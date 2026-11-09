@@ -17,7 +17,6 @@ public struct CueMemoryView: Equatable, Sendable {
   public var pinned: [CueMemoryLine]
   public var entries: [Entry]
   public var merges: [Merge]
-  /// 重点合计字节（`CueMemoryLine.bytes`）
   public var pinnedBytes: Int
   /// 重点过了硬线（`CueMemoryLine.pinnedHard`）：系统提示里叫 Cue 合并
   public var pinnedOverBudget: Bool { pinnedBytes > CueMemoryLine.pinnedHard }

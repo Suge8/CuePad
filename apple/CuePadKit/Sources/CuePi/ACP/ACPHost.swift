@@ -34,7 +34,6 @@ final class ACPHost {
         self.sessionFile = sessionFile
     }
 
-    /// 在托管的会话 id
     var sessionIDs: Set<String> { Set(sessions.keys) }
 
     func open(in directory: URL, launchToken: String, model: String? = nil) async throws -> PiSession.ID {

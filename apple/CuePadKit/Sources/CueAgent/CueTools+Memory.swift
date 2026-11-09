@@ -27,7 +27,6 @@ extension CueTools {
   static let excerptLimit = 200
   static let excerptLead = 40
 
-  /// recall 查到的一条会话回复：哪个会话、什么时候、命中的那一段。
   func replyLine(_ reply: CueRecall.Reply, around words: [String]) -> String {
     let name = reply.session.map(CueEnvelope.sessionName) ?? "会话（\(reply.message.sessionID.prefix(8))）"
     return "\(name) \(iso(reply.message.at)) 回复：\(Self.excerpt(reply.message.text, around: words))"

@@ -71,7 +71,6 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
     /// `model/list` 的结果（账号可用的模型对所有会话一样），第一次要时取
     var models: [CodexModel]?
     var stopped = true
-    /// 量起进程、问版本这些等待的时限的钟
     let timing: Timing
     /// 终端会话哪些接上桥（`follow`）；给之前一个都不接
     var scope = PiHistoryScope.sessions([])
@@ -128,8 +127,6 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
             case request(CodexRPC, id: JSONValue, question: String)
         }
     }
-
-    // MARK: AgentRuntime
 
     public func start() throws {
         guard stopped else { return }
@@ -192,8 +189,6 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
             throw AgentRuntimeError.openElsewhere
         }
     }
-
-    // MARK: 托管进程
 
     /// 托管会话的沙箱：用户、项目或管理配置定过（`sandbox_mode`，或权限档 `default_permissions`，含比工作区更宽的）就照它，不传；
     /// 都没定时 Codex 对没被信任过的目录用只读——终端里第一次进目录会问信不信任，托管的会话没人回答，写工作区的每一步都要申请。

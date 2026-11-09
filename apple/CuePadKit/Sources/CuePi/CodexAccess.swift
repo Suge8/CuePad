@@ -12,7 +12,6 @@ public struct CodexAccess: Sendable {
 }
 
 public enum CodexAccessError: Error, Equatable {
-    /// 没装 Codex
     case notInstalled
     /// Codex 没登录，或登的不是 ChatGPT 账号（API Key 用不了订阅的语音）
     case signedOut

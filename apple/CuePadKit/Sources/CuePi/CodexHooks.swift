@@ -52,8 +52,6 @@ struct CodexHooks: AgentHookConfig {
         var stateTable: Bool?
     }
 
-    // MARK: 状态
-
     func files(command: String) -> AgentStatus.Files {
         let state = hooks.files(command: command)
         guard state == .current, let text = try? Data(contentsOf: hooks.file), let tree = try? JSONSourceTree(text) else { return state }
@@ -66,8 +64,6 @@ struct CodexHooks: AgentHookConfig {
         }
         return trusted ? .current : .outdated
     }
-
-    // MARK: 安装与卸载
 
     func install(command: String) async throws {
         if hooks.footprint()?.config == nil {
@@ -167,8 +163,6 @@ struct CodexHooks: AgentHookConfig {
         let rpc = try await CodexRPC.launch(codex, environment: environment)
         try await withStopped(rpc, stop: { await $0.shutdown() }, body)
     }
-
-    // MARK: 信任条目
 
     /// Codex 的信任哈希（`hook_hash`）：条目按 Codex 读进来的样子补全（`async` 缺省 false）。
     static func hash(_ event: HookFile.Event, command: String, hooks: HookFile) -> String? {

@@ -31,7 +31,6 @@ public final class ClaudeCodeRuntime: AgentRuntime {
     private var hosted: [String: ClaudeHostedSession] = [:]  // 会话 id → 托管进程
     /// 终端会话哪些接上桥（`follow`）；给之前一个都不接
     private var scope = PiHistoryScope.sessions([])
-    /// 量列表请求时限的钟
     private let timing: Timing
 
     public init(
@@ -123,8 +122,6 @@ public final class ClaudeCodeRuntime: AgentRuntime {
             in: directory, launchToken: nil, known: await remembered(session.id))
     }
 
-    // MARK: 托管
-
     /// `claude` 与给它的环境：`paths` 里指定的（隔离的配置目录等）盖在本进程的环境上。不自己补 `CLAUDE_CONFIG_DIR`：
     /// 设了它 Claude Code 就到那个目录里找 `.claude.json`，与没设时的 `~/.claude.json` 不是一份。
     private func executable() async throws -> (url: URL, environment: [String: String]) {
@@ -161,8 +158,6 @@ public final class ClaudeCodeRuntime: AgentRuntime {
             throw AgentRuntimeError.launchTimedOut(.claudeCode)
         }
     }
-
-    // MARK: 终端会话
 
     /// 一次钩子调用。原样放行、不登记的两种：
     /// - 不是 Claude Code 发的：Claude Code 按每次钩子的输入设环境里的 `CLAUDE_CODE_SESSION_ID`，与输入里的 `session_id` 相同；
@@ -239,8 +234,6 @@ public final class ClaudeCodeRuntime: AgentRuntime {
         exitWatchers.removeValue(forKey: pid)?.cancel()
         for (id, terminal) in terminals where terminal.pid == pid { settle(id, reason: nil) }
     }
-
-    // MARK: 已在跑的会话
 
     private struct Running: Decodable {
         var pid: Int32

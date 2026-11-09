@@ -43,7 +43,6 @@ public final class ChildProcess: Sendable {
     let output: AsyncStream<Data>
     let pid: pid_t
     private let placement: Placement
-    /// 量限时等待与收尾宽限的钟
     private let timing: Timing
     private let input: Int32?
     private let writes = DispatchQueue(label: "cuepad.child.write")
@@ -156,8 +155,6 @@ public final class ChildProcess: Sendable {
         errors?.stop()
     }
 
-    // MARK: 一次性的命令
-
     /// 一次性命令的结局：跑完（退出码与标准输出）、超时被结束、没能启动。
     public enum Attempt: Sendable {
         case finished(status: Int32, output: String)
@@ -205,8 +202,6 @@ public final class ChildProcess: Sendable {
         return status
     }
 
-    // MARK: 读写
-
     /// 写一行（补上换行）。
     func write(_ line: Data) {
         guard let input else { return }
@@ -226,8 +221,6 @@ public final class ChildProcess: Sendable {
             if open { close(input) }
         }
     }
-
-    // MARK: 停与等
 
     /// 请它马上退出、不等：SIGTERM，宽限 `AgentTimeouts.endGrace` 过了还没走就 SIGKILL（自成进程组的整组结束）。之后等它退出的一定等得到。
     public func end() {

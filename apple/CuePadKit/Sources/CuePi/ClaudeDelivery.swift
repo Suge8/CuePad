@@ -15,12 +15,10 @@ final class ClaudeDelivery {
     private var running: String?
     private var failure: String?
 
-    /// 登记 `uuid`、用 `send` 交出，等它定下。
     func deliver(_ uuid: String, send: () throws -> Void) async throws {
         try await verdicts.request(uuid.lowercased(), send: send)
     }
 
-    /// Claude Code 输出的每一行。
     func observe(_ message: JSONValue) {
         switch message["type"]?.string {
         case "command_lifecycle":

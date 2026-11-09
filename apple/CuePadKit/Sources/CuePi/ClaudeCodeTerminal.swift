@@ -63,8 +63,6 @@ final class ClaudeTerminalSession: SessionLink {
 
     func publish(_ session: inout PiSession) { facts.publish(to: &session) }
 
-    // MARK: 钩子
-
     /// 一次钩子调用：更新会话；要等答复的留着，其余当场放行。
     func handle(_ event: String, _ input: JSONValue, call: AgentHookCall) {
         let agent = input["agent_id"]?.string
@@ -224,8 +222,6 @@ final class ClaudeTerminalSession: SessionLink {
         gate.drop(pending.remove(at: index).hold)
         show(at: .now)
     }
-
-    // MARK: SessionLink
 
     /// 只在歇着时送到（在跑时桥先拒收，见 `AgentCapabilities.speakBlocked`）：`next` 让它马上开这一轮。
     func send(_ message: PiMessage, in _: PiSession.ID) async throws {

@@ -15,7 +15,6 @@ struct AgentLibraryPlaces: Sendable {
     let paths: AgentPaths
     /// 这台用着的几家（配置目录在、碰得了），按 `AgentKind` 的顺序
     let installed: [AgentKind]
-    /// 这台绑了文件夹的项目
     let projects: [UUID: URL]
 
     init(paths: AgentPaths, touches: (AgentKind) -> Bool, projects: [UUID: String]) {
@@ -30,7 +29,6 @@ struct AgentLibraryPlaces: Sendable {
         [.global] + projects.sorted { $0.value.path < $1.value.path }.map { .project($0.key) }
     }
 
-    /// 这一层的 `.agents/skills`。
     func skills(_ scope: LibraryScope) -> URL? {
         base(scope).map { $0.appending(path: scope == .global ? "skills" : ".agents/skills", directoryHint: .isDirectory) }
     }
@@ -71,11 +69,8 @@ struct AgentLibraryPlaces: Sendable {
         }
     }
 
-    // MARK: 规则
-
     var globalInstructions: URL { paths.agentsDirectory.appending(path: "AGENTS.md") }
 
-    /// 这家自己的全局规则。
     func globalFile(_ kind: AgentKind) -> URL {
         paths.home(of: kind).appending(path: kind.facts.instructionsFile)
     }

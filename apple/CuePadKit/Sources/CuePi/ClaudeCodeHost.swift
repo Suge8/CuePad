@@ -134,8 +134,6 @@ final class ClaudeHostedSession: SessionLink {
         return session
     }
 
-    // MARK: 一处产出
-
     /// 交给事件流（大脑）与桥（托管会话）。
     private func emit(_ event: TurnEvent) {
         brain?.emit(event)
@@ -162,8 +160,6 @@ final class ClaudeHostedSession: SessionLink {
         contextWindow = window
         emit(.context(used: used, window: window))
     }
-
-    // MARK: 输出
 
     private func received(_ message: JSONValue) {
         deliveries.observe(message)

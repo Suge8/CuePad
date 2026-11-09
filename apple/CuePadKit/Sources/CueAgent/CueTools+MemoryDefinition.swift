@@ -2,7 +2,6 @@ import CueStore
 import Foundation
 
 extension CueTools {
-  /// memory 的说明与参数（实现在 `CueTools+Memory`）。
   static var memoryDefinition: [String: Any] {
     [
         "name": "memory",

@@ -19,7 +19,6 @@ public enum PiExtensionBundle {
         return url
     }()
 
-    /// 文件名 → 内容
     static let files: [String: String] = {
         guard let names = try? FileManager.default.contentsOfDirectory(atPath: url.path) else {
             preconditionFailure("bundled cuepad-bridge/ is unreadable")
