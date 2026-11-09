@@ -139,6 +139,21 @@ struct RealOpenCodeTests {
         }
     }
 
+    /// 忙时点结束（同 `RealHostedEndTests` 的第一例）：先停下这一轮（服务把它写成被停下的一轮）再下桥，结束报成功；会话还在服务里，接着说照常。
+    @Test func endingABusySessionStopsTheRoundFirst() async throws {
+        try await withOpenCode { sandbox, store, bridge, runtime in
+            let id = try await runtime.open(in: sandbox.work, launchToken: "token-e", name: nil, model: nil, thinking: nil)
+            let sessionID = try #require(bridge.session(id: id)?.sessionID)
+            try await bridge.send(PiMessage(text: "Use the shell tool to run exactly: sleep 30 . Then reply SLEPT."), to: id)
+            try await eventually("在跑命令") { session(bridge)?.state == .tool }
+            try await bridge.end(id)
+            #expect(bridge.session(id: id) == nil)
+            try await eventually("对话里留下'已停止'") {
+                try await store.piMessages(of: sessionID).map { "\($0.role.rawValue):\($0.text)" }.suffix(1) == ["system:已停止"]
+            }
+        }
+    }
+
     @Test func aRoundEndedByARejectedPermissionSaysDeclined() async throws {
         try await withOpenCode { sandbox, store, bridge, runtime in
             let id = try await runtime.open(in: sandbox.work, launchToken: "token-d", name: nil, model: nil, thinking: nil)

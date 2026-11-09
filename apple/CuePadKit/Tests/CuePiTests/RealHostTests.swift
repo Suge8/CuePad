@@ -1,5 +1,6 @@
 #if os(macOS)
 import CueTestSupport
+import Darwin
 import Foundation
 import Testing
 import CueStore
@@ -109,6 +110,28 @@ struct RealHostTests {
         try await eventually("回答了开场的话") {
             recap(of: bridge.sessions.first { $0.id == opened.id })?.lastReply == "ECHO 开场的话"
         }
+    }
+
+    /// 忙时点结束（同 `RealHostedEndTests` 的第一例）：扩展先中止这一轮、Pi 自己把它写成被停下的一轮，再退出，结束报成功。
+    @Test func endingABusyHostedSessionStopsTheTurnBeforeItQuits() async throws {
+        let pi = try await PiProcess()
+        let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
+        defer { bridge.stop(); pi.stop() }
+        try bridge.start()
+        let host = host(pi, bridge)
+        host.start()
+        defer { stopHostedProcesses(bridge) }
+        pi.model.on("BUSY-HANG", .stream(["Working on it"]))
+        let session = try #require(bridge.session(id: try await host.open(in: pi.cwd, launchToken: "tok-busy", name: nil, model: nil, thinking: nil)))
+        try await bridge.send(PiMessage(text: "BUSY-HANG keep going"), to: session.id)
+        try await eventually("这一轮在跑、停在模型里") { bridge.session(id: session.id)?.state.isWorking == true }
+
+        try await bridge.end(session.id)
+        #expect(bridge.session(id: session.id) == nil)
+        try await eventually("进程退了") { kill(session.pid, 0) != 0 }
+        let record = try PiHistory.index(file: try #require(session.sessionFile), agent: .pi, from: nil, files: scratchFiles)
+        #expect(record.messages.contains { $0.role == .known(.user) && $0.text.contains("BUSY-HANG") })
+        #expect(record.checkpoint.stoppedAt != nil, "会话记录里没有被停下的这一轮：\(record.messages.map(\.text))")
     }
 
     @Test func anIdleHostedSessionExitsAfterTheIdleLimit() async throws {
