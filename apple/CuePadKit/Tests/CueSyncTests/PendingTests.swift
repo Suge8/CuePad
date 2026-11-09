@@ -24,11 +24,12 @@ import Testing
 
   @Test
   func anEditMadeWhileThePreviousVersionWasUploadingIsUploadedAfterIt() async throws {
+    // 先写下再起发送者：替身扣住的是第一批，起来时库里还没有它的话，第一批只带走默认项目、被扣住，排在后面的轮次一直等它
+    let card = try await store.createCard(body: "v1")
+    let id = rig.id(card.id)
     let server = FakeUploader(holding: true)
     let sender = RecordSender(uploader: server, coordinator: rig.coordinator)
     await sender.start()
-    let card = try await store.createCard(body: "v1")
-    let id = rig.id(card.id)
     await server.uploaded(id)
 
     try await Task.sleep(for: .milliseconds(3))

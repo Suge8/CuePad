@@ -19,7 +19,7 @@ struct OwnEchoTests {
 
   @Test func anUploadWhoseResultNeverArrivedIsNotAConflict() async throws {
     let (sync, card) = try await syncedCard()
-    await cloud.loseNextResult()
+    await cloud.loseResults()
     try await edit(card, "第一版")
     #expect(await !sync.send(recordNames: [name(card)]))
 
@@ -62,7 +62,7 @@ actor EchoCloud: SyncCloud {
   private let inner: SimulatedCloud
   private var holding = false
   private var held: [CheckedContinuation<Void, Never>] = []
-  private var losesNextResult = false
+  private var losesResults = false
 
   init() {
     let floor = CKRecord(recordType: PeerFloor.recordType, recordID: PeerFloor(zoneID: CloudSync.zoneID).id)
@@ -78,15 +78,14 @@ actor EchoCloud: SyncCloud {
     held = []
   }
 
-  func loseNextResult() { losesNextResult = true }
+  /// 之后的上传都到了服务器、结果都回不来。不是只丢下一次：编辑后后台那一路过了攒批窗口也会发这一版，丢的若是它的，
+  /// 马上传再发时服务器已有这一版、答收下了。
+  func loseResults() { losesResults = true }
 
   func upload(saving: [CKRecord], deleting: [CKRecord.ID]) async throws -> SentRecords {
     if holding { await withCheckedContinuation { held.append($0) } }
     let sent = await inner.upload(saving: saving, deleting: deleting)
-    guard !losesNextResult else {
-      losesNextResult = false
-      throw CKError(.networkFailure)
-    }
+    if losesResults { throw CKError(.networkFailure) }
     return sent
   }
 
