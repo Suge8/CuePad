@@ -41,6 +41,7 @@ final class AttachmentRun: Sendable {
     AttachmentFiles.names(in: holds).filter { !$0.hasSuffix(".lock") }.map { holds.appending(path: $0, directoryHint: .isDirectory) }
   }
 
+  /// 有目录的，和只剩锁文件的（崩在建锁与建目录之间、删目录与删锁之间）。
   static func ids(in holds: URL) -> Set<String> {
     Set(AttachmentFiles.names(in: holds).map { $0.hasSuffix(".lock") ? String($0.dropLast(5)) : $0 })
   }

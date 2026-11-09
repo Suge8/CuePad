@@ -119,6 +119,7 @@ enum ChatScrollBench {
             DebugForeground.movePointer(to: spot)
             await Task.wait(for: .milliseconds(500))
         }
+        // 窗口得在指针下的最上层才发得出事件：等一会儿，等不到就不量
         if driver == .hid {
             var ready = false
             for _ in 0..<20 {

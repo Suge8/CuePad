@@ -73,6 +73,7 @@ extension CueStore {
     }
   }
 
+  /// 没留给你的返回 nil，收回了返回记录 id（立即上传用）。
   public func takeBack(_ sessionID: String) throws -> UUID? {
     try write {
       guard let session = try sessionState(sessionID), try cueState()?.left.contains(where: { $0.holds(for: session) }) == true else { return nil }

@@ -101,6 +101,7 @@ struct HandOffInput: View {
 
     private var header: some View {
         HStack(spacing: Spacing.item) {
+            // 新会话放最上面：会话多了也不用往下翻
             MenuButton(sections: [
                 ChoiceMenu.Section(choices: [ChoiceMenu.Choice(title: "新会话…", image: .icon(.add), choose: newSession)]),
                 ChoiceMenu.Section(choices: sessions.map { item in

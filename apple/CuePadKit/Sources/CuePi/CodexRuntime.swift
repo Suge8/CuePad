@@ -144,6 +144,7 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
         return try await configure(opened: id, name: name, model: model, thinking: thinking, on: bridge)
     }
 
+    /// 恢复时它被别处拿着写（终端里刚开）也改走控制 socket；常驻服务里也没有它才报错。
     public func resume(_ session: IndexedSession) async throws -> PiSession.ID {
         if let live = bridge.session(sessionID: session.id) { return live.id }
         if let id = try await adoptFromDaemon(session.id) { return id }

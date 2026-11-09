@@ -46,6 +46,7 @@ public enum CueWork: Identifiable, Equatable, Sendable {
 public struct CueBoardItem: Identifiable, Equatable, Sendable {
   public var task: Card
   public var progress: TaskProgress?
+  /// 至少一个：没有在做的就是此刻该做的那一个（无子任务是任务自己，否则第一个没完成的子任务）。
   /// 子任务都做完了时取最后做完的那一步（近况取它的会话，不落回第一步）。
   public var leaves: [CueBoardLeaf]
   public var id: UUID { task.id }
