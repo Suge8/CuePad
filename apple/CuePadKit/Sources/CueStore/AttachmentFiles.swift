@@ -6,8 +6,9 @@ import UniformTypeIdentifiers
 
 /// 附件文件（图片与任意文件）的唯一入口：按键（`AttachmentKey`）存取，本机只有一份，在库的缓存目录 `CuePadAttachments/<键>`；
 /// 快速查看、交给 Agent 与 Cue 的都是这条路径。iCloud 是事实源，缓存可被系统清掉，要用时再从 iCloud 取（`CueSync`）。
-/// 例外只有一条：服务器收下附件记录之前，库旁 `Attachments/<键>` 留一个硬链接保底（同一份数据，不多占空间；没登录 iCloud 就一直留着），
-/// 收下后删（`uploaded`）；缓存那份被清掉而保底还在，由保底补回。
+/// 丢了就找不回的时候，库旁另留一个硬链接（同一份数据，不多占空间），缓存那份被清掉、被回收删掉时由它补回：
+/// - 持有 `Attachments/holds/<运行>/<键>`：存入的进程还在、引用可能还没提交（`AttachmentRun`）；
+/// - 保底 `Attachments/<键>`：引用提交、登记了附件记录之后，到服务器收下为止（`uploaded`；没登录 iCloud 就一直留着）。
 ///
 /// 读写都不经过 `CueStore` actor，编辑器可在主线程同步调用。附件记录（同步用）不在这里写：
 /// 引用附件的写入（卡片正文、投送请求、发送记录、对话里的消息、预览）在同一事务里为本机已有文件的键登记，
@@ -24,10 +25,14 @@ public struct AttachmentFiles: Sendable {
   public static let maxBytes = 500_000_000
   private static let chunkSize = 1 << 20
 
+  /// 这次运行的持有
+  let run: AttachmentRun
+
   init(library: URL, caches: URL) {
     backups = library.appending(path: "Attachments", directoryHint: .isDirectory)
     directory = caches.appending(path: "CuePadAttachments", directoryHint: .isDirectory)
     self.caches = caches
+    run = AttachmentRun(holds: backups.appending(path: "holds", directoryHint: .isDirectory))
   }
 
   /// 存入数据（粘贴的图片等），返回键：扩展名按 ImageIO 认出的类型，认不出没有扩展名。超过 `maxBytes` 抛 `fileTooLarge`。
@@ -51,20 +56,13 @@ public struct AttachmentFiles: Sendable {
     return key
   }
 
-  /// 本机那份的位置；键不合法或本机没有（还没从 iCloud 取来、缓存被清掉）为 nil。缓存被清掉而保底还在时先由保底补回。
+  /// 本机那份的位置；键不合法或本机没有（还没从 iCloud 取来、缓存被清掉）为 nil。缓存里没有而保底或持有还在时先补回。
   public func fileURL(for key: String) -> URL? {
     guard AttachmentKey.isValid(key) else { return nil }
     let url = directory.appending(path: key)
     if FileManager.default.fileExists(atPath: url.path) { return url }
-    let backup = backups.appending(path: key)
-    guard FileManager.default.fileExists(atPath: backup.path) else { return nil }
-    do {
-      try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-      try FileManager.default.linkItem(at: backup, to: url)
-      return url
-    } catch {
-      return FileManager.default.fileExists(atPath: url.path) ? url : nil  // 同时补回：已有即可
-    }
+    for copy in keptCopies(of: key) where (try? link(copy, to: url)) != nil { return url }
+    return nil
   }
 
   /// 同步下载的附件文件：内容哈希必须与键一致，才放进本机；已有同键文件则不重写。
@@ -72,7 +70,7 @@ public struct AttachmentFiles: Sendable {
   package func adopt(fileAt source: URL, key: String) throws {
     guard let hash = AttachmentKey.parts(key)?.hash else { throw CueStoreError.invalidAttachmentHash }
     guard try Self.hash(of: source) == hash else { throw CueStoreError.attachmentHashMismatch }
-    try place(key, backup: false) { try FileManager.default.copyItem(at: source, to: $0) }
+    try place(key, held: false) { try FileManager.default.copyItem(at: source, to: $0) }
   }
 
   /// 服务器收下了这个附件记录：删保底。本来就没有不算失败。
@@ -86,60 +84,43 @@ public struct AttachmentFiles: Sendable {
     try Self.removeIfPresent(backups.appending(path: key))
   }
 
-  /// 清空本机的附件与保底（账号切换后丢弃本机数据时用）。
+  /// 清空本机的附件与保底（账号切换后丢弃本机数据时用）。持有不动：还在的进程里没提交的引用照样补得回。
   package func removeAll() throws {
     try Self.removeIfPresent(directory)
-    try Self.removeIfPresent(backups)
+    for name in Self.names(in: backups) where name != run.holds.lastPathComponent { try Self.removeIfPresent(backups.appending(path: name)) }
   }
 
-  /// 本机上（缓存与保底里）在 `date` 之前最后一次存入的附件的键：按修改时刻，存入时刷成当下（`place`）。硬链接的两份是同一个文件，时刻相同。
-  func keys(storedBefore date: Date) -> Set<String> {
-    var keys = Set<String>()
-    for folder in [directory, backups] {
-      let names = (try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? []
-      for name in names where AttachmentKey.isValid(name) {
-        let stored = (try? FileManager.default.attributesOfItem(atPath: folder.appending(path: name).path))?[.modificationDate] as? Date
-        if let stored, stored < date { keys.insert(name) }
-      }
-    }
-    return keys
-  }
-
-  /// 登记附件记录所需的元数据（`format` 就是键的扩展名）；文件不在本机返回 nil。
-  func metadata(_ key: String) -> (hash: String, byteCount: Int, format: String)? {
-    guard let parts = AttachmentKey.parts(key), let url = fileURL(for: key),
-      let size = (try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? Int
-    else { return nil }
+  /// 引用提交时（写事务内）登记附件记录要的元数据（`format` 就是键的扩展名），并留好保底；文件不在本机返回 nil。
+  /// 回滚了只多一个没有记录的保底：持有它的运行结束后，启动清理收走。
+  func keepUntilUploaded(_ key: String) throws -> (hash: String, byteCount: Int, format: String)? {
+    guard let parts = AttachmentKey.parts(key), let url = fileURL(for: key) else { return nil }
+    let size = try FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int ?? 0
+    try link(url, to: backups.appending(path: key))
     return (parts.hash, size, parts.format)
   }
 
-  /// 先写到目录内的临时名再改名：别的进程或线程永远看不到写了一半的文件。新放进来的、要上传的（不是从 iCloud 取来的）先留好保底再改名，
-  /// 所以留不下保底就什么都没存。
-  /// 每次存入（含同内容已在、直接用那份的）都把修改时刻刷成当下：启动时的清理据此认出这次运行里存的（`keys(storedBefore:)`）。
-  /// 不用创建时刻：实测系统拷贝（`copyItem`）把原文件的创建与修改时刻都带过来，创建时刻也刷不到已在的那份上。
-  private func place(_ key: String, backup: Bool = true, write: (URL) throws -> Void) throws {
+  /// 先写到目录内的临时名再改名：别的进程或线程永远看不到写了一半的文件。存入的（不是从 iCloud 取来的）不论新写还是同一份已在，
+  /// 都先在这次运行里持有（`AttachmentRun`）才返回，持有不了就什么都没存；已在的那份正好被回收删掉、链不上时，当新文件重写。
+  private func place(_ key: String, held: Bool = true, write: (URL) throws -> Void) throws {
     let url = directory.appending(path: key)
-    guard !FileManager.default.fileExists(atPath: url.path) else { return try Self.touch(url) }
+    if FileManager.default.fileExists(atPath: url.path) {
+      guard held else { return }
+      if (try? hold(url, as: key)) != nil { return }
+    }
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     let partial = directory.appending(path: ".\(key).\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: partial) }
     try write(partial)
-    try Self.touch(partial)
-    do {
-      if backup { try link(partial, to: backups.appending(path: key)) }
-      try FileManager.default.moveItem(at: partial, to: url)
-    } catch {
-      try? FileManager.default.removeItem(at: partial)
+    if held { try hold(partial, as: key) }
+    do { try FileManager.default.moveItem(at: partial, to: url) } catch {
       guard FileManager.default.fileExists(atPath: url.path) else { throw error }  // 同时存入同一份：已有即可
     }
   }
 
-  func link(_ file: URL, to backup: URL) throws {
-    try FileManager.default.createDirectory(at: backups, withIntermediateDirectories: true)
-    do { try FileManager.default.linkItem(at: file, to: backup) } catch let error as CocoaError where error.code == .fileWriteFileExists {}
-  }
-
-  private static func touch(_ url: URL) throws {
-    try FileManager.default.setAttributes([.modificationDate: Date.now], ofItemAtPath: url.path)
+  /// 给 `file` 在 `target` 多留一个目录项（保底、持有、补回缓存）；已有不算失败。
+  func link(_ file: URL, to target: URL) throws {
+    try FileManager.default.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
+    do { try FileManager.default.linkItem(at: file, to: target) } catch let error as CocoaError where error.code == .fileWriteFileExists {}
   }
 
   private static func removeIfPresent(_ url: URL) throws {
@@ -173,43 +154,13 @@ extension CueStore {
     return try db.first("SELECT 1 FROM attachments WHERE hash = ? AND format = ?", [parts.hash, parts.format], { _ in true }) != nil
   }
 
-  /// 本机已有这个文件、还没有记录时登记附件记录（同步载体）。必须在写事务内调用。
-  /// 记录已有、服务器也收下过的（同一份内容再存了一次）：存入时新留的保底用不着，提交后删掉（事务回滚了，保底还得留着）。
+  /// 本机已有这个文件、还没有记录时登记附件记录（同步载体），连同保底（`AttachmentFiles.keepUntilUploaded`）。必须在写事务内调用。
+  /// 记录已有的（服务器收下过的同一份内容再存了一次也是）不留保底。
   func registerAttachment(_ key: String) throws {
-    guard try !hasAttachment(key) else {
-      if try isUploaded(key) {
-        afterCommit.append { [files] in
-          // 删不掉只是多留一份硬链接，下次再存同一份时会再试
-          try? files.uploaded(key)
-        }
-      }
-      return
-    }
-    guard let metadata = files.metadata(key) else { return }
+    guard try !hasAttachment(key), let metadata = try files.keepUntilUploaded(key) else { return }
     let now = Date.stamp
     try insert(
       Attachment(id: UUID(), hash: metadata.hash, byteCount: metadata.byteCount, format: metadata.format, createdAt: now, modifiedAt: now))
-  }
-}
-
-extension CueStore {
-  /// 删掉本机上用不着的附件文件（缓存与保底一起），返回删了几个：没有附件记录、库里没有任何正文与文字引用它（`isAttachmentReferenced`），
-  /// 也不在 `drafts`（跨启动留着的草稿）里。这些是存进来却没发出去的：回复框选了又没发的、编辑器里插了又删的。
-  /// 只看 `before` 之前存入的（按存入时刷的修改时刻）：这次运行里刚存、还没写进正文的（输入框里的、正在入库的分享，含同内容已在本机的）都比它晚，不会被删。
-  /// 在一个写事务里查与删：别的进程（命令行）这期间写不进引用它的记录；事务里只读，删文件不留回滚不了的半截状态，所以不用等提交后。
-  public func removeStrayFiles(before: Date, drafts: [String]) throws -> Int {
-    let drafted = Set(drafts.flatMap(CueFormat.attachmentKeys(in:)))
-    return try reclaimFiles(candidates: { files.keys(storedBefore: before).subtracting(drafted) }) { _, error in throw error }
-  }
-
-  /// 这个键的附件记录服务器收下过（有一版推送成功）。
-  func isUploaded(_ key: String) throws -> Bool {
-    guard let parts = AttachmentKey.parts(key) else { return false }
-    return try db.first(
-      """
-      SELECT 1 FROM attachments a JOIN syncRecords s ON s.recordName = a.id
-      WHERE a.hash = ? AND a.format = ? AND s.pushedModifiedAt IS NOT NULL
-      """, [parts.hash, parts.format]) { _ in true } != nil
   }
 }
 

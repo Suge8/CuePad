@@ -49,20 +49,30 @@ import Testing
     #expect(throws: CueStoreError.fileTooLarge(limit: AttachmentFiles.maxBytes)) { try store.files.store(fileAt: url) }
   }
 
-  /// 缓存可被系统清掉：服务器收下之前由库旁的保底补回，收下之后保底删掉，本机没有了就是没有（再从 iCloud 取）。
-  @Test func backupCoversClearedCacheUntilUploaded() throws {
-    let key = try store.files.store(pngData(width: 6, height: 6))
+  /// 同一个库的另一个进程里做的事，做完它就退出了（持有它存过的文件的那次运行随之结束）。
+  private func inEndedRun<T: Sendable>(_ body: (CueStore) async throws -> T) async throws -> T {
+    try await body(CueStore(location: .isolated(fixture.directory)))
+  }
+
+  /// 缓存可被系统清掉：引用了、服务器还没收下的，存它的进程退出、下次启动清理过之后也由库旁的保底补回；
+  /// 收下之后保底删掉，本机没有了就是没有（再从 iCloud 取）。
+  @Test func backupCoversClearedCacheUntilUploaded() async throws {
+    let key = try await inEndedRun { earlier in
+      let key = try earlier.files.store(pngData(width: 6, height: 6))
+      _ = try await earlier.createCard(body: "![](cuepad://file/\(key))")
+      return key
+    }
+    _ = try await store.removeStrayFiles(drafts: [])
     try FileManager.default.removeItem(at: cached)
     #expect(store.files.fileURL(for: key) != nil)
     #expect(FileManager.default.fileExists(atPath: cached.appending(path: key).path))
 
     try store.files.uploaded(key)
-    #expect(!FileManager.default.fileExists(atPath: backups.appending(path: key).path) && store.files.fileURL(for: key) != nil)
     try FileManager.default.removeItem(at: cached)
     #expect(store.files.fileURL(for: key) == nil)
   }
 
-  /// 服务器早已收下的内容再存一次（缓存被清后又粘贴了同一张）：引用它时认出记录已上传，存入时新留的保底删掉。
+  /// 服务器早已收下的内容再存一次（缓存被清后又粘贴了同一张）：引用它时认出记录已在，不再留保底。
   @Test func storingUploadedContentAgainKeepsNoBackupOnceReferenced() async throws {
     let key = try store.files.store(pngData(width: 7, height: 7))
     _ = try await store.createCard(body: "![](cuepad://file/\(key))")
@@ -72,7 +82,6 @@ import Testing
     try FileManager.default.removeItem(at: cached)
 
     _ = try store.files.store(pngData(width: 7, height: 7))
-    #expect(FileManager.default.fileExists(atPath: backups.appending(path: key).path))
     _ = try await store.createCard(body: "又一张 ![](cuepad://file/\(key))")
     #expect(!FileManager.default.fileExists(atPath: backups.appending(path: key).path) && store.files.fileURL(for: key) != nil)
   }
@@ -97,27 +106,23 @@ import Testing
     #expect(try records().count == 3)
   }
 
-  /// 启动时的清理：没有记录、没被正文或草稿引用、在这次启动之前存下的才删（缓存与保底一起）；这次运行里刚存的、被引用的都留着。
-  @Test func strayFilesGoButReferencedDraftedAndFreshOnesStay() async throws {
-    let stray = try store.files.store(pngData(width: 2, height: 2, shade: 0.1))
-    let used = try store.files.store(pngData(width: 2, height: 2, shade: 0.3))
-    let drafted = try store.files.store(pngData(width: 2, height: 2, shade: 0.5))
-    _ = try await store.createCard(body: "![](cuepad://file/\(used))")
-    // 上次运行留下的、又在这次选进来的：同内容已在本机（直接用那份），拷来的文件还带着很早的时刻
-    let again = pngData(width: 2, height: 2, shade: 0.9)
-    let reused = try store.files.store(again)
-    let old = try file(named: "旧图.png", again)
-    try FileManager.default.setAttributes([.creationDate: Date.distantPast, .modificationDate: Date.distantPast], ofItemAtPath: old.path)
-    let copied = try file(named: "拷来的.pdf", Data("很早的文件".utf8))
-    try FileManager.default.setAttributes([.creationDate: Date.distantPast, .modificationDate: Date.distantPast], ofItemAtPath: copied.path)
-    let launched = Date.now
-    let fresh = try store.files.store(pngData(width: 2, height: 2, shade: 0.7))
-    #expect(try store.files.store(fileAt: old) == reused)
-    let pdf = try store.files.store(fileAt: copied)
+  /// 启动时的清理：上次运行（已退出）存下、没有记录、没被正文或草稿引用的才删（缓存与保底一起）；被引用的、草稿里的留着，
+  /// 草稿里的从此由这次运行持有，缓存再被清也补得回。还开着的别的进程（命令行）存好、还没提交的不受影响，提交后图在、照常登记。
+  @Test func strayFilesGoButReferencedDraftedAndPendingOnesStay() async throws {
+    let (stray, used, drafted) = try await inEndedRun { earlier in
+      let keys = try [0.1, 0.3, 0.5].map { try earlier.files.store(pngData(width: 2, height: 2, shade: $0)) }
+      _ = try await earlier.createCard(body: "![](cuepad://file/\(keys[1]))")
+      return (keys[0], keys[1], keys[2])
+    }
+    let cli = try CueStore(location: .isolated(fixture.directory))
+    let pending = try cli.files.store(pngData(width: 2, height: 2, shade: 0.7))
 
-    #expect(try await store.removeStrayFiles(before: launched, drafts: ["看 ![](cuepad://file/\(drafted))"]) == 1)
+    #expect(try await store.removeStrayFiles(drafts: ["看 ![](cuepad://file/\(drafted))"]) == 1)
     #expect(store.files.fileURL(for: stray) == nil && !FileManager.default.fileExists(atPath: backups.appending(path: stray).path))
-    for kept in [used, drafted, fresh, reused, pdf] { #expect(store.files.fileURL(for: kept) != nil) }
+    try FileManager.default.removeItem(at: cached)
+    for kept in [used, drafted] { #expect(store.files.fileURL(for: kept) != nil) }
+    _ = try await cli.createCard(body: "![](cuepad://file/\(pending))")
+    #expect(try await cli.hasAttachment(pending) && cli.files.fileURL(for: pending) != nil)
   }
 
   /// 键来自同步记录：拼不出附件目录外的路径。
