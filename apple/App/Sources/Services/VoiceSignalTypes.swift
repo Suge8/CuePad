@@ -37,7 +37,8 @@ nonisolated enum VoiceMediaSignal: Equatable, Codable, Sendable {
     case event(value: VoiceMediaEvent)
     case hangup(reason: VoiceEndReason)
     /// 同一通（header.session）"我在 header.sender 这个租约上"（`VoiceLink`、`VoiceSignalFormat.relinkGrace`）。
-    /// 正在等对端的一方每秒发 ask=true；另一方收到就回 ask=false（Mac 还另发当前投影），回的丢了下一秒的问会再问。
+    /// 正在等对端的一方每秒发 ask=true；另一方收到就回 ask=false，回的丢了下一秒的问会再问；
+    /// Mac 换绑时（不论哪种帧引起）另补发当前投影。
     /// 两端各凭收到对方的一帧确认对方还在（换绑只认 `VoiceService.rebind` 一处），不靠自己发没发出去推断。
     case resume(ask: Bool)
 }

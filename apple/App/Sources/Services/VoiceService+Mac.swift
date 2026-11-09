@@ -53,7 +53,10 @@ extension VoiceService {
             return
         }
         let header = received.header
-        if case .media(.resume(let ask)) = received.payload { return resume(header, ask: ask) }
+        if case .media(.resume(let ask)) = received.payload {
+            if ask { answer(header) }
+            return
+        }
         guard let remote, remote.session == header.session, remote.link == .bound(local: header.recipient, peer: header.sender) else { return }
         switch received.payload {
         case .media(.event(.connected)):
@@ -64,33 +67,43 @@ extension VoiceService {
         }
     }
 
-    /// 同一手机、同一通话来的一帧（等着时同一租约的也算）：媒体桥换绑到它，之后的命令来源核对、挂断与媒体事件都按这对租约认；
-    /// 这一通已有的命令结果按原命令身份补送到这里。
+    /// 换绑的唯一入口：Mac 这一通（含已在这边先结束的）从这台手机来的任何一帧（命令、resume、普通帧；等着时同一租约的也算），
+    /// 媒体桥换到这对租约（命令来源核对、挂断、媒体事件都按它认），这一通已有的命令结果按原命令身份补送过去，
+    /// 投影推送重新登记到这里并补发当前投影：宽限期里错过的更新由这份整份状态补齐，Mac 先结束的由此把真实结束原因带给手机。
     func rebind(_ header: VoiceSignalHeader) {
-        guard let remote, remote.session == header.session, remote.link.peerDevice == header.sender.device,
-              remote.link != .bound(local: header.recipient, peer: header.sender) else { return }
-        remote.link = .bound(local: header.recipient, peer: header.sender)
-        call?.mark("relinked")
-        for (id, outcome) in remote.results {
-            Task { await sendResult(.init(command: id, outcome: outcome), session: remote.session, to: header.sender) }
+        guard let call, VoiceSessionID(call.session) == header.session else { return }
+        let device = header.sender.device, pair = VoiceLink.bound(local: header.recipient, peer: header.sender)
+        var changed = false
+        if let remote, remote.session == header.session {
+            guard remote.link.peerDevice == device else { return }
+            if remote.link != pair {
+                remote.link = pair
+                changed = true
+                call.mark("relinked by \(header.purpose)")
+                for (id, outcome) in remote.results {
+                    Task { await sendResult(.init(command: id, outcome: outcome), session: remote.session, to: header.sender) }
+                }
+            }
         }
+        if let reader = projectionReaders[device], reader.sender == header.sender, reader.recipient == header.recipient {} else {
+            projectionReaders[device] = header
+            changed = true
+        }
+        guard changed, let value = projection, value.session == header.session, let reader = projectionReaders[device] else { return }
+        Task { if await !sendProjection(value, to: reader) { retryProjection(to: reader) } }
     }
 
     func waitsForRelink(_ session: VoiceSessionID) -> Bool { false }
 
-    /// 手机在这一通上报到：重新登记投影接收者并发当前投影，宽限期里错过的更新由这份快照补齐（投影是整份状态，不是增量）；
-    /// 是问（ask）就再回一个 resume。通话已在 Mac 这边先结束也照回：手机由此拿到真实的结束原因。
-    private func resume(_ header: VoiceSignalHeader, ask: Bool) {
+    /// 手机问"你还在吗"（`VoiceMediaSignal.resume`）：照答。换绑与补发投影已在 `rebind` 做过。
+    private func answer(_ header: VoiceSignalHeader) {
         guard let call, VoiceSessionID(call.session) == header.session, let signaling else { return }
-        projectionReaders[header.sender.device] = header
-        let projection = self.projection?.session == header.session ? self.projection : nil
         Task {
             let scope = VoiceOperationScope()
             defer { scope.end() }
             do {
                 try await scope.perform(within: .seconds(2)) {
-                    if ask { try await signaling.sendVoice(.media(signal: .resume(ask: false)), session: header.session, to: header.sender) }
-                    if let projection { try await signaling.sendVoice(.projection(value: projection), session: header.session, to: header.sender) }
+                    try await signaling.sendVoice(.media(signal: .resume(ask: false)), session: header.session, to: header.sender)
                 }
             } catch { AppServices.log.error("Voice resume answer not sent: \(String(describing: error))") }
         }

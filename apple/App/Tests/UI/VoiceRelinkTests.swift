@@ -84,8 +84,45 @@ import Testing
                                             payload: .command(command: command))))
         #expect(remote.link == .bound(local: signal.local, peer: back))
         try await eventually("result sent") { signal.sent.contains { if case .commandResult = $0 { true } else { false } } }
-        #expect(signal.sent.last == .commandResult(result: .init(command: id, outcome: .readbackQueued(message: reply.id))))
-        #expect(signal.recipients.last == back)
+        let result = VoiceSignalPayload.commandResult(result: .init(command: id, outcome: .readbackQueued(message: reply.id)))
+        #expect(zip(signal.sent, signal.recipients).contains { $0 == result && $1 == back })
+        voice.remote = nil
+        try await fixture.hangUp()
+    }
+
+    /// 手机回来后先到的是一条命令（resume 还在路上，或手机已因命令的结果认为接回、不再问）：换绑后投影照样推给手机的新租约。
+    @Test func aCommandBeforeResumeStillBringsProjectionsBack() async throws {
+        let app = TestApp(), store = app.services.store, signal = AuditSignaling(), host = TestApp.hostID
+        defer { app.services.cancelBackgroundWork() }
+        try await store.updateCueProfile { $0.enabledAt = .now; $0.hostID = host }
+        let voice = VoiceService(services: app.services, signaling: signal)
+        app.services.voice = voice
+        let fixture = VoiceFlowFixture(app.services)
+        try await fixture.connect()
+        let first = try await store.addCueMessage(.cue, text: "first result", answeredRequests: nil)
+        try await eventually("reply visible") { fixture.call.canRepeat && fixture.call.replies.contains { $0.id == first.id } }
+        let session = VoiceSessionID(fixture.call.session), phone = VoiceDeviceID("phone-audit")
+        let gone = VoiceEndpoint(device: phone, lease: UUID()), back = VoiceEndpoint(device: phone, lease: UUID())
+        let header = VoiceSignalHeader(version: 1, sender: gone, recipient: signal.local, session: session, sequence: 1,
+                                       expiresAtMilliseconds: .max, purpose: .media)
+        let remote = VoiceRemoteMedia(header: header, offer: .init(sdp: "offer"), signaling: signal)
+        remote.connected = true
+        voice.remote = remote
+        voice.projectionReaders[phone] = header
+        signal.peer = back
+        await voice.receive(.peerClosed(endpoint: gone, reason: .disconnected))
+        #expect(!remote.link.isBound)
+        let id = VoiceCommand.ID(UUID())
+        await voice.receive(.received(.init(header: .init(version: 1, sender: back, recipient: signal.local, session: session, sequence: 1,
+                                                          expiresAtMilliseconds: .max, purpose: .command(id: id)),
+                                            payload: .command(command: .init(id: id, action: .repeatReply(message: first.id))))))
+        #expect(remote.link == .bound(local: signal.local, peer: back))
+        let later = try await store.addCueMessage(.cue, text: "later result", answeredRequests: nil)
+        try await eventually("the later projection reaches the new lease") {
+            zip(signal.sent, signal.recipients).contains {
+                if case .projection(let value) = $0, value.replies.contains(where: { $0.message == later.id }) { $1 == back } else { false }
+            }
+        }
         voice.remote = nil
         try await fixture.hangUp()
     }
@@ -115,7 +152,7 @@ import Testing
                                             payload: .command(command: command))))
         remote.link = .relinking(peer: phone, until: .now + VoiceSignalFormat.relinkGrace, reason: .peerLeft)
         try await eventually("executed") { remote.results[id] != nil }
-        #expect(!signal.recipients.contains(gone))
+        #expect(!zip(signal.sent, signal.recipients).contains { if case .commandResult = $0 { $1 == gone } else { false } })
         await voice.receive(.received(.init(header: .init(version: 1, sender: back, recipient: signal.local, session: session, sequence: 1,
                                                           expiresAtMilliseconds: .max, purpose: .media), payload: .media(signal: .resume(ask: true)))))
         let result = VoiceSignalPayload.commandResult(result: .init(command: id, outcome: .readbackQueued(message: reply.id)))
