@@ -100,25 +100,27 @@ final class OpenCodeBrain: HostedSession {
     /// 流断了而服务还在（不是 `stop()` 停的）就结束服务。
     private func follow(_ client: OpenCodeClient) async throws {
         let stream = client.events()
-        try await withCheckedThrowingContinuation { (connected: CheckedContinuation<Void, any Error>) in
-            Task { [weak self] in
-                var connected = Optional(connected)
-                do {
-                    for try await event in stream {
-                        if event.type == "server.connected" {
-                            connected?.resume()
-                            connected = nil
-                        } else {
-                            self?.received(event)
-                        }
+        // 用流而不是 continuation 等第一声连上：调用方被取消时 `next()` 当场返回 nil
+        let (connected, announce) = AsyncThrowingStream.makeStream(of: Void.self)
+        Task { [weak self] in
+            var announced = false
+            do {
+                for try await event in stream {
+                    if event.type == "server.connected" {
+                        announced = true
+                        announce.yield()
+                    } else {
+                        self?.received(event)
                     }
-                    connected?.resume(throwing: HostedSessionError.notRunning)
-                } catch {
-                    connected?.resume(throwing: error)
                 }
-                if let self, self.client != nil { self.process?.end() }
+                announce.finish(throwing: announced ? nil : HostedSessionError.notRunning)
+            } catch {
+                announce.finish(throwing: announced ? nil : error)
             }
+            if let self, self.client != nil { self.process?.end() }
         }
+        var first = connected.makeAsyncIterator()
+        guard try await first.next() != nil else { throw CancellationError() }
     }
 
     /// 删掉这个工作目录里崩溃留下的大脑会话：带标记、起它的服务已不在；同时在跑的另一个大脑的不动。
