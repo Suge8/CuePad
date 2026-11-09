@@ -97,7 +97,7 @@ public final class ClaudeCodeRuntime: AgentRuntime {
             if bridge.session(id: id) != nil { return id }
             // 刚结束的：输出一断就下了桥，进程退了才离开 `hosted`（机器忙时隔得长；结束只关输入，不保证它退）。
             // 收掉它再接着：不交回下了桥的 id（话会报"会话已经结束"），也不让两个进程同写一份会话文件。
-            // 收法同 `stop()`：宽限后 SIGTERM、再宽限后 SIGKILL，有上限。旧条目这里就拿掉，不等退出监视那个任务
+            // 收法同 `stop()`：宽限（`AgentTimeouts.endGrace`，按注入的 `timing`）后 SIGTERM、再宽限后 SIGKILL，有上限。旧条目这里就拿掉，不等退出监视那个任务
             await running.stream?.process.stop()
             if hosted[session.id] === running { hosted[session.id] = nil }
         }
@@ -127,7 +127,7 @@ public final class ClaudeCodeRuntime: AgentRuntime {
         known: (name: String?, firstMessage: String?)? = nil
     ) async throws -> PiSession.ID {
         let claude = try await executable()
-        let session = ClaudeHostedSession(bridge: bridge)
+        let session = ClaudeHostedSession(bridge: bridge, timing: timing)
         // 交给会话的附件在工作目录外（`AttachmentFiles.directory`）：读它不用再问
         let process = try await session.host(
             executable: claude.url, arguments: arguments + ["--add-dir", store.files.directory.path(percentEncoded: false)], directory: directory,

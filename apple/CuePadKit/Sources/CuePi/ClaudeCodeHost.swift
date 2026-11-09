@@ -44,13 +44,18 @@ final class ClaudeHostedSession: SessionLink {
     /// 模型目录里每项（别名，如 `haiku`）解析到的 id（`claude-haiku-5-5`）：每轮报的是后者，界面认前者
     private var resolved: [String: String] = [:]
 
+    /// 等收尾的时限与进程收尾的宽限（`ChildProcess.stop()`）都按 `timing` 量
+    let timing: Timing
+
     init(bridge: PiBridge, timing: Timing = .system) {
         self.bridge = bridge
+        self.timing = timing
         brain = nil
         (closing, startWaits, clearWaits) = Self.waits(timing)
     }
 
     init(timing: Timing = .system) {
+        self.timing = timing
         brain = BrainSession()
         (closing, startWaits, clearWaits) = Self.waits(timing)
     }
