@@ -140,8 +140,6 @@ public actor CueStore {
     if !changed.isDisjoint(with: Table.synced) { syncChanged(nil, in: changed) }
   }
 
-  // MARK: 内部：事务与通用行读写
-
   /// 资料库队列此刻要排多久：投一件空活，到它开始执行（停摆打点，App 的 `holdActivityWhilePolling`）。
   public nonisolated func queueDelay() async -> Duration {
     await waited(since: .now)

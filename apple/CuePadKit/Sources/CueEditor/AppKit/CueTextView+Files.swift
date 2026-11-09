@@ -3,7 +3,6 @@ import AppKit
 import CueText
 
 extension CueTextView {
-    // MARK: 粘贴与拖入
     // 粘贴（paste:）和拖入最终都汇到 readSelection(from:type:)，在这里统一处理。
 
     public override func readSelection(from pboard: NSPasteboard, type: NSPasteboard.PasteboardType) -> Bool {
@@ -55,8 +54,6 @@ extension CueTextView {
         }
     }
 
-    // MARK: 点附件
-
     /// 点在文件牌或还没到这台的图片上（不移光标）：交给宿主（`onOpenAttachment`）；本机的图片与别处照常。
     public override func mouseDown(with event: NSEvent) {
         guard event.clickCount == 1, let (hit, rect) = attachment(at: event), hit.file == nil || !hit.name.isEmpty else { return super.mouseDown(with: event) }
@@ -75,8 +72,6 @@ extension CueTextView {
         }
         return nil
     }
-
-    // MARK: 复制
 
     /// 复制/剪切/拖出选区一律输出存储格式字符串：附件不会被归档成 RTFD 而丢失键。
     public override func writeSelection(to pboard: NSPasteboard, types: [NSPasteboard.PasteboardType]) -> Bool {

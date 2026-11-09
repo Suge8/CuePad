@@ -30,8 +30,6 @@ final class TransferDelegate: NSObject, UITextPasteDelegate, UITextDropDelegate,
 }
 
 extension CueTextView {
-    // MARK: 粘贴与拖入
-
     fileprivate func transform(_ item: UITextPasteItem) {
         let pasted = PastedItem(item.itemProvider)
         if pasted.isFile {
@@ -59,8 +57,6 @@ extension CueTextView {
         }
     }
 
-    // MARK: 外部选择器
-
     /// 相册、文件选择器选来的：存好（后台）再插到此刻的光标处，光标落在后面。
     public func insert(_ files: [IncomingFile]) {
         core.importFiles(files, at: selectedRange, selection: { [weak self] in self?.selectedRange ?? NSRange(location: 0, length: 0) }) { [weak self] result in
@@ -74,8 +70,6 @@ extension CueTextView {
             }
         }
     }
-
-    // MARK: 点附件
 
     /// 点按落在哪个附件上（字符位置的附件，且点在它的框里）。
     func attachment(at point: CGPoint) -> (key: String, name: String, file: URL?, rect: CGRect)? {
@@ -103,8 +97,6 @@ extension CueTextView {
         guard let hit = attachment(at: tap.location(in: self)) else { return }
         onOpenAttachment?(hit.key, hit.name, FileChip.picture(in: hit.rect, named: hit.name))
     }
-
-    // MARK: 复制
 
     /// 复制/剪切一律输出存储格式字符串：附件不会被归档成 RTFD 而丢失键。
     public override func copy(_ sender: Any?) {
