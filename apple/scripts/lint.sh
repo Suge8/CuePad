@@ -144,6 +144,12 @@ for file in App/Sources/UI/Debug/*.swift; do
   status=1
 done
 
+# 放行的测试只读或只写测试自己的：只读真实凭据（EvalBrain、CodexSupport）、找 ~/.local/bin 的真命令与核对真实历史里没留下这次（RealBrain*）、
+# 录带里换掉家目录与 Git 邮箱（AgentTape+Text）、固定版本 Agent 的下载缓存（PinnedAgent）
+forbid "家目录只经 UserHome（CueStore）取：读写各家 Agent 的走 AgentPaths（userHome、expanding，认环境给的 HOME，隔离实例与测试换得掉）；确要真实家目录的（显示 ~/…、展开用户写的 ~、缺省位置）用 UserHome。直接取绕过隔离，会读写真实的 ~/.claude、~/.pi" \
+  '(\bhomeDirectoryForCurrentUser\b|\bNSHomeDirectory(?:ForUser)?\b|\bhomeDirectory\(forUser|\.homeDirectory\b|\b(?:expanding|abbreviatingWith)TildeInPath\b|getenv\("HOME"\)|processInfo\.environment\["HOME"\])' \
+  '**/CueStore/UserHome.swift' '**/EvalBrain.swift' '**/CodexSupport.swift' '**/RealBrainTests.swift' '**/RealBrainProcessTests.swift' '**/AgentTape+Text.swift' '**/PinnedAgent.swift'
+
 # 间距只经 Spacing 的几档（规则在 lint_spacing.py 头注释）
 python3 "$scripts/lint_spacing.py" || status=1
 

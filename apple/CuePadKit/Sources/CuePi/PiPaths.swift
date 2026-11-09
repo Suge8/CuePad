@@ -25,9 +25,9 @@ public struct PiPaths: Sendable, Equatable {
     ) {
         self.agentDirectory = agentDirectory ?? Self.defaultAgentDirectory(environment)
         self.socketDirectory = socketDirectory ?? AgentHookEnvelope.socketDirectory(environment: environment)
-        let binOverride = environment["CUEPAD_BIN_DIR"].flatMap { $0.isEmpty ? nil : URL(filePath: ($0 as NSString).expandingTildeInPath, directoryHint: .isDirectory) }
+        let binOverride = environment["CUEPAD_BIN_DIR"].flatMap { $0.isEmpty ? nil : URL(filePath: UserHome.expanding($0), directoryHint: .isDirectory) }
         self.binDirectory = binDirectory ?? binOverride
-            ?? FileManager.default.homeDirectoryForCurrentUser.appending(path: ".local/bin", directoryHint: .isDirectory)
+            ?? UserHome.directory.appending(path: ".local/bin", directoryHint: .isDirectory)
         let agentGiven = agentDirectory != nil || !(environment[PiRuntime.facts.homeVariable] ?? "").isEmpty
         isExplicit = agentGiven && (binDirectory != nil || binOverride != nil)
     }
@@ -47,9 +47,9 @@ public struct PiPaths: Sendable, Equatable {
 
     private static func defaultAgentDirectory(_ environment: [String: String]) -> URL {
         if let dir = environment[PiRuntime.facts.homeVariable], !dir.isEmpty {
-            return URL(filePath: (dir as NSString).expandingTildeInPath, directoryHint: .isDirectory)
+            return URL(filePath: UserHome.expanding(dir), directoryHint: .isDirectory)
         }
-        return FileManager.default.homeDirectoryForCurrentUser.appending(path: ".pi/agent", directoryHint: .isDirectory)
+        return UserHome.directory.appending(path: ".pi/agent", directoryHint: .isDirectory)
     }
 }
 #endif

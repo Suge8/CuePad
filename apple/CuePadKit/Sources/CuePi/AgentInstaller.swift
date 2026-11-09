@@ -39,7 +39,7 @@ extension AgentIntegration {
     /// （`PiPaths.launchEnvironment`），登录进 CuePad 用的同一个配置目录；在家目录里起（终端默认的目录，隔离运行时是换走的那个）。
     public func piLoginScript(executable: URL) async -> String {
         let launching = await locate().environment(launching: executable, overrides: paths.environment)
-        let environment = paths.pi.launchEnvironment.merging(["HOME": launching["HOME"] ?? NSHomeDirectory(), "PATH": launching["PATH"] ?? ""]) { $1 }
+        let environment = paths.pi.launchEnvironment.merging(["HOME": launching["HOME"] ?? paths.userHome.path, "PATH": launching["PATH"] ?? ""]) { $1 }
         let exports = environment.sorted { $0.key < $1.key }.map { "export \($0.key)=\(AgentSkill.shellQuoted($0.value))" }
         return (["#!/bin/sh", "clear"] + exports + ["cd \"$HOME\"", "exec \(AgentSkill.shellQuoted(executable.path))"]).joined(separator: "\n") + "\n"
     }

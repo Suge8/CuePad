@@ -28,7 +28,7 @@ public struct ExecutableLocator: Sendable, Equatable {
     }
 
     private init(shellPath: String?) {
-        let home = FileManager.default.homeDirectoryForCurrentUser
+        let home = UserHome.directory
         let path = (shellPath ?? "").split(separator: ":").map { URL(filePath: String($0), directoryHint: .isDirectory) }
         // 先找到的先问版本：`.local/bin` 排在 Homebrew 之前，包管理器与 OpenCode 的在后
         let homes = Self.homeDirectories(home)

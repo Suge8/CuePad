@@ -116,6 +116,8 @@ public struct LibraryInstruction: Codable, Equatable, Sendable, Identifiable {
     case global
     case piSystem
     case project(UUID)
+    /// 一家原生读、还没换成共享那份的全局规则（`file` 是在它配置目录里的相对路径）：有就列，整理后没了。
+    case agent(AgentKind, file: String)
   }
 
   public let kind: Kind

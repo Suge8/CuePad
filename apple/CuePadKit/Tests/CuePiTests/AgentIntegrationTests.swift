@@ -175,7 +175,7 @@ struct AgentIntegrationTests {
         let file = inAgentDirectory ? agentSkill(kind).appending(path: "SKILL.md") : skillFile
         try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
         try mine.write(to: file, atomically: true, encoding: .utf8)
-        let shown = ((inAgentDirectory ? agentSkill(kind) : skillFile).path as NSString).abbreviatingWithTildeInPath
+        let shown = UserHome.shown((inAgentDirectory ? agentSkill(kind) : skillFile).path)
         #expect(await integration().status(of: kind).files == .foreign(shown))
         await #expect(throws: AgentInstallError.self) { try await integration().install(kind) }
         await #expect(throws: AgentInstallError.self) { try await integration().uninstall(kind) }

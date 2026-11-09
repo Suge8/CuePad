@@ -8,7 +8,8 @@ nonisolated struct DebugArgs: Decodable {
     let actsAs: String?
     /// `-CuePadAgentHome <目录>`（仅 Mac）：Agent 当作装在这个家目录里，给空目录是一家都没装，点安装真跑官方脚本装进它
     let agentHome: String?
-    /// `-CuePadAgentLibrary clean`：技能与规则的演示文件摆成整理好的样子（默认是该整理的样子）
+    /// `-CuePadAgentLibrary clean|agents-map`：技能与规则的演示文件摆成整理好的样子（默认是该整理的样子）；agents-map 是 ~/.agents 当仓库用的样子（仅 Mac）：
+    /// 它的 AGENTS.md 是一份目录地图，Pi 自己写了全局规则，Claude Code 没有，Codex 的是空文件
     let agentLibrary: String?
     let alertStatus: String?
     /// `-CuePadAllKinds YES|<批数>`（配 `-CuePadDemo YES -CuePadScene session -CuePadSession scratch`）：scratch 会话里发每种类型各一份的交付物、一个 3D 模型与一张"下载中"，两份一批
@@ -128,6 +129,8 @@ nonisolated struct DebugArgs: Decodable {
     let task: String?
     /// `-CuePadTaskLines written|changed`：对话末尾 Cue 再说一句关于"导入旧数据"的话（气泡下一行这件活），都看过、页停在最新处
     let taskLines: String?
+    /// `-CuePadTidy YES`（配 library 画面，仅 Mac）：画面出来后点一下一键整理，拍整理后的样子
+    let tidy: Bool
     /// `-CuePadVoice mic`：Cue 能听了就开始通话，声音走麦克风与扬声器（人工验收）
     let voice: String?
     /// `-CuePadWebSnapshot <PNG 路径>`：预览网页打开时，用同一套拦截规则另载入一份、把快照存成 PNG

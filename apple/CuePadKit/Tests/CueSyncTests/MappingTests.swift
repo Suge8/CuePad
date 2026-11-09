@@ -51,9 +51,9 @@ import Testing
       AgentLibrary(
         hostID: "mac", home: "/Users/me", skills: [LibrarySkill(
           name: "pr", scope: .global, group: "", path: "/Users/me/.agents/skills/pr", description: "写 PR", hash: LibraryEdit.base(of: skill))],
-        instructions: [LibraryInstruction(kind: .global, path: "/Users/me/.agents/AGENTS.md", hash: LibraryEdit.base(of: "规则"), modifiedAt: .now)],
+        instructions: [LibraryInstruction(kind: .global, path: "/Users/me/.config/agents/AGENTS.md", hash: LibraryEdit.base(of: "规则"), modifiedAt: .now)],
         tidies: [LibraryTidy(id: "empty", kind: .empty(["/Users/me/.codex/skills/x"]))], modifiedAt: .now),
-      texts: ["/Users/me/.agents/skills/pr/SKILL.md": skill, "/Users/me/.agents/AGENTS.md": "规则"])
+      texts: ["/Users/me/.agents/skills/pr/SKILL.md": skill, "/Users/me/.config/agents/AGENTS.md": "规则"])
     return (card, hash)
   }
 

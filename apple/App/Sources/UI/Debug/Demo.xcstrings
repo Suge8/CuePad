@@ -1,6 +1,22 @@
 {
   "sourceLanguage" : "zh-Hans",
   "strings" : {
+    "# Agents 目录地图\n\n这个仓库存技能与治理文件，只给在这里干活的 Agent 看。\n\n- skills/：各家共读的技能" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "# Agents Directory Map\n\nThis repo holds skills and governance files, for agents working here only.\n\n- skills/: skills shared by every agent"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "# Agents 目录地图\n\n这个仓库存技能与治理文件，只给在这里干活的 Agent 看。\n\n- skills/：各家共读的技能"
+          }
+        }
+      }
+    },
     "# CuePad\n\nSwift 原生应用。构建、测试、截图只经 apple/scripts/xc.sh。" : {
       "localizations" : {
         "en" : {

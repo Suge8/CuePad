@@ -4,12 +4,12 @@ import Foundation
 
 extension OpenCodeRuntime {
     /// 只认 v2（v1 的服务接口不同，不做兼容；Homebrew 与官方脚本装的是 v2，npm 上 v2 是 `@opencode/cli`，旧包 `opencode-ai` 仍是 1.x），太旧也是重跑 v2 的安装命令替换它。
-    /// 旧技能目录还认单数的 `skill`；全局规则不链：没有自己那份时它读 Claude Code 的。
+    /// 旧技能目录还认单数的 `skill`。
     nonisolated public static let facts = AgentFacts(
         command: "opencode", homeVariable: "OPENCODE_CONFIG_DIR",
         home: home, minimumVersion: AgentVersion(2, 0, 0), installScript: "curl -fsSL https://opencode.ai/v2/install | bash", probe: ask,
         brain: { OpenCodeBrain() },
-        skillFolders: ["skills", "skill"], projectFolder: ".opencode", linksGlobalInstructions: false)
+        skillFolders: ["skills", "skill"], projectFolder: ".opencode")
 
     nonisolated private static func home(_ paths: AgentPaths) -> URL {
         paths.directory(facts.homeVariable) ?? paths.xdg("XDG_CONFIG_HOME", ".config").appending(path: "opencode", directoryHint: .isDirectory)
