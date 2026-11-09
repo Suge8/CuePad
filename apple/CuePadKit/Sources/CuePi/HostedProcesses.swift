@@ -98,7 +98,6 @@ final class HostedProcesses {
         try await resumptions.resume(sessionID) { [self] in
             let admission = try admission()
             await vacate(sessionID)
-            guard era == admission.era else { throw CancellationError() }
             return try await start(admission)
         }
     }
