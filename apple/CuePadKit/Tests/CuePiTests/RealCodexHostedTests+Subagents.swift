@@ -53,14 +53,15 @@ extension RealCodexHostedTests {
     }
 
     /// 子代理的请求停在闸门上，代替原来让它 sleep：主会话先答 DISPATCHED 歇在“等子代理”，放行后读回结果才歇下。
-    @Test func aSubagentLeftRunningIsReadBackBeforeSettling() async throws {
-        try await withCodexRig(model: "gpt-6-luna") { rig in
-            // 假模型答得太快：派活的下一步等 CuePad 认出子代理再放行，否则这一轮会先歇下、再进“等子代理”（真模型要几秒；负载高时实测会错开）
-            let gate = rig.model.gate(), known = rig.model.gate()
+    /// 假模型派完活立刻答完（真模型要几秒），这一轮结束时 CuePad 可能还没认出子代理：要先认清再歇下，不先报一次歇下。
+    /// `childUnreadableWhileParentRuns`：这一轮结束前子线程的 `thread/read` 都读不到（`CodexReadFault`）。
+    @Test(arguments: [false, true]) func aSubagentLeftRunningIsReadBackBeforeSettling(childUnreadableWhileParentRuns: Bool) async throws {
+        try await withCodexRig(model: "gpt-6-luna", childUnreadableWhileParentRuns: childUnreadableWhileParentRuns) { rig in
+            let gate = rig.model.gate()
             rig.model.on("Spawn one subagent called fruit") { request in
                 request.step == 0
                     ? .call("spawn_agent", ["task_name": "fruit", "message": "Child task: fruit. Reply with BANANA.", "fork_turns": "none"])
-                    : .held(known, then: .say("DISPATCHED"))
+                    : .say("DISPATCHED")
             }
             rig.model.on({ $0.said.contains { $0.contains("Spawn one subagent called fruit") } && $0.messages.contains { $0.text.contains("BANANA") } }) { _ in .say("BANANA") }
             rig.model.on("Child task: fruit", .held(gate, then: .say("BANANA")))
@@ -70,12 +71,10 @@ extension RealCodexHostedTests {
             try await rig.bridge.send(PiMessage(text: "Spawn one subagent called fruit and do not wait for it."), to: id)
 
             try await gate.reached()
-            try await known.reached()
-            try await eventually("认出了子代理") { rig.bridge.session(id: id)?.subagents.map(\.name) == ["fruit"] }
-            known.open()
             // 变化日志经异步流收下，比桥上的会话晚一拍：等它也收到这次变化
             try await eventually("这一轮结束、在等子代理") { rig.bridge.session(id: id)?.state == .delegating && log.states.last == .delegating }
-            #expect(log.settles == 0)
+            #expect(log.settles == 0, "\(log.states)")
+            #expect(rig.bridge.session(id: id)?.subagents.map(\.name) == ["fruit"])
             let delegating = try #require(rig.bridge.session(id: id))
             let dispatched = try #require(try rig.transcript(delegating).recap.answeredAt)
 

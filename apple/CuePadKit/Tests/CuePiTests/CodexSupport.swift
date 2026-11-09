@@ -176,8 +176,10 @@ struct CodexHome {
 }
 
 @MainActor
-func withCodexRig(approvals: String = "never", model: String = codexTestModel, daemon: Bool = false, _ body: (CodexRig) async throws -> Void) async throws {
-    let rig = try await CodexRig(approvals: approvals, model: model, daemon: daemon)
+func withCodexRig(
+    approvals: String = "never", model: String = codexTestModel, daemon: Bool = false, childUnreadableWhileParentRuns: Bool = false, _ body: (CodexRig) async throws -> Void
+) async throws {
+    let rig = try await CodexRig(approvals: approvals, model: model, daemon: daemon, childUnreadableWhileParentRuns: childUnreadableWhileParentRuns)
     do {
         try await body(rig)
     } catch {
@@ -230,14 +232,18 @@ final class CodexRig {
     private let sharedBefore: DaemonDirectory?
 
     /// - Parameter daemon: 会起常驻服务（终端里的 Codex）：收尾时断言没动共用目录里别人的条目、自己的已清掉，见 `DaemonDirectory`。
-    init(approvals: String = "never", model: String = codexTestModel, daemon: Bool = false) async throws {
+    /// - Parameter childUnreadableWhileParentRuns: 托管的 Codex 经 `CodexReadFault` 起：主会话一轮在跑时子线程的 `thread/read` 都读不到。
+    init(approvals: String = "never", model: String = codexTestModel, daemon: Bool = false, childUnreadableWhileParentRuns: Bool = false) async throws {
         sharedBefore = daemon ? DaemonDirectory() : nil
         let codex = try CodexHome(model: try await FakeModel(), modelName: model)
         let presence = TestPresence()
         let hooks = AgentHookServer(path: codex.paths.pi.hookSocket)
         let bridge = PiBridge(socketDirectory: codex.sockets)
         let locator = codex.locator
-        let runtime = CodexRuntime(bridge: bridge, paths: codex.paths, hooks: hooks, codex: { [locator] in locator.candidates("codex").first }, locate: { [locator] in locator }, presence: presence, timing: noDeadline)
+        let launch = childUnreadableWhileParentRuns ? try CodexReadFault.wrapper(around: pinnedCodex.executable, in: codex.root) : nil
+        let runtime = CodexRuntime(
+            bridge: bridge, paths: codex.paths, hooks: hooks, codex: { [locator] in launch ?? locator.candidates("codex").first }, locate: { [locator] in locator },
+            presence: presence, timing: noDeadline)
         do {
             try codex.signIn(approvals: approvals)
             try await AgentIntegration(paths: codex.paths, locate: { [codex] in codex.locator }, cuepad: PiProcess.cuepad, timing: noDeadline).install(.codex)

@@ -85,6 +85,9 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
         var lastError: String?
         /// 终端会话出错歇下后，等会话文件里这一轮的结束记录来读原因（`readFailure`）
         var failureWatch: Task<Void, Never>?
+        /// 这一轮已结束、先认清同一进程上认不出主人的线程再歇下（`endTurn`）；期间 `facts` 仍是在跑，新一轮开始时取消
+        var ending: Task<Void, Never>?
+        var endingFailure: String?
         /// CuePad 正以一句话开新一轮（`deliver`）：期间一轮结束不算歇下，接着就是这句开的那一轮
         var restarting: Restart?
         var restartGeneration = 0

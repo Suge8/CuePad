@@ -26,8 +26,13 @@ extension RealClaudeHostTests {
                 try await testbed.bridge.configure(PiConfig(model: PiModelKey(provider: ClaudeCode.provider, id: "no-such-model")), in: id)
             }
             try await testbed.bridge.command("/rename 命令改名", in: id)
-            try await eventually("斜杠命令改了名、歇下") {
-                testbed.bridge.session(id: id)?.displayName == "命令改名" && testbed.bridge.session(id: id)?.state == .settled
+            do {
+                try await eventually("斜杠命令改了名、歇下") {
+                    testbed.bridge.session(id: id)?.displayName == "命令改名" && testbed.bridge.session(id: id)?.state == .settled
+                }
+            } catch {
+                let session = testbed.bridge.session(id: id)
+                throw Stuck(description: "等不到：斜杠命令改了名、歇下；名字 \(String(describing: session?.displayName))，状态 \(String(describing: session?.state))")
             }
             await #expect(throws: PiBridgeError.rejected("unknown_command")) { try await testbed.bridge.command("/no-such-command", in: id) }
 
