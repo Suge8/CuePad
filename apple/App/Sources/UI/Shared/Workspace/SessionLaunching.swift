@@ -131,9 +131,12 @@ extension Workspace {
     }
     #endif
 
-    /// 表单关上：它那一份不在途就清掉，下次打开是新的；在途的接着等，认领到时照样调 `opened`。
+    /// 表单关上：没发过或明确没开成的那一份清掉，下次打开是新的；在途的与可能已开过的（未确认、查不到）接着等，认领到时照样调 `opened`，
+    /// 重开后再开照样先问——清掉的话关一次就绕过了确认。它们只在认领到或确认后另开时结束。
     func settleLaunch(_ key: SessionLaunching.Key) {
-        if let launching = launches[key], !launching.inFlight(at: services.speech) { launching.reset() }
+        guard let launching = launches[key], !launching.inFlight(at: services.speech),
+              launching.progress?.submission(at: services.speech) != .confirm else { return }
+        launching.reset()
     }
 
     private func watch(_ launching: SessionLaunching, _ launch: SessionLaunch, opened: ((LaunchProgress.Claimed) -> Void)?) {

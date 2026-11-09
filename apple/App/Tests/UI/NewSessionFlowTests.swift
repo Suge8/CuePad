@@ -5,7 +5,7 @@ import Testing
 
 /// 新会话的三个入口（Mac 的新会话表单、Mac 任务的"开始"、手机的新会话输入框）同一套规则（`SessionLaunching`）：
 /// 首次开；明确没开成时直接重试，新请求替换失败的那条；结果未确认时先问，取消不动原请求与草稿，确认后另开；认领后各回各的去处；
-/// 同一任务已有没收尾的请求时 Store 拒绝冒充首次的交出。
+/// 结果未确认时关掉表单或输入框接着等：晚到的认领照样收尾，重开后再开照样先问；同一任务已有没收尾的请求时 Store 拒绝冒充首次的交出。
 @MainActor
 struct NewSessionFlowTests {
     nonisolated enum Entry: Sendable, CustomTestStringConvertible {
@@ -14,9 +14,11 @@ struct NewSessionFlowTests {
         #if os(macOS)
         static let all: [Entry] = [.form, .task]
         static let forCards: [Entry] = [.task]
+        static let closable: [Entry] = [.form]
         #else
         static let all: [Entry] = [.input]
         static let forCards: [Entry] = [.input]
+        static let closable: [Entry] = [.input]
         #endif
     }
 
@@ -70,6 +72,26 @@ struct NewSessionFlowTests {
         try await executor.start()
         try await eventually("入口读到 Mac 写回的结果") { phase(launching.phase(at: app.services.speech)) }
         await executor.stop()
+    }
+
+    /// 关上表单或输入框；返回重新打开它的动作（同一份开场）。
+    private func close(_ entry: Entry, in workspace: Workspace) -> () -> Void {
+        #if os(macOS)
+        workspace.showsNewSession = false
+        return { workspace.showsNewSession = true }
+        #else
+        let start = workspace.newSession
+        workspace.newSession = nil
+        return { workspace.newSession = start }
+        #endif
+    }
+
+    private func unconfirmedThenClosed(_ entry: Entry, in workspace: Workspace) async throws -> (SessionLaunching, SessionLaunch, () -> Void, () -> Task<Void, Never>?) {
+        let (_, launching, submit) = try await open(entry, in: workspace)
+        await submit()?.value
+        let first = try #require(launching.launch)
+        try await mac(answers: .unconfirmed(.verbatim("不知道开没开")), launching) { if case .unconfirmed = $0 { true } else { false } }
+        return (launching, first, close(entry, in: workspace), submit)
     }
 
     private var requests: Set<UUID> { get async throws { Set(try await store.deliveryRequests().map(\.id)) } }
@@ -151,5 +173,36 @@ struct NewSessionFlowTests {
         #expect(launching.error == CueStoreError.deliveryAlreadyHanded.localizedDescription)
         #expect(workspace.notice?.isError == true)
         #expect(try await requests == [other.id])
+    }
+
+    @Test(arguments: Entry.closable)
+    func 未确认后关上_晚到的认领照样收尾(entry: Entry) async throws {
+        defer { app.services.cancelBackgroundWork() }
+        let workspace = Workspace(services: app.services)
+        let (launching, first, _, _) = try await unconfirmedThenClosed(entry, in: workspace)
+        #expect(launching.launch == first, "可能已开过：关上也接着等")
+
+        let token = try #require(try await store.deliveryRequest(first.request)?.launch?.token)
+        try await PiStateRecorder(store: store, hostID: host).update(sessionID: "s1", state: .thinking, title: "修乱序", launchToken: token)
+        try await eventually("晚到的认领收尾这一次") { launching.launch == nil }
+        let route: SessionRoute? = if case .session(let route) = workspace.mainRoute { route } else { nil }
+        #if os(macOS)
+        #expect(route?.sessionID == "s1", "Mac 的表单关了也进入新会话")
+        #else
+        #expect(route == nil && workspace.newSession == nil, "手机的输入框关了就留在原处")
+        #endif
+    }
+
+    @Test(arguments: Entry.closable)
+    func 未确认后关上再开_再开照样先问(entry: Entry) async throws {
+        defer { app.services.cancelBackgroundWork() }
+        let workspace = Workspace(services: app.services)
+        let (launching, first, reopen, submit) = try await unconfirmedThenClosed(entry, in: workspace)
+        reopen()
+        #expect(launching.outcome(at: app.services.speech)?.text == "不知道开没开", "重开写着上一次的原因")
+        #expect(submit() == nil)
+        #expect(launching.confirmingAgain, "关一次不能绕过确认")
+        await launching.launchAgain()?.value
+        #expect(try await requests == [first.request, try #require(launching.launch).request])
     }
 }
