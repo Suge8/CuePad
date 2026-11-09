@@ -19,7 +19,7 @@ extension ClaudeTestbed {
             default: .say("launched")
             }
         }
-        on("SUBTASK-TICKER") { $0.step == 0 ? .call("Bash", ["command": python(sleeping: 3, then: "SUB_DONE"), "description": "sub"]) : handback("SUB_DONE") }
+        on("SUBTASK-TICKER") { $0.step == 0 ? .call("Bash", ["command": python(sleeping: 3, then: "SUB_DONE"), "description": "sub"]) : report("SUB_DONE", in: $0) }
         on("<task-notification>") { .say($0.prompt.contains("Background command") ? "BG_DONE" : "SUB_DONE") }
     }
 
@@ -52,7 +52,7 @@ extension ClaudeTestbed {
     func playLongSubagent() {
         let victim = python(sleeping: 60, then: "V")
         on("LONG-SUBAGENT") { $0.step == 0 ? launch("victim", task: "SUBTASK-VICTIM") : .say("launched") }
-        on("SUBTASK-VICTIM") { $0.step == 0 ? .call("Bash", ["command": victim, "description": "victim"]) : handback("V") }
+        on("SUBTASK-VICTIM") { $0.step == 0 ? .call("Bash", ["command": victim, "description": "victim"]) : report("V", in: $0) }
         on("TaskStop") { request in
             guard request.step == 0 else { return .say("STOPPED") }
             let agent = String(decoding: request.body, as: UTF8.self).firstMatch(of: /agentId: (\w+)/)?.1
@@ -69,6 +69,11 @@ private func launch(_ description: String, task: String) -> FakeReply {
 }
 
 private func handback(_ message: String) -> FakeReply { .call("SubagentHandback", ["message": message]) }
+
+/// 托管（stream-json）里的子代理有 SubagentHandback、靠它交报告；终端里的没有，最后一句话就是报告
+private func report(_ message: String, in request: FakeRequest) -> FakeReply {
+    request.tools.contains("SubagentHandback") ? handback(message) : .say(message)
+}
 
 private extension FakeRequest {
     /// 对话里最后一条你的话的原文（JSON；之后可能还跟着 system 消息）

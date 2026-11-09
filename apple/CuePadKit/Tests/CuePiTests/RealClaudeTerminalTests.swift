@@ -42,7 +42,8 @@ struct RealClaudeTerminalTests {
             let start = Date()
             try await testbed.bridge.send(PiMessage(text: "只回复 PONG", deliveryID: delivery), to: session.id)
             try await testbed.waitForTurn(session.id, since: start)
-            let said = try testbed.transcript(session.sessionFile).messages.filter { $0.role == .known(.user) }
+            try await testbed.waitForDraftLanded(session.id)  // 一轮歇下时会话文件可能还没写完
+            let said = try testbed.transcript(testbed.bridge.session(id: session.id)?.sessionFile).messages.filter { $0.role == .known(.user) }
             #expect(said.map(\.text) == ["只回复 PONG"])
             #expect(said.first?.deliveryID == UUID(uuidString: delivery))
             await #expect(throws: PiBridgeError.unsupported) {
