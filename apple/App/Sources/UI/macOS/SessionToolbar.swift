@@ -3,8 +3,7 @@ import CuePi
 import CueStore
 import SwiftUI
 
-@Observable
-final class SessionHeader {
+enum SessionHeader {
     struct State: Equatable {
         var session: PiSessionState
         var delivery: DeliveryRequest?
@@ -17,17 +16,6 @@ final class SessionHeader {
         /// 晚于标题两帧建：建菜单约占点击回合的一半。
         var showsMenu: Bool
         var task: SessionTaskLink?
-    }
-
-    private(set) var state: State?
-    @ObservationIgnored var reveal: () -> Void = {}
-
-    func set(_ state: State?) {
-        if self.state != state { self.state = state }
-    }
-
-    func clear(_ sessionID: String) {
-        if state?.session.sessionID == sessionID { state = nil }
     }
 }
 
