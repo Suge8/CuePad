@@ -18,6 +18,8 @@ final class CodexDriver {
     private(set) var turn: String?
     private var finishedTurn: String?
     private var lastError: String?
+    /// 报过 `turn/started` 的最近一轮：停止的 -32600 回应可能晚于它到，据此不再等一个已经来过的开跑
+    private var startedTurn: String?
     /// 等这一轮开跑（`turn/started`）或结束，见 `interrupt`
     private let activations = PendingReplies<UUID, Void>(timeout: AgentTimeouts.stop, timeoutError: PiBridgeError.ackTimeout)
     var onEvent: (TurnEvent) -> Void = { _ in }
@@ -73,7 +75,7 @@ final class CodexDriver {
         do {
             try await rpc.call("turn/interrupt", params)
         } catch CodexRPCError.server(-32600, _) where self.turn == turn {
-            try await activations.wait()
+            if startedTurn != turn { try await activations.wait() }
             guard self.turn == turn else { return }
             do {
                 try await rpc.call("turn/interrupt", params)
@@ -109,7 +111,10 @@ final class CodexDriver {
     private func own(_ method: String, _ params: JSONValue) {
         switch method {
         case "turn/started":
-            if let id = params["turn"]?["id"]?.string { begin(id) }
+            if let id = params["turn"]?["id"]?.string {
+                startedTurn = id
+                begin(id)
+            }
             activations.releaseAll()
         case "turn/completed":
             let completed = params["turn"]

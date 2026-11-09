@@ -56,6 +56,32 @@ struct RealHostedEndTests {
         }
     }
 
+    /// Codex 拒绝停开跑前的一轮（-32600），而这一轮的 `turn/started` 比拒绝先到：照样停下它，不再等一个已经来过的开跑。
+    @Test func aCodexRefusalArrivingAfterTheTurnStartedStillStopsIt() async throws {
+        try await EndRig.run(.codex, timing: .system) { rig in
+            try #"""
+            import sys
+            held = None
+            for line in sys.stdin:
+                if held is None and "no active turn to interrupt" in line:
+                    held = line
+                    continue
+                print(line, end="", flush=True)
+                if held is not None and "turn/started" in line:
+                    print(held, end="", flush=True)
+                    held = None
+            """#.write(to: rig.wrapper.appending(path: "late-refusal"), atomically: true, encoding: .utf8)
+            rig.hang("BUSY-HANG")
+            let id = try await rig.open()
+            try await rig.bridge.send(PiMessage(text: "BUSY-HANG keep going"), to: id)
+            let began = ContinuousClock.now
+            try await rig.bridge.abort(id)
+            try await eventually("停下了") { rig.bridge.session(id: id)?.state == .settled }
+            let took = began.duration(to: .now)
+            #expect(took < .seconds(10), "用了 \(took)")
+        }
+    }
+
     /// 闲置到点被请退出；外壳在真 Agent 退出后还握着输出 3 秒（进程还没走）。请退出的那一刻就不在桥上，
     /// 紧接着的话（`MacExecutor` 的接法）接着同一会话、等旧进程走了才起新的，话送到。
     @Test(arguments: Hosting.allCases)

@@ -35,7 +35,8 @@ enum Hosting: String, CaseIterable, Sendable, CustomTestStringConvertible {
 
 /// 钉住的真 Agent（`PinnedAgent`）连本用例的假模型，起它的是外壳（`wrapper/<命令>`，真的在 `$REAL`）：
 /// 记下每次起的进程号（`launched`），起的时候前面起的还活着就记进 `overlap`（同一会话同时两个进程）；
-/// 起的那一刻有 `slow` 标记的，真 Agent 退出后（写 `eof.<进程号>`）还握着输出 3 秒；有 `stubborn` 标记的不理 SIGTERM、退出后一直握着输出。
+/// 起的那一刻有 `slow` 标记的，真 Agent 退出后（写 `eof.<进程号>`）还握着输出 3 秒；有 `stubborn` 标记的不理 SIGTERM、退出后一直握着输出；
+/// 有 `late-refusal` 标记的（Codex）把"no active turn"的回应压到下一条 `turn/started` 之后才交出。
 /// 配置目录、家目录、连接目录全在临时目录里，不碰真实的配置与资料库。
 @MainActor
 final class EndRig {
@@ -75,6 +76,7 @@ final class EndRig {
             for p in $(cat "$dir/launched" 2>/dev/null); do kill -0 "$p" 2>/dev/null && echo "$p" >> "$dir/overlap"; done
             echo $$ >> "$dir/launched"
             if [ -e "$dir/stubborn" ]; then trap '' TERM; "$REAL" "$@"; : > "$dir/eof.$$"; exec sleep 600; fi
+            if [ -e "$dir/late-refusal" ]; then "$REAL" "$@" | /usr/bin/python3 -I -u -c "$(cat "$dir/late-refusal")"; exit; fi
             if [ -e "$dir/slow" ]; then "$REAL" "$@"; s=$?; : > "$dir/eof.$$"; sleep 3; exit $s; fi
             exec "$REAL" "$@"
             """
