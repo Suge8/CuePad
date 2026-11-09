@@ -104,7 +104,7 @@ Cue 最多等 `Speech.cueWait`。未交出才安全重发；未知重做须确�
 
 ## 最低对端版本
 
-`PeerFloor` 只在旧端会误写时抬 `Schema.peerFloor`，仅看不到新字段不抬。旧端暂停收发但可写，更新后自动发送，故按 [release.md](release.md)「发版顺序」先发 iOS。同次删旧兼容须所有设备已支持门槛（2026-10 起）；库起点 `Schema.baseVersion` 须所有用户升级后才挪。
+`PeerFloor` 只在旧端会误写时抬 `Schema.peerFloor`，仅看不到新字段不抬。旧端暂停收发但可写，更新后自动发送，故按 [release.md](release.md)「发版顺序」先发 iOS。同次删旧兼容须所有设备已支持门槛（2026-10 起）；库起点 `Schema.baseVersion` 怎么定见它的注释。
 
 同步不通（断网、要更新、等你决定）时说的话照样写下：会话与 Cue 一套规则（`Speech`），排在本机、恢复后自动发出；为什么不通只在同步那一处说（`SyncSummary`，手机上带点指过去）。派发期限从服务器收下起算（`DeliveryRequest.dispatchDeadline`），在发出的设备上等的那段不算。
 

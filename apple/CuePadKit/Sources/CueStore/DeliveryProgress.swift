@@ -63,17 +63,7 @@ extension CueStore {
 
   func applyIncomingDelivery(_ remote: SyncRow, systemFields: Data, serverAt: Date?) throws {
     let awaitingResult = try isAwaitingResult(remote.id)
-    var canonical = remote
-    let legacy = remote.text("status") == Schema.legacyDeliveryFailure
-    if legacy {
-      canonical.fields["status"] = try db.first(
-        "SELECT \(Schema.deliveryFailureStatus) FROM (SELECT ? AS handledBy)", [remote.fields["handledBy"] ?? .null]) { $0.value(0) }
-    }
-    try applyVersion(canonical, systemFields)
-    if legacy {
-      // 服务器确认的是旧字节，正规化后的版本必须重新上传；原原因和领取事实原样保留。
-      try db.run("UPDATE deliveryRequests SET modifiedAt = MAX(modifiedAt, ?2) + 1 WHERE id = ?1", [remote.id, remote.modifiedAt])
-    }
+    try applyVersion(remote, systemFields)
     if let serverAt { try db.run("UPDATE deliveryRequests SET serverAt = ? WHERE id = ? AND serverAt IS NULL", [serverAt, remote.id]) }
     // 旧同步快照仍带着领取事实，却把状态退回 pending：入库时就收口为未知，不只在执行器里跳过。
     try db.run(

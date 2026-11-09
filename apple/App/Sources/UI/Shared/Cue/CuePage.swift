@@ -125,7 +125,7 @@ struct CuePage: View {
             followKey: FollowKey(thread, live: cue.presence.progress != nil), readingWidth: Self.readingWidth, inset: Self.inset, follow: $follow,
             marks: thread.marks, ids: rows.map(\.id), paging: Self.paging(thread),
             holding: catchingUp || docking,
-            arrival: rows.last.flatMap { CueRow.arrives($0, swapsInPlace: services.cueSwapsInPlace) ? $0.id : nil },
+            arrival: rows.last.flatMap { CueRow.arrives($0, swapsInPlace: services.cueOnDutyHere) ? $0.id : nil },
             docked: CueWaitDock.current(in: thread.waiting, asking: workspace.cueAsking)?.id
         ) { window in
             let lastYou = thread.messages.last { $0.author == .known(.you) }?.id

@@ -54,7 +54,7 @@ extension DeliveryMigrationTests {
             for ext in app.host.extensions.values { ext.close(bye: "quit") }
             app.pi.stop(); app.services.cancelBackgroundWork()
         }
-        #expect(CueStore.schemaVersion(of: app.databaseURL) == 93 && CueStore.peerFloor == 93)
+        #expect(CueStore.schemaVersion(of: app.databaseURL) == CueStore.supportedSchemaVersions.upperBound && CueStore.peerFloor == 93)
         try await app.services.store.setDirectory(app.directory.path, for: Project.defaultID)
         let workspace = Workspace(services: app.services), original = app.services.store
         let card = try await workspace.createTask("准备发布", in: Project.defaultID)
@@ -78,7 +78,7 @@ extension DeliveryMigrationTests {
         do { try await recording.value } catch is CancellationError {}
         try seedSchema92(app)
         let services = app.relaunch(), store = services.store
-        #expect(CueStore.schemaVersion(of: app.databaseURL) == 93)
+        #expect(CueStore.schemaVersion(of: app.databaseURL) == CueStore.supportedSchemaVersions.upperBound)
         var edited = try #require(try await store.syncRow(recordName: card.id.uuidString.lowercased()))
         let pending = try #require(try await store.syncRow(recordName: request.id.uuidString.lowercased()))
         // 同一旧请求对应的未兑现正文副本；迁移必须保留另一端已经兑现的关联。

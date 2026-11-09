@@ -71,7 +71,7 @@ struct CueWelcome: View {
 
     #if os(iOS)
     private func setup(_ settings: CueSettings) -> CueMacSetup {
-        CueMacSetup(macs: settings.macs, status: services.syncStatus, waiting: settings.gate(services).waitingReason)
+        CueMacSetup(macs: settings.macs, status: services.syncState.status, waiting: settings.gate(services).waitingReason)
     }
     #endif
 

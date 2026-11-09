@@ -52,6 +52,6 @@ extension IndexedSession: Record {
   init(row: Row) {
     self.init(
       id: row.text(0), path: row.text(1), cwd: row.text(2), title: row.text(3),
-      lastActivityAt: row.date(4), agent: row.textOrNil(5).flatMap(AgentKind.init(rawValue:)) ?? .pi)
+      lastActivityAt: row.date(4), agent: AgentKind(rawValue: row.text(5))!)
   }
 }

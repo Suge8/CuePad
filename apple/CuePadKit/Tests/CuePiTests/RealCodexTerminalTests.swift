@@ -55,7 +55,7 @@ struct RealCodexTerminalTests {
             #expect(rig.replies(session).last?.uppercased().contains("LATE") != true, "\(rig.replies(session))")
 
             // 改名、换强度、压缩
-            try await rig.bridge.configure(thinking: .medium, name: "终端里的会话", in: id)
+            try await rig.bridge.configure(PiConfig(thinking: .medium, name: "终端里的会话"), in: id)
             #expect(rig.bridge.session(id: id)?.displayName == "终端里的会话")
             #expect(rig.bridge.session(id: id)?.thinking == .known(.medium))
             try await rig.bridge.command("/compact", in: id)

@@ -2,11 +2,9 @@ import CueStore
 import Observation
 import SwiftUI
 
-/// Cue 的设置，各入口同一份：两端设置里 Cue 那一组（`CueSettingsSection`）、Cue 面板的开关与选 Mac（`CueNowPanel`，三端同一份）与两端 Cue 页的启用（`CueWelcome`）都读写它。读的是同步的设置（`CueProfile`）与各台 Mac 自报的名字与能用的 Agent
-/// （`CueStore.allMacAgents`，Cue 能在哪台上运行就是这几台）；动作是改名、开关（`turn`）、在哪台运行并启用（`AppServices.enableCue`，
-/// 规则在 `CueStore.enableCue`），写完都立即上传。停用只经开关：它是唯一的停用入口，在哪台运行的菜单里没有"不启用"。
-/// 没写成的原因存在 `failure`，页面就地写出，下一次动作先清掉。
-/// 能不能启用、改 Mac 要不要先确认只读 `CueGate`。
+/// Cue 的设置，各入口同一份：两端设置里 Cue 那一组（`CueSettingsSection`）、Cue 面板的开关与选 Mac（`CueNowPanel`，三端同一份）与两端 Cue 页的启用（`CueWelcome`）都读写它。读的是 `CueSettings`，
+/// 动作是改名、开关（`AppServices.turnCue`）、在哪台运行并启用（`AppServices.enableCue`），写完都立即上传。停用只经开关：它是唯一的停用入口，在哪台运行的菜单里没有"不启用"。
+/// 没写成的原因存在 `failure`，页面就地写出，下一次动作先清掉。能不能启用、改 Mac 要不要先确认只读 `CueGate`。
 @Observable
 final class CueSettingsModel {
     /// 读到的（`cueSettings(_:)` 挂上的订阅写入；第一帧当场读好）。
@@ -91,17 +89,6 @@ final class CueSettingsModel {
     }
 }
 
-extension AppServices {
-    /// Cue 的开关，各处同一个（两端设置里 Cue 那一行、Cue 面板、Cue 页停用后的那张小纸），也是唯一的停用入口：
-    /// 关是停用（库里记着那台，`CueProfile.hostID`）；开是在接着干活的那台启用（`CueSettings.resumeHost`，规则同 `enableCue`）。
-    /// 开的时候按此刻库里的读，不按界面上一次读到的。`here` 是这台 Mac（手机为 nil）。一台 Mac 都没有时开不了，各处的开关那时停用。
-    func turnCue(_ on: Bool, here: String?) async throws {
-        guard on else { return try await updateCue { $0.enabledAt = nil } }
-        guard let host = try await CueSettings.read(from: store).resumeHost(here: here) else { throw CueEnableError.noMac }
-        try await enableCue(on: host.id, moving: false)
-    }
-}
-
 /// Cue 的名字输入框（两端设置里 Cue 那一行，`CueSwitchRow`）：不带框、像那一行的名字，点进去就改；回车或离开输入框时写入
 /// （`CueSettingsModel.rename`），库里的名字变了跟着回填。
 struct CueNameField: View {
@@ -141,64 +128,9 @@ private struct CueSettingsReader: ViewModifier {
     }
 }
 
-/// Cue 的设置读到的那一份，与给人看的写法（两端同一套）。
-nonisolated struct CueSettings: Equatable, Sendable {
-    var profile: CueProfile
-    var macs: [MacAgents]
-
-    static let empty = CueSettings(profile: CueProfile(), macs: [])
-
-    static func read(from store: isolated CueStore) throws -> CueSettings {
-        CueSettings(profile: try store.cueProfile() ?? CueProfile(), macs: try store.allMacAgents())
-    }
-
-    /// 开着：在哪台 Mac 上启用着。
-    var isOn: Bool { profile.activeHost != nil }
-
-    /// 能运行 Cue 的一台：名字（那台自报的，`MacAgents.shownName`；是这台（`isHere`）时写"这台 Mac"）、能用的几家与一家都不能用时为什么。
-    struct Host: Identifiable, Equatable {
-        let id: String
-        let isHere: Bool
-        let name: String
-        let brains: [AgentKind]
-        let whyNone: String
-
-        var usable: Bool { !brains.isEmpty }
-        /// 能不能选它启用：一家都用不了的别的 Mac 选不了（各入口列着、写为什么，是停用项）；这台照样能选——它的记录可能还没写下，
-        /// 启用前会重新探测，Cue 页上点它还会打开接入面板给装法。
-        var selectable: Bool { usable || isHere }
-        /// 菜单里名字下面那一行：能用的几家，或为什么一家都不能用。
-        var note: String { usable ? brains.map(\.name).formatted(.list(type: .and)) : whyNone }
-    }
-
-    /// Cue 能在哪几台上运行，`here` 是这台 Mac（手机为 nil）时它排第一：这台刚启动、自己的记录还没写下时也在（启用前会先重新探测）。
-    func hosts(here: String?) -> [Host] {
-        var hosts = macs.map { mac in
-            Host(id: mac.hostID, isHere: mac.hostID == here, name: mac.hostID == here ? Self.here : mac.shownName,
-                 brains: mac.kinds, whyNone: mac.whyNone)
-        }
-        if let here {
-            let local = hosts.firstIndex { $0.id == here }.map { hosts.remove(at: $0) }
-            hosts.insert(local ?? Host(id: here, isHere: true, name: Self.here, brains: [], whyNone: ""), at: 0)
-        }
-        return hosts
-    }
-
-    /// 开关打开时在哪台启用：停用前那台还能选就回到它（接着干活），否则这台 Mac，再否则第一台能用的；
-    /// 都不能用时仍给第一台，启用时说清为什么（`CueEnableError`）。一台都没有为 nil。
-    func resumeHost(here: String?) -> Host? {
-        let hosts = hosts(here: here)
-        return hosts.first { $0.id == profile.hostID && $0.selectable } ?? hosts.first(where: \.selectable) ?? hosts.first
-    }
-
+extension CueSettings {
     /// 在哪台运行那一行写的：此刻运行的那台的名字。
     static func shown(_ running: String, in hosts: [Host]) -> String { hosts.first { $0.id == running }?.name ?? MacAgents.unnamed }
-
-    /// 能不能在哪台启用（`CueGate`）：按库里它此刻运行在哪台、那台自报的名字。
-    @MainActor func gate(_ services: AppServices) -> CueGate {
-        let running = profile.activeHost
-        return CueGate.of(services, running: running, name: running.map { id in macs.first { $0.hostID == id }?.shownName ?? MacAgents.unnamed })
-    }
 
     /// 各端同一套写法：选在哪台运行的那一行。
     static var hostTitle: String { String(localized: "在哪台 Mac 上运行") }
@@ -211,8 +143,11 @@ nonisolated struct CueSettings: Equatable, Sendable {
     }
     #endif
     static let macDownload = URL(string: "https://github.com/Suge8/CuePad/releases/latest")!
+}
 
-    private static var here: String { String(localized: "这台 Mac") }
+extension CueSettings.Host {
+    /// 菜单里名字下面那一行：能用的几家，或为什么一家都不能用。
+    var note: String { usable ? brains.map(\.name).formatted(.list(type: .and)) : whyNone }
 }
 
 /// 改 Cue 运行的 Mac 前那一问（`CueSettingsModel.moving`），两端同一份说法：改在哪台、原来那台（`from`，它自报的名字）不再运行。
@@ -226,27 +161,4 @@ struct CueMove: Identifiable, Equatable {
     var title: String { to.isHere ? String(localized: "让 \(cue) 改在这台 Mac 上运行？") : String(localized: "让 \(cue) 改在「\(to.name)」上运行？") }
     var message: String { String(localized: "原来那台「\(from)」就不再运行 \(cue)。") }
     var confirm: String { to.isHere ? String(localized: "改在这台运行") : String(localized: "改在「\(to.name)」运行") }
-}
-
-/// 能不能在一台 Mac 上启用 Cue、改它运行的 Mac：所有入口（Cue 页的启用钮与它的多台菜单（`CueWelcome`）、手机 Cue 面板的选 Mac、接入面板 Cue 那一行、
-/// 各处的开关、两端设置里在哪台运行那一行）只读这一处，
-/// 规则本身落在启用的入口（`AppServices.enableCue`），这里只给界面说清楚此刻是哪种。
-enum CueGate: Equatable {
-    /// 这台的库还没和 iCloud 对过一遍（`AppServices.knowsSyncedFacts`）：入口写这句原因，不能启用
-    case waiting(String)
-    /// 正在 `id` 那台 Mac 上运行（`name` 是它自报的名字）：改到别的 Mac 要你确认（`CueMove`）
-    case runs(id: String, name: String)
-    /// 没启用：哪台都能直接启用
-    case open
-
-    /// `running`：它此刻运行的那台（没启用为 nil），`name` 是那台的名字。
-    static func of(_ services: AppServices, running: String?, name: String?) -> CueGate {
-        if let reason = services.cueReadiness.waitingReason { return .waiting(reason) }
-        guard let running else { return .open }
-        return .runs(id: running, name: name ?? MacAgents.unnamed)
-    }
-
-    var waitingReason: String? {
-        if case .waiting(let why) = self { why } else { nil }
-    }
 }
