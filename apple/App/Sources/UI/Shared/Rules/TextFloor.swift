@@ -59,11 +59,10 @@ enum TextFloor {
             text.split(separator: "\n", omittingEmptySubsequences: false).map { .prose(Font.prose.width(of: lead + MarkdownBlock.plainInline(String($0)))) }
         }
         return MarkdownBlock.parse(source).flatMap { block -> [Line] in
-            switch block {
-            case .paragraph(let text), .heading(_, let text): prose(text)
-            case .item(let marker, let text, let depth): prose(text, lead: String(repeating: "\u{2003}\u{2003}", count: depth) + marker + "\u{2002}")
-            case .quote(let text): prose(text, lead: "▎ ")
-            case .code(let code): code.split(separator: "\n", omittingEmptySubsequences: false).map { .code(Font.code.width(of: String($0))) }
+            switch block.content {
+            case .paragraph(let text), .heading(_, let text): prose(text, lead: block.textIndent)
+            case .quote(let text): prose(text, lead: block.textIndent + "▎ ")
+            case .code(let code): code.split(separator: "\n", omittingEmptySubsequences: false).map { .code(Font.code.width(of: block.textIndent + String($0))) }
             // 一行至少上下各 8 的内边距加一行小字（`MarkdownTableView`）
             case .table(let table): [.block(CGFloat(table.rows.count + 1) * (16 + Font.code.size))]
             case .rule: [.prose(0)]

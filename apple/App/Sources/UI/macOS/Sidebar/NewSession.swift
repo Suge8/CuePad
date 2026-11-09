@@ -58,8 +58,8 @@ struct NewSessionForm: View {
         VStack(alignment: .leading, spacing: Spacing.group) {
             Text("新会话").font(Typography.bodyStrong).foregroundStyle(palette.ink)
             ScrollView {
-                // 行的底向两边让出一截，留在滚动区里不被裁
-                VStack(spacing: Spacing.hair) { ForEach(places) { row($0, selected: $0.id == place?.id) } }.padding(.horizontal, RowMetrics.bleed)
+                // 预热与首次打开都只建可见行；行的底向两边让出一截，留在滚动区里不被裁。
+                LazyVStack(spacing: Spacing.hair) { ForEach(places) { row($0, selected: $0.id == place?.id) } }.padding(.horizontal, RowMetrics.bleed)
             }
             .frame(maxHeight: Self.listHeight).fixedSize(horizontal: false, vertical: true)
             TextField(String(localized: "开场的话（可不填）"), text: $prompt, palette: palette, axis: .vertical)

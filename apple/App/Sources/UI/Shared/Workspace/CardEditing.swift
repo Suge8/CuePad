@@ -63,6 +63,8 @@ final class CardEditing {
         #endif
     }
 
+    var hasVariables: Bool { !CueVariables.names(in: text).isEmpty }
+
     func changed(_ next: String) {
         text = next
         autosave?.changed(next)

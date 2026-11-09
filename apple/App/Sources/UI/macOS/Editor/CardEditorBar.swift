@@ -19,8 +19,10 @@ extension CardEditing {
     }
 
     /// 这张卡的编辑器：正文变化交给自动保存，右键有选区动作，⌘↩ 是主动作；点附件从牌子放大出全屏页（`AttachmentSpotLayer`）。
-    func field(_ card: Card, theme: CueEditorTheme) -> some View {
-        host(card, theme: theme).overlay { AttachmentSpotLayer(spot: handle.spot) }
+    func field(_ card: Card, theme: CueEditorTheme, bottomInset: CGFloat = 0) -> some View {
+        var editor = host(card, theme: theme)
+        editor.bottomInset = bottomInset
+        return editor.overlay { AttachmentSpotLayer(spot: handle.spot) }
     }
 
     /// 高贴着字、不自己滚的那一种（任务气泡）。
@@ -41,6 +43,8 @@ extension CardEditing {
 
 /// 散放灵感的编辑页底栏：变量（有才出现）。转为任务在编辑器的右键菜单里。
 struct EditorBar: View {
+    /// 变量胶囊的高度加上下留白，末行可完整滚到胶囊上方。
+    static let clearance: CGFloat = 44 + Spacing.block * 2
     let card: Card
     let editing: CardEditing
 

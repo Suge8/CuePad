@@ -74,12 +74,18 @@ struct CardMeta: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        HStack(spacing: Spacing.item) {
-            Text(DateLabel.short(card.modifiedAt))
-            // 第一个链接的域名：长段文字里一眼认出是哪张
+        let changed = Text(DateLabel.short(card.modifiedAt)).fixedSize()
+        HStack(alignment: .firstTextBaseline, spacing: Spacing.item) {
             if let host = text.linkHost {
-                Label(host, icon: .link).labelStyle(.titleAndIcon).lineLimit(1).truncationMode(.middle).layoutPriority(-1)
-            }
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: Spacing.item) { changed; Text(host) }.fixedSize()
+                    VStack(alignment: .leading, spacing: Spacing.hair) {
+                        changed
+                        Text(host).lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .layoutPriority(1)
+            } else { changed }
             if let lastTarget { SentMark(target: lastTarget) }
             Spacer(minLength: 0)
             if text.files > 0 { AttachmentMark(count: text.files) }
@@ -133,6 +139,14 @@ struct Thumbnail: View {
     @Environment(\.palette) private var palette
     @Environment(\.displayScale) private var scale
     @State private var image: CGImage?
+    @State private var place = AttachmentPlace.unchecked
+
+    private struct Request: Equatable {
+        let hash: String
+        let height: CGFloat
+        let scale: CGFloat
+        let place: AttachmentPlace
+    }
 
     var body: some View {
         Rectangle()
@@ -148,7 +162,11 @@ struct Thumbnail: View {
             .frame(maxWidth: fitWidth == nil ? .infinity : nil)
             .clipShape(.rect(cornerRadius: cornerRadius))
             .overlay(RoundedRectangle(cornerRadius: cornerRadius).strokeBorder(palette.hair))
-            .task(id: hash) { image = await Self.picture(hash, height: height, scale: scale, in: services.store.files) }
+            .observingArrival(of: hash, in: services, into: $place)
+            .task(id: Request(hash: hash, height: height, scale: scale, place: place)) {
+                guard place != .unchecked else { return }
+                image = await Self.picture(hash, height: height, scale: scale, in: services.store.files)
+            }
     }
 
     /// 这张图按 `height` 高的格子解的整张（最长边至多高的三倍、不裁，`Thumbnails` 有缓存）：全屏页飞出与占位用的也是它

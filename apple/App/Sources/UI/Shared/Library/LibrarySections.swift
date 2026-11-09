@@ -252,10 +252,9 @@ private struct GlobalRuleRow: View {
             lines.append(shown)
         }
         _ = MarkdownBlock.parse(text) { block in
-            switch block {
+            switch block.content {
             case .heading(_, let text): add(text, bold: true)
             case .paragraph(let text), .quote(let text): text.split(separator: "\n").forEach { add(String($0)) }
-            case .item(let marker, let text, _): add(marker + " " + text)
             case .code, .table, .rule: break
             }
             return lines.count < Self.lines

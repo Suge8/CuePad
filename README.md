@@ -31,7 +31,7 @@
 - **One home for skills and rules.** Skills live in `~/.agents/skills`, rules in one `AGENTS.md` for all your agents (and one per project). CuePad marks which agent can't read what and lets you edit any skill or rule right in the app, from your phone too. One tap gathers scattered skills and links Claude Code in; duplicate skills and diverging rule files are a tap away from one copy — and on the Mac, every change can be undone.
 - **Every agent on one board.** Tasks move through four lanes — to do, advancing, waiting on you, done — with each session's live state next to them: thinking, running a tool, waiting, finished.
 - **Your phone is the remote.** Answer an agent's question or permission request from anywhere. Agents send you screenshots, pages, PDFs and recordings to check, each captioned with what to look at.
-- **Ideas first.** Plain Markdown with inline images and `{{variables}}`. When it's time to act, drag an idea onto a task and it joins the task's notes; every send is logged and can be resent.
+- **Ideas first.** Plain Markdown with inline images (including HTTP/HTTPS image links) and `{{variables}}`. Edit directly; the More menu shares text, original images, or the whole idea laid out as a readable image. Shared images use the idea’s title as their filename; original images are numbered. When it's time to act, drag an idea onto a task and it joins the task's notes; every send is logged and can be resent.
 - **Yours.** Everything lives in a SQLite library on your device and syncs through your own private iCloud database. No CuePad account, no telemetry. Live Activity summaries pass through a stateless relay to Apple’s push service; the relay doesn’t retain them.
 
 | | |

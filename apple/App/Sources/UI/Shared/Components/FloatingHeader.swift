@@ -24,12 +24,12 @@ extension View {
     /// 状态行垫一行隐藏的最宽状态字、一打开就按终点宽排（同 Mac 的 `OverlayTitle`）——首次也不跳了，但玻璃常年顶到系统给的宽，状态轮播时渲染服务指令 +15%；
     /// 只长不缩但用几何读数写回下限——静置时渲染服务的指令多四成；玻璃铺满两侧圆钮之间；按最宽的样子固定占位。
     func floatingHeader<Detail: View, Trailing: View>(
-        _ title: LocalizedStringResource, hidden: Bool = false, reveal: (() -> Void)? = nil, wording: [String] = [],
+        _ title: LocalizedStringResource, hidden: Bool = false, reveal: (() -> Void)? = nil,
         @ViewBuilder detail: () -> Detail, @ViewBuilder trailing: () -> Trailing
     ) -> some View {
         modifier(FloatingHeader(
             title: title, hidden: hidden, reveal: reveal,
-            center: TitleStack(title: title, detail: detail(), wording: wording).padding(.horizontal, Spacing.block).headerPiece().opacity(String(localized: title).isEmpty ? 0 : 1),
+            center: TitleStack(title: title, detail: detail()).padding(.horizontal, Spacing.block).headerPiece().opacity(String(localized: title).isEmpty ? 0 : 1),
             trailing: trailing()))
     }
 
@@ -45,7 +45,7 @@ extension View {
     /// 要紧信息是一行字、右边一个圆钮或"⋯"菜单。`detail` 为 nil 时只写标题；要等读库才有的信息先给空串，
     /// 那一行先留着位置，读到后标题不再上移。
     func floatingHeader<Trailing: View>(_ title: LocalizedStringResource, detail: Dotted? = nil, @ViewBuilder trailing: () -> Trailing) -> some View {
-        floatingHeader(title, wording: detail.map { $0.isEmpty ? ["blank"] : $0.parts.map(HandOff.wording) } ?? [], detail: { HeaderDetail(text: detail) }, trailing: trailing)
+        floatingHeader(title, detail: { HeaderDetail(text: detail) }, trailing: trailing)
     }
 
     func floatingHeader(_ title: LocalizedStringResource, detail: Dotted? = nil) -> some View {
@@ -275,10 +275,11 @@ private struct HeaderPiece: ViewModifier {
     }
 }
 
+/// 顶栏文字保持身份：按说明的句式重建整组会把没变的标题一起淡空，玻璃上只剩近黑的字影。
+/// 说明的数字过渡由 `HeaderDetail` 自己处理，不更换标题与布局容器。
 private struct TitleStack<Detail: View>: View {
     let title: LocalizedStringResource
     let detail: Detail
-    let wording: [String]
     @Environment(\.palette) private var palette
     @State private var widest = Widening.Widest()
 
@@ -289,7 +290,6 @@ private struct TitleStack<Detail: View>: View {
                 detail
             }
         }
-        .handOff(id: ["title"] + wording)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
     }

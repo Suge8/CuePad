@@ -203,7 +203,7 @@ enum InteractionBench {
             }
         }
         // 会话条开合（256 与藏起）与 Cue 收起、放回在卡最多的项目页上量：主区整页按新的宽重排。会话条走 ⌃⌘S 那条路（主菜单动作经响应链），不直接调方法
-        if let big = workspace.catalog?.cardCounts.max(by: { $0.value < $1.value })?.key {
+        if let big = workspace.catalog?.summaries.max(by: { $0.value.cardCount < $1.value.cardCount })?.key {
             await step("页面回访") { workspace.show(.project(big)) }
             for _ in 0..<2 {
                 await step("侧栏收起") { NSApp.sendAction(#selector(AppDelegate.toggleCueSidebar(_:)), to: nil, from: nil) }
