@@ -179,7 +179,9 @@ extension CueStore {
   /// 记下是这台登记的（本机列 `registeredHere`）：启动清理只收这种，所以这台的引用都由自己那条撑着，不沿用别的设备登记的——
   /// 那台不再引用、清理收走它那条时，删除同步过来也不会让这里的引用没了记录。这台已登记过的（服务器收下过的同一份内容再存了一次也是）不再登记、不留保底。
   /// 代价：同一份内容每台引用过的各一条记录，各自经文件那一路上传一次（CloudKit 对同内容的资产去重，实测另一条只传约 0.1MB，见 `Schema.keyedAttachments`）；
-  /// 结构 95 之前登记的不算这台的，升级后再引用时补登记一条。文件不在本机时登记不了（记录要带文件），这样的引用仍只靠别处那条。
+  /// 结构 95 之前登记的不算这台的，升级后再引用时补登记一条。
+  /// 文件不在本机时登记不了（记录要带文件），这条引用仍只靠别的设备那一条记录：那台不再引用这份内容并启动清理时，这台的卡片还没传过去，
+  /// 这里的引用就没有文件了。本机离线、同步关着或在退避期间，这个窗口没有上限。这是两台设备离线时对同一份内容做了相反的编辑，有意接受。
   func registerAttachment(_ key: String) throws {
     guard let parts = AttachmentKey.parts(key),
       try db.first("SELECT 1 FROM attachments WHERE hash = ? AND format = ? AND registeredHere = 1", [parts.hash, parts.format], { _ in true }) == nil,

@@ -28,7 +28,8 @@ extension CueStore {
   /// 升级（95）前就有的记录也算别处来的，漏下的照旧留着。
   /// 只删这台登记的那几行，不按键删这份内容的全部记录（永久删除 `reclaimAttachments` 按键删：那是用户明确要删这张卡，这里只是回收本机的垃圾）：
   /// 同一份内容别的设备也登记过时，它那条与本机文件都留着（文件回收看到还有记录就不删），每台只回收自己登记的；
-  /// 别的设备引用这份内容时登记了它自己的一条（`registerAttachment`），这里删掉自己那条不会让那边的引用没了记录。
+  /// 别的设备引用这份内容时登记了它自己的一条（`registerAttachment`），这里删掉自己那条不会让那边的引用没了记录；
+  /// 例外是那台引用时本机没有文件、登记不了自己那条：它的卡片传过来之前这里清理，那边的引用就没有文件了（有意接受的边界，见 `registerAttachment`）。
   /// 某个运行目录或文件删不掉不挡别的：都清过一遍后，连同删掉的个数一起抛 `strayFilesNotRemoved`。
   public func removeStrayFiles(drafts: [String]) throws -> Int {
     let drafted = Set(drafts.flatMap(CueFormat.attachmentKeys(in:)))
