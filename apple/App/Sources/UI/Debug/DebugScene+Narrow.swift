@@ -10,7 +10,7 @@ extension DebugScene {
         await running("窄屏验收") {
             let store = workspace.services.store
             let recorder = demoRecorder(store)
-            let extra = defaults.integer(forKey: "CuePadNarrowWaiting")
+            let extra = args.layoutOpts.narrowWaiting
             for index in 0..<max(0, extra) {
                 let id = "ask-\(index + 1)"
                 _ = try await recorder.update(
@@ -18,12 +18,12 @@ extension DebugScene {
                     question: PiQuestion(promptID: nil, kind: .unknown("editor"), text: String(localized: "编辑提交说明", table: "Demo")),
                     agent: .codex)
             }
-            if let pane = defaults.string(forKey: "CuePadNarrowPane").flatMap(NavigationPane.init(rawValue:)) {
+            if let pane = args.layoutOpts.narrowPane.flatMap(NavigationPane.init(rawValue:)) {
                 workspace.selectPane(pane)
             }
         }
-        if defaults.bool(forKey: "CuePadNarrowCycle") { Task { await cycleNarrow(workspace) } }
-        if defaults.bool(forKey: "CuePadQuotaCycle") { Task { await cycleQuota() } }
+        if args.layoutOpts.narrowCycle { Task { await cycleNarrow(workspace) } }
+        if args.layoutOpts.quotaCycle { Task { await cycleQuota() } }
     }
 
     /// `-CuePadQuotaCycle YES`（配 progress 画面录屏）：就绪后点额度钮开浮窗、过一会儿走点浮窗外面那条路关（`ModalScrim` 调的同一个 `close`），来回几遍；

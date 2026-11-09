@@ -33,7 +33,7 @@ extension DebugScene {
     /// `-CuePadNotice <文字>`：就绪后 5 秒弹一条带去处（点它去进展页）与撤销（什么都不做）的提示，按真实时长收：
     /// 录屏都在就绪后才开录（Mac 实测晚 3 秒多），等这么久才录得到进场、停留与收起；`CUEPAD_REC_SECONDS` 给到 18。
     static func noticeIfAsked(_ workspace: Workspace) async {
-        guard let text = defaults.string(forKey: "CuePadNotice") else { return }
+        guard let text = args.driveOpts.notice else { return }
         await Task.wait(for: .seconds(5))
         workspace.say(Dotted(text), status: .unread, link: .progress, action: .undo {})
     }
@@ -85,7 +85,7 @@ extension DebugScene {
 
     /// `-CuePadFreeze <秒>`：就绪后 1 秒把主线程堵住这么久，核对 `MainThreadWatch` 记下的卡住（存档里的 freeze 那份、设置里的"上次卡住"）。
     private static func freezeIfAsked() {
-        let seconds = defaults.double(forKey: "CuePadFreeze")
+        let seconds = args.driveOpts.freeze
         guard seconds > 0 else { return }
         Task {
             try? await Task.sleep(for: .seconds(1))

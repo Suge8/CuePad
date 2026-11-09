@@ -9,7 +9,7 @@ import Foundation
 /// 手机上要起飞、落地都在屏内时不配 `-CuePadBusyBoard`：第一张在待办那一行的头上，推进中卡少、新来的那张落在第一屏。
 extension DebugScene {
     static func boardTourIfAsked(_ store: CueStore) async {
-        guard defaults.bool(forKey: "CuePadBoardTour") else { return }
+        guard args.driveOpts.boardTour else { return }
         await running("看板导览") { try await boardTour(store) }
     }
 

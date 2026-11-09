@@ -9,7 +9,7 @@ import Foundation
 ///   changed 再把它与结果卡的"README 截图"改名（标题后加"（改过）"）、换状态（前者做完、后者重开），核对对话里的任务行定格在写下那一刻。
 extension DebugScene {
     static func taskLinesIfAsked(_ store: CueStore) async throws {
-        guard let mode = defaults.string(forKey: "CuePadTaskLines") else { return }
+        guard let mode = args.taskLines else { return }
         let tasks = try await store.tasks(.todo, .inProgress, .done).flatMap(\.tasks)
         func task(_ prefix: String) -> Card? { tasks.first { $0.parentID == nil && $0.body.hasPrefix(prefix) } }
         guard let importing = task(String(localized: "导入旧数据时保留回收站", table: "Demo")), let panel = task(String(localized: "README 截图换成 Swift 版", table: "Demo")) else { return }
@@ -23,8 +23,8 @@ extension DebugScene {
     }
 
     static func atlasIfAsked(_ store: CueStore) async throws {
-        let state = defaults.string(forKey: "CuePadAtlas").flatMap(PiWorkState.init(rawValue:))
-        let title = defaults.string(forKey: "CuePadAtlasTitle")
+        let state = args.atlas.flatMap(PiWorkState.init(rawValue:))
+        let title = args.atlasTitle
         guard state != nil || title != nil else { return }
         _ = try await demoRecorder(store).update(sessionID: "atlas", state: state ?? .tool, title: title ?? "atlas")
     }

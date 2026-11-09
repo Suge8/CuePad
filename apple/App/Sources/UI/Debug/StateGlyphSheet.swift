@@ -42,7 +42,7 @@ struct StateGlyphSheet: View {
             .padding(.horizontal, 16).padding(.vertical, 24)
         }
         // 一屏放不下时截两张：`-CuePadSheetEnd YES` 停在底
-        .defaultScrollAnchor(DebugScene.defaults.bool(forKey: "CuePadSheetEnd") ? .bottom : .top)
+        .defaultScrollAnchor(DebugScene.args.layoutOpts.sheetEnd ? .bottom : .top)
         .background(palette.desk)
         .foregroundStyle(palette.ink)
     }

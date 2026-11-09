@@ -53,7 +53,7 @@ func energyMillijoules() -> Double {
 /// 按 PID 开录要好几秒，不等的话短的测量还没开录就量完了。在主线程上同步等（冷启动在进 run loop 之前就等）：开录之前什么都不做。
 /// 信号先忽略、经 kqueue 收：进程里哪个线程接到都不会被它结束；先登记再写这一行，信号不会在没人接的时候到。
 func waitForTracer() {
-    guard UserDefaults.standard.bool(forKey: "CuePadTraceWait") else { return }
+    guard DebugScene.args.driveOpts.traceWait else { return }
     signal(SIGUSR1, SIG_IGN)
     let queue = kqueue()
     var change = kevent(ident: UInt(SIGUSR1), filter: Int16(EVFILT_SIGNAL), flags: UInt16(EV_ADD), fflags: 0, data: 0, udata: nil)

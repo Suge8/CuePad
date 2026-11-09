@@ -64,8 +64,8 @@ struct AttachmentImportTests {
     /// 先发带慢附件的 A、紧接着发 B：库里的先后仍是 A、B。
     @Test func 带慢附件的先发_后发的不抢在前面落库() async throws {
         let workspace = Workspace(services: app.services)
-        DebugScene.defaults.set(1.0, forKey: "CuePadImportDelay")
-        defer { DebugScene.defaults.removeObject(forKey: "CuePadImportDelay") }
+        DebugHooks.importDelaySeconds = 1
+        defer { DebugHooks.importDelaySeconds = 0 }
         let url = FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString).txt")
         try Data(repeating: 2, count: 1000).write(to: url)
         defer { try? FileManager.default.removeItem(at: url) }

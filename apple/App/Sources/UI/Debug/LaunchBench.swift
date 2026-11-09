@@ -16,7 +16,7 @@ import QuartzCore
 /// 主线程与进程的计数从 exec 之前 app.py 那段 python 算起（`entry` 那一截，每次相同，前后对比时抵消）。
 /// 带着 `-CuePadTraceWait YES` 时进 `main` 就等开录（`waitForTracer`），时刻从放行时算。
 enum LaunchBench {
-    static let active = DebugScene.defaults.string(forKey: "CuePadBench") == "launch"
+    static let active = DebugScene.args.driveOpts.bench == "launch"
     private static let longTurn: UInt64 = 50_000_000
     private static let quiet: UInt64 = 1_000_000_000
     /// 到这么久还没量完就照报（没量到的几项为空）并以 1 退出：脚本按失败处理。

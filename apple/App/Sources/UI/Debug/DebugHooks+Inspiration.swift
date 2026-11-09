@@ -4,7 +4,7 @@ extension DebugHooks {
     #if os(iOS)
     static func inspirationActivities() -> [UIActivity]? {
         #if DEBUG
-        guard let path = UserDefaults.standard.string(forKey: "CuePadInspirationAudit") else { return nil }
+        guard let path = DebugScene.args.inspirationOpts.audit else { return nil }
         return [InspirationAuditActivity(destination: URL(filePath: path))]
         #else
         return nil
@@ -15,7 +15,7 @@ extension DebugHooks {
     /// `-CuePadInspirationAudit <目录>`：每个资源各写自己的创建/删除事件，验收系统消费期间的所有权与结束后的清理。
     nonisolated static func inspirationFileEvent(_ directory: URL, created: Bool) {
         #if DEBUG
-        guard let path = UserDefaults.standard.string(forKey: "CuePadInspirationAudit") else { return }
+        guard let path = DebugScene.args.inspirationOpts.audit else { return }
         let event = created ? "created" : "removed"
         let record: [String: Any] = ["event": event, "path": directory.path, "exists": FileManager.default.fileExists(atPath: directory.path)]
         do {
