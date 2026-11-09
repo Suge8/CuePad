@@ -64,6 +64,12 @@ public enum CloudOutage {
       try await timed("file-download") { try await now.downloadFile(id, progress: progress) }
     }
     func saveZone() async throws { try await timed("other") { try await now.saveZone() } }
+    func diagnosticChanges(since token: Data?) async throws -> ZoneChangeBatch {
+      try await timed("fetch") { try await now.diagnosticChanges(since: token) }
+    }
+    func uploadDiagnostics(saving: [CKRecord], deleting: [CKRecord.ID]) async throws -> SentRecords {
+      try await timed("upload") { try await now.uploadDiagnostics(saving: saving, deleting: deleting) }
+    }
     func subscriptions() async throws -> [CKSubscription.ID: CKSubscription] { try await timed("other") { try await now.subscriptions() } }
     func save(_ subscription: CKSubscription) async throws { try await timed("other") { try await now.save(subscription) } }
     func delete(_ id: CKSubscription.ID) async throws { try await timed("other") { try await now.delete(id) } }

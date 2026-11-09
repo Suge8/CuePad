@@ -20,7 +20,7 @@ extension AppServices {
             follow(reporting: { .syncUnavailable(String(localized: "这台手机开着的页没能写下：\(String(describing: $0))")) }) { try await viewer.keep() }
             followArrivals(viewer)
         }
-        diagnostics.start(metricKit: location.touchesRealWorld)
+        startDiagnostics()
     }
 
     /// 整个 App 只订这一份，iPad 开几个窗口都只做一次。立即同步排最前：它的拉取当场在主线程之外开始，不排在别的事的主线程工作后面。

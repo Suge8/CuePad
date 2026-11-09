@@ -31,7 +31,14 @@ struct SettingsScreen: View {
                     }
                 }
             }
-            if services.diagnostics.latest != nil { Section { LastCrashRow() } }
+            if services.diagnostics.latest != nil || services.diagnostics.canSend {
+                Section {
+                    LastCrashRow()
+                    if services.diagnostics.canSend { SendLogsRow() }
+                } footer: {
+                    if services.diagnostics.canSend { Text(SendLogsRow.note).lineLimit(nil).fixedSize(horizontal: false, vertical: true) }
+                }
+            }
             Section {} footer: {
                 Text("CuePad \(AppServices.version)").font(Typography.meta.monospacedDigit()).foregroundStyle(palette.ink3)
                     .frame(maxWidth: .infinity)

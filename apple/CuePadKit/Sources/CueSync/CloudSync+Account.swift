@@ -157,8 +157,14 @@ extension CloudSync {
     return outcome == .confirmed
   }
 
-  /// 门铃的密钥（`RelaySecret`）：认过账号、能同步时才去 iCloud 取；没登录、要你决定时一直等到账号认好，不发请求。被取消、或同步停下了就抛出。
+  /// 门铃的密钥（`RelaySecret`）：认过账号、能同步时才去 iCloud 取。
   public func relaySecret() async throws -> Data {
+    try await usableCloud(for: .pull).relaySecret()
+  }
+
+  /// 业务同步区以外的请求（门铃密钥、诊断）用的连接：没登录、要你决定时一直等到账号认好，不发请求；被取消、或同步停下了就抛出。
+  /// 同步被限流时不另发请求、抛 `RetryHeld`：调用方按自己的节奏再来。
+  func usableCloud(for request: SyncCoordinator.Request) async throws -> any SyncCloud {
     let checks = accountChecks.stream()  // 先订阅：看条件时跨了 actor，其间认完的那一次不漏
     if !stopped, await !accountUsable() {
       for await _ in checks {
@@ -168,8 +174,8 @@ extension CloudSync {
     }
     try Task.checkCancellation()
     guard let cloud = running?.cloud else { throw CancellationError() }
-    guard await coordinator.admits(.pull) else { throw RetryHeld() }  // 被限流时不另发请求：门铃按自己的退避再来
-    return try await cloud.relaySecret()
+    guard await coordinator.admits(request) else { throw RetryHeld() }
+    return cloud
   }
 
   private func accountUsable() async -> Bool { connected ? await coordinator.canSync : false }
