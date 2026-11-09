@@ -13,9 +13,13 @@ extension FakeModel {
         on("What is your codename") { .say($0.system.firstMatch(of: /codename is ([A-Z0-9-]+)/).map { String($0.1) } ?? "UNKNOWN") }
         on("What color is this image") { .say($0.images.isEmpty ? "I see no image" : "red") }
         on({ $0.prompt.contains("Create a file named") }) { request in
-            request.step == 0 ? .call("write", ["path": "hack.txt", "content": "x"]) : .say("I could not create it.")
+            let write: FakeReply = request.tools.contains("exec_command")
+                ? .call("exec_command", ["cmd": "echo x > hack.txt"]) : .call("write", ["path": "hack.txt", "content": "x"])
+            return request.step == 0 ? write : .say("I could not create it.")
         }
         on({ $0.prompt.contains("Call the echo tool") }) { request in
+            // Codex 把 MCP 工具藏在工具搜索后面：先搜一次
+            if request.needsSearch("echo") { return .search("echo") }
             let next = FakeReply.call("echo", ["text": request.results.last ?? "x"])
             return switch request.step {
             case 0: .call("echo", ["text": "x"])

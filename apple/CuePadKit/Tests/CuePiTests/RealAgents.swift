@@ -19,7 +19,8 @@ import Testing
 ///
 /// - pi：没有录像带，总连钉住的真 Pi（`PinnedAgent.pi`，`xc.sh agents install pi`；没装时跳过、列为未覆盖），模型是本用例的假模型
 ///   （`FakeModel`，Chat Completions），零网络；FireCode 随 Pi 钉住（`CUEPAD_FIRECODE_SOURCE` 可换成另一份检出）；
-/// - codex：本机的 codex 与登录（复制进临时目录且不刷新，见 `copyCodexAuth`），账号里最便宜的模型；
+/// - codex：没有录像带，总连钉住的真 Codex（`PinnedAgent.codex`，`xc.sh agents install codex`；没装时跳过、列为未覆盖），模型是本用例的假模型
+///   （`FakeModel`，Responses，经隔离 `CODEX_HOME/config.toml` 的 `model_providers` 指过去），零网络、不用任何登录；
 /// - claude：本机的 claude 与它自己的登录（钥匙串里的那条，见 `ClaudeLogin`），模型 haiku（`ClaudeTestbed`）；
 /// - grok：本机的 grok（`CUEPAD_GROK` 可换），假模型（`FakeResponses`），零网络；环境里给了 `XAI_API_KEY` 或 `GROK_AUTH_PATH`（已登录的
 ///   凭据文件，如 `~/.grok/auth.json`）时连真的 xAI（`GrokModel`），托管会话的模型用 `CUEPAD_GROK_MODEL` 换；
@@ -40,7 +41,7 @@ enum RealAgents {
         .compactMap { AgentKind(rawValue: String($0).trimmingCharacters(in: .whitespaces)) })
 
     static func mode(of agent: AgentKind) -> TapeMode {
-        if agent == .opencode || agent == .pi { return .live }
+        if agent == .opencode || agent == .pi || agent == .codex { return .live }
         return recording.contains(agent) ? .record : .replay
     }
 
@@ -48,7 +49,7 @@ enum RealAgents {
     static func missing(_ agent: AgentKind) -> String? {
         switch agent {
         case .pi: pinnedPi.uncovered
-        case .codex: realCodexURL != nil && FileManager.default.fileExists(atPath: realCodexAuth.path) ? nil : "本机没装或没登录 codex"
+        case .codex: pinnedCodex.uncovered
         case .claudeCode: claudeURL != nil && ClaudeLogin.token != nil ? nil : "本机没装或没登录 claude"
         case .opencode:
             if realOpenCodeURL == nil { "本机找不到 opencode v2（CUEPAD_OPENCODE 可指定）" }

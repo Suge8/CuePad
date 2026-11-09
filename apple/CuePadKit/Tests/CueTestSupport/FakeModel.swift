@@ -143,6 +143,8 @@ private final class Budget: Sendable {
 public indirect enum FakeReply: Sendable {
   case say(String)
   case call(String, [String: any Sendable])
+  /// Responses 的客户端工具搜索（Codex 把 MCP 工具藏在 `tool_search` 后面，要先搜才能调）
+  case search(String)
   /// 回 HTTP 错误（默认 400），`message` 是错误原文
   case fail(String, status: Int = 400)
   /// 先说这几段，然后不说完也不结束，直到 Agent 断开（停下这一轮）

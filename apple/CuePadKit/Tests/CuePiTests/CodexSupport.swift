@@ -3,33 +3,13 @@ import CueStore
 import CueTestSupport
 import Foundation
 import ImageIO
-import Network
 import Synchronization
 import Testing
 @testable import CuePi
 
-/// 本机装的 Codex（录制时用）；它自己的登录复制进临时 CODEX_HOME（`copyCodexAuth`），用完删掉，真实的 ~/.codex 只读这一个文件。
-/// `CUEPAD_CODEX_AUTH` 指向另一份 auth.json 时读它（不碰 ~/.codex）。
-let realCodexURL = ExecutableLocator.standard.candidates("codex").first
-let realCodexAuth = ProcessInfo.processInfo.environment["CUEPAD_CODEX_AUTH"].map { URL(filePath: $0) }
-    ?? FileManager.default.homeDirectoryForCurrentUser.appending(path: ".codex/auth.json")
-let codexTestModel = "gpt-6-luna"
-
-/// 把 ~/.codex/auth.json 复制到 `file`，副本永远不去刷新登录：refresh_token 换成假值、last_refresh 改成现在。
-/// 原样复制的话两份都会刷新，refresh token 只能用一次，副本先刷新就把用户的登录挤掉了。access token 过期时副本会失败，不碰用户那份。
-func copyCodexAuth(to file: URL) throws {
-    var auth = try #require(try JSONSerialization.jsonObject(with: Data(contentsOf: realCodexAuth)) as? [String: Any])
-    if var tokens = auth["tokens"] as? [String: Any] {
-        tokens["refresh_token"] = "cuepad-test-no-refresh"
-        auth["tokens"] = tokens
-    }
-    let format = ISO8601DateFormatter()
-    format.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    auth["last_refresh"] = format.string(from: .now)
-    AgentTape.current?.secret(tokens: auth)
-    try JSONSerialization.data(withJSONObject: auth).write(to: file, options: .atomic)
-    try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
-}
+/// 测试连的 Codex：钉住的版本（`PinnedAgent.codex`），模型是本用例的假模型（`FakeModel`，Responses），零网络、不用任何登录。
+let pinnedCodex = PinnedAgent.codex
+let codexTestModel = "gpt-5.5"
 
 /// 一张 64×64 的 sRGB 纯色 PNG（1×1 的图、设备色彩空间里的纯红，模型有时说成别的颜色）。
 func solidPNG(red: CGFloat, green: CGFloat, blue: CGFloat) throws -> Data {
@@ -49,36 +29,39 @@ func solidPNG(red: CGFloat, green: CGFloat, blue: CGFloat) throws -> Data {
 
 /// 一个临时的 Codex 配置目录，与它配套的 CuePad 钩子 socket 目录与工作目录。起的 codex 与接入用的环境把家目录、各家的配置目录、
 /// XDG 目录、CuePad 的资料库与 socket 目录都指到这里，不读写真实的配置与资料库。
+/// 模型提供方写在这个目录的 `config.toml` 里（Codex 只认 Responses；项目目录下的提供方配置会被忽略）。
 struct CodexHome {
     let root: URL
+    let model: FakeModel
     var home: URL { root.appending(path: "codex", directoryHint: .isDirectory) }
     var work: URL { root.appending(path: "work", directoryHint: .isDirectory) }
     var sockets: URL { root.appending(path: "s", directoryHint: .isDirectory) }
     var paths: AgentPaths {
         AgentPaths(pi: PiPaths(agentDirectory: root.appending(path: "pi"), socketDirectory: sockets), environment: environment)
     }
-    var locator: ExecutableLocator { AgentTape.locator("codex") }
+    var locator: ExecutableLocator { pinnedCodex.locator }
     var environment: [String: String] {
-        let isolated = ["CUEPAD_", "HERDR", "TMUX", "XDG_", "CLAUDE_", "OPENCODE_", "CODEX_", "PI_"]
         func path(_ name: String) -> String { root.appending(path: name).path }
-        return ProcessInfo.processInfo.environment.filter { key, _ in !isolated.contains { key.hasPrefix($0) } }.merging([
-            "HOME": path("user"), "XDG_CONFIG_HOME": path("xdg/config"), "XDG_DATA_HOME": path("xdg/data"),
+        return pinnedCodex.environment(home: root.appending(path: "user"), [
+            "XDG_CONFIG_HOME": path("xdg/config"), "XDG_DATA_HOME": path("xdg/data"),
             "XDG_STATE_HOME": path("xdg/state"), "XDG_CACHE_HOME": path("xdg/cache"), "CLAUDE_CONFIG_DIR": path("claude"),
             "OPENCODE_CONFIG_DIR": path("opencode"), "PI_CODING_AGENT_DIR": path("pi"), "CUEPAD_LIBRARY_DIR": path("library"),
-            "CODEX_HOME": home.path, "CUEPAD_PI_SOCKET_DIR": sockets.path,
-        ]) { $1 }
+            "CODEX_HOME": home.path, "CUEPAD_PI_SOCKET_DIR": sockets.path, Self.keyVariable: "fake",
+        ])
     }
+    static let keyVariable = "CUEPAD_FAKE_MODEL_KEY"
 
-    init() throws {
+    init(model: FakeModel) throws {
+        try pinnedCodex.require()
         root = try makeTempDirectory()
+        self.model = model
         for directory in [home, work, root.appending(path: "user")] {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         }
-        AgentTape.current?.watch(home.appending(path: "sessions"), home.appending(path: "config.toml"), work)
     }
 
+    /// 配置：假模型当提供方，最便宜的思考强度，信任工作目录（没人回答信任提问），关掉更新检查与遥测。
     func signIn(approvals: String = "never") throws {
-        if AgentTape.current?.mode != .replay { try copyCodexAuth(to: home.appending(path: "auth.json")) }
         let config = """
             model = "\(codexTestModel)"
             model_reasoning_effort = "low"
@@ -90,26 +73,33 @@ struct CodexHome {
             trust_level = "trusted"
 
             """
-        try config.write(to: home.appending(path: "config.toml"), atomically: true, encoding: .utf8)
+        try Self.write(provider: model, config: config, into: home)
+    }
+
+    /// 把假模型写成这个配置目录的提供方（`model_providers` 只认这里，项目目录下同名的会被忽略），并关掉常驻服务的自动更新。
+    static func write(provider model: FakeModel, config: String = "", into home: URL) throws {
+        let text = """
+            model_provider = "fake"
+            \(config)
+            [analytics]
+            enabled = false
+
+            [model_providers.fake]
+            name = "fake"
+            base_url = "\(model.baseURL)/v1"
+            env_key = "\(keyVariable)"
+            wire_api = "responses"
+
+            """
+        try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
+        try text.write(to: home.appending(path: "config.toml"), atomically: true, encoding: .utf8)
         let daemon = home.appending(path: "app-server-daemon", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: daemon, withIntermediateDirectories: true)
         try #"{"autoUpdateEnabled":false}"#.write(to: daemon.appending(path: "settings.json"), atomically: true, encoding: .utf8)
     }
 
-    func use(_ provider: RejectingProvider) throws {
-        let config = home.appending(path: "config.toml")
-        let text = try String(contentsOf: config, encoding: .utf8)
-        try ("model_provider = \"rejecting\"\n" + text + """
-
-            [model_providers.rejecting]
-            name = "rejecting"
-            base_url = "http://127.0.0.1:\(provider.port)/v1"
-            wire_api = "responses"
-
-            """).write(to: config, atomically: true, encoding: .utf8)
-    }
-
     @concurrent func remove() async {
+        model.stop()
         await TestProcesses.stop(under: [root])
         try? FileManager.default.removeItem(at: root)
     }
@@ -144,7 +134,7 @@ struct CodexHome {
     }
 
     @MainActor private func withCodex(_ body: (CodexRPC) async throws -> Void) async throws {
-        let rpc = try await CodexRPC.launch(AgentTape.executable("codex"), environment: environment)
+        let rpc = try await CodexRPC.launch(pinnedCodex.executable, environment: environment)
         do {
             try await body(rpc)
         } catch {
@@ -156,8 +146,8 @@ struct CodexHome {
 }
 
 @MainActor
-func withCodexRig(approvals: String = "never", wrapped: Bool = false, _ body: (CodexRig) async throws -> Void) async throws {
-    let rig = try await CodexRig(approvals: approvals, wrapped: wrapped)
+func withCodexRig(approvals: String = "never", _ body: (CodexRig) async throws -> Void) async throws {
+    let rig = try await CodexRig(approvals: approvals)
     do {
         try await body(rig)
     } catch {
@@ -174,35 +164,18 @@ final class CodexRig {
     let bridge: PiBridge
     let runtime: CodexRuntime
     let presence: TestPresence
+    var model: FakeModel { codex.model }
 
-    /// 钩子命令里的 cuepad。Codex 的信任哈希按命令算，录下的哈希回放时要对得上，所以路径不能带检出位置：
-    /// 固定的 /tmp 链接，指向本次构建的 cuepad（录制时真钩子经它跑）。
-    static let hookHelper: URL = {
-        let link = URL(filePath: "/tmp/cuepad-test-helper/cuepad")
-        try! FileManager.default.createDirectory(at: link.deletingLastPathComponent(), withIntermediateDirectories: true)
-        if (try? link.checkResourceIsReachable()) != nil || (try? FileManager.default.destinationOfSymbolicLink(atPath: link.path)) != nil {
-            try! FileManager.default.removeItem(at: link)
-        }
-        try! FileManager.default.createSymbolicLink(at: link, withDestinationURL: PiProcess.cuepad)
-        return link
-    }()
-
-    /// - Parameter wrapped: CuePad 起的 `codex` 是一层外壳、真 codex 是它的子进程（npm 装的 `codex` 就是 node 外壳），钩子的父进程不是 CuePad 起的那个。
-    init(approvals: String = "never", wrapped: Bool = false) async throws {
-        let codex = try CodexHome()
+    init(approvals: String = "never") async throws {
+        let codex = try CodexHome(model: try await FakeModel())
         let presence = TestPresence()
         let hooks = AgentHookServer(path: codex.paths.pi.hookSocket)
         let bridge = PiBridge(socketDirectory: codex.sockets)
-        var locator = codex.locator
-        if wrapped {
-            let bin = codex.root.appending(path: "wrapper", directoryHint: .isDirectory)
-            try TestScript.install("#!/bin/sh\n. \"$0.env\"\n\"$REAL\" \"$@\"\n", at: bin.appending(path: "codex"), variables: ["REAL": AgentTape.executable("codex").path])
-            locator = ExecutableLocator(searchDirectories: [bin])
-        }
+        let locator = codex.locator
         let runtime = CodexRuntime(bridge: bridge, paths: codex.paths, hooks: hooks, codex: { [locator] in locator.candidates("codex").first }, locate: { [locator] in locator }, presence: presence, timing: noDeadline)
         do {
             try codex.signIn(approvals: approvals)
-            try await AgentIntegration(paths: codex.paths, locate: { [codex] in codex.locator }, cuepad: Self.hookHelper, timing: noDeadline).install(.codex)
+            try await AgentIntegration(paths: codex.paths, locate: { [codex] in codex.locator }, cuepad: PiProcess.cuepad, timing: noDeadline).install(.codex)
             try hooks.start()
             try bridge.start()
             try runtime.start()
@@ -273,7 +246,7 @@ final class CodexTerminal: @unchecked Sendable {
 
     init(_ codex: CodexHome, arguments: [String] = []) throws {
         process.executableURL = URL(filePath: "/usr/bin/script")
-        process.arguments = ["-q", "/dev/null", "/bin/sh", "-c", "stty cols 140 rows 45; exec \"$0\" \"$@\"", realCodexURL!.path] + arguments
+        process.arguments = ["-q", "/dev/null", "/bin/sh", "-c", "stty cols 140 rows 45; exec \"$0\" \"$@\"", pinnedCodex.executable.path] + arguments
         process.environment = codex.environment.merging(["TERM": "xterm-256color"]) { $1 }
         process.currentDirectoryURL = codex.work
         process.standardInput = input
@@ -314,31 +287,5 @@ final class CodexTerminal: @unchecked Sendable {
         for child in children.prefix(Int(max(count, 0))) where child > 0 { kill(child, SIGTERM) }
         if process.isRunning { process.terminate() }
     }
-}
-final class RejectingProvider: Sendable {
-    static let reason = "bad things happened"
-    private let listener: NWListener
-    let port: UInt16
-
-    init() async throws {
-        listener = try NWListener(using: .tcp, on: .any)
-        listener.newConnectionHandler = { connection in
-            connection.start(queue: .global())
-            connection.receive(minimumIncompleteLength: 1, maximumLength: 1 << 20) { _, _, _, _ in
-                let body = #"{"error":{"message":"\#(Self.reason)","type":"invalid_request_error","code":"bad"}}"#
-                let reply = "HTTP/1.1 400 Bad Request\r\nContent-Type: application/json\r\nContent-Length: \(body.utf8.count)\r\nConnection: close\r\n\r\n" + body
-                connection.send(content: Data(reply.utf8), completion: .contentProcessed { _ in connection.cancel() })
-            }
-        }
-        let ready = AsyncStream<UInt16>.makeStream()
-        listener.stateUpdateHandler = { [listener] state in
-            if case .ready = state, let port = listener.port?.rawValue { ready.continuation.yield(port) }
-        }
-        listener.start(queue: .global())
-        var iterator = ready.stream.makeAsyncIterator()
-        port = try #require(await iterator.next())
-    }
-
-    func stop() { listener.cancel() }
 }
 #endif

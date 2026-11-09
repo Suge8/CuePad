@@ -26,12 +26,18 @@ public struct FakeRequest: Sendable {
   /// 思考强度（Chat 的 `reasoning_effort`、Responses 的 `reasoning.effort`）
   public let effort: String?
   public let body: Data
+  /// 工具搜索（Responses）找到的工具所在的命名空间，工具名 → 命名空间；调它们时要带上
+  public let found: [String: String]
 
   /// 最近一条你的话（工具结果不算）
   public var prompt: String { lastUser.map { messages[$0].text } ?? "" }
   public var images: [String] { lastUser.map { messages[$0].images } ?? [] }
   /// 最近一条你的话之后，助手已调过几次工具
   public var step: Int { after.filter { !$0.calls.isEmpty }.count }
+  /// 有工具搜索可用、`name` 还没搜出来（Codex 的 MCP 工具）
+  public func needsSearch(_ name: String) -> Bool {
+    tools.contains("tool_search") && !found.contains { $0.key == name || $0.key.hasSuffix("_" + name) }
+  }
   /// 最近一条你的话之后的工具结果
   public var results: [String] { after.filter { $0.role == .tool }.map(\.text) }
   /// 你说过的每一句
@@ -61,15 +67,28 @@ public struct FakeRequest: Sendable {
     case .other: ("", [])
     }
     (system, messages) = parsed
+    found = api == .responses ? Self.searched(json) : [:]
     tools = (json["tools"] as? [[String: Any]] ?? []).compactMap { tool in
-      (tool["function"] as? [String: Any])?["name"] as? String ?? tool["name"] as? String
+      (tool["function"] as? [String: Any])?["name"] as? String ?? tool["name"] as? String ?? (tool["type"] as? String == "tool_search" ? "tool_search" : nil)
     }
     effort = json["reasoning_effort"] as? String ?? (json["reasoning"] as? [String: Any])?["effort"] as? String
   }
 
+  private static func searched(_ json: [String: Any]) -> [String: String] {
+    var found: [String: String] = [:]
+    for item in json["input"] as? [[String: Any]] ?? [] where item["type"] as? String == "tool_search_output" {
+      for space in item["tools"] as? [[String: Any]] ?? [] {
+        for tool in space["tools"] as? [[String: Any]] ?? [] {
+          if let name = tool["name"] as? String, let namespace = space["name"] as? String { found[name] = namespace }
+        }
+      }
+    }
+    return found
+  }
+
   /// 工具清单里叫这个名字的、或以 `_<名字>` 结尾的那个（MCP 工具带着服务名前缀）
   func tool(_ name: String) -> String {
-    tools.first { $0 == name } ?? tools.first { $0.hasSuffix("_" + name) } ?? name
+    tools.first { $0 == name } ?? found.keys.first { $0 == name || $0.hasSuffix("_" + name) } ?? tools.first { $0.hasSuffix("_" + name) } ?? name
   }
 
   // MARK: 三种协议
