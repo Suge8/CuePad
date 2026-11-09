@@ -1,6 +1,6 @@
 # 验收
 
-Debug 认的启动参数只在 `DebugScene.swift`（及同目录 `DebugScene+*.swift`）的文档注释里，`xc.sh` 的用法在它的头注释里；这里只记代码里查不到的做法与坑。性能与同步的测量见 [perf.md](perf.md)，Cue 的提示词评测见 [cue-eval.md](cue-eval.md)。
+Debug 认的启动参数只在 `DebugScene+Args*.swift` 的字段注释里（拼错的参数启动即报错退出），画面登记在 `DebugScene+Scenes.swift` 的 `DebugScene.entries`、各画面在 `UI/Debug/Scenes/`，`xc.sh` 的用法在它的头注释里；这里只记代码里查不到的做法与坑。性能与同步的测量见 [perf.md](perf.md)，Cue 的提示词评测见 [cue-eval.md](cue-eval.md)。
 
 ## 视觉验收
 

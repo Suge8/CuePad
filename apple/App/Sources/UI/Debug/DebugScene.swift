@@ -10,8 +10,6 @@ enum ScrollAnchor {
 /// 调试画面（只在 Debug 构建里，视觉验收、录屏、测量用）。启动参数的登记表是 `DebugArgs`（`DebugScene+Args*.swift`，字段注释即说明），画面的登记表是 `entries`（`DebugScene+Scenes.swift`）。
 enum DebugScene {
     nonisolated static let args = DebugArgs.launch
-    /// 运行时可改的偏好域，只给 `-CuePadImportDelay`：测试在进程里设它（`AttachmentImportTests`），冻结的 `args` 跟不上。
-    static var defaults: UserDefaults { .standard }
     static var scene: String? { args.scene }
     /// `-CuePadWindowSize <宽>x<高>`：主窗口尺寸（Mac `resizeWindow`、iPad `debugCompact`）；没给或写错为 nil。
     static var windowSize: CGSize? {

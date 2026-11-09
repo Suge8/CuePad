@@ -66,7 +66,7 @@ extension DebugScene {
             }
             if let path = args.inspirationOpts.export,
                let card = try await store.cards(in: Project.defaultID).first(where: { $0.body.hasPrefix(body.prefix(20)) }) {
-                let payload = try await InspirationShare.prepare(card.body, originals: args.inspirationOpts.originals, files: store.files, colorScheme: UserDefaults.standard.string(forKey: "theme") == "dark" ? .dark : .light)
+                let payload = try await InspirationShare.prepare(card.body, originals: args.inspirationOpts.originals, files: store.files, colorScheme: services.settings.theme == .dark ? .dark : .light)
                 let target = URL(filePath: path)
                 if FileManager.default.fileExists(atPath: target.path) { try FileManager.default.removeItem(at: target) }
                 try FileManager.default.copyItem(at: payload.urls[0], to: target)

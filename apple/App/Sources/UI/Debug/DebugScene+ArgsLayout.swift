@@ -26,6 +26,8 @@ nonisolated struct LayoutArgs: Decodable, DebugArgGroup {
     let largestType: Bool
     /// `-CuePadMergePreview YES`（配 instruction 画面）：已点过一下"合并进来"、标出会并进来的段
     let mergePreview: Bool
+    /// `-CuePadLandscape YES`（iOS、iPad）：由 `xc.sh` 在起实例前把模拟器横过来（`app_sim.py`），App 自己不读；登记在这里是为了不被当成拼错的参数
+    let landscape: Bool
     /// `-CuePadModelMenu YES`（Mac）：模型菜单一出现就打开；菜单是独立窗口，截图另拍它
     let modelMenu: Bool
     /// `-CuePadNarrowCycle YES`（配录屏）：就绪后走一圈开侧栏的进展、换到项目、换回进展、再换到项目（中途反向：上一下换段的滑动还没停就点回去）、回 Cue

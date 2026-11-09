@@ -10,6 +10,8 @@ nonisolated struct DriveArgs: Decodable, DebugArgGroup {
     let axFocus: Bool
     /// `-CuePadActivityDiagnostics YES`：隔离库里也留活动取证
     let activityDiagnostics: Bool
+    /// `-CuePadActivityDiagnosticsRead <输出.json>`：`xc.sh activity-log` 用，只读导出活动取证；由 `ActivityDiagnosticReader` 直接读命令行，这里登记以便不被当成拼错的参数
+    let activityDiagnosticsRead: String?
     /// `-CuePadBench interact|chatscroll|churn`（量完退出）：interact 单次交互的点击回合与掉帧（`InteractionBench`、`IOSInteractionBench`），chatscroll（仅 Mac）长对话滚动（`ChatScrollBench`），churn（仅 Mac）边加卡边拉宽窗口查布局反馈环
     let bench: String?
     /// `-CuePadBoardTour YES`：走一遍看板的各种变化（`DebugScene+BoardTour.swift`）
@@ -42,7 +44,7 @@ nonisolated struct DriveArgs: Decodable, DebugArgGroup {
     let hover: String?
     /// `-CuePadHoverSeconds <秒>`：停这么久后移开（从那一块出现起算），录提示条悬停停表、移开重新计满
     let hoverSeconds: Double?
-    /// `-CuePadImportDelay <秒>`：把"附件还在存"拉长到能在界面上看见（配 `-CuePadSpeech press`；`DebugHooks.importDelay` 读的是运行时的偏好域，测试在进程里设它）
+    /// `-CuePadImportDelay <秒>`：把"附件还在存"拉长到能在界面上看见（配 `-CuePadSpeech press`；运行时的值在 `DebugHooks.importDelaySeconds`）
     let importDelay: Double
     /// `-CuePadInteractOnly 项,项`：`-CuePadBench interact` 只量列出的几项
     let interactOnly: String?

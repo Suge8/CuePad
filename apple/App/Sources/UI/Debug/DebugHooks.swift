@@ -247,10 +247,14 @@ enum DebugHooks {
     /// 输入框里选的附件存进附件目录之前停多久：`-CuePadImportDelay <秒>` 把"附件还在存"拉长到能在界面上看见（配 `-CuePadSpeech press`）。
     static func importDelay() async {
         #if DEBUG
-        let seconds = DebugScene.defaults.double(forKey: "CuePadImportDelay")
-        if seconds > 0 { try? await Task.sleep(for: .seconds(seconds)) }
+        if importDelaySeconds > 0 { try? await Task.sleep(for: .seconds(importDelaySeconds)) }
         #endif
     }
+
+    #if DEBUG
+    /// `importDelay` 停的秒数：启动时取 `-CuePadImportDelay`；测试在进程里改它（不碰偏好域）。
+    static var importDelaySeconds = DebugScene.args.driveOpts.importDelay
+    #endif
 
     /// "对 Cue 说"的输入框或会话回复框（`session`）出现时：`-CuePadSpeech press` 在它出现 3 秒后按一下它的发送钮
     /// （`press` 就是点按发送钮做的事），录屏看发出的那一下。
