@@ -60,8 +60,8 @@ extension CloudSync {
     recheckIfWaiting(generation, for: .activated)
   }
 
-  /// Mac 不接回前台的那两种：App Nap 只压低 CPU 与定时器、不挂起 App，账号变化的通知在跑着时照常送到；而 Mac 每次切回 App 都算激活，
-  /// 接了就是每次切换都关一次闸门、多两个请求。
+  /// Mac 不接回前台的那两种：App Nap 的文档只说压低 CPU 与定时器、没说挂起 App，由此推断账号变化的通知在跑着时照常送到（未经真机验证）；
+  /// 而 Mac 每次切回 App 都算激活，接了就是每次切换都关一次闸门、多两个请求。
   #if os(iOS)
   static let missesAccountChangesWhileInBackground = true
   #else

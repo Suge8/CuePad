@@ -187,12 +187,12 @@ actor SyncCoordinator {
   /// 此刻登录的 iCloud 账号（用户记录名）。第一次同步记下；和上次同步的不是同一个时，本机数据属于上一个账号，停下来等你决定。
   func account(_ name: String, from check: AccountGate.Check) async {
     guard !stopped, gate.admits(check) else { return }
-    let current = Data(name.utf8)
+    let gate = gate
     do {
-      let last = try await store.syncState(Self.accountKey)
-      guard !stopped, gate.admits(check) else { return }  // 读的途中又起了一次认：这次的名字可能已经过时
-      guard let last else { return try await store.setSyncState(Self.accountKey, current) }
-      if last != current { facts.status = .needsDecision(.accountSwitched) }
+      let match = try await store.matchAccount(Data(name.utf8), key: Self.accountKey) { gate.admits(check) }
+      // 回到这里的途中又起了一次认：这次的结论已经过时（之后同步地写，新一次的写排在后面）
+      guard match == .switched, !stopped, gate.admits(check) else { return }
+      facts.status = .needsDecision(.accountSwitched)
     } catch {
       guard gate.admits(check) else { return }
       failed(error)
@@ -277,3 +277,18 @@ actor SyncCoordinator {
 
 /// 停下了（等你决定，或这台要更新）：这一页不应用，令牌不前移。
 struct SyncPaused: Error {}
+
+enum AccountMatch { case recorded, same, switched }
+
+extension CueStore {
+  /// 比对并记下同步的账号，在资料库自己的队列上一步做完：读、比、写之间插不进别的读写（另一次认的比对排在前或后，不交错）。
+  /// `latest` 不是 true（这一次已被更新的一次取代）就什么都不写，返回 nil。
+  fileprivate func matchAccount(_ current: Data, key: String, latest: @Sendable () -> Bool) throws -> AccountMatch? {
+    guard latest() else { return nil }
+    guard let last = try syncState(key) else {
+      try setSyncState(key, current)
+      return .recorded
+    }
+    return last == current ? .same : .switched
+  }
+}
