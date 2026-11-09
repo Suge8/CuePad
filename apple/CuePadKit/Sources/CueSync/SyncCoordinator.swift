@@ -282,7 +282,8 @@ enum AccountMatch { case recorded, same, switched }
 
 extension CueStore {
   /// 比对并记下同步的账号，在资料库自己的队列上一步做完：读、比、写之间插不进别的读写（另一次认的比对排在前或后，不交错）。
-  /// `latest` 不是 true（这一次已被更新的一次取代）就什么都不写，返回 nil。
+  /// `latest` 不是 true（这一次已被更新的一次取代）就什么都不写，返回 nil。查过之后、写下之前另起的那次排在这次之后读，等同于这次更早写完；
+  /// 不把判定和写入挪进闸门的锁里：那样起新的一次认要在锁里等资料库写入。
   fileprivate func matchAccount(_ current: Data, key: String, latest: @Sendable () -> Bool) throws -> AccountMatch? {
     guard latest() else { return nil }
     guard let last = try syncState(key) else {
