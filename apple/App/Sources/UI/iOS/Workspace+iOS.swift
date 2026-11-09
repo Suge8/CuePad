@@ -5,7 +5,6 @@ import SwiftUI
 extension Workspace {
     func willSelect(_ route: Route, from previous: Route) {}
 
-    /// 灵感的纸页推在当前页上。
     func showEditor(_ card: UUID) { push(.card(card)) }
 
     /// 技能与规则的文件页推在技能与规则页上；已在一份文件页上时换掉它、不叠一层（去重的几份之间切换，返回回到技能与规则页）。

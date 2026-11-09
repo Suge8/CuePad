@@ -45,7 +45,6 @@ struct CueButton: View {
 /// 否决过：放得下与放不下各挂一份（右边一份、抽屉在窗口的浮层那一层一份）——跨过临界宽时拆一份建一份，对话回到最新处、读到一半的位置丢了。
 struct CueDock<Column: View>: View {
     let sizes: WideMetrics
-    /// 窗口宽。
     let width: CGFloat
     let focus: WideFocus
     /// 块的上沿排在安全区里（iPad 的状态栏底下），抽屉的面往上伸出去这么多，照样铺满整窗高；下沿块自己伸到窗口下缘（`reachesWindowBottom`）。

@@ -107,7 +107,6 @@ struct ComposerField: NSViewRepresentable {
         /// 上次交给 `text` 的那一串（同 iOS 那份：更新时拿它判断是不是外部改写）。
         var sent = ""
         var ink: Color?
-        /// 正在写外部改写的文字：这期间文字区报的变化不是你打的。
         var writing = false
         init(_ parent: ComposerField) { self.parent = parent }
 

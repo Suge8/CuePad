@@ -38,7 +38,6 @@ struct SetupPanel: View {
     private var cueRowShown: Bool { setupCue == .enable || waiting != nil }
     private var waiting: String? { if case .waiting(let why) = setupCue { why } else { nil } }
     private var enablingCue: Bool { setupCue == .enable && !skipsCue }
-    /// 检测完了，有可勾的：要接入的几家或 Cue 那一行。
     private var hasChoices: Bool { checked && (rows.contains { $0.step == .connect } || cueRowShown) }
     /// 有一家装好了只差登录（提示写"先登录"，否则写"先装"）。
     private var logsInFirst: Bool {
