@@ -30,8 +30,9 @@ enum Schema {
     init(files run: @escaping @Sendable (SQLite, AttachmentFiles) throws -> AfterCommit?) { self.run = run }
   }
 
-  /// 能打开的最老结构版本（`upgrades` 的起点）：更早的库不升级、不打开（`schemaTooOld`）。起点是最早对外发出的构建（经 Sparkle 的 Mac、TestFlight）用的结构，
-  /// 按各 `mac/`、`ios/` 标签那时的结构取最小：72 是 ios/2610262136（首个公开 Mac mac/2611041628 已是 88），再早的只有开发库。
+  /// 能打开的最老结构版本（`upgrades` 的起点）：更早的库不升级、不打开（`schemaTooOld`），也没有就地重建的入口。
+  /// 只有作者自己的设备在用：起点可以挪到这些设备的库都已升过的那一版，却不能高于任何一个 `mac/`、`ios/` 发布标签那时的结构。
+  /// 72 是 ios/2610262136；标签从它起才有，更早也发过 Sparkle 与 TestFlight 构建，它们的库自 10-23 起点到 66 就已打不开。
   /// 挪起点时把那一版及以前的步骤折进 `create`（它建的就是最新结构），给更早设备留的兼容一并删掉。
   static let baseVersion = 72
 
