@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # CuePad 的构建、测试、截图、测量、发布只走这里（Agent 绕开它直接调 xcodebuild、swift build/test、simctl 开关机，
 # 或自己起停 CuePad，会被 .pi/extensions/xc-guard.ts 拦下）。
-#   xc.sh check                                     提交前的门：lint.sh、CuePadKit 的 swift build、iOS 编译（连测试目标）、Mac App 的整模块编译；
+#   xc.sh check                                     提交前的门：lint.sh、CuePadKit 的 swift build、iOS 编译（连测试目标）、Mac App 连测试目标的整模块编译（只在 Mac 编的测试，如 #if os(macOS) 的，警告也在这里拦）；
 #                                                   自己的 Swift 源文件（App、CuePadKit）有一条编译警告就失败，第三方与生成的代码不算（_build.sh 的 own_warnings）
 #   xc.sh build <mac|ios|ipad>
 #   xc.sh activity-log [输出.json]                  生产 iCloud 活动取证只读导出：签隔离副本、不启动应用服务，不打开真实库、不重启正式版
