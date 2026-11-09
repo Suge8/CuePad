@@ -153,6 +153,9 @@ public struct FakeRequest: Sendable {
         let text = (inner as? String) ?? texts(inner as? [[String: Any]] ?? [])
         messages.append(Message(role: .tool, text: text, images: images(inner as? [[String: Any]] ?? []), calls: []))
       }
+      // dsh 把进行中插进来的话放在工具结果后面的文字块里：算你的话（Claude Code 放在那里的提醒是 <system-reminder> 开头的，不算）
+      let interjection = blocks.compactMap { $0["type"] as? String == "text" ? $0["text"] as? String : nil }.filter { !$0.hasPrefix("<system-reminder>") }
+      if !interjection.isEmpty { messages.append(Message(role: .user, text: interjection.joined(separator: "\n"), images: [], calls: [])) }
     }
     return (system, messages)
   }

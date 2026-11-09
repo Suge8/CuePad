@@ -5,97 +5,69 @@ import Foundation
 import Testing
 @testable import CuePi
 
-private let environment = ProcessInfo.processInfo.environment
-/// 测试用的 OpenCode v2：`CUEPAD_OPENCODE` 给的可执行文件，没给就是本机装的里头第一个 v2（v1 的接口不同）
-let realOpenCodeURL = environment["CUEPAD_OPENCODE"].map { URL(filePath: $0) }
-    ?? ExecutableLocator.standard.candidates("opencode").first { (version(of: $0)?.major ?? 0) >= 2 }
-/// 测试用的模型：缺省是假模型（`Fixtures/fake-openai.mjs`，提供方 `fake`，零网络、结果确定）；`CUEPAD_AGENT_TESTS` 列出 opencode 时
-/// 换成真提供方 `CUEPAD_OPENCODE_MODEL`（`提供方/模型`，密钥只经环境给，如 `DEEPSEEK_API_KEY`），`CUEPAD_OPENCODE_OTHER_MODEL`
-/// 是就地换到的那个（要有 high 强度），缺省同一个
-let openCodeRealModel = environment["CUEPAD_OPENCODE_MODEL"].flatMap(AgentKind.opencode.modelKey)
-/// 列出 opencode 却没给（或写错）真提供方的模型时套件跳过（`RealAgents.missing`），用不到这里
-let openCodeTestModel = RealAgents.recording.contains(.opencode) ? openCodeRealModel! : PiModelKey(provider: OpenCodeSandbox.fake, id: "echo")
+/// 测试用的模型提供方：`fake`（`FakeModel`，两个模型，窗口不同、都有 low / high 两档强度）。`echo` 是缺省，`echo-b` 是就地换到的那个
+let openCodeTestModel = PiModelKey(provider: OpenCodeSandbox.fake, id: "echo")
+let openCodeOtherModel = PiModelKey(provider: OpenCodeSandbox.fake, id: "echo-b")
 
-private func version(of executable: URL) -> AgentVersion? {
-    let process = Process()
-    process.executableURL = executable
-    process.arguments = ["--version"]
-    let output = Pipe()
-    process.standardOutput = output
-    process.standardError = FileHandle.nullDevice
-    guard (try? process.run()) != nil else { return nil }
-    let text = String(decoding: output.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
-    process.waitUntilExit()
-    return AgentVersion(parsing: text)
-}
-let openCodeOtherModel = openCodeTestModel.provider == OpenCodeSandbox.fake ? PiModelKey(provider: OpenCodeSandbox.fake, id: "echo-b")
-    : environment["CUEPAD_OPENCODE_OTHER_MODEL"].flatMap(AgentKind.opencode.modelKey) ?? openCodeTestModel
-
-/// 一台隔离的 OpenCode：HOME、XDG 与配置目录都在临时目录里，绝不碰真实的 ~/.config/opencode 与它的库。
+/// 一台隔离的 OpenCode：钉住版本的 v2（`PinnedAgent.opencode`），HOME、XDG 与配置目录都在临时目录里，绝不碰真实的 ~/.config/opencode 与它的库，
+/// 也没有任何登录或密钥——提供方 `fake` 经配置里的 `baseURL` 指到本用例的假模型（`FakeModel`，Chat Completions）。
 /// 后台服务的缺省端口是固定的（0xc0de），会撞上本机真在跑的服务，所以先给它配一个空闲端口。不联网取模型表（只用随包的那份）、
-/// 不开免费模型、不盯文件（它从根目录起逐级盯到工作目录，机器忙时起服务要几十秒）。
-/// - 假模型：起一个 `Fixtures/fake-openai.mjs`，配成提供方 `fake`（两个模型，窗口不同、都有 low / high 两档强度）；
-/// - 真模型：提供方的密钥（测试进程环境里 `*_API_KEY` 的）交给它，模型要在随包的模型表里。
+/// 不开免费模型、不盯文件（它从根目录起逐级盯到工作目录，机器忙时起服务要几十秒）、不自动更新。
+/// 不带工具的请求（起标题、压缩上下文的摘要）回一句固定的话。
 final class OpenCodeSandbox: Sendable {
     static let fake = "fake"
+    static let pinned = PinnedAgent.opencode
     let root: URL
     let work: URL
     let environment: [String: String]
     let paths: AgentPaths
-    private let model: ChildProcess?
+    let model: FakeModel
 
-    init() async throws {
+    /// - Parameter model: 剧本要在 OpenCode 起来之前写好时先建好交进来。
+    init(model: FakeModel? = nil) async throws {
+        try Self.pinned.require()
         let root = try makeTempDirectory()
         let config = root.appending(path: "xc/opencode", directoryHint: .isDirectory)
         self.root = root
         work = root.appending(path: "work", directoryHint: .isDirectory)
-        environment = [
-            "HOME": root.appending(path: "home").path, "XDG_CONFIG_HOME": root.appending(path: "xc").path,
-            "XDG_DATA_HOME": root.appending(path: "xd").path, "XDG_STATE_HOME": root.appending(path: "xs").path,
-            "XDG_CACHE_HOME": root.appending(path: "xk").path, "OPENCODE_CONFIG_DIR": config.path, "OPENCODE_DISABLE_AUTOUPDATE": "1",
-            "PATH": [realOpenCodeURL!.deletingLastPathComponent().path, "/usr/bin", "/bin", "/usr/sbin", "/sbin"].joined(separator: ":"),
-            "OPENCODE_DISABLE_MODELS_FETCH": "1", "OPENCODE_DISABLE_FREE_MODELS": "1", "OPENCODE_DISABLE_FILEWATCHER": "1",
-        ].merging(ProcessInfo.processInfo.environment.filter { $0.key.hasSuffix("_API_KEY") }) { $1 }
+        environment = Self.pinned.environment(home: root.appending(path: "home"), [
+            "XDG_CONFIG_HOME": root.appending(path: "xc").path, "XDG_DATA_HOME": root.appending(path: "xd").path,
+            "XDG_STATE_HOME": root.appending(path: "xs").path, "XDG_CACHE_HOME": root.appending(path: "xk").path,
+            "OPENCODE_CONFIG_DIR": config.path, "OPENCODE_DISABLE_AUTOUPDATE": "1", "OPENCODE_DISABLE_MODELS_FETCH": "1",
+            "OPENCODE_DISABLE_FREE_MODELS": "1", "OPENCODE_DISABLE_FILEWATCHER": "1",
+        ])
         paths = AgentPaths(pi: PiPaths(agentDirectory: root.appending(path: "pi"), socketDirectory: root.appending(path: "s"), environment: [:]), environment: environment)
         for directory in [work, config, root.appending(path: "home")] {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         }
-        var settings: [String: Any] = ["model": AgentKind.opencode.modelRef(openCodeTestModel)]
-        model = openCodeTestModel.provider == Self.fake ? try await Self.fakeModel() : nil
-        if let model { settings["providers"] = [Self.fake: try await Self.provider(model)] }
+        let fake: FakeModel
+        if let model { fake = model } else { fake = try await FakeModel() }
+        fake.on({ $0.tools.isEmpty }) { _ in .say("Fake summary") }
+        self.model = fake
+        let settings: [String: Any] = ["model": AgentKind.opencode.modelRef(openCodeTestModel), "providers": [Self.fake: Self.provider(fake)]]
         try JSONSerialization.data(withJSONObject: settings).write(to: config.appending(path: "opencode.json"))
         try await run(["service", "set", "port", String(try Self.freePort())])
     }
 
-    private static func fakeModel() async throws -> ChildProcess {
-        let node = try #require(ExecutableLocator.standard.candidates("node").first)
-        let script = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "Fixtures/fake-openai.mjs")
-        return try await ChildProcess(node, [script.path], placement: .group, input: .pipe, output: .lines)
-    }
-
-    private static func provider(_ model: ChildProcess) async throws -> [String: Any] {
-        struct Ready: Decodable { var port: Int }
-        let line = try #require(await model.output.first { _ in true }, "假模型没报端口")
-        let port = try JSONDecoder().decode(Ready.self, from: line).port
+    private static func provider(_ model: FakeModel) -> [String: Any] {
         func entry(_ window: Int) -> [String: Any] {
             ["capabilities": ["tools": true, "input": ["text", "image"], "output": ["text"]], "limit": ["context": window, "output": 4000],
              "variants": [["id": "low", "body": [:]], ["id": "high", "body": [:]]]]
         }
         return [
-            "package": "@opencode/ai/providers/openai-compatible", "settings": ["baseURL": "http://127.0.0.1:\(port)/v1", "apiKey": "fake"],
+            "package": "@opencode/ai/providers/openai-compatible", "settings": ["baseURL": "\(model.baseURL)/v1", "apiKey": "fake"],
             "models": ["echo": entry(100_000), "echo-b": entry(50_000)],
         ]
     }
 
     @MainActor func runtime(_ bridge: PiBridge, _ store: CueStore) -> OpenCodeRuntime {
-        OpenCodeRuntime(bridge: bridge, paths: paths, store: store, hostID: "mac", opencode: { realOpenCodeURL })
+        OpenCodeRuntime(bridge: bridge, paths: paths, store: store, hostID: "mac", opencode: { Self.pinned.executable }, locate: { Self.pinned.locator })
     }
 
     @discardableResult
     func run(_ arguments: [String], in directory: URL? = nil) async throws -> String {
-        let opencode = try #require(realOpenCodeURL)
         let result = try #require(
-            await ChildProcess.run(opencode, arguments, directory: directory ?? work, environment: environment, timeout: .seconds(180)),
+            await ChildProcess.run(Self.pinned.executable, arguments, directory: directory ?? work, environment: environment, timeout: .seconds(180)),
             "opencode \(arguments) 没跑完")
         try #require(result.status == 0, "opencode \(arguments) 失败：\(result.output)")
         return result.output
@@ -138,7 +110,7 @@ final class OpenCodeSandbox: Sendable {
             kill(pid, SIGTERM)
             try await eventually("OpenCode 服务退出") { kill(pid, 0) == -1 && errno == ESRCH }
         }
-        await model?.stop()
+        model.stop()
         try? FileManager.default.removeItem(at: root)
     }
 

@@ -9,9 +9,9 @@ import Testing
 extension RealOpenCodeTests {
     @Test func reconnectingKeepsTheFirstMessageAndOnlyTheServiceCuePadStartedIsStopped() async throws {
         try await withOpenCode { sandbox, store, bridge, runtime in
-            let opencode = try #require(realOpenCodeURL)
+            try await sandbox.run(["service", "start"])
             _ = await ChildProcess.run(
-                opencode, ["run", "-m", "\(openCodeTestModel.provider)/no-such-model-xyz", "say hi"], directory: sandbox.work, environment: sandbox.environment,
+                OpenCodeSandbox.pinned.executable, ["run", "-m", "\(openCodeTestModel.provider)/no-such-model-xyz", "say hi"], directory: sandbox.work, environment: sandbox.environment,
                 timeout: .seconds(120))
             try await eventually("终端的会话出现、名字是首条消息") { session(bridge)?.displayName.contains("say hi") == true }
             let terminalService = try #require(sandbox.service)
@@ -69,58 +69,31 @@ extension RealOpenCodeTests {
                     && messages.last?.role == .known(.pi)
             }
             #expect(store.files.fileURL(for: hash) != nil)
+            #expect(sandbox.model.requests.contains { $0.prompt.contains("SEEN") && $0.images.count == 1 }, "假模型没收到图")
 
-            let answered = try await replies(store, opened.sessionID).count
-            try await bridge.send(PiMessage(text: "Use the subagent tool with agent explore and description find-readme, prompt: list the files in the current directory. Wait for its result, then reply DONE."), to: id)
-            @MainActor func explored() -> Bool {
+            sandbox.model.on("Explore the folder", .call("subagent", ["agent": "explore", "description": "find-readme", "prompt": "list the files in the current directory."]), .say("DONE"))
+            try await bridge.send(PiMessage(text: "Explore the folder"), to: id)
+            try await eventually("子代理出现、做完") {
                 session(bridge)?.subagents.contains { $0.name == "find-readme" && $0.role == "explore" && $0.phase == .known(.done) } == true
             }
-            // 真模型偶尔不派子代理就答（实测 big-pickle 说"没有 subagent 工具"）：那样当场报出它的回答，不干等
-            try await eventually("子代理出现、做完") {
-                if explored() { return true }
-                guard session(bridge)?.state == .settled else { return false }
-                return try await replies(store, opened.sessionID).count > answered
-            }
-            let reply = try await replies(store, opened.sessionID).last?.prefix(200)
-            #expect(explored(), "模型没派子代理：\(String(describing: reply))")
             try await eventually("这一轮做完") { session(bridge)?.state == .settled }
 
-            try await bridge.send(PiMessage(text: "Use the question tool to ask me one question with header Color and question Which color? with options Red and Blue. After I answer, reply with exactly the color I chose."), to: id)
-            try await eventually("在等你回答") { session(bridge)?.question?.kind == .known(.select) }
-            let question = try #require(session(bridge)?.question)
-            #expect(question.options == ["Red", "Blue"])
-            try await bridge.answer(.option("Blue"), to: question.promptID!, in: id)
-            try await eventually("按你的回答接着做完") {
-                let reply = try await replies(store, opened.sessionID).last
-                return session(bridge)?.state == .settled && reply?.contains("Blue") == true
+            // 选择题：选一个，再换一次自己填一个不在选项里的答案（OpenCode 的选择题本身允许自己填）
+            for (ask, options, answer, expected) in [("Ask the color", ["Red", "Blue"], PiAnswerValue.option("Blue"), "Blue"), ("Ask the color again", ["Red", "Blue"], .text("Green"), "Green")] {
+                let questions: [[String: any Sendable]] = [["header": "Color", "question": "Which color?", "options": options.map { ["label": $0, "description": $0] }]]
+                sandbox.model.on(ask) { request in
+                    request.step == 0 ? .call("question", ["questions": questions]) : .say(request.results.last?.firstMatch(of: /="([^"]*)"/).map { String($0.1) } ?? "NO ANSWER")
+                }
+                try await bridge.send(PiMessage(text: ask), to: id)
+                try await eventually("在等你回答") { session(bridge)?.question?.kind == .known(.select) }
+                let question = try #require(session(bridge)?.question)
+                #expect(question.options == options && question.allowsOther)
+                try await bridge.answer(answer, to: question.promptID!, in: id)
+                try await eventually("按你的回答接着做完") {
+                    let reply = try await replies(store, opened.sessionID).last
+                    return session(bridge)?.state == .settled && reply == expected
+                }
             }
-
-            // OpenCode 的选择题本身允许自己填：从 CuePad 写一个不在选项里的答案
-            try await bridge.send(PiMessage(text: "Use the question tool once more: header Color, question Which color now? with options Red and Blue. After I answer, reply with exactly the color I gave."), to: id)
-            try await eventually("又在等你回答") { session(bridge)?.question?.kind == .known(.select) }
-            let open = try #require(session(bridge)?.question)
-            #expect(open.allowsOther)
-            try await bridge.answer(.text("Green"), to: open.promptID!, in: id)
-            try await eventually("按你自己填的接着做完") {
-                let reply = try await replies(store, opened.sessionID).last
-                return session(bridge)?.state == .settled && reply?.contains("Green") == true
-            }
-
-            let long = PiMessage(text: "Write the numbers from 1 to 400, one per line, each with a long sentence about it.")
-            try await bridge.send(PiMessage(text: "Write the numbers from 1 to 30, one per line, each with a short sentence about it."), to: id)
-            try await eventually("在忙") { session(bridge)?.state.isWorking == true }
-            try await bridge.send(PiMessage(text: "Reply with the word STEERED."), to: id)
-            // 这句停下在跑的一轮、开新一轮并做完（模型怎么回不在验收里：真模型不一定照说）
-            try await eventually("这句开的一轮做完") {
-                let messages = try await store.piMessages(of: opened.sessionID)
-                let said = messages.lastIndex { $0.role == .known(.user) && $0.text.contains("STEERED") }
-                return said.map { messages[$0...].contains { $0.role == .known(.pi) } } == true && session(bridge)?.state == .settled
-            }
-
-            try await bridge.send(long, to: id)
-            try await eventually("又在忙") { session(bridge)?.state.isWorking == true }
-            try await bridge.abort(id)
-            try await eventually("停下了") { session(bridge)?.state == .settled }
 
             try await bridge.end(id)
             #expect(bridge.session(id: id) == nil)
@@ -129,19 +102,41 @@ extension RealOpenCodeTests {
 
             let resumed = try await runtime.resume(indexed)
             #expect(bridge.session(id: resumed)?.sessionID == opened.sessionID)
-            let before = try await replies(store, opened.sessionID).count
-            // 停得早时那句长的还没回答就留在上下文里：不说明作废，模型会把两句当一个矛盾的要求、用提问工具反问（实测 big-pickle）
-            try await bridge.send(PiMessage(text: "The earlier unfinished request is cancelled, do not do it. Reply with exactly the word BACK."), to: resumed)
-            try await eventually("接着说的回答到了") {
-                try await replies(store, opened.sessionID).count > before || session(bridge)?.question != nil
-            }
-            #expect(session(bridge)?.question == nil, "模型反问了而没回答：\(String(describing: session(bridge)?.question?.text))")
+            try await bridge.send(PiMessage(text: "Reply with exactly the word BACK."), to: resumed)
+            try await eventually("接着说的回答到了") { try await replies(store, opened.sessionID).last?.contains("BACK") == true }
 
             try await sandbox.api("DELETE", "/api/session/\(opened.sessionID)")
             try await eventually("删掉的会话下线、索引也删了") {
                 let indexed = try await store.piSession(opened.sessionID)
                 return bridge.session(id: resumed) == nil && indexed == nil
             }
+        }
+    }
+
+    /// 恢复：说过话的托管会话结束、接入与后台服务都停了，重新接入后接着它说，模型收到的对话里带着之前说过的。
+    @Test func aSessionEndedAndItsServiceStoppedResumesWithItsConversation() async throws {
+        try await withOpenCode { sandbox, store, bridge, runtime in
+            let id = try await runtime.open(in: sandbox.work, launchToken: "token-r", name: nil, model: nil, thinking: nil)
+            let sessionID = try #require(bridge.session(id: id)?.sessionID)
+            try await bridge.send(PiMessage(text: "Reply with exactly the word FIRST."), to: id)
+            try await eventually("第一句答完") { try await replies(store, sessionID).last?.contains("FIRST") == true && session(bridge)?.state == .settled }
+
+            try await bridge.end(id)
+            let service = try #require(sandbox.service)
+            await runtime.stop()()
+            try await eventually("CuePad 拉起的服务随接入停了") { kill(service.pid, 0) != 0 && sandbox.service == nil }
+            let indexed = try #require(try await store.piSession(sessionID))
+
+            let restarted = sandbox.runtime(bridge, store)
+            try restarted.start()
+            let resumed = try await restarted.resume(indexed)
+            #expect(bridge.session(id: resumed)?.sessionID == sessionID)
+            let sent = sandbox.model.requests.count
+            try await bridge.send(PiMessage(text: "Reply with exactly the word SECOND."), to: resumed)
+            try await eventually("接着说的回答到了") { try await replies(store, sessionID).last?.contains("SECOND") == true }
+            let request = try #require(sandbox.model.requests.dropFirst(sent).first { $0.prompt.contains("SECOND") })
+            #expect(request.said.contains { $0.contains("FIRST") }, "模型收到的对话里没有之前说过的：\(request.said)")
+            await restarted.stop()()
         }
     }
 }

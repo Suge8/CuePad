@@ -49,7 +49,7 @@ final class AgentTape: @unchecked Sendable {
         return binary
     }
 
-    static let realExecutables: [String: URL?] = ["pi": pinnedPi.executable, "codex": realCodexURL, "claude": claudeURL, "grok": pinnedGrok.executable, "dsh": realDshURL]
+    static let realExecutables: [String: URL?] = ["pi": pinnedPi.executable, "codex": realCodexURL, "claude": claudeURL, "grok": pinnedGrok.executable, "dsh": PinnedAgent.dsh.executable]
 
     /// - Parameter agent: 一个套件一家时由特征给出；几家共用一个套件时用例自己用 `use(_:variant:)` 给出。
     init(agent: AgentKind?, test: Test) throws {
