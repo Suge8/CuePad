@@ -153,6 +153,9 @@ final class ClaudeTestbed {
         }
         let terminal = try await ClaudeTerminal(testbed: self, arguments: ["--permission-mode", mode] + arguments)
         terminals.append(terminal)
+        // 输入框画出来之前，收件箱收到的话即使带着令牌也按来路不明挂起（2.1.318 实测：13 个终端并行时上桥就发，12 个里挂起 3 个；
+        // 等到输入框再发，36 个都送到）。用户在 CuePad 上给终端会话发话时它早已起好，测试照这个先后。
+        try await eventually("终端里的 Claude Code 画出输入框") { await terminal.screen.contains(/for shortcuts|permissions on/) }
         return terminal
     }
 
@@ -219,6 +222,17 @@ final class ClaudeTerminal {
     }
 
     func keys(_ keys: String...) async throws { try await Self.tmux(name, ["send-keys"] + keys, environment: [:]) }
+
+    /// 在终端里的对话框上按键。对话框刚弹出的一小会儿里 Claude Code 不认按键（防误触；2.1.318 实测弹出后 10 毫秒按的 Enter 被吞掉，
+    /// 3 秒后再按就生效）：对话框还在画面上就再按，直到 `done`。只在对话框还在时补按，按早了也不会落到输入框里。
+    func press(_ key: String, on dialog: String, until done: () async throws -> Bool) async throws {
+        try await eventually("终端里按 \(key) 生效") {
+            if try await done() { return true }
+            if await screen.contains(dialog) { try await keys(key) }
+            try await Task.sleep(for: .milliseconds(300))
+            return try await done()
+        }
+    }
 
     var screen: String {
         get async { (try? await Self.tmux(name, ["capture-pane", "-p"], environment: [:])) ?? "" }
