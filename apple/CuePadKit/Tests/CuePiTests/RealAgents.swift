@@ -13,7 +13,7 @@ import Testing
 ///
 /// 录制：列出要录的几家（`AgentKind` 的 rawValue），这几家连真 Agent 跑同样的断言，并重写它们的录像带：
 ///
-///     TEST_RUNNER_CUEPAD_AGENT_TESTS=pi,codex,claude apple/scripts/xc.sh test kit -only-testing:CuePiTests
+///     TEST_RUNNER_CUEPAD_AGENT_TESTS=codex,grok apple/scripts/xc.sh test kit -only-testing:CuePiTests
 ///
 /// 下面的变量同样加 `TEST_RUNNER_` 前缀给（xcodebuild 只把这样的变量交给测试进程）。
 ///
@@ -25,7 +25,7 @@ import Testing
 /// - grok：本机的 grok（`CUEPAD_GROK` 可换），假模型（`FakeResponses`），零网络；环境里给了 `XAI_API_KEY` 或 `GROK_AUTH_PATH`（已登录的
 ///   凭据文件，如 `~/.grok/auth.json`）时连真的 xAI（`GrokModel`），托管会话的模型用 `CUEPAD_GROK_MODEL` 换；
 /// - dsh：`CUEPAD_DSH` 指的 dsh（0.2.1-rc.2 以上；没给按 PATH 找），DeepSeek 的 key 只经 `DEEPSEEK_API_KEY` 给（录完 grep 录像带确认没有它）；
-/// - 大脑（`RealBrainTests`）除 Pi（假模型，剧本 `playBrain`）外用本机用户自己的登录，模型用 `CUEPAD_BRAIN_MODEL_<家>`、强度用 `CUEPAD_BRAIN_EFFORT` 换。
+/// - 大脑（`RealBrainTests`）除 Pi 与 Claude Code（假模型，剧本 `playBrain`）外用本机用户自己的登录，模型用 `CUEPAD_BRAIN_MODEL_<家>`、强度用 `CUEPAD_BRAIN_EFFORT` 换。
 ///
 /// 列出的家本机没装或没登录时，它的用例跳过、录像带不动。模型的回答每次不同，录下的一盘断言没过就再录这一个用例。
 ///
@@ -33,7 +33,7 @@ import Testing
 /// `CUEPAD_OPENCODE` 可指定）就在隔离的 `OpenCodeSandbox` 里跑，找不到就跳过。缺省用假模型 `Fixtures/fake-openai.mjs`，零网络、结果确定；
 /// 列出 `opencode` 只是改连真提供方，模型用 `CUEPAD_OPENCODE_MODEL`（`提供方/模型`，必给），密钥只经环境给。
 ///
-/// 没有录像带、只在列出这家时连真 Agent 跑的（`live(_:_:)`）：终端里的 Codex 与 Claude Code（断言的是伪终端、tmux 里真终端界面的
+/// 没有录像带、只在列出这家时连真 Agent 跑的（`live(_:_:)`）：终端里的 Codex（断言的是伪终端里真终端界面的
 /// 输出与按键），大脑结束后不留进程与历史（`RealBrainProcessTests`，看的是真进程树与各家真实的历史目录；OpenCode 的总跑），
 /// 旧扩展托管进程换上新扩展（两个 Pi 进程交替上桥、热换扩展文件，回放排不稳先后）。
 enum RealAgents {
