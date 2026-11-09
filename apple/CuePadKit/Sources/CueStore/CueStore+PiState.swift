@@ -190,6 +190,8 @@ public struct PiProcess: Equatable, Sendable {
 /// 一个会话此刻写进同步记录的全部字段（摘要不在其中）：桥上的会话产出它（`PiSession.snapshot`），记录器只收它（`PiStateRecorder.update`），
 /// 已写入的值与落盘用的也是它。加一个会话字段：这里加一个属性，桥上产出时填上，再在 `writePiState` 写进记录。
 public struct PiSessionSnapshot: Paced {
+  /// 哪个会话（`PiSessionState.sessionID`）：记录跟着它，不另传。
+  public let sessionID: String
   public var state: PiWorkState
   public var detail: String?
   public var title = ""
@@ -212,7 +214,8 @@ public struct PiSessionSnapshot: Paced {
   /// 承载它的进程（只写本机表，不进同步记录）；不知道为 nil。
   public var process: PiProcess?
 
-  public init(state: PiWorkState, times: PiTimes) {
+  public init(sessionID: String, state: PiWorkState, times: PiTimes) {
+    self.sessionID = sessionID
     self.state = state
     self.times = times
   }

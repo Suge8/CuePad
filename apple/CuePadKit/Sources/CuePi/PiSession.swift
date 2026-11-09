@@ -108,7 +108,7 @@ public struct PiSession: Identifiable, Sendable, Equatable {
 
     /// 此刻要写进同步记录的样子（`PiStateRecorder.update`）。标题与项目要查库，由 `PiSessionMirror` 定好交进来。
     func snapshot(title: String, projectID: UUID?) -> PiSessionSnapshot {
-        var snapshot = PiSessionSnapshot(state: state, times: PiTimes(stateSince: stateSince, busySince: busySince))
+        var snapshot = PiSessionSnapshot(sessionID: sessionID, state: state, times: PiTimes(stateSince: stateSince, busySince: busySince))
         snapshot.detail = detail
         snapshot.failure = failure
         snapshot.title = title

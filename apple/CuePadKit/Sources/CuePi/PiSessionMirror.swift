@@ -52,7 +52,7 @@ public struct PiSessionMirror {
         let title = session.name != nil || session.firstMessage != nil
             ? session.displayName : try await store.piSession(session.sessionID)?.title ?? session.displayName
         let snapshot = session.snapshot(title: title, projectID: try await store.project(containing: session.cwd)?.id)
-        return try await recorder.update(snapshot, of: session.sessionID) == nil ? nil : session.sessionID
+        return try await recorder.update(snapshot) == nil ? nil : session.sessionID
     }
 }
 #endif

@@ -43,7 +43,8 @@ public actor PiStateRecorder {
   /// 快照上说不上来的几项沿用上一次写下的（`PiSessionSnapshot.keepingUnknown`）。
   /// 返回这次写入置位的通知标志（没有置位为 nil）：调用方据此立即上传这一条，通知不排在其余待推送后面。
   @discardableResult
-  public func update(_ snapshot: PiSessionSnapshot, of sessionID: String) async throws -> PiAlert? {
+  public func update(_ snapshot: PiSessionSnapshot) async throws -> PiAlert? {
+    let sessionID = snapshot.sessionID
     var session = sessions[sessionID] ?? Session()
     let now = timing.now()
     let previous = session.pace.content
@@ -73,7 +74,7 @@ public actor PiStateRecorder {
   }
 
   /// 演示与测试只写关心的几项：在上一次写下的样子上改给了的（nil 沿用），`question`、`detail` 与 `failure` 每次整体替换；
-  /// 第一次写、没给计时的从此刻算。落盘同 `update(_:of:)`。
+  /// 第一次写、没给计时的从此刻算。落盘同 `update(_:)`。
   @discardableResult
   public func update(
     sessionID: String, state: PiWorkState, detail: String? = nil, failure: PiFailure? = nil, title: String? = nil, directory: String? = nil,
@@ -81,7 +82,7 @@ public actor PiStateRecorder {
     subagents: [PiSubagentState]? = nil, modelState: PiModelState? = nil, context: PiContextUsage? = nil, commands: [PiSlashCommand]? = nil,
     agent: AgentKind? = nil, process: PiProcess? = nil
   ) async throws -> PiAlert? {
-    var snapshot = sessions[sessionID]?.pace.content ?? PiSessionSnapshot(state: state, times: PiTimes(stateSince: timing.now(), busySince: nil))
+    var snapshot = sessions[sessionID]?.pace.content ?? PiSessionSnapshot(sessionID: sessionID, state: state, times: PiTimes(stateSince: timing.now(), busySince: nil))
     snapshot.state = state
     snapshot.detail = detail
     snapshot.failure = failure
@@ -99,7 +100,7 @@ public actor PiStateRecorder {
     if let commands { snapshot.commands = commands }
     if let agent { snapshot.agent = agent }
     if let process { snapshot.process = process }
-    return try await update(snapshot, of: sessionID)
+    return try await update(snapshot)
   }
 
   /// 源端确认实际结束：状态与领取时固定的请求集合一并落盘；没有请求身份的状态更新不确认投送。
