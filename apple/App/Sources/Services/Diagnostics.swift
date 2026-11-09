@@ -2,7 +2,7 @@ import MetricKit
 import Observation
 import os
 
-/// MetricKit 的诊断一般在下次启动或隔天才交来。只存本机、不联网；真机上拿崩溃栈靠用户在设置页"导出诊断"。
+/// MetricKit 的诊断一般在下次启动或隔天才交来。只存本机、不联网；手机不在开发用的 Mac 旁边时，拿崩溃栈靠用户在设置页"导出诊断"（连着时用 xc.sh diag）。
 @Observable
 final class Diagnostics {
     private(set) var reports: [CrashReport]
