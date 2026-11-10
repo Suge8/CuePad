@@ -181,10 +181,9 @@ public final class ClaudeCodeRuntime: AgentRuntime {
         for (other, terminal) in terminals where terminal.pid == envelope.pid && other != id { settle(other, reason: nil) }
         let cwd = URL(filePath: input["cwd"]?.string ?? "/", directoryHint: .isDirectory)
         let file = input["transcript_path"]?.string.map { URL(filePath: $0) } ?? ClaudeCode.sessionFile(home: home, cwd: cwd, sessionID: sessionID)
-        var session = PiSession(
+        let session = PiSession(
             id: id, sessionID: sessionID, agent: .claudeCode, sessionFile: file, pid: envelope.pid, cwd: cwd,
             terminal: PiTerminal(tty: envelope.tty, environment: envelope.environment), state: .settled, stateSince: .now)
-        session.model = input["model"]?.string.map { ClaudeCode.model($0) }
         let terminal = attach(
             session, inbox: envelope.environment["CLAUDE_CODE_MESSAGING_SOCKET"], registry: registry(of: envelope.pid, in: home(of: envelope)),
             runningSince: nil, waiting: false)

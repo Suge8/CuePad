@@ -40,9 +40,10 @@ struct RealOpenCodeTests {
             try await sandbox.run(["service", "start"])
             try await sandbox.run(["run", "Reply with exactly the word PONG and nothing else."])
 
-            // 会话一建好就上桥，那时还没开始这一轮、也就还不知道用的模型（状态同样是歇着）：等回答进了资料库——这一轮的事件都已处理——再看歇下
+            // 会话一建好就上桥，那时还没开始这一轮、也就还不知道用的模型（状态同样是歇着）。回答进资料库不说明这一轮的事件已处理：
+            // 连上服务时的快照随即回填对话，直接从服务读，可以早于事件流里的这一轮。模型只有这一轮告诉 CuePad（事件，或快照里已有的回答）
             try await eventually("终端里的会话上了桥、答完歇下") {
-                guard let live = session(bridge), live.state == .settled else { return false }
+                guard let live = session(bridge), live.state == .settled, live.model != nil else { return false }
                 return try await replies(store, live.sessionID).last?.contains("PONG") == true
             }
             let live = try #require(session(bridge))
