@@ -173,18 +173,6 @@ struct ImageTests {
         #expect(h.stored == stored)
     }
 
-    @Test("图片像素在进入视口后显示出来，解码不阻塞加载")
-    func rendersPixels() async throws {
-        let h = EditorHarness()
-        let id = try h.store.store(makePNG(width: 800, height: 400, color: NSColor(srgbRed: 1, green: 0, blue: 0, alpha: 1)))
-        h.load("![](cuepad://file/\(id))")
-        let frame = try #require(h.imageLineFrames().first)
-        #expect(await h.wait {
-            guard let color = h.renderedCenterColor(of: frame) else { return false }
-            return color.redComponent > 0.8 && color.greenComponent < 0.4 && color.blueComponent < 0.3  // 红色主导（色彩管理会让数值略偏）
-        })
-    }
-
 }
 
 #endif

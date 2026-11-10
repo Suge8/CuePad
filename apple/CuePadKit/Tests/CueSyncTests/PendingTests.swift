@@ -15,10 +15,10 @@ import Testing
     await sender.start()
     let cli = try CueStore(location: .isolated(rig.fixture.directory))  // 另一个进程
     let card = try await cli.createCard(body: "written by cli")
-    await server.uploaded(rig.id(card.id))
+    try await server.uploaded(rig.id(card.id))
 
     try await store.purgeCard(card.id)
-    await server.deleted(rig.id(card.id))
+    try await server.deleted(rig.id(card.id))
     await sender.stop()
   }
 
@@ -30,13 +30,13 @@ import Testing
     let server = FakeUploader(holding: true)
     let sender = RecordSender(uploader: server, coordinator: rig.coordinator)
     await sender.start()
-    await server.uploaded(id)
+    try await server.uploaded(id)
 
-    try await Task.sleep(for: .milliseconds(3))
+    await nextMillisecond()
     try await store.updateCard(card.id) { $0.body = "v2" }
     await server.release()
 
-    await server.waitUntil { batches in batches.filter { $0.saves.contains(id) }.count == 2 }
+    try await server.waitUntil("同一条记录上传两批") { batches in batches.filter { $0.saves.contains(id) }.count == 2 }
     await sender.flush()  // 替身在第二批上传开始时就放行等待，这一批的结果落账要等这一轮结束
     #expect(try await rig.reconcileDelta().saves.isEmpty)
     await sender.stop()
