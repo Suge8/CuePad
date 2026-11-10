@@ -7,6 +7,8 @@ nonisolated struct VoiceArgs: Decodable, DebugArgGroup {
     static let prefix = "Voice"
     /// `-CuePadVoiceCloseSeconds <秒>`：通话多久后关闭
     let closeSeconds: Double
+    /// `-CuePadVoiceCodex <可执行文件>`（Mac）：通话的凭证照正式路径向这个 Codex 要（`codexAccess`），不读令牌文件；用替身验取凭证卡住、失败
+    let codex: String?
     /// `-CuePadVoiceDropRelay <在听后秒>,<断多久秒>`：像网络断了一样断掉这台的中转连接（`DebugRelayDrop`），核对通话等对端以新租约回来（`VoiceLink`）
     let dropRelay: String?
     /// `-CuePadVoiceFailProjection <在听后秒>,<多久秒>`（Mac）：这段时间里发给手机的投影一律当发送失败，核对 Mac 不因此当链路断

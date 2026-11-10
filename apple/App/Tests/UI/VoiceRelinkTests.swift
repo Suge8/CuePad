@@ -27,6 +27,18 @@ import Testing
         #expect(signal.sent.last == .media(signal: .hangup(reason: .hungUp)) && signal.recipients.last == signal.peer)
     }
 
+    /// Mac 上的 Codex 没给凭证（卡在系统提示上）：手机按 Mac 投来的这个原因结束，提示说去 Mac 上看，可重新接通。
+    @Test func codexNotRespondingOnTheMacEndsWithItsOwnReason() async throws {
+        let (app, voice, signal, media) = try await Voice89AuditTests().phone()
+        defer { app.services.cancelBackgroundWork() }
+        let session = try #require(voice.session), workspace = Workspace(services: app.services)
+        await voice.receive(signal.event(.projection(value: .init(session: session, phase: .failed(.codexUnresponsive), requests: [], replies: [], executions: [])), session: session))
+        #expect(media.closed)
+        #expect(workspace.phoneVoiceEnding == .failed(.codexUnresponsive))
+        #expect(String(localized: VoiceIssue.codexUnresponsive.phoneMessage) == "Codex 没响应，看看 Mac 上的提示")
+        guard case .start? = VoiceIssue.codexUnresponsive.phoneRecovery else { Issue.record("没有重新接通"); return }
+    }
+
     /// 中转连着却一直不回解析：通话仍在宽限期满时按断开的原因结束，不被这次解析拖住。
     @Test func aStuckLookupCannotOutlastTheGrace() async throws {
         let (app, voice, signal, media) = try await Voice89AuditTests().phone()

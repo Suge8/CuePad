@@ -141,17 +141,20 @@ struct VoiceFlowTests {
         try await fixture.hangUp()
     }
 
-    @Test(arguments: ["permission", "login", "quota"])
+    @Test(arguments: ["permission", "login", "quota", "codex"])
     func 连接失败提供原因与重连_修好条件后同一入口恢复(kind: String) async throws {
         let (app, fixture) = try await setup()
         defer { fixture.call.hangUp(); app.services.cancelBackgroundWork() }
         if kind == "permission" { fixture.media.denied = true }
         if kind == "login" { fixture.access = { throw CodexAccessError.signedOut } }
         if kind == "quota" { fixture.connectError = .notAllowed(429) }
+        if kind == "codex" { fixture.access = { throw CodexAccessError.unresponsive } }
         let validAccess = VoiceFlowFixture(app.services).access
         fixture.start()
         try await eventually("显示连接失败") { !fixture.call.isLive && fixture.call.phase.isFailure }
-        #expect(fixture.workspace.voicePresentation?.issues.isEmpty == false)
+        let said = fixture.workspace.voicePresentation?.issues.map { String(localized: $0.message) } ?? []
+        #expect(!said.isEmpty)
+        if kind == "codex" { #expect(said.contains("Mac 上的 Codex 没响应：看看有没有系统提示在等你确认")) }
         #expect(fixture.workspace.voicePresentation?.canStopExecution == false)
         fixture.media.denied = false
         fixture.connectError = nil
