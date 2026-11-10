@@ -8,7 +8,7 @@ import Testing
 
 /// 按回合停止与后续发送的协议合同。真实 Pi、桥和 Python 工具；模型与异步事件闸是替身。
 @MainActor
-@Suite(RealAgents.needs(.pi), .serialized)
+@Suite(RealAgents.needs(.pi), RealAgents.tiered, .serialized)
 struct RealPiQueueTests {
     @Test(arguments: ["preflight", "preflight-control", "pending", "starting", "sdk"])
     func 停止原回合不遗失后续消息(stage: String) async throws {

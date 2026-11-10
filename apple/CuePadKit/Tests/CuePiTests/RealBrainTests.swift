@@ -24,7 +24,7 @@ private let echoServer = URL(filePath: #filePath).deletingLastPathComponent().ap
 private let effort = environment["CUEPAD_BRAIN_EFFORT"].flatMap(PiThinkingLevel.init(rawValue:)) ?? .off
 
 @MainActor
-@Suite
+@Suite(RealAgents.tiered)
 struct RealBrainTests {
     @MainActor
     final class Rig {

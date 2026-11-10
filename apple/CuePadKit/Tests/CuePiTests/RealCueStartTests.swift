@@ -9,9 +9,9 @@ import Testing
 /// dsh 的家目录在临时目录里、登录只经环境里的 DeepSeek key。
 
 @MainActor
-@Suite
+@Suite(RealAgents.tiered)
 struct RealCueStartTests {
-    @Test(arguments: AgentKind.allCases) func cueStartsASessionTalksAndItSettles(_ agent: AgentKind) async throws {
+    @Test(.tags(.smoke), arguments: AgentKind.allCases) func cueStartsASessionTalksAndItSettles(_ agent: AgentKind) async throws {
         try RealAgents.require(agent)
         try await withAgent(agent) { runtime, bridge, work, model in
             // 强度给的不是测试台配置里的 low：生效了才看得出来

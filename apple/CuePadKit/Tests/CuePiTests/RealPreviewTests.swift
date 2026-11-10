@@ -7,7 +7,7 @@ import Testing
 /// 模型在 bash 里一次 `cuepad show` 两个文件：这条命令带着会话的环境变量（扩展设的 `CUEPAD_SESSION_ID` 在先，Pi 自己的 `PI_SESSION_ID`），
 /// 命令行据此认出会话、把预览写进（隔离的）资料库。
 @MainActor
-@Suite(RealAgents.needs(.pi))
+@Suite(RealAgents.needs(.pi), RealAgents.tiered)
 struct RealPreviewTests {
     private func bashResult(_ pi: PiProcess) throws -> (isError: Bool, text: String) {
         let event = try #require(pi.events.last { $0["type"] as? String == "tool_execution_end" && $0["toolName"] as? String == "bash" })

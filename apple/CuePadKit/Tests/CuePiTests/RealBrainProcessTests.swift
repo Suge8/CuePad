@@ -7,9 +7,9 @@ import Testing
 
 /// 结束后进程连同它起的子进程（MCP 服务等）都退出、各家的历史里没有这次对话：断言的是真进程树与各家写会话的目录。
 @MainActor
-@Suite(.serialized, .timeLimit(.minutes(5)))
+@Suite(RealAgents.tiered, .serialized, .timeLimit(.minutes(5)))
 struct RealBrainProcessTests {
-    @Test(arguments: AgentKind.allCases) func stoppingLeavesNoProcessesOrHistory(_ runtime: AgentKind) async throws {
+    @Test(.tags(.smoke), arguments: AgentKind.allCases) func stoppingLeavesNoProcessesOrHistory(_ runtime: AgentKind) async throws {
         try RealAgents.require(runtime)
         let rig = try await RealBrainTests.Rig(runtime)
         try await rig.brain.send("Reply with the single word OK.")

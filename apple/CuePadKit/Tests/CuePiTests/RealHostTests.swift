@@ -7,7 +7,7 @@ import CueStore
 @testable import CuePi
 
 @MainActor
-@Suite(RealAgents.needs(.pi))
+@Suite(RealAgents.needs(.pi), RealAgents.tiered)
 struct RealHostTests {
     private func endedSession(_ pi: PiProcess, _ bridge: PiBridge) async throws -> (file: URL, sessionID: String) {
         try await eventually("桥发现会话") { !bridge.sessions.isEmpty }
@@ -29,7 +29,7 @@ struct RealHostTests {
         return try #require(bridge.session(id: id))
     }
 
-    @Test func anEndedSessionIsResumedInTheBackgroundAndTheMessageArrives() async throws {
+    @Test(.tags(.smoke)) func anEndedSessionIsResumedInTheBackgroundAndTheMessageArrives() async throws {
         let pi = try await PiProcess()
         let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
         defer { bridge.stop(); pi.stop() }

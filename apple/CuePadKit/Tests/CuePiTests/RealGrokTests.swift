@@ -7,7 +7,7 @@ import Testing
 
 /// 端到端：钉住版本的真 Grok（ACP）+ 假模型（Responses，`FakeModel`）+ `GrokRuntime` 与 `PiBridge`。零网络、不用任何登录。
 @MainActor
-@Suite(RealAgents.needs(.grok))
+@Suite(RealAgents.needs(.grok), RealAgents.tiered)
 struct RealGrokTests {
     @Test func aHostedSessionTakesAMessageWithAnImageAndIsConfigured() async throws {
         try await withGrokRig { rig in
@@ -114,7 +114,7 @@ struct RealGrokTests {
     }
 
     /// 结束后另起一个 Grok 进程接着这个会话：对话保留（答案只在之前说的话里），新的话得到回答。
-    @Test func anEndedSessionIsResumedByANewProcessWithItsConversation() async throws {
+    @Test(.tags(.smoke)) func anEndedSessionIsResumedByANewProcessWithItsConversation() async throws {
         try await withGrokRig { rig in
             let id = try await rig.open("token-4")
             try await rig.bridge.send(PiMessage(text: "Remember the word PAPAYA. Reply with only OK."), to: id)
