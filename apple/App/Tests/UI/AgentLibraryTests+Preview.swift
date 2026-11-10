@@ -24,11 +24,16 @@ extension AgentLibraryTests {
         var address = ""
         do {
             workspace.openLibrary(.instruction(.global))
-            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 900, height: 600), styleMask: [.titled], backing: .buffered, defer: false)
-            window.isReleasedWhenClosed = false  // 默认关窗时 AppKit 自己再释放一次，与 ARC 重复：测试进程随后在自动释放池里崩掉
-            window.contentView = NSHostingView(rootView: LibraryFileLayer().environment(workspace).environment(services))
-            window.makeKeyAndOrderFront(nil)
-            defer { window.close() }
+            // 建窗、关窗都会把窗口放进当前的自动释放池；CI 上没有事件进来，事件循环那一层池子一直不排空，关上的窗口连带视图图、正文与库就一直活着
+            //（CI 上 leaks --traceTree 查到的唯一强引用根是主线程的自动释放池）。各包一层当场排空，不靠外层的池子
+            let window = autoreleasepool {
+                let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 900, height: 600), styleMask: [.titled], backing: .buffered, defer: false)
+                window.isReleasedWhenClosed = false  // 默认关窗时 AppKit 自己再释放一次，与 ARC 重复：测试进程随后在自动释放池里崩掉
+                window.contentView = NSHostingView(rootView: LibraryFileLayer().environment(workspace).environment(services))
+                window.makeKeyAndOrderFront(nil)
+                return window
+            }
+            defer { autoreleasepool { window.close() } }
             try await eventually("文件页挂上、正文拿到键盘") { window.firstResponder is CueTextView }
             let editor = try #require(window.firstResponder as? CueTextView)
             shown = editor
