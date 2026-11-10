@@ -39,6 +39,7 @@ nonisolated final class LibraryLedger: Sendable {
     private struct Excused {
         weak var store: CueStore?
         let comment: Comment
+        let intermittent: Bool
     }
 
     private struct State {
@@ -70,15 +71,17 @@ nonisolated final class LibraryLedger: Sendable {
     }
 
     /// 框架自己攥着环境里的对象、测试里拆不掉时调，指认它攥着的那一个库：收尾时按对象身份只豁免它，没释放记成已知问题，
-    /// 同一用例里别的没放的照报泄漏；它放掉了，测试框架报"已知问题没出现"，提醒删掉这一行。已知一种：SwiftUI 的视图图数据
-    /// 在窗口关上、视图拆掉后仍留着最后一版环境（试过清空 contentView、换成空根视图并当场排版绘制、另起一次刷新，都不放）。
+    /// 同一用例里别的没放的照报泄漏；它放掉了，测试框架报"已知问题没出现"，提醒删掉这一行。先用 `leaks --traceTree <对象地址> <pid>` 查清引用链再指认：
+    /// 曾以为 Mac 上 SwiftUI 视图图留着环境，实为文件草稿与工作区互相攥着。已知一种（iOS）：UIKit 攥着最后一个拿过键盘的文本视图，
+    /// 键盘单例的标记文字浮层（`UIKeyboardImpl.m_markedTextOverlay`）缓存的特征集合带着 SwiftUI 环境（交出键盘、结束编辑、关窗、清根视图都不放）。
     /// AppKit 文本视图进窗口时排的延迟合并块（`NSCreateMainQueueHysteresisBlock`）攥着它约半秒，在 1 秒宽限之内，不算。
-    static func heldByFramework(_ store: CueStore, _ comment: Comment, sourceLocation: SourceLocation = #_sourceLocation) {
+    /// `intermittent`：只在某些环境里放不掉（Mac 文件页那条：本机放掉、CI 的 runner 上不放），放掉了不报"已知问题没出现"。
+    static func heldByFramework(_ store: CueStore, _ comment: Comment, intermittent: Bool = false, sourceLocation: SourceLocation = #_sourceLocation) {
         guard let ledger = current else {
             Issue.record("指认框架攥着的库要在挂了 .releasesLibraries 的套件里", sourceLocation: sourceLocation)
             return
         }
-        ledger.state.withLock { $0.excused = Excused(store: store, comment: comment) }
+        ledger.state.withLock { $0.excused = Excused(store: store, comment: comment, intermittent: intermittent) }
     }
 
     func track(_ store: CueStore, createdAt location: SourceLocation) {
@@ -113,7 +116,7 @@ nonisolated final class LibraryLedger: Sendable {
         }
         if let excused {
             // 指认的那个放掉了也进来一次：里面不记问题，测试框架就报"已知问题没出现"
-            withKnownIssue(excused.comment) {
+            withKnownIssue(excused.comment, isIntermittent: excused.intermittent) {
                 for (store, location) in live where store === excused.store { record(location) }
             }
         }

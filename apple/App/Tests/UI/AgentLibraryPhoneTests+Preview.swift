@@ -29,6 +29,7 @@ extension AgentLibraryPhoneTests {
         window.rootViewController = UIHostingController(
             rootView: NavigationStack { LibraryFileScreen(file: .instruction(.global)) }.environment(workspace).environment(app.services))
         window.makeKeyAndVisible()
+        LibraryLedger.heldByFramework(store, "正文拿过键盘：UIKit 攥着最后一个拿过键盘的文本视图，键盘的标记文字浮层还缓存着带 SwiftUI 环境的特征集合，交出键盘、关窗都不放")
         defer { window.isHidden = true }
         try await eventually("文件页挂上") { workspace.fileDrafts[FileDraftKey(host: "mac-a", file: .instruction(.global))] != nil }
         let draft = try #require(workspace.fileDrafts[FileDraftKey(host: "mac-a", file: .instruction(.global))])

@@ -15,7 +15,7 @@ extension View {
 
     func debugExposesCuePanel(_ toggle: @escaping () -> Void) -> some View {
         #if DEBUG
-        onAppear { DebugScene.toggleCuePanel = toggle }
+        onAppear { if DebugHooks.scripted { DebugScene.toggleCuePanel = toggle } }
         #else
         self
         #endif
@@ -24,7 +24,7 @@ extension View {
     #if os(iOS)
     func debugExposesQuota(_ toggle: @escaping () -> Void) -> some View {
         #if DEBUG
-        onAppear { DebugScene.toggleQuota = toggle }
+        onAppear { if DebugHooks.scripted { DebugScene.toggleQuota = toggle } }
         #else
         self
         #endif
@@ -91,7 +91,7 @@ extension View {
 
     func debugExposesTaskFold(active: Bool = true, _ toggle: @escaping () -> Void) -> some View {
         #if DEBUG
-        onChange(of: active, initial: true) { if active { DebugScene.toggleTaskFold = toggle } }
+        onChange(of: active, initial: true) { if active, DebugHooks.scripted { DebugScene.toggleTaskFold = toggle } }
         #else
         self
         #endif

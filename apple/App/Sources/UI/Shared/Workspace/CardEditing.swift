@@ -57,6 +57,13 @@ final class CardEditing {
         #endif
     }
 
+    #if os(iOS)
+    // 登记的落盘闭包攥着自动存与工作区：没走 `leave` 就被放掉（窗口场景直接销毁）时，在这里注销，不然服务一直攥着它们
+    isolated deinit {
+        if let flushToken { workspace.services.removeBackgroundFlush(flushToken) }
+    }
+    #endif
+
     var hasVariables: Bool { !CueVariables.names(in: text).isEmpty }
 
     func changed(_ next: String) {
