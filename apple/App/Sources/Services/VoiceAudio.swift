@@ -236,7 +236,6 @@ final class VoiceAudio {
 
     nonisolated private static let format = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: VoiceAudioDevice.rate, channels: 1, interleaved: true)!
 
-    /// 下行：从 WebRTC 取一片。
     nonisolated private static func speaker(link: VoiceAudioDevice.Link, levels: VoiceLevels) -> AVAudioSourceNode {
         AVAudioSourceNode(format: format) { silence, timestamp, frames, buffers in
             var flags = AudioUnitRenderActionFlags()

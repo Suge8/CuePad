@@ -1,7 +1,6 @@
 import SwiftUI
 
 /// 画在大纲这一层、按行的位置摆（`rowPlate`），不画在行里：手机的行挂着轻扫，轻扫把行裁在自己的框里，伸出行框的底会被切成直角。两层：底垫在行后面（`fill`），描边与小签盖在行上（`mark`）。
-/// 拖着灵感时每一行铺一层淡底，一拖起来就看得出哪些接得住；亮起的是同一块，换行时滑过去，不是这行灭、那行亮。
 struct OutlineTargets: View {
     enum Layer { case fill, mark }
 
@@ -65,7 +64,6 @@ struct OutlineTargets: View {
     }
 }
 
-/// 落点变化时（含拖着灵感换了一行）一下轻触感。
 struct InsertionLine: View {
     let drag: OutlineDrag
     let first: UUID?
@@ -122,7 +120,6 @@ private struct NewTaskDrop: ViewModifier {
     }
 }
 
-/// 垫纸色，盖住下面的"添加任务"与开合。
 private struct NewTaskSlot: View {
     let over: Bool
     @Environment(\.palette) private var palette

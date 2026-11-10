@@ -108,7 +108,7 @@ final class CueKeeper {
     /// 最近告诉过你的那个错（`PiErrorSummary.line`）：同一个错一轮轮重复（如额度）只说一次
     var toldFailure: String?
     var setback: Setback?
-    /// 对账的唯一定时器（`schedule`）：下一个到点的定时、巡视、等着的停住，或等着重起的那一下、看门狗看一眼（`alarm`），每次对账重排
+    /// 对账的唯一定时器（`schedule`），每次对账重排成最早的那个（`alarm`）
     var timer: Task<Void, Never>?
     /// 最近一次大脑事件（或一轮开始）在看门狗的钟上的时刻（`CueTiming.awake`）：看门狗从它算（`alarm`）
     @ObservationIgnored var heardAt: SuspendingClock.Instant
@@ -149,8 +149,6 @@ final class CueKeeper {
     /// 说完的留着，由 Cue 页在对话里出现它之后换下；下一轮开始、大脑出问题时清掉。
     let speech = PiDraftFeed()
 
-    /// Cue 此刻在做什么：一轮里在想或在用工具（连同这一轮的经过在对话里的那一行），快的重试用完还起不来是出错（原因），
-    /// 其余（含起大脑、等着快的那几次重起）歇着。
     var work: (state: PiWorkState, detail: String?, step: CueActivity.Touch?, row: UUID?) {
         switch phase {
         case .restarting(let failures, let reason, _) where setup.timing.isDown(after: failures): return (.error, reason.text, nil, nil)

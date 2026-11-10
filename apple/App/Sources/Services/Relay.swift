@@ -153,7 +153,6 @@ final class Relay {
         if thenConnect { connect() }
     }
 
-    /// 自己结束（不是被 `disconnect` 取消）时清掉 `connection`。
     private func stayConnected(_ rang: @escaping @MainActor () async -> Void) async {
         var retry = Self.retry
         while !Task.isCancelled, wanted || owesRing {

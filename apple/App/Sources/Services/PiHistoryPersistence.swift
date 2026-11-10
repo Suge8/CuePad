@@ -93,7 +93,6 @@ actor PiHistoryPersistence {
         }
     }
 
-    /// 清理失败记日志，下次再来。
     func keepPruned(timing: Timing = .system) async {
         repeat {
             do {

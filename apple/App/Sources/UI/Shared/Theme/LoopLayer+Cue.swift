@@ -7,7 +7,7 @@ extension LoopLayer {
 }
 
 extension LoopLayer.Host {
-    /// 小人：一层，`contents` 是整张拼图（`CueAtlas`），帧序列只按 `contentsRect` 离散地换（`CAKeyframeAnimation`，`discrete`）：两下之间值不变，
+    /// 小人：一层，`contents` 是整张拼图（`CueAtlas`），帧序列只按 `contentsRect` 离散地换（`discrete`）：两下之间值不变。
     static func makeSprite(_ sprite: CueSprite, on sheet: CueAtlas.Sheet, intro: Bool) -> CALayer {
         let layer = CALayer()
         layer.contentsGravity = .resizeAspect

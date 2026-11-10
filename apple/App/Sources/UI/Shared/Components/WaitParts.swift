@@ -19,7 +19,6 @@ nonisolated extension PiSessionState {
     }
 }
 
-/// 每行按自己的宽靠右排；一颗比整行还长时独占一行、字折行。
 struct ChipFlow: Layout {
     var spacing = Spacing.item
 

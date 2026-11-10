@@ -143,7 +143,6 @@ private struct GlassSurface<S: Shape>: ViewModifier {
 /// 不缩放、不回弹、不震动——缩放与回弹是触屏的习惯，在指针下显得软、慢；触控板的震动在 macOS 只给对齐这类反馈，点按钮不震。
 /// Mac 悬停：指针一进来就有回应（同 macOS 26 工具栏玻璃钮的悬停，与 Linear、Raycast、Arc），淡入淡出 `Motion.fade`、不挪位置不缩放；iPad 的指针用系统给按钮的悬停效果。
 /// 指针照 HIG 与访达、邮件：按钮、行、卡片都是箭头，手形只给打开网页的链接（`pointerStyle(.link)`）——手形在 Mac 上读作"这是网页链接"。
-/// 手机上行只亮底不缩放：一屏几十行，缩放会让列表显得软。
 enum Press {
     case button
     case control

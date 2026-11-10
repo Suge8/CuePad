@@ -62,7 +62,6 @@ enum CueGate: Equatable {
     case runs(id: String, name: String)
     case open
 
-    /// `running`：它此刻运行的那台（没启用为 nil），`name` 是那台的名字。
     static func of(_ services: AppServices, running: String?, name: String?) -> CueGate {
         guard services.knowsSyncedFacts else {
             return .waiting(services.syncState.status.reachesMac ? String(localized: "正在从 iCloud 同步…") : String(localized: "同步恢复后再启用"))

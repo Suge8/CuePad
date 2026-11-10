@@ -3,8 +3,7 @@ import Foundation
 import Synchronization
 
 /// 文件那一路在 CloudKit 上：上传是长期操作（`isLongLived`），App 退出后由系统（cloudd）传完，下次启动按操作 ID 接上；取只要文件字段。
-/// 开发环境实测（research/asset-probe，2026-10-27）：100MB 传到四成时杀掉进程，cloudd 照样传完，下一个进程接上当场拿到收下的结果；
-/// 进度回调约 0.26 秒一次。空闲超时照 `CloudDatabase.database`：一直有数据在走的大文件不会被它断开。
+/// 实测：100MB 传到四成时杀掉进程，cloudd 照样传完，下一个进程接上当场拿到收下的结果；进度回调约 0.26 秒一次。
 extension CloudDatabase {
   func uploadFile(_ record: CKRecord, progress: @escaping @Sendable (Double) -> Void) async throws -> SentRecords {
     let operation = CKModifyRecordsOperation(recordsToSave: [record], recordIDsToDelete: nil)
@@ -58,7 +57,7 @@ extension CloudDatabase {
   }
 
   /// 文件操作的配置：空闲超时同别的请求；服务质量写明 userInitiated。不写时 CloudKit 当成可延后的（日志里 `discretionary=Infers Disc`、
-  /// qos=Default），2026-10-27 开发环境实测 100MB 的上传与几个小文件的取两分钟进度都停在 0，写明之后照常传。
+  /// qos=Default），实测上传与取的进度一直停在 0，写明之后照常传。
   private static var fileConfiguration: CKOperation.Configuration {
     let configuration = CKOperation.Configuration()
     configuration.timeoutIntervalForRequest = RequestLimits.request.seconds

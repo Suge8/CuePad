@@ -2,11 +2,8 @@ import CueStore
 import SwiftUI
 
 /// 一行只说一遍状态：进行中是静止开口弧，子任务做到哪是圈的分段（所以不写"1/4"），会话在做什么是那个会动的状态标；不写分组标题、不写状态词胶囊。要你管的（`BoardPulse`）才写状态词，它占时间那一格的位置。
-/// 已完成的不划线、标题淡一档；点圈后停留的那一下划线，看得清刚勾掉的是哪条。
-/// 子任务缩进到圈对着上级标题的起点（`TaskOutline.indentWidth`），层级靠对齐读出来，不靠线。
 /// 旁注的位置：iPhone 在行尾（屏窄，行尾就在眼前）；iPad 宽栏与 Mac 紧跟标题（放在行尾时宽窗口里离标题太远，一眼看不到）。
 /// 手机长按直接拖动（`TaskOutline`），不挂长按菜单：系统长按菜单弹出后，把预览往下拉是收起菜单、拖不起来，往下面的组或项目段拖就做不到。菜单那几项在左滑里。
-/// Mac 上"开始"只在指针停在行上时浮在行尾（`hoverReveal`，不占排版，标题与时间一个字都不挪）。
 struct TaskLine: View {
     let task: Card
     var subtasks: TaskProgress?
@@ -73,7 +70,6 @@ struct TaskLine: View {
         return task.status == .done ? palette.ink2 : palette.ink
     }
 
-    /// 做完的不写；要你管的状态词写出来时不写多久。
     @ViewBuilder private func notes(next: TaskNext?, done: Bool) -> some View {
         let pulse = workspace.pulse(of: agents.items[task.id])
         if !done, let next, Self.inlines(next) { TaskNextMark(next: next).yields(first: false, ever: !next.speaks).transition(.opacity) }

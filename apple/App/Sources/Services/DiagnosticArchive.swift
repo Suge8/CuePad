@@ -50,7 +50,6 @@ nonisolated struct DiagnosticArchive: Sendable {
         .sorted { $0.0 > $1.0 }
     }
 
-    /// 每个文件（同 `names`）最后改写的时刻。
     func modified() -> [String: Date] {
         Dictionary(uniqueKeysWithValues: names().map { ($0, (try? url($0).resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate ?? .distantPast) })
     }

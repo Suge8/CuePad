@@ -2,8 +2,6 @@ import CueStore
 import SwiftUI
 
 /// 进度只画在圈上，行尾不写"n/m"。
-/// 此刻那一步的会话在跑时（`running`）那一段是靛青浅底上走一道流光（`LoopLayer` 的 sheen）；不放循环动效时（`LoopsPlay`）流光换成静止的靛青。
-/// 勾上的那一下：圈按下去成一颗点（`Icon.donePending`），压到最扁时点弹成勾（`Jelly` 的 pop）；减弱动态效果时只淡入淡出。
 struct TaskRingView: View {
     let status: TaskStatus?
     let done: Bool

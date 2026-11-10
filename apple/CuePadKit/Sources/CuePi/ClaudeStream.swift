@@ -67,7 +67,6 @@ final class ClaudeStream {
         _ = try await request(["subtype": "set_model", "model": .string(id)])
     }
 
-    /// 换思考强度（夹到 Claude Code 的档，`ClaudeCode.effort`），返回交出去的档。
     @discardableResult
     func setEffort(_ level: PiThinkingLevel) async throws -> String {
         let effort = ClaudeCode.effort(level)

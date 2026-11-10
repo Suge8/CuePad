@@ -220,7 +220,6 @@ nonisolated struct ChatMark: Equatable, Sendable {
     let kind: Kind
     let preview: String
 
-    /// 只有一处时无处可跳。
     static func enough(_ marks: [ChatMark]) -> [ChatMark] { marks.count < 2 ? [] : marks }
 
     static func firstLine(_ stored: String) -> String {

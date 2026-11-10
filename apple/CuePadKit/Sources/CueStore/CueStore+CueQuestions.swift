@@ -80,7 +80,6 @@ extension CueStore {
     try select(CueMessage.self, where: Self.openQuestion, orderBy: "createdAt, rowid")
   }
 
-  /// 问的那句掉出了读的范围，你的回答还在读到的这段时间里。
   /// 问的那句掉出了读的范围，你的回答还在读到的这段时间里。范围按 id 排除，不按时刻切：同一毫秒写下的几条，`cueMessages` 按 rowid 截，按时刻切会两边都漏掉。
   public func cueQuestionsAnswered(outside recent: [CueMessage]) throws -> [CueMessage] {
     guard let oldest = recent.first else { return [] }

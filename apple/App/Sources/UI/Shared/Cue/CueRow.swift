@@ -138,7 +138,6 @@ struct CueEnding: View {
     }
 }
 
-/// 仍是旁注、不铺底，左缘对着 Cue 气泡的左缘；字比旁注大一档（正文的次一级）：这是你刚说完在等的那件事，比经过与动态要紧。
 private struct CueDoing: View {
     let shown: PiShown
     let doing: String
