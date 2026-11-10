@@ -3127,6 +3127,22 @@
         }
       }
     },
+    "Codex 没响应，看看 Mac 上的提示" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Codex is stuck. Check your Mac."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Codex 没响应，看看 Mac 上的提示"
+          }
+        }
+      }
+    },
     "Codex 没有信任 CuePad 的钩子（它的信任规则可能变了），钩子不会执行" : {
       "localizations" : {
         "en" : {
@@ -3685,22 +3701,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Mac 上改过，已跟上"
-          }
-        }
-      }
-    },
-    "Mac 上的 Codex 没响应：到 Mac 上看看有没有系统提示" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Codex on your Mac isn't responding. Check your Mac for a system prompt."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mac 上的 Codex 没响应：到 Mac 上看看有没有系统提示"
           }
         }
       }
