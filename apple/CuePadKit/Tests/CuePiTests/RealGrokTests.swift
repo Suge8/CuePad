@@ -102,8 +102,12 @@ struct RealGrokTests {
 
     @Test func aRunningTurnIsAborted() async throws {
         try await withGrokRig { rig in
+            // 说到一半停住（假模型的闸门）：停止一定落在回答还在说的时候
+            let gate = rig.model.gate()
+            rig.model.on({ $0.prompt.contains("numbers from 1 to 400") }) { _ in .stream(["1\n", "2\n", "3\n"], until: gate) }
             let id = try await rig.open("token-3")
             try await rig.bridge.send(PiMessage(text: "Write the numbers from 1 to 400, one per line."), to: id)
+            try await gate.reached()
             try await eventually("在说") { rig.bridge.session(id: id)?.state == .thinking && rig.bridge.slots.first { $0.id == id }?.draft != nil }
 
             try await rig.bridge.abort(id)

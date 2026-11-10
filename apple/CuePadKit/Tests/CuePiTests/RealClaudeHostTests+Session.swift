@@ -32,7 +32,8 @@ extension RealClaudeHostTests {
                 }
             } catch {
                 let session = testbed.bridge.session(id: id)
-                throw Stuck(description: "等不到：斜杠命令改了名、歇下；名字 \(String(describing: session?.displayName))，状态 \(String(describing: session?.state))")
+                let lines = ((try? String(contentsOf: file, encoding: .utf8)) ?? "").split(separator: "\n").filter { $0.contains("title") || $0.contains("rename") }
+                throw Stuck(description: "等不到：斜杠命令改了名、歇下；名字 \(String(describing: session?.displayName))，状态 \(String(describing: session?.state))；会话文件里与改名有关的行：\n\(lines.joined(separator: "\n"))")
             }
             await #expect(throws: PiBridgeError.rejected("unknown_command")) { try await testbed.bridge.command("/no-such-command", in: id) }
 
@@ -58,9 +59,12 @@ extension RealClaudeHostTests {
 
     /// 结束前停下的那一轮，Claude Code 接着时补写的助手消息（"No response requested."）不算它的回答。
     /// 暗号只在历史里：答得出就是重新起的进程把整段对话又交给了模型。
-    /// 结束后马上接着：外壳关掉输出后再过一秒才退出，拉开"流断了、进程还没收"的那一段（机器忙时它自己就有这么长）。
+    /// 结束后马上接着：外壳关掉输出后停住（写下 `closed`），恢复发出之后才放它退出（`go`），一定撞上"流断了、进程还没收"的那一段
+    /// （机器忙时它自己就有这么长）。
     @Test(.tags(.smoke)) func anEndedHostedSessionIsResumedWithItsHistory() async throws {
-        try await ClaudeTestbed.run(wrapper: #""$REAL" "$@"; status=$?; exec >&- 2>&- <&-; sleep 1; exit $status"#) { testbed in
+        let wrapper = #"[ "$1" = agents ] && exec "$REAL" "$@"; "$REAL" "$@"; status=$?; exec >&- 2>&- <&-; : > "${0%/*}/closed"; "#
+            + #"while [ ! -e "${0%/*}/go" ]; do sleep 0.01; done; exit $status"#
+        try await ClaudeTestbed.run(wrapper: wrapper) { testbed in
             try testbed.startConnected()
             let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t", name: nil, model: nil, thinking: nil)
             let first = try #require(testbed.bridge.session(id: id))
@@ -92,7 +96,10 @@ extension RealClaudeHostTests {
             try await testbed.index(first.sessionFile)
             let indexed = IndexedSession(
                 id: first.sessionID, path: first.sessionFile!.path, cwd: testbed.work.path, lastActivityAt: .now, agent: .claudeCode)
-            let resumed = try await testbed.runtime.resume(indexed)
+            let resuming = Task { try await testbed.runtime.resume(indexed) }
+            try await eventually("旧进程关了输出、还没退") { FileManager.default.fileExists(atPath: testbed.wrapperDirectory.appending(path: "closed").path) }
+            try Data().write(to: testbed.wrapperDirectory.appending(path: "go"))
+            let resumed = try await resuming.value
             #expect(testbed.bridge.session(id: resumed)?.sessionID == first.sessionID)
             let asked = Date()
             try await testbed.bridge.send(PiMessage(text: "刚才的暗号是什么？只回复暗号"), to: resumed)

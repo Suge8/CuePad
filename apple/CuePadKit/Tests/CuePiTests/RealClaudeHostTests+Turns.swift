@@ -1,6 +1,7 @@
 #if os(macOS)
 import CueStore
 import CueTestSupport
+import Darwin
 import Foundation
 import Testing
 @testable import CuePi
@@ -60,15 +61,15 @@ extension RealClaudeHostTests {
         try await ClaudeTestbed.run(settings: #"{"permissions": {"allow": ["Bash"]}}"#) { testbed in
             try testbed.startConnected()
             let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t", name: nil, model: nil, thinking: nil)
-            let never = testbed.work.appending(path: "never.txt")
-            let command = #"python3 -c "import time; time.sleep(100)" && touch \#(never.path)"#
-            testbed.on("SLEEP") { $0.step == 0 ? .call("Bash", ["command": command, "description": "slow"]) : .say("SLEPT") }
+            let never = testbed.work.appending(path: "never.txt"), pidFile = testbed.work.appending(path: "tool.pid")
+            testbed.on("SLEEP") { $0.step == 0 ? .call("Bash", ["command": slowTool(pidFile, never), "description": "slow"]) : .say("SLEPT") }
             testbed.on("只回复 AFTER", .say("AFTER"))
 
             try await testbed.bridge.send(PiMessage(text: "SLEEP now"), to: id)
-            try await eventually("在跑命令") { testbed.bridge.session(id: id)?.state == .tool }
+            try await eventually("在跑命令") { testbed.bridge.session(id: id)?.state == .tool && toolPid(pidFile) != nil }
             try await testbed.bridge.abort(id)
             try await eventually("停下") { testbed.bridge.session(id: id)?.state == .settled }
+            try await eventually("命令的进程退了") { kill(toolPid(pidFile)!, 0) != 0 }
 
             let after = Date()
             try await testbed.bridge.send(PiMessage(text: "只回复 AFTER"), to: id)
@@ -84,14 +85,14 @@ extension RealClaudeHostTests {
         try await ClaudeTestbed.run(settings: toolRunning ? #"{"permissions": {"allow": ["Bash"]}}"# : #"{"permissions": {"ask": ["Bash(touch *)"]}}"#) { testbed in
             try testbed.startConnected()
             let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t", name: nil, model: nil, thinking: nil)
-            let never = testbed.work.appending(path: "never.txt")
-            let command = toolRunning ? #"python3 -c "import time; time.sleep(100)" && touch \#(never.path)"# : "touch \(never.path)"
+            let never = testbed.work.appending(path: "never.txt"), pidFile = testbed.work.appending(path: "tool.pid")
+            let command = toolRunning ? slowTool(pidFile, never) : "touch \(never.path)"
             testbed.on("ZEBRA") { $0.step == 0 ? .call("Bash", ["command": command, "description": "zebra"]) : .say("ZEBRA") }
             testbed.on("只回复 MANGO", .say("MANGO"))
 
             try await testbed.bridge.send(PiMessage(text: "ZEBRA go"), to: id)
             if toolRunning {
-                try await eventually("在跑命令") { testbed.bridge.session(id: id)?.detail?.contains("time.sleep(100)") == true }
+                try await eventually("在跑命令") { testbed.bridge.session(id: id)?.detail?.contains("time.sleep(100") == true && toolPid(pidFile) != nil }
             } else {
                 _ = try await testbed.waitForQuestion(id)
             }
@@ -101,6 +102,7 @@ extension RealClaudeHostTests {
             try await testbed.waitForTurn(id, since: asked)
             try await testbed.waitForDraftLanded(id)
 
+            if toolRunning { try await eventually("命令的进程退了") { kill(toolPid(pidFile)!, 0) != 0 } }
             let session = try #require(testbed.bridge.session(id: id))
             #expect(session.state == .settled && session.question == nil)
             #expect(!FileManager.default.fileExists(atPath: never.path))
@@ -111,4 +113,11 @@ extension RealClaudeHostTests {
         }
     }
 }
+
+/// 睡 100 秒再建 `never` 的命令，起来先把自己的进程号写进 `pidFile`：停下后看它退没退，不只看 `never` 此刻还没建出来
+private func slowTool(_ pidFile: URL, _ never: URL) -> String {
+    #"python3 -c "import os, time; time.sleep(100 + 0 * open('\#(pidFile.path)', 'w').write(str(os.getpid())))" && touch \#(never.path)"#
+}
+
+private func toolPid(_ pidFile: URL) -> pid_t? { (try? String(contentsOf: pidFile, encoding: .utf8)).flatMap { pid_t($0) } }
 #endif

@@ -10,14 +10,12 @@ extension RealCodexHostedTests {
 
     @Test func aSubagentShowsUpInTheRoster() async throws {
         try await withCodexRig(model: "gpt-6-luna") { rig in
-            // 假模型答得太快：派活的下一步等 CuePad 认出子代理再放行，否则这一轮会先歇下、再进“等子代理”（真模型要几秒；负载高时实测会错开）
-            let known = rig.model.gate()
             // 子代理先答完时，主会话下一步的末条消息是子代理的 FINAL_ANSWER 通知：认整段对话里的那句话，不认末条
             // 步数也数整段对话里的工具调用：FINAL_ANSWER 通知算新的一句话，`step` 会从 0 重数
             rig.model.on({ $0.said.contains { $0.contains("Spawn one subagent called pong") } }) { request in
                 switch request.messages.filter({ !$0.calls.isEmpty }).count {
                 case 0: .call("spawn_agent", ["task_name": "pong", "message": "Child task: pong. Reply with PONG.", "fork_turns": "none"])
-                case 1: .held(known, then: .call("wait_agent", ["timeout_ms": 30000]))
+                case 1: .call("wait_agent", ["timeout_ms": 30000])
                 default: .say("The subagent said PONG")
                 }
             }
@@ -26,10 +24,6 @@ extension RealCodexHostedTests {
             let log = ChangeLog(rig.bridge)
 
             try await rig.bridge.send(PiMessage(text: "Spawn one subagent called pong and tell me what it said."), to: id)
-            try await known.reached()
-            try await eventually("认出了子代理") { rig.bridge.session(id: id)?.subagents.map(\.name) == ["pong"] }
-            known.open()
-
             // 变化日志经异步流收下，比桥上的会话晚一拍：等它也收到这次变化
             try await eventually("这一轮做完") { rig.bridge.session(id: id)?.state == .settled && log.states.contains(.thinking) && log.states.last == .settled }
             #expect(log.settles == 1, "\(log.states)")

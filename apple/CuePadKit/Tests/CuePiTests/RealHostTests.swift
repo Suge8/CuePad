@@ -154,20 +154,21 @@ struct RealHostTests {
         #expect(took < .seconds(10), "用了 \(took)")
     }
 
+    /// 托管的 Pi 一起来就开始算闲置（扩展里，不等 CuePad 认出它）：时限 1 秒短过忙时这个测试进程认出它的用时（#166），
+    /// 所以第一句经它自己的标准输入马上交出、停在假模型里，桥认出它之后才放行，闲置从这一轮歇下算起。
     @Test func anIdleHostedSessionExitsAfterTheIdleLimit() async throws {
-        let pi = try await PiProcess()
+        let pi = try await PiProcess(env: [PiRuntime.hostedVariable: "1"])
         let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
         defer { bridge.stop(); pi.stop() }
         try bridge.start()
-        let (file, _) = try await endedSession(pi, bridge)
-        let host = host(pi, bridge, idleLimit: .seconds(1))
-        host.start()
-        defer { stopHostedProcesses(bridge) }
+        let gate = pi.hold("先忙着")
+        try pi.prompt("先忙着")
+        try await eventually("桥认出在忙的托管会话") { bridge.sessions.first.map { $0.hosted && busy($0.state) } == true }
+        let log = ChangeLog(bridge)
 
-        // 上了桥才返回；空闲时限只有 1 秒，返回时它可能已经退了，所以不再查它在不在
-        let id = try await host.resume(IndexedSession(id: "", path: file.path, cwd: pi.cwd.path, lastActivityAt: .now))
-
-        try await eventually("空闲到点后退出") { bridge.session(id: id) == nil }
+        gate.open()
+        try await eventually("空闲到点后退出") { !log.ended.isEmpty }
+        #expect(log.ended.map(\.1) == [.closed(reason: "quit")])
     }
 
     @Test func theHostedProcessGivesWayWhenTheSameSessionIsOpenedElsewhere() async throws {
