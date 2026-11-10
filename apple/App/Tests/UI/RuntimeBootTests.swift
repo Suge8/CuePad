@@ -54,7 +54,7 @@ struct RuntimeBootTests {
         let location = app.services.location
         let db = RawDB(location.databaseURL)
         app.services.cancelBackgroundWork()
-        try db.restoreVersion90()
+        try db.restore(version: 90)
         if origin == "已发布82_活动地址" {
             _ = try await store.recordActivityDestination(device: "phone", activityID: "existing", token: "token", environment: "development", startedAt: .now)
             try db.exec("ALTER TABLE accountQuotas DROP COLUMN account; ALTER TABLE accountQuotas DROP COLUMN status; ALTER TABLE accountQuotas DROP COLUMN observedAt;")

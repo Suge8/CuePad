@@ -38,7 +38,7 @@ struct VoiceStorageFlowTests {
         try await oldStore.updateCueProfile { $0.hostID = host; $0.enabledAt = .now }
         let db = RawDB(app.databaseURL)
         let previous = try await oldStore.addCueMessage(.you, text: "升级前的问题")
-        try db.restoreVersion90()
+        try db.restore(version: 90)
         // 91 只清理派生摘要；这里没有缓存，表结构与 90 相同。
         try db.exec("PRAGMA user_version = \(version)")
         let services = app.relaunch(), store = services.store
