@@ -168,6 +168,11 @@ final class VoiceAudio {
             let input = engine.inputNode
             let format = input.outputFormat(forBus: 0)
             inputRate = format.sampleRate
+            // 语音处理要两侧采样率一致，否则启动报 -10875。Mac 上实测：DGM20 USB 麦克风 + 内建扬声器时收声侧 48000、放声侧默认 44100；
+            // 声道数不必一致（4 对 2 照常开）。放声侧的硬件格式此时读作 0 声道，声道数取它现接的。
+            let channels = engine.outputNode.inputFormat(forBus: 0).channelCount
+            guard let speaker = AVAudioFormat(standardFormatWithSampleRate: inputRate, channels: channels) else { throw VoicePeerError.unavailable }
+            try engine.link(engine.mainMixerNode, to: engine.outputNode, format: speaker)
             if let microphone { engine.detach(microphone) }
             let sink = Self.microphone(format: format, link: link, levels: levels)
             engine.attach(sink)
@@ -176,8 +181,19 @@ final class VoiceAudio {
         }
         device.reconfigured(inputRate: inputRate)
         engine.prepare()
-        try engine.start()
+        do {
+            try engine.start()
+        } catch {
+            Self.log.error("Voice audio start failed: \(Self.formats(engine), privacy: .public): \(String(describing: error), privacy: .public)")
+            throw error
+        }
         return inputRate
+    }
+
+    private static func formats(_ engine: AVAudioEngine) -> String {
+        func shown(_ format: AVAudioFormat) -> String { "\(format.channelCount)ch \(Int(format.sampleRate))Hz" }
+        let input = engine.inputNode, output = engine.outputNode
+        return "input \(shown(input.outputFormat(forBus: 0))), output \(shown(output.inputFormat(forBus: 0)))"
     }
 
     nonisolated private static let format = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: VoiceAudioDevice.rate, channels: 1, interleaved: true)!
