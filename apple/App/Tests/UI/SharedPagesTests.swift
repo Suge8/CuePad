@@ -3,6 +3,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
+@Suite(.releasesLibraries)
 struct SharedPagesTests {
     let app = TestApp()
     var store: CueStore { app.services.store }

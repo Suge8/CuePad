@@ -30,7 +30,7 @@ extension DeliveryMigrationTests {
         if mode != .start { try await app.host.connect("atlas", cwd: app.directory.path, hosted: true) }
         let changes = app.pi.changes()
         let recording = Task { try await services.consumePiChanges(changes) }
-        defer { recording.cancel() }
+        defer { await recording.stop() }
         try await services.executor.start()
         let migrated = try #require(try await store.deliveryRequest(pending.id))
         #expect(try await store.outcome(of: migrated).status == .known(.succeeded))

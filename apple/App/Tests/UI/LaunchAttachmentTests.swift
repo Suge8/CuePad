@@ -11,6 +11,7 @@ import Testing
 
 /// "手机"是第二个 Mac 进程（同 `AgentLibraryTests` 的经云同步），成功路径走新会话表单的 `Workspace.submitSession`，附件失败与重试走它写请求的 `AppServices.launchSession`。
 @MainActor
+@Suite(.releasesLibraries)
 struct LaunchAttachmentTests {
     @Test func 手机新会话第一句带新选截图_图传上去_Mac开会话时Agent收到这张图() async throws {
         let cloud = SimulatedCloud([CKRecord.peerFloor(CueStore.peerFloor)])
@@ -28,7 +29,7 @@ struct LaunchAttachmentTests {
         try await mac.services.executor.start()
         let changes = mac.pi.changes()
         let recording = Task { try await mac.services.consumePiChanges(changes) }
-        defer { recording.cancel() }
+        defer { await recording.stop() }
 
         let shot = pngData(width: 12, height: 9)
         let key = try phone.services.store.files.store(shot)
@@ -37,7 +38,7 @@ struct LaunchAttachmentTests {
         let project = try #require(try await phone.services.store.project(Project.defaultID))
         let place = ProjectFolders.launchPlaces(projects: [project], bindings: [], host: nil, workMac: TestApp.hostID).first
         var claimed: LaunchProgress.Claimed?
-        workspace.submitSession(in: place, draft: draft, choice: AgentModelChoice(agents: [], agent: .pi, model: nil, thinking: nil)) { claimed = $0 }
+        workspace.submitSession(in: place, draft: draft, choice: AgentModelChoice(agents: [], agent: .pi, model: nil, thinking: nil)) { claimed = $1 }
 
         let requests = try await eventually(phone.services.store, { try $0.deliveryRequests() }) { !$0.isEmpty }
         let request = try #require(requests.first)

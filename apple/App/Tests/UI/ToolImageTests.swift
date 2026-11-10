@@ -9,6 +9,7 @@ import Testing
 
 /// 各家同一条路（`PiHistory.Transcript.toolImages`）：会话文件的形状照各家真机读图时写下的（Codex 0.166 的 view_image、Grok 1.0.70 的 read_file）。
 @MainActor
+@Suite(.releasesLibraries)
 struct ToolImageTests {
     @Test func 工具结果带图的一轮_经过下有缩略图_点开全屏_同一张只存一份() async throws {
         let app = TestApp()

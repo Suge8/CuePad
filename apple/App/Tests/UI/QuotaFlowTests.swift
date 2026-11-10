@@ -7,12 +7,14 @@ import Testing
 @testable import CuePad
 @testable import CuePi
 
+@Suite(.releasesLibraries)
 struct QuotaFlowTests {
-    @Test func 菜单栏面板每次打开都刷新额度() async throws {
+    @Test
+    func 菜单栏面板每次打开都刷新额度() async throws {
         let app = TestApp(), services = app.services!
         let workspace = Workspace(services: services)
         let following = Task { await workspace.follow() }
-        defer { following.cancel(); services.cancelBackgroundWork() }
+        defer { await following.stop(); services.cancelBackgroundWork() }
         let ext = try await app.host.connect("menu-quota", cwd: "/work/quota")
         try await eventually("菜单栏资料库就绪") { workspace.isLibraryReady }
         let panel = MenuBarPanel()

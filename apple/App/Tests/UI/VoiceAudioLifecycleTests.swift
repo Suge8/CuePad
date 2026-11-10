@@ -4,7 +4,7 @@ import Testing
 @testable import CuePad
 
 /// #99：手机的按钮入口与隔离库；媒体、中转、远端及权限等待用替身。
-@Suite(.serialized) @MainActor struct VoiceAudioLifecycleTests {
+@Suite(.releasesLibraries, .serialized) @MainActor struct VoiceAudioLifecycleTests {
     final class Media: VoiceMedia {
         var onEvent: (VoicePeer.Event) -> Void = { _ in }
         var offerGate: AuditGate?

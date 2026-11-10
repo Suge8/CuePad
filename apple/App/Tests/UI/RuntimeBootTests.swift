@@ -3,6 +3,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
+@Suite(.releasesLibraries)
 struct RuntimeBootTests {
     @Test func Cue旧报告晚到与换Mac不复活忙碌_新报告保持确认() async throws {
         let source = TestApp(), receiver = TestApp()

@@ -5,6 +5,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
+@Suite(.releasesLibraries)
 struct SendTargetTests {
     let rig = TestApp()
     let workspace: Workspace

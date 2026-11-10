@@ -4,6 +4,7 @@ import Testing
 @testable import CuePad
 
 #if os(macOS)
+@Suite(.releasesLibraries)
 struct ProjectsTests {
     let rig = TestApp()
     var services: AppServices { rig.services }
@@ -21,14 +22,14 @@ struct ProjectsTests {
         services.settings.currentProject = UUID()
         let workspace = Workspace(services: services)
         let catalog = observing(workspace)
-        defer { catalog.cancel() }
+        defer { await catalog.stop() }
         try await eventually("目录读到三个项目，失效设置清掉") { workspace.catalog?.projects.count == 3 && services.settings.currentProject == nil }
         #expect(workspace.mainRoute == .shelf)
 
         services.settings.currentProject = pinned.id
         let fresh = Workspace(services: services)
         let freshCatalog = observing(fresh)
-        defer { freshCatalog.cancel() }
+        defer { await freshCatalog.stop() }
         #expect(fresh.mainRoute == .shelf && fresh.shownPane == .projects)
         let last = try await store.createProject(name: "C", color: "#000000")
         try await store.updateProject(last.id) { $0.isPinned = true }
@@ -79,6 +80,7 @@ struct ProjectsTests {
 #endif
 
 #if os(iOS)
+@Suite(.releasesLibraries)
 struct ProjectsNavigationTests {
     let app = TestApp()
     var store: CueStore { app.services.store }

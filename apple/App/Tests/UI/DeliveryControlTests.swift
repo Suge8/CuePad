@@ -8,6 +8,7 @@ import Testing
 @testable import CueStore
 
 @MainActor
+@Suite(.releasesLibraries)
 struct DeliveryControlTests {
     @Test(arguments: [DeliveryMode.send, .start], [
         ("unconfirmed", false), ("unconfirmed", true), ("future-outcome", false), ("future-outcome", true),

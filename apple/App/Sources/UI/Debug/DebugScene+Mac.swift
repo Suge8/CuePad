@@ -156,7 +156,7 @@ struct DebugNewSessionForm: View {
 
     var body: some View {
         let host = DebugScene.args.demo ? "demo-mac" : workspace.services.hostID
-        NewSessionForm(agents: agents) { _ in }
+        NewSessionForm(agents: agents) { _, _ in }
             .observing(workspace.services.store, into: $agents) { try $0.macAgents(on: host) }
     }
 }

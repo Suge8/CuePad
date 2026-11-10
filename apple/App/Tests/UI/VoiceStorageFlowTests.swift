@@ -7,6 +7,7 @@ import Testing
 @testable import CuePad
 
 @MainActor
+@Suite(.releasesLibraries)
 struct VoiceStorageFlowTests {
     @Test func 跨设备保存与发出都不冒充Cue已接走() async throws {
         let cloud = ReceiptTests.WeakCloud()

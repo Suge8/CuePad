@@ -5,6 +5,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
+@Suite(.releasesLibraries)
 struct ComposerTests {
     let app = TestApp()
     var store: CueStore { app.services.store }

@@ -8,6 +8,7 @@ import Testing
 
 /// 各家的目录都在临时目录里（`TestApp.agentHomes`）。
 @MainActor
+@Suite(.releasesLibraries)
 struct AgentLibraryTests {
     let app = TestApp()
     var services: AppServices { app.services }
@@ -64,7 +65,7 @@ struct AgentLibraryTests {
         try write("# 原则\n\n先读后写\n\n求证：以证据为准\n", codex.appending(path: "AGENTS.md"))
         let uploads = app.sync.uploads.stream
         let keeping = keep()
-        defer { keeping.cancel() }
+        defer { await keeping.stop() }
 
         let found = try await library("扫出五件") { $0.tidies.count == 5 }
         let workspace = Workspace(services: services)
@@ -92,7 +93,7 @@ struct AgentLibraryTests {
         let tidied = try await library("只剩要合并的全局规则") { $0.tidies.map(\.id) == ["global-instructions"] }
         #expect(tidied.skills.allSatisfy(\.unseenBy.isEmpty) && tidied.skills.map(\.name) == ["write-swift", "retro"])
 
-        try await #require(workspace.notice?.action).run()
+        try await #require(workspace.notice?.action).run(workspace)
 
         #expect(exists(codex.appending(path: "skills/retro/SKILL.md")) && !exists(moved))
         #expect(!exists(claude.appending(path: "skills/write-swift")) && !exists(claude.appending(path: "skills/retro")) && !exists(dsh.appending(path: "skills/write-swift")))
@@ -110,10 +111,10 @@ struct AgentLibraryTests {
         try write("# 藏在 .claude 里的\n", folder.appending(path: ".claude/CLAUDE.md"))
         try write("# 我自己的\n", folder.appending(path: "CLAUDE.local.md"))
         let keeping = keep()
-        defer { keeping.cancel() }
+        defer { await keeping.stop() }
         let workspace = Workspace(services: services)
         let following = Task { await workspace.follow() }
-        defer { following.cancel() }
+        defer { await following.stop() }
 
         let found = try await library("扫出项目规则") { $0.instruction(.project(project.id))?.hash == hash("# Site\n") }
         #expect(found.merge(into: .project(project.id))?.writers == [.claudeCode] && found.automaticOrders.isEmpty)
@@ -146,7 +147,7 @@ struct AgentLibraryTests {
         try write("规则二\n", codex.appending(path: "AGENTS.md"))
         try write("你是 Pi\n", pi.appending(path: "SYSTEM.md"))
         let keeping = keep()
-        defer { keeping.cancel() }
+        defer { await keeping.stop() }
         let found = try await library("扫出全局规则") { !$0.tidies.isEmpty }
         let workspace = Workspace(services: services)
         await workspace.tidy([TidyOrder(tidy: "global-instructions")], in: found)
@@ -156,7 +157,7 @@ struct AgentLibraryTests {
         try await workspace.saveFile(
             LibraryEdit(file: .instruction(.global), base: global.hash ?? "", text: "规则一\n\n规则二\n\n后来加的\n"), in: merged)
 
-        await #expect(throws: AgentLibraryError.changedSinceTidy) { try await undo.run() }
+        await #expect(throws: AgentLibraryError.changedSinceTidy) { try await undo.run(workspace) }
 
         #expect(read(rules) == "规则一\n\n规则二\n\n后来加的\n")
         #expect(RelativeLink.points(claude.appending(path: "rules/AGENTS.md"), to: rules))

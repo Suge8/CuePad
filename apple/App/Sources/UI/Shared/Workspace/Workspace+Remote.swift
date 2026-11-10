@@ -38,7 +38,7 @@ extension Workspace {
     private func launch(_ url: URL) async {
         guard await !apps.open(url) else { return }
         say("先装网易 UU 远程，并在 Mac 上也装好、登录同一个账号", tone: .gone, action: NoticeAction(title: String(localized: "去 App Store")) {
-            _ = await self.apps.open(MacRemote.appStore)
+            _ = await $0.apps.open(MacRemote.appStore)
         })
     }
 
@@ -57,7 +57,7 @@ extension Workspace {
         guard let failure = MacRemote.controlFailure(reason) else { return }
         if reason == "device_not_found", let host { services.settings.remoteDevices[host] = nil }
         let rebind = host.flatMap { host in
-            failure.rebind ? NoticeAction(title: String(localized: "重新选择 Mac")) { await self.rebindMac(host) } : nil
+            failure.rebind ? NoticeAction(title: String(localized: "重新选择 Mac")) { await $0.rebindMac(host) } : nil
         }
         say(Dotted(failure.message), tone: .failure, action: rebind)
     }

@@ -4,6 +4,7 @@ import SQLite3
 import Testing
 @testable import CuePad
 
+@Suite(.releasesLibraries)
 struct LibraryFailureTests {
     private func library(version: Int, setup: String) throws -> LibraryLocation {
         let directory = TestLibraries.makeDirectory()

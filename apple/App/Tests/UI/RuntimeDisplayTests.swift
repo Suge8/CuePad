@@ -6,6 +6,7 @@ import Testing
 import CuePi
 #endif
 
+@Suite(.releasesLibraries)
 struct RuntimeDisplayTests {
     @Test func 离线与系统重启不沿用旧报告_同boot重开仍保留确认_回填不续命() async throws {
         let clock = ManualTiming()

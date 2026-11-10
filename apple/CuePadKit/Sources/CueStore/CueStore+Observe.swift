@@ -38,12 +38,15 @@ extension CueStore {
     AsyncThrowingStream { continuation in
       let (signals, signal) = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
       let (subscriptions, rereader) = (self.subscriptions, self.rereader!)
+      let run = UUID()
+      subscriptions.began(run)
       let task = Task {
         let token = subscriptions.add(signal, reading: tables, scopes: scopes, since: since)
         var timer: Task<Void, Never>?
         defer {
           timer?.cancel()
           subscriptions.remove(token)
+          subscriptions.finished(run)
         }
         let timing = self.timing
         func schedule(_ expiry: Date?) {
@@ -75,8 +78,15 @@ extension CueStore {
       continuation.onTermination = { _ in
         signal.finish()
         task.cancel()
+        subscriptions.stopping(run, task)
       }
     }
+  }
+
+  /// 等读的一方已经停下的订阅收完尾：重读任务是订阅自己起的，读的一方停了它还要再走几步才放掉资料库，调用方等不到它。
+  /// 还有人在读的订阅不等。给要确认资料库放掉了的收尾用（测试），`observe` 的调用方不必等它。
+  public nonisolated func stoppedSubscriptions() async {
+    for task in subscriptions.stopped { await task.value }
   }
 
   /// 与结果随时间变的时刻。

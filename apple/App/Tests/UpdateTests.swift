@@ -5,6 +5,7 @@ import Testing
 @testable import CuePad
 
 /// Sparkle 自动更新：配置写在真实构建的 Info.plist 里，界面只经 `UpdateService` 操作更新器。
+@Suite(.releasesLibraries)
 struct UpdateTests {
     @Test func 重启会断的托管会话在干活_等子代理或等你确认_更新等它们都空下来再装_托管的Pi在干活不等() async throws {
         let updater = FakeUpdater()

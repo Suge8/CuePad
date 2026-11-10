@@ -3,6 +3,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
+@Suite(.releasesLibraries)
 struct PreviewReplyTests {
     @Test func 引用的预览随下一句发出_同批注一起_同一份不重复() async throws {
         let app = TestApp()
@@ -52,6 +53,7 @@ struct PreviewReplyTests {
 
 /// 改动预览（.diff/.patch，`UnifiedDiff`）：段里删去的一行以 "--" 开头、接着加的一行以 "++" 开头，带上前缀成了一对 ---/+++，仍是这一段的改动，
 /// 不另起一个文件；段走完后的那对（不带 `diff --git` 的多文件 `diff -u`）才是下一个文件。
+@Suite(.releasesLibraries)
 struct PreviewDiffTests {
     @Test func 段里以减减加加开头的行仍是改动_段外的那对才是下一个文件() {
         let diff = UnifiedDiff("""

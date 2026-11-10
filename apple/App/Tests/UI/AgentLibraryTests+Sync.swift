@@ -23,7 +23,7 @@ extension AgentLibraryTests {
         for side in [macApp, phone] { side.services.startSync() }
         defer { for side in [macApp, phone] { side.services.cancelBackgroundWork() } }
         let keeping = Task { try? await macApp.services.library.keep() }
-        defer { keeping.cancel() }
+        defer { await keeping.stop() }
         try await macApp.services.executor.start()
         let workspace = Workspace(services: phone.services)
         func phoneSees(_ what: String, _ condition: @escaping @Sendable (AgentLibrary) -> Bool) async throws -> AgentLibrary {
@@ -37,7 +37,7 @@ extension AgentLibraryTests {
                 try? await Task.sleep(for: .milliseconds(20))
             }
         }
-        defer { pulling.cancel() }
+        defer { await pulling.stop() }
 
         let mac = TestApp.hostID
         let library = try await phoneSees("手机读到 Mac 的快照") { $0.hostID == mac && $0.tidies.count == 1 }

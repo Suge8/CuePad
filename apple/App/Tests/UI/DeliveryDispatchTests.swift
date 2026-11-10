@@ -8,6 +8,7 @@ import Testing
 
 /// 从回复框写下消息；在执行器已有的准备回调边界重现扩展变更与期限交错，不改生产调度或增加测试开关。
 @MainActor
+@Suite(.releasesLibraries)
 struct DeliveryDispatchTests {
     @Test func 保留现有会话后再次升级且到期_明确失败不悬置() async throws {
         let clock = ManualTiming()

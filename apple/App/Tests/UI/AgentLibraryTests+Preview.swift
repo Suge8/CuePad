@@ -8,21 +8,23 @@ import Testing
 @testable import CuePad
 
 extension AgentLibraryTests {
-    @Test func 标出合并时打字不改正文_取消后键盘回到正文接着存() async throws {
+    @Test
+    func 标出合并时打字不改正文_取消后键盘回到正文接着存() async throws {
         let shared = rules
         try write("共用的\n", shared)
         try write("全局规则\n", claude.appending(path: "CLAUDE.md"))
         let keeping = keep()
-        defer { keeping.cancel() }
+        defer { await keeping.stop() }
         let workspace = Workspace(services: services)
         let following = Task { await workspace.follow() }
-        defer { following.cancel() }
+        defer { await following.stop() }
         try await eventually("快照里有要合并的全局规则") { workspace.library?.merge(into: .global) != nil }
 
         workspace.openLibrary(.instruction(.global))
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 900, height: 600), styleMask: [.titled], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false  // 默认关窗时 AppKit 自己再释放一次，与 ARC 重复：测试进程随后在自动释放池里崩掉
         window.contentView = NSHostingView(rootView: LibraryFileLayer().environment(workspace).environment(services))
+        LibraryLedger.heldByFramework(services.store, "文件页挂进真窗口：窗口关上、视图拆掉后，SwiftUI 的视图图数据仍攥着环境里的工作区与服务")
         window.makeKeyAndOrderFront(nil)
         defer { window.close() }
         try await eventually("文件页挂上、正文拿到键盘") { window.firstResponder is CueTextView }

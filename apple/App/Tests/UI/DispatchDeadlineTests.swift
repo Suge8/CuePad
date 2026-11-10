@@ -10,6 +10,7 @@ import Testing
 
 /// 手机与 Mac 经同一个云替身（替身同真服务器，给收下的记录盖 `creationDate`），两边从各自拿到的那条记录推出同一个锚点。
 @MainActor
+@Suite(.releasesLibraries)
 struct DispatchDeadlineTests {
     @Test func 手机离线十五分钟后连上_话照常送到_两端的派发期限是同一个锚点() async throws {
         let clock = ManualTiming()

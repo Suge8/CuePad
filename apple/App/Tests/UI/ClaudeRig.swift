@@ -73,7 +73,9 @@ final class ClaudeRig {
                     locate: { ExecutableLocator(searchDirectories: [bin]) })] },
                 pasteboard: NSPasteboard(name: .init("crig-\(UUID().uuidString)")),
                 cue: CueDependencies(launch: { _, _ in nil }, helper: realPi, notifier: RecordingCueNotifier()))
-            return (bridge, hooks, try AppServices(location: location, defaults: defaults, sync: .custom(FakeSync()), mac: mac))
+            let services = try AppServices(location: location, defaults: defaults, sync: .custom(FakeSync()), mac: mac)
+            LibraryLedger.tracking(services.store, createdAt: #_sourceLocation)
+            return (bridge, hooks, services)
         }
         (bridge, hooks, services) = try boot()
     }
@@ -105,22 +107,19 @@ final class ClaudeRig {
     }
 
     private func stopApp() async {
-        services.cancelBackgroundWork()
-        await services.executor.beginStop()()
-        await runtime.stop()()
-        hooks.stop()
-        bridge.stop()
+        let followers = services.cancelBackgroundWork()
+        _ = await services.beginShutdown()()
+        await followers?.value
     }
 
     /// 托管的进程按 runtime 的收法收；终端里的按 pid 结束；外壳在 `bin/pids` 里记下的（修坏了时 runtime 收不掉的那种）按 pid 结束。
     func shutdown() async {
-        services.cancelBackgroundWork()
-        await runtime.stop()()
+        let followers = services.cancelBackgroundWork()
+        _ = await services.beginShutdown()()
+        await followers?.value
         for terminal in terminals { terminal.stop() }
         let stray = ((try? String(contentsOf: bin.appending(path: "pids"), encoding: .utf8)) ?? "").split(separator: "\n").compactMap { Int32($0) }
         for pid in stray where kill(pid, 0) == 0 { kill(pid, SIGKILL) }
-        hooks.stop()
-        bridge.stop()
     }
 
     /// 在私有 tmux 服务器里开一个终端会话（`arguments` 是 `claude` 的参数），等它起好（登记文件写下 `status`）。

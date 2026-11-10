@@ -12,7 +12,7 @@ import Testing
 /// 从 Mac 本机发话：投送接着这个会话、得到回复，旧进程收掉（不是报"会话已经结束"）。
 /// 外壳（`wrapper`）起的托管进程在 Claude Code 读到 EOF 退出后（`eof.<pid>`：CuePad 已请它退出；pid 是外壳的，也是桥上记的）
 /// 一直握着输出、不自己走：只有 CuePad 收它才会结束。只看这个会话的：App 起来时问登录与模型清单也起一个、问完就关（`AgentFacts.probe`）。
-@Suite(.enabled(if: PinnedAgent.claude.uncovered == nil, Comment(rawValue: PinnedAgent.claude.uncovered ?? "")), .timeLimit(.minutes(4)))
+@Suite(.releasesLibraries, .enabled(if: PinnedAgent.claude.uncovered == nil, Comment(rawValue: PinnedAgent.claude.uncovered ?? "")), .timeLimit(.minutes(4)))
 @MainActor
 struct ClaudeIdleResumeTests {
     @Test func 托管会话请退出还没走时本机发话_接着它得到回复_旧进程收掉() async throws {

@@ -4,6 +4,7 @@ import Testing
 @testable import CuePad
 
 @MainActor
+@Suite(.releasesLibraries)
 struct AskShotsTests {
     let app = TestApp()
     var store: CueStore { app.services.store }

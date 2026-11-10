@@ -7,6 +7,7 @@ import Testing
 @testable import CueStore
 
 @MainActor
+@Suite(.releasesLibraries)
 struct DeliveryConfirmationTests {
     func session(_ app: TestApp) async throws -> (PiSessionState, FakeExtension, URL) {
         let id = UUID().uuidString.lowercased()
@@ -94,7 +95,7 @@ struct DeliveryConfirmationTests {
         try await app.services.executor.start()
         _ = try await settledDispatch(pendingA, in: app)
         let sendingB = Workspace(services: app.services).speak("第二处先完成", to: .session(second, mode: .send))
-        defer { sendingB.cancel() }
+        defer { await sendingB.stop() }
         try await eventually("写下第二处的新意图") { try await store.deliveryRequests().contains { $0.content == "第二处先完成" } }
         let pendingB = try #require(try await store.deliveryRequests().first { $0.content == "第二处先完成" })
         try await eventually("第二处收到话，不等第一处的历史或上传") { extB.messages.count == 1 }

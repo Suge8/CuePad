@@ -7,6 +7,7 @@ import Testing
 
 /// 测试宿主的 `UserDefaults.standard` 就是正式版的偏好域，这里连读也不读：偏好要落在库目录里那份具名的域（文件里看得到），
 /// 窗口位置只存进设置，AppKit 自己写标准域的途径（窗口的自动保存名）必须是空的。
+@Suite(.releasesLibraries)
 struct IsolationTests {
     private func temporaryDirectory() -> URL {
         FileManager.default.temporaryDirectory.appending(path: "cuepad-isolation-\(UUID().uuidString)", directoryHint: .isDirectory)

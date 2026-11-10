@@ -8,6 +8,7 @@ import SwiftUI
 import Testing
 @testable import CuePad
 
+@Suite(.releasesLibraries)
 struct AttachmentSendTests {
     @Test func 带着还没到的大附件的那句不挡后面的话_文件到了照常送到() async throws {
         let clock = ManualTiming()

@@ -54,7 +54,7 @@ struct NewSessionInput: View {
         .composerNotice(status != nil) { if let status { statusLine(status).font(Typography.caption) } }
         .confirmsLaunchAgain(launching)
         .onAppear {
-            workspace.resume(start, opened: workspace.entering(start))
+            workspace.resume(start, opened: Workspace.entering(start))
             if let seed = start.draft, draft.isEmpty(accepting: [.files, .cards]) { draft = seed }
             focused = true
         }
@@ -109,7 +109,7 @@ struct NewSessionInput: View {
     }
 
     private func launch() {
-        workspace.submitSession(start, in: chosen, draft: draft, choice: brain, opened: workspace.entering(start))
+        workspace.submitSession(start, in: chosen, draft: draft, choice: brain, opened: Workspace.entering(start))
     }
 }
 #endif

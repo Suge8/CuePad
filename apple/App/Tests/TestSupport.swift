@@ -60,12 +60,35 @@ nonisolated final class FakeSync: SyncControlling, Sendable {
 
     func stop() async {
         state.withLock { $0.stopped += 1 }
+        for hung in hanging.withLock({ $0.stop() }) { hung.resume() }
     }
+    /// 立即同步一直不返回，直到同步停下（同真的引擎：停了在途的才收尾）。
     let syncNowHangs = Mutex(false)
+    private let hanging = Mutex(Hanging())
+
+    private struct Hanging {
+        var stopped = false
+        var waiters: [CheckedContinuation<Void, Never>] = []
+
+        mutating func stop() -> [CheckedContinuation<Void, Never>] {
+            stopped = true
+            defer { waiters = [] }
+            return waiters
+        }
+
+        mutating func wait(_ waiter: CheckedContinuation<Void, Never>) -> Bool {
+            if !stopped { waiters.append(waiter) }
+            return !stopped
+        }
+    }
 
     @discardableResult func syncNow() async throws -> SyncPullResult {
         state.withLock { $0.syncNows += 1 }
-        if syncNowHangs.withLock({ $0 }) { try? await Task.sleep(for: .seconds(3600)) }
+        if syncNowHangs.withLock({ $0 }) {
+            await withCheckedContinuation { waiter in
+                if !hanging.withLock({ $0.wait(waiter) }) { waiter.resume() }
+            }
+        }
         return .noData
     }
     let uploads = AsyncStream<String>.makeStream()
@@ -110,6 +133,8 @@ final class TestApp {
 
     private let syncSource: AppServices.SyncSource?
     private let timing: Timing
+    private let createdAt: SourceLocation
+    private let ledger: LibraryLedger?
 
     #if os(macOS)
     private let cue: CueDependencies?
@@ -118,46 +143,70 @@ final class TestApp {
     let hostID: String
     init(
         sync source: AppServices.SyncSource? = nil, cue: CueDependencies? = nil, updater: (any AppUpdater)? = nil, timing: Timing = .system,
-        host: String = TestApp.hostID
+        host: String = TestApp.hostID, createdAt: SourceLocation = #_sourceLocation
     ) {
         hostID = host
         syncSource = source
         self.timing = timing
         self.cue = cue
         self.updater = updater
+        self.createdAt = createdAt
+        ledger = LibraryLedger.opening(createdAt: createdAt)
         services = makeServices()
     }
     #else
-    init(sync source: AppServices.SyncSource? = nil, timing: Timing = .system) {
+    init(sync source: AppServices.SyncSource? = nil, timing: Timing = .system, createdAt: SourceLocation = #_sourceLocation) {
         syncSource = source
         self.timing = timing
+        self.createdAt = createdAt
+        ledger = LibraryLedger.opening(createdAt: createdAt)
         services = makeServices()
     }
     #endif
 
+    /// 同真的 App 退出：Mac 走退出的收尾（后台工作、执行器、Cue、桥、同步都停）。不停的话后台任务一直攥着整套服务和资料库，
+    /// 换账号的通知又是全进程的，测试结束后它还会跟着并行的测试去认账号、拉取。deinit 里等不了：收尾交给 `.releasesLibraries`，用例结束时等它做完再查释放。
     isolated deinit {
-        endSync(of: services)
         #if os(macOS)
+        // 退出流程只取消跟随者、不等它们退场；它们退场前攥着服务与资料库，CI 慢时超过检查的宽限
+        let followers = services.cancelBackgroundWork(), finish = services.beginShutdown()
+        LibraryLedger.close(ledger, app: createdAt) {
+            _ = await finish()
+            await followers?.value
+        }
         pasteboard.releaseGlobally()
         try? FileManager.default.removeItem(at: socketDirectory)
         #else
+        retire(services, app: createdAt)
         UIPasteboard.remove(withName: pasteboardName)
         #endif
     }
 
     @discardableResult
     func relaunch() -> AppServices {
-        services.cancelBackgroundWork()
-        endSync(of: services)
+        retire(services)
         services = makeServices()
         return services
     }
 
-    /// 同真的进程退出：这个实例的同步不再跑。不停的话，换账号的通知是全进程的，测试结束后它还会跟着并行的测试去认账号、拉取。
-    /// deinit 里等不了，停下在后台做完。
-    private func endSync(of services: AppServices?) {
-        guard let sync = services?.sync else { return }
-        Task.detached { await sync.stop() }
+    /// 旧实例自己的工作都停下（同进程被杀）：桥、托管的会话和热键是 `TestApp` 的，留给新实例。不写离线之类的收尾记录，免得晚到的写入盖过新实例的。
+    private func retire(_ services: AppServices, app: SourceLocation? = nil) {
+        let followers = services.cancelBackgroundWork(), sync = services.sync
+        #if os(macOS)
+        services.hooks.stop()
+        let executor = services.executor.beginStop(), cue = services.cue.stop()
+        LibraryLedger.close(ledger, app: app) {
+            await executor()
+            await cue()
+            await sync?.stop()
+            await followers?.value
+        }
+        #else
+        LibraryLedger.close(ledger, app: app) {
+            await sync?.stop()
+            await followers?.value
+        }
+        #endif
     }
 
     func runtimeRecorder(on host: String, boot: String = TestBoot.id) async throws -> PiStateRecorder {
@@ -304,15 +353,28 @@ final class TestApp {
             runtimes: { [host, claude] _ in [.pi: host, .claudeCode: claude] },
             pasteboard: pasteboard,
             cue: cue ?? CueDependencies(launch: { _, _ in nil }, helper: helper, notifier: RecordingCueNotifier()))
-        return try! AppServices(location: isolatedLocation, defaults: preferences.defaults, sync: syncSource ?? .custom(sync), mac: mac)
+        let services = try! AppServices(location: isolatedLocation, defaults: preferences.defaults, sync: syncSource ?? .custom(sync), mac: mac)
+        ledger?.track(services.store, createdAt: createdAt)
+        return services
     }
     #else
     var pasteboard: UIPasteboard { UIPasteboard(name: pasteboardName, create: true)! }
 
     private func makeServices() -> AppServices {
-        try! AppServices(location: isolatedLocation, defaults: preferences.defaults, sync: syncSource ?? .custom(sync), pasteboard: pasteboard, timing: timing)
+        let services = try! AppServices(
+            location: isolatedLocation, defaults: preferences.defaults, sync: syncSource ?? .custom(sync), pasteboard: pasteboard, timing: timing)
+        ledger?.track(services.store, createdAt: createdAt)
+        return services
     }
     #endif
+}
+
+extension Task {
+    /// 取消并等它收尾：用例自己起的任务结束前还攥着它捕获的服务与资料库，`.releasesLibraries` 紧接着就查。
+    func stop() async {
+        cancel()
+        _ = await result
+    }
 }
 
 extension Workspace {

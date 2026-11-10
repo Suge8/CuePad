@@ -77,6 +77,8 @@ final class CueService {
             await stopping()
             await Self.rest(recorder)
             await task.value
+            // 先写的那次歇着是为了退出的时限；值班循环在它之后还会把停之前排着的对账做完、再写此刻（可能挂上合并计时，攥着记录器与资料库），收尾后再歇一次盖过它
+            await Self.rest(recorder)
         }
     }
 

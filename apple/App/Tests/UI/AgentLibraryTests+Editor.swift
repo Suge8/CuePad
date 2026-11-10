@@ -9,10 +9,10 @@ extension AgentLibraryTests {
     @Test func 规则的文件页自动存_跟上别处的改动_两边都改时由你选() async throws {
         let file = rules
         let keeping = keep()
-        defer { keeping.cancel() }
+        defer { await keeping.stop() }
         let workspace = Workspace(services: services)
         let following = Task { await workspace.follow() }
-        defer { following.cancel() }
+        defer { await following.stop() }
         func snapshot(_ text: String) async throws -> String? {
             try await eventually("快照读到 \(text)") { workspace.library?.instruction(.global)?.hash == hash(text) }
             return try await self.text(.instruction(.global), in: try #require(workspace.library))
@@ -62,10 +62,10 @@ extension AgentLibraryTests {
         let file = directory.appending(path: "SKILL.md")
         try write("---\nname: pr\ndescription: >\n  写 PR\n  描述\nlicense: MIT\n---\n\n旧的正文\n", file)
         let keeping = keep()
-        defer { keeping.cancel() }
+        defer { await keeping.stop() }
         let workspace = Workspace(services: services)
         let following = Task { await workspace.follow() }
-        defer { following.cancel() }
+        defer { await following.stop() }
         try await eventually("快照读到这个技能") { workspace.library?.skill(at: directory.path) != nil }
         let skill = try #require(workspace.library?.skill(at: directory.path))
         #expect(skill.description == "写 PR 描述")
@@ -92,10 +92,10 @@ extension AgentLibraryTests {
         let file = rules
         try write("# a\n", file)
         let keeping = keep()
-        defer { keeping.cancel() }
+        defer { await keeping.stop() }
         let workspace = Workspace(services: services)
         let following = Task { await workspace.follow() }
-        defer { following.cancel() }
+        defer { await following.stop() }
         try await eventually("快照有全局规则") { workspace.library?.instruction(.global)?.hash == hash("# a\n") }
         let draft = FileDraft(.instruction(.global), text: "# a\n", workspace: workspace)
 
@@ -121,7 +121,7 @@ extension AgentLibraryTests {
 
     @Test func 自己写入的回声先到_期间又打了字_不报冲突() async throws {
         let (draft, keeping, following) = try await ready("# a\n")
-        defer { keeping.cancel(); following.cancel() }
+        defer { await keeping.stop(); await following.stop() }
         draft.changed(body: "v1\n")
         let writing = Task { await draft.send() }
         await Task.yield()
@@ -135,7 +135,7 @@ extension AgentLibraryTests {
 
     @Test func 冲突后文件改回基准或变得和我的一样_冲突自动解除() async throws {
         let (draft, keeping, following) = try await ready("# a\n")
-        defer { keeping.cancel(); following.cancel() }
+        defer { await keeping.stop(); await following.stop() }
         draft.changed(body: "mine\n")
         draft.follow("ext\n")
         #expect(draft.conflicted)

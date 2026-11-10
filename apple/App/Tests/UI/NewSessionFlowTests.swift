@@ -4,6 +4,7 @@ import Testing
 @testable import CuePad
 
 @MainActor
+@Suite(.releasesLibraries)
 struct NewSessionFlowTests {
     nonisolated enum Entry: Sendable, CustomTestStringConvertible {
         case form, task, input
@@ -37,7 +38,7 @@ struct NewSessionFlowTests {
             let project = try #require(try await store.project(Project.defaultID))
             let place = ProjectFolders.launchPlaces(projects: [project], bindings: [], host: host, workMac: nil).first
             return (task, workspace.sessionLaunching(.form), {
-                workspace.submitSession(in: place, draft: ComposerDraft(text: "修乱序"), choice: choice) { workspace.showLaunched($0.sessionID) }
+                workspace.submitSession(in: place, draft: ComposerDraft(text: "修乱序"), choice: choice) { $0.showLaunched($1.sessionID) }
             })
         case .task:
             try await app.offersPi()
@@ -53,7 +54,7 @@ struct NewSessionFlowTests {
                 projects: try await store.projects(), bindings: try await store.directoryBindings(), host: nil, workMac: try await store.workMac())
             return (task, workspace.sessionLaunching(start.launchKey), {
                 workspace.submitSession(
-                    start, in: start.place(among: places), draft: start.draft ?? ComposerDraft(), choice: choice, opened: workspace.entering(start))
+                    start, in: start.place(among: places), draft: start.draft ?? ComposerDraft(), choice: choice, opened: Workspace.entering(start))
             })
         #endif
         default:

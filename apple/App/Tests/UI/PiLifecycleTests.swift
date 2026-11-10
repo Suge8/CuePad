@@ -5,6 +5,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
+@Suite(.releasesLibraries)
 struct PiLifecycleTests {
     let app = TestApp()
     var store: CueStore { app.services.store }
@@ -60,6 +61,7 @@ struct PiLifecycleTests {
     }
 }
 
+@Suite(.releasesLibraries)
 struct PiSendPrecisionTests {
     private final class Peer: SessionLink {
         var messages: [PiMessage] = []

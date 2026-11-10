@@ -9,7 +9,7 @@ import Testing
 
 /// 真实 Pi 与真实后台托管（测闲置退出的用例闲置 2 秒就退），全部状态落在临时目录，假模型（`model`，回 `ECHO <你的话>`）零网络；不碰真实资料库与 ~/.pi。
 
-@Suite(.pinnedPi, .timeLimit(.minutes(4)))
+@Suite(.releasesLibraries, .pinnedPi, .timeLimit(.minutes(4)))
 struct HistoryRulesTests {
     final class Rig {
         let cwd: URL
@@ -79,14 +79,18 @@ struct HistoryRulesTests {
                 cue: CueDependencies(launch: { _, _ in nil }, helper: realPi, notifier: RecordingCueNotifier()))
             let location = try LibraryLocation.resolve(environment: [LibraryLocation.environmentKey: directory.appending(path: "Library").path])
             services = try AppServices(location: location, defaults: TempDefaults().defaults, sync: .custom(FakeSync()), mac: mac)
+            LibraryLedger.tracking(services.store, createdAt: #_sourceLocation)
             services.start()
         }
 
         func shutdown() {
-            services.cancelBackgroundWork()
             // 托管的 Pi 不随 CuePad 结束：桥上还在的（本用例临时 socket 目录里的，是本用例启动的）逐个让它退出
             for session in bridge.sessions where session.hosted { kill(session.pid, SIGTERM) }
-            bridge.stop()
+            let followers = services.cancelBackgroundWork(), finish = services.beginShutdown()
+            LibraryLedger.close(LibraryLedger.current) {
+                _ = await finish()
+                await followers?.value
+            }
         }
 
         func records(_ scope: PiSessionScope) async throws -> [PiSessionState] {
@@ -179,7 +183,7 @@ struct HistoryRulesTests {
     }
 }
 
-@Suite(.pinnedPi)
+@Suite(.releasesLibraries, .pinnedPi)
 struct HostedLaunchTests {
     @Test func 开新会话模型无效时整体失败() async throws {
         let directory = TestLibraries.makeDirectory()

@@ -5,6 +5,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
+@Suite(.releasesLibraries)
 @MainActor struct VoiceProjectionFlowTests {
     @Test func 未保存原话可辨认_截断不改恢复正文() async throws {
         let app = TestApp(), services = app.services!, store = services.store

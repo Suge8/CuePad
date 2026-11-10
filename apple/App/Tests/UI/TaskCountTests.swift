@@ -3,6 +3,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
+@Suite(.releasesLibraries)
 struct TaskCountTests {
     let rig = TestApp()
     var store: CueStore { rig.services.store }

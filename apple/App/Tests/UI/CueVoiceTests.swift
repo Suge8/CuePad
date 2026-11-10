@@ -5,6 +5,7 @@ import Testing
 @testable import CuePad
 
 @MainActor
+@Suite(.releasesLibraries)
 struct CueVoiceTests {
     @Test func 每一通用开始时库里的音色_通话中改了下一通才换_认不出的按默认() async throws {
         let app = TestApp(), store = app.services.store, host = TestApp.hostID

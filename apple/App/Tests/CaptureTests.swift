@@ -4,6 +4,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
+@Suite(.releasesLibraries)
 struct CaptureTests {
     let app = TestApp()
     var services: AppServices { app.services }

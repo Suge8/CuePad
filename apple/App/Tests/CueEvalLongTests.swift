@@ -10,7 +10,7 @@ import Testing
 /// 换新那一刻丢没丢东西：换新线缩到场景跑得到的值（`renewAt`），缓存时长缩短、中途他走开一阵（冷换新）；几样只在原始上下文里出现过的
 /// （会话交回里的细节、他托付给它的打算、它对方案的判断、一件逐页推进的多步活）在换新前埋下、换新后考，每处标出跨了哪种换新（热、冷）。
 /// 只经库与假会话驱动、只读库与工具调用判定，不碰 Cue 的内部状态（换新次数从大脑的输出里数）。跑法见 docs/cue-eval.md。
-@Suite(.enabled(if: evalEnvironment["CUEPAD_CUE_EVAL"] == "1", "CUEPAD_CUE_EVAL=1 才跑"), .timeLimit(.minutes(60)))
+@Suite(.releasesLibraries, .enabled(if: evalEnvironment["CUEPAD_CUE_EVAL"] == "1", "CUEPAD_CUE_EVAL=1 才跑"), .timeLimit(.minutes(60)))
 struct CueEvalLongTests {
     nonisolated static let runs = max(1, Int(evalEnvironment["CUEPAD_CUE_EVAL_RUNS"] ?? "") ?? 1)
 

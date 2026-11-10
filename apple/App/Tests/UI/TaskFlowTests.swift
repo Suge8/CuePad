@@ -4,6 +4,7 @@ import Synchronization
 import Testing
 @testable import CuePad
 
+@Suite(.releasesLibraries)
 struct TaskFlowTests {
     let rig = TestApp()
     var store: CueStore { rig.services.store }
@@ -54,7 +55,7 @@ struct TaskFlowTests {
         #expect(workspace.notice?.text.visible == "已完成")
         let archive = try #require(workspace.notice?.action)
         #expect(archive.title == "归档")
-        try await archive.run()
+        try await archive.run(workspace)
         #expect(try await store.card(task.id)?.archivedAt != nil)
     }
 
@@ -184,7 +185,7 @@ struct TaskFlowTests {
         try await workspace.mergeIdea(crash.id, into: check.id)
         #expect(workspace.notice?.text.visible == "已接到「上线前检查」的正文后面")
         #expect(try await store.card(check.id)?.body == body + "\n\n看下 iOS 崩溃率，{{阈值}}")
-        try await #require(workspace.notice?.action).run()
+        try await #require(workspace.notice?.action).run(workspace)
         #expect(try await store.card(check.id)?.body == body)
         #expect(try await store.cards(in: Project.defaultID).map(\.id) == [crash.id])
 
@@ -192,7 +193,7 @@ struct TaskFlowTests {
         try await workspace.trash(idea.id)
         #expect(workspace.notice?.text.visible == "已删除")
         #expect(try await store.trashedCards().map(\.id) == [idea.id])
-        try await #require(workspace.notice?.action).run()
+        try await #require(workspace.notice?.action).run(workspace)
         #expect(try await store.trashedCards().isEmpty)
 
         let flaky = try await store.createCard(body: "排查 {{平台}} 闪退")
@@ -201,7 +202,7 @@ struct TaskFlowTests {
         #expect(workspace.notice?.text.visible == "已新建任务「排查 iOS 闪退」")
         let spawned = try #require(try await store.tasks(.todo).flatMap(\.tasks).first { $0.body == "排查 iOS 闪退" })
         #expect(try await store.trashedCards().map(\.id) == [flaky.id])
-        try await #require(workspace.notice?.action).run()
+        try await #require(workspace.notice?.action).run(workspace)
         #expect(try await store.trashedCards().map(\.id) == [spawned.id])
         #expect(try await store.cards(in: Project.defaultID).contains { $0.id == flaky.id })
 

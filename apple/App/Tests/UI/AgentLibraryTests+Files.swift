@@ -18,7 +18,7 @@ extension AgentLibraryTests {
         for side in [macApp, phone] { side.services.startSync() }
         defer { for side in [macApp, phone] { side.services.cancelBackgroundWork() } }
         let keeping = Task { try? await macApp.services.library.keep() }
-        defer { keeping.cancel() }
+        defer { await keeping.stop() }
         let pulling = Task {
             while !Task.isCancelled {
                 await macApp.services.syncNow()
@@ -26,7 +26,7 @@ extension AgentLibraryTests {
                 try? await Task.sleep(for: .milliseconds(20))
             }
         }
-        defer { pulling.cancel() }
+        defer { await pulling.stop() }
         let store = phone.services.store
         func phoneText(_ name: String) async throws -> String? {
             guard let library = try await store.agentLibrary(host: nil) else { return nil }
@@ -67,7 +67,7 @@ extension AgentLibraryTests {
         macApp.services.startSync()
         defer { macApp.services.cancelBackgroundWork() }
         let keeping = Task { try? await macApp.services.library.keep() }
-        defer { keeping.cancel() }
+        defer { await keeping.stop() }
 
         let id = CKRecord.ID(recordName: AgentLibrary.recordID(host: TestApp.hostID).uuidString.lowercased(), zoneID: CloudSync.zoneID)
         var uploaded: CKRecord?

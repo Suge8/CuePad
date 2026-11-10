@@ -8,6 +8,7 @@ import Testing
 
 /// 会话文件的形状照各家真机写下的（Claude Code 2.1、Grok 1.0、Codex 0.16x 的本机会话目录）。
 @MainActor
+@Suite(.releasesLibraries)
 struct SessionTitleTests {
     let app = TestApp()
     var store: CueStore { app.services.store }
@@ -76,7 +77,7 @@ struct SessionTitleTests {
         defer { app.services.cancelBackgroundWork() }
         let events = app.pi.changes()
         let consume = Task { try await app.services.consumePiChanges(events) }
-        defer { consume.cancel() }
+        defer { await consume.stop() }
         final class Link: SessionLink {}
         let file = try claude("c9", [])
         var live = PiSession(
@@ -133,7 +134,7 @@ struct SessionTitleTests {
 
         try title("纯黑静音视频")
         let again = indexing(following: [])
-        defer { again.cancel() }
+        defer { await again.stop() }
         _ = try await eventually(store, row) { $0 == "纯黑静音视频" }
     }
 }

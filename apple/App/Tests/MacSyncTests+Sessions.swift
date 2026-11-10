@@ -165,7 +165,7 @@ extension MacSyncTests {
         try services.reconcileLaunch()  // 更新后的 App 启动对账
         let mark = try await store.lastWrite()
         let consuming = Task { try await services.consumePiChanges(changes) }
-        defer { consuming.cancel() }
+        defer { await consuming.stop() }
 
         let old = try await rig.host.connect(
             "s1", cwd: "/work/app", busy: running, extensionVersion: upgrading ? PiWire.oldestExtension - 1 : PiExtensionBundle.version, sessionFile: file.path)

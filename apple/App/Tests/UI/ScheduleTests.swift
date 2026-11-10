@@ -5,6 +5,7 @@ import Testing
 @testable import CuePad
 
 @MainActor
+@Suite(.releasesLibraries)
 struct ScheduleTests {
     @Test func 原地改成每周一九点_不再定时就撤掉() async throws {
         let rig = TestApp()
@@ -47,10 +48,10 @@ struct ScheduleTests {
                 try await workspace.reopen(task.id)  // 再点一下：重新打开
             case "续费域名":
                 try await workspace.archive(task.id)
-                try await #require(workspace.notice?.action).run()  // 撤销：取回
+                try await #require(workspace.notice?.action).run(workspace)  // 撤销：取回
             default:
                 try await workspace.trash(task.id)
-                try await #require(workspace.notice?.action).run()  // 撤销：恢复
+                try await #require(workspace.notice?.action).run(workspace)  // 撤销：恢复
             }
         }
         #expect(try await store.cueSchedules().isEmpty)

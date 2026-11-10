@@ -66,16 +66,21 @@ final class VoiceFlowFixture {
     }
 
     func start() {
-        workspace.startVoiceCall { dependencies in
+        // 通话挂断后仍留在服务里（`VoiceService.call`），连同这些依赖：弱持有替身，不然替身、它的工作区与服务互相攥着放不掉
+        workspace.startVoiceCall { [weak self] dependencies in
             var dependencies = dependencies
-            dependencies.access = { try await self.access() }
-            dependencies.media = { _ in self.media }
-            dependencies.createCall = { _, _, voice, _, _ in
-                if let error = self.connectError { throw error }
-                self.voices.append(voice)
+            dependencies.access = { [weak self] in
+                guard let self else { throw CancellationError() }
+                return try await self.access()
+            }
+            dependencies.media = { [weak self] _ in self?.media ?? Media() }
+            dependencies.createCall = { [weak self] _, _, voice, _, _ in
+                if let error = self?.connectError { throw error }
+                self?.voices.append(voice)
                 return VoiceWire.Call(id: "rtc_isolated", answer: "answer", usedPercent: nil)
             }
-            dependencies.control = { _, _, _, received in
+            dependencies.control = { [weak self] _, _, _, received in
+                guard let self else { return Control() }
                 self.received = received
                 let control = Control()
                 self.controls.append(control)

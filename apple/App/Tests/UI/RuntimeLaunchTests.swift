@@ -4,6 +4,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
+@Suite(.releasesLibraries)
 struct RuntimeLaunchTests {
     @Test func Mac重开_第一帧里本机的会话就是确定的说法() async throws {
         let app = TestApp(), store = app.services.store

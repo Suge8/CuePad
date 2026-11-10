@@ -6,7 +6,7 @@ import Testing
 @testable import CuePad
 @testable import CueStore
 
-@Suite(.pinnedPi)
+@Suite(.releasesLibraries, .pinnedPi)
 @MainActor
 struct CuePatrolTests {
     @Test func 唯一在做的会话没说话就退出_Cue随后巡视() async throws {

@@ -4,6 +4,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
+@Suite(.releasesLibraries)
 struct CommandLineToolTests {
     let root = FileManager.default.temporaryDirectory
         .appending(path: "cuepad-cli-tests-\(UUID().uuidString)", directoryHint: .isDirectory)

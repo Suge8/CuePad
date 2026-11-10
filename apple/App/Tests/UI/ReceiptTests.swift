@@ -9,6 +9,7 @@ import Testing
 
 /// 时间用手动推进的钟：到点翻状态靠 App 自己的那一次睡眠，不靠测试去重读。会话在 mac-b、Cue 运行在 mac-cue，都要经同步。
 @MainActor
+@Suite(.releasesLibraries)
 struct ReceiptTests {
     let clock = ManualTiming()
 

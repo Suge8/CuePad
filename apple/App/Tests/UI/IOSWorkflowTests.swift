@@ -4,6 +4,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
+@Suite(.releasesLibraries)
 struct IOSWorkflowTests {
     let app = TestApp()
     var store: CueStore { app.services.store }
@@ -23,7 +24,7 @@ struct IOSWorkflowTests {
         let preparedDraft = try #require(start.draft)
         let sending = try #require(workspace.submitSession(
             start, in: place, draft: preparedDraft, choice: AgentModelChoice(agents: [], agent: .pi, model: nil, thinking: nil),
-            opened: workspace.entering(start)))
+            opened: Workspace.entering(start)))
         await sending.value
         #expect(workspace.sessionLaunching(start.launchKey).launch != nil)
         return (task, try #require(try await store.deliveryRequests().first))

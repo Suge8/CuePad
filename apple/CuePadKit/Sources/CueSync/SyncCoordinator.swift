@@ -90,6 +90,12 @@ actor SyncCoordinator {
     self.zoneID = zoneID
   }
 
+  /// 退避与空间不足的计时只弱持这里：同步整个没了（退出登录、换库、关掉 App 的服务）时，在等的计时不再攥着它与资料库直到到点。
+  deinit {
+    retryTimer?.cancel()
+    quotaTimer?.cancel()
+  }
+
   nonisolated var stateUpdates: AsyncStream<SyncState> { states.stream() }
 
   var canSync: Bool {
