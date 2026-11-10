@@ -1,6 +1,7 @@
 import CueStore
 import Foundation
 
+/// 只在回复框的草稿里（本机偏好，`AppSettings`），随下一句发出，不入库。
 /// 位置记在渲染后的文字里：回答写完后文字不再变，偏移是确切的，同一句话出现两次也不会挂错；那一处已不是 `quote` 时（渲染规则改了）只是不画高亮，发出时照样带摘录。
 /// 引用一份预览时不碰文件，网页地址那类预览也一样引用；话就是回复框里你写的那句，自己没有字（`note` 空）。
 nonisolated struct ReplyNote: Identifiable, Equatable, Codable, Sendable {

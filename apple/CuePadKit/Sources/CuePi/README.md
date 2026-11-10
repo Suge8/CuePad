@@ -1,6 +1,6 @@
 # CuePi —— Agent 桥（macOS）
 
-Pi、Claude Code、Codex、OpenCode、Grok Build、dsh 的会话都登记在同一个桥上（`PiBridge`），各家怎么发现会话、怎么说话在 `AgentRuntime` 的各家实现里，与别家不同的事实（命令、目录、安装、上报通道、探测、技能位置、大脑用哪种会话）在各自 `+Facts` 文件的 `AgentFacts` 里；CuePad 掌握全部输入输出的会话（Claude Code、Codex、Grok Build、dsh 的托管会话与 Cue 的大脑）是 `HostedSession`。说 ACP（Agent Client Protocol）的 Agent 共用一个驱动（`ACP/`：`ACPSession` 托管会话与大脑是同一份，托管会话的起法与登记是 `ACPHost`），这几家托管会话的进程怎么请退出、怎么接着只有一份（`HostedProcesses`），各家的扩展方法只经 `ACPDialect` 的扩展点接进来，各家的文件在自己的目录里（`Grok/`、`Dsh/`）。规则只写在类型的头注释里；这里只记 Pi 桥扩展的线上约定与已知边界。
+各家 Agent 的规则只写在类型的头注释里（各家与别家不同的事实在各自 `+Facts` 文件的 `AgentFacts`）；这里只记 Pi 桥扩展的线上约定与已知边界。
 
 ## 支持范围
 
@@ -11,7 +11,7 @@ RPC 扩展对自身发 SIGTERM 是这版运行时的已验证收尾路径，不�
 
 Pi 的桥扩展（`Extension/cuepad-bridge/`，装成 Pi 扩展目录下的同名目录）与 `PiWire` 之间的线上约定。字段的语义与上报时机见扩展源码的注释；这里只列消息与字段。
 
-- 传输：Unix socket，一行一个 JSON（`\n` 结尾）。路径 `<socket 目录>/<sessionId>.<pid>.sock`，缺省目录 `/tmp/cuepad-<uid>`（`sun_path` 上限 104 字节，所以不用 `$TMPDIR`）。目录 0700、socket 0600；客户端还校验 socket 属主与对端 uid。扩展在 `.tmp` 名上 listen、收紧权限后才改名成 `.sock`。
+- 传输：Unix socket，一行一个 JSON（`\n` 结尾）。路径 `<socket 目录>/<sessionId>.<pid>.sock`，缺省目录 `/tmp/cuepad-<uid>`（`sun_path` 上限 104 字节，所以不用 `$TMPDIR`）；权限与改名的做法在 `connection.ts`。
 - 版本声明的精确格式 `const EXTENSION_VERSION = <数字>;` 是兼容接口：在跑的扩展核对磁盘、Swift 的随包版本读取、Python 的 lint 与同步测量（共用 `apple/scripts/_pi_extension.py`）都按它解析。数字只在入口声明一份；不再增加 JSON 清单或第二份配置。
 - 版本：`EXTENSION_VERSION`（入口 `index.ts` 里）是唯一的版本号（`PiExtensionBundle.version` 从文件解析），扩展改了就升。会话握手时报的版本与随包版本不同，或 CuePad 装完新版扩展后，CuePad 发 `upgrade`；扩展读磁盘上的版本，不同就等会话连同子代理都歇下时重新载入（重新载入会中断进程内子代理在飞的回合，所以可能等几个小时）。
 - 兼容：CuePad 读得懂从 `PiWire.oldestExtension` 到随包版本的扩展，等换新扩展的这段照常收发。只加命令、加 CuePad 可以没有的字段不提它，旧扩展不认的命令回 `bad_request`；改了 CuePad 读的格式、已有命令的含义，或 CuePad 要靠新字段才对时提到那一版。区间外的会话只读出身份、不发命令，等它换上新扩展（`PiSession.upgrading`）。
@@ -41,19 +41,17 @@ Pi 的桥扩展（`Extension/cuepad-bridge/`，装成 Pi 扩展目录下的同�
 | `ack` | 命令回应：`id`、`ok`，或 `error`（见下表）；`reload` 另带 `reloaded` |
 | `bye` | 主动关闭前：`reason`（`quit`/`new`/`resume`/`fork`/`reload`） |
 
-`account.kind` 来自宿主认证事实（`oauth`/`apiKey`）；`scope` 是请求授权的不可逆分区，不传凭据。原生订阅只为当前模型的提供方解析授权；其他提供方的原生 OAuth 只报种类与 `scope=null`，主动查额度时再解析。未解析的授权（`scope=null`）是这个提供方的一条，不关联任何账号的数值：主动查询时解析失败报带 `requestedAt` 的 `failed`，其他提供方还没查的报能力；能力声明不带排序时刻，不报失败；解析失败不归到之前的账号。CuePad 让它与同一提供方证明了身份的结果按同一个时刻排先后：已有证明时不记"还没查"，失败只在没有不早于它的证明时记，证明不早于它的结果或会话的 `proofs` 到来时移除它。`proofs` 是这个会话解析成功过的每个模型（含模型范围外、额度查询解析到的）最近一次证明的授权与开始解析的时刻（Unix 秒）：每次成功都推进，解析失败不抹掉；CuePad 只在 Mac 的在线会话上据此决定保留哪些记录，不存、不同步、不据此关联额度。一条记录只在可能拥有它的每个模型都证明了别的授权、且证明不早于这条记录最近的结果时移除；没有证明的模型（含不在线、只剩存下模型表的会话）是未知，什么都不移除。未解析失败是否被取代，看额度记录（含网关来源那一条本机记下的 `owners`：证明过它的每个提供方与时刻，只并不删，会话退出后仍在）与在线会话里同一 Pi 提供方的证明。几个提供方指向同一网关时查询只做一次，报告的 `owners` 列出全部。实际地址与认证经宿主 `getApiKeyAndHeaders(model)` 取得，自定义地址不调用原生订阅接口。回复流里的额度只在回合前已报告的原生 OAuth 分区与收到回复后重新解析的一致时归到它，不一致就丢掉这次并重报模型身份。
+`account.kind` 来自宿主认证事实（`oauth`/`apiKey`）；`scope` 是请求授权的不可逆分区，不传凭据。原生订阅只为当前模型的提供方解析授权；其他提供方的原生 OAuth 只报种类与 `scope=null`，主动查额度时再解析。未解析的授权（`scope=null`）是这个提供方的一条，不关联任何账号的数值：主动查询时解析失败报带 `requestedAt` 的 `failed`，其他提供方还没查的报能力；能力声明不带排序时刻，不报失败；解析失败不归到之前的账号。`proofs` 是这个会话解析成功过的每个模型（含模型范围外、额度查询解析到的）最近一次证明的授权与开始解析的时刻（Unix 秒）：每次成功都推进，解析失败不抹掉。CuePad 怎么据此保留与移除记录在 `AccountQuota+Store`。几个提供方指向同一网关时查询只做一次，报告的 `owners` 列出全部。实际地址与认证经宿主 `getApiKeyAndHeaders(model)` 取得，自定义地址不调用原生订阅接口。回复流里的额度只在回合前已报告的原生 OAuth 分区与收到回复后重新解析的一致时归到它，不一致就丢掉这次并重报模型身份。
 
-自定义来源从模型实际 baseUrl 下的 `magpie/quotas` 查询，复用请求认证与配置头，不另存网关地址或密钥。404/405/501 表示不支持，其余请求失败明确报失败。网关账号以 `source`（实际地址与认证的不可逆分区）、完整上游 `route` 与 user 分开；可选 `name` 只作显示。网关来源一级按来源一条记录，几个提供方指向同一网关时同在一条上排先后；成功清单的 `accounts` 用清单的 `requestedAt`，与 `activeScopes` 同事务更新，只移除该来源已经撤销的账号；损坏清单不部分写入。主动查询的成功、失败与不支持结果和回复带回的观测都带 `requestedAt`，CuePad 按账号或网关来源只收不早于已收下的，先结束的操作不会盖过后开始的。原生查询的 `observedAt` 取响应解析完成时刻，回复取收到时刻，网关账号仍保留自己的 `readAt`。在线会话共同保留仍有效的来源；单个旧授权失败不阻止其他来源刷新。
+自定义来源从模型实际 baseUrl 下的 `magpie/quotas` 查询（`quota-gateway.ts`），复用请求认证与配置头，不另存网关地址或密钥；不支持与失败怎么报在那里。网关账号以 `source`（实际地址与认证的不可逆分区）、完整上游 `route` 与 user 分开；可选 `name` 只作显示。成功清单的 `accounts` 用清单的 `requestedAt`，与 `activeScopes` 同事务更新，只移除该来源已经撤销的账号；损坏清单不部分写入。主动查询的成功、失败与不支持结果和回复带回的观测都带 `requestedAt`。原生查询的 `observedAt` 取响应解析完成时刻，回复取收到时刻，网关账号仍保留自己的 `readAt`。
 
-额度面板打开、回前台与连接来源变化时读取账号清单，同时来的查询合并；已有账号的观测新鲜不能阻止发现新账号。手机通过原 `quota` 投送请求询问每台连着能查额度的会话（`AgentCapabilities.quota`，即 Pi 会话）的 Mac，没有这样的 Mac 就不问；不增加轮询。没查到不弹提示，原因写在额度明细里并可重试，同一批来源失败后 60 秒内自动触发不再问（`AccountQuotas`）。
-
-magpie 的 `balance` 字符串原样显示，金额与 credits 不作百分比；`plan` 保留提供方名称。窗口仅在名字明确是数字加 `hour(s)`、`day(s)`、`week(s)` 且有百分比和重置时间时计算匀速线与额度环；其他计量、`display` 纯文字、`unlimited` 与数值 `balance` 只显示读数，不推测周期。`readAt` 原样作为账号的 `observedAt`；没有它就是未知，`asOf` 与取缓存的时刻不代替它。明细里账号按产品名、同一产品按账号名排，不随刷新挪位置；刚观测过的账号并成一行原观测时间（取其中最早的），陈旧（标原观测时间）、失败、过期标在各自账号上；零余额照常显示，负余额原样显示并标欠费。
+什么时候查、怎么合并与冷却在 `AccountQuotas`，怎么显示在 `QuotaMeter`，模型额度环关联哪个账号在 `ModelQuota`。网关账号的原观测时间只认 `readAt`，`asOf` 与取缓存的时刻不代替它；明细里刚观测过的账号并成一行原观测时间（取其中最早的），陈旧、失败、过期标在各自账号上。
 
 magpie v0.1.2190 的 [公开结构](https://github.com/yetone/magpie/blob/v0.1.2190/internal/provider/quotas.go) 与[网关接口](https://github.com/yetone/magpie/blob/v0.1.2190/internal/gateway/gateway.go)已核对。GET `/v1/magpie/quotas` 不保证更新 Claude 观测：Claude Code 回答或 `/usage` 才更新。官方另有 POST `/v1/magpie/quotas/refresh`，可能在账号目录运行 CLI；CuePad 不自动调用它，不复制上游登录或以反复 GET 冒充实时刷新。
 
-账号窗口只在模型 id 明确指定完整上游、且该上游只有一个账号时关联；嵌套 provider 取最长前缀。自动池与多个账号不显示模型额度环，菜单明确路由账号未知，账号列表分别显示额度；`last` 不用于预测路由。单网关不显示来源标签，多来源时才按已有 Mac 名称与同机网关编号区分，不把地址拼进账号名；明细里同一产品只有一个账号时只写产品名，有几个时才接账号名（邮箱的 @ 前那段不重复就只写它，全名在悬停提示里）。
+单网关不显示来源标签，多来源时才按已有 Mac 名称与同机网关编号区分，不把地址拼进账号名；明细里同一产品只有一个账号时只写产品名，有几个时才接账号名（邮箱的 @ 前那段不重复就只写它，全名在悬停提示里）。
 
-ChatGPT plan（`openai` OAuth）当前没有公开额度查询能力，报 `unsupported`，管理入口为 https://chatgpt.com/settings/usage；不调用 Codex 用量接口。`ack.ok` 只代表命令已处理，不代表获得数值观测。过重置时刻无新观测算过期，不推算为满额。
+ChatGPT plan（`openai` OAuth）当前没有公开额度查询能力，报 `unsupported`，管理入口为 https://chatgpt.com/settings/usage；不调用 Codex 用量接口。`ack.ok` 只代表命令已处理，不代表获得数值观测。
 
 普通生成 `stopReason=length` 保留 `draft`，终态走现有 `error`（`max_output_tokens`）；历史保留部分文字及未完成记录。
 
@@ -84,13 +82,13 @@ CuePad → 扩展（都带 `id`）：
 
 `send` / `retry` 交出前通过公开 modelRegistry 核对当前模型及授权；明确缺授权回 `no_auth`，不启动或中止模型轮。ACK 只表示观察到对应消息事件，事件早于文件写入；持久化以历史读取到真实消息为准，模型轮次结果另看真实 settled。超时、断线与 `failed: <原因>` 都不证明未执行，不授权自动重投。重试在完成的助手消息上记录结果，到 `agent_settled` 才收尾未落成的等待；全部遗留 retry marker 都从请求及 `turn_end` 投影里移除，原始历史与已完成工具结果保留。
 
-`end` 先中止当前轮、等真实空闲，再按 mode 收尾：TUI 调宿主 shutdown 恢复终端，RPC 对自身发 SIGTERM；不向第三方 PID 发强杀。手动 `/reload` 与自动升级共用空闲门，等待进程内子代理与 SDK 待处理消息，不把重载当取消。托管 RPC 的 stdout 直接接空设备：不保存完整 RPC 事件、工具输出或任意第三方日志。stderr 接管道，App 只读到认领为止、留末尾 4KB 给起来就退出时的原因（模型不存在、没登录），认领后由启动时留下的看守 `cat` 读走丢掉；App 退出后也没有增长的输出文件、EPIPE 或读端背压。
+`end` 先中止当前轮、等真实空闲，再按 mode 收尾：TUI 调宿主 shutdown 恢复终端，RPC 对自身发 SIGTERM；不向第三方 PID 发强杀。手动 `/reload` 与自动升级共用空闲门，等待进程内子代理与 SDK 待处理消息，不把重载当取消。托管 RPC 的 stdout 与 stderr 怎么接在 `ChildProcess`、`PiRuntime`：不保存完整 RPC 事件、工具输出或任意第三方日志。
 
 模型错误由公开的完成消息与 settled 事件上报；CuePad 自己观察到的预检、压缩及内部操作错误通过既有 ACK 或 state 报出。`/compact` 等真实结果才回 ACK，不设提前成功窗口；超过确认时限的失败仍由公开 `session_compact_failed` 事件进入状态，原生手动与自动压缩共用这条收尾，取消不记成失败。其他扩展的命令交出即回 ACK：Pi 在任何检查之前同步调起处理函数，忙时也执行、没有拒收的路，ACK 证明 Pi 执行了它；处理函数的完成与出错没有公开回调，第三方扩展的错误原文只在 Pi 自己的界面或 RPC stdout 上，不可观测。启动即退出带上 Pi 在 stderr 里说的最后一句。
 
 `ack` 只回给发命令的连接；多个客户端同连一个会话时各自收到全部状态，扩展不仲裁。
 
-FireCode 经两个频道把事实交给扩展：`firecode:workers`（`{inFlight}`，在飞子代理数）与 `firecode:subagents`（`{workers}`，名册原文）。扩展不读 FireCode 的档案与会话文件。
+FireCode 交给扩展的两个频道见 `index.ts`。
 
 dsh 的随包插件（`dsh-cuepad.mjs`，每次启动经 `--patch` 叠上）与 CuePad 之间的扩展方法、通知与环境变量只写在插件的头注释里。
 
