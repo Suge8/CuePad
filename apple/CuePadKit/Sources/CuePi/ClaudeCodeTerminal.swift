@@ -6,7 +6,7 @@ import Foundation
 
 /// 在飞的工作只认 `Stop` 带的后台任务清单（`background_tasks`：后台子代理与后台命令，做完了还没交回的也在）：后台任务做完时 Claude Code 自己开一轮交回结果（`UserPromptSubmit` 的正文是 `<task-notification>`），
 /// 所以清单只在一轮结束时换，其间等子代理照旧，直到交回结果的那一轮做完。`SubagentStart`/`SubagentStop` 只改名册：
-/// 被停下的子代理没有 `SubagentStop`，下一个 `Stop` 的清单里没有它就记成被停下。
+/// 被停下的子代理没有 `SubagentStop`，下一个 `Stop` 的清单里没有它就记成被停下；主会话歇着时停掉的连下一个 `Stop` 也没有，见 `agentsStopped`。
 /// 结束是给进程发 SIGINT（与在终端里按 Ctrl-C 退出同一条路：跑 `SessionEnd` 钩子、恢复终端）。
 /// 收件箱送到的话 Claude Code 一律当作“另一个会话发来的”（包上同伴消息的说明；行里没有能改这一点的字段，实测 2.1.299），
 /// 所以正文前带一句 `ClaudeInbox.userNote`：是用户本人从 CuePad 发的，直接回答、不必回传。模型仍可能把它当同伴请求看待。
@@ -32,10 +32,10 @@ final class ClaudeTerminalSession: SessionLink {
     /// 在等起好的投送（`waitUntilReady`）各盯着一份登记文件；会话下桥（`close`）时停掉它们，等待随即以会话结束收场
     private var readyWaits: [UUID: FileFollower] = [:]
     private var closed = false
-    private var facts = SessionFacts()
+    var facts = SessionFacts()
     /// 收到上一个钩子的时刻（接上时为接上的此刻）与这一轮之前的那一次（`promptEnded` 的界）
     private var lastHookAt = Date.now
-    private var hookBeforeTurn: Date?
+    private(set) var hookBeforeTurn: Date?
     /// 要你回答的（同一时刻可能有好几个：子代理并行时各自要确认），按到达先后；会话的 `question` 是第一个
     private var pending: [Pending] = []
 
@@ -191,25 +191,6 @@ final class ClaudeTerminalSession: SessionLink {
         call?.onClose = { [weak self] in self?.withdraw(promptID) }
     }
 
-    /// 这一轮在会话文件里被停下了（中断标记，`PiHistoryCheckpoint.stoppedAt`）：终端里按 Esc（停下在跑的工具、拒绝确认）时
-    /// Claude Code 一个钩子都不跑（2.1.299 实测），只有会话文件说明这一轮结束了。与 `Stop` 同样收尾；停下之后才开的一轮不算。
-    func stopped(at date: Date) {
-        guard facts.running, let start = facts.turnStartedAt, start <= date else { return }
-        settlePending(agent: nil, when: "Stop")
-        facts.endTurn()
-        show(at: .now)
-    }
-
-    /// 你的 `UserPromptSubmit` 钩子挡下了这句（CuePad 的钩子已开了这一轮）：Claude Code 不跑这一轮，也不跑 `Stop`。几个钩子并行跑，
-    /// 挡下的那一行可能早于 CuePad 收到自己的钩子（2.1.318 实测早 3 毫秒），不能拿这一轮的开始比；这句一定在上一个钩子之后才交上来，
-    /// 早于它的是之前那句的。
-    func promptEnded(at date: Date) {
-        guard facts.running, let after = hookBeforeTurn, after < date else { return }
-        settlePending(agent: nil, when: "Stop")
-        facts.endTurn()
-        show(at: .now)
-    }
-
     /// 会话下桥（进程退出、`SessionEnd`、出了范围）时运行时调用：挂着的钩子放行，在等起好的投送结束（话没写进收件箱）。
     func close() {
         for item in pending {
@@ -222,12 +203,12 @@ final class ClaudeTerminalSession: SessionLink {
         readyWaits = [:]
     }
 
-    private func show(at now: Date) {
+    func show(at now: Date) {
         facts.questions = pending.map(\.question)
         bridge?.update(id) { facts.publish(to: &$0, at: now) }
     }
 
-    private func settlePending(agent: String?, when event: String) {
+    func settlePending(agent: String?, when event: String) {
         let ending = event == "Stop" || event == "StopFailure"
         let stale = pending.filter { $0.agent == agent || ending }
         guard !stale.isEmpty else { return }
@@ -337,20 +318,6 @@ final class ClaudeTerminalSession: SessionLink {
         } catch is CancellationError where closed {
             throw PiBridgeError.unknownSession(id)
         }
-    }
-}
-
-/// Claude Code 会话的收件箱（跨会话消息的 Unix socket，2.1.224 起，官方文档化）：连上、写几行、关掉。它不回话。
-/// 第一行可以是认证行 `{"type": "auth", "token": …}`（官方给"脚本往自己会话里投递"的路）：macOS 上不要求，但带上了，
-/// 跳过权限确认的会话才直接收下，不挂起等你批准。消息体的格式（`{"type": "user" | "control", …}`）官方没有写，来自实测。
-enum ClaudeInbox {
-    static let userNote = "（这句是用户本人在 CuePad 里发给你的，不是别的会话：直接在本会话里回答，不需要回传。）\n"
-
-    @concurrent static func post(_ lines: Data, to path: String) async throws {
-        guard let fd = try? UnixSocket.connect(path) else { throw PiBridgeError.sessionEnded }
-        defer { close(fd) }
-        guard writeAll(fd, lines) else { throw PiBridgeError.sessionEnded }
-        shutdown(fd, SHUT_WR)
     }
 }
 #endif

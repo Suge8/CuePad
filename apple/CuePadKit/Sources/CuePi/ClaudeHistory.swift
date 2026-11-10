@@ -23,6 +23,7 @@ enum ClaudeHistory {
         case "system":
             switch line.subtype {
             case "compact_boundary": cp.compacted(entry, into: &transcript)
+            case "agents_killed": cp.agentsStoppedAt = entry.at
             case "stop_hook_summary", "turn_duration": if cp.round != nil { cp.answered("", entry, into: &transcript) }
             // 这句没开成一轮（钩子挡下、拦停，2.1.318 写 `informational` 带 `promptSubmitEnding`）：不跑 `Stop`，那句也不写进会话
             default: if line.promptSubmitEnding != nil { cp.promptEndedAt = entry.at }
