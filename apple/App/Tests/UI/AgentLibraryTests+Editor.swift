@@ -101,7 +101,7 @@ extension AgentLibraryTests {
 
         draft.changed(body: "mine\n")
         let writing = Task { await draft.send() }
-        await Task.yield()
+        try await yieldUntil("写入进入保存中") { draft.state == .saving }
         #expect(draft.state == .saving, "写入在途中")
         try write("ext\n", file)
         draft.follow("ext\n")
@@ -124,7 +124,7 @@ extension AgentLibraryTests {
         defer { await keeping.stop(); await following.stop() }
         draft.changed(body: "v1\n")
         let writing = Task { await draft.send() }
-        await Task.yield()
+        try await yieldUntil("写入进入保存中") { draft.state == .saving }
         draft.changed(body: "v2\n")
         draft.follow("v1\n")
         await writing.value

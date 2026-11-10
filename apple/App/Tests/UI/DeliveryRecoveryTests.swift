@@ -13,14 +13,16 @@ import Testing
 struct DeliveryRecoveryTests {
     let clock = ManualTiming()
     private func outcome(_ request: DeliveryRequest, in appStore: CueStore) async throws -> DeliveryRequest {
-        for try await raw in appStore.observe({ try $0.deliveryRequest(request.id) }) {
-            guard let raw else { throw CueStoreError.notFound }
-            if !raw.isOpen { return raw }
+        let clock = clock
+        let done = try await awaitNext("请求收尾", from: appStore.observe({ try $0.deliveryRequest(request.id) })) { raw in
+            guard let raw else { return false }
+            if !raw.isOpen { return true }
             if raw.status == .known(.confirming), let due = raw.deadlineAt {
                 clock.advance(.seconds(max(0, due.timeIntervalSince(clock.now)) + 1))
             }
+            return false
         }
-        throw CancellationError()
+        return try #require(done)
     }
 
     private func session(_ app: TestApp, reply: String) async throws -> (PiSessionState, FakeExtension) {

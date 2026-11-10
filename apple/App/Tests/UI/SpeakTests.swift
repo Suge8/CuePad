@@ -71,8 +71,7 @@ struct SpeakTests {
         let said = try await youSaid()
         #expect(said.map(\.text) == ["看看发布"])
         let message = try #require(said.first)
-        var uploads = app.sync.uploads.stream.makeAsyncIterator()
-        #expect(await uploads.next() == message.id.uuidString.lowercased())
+        try await awaitNext("这句话上传", from: app.sync.uploads.stream) { $0 == message.id.uuidString.lowercased() }
         #expect(Said.cue(message, host: "mac-cue").trip(at: .always(at: .now)) == .sending)
         #expect(try await presence() == .sending(.sending))  // Cue 页头与气泡同一个"在路上"
 

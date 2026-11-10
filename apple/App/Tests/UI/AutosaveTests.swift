@@ -12,7 +12,7 @@ struct AutosaveTests {
     private final class Gate: Sendable {
         private let opened = AsyncStream<Void>.makeStream()
         private let started = AsyncStream<Void>.makeStream()
-        func started() async { for await _ in started.stream { break } }
+        func started() async throws { try await awaitNext("save 开始", from: started.stream) }
         func wait() async {
             started.continuation.yield()
             for await _ in opened.stream { break }
@@ -40,7 +40,7 @@ struct AutosaveTests {
         }, onError: { _ in })
 
         autosave.changed("刚打的字")
-        await gate.started()
+        try await gate.started()
         workspace.leaveEditing(id, flush: autosave, heading: "")
         await quietPeriod(.milliseconds(200))
         #expect(try await store.card(id) != nil, "写入还没落库，离开不能先把它当空白删掉")

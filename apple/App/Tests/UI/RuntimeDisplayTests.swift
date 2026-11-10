@@ -104,7 +104,7 @@ struct RuntimeDisplayTests {
         #expect(fresh.tally == onlyB.tally && fresh.subagents == onlyB.subagents)
         var expiration = CueReading(store: store, widget: false).updates().makeAsyncIterator()
         _ = try #require(try await expiration.next())
-        await clock.waitForSleeper()
+        try await clock.sleeper()
         clock.advance(.seconds(601))
         let reread = try #require(try await expiration.next())
         let timedOut = CueNow(reread.digest, at: .always(at: clock.now), local: .init(waiting: nil, here: nil))

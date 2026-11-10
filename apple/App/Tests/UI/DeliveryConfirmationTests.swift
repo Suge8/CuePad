@@ -121,7 +121,7 @@ struct DeliveryConfirmationTests {
         let due = try #require(Speech.deadline(confirming))
         await mac.services.executor.beginStop()()
         mac.pi.stop()
-        await clock.waitForSleeper()
+        try await clock.sleeper()
         clock.advance(.seconds(due.timeIntervalSince(clock.now) + 1))
         try await eventually("发送端自己的时钟结束等待") { phone.services.speech.now >= due }
         let received = try #require(try await phone.services.store.deliveryRequest(request.id))

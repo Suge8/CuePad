@@ -17,7 +17,7 @@ struct TaskCountTests {
         try await store.setStatus(publish.id, .done)
         let fix = try await store.createTask("修重连", in: project)
         try await store.setStatus(fix.id, .done)
-        try await Task.sleep(for: .milliseconds(2))  // 完成时间存到毫秒：同一毫秒里做完的两件分不出先后
+        try await clockTick()  // 完成时间存到毫秒：同一毫秒里做完的两件分不出先后
         let shipped = try await store.createTask("发版", in: project)
         try await store.setStatus(shipped.id, .done)
         let closed = try await store.createTask("收尾", in: project)

@@ -102,8 +102,8 @@ struct ReceiptTests {
     }
 
     /// 把钟拨到 `target`（记录的时刻是真实时间，钟从测试开始时起走，所以按时刻拨，不按秒数）：等 App 的那一次睡眠睡下再拨。
-    private func advance(to target: Date) async {
-        await clock.waitForSleeper()
+    private func advance(to target: Date) async throws {
+        try await clock.sleeper()
         clock.advance(.seconds(target.timeIntervalSince(clock.now)))
     }
 
@@ -163,7 +163,7 @@ struct ReceiptTests {
 
         let second = try await sayToSession(workspace, target, "再看看日志")
         #expect(try await trip(of: second, services) == .sending)
-        await advance(to: second.createdAt.addingTimeInterval(Speech.sendLimit + 1))
+        try await advance(to: second.createdAt.addingTimeInterval(Speech.sendLimit + 1))
         #expect(try await trip(of: second, services) == .sending)
         #expect(try await trip(of: first, services) == .sent)
         #expect(try await trip(of: toCue, services) == .sent)
@@ -179,9 +179,9 @@ struct ReceiptTests {
 
         // 派发期限从服务器收下起算（恢复后传上去的那一刻），不从断网时写下算
         let expires = try #require(try await store.deliveryRequest(second.id)?.dispatchDeadline).addingTimeInterval(Speech.receiptLimit)
-        await advance(to: expires.addingTimeInterval(-1))
+        try await advance(to: expires.addingTimeInterval(-1))
         #expect(try await trip(of: second, services) == .sent)
-        await advance(to: expires)
+        try await advance(to: expires)
         try await eventually("到期按未确认") { try await trip(of: second, services).unconfirmedReason != nil }
         #expect(row(services)?.isRunning == false)
         #expect(Speech.undelivered(try await store.deliveryRequests(), at: services.speech) == 0)
@@ -220,7 +220,7 @@ struct ReceiptTests {
         try await eventually("会话行是发送中") { row(services)?.status == .delivery(.inTransit(.sending)) }
 
         try await eventually("在等回执时按节奏拉") { app.sync.syncNows > 0 }
-        await clock.waitForSleeper()
+        try await clock.sleeper()
         clock.advance(.seconds(121))
         #if os(iOS)
         try await eventually("拉取窗口走完") { clock.sleeperCount == 0 }  // 醒来时已过两分钟，不再拉

@@ -38,7 +38,7 @@ struct CuePatrolTests {
         let task = try await store.createTask("在别的 Mac 上开工", in: project.id)
         _ = try await store.requestLaunch(PiLaunch(project: project.id, prompt: nil, token: "elsewhere"), title: task.body, on: "mac-b", card: task.id)
         let started = try #require(try await store.card(task.id))
-        try await Task.sleep(for: .milliseconds(5))  // 这台 Mac 上之后改的卡片：修改时间晚于手机上那次删除
+        try await clockTick()  // 这台 Mac 上之后改的卡片：修改时间晚于手机上那次删除
         _ = try await store.createCard(in: project.id, body: "随手记")
 
         let workspace = Workspace(services: rig.services)

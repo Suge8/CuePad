@@ -80,7 +80,7 @@ struct DiagnosticDeliveryTests {
 
         services.diagnostics.record([crash(day: 5)])
         let retry = clock.now.addingTimeInterval(DiagnosticOutbox.firstRetry.seconds)
-        await clock.waitForSleeper(until: retry)
+        try await clock.sleeper(until: retry)
         try await inbox.check()
         #expect(try FileManager.default.contentsOfDirectory(atPath: inbox.directory.path).filter { !$0.hasPrefix(".") }.isEmpty)
 
@@ -109,7 +109,7 @@ struct DiagnosticDeliveryTests {
 
         let limit = clock.now.addingTimeInterval(Diagnostics.sendLimit.seconds)
         let sending = Task { try await services.diagnostics.sendRecentLogs() }
-        await clock.waitForSleeper(until: limit)
+        try await clock.sleeper(until: limit)
         clock.advance(Diagnostics.sendLimit)
         await #expect(throws: Diagnostics.Queued.self) { try await sending.value }
 

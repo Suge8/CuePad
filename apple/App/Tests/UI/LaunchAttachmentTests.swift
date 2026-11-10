@@ -90,8 +90,7 @@ struct LaunchAttachmentTests {
             return launched
         }
         func progress(_ launch: SessionLaunch) async throws -> LaunchProgress {
-            for try await progress in phone.services.store.observe({ try launch.progress(from: $0) }) { return progress }
-            throw CancellationError()
+            try await awaitNext("会话启动进度", from: phone.services.store.observe({ try launch.progress(from: $0) }))
         }
         func phase(_ launch: SessionLaunch) async throws -> LaunchProgress.Phase { try await progress(launch).phase(at: phone.services.speech) }
         // 经服务器转一手：此刻服务器收下（拉到它的那台记下收下的时刻）
@@ -107,7 +106,7 @@ struct LaunchAttachmentTests {
         #expect(try await phase(first).submission == .waiting, "在路上不重复提交")
 
         let request = try #require(try await mac.services.store.deliveryRequest(first.request))
-        await clock.waitForSleeper()
+        try await clock.sleeper()
         clock.advance(.seconds(try #require(request.dispatchDeadline).timeIntervalSince(clock.now)))
         let failed = try await mac.services.store.outcome(of: request)
         #expect(failed.failure == "附件到期还没传到这台 Mac，没有发出，可以重发")
