@@ -73,7 +73,7 @@ nonisolated final class LibraryLedger: Sendable {
     /// 同一用例里别的没放的照报泄漏；它放掉了，测试框架报"已知问题没出现"，提醒删掉这一行。先用 `leaks --traceTree <对象地址> <pid>` 查清引用链再指认：
     /// 曾以为 Mac 上 SwiftUI 视图图留着环境，实为文件草稿与工作区互相攥着。已知一种（iOS）：UIKit 攥着最后一个拿过键盘的文本视图，
     /// 键盘单例的标记文字浮层（`UIKeyboardImpl.m_markedTextOverlay`）缓存的特征集合带着 SwiftUI 环境（交出键盘、结束编辑、关窗、清根视图都不放）。
-    /// AppKit 文本视图进窗口时排的延迟合并块（`NSCreateMainQueueHysteresisBlock`）攥着它约半秒，在 1 秒宽限之内，不算。
+    /// AppKit 文本视图的拼写检查排的延迟合并块（`NSCreateMainQueueHysteresisBlock`）关窗后还攥着它约半秒，慢机器上超过 1 秒宽限：挂真窗口的用例关窗后自己等文本视图放掉，不算框架攥着。
     static func heldByFramework(_ store: CueStore, _ comment: Comment, sourceLocation: SourceLocation = #_sourceLocation) {
         guard let ledger = current else {
             Issue.record("指认框架攥着的库要在挂了 .releasesLibraries 的套件里", sourceLocation: sourceLocation)
