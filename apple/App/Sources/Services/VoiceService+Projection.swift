@@ -58,6 +58,7 @@ extension VoiceService {
         switch failure {
         case .codex(.notInstalled): .codexNotInstalled
         case .codex(.signedOut), .wire(.signedOut): .signedOut
+        case .codex(.unresponsive): .codexUnresponsive
         case .wire(.notAllowed(let status)): .notAllowed(status: status)
         case .wire(.server(let status, _)): .server(status: status)
         case .microphoneDenied: .ended(.permissionDenied)

@@ -4,7 +4,7 @@ import CueStore
 import Foundation
 
 /// 和 Cue 通话的验收（`xc.sh run mac` 起的实例没有菜单栏，菜单那一项点不到，这里调它的同一个动作 `Workspace.toggleVoiceCall`）：
-/// - 给了 `-CuePadVoiceToken <文件>`（令牌由 `scripts/voice-token.py` 经本机 Codex app-server 获取，`DebugHooks.voiceToken`）就让 Cue 在这台启用。
+/// - 给了 `-CuePadVoiceToken <文件>`（令牌由 `scripts/voice-token.py` 经本机 Codex app-server 获取，`DebugHooks.voiceToken`）或 `-CuePadVoiceCodex <替身>` 就让 Cue 在这台启用。
 ///   配了 `-CuePadCueBrain apple/scripts/cue-brain-stub.py` 时运行时是 Pi、大脑是替身（回 `CUE_STUB_REPLY` 那句）；没配时是真的 Claude Code，
 ///   `-CuePadVoiceRuntime <pi|codex|claude>`、`-CuePadVoiceModel <模型>` 可指定其他已在隔离目录登录的运行时。
 ///   登录照 docs/verify.md「让 Cue 真跑」在起实例前交给它（`CLAUDE_CODE_OAUTH_TOKEN`）。
@@ -23,7 +23,7 @@ import Foundation
 ///   （`session.input_audio.append`、`session.output_audio.delta`）：与本机的 `input-loud`、`output-loud` 对齐即上下行各自的媒体时延。
 extension DebugScene {
     static func voiceCallIfAsked(_ workspace: Workspace) async {
-        guard args.voiceOpts.token != nil else { return }
+        guard args.voiceOpts.token != nil || args.voiceOpts.codex != nil else { return }
         await running("语音通话") { try await voiceCall(workspace) }
     }
 

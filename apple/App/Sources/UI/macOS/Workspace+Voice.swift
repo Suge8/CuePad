@@ -59,6 +59,7 @@ extension VoiceCall.Failure {
         switch self {
         case .codex(.notInstalled): String(localized: "通话要用 Codex 的 ChatGPT 登录：这台 Mac 没装 Codex")
         case .codex(.signedOut), .wire(.signedOut): String(localized: "Codex 的 ChatGPT 登录不可用或已过期：在 Codex 里重新登录后再通话")
+        case .codex(.unresponsive): String(localized: "Mac 上的 Codex 没响应：看看有没有系统提示在等你确认")
         case .wire(.notAllowed(let status)): String(localized: "ChatGPT 拒绝了这次通话（\(status)）：套餐不含语音或额度已用完")
         case .wire(.server(let status, _)): String(localized: "通话没能建立（\(status)）")
         case .wire(.malformed): String(localized: "通话没能建立：服务器的回应认不出")

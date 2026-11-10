@@ -77,7 +77,7 @@ nonisolated struct VoiceCallProjection: Equatable, Codable, Sendable {
 /// 可跨设备呈现的原因与动作，不转发上游错误原文、请求头、服务器 call ID 或授权。
 nonisolated enum VoiceIssue: Error, Equatable, Codable, Sendable {
     case ended(VoiceEndReason)
-    case codexNotInstalled, signedOut, cueUnavailable, macUnavailable, relayUnsupported, busy
+    case codexNotInstalled, signedOut, codexUnresponsive, cueUnavailable, macUnavailable, relayUnsupported, busy
     case notAllowed(status: Int)
     case server(status: Int?)
     case storageUnavailable, originalMissing, alreadyHandled, turnChanged
@@ -91,7 +91,7 @@ nonisolated enum VoiceIssue: Error, Equatable, Codable, Sendable {
         case .cueUnavailable: [.configureOnMac]
         case .notAllowed, .relayUnsupported, .busy, .storageUnavailable, .macUnavailable: [.retryLater]
         case .originalMissing, .alreadyHandled, .turnChanged: []
-        case .ended, .server: [.reconnect]
+        case .ended, .server, .codexUnresponsive: [.reconnect]
         }
     }
 }

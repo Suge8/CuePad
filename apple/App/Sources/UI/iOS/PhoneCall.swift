@@ -40,6 +40,7 @@ extension VoiceIssue {
             }
         case .codexNotInstalled: "请先在 Mac 上安装 Codex"
         case .signedOut: "请先在 Mac 上登录 Codex"
+        case .codexUnresponsive: "Mac 上的 Codex 没响应：到 Mac 上看看有没有系统提示"
         case .cueUnavailable: "请先在 Mac 上启用并配置 Cue"
         case .macUnavailable: "无法连接 Mac，请确认 Mac 已开机并联网"
         case .relayUnsupported: "当前连接不支持通话，请更新手机和 Mac 上的 CuePad"

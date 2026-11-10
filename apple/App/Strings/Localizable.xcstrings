@@ -3689,6 +3689,38 @@
         }
       }
     },
+    "Mac 上的 Codex 没响应：到 Mac 上看看有没有系统提示" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Codex on your Mac isn't responding. Check your Mac for a system prompt."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mac 上的 Codex 没响应：到 Mac 上看看有没有系统提示"
+          }
+        }
+      }
+    },
+    "Mac 上的 Codex 没响应：看看有没有系统提示在等你确认" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Codex isn't responding. Check for a system prompt waiting for you."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mac 上的 Codex 没响应：看看有没有系统提示在等你确认"
+          }
+        }
+      }
+    },
     "Mac 上的 CuePad 在执行过程中退出，送达尚未确认，不会自动重发" : {
       "localizations" : {
         "en" : {
