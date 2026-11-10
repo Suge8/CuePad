@@ -1,4 +1,5 @@
 #if os(macOS)
+import CueStore
 import Darwin
 import Foundation
 import Synchronization
@@ -85,36 +86,95 @@ extension ChildProcess {
         return (try lifted(fds[0]), try lifted(fds[1]))
     }
 
+    /// 还没退出（整组都走之前，组号不会被别的进程拿去）才发；SIGTERM 只发一次。
+    static func deliver(_ pid: pid_t, _ signal: Int32, group: Bool, shared: Shared) {
+        let send = shared.state.withLock { s in
+            guard s.status == nil, signal != SIGTERM || !s.terminated else { return false }
+            if signal == SIGTERM { s.terminated = true } else { s.killed = true }
+            return true
+        }
+        guard send else { return }
+        if group { killpg(pid, signal) } else { Darwin.kill(pid, signal) }
+    }
+
     /// 事件源在进程退出前一直握着自己，与这个对象的生死无关（脱离 App 的 Pi 也由它记下退出）。
-    static func watchExit(_ pid: pid_t, group: Bool, shared: Shared, errors: ErrorTail?) {
+    /// `group` 时组长退出后接着等组里剩下的（`Placement.group`）：每走一个重新列一遍组员，没人了才算退出。
+    static func watchExit(_ pid: pid_t, group: Bool, timing: Timing, shared: Shared, errors: ErrorTail?) {
         let finish: @Sendable (Int32) -> Void = { status in
-            if group { killpg(pid, SIGKILL) }
             errors?.flush()  // 等退出的取得到它退出前写的全部标准错误
-            let waiters = shared.state.withLock { s in
+            let (waiters, deadline) = shared.state.withLock { s in
                 s.status = status
                 defer { s.waiters = [:] }
-                return s.waiters.values
+                return (s.waiters.values, s.deadline)
             }
+            deadline?.cancel()
             for waiter in waiters { waiter.resume(returning: true) }
         }
         let queue = kqueue()
-        var change = kevent(
-            ident: UInt(pid), filter: Int16(EVFILT_PROC), flags: UInt16(EV_ADD | EV_ONESHOT), fflags: NOTE_EXIT | UInt32(NOTE_EXITSTATUS), data: 0,
-            udata: nil)
-        guard kevent(queue, &change, 1, nil, 0, nil) == 0 else {
+        guard watch(pid, on: queue) else {
             close(queue)
             return finish(SIGKILL)  // 还没放它 exec 就没了：只能是被外面结束的
         }
-        let source = DispatchSource.makeReadSource(fileDescriptor: queue, queue: .global())
+        let events = DispatchQueue(label: "cuepad.child.exit")
+        let source = DispatchSource.makeReadSource(fileDescriptor: queue, queue: events)
+        final class Leader: Sendable { let status = Mutex<Int32?>(nil) }
+        let leader = Leader()
+        let settle: @Sendable () -> Bool = {
+            // 到点强杀与最后一个组员退出可能同时到：已经算退出了的不再碰关掉的 kqueue
+            guard let status = leader.status.withLock({ $0 }), shared.state.withLock({ $0.status == nil }) else { return false }
+            if group, watchMembers(of: pid, on: queue) { return true }
+            source.cancel()
+            finish(status)
+            return false
+        }
         source.setEventHandler {
             var event = kevent()
             var now = timespec()
             guard kevent(queue, nil, 0, &event, 1, &now) == 1 else { return }
-            source.cancel()
-            finish(Int32(truncatingIfNeeded: event.data))
+            guard event.ident == UInt(pid) else { _ = settle(); return }
+            leader.status.withLock { $0 = Int32(truncatingIfNeeded: event.data) }
+            guard settle() else { return }
+            deliver(pid, SIGTERM, group: true, shared: shared)
+            guard !shared.state.withLock({ $0.killed }) else { return }
+            let deadline = Task {
+                guard (try? await timing.sleep(AgentTimeouts.endGrace)) != nil else { return }
+                events.async {
+                    deliver(pid, SIGKILL, group: true, shared: shared)
+                    _ = settle()  // 离开了这个组的不再等
+                }
+            }
+            shared.state.withLock { $0.deadline = deadline }
         }
         source.setCancelHandler { close(queue) }
         source.resume()
+    }
+
+    /// 登记它的退出事件；已经不在（含已退出、未回收的）时登记不上。
+    private static func watch(_ pid: pid_t, on queue: Int32) -> Bool {
+        var change = kevent(
+            ident: UInt(pid), filter: Int16(EVFILT_PROC), flags: UInt16(EV_ADD | EV_ONESHOT), fflags: NOTE_EXIT | UInt32(NOTE_EXITSTATUS), data: 0,
+            udata: nil)
+        return kevent(queue, &change, 1, nil, 0, nil) == 0
+    }
+
+    /// 组里还活着的都登记上退出事件，返回有没有。登记之后再核对组号：列出之后才退出、号又被别的进程拿去的不算。
+    private static func watchMembers(of group: pid_t, on queue: Int32) -> Bool {
+        var members = [pid_t](repeating: 0, count: 64)
+        var count = Int(proc_listpgrppids(group, &members, Int32(members.count * MemoryLayout<pid_t>.size)))
+        while count >= members.count {
+            members = [pid_t](repeating: 0, count: members.count * 2)
+            count = Int(proc_listpgrppids(group, &members, Int32(members.count * MemoryLayout<pid_t>.size)))
+        }
+        var alive = false
+        for member in members.prefix(max(count, 0)) where member > 0 && member != group && watch(member, on: queue) {
+            if getpgid(member) == group { alive = true } else { unwatch(member, on: queue) }
+        }
+        return alive
+    }
+
+    private static func unwatch(_ pid: pid_t, on queue: Int32) {
+        var change = kevent(ident: UInt(pid), filter: Int16(EVFILT_PROC), flags: UInt16(EV_DELETE), fflags: 0, data: 0, udata: nil)
+        _ = kevent(queue, &change, 1, nil, 0, nil)
     }
 
     private static func readToEnd(_ fd: Int32) async -> Data {

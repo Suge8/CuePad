@@ -15,7 +15,10 @@ import Synchronization
 ///   先后不变），写端设了 `F_SETNOSIGPIPE`：进程已退出时写入只是失败；关了输入之后的写入丢掉（描述符号可能已被别的文件复用）。
 public final class ChildProcess: Sendable {
     enum Placement: Sendable {
-        /// 自成一个进程组：退出后把组里剩下的（它起的、没跟着走的子进程）一并结束，不留孤儿；停它时整组结束
+        /// 自成一个进程组，信号按组发：用户的 Agent 命令常是不带 exec、不转发信号的外壳（版本管理器的 shim、自写的包装），
+        /// 只给组长（外壳）SIGTERM，外壳先死，真 Agent 收不到；它自己起的子进程跟着一起收到 SIGTERM，各家实测都照常收尾（#155）。
+        /// 组长先退出时，组里剩下的（没跟着走的子进程、外壳下的真 Agent）同样 SIGTERM、宽限 `AgentTimeouts.endGrace` 后 SIGKILL，不留孤儿；
+        /// 等它退出的（`exited`、`waitForExit`）等到整组都走，退出码是组长的
         case group
         /// 新会话：App 所在会话与进程组的信号碰不到它，认领（`release()`）之后 App 退出、崩溃它照常在（后台托管的 Pi）。
         /// 认领之前它的生死跟着起它的这一方：中转留一个看守读 `holdFD` 上只有本进程握着写端的管道，没等到认领就读到 EOF
@@ -48,6 +51,11 @@ public final class ChildProcess: Sendable {
     struct State {
         var inputOpen = true
         var stopping = false
+        /// SIGTERM 只发一次：停它时发过的，组长退出时不再补
+        var terminated = false
+        var killed = false
+        /// 组长已退出、组里还有人时，到点强杀的那一段
+        var deadline: Task<Void, Never>?
         var status: Int32?
         var waiters: [UUID: CheckedContinuation<Bool, Never>] = [:]
     }
@@ -111,7 +119,7 @@ public final class ChildProcess: Sendable {
             (pid, hold) = try await Self.spawn(
                 executable, arguments, environment: environment ?? ProcessInfo.processInfo.environment, actions: &actions,
                 newSession: placement == .detached, drainsErrors: errors != nil
-            ) { [shared] in Self.watchExit($0, group: placement == .group, shared: shared, errors: errors) }
+            ) { [shared] in Self.watchExit($0, group: placement == .group, timing: timing, shared: shared, errors: errors) }
         } catch {
             opened += [input, stdout].compactMap { $0 }
             errors?.stop()
@@ -213,9 +221,9 @@ public final class ChildProcess: Sendable {
         }
     }
 
-    /// 请它马上退出、不等：SIGTERM，宽限 `AgentTimeouts.endGrace` 过了还没走就 SIGKILL（自成进程组的整组结束）。之后等它退出的一定等得到。
+    /// 请它马上退出、不等：SIGTERM，宽限 `AgentTimeouts.endGrace` 过了还没走就 SIGKILL（自成进程组的都按组发）。之后等它退出的一定等得到。
     public func end() {
-        Darwin.kill(pid, SIGTERM)
+        terminate()
         Task { [self] in
             if await !exited(within: AgentTimeouts.endGrace) { kill() }
         }
@@ -228,15 +236,19 @@ public final class ChildProcess: Sendable {
         closeInput()
         await Task { [self] in
             if await exited(within: AgentTimeouts.endGrace) { return }
-            Darwin.kill(pid, SIGTERM)
+            terminate()
             if await exited(within: AgentTimeouts.endGrace) { return }
             kill()
             _ = await exited(within: nil)
         }.value
     }
 
+    private func terminate() {
+        Self.deliver(pid, SIGTERM, group: placement == .group, shared: shared)
+    }
+
     private func kill() {
-        if placement == .group { killpg(pid, SIGKILL) } else { Darwin.kill(pid, SIGKILL) }
+        Self.deliver(pid, SIGKILL, group: placement == .group, shared: shared)
     }
 
     /// 等进程退出，返回退出原因（退出码或信号与标准错误的末尾，各端按自己的语言显示）；是 `stop()` 让它退出的返回 nil。
