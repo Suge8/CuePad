@@ -97,8 +97,8 @@ extension CodexRuntime {
         }
     }
 
-    /// 同一进程上还有认不出主人的线程（推送先到、还在问或第一次没读到）时先不歇下：它可能就是这一轮派出的子代理，
-    /// 不等就会先报歇下、认出后再进“等子代理”。由这次结束触发一起再问一遍，至多 `AgentTimeouts.settleAsk`：认出的进名册，
+    /// 同一进程上还有认不出主人的线程（推送先到、还在问或第一次没读到），或这一轮派出的子代理还没露面（推送还没到，`spawned`）时先不歇下：
+    /// 不等就会先报歇下、认出后再进“等子代理”。由这次结束触发一起再问一遍、等派出的认出，至多 `AgentTimeouts.settleAsk`：认出的进名册，
     /// 仍读不到、没及时回的等它下一条推送再问（`resolve`）；问完歇下。
     /// 这一轮出错的原因只记在 `facts.failure`，只有新一轮开始（`startTurn`）清空：同一轮后到的结束信号（终端的 idle、Stop、Interrupt）
     /// 不带原因，推迟中、歇下后都不动它。
@@ -108,13 +108,17 @@ extension CodexRuntime {
         if let failure { session.facts.failure = failure }
         guard session.ending == nil else { return }
         let unknown = unresolvedThreads(on: session.pid)
-        guard !unknown.isEmpty else { return session.facts.endTurn(failure: session.facts.failure) }
+        guard !unknown.isEmpty || !session.spawned.isEmpty else { return session.facts.endTurn(failure: session.facts.failure) }
         let pid = session.pid
+        let recognized = Occurrences(timeout: nil, timing: timing, timeoutError: CancellationError())
+        session.recognized = recognized
         session.ending = Task {
             try? await withDeadline(AgentTimeouts.settleAsk, timing: timing, orThrow: CancellationError()) { @MainActor in
                 await withTaskGroup { group in
                     for thread in unknown { group.addTask { await self.resolve(thread, pid: pid) } }
                 }
+                // 读不到的线程认不出名字：派出的算在其中，照上面的规则先歇下；还在问的等它问完
+                while session.spawned.count > self.unreadableThreads(on: pid) { try await recognized.next() }
             }
             guard !Task.isCancelled, tracked[session.id] === session else { return }
             session.ending = nil
@@ -122,6 +126,12 @@ extension CodexRuntime {
             session.facts.endTurn(failure: session.facts.failure)
             if !session.unread.isEmpty { wake(session) }
             publish(session)
+        }
+    }
+
+    private func unreadableThreads(on pid: Int32) -> Int {
+        threads.count { key, owner in
+            if case .unreadable = owner { key.hasSuffix(".\(pid)") } else { false }
         }
     }
 
@@ -139,6 +149,7 @@ extension CodexRuntime {
     func startTurn(_ session: Tracked, at start: Date) {
         session.cancelWaits()
         session.ending = nil
+        session.spawned = []
         session.lastError = nil
         session.facts.startTurn(at: start)
         session.facts.inFlight.subtract(session.unread.keys)
@@ -180,12 +191,13 @@ extension CodexRuntime {
             }
             let seen = threads[key]?.pending?.count ?? 0
             if let info = try? await rpc.call("thread/read", ["threadId": .string(thread)])["thread"] { return await register(info, on: rpc) }
-            guard !Task.isCancelled, let now = threads[key]?.pending?.count, now > seen else { return unresolved(key) }
+            guard !Task.isCancelled, let now = threads[key]?.pending?.count, now > seen else { return unresolved(key, pid: pid) }
         }
     }
 
-    private func unresolved(_ key: String) {
+    private func unresolved(_ key: String, pid: Int32) {
         if case .asking(let queued) = threads[key] { threads[key] = .unreadable(queued) }
+        for session in tracked.values where session.pid == pid { session.recognized?.happened() }
     }
 
     func register(_ thread: JSONValue, on rpc: CodexRPC) async {
@@ -196,12 +208,13 @@ extension CodexRuntime {
             owner = try await self.owner(of: thread, on: rpc)
             if case .session = owner { last = try await Self.lastTurn(child, on: rpc) } else { last = nil }
         } catch {
-            return unresolved(key)
+            return unresolved(key, pid: rpc.pid)
         }
         let running = last?["status"]?.string == "inProgress"
         // 同一线程同时在问的另一次（推送触发的与歇下前的再问）先没读到时，这次读到的照样算
         guard let queued = threads[key]?.pending else { return }
         threads[key] = owner
+        if case .session(let id, let name, _) = owner, let session = tracked[id], session.spawned.remove(name) != nil { session.recognized?.happened() }
         if case .session(let id, let name, let role) = owner, let session = tracked[id],
            !session.facts.subagents.contains(where: { $0.id == child }), running || last != nil {
             let date = { (field: String) in thread[field]?.number.map { Date(timeIntervalSince1970: $0) } ?? .now }

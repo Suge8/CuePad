@@ -32,6 +32,8 @@ extension AppServices {
         // 刷新失败也照样启动——托管启动时核对连上的扩展，对不上就让它退出并报错（`PiHostError.extensionMismatch`）。
         follow(reporting: { .syncUnavailable(String(localized: "远程投送执行器没能启动：\(String(describing: $0))")) }) {
             await self.refreshAgentIntegrations()
+            // 刷新不因取消抛错：退出收尾已停过执行器，这里再起就是一个没人停、攥着资料库还在领请求的执行器
+            try Task.checkCancellation()
             try await self.executor.start()
         }
         follow(reporting: { .syncUnavailable(String(localized: "目录绑定没能同步给手机：\(String(describing: $0))")) }) { try await self.startDirectoryBindings() }
