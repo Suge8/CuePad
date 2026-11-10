@@ -76,7 +76,7 @@ jobs:
   # 是每次推送最慢的一段；模拟器在高负载的 runner 上还会开不起来，红的多半不是代码。
   ios:
     if: github.ref_name == 'main' || github.event_name == 'workflow_dispatch'
-    name: ${{ matrix.name }}
+    name: test ios sync
     runs-on: xcode-27
     timeout-minutes: 45
     strategy:
