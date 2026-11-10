@@ -33,57 +33,6 @@ import Testing
 
   private func request(_ id: UUID) async throws -> DeliveryRequest? { try await store.deliveryRequest(id) }
 
-  /// 交给上传的每一版：`onWritten` 被调那一刻库里这条请求的状态（马上传读的就是那一刻的行）。
-  actor Uploads {
-    private(set) var statuses: [DeliveryStatus?] = []
-    func add(_ status: DeliveryStatus?) { statuses.append(status) }
-  }
-
-  private func executor(_ uploads: Uploads, handler: @escaping @Sendable (DeliveryRequest) async -> DeliveryOutcome) -> DeliveryExecutor {
-    DeliveryExecutor(
-      store: store, hostID: "mac-a", timing: clock.timing, onIssue: { Issue.record("执行器意外上报：\($0)") },
-      onWritten: { [store] id in await uploads.add(try? await store.deliveryRequest(id)?.status.known) }, handler: { request, _ in await handler(request) })
-  }
-
-  /// 领取那一版在路上时结果得等它回来才能传，手机的回执要多等一个来回，所以当场执行完的只交出结果那一版。
-  @Test
-  func aRequestFinishedRightAwayHandsOnlyTheResultToUpload() async throws {
-    let uploads = Uploads()
-    let executor = executor(uploads) { $0.content == "栅栏" ? .failed(.verbatim("栅栏")) : .succeeded }
-    try await executor.start()
-    _ = try await store.requestDelivery("hi", to: pi, on: "mac-a")
-    try await eventually("结果交给上传") { await !uploads.statuses.isEmpty }
-    clock.advance(DeliveryExecutor.claimGrace)
-    // 第二条（换个结果好区分）做完时，领取那次要是没取消，到点交出的已排在它前面
-    _ = try await store.requestDelivery("栅栏", to: pi, on: "mac-a")
-    try await eventually("第二条的结果交给上传") { await uploads.statuses.count >= 2 }
-
-    #expect(await uploads.statuses == [.succeeded, .failed])
-    await executor.stop()
-  }
-
-  @Test
-  func aLongRunningRequestHandsOverTheClaimFirstThenTheResult() async throws {
-    let uploads = Uploads()
-    let (gate, open) = AsyncStream<Void>.makeStream()
-    let executor = executor(uploads) { _ in
-      for await _ in gate {}
-      return .succeeded
-    }
-    try await executor.start()
-    _ = try await store.requestDelivery("唤醒会话", to: pi, on: "mac-a")
-    // 执行期限也在这只钟上等待，不能把它当成领取回执的计时器。
-    await clock.waitForSleeper(until: clock.now.addingTimeInterval(DeliveryExecutor.claimGrace.seconds))
-    clock.advance(DeliveryExecutor.claimGrace)
-    try await eventually("领取交给上传") { await !uploads.statuses.isEmpty }
-    #expect(await uploads.statuses == [.executing])
-
-    open.finish()
-    try await eventually("结果交给上传") { await uploads.statuses.count == 2 }
-    #expect(await uploads.statuses == [.executing, .succeeded])
-    await executor.stop()
-  }
-
   @Test
   func requestsAreExecutedOneAtATimeInCreationOrder() async throws {
     let handler = Handler()

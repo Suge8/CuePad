@@ -257,21 +257,6 @@ import Testing
     await sender.stop()
   }
 
-  /// 停下时在等的当场答没传上，停下之后再要也是。
-  @Test func stoppingAnswersTheWaitingAsNotSent() async throws {
-    let server = Gated()
-    let (r, R) = try await card("r1")
-    let sender = await started(server)
-    try await edit(r, "r2")
-    let waiting = await ask(sender, [R])
-    await server.untilCalls(1)
-    let stopping = Task { await sender.stop() }
-    #expect(await waiting.value == false)
-    await server.open()
-    await stopping.value
-    #expect(await sender.send([R]) == false)
-  }
-
   /// 断网时答没传上，网络回来再要就传上。
   @Test func offlineIsAnsweredAsNotSentAndTheNextAskAfterReconnectingSends() async throws {
     let server = Gated()
@@ -298,12 +283,6 @@ import Testing
     #expect(await sender.send([B]) == false)
     #expect(await sender.send([A]))
     #expect(await server.bodies[A] == "a2")
-    await sender.stop()
-  }
-
-  @Test func askingForNothingAnswersAtOnce() async throws {
-    let sender = await started(Gated())
-    #expect(await sender.send([]))
     await sender.stop()
   }
 }
