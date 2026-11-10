@@ -25,6 +25,7 @@ extension RealClaudeHostTests {
             testbed.playEarlyReport()
             let start = Date()
             _ = try await testbed.bridge.send(PiMessage(text: ClaudeTestbed.earlyReport), to: id)
+            try await testbed.finishEarlyReport(id)
             try await testbed.expectSettledOnce(id, since: start, reply: "NESTED_DONE", roster: .done, waits: 2)
         }
     }
