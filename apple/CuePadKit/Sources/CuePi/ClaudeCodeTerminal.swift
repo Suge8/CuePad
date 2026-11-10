@@ -33,6 +33,9 @@ final class ClaudeTerminalSession: SessionLink {
     private var readyWaits: [UUID: FileFollower] = [:]
     private var closed = false
     private var facts = SessionFacts()
+    /// 收到上一个钩子的时刻（接上时为接上的此刻）与这一轮之前的那一次（`promptEnded` 的界）
+    private var lastHookAt = Date.now
+    private var hookBeforeTurn: Date?
     /// 要你回答的（同一时刻可能有好几个：子代理并行时各自要确认），按到达先后；会话的 `question` 是第一个
     private var pending: [Pending] = []
 
@@ -87,9 +90,11 @@ final class ClaudeTerminalSession: SessionLink {
             if event == "PostModelSwitch", let model = input["to_model"]?.string { session.model = ClaudeCode.model(model) }
         }
         let tool = input["tool_name"]?.string ?? "?"
+        defer { lastHookAt = now }
         switch event {
         case "UserPromptSubmit":
             facts.startTurn(at: now)  // 钩子挡着这一句：收到它一定早于这一轮的回答
+            hookBeforeTurn = lastHookAt
         case "PreToolUse" where tool == "AskUserQuestion":
             let ask = ClaudePermission(tool: tool, input: input["tool_input"] ?? .object([:]))
             return hold(Pending(question: ask.question(), kind: .ask(ask), call: call, agent: agent), answerable: ask.answerable, at: now)
@@ -190,6 +195,16 @@ final class ClaudeTerminalSession: SessionLink {
     /// Claude Code 一个钩子都不跑（2.1.299 实测），只有会话文件说明这一轮结束了。与 `Stop` 同样收尾；停下之后才开的一轮不算。
     func stopped(at date: Date) {
         guard facts.running, let start = facts.turnStartedAt, start <= date else { return }
+        settlePending(agent: nil, when: "Stop")
+        facts.endTurn()
+        show(at: .now)
+    }
+
+    /// 你的 `UserPromptSubmit` 钩子挡下了这句（CuePad 的钩子已开了这一轮）：Claude Code 不跑这一轮，也不跑 `Stop`。几个钩子并行跑，
+    /// 挡下的那一行可能早于 CuePad 收到自己的钩子（2.1.318 实测早 3 毫秒），不能拿这一轮的开始比；这句一定在上一个钩子之后才交上来，
+    /// 早于它的是之前那句的。
+    func promptEnded(at date: Date) {
+        guard facts.running, let after = hookBeforeTurn, after < date else { return }
         settlePending(agent: nil, when: "Stop")
         facts.endTurn()
         show(at: .now)

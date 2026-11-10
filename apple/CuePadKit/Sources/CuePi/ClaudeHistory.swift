@@ -24,7 +24,8 @@ enum ClaudeHistory {
             switch line.subtype {
             case "compact_boundary": cp.compacted(entry, into: &transcript)
             case "stop_hook_summary", "turn_duration": if cp.round != nil { cp.answered("", entry, into: &transcript) }
-            default: break
+            // 这句没开成一轮（钩子挡下、拦停，2.1.318 写 `informational` 带 `promptSubmitEnding`）：不跑 `Stop`，那句也不写进会话
+            default: if line.promptSubmitEnding != nil { cp.promptEndedAt = entry.at }
             }
         case "user":
             try user(line, entry, into: &cp, transcript: &transcript)
@@ -119,7 +120,10 @@ enum ClaudeHistory {
         var origin: Origin?
         var message: Message?
         var attachment: Attachment?
+        var promptSubmitEnding: PromptSubmitEnding?
     }
+
+    private struct PromptSubmitEnding: Decodable {}
 
     private struct Origin: Decodable { var kind: String? }
 

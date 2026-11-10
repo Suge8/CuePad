@@ -23,6 +23,8 @@ public struct PiHistoryCheckpoint: Sendable, Codable, Equatable {
     var round: Round?
     /// 最近一次停下一轮的时刻（会话文件里那条中断标记）：终端里的 Claude Code 被停下时不跑钩子，它的接入凭这个收尾（`AgentRuntime.read`）
     public internal(set) var stoppedAt: Date?
+    /// 最近一句没开成一轮的时刻（Claude Code 的钩子挡下、拦停这句时写的那一行）：同样不跑 `Stop`（`ClaudeTerminalSession.promptEnded`）
+    public internal(set) var promptEndedAt: Date?
     var reply: Reply?
     var recap = PiRecap()
     /// 先于那句话记下的投送请求 id（按 Agent 给那句话的消息 id）：dsh 的插件在话进收件箱时记，话随后才写进会话（`DshHistory`）
