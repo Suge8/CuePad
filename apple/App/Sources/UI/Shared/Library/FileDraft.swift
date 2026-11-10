@@ -24,7 +24,7 @@ final class FileDraft {
     /// 这时编辑器交出键盘、不接输入。
     var previewing = DebugHooks.preset.mergePreview
     var retire: Set<InstructionSource.Origin> = []
-    @ObservationIgnored private let workspace: Workspace
+    @ObservationIgnored private weak var workspace: Workspace?
     @ObservationIgnored private var autosave: Autosave?
     @ObservationIgnored private var epoch = 0
     /// 正在写的那一版：它的回声（同步来的、等于它的文件）是自己写的，不是别处的改动。
@@ -82,7 +82,7 @@ final class FileDraft {
     /// 写不成抛错（已提示、状态已记 `failed`），自动存据此把这一版留在待写里，离开时再试。
     private func write(_ text: String) async throws {
         // 只写此刻的这一版：换成文件里的之后，早先排着的那一版不算数
-        guard let library = workspace.library, text == self.text, text != base else { return }
+        guard let workspace, let library = workspace.library, text == self.text, text != base else { return }
         epoch += 1
         let mine = epoch
         state = .saving

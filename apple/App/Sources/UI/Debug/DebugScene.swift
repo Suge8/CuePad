@@ -22,6 +22,7 @@ enum DebugScene {
         return NSRange(location: parts[0], length: parts[1])
     }
     static var injectsGeometryLoop: Bool { args.layoutOpts.geometryLoop }
+    // 只在脚本起的实例里挂（`DebugHooks.scripted`）：全局攥着视图的闭包，连带它环境里的工作区与服务，测试宿主里每条用例的库都放不掉
     static var toggleTaskFold: () -> Void = {}
     static var toggleCuePanel: () -> Void = {}
     #if os(iOS)

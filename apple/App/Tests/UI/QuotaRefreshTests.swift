@@ -31,7 +31,7 @@ struct QuotaRefreshTests {
     }
 
     @Test func 没查到保留原因_冷却内自动不再问_重试照问() async throws {
-        defer { services.cancelBackgroundWork(); Task { await services.sync?.stop() } }
+        defer { services.cancelBackgroundWork(); await services.sync?.stop() }
         try await macWithQuota(.pi)
         #expect(services.quotaRefreshKey == ["mac-x"])
         // 演那台 Mac：第一次按会话还没连好写回失败，之后查到
@@ -62,7 +62,7 @@ struct QuotaRefreshTests {
     }
 
     @Test func 页面取消不取消查询_同来源并发合并_换来源不受旧冷却限制() async throws {
-        defer { services.cancelBackgroundWork(); Task { await services.sync?.stop() } }
+        defer { services.cancelBackgroundWork(); await services.sync?.stop() }
         try await macWithQuota(.pi)
         let gate = AsyncStream<Void>.makeStream()
         let attempts = Mutex(0)
@@ -109,7 +109,7 @@ struct QuotaRefreshTests {
     }
 
     @Test(arguments: [false, true]) func 查询途中来源变化_取消等待页不启动新查询_冷却对应实际来源(cancelPage: Bool) async throws {
-        defer { services.cancelBackgroundWork(); Task { await services.sync?.stop() } }
+        defer { services.cancelBackgroundWork(); await services.sync?.stop() }
         try await macWithQuota(.pi)
         let gate = AsyncStream<Void>.makeStream()
         let attempts = Mutex(0)
@@ -161,7 +161,7 @@ struct QuotaRefreshTests {
         let cloud = ReceiptTests.WeakCloud()
         let app = TestApp(sync: .built { CloudSync(store: $0) { cloud } })
         let services = app.services!, store = services.store
-        defer { services.cancelBackgroundWork(); Task { await services.sync?.stop() } }
+        defer { services.cancelBackgroundWork(); await services.sync?.stop() }
         try await macWithQuota(.pi, in: app)
         await cloud.setDown(true)
 
@@ -195,7 +195,7 @@ struct QuotaRefreshTests {
         let cloud = SimulatedCloud(now: { clock.now })
         let app = TestApp(sync: .built { CloudSync(store: $0) { cloud } }, timing: clock.timing)
         let services = app.services!, store = services.store
-        defer { services.cancelBackgroundWork(); Task { await services.sync?.stop() } }
+        defer { services.cancelBackgroundWork(); await services.sync?.stop() }
         try await macWithQuota(.pi, in: app)
 
         let query = Task { await services.refreshQuota(.automatic) }
