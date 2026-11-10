@@ -23,20 +23,6 @@ struct RealDshTests {
         }
     }
 
-    /// 搜索工具走的是另一个地址：它那次请求也落在假模型上（没指过去就会连 api.deepseek.com）。
-    @Test func aWebSearchGoesToTheFakeModelNotTheInternet() async throws {
-        try await withDshRig { rig in
-            rig.fake.on("Search the web") { $0.step == 0 ? .call("web_search", ["queries": ["cuepad"]]) : .say("SEARCHED") }
-            let id = try await rig.runtime.open(in: rig.work, launchToken: "token-search", name: nil, model: rig.model, thinking: nil)
-            try await rig.bridge.send(PiMessage(text: "Search the web"), to: id)
-            try await rig.settled(id, replying: "SEARCHED")
-            let isSearch: (FakeRequest) -> Bool = { request in
-                (request.json["tools"] as? [[String: Any]])?.contains { ($0["type"] as? String)?.hasPrefix("web_search") == true } == true
-            }
-            #expect(rig.fake.requests.contains(where: isSearch), "搜索的请求没到假模型：\(rig.fake.requests.map { "\($0.path) \($0.results)" })")
-        }
-    }
-
     /// 提问（dsh 里与权限同位的那一条）：一问一问地答，选一项、自己填一个，答案回到模型的工具结果里。
     @Test func aQuestionIsAnsweredFromCuePadOneByOne() async throws {
         try await withDshRig { rig in

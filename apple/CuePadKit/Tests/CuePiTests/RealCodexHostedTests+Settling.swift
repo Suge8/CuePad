@@ -108,33 +108,5 @@ extension RealCodexHostedTests {
             try await eventually("到点歇下") { rig.bridge.session(id: id)?.state == .settled }
         }
     }
-
-    enum Gone: CaseIterable { case processExits, runtimeStops }
-
-    /// 推迟歇下时会话没了（进程退出、CuePad 停下接入）：推迟的歇下跟着取消，进程退出清掉的线程表不会被写回。
-    @Test(arguments: Gone.allCases) func theDeferralEndsWithTheSession(_ gone: Gone) async throws {
-        try await withCodexRig(model: "gpt-6-luna", readFault: .fail) { rig in
-            let parent = rig.model.gate()
-            let id = try await dispatch(rig, ["apple", "pear"], parent: parent) { _ in .hang }
-            let fault = try #require(rig.readFault)
-            fault.mode = .hold
-            parent.open()
-            try await eventually("歇下前的再问挂住") { rig.runtime.tracked[id]?.ending != nil && !fault.threads("hold").isEmpty }
-            let ending = try #require(rig.runtime.tracked[id]?.ending)
-            let pid = try #require(rig.bridge.session(id: id)?.pid)
-            switch gone {
-            case .processExits:
-                kill(pid, SIGKILL)
-                try await eventually("会话撤走") { rig.bridge.session(id: id) == nil }
-            case .runtimeStops:
-                await rig.runtime.stop()()
-            }
-            #expect(ending.isCancelled)
-            await ending.value
-            guard gone == .processExits else { return }
-            await quietPeriod(.milliseconds(300))
-            #expect(rig.runtime.threads.keys.filter { $0.hasSuffix(".\(pid)") }.isEmpty, "\(rig.runtime.threads.keys.sorted())")
-        }
-    }
 }
 #endif

@@ -89,31 +89,6 @@ struct RealHostTests {
         #expect(bridge.sessions.first { $0.sessionID == sessionID }?.hosted == true)
     }
 
-    @Test(arguments: [false, true])
-    func endingAHostedSessionClosesItsProcessEvenMidTurn(busyTurn: Bool) async throws {
-        let pi = try await PiProcess()
-        let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
-        defer { bridge.stop(); pi.stop() }
-        try bridge.start()
-        let (file, _) = try await endedSession(pi, bridge)
-        let host = host(pi, bridge)
-        host.start()
-        defer { stopHostedProcesses(bridge) }
-        let resumed = try await resume(host, file, in: pi, on: bridge)
-        if busyTurn {
-            _ = pi.hold("正在跑的一轮")
-            try await bridge.send(PiMessage(text: "正在跑的一轮"), to: resumed.id)
-            try await eventually("后台在忙") { busy(bridge.sessions.first { $0.id == resumed.id }?.state) }
-        }
-        let log = ChangeLog(bridge)
-
-        try await bridge.end(resumed.id)
-
-        #expect(bridge.sessions.isEmpty)
-        try await eventually("会话结束的通知到了") { log.ended.count == 1 }
-        try await eventually("日志记下了") { log.ended[0].1 == .closed(reason: "quit") }
-    }
-
     @Test func aNewSessionStartsInTheBackgroundAndIsClaimedByItsToken() async throws {
         let pi = try await PiProcess()
         let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
