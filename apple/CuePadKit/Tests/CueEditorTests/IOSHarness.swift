@@ -1,5 +1,6 @@
 #if canImport(UIKit)
 import CueEditor
+import CueTestSupport
 import CueText
 import UIKit
 import UniformTypeIdentifiers
