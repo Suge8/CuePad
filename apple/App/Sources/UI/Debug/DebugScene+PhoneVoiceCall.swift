@@ -7,6 +7,7 @@ import UIKit
 /// Mac 那端起一个带 `-CuePadVoiceToken`、不带 `-CuePadVoice` 的实例，两端用同一朵模拟云（`-CuePadSharedCloud`，同一个中转房间）。
 /// 对方的声音录到 `-CuePadVoiceRecord <wav>`，节点写进 `-CuePadVoiceLog <文件>`（`DebugVoiceLog`）：阶段、回应、下行响停、进出后台，
 /// 结束前一行 `input-max` 是这一通上行的最大电平（`-CuePadVoice mic` 时看麦克风有没有真的进声音）。
+/// 音频引擎的配置变化超过 2 次（开语音处理那一下之外还在停、重开，`VoiceAudio`）记 `audio-changes` 并以失败退出，守住重开循环不再犯。
 /// 后台：`-CuePadVoicePlayInBackground YES` 在听后记 `waiting-background`、等 App 进后台（外面 `xcrun simctl launch <UDID> com.apple.Preferences` 把它压下去）1 秒再送文件，
 /// 核对上下行、委派与挂断都在后台照常；下行这时走真的扬声器（静音、不录，`VoiceFixture.Downlink.speaker`），进了后台电平就停（`VoiceAudio`），没有 `output-loud`，回应看 Mac 的转写。中断：`-CuePadVoiceInterruptAfter <秒>` 在听后发系统收走声音时的那条通知，核对通话带"音频已中断"结束、Mac 收到挂断。
 /// 信令断开：`-CuePadVoiceDropRelay <在听后秒>,<断多久秒>` 断掉这台的中转连接（记 `relay-drop`），`link` 一行是通话链路的变化（等 Mac 回来、换绑），
@@ -36,12 +37,15 @@ extension DebugScene {
         let note = log.note
         for await ready in Observations({ workspace.cue.canHear && voice.startUnavailableReason == nil }) where ready { break }
         var inputPeak = 0.0
+        var audioChanges = 0
         let background = NotificationCenter.default.notifications(named: UIApplication.didEnterBackgroundNotification)
         let foreground = NotificationCenter.default.notifications(named: UIApplication.willEnterForegroundNotification)
+        let audioChanged = NotificationCenter.default.notifications(named: .AVAudioEngineConfigurationChange)
         var watching = [
             Task { for await response in Observations({ voice.response }) { note("response \(response)") } },
             Task { for await loud in Observations({ voice.outputActive }) { note(loud ? "output-loud" : "output-quiet") } },
             Task { for await samples in Observations({ voice.inputSamples }) { inputPeak = max(inputPeak, samples.max() ?? 0) } },
+            Task { for await _ in audioChanged { audioChanges += 1; if audioChanges > 2 { note("audio-changes \(audioChanges)"); abandon("手机通话", Unmet("音频引擎重开超过 2 次")) } } },
             Task { for await link in Observations({ voice.phone?.link }) { note("link \(link.map { "\($0)" } ?? "none")") } },
             Task { for await value in Observations({ voice.projection.map { "\($0.requests.count) \($0.phase)" } }) { note("projection \(value ?? "none")") } },
             Task { for await _ in background { note("app-background") } },
