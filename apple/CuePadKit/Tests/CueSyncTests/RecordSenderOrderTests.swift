@@ -7,6 +7,11 @@ import Testing
 
 /// 马上传的答复与各路先后：先后由替身控制（上传挂着等放行、"区不存在"的逐条拒绝把那一批的收尾拖在作答之后），不靠负载。
 /// 每条都核对同一件事：答收下时，服务器上已有要的那一刻库里的那一版。
+/// 先后由替身控制，等的是替身记下的进展；等不到就记一条说出在等什么的问题，不挂住也不假通过。
+private func until(_ what: String, _ condition: () async -> Bool) async {
+  do { try await eventually(what, condition) } catch { Issue.record(error) }
+}
+
 @Suite struct RecordSenderOrderTests {
   let rig = try! Rig()
 
@@ -22,8 +27,6 @@ import Testing
     private var holds: [Int: CheckedContinuation<Void, Never>] = [:]
     private var released: Set<Int> = []
     private var zoneHold: CheckedContinuation<Void, Never>?
-    private var callWaiters: [(Int, CheckedContinuation<Void, Never>)] = []
-    private var zoneWaiters: [CheckedContinuation<Void, Never>] = []
 
     func set(gating: Bool? = nil, zoneMissing: Set<String>? = nil, refused: Set<String>? = nil, offline: Bool? = nil) {
       if let gating { self.gating = gating }
@@ -35,11 +38,6 @@ import Testing
     func upload(saving: [CKRecord], deleting: [CKRecord.ID]) async throws -> SentRecords {
       let index = calls
       calls += 1
-      callWaiters.removeAll { count, waiter in
-        guard calls >= count else { return false }
-        waiter.resume()
-        return true
-      }
       if gating, !released.contains(index) { await withCheckedContinuation { holds[index] = $0 } }
       if offline { throw CKError(.networkUnavailable) }
       let missing = saving.filter { zoneMissing.contains($0.recordID.recordName) }
@@ -54,8 +52,6 @@ import Testing
     func saveZone() async throws {
       guard !zoneMissing.isEmpty else { return }
       zoneWaiting = true
-      zoneWaiters.forEach { $0.resume() }
-      zoneWaiters = []
       await withCheckedContinuation { zoneHold = $0 }
       zoneWaiting = false
     }
@@ -80,15 +76,9 @@ import Testing
       zoneHold = nil
     }
 
-    func untilCalls(_ count: Int) async {
-      if calls >= count { return }
-      await withCheckedContinuation { callWaiters.append((count, $0)) }
-    }
+    func untilCalls(_ count: Int) async { await until("第 \(count) 次上传发出") { calls >= count } }
 
-    func untilZoneWaiting() async {
-      if zoneWaiting { return }
-      await withCheckedContinuation { zoneWaiters.append($0) }
-    }
+    func untilZoneWaiting() async { await until("那一批停在建区") { zoneWaiting } }
   }
 
   /// 一次马上传的答复，一次只等一个。
@@ -112,7 +102,7 @@ import Testing
     let before = await sender.asks
     let answer = Answer()
     Task { await answer.set(await sender.send(names)) }
-    while await sender.asks == before { await Task.yield() }
+    await until("这次要求在发送者那里记下") { await sender.asks != before }
     return answer
   }
 
@@ -132,7 +122,7 @@ import Testing
   }
 
   func edit(_ id: UUID, _ body: String) async throws {
-    try await Task.sleep(for: .milliseconds(3))  // 修改时间是毫秒
+    await nextMillisecond()
     try await rig.store.updateCard(id) { $0.body = body }
   }
 
@@ -172,7 +162,7 @@ import Testing
     await server.release(0)
     await server.untilZoneWaiting()
     await server.release(1)
-    while await sender.inFlight.contains(S) { await Task.yield() }  // S 那批先收尾，R 那批还在建区
+    await until("S 那批收尾") { await !sender.inFlight.contains(S) }  // S 那批先收尾，R 那批还在建区
     await server.open()
     #expect(await second.value)
     #expect(await server.bodies[R] == "r2")
@@ -190,7 +180,7 @@ import Testing
     let store = rig.store
     await order.arm(
       picked: {
-        try? await Task.sleep(for: .milliseconds(3))
+        await nextMillisecond()
         try? await store.updateCard(r) { $0.body = "r3" }
         return await self.ask(sender, [R])
       },

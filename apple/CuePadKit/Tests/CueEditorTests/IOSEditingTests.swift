@@ -14,10 +14,10 @@ private final class FailingStore: CueFileStore {
 }
 
 @MainActor
-private func transform(_ provider: NSItemProvider, in h: EditorHarness) async -> FakePasteItem {
+private func transform(_ provider: NSItemProvider, in h: EditorHarness) async throws -> FakePasteItem {
     let item = FakePasteItem(provider)
     h.textView.pasteDelegate?.textPasteConfigurationSupporting?(h.textView, transform: item)
-    await item.resolved()
+    try await item.resolved()
     return item
 }
 
@@ -50,7 +50,7 @@ struct IOSEditingTests {
             try png.write(to: file)
             let provider = fromFile ? try #require(NSItemProvider(contentsOf: file)) : NSItemProvider(object: try #require(UIImage(data: png)))
 
-            let item = await transform(provider, in: h)
+            let item = try await transform(provider, in: h)
 
             let found = attachments(in: item.result)
             let attachment = try #require(found.first as? CueImageAttachment)
@@ -65,7 +65,7 @@ struct IOSEditingTests {
         let file = h.store.directory.appendingPathComponent("报告.pdf")
         try Data("%PDF-1.4".utf8).write(to: file)
 
-        let item = await transform(try #require(NSItemProvider(contentsOf: file)), in: h)
+        let item = try await transform(try #require(NSItemProvider(contentsOf: file)), in: h)
 
         let chip = try #require(attachments(in: item.result).first as? CueFileAttachment)
         #expect(chip.name == "报告.pdf")
@@ -77,7 +77,7 @@ struct IOSEditingTests {
     func pasteText() async throws {
         let h = EditorHarness()
         let id = try h.store.store(makePNG(width: 40, height: 30))
-        let item = await transform(NSItemProvider(object: "a\n---\n![](cuepad://file/\(id))" as NSString), in: h)
+        let item = try await transform(NSItemProvider(object: "a\n---\n![](cuepad://file/\(id))" as NSString), in: h)
         #expect(attachments(in: item.result).first is CueImageAttachment)
         #expect(item.result?.string == "a\n---\n\u{FFFC}")
     }
@@ -93,7 +93,7 @@ struct IOSEditingTests {
         let item = FakePasteItem(NSItemProvider(object: try #require(UIImage(data: makePNG(width: 20, height: 20)))))
 
         failing.pasteDelegate?.textPasteConfigurationSupporting?(failing, transform: item)
-        await item.resolved()
+        try await item.resolved()
 
         #expect(item.result == nil && !item.usedDefault)
         #expect(errors.count == 1 && errors.first is DiskFull)
@@ -139,7 +139,7 @@ struct IOSEditingTests {
         #expect(h.textView.pasteboard.string == original)
         #expect(h.stored == original)
 
-        let item = await transform(NSItemProvider(object: try #require(h.textView.pasteboard.string) as NSString), in: h)
+        let item = try await transform(NSItemProvider(object: try #require(h.textView.pasteboard.string) as NSString), in: h)
         #expect((attachments(in: item.result).first as? CueImageAttachment)?.key != nil)
 
         h.textView.pasteboard.string = ""

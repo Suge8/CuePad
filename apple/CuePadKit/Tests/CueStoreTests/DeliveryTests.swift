@@ -62,7 +62,7 @@ import Testing
     _ = try await store.requestDelivery("quota", to: pi, on: "mac-a", mode: .quota)
     _ = try await eventually(store, { try $0.deliveryRequests().filter { $0.status == .known(.succeeded) }.count }) { $0 == 2 }
 
-    await clock.waitForSleeper()
+    await clock.waitForSleeper(until: clock.now.addingTimeInterval(DeliveryExecutor.retention.seconds))
     clock.advance(DeliveryExecutor.retention + .seconds(1))
     let remaining = try await eventually(store, { try $0.deliveryRequests() }) { $0.count == 2 }
     #expect(Set(remaining.map(\.id)) == [failed.id, sent.id])

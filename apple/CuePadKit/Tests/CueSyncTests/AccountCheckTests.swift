@@ -23,13 +23,14 @@ import Testing
     })
     changeAccount()
     try await eventually("在认") { await cloud.nameCalls == 1 }
+    let first = try #require(await sync.running?.checking)
     let card = try await store.createCard(body: "认清之前记的")
     #expect(await !sync.send(recordNames: [name(card)]))
 
     changeAccount()
     try await eventually("另认出是另一个账号") { await sync.coordinator.status == .needsDecision(.accountSwitched) }
     stale.resolve(.success(()))
-    await quietPeriod(.milliseconds(200))
+    _ = await first.value  // 旧的那次收尾（它晚到的答复被丢弃）
     #expect(await sync.coordinator.status == .needsDecision(.accountSwitched))
     #expect(await !cloud.inner.saved.contains(name(card)))
     await sync.stop()
@@ -45,10 +46,11 @@ import Testing
     })
     changeAccount()
     try await eventually("第一次在认") { await cloud.nameCalls == 1 }
+    let first = try #require(await sync.running?.checking)
     changeAccount()
     try await eventually("第二次认不清") { await sync.coordinator.state.status == .accountUnavailable }
     late.resolve(.success(()))
-    await quietPeriod(.milliseconds(200))
+    _ = await first.value
 
     let card = try await store.createCard(body: "认不清时记的")
     #expect(await !sync.send(recordNames: [name(card)]))

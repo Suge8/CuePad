@@ -209,8 +209,17 @@ public final class ManualTiming: Sendable {
 }
 
 /// 等不到时抛出：写明在等什么，测试就停在这里（接着往下跑只会在别处空等）。
-struct TimedOut: Error, CustomStringConvertible {
-  let description: String
+public struct TimedOut: Error, CustomStringConvertible {
+  public let description: String
+  public init(description: String) { self.description = description }
+}
+
+/// 一次性旗：先订阅再触发时，订阅的一侧举旗，触发的一侧用 `eventually` 等它。
+public final class Signal: Sendable {
+  private let raised = Atomic(false)
+  public init() {}
+  public func raise() { raised.store(true, ordering: .releasing) }
+  public var isRaised: Bool { raised.load(ordering: .acquiring) }
 }
 
 /// 条件等待的上限，只认一个来源：每个测试的统一时限（xc.sh 的 `TEST_TIME_LIMIT`，经 `CUEPAD_TEST_TIME_LIMIT` 交给测试进程），取它的九成。
@@ -245,13 +254,23 @@ public func quietPeriod(_ duration: Duration) async {
   try? await Task.sleep(for: duration)
 }
 
+/// 写入的时刻只到毫秒、排先后全看它：要让下一次写入的时刻严格晚于此前的，先过这个。等墙钟走过 2 毫秒，不猜时长。
+public func nextMillisecond() async {
+  let start = Date.timeIntervalSinceReferenceDate
+  while Date.timeIntervalSinceReferenceDate - start < 0.002 { await Task.yield() }
+}
+
 public func eventually<T: Sendable & Equatable>(
   _ store: CueStore, _ read: @escaping @Sendable (isolated CueStore) throws -> T,
-  until predicate: @escaping @Sendable (T) -> Bool
+  subscribed: Signal? = nil, until predicate: @escaping @Sendable (T) -> Bool
 ) async throws -> T {
   try await withThrowingTaskGroup(of: T.self) { group in
     group.addTask {
-      for try await value in store.observe(read) where predicate(value) { return value }
+      var first = true
+      for try await value in store.observe(read) {
+        if first { first = false; subscribed?.raise() }  // 初始值到了：订阅已就位
+        if predicate(value) { return value }
+      }
       throw CancellationError()
     }
     group.addTask {
