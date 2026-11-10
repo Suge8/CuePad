@@ -23,7 +23,7 @@ import Testing
 
   /// 在已推送之后再编辑一次：返回该记录此刻的 modifiedAt（毫秒），用来构造"更新/更旧/同刻"的远端版本。
   private func editCard(_ card: Card, body: String? = nil, pinned: Bool? = nil) async throws -> Int64 {
-    try await Task.sleep(for: .milliseconds(3))  // 时间精度是毫秒，确保晚于推送时间
+    await nextMillisecond()
     try await store.updateCard(card.id) {
       if let body { $0.body = body }
       if let pinned { $0.isPinned = pinned }
@@ -32,7 +32,7 @@ import Testing
   }
 
   private func editProject(_ id: UUID, name: String) async throws -> Int64 {
-    try await Task.sleep(for: .milliseconds(3))
+    await nextMillisecond()
     try await store.updateProject(id) { $0.name = name }
     return millis(try #require(try await store.project(id)).modifiedAt)
   }
@@ -42,14 +42,17 @@ import Testing
   @Test
   func remoteRecordsAreInsertedInOneTransactionAndWakeObservers() async throws {
     try await rig.simulatePush()  // 新库的默认项目先传上去
-    var values = store.observe { try $0.cards(in: Project.defaultID).map(\.body) }.makeAsyncIterator()
-    #expect(try await values.next() == [])
+    let subscribed = Signal()
+    let woken = Task { [store] in
+      try await eventually(store, { try $0.cards(in: Project.defaultID).map(\.body) }, subscribed: subscribed) { $0 == ["from other device"] }
+    }
+    try await eventually("观察者就位") { subscribed.isRaised }
 
     let project = remoteRecord(.projects, projectFields(name: "Remote", modifiedAt: 5_000))
     let card = remoteRecord(.cards, cardFields(body: "from other device", modifiedAt: 5_000))
     try await fetched(project, card)
 
-    #expect(try await values.next() == ["from other device"])
+    _ = try await woken.value
     #expect(Set(try await store.projects().map(\.name)) == ["Remote", "默认"])
     #expect(try await store.search("other device").cards.count == 1)  // 搜索索引跟随
     let delta = try await rig.reconcileDelta()

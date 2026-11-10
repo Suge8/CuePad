@@ -51,7 +51,7 @@ struct OwnEchoTests {
   }
 
   private func edit(_ card: Card, _ body: String) async throws {
-    try await Task.sleep(for: .milliseconds(3))  // 修改时间是毫秒，每一版要落在不同的毫秒
+    await nextMillisecond()
     try await store.updateCard(card.id) { $0.body = body }
   }
 

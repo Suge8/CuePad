@@ -19,11 +19,11 @@ struct ChildProcessTests {
         let call = Task { await ChildProcess.attempt(URL(filePath: "/bin/sh"), ["-c", "trap '' TERM; touch '\(started.path)'; sleep 30"], timeout: .seconds(1), timing: clock.timing) }
         try await eventually("命令跑起来了") { !fileGone(started) }
         call.cancel()
-        await clock.waitForSleeper()
+        try await clock.waitForSleeper()
         clock.advance(.seconds(1))
         guard case .timedOut = await call.value else { Issue.record("没按超时结束"); return }
         // 它不理 SIGTERM：结束时的宽限也按这个钟，推过去才 SIGKILL，不留下它
-        await clock.waitForSleeper()
+        try await clock.waitForSleeper()
         clock.advance(AgentTimeouts.endGrace)
     }
 
@@ -33,7 +33,7 @@ struct ChildProcessTests {
         let clock = ManualTiming()
         let call = Task { await ChildProcess.attempt(URL(filePath: "/bin/sh"), ["-c", script], timeout: .seconds(1), timing: clock.timing) }
         try await eventually("子进程写下了 pid") { !fileGone(marker) && ((try? String(contentsOf: marker, encoding: .utf8)) ?? "").hasSuffix("\n") }
-        await clock.waitForSleeper()
+        try await clock.waitForSleeper()
         clock.advance(.seconds(1))
         guard case .timedOut = await call.value else { Issue.record("没按超时结束"); return }
         let child = try #require(pid_t(try String(contentsOf: marker, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)))

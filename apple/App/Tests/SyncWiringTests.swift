@@ -105,12 +105,12 @@ struct SyncWiringTests {
 
     /// 同步一直不返回（引擎队列被占着、网络没有回音）：下拉刷新的圈到时限就停，同步仍挂着；转着的时候主线程照常响应（测试本身在主线程上推钟）。
     @Test
-    func 同步一直不返回时_下拉刷新到时限就停() async {
+    func 同步一直不返回时_下拉刷新到时限就停() async throws {
         let clock = ManualTiming()
         let app = TestApp(timing: clock.timing)
         app.sync.syncNowHangs.withLock { $0 = true }
         let refresh = Task { await app.services.syncNow() }
-        await clock.waitForSleeper()
+        try await clock.waitForSleeper()
         #expect(app.services.isSyncingNow)
 
         clock.advance(AppServices.syncWaitLimit)

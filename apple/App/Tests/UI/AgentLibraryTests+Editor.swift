@@ -101,7 +101,7 @@ extension AgentLibraryTests {
 
         draft.changed(body: "mine\n")
         let writing = Task { await draft.send() }
-        await Task.yield()
+        try await yieldUntil("写入进入保存中") { draft.state == .saving }
         #expect(draft.state == .saving, "写入在途中")
         try write("ext\n", file)
         draft.follow("ext\n")
@@ -124,7 +124,7 @@ extension AgentLibraryTests {
         defer { await keeping.stop(); await following.stop() }
         draft.changed(body: "v1\n")
         let writing = Task { await draft.send() }
-        await Task.yield()
+        try await yieldUntil("写入进入保存中") { draft.state == .saving }
         draft.changed(body: "v2\n")
         draft.follow("v1\n")
         await writing.value
@@ -149,6 +149,15 @@ extension AgentLibraryTests {
         #expect(draft.conflicted)
         draft.follow("mine2\n")
         #expect(draft.state == .saved && !draft.dirty, "变得和我的一样：已保存")
+    }
+}
+
+/// 只让出执行权、不睡：状态在主线程上同步翻转、转眼又翻走时，轮询睡眠会错过那一刻。
+private func yieldUntil(_ what: String, _ condition: () -> Bool) async throws {
+    let deadline = ContinuousClock.now + conditionBudget
+    while !condition() {
+        guard ContinuousClock.now < deadline else { throw TimedOut(description: "等不到：\(what)") }
+        await Task.yield()
     }
 }
 #endif

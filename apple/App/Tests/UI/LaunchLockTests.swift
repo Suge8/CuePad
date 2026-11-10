@@ -30,10 +30,7 @@ struct LaunchLockTests {
     }
 
     private func shown(_ phone: TestApp, _ launch: SessionLaunch) async throws -> LaunchProgress.Phase {
-        for try await progress in phone.services.store.observe({ try launch.progress(from: $0) }) {
-            return progress.phase(at: .always(at: clock.now))
-        }
-        throw CancellationError()
+        try await awaitNext("会话启动进度", from: phone.services.store.observe({ try launch.progress(from: $0) })).phase(at: .always(at: clock.now))
     }
 
     @Test func 离线一直没传上去_不锁_再开时撤回它() async throws {

@@ -1,5 +1,6 @@
 #if canImport(UIKit)
 import CueEditor
+import CueTestSupport
 import CueText
 import UIKit
 import UniformTypeIdentifiers
@@ -72,7 +73,10 @@ final class FakePasteItem: NSObject, UITextPasteItem, @unchecked Sendable {
 
     init(_ provider: NSItemProvider) { itemProvider = provider }
 
-    func resolved() async { for await _ in resolutions { return } }
+    func resolved() async throws {
+        let resolutions = resolutions
+        try await bounded("粘贴委托给出结果") { for await _ in resolutions {} }
+    }
 
     func setResult(string: String) { finish(NSAttributedString(string: string)) }
     func setResult(attributedString: NSAttributedString) { finish(attributedString) }

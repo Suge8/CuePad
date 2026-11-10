@@ -117,7 +117,7 @@ extension UpgradePreparationTests {
         let request = try await Workspace(services: app.services).said(
             ComposerDraft(text: "恢复后读附件", files: [DraftFile(key: key, name: "资料.txt")]), to: target, mode: .send)
         try await app.services.executor.start()
-        for await _ in asked.stream { break }  // 历史会话先在旁边取附件
+        try await awaitNext("历史会话先在旁边取附件", from: asked.stream)
         #expect(try await store.deliveryRequest(request.id)?.status == .known(.pending))
         #expect(app.host.calls.isEmpty)
         arrival.continuation.yield()

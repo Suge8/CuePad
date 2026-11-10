@@ -44,6 +44,8 @@ jobs:
       TEST_RUNNER_PATH: /opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin
       # 钉住的 Agent 缺一家就红，不跳过（PinnedAgent.fullMatrix）
       TEST_RUNNER_CUEPAD_AGENT_MATRIX: full
+      # 真 Agent 用例：主干与手动触发跑全量，分支只跑每家的冒烟（RealAgents.swift），没跑的在结论页列为没跑
+      TEST_RUNNER_CUEPAD_AGENT_TESTS: ${{ (github.ref_name == 'main' || github.event_name == 'workflow_dispatch') && 'all' || 'smoke' }}
     steps: &steps
       # lint 要 origin/main 与发布标签：整段历史、全部标签
       - uses: actions/checkout@v7

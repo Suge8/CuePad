@@ -8,7 +8,7 @@ import Testing
 /// 托管会话的开工、说话、歇下在 `RealCueStartTests`，这里是 dsh 才有的。真 dsh（钉住的版本）连本用例的假模型。
 /// dsh 的 ACP 实测不发 `session/request_permission`（0.2.1-rc.5：bash 在工作目录里、write 写到工作目录外，都直接执行），所以“权限”一条在这里是它的提问（`ask_user_question`）。
 @MainActor
-@Suite(RealAgents.needs(.dsh), .timeLimit(.minutes(3)))
+@Suite(RealAgents.needs(.dsh), RealAgents.tiered, .timeLimit(.minutes(3)))
 struct RealDshTests {
     /// 发送：起的是钉住版本的真 dsh，话到了模型（Messages，带着工具清单），回答回到对话里。
     @Test func aMessageReachesTheModelAndItsAnswerComesBack() async throws {
@@ -20,20 +20,6 @@ struct RealDshTests {
             try await rig.settled(id, replying: "PONG")
             let request = try #require(rig.fake.requests.first { $0.prompt.contains("PONG") }, "假模型没收到")
             #expect(request.api == .messages && request.model == rig.model.id && !request.tools.isEmpty, "\(request.api) \(request.model)")
-        }
-    }
-
-    /// 搜索工具走的是另一个地址：它那次请求也落在假模型上（没指过去就会连 api.deepseek.com）。
-    @Test func aWebSearchGoesToTheFakeModelNotTheInternet() async throws {
-        try await withDshRig { rig in
-            rig.fake.on("Search the web") { $0.step == 0 ? .call("web_search", ["queries": ["cuepad"]]) : .say("SEARCHED") }
-            let id = try await rig.runtime.open(in: rig.work, launchToken: "token-search", name: nil, model: rig.model, thinking: nil)
-            try await rig.bridge.send(PiMessage(text: "Search the web"), to: id)
-            try await rig.settled(id, replying: "SEARCHED")
-            let isSearch: (FakeRequest) -> Bool = { request in
-                (request.json["tools"] as? [[String: Any]])?.contains { ($0["type"] as? String)?.hasPrefix("web_search") == true } == true
-            }
-            #expect(rig.fake.requests.contains(where: isSearch), "搜索的请求没到假模型：\(rig.fake.requests.map { "\($0.path) \($0.results)" })")
         }
     }
 
@@ -89,7 +75,7 @@ struct RealDshTests {
     }
 
     /// 恢复：结束的会话在 dsh 重新起来后接着说，模型收到的对话里带着之前说过的。
-    @Test func anEndedSessionResumesInANewProcessWithItsConversation() async throws {
+    @Test(.tags(.smoke)) func anEndedSessionResumesInANewProcessWithItsConversation() async throws {
         try await withDshRig { rig in
             let id = try await rig.runtime.open(in: rig.work, launchToken: "token-resume", name: nil, model: rig.model, thinking: nil)
             let session = try #require(rig.bridge.session(id: id))

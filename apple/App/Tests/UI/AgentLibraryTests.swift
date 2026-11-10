@@ -76,8 +76,7 @@ struct AgentLibraryTests {
         #expect(found.instruction(.global)?.hash == nil)
         // 快照与各份正文同一批传，批内按记录名排
         let snapshot = AgentLibrary.recordID(host: TestApp.hostID).uuidString.lowercased()
-        var uploaded = uploads.makeAsyncIterator()
-        while let name = await uploaded.next(), name != snapshot {}
+        try await awaitNext("快照上传", from: uploads) { $0 == snapshot }
 
         await workspace.tidy(found.automaticOrders, in: found)
 

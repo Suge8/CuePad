@@ -37,10 +37,9 @@ struct DeliveryWaitFlowTests {
         let failed = try await eventually(services.store, { try $0.deliveryRequests().first }) { $0?.status == .known(.failed) }
         let shown = Said.request(try #require(failed)).trip(at: services.speech)
         #expect(shown == .failed(.reported(DeliveryPreparation.attachmentMissing.text)))
-        await quietPeriod(.milliseconds(300))
+        await services.executor.beginStop()()
         #expect(fetches.withLock { $0 } == 1, "不再见缺就取")
         #expect(atlas.messages.isEmpty)
-        await services.executor.beginStop()()
     }
 }
 

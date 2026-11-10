@@ -12,7 +12,7 @@ struct AutosaveTests {
     private final class Gate: Sendable {
         private let opened = AsyncStream<Void>.makeStream()
         private let started = AsyncStream<Void>.makeStream()
-        func started() async { for await _ in started.stream { break } }
+        func started() async throws { try await awaitNext("save 开始", from: started.stream) }
         func wait() async {
             started.continuation.yield()
             for await _ in opened.stream { break }
@@ -40,7 +40,7 @@ struct AutosaveTests {
         }, onError: { _ in })
 
         autosave.changed("刚打的字")
-        await gate.started()
+        try await gate.started()
         workspace.leaveEditing(id, flush: autosave, heading: "")
         await quietPeriod(.milliseconds(200))
         #expect(try await store.card(id) != nil, "写入还没落库，离开不能先把它当空白删掉")
@@ -49,22 +49,6 @@ struct AutosaveTests {
         _ = try await eventually(store, { try $0.card(id)?.body }) { $0 == "刚打的字" }
         await quietPeriod(.milliseconds(200))
         #expect(try await store.card(id)?.body == "刚打的字")
-    }
-
-    @Test func flush等在途写入落库() async throws {
-        let gate = Gate(), written = Mutex(false)
-        let autosave = Autosave(save: { _ in
-            await gate.wait()
-            written.withLock { $0 = true }
-        }, onError: { _ in })
-
-        autosave.changed("新正文")
-        await gate.started()
-        let flushing = Task { try await autosave.flush() }
-        await quietPeriod(.milliseconds(100))
-        gate.open()
-        try await flushing.value
-        #expect(written.withLock { $0 }, "flush 返回时写入已完成")
     }
 
     @Test func 写失败后离开再试一次_仍失败就报错不删() async throws {

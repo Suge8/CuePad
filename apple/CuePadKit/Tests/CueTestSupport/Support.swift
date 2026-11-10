@@ -162,8 +162,13 @@ public final class ManualTiming: Sendable {
     for continuation in due { continuation.resume() }
   }
 
-  /// 多个计时器共用钟时可指定截止时刻，避免被另一项等待提前放行；取消时立即返回。
-  public func waitForSleeper(until deadline: Date? = nil) async {
+  /// 推进钟之前先等被测的计时器睡下。多个计时器共用钟时可指定截止时刻，避免被另一项等待提前放行。
+  public func waitForSleeper(until deadline: Date? = nil) async throws {
+    try await bounded("手动钟上有人睡下") { await self.sleeperArrives(until: deadline) }
+  }
+
+  /// 取消时立即返回。
+  private func sleeperArrives(until deadline: Date?) async {
     if state.withLock({ $0.hasSleeper(until: deadline) }) { return }
     let id = UUID()
     await withTaskCancellationHandler {
@@ -209,14 +214,37 @@ public final class ManualTiming: Sendable {
 }
 
 /// 等不到时抛出：写明在等什么，测试就停在这里（接着往下跑只会在别处空等）。
-struct TimedOut: Error, CustomStringConvertible {
-  let description: String
+public struct TimedOut: Error, CustomStringConvertible {
+  public let description: String
+  public init(description: String) { self.description = description }
+}
+
+/// 一次性旗：先订阅再触发时，订阅的一侧举旗，触发的一侧用 `eventually` 等它。
+public final class Signal: Sendable {
+  private let raised = Atomic(false)
+  public init() {}
+  public func raise() { raised.store(true, ordering: .releasing) }
+  public var isRaised: Bool { raised.load(ordering: .acquiring) }
 }
 
 /// 条件等待的上限，只认一个来源：每个测试的统一时限（xc.sh 的 `TEST_TIME_LIMIT`，经 `CUEPAD_TEST_TIME_LIMIT` 交给测试进程），取它的九成。
 /// 条件要等的常是别的进程起来、答话，机器很忙时那不是几秒的事，自带一个短的墙钟上限只会假失败；挂住了仍由统一时限兜底，
 /// 取九成是让「等不到：X」这句话赶在它之前说出来。
 public let conditionBudget: Duration = .seconds(Double(ProcessInfo.processInfo.environment["CUEPAD_TEST_TIME_LIMIT"].flatMap(Int.init) ?? 120) * 0.9)
+
+/// 给一次等待加上限：到 `conditionBudget` 还没等到就抛 `TimedOut`，写明在等什么。测试里等流的下一项、等替身放行都经这里，不裸等。
+/// `wait` 要响应取消（`AsyncStream` 的迭代、库的订阅都响应），不然到了上限也回不来。
+public func bounded<T: Sendable>(_ what: String, _ wait: @escaping @Sendable () async throws -> T) async throws -> T {
+  try await withThrowingTaskGroup(of: T.self) { group in
+    group.addTask { try await wait() }
+    group.addTask {
+      try await Task.sleep(for: conditionBudget)
+      throw TimedOut(description: "等不到：\(what)")
+    }
+    defer { group.cancelAll() }
+    return try await group.next()!
+  }
+}
 
 /// 同步占住当前（主）线程，直到 `signal` 或 `conditionBudget` 到。轮询而不阻塞等：主线程阻塞等默认级线程会被
 /// Thread Performance Checker 报优先级反转，iOS 模拟器上 xcodebuild 随后收集诊断要卡满 600 秒。
@@ -245,21 +273,23 @@ public func quietPeriod(_ duration: Duration) async {
   try? await Task.sleep(for: duration)
 }
 
+/// 写入的时刻只到毫秒、排先后全看它：要让下一次写入的时刻严格晚于此前的，先过这个。等墙钟走过 2 毫秒，不猜时长。
+public func nextMillisecond() async {
+  let start = Date.timeIntervalSinceReferenceDate
+  while Date.timeIntervalSinceReferenceDate - start < 0.002 { await Task.yield() }
+}
+
 public func eventually<T: Sendable & Equatable>(
   _ store: CueStore, _ read: @escaping @Sendable (isolated CueStore) throws -> T,
-  until predicate: @escaping @Sendable (T) -> Bool
+  subscribed: Signal? = nil, until predicate: @escaping @Sendable (T) -> Bool
 ) async throws -> T {
-  try await withThrowingTaskGroup(of: T.self) { group in
-    group.addTask {
-      for try await value in store.observe(read) where predicate(value) { return value }
-      throw CancellationError()
+  try await bounded("库里的读取满足条件") {
+    var first = true
+    for try await value in store.observe(read) {
+      if first { first = false; subscribed?.raise() }  // 初始值到了：订阅已就位
+      if predicate(value) { return value }
     }
-    group.addTask {
-      try await Task.sleep(for: conditionBudget)
-      throw TimedOut(description: "等不到：库里的读取满足条件")
-    }
-    defer { group.cancelAll() }
-    return try await group.next()!
+    throw CancellationError()
   }
 }
 

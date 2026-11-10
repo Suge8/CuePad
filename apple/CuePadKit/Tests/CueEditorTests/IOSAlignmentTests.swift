@@ -43,7 +43,7 @@ struct IOSAlignmentTests {
         let destination = EditorHarness()
         let item = FakePasteItem(provider)
         destination.textView.pasteDelegate?.textPasteConfigurationSupporting?(destination.textView, transform: item)
-        await item.resolved()
+        try await item.resolved()
         let pasted = try #require(item.result)
         #expect(pasted.string == "甲\n\u{FFFC}\n乙")
         let image = try #require(pasted.attribute(.attachment, at: 2, effectiveRange: nil) as? CueImageAttachment)

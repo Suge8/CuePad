@@ -43,6 +43,7 @@ extension AgentLibraryTests {
         try await eventually("手机读到 b 的新正文") { try await phoneText("b") == "---\nname: b\ndescription: b 的说明\n---\n\n改过的正文\n" }
         let snapshot = AgentLibrary.recordID(host: TestApp.hostID).uuidString.lowercased()
         let bFile = LibraryFileText.recordID(host: TestApp.hostID, path: root.appending(path: "b/SKILL.md").path).uuidString.lowercased()
+        try await eventually("b 的正文与快照都上了云") { Set(await cloud.saved.dropFirst(sent)).isSuperset(of: [snapshot, bFile]) }
         #expect(Set(await cloud.saved.dropFirst(sent)) == [snapshot, bFile], "正文只传了 b 那一条，快照随哈希改一次")
 
         let cFile = root.appending(path: "c/SKILL.md").path

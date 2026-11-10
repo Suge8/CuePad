@@ -36,7 +36,7 @@ struct BrainLifecycleTests {
             exec sleep 300
             """#, timing: clock.timing)
         let start = Task { _ = try await config.startBrain() }
-        await clock.waitForSleeper()
+        try await clock.waitForSleeper()
         clock.advance(AgentTimeouts.endGrace)
         await #expect(throws: CodexRPCError.server(code: -1, message: "nope")) { try await start.value }
         #expect(kill(try pid(in: file), 0) != 0)
@@ -55,7 +55,7 @@ struct BrainLifecycleTests {
         let brain = try await config.startBrain()
         let stopped = Task { await brain.stop()() }
         for _ in 0..<2 {  // 关输入后一段、SIGTERM 后一段
-            await clock.waitForSleeper()
+            try await clock.waitForSleeper()
             clock.advance(AgentTimeouts.endGrace)
         }
         await stopped.value

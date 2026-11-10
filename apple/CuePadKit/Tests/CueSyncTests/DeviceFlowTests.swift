@@ -141,7 +141,7 @@ import Testing
     let mine = try await phone.store.requestAnswer(PiAnswer(promptID: "p-1", value: .option("另存为 feed-full.xml"), question: "要覆盖 public/feed.xml 吗？"), to: target, on: "mac")
     try await cloud.exchange()
     _ = try await eventually(mac.store, { try $0.deliveryRequests().allSatisfy { $0.status == .known(.succeeded) } }) { $0 }
-    await clock.waitForSleeper()
+    try await clock.waitForSleeper(until: clock.now.addingTimeInterval(DeliveryExecutor.retention.seconds))
     clock.advance(DeliveryExecutor.retention + .seconds(1))
     _ = try await eventually(mac.store, { try $0.deliveryRequests().count }) { $0 == 0 }
     try await cloud.exchange()

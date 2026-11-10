@@ -6,7 +6,7 @@ import CueStore
 @testable import CuePi
 
 @MainActor
-@Suite(RealAgents.needs(.pi))
+@Suite(RealAgents.needs(.pi), RealAgents.tiered)
 struct RealTranscriptTests {
     private func rig() async throws -> (PiProcess, PiBridge, URL) {
         let pi = try await PiProcess()

@@ -30,8 +30,8 @@ import Testing
         return []
       }
       group.addTask {
-        try await Task.sleep(for: .seconds(60))
-        throw CancellationError()
+        try await Task.sleep(for: conditionBudget)
+        throw TimedOut(description: "等不到：CLI 进程写的灵感出现在观察流里")
       }
       defer { group.cancelAll() }
       return try await group.next() ?? []

@@ -27,10 +27,7 @@ struct SessionControlsTests {
         let executor = DeliveryExecutor(store: store, hostID: "mac-a", onIssue: { _ in }) { _, _ in .failed(.verbatim(reason)) }
         try await executor.start()
         defer { await executor.stop() }
-        for try await current in store.observe({ try $0.deliveryRequest(request.id) }) {
-            if let current, !current.isOpen { return current }
-        }
-        throw CancellationError()
+        return try #require(try await eventually(store, { try $0.deliveryRequest(request.id) }) { $0.map { !$0.isOpen } ?? false })
     }
 
     @Test(arguments: [true, false])

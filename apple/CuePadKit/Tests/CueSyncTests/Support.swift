@@ -31,15 +31,11 @@ actor FakeUploader: RecordUploader {
   private(set) var batches: [(saves: [String], deletes: [String])] = []
   private var gate: CheckedContinuation<Void, Never>?
   private var holding: Bool
-  private var watchers: [(id: UUID, check: @Sendable ([(saves: [String], deletes: [String])]) -> Bool, continuation: CheckedContinuation<Void, Never>)] = []
 
   init(holding: Bool = false) { self.holding = holding }
 
   func upload(saving: [CKRecord], deleting: [CKRecord.ID]) async throws -> SentRecords {
     batches.append((saving.map(\.recordID.recordName), deleting.map(\.recordName)))
-    let ready = watchers.filter { $0.check(batches) }
-    watchers.removeAll { $0.check(batches) }
-    for watcher in ready { watcher.continuation.resume() }
     if holding {
       holding = false
       await withCheckedContinuation { gate = $0 }
@@ -54,27 +50,13 @@ actor FakeUploader: RecordUploader {
     gate = nil
   }
 
-  /// 等到上传过的批次满足条件；被取消（超出测试时限）时放手，测试照常结束、报出超时，不挂住整个测试进程。
-  func waitUntil(_ check: @escaping @Sendable ([(saves: [String], deletes: [String])]) -> Bool) async {
-    if check(batches) { return }
-    let id = UUID()
-    await withTaskCancellationHandler {
-      await withCheckedContinuation { continuation in
-        if Task.isCancelled { return continuation.resume() }
-        watchers.append((id, check, continuation))
-      }
-    } onCancel: {
-      Task { await self.cancel(id) }
-    }
+  /// 等到上传过的批次满足条件；到不了就在时限前抛 `TimedOut` 并说出在等什么。
+  func waitUntil(_ what: String, _ check: @escaping @Sendable ([(saves: [String], deletes: [String])]) -> Bool) async throws {
+    try await eventually(what) { check(batches) }
   }
 
-  private func cancel(_ id: UUID) {
-    watchers.first { $0.id == id }?.continuation.resume()
-    watchers.removeAll { $0.id == id }
-  }
-
-  func uploaded(_ name: String) async { await waitUntil { $0.contains { $0.saves.contains(name) } } }
-  func deleted(_ name: String) async { await waitUntil { $0.contains { $0.deletes.contains(name) } } }
+  func uploaded(_ name: String) async throws { try await waitUntil("上传出现 \(name)") { $0.contains { $0.saves.contains(name) } } }
+  func deleted(_ name: String) async throws { try await waitUntil("删除出现 \(name)") { $0.contains { $0.deletes.contains(name) } } }
 }
 
 let testZone = CKRecordZone.ID(zoneName: "CuePadTest", ownerName: CKCurrentUserDefaultName)

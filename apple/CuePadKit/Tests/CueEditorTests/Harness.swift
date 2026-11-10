@@ -55,24 +55,6 @@ final class EditorHarness {
         try? await Task.sleep(for: .seconds(seconds))
     }
 
-    func imageLineFrames() -> [CGRect] {
-        var frames: [CGRect] = []
-        let origin = textView.textContainerOrigin
-        textView.textLayoutManager!.enumerateTextLayoutFragments(from: nil, options: []) { fragment in
-            if (fragment.textElement as? NSTextParagraph)?.attributedString.string.trimmingCharacters(in: .newlines) == "\u{FFFC}" {
-                frames.append(fragment.layoutFragmentFrame.offsetBy(dx: origin.x, dy: origin.y))
-            }
-            return true
-        }
-        return frames
-    }
-
-    func renderedCenterColor(of rect: CGRect) -> NSColor? {
-        let rep = textView.bitmapImageRepForCachingDisplay(in: rect)!
-        textView.cacheDisplay(in: rect, to: rep)
-        return rep.colorAt(x: rep.pixelsWide / 2, y: rep.pixelsHigh / 2)?.usingColorSpace(.sRGB)
-    }
-
     func privatePasteboard() -> NSPasteboard {
         let pasteboard = NSPasteboard(name: NSPasteboard.Name("cue-editor-tests-\(UUID().uuidString)"))
         pasteboard.clearContents()

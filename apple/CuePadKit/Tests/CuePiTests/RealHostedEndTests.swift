@@ -14,7 +14,7 @@ import Testing
 /// 各家各走一遍的只有各家自己接的那部分（停这一轮、接着会话、起进程时登记）；收尾的时限、升级与日志全在 `HostedProcesses`，
 /// 由一家（Codex）作代表。每个用例自己一套钟与临时目录，可以并行。
 @MainActor
-@Suite(.enabled(if: Hosting.uncovered == nil || PinnedAgent.fullMatrix, Comment(rawValue: Hosting.uncovered ?? "")))
+@Suite(RealAgents.tiered, .enabled(if: Hosting.uncovered == nil || PinnedAgent.fullMatrix, Comment(rawValue: Hosting.uncovered ?? "")))
 struct RealHostedEndTests {
     /// 一个 Agent 进程上接着验各家停这一轮的接法，收尾用真钟：
     /// 起来马上点结束（没有在跑的一轮，不发中断）；说出一句马上点停止（#81：不等它开跑，Claude Code 不等 init、Codex 不丢在开跑前的停止）；

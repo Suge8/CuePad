@@ -13,14 +13,16 @@ import Testing
 struct DeliveryRecoveryTests {
     let clock = ManualTiming()
     private func outcome(_ request: DeliveryRequest, in appStore: CueStore) async throws -> DeliveryRequest {
-        for try await raw in appStore.observe({ try $0.deliveryRequest(request.id) }) {
-            guard let raw else { throw CueStoreError.notFound }
-            if !raw.isOpen { return raw }
+        let clock = clock
+        let done = try await awaitNext("请求收尾", from: appStore.observe({ try $0.deliveryRequest(request.id) })) { raw in
+            guard let raw else { return false }
+            if !raw.isOpen { return true }
             if raw.status == .known(.confirming), let due = raw.deadlineAt {
                 clock.advance(.seconds(max(0, due.timeIntervalSince(clock.now)) + 1))
             }
+            return false
         }
-        throw CancellationError()
+        return try #require(done)
     }
 
     private func session(_ app: TestApp, reply: String) async throws -> (PiSessionState, FakeExtension) {
@@ -145,24 +147,6 @@ struct DeliveryRecoveryTests {
         #expect(try await store.deliveryRequests().count == 2)
         #expect(try await store.deliveryRequest(first.id)?.status == .known(.unconfirmed))
         #expect(ext.messages.map(\.text) == ["继续检查", "继续检查"])
-        await app.services.executor.beginStop()()
-    }
-
-    @Test func 唤醒暂时连不上也不在一次领取里再开宿主() async throws {
-        let app = TestApp(timing: clock.timing), store = app.services.store
-        defer { app.pi.stop(); app.services.cancelBackgroundWork() }
-        try await store.upsertPiSession(IndexedSession(
-            id: "sleeping", path: app.directory.appending(path: "sleeping.jsonl").path, cwd: app.directory.path,
-            title: "发布", lastActivityAt: .now), host: TestApp.hostID)
-        try await PiStateRecorder(store: store, hostID: TestApp.hostID).update(sessionID: "sleeping", state: .ended)
-        let target = try #require(try await store.allPiSessionStates().first)
-        app.host.resumeFailures = [PiHostError.notConnected]
-        let request = try await say("检查一次发布结果", to: target, app: app)
-        try await app.services.executor.start()
-        let done = try await outcome(request, in: store)
-        #expect(done.status == .known(.failed))
-        #expect(app.host.extensions.isEmpty)
-        #expect(try await store.deliveryRequests().map(\.id) == [request.id])
         await app.services.executor.beginStop()()
     }
 

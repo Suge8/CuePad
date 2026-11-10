@@ -8,7 +8,7 @@ import Testing
 @MainActor
 /// 断言的是伪终端里真终端界面的输出与按键、真常驻服务（`CodexTerminal`）。常驻服务的目录是共用的 /tmp/codex-daemon-<uid>，一次只跑一个（`.serialized`），
 /// 收尾时检查那个目录只剩跑之前的样子（`DaemonDirectory`）。模型是假模型，剧本在 `play`。
-@Suite(RealAgents.needs(.codex), .serialized, .timeLimit(.minutes(6)))
+@Suite(RealAgents.needs(.codex), RealAgents.tiered, .serialized, .timeLimit(.minutes(6)))
 struct RealCodexTerminalTests {
     /// 用到的话（写成真模型也照做的英文）：回答一个词、跑一个慢命令再回答、要一个需要批准的命令、没有的模型报错。
     private func play(_ model: FakeModel) {
@@ -25,26 +25,40 @@ struct RealCodexTerminalTests {
         model.on({ $0.model == "no-such-model-xyz" }) { _ in .fail("The model no-such-model-xyz does not exist", status: 404) }
     }
 
+    /// 终端里的会话经钩子与常驻服务上桥，CuePad 发的话有回答、终端里也显示。
+    @Test(.tags(.smoke)) func aTerminalSessionIsSeenAndAnswersCuePad() async throws {
+        try await withCodexRig(daemon: true) { rig in
+            play(rig.model)
+            let terminal = try CodexTerminal(rig.codex)
+            defer { terminal.stop() }
+            let session = try await answered(terminal, rig)
+            #expect(!session.hosted && session.agent == .codex)
+
+            let hello = UUID()
+            try await rig.bridge.send(PiMessage(text: "Reply with the single word PONG.", deliveryID: hello.uuidString), to: session.id)
+            try await eventually("回答了 CuePad 的话") { rig.replies(session).last?.uppercased().contains("PONG") == true }
+            #expect(try rig.transcript(session).messages.contains { $0.deliveryID == hello && $0.text == "Reply with the single word PONG." })
+            try await eventually("终端里也显示了这句话") { terminal.printed("PONG") }
+        }
+    }
+
+    /// 终端界面起来、在终端里说一句、答完歇下：返回这时桥上的会话
+    private func answered(_ terminal: CodexTerminal, _ rig: CodexRig) async throws -> PiSession {
+        try await eventually("终端界面起来了") { terminal.printed("OpenAI Codex") }
+        try terminal.type("Reply with the single word READY.")
+        try await eventually("终端会话的回答") {
+            rig.session.map { rig.replies($0).last?.uppercased().contains("READY") == true && $0.state == .settled } ?? false
+        }
+        return try #require(rig.session)
+    }
+
     @Test func aTerminalSessionIsSeenAndDrivenFromCuePad() async throws {
         try await withCodexRig(approvals: "on-request", daemon: true) { rig in
             play(rig.model)
             let terminal = try CodexTerminal(rig.codex)
             defer { terminal.stop() }
-            try await eventually("终端界面起来了") { terminal.printed("OpenAI Codex") }
-
-            try terminal.type("Reply with the single word READY.")
-            try await eventually("终端会话的回答") {
-                rig.session.map { rig.replies($0).last?.uppercased().contains("READY") == true && $0.state == .settled } ?? false
-            }
-            let session = try #require(rig.session)
-            #expect(!session.hosted && session.agent == .codex)
+            let session = try await answered(terminal, rig)
             let id = session.id
-
-            let hello = UUID()
-            try await rig.bridge.send(PiMessage(text: "Reply with the single word PONG.", deliveryID: hello.uuidString), to: id)
-            try await eventually("回答了 CuePad 的话") { rig.replies(session).last?.uppercased().contains("PONG") == true }
-            #expect(try rig.transcript(session).messages.contains { $0.deliveryID == hello && $0.text == "Reply with the single word PONG." })
-            try await eventually("终端里也显示了这句话") { terminal.printed("PONG") }
 
             // 在跑时说：停下这一轮（连同在跑的命令），以这句开新一轮。回答用生造的词：被停下那一轮说过的过程说明也算它的回答，可能提到要说的词
             try await rig.bridge.send(PiMessage(text: "Run the shell command `sleep 60`, then reply with the single word ZEBRA."), to: id)

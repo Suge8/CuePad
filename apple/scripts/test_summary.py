@@ -15,6 +15,8 @@ from collections import Counter, defaultdict
 
 log_path, status = sys.argv[1], int(sys.argv[2])
 lines = [l.replace("\u200b", "").rstrip("\n") for l in open(log_path, encoding="utf-8", errors="replace")]
+# 输出被切开时，原因里的中文有时以八进制转义的字节出来（"未覆\347\233\226"）：还原成字，「未覆盖：」才认得出
+octal = lambda text: re.sub(r"(?:\\[0-7]{3})+", lambda m: bytes(int(b, 8) for b in m[0].split("\\")[1:]).decode("utf-8", "replace"), text)
 
 st_total = st_failed = st_skipped = xc_total = xc_failed = xc_skipped = 0
 failed_names, durations = set(), []
@@ -29,9 +31,9 @@ for i, line in enumerate(lines):
     elif m := re.match(r"✘ Test (.+?) failed after ", line):
         failed_names.add(m[1])
     elif m := re.match(r'➜ Test (.+?) skipped: "(.*)"$', line):
-        skip_reason[m[1]] = m[2]
+        skip_reason[m[1]] = octal(m[2])
     elif m := re.match(r'➜ Suite (.+?) skipped: "(.*)"$', line):
-        skip_suites[m[2]].append(m[1])
+        skip_suites[octal(m[2])].append(m[1])
     elif m := re.match(r"[✔━] Test (.+) passed after ([\d.]+) seconds", line):
         if not re.search(r" with \d+ arguments? ", m[1]):
             durations.append((float(m[2]), m[1]))

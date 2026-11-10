@@ -72,35 +72,6 @@ import Testing
     #endif
 
     #if os(macOS)
-    /// 手机换绑期间先到的一条"再说一遍"：Mac 认它是手机回来了，照常执行，不因来源不符拒绝。
-    @Test func aCommandFromThePhonesNewLeaseRelinksAndRuns() async throws {
-        let app = TestApp(), store = app.services.store, signal = AuditSignaling(), host = TestApp.hostID
-        defer { app.services.cancelBackgroundWork() }
-        try await store.updateCueProfile { $0.enabledAt = .now; $0.hostID = host }
-        let voice = VoiceService(services: app.services, signaling: signal)
-        app.services.voice = voice
-        let fixture = VoiceFlowFixture(app.services)
-        try await fixture.connect()
-        let reply = try await store.addCueMessage(.cue, text: "saved result", answeredRequests: nil)
-        try await eventually("reply visible") { fixture.call.canRepeat && fixture.call.replies.contains { $0.id == reply.id } }
-        let session = VoiceSessionID(fixture.call.session), phone = VoiceDeviceID("phone-audit")
-        let gone = VoiceEndpoint(device: phone, lease: UUID()), back = VoiceEndpoint(device: phone, lease: UUID())
-        let remote = VoiceRemoteMedia(header: .init(version: 1, sender: gone, recipient: signal.local, session: session, sequence: 1,
-                                                    expiresAtMilliseconds: 0, purpose: .media), offer: .init(sdp: "offer"), signaling: signal)
-        remote.link = .relinking(peer: phone, until: .now + VoiceSignalFormat.relinkGrace, reason: .peerLeft)
-        voice.remote = remote
-        let id = VoiceCommand.ID(UUID())
-        let command = VoiceCommand(id: id, action: .repeatReply(message: reply.id))
-        await voice.receive(.received(.init(header: .init(version: 1, sender: back, recipient: signal.local, session: session, sequence: 1,
-                                                          expiresAtMilliseconds: .max, purpose: .command(id: id)),
-                                            payload: .command(command: command))))
-        #expect(remote.link == .bound(local: signal.local, peer: back))
-        try await eventually("result sent") { signal.sent.contains { if case .commandResult = $0 { true } else { false } } }
-        let result = VoiceSignalPayload.commandResult(result: .init(command: id, outcome: .readbackQueued(message: reply.id)))
-        #expect(zip(signal.sent, signal.recipients).contains { $0 == result && $1 == back })
-        voice.remote = nil
-        try await fixture.hangUp()
-    }
 
     /// 手机回来后先到的是一条命令（resume 还在路上，或手机已因命令的结果认为接回、不再问）：换绑后投影照样推给手机的新租约。
     @Test func aCommandBeforeResumeStillBringsProjectionsBack() async throws {

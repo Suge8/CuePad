@@ -114,7 +114,7 @@ extension RealOpenCodeTests {
     }
 
     /// 恢复：说过话的托管会话结束、接入与后台服务都停了，重新接入后接着它说，模型收到的对话里带着之前说过的。
-    @Test func aSessionEndedAndItsServiceStoppedResumesWithItsConversation() async throws {
+    @Test(.tags(.smoke)) func aSessionEndedAndItsServiceStoppedResumesWithItsConversation() async throws {
         try await withOpenCode { sandbox, store, bridge, runtime in
             let id = try await runtime.open(in: sandbox.work, launchToken: "token-r", name: nil, model: nil, thinking: nil)
             let sessionID = try #require(bridge.session(id: id)?.sessionID)

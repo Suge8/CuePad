@@ -109,7 +109,7 @@ struct MacSyncTests {
         #expect(try await uploads.next("在线记录上传") == record)
         #expect(try await store.macOnline(host))
 
-        await clock.waitForSleeper()
+        try await clock.waitForSleeper()
         clock.advance(MacPresence.renewal)
         #expect(try await uploads.next("续期的在线记录上传") == record)
         #expect(try await store.macOnline(host))
@@ -117,9 +117,9 @@ struct MacSyncTests {
         rig.wakeCenter.post(name: NSWorkspace.willSleepNotification, object: nil)
         #expect(try await !store.macOnline(host))
         #expect(try await uploads.next("在线记录上传") == record)
-        await clock.waitForSleeper()
+        try await clock.waitForSleeper()
         clock.advance(MacPresence.renewal)
-        await clock.waitForSleeper()
+        try await clock.waitForSleeper()
         #expect(try await !store.macOnline(host))
 
         rig.wakeCenter.post(name: NSWorkspace.didWakeNotification, object: nil)

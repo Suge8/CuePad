@@ -22,7 +22,7 @@ import Testing
       let id = "s\(round)"
       try await recorder.update(sessionID: id, state: .thinking)
       try await recorder.update(sessionID: id, state: .tool, detail: "stale")
-      await clock.waitForSleeper()
+      try await clock.waitForSleeper()
       clock.advance(PiStateRecorder.detailInterval)
       try await recorder.update(sessionID: id, state: .settled)
       try await recorder.update(sessionID: id, state: .settled)

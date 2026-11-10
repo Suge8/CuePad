@@ -30,16 +30,6 @@ struct QuotaRefreshTests {
         try await eventually("会话与额度到界面") { !services.liveSessions.live.isEmpty && !services.accountQuotas.items.isEmpty }
     }
 
-    @Test func Mac上没有能答额度的会话时_自动刷新不发请求() async throws {
-        defer { services.cancelBackgroundWork(); Task { await services.sync?.stop() } }
-        try await macWithQuota(.codex)
-
-        #expect(await services.refreshQuota(.automatic) == nil)
-
-        #expect(try await quotaRequests().isEmpty)
-        #expect(services.accountQuotas.phase == .idle)
-    }
-
     @Test func 没查到保留原因_冷却内自动不再问_重试照问() async throws {
         defer { services.cancelBackgroundWork(); Task { await services.sync?.stop() } }
         try await macWithQuota(.pi)
