@@ -21,6 +21,7 @@ extension AgentLibraryTests {
         try await eventually("快照里有要合并的全局规则") { workspace.library?.merge(into: .global) != nil }
 
         weak var shown: CueTextView?
+        var address = ""
         do {
             workspace.openLibrary(.instruction(.global))
             let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 900, height: 600), styleMask: [.titled], backing: .buffered, defer: false)
@@ -31,6 +32,7 @@ extension AgentLibraryTests {
             try await eventually("文件页挂上、正文拿到键盘") { window.firstResponder is CueTextView }
             let editor = try #require(window.firstResponder as? CueTextView)
             shown = editor
+            address = "\(Unmanaged.passUnretained(editor).toOpaque())"
             let draft = try #require(workspace.fileDrafts[FileDraftKey(host: TestApp.hostID, file: .instruction(.global))])
             func type(_ text: String) { _ = window.firstResponder?.tryToPerform(#selector(NSResponder.insertText(_:)), with: text) }
 
@@ -48,8 +50,25 @@ extension AgentLibraryTests {
             await draft.leave()
             #expect(read(shared) == "共用的\n我加的")
         }
-        // AppKit 的拼写检查给正文排的延迟合并块（`NSCreateMainQueueHysteresisBlock`）关窗后还攥着它一阵，连带它闭包里的服务与库；慢机器上过了收尾的 1 秒宽限
-        try await eventually("关窗后正文放掉") { shown == nil }
+        let deadline = ContinuousClock.now + .seconds(10)
+        while shown != nil, ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(10)) }
+        if shown != nil { Issue.record(Comment(rawValue: "关窗 10 秒后正文仍没放掉，引用链：\n" + Self.referrers(of: address))) }
+    }
+
+    /// 取证：`leaks --traceTree` 列出谁攥着这个地址的对象；完整输出打到标准输出（CI 上传的 test.log 里），返回带类型名的强引用行。
+    static func referrers(of address: String) -> String {
+        let process = Process(), out = Pipe()
+        process.executableURL = URL(filePath: "/usr/bin/leaks")
+        process.arguments = ["--traceTree=\(address)", "\(getpid())"]
+        process.standardOutput = out
+        process.standardError = out
+        do { try process.run() } catch { return "leaks 起不来：\(error)" }
+        let text = String(decoding: out.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+        process.waitUntilExit()
+        print("LEAKS-TRACE BEGIN\n\(text)\nLEAKS-TRACE END")
+        let lines = text.split(separator: "\n")
+        let strong = lines.filter { $0.contains("__strong") || $0.contains("Region") || $0.contains("block_invoke") || $0.contains("Thread") }
+        return (lines.prefix(12) + strong.prefix(80)).map { String($0.prefix(240)) }.joined(separator: "\n")
     }
 }
 #endif
