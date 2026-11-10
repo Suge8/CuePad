@@ -1,10 +1,22 @@
 name: Swift
 
-# 与本机同一个入口 apple/scripts/xc.sh；四段各占一台 runner 并行，每段都是干净机器上的冷编译。
+# 与本机同一个入口 apple/scripts/xc.sh；各段各占一台 runner 并行，每段都是干净机器上的冷编译。
 # runner 标签 xcode-27：actions/runner-images 的 macOS 27 镜像（Xcode 27.0 与 iOS 27.0 模拟器 iPhone 17 都在）。
 # CloudKit 真同步、推送、后台与签名只能在设备上验，这里只跑替身。
 on:
   push:
+    # 只认分支：发版标签（mac/…、ios/…）指向的提交推上来时已经跑过，打标签不再跑一遍
+    branches: ['**']
+    # 只改文档、设计稿、落地页的推送不跑；落地页的色板令牌除外（lint 拿它对 Palette）
+    paths:
+      - '**'
+      - '!docs/**'
+      - '!design/**'
+      - '!landing/**'
+      - 'landing/src/styles/base.css'
+      - '!README*.md'
+      - '!WORDS.md'
+      - '!AGENTS.md'
   workflow_dispatch:
 
 concurrency:
@@ -26,14 +38,13 @@ jobs:
           - { name: check, args: check }
           - { name: test kit, args: test kit }
           - { name: test mac, args: test mac }
-          - { name: test ios sync, args: test ios -only-testing:CuePadTests/SyncAccountTests -only-testing:CuePadTests/FileSyncTests -only-testing:CuePadTests/NewSessionFlowTests }
-    env:
+    env: &env
       # xcodebuild 只把 TEST_RUNNER_ 开头的变量交给测试进程：测试自己起的 node 脚本（MCP 替身等）要找得到 /opt/homebrew/bin 里的 node。
       # 真 Agent 不走这个 PATH：它们装在专用缓存里、旁边带着 node（PinnedAgent）
       TEST_RUNNER_PATH: /opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin
       # 钉住的 Agent 缺一家就红，不跳过（PinnedAgent.fullMatrix）
       TEST_RUNNER_CUEPAD_AGENT_MATRIX: full
-    steps:
+    steps: &steps
       # lint 要 origin/main 与发布标签：整段历史、全部标签
       - uses: actions/checkout@v7
         with:
@@ -60,3 +71,17 @@ jobs:
           name: logs-${{ strategy.job-index }}
           path: apple/.derived/test.log
           if-no-files-found: ignore
+
+  # iOS 这一段只在主干跑，分支上要跑就手动触发（workflow_dispatch）：一次约 20 分钟里模拟器开机约 7 分钟、编译约 12 分钟，13 条用例只跑几秒，
+  # 是每次推送最慢的一段；模拟器在高负载的 runner 上还会开不起来，红的多半不是代码。
+  ios:
+    if: github.ref_name == 'main' || github.event_name == 'workflow_dispatch'
+    name: test ios sync
+    runs-on: xcode-27
+    timeout-minutes: 45
+    strategy:
+      matrix:
+        include:
+          - { name: test ios sync, args: test ios -only-testing:CuePadTests/SyncAccountTests -only-testing:CuePadTests/FileSyncTests -only-testing:CuePadTests/NewSessionFlowTests }
+    env: *env
+    steps: *steps
