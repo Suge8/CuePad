@@ -1,6 +1,8 @@
 # landing/ — 落地页（SvelteKit + Vercel）
 
-双语（EN/中）营销落地页，Svelte 5 + SvelteKit 2 + GSAP，全量预渲染。Vercel 项目 `cuepad-landing` 连着 GitHub `main` 自动部署：推到 main 就上线 [cue-pad.com](https://cue-pad.com)。
+双语（EN/中）营销落地页，Svelte 5 + SvelteKit 2 + GSAP，全量预渲染。
+
+**冻结中**（见根 AGENTS.md「护栏」）：用户说解冻前不改这里。Vercel 项目 `cuepad-landing` 已与 GitHub 断开，推送不再部署，[cue-pad.com](https://cue-pad.com) 停在断开前的版本；解冻后在本目录 `vercel --prod` 手动上线，要恢复推送即部署就 `vercel git connect`。
 
 ```bash
 bun install
