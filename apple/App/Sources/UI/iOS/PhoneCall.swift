@@ -296,7 +296,7 @@ struct PhoneVoiceEndings: View {
             case .failed(let issue):
                 workspace.say(issue.phoneMessage, tone: .failure, action: issue.phoneRecovery.map(recovery))
             case .unsent:
-                workspace.say("这次通话有话没交给 Cue", tone: .failure, action: Workspace.NoticeAction(title: String(localized: "查看")) {
+                workspace.say("这次通话有话没交给 Cue", tone: .failure, action: Workspace.NoticeAction(title: String(localized: "查看")) { workspace in
                     workspace.show(.cue)
                     workspace.voiceDetails = .unanchored
                 })
@@ -306,7 +306,7 @@ struct PhoneVoiceEndings: View {
     }
 
     private func recovery(_ action: PhoneVoiceAction) -> Workspace.NoticeAction {
-        Workspace.NoticeAction(title: String(localized: action.title)) {
+        Workspace.NoticeAction(title: String(localized: action.title)) { workspace in
             if case .start = action {
                 workspace.show(.cue)
                 workspace.callCue()

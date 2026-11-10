@@ -5,6 +5,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
+@Suite(.releasesLibraries)
 struct SyncAccountTests {
     let cloud = SimulatedCloud([CKRecord.peerFloor(CueStore.peerFloor)])
     /// 账号变化只发给这里起的同步：全进程的通知会叫醒并行的别的测试。

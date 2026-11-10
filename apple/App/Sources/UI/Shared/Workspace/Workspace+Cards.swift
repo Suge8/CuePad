@@ -30,7 +30,7 @@ extension Workspace {
         for request in ended { _ = services.uploaded(request) }
         // 做完了就给一个归档（不自动归档）
         guard status == .done else { return }
-        let archiving = NoticeAction(title: String(localized: "归档")) { try await self.archive(id) }
+        let archiving = NoticeAction(title: String(localized: "归档")) { try await $0.archive(id) }
         // 终端里你自己开的会话不替你结束，如实说它还在
         let text: LocalizedStringResource = terminalKept ? "已完成，终端未结束" : "已完成"
         say(text, action: archiving)
@@ -152,6 +152,6 @@ extension Workspace {
 
     func run(_ action: NoticeAction) {
         notice = nil
-        attempt { try await action.run() }
+        attempt { try await action.run(self) }
     }
 }

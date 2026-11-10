@@ -3,6 +3,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
+@Suite(.releasesLibraries)
 struct SessionControlsTests {
     let app = TestApp()
     var store: CueStore { app.services.store }
@@ -25,7 +26,7 @@ struct SessionControlsTests {
     private func execute(_ request: DeliveryRequest, failing reason: String) async throws -> DeliveryRequest {
         let executor = DeliveryExecutor(store: store, hostID: "mac-a", onIssue: { _ in }) { _, _ in .failed(.verbatim(reason)) }
         try await executor.start()
-        defer { Task { await executor.stop() } }
+        defer { await executor.stop() }
         for try await current in store.observe({ try $0.deliveryRequest(request.id) }) {
             if let current, !current.isOpen { return current }
         }

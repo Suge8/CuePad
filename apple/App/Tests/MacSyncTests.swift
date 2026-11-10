@@ -8,6 +8,7 @@ import Synchronization
 @testable import CuePad
 @testable import CuePi
 
+@Suite(.releasesLibraries)
 struct MacSyncTests {
     let rig = TestApp()
     var services: AppServices { rig.services }

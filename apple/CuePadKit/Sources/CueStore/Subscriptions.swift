@@ -20,6 +20,8 @@ final class Subscriptions: Sendable {
     /// 提交过几次（只算碰了可订阅的表的）；快照与重读据此知道其间有没有写入。
     var commits = 0
     var recent: [(commit: Int, tables: Set<Table>)] = []
+    /// 每个订阅的重读任务：读的一方停了（`onTermination`）就记下任务，等它收尾（`stopping`）。
+    var runs: [UUID: Task<Void, Never>?] = [:]
   }
 
   /// 收窄时回看的提交数：一次重读期间进来的提交远少于此；更早的已不在其中时按碰过处理（多读一次）。
@@ -40,6 +42,15 @@ final class Subscriptions: Sendable {
   }
 
   func remove(_ token: UUID) { _ = state.withLock { $0.subscribers.removeValue(forKey: token) } }
+
+  /// 订阅的重读任务起之前登记，任务结束时 `finished`；读的一方停了用 `stopping` 交出任务。
+  func began(_ run: UUID) { state.withLock { $0.runs[run] = .some(nil) } }
+
+  func stopping(_ run: UUID, _ task: Task<Void, Never>) { state.withLock { if $0.runs[run] != nil { $0.runs[run] = task } } }
+
+  func finished(_ run: UUID) { _ = state.withLock { $0.runs.removeValue(forKey: run) } }
+
+  var stopped: [Task<Void, Never>] { state.withLock { $0.runs.values.compactMap { $0 } } }
 
   /// 一次提交碰了 `tables`：记下，返回读到其中某张表的订阅者（按行收窄的由调用方再判断，见 `CueStore.touches`）。
   func committed(_ tables: Set<Table>) -> [Subscriber] {

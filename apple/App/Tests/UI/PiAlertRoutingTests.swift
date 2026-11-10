@@ -11,6 +11,7 @@ import UIKit
 import Vision
 #endif
 
+@Suite(.releasesLibraries)
 struct PiAlertRoutingTests {
     let app = TestApp()
 
@@ -43,7 +44,7 @@ struct PiAlertRoutingTests {
         let alerts = alertCenter()
         let workspace = Workspace(services: app.services)
         let following = Task { await workspace.follow() }
-        defer { following.cancel() }
+        defer { await following.stop() }
         workspace.show(.project(Project.defaultID))
 
         alerts.receive(payload(subscription: "somebody.else", record: UUID()))
@@ -69,7 +70,7 @@ struct PiAlertRoutingTests {
         let alerts = alertCenter()
         let workspace = Workspace(services: app.services)
         let following = Task { await workspace.follow() }
-        defer { following.cancel() }
+        defer { await following.stop() }
         workspace.path = [.session(id, seed: SessionDigest(session: seed, project: nil, deliveries: []))]
 
         alerts.receive(payload(subscription: "cuepad.pi.waiting", record: id))

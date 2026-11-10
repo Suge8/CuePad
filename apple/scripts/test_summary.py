@@ -2,7 +2,7 @@
 """xc.sh test 收尾时给 Agent 看的一页结论。用法：test_summary.py <完整日志> <xc.sh test 的退出码>
 
 只读完整日志（xcodebuild 的原始输出，一次调用里 Kit 与 App 两段都在里面），不改退出码。分两家数：
-- Swift Testing：`✔/✘ Test run with N tests …` 给总数，`✘ Test … failed after`、`➜ Test … skipped` 给失败与跳过；
+- Swift Testing：`✔/✘ Test run with N tests …`（有已知问题 `withKnownIssue` 时这类行以 `━` 开头） 给总数，`✘ Test … failed after`、`➜ Test … skipped` 给失败与跳过；
 - XCTest：每个测试包收尾的 `Test Suite 'All tests'|'Selected tests'` 后一行 `Executed N tests, with … skipped and … failures`。
 钉住的 Agent 没装时它的用例跳过、原因里带「未覆盖：」（CueTestSupport 的 PinnedAgent）：单列成「没跑、不算通过的」，不混进普通的跳过。
 按家参数化的用例跳过的那一例（`Test.cancel`）日志里没有任何一行，汇总把整个用例算通过：所以跑过真 Agent 用例时另列没装的家（agents.py status）。
@@ -24,7 +24,7 @@ runtime_warnings = Counter()
 expect_executed = False
 
 for i, line in enumerate(lines):
-    if m := re.match(r"[✔✘] Test run with (\d+) tests? ", line):
+    if m := re.match(r"[✔✘━] Test run with (\d+) tests? ", line):
         st_total += int(m[1])
     elif m := re.match(r"✘ Test (.+?) failed after ", line):
         failed_names.add(m[1])
@@ -32,7 +32,7 @@ for i, line in enumerate(lines):
         skip_reason[m[1]] = m[2]
     elif m := re.match(r'➜ Suite (.+?) skipped: "(.*)"$', line):
         skip_suites[m[2]].append(m[1])
-    elif m := re.match(r"✔ Test (.+) passed after ([\d.]+) seconds", line):
+    elif m := re.match(r"[✔━] Test (.+) passed after ([\d.]+) seconds", line):
         if not re.search(r" with \d+ arguments? ", m[1]):
             durations.append((float(m[2]), m[1]))
     elif m := re.match(r"Test Case '-\[(\S+) (\S+)\]' passed \(([\d.]+) seconds\)", line):

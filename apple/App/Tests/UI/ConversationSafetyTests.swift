@@ -7,6 +7,7 @@ import Testing
 @testable import CuePad
 @testable import CuePi
 
+@Suite(.releasesLibraries)
 struct ConversationSafetyTests {
     @Test func Cue不打断来源未确认的运行轮次() async throws {
         let app = TestApp(), store = app.services.store

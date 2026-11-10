@@ -18,7 +18,7 @@ extension AgentLibraryTests {
         try write(mine, pi.appending(path: "AGENTS.md"))
         try write("", codex.appending(path: "AGENTS.md"))
         let keeping = keep()
-        defer { keeping.cancel() }
+        defer { await keeping.stop() }
 
         let found = try await library("扫出全局规则") { $0.tidies.contains { $0.id == "global-instructions" } }
         #expect(found.instructions.allSatisfy { $0.path != map.path }, "全局规则里没有那份目录地图")
@@ -63,7 +63,7 @@ extension AgentLibraryTests {
         let project = try await store.createProject(name: "Site", color: "#000000")
         try await store.setDirectory(site.path, for: project.id)
         let keeping = keep()
-        defer { keeping.cancel() }
+        defer { await keeping.stop() }
 
         let found = try await library("扫出要合并的") { $0.merge(into: .global) != nil && $0.instruction(.project(project.id)) != nil }
         let merge = try #require(found.merge(into: .global))
@@ -90,7 +90,7 @@ extension AgentLibraryTests {
         let tidied = try await library("合并完全局规则没有要整理的") { $0.merge(into: .global) == nil && !$0.tidies.contains { $0.id == "global-instructions" } }
         #expect(tidied.instruction(.agent(.claudeCode, file: "rules/security.md")) != nil, "整理后照列 Claude Code 另读的")
 
-        try await #require(workspace.notice?.action).run()
+        try await #require(workspace.notice?.action).run(workspace)
 
         #expect(read(claude.appending(path: "AGENTS.md")) == "# Claude 目录里的\n" && read(literal.appending(path: "CLAUDE.md")) == "# Grok 读的\n" && !exists(rules))
         #expect(RelativeLink.points(codex.appending(path: "AGENTS.md"), to: mine))

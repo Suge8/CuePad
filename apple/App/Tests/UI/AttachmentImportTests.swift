@@ -5,6 +5,7 @@ import SwiftUI
 import Testing
 @testable import CuePad
 
+@Suite(.releasesLibraries)
 struct AttachmentImportTests {
     let app = TestApp()
     var store: CueStore { app.services.store }

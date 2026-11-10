@@ -4,6 +4,7 @@ import Testing
 @testable import CuePad
 
 @MainActor
+@Suite(.releasesLibraries)
 struct AwaitingReplyTests {
     let rig = TestApp()
     var store: CueStore { rig.services.store }

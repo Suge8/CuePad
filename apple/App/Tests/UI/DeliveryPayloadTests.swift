@@ -7,6 +7,7 @@ import Testing
 @testable import CuePad
 
 @MainActor
+@Suite(.releasesLibraries)
 struct DeliveryPayloadTests {
     @Test func 同步已读出的旧payload被撤回后不再交出_下一句仍正常送达() async throws {
         let cloud = ReceiptTests.WeakCloud()

@@ -7,6 +7,7 @@ import Testing
 @testable import CuePad
 
 @MainActor
+@Suite(.releasesLibraries)
 struct SetupTests {
     let app = TestApp()
     var services: AppServices { app.services }
@@ -126,7 +127,7 @@ struct SetupTests {
         #expect(try await panel(workspace).cue == .waiting("正在从 iCloud 同步…"))
 
         let following = Task { await workspace.followCue() }
-        defer { following.cancel() }
+        defer { await following.stop() }
         _ = try await services.store.updateCueProfile { profile in  // 第一遍拉回来的：Cue 在原来那台上
             profile.hostID = "mac-old"
             profile.enabledAt = .now

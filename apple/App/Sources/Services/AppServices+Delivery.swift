@@ -18,7 +18,7 @@ extension AppServices {
         case .cue(let message, _):
             guard try await store.withdrawCueMessage(message.id) else { throw SendError.alreadyHeard }
         }
-        Task { await upload(said.id, deleted: true) }
+        uploadSoon(said.id, deleted: true)
     }
 
     private func withdrawRemotely(_ id: UUID) async throws {
@@ -39,7 +39,7 @@ extension AppServices {
 
     /// Mac 本机也走投送通道、由执行器交给扩展；写出后立即上传（不等它完成），结果用 `CueStore.outcome(of:)` 等。
     func uploaded(_ request: DeliveryRequest) -> DeliveryRequest {
-        Task { await upload(request.id) }
+        uploadSoon(request.id)
         return request
     }
 
@@ -95,7 +95,7 @@ extension AppServices {
         let request = uploaded(try await store.requestLaunch(
             PiLaunch(project: project, prompt: prompt, token: token, agent: agent, model: model, thinking: thinking, fast: fast),
             title: title, on: host, card: card, intent: intent))
-        if case .replacing(let previous) = intent { Task { await upload(previous, deleted: true) } }
+        if case .replacing(let previous) = intent { uploadSoon(previous, deleted: true) }
         return SessionLaunch(request: request.id, token: token)
     }
 

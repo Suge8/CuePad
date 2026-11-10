@@ -7,6 +7,7 @@ import Testing
 @testable import CuePi
 
 @MainActor
+@Suite(.releasesLibraries)
 struct UpgradePreparationTests {
     func oldSession(_ app: TestApp) async throws -> (PiSessionState, FakeExtension) {
         let ext = try await app.host.connect("upgrade-target", cwd: app.directory.path, extensionVersion: 0)

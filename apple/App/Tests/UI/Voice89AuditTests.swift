@@ -51,7 +51,7 @@ import Testing
     }
 }
 
-@Suite(.serialized) @MainActor struct Voice89AuditTests {
+@Suite(.releasesLibraries, .serialized) @MainActor struct Voice89AuditTests {
     @Test func signedLeaseReplayAndOldCallback() async throws {
         let key = SymmetricKey(size: .bits256)
         let a = VoiceSignalConnection(room: "isolated", challenge: "same", device: .init("a"), key: key)

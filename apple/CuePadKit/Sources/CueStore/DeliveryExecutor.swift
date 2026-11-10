@@ -38,6 +38,7 @@ public actor DeliveryExecutor {
   private var draining: Task<Void, Never>?
   private var rerun = false
   private var handling: Task<DeliveryOutcome, Never>?
+  private let leftBehind = LeftBehind()
   var cleanupWake: Date?
   private var startFailure: (any Error)?
 
@@ -124,6 +125,13 @@ public actor DeliveryExecutor {
     }
     draining = drain
     await drain.value
+  }
+
+  /// 等 `stop` 不等的：被取消后还在自己收尾的 handler、核对与上传回执（它们引用的资料库到这时才放）。不响应取消的一直等不到：
+  /// 给要确认资料库放掉了的收尾用（测试），停止与退出不等它。
+  public func leftBehindSettled() async {
+    _ = await handling?.value
+    await leftBehind.settled()
   }
 
   func enqueue() {
@@ -272,7 +280,7 @@ public actor DeliveryExecutor {
       let stored = await reporting({ try await store.deliveryRequest(request.id) }), let stored,
       stored.status != .known(.succeeded), started, !Task.isCancelled {
       confirmations.put(stored.id, .spawn { id in
-        guard let result = try? await abandonable({ await verify(stored) }) else { return }
+        guard let result = try? await abandonable(leaving: self.leftBehind, { await verify(stored) }) else { return }
         await self.finish(stored, result)
         self.confirmations.release(stored.id, id)
       })
@@ -286,7 +294,7 @@ public actor DeliveryExecutor {
     let token = UUID()
     uploads.put(token, .spawn { [onWritten] owner in
       guard !Task.isCancelled else { return }
-      guard (try? await abandonable({ await onWritten(id) })) != nil else { return }
+      guard (try? await abandonable(leaving: self.leftBehind, { await onWritten(id) })) != nil else { return }
       self.uploads.release(token, owner)
     })
   }

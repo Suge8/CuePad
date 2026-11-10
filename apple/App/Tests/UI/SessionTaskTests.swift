@@ -7,6 +7,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
+@Suite(.releasesLibraries)
 struct SessionTaskTests {
     let rig = TestApp()
     var services: AppServices { rig.services }
@@ -59,7 +60,7 @@ struct SessionTaskTests {
         #expect(try await store.card(task.id)?.status == .done)
         let executor = DeliveryExecutor(store: store, hostID: services.hostID, onIssue: { Issue.record("\($0)") }) { _, _ in .succeeded }
         try await executor.start()
-        defer { Task { await executor.stop() } }
+        defer { await executor.stop() }
 
         try await reply("登录后还是白屏", to: "s1", in: workspace)
         let sent = try #require(try await store.deliveryRequests(toSession: "s1").last)
@@ -156,7 +157,7 @@ struct SessionTaskTests {
             return .succeeded
         }
         try await executor.start()
-        defer { Task { await executor.stop() } }
+        defer { await executor.stop() }
         let cue = CueTools(store: store, wait: 5)
         func ended(_ id: String) async throws -> Bool {
             let end = try #require(try await store.deliveryRequests(toSession: id).last { $0.mode == .known(.end) })

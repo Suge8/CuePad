@@ -25,7 +25,7 @@ extension AgentLibraryTests {
         try FileManager.default.createDirectory(at: agents.appending(path: "skills/binary"), withIntermediateDirectories: true)
         try Data([0xFF, 0xFE, 0x00]).write(to: agents.appending(path: "skills/binary/SKILL.md"))
         let keeping = keep()
-        defer { keeping.cancel() }
+        defer { await keeping.stop() }
 
         let found = try await library("扫出同名的") { $0.tidies.filter { if case .duplicate = $0.kind { true } else { false } }.count == 3 }
         let lintInApp = "duplicate/lint/\(project.id.uuidString)", lintInBlog = "duplicate/lint/\(blog.id.uuidString)"
@@ -44,7 +44,7 @@ extension AgentLibraryTests {
         let kept = try await library("pr 不再同名") { $0.duplicate(of: projectCopy) == nil }
         #expect(kept.skills.filter { $0.name == "pr" }.map(\.path) == [projectCopy, other.appending(path: ".agents/skills/pr").path])
 
-        try await #require(workspace.notice?.action).run()
+        try await #require(workspace.notice?.action).run(workspace)
 
         #expect(exists(agents.appending(path: "skills/pr/SKILL.md")))
         _ = try await library("撤销后 pr 又同名") { $0.duplicate(of: projectCopy) != nil }
@@ -60,7 +60,7 @@ extension AgentLibraryTests {
         let config = "model = \"gpt\"\nmodel_instructions_file = \"prompt.md\"\n\n[tools]\nweb = true\n"
         try write(config, codex.appending(path: "config.toml"))
         let keeping = keep()
-        defer { keeping.cancel() }
+        defer { await keeping.stop() }
 
         let found = try await library("扫出全局规则") { $0.tidies.map(\.id) == ["global-instructions"] }
         let merge = try #require(found.merge(into: .global))
@@ -92,7 +92,7 @@ extension AgentLibraryTests {
         let global = try #require(merged.instruction(.global))
         #expect(merged.instruction(.piSystem) == nil && merged.unseen(global) == [])
 
-        try await #require(workspace.notice?.action).run()
+        try await #require(workspace.notice?.action).run(workspace)
 
         #expect(read(claude.appending(path: "CLAUDE.md")) == "全局规则\n" && read(rules) == "共用的\n")
         #expect(read(pi.appending(path: "SYSTEM.md")) == "你是 Pi\n" && read(codex.appending(path: "config.toml")) == config)

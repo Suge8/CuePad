@@ -7,6 +7,7 @@ import Testing
 @testable import CuePad
 
 @MainActor
+@Suite(.releasesLibraries)
 struct CopyFileTests {
     let app = TestApp()
 

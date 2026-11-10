@@ -11,6 +11,7 @@ import Testing
 /// 到期报未确认、写明可能的原因，不报送达。这些局面由它自己的设置与启动方式决定，CuePad 不预判（`PiSession.confirmsFromHistory`）。
 /// 会话都先于 CuePad 开着、钩子不通（`ClaudeRig`），所以 CuePad 只拿到收件箱、没有令牌。
 @Suite(
+    .releasesLibraries,
     .enabled(if: PinnedAgent.claude.uncovered == nil, Comment(rawValue: PinnedAgent.claude.uncovered ?? "")),
     .enabled(if: ExecutableLocator.standard.candidates("tmux").first != nil, "要 tmux"), .timeLimit(.minutes(4)))
 @MainActor

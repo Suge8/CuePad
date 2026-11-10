@@ -3,6 +3,7 @@ import Synchronization
 import Testing
 @testable import CuePad
 
+@Suite(.releasesLibraries)
 struct AutosaveTests {
     let app = TestApp()
     var store: CueStore { app.services.store }

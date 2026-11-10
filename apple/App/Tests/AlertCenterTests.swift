@@ -5,6 +5,7 @@ import Testing
 import UserNotifications
 @testable import CuePad
 
+@Suite(.releasesLibraries)
 struct AlertCenterTests {
     typealias Case = (
         UNAuthorizationStatus, AlertCenter.Registration, PiAlertSubscriptionStatus, PiAlertStatus.State, PiAlertStatus.Action?, String?

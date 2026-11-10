@@ -7,6 +7,7 @@ import Testing
 @testable import CuePad
 
 @MainActor
+@Suite(.releasesLibraries)
 struct VoiceFlowTests {
     private func setup() async throws -> (TestApp, VoiceFlowFixture) {
         let app = TestApp(), host = TestApp.hostID

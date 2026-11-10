@@ -71,10 +71,13 @@ import os
         #endif
     }
 
-    func cancel() {
+    /// 返回的任务都结束时语音不再攥着资料库（`AppServices.cancelBackgroundWork` 的等待里等它们）。
+    @discardableResult
+    func cancel() -> [Task<Void, Never>] {
+        var stopping: [Task<Void, Never>] = []
         #if os(macOS)
-        observing?.cancel()
-        projectionRetries.values.forEach { $0.cancel() }
+        stopping = [observing].compactMap(\.self) + Array(projectionRetries.values) + (call?.stopWatching() ?? [])
+        stopping.forEach { $0.cancel() }
         observing = nil
         call?.hangUp()
         #else
@@ -87,6 +90,7 @@ import os
         replyPages.disconnected()
         revokeProjection()
         #endif
+        return stopping
     }
 
     var phase: VoiceCallProjection.Phase? {

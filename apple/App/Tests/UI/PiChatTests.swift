@@ -3,6 +3,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
+@Suite(.releasesLibraries)
 struct PiChatTests {
     let start = Date(timeIntervalSince1970: 1_000_000)
 

@@ -3,6 +3,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
+@Suite(.releasesLibraries)
 struct WidgetDataTests {
     let app = TestApp()
     var services: AppServices { app.services }

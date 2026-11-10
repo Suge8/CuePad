@@ -11,7 +11,7 @@ struct NewSessionPanel: ViewModifier {
         content
             .observing(services.store, into: $agents, onError: workspace.fail) { [host = services.hostID] in try $0.macAgents(on: host) }
             .panel(isPresented: Bindable(workspace).showsNewSession) {
-                NewSessionForm(agents: agents, opened: workspace.showLaunched)
+                NewSessionForm(agents: agents) { $0.showLaunched($1) }
             }
             .confirmsLaunchAgain(workspace.sessionLaunching(.form))
     }
@@ -20,7 +20,7 @@ struct NewSessionPanel: ViewModifier {
 /// 发出后到有结果前锁住（手机的输入框不锁）；再开按上一次的结果直接重试或先确认。
 struct NewSessionForm: View {
     let agents: MacAgents?
-    let opened: (String) -> Void
+    let opened: (Workspace, String) -> Void
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -108,7 +108,7 @@ struct NewSessionForm: View {
 
     private func start(_ place: ProjectFolders.LaunchPlace, _ choice: AgentModelChoice) {
         workspace.submitSession(in: place, draft: ComposerDraft(text: prompt), choice: choice) { [opened] in
-            opened($0.sessionID)
+            opened($0, $1.sessionID)
         }
     }
 }

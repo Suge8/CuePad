@@ -5,6 +5,7 @@ import Testing
 
 /// 各自只从自己的事实推出：Cue 的是那条提问的 answer / answeredAt，会话的是作答成功时写进对话的那一句。
 @MainActor
+@Suite(.releasesLibraries)
 struct AnswerLineTests {
     let app = TestApp()
     var store: CueStore { app.services.store }
@@ -50,7 +51,7 @@ struct AnswerLineTests {
             sessionID: "s", messages: [PiChatMessage(sessionID: "s", entryID: "u1", seq: 1, role: .user, text: "把 RSS 改成全文", at: asked.addingTimeInterval(-60))],
             recap: PiRecap(lastPrompt: "把 RSS 改成全文")))
         let executor = DeliveryExecutor(store: store, hostID: "mac", onIssue: { Issue.record("\($0)") }) { _, _ in .succeeded }
-        defer { Task { await executor.stop() } }
+        defer { await executor.stop() }
 
         let request = try await app.services.answer(.option("另存为 feed-full.xml"), to: session)
         _ = try await store.requestAnswer(PiAnswer(promptID: "p-1", value: .option("覆盖"), question: question.text), to: session.target, on: "mac", cue: true)

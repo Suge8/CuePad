@@ -4,7 +4,7 @@ import Testing
 @testable import CuePad
 
 /// 中转断开时通话照常，对端在宽限期内以新租约回来就接着打（`VoiceLink`）；替身见 `Voice89AuditTests`。
-@Suite(.serialized) @MainActor struct VoiceRelinkTests {
+@Suite(.releasesLibraries, .serialized) @MainActor struct VoiceRelinkTests {
     #if os(iOS)
     /// 中转断了不挂电话：Mac 以新租约回来的那帧带着最新投影，手机换绑；Mac 问 resume 手机就答，之后的挂断送到新租约。
     @Test func relayDropKeepsTheCallUntilTheMacComesBack() async throws {

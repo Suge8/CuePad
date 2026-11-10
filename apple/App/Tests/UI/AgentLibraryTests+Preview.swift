@@ -8,15 +8,16 @@ import Testing
 @testable import CuePad
 
 extension AgentLibraryTests {
-    @Test func 标出合并时打字不改正文_取消后键盘回到正文接着存() async throws {
+    @Test(.libraryHeldByFramework("文件页挂进真窗口：窗口关上、视图拆掉后，SwiftUI 的视图图数据仍攥着环境里的工作区与服务"))
+    func 标出合并时打字不改正文_取消后键盘回到正文接着存() async throws {
         let shared = rules
         try write("共用的\n", shared)
         try write("全局规则\n", claude.appending(path: "CLAUDE.md"))
         let keeping = keep()
-        defer { keeping.cancel() }
+        defer { await keeping.stop() }
         let workspace = Workspace(services: services)
         let following = Task { await workspace.follow() }
-        defer { following.cancel() }
+        defer { await following.stop() }
         try await eventually("快照里有要合并的全局规则") { workspace.library?.merge(into: .global) != nil }
 
         workspace.openLibrary(.instruction(.global))

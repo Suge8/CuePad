@@ -6,6 +6,7 @@ import Testing
 @testable import CuePad
 
 @MainActor
+@Suite(.releasesLibraries)
 struct CueGateTests {
     let app = TestApp()
     var services: AppServices { app.services }
@@ -40,7 +41,7 @@ struct CueGateTests {
         try await app.syncs(reconciled: false)
         let workspace = Workspace(services: services)
         let following = Task { await workspace.followCue() }
-        defer { following.cancel() }
+        defer { await following.stop() }
 
         #expect(try await gate() == .waiting("正在从 iCloud 同步…"))
         #expect(workspace.cue.now.quietLine == "正在从 iCloud 同步…")  // Cue 此刻（侧栏名片、菜单栏面板、小组件）：不说"还没启用"

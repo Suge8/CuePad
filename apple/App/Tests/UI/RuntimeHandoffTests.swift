@@ -3,6 +3,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
+@Suite(.releasesLibraries)
 struct RuntimeHandoffTests {
     @Test(arguments: [DeliveryMode.send, .start], ["unconfirmed", "future_ack", "pending"])
     func 未确认交接仍在推进中但不算在跑(mode: DeliveryMode, status: String) async throws {

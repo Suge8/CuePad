@@ -6,6 +6,7 @@ import Testing
 @testable import CuePad
 
 /// 经真实隔离的 Pi 与桥入库，仅模型服务是替身。
+@Suite(.releasesLibraries)
 struct ChatGPTTests {
     private func rig(oauth: Bool = true) async throws -> HistoryRulesTests.Rig {
         try await HistoryRulesTests.Rig(providerFixture: URL(filePath: #filePath).deletingLastPathComponent().appending(path: "Fixtures/chatgpt.ts"), oauth: oauth)

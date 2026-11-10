@@ -5,6 +5,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
+@Suite(.releasesLibraries)
 struct GlobalShortcutTests {
     @Test func 启动时按设置注册_更换成功才落设置_失败回滚() throws {
         let rig = TestApp()
@@ -26,6 +27,7 @@ struct GlobalShortcutTests {
     }
 }
 
+@Suite(.releasesLibraries)
 struct PiHistoryPersistenceTests {
     private func sessionFile(in rig: TestApp, lines: [String]) throws -> URL {
         let directory = rig.piPaths.sessionsDirectory.appending(path: "--work-x--")
@@ -75,6 +77,7 @@ struct PiHistoryPersistenceTests {
     }
 }
 
+@Suite(.releasesLibraries)
 struct AgentLineTests {
     @Test func 各家接入后都写已接入与版本() async throws {
         let rig = TestApp()
@@ -95,6 +98,7 @@ struct AgentLineTests {
     }
 }
 
+@Suite(.releasesLibraries)
 struct AgentUpgradeTests {
     @Test func 已装旧版扩展时启动检查静默升级到随包版本() async throws {
         let rig = TestApp()
@@ -125,6 +129,7 @@ struct AgentUpgradeTests {
     }
 }
 
+@Suite(.releasesLibraries)
 struct AgentIndexingTests {
     private func claudeSession(in rig: TestApp, id: String) throws {
         let project = rig.directory.appending(path: "claude/projects/-work-x")
@@ -170,6 +175,7 @@ struct AgentIndexingTests {
     }
 }
 
+@Suite(.releasesLibraries)
 struct CueEnableTests {
     private func launch() async throws -> TestApp {
         let app = TestApp()

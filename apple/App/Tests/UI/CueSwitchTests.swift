@@ -6,6 +6,7 @@ import Testing
 @testable import CuePad
 
 @MainActor
+@Suite(.releasesLibraries)
 struct CueSwitchTests {
     let app = TestApp()
     var services: AppServices { app.services }
@@ -23,7 +24,7 @@ struct CueSwitchTests {
         }
         let workspace = Workspace(services: services)
         let following = Task { await workspace.followCue() }
-        defer { following.cancel() }
+        defer { await following.stop() }
         try await eventually("在 Mac Studio 上运行") { workspace.cue.now.quietLine == "在「Mac Studio」上运行" }
 
         let toggle = CueSettingsModel()

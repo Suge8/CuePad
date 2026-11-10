@@ -8,7 +8,7 @@ import Testing
 
 /// 真 Cue 进程、真实工具服务与库；语音端和执行 Agent 是外部替身。
 /// 断言请求从语音派到任务，再从同一个窗口停止真正收到的会话；旁边的会话及后来的人类回合不受影响。
-@Suite(.pinnedPi, .serialized)
+@Suite(.releasesLibraries, .pinnedPi, .serialized)
 @MainActor
 struct VoiceExecutionTests {
     @Test func Cue先提问再收尾_两条真实回复都归到原语音请求() async throws {

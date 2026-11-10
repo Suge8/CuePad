@@ -7,6 +7,7 @@ import SQLite3
 import Testing
 @testable import CuePad
 
+@Suite(.releasesLibraries)
 struct PiHistoryFailureTests {
     let app = TestApp()
     var services: AppServices { app.services }

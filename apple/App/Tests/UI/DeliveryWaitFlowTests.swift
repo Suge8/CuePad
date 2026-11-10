@@ -9,6 +9,7 @@ import Testing
 @testable import CuePad
 
 @MainActor
+@Suite(.releasesLibraries)
 struct DeliveryWaitFlowTests {
     @Test func 附件取过了仍不在这台Mac_气泡写没送达原因_只取一次() async throws {
         let app = TestApp()

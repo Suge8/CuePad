@@ -7,6 +7,7 @@ import Synchronization
 import Testing
 @testable import CuePad
 
+@Suite(.releasesLibraries)
 struct AgentDayTests {
     let app = TestApp()
     var store: CueStore { app.services.store }

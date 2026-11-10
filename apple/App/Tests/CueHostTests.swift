@@ -19,14 +19,14 @@ extension Trait where Self == ConditionTrait {
     static var pinnedPi: Self { .enabled(if: PinnedAgent.pi.uncovered == nil, Comment(rawValue: PinnedAgent.pi.uncovered ?? "")) }
 }
 
-@Suite(.pinnedPi, .serialized)
+@Suite(.releasesLibraries, .pinnedPi, .serialized)
 struct CueHostTests {
     /// 不是等写入歇下才交。不量时长：写入到交出去为止一直在继续，交不出去由测试时限报。
     @Test func 库正忙时你的话马上送进Cue() async throws {
         let rig = try await Rig()
         let store = rig.store
         let busy = Task {
-            let recorder = PiStateRecorder(store: store, hostID: "mac-busy")
+            let recorder = PiStateRecorder(store: store, hostID: "mac-busy", minInterval: .zero)  // 每次都当场写：不留合并的定时写入（它攥着库到间隔结束）
             var round = 0
             while !Task.isCancelled {
                 round += 1
@@ -36,7 +36,7 @@ struct CueHostTests {
                 try? await Task.sleep(for: .milliseconds(20))
             }
         }
-        defer { busy.cancel() }
+        defer { await busy.stop() }
         try await eventually("写入已经跑起来") { try await store.allPiSessionStates().count == 10 }
         try await rig.say("库正忙时说的")
         try await eventually("交给 Cue") {

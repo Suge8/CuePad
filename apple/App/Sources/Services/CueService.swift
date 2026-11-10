@@ -43,6 +43,8 @@ final class CueService {
     @ObservationIgnored private let hostID: String
     @ObservationIgnored private let notifier: any CueNotifying
     private var duty: (keeper: CueKeeper, task: Task<Void, Never>)?
+    /// 上一次值班的任务：停过之后再停（退出收尾在别处停过之后又停一次）等的还是它，不当成没在值班。
+    private var lastDuty: Task<Void, Never>?
     private var store: CueStore { setup.recorder.store }
     private nonisolated static let log = Logger(subsystem: AppIdentity.id, category: "cue")
 
@@ -70,8 +72,9 @@ final class CueService {
     /// 退出收尾：立即不再值班；返回的过程等大脑退出，再等值班收尾（正在起的大脑起好后由值班停掉）。
     /// 已在跑的大脑不经主线程就停（见 `AppServices.beginShutdown`）；正在起的那个要等主线程把值班走完。
     func stop() -> @Sendable () async -> Void {
-        guard let duty else { return {} }
+        guard let duty else { return { [lastDuty] in await lastDuty?.value } }
         self.duty = nil
+        lastDuty = duty.task
         let stopping = duty.keeper.stop(), task = duty.task, recorder = setup.recorder
         return {
             await stopping()
@@ -90,6 +93,7 @@ final class CueService {
     private func endDuty() async {
         guard let duty else { return }
         self.duty = nil
+        lastDuty = duty.task
         duty.keeper.stop()
         await duty.task.value
         await Self.rest(setup.recorder)

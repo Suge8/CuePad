@@ -7,6 +7,7 @@ import Testing
 @testable import CueStore
 
 @MainActor
+@Suite(.releasesLibraries)
 struct SlashDeliveryTests {
     static let commands = [
         PiSlashCommand(name: "greet", summary: "Greet someone", source: .known(.prompt)),

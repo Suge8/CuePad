@@ -9,6 +9,7 @@ import Testing
 @testable import CueSync
 
 @MainActor
+@Suite(.releasesLibraries)
 struct QuotaRefreshTests {
     let app = TestApp(sync: .built { CloudSync.simulated(store: $0, peerFloor: CueStore.peerFloor) })
     var services: AppServices { app.services }
@@ -52,7 +53,7 @@ struct QuotaRefreshTests {
             }
         }
         try await mac.start()
-        defer { Task { await mac.stop() } }
+        defer { await mac.stop() }
 
         let failure = await services.refreshQuota(.automatic)
         #expect(failure?.text == "这台 Mac 上没有在线的 Pi 会话")
@@ -227,7 +228,7 @@ struct QuotaRefreshTests {
             request.mode == .known(.quota) ? .succeeded : .failed(ShownText("不该有别的请求"))
         }
         try await mac.start()
-        defer { Task { await mac.stop() } }
+        defer { await mac.stop() }
         #expect(await retry.value == nil)
         #expect(try await quotaRequests(in: app).count == 2)
         #expect(services.accountQuotas.phase == .idle)

@@ -6,6 +6,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
+@Suite(.releasesLibraries)
 struct SendTests {
     let rig = TestApp()
     var services: AppServices { rig.services }

@@ -5,6 +5,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
+@Suite(.releasesLibraries)
 struct RuntimeGrokTests {
     @Test func 旧登记与旧轮次不签运行证明_当前进程关联与新报告才接入() async throws {
         let app = TestApp(), store = app.services.store, workspace = Workspace(services: app.services)
@@ -54,7 +55,7 @@ struct RuntimeGrokTests {
         try JSONSerialization.data(withJSONObject: entries).write(to: home.appending(path: "active_sessions.json"))
         let events = app.pi.changes()
         let consume = Task { try await app.services.consumePiChanges(events) }
-        defer { consume.cancel() }
+        defer { await consume.stop() }
         let runtime = GrokRuntime(bridge: app.pi, paths: paths, files: store.files, grok: { executable })
         defer { _ = runtime.stop() }
         try runtime.start()

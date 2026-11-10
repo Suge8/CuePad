@@ -3,6 +3,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
+@Suite(.releasesLibraries)
 struct ReplyTests {
     /// 偏好放在临时目录（`TempDefaults`）：按名字开的套件落进本机的 ~/Library/Preferences，每跑一次留一个文件。
     private func settings(_ preferences: TempDefaults) -> AppSettings {

@@ -8,6 +8,7 @@ import Testing
 @testable import CueStore
 
 @MainActor
+@Suite(.releasesLibraries)
 struct DeliveryMigrationTests {
     private func say(in app: TestApp) async throws -> DeliveryRequest {
         await Workspace(services: app.services).speak("上传结果", to: .session(

@@ -5,6 +5,7 @@ import SwiftUI
 import Testing
 @testable import CuePad
 
+@Suite(.releasesLibraries)
 struct SubmissionFlowTests {
     let app = TestApp()
     var store: CueStore { app.services.store }
@@ -57,7 +58,7 @@ struct SubmissionFlowTests {
         let start = SessionStart(project: project.id)
         let launching = workspace.sessionLaunching(start.launchKey)
         func submit(_ draft: ComposerDraft) -> Task<Void, Never>? {
-            workspace.submitSession(start, in: place, draft: draft, choice: choice, opened: { _ in })
+            workspace.submitSession(start, in: place, draft: draft, choice: choice, opened: { _, _ in })
         }
         let url = app.directory.appending(path: "截图.png")
         try pngData().write(to: url)

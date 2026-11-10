@@ -17,13 +17,13 @@ extension Workspace {
 
     @discardableResult
     private func start(_ leaf: UUID, fresh: Bool) -> Task<Void, Never>? {
-        launch(sessionLaunching(.card(leaf))) { [services] intent in
+        launch(sessionLaunching(.card(leaf))) { [services] workspace, intent in
             let store = services.store
             let plan = try await store.handOffPlan(leaf, host: services.hostID, fresh: fresh)
             let text = try await store.opening(of: leaf, plan.opensSession)
             switch plan.destination {
             case .session(let session, _, let host):
-                self.send(text, to: AgentTarget(session: session, host: host), card: leaf)
+                workspace.send(text, to: AgentTarget(session: session, host: host), card: leaf)
                 return nil
             case .launch(let project, let host):
                 // 会话名由任务定（`CueStore.requestLaunch`）；请求上显示的目标名同新会话的其他入口：任务没有标题时写项目名

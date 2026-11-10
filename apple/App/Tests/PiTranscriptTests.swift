@@ -6,6 +6,7 @@ import Synchronization
 import Testing
 @testable import CuePad
 
+@Suite(.releasesLibraries)
 struct PiTranscriptTests {
     let rig = TestApp()
     var services: AppServices { rig.services }
@@ -187,7 +188,7 @@ struct PiTranscriptTests {
         _ = try await live("s1", file: file)
         let indexer = PiHistoryIndexer(agent: .pi, paths: AgentPaths(pi: rig.piPaths), files: store.files) { _ in nil }!
         let consuming = Task { await services.consumePiHistory(indexer.events(following: AsyncStream { $0.yield([file]) }, scope: .all), agent: .pi) }
-        defer { consuming.cancel() }
+        defer { await consuming.stop() }
         for try await count in store.observe({ try $0.piMessages(of: "s1").count }) where count == 4 { break }
 
         let handle = try FileHandle(forWritingTo: file)
@@ -228,7 +229,7 @@ struct PiTranscriptTests {
             if days.withLock({ $0 }) > 8 { try await Task.sleep(for: .seconds(3_600)) }
         }
         let pruning = Task { await services.historyStore.keepPruned(timing: timing) }
-        defer { pruning.cancel() }
+        defer { await pruning.stop() }
 
         for try await count in store.observe({ try $0.piMessages(of: "old").count }) where count == 0 { break }
     }

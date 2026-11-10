@@ -12,7 +12,7 @@ final class SessionLaunching {
     fileprivate(set) var sending = false
     var confirmingAgain = false
     fileprivate(set) var error: String?
-    @ObservationIgnored fileprivate var opened: ((LaunchProgress.Claimed) -> Void)?
+    @ObservationIgnored fileprivate var opened: Workspace.LaunchOpened?
     @ObservationIgnored fileprivate var again: (() -> Task<Void, Never>?)?
     @ObservationIgnored fileprivate var watching: Task<Void, Never>?
 
@@ -48,6 +48,8 @@ final class SessionLaunching {
         return again?()
     }
 
+    deinit { watching?.cancel() }
+
     fileprivate func reset() {
         watching?.cancel()
         (launch, progress, error, confirmingAgain, opened, again, watching) = (nil, nil, nil, false, nil, nil, nil)
@@ -55,6 +57,12 @@ final class SessionLaunching {
 }
 
 extension Workspace {
+    /// 认领到时调，存到那时为止（可能永远不来）。它与再开要用的 `LaunchMaking` 都存在进度里（`SessionLaunching` 归工作区存）：
+    /// 工作区作为参数给，闭包里不必也别去攥着它，不然工作区与它的进度互相攥着都放不掉。
+    typealias LaunchOpened = (Workspace, LaunchProgress.Claimed) -> Void
+    /// 返回 nil 是没开新会话（任务接着用了已有的会话）。
+    typealias LaunchMaking = (Workspace, SessionLaunchIntent) async throws -> SessionLaunch?
+
     func sessionLaunching(_ key: SessionLaunching.Key) -> SessionLaunching {
         if let launching = launches[key] { return launching }
         let launching = SessionLaunching()
@@ -65,11 +73,11 @@ extension Workspace {
     @discardableResult
     func submitSession(
         _ start: SessionStart = SessionStart(), in place: ProjectFolders.LaunchPlace?, draft: ComposerDraft, choice: AgentModelChoice?,
-        opened: @escaping (LaunchProgress.Claimed) -> Void
+        opened: @escaping LaunchOpened
     ) -> Task<Void, Never>? {
         guard let place, let host = place.host, let choice, let agent = choice.agent else { return nil }
         let claim = claimImports(draft)
-        return launch(sessionLaunching(start.launchKey), opened: opened) { [services] intent in
+        return launch(sessionLaunching(start.launchKey), opened: opened) { [services] _, intent in
             let draft = await claim.settled()
             return try await services.launchSession(
                 in: place.project.id, prompt: draft.stored.nonEmpty, title: start.name ?? place.project.shownName, on: host,
@@ -78,11 +86,10 @@ extension Workspace {
         }
     }
 
-    /// `make` 返回 nil 是没开新会话（任务接着用了已有的会话）。
     @discardableResult
     func launch(
-        _ launching: SessionLaunching, confirmedAgain: Bool = false, opened: ((LaunchProgress.Claimed) -> Void)? = nil,
-        _ make: @escaping (SessionLaunchIntent) async throws -> SessionLaunch?
+        _ launching: SessionLaunching, confirmedAgain: Bool = false, opened: LaunchOpened? = nil,
+        _ make: @escaping LaunchMaking
     ) -> Task<Void, Never>? {
         guard launching.canSubmit(at: services.speech) else { return nil }
         if launching.progress?.submission(at: services.speech) == .confirm, !confirmedAgain {
@@ -96,7 +103,7 @@ extension Workspace {
         return Task {
             defer { launching.sending = false }
             do {
-                guard let launch = try await make(intent) else { return }
+                guard let launch = try await make(self, intent) else { return }
                 watch(launching, launch, opened: opened)
             } catch {
                 launching.error = error.localizedDescription
@@ -105,7 +112,7 @@ extension Workspace {
         }
     }
 
-    func resume(_ start: SessionStart, opened: @escaping (LaunchProgress.Claimed) -> Void) {
+    func resume(_ start: SessionStart, opened: @escaping LaunchOpened) {
         let launching = sessionLaunching(start.launchKey)
         if let launch = launching.launch ?? start.launched { watch(launching, launch, opened: opened) }
     }
@@ -116,8 +123,8 @@ extension Workspace {
         show(.session(sessionID))
     }
     #else
-    func entering(_ start: SessionStart) -> (LaunchProgress.Claimed) -> Void {
-        { [weak self] claimed in if self?.newSession?.id == start.id { self?.claimSession(claimed.id) } }
+    static func entering(_ start: SessionStart) -> LaunchOpened {
+        { workspace, claimed in if workspace.newSession?.id == start.id { workspace.claimSession(claimed.id) } }
     }
     #endif
 
@@ -128,19 +135,21 @@ extension Workspace {
         launching.reset()
     }
 
-    private func watch(_ launching: SessionLaunching, _ launch: SessionLaunch, opened: ((LaunchProgress.Claimed) -> Void)?) {
+    private func watch(_ launching: SessionLaunching, _ launch: SessionLaunch, opened: LaunchOpened?) {
         launching.opened = opened
         guard launching.launch != launch || launching.watching == nil else { return }
         launching.watching?.cancel()
         launching.launch = launch
-        launching.watching = Task { [weak self, store = services.store] in
+        // 弱持有：工作区（iOS 每个窗口一份）连同它的进度一起没了，这一路订阅就随进度的 deinit 取消，不等一次永远不来的认领
+        launching.watching = Task { [weak self, weak launching, store = services.store] in
             do {
                 for try await progress in store.observe({ try launch.progress(from: $0) }) {
+                    guard let self, let launching else { return }
                     launching.progress = progress
                     guard let claimed = progress.claimed else { continue }
                     let opened = launching.opened
                     launching.reset()
-                    opened?(claimed)
+                    opened?(self, claimed)
                     return
                 }
             } catch is CancellationError {

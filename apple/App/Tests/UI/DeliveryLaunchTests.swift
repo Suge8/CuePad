@@ -7,6 +7,7 @@ import Testing
 @testable import CuePad
 
 @MainActor
+@Suite(.releasesLibraries)
 struct DeliveryLaunchTests {
     @Test(arguments: ["no_auth", "unconfirmed_turn"])
     func 会话已创建但首句拒绝_保留未知_不能删除重发或自动再开(reason: String) async throws {

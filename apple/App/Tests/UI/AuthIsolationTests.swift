@@ -5,6 +5,7 @@ import Testing
 @testable import CuePad
 
 /// 只替换两个外部服务，Pi、桥、投送与存储照常运行。
+@Suite(.releasesLibraries)
 struct AuthIsolationTests {
     @Test func Claude授权未返回或已失效_GPT仍能发话换模型_主动查额度明确失败() async throws {
         let fixture = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "Fixtures/auth-isolation.ts")
@@ -47,7 +48,7 @@ struct AuthIsolationTests {
         #expect(try #require(quotas.first { $0.provider == "anthropic" && $0.hostID == TestApp.hostID }).status == .unobserved)
 
         let quota = Task { await rig.services.refreshQuota(.manual) }
-        defer { quota.cancel() }
+        defer { await quota.stop() }
         try await Self.control("entered", at: endpoint)
         workspace.attempt { _ = try await rig.services.configure(PiConfig(model: PiModelKey(provider: "openai", id: "echo")), for: current) }
         _ = try await eventually(store, { try $0.allPiSessionStates().first?.model?.key.id }) { $0 == "echo" }

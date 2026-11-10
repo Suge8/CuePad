@@ -21,7 +21,7 @@ extension AgentLibraryPhoneTests {
         try await store.recordAgentLibrary(library, texts: [Self.rulesPath: shared, claude: own])
         let workspace = Workspace(services: app.services)
         let following = Task { await workspace.follow() }
-        defer { following.cancel() }
+        defer { await following.stop() }
         try await eventually("读到要合并的全局规则") { workspace.library?.merge(into: .global) != nil }
 
         let scene = try #require(UIApplication.shared.connectedScenes.first as? UIWindowScene)

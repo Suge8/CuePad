@@ -12,7 +12,7 @@ extension MacSyncTests {
 
     func recordingQuotas() {
         let changes = services.pi.changes()
-        services.follow { try? await self.services.consumePiChanges(changes) }
+        services.follow { [services] in try? await services.consumePiChanges(changes) }
     }
 
     static let resetsAt = Date(timeIntervalSince1970: 1_800_000_000)

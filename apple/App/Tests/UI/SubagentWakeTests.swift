@@ -7,7 +7,7 @@ import SwiftUI
 import Testing
 @testable import CuePad
 
-@Suite(.pinnedPi, .serialized)
+@Suite(.releasesLibraries, .pinnedPi, .serialized)
 @MainActor
 struct SubagentWakeTests {
     /// 会话文件由 Mac 照常读（不经测试代写摘要）：会话是 FireCode 的指挥官，交回结果是一条机器消息开的轮。

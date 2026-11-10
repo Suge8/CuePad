@@ -5,6 +5,7 @@ import Testing
 
 /// 替身记下拉起了哪些链接（只用替身，不真去拉起 UU 远程）。
 @MainActor
+@Suite(.releasesLibraries)
 struct MacRemoteTests {
     private final class Apps {
         var installed = true
@@ -67,7 +68,7 @@ struct MacRemoteTests {
 
         workspace.open(try #require(callback("&status=failure&reason=device_not_found")))
         #expect(app.services.settings.remoteDevices["studio"] == nil)
-        try await #require(workspace.notice?.action).run()
+        try await #require(workspace.notice?.action).run(workspace)
         #expect(apps.opened.last?.path() == "/device/authorize")
     }
 
@@ -81,7 +82,7 @@ struct MacRemoteTests {
         #expect(apps.opened.isEmpty)
         let notice = try #require(workspace.notice)
         #expect(notice.text.parts.joined().contains("UU 远程"))
-        try await #require(notice.action).run()
+        try await #require(notice.action).run(workspace)
         #expect(apps.opened == [MacRemote.appStore])
 
         apps.installed = true

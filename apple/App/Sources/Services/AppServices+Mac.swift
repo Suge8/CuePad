@@ -196,10 +196,20 @@ extension AppServices {
             start: { [weak self] file in await self?.loadHistoryStart(for: file) }) {
             let scope = connected ? .all : await hostedScope(of: agent)
             runtimes[agent]?.follow(scope)
-            let events = agent == .pi
-                ? indexer.events(following: piDeliveryHistoryFiles(), scope: scope)
-                : indexer.events(following: pi.sessionFiles, scope: scope)
-            return await consumePiHistory(events, agent: agent)
+            // 读文件与跟随在这个跟随者的任务组里跑：取消后跟随者返回时它们都停了，不留脱离的任务攥着资料库
+            let (events, sink) = AsyncStream<PiHistoryEvent>.makeStream()
+            return await withDiscardingTaskGroup { group in
+                if agent == .pi {
+                    let (files, filesSink) = AsyncStream<Set<URL>>.makeStream()
+                    group.addTask { await self.followDeliveryHistoryFiles(into: filesSink) }
+                    group.addTask { await indexer.run(sink, following: files, scope: scope) }
+                } else {
+                    let files = pi.sessionFiles
+                    group.addTask { await indexer.run(sink, following: files, scope: scope) }
+                }
+                await consumePiHistory(events, agent: agent)
+                group.cancelAll()
+            }
         }
         guard connected, let runtime = runtimes[agent] else { return }
         do {

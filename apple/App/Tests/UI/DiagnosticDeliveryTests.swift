@@ -8,6 +8,7 @@ import Testing
 
 /// 手机的诊断与"把最近日志发到 Mac"经同一朵云替身到 Mac：Mac 那头是 App 用的 `DiagnosticInbox`，落盘目录换成测试自己的。
 @MainActor
+@Suite(.releasesLibraries)
 struct DiagnosticDeliveryTests {
     /// 一份只有一次崩溃的 MetricKit 包，时间按 `day` 排。
     private func crash(day: Int) -> Data {

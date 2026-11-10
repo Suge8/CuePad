@@ -9,6 +9,7 @@ import Testing
 @testable import CueStore
 
 @MainActor
+@Suite(.releasesLibraries)
 struct DeliveryRecoveryTests {
     let clock = ManualTiming()
     private func outcome(_ request: DeliveryRequest, in appStore: CueStore) async throws -> DeliveryRequest {

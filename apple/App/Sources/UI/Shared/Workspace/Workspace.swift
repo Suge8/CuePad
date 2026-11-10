@@ -39,8 +39,9 @@ final class Workspace {
         let title: String
         /// 同时绑 ⌘Z（`NoticeCapsule`）。
         var isUndo = false
-        let run: Undo
-        static func undo(_ run: @escaping Undo) -> Self { Self(title: String(localized: "撤销"), isUndo: true, run: run) }
+        /// 提示挂在工作区上、可能一直不收（读屏开着时）：工作区作为参数给，闭包里别去攥着它，不然两者互相攥着都放不掉。
+        let run: @MainActor (Workspace) async throws -> Void
+        static func undo(_ run: @escaping Undo) -> Self { Self(title: String(localized: "撤销"), isUndo: true) { _ in try await run() } }
         static func == (lhs: NoticeAction, rhs: NoticeAction) -> Bool { lhs.id == rhs.id }
     }
 
