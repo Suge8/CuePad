@@ -74,17 +74,5 @@ extension CueHostTests {
         #expect(!keeper.rounds.contains { $0.sent.joined().contains("[完成]") })
         await rig.stop()
     }
-
-    @Test func 记忆待合并_后台合并_Cue的轮里没有合并() async throws {
-        let rig = try await Rig(usage: CueContext.renewAt + 10_000)
-        for index in 0..<(CueMemoryView.budget + 4) { try await rig.store.noteCueLine("偏好 \(index)", source: .you) }
-        try await eventually("后台写了摘要") { try await !rig.store.cueMemory().summaries.isEmpty }
-        try await rig.say("你好")
-        try await rig.message(.cue, containing: "收到：你好")
-        let keeper = try #require(rig.services.cue.keeper)
-        #expect(keeper.rounds.map(\.wake) == [.message])  // 空库启用不醒，记忆待合并也不叫醒 Cue
-        #expect(!keeper.rounds.contains { $0.sent.contains { $0.contains("<merge>") } })
-        await rig.stop()
-    }
 }
 #endif

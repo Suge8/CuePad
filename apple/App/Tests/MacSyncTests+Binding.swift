@@ -89,15 +89,11 @@ extension MacSyncTests {
         defer { services.cancelBackgroundWork() }
 
         try await services.store.setDirectory("/Users/someone/work/app", for: project.id)
-        var bound: [DirectoryBinding] = []
-        for try await bindings in services.store.observe({ try $0.directoryBindings() }) where !bindings.isEmpty {
-            bound = bindings
-            break
-        }
+        let bound = try await eventually(services.store, { try $0.directoryBindings() }, until: { !$0.isEmpty })
         #expect(bound.map(\.projectID) == [project.id] && bound.map(\.hostID) == [TestApp.hostID] && bound.map(\.folder) == ["app"])
 
         try await services.store.setDirectory(nil, for: project.id)
-        for try await bindings in services.store.observe({ try $0.directoryBindings() }) where bindings.isEmpty { break }
+        _ = try await eventually(services.store, { try $0.directoryBindings() }, until: { $0.isEmpty })
     }
 }
 #endif

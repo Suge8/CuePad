@@ -41,9 +41,10 @@ struct IsolationTests {
         let keeper = WindowFrameKeeper(window: window, name: "main", settings: settings)
 
         window.setFrame(NSRect(x: 200, y: 220, width: 700, height: 500), display: false)
-        await Task.yield()  // 让订阅的任务先到位，再发通知
-        NotificationCenter.default.post(name: NSWindow.didMoveNotification, object: window)
-        try await eventually("窗口位置存进设置") { settings.windowFrame(for: "main") != nil }
+        try await eventually("窗口位置存进设置") {
+            NotificationCenter.default.post(name: NSWindow.didMoveNotification, object: window)  // 订阅的任务何时到位不定：到位前发的丢了就再发
+            return settings.windowFrame(for: "main") != nil
+        }
 
         #expect(window.frameAutosaveName.isEmpty)
         let other = NSWindow(contentRect: .zero, styleMask: [.titled, .resizable], backing: .buffered, defer: true)

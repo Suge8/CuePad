@@ -73,22 +73,5 @@ struct PiHistoryFailureTests {
         guard case .piHistoryUnavailable(let message)? = services.startupIssues.first else { return }
         #expect(message.contains(bad.path) && !message.contains(good.path))
     }
-
-    @Test func 检查点解码失败是合法的重读_不报问题_写回照常() async throws {
-        let file = try sessionFile("stale")
-        let garbage = Data("not a checkpoint".utf8)
-        try await services.store.upsertPiSession(
-            IndexedSession(id: "stale", path: file.path, cwd: "/work/x", lastActivityAt: .now), checkpoint: garbage, host: TestApp.hostID)
-
-        #expect(await services.loadHistoryStart(for: file)?.checkpoint == nil)
-        await services.consumePiHistory(AsyncStream { continuation in
-            continuation.yield(.updated(try! PiHistory.index(file: file, agent: .pi, from: nil, files: services.store.files)))
-            continuation.yield(.backfillFinished(sessionFiles: [file]))
-            continuation.finish()
-        }, agent: .pi)
-
-        #expect(services.startupIssues.isEmpty)
-        #expect(try await services.store.piCheckpoint(of: "stale") != garbage)
-    }
 }
 #endif

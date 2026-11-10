@@ -94,12 +94,8 @@ struct PiTranscriptTests {
         defer { services.cancelBackgroundWork() }
 
         let request = try await store.requestTranscript(of: try await record("old"))
-        for try await current in store.observe({ try $0.deliveryRequest(request.id) }) {
-            if current?.status == .known(.succeeded) || current?.status == .known(.failed) {
-                #expect(current?.status == .known(.succeeded))
-                break
-            }
-        }
+        let finished = try await eventually(store, { try $0.deliveryRequest(request.id) }, until: { $0?.isOpen == false })
+        #expect(finished?.status == .known(.succeeded))
 
         #expect(try await store.piMessages(of: "old").map(\.text) == ["第一问", "第一答", "第二问", "第二答"])
         #expect(try RawDB(services.location.databaseURL).count("sendRecords") == 0)
@@ -189,7 +185,7 @@ struct PiTranscriptTests {
         let indexer = PiHistoryIndexer(agent: .pi, paths: AgentPaths(pi: rig.piPaths), files: store.files) { _ in nil }!
         let consuming = Task { await services.consumePiHistory(indexer.events(following: AsyncStream { $0.yield([file]) }, scope: .all), agent: .pi) }
         defer { await consuming.stop() }
-        for try await count in store.observe({ try $0.piMessages(of: "s1").count }) where count == 4 { break }
+        _ = try await eventually(store, { try $0.piMessages(of: "s1").count }, until: { $0 == 4 })
 
         let handle = try FileHandle(forWritingTo: file)
         try handle.seekToEnd()
@@ -231,7 +227,7 @@ struct PiTranscriptTests {
         let pruning = Task { await services.historyStore.keepPruned(timing: timing) }
         defer { await pruning.stop() }
 
-        for try await count in store.observe({ try $0.piMessages(of: "old").count }) where count == 0 { break }
+        _ = try await eventually(store, { try $0.piMessages(of: "old").count }, until: { $0 == 0 })
     }
 }
 #endif

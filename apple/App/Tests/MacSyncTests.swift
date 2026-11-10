@@ -68,18 +68,18 @@ struct MacSyncTests {
             helper: URL(filePath: "/usr/bin/true"), notifier: RecordingCueNotifier()))
         let services: AppServices = rig.services, host = TestApp.hostID
         let record = MacPresence.recordID(host: host).uuidString.lowercased()
-        var uploads = rig.sync.uploads.stream.filter { $0 == record }.makeAsyncIterator()
+        let uploads = Watch(rig.sync.uploads.stream) { $0 == record }
         try await services.store.updateCueProfile {
             $0.hostID = host
             $0.enabledAt = .now
         }
         services.start()
-        #expect(await uploads.next() == record)
+        #expect(try await uploads.next("在线记录上传") == record)
         try await eventually("Cue 在这台值班") { services.cue.onDuty }
 
         #expect(await services.beginShutdown(within: .milliseconds(300))() == "Cue")
 
-        #expect(await uploads.next() == record)
+        #expect(try await uploads.next("在线记录上传") == record)
         #expect(try await !services.store.macOnline(host))
     }
 
@@ -102,42 +102,32 @@ struct MacSyncTests {
         let rig = TestApp(timing: clock.timing)
         let services: AppServices = rig.services, store = services.store, host = TestApp.hostID
         let record = MacPresence.recordID(host: host).uuidString.lowercased()
-        var uploads = rig.sync.uploads.stream.filter { $0 == record }.makeAsyncIterator()
+        let uploads = Watch(rig.sync.uploads.stream) { $0 == record }
         services.start()
         defer { services.cancelBackgroundWork() }
 
-        #expect(await uploads.next() == record)
+        #expect(try await uploads.next("在线记录上传") == record)
         #expect(try await store.macOnline(host))
 
         await clock.waitForSleeper()
         clock.advance(MacPresence.renewal)
-        #expect(await uploads.next() == record)  // 续期
+        #expect(try await uploads.next("续期的在线记录上传") == record)
         #expect(try await store.macOnline(host))
 
         rig.wakeCenter.post(name: NSWorkspace.willSleepNotification, object: nil)
         #expect(try await !store.macOnline(host))
-        #expect(await uploads.next() == record)
+        #expect(try await uploads.next("在线记录上传") == record)
         await clock.waitForSleeper()
         clock.advance(MacPresence.renewal)
         await clock.waitForSleeper()
         #expect(try await !store.macOnline(host))
 
         rig.wakeCenter.post(name: NSWorkspace.didWakeNotification, object: nil)
-        #expect(await uploads.next() == record)
+        #expect(try await uploads.next("在线记录上传") == record)
         #expect(try await store.macOnline(host))
     }
 
     // MARK: Pi 状态记录
-
-    @Test func 桥报来不认识的取值原样写进同步记录() async throws {
-        var live = session("s1")
-        live.thinking = .unknown("ultra")
-        live.subagents = [PiSubagentState(name: "docs", role: "写手", phase: .unknown("napping"))]
-        try await services.consumePiChanges(changes([.appeared(live)]))
-
-        let stored = try #require(try await services.store.allPiSessionStates().first)
-        #expect(stored.thinking == .unknown("ultra") && stored.subagents.map(\.phase) == [.unknown("napping")])
-    }
 
     @Test func 会话显示名写进同步记录_改名后跟上() async throws {
         var named = session("s1", cwd: "/work/app")

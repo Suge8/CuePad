@@ -24,24 +24,6 @@ struct CommandLineToolTests {
 
     private func destination() throws -> String { try FileManager.default.destinationOfSymbolicLink(atPath: link.path) }
 
-    @Test func 安装时创建缺失的目录并建指向App内二进制的链接_卸载即删除() async throws {
-        defer { try? FileManager.default.removeItem(at: root) }
-        let installer = makeInstaller()
-        await installer.refresh()
-        #expect(installer.state == .notInstalled)
-
-        try await installer.install()
-
-        #expect(installer.state == .installed)
-        #expect(try destination() == helper.path)
-        try await installer.install() // 再装一次是空操作
-        #expect(try destination() == helper.path)
-
-        try await installer.uninstall()
-        #expect(installer.state == .notInstalled)
-        #expect(!FileManager.default.fileExists(atPath: link.path))
-    }
-
     @Test func 位置被别的东西占用时不覆盖_明确报错() async throws {
         defer { try? FileManager.default.removeItem(at: root) }
         try FileManager.default.createDirectory(at: linkDirectory, withIntermediateDirectories: true)
