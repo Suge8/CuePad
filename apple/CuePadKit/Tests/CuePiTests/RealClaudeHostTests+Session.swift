@@ -25,6 +25,11 @@ extension RealClaudeHostTests {
             await #expect(throws: PiBridgeError.unknownModel(.claudeCode)) {
                 try await testbed.bridge.configure(PiConfig(model: PiModelKey(provider: ClaudeCode.provider, id: "no-such-model")), in: id)
             }
+            // rename_session 回了之后 Claude Code 才把名字登记进会话名册（2.1.318 的 applyRenamedSessionName，先写 agent-name 行再登记）：
+            // 登记前到的 /rename 被它当成"更新的改名先到了"丢掉（会话文件里：Session is named: 托管改名 (a newer rename landed first)），名字停在托管改名
+            try await eventually("托管改名登记进名册") {
+                ((try? String(contentsOf: file, encoding: .utf8)) ?? "").split(separator: "\n").contains { $0.contains(#""type":"agent-name""#) && $0.contains("托管改名") }
+            }
             try await testbed.bridge.command("/rename 命令改名", in: id)
             do {
                 try await eventually("斜杠命令改了名、歇下") {

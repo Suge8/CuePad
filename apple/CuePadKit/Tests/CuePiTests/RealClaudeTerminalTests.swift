@@ -121,7 +121,7 @@ struct RealClaudeTerminalTests {
             #expect(try testbed.transcript(session.sessionFile).messages.last?.text == PiNotice.stopped.rawValue)
             let delivery = UUID()
             try await testbed.bridge.send(PiMessage(text: "只回复 MANGO", deliveryID: delivery.uuidString), to: session.id)
-            try await eventually("话送到了") {
+            try await testbed.waitOnScreen("话送到了", on: terminal, in: session.id) {
                 (try? testbed.transcript(session.sessionFile).messages.contains { $0.deliveryID == delivery }) == true
             }
         }
@@ -135,6 +135,7 @@ struct RealClaudeTerminalTests {
             testbed.playBackgroundWork()
             let start = Date()
             try await terminal.type(ClaudeTestbed.backgroundWork)
+            try await testbed.finishBackgroundWork(session.id)
             try await testbed.expectSettledOnce(session.id, since: start, reply: "BG_DONE", roster: .done)
         }
     }

@@ -45,6 +45,7 @@ extension CodexRuntime {
             session.facts.standingQuestion = Self.asyncQuestion(input["tool_input"])
             session.facts.work(.thinking)
         case "PostToolUse":
+            if tool.hasSuffix("spawn_agent") { expectChild(input["tool_response"], in: session) }
             if session.reply == nil { session.facts.questions = [] }
             session.facts.work(.thinking)
         case "PreCompact":
@@ -59,6 +60,14 @@ extension CodexRuntime {
         }
         call.finish()
         publish(session)
+    }
+
+    /// 派活工具回的是任务路径（0.167 v2：`{"task_name":"/root/fruit"}`），末段就是认出后名册里的名字（`owner`）。已认出的同名线程不再等（早到的推送，或前几轮派过同名的）。
+    private func expectChild(_ response: JSONValue?, in session: Tracked) {
+        guard let path = response?.string.flatMap({ JSONValue.parse(Data($0.utf8)) })?["task_name"]?.string,
+              let name = path.split(separator: "/").last.map(String.init) else { return }
+        let known = threads.values.contains { if case .session(session.id, name, _) = $0 { true } else { false } }
+        if !known { session.spawned.insert(name) }
     }
 
     /// 钩子来自哪个托管进程：环境里带着它的标记，且线程是它承载的（或它还没有上桥的线程：刚开、刚接着）。

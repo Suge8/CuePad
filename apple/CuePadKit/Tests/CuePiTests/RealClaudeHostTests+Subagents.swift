@@ -13,6 +13,7 @@ extension RealClaudeHostTests {
             testbed.playBackgroundWork()
             let start = Date()
             _ = try await testbed.bridge.send(PiMessage(text: ClaudeTestbed.backgroundWork), to: id)
+            try await testbed.finishBackgroundWork(id)
             try await testbed.expectSettledOnce(id, since: start, reply: "BG_DONE", roster: .done)
         }
     }
