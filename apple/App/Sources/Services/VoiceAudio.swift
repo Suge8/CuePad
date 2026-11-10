@@ -9,7 +9,9 @@ import UIKit
 /// iOS 的音频会话与中断照常（中断与后台因此能在模拟器上验，`DebugScene+PhoneVoiceCall`）。
 /// 麦克风走 AVAudioEngine，打开系统的语音处理（回声消除、降噪、自动增益），WebRTC 自己的那套关掉（`VoicePeer`）。
 /// iOS 的音频会话只经 `VoiceAudioSession`：`start` 拿到、`stop` 交还，`start` 半途失败也交还。会话被系统收走即结束（`audioInterrupted`），
-/// 不假装还在通。换路由（蓝牙、耳机）或 Mac 换设备时引擎自己停下并发配置变化：按新硬件格式重建再开，开不起来按 mediaFailed 结束。
+/// 不假装还在通。引擎一通只建一台：开了语音处理的引擎一开就自己停下并发一次配置变化（实测，iOS 27 模拟器：每台新引擎都这样，
+/// 收到通知就另建新引擎因此会无限循环，每秒七八次）；换路由（蓝牙、耳机）或 Mac 换设备也是停下并发通知。
+/// 都在同一台引擎上按此刻的硬件格式重接麦克风这一路再开（同一台重开一次就稳住，实测）；重开抛错，或 `restartLimit` 内反复停，按 mediaFailed 结束。
 /// 电平 50 ms 取一次，只给界面；iOS 进后台（含锁屏）就停，回前台接着取。
 final class VoiceAudio {
     /// 一次渲染的帧数上限：引擎默认 4096，留余量。
@@ -18,6 +20,9 @@ final class VoiceAudio {
     private let fixture: VoiceFixture?
     private let levels = VoiceLevels()
     private var engine: AVAudioEngine?
+    private var microphone: AVAudioSinkNode?
+    /// 开语音处理那一下加上一次换路由，正常不过两三次；窗口里超过就当失控，不再重开。
+    private static let restartLimit = (count: 5, within: Duration.seconds(2))
     private var events: (VoicePeer.Event) -> Void = { _ in }
     private var watching: [Task<Void, Never>] = []
     private var metering: Task<Void, Never>?
@@ -58,6 +63,7 @@ final class VoiceAudio {
         fixture?.stop()
         engine?.stop()
         engine = nil
+        microphone = nil
         #if os(iOS)
         visibility.forEach(NotificationCenter.default.removeObserver)
         visibility = []
@@ -71,16 +77,24 @@ final class VoiceAudio {
             device.reconfigured(inputRate: VoiceAudioDevice.rate)
             return fixture.start(link: link, levels: levels)
         }
-        try build(link)
+        let engine = try build(link)
         fixture?.start(link: link, levels: levels)
-        let changes = NotificationCenter.default.notifications(named: .AVAudioEngineConfigurationChange)
+        let changes = NotificationCenter.default.notifications(named: .AVAudioEngineConfigurationChange, object: engine)
         watching.append(Task {
+            var restarts: [ContinuousClock.Instant] = []
             for await _ in changes {
-                // 引擎停下才发；还在跑的（开语音处理时自己发的那一下）不用重建
-                guard let engine, !engine.isRunning else { continue }
-                do { try build(link) }
-                catch {
-                    Self.log.error("Voice audio rebuild failed: \(error.localizedDescription, privacy: .public)")
+                guard !engine.isRunning else { continue }
+                let now = ContinuousClock.now
+                restarts = restarts.filter { now - $0 < Self.restartLimit.within } + [now]
+                guard restarts.count <= Self.restartLimit.count else {
+                    Self.log.error("Voice audio keeps stopping: \(restarts.count) restarts within \(Self.restartLimit.within, privacy: .public)")
+                    return events(.ended(.mediaFailed))
+                }
+                do {
+                    let rate = try start(engine, link: link)
+                    Self.log.notice("Voice audio restarted, input \(rate, privacy: .public) Hz")
+                } catch {
+                    Self.log.error("Voice audio restart failed: \(String(describing: error), privacy: .public)")
                     return events(.ended(.mediaFailed))
                 }
             }
@@ -119,21 +133,12 @@ final class VoiceAudio {
     }
     #endif
 
-    /// 每次按此刻的硬件格式建一台新引擎：AVAudioEngine 换格式后旧连接的格式不再成立。
     /// 声源是文件时只建扬声器这一半，且不外放（无人值守）。
-    private func build(_ link: VoiceAudioDevice.Link) throws {
-        engine?.stop()
+    private func build(_ link: VoiceAudioDevice.Link) throws -> AVAudioEngine {
         let engine = AVAudioEngine()
-        var inputRate = VoiceAudioDevice.rate
         if fixture == nil {
-            let input = engine.inputNode
-            try input.setVoiceProcessingEnabled(true)
-            input.voiceProcessingOtherAudioDuckingConfiguration = .init(enableAdvancedDucking: false, duckingLevel: .min)
-            let format = input.outputFormat(forBus: 0)
-            inputRate = format.sampleRate
-            let sink = Self.microphone(format: format, link: link, levels: levels)
-            engine.attach(sink)
-            try engine.link(input, to: sink, format: format)
+            try engine.inputNode.setVoiceProcessingEnabled(true)
+            engine.inputNode.voiceProcessingOtherAudioDuckingConfiguration = .init(enableAdvancedDucking: false, duckingLevel: .min)
         } else {
             engine.mainMixerNode.outputVolume = 0
         }
@@ -141,9 +146,27 @@ final class VoiceAudio {
         engine.attach(output)
         try engine.link(output, to: engine.mainMixerNode, format: Self.format)
         self.engine = engine
+        _ = try start(engine, link: link)
+        return engine
+    }
+
+    /// 麦克风这一路按此刻的硬件格式重接（换格式后旧连接的格式不再成立，收声节点按格式取声道），告诉 WebRTC 新采样率，再开。返回上行采样率。
+    private func start(_ engine: AVAudioEngine, link: VoiceAudioDevice.Link) throws -> Double {
+        var inputRate = VoiceAudioDevice.rate
+        if fixture == nil {
+            let input = engine.inputNode
+            let format = input.outputFormat(forBus: 0)
+            inputRate = format.sampleRate
+            if let microphone { engine.detach(microphone) }
+            let sink = Self.microphone(format: format, link: link, levels: levels)
+            engine.attach(sink)
+            try engine.link(input, to: sink, format: format)
+            microphone = sink
+        }
         device.reconfigured(inputRate: inputRate)
         engine.prepare()
         try engine.start()
+        return inputRate
     }
 
     nonisolated private static let format = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: VoiceAudioDevice.rate, channels: 1, interleaved: true)!
