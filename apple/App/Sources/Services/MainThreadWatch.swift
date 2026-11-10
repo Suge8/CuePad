@@ -32,6 +32,8 @@ nonisolated final class MainThreadWatch: Sendable {
         /// 这一轮醒来的时刻（`DispatchTime` 的纳秒）；0 是在等事件。
         var entered: UInt64 = 0
         var watching = false
+        /// 看守上一次醒来的时刻（同一个钟）。
+        var checked: UInt64 = 0
         var page = "?"
         var actions: [String] = []
         var open: (entered: UInt64, note: FreezeNote)?
@@ -83,6 +85,7 @@ nonisolated final class MainThreadWatch: Sendable {
             state.entered = awake ? DispatchTime.now().uptimeNanoseconds : 0
             guard awake, !state.watching else { return }
             state.watching = true
+            state.checked = state.entered
             timer.resume()
         }
     }
@@ -92,7 +95,20 @@ nonisolated final class MainThreadWatch: Sendable {
             // 在锁里取时刻：锁外取的话主线程可能在取完之后才记下这一轮的醒来，醒来比"此刻"还晚
             let now = DispatchTime.now().uptimeNanoseconds
             var write: FreezeNote?
-            if let open = state.open, open.entered != state.entered {
+            // 看守隔了这么久才醒：这段时间进程没在跑（iOS 挂起了它），不算主线程忙。主线程常在结束后台任务的那一轮里就被挂起，
+            // 恢复后那一轮才走完；不扣掉就记成一次卡住，时长是整段挂起（实机记过 181 秒）。挂起前已在卡的记到挂起为止，还没走完的这一轮从此刻重新计。
+            let suspended = now - state.checked > Self.threshold
+            let lastRan = state.checked
+            state.checked = now
+            if suspended {
+                if let open = state.open {
+                    var note = open.note
+                    note.seconds = Double(lastRan - open.entered) / 1e9
+                    write = note
+                    state.open = nil
+                }
+                if state.entered != 0 { state.entered = now }
+            } else if let open = state.open, open.entered != state.entered {
                 var note = open.note
                 note.seconds = Double(now - open.entered) / 1e9
                 write = note
