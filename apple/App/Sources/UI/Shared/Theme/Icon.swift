@@ -56,7 +56,6 @@ nonisolated enum Icon: Hashable, Sendable {
     case project(ProjectIcon)
 
     private enum Source {
-        /// 自家的圆润轮廓符号（资源 Symbols/cue.<名>）。
         case ink(String)
         /// 自家的反白符号：记号在第一层、实心底在第二层（同系统的 *.circle.fill），不按层级渲染，调用方给两种颜色时按层上色。
         case filled(String)
@@ -197,14 +196,12 @@ nonisolated enum Icon: Hashable, Sendable {
     }
 
     #if os(iOS)
-    /// UIKit 的菜单与工具条用。
     var platformImage: UIImage? {
         switch source {
         case .ink(let name), .filled(let name): UIImage(named: Self.ink(name))
         }
     }
     #else
-    /// AppKit 的菜单与工具条用。
     var platformImage: NSImage? {
         switch source {
         case .ink(let name), .filled(let name): NSImage(symbolName: Self.ink(name), bundle: .main, variableValue: 0)

@@ -3,7 +3,6 @@ import Foundation
 
 /// 灵感与任务是同一种记录，差别只是 `todoAt`（建成任务时写上，之后不变：不互转，灵感要做就接进一条任务或照它新建一条，灵感进回收站）。
 /// 任务的正文第一行是标题，其余是要交代给 Agent 的话：开工时整段作为第一句发出，发出后留在任务上。
-/// 结构（上级、要做、状态）对调用方只读，各有专门的方法。
 public struct Card: Identifiable, Equatable, Sendable {
   public let id: UUID
   public internal(set) var projectID: UUID

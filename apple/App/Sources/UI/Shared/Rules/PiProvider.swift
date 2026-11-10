@@ -47,6 +47,7 @@ nonisolated struct PiProvider: Equatable, Identifiable {
 
 nonisolated extension BrandMark {
     /// 模型的标志：按模型家族，从模型 id 与显示名认（经 OpenRouter、OpenCode 转发的 `anthropic/claude-…`、`google/gemini-…` 也认得）；
+    /// 认不出家族时退到提供方的标志，再认不出为 nil（不带标志）。
     static func model(id: String, name: String = "", provider: String?) -> BrandMark? {
         let words = "\(id) \(name)".lowercased().split { !$0.isLetter && !$0.isNumber }
         for family in families where words.contains(where: { word in family.prefixes.contains { word.hasPrefix($0) } }) { return family.mark }

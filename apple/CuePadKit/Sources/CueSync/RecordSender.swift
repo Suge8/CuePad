@@ -51,7 +51,6 @@ actor RecordSender {
   private let generation: SyncGeneration
   private var stopped: Bool { generation.isOver }
 
-  /// `step` 只给测试控制先后（`Step`）。
   init(
     uploader: any RecordUploader, coordinator: SyncCoordinator, generation: SyncGeneration = SyncGeneration(),
     prepare: @escaping @Sendable () async throws -> Void = {}, step: @escaping @Sendable (Step) async -> Void = { _ in }

@@ -84,7 +84,7 @@ private struct Observing<T: Sendable & Equatable, ID: Equatable>: ViewModifier {
     }
 }
 
-/// 读屏不念（行要读的话由行自己的标签给）；颜色跟随外层，要淡一档的调用处自己加。
+/// 读屏不念（行要读的话由行自己的标签给）。
 struct Dot: View {
     var body: some View { Text("·").readerHidden(true) }
 }
@@ -188,7 +188,6 @@ nonisolated enum DateLabel {
     }
 }
 
-/// 左右缩进与上下留白由所在列表给；能折的组由调用处在旁边放 `Chevron`。
 struct SectionHeader: View {
     enum Level { case page, group }
 

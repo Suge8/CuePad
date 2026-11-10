@@ -2,6 +2,8 @@ import CueStore
 import Foundation
 
 /// FireCode 的三种信封照它自己给终端的一行投影（FireCode 的 tools/machine.ts；正文分节词两种语言都认，会话可能跨过换语言）：
+/// 子代理事件写子代理名与结果首句（失败取"错误"那一节、标胭脂；没有分节的通知、被中断写标题），审查写结论那行标题，观察员写它说的首句。
+/// 别的信封写信封名与正文首句；不是信封的（别的扩展投进来的纯文字）写"扩展"。
 struct MachineNote: Equatable {
     var who: String
     var line: String

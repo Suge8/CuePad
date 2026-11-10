@@ -40,8 +40,8 @@ public struct CueState: Equatable, Sendable {
 public struct CueContext: StoredJSON, Equatable, Sendable {
   public var used: Int
 
-  /// 换新线：10 万 token。按真实时间线每次醒来约涨 8k，10 万与 6 万每天的花费只差约 1%，换新却从每天约 13 次降到约 8 次：
-  /// 换新只省后面几轮的缓存读，代价是重写视图并丢掉会话里原样的经过，线太低就换得太勤；再往上每次醒来读的上下文变长，花费又涨回去。
+  /// 换新线：换新只省后面几轮的缓存读，代价是重写视图、丢掉会话里原样的经过，线低换得太勤；线高每次醒来读的上下文变长，花费涨回去。
+  /// 按真实时间线（每次醒来约涨 8k），10 万比 6 万每天花费只差约 1%，换新从每天约 13 次降到约 8 次。
   /// 管理器经 `CueTiming.renewAt` 读它（评测可缩短），界面直接读它。
   public static let renewAt = 100_000
 
