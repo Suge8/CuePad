@@ -64,6 +64,8 @@ public struct PiHistoryCheckpoint: Sendable, Codable, Equatable {
         var tools = PiToolLog()
         /// 这一轮里你拒绝过它要用的工具（这一轮因此停下时写"已拒绝"）
         var declined = false
+        /// 这一轮说完了的那条助手消息的 id（Claude Code：`stop_reason` 不是 `tool_use`，没有文字）：紧接着它写的 `turn_duration` 才收这一轮（`ClaudeHistory`）
+        var endedBy: String?
     }
 
     struct Held: Sendable, Codable, Equatable {
