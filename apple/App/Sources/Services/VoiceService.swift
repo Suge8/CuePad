@@ -78,8 +78,8 @@ import os
         var stopping: [Task<Void, Never>] = []
         #if os(macOS)
         stopping = [observing].compactMap(\.self) + Array(projectionRetries.values) + (call?.stopWatching() ?? [])
+        // 不清 `observing`：再取消一次（收尾在用例之后又停一遍）返回的还要有它，等它收尾
         stopping.forEach { $0.cancel() }
-        observing = nil
         call?.hangUp()
         #else
         Task { await end() }

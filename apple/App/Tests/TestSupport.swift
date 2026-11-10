@@ -370,6 +370,22 @@ final class TestApp {
     #endif
 }
 
+#if os(macOS)
+extension PiHistoryIndexer {
+    /// 在调用方的任务里读文件，`consume` 消费事件；它返回或被取消后停下读文件并等它收尾（`events` 起的是脱离的任务，用例收尾时还攥着资料库）。
+    func consuming(
+        following live: some AsyncSequence<Set<URL>, Never> & Sendable, _ consume: (AsyncStream<PiHistoryEvent>) async -> Void
+    ) async {
+        let (events, sink) = AsyncStream<PiHistoryEvent>.makeStream()
+        await withDiscardingTaskGroup { group in
+            group.addTask { await self.run(sink, following: live, scope: .all) }
+            await consume(events)
+            group.cancelAll()
+        }
+    }
+}
+#endif
+
 extension Task {
     /// 取消并等它收尾：用例自己起的任务结束前还攥着它捕获的服务与资料库，`.releasesLibraries` 紧接着就查。
     func stop() async {

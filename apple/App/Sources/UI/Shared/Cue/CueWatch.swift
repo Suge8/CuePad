@@ -74,7 +74,7 @@ final class CueWatch {
     func launchFailed() { launching = false }
 
     func follow(_ services: AppServices) async throws {
-        for try await seen in services.cueUpdates() {
+        try await services.cueUpdates { seen in
             apply(seen.read.digest, at: seen.moment, local: seen.local, catchingUp: services.isCatchingUp(on: seen.read.digest.hostID))
         }
     }

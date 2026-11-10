@@ -47,29 +47,23 @@ final class CueFeed {
         }
     }
 
-    /// 订阅读失败时以那个错误结束。
-    fileprivate func updates(_ services: AppServices) -> AsyncThrowingStream<Seen, any Error> {
-        AsyncThrowingStream { continuation in
-            let task = Task {
-                for await (read, moment, local, failure) in Observations({ (self.read, services.speech, services.cueLocal, self.failure) }) {
-                    if let failure { return continuation.finish(throwing: failure) }
-                    if let read { continuation.yield(Seen(read: read, moment: moment, local: local)) }
-                }
-                continuation.finish()
-            }
-            continuation.onTermination = { _ in task.cancel() }
+    /// 在调用方的任务里跟到被取消，每份交给 `each`；订阅读失败时抛那个错误。消费慢时跳过中间的，交的总是最新那份。
+    fileprivate func updates(_ services: AppServices, _ each: (Seen) async throws -> Void) async throws {
+        for await (read, moment, local, failure) in Observations({ (self.read, services.speech, services.cueLocal, self.failure) }) {
+            if let failure { throw failure }
+            if let read { try await each(Seen(read: read, moment: moment, local: local)) }
         }
     }
 }
 
 extension AppServices {
     /// 第一个来读的起订阅（随 App 的常驻任务一起取消），之后的共用。
-    func cueUpdates() -> AsyncThrowingStream<CueFeed.Seen, any Error> {
+    func cueUpdates(_ each: (CueFeed.Seen) async throws -> Void) async throws {
         if !cueFeed.following {
             cueFeed.following = true
             cueFeed.failure = nil
             follow { await self.cueFeed.follow() }
         }
-        return cueFeed.updates(self)
+        try await cueFeed.updates(self, each)
     }
 }

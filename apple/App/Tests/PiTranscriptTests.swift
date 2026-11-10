@@ -42,18 +42,19 @@ struct PiTranscriptTests {
         let indexer = PiHistoryIndexer(
             agent: .pi, paths: AgentPaths(pi: rig.piPaths), transcriptWindow: PiChat.transcriptWindow, files: store.files
         ) { [services] in await services.loadHistoryStart(for: $0) }!
-        let source = indexer.events(following: AsyncStream { $0.finish() }, scope: .all)
-        let events = AsyncStream<PiHistoryEvent> { continuation in
-            let task = Task {
-                for await event in source {
-                    continuation.yield(event)
-                    if case .backfillFinished = event { break }
+        await indexer.consuming(following: AsyncStream { $0.finish() }) { source in
+            let (events, sink) = AsyncStream<PiHistoryEvent>.makeStream()
+            await withDiscardingTaskGroup { group in
+                group.addTask {
+                    for await event in source {
+                        sink.yield(event)
+                        if case .backfillFinished = event { break }
+                    }
+                    sink.finish()
                 }
-                continuation.finish()
+                await services.consumePiHistory(events, agent: .pi)
             }
-            continuation.onTermination = { _ in task.cancel() }
         }
-        await services.consumePiHistory(events, agent: .pi)
     }
 
     private func live(_ sessionID: String, file: URL) async throws -> CuePi.PiSession {
@@ -187,7 +188,9 @@ struct PiTranscriptTests {
         let file = try sessionFile("s1", at: .now.addingTimeInterval(-60))
         _ = try await live("s1", file: file)
         let indexer = PiHistoryIndexer(agent: .pi, paths: AgentPaths(pi: rig.piPaths), files: store.files) { _ in nil }!
-        let consuming = Task { await services.consumePiHistory(indexer.events(following: AsyncStream { $0.yield([file]) }, scope: .all), agent: .pi) }
+        let consuming = Task { [services] in
+            await indexer.consuming(following: AsyncStream { $0.yield([file]) }) { await services.consumePiHistory($0, agent: .pi) }
+        }
         defer { await consuming.stop() }
         for try await count in store.observe({ try $0.piMessages(of: "s1").count }) where count == 4 { break }
 

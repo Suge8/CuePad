@@ -41,8 +41,9 @@ extension AppServices {
     /// 返回的等待在语音的订阅、马上上传的几条、跟随者与拉取都收尾后结束（测试等它确认放掉了资料库；退出不等）。
     @discardableResult
     func cancelBackgroundWork() -> @Sendable () async -> Void {
-        let voice = voice.cancel(), followers = tasks.cancelAll(), polling = polling, sending = inFlight.settled()
+        let voice = voice.cancel(), followers = tasks.cancelAll(), sending = inFlight.settled()
         stopPolling()
+        let polling = stoppedPolling
         return {
             await sending()
             for task in voice { await task.value }

@@ -62,10 +62,15 @@ extension AppServices {
     /// 节奏与拉取不在主线程上：主线程忙（排版、重读）时拉取不跟着晚，只有等待理由变了才回主线程算一次节奏。
     func startPolling() {
         guard sync != nil, polling == nil else { return }
-        let waiting = pollingCondition()
         let poller = SyncPoller(timing: timing)
+        // 节奏的来源与拉取同在这个任务里：取消后它结束时两者都停了，不留脱离的任务攥着服务
         polling = Task {
-            await poller.run(while: waiting) { await self.pull() }
+            let (waiting, cadences) = AsyncStream<SyncPoller.Cadence?>.makeStream()
+            await withDiscardingTaskGroup { group in
+                group.addTask { await self.followPollingCondition(into: cadences) }
+                await poller.run(while: waiting) { await self.pull() }
+                group.cancelAll()
+            }
         }
     }
 
@@ -89,20 +94,15 @@ extension AppServices {
 
     /// 本机同步恢复时（`Speech.Moment.reachableSince` 换了）也重给一次，
     /// 拉取从头开始一个窗口：断网超过手机的两分钟窗口，恢复后在等的回执照样拉得回来。断网时照常拉，拉成功就是恢复了（`SyncStatus.offline`）。
-    func pollingCondition() -> AsyncStream<SyncPoller.Cadence?> {
-        AsyncStream { continuation in
-            let task = Task { [weak self] in
-                guard let self else { return }
-                // 依赖的状态变了节奏不一定变（如 Cue 在想与空闲之间来回）：同样的节奏不再给，免得拉取循环每次都从头立即拉
-                var last: Polling?
-                for await polling in Observations({ Polling(cadence: self.pollingCadence, since: self.speech.reachableSince) })
-                where last != polling && (last?.cadence != polling.cadence || polling.since != nil) {
-                    last = polling
-                    continuation.yield(polling.cadence)
-                }
-                continuation.finish()
-            }
-            continuation.onTermination = { _ in task.cancel() }
+    /// 在调用方的任务里跑到被取消。
+    func followPollingCondition(into continuation: AsyncStream<SyncPoller.Cadence?>.Continuation) async {
+        defer { continuation.finish() }
+        // 依赖的状态变了节奏不一定变（如 Cue 在想与空闲之间来回）：同样的节奏不再给，免得拉取循环每次都从头立即拉
+        var last: Polling?
+        for await polling in Observations({ Polling(cadence: self.pollingCadence, since: self.speech.reachableSince) })
+        where last != polling && (last?.cadence != polling.cadence || polling.since != nil) {
+            last = polling
+            continuation.yield(polling.cadence)
         }
     }
 
@@ -111,8 +111,10 @@ extension AppServices {
         var since: Date?
     }
 
+    /// 停下的拉取任务记在 `stoppedPolling`：收尾要等它结束（`cancelBackgroundWork`），先停过一次的也等得到。
     func stopPolling() {
         polling?.cancel()
+        if let polling { stoppedPolling = polling }
         polling = nil
     }
 
