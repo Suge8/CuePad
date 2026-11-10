@@ -10,7 +10,7 @@ Swift 原生应用（macOS / iOS / iPadOS），产品见 [README.md](README.md)�
 - 提交钩子拦下超过 5000 令牌（字节数 ÷ 4，约 20KB）的新文件与变大的超标文件，拆法在它的报错里：新代码按职责分文件写，不往超标文件里加。
 - 调试实例只用 `xc.sh shot|rec|run` 起（隔离、用完自己退出，`run` 起的用 `xc.sh stop` 收）；多张图在一次调用里拍（用 `,` 隔开，见 xc.sh 头注释），不一张一次、不另写批拍脚本。别的进程只按自己拿到的 PID 结束。排队等过上限以 75 退出并列出持有者（`_lock.sh` 头注释）。
 - `xc.sh test` 收尾一页结论（两个框架各自的通过、失败、跳过，首个失败，跳过原因，最慢 5 个，完整日志路径）；先看它，别翻日志。
-- CI（`.github/workflows/swift.yml`）在 GitHub 托管的 macOS runner 上跑 `check`、`test kit`、`test mac` 与 iOS 同步测试，入口就是 `xc.sh`；lint 要完整的 Git 检出（origin/main、发布标签），`git archive` 导出的副本跑不了。
+- CI（`.github/workflows/swift.yml`）在 GitHub 托管的 macOS runner 上跑 `check`、`test kit`、`test mac`，iOS 同步测试只在主干跑（分支上手动触发），入口就是 `xc.sh`；lint 要完整的 Git 检出（origin/main、发布标签），`git archive` 导出的副本跑不了。
 - `cuepad --help` 是命令行唯一文档。
 - 报"没有这个成员"而代码里明明有，或改了 CuePadKit 公开类型的存储属性后 App 一启动就崩在 Kit 的释放里：检出里还留着旧版 xc.sh 只编 App 时的静态模块（原因见 xc.sh 的 `xcd`），删一次 `apple/.derived/Build/Products/<平台>/Cue*.swiftmodule` 与 `apple/.derived-wmo/Build/Products/<平台>/Cue*.swiftmodule`（`check` 在后者里编）再编。
 
