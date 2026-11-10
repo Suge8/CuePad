@@ -9,9 +9,9 @@ import UIKit
 /// iOS 的音频会话与中断照常（中断与后台因此能在模拟器上验，`DebugScene+PhoneVoiceCall`）。
 /// 麦克风走 AVAudioEngine，打开系统的语音处理（回声消除、降噪、自动增益），WebRTC 自己的那套关掉（`VoicePeer`）。
 /// iOS 的音频会话只经 `VoiceAudioSession`：`start` 拿到、`stop` 交还，`start` 半途失败也交还。会话被系统收走即结束（`audioInterrupted`），
-/// 不假装还在通。引擎一通只建一台：开了语音处理的引擎一开就自己停下并发一次配置变化（实测，iOS 27 模拟器：每台新引擎都这样，
+/// 不假装还在通。开了语音处理的引擎一开就自己停下并发一次配置变化（实测，iOS 27 模拟器：每台新引擎都这样，
 /// 收到通知就另建新引擎因此会无限循环，每秒七八次）；换路由（蓝牙、耳机）或 Mac 换设备也是停下并发通知。
-/// 都在同一台引擎上按此刻的硬件格式重接麦克风这一路再开（同一台重开一次就稳住，实测）；重开抛错，或 `restartLimit` 内反复停，按 mediaFailed 结束。
+/// 停下就按此刻的硬件格式再开（两端怎么开见 `restart`）；重开抛错，或 `restartLimit` 内反复停，按 mediaFailed 结束。
 /// 电平 50 ms 取一次，只给界面；iOS 进后台（含锁屏）就停，回前台接着取。
 final class VoiceAudio {
     /// 一次渲染的帧数上限：引擎默认 4096，留余量。
@@ -77,13 +77,13 @@ final class VoiceAudio {
             device.reconfigured(inputRate: VoiceAudioDevice.rate)
             return fixture.start(link: link, levels: levels)
         }
-        let engine = try build(link)
+        try build(link)
         fixture?.start(link: link, levels: levels)
-        let changes = NotificationCenter.default.notifications(named: .AVAudioEngineConfigurationChange, object: engine)
+        let changes = NotificationCenter.default.notifications(named: .AVAudioEngineConfigurationChange)
         watching.append(Task {
             var restarts: [ContinuousClock.Instant] = []
             for await _ in changes {
-                guard !engine.isRunning else { continue }
+                guard let engine, !engine.isRunning else { continue }
                 let now = ContinuousClock.now
                 restarts = restarts.filter { now - $0 < Self.restartLimit.within } + [now]
                 guard restarts.count <= Self.restartLimit.count else {
@@ -91,7 +91,7 @@ final class VoiceAudio {
                     return events(.ended(.mediaFailed))
                 }
                 do {
-                    let rate = try start(engine, link: link)
+                    let rate = try restart(engine, link: link)
                     Self.log.notice("Voice audio restarted, input \(rate, privacy: .public) Hz")
                 } catch {
                     Self.log.error("Voice audio restart failed: \(String(describing: error), privacy: .public)")
@@ -133,8 +133,20 @@ final class VoiceAudio {
     }
     #endif
 
-    /// 声源是文件时只建扬声器这一半，且不外放（无人值守）。
-    private func build(_ link: VoiceAudioDevice.Link) throws -> AVAudioEngine {
+    /// iOS 开语音处理会让引擎自停、新建的又自停而循环，所以重开同一台；Mac 新建引擎才跟随换掉的设备，同一台重开在 Mac 上没验证过。
+    private func restart(_ engine: AVAudioEngine, link: VoiceAudioDevice.Link) throws -> Double {
+        #if os(iOS)
+        try start(engine, link: link)
+        #else
+        try build(link)
+        #endif
+    }
+
+    /// 声源是文件时只建扬声器这一半，且不外放（无人值守）。返回上行采样率。
+    @discardableResult
+    private func build(_ link: VoiceAudioDevice.Link) throws -> Double {
+        engine?.stop()
+        microphone = nil
         let engine = AVAudioEngine()
         if fixture == nil {
             try engine.inputNode.setVoiceProcessingEnabled(true)
@@ -146,8 +158,7 @@ final class VoiceAudio {
         engine.attach(output)
         try engine.link(output, to: engine.mainMixerNode, format: Self.format)
         self.engine = engine
-        _ = try start(engine, link: link)
-        return engine
+        return try start(engine, link: link)
     }
 
     /// 麦克风这一路按此刻的硬件格式重接（换格式后旧连接的格式不再成立，收声节点按格式取声道），告诉 WebRTC 新采样率，再开。返回上行采样率。
