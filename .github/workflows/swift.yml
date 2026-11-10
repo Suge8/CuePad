@@ -1,27 +1,29 @@
 name: Swift
 
-# 与本机同一个入口 apple/scripts/xc.sh；各段各占一台 runner 并行，每段都是干净机器上的冷编译。
+# 与本机同一个入口 apple/scripts/xc.sh；各段各占一台 runner 并行，每段都是干净机器（主干冷编译，PR 取主干的编译缓存）。
 # runner 标签 xcode-27：actions/runner-images 的 macOS 27 镜像（Xcode 27.0 与 iOS 27.0 模拟器 iPhone 17 都在）。
 # CloudKit 真同步、推送、后台与签名只能在设备上验，这里只跑替身。
 on:
-  push:
-    # 只认分支：发版标签（mac/…、ios/…）指向的提交推上来时已经跑过，打标签不再跑一遍
-    branches: ['**']
-    # 只改文档、设计稿、落地页的推送不跑；落地页的色板令牌除外（lint 拿它对 Palette）
-    paths:
+  # 分支上只有开了 PR 才跑（draft 也算），跑的是与主干合并后的结果；光推分支不跑：一天上百次推送大半没人等结果，却占着 runner 让别的排队
+  pull_request:
+    # 只改文档、设计稿、落地页的不跑；落地页的色板令牌除外（lint 拿它对 Palette）
+    paths: &paths
       - '**'
       - '!docs/**'
       - '!design/**'
       - '!landing/**'
       - 'landing/src/styles/base.css'
-      - '!README*.md'
-      - '!WORDS.md'
-      - '!AGENTS.md'
+      - '!**/*.md'
+  # 发版标签（mac/…、ios/…）指向的提交进主干时已经跑过，打标签不再跑
+  push:
+    branches: [main]
+    paths: *paths
   workflow_dispatch:
 
+# 同一个 PR 新推上来就取消在跑的；主干不取消（接连合并时每次都被下一次取消，就一直没有跑完的结果，编译缓存也存不下），排着的只留最新一次
 concurrency:
   group: swift-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref_name != 'main' }}
 
 permissions:
   contents: read
@@ -44,8 +46,10 @@ jobs:
       TEST_RUNNER_PATH: /opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin
       # 钉住的 Agent 缺一家就红，不跳过（PinnedAgent.fullMatrix）
       TEST_RUNNER_CUEPAD_AGENT_MATRIX: full
-      # 真 Agent 用例：主干与手动触发跑全量，分支只跑每家的冒烟（RealAgents.swift），没跑的在结论页列为没跑
+      # 真 Agent 用例：主干与手动触发跑全量，PR 只跑每家的冒烟（RealAgents.swift），没跑的在结论页列为没跑
       TEST_RUNNER_CUEPAD_AGENT_TESTS: ${{ (github.ref_name == 'main' || github.event_name == 'workflow_dispatch') && 'all' || 'smoke' }}
+      # 编译缓存的目录（_build.sh 的 compile_cache）
+      CUEPAD_COMPILE_CACHE: ${{ github.workspace }}/apple/.derived-cas
     steps: &steps
       # lint 要 origin/main 与发布标签：整段历史、全部标签
       - uses: actions/checkout@v7
@@ -65,8 +69,22 @@ jobs:
           key: cuepad-agents-${{ hashFiles('apple/CuePadKit/Tests/agents.json', 'apple/scripts/agents.py') }}
       - if: matrix.name == 'test kit' || matrix.name == 'test mac'
         run: apple/scripts/xc.sh agents install
+      # 编译缓存：主干每次冷编译、编完存下（主干的结果不靠缓存，缓存也不会一代代越攒越大），PR 只取主干最近的那份
+      # （实测 check 从 9.5 分钟降到 3.7 分钟，test mac 5.8 → 4.1，test kit 2.8 → 2.4）。
+      # iOS 那段只在主干跑，没有分支来取，不存
+      - if: github.ref_name != 'main' && matrix.name != 'test ios sync'
+        uses: actions/cache/restore@v6
+        with:
+          path: apple/.derived-cas
+          key: compile-${{ matrix.name }}-${{ github.sha }}
+          restore-keys: compile-${{ matrix.name }}-
       - run: apple/scripts/xc.sh ${{ matrix.args }}
         timeout-minutes: 30
+      - if: github.ref_name == 'main' && matrix.name != 'test ios sync'
+        uses: actions/cache/save@v6
+        with:
+          path: apple/.derived-cas
+          key: compile-${{ matrix.name }}-${{ github.sha }}
       - uses: actions/upload-artifact@v7
         if: always()
         with:
