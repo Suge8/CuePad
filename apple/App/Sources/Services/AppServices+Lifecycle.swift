@@ -38,9 +38,11 @@ extension AppServices {
         await resendSnapshots()
     }
 
-    func cancelBackgroundWork() {
+    /// 返回的是跟随者们的任务（见 `Followers.cancelAll`）。
+    @discardableResult
+    func cancelBackgroundWork() -> Task<Void, Never>? {
         voice.cancel()
-        tasks.cancelAll()
         stopPolling()
+        return tasks.cancelAll()
     }
 }

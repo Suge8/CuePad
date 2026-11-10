@@ -168,8 +168,12 @@ final class TestApp {
     /// 换账号的通知又是全进程的，测试结束后它还会跟着并行的测试去认账号、拉取。deinit 里等不了：收尾交给 `.releasesLibraries`，用例结束时等它做完再查释放。
     isolated deinit {
         #if os(macOS)
-        let finish = services.beginShutdown()
-        LibraryLedger.close(ledger, app: createdAt) { _ = await finish() }
+        // 退出流程只取消跟随者、不等它们退场；它们退场前攥着服务与资料库，CI 慢时超过检查的宽限
+        let followers = services.cancelBackgroundWork(), finish = services.beginShutdown()
+        LibraryLedger.close(ledger, app: createdAt) {
+            _ = await finish()
+            await followers?.value
+        }
         pasteboard.releaseGlobally()
         try? FileManager.default.removeItem(at: socketDirectory)
         #else
@@ -187,8 +191,7 @@ final class TestApp {
 
     /// 旧实例自己的工作都停下（同进程被杀）：桥、托管的会话和热键是 `TestApp` 的，留给新实例。不写离线之类的收尾记录，免得晚到的写入盖过新实例的。
     private func retire(_ services: AppServices, app: SourceLocation? = nil) {
-        services.cancelBackgroundWork()
-        let sync = services.sync
+        let followers = services.cancelBackgroundWork(), sync = services.sync
         #if os(macOS)
         services.hooks.stop()
         let executor = services.executor.beginStop(), cue = services.cue.stop()
@@ -196,9 +199,13 @@ final class TestApp {
             await executor()
             await cue()
             await sync?.stop()
+            await followers?.value
         }
         #else
-        LibraryLedger.close(ledger, app: app) { await sync?.stop() }
+        LibraryLedger.close(ledger, app: app) {
+            await sync?.stop()
+            await followers?.value
+        }
         #endif
     }
 

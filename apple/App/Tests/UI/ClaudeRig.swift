@@ -107,12 +107,16 @@ final class ClaudeRig {
     }
 
     private func stopApp() async {
+        let followers = services.cancelBackgroundWork()
         _ = await services.beginShutdown()()
+        await followers?.value
     }
 
     /// 托管的进程按 runtime 的收法收；终端里的按 pid 结束；外壳在 `bin/pids` 里记下的（修坏了时 runtime 收不掉的那种）按 pid 结束。
     func shutdown() async {
+        let followers = services.cancelBackgroundWork()
         _ = await services.beginShutdown()()
+        await followers?.value
         for terminal in terminals { terminal.stop() }
         let stray = ((try? String(contentsOf: bin.appending(path: "pids"), encoding: .utf8)) ?? "").split(separator: "\n").compactMap { Int32($0) }
         for pid in stray where kill(pid, 0) == 0 { kill(pid, SIGKILL) }

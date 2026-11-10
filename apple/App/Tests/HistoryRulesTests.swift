@@ -86,8 +86,11 @@ struct HistoryRulesTests {
         func shutdown() {
             // 托管的 Pi 不随 CuePad 结束：桥上还在的（本用例临时 socket 目录里的，是本用例启动的）逐个让它退出
             for session in bridge.sessions where session.hosted { kill(session.pid, SIGTERM) }
-            let finish = services.beginShutdown()
-            LibraryLedger.close(LibraryLedger.current) { _ = await finish() }
+            let followers = services.cancelBackgroundWork(), finish = services.beginShutdown()
+            LibraryLedger.close(LibraryLedger.current) {
+                _ = await finish()
+                await followers?.value
+            }
         }
 
         func records(_ scope: PiSessionScope) async throws -> [PiSessionState] {

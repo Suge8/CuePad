@@ -70,10 +70,10 @@ extension SyncCoordinator {
     let until = ContinuousClock.now + Self.quotaPause
     facts.filesHeldUntil = until
     quotaTimer?.cancel()
-    quotaTimer = Task {
+    quotaTimer = Task { [weak self] in
       try? await Task.sleep(until: until, clock: .continuous)
       guard !Task.isCancelled else { return }
-      self.retryDue.yield(())
+      self?.retryDue.yield(())
     }
   }
 
@@ -116,10 +116,10 @@ extension SyncCoordinator {
   private func setHold(_ next: Hold) {
     facts.holding = next
     retryTimer?.cancel()
-    retryTimer = Task { [until = next.until] in
+    retryTimer = Task { [weak self, until = next.until] in
       try? await Task.sleep(until: until, clock: .continuous)
       guard !Task.isCancelled else { return }
-      self.release()
+      await self?.release()
     }
   }
 
