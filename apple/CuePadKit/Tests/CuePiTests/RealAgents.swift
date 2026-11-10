@@ -58,7 +58,7 @@ enum RealAgents {
 }
 
 extension Tag {
-    /// 真 Agent 的冒烟（`RealAgents.Gate`）
+    /// 真 Agent 的冒烟（`RealAgents.Tiered`）
     @Tag static var smoke: Self
 }
 
