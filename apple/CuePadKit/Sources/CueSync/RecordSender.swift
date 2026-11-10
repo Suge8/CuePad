@@ -35,7 +35,7 @@ actor RecordSender {
   private var urgent: Set<String> = []
   /// 每次要马上传加一。一批只答读库之前要的（`Waiter.asked <= readAt`）：之后要的，这一批读到的可能早于它要的那一版
   /// （刚领取的投送请求，结果紧跟着写下；后台那一路读库在先、进 `inFlight` 在后）。没答的等这几条离开 `inFlight` 时补发（`release`）。
-  private var asks = 0
+  private(set) var asks = 0
   /// 谁还在等哪几条，只记在这里。停下时随这一代结束一起答。
   private var waiters: [Waiter] = []
   private struct Waiter {

@@ -91,29 +91,28 @@ import Testing
     }
   }
 
-  /// 要的结果与答复那一刻服务器上的这条（`body`），一次只等一个。
+  /// 一次马上传的答复，一次只等一个。
   actor Answer {
-    private var result: (Bool, String?)?
-    private var waiter: CheckedContinuation<(Bool, String?), Never>?
-    func set(_ value: (Bool, String?)) {
+    private var result: Bool?
+    private var waiter: CheckedContinuation<Bool, Never>?
+    func set(_ value: Bool) {
       result = value
       waiter?.resume(returning: value)
     }
-    var value: (Bool, String?) {
+    var value: Bool {
       get async {
         if let result { return result }
         return await withCheckedContinuation { waiter = $0 }
       }
     }
-    var answered: Bool { result != nil }
   }
 
-  func ask(_ sender: RecordSender, _ server: Gated, _ names: Set<String>, reading: String? = nil) -> Answer {
+  /// 要马上传，返回时这次已在发送者那里记下（之后放行什么，它都赶上了）。
+  func ask(_ sender: RecordSender, _ names: Set<String>) async -> Answer {
+    let before = await sender.asks
     let answer = Answer()
-    Task {
-      let ok = await sender.send(names)
-      await answer.set((ok, await reading.asyncMap { await server.bodies[$0] } ?? nil))
-    }
+    Task { await answer.set(await sender.send(names)) }
+    while await sender.asks == before { await Task.yield() }
     return answer
   }
 
@@ -145,13 +144,14 @@ import Testing
     try await edit(r, "r2")
     try await edit(d, "d2")
     await server.set(zoneMissing: [D])
-    let first = ask(sender, server, [R, D])
+    let first = await ask(sender, [R, D])
     await server.untilCalls(1)
     await server.release(0)
     await server.untilZoneWaiting()  // R 已作答，那一批还在建区
-    let second = ask(sender, server, [R], reading: R)
+    let second = await ask(sender, [R])
     await server.open()
-    #expect(await second.value == (true, "r2"))
+    #expect(await second.value)
+    #expect(await server.bodies[R] == "r2")
     _ = await first.value
     await sender.stop()
   }
@@ -164,17 +164,18 @@ import Testing
     try await edit(r, "r2")
     try await edit(d, "d2")
     await server.set(zoneMissing: [D])
-    let first = ask(sender, server, [R, D])
+    let first = await ask(sender, [R, D])
     await server.untilCalls(1)
     try await edit(s, "s2")
-    let second = ask(sender, server, [S, R], reading: R)
+    let second = await ask(sender, [S, R])
     await server.untilCalls(2)
     await server.release(0)
     await server.untilZoneWaiting()
     await server.release(1)
     while await sender.inFlight.contains(S) { await Task.yield() }  // S 那批先收尾，R 那批还在建区
     await server.open()
-    #expect(await second.value == (true, "r2"))
+    #expect(await second.value)
+    #expect(await server.bodies[R] == "r2")
     _ = await first.value
     await sender.stop()
   }
@@ -191,16 +192,17 @@ import Testing
       picked: {
         try? await Task.sleep(for: .milliseconds(3))
         try? await store.updateCard(r) { $0.body = "r3" }
-        let answer = self.ask(sender, server, [R], reading: R)
-        while await !sender.waited.contains(R) { await Task.yield() }
-        return answer
+        return await self.ask(sender, [R])
       },
       reserving: { await server.untilCalls(1) })  // 后台那一批（V1）已在路上
     await sender.kick()
     await server.untilCalls(1)
-    await server.release(0)
+    await server.release(0)  // V1（r2）收下
+    await server.untilCalls(2)  // 新版那一批已在路上、挂着：此刻答了就是拿 V1 答的
+    #expect(await sender.waited.contains(R))
     await server.open()
-    #expect(await order.answer.value == (true, "r3"))
+    #expect(await order.answer.value)
+    #expect(await server.bodies[R] == "r3")
     await sender.stop()
   }
 
@@ -241,14 +243,17 @@ import Testing
     let (r, R) = try await card("r1")
     let sender = await started(server)
     try await edit(r, "r2")
-    let first = ask(sender, server, [R], reading: R)
+    let first = await ask(sender, [R])
     await server.untilCalls(1)
     try await edit(r, "r3")
-    let second = ask(sender, server, [R], reading: R)
-    await server.release(0)
+    let second = await ask(sender, [R])
+    await server.release(0)  // r2 收下：答不了第二次
+    await server.untilCalls(2)  // r3 那一批已在路上、挂着
+    #expect(await sender.waited.contains(R))
     await server.open()
-    #expect(await first.value.0)
-    #expect(await second.value == (true, "r3"))
+    #expect(await first.value)
+    #expect(await second.value)
+    #expect(await server.bodies[R] == "r3")
     await sender.stop()
   }
 
@@ -258,10 +263,10 @@ import Testing
     let (r, R) = try await card("r1")
     let sender = await started(server)
     try await edit(r, "r2")
-    let waiting = ask(sender, server, [R])
+    let waiting = await ask(sender, [R])
     await server.untilCalls(1)
     let stopping = Task { await sender.stop() }
-    #expect(await waiting.value.0 == false)
+    #expect(await waiting.value == false)
     await server.open()
     await stopping.value
     #expect(await sender.send([R]) == false)
@@ -300,12 +305,5 @@ import Testing
     let sender = await started(Gated())
     #expect(await sender.send([]))
     await sender.stop()
-  }
-}
-
-extension Optional {
-  fileprivate func asyncMap<T>(_ transform: (Wrapped) async -> T) async -> T? {
-    guard let self else { return nil }
-    return await transform(self)
   }
 }
