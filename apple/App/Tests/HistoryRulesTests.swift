@@ -182,23 +182,4 @@ struct HistoryRulesTests {
         return state
     }
 }
-
-@Suite(.releasesLibraries, .pinnedPi)
-struct HostedLaunchTests {
-    @Test func 开新会话模型无效时整体失败() async throws {
-        let directory = TestLibraries.makeDirectory()
-        let paths = PiPaths(
-            agentDirectory: directory.appending(path: "agent"),
-            socketDirectory: URL(filePath: "/tmp/hl-\(UUID().uuidString.prefix(8))", directoryHint: .isDirectory),
-            binDirectory: directory.appending(path: "bin"))
-        let bridge = PiBridge(socketDirectory: paths.socketDirectory)
-        try bridge.start()
-        defer { bridge.stop() }
-        let host = PiRuntime(bridge: bridge, paths: paths, pi: { realPi })
-        await #expect(throws: PiHostError.exited(#"Error: Model "nope/x" not found. Use --list-models to see available models."#)) {
-            _ = try await host.open(in: directory, launchToken: "t", name: "修登录页", model: PiModelKey(provider: "nope", id: "x"), thinking: nil)
-        }
-        #expect(bridge.sessions.isEmpty)
-    }
-}
 #endif

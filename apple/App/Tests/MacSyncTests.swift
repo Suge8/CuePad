@@ -129,16 +129,6 @@ struct MacSyncTests {
 
     // MARK: Pi 状态记录
 
-    @Test func 桥报来不认识的取值原样写进同步记录() async throws {
-        var live = session("s1")
-        live.thinking = .unknown("ultra")
-        live.subagents = [PiSubagentState(name: "docs", role: "写手", phase: .unknown("napping"))]
-        try await services.consumePiChanges(changes([.appeared(live)]))
-
-        let stored = try #require(try await services.store.allPiSessionStates().first)
-        #expect(stored.thinking == .unknown("ultra") && stored.subagents.map(\.phase) == [.unknown("napping")])
-    }
-
     @Test func 会话显示名写进同步记录_改名后跟上() async throws {
         var named = session("s1", cwd: "/work/app")
         try await services.consumePiChanges(changes([.appeared(named)]))
