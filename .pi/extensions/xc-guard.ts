@@ -19,7 +19,7 @@ const INSTANCE =
 const FOREGROUND =
 	"AppleScript 里的 activate、set frontmost、System Events 点按会抢用户正在用的前台与键盘。" +
 	"操作调试实例用 bcu（按 PID 投递，不抢前台，先 xc.sh run 拿 PID）；Finder、浏览器等别的应用只读窗口信息可以，要点按请让用户自己点；" +
-	"调试实例的前台测量只经 -CuePadForeground YES（DebugForeground：用户键鼠静止 5 分钟以上才借，docs/verify.md「占前台」）。";
+	"调试实例的前台测量只经 -CuePadForeground YES（DebugForeground：用户键鼠静止 60 秒以上才借，docs/verify.md「占前台」）。";
 const ACTIVATING = /\b(?:activate|reopen|keystroke|key\s+code|click|perform\s+action|AXRaise)\b|\bset\b[^\n]*\bfrontmost\b/i;
 // 指向 CuePad 本身：名字、bundle id 或 .app 包（不含路径里的 CuePad 检出目录名）
 // bundle id 是 Signing.xcconfig 的 CUEPAD_APP_ID（唯一定义）

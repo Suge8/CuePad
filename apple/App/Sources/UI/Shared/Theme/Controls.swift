@@ -117,7 +117,7 @@ private struct GlassIconLabel: LabelStyle {
 }
 #endif
 
-/// `selected`：开着的筛选、选中的那一颗（全 App 一套选中：选中底、墨字半粗，docs/ui.md「选中」），只对带字的胶囊有意义；胶囊的外形经 `chip`。
+/// `selected`：开着的筛选、选中的那一颗（全 App 一套选中：选中底、墨字半粗，docs/ui.md「视觉原则」），只对带字的胶囊有意义；胶囊的外形经 `chip`。
 /// `level`：胶囊自己当读数用（上下文用量）——底下从左铺一层到比例，高就是胶囊实际的高（随字号长），不含触屏补出来的点按区。
 struct ControlSurface: ViewModifier {
     struct Level: Equatable {

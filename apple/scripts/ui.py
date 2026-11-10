@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""模拟器里按元素操作界面：读、点、输入、等文字、截图（AXe 的薄封装，docs/verify.md「模拟器里按元素操作」）。
+"""模拟器里按元素操作界面：读、点、输入、等文字、截图（AXe 的薄封装，docs/verify.md「交互验收」）。
 用法：ui.py <UDID|iphone|ipad|mac> <命令> …，iphone、ipad、mac 是 `xc.sh fleet up` 起的那一台（fleet.json）。
   read [--all]               屏上的元素，每行 类型⇥标签⇥值⇥x,y,宽,高（点）；--all 连屏外的与没标签的一起列
   tap <标签|#id|x,y> [--type T] [--nth N] [--physical]   按元素点它的中心：标签先全等后包含，只数屏上的；有几个就报错列出，--nth 从 0 起挑一个

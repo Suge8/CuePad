@@ -9,7 +9,7 @@
 **门铃不通时 Mac 按节奏的拉取是别的设备的请求与对 Cue 说的话到达 Mac 的唯一通路，别放慢、别删**（档位在 `SyncPoller.Cadence`，兜底间隔的理由在 `Relay.silenceLimit`）。
 
 - 实测（2026-10，正式中转、CloudKit 开发环境）：服务器收下到对方入库，只靠按节奏拉中位 1.0～1.8 秒，门铃 0.5 秒；中转停掉 2 秒内发现并退回按节奏拉，起来后 4～8 秒连回。
-- 中转只有一台：`Signing.xcconfig` 的 `CUEPAD_RELAY_HOST`（部署见 `relay/README.md`），发布脚本打包前核对它活着。连真 iCloud 的实例都连它，替身云不连；同步测量的密钥从开发容器取，房间与正式用户的不重合。
+- 中转只有一台：`Signing.xcconfig` 的 `CUEPAD_RELAY_HOST`（部署见 `relay/README.md`），发布脚本打包前核对它活着。连真 iCloud 的实例与共享模拟云（`SharedCloud`，`SYNC_BENCH_RELAY=0` 时除外）都连它，测试里的内存替身不连；同步测量的密钥从开发容器取，房间与正式用户的不重合。
 - 中转放在香港自建：Cloudflare、Vercel 的默认域名在大陆遭 DNS 污染、按 SNI 阻断。
 - 密钥放在 CloudKit 私有库的加密字段，没用 iCloud 钥匙串：钥匙串另有开关、同步时机不定，两台同时生成时没有先来后到可认，会各进各的房间。没登录 iCloud 时取不到密钥，门铃不连、不重试，账号认好再连。
 - Mac 只要 App 在跑就连着，手机只在前台连。每次入房先补按欠下的门铃，再拉一次；换了 iCloud 账号按新账号的密钥进新房间。
