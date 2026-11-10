@@ -29,7 +29,7 @@ public final class DshRuntime: AgentRuntime {
         self.bridge = bridge
     }
 
-    public func start() throws {}
+    public func start() throws { host.start() }
 
     public func stop() -> @concurrent @Sendable () async -> Void { host.stop() }
 

@@ -19,7 +19,7 @@ import Foundation
 ///   `-CuePadVoiceReplay YES` 在 Cue 结果送出后重放原 delegation 与用户 turn.done，核对请求没有重复落库。
 /// - 节点写进 `-CuePadVoiceLog <文件>`（`DebugVoiceLog`）。`input-ended` 是文件送完，`output-loud/quiet` 是下行实际的声音；
 ///   `cue-forward` 是落库结果与交接归属，`cue-sent` 是发送完成，`context-accepted` 是服务端追加回执，`assistant-said` 只是模型转写。
-///   最后一行是终态与音频用量；原始控制事件写到 `-CuePadVoiceWireLog <文件>`，连同服务端在控制连接上回传的音频块
+///   最后一行是终态与音频用量；原始控制事件写到 `-CuePadVoiceWireLog <文件>`（第一行 `call.create` 是建通话体里的会话设置，不含 SDP 与开发者消息），连同服务端在控制连接上回传的音频块
 ///   （`session.input_audio.append`、`session.output_audio.delta`）：与本机的 `input-loud`、`output-loud` 对齐即上下行各自的媒体时延。
 extension DebugScene {
     static func voiceCallIfAsked(_ workspace: Workspace) async {

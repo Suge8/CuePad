@@ -31,6 +31,7 @@ extension VoiceService {
             issue = reason
             throw reason
         }
+        preview.stop()
         let owner = VoicePhoneSession(id: VoiceSessionID(UUID()), local: local, media: makeMedia())
         phone = owner
         phoneBinding = nil

@@ -43,7 +43,11 @@ struct Slots<Key: Hashable> {
 /// 等一个可能不响应取消的外部回调（取附件、等目标就绪），但取消时不等它：立即抛 `CancellationError`，回调留在脱离的任务里自己收尾，结果丢弃。
 /// 任务组退出、`stop()` 都要等子任务真正结束，不隔开的话一个不返回的回调会让它们永久挂住。
 /// 给了 `leftBehind` 的，隔开后还在跑的回调记在那里，要确认它们放掉了所引用对象的一方（退出收尾）可以等。
-func abandonable<T: Sendable>(leaving leftBehind: LeftBehind? = nil, _ operation: @escaping @Sendable () async throws -> T) async throws -> T {
+public func abandonable<T: Sendable>(_ operation: @escaping @Sendable () async throws -> T) async throws -> T {
+  try await abandonable(leaving: nil, operation)
+}
+
+func abandonable<T: Sendable>(leaving leftBehind: LeftBehind?, _ operation: @escaping @Sendable () async throws -> T) async throws -> T {
   let handoff = Handoff<T>(leftBehind)
   return try await withTaskCancellationHandler {
     try await handoff.run(operation)

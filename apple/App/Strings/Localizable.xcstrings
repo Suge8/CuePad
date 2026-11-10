@@ -7071,6 +7071,22 @@
         }
       }
     },
+    "停止试听" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stop Preview"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "停止试听"
+          }
+        }
+      }
+    },
     "停止请求已受理" : {
       "localizations" : {
         "en" : {
@@ -11291,6 +11307,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "地球"
+          }
+        }
+      }
+    },
+    "声音" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voice"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "声音"
           }
         }
       }
@@ -22363,6 +22395,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "设置（⌘,）"
+          }
+        }
+      }
+    },
+    "试听" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preview Voice"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "试听"
           }
         }
       }

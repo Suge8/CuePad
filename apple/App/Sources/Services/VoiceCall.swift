@@ -26,7 +26,6 @@ final class VoiceCall {
         var access: () async throws -> CodexAccess
         var tell: (String) async throws -> UUID
         var store: CueStore
-        var cueName: String
         var source: VoicePeer.Source = .microphone
         var media: (VoicePeer.Source) -> any VoiceMedia = { VoicePeer(source: $0) }
         var createCall = VoiceWire.createCall
@@ -179,7 +178,9 @@ final class VoiceCall {
                 try Task.checkCancellation()
                 let offer = try await peer.offer()
                 try Task.checkCancellation()
-                let call = try await dependencies.createCall(offer, Self.identity(name: dependencies.cueName), access, session)
+                let cue = try await dependencies.store.cueProfile() ?? CueProfile()
+                try Task.checkCancellation()
+                let call = try await dependencies.createCall(offer, Self.identity(name: cue.name), cue.callVoice, access, session)
                 try Task.checkCancellation()
                 inputs.continuation.yield(.prepared(call, access))
                 try await peer.accept(answer: call.answer)

@@ -10,6 +10,7 @@ struct CueSettingsSection: View {
         Section {
             CueSwitchRow(model: model, here: services.hostID, blocked: settings.gate(services).waitingReason)
                 .cueSettings(model)
+            SettingRow(title: CueVoiceSetting.title, icon: Image(.voice)) { CueVoiceSetting(model: model) }
             if let running = settings.profile.activeHost, model.isOn {
                 SettingRow(title: .verbatim(CueSettings.hostTitle), icon: Image(.mac), busy: model.enabling != nil) {
                     CueHostSetting(running: running, hosts: settings.hosts(here: services.hostID), model: model)

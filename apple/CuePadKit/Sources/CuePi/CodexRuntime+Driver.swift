@@ -18,15 +18,19 @@ final class CodexDriver {
     private(set) var turn: String?
     private var finishedTurn: String?
     private var lastError: String?
+    /// 一轮开跑（`turn/started`）或结束，见 `interrupt`
+    private let activations = Occurrences(timeout: AgentTimeouts.stop, timeoutError: PiBridgeError.ackTimeout)
     var onEvent: (TurnEvent) -> Void = { _ in }
     var onNotification: (String, JSONValue) -> Void = { _, _ in }
 
     /// 进程退出报 `exited`（`stop` 让它退的为 nil）。
     @discardableResult
     func launch(
-        _ executable: URL, arguments: [String] = [], environment: [String: String], directory: URL? = nil, timing: Timing = .system
+        _ executable: URL, arguments: [String] = [], environment: [String: String], directory: URL? = nil, timing: Timing = .system,
+        spawned: (ChildProcess) async throws -> Void = { _ in }
     ) async throws -> CodexRPC {
-        let rpc = try await CodexRPC.launch(executable, arguments: arguments, environment: environment, directory: directory, timing: timing)
+        let rpc = try await CodexRPC.launch(
+            executable, arguments: arguments, environment: environment, directory: directory, timing: timing, spawned: spawned)
         self.rpc = rpc
         rpc.onNotification = { [weak self] in self?.notification($0, $1) }
         rpc.onDraft = { [weak self] thread, draft in
@@ -35,6 +39,7 @@ final class CodexDriver {
         }
         let process = rpc.process
         rpc.onClose = { [weak self] in
+            self?.activations.closeAll(PiBridgeError.sessionEnded)
             Task { [weak self] in
                 let reason = await process?.exited()
                 self?.onEvent(.exited(reason))
@@ -60,10 +65,23 @@ final class CodexDriver {
     }
 
     /// 停下在跑的这一轮，等它真的结束了才回（回应与它的 `turn/completed` 同时到）。
+    /// `turn/start` 已回了这一轮、它还没开跑时，Codex 回 -32600 "no active turn to interrupt"（0.167.0 实测：紧跟发话就停，几毫秒后才有 `turn/started`）：
+    /// 等它开跑再停一次；当它已结束的话这次停止就丢了，这一轮照跑。真已结束的，等的是随后到的 `turn/completed`。
+    /// `turn/started` 可能先于这个回应到（问的工夫里它开跑了），所以从发问前算起。
     func interrupt() async throws {
         guard let rpc, let thread, let turn else { return }
+        let params: JSONValue = ["threadId": .string(thread), "turnId": .string(turn)]
+        let seen = activations.count
         do {
-            try await rpc.call("turn/interrupt", ["threadId": .string(thread), "turnId": .string(turn)])
+            try await rpc.call("turn/interrupt", params)
+        } catch CodexRPCError.server(-32600, _) where self.turn == turn {
+            try await activations.wait(after: seen)
+            guard self.turn == turn else { return }
+            do {
+                try await rpc.call("turn/interrupt", params)
+            } catch CodexRPCError.server(-32600, _) {
+                // 这一轮在问与停之间自己结束了
+            }
         } catch CodexRPCError.server(-32600, _) {
             // 这一轮在问与停之间自己结束了（"no active turn to interrupt"）
         }
@@ -79,6 +97,7 @@ final class CodexDriver {
     private func finish(failure: String?) {
         finishedTurn = turn
         turn = nil
+        activations.happened()
         lastError = nil
         if let failure { onEvent(.failed(failure)) }
         onEvent(.turnFinished)
@@ -93,6 +112,7 @@ final class CodexDriver {
         switch method {
         case "turn/started":
             if let id = params["turn"]?["id"]?.string { begin(id) }
+            activations.happened()
         case "turn/completed":
             let completed = params["turn"]
             guard turn != nil, completed?["id"]?.string == turn else {

@@ -116,12 +116,8 @@ final class PendingReplies<ID: Hashable & Sendable, Reply: Sendable> {
         return true
     }
 
-    /// 等一件没有回应 id 的事（一轮收尾、开跑）：每个等待者自己一个 id，事件到了 `releaseAll` 一起放行；超时与取消同 `request`。
-    func wait() async throws where ID == UUID, Reply == Void {
-        _ = try await request(UUID()) {}
-    }
-
-    func releaseAll() where Reply == Void {
+    /// 放行此刻在等的全部；之前、之后都不留痕迹（`Occurrences` 在它上面记次数）。
+    fileprivate func releaseAll() where Reply == Void {
         let all = waiting.values
         waiting = [:]
         for continuation in all { continuation.resume() }
@@ -132,6 +128,37 @@ final class PendingReplies<ID: Hashable & Sendable, Reply: Sendable> {
         let all = waiting.values
         waiting = [:]
         for continuation in all { continuation.resume(throwing: error) }
+    }
+}
+
+/// 会反复发生的一件事（一轮开跑、一轮收尾、一轮变一次），等的人不错过已经来过的那一次：先记下 `count`，再做会引出它的事
+/// （发请求、等回应），然后 `wait(after:)`：记下之后来过就立即返回，没来过才挂起。至多等 `timeout`，取消与断线同 `PendingReplies`。
+@MainActor
+final class Occurrences {
+    private(set) var count = 0
+    private let waiting: PendingReplies<UUID, Void>
+
+    init(timeout: Duration?, timing: Timing = .system, timeoutError: any Error) {
+        waiting = PendingReplies(timeout: timeout, timing: timing, timeoutError: timeoutError)
+    }
+
+    func happened() {
+        count += 1
+        waiting.releaseAll()
+    }
+
+    func wait(after seen: Int) async throws {
+        guard count == seen else { return }
+        try await next()
+    }
+
+    /// 只等下一次，之前来过的不算：给刚同步查过状态、紧接着等的（查与等之间没有挂起，不会漏）。
+    func next() async throws {
+        _ = try await waiting.request(UUID()) {}
+    }
+
+    func closeAll(_ error: any Error) {
+        waiting.closeAll(error)
     }
 }
 #endif

@@ -19,6 +19,7 @@ public final class PiRuntime: AgentRuntime {
     private let idleLimit: Duration
     private let timing: Timing
     private var watcher: Task<Void, Never>?
+    private let resumptions = Resumptions()
 
     /// - Parameter pi: 这台 Mac 上够新的 `pi`（检测时挑中的那个，`AgentStatus.executable`；没有为 nil）。
     public init(
@@ -64,7 +65,9 @@ public final class PiRuntime: AgentRuntime {
     }
 
     public func resume(_ session: IndexedSession) async throws -> PiSession.ID {
-        try await launch(["--session", session.path], in: URL(filePath: session.cwd, directoryHint: .isDirectory), environment: [:]).id
+        try await resumptions.resume(session.id) { [self] in
+            try await launch(["--session", session.path], in: URL(filePath: session.cwd, directoryHint: .isDirectory), environment: [:]).id
+        }
     }
 
     static let hostedVariable = "CUEPAD_HOSTED"

@@ -20,14 +20,8 @@ extension ClaudeHostedSession {
 
     /// 发出的话（斜杠命令也是）一定开始一轮：从发出那一刻算，不等它的 `system/init`（中间隔着钩子）；为它停下的那一轮收尾时已经开了。
     func began() {
-        if !facts.running { starting = true }
         beginTurn()
         publish(at: .now)
-    }
-
-    func started() {
-        starting = false
-        startWaits.releaseAll()
     }
 
     /// 等着的 `/clear` 都以会话已结束收尾，之后的也直接抛它。
@@ -44,14 +38,15 @@ extension ClaudeHostedSession {
 
     func interrupt(restarting: Bool) async throws {
         try await stopPhase.run(cancellable: restarting) { [self] in
-            if starting { try await startWaits.wait() }
+            // 还没见它的 `system/init` 也照停，不等 init（#81：起得慢就等满 `AgentTimeouts.stop`）：话已交出、中断排在它后面，
+            // Claude Code 照样停下这一轮、回 `result`（2.1.318 实测：冻住进程时话与中断一起读到，这一轮不问模型就收尾）
             guard facts.running else { return }
             stopping = true
             restart = restarting
-            let turn = closed
+            let seen = closing.count
             do {
                 _ = try await live.request(["subtype": "interrupt"])
-                if closed == turn { try await closing.wait() }
+                try await closing.wait(after: seen)
             } catch {
                 restart = false
                 throw error
@@ -60,7 +55,7 @@ extension ClaudeHostedSession {
     }
 
     func release() {
-        closing.releaseAll()
+        closing.happened()
     }
 }
 #endif

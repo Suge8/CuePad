@@ -27,14 +27,16 @@ final class ACPConnection {
         }
     }
 
-    /// 起不来、握手失败或超时时停掉进程再抛错。
+    /// 起不来、握手失败或超时时停掉进程再抛错。`spawned` 在进程起来、握手之前调（托管的在这里登记，`HostedProcesses.admit`）。
     static func launch(
-        _ executable: URL, _ arguments: [String], environment: [String: String], directory: URL? = nil, timing: Timing = .system
+        _ executable: URL, _ arguments: [String], environment: [String: String], directory: URL? = nil, timing: Timing = .system,
+        spawned: (ChildProcess) async throws -> Void = { _ in }
     ) async throws -> ACPConnection {
         let process = try await ChildProcess(
             executable, arguments, directory: directory, environment: environment, placement: .group, input: .pipe, output: .lines, timing: timing)
         let connection = ACPConnection(process)
         do {
+            try await spawned(process)
             connection.agent = try await connection.call("initialize", [
                 "protocolVersion": 1, "clientCapabilities": ["fs": ["readTextFile": false, "writeTextFile": false], "terminal": false],
                 "clientInfo": ["name": "cuepad", "title": "CuePad", "version": "1"],

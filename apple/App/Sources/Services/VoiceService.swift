@@ -13,6 +13,7 @@ import os
     var availability: VoiceRelayAvailability
     var session: VoiceSessionID?
     var commandResults: [VoiceCommand.ID: VoiceCommandResult.Outcome] = [:]
+    let preview = VoicePreview()
     @ObservationIgnored var pending: [VoiceCommand.ID: Pending<VoiceCommandResult.Outcome>] = [:]
     @ObservationIgnored var pageReads: [VoiceCommand.ID: Pending<VoicePageResult>] = [:]
     struct Pending<Value: Sendable> {
@@ -124,6 +125,14 @@ import os
         #else
         phone != nil
         #endif
+    }
+
+    /// 试听与通话互斥：通话在连、通着或在关时不放，开始一通先停试听。
+    var canPreview: Bool { canStart && !isLive }
+
+    func playPreview(_ voice: CueVoice) throws {
+        guard canPreview else { return }
+        try preview.play(voice)
     }
 
     var canStart: Bool {

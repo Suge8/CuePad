@@ -1,5 +1,6 @@
 #if os(macOS)
 import CueTestSupport
+import Darwin
 import Foundation
 import Testing
 import CueStore
@@ -43,6 +44,25 @@ struct RealHostTests {
         #expect(resumed.sessionID == sessionID && resumed.hosted)
         try await bridge.send(PiMessage(text: "后台接着说"), to: resumed.id)
         try await eventually("后台进程回答了") { fileTexts("assistant", in: file).last == "ECHO 后台接着说" }
+    }
+
+    /// 同 `RealHostedResumeTests` 的并发恢复：同一会话同时来两次恢复，只起一个 Pi，两边拿到同一个 id。
+    @Test func twoResumesOfTheSameSessionAtOnceStartOneProcess() async throws {
+        let pi = try await PiProcess()
+        let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
+        defer { bridge.stop(); pi.stop() }
+        try bridge.start()
+        let (file, sessionID) = try await endedSession(pi, bridge)
+        let host = host(pi, bridge)
+        host.start()
+        defer { stopHostedProcesses(bridge) }
+
+        async let one = resume(host, file, in: pi, on: bridge)
+        async let two = resume(host, file, in: pi, on: bridge)
+        let (a, b) = try await (one, two)
+
+        #expect(a.id == b.id)
+        #expect(bridge.sessions.filter { $0.sessionID == sessionID }.map(\.pid) == [a.pid])
     }
 
     @Test func theHostedMarkStaysWithTheHostedProcessAndIsNotInheritedByItsChildren() async throws {
@@ -110,6 +130,53 @@ struct RealHostTests {
         try await eventually("回答了开场的话") {
             recap(of: bridge.sessions.first { $0.id == opened.id })?.lastReply == "ECHO 开场的话"
         }
+    }
+
+    /// 忙时点结束（同 `RealHostedEndTests` 的第一例）：扩展先中止这一轮、Pi 自己把它写成被停下的一轮，再退出，结束报成功。
+    @Test func endingABusyHostedSessionStopsTheTurnBeforeItQuits() async throws {
+        let pi = try await PiProcess()
+        let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
+        defer { bridge.stop(); pi.stop() }
+        try bridge.start()
+        let host = host(pi, bridge)
+        host.start()
+        defer { stopHostedProcesses(bridge) }
+        pi.model.on("BUSY-HANG", .stream(["Working on it"]))
+        let session = try #require(bridge.session(id: try await host.open(in: pi.cwd, launchToken: "tok-busy", name: nil, model: nil, thinking: nil)))
+        try await bridge.send(PiMessage(text: "BUSY-HANG keep going"), to: session.id)
+        try await eventually("这一轮在跑、停在模型里") { bridge.session(id: session.id)?.state.isWorking == true }
+
+        try await bridge.end(session.id)
+        #expect(bridge.session(id: session.id) == nil)
+        try await eventually("进程退了") { kill(session.pid, 0) != 0 }
+        let record = try PiHistory.index(file: try #require(session.sessionFile), agent: .pi, from: nil, files: scratchFiles)
+        #expect(record.messages.contains { $0.role == .known(.user) && $0.text.contains("BUSY-HANG") })
+        #expect(record.checkpoint.stoppedAt != nil, "会话记录里没有被停下的这一轮：\(record.messages.map(\.text))")
+    }
+
+    /// 起来马上点结束、说出第一句马上点停止或结束（同 `RealHostedEndTests` 的那一例，#81）：都不等满 `AgentTimeouts.stop`。
+    @Test(arguments: ["end on open", "stop on first message", "end on first message"])
+    func stoppingOrEndingRightAwayDoesNotWaitOutTheStopLimit(_ moment: String) async throws {
+        let pi = try await PiProcess()
+        let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
+        defer { bridge.stop(); pi.stop() }
+        try bridge.start()
+        let host = host(pi, bridge)
+        host.start()
+        defer { stopHostedProcesses(bridge) }
+        pi.model.on("BUSY-HANG", .stream(["Working on it"]))
+        let session = try #require(bridge.session(id: try await host.open(in: pi.cwd, launchToken: "tok-now", name: nil, model: nil, thinking: nil)))
+        if moment != "end on open" { try await bridge.send(PiMessage(text: "BUSY-HANG keep going"), to: session.id) }
+        let began = ContinuousClock.now
+        if moment == "stop on first message" {
+            try await bridge.abort(session.id)
+            try await eventually("停下了") { bridge.session(id: session.id)?.state == .settled }
+        } else {
+            try await bridge.end(session.id)
+            try await eventually("进程退了") { kill(session.pid, 0) != 0 }
+        }
+        let took = began.duration(to: .now)
+        #expect(took < .seconds(10), "用了 \(took)")
     }
 
     @Test func anIdleHostedSessionExitsAfterTheIdleLimit() async throws {

@@ -25,7 +25,7 @@ extension DeliveryMigrationTests {
             SendTarget(kind: .piSession, name: "投送目标", ref: mode == .start ? nil : "atlas"),
             host: TestApp.hostID, mode: mode, card: card.id)).value
         let pending = try #require(try await app.services.store.deliveryRequests().first)
-        try seedSchema92(app)
+        try RawDB(app.databaseURL).restore(version: 92)
         let services = app.relaunch(), store = services.store
         if mode != .start { try await app.host.connect("atlas", cwd: app.directory.path, hosted: true) }
         let changes = app.pi.changes()
@@ -76,7 +76,7 @@ extension DeliveryMigrationTests {
         await app.services.executor.beginStop()()
         recording.cancel()
         do { try await recording.value } catch is CancellationError {}
-        try seedSchema92(app)
+        try RawDB(app.databaseURL).restore(version: 92)
         let services = app.relaunch(), store = services.store
         #expect(CueStore.schemaVersion(of: app.databaseURL) == CueStore.supportedSchemaVersions.upperBound)
         var edited = try #require(try await store.syncRow(recordName: card.id.uuidString.lowercased()))
@@ -92,18 +92,6 @@ extension DeliveryMigrationTests {
         try await Workspace(services: services).complete(card.id)
         #expect(try await store.deliveryRequests().filter { $0.mode == .known(.end) }.isEmpty)
         #expect(try await store.piSessions(sessionIDs: [sessionID])[sessionID]?.state.createdForTaskID == nil)
-    }
-
-    private func seedSchema92(_ app: TestApp) throws {
-        try RawDB(app.databaseURL).exec("""
-            UPDATE deliveryRequests SET content = json_remove(content, '$.createdForTaskID') WHERE mode = 'start';
-            ALTER TABLE cards DROP COLUMN sessionBindingRevision;
-            ALTER TABLE deliveryRequests DROP COLUMN sessionBindingRevision;
-            DROP INDEX piSessionStates_createdForTaskID;
-            ALTER TABLE piSessionStates DROP COLUMN createdForTaskID;
-            ALTER TABLE attachments DROP COLUMN registeredHere;
-            PRAGMA user_version = 92;
-            """)
     }
 
 }

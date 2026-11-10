@@ -49,6 +49,8 @@ final class VoiceFlowFixture {
     var controls: [Control] = []
     var received: ((Result<VoiceWire.Event, VoiceWire.SidebandClosed>) -> Void)?
     var connectError: VoiceWire.Failure?
+    /// 每一通建通话时交给服务端的音色
+    var voices: [CueVoice] = []
     var access: () async throws -> CodexAccess = {
         let payload = Data(#"{"exp":4102444800,"https://api.openai.com/auth":{"chatgpt_account_id":"isolated-test"}}"#.utf8).base64EncodedString()
         return try #require(CodexAccess(token: "test.\(payload).test"))
@@ -72,8 +74,9 @@ final class VoiceFlowFixture {
                 return try await self.access()
             }
             dependencies.media = { [weak self] _ in self?.media ?? Media() }
-            dependencies.createCall = { [weak self] _, _, _, _ in
+            dependencies.createCall = { [weak self] _, _, voice, _, _ in
                 if let error = self?.connectError { throw error }
+                self?.voices.append(voice)
                 return VoiceWire.Call(id: "rtc_isolated", answer: "answer", usedPercent: nil)
             }
             dependencies.control = { [weak self] _, _, _, received in

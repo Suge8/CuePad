@@ -48,6 +48,7 @@ public final class GrokRuntime: AgentRuntime {
 
     public func start() throws {
         stopped = false
+        host.start()
     }
 
     public func follow(_ scope: PiHistoryScope) {

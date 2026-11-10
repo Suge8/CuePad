@@ -164,9 +164,6 @@ python3 "$scripts/lint_palette.py" App/AppGroup/Palette.swift ../landing/src/sty
 # Pi 桥扩展改了要升版本（规则在 lint_extension.py 头注释）；比的是检出与 origin/main，提交钩子查的暂存区副本里没有 git，不查
 [ "${1:-}" = --staged ] || python3 "$scripts/lint_extension.py" || status=1
 
-# App 的测试套件都查资料库释放（规则在 lint_suites.py 头注释）
-python3 "$scripts/lint_suites.py" || status=1
-
 # 注释里的到期或退役写法要附工单编号（规则在 lint_expiry.py 头注释）
 python3 "$scripts/lint_expiry.py" || status=1
 

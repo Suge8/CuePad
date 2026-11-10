@@ -38,14 +38,21 @@ final class CodexRPC {
         return text + images.map { ["type": "image", "url": .string("data:\($0.mimeType);base64,\($0.data.base64EncodedString())")] }
     }
 
-    /// 握手失败或超时时停掉这个进程再抛错。
+    /// 握手失败或超时时停掉这个进程再抛错。`spawned` 在进程起来、握手之前调（托管的在这里登记，`HostedProcesses.admit`），抛错时同样停掉。
     static func launch(
-        _ executable: URL, arguments: [String] = [], environment: [String: String], directory: URL? = nil, timing: Timing = .system
+        _ executable: URL, arguments: [String] = [], environment: [String: String], directory: URL? = nil, timing: Timing = .system,
+        spawned: (ChildProcess) async throws -> Void = { _ in }
     ) async throws -> CodexRPC {
         let process = try await ChildProcess(
             executable, ["app-server", "--listen", "stdio://"] + arguments, directory: directory, environment: environment,
             placement: .group, input: .pipe, output: .lines, timing: timing)
         let rpc = CodexRPC(pid: process.pid, transport: .stdio(process), messages: process.output)
+        do {
+            try await spawned(process)
+        } catch {
+            await process.stop()
+            throw error
+        }
         try await rpc.handshake()
         return rpc
     }

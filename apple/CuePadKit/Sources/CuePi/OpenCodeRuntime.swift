@@ -30,6 +30,7 @@ public final class OpenCodeRuntime: AgentRuntime, SessionLink {
     var sessions: [String: Tracked] = [:]
     var parents: [String: String] = [:]
     var childTurns: [String: OpenCodeTurn] = [:]
+    /// 在 CuePad 里结束的时刻：此后的活动才让它重新上线（`revives`）
     var ended: [String: Date] = [:]
     var catalogs: [String: Catalog] = [:]
     /// 服务里全部顶层会话（会话索引对账用）；还没拉到完整列表时为 nil

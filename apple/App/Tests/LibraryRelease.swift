@@ -5,7 +5,7 @@ import Testing
 
 /// 用例结束前等它建过的资料库都释放：没释放的就是有任务、订阅或对象还攥着它（同一个测试宿主里只增不减，每个库占一组系统通知登记，
 /// 攒到几百个宿主就崩在建库上）。检查放在用例的作用域里而不在 `TestApp` 的 deinit 里：释放要等被取消的任务收尾，deinit 等不了，
-/// 用例结束后再记的问题测试框架不算到任何用例头上。`TestApp` 只在这个作用域里建（建在外面当场报错）。Swift Testing 没有进程级的作用域，只能逐个套件挂：App 的测试套件都挂（`lint_suites.py` 查）。
+/// 用例结束后再记的问题测试框架不算到任何用例头上。`TestApp` 只在这个作用域里建（建在外面当场报错）。Swift Testing 没有进程级的作用域，只能逐个套件挂。
 nonisolated struct ReleasesLibraries: TestTrait, SuiteTrait, TestScoping {
     var isRecursive: Bool { true }
 

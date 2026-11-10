@@ -166,5 +166,42 @@ struct RealOpenCodeTests {
             #expect(messages.map(\.seq) == messages.map(\.seq).sorted())
         }
     }
+
+    /// 起来马上点结束、说出第一句马上点停止或结束（同 `RealHostedEndTests` 的那一例，#81）：都不等满 `AgentTimeouts.stop`；
+    /// 结束的会话还在服务里（进程是服务的），只看它下桥。
+    @Test(arguments: ["end on open", "stop on first message", "end on first message"])
+    func stoppingOrEndingRightAwayDoesNotWaitOutTheStopLimit(_ moment: String) async throws {
+        try await withOpenCode { sandbox, store, bridge, runtime in
+            sandbox.model.on("Run the slow command", .call("shell", ["command": "sleep 30", "description": "Run the requested command"]), .say("SLEPT"))
+            let id = try await runtime.open(in: sandbox.work, launchToken: "token-now", name: nil, model: nil, thinking: nil)
+            if moment != "end on open" { try await bridge.send(PiMessage(text: "Run the slow command"), to: id) }
+            let began = ContinuousClock.now
+            if moment == "stop on first message" {
+                try await bridge.abort(id)
+                try await eventually("停下了") { session(bridge)?.state == .settled }
+            } else {
+                try await bridge.end(id)
+                #expect(bridge.session(id: id) == nil)
+            }
+            let took = began.duration(to: .now)
+            #expect(took < .seconds(10), "用了 \(took)")
+        }
+    }
+
+    /// 忙时点结束（同 `RealHostedEndTests` 的第一例）：先停下这一轮（服务把它写成被停下的一轮）再下桥，结束报成功。
+    @Test func endingABusySessionStopsTheRoundFirst() async throws {
+        try await withOpenCode { sandbox, store, bridge, runtime in
+            sandbox.model.on("Run the slow command", .call("shell", ["command": "sleep 30", "description": "Run the requested command"]), .say("SLEPT"))
+            let id = try await runtime.open(in: sandbox.work, launchToken: "token-e", name: nil, model: nil, thinking: nil)
+            let sessionID = try #require(bridge.session(id: id)?.sessionID)
+            try await bridge.send(PiMessage(text: "Run the slow command"), to: id)
+            try await eventually("在跑命令") { session(bridge)?.state == .tool }
+            try await bridge.end(id)
+            #expect(bridge.session(id: id) == nil)
+            try await eventually("对话里留下'已停止'") {
+                try await store.piMessages(of: sessionID).map { "\($0.role.rawValue):\($0.text)" }.suffix(1) == ["system:已停止"]
+            }
+        }
+    }
 }
 #endif

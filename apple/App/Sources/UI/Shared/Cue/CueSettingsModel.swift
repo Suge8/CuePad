@@ -49,6 +49,11 @@ final class CueSettingsModel {
         run(.rename) { try await services.updateCue { $0.name = name } } finished: {}
     }
 
+    func chooseVoice(_ voice: CueVoice, _ services: AppServices) {
+        guard voice != settings?.profile.callVoice else { return }
+        run(.voice) { try await services.updateCue { $0.voice = .known(voice) } } finished: {}
+    }
+
     func fail(_ error: any Error) {
         failure = error.localizedDescription
         turning = nil
@@ -59,7 +64,7 @@ final class CueSettingsModel {
         if turning == settings?.isOn { turning = nil }
     }
 
-    private enum Action: Hashable { case turn, enable, rename }
+    private enum Action: Hashable { case turn, enable, rename, voice }
     /// 每种动作最新的一代：连续按时只有最新的一次改界面状态，先到的旧结果（完成或失败）不清掉后来那次的忙与乐观翻转。
     @ObservationIgnored private var generations: [Action: Int] = [:]
 
