@@ -193,11 +193,46 @@ final class VoiceAudio {
         return inputRate
     }
 
+    /// 两侧的硬件格式（设备本身的；语音处理起不来时节点上读到的硬件格式是 0 声道 0 Hz，没用）与交给语音处理的格式。
     private static func formats(_ engine: AVAudioEngine) -> String {
         func shown(_ format: AVAudioFormat) -> String { "\(format.channelCount)ch \(Int(format.sampleRate))Hz" }
-        let input = engine.inputNode, output = engine.outputNode
-        return "input \(shown(input.outputFormat(forBus: 0))), output \(shown(output.inputFormat(forBus: 0)))"
+        #if os(iOS)
+        let session = AVAudioSession.sharedInstance()
+        let hardware = (input: "\(session.inputNumberOfChannels)ch \(Int(session.sampleRate))Hz",
+                        output: "\(session.outputNumberOfChannels)ch \(Int(session.sampleRate))Hz")
+        #else
+        let hardware = (input: device(kAudioHardwarePropertyDefaultInputDevice, scope: kAudioObjectPropertyScopeInput),
+                        output: device(kAudioHardwarePropertyDefaultOutputDevice, scope: kAudioObjectPropertyScopeOutput))
+        #endif
+        return "input hw \(hardware.input) client \(shown(engine.inputNode.outputFormat(forBus: 0))), "
+            + "output hw \(hardware.output) client \(shown(engine.outputNode.inputFormat(forBus: 0)))"
     }
+
+    #if os(macOS)
+    /// 默认设备的标称采样率与这一侧的声道总数；读不到的项是 0。
+    private static func device(_ selector: AudioObjectPropertySelector, scope: AudioObjectPropertyScope) -> String {
+        func address(_ selector: AudioObjectPropertySelector, _ scope: AudioObjectPropertyScope = kAudioObjectPropertyScopeGlobal) -> AudioObjectPropertyAddress {
+            AudioObjectPropertyAddress(mSelector: selector, mScope: scope, mElement: kAudioObjectPropertyElementMain)
+        }
+        var id = AudioObjectID(kAudioObjectUnknown), size = UInt32(MemoryLayout<AudioObjectID>.size)
+        var target = address(selector)
+        AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &target, 0, nil, &size, &id)
+        var rate = Float64(0)
+        size = UInt32(MemoryLayout<Float64>.size)
+        target = address(kAudioDevicePropertyNominalSampleRate)
+        AudioObjectGetPropertyData(id, &target, 0, nil, &size, &rate)
+        target = address(kAudioDevicePropertyStreamConfiguration, scope)
+        size = 0
+        AudioObjectGetPropertyDataSize(id, &target, 0, nil, &size)
+        let raw = UnsafeMutableRawPointer.allocate(byteCount: max(Int(size), MemoryLayout<AudioBufferList>.size), alignment: MemoryLayout<AudioBufferList>.alignment)
+        defer { raw.deallocate() }
+        let list = raw.bindMemory(to: AudioBufferList.self, capacity: 1)
+        list.pointee.mNumberBuffers = 0
+        AudioObjectGetPropertyData(id, &target, 0, nil, &size, raw)
+        let channels = UnsafeMutableAudioBufferListPointer(list).reduce(0) { $0 + Int($1.mNumberChannels) }
+        return "\(channels)ch \(Int(rate))Hz"
+    }
+    #endif
 
     nonisolated private static let format = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: VoiceAudioDevice.rate, channels: 1, interleaved: true)!
 
