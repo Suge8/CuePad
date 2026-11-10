@@ -29,8 +29,6 @@ extension DebugScene {
             recap: PiRecap(lastPrompt: done?.you, lastReply: done?.pi, pendingPrompt: pending?.you, pendingTools: pending?.tools)))
     }
 
-    /// 绑定由本机目录推导，所以先只留 CuePad 的目录发布第二台，再把目录放回去。
-
     private static let notesWeek = PiChatMessage.Tools(
         steps: 7,
         items: [

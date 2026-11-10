@@ -17,7 +17,7 @@ final class CueSettingsModel {
 
     var isOn: Bool { turning ?? (settings ?? .empty).isOn }
 
-    /// 开关先翻到按下的那一态、停在那里直到库里读回来（没写成就回去）。`here` 是这台 Mac（手机为 nil）。
+    /// `here` 是这台 Mac（手机为 nil）。
     func turn(_ on: Bool, here: String?, _ services: AppServices) {
         turning = on
         run(.turn) { try await services.turnCue(on, here: here) } finished: { self.settle() }

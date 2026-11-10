@@ -1,22 +1,17 @@
 import CueStore
 import SwiftUI
 
-/// Cue 页（窄屏的根，打开 App 就在这一页；宽屏一直在右边，收起时成一颗钮），与会话页同一套消息版式：
-/// 页头一直在（头像、名字与数字账；Mac 在右边那一栏的栏头，是 `CueTitle`；手机与 iPad 是浮在对话上的 `CueHeader`；点开都是 Cue 的面板，`CueNowPanel`）；
-/// 中间是对话：你的话是右侧牛皮纸色的气泡，Cue 的话是左侧纸做的气泡（`CueBubble`、`CueSays`），它第一次提到一件活时气泡底下一行这件活（`CueTaskLine`），
-/// 同一边连着说的几颗收紧成一串，隔了一阵的地方居中写几点（`ChatTimeMarker`）；经过、醒来记录与分隔不是气泡，是旁注与居中的标记（`NoteLine`、`ChatMarker`），
+/// Cue 页（窄屏的根，宽屏一直在右边），与会话页同一套消息版式，对话区也是同一个（`ChatColumn`）。
+/// 页头点开都是 Cue 的面板（`CueNowPanel`，三端同一份）：记忆（`CueMemoryPage`）与定时（`CueSchedulePage`）从那里去，Cue 在这台 Mac 值班时 Mac 的面板末尾还有"运行情况"，在右侧开一栏（`CueRunPanel`）。
 /// 你发起的一轮在你的话之后先是这一轮的经过（`CueTrace`：碰到的任务与会话一处一行，做完一步才往下长、出现了就不再动），这一轮说的话与结果按先后在它之后。
-/// Cue 自己醒来的那几轮每轮一行旁注（`CueNoteLog`：提到的那一处、当时出了什么事与它说的一句，点了去那里），
-/// 末尾是它此刻在做什么（`CueEnding`：常驻的一行，此刻在做的只写这里）；
-/// 对话区与会话页是同一个（`ChatColumn`：排开、刻度滑条、跳转与描圈）；底部是拍板卡（`CueWaitDock`：Cue 的提问与会话在问的都在这里，
-/// 对话里不另挂）与输入框（`CueComposer`；手机与 iPad 上通话也在它里面，Mac 的通话条在栏顶，`CueVoicePanel`）。
+/// Cue 自己醒来的几轮每轮一行旁注（`CueNoteLog`），末尾是它此刻在做什么（`CueEnding`：此刻在做的只写这里）。
+/// 拍板卡（`CueWaitDock`）里是 Cue 的提问与会话在问的，对话里不另挂；通话在输入框里（`CueComposer`），Mac 的通话条在栏顶（`CueVoicePanel`）。
 /// 首次见面与启用只有一处（`CueWelcome`）：还没说过话时在正中，说过话后停用了在输入框正上方。
 /// 对话第一帧就排好（`observing` 当场读），停在最新处；有新消息时从第一条读起，还没读的气泡旁一颗小点（`CueViewing`）。
 /// Cue 运行在别的设备上、本机正在和 iCloud 对时（`AppServices.isCatchingUp(on:)`）页头写"正在同步"，这期间到的话先不滑上来，
 /// 对完一次滑上来（`ChatColumn` 的 `holding`）：对完才算开始看，有新消息就到第一条新消息、从它读起，没有才到最新处（`CueViewing`）。
 /// Cue 在做的事在任务与 Agent 页里看，这里不另列。
-/// 页面只读写库：写一条你的消息就是对 Cue 说话，Cue 运行在哪台 Mac 都一样。"Cue 记得什么"（`CueMemoryPage`）与定时（`CueSchedulePage`）从 Cue 的面板里去（`CueNowPanel`，三端同一份）；
-/// Cue 在这台 Mac 值班时 Mac 的面板末尾还有"运行情况"，在右侧开一栏（`CueRunPanel`）。宽屏没启用时这一页不放输入框（`bottom`）。
+/// 页面只读写库：写一条你的消息就是对 Cue 说话，Cue 运行在哪台 Mac 都一样。
 struct CuePage: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -93,7 +88,6 @@ struct CuePage: View {
     private var railInset: CGFloat { workspace.layout == .narrow ? SessionRail.chatInset : 0 }
 
     /// 读不出来时也排一个真的视图：读库的订阅挂在页上，等视图出现才启动（docs/layout.md）。
-    /// 还没说过话时正中是首次见面（`CueWelcome`：自我介绍，没启用时连同启用那一步，启用了接几句能直接说的话）。
     @ViewBuilder private var chat: some View {
         Group {
             if let thread, !thread.rows.isEmpty {
@@ -142,7 +136,6 @@ struct CuePage: View {
         }
     }
 
-    /// 有新内容：多了消息、有一条被答了、拍板或待回复变了、末尾的进展出现或收起。
     private struct FollowKey: Equatable {
         var count: Int
         var last: Date?
@@ -157,13 +150,11 @@ struct CuePage: View {
         }
     }
 
-    /// 拍板卡、停用时的启用与原输入框。
     private func bottom() -> some View {
         VStack(spacing: 0) {
             if let thread {
                 CueWaitDock(waiting: thread.waiting, asking: workspace.cueAsking, shots: thread.shots, open: { opened = $0 }, moving: $docking)
                     .padding(.leading, railInset)
-                // 说过话后停用了：启用就在输入框正上方（`CueWelcome`），是这时唯一的主动作
                 if !thread.rows.isEmpty, !cue.canHear { CueWelcome(intro: false).fixedSize(horizontal: false, vertical: true).padding(.bottom, Spacing.item).transition(.opacity) }
             }
             // 宽屏没启用时不放输入框：主区底部已有记下灵感的那一条（`CaptureSlot`），一屏只留一个；这一栏只剩启用那一张（`CueWelcome`）

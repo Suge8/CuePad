@@ -30,7 +30,7 @@ extension CueStore {
     }
   }
 
-  /// `updateCueProfile` 的事务内部分：必须在写事务内调用。
+  /// 必须在写事务内调用。
   func editProfile(_ edit: (inout CueProfile) -> Void) throws -> CueProfile {
     let stored = try cueProfile()
     var profile = stored ?? CueProfile()

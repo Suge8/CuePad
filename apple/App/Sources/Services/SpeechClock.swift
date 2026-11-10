@@ -60,7 +60,6 @@ final class SpeechClock {
 }
 
 extension AppServices {
-    /// 一个订阅读一次。读失败时报告并停止（到点不再翻、不再主动拉）。
     func startSpeechClock() {
         follow(reporting: { .syncUnavailable(String(localized: "读取在等回执的话失败，到点不再翻状态、不再主动拉取：\(String(describing: $0))")) }) {
             for try await open in self.store.observe({ store in

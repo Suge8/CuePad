@@ -27,7 +27,7 @@ extension CueStore {
     }
   }
 
-  /// 记一条（在写事务内调用，调用方先查过记得成）。
+  /// 在写事务内调用，调用方先查过记得成。
   func insertLine(
     _ text: String, source: CueLineSource, pinned: Bool, remindAt: Date? = nil, repeats: CueRepeat? = nil, task: UUID? = nil
   ) throws -> CueMemoryLine {

@@ -24,7 +24,6 @@ extension ClaudeHostedSession {
         publish(at: .now)
     }
 
-    /// 等着的 `/clear` 都以会话已结束收尾，之后的也直接抛它。
     func closeClears() {
         clearWaits.closeAll(PiBridgeError.sessionEnded)
         clearing.removeAll()

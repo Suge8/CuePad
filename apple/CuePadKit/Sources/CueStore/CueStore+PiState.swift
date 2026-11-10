@@ -48,6 +48,8 @@ extension CueStore {
   }
 
   /// 一个会话的进程没了（不是你结束的：歇满被请退出、崩溃、被杀）：托管的记为歇着（仍可唤醒、不进历史），
+  /// 其余记为已结束、进历史；记录上手上还有活（在跑一轮、等你确认、子代理还在跑）的都记为做到一半被打断（`PiWorkState.interrupted`）。
+  /// `bootID` 是见证这次收尾的系统启动（`close`）。
   func losePiState(host: String, sessionID: String, bootID: String?, at now: Date) throws {
     try write {
       try close(where: "id = ?", [PiSessionState.recordID(sessionID: sessionID)], boot: bootID, at: now)

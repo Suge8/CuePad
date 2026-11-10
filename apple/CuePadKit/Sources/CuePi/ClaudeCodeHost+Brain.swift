@@ -10,10 +10,8 @@ import Foundation
 /// - 正忙时说的话不先停下（与托管会话的发话不同）：带上发送标识（`uuid`）排进它的命令队列，下一次请求模型前并进这一轮，
 ///   赶上这一轮最后一次请求就在收尾后自己另开一轮；哪一轮收下看 `command_lifecycle` 的 `started`：并进时报在这一轮里，另开时先于那一轮的
 ///   `system/init` 到（2.1.317 实测）。他的话以 `/` 开头时前面垫一个空格，不被当成命令；
-/// - 起好要等 CuePad 的 MCP 服务连上（`toolsConnected`）；
 /// - 开新会话是写一句 `/clear`：Claude Code 清掉对话（进程、MCP 连接、模型与强度都留着），回一条不调模型的 `result`，不报成一轮；
-/// - 提示缓存留 1 小时（`ENABLE_PROMPT_CACHING_1H`：订阅登录多数时候本来就是，API 密钥与超额时默认 5 分钟）；
-/// - 思考强度按 Claude Code 的档位夹取（`ClaudeCode.effort`）；就地换模型与强度走控制请求（`ClaudeStream`）。
+/// - 提示缓存留 1 小时（`ENABLE_PROMPT_CACHING_1H`：订阅登录多数时候本来就是，API 密钥与超额时默认 5 分钟）。
 extension ClaudeHostedSession: HostedSession {
     var events: AsyncStream<TurnEvent> { brain?.events ?? AsyncStream { $0.finish() } }
     var seesImages: Bool { true }

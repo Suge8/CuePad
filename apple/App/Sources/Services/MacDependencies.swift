@@ -12,7 +12,6 @@ struct MacDependencies {
     var terminal: PiTerminalJumper
     var hostID: String
     var workspaces: Workspaces
-    /// 生产用 `NSWorkspace` 自己的通知中心。
     var wakeNotifications: NotificationCenter
     /// `pi` 必须用同一个钟建（`PiBridge.timing`）；测试换成手动推进的。
     var timing: Timing = .system

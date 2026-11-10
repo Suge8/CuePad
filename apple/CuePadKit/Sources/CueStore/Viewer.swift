@@ -41,7 +41,7 @@ extension CueStore {
 
   /// 他此刻在某台在线的 Mac 上开着这一页（`opens`）：提示到不到他的一半（`reaches`）。手机的那条不算（理由见 `Viewer`）。
   func watchedOnMac(_ opens: (Viewer) -> Bool) throws -> Bool {
-    try viewing().contains { try opens($0) && macOnline($0.device) }  // 手机没有在线记录，不算
+    try viewing().contains { try opens($0) && macOnline($0.device) }
   }
 
   /// 这台设备写下自己开着哪些页（会话页、Cue 页；都没开着就都空）。和库里一样就不写。返回记录 id（立即上传用），没写为 nil。

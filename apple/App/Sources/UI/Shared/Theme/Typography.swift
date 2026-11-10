@@ -33,7 +33,6 @@ enum Typography {
     static let code = Font.system(size: codeSize).monospaced()
     /// 注脚里的等宽字（一轮回答的工具清单）：比代码块小一档，是回答的注脚、不跟回答抢。
     static let codeNote = Font.system(size: 12).monospaced()
-    /// 行内代码与代码块共用字号和字形。
     static let inlineCode = code
     /// 阅读列的额外行距；总行高由系统字体与脚本度量决定。
     static let readingLineSpacing: CGFloat = 7
@@ -48,9 +47,7 @@ enum Typography {
     /// ⌘K 搜索框的输入与右侧预览的标题：浮层里最大的两行字。
     static let searchField = Font.system(size: 18)
     static let previewTitle = Font.system(size: 17, weight: .bold)
-    /// 键帽（快捷键提示）。
     static let keycap = Font.system(size: 11, weight: .medium, design: .rounded)
-    /// 空态的标题。
     static let emptyTitle = Font.system(size: 17, weight: .semibold)
     /// 栏头（窗口最顶那一排）：钮上的字（收起、项目范围）；三栏栏头的标题只有一种（项目名、会话名与它前面的项目、Cue 的名字、页名），
     /// 下面或后面跟的那一行（项目介绍、Cue 的数字账）是 `toolbarSubtitle`；标题下面还有一行（任务 · 子任务）时标题收小，两行放进一个控件的高度。
@@ -63,13 +60,10 @@ enum Typography {
     static let laneTitle = Font.system(size: 13, weight: .semibold)
     static let laneCount = Font.system(size: 15, weight: .semibold)
     static let toolbarPath = Font.system(size: 11)
-    /// 侧栏最上面的 Cue 名片的名字。
     static let cueCardName = Font.system(size: 18, weight: .semibold)
     /// 卡片摘要的额外行距；紧凑内容小于长文阅读。
     static let lineSpacing: CGFloat = 4
-    /// 用量环里剩多少的数字。
     static let gaugeNumber = Font.system(size: 15, weight: .semibold, design: .rounded).monospacedDigit()
-    /// 菜单栏图标右边的计数。
     static let menuBarCount = NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .semibold)
     #else
     static let body = Font.body

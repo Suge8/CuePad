@@ -43,6 +43,7 @@ extension CueHostTests.Rig {
     }
 
     /// 会话这一轮说了 `said`、接着调工具（问他的对话框由工具调起）：写进会话文件，等 Mac 读进这一轮的经过再往下（真会话里这段话先落盘、对话框才弹出），
+    /// 叫醒的 Cue 看得到它。
     func spoke(_ said: String, in sessionID: String) async throws {
         try app.host.sessionFiles[sessionID]!.spoke(said)
         let shown = said.trimmingCharacters(in: .whitespacesAndNewlines).clipped(PiChatMessage.Tools.saidLimit)

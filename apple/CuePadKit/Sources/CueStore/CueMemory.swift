@@ -68,6 +68,7 @@ extension CueMemoryLine: Record {
 }
 
 /// 记忆里对齐的 2 的幂区间 [lo, hi) 的一行摘要（本机缓存，不同步）。底层行或生成时读取的子摘要依赖变化就作废；
+/// `CueStore.cueMemory` 从小块到大块验证，读出时只保留有效摘要。
 public struct CueMemorySummary: Equatable, Sendable {
   public var lo: Int
   public var hi: Int

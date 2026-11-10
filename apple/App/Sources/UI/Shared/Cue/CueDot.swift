@@ -21,7 +21,6 @@ struct CueDot: View {
 
 /// 挂在一直在的视图上（头像、入口的点）：它自己看新消息的数变多，不另存状态，数只在 `CueWatch.unread`。
 /// 一圈与别的尺寸动效同一条弹簧（`Motion.nudge`）：余光里抓得住的是突然动起来的那一下，不是动多久。
-/// `reach`：圈扩到自身的几倍（点小、扩得远；头像大、扩一圈就够）。
 struct CueArrival: View {
     let color: Color
     var reach: CGFloat = 3.2

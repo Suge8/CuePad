@@ -70,7 +70,7 @@ struct CueWaitCard: View {
         }
     }
 
-    /// 连紧凑的样子都放不下（横屏弹着键盘）：整张卡收成问句一行。点它收起键盘，地方够了卡就按上面的挑法展开。
+    /// 连紧凑的样子都放不下（横屏弹着键盘）：整张卡收成问句一行。
     private var line: some View {
         Button {
             UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)

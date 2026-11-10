@@ -332,7 +332,6 @@ enum ClaudeInbox {
     static let userNote = "（这句是用户本人在 CuePad 里发给你的，不是别的会话：直接在本会话里回答，不需要回传。）\n"
 
     @concurrent static func post(_ lines: Data, to path: String) async throws {
-        // 连不上：会话已经退出（socket 删了或没人听）
         guard let fd = try? UnixSocket.connect(path) else { throw PiBridgeError.sessionEnded }
         defer { close(fd) }
         guard writeAll(fd, lines) else { throw PiBridgeError.sessionEnded }

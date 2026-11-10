@@ -3,9 +3,9 @@ import CueStore
 import CueText
 import SwiftUI
 
-/// 正文（编辑器）里刚点的那个附件画面在哪：全屏页从这里放大出来、关上缩回这里，走缩略图同一套（`previewSource`）。
-/// 编辑器是平台的文本视图，牌子不是 SwiftUI 视图：点的那一下由编辑器的宿主记下框（编辑器外层视图的坐标，左上为原点），
-/// 盖在编辑器上的 `AttachmentSpotLayer` 在那里放一块看不见、不接点按的视图当来源。
+/// 正文里刚点的那个附件在哪：全屏页从这里放大、关上缩回，走缩略图同一套（`previewSource`）。
+/// 编辑器是平台文本视图，附件牌子不是 SwiftUI 视图：点的那一下由宿主记下框（编辑器外层视图坐标，左上为原点），
+/// `AttachmentSpotLayer` 在那里放一块看不见的视图当来源。
 @Observable final class AttachmentSpot {
     static let group = "note"
 

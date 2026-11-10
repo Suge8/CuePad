@@ -107,7 +107,6 @@ final class CueService {
     }
 
 
-    /// 只发这次启动之后新写的。
     func followNotifications() async throws {
         let since = Date.now
         var seen = Set<UUID>()

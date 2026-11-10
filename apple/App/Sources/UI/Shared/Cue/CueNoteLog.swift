@@ -81,7 +81,6 @@ private struct CueNoteLine: View {
         let head: Text? = switch places.count {
         case 0: nil
         case 1: place(places[0])
-        // 几处只写最近那一处与几处（点了列出全部），窄屏也是一行写得下
         default: Text("\(Text(places[0].title).foregroundStyle(palette.ink2)) 等 \(places.count) 处有动静")
         }
         let tail: Text? = if let outcome = round.outcome {
@@ -159,7 +158,6 @@ struct CueNoteRow<Glyph: View, Words: View>: View {
 enum CueNoteRows {
     /// 几点那一列至少多宽："中午 12:44" 放得下，一列对齐。
     static let timeWidth: CGFloat = 62
-    /// 一行至少多高：比旁注（`Note.lineHeight`）高一点，整行可点。
     static let height: CGFloat = Note.lineHeight + 4
 }
 

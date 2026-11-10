@@ -143,6 +143,7 @@ struct AgentIndexingTests {
     }
 
     /// 没接入时那一遍回填只收 CuePad 托管过的会话（用户反馈：Cue 在没接入的 Claude Code 里开的会话做完、结束后，两端点进去都是空的）：
+    /// 托管过的那个读得到对话，就说明这一遍回填已经看过整个目录，同目录里终端开的那个没进索引。
     @Test func 只有接入了的Agent建会话索引_托管过的不论接入都读得到_关掉删本地索引_同步记录留着() async throws {
         let rig = TestApp()
         let hosted = "6f1c0d2e-0000-4000-8000-000000000002", terminal = "6f1c0d2e-0000-4000-8000-000000000001"

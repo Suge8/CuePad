@@ -17,7 +17,6 @@ struct CueHeader: View {
     var body: some View {
         let style = host == .page ? PlateStyle.fill : .compact
         ZStack(alignment: .top) {
-            // 圆钮与名牌同一排、同一条中线；名牌长开时盖住它们（点面板外先收起）
             // 长开时面板盖住它们、读屏只读面板（模态，`GrowPanel`）：撤掉，不只是变透明——它们的玻璃与面板在同一个容器里由容器一起画，透明度管不到钮上的图标
             if !expanded {
                 HStack {
@@ -48,7 +47,6 @@ struct CueHeader: View {
         } panel: {
             CueNowPanel(brain: brain, close: toggle)
         }
-        // 窄屏收着时让出两边的圆钮；长开时铺满整排、盖住它们（`GrowPanel`）
         .padding(.horizontal, style.width == nil && !expanded ? FloatingHeaderLayout.slot : 0)
         .observingCueBrain(into: $brain)
         .debugExposesCuePanel(toggle)
