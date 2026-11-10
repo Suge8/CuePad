@@ -4,7 +4,6 @@ import CueEditor
 import CueStore
 import CueTestSupport
 import SwiftUI
-import Synchronization
 import Testing
 @testable import CuePad
 
@@ -21,74 +20,34 @@ extension AgentLibraryTests {
         defer { await following.stop() }
         try await eventually("快照里有要合并的全局规则") { workspace.library?.merge(into: .global) != nil }
 
-        weak var shown: CueTextView?
-        var address = ""
-        do {
-            workspace.openLibrary(.instruction(.global))
-            // 建窗、关窗都会把窗口放进当前的自动释放池；CI 上没有事件进来，事件循环那一层池子一直不排空，关上的窗口连带视图图、正文与库就一直活着
-            //（CI 上 leaks --traceTree 查到的唯一强引用根是主线程的自动释放池）。各包一层当场排空，不靠外层的池子
-            let window = autoreleasepool {
-                let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 900, height: 600), styleMask: [.titled], backing: .buffered, defer: false)
-                window.isReleasedWhenClosed = false  // 默认关窗时 AppKit 自己再释放一次，与 ARC 重复：测试进程随后在自动释放池里崩掉
-                window.contentView = NSHostingView(rootView: LibraryFileLayer().environment(workspace).environment(services))
-                window.makeKeyAndOrderFront(nil)
-                return window
-            }
-            defer { autoreleasepool { window.close() } }
-            try await eventually("文件页挂上、正文拿到键盘") { window.firstResponder is CueTextView }
-            let editor = try #require(window.firstResponder as? CueTextView)
-            shown = editor
-            address = "\(Unmanaged.passUnretained(editor).toOpaque())"
-            let draft = try #require(workspace.fileDrafts[FileDraftKey(host: TestApp.hostID, file: .instruction(.global))])
-            func type(_ text: String) { _ = window.firstResponder?.tryToPerform(#selector(NSResponder.insertText(_:)), with: text) }
+        workspace.openLibrary(.instruction(.global))
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 900, height: 600), styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false  // 默认关窗时 AppKit 自己再释放一次，与 ARC 重复：测试进程随后在自动释放池里崩掉
+        window.contentView = NSHostingView(rootView: LibraryFileLayer().environment(workspace).environment(services))
+        // 本机关窗后约半秒放掉，GitHub 的 macOS runner 上关窗后再等 15 秒（其间转默认模式的主 run loop，perform 块照常执行）也不放：
+        // 运行 42881986575、42884155676、42886191288 的 leaks --traceTree 里，正文的强引用根依次是主线程的自动释放池（关上的窗口）、
+        // NSRunLoop 待执行的 perform 块攥着的 AppKit 视图观察闭包（`-[NSView _commonAwake]`）、窗口与视图图之间的引用，每次不同，都在 AppKit 与 SwiftUI 里
+        LibraryLedger.heldByFramework(services.store, "文件页挂进真窗口：CI 的 runner 上关窗后 AppKit 与 SwiftUI 仍攥着正文，连带环境里的服务与库", intermittent: true)
+        window.makeKeyAndOrderFront(nil)
+        defer { window.close() }
+        try await eventually("文件页挂上、正文拿到键盘") { window.firstResponder is CueTextView }
+        let editor = try #require(window.firstResponder as? CueTextView)
+        let draft = try #require(workspace.fileDrafts[FileDraftKey(host: TestApp.hostID, file: .instruction(.global))])
+        func type(_ text: String) { _ = window.firstResponder?.tryToPerform(#selector(NSResponder.insertText(_:)), with: text) }
 
-            draft.previewing = true
-            try await eventually("标出时正文交出键盘") { !(window.firstResponder is NSTextView) }
-            #expect(!editor.isEditable && !editor.isAccessibilityElement(), "不接输入、读屏跳过")
-            type("x")
-            await draft.leave()
-            #expect(editor.string == "共用的\n" && read(shared) == "共用的\n", "标出时打的字不进正文、不写进文件")
+        draft.previewing = true
+        try await eventually("标出时正文交出键盘") { !(window.firstResponder is NSTextView) }
+        #expect(!editor.isEditable && !editor.isAccessibilityElement(), "不接输入、读屏跳过")
+        type("x")
+        await draft.leave()
+        #expect(editor.string == "共用的\n" && read(shared) == "共用的\n", "标出时打的字不进正文、不写进文件")
 
-            draft.previewing = false
-            try await eventually("取消后键盘回到正文") { window.firstResponder === editor }
-            editor.setSelectedRange(NSRange(location: (editor.string as NSString).length, length: 0))
-            type("我加的")
-            await draft.leave()
-            #expect(read(shared) == "共用的\n我加的")
-        }
-        let mode = RunLoop.main.currentMode?.rawValue ?? "nil"
-        let performed = Mutex<Duration?>(nil), start = ContinuousClock.now
-        RunLoop.main.perform { performed.withLock { $0 = ContinuousClock.now - start } }
-        let waitDeadline = start + .seconds(5)
-        while shown != nil || performed.withLock({ $0 }) == nil, ContinuousClock.now < waitDeadline { try await Task.sleep(for: .milliseconds(10)) }
-        let releasedByWaiting = shown == nil, waited = ContinuousClock.now - start
-        var spun: Duration?
-        if shown != nil {
-            let spinStart = ContinuousClock.now
-            while shown != nil, ContinuousClock.now < spinStart + .seconds(10) { Self.turnMainRunLoop() }
-            spun = ContinuousClock.now - spinStart
-        }
-        let report = "PROBE-RUNLOOP mode=\(mode) performAfter=\(performed.withLock { $0 }.map { "\($0)" } ?? "never") releasedByWaiting=\(releasedByWaiting) waited=\(waited) spun=\(spun.map { "\($0)" } ?? "-") releasedAfterSpin=\(shown == nil)"
-        print(report)
-        if shown != nil { Issue.record(Comment(rawValue: report + "\n关窗后正文仍没放掉，引用链：\n" + Self.referrers(of: address))) }
-    }
-
-    static func turnMainRunLoop() { RunLoop.main.run(mode: .default, before: .now + 0.05) }
-
-    /// 取证：`leaks --traceTree` 列出谁攥着这个地址的对象；完整输出打到标准输出（CI 上传的 test.log 里），返回带类型名的强引用行。
-    static func referrers(of address: String) -> String {
-        let process = Process(), out = Pipe()
-        process.executableURL = URL(filePath: "/usr/bin/leaks")
-        process.arguments = ["--traceTree=\(address)", "\(getpid())"]
-        process.standardOutput = out
-        process.standardError = out
-        do { try process.run() } catch { return "leaks 起不来：\(error)" }
-        let text = String(decoding: out.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
-        process.waitUntilExit()
-        print("LEAKS-TRACE BEGIN\n\(text)\nLEAKS-TRACE END")
-        let lines = text.split(separator: "\n")
-        let strong = lines.filter { $0.contains("__strong") || $0.contains("Region") || $0.contains("block_invoke") || $0.contains("Thread") }
-        return (lines.prefix(12) + strong.prefix(80)).map { String($0.prefix(240)) }.joined(separator: "\n")
+        draft.previewing = false
+        try await eventually("取消后键盘回到正文") { window.firstResponder === editor }
+        editor.setSelectedRange(NSRange(location: (editor.string as NSString).length, length: 0))
+        type("我加的")
+        await draft.leave()
+        #expect(read(shared) == "共用的\n我加的")
     }
 }
 #endif
