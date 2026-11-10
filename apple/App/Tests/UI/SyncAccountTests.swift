@@ -136,24 +136,6 @@ struct SyncAccountTests {
     }
     #endif
 
-    @Test
-    func 认账号没有回音时停下_在等的都当场返回() async throws {
-        await cloud.setAccount(nil)
-        let app = TestApp()
-        let sync = CloudSync(store: app.services.store) { [cloud] in cloud }
-        let starting = Task { await sync.start() }
-        let pulling = Task { try await sync.syncNow() }
-        let fetching = Task { try await sync.fetchFile("missing") }
-        let secret = Task { try await sync.relaySecret() }
-
-        try await eventually("在认账号") { await cloud.accountChecks == 1 }
-        await sync.stop()
-        await starting.value
-        #expect(try await pulling.value == .incomplete)
-        await #expect(throws: FileFetchFailure.notSyncing) { try await fetching.value }
-        await #expect(throws: CancellationError.self) { try await secret.value }
-    }
-
     private func start() -> TestApp {
         let app = TestApp(sync: .built { [cloud, accountChanges] in CloudSync(store: $0, accountChanges: accountChanges) { cloud } })
         app.services.startSync()

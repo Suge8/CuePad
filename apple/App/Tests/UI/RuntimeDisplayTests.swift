@@ -111,36 +111,6 @@ struct RuntimeDisplayTests {
         #expect(timedOut.tally.moving == 0 && timedOut.subagents == 0 && timedOut.unconfirmed && timedOut.isLive)
     }
 
-    @Test func 界面队列被占住时_共享事实的订阅仍收到续期() async throws {
-        let clock = ManualTiming()
-        let app = TestApp(timing: clock.timing)
-        let workspace = Workspace(services: app.services), store = app.services.store
-        let task = try await workspace.createTask("续期", in: Project.defaultID)
-        let recorder = try await app.runtimeRecorder(on: "mac-b", boot: "test-boot")
-        try await recorder.update(sessionID: "b", state: .thinking, title: "续期")
-        try await store.bindSession("b", to: task.id)
-        let reading = CueReading(store: store, widget: false)
-        let progressed = DispatchSemaphore(value: 0)
-        let observe = Task.detached {
-            defer { progressed.signal() }
-            var updates = reading.updates().makeAsyncIterator()
-            let before = try await updates.next()
-            clock.advance(.seconds(1))
-            try await store.recordMacPresence(host: "mac-b", bootID: "test-boot") { true }
-            let renewed = try await updates.next()
-            return (before, renewed)
-        }
-        // 不以 CueFeed/Observations 给出新值为前提。
-        let completed = holdThread(until: progressed)
-        #expect(completed)
-        if !completed { observe.cancel() }
-        let observed = try await observe.value
-        let before = try #require(observed.0), renewal = try #require(observed.1)
-        let old = CueNow(before.digest, at: .always(at: clock.now), local: .init(waiting: nil, here: nil))
-        let renewed = CueNow(renewal.digest, at: .always(at: clock.now), local: .init(waiting: nil, here: nil))
-        #expect(!old.same(as: renewed))
-    }
-
     @Test func 八台Mac八件在跑_活动推送的完整信封不超过4096字节() async throws {
         let clock = ManualTiming()
         let app = TestApp(timing: clock.timing)

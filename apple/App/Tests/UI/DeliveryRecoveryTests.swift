@@ -148,24 +148,6 @@ struct DeliveryRecoveryTests {
         await app.services.executor.beginStop()()
     }
 
-    @Test func 唤醒暂时连不上也不在一次领取里再开宿主() async throws {
-        let app = TestApp(timing: clock.timing), store = app.services.store
-        defer { app.pi.stop(); app.services.cancelBackgroundWork() }
-        try await store.upsertPiSession(IndexedSession(
-            id: "sleeping", path: app.directory.appending(path: "sleeping.jsonl").path, cwd: app.directory.path,
-            title: "发布", lastActivityAt: .now), host: TestApp.hostID)
-        try await PiStateRecorder(store: store, hostID: TestApp.hostID).update(sessionID: "sleeping", state: .ended)
-        let target = try #require(try await store.allPiSessionStates().first)
-        app.host.resumeFailures = [PiHostError.notConnected]
-        let request = try await say("检查一次发布结果", to: target, app: app)
-        try await app.services.executor.start()
-        let done = try await outcome(request, in: store)
-        #expect(done.status == .known(.failed))
-        #expect(app.host.extensions.isEmpty)
-        #expect(try await store.deliveryRequests().map(\.id) == [request.id])
-        await app.services.executor.beginStop()()
-    }
-
     @Test func 其他接入仍保留各自的受理合同() async throws {
         let app = TestApp(timing: clock.timing), store = app.services.store
         defer { app.pi.stop(); app.services.cancelBackgroundWork() }

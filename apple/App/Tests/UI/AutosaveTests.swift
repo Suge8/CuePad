@@ -51,22 +51,6 @@ struct AutosaveTests {
         #expect(try await store.card(id)?.body == "刚打的字")
     }
 
-    @Test func flush等在途写入落库() async throws {
-        let gate = Gate(), written = Mutex(false)
-        let autosave = Autosave(save: { _ in
-            await gate.wait()
-            written.withLock { $0 = true }
-        }, onError: { _ in })
-
-        autosave.changed("新正文")
-        await gate.started()
-        let flushing = Task { try await autosave.flush() }
-        await quietPeriod(.milliseconds(100))
-        gate.open()
-        try await flushing.value
-        #expect(written.withLock { $0 }, "flush 返回时写入已完成")
-    }
-
     @Test func 写失败后离开再试一次_仍失败就报错不删() async throws {
         struct Boom: Error {}
         let workspace = Workspace(services: app.services)

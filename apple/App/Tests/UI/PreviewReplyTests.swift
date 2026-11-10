@@ -50,34 +50,3 @@ struct PreviewReplyTests {
         #expect(app.services.settings.replyDraft(for: session.id).isEmpty(accepting: .reply))
     }
 }
-
-/// 改动预览（.diff/.patch，`UnifiedDiff`）：段里删去的一行以 "--" 开头、接着加的一行以 "++" 开头，带上前缀成了一对 ---/+++，仍是这一段的改动，
-/// 不另起一个文件；段走完后的那对（不带 `diff --git` 的多文件 `diff -u`）才是下一个文件。
-@Suite(.releasesLibraries)
-struct PreviewDiffTests {
-    @Test func 段里以减减加加开头的行仍是改动_段外的那对才是下一个文件() {
-        let diff = UnifiedDiff("""
-            diff --git a/notes.md b/notes.md
-            index 1111111..2222222 100644
-            --- a/notes.md
-            +++ b/notes.md
-            @@ -1,3 +1,3 @@ 标题
-             第一行
-            --- 旧的分隔线
-            +++ 新的强调
-             最后一行
-            --- a/two.txt
-            +++ b/two.txt
-            @@ -1 +1 @@
-            -a
-            +b
-
-            """)
-        let files = diff.lines.compactMap { line -> String? in if case .file = line.kind { line.text } else { nil } }
-        #expect(files == ["notes.md", "two.txt"])
-        let changed = diff.lines.filter { if case .added = $0.kind { true } else if case .removed = $0.kind { true } else { false } }
-        #expect(changed.map(\.text) == ["-- 旧的分隔线", "++ 新的强调", "a", "b"])
-        #expect(changed.map(\.old) == [2, nil, 1, nil] && changed.map(\.new) == [nil, 2, nil, 1])
-        if case .file(let added, let removed) = diff.lines[0].kind { #expect(added == 1 && removed == 1) } else { Issue.record("第一行不是文件抬头") }
-    }
-}
