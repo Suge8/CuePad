@@ -103,7 +103,7 @@ extension RealCodexHostedTests {
             parent.open()
             try await eventually("两个一起再问") { rig.runtime.tracked[id]?.ending != nil && fault.threads("hold").count == 2 }
             #expect(rig.bridge.session(id: id)?.state == .thinking)
-            await clock.waitForSleeper(until: clock.now.addingTimeInterval(AgentTimeouts.settleAsk.seconds))
+            try await clock.waitForSleeper(until: clock.now.addingTimeInterval(AgentTimeouts.settleAsk.seconds))
             clock.advance(AgentTimeouts.settleAsk)
             try await eventually("到点歇下") { rig.bridge.session(id: id)?.state == .settled }
         }

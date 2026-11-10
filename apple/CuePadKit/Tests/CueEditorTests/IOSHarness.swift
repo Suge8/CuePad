@@ -74,15 +74,8 @@ final class FakePasteItem: NSObject, UITextPasteItem, @unchecked Sendable {
     init(_ provider: NSItemProvider) { itemProvider = provider }
 
     func resolved() async throws {
-        try await withThrowingTaskGroup(of: Void.self) { group in
-            group.addTask { for await _ in self.resolutions {} }
-            group.addTask {
-                try await Task.sleep(for: conditionBudget)
-                throw TimedOut(description: "等不到：粘贴委托给出结果")
-            }
-            defer { group.cancelAll() }
-            try await group.next()
-        }
+        let resolutions = resolutions
+        try await bounded("粘贴委托给出结果") { for await _ in resolutions {} }
     }
 
     func setResult(string: String) { finish(NSAttributedString(string: string)) }

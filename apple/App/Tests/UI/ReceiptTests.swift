@@ -103,7 +103,7 @@ struct ReceiptTests {
 
     /// 把钟拨到 `target`（记录的时刻是真实时间，钟从测试开始时起走，所以按时刻拨，不按秒数）：等 App 的那一次睡眠睡下再拨。
     private func advance(to target: Date) async throws {
-        try await clock.sleeper()
+        try await clock.waitForSleeper()
         clock.advance(.seconds(target.timeIntervalSince(clock.now)))
     }
 
@@ -220,7 +220,7 @@ struct ReceiptTests {
         try await eventually("会话行是发送中") { row(services)?.status == .delivery(.inTransit(.sending)) }
 
         try await eventually("在等回执时按节奏拉") { app.sync.syncNows > 0 }
-        try await clock.sleeper()
+        try await clock.waitForSleeper()
         clock.advance(.seconds(121))
         #if os(iOS)
         try await eventually("拉取窗口走完") { clock.sleeperCount == 0 }  // 醒来时已过两分钟，不再拉

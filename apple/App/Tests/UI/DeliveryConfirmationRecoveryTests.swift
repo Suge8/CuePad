@@ -111,7 +111,7 @@ extension DeliveryConfirmationTests {
         #expect(try await phone.services.store.applyRemote([.save(row, systemFields: Data())]).isEmpty)
         phone.services.startSpeechClock()
         if !ackAfterDeadline {
-            try await clock.sleeper()
+            try await clock.waitForSleeper()
             clock.advance(.seconds(due.timeIntervalSince(clock.now) + 1))
         }
         try await eventually("发送端不再把执行快照当作在跑") { phone.services.speech.now >= due }

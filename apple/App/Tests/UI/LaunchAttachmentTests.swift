@@ -106,7 +106,7 @@ struct LaunchAttachmentTests {
         #expect(try await phase(first).submission == .waiting, "在路上不重复提交")
 
         let request = try #require(try await mac.services.store.deliveryRequest(first.request))
-        try await clock.sleeper()
+        try await clock.waitForSleeper()
         clock.advance(.seconds(try #require(request.dispatchDeadline).timeIntervalSince(clock.now)))
         let failed = try await mac.services.store.outcome(of: request)
         #expect(failed.failure == "附件到期还没传到这台 Mac，没有发出，可以重发")

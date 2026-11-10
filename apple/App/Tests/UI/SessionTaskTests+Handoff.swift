@@ -33,7 +33,7 @@ extension SessionTaskTests {
         let written = try #require(try await store.piSessions(sessionIDs: ["old"])["old"]?.state)
         #expect(written.title == "整理发布脚本" && written.lastReply == "好了")
 
-        try await clockTick()  // 改写了的话修改时间一定不同
+        await nextMillisecond()  // 改写了的话修改时间一定不同
         await backfill()
         #expect(try await store.piSessions(sessionIDs: ["old"])["old"]?.state == written)
     }
@@ -164,7 +164,7 @@ extension SessionTaskTests {
         let watching = Task { for try await count in store.observe({ try $0.cueTally().waiting.count }) { counts.withLock { $0.append(count) } } }
         defer { watching.cancel() }  // 订阅一直开着：到期重读靠它登记的计时器
         try await eventually("等 Cue 的 1 件") { counts.withLock { $0.last } == 1 }
-        try await clock.sleeper()
+        try await clock.waitForSleeper()
         clock.advance(.seconds(MacPresence.lifetime - 1))
         _ = try await app.runtimeRecorder(on: services.hostID)  // Agent 所在的 Mac 仍续期，只让 Cue 那台过期
         clock.advance(.seconds(1))

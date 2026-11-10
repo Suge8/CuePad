@@ -84,7 +84,7 @@ struct AgentIntegrationTests {
             timing: clock.timing)
         async let status = integration.status(of: .pi)
         try await eventually("它被问到了") { !fileGone(asked) }
-        await clock.waitForSleeper()
+        try await clock.waitForSleeper()
         clock.advance(AgentTimeouts.command)
         #expect(await status.presence == .unresponsive)
     }

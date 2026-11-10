@@ -64,7 +64,7 @@ struct ClaudeInboxConfirmationTests {
                 try await eventually("终端里挂起这句话") { await terminal.screen.contains("Held") }
             }
             let deadline = try #require(try await rig.store.deliveryRequest(request.id)?.deadlineAt)
-            try await clock.sleeper(until: deadline)
+            try await clock.waitForSleeper(until: deadline)
             clock.advance(.seconds(Speech.receiptLimit + 1))
             try await eventually("到期报未确认") { try await rig.store.deliveryRequest(request.id)?.status == .known(.unconfirmed) }
             #expect(try await rig.store.deliveryRequest(request.id)?.reason == PiDeliveryConfirmation.notTaken)
@@ -103,9 +103,9 @@ struct ClaudeInboxConfirmationTests {
             let request = try #require(try await rig.store.deliveryRequests(toSession: session.sessionID).last)
             try await eventually("交出了，在等会话文件") { try await rig.store.deliveryRequest(request.id)?.status == .known(.confirming) }
             let first = try #require(try await rig.store.deliveryRequest(request.id)?.deadlineAt)
-            try await clock.sleeper(until: first)
+            try await clock.waitForSleeper(until: first)
             clock.advance(.seconds(Speech.receiptLimit + 1))
-            try await clock.sleeper(until: clock.now.addingTimeInterval(Speech.receiptLimit))
+            try await clock.waitForSleeper(until: clock.now.addingTimeInterval(Speech.receiptLimit))
             #expect(try await rig.store.deliveryRequest(request.id)?.status == .known(.confirming), "到期时它还在跑：接着等，不报没收下")
 
             gate.open()

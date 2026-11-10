@@ -100,7 +100,7 @@ struct AgentDayTests {
         try await beta.update(sessionID: "beta", state: .settled, title: "beta")
         let lost = try await say("备份一下线上库", to: "beta")
         try await macAnswers(lost, host: "mac-b", .failed(.verbatim("Pi 已经退出")))
-        try await clockTick()
+        await nextMillisecond()
         try await beta.update(sessionID: "beta", state: .thinking, title: "beta")
         try await beta.update(sessionID: "beta", state: .settled, title: "beta")
         #expect(try await label("beta") == "没能送达")  // 会话之后动过也不消失
@@ -138,7 +138,7 @@ struct AgentDayTests {
 
         let again = try await app.services.rename(failed.state, to: "排队调度")
         try await macAnswers(again, host: "mac-d", .succeeded)
-        try await clockTick()
+        await nextMillisecond()
         try await recorder.update(sessionID: "delta", state: .settled, title: "排队调度")
         #expect(try await title() == "排队调度")
         try await recorder.update(sessionID: "delta", state: .settled, title: "调度")  // 之后在终端里又改了名：以 Pi 为准

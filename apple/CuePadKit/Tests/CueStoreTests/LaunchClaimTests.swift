@@ -40,7 +40,7 @@ import Testing
     let plain = try await store.requestDelivery("别的", to: SendTarget(kind: .piSession, name: "notes", ref: "s2"), on: "mac-a", mode: .quota)
     _ = try await eventually(store, { try $0.deliveryRequests().filter { $0.status == .known(.succeeded) }.count }) { $0 == 2 }
 
-    await clock.waitForSleeper(until: clock.now.addingTimeInterval(DeliveryExecutor.retention.seconds))
+    try await clock.waitForSleeper(until: clock.now.addingTimeInterval(DeliveryExecutor.retention.seconds))
     clock.advance(DeliveryExecutor.retention * 2 + .seconds(1))
     _ = try await eventually(store, { try $0.deliveryRequest(plain.id) }) { $0 == nil }
     #expect(try await store.deliveryRequest(launch.id) != nil)
@@ -49,7 +49,7 @@ import Testing
     try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "s-late", state: .thinking, title: "圆桌", launchToken: "t-late")
     #expect(try await store.card(idea.id)?.piSessionID == "s-late")
 
-    await clock.waitForSleeper(until: clock.now.addingTimeInterval(DeliveryExecutor.retention.seconds))
+    try await clock.waitForSleeper(until: clock.now.addingTimeInterval(DeliveryExecutor.retention.seconds))
     clock.advance(DeliveryExecutor.retention + .seconds(1))
     _ = try await eventually(store, { try $0.deliveryRequest(launch.id) }) { $0 == nil }
     await executor.stop()

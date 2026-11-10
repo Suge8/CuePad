@@ -162,8 +162,13 @@ public final class ManualTiming: Sendable {
     for continuation in due { continuation.resume() }
   }
 
-  /// 多个计时器共用钟时可指定截止时刻，避免被另一项等待提前放行；取消时立即返回。
-  public func waitForSleeper(until deadline: Date? = nil) async {
+  /// 推进钟之前先等被测的计时器睡下。多个计时器共用钟时可指定截止时刻，避免被另一项等待提前放行。
+  public func waitForSleeper(until deadline: Date? = nil) async throws {
+    try await bounded("手动钟上有人睡下") { await self.sleeperArrives(until: deadline) }
+  }
+
+  /// 取消时立即返回。
+  private func sleeperArrives(until deadline: Date?) async {
     if state.withLock({ $0.hasSleeper(until: deadline) }) { return }
     let id = UUID()
     await withTaskCancellationHandler {
@@ -227,6 +232,20 @@ public final class Signal: Sendable {
 /// 取九成是让「等不到：X」这句话赶在它之前说出来。
 public let conditionBudget: Duration = .seconds(Double(ProcessInfo.processInfo.environment["CUEPAD_TEST_TIME_LIMIT"].flatMap(Int.init) ?? 120) * 0.9)
 
+/// 给一次等待加上限：到 `conditionBudget` 还没等到就抛 `TimedOut`，写明在等什么。测试里等流的下一项、等替身放行都经这里，不裸等。
+/// `wait` 要响应取消（`AsyncStream` 的迭代、库的订阅都响应），不然到了上限也回不来。
+public func bounded<T: Sendable>(_ what: String, _ wait: @escaping @Sendable () async throws -> T) async throws -> T {
+  try await withThrowingTaskGroup(of: T.self) { group in
+    group.addTask { try await wait() }
+    group.addTask {
+      try await Task.sleep(for: conditionBudget)
+      throw TimedOut(description: "等不到：\(what)")
+    }
+    defer { group.cancelAll() }
+    return try await group.next()!
+  }
+}
+
 /// 同步占住当前（主）线程，直到 `signal` 或 `conditionBudget` 到。轮询而不阻塞等：主线程阻塞等默认级线程会被
 /// Thread Performance Checker 报优先级反转，iOS 模拟器上 xcodebuild 随后收集诊断要卡满 600 秒。
 public func holdThread(until signal: DispatchSemaphore) -> Bool {
@@ -264,21 +283,13 @@ public func eventually<T: Sendable & Equatable>(
   _ store: CueStore, _ read: @escaping @Sendable (isolated CueStore) throws -> T,
   subscribed: Signal? = nil, until predicate: @escaping @Sendable (T) -> Bool
 ) async throws -> T {
-  try await withThrowingTaskGroup(of: T.self) { group in
-    group.addTask {
-      var first = true
-      for try await value in store.observe(read) {
-        if first { first = false; subscribed?.raise() }  // 初始值到了：订阅已就位
-        if predicate(value) { return value }
-      }
-      throw CancellationError()
+  try await bounded("库里的读取满足条件") {
+    var first = true
+    for try await value in store.observe(read) {
+      if first { first = false; subscribed?.raise() }  // 初始值到了：订阅已就位
+      if predicate(value) { return value }
     }
-    group.addTask {
-      try await Task.sleep(for: conditionBudget)
-      throw TimedOut(description: "等不到：库里的读取满足条件")
-    }
-    defer { group.cancelAll() }
-    return try await group.next()!
+    throw CancellationError()
   }
 }
 
