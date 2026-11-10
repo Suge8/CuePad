@@ -114,8 +114,10 @@ import Testing
       try await earlier.purgeCard(card.id)
       return (keys[0], keys[1], keys[2], keys[3])
     }
+    #if os(macOS)  // 同时开着库的另一个进程（命令行）只在 Mac 上有，iOS 的运行不留锁（`AttachmentRun.keepsLock`）
     let cli = try CueStore(location: .isolated(fixture.directory))
     let pending = try cli.files.store(pngData(width: 2, height: 2, shade: 0.7))
+    #endif
 
     #expect(try await store.removeStrayFiles(drafts: ["看 ![](cuepad://file/\(drafted))"]) == 2)
     for gone in [stray, edited] {
@@ -124,8 +126,10 @@ import Testing
     #expect(try await !store.hasAttachment(edited))
     try FileManager.default.removeItem(at: cached)
     for kept in [used, drafted] { #expect(store.files.fileURL(for: kept) != nil) }
+    #if os(macOS)
     _ = try await cli.createCard(body: "![](cuepad://file/\(pending))")
     #expect(try await cli.hasAttachment(pending) && cli.files.fileURL(for: pending) != nil)
+    #endif
   }
 
   /// 别处来的记录不收：收了会把删除同步出去，那台的图就没了。
