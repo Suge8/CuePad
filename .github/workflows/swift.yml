@@ -5,6 +5,18 @@ name: Swift
 # CloudKit 真同步、推送、后台与签名只能在设备上验，这里只跑替身。
 on:
   push:
+    # 只认分支：发版标签（mac/…、ios/…）指向的提交推上来时已经跑过，打标签不再跑一遍
+    branches: ['**']
+    # 只改文档、设计稿、落地页的推送不跑；落地页的色板令牌除外（lint 拿它对 Palette）
+    paths:
+      - '**'
+      - '!docs/**'
+      - '!design/**'
+      - '!landing/**'
+      - 'landing/src/styles/base.css'
+      - '!README*.md'
+      - '!WORDS.md'
+      - '!AGENTS.md'
   workflow_dispatch:
 
 concurrency:
