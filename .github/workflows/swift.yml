@@ -46,6 +46,8 @@ jobs:
       TEST_RUNNER_CUEPAD_AGENT_MATRIX: full
       # 真 Agent 用例：主干与手动触发跑全量，分支只跑每家的冒烟（RealAgents.swift），没跑的在结论页列为没跑
       TEST_RUNNER_CUEPAD_AGENT_TESTS: ${{ (github.ref_name == 'main' || github.event_name == 'workflow_dispatch') && 'all' || 'smoke' }}
+      # 编译缓存的目录（_build.sh 的 compile_cache）
+      CUEPAD_COMPILE_CACHE: ${{ github.workspace }}/apple/.derived-cas
     steps: &steps
       # lint 要 origin/main 与发布标签：整段历史、全部标签
       - uses: actions/checkout@v7
@@ -65,8 +67,21 @@ jobs:
           key: cuepad-agents-${{ hashFiles('apple/CuePadKit/Tests/agents.json', 'apple/scripts/agents.py') }}
       - if: matrix.name == 'test kit' || matrix.name == 'test mac'
         run: apple/scripts/xc.sh agents install
+      # 编译缓存：主干每次冷编译、编完存下（主干的结果不靠缓存，缓存也不会一代代越攒越大），分支只取主干最近的那份。
+      # iOS 那段只在主干跑，没有分支来取，不存
+      - if: github.ref_name != 'main' && matrix.name != 'test ios sync'
+        uses: actions/cache/restore@v6
+        with:
+          path: apple/.derived-cas
+          key: compile-${{ matrix.name }}-${{ github.sha }}
+          restore-keys: compile-${{ matrix.name }}-
       - run: apple/scripts/xc.sh ${{ matrix.args }}
         timeout-minutes: 30
+      - if: (github.ref_name == 'main' || github.ref_name == 'feat/ci-fast') && matrix.name != 'test ios sync'
+        uses: actions/cache/save@v6
+        with:
+          path: apple/.derived-cas
+          key: compile-${{ matrix.name }}-${{ github.sha }}
       - uses: actions/upload-artifact@v7
         if: always()
         with:
