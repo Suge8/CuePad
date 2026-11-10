@@ -25,7 +25,7 @@ nonisolated struct ReleasesLibraries: TestTrait, SuiteTrait, TestScoping {
     }
 }
 
-/// 框架自己攥着环境里的对象、测试里拆不掉时，库在收尾时还没放：只逐条用例写明是哪个框架、怎么攥的，没释放记成已知问题，
+/// 框架自己攥着环境里的对象、测试里拆不掉时，库在收尾时还没放：只逐条用例写明是哪个框架、怎么攥的，没释放的那一个记成已知问题（只豁免一个，同一用例里别的没放的照报泄漏），
 /// 哪天放掉了，测试框架报"已知问题没出现"，提醒删掉它。已知一种：SwiftUI 的视图图数据在窗口关上、视图拆掉后仍留着最后一版环境
 /// （试过清空 contentView、换成空根视图并当场排版绘制、另起一次刷新，都不放）。AppKit 文本视图进窗口时排的延迟合并块
 /// （`NSCreateMainQueueHysteresisBlock`）攥着它约半秒，在 1 秒宽限之内，不算。
@@ -105,11 +105,13 @@ nonisolated final class LibraryLedger: Sendable {
         for store in stores { await store.stoppedSubscriptions() }
         await MainActor.run {}
         await graceForOneShots()
-        if let knownHeld {
-            withKnownIssue(knownHeld.comment) { recordHeld() }
-        } else {
-            recordHeld()
+        var held = held
+        // 框架只攥着挂进窗口的那一份服务：只豁免一个，同一用例里别的没放的照报
+        if let knownHeld, !held.isEmpty {
+            let excused = held.removeFirst()
+            withKnownIssue(knownHeld.comment) { record(excused) }
         }
+        held.forEach(record)
     }
 
     /// 库释放没有可等的事件，每 10 毫秒看一次。
@@ -122,9 +124,7 @@ nonisolated final class LibraryLedger: Sendable {
 
     private var stores: [CueStore] { state.withLock { $0.stores.compactMap(\.store) } }
 
-    private func recordHeld() {
-        for location in held {
-            Issue.record("这条用例的资料库收尾后没释放：还有任务、订阅或对象攥着它（在这里建的 TestApp）", sourceLocation: location)
-        }
+    private func record(_ location: SourceLocation) {
+        Issue.record("这条用例的资料库收尾后没释放：还有任务、订阅或对象攥着它（在这里建的 TestApp）", sourceLocation: location)
     }
 }
