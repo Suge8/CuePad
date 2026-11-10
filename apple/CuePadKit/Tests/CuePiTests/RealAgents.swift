@@ -17,6 +17,10 @@ import Testing
 ///
 /// 没装的家跳过，原因以「未覆盖：」开头（`PinnedAgent.uncovered`，xc.sh 在汇总后单列，不算通过）：只连一家的套件整套跳过（`needs`），
 /// 按家参数化的用例跳过那一例（`require`）。完整矩阵（`CUEPAD_AGENT_MATRIX=full`，CI）不跳过，缺一家就红。
+///
+/// 分两档：默认只跑打了 `.smoke` 标签的（每家起来、说一句、收到回复、停下，加那一家独有的握手），哪条是冒烟只看这个标签；
+/// `CUEPAD_AGENT_TESTS=all`（CI 的主干与手动触发；`xc.sh test` 点名 Real 开头的套件时也是）跑全量。
+/// 每个 Real 开头的套件都挂 `tiered`：没跑的照样以「未覆盖：」跳过，不算通过。
 enum RealAgents {
     static func pinned(_ agent: AgentKind) -> PinnedAgent {
         switch agent {
@@ -33,10 +37,29 @@ enum RealAgents {
         .enabled(if: pinned(agent).uncovered == nil, Comment(rawValue: pinned(agent).uncovered ?? ""))
     }
 
+    static let everything = ProcessInfo.processInfo.environment["CUEPAD_AGENT_TESTS"] == "all"
+
+    /// 跳过借 `ConditionTrait` 的 `prepare`：自己抛的错算失败，它抛的才记成跳过（带原因，结论页认得出）
+    struct Tiered: SuiteTrait, TestTrait {
+        var isRecursive: Bool { true }
+
+        func prepare(for test: Test) async throws {
+            guard !test.isSuite, !everything, !test.tags.contains(.smoke) else { return }
+            try await ConditionTrait.disabled("未覆盖：真 Agent 的全量用例，这一档只跑冒烟（TEST_RUNNER_CUEPAD_AGENT_TESTS=all 跑全量）").prepare(for: test)
+        }
+    }
+
+    static let tiered = Tiered()
+
     /// 按家参数化的用例第一句调
     static func require(_ agent: AgentKind) throws {
         if let reason = pinned(agent).uncovered { try Test.cancel(Comment(rawValue: reason)) }
     }
+}
+
+extension Tag {
+    /// 真 Agent 的冒烟（`RealAgents.Gate`）
+    @Tag static var smoke: Self
 }
 
 let fixturesDirectory = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "Fixtures", directoryHint: .isDirectory)

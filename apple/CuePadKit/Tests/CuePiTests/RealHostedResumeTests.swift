@@ -11,7 +11,7 @@ import Testing
 /// 合成、放弃与退出的判断都在共用层（`Resumptions`、`HostedProcesses`），一家（Codex）作代表；各家各走一遍的只有
 /// 自己的恢复经不经共用层（第一例）与起进程时登记（App 退出在起进程时，Grok 与 dsh 同一套 `ACPHost.launch`，Grok 作代表）。
 @MainActor
-@Suite(.enabled(if: Hosting.uncovered == nil || PinnedAgent.fullMatrix, Comment(rawValue: Hosting.uncovered ?? "")))
+@Suite(RealAgents.tiered, .enabled(if: Hosting.uncovered == nil || PinnedAgent.fullMatrix, Comment(rawValue: Hosting.uncovered ?? "")))
 struct RealHostedResumeTests {
     /// 闲置到点被请退出、外壳在真 Agent 退出后还握着输出 3 秒（旧进程还没走）。请退出的那一刻就不在桥上；
     /// 紧接着同时来两条投送（`MacExecutor` 的接法）：接着同一会话、合成一次，等旧进程走了才起一个新的，话送到。

@@ -42,6 +42,8 @@ xc_test() {
   }
   # iOS/iPad：同一个入口也在模拟器上跑 CuePadKit 的测试（iOS 编辑器等只在这里跑；macOS 上的 Kit 测试是 test kit）。
   # 带了收窄参数（-only-testing 等）时只跑 App 那部分；两部分都跑完再按其一失败退出。
+  # 点名真 Agent 的套件或用例时跑全量档：冒烟档会把点名的跳过（RealAgents.swift）
+  if [[ " ${*:3}" == *" -only-testing:CuePiTests/Real"* ]]; then export TEST_RUNNER_CUEPAD_AGENT_TESTS="${TEST_RUNNER_CUEPAD_AGENT_TESTS:-all}"; fi
   status=0
   if [ "$platform" = kit ]; then
     kit_test "${@:3}" | shown || status=$?

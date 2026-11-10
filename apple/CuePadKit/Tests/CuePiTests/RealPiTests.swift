@@ -9,7 +9,7 @@ private let longCommand = "echo " + String(repeating: "a", count: 200)
 
 /// 端到端：真实 Pi（钉住的版本）+ 安装器装进临时 agent 目录的真实扩展 + 假模型 + `PiBridge`。
 @MainActor
-@Suite(RealAgents.needs(.pi))
+@Suite(RealAgents.needs(.pi), RealAgents.tiered)
 struct RealPiTests {
     /// 起 Pi、等桥发现它，测试体结束后停掉 Pi 与桥（Pi 进程的生命周期必须覆盖整个测试体）。
     func withRig(_ body: (PiProcess, PiBridge, PiSession) async throws -> Void) async throws {
@@ -21,7 +21,7 @@ struct RealPiTests {
         try await body(pi, bridge, bridge.sessions[0])
     }
 
-    @Test func installedExtensionIsLoadedByPiAndReportsTheSession() async throws {
+    @Test(.tags(.smoke)) func installedExtensionIsLoadedByPiAndReportsTheSession() async throws {
         try await withRig { pi, _, s in
             #expect(s.pid == pi.pid)
             #expect(s.cwd.resolvingSymlinksInPath().path == pi.cwd.resolvingSymlinksInPath().path)

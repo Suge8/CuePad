@@ -6,7 +6,7 @@ import Testing
 @testable import CuePi
 
 @MainActor
-@Suite(RealAgents.needs(.opencode), .serialized, .timeLimit(.minutes(10)))
+@Suite(RealAgents.needs(.opencode), RealAgents.tiered, .serialized, .timeLimit(.minutes(10)))
 struct RealOpenCodeTests {
     func session(_ bridge: PiBridge) -> PiSession? { bridge.sessions.first { $0.agent == .opencode } }
 
@@ -34,7 +34,7 @@ struct RealOpenCodeTests {
     }
 
     /// 发送：终端里 `opencode run` 的会话上了桥、答完歇下，CuePad 再发一句、改名、就地换模型与强度、压缩上下文，接入停了再开会话回来，服务停了会话下线。
-    @Test func aTerminalSessionIsLiveInCuePadAndTakesMessagesAnswersAndSettings() async throws {
+    @Test(.tags(.smoke)) func aTerminalSessionIsLiveInCuePadAndTakesMessagesAnswersAndSettings() async throws {
         try await withOpenCode { sandbox, store, bridge, runtime in
             // 2.2.6 的 `run` 没有后台服务时自己带一个私有的、跑完就走：终端用户的服务是先开着的
             try await sandbox.run(["service", "start"])

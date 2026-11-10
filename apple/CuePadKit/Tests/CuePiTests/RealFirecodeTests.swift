@@ -5,7 +5,7 @@ import Testing
 @testable import CuePi
 
 @MainActor
-@Suite(RealAgents.needs(.pi))
+@Suite(RealAgents.needs(.pi), RealAgents.tiered)
 struct RealFirecodeTests {
     /// 指挥官照 `prompt` 调 FireCode 的 subagents 工具（开子代理或移除它），之后回 TOOL_DONE；子代理的任务（"子任务"）停在返回的闸门上，
     /// 指挥官收到它交回的结果照常回声。

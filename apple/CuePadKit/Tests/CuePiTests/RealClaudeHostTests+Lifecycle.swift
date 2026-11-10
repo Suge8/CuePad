@@ -40,9 +40,9 @@ extension RealClaudeHostTests {
     }
 
     /// 接着会话时还没连上就被取消（投送到了截止时刻）：自己起的进程收掉、不再占着这个会话；再接着同一会话只起一个进程，照常说话。
-    /// 外壳带着 `slow` 标记时晚 2 秒才起 Claude Code：进程起了、还没连上。
+    /// 外壳带着 `slow` 标记时停住、不起 Claude Code，直到标记去掉（或被收掉）：进程起了、还没连上。
     @Test func aResumeCancelledBeforeItConnectsLeavesNoProcessBehind() async throws {
-        let wrapper = listing + #"dir=${0%/*}; echo $$ >> "$dir/launched"; [ -e "$dir/slow" ] && sleep 2; exec "$REAL" "$@""#
+        let wrapper = listing + #"dir=${0%/*}; echo $$ >> "$dir/launched"; while [ -e "$dir/slow" ]; do sleep 0.01; done; exec "$REAL" "$@""#
         try await ClaudeTestbed.run(wrapper: wrapper) { testbed in
             try testbed.startConnected()
             let (id, indexed) = try await openWithATurn(testbed)
@@ -56,10 +56,11 @@ extension RealClaudeHostTests {
             try await eventually("进程起了") { pids().count == 2 }
             cancelled.cancel()
             await #expect(throws: CancellationError.self) { try await cancelled.value }
-            // 被取消的调用方当场走（`Resumptions`），这次恢复随后收掉自己起的进程；下一次恢复等它收完才起
+            // 被取消的调用方当场走（`Resumptions`），这次恢复随后收掉自己起的进程；下一次恢复等它收完才起。
+            // 停住的外壳不理关输入，放它起真 Claude Code，读到关了的输入就退（runtime 的钟不走，等不到强杀）
+            try FileManager.default.removeItem(at: testbed.wrapperDirectory.appending(path: "slow"))
             try await eventually("被取消的那次起的进程收掉") { kill(pids()[1], 0) != 0 }
 
-            try FileManager.default.removeItem(at: testbed.wrapperDirectory.appending(path: "slow"))
             let resumed = try await testbed.connect(indexed)
             #expect(pids().count == 3)
             #expect(pids().filter { kill($0, 0) == 0 } == [pids()[2]])

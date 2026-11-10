@@ -7,7 +7,7 @@ import CueStore
 
 /// 摘要请求停在假模型的闸门上（`holdCompaction`）：压缩停住多久由测试决定，不按时长——机器负载高时测试自己的步骤会慢过任何固定窗口。
 @MainActor
-@Suite(RealAgents.needs(.pi))
+@Suite(RealAgents.needs(.pi), RealAgents.tiered)
 struct RealCompactTests {
     /// 早先那一轮要比 `keepRecentTokens` 长（Pi 按字数估：每 4 个字一个 token），才有可压缩的
     private let filler = String(repeating: "话", count: 60)
