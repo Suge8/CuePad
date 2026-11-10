@@ -21,10 +21,10 @@ public enum CodexAccessError: Error, Equatable {
 extension AgentIntegration {
     /// 至多 `AgentTimeouts.probe`（比通话的接通期限短，失败原因才轮得到它说）。开始、拿到、失败各记一行：只记阶段、用时与错误种类，不记令牌。
     @MainActor public func codexAccess(executable: URL?) async throws -> CodexAccess {
-        guard let executable else { throw CodexAccessError.notInstalled }
         let started = ContinuousClock.now
         CodexRuntime.log.notice("Codex credentials: start")
         do {
+            guard let executable else { throw CodexAccessError.notInstalled }
             let access = try await withDeadline(AgentTimeouts.probe, orThrow: CodexAccessError.unresponsive) { @MainActor in
                 let locator = await locate()
                 let rpc = try await CodexRPC.launch(executable, environment: locator.environment(launching: executable, overrides: paths.launchEnvironment(of: .codex)))
