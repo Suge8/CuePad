@@ -31,9 +31,8 @@ extension AppServices {
         // 执行器在接入刷新之后才启动：托管的 Pi 加载磁盘上的扩展，App 更新后要先换成随包版本，旧扩展读不懂托管约定。
         // 刷新失败也照样启动——托管启动时核对连上的扩展，对不上就让它退出并报错（`PiHostError.extensionMismatch`）。
         follow(reporting: { .syncUnavailable(String(localized: "远程投送执行器没能启动：\(String(describing: $0))")) }) {
+            // 刷新不因取消抛错；退出收尾取消了这个任务时，迟到的 start 当场抛取消、不再起执行器（`DeliveryExecutor.start`）
             await self.refreshAgentIntegrations()
-            // 刷新不因取消抛错：退出收尾已停过执行器，这里再起就是一个没人停、攥着资料库还在领请求的执行器
-            try Task.checkCancellation()
             try await self.executor.start()
         }
         follow(reporting: { .syncUnavailable(String(localized: "目录绑定没能同步给手机：\(String(describing: $0))")) }) { try await self.startDirectoryBindings() }

@@ -34,7 +34,7 @@ public actor DeliveryExecutor {
   /// `expiry` 是期限监视：到期没领取的按失败写回，不经执行队列——上一条 handler 不响应取消、队列停在等它时（一次一个），后面的话照样到期收尾。
   enum Role { case starting, watcher, expiry, cleanup, runner, claimUpload }
   var roles = Slots<Role>()
-  /// 上一次 `stop` 等旧任务收尾的那一段：`start` 等它过去才开新一轮，旧 handler 不会与新循环同时在跑。
+  /// 上一次 `stop` 等本轮任务收尾的那一段：`start` 等它过去才开新一轮，旧一轮的任务不会与新一轮同时在跑。
   private var draining: Task<Void, Never>?
   private var rerun = false
   private var handling: Task<DeliveryOutcome, Never>?
@@ -61,8 +61,13 @@ public actor DeliveryExecutor {
     self.fetchFile = fetchFile
   }
 
+  /// 起停只有三态：停着（`started` 假、`draining` 已过）→ `start` → 在跑（`started` 真，先跑启动恢复）→ `stop` → 停止中（`started` 假、等 `draining`）→ 停着。
+  /// 停止中调用 `start` 等它停完再开新一轮。一轮只等自己的回调：上一轮丢下的（不响应取消的 handler）不等，它的请求由新一轮的启动恢复按未知对账。
+  /// 在已取消的任务里调用抛 `CancellationError`、什么都不起：退出收尾取消了启动任务、停过执行器后，迟到的启动不会再起一轮没人停的。
+  /// 启动恢复读写失败时停回停着并抛出。
   public func start() async throws {
     await draining?.value
+    try Task.checkCancellation()
     guard !started else { return }
     started = true
     // 恢复段登记为 stop 能取消并收齐的任务：停止再启动时，旧一轮的恢复已被取消，不会与新一轮同时跑、也不会覆盖新一轮的监听
@@ -82,8 +87,7 @@ public actor DeliveryExecutor {
       try await store.releaseDeliveryReservations(for: hostID)
       for id in try await store.abandonPreparedDeliveries(for: hostID) { notifyWritten(id) }
       for request in try await store.unsettledDeliveries(for: hostID) {
-        // 被丢下的上一条 handler 没结束时，对账也等它（与派发同样"一次一个"）
-        guard started, !Task.isCancelled, await settleHandler() else { return }
+        guard started, !Task.isCancelled else { return }
         guard let outcome = await perform({ [recover] in await recover(request) }) else { return }
         await finish(request, outcome, resuming: true)
       }
@@ -117,6 +121,7 @@ public actor DeliveryExecutor {
   public func stop() async {
     started = false
     let tasks = roles.cancelAll() + fetching.cancelAll() + waiting.cancelAll() + confirmations.cancelAll() + uploads.cancelAll()
+    handling = nil
     let previous = draining
     let drain = Task {
       await previous?.value
@@ -140,8 +145,8 @@ public actor DeliveryExecutor {
     } while rerun && !Task.isCancelled
   }
 
-  /// 执行 handler 或启动对账的 recover：取消时调用方不等它（`abandonable`），但回调留在 `handling` 里，下一次执行前先等它结束（`settleHandler`），
-  /// 所以停止再启动后新一轮不会与还没结束的旧回调同时执行。被取消返回 nil。
+  /// 执行 handler 或启动对账的 recover：取消时调用方不等它（`abandonable`），但回调留在 `handling` 里，本轮下一次执行前先等它结束（`settleHandler`），
+  /// 所以同一轮里不会与还没结束的上一个回调同时执行；`stop` 丢下它，不拖住下一轮。被取消返回 nil。
   private func perform(until deadline: Date? = nil, _ operation: @escaping @Sendable () async -> DeliveryOutcome) async -> DeliveryOutcome? {
     let work = Task { await operation() }
     handling = work
