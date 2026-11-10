@@ -97,9 +97,10 @@ import Testing
     let made = try await phone.store.requestConfig(config, to: target, on: "mac")
     try await cloud.exchange()
     #expect(try await mac.store.deliveryRequest(made.id)?.config == config)
-    try await phone.store.updateCueProfile { $0.fast = true }
+    try await phone.store.updateCueProfile { $0.fast = true; $0.voice = .known(.hanul) }
     try await cloud.exchange()
-    #expect(try await mac.store.cueProfile()?.fast == true)
+    let profile = try await mac.store.cueProfile()
+    #expect(profile?.fast == true && profile?.voice == .known(.hanul))
   }
 
   @Test

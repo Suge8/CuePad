@@ -4,9 +4,9 @@ import CueStore
 import Foundation
 
 extension VoiceService {
-    func startLocal(source: VoicePeer.Source, name: String, makeCall: @MainActor (VoiceCall.Dependencies) -> VoiceCall) {
+    func startLocal(source: VoicePeer.Source, makeCall: @MainActor (VoiceCall.Dependencies) -> VoiceCall) {
         guard call?.isLive != true, remote == nil else { return }
-        let call = obtainCall(name: name, source: source, makeCall: makeCall)
+        let call = obtainCall(source: source, makeCall: makeCall)
         issue = nil
         projectionReaders.removeAll()
         call.reconnect()
@@ -14,8 +14,9 @@ extension VoiceService {
         observeCall(call)
     }
 
-    private func obtainCall(name: String, host: String? = nil, source: VoicePeer.Source = .microphone,
+    private func obtainCall(host: String? = nil, source: VoicePeer.Source = .microphone,
                             makeCall: @MainActor (VoiceCall.Dependencies) -> VoiceCall = VoiceCall.init) -> VoiceCall {
+        preview.stop()
         let services = services
         let tell: (String) async throws -> UUID = { [weak services] text in
             guard let services else { throw CancellationError() }
@@ -23,7 +24,6 @@ extension VoiceService {
         }
         if let call {
             call.dependencies.tell = tell
-            call.dependencies.cueName = name
             call.dependencies.source = source
             return call
         }
@@ -38,7 +38,7 @@ extension VoiceService {
                 }
                 return try await services.agents.integration.codexAccess(executable: services.agents.executable(.codex))
             },
-            tell: tell, store: services.store, cueName: name, source: source))
+            tell: tell, store: services.store, source: source))
         call = value
         return value
     }
@@ -126,7 +126,7 @@ extension VoiceService {
                 remote = nil
                 return
             }
-            let call = obtainCall(name: profile?.name ?? CueProfile.defaultName, host: services.hostID)
+            let call = obtainCall(host: services.hostID)
             issue = nil
             session = header.session
             projectionReaders = [header.sender.device: header]

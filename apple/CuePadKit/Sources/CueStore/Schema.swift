@@ -136,6 +136,8 @@ enum Schema {
     // 95：附件记录是不是这台设备登记的（本机列，不同步、不改 modifiedAt），启动清理只收这种（`removeStrayFiles`）。
     // 升级前已有的一律留空、当作别处来的：其中编辑删图后再永久删卡漏下的记录与文件照旧留着，宁可不释放，也不误删别的设备上的图
     "ALTER TABLE attachments ADD COLUMN registeredHere INTEGER;",
+    // 96：Cue 通话的音色（`CueVoice`）；空着的按默认
+    "ALTER TABLE cueProfile ADD COLUMN voice TEXT;",
   ]
 
   static let activityDestinationsTable = """

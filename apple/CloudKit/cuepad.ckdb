@@ -258,6 +258,7 @@ DEFINE SCHEMA
         enabledAt     INT64,
         modifiedAt    INT64,
         fast          ENCRYPTED INT64,
+        voice         ENCRYPTED STRING,
         allows        ENCRYPTED STRING,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
