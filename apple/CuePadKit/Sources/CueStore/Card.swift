@@ -25,7 +25,7 @@ public struct Card: Identifiable, Equatable, Sendable {
   public internal(set) var completedAt: Date?
   public internal(set) var piSessionID: String?
   public internal(set) var sessionBindingRevision: SessionBindingRevision?
-  /// 连同下级一起归档、一起取回。
+  /// 连同下级一起归档、一起取回；归档的照样搜得到（`cardVisible` 只挡回收站）。
   public internal(set) var archivedAt: Date?
   /// 叶子以前用过的会话（Pi 自己的会话 id，先换下的在前）：开新会话、改绑、Cue 换新会话时换下来的那个记在这里，
   /// 它仍属于这个叶子（`CueStore.isLoose`）。正在用的只在 `piSessionID`，不在这里。
