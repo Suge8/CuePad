@@ -36,7 +36,8 @@ extension VoiceService {
                     }
                     return access
                 }
-                return try await services.agents.integration.codexAccess(executable: services.agents.executable(.codex))
+                let codex = if let debug = DebugHooks.voiceCodex { debug } else { await services.agents.executable(.codex) }
+                return try await services.agents.integration.codexAccess(executable: codex)
             },
             tell: tell, store: services.store, source: source))
         call = value
