@@ -4,6 +4,7 @@ import CueEditor
 import CueStore
 import CueTestSupport
 import SwiftUI
+import Synchronization
 import Testing
 @testable import CuePad
 
@@ -55,10 +56,24 @@ extension AgentLibraryTests {
             await draft.leave()
             #expect(read(shared) == "共用的\n我加的")
         }
-        let deadline = ContinuousClock.now + .seconds(10)
-        while shown != nil, ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(10)) }
-        if shown != nil { Issue.record(Comment(rawValue: "关窗 10 秒后正文仍没放掉，引用链：\n" + Self.referrers(of: address))) }
+        let mode = RunLoop.main.currentMode?.rawValue ?? "nil"
+        let performed = Mutex<Duration?>(nil), start = ContinuousClock.now
+        RunLoop.main.perform { performed.withLock { $0 = ContinuousClock.now - start } }
+        let waitDeadline = start + .seconds(5)
+        while shown != nil || performed.withLock({ $0 }) == nil, ContinuousClock.now < waitDeadline { try await Task.sleep(for: .milliseconds(10)) }
+        let releasedByWaiting = shown == nil, waited = ContinuousClock.now - start
+        var spun: Duration?
+        if shown != nil {
+            let spinStart = ContinuousClock.now
+            while shown != nil, ContinuousClock.now < spinStart + .seconds(10) { Self.turnMainRunLoop() }
+            spun = ContinuousClock.now - spinStart
+        }
+        let report = "PROBE-RUNLOOP mode=\(mode) performAfter=\(performed.withLock { $0 }.map { "\($0)" } ?? "never") releasedByWaiting=\(releasedByWaiting) waited=\(waited) spun=\(spun.map { "\($0)" } ?? "-") releasedAfterSpin=\(shown == nil)"
+        print(report)
+        if shown != nil { Issue.record(Comment(rawValue: report + "\n关窗后正文仍没放掉，引用链：\n" + Self.referrers(of: address))) }
     }
+
+    static func turnMainRunLoop() { RunLoop.main.run(mode: .default, before: .now + 0.05) }
 
     /// 取证：`leaks --traceTree` 列出谁攥着这个地址的对象；完整输出打到标准输出（CI 上传的 test.log 里），返回带类型名的强引用行。
     static func referrers(of address: String) -> String {
