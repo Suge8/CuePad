@@ -1,4 +1,6 @@
 import AVFoundation
+import CueStore
+import os
 @preconcurrency import WebRTC
 
 /// 一通电话一份原生 WebRTC 连接，声音由 `VoiceAudio` 进出；关闭即刻停下声音与连接，不复用。所有者是通话服务。
@@ -28,6 +30,7 @@ final class VoicePeer: NSObject, VoiceMedia {
     private var reconnecting: Task<Void, Never>?
     /// 断开后等多久：短的网络抖动、Wi-Fi 换蜂窝的 ICE 重选都在几秒内回到 connected（对端停 4 秒再恢复，实测自己回来）。
     static let grace: Duration = .seconds(8)
+    nonisolated private static let log = Logger(subsystem: AppIdentity.id, category: "voice")
 
     init(source: Source = .microphone) {
         self.source = source
@@ -101,17 +104,50 @@ final class VoicePeer: NSObject, VoiceMedia {
 
 extension VoicePeer: RTCPeerConnectionDelegate {
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCPeerConnectionState) {
+        Self.log.notice("Voice peer connection \(newState.name, privacy: .public)")
         Task { @MainActor in self.changed(newState) }
     }
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didChange stateChanged: RTCSignalingState) {}
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didAdd stream: RTCMediaStream) {}
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didRemove stream: RTCMediaStream) {}
     nonisolated func peerConnectionShouldNegotiate(_ peerConnection: RTCPeerConnection) {}
-    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCIceConnectionState) {}
+    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCIceConnectionState) {
+        Self.log.notice("Voice ICE \(newState.name, privacy: .public)")
+    }
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCIceGatheringState) {}
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didGenerate candidate: RTCIceCandidate) {}
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didRemove candidates: [RTCIceCandidate]) {}
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didOpen dataChannel: RTCDataChannel) {}
+}
+
+private extension RTCPeerConnectionState {
+    nonisolated var name: String {
+        switch self {
+        case .new: "new"
+        case .connecting: "connecting"
+        case .connected: "connected"
+        case .disconnected: "disconnected"
+        case .failed: "failed"
+        case .closed: "closed"
+        @unknown default: "unknown(\(rawValue))"
+        }
+    }
+}
+
+private extension RTCIceConnectionState {
+    nonisolated var name: String {
+        switch self {
+        case .new: "new"
+        case .checking: "checking"
+        case .connected: "connected"
+        case .completed: "completed"
+        case .failed: "failed"
+        case .disconnected: "disconnected"
+        case .closed: "closed"
+        case .count: "count"
+        @unknown default: "unknown(\(rawValue))"
+        }
+    }
 }
 
 /// `unavailable`：WebRTC 没给出连接，或它的音频设备还没接上（`VoiceAudioDevice.link`）。

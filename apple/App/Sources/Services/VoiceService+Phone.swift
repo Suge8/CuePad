@@ -66,6 +66,7 @@ extension VoiceService {
             }
         } catch {
             guard phone === owner, !owner.scope.ended else { return }
+            AppServices.log.error("Voice start failed: \(String(describing: error), privacy: .public)")
             let reason = error as? VoiceIssue ?? Self.phoneIssue(error)
             await end(reason: .mediaFailed)
             issue = reason
@@ -205,7 +206,11 @@ extension VoiceService {
             guard !owner.answered else { await end(reason: .protocolRejected); return }
             owner.answered = true
             do { try await owner.scope.perform { try await owner.media.accept(answer: answer.sdp) } }
-            catch { if phone === owner, !owner.scope.ended { await end(reason: .mediaFailed) } }
+            catch {
+                guard phone === owner, !owner.scope.ended else { return }
+                AppServices.log.error("Voice answer not applied: \(String(describing: error), privacy: .public)")
+                await end(reason: .mediaFailed)
+            }
         case .media(.hangup(let reason)): await end(reason: reason, notify: false)
         case .media(.resume(let ask)):
             guard ask else { return }
@@ -227,7 +232,9 @@ extension VoiceService {
                 do { try await signaling.sendVoice(.media(signal: .event(value: .connected)), session: owner.id, to: peer) }
                 catch { if self.phone === owner { await self.end(reason: .networkFailed) } }
             }
-        case .ended(let reason): _ = beginEnd(owner, reason: reason)
+        case .ended(let reason):
+            AppServices.log.error("Voice media ended: \(reason.rawValue, privacy: .public)")
+            _ = beginEnd(owner, reason: reason)
         case .sample(let side, let peak):
             if side == .input { inputSamples = Array((inputSamples + [peak]).suffix(VoicePeer.sampleCount)) }
             else { outputSamples = Array((outputSamples + [peak]).suffix(VoicePeer.sampleCount)) }
