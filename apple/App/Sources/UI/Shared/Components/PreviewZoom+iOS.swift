@@ -49,7 +49,7 @@ final class PreviewZoomView: UIScrollView, UIScrollViewDelegate {
         decelerationRate = .fast
         minimumZoomScale = 1
         maximumZoomScale = Self.maxZoom
-        // 栏后面不垫系统的滚动边缘效果（docs/layout.md「沉浸式的栏」）
+        // 栏后面不垫系统的滚动边缘效果（docs/layout.md「栏头与页顶」）
         topEdgeEffect.isHidden = true
         bottomEdgeEffect.isHidden = true
         imageView.isAccessibilityElement = false

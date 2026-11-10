@@ -1,58 +1,43 @@
 # 性能与同步测量
 
-三个入口都是 Release 构建、每次全新进程、多次取中位，跑法与口径在各脚本头注释，和交互预算比的要占前台（[verify.md](verify.md)「占前台」）：交互是 `xc.sh perf mac|ios`，静置与常驻开销是 `xc.sh perf idle mac|ios`，Mac 冷启动到首屏与能交互是 `xc.sh perf launch mac`。前后对比一律用 `xc.sh perf ab <旧检出> <新检出> <轮数> <上面那条 perf 命令的参数>`（如 `xc.sh perf ab ../CuePad ./ 4 idle mac 1 30`）：两边各构建一次、交替跑，每轮跑完一行（带当时的负载），最后出两边中位数与各次范围的对比表，两边范围重叠的标「≈」，前台阻塞到结束，不要自己写交替脚本、也不用轮询。以指令数与唤醒为准：机器忙时帧间隔、CPU 时间、能耗都会被别的进程拖歪。`xc.sh` 每条命令结束打一行用时（排队、编译、其余）与那一刻的 1 分钟负载，时间花在哪、机器忙不忙看它。`perf idle` 在启动收尾 120 秒内等不到安静就失败、不出数（那样量到的不是静置）；机器忙就等空了重跑，确要带噪声量给 `CUEPAD_IDLE_ALLOW_NOISY=1`，结果行 `quiet` 为 false、表尾标出，不能当基线。perf 构建失败时 `xc.sh` 保留 xcodebuild 的退出码，完整输出在 `apple/.derived-perf/build.log`。
+跑法与口径在各脚本头注释；这里只记怎么选、怎么读数与踩过的坑。
 
-- 常驻动效（`LoopLayer` 的循环、头像帧序列）的开销在渲染服务里，App 进程看不到：`perf idle` 同一窗口另记渲染服务的 `render*`（口径在 `rusage.py` 头注释）。头像的眨眼张望每一下都要合成几帧，静置开销随次数涨（`CueSprite` 头注释）。iOS 模拟器是它的 backboardd，CPU、指令、唤醒都有，含模拟器的系统界面，基线相同、前后可比；
-  Mac 是 WindowServer，不提权只读得到 ps 的累计 CPU，合成整个屏幕、随别的 App 起伏，机器上有别的东西在动时几秒的波动盖过 CuePad 自己的几十毫秒，只在静置的桌面上用 `perf ab` 多跑几轮才能比。
-- 掉帧数是主线程 display link 的回调间隔，反映主线程跟不跟得上，不是实际交出的帧率；以 Instruments 的 Animation Hitches 为准。iOS 模拟器不支持 Animation Hitches，用 `xc.sh rec` 逐帧或应用内探针。屏幕外（`-CuePadOffscreen`）display link 不走，只用于布局与日志类场景。
-- Instruments：Release 用 `CUEPAD_TRACE=<模板>` 跟着 perf 录；Debug 实例 `xc.sh run mac` 拿 PID 再 `xctrace record --attach <PID>`。按名字或 bundle id 认 CuePad 会认到正式版。
-- SwiftUI 模板 `--attach` 没有数据：`--launch` 一份换了 bundle id 并重签名的副本。`Animation Hitches` 模板单独录会写出几十 GB，不用；`--launch` 的进程结束后可能停在暂停状态，按 PID 结束。
-- 冷启动在真实库的只读副本上量（`CUEPAD_PERF_SEED`），副本的 `preferences.plist` 里放一条正式版都有的窗口位置（`plutil -insert "NSWindow Frame main" -string "<x y 宽 高 屏x 屏y 屏宽 屏高>"`）：没记过位置的库少排一遍按记下的大小摆窗口，量得偏轻。
-  AppKit 起来时为本 App 查几遍 LaunchServices，同一个 bundle id 登记过的每一份都要比对；开发机上登记着上千份删掉了的本机构建（`lsregister -dump` 里 `Bundle node not found on disk`），这几次查找占冷启动主线程的一成多，正式版也一样付。
-- Cue 值班的开销：库里要有 Cue 运行在这台的设置（`cueProfile` 的 `hostID` 是 `mac-<名>`、运行时 pi，配 `-CuePadHost <名>`），大脑换成 `-CuePadCueBrain apple/scripts/cue-brain-stub.py`，会话的动静由说桥协议的假扩展给（[verify.md](verify.md)「通知」）。
-  隔离实例的本机标识是 `mac-isolated`（`-CuePadHost` 可换，不能是这台的硬件标识），真实库副本里记给这台的请求、会话与 Cue 值班它都当别台的。在副本上量值班先把 `cueProfile` 的 `hostID` 改成 `mac-<名>`；副本没带 `Cue/keeper.json`，第一次值班会当刚启用醒一次。
+- 三个入口都是 Release 构建、每次全新进程、多次取中位：交互 `xc.sh perf mac|ios`，静置与常驻开销 `xc.sh perf idle mac|ios`，Mac 冷启动 `xc.sh perf launch mac`。和交互预算比的要占前台（[verify.md](verify.md)「占前台」）。
+- 前后对比一律用 `xc.sh perf ab <旧检出> <新检出> <轮数> <上面那条 perf 命令的参数>`（如 `xc.sh perf ab ../CuePad ./ 4 idle mac 1 30`）：两边各构建一次、交替跑，出中位数与范围的对比表，范围重叠的标「≈」。它在前台阻塞到结束，不自己写交替脚本、不轮询。
+- 以指令数与唤醒为准：机器忙时帧间隔、CPU 时间、能耗都会被别的进程拖歪。机器忙不忙看 `xc.sh` 结束那行的 1 分钟负载。
+- `perf idle` 在启动收尾 120 秒内等不到安静就失败、不出数；机器忙就等空了重跑。确要带噪声量给 `CUEPAD_IDLE_ALLOW_NOISY=1`，结果标 `quiet` 为 false，不能当基线。
+- perf 构建失败的完整输出在 `apple/.derived-perf/build.log`。
+- 常驻动效（`LoopLayer`、头像帧序列）的开销在渲染服务里，App 进程看不到：`perf idle` 另记渲染服务的 `render*`（口径在 `rusage.py` 头注释）。iOS 模拟器的可比；Mac 的是 WindowServer，合成整个屏幕、随别的 App 起伏，只在静置的桌面上用 `perf ab` 多跑几轮才能比。
+- 掉帧数是主线程 display link 的回调间隔，反映主线程跟不跟得上，不是实际交出的帧率；以 Instruments 的 Animation Hitches 为准。iOS 模拟器不支持它，用 `xc.sh rec` 逐帧或应用内探针。屏幕外（`-CuePadOffscreen`）display link 不走，只用于布局与日志类场景。
+- Instruments：Release 用 `CUEPAD_TRACE=<模板>` 跟着 perf 录；Debug 实例 `xc.sh run mac` 拿 PID 再 `xctrace record --attach <PID>`（按名字或 bundle id 会认到正式版）。SwiftUI 模板 `--attach` 没有数据，要 `--launch` 一份换了 bundle id 并重签名的副本；`Animation Hitches` 模板单独录会写出几十 GB，不用；`--launch` 的进程结束后可能停在暂停状态，按 PID 结束。
+- 冷启动在真实库的只读副本上量（`CUEPAD_PERF_SEED`），副本的 `preferences.plist` 里放一条窗口位置（`plutil -insert "NSWindow Frame main" -string "<x y 宽 高 屏x 屏y 屏宽 屏高>"`）：没记过位置的库少排一遍，量得偏轻。开发机上 LaunchServices 登记着上千份删掉了的本机构建，查找占冷启动主线程一成多，正式版也一样付，不是回归。
+- 量 Cue 值班的开销：库里要有 Cue 运行在这台的设置（`cueProfile` 的 `hostID` 是 `mac-<名>`、运行时 pi，配 `-CuePadHost <名>`），大脑换成 `-CuePadCueBrain apple/scripts/cue-brain-stub.py`，会话的动静由说桥协议的假扩展给（[verify.md](verify.md)「通知」）。隔离实例的本机标识是 `mac-isolated`，真实库副本里记给这台的请求、会话与值班它都当别台的：在副本上量先把 `hostID` 改成 `mac-<名>`；副本没带 `Cue/keeper.json`，第一次值班会当刚启用醒一次。
 
 ## 交互预算
 
-预算表在 `InteractionBench.budgets`，指标定义在它与 `Probes.swift` 的注释里。和预算比的数在前台量、至少跑两遍取中位；前台测量不独占机器，别的编译、测试照常在跑，看 `xc.sh` 结束那行用时里的 1 分钟负载：高于 CPU 核数（`sysctl -n hw.ncpu`）时帧、掉帧与回合时长不可比，只比指令数。点击回合随机器那一刻的频率差到一倍（空闲后的第一下性能核常没升频）：同列的指令数不随它变，GHz 低的那几次就是慢在频率上。
+预算表在 `InteractionBench.budgets`，指标定义在它与 `Probes.swift` 的注释里。
 
-Mac 看板这一页上的看板⇄会话与 Cue 面板开合是 `InteractionBench+Board` 的几项；
-宽屏阈值那几项（`InteractionBench+Wide`）三种主区的临界宽相同，量的是跨阈值那一下各页重排的开销。宽屏那几项判不对时看 `interact.jsonl` 那一行的 `timeline`（改宽后、量完、静置后三刻的窗口宽、主区左缘与 Cue 露没露）与 `unexpected`（测量期间不是测量要的改宽连同调用栈、主区去处与临界宽的变化，`WideWatch`）。
-偶发过的会话条错宽（某一步跨阈值后会话条或 Cue 是另一侧的样子）：2026-11 在全量里出现过 2/5，一次在「Cue 收钮·会话+Cue」、一次在「宽屏展开·看板+Cue」，两次都像窗口宽在这一步之外被改回了临界宽。
-已修的一处竞态：「宽屏反向」拉回临界宽的那个任务原先不等它落地，负载高时晚到、把后面一步改过的宽改回去，现在等它落地再走。修完后带着记录器连跑 5 轮全量（宽屏 270 行，两库各 135）没再出现，没找到别的原因。
-再出现时先看那一行的 `unexpected`：有「窗宽变成…（要的是…）」就是测量之外有人改了窗口，后面跟调用栈；只有状态变化就看这一步里变的是哪一样（主区去处、临界宽、开合偏好）。
-5 轮全量约 35 分钟，超过任务时限（`_lock.sh` 的 HOLD_LIMIT，默认 1800 秒），要这样跑：`CUEPAD_TEST_TIME_LIMIT=3600 xc.sh perf mac 5`。
-看板这一页那几项的预算借最近的已有项：看板→会话 90ms/2（同会话页）、会话→看板 28ms/2（同进进展页）、展开 Cue 面板 28ms/2、收起 14ms/2（同任务气泡开、关）。
-
-- `-CuePadInteractOnly 项,项`（跟在 `xc.sh perf <mac|ios> 次数` 之后）只量列出的几项，前后对比省下整套流程；列的项之间要自己够得着（开编辑页配收编辑页）。
-- 冷启动进 Cue 页要量真实大小的对话：`CUEPAD_PERF_SEED=<真实库的只读副本> xc.sh perf ios 5 -CuePadInteractOnly "冷启动·Cue 页"`（副本先用这个构建打开一次，免得每次都量进升级库结构）。项名带空格要加引号。
+- 和预算比的数在前台量、至少跑两遍取中位。负载高于 CPU 核数（`sysctl -n hw.ncpu`）时帧、掉帧与回合时长不可比，只比指令数。点击回合的时长随那一刻的频率能差一倍（空闲后的第一下性能核常没升频），同列的指令数不随它变。
+- `-CuePadInteractOnly 项,项`（跟在 `xc.sh perf <mac|ios> 次数` 之后）只量列出的几项；列的项之间要自己够得着（开编辑页配收编辑页），项名带空格要加引号。
+- 5 轮全量约 35 分钟，超过任务时限（`_lock.sh` 的 HOLD_LIMIT）：`CUEPAD_TEST_TIME_LIMIT=3600 xc.sh perf mac 5`。
+- 冷启动进 Cue 页要量真实大小的对话：`CUEPAD_PERF_SEED=<真实库的只读副本> xc.sh perf ios 5 -CuePadInteractOnly "冷启动·Cue 页"`（副本先用这个构建打开一次，免得量进升级库结构）。
+- 宽屏阈值那几项（`InteractionBench+Wide`）判不对时看 `interact.jsonl` 那一行的 `timeline` 与 `unexpected`（`WideWatch`）：有「窗宽变成…（要的是…）」就是测量之外有人改了窗口，后面跟调用栈；只有状态变化就看这一步里变的是哪一样。
 
 ### 开合的逐帧量法
 
-宽屏开合（会话条、Cue、跨临界宽，做法在 [layout.md](layout.md)「宽屏开合」）量两样，缺一不可：
-- 主线程开销：`xc.sh perf ab <旧> <新> 3 mac 1 -CuePadInteractOnly "侧栏收起,侧栏展开,Cue 收起,Cue 放回"`，再加宽屏阈值那几项（`宽屏收窄·…`、`宽屏展开·…`、`宽屏反向·…`、`Cue 收钮·…`）。比指令、掉帧与动作后点击那一圈之外最长的一圈（`interact.jsonl` 的 `heavy`，偏移大于 0 的那几项）；点击那一圈有时拆成两圈（第一圈很轻、隔十几毫秒才是排版那一圈），两圈加起来才是它。
-  「宽屏反向」的每帧位移（`SlideSampler` 在主线程取样）在大库上常读成 128 或 256：主线程忙的那几帧漏采，2026-11 改前改后一样（9 次里 5、6 次），跳没跳以录屏为准。
-- 屏上每样东西是不是连续地走：`xc.sh rec mac -- -CuePadDemo YES … -CuePadWindowSize 1512x900 -CuePadSidebarCycle YES`（`fast` 中途反向；`-CuePadRightCycle` 开合 Cue；`-CuePadWideReverse <组合>` 跨临界宽，窗口起在临界宽上），
-  再用 `apple/scripts/frame-track.py`（用法在它的头注释）逐帧量三类东西的左缘：左对齐的（栏头字、看板第一列）、居中的（会话与项目页的阅读栏、回复框、输入条）、靠右的（搜索与"⋯"）。每段单调、没有反向步才算过；`fast` 看按下那一下前后位置是否连着。
-  会话、看板、项目三页各量收起、展开与 `fast`，Cue 收起放回同样三页。最大单步只在动的那几段里取（录屏最后几帧是实例退出）；看板卡的标题宽了会换行，模板会认到别的字上，看板用列头与第四列。
-  某一步特别大时比同一帧里别的东西走到曲线的哪儿：都一样就是合成那一帧晚交（负载高时偶有，录屏的时刻差照样是一帧），不是错位。`-CuePadWideReverse` 改窗口宽的那一帧录出来是另一个尺寸，模板对不上，那一帧不算。
+宽屏开合（做法在 [layout.md](layout.md)「宽屏开合」）量两样，缺一不可：
 
-2026-11-05 改成按元素补位时（与 main 交替 3 轮，后台量，负载 20～34、14 核）：指令大库 +2～7%、演示库 +20～36%（约 100～150M：排版前后各走一遍层树、叠上的动画与遮罩），掉帧每次 0～1 同 main，没有新长圈；
-三页三类元素收起、展开、Cue 收起放回都单调，`fast` 中途反向位置连着。最大单步随距离：会话条开合（挪 156 点）20～38，Cue 收起放回（挪 200～356 点）30～65；
-合成晚交一帧的那一步到 94～112（同一帧里各样东西进度相同）。录屏、逐帧结果与汇总在检出的 apple/.derived/live-slide/element/（`summary.txt`）。被否决的两种实时排版的数字在 #75。
-- iPad 同样录：`xc.sh rec ipad -- -CuePadDemo YES -CuePadQuiet YES -CuePadLandscape YES … -CuePadSidebarCycle YES`（横屏才放得下会话条；iPad Pro 11 横屏宽 1210，会话条与 Cue 同开放不下，量会话条开合加 `-CuePadCue shut`），坐标同 Mac 按点、2x。
-  2026-11-06 第一次在横屏上量：iPad 上补位原先没生效（SwiftUI 晚一步才把页摆到层上，会话页还晚一次提交，`WideColumnController.lastLayout`），居中与靠右的第一帧先反向跳 128 点；
-  修完会话、看板两页的会话条开合与 Cue 收起放回都单调，`fast` 中途反向位置连着，最大单步会话条（挪 64～256 点）12～56、Cue（挪 200～400 点）30～71。录屏与逐帧在检出的 apple/.derived/cue-host/ipad/（`summary.txt`）。
-  同次与 f50c70dd8 交替 3 轮（Mac，开合 4 项与阈值 12 项，不含改前必失败的「Cue 露出」，负载 22～32）：总指令演示库多数在 ±1% 内（≈），Cue 收钮三页 −8～−15%；大库 +0.4～−14%，点击回合指令最多 −32%，减少集中在 Cue 跨宽、开合不再重建与 Cue 收钮。增加的两项（大库「宽屏收窄·会话+Cue」总指令 +0.4%、「宽屏收窄·双会话+Cue」点击回合指令 +3.6%）都在范围重叠内，没有不带 ≈ 的增加；点击时长只有「宽屏反向·会话+Cue」+40%，同项点击回合指令 −3.7%，是频率。全表在 apple/.derived/cue-host/perf-ab.log。
+- 主线程开销：`xc.sh perf ab <旧> <新> 3 mac 1 -CuePadInteractOnly "侧栏收起,侧栏展开,Cue 收起,Cue 放回"`，再加宽屏阈值那几项（`宽屏收窄·…`、`宽屏展开·…`、`宽屏反向·…`、`Cue 收钮·…`）。比指令、掉帧与点击那一圈之外最长的一圈（`interact.jsonl` 的 `heavy`）；点击那一圈有时拆成两圈，加起来才是它。「宽屏反向」的每帧位移在大库上常读成 128 或 256，是主线程忙时漏采，跳没跳以录屏为准。
+- 屏上每样东西是不是连续地走：`xc.sh rec mac -- -CuePadDemo YES … -CuePadWindowSize 1512x900 -CuePadSidebarCycle YES`（`fast` 中途反向；`-CuePadRightCycle` 开合 Cue；`-CuePadWideReverse <组合>` 跨临界宽），再用 `apple/scripts/frame-track.py`（用法在头注释）逐帧量左对齐、居中、靠右三类东西的左缘。每段单调、没有反向步才算过；`fast` 看按下前后位置是否连着。会话、看板、项目三页各量收起、展开与 `fast`。
+  - 最大单步只在动的那几段里取（录屏最后几帧是实例退出）；看板卡标题会换行、模板会认错，看板用列头与第四列；`-CuePadWideReverse` 改窗口宽的那一帧尺寸不同，不算。
+  - 某一步特别大时比同一帧里别的东西走到曲线的哪儿：都一样就是合成那一帧晚交（负载高时偶有），不是错位。
+- iPad 同样录：`xc.sh rec ipad -- -CuePadDemo YES -CuePadQuiet YES -CuePadLandscape YES … -CuePadSidebarCycle YES`。横屏才放得下会话条；iPad Pro 11 横屏会话条与 Cue 同开放不下，量会话条开合加 `-CuePadCue shut`。
 
 ### 主区换宽一次
 
-逐帧排版的前提是主区按新宽排一次远低于一帧（#74，目标大库三页中位 8ms）。量法：`xc.sh perf mac 1 -CuePadInteractOnly "换宽·会话页,换宽·看板,换宽·项目页"`（只在点名时量；怎么挪、各列是什么在 `InteractionBench+Relayout` 头注释），同一构建连跑指令差不到 1%，隔着构建与负载能差一成，前后对比只用 `perf ab` 交替看指令；CPU 毫秒随负载走，和目标比用 `clickCyclesM` 按性能核频率折算。看开销在哪：`CUEPAD_TRACE='Time Profiler'` 跟着录，每页是一段「交互」区间。
-2026-11-06（main 895579447，负载 22～40）：大库会话页、看板、项目页每步约 87 / 137 / 138M 指令、38 / 49 / 49M 周期，折算约 8.5 / 11 / 11ms，没到目标，开合仍是补位。开销分散在系统里：主区页的 SwiftUI 图更新与重排约六成，只算一次：嵌着的托管视图与主窗口的根同一个更新组，根取偏好时先把主区页排了（Time Profiler 里记在根托管视图的 `layout` 下，两成多），主区托管视图那一遍取缓存；所以它不是可去掉的重复，根上的浮层与会话条拿掉也不变；
-提交里文字重画一成到一成半（要断行的字每画一次新建一个 ICU 断行器）；标题栏拖窗区（排版后 AppKit 重算标题栏哪里能拖，`_resetDragMargins`）一成到一成半，整个不算也还有 34 / 42 / 43M 周期。
-拖窗区的开销不在标题栏那一截：AppKit 自己按那一截裁，但从托管视图进到嵌着的视图时传下去的是整个框，整窗所有托管视图里的响应者与滚动区都要走一遍。所以栏头挪进单独一层、内容不伸进标题栏都不省（栏头全拿掉、两栏托管视图从标题栏下面开始，各量过一次，占比不变）；
-能让它不算的只有窗口不可拖（`isMovable` 为 false，系统拖窗与平铺随之失效）和不透明的标题栏（那一截的点按全归标题栏，栏头钮点不进）。外层按 Auto Layout 量栏的合适大小那一笔已去掉（`WideColumnHost.sizeThatFits`）：每步 -15～30%（原来 107 / 153 / 155M），大库开合点击回合的指令 -18～22%（与 main 交替 3 轮）。
-试过没留的（数据在 #74）：项目页各段与"更早"改懒加载栈（大库 -5%、演示库 +21%，懒加载栈估高）；块声明不透明让拖窗区在块上止步（只会话页 -15%，看板不变：托管视图自己算区域、照样钻进每列的滚动区）。
+量法：`xc.sh perf mac 1 -CuePadInteractOnly "换宽·会话页,换宽·看板,换宽·项目页"`（只在点名时量，`InteractionBench+Relayout` 头注释）。隔着构建与负载能差一成，前后对比只用 `perf ab` 看指令。
+
+结论（2026-11，数据与否决的方案在 #74、#75）：大库三页按新宽排一次折算约 8.5～11ms，没到逐帧排版要的 8ms，所以开合用补位而不是实时排版。开销分散在系统里（SwiftUI 图更新与重排约六成、文字重画与 AppKit 重算标题栏拖窗区各一成多），拖窗区那笔只有窗口不可拖或标题栏不透明才省得掉，两样都不能要。
 
 ## 同步测量
 
@@ -73,7 +58,7 @@ Mac 看板这一页上的看板⇄会话与 Cue 面板开合是 `InteractionBenc
 - 断网（`offline`）：只让手机那个实例的请求当场以 -1009 失败、门铃断开（`CloudOutage`），不碰机器的网络。恢复时默认替路径监视器报一次网络回来（同真断网）；`nopath` 是路径一直可用、只是云连不上的那种恢复。
 - 灵动岛（`island`）：iPhone 模拟器里量 App 这一侧"拉到的话入库 → 实时活动换内容"。模拟器上量不到推送本身：`simctl push` 不收只有 content-available 的推送（"no user visible content"），
   可见推送由系统直接出通知、不经 App；本机构建 ad-hoc 签名不带推送权限，系统不在后台叫起它（"doesn't declare the proper UIBackgroundMode"），补签推送权限的包起不来（要描述文件）。
-  推送到达、后台叫醒、岛画到锁屏上只能真机验（docs/sync.md「推送拉起被划掉的 App」）；拉取那段由 Mac 上的替身手机量（`send`、`fg`）。
+  推送到达、后台叫醒、岛画到锁屏上只能真机验（[sync.md](sync.md)「推送叫醒被系统结束的 App」）；拉取那段由 Mac 上的替身手机量（`send`、`fg`）。
 - 量不了的：手机真的被挂起、App Nap 与系统节流（直接起的进程不被节流；隐藏的 Mac 实例窗口仍在画，`parkWhileUnseen` 不生效）；真机的网络。
 - 限流（`throttle`，只在模拟云）：窗口内云照设备限流回 429 带 Retry-After，两个实例共用一份（同一台设备）；按云记下的每个请求数窗口内的拉取、上传与没守自己收到的 Retry-After 的次数。
   模拟云的限流不拦门铃，正式版被限时门铃也会断、退回轮询，要看这种就加 `SYNC_BENCH_RELAY=0`。

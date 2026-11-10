@@ -17,6 +17,7 @@ Swift 原生应用（macOS / iOS / iPadOS），产品见 [README.md](README.md)�
 ## 护栏
 
 - 并行工作在自己的检出里做：在主检出里 `git worktree add ../CuePad-wt/<名> -b feat/<名>`。主检出只读：那里常有别人没提交的改动。
+- 冻结：两份 README、`landing/`、`design/readme/` 的截图与文案在高速开发期不跟功能走，不改、不重拍、不重新部署，直到用户说解冻；唯一例外是 lint 要求与 `Palette` 同步的 `landing/src/styles/base.css` 令牌。产品现状以代码为准。
 - 发布只在干净检出运行 `xc.sh release`，对外发布只在用户明确要求时做（见 docs/release.md）。
 - 本机构建只开隔离库（隔离哪些目录只在 `app_env.py` 的 `isolated_env`）；终端里起的会话要连上 `xc.sh` 起的实例就 `export CUEPAD_PI_SOCKET_DIR=$(python3 apple/scripts/app.py sockets)`。不读写真实资料库（位置见 `LibraryLocation`）、偏好域（App 身份前缀，`Signing.xcconfig` 的 `CUEPAD_APP_ID`）、`~/.pi` 与 `~/.local/bin`：本机构建一打开真实库就会升级结构、改写数据并同步出去，正式版之后就打不开了。看真实数据只用只读副本（docs/verify.md「真实数据复现」）。
 - 测试只用替身，不向其他应用发键鼠事件；全局热键的物理触发与跨应用粘贴只能人工验证。
@@ -30,9 +31,9 @@ Swift 原生应用（macOS / iOS / iPadOS），产品见 [README.md](README.md)�
 - 加、改界面上的字，英文版 → [docs/i18n.md](docs/i18n.md)
 - 同步、投送请求、CloudKit 订阅、通知、同步排查 → [docs/sync.md](docs/sync.md)
 - 截图验收、交互验收、通知验收、要占前台（截系统菜单、在前台量帧） → [docs/verify.md](docs/verify.md)
+- 改 Cue 通话后的验收（后台、中断、信令断开、交接、朗读）→ [docs/verify-voice.md](docs/verify-voice.md)
 - 真机上的崩溃、卡住与日志（各台经 iCloud 送到 Mac、`xc.sh diag` 读）→ [docs/diagnose.md](docs/diagnose.md)
 - 性能测量、交互预算、同步测量 → [docs/perf.md](docs/perf.md)
 - 改 Cue 的提示词、工具说明、信封或记忆的前后评测，记忆基准 → [docs/cue-eval.md](docs/cue-eval.md)
 - 签名、发布、Sparkle、CloudKit 结构部署 → [docs/release.md](docs/release.md)
 - Agent 桥、socket 协议、各家接入 → [CuePi README](apple/CuePadKit/Sources/CuePi/README.md)
-- 落地页 → [landing/AGENTS.md](landing/AGENTS.md)

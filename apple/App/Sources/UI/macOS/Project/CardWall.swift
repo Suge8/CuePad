@@ -122,7 +122,7 @@ private struct DeleteGlyph: View {
     }
 }
 
-/// 全 App 一套选中（docs/ui.md「选中」），不着靛青。
+/// 全 App 一套选中（docs/ui.md「视觉原则」），不着靛青。
 /// 挂在卡面外、纸里面：底垫在字下，卡面不随选中重算。
 private struct SelectedCard: ViewModifier {
     @Environment(\.cardSelected) private var selected

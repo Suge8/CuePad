@@ -61,7 +61,7 @@ struct BoardColumn: View {
         #endif
     }
 
-    /// 列头浮在卡上，卡从它后面滚过，不在它下沿裁掉（docs/layout.md 沉浸式的栏）。
+    /// 列头浮在卡上，卡从它后面滚过，不在它下沿裁掉（docs/layout.md「栏头与页顶」）。
     private var columnLane: some View {
         #if os(macOS)
         ScrollView { cards }
