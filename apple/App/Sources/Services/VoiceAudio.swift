@@ -168,6 +168,14 @@ final class VoiceAudio {
             let input = engine.inputNode
             let format = input.outputFormat(forBus: 0)
             inputRate = format.sampleRate
+            #if os(macOS)
+            // 语音处理要两侧采样率一致，否则启动报 -10875。Mac 上实测：DGM20 USB 麦克风 + 内建扬声器时收声侧 48000、放声侧默认 44100；
+            // 声道数不必一致（4 对 2 照常开）。放声侧的硬件格式此时读作 0 声道，声道数取它现接的。
+            // 只在 Mac 改接：iOS 真机按现有接法已接通，这样改接没在真机上验过。
+            let channels = engine.outputNode.inputFormat(forBus: 0).channelCount
+            guard let speaker = AVAudioFormat(standardFormatWithSampleRate: inputRate, channels: channels) else { throw VoicePeerError.unavailable }
+            try engine.link(engine.mainMixerNode, to: engine.outputNode, format: speaker)
+            #endif
             if let microphone { engine.detach(microphone) }
             let sink = Self.microphone(format: format, link: link, levels: levels)
             engine.attach(sink)
@@ -176,9 +184,55 @@ final class VoiceAudio {
         }
         device.reconfigured(inputRate: inputRate)
         engine.prepare()
-        try engine.start()
+        do {
+            try engine.start()
+        } catch {
+            Self.log.error("Voice audio start failed: \(Self.formats(engine), privacy: .public): \(String(describing: error), privacy: .public)")
+            throw error
+        }
         return inputRate
     }
+
+    /// 两侧的硬件格式（设备本身的；语音处理起不来时节点上读到的硬件格式是 0 声道 0 Hz，没用）与交给语音处理的格式。
+    private static func formats(_ engine: AVAudioEngine) -> String {
+        func shown(_ format: AVAudioFormat) -> String { "\(format.channelCount)ch \(Int(format.sampleRate))Hz" }
+        #if os(iOS)
+        let session = AVAudioSession.sharedInstance()
+        let hardware = (input: "\(session.inputNumberOfChannels)ch \(Int(session.sampleRate))Hz",
+                        output: "\(session.outputNumberOfChannels)ch \(Int(session.sampleRate))Hz")
+        #else
+        let hardware = (input: device(kAudioHardwarePropertyDefaultInputDevice, scope: kAudioObjectPropertyScopeInput),
+                        output: device(kAudioHardwarePropertyDefaultOutputDevice, scope: kAudioObjectPropertyScopeOutput))
+        #endif
+        return "input hw \(hardware.input) client \(shown(engine.inputNode.outputFormat(forBus: 0))), "
+            + "output hw \(hardware.output) client \(shown(engine.outputNode.inputFormat(forBus: 0)))"
+    }
+
+    #if os(macOS)
+    /// 默认设备的标称采样率与这一侧的声道总数；读不到的项是 0。
+    private static func device(_ selector: AudioObjectPropertySelector, scope: AudioObjectPropertyScope) -> String {
+        func address(_ selector: AudioObjectPropertySelector, _ scope: AudioObjectPropertyScope = kAudioObjectPropertyScopeGlobal) -> AudioObjectPropertyAddress {
+            AudioObjectPropertyAddress(mSelector: selector, mScope: scope, mElement: kAudioObjectPropertyElementMain)
+        }
+        var id = AudioObjectID(kAudioObjectUnknown), size = UInt32(MemoryLayout<AudioObjectID>.size)
+        var target = address(selector)
+        AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &target, 0, nil, &size, &id)
+        var rate = Float64(0)
+        size = UInt32(MemoryLayout<Float64>.size)
+        target = address(kAudioDevicePropertyNominalSampleRate)
+        AudioObjectGetPropertyData(id, &target, 0, nil, &size, &rate)
+        target = address(kAudioDevicePropertyStreamConfiguration, scope)
+        size = 0
+        AudioObjectGetPropertyDataSize(id, &target, 0, nil, &size)
+        let raw = UnsafeMutableRawPointer.allocate(byteCount: max(Int(size), MemoryLayout<AudioBufferList>.size), alignment: MemoryLayout<AudioBufferList>.alignment)
+        defer { raw.deallocate() }
+        let list = raw.bindMemory(to: AudioBufferList.self, capacity: 1)
+        list.pointee.mNumberBuffers = 0
+        AudioObjectGetPropertyData(id, &target, 0, nil, &size, raw)
+        let channels = UnsafeMutableAudioBufferListPointer(list).reduce(0) { $0 + Int($1.mNumberChannels) }
+        return "\(channels)ch \(Int(rate))Hz"
+    }
+    #endif
 
     nonisolated private static let format = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: VoiceAudioDevice.rate, channels: 1, interleaved: true)!
 
