@@ -114,7 +114,7 @@ import Testing
       try await earlier.purgeCard(card.id)
       return (keys[0], keys[1], keys[2], keys[3])
     }
-    #if os(macOS)  // 同时开着库的另一个进程（命令行）只在 Mac 上有，iOS 的运行不留锁（`AttachmentRun.keepsLock`）
+    #if os(macOS)  // 同时开着库的另一个进程（命令行）只在 Mac 上有，iOS 的运行不用锁（`AttachmentRun.locks`）
     let cli = try CueStore(location: .isolated(fixture.directory))
     let pending = try cli.files.store(pngData(width: 2, height: 2, shade: 0.7))
     #endif

@@ -3,7 +3,7 @@ import Foundation
 import Synchronization
 
 /// 一次运行的持有：打开着的库（一个进程一份）在 `Attachments/holds/<运行>/` 里为这次存入过的每个键留一个硬链接，
-/// 对 `<运行>.lock` 的 flock 拿到进程结束，崩溃时由内核放掉（iOS 上不留着，见 `keepsLock`）。第一次存入时才建，只读的进程不留目录。
+/// 对 `<运行>.lock` 的 flock 拿到进程结束，崩溃时由内核放掉（iOS 上不建锁，见 `locks`）。第一次存入时才建，只读的进程不留目录。
 /// 存入先留好持有才返回键（`AttachmentFiles.place`）；回收（本机永久删除、远端删除、启动清理、账号切换清空）只删缓存与保底，活着的运行的持有谁也不删，
 /// 所以已存好、还没提交引用的写者在提交时照样从自己的持有补回、登记；提交回滚了，持有还在，可以重试。
 /// 只有存入它的运行从自己的持有补回（`AttachmentFiles.fileURL`）：别的进程不会去引用它没存过的键，查找也不随运行数变慢。
@@ -17,26 +17,27 @@ final class AttachmentRun: Sendable {
 
   private enum Lock {
     case notTaken
-    /// 目录已建；锁的描述符，不留着锁时为 nil。
+    /// 目录已建；锁的描述符，不用锁时（iOS）为 nil。
     case made(Int32?)
     case released
   }
 
   /// iOS 上进程随时会被挂起，挂起时还锁着 App Group 容器里的文件，系统就以 0xdead10cc 结束它（TN2408：flock 与 DELETE 模式的 SQLite 一样，
   /// 挂起即杀；WAL 模式只在挂着写事务时杀）。那里写库的只有 App 一个进程（分享扩展经 `CaptureQueue` 交给 App，小组件只读快照），
-  /// 清理只在 App 启动时跑，那时上一个 App 进程已经结束：别的运行都已结束，不必靠锁分辨，建好目录就放锁。锁文件照建，清理按它认运行。
-  /// 否决了进后台放锁、回前台再拿：后台推送、后台刷新也会存入附件（取文件、收分享），每条进后台的路都要配一次放锁，漏一条就又被杀。
+  /// 清理只在 App 启动时跑，那时上一个 App 进程已经结束：别的运行都已结束，不必靠锁分辨，所以 iOS 上建目录、清理都不碰 flock，挂起落在哪一步都没有锁。
+  /// 否决了只缩短持锁（建好目录就放、清理时拿着锁删）：挂起正好落在那一下照样被杀；也否决了进后台放锁、回前台再拿：
+  /// 后台推送、后台刷新也会存入附件（取文件、收分享），每条进后台的路都要配一次放锁，漏一条就又被杀。
   #if os(iOS)
-  private static let keepsLock = false
+  private static let locks = false
   #else
-  private static let keepsLock = true
+  private static let locks = true
   #endif
 
   init(holds: URL) { self.holds = holds }
 
   var location: URL { holds.appending(path: id, directoryHint: .isDirectory) }
 
-  /// 建好并返回这次运行的持有目录。先拿锁再建目录：看得到目录时锁一定拿着（iOS 上只拿到建好目录，`keepsLock`）；崩在两步之间只留一个锁文件，清理照样收。
+  /// 建好并返回这次运行的持有目录。先拿锁再建目录：看得到目录时锁一定拿着（iOS 上没有锁，`locks`）；崩在两步之间只留一个锁文件，清理照样收。
   /// 锁的描述符不传给子进程：比 App 活得久的 Agent 进程不能替它占着锁。
   func folder() throws -> URL {
     try lockState.withLock { state in
@@ -46,17 +47,12 @@ final class AttachmentRun: Sendable {
       case .notTaken: break
       }
       try FileManager.default.createDirectory(at: holds, withIntermediateDirectories: true)
-      let opened = try Self.takeLock(Self.lock(id, in: holds))
+      let opened = Self.locks ? try Self.takeLock(Self.lock(id, in: holds)) : nil
       do { try FileManager.default.createDirectory(at: location, withIntermediateDirectories: true) } catch {
-        close(opened)
+        if let opened { close(opened) }
         throw error
       }
-      if Self.keepsLock {
-        state = .made(opened)
-      } else {
-        close(opened)
-        state = .made(nil)
-      }
+      state = .made(opened)
     }
     return location
   }
@@ -82,12 +78,16 @@ final class AttachmentRun: Sendable {
     Set(AttachmentFiles.names(in: holds).map { $0.hasSuffix(".lock") ? String($0.dropLast(5)) : $0 })
   }
 
+  /// iOS 上不是这次的运行都已结束（`locks`），不拿锁直接删；旧版本留下的锁文件一并删。
   static func removeIfEnded(_ id: String, in holds: URL) throws {
     let lock = lock(id, in: holds)
-    let opened = open(lock.path, O_RDWR | O_CLOEXEC)
-    guard opened >= 0 else { return }
-    defer { close(opened) }
-    guard flock(opened, LOCK_EX | LOCK_NB) == 0 else { return }
+    var opened: Int32?
+    if locks {
+      opened = open(lock.path, O_RDWR | O_CLOEXEC)
+      guard let opened, opened >= 0 else { return }
+    }
+    defer { if let opened { close(opened) } }
+    if let opened { guard flock(opened, LOCK_EX | LOCK_NB) == 0 else { return } }
     try AttachmentFiles.removeIfPresent(holds.appending(path: id, directoryHint: .isDirectory))
     try AttachmentFiles.removeIfPresent(lock)
   }
