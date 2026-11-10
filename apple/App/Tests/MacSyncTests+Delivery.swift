@@ -95,31 +95,31 @@ extension MacSyncTests {
     func 请求停止_结束_改配置写给会话所在的Mac并立即上传() async throws {
         try await PiStateRecorder(store: services.store, hostID: "mac-other").update(sessionID: "far", state: .thinking, title: "远处")
         let session = try #require(try await services.store.allPiSessionStates().first)
-        var uploads = rig.sync.uploads.stream.makeAsyncIterator()
+        let uploads = Watch(rig.sync.uploads.stream)
 
         let stop = try await services.stop(session)
         #expect(stop.hostID == "mac-other" && stop.mode == .known(.stop) && stop.target.ref == "far")
-        #expect(await uploads.next() == stop.id.uuidString.lowercased())
+        #expect(try await uploads.next("停止请求的上传") == stop.id.uuidString.lowercased())
 
         let end = try await services.end(session)
         #expect(end.hostID == "mac-other" && end.mode == .known(.end) && end.target.ref == "far")
-        #expect(await uploads.next() == end.id.uuidString.lowercased())
+        #expect(try await uploads.next("结束请求的上传") == end.id.uuidString.lowercased())
 
         let config = try await services.configure(PiConfig(thinking: .low), for: session)
         #expect(config.hostID == "mac-other" && config.config == PiConfig(thinking: .low) && config.target.ref == "far")
-        #expect(await uploads.next() == config.id.uuidString.lowercased())
+        #expect(try await uploads.next("改配置请求的上传") == config.id.uuidString.lowercased())
     }
 
     @Test
     func 主动拉取的条件_没有连着的会话时不因旧记录而拉_有本机待执行请求时拉() async throws {
         try await PiStateRecorder(store: services.store, hostID: TestApp.hostID).update(sessionID: "stale", state: .settled, title: "旧会话")
         services.startSpeechClock()
-        var waiting = services.pollingCondition().makeAsyncIterator()
-        #expect(await waiting.next() == .some(nil))
+        let waiting = Watch(services.pollingCondition())
+        #expect(try await waiting.next("没有可拉的事时给出空节奏") == .some(nil))
 
         _ = try await services.store.requestDelivery(
             "hi", to: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), on: TestApp.hostID)
-        while let next = await waiting.next(), next == nil {}
+        while try await waiting.next("有待执行请求后给出拉取节奏") == .some(nil) {}
         #expect(services.pollingCadence != nil)
     }
 
@@ -144,10 +144,10 @@ extension MacSyncTests {
         defer { services.cancelBackgroundWork() }
 
         let request = try await services.store.requestStop(of: SendTarget(kind: .piSession, name: "不在的会话", ref: "absent"), on: TestApp.hostID)
-        var uploads = rig.sync.uploads.stream.makeAsyncIterator()
+        let uploads = Watch(rig.sync.uploads.stream)
         let name = request.id.uuidString.lowercased()
 
-        #expect(await uploads.next() == name)
+        #expect(try await uploads.next("执行器写回结果的上传") == name)
         #expect(try await services.store.deliveryRequest(request.id)?.isOpen == false)
     }
 
