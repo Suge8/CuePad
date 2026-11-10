@@ -12,8 +12,8 @@ import WidgetKit
 extension AppServices {
     func startSnapshots() {
         follow(reporting: { .widgetDataUnavailable("\($0)") }) {
-            try await self.cueUpdates { seen in
-                guard seen.read.widget != nil else { return }
+            for try await seen in self.cueUpdates() {
+                guard seen.read.widget != nil else { continue }
                 try await self.writeSnapshots()  // 观察只当通知：读在发布的串行段里重做，见 writeSnapshots
             }
         }

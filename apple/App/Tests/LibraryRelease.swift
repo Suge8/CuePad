@@ -4,7 +4,8 @@ import Synchronization
 import Testing
 
 /// 用例结束前等它建过的资料库都释放：没释放的就是有任务、订阅或对象还攥着它（同一个测试宿主里只增不减，每个库占一组系统通知登记，
-/// 攒到几百个宿主就崩在建库上）。检查放在用例的作用域里而不在 `TestApp` 的 deinit 里：释放要等被取消的任务收尾，deinit 等不了，
+/// 攒到几百个宿主就崩在建库上）。等完收尾与订阅后还活着的再给 1 秒才算泄漏：收尾时还在跑的一次性任务（上传、起名、立即同步的那一拉）
+/// 做完就放，这种短暂持有不算，只增不减才算；1 秒够它们收尾，真泄漏的用例约 1 秒报红，正常用例到这里已经放了、不多花时间。检查放在用例的作用域里而不在 `TestApp` 的 deinit 里：释放要等被取消的任务收尾，deinit 等不了，
 /// 用例结束后再记的问题测试框架不算到任何用例头上。`TestApp` 只在这个作用域里建（建在外面当场报错）。Swift Testing 没有进程级的作用域，只能逐个套件挂。
 nonisolated struct ReleasesLibraries: TestTrait, SuiteTrait, TestScoping {
     var isRecursive: Bool { true }
@@ -25,9 +26,9 @@ nonisolated struct ReleasesLibraries: TestTrait, SuiteTrait, TestScoping {
 }
 
 /// 框架自己攥着环境里的对象、测试里拆不掉时，库在收尾时还没放：只逐条用例写明是哪个框架、怎么攥的，没释放记成已知问题，
-/// 哪天放掉了，测试框架报"已知问题没出现"，提醒删掉它。已知两种：SwiftUI 的视图图数据在窗口关上、视图拆掉后仍留着最后一版环境
-/// （试过清空 contentView、换成空根视图并当场排版绘制、另起一次刷新，都不放）；AppKit 的文本视图进窗口时排一个延迟约半秒的
-/// 主队列合并块（`NSCreateMainQueueHysteresisBlock`，更新拖放类型登记），块里攥着文本视图，到点才放，取消不了。
+/// 哪天放掉了，测试框架报"已知问题没出现"，提醒删掉它。已知一种：SwiftUI 的视图图数据在窗口关上、视图拆掉后仍留着最后一版环境
+/// （试过清空 contentView、换成空根视图并当场排版绘制、另起一次刷新，都不放）。AppKit 文本视图进窗口时排的延迟合并块
+/// （`NSCreateMainQueueHysteresisBlock`）攥着它约半秒，在 1 秒宽限之内，不算。
 nonisolated struct LibraryHeldByFramework: TestTrait {
     let comment: Comment
 
@@ -68,6 +69,15 @@ nonisolated final class LibraryLedger: Sendable {
         return ledger
     }
 
+    /// 不经 `TestApp`、自己搭服务的测试台（`ClaudeRig`、`HistoryRulesTests.Rig`）建好服务时调：同样只能在作用域里建，库同样查释放。
+    static func tracking(_ store: CueStore, createdAt location: SourceLocation) {
+        guard let ledger = current else {
+            Issue.record("建服务要在挂了 .releasesLibraries 的套件里：不然它的资料库有没有释放没人查", sourceLocation: location)
+            return
+        }
+        ledger.track(store, createdAt: location)
+    }
+
     func track(_ store: CueStore, createdAt location: SourceLocation) {
         state.withLock { $0.stores.append(Entry(store: store, createdAt: location)) }
     }
@@ -91,14 +101,23 @@ nonisolated final class LibraryLedger: Sendable {
             Issue.record("这条用例的 TestApp 本身没释放：用例里还有任务或对象攥着它", sourceLocation: location)
         }
         for closing in closings { await closing.value }
-        if let knownHeld {
-            withKnownIssue(knownHeld.comment) { recordHeld() }
-            return
-        }
         // 订阅的重读任务在读的一方停下后才收尾，用例与服务都等不到它：这里等完，再让它放掉的主线程对象释放
         for store in stores { await store.stoppedSubscriptions() }
         await MainActor.run {}
-        recordHeld()
+        await graceForOneShots()
+        if let knownHeld {
+            withKnownIssue(knownHeld.comment) { recordHeld() }
+        } else {
+            recordHeld()
+        }
+    }
+
+    /// 库释放没有可等的事件，每 10 毫秒看一次。
+    private func graceForOneShots() async {
+        let clock = ContinuousClock(), deadline = clock.now + .seconds(1)
+        while !held.isEmpty, clock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(10))
+        }
     }
 
     private var stores: [CueStore] { state.withLock { $0.stores.compactMap(\.store) } }

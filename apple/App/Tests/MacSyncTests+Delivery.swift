@@ -114,10 +114,7 @@ extension MacSyncTests {
     func 主动拉取的条件_没有连着的会话时不因旧记录而拉_有本机待执行请求时拉() async throws {
         try await PiStateRecorder(store: services.store, hostID: TestApp.hostID).update(sessionID: "stale", state: .settled, title: "旧会话")
         services.startSpeechClock()
-        let (cadences, sink) = AsyncStream<SyncPoller.Cadence?>.makeStream()
-        let following = Task { [services] in await services.followPollingCondition(into: sink) }
-        defer { await following.stop() }
-        var waiting = cadences.makeAsyncIterator()
+        var waiting = services.pollingCondition().makeAsyncIterator()
         #expect(await waiting.next() == .some(nil))
 
         _ = try await services.store.requestDelivery(

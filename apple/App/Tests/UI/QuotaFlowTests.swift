@@ -9,7 +9,7 @@ import Testing
 
 @Suite(.releasesLibraries)
 struct QuotaFlowTests {
-    @Test(.libraryHeldByFramework("菜单栏面板的输入框进过窗口：AppKit 排的延迟合并块攥着它（连同工作区与服务）约半秒才放"))
+    @Test
     func 菜单栏面板每次打开都刷新额度() async throws {
         let app = TestApp(), services = app.services!
         let workspace = Workspace(services: services)

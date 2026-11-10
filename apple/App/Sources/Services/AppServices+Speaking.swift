@@ -33,7 +33,7 @@ extension AppServices {
             try await self.store.recordVoiceRequest(StoredBody.make(text: text, files: []), command: command, host: host).id
         }
         let id = try await recording.value
-        uploadSoon(id)
+        Task { await upload(id) }
         return id
     }
     #endif

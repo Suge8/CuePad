@@ -121,9 +121,7 @@ struct SessionTitleTests {
         let row: @Sendable (isolated CueStore) throws -> String? = { try $0.piSessions(sessionIDs: ["g2"])["g2"]?.state.title }
         func indexing(following live: Set<URL>) -> Task<Void, Never> {
             let indexer = PiHistoryIndexer(agent: .grok, paths: paths, files: store.files) { [services = app.services] in await services.loadHistoryStart(for: $0) }!
-            return Task { [services = app.services] in
-                await indexer.consuming(following: AsyncStream { $0.yield(live) }) { await services.consumePiHistory($0, agent: .grok) }
-            }
+            return Task { await app.services.consumePiHistory(indexer.events(following: AsyncStream { $0.yield(live) }, scope: .all), agent: .grok) }
         }
 
         try title("黑屏视频")

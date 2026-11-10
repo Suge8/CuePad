@@ -63,10 +63,8 @@ final class AppServices {
     var pendingDeepLink: DeepLink?
 
     @ObservationIgnored let tasks = Followers()
-    @ObservationIgnored let inFlight = InFlight()
     /// iOS 整个进后台时取消、回前台再开。
     @ObservationIgnored var polling: Task<Void, Never>?
-    @ObservationIgnored var stoppedPolling: Task<Void, Never>?
     var hasOpenDeliveries = false
     var piViewers = 0
     /// 只由 `CueViewing` 增减；算不算在看的规则在它那里。

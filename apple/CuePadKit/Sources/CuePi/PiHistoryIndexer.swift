@@ -43,8 +43,7 @@ public struct PiHistoryIndexer: Sendable {
         }
     }
 
-    /// 同 `events`，但在调用方的任务里跑：取消后它返回时，跟随与读文件都已停下（不留脱离的任务攥着调用方给的东西）。
-    @concurrent public func run(
+    @concurrent private func run(
         _ continuation: AsyncStream<PiHistoryEvent>.Continuation, following liveFiles: some AsyncSequence<Set<URL>, Never> & Sendable,
         scope: PiHistoryScope
     ) async {
@@ -63,7 +62,7 @@ public struct PiHistoryIndexer: Sendable {
                 follower.follow(only: Set(mine.map(\.path)).union(named.keys))
             }
         }
-        defer { following.cancel(); await following.value }
+        defer { following.cancel() }
         var live = LiveCache(limit: Self.liveCacheLimit)
         var excluded: Set<URL> = []
 

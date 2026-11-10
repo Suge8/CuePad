@@ -17,8 +17,6 @@ final class MacExecutor {
     private let refreshQuota: AccountQuotas.Query
     private let reportIssue: @MainActor (String) -> Void
     private var running: DeliveryExecutor?
-    /// 上一个停下的：它隔开的回调还攥着资料库，`leftBehind` 等它们。
-    private var stopped: DeliveryExecutor?
 
     init(
         store: CueStore, pi: PiBridge, runtimes: [AgentKind: any AgentRuntime], hostID: String, workspaces: Workspaces, recorder: PiStateRecorder,
@@ -65,14 +63,7 @@ final class MacExecutor {
     func beginStop() -> @Sendable () async -> Void {
         let executor = running
         running = nil
-        if let executor { stopped = executor }
         return { await executor?.stop() }
-    }
-
-    /// 等停下时被隔开、还在收尾的回调走完（`DeliveryExecutor.leftBehindSettled`）：要确认资料库放掉了的收尾用（测试）。
-    func leftBehind() -> @Sendable () async -> Void {
-        let executor = running ?? stopped
-        return { await executor?.leftBehindSettled() }
     }
 
     /// 每个意图只尝试一次。明确的前置拒绝可报失败，交出后的超时、断线或执行错误保留未知。

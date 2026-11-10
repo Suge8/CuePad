@@ -122,13 +122,6 @@ final class VoiceCall {
     var canRepeat: Bool { channel != nil }
     func hangUp() { inputs.continuation.yield(.hangUp) }
 
-    /// 不再订阅库：退出与测试收尾用，返回的任务结束时这一通不再攥着资料库。
-    func stopWatching() -> [Task<Void, Never>] {
-        let tasks = [observing, reading].compactMap(\.self)
-        tasks.forEach { $0.cancel() }
-        return tasks
-    }
-
     /// 重新接通只重建媒体与控制连接；库订阅、请求身份和结果保留，不重新执行业务。
     func reconnect(session: UUID = UUID(), media: (any VoiceMedia)? = nil) {
         guard !isLive else { return }

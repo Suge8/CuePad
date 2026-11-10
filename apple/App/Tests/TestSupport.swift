@@ -168,12 +168,8 @@ final class TestApp {
     /// 换账号的通知又是全进程的，测试结束后它还会跟着并行的测试去认账号、拉取。deinit 里等不了：收尾交给 `.releasesLibraries`，用例结束时等它做完再查释放。
     isolated deinit {
         #if os(macOS)
-        let background = services.cancelBackgroundWork(), finish = services.beginShutdown(), leftBehind = services.executor.leftBehind()
-        LibraryLedger.close(ledger, app: createdAt) {
-            await background()
-            _ = await finish()
-            await leftBehind()
-        }
+        let finish = services.beginShutdown()
+        LibraryLedger.close(ledger, app: createdAt) { _ = await finish() }
         pasteboard.releaseGlobally()
         try? FileManager.default.removeItem(at: socketDirectory)
         #else
@@ -191,22 +187,18 @@ final class TestApp {
 
     /// 旧实例自己的工作都停下（同进程被杀）：桥、托管的会话和热键是 `TestApp` 的，留给新实例。不写离线之类的收尾记录，免得晚到的写入盖过新实例的。
     private func retire(_ services: AppServices, app: SourceLocation? = nil) {
-        let background = services.cancelBackgroundWork(), sync = services.sync
+        services.cancelBackgroundWork()
+        let sync = services.sync
         #if os(macOS)
         services.hooks.stop()
-        let executor = services.executor.beginStop(), leftBehind = services.executor.leftBehind(), cue = services.cue.stop()
+        let executor = services.executor.beginStop(), cue = services.cue.stop()
         LibraryLedger.close(ledger, app: app) {
-            await background()
             await executor()
-            await leftBehind()
             await cue()
             await sync?.stop()
         }
         #else
-        LibraryLedger.close(ledger, app: app) {
-            await background()
-            await sync?.stop()
-        }
+        LibraryLedger.close(ledger, app: app) { await sync?.stop() }
         #endif
     }
 
@@ -369,22 +361,6 @@ final class TestApp {
     }
     #endif
 }
-
-#if os(macOS)
-extension PiHistoryIndexer {
-    /// 在调用方的任务里读文件，`consume` 消费事件；它返回或被取消后停下读文件并等它收尾（`events` 起的是脱离的任务，用例收尾时还攥着资料库）。
-    func consuming(
-        following live: some AsyncSequence<Set<URL>, Never> & Sendable, _ consume: (AsyncStream<PiHistoryEvent>) async -> Void
-    ) async {
-        let (events, sink) = AsyncStream<PiHistoryEvent>.makeStream()
-        await withDiscardingTaskGroup { group in
-            group.addTask { await self.run(sink, following: live, scope: .all) }
-            await consume(events)
-            group.cancelAll()
-        }
-    }
-}
-#endif
 
 extension Task {
     /// 取消并等它收尾：用例自己起的任务结束前还攥着它捕获的服务与资料库，`.releasesLibraries` 紧接着就查。
