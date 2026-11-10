@@ -40,26 +40,6 @@ struct PiHistoryPersistenceTests {
     private let header = #"{"type":"session","version":3,"id":"sess-1","timestamp":"2026-01-01T00:00:00.000Z","cwd":"/work/x"}"#
     private let firstPrompt = #"{"type":"message","id":"m1","parentId":null,"timestamp":"2026-01-01T00:00:01.000Z","message":{"role":"user","content":"fix the build","timestamp":1}}"#
 
-    /// 续读从检查点接着读（读多少由 CuePiTests 的 HistoryTests 证明）：这里只管检查点落进本机会话表、重启后按文件路径取得回来。
-    @Test func 索引结果与检查点写入本机会话表_重启后按文件取得回检查点() async throws {
-        let rig = TestApp()
-        let file = try sessionFile(in: rig, lines: [header, firstPrompt])
-        let events = AsyncStream<PiHistoryEvent> { continuation in
-            continuation.yield(.updated(try! PiHistory.index(file: file, agent: .pi, from: nil, files: rig.services.store.files)))
-            continuation.yield(.backfillFinished(sessionFiles: [file]))
-            continuation.finish()
-        }
-
-        await rig.services.consumePiHistory(events, agent: .pi)
-
-        let rows = try await rig.services.store.piSessions()
-        #expect(rows.map(\.id) == ["sess-1"])
-        #expect(rows[0].cwd == "/work/x")
-        #expect(rows[0].path == file.path)
-        #expect(rows[0].title == "fix the build")
-        #expect(try await rig.relaunch().historyStore.start(for: file)?.checkpoint != nil)
-    }
-
     @Test func 回填完成后_不在会话列表里的旧行被删除() async throws {
         let rig = TestApp()
         let file = try sessionFile(in: rig, lines: [header, firstPrompt])

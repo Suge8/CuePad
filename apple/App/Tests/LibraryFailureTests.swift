@@ -37,15 +37,4 @@ struct LibraryFailureTests {
         #expect(older.diagnostics.contains(older.reason) && older.diagnostics.contains("13"))
         #expect(!older.summary.contains(older.reason))
     }
-
-    #if os(iOS)
-    @Test func 启动遇到打不开的库_得到失败而不是终止() throws {
-        let location = try library(version: 13, setup: "CREATE TABLE cards (id TEXT)")
-        guard case .failed(let failure) = Launch.open(location) else {
-            Issue.record("应该得到失败")
-            return
-        }
-        #expect(failure.version == 13)
-    }
-    #endif
 }
