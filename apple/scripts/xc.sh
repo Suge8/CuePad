@@ -3,6 +3,7 @@
 # 或自己起停 CuePad，会被 .pi/extensions/xc-guard.ts 拦下）。
 #   xc.sh check                                     提交前的门：lint.sh、CuePadKit 的 swift build、iOS 编译（连测试目标）、Mac App 连测试目标的整模块编译（只在 Mac 编的测试，如 #if os(macOS) 的，警告也在这里拦）；
 #                                                   自己的 Swift 源文件（App、CuePadKit）有一条编译警告就失败，第三方与生成的代码不算（_build.sh 的 own_warnings）
+#   xc.sh signoff                                   合并前的门：本机跑 check、test kit、test mac，全过才给 HEAD 这个提交记 GitHub 状态，主干规则认它（signoff.sh 头注释）
 #   xc.sh build <mac|ios|ipad>
 #   xc.sh activity-log [输出.json]                  生产 iCloud 活动取证只读导出：签隔离副本、不启动应用服务，不打开真实库、不重启正式版
 #   xc.sh strings                                   编 mac 与 ios，把界面文字收进 String Catalog，列出缺英文的（strings.py 头注释）
@@ -65,7 +66,7 @@ export TEST_RUNNER_PI_OFFLINE=1
 # 同时跑的测试最多这么多个（Swift Testing 的并行宽度；不限时它把用例全数同时起）：测试起的是真 Agent 进程，3 核的 CI 机器上同时起几十个，
 # 不少用例等到超时（实测 76 条）。按核数给，CUEPAD_TEST_WIDTH 覆盖
 export TEST_RUNNER_SWT_EXPERIMENTAL_MAXIMUM_PARALLELIZATION_WIDTH="${CUEPAD_TEST_WIDTH:-$(sysctl -n hw.ncpu)}"
-USAGE="用法：$0 <check|build|strings|test|agents|shot|rec|run|stop|fleet|explore|perf|release|device|provision|activity-log|diag> [mac|ios|ipad|kit] …（见脚本头注释）"
+USAGE="用法：$0 <check|signoff|build|strings|test|agents|shot|rec|run|stop|fleet|explore|perf|release|device|provision|activity-log|diag> [mac|ios|ipad|kit] …（见脚本头注释）"
 
 cmd="${1:-}"; platform="${2:-}"
 case "$cmd" in
@@ -73,6 +74,7 @@ case "$cmd" in
   strings) "$0" build mac; "$0" build ios; exec python3 "$APPLE_DIR/scripts/strings.py" sync ;;
   provision) signing_begin; exec python3 "$APPLE_DIR/scripts/provision.py" "${2:-all}" "${@:3}" ;;  # 签名锁见 _lock.sh 规则 3
   stop) exec python3 "$APPLE_DIR/scripts/app.py" stop ;;
+  signoff) exec "$APPLE_DIR/scripts/signoff.sh" "$0" ;;
   agents) exec python3 "$APPLE_DIR/scripts/agents.py" "${@:2}" ;;
   diag) exec python3 "$APPLE_DIR/scripts/device_diag.py" "${@:2}" ;;
   explore) exec python3 "$APPLE_DIR/scripts/explore.py" "$0" "${@:2}" ;;
