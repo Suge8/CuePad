@@ -108,6 +108,26 @@ struct RealCodexHostedTests {
         }
     }
 
+    /// 命令、改文件、MCP 以外的工具（这里是看图）在跑时同样显示在做什么。
+    @Test func viewingAnImageShowsAsAToolWithItsFileName() async throws {
+        try await withCodexRig { rig in
+            let picture = rig.codex.work.appending(path: "kiwi-picture.png")
+            try solidPNG(red: 0, green: 1, blue: 0).write(to: picture)
+            rig.model.on("Look at the picture") { request in
+                request.step == 0 ? .call("view_image", ["path": picture.path]) : .say("LOOKED")
+            }
+            let log = ChangeLog(rig.bridge)
+            let id = try await open(rig, "token-view")
+
+            try await rig.bridge.send(SessionMessage(text: "Look at the picture."), to: id)
+            try await eventually("看完答完") {
+                rig.bridge.session(id: id).map { $0.state == .settled && rig.replies($0).last == "LOOKED" } == true && log.states.last == .settled
+            }
+            let shown = zip(log.states, log.details).filter { $0.0 == .tool }.compactMap(\.1)
+            #expect(shown.contains { $0.contains("kiwi-picture.png") }, "\(log.states) \(log.details)")
+        }
+    }
+
     // MARK: 权限
 
     @Test(arguments: [codexTestModel, "gpt-6-luna"], [true, false])
