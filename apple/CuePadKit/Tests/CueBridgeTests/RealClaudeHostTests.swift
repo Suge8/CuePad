@@ -5,26 +5,9 @@ import Foundation
 import Testing
 @testable import CueBridge
 
-/// 托管进程自己也跑装好的钩子，桥上不多出一个会话。托管的会话让给终端里打开的那个在 `RealClaudeTerminalTests`。
 @MainActor
 @Suite(RealAgents.needs(.claudeCode), RealAgents.tiered)
 struct RealClaudeHostTests {
-    /// 只看提交那一刻的钩子（`UserPromptSubmit` 在调模型之前），不等模型回答。
-    @Test func aWrappedClaudeIsNotSeenTwice() async throws {
-        try await ClaudeTestbed.run(wrapper: ClaudeTestbed.passThrough) { testbed in
-            try testbed.startConnected()
-            let log = ChangeLog(testbed.bridge)
-            let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t-wrapped", name: nil, model: nil, thinking: nil)
-            let sessionID = try #require(testbed.bridge.session(id: id)?.sessionID)
-
-            try await testbed.bridge.send(SessionMessage(text: "Reply with the single word WRAPPED."), to: id)
-            try await eventually("这一轮开始又结束") {
-                log.states.contains { $0.isWorking } && testbed.bridge.session(id: id)?.state.isWorking == false
-            }
-            #expect(log.changes.allSatisfy { if case .appeared(let s) = $0 { s.sessionID != sessionID || s.id == id } else { true } })
-        }
-    }
-
     /// 外壳不转发信号（`passThrough`）、App 退出时这一轮还在跑（关了输入 Claude Code 也不走）：宽限到点的 SIGTERM 要到 Claude Code 本人，
     /// 它自己收拾掉收件箱 socket，不是外壳先死、它跟着被整组强杀（#155）。宽限按手动钟，拨到才发 SIGTERM。
     @Test func aWrappedClaudeBusyAtQuitCleansUpOnSIGTERM() async throws {

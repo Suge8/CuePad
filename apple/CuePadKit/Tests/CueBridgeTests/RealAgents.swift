@@ -10,7 +10,7 @@ import Testing
 /// （`FakeModel`），零网络、不用任何登录：
 /// - pi：Chat Completions；FireCode 随 Pi 钉住（`CUEPAD_FIRECODE_SOURCE` 可换成另一份检出）；
 /// - codex：Responses，经隔离 `CODEX_HOME/config.toml` 的 `model_providers` 指过去；终端里的 Codex 跑在伪终端里；
-/// - claude：Anthropic Messages（`ClaudeTestbed`），假密钥、关辅助流量；终端里的 Claude Code 要 tmux；
+/// - claude：Anthropic Messages（`ClaudeTestbed`），假密钥、关辅助流量；
 /// - grok：Responses；
 /// - dsh：Messages，经 `DEEPSEEK_BASE_URL`（搜索的 `DEEPSEEK_SEARCH_BASE_URL` 也指过去），key 是假的；
 /// - opencode：Chat Completions，在隔离的 `OpenCodeSandbox` 里。

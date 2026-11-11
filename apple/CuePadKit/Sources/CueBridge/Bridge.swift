@@ -198,11 +198,8 @@ extension Bridge {
         try await pi(id).refreshQuota()
     }
 
-    /// 此刻在不在跑一轮：接入自己知道得更准的（`SessionLink.takingTurn`）以它为准，否则看桥上的状态；不在桥上的为 false。
-    public func isTurnRunning(_ id: Session.ID) -> Bool {
-        guard let session = session(id: id) else { return false }
-        return controls[id]?.takingTurn(id) ?? session.state.isTurnRunning
-    }
+    /// 不在桥上的为 false。
+    public func isTurnRunning(_ id: Session.ID) -> Bool { session(id: id)?.state.isTurnRunning ?? false }
 
     /// 会话的控制通道；这个 Agent 的这类会话做不到（`AgentCapabilities`）就抛 `unsupported`：能做什么只看能力表，通道不判断。
     private func control(_ id: Session.ID, needs: AgentCapabilities) throws -> any SessionLink {

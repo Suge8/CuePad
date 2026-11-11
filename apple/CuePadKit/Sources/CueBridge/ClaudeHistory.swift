@@ -3,7 +3,7 @@ import CueStore
 import CueText
 import Foundation
 
-/// CuePad 送进去的话：托管进程的 stream-json 与收件箱 socket 都把投送请求 id 当作这条消息的 `uuid`（插进去的是 `source_uuid`）。
+/// CuePad 送进去的话：托管进程的 stream-json 把投送请求 id 当作这条消息的 `uuid`（插进去的是 `source_uuid`）。
 enum ClaudeHistory {
     static func ingest(_ raw: UnsafeRawBufferPointer, _ cp: inout HistoryCheckpoint, _ transcript: inout History.Transcript) throws {
         cp.seq += 1
@@ -23,18 +23,12 @@ enum ClaudeHistory {
         case "system":
             switch line.subtype {
             case "compact_boundary": cp.compacted(entry, into: &transcript)
-            case "agents_killed": transcript.signal(.agentsStopped)
             case "stop_hook_summary": if cp.round != nil { cp.answered("", entry, into: &transcript) }
             // 进程内队友还在跑时，2.1.318 把那一轮的这一行推迟到队友都停下才写，可能落在下一轮中途（停掉队友的那次工具调用之后）。
             // 认它接在哪一行后面（parentUuid），不认时长：等后台结果的一轮按时写的这一行也从更早那一轮的开头量起
             case "turn_duration":
                 if let ended = cp.round?.endedBy, ended == line.parentUuid { cp.answered("", entry, into: &transcript) }
-            // 这句没开成一轮（钩子挡下、拦停，2.1.318 写 `informational` 带 `promptSubmitEnding`）：不跑 `Stop`，那句也不写进会话。
-            // `no_verdict` 是钩子没跑，CuePad 也没收到这句的钩子，不算
-            default:
-                if let kind = line.promptSubmitEnding?.ending?.kind, ["blocked_by_hook", "stopped_by_hook"].contains(kind) {
-                    transcript.signal(.promptRefused(line.content?.string ?? ""))
-                }
+            default: break
             }
         case "user":
             try user(line, entry, into: &cp, transcript: &transcript)
@@ -89,18 +83,19 @@ enum ClaudeHistory {
         cp.said(said, entry, deliveryID: deliveryID, into: &transcript)
     }
 
-    /// Claude Code 给收件箱送来的话包的说明（2.1.293）：开头一行与结尾一段固定英文，正文原样夹在中间；CuePad 发的正文前还有一句
-    /// `ClaudeInbox.userNote`。钩子交来的那句不一定包着英文说明，说明与那句各自有就去掉。
+    /// Claude Code 给收件箱送来的话包的说明（2.1.293）：开头一行与结尾一段固定英文，正文原样夹在中间；旧版 CuePad 经收件箱发给终端会话的
+    /// 正文前还有一句 `userNote`，旧会话记录里留着。说明与那句各自有就去掉。
+    private static let userNote = "（这句是用户本人在 CuePad 里发给你的，不是别的会话：直接在本会话里回答，不需要回传。）\n"
     private static let peerPrefix = "Another Claude session sent a message:\n"
     private static let peerSuffix = "\n\nThis came from another Claude session"
 
-    static func withoutPeerWrapper(_ text: String) -> String {
+    private static func withoutPeerWrapper(_ text: String) -> String {
         var body = Substring(text)
         if body.hasPrefix(peerPrefix) {
             body = body.dropFirst(peerPrefix.count)
             body = body.range(of: peerSuffix).map { body[..<$0.lowerBound] } ?? body
         }
-        if body.hasPrefix(ClaudeInbox.userNote) { body = body.dropFirst(ClaudeInbox.userNote.count) }
+        if body.hasPrefix(userNote) { body = body.dropFirst(userNote.count) }
         return String(body)
     }
 
@@ -131,19 +126,6 @@ enum ClaudeHistory {
         var origin: Origin?
         var message: Message?
         var attachment: Attachment?
-        var promptSubmitEnding: PromptSubmitEnding?
-        var content: Text?
-    }
-
-    /// 只要字符串；别的行的同名字段不是字符串时不拖累整行
-    private struct Text: Decodable {
-        var string: String?
-        init(from decoder: any Decoder) { string = try? decoder.singleValueContainer().decode(String.self) }
-    }
-
-    private struct PromptSubmitEnding: Decodable {
-        var ending: Ending?
-        struct Ending: Decodable { var kind: String? }
     }
 
     private struct Origin: Decodable { var kind: String? }

@@ -195,9 +195,10 @@ public struct SlashCommand: Sendable, Equatable, Identifiable, Codable {
   }
 }
 
-/// 子代理此刻的状态，即 FireCode 子代理名册的分组：在跑、在审查、已交回结果、失败、被中断、空闲。
+/// 子代理此刻的状态，即 FireCode 子代理名册的分组：在跑、在审查、临时故障后暂停（到点自动续跑）、已交回结果、失败、
+/// 审查没通过（挑出问题后停下，不是故障）、被中断、空闲。
 public enum SubagentPhase: String, Sendable, CaseIterable, Codable {
-  case running, review, done, failed, interrupted, idle
+  case running, review, paused, done, failed, rejected, interrupted, idle
 }
 
 /// 会话里的一个子代理（来自 FireCode 的子代理名册）：名字、派发角色、状态、在做什么，以及本次运行的开始与落定时刻
