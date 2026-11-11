@@ -2,8 +2,7 @@
 import CueStore
 import Foundation
 
-/// CuePad 的条目合并进用户自己的配置文件（别人的条目原样留着），卸载只删 CuePad 的条目，认 CuePad 的条目只看命令（`<cuepad> hook <agent>`，路径可能是旧位置）；
-/// Pi 的是整个桥扩展目录（`PiExtensionFiles`，不看命令）。
+/// CuePad 的条目合并进用户自己的配置文件（别人的条目原样留着），卸载只删 CuePad 的条目，认 CuePad 的条目只看命令（`<cuepad> hook <agent>`，路径可能是旧位置）。
 protocol AgentHookConfig: Sendable {
     /// 不含 `files(command:)` 判定用的记录。
     var writtenFiles: [URL] { get }

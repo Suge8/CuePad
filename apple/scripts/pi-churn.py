@@ -24,7 +24,7 @@ def session(sid, lifetime):
         try:
             c, _ = s.accept()
             c.sendall((json.dumps({"t": "hello", "extensionVersion": 2, "sessionId": sid, "sessionFile": None, "pid": os.getpid(),
-                                   "cwd": cwd, "mode": "tui", "model": "demo", "tty": None, "term": {}, "state": state}) + "\n").encode())
+                                   "cwd": cwd, "hosted": True, "model": "demo", "state": state}) + "\n").encode())
             clients.append(c)
         except socket.timeout: pass
         if time.time() >= nxt:

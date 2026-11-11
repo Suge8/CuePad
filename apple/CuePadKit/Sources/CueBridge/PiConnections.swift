@@ -39,9 +39,6 @@ final class PiConnections {
         orphanExitWatchers = [:]
     }
 
-    /// 握手时版本不同的已请过换上，但那时磁盘上可能还是旧的，所以装完新版扩展后再请一遍。
-    func offerExtensionUpgrade() { for link in links.values where link.id != nil { link.offerUpgrade() } }
-
     private func scan() {
         let names = (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
         let present = Set(names.filter { $0.hasSuffix(".sock") }.map { String($0.dropLast(".sock".count)) })
@@ -100,28 +97,29 @@ final class PiConnections {
         case .hello(let hello):
             guard link.id == nil else { throw HandlingError.duplicateHello }
             guard "\(hello.sessionId).\(hello.pid)" == name else { throw HandlingError.nameMismatch }
+            guard hello.hosted else { throw HandlingError.notHosted }
             guard let work = hello.state.work else { throw HandlingError.unknownState(hello.state.kind) }
             var session = Session(
                 id: name, sessionID: hello.sessionId, agent: .pi, sessionFile: hello.sessionFile.map { URL(filePath: $0) }, pid: hello.pid,
-                cwd: URL(filePath: hello.cwd, directoryHint: .isDirectory), terminal: TerminalIdentity(tty: hello.tty, environment: hello.term),
-                state: work.state, detail: work.detail,
+                cwd: URL(filePath: hello.cwd, directoryHint: .isDirectory), terminal: TerminalIdentity(), state: work.state, detail: work.detail,
                 errorMessage: hello.state.errorMessage, stateSince: hello.state.sinceDate, busySince: hello.state.busySinceDate)
             session.turnStartedAt = hello.state.turnSinceDate
             hello.info.apply(to: &session)
             session.launchToken = hello.launchToken
             link.extensionVersion = hello.extensionVersion
-            session.hosted = hello.hosted ?? false
+            session.hosted = true
             appear(session, on: link)
             link.offerUpgrade()
         case .upgrading(let hello):
             guard link.id == nil else { throw HandlingError.duplicateHello }
             guard "\(hello.sessionId).\(hello.pid)" == name else { throw HandlingError.nameMismatch }
+            guard hello.hosted else { throw HandlingError.notHosted }
             var session = Session(
                 id: name, sessionID: hello.sessionId, agent: .pi, sessionFile: hello.sessionFile.map { URL(filePath: $0) }, pid: hello.pid, cwd: URL(filePath: hello.cwd, directoryHint: .isDirectory),
                 terminal: TerminalIdentity(), state: .settled, upgrading: true, stateSince: Date())
             session.name = hello.name
             session.firstMessage = hello.firstMessage
-            session.hosted = hello.hosted
+            session.hosted = true
             link.extensionVersion = hello.extensionVersion
             appear(session, on: link)
             link.offerUpgrade()
@@ -154,6 +152,8 @@ final class PiConnections {
 
     private enum HandlingError: Error {
         case duplicateHello, nameMismatch, unknownState(String), messageBeforeHello
+        /// 旧版装进 Pi 扩展目录的那份在终端里开的 pi 里也加载、也来连：CuePad 只管它托管的会话
+        case notHosted
     }
 
     private func appear(_ session: Session, on link: PiConnection) {

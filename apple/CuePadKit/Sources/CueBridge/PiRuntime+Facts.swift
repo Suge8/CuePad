@@ -11,11 +11,10 @@ extension PiRuntime {
         installPrerequisite: InstallPrerequisite(name: "Node.js", command: "node", minimum: AgentVersion(22, 19, 0), site: URL(string: "https://nodejs.org")!),
         homeMeansInstalled: false,
         sessionFiles: SessionFileFormat(ingest: History.ingest, depth: 2, naming: .idSuffix) { $0.pi.sessionsDirectory },
-        channel: { integration, _ in PiExtensionFiles(extensionsDirectory: integration.paths.pi.extensionsDirectory) },
-        hostingNeedsChannel: true, probe: askPi, brain: { PiBrain() }, projectFolder: ".pi",
+        probe: askPi, brain: { PiBrain() }, projectFolder: ".pi",
         globalReads: ["AGENTS.override.md", "AGENTS.md", "CLAUDE.md"])
 
-    /// RPC 模式、不存会话，只加载随包的桥扩展（不加载装好的那份与其他扩展，也就不连 CuePad）并开探测模式（扩展的 `CUEPAD_PROBE`）：
+    /// RPC 模式、不存会话，只加载随包的桥扩展（不加载其他扩展；探测模式下它不连 CuePad）并开探测模式（扩展的 `CUEPAD_PROBE`）：
     /// 扩展把会话里上报的同一份模型配置写成一行就收尾。可选的与 Pi 的 /model 同一规则，配了范围（`enabledModels`）就是范围内的。
     /// 没有可用的模型是没登录。
     nonisolated private static func askPi(_ executable: URL, _ probe: AgentProbe) async throws -> MacAgent? {

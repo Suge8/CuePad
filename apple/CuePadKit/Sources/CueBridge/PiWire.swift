@@ -48,15 +48,13 @@ enum PiWire {
         var sessionFile: String?
         var pid: Int32
         var cwd: String
-        var tty: String?
-        var term: [String: String]
         var state: State
         var launchToken: String?
-        var hosted: Bool?
+        var hosted: Bool
         var info: Info
 
         enum CodingKeys: String, CodingKey {
-            case extensionVersion, sessionId, sessionFile, pid, cwd, tty, term, state, launchToken, hosted
+            case extensionVersion, sessionId, sessionFile, pid, cwd, state, launchToken, hosted
         }
 
         init(from decoder: any Decoder) throws {
@@ -66,17 +64,15 @@ enum PiWire {
             sessionFile = try c.decodeIfPresent(String.self, forKey: .sessionFile)
             pid = try c.decode(Int32.self, forKey: .pid)
             cwd = try c.decode(String.self, forKey: .cwd)
-            tty = try c.decodeIfPresent(String.self, forKey: .tty)
-            term = try c.decode([String: String].self, forKey: .term)
             state = try c.decode(State.self, forKey: .state)
             launchToken = try c.decodeIfPresent(String.self, forKey: .launchToken)
-            hosted = try c.decodeIfPresent(Bool.self, forKey: .hosted)
+            hosted = try c.decode(Bool.self, forKey: .hosted)
             info = try Info(from: decoder)
         }
     }
 
     /// 每个 hello 先按它读：读得懂这一版扩展（`reads`）才往下读完整的 `Hello`，读不懂的只留认得出会话的几项（其余字段读不出就当没有），
-    /// 这几项的键与含义永远不变。`hosted` 也读：托管的与终端里的同一会话并存时记录跟哪个、界面标不标后台看它。
+    /// 这几项的键与含义永远不变。`hosted` 也读：只有托管的会话上桥，旧版装进 Pi 扩展目录的那份在终端里的 pi 里也会来连。
     /// `sessionFile` 也读：进程退出时说没说过话（`Session.spoke`）看它，读不到就会把说过话的会话当成没说话、删掉记录与摘要。
     struct IdentityHello: Decodable {
         var extensionVersion: Int?

@@ -27,8 +27,6 @@ final class PiConnection: SessionLink {
 
     func command(_ line: String, deliveryID _: String?, in _: Session.ID) async throws { _ = try await request { try PiWire.slashCommand(id: $0, line: line) } }
 
-    func reload() async throws { _ = try await request { try PiWire.bare("reload", id: $0) } }
-
     /// 退出方式由扩展按真实 mode 选择，不按 hosted 猜模式，也不对外部 PID 发信号。
     func end(_: Session.ID) async throws { _ = try await request { try PiWire.bare("end", id: $0) } }
 
@@ -55,7 +53,7 @@ final class PiConnection: SessionLink {
         _ = try await request { try PiWire.configCommand(id: $0, model: config.model, thinking: thinking, fast: config.fast, name: config.name) }
     }
 
-    /// 报的扩展版本不是随包版本（没报的也算）：请它核对磁盘（`PiWire.upgrade`）。磁盘上还是旧的它就不动，所以可以多说。
+    /// 报的扩展版本不是随包版本（没报的也算）：请它核对随包目录（`PiWire.upgrade`）。那里还是旧的它就不动，所以可以多说。
     func offerUpgrade() {
         guard extensionVersion != PiExtensionBundle.version else { return }
         connection.write(PiWire.upgrade)

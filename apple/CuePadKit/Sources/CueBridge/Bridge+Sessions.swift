@@ -74,15 +74,12 @@ extension Bridge {
         emit(.ended(session, reason: reason))
     }
 
-    /// 请它退出（不算结束，发话时再接着）：同一会话在别处（终端里）也开着、自己又空闲时（两边会各写各的），或歇着满 `hostedIdle` 时（`AgentFacts.releasesIdleHosted`）。
+    /// 歇着满 `hostedIdle` 时请它退出（不算结束，发话时再接着；`AgentFacts.releasesIdleHosted`）。
     func reviewHosted() {
         for slot in slots where slot.session.hosted && !releasing.contains(slot.id) {
             let session = slot.session
             let busy = session.state.hasPendingWork
-            let elsewhere = slots.contains { $0.session.agent == session.agent && $0.sessionID == session.sessionID && !$0.session.hosted }
-            if !busy && elsewhere {
-                release(session.id)
-            } else if !session.agent.facts.releasesIdleHosted {
+            if !session.agent.facts.releasesIdleHosted {
                 continue
             } else if busy {
                 idleTimers.removeValue(forKey: session.id)?.cancel()

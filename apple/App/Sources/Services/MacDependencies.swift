@@ -72,7 +72,7 @@ struct MacDependencies {
             updater: AppIdentity.isRelease ? SparkleUpdater() : DebugHooks.updater,
             hooks: hooks,
             runtimes: { store in [
-                .pi: PiRuntime(bridge: bridge, paths: paths.pi, pi: { await agents.executable(.pi) }),
+                .pi: PiRuntime(bridge: bridge, paths: paths.pi, cleansInstalledExtension: agents.integration.touches(.pi), pi: { await agents.executable(.pi) }),
                 .claudeCode: ClaudeCodeRuntime(bridge: bridge, paths: paths, hooks: hooks, store: store, claude: { await agents.executable(.claudeCode) }),
                 .codex: CodexRuntime(bridge: bridge, paths: paths, hooks: hooks, codex: { await agents.executable(.codex) }),
                 .opencode: OpenCodeRuntime(

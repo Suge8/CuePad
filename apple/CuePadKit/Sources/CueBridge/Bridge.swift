@@ -50,8 +50,6 @@ public final class Bridge {
     @ObservationIgnored let hostedIdle: Duration
     /// App 给的是它自己的那一个（`MacDependencies.timing`）。
     @ObservationIgnored let timing: Timing
-    /// 显式结束正在等待的承载进程；让出后的接手重载不能干扰同一个结束请求。
-    @ObservationIgnored private(set) var ending: Set<Session.ID> = []
     @ObservationIgnored var controls: [Session.ID: any SessionLink] = [:]
     /// 重开前（`carryOver`）与重新载入扩展前（`detach` 的 `.reload`）各会话的状态与计时：重新上桥时用一次。
     /// 读不懂的扩展读不到状态，不留也不用：接回时沿用的是它之前读到的
@@ -71,8 +69,6 @@ public final class Bridge {
     }
 
     public func start() throws { try connections.start() }
-
-    public func offerExtensionUpgrade() { connections.offerExtensionUpgrade() }
 
     public func stop() {
         turns.stop()
@@ -134,18 +130,11 @@ extension Bridge {
         try await control(id, needs: .commands).command(line, deliveryID: deliveryID, in: id)
     }
 
-    /// 同一会话的另一个进程刚写过文件后用；扩展判断能否安全重载，不能就提示用户。只有 Pi 有。
-    public func reload(_ id: Session.ID) async throws {
-        try await pi(id).reload()
-    }
-
     /// `AgentTimeouts.end` 内没下线抛 `notEnded`。
     public func end(_ id: Session.ID) async throws {
         guard let target = session(id: id) else { throw BridgeError.sessionEnded }
         let ids = target.agent == .pi
             ? sessions.filter { $0.agent == .pi && $0.sessionID == target.sessionID }.map(\.id) : [id]
-        ending.formUnion(ids)
-        defer { ending.subtract(ids) }
         try await withThrowingTaskGroup(of: Void.self) { group in
             for id in ids { group.addTask { try await self.endInstance(id) } }
             try await group.waitForAll()
