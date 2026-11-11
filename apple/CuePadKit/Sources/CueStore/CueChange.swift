@@ -41,7 +41,7 @@ extension SessionState {
   }
 }
 
-/// 在终端里打的与在 CuePad 里发的一样，Cue 发进去的不算。他发起的一轮停下时他在场，先不报给 Cue，等他离开（`CueStore.cueChanges`）。
+/// Cue 发进去的话不算他说的。他发起的一轮停下时他在场，先不报给 Cue，等他离开（`CueStore.cueChanges`）。
 public struct SessionPresence: Equatable, Sendable {
   var viewing: Bool
   var spokeAt: Date?

@@ -84,7 +84,7 @@ CuePad → 扩展（都带 `id`）：
 
 `send` / `retry` 交出前通过公开 modelRegistry 核对当前模型及授权；明确缺授权回 `no_auth`，不启动或中止模型轮。ACK 只表示观察到对应消息事件，事件早于文件写入；持久化以历史读取到真实消息为准，模型轮次结果另看真实 settled。超时、断线与 `failed: <原因>` 都不证明未执行，不授权自动重投。重试在完成的助手消息上记录结果，到 `agent_settled` 才收尾未落成的等待；全部遗留 retry marker 都从请求及 `turn_end` 投影里移除，原始历史与已完成工具结果保留。
 
-`end` 先中止当前轮、等真实空闲，再按 mode 收尾：TUI 调宿主 shutdown 恢复终端，RPC 对自身发 SIGTERM；不向第三方 PID 发强杀。手动 `/reload` 与自动升级共用空闲门，等待进程内子代理与 SDK 待处理消息，不把重载当取消。托管 RPC 的 stdout 与 stderr 怎么接在 `ChildProcess`、`PiRuntime`：不保存完整 RPC 事件、工具输出或任意第三方日志。
+`end` 先中止当前轮、等真实空闲，再对自身发 SIGTERM；不向第三方 PID 发强杀。手动 `/reload` 与自动升级共用空闲门，等待进程内子代理与 SDK 待处理消息，不把重载当取消。托管 RPC 的 stdout 与 stderr 怎么接在 `ChildProcess`、`PiRuntime`：不保存完整 RPC 事件、工具输出或任意第三方日志。
 
 模型错误由公开的完成消息与 settled 事件上报；CuePad 自己观察到的预检、压缩及内部操作错误通过既有 ACK 或 state 报出。`/compact` 等真实结果才回 ACK，不设提前成功窗口；超过确认时限的失败仍由公开 `session_compact_failed` 事件进入状态，原生手动与自动压缩共用这条收尾，取消不记成失败。其他扩展的命令交出即回 ACK：Pi 在任何检查之前同步调起处理函数，忙时也执行、没有拒收的路，ACK 证明 Pi 执行了它；处理函数的完成与出错没有公开回调，第三方扩展的错误原文只在 Pi 自己的界面或 RPC stdout 上，不可观测。启动即退出带上 Pi 在 stderr 里说的最后一句。
 
@@ -97,5 +97,4 @@ dsh 的随包插件（`dsh-cuepad.mjs`，每次启动经 `--patch` 叠上）与 
 ## 已知边界
 
 - 会话冻结（SIGSTOP）或机器休眠造成的假死发现不了：既定取舍，不做心跳。
-- 终端里的 Grok Build 只读：CuePad 碰不到它的输入，只从它的会话记录看它在做什么，看不到它在等你确认（`GrokRuntime`）。
 - 不用 FSEvents（延迟实测数据见 `FileFollower`、`Socket.swift` 里 `DirectoryWatcher` 的头注释）。

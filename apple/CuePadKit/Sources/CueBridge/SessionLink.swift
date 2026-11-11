@@ -13,8 +13,8 @@ public protocol SessionLink: AnyObject {
     /// 斜杠命令：不开轮的照原样执行，返回即这家执行了它；会开一轮的（带话的模式切换、OpenCode 的模板）与 `send` 同一规则。
     /// `deliveryID` 是投送请求 id，收得下的（托管的 Claude Code）随命令交出、据它认这条命令的结果。
     func command(_ line: String, deliveryID: String?, in id: Session.ID) async throws
-    /// 请会话退出：托管的这一刻下桥，在跑的这一轮先停下再收进程（CuePad 起的进程见 `HostedProcesses`；Pi、OpenCode 由扩展、服务自己先停这一轮）；
-    /// 终端里的像在终端里退出那样收尾（Claude Code 收 SIGINT 就退，不先停下这一轮，2.1.318 实测）。受理即返回，下线经 `Bridge.detach` 报告。
+    /// 请会话退出：这一刻下桥，在跑的这一轮先停下再收进程（CuePad 起的进程见 `HostedProcesses`；Pi、OpenCode 由扩展、服务自己先停这一轮）。
+    /// 受理即返回，下线经 `Bridge.detach` 报告。
     func end(_ id: Session.ID) async throws
     func abort(_ id: Session.ID) async throws
     /// 核对真实投送身份和停止必须在接收端的同一同步段；不支持的接入明确拒绝，不能降级为无条件停止。
@@ -29,7 +29,7 @@ public protocol SessionLink: AnyObject {
     func suggestName(from firstMessage: String, in id: Session.ID) async throws -> String
 }
 
-/// 做不到的操作缺省拒绝（终端里只读的会话、没有斜杠命令或停止的终端会话）：桥按能力表先拒，实际到不了这里。
+/// 这家没实现的操作缺省拒绝。
 extension SessionLink {
     public func send(_ message: SessionMessage, in id: Session.ID) async throws { throw BridgeError.unsupported }
     public func command(_ line: String, deliveryID: String?, in id: Session.ID) async throws { throw BridgeError.unsupported }

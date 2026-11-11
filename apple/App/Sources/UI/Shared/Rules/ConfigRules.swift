@@ -43,7 +43,7 @@ nonisolated struct ThinkingMeter: Equatable {
 
     var filled: Int { current.flatMap { Self.scale.firstIndex(of: $0) }.map { $0 + 1 } ?? 0 }
     var isOff: Bool { current == .off }
-    /// 档名；Agent 没报此刻的强度时（如终端里的 Codex 用模型的缺省）是"默认"，照样能点能换。
+    /// 档名；Agent 没报此刻的强度时（用模型的缺省）是"默认"，照样能点能换。
     var label: String { current?.label ?? String(localized: "默认") }
     var isMax: Bool { current != .off && current == ThinkingLevel.allCases.last(where: levels.contains) }
 
