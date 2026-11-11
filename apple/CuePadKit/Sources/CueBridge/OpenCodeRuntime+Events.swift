@@ -34,19 +34,10 @@ extension OpenCodeRuntime {
         guard event.type.hasPrefix("session."), let sessionID = data.sessionID else { return }
         if let parent = data.parentID ?? parents[sessionID] { return child(sessionID, of: parent, event) }
         switch event.type {
-        case "session.created":
-            guard let location = data.location else { return }
-            let now = Date().timeIntervalSince1970 * 1000
-            let info = OpenCodeSessionInfo(
-                id: sessionID, title: data.title, agent: data.agent, model: data.model, location: location, time: .init(created: now, updated: now))
-            if sessions[sessionID] == nil { sessions[sessionID] = Tracked(info: info) }
-            listed?.insert(sessionID)
-            await change(sessionID, connection, activeAt: event.at) { _ in }
         case "session.deleted":
             guard let tracked = sessions.removeValue(forKey: sessionID) else { return }
             if tracked.online { bridge.detach(bridgeID(sessionID, connection), reason: .closed(reason: "deleted")) }
-            listed?.remove(sessionID)
-            await retainIndex()
+            await dropIndex([sessionID])
         case "session.renamed":
             await change(sessionID, connection) { $0.info.title = data.title }
         case "session.model.selected":
@@ -114,16 +105,10 @@ extension OpenCodeRuntime {
         if turns.contains(where: \.changesFacts) { publish(sessionID) }
     }
 
-    /// 改一个顶层会话并发布。`activeAt`：这是服务在这一刻记下的一次活动，会话不在线就上线（在 CuePad 里结束之后的才算，`revives`）。
-    /// 不认识的会话（连上之后才建、事件先于列表）先取它的信息。
+    /// 改一个托管的顶层会话并发布，别的会话不理。`activeAt`：这是服务在这一刻记下的一次活动，会话不在线就上线（在 CuePad 里结束之后的才算，`revives`）。
     private func change(
         _ sessionID: String, _ connection: Connection, activeAt: Date? = nil, publishing: Bool = true, _ body: (inout Tracked) -> Void
     ) async {
-        if sessions[sessionID] == nil {
-            guard activeAt != nil, let info = try? await connection.client.get(OpenCodeData<OpenCodeSessionInfo>.self, "/api/session/\(sessionID)").data,
-                  info.parentID == nil, !info.isCueBrain, self.connection === connection else { return }
-            sessions[sessionID] = sessions[sessionID] ?? Tracked(info: info)
-        }
         guard var tracked = sessions[sessionID] else { return }
         body(&tracked)
         if let activeAt, !tracked.online, revives(sessionID, at: activeAt) {
@@ -136,6 +121,7 @@ extension OpenCodeRuntime {
     }
 
     func child(_ sessionID: String, of parent: String, _ event: OpenCodeEvent) {
+        guard sessions[parent] != nil else { return }
         parents[sessionID] = parent
         guard !event.type.hasPrefix("session.text.") else { return }  // 子代理说的话不要，逐字增量也不白拼
         let data = event.data

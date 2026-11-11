@@ -72,11 +72,11 @@ struct MacDependencies {
             runtimes: { store in [
                 .pi: PiRuntime(bridge: bridge, paths: paths.pi, pi: { await agents.executable(.pi) }),
                 .claudeCode: ClaudeCodeRuntime(bridge: bridge, paths: paths, store: store, claude: { await agents.executable(.claudeCode) }),
-                .codex: CodexRuntime(bridge: bridge, paths: paths, hooks: hooks, codex: { await agents.executable(.codex) }),
+                .codex: CodexRuntime(bridge: bridge, paths: paths, codex: { await agents.executable(.codex) }),
                 .opencode: OpenCodeRuntime(
                     bridge: bridge, paths: paths, store: store, hostID: hostID, opencode: { await agents.executable(.opencode) },
                     transcriptWindow: Chat.transcriptWindow),
-                .grok: GrokRuntime(bridge: bridge, paths: paths, files: store.files, grok: { await agents.executable(.grok) }),
+                .grok: GrokRuntime(bridge: bridge, paths: paths, grok: { await agents.executable(.grok) }),
                 .dsh: DshRuntime(bridge: bridge, paths: paths, dsh: { await agents.executable(.dsh) }),
             ] },
             pasteboard: .general,

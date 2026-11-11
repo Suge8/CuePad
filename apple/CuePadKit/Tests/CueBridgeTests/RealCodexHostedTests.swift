@@ -108,6 +108,26 @@ struct RealCodexHostedTests {
         }
     }
 
+    /// 命令、改文件、MCP 以外的工具（这里是看图）在跑时同样显示在做什么。
+    @Test func viewingAnImageShowsAsAToolWithItsFileName() async throws {
+        try await withCodexRig { rig in
+            let picture = rig.codex.work.appending(path: "kiwi-picture.png")
+            try solidPNG(red: 0, green: 1, blue: 0).write(to: picture)
+            rig.model.on("Look at the picture") { request in
+                request.step == 0 ? .call("view_image", ["path": picture.path]) : .say("LOOKED")
+            }
+            let log = ChangeLog(rig.bridge)
+            let id = try await open(rig, "token-view")
+
+            try await rig.bridge.send(SessionMessage(text: "Look at the picture."), to: id)
+            try await eventually("看完答完") {
+                rig.bridge.session(id: id).map { $0.state == .settled && rig.replies($0).last == "LOOKED" } == true && log.states.last == .settled
+            }
+            let shown = zip(log.states, log.details).filter { $0.0 == .tool }.compactMap(\.1)
+            #expect(shown.contains { $0.contains("kiwi-picture.png") }, "\(log.states) \(log.details)")
+        }
+    }
+
     // MARK: 权限
 
     @Test(arguments: [codexTestModel, "gpt-6-luna"], [true, false])
@@ -247,6 +267,33 @@ struct RealCodexHostedTests {
             }
             #expect(rig.bridge.session(id: id)?.question == nil)
             try await rig.bridge.command("/default", in: id)
+        }
+    }
+
+    /// 不挡着这一轮的提问（gpt-6 一档 Plan 模式的 `request_user_input_async`）：这一轮照常答完，问题留着等你；从 CuePad 作答就是说下一句。
+    @Test func aStandingPlanModeQuestionIsAnsweredWithTheNextMessage() async throws {
+        try await withCodexRig(model: "gpt-6-luna") { rig in
+            rig.model.on("Ask me which drink") { request in
+                request.step == 0
+                    ? .call("request_user_input_async", ["questions": [["title": "Tea or Coffee?", "options": ["Tea", "Coffee"]] as [String: any Sendable]]])
+                    : .say("ASKED")
+            }
+            rig.model.on("Coffee", .say("ENJOY"))
+            let id = try await open(rig, "token-standing")
+            try await eventually("命令清单里有 /plan") { rig.bridge.session(id: id)?.commands.contains { $0.name == "plan" } == true }
+
+            try await rig.bridge.command("/plan Ask me which drink I want.", in: id)
+            try await eventually("这一轮答完，问题留着等你") {
+                rig.bridge.session(id: id).map { $0.state == .waitingForUser && rig.replies($0).last == "ASKED" } == true
+            }
+            let question = try #require(rig.bridge.session(id: id)?.question)
+            #expect(question.kind == .known(.select) && question.text == "Tea or Coffee?" && question.options == ["Tea", "Coffee"])
+
+            try await rig.bridge.answer(.option("Coffee"), to: try #require(question.promptID), in: id)
+            try await eventually("答案当下一句说出，答完歇下") {
+                rig.bridge.session(id: id).map { $0.state == .settled && rig.replies($0).last == "ENJOY" } == true
+            }
+            #expect(rig.bridge.session(id: id)?.question == nil)
         }
     }
 }

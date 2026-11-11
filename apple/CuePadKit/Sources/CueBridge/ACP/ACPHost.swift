@@ -2,8 +2,7 @@
 import CueStore
 import Foundation
 
-/// 接着一个会话时先看桥上：已经在线、是托管的就用它，开在别处（终端里）的不接——同一个会话两边各写各的；
-/// 请退出后还没走的旧进程先收完（`HostedProcesses`）。
+/// 接着一个会话时先看桥上：已经在线就用它；请退出后还没走的旧进程先收完（`HostedProcesses`）。
 @MainActor
 final class ACPHost {
     struct Launching {
@@ -32,8 +31,6 @@ final class ACPHost {
         processes = HostedProcesses(bridge: bridge, timing: timing)
     }
 
-    var sessionIDs: Set<String> { processes.sessionIDs }
-
     func open(in directory: URL, launchToken: String, model: String? = nil) async throws -> Session.ID {
         try await host(in: directory, model: model, launchToken: launchToken, sessionID: nil, admission: try processes.admission()) {
             try await $0.open(in: directory)
@@ -41,10 +38,7 @@ final class ACPHost {
     }
 
     func resume(_ session: IndexedSession) async throws -> Session.ID {
-        if let live = bridge.session(sessionID: session.id) {
-            guard live.hosted else { throw AgentRuntimeError.openElsewhere }
-            return live.id
-        }
+        if let live = bridge.session(sessionID: session.id) { return live.id }
         let directory = URL(filePath: session.cwd, directoryHint: .isDirectory)
         return try await processes.resume(session.id) { [self] admission in
             try await host(in: directory, model: nil, launchToken: nil, sessionID: session.id, admission: admission) {

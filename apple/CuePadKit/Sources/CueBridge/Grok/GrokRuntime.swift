@@ -3,39 +3,17 @@ import CueStore
 import Foundation
 
 /// 托管会话用用户的配置目录（会话落在 `<GROK_HOME>/sessions`，`grok --resume` 里也有）。
-/// 终端里的会话（TUI）只读跟读：开着的登记在 `<GROK_HOME>/active_sessions.json`（会话 id、pid、工作目录；正常退出时注销，崩溃留下的由下一个登记的清掉）。
-/// 在做什么从它的会话记录推出（历史索引增量跟读，`read`）：你说了一句到这一轮结束是在跑；等你确认、出错的原话不进会话记录，看不到。
-/// CuePad 碰不到它的输入，说话、停止、作答、结束都只能在终端里（能力表里终端的 Grok 什么都没有）。
-/// 用户开了 leader（`grok --leader`）时终端界面是 leader 的客户端，连上 leader 能完全接管：不做——leader 的协议没有文档，CuePad 也不常连用户的 leader 进程。
-/// 不装 Grok 自己的钩子（`~/.grok/hooks`）：会话记录已给出一轮的起止与工具，钩子多给的只有等你确认。Grok 也跑 Claude Code 格式的钩子，CuePad 写给 Claude Code 的钩子在终端的 Grok 里也会被调起，钩子入口只认 Claude Code 发的。
+/// 不装 Grok 自己的钩子（`~/.grok/hooks`）。Grok 也跑 Claude Code 格式的钩子，CuePad 写给 Claude Code 的钩子在 Grok 里也会被调起，钩子入口只认 Claude Code 发的。
 @MainActor
 public final class GrokRuntime: AgentRuntime {
     private let bridge: Bridge
-    private let paths: AgentPaths
-    private let files: AttachmentFiles
     private let host: ACPHost
-    private var terminals: [Session.ID: Terminal] = [:]
-    private var watcher: DirectoryWatcher?
-    private var scope = HistoryScope.sessions([])
-    private var stopped = true
-
-    private final class Terminal {
-        var facts = SessionFacts()
-        let process: SessionProcess
-        var checkpoint: HistoryCheckpoint?
-        var awaitingReport: DirectoryWatcher?
-        var exit: ProcessExitWatcher?
-
-        init(process: SessionProcess) { self.process = process }
-    }
 
     public init(
-        bridge: Bridge, paths: AgentPaths, files: AttachmentFiles, grok: @escaping @Sendable () async -> URL?,
+        bridge: Bridge, paths: AgentPaths, grok: @escaping @Sendable () async -> URL?,
         locate: @escaping @Sendable () async -> ExecutableLocator = { await .system }, timing: Timing = .system
     ) {
         self.bridge = bridge
-        self.paths = paths
-        self.files = files
         let home = paths.home(of: .grok)
         host = ACPHost(.grok, bridge: bridge, timing: timing, launching: { _ in
             guard let grok = await grok() else { throw AgentRuntimeError.notInstalled(.grok) }
@@ -44,24 +22,9 @@ public final class GrokRuntime: AgentRuntime {
         }, sessionFile: { cwd, id in Self.sessionFile(in: home, cwd: cwd.path, id: id) })
     }
 
-    private var home: URL { paths.home(of: .grok) }
+    public func start() throws { host.start() }
 
-    public func start() throws {
-        stopped = false
-        host.start()
-    }
-
-    public func follow(_ scope: HistoryScope) {
-        self.scope = scope
-        refresh()
-    }
-
-    public func stop() -> @concurrent @Sendable () async -> Void {
-        stopped = true
-        watcher = nil
-        for id in terminals.keys { detach(id) }
-        return host.stop()
-    }
+    public func stop() -> @concurrent @Sendable () async -> Void { host.stop() }
 
     public func open(
         in directory: URL, launchToken: String, name: String?, model: ModelKey?, thinking: ThinkingLevel?
@@ -72,99 +35,6 @@ public final class GrokRuntime: AgentRuntime {
 
     public func resume(_ session: IndexedSession) async throws -> Session.ID { try await host.resume(session) }
 
-    public func read(_ update: HistoryUpdate) {
-        guard let (id, terminal) = terminals.first(where: { bridge.session(id: $0.key)?.sessionID == update.sessionID }) else { return }
-        guard terminal.process.isRunning else { return detach(id) }
-        guard current(update.checkpoint, for: terminal) else { return }
-        follow(terminal, update.checkpoint)
-        bridge.update(id) { terminal.facts.publish(to: &$0) }
-    }
-
-    /// 目录在之前还没有（后装的 Grok）时这时开始盯。
-    private func refresh() {
-        guard !stopped else { return }
-        if watcher == nil { watcher = try? DirectoryWatcher(home) { [weak self] in self?.refresh() } }
-        let hostedIDs = host.sessionIDs
-        let open = Self.activeSessions(in: home).filter {
-            scope.covers(sessionID: $0.sessionID) && !hostedIDs.contains($0.sessionID) && $0.process?.isRunning == true
-        }
-        let ids = Set(open.map { "\($0.sessionID).\($0.pid)" })
-        for (id, terminal) in terminals where !ids.contains(id) || !terminal.process.isRunning { detach(id) }
-        for entry in open { confirm(entry) }
-    }
-
-    private func confirm(_ entry: ActiveSession) {
-        let id = "\(entry.sessionID).\(entry.pid)"
-        guard bridge.session(id: id) == nil else { return }
-        let file = Self.sessionFile(in: home, cwd: entry.cwd, id: entry.sessionID)
-        let terminal: Terminal
-        if let existing = terminals[id] {
-            terminal = existing
-        } else {
-            guard let process = entry.process, process.isRunning else { return }
-            terminal = Terminal(process: process)
-            terminals[id] = terminal
-            terminal.exit = ProcessExitWatcher(pid: entry.pid) { [weak self] in self?.detach(id) }
-            terminal.awaitingReport = try? DirectoryWatcher(file) { [weak self] in self?.refresh() }
-        }
-        guard let checkpoint = try? History.index(file: file, agent: .grok, from: terminal.checkpoint, transcript: false, files: files).checkpoint else { return }
-        let confirmed = current(checkpoint, for: terminal)
-        terminal.checkpoint = checkpoint
-        guard confirmed else { return }
-        terminal.awaitingReport = nil
-        var session = Session(
-            id: id, sessionID: entry.sessionID, agent: .grok, sessionFile: file, pid: entry.pid,
-            cwd: URL(filePath: entry.cwd, directoryHint: .isDirectory), terminal: TerminalIdentity(tty: TerminalIdentity.controllingTerminal(of: entry.pid)),
-            state: .settled, stateSince: .now)
-        session.name = checkpoint.name
-        follow(terminal, checkpoint)
-        terminal.facts.publish(to: &session)
-        bridge.attach(session, via: self)
-    }
-
-    private func current(_ checkpoint: HistoryCheckpoint, for terminal: Terminal) -> Bool {
-        let start = terminal.process.startDate
-        guard let reported = checkpoint.lastActivity, reported >= start,
-              checkpoint.round.map({ $0.startedAt.map { $0 >= start } ?? false }) ?? true else { return false }
-        guard let previous = terminal.checkpoint, let last = previous.lastActivity else { return true }
-        return reported > last || (reported == last && checkpoint.offset >= previous.offset)
-    }
-
-    private func follow(_ terminal: Terminal, _ checkpoint: HistoryCheckpoint) {
-        terminal.checkpoint = checkpoint
-        if let round = checkpoint.round {
-            if !terminal.facts.running { terminal.facts.startTurn(at: round.startedAt ?? .now) }
-        } else if terminal.facts.running {
-            terminal.facts.endTurn()
-        }
-    }
-
-    private func detach(_ id: Session.ID) {
-        guard let terminal = terminals.removeValue(forKey: id) else { return }
-        terminal.exit?.cancel()
-        bridge.detach(id, reason: .closed(reason: "quit"))
-    }
-
-    /// `active_sessions.json` 里的一项；`pid_start` 是 Unix 微秒，与内核进程起点逐位相等。缺少时不靠裸 PID 回退。
-    struct ActiveSession: Decodable {
-        var sessionID: String
-        var pid: Int32
-        var pidStart: Int64?
-        var cwd: String
-
-        var process: SessionProcess? { pidStart.map { SessionProcess(pid: pid, startedAt: $0) } }
-
-        private enum CodingKeys: String, CodingKey {
-            case sessionID = "session_id"
-            case pidStart = "pid_start"
-            case pid, cwd
-        }
-    }
-
-    static func activeSessions(in home: URL) -> [ActiveSession] {
-        (try? Data(contentsOf: home.appending(path: "active_sessions.json"))).flatMap { try? JSONDecoder().decode([ActiveSession].self, from: $0) } ?? []
-    }
-
     /// 工作目录照 URL 的写法编码（只留字母、数字与 `-._~`，同 Grok 用的 urlencoding）。
     static func sessionFile(in home: URL, cwd: String, id: String) -> URL {
         let unreserved = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
@@ -173,7 +43,4 @@ public final class GrokRuntime: AgentRuntime {
             .appending(path: id, directoryHint: .isDirectory).appending(path: GrokHistory.fileName)
     }
 }
-
-/// 终端里的会话只读：桥按能力表先拒掉，到不了这里。
-extension GrokRuntime: SessionLink {}
 #endif

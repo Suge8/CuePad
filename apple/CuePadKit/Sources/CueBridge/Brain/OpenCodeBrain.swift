@@ -9,7 +9,7 @@ import Foundation
 ///   用户配置里的 MCP 服务不起），不走 codemode（工具直接给模型）；不留快照；
 /// - 不读工作目录的项目配置（`OPENCODE_DISABLE_PROJECT_CONFIG`）。用户全局的 AGENTS.md（OpenCode 配置目录里的）没有开关（只换配置目录
 ///   才挡得住，换了会丢用户配的提供方），写了就会进来——同 Codex 大脑对 `<CODEX_HOME>/AGENTS.md` 的取舍；
-/// - 会话落在用户真实的库里（订阅登录、提供方凭据都在那里）：开会话时带标题（省掉起标题的那次模型调用），metadata 里标上 `cuepadBrain`（值是这台服务的 pid）；接入认这个标记跳过它们（`OpenCodeSessionInfo.isCueBrain`）；
+/// - 会话落在用户真实的库里（订阅登录、提供方凭据都在那里）：开会话时带标题（省掉起标题的那次模型调用），metadata 里标上 `cuepadBrain`（值是这台服务的 pid）；接入不托管它们，所以碰不到；
 /// - MCP 是起服务后异步连上的：起大脑时等 `/api/mcp` 报 `cuepad` 已连上（`mcp.status.changed` 时再看）、再等它的工具进了工具表
 ///   （没有信号可等，见 `mcpToolsSettle`），之前说的话模型看不到它的工具；
 /// - 换模型与强度先在 `/api/model` 里认：服务对不存在的模型也回 204。

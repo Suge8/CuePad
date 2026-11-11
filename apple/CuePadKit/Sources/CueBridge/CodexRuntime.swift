@@ -4,44 +4,26 @@ import CueText
 import Foundation
 import OSLog
 
-/// 托管的会话一轮的起止、成败、正在说的话只看它的驱动（`CodexDriver`，与 Cue 的大脑同一个），钩子只管这一轮里在做什么与权限确认。
-/// 子线程没有订阅者，它的推送广播给所有连接（实测、文档没写），所以子代理只认 app-server 的子线程推送。钩子不行：`SubagentStop` 只在正常做完时发，出错、被停没有；v2 `followup_task` 再跑不发 `SubagentStart`。
+/// CuePad 只管自己起的 Codex（每个会话一个 app-server 进程，经标准输入输出）：一轮的起止、成败、在做什么、正在说的话与上下文余量都来自它的驱动（`CodexDriver`，与 Cue 的大脑同一个），
+/// 权限确认与提问是它发来的服务端请求，子代理、压缩、不挡着这一轮的提问看线程的推送。不往 Codex 的配置里写任何东西。
+/// 子线程没有订阅者，它的推送广播给所有连接（实测、文档没写），所以子代理只认 app-server 的子线程推送。
 /// 父线程歇着时子代理做完，Codex 不自己接着跑（结果在它的历史或邮箱里等下一轮）：最后一个落定时 CuePad 补一轮空输入（`wake`）。
-/// 常驻服务里的线程在终端退出后还会挂着（没有订阅者、闲置约 30 分钟后才卸载并报 `SessionEnd`，实测、文档没写），这段时间它仍在线、能收话。
-/// 正在说的话（`LiveDraft`）与上下文余量只有托管的会话有：增量与用量只发给订阅了线程的连接（自己起的进程）；终端里的会话不订阅，也就没有。
-/// 控制只经 app-server 的接口，不为观察而订阅（`thread/resume` 会把终端的事件与审批抢走）：说话在跑就先 `turn/interrupt`（`turn/steer` 要等在跑的工具做完才读到，不是打断）。
-/// 常驻服务把 `thread/status/changed`、`thread/name/updated`、`thread/closed` 广播给所有连接：钩子漏掉的歇下（出错时没有 `Stop`）与改名靠它们补上。
-/// 常驻服务的控制 socket 在哪由 `codex app-server daemon version` 告诉（服务在跑时才有），不自己拼路径。
-/// 权限确认：Codex 先问钩子、钩子没给决定才在终端里弹框；在终端里按 Esc 停下这一轮会收回挂住的调用。
+/// 说话在跑就先 `turn/interrupt`（`turn/steer` 要等在跑的工具做完才读到，不是打断）。
 /// Plan 模式提问有两种：
-/// - 不挡着这一轮的（`request_user_input_async`，0.162 起 Plan 模式的默认）：Codex 登记了问题就接着做事、睡着等或歇下，你的下一句话就是答案。
-///   终端与托管的会话都经 `PostToolUse` 钩子（工具被接受了才有）显示成等你回答，从 CuePad 作答就是对它说这句话（`deliver`），
-///   你说了下一句（`UserPromptSubmit`）就收起。
-/// - 挡着这一轮的（`request_user_input`）只发给开出线程的连接：终端会话的只能在终端里答（CuePad 只显示）；
-///   托管会话的经 `item/tool/requestUserInput` 发给 CuePad，只有一个问题时能从 CuePad 答。
+/// - 不挡着这一轮的（`request_user_input_async`，0.162 起 Plan 模式的默认，gpt-6 一档才有）：问题是一条 `delivery` 为 async 的 `agentMessage`，
+///   Codex 登记了就接着做事、睡着等或歇下，你的下一句话就是答案：显示成等你回答，从 CuePad 作答就是对它说这句话（`deliver`），你说了下一句就收起。
+/// - 挡着这一轮的（`request_user_input`）经 `item/tool/requestUserInput` 发来，只有一个问题时能从 CuePad 答。
 @MainActor
 public final class CodexRuntime: AgentRuntime, SessionLink {
     static let log = Logger(subsystem: AppIdentity.id, category: "codex")
     let bridge: Bridge
     private let paths: AgentPaths
-    private let hooks: AgentHookServer
     let codex: @Sendable () async -> URL?
     private let locate: @Sendable () async -> ExecutableLocator
-    let gate: PresenceGate
     var tracked: [Session.ID: Tracked] = [:]
     var hosted: [Int32: CodexDriver] = [:]
     /// 托管会话的进程按会话（线程 id）登记，请退出与接着都经它（`HostedProcesses`）
     let processes: HostedProcesses
-    var marks: [String: Int32] = [:]
-    var daemon: CodexRPC?
-    var connecting: Task<CodexRPC?, any Error>?
-    var scanning: Scan?
-    final class Scan {
-        var task: Task<Void, Never>?
-        var again = false
-    }
-    var controlSocket: String?
-    var exitWatchers: [Int32: ProcessExitWatcher] = [:]
     var threads: [String: Owner] = [:]
     enum Owner {
         case asking([(method: String, params: JSONValue)])
@@ -63,21 +45,17 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
     var models: [CodexModel]?
     var stopped = true
     let timing: Timing
-    var scope = HistoryScope.sessions([])
 
     public init(
-        bridge: Bridge, paths: AgentPaths, hooks: AgentHookServer, codex: @escaping @Sendable () async -> URL?,
-        locate: @escaping @Sendable () async -> ExecutableLocator = { await .system }, presence: any UserPresence = SystemPresence(),
-        timing: Timing = .system
+        bridge: Bridge, paths: AgentPaths, codex: @escaping @Sendable () async -> URL?,
+        locate: @escaping @Sendable () async -> ExecutableLocator = { await .system }, timing: Timing = .system
     ) {
         self.timing = timing
         self.codex = codex
         self.bridge = bridge
         processes = HostedProcesses(bridge: bridge, timing: timing)
         self.paths = paths
-        self.hooks = hooks
         self.locate = locate
-        gate = PresenceGate(presence: presence)
     }
 
     enum Restart { case stopping, stopped }
@@ -85,6 +63,7 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
     final class Tracked {
         let id: Session.ID
         let threadID: String
+        let driver: CodexDriver
         let pid: Int32
         var facts = SessionFacts()
         /// 要你回答的那一个怎么回给 Codex（与 `facts.questions` 一一对应，只有一个）
@@ -92,14 +71,14 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
         /// 父线程歇着时落定、结果还没交给一轮的子代理（线程 id）：有没有交回结果（做完、出错交回；被停下的不交）
         var unread: [String: Bool] = [:]
         var lastWords: [String: String] = [:]
-        /// 这一轮报过的错误原文（终端会话是常驻服务广播的 `error` 通知，托管的是驱动报的 `failed`），出错歇下时用
+        /// 这一轮驱动报的失败原文（`failed`），出错歇下时用
         var lastError: String?
-        /// 终端会话出错歇下后，等会话文件里这一轮的结束记录来读原因（`readFailure`）
-        var failureWatch: Task<Void, Never>?
+        /// CuePad 发出 `turn/start` 前的时刻：它开出的一轮从这里算起。收到开始通知的时刻在负载高时可能晚于这一轮在会话文件里的回答（实测）
+        var sentAt: Date?
         /// 这一轮已结束、先认清同一进程上认不出主人的线程再歇下（`endTurn`）；期间 `facts` 仍是在跑
         var ending: Task<Void, Never>?
-        /// 这一轮派出、还没认出的子代理（任务名，派活工具的 `PostToolUse` 报的）：终端会话的 `Stop` 走钩子，子线程的推送走常驻服务的连接，
-        /// 两路不分先后，推送晚到时一轮结束还不知道有它（`endTurn` 等它认出，`recognized` 报每次认出）
+        /// 这一轮派出、还没认出的子代理（任务名，父线程的 `subAgentActivity` 报的）：子线程的推送与父线程的一轮结束不分先后，
+        /// 推送晚到时一轮结束还不知道有它（`endTurn` 等它认出，`recognized` 报每次认出）
         var spawned: Set<String> = []
         var recognized: Occurrences?
         /// CuePad 正以一句话开新一轮（`deliver`）：期间一轮结束不算歇下，接着就是这句开的那一轮
@@ -108,21 +87,25 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
         let stopPhase = StopPhase()
         var skills: [(name: String, path: String)] = []
 
-        init(id: Session.ID, threadID: String, pid: Int32) {
+        init(id: Session.ID, threadID: String, driver: CodexDriver, pid: Int32) {
             self.id = id
             self.threadID = threadID
+            self.driver = driver
             self.pid = pid
         }
 
-        /// 新一轮开始、会话撤走、停下接入时取消
-        func cancelWaits() {
-            failureWatch?.cancel()
-            ending?.cancel()
-        }
-
+        /// 服务端请求（`id` 是它的请求 id）
         enum Reply {
-            case hook(AgentHookCall, hold: UUID?)
-            case request(CodexRPC, id: JSONValue, question: String)
+            /// `item/tool/requestUserInput`：答案按问题的 id 回
+            case question(CodexRPC, id: JSONValue, question: String)
+            /// 权限确认：允许、拒绝各回什么
+            case approval(CodexRPC, id: JSONValue, allow: JSONValue, deny: JSONValue)
+
+            var request: JSONValue {
+                switch self {
+                case .question(_, let id, _), .approval(_, let id, _, _): id
+                }
+            }
         }
     }
 
@@ -130,39 +113,18 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
         guard stopped else { return }
         stopped = false
         processes.start()
-        hooks.handle(.codex) { [weak self] call in
-            guard let self, !self.stopped else { return call.finish() }
-            self.hook(call)
-        }
-    }
-
-    public func follow(_ scope: HistoryScope) {
-        self.scope = scope
-        for session in tracked.values where hosted[session.pid] == nil && !scope.covers(sessionID: session.threadID) { detach(session.id) }
-        if scope != .sessions([]) { Task { await discover() } }
     }
 
     public func stop() -> @concurrent @Sendable () async -> Void {
         stopped = true
         for session in tracked.values {
-            release(session)
-            session.cancelWaits()
+            session.reply = nil
+            session.ending?.cancel()
         }
-        for watcher in exitWatchers.values { watcher.cancel() }
-        exitWatchers = [:]
-        daemon?.close()
-        daemon = nil
-        let (connecting, scan) = (connecting, scanning?.task)
-        connecting?.cancel()
-        scan?.cancel()
-        self.connecting = nil
-        scanning = nil
         let waits = hosted.values.compactMap(\.rpc).map { rpc in Task { await rpc.shutdown() } }
         let launching = processes.stop()
         return {
             await launching()
-            _ = try? await connecting?.value
-            await scan?.value
             for wait in waits { await wait.value }
         }
     }
@@ -172,24 +134,22 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
     ) async throws -> Session.ID {
         let id = try await launch(sessionID: nil, admission: try processes.admission()) { driver, rpc in
             let started = try await driver.open("thread/start", .object(try await self.sandbox(in: directory.path, on: rpc).merging(["cwd": .string(directory.path)]) { $1 }))
-            return self.attachHosted(started, rpc: rpc, launchToken: launchToken)
+            return self.attachHosted(started, driver: driver, rpc: rpc, launchToken: launchToken)
         }
         return try await configure(opened: id, name: name, model: model, thinking: thinking, on: bridge)
     }
 
-    /// 恢复时它被别处拿着写（终端里刚开）也改走控制 socket；常驻服务里也没有它才报错。
+    /// 它正被别处拿着写（终端或桌面版里开着）时报 `openElsewhere`。
     public func resume(_ session: IndexedSession) async throws -> Session.ID {
         if let live = bridge.session(sessionID: session.id) { return live.id }
         return try await processes.resume(session.id) { [self] admission in
-            if let id = try await adoptFromDaemon(session.id) { return id }
             do {
                 return try await launch(sessionID: session.id, admission: admission) { driver, rpc in
                     let params: [String: JSONValue] = ["threadId": .string(session.id), "path": .string(session.path), "excludeTurns": true]
                     let resumed = try await driver.open("thread/resume", .object(try await self.sandbox(in: session.cwd, on: rpc).merging(params) { $1 }))
-                    return self.attachHosted(resumed, rpc: rpc, launchToken: nil)
+                    return self.attachHosted(resumed, driver: driver, rpc: rpc, launchToken: nil)
                 }
             } catch CodexRPCError.server(_, let message) where message.contains("active writer") {
-                if let id = try await adoptFromDaemon(session.id) { return id }
                 throw AgentRuntimeError.openElsewhere
             }
         }
@@ -215,12 +175,11 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
         sessionID: String?, admission: HostedProcesses.Admission, _ body: @escaping @MainActor (CodexDriver, CodexRPC) async throws -> Session.ID
     ) async throws -> Session.ID {
         let codex = try await executable()
-        let mark = UUID().uuidString
         let driver = CodexDriver()
-        let rpc = try await driver.launch(codex.url, environment: codex.environment.merging([HostMark.variable: mark]) { $1 }) { [processes] process in
+        let rpc = try await driver.launch(codex.url, environment: codex.environment) { [processes] process in
             try await processes.admit(process, for: sessionID, admission)
         }
-        host(driver, rpc, mark: mark)
+        host(driver, rpc)
         do {
             return try await withDeadline(AgentTimeouts.launch, timing: timing, orThrow: AgentRuntimeError.launchTimedOut(.codex)) { try await body(driver, rpc) }
         } catch {
@@ -229,25 +188,24 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
         }
     }
 
-    private func host(_ driver: CodexDriver, _ rpc: CodexRPC, mark: String) {
+    private func host(_ driver: CodexDriver, _ rpc: CodexRPC) {
         let pid = rpc.pid
         hosted[pid] = driver
-        marks[mark] = pid
         driver.onNotification = { [weak self] method, params in self?.notification(method, params, from: pid) }
         driver.onEvent = { [weak self] event in self?.event(event, from: pid) }
         rpc.onRequest = { [weak self, weak rpc] method, id, params in
-            guard let self, let rpc, method == "item/tool/requestUserInput" else { return false }
-            return self.userInput(params, id: id, on: rpc)
+            guard let self, let rpc else { return false }
+            return self.request(method, params, id: id, on: rpc)
         }
     }
 
-    private func attachHosted(_ result: JSONValue, rpc: CodexRPC, launchToken: String?) -> Session.ID {
+    private func attachHosted(_ result: JSONValue, driver: CodexDriver, rpc: CodexRPC, launchToken: String?) -> Session.ID {
         var session = makeSession(result["thread"] ?? .object([:]), pid: rpc.pid)
         session.hosted = true
         session.fast = result["serviceTier"]?.string == "priority"
         session.launchToken = launchToken
-        if let process = rpc.process { processes.adopt(process, as: session.sessionID) }
-        attach(session)
+        processes.adopt(rpc.process, as: session.sessionID)
+        attach(session, driver: driver)
         return session.id
     }
 }

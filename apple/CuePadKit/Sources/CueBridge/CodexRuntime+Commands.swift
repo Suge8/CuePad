@@ -19,9 +19,9 @@ extension CodexRuntime {
         return [["type": "skill", "name": .string(skill.name), "path": .string(skill.path)]] + CodexRPC.input(text: rest, images: images)
     }
 
-    /// 以这句开新一轮：在跑就先停下这一轮。托管的停下等这一轮真的中止了才回（`CodexDriver.interrupt`），
+    /// 以这句开新一轮：在跑就先停下这一轮。停下等这一轮真的中止了才回（`CodexDriver.interrupt`），
     /// 所以紧接着的 `turn/start` 开的是新一轮——它碰上还在跑的一轮会变成插话（压缩那一轮则拒收）。
-    /// 被停下的那一轮不报歇下（`restarting`）：这句开出新一轮就从此刻算起（托管的从驱动报的开始算，见 `event`），没开成才歇下。
+    /// 被停下的那一轮不报歇下（`restarting`）：这句开出的新一轮从驱动报的开始算（见 `event`），没开成才歇下。
     /// 中止（`abort`）只取消停下上一轮那一段（`StopPhase`）；`turn/start` 发出后的等待不取消：话已交出，抛取消会误报未确认、引起重发。
     func deliver(_ input: [JSONValue], clientID: String, to session: Tracked) async throws {
         // 代次：几处并发进来（发话、带话的斜杠命令、回答问题）时，后来的接手 `restarting`，先到的结束时不清、也不据它判断
@@ -37,10 +37,6 @@ extension CodexRuntime {
             publish(session)
             throw error
         }
-        // 托管的这一轮由驱动报开始（`event`），这里只补终端会话的
-        guard session.restartGeneration == mine, session.restarting == .stopped, hosted[session.pid] == nil else { return }
-        startTurn(session, at: .now)
-        publish(session)
     }
 
     public func command(_ line: String, deliveryID _: String?, in id: Session.ID) async throws {
@@ -59,7 +55,6 @@ extension CodexRuntime {
             guard !argument.isEmpty else { throw BridgeError.rejected("missing_argument") }
             try await configure(SessionConfig(model: ModelKey(provider: CodexModel.provider, id: argument)), in: id)
         case "plan", "default":
-            guard hosted[session.pid] != nil else { throw BridgeError.rejected("unknown_command") }
             try await collaborate(name == "plan" ? "plan" : "default", in: session)
             if !argument.isEmpty {
                 try await deliver(CodexRPC.input(text: argument, images: []), clientID: CodexHistory.clientID(for: nil), to: session)
@@ -89,17 +84,9 @@ extension CodexRuntime {
         try await interrupt(session)
     }
 
-    /// 终端的只问 Codex（最近一轮），不另记这一轮的 id：钩子推出的忙闲只给界面看，不拿来判断要不要停。
     private func interrupt(_ session: Tracked) async throws {
-        let thread = JSONValue.string(session.threadID)
         do {
-            if let driver = hosted[session.pid] { return try await driver.interrupt() }
-            let rpc = try await control(session)
-            let latest = try await Self.lastTurn(session.threadID, on: rpc)
-            guard latest?["status"]?.string == "inProgress", let turn = latest?["id"] else { return }
-            try await rpc.call("turn/interrupt", ["threadId": thread, "turnId": turn])
-        } catch CodexRPCError.server(-32600, _) {
-            // 这一轮在问与停之间自己结束了（"no active turn to interrupt"）：要的就是它不在跑
+            try await session.driver.interrupt()
         } catch CodexRPCError.server(_, let message) {
             throw BridgeError.rejected("failed: \(message)")
         }
@@ -113,7 +100,7 @@ extension CodexRuntime {
             bridge.update(id) { $0.name = name }
         }
         guard model != nil || thinking != nil || config.fast != nil else { return }
-        let rpc = try await control(session)
+        let rpc = try control(session)
         if models == nil { models = try await CodexModel.list(rpc) }
         let target = model?.id ?? bridge.session(id: id)?.model?.key.id
         let entry = models?.first { $0.id == target }
@@ -133,19 +120,20 @@ extension CodexRuntime {
         }
     }
 
-    /// 终端里的会话 Codex 没有让终端退出的接口（能力表里没有，桥先拒绝）。托管的这一刻下桥，`tracked` 留到进程退出：停下这一轮还要用它。
+    /// 这一刻下桥，`tracked` 留到进程退出：停下这一轮还要用它。
     public func end(_ id: Session.ID) throws {
-        guard let session = tracked[id], hosted[session.pid] != nil else { throw BridgeError.unsupported }
+        guard tracked[id] != nil else { throw BridgeError.unknownSession(id) }
         processes.retire(id, link: self)
     }
 
     func turnStart(_ session: Tracked, _ input: [JSONValue], options: [String: JSONValue] = [:]) async throws {
+        session.sentAt = .now
         do {
-            if let driver = hosted[session.pid] { return try await driver.startTurn(input, options: options) }
-            let params = options.merging(["threadId": .string(session.threadID), "input": .array(input)]) { $1 }
-            try await control(session).call("turn/start", .object(params))
-        } catch CodexRPCError.server(_, let message) {
-            throw BridgeError.rejected("failed: \(message)")
+            try await session.driver.startTurn(input, options: options)
+        } catch {
+            session.sentAt = nil
+            if case CodexRPCError.server(_, let message) = error { throw BridgeError.rejected("failed: \(message)") }
+            throw error
         }
     }
 
