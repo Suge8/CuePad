@@ -127,17 +127,27 @@ final class ClaudeTestbed {
     }
 
     func terminal(_ arguments: [String] = [], mode: String = "default") async throws -> ClaudeTerminal {
-        if reading == nil, let indexer = PiHistoryIndexer(agent: .claudeCode, paths: paths, files: files, start: { _ in nil }) {
-            reading = Task { [weak self, runtime, bridge] in
-                for await case .updated(let update) in indexer.events(following: bridge.sessionFiles, scope: .all) {
-                    self?.reads.append(update)
-                    runtime.read(update)
-                }
-            }
-        }
+        if reading == nil { startReading() }
         let terminal = try await ClaudeTerminal(testbed: self, arguments: ["--permission-mode", mode] + arguments)
         terminals.append(terminal)
         return terminal
+    }
+
+    /// 换一个从头读起的索引器（同 CuePad 重启、读规则升级后从头重读已索引的会话），之前记下的读过的不算
+    func rereadFromScratch() {
+        reading?.cancel()
+        reads = []
+        startReading()
+    }
+
+    private func startReading() {
+        guard let indexer = PiHistoryIndexer(agent: .claudeCode, paths: paths, files: files, start: { _ in nil }) else { return }
+        reading = Task { [weak self, runtime, bridge] in
+            for await case .updated(let update) in indexer.events(following: bridge.sessionFiles, scope: .all) {
+                self?.reads.append(update)
+                runtime.read(update)
+            }
+        }
     }
 
     /// 正文含 `text` 的 `UserPromptSubmit` 钩子收到后先挂着，`release` 为真才交给 CuePad：钩子并行跑，让 CuePad 晚于会话记录知道这句。

@@ -104,5 +104,29 @@ extension RealClaudeTerminalTests {
             #expect(try testbed.transcript(session.sessionFile).recap.lastReply == "OK")
         }
     }
+
+    /// 从头重读会话记录（CuePad 重启、读规则升级）时，读到之前那句被挡下的那一行不算现在的：之后在终端里再交上同一句（挡下的那句留在输入框里，回车即可；这回你的钩子放行）照常开一轮。
+    /// CuePad 发的那句带着说明，原话与之不同，测不到这里。
+    @Test func aBlockedLineReadAgainFromTheStartDoesNotSwallowTheSamePromptLater() async throws {
+        let once = FileManager.default.temporaryDirectory.appending(path: "blocked-once-\(UUID().uuidString)")
+        let blocker = #"{"hooks": {"UserPromptSubmit": [{"hooks": [{"type": "command", "command": "grep -q BLOCKME && [ ! -e '\#(once.path)' ] && { touch '\#(once.path)'; echo blocked-by-user-hook >&2; exit 2; }; exit 0"}]}]}}"#
+        try await ClaudeTestbed.run(settings: blocker) { testbed in
+            try testbed.startConnected()
+            testbed.on("只回复 OK", .say("OK"))
+            let terminal = try await testbed.terminal()
+            let session = try await testbed.waitForSession(pid: terminal.pid)
+            try await terminal.type("BLOCKME 只回复 OK")
+            try await testbed.waitOnScreen("挡下后歇下", on: terminal, in: session.id) {
+                await terminal.screen.contains("blocked-by-user-hook") && testbed.bridge.session(id: session.id)?.state == .settled
+            }
+            testbed.rereadFromScratch()
+            try await testbed.waitOnScreen("从头重读过挡下的那一行", on: terminal, in: session.id) { testbed.hasRead("promptSubmitEnding", in: session.sessionFile) }
+            let start = Date()
+            try await terminal.keys("Enter")
+            try await testbed.waitForTurn(session.id, since: start)
+            try await testbed.waitForDraftLanded(session.id)
+            #expect(try testbed.transcript(session.sessionFile).recap.lastReply == "OK")
+        }
+    }
 }
 #endif
