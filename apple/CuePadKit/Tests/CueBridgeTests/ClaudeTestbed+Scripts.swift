@@ -27,7 +27,7 @@ extension ClaudeTestbed {
         on("<task-notification>") { .say($0.prompt.contains("Background command") ? "BG_DONE" : "SUB_DONE") }
     }
 
-    /// 交回子代理结果的那一轮做完、只剩后台命令在跑时，放它做完（终端里子代理做完就记成做完，早于交回它的那一轮，名册不够）。
+    /// 交回子代理结果的那一轮做完、只剩后台命令在跑时，放它做完。
     func finishBackgroundWork(_ id: Session.ID) async throws {
         try await eventually("交回子代理的那一轮做完，只等后台命令") {
             guard let session = bridge.session(id: id), session.state == .delegating else { return false }
@@ -95,7 +95,7 @@ private func launch(_ description: String, task: String) -> FakeReply {
 
 private func handback(_ message: String) -> FakeReply { .call("SubagentHandback", ["message": message]) }
 
-/// 托管（stream-json）里的子代理有 SubagentHandback、靠它交报告；终端里的没有，最后一句话就是报告
+/// 子代理有 SubagentHandback 就靠它交报告，没有时最后一句话就是报告
 private func report(_ message: String, in request: FakeRequest) -> FakeReply {
     request.tools.contains("SubagentHandback") ? handback(message) : .say(message)
 }

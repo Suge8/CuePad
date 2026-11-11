@@ -126,7 +126,7 @@ struct RealHostTests {
         try await eventually("进程退了") { kill(session.pid, 0) != 0 }
         let record = try History.index(file: try #require(session.sessionFile), agent: .pi, from: nil, files: scratchFiles)
         #expect(record.messages.contains { $0.role == .known(.user) && $0.text.contains("BUSY-HANG") })
-        #expect(record.checkpoint.stoppedAt != nil, "会话记录里没有被停下的这一轮：\(record.messages.map(\.text))")
+        #expect(record.messages.contains { $0.text == ChatNotice.stopped.rawValue }, "会话记录里没有被停下的这一轮：\(record.messages.map(\.text))")
     }
 
     /// 起来马上点结束、说出第一句马上点停止或结束（同 `RealHostedEndTests` 的那一例，#81）：都不等满 `AgentTimeouts.stop`。
