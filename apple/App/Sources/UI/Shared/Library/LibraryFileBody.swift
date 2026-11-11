@@ -2,7 +2,7 @@ import CueEditor
 import CueStore
 import SwiftUI
 
-/// 文件页上半：文件在别处改过的那一条、同名的分段加"只留这份"或另写了一份的"合并进来"、技能的名字与说明两个框；都没有时不占位置，
+/// 文件页上半：文件在别处改过的那一条、同名的分段加"只留这份"或另写了一份的"合并进来"、全局规则还空着时的起步规则、技能的名字与说明两个框；都没有时不占位置，
 /// 正文从页顶下开始。两端同一份，只有摆法随端：Mac 与正文同一列（`LibraryLayout.column`），手机是铺满的一块。
 struct LibraryFileTop: View {
     let file: LibraryFile
@@ -14,13 +14,17 @@ struct LibraryFileTop: View {
         let skill: String? = if case .skill(let path) = file { path } else { nil }
         let duplicate = library.duplicate(for: file)
         let merge = library.merge(for: file)
-        if draft.conflicted || duplicate != nil || merge != nil || skill != nil {
+        // 另写了一份的先合并进来，不拿底稿盖过它
+        let starter = file == .instruction(.global) && draft.blank && merge == nil
+        if draft.conflicted || duplicate != nil || merge != nil || starter || skill != nil {
             VStack(alignment: .leading, spacing: Self.gap) {
                 if draft.conflicted { ConflictBar(draft: draft) }
                 if let skill, let duplicate {
                     DuplicateBar(path: skill, tidy: duplicate, library: library)
                 } else if let merge {
                     MergeBar(tidy: merge, library: library, draft: draft, texts: texts)
+                } else if starter {
+                    StarterBar(draft: draft)
                 }
                 if let skill {
                     SkillFields(draft: draft, problem: library.skill(at: skill)?.problem).padding(.horizontal, Self.fieldsInset)

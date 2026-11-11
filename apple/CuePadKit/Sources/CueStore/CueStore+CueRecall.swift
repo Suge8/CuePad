@@ -1,20 +1,22 @@
 import CueText
 import Foundation
 
-/// `CueStore.recallCue` 的结果：命中的记忆（UUID 身份）、对话、灵感任务，与 Cue 管过的会话里 Agent 的回复；每类另有多少条命中没列出（`unlisted`）。
+/// `CueStore.recallCue` 的结果：命中的记忆（UUID 身份）、对话、灵感任务，Cue 管过的会话里 Agent 的回复，与他在各会话里说的话；每类另有多少条命中没列出（`unlisted`）。
 public struct CueRecall: Equatable, Sendable {
   public var lines: [CueMemoryLine] = []
   public var messages: [CueMessage] = []
   public var cards: [Card] = []
   public var replies: [Reply] = []
-  /// 每类命中却超出 `limit` 没列出的条数，顺序同上四类
+  /// 他在会话里说的话（`CueStore.saidByHim`）：他反复交代的做法只在这里找得到
+  public var said: [Reply] = []
+  /// 每类命中却超出 `limit` 没列出的条数，顺序同上五类
   public var unlisted = Unlisted()
 
   public struct Unlisted: Equatable, Sendable {
-    public var lines = 0, messages = 0, cards = 0, replies = 0
+    public var lines = 0, messages = 0, cards = 0, replies = 0, said = 0
   }
 
-  /// 会话里的一条回复与它所在的会话（记录已清掉的为 nil，只剩会话 id）。
+  /// 会话里的一条消息与它所在的会话（记录已清掉的为 nil，只剩会话 id）。
   public struct Reply: Equatable, Sendable {
     public var message: PiChatMessage
     public var session: PiSessionState?
@@ -29,8 +31,16 @@ extension CueStore {
     UNION SELECT targetRef FROM sendRecords WHERE origin = '\(DeliveryOrigin.cue.rawValue)' AND targetKind = '\(SendTargetKind.piSession.rawValue)'
     """
 
-  /// 全文找：记忆（含忘掉的，标着）、对话、灵感与任务（没删的，含归档的，同 `search` 的索引），与 Cue 管过的会话（`cueSessions`）里 Agent 的回复原话
-  /// （同步来的那份对话，`PiChatMessage`）。词之间空格隔开，不分大小写，命中任一个就算；每类在库里按 `recallQuery` 的分排好，取前 `limit` 条，
+  /// 他在会话里说的话：你一方的话里有正证据是他的——终端里打的（没有投送），或 CuePad 替他发的（请求或发送记录上没有来源；Cue 送的写着来源）。
+  /// 不限 Cue 管过的会话：他在自己开的会话里交代的做法也是他的规矩的来处。
+  static let saidByHim = """
+    role = '\(PiChatRole.user.rawValue)' AND (deliveryID IS NULL OR deliveryID IN (
+      SELECT id FROM deliveryRequests WHERE origin IS NULL
+      UNION SELECT deliveryID FROM sendRecords WHERE origin IS NULL AND deliveryID IS NOT NULL))
+    """
+
+  /// 全文找：记忆（含忘掉的，标着）、对话、灵感与任务（没删的，含归档的，同 `search` 的索引），Cue 管过的会话（`cueSessions`）里 Agent 的回复原话，
+  /// 与他在各会话里说的话（`saidByHim`；都是同步来的那份对话，`PiChatMessage`）。词之间空格隔开，不分大小写，命中任一个就算；每类在库里按 `recallQuery` 的分排好，取前 `limit` 条，
   /// 并数出命中却没列出的条数。
   public func recallCue(_ query: String, limit: Int = 20) throws -> CueRecall {
     let patterns = Self.recallPatterns(query)
@@ -47,9 +57,11 @@ extension CueStore {
     let card = try recallQuery(from: "cards", where: Self.cardVisible, hit: cardHit, patterns, length: nil, then: "modifiedAt DESC, id")
     found.cards = try select(Card.self, where: card.condition, card.arguments, orderBy: card.orderBy, limit: limit)
     found.unlisted.cards = try unlisted("cards", card, limit)
-    let reply: RecallQuery
-    (found.replies, reply) = try recallReplies(patterns, limit: limit)
+    let reply: RecallQuery, said: RecallQuery
+    (found.replies, reply) = try recallSessions(Self.cueReplies, patterns, limit: limit)
     found.unlisted.replies = try unlisted(PiChatMessage.table.rawValue, reply, limit)
+    (found.said, said) = try recallSessions(Self.saidByHim, patterns, limit: limit)
+    found.unlisted.said = try unlisted(PiChatMessage.table.rawValue, said, limit)
     return found
   }
 
@@ -57,11 +69,13 @@ extension CueStore {
   /// 四类都查在真实库上一句要 80–190 毫秒，都排在资料库的队列上。
   public func recallCueReplies(_ query: String, limit: Int) throws -> [CueRecall.Reply] {
     let patterns = Self.recallPatterns(query)
-    return patterns.isEmpty ? [] : try recallReplies(patterns, limit: limit).found
+    return patterns.isEmpty ? [] : try recallSessions(Self.cueReplies, patterns, limit: limit).found
   }
 
-  private func recallReplies(_ patterns: [any SQLBindable], limit: Int) throws -> (found: [CueRecall.Reply], query: RecallQuery) {
-    let scope = "role = '\(PiChatRole.pi.rawValue)' AND sessionID IN (\(Self.cueSessions))"
+  private static let cueReplies = "role = '\(PiChatRole.pi.rawValue)' AND sessionID IN (\(cueSessions))"
+
+  /// 会话对话里满足 `scope` 的那一类（Agent 的回复、他说的话）。
+  private func recallSessions(_ scope: String, _ patterns: [any SQLBindable], limit: Int) throws -> (found: [CueRecall.Reply], query: RecallQuery) {
     let reply = try recallQuery(from: PiChatMessage.table.rawValue, where: scope, hit: Self.recallText, patterns, length: "length(text)", then: "at DESC, id")
     let replies = try select(PiChatMessage.self, where: reply.condition, reply.arguments, orderBy: reply.orderBy, limit: limit)
     var sessions: [String: PiSessionState] = [:]

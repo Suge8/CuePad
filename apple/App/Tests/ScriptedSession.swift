@@ -32,7 +32,7 @@ final class ScriptedSession {
             fake.onCommand = { [weak fake] connection, command in
                 switch command["t"] as? String {
                 case "send":
-                    if (command["text"] as? String)?.contains(/表面补丁|双事实源/) == true { inbox.closing.withLock { $0 = true } }
+                    if (command["text"] as? String)?.contains(/通读这件事的全部改动/) == true { inbox.closing.withLock { $0 = true } }
                     fake?.setState(["kind": "thinking"])
                 case "answer":
                     if let value = command["value"] as? String { inbox.answers.withLock { $0.append((value, .now)) } }
@@ -57,10 +57,10 @@ final class ScriptedSession {
     /// Cue 问了收口那一问、还没答。
     var askedToClose: Bool { inbox.closing.withLock { $0 } }
 
-    /// 答收口那一问（真会话会答；剧本的回复是定好的，不会自己接这一句）：复查过、没有要收口的，结果与证据不变。
+    /// 答收口那一问（真会话会答；剧本的回复是定好的，不会自己接这一句）：通读过、没有要收的，结果与证据不变。
     func answerClosing(rig: CueHostTests.Rig) async throws {
         inbox.closing.withLock { $0 = false }
-        try await settle("对照做法复查过了：没有表面补丁与双事实源，重复分支、多余的防御与测试、没人用了的代码与文档都没有，范围内没有要收口的。上一条的结果与证据不变。", rig: rig)
+        try await settle("通读过这件事的全部改动：没有前几轮留下、现在用不上的代码，没有重复的分支与临时补丁，没有要收的。上一条的结果与证据不变。", rig: rig)
     }
 
     /// `window` 里收到的作答（同 `Working.answers`：只认会话收到的）

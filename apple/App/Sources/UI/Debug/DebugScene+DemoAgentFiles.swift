@@ -9,7 +9,7 @@ extension DebugScene {
     /// 目录里已有东西就不再写（重开、整理过的样子留着）。
     /// 该整理的样子：Claude Code 旧目录里两个技能、write-swift 与圆桌的 load-test 没给 Claude Code 补上链接、全局与 CuePad 各有一个 release、
     /// uilane 没有名字与说明、Codex 技能目录里一个空目录、Claude Code 与 Pi 的系统提示各写一份全局规则、个人网站另有一份不同的 CLAUDE.md；
-    /// `-CuePadAgentLibrary clean` 时都已收好。
+    /// `-CuePadAgentLibrary clean` 时都已收好；`blank` 同 clean、只是全局规则还没写。
     static func seedAgentFiles() throws {
         let environment = ProcessInfo.processInfo.environment
         guard let sharedPath = environment["CUEPAD_AGENTS_DIR"], let claudePath = environment[AgentKind.claudeCode.facts.homeVariable],
@@ -22,7 +22,7 @@ extension DebugScene {
         let claude = URL(filePath: claudePath, directoryHint: .isDirectory)
         let pi = URL(filePath: piPath, directoryHint: .isDirectory)
         let codex = URL(filePath: codexPath, directoryHint: .isDirectory)
-        let clean = defaults.string(forKey: "CuePadAgentLibrary") == "clean"
+        let look = defaults.string(forKey: "CuePadAgentLibrary"), blank = look == "blank", clean = look == "clean" || blank
         let skills = shared.appending(path: "skills")
 
         func write(_ text: String, _ file: URL) throws {
@@ -53,7 +53,7 @@ extension DebugScene {
         try skill("load-test", DemoAgentLibrary.loadTest, in: atlas.appending(path: ".agents/skills"))
         if clean { try link(atlas.appending(path: ".claude/skills/load-test"), to: atlas.appending(path: ".agents/skills/load-test")) }
         try write(DemoAgentLibrary.homepageRules, homepage.appending(path: "AGENTS.md"))
-        try write(DemoAgentLibrary.sharedRules, shared.appending(path: "AGENTS.md"))
+        if !blank { try write(DemoAgentLibrary.sharedRules, shared.appending(path: "AGENTS.md")) }
         for file in [pi.appending(path: "AGENTS.md"), codex.appending(path: "AGENTS.md")] { try link(file, to: shared.appending(path: "AGENTS.md")) }
         try write(DemoAgentLibrary.piSystem, pi.appending(path: "SYSTEM.md"))
         if clean {

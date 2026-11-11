@@ -5,7 +5,8 @@ import Foundation
 extension DebugScene {
     /// 演示的技能与规则（配 `-CuePadDemo YES`）：手机上看的是演示的 Mac Studio 报来的快照（各家都接了，`seedMacAgents`），这里替它写一份；
     /// Mac 上看的是本机照文件扫出的（`AgentLibraryKeeper`），这里把同一套内容写成隔离目录里的文件（`seedAgentFiles`）。
-    /// 默认是该整理的样子（散落的、Claude Code 读不到的、空目录、同名的、格式不对的、另写了一份的全局规则）；`-CuePadAgentLibrary clean` 是整理好了的样子。
+    /// 默认是该整理的样子（散落的、Claude Code 读不到的、空目录、同名的、格式不对的、另写了一份的全局规则）；`-CuePadAgentLibrary clean` 是整理好了的样子，
+    /// `blank` 是整理好了、全局规则还一个字没写的样子（文件页给起步规则，`StarterBar`）。
     static func seedAgentLibrary(_ services: AppServices) async throws {
         #if os(macOS)
         try seedAgentFiles()
@@ -14,9 +15,9 @@ extension DebugScene {
         let projects = try await store.projects()
         func project(_ name: String) -> UUID? { projects.first { $0.name == name }?.id }
         let host = "demo-mac"
-        let clean = defaults.string(forKey: "CuePadAgentLibrary") == "clean"
+        let look = defaults.string(forKey: "CuePadAgentLibrary")
         let library = DemoAgentLibrary(
-            home: String(DemoLibrary.demoHome.dropLast()), clean: clean,
+            home: String(DemoLibrary.demoHome.dropLast()), clean: look == "clean" || look == "blank", blank: look == "blank",
             cuepad: project("CuePad"), atlas: project(String(localized: "圆桌", table: "Demo")),
             homepage: project(String(localized: "个人网站", table: "Demo"))
         )
@@ -27,6 +28,7 @@ extension DebugScene {
 struct DemoAgentLibrary {
     let home: String
     let clean: Bool
+    let blank: Bool
     let cuepad: UUID?
     let atlas: UUID?
     let homepage: UUID?
@@ -253,7 +255,8 @@ struct DemoAgentLibrary {
         let agents: [AgentKind] = [.pi, .claudeCode, .codex]
         var list = [
             instruction(
-                .global, home + "/.agents/AGENTS.md", text: Self.sharedRules, hours: 26, readers: clean ? agents : [.pi, .codex],
+                .global, home + "/.agents/AGENTS.md", text: blank ? nil : Self.sharedRules, hours: blank ? nil : 26,
+                readers: blank ? [] : clean ? agents : [.pi, .codex],
                 links: [home + "/.pi/agent/AGENTS.md", home + "/.codex/AGENTS.md"] + (clean ? [home + "/.claude/CLAUDE.md"] : [])),
             instruction(.piSystem, home + "/.pi/agent/SYSTEM.md", text: Self.piSystem, hours: 24 * 9, readers: [.pi]),
         ]

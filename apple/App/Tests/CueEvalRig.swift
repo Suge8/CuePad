@@ -76,12 +76,17 @@ extension CueHostTests.Rig {
         try await settle(work, reply: text)
     }
 
-    /// 会话早先交回过 `handed`，Cue 说了 `cue`（收口、挑刺那一问）开了这一轮，做完回复 `reply` 后歇下。
-    func settleClosed(_ work: Working, handed: String, cue: String, reply text: String) async throws {
-        let delivery = UUID()
-        try await store.recordSend(cue, to: SendTarget(kind: .piSession, name: work.task.heading, ref: work.id), card: work.task.id, delivery: delivery, origin: .known(.cue))
-        try work.file.reply(handed, at: .now - 300)
-        try work.file.user(cue, delivery: delivery.uuidString, at: .now - 240)
+    /// 这件事返工过几轮：每一轮会话交回 `handed`、Cue 接着说了 `cue`（发送记录是 Cue 的）；最后那句开的这一轮做完，回复 `reply` 后歇下。
+    func settleReworked(_ work: Working, rounds: [(handed: String, cue: String)], reply text: String) async throws {
+        var at = Date.now - Double(rounds.count) * 300
+        for round in rounds {
+            let delivery = UUID()
+            try await store.recordSend(
+                round.cue, to: SendTarget(kind: .piSession, name: work.task.heading, ref: work.id), card: work.task.id, delivery: delivery, origin: .known(.cue))
+            try work.file.reply(round.handed, at: at)
+            try work.file.user(round.cue, delivery: delivery.uuidString, at: at + 60)
+            at += 300
+        }
         try await settle(work, reply: text)
     }
 

@@ -55,6 +55,6 @@
 - 拍板 Your Call（"等你拍板" Needs Your Call）；数字账（名牌、小组件、灵动岛与锁屏、菜单栏面板）与会话条的计数里数接小写短形：N for you（拍板）· N to reply · N active · N subagent(s) · N need(s) you
 - 进行中 In Progress（任务自己的状态，不与 Active 混）· 已完成 Done（列名）· 完成 Complete（按钮）· 待回复 To Reply · 该你了 Your Turn · 新消息 New Messages · 有新回复 New Reply · 输出中 Writing…
 - 经过的动作词：查看 View · 发给 Message · 新建 New · 修改 Edit · 开始 Start · 停止 Stop · 完成 Complete · 留给你 Left for You
-- 技能与规则 Skills & Rules · 规则 Rules（全局规则 Global Rules · 项目规则 Project Rules）· 一键整理 Tidy Up · 去重（按钮"只留这份"）Keep This One · 合并（按钮"合并进来"）Merge In · 发往 Mac Send to Mac
+- 技能与规则 Skills & Rules · 规则 Rules（全局规则 Global Rules · 项目规则 Project Rules）· 一键整理 Tidy Up · 去重（按钮"只留这份"）Keep This One · 合并（按钮"合并进来"）Merge In · 起步规则（按钮"填进来"）Starter Rules · Use These · 发往 Mac Send to Mac
 - 定时 Schedule · 定时到点 Schedule Due · 不再定时 Stop Schedule
 - 只记下 Just Save · 对 Cue 说 Tell Cue · 运行情况 Status · 额度 Usage · 技能 Skill · 斜杠命令 Slash Command · 思考强度 Thinking · 灵动岛与锁屏 Live Activity

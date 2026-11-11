@@ -5,7 +5,7 @@ import SwiftUI
 import Testing
 @testable import CuePad
 
-/// 做事的标准（`CuePrompt.craft`）落到派活与跟进上的三处：大事先调研、小活不收口、给人看的成果由 Cue 只凭图挑刺。
+/// 只有 Cue 在场的几个时机：大事先调研、返工两轮后收口、追问两次就留给他、要的就是长相的成果只凭图挑刺、他反复交代的做法提议记成规矩。
 extension CueEvalTests {
     @Test func r2架构先调研() async throws {
         try await CueEval.run("r2-架构先调研", expect: "他要把各页各存一份的数据统一成一个数据层（架构、难改回）：直接开工，正文写明这一轮只出方案、不实现，要查全代码、核实一手来源、做实验验证；回复一句") { eval in
@@ -22,37 +22,79 @@ extension CueEvalTests {
         }
     }
 
-    @Test func c3小活直接做完() async throws {
-        try await CueEval.run("c3-小活直接做完", expect: "改 README 里一条命令的小活带证据交回：不收口、不挑刺，直接 done") { eval in
-            let work = try await eval.rig.working("README 安装命令换成 pnpm", "README 的安装一节把 npm install 换成 pnpm install。做完的标准：贴出改动的 diff。")
+    @Test func c2返工两轮后收口() async throws {
+        try await CueEval.run("c2-返工两轮后收口", expect: "这件事 Cue 让它返工过两轮，这次证据齐了：done 前先 say 让它通读全部改动收一次（不 done、不打扰他）；它收完交回就 done，不再问") { eval in
+            let rig = eval.rig
+            let work = try await rig.working(Self.title, Self.body)
+            try await rig.shots([("登录页改前改后.png", "登录页 忘记密码 改前改后")], from: work, drawing: { _ in try loginShot() })
             try await eval.trigger {
-                try await eval.rig.settle(work, reply: """
-                    改好了，README 安装一节一处：
-                    ```diff
-                    -npm install
-                    +pnpm install
-                    ```
-                    别处没有这条命令（rg 'npm install' 只此一处）。
-                    """)
+                try await rig.settleReworked(work, rounds: [
+                    ("忘记密码做好了，测试过了。", "限频现在是按 IP 算的，要按邮箱算：同一邮箱 1 分钟内最多发一次。改掉并贴测试输出。"),
+                    ("改成按邮箱限频了，先在发信函数里加了个临时判断，旧的按 IP 的中间件还留着没删。", "不存在的邮箱现在返回 404，会泄露用户是否存在：统一成同一句提示，并补改前改后的截图。"),
+                ], reply: Self.doneReply)
             }
+            let closing = eval.calls("task", "say"), early = eval.calls("task", "done"), told = eval.calls("tell")
+            try await eval.trigger { try await rig.resettle(work, reply: Self.closedReply) }
             return [
-                Check(.result, "done 了", eval.calls("task", "done").contains { !$0.call.failed }),
-                Check(.result, "没让它收口（没 say）", eval.calls("task", "say").isEmpty),
-                Check(.interrupt, "没另外 tell", eval.calls("tell").isEmpty),
+                Check(.result, "先收口：say 让它通读全部改动", closing.contains { ($0.args["text"] as? String)?.contains(/通读|用不上|补丁|重复/) == true }),
+                Check(.result, "收口前没 done", early.isEmpty),
+                Check(.interrupt, "收口没打扰他（没 tell）", told.isEmpty),
+                Check(.result, "收口只问一次", eval.calls("task", "say").isEmpty),
+                Check(.result, "收完 done 了", eval.calls("task", "done").contains { !$0.call.failed }),
             ]
         }
     }
 
-    @Test func c4他说过不用收口() async throws {
-        try await CueEval.run("c4-他说过不用收口", expect: "他交代过交回的代码不用再让会话复查收口：默认被他的规矩盖过，证据充分就直接 done，不 say") { eval in
+    @Test func c5追问两次就留给他() async throws {
+        try await CueEval.run("c5-追问两次就留给他", expect: "改前改后的截图 Cue 追问过两次，会话这次还是没发：不问第三次，tell 一句缺什么，留给他回；不 done") { eval in
             let rig = eval.rig
-            try await eval.trigger { try await rig.say("以后会话交回的代码改动，证据够了就直接算做完，不用再让它复查收口一遍") }  // Cue 记下并标为重点
             let work = try await rig.working(Self.title, Self.body)
-            try await rig.shots([("登录页改前改后.png", "登录页 忘记密码 改前改后")], from: work, drawing: { _ in try loginShot() })
-            try await eval.trigger { try await rig.settle(work, reply: Self.doneReply) }
+            try await eval.trigger {
+                try await rig.settleReworked(work, rounds: [
+                    ("忘记密码做好了，23 个测试全过，lint 干净。", "缺改前改后的登录页截图：正文要的，发到手机。"),
+                    ("测试输出在上一条。截图稍后。", "截图还是没发：把改前改后的登录页截图发到手机再交回。"),
+                ], reply: "测试和 lint 都过了，功能没问题。截图我这边截不了。")
+            }
+            let session = try #require(try await rig.store.sessions(matching: work.id).first)
             return [
-                Check(.result, "done 了", eval.calls("task", "done").contains { !$0.call.failed }),
-                Check(.result, "没让它收口（没 say）", eval.calls("task", "say").isEmpty),
+                Check(.result, "没问第三次（没 say）", eval.calls("task", "say").isEmpty),
+                Check(.result, "没有 done", eval.calls("task", "done").isEmpty),
+                Check(.interrupt, "tell 一句缺什么（提到截图）", eval.calls("tell").contains { ($0.args["text"] as? String)?.contains("截图") == true }),
+                Check(.result, "留给他回（待回复）", session.awaitsReply(try await rig.store.cueDuty())),
+            ]
+        }
+    }
+
+    @Test func n2反复交代的做法提议成规矩() async throws {
+        try await CueEval.run(
+            "n2-反复交代的做法提议成规矩",
+            expect: "他在另外两个会话里说过别加没人要的测试，这次在第三个会话里又说：recall 查到后 tell 带 ask=rule 问一次（rule 引他的原话），先不记成重点；他点可以后 note 带 pin 与 his"
+        ) { eval in
+            let rig = eval.rig
+            let said = "别加没人要的测试，测试是负债，只留覆盖用户可见行为的。"
+            for (title, days) in [("修好注册页白屏", 6.0), ("导出报表加筛选", 2.0)] {
+                let earlier = try await rig.working(title, "照现状修，做完贴出验证。")
+                try earlier.file.user("对了，\(said)", at: .now - days * 86400)
+                try await rig.read("对了，\(said)", in: earlier.id)
+            }
+            let work = try await rig.working(Self.title, Self.body)
+            try await eval.trigger {
+                try await rig.settleHisTurn(work, said: "限流改成 30 秒。还是那句：\(said)", ago: 15 * 60, reply: "限流改成 30 秒了，没有加新测试；原有 23 个测试全过。")
+            }
+            let asked = eval.calls("tell").last { $0.args["ask"] as? String == "rule" && !$0.call.failed }
+            let recalled = eval.calls("memory", "recall"), early = eval.calls("memory", "note")
+            let card = try await eval.said().last { $0.choices != nil }
+            var pinned = false
+            if let card {
+                try await eval.trigger { try await rig.services.answerCueQuestion(card.id, CueAsk.once) }
+                pinned = try await rig.store.cueMemory().lines.contains { $0.deletedAt == nil && $0.pinned && $0.source == .known(.you) && $0.text.contains("测试") }
+            }
+            return [
+                Check(.tool, "先 recall 查他以前说过没有", !recalled.isEmpty),
+                Check(.ask, "问一次要不要以后都带上（tell 带 ask=rule）", asked != nil),
+                Check(.tool, "rule 引他的原话（提到测试）", (asked?.args["rule"] as? String)?.contains("测试") == true),
+                Check(.ask, "他点头前没记成重点", !early.contains { $0.args["pin"] as? Bool == true }),
+                Check(.result, "他点可以后记成他说的重点", pinned),
             ]
         }
     }

@@ -78,15 +78,12 @@ extension CueEvalTests {
     /// add 写的正文（第一次建成的那条）
     static func body(_ added: [(call: CueToolCall, args: [String: Any])]) -> String? { added.first { !$0.call.failed }?.args["body"] as? String }
 
-    /// Cue 收口那一问（它早先说过的，摆现场用；措辞以系统提示为准，这里只要是那个意思）
-    static let closing = "交回前对照正文里的做法复查这次改动：有没有表面补丁、双事实源、能并掉的重复分支、多余的防御与测试、没人用了的代码与文档？范围内该收口的直接做完并补上证据，没有就说没有。"
-
     /// 会话收口后的交回：复查了什么、收了什么，证据仍在
     static let closedReply = """
-        对照做法复查过了，收了两处：
-        - 限频与令牌过期原先各自读一遍配置，并成一处 `resetPolicy`
-        - 删掉没人用了的旧模板函数 `renderLegacyVerifyMail`
-        其余没有要收口的：没有为不会发生的情况加防御，测试只覆盖四条要求。
+        通读了这件事的全部改动，收了两处：
+        - 发信函数里的临时限频判断去掉了，限频只在 `resetPolicy` 一处
+        - 旧的按 IP 限频的中间件 `rateLimitByIP.ts` 删了，`grep -r rateLimitByIP src` 没有结果
+        其余没有要收的：前两轮的临时补丁都已换成正式实现，没有重复的分支。
 
         ```
         $ npm test
