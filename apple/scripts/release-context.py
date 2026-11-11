@@ -3,6 +3,7 @@
 用法：release-context.py run <mac|ios> [--dry-run] [--resume <公证 id>]   拿锁、建或找回尝试目录（CUEPAD_RELEASE_OUT），再 exec 发布脚本
       release-context.py seal <尝试目录> <归档> <release_versions 的输出…>  归档与导出产物都要符合快照的 bundle id 与本次版本，打印构建号
       release-context.py id <尝试目录>                                     打印 submission.json 里的公证 ID
+新的发布（不含 --dry-run 与 --resume）只认主干那一遍云端检查全绿的提交（verified）。
 发布凭据只在这台 Mac，锁不跨机器。恢复只认 submission.json 的公证 ID 唯一匹配：响应缺失或不完整就是结果未知，不猜、不重投。
 """
 import fcntl, json, os, plistlib, re, subprocess, sys, tarfile, tempfile, time, zipfile
@@ -40,7 +41,17 @@ def hold(platform):
     os.set_inheritable(lock, True)  # exec 后由发布脚本和它起的进程持有，全部结束才放
 
 
-def attempt(platform, resume):
+def verified(commit):
+    """合并前的本机签核只跑真 Agent 的冒烟、不跑 iOS；全量只有合并进主干后云端那一遍（swift.yml），用户拿到的构建只从它全绿的提交出。"""
+    runs = json.loads(subprocess.check_output(
+        ["gh", "run", "list", "--workflow", "swift.yml", "--commit", commit, "--json", "status,conclusion,url"], cwd=CHECKOUT, text=True))
+    if any(run["conclusion"] == "success" for run in runs):
+        return
+    seen = "；".join(f"{run['conclusion'] or run['status']} {run['url']}" for run in runs) or "这个提交没有跑过（不在主干上，或排队时被后来的合并顶掉）"
+    fail(f"{commit[:9]} 的主干检查没有全绿，不发布：{seen}。在跑就等它跑完；红了先修主干（runner 自己崩的就 gh run rerun <id> --failed）；没跑过就从主干最新的提交发，或 gh workflow run swift.yml 补跑")
+
+
+def attempt(platform, resume, gated):
     fixed = RELEASES / platform
     if fixed.exists() or fixed.is_symlink():
         fail(f"旧版留下的 {fixed} 还在：是链接就删掉；是目录先确认里面没有待恢复的公证（submission.json），再手工删掉或移走（docs/release.md）")
@@ -55,9 +66,11 @@ def attempt(platform, resume):
         if len(matches) > 1:
             fail(f"公证 ID {resume} 不唯一：{', '.join(map(str, matches))}；保留全部尝试，核实后手工处理")
         return matches[0]
+    commit = subprocess.check_output(["git", "-C", CHECKOUT, "rev-parse", "HEAD"], text=True).strip()
+    if gated:
+        verified(commit)
     attempts.mkdir(parents=True, exist_ok=True)
     out = Path(tempfile.mkdtemp(prefix=time.strftime("%y%m%d-%H%M%S-"), dir=attempts))
-    commit = subprocess.check_output(["git", "-C", CHECKOUT, "rev-parse", "HEAD"], text=True).strip()
     (out / "commit").write_text(commit + "\n")
     # 只取提交里的文件：未跟踪与被忽略的本地源码进不了产物
     with subprocess.Popen(["git", "-C", CHECKOUT, "archive", commit], stdout=subprocess.PIPE) as source:
@@ -79,7 +92,7 @@ def run(platform, args):
         else:
             fail(USAGE)
     hold(platform)
-    out = attempt(platform, resume)
+    out = attempt(platform, resume, gated="--dry-run" not in rest)
     print(f"发布尝试：{out}", file=sys.stderr, flush=True)
     script = f"{APPLE}/scripts/release-{platform}.sh"
     os.execve(script, [script, *(rest if platform == "mac" else ["testflight"])], dict(os.environ, CUEPAD_RELEASE_OUT=str(out)))

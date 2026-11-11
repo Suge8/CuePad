@@ -16,10 +16,10 @@ import Testing
 /// - opencode：Chat Completions，在隔离的 `OpenCodeSandbox` 里。
 ///
 /// 没装的家跳过，原因以「未覆盖：」开头（`PinnedAgent.uncovered`，xc.sh 在汇总后单列，不算通过）：只连一家的套件整套跳过（`needs`），
-/// 按家参数化的用例跳过那一例（`require`）。完整矩阵（`CUEPAD_AGENT_MATRIX=full`，CI）不跳过，缺一家就红。
+/// 按家参数化的用例跳过那一例（`require`）。完整矩阵（`CUEPAD_AGENT_MATRIX=full`，CI 与 `xc.sh signoff`）不跳过，缺一家就红。
 ///
 /// 分两档：默认只跑打了 `.smoke` 标签的（每家起来、说一句、收到回复、停下，加那一家独有的握手），哪条是冒烟只看这个标签；
-/// `CUEPAD_AGENT_TESTS=all`（CI 的主干与手动触发；`xc.sh test` 点名 Real 开头的套件时也是）跑全量。
+/// `CUEPAD_AGENT_TESTS=all`（CI；`xc.sh test` 点名 Real 开头的套件时也是）跑全量。
 /// 每个 Real 开头的套件都挂 `tiered`：没跑的照样以「未覆盖：」跳过，不算通过。
 enum RealAgents {
     static func pinned(_ agent: AgentKind) -> PinnedAgent {

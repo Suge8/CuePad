@@ -36,10 +36,6 @@ built() {
 # 这里的产物目录按检出分开，不指定就每个新检出从头编一遍。实测换检出路径照样命中，冷编约快 17%。删 .derived 不会清掉它
 shared_cache="$HOME/Library/Caches/cuepad-xc"
 shared_modules=(SDK_EXPLICIT_MODULES_OUTPUT_PATH="$shared_cache/SDKExplicitPrecompiledModules" MODULE_CACHE_DIR="$shared_cache/ModuleCache.noindex" SDK_STAT_CACHE_DIR="$shared_cache")
-# 编译缓存（Xcode 的 compilation caching）：每个编译步骤的产物按输入内容存进 CUEPAD_COMPILE_CACHE 指的目录，输入没变就取回、不重编。
-# 只有 CI 给这个目录（swift.yml：主干冷编译后存下，分支取主干那份）。本机不开：实测同一检出删掉产物重编从 40 秒降到 16 秒，
-# 但换一个检出路径就基本不命中（45 秒），每个检出还各占约 0.8GB。
-compile_cache=(${CUEPAD_COMPILE_CACHE:+COMPILATION_CACHE_ENABLE_CACHING=YES "COMPILATION_CACHE_CAS_PATH=$CUEPAD_COMPILE_CACHE"})
 # 包产品被 App 与测试目标共用而改编成动态框架时（见 xcd 的注释），Xcode 按改编前的静态目标对账依赖，
 # 每次都报 "'CueStore' is missing a dependency on 'CueText'"：动态的 CueStore 实际链着 CueText.framework，是误报。
 # 目标之间的依赖都写在工程与包的声明里，真缺依赖会在编译时报"找不到模块"，所以整个关掉这项诊断。
@@ -86,7 +82,7 @@ xcb() {
   echo "原始输出：$log" >&2
   xcodebuild -project "$APPLE_DIR/CuePad.xcodeproj" -scheme CuePad -configuration "$configuration" \
     -destination "$destination" -derivedDataPath "$DERIVED" "$@" \
-    "${shared_modules[@]}" ${compile_cache[@]+"${compile_cache[@]}"} "${quiet_diagnostics[@]}" ${build_settings[@]+"${build_settings[@]}"} 2>&1 \
+    "${shared_modules[@]}" "${quiet_diagnostics[@]}" ${build_settings[@]+"${build_settings[@]}"} 2>&1 \
     | tee "$log" | { grep --line-buffered -v 'failed with exit code 0 but produced no further output' || true; } || status=$?
   own_warnings "$DERIVED/warnings-$platform" <"$log" || warned=1
   [ "$status" != 0 ] || rm -f "$log"
