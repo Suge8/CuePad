@@ -18,6 +18,10 @@ public struct MacPresence: Equatable, Sendable {
 
   func isOnline(at now: Date) -> Bool { now < onlineUntil }
 
+  /// 将睡眠、退出时它当场写下的离线（期限就是写的那一刻）。到期没续不算：它崩溃、断电了，或者本机手里这份只是旧了
+  ///（手机在后台十几分钟没拉到续期是常事），那是没消息。
+  var saidGoodbye: Bool { onlineUntil <= modifiedAt }
+
   public static func recordID(host: String) -> UUID { DeterministicID.uuid("mac-presence/\(host)") }
 }
 
@@ -69,4 +73,11 @@ extension CueStore {
   }
 
   public func macOnline(_ host: String) throws -> Bool { try macOnlineUntil(host) != nil }
+
+  /// 那台 Mac 自己说了离开（`MacPresence.saidGoodbye`）、之后没再上线时它的名字。在线、没有记录、只是到期没续，
+  /// 或本机同步不通说不准（`Speech.Moment.seesPresence`）都为 nil：没消息不是知道它不在。
+  public func macKnownOff(_ host: String, at moment: Speech.Moment) throws -> String? {
+    guard moment.seesPresence(of: host), try find(MacPresence.self, MacPresence.recordID(host: host))?.saidGoodbye == true else { return nil }
+    return try macAgents(on: host).shownName
+  }
 }

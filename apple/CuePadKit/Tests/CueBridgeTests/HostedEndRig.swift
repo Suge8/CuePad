@@ -21,12 +21,11 @@ enum Hosting: String, CaseIterable, Sendable, CustomTestStringConvertible {
         }
     }
 
-    /// 外壳只把起托管会话的那几次算进来；问在跑哪些会话（Claude Code）、问常驻服务（Codex）的照原样跑
+    /// 外壳只把起托管会话的那几次算进来；问在跑哪些会话（Claude Code）的照原样跑
     fileprivate var hostedLaunch: String {
         switch self {
         case .claude: #"[ "$1" != agents ]"#
-        case .codex: #"[ "$2" = --listen ]"#
-        case .grok, .dsh: "true"
+        case .codex, .grok, .dsh: "true"
         }
     }
 
@@ -52,7 +51,6 @@ final class EndRig {
     private let root: URL
     private let modelKey: ModelKey?
     private let claude: ClaudeTestbed?
-    private let hooks: AgentHookServer?
 
     static func run(
         _ hosting: Hosting, timing: Timing, _ body: (EndRig) async throws -> Void
@@ -83,8 +81,8 @@ final class EndRig {
         if hosting == .claude {
             let testbed = try await ClaudeTestbed(idleLimit: Self.idleLimit, wrapper: script, timing: timing, bridgeTiming: idle.timing)
             try testbed.startConnected()
-            (claude, root, model, bridge, runtime, work, wrapper, hooks, modelKey) =
-                (testbed, testbed.root, testbed.model, testbed.bridge, testbed.runtime, testbed.work, testbed.wrapperDirectory, nil, nil)
+            (claude, root, model, bridge, runtime, work, wrapper, modelKey) =
+                (testbed, testbed.root, testbed.model, testbed.bridge, testbed.runtime, testbed.work, testbed.wrapperDirectory, nil)
             return
         }
         claude = nil
@@ -104,7 +102,6 @@ final class EndRig {
         let locator = ExecutableLocator(searchDirectories: [wrapper, hosting.pinned.bin])
         bridge = Bridge(socketDirectory: sockets, hostedIdle: Self.idleLimit, timing: idle.timing)
         try bridge.start()
-        var hooks: AgentHookServer?
         switch hosting {
         case .codex:
             let home = root.appending(path: "codex", directoryHint: .isDirectory)
@@ -113,12 +110,8 @@ final class EndRig {
                 "CODEX_HOME": home.path, "CUEPAD_PI_SOCKET_DIR": sockets.path, "CUEPAD_FAKE_MODEL_KEY": "fake",
                 "XDG_CONFIG_HOME": root.appending(path: "xdg/config").path, "XDG_STATE_HOME": root.appending(path: "xdg/state").path,
             ])
-            let paths = AgentPaths(pi: pi, environment: environment)
-            let server = AgentHookServer(path: paths.pi.hookSocket)
-            try server.start()
-            hooks = server
             let codex = CodexRuntime(
-                bridge: bridge, paths: paths, hooks: server, codex: { executable }, locate: { locator }, presence: TestPresence(), timing: timing)
+                bridge: bridge, paths: AgentPaths(pi: pi, environment: environment), codex: { executable }, locate: { locator }, timing: timing)
             try codex.start()
             runtime = codex
             modelKey = nil
@@ -131,7 +124,7 @@ final class EndRig {
                 "NO_PROXY": "127.0.0.1,localhost", "no_proxy": "127.0.0.1,localhost", "CUEPAD_PI_SOCKET_DIR": sockets.path,
             ]
             let grok = GrokRuntime(
-                bridge: bridge, paths: AgentPaths(pi: pi, environment: environment), files: scratchFiles, grok: { executable }, locate: { locator },
+                bridge: bridge, paths: AgentPaths(pi: pi, environment: environment), grok: { executable }, locate: { locator },
                 timing: timing)
             try grok.start()
             runtime = grok
@@ -144,7 +137,6 @@ final class EndRig {
             runtime = DshRuntime(bridge: bridge, paths: AgentPaths(pi: pi, environment: environment), dsh: { executable }, locate: { locator }, timing: timing)
             modelKey = ModelKey(provider: "deepseek-official", id: "deepseek-flash")
         }
-        self.hooks = hooks
     }
 
     /// 假模型当提供方（Codex 只认配置目录里的），关掉联网的插件、应用、更新与遥测，信任工作目录。
@@ -190,7 +182,6 @@ final class EndRig {
         for pid in launched where has("eof.\(pid)") && kill(pid, 0) == 0 { killpg(pid, SIGKILL) }
         if let claude { return await claude.stop() }
         await runtime.stop()()
-        hooks?.stop()
         bridge.stop()
         model.stop()
         await TestProcesses.stop(under: [root])

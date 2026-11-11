@@ -342,7 +342,6 @@ final class TestApp {
             hotkeys: hotkeys,
             paths: AgentPaths(pi: piPaths, environment: agentHomes),
             agents: AgentIntegrations(agentIntegration),
-            terminal: TerminalJumper(),
             hostID: hostID,
             workspaces: workspaces,
             wakeNotifications: wakeCenter,

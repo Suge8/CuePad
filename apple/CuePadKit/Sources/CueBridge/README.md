@@ -95,6 +95,5 @@ dsh 的随包插件（`dsh-cuepad.mjs`，每次启动经 `--patch` 叠上）与 
 ## 已知边界
 
 - 会话冻结（SIGSTOP）或机器休眠造成的假死发现不了：既定取舍，不做心跳。
-- 跳到终端定位不到 herdr 这类再套一层的复用器里的 pane。
 - 终端里的 Grok Build 只读：CuePad 碰不到它的输入，只从它的会话记录看它在做什么，看不到它在等你确认（`GrokRuntime`）。
 - 不用 FSEvents（延迟实测数据见 `FileFollower`、`Socket.swift` 里 `DirectoryWatcher` 的头注释）。
