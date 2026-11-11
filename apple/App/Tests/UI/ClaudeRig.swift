@@ -53,7 +53,7 @@ final class ClaudeRig {
             hostID: TestApp.hostID, workspaces: Workspaces(root: root.appending(path: "CuePad", directoryHint: .isDirectory)),
             wakeNotifications: NotificationCenter(), timing: .system,
             commandLineTool: CommandLineToolInstaller(helper: helper, linkDirectory: root.appending(path: "home/.local/bin"), shellPath: { nil }),
-            updater: nil, hooks: AgentHookServer(path: paths.hookSocket),
+            updater: nil,
             runtimes: { store in [.claudeCode: ClaudeCodeRuntime(
                 bridge: bridge, paths: agentPaths, store: store, claude: { bin.appending(path: "claude") },
                 locate: { ExecutableLocator(searchDirectories: [bin]) })] },

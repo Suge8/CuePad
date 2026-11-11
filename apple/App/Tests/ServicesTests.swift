@@ -89,6 +89,39 @@ struct AgentUpgradeTests {
         #expect(rig.services.agents.status(.claudeCode) == AgentStatus(presence: .found(nil), files: .missing))
         #expect(FileManager.default.subpaths(atPath: rig.directory.appending(path: "claude").path) == [])
     }
+
+    /// 旧版接入时往两家配置里写过钩子，装时把它建了哪些结构记在技能目录里（`HookFile.Footprint`）；这里照它写下的原样摆好。
+    @Test func 启动时删掉旧版写进ClaudeCode与Codex的钩子_用户自己的条目一字不动() async throws {
+        let rig = TestApp()
+        let old = "/Applications/CuePad.app/Contents/Helpers/cuepad"
+        let claude = rig.directory.appending(path: "claude/settings.json"), codex = rig.directory.appending(path: "codex/hooks.json")
+        let footprints = rig.directory.appending(path: "agents/skills/cuepad")
+        let mine = """
+            {
+              "theme": "dark",
+              "hooks": {
+                "Stop": [ { "hooks": [ { "type": "command", "command": "true" } ] } ]
+              }
+            }
+
+            """
+        let ours = #"{"hooks":[{"command":"\#(old) hook claude","timeout":10,"type":"command"}]}"#
+        let written = mine.replacingOccurrences(of: "} ] } ]", with: "} ] },\(ours) ],\"SessionStart\":[\(ours)]")
+        for (file, text) in [
+            (claude, written), (footprints.appending(path: "claude-hooks.json"), #"{"file":true,"hooksObject":false,"events":["SessionStart"]}"#),
+            (codex, #"{"hooks":{"Stop":[{"hooks":[{"command":"\#(old) hook codex","timeout":10,"type":"command"}]}]}}"#),
+            (footprints.appending(path: "codex-hooks.json"), #"{"file":false,"hooksObject":true,"events":["Stop"]}"#),
+        ] {
+            try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try text.write(to: file, atomically: true, encoding: .utf8)
+        }
+
+        try await rig.services.agents.refresh()
+
+        #expect(try String(contentsOf: claude, encoding: .utf8) == mine)
+        #expect(!FileManager.default.fileExists(atPath: codex.path))
+        #expect(!FileManager.default.fileExists(atPath: footprints.path), "装时的记录随之删掉，CuePad 的技能目录空了也删掉")
+    }
 }
 
 @Suite(.releasesLibraries)
