@@ -7,7 +7,7 @@ extension MacExecutor {
     func stopTurn(_ request: DeliveryRequest) async throws {
         guard let target = request.stopTurn, target.hostID == hostID, target.bootID == SystemBoot.id,
               request.target.ref == target.sessionID, let live = bridge.session(sessionID: target.sessionID),
-              live.turnStartedAt?.stored == target.turnStartedAtMilliseconds else {
+              live.isCurrentTurn(target.turnStartedAtMilliseconds) else {
             throw BridgeError.rejected("stale_turn")
         }
         try await bridge.abort(live.id, deliveryID: target.deliveryID.uuidString, turnStartedAt: target.turnStartedAtMilliseconds)
