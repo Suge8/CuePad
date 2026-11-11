@@ -14,13 +14,15 @@ import sys
 from collections import Counter, defaultdict
 
 log_path, status = sys.argv[1], int(sys.argv[2])
-lines = [l.replace("\u200b", "").rstrip("\n") for l in open(log_path, encoding="utf-8", errors="replace")]
+# xcodebuild 插进输出的屏障字样（XCTestOutputBarrier）有时整段或被切开的一截落在结果行前面：去掉，结果行才认得出
+barrier = lambda line: line[m.end():] if (m := re.match(r"[A-Za-z]+(?=[✔✘━➜◇↳] )", line)) and m[0] in "XCTestOutputBarrier" else line
+lines = [barrier(l.replace("\u200b", "").rstrip("\n")) for l in open(log_path, encoding="utf-8", errors="replace")]
 # 输出被切开时，原因里的中文有时以八进制转义的字节出来（"未覆\347\233\226"）：还原成字，「未覆盖：」才认得出
 octal = lambda text: re.sub(r"(?:\\[0-7]{3})+", lambda m: bytes(int(b, 8) for b in m[0].split("\\")[1:]).decode("utf-8", "replace"), text)
 
 st_total = st_failed = st_skipped = xc_total = xc_failed = xc_skipped = 0
 failed_names, durations = set(), []
-skip_reason, skip_suites = {}, defaultdict(list)
+skipped, skip_suites = [], defaultdict(list)  # 跳过的按行数：不同套件里有同名的用例
 first_failure = None
 runtime_warnings = Counter()
 expect_executed = False
@@ -31,7 +33,7 @@ for i, line in enumerate(lines):
     elif m := re.match(r"✘ Test (.+?) failed after ", line):
         failed_names.add(m[1])
     elif m := re.match(r'➜ Test (.+?) skipped: "(.*)"$', line):
-        skip_reason[m[1]] = octal(m[2])
+        skipped.append((m[1], octal(m[2])))
     elif m := re.match(r'➜ Suite (.+?) skipped: "(.*)"$', line):
         skip_suites[octal(m[2])].append(m[1])
     elif m := re.match(r"[✔━] Test (.+) passed after ([\d.]+) seconds", line):
@@ -57,7 +59,7 @@ for i, line in enumerate(lines):
         elif "Time limit was exceeded" in line:
             first_failure = ("超时", "", [line.strip()])
 
-st_skipped = len(skip_reason)
+st_skipped = len(skipped)
 st_failed = len(failed_names)
 passed = lambda total, failed, skipped: max(total - failed - skipped, 0)
 ran = st_total + xc_total > 0
@@ -76,7 +78,7 @@ if first_failure:
 elif status != 0:
     print("用例都过了但命令失败：看上面的错误输出（编译、超时、测试宿主崩溃）")
 by_reason = defaultdict(list)
-for name, reason in skip_reason.items():
+for name, reason in skipped:
     by_reason[reason].append(name)
 uncovered = defaultdict(int)
 for reason, names in by_reason.items():
