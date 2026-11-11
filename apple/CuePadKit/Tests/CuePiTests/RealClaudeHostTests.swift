@@ -38,7 +38,7 @@ struct RealClaudeHostTests {
                 testbed.model.requests.contains { $0.prompt.contains("BUSY-HANG") } && testbed.bridge.session(id: id)?.state.isWorking == true
             }
             let wrapper = try #require(testbed.bridge.session(id: id)).pid
-            let claude = try #require(childPIDs(of: wrapper).first)
+            let claude = try #require(claudeChildren(of: wrapper).first)
             let inbox = "/tmp/cc-socks/\(claude).sock"
             #expect(FileManager.default.fileExists(atPath: inbox), "收件箱 socket 不在 \(inbox)")
 
@@ -115,10 +115,5 @@ struct RealClaudeHostTests {
             #expect(log.ended.map(\.1) == [.closed(reason: "quit")])
         }
     }
-}
-private func childPIDs(of pid: pid_t) -> [pid_t] {
-    var children = [pid_t](repeating: 0, count: 16)
-    let count = proc_listchildpids(pid, &children, Int32(children.count * MemoryLayout<pid_t>.size))
-    return Array(children.prefix(Int(max(count, 0)))).filter { $0 > 0 }
 }
 #endif
