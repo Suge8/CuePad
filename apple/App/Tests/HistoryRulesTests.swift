@@ -68,7 +68,7 @@ struct HistoryRulesTests {
             bridge = Bridge(socketDirectory: paths.socketDirectory)
             host = PiRuntime(bridge: bridge, paths: paths, pi: { realPi })
             let mac = MacDependencies(
-                bridge: bridge, hotkeys: InMemoryHotkeys(), paths: agentPaths, agents: AgentIntegrations(agents), terminal: TerminalJumper(),
+                bridge: bridge, hotkeys: InMemoryHotkeys(), paths: agentPaths, agents: AgentIntegrations(agents),
                 hostID: TestApp.hostID, workspaces: Workspaces(root: directory.appending(path: "CuePad", directoryHint: .isDirectory)),
                 wakeNotifications: NotificationCenter(),
                 commandLineTool: CommandLineToolInstaller(

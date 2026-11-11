@@ -21,11 +21,6 @@ struct SessionActions: View {
             Button(item.title, icon: item.icon) { workspace.setPinned(task.id, !task.isPinned) }
         }
         if let rename = Self.rename(session, task: task, adopts: board != nil, in: workspace) { RowActionButtons(actions: [rename]) }
-        #if os(macOS)
-        if let bridge = workspace.services.bridge.session(sessionID: session.sessionID), bridge.canJump {
-            Button("跳到所在终端", icon: .terminal) { workspace.jumpToTerminal(bridge.id) }
-        }
-        #endif
         if let end = Self.end(session, ending: ending, in: workspace) { RowActionButtons(actions: [end]) }
         #if os(iOS)
         Section { RemoteMacActions(host: session.hostID) }

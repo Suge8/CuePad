@@ -18,11 +18,6 @@ extension SessionState {
     }
 }
 
-extension CueBridge.Session {
-    /// 跳转至少要激活终端应用，所以后台托管的与没报终端的（OpenCode 的服务）没有。
-    var canJump: Bool { !hosted && terminal.bundleID != nil }
-}
-
 extension SessionDigest {
     static func read(sessionID: String, from store: isolated CueStore) throws -> SessionDigest {
         try read(SessionState.recordID(sessionID: sessionID), sessionID: sessionID, from: store)
@@ -164,18 +159,6 @@ extension Workspace {
         var item = item
         item.state = withLiveState(item.state)
         return item
-    }
-
-    /// 跳到会话所在的终端；只能大致定位或失败时说一句。
-    func jumpToTerminal(_ id: CueBridge.Session.ID) {
-        Task {
-            do {
-                let result = try await services.jumpToTerminal(id)
-                if let note = result.note { say(Dotted(note), tone: result.precision == .failed ? .failure : .done) }
-            } catch {
-                fail(error)
-            }
-        }
     }
 }
 #endif
