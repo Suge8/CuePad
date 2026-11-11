@@ -5,17 +5,15 @@ import SwiftUI
 import Testing
 @testable import CuePad
 
-/// 只有 Cue 在场的几个时机：大事先调研、返工两轮后收口、追问两次就留给他、要的就是长相的成果只凭图挑刺、他反复交代的做法提议记成规矩。
+/// 只有 Cue 在场的几个时机：大事先出方案、返工两轮后收口、追问两次就留给他、要的就是长相的成果只凭图挑刺、他反复交代的做法提议记成规矩。
 extension CueEvalTests {
-    @Test func r2架构先调研() async throws {
-        try await CueEval.run("r2-架构先调研", expect: "他要把各页各存一份的数据统一成一个数据层（架构、难改回）：直接开工，正文写明这一轮只出方案、不实现，要查全代码、核实一手来源、做实验验证；回复一句") { eval in
+    @Test func r2架构先出方案() async throws {
+        try await CueEval.run("r2-架构先出方案", expect: "他要把各页各存一份的数据统一成一个数据层（架构、难改回）：直接开工，正文写明这一轮只出方案、不实现，回复一句，不发等你") { eval in
             try await eval.trigger { try await eval.rig.say("演示项目现在每个页面各自拉数据、各存一份，经常对不上。统一成一个数据层，你看怎么做合适") }
             let reply = try await eval.reply(), body = Self.body(eval.calls("task", "add"))
             return [
                 Check(.result, "开工（开出了会话）", eval.rig.app.host.calls.contains { if case .open = $0 { true } else { false } }),
                 Check(.result, "正文写明这一轮只出方案、不实现", body?.contains(/只出方案|不实现|不要?改|不动手|先不/) == true),
-                Check(.result, "正文要它查实（一手来源、实验或最佳实践）", body?.contains(/一手|联网|实验|最佳实践/) == true),
-                Check(.result, "正文要它标明没查实的", body?.contains(/未确认|没查实|没验证/) == true),
                 Check(.interrupt, "回复一两句", reply.map { sentences($0.text) <= 2 } == true),
                 Check(.ask, "没发等你", try await eval.said().allSatisfy { $0.choices == nil }),
             ]
