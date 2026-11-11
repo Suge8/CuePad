@@ -87,11 +87,13 @@ public final class ClaudeCodeRuntime: AgentRuntime {
         return try await configure(opened: id, name: name, model: model, thinking: thinking, on: bridge)
     }
 
-    /// 终端里的会话被停下时不跑钩子，会话文件里的中断标记是这一轮结束的唯一消息（`ClaudeTerminalSession.stopped`）；
+    /// 终端里的会话被停下、这句被钩子挡下、后台子代理被停掉时不跑钩子，会话文件里的那一行是这一轮结束的唯一消息（`ClaudeTerminalSession.stopped`、`recorded`）；
     /// 托管的会话有 `result`，用不着。
     public func read(_ update: PiHistoryUpdate) {
-        guard let stoppedAt = update.checkpoint.stoppedAt else { return }
-        for (id, terminal) in terminals where bridge.session(id: id)?.sessionID == update.sessionID { terminal.stopped(at: stoppedAt) }
+        for (id, terminal) in terminals where bridge.session(id: id)?.sessionID == update.sessionID {
+            if let stoppedAt = update.checkpoint.stoppedAt { terminal.stopped(at: stoppedAt) }
+            terminal.recorded(update.signals, through: update.checkpoint.offset)
+        }
     }
 
     public func resume(_ session: IndexedSession) async throws -> PiSession.ID {
@@ -194,7 +196,7 @@ public final class ClaudeCodeRuntime: AgentRuntime {
     private func attach(_ session: PiSession, inbox: String?, registry: URL, runningSince: Date?, waiting: Bool) -> ClaudeTerminalSession {
         let terminal = ClaudeTerminalSession(
             id: session.id, pid: session.pid, bridge: bridge, gate: gate, inbox: inbox, registry: registry,
-            timing: timing, runningSince: runningSince, waiting: waiting)
+            timing: timing, runningSince: runningSince, waiting: waiting, recordLength: session.sessionFile.flatMap { ClaudeTerminalSession.length(of: $0) } ?? 0)
         terminals[session.id] = terminal
         let pid = session.pid
         if exitWatchers[pid] == nil {

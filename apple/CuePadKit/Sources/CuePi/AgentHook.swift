@@ -41,7 +41,7 @@ public final class AgentHookServer {
     private let path: URL
     private var listener: Int32 = -1
     private var source: DispatchSourceRead?
-    private var handlers: [AgentKind: @MainActor (AgentHookCall) -> Void] = [:]
+    private(set) var handlers: [AgentKind: @MainActor (AgentHookCall) -> Void] = [:]
     private var open: [ObjectIdentifier: PiSocketConnection] = [:]
 
     public init(path: URL = PiPaths().hookSocket) {

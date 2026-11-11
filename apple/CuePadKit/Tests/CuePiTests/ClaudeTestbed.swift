@@ -37,6 +37,8 @@ final class ClaudeTestbed {
     let log: ChangeLog
     private var terminals: [ClaudeTerminal] = []
     private var reading: Task<Void, Never>?
+    /// CuePad 读到的会话记录（交给 `runtime.read` 的每一次），按先后
+    private(set) var reads: [PiHistoryUpdate] = []
 
     /// 剧本只认带工具清单的请求（一轮真正的对话，含子代理的）：上面那类旁问的转录里也有你的话，不能让它们撞上剧本。
     func on(_ prompt: String, _ steps: FakeReply...) {
@@ -125,14 +127,47 @@ final class ClaudeTestbed {
     }
 
     func terminal(_ arguments: [String] = [], mode: String = "default") async throws -> ClaudeTerminal {
-        if reading == nil, let indexer = PiHistoryIndexer(agent: .claudeCode, paths: paths, files: files, start: { _ in nil }) {
-            reading = Task { [runtime, bridge] in
-                for await case .updated(let update) in indexer.events(following: bridge.sessionFiles, scope: .all) { runtime.read(update) }
-            }
-        }
+        if reading == nil { startReading() }
         let terminal = try await ClaudeTerminal(testbed: self, arguments: ["--permission-mode", mode] + arguments)
         terminals.append(terminal)
         return terminal
+    }
+
+    /// 换一个从头读起的索引器（同 CuePad 重启、读规则升级后从头重读已索引的会话），之前记下的读过的不算
+    func rereadFromScratch() {
+        reading?.cancel()
+        reads = []
+        startReading()
+    }
+
+    private func startReading() {
+        guard let indexer = PiHistoryIndexer(agent: .claudeCode, paths: paths, files: files, start: { _ in nil }) else { return }
+        reading = Task { [weak self, runtime, bridge] in
+            for await case .updated(let update) in indexer.events(following: bridge.sessionFiles, scope: .all) {
+                self?.reads.append(update)
+                runtime.read(update)
+            }
+        }
+    }
+
+    /// 正文含 `text` 的 `UserPromptSubmit` 钩子收到后先挂着，`release` 为真才交给 CuePad：钩子并行跑，让 CuePad 晚于会话记录知道这句。
+    func holdPrompt(containing text: String, until release: @escaping @MainActor () -> Bool) {
+        let handler = hooks.handlers[.claudeCode]!
+        hooks.handle(.claudeCode) { call in
+            let input = JSONValue.parse(call.envelope.input)
+            guard input?["hook_event_name"]?.string == "UserPromptSubmit", input?["prompt"]?.string?.contains(text) == true else { return handler(call) }
+            Task { @MainActor in
+                try? await eventually("放行挂着的钩子") { release() }
+                handler(call)
+            }
+        }
+    }
+
+    /// CuePad 已读过会话文件里含 `text` 的那一行
+    func hasRead(_ text: String, in file: URL?) -> Bool {
+        guard let file, let data = try? Data(contentsOf: file), let hit = data.range(of: Data(text.utf8)),
+              let end = data[hit.upperBound...].firstIndex(of: 0x0A) else { return false }
+        return reads.contains { $0.file.realPath == file.realPath && $0.checkpoint.offset > UInt64(end) }
     }
 
     /// 同 `MacExecutor.connect`：桥上有这个会话就用它，没有就接着它。
