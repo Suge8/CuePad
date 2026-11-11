@@ -2,6 +2,7 @@
 import CueStore
 import CueTestSupport
 import Foundation
+@testable import CuePi
 
 /// 后台的子代理与命令的剧本：主线程（有 Agent 工具）、子代理（有 SubagentHandback，交报告靠它）、后台完成的通知（`<task-notification>` 作为你的话进来）
 /// 三种请求各演各的。话本身只是触发剧本的暗语。
