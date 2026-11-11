@@ -3,8 +3,7 @@ import CueStore
 import CueText
 import Foundation
 
-/// 只读，不改任何一家的配置：每家起一个不落会话、不跑钩子、不连 CuePad 的进程，问完让它退出。
-/// 没接入的 Pi 也问：先报没登录，登录了才报只差接入，接入面板一打开就给对那一步。
+/// 只读，不改任何一家的配置：每家起一个不落会话、不跑钩子、不连 CuePad 的进程，问完让它退出。接没接入不影响能不能用：后台开的会话都由 CuePad 直接托管。
 struct AgentProbe {
     let paths: AgentPaths
     let locator: ExecutableLocator
@@ -39,7 +38,7 @@ struct AgentProbe {
                 try await kind.facts.probe(executable, self)
             }
             guard let agent else { return .unusable(.notLoggedIn) }
-            return Self.unconnected(kind, status).map(Outcome.unusable) ?? .usable(agent)
+            return .usable(agent)
         } catch let error as ProbeError {
             return .unusable(.other(ShownText(error)))
         } catch {
@@ -56,17 +55,6 @@ struct AgentProbe {
         case .unresponsive: .other(ShownText("问版本没有回应，稍后再试"))
         case .tooOld(let version): .other(ShownText("版本太旧（\(version.description)，要 \(kind.facts.minimumVersion?.description ?? "") 或更新）"))
         case .found: nil
-        }
-    }
-
-    /// CuePad 写给多数家的文件（技能、钩子）只管终端里开的会话与历史，后台开的会话由 CuePad 直接托管，没接入照样开得出；
-    /// 托管的会话也经上报通道上报的（`AgentFacts.hostingNeedsChannel`）没接入就开不出来。
-    private static func unconnected(_ kind: AgentKind, _ status: AgentStatus) -> MacAgentProblem.Reason? {
-        guard kind.facts.hostingNeedsChannel else { return nil }
-        switch status.files {
-        case .missing: return .notConnected
-        case .foreign(let path): return .other(ShownText("接不上：\(path) 是别人的同名文件"))
-        case .current, .outdated: return nil
         }
     }
 

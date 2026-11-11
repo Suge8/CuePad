@@ -3,7 +3,6 @@ import CueStore
 import Foundation
 
 /// 托管会话用用户的配置目录（会话落在 `<GROK_HOME>/sessions`，`grok --resume` 里也有）。
-/// 不装 Grok 自己的钩子（`~/.grok/hooks`）。Grok 也跑 Claude Code 格式的钩子，CuePad 写给 Claude Code 的钩子在 Grok 里也会被调起，钩子入口只认 Claude Code 发的。
 @MainActor
 public final class GrokRuntime: AgentRuntime {
     private let bridge: Bridge

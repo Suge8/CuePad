@@ -77,8 +77,6 @@ public struct AgentFacts: Sendable {
     public var loginArguments: [String]?
     var homeMeansInstalled = true
     var sessionFiles: SessionFileFormat?
-    var channel: @Sendable (AgentIntegration, _ executable: URL?) -> (any AgentHookConfig)? = { _, _ in nil }
-    var hostingNeedsChannel = false
     /// 托管的会话是 CuePad 为它起的进程：歇满 `Bridge.hostedIdle` 由桥请它退出（`Bridge.reviewHosted`）；
     /// 不是的自己计时或住在它的服务里。
     var releasesIdleHosted = false

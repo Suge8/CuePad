@@ -10,11 +10,6 @@ extension CodexRuntime {
         sessionFiles: SessionFileFormat(ingest: CodexHistory.ingest, depth: 4, naming: .idSuffix, sidecar: CodexHistory.sidecar) {
             $0.home(of: .codex).appending(path: "sessions", directoryHint: .isDirectory)
         },
-        channel: { integration, codex in
-            CodexHooks(
-                home: integration.home(of: .codex), skillDirectory: integration.skillDirectory, codex: codex, locate: integration.locate,
-                environment: integration.paths.environment)
-        },
         releasesIdleHosted: true, probe: askCodex, brain: { CodexBrain() }, projectFolder: ".codex", selfManagedSkills: ".system",
         globalReads: ["AGENTS.override.md", "AGENTS.md"])
 

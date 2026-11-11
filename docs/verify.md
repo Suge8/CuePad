@@ -94,12 +94,11 @@ iOS 旁白走到哪以旁白真走为准，不用 axe 的树（它连 `accessibi
 CUEPAD_FAKE_HOME=$PWD/apple/.derived/fakehome apple/scripts/xc.sh run mac -- -CuePadActsAs stranger -CuePadOfferSetup YES
 ```
 
-- 假家目录（`app_env.py` 的 `isolated_env`）：各家配置、`~/.local/bin`、`~/CuePad` 落在它的缺省位置。只有连接目录照样另起：终端里开的会话要 `export CUEPAD_PI_SOCKET_DIR=$(python3 apple/scripts/app.py sockets)`，`HOME` 也给假家目录。
-- 假家目录不放 `/tmp` 下：CuePad 按 `/private/tmp/…` 写 Codex 钩子的信任，Codex 按 `/tmp/…` 查，终端里一开就要你审核钩子。
+- 假家目录（`app_env.py` 的 `isolated_env`）：各家配置、`~/.local/bin`、`~/CuePad` 落在它的缺省位置，连接目录照样另起。终端里开的会话要进这个实例的历史，`HOME` 给假家目录（各家的会话记录写在它下面）。
 - `-CuePadActsAs development` 照真的找这台装没装正式版（维护者的 Mac：不碰）。
 - 换不走的是真的：通知权限与通知按 bundle id 记，与正式版共用，模拟时会真的弹出。
 - Claude Code 例外地给了配置目录：在缺省位置，它会从钥匙串读到真实的登录。
-- 终端里开会话在 tmux 里跑（`tmux -L <名> new-session -d …`，`send-keys` 作答）：Codex 的终端界面要终端回答它的查询，`script` 起的会挂住。
+- 要造终端里开过的会话（接入后在历史里翻看、对它发话由 CuePad 在后台接着），在 tmux 里跑（`tmux -L <名> new-session -d …`，`send-keys` 作答）：Codex 的终端界面要终端回答它的查询，`script` 起的会挂住。
 
 ## 通知
 

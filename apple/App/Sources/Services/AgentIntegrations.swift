@@ -5,8 +5,8 @@ import CueStore
 import Foundation
 import Observation
 
-/// `AgentIntegration` 之上唯一的一份。装只在用户点了之后；装过的在 `refresh()` 发现与这个版本的 App 要写的不同时
-/// （App 更新了，或 App 被移动后技能里的 cuepad 路径变了）静默升级，不再询问。
+/// `AgentIntegration` 之上唯一的一份。接入一家只写技能（它的会话记录全量读成历史在 `AppServices.indexAgents`）；装只在用户点了之后，
+/// 装过的在 `refresh()` 发现与这个版本的 App 要写的不同时（App 更新了，或 App 被移动后技能里的 cuepad 路径变了）静默升级，不再询问。
 /// 不碰真实世界时（`LibraryLocation.touchesRealWorld`）只写配置目录经环境变量换走了的那几家（`AgentIntegration.isWritable`），其余只检测。
 @Observable
 final class AgentIntegrations {
@@ -123,7 +123,7 @@ final class AgentIntegrations {
         await integration.probe(statuses)
     }
 
-    /// 升级失败抛第一个错，状态仍反映磁盘上的旧版。
+    /// 升级技能、删掉旧版写的钩子（`AgentIntegration.removeOldHooks`）；哪样失败都照做其余的，抛第一个错，状态仍反映磁盘上的旧版。
     func refresh() async throws {
         await redetect()
         var failure: (any Error)?
@@ -131,18 +131,18 @@ final class AgentIntegrations {
         where isWritable(kind) && statuses[kind]?.files == .outdated && statuses[kind]?.isAvailable == true {
             do { try await install(kind) } catch { failure = failure ?? error }
         }
+        do { try await integration.removeOldHooks(codex: statuses[.codex]?.executable) } catch { failure = failure ?? error }
         if let failure { throw failure }
     }
 
-    /// 新装或升级；已在运行的 Pi 会话经 `installed` 被请去核对，空闲时重新载入扩展。
+    /// 新装或升级。
     func install(_ kind: AgentKind) async throws {
         try await change(kind) { try await $0.install(kind) }
         installed(kind)
     }
 
     func uninstall(_ kind: AgentKind) async throws {
-        let executable = statuses[kind]?.executable
-        try await change(kind) { try await $0.uninstall(kind, executable: executable) }
+        try await change(kind) { try await $0.uninstall(kind) }
         await uninstalled(kind)
     }
 

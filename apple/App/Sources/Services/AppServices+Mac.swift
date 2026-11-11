@@ -17,7 +17,6 @@ extension AppServices {
         agents.installed = { [weak self] kind in self?.runtimes[kind]?.integrationInstalled() }
         do {
             try bridge.start()
-            try hooks.start()
         } catch {
             reportIssue(.bridgeUnavailable("\(error)"))
         }
@@ -28,8 +27,8 @@ extension AppServices {
         follow(reporting: { .syncUnavailable(String(localized: "Agent 状态没能写入同步记录：\(String(describing: $0))")) }) {
             try await self.consumeSessionChanges(sessionChanges)
         }
-        // 执行器在接入刷新之后才启动：托管的 Pi 加载磁盘上的扩展，App 更新后要先换成随包版本，旧扩展读不懂托管约定。
-        // 刷新失败也照样启动——托管启动时核对连上的扩展，对不上就让它退出并报错（`PiHostError.extensionMismatch`）。
+        // 执行器在接入刷新之后才启动：技能里写着 cuepad 的绝对路径与这一版的用法，App 更新或移动后先改写，它开的会话才读到对的。
+        // 刷新失败也照样启动：技能旧了只是 cuepad 用不对，不挡远程投送。
         follow(reporting: { .syncUnavailable(String(localized: "远程投送执行器没能启动：\(String(describing: $0))")) }) {
             // 刷新不因取消抛错；退出收尾取消了这个任务时，迟到的 start 当场抛取消、不再起执行器（`DeliveryExecutor.start`）
             await self.refreshAgentIntegrations()
@@ -71,7 +70,7 @@ extension AppServices {
         do {
             try await agents.refresh()
         } catch where !Task.isCancelled {
-            reportIssue(.bridgeUnavailable(String(localized: "CuePad 写给 Agent 的技能或扩展没能升级：\(error.localizedDescription)")))
+            reportIssue(.bridgeUnavailable(String(localized: "Agent 的接入没能更新：\(error.localizedDescription)")))
         } catch {}
     }
 
@@ -92,7 +91,6 @@ extension AppServices {
         cancelBackgroundWork()
         let hosted = runtimes.values.map { $0.stop() }
         let hostedExit: @Sendable () async -> Void = { for exit in hosted { await exit() } }
-        hooks.stop()
         bridge.stop()
         hotkey.unregister()
         // 离线这一条一开始收尾就写、就传，不排在别的组件停下之后：前面的步骤耗尽上限时它也已写下；停同步前等它传完
