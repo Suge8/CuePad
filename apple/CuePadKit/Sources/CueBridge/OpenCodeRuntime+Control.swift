@@ -135,7 +135,7 @@ extension OpenCodeRuntime {
         // 桥上的名字与模型只随服务自己的事件（改名、选模型）更新，不在这里先写
     }
 
-    /// 结束：停下在跑的一轮，会话下线（它还在服务里，再有活动——终端里接着说、CuePad 接着它——就重新上线）。
+    /// 结束：停下在跑的一轮，会话下线（它还在服务里，再有活动——CuePad 接着它——就重新上线）。
     public func end(_ id: Session.ID) async throws {
         let (connection, _, sessionID) = try await live(id)
         try await interrupt(sessionID, connection)
@@ -153,10 +153,7 @@ extension OpenCodeRuntime {
         let data = try await connection.client.call(
             "POST", "/api/session", body: Create(location: OpenCodeLocation(directory: directory.path(percentEncoded: false))))
         let info = try JSONDecoder().decode(OpenCodeData<OpenCodeSessionInfo>.self, from: data).data
-        let id = try await host(info, connection) {
-            $0.hosted = true
-            $0.launchToken = launchToken
-        }
+        let id = try await host(info, connection, launchToken: launchToken)
         let sessionID = info.id
         do {
             return try await configure(opened: id, name: name, model: model, thinking: thinking, on: bridge)
@@ -169,23 +166,22 @@ extension OpenCodeRuntime {
 
     public func resume(_ session: IndexedSession) async throws -> Session.ID {
         let connection = try await ensureService()
-        let online = sessions[session.id]?.online == true
         let info: OpenCodeSessionInfo
         do {
             info = try await connection.client.get(OpenCodeData<OpenCodeSessionInfo>.self, "/api/session/\(session.id)").data
         } catch let error as OpenCodeAPIError where error.status == 404 {
             throw BridgeError.unknownSession(session.id)
         }
-        return try await host(info, connection) { if !online { $0.hosted = true } }
+        return try await host(info, connection, launchToken: nil)
     }
 
-    /// 让 CuePad 托管的会话上线；已经在线的（比如终端里正开着）不算托管。
-    func host(_ info: OpenCodeSessionInfo, _ connection: Connection, _ body: (inout Tracked) -> Void) async throws -> Session.ID {
+    /// 开的、接着的会话从此托管：上线，此后它的事件、子代理与对话都收。
+    private func host(_ info: OpenCodeSessionInfo, _ connection: Connection, launchToken: String?) async throws -> Session.ID {
         guard self.connection === connection else { throw BridgeError.sessionEnded }
         var tracked = sessions[info.id] ?? Tracked(info: info)
         tracked.online = true
         ended[info.id] = nil
-        body(&tracked)
+        if let launchToken { tracked.launchToken = launchToken }
         sessions[info.id] = tracked
         listed?.insert(info.id)
         try await catalog(info.location.directory, connection.client)

@@ -4,8 +4,9 @@ import Foundation
 import OSLog
 
 /// 服务不续传，所以每次连上（含断线重连）都重拉一遍快照。
-/// 在线：服务活着期间有过活动（建立、发话、执行、提问）的顶层会话在线——连上时按“最后修改晚于服务启动”认，之后按事件认；在 CuePad 里结束的会话也下线，直到它再有活动。服务端不知道终端的 tty，所以跳不到终端。
-/// Cue 的大脑（`OpenCodeBrain`）开的会话也在用户的库里，按标记（`OpenCodeSessionInfo.isCueBrain`）跳过：它们由大脑自己的服务跑，事件不经后台服务的事件流，接入只会在会话列表与按 id 取会话时碰到。
+/// 只管 CuePad 开的、接着的会话：服务与库是用户的，别处开的会话（终端、Cue 的大脑）也在里面，一概不上桥、不进索引、不收事件。
+/// 认法是资料库里这台 Mac 托管过的（`CueStore.hostedSessionIDs`，App 重启、服务重连后靠它认回）加上这次运行里开的、接着的（`sessions`）。
+/// 在线：服务活着期间有过活动（建立、发话、执行、提问）的托管会话在线——连上时按“最后修改晚于服务启动”认，之后按事件认；在 CuePad 里结束的会话也下线，直到它再有活动。
 /// 从没取过模型表的第一次启动，它先用随包的旧表、同时联网取新表（约 1～2 秒）；这期间配置的默认模型不在旧表里就改用旧表第一个（它自己的终端界面也一样）。CuePad 不补，会话页显示实际用的模型。
 @MainActor
 public final class OpenCodeRuntime: AgentRuntime, SessionLink {
@@ -27,13 +28,14 @@ public final class OpenCodeRuntime: AgentRuntime, SessionLink {
     var stopPhases: [Session.ID: StopPhase] = [:]
     var waiters: [UUID: CheckedContinuation<Connection, any Error>] = [:]
 
+    /// 托管的顶层会话：只有它们（与它们的子代理）上桥、进索引、收事件
     var sessions: [String: Tracked] = [:]
     var parents: [String: String] = [:]
     var childTurns: [String: OpenCodeTurn] = [:]
     /// 在 CuePad 里结束的时刻：此后的活动才让它重新上线（`revives`）
     var ended: [String: Date] = [:]
     var catalogs: [String: Catalog] = [:]
-    /// 服务里全部顶层会话（会话索引对账用）；还没拉到完整列表时为 nil
+    /// 服务里的托管会话（会话索引对账用）；还没拉到完整列表时为 nil
     var listed: Set<String>?
     var checkpoints: [String: OpenCodeHistory.Checkpoint] = [:]
     var ingestQueue: [String] = []
@@ -63,7 +65,6 @@ public final class OpenCodeRuntime: AgentRuntime, SessionLink {
     struct Tracked {
         var info: OpenCodeSessionInfo
         var online = false
-        var hosted = false
         var launchToken: String?
         var facts = SessionFacts()
         var turn = OpenCodeTurn()

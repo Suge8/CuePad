@@ -136,7 +136,6 @@ struct OpenCodeEvent: Decodable, Sendable {
         var title: String?
         var agent: String?
         var model: OpenCodeModelRef?
-        var location: OpenCodeLocation?
         var name: String?
         var input: OpenCodeToolInput?
         var error: OpenCodeFailure?
@@ -267,9 +266,6 @@ struct OpenCodeSessionInfo: Decodable, Sendable {
     }
 
     struct Metadata: Codable, Sendable { var cuepadBrain: Int32? }
-
-    /// Cue 的大脑开的会话：它的服务与接入连的后台服务共用用户的库，接入照这个标记跳过（不上桥、不进会话索引与历史）。
-    var isCueBrain: Bool { metadata?.cuepadBrain != nil }
 
     var updatedAt: Date { Date(timeIntervalSince1970: time.updated / 1000) }
     var createdAt: Date { Date(timeIntervalSince1970: time.created / 1000) }
