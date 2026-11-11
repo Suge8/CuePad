@@ -17,7 +17,7 @@ struct SessionDock: View {
         let endIssue = MacDelivery.endIssue(deliveries, at: speech)
         // 卡与回复框之间的缝在卡里（`DockedCard`）：卡升起、沉回时缝跟着长、跟着收
         VStack(spacing: 0) {
-            PiQuestionDock(session: session, deliveries: deliveries)
+            PiQuestionDock(session: session)
             PiFailureDock(session: session, delivery: digest?.delivery, catalog: digest?.catalog, config: digest?.config(at: speech))
             DockedCard(endIssue?.unconfirmedReason) { reason in
                 Callout(.unknown(), text: String(localized: "结束结果尚未确认：\(reason)"), docked: true) { recoverEnd }

@@ -129,11 +129,10 @@ private struct CalloutSurface: ViewModifier {
 struct QuestionCard: View {
     let session: PiSessionState
     let question: PiQuestion
-    let deliveries: [DeliveryRequest]
 
     var body: some View {
         Callout(.asking, text: question.text, docked: true) {
-            WaitAnswer(wait: .session(session, task: nil), replyElsewhere: true, deliveries: deliveries)
+            WaitAnswer(wait: .session(session, task: nil), replyElsewhere: true)
         }
     }
 }

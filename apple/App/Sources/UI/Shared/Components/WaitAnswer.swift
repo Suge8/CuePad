@@ -9,7 +9,6 @@ import SwiftUI
 struct WaitAnswer: View {
     let wait: CueTally.Wait
     var replyElsewhere = false
-    var deliveries: [DeliveryRequest]?
     @Environment(Workspace.self) private var workspace
     @State private var ending = false
 
@@ -24,7 +23,7 @@ struct WaitAnswer: View {
                 }
             }
         case .session(let session, _):
-            SessionAnswer(session: session, replyElsewhere: replyElsewhere, deliveries: deliveries)
+            SessionAnswer(session: session, replyElsewhere: replyElsewhere)
         }
     }
 }
@@ -32,7 +31,6 @@ struct WaitAnswer: View {
 private struct SessionAnswer: View {
     let session: PiSessionState
     let replyElsewhere: Bool
-    let deliveries: [DeliveryRequest]?
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -51,11 +49,7 @@ private struct SessionAnswer: View {
         var error: String?
     }
 
-    private var request: DeliveryRequest? {
-        guard let promptID = question?.promptID else { return nil }
-        let requests = deliveries ?? services.liveSessions.deliveries[session.sessionID].map { [$0] } ?? []
-        return requests.last { $0.answer?.promptID == promptID }
-    }
+    private var request: DeliveryRequest? { services.liveSessions.answer(to: session) }
 
     private var unseen: Pending? {
         guard let pending, pending.promptID == question?.promptID, pending.requestID == nil || pending.requestID != request?.id else { return nil }

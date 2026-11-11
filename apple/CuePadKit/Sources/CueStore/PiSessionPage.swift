@@ -68,6 +68,8 @@ public struct PiSessionListItem: Identifiable, Sendable, Equatable {
   public var delivery: DeliveryRequest?
   /// 发给它的最近一条改名请求（带名字的配置请求）：改名在路上、没改成都由它推出。
   public var rename: DeliveryRequest?
+  /// 发给它的最近一条作答请求：答题部件据此看作答到哪了，别的请求再发进来也不会把它挤掉（`delivery` 只留最近一条）。
+  public var answer: DeliveryRequest?
   /// 发给它、还没有回执或失败了的话（说话的方式，没被领取或失败、还没重发或移除的）：哪几句没能送达按说的话那条规则看此刻（`undelivered`）。
   public var unsettled: [DeliveryRequest]
   /// 它此刻归的那件事的顶层任务（`CueStore.sessionOwners`）：会话的"置顶"置的是它；没绑还在列表里的任务为 nil。
@@ -76,13 +78,14 @@ public struct PiSessionListItem: Identifiable, Sendable, Equatable {
   public var home: UUID { project?.id ?? Project.defaultID }
 
   public init(
-    state: PiSessionState, project: Project? = nil, delivery: DeliveryRequest? = nil, rename: DeliveryRequest? = nil,
+    state: PiSessionState, project: Project? = nil, delivery: DeliveryRequest? = nil, rename: DeliveryRequest? = nil, answer: DeliveryRequest? = nil,
     unsettled: [DeliveryRequest] = [], task: SessionTask? = nil
   ) {
     self.state = state
     self.project = project
     self.delivery = delivery
     self.rename = rename
+    self.answer = answer
     self.unsettled = unsettled
     self.task = task
   }
