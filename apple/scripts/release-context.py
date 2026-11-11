@@ -3,7 +3,7 @@
 用法：release-context.py run <mac|ios> [--dry-run] [--resume <公证 id>]   拿锁、建或找回尝试目录（CUEPAD_RELEASE_OUT），再 exec 发布脚本
       release-context.py seal <尝试目录> <归档> <release_versions 的输出…>  归档与导出产物都要符合快照的 bundle id 与本次版本，打印构建号
       release-context.py id <尝试目录>                                     打印 submission.json 里的公证 ID
-新的发布（不含 --dry-run 与 --resume）只认主干那一遍云端检查全绿的提交（verified）。
+会上传的发布（新发的与 --resume 找回的，不含 --dry-run）只认主干那一遍云端检查全绿的提交（verified）。
 发布凭据只在这台 Mac，锁不跨机器。恢复只认 submission.json 的公证 ID 唯一匹配：响应缺失或不完整就是结果未知，不猜、不重投。
 """
 import fcntl, json, os, plistlib, re, subprocess, sys, tarfile, tempfile, time, zipfile
@@ -42,16 +42,20 @@ def hold(platform):
 
 
 def verified(commit):
-    """合并前的本机签核只跑真 Agent 的冒烟、不跑 iOS；全量只有合并进主干后云端那一遍（swift.yml），用户拿到的构建只从它全绿的提交出。"""
+    """合并前的本机签核只跑真 Agent 的冒烟、不跑 iOS；全量只有合并进主干后云端那一遍（swift.yml），用户拿到的构建只从它全绿的提交出。
+    只认主干上的运行：分支上手动触发的那一遍用的是分支自己的工作流定义。"""
     runs = json.loads(subprocess.check_output(
-        ["gh", "run", "list", "--workflow", "swift.yml", "--commit", commit, "--json", "status,conclusion,url"], cwd=CHECKOUT, text=True))
+        ["gh", "run", "list", "--workflow", "swift.yml", "--branch", "main", "--commit", commit, "--json", "status,conclusion,url,event"],
+        cwd=CHECKOUT, text=True))
+    runs = [run for run in runs if run["event"] != "pull_request"]  # 别的仓库名叫 main 的分支提的 PR 也记成 main
     if any(run["conclusion"] == "success" for run in runs):
         return
-    seen = "；".join(f"{run['conclusion'] or run['status']} {run['url']}" for run in runs) or "这个提交没有跑过（不在主干上，或排队时被后来的合并顶掉）"
-    fail(f"{commit[:9]} 的主干检查没有全绿，不发布：{seen}。在跑就等它跑完；红了先修主干（runner 自己崩的就 gh run rerun <id> --failed）；没跑过就从主干最新的提交发，或 gh workflow run swift.yml 补跑")
+    seen = "；".join(f"{run['conclusion'] or run['status']} {run['url']}" for run in runs) or "这个提交在主干上没有跑过（不在主干上，或排队时被后来的合并顶掉）"
+    fail(f"{commit[:9]} 的主干检查没有全绿，不发布：{seen}。在跑就等它跑完；红了先修主干（runner 自己崩的就 gh run rerun <id> --failed）；"
+         "没跑过就从主干最新的提交发，或 gh workflow run swift.yml --ref main 补跑")
 
 
-def attempt(platform, resume, gated):
+def attempt(platform, resume, uploads):
     fixed = RELEASES / platform
     if fixed.exists() or fixed.is_symlink():
         fail(f"旧版留下的 {fixed} 还在：是链接就删掉；是目录先确认里面没有待恢复的公证（submission.json），再手工删掉或移走（docs/release.md）")
@@ -65,9 +69,11 @@ def attempt(platform, resume, gated):
             fail(f"公证结果未知：没有哪次尝试的 submission.json 记着 {resume}；保留全部尝试，核实苹果的提交记录，不猜 ID、不重新提交")
         if len(matches) > 1:
             fail(f"公证 ID {resume} 不唯一：{', '.join(map(str, matches))}；保留全部尝试，核实后手工处理")
+        if uploads:  # 找回的可能是 --dry-run 留下的：那时没核对
+            verified((matches[0] / "commit").read_text().strip())
         return matches[0]
     commit = subprocess.check_output(["git", "-C", CHECKOUT, "rev-parse", "HEAD"], text=True).strip()
-    if gated:
+    if uploads:
         verified(commit)
     attempts.mkdir(parents=True, exist_ok=True)
     out = Path(tempfile.mkdtemp(prefix=time.strftime("%y%m%d-%H%M%S-"), dir=attempts))
@@ -92,7 +98,7 @@ def run(platform, args):
         else:
             fail(USAGE)
     hold(platform)
-    out = attempt(platform, resume, gated="--dry-run" not in rest)
+    out = attempt(platform, resume, uploads="--dry-run" not in rest)
     print(f"发布尝试：{out}", file=sys.stderr, flush=True)
     script = f"{APPLE}/scripts/release-{platform}.sh"
     os.execve(script, [script, *(rest if platform == "mac" else ["testflight"])], dict(os.environ, CUEPAD_RELEASE_OUT=str(out)))
