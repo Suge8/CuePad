@@ -59,7 +59,7 @@ struct SessionTranscriptTests {
     private func live(_ sessionID: String, file: URL) async throws -> CueBridge.Session {
         let session = CueBridge.Session(
             id: "\(sessionID).100", sessionID: sessionID, agent: .pi, sessionFile: file, pid: 100, cwd: URL(filePath: "/work/x", directoryHint: .isDirectory),
-            terminal: TerminalIdentity(), state: .thinking, stateSince: .now)
+            state: .thinking, stateSince: .now)
         try await services.consumeSessionChanges(AsyncStream { continuation in
             continuation.yield(.appeared(session))
             continuation.finish()

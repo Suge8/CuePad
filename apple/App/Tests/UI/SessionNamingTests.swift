@@ -50,7 +50,7 @@ struct SessionNamingTests {
         let consume = Task { try await app.services.consumeSessionChanges(events) }
         link.bridge = app.bridge
         var session = Session(
-            id: "p1.1", sessionID: "p1", agent: .pi, sessionFile: nil, pid: 1, cwd: app.directory, terminal: TerminalIdentity(),
+            id: "p1.1", sessionID: "p1", agent: .pi, sessionFile: nil, pid: 1, cwd: app.directory, 
             state: .settled, stateSince: .now)
         session.firstMessage = Self.first
         app.bridge.attach(session, via: link)

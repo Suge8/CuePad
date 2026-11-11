@@ -24,7 +24,7 @@ struct MacSyncTests {
         }
         return CueBridge.Session(
             id: "\(sessionID).\(pid)", sessionID: sessionID, agent: .pi, sessionFile: file, pid: pid, cwd: URL(filePath: cwd, directoryHint: .isDirectory),
-            terminal: TerminalIdentity(), state: state, stateSince: .now)
+            state: state, stateSince: .now)
     }
 
     func changes(_ items: [SessionChange]) -> AsyncStream<SessionChange> {

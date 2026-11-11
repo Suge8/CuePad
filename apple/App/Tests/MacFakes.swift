@@ -143,7 +143,7 @@ final class PipedHostedAgent: AgentRuntime, SessionLink {
     func host(_ sessionID: String, state: WorkState) -> Session.ID {
         let session = Session(
             id: "\(sessionID).1", sessionID: sessionID, agent: agent, sessionFile: nil, pid: 1, cwd: URL(filePath: "/work/\(sessionID)"),
-            terminal: TerminalIdentity(), state: state, stateSince: Date())
+            state: state, stateSince: Date())
         bridge.attach(session, via: self)
         return session.id
     }

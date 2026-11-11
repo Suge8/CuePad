@@ -20,7 +20,7 @@ struct SessionTaskTests {
         try services.reconcileLaunch()  // Mac 启动
         var session = CueBridge.Session(
             id: "s1.100", sessionID: "s1", agent: .pi, sessionFile: URL(filePath: "/tmp/never-\(UUID().uuidString).jsonl"), pid: 100,
-            cwd: URL(filePath: "/work/x", directoryHint: .isDirectory), terminal: TerminalIdentity(),
+            cwd: URL(filePath: "/work/x", directoryHint: .isDirectory), 
             state: .settled, stateSince: .now)
         session.name = "修登录"
         try await bridge(.appeared(session))
