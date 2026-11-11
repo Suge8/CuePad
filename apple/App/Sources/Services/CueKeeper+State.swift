@@ -74,7 +74,7 @@ extension CueKeeper {
         var unanswered: [UUID]?
         /// 额度、登录卡住后的绕行（`Detour`）；没在绕行为 nil
         var detour: Detour?
-        /// 做梦听他在会话里说的话听到哪了（`CueStore.said(after:limit:)` 的 `through`）；nil 是还没听过，从最新的那些听起
+        /// 做梦听他在会话里说的话听到哪了：交给它的最后一句的次序（`CueStore.said(after:limit:)` 的 `through`）；nil 是还没听过，从此刻听起（`dreams`）
         var heard: Int64?
     }
 

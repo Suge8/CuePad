@@ -8,22 +8,26 @@ extension CueKeeper {
     /// 后台整理记忆（做梦）：Cue 没在跑一轮时，另起一个一次性的大脑做两件事，跑完收掉。
     /// - 合并：记忆变了（订阅记忆的版本，与对账同一份判定：别的设备迟到同步来的钉上、取消、忘掉也算；摘要不在内，写摘要不会再叫醒它），
     ///   有待合并的块（`CueMemoryView.merges`）就合。Cue 一轮里接连记下的几条等这一轮做完一起合，也不和回你的那一轮抢模型。
-    /// - 听：会话对话每多 `heardBatch` 条看一次，他在各会话里说的新话攒够 `heardBatch` 句，就交给它找反复交代的做法、
-    ///   问他一次要不要记成重点（`CuePrompt.dream`）。
+    /// - 听：他在各会话里说的新话攒够 `heardBatch` 句，就交给它找反复交代的做法、问他一次要不要记成重点（`CuePrompt.dream`）。
+    ///   听到哪了是一个书签（`Progress.heard`）；没有书签就夹在此刻，只听之后说的：历史不补听，它查以前说过没有时查的是全部（said）。
     /// 重点只归 Cue 整理：做梦只写摘要与提问，和 Cue 的一轮重叠也不改规矩。
     /// 一个个按序处理：同一时刻只跑一个，跑时又变了，跑完由排着的那次变化再看一遍；合不成的（出错、没写全）不另记，等下一次再看时自然重合。
     /// 值班到 `run` 结束。
     func dreams() async {
-        var seen: CueMemoryVersion?, looked: Int64?
+        var seen: CueMemoryVersion?
         do {
             for try await moment in store.observe({
                 DreamMoment(memory: try $0.cueMemoryVersion(), said: try $0.sessionMessagesThrough(), busy: try $0.cueState()?.state.known?.isWorking == true)
             }) where !moment.busy {
-                // 上次看过之后对话多了一批（或次序重新数了，见 `CueStore.said(after:limit:)`）才再数他说了几句：数一次要扫这段对话
-                let grown = looked.map { !($0..<$0 + Int64(Self.heardBatch)).contains(moment.said) } ?? true
-                guard grown || moment.memory != seen else { continue }
-                (seen, looked) = (moment.memory, grown ? moment.said : looked)
-                await dream()
+                // 书签在对话末尾之后，是清过同步数据、次序重新数了：同没有书签一样夹在此刻
+                if progress.heard.map({ $0 > moment.said }) ?? true {
+                    progress.heard = moment.said
+                    save()
+                }
+                var merging = moment.memory != seen
+                seen = moment.memory
+                // 积压着的（停用、离线时攒下的）一批批听完
+                while await dream(merging: merging, after: progress.heard ?? moment.said) { merging = false }
             }
         } catch {
             Self.log.error("Cue 订阅记忆失败：\(error.localizedDescription, privacy: .public)")
@@ -37,28 +41,29 @@ extension CueKeeper {
         var busy: Bool
     }
 
-    /// 他在会话里说的新话攒够这么多句才听一遍（真实库里一天五十句上下：一天一两遍），一遍至多听最新的 `heardLimit` 句。
+    /// 他在会话里说的新话攒够这么多句才听一遍（真实库里一天五十句上下：一天一两遍），一遍至多听 `heardLimit` 句，多的下一遍接着听。
     nonisolated static let heardBatch = 40
     nonisolated static let heardLimit = 200
 
-    /// 做一次：Cue 的那家与模型、强度用低档（模型照用户给 Cue 选的，各家都起得来、不另猜模型名），
+    /// 做一次（`merging`：记忆变过，看有没有待合并的块；`heard` 之后他说的话够一批就一起听），返回听没听一批（听了可能还有下一批）。
+    /// Cue 的那家与模型、强度用低档（模型照用户给 Cue 选的，各家都起得来、不另猜模型名），
     /// 系统提示与输入见 `CuePrompt.dream`、`dreamInput`，工具是 `cuepad mcp --dream` 那一组，不带 Cue 的会话。一轮做完或进程退出就停。
-    /// 听过的那一批不论做没做成都算听过（`Progress.heard`）：没做成的不重听，那几句以后照样查得到（said），他再说起时补上；
-    /// 重听的话大脑起不来的那段时间里对话每多一批就白起一次。
-    private func dream() async {
-        var brain: (any HostedSession)?
+    /// 交出去的那一批不论做没做成都算听过（书签移到其中最后一句）：没做成的不重听，那几句以后照样查得到（said），他再说起时补上；
+    /// 重听的话大脑起不来的那段时间里每来一句新话就白起一次。
+    private func dream(merging: Bool, after heard: Int64) async -> Bool {
+        var brain: (any HostedSession)?, listened = false
         do {
-            let heard = try await store.said(after: progress.heard ?? 0, limit: Self.heardLimit)
-            let listening = heard.said.count >= Self.heardBatch
+            let new = try await store.said(after: heard, limit: Self.heardLimit)
+            let listening = new.said.count >= Self.heardBatch
+            guard merging || listening else { return false }
             let asked = listening ? try await store.cueHabitQuestions() : []
-            guard let input = CuePrompt.dreamInput(CueMemoryView(try await store.cueMemory()), said: listening ? heard.said : [], asked: asked),
+            guard let input = CuePrompt.dreamInput(CueMemoryView(try await store.cueMemory()), said: listening ? new.said : [], asked: asked),
                   let profile = try await store.cueProfile(), let runtime = profile.runtime.known, let launch = try await setup.launch(runtime)
-            else { return }
-            defer {
-                if listening {
-                    progress.heard = heard.through
-                    save()
-                }
+            else { return false }
+            if listening {
+                progress.heard = new.through
+                save()
+                listened = true
             }
             let started = try await startBrain(
                 runtime, launch, model: profile.model, effort: .low, systemPrompt: CuePrompt.dream(runtime: runtime), tools: ["--dream"])
@@ -77,6 +82,7 @@ extension CueKeeper {
             Self.log.error("Cue 整理记忆没起来：\(error.localizedDescription, privacy: .public)")
         }
         await brain?.stop()()
+        return listened
     }
 
 }

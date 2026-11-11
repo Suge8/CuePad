@@ -21,7 +21,7 @@ public struct CueRecall: Equatable, Sendable {
   }
 }
 
-/// 他在会话里新说的一批话（`CueStore.said(after:limit:)`）与读到哪了。
+/// 他在会话里新说的一批话（`CueStore.said(after:limit:)`）与其中最后一句的次序：听到哪了只能是交出去的最后一句。
 public struct CueSaid: Equatable, Sendable {
   public var said: [CueRecall.Reply]
   public var through: Int64
@@ -101,13 +101,12 @@ extension CueStore {
     try db.first("SELECT COALESCE(max(rowid), 0) FROM \(PiChatMessage.table.rawValue)") { $0.int(0) } ?? 0
   }
 
-  /// 他在会话里新说的话：读进这台的次序在 `heard` 之后的，最新 `limit` 条，从早到晚；`through` 是这次读到哪。
-  /// `heard` 比库里最新的还大（换账号清过同步数据，次序重新数）就从头读。
+  /// 他在会话里新说的话：读进这台的次序在 `heard` 之后的，从早到晚至多 `limit` 句；没有新的 `through` 就是 `heard`。
   public func said(after heard: Int64, limit: Int) throws -> CueSaid {
-    let through = try sessionMessagesThrough()
-    let said = try replies(
-      where: "rowid > ? AND rowid <= ? AND \(Self.saidByHim)", [heard > through ? 0 : heard, through], orderBy: "rowid DESC", limit: limit)
-    return CueSaid(said: said.reversed(), through: through)
+    let table = PiChatMessage.table.rawValue
+    let said = try replies(where: "rowid > ? AND \(Self.saidByHim)", [heard], orderBy: "rowid", limit: limit)
+    let through = try said.last.flatMap { last in try db.first("SELECT rowid FROM \(table) WHERE id = ?", [last.message.id]) { $0.int(0) } }
+    return CueSaid(said: said, through: through ?? heard)
   }
 
   private static let recallText = "(text LIKE ? ESCAPE '\\')"
