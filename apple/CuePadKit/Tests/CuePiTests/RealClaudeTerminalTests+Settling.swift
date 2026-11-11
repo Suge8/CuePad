@@ -52,12 +52,12 @@ extension RealClaudeTerminalTests {
         }
     }
 
-    /// 挡下的那一行晚于 CuePad 收到这句的钩子写下（你的钩子比 CuePad 的慢），紧接着在终端里说一句正常的话：这一轮跑完之前不歇下。
+    /// 挡下的那一行晚于 CuePad 收到这句的钩子写下（你的钩子比 CuePad 的慢），紧接着说一句正常的话：这一轮跑完之前不歇下。
+    /// 下一句从 CuePad 发：挡下的那句留在终端的输入框里，在终端里打会接在它后面。
     @Test func theNextPromptAfterABlockedOneRunsUntilItsEnd() async throws {
         let release = FileManager.default.temporaryDirectory.appending(path: "release-\(UUID().uuidString)")
-        let finish = FileManager.default.temporaryDirectory.appending(path: "finish-\(UUID().uuidString)")
         let settings = #"{"permissions": {"allow": ["Bash"]}, "hooks": {"UserPromptSubmit": [{"hooks": [{"type": "command", "command": "grep -q BLOCKME && { while [ ! -e '\#(release.path)' ]; do sleep 0.05; done; echo blocked-by-user-hook >&2; exit 2; }; exit 0"}]}]}}"#
-        let command = #"while [ ! -e '\#(finish.path)' ]; do sleep 0.05; done; echo RAN"#
+        let command = "while [ ! -e finish ]; do sleep 0.05; done; echo RAN"
         try await ClaudeTestbed.run(settings: settings) { testbed in
             try testbed.startConnected()
             testbed.on("RUN-AFTER") { $0.step == 0 ? .call("Bash", ["command": command, "description": "wait"]) : .say("RAN") }
@@ -70,12 +70,12 @@ extension RealClaudeTerminalTests {
                 await terminal.screen.contains("blocked-by-user-hook") && testbed.bridge.session(id: session.id)?.state == .settled
             }
             let start = Date()
-            try await terminal.type("RUN-AFTER now")
+            try await testbed.bridge.send(PiMessage(text: "RUN-AFTER now"), to: session.id)
             try await testbed.waitOnScreen("这一轮在跑命令，CuePad 读过它写下的工具调用", on: terminal, in: session.id) {
                 testbed.bridge.session(id: session.id)?.detail?.contains("echo RAN") == true && testbed.hasRead(#""name":"Bash""#, in: session.sessionFile)
             }
             #expect(testbed.bridge.session(id: session.id)?.state.isWorking == true, "命令还在跑：\(String(describing: testbed.bridge.session(id: session.id)?.state))")
-            try Data().write(to: finish)
+            try Data().write(to: testbed.work.appending(path: "finish"))
             try await testbed.waitForTurn(session.id, since: start)
             try await testbed.waitForDraftLanded(session.id)
             #expect(try testbed.transcript(session.sessionFile).recap.lastReply == "RAN")
