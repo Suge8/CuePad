@@ -115,6 +115,9 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   /// 持久记录还没有收尾，不等于此刻在跑；当前进度与控制去重读 Speech.trip。
   public var isOpen: Bool { status.known.map(DeliveryStatus.open.contains) ?? false }
 
+  /// 还在等执行的 Mac 领取（待领取或准备中）：别的设备上只凭这个快照可以请那台 Mac 撤回，撤不撤得成由它核对（`completeDeliveryWithdrawal`）。
+  public var awaitsClaim: Bool { status.known.map(DeliveryStatus.waiting.contains) == true }
+
   /// 尚未领取只是撤回的必要条件；能否撤回还要由库事务核对已发送事实。
   public var isWithdrawable: Bool { status.known.map(DeliveryStatus.waiting.contains) == true && handledBy == nil }
 

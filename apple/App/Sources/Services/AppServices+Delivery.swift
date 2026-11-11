@@ -11,7 +11,7 @@ extension AppServices {
             guard try await store.withdrawFailedDelivery(request.id) else { throw SendError.alreadyHanded }
         case .request(let request):
             if try await !store.withdrawDelivery(request.id, locallyOn: speech.localHost) {
-                guard request.status == .known(.preparing) else { throw SendError.alreadyHanded }
+                guard request.awaitsClaim else { throw SendError.alreadyHanded }
                 try await withdrawRemotely(request.id)
                 try await store.deleteDelivery(request.id)
             }

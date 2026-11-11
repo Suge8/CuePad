@@ -20,7 +20,7 @@ extension CueStore {
   /// 远端快照不能授权删除：沿现有投送通道交给目标 Mac，核对仍未交出后才撤回。
   public func requestDeliveryWithdrawal(_ id: UUID) throws -> DeliveryRequest? {
     try write {
-      guard let original = try find(DeliveryRequest.self, id), original.status == .known(.preparing) else { return nil }
+      guard let original = try find(DeliveryRequest.self, id), original.awaitsClaim else { return nil }
       if let existing = try select(DeliveryRequest.self, where: "mode = 'withdraw' AND content = ? AND status IN (\(DeliveryStatus.openSQL))", [id.uuidString.lowercased()]).first {
         return existing
       }
