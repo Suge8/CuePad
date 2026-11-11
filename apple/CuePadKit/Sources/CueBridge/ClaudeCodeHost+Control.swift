@@ -17,7 +17,7 @@ extension ClaudeHostedSession {
             throw BridgeError.rejected("empty")
         }
         try await deliver(hosted(ClaudeStream.content(text: message.text, images: message.images), uuid: message.deliveryID))
-        // 托管进程自己的钩子不登记，首条消息由这里记，与终端会话的 `UserPromptSubmit` 同一规则
+        // stream-json 不报首条消息，由这里记
         if !message.text.isEmpty, let id {
             bridge?.update(id) { if $0.firstMessage == nil { $0.firstMessage = String(message.text.prefix(SessionName.firstMessageLimit)) } }
         }

@@ -51,7 +51,7 @@ jobs:
       - run: |
           sudo xcode-select -s /Applications/Xcode_27.0.app
           xcodebuild -version; xcrun --show-sdk-path; xcrun simctl list runtimes; env | grep -iE 'sdkroot|developer_dir' || true
-      - run: brew install ripgrep tmux  # tmux：终端里的 Claude Code 用例（RealClaudeTerminalTests）
+      - run: brew install ripgrep
       # 测试连的真 Agent：版本只在 apple/CuePadKit/Tests/agents.json，装进专用缓存（agents.py）；缓存随清单变
       - if: matrix.name == 'test kit' || matrix.name == 'test mac'
         uses: actions/cache@v6

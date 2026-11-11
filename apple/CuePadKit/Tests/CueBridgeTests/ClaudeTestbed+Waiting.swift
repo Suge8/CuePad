@@ -7,11 +7,6 @@ import Testing
 @testable import CueBridge
 
 extension ClaudeTestbed {
-    func waitForSession(pid: Int32) async throws -> Session {
-        try await eventually("Claude Code 会话上桥") { session(pid: pid) != nil }
-        return session(pid: pid)!
-    }
-
     /// 看变化记录，不看此刻的状态：一轮可能在开始等之前就做完了；按歇下的时刻认，之前停下的那一轮不算。发话之前取 `start`。
     func waitForTurn(_ id: Session.ID, since start: Date) async throws {
         func done() -> Bool {
@@ -29,24 +24,13 @@ extension ClaudeTestbed {
         }
     }
 
-    func waitForQuestion(_ id: Session.ID, on terminal: ClaudeTerminal? = nil) async throws -> Question {
+    func waitForQuestion(_ id: Session.ID) async throws -> Question {
         do {
             try await eventually("会话在等你确认") { bridge.session(id: id)?.question?.promptID != nil }
         } catch {
-            throw NoQuestion(description: "等不到会话在等你确认；会话：\(String(describing: bridge.session(id: id)))；终端：\n\(await terminal?.screen ?? "")")
+            throw NoQuestion(description: "等不到会话在等你确认；会话：\(String(describing: bridge.session(id: id)))")
         }
         return bridge.session(id: id)!.question!
-    }
-
-    /// 同 `eventually`，等不到时带上会话与终端画面（终端里按键后的事看画面才分得清是谁没动）。
-    /// 终端画面比钩子慢：一轮的 `Stop` 已到、CuePad 已报歇下时，终端可能还没画出这一轮的回答（12 个空转核加压实测晚约 20 毫秒），
-    /// 画面上的东西都等它画出来再断言
-    func waitOnScreen(_ what: String, on terminal: ClaudeTerminal, in id: Session.ID, _ condition: () async throws -> Bool) async throws {
-        do {
-            try await eventually(what, condition)
-        } catch {
-            throw Stuck(description: "等不到：\(what)；会话：\(String(describing: bridge.session(id: id)?.state)) \(String(describing: bridge.session(id: id)?.detail)) \(String(describing: bridge.session(id: id)?.question))；终端：\n\(await terminal.screen)")
-        }
     }
 
     static let passThrough = #""$REAL" "$@""#

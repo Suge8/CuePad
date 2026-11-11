@@ -9,9 +9,7 @@ import Testing
 /// 真 Claude Code（钉住的版本，`PinnedAgent.claude`）的端到端测试台：配置目录、HOME、XDG 目录、CuePad 的连接目录与资料库全部指到临时目录，
 /// 绝不碰 ~/.claude 与真实资料库；模型是本测试台的假模型（`FakeModel`，Anthropic Messages，经 `ANTHROPIC_BASE_URL` 指过去），
 /// 登录是假密钥、不带订阅令牌，辅助流量关掉（见 `environment`），零网络。
-/// 终端会话跑在私有 tmux 服务器里（`tmux -L`），结束时按确切 pid 停掉 Claude Code 与那个 tmux 服务器。
 let pinnedClaude = PinnedAgent.claude
-let tmuxURL = ExecutableLocator.standard.candidates("tmux").first
 let claudeTestModel = ClaudeSandbox.model, claudeOtherModel = "sonnet"
 
 /// 256×256 纯红 PNG（32×32 的常被模型认成别的颜色）
@@ -29,16 +27,10 @@ final class ClaudeTestbed {
     let model: FakeModel
     let paths: AgentPaths
     let bridge: Bridge
-    let hooks: AgentHookServer
     let runtime: ClaudeCodeRuntime
-    let presence: TestPresence
     let files: AttachmentFiles
     let store: CueStore
     let log: ChangeLog
-    private var terminals: [ClaudeTerminal] = []
-    private var reading: Task<Void, Never>?
-    /// CuePad 读到的会话记录（交给 `runtime.read` 的每一次），按先后
-    private(set) var reads: [HistoryUpdate] = []
 
     /// 剧本只认带工具清单的请求（一轮真正的对话，含子代理的）：上面那类旁问的转录里也有你的话，不能让它们撞上剧本。
     func on(_ prompt: String, _ steps: FakeReply...) {
@@ -49,24 +41,21 @@ final class ClaudeTestbed {
         model.on({ !$0.tools.isEmpty && $0.prompt.contains(prompt) }, reply: reply)
     }
 
-    func startConnected() throws {
-        try runtime.start()
-        runtime.follow(.all)
-    }
+    func startConnected() throws { try runtime.start() }
 
     var integration: AgentIntegration {
         AgentIntegration(paths: paths, locate: { pinnedClaude.locator }, cuepad: PiProcess.cuepad, timing: noDeadline)
     }
 
-    /// - Parameter settings: 装钩子之前用户自己的 settings.json（nil 是没有这个文件）。
-    /// - Parameter wrapper: CuePad 起的 `claude` 换成这段 shell 脚本的外壳，真 claude 在 `$REAL`（`passThrough`：托管进程是它的子进程，
-    ///   钩子的父进程不是 CuePad 起的那个）。终端里开的仍是真 claude。脚本经 `TestScript` 放，内容里不写本次运行的路径：
+    /// - Parameter settings: 用户自己的 settings.json（nil 是没有这个文件）。
+    /// - Parameter wrapper: CuePad 起的 `claude` 换成这段 shell 脚本的外壳，真 claude 在 `$REAL`（`passThrough`：托管进程是它的子进程）。
+    ///   脚本经 `TestScript` 放，内容里不写本次运行的路径：
     ///   它要用的文件放在 `wrapperDirectory`，脚本里写 `${0%/*}`。
     /// - Parameter signedIn: false 时不给密钥，Claude Code 照常起来、上桥，要用模型的都被它拒收。
     /// - Parameter timing: runtime 的钟（默认不前进：期限都不到点）；要量宽限的用例给 `ManualTiming`。
     /// - Parameter bridgeTiming: 桥的钟（闲置到点按它）
     init(
-        installHooks: Bool = true, settings: String? = nil, idleLimit: Duration = .seconds(1800), wrapper: String? = nil, signedIn: Bool = true,
+        settings: String? = nil, idleLimit: Duration = .seconds(1800), wrapper: String? = nil, signedIn: Bool = true,
         timing: Timing = noDeadline, bridgeTiming: Timing = .system
     ) async throws {
         try pinnedClaude.require()
@@ -93,10 +82,6 @@ final class ClaudeTestbed {
         bridge = Bridge(socketDirectory: sockets, hostedIdle: idleLimit, timing: bridgeTiming)
         log = ChangeLog(bridge)
         try bridge.start()
-        hooks = AgentHookServer(path: paths.pi.hookSocket)
-        try hooks.start()
-        let presence = TestPresence()
-        self.presence = presence
         var bin = pinnedClaude.bin
         if let wrapper {
             let real = bin.appending(path: "claude")
@@ -104,19 +89,17 @@ final class ClaudeTestbed {
             try TestScript.install("#!/bin/sh\n. \"$0.env\"\n\(wrapper)\n", at: bin.appending(path: "claude"), variables: ["REAL": real.path])
         }
         runtime = ClaudeCodeRuntime(
-            bridge: bridge, paths: paths, hooks: hooks, store: store, claude: { [bin] in bin.appending(path: "claude") },
-            locate: { [bin] in ExecutableLocator(searchDirectories: [bin]) },
-            presence: presence, timing: timing)
-        if installHooks { try await integration.install(.claudeCode) }
+            bridge: bridge, paths: paths, store: store, claude: { [bin] in bin.appending(path: "claude") },
+            locate: { [bin] in ExecutableLocator(searchDirectories: [bin]) }, timing: timing)
     }
 
     /// 搭好测试台跑 `body`，不论成败都停掉起的进程（临时目录随测试进程退出整体删除）。
     static func run(
-        installHooks: Bool = true, settings: String? = nil, idleLimit: Duration = .seconds(1800), wrapper: String? = nil, signedIn: Bool = true,
+        settings: String? = nil, idleLimit: Duration = .seconds(1800), wrapper: String? = nil, signedIn: Bool = true,
         timing: Timing = noDeadline, _ body: (ClaudeTestbed) async throws -> Void
     ) async throws {
         let testbed = try await ClaudeTestbed(
-            installHooks: installHooks, settings: settings, idleLimit: idleLimit, wrapper: wrapper, signedIn: signedIn, timing: timing)
+            settings: settings, idleLimit: idleLimit, wrapper: wrapper, signedIn: signedIn, timing: timing)
         do {
             try await body(testbed)
         } catch {
@@ -126,57 +109,11 @@ final class ClaudeTestbed {
         await testbed.stop()
     }
 
-    func terminal(_ arguments: [String] = [], mode: String = "default") async throws -> ClaudeTerminal {
-        if reading == nil { startReading() }
-        let terminal = try await ClaudeTerminal(testbed: self, arguments: ["--permission-mode", mode] + arguments)
-        terminals.append(terminal)
-        return terminal
-    }
-
-    /// 换一个从头读起的索引器（同 CuePad 重启、读规则升级后从头重读已索引的会话），之前记下的读过的不算
-    func rereadFromScratch() {
-        reading?.cancel()
-        reads = []
-        startReading()
-    }
-
-    private func startReading() {
-        guard let indexer = HistoryIndexer(agent: .claudeCode, paths: paths, files: files, start: { _ in nil }) else { return }
-        reading = Task { [weak self, runtime, bridge] in
-            for await case .updated(let update) in indexer.events(following: bridge.sessionFiles, scope: .all) {
-                self?.reads.append(update)
-                runtime.read(update)
-            }
-        }
-    }
-
-    /// 正文含 `text` 的 `UserPromptSubmit` 钩子收到后先挂着，`release` 为真才交给 CuePad：钩子并行跑，让 CuePad 晚于会话记录知道这句。
-    func holdPrompt(containing text: String, until release: @escaping @MainActor () -> Bool) {
-        let handler = hooks.handlers[.claudeCode]!
-        hooks.handle(.claudeCode) { call in
-            let input = JSONValue.parse(call.envelope.input)
-            guard input?["hook_event_name"]?.string == "UserPromptSubmit", input?["prompt"]?.string?.contains(text) == true else { return handler(call) }
-            Task { @MainActor in
-                try? await eventually("放行挂着的钩子") { release() }
-                handler(call)
-            }
-        }
-    }
-
-    /// CuePad 已读过会话文件里含 `text` 的那一行
-    func hasRead(_ text: String, in file: URL?) -> Bool {
-        guard let file, let data = try? Data(contentsOf: file), let hit = data.range(of: Data(text.utf8)),
-              let end = data[hit.upperBound...].firstIndex(of: 0x0A) else { return false }
-        return reads.contains { $0.file.realPath == file.realPath && $0.checkpoint.offset > UInt64(end) }
-    }
-
     /// 同 `MacExecutor.connect`：桥上有这个会话就用它，没有就接着它。
     func connect(_ indexed: IndexedSession) async throws -> Session.ID {
         if let live = bridge.session(sessionID: indexed.id) { return live.id }
         return try await runtime.resume(indexed)
     }
-
-    func session(pid: Int32) -> Session? { bridge.sessions.first { $0.pid == pid && $0.agent == .claudeCode } }
 
     func record(_ id: Session.ID) async throws {
         let session = try #require(bridge.session(id: id))
@@ -188,12 +125,9 @@ final class ClaudeTestbed {
     /// 停掉起的 Claude Code 并等它们退出：都该自己收拾掉收件箱 socket（只有 SIGKILL 会让它留在 /tmp/cc-socks）。
     /// 经外壳起的托管会话，会话的进程号是外壳的，收件箱跟着它底下的真 Claude Code 的进程号。
     func stop() async {
-        let sessions = terminals.map(\.pid) + bridge.sessions.filter { $0.agent == .claudeCode }.map(\.pid)
+        let sessions = bridge.sessions.filter { $0.agent == .claudeCode }.map(\.pid)
         let pids = Set(sessions + sessions.flatMap { claudeChildren(of: $0) })
-        for terminal in terminals { terminal.stop() }
-        reading?.cancel()
         await runtime.stop()()
-        hooks.stop()
         bridge.stop()
         for pid in pids {
             try? await eventually("Claude Code \(pid) 退出") { kill(pid, 0) != 0 }
@@ -214,65 +148,6 @@ func claudeChildren(of pid: pid_t) -> [pid_t] {
     }
 }
 
-struct TmuxFailed: Error { let command: String }
 struct NoQuestion: Error, CustomStringConvertible { let description: String }
 struct Stuck: Error, CustomStringConvertible { let description: String }
-
-@MainActor
-final class ClaudeTerminal {
-    let pid: Int32
-    private let server: Int32
-    private let name: String
-
-    init(testbed: ClaudeTestbed, arguments: [String]) async throws {
-        name = "cpt-\(UUID().uuidString.prefix(8))"
-        let environment = pinnedClaude.environment(home: testbed.root.appending(path: "home"), testbed.environment)
-        _ = try await Self.tmux(name, ["-f", "/dev/null", "new-session", "-d", "-x", "200", "-y", "50", "-c", testbed.work.path,
-                                       (["exec", pinnedClaude.executable.path] + arguments).joined(separator: " ")], environment: environment)
-        let ids = try await Self.tmux(name, ["display-message", "-p", "#{pane_pid} #{pid}"], environment: environment)
-            .split(separator: " ").compactMap { Int32($0.trimmingCharacters(in: .whitespacesAndNewlines)) }
-        guard ids.count == 2 else { throw TmuxFailed(command: "display-message") }
-        pid = ids[0]
-        server = ids[1]
-    }
-
-    @discardableResult
-    private static func tmux(_ name: String, _ arguments: [String], environment: [String: String]) async throws -> String {
-        guard let result = await ChildProcess.run(tmuxURL!, ["-L", name] + arguments, environment: environment, timeout: .seconds(10)),
-              result.status == 0 else {
-            throw TmuxFailed(command: arguments.joined(separator: " "))
-        }
-        return result.output
-    }
-
-    /// 在终端里打一句话，等它出现在输入框里再回车（一口气送进去的字被当作粘贴，紧跟着的回车会被吞掉）
-    func type(_ text: String) async throws {
-        try await Self.tmux(name, ["send-keys", "-l", text], environment: [:])
-        try await eventually("输入框里有这句话") { await screen.contains(String(text.prefix(20))) }
-        try await keys("Enter")
-    }
-
-    func keys(_ keys: String...) async throws { try await Self.tmux(name, ["send-keys"] + keys, environment: [:]) }
-
-    /// 在终端里的对话框上按键。对话框刚弹出的一小会儿里 Claude Code 不认按键（防误触；2.1.318 实测弹出后 10 毫秒按的 Enter 被吞掉，
-    /// 3 秒后再按就生效）：对话框还在画面上就再按，直到 `done`。只在对话框还在时补按，按早了也不会落到输入框里。
-    func press(_ key: String, on dialog: String, until done: () async throws -> Bool) async throws {
-        try await eventually("终端里按 \(key) 生效") {
-            if try await done() { return true }
-            if await screen.contains(dialog) { try await keys(key) }
-            try await Task.sleep(for: .milliseconds(300))
-            return try await done()
-        }
-    }
-
-    var screen: String {
-        get async { (try? await Self.tmux(name, ["capture-pane", "-p"], environment: [:])) ?? "" }
-    }
-
-    /// 像在终端里按 Ctrl-C 那样让它退出（它自己收拾收件箱 socket），再停掉这个 tmux 服务器。
-    func stop() {
-        kill(pid, SIGINT)
-        kill(server, SIGTERM)
-    }
-}
 #endif

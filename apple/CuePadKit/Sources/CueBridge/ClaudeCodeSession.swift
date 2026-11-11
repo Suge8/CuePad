@@ -54,8 +54,7 @@ enum ClaudeCode {
     }
 }
 
-/// 一次等你回答：Claude Code 要用一个工具（钩子的 `PermissionRequest`、托管进程的 `can_use_tool`），或问你一个问题（`AskUserQuestion`：
-/// 终端会话经 `PreToolUse` 钩子答，托管进程经 `can_use_tool`；答案就是放行时改写的输入里的 `answers`）。
+/// 一次等你回答（托管进程的 `can_use_tool`）：Claude Code 要用一个工具，或问你一个问题（`AskUserQuestion`：答案就是放行时改写的输入里的 `answers`）。
 struct ClaudePermission {
     let promptID = UUID().uuidString
     let tool: String
@@ -76,13 +75,13 @@ struct ClaudePermission {
         !isQuestion || (input["questions"]?.array?.count == 1 && input["questions"]?.array?.first?["multiSelect"]?.bool != true)
     }
 
-    /// 显示的问题；`answerable` 为 false 或交给终端时没有作答标识（只显示）。
-    func question(answerable: Bool = true) -> Question {
-        let id = answerable && self.answerable ? promptID : nil
+    /// 显示的问题；`answerable` 为 false 时没有作答标识（只显示）。
+    func question() -> Question {
+        let id = answerable ? promptID : nil
         if let asked {
             let header = input["questions"]?.array?.first?["header"]?.string
             let text = [header, asked.question].compactMap { $0 }.joined(separator: "\n")
-            // 终端里每道选择题都有"自己填"（Type something）
+            // Claude Code 的每道选择题都有"自己填"（Type something）
             return Question(promptID: id, kind: .select, text: text.clipped(Self.textLimit), options: asked.options, allowsOther: true)
         }
         let text = PermissionWording.question(.claudeCode, String(localized: "使用 \(ToolDetail.name(tool))"), [ToolDetail.target(input), input["description"]?.string])

@@ -20,8 +20,6 @@ public enum AgentTimeouts {
     /// 停下在跑的一轮后等它收尾（ACP 的取消回应、Claude Code 的 `result`、等发出的话开跑）与 `/clear` 的结果：对端接了请求却不收尾时到点放弃，免得停止与随后的发话永远等下去
     public static let stop: Duration = .seconds(30)
     public static let hostedIdle: Duration = .seconds(30 * 60)
-    /// 终端里刚起的 Claude Code 起好（能收话）：本机上桥后约 0.5 秒，留给慢机器
-    public static let terminalReady: Duration = .seconds(15)
 }
 
 /// 至多等 `limit`（按 `timing` 量）：到点取消 `operation` 并抛 `timeout`。`operation` 要响应取消（到点后要等它返回）。
