@@ -17,6 +17,8 @@ final class CodexDriver {
     /// 在跑的这一轮与最近结束的一轮（挡住晚到的回应）
     private(set) var turn: String?
     private var finishedTurn: String?
+    /// 已发出停止的那一轮，见 `interrupt`
+    private var stopping: String?
     private var lastError: String?
     /// 一轮开跑（`turn/started`）或结束，见 `interrupt`
     private let activations = Occurrences(timeout: AgentTimeouts.stop, timeoutError: BridgeError.ackTimeout)
@@ -64,12 +66,21 @@ final class CodexDriver {
         if let id = started["turn"]?["id"]?.string { begin(id) }
     }
 
-    /// 停下在跑的这一轮，等它真的结束了才回（回应与它的 `turn/completed` 同时到）。
+    /// 停下在跑的这一轮，等它真的结束（它的 `turn/completed`）才回：0.167.0 的回应先于 `turn/completed` 到（实测），
+    /// 这期间对这一轮再发 `turn/interrupt` Codex 不回（等满 `AgentTimeouts.reply`），发 `turn/start` 会碰上还没结束的这一轮。
+    /// 所以一轮只停一次（`stopping`），之后再停（停下后紧接着发话、停与发话同时）只等它结束。
     /// `turn/start` 已回了这一轮、它还没开跑时，Codex 回 -32600 "no active turn to interrupt"（0.167.0 实测：紧跟发话就停，几毫秒后才有 `turn/started`）：
-    /// 等它开跑再停一次；当它已结束的话这次停止就丢了，这一轮照跑。真已结束的，等的是随后到的 `turn/completed`。
-    /// `turn/started` 可能先于这个回应到（问的工夫里它开跑了），所以从发问前算起。
+    /// 等它开跑再停一次。`turn/started` 可能先于这个回应到（问的工夫里它开跑了），所以从发问前算起。
     func interrupt() async throws {
         guard let rpc, let thread, let turn else { return }
+        if stopping != turn {
+            stopping = turn
+            do { try await requestStop(turn, thread: thread, on: rpc) } catch { stopping = nil; throw error }
+        }
+        while self.turn == turn { try await activations.next() }
+    }
+
+    private func requestStop(_ turn: String, thread: String, on rpc: CodexRPC) async throws {
         let params: JSONValue = ["threadId": .string(thread), "turnId": .string(turn)]
         let seen = activations.count
         do {

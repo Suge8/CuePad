@@ -19,8 +19,8 @@ extension CodexRuntime {
         return [["type": "skill", "name": .string(skill.name), "path": .string(skill.path)]] + CodexRPC.input(text: rest, images: images)
     }
 
-    /// 以这句开新一轮：在跑就先停下这一轮。`turn/interrupt` 等这一轮真的中止了才回（实测 0.162.1：回应与 `turn/completed` 的
-    /// `interrupted` 同时到），所以紧接着的 `turn/start` 开的是新一轮——它碰上还在跑的一轮会变成插话（压缩那一轮则拒收）。
+    /// 以这句开新一轮：在跑就先停下这一轮。托管的停下等这一轮真的中止了才回（`CodexDriver.interrupt`），
+    /// 所以紧接着的 `turn/start` 开的是新一轮——它碰上还在跑的一轮会变成插话（压缩那一轮则拒收）。
     /// 被停下的那一轮不报歇下（`restarting`）：这句开出新一轮就从此刻算起（托管的从驱动报的开始算，见 `event`），没开成才歇下。
     /// 中止（`abort`）只取消停下上一轮那一段（`StopPhase`）；`turn/start` 发出后的等待不取消：话已交出，抛取消会误报未确认、引起重发。
     func deliver(_ input: [JSONValue], clientID: String, to session: Tracked) async throws {
