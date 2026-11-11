@@ -8,10 +8,8 @@ nonisolated extension SessionState {
 }
 
 nonisolated extension SessionState {
-    /// 此刻同步不通时那台的在线记录可能只是没同步来，那台就是本机（刚启动、还没写下在线）也不算：都照旧说不准。
     func macOff(at moment: Speech.Moment) -> String? {
-        guard let mac = offlineMac, !moment.isLocal(hostID), moment.reachableSince(hostID) != nil else { return nil }
-        return mac
+        moment.seesPresence(of: hostID) ? offlineMac : nil
     }
 }
 

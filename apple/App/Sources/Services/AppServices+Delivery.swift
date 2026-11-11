@@ -12,7 +12,7 @@ extension AppServices {
         case .request(let request):
             if try await !store.withdrawDelivery(request.id, locallyOn: speech.localHost) {
                 guard request.status == .known(.preparing) else { throw SendError.alreadyHanded }
-                try await withdrawRemotely(request.id)
+                try await withdrawRemotely(request.id, on: request.hostID)
                 try await store.deleteDelivery(request.id)
             }
         case .cue(let message, _):
@@ -21,10 +21,12 @@ extension AppServices {
         Task { await upload(said.id, deleted: true) }
     }
 
-    private func withdrawRemotely(_ id: UUID) async throws {
+    private func withdrawRemotely(_ id: UUID, on host: String) async throws {
         let deadline = timing.now().addingTimeInterval(Speech.receiptLimit)
-        guard let withdrawal = try await store.requestDeliveryWithdrawal(id) else { throw SendError.alreadyHanded }
-        let request = uploaded(withdrawal)
+        let request = try await request(on: host) {
+            guard let withdrawal = try await store.requestDeliveryWithdrawal(id) else { throw SendError.alreadyHanded }
+            return withdrawal
+        }
         let result = try await withThrowingTaskGroup(of: DeliveryRequest.self) { [store, timing] group in
             group.addTask { try await store.outcome(of: request) }
             group.addTask {
@@ -35,6 +37,17 @@ extension AppServices {
             return try await group.next()!
         }
         guard result.status == .known(.succeeded) else { throw SendError.alreadyHanded }
+    }
+
+    /// 你要一台 Mac 做的事（说话、停下、结束、开会话、回答、改设置……）都经这里写成请求并立即上传。
+    /// 那台已知不在线（`CueStore.macKnownOff`）时不写、抛 `SendError.macOff`：写了没人领，到派发期限才作废，这之前界面只能说"已发出"。
+    func request(on host: String, _ write: () async throws -> DeliveryRequest) async throws -> DeliveryRequest {
+        try await requireAwake(host)
+        return uploaded(try await write())
+    }
+
+    func requireAwake(_ host: String) async throws {
+        if let mac = try await store.macKnownOff(host, at: speech) { throw SendError.macOff(mac) }
     }
 
     /// Mac 本机也走投送通道、由执行器交给扩展；写出后立即上传（不等它完成），结果用 `CueStore.outcome(of:)` 等。
@@ -53,13 +66,13 @@ extension AppServices {
         guard let question = session.question, question.isAnswerable, let promptID = question.promptID else {
             throw SendError.unanswerable
         }
-        return uploaded(try await store.requestAnswer(
-            Answer(promptID: promptID, value: value, question: question.text), to: session.target,
-            on: session.hostID))
+        return try await request(on: session.hostID) {
+            try await store.requestAnswer(Answer(promptID: promptID, value: value, question: question.text), to: session.target, on: session.hostID)
+        }
     }
 
     func configure(_ config: SessionConfig, for session: SessionState) async throws -> DeliveryRequest {
-        uploaded(try await store.requestConfig(config, to: session.target, on: session.hostID))
+        try await request(on: session.hostID) { try await store.requestConfig(config, to: session.target, on: session.hostID) }
     }
 
     /// 新名为空时抛 `CueStoreError.blankDeliveryContent`。
@@ -71,17 +84,17 @@ extension AppServices {
 
     /// 会话记录与对话都留着，之后再给它发消息会在后台恢复；已经结束的会话也算成功。
     func end(_ session: SessionState) async throws -> DeliveryRequest {
-        uploaded(try await store.requestEnd(of: session.target, on: session.hostID))
+        try await request(on: session.hostID) { try await store.requestEnd(of: session.target, on: session.hostID) }
     }
 
     /// 只停指挥官自己这一轮，子代理照常跑；已经结束或空闲的会话也算成功。
     func stop(_ session: SessionState) async throws -> DeliveryRequest {
-        uploaded(try await store.requestStop(of: session.target, on: session.hostID))
+        try await request(on: session.hostID) { try await store.requestStop(of: session.target, on: session.hostID) }
     }
 
     /// 不补发用户消息；还在路上时再点不会再发一条（Store 去重）。
     func retry(_ session: SessionState) async throws -> DeliveryRequest {
-        uploaded(try await store.requestRetry(of: session.target, on: session.hostID))
+        try await request(on: session.hostID) { try await store.requestRetry(of: session.target, on: session.hostID) }
     }
 
     /// `model`、`thinking` 为 nil 是这家的默认。这里生成这一次的认领标识：同步记录上出现带同一个 `launchToken` 的会话就是它（`SessionLaunch`）。
@@ -92,28 +105,30 @@ extension AppServices {
         model: ModelKey? = nil, thinking: ThinkingLevel? = nil, fast: Bool = false, intent: SessionLaunchIntent = .new
     ) async throws -> SessionLaunch {
         let token = UUID().uuidString
-        let request = uploaded(try await store.requestLaunch(
-            LaunchRequest(project: project, prompt: prompt, token: token, agent: agent, model: model, thinking: thinking, fast: fast),
-            title: title, on: host, card: card, intent: intent))
+        let request = try await request(on: host) {
+            try await store.requestLaunch(
+                LaunchRequest(project: project, prompt: prompt, token: token, agent: agent, model: model, thinking: thinking, fast: fast),
+                title: title, on: host, card: card, intent: intent)
+        }
         if case .replacing(let previous) = intent { Task { await upload(previous, deleted: true) } }
         return SessionLaunch(request: request.id, token: token)
     }
 
     /// `BindRequest.folder` 为 nil 是解除；手机没有完整路径，由那台 Mac 解析并写本机的目录绑定。
     func requestBind(_ bind: BindRequest, title: String, on host: String) async throws -> DeliveryRequest {
-        uploaded(try await store.requestBind(bind, title: title, on: host))
+        try await request(on: host) { try await store.requestBind(bind, title: title, on: host) }
     }
 
     func requestTidy(_ orders: [TidyOrder], on host: String) async throws -> DeliveryRequest {
-        uploaded(try await store.requestTidy(orders, on: host))
+        try await request(on: host) { try await store.requestTidy(orders, on: host) }
     }
 
     func requestLibraryEdit(_ edit: LibraryEdit, title: String, on host: String) async throws -> DeliveryRequest {
-        uploaded(try await store.requestLibraryEdit(edit, title: title, on: host))
+        try await request(on: host) { try await store.requestLibraryEdit(edit, title: title, on: host) }
     }
 
     func requestTranscript(of session: SessionState) async throws -> DeliveryRequest {
-        uploaded(try await store.requestTranscript(of: session))
+        try await request(on: session.hostID) { try await store.requestTranscript(of: session) }
     }
 }
 

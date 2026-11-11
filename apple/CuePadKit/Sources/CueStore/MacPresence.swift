@@ -69,4 +69,10 @@ extension CueStore {
   }
 
   public func macOnline(_ host: String) throws -> Bool { try macOnlineUntil(host) != nil }
+
+  /// 那台 Mac 已知不在线时它的名字，在线或说不准（`Speech.Moment.seesPresence`）为 nil。
+  public func macKnownOff(_ host: String, at moment: Speech.Moment) throws -> String? {
+    guard moment.seesPresence(of: host), try !macOnline(host) else { return nil }
+    return try macAgents(on: host).shownName
+  }
 }

@@ -4583,6 +4583,22 @@
         }
       }
     },
+    "「%@」没开，没有发出" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%@” is off. Not sent."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "「%@」没开，没有发出"
+          }
+        }
+      }
+    },
     "一个 Agent 的模型与命令" : {
       "localizations" : {
         "en" : {
