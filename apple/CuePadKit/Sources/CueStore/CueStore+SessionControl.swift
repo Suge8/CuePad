@@ -33,14 +33,14 @@ extension CueStore {
     return sessionID
   }
 
-  /// 必须在写事务内、写别的之前调用：抛错时什么都没写。换不了模型（记录没到也算不知道、不换）抛 `cannotChangeModel`。
+  /// 必须在写事务内、写别的之前调用：抛错时什么都没写。记录没到不换，抛 `cannotChangeModel`。
   private func requestConfig(_ config: SessionConfig?, in session: SessionTarget, host: String, cue: Bool) throws {
     guard let config else { return }
-    guard session.state?.capabilities.contains(.model) == true else { throw CueStoreError.cannotChangeModel(session.target.name) }
+    guard session.state != nil else { throw CueStoreError.cannotChangeModel(session.target.name) }
     _ = try insertDelivery(config.stored, to: session.target, on: session.host(or: host), mode: .config, cue: cue)
   }
 
-  /// Cue 这会儿说不了就抛 `cannotSpeakNow`、什么都不写，它歇下时 Cue 被叫醒再说：停不下这一轮（`speakBlocked`），或会打断他发起的那一轮（`inUserTurn`）。正文原样写：收不了图片的会话由 Mac 交出时把图片写成路径。必须在写事务内调用。
+  /// Cue 这会儿说不了就抛 `cannotSpeakNow`、什么都不写，它歇下时 Cue 被叫醒再说：会打断他发起的那一轮（`checkCueCanSpeak`）。正文原样写：收不了图片的会话由 Mac 交出时把图片写成路径。必须在写事务内调用。
   func say(_ content: String, to session: SessionTarget, card: UUID?, host: String, cue: Bool) throws -> DeliveryRequest {
     if cue {
       guard let state = session.state else { throw CueStoreError.sessionUnconfirmed(session.target.name) }
@@ -101,7 +101,7 @@ extension CueStore {
     return try requestControl(.stop, of: session.target, on: session.host(or: host), cue: cue)
   }
 
-  /// 做不到的、终端里他自己开的抛 `cannotEnd`，在用的抛 `sessionInUse`：Cue 点名要收，得知道为什么没收。已结束且无待核对结束请求才返回 nil；否则明确投送，不用 ended 快照代替执行结果。
+  /// 在用的抛 `sessionInUse`：Cue 点名要收，得知道为什么没收。已结束且无待核对结束请求才返回 nil；否则明确投送，不用 ended 快照代替执行结果。
   public func endIdleSession(_ sessionID: String) throws -> DeliveryRequest? {
     try write {
       guard let state = try sessionState(sessionID) else { throw CueStoreError.notFound }
@@ -110,8 +110,6 @@ extension CueStore {
           $0.mode == .known(.end) && $0.handledBy != nil && ($0.isOpen || $0.status == .known(.unconfirmed))
         }
         guard unresolved else { return nil }
-      } else {
-        guard state.hosted, state.canEnd else { throw CueStoreError.cannotEnd(state.title) }
       }
       guard try db.first(Self.usedElsewhere, [sessionID, nil as UUID?], { _ in true }) == nil else { throw CueStoreError.sessionInUse(state.title) }
       return try requestControl(.end, of: SendTarget(kind: .piSession, name: state.title, ref: sessionID), on: state.hostID, cue: true)

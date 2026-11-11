@@ -49,8 +49,7 @@ extension TaskFlowTests {
         try await StateRecorder(store: store, hostID: TestApp.hostID).update(sessionID: "audit-interrupted", state: .thinking, projectID: Project.defaultID, launchToken: launch.launch?.token, hosted: true)
         try await store.deleteDelivery(launch.id)
         let link = InterruptedEndLink(rig.bridge)
-        var session = Session(id: "audit-interrupted.1", sessionID: "audit-interrupted", agent: .pi, sessionFile: nil, pid: 1, cwd: rig.directory, terminal: TerminalIdentity(), state: .thinking, stateSince: .now)
-        session.hosted = true
+        let session = Session(id: "audit-interrupted.1", sessionID: "audit-interrupted", agent: .pi, sessionFile: nil, pid: 1, cwd: rig.directory, state: .thinking, stateSince: .now)
         rig.bridge.attach(session, via: link)
         try await workspace.complete(task.id)
         let automatic = try #require(try await store.deliveryRequests().first { $0.mode == .known(.end) })
@@ -117,8 +116,7 @@ extension TaskFlowTests {
             #expect(try await self.store.applyRemote([.save(row, systemFields: Data())]).isEmpty)
             #expect(try await self.store.card(borrower.id)?.piSessionID == "audit-remote")
         }
-        var session = Session(id: "audit-remote.1", sessionID: "audit-remote", agent: .pi, sessionFile: nil, pid: 1, cwd: rig.directory, terminal: TerminalIdentity(), state: .thinking, stateSince: .now)
-        session.hosted = true
+        let session = Session(id: "audit-remote.1", sessionID: "audit-remote", agent: .pi, sessionFile: nil, pid: 1, cwd: rig.directory, state: .thinking, stateSince: .now)
         rig.bridge.attach(session, via: link)
         try await services.executor.start()
         #expect(try await store.outcome(of: automatic).status == .known(.succeeded))
@@ -141,8 +139,7 @@ extension TaskFlowTests {
         let recorder = StateRecorder(store: store, hostID: TestApp.hostID)
         try await recorder.update(sessionID: "audit-lost", state: .thinking, projectID: Project.defaultID, launchToken: launch.launch?.token, hosted: true)
         try await store.deleteDelivery(launch.id)
-        var session = Session(id: "audit-lost.1", sessionID: "audit-lost", agent: .pi, sessionFile: nil, pid: 1, cwd: rig.directory, terminal: TerminalIdentity(), state: .thinking, stateSince: .now)
-        session.hosted = true
+        let session = Session(id: "audit-lost.1", sessionID: "audit-lost", agent: .pi, sessionFile: nil, pid: 1, cwd: rig.directory, state: .thinking, stateSince: .now)
         rig.bridge.attach(session, via: LostEndLink(rig.bridge))
         try await workspace.complete(task.id)
         let automatic = try #require(try await store.deliveryRequests().first { $0.mode == .known(.end) })

@@ -12,11 +12,10 @@ struct SessionBoardTests {
     static let mac = "mac-a"
 
     private func session(
-        _ id: String, title: String, agent: AgentKind = .pi, hosted: Bool = false
+        _ id: String, title: String
     ) async throws -> SessionState {
         let recorder = try await rig.runtimeRecorder(on: Self.mac)
-        try await recorder.update(
-            sessionID: id, state: .settled, title: title, hosted: hosted, agent: agent)
+        try await recorder.update(sessionID: id, state: .settled, title: title, hosted: true)
         return try #require(try await store.sessionItems(sessionIDs: [id])[id]?.state)
     }
 
@@ -37,18 +36,16 @@ struct SessionBoardTests {
         return [item.task.title(session: item.agent?.shownTitle(at: services.speech)), row.name(at: services.speech)]
     }
 
-    @Test func 无主会话拖到已完成_当场建卡绑上_任务完成_终端里的会话不结束只收起() async throws {
-        let terminal = try await session("s1", title: "修登录")
-        let hosted = try await session("s2", title: "补测试", hosted: true)
+    @Test func 无主会话拖到已完成_当场建卡绑上_任务完成_会话不结束只收起() async throws {
+        let first = try await session("s1", title: "修登录")
+        let second = try await session("s2", title: "补测试")
         let workspace = Workspace(services: services)
         let before = try await TaskBoard.read(from: store)
         #expect(Set(before.advancing.map(\.id)) == ["session/s1", "session/s2"])
         #expect(try await tasks().isEmpty, "没当任务用过的会话不留卡")
 
-        try await workspace.finish(SessionListItem(state: terminal))
-        #expect(workspace.notice?.text.visible.contains("终端未结束") == true, "终端里的会话不结束，提示如实说它还在")
-        try await workspace.finish(SessionListItem(state: hosted))
-        #expect(workspace.notice?.text.visible.contains("终端未结束") == false, "托管的会话结束了，提示还是原文案")
+        try await workspace.finish(SessionListItem(state: first))
+        try await workspace.finish(SessionListItem(state: second))
         #expect(workspace.sessionAsk == nil, "歇着的会话不问")
 
         let made = try await tasks()
@@ -61,8 +58,7 @@ struct SessionBoardTests {
             let name = card.piSessionID == "s1" ? "修登录" : "补测试"
             #expect(try await names(card.id, card.piSessionID!) == [name, name], "标题为空的写会话名")
         }
-        #expect(try await store.deliveryRequests(toSession: "s1").isEmpty, "终端里你开的会话不替你结束")
-        #expect(try await store.deliveryRequests(toSession: "s2").isEmpty, "把既有会话变成任务不取得结束权限")
+        #expect(try await store.deliveryRequests().isEmpty, "把既有会话变成任务不取得结束权限")
 
         let s1 = try #require(made.first { $0.piSessionID == "s1" }).id
         try await moves("s1", after: s1, by: 0)
@@ -175,20 +171,4 @@ struct SessionBoardTests {
         try await store.updateCard(task.id) { $0.body = "注册页" }
         try await recorder.update(sessionID: "s1", state: .settled, title: "别的名字")
         #expect(try await names(task.id, "s1") == ["注册页", "注册页"])
-    }
-
-    @Test func 只读会话_能拖状态_没有发话与改名() async throws {
-        let grok = try await session("g1", title: "看日志", agent: .grok)
-        let workspace = Workspace(services: services)
-        #expect(grok.speakBlocked != nil, "只能在终端里说话")
-        #expect(SessionActions.rename(grok, in: workspace) == nil && SessionActions.rename(grok, adopts: true, in: workspace) == nil)
-
-        try await workspace.finish(SessionListItem(state: grok))
-        let task = try #require(try await tasks().first)
-        #expect(task.status == .done && task.piSessionID == "g1")
-        try await store.updateCard(task.id) { $0.body = "查崩溃日志" }
-        try await workspace.pushName(of: task.id)
-        #expect(try await store.deliveryRequests(toSession: "g1").isEmpty)
-        #expect(try await names(task.id, "g1") == ["查崩溃日志", "查崩溃日志"])
-    }
-}
+    }}

@@ -1,7 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// 这个会话做不到的不露出（`AgentCapabilities`），规则同 `MacDelivery`。
+/// 这个会话此刻做不到的不露出，规则同 `MacDelivery`。
 /// 等你确认时文字型问题它就是作答框（只收文字）；选择、确认型收成一行"先在上面作答"，这里答不了的写明要去哪回答——都不发自由文本（Pi 不答完题不会去看，消息会一直挂着）。
 /// 同步到不了 Mac 时照样发：写下就排着，恢复后自动发出，同对 Cue 说的话（为什么不通只在同步那一处说）；停止要当场生效，那时停用。按下就清空输入框，请求马上贴到对话末尾，不等上传。
 struct ReplyBar: View {
@@ -33,7 +33,7 @@ struct ReplyBar: View {
     }
 
     private var hasTools: Bool {
-        config != nil && session.capabilities.contains(.model) && !models.isEmpty
+        config != nil && !models.isEmpty
     }
 
     private var form: ComposerForm {
@@ -56,9 +56,7 @@ struct ReplyBar: View {
     private var commands: [SlashCommand] { answering == nil ? session.usableCommands(in: catalog) : [] }
     private var reachable: Bool { services.reachesHost }
     private var hasDraft: Bool { !draft.isEmpty(accepting: accepts) }
-    private var canSend: Bool { hasDraft && speakBlocked == nil }
-    /// 发送钮的说明写全文，占位写短的（手机一行放不下全文）；作答不是说话，不受它管。
-    private var speakBlocked: String? { answering == nil ? session.speakBlocked : nil }
+    private var canSend: Bool { hasDraft }
     private var canStop: Bool { session.canStop }
     private var shownSending: Bool { !hasDraft && !canStop && (workspace.launching.contains(session) || sending) }
     private var glyph: SendGlyph.Phase { canSend ? .ready : shownSending ? .sending : .idle }
@@ -116,11 +114,7 @@ struct ReplyBar: View {
         .font(Typography.meta).foregroundStyle(progress.failed ? palette.failure : palette.ink3)
     }
 
-    #if os(iOS)
-    private static let unanswerable: LocalizedStringResource = "这个问题要在 Mac 上回答"
-    #else
-    private static let unanswerable: LocalizedStringResource = "这个问题要在终端里的 Agent 那边回答"
-    #endif
+    private static let unanswerable: LocalizedStringResource = "CuePad 答不了这类提问，只能结束这个会话"
 
     private var shortcuts: [ReplyShortcut: () -> Void] {
         var map: [ReplyShortcut: () -> Void] = [:]
@@ -188,12 +182,10 @@ struct ReplyBar: View {
 
     private var interrupts: Bool { session.state.known?.isTurnRunning == true }
     private static let interruptNote = String(localized: "会打断这一轮，以这句接着做")
-    private static let blockedPrompt: LocalizedStringResource = "在终端里跑着：按 Esc 或等它做完"
-    private var sendNote: String { speakBlocked ?? (interrupts ? Self.interruptNote : "") }
+    private var sendNote: String { interrupts ? Self.interruptNote : "" }
 
     private var placeholder: LocalizedStringResource {
         if let answering { return answering.kind == .known(.select) ? "或写你自己的回答" : "回答上面的问题" }
-        if speakBlocked != nil { return Self.blockedPrompt }
         if !draft.attachments.isEmpty || !draft.files.isEmpty { return "补一句（可不填）" }
         return interrupts ? "打断本轮" : replyPrompt
     }

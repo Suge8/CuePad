@@ -3545,6 +3545,38 @@
         }
       }
     },
+    "CuePad 答不了这类提问" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CuePad can't answer this kind of question."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CuePad 答不了这类提问"
+          }
+        }
+      }
+    },
+    "CuePad 答不了这类提问，只能结束这个会话" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CuePad can't answer this kind of question. You can only end the session."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CuePad 答不了这类提问，只能结束这个会话"
+          }
+        }
+      }
+    },
     "CuePad 诊断摘要：%lld 份，%lld 种" : {
       "localizations" : {
         "en" : {
@@ -6379,6 +6411,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "会话结束了"
+          }
+        }
+      }
+    },
+    "会话还没起好，没有发出，可以重发" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The session isn't ready yet. Not sent; you can send it again."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "会话还没起好，没有发出，可以重发"
           }
         }
       }
@@ -10543,22 +10591,6 @@
         }
       }
     },
-    "在 Mac 的终端里开一个 Agent，或在这里开新会话" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Start an agent in a terminal on your Mac, or start a new session here"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在 Mac 的终端里开一个 Agent，或在这里开新会话"
-          }
-        }
-      }
-    },
     "在 TestFlight 里更新" : {
       "localizations" : {
         "en" : {
@@ -11023,22 +11055,6 @@
         }
       }
     },
-    "在终端里跑着：按 Esc 或等它做完" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Running in Terminal: press Esc or wait"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在终端里跑着：按 Esc 或等它做完"
-          }
-        }
-      }
-    },
     "在访达中显示" : {
       "localizations" : {
         "en" : {
@@ -11099,6 +11115,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "在这台 Mac 上启用 %@"
+          }
+        }
+      }
+    },
+    "在这里开新会话；Mac 上接入的 Agent，它的会话记录也会出现在这里" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start a new session here. Sessions from agents connected on your Mac also show up here."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在这里开新会话；Mac 上接入的 Agent，它的会话记录也会出现在这里"
           }
         }
       }
@@ -12523,22 +12555,6 @@
         }
       }
     },
-    "已完成，终端未结束" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Done · still open"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已完成，终端未结束"
-          }
-        }
-      }
-    },
     "已展开" : {
       "localizations" : {
         "en" : {
@@ -13523,22 +13539,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "忘掉这一条？"
-          }
-        }
-      }
-    },
-    "快满了。Agent 会在到顶前自动压缩。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Almost full. The agent compacts automatically before it runs out."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "快满了。Agent 会在到顶前自动压缩。"
           }
         }
       }
@@ -20839,54 +20839,6 @@
         }
       }
     },
-    "终端里的 %@ 只能在终端里说话：CuePad 只看得到它在做什么" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ in the terminal only takes messages there. CuePad can only see what it's doing."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "终端里的 %@ 只能在终端里说话：CuePad 只看得到它在做什么"
-          }
-        }
-      }
-    },
-    "终端里的 %@ 在跑，CuePad 打断不了它：在终端里按 Esc，或等它做完再说" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ is running in the terminal and CuePad can't interrupt it. Press Esc in the terminal, or wait until it's done."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "终端里的 %@ 在跑，CuePad 打断不了它：在终端里按 Esc，或等它做完再说"
-          }
-        }
-      }
-    },
-    "终端里的会话还没起好，没有发出，可以重发" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The terminal session isn’t ready yet. Nothing was sent; you can send it again."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "终端里的会话还没起好，没有发出，可以重发"
-          }
-        }
-      }
-    },
     "绑定会话" : {
       "localizations" : {
         "en" : {
@@ -23143,22 +23095,6 @@
         }
       }
     },
-    "还没接入 CuePad（在设置里打开）" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "not connected to CuePad (turn on in Settings)"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "还没接入 CuePad（在设置里打开）"
-          }
-        }
-      }
-    },
     "还没有" : {
       "localizations" : {
         "en" : {
@@ -23191,18 +23127,18 @@
         }
       }
     },
-    "还没有 Agent 会话。在终端里开一个，会话就会出现在这里" : {
+    "还没有 Agent 会话。开个新会话，或在设置里接入 Agent 读进它的会话记录" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No agent sessions yet. Start one in Terminal and it'll show up here."
+            "value" : "No agent sessions yet. Start a new session, or connect an agent in Settings to bring in its sessions."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "还没有 Agent 会话。在终端里开一个，会话就会出现在这里"
+            "value" : "还没有 Agent 会话。开个新会话，或在设置里接入 Agent 读进它的会话记录"
           }
         }
       }
@@ -23555,6 +23491,22 @@
         }
       }
     },
+    "这个会话不是为这件事开的，完成不会结束它。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This session wasn't started for this task. Completing won't end it."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这个会话不是为这件事开的，完成不会结束它。"
+          }
+        }
+      }
+    },
     "这个会话已经不在了，发不到它" : {
       "localizations" : {
         "en" : {
@@ -23715,22 +23667,6 @@
         }
       }
     },
-    "这个问题只能在 Mac 终端里的 Agent 那边回答" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This question can only be answered in the agent's Terminal on the Mac"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这个问题只能在 Mac 终端里的 Agent 那边回答"
-          }
-        }
-      }
-    },
     "这个问题已经答过了，或 Agent 已经不在等这个问题" : {
       "localizations" : {
         "en" : {
@@ -23743,38 +23679,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "这个问题已经答过了，或 Agent 已经不在等这个问题"
-          }
-        }
-      }
-    },
-    "这个问题要在 Mac 上回答" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Answer this question on the Mac"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这个问题要在 Mac 上回答"
-          }
-        }
-      }
-    },
-    "这个问题要在终端里的 Agent 那边回答" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Answer this question in the agent's terminal"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这个问题要在终端里的 Agent 那边回答"
           }
         }
       }
@@ -24239,22 +24143,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "这台设备的资料库读写出错，会自动重试"
-          }
-        }
-      }
-    },
-    "这是你在终端里开的会话，完成不会结束它。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "You started this session in Terminal. Completing won't end it."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这是你在终端里开的会话，完成不会结束它。"
           }
         }
       }

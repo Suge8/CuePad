@@ -74,12 +74,6 @@ extension SessionTaskTests {
         try await store.writeTranscript(SessionTranscript(sessionID: "s1", messages: [said(5, "再跑一遍", byCueLater)], recap: Recap()))
         let interrupted = try #require(await cue.call("task", ["action": "say", "task": task.id.uuidString, "text": "只跑登录的"]))
         #expect(!interrupted.isError && interrupted.text.contains("对「修登录」的会话说"))
-
-        let terminal = try await store.createTask("修注册")
-        try await store.linkCard(terminal.id, toSession: "s2")
-        try await recorder.update(sessionID: "s2", state: .tool, title: "修注册", agent: .claudeCode)
-        let blocked = try #require(await cue.call("task", ["action": "say", "task": terminal.id.uuidString, "text": "先停一下"]))
-        #expect(blocked.isError && blocked.text.contains("打断不了"))
     }
 
     @Test func 停下归谁接手_Cue开的归Cue_他开的他在场时归他_子代理交回跟着开它的那句() async throws {

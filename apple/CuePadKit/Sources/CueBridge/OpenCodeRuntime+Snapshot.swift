@@ -125,7 +125,6 @@ extension OpenCodeRuntime {
             session.name = tracked.info.title
             session.firstMessage = tracked.firstMessage
             session.launchToken = tracked.launchToken
-            session.hosted = true
             session.model = model
             session.thinking = model.flatMap { Self.thinking(tracked.info.model?.variant, of: $0) }
             session.availableModels = catalog?.models.map(\.option) ?? []
@@ -135,7 +134,7 @@ extension OpenCodeRuntime {
         if bridge.session(id: id) == nil {
             var session = Session(
                 id: id, sessionID: sessionID, agent: .opencode, sessionFile: nil, pid: connection.pid,
-                cwd: URL(filePath: tracked.directory, directoryHint: .isDirectory), terminal: TerminalIdentity(),
+                cwd: URL(filePath: tracked.directory, directoryHint: .isDirectory), 
                 state: .settled, stateSince: .now)
             fill(&session)
             bridge.attach(session, via: self)

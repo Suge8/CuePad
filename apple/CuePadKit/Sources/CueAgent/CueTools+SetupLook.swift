@@ -35,7 +35,6 @@ extension CueTools {
     if let failover = health.failover {
       lines.append("最近自动换大脑 \(CueScheduleWords.time(failover.at, now: now))：从 \(failover.from.name) 换到 \(failover.to.name)，\(failover.reason)")
     }
-    if detail, let agent { lines += Self.limits(agent.kind).map { "  \($0)" } }
     return lines
   }
 
@@ -61,7 +60,6 @@ extension CueTools {
       let model = agent.model.map { " · 默认 \(kind.modelRef($0))" } ?? ""
       let count = agent.models.isEmpty ? " · 没有模型清单（用它自己的默认）" : " · \(agent.models.count) 个模型"
       lines.append("- \(kind.rawValue) 能用\(brain)\(model)\(count)")
-      lines += Self.limits(kind).map { "  \($0)" }
       guard detail else { continue }
       lines += agent.models.map { option in "  - " + Self.model(option, of: agent, quotas: quotas, now: now) }
     }
@@ -78,21 +76,6 @@ extension CueTools {
     if let quota = option.quota(in: quotas) { parts.append("额度：" + CueQuotaWords.binding(quota, model: option.key, at: now)) }
     return parts.joined(separator: " · ")
   }
-
-  /// 这家的边界：他在终端里开的会话少了哪几样（CuePad 托管的、你开的会话什么都能做）。
-  static func limits(_ kind: AgentKind) -> [String] {
-    let hosted = AgentCapabilities.of(kind, hosted: true, model: nil), terminal = AgentCapabilities.of(kind, hosted: false, model: nil)
-    let missing = abilities.filter { hosted.contains($0.0) && !terminal.contains($0.0) }.map(\.1)
-    guard !missing.isEmpty else { return [] }
-    if terminal.isEmpty { return ["他在终端里开的 \(kind.name) 会话你只能看，说不了话"] }
-    let busy = terminal.contains(.speak) && !terminal.contains(.abort) ? "；它在跑时说不进去，等它歇下" : ""
-    return ["他在终端里开的 \(kind.name) 会话：不能\(missing.joined(separator: "、"))\(busy)"]
-  }
-
-  private static let abilities: [(AgentCapabilities, String)] = [
-    (.speak, "说话"), (.images, "发图"), (.abort, "停下这一轮"), (.model, "换模型"), (.rename, "改名"), (.commands, "用斜杠命令"),
-    (.answer, "回答它的提问"), (.end, "收掉"), (.retry, "重跑出错的一轮"),
-  ]
 
   private func quota(_ quotas: [AccountQuota], mac: MacAgents, now: Date, detail: Bool) -> [String] {
     guard !quotas.isEmpty else { return ["额度：这台 Mac 没有订阅额度的记录（按量计费的不报，订阅的要等用过一次才观测到）"] }

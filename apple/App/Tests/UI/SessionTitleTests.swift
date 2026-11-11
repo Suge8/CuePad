@@ -81,7 +81,7 @@ struct SessionTitleTests {
         final class Link: SessionLink {}
         let file = try claude("c9", [])
         var live = Session(
-            id: "c9.1", sessionID: "c9", agent: .claudeCode, sessionFile: file, pid: 1, cwd: app.directory, terminal: TerminalIdentity(),
+            id: "c9.1", sessionID: "c9", agent: .claudeCode, sessionFile: file, pid: 1, cwd: app.directory, 
             state: .settled, stateSince: .now)
         live.firstMessage = "帮我看看登录页为什么白屏"
         app.bridge.attach(live, via: Link())

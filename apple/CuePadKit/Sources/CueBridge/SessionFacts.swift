@@ -23,7 +23,7 @@ struct SessionFacts {
     private var beforeCompaction: (since: Date, busySince: Date?)?
 
     /// 开始新的一轮。`start` 要早于这一轮在会话文件里可能的收尾（歇下就绪看收尾不早于它，`SessionState.answered`）：
-    /// 取 Agent 给的开始时刻；没有就取一定在它之前的——挡住这一轮的钩子、CuePad 发出话或空输入、收到开始通知的那一刻；
+    /// 取 Agent 给的开始时刻；没有就取一定在它之前的——CuePad 发出话或空输入、收到开始通知的那一刻；
     /// 接上时已在跑的取拿到列表或快照之后会话记录里最后一轮的开始（`HistoryCheckpoint.lastTurnStart`）：接上的此刻、请求前的时刻、
     /// 库里旧的都分不清期间换没换轮（会晚于这一轮的收尾或早于上一轮的回答），记录里一轮都读不到才取请求前的时刻。
     mutating func startTurn(at start: Date) {
@@ -155,45 +155,6 @@ enum ToolDetail {
             .joined(separator: SessionState.detailSeparator)
     }
 
-}
-
-/// 挂在钩子上、要你回答的（Codex 的权限确认、Claude Code 的 `AskUserQuestion` 与 MCP 请求输入）在哪里答：按人在不在这台 Mac 前（`UserPresence`）。
-/// 人在就当场放行钩子，Agent 在自己的终端界面里问，CuePad 只显示；人不在就挂住等 CuePad 作答，挂住期间人回来了就放行、终端补问。
-/// 后台托管的会话没有终端，不经这里（总是挂住）。
-@MainActor
-final class PresenceGate {
-    private let presence: any UserPresence
-    private var held: [UUID: @MainActor () -> Void] = [:]
-    private var watch: Task<Void, Never>?
-
-    init(presence: any UserPresence) {
-        self.presence = presence
-    }
-
-    /// 人在返回 nil（调用方放行钩子、只显示）；人不在就挂住，人回来时调 `handBack`（调用方放行钩子、改成只显示），返回挂住的凭据：
-    /// 答过、被收回、会话下线时 `drop`。
-    func hold(handBack: @escaping @MainActor () -> Void) -> UUID? {
-        guard !presence.isPresent else { return nil }
-        let token = UUID()
-        held[token] = handBack
-        if watch == nil {
-            watch = Task { [weak self, presence] in
-                await presence.untilPresent()
-                guard let self, !Task.isCancelled else { return }
-                let all = self.held.values
-                self.held = [:]
-                self.watch = nil
-                for handBack in all { handBack() }
-            }
-        }
-        return token
-    }
-
-    func drop(_ token: UUID?) {
-        guard let token, held.removeValue(forKey: token) != nil, held.isEmpty else { return }
-        watch?.cancel()
-        watch = nil
-    }
 }
 
 /// 作答时回给模型的原因说明是用户在 CuePad 里答的（不说成 CuePad 自己拦的）。各家同一句式。

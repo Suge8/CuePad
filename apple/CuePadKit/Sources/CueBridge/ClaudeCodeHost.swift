@@ -99,8 +99,7 @@ final class ClaudeHostedSession: SessionLink {
         let pid = stream.process.pid
         var session = Session(
             id: Session.claudeID(sessionID: sessionID, pid: pid), sessionID: sessionID, agent: .claudeCode, sessionFile: sessionFile, pid: pid,
-            cwd: cwd, terminal: TerminalIdentity(), state: .settled, stateSince: .now)
-        session.hosted = true
+            cwd: cwd, state: .settled, stateSince: .now)
         session.launchToken = launchToken
         session.name = known?.name
         session.firstMessage = known?.firstMessage

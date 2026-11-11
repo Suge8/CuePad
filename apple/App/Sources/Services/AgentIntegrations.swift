@@ -19,7 +19,6 @@ final class AgentIntegrations {
     var detected: Bool { statuses.count == AgentKind.allCases.count }
     @ObservationIgnored let integration: AgentIntegration
     @ObservationIgnored var uninstalled: (AgentKind) async -> Void = { _ in }
-    @ObservationIgnored var installed: (AgentKind) -> Void = { _ in }
 
     init(_ integration: AgentIntegration) {
         self.integration = integration
@@ -138,7 +137,6 @@ final class AgentIntegrations {
     /// 新装或升级。
     func install(_ kind: AgentKind) async throws {
         try await change(kind) { try await $0.install(kind) }
-        installed(kind)
     }
 
     func uninstall(_ kind: AgentKind) async throws {

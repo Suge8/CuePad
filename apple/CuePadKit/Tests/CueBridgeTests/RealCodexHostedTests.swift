@@ -12,7 +12,7 @@ struct RealCodexHostedTests {
     func open(_ rig: CodexRig, _ token: String) async throws -> Session.ID {
         let id = try await rig.runtime.open(in: rig.codex.work, launchToken: token, name: nil, model: nil, thinking: nil)
         let opened = try #require(rig.bridge.session(id: id))
-        #expect(opened.hosted && opened.agent == .codex && opened.launchToken == token)
+        #expect(opened.agent == .codex && opened.launchToken == token)
         return id
     }
 
@@ -170,7 +170,7 @@ struct RealCodexHostedTests {
             let file = try #require(session.sessionFile)
             let resumed = try await rig.runtime.resume(
                 IndexedSession(id: session.sessionID, path: file.path, cwd: rig.codex.work.path, lastActivityAt: .now, agent: .codex))
-            #expect(rig.bridge.session(id: resumed)?.hosted == true && rig.bridge.session(id: resumed)?.sessionID == session.sessionID)
+            #expect(rig.bridge.session(id: resumed)?.sessionID == session.sessionID)
             try await rig.bridge.send(SessionMessage(text: "Which word?"), to: resumed)
             try await eventually("接着回答了") { rig.replies(session).count == 2 }
             let request = try #require(rig.model.requests.last)

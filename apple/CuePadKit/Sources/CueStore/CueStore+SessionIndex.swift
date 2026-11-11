@@ -50,7 +50,7 @@ extension CueStore {
       """, [host]) { URL(filePath: $0.text(0)) })
   }
 
-  /// 同时让已结束（与终端里被打断）的记录与会话文件一一对应：删掉这台 Mac 上没有会话文件的这类记录（文件被删的；从没落盘的，如 `--no-session` 或没发过消息的），补写有会话文件却没有记录的。在线的不动；歇着的托管会话同样要有会话文件，由 `StateRecorder.dropUnindexedHosted` 对账（它知道哪些是此刻在线的）。每个 Agent 的索引各自对账自己的会话。
+  /// 同时让已结束（与没托管过、被打断）的记录与会话文件一一对应：删掉这台 Mac 上没有会话文件的这类记录（文件被删的；从没落盘的，如 `--no-session` 或没发过消息的），补写有会话文件却没有记录的。在线的不动；歇着的托管会话同样要有会话文件，由 `StateRecorder.dropUnindexedHosted` 对账（它知道哪些是此刻在线的）。每个 Agent 的索引各自对账自己的会话。
   @discardableResult
   public func retainSessions(paths: Set<String>, agent: AgentKind, host: String) throws -> Int {
     try write {
@@ -81,7 +81,7 @@ extension CueStore {
     }
   }
 
-  /// `host` 这台 Mac 托管过的这家的会话：CuePad 开的（带认领标识，结束了也留着），与此刻托管着的（接着已结束的会话时不带标识）。
+  /// `host` 这台 Mac 托管过的这家的会话：CuePad 开的（带认领标识）与接着的（不带标识），结束了也算。
   public func hostedSessionIDs(of agent: AgentKind, host: String) throws -> Set<String> {
     Set(try db.query(Self.hostedSessionsSQL, [host, agent.rawValue]) { $0.text(0) })
   }

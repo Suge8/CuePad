@@ -103,13 +103,6 @@ enum SharedSkills: Sendable {
     func reaches(group: String) -> Bool { self == .recursive || self == .topLevel && group.isEmpty }
 }
 
-/// CuePad 托管的 Claude Code、Codex 进程在环境里带的标记（钩子转发 `CUEPAD_` 前缀的变量）：钩子按它认回托管会话。
-/// 不按进程号认：可执行文件可能是外壳（npm 装的 codex 是 node 脚本），钩子的父进程是外壳起的子进程。
-/// Agent 在托管会话里再起的进程也继承它，所以认的时候还要对上会话。
-enum HostMark {
-    static let variable = "CUEPAD_HOST"
-}
-
 /// 投送执行器开会话、接着会话只经这里（按会话的 Agent 找到它）；对在线会话的一切（含结束）经桥。
 @MainActor
 public protocol AgentRuntime: AnyObject {
@@ -125,10 +118,6 @@ public protocol AgentRuntime: AnyObject {
     ) async throws -> Session.ID
     func resume(_ session: IndexedSession) async throws -> Session.ID
     func transcript(of session: IndexedSession, files: AttachmentFiles) async throws -> SessionTranscript
-    func read(_ update: HistoryUpdate)
-    /// 终端里开的会话在范围里才接上桥，已接上的出了范围就下桥，每次换了范围补上此刻在跑的。托管的会话不受它管。启动后、给范围之前一个终端会话都不接。
-    func follow(_ scope: HistoryScope)
-    func integrationInstalled()
     func integrationRemoved() async
 }
 
@@ -149,14 +138,6 @@ extension AgentRuntime {
         }
         return id
     }
-
-    /// 状态全来自 Agent 自己报的，用不着会话文件。
-    public func read(_ update: HistoryUpdate) {}
-
-    /// 终端里的会话不经接入上报（Pi 经桥扩展，装了才有）或整个接入只在接入期间运行（OpenCode）。
-    public func follow(_ scope: HistoryScope) {}
-
-    public func integrationInstalled() {}
 
     public func integrationRemoved() async {}
 

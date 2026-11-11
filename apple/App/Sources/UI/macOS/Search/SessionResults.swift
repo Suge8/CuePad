@@ -55,7 +55,7 @@ struct SessionResultList: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: Spacing.hair) {
                     if groups.isEmpty {
-                        Text(isFiltered ? "没有找到会话" : "还没有 Agent 会话。在终端里开一个，会话就会出现在这里")
+                        Text(isFiltered ? "没有找到会话" : "还没有 Agent 会话。开个新会话，或在设置里接入 Agent 读进它的会话记录")
                             .font(Typography.secondary).foregroundStyle(palette.ink2).padding(.vertical, Spacing.block)
                     }
                     ForEach(groups, id: \.key) { group in

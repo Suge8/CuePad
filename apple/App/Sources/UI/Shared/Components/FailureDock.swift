@@ -46,7 +46,7 @@ struct FailureDock: View {
     }
 
     private func modelMenu(_ session: SessionState) -> ModelMenu? {
-        guard [.quota, .login].contains(session.failure?.known), let config, session.capabilities.contains(.model),
+        guard [.quota, .login].contains(session.failure?.known), let config,
               let models = catalog?.models, !models.isEmpty else { return nil }
         return .session(session, models: models, current: config.model?.key, in: workspace)
     }

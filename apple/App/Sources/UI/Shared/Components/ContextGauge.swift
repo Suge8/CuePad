@@ -3,7 +3,7 @@ import SwiftUI
 
 /// 不用一条短横（挨着数字读成减号"−86%"），也不用圈里一块扇形（像录制钮或表盘）。
 /// 胭脂字压在胭脂铺色上，深色下到不了 4.5:1，颜色只放在铺色上，字留给墨色。
-/// 接近上限时点开的气泡里多一个"压缩"，等于发出 /compact（会话能用斜杠命令时，`AgentCapabilities.commands`）。
+/// 接近上限时点开的气泡里多一个"压缩"，等于发出 /compact。
 struct ContextGauge: View {
     let session: SessionState
     let meter: ContextMeter
@@ -62,14 +62,11 @@ struct ContextGauge: View {
             Text(meter.summary).font(Typography.meta.monospacedDigit()).foregroundStyle(palette.ink2)
                 .fixedSize(horizontal: false, vertical: true)
             if meter.suggestsCompact {
-                let compacts = session.capabilities.contains(.commands)
-                Text(compacts ? "快满了。Agent 会在到顶前自动压缩，也可以现在压缩。" : "快满了。Agent 会在到顶前自动压缩。")
+                Text("快满了。Agent 会在到顶前自动压缩，也可以现在压缩。")
                     .font(Typography.meta).foregroundStyle(palette.ink2)
                     .fixedSize(horizontal: false, vertical: true)
-                if compacts {
-                    Button("现在压缩", icon: .compact, action: compact)
-                        .buttonStyle(ControlButtonStyle(size: .compact))
-                }
+                Button("现在压缩", icon: .compact, action: compact)
+                    .buttonStyle(ControlButtonStyle(size: .compact))
             }
         }
         .padding(Spacing.block)

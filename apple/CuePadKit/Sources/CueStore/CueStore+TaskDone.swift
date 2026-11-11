@@ -4,10 +4,6 @@ import Foundation
 /// `createdForTaskID` 持久保存会话的创建来源，纯关联（没有任务创建来源）不授权结束；`executing` 的会话拒绝本地借用；跨端后到的关联不撤回已发出的结束，可以指向历史。
 /// 结束请求领取时固定一个请求 ID 集合，源端实际结束与这些请求的结果在同一个事务里写回；同步只合并同一条请求，不凭时间或 ended 的回声确认别的请求。
 /// 重启后没有证据的会话保持“未知”；会话页与 Cue 可以明确结束它，这只覆盖受理那一刻已知的旧未知，不扩到之后的新请求。
-struct UnusedSessions {
-  var ended: [DeliveryRequest] = []
-  var terminalKept = false
-}
 
 extension CueStore {
   /// 算不算做完由 Cue 按证据自己定，不请你确认。还有没完成的子任务抛 `stepsRemaining`、什么都不改；否则完成它，结束没人再用的会话（`endUnusedSessions`，请求算 Cue 发起的）。顶层任务同时写一条给你的结果（`CueReport.text`）：你不认可就把它改回没做完，或直接告诉 Cue。结果上只挂 Cue 点名的图（`shots`），没点名就不挂；点名的不在发到手机的里抛 `shotMissing`、什么都不改。已完成的再做完一次只结束没人再用的会话（说话会恢复已结束的会话，答完就空着），状态与结果不再写。证据的条数与长短由调用方（Cue 的工具）把关。返回这条结果（子任务与已完成的为 nil）与结束请求。
@@ -19,7 +15,7 @@ extension CueStore {
       guard let card = try find(Card.self, task) else { throw CueStoreError.notFound }
       let finished = card.status != .done
       _ = try applyStatus(task, .done)
-      let ended = try endUnusedSessions(of: task, cue: true).ended
+      let ended = try endUnusedSessions(of: task, cue: true)
       guard finished, card.parentID == nil else { return (nil, ended) }
       return (try insertCueMessage(.cue, shown: CueReport.text(task: card.heading, evidence: evidence), shots: shots, task: task, answeredRequests: answeredRequests), ended)
     }
@@ -31,16 +27,15 @@ extension CueStore {
     guard remaining == 0 else { throw CueStoreError.stepsRemaining(remaining) }
   }
 
-  /// 已完成的什么都不改，所以界面手里的副本过时（别的设备刚做完）、或延迟提交时它已被做完，都不会把它翻回去。读与改在一个事务里：两次 `await` 之间也可能有同步来的改动插进来。返回新状态、结束请求，以及有没有终端里你自己开的会话没结束（`terminalKept`，提示里如实说）。
+  /// 已完成的什么都不改，所以界面手里的副本过时（别的设备刚做完）、或延迟提交时它已被做完，都不会把它翻回去。读与改在一个事务里：两次 `await` 之间也可能有同步来的改动插进来。返回新状态与结束请求。
   @discardableResult
-  public func completeTask(_ id: UUID) throws -> (status: TaskStatus, ended: [DeliveryRequest], terminalKept: Bool) {
+  public func completeTask(_ id: UUID) throws -> (status: TaskStatus, ended: [DeliveryRequest]) {
     try write {
       guard let card = try find(Card.self, id) else { throw CueStoreError.notFound }
       guard let current = card.status else { throw CueStoreError.notATask }
-      guard current != .done else { return (.done, [], false) }
+      guard current != .done else { return (.done, []) }
       let status = try applyStatus(id, .done)
-      let fate = try endUnusedSessions(of: id, cue: false)
-      return (status, fate.ended, fate.terminalKept)
+      return (status, try endUnusedSessions(of: id, cue: false))
     }
   }
 
@@ -62,20 +57,20 @@ extension CueStore {
   }
 
   /// 任务离开看板，或明确开工换会话时（纯关联不收尾），对这件事里绑着的会话各看一遍，没人再用就请它所在的 Mac 结束。资格统一由 `taskSessionCanEnd` 判断；事务事件入口也复用这里。
-  /// 留着的：还有在看板上、没在开新会话的叶子绑着它（别的事的叶子也算），或有话正送进去；这件事的下一步还没开工、也没在往别处交，照 `handOffPlan` 默认接着用它。终端里你自己开的会话不替你结束（结束它就是关掉你的终端进程），它随这件事从看板收起（`isLoose`），再有动静才回来；做不到的（`canEnd`）也留着；已结束的、记录还没到的不动。取回归档、撤销删除不重开：再对它说话就在后台恢复。
+  /// 留着的：还有在看板上、没在开新会话的叶子绑着它（别的事的叶子也算），或有话正送进去；这件事的下一步还没开工、也没在往别处交，照 `handOffPlan` 默认接着用它。不是为这件事开的（`endsWithTask`）不结束，它随这件事从看板收起（`isLoose`），再有动静才回来；已结束的、记录还没到的不动。取回归档、撤销删除不重开：再对它说话就在后台恢复。
   /// `task` 可以已经归档或删掉（删掉的从它原来的上级往上找这件事）；灵感不管。必须在写事务内调用。
   @discardableResult
-  func endUnusedSessions(of task: UUID, cue: Bool) throws -> UnusedSessions {
-    guard let card = try find(Card.self, task), card.isTask else { return UnusedSessions() }
+  func endUnusedSessions(of task: UUID, cue: Bool) throws -> [DeliveryRequest] {
+    guard let card = try find(Card.self, task), card.isTask else { return [] }
     let topID = try card.parentID.map { try ancestors(of: $0).last ?? $0 } ?? task
-    guard let top = try find(Card.self, topID) else { return UnusedSessions() }
+    guard let top = try find(Card.self, topID) else { return [] }
     let sessions = try db.query(
       """
       SELECT piSessionID FROM cards WHERE piSessionID IS NOT NULL AND (id = ?1 OR id IN (\(Self.subtree(from: "SELECT ?2"))))
       UNION SELECT sessionID FROM piSessionStates WHERE createdForTaskID IN (\(Self.subtree(from: "SELECT ?2", includingDeleted: true)))
       """, [task, topID]
     ) { $0.text(0) }
-    guard !sessions.isEmpty else { return UnusedSessions() }
+    guard !sessions.isEmpty else { return [] }
     let open = try select(
       Card.self, where: "id IN (SELECT value FROM json_each(?)) AND \(Self.taskOpen)", [Self.idList(try leaves(of: top).map(\.id))], orderBy: "sortKey, id")
     let launching = try launchingLeaves(open.map(\.id))
@@ -88,19 +83,17 @@ extension CueStore {
     return try endUnused(sessions.filter { !used.contains($0) }, outside: top.id, cue: cue)
   }
 
-  /// 这些会话里在 `root` 这件事之外也没人再用（`usedElsewhere`）、CuePad 托管且做得到的，请它所在的 Mac 结束。终端里你自己开的、还没结束的不结束，记进 `terminalKept`。必须在写事务内调用。
-  func endUnused(_ sessions: [String], outside root: UUID?, cue: Bool) throws -> UnusedSessions {
-    var result = UnusedSessions()
+  /// 这些会话里在 `root` 这件事之外也没人再用（`usedElsewhere`）、可随任务结束的（`taskSessionCanEnd`），请它所在的 Mac 结束。必须在写事务内调用。
+  func endUnused(_ sessions: [String], outside root: UUID?, cue: Bool) throws -> [DeliveryRequest] {
+    var ended: [DeliveryRequest] = []
     for sessionID in sessions {
       guard try db.first(Self.usedElsewhere, [sessionID, root], { _ in true }) == nil, let state = try sessionState(sessionID) else { continue }
       if try taskSessionCanEnd(state), let owner = state.createdForTaskID {
-        result.ended.append(try requestControl(.end, of: SendTarget(kind: .piSession, name: state.title, ref: sessionID), on: state.hostID, cue: cue,
+        ended.append(try requestControl(.end, of: SendTarget(kind: .piSession, name: state.title, ref: sessionID), on: state.hostID, cue: cue,
           content: TaskSessionEnd(createdForTaskID: owner).stored))
-      } else if !state.hosted, state.state != .known(.ended) {
-        result.terminalKept = true
       }
     }
-    return result
+    return ended
   }
 
   static let usedElsewhere = """

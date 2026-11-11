@@ -13,14 +13,14 @@ struct SessionTaskTests {
     var services: AppServices { rig.services }
     var store: CueStore { services.store }
 
-    @Test func 终端里开的会话_不长任务_Cue的信封里看得到_能对它说话_也能为它建任务() async throws {
+    @Test func 不经任务开的会话_不长任务_Cue的信封里看得到_能对它说话_也能为它建任务() async throws {
         let project = try await store.createProject(name: "圆桌", color: "#000000")
         try await store.setDirectory("/work/x", for: project.id)
         try await enableCue()
         try services.reconcileLaunch()  // Mac 启动
         var session = CueBridge.Session(
             id: "s1.100", sessionID: "s1", agent: .pi, sessionFile: URL(filePath: "/tmp/never-\(UUID().uuidString).jsonl"), pid: 100,
-            cwd: URL(filePath: "/work/x", directoryHint: .isDirectory), terminal: TerminalIdentity(),
+            cwd: URL(filePath: "/work/x", directoryHint: .isDirectory), 
             state: .settled, stateSince: .now)
         session.name = "修登录"
         try await bridge(.appeared(session))

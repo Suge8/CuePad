@@ -114,7 +114,7 @@ public actor StateRecorder {
   /// 会话的进程退出了、没有别的进程接着它：什么算历史只在这里定——
   /// - 没留下对话的（`spoke` 为 false：Pi 在第一条消息落盘前不建文件，`--no-session` 也没有）：一句话没说过，不进历史，记录删掉（同步删除）；
   /// - CuePad 后台托管的：闲置退出不算结束，记录留着、歇着，仍在"现在"，发话由本机执行器照常唤醒；
-  /// - 其余（终端里的 Pi 退出）：记为已结束，进历史。
+  /// - 其余（旧版本留下的没托管过的，启动对账时收尾）：记为已结束，进历史。
   /// 后两种在记录上手上还有活时记为做到一半被打断（`WorkState.interrupted`：崩溃、被杀）。
   /// 托管的会话要结束，由用户的结束请求写 `end`。
   public func exited(sessionID: String, spoke: Bool) async throws {

@@ -109,7 +109,7 @@ extension RealOpenCodeTests {
             let id = try await runtime.open(in: sandbox.work, launchToken: "token-1", name: nil, model: nil, thinking: nil)
 
             let opened = try #require(bridge.session(id: id))
-            #expect(opened.agent == .opencode && opened.hosted && opened.launchToken == "token-1" && sandbox.service != nil)
+            #expect(opened.agent == .opencode && opened.launchToken == "token-1" && sandbox.service != nil)
             let image = pngData(width: 8, height: 8, shade: 0.9)
             try await bridge.send(SessionMessage(text: "Reply with exactly the word SEEN.", images: [MessageImage(mimeType: "image/png", data: image)]), to: id)
             let hash = SHA256.hash(data: image).map { String(format: "%02x", $0) }.joined() + ".png"

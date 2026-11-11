@@ -141,7 +141,7 @@ struct UpgradePreparationTests {
         let id = "compound.1", sessionID = "compound"
         let link = StartedOperation(bridge: app.bridge, id: id)
         app.bridge.attach(Session(id: id, sessionID: sessionID, agent: .pi, sessionFile: nil, pid: 1,
-                                cwd: app.directory, terminal: TerminalIdentity(), state: .settled, stateSince: .now), via: link)
+                                cwd: app.directory, state: .settled, stateSince: .now), via: link)
         let recorder = try await app.runtimeRecorder(on: TestApp.hostID)
         try await recorder.update(sessionID: sessionID, state: .settled)
         let target = try #require(try await store.allSessionStates().first { $0.sessionID == sessionID })

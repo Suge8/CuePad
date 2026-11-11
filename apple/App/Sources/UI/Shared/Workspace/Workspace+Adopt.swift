@@ -3,7 +3,7 @@ import CueText
 import Foundation
 
 /// 只在看板上建任务，别处给没绑任务的会话改名仍只是让 Agent 改。
-/// 名字只有一个事实源——任务标题：绑着任务的会话改名改的是它绑着的叶子的标题，再对做得到的 Agent（`MacDelivery.canRename`）发改名；
+/// 名字只有一个事实源——任务标题：绑着任务的会话改名改的是它绑着的叶子的标题，再对 Agent 发改名；
 /// 标题为空的任务显示会话名、随会话改名变（`Card.title(session:)`）。
 extension Workspace {
     func adopt(_ session: SessionState) async throws -> UUID {
@@ -43,14 +43,14 @@ extension Workspace {
         try await pushName(of: leaf)
     }
 
-    /// 标题为空（跟着会话名）、已经同名、做不到改名的（终端里的 Grok 这类，只读跟读）不发。
+    /// 标题为空（跟着会话名）、已经同名的不发。
     func pushName(of leaf: UUID) async throws {
         let store = services.store
         guard let card = try await store.card(leaf), card.isTask, !card.heading.isEmpty, let sessionID = card.piSessionID,
             let session = try await store.sessionItems(sessionIDs: [sessionID])[sessionID]
         else { return }
         let name = CueName.clipped(card.heading)
-        guard MacDelivery.canRename(session.state), name != session.shownTitle(at: services.speech) else { return }
+        guard name != session.shownTitle(at: services.speech) else { return }
         _ = try await services.rename(session.state, to: name)
     }
 }

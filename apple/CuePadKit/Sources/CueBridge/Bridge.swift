@@ -98,7 +98,7 @@ public final class Bridge {
 }
 
 extension Bridge {
-    /// 打断不了的（`AgentCapabilities.speakBlocked`）拒收、带上原因，不排队。受理即返回，不代表模型成功。
+    /// 受理即返回，不代表模型成功。
     /// 同一会话的 `send` 一次一句（`SessionGate`）；`abort` 不排队、还取消排着的发话；斜杠命令不排队（`/compact` 要等压完才确认，发话得能在它进行中打断它）。
     public func send(_ message: SessionMessage, to id: Session.ID) async throws {
         try await turns.run(id) { try await deliver(message, to: id) }
@@ -115,9 +115,6 @@ extension Bridge {
                 guard peer.isCurrentTurn(turnStartedAt.stored) else { throw BridgeError.rejected("user_turn") }
             }
         }
-        if let why = peer.capabilities.speakBlocked(in: peer.state, agent: peer.agent) {
-            throw BridgeError.rejected("failed: \(why)")
-        }
         do { try await link.send(message, in: id) }
         catch BridgeError.upgradingExtension {
             throw BridgeError.operationStarted(ShownText(BridgeError.upgradingExtension))
@@ -127,7 +124,7 @@ extension Bridge {
     /// 整行以 / 开头。Pi 执行了它就确认（处理函数的结果没有公开回执）；模板与 skill 是说的话，经 `send` 交出。
     /// 模板与 skill 是说的话，经 `send` 交出。清单里没有的命令抛 `rejected("unknown_command")`，必填参数没给抛 `rejected("missing_argument")`。
     public func command(_ line: String, deliveryID: String? = nil, in id: Session.ID) async throws {
-        try await control(id, needs: .commands).command(line, deliveryID: deliveryID, in: id)
+        try await control(id).command(line, deliveryID: deliveryID, in: id)
     }
 
     /// `AgentTimeouts.end` 内没下线抛 `notEnded`。
@@ -142,7 +139,7 @@ extension Bridge {
     }
 
     private func endInstance(_ id: Session.ID) async throws {
-        let link = try control(id, needs: .end)
+        let link = try control(id)
         let changes = changes()  // 先订阅再动手：下线的那一刻不会漏
         try await link.end(id)
         try await withDeadline(AgentTimeouts.end, timing: timing, orThrow: BridgeError.notEnded) {
@@ -161,11 +158,11 @@ extension Bridge {
     /// 有目标的停止不取消本桥排着的新消息；真实回合身份交给接收端同步核对。
     public func abort(_ id: Session.ID, deliveryID: String, turnStartedAt: Int64) async throws {
         guard session(id: id)?.isCurrentTurn(turnStartedAt) == true else { throw BridgeError.rejected("stale_turn") }
-        try await control(id, needs: .abort).abort(id, deliveryID: deliveryID, turnStartedAt: turnStartedAt)
+        try await control(id).abort(id, deliveryID: deliveryID, turnStartedAt: turnStartedAt)
     }
 
     public func abort(_ id: Session.ID) async throws {
-        let link = try control(id, needs: .abort)
+        let link = try control(id)
         turns.abort(id)
         try await link.abort(id)
     }
@@ -178,7 +175,7 @@ extension Bridge {
 
     /// 回答该会话正在等的弹窗；`promptID` 不是正在等的那个、或答案对不上时抛 `BridgeError.rejected`。
     public func answer(_ answer: AnswerValue, to promptID: String, in id: Session.ID) async throws {
-        try await control(id, needs: .answer).answer(answer, to: promptID, in: id)
+        try await control(id).answer(answer, to: promptID, in: id)
     }
 
     /// 换该会话的模型、思考强度或会话名（至少给一项，会话名不能是空白）：先换模型再设强度，强度按新模型支持的范围夹取。
@@ -187,9 +184,7 @@ extension Bridge {
         var config = config
         config.name = config.name?.trimmingCharacters(in: .whitespacesAndNewlines)
         guard config.model != nil || config.thinking != nil || config.fast != nil || config.name != nil, config.name?.isEmpty != true else { throw BridgeError.rejected("bad_request") }
-        var needs: AgentCapabilities = config.model != nil || config.thinking != nil || config.fast != nil ? .model : []
-        if config.name != nil { needs.insert(.rename) }
-        try await control(id, needs: needs).configure(config, in: id)
+        try await control(id).configure(config, in: id)
     }
 
     /// 请该会话查一次所有 OAuth 订阅的额度：查到的随 `changes()` 的 `.quota` 报出（与回复里带回的同一条路），
@@ -201,8 +196,8 @@ extension Bridge {
     /// 不在桥上的为 false。
     public func isTurnRunning(_ id: Session.ID) -> Bool { session(id: id)?.state.isTurnRunning ?? false }
 
-    /// 会话的控制通道；这个 Agent 的这类会话做不到（`AgentCapabilities`）就抛 `unsupported`：能做什么只看能力表，通道不判断。
-    private func control(_ id: Session.ID, needs: AgentCapabilities) throws -> any SessionLink {
+    /// 会话的控制通道；这家或这个模型做不到（`AgentCapabilities`）就抛 `unsupported`：能做什么只看能力表，通道不判断。
+    private func control(_ id: Session.ID, needs: AgentCapabilities = []) throws -> any SessionLink {
         guard let link = controls[id], let session = session(id: id) else { throw BridgeError.unknownSession(id) }
         guard session.capabilities.isSuperset(of: needs) else { throw BridgeError.unsupported }
         return link

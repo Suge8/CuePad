@@ -57,10 +57,6 @@ extension CueStore {
   func checkCueCanSpeak(in state: SessionState) throws {
     try requireRuntime(state)
     if state.state == .known(.ended) || state.state == .known(.interrupted) { return }
-    if state.speakBlocked != nil {
-      guard state.capabilities.contains(.speak) else { throw CueStoreError.terminalOnly(state.title) }
-      throw CueStoreError.cannotSpeakNow(state.title, "在跑，CuePad 打断不了它（在终端里开的）")
-    }
     guard state.state.known?.hasPendingWork == true else { return }
     switch try turnOpener(state.sessionID) {
     case .cue: return

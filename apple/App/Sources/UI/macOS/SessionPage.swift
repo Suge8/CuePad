@@ -12,7 +12,7 @@ extension SessionState {
             projectID: projectID, state: .known(session.state), detail: session.detail, folder: session.cwd.lastPathComponent,
             lastPrompt: recap?.lastPrompt, lastReply: recap?.lastReply, question: session.question, notify: nil,
             stateSince: session.stateSince, busySince: session.busySince, createdAt: session.stateSince, modifiedAt: session.stateSince,
-            launchToken: session.launchToken, hosted: session.hosted, subagents: session.subagents,
+            launchToken: session.launchToken, hosted: true, subagents: session.subagents,
             pendingPrompt: recap?.pendingPrompt, pendingTools: recap?.pendingTools, model: session.model, thinking: session.thinking, fast: session.fast, context: session.context,
             agent: .known(session.agent), turnStartedAt: session.turnStartedAt, answeredAt: recap?.answeredAt, failure: session.failure.map(Open.known), bootID: SystemBoot.id, runtimeUntil: .distantFuture)
     }

@@ -14,7 +14,6 @@ extension AppServices {
         startDiagnostics()
         let sessionChanges = bridge.changes() // 先订阅再启动桥与各家的接入：启动时发现的会话不能漏
         agents.uninstalled = { [weak self] kind in await self?.runtimes[kind]?.integrationRemoved() }
-        agents.installed = { [weak self] kind in self?.runtimes[kind]?.integrationInstalled() }
         do {
             try bridge.start()
         } catch {
@@ -194,7 +193,6 @@ extension AppServices {
             agent: agent, paths: paths, transcriptWindow: Chat.transcriptWindow, files: store.files,
             start: { [weak self] file in await self?.loadHistoryStart(for: file) }) {
             let scope = connected ? .all : await hostedScope(of: agent)
-            runtimes[agent]?.follow(scope)
             let events = agent == .pi
                 ? indexer.events(following: deliveryHistoryFiles(), scope: scope)
                 : indexer.events(following: bridge.sessionFiles, scope: scope)
@@ -225,7 +223,7 @@ extension AppServices {
     /// 首次回填时攒够这么多个文件写一次（一个事务、一次变更通知）。
     static let backfillBatch = 200
 
-    /// 先落检查点再写会话行；读到的会话名也交给这家的接入（会话状态有要从文件里得知的，`AgentRuntime.read`）。
+    /// 先落检查点再写会话行；读到的会话名也交给桥上在线的同一会话（`Bridge.read`）。
     func consumeHistory(_ events: AsyncStream<HistoryEvent>, agent: AgentKind) async {
         await historyStore.beginBackfill()
         var pending: [HistoryUpdate] = []
@@ -241,7 +239,6 @@ extension AppServices {
             switch event {
             case .updated(let update):
                 bridge.read(update)
-                runtimes[agent]?.read(update)
                 pending.append(update)
                 if !backfilling || pending.count >= Self.backfillBatch { await flush() }
             case .backfillFinished(let files):

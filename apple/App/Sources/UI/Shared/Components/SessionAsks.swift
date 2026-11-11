@@ -133,7 +133,3 @@ private struct SessionAsks: ViewModifier {
         Binding { workspace.sessionAsk.flatMap(pick) } set: { if $0 == nil, workspace.sessionAsk.flatMap(pick) != nil { workspace.sessionAsk = nil } }
     }
 }
-
-extension MacDelivery {
-    static func canRename(_ session: SessionState) -> Bool { session.capabilities.contains(.rename) }
-}

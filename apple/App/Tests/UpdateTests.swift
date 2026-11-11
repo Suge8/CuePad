@@ -16,9 +16,8 @@ struct UpdateTests {
         let asking = claude.host("asking", state: .waitingForUser)
         let delegating = claude.host("delegating", state: .delegating)
         claude.host("resting", state: .settled)
-        // 托管的 Pi 撑得过重启；终端里开的会话不受 CuePad 重启影响
+        // 托管的 Pi 撑得过重启
         try await rig.host.connect("pi-hosted", cwd: "/work/p", busy: true)
-        try await rig.host.connect("terminal", cwd: "/work/d", busy: true)
 
         updates.checkForUpdates()
         #expect(updater.installs == 0)

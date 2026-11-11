@@ -27,8 +27,8 @@ extension CueStore {
     }
     func stall(_ session: SessionState, seq: Int, task: Card?, leaf: Card?) throws {
       guard let at = session.stallsAt, at <= now, marks.stalls.map({ at > $0 }) ?? true else { return }
-      // Cue 这会儿说不进去的不报：他发起的那一轮（`checkCueCanSpeak`），或在跑时 CuePad 打断不了的；叫醒它只能干看
-      guard session.speakBlocked == nil, try !hisTurn(session.sessionID) else { return }
+      // 他发起的那一轮不报：Cue 这会儿说不进去（`checkCueCanSpeak`），叫醒它只能干看
+      guard try !hisTurn(session.sessionID) else { return }
       let running = session.subagents.filter(\.isRunning).map { $0.action.isEmpty ? $0.name : "\($0.name)：\($0.action)" }
       changes.append(CueChange(
         kind: .stalled, task: task, leaf: leaf, session: session, at: at, seq: seq, detail: running.joined(separator: "；"), recap: session.recap))
