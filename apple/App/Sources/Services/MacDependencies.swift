@@ -9,7 +9,6 @@ struct MacDependencies {
     var hotkeys: any HotkeyBackend
     var paths: AgentPaths
     var agents: AgentIntegrations
-    var terminal: TerminalJumper
     var hostID: String
     var workspaces: Workspaces
     var wakeNotifications: NotificationCenter
@@ -63,7 +62,6 @@ struct MacDependencies {
             hotkeys: CarbonHotkeyBackend(),
             paths: paths,
             agents: agents,
-            terminal: TerminalJumper(),
             hostID: hostID,
             workspaces: Workspaces.resolve(isolatedLibrary: isolated ? location.directory : nil),
             wakeNotifications: NSWorkspace.shared.notificationCenter,
@@ -78,7 +76,7 @@ struct MacDependencies {
                 .opencode: OpenCodeRuntime(
                     bridge: bridge, paths: paths, store: store, hostID: hostID, opencode: { await agents.executable(.opencode) },
                     transcriptWindow: Chat.transcriptWindow),
-                .grok: GrokRuntime(bridge: bridge, paths: paths, files: store.files, grok: { await agents.executable(.grok) }),
+                .grok: GrokRuntime(bridge: bridge, paths: paths, grok: { await agents.executable(.grok) }),
                 .dsh: DshRuntime(bridge: bridge, paths: paths, dsh: { await agents.executable(.dsh) }),
             ] },
             pasteboard: .general,

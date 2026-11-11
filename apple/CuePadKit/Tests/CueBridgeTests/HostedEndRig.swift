@@ -124,7 +124,7 @@ final class EndRig {
                 "NO_PROXY": "127.0.0.1,localhost", "no_proxy": "127.0.0.1,localhost", "CUEPAD_PI_SOCKET_DIR": sockets.path,
             ]
             let grok = GrokRuntime(
-                bridge: bridge, paths: AgentPaths(pi: pi, environment: environment), files: scratchFiles, grok: { executable }, locate: { locator },
+                bridge: bridge, paths: AgentPaths(pi: pi, environment: environment), grok: { executable }, locate: { locator },
                 timing: timing)
             try grok.start()
             runtime = grok

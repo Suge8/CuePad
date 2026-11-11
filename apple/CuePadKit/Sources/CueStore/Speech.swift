@@ -78,6 +78,9 @@ public enum Speech {
 
     /// 到 `host` 那台 Mac 的同步从什么时候起通着；nil 是此刻不通。
     public func reachableSince(_ host: String?) -> Date? { isLocal(host) ? .distantPast : reachableSince }
+
+    /// 那台 Mac 的在线记录（`MacPresence`）此刻作不作数：本机同步不通时它可能只是没同步来，那台就是本机（刚启动、还没写下在线）也不算。
+    public func seesPresence(of host: String) -> Bool { !isLocal(host) && reachableSince != nil }
   }
 
   /// 对 Cue 说的一句：`said` 是写下的时刻，`delivered` 是交给 Cue 的时刻，`reachedServer` 是服务器收下过它，`host` 是 Cue 运行的那台 Mac。
