@@ -123,7 +123,7 @@ extension SessionProcess {
 }
 
 /// 盯一个目录本身的增删改名（kqueue），在主线程回调。不用 FSEvents：fseventsd 转发的事件实测晚到 0.4 到 20 多秒，
-/// 后台唤醒的会话、终端里新开的会话都要等它才上桥。
+/// 后台起的、唤醒的会话都要等它才上桥。
 @MainActor
 final class DirectoryWatcher {
     private let source: DispatchSourceFileSystemObject
