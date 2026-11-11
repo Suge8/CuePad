@@ -17155,6 +17155,22 @@
         }
       }
     },
+    "未通过" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not passed"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未通过"
+          }
+        }
+      }
+    },
     "本周" : {
       "localizations" : {
         "en" : {
@@ -20447,6 +20463,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "稍后会自动重试"
+          }
+        }
+      }
+    },
+    "稍后重试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retrying soon"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "稍后重试"
           }
         }
       }

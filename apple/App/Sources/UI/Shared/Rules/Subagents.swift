@@ -19,7 +19,7 @@ nonisolated extension SubagentState {
         switch phase.known {
         case .running: SessionShown(state: .known(.thinking))
         case .failed: SessionShown(state: .known(.error))
-        case .review, .done, .interrupted, .idle: SessionShown(state: .known(.settled))
+        case .review, .paused, .done, .rejected, .interrupted, .idle: SessionShown(state: .known(.settled))
         case nil: SessionShown(state: .unknown(phase.rawValue))
         }
     }
@@ -28,8 +28,10 @@ nonisolated extension SubagentState {
         switch phase.known {
         case .running: String(localized: "工作中")
         case .review: String(localized: "审查中")
+        case .paused: String(localized: "稍后重试")
         case .done: String(localized: "已交回")
         case .failed: String(localized: "失败")
+        case .rejected: String(localized: "未通过")
         case .interrupted: String(localized: "被中断")
         case .idle: String(localized: "空闲")
         case nil: shown.label
