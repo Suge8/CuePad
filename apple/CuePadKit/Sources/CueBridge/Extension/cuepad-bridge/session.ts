@@ -1,16 +1,12 @@
-import { execFile } from "node:child_process";
 import type net from "node:net";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { account } from "./account.ts";
 import { Draft } from "./draft.ts";
 import { phaseOf, StateTracker, type Asking, type Clock, type Phase } from "./events.ts";
 import { commandInfo, contextInfo, firstUserMessage, INTERNAL_COMMAND, modelInfo, reason, type Info, type Subagent } from "./info.ts";
-import { IdleExit, IS_HOSTED, SelfReload } from "./lifecycle.ts";
+import { IdleExit, SelfReload } from "./lifecycle.ts";
 import { preflight } from "./preflight.ts";
 import { QuotaFetcher, type Quota, type QuotaWindow } from "./quota.ts";
-
-/** CuePad 用它们定位终端 */
-const TERMINAL_ENV_KEYS = ["TERM_PROGRAM", "__CFBundleIdentifier", "TMUX", "TMUX_PANE"];
 
 type UserContent = Parameters<ExtensionAPI["sendUserMessage"]>[0];
 export type Ack = (fields: object) => void;
@@ -18,15 +14,6 @@ export type Ack = (fields: object) => void;
 type Said = { content: UserContent; expand: boolean; text: string; id?: string; ack?: Ack; cueTurn?: { deliveryId?: string | null } };
 export type Firecode = { inFlight: number; subagents: Subagent[] };
 type Identity = { extensionVersion: number; launchToken: string | null };
-
-function readTTY(): Promise<string | null> {
-	return new Promise((resolve) => {
-		execFile("ps", ["-o", "tty=", "-p", String(process.pid)], { encoding: "utf8" }, (error, stdout) => {
-			const tty = error ? "" : stdout.trim();
-			resolve(tty && tty !== "??" ? tty : null);
-		});
-	});
-}
 
 export class Session {
 	readonly tracker = new StateTracker();
@@ -40,9 +27,6 @@ export class Session {
 	phase: Phase;
 	since: number;
 	busySince: number | null;
-	private readonly tty = readTTY();
-	/** 会话载入时的条目数：之后多出来的是这个进程自己写的 */
-	readonly loadedEntries: number;
 	private info: Info;
 	/**
 	 * 已交给 Pi、还没观察到对应用户消息事件的那句。message_end 先于文件写入，ACK 不是持久化证明。
@@ -85,7 +69,6 @@ export class Session {
 		this.phase = phaseOf(initial);
 		this.since = Date.now();
 		this.busySince = this.phase === "working" ? this.since : null;
-		this.loadedEntries = ctx.sessionManager.getEntries().length;
 		this.info = {
 			name: pi.getSessionName() ?? null,
 			firstMessage: firstUserMessage(ctx.sessionManager.getEntries()),
@@ -197,8 +180,6 @@ export class Session {
 
 	async hello() {
 		this.updateInfo(await modelInfo(this.pi, this.ctx));
-		const terminalEnv: Record<string, string> = {};
-		for (const key of TERMINAL_ENV_KEYS) if (process.env[key]) terminalEnv[key] = process.env[key]!;
 		return {
 			t: "hello",
 			extensionVersion: this.identity.extensionVersion,
@@ -206,12 +187,9 @@ export class Session {
 			sessionFile: this.ctx.sessionManager.getSessionFile() ?? null,
 			pid: process.pid,
 			cwd: this.ctx.cwd,
-			mode: this.ctx.mode,
-			tty: await this.tty,
-			term: terminalEnv,
 			state: { ...this.state(), since: this.since, busySince: this.busySince, turnSince: this.turnSince },
 			launchToken: this.identity.launchToken,
-			hosted: IS_HOSTED,
+			hosted: true,
 			...this.info,
 		};
 	}

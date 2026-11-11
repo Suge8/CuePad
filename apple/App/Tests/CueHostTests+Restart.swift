@@ -61,7 +61,7 @@ extension CueHostTests {
         let running = try await store.createTask("托管着在跑", under: task.id), upgraded = try await store.createTask("升级前就在跑", under: task.id)
         let file = rig.folder.appending(path: "h0.jsonl")
         try Data("{}\n".utf8).write(to: file)
-        _ = try await rig.app.host.connect("h0", cwd: rig.folder.path, busy: true, hosted: true, sessionFile: file.path)
+        _ = try await rig.app.host.connect("h0", cwd: rig.folder.path, busy: true, sessionFile: file.path)
         try await store.linkCard(running.id, toSession: "h0")
         let helper = SubagentState(name: "helper", role: "工程师", phase: .known(.running))
         try await StateRecorder(store: store, hostID: TestApp.hostID)

@@ -25,7 +25,6 @@ export class IdleExit {
 	private timer: ReturnType<typeof setTimeout> | undefined;
 
 	follow(phase: Phase) {
-		if (!IS_HOSTED) return;
 		if (phase === "working" || phase === "waiting") {
 			this.cancel();
 		} else {
@@ -39,7 +38,7 @@ export class IdleExit {
 	}
 }
 
-/** 本扩展在磁盘上的目录（Pi 经 jiti 载入，按 CommonJS 给出 `__filename`）：CuePad 升级时（`AgentIntegration.install`）把整个目录原子地换成新版本 */
+/** 本扩展在磁盘上的目录（Pi 经 jiti 载入，按 CommonJS 给出 `__filename`）：App 里随包的那份，App 更新时随整个 App 换成新版本，路径不变 */
 const OWN_DIRECTORY = path.dirname(__filename);
 const ENTRY = path.join(OWN_DIRECTORY, "index.ts");
 
@@ -49,7 +48,7 @@ const ENTRY = path.join(OWN_DIRECTORY, "index.ts");
  * 要等子代理也歇下：Pi 的重新载入是整个进程的扩展一起重来，FireCode 的子代理是进程内会话，在飞的回合会被中断。等的这段（可能几个小时）
  * CuePad 照常收发：它读得懂往前若干版扩展的格式（`PiWire.oldestExtension`），旧扩展不认的新命令回 `bad_request`。
  * 否决自己盯着扩展目录（`fs.watch`）：Bun 在 macOS 上用 FSEvents，关监听与进程退出都同步等 fseventsd 注册完，它一忙，
- * 会话关闭（闲置自退、/reload、换会话）就卡住几秒到十几秒；扩展文件只有 CuePad 写，由它来说。
+ * 会话关闭（闲置自退、/reload、换会话）就卡住几秒到十几秒；扩展文件只随 App 更新变，由 CuePad 来说。
  * 否决重新载入会话（`switchSession`）：同一工作目录下 Pi 复用缓存里的旧模块，载入的还是旧代码。
  */
 export class SelfReload {

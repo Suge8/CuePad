@@ -120,7 +120,7 @@ struct VoiceStopRaceTests {
     }
 
     private func agent(in rig: CueHostTests.Rig) async throws -> ChildProcess {
-        let environment = PinnedAgent.pi.environment(home: rig.app.directory, rig.app.piPaths.launchEnvironment.merging(["PI_OFFLINE": "1"]) { $1 })
+        let environment = PinnedAgent.pi.environment(home: rig.app.directory, rig.app.piPaths.launchEnvironment.merging(["PI_OFFLINE": "1", PiRuntime.hostedVariable: "3600"]) { $1 })
         return try await ChildProcess(realPi, ["--mode", "rpc", "--no-extensions", "-e", PiExtensionBundle.url.path,
             "--model", "fake/fake-model", "--name", "语音停止验收", "--no-skills"],
             directory: rig.folder, environment: environment, placement: .group, input: .pipe)

@@ -20,7 +20,7 @@ struct SessionLifecycleTests {
         let first = try await app.host.connect("atlas", cwd: "/")
         let other = FakeExtension(
             directory: app.socketDirectory, sessionID: "atlas", pid: Int32.max - 1,
-            options: .init(cwd: "/", mode: "rpc"))
+            options: .init(cwd: "/"))
         other.onCommand = { [weak other] _, command in
             if command["t"] as? String == "end" { other?.closeAfterReply(bye: "quit") }
             return ["ok": true]

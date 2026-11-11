@@ -104,11 +104,6 @@ function isImages(value: unknown): value is { mimeType: string; data: string }[]
 	return Array.isArray(value) && value.every((i) => typeof i?.mimeType === "string" && typeof i?.data === "string");
 }
 
-/** 会话文件里的条目数（不算文件头） */
-function entriesOnDisk(file: string): number {
-	return fs.readFileSync(file, "utf8").split("\n").filter((line) => line.trim().length > 0).length - 1;
-}
-
 function handleCommand(session: Session, socket: net.Socket, command: Command | null) {
 	const ack: Ack = (fields) => session.write(socket, { t: "ack", id: command?.id ?? null, ...fields });
 	const reject: Reject = (error) => ack({ ok: false, error });
@@ -118,7 +113,6 @@ function handleCommand(session: Session, socket: net.Socket, command: Command | 
 		if (command?.t === "send") return void handleSend(session, command, ack, reject).catch((error) => reject(`failed: ${reason(error)}`));
 		if (command?.t === "command") return void handleSlash(session, command, ack, reject).catch((error) => reject(`failed: ${reason(error)}`));
 		if (command?.t === "answer") return handleAnswer(session, command, ack, reject);
-		if (command?.t === "reload") return handleReload(session, ack);
 		if (command?.t === "end") return handleEnd(session, ack);
 		if (command?.t === "abort") return handleAbort(session, ack);
 		if (command?.t === "abortTurn") {
@@ -161,24 +155,6 @@ function slashCommand(session: Session, text: string): BuiltinCommand | SlashCom
 	const name = text.slice(1, space < 0 ? undefined : space);
 	if (name === INTERNAL_COMMAND) return undefined;
 	return BUILTIN_COMMANDS.find((c) => c.name === name) ?? session.pi.getCommands().find((c) => c.name === name);
-}
-
-/**
- * CuePad 在后台托管的同一会话刚做完一轮、让出退出：那一轮写进会话文件的内容，这个进程（用户打开时已载入）看不到。
- * 这个进程从载入起没写过，就把会话从文件重新载入到最新——之后说的话接在那一轮后面，不分支；写过了（会话已分出支线）
- * 就不动，提示一句。Pi 只在命令里给切换会话的能力（`switchSession`），所以经 `sendUserMessage` 触发本扩展的命令。
- */
-function handleReload(session: Session, ack: Ack) {
-	const { ctx } = session;
-	const file = ctx.sessionManager.getSessionFile();
-	const inMemory = ctx.sessionManager.getEntries().length;
-	if (!file || entriesOnDisk(file) <= inMemory) return ack({ ok: true, reloaded: false });
-	if (inMemory !== session.loadedEntries || !ctx.isIdle()) {
-		ctx.ui.notify("CuePad 在后台跑的那一轮在你打开会话后才写完，会话分出了支线；用 /tree 查看", "warning");
-		return ack({ ok: true, reloaded: false });
-	}
-	ack({ ok: true, reloaded: true });
-	session.runInternal("reload-session");
 }
 
 /**

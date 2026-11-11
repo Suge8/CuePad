@@ -59,7 +59,7 @@ final class RecordingHost: AgentRuntime {
     func resume(_ session: IndexedSession) async throws -> String {
         calls.append(.resume(sessionFile: session.path, directory: session.cwd))
         if !resumeFailures.isEmpty { throw resumeFailures.removeFirst() }
-        return try await connect(URL(filePath: session.path).deletingPathExtension().lastPathComponent, cwd: session.cwd, hosted: true).id
+        return try await connect(URL(filePath: session.path).deletingPathExtension().lastPathComponent, cwd: session.cwd).id
     }
 
     func open(
@@ -71,7 +71,7 @@ final class RecordingHost: AgentRuntime {
         try Task.checkCancellation()
         if let openFailure { throw PiHostError.exited(openFailure) }
         let id = "new-\(launchToken)"
-        let ext = try await connect(id, cwd: directory.path, hosted: true, sessionFile: sessions.appending(path: "--demo--/\(id).jsonl").path, launchToken: launchToken)
+        let ext = try await connect(id, cwd: directory.path, sessionFile: sessions.appending(path: "--demo--/\(id).jsonl").path, launchToken: launchToken)
         if let openingRejection {
             let previous = ext.onCommand
             ext.onCommand = { connection, command in
@@ -82,14 +82,14 @@ final class RecordingHost: AgentRuntime {
         return ext.id
     }
 
-    /// 一个连着桥的会话：假扩展在 socket 目录里监听，桥发现它后返回。`busy` 为 true 时它正在跑一轮；`hosted` 是 CuePad 在后台托管的；
+    /// 一个连着桥的会话：假扩展在 socket 目录里监听，桥发现它后返回。`busy` 为 true 时它正在跑一轮；
     /// `sessionFile` 是它的会话文件（文件在就算说过话，进程没了时记录留着而不是删掉）。
     @discardableResult
     func connect(
-        _ sessionID: String, cwd: String, busy: Bool = false, hosted: Bool = false,
+        _ sessionID: String, cwd: String, busy: Bool = false,
         extensionVersion: Int = PiExtensionBundle.version, sessionFile: String? = nil, seesImages: Bool = true, launchToken: String? = nil
     ) async throws -> FakeExtension {
-        var options = FakeExtension.Options(extensionVersion: extensionVersion, cwd: cwd, hosted: hosted)
+        var options = FakeExtension.Options(extensionVersion: extensionVersion, cwd: cwd)
         options.launchToken = launchToken
         if !seesImages { options.model?.images = false }
         let file = SessionFile(url: sessionFile.map { URL(filePath: $0) } ?? sessions.appending(path: "--demo--/\(sessionID).jsonl"), sessionID: sessionID, cwd: cwd)

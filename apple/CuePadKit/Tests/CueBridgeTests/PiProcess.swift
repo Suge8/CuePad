@@ -42,14 +42,15 @@ final class PiProcess: @unchecked Sendable {
     var pid: Int32 { process.processIdentifier }
     var events: [PiEvent] { output.withLock { $0.events } }
 
-    /// - Parameter installBridge: 先用安装器把桥扩展装进临时 agent 目录、技能装进临时家目录的 `.agents`，让 Pi 按自己的发现规则加载。
+    /// 同 CuePad 托管的进程：显式加载桥扩展、带托管标记（`PiRuntime.hostedVariable`，空闲时限给得长，`env` 可改），技能用安装器装进临时家目录的 `.agents`。
+    /// - Parameter bridgeExtension: 加载的桥扩展目录，缺省随包的那个。
     /// - Parameter oneShotPrompt: 非 nil 时以 print 模式跑这条 prompt 然后退出（否则 RPC 常驻）。
     /// - Parameter firecode: 把 FireCode 与测试配置装进临时 agent 目录（它的子代理是进程内子会话，只加载 agent 目录里的扩展、只认 `models.json` 里的模型）。
     /// - Parameter alongside: 与它共用同一个临时 agent 目录、连接目录、工作目录与假模型（同一会话的第二个进程）。
     /// - Parameter discoverSkills: 让 Pi 去它的 skills 目录发现 skill（默认的安静参数里是 `--no-skills`）。
     /// - Parameter settings: 另外写进临时 agent 目录 Pi 设置（`settings.json`）的项，如压缩阈值（隔离的那几项见 `writeSettings`）。
     /// - Parameter model: 剧本要在 Pi 起来之前写好时（一起来就发请求的 print 模式）先建好交进来。
-    init(installBridge: Bool = true, socketDirectory: URL? = nil, extraExtensions: [String] = ["ui-confirm.ts"],
+    init(bridgeExtension: URL = PiExtensionBundle.url, socketDirectory: URL? = nil, extraExtensions: [String] = ["ui-confirm.ts"],
          oneShotPrompt: String? = nil, firecode: Bool = false,
          alongside other: PiProcess? = nil, sessionFile: URL? = nil, env: [String: String] = [:], extraArguments: [String] = [], discoverSkills: Bool = false, settings: [String: Any]? = nil,
          model: FakeModel? = nil) async throws {
@@ -70,20 +71,18 @@ final class PiProcess: @unchecked Sendable {
             try Self.writeModels(self.model, into: paths.agentDirectory)
             try Self.writeSettings(settings ?? [:], discoverSkills: discoverSkills, into: paths.agentDirectory)
             self.model.onTitle { .say("\($0.model)：\($0.prompt)") }
-            if installBridge {
-                let agents = AgentIntegration(paths: AgentPaths(pi: paths, environment: ["CUEPAD_AGENTS_DIR": home.appending(path: ".agents").path]), locate: { pinnedPi.locator }, cuepad: Self.cuepad, timing: noDeadline)
-                try await agents.install(.pi)
-            }
+            let agents = AgentIntegration(paths: AgentPaths(pi: paths, environment: ["CUEPAD_AGENTS_DIR": home.appending(path: ".agents").path]), locate: { pinnedPi.locator }, cuepad: Self.cuepad, timing: noDeadline)
+            try await agents.install(.pi)
         }
         if firecode { try Self.installFirecode(into: paths.agentDirectory) }
 
-        var args = (oneShotPrompt.map { ["-p", $0] } ?? ["--mode", "rpc"]) + extraArguments
+        var args = (oneShotPrompt.map { ["-p", $0] } ?? ["--mode", "rpc"]) + ["-e", bridgeExtension.path] + extraArguments
         if let sessionFile { args += ["--session", sessionFile.path] }
         for e in extraExtensions { args += ["-e", fixtures.appending(path: e).path] }
 
         var environment = pinnedPi.environment(home: home, [
             "PI_CODING_AGENT_DIR": paths.agentDirectory.path, "CUEPAD_PI_SOCKET_DIR": paths.socketDirectory.path, "PI_OFFLINE": "1",
-            "TERM_PROGRAM": "test-term", "__CFBundleIdentifier": "com.example.term", "TMUX_PANE": "%9", "TMUX": "/tmp/tmux-test/default,1,0",
+            PiRuntime.hostedVariable: "3600",
         ])
         environment.merge(env) { _, new in new }
 
@@ -119,7 +118,7 @@ final class PiProcess: @unchecked Sendable {
         try JSONSerialization.data(withJSONObject: ["providers": ["fake": provider]], options: [.sortedKeys]).write(to: agent.appending(path: "models.json"))
     }
 
-    /// 临时 agent 目录里的 Pi 设置（终端里起的与 CuePad 后台托管的都读它，同真实用户一样）：默认用假模型、不思考；
+    /// 临时 agent 目录里的 Pi 设置（同真实用户一样，托管的进程也读它）：默认用假模型、不思考；
     /// 不加载自动发现的 skill，`discoverSkills` 时照常发现。上下文文件、提示词模板、主题只从 agent 目录与（受信任的）工作目录找，两处都是临时目录。
     private static func writeSettings(_ extra: [String: Any], discoverSkills: Bool, into agent: URL) throws {
         var settings: [String: Any] = ["defaultProvider": "fake", "defaultModel": "echo", "defaultThinkingLevel": "off"]

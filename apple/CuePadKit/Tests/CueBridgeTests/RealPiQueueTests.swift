@@ -83,7 +83,7 @@ struct RealPiQueueTests {
         let model = try await FakeModel()
         try PiProcess.writeModels(model, into: agent)
         script(model)
-        let environment = pinnedPi.environment(home: root, paths.launchEnvironment.merging(["PI_OFFLINE": "1"]) { $1 })
+        let environment = pinnedPi.environment(home: root, paths.launchEnvironment.merging(["PI_OFFLINE": "1", PiRuntime.hostedVariable: "3600"]) { $1 })
         let process = try await ChildProcess(pinnedPi.executable, ["--mode", "rpc", "--no-extensions", "-e", PiExtensionBundle.url.path,
             "-e", fixturesDirectory.appending(path: "queue-gates.ts").path,
             "--model", "fake/echo", "--no-skills"], directory: folder, environment: environment, placement: .group, input: .pipe)
