@@ -75,6 +75,9 @@ extension CueEvalTests {
         截图都发到手机了：一路的方案稿 A/B、中途两版，和最终版。
         """
 
+    /// add 写的正文（第一次建成的那条）
+    static func body(_ added: [(call: CueToolCall, args: [String: Any])]) -> String? { added.first { !$0.call.failed }?.args["body"] as? String }
+
     static let doneReply = """
         忘记密码做好了。
 

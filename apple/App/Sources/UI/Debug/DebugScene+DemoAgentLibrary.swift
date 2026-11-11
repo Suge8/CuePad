@@ -12,9 +12,9 @@ extension DebugScene {
         let projects = try await store.projects()
         func project(_ name: String) -> UUID? { projects.first { $0.name == name }?.id }
         let host = "demo-mac"
-        let clean = args.agentLibrary == "clean"
+        let look = args.agentLibrary
         let library = DemoAgentLibrary(
-            home: String(DemoLibrary.demoHome.dropLast()), clean: clean,
+            home: String(DemoLibrary.demoHome.dropLast()), clean: look == "clean" || look == "blank", blank: look == "blank",
             cuepad: project("CuePad"), atlas: project(String(localized: "圆桌", table: "Demo")),
             homepage: project(String(localized: "个人网站", table: "Demo"))
         )
@@ -41,6 +41,7 @@ extension DebugScene {
 struct DemoAgentLibrary {
     let home: String
     let clean: Bool
+    let blank: Bool
     let cuepad: UUID?
     let atlas: UUID?
     let homepage: UUID?
@@ -262,7 +263,8 @@ struct DemoAgentLibrary {
         let agents: [AgentKind] = [.pi, .claudeCode, .codex]
         var list = [
             instruction(
-                .global, home + "/.config/agents/AGENTS.md", text: Self.sharedRules, hours: 26, readers: clean ? agents : [.pi, .codex],
+                .global, home + "/.config/agents/AGENTS.md", text: blank ? nil : Self.sharedRules, hours: blank ? nil : 26,
+                readers: blank ? [] : clean ? agents : [.pi, .codex],
                 links: [home + "/.pi/agent/AGENTS.md", home + "/.codex/AGENTS.md"] + (clean ? [home + "/.claude/rules/AGENTS.md"] : [])),
             instruction(.piSystem, home + "/.pi/agent/SYSTEM.md", text: Self.piSystem, hours: 24 * 9, readers: [.pi]),
         ]

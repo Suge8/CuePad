@@ -18,7 +18,7 @@ extension DebugScene {
         let claude = URL(filePath: claudePath, directoryHint: .isDirectory)
         let pi = URL(filePath: piPath, directoryHint: .isDirectory)
         let codex = URL(filePath: codexPath, directoryHint: .isDirectory)
-        let clean = args.agentLibrary == "clean"
+        let look = args.agentLibrary, blank = look == "blank", clean = look == "clean" || blank
         let skills = shared.appending(path: "skills")
 
         func write(_ text: String, _ file: URL) throws {
@@ -56,7 +56,7 @@ extension DebugScene {
         try skill("load-test", DemoAgentLibrary.loadTest, in: atlas.appending(path: ".agents/skills"))
         if clean { try link(atlas.appending(path: ".claude/skills/load-test"), to: atlas.appending(path: ".agents/skills/load-test")) }
         try write(DemoAgentLibrary.homepageRules, homepage.appending(path: "AGENTS.md"))
-        try write(DemoAgentLibrary.sharedRules, rules)
+        if !blank { try write(DemoAgentLibrary.sharedRules, rules) }
         for file in [pi.appending(path: "AGENTS.md"), codex.appending(path: "AGENTS.md")] { try link(file, to: rules) }
         try write(DemoAgentLibrary.piSystem, pi.appending(path: "SYSTEM.md"))
         if clean {

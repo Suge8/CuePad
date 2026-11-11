@@ -12,13 +12,17 @@ struct LibraryFileTop: View {
         let skill: String? = if case .skill(let path) = file { path } else { nil }
         let duplicate = library.duplicate(for: file)
         let merge = library.merge(for: file)
-        if draft.conflicted || duplicate != nil || merge != nil || skill != nil {
+        // 另写了一份的先合并进来，不拿底稿盖过它
+        let starter = file == .instruction(.global) && draft.blank && merge == nil
+        if draft.conflicted || duplicate != nil || merge != nil || starter || skill != nil {
             VStack(alignment: .leading, spacing: Self.gap) {
                 if draft.conflicted { ConflictBar(draft: draft) }
                 if let skill, let duplicate {
                     DuplicateBar(path: skill, tidy: duplicate, library: library)
                 } else if let merge {
                     MergeBar(tidy: merge, library: library, draft: draft, texts: texts)
+                } else if starter {
+                    StarterBar(draft: draft)
                 }
                 if let skill {
                     SkillFields(draft: draft, problem: library.skill(at: skill)?.problem).padding(.horizontal, Self.fieldsInset)

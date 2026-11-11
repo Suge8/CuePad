@@ -20,6 +20,8 @@ final class FileDraft {
     @ObservationIgnored private var document: SkillDocument?
     @ObservationIgnored private var base: String
     private(set) var dirty = false
+    /// 此刻一个字都没有（规则还没有文件，或清空了）：全局规则这时给起步规则（`StarterBar`）。
+    private(set) var blank: Bool
     private(set) var state = State.idle
     /// 这时编辑器交出键盘、不接输入。
     var previewing = DebugHooks.preset.mergePreview
@@ -49,6 +51,7 @@ final class FileDraft {
         base = text ?? ""
         body = ""
         self.workspace = workspace
+        blank = Self.isBlank(base)
         load(base)
         #if os(macOS)
         // 写不成的错已在 `write` 里提示，这里不再报
@@ -69,6 +72,12 @@ final class FileDraft {
     func changed(summary next: String) {
         summary = next
         edited()
+    }
+
+    /// 把一篇现成的正文填进编辑器（起步规则）：同你自己打的字一样算改动、一样存。
+    func fill(_ text: String) {
+        handle.replace(text)
+        changed(body: text)
     }
 
     private func edited() {
@@ -175,7 +184,12 @@ final class FileDraft {
         body = document.body
     }
 
-    private func mark() { if dirty != (text != base) { dirty = text != base } }
+    private func mark() {
+        if dirty != (text != base) { dirty = text != base }
+        if blank != Self.isBlank(text) { blank.toggle() }
+    }
+
+    private static func isBlank(_ text: String) -> Bool { text.allSatisfy(\.isWhitespace) }
 
     /// 文件在别处改过、等你选时不写，文件页顶上那一条写（`ConflictBar`）。
     var shownState: String? { Self.shown(state, dirty: dirty) }

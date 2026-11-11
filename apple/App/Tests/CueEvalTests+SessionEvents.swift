@@ -149,7 +149,7 @@ extension CueEvalTests {
     @Test func u做完只挂最终成果() async throws {
         try await CueEval.run(
             "u-做完只挂最终成果",
-            expect: "会话做完侧栏改版，一路发过方案稿、中途两版与最终版（共 5 份），回复带证据："
+            expect: "会话做完侧栏改版，一路发过方案稿、中途两版与最终版（共 5 份），挑过一轮刺、回复带证据："
                 + "done 的 show 挂最终版，每张一句看什么；方案稿、中途稿不挂"
         ) { eval in
             let rig = eval.rig
@@ -162,7 +162,11 @@ extension CueEvalTests {
             ] {
                 try await rig.shots(batch, from: work)
             }
-            try await eval.trigger { try await rig.settle(work, reply: Self.sidebarReply) }
+            try await eval.trigger {
+                try await rig.settleReworked(
+                    work, rounds: [("侧栏收口做完了，方案稿与中途两版发到手机了。", "视觉 86/100：分组标题太挤，深色下状态标错位。改完重发最终版。")],
+                    reply: Self.sidebarReply + "\n分组标题间距放开了，深色下状态标对齐了。")
+            }
             let previews = try await rig.store.previews(of: work.id)
             let done = eval.calls("task", "done").last { !$0.call.failed }
             let picked = done?.args["show"] as? [[String: Any]] ?? []

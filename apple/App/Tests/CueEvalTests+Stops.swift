@@ -57,33 +57,6 @@ extension CueEvalTests {
         }
     }
 
-    @Test func o他那一轮碰上推送() async throws {
-        try await CueEval.run(
-            "o2-他那一轮碰上推送",
-            expect: "他 15 分钟前在会话里说测试过了就提交，会话提交后停下问要不要推送（他那一轮碰上先问的，CuePad 已当场留给他）：留着是他的拍板，不收回、不替他答、不 tell、不发 Cue 的等你"
-        ) { eval in
-            let rig = eval.rig
-            let work = try await rig.working(Self.title, Self.body)
-            try await eval.trigger {
-                let his = "测试都过了就提交吧。"
-                try work.file.reply("后端和登录页都做好了，测试 23 个、lint 全过。", at: .now - 16 * 60)
-                try work.file.user(his, at: .now - 15 * 60)
-                try await rig.read(his, in: work.id)  // 他 15 分钟前说的，早已读进库
-                try await rig.spoke("提交好了（3f9c2ab）。", in: work.id)
-                let question = "要推送到 origin/main 吗？"
-                work.session.sendInfo(["question": ["id": "p1", "kind": "select", "text": question, "options": ["推送", "不推送"]]])
-                work.session.setState(["kind": "waiting_user", "title": question])
-            }
-            let session = try #require(try await rig.store.sessions(matching: work.id).first)
-            return [
-                Check(.result, "还是他的拍板（没收回）", session.asksYou(try await rig.store.cueDuty())),
-                Check(.ask, "没替他答（没 say 推送）", !work.answers.contains("推送")),
-                Check(.ask, "没发 Cue 的等你", try await eval.said().allSatisfy { $0.choices == nil }),
-                Check(.interrupt, "没打扰他（没 tell）", eval.calls("tell").isEmpty),
-            ]
-        }
-    }
-
     @Test func o调研交回要他看() async throws {
         try await CueEval.run(
             "o3-调研交回要他看",

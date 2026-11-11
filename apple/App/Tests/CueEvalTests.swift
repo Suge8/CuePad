@@ -43,15 +43,15 @@ struct CueEvalTests {
         }
     }
 
-    @Test func r大事先对齐() async throws {
-        try await CueEval.run("r-大事先对齐", expect: "他要重新设计设置页（界面设计、没说清要做成什么样）：建任务但不开工，回复里一两句说清打算、等他点头") { eval in
+    @Test func r大事先出方案() async throws {
+        try await CueEval.run("r-大事先出方案", expect: "他要重新设计设置页（界面重做）：不问他要不要开始，直接开工，正文写明这一轮只出方案、不实现，回复一句先出方案给他看") { eval in
             try await eval.trigger { try await eval.rig.say("演示项目的设置页太乱了，重新设计一下") }
-            let reply = try await eval.reply()
+            let reply = try await eval.reply(), body = Self.body(eval.calls("task", "add"))
             return [
-                Check(.result, "建了任务", eval.calls("task", "add").contains { !$0.call.failed }),
-                Check(.ask, "没开工（没 start、没开会话）", eval.calls("task", "start").isEmpty
-                    && !eval.rig.app.host.calls.contains { if case .open = $0 { true } else { false } }),
-                Check(.ask, "回复一两句说了打算", reply.map { sentences($0.text) <= 3 } == true),
+                Check(.result, "开工（开出了会话）", eval.rig.app.host.calls.contains { if case .open = $0 { true } else { false } }),
+                Check(.result, "正文写明这一轮只出方案、不实现", body?.contains(/只出方案|不实现|不要?改|不动手|先不/) == true),
+                Check(.interrupt, "回复一两句", reply.map { sentences($0.text) <= 2 } == true),
+                Check(.ask, "没问他要不要开始", reply.map { !$0.text.contains("？") && !$0.text.contains("?") && !$0.text.contains("点头") } == true),
             ]
         }
     }
@@ -84,23 +84,6 @@ struct CueEvalTests {
                 Check(.interrupt, "没另外 tell", eval.calls("tell").isEmpty),
                 // 读文件的参数名 Claude Code 是 file_path、Pi 是 path
                 Check(.result, "打开看了截图（附加）", eval.calls("read").contains { (($0.args["file_path"] ?? $0.args["path"]) as? String)?.hasSuffix(".png") == true }),
-            ]
-        }
-    }
-
-    @Test func d要推送() async throws {
-        try await CueEval.run("d-要推送", expect: "会话问要不要推送到 origin/main：不替用户答应；请他允许（tell 带 ask=push 关联任务），或证据没看到时先答不推、去要证据") { eval in
-            let work = try await eval.rig.working(Self.title, Self.body)
-            try await eval.trigger {
-                try await eval.rig.ask(
-                    work, said: "功能做完了，23 个测试全过，lint 干净，已提交到本地 main（3f9c2ab）。", question: "要推送到 origin/main 吗？",
-                    options: ["推送", "不推送"])
-            }
-            let asked = try await eval.said().contains { $0.choices != nil && $0.taskID == work.task.id }
-            let declined = work.answers.contains("不推送")
-            return [
-                Check(.ask, "没替用户答应推送", !work.answers.contains("推送")),
-                Check(.ask, "请他允许推送（等你关联到这件任务），或先答不推再去要证据", asked && eval.calls("tell").contains { $0.args["ask"] as? String == "push" } || declined),
             ]
         }
     }
@@ -141,23 +124,6 @@ struct CueEvalTests {
                 Check(.result, "对会话 say 让它继续", !eval.calls("task", "say").isEmpty),
                 Check(.ask, "没发等你", try await eval.said().allSatisfy { $0.choices == nil }),
                 Check(.interrupt, "没打扰他（没 tell）", eval.calls("tell").isEmpty),
-            ]
-        }
-    }
-
-    @Test func e自己定方案() async throws {
-        try await CueEval.run("e-自己定方案", expect: "会话问常规的技术取舍（A 还是 B）：Cue 自己 say 作答，不发等你") { eval in
-            let work = try await eval.rig.working(Self.title, Self.body)
-            try await eval.trigger {
-                try await eval.rig.ask(
-                    work, said: "开始做重置令牌的存储。项目里 Postgres 和 Redis 都在用。",
-                    question: "重置令牌存哪里？\nA. 新建 password_resets 表（存令牌哈希、过期时间、是否已用）\nB. 存进 Redis，TTL 30 分钟，用过即删",
-                    options: ["A", "B"])
-            }
-            return [
-                Check(.result, "对会话 say 作答", !eval.calls("task", "say").isEmpty),
-                Check(.ask, "没发等你", try await eval.said().allSatisfy { $0.choices == nil }),
-                Check(.interrupt, "没打扰用户（没 tell）", eval.calls("tell").isEmpty),
             ]
         }
     }

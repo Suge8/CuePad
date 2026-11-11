@@ -82,9 +82,11 @@ extension CueTools {
   func peek(_ card: Card) async throws -> Result {
     let detail = try await store.cueTaskDetail(card.id)
     let now = store.timing.now(), left = try await store.cueState()?.left ?? []
+    // 在哪个项目里：他放行的范围写的是项目（"以后「演示」里推送代码不用问"），不写出来就对不上
+    let project = try await store.projects().first { $0.id == detail.task.projectID }?.name
     var lines = [
-      "「\(detail.task.heading)」（\(detail.task.id.shortID)）" + (detail.progress.map { " · 子任务 \($0.done)/\($0.total)" } ?? "")
-        + " · " + status(detail.task)
+      "「\(detail.task.heading)」（\(detail.task.id.shortID)）" + (project.map { " · 项目「\($0)」" } ?? "")
+        + (detail.progress.map { " · 子任务 \($0.done)/\($0.total)" } ?? "") + " · " + status(detail.task)
     ]
     // 几步接着用同一个会话（start 的缺省）时，会话与它的问答只列在最后用它的那一步下面：每步各列一遍是同一段字重复几次
     let lastUse = Dictionary(detail.leaves.enumerated().compactMap { index, leaf in leaf.session.map { ($0.session.sessionID, index) } }) { _, later in later }
