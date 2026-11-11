@@ -38,5 +38,35 @@ extension RealCodexHostedTests {
             #expect(!rig.replies(session).contains("TOO LATE"))
         }
     }
+
+    /// 发话停下这一轮时它还没开跑（-32600），在等它开跑好补停时被停止取消：停止接手同一次停下，这一轮照样结束，下一句开出新一轮。
+    @Test func aStopTakingOverAMessageWaitingForTheTurnToStartStillStopsIt() async throws {
+        try await withCodexRig(readFault: .pass) { rig in
+            let fault = try #require(rig.readFault)
+            let first = rig.model.gate()
+            rig.model.on("Take your time", .held(first, then: .say("TOO LATE")))
+            rig.model.on("Reply with the single word NEXT", .say("NEXT"))
+            let id = try await open(rig, "token-late-start")
+            fault.lateStart = true
+            try await rig.bridge.send(SessionMessage(text: "Take your time."), to: id)
+            try await first.reached()
+
+            let speech = Task { try await rig.bridge.send(SessionMessage(text: "Reply with the single word LOST."), to: id) }
+            try await eventually("发话的停止回了 -32600，在等这一轮开跑") { fault.refusedStops == 1 }
+            async let stop: Void = rig.bridge.abort(id)
+            await #expect(throws: CancellationError.self) { try await speech.value }
+            fault.lateStart = false
+            try await stop
+            #expect(fault.refusedStops == 1)
+            #expect(rig.bridge.session(id: id)?.state == .settled)
+
+            let stopped = Date()
+            try await rig.bridge.send(SessionMessage(text: "Reply with the single word NEXT."), to: id)
+            let session = try #require(rig.bridge.session(id: id))
+            try await eventually("下一句开出新一轮、答完") { rig.bridge.session(id: id)?.state == .settled && rig.replies(session).last == "NEXT" }
+            #expect(try #require(rig.bridge.session(id: id)?.turnStartedAt) > stopped)
+            #expect(!rig.replies(session).contains("TOO LATE"))
+        }
+    }
 }
 #endif

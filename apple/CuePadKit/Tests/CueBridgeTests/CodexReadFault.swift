@@ -7,6 +7,8 @@ import Foundation
 /// 用它把这些先后排定。怎么回由 `mode` 定，随时可改，挂住的读在改成别的之后照新的回：
 /// - `whileParentRuns`：主会话的一轮在跑时回错误，这一轮的 `turn/completed` 转出之后照常转发（缺省）。只拦第一次不够：子线程随后的推送会马上再问到。
 /// - `fail`：回错误；`hold`：挂住不回；`pass`：照常转发。
+/// 另有 `lateStart`：主会话的 `turn/started` 先扣住、`turn/interrupt` 回 -32600，同 `turn/start` 已回、这一轮还没开跑时的真 Codex
+/// （0.167.0 实测只有几毫秒，测试排不进去，见 `CodexDriver.interrupt`）；关掉时转出扣住的 `turn/started`，之后的停止照常转发。
 @MainActor
 final class CodexReadFault {
     enum Mode: String { case whileParentRuns, fail, hold, pass }
@@ -26,6 +28,18 @@ final class CodexReadFault {
 
     var mode: Mode {
         didSet { write(mode) }
+    }
+
+    var lateStart = false {
+        didSet {
+            let flag = control.appending(path: "late-start")
+            if lateStart { FileManager.default.createFile(atPath: flag.path, contents: nil) } else { try? FileManager.default.removeItem(at: flag) }
+        }
+    }
+
+    /// `lateStart` 时回了 -32600 的停止有几次
+    var refusedStops: Int {
+        ((try? String(contentsOf: control.appending(path: "refused.log"), encoding: .utf8)) ?? "").count { $0 == "\n" }
     }
 
     private func write(_ mode: Mode) { try! Data(mode.rawValue.utf8).write(to: control.appending(path: "mode"), options: .atomic) }
@@ -48,7 +62,9 @@ final class CodexReadFault {
         CONTROL = \(String(reflecting: control.path))
         child = subprocess.Popen([\(String(reflecting: codex.path))] + sys.argv[1:], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
         lock, out_lock, in_lock = threading.Lock(), threading.Lock(), threading.Lock()
-        own, starts, running, parked = set(), set(), set(), []
+        own, starts, running, parked, started = set(), set(), set(), [], []
+        def late():
+            return os.path.exists(CONTROL + "/late-start")
         def mode():
             try:
                 return open(CONTROL + "/mode").read().strip()
@@ -84,6 +100,9 @@ final class CodexReadFault {
                     thread = (message.get("params") or {}).get("threadId")
                     if thread in own and message.get("method") == "turn/started":
                         running.add(thread)
+                        if late():
+                            started.append(line)
+                            continue
                     if thread in own and message.get("method") == "turn/completed":
                         running.discard(thread)
                 emit(line)
@@ -91,6 +110,10 @@ final class CodexReadFault {
             while True:
                 time.sleep(0.005)
                 with lock:
+                    if started and not late():
+                        for line in started:
+                            emit(line)
+                        started[:] = []
                     if parked and mode() != "hold":
                         ready = parked[:]
                         parked[:] = []
@@ -104,6 +127,11 @@ final class CodexReadFault {
             with lock:
                 if method in ("thread/start", "thread/resume"):
                     starts.add(message["id"])
+                elif method == "turn/interrupt" and late():
+                    with open(CONTROL + "/refused.log", "a") as log:
+                        log.write("\\n")
+                    emit((json.dumps({"id": message["id"], "error": {"code": -32600, "message": "no active turn to interrupt"}}) + "\\n").encode())
+                    continue
                 elif method == "thread/read" and message["params"]["threadId"] not in own:
                     answer(message, line)
                     continue
