@@ -75,7 +75,10 @@ struct AgentRow: View {
         let files = services.agents.writtenFiles(kind).joined(separator: String(localized: "、"))
         let name = kind.name
         let lines = [
-            String(localized: "接入后，这台 Mac 上的 \(name) 会话记录都能在 CuePad 里翻看，终端里开的也在；对其中一个发话，CuePad 在后台接着它。"),
+            kind.readsAllSessions
+                ? String(localized: "接入后，这台 Mac 上的 \(name) 会话记录都能在 CuePad 里翻看，终端里开的也在；对其中一个发话，CuePad 在后台接着它。")
+                : kind == .dsh ? String(localized: "CuePad 里只有它在后台开过的 \(name) 会话，网页与桌面版里开的不会出现。")
+                : String(localized: "CuePad 里只有它在后台开过的 \(name) 会话，终端里开的不会出现。"),
             String(localized: "不接入也能让 CuePad 在后台开 \(name) 会话。"),
             String(localized: "它也学会用 cuepad 记灵感、看和改任务，把页面和截图发到手机上看。"),
             kind == .codex ? String(localized: "Codex 在沙箱里跑命令，写入 CuePad 时会请你批准。") : nil,
@@ -135,11 +138,17 @@ enum AgentLine {
         case (.unresponsive, _): return (.notice, Dotted(String(localized: "找到了，但问版本没有回应，稍后再看")))
         case (.notFound, .missing): return (.calm, Dotted(String(localized: "没有检测到")))
         case (.notFound, _): return (.calm, Dotted(String(localized: "已卸载，CuePad 的技能还留着")))
-        case (.found, .missing): return (.calm, Dotted(String(localized: "写入技能，读进它的会话记录")))
+        case (.found, .missing): return (.calm, Dotted(kind.readsAllSessions ? String(localized: "写入技能，读进它的会话记录") : String(localized: "写入技能")))
         case (.found, .outdated): return (.notice, Dotted(String(localized: "需要升级")))
         case (.found(let version), .current): return (.calm, Dotted(String(localized: "已接入"), version.map { "\(kind.name) \($0)" }))
         }
     }
+}
+
+extension AgentKind {
+    /// 接入后读进它磁盘上的全部会话记录（`HistoryScope.all`）。OpenCode 只认 CuePad 托管过的（`OpenCodeRuntime`），
+    /// dsh 的会话记录只落在 CuePad 给托管会话的存储根里（`DshRuntime.sessions`）。
+    var readsAllSessions: Bool { self != .opencode && self != .dsh }
 }
 
 #endif

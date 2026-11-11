@@ -60,21 +60,34 @@ struct HookFile {
         static let unknown = Footprint(file: true)
     }
 
-    func footprint() -> Footprint? {
-        (try? Data(contentsOf: footprintFile)).flatMap { try? JSONDecoder().decode(Footprint.self, from: $0) }
+    /// 记录在但读不出来时抛错（读不了就分不清哪些结构是 CuePad 建的）；内容坏了当作没有记录。
+    func footprint() throws -> Footprint? {
+        try Self.readIfPresent(footprintFile).flatMap { try? JSONDecoder().decode(Footprint.self, from: $0) }
     }
 
-    /// 下标是 Codex 信任的键要用的。
-    func ourGroups(in tree: JSONSourceTree) -> [(event: String, index: Int)] {
+    /// 只有文件不在才是 nil；在而读不出来（权限等）抛错：当成没有就会删掉记录、留下旧条目，或漏掉要删的信任。
+    static func readIfPresent(_ file: URL) throws -> Data? {
+        do {
+            return try Data(contentsOf: file)
+        } catch CocoaError.fileReadNoSuchFile {
+            return nil
+        }
+    }
+
+    /// CuePad 的每一条命令在哪：事件、组号、组里的条目号（Codex 信任的键要用）。
+    func ourHandlers(in tree: JSONSourceTree) -> [(event: String, group: Int, handler: Int)] {
         (tree.root.member("hooks")?.members ?? []).flatMap { member in
-            (member.value.elements ?? []).enumerated().filter { isOurs($0.element, in: tree.text) }.map { (member.key, $0.offset) }
+            (member.value.elements ?? []).enumerated().flatMap { group in
+                (group.element.member("hooks")?.elements ?? []).enumerated().filter { isOurs($0.element, in: tree.text) }
+                    .map { (member.key, group.offset, $0.offset) }
+            }
         }
     }
 
     func remove() throws {
         let recorded = FileManager.default.fileExists(atPath: footprintFile.path)
-        let footprint = footprint() ?? .unknown
-        if let original = try? Data(contentsOf: file) {
+        let footprint = try self.footprint() ?? .unknown
+        if let original = try Self.readIfPresent(file) {
             guard (try? JSONSourceTree(original)) != nil else {
                 if recorded { throw HookFileError.malformed }
                 return
@@ -96,19 +109,22 @@ struct HookFile {
         return URL(filePath: executable).lastPathComponent == "cuepad"
     }
 
-    private func isOurs(_ node: JSONSourceTree.Node, in text: Data) -> Bool {
-        let group = (try? JSONSerialization.jsonObject(with: text[node.range])) as? [String: Any]
-        return ((group?["hooks"] as? [[String: Any]]) ?? []).contains { ($0["command"] as? String).map(isOurCommand) ?? false }
+    /// 组里的一条命令（`{"type": "command", "command", …}`）
+    private func isOurs(_ handler: JSONSourceTree.Node, in text: Data) -> Bool {
+        let object = (try? JSONSerialization.jsonObject(with: text[handler.range])) as? [String: Any]
+        return (object?["command"] as? String).map(isOurCommand) ?? false
     }
 
-    /// 一次删一处、重新扫描。
+    /// 一次删一处、重新扫描：组里只删 CuePad 的命令（用户可能往旧版建的组里加过自己的），组空了才删整组。
     private func removingOurs(from text: Data, dropping footprint: Footprint) throws -> Data {
         var text = text
         while true {
             let tree = try JSONSourceTree(text)
             guard let hooks = tree.root.member("hooks") else { return text }
-            if let array = hooks.members.first(where: { $0.value.elements?.contains { isOurs($0, in: text) } == true })?.value {
-                text = array.removing(element: array.elements!.firstIndex { isOurs($0, in: text) }!, in: text)
+            if let found = ourHandlers(in: tree).first, let groups = hooks.member(found.event),
+               let handlers = groups.elements?[found.group].member("hooks") {
+                text = handlers.elements?.count == 1
+                    ? groups.removing(element: found.group, in: text) : handlers.removing(element: found.handler, in: text)
                 continue
             }
             if let event = hooks.members.first(where: { footprint.events.contains($0.key) && $0.value.elements?.isEmpty == true })?.key {

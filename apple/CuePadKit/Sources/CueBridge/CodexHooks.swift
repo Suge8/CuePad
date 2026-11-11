@@ -32,21 +32,22 @@ struct CodexHooks {
         var stateTable: Bool?
     }
 
-    /// 有信任要删而没有 `codex` 时什么都不动，留到下次。
+    /// 有信任要删而没有 `codex`（没装、太旧、问版本没回应）时什么都不动、也不报错：Codex 不在时旧钩子不会被调起，
+    /// 它回来后的下一次启动就删。`hooks.json` 或 `config.toml` 在而读不出来时抛错、什么都不动：先删了组就再也认不出哪些信任是 CuePad 的。
     func remove() async throws {
-        let keys = trustedKeys()
+        let keys = try trustedKeys()
         if !keys.isEmpty {
             guard let codex else { return }
-            try await untrust(keys, footprint: hooks.footprint()?.config, codex: codex)
+            try await untrust(keys, footprint: try hooks.footprint()?.config, codex: codex)
         }
         try hooks.remove()
     }
 
-    private func trustedKeys() -> [String] {
-        guard let original = try? Data(contentsOf: hooks.file), let tree = try? JSONSourceTree(original) else { return [] }
+    private func trustedKeys() throws -> [String] {
+        guard let original = try HookFile.readIfPresent(hooks.file), let tree = try? JSONSourceTree(original) else { return [] }
         let path = hooks.file.realPath.path
-        let config = (try? String(contentsOf: configFile, encoding: .utf8)) ?? ""
-        return hooks.ourGroups(in: tree).map { Self.key(path, $0.event, $0.index) }.filter { Self.trustedHash(of: $0, in: config) != nil }
+        let config = try HookFile.readIfPresent(configFile).map { String(decoding: $0, as: UTF8.self) } ?? ""
+        return hooks.ourHandlers(in: tree).map { Self.key(path, $0.event, $0.group, $0.handler) }.filter { Self.trustedHash(of: $0, in: config) != nil }
     }
 
     /// 删掉这些信任条目（`config/batchWrite` 对带引号的键写 null）；CuePad 建的 `[hooks.state]` 因此空了就删掉它，CuePad 建的 `[hooks]` 也只剩它就一并删掉。
@@ -86,7 +87,7 @@ struct CodexHooks {
         }
     }
 
-    private static func key(_ path: String, _ event: String, _ group: Int) -> String { "\(path):\(label(event)):\(group):0" }
+    private static func key(_ path: String, _ event: String, _ group: Int, _ handler: Int) -> String { "\(path):\(label(event)):\(group):\(handler)" }
 
     private static func quoted(_ key: String) -> String {
         "\"" + key.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"") + "\""

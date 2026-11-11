@@ -3561,6 +3561,38 @@
         }
       }
     },
+    "CuePad 里只有它在后台开过的 %@ 会话，终端里开的不会出现。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CuePad shows only the %@ sessions it started in the background; sessions started in Terminal don’t appear."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CuePad 里只有它在后台开过的 %@ 会话，终端里开的不会出现。"
+          }
+        }
+      }
+    },
+    "CuePad 里只有它在后台开过的 %@ 会话，网页与桌面版里开的不会出现。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CuePad shows only the %@ sessions it started in the background; sessions from its web and desktop apps don’t appear."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CuePad 里只有它在后台开过的 %@ 会话，网页与桌面版里开的不会出现。"
+          }
+        }
+      }
+    },
     "Mac 上刚改过" : {
       "localizations" : {
         "en" : {
@@ -7751,6 +7783,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "写入剪贴板失败"
+          }
+        }
+      }
+    },
+    "写入技能" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adds a skill"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "写入技能"
           }
         }
       }
