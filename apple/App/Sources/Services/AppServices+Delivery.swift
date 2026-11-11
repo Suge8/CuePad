@@ -41,12 +41,16 @@ extension AppServices {
 
     /// 你要一台 Mac 做的事（说话、停下、结束、开会话、回答、改设置……）都经这里写成请求并立即上传。
     /// 那台说了离开、还没回来（`CueStore.macKnownOff`）时不写、抛 `SendError.macOff`：写了没人领，到派发期限才作废，这之前界面只能说"已发出"。
+    /// 任务收尾顺带的结束（`CueStore.endUnusedSessions`）不经这里：那是库里推出来的，界面不显示它在路上，那台回来同步到这件事收尾时自己也会写。
     func request(on host: String, _ write: () async throws -> DeliveryRequest) async throws -> DeliveryRequest {
         try await requireAwake(host)
         return uploaded(try await write())
     }
 
+    /// 手里那条"离开"可能已经过时（它回来了，本机刚回前台还没拉到）：说它没开之前先拉一次再看。拉不通就是同步不通，说不准，照常排着。
     func requireAwake(_ host: String) async throws {
+        guard try await store.macKnownOff(host, at: speech) != nil else { return }
+        await syncNow()
         if let mac = try await store.macKnownOff(host, at: speech) { throw SendError.macOff(mac) }
     }
 
