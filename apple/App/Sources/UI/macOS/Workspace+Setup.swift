@@ -24,9 +24,7 @@ extension Workspace {
         case .runs: return .none
         case .waiting(let why): return .waiting(why)
         case .open:
-            let connectable = services.agents.connectable
-            let usable = AgentKind.allCases.contains { here.kinds.contains($0) || here.problem($0) == .notConnected && connectable.contains($0) }
-            return usable ? .enable : .needsAgent
+            return here.kinds.isEmpty ? .needsAgent : .enable
         }
     }
 

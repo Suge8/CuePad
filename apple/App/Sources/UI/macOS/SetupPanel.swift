@@ -156,13 +156,8 @@ struct SetupPanel: View {
         }
     }
 
-    /// 勾得上、却问不出能不能用的原因（只差接入不算）：接入照样写文件，但不写出来就像接上就能用。
-    private func unusable(_ kind: AgentKind) -> String? {
-        switch mac.problem(kind) {
-        case nil, .notConnected?: nil
-        case let reason?: reason.description
-        }
-    }
+    /// 勾得上、却问不出能不能用的原因：接入照样写文件，但不写出来就像接上就能用。
+    private func unusable(_ kind: AgentKind) -> String? { mac.problem(kind)?.description }
 
     private func action(_ title: LocalizedStringResource, _ kind: AgentKind, _ run: @escaping () async -> Void) -> some View {
         Button(title) { Task { await run() } }

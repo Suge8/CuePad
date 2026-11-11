@@ -102,7 +102,6 @@ final class AppServices {
     @ObservationIgnored var windowShell: MainShellWindow?
 
     @ObservationIgnored let paths: AgentPaths
-    @ObservationIgnored let hooks: AgentHookServer
     @ObservationIgnored let runtimes: [AgentKind: any AgentRuntime]
     @ObservationIgnored let pasteboard: NSPasteboard
     @ObservationIgnored let historyStore: HistoryPersistence
@@ -169,7 +168,6 @@ final class AppServices {
         pasteboard = mac.pasteboard
         hotkeyBackend = mac.hotkeys
         paths = mac.paths
-        hooks = mac.hooks
         runtimes = mac.runtimes(store)
         agents = mac.agents
         macAgents = MacAgentsRecorder(store: store, sync: self.sync, host: mac.hostID, agents: agents)

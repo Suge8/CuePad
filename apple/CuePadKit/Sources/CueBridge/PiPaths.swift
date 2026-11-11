@@ -1,4 +1,5 @@
 #if os(macOS)
+import CryptoKit
 import CueStore
 import Foundation
 
@@ -15,7 +16,6 @@ public struct PiPaths: Sendable, Equatable {
     /// Pi 目录与链接目录都是指定的（参数或环境变量），不是缺省的真实位置。不碰真实世界的进程（装着正式版的 Mac 上的本机构建）只在这时接入 Agent，
     /// 不会把真实 `~/.pi` 与 `~/.local/bin` 里的东西改成指向开发构建。
     public var isExplicit: Bool
-    public var hookSocket: URL { AgentHookEnvelope.socketPath(in: socketDirectory) }
 
     public init(
         agentDirectory: URL? = nil,
@@ -24,7 +24,7 @@ public struct PiPaths: Sendable, Equatable {
         environment: [String: String] = ProcessInfo.processInfo.environment
     ) {
         self.agentDirectory = agentDirectory ?? Self.defaultAgentDirectory(environment)
-        self.socketDirectory = socketDirectory ?? AgentHookEnvelope.socketDirectory(environment: environment)
+        self.socketDirectory = socketDirectory ?? Self.socketDirectory(environment: environment)
         let binOverride = environment["CUEPAD_BIN_DIR"].flatMap { $0.isEmpty ? nil : URL(filePath: UserHome.expanding($0), directoryHint: .isDirectory) }
         self.binDirectory = binDirectory ?? binOverride
             ?? UserHome.directory.appending(path: ".local/bin", directoryHint: .isDirectory)
@@ -39,6 +39,14 @@ public struct PiPaths: Sendable, Equatable {
             environment[PiRuntime.facts.homeVariable] = agentDirectory.path
         }
         return environment
+    }
+
+    /// `CUEPAD_PI_SOCKET_DIR`，缺省 `/tmp/cuepad-<uid>`（扩展端用同一缺省值）。不碰真实世界的进程（`isolatedLibrary` 是它的资料库目录）
+    /// 没给时按资料库目录另起一个：缺省目录是正式版的，用它桥会连上正式版托管的会话。
+    public static func socketDirectory(environment: [String: String], isolatedLibrary: URL? = nil) -> URL {
+        if let given = environment["CUEPAD_PI_SOCKET_DIR"], !given.isEmpty { return URL(filePath: given, directoryHint: .isDirectory) }
+        let suffix = isolatedLibrary.map { "-" + Insecure.SHA1.hash(data: Data($0.standardizedFileURL.path.utf8)).prefix(4).map { String(format: "%02x", $0) }.joined() } ?? ""
+        return URL(filePath: "/tmp/cuepad-\(getuid())\(suffix)", directoryHint: .isDirectory)
     }
 
     private var isDefaultAgentDirectory: Bool {

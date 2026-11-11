@@ -1,30 +1,17 @@
 #if os(macOS)
-import CryptoKit
 import CueStore
 import Foundation
 
-/// Codex 只执行被信任的钩子：信任条目的键是“hooks.json 的真实路径:事件:组号:条目号”，值是条目内容的哈希。装时向 Codex 要
-/// （`hooks/list` 给出键与哈希，`config/batchWrite` 写入，和 `/hooks` 里点信任同一条路）；查状态不起进程，按 Codex 的规则自己算
-/// （`hook_hash`：事件名与只含这一条的组，转成键排好序的紧凑 JSON 取 SHA-256），与 `config.toml` 里的比——对不上（没信任、
-/// 用户删了排在前面的组使组号变了、Codex 改了算法）就是旧版，重装时重新信任。
-struct CodexHooks: AgentHookConfig {
+/// 迁移代码（#202，见 `AgentIntegration.removeOldHooks`）：旧版写进 `hooks.json` 的钩子与它在 `config.toml` 里的信任。
+/// 信任条目的键是“hooks.json 的真实路径:事件:组号:条目号”，所以先按 `hooks.json` 里 CuePad 的组算出键、删掉信任，再删组：
+/// 先删了组就再也认不出哪些信任是 CuePad 的。删信任经 Codex 自己（`config/batchWrite`，和 `/hooks` 里撤销信任同一条路）。
+struct CodexHooks {
     let home: URL
-    /// 写、删信任时起的 `codex`（检测时挑中的那个）；没有时要写、删信任就报没找到
+    /// 删信任时起的 `codex`（检测时挑中的那个）
     let codex: URL?
     let locate: @Sendable () async -> ExecutableLocator
     let environment: [String: String]
     let hooks: HookFile
-
-    /// 子代理的起止不挂钩子（只认 app-server 的子线程推送，见 `CodexRuntime`）；权限确认要等 CuePad 作答（远程的回答可能很久才来，
-    /// 超时后 Codex 当作钩子没给决定，回到终端里问），会话结束与中断 Codex 最多给 3 秒，其余当场就回。
-    static let events: [HookFile.Event] = [
-        .init(name: "SessionStart", timeout: 10), .init(name: "UserPromptSubmit", timeout: 10), .init(name: "PreToolUse", timeout: 10),
-        .init(name: "PermissionRequest", timeout: 86_400, statusMessage: waitingMessage), .init(name: "PostToolUse", timeout: 10),
-        .init(name: "PreCompact", timeout: 10), .init(name: "PostCompact", timeout: 10), .init(name: "Stop", timeout: 10),
-        .init(name: "Interrupt", timeout: 3), .init(name: "SessionEnd", timeout: 3),
-    ]
-
-    static let waitingMessage = "等你在 CuePad 里确认"
 
     init(
         home: URL, skillDirectory: URL, codex: URL?, locate: @escaping @Sendable () async -> ExecutableLocator, environment: [String: String]
@@ -33,11 +20,10 @@ struct CodexHooks: AgentHookConfig {
         self.codex = codex
         self.locate = locate
         self.environment = environment
-        hooks = HookFile(agent: .codex, file: home.appending(path: "hooks.json"), skillDirectory: skillDirectory, events: Self.events)
+        hooks = HookFile(agent: .codex, file: home.appending(path: "hooks.json"), skillDirectory: skillDirectory)
     }
 
     private var configFile: URL { home.appending(path: "config.toml") }
-    var writtenFiles: [URL] { [hooks.file, configFile] }
 
     /// 第一次写信任时才知道。
     struct ConfigFootprint: Codable, Equatable {
@@ -46,79 +32,44 @@ struct CodexHooks: AgentHookConfig {
         var stateTable: Bool?
     }
 
-    func files(command: String) -> AgentStatus.Files {
-        let state = hooks.files(command: command)
-        guard state == .current, let text = try? Data(contentsOf: hooks.file), let tree = try? JSONSourceTree(text) else { return state }
-        let config = (try? String(contentsOf: configFile, encoding: .utf8)) ?? ""
+    /// 有信任要删而没有 `codex`（没装、太旧、问版本没回应）时什么都不动、也不报错：Codex 不在时旧钩子不会被调起，
+    /// 它回来后的下一次启动就删。`hooks.json` 或 `config.toml` 在而读不出来时抛错、什么都不动：先删了组就再也认不出哪些信任是 CuePad 的。
+    func remove() async throws {
+        let keys = try trustedKeys()
+        if !keys.isEmpty {
+            guard let codex else { return }
+            try await untrust(keys, footprint: try hooks.footprint()?.config, codex: codex)
+        }
+        try hooks.remove()
+    }
+
+    private func trustedKeys() throws -> [String] {
+        guard let original = try HookFile.readIfPresent(hooks.file), let tree = try? JSONSourceTree(original) else { return [] }
         let path = hooks.file.realPath.path
-        let trusted = hooks.ourGroups(in: tree).allSatisfy { group in
-            Self.events.first { $0.name == group.event }.map { event in
-                Self.trustedHash(of: Self.key(path, event.name, group.index), in: config) == Self.hash(event, command: command, hooks: hooks)
-            } ?? false
-        }
-        return trusted ? .current : .outdated
-    }
-
-    func install(command: String) async throws {
-        if hooks.footprint()?.config == nil {
-            var footprint = hooks.footprint() ?? HookFile.Footprint(file: FileManager.default.fileExists(atPath: hooks.file.path))
-            footprint.config = ConfigFootprint(file: FileManager.default.fileExists(atPath: configFile.path))
-            try hooks.save(footprint)
-        }
-        // 旧版挂过、这一版不再挂的事件（如子代理的起止）：先撤掉它们的信任，卸载时才与装之前一致
-        let retired = trustedKeys { event in !Self.events.contains { $0.name == event } }
-        if !retired.isEmpty { try await untrust(retired, footprint: nil) }
-        try hooks.install(command: command)
-        try await trust(command: command)
-        guard files(command: command) == .current else { throw CodexHooksError.notTrusted }
-    }
-
-    func uninstall() async throws {
-        let footprint = hooks.footprint() ?? .unknown
-        let keys = trustedKeys { _ in true }
-        if !keys.isEmpty { try await untrust(keys, footprint: footprint.config) }
-        try hooks.uninstall()
-    }
-
-    private func trustedKeys(_ include: (String) -> Bool) -> [String] {
-        guard let original = try? Data(contentsOf: hooks.file), let tree = try? JSONSourceTree(original) else { return [] }
-        let path = hooks.file.realPath.path
-        let config = (try? String(contentsOf: configFile, encoding: .utf8)) ?? ""
-        return hooks.ourGroups(in: tree).filter { include($0.event) }.map { Self.key(path, $0.event, $0.index) }
-            .filter { Self.trustedHash(of: $0, in: config) != nil }
-    }
-
-    private func trust(command: String) async throws {
-        try await withCodex { rpc in
-            let list = try await rpc.call("hooks/list", ["cwds": [.string(home.path)]])
-            let listed = list["data"]?.array?.first
-            let entries = listed?["hooks"]?.array ?? []
-            guard entries.contains(where: { $0["command"]?.string == command }) else {
-                throw CodexHooksError.rejected((listed?["warnings"]?.array?.compactMap(\.string) ?? []).joined(separator: "；"))
-            }
-            var state: [String: JSONValue] = [:]
-            for entry in entries where entry["command"]?.string == command && entry["trustStatus"]?.string != "trusted" {
-                guard let key = entry["key"]?.string, let hash = entry["currentHash"]?.string else { continue }
-                state[key] = ["trusted_hash": .string(hash)]
-            }
-            guard !state.isEmpty else { return }
-            if var footprint = hooks.footprint(), footprint.config?.stateTable == nil {
-                let user = try await userHooks(rpc)
-                footprint.config?.hooksTable = user == nil
-                footprint.config?.stateTable = user?["state"] == nil
-                try hooks.save(footprint)
-            }
-            try await rpc.call("config/batchWrite", ["edits": [["keyPath": "hooks.state", "value": .object(state), "mergeStrategy": "upsert"]]])
-        }
+        let config = try HookFile.readIfPresent(configFile).map { String(decoding: $0, as: UTF8.self) } ?? ""
+        return hooks.ourHandlers(in: tree).map { Self.key(path, $0.event, $0.group, $0.handler) }.filter { Self.trustedHash(of: $0, in: config) != nil }
     }
 
     /// 删掉这些信任条目（`config/batchWrite` 对带引号的键写 null）；CuePad 建的 `[hooks.state]` 因此空了就删掉它，CuePad 建的 `[hooks]` 也只剩它就一并删掉。
     /// 装之前没有 `config.toml`、删完只剩空白的，删掉文件。
-    private func untrust(_ keys: [String], footprint: ConfigFootprint?) async throws {
-        try await withCodex { rpc in
-            let user = try await userHooks(rpc) ?? [:]
+    private func untrust(_ keys: [String], footprint: ConfigFootprint?, codex: URL) async throws {
+        let locator = await locate()
+        var environment = environment
+        environment[CodexRuntime.facts.homeVariable] = home.path
+        environment["PATH"] = locator.environment(launching: codex, overrides: self.environment)["PATH"]
+        try await Self.untrust(keys, footprint: footprint, codex: codex, environment: environment)
+        if footprint?.file == false, let left = try? String(contentsOf: configFile, encoding: .utf8), left.allSatisfy(\.isWhitespace) {
+            try FileManager.default.removeItem(at: configFile)
+        }
+    }
+
+    @MainActor private static func untrust(_ keys: [String], footprint: ConfigFootprint?, codex: URL, environment: [String: String]) async throws {
+        let rpc = try await CodexRPC.launch(codex, environment: environment)
+        try await withStopped(rpc, stop: { await $0.shutdown() }) { rpc in
+            let read = try await rpc.call("config/read", ["includeLayers": true])
+            let user = read["layers"]?.array?.first { $0["name"]?["type"]?.string == "user" }?["config"]?["hooks"]?.object ?? [:]
             let state = user["state"]?.object ?? [:]
-            var edits: [JSONValue] = keys.map { ["keyPath": .string("hooks.state.\(Self.quoted($0))"), "value": .null, "mergeStrategy": "replace"] }
+            var edits: [JSONValue] = keys.map { ["keyPath": .string("hooks.state.\(quoted($0))"), "value": .null, "mergeStrategy": "replace"] }
             if footprint?.stateTable == true, Set(state.keys).isSubset(of: keys) {
                 edits.append(["keyPath": "hooks.state", "value": .null, "mergeStrategy": "replace"])
                 if footprint?.hooksTable == true, user.keys.allSatisfy({ $0 == "state" }) {
@@ -127,57 +78,23 @@ struct CodexHooks: AgentHookConfig {
             }
             try await rpc.call("config/batchWrite", ["edits": .array(edits)])
         }
-        if footprint?.file == false, let left = try? String(contentsOf: configFile, encoding: .utf8), left.allSatisfy(\.isWhitespace) {
-            try FileManager.default.removeItem(at: configFile)
-        }
     }
 
-    @MainActor private func userHooks(_ rpc: CodexRPC) async throws -> [String: JSONValue]? {
-        let read = try await rpc.call("config/read", ["includeLayers": true])
-        let user = read["layers"]?.array?.first { $0["name"]?["type"]?.string == "user" }
-        return user?["config"]?["hooks"]?.object
-    }
-
-    private func withCodex(_ body: @MainActor (CodexRPC) async throws -> Void) async throws {
-        guard let codex else { throw CodexHooksError.codexNotFound }
-        let locator = await locate()
-        var environment = environment
-        environment[CodexRuntime.facts.homeVariable] = home.path
-        environment["PATH"] = locator.environment(launching: codex, overrides: self.environment)["PATH"]
-        try await Self.run(codex, environment, body)
-    }
-
-    @MainActor private static func run(
-        _ codex: URL, _ environment: [String: String], _ body: @MainActor (CodexRPC) async throws -> Void
-    ) async throws {
-        let rpc = try await CodexRPC.launch(codex, environment: environment)
-        try await withStopped(rpc, stop: { await $0.shutdown() }, body)
-    }
-
-    /// 条目按 Codex 读进来的样子补全（`async` 缺省 false）。
-    static func hash(_ event: HookFile.Event, command: String, hooks: HookFile) -> String? {
-        guard var handler = (hooks.group(event, command: command)["hooks"] as? [[String: Any]])?.first else { return nil }
-        handler["async"] = false
-        let identity: [String: Any] = ["event_name": label(event.name), "hooks": [handler]]
-        guard let data = try? JSONSerialization.data(withJSONObject: identity, options: [.sortedKeys, .withoutEscapingSlashes]) else { return nil }
-        return "sha256:" + SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
-    }
-
-    static func label(_ event: String) -> String {
+    private static func label(_ event: String) -> String {
         event.reduce(into: "") { result, character in
             if character.isUppercase, !result.isEmpty { result.append("_") }
             result.append(character.lowercased())
         }
     }
 
-    static func key(_ path: String, _ event: String, _ group: Int) -> String { "\(path):\(label(event)):\(group):0" }
+    private static func key(_ path: String, _ event: String, _ group: Int, _ handler: Int) -> String { "\(path):\(label(event)):\(group):\(handler)" }
 
     private static func quoted(_ key: String) -> String {
         "\"" + key.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"") + "\""
     }
 
     /// `config.toml` 里这个键的 `trusted_hash`：Codex 写成 `[hooks.state."<键>"]` 一张表，下一行是 `trusted_hash = "…"`。
-    static func trustedHash(of key: String, in config: String) -> String? {
+    private static func trustedHash(of key: String, in config: String) -> String? {
         let header = "[hooks.state.\(quoted(key))]"
         var inTable = false
         for line in config.split(whereSeparator: \.isNewline).map({ $0.trimmingCharacters(in: .whitespaces) }) {
@@ -190,22 +107,6 @@ struct CodexHooks: AgentHookConfig {
             return String(line[line.index(after: start)..<end])
         }
         return nil
-    }
-}
-
-enum CodexHooksError: Error, Equatable {
-    case codexNotFound
-    case notTrusted
-    case rejected(String)
-}
-
-extension CodexHooksError: LocalizedError {
-    var errorDescription: String? {
-        switch self {
-        case .codexNotFound: String(localized: "没有找到 codex 命令：Codex 的钩子要它来信任与撤销")
-        case .notTrusted: String(localized: "Codex 没有信任 CuePad 的钩子（它的信任规则可能变了），钩子不会执行")
-        case .rejected(let reason): String(localized: "Codex 读不了 hooks.json：\(reason)")
-        }
     }
 }
 #endif

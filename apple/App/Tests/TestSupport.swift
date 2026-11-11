@@ -193,7 +193,6 @@ final class TestApp {
     private func retire(_ services: AppServices, app: SourceLocation? = nil) {
         let followers = services.cancelBackgroundWork(), sync = services.sync
         #if os(macOS)
-        services.hooks.stop()
         let executor = services.executor.beginStop(), cue = services.cue.stop()
         LibraryLedger.close(ledger, app: app) {
             await executor()
@@ -240,11 +239,9 @@ final class TestApp {
 
     /// 接入一家 Agent（会话索引只为接入了的建）：放一个只报版本的假可执行文件，再装上 CuePad 的文件，状态按磁盘上的文件检测。
     /// 假的 Pi 还像桥扩展的探测模式那样报出模型（登录了），所以这台 Mac 上能用它（同步表 macAgents）；其余几家问不出模型。
-    /// Codex 的钩子信任平时由 `codex app-server` 写（真 Codex 的那一步只在 Kit 的 Real* 测试里验）：这里替它把信任写进 `config.toml`。
     func connect(_ kind: AgentKind, version: String = "2.1.299") async throws {
         try install(kind, version: version)
-        if kind == .codex { try installCodexTrustedLikeCodex() }
-        else { try await services.agents.install(kind) }
+        try await services.agents.install(kind)
         await services.agents.detect(kind)
         #expect(services.agents.status(kind)?.files == .current)
     }
@@ -270,23 +267,6 @@ final class TestApp {
     }
 
     private static let piProbeLine = #"{"cuepadProbe":{"model":{"provider":"fake","id":"m","name":"M","thinking":["off"]},"models":[{"provider":"fake","id":"m","name":"M","thinking":["off"]}]}}"#
-
-    private func installCodexTrustedLikeCodex() throws {
-        let integration = agentIntegration
-        let hooks = try #require(integration.channel(.codex) as? CodexHooks).hooks
-        let command = integration.hookCommand(.codex)
-        let skill = integration.skillFile
-        try FileManager.default.createDirectory(at: skill.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try AgentSkill.text(cuepad: helper, for: [.codex]).write(to: skill, atomically: true, encoding: .utf8)
-        try hooks.install(command: command)
-        let path = hooks.file.realPath.path
-        let trust = try hooks.ourGroups(in: JSONSourceTree(Data(contentsOf: hooks.file))).map { group in
-            let event = try #require(CodexHooks.events.first { $0.name == group.event })
-            let hash = try #require(CodexHooks.hash(event, command: command, hooks: hooks))
-            return "[hooks.state.\"\(CodexHooks.key(path, group.event, group.index))\"]\ntrusted_hash = \"\(hash)\"\n"
-        }
-        try trust.joined(separator: "\n").write(to: hooks.file.deletingLastPathComponent().appending(path: "config.toml"), atomically: true, encoding: .utf8)
-    }
 
     var agentIntegration: AgentIntegration {
         let bin = bin, installers = installers.path
@@ -348,7 +328,6 @@ final class TestApp {
             timing: timing,
             commandLineTool: CommandLineToolInstaller(helper: helper, linkDirectory: piPaths.binDirectory, shellPath: { nil }),
             updater: updater,
-            hooks: AgentHookServer(path: piPaths.hookSocket),
             runtimes: { [host, claude] _ in [.pi: host, .claudeCode: claude] },
             pasteboard: pasteboard,
             cue: cue ?? CueDependencies(launch: { _, _ in nil }, helper: helper, notifier: RecordingCueNotifier()))

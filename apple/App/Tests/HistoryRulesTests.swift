@@ -74,7 +74,7 @@ struct HistoryRulesTests {
                 commandLineTool: CommandLineToolInstaller(
                     helper: directory.appending(path: "CuePad.app/Contents/Helpers/cuepad"),
                     linkDirectory: directory.appending(path: "home/.local/bin"), shellPath: { nil }),
-                updater: nil, hooks: AgentHookServer(path: paths.hookSocket),
+                updater: nil,
                 runtimes: { [host] _ in [.pi: host] }, pasteboard: NSPasteboard(name: .init("hr-\(UUID().uuidString)")),
                 cue: CueDependencies(launch: { _, _ in nil }, helper: realPi, notifier: RecordingCueNotifier()))
             let location = try LibraryLocation.resolve(environment: [LibraryLocation.environmentKey: directory.appending(path: "Library").path])

@@ -102,8 +102,7 @@ struct AgentIntegrationTests {
 
     // MARK: 接入与删除
 
-    /// Codex 的钩子要真 codex 来信任，它的接入与删除见 `CodexHooksTests`。
-    @Test(arguments: AgentKind.allCases.filter { $0 != .codex })
+    @Test(arguments: AgentKind.allCases)
     func installWritesTheSkillWhereTheAgentReadsItAndUninstallLeavesNoTrace(kind: AgentKind) async throws {
         try installAll()
         let home = agentSkill(kind).deletingLastPathComponent().deletingLastPathComponent()
