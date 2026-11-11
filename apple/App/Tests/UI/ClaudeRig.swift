@@ -49,7 +49,7 @@ final class ClaudeRig {
         let location = try LibraryLocation.resolve(environment: [LibraryLocation.environmentKey: root.appending(path: "Library").path])
         let bridge = Bridge(socketDirectory: sockets, hostedIdle: hostedIdle)
         let mac = MacDependencies(
-            bridge: bridge, hotkeys: InMemoryHotkeys(), paths: agentPaths, agents: AgentIntegrations(agents), terminal: TerminalJumper(),
+            bridge: bridge, hotkeys: InMemoryHotkeys(), paths: agentPaths, agents: AgentIntegrations(agents),
             hostID: TestApp.hostID, workspaces: Workspaces(root: root.appending(path: "CuePad", directoryHint: .isDirectory)),
             wakeNotifications: NotificationCenter(), timing: .system,
             commandLineTool: CommandLineToolInstaller(helper: helper, linkDirectory: root.appending(path: "home/.local/bin"), shellPath: { nil }),

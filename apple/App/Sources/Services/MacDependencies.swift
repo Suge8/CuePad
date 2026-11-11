@@ -9,7 +9,6 @@ struct MacDependencies {
     var hotkeys: any HotkeyBackend
     var paths: AgentPaths
     var agents: AgentIntegrations
-    var terminal: TerminalJumper
     var hostID: String
     var workspaces: Workspaces
     var wakeNotifications: NotificationCenter
@@ -63,7 +62,6 @@ struct MacDependencies {
             hotkeys: CarbonHotkeyBackend(),
             paths: paths,
             agents: agents,
-            terminal: TerminalJumper(),
             hostID: hostID,
             workspaces: Workspaces.resolve(isolatedLibrary: isolated ? location.directory : nil),
             wakeNotifications: NSWorkspace.shared.notificationCenter,
