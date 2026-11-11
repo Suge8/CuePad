@@ -176,8 +176,10 @@ final class ClaudeTestbed {
     }
 
     /// 停掉起的 Claude Code 并等它们退出：都该自己收拾掉收件箱 socket（只有 SIGKILL 会让它留在 /tmp/cc-socks）。
+    /// 经外壳起的托管会话，会话的进程号是外壳的，收件箱跟着它底下的真 Claude Code 的进程号。
     func stop() async {
-        let pids = Set(terminals.map(\.pid) + bridge.sessions.filter { $0.agent == .claudeCode }.map(\.pid))
+        let sessions = terminals.map(\.pid) + bridge.sessions.filter { $0.agent == .claudeCode }.map(\.pid)
+        let pids = Set(sessions + sessions.flatMap { claudeChildren(of: $0) })
         for terminal in terminals { terminal.stop() }
         reading?.cancel()
         await runtime.stop()()
@@ -187,6 +189,18 @@ final class ClaudeTestbed {
             try? await eventually("Claude Code \(pid) 退出") { kill(pid, 0) != 0 }
             #expect(!FileManager.default.fileExists(atPath: "/tmp/cc-socks/\(pid).sock"), "Claude Code \(pid) 的收件箱 socket 留下了")
         }
+    }
+}
+
+/// 外壳底下的真 Claude Code（钉住的那份）
+func claudeChildren(of pid: pid_t) -> [pid_t] {
+    var children = [pid_t](repeating: 0, count: 16)
+    let count = proc_listchildpids(pid, &children, Int32(children.count * MemoryLayout<pid_t>.size))
+    let claude = pinnedClaude.executable.resolvingSymlinksInPath().path
+    return children.prefix(Int(max(count, 0))).filter { child in
+        var path = [UInt8](repeating: 0, count: 4096)
+        let length = proc_pidpath(child, &path, UInt32(path.count))
+        return child > 0 && length > 0 && URL(filePath: String(decoding: path.prefix(Int(length)), as: UTF8.self)).resolvingSymlinksInPath().path == claude
     }
 }
 
