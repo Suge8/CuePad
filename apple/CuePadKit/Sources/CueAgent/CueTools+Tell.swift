@@ -5,7 +5,7 @@ import Foundation
 extension CueTools {
   /// 先撤回（若有 withdraw）、放回（若有 restore），再说（若有 text）；都没有是参数错。
   func tell(_ args: Args) async throws -> Result {
-    let related = try await args.string("task").asyncMap(task)
+    let related = try await args.string("task").asyncMap(references.task)
     let shots = try CueShot.checked(try await shots(args.raw["show"]))
     let ask = try args.string("ask").map { raw -> CueAsking in
       guard let ask = CueAsk(rawValue: raw) else { throw Failure("ask 只能是这几类：\(CuePrompt.asks)；别的事你自己定，做完告诉他") }
@@ -33,8 +33,8 @@ extension CueTools {
       guard !done.isEmpty else { throw Failure("要给 text（说什么）、withdraw（撤回哪条提问）或 restore（放回哪条）") }
       return .ok(done.joined())
     }
-    let message = try await store.addCueMessage(.cue, text: text, ask: ask, shots: shots, urgent: args.bool("urgent") ?? false, task: related?.id)
-    return .ok(done.joined() + (message.choices != nil ? "已问用户，等他选。" : "已告诉用户。") + "（\(message.id.shortID)）")
+    let message = try await store.addCueMessage(.cue, text: text, ask: ask, shots: shots, urgent: args.bool("urgent") ?? false, task: related?.id, answeredRequests: nil)
+    return .ok(done.joined() + (message.choices != nil ? "已问用户，等他选。" : "已告诉用户。") + "（\(message.id.shortID)）\n\(CueToolReceipt(.reply, message.id).mark)")
   }
 
   /// show 点名的图（tell 的提问、done 的结果）：每张的 file 是发到手机的那一份的 id 或前缀（task peek 里列的）。
@@ -53,7 +53,6 @@ extension CueTools {
     return shots
   }
 
-  /// `candidates` 里 id 或前缀是 `ref` 的那一条提问；对不上报 `missing`。
   private static func question(_ ref: String, in candidates: [CueMessage], missing: String) throws -> CueMessage {
     guard let question = try question(ref, in: candidates) else { throw Failure(missing) }
     return question

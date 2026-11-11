@@ -3,19 +3,26 @@ import CueText
 import SwiftUI
 
 extension Composer {
+    /// "＋"，或调用方换上的那一颗（`lead`）：同一颗钮，换的只是字形、底与点了做什么，换时字形原地替换、底渐变。
     var plus: some View {
         let cards = accepts.contains(.cards) ? [ChoiceMenu.Choice(title: "选灵感或任务", image: .icon(.pickCards)) { source = .cards }] : []
         let files = accepts.contains(.files) ? ComposerSource.fileChoices.map { choice in
             ChoiceMenu.Choice(title: choice.title, image: .icon(choice.icon)) { source = choice.source }
         } : []
-        return MenuButton(sections: [ChoiceMenu.Section(choices: cards + files)], press: .button, accessibilityLabel: "添加") {
-            CircleGlyph(fill: palette.fill) { Image(.add).font(Glyph.control.weight(.semibold)).foregroundStyle(palette.ink) }
-                .frame(width: ComposerMetrics.slot, height: buttonHeight)
+        return MenuButton(sections: lead == nil ? [ChoiceMenu.Section(choices: cards + files)] : [], primary: lead?.act, press: .button,
+                          accessibilityLabel: lead?.label ?? "添加") {
+            CircleGlyph(fill: lead?.on == true ? palette.selection : palette.fill) {
+                Image(lead?.icon ?? .add).font(Glyph.control.weight(.semibold))
+                    .foregroundStyle(lead?.enabled == false ? palette.ink3 : palette.ink)
+                    .contentTransition(.symbolEffect(.replace))
+            }
+            .frame(width: ComposerMetrics.slot, height: buttonHeight)
+            .animation(Motion.fade, value: lead)
         }
+        .disabled(lead?.enabled == false)
         .fixedSize()
     }
 
-    /// 带上的卡片或任务：标题、附件数（图片与文件），可移除；点一下看全文，长按（Mac 右键）出"展开编辑""不带了"（`AttachmentButton`）。
     func chip(_ outbox: Outbox) -> some View {
         let card = CardText(outbox.content), name = card.title.nonEmpty ?? String(localized: "附件")
         let attached = CueFormat.attachmentKeys(in: outbox.content).count
@@ -31,7 +38,6 @@ extension Composer {
                     Image(.pickCards).foregroundStyle(palette.ink3)
                     VStack(alignment: .leading, spacing: Spacing.hair) {
                         Text(name).font(Typography.secondary.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(1)
-                        // 去处收不了附件时卡片里的附件不发（`ComposerDraft.accepting`），不写个数
                         if accepts.contains(.files), attached > 0 {
                             Text("\(attached) 个附件").font(Typography.caption).foregroundStyle(palette.ink3)
                         }
@@ -51,7 +57,6 @@ extension Composer {
         .background(palette.fill, in: shape)
     }
 
-    /// 附件条：图片是方块缩略图，别的文件是文件牌（`FileChip`），各带一颗移除；点一个在全屏页里看（附件条里的几份左右翻）。
     var fileStrip: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: Spacing.item) {
@@ -63,7 +68,6 @@ extension Composer {
                             FileChip(key: file.key, name: file.name, height: Self.stripSide, among: draft.files, group: "draft").frame(maxWidth: 220)
                         }
                         Button { draft.files.removeAll { $0 == file } } label: {
-                            // 图上是压暗的底，文件牌上是纸色的叉落在二墨的圆上
                             Image(.clear).symbolRenderingMode(.palette)
                                 .foregroundStyle(file.isImage ? palette.onMedia : palette.paper, file.isImage ? palette.mediaScrim : palette.ink2).font(Glyph.control)
                                 .frame(width: 44, height: 44, alignment: .topTrailing)
@@ -79,12 +83,11 @@ extension Composer {
 
     static var stripSide: CGFloat { 64 }
 
-    /// 存进附件目录（后台）再接进附件条；已带着的不重复。存的途中发出，附件随这句发出（`Workspace.importFiles`）。
+    /// 存的途中发出的话，附件随这句发出（`Workspace.importFiles`）。
     func add(_ incoming: [IncomingFile]) { workspace.importFiles(incoming, into: $draft) }
 
     func drop(_ outbox: Outbox) { draft.attachments.removeAll { $0.id == outbox.id } }
 
-    /// 展开编辑：卡片的文字与附件放回输入框（`ComposerDraft.append`），不再作为整张卡带上，原卡片不动。
     func expand(_ outbox: Outbox) {
         draft.append(stored: outbox.content)
         drop(outbox)
@@ -101,8 +104,7 @@ private struct AttachmentPop: ViewModifier {
     }
 }
 
-/// 带卡片的输入框才挂的两个弹层：挑灵感或任务、看带上的那张卡。不接受卡片的（随手记）不挂，Mac 上也就不需要浮层宿主
-/// （菜单栏面板没有）。`on` 对一个输入框是定值，不会来回换结构。
+/// 不接受卡片的（随手记）不挂，Mac 上也就不需要浮层宿主（菜单栏面板没有）。`on` 对一个输入框是定值，不会来回换结构。
 struct CardPanels<Picker: View, Preview: View>: ViewModifier {
     let on: Bool
     let picking: Binding<Bool>

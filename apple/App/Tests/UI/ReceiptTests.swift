@@ -7,10 +7,9 @@ import SwiftUI
 import Testing
 @testable import CuePad
 
-/// 说出去的话到哪了只看这句自己：服务器收下了是已发出、Mac 回执了是已送达，等服务器或接收方回执到点只说明未确认
-/// （`Speech`，App 一处刷新"此刻"，`SpeechClock`）。全局同步状态一时不通不让已发出的话变红。
 /// 时间用手动推进的钟：到点翻状态靠 App 自己的那一次睡眠，不靠测试去重读。会话在 mac-b、Cue 运行在 mac-cue，都要经同步。
 @MainActor
+@Suite(.releasesLibraries)
 struct ReceiptTests {
     let clock = ManualTiming()
 
@@ -19,7 +18,6 @@ struct ReceiptTests {
         let inner: SimulatedCloud
         var down = false
 
-        /// `now`：服务器的钟（收下记录时盖的 `creationDate`）。
         init(now: @escaping @Sendable () -> Date = Date.init) {
             inner = SimulatedCloud([.peerFloor(CueStore.peerFloor)], now: now)
         }
@@ -27,7 +25,6 @@ struct ReceiptTests {
         func setDown(_ down: Bool) { self.down = down }
         func holds(_ id: UUID) async -> Bool { await inner.saved.contains(id.uuidString.lowercased()) }
 
-        /// mac-b 领取并执行了这条请求，结果写回服务器。
         func macAnswers(_ id: UUID, status: String = DeliveryStatus.succeeded.rawValue) async throws {
             let record = try #require(await inner.records([CKRecord.ID(recordName: id.uuidString.lowercased(), zoneID: CloudSync.zoneID)]).first)
             let done = try #require(record.copy() as? CKRecord)
@@ -44,6 +41,10 @@ struct ReceiptTests {
         func accountStatus() async throws -> CKAccountStatus { await inner.accountStatus() }
         func accountName() async throws -> String { await inner.accountName() }
         func relaySecret() async throws -> Data { await inner.relaySecret() }
+        func diagnosticChanges(since token: Data?) async throws -> ZoneChangeBatch { try await inner.diagnosticChanges(since: token) }
+        func uploadDiagnostics(saving: [CKRecord], deleting: [CKRecord.ID]) async throws -> SentRecords {
+          await inner.uploadDiagnostics(saving: saving, deleting: deleting)
+        }
         func changes(since token: Data?, keys: [String]) async throws -> ZoneChangeBatch {
             try reachable()
             return await inner.changes(since: token, keys: keys)
@@ -71,11 +72,11 @@ struct ReceiptTests {
         func delete(_ id: CKSubscription.ID) async throws {}
     }
 
-    private func session(in store: CueStore) async throws -> PiSessionState {
-        let recorder = PiStateRecorder(store: store, hostID: "mac-b")
+    private func session(in store: CueStore) async throws -> SessionState {
+        let recorder = StateRecorder(store: store, hostID: "mac-b")
         try await recorder.update(sessionID: "atlas", state: .thinking, title: "atlas")
         try await recorder.update(sessionID: "atlas", state: .settled)
-        return try #require(try await store.allPiSessionStates().first { $0.sessionID == "atlas" })
+        return try #require(try await store.allSessionStates().first { $0.sessionID == "atlas" })
     }
 
     private func enableCue(in store: CueStore) async throws {
@@ -92,7 +93,7 @@ struct ReceiptTests {
         return try #require(try await workspace.services.store.cueMessages().last { $0.author == .known(.you) })
     }
 
-    private func sayToSession(_ workspace: Workspace, _ target: PiSessionState, _ text: String) async throws -> DeliveryRequest {
+    private func sayToSession(_ workspace: Workspace, _ target: SessionState, _ text: String) async throws -> DeliveryRequest {
         let services = workspace.services
         let box = services.settings.replyDraftBinding(for: target.id)
         box.wrappedValue = ComposerDraft(text: text)
@@ -101,16 +102,15 @@ struct ReceiptTests {
     }
 
     /// 把钟拨到 `target`（记录的时刻是真实时间，钟从测试开始时起走，所以按时刻拨，不按秒数）：等 App 的那一次睡眠睡下再拨。
-    private func advance(to target: Date) async {
-        await clock.waitForSleeper()
+    private func advance(to target: Date) async throws {
+        try await clock.waitForSleeper()
         clock.advance(.seconds(target.timeIntervalSince(clock.now)))
     }
 
-    private func row(_ services: AppServices) -> PiShown? {
+    private func row(_ services: AppServices) -> SessionShown? {
         services.liveSessions.live.first { $0.state.sessionID == "atlas" }.map(Workspace(services: services).shown)
     }
 
-    /// 这句此刻到哪了：记录（连同服务器收下过没有）从库里读，配上 App 的"此刻"。
     private func trip(of request: DeliveryRequest, _ services: AppServices) async throws -> Speech.Trip {
         Said.request(try #require(try await services.store.deliveryRequest(request.id))).trip(at: services.speech)
     }
@@ -124,9 +124,34 @@ struct ReceiptTests {
         CuePresence.derive(try await CueDigest.read(from: services.store), at: services.speech)
     }
 
-    /// 话传上服务器就是已发出（会话行、Cue 页头同一个说法），不等 Mac 回执。弱网：一次拉取失败、同步状态成了连不上 iCloud，
-    /// 已发出的话不变红；断着时写下的话排在本机，一直是发送中、过了 `Speech.sendLimit` 也不判没能送达。恢复后它传上去回到已发出；
-    /// Mac 回执的那句已送达；另一句一直没人领取，派发期限前是已发出，期限再过一个回执窗口是未确认，迟到的回执仍收敛原句。
+    @Test
+    func 那台Mac已知没开_这句不写下字留在输入框_同步断着说不准时照常排着() async throws {
+        let cloud = WeakCloud { [clock] in clock.now }
+        let app = TestApp(sync: .built { CloudSync(store: $0) { cloud } }, timing: clock.timing)
+        let services = app.services!
+        let store = services.store
+        let target = try await session(in: store)
+        try await store.recordMacPresence(host: "mac-b") { false }
+        services.startSync()
+        defer { services.cancelBackgroundWork() }
+        try await eventually("同步通了") { services.syncState.status == .idle && services.syncState.reconciled }
+        let workspace = Workspace(services: services)
+        let box = services.settings.replyDraftBinding(for: target.id)
+
+        box.wrappedValue = ComposerDraft(text: "改完再跑一遍")
+        await workspace.speak(to: .session(target, mode: .send), from: box) { $0.stored }.value
+        #expect(workspace.notice?.isError == true)
+        #expect(box.wrappedValue.text == "改完再跑一遍")
+        #expect(try await store.deliveryRequests().isEmpty)
+
+        await cloud.setDown(true)
+        await services.syncNow()
+        try await eventually("连不上 iCloud") { services.syncState.status == .offline }
+        await workspace.speak(to: .session(target, mode: .send), from: box) { $0.stored }.value
+        #expect(try await store.deliveryRequests().map(\.content) == ["改完再跑一遍"])
+        #expect(box.wrappedValue.text.isEmpty)
+    }
+
     @Test
     func 说的话到服务器是已发出_回执是已送达_一次失败不让别的话变红_断着时排着不到点_没回执到点() async throws {
         let cloud = WeakCloud { [clock] in clock.now }
@@ -139,7 +164,7 @@ struct ReceiptTests {
         services.startSpeechClock()
         services.startLiveSessions()
         defer { services.cancelBackgroundWork() }
-        try await eventually("同步通了") { services.syncStatus == .idle && services.syncReconciled }
+        try await eventually("同步通了") { services.syncState.status == .idle && services.syncState.reconciled }
         let workspace = Workspace(services: services)
 
         let first = try await sayToSession(workspace, target, "改完再跑一遍")
@@ -157,24 +182,21 @@ struct ReceiptTests {
         #expect(workspace.notice?.isError == true)
         #expect(try await store.deliveryRequests(toSession: target.sessionID).map(\.id) == [first.id])
 
-        // 弱网：一次拉取失败，同步状态连不上 iCloud；已发出的照旧
         await cloud.setDown(true)
         await services.syncNow()
-        try await eventually("连不上 iCloud") { services.syncStatus == .offline }
+        try await eventually("连不上 iCloud") { services.syncState.status == .offline }
         #expect(try await trip(of: first, services) == .sent)
         #expect(try await trip(of: toCue, services) == .sent)
         #expect(row(services)?.label == "已发出")
 
-        // 断着时写下的一句：传不出去就排着，过了时限仍是发送中，不数没送到
         let second = try await sayToSession(workspace, target, "再看看日志")
         #expect(try await trip(of: second, services) == .sending)
-        await advance(to: second.createdAt.addingTimeInterval(Speech.sendLimit + 1))
+        try await advance(to: second.createdAt.addingTimeInterval(Speech.sendLimit + 1))
         #expect(try await trip(of: second, services) == .sending)
         #expect(try await trip(of: first, services) == .sent)
         #expect(try await trip(of: toCue, services) == .sent)
         #expect(row(services)?.undelivered == nil && services.liveSessions.undelivered["atlas"] == nil)
 
-        // 恢复：没发出的那句传上去，回到已发出；Mac 回执了第一句，它已送达
         await cloud.setDown(false)
         await services.syncNow()
         try await eventually("恢复后传上去") { try await trip(of: second, services) == .sent }
@@ -183,12 +205,11 @@ struct ReceiptTests {
         try await eventually("回执回来") { try await trip(of: first, services) == .delivered }
         try await eventually("会话行回到已发出，不再数没送到") { row(services)?.label == "已发出" && services.liveSessions.undelivered["atlas"] == nil }
 
-        // 一直没人领取：派发期限前是已发出；期限再过一个回执窗口按未确认显示（领取结果可能还没同步回来）
         // 派发期限从服务器收下起算（恢复后传上去的那一刻），不从断网时写下算
         let expires = try #require(try await store.deliveryRequest(second.id)?.dispatchDeadline).addingTimeInterval(Speech.receiptLimit)
-        await advance(to: expires.addingTimeInterval(-1))
+        try await advance(to: expires.addingTimeInterval(-1))
         #expect(try await trip(of: second, services) == .sent)
-        await advance(to: expires)
+        try await advance(to: expires)
         try await eventually("到期按未确认") { try await trip(of: second, services).unconfirmedReason != nil }
         #expect(row(services)?.isRunning == false)
         #expect(Speech.undelivered(try await store.deliveryRequests(), at: services.speech) == 0)
@@ -197,9 +218,6 @@ struct ReceiptTests {
         try await eventually("迟到的原回执收敛") { try await trip(of: second, services) == .delivered }
     }
 
-    /// 断网时说的话（对 Cue、对会话）排在本机，一直是发送中：不判没能送达、不说 Mac 迟迟没收下、不说 Cue 在睡觉。断网超过手机主动拉取的
-    /// 两分钟窗口后恢复：立即同步一次（交回引擎的记录当场传出、回执当场拉回），主动拉取重开一个窗口；没发出的话的时限从恢复那一刻起算。
-    /// 传出与回执经同步走完一圈见 CueSync 的 DeviceFlowTests（断网写下的请求恢复后到 Mac、结果回到手机）。
     @Test
     func 断网时说的话_排着不判没能送达_恢复后立即同步并重开拉取_时限从恢复起算() async throws {
         let app = TestApp(timing: clock.timing)
@@ -208,7 +226,7 @@ struct ReceiptTests {
         defer { services.cancelBackgroundWork() }
         func setSync(_ status: SyncStatus) async throws {
             app.sync.emit(SyncState(status: status, issues: []))
-            try await eventually("同步状态 \(status)") { services.syncStatus == status }
+            try await eventually("同步状态 \(status)") { services.syncState.status == status }
         }
         try await enableCue(in: store)
         try await store.recordMacPresence(host: "mac-cue") { false }  // 断网前同步来的：那台已睡（断网时本机说不准，不说它在睡觉）
@@ -229,9 +247,8 @@ struct ReceiptTests {
         #expect(try await trips() == [.sending, .sending])
         try await eventually("会话行是发送中") { row(services)?.status == .delivery(.inTransit(.sending)) }
 
-        // 断网两分钟多：拉取的窗口走完（手机）；没发出的两句仍是发送中
         try await eventually("在等回执时按节奏拉") { app.sync.syncNows > 0 }
-        await clock.waitForSleeper()
+        try await clock.waitForSleeper()
         clock.advance(.seconds(121))
         #if os(iOS)
         try await eventually("拉取窗口走完") { clock.sleeperCount == 0 }  // 醒来时已过两分钟，不再拉
@@ -253,7 +270,6 @@ struct ReceiptTests {
         try await eventually("会话行回到发送中") { row(services)?.status == .delivery(.inTransit(.sending)) }
         #expect(services.liveSessions.undelivered["atlas"] == nil)
 
-        // 写下已远过时限，但恢复才差一秒到：还在发送中
         clock.advance(.seconds(Speech.sendLimit - 1))
         #expect(try await trips() == [.sending, .sending])
         #expect(try await presence(services) == .sending(.sending))
@@ -281,7 +297,7 @@ struct ReceiptTests {
         let target = try await session(in: services.store)
         services.startSync()
         services.startLiveSessions()
-        try await eventually("同步通了") { services.syncStatus == .idle && services.syncReconciled }
+        try await eventually("同步通了") { services.syncState.status == .idle && services.syncState.reconciled }
         let request = try await sayToSession(workspace, target, "继续一次检查")
         try await eventually("服务器收下请求") { await cloud.holds(request.id) }
         try await cloud.macAnswers(request.id, status: status)

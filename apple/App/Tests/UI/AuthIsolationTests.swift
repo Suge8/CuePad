@@ -4,7 +4,8 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// Master 终审批准：Claude 授权失效不挡 GPT 发话与模型选择；只替换两个外部服务，Pi、桥、投送与存储照常运行。
+/// 只替换两个外部服务，Pi、桥、投送与存储照常运行。
+@Suite(.releasesLibraries)
 struct AuthIsolationTests {
     @Test func Claude授权未返回或已失效_GPT仍能发话换模型_主动查额度明确失败() async throws {
         let fixture = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "Fixtures/auth-isolation.ts")
@@ -25,37 +26,36 @@ struct AuthIsolationTests {
         // 发话前的命令刷新不能顺带刷新 Claude。若它进入 Claude 门，立即失败并放行清理，不拿墙钟竞速。
         workspace.send("normal", to: AgentTarget(session: sessionID))
         let replied = try await Self.withoutClaude(at: endpoint) {
-            _ = try await eventually(store, { try $0.piMessages(of: sessionID) }) { $0.filter { $0.role.known == .pi }.count == 1 }
+            _ = try await eventually(store, { try $0.chatMessages(of: sessionID) }) { $0.filter { $0.role.known == .pi }.count == 1 }
         }
         try #require(replied, "GPT 应在 Claude 授权返回前完成回答")
-        let state = try #require(try await store.allPiSessionStates().first)
-        let next = PiModelKey(provider: "openai", id: "echo-next")
+        let state = try #require(try await store.allSessionStates().first)
+        let next = ModelKey(provider: "openai", id: "echo-next")
 
-        workspace.attempt { _ = try await rig.services.configure(PiConfig(model: next), for: state) }
+        workspace.attempt { _ = try await rig.services.configure(SessionConfig(model: next), for: state) }
         let configured = try await Self.withoutClaude(at: endpoint) {
-            _ = try await eventually(store, { try $0.allPiSessionStates().first?.model?.key }) { $0 == next }
+            _ = try await eventually(store, { try $0.allSessionStates().first?.model?.key }) { $0 == next }
         }
         try #require(configured, "选择另一个 GPT 模型不能等待 Claude 授权")
 
-        let current = try #require(try await store.allPiSessionStates().first)
+        let current = try #require(try await store.allSessionStates().first)
         let digest = try await SessionDigest.read(sessionID: sessionID, from: store)
         let claude = try #require(digest.catalog?.models.first { $0.key.provider == "anthropic" })
         #expect(claude.account?.kind == .oauth)
         #expect(claude.account?.scope == nil)
         let quotas = try await store.accountQuotas()
-        #expect(!PiModelLabel.title(claude, quotas: quotas, at: .now).contains("%"))
+        #expect(!ModelLabel.title(claude, quotas: quotas, at: .now).contains("%"))
         #expect(try #require(quotas.first { $0.provider == "anthropic" && $0.hostID == TestApp.hostID }).status == .unobserved)
 
-        // 只有主动查询才进入 Claude 授权服务；即使它正在等待，GPT 的发话、设置仍独立。
         let quota = Task { await rig.services.refreshQuota(.manual) }
-        defer { quota.cancel() }
+        defer { await quota.stop() }
         try await Self.control("entered", at: endpoint)
-        workspace.attempt { _ = try await rig.services.configure(PiConfig(model: PiModelKey(provider: "openai", id: "echo")), for: current) }
-        _ = try await eventually(store, { try $0.allPiSessionStates().first?.model?.key.id }) { $0 == "echo" }
+        workspace.attempt { _ = try await rig.services.configure(SessionConfig(model: ModelKey(provider: "openai", id: "echo")), for: current) }
+        _ = try await eventually(store, { try $0.allSessionStates().first?.model?.key.id }) { $0 == "echo" }
         workspace.speak("/model openai/echo-next", to: .session(current, mode: .command))
-        _ = try await eventually(store, { try $0.allPiSessionStates().first?.model?.key.id }) { $0 == "echo-next" }
+        _ = try await eventually(store, { try $0.allSessionStates().first?.model?.key.id }) { $0 == "echo-next" }
         workspace.send("normal", to: AgentTarget(session: sessionID))
-        _ = try await eventually(store, { try $0.piMessages(of: sessionID) }) { $0.filter { $0.role.known == .pi }.count == 2 }
+        _ = try await eventually(store, { try $0.chatMessages(of: sessionID) }) { $0.filter { $0.role.known == .pi }.count == 2 }
 
         try await Self.control("reject", at: endpoint)
         #expect(await quota.value != nil)
@@ -65,7 +65,7 @@ struct AuthIsolationTests {
         #expect(QuotaMeter(failed, at: .now).message == "额度查询失败")
 
         workspace.send("normal", to: AgentTarget(session: sessionID))
-        let messages = try await eventually(store, { try $0.piMessages(of: sessionID) }) { $0.filter { $0.role.known == .pi }.count == 3 }
+        let messages = try await eventually(store, { try $0.chatMessages(of: sessionID) }) { $0.filter { $0.role.known == .pi }.count == 3 }
         #expect(messages.filter { $0.role.known == .pi }.allSatisfy { $0.text == "PARTIAL_REPLY" })
     }
 

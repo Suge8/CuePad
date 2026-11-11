@@ -4,13 +4,10 @@ import CueStore
 import SwiftUI
 
 extension PreviewFlight {
-    /// 全屏页内容区上飞的终点与起点：铺满内容区（含两条栏下面），`chrome` 是两条栏占的边，`key` 是翻到的那一份（跟着翻页换），
-    /// `kind` 定内容落在哪（`PreviewPlace`）；`page`：内容是本机有文件的网页时是它的附件键，落地等它画上第一帧（`pagePainted`），并按它记那一屏（`PreviewPageShots`）；
-    /// `landed` 是内容露没露出来（飞的这段藏着）；`ground` 是全屏页的底色（落地换内容时垫在快照下面）。
     struct Stage: NSViewRepresentable {
         let flight: PreviewFlight
         let key: PreviewZoomKey
-        let kind: PiPreviewKind?
+        let kind: PreviewKind?
         let page: String?
         let chrome: EdgeInsets
         @Binding var landed: Bool
@@ -33,7 +30,7 @@ extension PreviewFlight.Stage {
     final class Mark: NSView {
         weak var flight: PreviewFlight?
         var key = PreviewZoomKey(group: "", preview: UUID())
-        var kind: PiPreviewKind?
+        var kind: PreviewKind?
         var page: String?
         var dark = false
         var chrome = EdgeInsets()
@@ -62,10 +59,8 @@ extension PreviewFlight.Stage {
             flight?.depart(to: self)
         }
 
-        /// 这一页网页此刻大小、深浅色下的那一屏记在哪（`PreviewPageShots.key`）；不是网页为 nil
         var shotKey: String? { page.map { PreviewPageShots.key(page: $0, area: place.area.size, dark: dark) } }
 
-        /// 内容落在哪（窗口坐标）：两条栏之间的那一块。
         var place: PreviewPlace {
             let area = convert(bounds, to: nil)
             return PreviewPlace(kind: kind, area: CGRect(
@@ -75,16 +70,12 @@ extension PreviewFlight.Stage {
     }
 }
 
-/// 内容在两条栏之间的那块（`area`，窗口坐标）里落在哪：按画面比例整张放下、居中；PDF 按宽铺满、从上沿排起（`PreviewPDF`）；
-/// 网页的快照按 CSS 像素一比一从左上摆起（见 `frame`）；Markdown 与改动的快照一比一落在正文开头。
 struct PreviewPlace {
-    let kind: PiPreviewKind?
+    let kind: PreviewKind?
     let area: CGRect
 
-    /// 落地时换成内容、不交叉淡的几类（`PreviewFlight` 头注释）
-    static func swaps(_ kind: PiPreviewKind?) -> Bool { [.web, .markdown, .diff].contains(kind) }
+    static func swaps(_ kind: PreviewKind?) -> Bool { [.web, .markdown, .diff].contains(kind) }
 
-    /// 飞的那一端：画面 `image`（缩略图的那张）落在哪、露出哪一截。
     /// 网页：快照是 `PageSnapshots.viewport` 宽排的首屏，全屏页里的网页一个 CSS 像素一点、从内容区左上排起，
     /// 快照照这个比例摆在左上、多出内容区的那截裁掉：字号、标题与第一张卡的位置同真网页，只有随宽度伸缩的块宽一点。
     /// 按内容区的宽铺满则整页缩放，落地换成真网页时字跳一号（窄窗里约 6%）。
@@ -95,7 +86,6 @@ struct PreviewPlace {
         let page = PageSnapshots.viewport.width
         let height = page / max(PreviewFrame.aspect(of: image), 0.01)
         let width = min(area.width, page), shown = min(area.height, height)
-        // 单位坐标 y 朝上：露出顶上那一截
         return PreviewFrame(
             rect: CGRect(x: area.minX, y: area.maxY - shown, width: width, height: shown),
             shown: CGRect(x: 0, y: 1 - shown / height, width: width / page, height: shown / height))
@@ -120,7 +110,6 @@ struct PreviewPlace {
     }
 }
 
-/// 缩略图在 `PreviewFlight` 里登记的那个不占地方的平台视图（`previewSource`）。
 struct PreviewSourceMark: NSViewRepresentable {
     let flight: PreviewFlight
     let key: PreviewZoomKey

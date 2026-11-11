@@ -1,0 +1,214 @@
+#if os(macOS)
+import CueStore
+import Darwin
+import Foundation
+import Synchronization
+
+extension ChildProcess {
+    /// `registered` 在它 exec 之前调（登记退出事件：已被 launchd 回收的进程登记不上，退出码就丢了）。
+    /// `actions` 里放好了标准输入输出与 3 号（`drainsErrors` 时还有 `errorsFD`），中转用的 `goFD`、`reportFD` 在这里放；
+    /// `newSession` 时留一个看守（`Placement.detached`），返回看守那根管道的写端。
+    static func spawn(
+        _ executable: URL, _ arguments: [String], environment: [String: String], actions: inout posix_spawn_file_actions_t?,
+        newSession: Bool, drainsErrors: Bool, registered: (pid_t) -> Void
+    ) async throws -> (pid: pid_t, hold: Int32?) {
+        // 起不来的（不存在、不可执行）当场抛错，不等中转里的 exec 失败
+        guard access(executable.path, X_OK) == 0 else { throw POSIXError(.init(rawValue: errno) ?? .ENOENT) }
+        let reported = try pipe(), go = try pipe()
+        posix_spawn_file_actions_adddup2(&actions, reported.write, reportFD)
+        posix_spawn_file_actions_adddup2(&actions, go.read, goFD)
+        let hold = newSession ? try pipe() : nil
+        if let hold { posix_spawn_file_actions_adddup2(&actions, hold.read, holdFD) }
+        var attributes: posix_spawnattr_t? = nil
+        posix_spawnattr_init(&attributes)
+        defer { posix_spawnattr_destroy(&attributes) }
+        // 信号处置与屏蔽恢复默认：忽略的信号会跨 exec 继承（测试进程、App 都可能忽略着 SIGTERM），子进程就收不到结束信号
+        var signals = sigset_t()
+        sigfillset(&signals)
+        posix_spawnattr_setsigdefault(&attributes, &signals)
+        sigemptyset(&signals)
+        posix_spawnattr_setsigmask(&attributes, &signals)
+        let session: Int32 = newSession ? POSIX_SPAWN_SETSID : 0
+        posix_spawnattr_setflags(&attributes, Int16(POSIX_SPAWN_CLOEXEC_DEFAULT | POSIX_SPAWN_SETSIGDEF | POSIX_SPAWN_SETSIGMASK | session))
+        let argv = ([shell, "-c", relay(environment, held: hold != nil, drainsErrors: drainsErrors), "sh", executable.path] + arguments).map { strdup($0) } + [nil]
+        let envp = environment.map { strdup("\($0.key)=\($0.value)") } + [nil]
+        defer { (argv + envp).forEach { free($0) } }
+        var relayPID: pid_t = 0
+        let code = posix_spawn(&relayPID, shell, &actions, &attributes, argv, envp)
+        close(reported.write)
+        close(go.read)
+        if let hold { close(hold.read) }
+        defer { close(go.write) }  // 放它 exec
+        guard code == 0 else {
+            close(reported.read)
+            if let hold { close(hold.write) }
+            throw POSIXError(.init(rawValue: code) ?? .EIO)
+        }
+        let report = await readToEnd(reported.read)
+        var status: Int32 = 0
+        waitpid(relayPID, &status, 0)
+        guard let pid = pid_t(String(decoding: report, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)) else {
+            if let hold { close(hold.write) }
+            throw POSIXError(.ECHILD)
+        }
+        registered(pid)
+        return (pid, hold?.write)
+    }
+
+    private static let shell = "/bin/sh"
+    static let errorsFD: Int32 = 6
+    private static let holdFD: Int32 = 7
+    private static let goFD: Int32 = 8
+    private static let reportFD: Int32 = 9
+
+    /// 中转脚本：后台的子 shell 自成进程组（`set -m`：作业控制下也不把标准输入换成空设备、不忽略 SIGINT 与 SIGQUIT），
+    /// 等 `goFD` 读到 EOF 再 exec 成要起的命令；`reportFD` 报出它的 PID，中转随即退出，它就挂到 launchd 下。
+    /// shell 会给要起的命令补上 PWD 与 SHLVL（exec 时 SHLVL 去不掉）：要求的环境里没有的，经 env 去掉，环境与要求的一致。
+    /// `held` 时再留一个看守（`Placement.detached`）：`holdFD` 上读到认领的一行就不再管它，读到 EOF 就结束它（SIGTERM，宽限后 SIGKILL）；
+    /// 它已经不在（自己退了、`end()` 结束过）时 SIGTERM 失败，不再等宽限、补 SIGKILL。`drainsErrors` 时认领后看守变成读走它标准错误的
+    /// `cat`（App 这时不再读，见 `ChildProcess.release()`），直到它与继承了标准错误的后代都退出：管道一直有读者，
+    /// 它写标准错误不会因 App 退出收到 EPIPE、写满后卡住，也不留越写越大的文件。
+    private static func relay(_ environment: [String: String], held: Bool, drainsErrors: Bool) -> String {
+        let added = ["PWD", "SHLVL"].filter { environment[$0] == nil }
+        let command = added.isEmpty ? #""$@""# : "/usr/bin/env " + added.map { "-u \($0) " }.joined() + #""$@""#
+        let start = "set -m; { read -r _ <&\(goFD); exec \(command) \(goFD)<&-; } \(reportFD)>&- \(holdFD)<&- \(errorsFD)<&- & p=$!; "
+        let grace = AgentTimeouts.endGrace.components.seconds
+        let drain = drainsErrors ? " && exec cat <&\(errorsFD) >/dev/null 3>&- \(holdFD)<&- \(errorsFD)<&-" : ""
+        let guardian = held
+            ? "{ read -r _ <&\(holdFD)\(drain) || { kill -TERM $p && { sleep \(grace); kill -KILL $p; }; }; } \(goFD)<&- \(reportFD)>&- 2>/dev/null & "
+            : ""
+        return start + guardian + "echo $p >&\(reportFD)"
+    }
+
+    static func pipe() throws -> (read: Int32, write: Int32) {
+        var fds: [Int32] = [0, 0]
+        guard Darwin.pipe(&fds) == 0 else { throw POSIXError(.init(rawValue: errno) ?? .EIO) }
+        return (try lifted(fds[0]), try lifted(fds[1]))
+    }
+
+    /// 还没退出（整组都走之前，组号不会被别的进程拿去）才发；SIGTERM 只发一次。
+    static func deliver(_ pid: pid_t, _ signal: Int32, group: Bool, shared: Shared) {
+        let send = shared.state.withLock { s in
+            guard s.status == nil, signal != SIGTERM || !s.terminated else { return false }
+            if signal == SIGTERM { s.terminated = true } else { s.killed = true }
+            return true
+        }
+        guard send else { return }
+        if group { killpg(pid, signal) } else { Darwin.kill(pid, signal) }
+    }
+
+    /// 事件源在进程退出前一直握着自己，与这个对象的生死无关（脱离 App 的 Pi 也由它记下退出）。
+    /// `group` 时组长退出后接着等组里剩下的（`Placement.group`）：每走一个重新列一遍组员，没人了才算退出。
+    static func watchExit(_ pid: pid_t, group: Bool, timing: Timing, shared: Shared, errors: ErrorTail?) {
+        let finish: @Sendable (Int32) -> Void = { status in
+            errors?.flush()  // 等退出的取得到它退出前写的全部标准错误
+            let (waiters, deadline) = shared.state.withLock { s in
+                s.status = status
+                defer { s.waiters = [:] }
+                return (s.waiters.values, s.deadline)
+            }
+            deadline?.cancel()
+            for waiter in waiters { waiter.resume(returning: true) }
+        }
+        let queue = kqueue()
+        guard watch(pid, on: queue) else {
+            close(queue)
+            return finish(SIGKILL)  // 还没放它 exec 就没了：只能是被外面结束的
+        }
+        let events = DispatchQueue(label: "cuepad.child.exit")
+        let source = DispatchSource.makeReadSource(fileDescriptor: queue, queue: events)
+        final class Leader: Sendable { let status = Mutex<Int32?>(nil) }
+        let leader = Leader()
+        let settle: @Sendable () -> Bool = {
+            // 到点强杀与最后一个组员退出可能同时到：已经算退出了的不再碰关掉的 kqueue
+            guard let status = leader.status.withLock({ $0 }), shared.state.withLock({ $0.status == nil }) else { return false }
+            if group, watchMembers(of: pid, on: queue) { return true }
+            source.cancel()
+            finish(status)
+            return false
+        }
+        source.setEventHandler {
+            var event = kevent()
+            var now = timespec()
+            guard kevent(queue, nil, 0, &event, 1, &now) == 1 else { return }
+            guard event.ident == UInt(pid) else { _ = settle(); return }
+            leader.status.withLock { $0 = Int32(truncatingIfNeeded: event.data) }
+            guard settle() else { return }
+            deliver(pid, SIGTERM, group: true, shared: shared)
+            guard !shared.state.withLock({ $0.killed }) else { return }
+            let deadline = Task {
+                guard (try? await timing.sleep(AgentTimeouts.endGrace)) != nil else { return }
+                events.async {
+                    deliver(pid, SIGKILL, group: true, shared: shared)
+                    _ = settle()  // 离开了这个组的不再等
+                }
+            }
+            shared.state.withLock { $0.deadline = deadline }
+        }
+        source.setCancelHandler { close(queue) }
+        source.resume()
+    }
+
+    /// 登记它的退出事件；已经不在（含已退出、未回收的）时登记不上。
+    private static func watch(_ pid: pid_t, on queue: Int32) -> Bool {
+        var change = kevent(
+            ident: UInt(pid), filter: Int16(EVFILT_PROC), flags: UInt16(EV_ADD | EV_ONESHOT), fflags: NOTE_EXIT | UInt32(NOTE_EXITSTATUS), data: 0,
+            udata: nil)
+        return kevent(queue, &change, 1, nil, 0, nil) == 0
+    }
+
+    /// 组里还活着的都登记上退出事件，返回有没有。登记之后再核对组号：列出之后才退出、号又被别的进程拿去的不算。
+    private static func watchMembers(of group: pid_t, on queue: Int32) -> Bool {
+        var members = [pid_t](repeating: 0, count: 64)
+        var count = Int(proc_listpgrppids(group, &members, Int32(members.count * MemoryLayout<pid_t>.size)))
+        while count >= members.count {
+            members = [pid_t](repeating: 0, count: members.count * 2)
+            count = Int(proc_listpgrppids(group, &members, Int32(members.count * MemoryLayout<pid_t>.size)))
+        }
+        var alive = false
+        for member in members.prefix(max(count, 0)) where member > 0 && member != group && watch(member, on: queue) {
+            if getpgid(member) == group { alive = true } else { unwatch(member, on: queue) }
+        }
+        return alive
+    }
+
+    private static func unwatch(_ pid: pid_t, on queue: Int32) {
+        var change = kevent(ident: UInt(pid), filter: Int16(EVFILT_PROC), flags: UInt16(EV_DELETE), fflags: 0, data: 0, udata: nil)
+        _ = kevent(queue, &change, 1, nil, 0, nil)
+    }
+
+    private static func readToEnd(_ fd: Int32) async -> Data {
+        final class Collected: Sendable { let data = Mutex(Data()) }
+        let collected = Collected()
+        await withCheckedContinuation { continuation in
+            read(fd) { chunk in collected.data.withLock { $0.append(chunk) } } done: { continuation.resume() }
+        }
+        return collected.data.withLock { $0 }
+    }
+
+    static func read(_ fd: Int32, chunk: @escaping @Sendable (Data) -> Void, done: @escaping @Sendable () -> Void) {
+        let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: DispatchQueue(label: "cuepad.child.read"))
+        let buffer = ReadBuffer()
+        source.setEventHandler {
+            guard let data = buffer.read(from: fd) else { return source.cancel() }
+            chunk(data)
+        }
+        source.setCancelHandler {
+            close(fd)
+            done()
+        }
+        source.resume()
+    }
+
+    /// 要交给子进程的描述符在本进程这端挪到 `reportFD` 之上、设 FD_CLOEXEC：
+    /// 不撞子进程里要放的 0–9 号（dup2 按顺序做，来源若正是先放的目标号就被盖掉；来源与目标同号时 dup2 不清 FD_CLOEXEC，会被关掉），
+    /// 也不漏进同时起的别的子进程（继承了写端，这边就永远等不到 EOF）。
+    private static func lifted(_ fd: Int32) throws -> Int32 {
+        defer { close(fd) }
+        let moved = fcntl(fd, F_DUPFD_CLOEXEC, reportFD + 1)
+        guard moved >= 0 else { throw POSIXError(.init(rawValue: errno) ?? .EMFILE) }
+        return moved
+    }
+}
+
+#endif

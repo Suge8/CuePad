@@ -1,7 +1,7 @@
 import Foundation
 
 extension AppServices {
-    /// 小组件、分享扩展的链接；不认识的链接忽略。
+    /// 不认识的链接忽略。
     func handle(url: URL) {
         guard let link = DeepLink(url: url) else { return }
         pendingDeepLink = link
@@ -12,7 +12,7 @@ extension AppServices {
         return pendingDeepLink
     }
 
-    /// 界面登记进入后台前必须落盘的内容（如编辑中的草稿）。返回的令牌用于注销。
+    /// 返回的令牌用于注销。
     @discardableResult
     func addBackgroundFlush(_ flush: @escaping @MainActor () async -> Void) -> UUID {
         let token = UUID()
@@ -24,13 +24,11 @@ extension AppServices {
         backgroundFlushes[token] = nil
     }
 
-    /// App 整个进后台时调用（iOS 最后一个窗口退到后台，在后台任务里，`BackgroundWork`；只是一个窗口退下、别的还在前台的不调）：
-    /// 停掉按节奏的拉取，等所有登记的落盘完成，写下这台设备已离开会话（界面在场景退到后台时报的）并传完，
-    /// 本地落盘后先刷新快照，不让网络占完后台时间；再发完待推送、等门铃按完后断开中转，最后补上上传后的状态。
-    /// 回前台的对应入口是 `handleActivation`。
+    /// App 整个进后台时在后台任务里调用（iOS 最后一个窗口退到后台，`BackgroundWork`；只是一个窗口退下、别的还在前台的不调）。
+    /// 本地落盘后先刷新快照，不让网络占完后台时间。通话在后台照常进行，中转为它的信令留着，通话结束时再来一遍（`VoiceService.finish`）。
     func prepareForBackground() async {
         stopPolling()
-        relay?.pause()
+        if !voice.isLive { relay?.pause() }
         for flush in backgroundFlushes.values { await flush() }
         await resendSnapshots()
         await viewer?.settle()
@@ -40,9 +38,11 @@ extension AppServices {
         await resendSnapshots()
     }
 
-    /// 取消后台任务（快照维护、分享入库、macOS 的 Pi 索引等）。
-    func cancelBackgroundWork() {
-        tasks.cancelAll()
+    /// 返回的是跟随者们的任务（见 `Followers.cancelAll`）。
+    @discardableResult
+    func cancelBackgroundWork() -> Task<Void, Never>? {
+        voice.cancel()
         stopPolling()
+        return tasks.cancelAll()
     }
 }

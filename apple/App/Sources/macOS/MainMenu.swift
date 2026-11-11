@@ -1,8 +1,7 @@
 #if os(macOS)
 import AppKit
 
-/// 无 nib 的标准主菜单：⌘Q 退出、⌘W 关闭（即隐藏）、新建（"文件"：⌘N 记一条灵感、⌥⌘N 新会话）、编辑快捷键与查找（⌘F、⌘G）、搜索、侧栏与右栏的开关、去进展页（"显示"），
-/// 以及会话回复框的快捷键（"回复"，`ReplyShortcut`）。⌘N 已是记一条灵感，新会话用 ⌥⌘N（Mac 上"另一种新建"的惯例）。
+/// 无 nib 的标准主菜单。⌘N 已是记一条灵感，新会话用 ⌥⌘N（Mac 上"另一种新建"的惯例）。
 enum MainMenu {
     static func install() {
         let main = build()
@@ -15,7 +14,6 @@ enum MainMenu {
         main.addItem(submenu(title: "CuePad", items: [
             .item("关于 CuePad", #selector(NSApplication.orderFrontStandardAboutPanel(_:)), ""),
             .item("检查更新…", #selector(AppDelegate.checkForUpdates(_:)), ""),
-            // 更新等后台会话做完再装时才出现：一行写等几个（停用的说明），一行现在就装（`AppDelegate.validateMenuItem`）
             .item("", #selector(AppDelegate.installUpdateNow(_:)), "", tag: AppDelegate.updateNoteTag),
             .item("现在就装", #selector(AppDelegate.installUpdateNow(_:)), ""),
             .separator,
@@ -28,6 +26,8 @@ enum MainMenu {
         main.addItem(submenu(title: "文件", items: [
             .item("记一条灵感", #selector(AppDelegate.newCard(_:)), "n"),
             .item("新会话…", #selector(AppDelegate.newSession(_:)), "n", [.option, .command]),
+            .separator,
+            .item("和 Cue 通话", #selector(AppDelegate.toggleVoiceCall(_:)), ""),
         ]))
         main.addItem(submenu(title: "编辑", items: [
             .item("撤销", Selector(("undo:")), "z"),

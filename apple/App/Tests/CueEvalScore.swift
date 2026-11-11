@@ -3,19 +3,12 @@ import CueStore
 import Foundation
 @testable import CuePad
 
-/// 判定的类别：成绩单（`apple/scripts/score.py`）按它汇总通过数，跑法见 docs/cue-eval.md。
 enum CheckKind: String, CaseIterable {
-    /// 事做对没
     case result = "结果"
-    /// 该问的问了，不该问的没问
     case ask = "问"
-    /// 推送、tell、urgent 是否必要
     case interrupt = "打扰"
-    /// 参数填对、没白调
     case tool = "工具"
-    /// 换新后接得上
     case carry = "接续"
-    /// 以前的事答对
     case memory = "记忆"
 }
 
@@ -32,12 +25,10 @@ struct Check {
         (self.kind, self.label, self.passed, self.note, self.counted) = (kind, label, passed, note, counted)
     }
 
-    /// 写进 .md 的那一行
     var shown: String { "〔\(kind.rawValue)〕\(label)\(note)\(counted ? "" : "〔不计〕")" }
     var failed: Bool { counted && !passed }
 }
 
-/// 评测分哪一套：成绩单按套汇总（短场景一遍是目录里各场景的合计）。
 enum EvalSuite: String {
     case short = "短场景"
     case long = "长程"
@@ -45,7 +36,6 @@ enum EvalSuite: String {
     case bench = "记忆基准"
 }
 
-/// 出错的工具调用按原因分：参数校验退回、对象找不到（含对上了好几个）、没有这个工具、其他（会话没送到、读的文件不在等）。
 /// 认法是对工具结果的原文做正则：跟着 CueTools 与 CueStoreError 的报错措辞走，那边改了措辞这里要一起改（工具结果不另带机器可读的类别）。
 enum CallFailure: String, CaseIterable {
     case invalid = "参数校验退回"
@@ -86,7 +76,6 @@ extension CueEval {
         let isReply = { (message: CueMessage) in
             answering.contains { round in message.createdAt >= round.startedAt && message.createdAt <= (round.finishedAt ?? .distantFuture).addingTimeInterval(0.001) }
         }
-        // 他会收到推送、又不是 tell 与回他的话的（出错、起不来这类管理器写的 urgent）
         let otherPushes = messages.filter { $0.urgent && $0.choices == nil && !toldTexts.contains($0.text) && !isReply($0) }
         let replies = messages.filter { $0.choices == nil && $0.taskID == nil && !toldTexts.contains($0.text) && isReply($0) }
         // 他问进展的那一轮：系统提示要的是逐件一句，不受两句的限——上限是两句与件数（非空的行）里大的那个
@@ -101,7 +90,6 @@ extension CueEval {
         var failed = Dictionary(uniqueKeysWithValues: CallFailure.allCases.map { ($0.rawValue, 0) })
         for call in calls where call.failed { failed[CallFailure(call.result ?? "").rawValue, default: 0] += 1 }
         let usage = (rig.brainDirectory.map(BrainUsage.rounds(in:)) ?? []).reduce(BrainUsage(), +)
-        // 合并在哪做：摘要的写入时刻落在某个做梦进程的起止里就是后台；Cue 的轮里的 merge 调用另数（后台做梦时应为 0）
         let dreams = rig.brainDirectory.map(BrainUsage.dreams(in:)) ?? []
         let summaries = ((try? await rig.store.cueMemory().summaries) ?? []).filter { $0.createdAt >= (rounds.first?.startedAt ?? .distantFuture) }
         let background = summaries.count { summary in dreams.contains { $0.contains(summary.createdAt) } }
@@ -126,7 +114,6 @@ extension CueEval {
     /// 他在问进展（系统提示："问进展时逐件一句，不受这个限"）：问进展的几种常见说法
     static let progressQuestion = /做到哪|到哪了|进展|进度|怎么样了|开工了吗/
 
-    /// 成绩单读的那一份：判定（类别、身份、过没过、计不计）与指标，写在 `<场景>.score.json`。
     /// `prompt` 是这一遍的系统提示：记下估算的 token（非 ASCII 每字算 1、ASCII 每 4 字符算 1；工具说明另算）。
     /// Pi 用 Anthropic 的模型当大脑时另记模型请求带没带 Claude 订阅的计费标识（`EvalBrain` 的只读扩展记下的）。
     func writeScore(_ name: String, suite: EvalSuite, checks: [Check], failure: (any Error)?, prompt: String, to output: URL) async throws {

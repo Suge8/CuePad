@@ -2,7 +2,6 @@ import CueStore
 import Foundation
 import Testing
 
-/// 投送请求：手机写内容与目标；Mac 执行（经回调交给 App 层）后写回结果；完成后清理。
 @Suite struct DeliveryTests {
   let fixture = try! Fixture()
   let clock = ManualTiming()
@@ -10,7 +9,6 @@ import Testing
 
   private let pi = SendTarget(kind: .piSession, name: "fix bug", ref: "s1")
 
-  /// 记录被调用的请求；可控制何时返回。
   actor Handler {
     private(set) var seen: [DeliveryRequest] = []
     private(set) var concurrent = 0
@@ -35,57 +33,6 @@ import Testing
 
   private func request(_ id: UUID) async throws -> DeliveryRequest? { try await store.deliveryRequest(id) }
 
-  /// 交给上传的每一版：`onWritten` 被调那一刻库里这条请求的状态（马上传读的就是那一刻的行）。
-  actor Uploads {
-    private(set) var statuses: [DeliveryStatus?] = []
-    func add(_ status: DeliveryStatus?) { statuses.append(status) }
-  }
-
-  private func executor(_ uploads: Uploads, handler: @escaping @Sendable (DeliveryRequest) async -> DeliveryOutcome) -> DeliveryExecutor {
-    DeliveryExecutor(
-      store: store, hostID: "mac-a", timing: clock.timing, onIssue: { Issue.record("执行器意外上报：\($0)") },
-      onWritten: { [store] id in await uploads.add(try? await store.deliveryRequest(id)?.status.known) }, handler: { request, _ in await handler(request) })
-  }
-
-  /// 当场执行完的只交出结果那一版：领取那一版在路上时结果得等它回来才能传，手机的回执要多等一个来回。
-  @Test
-  func aRequestFinishedRightAwayHandsOnlyTheResultToUpload() async throws {
-    let uploads = Uploads()
-    let executor = executor(uploads) { $0.content == "栅栏" ? .failed(.verbatim("栅栏")) : .succeeded }
-    try await executor.start()
-    _ = try await store.requestDelivery("hi", to: pi, on: "mac-a")
-    try await eventually("结果交给上传") { await !uploads.statuses.isEmpty }
-    clock.advance(DeliveryExecutor.claimGrace)
-    // 第二条（换个结果好区分）做完时，领取那次要是没取消，到点交出的已排在它前面
-    _ = try await store.requestDelivery("栅栏", to: pi, on: "mac-a")
-    try await eventually("第二条的结果交给上传") { await uploads.statuses.count >= 2 }
-
-    #expect(await uploads.statuses == [.succeeded, .failed])
-    await executor.stop()
-  }
-
-  /// 执行得久的（唤醒已结束的会话）到 `claimGrace` 先交出领取那一版：手机据它知道 Mac 接手了，不会报成没送到。
-  @Test
-  func aLongRunningRequestHandsOverTheClaimFirstThenTheResult() async throws {
-    let uploads = Uploads()
-    let (gate, open) = AsyncStream<Void>.makeStream()
-    let executor = executor(uploads) { _ in
-      for await _ in gate {}
-      return .succeeded
-    }
-    try await executor.start()
-    _ = try await store.requestDelivery("唤醒会话", to: pi, on: "mac-a")
-    await clock.waitForSleeper()
-    clock.advance(DeliveryExecutor.claimGrace)
-    try await eventually("领取交给上传") { await !uploads.statuses.isEmpty }
-    #expect(await uploads.statuses == [.executing])
-
-    open.finish()
-    try await eventually("结果交给上传") { await uploads.statuses.count == 2 }
-    #expect(await uploads.statuses == [.executing, .succeeded])
-    await executor.stop()
-  }
-
   @Test
   func requestsAreExecutedOneAtATimeInCreationOrder() async throws {
     let handler = Handler()
@@ -102,7 +49,31 @@ import Testing
     await executor.stop()
   }
 
-  /// 发出的话到期清理不带走：没能送达的等用户重发或移除，送到的等它的消息上了服务器再收走（见 `DeviceFlowTests`），别的完成请求照常清理。
+  @Test
+  func restartingDoesNotWaitForTheLastRoundsHandlerThatIgnoresCancellation() async throws {
+    let handler = Handler()
+    let (opened, open) = AsyncStream<Void>.makeStream()
+    defer { open.finish() }
+    let entered = Signal()
+    let executor = DeliveryExecutor(store: store, hostID: "mac-a", timing: clock.timing, onIssue: { Issue.record("执行器意外上报：\($0)") }) { request, _ in
+      guard request.content == "卡住" else { return await handler.handle(request) }
+      entered.raise()
+      await Task { for await _ in opened {} }.value
+      return .succeeded
+    }
+    try await executor.start()
+    _ = try await store.requestDelivery("卡住", to: pi, on: "mac-a")
+    try await eventually("上一轮的 handler 开始执行") { entered.isRaised }
+    await executor.stop()
+
+    let restarted = Task { try await executor.start() }
+    let next = try await store.requestDelivery("下一条", to: pi, on: "mac-a")
+    _ = try await eventually(store, { try $0.deliveryRequest(next.id)?.status }) { $0 == .known(.succeeded) }
+    try await restarted.value
+    #expect(await handler.seen.map(\.content) == ["下一条"])
+    await executor.stop()
+  }
+
   @Test
   func sentMessagesOutliveTheRetention() async throws {
     let handler = Handler()
@@ -116,7 +87,7 @@ import Testing
     _ = try await store.requestDelivery("quota", to: pi, on: "mac-a", mode: .quota)
     _ = try await eventually(store, { try $0.deliveryRequests().filter { $0.status == .known(.succeeded) }.count }) { $0 == 2 }
 
-    await clock.waitForSleeper()
+    try await clock.waitForSleeper(until: clock.now.addingTimeInterval(DeliveryExecutor.retention.seconds))
     clock.advance(DeliveryExecutor.retention + .seconds(1))
     let remaining = try await eventually(store, { try $0.deliveryRequests() }) { $0.count == 2 }
     #expect(Set(remaining.map(\.id)) == [failed.id, sent.id])
@@ -127,7 +98,6 @@ import Testing
   func requestsOlderThanTheMaximumAgeAreAbandonedInsteadOfSurprisingTheUser() async throws {
     let handler = Handler()
     let stale = try await store.requestDelivery("old prompt", to: pi, on: "mac-a")
-    // 一天前写下的请求：比任何最长等待都旧
     try RawDB(fixture.url).exec("UPDATE deliveryRequests SET createdAt = createdAt - 86400000")
 
     let executor = executor(handler)

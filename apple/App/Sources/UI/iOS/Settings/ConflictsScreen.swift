@@ -2,7 +2,6 @@
 import CueStore
 import SwiftUI
 
-/// 冲突副本：同一张卡在两台设备上离线改过，两个版本并排，选一份保留，另一份删除。
 struct ConflictsScreen: View {
     @Environment(AppServices.self) private var services
     @State private var choices = SyncChoices()

@@ -6,11 +6,10 @@ import CueText
 import Foundation
 
 extension DebugScene {
-    /// `-CuePadFiles YES`（iOS 与 Mac）：默认项目里写一条带附件的灵感「交接材料」——一张图、一份本机的 PDF、一份还在 iCloud 的压缩包
-    /// （记录到了、文件没到），配 `-CuePadScene editor -CuePadCard 交接材料` 打开它看文件牌。`-CuePadFileArrives <秒>`：过这么多秒后
-    /// 那份压缩包"开始下载"，进度一路走到头、文件落地（看还在路上 → 下载中 → 到了换上缩略图与大小）。没有同步，进度是这里写给界面的。
+    /// 没有同步，下载进度是这里写给界面的。
     static func seedFiles(_ services: AppServices) async {
-        guard defaults.bool(forKey: "CuePadFiles") else { return }
+        await seedInspiration(services)
+        guard args.files else { return }
         let store = services.store
         let archive = Data((0..<200_000).map { UInt8(truncatingIfNeeded: $0 &* 2_654_435_761 >> 13) })
         let away = SHA256.hash(data: archive).map { String(format: "%02x", $0) }.joined() + ".zip"
@@ -32,7 +31,7 @@ extension DebugScene {
         } catch {
             abandon("带附件的灵感没写下", error)
         }
-        let delay = defaults.double(forKey: "CuePadFileArrives")
+        let delay = args.fileArrives
         guard delay > 0, store.files.fileURL(for: away) == nil else { return }
         Task {
             await Task.wait(for: .seconds(delay))

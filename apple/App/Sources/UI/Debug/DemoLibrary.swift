@@ -6,8 +6,6 @@ import CueStore
 import CueText
 import Foundation
 
-/// 视觉验收的演示资料库：项目与灵感按各自的修改时间写入（`CueStore.seed`，所以墙、"更早"的周/月分组都有真实分布），
-/// 再补任务层级、项目介绍、目录绑定、发送记录与 Pi 历史。
 /// 只在 Debug 构建、隔离资料库、`-CuePadDemo YES` 时运行。
 enum DemoLibrary {
     struct DemoProject {
@@ -45,22 +43,19 @@ enum DemoLibrary {
         try await seedQuotas(store)
         let home = demoHome
         for (index, item) in [("cuepad", String(localized: "规划投送队列的重试边界", table: "Demo")), ("atlas", String(localized: "多 Agent 调度压测", table: "Demo")), ("homepage", String(localized: "首页改版文案", table: "Demo"))].enumerated() {
-            try await store.upsertPiSession(IndexedSession(
+            try await store.upsertSession(IndexedSession(
                 id: "demo-\(index)", path: "/tmp/demo-\(index).jsonl", cwd: "\(home)Project/\(item.0)",
                 title: item.1, lastActivityAt: .now.addingTimeInterval(-Double(index + 1) * 5400)), host: "demo-mac")
         }
     }
 
-    /// 订阅额度：Claude 的 5 小时用得比匀速快（照这速度会提前用完）、本周宽松、按模型的周额度几乎没用（明细里不列）；Codex 本周已过九成（胭脂）。
-    /// `-CuePadQuotaResetIn <秒>`：Claude 的 5 小时窗口这么多秒后重置，截图等到重置之后再拍（核对明细在那一刻变成已重置）。
-    /// `-CuePadQuotaRemindIn <秒>`：Claude 的本周这么多秒后到提醒时刻（`QuotaReminder`），该响；5 小时（不是周窗口）、按模型的本周与 Codex 的本周（还远）不该响。
-    /// 到点 20 秒后再观测到同一个本周窗口（多用了一些），不该再响。
+    /// `-CuePadQuotaRemindIn`：Claude 的本周到点该响；5 小时（不是周窗口）、按模型的本周与 Codex 的本周（还远）不该响。到点 20 秒后再观测到同一个本周窗口（多用了一些），不该再响。
     private static func seedQuotas(_ store: CueStore) async throws {
-        if let sample = DebugScene.defaults.string(forKey: "CuePadQuotaSample") { return try await seedQuotaSample(sample, store) }
+        if let sample = DebugScene.args.quotaOpts.sample { return try await seedQuotaSample(sample, store) }
         let now = Date.now
-        let resetIn = DebugScene.defaults.double(forKey: "CuePadQuotaResetIn")
+        let resetIn = DebugScene.args.quotaOpts.resetIn
         if resetIn > 0 { DebugHooks.later(.seconds(resetIn + 5)) {} }
-        let remindIn = DebugScene.defaults.double(forKey: "CuePadQuotaRemindIn")
+        let remindIn = DebugScene.args.quotaOpts.remindIn
         func window(_ seconds: Int, used: Double, left: TimeInterval, model: String? = nil) -> QuotaWindow {
             QuotaWindow(seconds: seconds, used: used, resetsAt: now.addingTimeInterval(left), model: model)
         }
@@ -83,8 +78,6 @@ enum DemoLibrary {
         ], complete: true, account: PiAccount(kind: .oauth, scope: "demo-codex")), host: "demo-mac")
     }
 
-    /// 两级任务：圆桌的"乱序"四个子任务，每个子任务是叶子、带着正文（发给 Agent 的状态见 `DebugScene.seedTaskStates`）；
-    /// CuePad 的"投送超时"是叶子、带着正文（演示里发给 notes）。
     private static func seedSubtasks(_ store: CueStore) async throws {
         let tasks = try await store.tasks(.todo).flatMap(\.tasks)
         if let timeout = tasks.first(where: { $0.body.hasPrefix(String(localized: "投送队列超时报错不发键", table: "Demo")) }) {
@@ -101,7 +94,6 @@ enum DemoLibrary {
         }
     }
 
-    /// 把项目分组与任务写进库；名称为空的一组进默认项目。
     static func seed(_ store: CueStore, groups: [DemoProject], tasks: [DemoTask]) async throws {
         let named = groups.filter { !$0.name.isEmpty }
         func index(of name: String?) -> Int? { name.flatMap { name in named.firstIndex { $0.name == name } } }
@@ -115,7 +107,6 @@ enum DemoLibrary {
             projects: named.map { SeedProject(name: $0.name, icon: $0.icon.rawValue, color: $0.color, pinned: $0.pinned) }, cards: cards)
     }
 
-    /// 一张像界面截图的示意图：桌面底色上几块纸片。用 CoreGraphics 画，Mac 与 iOS 共用。
     /// 演示用的主目录（以 / 结尾）：演示项目绑的文件夹、假 Pi 会话的工作目录都在它下面。Mac 上在隔离库里（`CUEPAD_LIBRARY_DIR/home`，
     /// 没给隔离库时在临时目录），不是真实主目录：演示实例会真去读写绑定的文件夹（技能与规则的扫描与整理），落在真实主目录下就会改到真的仓库。
     /// iOS 只作显示。
@@ -129,7 +120,6 @@ enum DemoLibrary {
         #endif
     }
 
-    /// 一份日志文本的引用（带两个文件的灵感里的第二个）。
     private static func demoLog(_ store: CueStore) throws -> String {
         let name = String(localized: "桥接日志.txt", table: "Demo")
         let url = FileManager.default.temporaryDirectory.appending(path: name)
@@ -142,7 +132,6 @@ enum DemoLibrary {
         let context = CGContext(
             data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
             space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
-        // 翻成左上角为原点，方便按版面坐标画
         context.translateBy(x: 0, y: CGFloat(height))
         context.scaleBy(x: 1, y: -1)
         func fill(_ rect: CGRect, radius: CGFloat, _ gray: (CGFloat, CGFloat, CGFloat, CGFloat)) {
@@ -167,7 +156,6 @@ enum DemoLibrary {
         return encode(context.makeImage()!)
     }
 
-    /// 把一张图编成 PNG（或给了 `quality` 的 JPEG）：演示图片、大库的照片、截图示意图共用。
     nonisolated static func encode(_ image: CGImage, as type: UTType = .png, quality: Double? = nil) -> Data {
         let output = NSMutableData()
         let destination = CGImageDestinationCreateWithData(output, type.identifier as CFString, 1, nil)!

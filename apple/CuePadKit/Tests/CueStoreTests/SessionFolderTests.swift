@@ -2,18 +2,16 @@ import CueStore
 import Foundation
 import Testing
 
-/// 会话归哪个项目写在记录上（写入时按本机的目录绑定定）：绑定或解除时本机已有的会话（含几千条历史）要跟着归进来、放出去；
-/// 手机据"各 Mac 上跑过 Agent 的文件夹"建议绑定（`sessionFolders`）。
 @Suite struct SessionFolderTests {
   let fixture = try! Fixture()
   var store: CueStore { fixture.store }
 
   private func index(_ id: String, cwd: String) async throws {
-    try await store.upsertPiSession(IndexedSession(id: id, path: "/s/\(id).jsonl", cwd: cwd, lastActivityAt: Date()), host: "mac-a")
+    try await store.upsertSession(IndexedSession(id: id, path: "/s/\(id).jsonl", cwd: cwd, lastActivityAt: Date()), host: "mac-a")
   }
 
   private func projects() async throws -> [String: UUID?] {
-    Dictionary(uniqueKeysWithValues: try await store.allPiSessionStates().map { ($0.sessionID, $0.projectID) })
+    Dictionary(uniqueKeysWithValues: try await store.allSessionStates().map { ($0.sessionID, $0.projectID) })
   }
 
   @Test func bindingAFolderPutsExistingSessionsIntoTheProjectAndUnbindingTakesThemOut() async throws {
@@ -41,9 +39,9 @@ import Testing
     let project = try await store.createProject(name: "App", color: "#111")
     let base = Date(timeIntervalSince1970: 1_000_000)
     func write(_ id: String, folder: String?, host: String, at offset: TimeInterval, project: UUID? = nil) async throws {
-      try await PiStateRecorder(store: store, hostID: host).update(
+      try await StateRecorder(store: store, hostID: host).update(
         sessionID: id, state: .settled, title: id, directory: folder.map { "/work/\($0)" }, projectID: project,
-        times: PiTimes(stateSince: base.addingTimeInterval(offset), busySince: nil))
+        times: SessionTimes(stateSince: base.addingTimeInterval(offset), busySince: nil))
     }
     try await write("old", folder: "app", host: "mac-a", at: 10)
     try await write("new", folder: "app", host: "mac-a", at: 30, project: project.id)

@@ -1,7 +1,6 @@
 import SwiftUI
 
 #if os(iOS)
-/// iOS 设置里的一行"上次崩溃 · 时间"（没有诊断就不显示）：点开看摘要（异常类型、崩溃线程顶部的帧），可导出给开发者。Mac 的那一行见设置窗口的 `CrashRow`。
 struct LastCrashRow: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -25,7 +24,7 @@ struct LastCrashRow: View {
 }
 #endif
 
-/// 一份诊断的要点，与整份存档的导出：复制的是每种只留要点的摘要（`DiagnosticSummary`），完整原文作文件分享，不进剪贴板。
+/// 复制的是每种只留要点的摘要（`DiagnosticSummary`），完整原文作文件分享，不进剪贴板。
 struct CrashReportView: View {
     let report: CrashReport
     @Environment(AppServices.self) private var services
@@ -47,7 +46,6 @@ struct CrashReportView: View {
         }
     }
     #else
-    /// Mac：挂在设置那一行"查看"上的弹出框，与设置里其余弹出框同一种外观（`SettingPopover`）。
     var body: some View {
         SettingPopover(title: report.kind.label, width: 420) {
             Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: Spacing.group, verticalSpacing: 6) {
@@ -84,7 +82,7 @@ struct CrashReportView: View {
         return facts
     }
 
-    private static let note: LocalizedStringResource = "只存在这台设备上，不会自动上传。导出诊断复制每次出事的要点，发给开发者；开发者要完整原文时，再分享原始文件。"
+    private static let note: LocalizedStringResource = "存在这台设备上，连着 iCloud 时经你自己的 iCloud 送到你的 Mac，不经别人。要发给别人时，导出诊断复制每次出事的要点；要完整原文时，再分享原始文件。"
     private static let share: LocalizedStringResource = "分享原始文件…"
 
     #if os(iOS)

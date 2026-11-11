@@ -5,9 +5,9 @@ import Testing
 import WebKit
 @testable import CuePad
 
-/// 手机上预览的网页：脚本能跑，但联网请求一律被拦掉（页面里的 fetch、图片都到不了网络）。
 /// 用本机的监听端口当"外网"：没有拦截规则的对照页面请求能到，装了规则的请求到不了。两页各用各的端口：对照页的请求什么时候到
 /// 都算不到装了规则的那一页头上（共用一个计数时，对照页晚到的图片请求在负载下会被误算成拦截漏了）。
+@Suite(.releasesLibraries)
 struct PreviewWebTests {
     private nonisolated final class Probe: @unchecked Sendable {
         private let listener = try! NWListener(using: .tcp, on: .any)

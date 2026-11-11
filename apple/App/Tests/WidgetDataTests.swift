@@ -3,7 +3,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 小组件与分享扩展读的快照：主 App 跟随资料库变化写进共享容器。
+@Suite(.releasesLibraries)
 struct WidgetDataTests {
     let app = TestApp()
     var services: AppServices { app.services }
@@ -44,7 +44,6 @@ struct WidgetDataTests {
     }
     #endif
 
-    /// 草稿落盘要赶在快照之前：快照里得有它刚写进库的那张。
     @Test func 进入后台前先跑完登记的落盘_再刷新快照() async throws {
         let store = services.store
         services.addBackgroundFlush {
@@ -59,7 +58,6 @@ struct WidgetDataTests {
         #expect(Snapshots.read(DefaultProjectSnapshot.self, from: snapshots)?.cards.map(\.title) == ["刚写的"])
     }
 
-    /// 小组件、通知与旧版本写出的链接：认得的解析与生成互逆，不认识的忽略。
     @Test(arguments: [
         ("cuepad://speak", DeepLink.speak),
         ("cuepad://project/6f0c1a7e-0000-4000-8000-000000000002", DeepLink.project(UUID(uuidString: "6f0c1a7e-0000-4000-8000-000000000002")!)),

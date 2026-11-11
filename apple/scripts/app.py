@@ -6,7 +6,7 @@
       app.py exec <CuePad.app> <库目录> [-- 启动参数…]   占住本检出那一份后 exec 成 CuePad（量完自己退出的 bench 用，$! 就是 CuePad）
       app.py wait <就绪文件> <PID> [秒=60]              等 exec 起的实例写下就绪文件（kqueue）；它先退出或超时以 1 退出
       app.py stop [sim]                                 结束本检出 run 起的实例（Mac 与模拟器；sim 只收模拟器的）
-      app.py sockets                                    本检出实例的连接目录（终端里的会话 export CUEPAD_PI_SOCKET_DIR 为它才连得上）
+      app.py sockets                                    本检出实例的连接目录（手动起的托管 Pi 带 CUEPAD_PI_SOCKET_DIR 为它才连得上，见 CueBridge README）
       app.py preflight                                  Mac 截图、录屏前查台前调度
 规则：
 1. 只起 apple/.derived* 里的构建；库、偏好、各家 Agent 的配置目录、命令行链接与连接目录都在库目录或本检出的 SOCKETS 下

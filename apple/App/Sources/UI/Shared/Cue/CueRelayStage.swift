@@ -1,41 +1,15 @@
 import QuartzCore
 import SwiftUI
 
-/// Cue 与会话之间的"接力"：一束靛青的光沿弧交棒，两端同一套尺寸、曲线与时长。一次最多三道、错开 90ms。
-/// - 叫醒（会话 → Cue）：状态标先漾开，小光点拖着细亮芯与宽淡尾飞向头像右下那颗点；光头到点的那一刻那颗点亮起来，头像这时才醒
-///   （光在路上时各处的头像停在起飞那一刻的样子，`CueWatch.beat`），先醒后到读成因果反了。这次叫醒的时间线归 `CueWatch.wake`：起点是本机第一次看到它的时刻，
-///   起飞、到点点亮与小人醒都由起点加固定的飞行时长推出，这里照它画、不回报。不在头像外画环、不外扩：头像外的环是否决过的"加载进度"。
-/// - 交给（Cue → 会话）：头像右下那颗点先亮一下，160ms 后一个空心小环带着尾巴从那里离开；落点的状态标亮成实心、停一拍，再随外圈余光淡下去。
-/// - 发出（你 → Cue）：发送钮纸飞机的机头当场变成光点，不另叠起飞环（`RelayLaunch`），落进那颗点同叫醒（同一个到点时刻，`RelayFlight.Scene.land`）：
-///   光在路上时头像也停在原样，落下才露"在听"。
-/// 飞行 0.78～1.08s，先提速、后缓缓被接住；拖尾是同一条弧上三截由亮到暗、由细到宽的描边，尾端稍后起步、落下时追上光头。
-/// 弧向窗口竖中线鼓，几乎横着时向上鼓；来回同一条弧。短距离也至少鼓出 24pt，两头挨着仍看得清方向。
-/// 起飞、飞行与落点余光总共约 1.7～2.2s（含最多三道错峰）：全 App 唯一不走 `Motion` 几种 token 的长编排，给低频的交棒留出看清两头的时间。
-///
-/// 两头各落在屏上哪一处，规则只在两个枚举里：Cue 那头按平台定一处（`CueSpot`），会话那头按具体程度取最具体的那处（`EndSpot`）。
-/// 会话自己那一行优先于它的任务行，同一级几处时取离头像近的，来回都接同一行的头像。
-/// 开新会话（start）不在写下请求时飞，等开出的会话有了记录（`CueFlight.Handed`）才飞：落在新会话那一行；新行先占好位置、透明着，
-/// 光落下的那一刻（落点那圈环的动画真的开始时，Core Animation 回调）才淡出来（`relayArrival`、`Stage.arriving`）。
-///
-/// 降级（两个方向同一条规则：没有一个看得见的东西就不凭空画，也不往屏外飞）：
-/// - 会话那头连同"会话"那一格都不在屏上（iPhone 的会话页与纸页、Mac 侧栏收起、iPad）：叫醒只是那颗点亮一下（头像同时醒）；交给是那颗点亮一下、光环从那里朝窗口中间飘一小段就淡去——"它把事交出去了"。
-/// - 头像不在屏上（Mac 侧栏收起且不在 Cue 页，iPhone 的会话页与纸页，iPad 不在 Cue 页与侧栏收起时）：叫醒是起飞的环照样扩开、光从状态标升起一小段就淡去；
-///   交给是只在会话那头外扩一圈、垫一层淡光。
-/// - 两头都不在就什么都不画：Cue 的头像回到屏幕上时自己带着在动的点，会话的状态标自己会变。
-/// - 同步追赶中（`AppServices.isCatchingUp`：启动、回到前台、下拉刷新那一拉，积压的一页页）带回来的不播：那是不在眼前时发生过的事。
-/// - 减弱动态效果：不飞、不扩，头像那颗点与会话那头的状态标同时淡入一层高亮再淡出（1s），同 `Motion` 的约定只留透明度；叫醒、发出的那一下落在同一个到点时刻，头像也在那一刻换。
-///
-/// 接力只来自库里的事实：交给经 `LiveSessions.flight`（规则在 `CueFlight`）、叫醒经 `CueWatch.wake`，都投影成只在变了时才写的值（打开资料库时已有的不算）；
-/// 它与在做那一列同一份读到，重排那一列的写入与这次接力在同一次更新里到达，等一帧排好就量（`NextFrame`），不猜时长。
-/// 页面换来换去也不播（挂在窗口根上，不随页面出现）。舞台只另记一件事：哪几个新会话还在等光落下（`Stage.arriving`）。
-///
-/// 性能：飞行整个交给 Core Animation（渲染服务插值，App 进程不逐帧参与），只在播时把一层画布挂到窗口的根层最上面，播完拿掉。
-/// 不在每一行挂几何读数：只有此刻在接力的会话状态标与任务行挂一个空的锚视图，Cue 的几处头像各挂一个；
+/// 接力的光沿弧交棒，两端同一套尺寸、曲线与时长；全 App 唯一不走 `Motion` 几种 token 的长编排，给低频的交棒留出看清两头的时间。
+/// 叫醒（会话 → Cue）：光头到点的那一刻那颗点亮起来，头像这时才醒（光在路上时各处的头像停在起飞那一刻的样子，`CueWatch.beat`），先醒后到读成因果反了。
+/// 这次叫醒的时间线归 `CueWatch.wake`，这里照它画、不回报。不在头像外画环：头像外的环是否决过的"加载进度"。
+/// 开新会话（start）不在写下请求时飞，等开出的会话有了记录（`CueFlight.Handed`）才飞；新行先占好位置、透明着，光落下的那一刻（落点那圈环的动画真的开始时，Core Animation 回调）才淡出来（`relayArrival`、`Stage.arriving`）。
+/// 降级（两个方向同一条规则）：没有一个看得见的东西就不凭空画，也不往屏外飞；两头都不在就什么都不画。同步追赶中（`AppServices.isCatchingUp`）带回来的不播：那是不在眼前时发生过的事。
+/// 接力只来自库里的事实，只在变了时才写（打开资料库时已有的不算）；它与在做那一列同一份读到，重排那一列的写入与这次接力在同一次更新里到达，等一帧排好就量（`NextFrame`），不猜时长。页面换来换去也不播（挂在窗口根上，不随页面出现）。
+/// 性能：飞行整个交给 Core Animation（渲染服务插值，App 进程不逐帧参与）。不在每一行挂几何读数：只有此刻在接力的会话状态标与任务行挂一个空的锚视图；
 /// 空锚不做插入转场：继承到父级动画时，默认淡入会让新锚的宿主层首帧透明，把本来可见的落点误判成不在屏上。
-/// 播的那一刻沿层树把锚换算到窗口根层的坐标，一并算进父层的裁切、隐藏与透明（滚出屏的、被盖住的页、开合到 0 的都算不在），
-/// 工具栏、导航容器、分栏这些各自托管的视图都在同一棵层树里，不需要逐层换算。
-/// 接住的那几圈挂在落点的锚自己的层上（`RelayFlight.Landing`）：量过之后落点又挪了（页头随换句重新居中、列表重排）圈也跟着锚走，
-/// 且压在锚后面的字底下；飞的那道光仍沿播的那一刻量出的弧，落下那一下由渲染服务按锚此刻的位置画，不另量、不逐帧读几何。
+/// 接住的那几圈挂在落点的锚自己的层上（`RelayFlight.Landing`）：量过之后落点又挪了（页头随换句重新居中、列表重排）圈也跟着锚走，且压在锚后面的字底下。
 /// 否决了 SwiftUI 的覆盖层加锚点偏好：偏好过不了 Mac 工具栏与 iOS 导航容器的托管边界，覆盖层也盖不住 Mac 的工具栏。
 struct CueRelayStage: ViewModifier {
     let workspace: Workspace
@@ -47,7 +21,6 @@ struct CueRelayStage: ViewModifier {
         content.environment(\.relayStage, stage).background(Watcher(workspace: workspace, stage: stage))
     }
 
-    /// 交给读 `LiveSessions.flight`、叫醒读 `CueWatch.wake`（都只在变了时才写）：又有一次就播。叫醒照 `CueWatch` 记下的起点画，不回报。
     private struct Watcher: View {
         let workspace: Workspace
         let stage: Stage
@@ -69,10 +42,8 @@ struct CueRelayStage: ViewModifier {
         }
     }
 
-    /// 本窗口的舞台：认得窗口（`Probe`），播时找锚、交给 `RelayFlight`；记着哪几个新开的会话还在等光落下。
     @Observable
     final class Stage {
-        /// 这次交给开出的、光还没落下的会话（`relayArrival` 让它们的行与状态标透明着）。
         private(set) var arriving: Set<String> = []
         @ObservationIgnored fileprivate weak var host: RelayAnchorView?
         @ObservationIgnored fileprivate var color: CGColor?
@@ -109,7 +80,6 @@ struct CueRelayStage: ViewModifier {
                 let placed = Array(
                     flight.ends.compactMap { end in Self.place(of: end, among: anchors, in: root, near: cue?.center).map { (end.session, $0) } }
                         .prefix(RelayFlight.most))
-                // 没有落点的不等
                 arriving.formIntersection(placed.map(\.0))
                 RelayFlight(color: color, reduceMotion: reduceMotion).play(
                     flight.direction, cue: cue, ends: placed.map(\.1), in: root, since: flight.direction == .relay ? .now : since) { index in
@@ -118,7 +88,6 @@ struct CueRelayStage: ViewModifier {
             }
         }
 
-        /// 会话那头在屏上的位置：最具体的那一级（`EndSpot.rank`），同一级几处都在时取离头像近的。
         /// 刚开出的会话那一行正透明着等光落下（`relayArrival`），量它时不看透明度。
         private static func place(of end: RelayEnd, among anchors: [RelayAnchorView], in root: CALayer, near cue: CGPoint?) -> RelayFlight.Landing? {
             anchors.compactMap { anchor -> (rank: Int, landing: RelayFlight.Landing)? in
@@ -130,7 +99,6 @@ struct CueRelayStage: ViewModifier {
         }
     }
 
-    /// 窗口根上一个空视图：让舞台认得自己在哪个窗口，并取当下配色里的靛青。
     fileprivate struct Probe {
         let stage: Stage
         let color: Color
@@ -164,7 +132,6 @@ final class RelayLaunch {
 }
 
 extension View {
-    /// 发出的起点：`launch.fly` 从这里起飞（颜色是此刻配色里的 `color`）。
     func relayLaunch(_ launch: RelayLaunch, color: Color) -> some View {
         background(RelayLaunchPad(launch: launch, color: color))
     }
@@ -185,11 +152,9 @@ struct RelayAnchor {
     let role: RelayAnchorView.Role
 }
 
-/// 锚：一个不接事件、不画东西的空视图，只为播的那一刻能沿层树量出它在窗口里的位置。
 final class RelayAnchorView: RelayAnchorBase {
     enum Role: Equatable {
         case stage
-        /// 发出的起点（`RelayLaunch`）。
         case launch
         case cue(CueSpot)
         case end(EndSpot)
@@ -217,7 +182,6 @@ final class RelayAnchorView: RelayAnchorBase {
 
     static func all(in window: AnyObject) -> [RelayAnchorView] { anchors.allObjects.filter { $0.window === window } }
 
-    /// Cue 那头在屏上的那块：几处都在时取 `CueSpot` 排在前面的。
     static func cue(among anchors: [RelayAnchorView], in root: CALayer) -> CGRect? {
         anchors.compactMap { anchor -> (spot: CueSpot, frame: CGRect)? in
             guard case .cue(let spot) = anchor.role, let frame = anchor.frame(in: root) else { return nil }
@@ -232,7 +196,6 @@ final class RelayAnchorView: RelayAnchorBase {
     static func rootLayer(of window: NSWindow) -> CALayer? { window.contentView?.superview?.layer }
     #endif
 
-    /// 在 `root` 里看得见的那块：沿层树往上换算，被裁掉、藏起或透明的祖先让它不算在屏上（`seesThrough` 时透明的不算）。
     func frame(in root: CALayer, seesThrough: Bool = false) -> CGRect? {
         #if os(iOS)
         var current = layer

@@ -1,17 +1,13 @@
 import CueStore
 import SwiftUI
 
-/// "Cue 记得什么"（Cue 页上打开的弹层，入口见 `CuePage`；手机与 Mac 同一张列表，壳是 `CueListPanel`）：没忘掉、不是定时的记忆，
-/// 最上面是"重点"（钉住的）一组、组头右端是它的用量（`PinnedUsage`；重点只有 Cue 整理，它并成的就是普通的一条，不另标），其余按记下的时间分段（今天、昨天、本周、本月、更早，同会话历史 `TimeSection`），组内从新到旧。
-/// 一条只剩正文：时间在组头，谁说的与确切日期只在长按（右键）菜单的抬头与读屏里——一屏要看得到十来条。定时另有一张（`CueSchedulePage`）。
-/// 记一条是浮在底部的玻璃胶囊；记下的算你说的，一条超过 `CueMemoryLine.maxBytes` 字节时在胶囊里说明、不写。
-/// 钉住与忘掉按平台惯例收起（`CueListRow`）；忘掉先确认：库里忘掉是软删、界面上没有拨回去的路。
+/// "重点"（钉住的）只有 Cue 整理，它并成的就是普通的一条，不另标。一条只剩正文：时间在组头，谁说的与确切日期只在长按（右键）菜单的抬头与读屏里——一屏要看得到十来条。
+/// 忘掉先确认：库里忘掉是软删、界面上没有拨回去的路。
 struct CueMemoryPage: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// 记忆（没忘掉、不是定时的），新的在前
     @State private var memory: CueMemoryRecent?
     @State private var text = ""
     @State private var forgetting: CueMemoryLine?
@@ -93,13 +89,11 @@ struct CueMemoryPage: View {
 }
 
 extension RowAction {
-    /// 复制这一行的字（菜单与读屏里）。
     static func copy(_ text: String, _ workspace: Workspace) -> RowAction {
         RowAction(.verbatim(MessageMenu.Item.copy.title), icon: MessageMenu.Item.copy.icon) { workspace.copy(text) }
     }
 }
 
-/// 组头：小号、第三档墨，可带一枚图标，右端可挂一样东西（重点用量）；上面空出一段把组分开。
 private struct GroupTitle<Trailing: View>: View {
     let title: String
     var icon: Icon?
@@ -119,8 +113,6 @@ extension GroupTitle where Trailing == EmptyView {
     init(title: String, icon: Icon? = nil) { self.init(title: title, icon: icon) { EmptyView() } }
 }
 
-/// 重点用量：一条用量条（`MarkedBar`，不带刻线）铺到硬线（`CueMemoryLine.pinnedHard`）的比例，旁边是已用多少（kB，一位小数）。
-/// 用量档位与配色同上下文那一行（`UsageLevel`），平时是安静的次要墨。
 private struct PinnedUsage: View {
     let bytes: Int
     @Environment(\.palette) private var palette

@@ -10,9 +10,8 @@ import UIKit
 
 /// 宿主告诉编辑器一个附件此刻的样子：编辑器只画，不懂同步。
 public struct CueFileStatus: Equatable, Sendable {
-    /// 文件牌名字下面那一行（类型与大小、还没到时怎么取、在传时传了几成）；还没到的图片写在占位上。
+    /// 还没到的图片写在占位上。
     public var detail: String
-    /// 正在上传或下载时的进度（0–1），文件牌底下画一条进度。
     public var progress: Double?
 
     public init(detail: String, progress: Double? = nil) {
@@ -21,8 +20,7 @@ public struct CueFileStatus: Equatable, Sendable {
     }
 }
 
-/// 正文里的任意文件（`CueToken.file`）：一枚文件牌，左边缩略图（系统快速查看的缩略图，文件不在本机时是文件记号），右边文件名与一行说明
-/// （`CueFileStatus`，宿主给），在传时底下一条进度。点它交给宿主（`onOpenAttachment`）；牌子在绘制时现画，缩略图后台出好再重画。
+/// 点它交给宿主（`onOpenAttachment`）；牌子在绘制时现画，缩略图后台出好再重画。
 final class CueFileAttachment: NSTextAttachment {
     private static let maxWidth: CGFloat = 360
 
@@ -71,13 +69,11 @@ nonisolated enum FileChip {
         CueFont.systemFont(ofSize: (style.font.pointSize * 0.78).rounded())
     }
 
-    /// 附件在 `rect` 里画面的那一块：文件牌（有名字）是左边的缩略图，图片（没有名字）是整张。
     static func picture(in rect: CGRect, named name: String) -> CGRect {
         guard !name.isEmpty else { return rect }
         return CGRect(x: rect.minX + padding, y: rect.midY - thumbSide / 2, width: thumbSide, height: thumbSide)
     }
 
-    /// 两行字加上下留白，至少放得下缩略图。
     static func height(style: CueEditorTheme) -> CGFloat {
         max(thumbSide + padding * 2, ceil(line(nameFont(style)) + line(detailFont(style)) + 22))
     }

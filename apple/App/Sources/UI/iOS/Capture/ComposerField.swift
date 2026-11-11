@@ -12,22 +12,21 @@ struct ComposerField: UIViewRepresentable {
     let label: String
     let maxLines: Int
     let ink: Color
-    /// 焦点由调用方的 `.focused` 管（UIKit 文字区接得住 SwiftUI 的焦点）；Mac 的那份还要把 AppKit 侧的变化报回来。
     let focus: FocusState<Bool>.Binding
-    /// 外接键盘的方向键、↩/Tab、Esc 先交给调用方（斜杠命令面板打开时用）；返回 true 表示已处理。
+    /// 外接键盘的方向键、↩/Tab、Esc 先交给调用方；返回 true 表示已处理。
     var keys: (ComposerKey) -> Bool = { _ in false }
-    /// 回复框的快捷键（`ReplyShortcut`）此刻要做的事；nil 是此刻用不了。外接键盘上是文字区的按键命令（按住 ⌘ 看得到）。
+    /// nil 是此刻用不了。
     var shortcut: (ReplyShortcut) -> (() -> Void)? = { _ in nil }
-    /// 收下粘贴进来的附件（放进附件条）；nil 是这个输入框不收附件，剪贴板里的照常当文字粘。
+    /// nil 是不收附件，剪贴板里的照常当文字粘。
     var files: (([IncomingFile]) -> Void)?
     @Environment(Workspace.self) private var workspace
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.palette) private var palette
+    @Environment(\.dynamicTypeSize) private var typeSize
 
-    /// 这个字号下文字区一行中文的高（`ComposerMetrics.lineSlot`）。
     static func lineHeight(_ size: DynamicTypeSize) -> CGFloat {
         let traits = UITraitCollection(preferredContentSizeCategory: UIContentSizeCategory(size))
-        return GrowingTextView.rulerHeight(font: .preferredFont(forTextStyle: .body, compatibleWith: traits), lines: 1)
+        return GrowingTextView.rulerHeight(font: Typography.readingFont(for: traits), paragraph: Typography.readingParagraph(for: traits), lines: 1)
     }
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
@@ -35,8 +34,6 @@ struct ComposerField: UIViewRepresentable {
     func makeUIView(context: Context) -> GrowingTextView {
         let view = GrowingTextView(pasteboard: workspace.services.pasteboard)
         view.delegate = context.coordinator
-        view.font = .preferredFont(forTextStyle: .body)
-        view.adjustsFontForContentSizeCategory = true
         view.backgroundColor = .clear
         view.textContainerInset = .zero
         view.textContainer.lineFragmentPadding = 0
@@ -48,6 +45,7 @@ struct ComposerField: UIViewRepresentable {
 
     func updateUIView(_ view: GrowingTextView, context: Context) {
         context.coordinator.parent = self
+        view.applyTypography(UITraitCollection(preferredContentSizeCategory: UIContentSizeCategory(typeSize)))
         // 组合期的文字已经在 `text` 里；只在外部改写（回到会话恢复草稿、发送后清空、展开编辑、编辑后重发）时才写回，免得打断输入法。
         // 外部改写赢过组合期：没定字就发出时拼音已随这句发出去，先结束组合（定字那一下不回写草稿）再写，框里不留它、之后也不被定字写回草稿。
         // 外部写进来的光标放到末尾、排好后让末尾露出来：接着写的地方在末尾，撑满行数时看见的是最后几行而不是开头
@@ -65,7 +63,7 @@ struct ComposerField: UIViewRepresentable {
             view.revealsEnd = true
             view.setNeedsLayout()
         }
-        view.placeholder.text = prompt
+        view.setPrompt(prompt)
         view.placeholder.isHidden = !view.text.isEmpty
         // 只在颜色真的变了时设：设一次就给整篇文字重铺颜色、作废排版（每次更新都设时，几百行的草稿每个字多花好几毫秒）
         if ink != context.coordinator.ink {
@@ -83,7 +81,9 @@ struct ComposerField: UIViewRepresentable {
 
     func sizeThatFits(_ proposal: ProposedViewSize, uiView view: GrowingTextView, context: Context) -> CGSize? {
         guard let width = proposal.width else { return nil }
-        return CGSize(width: width, height: view.fittingHeight(width: width))
+        let ideal = view.fittingHeight(width: width)
+        let height = min(ideal, max(Self.lineHeight(typeSize), proposal.height ?? ideal))
+        return CGSize(width: width, height: height)
     }
 
     final class Coordinator: NSObject, UITextViewDelegate {
@@ -114,16 +114,46 @@ final class GrowingTextView: UITextView {
     var keys: (ComposerKey) -> Bool = { _ in false }
     var shortcut: (ReplyShortcut) -> (() -> Void)? = { _ in nil }
     var files: (([IncomingFile]) -> Void)?
-    /// 粘贴从哪个剪贴板取：与复制写进的是同一个（`AppServices.pasteboard`）
+    /// 与复制写进的是同一个剪贴板（`AppServices.pasteboard`）。
     let pasteboard: UIPasteboard
-    /// 外部刚写进文字：之后的排版里滚到末尾，直到高度不再变。
     var revealsEnd = false { didSet { revealedHeight = nil } }
     private var revealedHeight: CGFloat?
 
-    /// 最大高度：同一字体下排满 `maxLines` 行中文量出来的高度（中文行比西文行高，首行与后续行也不一样），
-    /// 撑满时最后一行不被切一半；字号大到放不下时少排几行。
+    private var paragraph: NSParagraphStyle { typingAttributes[.paragraphStyle] as? NSParagraphStyle ?? .default }
+
+    func applyTypography(_ traits: UITraitCollection) {
+        let nextFont = Typography.readingFont(for: traits)
+        let nextParagraph = Typography.readingParagraph(for: traits)
+        guard font != nextFont || paragraph != nextParagraph else { return }
+        font = nextFont
+        placeholder.font = nextFont
+        let attributes: [NSAttributedString.Key: Any] = [.font: nextFont, .paragraphStyle: nextParagraph]
+        textStorage.addAttributes(attributes, range: NSRange(location: 0, length: textStorage.length))
+        typingAttributes.merge(attributes) { _, value in value }
+        setPrompt(placeholder.text ?? "")
+        heights.textChanged()
+        revealedHeight = nil
+        layOutAll()
+        invalidateIntrinsicContentSize()
+    }
+
+    func setPrompt(_ text: String) {
+        let content = NSAttributedString(string: text, attributes: [.font: font!, .paragraphStyle: paragraph])
+        guard placeholder.attributedText != content else { return }
+        placeholder.attributedText = content
+        setNeedsLayout()
+        invalidateIntrinsicContentSize()
+    }
+
+    private var placeholderInset: CGFloat { caretRect(for: beginningOfDocument).maxX + 1 }
+
+    private func promptSize(width: CGFloat) -> CGSize {
+        placeholder.sizeThatFits(CGSize(width: max(0, width - placeholderInset), height: .greatestFiniteMagnitude))
+    }
+
+    /// 排满 `maxLines` 行中文量出来的高度（中文行比西文行高，首行与后续行也不一样），撑满时最后一行不被切一半；字号大到放不下时少排几行。
     var maxHeight: CGFloat {
-        let rulerHeight = Self.rulerHeight(font: font ?? .preferredFont(forTextStyle: .body), lines: maxLines)
+        let rulerHeight = Self.rulerHeight(font: font!, paragraph: paragraph, lines: maxLines)
         // 大字号档位下 6 行会高过键盘上方放得下的空间（头部叠到文字上、最后一行被玻璃边切掉）：按整行数收到窗口高度的 3 成以内
         let pitch = rulerHeight / CGFloat(maxLines)
         let limit = (window?.bounds.height ?? .greatestFiniteMagnitude) * 0.3
@@ -131,37 +161,42 @@ final class GrowingTextView: UITextView {
         return lines == maxLines ? rulerHeight : ceil(pitch * CGFloat(lines))
     }
 
-    /// 量行高的那一个文字区，全部输入框共用：每个输入框各建一个是又一套 TextKit（打开回复框、随手记都要现建一次）。
-    private static let ruler: UITextView = {
-        let view = UITextView()
-        view.textContainerInset = .zero
-        view.textContainer.lineFragmentPadding = 0
-        return view
-    }()
-    private struct RulerKey: Hashable { var lines: Int; var size: CGFloat }
+    /// 每次未命中高度缓存时使用独立的原生排版状态；末尾空行还读取 font/typingAttributes，不能只替换 attributedText。
+    private static func measure(_ text: String, width: CGFloat, font: UIFont, paragraph: NSParagraphStyle) -> CGFloat {
+        let attributes: [NSAttributedString.Key: Any] = [.font: font, .paragraphStyle: paragraph]
+        let content = NSAttributedString(string: text, attributes: attributes)
+        // SwiftUI 会用无穷宽探尺寸；原生视图的几何只能是有限值，超过文字自然宽度也不会再少换一行。
+        let width = min(width, ceil(content.size().width))
+        let ruler = UITextView(frame: CGRect(x: 0, y: 0, width: width, height: 0))
+        ruler.textContainerInset = .zero
+        ruler.textContainer.lineFragmentPadding = 0
+        ruler.font = font
+        ruler.attributedText = content
+        ruler.typingAttributes = attributes
+        ruler.layoutIfNeeded()
+        return ruler.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude)).height
+    }
+    private struct RulerKey: Hashable { var lines: Int; var size: CGFloat; var spacing: CGFloat }
     private static var rulerHeights: [RulerKey: CGFloat] = [:]
 
-    static func rulerHeight(font: UIFont, lines: Int) -> CGFloat {
-        let key = RulerKey(lines: lines, size: font.pointSize)
+    static func rulerHeight(font: UIFont, paragraph: NSParagraphStyle, lines: Int) -> CGFloat {
+        let key = RulerKey(lines: lines, size: font.pointSize, spacing: paragraph.lineSpacing)
         if let height = rulerHeights[key] { return height }
-        ruler.font = font
-        ruler.text = Array(repeating: "国", count: lines).joined(separator: "\n")
-        let height = ruler.sizeThatFits(CGSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)).height
+        let height = measure(Array(repeating: "国", count: lines).joined(separator: "\n"), width: .greatestFiniteMagnitude, font: font, paragraph: paragraph)
         rulerHeights[key] = height
         return height
     }
 
-    /// 文字区在这个宽度下要多高：排出来的高度，最高 `maxHeight`（只排够上限的开头，量过的记着，见 `ComposerHeight`）。
     func fittingHeight(width: CGFloat) -> CGFloat {
-        heights.height(of: textStorage.string as NSString, width: width, em: font?.pointSize ?? 0, limit: maxHeight) { prefix in
-            Self.ruler.font = font
-            Self.ruler.text = prefix
-            return Self.ruler.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude)).height
+        if text.isEmpty {
+            return max(Self.rulerHeight(font: font!, paragraph: paragraph, lines: 1), promptSize(width: width).height)
+        }
+        return heights.height(of: textStorage.string as NSString, width: width, em: font?.pointSize ?? 0, limit: maxHeight) { prefix in
+            return Self.measure(prefix, width: width, font: font!, paragraph: paragraph)
         }
     }
     private var heights = ComposerHeight()
 
-    /// 文字变了（打字、外部写入）。宽度变过（形态动画、转屏）之后头一次打字时整篇重排一遍（见 `layOutAll`）。
     func textChanged() {
         heights.textChanged()
         if laidOutWidth != bounds.width { layOutAll() }
@@ -176,8 +211,6 @@ final class GrowingTextView: UITextView {
         setNeedsLayout()
     }
 
-    /// 剪贴板里有附件时"粘贴"收的是附件（交给 `files`，放进附件条），认法与卡片编辑器同一条（`PastedItem`）：
-    /// 纯文字的文字区本来不收文件，只有文件时连"粘贴"都不给。
     private var pastesFiles: Bool { files != nil && PastedItem.isFile(pasteboard.types.compactMap(UTType.init)) }
 
     override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
@@ -196,8 +229,8 @@ final class GrowingTextView: UITextView {
     init(pasteboard: UIPasteboard) {
         self.pasteboard = pasteboard
         super.init(frame: .zero, textContainer: nil)
-        placeholder.font = .preferredFont(forTextStyle: .body)
-        placeholder.adjustsFontForContentSizeCategory = true
+        applyTypography(traitCollection)
+        placeholder.numberOfLines = 0
         placeholder.isAccessibilityElement = false
         addSubview(placeholder)
     }
@@ -211,8 +244,8 @@ final class GrowingTextView: UITextView {
         }
         super.layoutSubviews()
         // 占位从光标右边起：光标画在第一个字上会压住它（系统输入框同样留出光标的宽度）
-        let caret = caretRect(for: beginningOfDocument).maxX + 1
-        placeholder.frame = CGRect(x: caret, y: 0, width: bounds.width - caret, height: placeholder.font.lineHeight)
+        let size = promptSize(width: bounds.width)
+        placeholder.frame = CGRect(x: placeholderInset, y: 0, width: max(0, bounds.width - placeholderInset), height: size.height)
         // 没撑满行数时没有可滚的：滚动条只在内容比框高出半行以上时开（尺寸为 0 的滚动条会作为"0页"滑块进读屏树）
         showsVerticalScrollIndicator = contentSize.height - bounds.height > (font?.lineHeight ?? 0) / 2
         // 外部写进文字后让末尾露出来：按末尾的位置滚，不按内容高度（高度只量了开头，见 `ComposerHeight`；文字区自己只排看得见的那段，

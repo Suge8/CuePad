@@ -2,9 +2,7 @@ import CueStore
 import Foundation
 import Observation
 
-/// 共用入口只分派布局；窄屏与宽屏的去处规则分别在 Workspace+Narrow、Workspace+Wide。
 extension Workspace {
-    /// 窄屏栈顶，宽屏主区（并排时是左半）；看得见哪些会话读 shownSessions。
     var top: Route { mainRoute }
 
     var currentProject: UUID? {
@@ -14,7 +12,6 @@ extension Workspace {
         }.first
     }
 
-    /// 一个窗口可见的会话：宽屏是主区开着的（并排时左、右），窄屏是推入的会话页；不重复。
     /// 只表达导航可见性；前后台、窗口遮挡与人在不在由 ViewerKeeper 处理。
     var shownSessions: [ViewerKeeper.Page] {
         let sessions: [SessionRoute]
@@ -61,13 +58,11 @@ extension Workspace {
         }
     }
 
-    /// 项目"⋯"里的"看这个项目的进展"（三端同）：项目范围设成它，去进展的看板。
     func showProgress(of project: UUID) {
         projectScope = project
         selectPane(.progress)
     }
 
-    /// 去 Cue 页一行旁注提到的那一处（醒来那几行、一轮的经过）：会话、任务（从点的地方长出气泡）或定时。
     func open(_ target: CueWakeHeader.Target) {
         switch target {
         case .session(let id, let sessionID): openSession(id, sessionID: sessionID)
@@ -76,7 +71,6 @@ extension Workspace {
         }
     }
 
-    /// 打开一条灵感或任务：任务在气泡里看（`openTask`）；灵感（挂在任务下的也一样）进编辑页（`showEditor`）。
     func open(_ card: Card) {
         if card.isTask { return openTask(card) }
         openTask = nil
@@ -96,14 +90,12 @@ extension Workspace {
         }
     }
 
-    /// 点提示条去它说的地方（两端的提示共用）：会话经 `openSession`（同其他打开会话的入口先读好这一页），其余经 `show`。
     func go(to link: Route) {
         notice = nil
         guard case .session(let route) = link else { return show(link) }
         openSession(route.id, sessionID: route.sessionID)
     }
 
-    /// 去"下一步"：打开会话，或把任务的正文交给 Agent（`handOff`）。
     func follow(_ next: TaskNext) {
         switch next {
         case .agent(_, let session): openSession(session.id, sessionID: session.sessionID)
@@ -118,19 +110,16 @@ extension Workspace {
         show(.project(projects[number - 1].id))
     }
 
-    /// ⌘N（Mac 的"文件 › 记一条灵感"）：在当前项目里新记一条灵感并打开它；不在项目里时记进默认项目。
     func newCard() {
         let project = currentProject ?? Project.defaultID
         attempt { self.open(try await self.createCard(in: project)) }
     }
 
-    /// 去 Cue 页并让"对 Cue 说"拿到焦点（随手记小组件、手机的 ⌘⇧N）：要做事、随手记都从这里说。
     func speakToCue() {
         show(.cue)
         cueFocusPending = true
     }
 
-    /// 小组件、分享扩展、实时活动的链接与点开的通知（`AppServices.pendingDeepLink`）：对 Cue 说、项目、卡片、Cue 页、会话；UU 远程绑定完、远控失败的回跳。
     func open(_ link: DeepLink) {
         switch link {
         case .speak: speakToCue()
@@ -145,7 +134,7 @@ extension Workspace {
         }
     }
 
-    /// 取走待打开的链接，直到所在任务取消（`follow`）：iPad 开着几个窗口时谁先取到谁打开。
+    /// iPad 开着几个窗口时谁先取到谁打开。
     func openLinks() async {
         for await _ in Observations({ self.services.pendingDeepLink }) {
             if let link = services.consumeDeepLink() { open(link) }
@@ -153,13 +142,11 @@ extension Workspace {
     }
 }
 
-/// 新建（`project` 为 nil）或编辑哪个项目的表单（`Workspace.projectForm`）。
 struct ProjectFormRequest: Identifiable {
     let id = UUID()
     var project: Project?
 }
 
-/// 技能与规则页的两段（`Workspace.libraryPane`），先后即分段里的左右。
 enum LibraryPane: Int, CaseIterable, Comparable {
     case rules, skills
 

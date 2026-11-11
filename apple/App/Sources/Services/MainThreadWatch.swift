@@ -13,34 +13,33 @@ nonisolated struct FreezeNote: Codable, Equatable, Sendable {
     var device: String
     var os: String
 
-    /// 存档里的文件：外面包一层键，与 MetricKit 的包区分（`CrashReport.Kind`）。
+    /// 与 MetricKit 的包区分（`CrashReport.Kind`）。
     struct File: Codable {
         static let key = "cuepadFreeze"
         let cuepadFreeze: FreezeNote
     }
 }
 
-/// 看着主线程的事件循环：每轮醒来记下时刻、回去等事件时清掉；在忙时另一条队列每 `interval` 看一眼，同一轮忙过 `threshold`（1 秒）就记一条 `FreezeNote`。
-/// 主线程闲着时看守停着（不为它唤醒），醒来的那一轮再开。所在页与最近的动作由界面在变时报来（`page`、`action`），卡住时看守直接读，不经主线程。
+/// 同一轮忙过 `threshold`（1 秒）才记。主线程闲着时看守停着（不为它唤醒）；所在页与最近的动作由界面在变时报来，卡住时看守直接读，不经主线程。
 /// 处处都开（调试实例也记：`xc.sh explore` 靠它发现卡住后取样）；只有 MetricKit 订阅限在用户的设备上（`Diagnostics.start`）。
 nonisolated final class MainThreadWatch: Sendable {
     static let shared = MainThreadWatch()
     static let threshold: UInt64 = 1_000_000_000
     static let interval = DispatchTimeInterval.milliseconds(500)
-    /// 留下最近这么多个动作。
     static let recent = 8
 
     private struct State {
         /// 这一轮醒来的时刻（`DispatchTime` 的纳秒）；0 是在等事件。
         var entered: UInt64 = 0
         var watching = false
+        /// 看守上一次醒来的时刻（同一个钟）。
+        var checked: UInt64 = 0
         var page = "?"
         var actions: [String] = []
-        /// 正在记的那一次卡住：哪一轮、写下的那条。
         var open: (entered: UInt64, note: FreezeNote)?
         var archive: DiagnosticArchive?
         var meta = (version: "", device: "", os: "")
-        var recorded: (@Sendable () -> Void)?
+        var recorded: (@Sendable (FreezeNote) -> Void)?
     }
 
     private let state = Mutex(State())
@@ -53,13 +52,13 @@ nonisolated final class MainThreadWatch: Sendable {
         timer.setEventHandler { [unowned self] in check() }
     }
 
-    /// 开始看（幂等）。记下的条目存进 `archive`，存下后在主线程调 `recorded`。
+    /// 幂等。记下的条目存进 `archive`，存下后在主线程调 `recorded`（卡住时一次，恢复了带上时长再一次）。
     @MainActor
-    func start(archive: DiagnosticArchive, version: String, recorded: @escaping @MainActor @Sendable () -> Void) {
+    func start(archive: DiagnosticArchive, version: String, recorded: @escaping @MainActor @Sendable (FreezeNote) -> Void) {
         let started = state.withLock { state in
             defer { state.archive = archive }
             state.meta = (version, Self.device, ProcessInfo.processInfo.operatingSystemVersionString)
-            state.recorded = { Task { @MainActor in recorded() } }
+            state.recorded = { note in Task { @MainActor in recorded(note) } }
             return state.archive != nil
         }
         guard !started else { return }
@@ -70,10 +69,8 @@ nonisolated final class MainThreadWatch: Sendable {
         turn(awake: true)
     }
 
-    /// 界面换了页（`Workspace.navigation`）。
     func page(_ page: String) { state.withLock { $0.page = page } }
 
-    /// 一个动作（开合面板、浮窗，前后台）。
     func action(_ action: String) {
         let stamp = Date.now.formatted(Date.ISO8601FormatStyle(timeZone: .current).time(includingFractionalSeconds: false))
         state.withLock { state in
@@ -88,17 +85,30 @@ nonisolated final class MainThreadWatch: Sendable {
             state.entered = awake ? DispatchTime.now().uptimeNanoseconds : 0
             guard awake, !state.watching else { return }
             state.watching = true
+            state.checked = state.entered
             timer.resume()
         }
     }
 
-    /// 看守那一下：主线程在等事件就停下；同一轮忙过阈值记一条，换了一轮（恢复了）补上时长。
     private func check() {
-        let (write, archive, recorded) = state.withLock { state -> (FreezeNote?, DiagnosticArchive?, (@Sendable () -> Void)?) in
+        let (write, archive, recorded) = state.withLock { state -> (FreezeNote?, DiagnosticArchive?, (@Sendable (FreezeNote) -> Void)?) in
             // 在锁里取时刻：锁外取的话主线程可能在取完之后才记下这一轮的醒来，醒来比"此刻"还晚
             let now = DispatchTime.now().uptimeNanoseconds
             var write: FreezeNote?
-            if let open = state.open, open.entered != state.entered {
+            // 看守隔了这么久才醒：这段时间进程没在跑（iOS 挂起了它），不算主线程忙。主线程常在结束后台任务的那一轮里就被挂起，
+            // 恢复后那一轮才走完；不扣掉就记成一次卡住，时长是整段挂起（实机记过 181 秒）。挂起前已在卡的记到挂起为止，还没走完的这一轮从此刻重新计。
+            let suspended = now - state.checked > Self.threshold
+            let lastRan = state.checked
+            state.checked = now
+            if suspended {
+                if let open = state.open {
+                    var note = open.note
+                    note.seconds = Double(lastRan - open.entered) / 1e9
+                    write = note
+                    state.open = nil
+                }
+                if state.entered != 0 { state.entered = now }
+            } else if let open = state.open, open.entered != state.entered {
                 var note = open.note
                 note.seconds = Double(now - open.entered) / 1e9
                 write = note
@@ -118,10 +128,12 @@ nonisolated final class MainThreadWatch: Sendable {
         }
         guard let write, let archive else { return }
         do { try archive.store(write) } catch { AppServices.log.error("卡住记录没存下：\(String(describing: error))") }
-        recorded?()
+        recorded?(write)
     }
 
-    private static var device: String {
+    /// 型号代号（iPhone18,1、Mac16,11）。模拟器里 uname 给的是主机的 arm64，用它模拟的型号。
+    static var device: String {
+        if let simulated = ProcessInfo.processInfo.environment["SIMULATOR_MODEL_IDENTIFIER"] { return simulated }
         var info = utsname()
         uname(&info)
         return withUnsafeBytes(of: &info.machine) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) }

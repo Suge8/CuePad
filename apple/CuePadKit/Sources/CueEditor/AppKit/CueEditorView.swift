@@ -1,7 +1,6 @@
 #if canImport(AppKit)
 import AppKit
 
-/// 可直接放进窗口或 SwiftUI（NSViewRepresentable）的编辑器：滚动视图 + `CueTextView`。
 @MainActor
 public final class CueEditorView: NSScrollView {
     public let textView: CueTextView

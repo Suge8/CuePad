@@ -1,7 +1,6 @@
 #if os(iOS)
 import SwiftUI
 
-/// 模态浮出（手机与 iPad）：居中的浮窗（`popup(isPresented:)`）与页里原地长开的面板（`GrowPanel`）。
 /// 点外面、Esc、读屏的退出手势怎么关，背后进不进读屏，只在这里一处（`ModalHost`、`ModalScrim`），窗口那一层（`panelHost`）挂一份：
 /// - 开着时铺一层接点按的底，盖在整窗上（会话条、提示横幅、iPad 的别的栏都在它下面）：手指一落在浮出外面就关，
 ///   那一下不落到下面（点外面是"关掉它"，不是点了下面那张卡）；收起那一下就撤（`transition(.identity)`），紧接着的点按照常落到下面。
@@ -13,12 +12,9 @@ import SwiftUI
 /// 抽屉里还会长开名牌，两个同时开着，这里一次只开一个、后开的顶掉先开的，并进来开名牌就会关掉抽屉。名牌开着时两层都在：点抽屉外先由这里接住、只收名牌；Esc 也只有这里一个（抽屉的那颗让位，`escapeTaken`）。
 @Observable
 final class ModalHost {
-    /// 开着的那一个：一个窗口一次只一个。
     private(set) var modal: Modal?
-    /// 页里原地长开的那块（`Modal.inPage`）此刻在窗口里的框：开合的每一帧都在变，单放一处，只有接点按的那一层读它。
     private(set) var hole: CGRect?
 
-    /// 开着一个：后开的顶掉先开的（先关它，同点在它外面）。页里长开的给它此刻的框。
     func cover(_ entry: Modal, hole: CGRect? = nil) {
         if let modal, modal.token != entry.token { modal.close() }
         MainThreadWatch.shared.action(entry.popup == nil ? "open panel" : "open popup")
@@ -40,29 +36,23 @@ final class ModalHost {
     struct Modal {
         let token: UUID
         let close: ClosePanel
-        /// 页里原地长开的面板（`GrowPanel`）：它在这一层下面，报来自己的框（`reshape`），那一块留给它自己接点按。
         var inPage = false
-        /// 居中的浮窗：画在这一层，背后压暗。
         var popup: Popup?
     }
 
     struct Popup {
-        /// 长出它的那颗钮在窗口里的框：从这里长出、收回这里。
         let source: CGRect
         let content: AnyView
     }
 }
 
 extension View {
-    /// 居中的浮窗（进展页的额度）：从这颗钮长出、落在窗口正中，背后压暗；同一块实底玻璃从钮的框长到浮窗的框，字按终点排好、玻璃长过三成才淡出来，
-    /// 不缩放字（有字的一块进出场不缩放，理由在 `Bubble.swift`）；收起原路缩回钮上。减弱动态效果时只淡。
-    /// 宽是窗口减两侧页边、最宽 `PopupLayer.widest`，高随内容（内容里不放滚动区，同 `GrowPanel`）。离开页面（`pageActive`）、钮走了都收起。
+    /// 同一块实底玻璃从钮的框长到浮窗的框，字按终点排好、玻璃长过三成才淡出来，不缩放字（有字的一块进出场不缩放，理由在 `Bubble.swift`）。
     func popup(isPresented: Binding<Bool>, @ViewBuilder content: @escaping () -> some View) -> some View {
         modifier(PopupSlot(isPresented: isPresented, panel: content))
     }
 }
 
-/// 窗口那一层（`panelHost`）挂的模态浮出：浮窗开着时背后整窗不进读屏，接点按的底与浮窗盖在整窗上。
 struct ModalLayers: ViewModifier {
     let host: ModalHost
 
@@ -95,7 +85,6 @@ private struct PopupSlot<Panel: View>: ViewModifier {
                 guard let host else { return }
                 guard open else {
                     host.uncover(token)
-                    // 关了：读屏的焦点回到这颗钮
                     if was { focused = true }
                     return
                 }
@@ -122,7 +111,6 @@ private struct PopupSlot<Panel: View>: ViewModifier {
     }
 }
 
-/// 浮窗那一层：浮窗在可用区（安全区里）正中，开合时从钮的框长出、缩回（\`PopupGrow\`）。
 struct PopupLayer: View {
     let modal: ModalHost.Modal?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -156,11 +144,9 @@ struct PopupLayer: View {
     }
 }
 
-/// 浮窗的玻璃从钮的框长到浮窗自己的框：\`progress\` 0 是钮、1 是浮窗。每一帧只改一块形状（\`GrowShape\`，不读几何、不排字）；
-/// 里面的字按终点排好、裁在这块形状里，玻璃长过三成才淡出来。不开时（\`progress\` 1）就是浮窗本身的那块玻璃：浮窗只经它画玻璃。
+/// 每一帧只改一块形状（`GrowShape`，不读几何、不排字）；里面的字按终点排好、裁在这块形状里，玻璃长过三成才淡出来。不开时（`progress` 1）就是浮窗本身的那块玻璃：浮窗只经它画玻璃。
 private struct PopupGrow: ViewModifier, Animatable {
     var progress: CGFloat
-    /// 钮的框，相对浮窗中心。
     let source: CGRect
 
     var animatableData: CGFloat {
@@ -182,11 +168,9 @@ private struct PopupGrow: ViewModifier, Animatable {
             .opacity(min(progress / Self.glassFrom, 1))
     }
 
-    /// 玻璃在这一点之前淡着：长出时一离开钮就是整块玻璃，收回时贴着钮淡掉。
     private static let glassFrom: CGFloat = 0.15
 }
 
-/// 从钮的框（相对中心给）到给的框之间、按 \`progress\` 插好的那一块圆角矩形：圆角从钮的半圆走到 \`Radius.sheet\`。
 nonisolated private struct GrowShape: Shape {
     var progress: CGFloat
     let source: CGRect
@@ -206,7 +190,6 @@ nonisolated private struct GrowShape: Shape {
     }
 }
 
-/// 模态浮出开着时铺在整窗上的那一层：接住浮出外面的每一下（关，那一下不落到下面），浮窗时背后压暗；外接键盘的 Esc 同关。
 struct ModalScrim: View {
     let modal: ModalHost.Modal?
     let hole: CGRect?
@@ -233,7 +216,6 @@ struct ModalScrim: View {
         .animation(Motion.fade, value: modal?.popup != nil)
     }
 
-    /// 整窗减去开着的那块：奇偶填充，洞里的点不算在形状里。
     nonisolated private struct Outside: Shape {
         let hole: CGRect?
 

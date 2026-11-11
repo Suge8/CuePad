@@ -2,7 +2,6 @@
 import SwiftUI
 import UIKit
 
-/// 搜索页的搜索框：页顶那一排中间的一块写字玻璃（`headerPiece`），有字时右端是系统的清除钮。
 /// `focusRequests` 每变一次（进入搜索页、再按 ⌘K）聚焦一次。
 struct SearchCapsule: View {
     @Binding var query: String

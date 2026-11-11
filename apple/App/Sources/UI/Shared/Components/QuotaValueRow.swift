@@ -1,7 +1,6 @@
 import CueStore
 import SwiftUI
 
-/// 没有明确周期的计量、余额与文本只显示提供方的读数，不参与匀速线与额度环；一行，同额度明细里的余额（名字与重置在左、读数在右）。
 struct QuotaValueRow: View {
     let value: QuotaDetails.Value
     @Environment(\.palette) private var palette

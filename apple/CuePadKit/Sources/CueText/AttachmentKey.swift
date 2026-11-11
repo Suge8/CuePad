@@ -15,10 +15,10 @@ public enum AttachmentKey {
 
     public static func make(hash: String, format: String) -> String { format.isEmpty ? hash : hash + "." + format }
 
-    /// 文件名对应的键：扩展名取文件名的（小写、只认字母数字，`reassigned` 里的换掉），没有或不合规为空。
+    /// 扩展名取文件名的；没有或不合规为空。
     public static func make(hash: String, name: String) -> String { make(hash: hash, format: format(ofName: name)) }
 
-    /// 文件名对应的系统类型（快速查看、图标、预览的种类都按它）：按键的扩展名认，系统认错的（`reassigned`）已换掉；没有扩展名为 nil。
+    /// 文件名对应的系统类型（快速查看、图标、预览的种类都按它）；没有扩展名为 nil。
     public static func type(ofName name: String) -> UTType? { type(ofFormat: format(ofName: name)) }
 
     static func type(ofFormat format: String) -> UTType? { format.isEmpty ? nil : UTType(filenameExtension: format) }

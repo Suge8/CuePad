@@ -2,8 +2,8 @@ import CueStore
 import Foundation
 
 extension AppServices {
-    /// 撤回一句说出去的话（重发或移除没能送达的话）：发给会话的，还没被 Mac 领取的才撤得回，明确未交出的失败按库里的当前状态撤回；
-    /// 对 Cue 说的，还没交给它的才撤得回。撤了立即把删除传上去，免得 Mac 先拉到它；撤不回时抛出原因。
+    /// 撤回一句说出去的话：发给会话的，还没被 Mac 领取才撤得回，明确未交出的失败按库里的当前状态撤回；
+    /// 对 Cue 说的，还没交给它才撤得回。撤了立即把删除传上去，免得 Mac 先拉到它；撤不回时抛出原因。
     func withdraw(_ said: Said) async throws {
         guard said.trip(at: speech).unconfirmedReason == nil else { throw SendError.alreadyHanded }
         switch said {
@@ -12,7 +12,7 @@ extension AppServices {
         case .request(let request):
             if try await !store.withdrawDelivery(request.id, locallyOn: speech.localHost) {
                 guard request.status == .known(.preparing) else { throw SendError.alreadyHanded }
-                try await withdrawRemotely(request.id)
+                try await withdrawRemotely(request.id, on: request.hostID)
                 try await store.deleteDelivery(request.id)
             }
         case .cue(let message, _):
@@ -21,10 +21,12 @@ extension AppServices {
         Task { await upload(said.id, deleted: true) }
     }
 
-    private func withdrawRemotely(_ id: UUID) async throws {
+    private func withdrawRemotely(_ id: UUID, on host: String) async throws {
         let deadline = timing.now().addingTimeInterval(Speech.receiptLimit)
-        guard let withdrawal = try await store.requestDeliveryWithdrawal(id) else { throw SendError.alreadyHanded }
-        let request = uploaded(withdrawal)
+        let request = try await request(on: host) {
+            guard let withdrawal = try await store.requestDeliveryWithdrawal(id) else { throw SendError.alreadyHanded }
+            return withdrawal
+        }
         let result = try await withThrowingTaskGroup(of: DeliveryRequest.self) { [store, timing] group in
             group.addTask { try await store.outcome(of: request) }
             group.addTask {
@@ -37,91 +39,103 @@ extension AppServices {
         guard result.status == .known(.succeeded) else { throw SendError.alreadyHanded }
     }
 
-    /// 投送请求（发送、作答、配置、结束、停止、重跑、开会话、绑定、补对话）都走同一条投送通道，Mac 本机也走它、由执行器交给扩展；
-    /// 写出后立即上传（不等它完成），结果用 `CueStore.outcome(of:)` 等。
+    /// 你要一台 Mac 做的事（说话、停下、结束、开会话、回答、改设置……）都经这里写成请求并立即上传。
+    /// 那台说了离开、还没回来（`CueStore.macKnownOff`）时不写、抛 `SendError.macOff`：写了没人领，到派发期限才作废，这之前界面只能说"已发出"。
+    /// 任务收尾顺带的结束（`CueStore.endUnusedSessions`）不经这里：那是库里推出来的，界面不显示它在路上，那台回来同步到这件事收尾时自己也会写。
+    func request(on host: String, _ write: () async throws -> DeliveryRequest) async throws -> DeliveryRequest {
+        try await requireAwake(host)
+        return uploaded(try await write())
+    }
+
+    /// 手里那条"离开"可能已经过时（它回来了，本机刚回前台还没拉到）：说它没开之前先拉一次再看。拉不通就是同步不通，说不准，照常排着。
+    func requireAwake(_ host: String) async throws {
+        guard try await store.macKnownOff(host, at: speech) != nil else { return }
+        await syncNow()
+        if let mac = try await store.macKnownOff(host, at: speech) { throw SendError.macOff(mac) }
+    }
+
+    /// Mac 本机也走投送通道、由执行器交给扩展；写出后立即上传（不等它完成），结果用 `CueStore.outcome(of:)` 等。
     func uploaded(_ request: DeliveryRequest) -> DeliveryRequest {
         Task { await upload(request.id) }
         return request
     }
 
-    /// 马上传这几条（`SyncControlling.upload`，同一次写入写出的一起给）：手机写出投送请求、Mac 写回结果、Mac 写出带通知标志的会话状态后都调用。
-    /// 没有同步时什么也不做。
+    /// 马上传这几条，同一次写入写出的一起给。
     func upload(_ records: UUID..., deleted: Bool = false) async {
         await sync?.upload(records, deleted: deleted)
     }
 
-    /// 回答会话正在等的弹窗：写一条作答请求给会话所在的 Mac。
-    /// 问题不能从这里作答（没有标识或种类不认识）时抛 `SendError.unanswerable`。
-    func answer(_ value: PiAnswerValue, to session: PiSessionState) async throws -> DeliveryRequest {
+    /// 问题不能从这里作答时抛 `SendError.unanswerable`。
+    func answer(_ value: AnswerValue, to session: SessionState) async throws -> DeliveryRequest {
         guard let question = session.question, question.isAnswerable, let promptID = question.promptID else {
             throw SendError.unanswerable
         }
-        return uploaded(try await store.requestAnswer(
-            PiAnswer(promptID: promptID, value: value, question: question.text), to: session.target,
-            on: session.hostID))
+        return try await request(on: session.hostID) {
+            try await store.requestAnswer(Answer(promptID: promptID, value: value, question: question.text), to: session.target, on: session.hostID)
+        }
     }
 
-    /// 换会话的模型或思考强度：当前值与可选项读会话状态的 `model`、`thinking`、`models`。
-    func configure(_ config: PiConfig, for session: PiSessionState) async throws -> DeliveryRequest {
-        uploaded(try await store.requestConfig(config, to: session.target, on: session.hostID))
+    func configure(_ config: SessionConfig, for session: SessionState) async throws -> DeliveryRequest {
+        try await request(on: session.hostID) { try await store.requestConfig(config, to: session.target, on: session.hostID) }
     }
 
-    /// 结束会话：请会话所在的 Mac 让它的 Pi 进程正常退出。会话记录与对话都留着，之后再给它发消息会在后台恢复；已经结束的会话也算成功。
-    func end(_ session: PiSessionState) async throws -> DeliveryRequest {
-        uploaded(try await store.requestEnd(of: session.target, on: session.hostID))
+    /// 新名为空时抛 `CueStoreError.blankDeliveryContent`。
+    @discardableResult
+    func rename(_ session: SessionState, to name: String) async throws -> DeliveryRequest {
+        guard let name = SessionRename.clean(name) else { throw CueStoreError.blankDeliveryContent }
+        return try await configure(SessionConfig(name: name), for: session)
     }
 
-    /// 停止这一轮：请会话所在的 Mac 中止它正在跑的回合（相当于在 Pi 里按 Esc）。会话随后回到等你下一句（状态记录里是"完成"，被中止）；
-    /// 只停指挥官自己这一轮，子代理照常跑；已经结束或空闲的会话也算成功。界面只在会话 `state.isTurnRunning` 时给入口（等子代理时指挥官没有在跑的一轮）。
-    func stop(_ session: PiSessionState) async throws -> DeliveryRequest {
-        uploaded(try await store.requestStop(of: session.target, on: session.hostID))
+    /// 会话记录与对话都留着，之后再给它发消息会在后台恢复；已经结束的会话也算成功。
+    func end(_ session: SessionState) async throws -> DeliveryRequest {
+        try await request(on: session.hostID) { try await store.requestEnd(of: session.target, on: session.hostID) }
     }
 
-    /// 接着出错的那一轮重试（`PiSessionState.canRetry`）：请会话所在的 Mac 让扩展重试，不补发用户消息；
-    /// 还在路上时再点不会再发一条（Store 去重）。会话的显示状态按这条请求当场是"在路上"（`PiDelivery`）。
-    func retry(_ session: PiSessionState) async throws -> DeliveryRequest {
-        uploaded(try await store.requestRetry(of: session.target, on: session.hostID))
+    /// 只停指挥官自己这一轮，子代理照常跑；已经结束或空闲的会话也算成功。
+    func stop(_ session: SessionState) async throws -> DeliveryRequest {
+        try await request(on: session.hostID) { try await store.requestStop(of: session.target, on: session.hostID) }
     }
 
-    /// 请 `host` 那台 Mac 在项目的文件夹里用 `agent` 开新会话（`model`、`thinking` 为 nil 是这家的默认），`prompt` 作开场。
-    /// `title` 是给人看的目标名（会话名或项目名）。这里生成这一次的认领标识：同步记录上出现带同一个 `launchToken` 的会话就是它（`SessionLaunch`）。
-    /// `card`：从这条灵感或任务开的（开好后它关联到新会话、会话名按它定，见 `CueStore.requestLaunch`、`CueStore.claimLaunchedCards`）。
+    /// 不补发用户消息；还在路上时再点不会再发一条（Store 去重）。
+    func retry(_ session: SessionState) async throws -> DeliveryRequest {
+        try await request(on: session.hostID) { try await store.requestRetry(of: session.target, on: session.hostID) }
+    }
+
+    /// `model`、`thinking` 为 nil 是这家的默认。这里生成这一次的认领标识：同步记录上出现带同一个 `launchToken` 的会话就是它（`SessionLaunch`）。
+    /// `card`：从这条灵感或任务开的，开好后它关联到新会话、会话名按它定。
     /// `intent`：首次、安全替换或确认后重复，由 Store 在事务里按任务已有请求核对。
     func launchSession(
         in project: UUID, prompt: String?, title: String, on host: String, card: UUID?, agent: AgentKind,
-        model: PiModelKey? = nil, thinking: PiThinkingLevel? = nil, fast: Bool = false, intent: SessionLaunchIntent = .new
+        model: ModelKey? = nil, thinking: ThinkingLevel? = nil, fast: Bool = false, intent: SessionLaunchIntent = .new
     ) async throws -> SessionLaunch {
         let token = UUID().uuidString
-        let request = uploaded(try await store.requestLaunch(
-            PiLaunch(project: project, prompt: prompt, token: token, agent: agent, model: model, thinking: thinking, fast: fast),
-            title: title, on: host, card: card, intent: intent))
+        let request = try await request(on: host) {
+            try await store.requestLaunch(
+                LaunchRequest(project: project, prompt: prompt, token: token, agent: agent, model: model, thinking: thinking, fast: fast),
+                title: title, on: host, card: card, intent: intent)
+        }
         if case .replacing(let previous) = intent { Task { await upload(previous, deleted: true) } }
         return SessionLaunch(request: request.id, token: token)
     }
 
-    /// 请 `host` 那台 Mac 给项目绑定文件夹（`PiBind.folder` 为 nil 是解除；手机没有完整路径，由那台 Mac 解析并写本机的目录绑定）；
-    /// 绑好后目录绑定记录随同步回来。
-    func requestBind(_ bind: PiBind, title: String, on host: String) async throws -> DeliveryRequest {
-        uploaded(try await store.requestBind(bind, title: title, on: host))
+    /// `BindRequest.folder` 为 nil 是解除；手机没有完整路径，由那台 Mac 解析并写本机的目录绑定。
+    func requestBind(_ bind: BindRequest, title: String, on host: String) async throws -> DeliveryRequest {
+        try await request(on: host) { try await store.requestBind(bind, title: title, on: host) }
     }
 
-    /// 请 `host` 那台 Mac 整理技能与规则（`Workspace.tidy`）。
     func requestTidy(_ orders: [TidyOrder], on host: String) async throws -> DeliveryRequest {
-        uploaded(try await store.requestTidy(orders, on: host))
+        try await request(on: host) { try await store.requestTidy(orders, on: host) }
     }
 
-    /// 请 `host` 那台 Mac 改一份技能或规则文件（`Workspace.saveFile`）。
     func requestLibraryEdit(_ edit: LibraryEdit, title: String, on host: String) async throws -> DeliveryRequest {
-        uploaded(try await store.requestLibraryEdit(edit, title: title, on: host))
+        try await request(on: host) { try await store.requestLibraryEdit(edit, title: title, on: host) }
     }
 
-    /// 请会话所在的 Mac 把这个会话的对话补写进来（7 天前活跃过、还没有对话的会话打开时调用）。
-    func requestTranscript(of session: PiSessionState) async throws -> DeliveryRequest {
-        uploaded(try await store.requestTranscript(of: session))
+    func requestTranscript(of session: SessionState) async throws -> DeliveryRequest {
+        try await request(on: session.hostID) { try await store.requestTranscript(of: session) }
     }
 }
 
-nonisolated extension PiSessionState {
-    /// 投送请求里指这个会话的目标（`ref` 是 Pi 自己的会话 id）。
+nonisolated extension SessionState {
     var target: SendTarget { SendTarget(kind: .piSession, name: title, ref: sessionID) }
 }

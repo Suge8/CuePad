@@ -1,14 +1,9 @@
 import SwiftUI
 
-/// 对话一段一段排（会话页 `PiConversation` 与 Cue 页共用，放在对话那一列 `ChatStack` 里，各段与列里别的行同一层）：排 `window` 那么多条到最新，一段约 `size` 条；
-/// 上面还有更早的时最上面一行"更早的 N 条"（`EarlierRow`）。
-/// 段界只看条目自己，不看它排第几：id 的散列落在 `size` 分之一上的那条起一段，连着 `2 × size` 条没有这样的段界时补一处（从上一处段界数起）。
-/// 所以对话怎么变都只动挨着变化的那一段：新的一条长在最新那段、上面再排开只是最上面那段变长或多出几段、最早的掉出读的范围
-/// （Cue 页只读最近 `CueThread.limit` 条，来一句新的最早那条就掉出去）、中间回来一条（答完的拍板），别的段条目不变。
+/// 段界只看条目自己，不看它排第几：所以对话怎么变都只动挨着变化的那一段（新的一条长在最新那段、上面再排开只是最上面那段变长或多出几段、最早的掉出读的范围、中间回来一条，别的段条目不变）。
 /// 按位置切的话最早那条一掉每段都往前挪一条，离屏空白按旧的高排，几十段的差加起来能有几屏，贴着最新时可见区落在内容外、整屏空白。
 /// 段由 `segment` 排，交出来的要只按内容比较（`equatable()`）：没变的段不重算也不重排，系统直接用上次量好的尺寸。
 ///
-/// 屏上的段、最新一段（还会长）、要跳去的那条所在的段（刻度滑条、Cue 页的第一条新消息），连同离它们不到 `spare` 段的，还有没量过或量过之后条目变了的段排真的：
 /// 最新那头与要跳去的地方一直是真的，回到最新、跳过去落下的那一帧不露空白，不用等"到了屏上"的回报。
 /// 哪几段在屏上、量过的段多高都出自排版的记录（`ChatAnchor`，列与段排的时候记下，滚动区每次读数按可见区算出在屏上的段），不给每段挂几何读数，
 /// 也不按系统的滚进滚出通知（`onScrollVisibilityChange`）：那个通知管的是在不在屏幕上，页一被盖住（回到列表、推入别的页）就报全都不在，
@@ -29,7 +24,6 @@ struct ChatSegments<Item: Identifiable, Segment: View>: View where Item.ID == UU
     @Environment(\.chatAnchor) private var anchor
     @Environment(\.chatOnScreen) private var onScreen
 
-    /// 一段：段首那一条、在 `items` 里的范围、从上往下第几段。
     private struct Run: Identifiable {
         let id: Item.ID
         let range: Range<Int>
@@ -67,9 +61,7 @@ struct ChatSegments<Item: Identifiable, Segment: View>: View where Item.ID == UU
     }
 }
 
-/// 排开的最上面一行：还有更早的对话（居中的标记）。往上翻快到这里时会自动再排开一段（`ChatFollow.nearOldest`），点它（读屏）也能排开。
 struct EarlierRow: View {
-    /// 点一下再排开几条。
     let count: Int
     let action: () -> Void
 

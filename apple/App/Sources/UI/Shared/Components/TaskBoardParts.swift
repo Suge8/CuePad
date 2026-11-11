@@ -1,27 +1,16 @@
 import CueStore
 import SwiftUI
 
-/// 看板的一列（`TaskBoard`；Mac 与宽屏 iPad 四列并排；手机转成一行，四行竖着排，`PhoneBoard`）：身后不铺底（`BoardLane`，拖进来时一层选中底），一件一张卡——
-/// 待办、推进中、已完成是任务卡（`BoardTaskCard`）、没绑任务的会话卡（`BoardSessionCard`），等你是一件一张的卡（`BoardWaitCard`，拍板在前、待回复在后），都在懒加载栈里（列可能很长，只建看得见的）。
-/// 推进中置顶的在最前，其余按档排（要你管 → 在跑 → 歇着，`Workspace.byAttention`），档与档之间多空一截；在跑的那一档只有前 `BoardLine.maxMoving` 张的线在动，
-/// 各卡线上说过的话由列一次读好（`SaidReading`）。
-/// 看全部项目时卡上标题前一个项目小图形。点击去处：待办、已完成的卡开任务气泡；推进中的任务卡进此刻干活的会话（没有会话的开气泡），会话卡进会话；
-/// 等你的卡只看不答：拍板点了去 Cue 页那一问（会话在问的进会话），待回复进会话。已完成卡尾的成果图点开全屏看（这一列挂一个 `previewPresenter`）。
-/// 拖放：行拖到推进中是开始（同"开始"：Mac 交给 Agent，手机浮起发给 Agent 的输入框）、拖到已完成是做完（同点完成圈，还有没完成的子任务、
-/// Agent 还在做时先问一句，`TaskCheck`）；待办里拖到一行前面是排序（`TaskBoard.move`），拖进来不改状态。不归没做完的事的会话卡只接拖到已完成：
-/// 当场给它建任务、完成（`Workspace.complete`；它本来就在推进中，拖到待办按列的投影会弹回来，所以不接）。别的拖法不接。
-/// 已完成列末尾是"更早做完的 N"：原地展开（它们没进归档，跳去归档页看到的是别的），展开后旁边是"全部归档"。
+/// 不归没做完的事的会话卡只接拖到已完成：它本来就在推进中，拖到待办按列的投影会弹回来，所以不接。
+/// 已完成列末尾的"更早做完的 N"原地展开：它们没进归档，跳去归档页看到的是别的。
 struct BoardColumn: View {
     let column: TaskBoard.Column
-    /// 按项目范围筛过的看板。
     let board: TaskBoard
-    /// 待办顶上浮出添加任务那一行（"+ 新任务"）；新任务落在 `newTaskProject`。
     @Binding var adding: Bool
     let newTaskProject: UUID?
     /// 已完成列末尾"更早做完的"展开着：四列并排时由 `BoardColumns` 持有（它展开了已完成就不是空列，列宽跟着变）；不给时这一列自己记（手机的一行）。
     var earlier: Binding<Bool>?
     #if os(iOS)
-    /// 手机竖版看板的一行（`PhoneBoard`）：排成横着滑的一行（`BoardRowLane`）；否则是一列、列头浮在顶上（Mac、宽屏 iPad）。
     var row = false
     #endif
     @Environment(Workspace.self) private var workspace
@@ -31,10 +20,8 @@ struct BoardColumn: View {
     @Environment(\.cardDrags) private var drags
     @State private var ownEarlier = DebugHooks.preset.showsDone
     @State private var targeted = false
-    /// 拖到已完成的那件与它这一下（同点完成圈，`taskCheck`）。
     @State private var finishing: TaskBoard.Item?
     @State private var check = TaskCheck()
-    /// 点开的成果图（已完成列）。
     @State private var opened: PreviewOpening?
 
     var body: some View {
@@ -49,7 +36,6 @@ struct BoardColumn: View {
             .zIndex(moves?.lands(in: board.flights(column)) == true ? 1 : 0)
     }
 
-    /// 推进中这一列的线要的"最近说过的话"（`SaidReading`）。
     @ViewBuilder private var fed: some View {
         if column == .advancing {
             let sessions = board.advancing.compactMap(\.agent?.state.sessionID).sorted()
@@ -75,7 +61,7 @@ struct BoardColumn: View {
         #endif
     }
 
-    /// 列头浮在卡上，卡从它后面滚过，不在它下沿裁掉（docs/layout.md 沉浸式的栏）：都是一块写字玻璃（Mac 上是 `boardTopRow`）。
+    /// 列头浮在卡上，卡从它后面滚过，不在它下沿裁掉（docs/layout.md「栏头与页顶」）。
     private var columnLane: some View {
         #if os(macOS)
         ScrollView { cards }
@@ -105,10 +91,8 @@ struct BoardColumn: View {
     /// 打开添加任务时待办回到开头（行滑到首格，列滚回顶）：添加那一行在待办最前，滚过的列要把它带进视野。
     private var rewind: UUID? { adding && column == .todo ? board.todo.first?.id : nil }
 
-    /// 更早做完的展开着没有（给了 `earlier` 读写它，否则这一列自己那一份）。
     private var showsEarlier: Binding<Bool> { earlier ?? $ownEarlier }
 
-    /// 拖着卡停在这一列上：只在有一张卡正被拖着时算（`CardDrags`），拖完不留着底。
     private var lit: Bool { targeted && drags?.current != nil }
 
     private var isRow: Bool {
@@ -128,7 +112,6 @@ struct BoardColumn: View {
     @ViewBuilder private var content: some View {
         switch column {
         case .todo:
-            // 手机竖版看板里添加那一行横贯在行上（`BoardRowLane.above`），不进格子
             if adding, !isRow {
                 newTask.transition(.opacity)
             }
@@ -178,7 +161,6 @@ struct BoardColumn: View {
             .benchSpot(item.id)
     }
 
-    /// 卡上的项目小图形：只看一个项目时不画（范围已经说了）。
     private func glyph(_ project: Project?) -> Project? { workspace.scopedProject == nil ? project : nil }
 
     private var newTask: some View {
@@ -191,7 +173,6 @@ struct BoardColumn: View {
             .paper(cornerRadius: TaskMetrics.cardRadius)
     }
 
-    /// 空列的占位：一句话在里面居中折行。
     private func empty(_ text: LocalizedStringResource) -> some View {
         Text(text).font(Typography.secondary).foregroundStyle(palette.ink3).multilineTextAlignment(.center)
             .padding(.horizontal, BoardCardMetrics.inset)
@@ -214,7 +195,6 @@ struct BoardColumn: View {
             .accessibilityValue(showsEarlier.wrappedValue ? "已展开" : "已折叠")
             Spacer(minLength: 0)
             if showsEarlier.wrappedValue {
-                // 做完的一键收走：归档后不占列表，照样搜得到
                 Button { workspace.attempt { try await workspace.archiveCompletedTasks() } } label: {
                     Text("全部归档").frame(minHeight: TaskMetrics.chipTarget).contentShape(.rect)
                 }
@@ -224,11 +204,8 @@ struct BoardColumn: View {
         }
         .font(Typography.meta).foregroundStyle(palette.ink3)
         .padding(.horizontal, Spacing.tight)
-        // 手机一行里它占一格：与旁边的空格一样高、字在中间
         .frame(maxHeight: isRow ? .infinity : nil)
     }
-
-    // MARK: 拖放
 
     private func drop(_ id: UUID, before target: UUID?) {
         guard let item = board.item(id) else { return }
@@ -246,16 +223,14 @@ struct BoardColumn: View {
         }
     }
 
-    /// 会话卡（推进中、等你里没归没做完的事的）拖到已完成（别的列不接）：同菜单里的完成（`Workspace.finish`，在做或在等你时先问）。
     private func drop(session id: String) {
-        let loose = board.advancing.compactMap(\.loose) + board.held.filter { $0.item == nil }.map { PiSessionListItem(state: $0.session) }
+        let loose = board.advancing.compactMap(\.loose) + board.held.filter { $0.item == nil }.map { SessionListItem(state: $0.session) }
         guard column == .done, let agent = loose.first(where: { $0.state.sessionID == id }) else { return }
         workspace.attempt { try await workspace.finish(agent) }
     }
 
     private func start(_ task: Card) { workspace.handOff(task) }
 
-    /// 同点完成圈（`Workspace.tap`，确认、停留与写入同 `taskCheck`）。
     private func finish(_ item: TaskBoard.Item) {
         let busy = workspace.next(for: item, shown: workspace.pulse(of: item.agent).shown)?.busySession
         finishing = item
@@ -265,7 +240,6 @@ struct BoardColumn: View {
 }
 
 extension TaskBoard {
-    /// 看板上的这件任务（在哪一列都算）。
     func item(_ id: UUID) -> Item? {
         todo.first { $0.id == id } ?? advancing.lazy.compactMap(\.item).first { $0.id == id } ?? held.lazy.compactMap(\.item).first { $0.id == id }
             ?? done.first { $0.id == id } ?? earlier.first { $0.id == id }
@@ -296,7 +270,6 @@ private struct LaneAnchor: ViewModifier {
     }
 }
 
-/// 已完成列点开的成果图（`BoardShot`）：一页只这一列挂全屏预览。
 private struct ShotPresenter: ViewModifier {
     let column: TaskBoard.Column
     @Binding var opened: PreviewOpening?
@@ -306,7 +279,7 @@ private struct ShotPresenter: ViewModifier {
     }
 }
 
-/// 读推进中一列各会话最近说的几句，交给列里的卡（`boardSaid`）：一列一次读，会话换了才重新订阅，读到的没变不送到界面。
+/// 一列一次读，会话换了才重新订阅，读到的没变不送到界面。
 private struct SaidReading: ViewModifier {
     let sessions: [String]
     @State private var said: [String: [Date]]?
@@ -319,8 +292,6 @@ private struct SaidReading: ViewModifier {
     }
 }
 
-/// 推进中这一列从上到下的一格：一张卡（`moves`：线可以动，只给在跑那一档的前几张，`BoardLine.maxMoving`），或档与档之间的空。
-/// 置顶的几档连成一块，不在中间空开。
 private enum AdvancingSlot: Identifiable {
     case gap(pinned: Bool, BoardPulse.Tier)
     case work(TaskBoard.Work, moves: Bool)

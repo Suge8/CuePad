@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 # Cue 的替身大脑（配 Debug 启动参数 -CuePadCueBrain，运行时选 Pi）：说 Pi 的 RPC，只认 get_state 与 prompt，其余一律回成功。
-# 每次 prompt 开一轮，等 CUE_STUB_DELAY 秒（默认 0）说一句"知道了。"再歇下；正在一轮里收到的话插进这一轮，不另开（同 Pi 的 steer）。
+# 每次 prompt 开一轮，等 CUE_STUB_DELAY 秒（默认 0）说一句 CUE_STUB_REPLY（默认"知道了。"）再歇下；正在一轮里收到的话插进这一轮，不另开（同 Pi 的 steer）。
 # 给了 CUE_STUB_LOG=<文件> 时把每次交来的话记成一行 JSON（时刻与原文），比对叫醒次数与信封内容用。
 import json, os, sys, threading, time
 
 log, delay = os.environ.get("CUE_STUB_LOG"), float(os.environ.get("CUE_STUB_DELAY", "0"))
+answer = os.environ.get("CUE_STUB_REPLY", "知道了。")
 lock, busy = threading.Lock(), False
 model = {"provider": "fake", "id": "echo", "name": "Echo", "input": ["text"], "contextWindow": 100000}
 
@@ -18,7 +19,7 @@ def out(message):
 def turn():
     global busy
     time.sleep(delay)
-    reply = {"role": "assistant", "content": [{"type": "text", "text": "知道了。"}], "stopReason": "stop",
+    reply = {"role": "assistant", "content": [{"type": "text", "text": answer}], "stopReason": "stop",
              "usage": {"input": 1000, "cacheRead": 0, "cacheWrite": 0}}
     out({"type": "message_start", "message": {"role": "assistant", "content": []}})
     out({"type": "message_end", "message": reply})

@@ -15,12 +15,11 @@ enum PerfLibrary {
     static let projectCount = 50
     static let cardCount = 5000
     nonisolated static let imageCount = 300
-    static let piSessionCount = 200
+    static let sessionCount = 200
     static let bigProject = "大项目"
     private static let bigProjectCards = 1200
     private static let defaultCards = 300
     private static let boundProjects = 10
-    /// 带对话的历史会话（`perf-0`…）各有多少轮，长短悬殊。
     static let chatRounds = [3, 6, 10, 16, 24, 36, 50, 70, 100, 140, 200, 300]
     static var longestChat: String { "perf-\(chatRounds.count - 1)" }
 
@@ -40,7 +39,6 @@ enum PerfLibrary {
         groups.append(DemoLibrary.DemoProject(
             name: "", icon: .folder, color: "", pinned: false, directory: nil,
             cards: (0..<defaultCards).map { _ in card(&random, images: &imagePool, imageShare: 0.03) }))
-        // 用剩的图分给大项目最近的卡，保证 300 张都用上
         var big = groups[0]
         for (offset, hash) in imagePool.enumerated() where offset < big.cards.count {
             big.cards[offset].text += "\n\n" + CueFormat.imageMarkup(key: hash)
@@ -64,9 +62,9 @@ enum PerfLibrary {
             let name = targets[index % targets.count]
             try await store.recordSend(card.body, to: SendTarget(kind: .piSession, name: name), card: card.id)
         }
-        for index in 0..<piSessionCount {
+        for index in 0..<sessionCount {
             let cwd = index % 2 == 0 ? "\(home)Project/perf-\(index % boundProjects)" : "/Users/dev/work/repo-\(index)"
-            try await store.upsertPiSession(IndexedSession(
+            try await store.upsertSession(IndexedSession(
                 id: "perf-\(index)", path: "/tmp/perf-\(index).jsonl", cwd: cwd,
                 title: sentence(&random, chinese: index % 2 == 0, words: 3...9),
                 lastActivityAt: .now.addingTimeInterval(-Double(index) * 3_600)), host: "perf-mac")
@@ -121,9 +119,9 @@ enum PerfLibrary {
         }
     }
 
-    private static func tools(_ random: inout SeededRandom) -> PiChatMessage.Tools {
+    private static func tools(_ random: inout SeededRandom) -> ChatMessage.Tools {
         let edits = random.next(4), reads = random.next(6), commands = random.next(5)
-        var items: [PiChatMessage.Tools.Item] = []
+        var items: [ChatMessage.Tools.Item] = []
         for _ in 0..<edits { items.append(.init(kind: .edit, target: "src/module\(random.next(40)).swift", added: random.next(60), removed: random.next(20))) }
         for _ in 0..<reads { items.append(.init(kind: .read, target: "docs/note\(random.next(40)).md")) }
         for _ in 0..<commands { items.append(.init(kind: .command, target: "pnpm test --filter pkg\(random.next(9))")) }
@@ -139,7 +137,6 @@ enum PerfLibrary {
         if random.unit() < imageShare, let hash = images.popFirst() {
             lines.insert(CueFormat.imageMarkup(key: hash), at: 2)
         }
-        // 一年内，越近越密
         let days = 365 * pow(random.unit(), 2.2)
         return (days, lines.joined(separator: "\n"), random.unit() < 0.004)
     }
@@ -153,7 +150,7 @@ enum PerfLibrary {
         return text.prefix(1).uppercased() + text.dropFirst() + "."
     }
 
-    /// 300 张内容各不相同的大图（存储按内容去重），并行生成。
+    /// 内容各不相同：存储按内容去重，相同的图只算一张。
     nonisolated private static func storeImages(_ store: CueStore) throws -> [String] {
         let hashes = Mutex([String?](repeating: nil, count: imageCount))
         let failure = Mutex<(any Error)?>(nil)
@@ -169,7 +166,6 @@ enum PerfLibrary {
         return hashes.withLock { $0.compactMap { $0 } }
     }
 
-    /// 像照片的 4032×3024 JPEG：低分辨率噪声放大成柔和的色块，再叠几块渐变。
     nonisolated private static func photo(seed: UInt64) -> Data {
         var random = SeededRandom(seed: seed)
         let small = 252, smallHeight = 189

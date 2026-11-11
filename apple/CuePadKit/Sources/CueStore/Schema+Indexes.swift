@@ -26,10 +26,10 @@ extension Schema {
     CREATE INDEX piSessionStates_folder ON piSessionStates(hostID, folder, stateSince, sessionID, projectID)
       WHERE \(CueStore.hasFolder);
     """
-  /// 清理过期对话（`CueStore.prunePiMessages`，启动时一次）按会话取最后的时刻：只读索引，不逐条读消息正文（冷读约 190ms → 15ms）。
+  /// 清理过期对话（`CueStore.pruneMessages`，启动时一次）按会话取最后的时刻：只读索引，不逐条读消息正文（冷读约 190ms → 15ms）。
   static let transcriptAgeIndex = "CREATE INDEX piMessages_sessionID_at ON piMessages(sessionID, at, createdAt);"
-  /// 本机会话索引按 Agent 取、删（启动时对每家接入各一次）：表里存着检查点，整表扫一次约 35ms。表达式与查询同出 `CueStore.agentOf`。
-  static let agentIndex = "CREATE INDEX piSessions_agent ON piSessions(\(CueStore.agentOf));"
+  /// 本机会话索引按 Agent 取、删（启动时对每家接入各一次）：表里存着检查点，整表扫一次约 35ms。
+  static let agentIndex = "CREATE INDEX piSessions_agent ON piSessions(agent);"
   /// Cue 还开着的提问（首屏读、每次 Cue 的对话变化重读）：部分索引只收这几条，条件与查询同出 `CueStore.openQuestion`（不一样就用不上）。
   /// Cue 页读到的对话之前问、之后答的提问（`CueStore.cueQuestionsAnswered`，每次 Cue 的对话变化重读）：提问只占对话的一小部分。
   static let answeredIndex = "CREATE INDEX cueMessages_answered ON cueMessages(answeredAt) WHERE \(CueStore.answered);"
@@ -39,13 +39,13 @@ extension Schema {
   /// 待交给 Cue 的大脑的（`CueStore.cueMessagesToDeliver`，Cue 的对话每变一次都读）：部分索引只收这几条，条件同出 `CueStore.toDeliver`。
   /// 整表扫一次要读一千多条带正文的行。
   static let toDeliverIndex = "CREATE INDEX cueMessages_toDeliver ON cueMessages(createdAt) WHERE \(CueStore.toDeliver);"
-  /// 按状态取会话（结束的按项目各取最近几条、按项目计数，`CueStore.piSessionPage`，会话列表每次变化都读）：带上项目与 id 只读索引，
+  /// 按状态取会话（结束的按项目各取最近几条、按项目计数，`CueStore.sessionPage`，会话列表每次变化都读）：带上项目与 id 只读索引，
   /// 不回表读带问答长文的会话记录（真实库四千多条结束的，冷读从约一千五百页降到一百多页）。
   static let stateIndex = "CREATE INDEX piSessionStates_state ON piSessionStates(state, stateSince, projectID, id);"
   /// 开新会话的请求按认领标识对会话记录（认领、等认领、Cue 开出的会话，`CueStore.launchUnclaimed` 等）：没有它时每对一次都现建一份自动索引或整表扫，
   /// 真实库里启动时这几条占读库指令的大半。只有 CuePad 开的会话带标识。
   static let launchTokenIndex = "CREATE INDEX piSessionStates_launchToken ON piSessionStates(launchToken) WHERE launchToken IS NOT NULL;"
-  /// 这台 Mac 托管过的会话（`CueStore.hostedPiSessionIDs`，启动时没接入的每家各读一次、删索引时再读）：几千条记录里只有几十条，条件同出 `CueStore.hostedOrLaunched`。
+  /// 这台 Mac 托管过的会话（`CueStore.hostedSessionIDs`，启动时没接入的每家各读一次、删索引时再读）：几千条记录里只有几十条，条件同出 `CueStore.hostedOrLaunched`。
   static let hostedIndex = "CREATE INDEX piSessionStates_hosted ON piSessionStates(hostID, sessionID) WHERE \(CueStore.hostedOrLaunched);"
 
   /// 本机写入序号（`CueStore.lastWrite`）的计数器与盖序号的触发器：Cue 的变化按本机收到的先后分新旧，不按事件时刻（晚到的事件时刻可能早于上次醒来）。
@@ -57,9 +57,28 @@ extension Schema {
     \(stamped("piSessionStates", when: sessionChanges))
     \(stamped("cards", when: ["completedAt", "parentID", "todoAt"]))
     \(stamped("deliveryRequests", when: ["status"]))
+    \(cueMessageWrites)
     """
 
-  /// `table`（已有 `writeSeq` 列）新增的行，或 `when` 里的列改了值的行，盖上计数器的下一个数。
+  /// 90：为升级前已上传、仍待派发的请求补齐期限锚点。
+  static let deliveryServerAnchor = """
+    UPDATE deliveryRequests AS r SET serverAt = createdAt
+      WHERE serverAt IS NULL AND (status = 'preparing' OR (status = 'pending' AND handledBy IS NULL)) AND \(Speech.reachedServerSQL("r"));
+    """
+
+  /// 92：轮结束的请求集合随对话同步；到达顺序复用本机计数器，不受对端时钟影响。
+  static let cueMessageUpgrade: Upgrade = """
+    ALTER TABLE cueMessages ADD COLUMN answeredRequests TEXT;
+    ALTER TABLE cueMessages ADD COLUMN writeSeq INTEGER NOT NULL DEFAULT 0;
+    \(cueMessageWrites)
+    """
+
+  /// 对话正文写下就不再变；轮结束的请求集合可能后补到经过行。送达、推送与工具进度不产生第二次播报。
+  static let cueMessageWrites = """
+    \(stamped("cueMessages", when: ["answeredRequests"]))
+    CREATE INDEX cueMessages_writeSeq ON cueMessages(writeSeq);
+    """
+
   private static func stamped(_ table: String, when columns: [String]) -> String {
     """
       CREATE TRIGGER \(table)_writeSeq_insert AFTER INSERT ON \(table) BEGIN \(stamp(table)) END;

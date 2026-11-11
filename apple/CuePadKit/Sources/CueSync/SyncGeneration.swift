@@ -1,6 +1,6 @@
 import Synchronization
 
-/// 同步的一代：`CloudSync` 的一次 `start` 到 `stop`。本代的拉取器、发送者与文件两路共用一个，`stop` 一开始就结束它（`end`）：
+/// `CloudSync` 的一次 `start` 到 `stop`，本代各组件共用一个，`stop` 一开始就结束它（`end`）：
 /// 结束之后本代的任务不再改协调器与库（每个 await 之后看 `isOver`），本代里在等的（`value(of:)`、`outcome(of:)`）当场抛出 `CancellationError`。
 /// 代次只有这一种写法：组件不另记"停下了"，`CloudSync` 也不另记代次号。单独建的组件（测试）各自一代。
 final class SyncGeneration: Sendable {
@@ -43,8 +43,7 @@ final class SyncGeneration: Sendable {
   }
 }
 
-/// 一个以后才有的答复，只答一次：谁先答（结果、调用方取消、这一代结束）算谁，后来的不管。CueSync 里登记等待者、以后再答的都用它
-/// （等开始、等一轮发完、等马上传的结果、等附件记录、几路请求比快），不另写续体；答早于等的，等时当场拿到。
+/// 一个以后才有的答复，只答一次：谁先答（结果、调用方取消、这一代结束）算谁，后来的不管；答早于等的，等时当场拿到。CueSync 里登记等待者、以后再答的都用它，不另写续体。
 /// 只能有一个在等（`value`）；要好几个等同一件事的，各登记一个。
 final class Promise<T: Sendable>: Sendable {
   private enum State {

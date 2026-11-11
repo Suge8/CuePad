@@ -3,13 +3,11 @@ import CueStore
 import SwiftUI
 
 enum ProjectDirectory {
-    /// 弹系统的选文件夹面板，返回选中的路径（取消为 nil）。
     static func pick() async -> String? {
         await FilePicker.folder(message: "选择这个项目的文件夹，在其中运行的 Agent 会话会归到这个项目，新会话也开在这里")?
             .path(percentEncoded: false)
     }
 
-    /// 选择文件夹后绑定；Pi 会话按这个目录归入项目。
     static func choose(for project: UUID, workspace: Workspace) {
         workspace.attempt {
             guard let path = await pick() else { return }
@@ -18,14 +16,11 @@ enum ProjectDirectory {
     }
 }
 
-/// 新建或编辑项目：名称、一句话介绍、图标、颜色；新建时还可以选文件夹（不选的第一次开工时建工作区，之后在项目菜单里换）。
-/// 只给内容，圆角、描边与投影是所在的浮层（`panel`）的；按钮同一档高（`compact`），"创建""保存"是这里唯一的主按钮。
 struct ProjectForm: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.closePanel) private var close
     @Environment(\.palette) private var palette
     @State private var draft: ProjectDraft
-    /// 新建时选的文件夹（完整路径）；编辑项目不在这里改绑定，项目菜单里改。
     @State private var folder: String?
 
     init(_ request: ProjectFormRequest) {
@@ -54,7 +49,6 @@ struct ProjectForm: View {
         .frame(width: 340)
     }
 
-    /// 名称与介绍：同一种淡底单行框，与一排控件同高。
     private func field(_ prompt: String, text: Binding<String>) -> some View {
         TextField(prompt, text: text, palette: palette)
             .textFieldStyle(.plain).font(Typography.body).foregroundStyle(palette.ink)
@@ -64,7 +58,6 @@ struct ProjectForm: View {
             .onSubmit(save)
     }
 
-    /// 文件夹：没选时是"选择…"，选了写末段名（悬停看完整路径）并可清掉。
     private var folderRow: some View {
         HStack(spacing: Spacing.item) {
             Label("文件夹", icon: .folder).foregroundStyle(palette.ink2)

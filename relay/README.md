@@ -5,7 +5,7 @@ Bun 服务，无第三方依赖。门铃让同一个人的几台设备即时知�
 - 一台设备的改动被 iCloud 收下后，经中转按一下门铃。
 - 其它设备听到门铃，立刻去 iCloud 拉一次。
 
-门铃不带内容，资料仍从 iCloud 拉。可选的实时活动转发会让个人内容、计数与活动推送令牌瞬时经过中转内存；中转不落盘、不记录请求或响应内容，没有账户、令牌库或重试队列。
+门铃不带内容，资料仍从 iCloud 拉。实时通话共用这条连接传递端到端加密的建连与控制信令，声音在手机与语音服务之间直连；中转只看到路由与密文，不读取通话正文。可选的实时活动转发会让个人内容、计数与活动推送令牌瞬时经过中转内存。两种转发都不落盘、不记录请求或响应内容，也没有令牌库或重试队列。
 
 门铃认证只用房间号和签名。房间号是一把公钥，由你 iCloud 里的密钥派生；进房间要用这把密钥签名。没有密钥的人进不了你的房间，也按不了你的门铃。协议写在 `server.ts` 的头注释里。
 
@@ -27,7 +27,7 @@ Bun 服务，无第三方依赖。门铃让同一个人的几台设备即时知�
 
    ```bash
    useradd --system --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin cuepad-relay
-   mkdir -p /opt/cuepad-relay && cp server.ts activity.ts apns.ts ingress.ts /opt/cuepad-relay/   # root 所有，服务只读
+   mkdir -p /opt/cuepad-relay && cp server.ts activity.ts apns.ts ingress.ts auth.ts voice.ts /opt/cuepad-relay/   # root 所有，服务只读
    ```
 
 4. 写 `/etc/systemd/system/cuepad-relay.service`，然后 `systemctl daemon-reload && systemctl enable --now cuepad-relay`：
@@ -90,7 +90,17 @@ Bun 服务，无第三方依赖。门铃让同一个人的几台设备即时知�
 
 不想装 Caddy 的，也可以让 Bun 自己提供 TLS（`CERT`、`KEY` 环境变量，见 `server.ts` 头注释），证书续期后要重启服务。
 
-日常维护：日志 `journalctl -u cuepad-relay`、`journalctl -u caddy`；升级中转就把四个 `.ts` 文件一起拷进 `/opt/cuepad-relay/` 再 `systemctl restart cuepad-relay`（设备几秒内自动重连）；升级 Bun 按第 2 步重装后同样重启。
+日常维护：日志 `journalctl -u cuepad-relay`、`journalctl -u caddy`；升级中转就把上述六个 `.ts` 文件一起拷进 `/opt/cuepad-relay/` 再 `systemctl restart cuepad-relay`（设备几秒内自动重连）；升级 Bun 按第 2 步重装后同样重启。重启会结束经这台中转控制的手机通话，用户需重新发起；既有业务请求和结果不重投。
+
+## 通话信令
+
+普通门铃客户端仍可只做原来的认证与 `ring`。支持通话的客户端收到 `ready.voiceVersion=1` 后，用房间密钥签名登记设备路由和本次连接新生成的租约；中转只在当前已认证连接上登记，不以设备名称证明独立物理身份。同账号的设备成员互相信任。
+
+设备解析目标的当前租约，再向它发送加密帧。中转只校验来源、双方当前租约、格式和长度并定向转发；接收端验证密文、期限、序号和通话或命令身份后才执行。期限由发送端按自己的时钟写、接收端按自己的时钟查，两端之间留时钟偏差容差；中转当场转发、不查期限，免得多一台会偏的时钟。一次转发不表示对端已经收到。没有目标就立即返回不可用；旧租约不改投新连接，帧不续期、不排队。
+
+目标断开或被同设备的新连接替换时，观察它的设备收到该旧租约的退出事件；替换还会以 4409 关闭旧连接。退出事件只说明那条连接没了，不等于通话结束：通话的媒体不经中转，已接通的通话由两端客户端等对方以新租约回来（15 秒宽限，`VoiceLink`），同一设备、同一通话的新租约发来一帧即接回，期满才算对方离开。中转对此无感，照旧不改投、不排队。每个房间最多登记 64 个同时在线的通话设备，以限制租约观察关系的内存占用。信令总帧最多 64 KiB、密文最多为 32 KiB 明文加认证开销；WebSocket 缓冲有界，慢端超过上限会断开。门铃与认证帧仍限制在 1 KiB。
+
+协议形状在 `voice.ts` 与原生 `VoiceSignaling.swift` 中。这里只扩展中转能力；手机直接通话还需要配套 App 与在线的 Cue Mac。
 
 ## 入口限频
 

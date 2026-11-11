@@ -211,39 +211,14 @@ def rpoly(points, radii):
     return segs if area(segs) > 0 else rev(segs)
 
 
-def grown(points, radii, g):
-    """多边形（顺时针）每条边向外平移 g 格（斜接），圆角半径跟着加 g，利角保持利角。"""
-    n, out = len(points), []
-    for i in range(n):
-        A, B, C = points[i - 1], points[i], points[(i + 1) % n]
-        u, v = norm(sub(B, A)), norm(sub(C, B))
-        nu, nv = (u[1], -u[0]), (v[1], -v[0])  # 顺时针（y 向下）多边形的外法线
-        bis = norm(add(nu, nv))
-        out.append(add(B, mul(bis, g / max(1e-6, bis[0] * nu[0] + bis[1] * nu[1]))))
-    return rpoly(out, [max(0.15, r + g) if r else 0 for r in radii])
-
-
 def disc(c, r, hole=False):
     segs = arcs(c, r, -90, 360)
     return rev(segs) if hole else segs
 
 
-def ellipse(c, rx, ry):
-    cx, cy = mul(c, G); rx, ry = rx * G, ry * G; k = 0.5523
-    pts = [(cx + rx, cy), (cx, cy + ry), (cx - rx, cy), (cx, cy - ry)]
-    ctl = [((cx + rx, cy + k * ry), (cx + k * rx, cy + ry)), ((cx - k * rx, cy + ry), (cx - rx, cy + k * ry)),
-           ((cx - rx, cy - k * ry), (cx - k * rx, cy - ry)), ((cx + k * rx, cy - ry), (cx + rx, cy - k * ry))]
-    return [Cubic(pts[i], ctl[i][0], ctl[i][1], pts[(i + 1) % 4]) for i in range(4)]
-
-
 def bar(points, width, radius=0.0):
     """圆头的一笔（格）：造勾、腰环、把手这类实心块，宽度按体块算，不是描边。"""
     return stroke(poly(points, radius), width * G)
-
-
-def bow(c, r, deg0, sweep, width):
-    """圆头的一段粗弧（格）。"""
-    return stroke(arcs(c, r, deg0, sweep), width * G)
 
 
 def thick(pts, width, n=8):

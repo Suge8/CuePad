@@ -4,12 +4,8 @@ import CueStore
 import SwiftUI
 import WebKit
 
-/// Mac 全屏预览的飞出、飞回（iOS 是系统的 zoom 转场）：打开时点的那张缩略图从原处长到内容落下的地方，关上时翻到的那一份缩回它自己的缩略图
-/// （那张不在屏上时只随浮层淡出）。飞的是缩略图的那张画面，一层 Core Animation 图层浮在整窗最上面，位置、尺寸与圆角都在渲染端走 `Motion.glide`
-/// （定长：飞到了才接着落内容），主线程不逐帧重排（docs/layout.md「宽屏开合不逐帧排版」）；飞完那张画面淡掉（`Motion.fade`）。
-/// 关上时从屏上此刻的样子飞回（`PreviewShown`）：放大、拖过的图从露出的那一截连着缩回去。
+/// 位置、尺寸与圆角都在渲染端走 `Motion.glide`（定长：飞到了才接着落内容），主线程不逐帧重排（docs/layout.md「宽屏开合」）；飞完那张画面淡掉（`Motion.fade`）。
 /// 飞的这段内容藏着（`landed`），同一张图不会在两处同时出现：不用盖一层幕布——浮层淡入淡出时 SwiftUI 按层各自改透明度，半透明的幕布盖不住半透明的内容。
-/// 内容区上不占地方的 `Stage` 是飞的终点与起点：它知道翻到了哪一份、内容落在哪。浮层本身的淡入淡出在 `PanelLayer`。减弱动态效果时不飞，只淡。
 /// 网页落地不交叉淡：飞的是缩略图那张快照（1024 宽排的首屏），真网页按全屏页的宽排，字的位置不同，两层一淡一显就是重影。
 /// 所以同样大小打开过的网页飞真网页上次画好的那一屏（`PreviewPageShots`），落在它那一处；没有时缩略图按 CSS 像素一比一落在内容区左上
 /// （同真网页的起点与字号，块宽随宽度伸缩的差一点；`PreviewPlace.frame`）。落地后快照停着，等真网页载完、画上第一帧（`pagePainted`）
@@ -27,10 +23,8 @@ import WebKit
     }
 
     private var sources: [PreviewZoomKey: Source] = [:]
-    /// 这次打开的网页画上第一帧了（`pagePainted`）；等着它的落地（`painted()`）。
     private var painted = false
     private var paintWaiter: CheckedContinuation<Void, Never>?
-    /// 开始关了：还在等网页的那趟飞就不再落地。
     private var closing = false
     private var shows: [UUID: WeakShowing] = [:]
     private let pageShots = PreviewPageShots()
@@ -42,20 +36,17 @@ import WebKit
         if sources[key]?.view === view { sources[key] = nil }
     }
 
-    /// 屏上看得见的那张（被滚出去的、懒加载撤掉的不算）。
     private func source(_ key: PreviewZoomKey, in window: NSWindow) -> (Source, CGRect)? {
         guard let source = sources[key], let view = source.view, view.window === window, !view.visibleRect.isEmpty else { return nil }
         return (source, view.convert(view.bounds, to: nil))
     }
 
-    /// 全屏页的内容区第一次排好：从点的那张飞过去，落地时内容淡入。
     func depart(to stage: Stage.Mark) {
         painted = false
         closing = false
         guard let window = stage.window, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
               let (source, from) = source(stage.key, in: window)
         else { return stage.landed(true) }
-        // 同样大小打开过这一页：飞真网页的那一屏，落在它那一处（`PreviewPageShots`）；没有就飞缩略图
         let shot = stage.shotKey.flatMap { pageShots.shot($0) }
         let area = stage.place.area
         Task {
@@ -83,8 +74,6 @@ import WebKit
         }
     }
 
-    /// 全屏页里的网页载完、画上了第一帧（载不出来、规则装不上也算：那时露出的是读不了的说明）。
-    /// 带着画好的网页 `view` 时把它此刻的那一屏记下，下次同样大小打开时飞它（`PreviewPageShots`）。
     func pagePainted(_ view: WKWebView? = nil) {
         painted = true
         paintWaiter?.resume()
@@ -99,8 +88,6 @@ import WebKit
         await withCheckedContinuation { paintWaiter = $0 }
     }
 
-    /// 要关上（`previewPresenter` 的关法都经这里）：翻到的那一份从屏上此刻的样子（`PreviewShown`）缩回它的缩略图；
-    /// 飞的那层铺上时才藏内容，没得飞（缩略图不在屏上、减弱动态效果）就留着内容随浮层淡出。
     func land() {
         closing = true
         pagePainted()
@@ -129,7 +116,6 @@ import WebKit
     func showing(_ preview: UUID, _ view: some PreviewShowing) { shows[preview] = WeakShowing(value: view) }
 }
 
-/// 页里显示内容的视图：关上那一刻自己在屏上是什么样子。
 @MainActor protocol PreviewShowing: AnyObject {
     func shown(in window: NSWindow) -> PreviewShown
 }
@@ -139,7 +125,6 @@ private struct WeakShowing {
 }
 
 extension EnvironmentValues {
-    /// 缩略图在哪登记（`previewPresenter` 给）。
     @Entry var previewFlight: PreviewFlight?
 }
 
@@ -148,7 +133,6 @@ extension EnvironmentValues {
 @MainActor private final class Flight {
     private let layer = CALayer()
     private weak var root: NSView?
-    /// 落地换内容时垫在快照下面的底（`ground`）
     private var backdrop: CALayer?
 
     /// `contents` 是 CGImage 或 IOSurface；两端各带着那里画面露出的那一截（`contentsRect`），飞着从一截换成另一截。
@@ -156,12 +140,10 @@ extension EnvironmentValues {
         guard let root = window.contentView?.superview, let host = root.layer else { return nil }
         self.root = root
         layer.contents = contents
-        // 露出哪一截全由两端的 `shown` 定（缩略图怎么裁、对齐哪边由它登记时交出），图层不再自己居中裁
         layer.contentsGravity = .resize
         layer.contentsScale = window.backingScaleFactor
         layer.masksToBounds = true
         layer.cornerCurve = .continuous
-        // 压过内容视图里的一切（含托管视图之后插进来的平台视图）
         layer.zPosition = 1000
         let start = root.convert(from.rect, from: nil), end = root.convert(to.rect, from: nil)
         CATransaction.begin()
@@ -177,7 +159,6 @@ extension EnvironmentValues {
         CATransaction.commit()
     }
 
-    /// 快照下面垫一块 `color` 铺满 `area`（窗口坐标），随 `remove` 一起撤。
     func ground(_ area: CGRect, _ color: CGColor) {
         guard let root, let host = root.layer else { return }
         let backdrop = CALayer()
@@ -191,13 +172,11 @@ extension EnvironmentValues {
         self.backdrop = backdrop
     }
 
-    /// 当场撤走（落地换内容：内容已经画在它下面）。
     func remove() {
         layer.removeFromSuperlayer()
         backdrop?.removeFromSuperlayer()
     }
 
-    /// 淡掉（`Motion.fade`）、撤走。
     func dissolve() {
         CATransaction.begin()
         CATransaction.setCompletionBlock { [layer] in layer.removeFromSuperlayer() }
@@ -210,7 +189,6 @@ extension EnvironmentValues {
         CATransaction.commit()
     }
 
-    /// 从 `value` 到模型值（终点），`Motion.glide`。
     private static func move(_ keyPath: String, _ value: Any) -> CABasicAnimation {
         let animation = CABasicAnimation(keyPath: keyPath)
         animation.fromValue = value
@@ -221,12 +199,10 @@ extension EnvironmentValues {
 }
 
 extension PreviewFlight.Source {
-    /// 内容那一端多出来的按什么留：点名图在那一端是整张、不裁，居中即可。
     var alignment: Alignment {
         if case .aligned(let alignment) = crop { alignment } else { .center }
     }
 
-    /// 缩略图这一端：框 `rect`，画面 `contents` 露出缩略图上那一截（`crop`）。
     /// 点名图露的是细节最多的那块，按缩略图同一个算法在整张上算；`contents` 是全屏页的大图（IOSurface）时到缩略图交的整张上算，单位坐标一样。
     func frame(_ rect: CGRect, showing contents: Any) async -> PreviewFrame {
         guard case .detail = crop else { return PreviewFrame(filling: rect, radius: radius, with: contents, crop: alignment) }
@@ -234,19 +210,16 @@ extension PreviewFlight.Source {
         guard let whole, whole.width > 0, whole.height > 0 else { return PreviewFrame(filling: rect, radius: radius, with: contents, crop: .center) }
         let region = await DeliverableLooks.detailRegion(whole, aspect: rect.width / max(rect.height, 1))
         let width = CGFloat(whole.width), height = CGFloat(whole.height)
-        // 像素原点左上，单位坐标 y 朝上
         return PreviewFrame(rect: rect, radius: radius, shown: CGRect(
             x: region.minX / width, y: 1 - region.maxY / height, width: region.width / width, height: region.height / height))
     }
 }
 
-/// 飞的一端：窗口坐标的框、圆角，与画面露出的那一截（单位坐标，整张是 0,0,1,1，y 朝上）。
 struct PreviewFrame {
     var rect: CGRect
     var radius: CGFloat = 0
     var shown = CGRect(x: 0, y: 0, width: 1, height: 1)
 
-    /// 画面铺满 `rect`、多出来的按 `crop` 那边留（同缩略图的裁法：截图留上沿）。
     init(filling rect: CGRect, radius: CGFloat = 0, with contents: Any, crop: Alignment) {
         self.rect = rect
         self.radius = radius
@@ -267,10 +240,8 @@ struct PreviewFrame {
         self.shown = shown
     }
 
-    /// 多出来的那段裁在低端（左、下）的份额：留低端 0、留高端 1、居中一半。
     private static func share(_ low: Bool, _ high: Bool) -> CGFloat { low ? 0 : high ? 1 : 0.5 }
 
-    /// 图层上放的画面（IOSurface 或 CGImage）的宽高比。
     static func aspect(of contents: Any) -> CGFloat {
         let (width, height) = if let surface = contents as? IOSurface { (surface.width, surface.height) }
             else { ((contents as! CGImage).width, (contents as! CGImage).height) }
@@ -280,11 +251,8 @@ struct PreviewFrame {
 
 private typealias Frame = PreviewFrame
 
-/// 全屏页里此刻显示着的那一份在屏上的样子，关上时从它飞回，而不是从刚打开的样子。
 enum PreviewShown {
-    /// 说不清（内容还没出来、不是图片或 PDF）：飞回的起点照落地那一处（`PreviewPlace`），画面用缩略图
     case opened
-    /// 屏上的就是这张画面（的这一截）
     case picture(Any, PreviewFrame)
 }
 #endif

@@ -10,7 +10,7 @@
 	<array>
 		<string>CloudKit</string>
 	</array>
-	<key>com.apple.security.automation.apple-events</key>
+	<key>com.apple.security.device.audio-input</key>
 	<true/>
 </dict>
 </plist>

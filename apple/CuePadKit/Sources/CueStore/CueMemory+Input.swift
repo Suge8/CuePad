@@ -1,13 +1,11 @@
 import Foundation
 
-/// 模型真正读取的输入：原行或已经验证的子摘要。布局、生成范围和缓存验证共用这一棵依赖树。
 public enum CueMemoryInput: Equatable, Sendable {
   case line(CueMemoryLine)
   case summary(range: CueMemoryRange, text: String)
 }
 
 extension CueMemory {
-  /// 小块直接读原行；大块只读两半各自展开的内容。
   public static let rawMax = 16
 
   public func range(lo: Int, hi: Int) -> CueMemoryRange? {
@@ -19,7 +17,7 @@ extension CueMemory {
     } else {
       let dependencies = summaryInput(lo: lo, hi: hi).flatMap { input -> [String] in
         switch input {
-        case .line: [] // 原行语义已经包含在 raw 中。
+        case .line: []
         case .summary(let range, let text): [range.reference, text]
         }
       }

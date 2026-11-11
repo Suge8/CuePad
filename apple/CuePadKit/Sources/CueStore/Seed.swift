@@ -14,7 +14,6 @@ public struct SeedProject: Sendable {
 public struct SeedCard: Sendable {
   public enum Kind: Sendable { case idea, task, doneTask }
 
-  /// 所属项目在 `seed(projects:cards:)` 的 `projects` 里的下标；nil 是默认项目。
   public var project: Int?
   public var body: String
   public var pinned: Bool
@@ -29,7 +28,6 @@ public struct SeedCard: Sendable {
 /// 演示记忆的一条：记下的时刻原样写入，记忆页才有"刚刚""昨天""几月几日"的分布。
 public struct SeedCueLine: Sendable {
   public var text: String, source: CueLineSource, pinned: Bool, createdAt: Date
-  /// 定时（`CueMemoryLine.remindAt` 等）
   public var remindAt: Date?, repeats: CueRepeat?, task: UUID?
 
   public init(
@@ -41,7 +39,6 @@ public struct SeedCueLine: Sendable {
 }
 
 extension CueStore {
-  /// 一次写入演示记忆（按记下的时刻排位，与正常记下的一样）。
   public func seed(cueLines: [SeedCueLine]) throws {
     try write {
       for line in cueLines {
@@ -54,7 +51,6 @@ extension CueStore {
     }
   }
 
-  /// 一次写入全部项目与卡片（同类按给定顺序排）。
   public func seed(projects: [SeedProject], cards: [SeedCard]) throws {
     let now = Date.stamp
     try write {

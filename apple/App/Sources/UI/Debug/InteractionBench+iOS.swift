@@ -63,7 +63,7 @@ enum IOSInteractionBench {
             write("FAIL " + reason)
             exit(1)
         }
-        let only = UserDefaults.standard.string(forKey: "CuePadInteractOnly").map { Set($0.split(separator: ",").map(String.init)) }
+        let only = DebugScene.args.driveOpts.interactOnly.map { Set($0.split(separator: ",").map(String.init)) }
         func wants(_ name: String) -> Bool { only?.contains(name) ?? true }
         func row(_ row: [String: Any]) { write(jsonLine("INTERACT", row)) }
         /// `finger`：请测量脚本真按或真滑（`Finger`），从手指按下起量；不给时从 `action` 发出起量。
@@ -87,7 +87,7 @@ enum IOSInteractionBench {
         await Task.wait(for: .seconds(3))
         let store = workspace.services.store
         let projects = (workspace.catalog?.projects ?? []).map(\.id)
-        let sessions = try await store.piSessionPage(PiSessionQuery(limit: 4)).items.map(\.state.id)
+        let sessions = try await store.sessionPage(SessionQuery(limit: 4)).items.map(\.state.id)
         let tasks = try await store.tasks(.inProgress, .todo).flatMap(\.tasks).filter { $0.parentID == nil }
         guard projects.count >= 2 else { fail("演示库里不到两个项目") }
         guard sessions.count >= 2 else { fail("演示库里不到两个会话") }
@@ -119,6 +119,9 @@ enum IOSInteractionBench {
         for _ in 0..<2 {
             await step("展开 Cue 面板") { DebugScene.toggleCuePanel() }
             await step("收起 Cue 面板") { DebugScene.toggleCuePanel() }
+        }
+        if !callSteps.isDisjoint(with: only ?? callSteps) {
+            await call(workspace, wants: wants) { name, window, action in await step(name, window: window, action) }
         }
         // Cue 页左边的会话条点会话（先读出这一页再推入）→ 返回 Cue
         for id in [sessions[0], sessions[0], sessions[1]] {
@@ -159,7 +162,7 @@ enum IOSInteractionBench {
 
     /// 粘贴进来的一大段：仿诊断 JSON（嵌套的调用栈帧，约 850 行、66 KB），或 `-CuePadPasteFile <路径>` 那个文件。
     private static var pasted: String {
-        if let path = UserDefaults.standard.string(forKey: "CuePadPasteFile") {
+        if let path = DebugScene.args.pasteFile {
             do {
                 return try String(contentsOfFile: path, encoding: .utf8)
             } catch {

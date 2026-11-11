@@ -1,0 +1,108 @@
+#if os(macOS)
+import CueStore
+import Foundation
+
+/// Grok Build 的会话记录（`<GROK_HOME>/sessions/<百分号编码的工作目录>/<会话 id>/updates.jsonl`，Grok 恢复会话时读的就是它）的逐行解码。
+/// 一行是一条原样的 ACP 通知（`{timestamp, method, params: {sessionId, update, _meta}}`）；连续的说话增量 Grok 写下之前已并成一行，
+/// 写下要等下一条通知来（实测与源码 persistence.rs）。
+/// - `user_message_chunk` 是你的话（文字与图片各一行；`hideFromScrollback` 的是 Grok 自己垫进去的，不算），一到就算这一轮开始。
+///   发它的请求 id 只写在它之后的行上（`_meta.promptId`、`turn_completed` 的 `prompt_id`）：这一句先存在检查点里（`held`），
+///   读到下一行再记下；CuePad 发的请求 id 是 `cuepad-<投送请求 id>`（`GrokDialect.promptMeta`）。
+/// 做完那条工具活动的 `content` 里 ACP 的图片块（`{type: content, content: {type: image, data}}`，grok 1.0.70 读图实测）是工具结果里的图，缩小后记在那一步上（`ToolImage`）；
+/// - `turn_completed`（方法 `_x.ai/session/update`）结束这一轮：`cancelled` 是被停下，其余是做完（出错的原话不在记录里）。
+/// 工作目录在路径里（`SessionFileFormat.cwd`）；会话名不在这个文件里，在同目录的 `summary.json`（`name`）。
+enum GrokHistory {
+    static let fileName = "updates.jsonl"
+
+    /// 同目录的 `summary.json`：Grok 按对话起的与 `/rename` 起的都写进 `generated_title`（`title_is_manual` 标出后者），
+    /// 旧版只写 `session_summary`；都空是还没起名。一轮结束后才起好、之后几轮还会改，都不写会话记录。
+    static let sidecar = SessionFileFormat.Sidecar(file: { $0.deletingLastPathComponent().appending(path: "summary.json") }, name: name)
+
+    private static func name(in data: Data, sessionID _: String) -> String? {
+        guard let summary = try? JSONDecoder().decode(Summary.self, from: data) else { return nil }
+        return [summary.generatedTitle, summary.sessionSummary].lazy.compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }.first { !$0.isEmpty }
+    }
+
+    private struct Summary: Decodable {
+        var generatedTitle: String?
+        var sessionSummary: String?
+
+        private enum CodingKeys: String, CodingKey {
+            case generatedTitle = "generated_title"
+            case sessionSummary = "session_summary"
+        }
+    }
+    static let deliveryPrefix = "cuepad-"
+
+    static func ingest(_ raw: UnsafeRawBufferPointer, _ cp: inout HistoryCheckpoint, _ transcript: inout History.Transcript) throws {
+        cp.seq += 1
+        guard let data = raw.borrowedData, let line = JSONValue.parse(data),
+              let params = line["params"], let update = params["update"]
+        else { return }
+        if cp.sessionID == nil { cp.sessionID = params["sessionId"]?.string }
+        let meta = params["_meta"]
+        let time = meta?["agentTimestampMs"]?.number.map { Date(timeIntervalSince1970: $0 / 1000) }
+            ?? line["timestamp"]?.number.map { Date(timeIntervalSince1970: $0) }
+        if let time { cp.lastActivity = time }
+        let entry = History.Entry(id: meta?["eventId"]?.string ?? "\(cp.seq)", seq: cp.seq, at: time ?? cp.lastActivity ?? .distantPast)
+        let kind = update["sessionUpdate"]?.string
+        if kind == "user_message_chunk" {
+            guard update["_meta"]?["hideFromScrollback"]?.bool != true else { return }
+            return try hold(update["content"], entry, into: &cp, transcript: &transcript)
+        }
+        release(meta?["promptId"]?.string ?? update["prompt_id"]?.string, into: &cp, transcript: &transcript)
+        switch kind {
+        case "agent_message_chunk":
+            if let text = update["content"]?["text"]?.string { cp.spoke(text, entry) }
+        case "tool_call":
+            guard let id = update["toolCallId"]?.string else { return }
+            let name = update["_meta"]?["x.ai/tool"]?["name"]?.string ?? update["title"]?.string ?? "tool"
+            let arguments = (update["rawInput"]?.data).flatMap { try? JSONDecoder().decode(ToolArguments.self, from: $0) } ?? ToolArguments()
+            cp.toolStarted(id: id, name: name, arguments: arguments)
+            try settled(update, into: &cp, transcript: transcript)
+        case "tool_call_update":
+            try settled(update, into: &cp, transcript: transcript)
+        case "turn_completed":
+            if update["stop_reason"]?.string == "cancelled" {
+                cp.interrupted(entry, into: &transcript)
+            } else {
+                cp.answered("", entry, into: &transcript)
+            }
+        default:
+            break
+        }
+    }
+
+    private static func hold(_ content: JSONValue?, _ entry: History.Entry, into cp: inout HistoryCheckpoint, transcript: inout History.Transcript) throws {
+        var said = transcript.said()
+        if let held = cp.held {
+            said.restore(text: held.text, stored: held.stored)
+        } else {
+            cp.roundStarted(at: entry.at)
+        }
+        switch content?["type"]?.string {
+        case "text": said.text(content?["text"]?.string)
+        case "image": try said.image(content?["data"]?.string.flatMap { Data(base64Encoded: $0) })
+        default: break
+        }
+        let first = cp.held.map { History.Entry(id: $0.id, seq: $0.seq, at: $0.at) } ?? entry
+        cp.held = HistoryCheckpoint.Held(text: said.text, stored: said.stored, id: first.id, seq: first.seq, at: first.at)
+    }
+
+    private static func release(_ prompt: String?, into cp: inout HistoryCheckpoint, transcript: inout History.Transcript) {
+        guard let held = cp.held else { return }
+        cp.held = nil
+        var said = transcript.said()
+        said.restore(text: held.text, stored: held.stored)
+        let delivery = prompt.flatMap { $0.hasPrefix(deliveryPrefix) ? String($0.dropFirst(deliveryPrefix.count)) : nil }
+        cp.said(said, History.Entry(id: held.id, seq: held.seq, at: held.at), deliveryID: delivery, into: &transcript)
+    }
+
+    private static func settled(_ update: JSONValue, into cp: inout HistoryCheckpoint, transcript: History.Transcript) throws {
+        guard let id = update["toolCallId"]?.string, let status = update["status"]?.string, status == "completed" || status == "failed" else { return }
+        let images = (update["content"]?.array ?? []).compactMap { $0["content"] }.filter { $0["type"]?.string == "image" }
+            .map { $0["data"]?.string.flatMap { Data(base64Encoded: $0) } }
+        cp.toolFinished(id: id, failed: status == "failed", images: try transcript.toolImages(images))
+    }
+}
+#endif

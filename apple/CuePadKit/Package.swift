@@ -10,7 +10,7 @@ let package = Package(
         .library(name: "CueText", targets: ["CueText"]),
         .library(name: "CueStore", targets: ["CueStore"]),
         .library(name: "CueEditor", targets: ["CueEditor"]),
-        .library(name: "CuePi", targets: ["CuePi"]),
+        .library(name: "CueBridge", targets: ["CueBridge"]),
         .library(name: "CueSync", targets: ["CueSync"]),
         .library(name: "CueAgent", targets: ["CueAgent"]),
         .executable(name: "cuepad", targets: ["CueCLI"]),
@@ -18,29 +18,25 @@ let package = Package(
         .library(name: "CueTestSupport", targets: ["CueTestSupport"]),
     ],
     targets: [
-        // 卡片正文（Markdown 原文）的模型：图片的解析/序列化、标题与按行规则、轻装饰、变量。仅依赖 Foundation。
+        // 仅依赖 Foundation。
         .target(name: "CueText"),
-        // SQLite 唯一事实源、结构与升级、仓储。直接用系统 SQLite3，零第三方依赖。
+        // 直接用系统 SQLite3，零第三方依赖。
         .target(name: "CueStore", dependencies: ["CueText"]),
-        // TextKit 2 编辑器宿主（AppKit / UIKit）。
         .target(name: "CueEditor", dependencies: ["CueText"]),
-        // macOS Pi 桥：扩展（随包资源）、socket 客户端、会话历史索引、终端跳转。仅 macOS，iOS 目标不依赖。
-        .target(name: "CuePi", dependencies: ["CueStore", "CueText", "CueAgent"], exclude: ["README.md"], resources: [.copy("Extension"), .copy("Brain/claude-subscription.ts"), .copy("Brain/cue-tools.ts"), .copy("Brain/cue-fast.ts"), .copy("Dsh/dsh-cuepad.mjs")]),
-        // iCloud 同步：CueStore ↔ CloudKit 的拉取、上传、记录映射、待推送变更、冲突与附件。
+        // 仅 macOS，iOS 目标不依赖。
+        .target(name: "CueBridge", dependencies: ["CueStore", "CueText", "CueAgent"], exclude: ["README.md"], resources: [.copy("Extension"), .copy("Brain/claude-subscription.ts"), .copy("Brain/cue-tools.ts"), .copy("Brain/cue-fast.ts"), .copy("Dsh/dsh-cuepad.mjs")]),
         .target(name: "CueSync", dependencies: ["CueStore", "CueText"]),
-        // 总控 Agent Cue：MCP 工具与 stdio 服务（`cuepad mcp`）、交给大脑的信封、记忆视图。
         .target(name: "CueAgent", dependencies: ["CueStore", "CueText"]),
-        // 测试共用的支撑（临时库目录、独立 sqlite3 连接、测试图片、手动时钟、条件等待），只给测试目标依赖。
+        // 只给测试目标依赖。
         .target(name: "CueTestSupport", dependencies: ["CueStore"], path: "Tests/CueTestSupport"),
         .testTarget(name: "CueSyncTests", dependencies: ["CueSync", "CueTestSupport"]),
-        // `cuepad` 命令行：供人和 agent 读写本机资料库（经 CueStore，零第三方依赖）。
+        // 零第三方依赖。
         .executableTarget(name: "CueCLI", dependencies: ["CueStore", "CueText", "CueAgent"]),
         .testTarget(name: "CueCLITests", dependencies: ["CueCLI", "CueTestSupport"]),
-        .testTarget(name: "CueAgentTests", dependencies: ["CueAgent", "CueTestSupport"]),
         .testTarget(name: "CueTextTests", dependencies: ["CueText"]),
         .testTarget(name: "CueStoreTests", dependencies: ["CueStore", "CueText", "CueTestSupport"]),
         .testTarget(name: "CueEditorTests", dependencies: ["CueEditor", "CueTestSupport"]),
-        .testTarget(name: "CuePiTests", dependencies: ["CuePi", "CueStore", "CueTestSupport"], exclude: ["Fixtures"]),
+        .testTarget(name: "CueBridgeTests", dependencies: ["CueBridge", "CueStore", "CueTestSupport"], exclude: ["Fixtures"]),
     ]
 )
 

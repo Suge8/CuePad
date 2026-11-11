@@ -2,17 +2,11 @@ import CloudKit
 import CueStore
 import Foundation
 
-/// 推：库里推导的待推送（`CueStore.pendingSync`）是唯一的队列，这里只决定什么时候发、一批发哪些。附件记录带着文件，不在这里传（`FileSender`）。
-///
-/// 两路：后台那一路随本机提交（攒 `gatherWindow` 合成一批）与立即同步（`kick`）一轮轮地发，每批至多 `CloudKitLimits.recordsPerRequest` 条；
-/// 马上传（`send`，说的话、回执）另走一路，不进攒批窗口、不排在后台那批后面，当场只发这几条。Cue 对你说的话由这里认出来马上传
-/// （`speak`）：多半是命令行进程里 Cue 的工具写的，写的人叫不了上传。同一条记录同一时刻只在一批里（`inFlight`）：
-/// 不会有两个版本同时上传、互相以版本冲突拒绝。`.ifServerRecordUnchanged`；结果交给协调器记账（`SyncCoordinator.sent`）。
-/// 开始上传前先对一次最低对端版本（`prepare`），成功为止；拉取不等它。
-/// `stop` 取消并等在途的轮次与请求收尾才返回：之后不再挑、不再发，接手的新发送者不会与旧的同时传同一条记录（`inFlight` 随发送者，新旧不并存）。
-///
+/// 这里只决定什么时候发、一批发哪些；附件的文件不在这里传（`FileSender`）。
+/// 同一条记录同一时刻只在一批里（`inFlight`）：不会有两个版本同时上传、互相以 `.ifServerRecordUnchanged` 的版本冲突拒绝。
+/// `stop` 取消并等在途的轮次与请求收尾才返回：之后不再挑、不再发，接手的新发送者不会与旧的同时传同一条记录。
 /// 服务器拒收的单条记录不挡别的：协调器记下这一版跳过它（`SyncCoordinator.unsendable`），这一批照常算有进展。
-/// 整批的失败交给同步层唯一的重试调度（协调器的 `hold`，与拉取共用）：立即同步与按节奏的拉取顺带的一轮都守它的时刻，等待结束时（`retryDue`）接着发。
+/// 整批的失败交给同步层唯一的重试调度（协调器的 `hold`，与拉取共用），等待结束时（`retryDue`）接着发。
 /// 马上传与进后台前的那一轮（用户在等，试一次不费什么）越过连不上与被拒的等待，服务器要求的等待照守。
 actor RecordSender {
   static let gatherWindow = Duration.milliseconds(300)
@@ -22,29 +16,30 @@ actor RecordSender {
   private let uploader: any RecordUploader
   private let coordinator: SyncCoordinator
   private let prepare: @Sendable () async throws -> Void
+  private let step: @Sendable (Step) async -> Void
+  /// 测试控制先后的两处：后台那一路挑完一批、进 `inFlight` 之前；马上传那一路占下之前。
+  enum Step { case picked, reserving }
   private let triggers: AsyncStream<Void>
   private let trigger: AsyncStream<Void>.Continuation
   private var tasks: [Task<Void, Never>] = []
 
-  /// 下一轮不攒窗口（立即同步、重试到点、连通了）；`urgentRound` 另越过连不上与被拒的等待（进后台前，`SyncCoordinator.admits`）。
   private var explicit = false
   private var urgentRound = false
-  /// 等下一轮结束的（`flush`）；轮开始时取走、轮结束时答复。停下时随这一代结束一起答（`SyncGeneration.value`）。
+  /// 停下时随这一代结束一起答（`SyncGeneration.value`）。
   private var flushes: [Promise<Void>] = []
   private var prepared = false
   private var preparing: Task<Bool, Never>?
-  /// 在路上的（或马上传已占下的）记录名：另一路不再挑它们。
-  private var inFlight: Set<String> = []
-  /// 马上传了、还没收下的：有它们时退避上限小，到点先发它们。
+  /// 在路上的（或马上传已占下的）记录名：另一路不再挑它们。测试读它控制先后。
+  private(set) var inFlight: Set<String> = []
+  /// 马上传了、还没收下的（含答过没传成的）：有它们时退避上限小，到点先发它们。
   private var urgent: Set<String> = []
-  /// 要马上传时已在路上或已被另一趟马上传占下的（多半是刚领取的那一版，结果紧跟着写下）：那批收下的、那趟读库时看到"已不是待推送"的
-  /// 都可能是旧版，不算答复，当场再发一趟（新版还在就传，已收下就答收下）。
-  private var newer: Set<String> = []
-  /// 答复里作废、该再马上传一趟的（`resendNewer` 在它们离开 `inFlight` 后发）。
-  private var resend: Set<String> = []
-  /// 马上传在等结果的（`send`）。停下时随这一代结束一起答。
+  /// 每次要马上传加一。一批只答读库之前要的（`Waiter.asked <= readAt`）：之后要的，这一批读到的可能早于它要的那一版
+  /// （刚领取的投送请求，结果紧跟着写下；后台那一路读库在先、进 `inFlight` 在后）。没答的等这几条离开 `inFlight` 时补发（`release`）。
+  private(set) var asks = 0
+  /// 谁还在等哪几条，只记在这里。停下时随这一代结束一起答。
   private var waiters: [Waiter] = []
   private struct Waiter {
+    let asked: Int
     var remaining: Set<String>
     var received = true
     let answer = Promise<Bool>()
@@ -58,16 +53,16 @@ actor RecordSender {
 
   init(
     uploader: any RecordUploader, coordinator: SyncCoordinator, generation: SyncGeneration = SyncGeneration(),
-    prepare: @escaping @Sendable () async throws -> Void = {}
+    prepare: @escaping @Sendable () async throws -> Void = {}, step: @escaping @Sendable (Step) async -> Void = { _ in }
   ) {
     self.uploader = uploader
     self.coordinator = coordinator
     self.generation = generation
     self.prepare = prepare
+    self.step = step
     (triggers, trigger) = AsyncStream.makeStream(bufferingPolicy: .bufferingNewest(1))
   }
 
-  /// 开始跟随本机提交与重试的等待结束，并立即发一轮（上次没发完的）。
   func start() async {
     let changes = await coordinator.store.syncChanges()  // 先订阅：返回后的提交都不会漏
     guard !stopped else { return }  // 订阅期间停下了
@@ -96,14 +91,14 @@ actor RecordSender {
     _ = await preparation?.value
   }
 
-  /// 发一轮（立即同步、按节奏的拉取顺带的），不等；守着重试的时刻。
+  /// 不等；守着重试的时刻。
   func kick() {
     guard !stopped else { return }
     explicit = true
     trigger.yield()
   }
 
-  /// 现在发一轮并等它结束，连同在路上的马上传（iOS 进入后台前）：越过连不上与被拒的等待试一次，服务器要求的等待照守。
+  /// 现在发一轮并等它结束，连同在路上的马上传：越过连不上与被拒的等待试一次，服务器要求的等待照守。
   /// 挂住的请求至多到 CloudKit 的超时（`RequestLimits.request`），在系统给的后台时间之内。
   func flush() async {
     guard !stopped else { return }
@@ -116,24 +111,27 @@ actor RecordSender {
     for run in sending { await run.value }
   }
 
-  /// 马上传这几条：不进攒批窗口，不等后台那批，等到它们都有了结果（全收下为 true；离线等没传成的为 false，之后照常重试，且优先）。
+  /// 马上传这几条：不进攒批窗口，不等后台那批，等到它们都有了结果（全收下为 true；离线等没传成的为 false，之后照常重试，且优先；空集当场 true）。
+  /// 收下指服务器收下的不早于此刻库里的这一版。
+  /// 调用方被取消也不提前返回（`cancellable: false`，等的是多方共用的那次上传），最长到 CloudKit 的请求超时：不要在任务组里拿它跟到点比快，
+  /// 输的一方等不了，组返回不了。要设时限就用 `abandonable` 包住它，或照 `DiagnosticOutbox.reconcile(within:)`：事件流加一个定时 Task，谁先 yield 谁赢。
   func send(_ names: Set<String>) async -> Bool {
+    guard !names.isEmpty else { return true }
     guard !stopped else { return false }
     urgent.formUnion(names)
-    newer.formUnion(names.intersection(inFlight))
-    let waiter = Waiter(remaining: names)
+    asks += 1
+    let waiter = Waiter(asked: asks, remaining: names)
     waiters.append(waiter)
     runUrgent()
     return (try? await generation.value(of: waiter.answer, cancellable: false)) ?? false
   }
 
-  /// 碰过 Cue 对话的提交：Cue 对你说的话还没传的马上传（`CueStore.pendingSpeech`），不等攒批窗口、不排在后台那批后面。
+  /// Cue 对你说的话还没传的马上传：多半是命令行进程里 Cue 的工具写的，写的人叫不了上传。
   private func speak() async {
     guard let names = try? await coordinator.store.pendingSpeech(), !names.subtracting(urgent).isEmpty else { return }
     Task { _ = await send(names) }
   }
 
-  /// 马上传那一路发一次，记着在跑的（`flush` 等它们）。
   @discardableResult
   private func runUrgent() -> Task<Void, Never> {
     guard !stopped else { return Task {} }
@@ -147,9 +145,6 @@ actor RecordSender {
     return run
   }
 
-  // MARK: 两路
-
-  /// 后台那一路的一轮：一批接一批发到没有待推送、或要等。
   private func round() async {
     if !explicit {
       try? await Task.sleep(for: Self.gatherWindow)  // 提交触发：同一阵子的写入合成一批
@@ -164,10 +159,12 @@ actor RecordSender {
     for _ in 0..<Self.batchesPerRound {
       guard !stopped, await coordinator.admits(.upload(urgent: urgent)) else { return }  // 另一路这期间被要求等了
       // 准备不了（停下了、读库出错）由协调器记下状态，下一次触发再来
+      let readAt = asks
       guard var batch = try? await coordinator.nextBatch(.pending(excluding: inFlight), limit: limit) else { return }
+      await step(.picked)
       batch.drop(inFlight)  // 挑的时候马上传那一路占下的
       guard !batch.isEmpty else { return }
-      guard await upload(batch) else { return }
+      guard await upload(batch, readAt: readAt) else { return }
     }
     kick()  // 一轮的批数用完，还有没发完的
   }
@@ -175,61 +172,71 @@ actor RecordSender {
   /// 马上传那一路：只发在等的这几条里不在路上的；在路上的等那一批的结果。已不是待推送的答收下了，这一版传不上去的答没传成、不再追；
   /// 一批装不下的这一批收下后接着发，这一批没成就一起答没传成（仍在 `urgent` 里，重试时先发）。
   private func sendUrgent() async {
-    let wanted = urgent.subtracting(inFlight)
+    let wanted = waited.union(urgent).subtracting(inFlight)
     guard !stopped, !wanted.isEmpty else { return }
-    guard await coordinator.admits(.upload(urgent: true)), await coordinator.canSync, await ready() else { return answer(wanted, received: []) }
+    guard await coordinator.admits(.upload(urgent: true)), await coordinator.canSync, await ready() else {
+      return answer(wanted, received: [], readAt: asks)
+    }
+    await step(.reserving)
     let reserved = wanted.subtracting(inFlight)  // 等的时候后台那一路可能已带走
+    let readAt = asks
     inFlight.formUnion(reserved)
-    let prepared = try? await coordinator.nextBatch(.only(reserved), limit: limit)
-    inFlight.subtract(reserved)
-    guard let batch = prepared else { return answer(reserved, received: []) }  // 准备不了：之后照常重试
+    guard let batch = try? await coordinator.nextBatch(.only(reserved), limit: limit) else {  // 准备不了：之后照常重试
+      answer(reserved, received: [], readAt: readAt)
+      return release(reserved)
+    }
     let settled = reserved.subtracting(batch.names).subtracting(batch.stuck).subtracting(batch.left)  // 已不是待推送（别的批已收下、删掉了）
-    answer(settled, received: settled)
-    answer(batch.stuck, received: [])
-    urgent.subtract(batch.stuck)  // 收下的在答复里已去掉；作废的（读库时可能早于要马上传的那一版）留着，接着再发
-    resendNewer()
-    guard !batch.isEmpty, !stopped else { return answer(batch.names, received: []) }
-    let sent = await upload(batch)
+    answer(settled, received: settled, readAt: readAt)
+    answer(batch.stuck, received: [], readAt: readAt)
+    urgent.subtract(batch.stuck)
+    guard !batch.isEmpty, !stopped else {
+      answer(batch.names, received: [], readAt: readAt)
+      return release(reserved)
+    }
+    release(reserved.subtracting(batch.names).subtracting(batch.left))
+    let sent = await upload(batch, readAt: readAt)
     trigger.yield()  // 在路上时又改过的，后台那一路接着发
-    guard !batch.left.isEmpty else { return }
-    if sent { runUrgent() } else { answer(batch.left, received: []) }
+    if !sent { answer(batch.left, received: [], readAt: readAt) }
+    release(batch.left)  // 这一批收下了，装不下的接着发
   }
 
-  /// 发一批；返回能不能接着发下一批。
-  private func upload(_ batch: OutgoingBatch) async -> Bool {
+  /// 发一批；返回能不能接着发下一批。`readAt`：这一批读库之前的 `asks`。
+  private func upload(_ batch: OutgoingBatch, readAt: Int) async -> Bool {
     let names = batch.names
     inFlight.formUnion(names)
     await updateBusy()
-    let next = await outcome(of: batch)
-    inFlight.subtract(names)
-    resendNewer()
+    let next = await outcome(of: batch, readAt: readAt)
+    release(names)
     await updateBusy()
     return next
   }
 
-  /// 再马上传一趟答复里作废的（`resend`）。只在它们离开 `inFlight` 后调：之前发起的那一趟挑不到它们，在等的就一直等到别的批碰巧带上它们。
-  private func resendNewer() {
-    guard !resend.isEmpty else { return }
-    resend = []
+  /// 还有人在等的记录名。测试读它控制先后。
+  var waited: Set<String> { waiters.reduce(into: []) { $0.formUnion($1.remaining) } }
+
+  /// 这几条离开 `inFlight`：还有人在等的（读库之后才要的、核对时已作废的、这一批没带上的）补发一趟，读库在那之后，答得了它们。
+  /// 补发的那一趟挑不到在路上的，所以只在离开时补：在路上时补，就没人再发，在等的要等到这条记录下次被改。
+  private func release(_ names: Set<String>) {
+    inFlight.subtract(names)
+    guard waiters.contains(where: { !$0.remaining.isDisjoint(with: names) }) else { return }
     runUrgent()
   }
 
-  private func outcome(of prepared: OutgoingBatch) async -> Bool {
+  private func outcome(of prepared: OutgoingBatch, readAt: Int) async -> Bool {
     var names = prepared.names
     do {
-      let batch = try await reservingDeliveryPayloads(in: prepared)
+      let (batch, _) = try await coordinator.reserveForUpload(prepared)  // 作废的仍有人等就由 `release` 补发
       names = batch.names
       guard !batch.isEmpty else { return true }
       var sent: SentRecords
       do {
         sent = try await uploader.upload(saving: batch.saves, deleting: batch.deletes)
       } catch let error as CKError where error.code == .zoneNotFound {
-        // 整个请求因同步区不在被拒（新装的第一次上传）：建区再发这一批
         try await uploader.saveZone()
         sent = try await uploader.upload(saving: batch.saves, deleting: batch.deletes)
       }
       let outcome = await coordinator.sent(sent, for: batch)
-      answer(names, received: Set(sent.saved.map(\.recordID.recordName) + sent.deleted.map(\.recordName)))
+      answer(names, received: Set(sent.saved.map(\.recordID.recordName) + sent.deleted.map(\.recordName)), readAt: readAt)
       if outcome.paused { return false }  // 协调器停下了（等你决定、要更新）：结果没记账，也不定重试时刻
       if outcome.zoneMissing { try await uploader.saveZone() }
       if let fault = outcome.fault {
@@ -244,10 +251,10 @@ actor RecordSender {
       return true
     } catch let error as CKError where error.code == .limitExceeded && limit > 1 {
       limit /= 2  // 这一批太大：减半再试（马上传那一路的由后台那一路接着发）
-      answer(names, received: [])
+      answer(names, received: [], readAt: readAt)
       return true
     } catch {
-      answer(names, received: [])
+      answer(names, received: [], readAt: readAt)
       if stopped { return false }  // 停下时被取消的请求不是同步的失败，不记
       if let error = error as? CKError, error.code == .userDeletedZone {
         await coordinator.zoneMissing(deletedByUser: true)
@@ -258,24 +265,7 @@ actor RecordSender {
     }
   }
 
-  /// nextBatch 读 payload 与登记 noteSent 之间也可能被另一进程撤回；交出前按同一 Store 事务核对并保留该版。
-  /// 旧版已消失或变更就丢弃它，沿现有调度重读，不把丢弃当成服务器已接收。
-  private func reservingDeliveryPayloads(in prepared: OutgoingBatch) async throws -> OutgoingBatch {
-    var obsolete = Set<String>()
-    for record in prepared.saves where record.recordType == Table.deliveryRequests.rawValue {
-      if let stamp = record.modifiedAt,
-        try await !coordinator.store.reserveDeliveryPayload(record.recordID.recordName, modifiedAt: stamp) {
-        obsolete.insert(record.recordID.recordName)
-      }
-    }
-    var batch = prepared
-    batch.drop(obsolete)
-    newer.subtract(obsolete)
-    resend.formUnion(obsolete.intersection(urgent))
-    return batch
-  }
-
-  /// 上传前对一次最低对端版本，成功为止（同一时刻只对一次）；停下（这台要更新、要你决定）的不再对。文件那一路（`FileSender`）同样等它。
+  /// 上传前对一次最低对端版本，成功为止（同一时刻只对一次）；停下的不再对。文件那一路（`FileSender`）同样等它。
   func ready() async -> Bool {
     guard !stopped else { return false }
     if prepared { return true }
@@ -297,13 +287,11 @@ actor RecordSender {
     return prepared
   }
 
-  // MARK: 重试
-
   private func schedule(_ fault: SyncFault) async {
     await coordinator.hold(fault, waiting: !urgent.isEmpty)
   }
 
-  /// 等待结束：有话在等先只发它们，成了再发一轮后台的（没成就又定了时刻，那一轮守着它）：断网时每次重试只一个请求。
+  /// 有话在等先只发它们，成了再发后台那一轮：断网时每次重试只一个请求。
   private func resume() {
     guard !stopped else { return }
     guard !urgent.isEmpty else { return kick() }
@@ -314,7 +302,6 @@ actor RecordSender {
     }
   }
 
-  /// 同步中：有一批在路上（服务器要求等着重发由协调器记）。
   private func updateBusy() async {
     let now = !inFlight.isEmpty
     guard now != busy else { return }
@@ -322,28 +309,23 @@ actor RecordSender {
     await coordinator.setSending(now)
   }
 
-  /// 一批有了结果：在等的话里这批带着的有了答复，都有答复的等待者返回（全收下才是 true）。
-  private func answer(_ names: Set<String>, received: Set<String>) {
-    let stale = newer.intersection(received)
-    newer.subtract(names)
-    resend.formUnion(stale)
-    let names = names.subtracting(stale)
-    urgent.subtract(names.intersection(received))
+  private func answer(_ names: Set<String>, received: Set<String>, readAt: Int) {
     var rest: [Waiter] = []
     for var waiter in waiters {
-      let hit = waiter.remaining.intersection(names)
+      let hit = waiter.asked <= readAt ? waiter.remaining.intersection(names) : []
       waiter.received = waiter.received && hit.isSubset(of: received)
       waiter.remaining.subtract(hit)
       if waiter.remaining.isEmpty { waiter.answer.resolve(.success(waiter.received)) } else { rest.append(waiter) }
     }
     waiters = rest
+    urgent.subtract(names.intersection(received).subtracting(waited))
   }
 }
 
 extension OutgoingBatch {
   var isEmpty: Bool { saves.isEmpty && deletes.isEmpty }
 
-  /// 去掉这几条（另一批已带走）：这批就不再是"全部"。
+  /// 另一批已带走的去掉后，这批就不再是"全部"。
   mutating func drop(_ names: Set<String>) {
     guard !names.isDisjoint(with: self.names) else { return }
     saves.removeAll { names.contains($0.recordID.recordName) }

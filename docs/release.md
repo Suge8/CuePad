@@ -1,18 +1,22 @@
 # 签名、发布与 CloudKit 结构
 
-入口是 `xc.sh release mac|ios`、`xc.sh device`、`xc.sh provision`，每步做什么在 `apple/scripts/` 下各脚本的头注释里（`release-mac.sh`、`release-ios.sh`、`provision.py`、`testflight.py`、`sparkle.sh`、`ck-production.sh`）。对外发布只在用户明确要求时做：发出去的包会推给所有用户。发布只在干净检出运行，否则 `xc.sh` 拒绝。
-
-描述文件全机一份：几个检出同时发版、跑 `device` 或 `provision` 时，从生成描述文件到归档导出这一段全机排队，一次一个（`_lock.sh` 规则 3），公证与上传不排。
+入口是 `xc.sh release mac|ios`、`xc.sh device`、`xc.sh provision`。每步做什么、全机发布锁、每次尝试一个新目录、源码取固定提交的快照、`--dry-run` 与 `--resume` 的语义、签名排队，都在脚本头注释里（`release-context.py`、`release-mac.sh`、`release-ios.sh`、`provision.py`、`testflight.py`、`sparkle.sh`、`ck-production.sh`、`_lock.sh` 规则 3）；这里只记脚本里没写的。对外发布只在用户明确要求时做：发出去的包会推给所有用户。
 
 ## 发版核对
 
-`release mac` 导出后、公证前由脚本核对，不过就停：门铃中转活着、签名完整、包里的正式版标记 `CuePadRelease` 是 YES（`Signing.xcconfig` 的 `CUEPAD_RELEASE`，只有发版脚本归档时设）、包里的命令行在空家目录下去找正式资料库 `CuePad/Library` 而不是开发库 `CuePad Dev`。少了标记，装上的正式版会开开发库，用户看到的是空库。只核对、不上传用 `xc.sh release mac --dry-run`（照样提交公证）。
+- 会上传的发布（新发的与 `--resume` 找回的，不含 `--dry-run`）只从主干云端检查全绿的提交出：脚本开头自己查，不绿就停并给出那一遍的链接。在跑就等它跑完，红了先修主干。
+- 少了正式版标记 `CuePadRelease`（`Signing.xcconfig` 的 `CUEPAD_RELEASE`，只有发版脚本归档时设），装上的正式版会开开发库 `CuePad Dev`，用户看到的是空库；`release mac` 在公证前核对它。只核对不上传用 `--dry-run`，它照样访问签名、云服务与公证，不是离线模式。
+- 归档、导出或前置检查失败后直接再发即可。待公证、上传结果未知的旧尝试原样保留（`apple/.derived/release/<平台>-attempts/`），确认不再需要恢复后才手动清理；不手改保留的产物。
+- 恢复找不到唯一匹配的公证 ID（响应缺失、不完整或匹配到多个）时脚本拒绝猜测：保留全部尝试，去核实苹果的提交记录。恢复时即使 HEAD 已移动，也沿用原提交的配置与同步下界。
+- 旧版脚本的固定目录 `apple/.derived/release/mac|ios` 还在时发布直接报错，不自动迁移：是链接就删掉；是目录先确认里面没有待恢复的公证（`submission.json`），再手工删掉或移走。
+- iOS 的 TestFlight 分组是上传后的辅助步骤：分组失败只重跑 `python3 apple/scripts/testflight.py group`，不为它重传 IPA。下一次 `release ios` 是新构建，不是重试上一份；上传结果未知时保留原尝试并核实 App Store Connect，不自动重投。
+- Xcode Archives 另存归档和 dSYM（`xc.sh diag` 靠它还原崩溃帧），归档名带尝试名，同分钟重试不覆盖。
 
 ## 发版顺序
 
-同步下界（`Schema.peerFloor`，什么时候抬见它的注释）抬高的那一版先发 iOS，等 TestFlight 处理完（`testflight.py builds` 显示 VALID）再发 Mac：Mac 经 Sparkle 几分钟就装上，iOS 要等苹果处理十几分钟到一小时，反过来发，这段时间里手机停下收发。`release ios` 上传后、`release mac` 回读校验后各在那个提交上打 `ios/<构建号>`、`mac/<构建号>` 标签并推到远端（查某一版的源码只看标签，不另留发版分支），`release mac` 核对 TestFlight 上处理好的最新一版的下界不低于这一版，不够就不发。下界没变的版本通常先后随意；首次启用远程实时活动的这一版先更新负责发布的 Mac，再更新 iPhone：新版手机不再用本地库更新远程活动。
+同步下界（`Schema.peerFloor`，什么时候抬见它的注释）抬高的那一版先发 iOS，等 TestFlight 处理完（`testflight.py builds` 显示 VALID）再发 Mac：Mac 经 Sparkle 几分钟就装上，iOS 要等苹果处理十几分钟到一小时，反过来发，这段时间里手机停下收发。`release ios` 上传后、`release mac` 公开替换资产前各在那个提交上打 `ios/<构建号>`、`mac/<构建号>` 标签并推到远端（查某一版的源码只看标签，不另留发版分支），`release mac` 核对 TestFlight 上处理好的最新一版的下界不低于这一版，不够就不发。下界没变的版本通常先后随意；首次启用远程实时活动的这一版先更新负责发布的 Mac，再更新 iPhone：新版手机不再用本地库更新远程活动。
 
-每次发 Mac 都把这一版装进本机 `~/Applications/CuePad.app` 并重启到新版（导出的包在 `apple/.derived/release/mac/export/CuePad.app`），不等 Sparkle；交回时写装上的 `CFBundleVersion`，没装上就说原因。
+每次发 Mac 都把这一版装进本机 `~/Applications/CuePad.app` 并重启到新版（导出的包在这次尝试目录的 `export/CuePad.app`），不等 Sparkle；交回时写装上的 `CFBundleVersion`，没装上就说原因。
 
 先装上新版的那台把下界抬上去，另一台停下同步、写下的照记，更新后自动发出：Mac 停下时当场查一次更新（`UpdateService.checkInBackground`），手机在设置的同步那一行点「在 TestFlight 里更新」。
 
@@ -32,9 +36,9 @@ Mac 的自动更新源与公钥（`CuePad-macOS-Info.plist` 的 `SUFeedURL`、`S
 
 ## 自动更新（macOS）
 
-Sparkle 2：密钥、appcast 与只发完整包见 `sparkle.sh` 头注释，更新源与公钥在 `App/Config/CuePad-macOS-Info.plist`。
+Sparkle 2，只发完整包。密钥与 appcast 见 `sparkle.sh` 头注释，发布步骤、线上版本核对与回读见 `release-mac.sh` 头注释，更新源与公钥在 `App/Config/CuePad-macOS-Info.plist`。
 
-下载位置只有一处：GitHub `Suge8/CuePad` 里一个固定的 Release（标签 `v0.1.0`），`release mac` 每次原地替换资产，都经 `releases/latest/download/<文件名>` 访问，更新链不经过官网：
+下载位置只有一处：GitHub `Suge8/CuePad` 里一个固定的 Release（标签 `v0.1.0`），都经 `releases/latest/download/<文件名>` 访问，更新链不经过官网：
 
 | 资产 | 用途 |
 | --- | --- |
@@ -42,11 +46,14 @@ Sparkle 2：密钥、appcast 与只发完整包见 `sparkle.sh` 头注释，更�
 | `appcast.xml` | 更新源，只含最新这一版 |
 | `CuePad-mac-arm64-<构建号>.zip` | 与官网包同一个文件，appcast 的 enclosure 指向它 |
 
-enclosure 带构建号，是因为 GitHub 不能一次替换多个资产：用固定名字时，换包与换 appcast 之间有一段旧签名配新包的窗口，落后的客户端验签失败。所以上传顺序是：带构建号的新包 → `appcast.xml` → 官网包 → 删上一版带构建号的包；中途失败重跑 `release mac` 即可补齐。
+- enclosure 带构建号，是因为 GitHub 不能一次替换多个资产：用固定名字时，换包与换 appcast 之间有一段旧签名配新包的窗口，落后的客户端验签失败。所以上传顺序是：带构建号的新包 → `appcast.xml` → 官网包 → 删上一版带构建号的包；中途失败用 `--resume <公证 id>` 补齐。
+- 恢复不重新签名：重新生成会换 `pubDate` 与 EdDSA 签名，线上已有的资产就不一致了。
+- GitHub 的 CDN 在上传后 1–2 分钟内仍可能返回旧内容（#124），回读轮询到一致；超时（`READBACK_TIMEOUT`，默认 300 秒）时线上资产已传完，等一会儿 `--resume` 只做回读。
+- `mac/<构建号>` 标签先于资产推送，标签在不代表上传与回读已完成。发布锁不跨机器：将来有第二台发布机时要另补跨机互斥。
 
 装更新要重启 CuePad：托管的 Pi 撑得过重启（新版经桥认回），Claude Code、Codex、OpenCode、Grok Build 这类随 App 退出的托管会话还在干活或等你确认时，重启推迟到它们空下来（`UpdateService`）。`-CuePadScene updatewait` 验托管的 Pi 在干活时更新直接装。
 
-换图标：改 `AppIcon.icon` 里的 `cue.png`，着色与透明外观的剪影、落地页的小标重跑 `design/tools/cue-symbols.py`（连同菜单栏与图标族里的 Cue，几何只在它的 `mascot`），落地页的 `icon.png`（64）与 `apple-touch-icon.png`（180，垫墨色底）用 Icon Composer 的 `ictool` 导出。
+换图标：改 `AppIcon.icon` 里的 `cue.png`，着色与透明外观的剪影、落地页的小标重跑 `design/tools/cue-symbols.py`（连同菜单栏与图标族里的 Cue，几何只在 `design/tools/ink/mascot.py`），落地页的 `icon.png`（64）与 `apple-touch-icon.png`（180，垫墨色底）用 Icon Composer 的 `ictool` 导出。
 
 ## CloudKit 数据结构
 

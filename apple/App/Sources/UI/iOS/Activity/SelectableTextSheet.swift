@@ -2,8 +2,7 @@
 import SwiftUI
 import UIKit
 
-/// "选择文本"：一条消息的全文，可以像备忘录那样按住拖出任意一段去复制、查询（SwiftUI 的 `Text` 在手机上只能整段复制）。
-/// Cue 页的话用它；会话里的回答用带批注的那一张（`ReplyTextSheet`）。
+/// 不用 `Text`：它在手机上只能整段复制。
 struct SelectableTextSheet: View {
     let text: String
     @Environment(\.palette) private var palette
@@ -13,7 +12,6 @@ struct SelectableTextSheet: View {
     }
 }
 
-/// 可选文本页的外框：标题、可选的一行提示（标题下面），右上角"完成"。
 struct TextSheet<Content: View>: View {
     let title: LocalizedStringResource
     var hint: LocalizedStringResource?
@@ -35,25 +33,20 @@ struct TextSheet<Content: View>: View {
     }
 }
 
-/// 只读、可选的系统文本视图。给了 `notes` 时可以批注：编辑菜单最前面加"批注"，批注过的几处高亮、点它打开那一条。
 struct SelectableText: UIViewRepresentable {
     let text: String
     let ink: Color
     var notes: Notes?
 
-    /// 一条回答的批注：`text` 是 `runs` 用 `runGap` 连起来的全文，选区按它换算回第几段、段内偏移（`ReplyNote`）。
     struct Notes {
         let runs: [String]
         let entry: UUID
-        /// 这条回答已有的批注。
         let marked: [ReplyNote]
         let fill: Color
         let line: Color
-        /// 选中的一处（还不知道是不是已经批注过）。
         let annotate: (ReplyNote) -> Void
         let open: (UUID) -> Void
 
-        /// 选区所在的那一处：截到起点那一段（起点落在段间空行里时是下一段）；选区里没有正文时为 nil。
         func place(_ range: NSRange) -> ReplyNote? {
             var start = 0
             for (run, text) in runs.enumerated() {
@@ -68,7 +61,6 @@ struct SelectableText: UIViewRepresentable {
             return nil
         }
 
-        /// 每条批注在全文里的那一处；那一处已不是摘录时不画（同 `MarkdownText`）。
         func ranges() -> [(UUID, NSRange)] {
             var starts: [Int] = [], start = 0
             for run in runs {

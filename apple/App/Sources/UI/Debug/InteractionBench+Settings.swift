@@ -6,9 +6,8 @@ import AppKit
 /// 开设置、关设置（`-CuePadBench interact`，只在点名时量，不改全量里其余各项的先后与基线）：两端各做两遍，第一遍要现建那一页。
 /// Mac 开的是设置窗口（同 ⌘,），它不在主窗口里，画面变化看不到（`seen` 为 false），看合计与最重一圈；iPhone 是冷启动后接着点设置（同侧栏的设置钮）、再回 Cue 页。
 /// 每行的 `freezes` 见 `PerfProbe.freezes`。量法：`xc.sh perf ios 5 -CuePadInteractOnly "冷启动·Cue 页,开设置,关设置"`、`xc.sh perf mac 5 -CuePadInteractOnly 开设置,关设置`。
-/// 2026-11-06（main c9508d72f，两端两库各 5 次）：看守一条没记；首次开设置最重一圈 iPhone 164～195ms、Mac 111～152ms，超 28ms；再开 iPhone 52～88ms、Mac 1～31ms。
-/// 开销在系统里：建那一页的 SwiftUI 表单与排版（Mac 是分组表单逐行判横竖排、设置窗口按内容求大小），iPhone 另有导航推入，模拟器上约四分之一是第一次用到类型时的 Swift 一致性查找；
-/// 没有读库、文件读写或大计算。调试实例冷启动开设置时记到过一次 1.56 秒卡住，没能复现：Debug 7 次（首次开设置 105～224ms）与 Release 40 次都没有超 1 秒的一圈。
+/// 首次开设置最重一圈 iPhone 164～195ms、Mac 111～152ms（超 28ms），再开 iPhone 52～88ms、Mac 1～31ms；开销在系统建 SwiftUI 表单与排版（模拟器上约四分之一是第一次用到类型时的 Swift 一致性查找），
+/// 没有读库、文件读写或大计算。调试实例冷启动开设置时记到过一次 1.56 秒卡住，没能复现（Debug 7 次、Release 40 次都没有超 1 秒的一圈）。
 enum SettingsBench {
     static let names: Set<String> = ["开设置", "关设置"]
 

@@ -37,18 +37,27 @@ $([ "$method" = app-store-connect ] && echo '<key>destination</key><string>expor
 PLIST
 }
 
-# 发布版本的 xcodebuild 设置，由同一个时间戳推出：显示版本是日期（2026.10.13），构建号是分钟（2610131639）。
-# TestFlight 与 Sparkle 都按构建号比较新旧，所以它必须递增：发布是串行的，一次要几分钟（公证），分钟精度够；同日多次发布显示版本相同，Sparkle 的更新提示会补上构建号区分。
+# TestFlight 与 Sparkle 按构建号比较新旧；同分钟的尝试可能同号，不能依靠归档或公证耗时保证递增。
 release_versions() {
   local now; now="$(date +%s)"
   echo "MARKETING_VERSION=$(date -r "$now" +%Y.%-m.%-d) CURRENT_PROJECT_VERSION=$(date -r "$now" +%y%m%d%H%M)"
 }
 
-# 发布的归档按构建号存进 Xcode 的归档目录，不放产物目录：产物目录每次发布先清空、发布用的干净检出用完就删，
+# 发布归档按构建号与尝试名存进 Xcode 的归档目录，不随检出或尝试目录的清理删除：
 # 真机崩溃（MetricKit、TestFlight）的栈只能靠归档里的 dSYM 还原；Xcode 的 Organizer 列得出它，Spotlight 按 UUID 找得到 dSYM。
-# 用法：release_archive <ios|mac> <release_versions 的输出…>
+# 用法：release_archive <ios|mac> <尝试目录名> <release_versions 的输出…>；同分钟重试也不覆盖旧归档
 release_archive() {
-  echo "$HOME/Library/Developer/Xcode/Archives/$(date +%F)/CuePad $1 ${3#CURRENT_PROJECT_VERSION=}.xcarchive"
+  echo "$HOME/Library/Developer/Xcode/Archives/$(date +%F)/CuePad $1 ${4#CURRENT_PROJECT_VERSION=}-${2}.xcarchive"
+}
+
+# 在归档来源提交上打 <ios|mac>/<构建号> 标签并推到 origin（这一版源码的唯一记号）：release_tag <平台> <构建号> <提交>。
+# 已有同名标签只认同一提交（恢复时重入）；远端同名标签指向别的提交时推送被拒，发布停下
+release_tag() {
+  local tag="$1/$2" found
+  found="$(git -C "$REPO_DIR" rev-parse -q --verify "refs/tags/$tag^{commit}" || true)"
+  [ -n "$found" ] || { git -C "$REPO_DIR" tag "$tag" "$3"; found="$3"; }
+  [ "$found" = "$3" ] || { echo "标签 $tag 已指向另一提交 $found" >&2; exit 1; }
+  git -C "$REPO_DIR" push -q origin "refs/tags/$tag"
 }
 
 # 发布前核对中转：check_relay [打出来的 Info.plist]。门铃 /health 回 ok，实时活动 /v1/activity/health 回 204；
@@ -63,6 +72,6 @@ check_relay() {
 }
 
 require_asc() {
-  [ "${#team_signing[@]}" -gt 0 ] || { echo "缺少 App Store Connect 凭据文件：$ASC_ENV（字段见 apple/scripts/_signing.sh 头注释）" >&2; exit 1; }
+  [ "${#team_signing[@]}" -gt 0 ] || { echo "缺少 App Store Connect 凭据文件：${ASC_ENV}（字段见 apple/scripts/_signing.sh 头注释）" >&2; exit 1; }
   [ -f "$ASC_KEY_PATH" ] || { echo "ASC_KEY_PATH 指向的密钥文件不存在" >&2; exit 1; }
 }

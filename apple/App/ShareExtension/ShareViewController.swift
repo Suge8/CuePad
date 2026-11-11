@@ -2,7 +2,6 @@ import CueStore
 import SwiftUI
 import UIKit
 
-/// 分享面板里的入口：把系统给的内容交给 `ShareModel`，界面由 `ShareViews` 提供。
 @objc(ShareViewController)
 final class ShareViewController: UIViewController {
     override func viewDidLoad() {

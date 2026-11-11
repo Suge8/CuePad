@@ -1,6 +1,6 @@
 #if os(macOS)
 import CueAgent
-import CuePi
+import CueBridge
 import CueStore
 import Foundation
 
@@ -18,7 +18,7 @@ extension CueKeeper {
         var name: String
         var runtime: Open<AgentKind>
         var model: String?
-        var effort: PiThinkingLevel?
+        var effort: ThinkingLevel?
         var fast: Bool
 
         init(_ profile: CueProfile) {
@@ -76,7 +76,7 @@ extension CueKeeper {
         var detour: Detour?
     }
 
-    /// 额度、登录卡住后的绕行（规则在 `CueKeeper+Recover` 的头注释）：你设定的那家与它的模型、强度、fast（绕行前的设置），与这次卡住的几家。
+    /// 额度、登录卡住后的绕行：你设定的那家与它的模型、强度、fast（绕行前的设置），与这次卡住的几家。
     nonisolated struct Detour: Codable, Equatable, Sendable {
         struct Stuck: Codable, Equatable, Sendable {
             /// 卡住的时刻：轮流从最近卡住的那家后面数
@@ -87,7 +87,7 @@ extension CueKeeper {
 
         var runtime: AgentKind
         var model: String?
-        var effort: PiThinkingLevel?
+        var effort: ThinkingLevel?
         var fast: Bool
         var stuck: [AgentKind: Stuck] = [:]
 
@@ -145,7 +145,7 @@ extension CueKeeper {
         /// 这一轮接走的你的消息与回答（大脑报的，`TurnEvent.received`）。Cue 自己醒来的一轮里有它，就是中途插进了你的话
         var delivered: [UUID] = []
         /// 大脑此刻正在说的话：做完时还留着的就是这一轮的回复
-        var speaking: PiDraft?
+        var speaking: LiveDraft?
         /// 醒来时读到的写入序号（读变化之前取）：这一轮做完且没出错，会话的动静从它之后算
         var mark: Int?
         /// 这一轮做完且没出错后，还要等他离开再报的那几次停下（`Progress.held`）：这一轮报了的不再记，没做完下次照样报

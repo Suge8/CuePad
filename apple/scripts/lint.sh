@@ -18,10 +18,11 @@ cd apple
 command -v rg >/dev/null || { echo "lint.sh 要 ripgrep：brew install ripgrep" >&2; exit 1; }
 
 status=0
-# forbid <原因与替代> <正则（PCRE2）> [白名单路径…]；只查某几个目录的，调用前写 FORBID_IN="目录…"（默认 App 与 CuePadKit）
+# forbid <原因与替代> <正则（PCRE2）> [白名单路径…]；只查某几个目录的，调用前写 FORBID_IN="目录…"（默认 App 与 CuePadKit）；正则要跨行认就写 FORBID_U=1
 forbid() {
   local why=$1 pattern=$2; shift 2
   local args=(--pcre2 --line-number --no-heading --type swift) path hits rc=0 roots
+  [ -z "${FORBID_U:-}" ] || args+=(-U)
   read -ra roots <<<"${FORBID_IN:-App CuePadKit}"
   for path in "$@"; do args+=(--glob "!$path"); done
   # 只认 // 之前的代码；行内字符串里的 // 后面的就漏了，代价可接受
@@ -70,6 +71,12 @@ forbid "圆角只用 Radius 的几档（Theme/Radius.swift，按东西的种类�
 forbid "字号只经 Typography（文字，Theme/Typography.swift）与 Glyph（图标，Theme/Glyph.swift）的几档，Theme 以外不写 .system(size: 数) 与 ofSize:、pointSize: 的数：各处自写的字号是又一套层级，新东西先问它是正文、说明还是哪一档图标；确要新档就在那两处按用途加一个" \
   '(?:\.system\(size:\s*[\d.]|\b(?:ofSize|pointSize):\s*[\d.])' \
   '**/Theme/**' 'App/Sources/UI/Debug/**' '**/Tests/**' 'App/Widget/IslandType.swift'
+forbid "字体名称只在 Typography 选择：界面与编辑器复用同一角色，让系统按文字选择中英文字形，不在单个组件强制中文字体" \
+  '(?:\b(?:CueFont|NSFont|UIFont)\(name:|\bFont\.custom\(|\.font\(\s*\.custom\()' \
+  '**/Theme/Typography.swift' 'App/Sources/UI/Debug/**' '**/Tests/**'
+forbid "额外行距只在 Typography 定义：输入、发送后的气泡、正文与测高复用同一阅读角色；紧凑文字按角色取值，不在组件里另写一套" \
+  '(?:(?:\.lineSpacing\(\s*|\blineSpacing:\s*|\.lineSpacing\s*=\s*)(?:[1-9]|0\.\d*[1-9]))' \
+  '**/Theme/Typography.swift' 'App/Sources/UI/Debug/**' '**/Tests/**'
 forbid "投影只经 elevation 的几档（Theme/Surfaces.swift 的 Elevation，按浮多高分：hover、lifted、panel）：各处自写的半径与偏移是又一套手感，颜色随外观由色板给" \
   '\.shadow\(' '**/Theme/**' 'App/Sources/UI/Debug/**' '**/Tests/**'
 forbid "字号只经 Typography 的角色与 Glyph，不写系统文字样式（.caption、.footnote、Font.subheadline…）：它们编进 Mac 是系统的小号（.caption、.footnote 10 点），低于 Mac 的 12 点下限；iOS 缺的角色在 Typography 里按用途加。扩展（Widget）里没有 Typography，例外" \
@@ -91,15 +98,15 @@ forbid "不在界面里给颜色叠透明度：每处各写一个透明度就多
 forbid "图标只经 Icon（Theme/Icon.swift）按意思取自家墨块符号（design/tools/cue-symbols.py 生成），不用系统符号：哪个意思画成哪个符号只在那里写一处，缺哪个就在生成器里画、在 Icon 里加一个意思。用 Image(.名)、Label(_:icon:)、Button(_:icon:)、Menu(_:icon:)、Icon.platformImage；出错是 .failure、等你是 .waiting。扩展里没有 Icon，经 WidgetIcon" \
   '\b(?:systemName|systemImage|systemSymbolName)\b|\b(?:Image|UIImage|NSImage)\((?:named:\s*|symbolName:\s*)?"cue\.' \
   'App/Widget/WidgetIcon.swift'
-forbid "说的话只有一条路 Workspace.speak（Speaking.swift）：同步清空输入框、写一条记录、后台立即上传，界面不等上传与结果；别处直接写记录会长出第二套发消息的写法" \
-  '(\baddCueMessage\(\s*\.you\b|\bstore\.(requestDelivery|speak)\()' '**/Workspace/Speaking.swift' '**/CueAgent/CueTools+Say.swift' '**/Tests/**' 'App/Sources/UI/Debug/**'
+forbid "输入框经 Workspace.speak 同步取走草稿；消息落库经 AppServices.recordSpeech，语音身份原子复核只在 CueStore+VoiceRecovery；同一去处共用发送顺序，界面不等上传与执行结果" \
+  '(\baddCueMessage\(\s*\.you\b|\bstore\.(requestDelivery|speak)\()' 'App/Sources/Services/AppServices+Speaking.swift' 'CuePadKit/Sources/CueStore/CueStore+VoiceRecovery.swift' '**/CueAgent/CueTools+Say.swift' '**/Tests/**' 'App/Sources/UI/Debug/**'
 forbid "界面上请求到哪了只读 Speech.trip（发送中、已送达、没能送达，含超时与本机同步不通）：直接看请求的原始状态会长出第二套状态机，超时与断网时说法对不上" \
   '\.isOpen\b|\.status\s*[!=]=\s*\.known\(\.(?:pending|executing|succeeded|failed)\)|\.status\.known\b' \
   'App/Sources/[!U]*/**' 'App/Sources/*.swift' 'App/Sources/UI/Debug/**' 'App/Tests/**' 'CuePadKit/**'
 forbid "一行里用“·”隔开几段的字只经 Dotted 或 Dot（Atoms.swift）：屏幕写“·”、读屏读逗号；直接拼的分隔点读屏会念出来" \
-  '(?: · |Text\("·"\))' 'App/AppGroup/Dotted.swift' '**/Components/Atoms.swift' '**/PiProgress.swift' 'App/Sources/UI/Debug/**' 'App/Tests/**' 'CuePadKit/**'
+  '(?: · |Text\("·"\))' 'App/AppGroup/Dotted.swift' '**/Components/Atoms.swift' '**/SessionProgress.swift' 'App/Sources/UI/Debug/**' 'App/Tests/**' 'CuePadKit/**'
 forbid "你说出去的话用 SpeechBubble 画（状态只从记录推出，见 Speech）；UserBubble 只给已进对话的话（会话对话与近况）" \
-  '\bUserBubble\s*\(' '**/Components/PiBubbles.swift' '**/Components/SpeechBubble.swift' '**/Components/PiConversation.swift' '**/Components/PiConversationBlocks.swift'
+  '\bUserBubble\s*\(' '**/Components/Bubbles.swift' '**/Components/SpeechBubble.swift' '**/Components/Conversation.swift' '**/Components/ConversationBlocks.swift'
 # 例外：小组件与实时活动（扩展里没有 PressStyle）；设置里的网页链接（下划线、手形，同系统链接）；输入框里图片角上的移除（压在图片的暗底上，不铺悬停底）
 forbid "自绘的可点控件用 PressStyle（按种类 Press）或 RowStyle，不用 .plain/.borderless：Mac 的悬停淡底与按下只在这两处，用了 plain 指针过去没有回应（docs/ui.md 悬停）" \
   'buttonStyle\(\.(?:plain|borderless)\)' 'App/Sources/UI/iOS/**' '**/*+iOS.swift' 'App/Widget/**' '**/Settings/SettingRow.swift' '**/Components/Composer+Attachments.swift'
@@ -107,6 +114,17 @@ FORBID_IN=CuePadKit/Sources/CueSync forbid "同步里登记等待者、以后再
   '\bwith(?:Checked|Unsafe)(?:Throwing)?Continuation\b' \
   'CuePadKit/Sources/CueSync/SyncGeneration.swift' 'CuePadKit/Sources/CueSync/CloudDatabase+Files.swift'
 
+# 业务规则只进 Services：UI 里给 AppServices 加方法，规则就散进了界面（界面的 Workspace 方法调 Services，不替它长方法）；AppServices.StartupIssue 这类嵌套类型的扩展不算
+FORBID_IN=App/Sources/UI forbid "UI 下不写 extension AppServices：业务规则放 App/Sources/Services（AppServices+….swift），界面只调它" \
+  '\bextension AppServices\b(?!\.)'
+# 测试宿主就是正式版的 App 身份，.standard 就是正式版的偏好域
+FORBID_IN="App/Tests CuePadKit/Tests" forbid "测试不碰 UserDefaults.standard：测试宿主就是正式版的 App 身份，读写的是真实偏好域；用库目录里具名的域（App/Tests/IsolationTests.swift）" \
+  '\bUserDefaults\.standard\b'
+# 拼装写法（一个个字段传）是演示与测试图方便的；真实写入只经 SessionSnapshot 的 update(_:)。参数可能换行，所以跨行认
+FORBID_U=1 forbid "生产代码不调 StateRecorder.update(sessionID: …)：它只给 UI/Debug 与测试拼状态用；真实会话的状态经 SessionMirror 产出 SessionSnapshot，再 update(_:)" \
+  '(?<!func )\bupdate\(\s*sessionID:' 'App/Sources/UI/Debug/**' '**/Tests/**'
+FORBID_IN="CuePadKit/Sources/CueStore App/Sources/Services/AppServices+StrayFiles.swift" forbid "附件文件与资料库不按文件时刻定去留：拷贝、还原、同步会改写或带走时刻，按时刻猜「刚存的」曾删掉写者还没提交引用的文件（#102）。谁还要它只看库里的记录与引用、运行的持有（AttachmentRun 的锁）与草稿" \
+  '\b(?:(?:(?:content|attribute)ModificationDate|contentAccessDate|creationDate|modificationDate|addedToDirectoryDate)(?:Key)?|st_[acmb]tim(?:e|espec)\w*|storedBefore)\b'
 # 长按菜单带预览要跨行认（菜单闭包在中间），单独一条多行规则
 hits="$(rg -U --pcre2 --line-number --no-heading --type swift --glob '!App/Sources/UI/iOS/Components.swift' \
   -e '\.contextMenu\s*(?:\(menuItems:|\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\}\s*preview:)' -- App CuePadKit)" && rc=0 || rc=$?
@@ -126,53 +144,16 @@ for file in App/Sources/UI/Debug/*.swift; do
   status=1
 done
 
-# 间距只经 Spacing 的几档（棘轮清零后的全仓规则）：padding、safeAreaPadding、spacing:、EdgeInsets 的参数里不写数。
-# 用 Python 认括号：一次调用的参数里可能套着别的调用（三元式、加减），正则认不准哪段是参数。0 与按比例的乘除（size * 0.08、height / 2）不算
-python3 - <<'PY' || status=1
-import os, re
-skip = re.compile(r"(?:^|/)Theme/|^App/Sources/UI/Debug/|^App/Widget/|/Tests/")
-call = re.compile(r"\.(?:padding|safeAreaPadding)\(|\b(?:UI|NS)?EdgeInsets\(")
-label = re.compile(r"\bspacing:\s*")
-number = re.compile(r"(?<![\w.])\d+(?:\.\d+)?(?![\w.])")
-named = re.compile(r"\s*(?:@\w+(?:\([^)]*\))?\s+)*(?:(?:private|fileprivate|internal|public|nonisolated)\s+)*static\s+(?:let|var)\b")
+# 放行的测试只读或只写测试自己的：只读真实凭据（EvalBrain）、固定版本 Agent 的下载缓存（PinnedAgent）
+forbid "家目录只经 UserHome（CueStore）取：读写各家 Agent 的走 AgentPaths（userHome、expanding，认环境给的 HOME，隔离实例与测试换得掉）；确要真实家目录的（显示 ~/…、展开用户写的 ~、缺省位置）用 UserHome。直接取绕过隔离，会读写真实的 ~/.claude、~/.pi" \
+  '(\bhomeDirectoryForCurrentUser\b|\bNSHomeDirectory(?:ForUser)?\b|\bhomeDirectory\(forUser|\.homeDirectory\b|\b(?:expanding|abbreviatingWith)TildeInPath\b|getenv\("HOME"\)|processInfo\.environment\["HOME"\])' \
+  '**/CueStore/UserHome.swift' '**/EvalBrain.swift' '**/PinnedAgent.swift'
 
-def argument(code, start, stops):
-    depth, i = 0, start
-    while i < len(code):
-        c = code[i]
-        if c in "([{": depth += 1
-        elif c in ")]}":
-            if depth == 0: return code[start:i]
-            depth -= 1
-        elif c in stops and depth == 0: return code[start:i]
-        i += 1
-    return code[start:]
+FORBID_U=1 forbid "通知先订再消费：任务外先 let 流，任务里 for await 它。for await 那行才订，此前发的就丢了；不怕丢的行尾写「// 晚订：理由」" \
+  'for (?:try )?await\b[^{]*?\bin [^{]*?\.notifications\(named:(?!.*// 晚订：)'
 
-def literals(text):
-    for m in number.finditer(text):
-        if float(m.group()) == 0: continue
-        before, after = text[:m.start()].rstrip(), text[m.end():].lstrip()
-        if before.endswith(("*", "/")) or after.startswith("*"): continue
-        yield m.group()
-
-hits = []
-for root in ("App", "CuePadKit"):
-    for folder, _, names in os.walk(root):
-        for name in names:
-            path = os.path.join(folder, name)
-            if not name.endswith(".swift") or skip.search(path): continue
-            for n, line in enumerate(open(path, encoding="utf-8"), 1):
-                code = line.split("//", 1)[0]
-                if named.match(code): continue
-                found = [v for m in call.finditer(code) for v in literals(argument(code, m.end(), ""))]
-                found += [v for m in label.finditer(code) for v in literals(argument(code, m.end(), ",{"))]
-                if found: hits.append(f"{path}:{n}:{line.strip()}")
-if hits:
-    print("\n".join(hits))
-    print("  → 间距只经 Spacing 的几档（Theme/Spacing.swift，按这段空隔开的是什么取）、ControlSize、Chrome 与组件里有名字的常量：padding、safeAreaPadding、spacing:、EdgeInsets 的参数里写的数是又一套手感，"
-          "不在 4 点格上的按角色就近落档；确是组件几何或光学校准的提成 static let，写一句为什么。0 与按比例的乘除（size * 0.08、height / 2）不算\n")
-    raise SystemExit(1)
-PY
+# 间距只经 Spacing 的几档（规则在 lint_spacing.py 头注释）
+python3 "$scripts/lint_spacing.py" || status=1
 
 # 环境值的类型里带闭包却比不了（规则与原因在 lint_env.py 头注释）
 python3 "$scripts/lint_env.py" || status=1
@@ -182,5 +163,11 @@ python3 "$scripts/lint_palette.py" App/AppGroup/Palette.swift ../landing/src/sty
 
 # Pi 桥扩展改了要升版本（规则在 lint_extension.py 头注释）；比的是检出与 origin/main，提交钩子查的暂存区副本里没有 git，不查
 [ "${1:-}" = --staged ] || python3 "$scripts/lint_extension.py" || status=1
+
+# 注释里的到期或退役写法要附工单编号（规则在 lint_expiry.py 头注释）
+python3 "$scripts/lint_expiry.py" || status=1
+
+# Schema.baseVersion 不高于已发布标签的最小结构版本（规则在 lint_schema.py 头注释）；同样要 git，暂存区副本里没有
+[ "${1:-}" = --staged ] || python3 "$scripts/lint_schema.py" || status=1
 
 exit $status

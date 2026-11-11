@@ -4,8 +4,8 @@ import Foundation
 
 /// 分享扩展留在共享容器里的内容入库：主 App 是资料库唯一写者。
 extension AppServices {
-    /// 把 `Capture/` 里已写完的条目存成卡片并删除条目。失败的条目保留（下次再试）并报告。
-    /// 同一时刻只有一趟在跑（启动跟随者、Darwin 通知、回到前台都会调）：跑的时候再来的记成再扫一遍，并等这趟扫完。
+    /// 失败的条目保留（下次再试）并报告。
+    /// 同一时刻只有一趟在跑：跑的时候再来的记成再扫一遍，并等这趟扫完。
     func drainCaptures() async {
         if let running = flights.captureDrain {
             flights.captureDrainAgain = true
@@ -35,9 +35,10 @@ extension AppServices {
     }
 
     func startCaptureIngest() {
+        let shared = DarwinNotifications.notifications(named: CaptureQueue.notification)  // 先订再扫：扫的途中分享进来的，通知不漏
         follow {
             await self.drainCaptures()
-            for await _ in DarwinNotifications.notifications(named: CaptureQueue.notification) {
+            for await _ in shared {
                 await self.drainCaptures()
             }
         }
@@ -51,13 +52,7 @@ extension AppServices {
             capture.urls.map(\.absoluteString).joined(separator: "\n"),
             files.joined(separator: "\n"),
         ].filter { !$0.isEmpty }
-        let project = try await existingProject(capture.project)
-        _ = try await store.createCard(in: project, body: sections.joined(separator: "\n\n"), capture: entry.id)  // 已入库过的返回 nil
-    }
-
-    /// 选的项目此后已被删除（卡片放进已删除的项目会不可见）的，进默认项目。
-    private func existingProject(_ id: UUID) async throws -> UUID {
-        guard let project = try await store.project(id), project.deletedAt == nil else { return Project.defaultID }
-        return id
+        _ = try await store.createCard(
+            in: capture.project, body: sections.joined(separator: "\n\n"), capture: entry.id, ifProjectMissing: .useDefault)
     }
 }

@@ -3,8 +3,7 @@ import CueText
 import Foundation
 
 extension CueTools {
-  /// 命中的那一段，至多 `excerptLimit` 字：从某个命中词前面一点起，取含不同的命中词最多的一段，一样多取命中次数多的，再一样取靠前的。
-  /// 不从开头截：长回复的开头多半不是要找的。不只认最少见的那个词：问的说法常与原文对不上（问"停止维护"，原文写"结束维护"），
+  /// 命中的那一段，至多 `excerptLimit` 字。不从开头截：长回复的开头多半不是要找的。不只认最少见的那个词：问的说法常与原文对不上（问"停止维护"，原文写"结束维护"），
   /// 只认一个词就落到别处（长程评测里查 Node 的建议，落到了 ESLint 那一行），几个词凑在一起的地方才是要找的。
   static func excerpt(_ text: String, around words: [String]) -> String {
     let flat = CueEnvelope.clip(text, Int.max)
@@ -27,10 +26,9 @@ extension CueTools {
   static let excerptLimit = 200
   static let excerptLead = 40
 
-  /// recall 查到的一条会话里的话（Agent 的回复，`his` 是他说的）：哪个会话、什么时候、命中的那一段。
-  func replyLine(_ reply: CueRecall.Reply, his: Bool = false, around words: [String]) -> String {
+  func replyLine(_ reply: CueRecall.Reply, around words: [String]) -> String {
     let name = reply.session.map(CueEnvelope.sessionName) ?? "会话（\(reply.message.sessionID.prefix(8))）"
-    return "\(name) \(iso(reply.message.at)) \(his ? "他说" : "回复")：\(Self.excerpt(reply.message.text, around: words))"
+    return "\(name) \(iso(reply.message.at)) 回复：\(Self.excerpt(reply.message.text, around: words))"
   }
 
   func memory(_ args: Args) async throws -> Result {
@@ -54,9 +52,8 @@ extension CueTools {
       lines += found.messages.map { "对话 \(iso($0.createdAt)) \($0.author.rawValue)：\(Self.excerpt(CueFormat.plainText($0.text), around: words))" }
       lines += found.cards.map { "\($0.isTask ? "任务" : "灵感")「\($0.heading)」（\($0.id.shortID)）" }
       lines += found.replies.map { replyLine($0, around: words) }
-      lines += found.said.map { replyLine($0, his: true, around: words) }
       let more = found.unlisted
-      let unlisted = [("记忆", more.lines), ("对话", more.messages), ("任务", more.cards), ("会话回复", more.replies), ("他在会话里说的", more.said)].filter { $0.1 > 0 }
+      let unlisted = [("记忆", more.lines), ("对话", more.messages), ("任务", more.cards), ("会话回复", more.replies)].filter { $0.1 > 0 }
       if !unlisted.isEmpty {
         lines.append("还有命中没列出：" + unlisted.map { "\($0.0) \($0.1) 条" }.joined(separator: "、") + "。要查全就加上更具体的词、换个说法再查。")
       }
@@ -80,7 +77,7 @@ extension CueTools {
         }
         return repeats
       }
-      let task = try await args.string("task").asyncMap { try await self.task($0) }
+      let task = try await args.string("task").asyncMap { try await self.references.task($0) }
       // 回收站里的 `task(_:)` 已不认；完成、归档的挂上去不会再被收掉（`endCueSchedules`）
       if let task, task.completedAt != nil || task.archivedAt != nil {
         throw Failure("「\(task.heading)」已完成或已归档：定时只挂在没完成的任务上")

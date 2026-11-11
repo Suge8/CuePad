@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { observeVideo } from '$lib/video';
 	import { gsap, REDUCED } from '$lib/gsap';
 	import { t } from '$lib/i18n.svelte';
 	import SplitH from './SplitH.svelte';
@@ -9,21 +10,8 @@
 	let night: HTMLVideoElement;
 
 	onMount(() => {
-		/* Ambient loop: pause offscreen; frozen first frame with reduced motion */
-		if (REDUCED()) {
-			night.removeAttribute('autoplay');
-			return;
-		}
-		const io = new IntersectionObserver(
-			(entries) => {
-				for (const e of entries) {
-					if (e.isIntersecting) night.play().catch(() => {});
-					else night.pause();
-				}
-			},
-			{ threshold: 0.1 }
-		);
-		io.observe(night);
+		const stopVideo = observeVideo(night, 0.1, 'static');
+		if (REDUCED()) return stopVideo;
 
 		const ctx = gsap.context(() => {
 			gsap.fromTo(
@@ -53,7 +41,7 @@
 		}, section);
 		return () => {
 			ctx.revert();
-			io.disconnect();
+			stopVideo();
 		};
 	});
 </script>

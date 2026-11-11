@@ -5,33 +5,30 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// App 层接入同步：启动引擎、镜像状态与问题、激活时立即同步、冲突与决定经 AppServices 交给界面。
+@Suite(.releasesLibraries)
 struct SyncWiringTests {
     let app = TestApp()
     var services: AppServices { app.services }
 
-    /// 有引擎时起点是"正在开始"，引擎确认账号前不说"已同步"；没有引擎（测试宿主在隔离目录里）是不可用并写明原因。
     @Test(arguments: [true, false])
     func 同步的起点_有引擎先是正在开始_没有引擎是不可用并写原因(_ hasEngine: Bool) async throws {
         let app = hasEngine ? TestApp() : TestApp(sync: .iCloud)
         let services = app.services!
         guard hasEngine else {
             #expect(services.sync == nil)
-            guard case .unavailable(let reason) = services.syncStatus else {
-                Issue.record("没有引擎却不是 unavailable：\(services.syncStatus)")
+            guard case .unavailable(let reason) = services.syncState.status else {
+                Issue.record("没有引擎却不是 unavailable：\(services.syncState.status)")
                 return
             }
             #expect(!reason.isEmpty)
             return
         }
-        #expect(services.syncStatus == .starting)
+        #expect(services.syncState.status == .starting)
         services.startSync()
         defer { services.cancelBackgroundWork() }
         try await eventually("app.sync.started == 1") { app.sync.started == 1 }
     }
 
-    /// 真实的同步代码连内存里的 iCloud 替身（`SimulatedCloud`），从 AppServices 启动：云端最低对端版本高于这台时，
-    /// 设置里说要更新、立即同步按不了，本机照记，改动不上传。
     @Test
     func 云端门槛高于这台时_提示更新_本机照记_改动不上传() async throws {
         let cloud = SimulatedCloud([CKRecord.peerFloor(CueStore.supportedSchemaVersions.upperBound + 1)])
@@ -40,7 +37,7 @@ struct SyncWiringTests {
         services.startSync()
         defer { services.cancelBackgroundWork() }
 
-        try await eventually("提示更新") { services.syncStatus == .outdated }
+        try await eventually("提示更新") { services.syncState.status == .outdated }
         #expect(!services.canSyncNow)
 
         let card = try await Workspace(services: services).createCard(body: "要更新时照记", in: Project.defaultID)
@@ -49,8 +46,6 @@ struct SyncWiringTests {
         #expect(await cloud.saved.isEmpty)
     }
 
-    /// 云端门槛低于这台要求的（能打开的最老库）：先把门槛抬上去，之后才传内容；别的设备换了更新的版本、把门槛抬过这台，
-    /// 拉到就停下提示更新，之后的改动不再上传。
     @Test
     func 门槛先抬再传内容_别的设备抬过这台后停下不再上传() async throws {
         let cloud = SimulatedCloud([CKRecord.peerFloor(CueStore.peerFloor - 1)])
@@ -66,34 +61,31 @@ struct SyncWiringTests {
         #expect(saved.first == PeerFloor.recordType)
         #expect(PeerFloor.version(in: await cloud.records([PeerFloor(zoneID: CloudSync.zoneID).id])) == CueStore.peerFloor)
 
-        // 立即同步在跑时再要的只等这一次、不另拉（`AppServices.syncNow`）：启动那次还没收尾就会错过下面这条门槛
-        try await eventually("启动那次立即同步做完") { !services.isSyncingNow }
         await cloud.put(CKRecord.peerFloor(CueStore.supportedSchemaVersions.upperBound + 1))
         await services.syncNow()
-        try await eventually("拉到就停下") { services.syncStatus == .outdated }
+        try await eventually("拉到就停下") { services.syncState.status == .outdated }
         let after = try await workspace.createCard(body: "停下之后写的", in: Project.defaultID)
         await services.upload(after.id)
         #expect(await cloud.saved == saved)
         #expect(try await services.store.card(after.id)?.body == "停下之后写的")
     }
 
-    /// 换了 iCloud 账号：停下等你决定，决定之前记的不上传。选上传本机，本机的都传给新账号；选清掉本机，同步的数据清掉，
-    /// 本机的 Pi 会话索引（与账号无关）留着。
     @Test(arguments: [SyncResolution.uploadLocal, .eraseLocal])
     func 换了iCloud账号_停下等你决定(_ resolution: SyncResolution) async throws {
         let cloud = SimulatedCloud([CKRecord.peerFloor(CueStore.peerFloor)])
-        let app = TestApp(sync: .built { CloudSync(store: $0) { cloud } })
+        let accountChanges = NotificationCenter()  // 全进程的通知会叫醒并行的别的测试
+        let app = TestApp(sync: .built { CloudSync(store: $0, accountChanges: accountChanges) { cloud } })
         let services = app.services!
         let workspace = Workspace(services: services)
         services.startSync()
         defer { services.cancelBackgroundWork() }
         let before = try await workspace.createCard(body: "换账号前记的", in: Project.defaultID)
         try await eventually("传上去") { await cloud.saved.contains(before.id.uuidString.lowercased()) }
-        try await services.store.upsertPiSession(IndexedSession(id: "s1", path: "/p", cwd: "/c", lastActivityAt: .now), host: "mac-a")
+        try await services.store.upsertSession(IndexedSession(id: "s1", path: "/p", cwd: "/c", lastActivityAt: .now), host: "mac-a")
 
         await cloud.signIn("另一个账号")
-        NotificationCenter.default.post(name: .CKAccountChanged, object: nil)
-        try await eventually("要你决定") { services.syncStatus == .needsDecision(.accountSwitched) }
+        accountChanges.post(name: .CKAccountChanged, object: nil)
+        try await eventually("要你决定") { services.syncState.status == .needsDecision(.accountSwitched) }
         let waiting = try await workspace.createCard(body: "决定之前记的", in: Project.defaultID)
         await services.upload(waiting.id)
         #expect(await !cloud.saved.contains(waiting.id.uuidString.lowercased()))
@@ -106,19 +98,19 @@ struct SyncWiringTests {
         case .eraseLocal:
             #expect(try await services.store.card(before.id) == nil)
             #expect(try await services.store.card(waiting.id) == nil)
-            #expect(try await services.store.piSessions().map(\.id) == ["s1"])
+            #expect(try await services.store.indexedSessions().map(\.id) == ["s1"])
             #expect(await cloud.records(ids).isEmpty)
         }
     }
 
     /// 同步一直不返回（引擎队列被占着、网络没有回音）：下拉刷新的圈到时限就停，同步仍挂着；转着的时候主线程照常响应（测试本身在主线程上推钟）。
     @Test
-    func 同步一直不返回时_下拉刷新到时限就停() async {
+    func 同步一直不返回时_下拉刷新到时限就停() async throws {
         let clock = ManualTiming()
         let app = TestApp(timing: clock.timing)
         app.sync.syncNowHangs.withLock { $0 = true }
         let refresh = Task { await app.services.syncNow() }
-        await clock.waitForSleeper()
+        try await clock.waitForSleeper()
         #expect(app.services.isSyncingNow)
 
         clock.advance(AppServices.syncWaitLimit)

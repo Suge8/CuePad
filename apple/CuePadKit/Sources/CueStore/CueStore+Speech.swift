@@ -5,20 +5,19 @@ import Foundation
 // （`dependOnUnsent`）：Mac 每小时推送几百次别的记录，不叫醒读说的话的订阅；那几句被收下时才叫醒。
 
 extension Speech {
-  /// 表 `alias` 这一行服务器收下过（任一版）：SELECT 里推出 `reachedServer` 的那一列。别的设备写来的记录也收下过。
   static func reachedServerSQL(_ alias: String) -> String {
     "EXISTS (SELECT 1 FROM syncRecords s WHERE s.recordName = \(alias).id AND s.pushedModifiedAt IS NOT NULL)"
   }
 }
 
-/// 读出时带着服务器收下过没有的记录（`CueStore.select` 据此只按行依赖同步元数据）。
 protocol AwaitsServer: Record {
-  /// 还没发出、发出了状态就会变的那句（等回执的话里服务器还没收下的）的记录名；不是为 nil。
   var unsentName: String? { get }
 }
 
 extension AwaitsServer {
-  static var selection: String { (columns + [Speech.reachedServerSQL(table.rawValue)]).joined(separator: ", ") }
+  static func reachedServer(in row: Row) -> Bool { row.bool(row.index(of: "reachedServer")!) }
+
+  static var selection: String { (columns + ["\(Speech.reachedServerSQL(table.rawValue)) AS reachedServer"]).joined(separator: ", ") }
 }
 
 extension DeliveryRequest: AwaitsServer {
@@ -30,7 +29,6 @@ extension CueMessage: AwaitsServer {
 }
 
 extension CueStore {
-  /// 你最近一句对 Cue 说的话：写下的时刻、交给它的时刻与服务器收下过没有；你还没说过为 nil。到哪了由读的人按此刻推（`Speech.trip`，
   /// App 的"此刻"只在 `SpeechClock` 一处到点刷新），这里只给记录。不说 Cue 那台 Mac 在不在（那是 `macOnline`）。
   public func cueLastYou() throws -> (said: Date, delivered: Date?, reachedServer: Bool)? {
     let last = try db.untracked(.syncRecords) {

@@ -1,13 +1,12 @@
 import SwiftUI
 
 /// 品牌标志，全 App 只此一处：资源名规则、AppKit 用的图都在这里。规则：标志是产品的，不是公司的——
-/// 模型显示它的家族（Claude、GPT、Gemini、Grok…，`BrandMark.model`，规则在 `PiProvider` 旁边）；提供方（模型菜单的分组、
-/// 订阅额度的账号）显示它的产品（Anthropic 是 Claude、OpenAI Codex 是 Codex，`PiProvider.mark`）；Agent 显示它自己（`AgentKind.mark`）。
+/// 模型显示它的家族（Claude、GPT、Gemini、Grok…，`BrandMark.model`，规则在 `Provider` 旁边）；提供方（模型菜单的分组、
+/// 订阅额度的账号）显示它的产品（Anthropic 是 Claude、OpenAI Codex 是 Codex，`Provider.mark`）；Agent 显示它自己（`AgentKind.mark`）。
 /// 认不出的（用户自定义的提供方与它的模型）不带标志，只写名字：通用图标说不出是哪一家，在模型胶囊上还被读成"默认模型"。
 /// 标志是 LobeHub 的单色标志转成的自定义符号（资源目录 Brands 下的 `brand-<名>`，由 design/tools/brand-symbols.py 生成），
 /// 能嵌进 `Text` 插值；颜色跟着前景色走（系统菜单里是模板图），不用品牌色。
 nonisolated struct BrandMark: Hashable, Sendable {
-    /// 资源名里 `brand-` 之后那段。
     private let asset: String
 
     private init(_ asset: String) { self.asset = asset }
@@ -22,7 +21,6 @@ nonisolated struct BrandMark: Hashable, Sendable {
     static let mimo = Self("mimo")
     // 转发模型的提供方：认不出家族时退到它
     static let openrouter = Self("openrouter")
-    // 接入的 Agent
     static let claudeCode = Self("claudecode")
     static let codex = Self("codex")
     static let opencode = Self("opencode")
@@ -31,22 +29,18 @@ nonisolated struct BrandMark: Hashable, Sendable {
     /// 装饰图：名字总在旁边或在所在元素的标签里，读屏不念资源名（同 `Icon`）。
     var image: Image { Image(decorative: "brand-" + asset) }
 
-    /// 嵌在一行字里的"标志 名字"；没有标志只写名字。
     static func label(_ mark: BrandMark?, _ name: String) -> Text {
         mark.map { Text("\($0.image) \(name)") } ?? Text(name)
     }
 
     #if os(iOS)
-    /// UIKit 菜单项用的同一个标志（`MenuButton`）。
     var uiImage: UIImage? { UIImage(named: "brand-" + asset) }
     #else
-    /// AppKit 菜单项用的同一个标志：符号是模板图。
     var nsImage: NSImage? { NSImage(symbolName: "brand-" + asset, bundle: .main, variableValue: 0) }
     #endif
 }
 
 /// "这家读不到"：标志压一道斜杠（同系统符号的 `.slash` 变体，一眼读作"没有"），斜杠两侧挖开一道缝，叠在纸上、行的悬停底上都分得开。
-/// 只经这里画（技能与规则行末的 `UnseenMarks`）。
 struct StruckBrandMark: View {
     let mark: BrandMark
     let size: CGFloat

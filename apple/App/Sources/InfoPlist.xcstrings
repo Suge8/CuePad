@@ -1,24 +1,6 @@
 {
   "sourceLanguage" : "zh-Hans",
   "strings" : {
-    "NSAppleEventsUsageDescription" : {
-      "comment" : "Mac：跳到会话所在终端时的自动化授权说明",
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "CuePad controls your terminal app to take you to the tab where an agent session is running."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "CuePad 需要控制终端应用，才能把你带到运行 Agent 会话的那个终端标签页。"
-          }
-        }
-      }
-    },
     "NSCameraUsageDescription" : {
       "comment" : "iOS：相机授权说明",
       "extractionState" : "manual",
@@ -33,6 +15,24 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "CuePad 用相机拍照，把照片记进灵感或任务。"
+          }
+        }
+      }
+    },
+    "NSMicrophoneUsageDescription" : {
+      "comment" : "和 Cue 通话时的麦克风授权说明",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CuePad listens to you while you're on a call with Cue."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "和 Cue 通话时，CuePad 要听你说话。"
           }
         }
       }

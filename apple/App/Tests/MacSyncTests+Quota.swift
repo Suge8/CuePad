@@ -5,15 +5,14 @@ import Foundation
 import Testing
 @testable import CuePad
 
-@testable import CuePi
+@testable import CueBridge
 
 extension MacSyncTests {
     // 订阅额度只有 Mac 写，手机只读
 
-    /// 桥报来的额度一直写进库（`start()` 里同一条路），直到测试结束。
     func recordingQuotas() {
-        let changes = services.pi.changes()
-        services.follow { try? await self.services.consumePiChanges(changes) }
+        let changes = services.bridge.changes()
+        services.follow { [services] in try? await services.consumeSessionChanges(changes) }
     }
 
     static let resetsAt = Date(timeIntervalSince1970: 1_800_000_000)
@@ -22,7 +21,6 @@ extension MacSyncTests {
             .first { $0.provider == provider }!
     }
 
-    /// 回复里顺带报来的额度写进这个账号的记录；手机打开额度视图、数据陈旧时写的刷新请求：Mac 经在线会话里的扩展查一次，查到的写进账号记录，请求按成功写回。
     @Test
     func 手机的额度刷新请求经在线会话查到_写回额度与成功() async throws {
         recordingQuotas()

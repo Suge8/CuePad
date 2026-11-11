@@ -5,7 +5,7 @@ import CueText
 import SwiftUI
 
 extension CardEditing {
-    /// 编辑器里的 ⌘↩：任务先写下没保存的字，再把库里此刻的正文交给 Agent（`Workspace.handOff`）；灵感没有这一下。
+    /// 任务先写下没保存的字，再把库里此刻的正文交给 Agent；灵感没有这一下。
     func submit() {
         let workspace = workspace
         Task {
@@ -18,12 +18,12 @@ extension CardEditing {
         }
     }
 
-    /// 这张卡的编辑器：正文变化交给自动保存，右键有选区动作，⌘↩ 是主动作；点附件从牌子放大出全屏页（`AttachmentSpotLayer`）。
-    func field(_ card: Card, theme: CueEditorTheme) -> some View {
-        host(card, theme: theme).overlay { AttachmentSpotLayer(spot: handle.spot) }
+    func field(_ card: Card, theme: CueEditorTheme, bottomInset: CGFloat = 0) -> some View {
+        var editor = host(card, theme: theme)
+        editor.bottomInset = bottomInset
+        return editor.overlay { AttachmentSpotLayer(spot: handle.spot) }
     }
 
-    /// 高贴着字、不自己滚的那一种（任务气泡）。
     func fittedField(_ card: Card, theme: CueEditorTheme) -> some View {
         FittedEditorHost(host: host(card, theme: theme)).overlay { AttachmentSpotLayer(spot: handle.spot) }
     }
@@ -39,8 +39,9 @@ extension CardEditing {
     }
 }
 
-/// 散放灵感的编辑页底栏：变量（有才出现）。转为任务在编辑器的右键菜单里。
 struct EditorBar: View {
+    /// 变量胶囊的高度加上下留白，末行可完整滚到胶囊上方。
+    static let clearance: CGFloat = 44 + Spacing.block * 2
     let card: Card
     let editing: CardEditing
 
@@ -55,7 +56,6 @@ struct EditorBar: View {
     }
 }
 
-/// 变量取值：显示第一个变量与其值，点开逐个填写；取值存在卡片上。
 private struct VariablesChip: View {
     let card: Card
     let names: [String]

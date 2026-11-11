@@ -71,7 +71,7 @@ run() { # 名称 Pi模式(none/all/error/real) 轮数 启动参数…
   fi
   local ending=进程正常
   if [ "$crashed" = 1 ]; then
-    if [ "$status" -gt 128 ]; then ending="进程中途退出（信号 SIG$(kill -l $((status - 128)))）"; else ending="进程中途退出（退出码 $status）"; fi
+    if [ "$status" -gt 128 ]; then ending="进程中途退出（信号 SIG$(kill -l $((status - 128)))）"; else ending="进程中途退出（退出码 ${status}）"; fi
   fi
   echo "${name}：几何循环 $cycles  布局迭代超限 $iterations  $ending$coverage"
   if [ "$crashed" = 1 ]; then failed=1

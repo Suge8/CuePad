@@ -7,7 +7,6 @@ import Foundation
 /// 没给时放进隔离库目录，不在真实的家目录下建东西。
 public struct Workspaces: Equatable, Sendable {
   public static let environmentKey = "CUEPAD_WORKSPACE_DIR"
-  /// 根目录的名字：家目录下的 `~/CuePad`，不碰真实世界时隔离库里的 `CuePad`。
   private static let rootName = "CuePad"
 
   public let root: URL
@@ -19,10 +18,9 @@ public struct Workspaces: Equatable, Sendable {
     if let override = environment[environmentKey], override.hasPrefix("/") {
       return Workspaces(root: URL(filePath: override, directoryHint: .isDirectory))
     }
-    return Workspaces(root: (isolatedLibrary ?? URL.homeDirectory).appending(path: rootName, directoryHint: .isDirectory))
+    return Workspaces(root: (isolatedLibrary ?? UserHome.directory).appending(path: rootName, directoryHint: .isDirectory))
   }
 
-  /// 项目的工作区：根目录下以项目名命名的文件夹（`folderName`）；同名的两个项目共用一个（已存在就直接用）。
   public func directory(for projectName: String) -> URL {
     root.appending(path: Self.folderName(for: projectName), directoryHint: .isDirectory)
   }
@@ -32,13 +30,5 @@ public struct Workspaces: Equatable, Sendable {
     var name = projectName.trimmingCharacters(in: .whitespacesAndNewlines).replacing(/[\/:]/, with: "-")
     while name.hasPrefix(".") { name = "-" + name.dropFirst() }
     return name.isEmpty ? Project.untitled : name
-  }
-
-  /// 本机路径给人看的写法（Mac 上项目的文件夹在哪，`ProjectPlace`；接入面板里任务在哪做同一个）：家目录下的写成 `~/…`（`~/CuePad/默认`），其余照写全路径。
-  public static func shown(_ path: String) -> String {
-    // 只比路径的各段，不经 standardizedFileURL / resolvingSymlinksInPath：它们对已存在与还没建的目录写法不同（/private/tmp 有时去掉 /private）
-    let target = URL(filePath: path).pathComponents, home = URL.homeDirectory.pathComponents
-    guard target.count > home.count, target.starts(with: home) else { return NSString.path(withComponents: target) }
-    return (["~"] + target.dropFirst(home.count)).joined(separator: "/")
   }
 }

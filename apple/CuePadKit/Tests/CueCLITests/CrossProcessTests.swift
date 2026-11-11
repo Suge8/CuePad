@@ -3,7 +3,6 @@ import CueStore
 import Foundation
 import Testing
 
-/// 真实两进程：`cuepad` 子进程写入，本进程 Store 的观察者被跨进程通知唤醒并读到新卡。
 @Suite struct CrossProcessTests {
   private static func run(_ binary: URL, _ arguments: [String], library: URL) async throws -> Int32 {
     let process = Process()
@@ -31,8 +30,8 @@ import Testing
         return []
       }
       group.addTask {
-        try await Task.sleep(for: .seconds(60))
-        throw CancellationError()
+        try await Task.sleep(for: conditionBudget)
+        throw TimedOut(description: "等不到：CLI 进程写的灵感出现在观察流里")
       }
       defer { group.cancelAll() }
       return try await group.next() ?? []

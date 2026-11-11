@@ -3,20 +3,16 @@ import CueStore
 import SwiftUI
 
 extension View {
-    /// 会话页的批注层（手机）：回答的长按菜单里"选择文本"与"批注"打开同一张可选文本页（`ReplyTextSheet`），在那里选一段、
-    /// 系统编辑菜单里点"批注"写一句，进这个会话回复框的草稿（`AppSettings.replyNotes`），随下一句发出（`ReplyNote`）。
-    /// 点对话里的高亮直接弹出改那一条的提示框。增删改的规则与 Mac 同一套（`AppSettings.editReplyNote`）。
-    func replyNotes(session: UUID, messages: [PiChatMessage]) -> some View {
+    func replyNotes(session: UUID, messages: [ChatMessage]) -> some View {
         modifier(ReplyNoteLayer(session: session, messages: messages))
     }
 }
 
 extension EnvironmentValues {
-    /// 打开一条回答的可选文本页（会话页的批注层给）；不在会话页里为 nil。
     @Entry var replyText: ReplyTextOpener?
 }
 
-/// 按会话比较（同 `ChatJump`）：每次更新换出的闭包做的是同一件事，读它的回答不因此重算。
+/// 每次更新换出的闭包做的是同一件事，读它的回答不因此重算，所以按会话比较。
 struct ReplyTextOpener: Equatable {
     let session: UUID
     let open: (UUID, ReplyTextSheet.Purpose) -> Void
@@ -28,7 +24,7 @@ struct ReplyTextOpener: Equatable {
 
 private struct ReplyNoteLayer: ViewModifier {
     let session: UUID
-    let messages: [PiChatMessage]
+    let messages: [ChatMessage]
     @Environment(AppServices.self) private var services
     @State private var opened: Opened?
     @State private var edit: ReplyNote.Edit?
@@ -56,15 +52,12 @@ private struct ReplyNoteLayer: ViewModifier {
     }
 }
 
-/// 一条回答的可选文本页：正文是渲染后的可选文字（`MarkdownText.proseTexts`，段间空一行），选区才换算得成批注的位置；
-/// 系统编辑菜单最前面是"批注"（跨段的选区截到起点那一段），批注过的几处同对话里一样高亮，点它改或删那一条。
 struct ReplyTextSheet: View {
     enum Purpose { case select, annotate }
 
-    let message: PiChatMessage
+    let message: ChatMessage
     let purpose: Purpose
     let session: UUID
-    /// 对话里回答的 id 顺序：新的批注按它排进草稿。
     let order: [UUID]
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -86,7 +79,6 @@ struct ReplyTextSheet: View {
 }
 
 extension View {
-    /// 写或改一条批注的系统提示框：标题"批注"，消息是摘录，输入框里是批注；空的不能记下，已有的那条另给"删除"。
     fileprivate func noteDialog(_ edit: Binding<ReplyNote.Edit?>, session: UUID, order: [UUID]) -> some View {
         modifier(NoteDialog(edit: edit, session: session, order: order))
     }

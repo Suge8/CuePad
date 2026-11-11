@@ -36,7 +36,6 @@ extension Shortcut {
         return codes
     }()
 
-    /// 至少一个修饰键加一个受支持的主键；否则 nil。
     init?(accelerator: String) {
         var tokens = accelerator.split(separator: "+", omittingEmptySubsequences: false).map(String.init)
         guard let key = tokens.popLast(), let code = Self.keyCodes[key], !tokens.isEmpty else { return nil }

@@ -9,10 +9,8 @@ import SwiftUI
 // 下拉收不起。文稿、表格、演示文稿交给 WebKit（`PreviewWeb`），3D 与认不出的类型是一张静态的图（`PreviewStill`）。
 // 每页铺满整屏：会滚的（图、PDF、文本、网页）铺到两条栏后面、按 `previewInsets` 让出内容边，其余排在两条栏之间（全屏页给的安全区）。
 
-/// 全屏页里除网页、Markdown 与改动外的每一类（`PreviewContent`）。
-/// 图、视频、网页与文稿在内容出来前先铺缩略图的画面（`previewLook`）：从缩略图飞出来的第一帧就有图，不是一张空的纸。
 struct PreviewPage: View {
-    let preview: PiPreview
+    let preview: PreviewItem
     let file: URL
     let active: Bool
     @Environment(\.previewLook) private var look
@@ -20,7 +18,6 @@ struct PreviewPage: View {
     var body: some View {
         switch preview.kind {
         case .image: PreviewImage(file: file, look: look).ignoresSafeArea()
-            // 图在平台视图里画，读屏摸不到：整张是一个图，读它的标题
             .accessibilityElement().accessibilityLabel(Text(verbatim: preview.title)).accessibilityAddTraits(.isImage)
         case .pdf: PreviewPDF(file: file).ignoresSafeArea()
         case .video, .audio: PreviewPlayer(file: file, active: active, look: look)
@@ -31,8 +28,6 @@ struct PreviewPage: View {
     }
 }
 
-/// PDF：系统的 PDF 视图，按宽铺满、竖着连续滚，页与页之间留一道缝，双指缩放（以手指处为锚、放大了拖到边再拖是翻页，同图片）。
-/// 页内搜索是系统的查找（`UIFindInteraction`）：页顶的搜索钮或接了键盘时 ⌘F 打开（`PreviewFinds`）。
 struct PreviewPDF: UIViewRepresentable {
     let file: URL
     /// 页与页之间那道缝（系统 PDF 视图的页距，按页的四边给）：同"预览"连续翻页时的页距，是 PDF 的版面、不随界面的间距档。
@@ -60,8 +55,6 @@ struct PreviewPDF: UIViewRepresentable {
     }
 }
 
-/// 视频与音频：系统播放器（播放、拖进度、静音、画中画都是它的），排在两条栏之间、画面外透出桌面，翻到就播（同快速查看），翻走停下。
-/// 第一帧画出来之前铺缩略图的画面（按视频的比例摆在画面那块），播放器就绪（`isReadyForDisplay`）就撤。
 struct PreviewPlayer: UIViewControllerRepresentable {
     let file: URL
     let active: Bool
@@ -75,7 +68,6 @@ struct PreviewPlayer: UIViewControllerRepresentable {
         cover.frame = controller.contentOverlayView?.bounds ?? .zero
         cover.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         controller.contentOverlayView?.addSubview(cover)
-        // 播放器在主线程报就绪
         context.coordinator.ready = controller.observe(\.isReadyForDisplay, options: [.initial, .new]) { [weak cover] _, change in
             guard change.newValue == true else { return }
             MainActor.assumeIsolated { cover?.removeFromSuperview() }
@@ -96,19 +88,16 @@ struct PreviewPlayer: UIViewControllerRepresentable {
     }
 }
 
-/// SwiftUI 里铺的那张（`PreviewCover`），按这一页的 `previewLook`。
 struct PreviewCoverView: UIViewRepresentable {
     @Environment(\.previewLook) private var look
     func makeUIView(context: Context) -> PreviewCover { PreviewCover(look: look) }
     func updateUIView(_ view: PreviewCover, context: Context) {}
 }
 
-/// 内容出来前铺的缩略图画面：按内容的真实比例在框里放到最大（缩略图裁过的那几边照比例铺满，同 zoom 转场飞的那张）。
 final class PreviewCover: UIView {
     private let imageView = UIImageView()
     private var aspect: CGFloat?
 
-    /// `ground`：缩略图四周铺的底色，给了就盖住下面的内容（网页画出一部分时不露出来）；默认透明
     init(look: PreviewLook?, ground: UIColor = .clear) {
         super.init(frame: .zero)
         isUserInteractionEnabled = false
@@ -140,7 +129,6 @@ final class PreviewCover: UIView {
 }
 
 extension UIScrollView {
-    /// 全屏页里会滚的页：铺到两条栏后面，内容边让出栏（`previewInsets`），栏后面不垫系统的滚动边缘效果（docs/layout.md「沉浸式的栏」）。
     func previewInsets(_ insets: EdgeInsets) {
         let edges = UIEdgeInsets(top: insets.top, left: insets.leading, bottom: insets.bottom, right: insets.trailing)
         topEdgeEffect.isHidden = true
@@ -154,10 +142,9 @@ extension UIScrollView {
     }
 }
 
-/// 3D 与这台设备认不出的类型：一张系统缩略图与文件名，分页与下拉照常。3D 要转着看时点"转动查看"，进系统的快速查看
-/// （拖动在那里是转模型），不让同一个拖动既转模型又翻页。
+/// 3D 要转着看时点"转动查看"，进系统的快速查看（拖动在那里是转模型），不让同一个拖动既转模型又翻页。
 struct PreviewStill: View {
-    let preview: PiPreview
+    let preview: PreviewItem
     let file: URL
     @Environment(\.palette) private var palette
     @Environment(AppServices.self) private var services
@@ -194,7 +181,6 @@ struct PreviewStill: View {
     }
 }
 
-/// 文本（源代码、日志）：只读的系统文字视图，长文也只排看得见的那段。
 struct PreviewText: UIViewRepresentable {
     let file: URL
     @Environment(\.previewInsets) private var insets
@@ -214,7 +200,6 @@ struct PreviewText: UIViewRepresentable {
     @concurrent private static func read(_ file: URL) async -> String { (try? String(contentsOf: file, encoding: .utf8)) ?? "" }
 }
 
-/// 全屏页里各份 PDF 的查找（按文件认）：页顶的搜索钮打开翻到的那一份的（`PreviewPager`）。
 @MainActor final class PreviewFinds {
     private struct Weak { weak var value: UIFindInteraction? }
     private var finds: [URL: Weak] = [:]

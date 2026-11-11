@@ -2,9 +2,7 @@
 import CueStore
 import SwiftUI
 
-/// 手机上给项目选文件夹：候选是 Mac 上已知的文件夹（跑过 Agent 的、别的项目绑着的，规则见 `ProjectFolders.candidates`），
-/// 手机看不到 Mac 的完整路径，所以只有名字；选中后请那台 Mac 解析成完整路径再绑。同一台 Mac 上只列一次，Mac 不止一台时按 Mac 分组。
-/// `project` 是给哪个项目选（它在那台 Mac 上已绑着的不列）；新建项目时还没有项目，为 nil。`closesOnChoose`：选中后收起自己（推入页用）。
+/// 手机看不到 Mac 的完整路径，所以只有名字；选中后请那台 Mac 解析成完整路径再绑。`project` 在新建项目时还没有，为 nil。
 struct FolderCandidateList: View {
     let project: UUID?
     var closesOnChoose = false
@@ -66,7 +64,7 @@ struct FolderCandidateList: View {
     }
 }
 
-/// 项目操作菜单里"换文件夹…"弹出的页：选一个候选，请那台 Mac 绑；Mac 绑好（结果写回）才收起，没成功就在下面写原因、可以再选。
+/// Mac 绑好（结果写回）才收起；没成功就在下面写原因、可以再选。
 struct FolderPickerSheet: View {
     let project: Project
     @Environment(Workspace.self) private var workspace
@@ -112,7 +110,7 @@ struct FolderPickerSheet: View {
         let id = project.id, name = project.shownName
         Task {
             do {
-                try await workspace.requestFolder(PiBind(project: id, folder: candidate.target), title: name, on: candidate.hostID)
+                try await workspace.requestFolder(BindRequest(project: id, folder: candidate.target), title: name, on: candidate.hostID)
                 dismiss()
             } catch {
                 phase = .failed(error.localizedDescription)

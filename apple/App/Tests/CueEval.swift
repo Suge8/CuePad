@@ -1,6 +1,6 @@
 #if os(macOS)
 import CueAgent
-import CuePi
+import CueBridge
 import CueStore
 import CueTestSupport
 import Foundation
@@ -19,17 +19,14 @@ struct Working {
     var answers: [String] { session.commands.filter { $0.json["t"] as? String == "answer" }.compactMap { $0.json["value"] as? String } }
 }
 
-/// 一个场景的现场：Rig、叫醒 Cue 的时刻，以及被叫醒的那一轮。
 @MainActor
 final class CueEval {
     let rig: CueHostTests.Rig
     private let output: URL
     private var start = Date.distantFuture
-    /// 第一次叫醒的时刻：此后的每一轮都写进现场
     private var begin: Date?
     /// 场景里的每一轮（含预热）按 id 留着：运行情况只留最近 `CueKeeper.roundsKept` 轮
     private var archive: [Int: CueRound] = [:]
-    /// 场景自己要写进 .md 的段落（长程、多日的统计）
     var report: [String] = []
     /// 场景自己要写进成绩单的（多日单列的轮，score.py 的"单列的轮"表），JSON 能表示的值
     var extra: [String: Any] = [:]
@@ -59,7 +56,6 @@ final class CueEval {
         if let failure { throw failure }
     }
 
-    /// 叫醒 Cue（你说一句，或会话有动静），等被叫醒的那一轮做完。
     func trigger(_ wake: () async throws -> Void) async throws {
         mark()
         try await wake()
@@ -109,16 +105,13 @@ final class CueEval {
 
     var round: CueRound? { rig.rounds.first { $0.startedAt >= start } }
 
-    /// 这一轮是不是新会话的第一轮：发给大脑的带着视图（新会话从记忆视图与对话视图接上，刚启用那一轮也是）
     static func opensSession(_ round: CueRound) -> Bool { round.sent.contains { $0.contains("<view>") || $0.contains("<memory>") } }
 
-    /// 场景到此的每一轮（含预热），从早到晚
     var rounds: [CueRound] {
         for round in rig.rounds { archive[round.id] = round }
         return archive.values.sorted { $0.startedAt < $1.startedAt }
     }
 
-    /// 那一轮里调的 `tool`（只看 `action` 这一种）与它的参数
     func calls(_ tool: String, _ action: String? = nil) -> [(call: CueToolCall, args: [String: Any])] {
         Self.calls(in: round.map { [$0] } ?? [], tool, action.map { [$0] } ?? [])
     }
@@ -143,10 +136,8 @@ final class CueEval {
         return session.lowercased().hasPrefix(ref) || title.lowercased() == ref || isCard(ref)
     }
 
-    /// 这次 add 真建了一件任务：成了、且工具没认出同名没做完的那件（"已有没做完的…，没再建"）
     static func built(_ call: CueToolCall) -> Bool { !call.failed && call.result?.hasPrefix("已有没做完的") != true }
 
-    /// 叫醒之后 Cue 写的消息（tell、回复、完成的结果）
     func said(since: Date? = nil) async throws -> [CueMessage] {
         let from = since ?? start
         return try await rig.store.cueMessages(limit: 2000).filter { $0.createdAt >= from && $0.author != .known(.you) && !$0.text.isEmpty }
@@ -239,7 +230,6 @@ final class CueEval {
             let prompt = CuePrompt.system(name: CueProfile.defaultName, memory: CueMemoryView(try await rig.store.cueMemory()), agents: [], runtime: EvalBrain.current.runtime, interface: .current)
             try prompt.write(to: output.appending(path: "system-prompt.md"), atomically: true, encoding: .utf8)
             try await writeScore(name, suite: suite, checks: checks, failure: failure, prompt: prompt, to: output)
-            // 资料库留一份，看这一场在 Cue 页上的样子（docs/cue-eval.md）
             let library = output.appending(path: "\(name).library", directoryHint: .isDirectory)
             try? FileManager.default.removeItem(at: library)
             try FileManager.default.copyItem(at: rig.app.databaseURL.deletingLastPathComponent(), to: library)

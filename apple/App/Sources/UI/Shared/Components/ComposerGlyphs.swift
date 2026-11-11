@@ -14,18 +14,19 @@ struct CircleGlyph<Content: View>: View {
     }
 }
 
-/// 输入框右下角的主按钮，全 App 的输入框只此一颗（"对 Cue 说"、会话回复框、随手记、新会话、发给 Agent）。墨块的样子：钮是一块实心圆，
-/// 字形是钮上反色的一块——发送是纸飞机（与"交给"同一架，`Icon.send`），记下是勾，停止是一块圆角方墨。
-/// - 不可发送：淡底、淡墨飞机；可发送（主动作）：靛青实心、纸色飞机，变成可发送的那一下上翼、下翼依次往上一跳。
-/// - 发送中（话在路上，与会话状态标同一个）：发出那一刻钮底当帧换掉、飞机往右上飞走淡出，同一刻机头处起飞一点光（`RelayLaunch`，"对 Cue 说"才有）——
-///   钮底不渐变，靛青的光才不会压在靛青的钮上看不见；接着淡底上一架靛青的飞机一趟趟从左下飞进、朝右上飞出（`LoopLayer.flight`），直到送达。
-/// - 停止（Agent 跑一轮时代替发送）：墨色实心方块；停止请求发出、这一轮还没歇下时换成转圈，不能再点。
+/// 输入框右下角的主按钮，全 App 的输入框只此一颗。发送是纸飞机（与"交给"同一架，`Icon.send`），记下是勾，停止是圆角方墨，通话是声纹，挂断是叉：
+/// 同一个字形换符号，几样之间来回都原地换，中途反向从此刻的样子接着走。
+/// 发送中（话在路上，与会话状态标同一个）：发出那一刻钮底当帧换掉、飞机往右上飞走淡出，同一刻机头处起飞一点光（`RelayLaunch`，"对 Cue 说"才有）——
+/// 钮底不渐变，靛青的光才不会压在靛青的钮上看不见。
 /// 按下照 `PressFeedback`（由外面的按钮给）。减弱动态效果：换状态只淡入淡出，不跳、不走，发送中是静止的"话在路上"。
 struct SendGlyph: View {
     enum Phase: Equatable {
         case idle, ready, sending, stop, stopping
         /// 记下（随手记、Cue 没启用时）：勾，能按时靛青。
         case save(enabled: Bool)
+        case call(enabled: Bool)
+        /// 挂断（手机通话中，代替发送那一位）：墨色实心，同停止。
+        case hangUp
     }
 
     let phase: Phase
@@ -42,9 +43,10 @@ struct SendGlyph: View {
                 switch phase {
                 case .sending: onTheWay.transition(.opacity)
                 case .stopping: Spinner(.small).transition(.opacity)
-                case .idle, .ready:
-                    // 发出：飞机往右上飞走淡出（减弱动态效果时只淡出）
-                    glyph.transition(.asymmetric(insertion: .opacity, removal: reduceMotion ? .opacity : .offset(Self.flight).combined(with: .opacity)))
+                case .idle, .ready, .call, .hangUp:
+                    // 发出：飞机往右上飞走淡出（减弱动态效果时只淡出）；离开时用的是离开前那一刻的这一句，所以只有发送飞走
+                    glyph.transition(.asymmetric(insertion: .opacity,
+                                                 removal: phase == .ready && !reduceMotion ? .offset(Self.flight).combined(with: .opacity) : .opacity))
                 default: glyph.transition(.opacity)
                 }
             }
@@ -57,9 +59,9 @@ struct SendGlyph: View {
 
     private var disc: Color {
         switch phase {
-        case .idle, .sending, .stopping, .save(enabled: false): palette.fill
+        case .idle, .sending, .stopping, .save(enabled: false), .call: palette.fill
         case .ready, .save(enabled: true): palette.signatureFill
-        case .stop: palette.ink
+        case .stop, .hangUp: palette.ink
         }
     }
 
@@ -68,6 +70,8 @@ struct SendGlyph: View {
         let (icon, ink, size): (Icon, Color, CGFloat) = switch phase {
         case .stop: (.stop, palette.paper, 14)
         case .save(let enabled): (.save, enabled ? palette.onFill : palette.ink3, 17)
+        case .call(let enabled): (.call, enabled ? palette.ink : palette.ink3, 18)
+        case .hangUp: (.close, palette.paper, 14)
         case .ready: (.send, palette.onFill, Self.sendSide)
         default: (.send, palette.ink3, Self.sendSide)
         }

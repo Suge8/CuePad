@@ -1,13 +1,12 @@
 #if os(macOS)
 import CueAgent
-import CuePi
+import CueBridge
 @testable import CueStore
 import CueTestSupport
 import Foundation
 import Testing
 @testable import CuePad
 
-/// 两周的历史：启用 Cue 之前写进库（时刻往回倒），在做的两件事挂着假会话。
 @MainActor
 final class DaysHistory {
     private(set) var storage: ScriptedSession?
@@ -27,7 +26,6 @@ final class DaysHistory {
         func at(_ day: Int, _ minute: Int) -> Date {
             calendar.date(byAdding: .minute, value: 9 * 60 + minute, to: calendar.startOfDay(for: calendar.date(byAdding: .day, value: -day, to: .now)!))!
         }
-        // 日常来回：每天二十八轮，他的话、这一轮的经过、Cue 的回复
         for day in stride(from: 14, through: 1, by: -1) {
             for turn in 0..<28 {
                 let topic = DaysScript.routine[(day * 28 + turn) % DaysScript.routine.count]
@@ -37,7 +35,6 @@ final class DaysHistory {
                 log.append(Seeded(.cue, topic.reply, at(day, minute) + 40))
             }
         }
-        // 埋的事实
         log.append(Seeded(.you, "顺便说一句，我女儿 11 月 18 号钢琴考级，那天我请一天假。", at(13, 7 * 60 + 3)))
         log.append(Seeded(.cue, "好的，祝考级顺利。", at(13, 7 * 60 + 4)))
         log.append(Seeded(.cue, "图片存储我打算迁到 S3：生命周期规则和 CloudFront 都现成，压缩做完一起迁。你点头我就让会话准备。", at(5, 5 * 60)))
@@ -50,7 +47,6 @@ final class DaysHistory {
         try await store.seed(log.sorted { $0.at < $1.at })
         logged = log.count
 
-        // 记忆：先是重点（含后来改掉的那条旧偏好），再是日常学到的，最后是 1 天前改的新偏好；共 94 行、6 行是重点
         let pins = ["改数据库结构前先问我", "推送到远端前先问我", "提交信息用英文写", "界面方案先给几个让我在卡上选", "回复用中文、一两句", "官网的改动不要碰 blog 子目录"]
         // 序号按写下的先后：同一毫秒写下的按 id 排，所以一条一条隔开写
         let lines = pins.map { ($0, true) } + (0..<87).map { (DaysScript.learned[$0 % DaysScript.learned.count] + "（\($0 + 1)）", false) }
@@ -62,13 +58,11 @@ final class DaysHistory {
         memoryLines = pins.count + 88
         pinned = pins.count
 
-        // 做完的任务（会话回复里带细节）
         for (index, task) in DaysScript.done.enumerated() {
             try await doneTask(task.title, task.body, task.reply, day: task.day, project: demo.id, store: store, at: at, index: index)
         }
         doneTasks = DaysScript.done.count
 
-        // 在做的两件：图片存储（5 天前开工）、官网十月周报（2 天前开工），会话在干活
         storage = try await working(
             "优化图片存储", "上传的图片压缩成 WebP、按宽度出三档；存储留在 R2。", rig: rig, project: demo.id, folder: rig.folder,
             replies: [("接口与转码好了，在补存量图片的批处理。", at(4, 3 * 60))], started: at(5, 5 * 60 + 10))
@@ -83,9 +77,9 @@ final class DaysHistory {
         let first = "\(title)\n\(body)", id = "done-\(index)", delivery = UUID()
         let task = try await store.createTask(first, in: project)
         try await store.recordSend(first, to: SendTarget(kind: .piSession, name: title, ref: id), card: task.id, delivery: delivery, origin: .known(.cue))
-        let prompt = PiChatMessage(sessionID: id, entryID: "u1", seq: 1, role: .user, text: first, at: at(day, 60), deliveryID: delivery)
-        let answer = PiChatMessage(sessionID: id, entryID: "a1", seq: 2, role: .pi, text: reply, at: at(day, 180))
-        try await store.writePiTranscript(PiTranscript(sessionID: id, messages: [prompt, answer], recap: PiRecap(lastPrompt: title, lastReply: reply, answeredAt: at(day, 180))))
+        let prompt = ChatMessage(sessionID: id, entryID: "u1", seq: 1, role: .user, text: first, at: at(day, 60), deliveryID: delivery)
+        let answer = ChatMessage(sessionID: id, entryID: "a1", seq: 2, role: .pi, text: reply, at: at(day, 180))
+        try await store.writeTranscript(SessionTranscript(sessionID: id, messages: [prompt, answer], recap: Recap(lastPrompt: title, lastReply: reply, answeredAt: at(day, 180))))
         try await store.setStatus(task.id, .done)
     }
 
@@ -113,14 +107,13 @@ final class DaysHistory {
     }
 }
 
-/// 预置的一条对话：谁、写什么、在什么时刻；他的话记成当时就交给了 Cue。
 nonisolated struct Seeded: Sendable {
     let author: CueAuthor
     let text: String
     let at: Date
-    var tools: [PiChatMessage.Tools.Item] = []
+    var tools: [ChatMessage.Tools.Item] = []
 
-    init(_ author: CueAuthor, _ text: String, _ at: Date, tools: [PiChatMessage.Tools.Item] = []) {
+    init(_ author: CueAuthor, _ text: String, _ at: Date, tools: [ChatMessage.Tools.Item] = []) {
         (self.author, self.text, self.at, self.tools) = (author, text, at, tools)
     }
 }
@@ -130,7 +123,7 @@ extension CueStore {
     func seed(_ log: [Seeded]) throws {
         try write {
             for entry in log {
-                let tools = entry.tools.isEmpty ? nil : PiChatMessage.Tools(steps: entry.tools.count, items: entry.tools)
+                let tools = entry.tools.isEmpty ? nil : ChatMessage.Tools(steps: entry.tools.count, items: entry.tools)
                 let message = try insertCueMessage(entry.author, text: entry.text, tools: tools, at: entry.at)
                 if entry.author == .you { try db.run("UPDATE cueMessages SET deliveredAt = ? WHERE id = ?", [entry.at, message.id]) }
             }
@@ -138,7 +131,6 @@ extension CueStore {
     }
 }
 
-/// 预置历史与会话交回的文字。
 enum DaysScript {
     /// 多日后段补记的记忆（Cue 记下的），让视图超出预算、有块待合并；第一条是后面要问的车位
     static let notedLater = [
@@ -149,10 +141,9 @@ enum DaysScript {
 
     struct Routine {
         let ask: String, reply: String
-        let step: PiChatMessage.Tools.Item
+        let step: ChatMessage.Tools.Item
     }
 
-    /// 日常来回的几种：换着用，凑出两周的量
     static let routine: [Routine] = ([
         ("看下 CI 现在绿不绿", "CI 绿的，最近 20 次构建都过了。", "CI 构建记录"),
         ("依赖更新的那几个 PR 合了吗", "合了三个，剩一个等测试补完。", "依赖更新 PR"),
@@ -168,16 +159,14 @@ enum DaysScript {
         ("搜索变慢是怎么回事", "索引没覆盖新加的字段，会话加了索引，查询从 1.2 秒降到 80 毫秒。", "搜索变慢"),
         ("给通知中心加个全部已读", "加好了，测试过了，已 done。", "通知中心全部已读"),
         ("把日志保留期改成 30 天", "改了，旧日志下次清理时按新规则删。", "日志保留期"),
-    ] as [(String, String, String)]).map { Routine(ask: $0.0, reply: $0.1, step: PiChatMessage.Tools.Item(kind: .talk, target: "\($0.2)：让会话跟进")) }
+    ] as [(String, String, String)]).map { Routine(ask: $0.0, reply: $0.1, step: ChatMessage.Tools.Item(kind: .talk, target: "\($0.2)：让会话跟进")) }
 
-    /// 日常学到的记忆（不 pin）
     static let learned = [
         "演示项目的测试用 vitest，跑全量约 40 秒", "官网用 Astro，部署在 Cloudflare Pages", "CI 跑在自建 runner 上，周末偶尔排队",
         "他早上九点前不看手机", "演示项目的数据库是 Postgres 15", "看板拖拽用的是 dnd-kit", "官网的统计用的是自建的 Plausible",
         "发版通常在周四下午", "设置页的埋点在 analytics/settings-usage.csv", "移动端用 390 宽截图验收",
     ]
 
-    /// 做完的任务：标题、正文、会话的交回、几天前
     static let done: [(title: String, body: String, reply: String, day: Int)] = [
         ("查清 CI 变慢", "最近 CI 从 6 分钟涨到 14 分钟，查清原因。", ciReport, 9),
         ("修好登录页白屏", "Safari 上偶发白屏，查清并修掉。", "修好了：Safari 15 不支持 structuredClone，换成手写深拷贝；补了 3 个测试，全过。", 12),

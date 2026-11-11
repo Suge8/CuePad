@@ -39,7 +39,7 @@ extension WideColumnController: UIDropInteractionDelegate {
             }
         } else {
             load(DraggedSession.self, type: .cuepadSession, from: provider) {
-                self.workspace.openSession(PiSessionState.recordID(sessionID: $0.sessionID), sessionID: $0.sessionID, in: column)
+                self.workspace.openSession(SessionState.recordID(sessionID: $0.sessionID), sessionID: $0.sessionID, in: column)
             }
         }
     }
@@ -62,8 +62,6 @@ extension WideColumnController: UIDropInteractionDelegate {
 
 #endif
 
-/// 会话的栏头（宽屏主区的一边）：「项目 / 会话名」，项目淡一档，字同各栏栏头的标题（`Typography.toolbarTitle`）；右边 ×（`closeColumn`），Mac 左半的栏头 × 左边是搜索（`SearchSlot`，一个窗口只一颗），
-/// 同这一排别的钮一样是玻璃圆钮（`Chrome.control`）。拖标题到主区的另一半换边，松手才改去处。
 /// 排在窗口最顶那一排（`Chrome.band`），左右让出多少由主区给（`headInset`：收起的 Cue 钮压在最右那一块的栏头上）。
 struct WideSessionTitle: View {
     let title: String
@@ -110,7 +108,6 @@ struct WideSessionTitle: View {
 }
 
 extension EnvironmentValues {
-    /// 这一块栏头左右让出多少：收起的 Cue 钮压在最右那一块的栏头右端（`MainWindow`、`SplitRoot` 给）。
     @Entry var headInset = EdgeInsets(top: 0, leading: Spacing.page, bottom: 0, trailing: Spacing.page)
 }
 

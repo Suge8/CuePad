@@ -21,9 +21,9 @@ extension InteractionBench {
         let wanted = relayoutPages.filter { only?.contains($0) == true }
         guard !wanted.isEmpty, let root = window.contentView else { return }
         let store = workspace.services.store
-        let longest = try await store.piSessionPage(PiSessionQuery(id: PiSessionState.recordID(sessionID: PerfLibrary.longestChat))).items.first
+        let longest = try await store.sessionPage(SessionQuery(id: SessionState.recordID(sessionID: PerfLibrary.longestChat))).items.first
         let session = longest?.state.sessionID ?? sessions.first
-        let project = workspace.catalog?.cardCounts.max(by: { $0.value < $1.value })?.key
+        let project = workspace.catalog?.summaries.max(by: { $0.value.cardCount < $1.value.cardCount })?.key
         let settings = workspace.services.settings
         settings.railExpanded = true
         settings.cueOpen = true

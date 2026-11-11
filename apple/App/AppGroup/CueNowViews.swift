@@ -33,11 +33,9 @@ extension View {
     }
 }
 
-/// "Cue 此刻"（`CueNow`）的现成样子，App、小组件、灵动岛与锁屏同一份：数字账（`CueLedger`）与头像的那一层（`cueDisc`、`cueMarks`，扩展里的头像 `CueNowFace`；
-/// App 里会动的头像 `CueAvatar` 套同一层）。颜色只按意思取：拍板赭黄、待回复墨色、推进中与子代理（每件那一行的在跑、等子代理）靛青、刚做完石绿、歇着灰。
-/// 数字账：数字按意思上色、加粗，词是次要墨色；要你管的与推进中的两组之间比组里宽一截。排得下哪排画哪排（`CueNow.ledger` 由细到粗），
-/// 最粗那排还放不下先收紧间距，再不够去掉推进中那组；要你管的那组（拍板、待回复）永远写全、不截。没有可数的写那一句（`CueNow.quietLine`，起不来是胭脂色，不在是次要灰）。候选排的种类序列变了才整组交接；数字原地滚，只因宽度换排则直切。
-/// LedgerFit 在一次布局里选排并直接画字，首帧不等回填。
+/// App、小组件、灵动岛与锁屏同一份：数字账（`CueLedger`）与头像的那一层（`cueDisc`、`cueMarks`，扩展里的头像 `CueNowFace`；App 里会动的头像 `CueAvatar` 套同一层）。
+/// 排得下哪排画哪排（`CueNow.ledger` 由细到粗），最粗那排还放不下先收紧间距，再不够去掉推进中那组；要你管的那组（拍板、待回复）永远写全、不截。
+/// `LedgerFit` 在一次布局里选排并直接画字，首帧不等回填。
 /// 否决过：一件一颗珠子接一句——实心空心要背，一句只挑一种说，几件在推进反而看不出；`ViewThatFits` 每排一份候选——挑剩的几排也要建出来，真实库冷启动首屏主线程多约 90M 指令。
 struct CueLedger: View {
     let now: CueNow
@@ -109,9 +107,7 @@ struct CueFaceMarks: ViewModifier {
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// 不在时的不透明度。
     static let awayOpacity = 0.5
-    /// 点的直径（含外那一圈 rim）。
     static func dotSide(_ size: CGFloat) -> CGFloat { max(size * 0.26, 6) }
 
     /// 点的圆心往右、往下各离头像圆心多远：落在圆边的右下 45° 处；小到点会越出头像的框时（16pt，点有 6pt 下限）往里收到贴着框。
@@ -146,12 +142,10 @@ struct CueFaceMarks: ViewModifier {
 }
 
 extension View {
-    /// 头像的框与淡底的圆。
     func cueDisc(size: CGFloat) -> some View {
         modifier(CueDisc(size: size))
     }
 
-    /// 头像上的点、变淡与角标（`CueFaceMarks`），挂在 `size` 见方的头像上。
     func cueMarks(size: CGFloat, beat: CueBeat, badge: Int? = nil, rim: Color? = nil) -> some View {
         modifier(CueFaceMarks(size: size, beat: beat, badge: badge, rim: rim))
     }

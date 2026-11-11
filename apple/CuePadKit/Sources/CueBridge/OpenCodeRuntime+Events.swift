@@ -1,0 +1,207 @@
+#if os(macOS)
+import CueStore
+import Foundation
+
+extension OpenCodeRuntime {
+    func apply(_ event: OpenCodeEvent, _ connection: Connection) async {
+        let data = event.data
+        switch event.type {
+        case "model.updated", "command.updated":
+            guard let directory = event.location?.directory, catalogs[directory] != nil else { return }
+            _ = try? await catalog(directory, connection.client, reload: true)
+            for (id, tracked) in sessions where tracked.directory == directory { publish(id) }
+            return
+        // 子代理要你确认的也挂在顶层会话上（它在等，整个会话就在等）；作答时按标识里记的会话答
+        case "permission.asked":
+            guard let sessionID = data.sessionID, let id = data.id else { return }
+            let question = Self.question(OpenCodePermission(id: id, sessionID: sessionID, action: data.action ?? "", resources: data.resources ?? []))
+            await change(topLevel(sessionID), connection, activeAt: event.at) { $0.facts.questions.append(question) }
+            return
+        case "permission.replied":
+            guard let sessionID = data.sessionID, let id = data.requestID else { return }
+            await change(topLevel(sessionID), connection) { $0.facts.questions.removeAll { $0.promptID == Self.prompt(.permission, sessionID, id) } }
+            return
+        case "form.created":
+            guard let form = data.form else { return }
+            await change(topLevel(form.sessionID), connection, activeAt: event.at) { $0.facts.questions.append(Self.question(form)) }
+            return
+        case "form.replied", "form.cancelled":
+            guard let sessionID = data.sessionID, let id = data.id else { return }
+            await change(topLevel(sessionID), connection) { $0.facts.questions.removeAll { $0.promptID == Self.prompt(.form, sessionID, id) } }
+            return
+        default: break
+        }
+        guard event.type.hasPrefix("session."), let sessionID = data.sessionID else { return }
+        if let parent = data.parentID ?? parents[sessionID] { return child(sessionID, of: parent, event) }
+        switch event.type {
+        case "session.deleted":
+            guard let tracked = sessions.removeValue(forKey: sessionID) else { return }
+            if tracked.online { bridge.detach(bridgeID(sessionID, connection), reason: .closed(reason: "deleted")) }
+            await dropIndex([sessionID])
+        case "session.renamed":
+            await change(sessionID, connection) { $0.info.title = data.title }
+        case "session.model.selected":
+            await change(sessionID, connection) { $0.info.model = data.model }
+        case "session.inbox.enqueued":
+            await change(sessionID, connection, activeAt: event.at) {
+                if $0.firstMessage == nil { $0.firstMessage = data.item?.payload?.text.map { String($0.prefix(SessionName.firstMessageLimit)) } }
+            }
+        case "session.inbox.delivered":
+            enqueueIngest(sessionID, urgent: true)
+        case "session.step.started", "session.reasoning.started":
+            // 没给会话选过模型时它用配置里的默认模型：每一步都带着实际用的那个
+            await change(sessionID, connection) {
+                $0.facts.work(.thinking)
+                if let model = data.model { $0.info.model = model }
+            }
+        case "session.compaction.started":
+            await change(sessionID, connection, activeAt: event.at) { $0.facts.compacting = true }
+        case "session.compaction.ended", "session.compaction.failed":
+            await change(sessionID, connection) {
+                $0.facts.compacting = false
+                if event.type == "session.compaction.ended" { $0.context?.tokens = nil }
+            }
+        default:
+            break
+        }
+        await turn(event, of: sessionID, connection)
+        if Self.transcriptChanges.contains(event.type) { enqueueIngest(sessionID, urgent: true) }
+    }
+
+    private static let transcriptChanges: Set = [
+        "session.step.ended", "session.compaction.ended", "session.compaction.failed",
+        "session.execution.succeeded", "session.execution.failed", "session.execution.interrupted",
+    ]
+
+    private func turn(_ event: OpenCodeEvent, of sessionID: String, _ connection: Connection) async {
+        if event.type == "session.execution.started" { await change(sessionID, connection, activeAt: event.at, publishing: false) { _ in } }
+        guard var tracked = sessions[sessionID] else { return }
+        let id = bridgeID(sessionID, connection)
+        let turns = tracked.turn.apply(event, models: catalogs[tracked.directory]?.models ?? [])
+        var failure: String?
+        for turn in turns {
+            switch turn {
+            case .speaking(let draft):
+                if tracked.online { bridge.setDraft(id, draft) }
+            case .turnStarted:
+                tracked.facts.startTurn(at: .now)
+            case .context(let used, let window):
+                tracked.context = window.map { ContextUsage(tokens: used, window: $0) }
+            case .tool(_, let name, let arguments):
+                tracked.facts.work(.tool, detail: ToolDetail.line(name, JSONValue.parse(Data(arguments.utf8))))
+            case .toolDone:
+                if !tracked.turn.runningTools { tracked.facts.work(.thinking) }
+            case .failed(let text):
+                failure = text
+            case .turnFinished:
+                let questions = tracked.facts.questions
+                tracked.facts.endTurn(failure: failure)
+                tracked.facts.questions = questions  // 权限与表单随它们自己的事件收起
+            case .exited, .received:
+                break
+            }
+        }
+        sessions[sessionID] = tracked
+        if turns.contains(where: \.changesFacts) { publish(sessionID) }
+    }
+
+    /// 改一个托管的顶层会话并发布，别的会话不理。`activeAt`：这是服务在这一刻记下的一次活动，会话不在线就上线（在 CuePad 里结束之后的才算，`revives`）。
+    private func change(
+        _ sessionID: String, _ connection: Connection, activeAt: Date? = nil, publishing: Bool = true, _ body: (inout Tracked) -> Void
+    ) async {
+        guard var tracked = sessions[sessionID] else { return }
+        body(&tracked)
+        if let activeAt, !tracked.online, revives(sessionID, at: activeAt) {
+            tracked.online = true
+            ended[sessionID] = nil
+        }
+        sessions[sessionID] = tracked
+        if tracked.online, catalogs[tracked.directory] == nil { _ = try? await catalog(tracked.directory, connection.client) }
+        if publishing { publish(sessionID) }
+    }
+
+    func child(_ sessionID: String, of parent: String, _ event: OpenCodeEvent) {
+        guard sessions[parent] != nil else { return }
+        parents[sessionID] = parent
+        guard !event.type.hasPrefix("session.text.") else { return }  // 子代理说的话不要，逐字增量也不白拼
+        let data = event.data
+        let now = Date()
+        let turn = childTurns[sessionID, default: OpenCodeTurn()].apply(event, models: []).filter(\.changesFacts)
+        if turn.contains(.turnFinished) { childTurns[sessionID] = nil }
+        guard event.type == "session.created" || !turn.isEmpty else { return }
+        subagent(sessionID, of: parent) { agent in
+            if event.type == "session.created" {
+                agent.name = data.title ?? ""
+                agent.role = data.agent ?? ""
+                agent.startedAt = now
+            }
+            for turn in turn {
+                switch turn {
+                case .turnStarted:
+                    agent.phase = .known(.running)
+                    agent.settledAt = nil
+                case .tool(_, let name, let arguments):
+                    agent.action = ToolDetail.line(name, JSONValue.parse(Data(arguments.utf8)))
+                case .failed(let text):
+                    agent.phase = .known(.failed)
+                    agent.action = text
+                    agent.settledAt = now
+                case .turnFinished where agent.phase == .known(.running):
+                    agent.phase = .known(event.type == "session.execution.interrupted" ? .interrupted : .done)
+                    agent.action = ""
+                    agent.settledAt = now
+                default: break
+                }
+            }
+        }
+        publish(parent)
+    }
+
+    func subagent(_ id: String, of parent: String, _ body: (inout SubagentState) -> Void) {
+        guard var tracked = sessions[parent] else { return }
+        let now = Date()
+        if !tracked.facts.subagents.contains(where: { $0.id == id }) { tracked.facts.startSubagent(id, name: "", role: "", at: now) }
+        tracked.facts.updateSubagent(id, at: now, body)
+        tracked.facts.inFlight = Set(tracked.facts.subagents.filter { $0.state.phase == .known(.running) }.map(\.id))
+        sessions[parent] = tracked
+    }
+
+    func topLevel(_ sessionID: String) -> String { parents[sessionID] ?? sessionID }
+
+    enum PromptKind: String { case permission, form }
+
+    static func prompt(_ kind: PromptKind, _ sessionID: String, _ id: String) -> String { "\(kind.rawValue):\(sessionID)/\(id)" }
+
+    static func parse(_ promptID: String) -> (kind: PromptKind, sessionID: String, id: String)? {
+        let parts = promptID.split(separator: ":", maxSplits: 1)
+        guard parts.count == 2, let kind = PromptKind(rawValue: String(parts[0])) else { return nil }
+        let rest = parts[1].split(separator: "/", maxSplits: 1)
+        guard rest.count == 2 else { return nil }
+        return (kind, String(rest[0]), String(rest[1]))
+    }
+
+    static func question(_ permission: OpenCodePermission) -> Question {
+        let text = PermissionWording.question(.opencode, String(localized: "使用 \(permission.action)"), permission.resources)
+        return Question(
+            promptID: prompt(.permission, permission.sessionID, permission.id), kind: .select, text: text,
+            options: [allowOnce, allowAlways, reject])
+    }
+
+    /// 只有一个字段的表单能从 CuePad 答（`question` 工具问一个问题时就是这样）：有选项的是选择，文字是填空，是否是确认；其余只能在 OpenCode 里答。
+    static func question(_ form: OpenCodeForm) -> Question {
+        guard form.fields.count == 1, let field = form.fields.first else {
+            return Question(promptID: nil, kind: .unknown("form"), text: String((form.title ?? "").prefix(500)))
+        }
+        let text = String([field.title, field.description].compactMap { $0 }.joined(separator: "\n").prefix(500))
+        switch field.type {
+        case "string" where field.options?.isEmpty == false:
+            return Question(
+                promptID: prompt(.form, form.sessionID, form.id), kind: .select, text: text, options: field.options!.map(\.label),
+                allowsOther: field.custom == true)
+        case "string": return Question(promptID: prompt(.form, form.sessionID, form.id), kind: .text, text: text)
+        case "boolean": return Question(promptID: prompt(.form, form.sessionID, form.id), kind: .confirm, text: text)
+        default: return Question(promptID: nil, kind: .unknown(field.type), text: text)
+        }
+    }
+}
+#endif

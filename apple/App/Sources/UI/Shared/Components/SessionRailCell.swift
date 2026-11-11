@@ -12,18 +12,14 @@ extension UTType {
     nonisolated static let cuepadSession = UTType(exportedAs: "\(AppIdentity.id).session", conformingTo: .data)
 }
 
-/// 会话条上的一个会话。手机：Agent 标志、名字、状态线竖排在一格里。宽屏（`SessionRail` 头注释）：行首是状态标（`PiStateDot`，全 App 同一份图形），
-/// Agent 标志不占行首（同一家的都一样）、在悬停提示与读屏里。
-/// - 推进中一行：名字，行尾一个读数——要你管的写状态词（同状态色，`BoardPulse.word`），其余写在这个状态里待了多久（淡墨等宽）；
-/// - 等你组两行：名字与等了多久一行，下面一行写它要什么——状态词着状态色，后面是要你拍板的问题原文或留给你回的那句。
-///   这一行一直占着（没有原文时只写状态词），整组行高一律、不随状态跳。
-/// 选中只有中性底与半粗字（`RowStyle`）；名字墨色，歇着的淡一档。
+/// Agent 标志不占行首（同一家的都一样），在悬停提示与读屏里。
+/// 等你组第二行一直占着（没有原文时只写状态词），整组行高一律、不随状态跳。
 struct SessionRailCell: View {
     let item: SessionRailRows.Item
     let form: SessionRail.Form
     let moves: Bool
     let selected: Bool
-    let open: (PiSessionState, SessionRail.Opening) -> Void
+    let open: (SessionState, SessionRail.Opening) -> Void
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -46,7 +42,6 @@ struct SessionRailCell: View {
         .help(help)
     }
 
-    /// 悬停说明写全：名字、状态、它要什么（行里截断的那几处）与哪家 Agent。
     private var help: String { Dotted(item.name, item.shown.label, item.ask, item.session.agentMark).visible }
 
     @ViewBuilder private var control: some View {
@@ -70,7 +65,6 @@ struct SessionRailCell: View {
         #endif
     }
 
-    /// 会话的菜单，同会话出现的每一处。
     @ViewBuilder private var menu: some View {
         OpenSessionBeside(session: item.session)
         SessionActions(session: item.session)
@@ -89,7 +83,7 @@ struct SessionRailCell: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 RailLine(height: item.waiting == nil ? Chrome.row : Chrome.tallRow) {
-                    PiStateDot(shown: item.shown, size: Chrome.railMark)
+                    StateDot(shown: item.shown, size: Chrome.railMark)
                 } rest: {
                     if item.waiting == nil {
                         name.font(Typography.body)
@@ -111,7 +105,6 @@ struct SessionRailCell: View {
             .lineLimit(1)
     }
 
-    /// 等你组的两行：名字与等了多久，下面它要什么。
     private var asking: some View {
         VStack(alignment: .leading, spacing: Spacing.hair) {
             HStack(spacing: Spacing.item) {
@@ -143,7 +136,7 @@ struct SessionRailCell: View {
     private var signal: some View {
         Group {
             if let waiting = item.waiting {
-                PiStateGlyph(status: waiting).font(Glyph.small)
+                StateGlyph(status: waiting).font(Glyph.small)
             } else {
                 BoardLine(pulse: item.pulse, moves: moves, detail: .now)
             }
@@ -153,7 +146,6 @@ struct SessionRailCell: View {
     }
 }
 
-/// 推进中一行行尾的读数：要你管的写状态词（同状态色、半粗），其余写在这个状态里待了多久。
 private struct SessionRailReadout: View {
     let item: SessionRailRows.Item
     @Environment(\.palette) private var palette
@@ -169,12 +161,10 @@ private struct SessionRailReadout: View {
         .font(Typography.caption)
         .lineLimit(1)
         .fixedSize()
-        // 换状态（在跑 → 出错、上下文到了九成）时读数交叉淡过去，不跳字
         .animation(Motion.fade, value: item.pulse.word)
     }
 }
 
-/// 在这个状态里待了多久（"刚刚""6 分钟"，`PiClock.Style.span`）：淡墨、等宽数字，经 `LiveText` 只在字会变的那一刻重画。
 private struct SessionRailTime: View {
     let item: SessionRailRows.Item
     @Environment(\.palette) private var palette
@@ -187,16 +177,13 @@ private struct SessionRailTime: View {
 }
 
 extension SessionRailRows.Item {
-    /// 行上画的状态：等你组是拍板或待回复（计时同这个会话），其余同看板（`BoardPulse`）。
-    var shown: PiShown {
-        guard let waiting else { return pulse.shown ?? PiShown(status: .unknown()) }
-        return PiShown(status: waiting, clock: pulse.shown?.clock)
+    var shown: SessionShown {
+        guard let waiting else { return pulse.shown ?? SessionShown(status: .unknown()) }
+        return SessionShown(status: waiting, clock: pulse.shown?.clock)
     }
 
-    /// 歇着：名字淡一档。
     var resting: Bool { waiting == nil && pulse.tier == .resting }
 
-    /// 等你组第二行跟在状态词后面的原文（第一行）：要你拍板的问题，或留给你回的那句。
     var ask: String? {
         let text = waiting == .asking ? session.question?.displayText ?? session.detail : session.lastReply
         let line = text?.split(whereSeparator: \.isNewline).first.map(String.init)

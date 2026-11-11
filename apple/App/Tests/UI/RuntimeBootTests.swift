@@ -3,7 +3,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// #43：旧 boot 或旧宿主晚到的 Cue 报告不能重新变成当前运行证明。
+@Suite(.releasesLibraries)
 struct RuntimeBootTests {
     @Test func Cue旧报告晚到与换Mac不复活忙碌_新报告保持确认() async throws {
         let source = TestApp(), receiver = TestApp()
@@ -23,7 +23,7 @@ struct RuntimeBootTests {
         let stale = try await now()
         #expect(!stale.isBusy && stale.unconfirmed && stale.isLive && !stale.hasConfirmedActivity)
         #expect(try await store.cueState()?.state == .known(.thinking))
-        let current = PiStateRecorder(store: store, hostID: "mac-a", minInterval: .zero, bootID: "new-boot")
+        let current = StateRecorder(store: store, hostID: "mac-a", minInterval: .zero, bootID: "new-boot")
         try await current.updateCue(.thinking)
         #expect(try await now().isBusy)
         old.fields["modifiedAt"] = .int(Int64(Date.now.addingTimeInterval(10).timeIntervalSince1970 * 1000))
@@ -36,7 +36,7 @@ struct RuntimeBootTests {
         try await store.recordMacPresence(host: "mac-b", bootID: "boot-b") { true }
         let moved = try await now()
         #expect(!moved.isBusy && moved.isLive && !moved.hasConfirmedActivity)
-        let replacement = PiStateRecorder(store: store, hostID: "mac-b", minInterval: .zero, bootID: "boot-b")
+        let replacement = StateRecorder(store: store, hostID: "mac-b", minInterval: .zero, bootID: "boot-b")
         try await replacement.updateCue(.thinking)
         #expect(try await now().isBusy)
         try await replacement.updateCue(.settled)
@@ -55,6 +55,7 @@ struct RuntimeBootTests {
         let location = app.services.location
         let db = RawDB(location.databaseURL)
         app.services.cancelBackgroundWork()
+        try db.restore(version: 90)
         if origin == "已发布82_活动地址" {
             _ = try await store.recordActivityDestination(device: "phone", activityID: "existing", token: "token", environment: "development", startedAt: .now)
             try db.exec("ALTER TABLE accountQuotas DROP COLUMN account; ALTER TABLE accountQuotas DROP COLUMN status; ALTER TABLE accountQuotas DROP COLUMN observedAt;")
@@ -96,7 +97,7 @@ struct RuntimeBootTests {
         let unconfirmed = try await now()
         #expect(unconfirmed.unconfirmed && unconfirmed.isLive && !unconfirmed.isBusy && !unconfirmed.hasConfirmedActivity)
         #expect(try db.rows("SELECT hostID IS NULL, bootID IS NULL FROM cueState") == [["1", "1"]])
-        let recorder = PiStateRecorder(store: reopened.store, hostID: "mac-a", minInterval: .zero, bootID: "upgrade-boot")
+        let recorder = StateRecorder(store: reopened.store, hostID: "mac-a", minInterval: .zero, bootID: "upgrade-boot")
         try await recorder.updateCue(.thinking, detail: "检查发布结果")
         let confirmed = try await now()
         #expect(confirmed.isBusy && confirmed.hasConfirmedActivity && !confirmed.unconfirmed)

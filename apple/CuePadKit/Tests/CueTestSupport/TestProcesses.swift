@@ -8,9 +8,8 @@ import Foundation
 ///
 /// 读一遍进程表要两三百毫秒（两千多个进程时实测，机器忙时要几秒），找到进程时还要等它们退出：测试跑着时不在主线程上调，
 /// 也不在 Swift 并发的协作线程上调（只有核数那么多，几个用例同时收尾就占满，全进程的 async 都停下）——异步代码用 async 的那个。
-/// 主线程或协作线程一停，同时在跑的回放与 CuePad 跟着停（回放换通道前要等主线程排着的处理跑完），别的用例的等待就此超时。
+/// 主线程或协作线程一停，同时在跑的 CuePad 跟着停，别的用例的等待就此超时。
 public enum TestProcesses {
-  /// 同下，在自己的线程上做完再回来。
   public static func stop(under directories: [URL]) async {
     await withCheckedContinuation { done in
       Thread.detachNewThread {
@@ -20,8 +19,7 @@ public enum TestProcesses {
     }
   }
 
-  /// 停掉可执行文件、命令行或工作目录在 `directories` 里的进程（不含本进程）：先停 `pid-update-loop`（它守着常驻服务），
-  /// 再停其余的；SIGTERM 后至多等 `grace`，还在的 SIGKILL。停完再看一遍，收掉期间新起的。几个目录一起给，只读一遍进程表。
+  /// 先停 `pid-update-loop`（它守着常驻服务）。停完再看一遍，收掉期间新起的。几个目录一起给，只读一遍进程表。
   public static func stop(under directories: [URL], grace: Duration = .seconds(3)) {
     guard !directories.isEmpty else { return }
     for _ in 0..<2 {
@@ -32,7 +30,6 @@ public enum TestProcesses {
     }
   }
 
-  /// Codex 常驻服务的守护进程的参数
   private static let updaterArgument = "pid-update-loop"
 
   /// 退出由 kqueue 的进程事件得知（先登记再发信号，不会错过）；登记不上的是已经没了。
@@ -62,7 +59,6 @@ public enum TestProcesses {
     let arguments: [String]
   }
 
-  /// 各进程可执行文件、命令行与工作目录里含 `fragment` 的那些路径（目录已被删掉、进程还指着它时也找得到）。
   public static func referencedPaths(containing fragment: String) -> [String] {
     allPIDs().filter { $0 > 0 && $0 != getpid() }.flatMap { pid in
       (arguments(of: pid) + [workingDirectory(of: pid)].compactMap { $0 }).filter { $0.contains(fragment) }

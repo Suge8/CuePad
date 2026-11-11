@@ -1,5 +1,6 @@
 #if canImport(UIKit)
 import CueEditor
+import CueTestSupport
 import CueText
 import UIKit
 import UniformTypeIdentifiers
@@ -14,7 +15,7 @@ func makePNG(width: Int = 1600, height: Int = 1000, color: UIColor = .systemTeal
 }
 
 extension CueEditorTheme {
-    /// 测试用的最小主题：系统字体、固定色。App 的纸页主题在 App 里，不在这个包。
+    /// App 的纸页主题在 App 里，不在这个包。
     static let test = CueEditorTheme(
         font: .systemFont(ofSize: 17),
         headingFont: .systemFont(ofSize: 20, weight: .semibold), codeFont: .monospacedSystemFont(ofSize: 15, weight: .regular),
@@ -72,7 +73,10 @@ final class FakePasteItem: NSObject, UITextPasteItem, @unchecked Sendable {
 
     init(_ provider: NSItemProvider) { itemProvider = provider }
 
-    func resolved() async { for await _ in resolutions { return } }
+    func resolved() async throws {
+        let resolutions = resolutions
+        try await bounded("粘贴委托给出结果") { for await _ in resolutions {} }
+    }
 
     func setResult(string: String) { finish(NSAttributedString(string: string)) }
     func setResult(attributedString: NSAttributedString) { finish(attributedString) }

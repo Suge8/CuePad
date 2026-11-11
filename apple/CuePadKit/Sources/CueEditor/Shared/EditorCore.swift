@@ -7,7 +7,6 @@ import AppKit
 import UIKit
 #endif
 
-/// 平台宿主（NSTextView / UITextView 的薄封装）向共享核心提供的少量能力。
 @MainActor
 protocol CueEditorHost: AnyObject {
     /// 动态色按当前外观解析成固定色（绘制到 CGContext 的底色用）。
@@ -36,8 +35,7 @@ enum CueTextStack {
     }
 }
 
-/// 编辑器的平台无关核心：存储格式（Markdown 原文）与运行时富文本的互转（只有附件——图片与文件牌——换成 U+FFFC）、变量高亮、轻装饰、
-/// 附件懒加载与分片预布局。平台宿主只负责视图、输入与系统交互。
+/// 编辑器的平台无关核心：存储格式（Markdown 原文）与运行时富文本的互转（只有附件换成 U+FFFC）。平台宿主只负责视图、输入与系统交互。
 @MainActor
 final class EditorCore {
     private weak var host: (any CueEditorHost)?
@@ -54,7 +52,6 @@ final class EditorCore {
     private var edits = 0
     /// 自上次刷新以来的编辑：新坐标下的范围与长度变化。
     private var pendingEdits: [NSRange] = []
-    /// 现有段落是按哪份装饰上下文排版的。
     var flushedDecorations = CueDecorations("")
     var decorations = CueDecorations("")
     private var decorationDelegate: DecorationDelegate?
@@ -80,8 +77,6 @@ final class EditorCore {
         content.delegate = delegate
         layout.delegate = delegate
     }
-
-    // MARK: 存储格式 <-> 运行时
 
     func stored() -> String {
         CueFormat.serialize(tokens(in: NSRange(location: 0, length: storage.length)))
@@ -129,7 +124,6 @@ final class EditorCore {
         return attachmentString(attachment)
     }
 
-    /// 存好的一个附件放进正文的样子：能内联显示的图片嵌入，其余是文件牌（同 `CueFormat.markup`）。
     func attachmentString(key: String, name: String) -> NSAttributedString {
         AttachmentKey.isImage(key) ? imageString(key: key) : fileString(key: key, name: name)
     }
@@ -174,7 +168,6 @@ final class EditorCore {
         }
     }
 
-    /// 插进来的附件自成一行：插入处前面、后面不是换行（也不是开头、结尾）就补一个。
     func onOwnLine(_ insertion: NSAttributedString, replacing range: NSRange) -> NSAttributedString {
         let text = storage.mutableString, newline: unichar = 0x0A
         let result = NSMutableAttributedString(attributedString: insertion)
@@ -187,7 +180,6 @@ final class EditorCore {
         return result
     }
 
-    /// 文件牌此刻的画面（`CueFileAttachment` 绘制时取）。
     func fileChip(key: String, name: String, size: CGSize) -> CueImage {
         let url = files.fileURL(for: key)
         let status = fileStatus(key, name, url)
@@ -202,7 +194,6 @@ final class EditorCore {
         }
     }
 
-    /// 还没到这台的图片的占位上写什么（宿主给的那一行）。
     func missingImageLabel(_ key: String) -> String { fileStatus(key, "", nil).detail }
 
     /// 这个字符位置上的附件，连同它的键与本机有没有（点按据此打开或去取）；不是附件为 nil。
@@ -225,7 +216,6 @@ final class EditorCore {
         settler.restart()
     }
 
-    /// 主题或字号档位变了：重刷基础属性、高亮、装饰并重新预布局。
     func styleDidChange() {
         if storage.length > 0 {
             storage.addAttributes(baseAttributes, range: NSRange(location: 0, length: storage.length))
@@ -234,8 +224,6 @@ final class EditorCore {
         restyle(NSRange(location: 0, length: storage.length))
         settler.restart()
     }
-
-    // MARK: 编辑记账
 
     /// storage 的 didProcessEditing：此刻 TextKit 的内容管理器还没同步新文本，位置换算要等下一个同步点。
     func storageDidProcessEditing() {
@@ -259,8 +247,6 @@ final class EditorCore {
     func resolved(_ color: CueColor) -> CueColor { host?.resolvedColor(color) ?? color }
     func layoutDidAdvance() { host?.layoutDidAdvance() }
     func needsRelayout() { host?.needsRelayout() }
-
-    // MARK: 变量高亮
 
     func textRange(_ range: NSRange) -> NSTextRange? {
         guard let start = content.location(content.documentRange.location, offsetBy: range.location),
@@ -286,8 +272,6 @@ final class EditorCore {
         }
     }
 
-    // MARK: 附件重绘
-
     /// 缩略图出好后重画引用它的附件（`key` 为 nil 时全部，例如换到缩放比例不同的屏）：TextKit 缓存了片段的渲染结果，必须让对应片段失效重排。
     func redraw(key: String?) {
         redraw { attachment in
@@ -296,7 +280,6 @@ final class EditorCore {
         }
     }
 
-    /// 附件的文件到了、传的进度变了（宿主报来）：还没到的图片再找一次本机那份，文件牌全部重画（说明与进度现读）。
     func refreshAttachments() {
         redraw { attachment in
             switch attachment {
@@ -317,7 +300,6 @@ final class EditorCore {
         if any { needsRelayout() }
     }
 
-    /// 选中部分的存储格式；没选中为 nil。
     func stored(in range: NSRange) -> String? {
         range.length > 0 ? CueFormat.serialize(tokens(in: range)) : nil
     }

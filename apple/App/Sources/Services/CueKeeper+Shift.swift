@@ -1,6 +1,6 @@
 #if os(macOS)
 import CueAgent
-import CuePi
+import CueBridge
 import CueStore
 import CueText
 import Foundation
@@ -12,7 +12,6 @@ extension CueKeeper {
 
     var turn: Turn? { shift?.turn }
 
-    /// 改在跑的班次（不在值班时什么都不做）。
     func updateShift(_ edit: (inout Shift) -> Void) {
         guard case .running(var shift) = phase else { return }
         edit(&shift)
@@ -43,9 +42,9 @@ extension CueKeeper {
         }
     }
 
-    /// 按这家起一个大脑（Cue 的班次与后台整理记忆的都经这里）：工作目录是 Cue 自己的空目录，`tools` 是 `cuepad mcp` 后面的参数（给哪一组工具）。
+    /// Cue 的班次与后台整理记忆的都经这里：工作目录是 Cue 自己的空目录，`tools` 是 `cuepad mcp` 后面的参数。
     func startBrain(
-        _ runtime: AgentKind, _ launch: CueLaunch, model: String?, effort: PiThinkingLevel?, fast: Bool = false, systemPrompt: String, tools: [String]
+        _ runtime: AgentKind, _ launch: CueLaunch, model: String?, effort: ThinkingLevel?, fast: Bool = false, systemPrompt: String, tools: [String]
     ) async throws -> any HostedSession {
         let work = setup.directory.appending(path: "work", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
@@ -57,8 +56,7 @@ extension CueKeeper {
         ).startBrain()
     }
 
-    /// 大脑起不来、发不进去、意外退出或一轮里太久没动静：这一轮交出去的你的话清掉送达，退避重试（快的用完转慢的、一直试，`CueTiming.restartDelay`），
-    /// 快的用完时告诉你一次起不来。额度、登录卡住且另有能用的 Agent 就换过去（`failOver`），换了设置的下一次对账马上按新的起。
+    /// 大脑起不来、发不进去、意外退出或一轮里太久没动静，都走这里。
     func broke(_ reason: ShownText) async {
         Self.log.error("Cue 的大脑出了问题：\(reason.text, privacy: .public)")
         trouble = CueHealth.Failure(at: now, text: reason.text)
@@ -76,7 +74,6 @@ extension CueKeeper {
             failures = shift.failures + 1
         case .restarting: return
         }
-        // 换了 Agent：新的那家马上起，从头算失败次数
         if let switched = await failOver(reason.text) {
             phase = .restarting(failures: 0, reason: reason, at: now)
             return await say(.cue, switched)
@@ -87,7 +84,7 @@ extension CueKeeper {
         await tellDown(reason)
     }
 
-    /// 停掉这个班次的大脑：交给它、还没答上的你的话（`Shift.unanswered`）退回（`giveBack`），下一个大脑重新交。出了问题、换班次与不再值班都经这里。
+    /// 交给它、还没答上的你的话退回（`giveBack`），下一个大脑重新交。出了问题、换班次与不再值班都经这里。
     func retire(_ shift: Shift) async {
         await shift.brain.stop()()
         updateShift { shift in
@@ -115,7 +112,6 @@ extension CueKeeper {
                     $0.taken = []
                 }
             }
-        // 接走你的话的一轮回答你：写成 Cue 说的，最后的话写进对话
         case .received(let id):
             updateShift { shift in
                 guard let ids = shift.handed.removeValue(forKey: id), !ids.isEmpty else { return }
@@ -136,7 +132,6 @@ extension CueKeeper {
         case .failed(let raw):
             updateShift { $0.turn?.round.failure = raw }
             trouble = CueHealth.Failure(at: now, text: raw)
-            // 额度、登录卡住且换得了 Agent：只说换到了哪，这一轮交给新的大脑重来（`Turn.replay`）
             if let switched = await failOver(raw) {
                 updateShift {
                     $0.retiring = true
@@ -145,13 +140,12 @@ extension CueKeeper {
                 if let turn, turn.answersYou { await reply(switched, in: turn) } else { await say(.cue, switched) }
                 return
             }
-            let summary = PiErrorSummary(raw)
+            let summary = ErrorSummary(raw)
             // Cue 自己醒来的一轮第一次出错（会重试的那种）先不说：多是网络偶发，重试也失败了再告诉你；你在等的一轮立刻说
             if turn?.selfStarted != nil, setback == nil, Self.retryable(summary) { return }
             // 同一个错一轮轮重复（如额度）只说一次：按摘要认，原文里常带每次不同的请求 id；卡住后慢速周期里换着家重来的错都不再说
             guard setback?.persistent != true, summary.line != toldFailure else { return }
             toldFailure = summary.line
-            // 卡住了（额度、登录，没得换）：好好做完的那一轮说一句恢复了（`recovered`）
             if !Self.retryable(summary) { outage = .down }
             // 认不出的错，摘要只是原文的首行
             let text = summary.kind == .other ? ShownText("这一轮出错了：\(raw)") : ShownText("这一轮出错了：\(summary.shownTitle.embedded)\n\(raw)")
@@ -164,7 +158,6 @@ extension CueKeeper {
             do {
                 finished.round.row = try await finish(finished, reply: reply)
             } catch {
-                // 回答没写进库：这一轮接走的你的话不算答上，退回重交
                 Self.log.error("Cue 这一轮的收尾没能写进资料库：\(error.localizedDescription, privacy: .public)")
                 await giveBack(finished.delivered)
             }
@@ -177,7 +170,7 @@ extension CueKeeper {
             if let failure = finished.round.failure {
                 if finished.replay { await replay(finished, failure: failure) }
                 else if let woke = finished.selfStarted { await setBack(failure, retrying: woke, as: finished.author) }
-                else if !Self.retryable(PiErrorSummary(failure)) { await setBack(failure, retrying: .message, as: .cue) }
+                else if !Self.retryable(ErrorSummary(failure)) { await setBack(failure, retrying: .message, as: .cue) }
             } else {
                 let resolved = setback?.persistent != true || setback?.wake == finished.round.wake
                 // 卡着的那家又好好做完了别的一轮：卡住的那件不等慢速周期，马上重来
@@ -193,13 +186,12 @@ extension CueKeeper {
         }
     }
 
-    /// 一次工具调用开始 / 做完：记进这一轮的经过（大脑报的，与 `leaveUnattended` 代留的同一条路）。
     func began(_ id: String, _ name: String, _ arguments: String) async {
         let named = await CueActivity.named(tool: name, arguments: arguments, store: store)
         let step = CueActivity.step(tool: name, arguments: arguments, named: named)
         updateShift { $0.turn?.round.calls.append(CueToolCall(
             id: id, name: name, arguments: arguments, named: named, step: step,
-            detail: step == nil ? CueActivity.detail(tool: name, arguments: arguments) : nil, startedAt: now)) }
+            detail: step == nil ? CueActivity.detail(tool: name, arguments: arguments) : nil, startedAt: now, requests: turn?.delivered ?? [])) }
         await recordRound()
     }
 
@@ -209,13 +201,23 @@ extension CueKeeper {
             Self.log.error("Cue 的工具服务没了：这一轮做完换个班次")
             updateShift { $0.retiring = true }
         }
-        let item = await CueActivity.item(tool: call.name, arguments: call.arguments, named: call.named, failed: failed, store: store)
+        var item = await CueActivity.item(tool: call.name, arguments: call.arguments, named: call.named, failed: failed, store: store)
+        if !failed, let receipt = CueToolReceipt(result: result) {
+            switch receipt.kind {
+            case .request where call.name == "task" && [.start, .talk, .add].contains(item.kind):
+                item.cueRequests = call.requests.isEmpty ? nil : call.requests
+                item.deliveries = [receipt.id]
+            case .reply where ["task", "tell"].contains(call.name):
+                do { try await store.associateCueReply(receipt.id, answering: call.requests) }
+                catch { Self.log.error("Cue 回复的来源没能写进资料库：\(error.localizedDescription, privacy: .public)") }
+            default: break
+            }
+        }
         updateShift { $0.turn?.round.finish(id, result: result, failed: failed, item: item) }
         await recordRound()
     }
 
-    /// 把在跑这一轮的经过写进对话里它那一行（`CueStore.recordCueRound`）：Cue 自己醒来的一轮醒来时已写下（`wakeUp`），你发起的第一次调工具时写下，
-    /// 之后每做完一步改它。
+    /// Cue 自己醒来的一轮醒来时已写下（`wakeUp`），你发起的第一次调工具时写下，之后每做完一步改它。
     func recordRound() async {
         guard let turn, !turn.round.calls.isEmpty else { return }
         do {
@@ -227,17 +229,20 @@ extension CueKeeper {
         }
     }
 
-    /// 一轮做完：经过那一行最后一次改（中途插了你的话，这一轮成了回答你的）、这一轮写给你的话与歇着一次写下（`CueStore.finishCueRound`），返回那一行。
+    /// 经过那一行最后一次改（中途插了你的话，这一轮成了回答你的）、写给你的话与歇着，一次写下（`CueStore.finishCueRound`）。
     func finish(_ turn: Turn, reply: String?) async throws -> UUID? {
         try await setup.recorder.finishCueRound(
             turn.round.row, startedAt: turn.round.startedAt, answersYou: turn.answersYou, tools: turn.round.calls.isEmpty ? nil : turn.round.process,
-            reply: reply, as: turn.author, context: shift?.context)
+            reply: reply, as: turn.author, context: shift?.context, answeredRequests: turn.replay ? [] : turn.delivered)
     }
 
     /// 好好做完的一轮里，说话工具当场报给 Cue 的没送到：它已经知道了，不再进变化。只认做完的一轮——
     /// 工具写出了结果、这一轮却断了（大脑被杀、重起），Cue 没看到，下一轮照样报。
     private func markTold(_ round: CueRound) async {
-        let told = round.calls.filter(\.failed).flatMap { CueTools.undeliveredRequests(in: $0.result ?? "") }
+        let told = round.calls.filter(\.failed).compactMap { call -> UUID? in
+            guard let receipt = CueToolReceipt(result: call.result ?? ""), receipt.kind == .request else { return nil }
+            return receipt.id
+        }
         do {
             try await store.markCueTold(told)
         } catch {
@@ -245,7 +250,6 @@ extension CueKeeper {
         }
     }
 
-    /// 该报给 Cue 的变化：基线之后的（到 `now` 为止到了的停住），与记着的他在场的停下（`CueStore.cueChanges`）。
     func changes(at now: Date) async throws -> CueChanges {
         try await store.cueChanges(after: progress.marks ?? CueMarks(0), held: progress.held, at: now)
     }
@@ -262,11 +266,9 @@ extension CueKeeper {
         save()
     }
 
-    /// 一轮出错之后什么时候重来（带上这次的错）：换了 Agent 的马上；额度、登录卡住又换不了 Agent 的（你发起的一轮也算，`wake` 是你发来消息）
-    /// 按慢速周期（`CueTiming.slowDelay`）一直重来，直到一轮好好做完；Cue 自己醒来的其余错第一次隔 `retryWake` 再醒一次，再错就等新变化。
     private func setBack(_ failure: String, retrying wake: CueWake, as author: CueAuthor, now: Bool = false) async {
         if let held = setback, held.persistent, held.wake != wake { return }
-        let persistent = setback?.persistent == true || !Self.retryable(PiErrorSummary(failure))
+        let persistent = setback?.persistent == true || !Self.retryable(ErrorSummary(failure))
         let at = self.now
         let latest = try? await changes(at: at).due.filter { $0.kind != .stalled }.map(\.seq).max()
         let stalls = (setback?.stalls ?? 0) + (persistent && !now ? 1 : 0)
@@ -279,7 +281,6 @@ extension CueKeeper {
             latest: latest, since: at, retryAt: delay.map { at + $0.seconds }, persistent: persistent, stalls: stalls, wake: wake, author: author)
     }
 
-    /// 出错后换了 Agent 的一轮：交出去的你的话退回（新的大脑起好就交），Cue 自己醒来的那次马上重来；都带上这次的错。
     private func replay(_ turn: Turn, failure: String) async {
         retrying = failure
         if let woke = turn.selfStarted { await setBack(failure, retrying: woke, as: turn.author, now: true) }

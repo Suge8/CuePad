@@ -8,22 +8,27 @@ import Synchronization
 /// 门铃：经自建中转（`relay/server.ts`）与同一个人的其它设备保持一条长连接。本机的一批改动被 iCloud 收下就按一下，
 /// 别的设备听到就去 iCloud 拉一次；门铃不带内容，数据只有 iCloud 一份。通着（`isLive`）时按节奏的拉取降为兜底，连不上或断了换回快档（`SyncPoller.Cadence`）。
 ///
-/// 何时连由 App 定（`AppServices.startRelay`）：`run` 期间想连就连着；`pause` 起不想连，`settle` 等按出去的门铃发完再断，
-/// 其间 `resume` 了就不断；换了 iCloud 账号 `reconnect` 换房间。不想连着时又有改动被收下（手机在后台点了实时活动上的"允许一次"），
-/// 短连一次（iOS 在后台任务里）：入房、按完就断，不等回前台，对方不必等兜底那一拉。
+/// 不想连着时又有改动被收下（手机在后台点了实时活动上的"允许一次"），短连一次（iOS 在后台任务里）：入房、按完就断，不等回前台，对方不必等兜底那一拉。
 /// 密钥要认过账号才取得到（`CloudSync.relaySecret`）：没登录 iCloud 时连接停在取密钥上，不重试。取到就记着（`known`），之后的连接不再先去 iCloud 取一趟；
 /// 用记着的那份入了房再去取一次核对，变了（这个账号的 iCloud 数据被清掉、密钥重新生成过）就按新的重连。
-/// 断了按退避加抖动重连（`retry`），网络恢复时不等退避；每次入房先补按欠下的门铃（`ring`），同时开始心跳、收门铃并拉一次：
-/// 没连着的那段时间（包括启动到第一次连上）的门铃听不到。
-/// 心跳用 WebSocket 协议层的 ping，每 `pingInterval` 一次，`pongLimit` 内没回就断开重连：静默断线最迟 `silenceLimit` 发现。
+/// 每次入房先拉一次：没连着的那段时间（包括启动到第一次连上）的门铃听不到。
 /// 同一时刻至多一条连接任务：旧的还在收尾（`closing`）时 `resume`、`ring` 不另起新的，收尾完了再按那时想不想连来决定，
 /// 所以旧任务的收尾（`isLive`、`socket`、`connection`）碰不到新连接的状态。几处同时断开（换账号重连时 `run` 被取消）都等同一个收尾；
 /// `run` 结束后不再连（`rang` 清掉），收尾完的重连也不起：没人能再取消的连接不会留下。
-/// 用 URLSessionWebSocketTask：带系统代理设置、协议层 ping、自动回中转的 ping；连接是 wss（证书由系统校验）。
+/// 用 URLSessionWebSocketTask：带系统代理设置、协议层 ping、自动回中转的 ping。
 @Observable
 final class Relay {
-    /// 门铃此刻通着：入了房间，心跳有回应。
     private(set) var isLive = false
+    private(set) var voiceAvailability: VoiceRelayAvailability = .unavailable
+    @ObservationIgnored var voiceConnection: RelayVoiceConnection?
+    @ObservationIgnored private let voiceDevice: VoiceDeviceID
+    @ObservationIgnored private let voiceFeed = AsyncStream<VoiceRelayEvent>.makeStream()
+    var voiceEvents: AsyncStream<VoiceRelayEvent> { voiceFeed.stream }
+
+    private func voiceAvailability(_ value: VoiceRelayAvailability) {
+        voiceAvailability = value
+        voiceFeed.continuation.yield(.availability(value))
+    }
 
     @ObservationIgnored private let endpoint: URL
     @ObservationIgnored private let credentials: @MainActor () async throws -> RelayCredentials
@@ -32,7 +37,6 @@ final class Relay {
     @ObservationIgnored private var rang: (@MainActor () async -> Void)?
     /// 这个账号的房间与签名（密钥派生的）：取到一次就记着，换账号（`reconnect`）时清掉。
     @ObservationIgnored private var known: RelayCredentials?
-    /// 保持连接的任务（断了自己重连）；断开着时为 nil。
     @ObservationIgnored private var connection: Task<Void, Never>?
     /// 正在收尾的旧连接任务（`disconnect` 都等它）：这期间不起新的。
     @ObservationIgnored private var closing: Task<Void, Never>?
@@ -50,7 +54,6 @@ final class Relay {
     /// 心跳察觉静默断线的上限，也是门铃通着时按节奏拉取降到的兜底间隔（`AppServices.doorbellFallback`）：兜底只补门铃自己察觉不到的丢失
     /// （对方按出去的那一下在路上没了、中转重启），察觉得到的断（断线、重连）当场换回快档、入房先拉一次，察觉不到的也不比它更晚。
     nonisolated static let silenceLimit = pingInterval + pongLimit
-    /// 连上、入房的时限。
     nonisolated static let handshakeLimit = Duration.seconds(15)
     /// 重连的退避：1 秒起，至多 `Backoff.waitingCap`（中转恢复后至多再等这么久就连回来，门铃不通时一直按 2 秒拉）。
     static let retry = Backoff(first: .seconds(1), cap: Backoff.waitingCap)
@@ -59,7 +62,8 @@ final class Relay {
     private nonisolated static let log = Logger(subsystem: AppIdentity.id, category: "relay")
 
     /// `host` 是中转的主机（可带端口），连 `wss://<host>/v1/<房间号>`。
-    init(host: String, credentials: @escaping @MainActor () async throws -> RelayCredentials) {
+    init(host: String, device: String, credentials: @escaping @MainActor () async throws -> RelayCredentials) {
+        voiceDevice = VoiceDeviceID(device)
         endpoint = URL(string: "wss://\(host)/v1")!
         self.credentials = credentials
         session = URLSession(configuration: .ephemeral)
@@ -97,7 +101,6 @@ final class Relay {
         await disconnect(thenConnect: false)
     }
 
-    /// 想连着：没连着就连（还没 `run` 时只记下）。
     func resume() {
         wanted = true
         connect()
@@ -117,12 +120,12 @@ final class Relay {
 
     /// 换了 iCloud 账号：连着的那条在旧账号的房间里，断开后按新账号的密钥重连。
     func reconnect() async {
+        voiceConnection?.close(.accountChanged)
         known = nil
         guard connection != nil else { return }
         await disconnect(thenConnect: true)
     }
 
-    /// 想连着、或欠着门铃时连（后者是短连：iOS 在后台任务里，按完就断）。
     private func connect() {
         guard connection == nil, closing == nil, let rang, wanted || owesRing else { return }
         let done: @MainActor @Sendable () -> Void
@@ -150,10 +153,10 @@ final class Relay {
         if thenConnect { connect() }
     }
 
-    /// 想连着就一直连着，只为补按门铃连上的按完就走；断了按退避重连。自己结束（不是被 `disconnect` 取消）时清掉 `connection`。
     private func stayConnected(_ rang: @escaping @MainActor () async -> Void) async {
         var retry = Self.retry
         while !Task.isCancelled, wanted || owesRing {
+            await DebugHooks.relayHold()
             let began = ContinuousClock.now
             do {
                 try await session(rang)
@@ -171,12 +174,12 @@ final class Relay {
         if !Task.isCancelled { connection = nil }
     }
 
-    /// 等 `delay`，其间网络恢复（`NetworkReturns`）或任务被取消就提前返回。
     private nonisolated static func wait(upTo delay: Duration) async {
+        let returns = NetworkReturns.stream()  // 在子任务跑起来之前订上：其间回来的网络不让门铃白等一个退避
         await withTaskGroup(of: Void.self) { group in
             group.addTask { try? await Task.sleep(for: delay) }
             group.addTask {
-                var returns = NetworkReturns.stream().makeAsyncIterator()
+                var returns = returns.makeAsyncIterator()
                 _ = await returns.next()
             }
             await group.next()
@@ -184,21 +187,33 @@ final class Relay {
         }
     }
 
-    /// 一次连接：握手、入房、补按欠下的门铃；不想连着的按完就返回，想连着的同时拉一次、收门铃、发心跳，直到断开（抛出）或被取消。
     private func session(_ rang: @escaping @MainActor () async -> Void) async throws {
         let remembered = known
         let credentials: RelayCredentials
         if let remembered { credentials = remembered } else { credentials = try await self.credentials() }
         known = credentials
         let socket = session.webSocketTask(with: endpoint.appending(path: credentials.room))
+        socket.maximumMessageSize = VoiceSignalFormat.maximumWireBytes
         self.socket = socket
+        DebugHooks.relaySocket(socket)
         defer {
+            let reason: VoiceEndReason = switch socket.closeCode.rawValue {
+            case VoiceSignalFormat.replacedCloseCode: .leaseReplaced
+            case 4408: .relayCapacity
+            case 4400, 4401: .protocolRejected
+            default: .networkFailed
+            }
+            voiceConnection?.close(reason)
+            voiceConnection = nil
+            voiceAvailability(.unavailable)
             socket.cancel(with: .goingAway, reason: nil)
             if self.socket === socket { self.socket = nil }
         }
         try await withTaskCancellationHandler {
             socket.resume()
-            try await Self.handshake(socket, credentials)
+            let voice = try await Self.handshake(socket, credentials, device: voiceDevice, emit: { [voiceFeed] in voiceFeed.continuation.yield($0) })
+            voiceConnection = voice
+            voiceAvailability(voice.map { .ready(endpoint: $0.crypto.claim.endpoint) } ?? .unsupported)
             isLive = true
             if let downSince {
                 Self.log.notice("门铃通了，断了 \((ContinuousClock.now - downSince).seconds, format: .fixed(precision: 1), privacy: .public) 秒")
@@ -220,9 +235,16 @@ final class Relay {
                 group.addTask { try await Self.heartbeat(socket) }
                 group.addTask {
                     while true {
-                        guard try await Self.frame(from: socket).t == "ring" else { throw RelayError.unexpectedFrame }
-                        Self.log.info("门铃响了")
-                        await rang()
+                        let frame = try await Self.frame(from: socket)
+                        switch frame.t {
+                        case "ring":
+                            Self.log.info("门铃响了")
+                            await rang()
+                        case "voice":
+                            guard let voice, let body = frame.body else { throw RelayError.unexpectedFrame }
+                            try await voice.receive(body)
+                        default: throw RelayError.unexpectedFrame
+                        }
                     }
                 }
                 defer { socket.cancel(with: .goingAway, reason: nil) }  // 一个先结束，另一个等在这条连接上的也随之结束
@@ -233,15 +255,14 @@ final class Relay {
         }
     }
 
-    /// 用记着的那份入了房：再取一次密钥核对，换过了就忘掉旧的、重取重连（只在其间没换账号时）。
     private func recheck(_ remembered: RelayCredentials) async {
         guard let fresh = try? await credentials(), fresh.room != remembered.room, known?.room == remembered.room else { return }
         Self.log.notice("门铃的密钥换过了，换房间重连")
         await reconnect()
     }
 
-    /// 收中转的随机数、签名回去、等它说入了房间；`handshakeLimit` 内没走完就断开。
-    private static func handshake(_ socket: URLSessionWebSocketTask, _ credentials: RelayCredentials) async throws {
+    private static func handshake(_ socket: URLSessionWebSocketTask, _ credentials: RelayCredentials,
+                                  device: VoiceDeviceID, emit: @escaping (VoiceRelayEvent) -> Void) async throws -> RelayVoiceConnection? {
         let watchdog = Task {
             try await Task.sleep(for: handshakeLimit)
             socket.cancel(with: .goingAway, reason: nil)
@@ -250,8 +271,25 @@ final class Relay {
             let challenge = try await frame(from: socket)
             guard challenge.t == "challenge", let nonce = challenge.n else { throw RelayError.unexpectedFrame }
             try await socket.send(.string(#"{"t":"auth","s":"\#(try credentials.sign(nonce))"}"#))
-            guard try await frame(from: socket).t == "ready" else { throw RelayError.unexpectedFrame }
+            let ready = try await frame(from: socket)
+            guard ready.t == "ready" else { throw RelayError.unexpectedFrame }
+            guard ready.voiceVersion == VoiceSignalFormat.version else { watchdog.cancel(); return nil }
+            let voice = RelayVoiceConnection(socket: socket, credentials: credentials, challenge: nonce, device: device, emit: emit)
+            do {
+                try await voice.register(credentials)
+                while true {
+                    let response = try await frame(from: socket)
+                    if response.t == "ring" { continue } // 入房后会统一拉取，握手期间不丢业务事实。
+                    guard response.t == "voice", case .registered(let endpoint) = response.body else { throw RelayError.unexpectedFrame }
+                    try voice.crypto.acceptRegistration(endpoint)
+                    break
+                }
+            } catch {
+                voice.close(socket.closeCode.rawValue == 4408 ? .relayCapacity : .protocolRejected)
+                throw error
+            }
             watchdog.cancel()
+            return voice
         } catch {
             watchdog.cancel()
             if case .success = await watchdog.result { throw RelayError.handshakeTimeout }  // 是时限到了断的，不是别的错
@@ -259,7 +297,6 @@ final class Relay {
         }
     }
 
-    /// 每 `pingInterval` 发一个 ping，`pongLimit` 内没回就抛出（连接静默断了：中转挂了、网络换了、睡眠醒来）。
     private nonisolated static func heartbeat(_ socket: URLSessionWebSocketTask) async throws {
         let pong = Pong()
         while true {
@@ -274,10 +311,13 @@ final class Relay {
     private struct Frame: Decodable {
         var t: String
         var n: String?
+        var voiceVersion: UInt8?
+        var body: VoiceRelayResponse?
     }
 
     private nonisolated static func frame(from socket: URLSessionWebSocketTask) async throws -> Frame {
         guard case .string(let text) = try await socket.receive() else { throw RelayError.unexpectedFrame }
+        guard text.utf8.count <= VoiceSignalFormat.maximumWireBytes else { throw VoiceSignalError.tooLarge }
         return try JSONDecoder().decode(Frame.self, from: Data(text.utf8))
     }
 }

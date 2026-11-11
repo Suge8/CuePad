@@ -16,7 +16,7 @@ import Testing
     let pi = SendTarget(kind: .piSession, name: "fix bug", ref: "s1")
 
     let old = try await store.recordSend("a", to: review, card: a.id)
-    try await Task.sleep(for: .milliseconds(3))  // 时间精度是毫秒
+    await nextMillisecond()
     let latest = try await store.recordSend("a again", to: pi, card: a.id)
     let onlyOnce = try await store.recordSend("b", to: review, card: b.id)
     try await store.recordSend("t", to: review, card: trashed.id)

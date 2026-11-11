@@ -1,5 +1,5 @@
 #if os(macOS)
-import CuePi
+import CueBridge
 import CueStore
 import CueTestSupport
 import Foundation
@@ -7,10 +7,9 @@ import ImageIO
 import Testing
 @testable import CuePad
 
-/// 工具结果里的图（Agent 截的屏、读进来的图）：Mac 读会话时缩小存进附件、记在那一步上，会话页那一轮的经过下面是它的缩略图（`RoundProcess` 读
-/// `Tools.images`），点开在全屏页里看、几张左右翻。大的缩到长边 1600，小的原样；同一张反复读只存一份。
-/// 各家同一条路（`PiHistory.Transcript.toolImages`）：会话文件的形状照各家真机读图时写下的（Codex 0.166 的 view_image、Grok 1.0.70 的 read_file）。
+/// 各家同一条路（`History.Transcript.toolImages`）：会话文件的形状照各家真机读图时写下的（Codex 0.166 的 view_image、Grok 1.0.70 的 read_file）。
 @MainActor
+@Suite(.releasesLibraries)
 struct ToolImageTests {
     @Test func 工具结果带图的一轮_经过下有缩略图_点开全屏_同一张只存一份() async throws {
         let app = TestApp()
@@ -26,20 +25,19 @@ struct ToolImageTests {
         try log.tool("read", id: "c2", arguments: ["path": "icon.png"], images: [icon])
         try log.tool("read", id: "c3", arguments: ["path": "shot.png"], images: [shot])
         try log.reply("截好了")
-        let update = try PiHistory.index(file: file, agent: .pi, from: nil, files: files)
-        await app.services.consumePiHistory(AsyncStream { $0.yield(.updated(update)); $0.finish() }, agent: .pi)
+        let update = try History.index(file: file, agent: .pi, from: nil, files: files)
+        await app.services.consumeHistory(AsyncStream { $0.yield(.updated(update)); $0.finish() }, agent: .pi)
 
-        let round = try #require(try await store.piMessages(of: "s").last { $0.role == .known(.pi) })
+        let round = try #require(try await store.chatMessages(of: "s").last { $0.role == .known(.pi) })
         let images = try #require(round.tools?.images)
         #expect(images.count == 2)
         #expect(round.tools?.steps == 33)  // 31 条命令 + 读两个文件（同一个文件读两次只算一次）
 
-        // 升级前按旧规则读过的会话：检查点作废、从头重读，窗口内已有的轮次也补上图
         let stored = try JSONEncoder().encode(update.checkpoint)
         var old = try #require(try JSONSerialization.jsonObject(with: stored) as? [String: Any])
         old["rules"] = 1
-        #expect(throws: (any Error).self) { try JSONDecoder().decode(PiHistoryCheckpoint.self, from: JSONSerialization.data(withJSONObject: old)) }
-        #expect(try JSONDecoder().decode(PiHistoryCheckpoint.self, from: stored) == update.checkpoint)
+        #expect(throws: (any Error).self) { try JSONDecoder().decode(HistoryCheckpoint.self, from: JSONSerialization.data(withJSONObject: old)) }
+        #expect(try JSONDecoder().decode(HistoryCheckpoint.self, from: stored) == update.checkpoint)
         let shrunk = try #require(files.fileURL(for: images[0]))
         let size = try #require(CGImageSourceCreateWithURL(shrunk as CFURL, nil).flatMap { CGImageSourceCopyPropertiesAtIndex($0, 0, nil) } as? [CFString: Any])
         #expect(size[kCGImagePropertyPixelWidth] as? Int == 1600 && size[kCGImagePropertyPixelHeight] as? Int == 1000)
@@ -101,10 +99,10 @@ struct ToolImageTests {
         let shot = app.directory.appending(path: "shot.png")
         try pngData(width: 2400, height: 1200, shade: 0.4).write(to: shot)
         let file = try agent == .codex ? Self.codex(app.directory, shot: shot) : Self.grok(app.directory, shot: shot)
-        let update = try PiHistory.index(file: file, agent: agent, from: nil, files: files)
-        await app.services.consumePiHistory(AsyncStream { $0.yield(.updated(update)); $0.finish() }, agent: agent)
+        let update = try History.index(file: file, agent: agent, from: nil, files: files)
+        await app.services.consumeHistory(AsyncStream { $0.yield(.updated(update)); $0.finish() }, agent: agent)
 
-        let round = try #require(try await store.piMessages(of: "s").last { $0.role == .known(.pi) })
+        let round = try #require(try await store.chatMessages(of: "s").last { $0.role == .known(.pi) })
         let key = try #require(round.tools?.images.first)
         let size = try #require(
             files.fileURL(for: key).flatMap { CGImageSourceCreateWithURL($0 as CFURL, nil) }.flatMap { CGImageSourceCopyPropertiesAtIndex($0, 0, nil) }

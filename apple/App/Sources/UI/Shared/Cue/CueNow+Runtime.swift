@@ -12,7 +12,6 @@ nonisolated struct RuntimeTimeline {
         var running = 0
         var delegating = 0
         var unknown = 0
-        /// 未确认里因为所在的 Mac 没开的那几份，与那台的名字：全是它时这一行写那台没开（`offline`）
         var offlineUnknown = 0
         var offlineMac: String?
         var agents = 0
@@ -58,7 +57,6 @@ nonisolated struct RuntimeTimeline {
         var pending = 0
         var visible: String?
         var unknown = 0
-        /// 到期的是会话所在那台 Mac 的在线期限：那台从此不在线（名字），见 `Work.offline`
         var offlineUnknown = 0
         var offlineMac: String?
         var startedRunning: Date?
@@ -161,7 +159,7 @@ nonisolated struct RuntimeTimeline {
             }
             works.append(entry)
         }
-        func owner(_ task: UUID?, _ session: PiSessionState) -> Int? {
+        func owner(_ task: UUID?, _ session: SessionState) -> Int? {
             task.flatMap { owners["task/\($0.uuidString)"] } ?? owners["session/\(session.sessionID)"]
         }
         for waiting in source.waiting {

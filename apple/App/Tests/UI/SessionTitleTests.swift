@@ -1,15 +1,14 @@
 #if os(macOS)
-@testable import CuePi
+@testable import CueBridge
 import CueStore
 import CueTestSupport
 import Foundation
 import Testing
 @testable import CuePad
 
-/// 会话名取各家 Agent 自己的会话名：你起的为准，没起过时用 Agent 按对话起的（Claude Code 的 `ai-title`、dsh 的标题、Grok 的 `summary.json`、
-/// Codex 的 `session_index.jsonl`），都没有才退回首句。历史会话与在线会话（只落在文件里的名字经历史索引补上）同一个名字。
 /// 会话文件的形状照各家真机写下的（Claude Code 2.1、Grok 1.0、Codex 0.16x 的本机会话目录）。
 @MainActor
+@Suite(.releasesLibraries)
 struct SessionTitleTests {
     let app = TestApp()
     var store: CueStore { app.services.store }
@@ -21,11 +20,10 @@ struct SessionTitleTests {
         try objects.map { String(decoding: try JSONSerialization.data(withJSONObject: $0), as: UTF8.self) + "\n" }.joined().write(to: file, atomically: true, encoding: .utf8)
     }
 
-    /// 读一遍会话文件交给 App（同历史索引），返回会话行写的名字。
     private func indexed(_ file: URL, _ agent: AgentKind, id: String) async throws -> String {
-        let update = try PiHistory.index(file: file, agent: agent, from: nil, files: store.files)
-        await app.services.consumePiHistory(AsyncStream { $0.yield(.updated(update)); $0.finish() }, agent: agent)
-        return try #require(try await store.piSessions(sessionIDs: [id])[id]).name(at: app.services.speech)
+        let update = try History.index(file: file, agent: agent, from: nil, files: store.files)
+        await app.services.consumeHistory(AsyncStream { $0.yield(.updated(update)); $0.finish() }, agent: agent)
+        return try #require(try await store.sessionItems(sessionIDs: [id])[id]).name(at: app.services.speech)
     }
 
     private func claude(_ id: String, _ extra: [[String: Any]]) throws -> URL {
@@ -75,44 +73,41 @@ struct SessionTitleTests {
         #expect(try await indexed(grok, .grok, id: "g1") == "6 秒黑屏视频")
     }
 
-    /// 在线的会话：接入没报名字（Claude Code 的钩子不带它自己起的名字），历史索引读到后会话行与看板换成它；之后接入报来的改名，
-    /// 落后一步的文件不会把它倒回去。
     @Test func 在线会话的名字只在文件里_读到后补上_不倒回接入报来的改名() async throws {
         defer { app.services.cancelBackgroundWork() }
-        let events = app.pi.changes()
-        let consume = Task { try await app.services.consumePiChanges(events) }
-        defer { consume.cancel() }
+        let events = app.bridge.changes()
+        let consume = Task { try await app.services.consumeSessionChanges(events) }
+        defer { await consume.stop() }
         final class Link: SessionLink {}
         let file = try claude("c9", [])
-        var live = PiSession(
-            id: "c9.1", sessionID: "c9", agent: .claudeCode, sessionFile: file, pid: 1, cwd: app.directory, terminal: PiTerminal(),
+        var live = Session(
+            id: "c9.1", sessionID: "c9", agent: .claudeCode, sessionFile: file, pid: 1, cwd: app.directory, 
             state: .settled, stateSince: .now)
         live.firstMessage = "帮我看看登录页为什么白屏"
-        app.pi.attach(live, via: Link())
-        let shown: @Sendable (isolated CueStore) throws -> String? = { try $0.piSessions(sessionIDs: ["c9"])["c9"]?.state.title }
+        app.bridge.attach(live, via: Link())
+        let shown: @Sendable (isolated CueStore) throws -> String? = { try $0.sessionItems(sessionIDs: ["c9"])["c9"]?.state.title }
         _ = try await eventually(store, shown) { $0 == "帮我看看登录页为什么白屏" }
 
-        let first = try PiHistory.index(file: file, agent: .claudeCode, from: nil, files: store.files)
+        let first = try History.index(file: file, agent: .claudeCode, from: nil, files: store.files)
         try Self.lines([
             ["type": "user", "uuid": "u1", "sessionId": "c9", "cwd": app.directory.path, "timestamp": Self.stamp.format(.now),
              "message": ["role": "user", "content": "帮我看看登录页为什么白屏"]],
             ["type": "ai-title", "aiTitle": "排查登录页白屏", "sessionId": "c9"],
         ], to: file)
-        let titled = try PiHistory.index(file: file, agent: .claudeCode, from: first.checkpoint, files: store.files)
-        await app.services.consumePiHistory(AsyncStream { $0.yield(.updated(titled)); $0.finish() }, agent: .claudeCode)
+        let titled = try History.index(file: file, agent: .claudeCode, from: first.checkpoint, files: store.files)
+        await app.services.consumeHistory(AsyncStream { $0.yield(.updated(titled)); $0.finish() }, agent: .claudeCode)
         _ = try await eventually(store, shown) { $0 == "排查登录页白屏" }
         let board = try await TaskBoard.read(from: store)
         #expect(board.advancing.first { $0.id == "session/c9" }?.loose?.name(at: app.services.speech) == "排查登录页白屏")
 
-        app.pi.update(live.id) { $0.name = "登录白屏" }
+        app.bridge.update(live.id) { $0.name = "登录白屏" }
         _ = try await eventually(store, shown) { $0 == "登录白屏" }
-        let stale = try PiHistory.index(file: file, agent: .claudeCode, from: titled.checkpoint, files: store.files)
-        await app.services.consumePiHistory(AsyncStream { $0.yield(.updated(stale)); $0.finish() }, agent: .claudeCode)
-        #expect(app.pi.session(sessionID: "c9")?.name == "登录白屏", "文件还没写下改名：不倒回去")
+        let stale = try History.index(file: file, agent: .claudeCode, from: titled.checkpoint, files: store.files)
+        await app.services.consumeHistory(AsyncStream { $0.yield(.updated(stale)); $0.finish() }, agent: .claudeCode)
+        #expect(app.bridge.session(sessionID: "c9")?.name == "登录白屏", "文件还没写下改名：不倒回去")
         consume.cancel()
         _ = await consume.result
     }
-    /// Grok 起好、改过的名字只写 `summary.json`，会话记录不动：盯着的会话照样换上新名字，CuePad 重开后回填也读到这期间改的。
     @Test func 只有旁边存名字的文件变了_名字照样跟上_重开后也是() async throws {
         defer { app.services.cancelBackgroundWork() }
         let paths = AgentPaths(pi: app.piPaths, environment: app.agentHomes)
@@ -123,10 +118,10 @@ struct SessionTitleTests {
         func title(_ name: String) throws {
             try JSONSerialization.data(withJSONObject: ["generated_title": name, "title_is_manual": false]).write(to: summary, options: .atomic)
         }
-        let row: @Sendable (isolated CueStore) throws -> String? = { try $0.piSessions(sessionIDs: ["g2"])["g2"]?.state.title }
+        let row: @Sendable (isolated CueStore) throws -> String? = { try $0.sessionItems(sessionIDs: ["g2"])["g2"]?.state.title }
         func indexing(following live: Set<URL>) -> Task<Void, Never> {
-            let indexer = PiHistoryIndexer(agent: .grok, paths: paths, files: store.files) { [services = app.services] in await services.loadHistoryStart(for: $0) }!
-            return Task { await app.services.consumePiHistory(indexer.events(following: AsyncStream { $0.yield(live) }, scope: .all), agent: .grok) }
+            let indexer = HistoryIndexer(agent: .grok, paths: paths, files: store.files) { [services = app.services] in await services.loadHistoryStart(for: $0) }!
+            return Task { await app.services.consumeHistory(indexer.events(following: AsyncStream { $0.yield(live) }, scope: .all), agent: .grok) }
         }
 
         try title("黑屏视频")
@@ -139,7 +134,7 @@ struct SessionTitleTests {
 
         try title("纯黑静音视频")
         let again = indexing(following: [])
-        defer { again.cancel() }
+        defer { await again.stop() }
         _ = try await eventually(store, row) { $0 == "纯黑静音视频" }
     }
 }

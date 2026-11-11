@@ -24,11 +24,8 @@ public func fetchAttachments(
   return keys.allSatisfy { files.fileURL(for: $0) != nil } ? .arrived : .missing
 }
 
-/// 取附件的结果（`fetchAttachments`）。
 public enum AttachmentArrival: Sendable {
   case arrived
-  /// 到期还没取齐。
   case expired
-  /// 取过了，文件仍不在本机。
   case missing
 }

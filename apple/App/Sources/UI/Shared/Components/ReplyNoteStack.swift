@@ -1,15 +1,10 @@
 import CueStore
 import SwiftUI
 
-/// 回复框玻璃里、输入区上面的批注（`ComposerDraft.notes`，按在对话里的先后）：与带上的灵感同一种淡底圆角块，一条一行——
-/// 左边一道次墨色短竖条，先是批注，后面淡淡的「摘录」；引用的预览行首是它的小缩略图（`QuoteThumb`，按编号取），后面一句"预览「标题」"（话在回复框里写）。
-/// 点一条回到原文（引用的回到对话里那一批预览）；× 删掉（Mac 悬停时才露出，触屏上常显）。批注只存在本机。
-/// 多于 `shown` 条时这一块定高、可滚，不把对话挤走。改批注在对话里点那处高亮。
+/// 批注只存在本机；改批注在对话里点那处高亮。按实际内容高度选择整块或滚动，最多占默认 4.5 行的空间，不把输入与发送挤走。
 struct ReplyNoteStack: View {
     let notes: [ReplyNote]
-    /// 这个会话此刻的预览：引用的那一行按编号取缩略图（`ReplyNote.quoted`）。
-    let previews: [PiPreview]
-    /// 回到原文（会话页给）。
+    let previews: [PreviewItem]
     let reveal: (ReplyNote) -> Void
     let remove: (ReplyNote) -> Void
     @Environment(\.palette) private var palette
@@ -18,12 +13,10 @@ struct ReplyNoteStack: View {
     private static let shape = Radius.nested
 
     var body: some View {
-        Group {
-            if notes.count > Self.shown {
-                // 多露半行：看得出还能往下滚
-                ScrollView { rows }.frame(height: (CGFloat(Self.shown) + 0.5) * NoteRow.height + 2 * Self.pad)
-            } else {
-                rows
+        ReplyNoteLayout(limit: (CGFloat(Self.shown) + 0.5) * NoteRow.height + 2 * Self.pad) {
+            ViewThatFits(in: .vertical) {
+                rows.fixedSize(horizontal: false, vertical: true)
+                ScrollView { rows }
             }
         }
         .background(palette.fill, in: Self.shape)
@@ -44,17 +37,31 @@ struct ReplyNoteStack: View {
     }
 }
 
+/// 只占内容需要的高度，同时接受输入区分配后剩下的空间；fixedSize 会丢掉后一个约束。
+private struct ReplyNoteLayout: Layout {
+    let limit: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let ideal = subviews[0].sizeThatFits(ProposedViewSize(width: proposal.width, height: nil))
+        return CGSize(width: ideal.width, height: min(ideal.height, limit, proposal.height ?? limit))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews[0].place(at: bounds.origin, proposal: ProposedViewSize(bounds.size))
+    }
+}
+
 private struct NoteRow: View {
     let note: ReplyNote
-    let quoted: PiPreview?
+    let quoted: PreviewItem?
     let reveal: () -> Void
     let remove: () -> Void
     @Environment(\.palette) private var palette
     @State private var hovering = false
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     #if os(iOS)
     static let height: CGFloat = 40
-    /// 触屏没有悬停：× 常显，按得着的宽度够一根手指。
     private static let alwaysShowsRemove = true, removeWidth: CGFloat = 44
     #else
     static let height: CGFloat = 30
@@ -62,19 +69,26 @@ private struct NoteRow: View {
     #endif
 
     var body: some View {
-        HStack(spacing: 0) {
+        HStack(alignment: typeSize.isAccessibilitySize ? .top : .center, spacing: 0) {
             Button(action: reveal) {
-                HStack(spacing: Spacing.item) {
+                HStack(alignment: typeSize.isAccessibilitySize ? .top : .center, spacing: Spacing.item) {
                     if note.preview != nil {
                         QuoteThumb(preview: quoted, kind: note.kind)
                         Text("预览「\(note.quote)」").font(Typography.secondary).foregroundStyle(palette.ink2)
-                            .lineLimit(1).truncationMode(.middle)
+                            .lineLimit(typeSize.isAccessibilitySize ? nil : 1).truncationMode(.middle)
                     } else {
                         Capsule().fill(palette.ink2).frame(width: 3, height: 14)
-                        Text(note.note).font(Typography.secondary).foregroundStyle(palette.ink).lineLimit(1)
-                            .layoutPriority(1)
-                        Text("「\(ReplyNote.excerpt(note.quote))」").font(Typography.caption).foregroundStyle(palette.ink3)
-                            .lineLimit(1).truncationMode(.middle)
+                        let layout = typeSize.isAccessibilitySize
+                            ? AnyLayout(VStackLayout(alignment: .leading, spacing: Spacing.tight))
+                            : AnyLayout(HStackLayout(spacing: Spacing.item))
+                        layout {
+                            Text(note.note).font(Typography.secondary).foregroundStyle(palette.ink)
+                                .layoutPriority(1)
+                            Text("「\(ReplyNote.excerpt(note.quote))」").font(Typography.caption).foregroundStyle(palette.ink3)
+                                .truncationMode(.middle)
+                        }
+                        .lineLimit(typeSize.isAccessibilitySize ? nil : 1)
+                        .fixedSize(horizontal: false, vertical: typeSize.isAccessibilitySize)
                     }
                     Spacer(minLength: 0)
                 }
@@ -102,11 +116,10 @@ private struct NoteRow: View {
     private var removeLabel: LocalizedStringResource { note.preview == nil ? "删掉这条批注" : "不引用这份预览" }
 }
 
-/// 引用那一行行首的小图：按编号取到的那份预览的画面（同会话里的缩略图一套 `DeliverableLooks`，草稿里不存图）。
-/// 文件还没到本机、画面还没出来或这种文件没有画面时写它的类型（`DeliverableTile.icon`）；预览已随对话过期、取不到时照引用时记下的类型（`ReplyNote.kind`）。
+/// 预览已随对话过期、取不到时照引用时记下的类型（`ReplyNote.kind`）。
 private struct QuoteThumb: View {
-    let preview: PiPreview?
-    let kind: PiPreviewKind?
+    let preview: PreviewItem?
+    let kind: PreviewKind?
     @Environment(\.palette) private var palette
 
     #if os(iOS)
@@ -131,7 +144,7 @@ private struct QuoteThumb: View {
     }
 
     private struct Picture: View {
-        let preview: PiPreview
+        let preview: PreviewItem
         @Environment(AppServices.self) private var services
         @Environment(\.palette) private var palette
         @Environment(\.displayScale) private var scale
@@ -141,7 +154,6 @@ private struct QuoteThumb: View {
         var body: some View {
             Group {
                 if let image {
-                    // 同会话里的缩略图：留上沿，深色下截图与网页压暗一层
                     Image(decorative: image, scale: 1).resizable().scaledToFill()
                         .frame(width: QuoteThumb.side, height: QuoteThumb.side, alignment: .top)
                         .overlay { if preview.kind != .video, !DeliverableLooks.drawn(preview.kind) { palette.mediaDim } }

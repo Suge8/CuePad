@@ -1,19 +1,12 @@
 import SwiftUI
 
-/// 浮在回复框上方的整卡（Cue 页的拍板卡、会话页的问题卡、出错与没能结束，三端同一份）从回复框那一排后面升起，离开时沉回去
-/// （会话页的整卡经 `DockedCard`，拍板卡由 `CueWaitDock` 自己驱动）。
-/// 占的高随曲线在 0 与整高之间连续变，卡不透明、顶边跟着走，没露出的下半截齐那一排的上沿裁掉。
 /// 底栏、对话让出的地方（手机是安全区，Mac 是浮着的回复框）与卡每一帧都是同一个高，贴着最新的对话跟着每帧让位、再跟着落回（`ChatScroll`），不当帧跳。
 /// 只动卡（淡入淡出、平移）的话占的高当帧就到终点：对话先一下被顶开或掉下去，再空着等卡补上或淡完。代价是动的这零点几秒里底栏与对话每帧排一次
 /// （会话页状态轮播、卡几秒进出一次，与改前交替 3 轮：唤醒与渲染服务持平，App 指令每次进出约多 3.5 亿条）。
 /// 否决过：卡叠在对话上、对话底下常留一张卡的位置——卡高随问题与选项变，平时空着一大截；不留又盖住最新那几行（问的来龙去脉）。
-/// 减弱动态效果时只淡入淡出（`floats`），高当帧到位。
 struct RiseBehind: ViewModifier, Animatable {
-    /// 露出的比例，0 是全藏在输入框后面。
     var shown: CGFloat
-    /// 浮着（减弱动态效果）：不裁，占的高为 0 时卡往上浮在对话上（淡入淡出时用）。
     let floats: Bool
-    /// 对话区可见的高：卡至多它的一半，再高在卡里滚。
     @Environment(\.chatHeight) private var chatHeight
 
     var animatableData: CGFloat {
@@ -36,7 +29,6 @@ struct RiseBehind: ViewModifier, Animatable {
     private static let shadowRoom: CGFloat = 24
 }
 
-/// `RiseBehind` 的裁剪：两边与上面往外让出 `side`、`top`，下沿齐自己的下沿。
 private nonisolated struct RiseClip: Shape {
     let side: CGFloat
     let top: CGFloat
@@ -46,17 +38,13 @@ private nonisolated struct RiseClip: Shape {
     }
 }
 
-/// 会话页浮在回复框上方的一张整卡（问题卡、出错、没能结束，两端同一份）：`item` 有了升起、没了沉回（`RiseBehind`），沉的这一段还画它最后的样子。
 /// 不用转场：拿掉的视图不进排版，占的高当帧就没了，对话照样一跳。页打开时已经在的随页排出来、不升起；没有卡时什么都不排。
 /// 曲线是定长的 `Motion.glide`：这一段底栏与对话每帧都要排，弹簧收尾那一两像素还要多排两百多毫秒。
 /// 卡与下面回复框（或下一张卡）之间的缝在这里，算在升起的那一截里：缝跟着卡长、跟着收，缝里的影子不被裁掉。
-/// Cue 页的拍板卡另有滑卡换件与叠边，自己驱动 `RiseBehind`（`CueWaitDock`）。
 struct DockedCard<Item: Equatable, Card: View>: View {
     let item: Item?
     @ViewBuilder let card: (Item) -> Card
-    /// 正在沉回去的那张最后的样子；不在沉为 nil。
     @State private var last: Item?
-    /// 露出的比例（`RiseBehind`）；减弱动态效果时是不透明度。
     @State private var level: CGFloat
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -95,7 +83,6 @@ struct DockedCard<Item: Equatable, Card: View>: View {
     }
 }
 
-/// 按露出的比例占高，孩子按整高顶对齐排：顶边随占的高上下，下半截在外面；浮着时底对齐，多出的往上浮。
 struct RiseLayout: Layout {
     let shown: CGFloat
     let floats: Bool

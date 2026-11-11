@@ -9,8 +9,7 @@ enum Clipboard {
         NSPasteboard.general.setString(text, forType: .string)
     }
 
-    /// 文字与附件按原顺序：一个条目两种表示——`.string` 纯文字（文本框、终端取它，文件写文件名），有附件时另有 `.rtfd`
-    /// 内联图片与文件（富文本取它：备忘录、邮件、文本编辑里粘出来是图与文件附件）。
+    /// 一个条目两种表示——`.string` 纯文字（文本框、终端取它，文件写文件名），有附件时另有 `.rtfd`
     /// `.rtfd` 按需生成（`RichText`）：复制这一下不读附件，粘贴方真要富文本时才读，几百 MB 的文件不在复制时进内存。
     /// 不并列放 `.png/.tiff` 与文件网址：图形应用会在其中挑图片而丢掉文字，访达会只粘出文件。
     static func write(_ content: ClipboardContent, to pasteboard: NSPasteboard = .general) throws {
@@ -21,8 +20,7 @@ enum Clipboard {
         guard pasteboard.writeObjects([item]) else { throw ClipboardError.writeFailed }
     }
 
-    /// 粘贴方要 `.rtfd` 时才读附件、拼出富文本（剪贴板条目持有它，直到下一次复制）。图片转成 PNG（富文本里各应用都认），
-    /// 读不出的只留文字。
+    /// 剪贴板条目持有它，直到下一次复制。
     private final class RichText: NSObject, NSPasteboardItemDataProvider {
         /// 附件按先后装进富文本，合计不过这么多字节，装不下的文件只写名字：实测一份超过 256MiB 的数据剪贴板就交不出去
         /// （250MiB 的文件拼出 263MB 照常粘出，260MiB 的拼出约 274MB 时粘贴方拿到的是空），整份富文本连同文字都没了。
@@ -56,7 +54,6 @@ enum Clipboard {
             if let data = document.rtfd(from: NSRange(location: 0, length: document.length)) { item.setData(data, forType: type) }
         }
 
-        /// 这份文件还装得下就从余量里扣掉。
         private static func take(_ url: URL, from room: inout Int) -> Bool {
             let size = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
             guard size <= room else { return false }
@@ -66,7 +63,6 @@ enum Clipboard {
     }
 }
 
-/// 复制到剪贴板的内容：正文按原顺序切成的文字、图片与文件（本机那份；文件带显示的名字）。本机没有的附件只是文字（它的名字）。
 nonisolated struct ClipboardContent: Sendable, Equatable {
     enum Segment: Sendable, Equatable {
         case text(String)

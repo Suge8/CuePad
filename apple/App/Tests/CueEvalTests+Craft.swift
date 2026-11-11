@@ -5,7 +5,7 @@ import SwiftUI
 import Testing
 @testable import CuePad
 
-/// 只有 Cue 在场的几个时机：大事先出方案、追问两次就留给他、要的就是长相的成果只凭图挑刺、他反复交代的做法提议记成规矩。
+/// 只有 Cue 在场的几个时机：追问两次就留给他、要的就是长相的成果只凭图挑刺。
 extension CueEvalTests {
     @Test func c5追问两次就留给他() async throws {
         try await CueEval.run("c5-追问两次就留给他", expect: "改前改后的截图 Cue 追问过两次，会话这次还是没发：不问第三次，tell 一句缺什么，留给他回；不 done") { eval in
@@ -23,40 +23,6 @@ extension CueEvalTests {
                 Check(.result, "没有 done", eval.calls("task", "done").isEmpty),
                 Check(.interrupt, "tell 一句缺什么（提到截图）", eval.calls("tell").contains { ($0.args["text"] as? String)?.contains("截图") == true }),
                 Check(.result, "留给他回（待回复）", session.awaitsReply(try await rig.store.cueDuty())),
-            ]
-        }
-    }
-
-    @Test func n2反复交代的做法提议成规矩() async throws {
-        try await CueEval.run(
-            "n2-反复交代的做法提议成规矩",
-            expect: "他在另外两个会话里说过别加没人要的测试，这次在第三个会话里又说：recall 查到后 tell 带 ask=rule 问一次（rule 引他的原话），先不记成重点；他点可以后 note 带 pin 与 his"
-        ) { eval in
-            let rig = eval.rig
-            let said = "别加没人要的测试，测试是负债，只留覆盖用户可见行为的。"
-            for (title, days) in [("修好注册页白屏", 6.0), ("导出报表加筛选", 2.0)] {
-                let earlier = try await rig.working(title, "照现状修，做完贴出验证。")
-                try earlier.file.user("对了，\(said)", at: .now - days * 86400)
-                try await rig.read("对了，\(said)", in: earlier.id)
-            }
-            let work = try await rig.working(Self.title, Self.body)
-            try await eval.trigger {
-                try await rig.settleHisTurn(work, said: "限流改成 30 秒。还是那句：\(said)", ago: 15 * 60, reply: "限流改成 30 秒了，没有加新测试；原有 23 个测试全过。")
-            }
-            let asked = eval.calls("tell").last { $0.args["ask"] as? String == "rule" && !$0.call.failed }
-            let recalled = eval.calls("memory", "recall"), early = eval.calls("memory", "note")
-            let card = try await eval.said().last { $0.choices != nil }
-            var pinned = false
-            if let card {
-                try await eval.trigger { try await rig.services.answerCueQuestion(card.id, CueAsk.once) }
-                pinned = try await rig.store.cueMemory().lines.contains { $0.deletedAt == nil && $0.pinned && $0.source == .known(.you) && $0.text.contains("测试") }
-            }
-            return [
-                Check(.tool, "先 recall 查他以前说过没有", !recalled.isEmpty),
-                Check(.ask, "问一次要不要以后都带上（tell 带 ask=rule）", asked != nil),
-                Check(.tool, "rule 引他的原话（提到测试）", (asked?.args["rule"] as? String)?.contains("测试") == true),
-                Check(.ask, "他点头前没记成重点", !early.contains { $0.args["pin"] as? Bool == true }),
-                Check(.result, "他点可以后记成他说的重点", pinned),
             ]
         }
     }

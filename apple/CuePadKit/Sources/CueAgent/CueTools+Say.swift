@@ -23,10 +23,10 @@ extension CueTools {
     return Int(value) == nil && value.caseInsensitiveCompare(option) != .orderedSame
   }
 
-  /// say、stop、leave、take 对的会话（认法在 `place`）：是任务就是它在做的叶子绑着的会话（带上叶子），是会话就是那个会话。`label` 是工具结果里对它的称呼。
+  /// 认法在 `place`；`label` 是工具结果里对它的称呼。
   func speaker(_ args: Args) async throws -> (session: String, card: UUID?, label: String, short: String) {
     let leaf: Card
-    switch try await place(args) {
+    switch try await references.place(args) {
     case .session(let session)?: return (session.sessionID, nil, "会话「\(session.title)」", session.shortID)
     case .task(let card)?: leaf = try await store.workingLeaf(of: card.id)
     case nil: throw Failure("要给 task 或 session")
@@ -37,7 +37,7 @@ extension CueTools {
   /// 只把明确拒绝标成出错；等待窗口结束不授权 Cue 重说，也不保证之后一定收到结果。
   func spoken(_ request: DeliveryRequest, _ what: String, tail short: String, from host: String) async throws -> Result {
     let latest = try await settled(request)
-    let tail = "（\(short)）"
+    let tail = "（\(short)）\n\(CueToolReceipt(.request, request.id).mark)"
     let moment = Speech.Moment.always(localHost: host)
     switch Speech.trip(latest, at: moment) {
     case .preparing(let reason):
@@ -45,19 +45,10 @@ extension CueTools {
     case .delivered:
       return .ok("\(what)：已送达。\(tail)")
     case .failed(.reported(let reason)):
-      return Result(text: "\(what)：没送到——\(reason)\(tail) \(Self.undeliveredMark(request.id))", isError: true)
+      return Result(text: "\(what)：没送到——\(reason)\(tail)", isError: true)
     case .sending, .sent, .unconfirmed:
       return .ok("\(what)：送达尚未确认，可能已经执行；不要自动重发。若收到后续回执或消息，再据实判断。\(tail)")
     }
-  }
-
-  /// 说的话没送到时写在工具结果末尾的请求标识。工具写出回应不等于 Cue 看到了（大脑可能正在这时没了）：值班的管理器在这一轮
-  /// 好好做完时，从这一轮收到的出错工具结果里认出它们，记下已告诉 Cue（`CueStore.markCueTold`），别的失败照样进下一轮的变化。
-  static func undeliveredMark(_ request: UUID) -> String { "[请求 \(request.uuidString.lowercased())]" }
-
-  /// 一条出错的工具结果里告诉了 Cue 的没送到的请求（`undeliveredMark`）。
-  public static func undeliveredRequests(in result: String) -> [UUID] {
-    result.matches(of: /\[请求 ([0-9a-f-]{36})\]/).compactMap { UUID(uuidString: String($0.1)) }
   }
 
   /// 等请求有结果，至多到写下后 `wait`；到点还没结果返回此刻的记录。等的是别的进程（执行它的 Mac 上的 App）写回的结果：
@@ -78,10 +69,10 @@ extension CueTools {
   }
 
   /// say 带的 model、effort（说话与作答之前先换上）；model 的写法同 start，只写 id 时提供方按会话是哪家补，不在它的模型表里当场退回。都没带为 nil。
-  private func config(_ args: Args, of session: String, host: String) async throws -> PiConfig? {
+  private func config(_ args: Args, of session: String, host: String) async throws -> SessionConfig? {
     let effort = try Self.effort(args)
-    guard let raw = args.string("model") else { return effort.map { PiConfig(thinking: $0) } }
-    let agent = try await store.piSessions(sessionIDs: [session])[session]?.state.agent.known
-    return PiConfig(model: try await store.cueModelKey(raw, of: agent ?? .pi, host: host, session: session), thinking: effort)
+    guard let raw = args.string("model") else { return effort.map { SessionConfig(thinking: $0) } }
+    let agent = try await store.sessionItems(sessionIDs: [session])[session]?.state.agent.known
+    return SessionConfig(model: try await store.cueModelKey(raw, of: agent ?? .pi, host: host, session: session), thinking: effort)
   }
 }

@@ -43,7 +43,6 @@ import Testing
     #expect(try await sb.store.card(UUID(uuidString: id)!)?.body == "- 新正文")
   }
 
-  /// 引用写 id 或至少 4 位的唯一前缀：不分大小写，回收站里的也找得到，同前缀多条时列出来让人写长一点。
   @Test func cardReferencesResolveByUniquePrefix() async throws {
     let sb = try Fixture()
     let first = try await sb.store.createCard(body: "一号")
@@ -132,7 +131,6 @@ import Testing
 
     #expect(try array(try await sb.json("task", "list")).count == 2)
 
-    // 进行中仍算未完成
     let started = try await sb.object("task", "start", id)
     #expect(started.string("status") == "inProgress" && started.string("startedAt") != nil)
     #expect(try array(try await sb.json("task", "list")).count == 2)
@@ -148,10 +146,31 @@ import Testing
     let undone = try await sb.object("task", "undo", id)
     #expect(undone.string("status") == "todo" && undone["completedAt"] is NSNull && undone["startedAt"] is NSNull)
 
-    // 正文、换项目、回收站与灵感共用 card 命令
     let trashed = try await sb.object("card", "trash", id)
     #expect(trashed.string("id") == id && trashed["deletedAt"] != nil)
     #expect(try array(try await sb.json("task", "list", "--all")).count == 1)
+  }
+
+  @Test func bindExistingSessionAndCompleteTask() async throws {
+    let sb = try Fixture()
+    let task = try await sb.store.createTask("关联已有会话")
+    try await sb.store.setStatus(task.id, .inProgress)
+    let started = try #require(try await sb.store.card(task.id)?.startedAt)
+    try await StateRecorder(store: sb.store, hostID: "mac-a").update(sessionID: "session-one", state: .thinking, title: "已有会话", hosted: true)
+    let id = task.id.uuidString
+    #expect((await sb.run("task", "bind", id, "session-one")).code == 0)
+    #expect(try await sb.store.card(task.id)?.piSessionID == "session-one")
+    #expect((await sb.run("task", "bind", id, "session-one")).code == 0)
+    #expect(try await sb.store.card(task.id)?.startedAt == started)
+    #expect(try await sb.store.deliveryRequests().isEmpty)
+    #expect((await sb.run("task", "unbind", id)).code == 0)
+    #expect(try await sb.store.card(task.id)?.piSessionID == nil)
+    #expect((await sb.run("task", "bind", id, "session-one")).code == 0)
+    #expect((await sb.run("task", "done", id)).code == 0)
+    let ended = try await sb.store.deliveryRequests().filter { $0.mode == .known(.end) }
+    #expect(ended.isEmpty, "完成借用会话的任务不能结束会话：\(ended.map(\.target.ref))")
+    #expect((await sb.run("task", "unbind", UUID().uuidString)).code != 0)
+    #expect((await sb.run("task", "bind", id, "missing-session")).code != 0)
   }
 
   @Test func addSubtaskUnderAParent() async throws {
@@ -230,14 +249,14 @@ import Testing
 }
 
 @Suite struct HelpTests {
-  /// 帮助是唯一文档：手写的根帮助提到每个名词，名词的帮助列出它的动词，每个命令有自己的帮助。
   @Test func everyCommandIsReachableFromRootAndItsOwnHelp() async throws {
     let sb = try Fixture()
     let root = await sb.run("--help").out
-    let listed = try #require(root.split(separator: "\n").first { $0.hasPrefix("全部命令：") })
+    let commands = try #require(root.split(separator: "\n").first { $0.hasPrefix("全部命令：") })
+    let names = commands.dropFirst("全部命令：".count).prefix { $0 != "；" }.split(separator: "、").map(String.init)
+    #expect(Set(names) == ["project", "card", "task", "search", "show", "conflicts"])
     for command in Command.all {
       let noun = command.path[0]
-      #expect(listed.contains(noun), "根帮助的全部命令没有 \(noun)")
       if command.path.count == 2 {
         #expect((await sb.run(noun, "--help")).out.contains(command.name), "\(noun) --help 没列出 \(command.name)")
       }
@@ -246,7 +265,7 @@ import Testing
     }
   }
 
-  @Test func documentedFieldsMatchActualJSON() async throws {
+  @Test func outputFieldsFollowTheCLIContract() async throws {
     let sb = try Fixture()
     let project = try await sb.project("Alpha")
     let card = try await sb.store.createCard(in: project.id, body: "x")
@@ -254,19 +273,28 @@ import Testing
     let copy = try await sb.store.createCard(body: "旧")
     try sb.markConflict(copy: copy.id, of: card.id)
 
-    func documented(_ type: String, in command: [String]) async throws -> Set<String> {
-      let help = await sb.call(command + ["--help"]).out
-      let start = try #require(help.range(of: "\(type) {"), "\(command) --help 没有 \(type) 的字段说明")
-      let fields = try #require(help[start.upperBound...].split(separator: "}", maxSplits: 1).first)
-      return Set(fields.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) })
+    let projectFields: Set<String> = ["id", "name", "intro", "icon", "color", "pinned", "directory", "cardCount", "createdAt", "modifiedAt"]
+    let cardFields: Set<String> = ["id", "kind", "status", "projectId", "project", "parentId", "body", "pinned", "conflictOf", "startedAt", "completedAt", "archivedAt", "deletedAt", "createdAt", "modifiedAt"]
+    let searchFields: Set<String> = ["total", "projects", "cards"]
+    let conflictFields: Set<String> = ["original", "copy"]
+    func documentedFields(_ command: [String], type: String) async throws -> Set<String> {
+      let help = await sb.call(command + ["--help"])
+      #expect(help.code == 0)
+      let start = try #require(help.out.range(of: "\(type) {"))
+      return Set(help.out[start.upperBound...].prefix { $0 != "}" }.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) })
     }
+    #expect(try await documentedFields(["project", "list"], type: "Project") == projectFields)
+    #expect(try await documentedFields(["card", "show"], type: "Card") == cardFields)
+    #expect(try await documentedFields(["task", "done"], type: "Card") == cardFields)
+    #expect(try await documentedFields(["search"], type: "Search") == searchFields)
+    #expect(try await documentedFields(["conflicts", "list"], type: "Conflict") == conflictFields)
     let projects = try array(try await sb.json("project", "list"))
-    #expect(Set(projects[0].keys) == (try await documented("Project", in: ["project", "list"])))
-    #expect(Set(try await sb.object("card", "show", card.id.uuidString).keys) == (try await documented("Card", in: ["card", "show"])))
-    #expect(Set(try await sb.object("task", "done", task.id.uuidString).keys) == (try await documented("Card", in: ["task", "done"])))
-    #expect(Set(try await sb.object("search", "x").keys) == (try await documented("Search", in: ["search"])))
+    #expect(Set(projects[0].keys) == projectFields)
+    #expect(Set(try await sb.object("card", "show", card.id.uuidString).keys) == cardFields)
+    #expect(Set(try await sb.object("task", "done", task.id.uuidString).keys) == cardFields)
+    #expect(Set(try await sb.object("search", "x").keys) == searchFields)
     let conflicts = try array(try await sb.json("conflicts", "list"))
-    #expect(Set(conflicts[0].keys) == (try await documented("Conflict", in: ["conflicts", "list"])))
+    #expect(Set(conflicts[0].keys) == conflictFields)
   }
 
   @Test(arguments: [["nope"], ["card", "nope"], ["card", "show"], ["card", "list", "--bogus"], ["card", "add", "--body"]])

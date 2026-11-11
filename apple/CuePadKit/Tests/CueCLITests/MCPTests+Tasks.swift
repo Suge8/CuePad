@@ -4,7 +4,74 @@ import Foundation
 import Testing
 
 extension MCPTests {
-  /// 没给项目建的任务落在默认项目：Cue 用 edit 的 project 把它连同子任务与草稿挪进别的项目，开工就在那个项目的文件夹。
+  @Test func taskReferencesRespectProjectsAndDistinguishFinishingFromEnding() async throws {
+    let sandbox = try Fixture()
+    let store = sandbox.store
+    let alpha = try await sandbox.project("甲")
+    let beta = try await sandbox.project("乙")
+    try await store.updateCueProfile { $0.hostID = "mac-a"; $0.enabledAt = .now }
+    try await StateRecorder(store: store, hostID: "mac-a").update(sessionID: "free-session", state: .settled, title: "空闲会话", hosted: true)
+    try await Server.run(library: sandbox.directory) { server in
+      let first = try await server.call("task", ["action": "add", "title": "同名任务", "project": "甲"])
+      let second = try await server.call("task", ["action": "add", "title": "同名任务", "project": "乙"])
+      let cards = try await store.tasks(.todo).flatMap(\.tasks).filter { $0.heading == "同名任务" }
+      let a = try #require(cards.first { $0.projectID == alpha.id })
+      let b = try #require(cards.first { $0.projectID == beta.id })
+      #expect(first.contains(a.id.shortID) && second.contains(b.id.shortID) && a.id != b.id)
+      #expect(try await server.call("task", ["action": "add", "title": "同名任务", "project": "甲"]).contains(a.id.shortID))
+      #expect(try await store.tasks(.todo).flatMap(\.tasks).filter { $0.heading == "同名任务" }.count == 2)
+      #expect(try await server.refused("task", ["action": "done", "session": a.id.uuidString]).contains("做完任务给 task"))
+      #expect(try await store.card(a.id)?.status == .todo)
+      #expect(try await server.call("task", ["action": "done", "session": "free-session"]).contains("结束"))
+      #expect(try await store.deliveryRequests().contains { $0.mode == .known(.end) && $0.target.ref == "free-session" })
+      _ = try await server.call("task", ["action": "done", "task": a.id.uuidString, "evidence": ["完成"]])
+      #expect(try await store.card(a.id)?.status == .done)
+      #expect(try await store.card(b.id)?.status == .todo)
+      #expect(try await server.refused("task", ["action": "unknown"]) == "task 没有 unknown：可用 add / edit / start / bind / unbind / say / peek / stop / leave / take / done")
+    }
+  }
+
+  @Test func cueStopsLeavesAndTakesBackASession() async throws {
+    let sandbox = try Fixture()
+    let store = sandbox.store
+    try await store.updateCueProfile { $0.hostID = "mac-a"; $0.enabledAt = .now }
+    let recorder = try await store.runtimeRecorder(on: "mac-a", boot: UUID().uuidString, minInterval: .zero)
+    try await recorder.update(sessionID: "working-session", state: .thinking, title: "工作会话", hosted: true)
+    try await Server.run(library: sandbox.directory) { server in
+      #expect(try await server.call("task", ["action": "stop", "session": "working-session"]).contains("停下这一轮"))
+      #expect(try await store.deliveryRequests().contains { $0.mode == .known(.stop) && $0.target.ref == "working-session" })
+      try await recorder.update(sessionID: "working-session", state: .settled)
+      #expect(try await server.call("task", ["action": "leave", "session": "working-session"]).contains("留给他回"))
+      #expect(try await store.cueState()?.left.contains { $0.sessionID == "working-session" } == true)
+      #expect(try await server.call("task", ["action": "take", "session": "working-session"]).contains("已收回"))
+      #expect(try await store.cueState()?.left.isEmpty == true)
+      #expect(try await server.refused("task", ["action": "take", "session": "working-session"]).contains("不用收回"))
+    }
+  }
+
+  @Test func cueBindsExistingTaskWithoutSending() async throws {
+    let sandbox = try Fixture()
+    let store = sandbox.store
+    let task = try await store.createTask("已有任务")
+    try await store.setStatus(task.id, .inProgress)
+    let started = try #require(try await store.card(task.id)?.startedAt)
+    try await StateRecorder(store: store, hostID: "mac-a").update(sessionID: "session-one", state: .thinking, title: "已有会话", hosted: true)
+    try await Server.run(library: sandbox.directory) { server in
+      let args = ["action": "bind", "task": task.id.uuidString, "session": "session-one"]
+      _ = try await server.call("task", args)
+      _ = try await server.call("task", args)
+      #expect(try await store.card(task.id)?.piSessionID == "session-one")
+      #expect(try await store.card(task.id)?.startedAt == started)
+      #expect(try await store.deliveryRequests().isEmpty)
+      #expect(try await server.refused("task", ["action": "start", "task": task.id.uuidString, "session": "session-one"]).contains("session"))
+      _ = try await server.refused("task", ["action": "bind", "task": task.id.uuidString, "session": "missing-session"])
+      _ = try await server.refused("task", ["action": "unbind", "task": UUID().uuidString])
+      _ = try await server.call("task", ["action": "unbind", "task": task.id.uuidString])
+      #expect(try await store.card(task.id)?.piSessionID == nil)
+      #expect(try await store.deliveryRequests().isEmpty)
+    }
+  }
+
   @Test func cueMovesATaskFromTheDefaultProjectIntoAnother() async throws {
     let sandbox = try Fixture()
     let store = sandbox.store
@@ -28,16 +95,13 @@ extension MCPTests {
       _ = try await server.call("task", ["action": "start", "task": taskID])
       #expect(try await store.deliveryRequests().first?.launch?.project == project.id)
 
-      // 你亲手给子任务绑上会话：再开工被拒（叫它用 say），什么请求都不多写
+      try await StateRecorder(store: store, hostID: "mac-a").update(sessionID: "s9", state: .settled, projectID: project.id)
       try await store.bindSession("s9", to: step.id)
       #expect(try await server.refused("task", ["action": "start", "task": taskID]).contains("say"))
       #expect(try await store.deliveryRequests().count == 1)
     }
   }
 
-  /// 会话交了结果、Cue 收尾（task done 带证据）：Cue 自己验收，顶层任务直接完成，不请用户收下；做完了的会话请它结束（算 Cue 发起），
-  /// 给用户写一条结果（关联任务、不是"等你"，正文由代码拼成"「任务名」做完了"加证据要点）。再调一次只说已经完成，不重复写。
-  /// 整件事收尾要带证据：没带、多于 3 条或一条太长都退回，什么都不写。
   @Test func cueFinishesATopTaskAndReportsIt() async throws {
     let sandbox = try Fixture()
     let store = sandbox.store
@@ -47,11 +111,12 @@ extension MCPTests {
       $0.enabledAt = .now
     }
     let task = try await store.createTask("修好登录页", in: project.id)
-    try await store.linkCard(task.id, toSession: "s1")
-    try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "s1", state: .settled, title: "修好登录页", hosted: true)
+    let launch = try await store.requestLaunch(LaunchRequest(project: project.id, prompt: task.body, token: "fix-login"), title: task.heading, on: "mac-a", card: task.id)
+    try await StateRecorder(store: store, hostID: "mac-a").update(
+      sessionID: "s1", state: .settled, title: "修好登录页", projectID: project.id, launchToken: launch.launch?.token, hosted: true)
+    try await store.deleteDelivery(launch.id)
     try await Server.run(library: sandbox.directory) { server in
       try await server.refused("task", ["action": "done", "task": task.id.uuidString])
-      // 证据多于 3 条或一条太长：退回，什么都不写
       for bad in [["一", "二", "三", "四"], ["登录测试 12 个全过，另外把注册页、找回密码页也顺手都改好了"]] {
         try await server.refused("task", ["action": "done", "task": task.id.uuidString, "evidence": bad])
       }

@@ -4,7 +4,6 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 他亲口放行过的那一类（照原话记下、之后不问）、到点的提醒（该打扰、该 urgent），与定时的建与到点开工。会话问问题时该不该问他在 `会话在问` 那张表里。
 extension CueEvalTests {
     /// 测"不该问却问"：他亲口说过推送不用问，会话做完问推不推，Cue 直接答（靠当时照原话 note 并 pin 记下）。
     @Test func w放行过的不再问() async throws {

@@ -17,8 +17,8 @@ TEST_RUNNER_CUEPAD_CUE_EVAL=1 TEST_RUNNER_CUEPAD_CUE_EVAL_RUNTIME=pi TEST_RUNNER
 ```
 
 - 长程、多日考什么、怎么换新，在 `CueEvalLongTests`、`CueEvalDaysTests` 的头注释。只改了一两类行为时，短场景可用 `-only-testing:'CuePadTests/CueEvalTests/<函数名>()'` 只跑受影响的几个，结论照样看两遍以上。
-- 输出目录每个场景一个 .md（信封、工具调用、Cue 写的消息、判定与每一轮的开销）与一份 `<场景>.score.json`，这一遍的系统提示在 `system-prompt.md`。有场景没过时非零退出，输出照样写完。每个场景的库留在 `<场景>.library`，用 `CUEPAD_SHOT_LIBRARY=<它> xc.sh shot mac out.png -- -CuePadScene cue` 看。
-- 开销是大脑自报的 token 与费用；后台做梦的大脑输出另存 `usage/dream`，逐轮开销与换新只数 Cue 的。缓存跨场景命中一小时，先后跑的缓存读写会不同。
+- 输出目录里有什么见 `CueEvalTests` 头注释；这一遍的系统提示在 `system-prompt.md`。有场景没过时非零退出，输出照样写完。每个场景的库留在 `<场景>.library`，用 `CUEPAD_SHOT_LIBRARY=<它> xc.sh shot mac out.png -- -CuePadScene cue` 看。
+- 开销是大脑自报的 token 与费用，逐轮开销与换新只数 Cue 的（做梦的另存，`EvalBrain`）。缓存跨场景命中一小时，先后跑的缓存读写会不同。
 
 ## 换大脑
 
@@ -50,7 +50,6 @@ TEST_RUNNER_CUEPAD_CUE_EVAL=1 TEST_RUNNER_CUEPAD_CUE_EVAL_RUNTIME=codex TEST_RUN
 | c | 一次交回、证据充分 | 直接 done，不追加要求 |
 | c5 | 同一条证据追问过两次还没补上 | 不问第三次：tell 一句缺什么，留给他 |
 | u2 | 界面成品的截图满是模板痕迹 | read 打开图，say 带百分制分数与具体扣分处，不 done、不 tell |
-| n2 | 他在另外两个会话里说过同一条做法，这次又说 | recall 查到后 tell 带 ask=rule 问一次；他点可以才记成他说的重点 |
 
 他发起的一轮与会话的常规停下另判"没 tell"。做事的标准不在 Cue 的系统提示里（在各家读的规则文件里，全局规则空着时文件页给起步规则）。评测里 Cue 派的会话照真实的搭：由 CuePad 开的（能从 CuePad 结束）。
 
@@ -65,16 +64,15 @@ python3 apple/scripts/score.py /tmp/cue-eval/base-short-{1,2} /tmp/cue-eval/base
   --vs /tmp/cue-eval/new-short-{1,2} /tmp/cue-eval/new-long-{1,2} /tmp/cue-eval/new-days-{1,2}
 ```
 
-- 整理场景 `m整理钉着的记忆` 的自动检查只确认有回复与记忆产物；运行后用 `python3 apple/scripts/memory-judge.py RUN [RUN…]` 验收合并、回复、语义保留与新原则，全部通过才算完成。它沿用 `bench.py` 的判分模型配置，原文与逐项理由在每遍的 `memory-judge.json`，也能重判旧经过；不把逐字相同或关键词命中当作语义正确。判分语义以脚本的 `RUBRIC` 为准，旧经过中的期望文字不覆盖实际输入。
+- 整理场景 `m整理钉着的记忆` 的自动检查只确认有回复与记忆产物；运行后用 `python3 apple/scripts/memory-judge.py RUN [RUN…]` 验收（判什么在它的 `RUBRIC`），全部通过才算完成。
 - 改判分规范时，先把旧分数和原始经过另存，再在副本上重判，保留前后理由。用固定材料核对同义表达、交换句序同判，以及删通过条件、反转免询问、免 lint、仅运行不要求通过均被拒绝；原材料只写“先跑”而丢失“通过”的也应判失败。对照放临时目录，不用重跑产品来覆盖旧失败；真实输出若丢项仍不通过。
 - 判定的类别见 `CheckKind`，出错调用的分法见 `CallFailure`；前提这一遍没出现的判定记"不计"，不进通过数。
-- 判定按工具调用、库里的结果、会话收到的命令（替他答了哪个选项看会话收到的作答）与消息字段判；只能读 Cue 写的字的几处收在 `EvalReading`，认法与边界在那里，改了认法先拿现有的 .md 重放一遍、看翻了哪些。
+- 判定按工具调用、库里的结果、会话收到的命令（替他答了哪个选项看会话收到的作答）与消息字段判；只能读 Cue 写的字的几处收在 `EvalReading`。
 - 打扰 = tell（不含 ask、撤回、放回）+ task leave（他收到"待回复"）+ 其他推送（管理器写的 urgent，如出错）；回他的话不算。
-- 回复与 tell 超两句按系统提示的上限数；他问进展的那一轮上限是两句与件数（非空的行）里大的那个。
-- 怎么看：先看组内差（同一设置几遍之间最大减最小），差值没超过它的不算改动的效果；再看翻转、组内不稳与每遍都没过的。改了判定的措辞，它在成绩单里就是另一条（按措辞认身份），改前改后各列一次。
-- 多日另记合并（按摘要认）：在哪一轮、哪一步、几条摘要、之后视图几行，见 .md 的「多日」；单列的轮另出一表。
+- 怎么看：差值没超过组内差的不算改动的效果；再看翻转、组内不稳与每遍都没过的。改了判定的措辞，它在成绩单里就是另一条，改前改后各列一次。
+- 多日另记合并：见 .md 的「多日」；单列的轮另出一表。
 
-记忆工具改身份或区间引用时，核对原始调用中的 UUID 与 `range` 是否从输入原样复制，并检查工具结果及库内命中对象；不能只凭最终回复判通过。旧数字身份不再接受；摘要写回与展开绑定生成输入的范围指纹。竞态验收用隔离库走真实 MCP，覆盖输入变化拒绝、未变及区间外追加成功，再跑模型场景。大块指纹还绑定实际读到的子摘要及其输入依赖；子块改写必须使旧父缓存与在途父写失效，相同文本重写不失效。输入就绪才发布范围，子块写入回执接续父块；核对模型确实使用回执的新输入与引用。
+记忆工具改身份或区间引用时（规则在 `CueMemoryRange`、`CueStore+CueMemory` 的注释），核对原始调用中的 UUID 与 `range` 是否从输入原样复制，并检查工具结果及库内命中对象；不能只凭最终回复判通过。竞态验收用隔离库走真实 MCP，覆盖输入变化拒绝、未变及区间外追加成功，再跑模型场景；核对模型确实使用子块写入回执的新输入与引用。
 
 ## 记忆基准
 
@@ -89,4 +87,4 @@ python3 apple/scripts/bench.py judge /tmp/cue-eval/$B-before /tmp/cue-eval/$B-af
 ```
 
 - 改提示词时在 sample 上挑改法，在留出集（`sample $B --holdout`）上验。
-- `TEST_RUNNER_CUEPAD_BENCH_ONLY=<题号,…>` 只跑几题，`_LANES` 同时跑几题（缺省 8，一遍约四五分钟）。重判一题先删掉它 .json 里的 `label`。大脑那边一遍之间差几题，结论看两遍以上。
+- `TEST_RUNNER_CUEPAD_BENCH_ONLY=<题号,…>` 只跑几题，`_LANES` 同时跑几题（缺省 8 时一遍约四五分钟）。重判一题先删掉它 .json 里的 `label`。大脑那边一遍之间差几题，结论看两遍以上。

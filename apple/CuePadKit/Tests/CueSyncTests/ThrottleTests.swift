@@ -6,14 +6,12 @@ import Testing
 @testable import CueSync
 
 /// 正式版的故障：被 CloudKit 限流（429 带 Retry-After）后照样发拉取、门铃密钥，限流按设备算，越发被限得越久。
-/// 两台设备连同步测量用的模拟云（`SharedCloud`：按 CloudKit 的设备限流回 429、记下到了服务器的每个请求），同步代码照真的跑。
 struct ThrottleTests {
   static let retryAfter = 1.0
   let directory = TestLibraries.makeDirectory()
   let mac = try! Fixture()
   let phone = try! Fixture()
 
-  /// 限流期间立即同步、马上传、按提交的上传、取门铃密钥、进后台前的发送都不到服务器；到点后限流时记下的那条照样传上去、到了另一台。
   @Test func nothingReachesTheServerBeforeRetryAfterAndTheBacklogArrivesAfterwards() async throws {
     try await SharedCloud(directory: directory).saveZone()  // 先建好云的库文件：两台同时头一次打开会撞上切 WAL 的锁
     let macSync = connect(mac), phoneSync = connect(phone)

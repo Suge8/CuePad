@@ -1,9 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// 搜索的四个筛选（项目、含附件、发给过哪个 Agent、时间）两端同一份：有哪几项、菜单里列什么、生效时写什么，胶囊是 `chip`（生效的是选中）。
-/// 没筛（取默认）时只写名字；筛了是选中，名字退到次一档墨、后面跟墨色的取值（"项目 圆桌"），一眼扫得到筛的是什么。开关没有取值，也没有菜单与箭头。
-/// 项目列表读 `Workspace.catalog`，目标读这一页结果（`CardMatches.targets`）。菜单的样式跟外面的环境（Mac 在外面套 `.menuStyle(.button)`）。
+/// 菜单的样式跟外面的环境（Mac 在外面套 `.menuStyle(.button)`）。
 struct SearchFilters: View {
     @Binding var query: PaletteQuery
     let targets: [SendTarget]
@@ -55,8 +53,7 @@ struct SearchFilters: View {
     }
 }
 
-/// 搜索结果的滚动区（Mac ⌘K 与手机搜索页）：换了条件（卡片页数回到 1）就回到顶上，"显示更多"不动。
-/// 结果变短时滚动位置留在原处、落到内容外面，懒加载的列表画成空白，两端都会。
+/// 结果变短时滚动位置留在原处、落到内容外面，懒加载的列表画成空白，两端都会，所以换了条件（卡片页数回到 1）就回到顶上，"显示更多"不动。
 struct ResultsScroll<Content: View>: View {
     let query: PaletteQuery
     @ViewBuilder let content: Content

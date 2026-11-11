@@ -1,0 +1,77 @@
+#if os(macOS)
+import CueBridge
+import CueStore
+import Foundation
+import OSLog
+import SQLite3
+import Testing
+@testable import CuePad
+
+@Suite(.releasesLibraries)
+struct HistoryFailureTests {
+    let app = TestApp()
+    var services: AppServices { app.services }
+
+    private func sessionFile(_ id: String) throws -> URL {
+        let directory = app.directory.appending(path: "sessions")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let url = directory.appending(path: "\(id).jsonl")
+        let header = #"{"type":"session","version":3,"id":"\#(id)","timestamp":"2026-01-01T00:00:00.000Z","cwd":"/work/x"}"#
+        try (header + "\n").write(to: url, atomically: true, encoding: .utf8)
+        return url
+    }
+
+    private func events(for files: [URL]) -> AsyncStream<HistoryEvent> {
+        AsyncStream { continuation in
+            for file in files { continuation.yield(.updated(try! History.index(file: file, agent: .pi, from: nil, files: services.store.files))) }
+            continuation.finish()
+        }
+    }
+
+    private func breakPiSessionTable() throws {
+        var handle: OpaquePointer?
+        defer { sqlite3_close(handle) }
+        guard sqlite3_open(services.location.databaseURL.path, &handle) == SQLITE_OK,
+              sqlite3_exec(handle, "DROP TABLE piSessions", nil, nil, nil) == SQLITE_OK
+        else { throw BreakFailed() }
+    }
+
+    struct BreakFailed: Error {}
+
+    @Test func 读检查点失败_报告问题并停止该文件写回_其他文件照常尝试() async throws {
+        let broken = try sessionFile("broken")
+        let healthy = try sessionFile("healthy")
+        try breakPiSessionTable()
+
+        #expect(await services.loadHistoryStart(for: broken) == nil)
+        guard case .historyUnavailable(let message)? = services.startupIssues.first else {
+            Issue.record("读检查点失败没有进入 startupIssues：\(services.startupIssues)")
+            return
+        }
+        #expect(message.contains(broken.path))
+
+        await services.consumeHistory(events(for: [broken, healthy]), agent: .pi)
+
+        #expect(services.startupIssues.count == 2, "broken 不再写回，healthy 仍尝试写入（并同样失败）")
+        guard case .historyUnavailable(let second)? = services.startupIssues.last else { return }
+        #expect(second.contains(healthy.path))
+    }
+
+    @Test func 一批里一个文件写失败_其余照常写入_只挡住失败的那个() async throws {
+        let bad = try sessionFile("bad")
+        let good = try sessionFile("good")
+        var handle: OpaquePointer?
+        defer { sqlite3_close(handle) }
+        guard sqlite3_open(services.location.databaseURL.path, &handle) == SQLITE_OK, sqlite3_exec(handle, """
+            CREATE TRIGGER rejectBad BEFORE INSERT ON piSessions WHEN NEW.id = 'bad' BEGIN SELECT RAISE(ABORT, 'boom'); END;
+            """, nil, nil, nil) == SQLITE_OK else { throw BreakFailed() }
+
+        await services.consumeHistory(events(for: [bad, good]), agent: .pi)
+
+        #expect(try await services.store.indexedSessions().map(\.id) == ["good"])
+        #expect(services.startupIssues.count == 1)
+        guard case .historyUnavailable(let message)? = services.startupIssues.first else { return }
+        #expect(message.contains(bad.path) && !message.contains(good.path))
+    }
+}
+#endif

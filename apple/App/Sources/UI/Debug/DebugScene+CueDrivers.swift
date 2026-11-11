@@ -7,21 +7,16 @@ import UIKit
 #endif
 
 extension DebugScene {
-    /// `-CuePadWake <秒>`（配 `-CuePadDemo YES`，画面就绪后开始、一直循环）：每隔这么久 Cue 被在线会话叫醒一次——此刻的状态写成在想、
-    /// 带上叫醒它的会话（这一轮的经过那一行上的 `CueMessage.wake`，同值班的 Mac 起一轮时写下的样子，对话里随之多一行），醒 1.5 秒后歇下；叫醒的会话从在线会话的前三个里轮着挑，
-    /// 一次一个、一次两个交替（看几道光错开），歇下前给第一个会话去处：两个的那次对它说话、一个的那次留给你回（录 Cue 页那一行从在跑到补上去处）；给了 `-CuePadSession`（session 画面）时它排第一个，每次都有它。
     /// 录"叫醒"的动效用（`CueRelayStage`）；隔离库里 Cue 不值班，没有别人改它的状态。
-    /// `-CuePadFlightLog <路径>`：每次叫醒（或交给，见 `relayIfAsked`）前歇着的 `probe` 秒与之后的 `probe` 秒各量一段，一段一行 JSON 追加到这个文件：
-    /// 主线程 display link 的全部间隔、总帧数、超 16ms 的帧与掉帧（超过刷新间隔 1.5 倍）、每圈 run loop 的主线程 CPU、进程的指令数与能量（`TurnLog.metrics`、`energyMillijoules`）。
+    /// `-CuePadFlightLog <路径>`：每次叫醒（或交给）前歇着的 `probe` 秒与之后的 `probe` 秒各量一段，一段一行 JSON 追加到这个文件：主线程 display link 的全部间隔、总帧数、超 16ms 的帧与掉帧（超过刷新间隔 1.5 倍）、每圈 run loop 的主线程 CPU、进程的指令数与能量（`TurnLog.metrics`、`energyMillijoules`）。
     /// 那一下的那段减去歇着那段是一次接力在 App 进程里的开销；配 `-CuePadReduceMotion YES` 再跑一遍当对照（库照样变、不飞），两者之差是飞的那一下。
     /// 不抢前台：窗口在后台、留在屏上（display link 照走）；动画本身在渲染服务里插值，渲染服务的开销不在这个进程里，量不到。
 
     static func wakeIfAsked(_ workspace: Workspace) async {
         let store = workspace.services.store
         var round = 0
-        await everyIfAsked("CuePadWake") {
-            // 演示会话的 sessionID 与会话名相同
-            let opened = defaults.string(forKey: "CuePadSession")
+        await everyIfAsked("CuePadWake", every: args.driveOpts.wake) {
+            let opened = args.session
             let live = Array(workspace.liveWork.filter { $0.state != .known(.ended) && $0.sessionID != opened }.prefix(3).map(\.sessionID))
             let count = round % 2 + 1
             var woke = (0..<min(count, live.count)).map { live[(round + $0) % live.count] }
@@ -31,14 +26,13 @@ extension DebugScene {
             guard !woke.isEmpty else { return nil }
             let row = try await store.recordCueRound(nil, startedAt: .now, answersYou: false, tools: nil, wake: wake)
             try await store.setDemoCueState(.thinking, round: row)
-            // 歇下前给去处（同真的一轮：醒来、想、动手、歇下）
             let talks = round % 2 == 0
             return ("wake", {
-                var tools = PiChatMessage.Tools()
+                var tools = ChatMessage.Tools()
                 tools.record(.init(
                     kind: talks ? .talk : .leave,
                     target: talks ? String(localized: "对 \(woke[0]) 说：测试跑完把结果贴过来", table: "Demo") : String(localized: "「\(woke[0])」留给你回", table: "Demo"),
-                    name: woke[0], session: PiSessionState.recordID(sessionID: woke[0])))
+                    name: woke[0], session: SessionState.recordID(sessionID: woke[0])))
                 _ = try await store.recordCueRound(row, startedAt: .now, answersYou: false, tools: tools)
                 try await store.setDemoCueState(.settled)
             })
@@ -50,22 +44,21 @@ extension DebugScene {
     static func replyBlinkIfAsked(_ store: CueStore) async {
         let recorder = demoRecorder(store)
         let title = String(localized: "底栏换系统液态玻璃", table: "Demo")
-        func set(_ state: PiWorkState) async throws {
+        func set(_ state: WorkState) async throws {
             _ = try await recorder.update(sessionID: "blink", state: state, title: title, directory: "CuePad", agent: .claudeCode)
         }
-        await everyIfAsked("CuePadReplyBlink") {
+        await everyIfAsked("CuePadReplyBlink", every: args.driveOpts.replyBlink) {
             try await set(.settled)
             _ = try await store.leaveToYou("blink")
             return ("reply", { try await set(.thinking) })
         }
     }
 
-    /// `-CuePadNoAsks YES`（配 `-CuePadDemo YES`）：演示库里等你回答的会话都改成歇着、Cue 还没结束的提问都由它撤回（同 Cue 的 withdraw），
     /// "等你"为 0：看只有新消息时 Cue 入口上的样子（石绿点）。
     static func settleAsks(_ store: CueStore) async {
         await running("撤回等你的提问") {
             for asked in try await store.cueMessagesWaitingForYou() { _ = try await store.endCueQuestion(asked.id, .withdrawn) }
-            for session in try await store.piSessionPage(PiSessionQuery(limit: 500)).items.map(\.state) where session.state == .known(.waitingForUser) {
+            for session in try await store.sessionPage(SessionQuery(limit: 500)).items.map(\.state) where session.state == .known(.waitingForUser) {
                 _ = try await demoRecorder(store, host: session.hostID).update(sessionID: session.sessionID, state: .settled, title: session.title)
             }
         }
@@ -75,13 +68,13 @@ extension DebugScene {
     /// 看你切到别的 App 或别的页时来了新话、回到 Cue 页的样子。之前的都先算读过，开始时没有新消息。
     /// `-CuePadVisitCue <秒>`：说完这么久去 Cue 页（`visit`），停够读到它再回原来那页（`back`），录"别处时有提示、读过就没了"。
     static func saysIfAsked(_ services: AppServices, visit: @MainActor () -> Void = {}, back: @MainActor () -> Void = {}) async {
-        let delay = defaults.double(forKey: "CuePadCueSays")
+        let delay = args.driveOpts.cueSays
         guard delay > 0 else { return }
         await running("Cue 自己说一句") {
             try await services.store.markCueRead(through: .now)
             await Task.wait(for: .seconds(delay))
             _ = try await services.store.addCueMessage(.cue, text: String(localized: "圆桌的预发部署好了，5 人以上的房间发言顺序都对了。", table: "Demo"))
-            let visitAfter = defaults.double(forKey: "CuePadVisitCue")
+            let visitAfter = args.driveOpts.visitCue
             guard visitAfter > 0 else { return }
             await Task.wait(for: .seconds(visitAfter))
             visit()
@@ -90,8 +83,7 @@ extension DebugScene {
         }
     }
 
-    /// 你不在的一夜里 Cue 陆续说的几句（中间夹一条它自己醒来的动态）：之前的对话一段段挪早，最后一句是刚说的。
-    /// `aged` 为 false 时不挪，都是此刻说的（连着 iCloud 的实例里挪早会挪进别的设备写过的对话中间）。
+    /// `aged` 为 false 时不挪，都是此刻说的：连着 iCloud 的实例里挪早会挪进别的设备写过的对话中间。
     static func seedAway(_ store: CueStore, aged: Bool = true) async throws {
         let hour: TimeInterval = 3600
         for (hours, author, text) in [
@@ -117,11 +109,10 @@ extension DebugScene {
 
     static let goingAway = String(localized: "推吧。我去睡了，后面的你盯着，明早看", table: "Demo")
 
-    /// `-CuePadAwayAfter <秒>`：就绪后这么久离开 Cue 页（`leave`），你说一句去睡了、Cue 接着说一夜的那几句，再回来（`back`）。
     /// 手机录"离开很久后回来"的定位；Mac 在两台设备同步读到哪时当写下新消息的那台（停在设置画面，不回来）。
     /// 不挪早：连着 iCloud 时挪早会挪进别的设备写过的对话中间；等这么久是先把 iCloud 里已有的拉完，之前的都在你这一句之前，不算新的。
     static func awayIfAsked(_ store: CueStore, leave: @MainActor () -> Void = {}, back: @MainActor () -> Void = {}) async {
-        let delay = defaults.double(forKey: "CuePadAwayAfter")
+        let delay = args.awayAfter
         guard delay > 0 else { return }
         await Task.wait(for: .seconds(delay))
         leave()
@@ -139,10 +130,10 @@ extension DebugScene {
     /// 隔离库里没有执行器，请求停在待领取；1.5 秒后删掉，开出的会话结束。录"交给"的动效用（`CueRelayStage`），`-CuePadFlightLog` 同叫醒。
     static func relayIfAsked(_ workspace: Workspace) async {
         let store = workspace.services.store
-        let kind = defaults.string(forKey: "CuePadRelayKind")
+        let kind = args.driveOpts.relayKind
         let launcher = demoRecorder(store)
         var round = 0
-        await everyIfAsked("CuePadRelay") {
+        await everyIfAsked("CuePadRelay", every: args.driveOpts.relay) {
             if kind == "mixed" {
                 let requests = try await relayMixed(store, on: launcher)
                 return ("mixed", {
@@ -166,31 +157,27 @@ extension DebugScene {
 
     private static func relaySay(_ workspace: Workspace) async throws -> DeliveryRequest? {
         let rows = workspace.liveWork.filter { $0.state != .known(.ended) }
-        guard let session = rows.first(where: { $0.sessionID == defaults.string(forKey: "CuePadSession") }) ?? rows.first else { return nil }
+        guard let session = rows.first(where: { $0.sessionID == args.session }) ?? rows.first else { return nil }
         return try await workspace.services.store.requestDelivery(
             String(localized: "看一下测试跑完没有，跑完把结果贴给我", table: "Demo"), to: SendTarget(kind: .piSession, name: session.title, ref: session.sessionID), on: session.hostID, cue: true)
     }
 
-    /// 给一件还没交出去、归在项目里的待办叶子开新会话（Cue 发起，带着那张卡），演示 Mac 过一会儿开出它；返回请求与开出的会话 id。
-    private static func relayStart(_ store: CueStore, on launcher: PiStateRecorder) async throws -> (DeliveryRequest, String)? {
+    private static func relayStart(_ store: CueStore, on launcher: StateRecorder) async throws -> (DeliveryRequest, String)? {
         let tasks = try await store.tasks(.todo).flatMap(\.tasks)
         let parents = Set(tasks.compactMap(\.parentID))
         guard let task = tasks.first(where: { $0.piSessionID == nil && !parents.contains($0.id) }) else { return nil }
         let token = UUID().uuidString
         let request = try await store.requestLaunch(
-            PiLaunch(project: task.projectID, prompt: task.body, token: token), title: task.heading, on: "demo-mac", card: task.id, cue: true)
-        // 演示节奏：Mac 开出会话要一会儿
+            LaunchRequest(project: task.projectID, prompt: task.body, token: token), title: task.heading, on: "demo-mac", card: task.id, cue: true)
         try await Task.sleep(for: .seconds(0.8))
         let session = "launched-\(token.prefix(8))"
         try await launcher.update(sessionID: session, state: .thinking, title: task.heading, directory: "demo", projectID: task.projectID, launchToken: token)
         return (request, session)
     }
 
-    /// `key` 给了秒数时每隔这么久做一次 `act`（返回量的那段叫什么与 1.5 秒后怎么收回；做不成返回 nil，跳过这一次），配 `-CuePadFlightLog` 前后各量一段。
-    private static func everyIfAsked(_ key: String, _ act: () async throws -> (kind: String, undo: () async throws -> Void)?) async {
-        let every = defaults.double(forKey: key)
+    private static func everyIfAsked(_ key: String, every: Double, _ act: () async throws -> (kind: String, undo: () async throws -> Void)?) async {
         guard every > 0 else { return }
-        let log = defaults.string(forKey: "CuePadFlightLog").map { URL(fileURLWithPath: $0) }
+        let log = args.driveOpts.flightLog.map { URL(fileURLWithPath: $0) }
         let probe = log == nil ? 0 : flightProbe
         await running(key) {
             while !Task.isCancelled {
@@ -210,11 +197,11 @@ extension DebugScene {
     /// 一次叫醒的开销；`-CuePadReopen <秒>`：关上这么久后再打开（真的显示，会到前台），关着的这段中途把 Cue 此刻的状态写成用工具
     /// "读看板 · 关窗时写下"，看重新打开的第一眼是不是关窗期间变过的样子。
     static func closeIfAsked(_ workspace: Workspace) async {
-        let after = defaults.double(forKey: "CuePadClosed")
+        let after = args.driveOpts.closed
         guard after > 0, let shell = workspace.services.windowShell else { return }
         await Task.wait(for: .seconds(after))
         shell.hide()
-        let reopen = defaults.double(forKey: "CuePadReopen")
+        let reopen = args.driveOpts.reopen
         guard reopen > 0 else { return }
         await Task.wait(for: .seconds(reopen / 2))
         await running("关窗时写下 Cue 的状态") { try await workspace.services.store.setDemoCueState(.tool, detail: String(localized: "读看板 · 关窗时写下", table: "Demo")) }
@@ -223,17 +210,16 @@ extension DebugScene {
     }
     #endif
 
-    /// 样例轮播默认每拍停多久：够放完一下软糖再看清这一拍。
     static let cueCycleStep = 2.6
 
     /// `-CuePadCueCycle YES`：就绪后 Cue 此刻每 `cueCycleStep` 秒（`-CuePadCueCycleSeconds <秒>` 改，给得比软糖短就是每一下都被下一个值打断）换成下一份样例
     /// （`CueNowSamples.tour`），页头、侧栏与实时活动预览同一份一起变。配 `-CuePadLiveActivity YES` 时也更新系统活动，
     /// 用持续有活的样例录换态，避免后台无法重开；这是演示节奏，不是生产发布频率。
     static func cueNowTourIfAsked(_ workspace: Workspace) async {
-        guard defaults.bool(forKey: "CuePadCueCycle") else { return }
-        let live = defaults.bool(forKey: "CuePadLiveActivity")
+        guard args.cueOpts.cycle else { return }
+        let live = args.liveActivity
         let samples = live ? CueActivitySamples.tour : CueNowSamples.tour
-        let step = defaults.object(forKey: "CuePadCueCycleSeconds") == nil ? cueCycleStep : defaults.double(forKey: "CuePadCueCycleSeconds")
+        let step = args.cueOpts.cycleSeconds ?? cueCycleStep
         for index in 0... {
             var now = samples[index % samples.count]
             now.at = .now

@@ -6,13 +6,9 @@ import Testing
 @testable import CuePad
 @testable import CueStore
 
-/// 值班的 Cue 在没有在做的事之后照常巡视（真 Pi 当大脑，同 `CueHostTests`）；手上还有一件没开工的事（`Rig.handOverWork`），
-/// 什么都没有时不巡视。
-@Suite(.enabled(if: FileManager.default.isExecutableFile(atPath: realPi.path), "需要 ~/.local/bin/pi"))
+@Suite(.releasesLibraries, .pinnedPi)
 @MainActor
 struct CuePatrolTests {
-    /// 终端里开着的会话一句话没说就退出了（没有会话文件：记录删掉，不算会话的动静）。它原是唯一在做的事，在做的就没了：
-    /// 你跟 Cue 说过话之后空闲够久，Cue 巡视一次。
     @Test func 唯一在做的会话没说话就退出_Cue随后巡视() async throws {
         let rig = try await CueHostTests.Rig(patrolAfter: Self.patrolAfter, prepare: CueHostTests.Rig.handOverWork)
         let store = rig.store
@@ -34,15 +30,15 @@ struct CuePatrolTests {
         await rig.stop()
     }
 
-    /// 唯一在做的事是一件正在别的 Mac 上开会话的任务；你在手机上删了它，经同步到这台 Mac（软删除带着手机上更早的修改时间，
-    /// 早于这台 Mac 上之后改过的卡片）。在做的没了：你跟 Cue 说过话之后空闲够久，Cue 巡视一次。
+    /// 手机上的软删除带着更早的修改时间，早于这台 Mac 上之后改过的卡片。
     @Test func 唯一在做的任务经同步删掉_Cue随后巡视() async throws {
         let rig = try await CueHostTests.Rig(patrolAfter: Self.patrolAfter, prepare: CueHostTests.Rig.handOverWork)
         let store = rig.store
         let project = try #require(try await store.projects().first)
         let task = try await store.createTask("在别的 Mac 上开工", in: project.id)
-        _ = try await store.requestLaunch(PiLaunch(project: project.id, prompt: nil, token: "elsewhere"), title: task.body, on: "mac-b", card: task.id)
-        try await Task.sleep(for: .milliseconds(5))  // 这台 Mac 上之后改的卡片：修改时间晚于手机上那次删除
+        _ = try await store.requestLaunch(LaunchRequest(project: project.id, prompt: nil, token: "elsewhere"), title: task.body, on: "mac-b", card: task.id)
+        let started = try #require(try await store.card(task.id))
+        await nextMillisecond()  // 这台 Mac 上之后改的卡片：修改时间晚于手机上那次删除
         _ = try await store.createCard(in: project.id, body: "随手记")
 
         let workspace = Workspace(services: rig.services)
@@ -52,7 +48,7 @@ struct CuePatrolTests {
 
         #expect(try await store.cueBoardActive())  // 别的 Mac 上正在开会话的那件事还在做
         var deleted = try #require(try await store.syncRow(recordName: task.id.uuidString.lowercased()))
-        let deletedAt = SQLValue.int(Int64((task.modifiedAt.timeIntervalSince1970 * 1000).rounded()) + 1)
+        let deletedAt = SQLValue.int(Int64((started.modifiedAt.timeIntervalSince1970 * 1000).rounded()) + 1)
         deleted.fields["deletedAt"] = deletedAt
         deleted.fields["modifiedAt"] = deletedAt
         let synced = Date.now

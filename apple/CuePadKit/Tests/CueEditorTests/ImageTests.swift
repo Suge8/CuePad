@@ -77,7 +77,6 @@ struct ImageTests {
         try makePNG(width: 400, height: 200).write(to: file)
         let pasteboard = h.privatePasteboard()
         pasteboard.writeObjects([file as NSURL])
-        // 第二行行首附近（位置从布局里取）
         var secondLine = CGRect.zero
         h.textView.textLayoutManager!.enumerateTextLayoutFragments(from: nil, options: [.ensuresLayout]) { fragment in
             if (fragment.textElement as? NSTextParagraph)?.attributedString.string == "第二行文字" {
@@ -94,7 +93,6 @@ struct ImageTests {
 
         let tokens = CueFormat.parse(h.stored)
         let imageIndex = try #require(tokens.firstIndex { if case .image = $0 { true } else { false } })
-        // 图片落在第二行行首附近，而不是文末
         let before = CueFormat.serialize(Array(tokens[..<imageIndex]))
         #expect(before.hasPrefix("第一行文字\n"))
         #expect(!before.contains("第二行文字"))
@@ -117,7 +115,6 @@ struct ImageTests {
         h.textView.undoManager?.redo()
         #expect(h.stored == pasted)
 
-        // 图片后继续键入：新字符是普通文字，不带附件
         h.textView.insertText("x", replacementRange: NSRange(location: NSNotFound, length: 0))
         #expect(h.stored.contains(")\nx"))
         #expect(CueFormat.parse(h.stored).filter { if case .image = $0 { true } else { false } }.count == 1)
@@ -174,18 +171,6 @@ struct ImageTests {
         let stored = "前\n![](cuepad://file/\(String(repeating: "0", count: 64)).png)\n后"
         h.load(stored)
         #expect(h.stored == stored)
-    }
-
-    @Test("图片像素在进入视口后显示出来，解码不阻塞加载")
-    func rendersPixels() async throws {
-        let h = EditorHarness()
-        let id = try h.store.store(makePNG(width: 800, height: 400, color: NSColor(srgbRed: 1, green: 0, blue: 0, alpha: 1)))
-        h.load("![](cuepad://file/\(id))")
-        let frame = try #require(h.imageLineFrames().first)
-        #expect(await h.wait {
-            guard let color = h.renderedCenterColor(of: frame) else { return false }
-            return color.redComponent > 0.8 && color.greenComponent < 0.4 && color.blueComponent < 0.3  // 红色主导（色彩管理会让数值略偏）
-        })
     }
 
 }

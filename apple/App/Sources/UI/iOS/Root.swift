@@ -2,7 +2,6 @@
 import CueStore
 import SwiftUI
 
-/// 每个场景一个 Workspace；尺寸类选择窄屏单栈或宽屏两栏。
 struct IOSRoot: View {
     let services: AppServices
     /// 本窗口的工作区：出现时建（`onAppear` 在第一帧之前做完，第一帧照样是建好的样子），不在 init 里建：init 在上一层的 body 里跑，
@@ -29,7 +28,6 @@ struct IOSRoot: View {
             // 正文、输入框里的附件在这里看（页里另挂了全屏页的用页里那个，带底栏）
             .previewPresenter($workspace.preview, reply: nil)
             .background { RootShortcuts() }
-            // 会写资料库的面板挂在门内：读不出资料库时不弹出，读到后再弹；新会话与发给 Agent 都是浮在键盘上方的输入框
             .overlay {
                 FloatingInput(isPresented: workspace.newSession != nil, close: { workspace.newSession = nil }) {
                     if let start = workspace.newSession { NewSessionInput(start: start).id(start.id) }
@@ -47,14 +45,10 @@ struct IOSRoot: View {
             .sessionAsks(workspace)
         }
         .watchesTouches { [workspace] in workspace.pressed(at: $0) }
-        // 这一层还没有导航栏：上安全区就是状态栏
         .measuresStatusBar()
         .overlay { StatusBarBlur() }
-        // 窄屏盖在整个窗口上；宽屏在右边那一栏里（`SplitRoot`）
         .overlay(alignment: .top) { if sizeClass != .regular { NoticeBanner() } }
-        // 卡与行上"交给了哪个会话"的状态点读窗口里的那一份（`Workspace.agentLinks`）
         .modifier(WindowCardAgents(workspace: workspace))
-        // Cue 与会话之间接力的那一下画在整个窗口上
         .modifier(CueRelayStage(workspace: workspace))
         // 环境放在最外层：浮层与弹出面板是这些修饰符内容的兄弟，放在里面它们拿不到
         .environment(\.zoomNamespace, zoom)
@@ -77,21 +71,18 @@ struct RouteView: View {
     @Environment(\.headerHost) private var host
 
     var body: some View {
-        // 沉浸式：内容一直滚到顶栏、回复框的玻璃后面、透到屏幕最顶，玻璃本身就是遮挡，玻璃之间与下面的内容清楚可见——
-        // 系统的滚动边缘效果（渐进模糊带，盖住整条栏）全关；状态栏那一条的模糊是整个窗口一份（`StatusBarBlur`）。
-        // 内容离系统顶栏的距离只在这里给（`Bars.contentGap`，让出在上安全区里），静止时第一行在顶栏下面；页顶那一排自己画的页（窄屏的根）
-        // 由那一排让（`FloatingHeader`）。系统分组列表默认在顶上再留一段空，这里清掉，离栏多远只有这一个数
+        // 页顶由系统滚动边缘效果隔开正文；底部仍透过回复框，状态栏模糊由窗口负责。
+        // 系统分组列表默认顶边清掉，第一行只按栏头安全区与 contentGap 让位。
         page.contentMargins(.top, 0, for: .scrollContent)
             .safeAreaPadding(.top, host == .navigationBar ? Bars.contentGap : 0)
             .containerBackground(background, for: .navigation)
-            // 标题在页顶那一排中间的玻璃里或不写（根页），不用系统大标题
             .navigationBarTitleDisplayMode(.inline)
-            .scrollEdgeEffectHidden()
+            .scrollEdgeEffectHidden(true, for: .bottom)
+            .scrollEdgeEffectStyle(.soft, for: .top)
             // 导航栈里的页自己跟着键盘让位（UIKit 给的安全区，不经外层），菜单开着时在这里锁住
             .modifier(KeyboardHold())
     }
 
-    /// 卡片纸页在窄屏是整页的纸，宽屏是桌面上的一张纸；其余页是桌面。
     private var background: Color {
         route.isCard && sizeClass != .regular ? palette.paper : palette.desk
     }
@@ -105,12 +96,12 @@ struct RouteView: View {
         case .settings: SettingsScreen()
         case .conflicts: ConflictsScreen()
         case .progress: ProgressScreen()
-        case .cue: CuePage().countsAsPiViewer()
+        case .cue: CuePage().countsAsViewer()
         case .search: SearchScreen()
         case .earlier: EarlierPage()
         case .library: LibraryScreen()
         case .libraryFile(let file): LibraryFileScreen(file: file)
-        case .session(let route): SessionScreen(id: route.id, seed: route.seed).countsAsPiViewer()
+        case .session(let route): SessionScreen(id: route.id, seed: route.seed).countsAsViewer()
         case .card(let id):
             if let zoom {
                 CardEditorScreen(cardID: id).navigationTransition(.zoom(sourceID: id, in: zoom))
@@ -121,8 +112,6 @@ struct RouteView: View {
     }
 }
 
-/// 外接键盘快捷键（不占位的隐形按钮），两种容器同一组，与 Mac 对齐：⌘1–9 切项目、⌘K（及 ⌘F）搜索、⌘N 新建卡片、
-/// ⌘⇧N 对 Cue 说、⌘⇧T 任务、⌘, 设置。⌘\ 开合侧栏只在宽屏，按侧栏此刻在不在旁边（`SplitRoot`）。
 struct RootShortcuts: View {
     @Environment(Workspace.self) private var workspace
 

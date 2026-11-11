@@ -1,5 +1,5 @@
 #if os(macOS)
-import CuePi
+import CueBridge
 import CueStore
 import CueTestSupport
 import CueText
@@ -46,16 +46,16 @@ extension CueEvalTests {
             try await eval.trigger {
                 // 在另一台 Mac 上：e2e 最后一次进展再过 3 秒满 20 分钟
                 let due = Date.now.addingTimeInterval(3)
-                let e2e = PiSubagentState(
+                let e2e = SubagentState(
                     name: "e2e", role: "工程师", phase: .known(.running), action: "bash · npx playwright test reset-password", startedAt: due - 1800,
-                    progressAt: due - PiSessionState.stallAfter)
+                    progressAt: due - SessionState.stallAfter)
                 try await rig.store.recordMacPresence(host: "mac-b") { true }
-                try await PiStateRecorder(store: rig.store, hostID: "mac-b")
+                try await StateRecorder(store: rig.store, hostID: "mac-b")
                     .update(sessionID: id, state: .delegating, title: Self.title, turnStartedAt: due - 1900, subagents: [e2e])
-                let prompt = PiChatMessage(sessionID: id, entryID: "u1", seq: 1, role: .user, text: first, at: due - 3600, deliveryID: delivery)
-                let reply = PiChatMessage(sessionID: id, entryID: "a1", seq: 2, role: .pi, text: dispatched, at: due - 1800)
-                try await rig.store.writePiTranscript(PiTranscript(
-                    sessionID: id, messages: [prompt, reply], recap: PiRecap(lastPrompt: oneLine(first), lastReply: dispatched, answeredAt: due - 1800)))
+                let prompt = ChatMessage(sessionID: id, entryID: "u1", seq: 1, role: .user, text: first, at: due - 3600, deliveryID: delivery)
+                let reply = ChatMessage(sessionID: id, entryID: "a1", seq: 2, role: .pi, text: dispatched, at: due - 1800)
+                try await rig.store.writeTranscript(SessionTranscript(
+                    sessionID: id, messages: [prompt, reply], recap: Recap(lastPrompt: oneLine(first), lastReply: dispatched, answeredAt: due - 1800)))
             }
             let toIt = eval.calls("task", "say").filter { !$0.call.failed && CueEval.refers($0.args, to: id, title: Self.title, cards: [task]) }
             let said = toIt.compactMap { $0.args["text"] as? String }
@@ -95,16 +95,23 @@ extension CueEvalTests {
         try await CueEval.run("h-做完的事的会话答完", expect: "已完成的事的会话被 Cue 的一句恢复、答完歇下：再 done 那件事结束会话，不另开活、不打扰用户") { eval in
             let rig = eval.rig
             let work = try await rig.working(Self.title, Self.body)
-            try await rig.store.setStatus(work.task.id, .done)  // 早已做完，会话是被下面这句恢复的
-            let asked = "复查一遍：限流有没有绕过的办法？", delivery = UUID()
-            try await rig.store.recordSend(asked, to: SendTarget(kind: .piSession, name: Self.title, ref: work.id), card: work.task.id, delivery: delivery, origin: .known(.cue))
+            try await rig.store.setStatus(work.task.id, .done)
+            let initialEnd = try #require(try await rig.store.deliveryRequests(toSession: work.id).first { $0.mode == .known(.end) })
+            #expect(try await rig.store.outcome(of: initialEnd).status == .known(.succeeded))
+            try await eventually("第一次完成已结束会话") { rig.services.bridge.session(id: work.session.id) == nil }
+            let asked = "复查一遍：限流有没有绕过的办法？"
             try work.file.reply(Self.doneReply, at: .now - 600)
-            try work.file.user(asked, delivery: delivery.uuidString)
+            let request = try await rig.store.requestDelivery(
+                asked, to: SendTarget(kind: .piSession, name: Self.title, ref: work.id), on: rig.services.hostID, mode: .send, card: work.task.id, cue: true)
+            #expect(try await rig.store.outcome(of: request).status == .known(.succeeded))
+            let resumed = try #require(rig.app.host.extensions[work.id])
+            resumed.setState(["kind": "thinking"])
+            try await rig.read(asked, in: work.id)
             try await eval.trigger {
-                work.session.setState(["kind": "idle"])
+                resumed.setState(["kind": "idle"])
                 try await rig.answered(work.id, reply: "复查过了：限流按邮箱哈希计数、存在服务端，换 IP 或改大小写都绕不过去。")
             }
-            let ended = try await rig.store.deliveryRequests(toSession: work.id).contains { $0.mode == .known(.end) }
+            let ended = try await rig.store.deliveryRequests(toSession: work.id).contains { $0.mode == .known(.end) && $0.id != initialEnd.id }
             return [
                 Check(.result, "再 done 了这件事", eval.calls("task", "done").contains { !$0.call.failed }),
                 Check(.result, "请会话结束", ended),
@@ -176,7 +183,7 @@ extension CueEvalTests {
     }
 
     /// show 点名的图（file 写编号前缀）是会话发来的哪几张；认不出的略过
-    static func shown(_ show: Any?, in previews: [PiPreview]) -> [PiPreview] {
+    static func shown(_ show: Any?, in previews: [PreviewItem]) -> [PreviewItem] {
         (show as? [[String: Any]] ?? []).compactMap { item in
             guard let key = (item["file"] as? String)?.lowercased(), !key.isEmpty else { return nil }
             return previews.first { $0.id.uuidString.lowercased().hasPrefix(key) }

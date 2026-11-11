@@ -4,7 +4,6 @@ import CueText
 import SwiftUI
 
 extension DebugScene {
-    /// 演示记忆：长短不一（一句话到接近一条的上限）、钉住的与其他、你说的与 Cue 记的，时间从刚刚到几个月前。
     static var demoMemory: [SeedCueLine] {
         let hour: TimeInterval = 3600, day = 24 * hour
         func ago(_ seconds: TimeInterval) -> Date { .now.addingTimeInterval(-seconds) }
@@ -32,7 +31,6 @@ extension DebugScene {
         ]
     }
 
-    /// 推送那条"等你"点名要看的两份：部署会话发来的预发截图与测试报告（`seedDeliveries`）。
     static func deployShots(_ store: CueStore) async throws -> [CueShot] {
         let sent = try await store.previews(of: "deploy")
         return [(String(localized: "预发上的发言顺序", table: "Demo"), String(localized: "预发上 6 人的发言顺序", table: "Demo")), (String(localized: "重连测试报告", table: "Demo"), String(localized: "重连用例 4 个都过了", table: "Demo"))].compactMap { title, look in
@@ -40,8 +38,6 @@ extension DebugScene {
         }
     }
 
-    /// `-CuePadLongChat YES`：演示对话前面多 110 轮更早的来回（比 Cue 页读得到的 `CueThread.limit` 条多：来一句新的，最早那条就掉出去，同真实库）（看 Cue 页往上翻与刻度滑条）。
-    /// Cue 的回答高矮悬殊：一句话与会话页长对话同一套长段落、40 行代码块、宽表、长列表轮换（`longChatReply`）；你每 25 轮贴进来一段长文，每 15 轮带一张图。
     /// 量 Cue 页的长对话滚动（`-CuePadBench chatscroll`）就用这一段。
     static func seedLongCueChat(you: (String) async throws -> Void, store: CueStore) async throws {
         let asks = [String(localized: "今天先看哪件？", table: "Demo"), String(localized: "把计费那个会话的进展说一下", table: "Demo"), String(localized: "圆桌的预发什么时候能好？", table: "Demo"), String(localized: "帮我记一下：周五不发版", table: "Demo"), String(localized: "README 截图换完了吗？", table: "Demo"), String(localized: "重连用例加了几个？", table: "Demo")]
@@ -55,17 +51,13 @@ extension DebugScene {
         }
     }
 
-    /// `-CuePadScene cuerows`（不配演示库）：Cue 在值班，五个会话——Pi、Codex、Claude Code 各一，标题长短都有，
-    /// 停着的、在跑的、等回答的都有（Claude Code 那个是 CuePad 答得了的确认，等 Cue 回答；Codex 那个只是一句话，等你确认）；各绑一件任务。
-    /// 停着的两个里 faq 是 Cue 留给你回的（"待回复"），README 那个归 Cue 接手（"歇着"），两相对照。上下文 50%（行上不写）、75%（加粗）、94%（胭脂）三档都有；
-    /// 两个带模型（Agent 页卡片多一层读数），其余没有（卡片只有两层）。
     /// 看窄处名字优先、Agent 只留标志，状态标与第二层对齐，上下文落在时长下面。
     static func seedCueRows(_ services: AppServices) async {
         await running("Cue 行的演示数据") { try await seedCueRows(services.store) }
     }
 
     private static func seedCueRows(_ store: CueStore) async throws {
-        guard try await store.piSessionCount() == 0 else { return }
+        guard try await store.sessionCount() == 0 else { return }
         _ = try await store.updateCueProfile { profile in
             profile.hostID = "demo-mac"
             profile.enabledAt = .now
@@ -73,29 +65,28 @@ extension DebugScene {
         try await store.recordMacPresence(host: "demo-mac", bootID: demoBoot) { true }
         let recorder = demoRecorder(store)
         let asked = String(localized: "加在「安装」后面吗？", table: "Demo")
-        let rows: [(id: String, title: String, agent: AgentKind, state: PiWorkState, detail: String?, question: PiQuestion?, tokens: Int, model: Bool)] = [
+        let rows: [(id: String, title: String, agent: AgentKind, state: WorkState, detail: String?, question: Question?, tokens: Int, model: Bool)] = [
             ("cue-pi-long", String(localized: "把 README 的截图换成 Swift 版并补上深色模式的那一张", table: "Demo"), .pi, .settled, nil, nil, 100_000, true),
             ("cue-codex-short", "greet", .codex, .waitingForUser, String(localized: "要覆盖 tests/test_greet.py 吗？", table: "Demo"), nil, 150_000, false),
             ("cue-codex-long", String(localized: "为 greet 添加 --upper 参数并验证测试输出原文", table: "Demo"), .codex, .tool, "bash · python3 -m unittest", nil, 188_000, true),
             ("cue-claude-short", "faq", .claudeCode, .settled, nil, nil, 150_000, false),
             ("cue-claude-long", String(localized: "评估 README 是否需要加一节 FAQ 并跑一遍测试", table: "Demo"), .claudeCode, .waitingForUser, asked,
-             PiQuestion(promptID: "cuerows-confirm", kind: .confirm, text: asked), 100_000, false),
+             Question(promptID: "cuerows-confirm", kind: .confirm, text: asked), 100_000, false),
         ]
         for row in rows {
             _ = try await recorder.update(
                 sessionID: row.id, state: row.state, detail: row.detail, title: row.title, directory: "greet", question: row.question,
                 modelState: row.model ? demoModels(for: row.agent) : nil,
-                context: PiContextUsage(tokens: row.tokens, window: 200_000), agent: row.agent)
-            try await store.writePiTranscript(PiTranscript(sessionID: row.id, messages: [], recap: PiRecap(lastPrompt: row.title, lastReply: String(localized: "好了", table: "Demo"))))
+                context: ContextUsage(tokens: row.tokens, window: 200_000), agent: row.agent)
+            try await store.writeTranscript(SessionTranscript(sessionID: row.id, messages: [], recap: Recap(lastPrompt: row.title, lastReply: String(localized: "好了", table: "Demo"))))
             let task = try await store.createTask(row.title)
             try await store.linkCard(task.id, toSession: row.id)
         }
         try await store.leaveToYou("cue-claude-short")
     }
 
-    /// 会话发来一张截图（`png`）：卡片与"等你"上的证据。
     @discardableResult
-    static func seedEvidence(_ store: CueStore, session: String, title: String, png: Data) async throws -> PiPreview {
+    static func seedEvidence(_ store: CueStore, session: String, title: String, png: Data) async throws -> PreviewItem {
         let file = FileManager.default.temporaryDirectory.appending(path: "cuepad-demo-\(session).png")
         try png.write(to: file)
         return try await store.addPreviews([(file, title)], sessionID: session)[0].preview
@@ -105,8 +96,6 @@ extension DebugScene {
 
 #if DEBUG
 extension DebugScene {
-    /// 定时（定时页、手机 Cue 面板的定时那一行、任务气泡里那一条）：每天 8:00 的汇总；挂在 `task` 上的每月 1 号 9:00，
-    /// 上一次那次错过了、41 分钟后补上（那一轮写在对话里它补上的时刻）；明天 15:00 只这一次的。
     static func seedSchedules(_ store: CueStore, task: Card?) async throws {
         let daily = CueRepeat(.daily, hour: 8, minute: 0)!
         try await store.noteCueLine(

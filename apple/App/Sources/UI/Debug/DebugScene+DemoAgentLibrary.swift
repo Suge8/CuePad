@@ -3,10 +3,7 @@ import CueStore
 import Foundation
 
 extension DebugScene {
-    /// 演示的技能与规则（配 `-CuePadDemo YES`）：手机上看的是演示的 Mac Studio 报来的快照（各家都接了，`seedMacAgents`），这里替它写一份；
-    /// Mac 上看的是本机照文件扫出的（`AgentLibraryKeeper`），这里把同一套内容写成隔离目录里的文件（`seedAgentFiles`）。
-    /// 默认是该整理的样子（散落的、Claude Code 读不到的、空目录、同名的、格式不对的、另写了一份的全局规则）；`-CuePadAgentLibrary clean` 是整理好了的样子，
-    /// `blank` 是整理好了、全局规则还一个字没写的样子（文件页给起步规则，`StarterBar`）。
+    /// 手机上看的是演示的 Mac Studio 报来的快照，这里替它写一份；Mac 上看的是本机照文件扫出的，这里把同一套内容写成隔离目录里的文件（`seedAgentFiles`）。
     static func seedAgentLibrary(_ services: AppServices) async throws {
         #if os(macOS)
         try seedAgentFiles()
@@ -15,7 +12,7 @@ extension DebugScene {
         let projects = try await store.projects()
         func project(_ name: String) -> UUID? { projects.first { $0.name == name }?.id }
         let host = "demo-mac"
-        let look = defaults.string(forKey: "CuePadAgentLibrary")
+        let look = args.agentLibrary
         let library = DemoAgentLibrary(
             home: String(DemoLibrary.demoHome.dropLast()), clean: look == "clean" || look == "blank", blank: look == "blank",
             cuepad: project("CuePad"), atlas: project(String(localized: "圆桌", table: "Demo")),
@@ -23,6 +20,22 @@ extension DebugScene {
         )
         _ = try await store.recordAgentLibrary(library.library(host: host), texts: library.texts)
     }
+
+    #if os(macOS)
+    /// 本机扫出该一键整理的就点一下，直到 3 秒里不再冒出新的（隔离实例起来后各家的目录陆续建出来，又有一家要链），最多 20 秒。
+    static func tidyLibrary(_ workspace: Workspace) async {
+        var quiet = 0
+        for _ in 0..<200 where quiet < 30 {
+            if let library = workspace.library, !library.automaticTidies.isEmpty {
+                await workspace.tidy(library.automaticOrders, in: library)
+                quiet = 0
+            } else if workspace.library != nil {
+                quiet += 1
+            }
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+    }
+    #endif
 }
 
 struct DemoAgentLibrary {
@@ -43,7 +56,6 @@ struct DemoAgentLibrary {
             agents: [.pi, .claudeCode, .codex], modifiedAt: .now)
     }
 
-    /// 各份文件的正文（`LibraryFileText`）：列出的技能与规则，加合并要比的各家那几份。
     var texts: [String: String] {
         var texts: [String: String] = [:]
         for (skill, text) in skills { texts[skill.textPath] = text }
@@ -127,7 +139,6 @@ struct DemoAgentLibrary {
         return .succeeded
     }
 
-    /// 画面直接打开的那份文件（`-CuePadScene instruction|skill|duplicate`）：全局规则（给了项目是它的规则）、write-swift、同名的全局 release。
     static func file(scene: String, project: UUID?) -> LibraryFile? {
         #if os(macOS)
         let root = (ProcessInfo.processInfo.environment["CUEPAD_AGENTS_DIR"] ?? "") + "/skills"
@@ -141,8 +152,6 @@ struct DemoAgentLibrary {
         default: nil
         }
     }
-
-    // MARK: 技能
 
     static let global: [(group: String, name: String, description: String)] = [
         ("creative", "copywriting", String(localized: "写落地页、发布说明与商店文案", table: "Demo")),
@@ -162,7 +171,6 @@ struct DemoAgentLibrary {
         ("", "web-search", String(localized: "联网搜索与取正文", table: "Demo")),
     ]
 
-    /// SKILL.md 的样子（同 `seedAgentFiles` 写出的）。
     static func skillText(_ name: String, _ description: String) -> String {
         "---\nname: \(name)\ndescription: \(description)\n---\n\n\(description)\n"
     }
@@ -205,8 +213,6 @@ struct DemoAgentLibrary {
     static let cuepadRelease = String(
         localized: "---\nname: release\ndescription: 签名、公证、发布新版本\n---\n\n只在干净检出运行 xc.sh release。\n\n公证完再推 appcast。", table: "Demo")
 
-    // MARK: 规则
-
     static let cuepadRules = String(localized: "# CuePad\n\nSwift 原生应用。构建、测试、截图只经 apple/scripts/xc.sh。", table: "Demo")
     static let homepageRules = String(localized: "# 个人网站\n\nAstro 静态站，部署前先跑 pnpm build。", table: "Demo")
     static let homepageClaude = String(localized: "# 个人网站\n\n图片放 public/img，用 webp。", table: "Demo")
@@ -224,6 +230,8 @@ struct DemoAgentLibrary {
 
         默认中文，删去客套与重复。
         """, table: "Demo")
+
+    static let agentsMap = String(localized: "# Agents 目录地图\n\n这个仓库存技能与治理文件，只给在这里干活的 Agent 看。\n\n- skills/：各家共读的技能", table: "Demo")
 
     static let claudeRules = String(localized: """
         # 原则
@@ -255,11 +263,14 @@ struct DemoAgentLibrary {
         let agents: [AgentKind] = [.pi, .claudeCode, .codex]
         var list = [
             instruction(
-                .global, home + "/.agents/AGENTS.md", text: blank ? nil : Self.sharedRules, hours: blank ? nil : 26,
+                .global, home + "/.config/agents/AGENTS.md", text: blank ? nil : Self.sharedRules, hours: blank ? nil : 26,
                 readers: blank ? [] : clean ? agents : [.pi, .codex],
-                links: [home + "/.pi/agent/AGENTS.md", home + "/.codex/AGENTS.md"] + (clean ? [home + "/.claude/CLAUDE.md"] : [])),
+                links: [home + "/.pi/agent/AGENTS.md", home + "/.codex/AGENTS.md"] + (clean ? [home + "/.claude/rules/AGENTS.md"] : [])),
             instruction(.piSystem, home + "/.pi/agent/SYSTEM.md", text: Self.piSystem, hours: 24 * 9, readers: [.pi]),
         ]
+        if !clean {
+            list.insert(instruction(.agent(.claudeCode, file: "CLAUDE.md"), home + "/.claude/CLAUDE.md", text: Self.claudeRules, hours: 24 * 2, readers: [.claudeCode]), at: 1)
+        }
         if let cuepad {
             list.append(instruction(
                 .project(cuepad), home + "/Project/cuepad/AGENTS.md", text: Self.cuepadRules, hours: 3, readers: agents,
@@ -273,8 +284,6 @@ struct DemoAgentLibrary {
         }
         return list
     }
-
-    // MARK: 该整理的
 
     private var tidies: [LibraryTidy] {
         let claude = home + "/.claude/skills"
@@ -295,7 +304,7 @@ struct DemoAgentLibrary {
         }
         list.append(LibraryTidy(id: "empty", kind: .empty([home + "/.codex/skills/codex-primary-runtime"])))
         list.append(LibraryTidy(id: "global-instructions", kind: .globalInstructions([
-            source(.shared, home + "/.agents/AGENTS.md", Self.sharedRules, hours: 26),
+            source(.shared, home + "/.config/agents/AGENTS.md", Self.sharedRules, hours: 26),
             source(.agent(.claudeCode), home + "/.claude/CLAUDE.md", Self.claudeRules, hours: 24 * 2),
             source(.piSystem, home + "/.pi/agent/SYSTEM.md", Self.piSystem, hours: 24 * 9),
         ])))

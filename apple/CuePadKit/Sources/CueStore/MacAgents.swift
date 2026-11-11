@@ -10,7 +10,6 @@ public struct MacAgents: Equatable, Sendable {
   public var name: String?
   /// 能用的，按 `AgentKind` 的顺序；更新的版本写的、不认识的那家读出时丢掉（下同）。
   public var agents: [MacAgent]
-  /// 不能用的与原因（没装、没接入、没登录、问不出），按 `AgentKind` 的顺序。
   public var problems: [MacAgentProblem]
   public var modifiedAt: Date
 
@@ -22,7 +21,6 @@ public struct MacAgents: Equatable, Sendable {
     self.modifiedAt = modifiedAt
   }
 
-  /// 给人看的名字（各处写某台 Mac 都用它）：没报过名字的（更旧的版本写的记录、还没有这台的记录）写 `unnamed`。
   public var shownName: String { Self.shownName(name) }
   public static let unnamed = String(localized: "未命名的 Mac")
   static func shownName(_ name: String?) -> String { name ?? unnamed }
@@ -31,7 +29,6 @@ public struct MacAgents: Equatable, Sendable {
 
   public func agent(_ kind: AgentKind) -> MacAgent? { agents.first { $0.kind == kind } }
 
-  /// 这一家为什么不能用；能用或没写过为 nil。
   public func problem(_ kind: AgentKind) -> MacAgentProblem.Reason? { problems.first { $0.kind == kind }?.reason }
 
   public var kinds: [AgentKind] { agents.map(\.kind) }
@@ -55,22 +52,21 @@ public struct MacAgents: Equatable, Sendable {
 /// 没有模型清单的（OpenCode）两者都空。
 public struct MacAgent: Codable, Equatable, Sendable, Identifiable {
   public let kind: AgentKind
-  public let model: PiModelKey?
-  public let models: [PiModelOption]
+  public let model: ModelKey?
+  public let models: [ModelOption]
 
   public var id: AgentKind { kind }
 
-  public init(kind: AgentKind, model: PiModelKey?, models: [PiModelOption]) {
+  public init(kind: AgentKind, model: ModelKey?, models: [ModelOption]) {
     self.kind = kind
     self.model = model
-    let missing = model.flatMap { key in models.contains { $0.key == key } ? nil : PiModelOption(key: key, name: "", thinkingLevels: []) }
+    let missing = model.flatMap { key in models.contains { $0.key == key } ? nil : ModelOption(key: key, name: "", thinkingLevels: []) }
     self.models = (missing.map { [$0] } ?? []) + models
   }
 
-  public var defaultModel: PiModelOption? { model.flatMap { key in models.first { $0.key == key } } }
+  public var defaultModel: ModelOption? { model.flatMap { key in models.first { $0.key == key } } }
 }
 
-/// 一家不能用的原因（`AgentProbe` 写下）。
 public struct MacAgentProblem: Codable, Equatable, Sendable {
   public let kind: AgentKind
   public let reason: Reason
@@ -80,20 +76,17 @@ public struct MacAgentProblem: Codable, Equatable, Sendable {
     self.reason = reason
   }
 
-  /// 要你动手的几种（Mac 的接入面板按它给"安装""登录"、勾上接入）与别的（版本太旧、问不出模型……，只写出来）。
+  /// 要你动手的几种（Mac 的接入面板按它给"安装""登录"）与别的（版本太旧、问不出模型……，只写出来）。
   /// 同步记录里存的是种类（别的带句式与参数，`ShownText`），各端按自己的语言写出（`description`，接在 Agent 名后面读）。
   public enum Reason: Equatable, Sendable, Codable, CustomStringConvertible {
     case notInstalled
     case notLoggedIn
-    /// 登录了、只差接入（只有 Pi：托管的 Pi 经桥扩展上报）
-    case notConnected
     case other(ShownText)
 
     public var description: String {
       switch self {
       case .notInstalled: String(localized: "没装")
       case .notLoggedIn: String(localized: "没登录")
-      case .notConnected: String(localized: "还没接入 CuePad（在设置里打开）")
       case .other(let text): text.text
       }
     }
@@ -128,7 +121,6 @@ extension CueStore {
     }
   }
 
-  /// 各台 Mac 写下的（Cue 能运行的就是这几台），按名字排。
   public func allMacAgents() throws -> [MacAgents] {
     try select(MacAgents.self, orderBy: "name, hostID")
   }

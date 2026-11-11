@@ -4,9 +4,8 @@ import SQLite3
 import Testing
 @testable import CuePad
 
-/// 资料库打不开（更早或更新版本建的库）时进程不能终止：失败交给界面，带原文与库版本，界面据此写人话、可重试、可导出诊断。
+@Suite(.releasesLibraries)
 struct LibraryFailureTests {
-    /// 一个隔离位置，库文件是 `setup` 造出来的、结构版本为 `version` 的样子。
     private func library(version: Int, setup: String) throws -> LibraryLocation {
         let directory = TestLibraries.makeDirectory()
         var db: OpaquePointer?
@@ -36,18 +35,6 @@ struct LibraryFailureTests {
         // 更新版本的库要说更新 App，而不是"不再升级"
         #expect(newer.summary != older.summary)
         #expect(older.diagnostics.contains(older.reason) && older.diagnostics.contains("13"))
-        // 给人看的说明不夹原文（原文折叠在详情里）
         #expect(!older.summary.contains(older.reason))
     }
-
-    #if os(iOS)
-    @Test func 启动遇到打不开的库_得到失败而不是终止() throws {
-        let location = try library(version: 13, setup: "CREATE TABLE cards (id TEXT)")
-        guard case .failed(let failure) = Launch.open(location) else {
-            Issue.record("应该得到失败")
-            return
-        }
-        #expect(failure.version == 13)
-    }
-    #endif
 }

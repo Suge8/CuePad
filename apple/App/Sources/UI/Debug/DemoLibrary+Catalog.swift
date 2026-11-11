@@ -4,7 +4,6 @@ import CueText
 import Foundation
 
 extension DemoLibrary {
-    /// `doc`：一份 PDF 的引用，`docs`：它加一份日志（只带一个、两个文件的灵感看附件标记）。
     static func projects(image: String, doc: String, docs: String) -> [DemoProject] {
         let home = demoHome
         let pic = CueFormat.imageMarkup(key: image)

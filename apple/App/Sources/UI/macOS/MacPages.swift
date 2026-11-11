@@ -1,11 +1,10 @@
 #if os(macOS)
 import SwiftUI
 
-/// 主窗口主区挂着哪些页（Mac）。当前页本身在 `Workspace.mainRoute`，这里只管"去过的页留着"。
 @Observable
 final class MacPages {
 
-    /// 内容区挂着的页（`PageStack`）：去过的页留着，回访不再重建；至多 `keptPages` 个，满了换掉最久没看的。会话页不留（带着输入焦点与实时对话，挂着不看会抢键盘）。
+    /// 会话页不留：带着输入焦点与实时对话，挂着不看会抢键盘。
     private(set) var kept: [Route] = []
 
     /// 刚离开的页：切页的那一帧它已经看不见，但"不在前台"（暂停订阅、停读实时状态）晚两帧才生效——页面重新求值要几十毫秒，不放在点击的回合里。
@@ -40,13 +39,11 @@ final class MacPages {
         if kept.count > Self.keptPages + 2 { trim() } else { scheduleTrim() }
     }
 
-    /// 启动后空闲时先挂上一页（`Prewarm`）：它先读一份数据把整页建好（`pagePrefetch`），第一次点开就是回访，
-    /// 现建整页（Agent 页十几行会话要几十毫秒）不落在点击的回合里。不算去过，留着的页满了先换掉它。
+    /// 启动后空闲时先挂上一页（`Prewarm`）：先读一份数据把整页建好，第一次点开就是回访，现建整页（Agent 页十几行会话要几十毫秒）不落在点击的回合里。
     func premount(_ page: Route) {
         if !kept.contains(page) { kept.append(page) }
     }
 
-    /// 先挂上、还没去过的页（`premount`）：去过的页都记着最后一次看它。
     func isPremounted(_ page: Route) -> Bool { lastSeen[page] == nil }
 
     func forget(projectsNotIn ids: Set<UUID>) {
@@ -63,7 +60,6 @@ final class MacPages {
         }
     }
 
-    /// 只留最近看过的 `keptPages` 页，当前页一定留着。
     private func trim() {
         let stale = kept.filter { $0 != current }.sorted { lastSeen[$0, default: 0] < lastSeen[$1, default: 0] }.prefix(max(0, kept.count - Self.keptPages))
         if !stale.isEmpty { kept.removeAll { stale.contains($0) } }

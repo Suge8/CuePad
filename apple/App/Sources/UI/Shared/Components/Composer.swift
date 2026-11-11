@@ -2,11 +2,8 @@ import CueStore
 import SwiftUI
 
 /// 随手记、新会话与 Pi 会话回复框共用的输入框（iOS 与 Mac 同一份；文字区各用平台的文本视图，见 `ComposerField`；附件来源与带上的卡片的菜单、面板
-/// 在 `Composer+iOS`、`Composer+macOS`）：一层玻璃，里面是（调用方放的）头部、带上的卡片、附件条、文字区，以及底下一整排工具：
-/// 左"＋"（选卡片、相册、拍照、文件；粘贴、拖进来的也进附件条）、调用方的小圆钮（会话回复框的模型与思考强度），右提交钮，"＋"与提交钮钉在左下、右下角。
-/// 一直展开（`ComposerForm.open`，不变形）又有工具的，文字铺满整宽在上，底下一排是＋、工具与提交钮；其余的文字区一直在两颗圆钮中间、往上长，
-/// 工具排（有就）在文字下面、两颗圆钮之间：变形时只有玻璃上沿与文字往上下挪，没有横着挪的东西——文字区是平台的文本视图，
-/// 变形时它一下换到新位置，横着挪的"＋"会从字上滑过、挪着的提交钮被玻璃下沿裁掉。带上的卡片点一下看全文，能"展开编辑"成这次要发的文字。
+/// 在 `Composer+iOS`、`Composer+macOS`）。变形时只有玻璃上沿与文字往上下挪，没有横着挪的东西：文字区是平台的文本视图，
+/// 变形时它一下换到新位置，横着挪的"＋"会从字上滑过、挪着的提交钮被玻璃下沿裁掉。
 /// 调用方给草稿、占位、接受的种类和提交钮，草稿怎么处理由它们决定；回复框另给键盘快捷键（`ReplyShortcut`）与空着时按 ↑ 调回的那一句（`recall`）。
 struct Composer<Header: View, Tools: View, Send: View>: View {
     @Binding var draft: ComposerDraft
@@ -24,13 +21,18 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     var submitsEmpty = false
     /// 空着时钮位也露出钮（只是看的，不能提交）："对 Cue 说"发出后的发送中（话在路上）。
     var showsSendEmpty = false
+    /// 让出文字那一栏：字（连同工具排）先淡走，不接点按、读屏与焦点，玻璃、高度与两角的圆钮留着，调用方把别的东西摆在两颗圆钮之间
+    /// （手机通话时的声纹与状态，`PhoneCall`）。草稿与文字区都还在，让回来时等摆上去的先淡走再淡回来，同一处不叠两层字。
+    var yielded = false
+    /// 左下那一颗此刻不是"＋"（手机通话时的静音，`CueComposer`）：同一颗圆钮原地换字形与底，不另起一颗叠在上面。
+    var lead: ComposerLead?
     /// 收成一行时头部也留着（会话回复框：批注在这块玻璃的上部）；平时头部只在展开时出现。
     var keepsHeader = false
     /// 有工具排（`tools`：会话的模型与思考强度）。一直展开的有工具时才分两层（文字在上、＋工具提交钮一排在下），没有工具的照旧一排；
     /// 会收起的在聚焦时文字下面多一排。
     var tooled = false
-    /// 这个会话此刻能用的斜杠命令：输入 "/" 时弹出面板（`PiSlashPalette`）；空表示不弹。
-    var commands: [PiSlashCommand] = []
+    /// 这个会话此刻能用的斜杠命令：输入 "/" 时弹出面板（`SlashPalette`）；空表示不弹。
+    var commands: [SlashCommand] = []
     var shortcuts: [ReplyShortcut: () -> Void] = [:]
     /// 空着时按 ↑ 放进来的话，存储格式（回复框：你在这个会话里说过的上一句，文字与附件）。
     var recall: String?
@@ -70,9 +72,9 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     private var hasContent: Bool { !draft.isEmpty(accepting: accepts) }
     private var sendVisible: Bool { !shrunk && (hasContent || submitsEmpty || showsSendEmpty) }
 
-    private var paletteCommands: [PiSlashCommand] {
+    private var paletteCommands: [SlashCommand] {
         guard expanded, dismissedPalette != draft.text else { return [] }
-        return PiSlash.matches(draft.text, in: commands) ?? []
+        return Slash.matches(draft.text, in: commands) ?? []
     }
 
     /// 此刻能用的快捷键：发送的两种要有内容。
@@ -98,8 +100,8 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
         return true
     }
 
-    private func pick(_ command: PiSlashCommand) {
-        draft.text = PiSlash.insertion(for: command)
+    private func pick(_ command: SlashCommand) {
+        draft.text = Slash.insertion(for: command)
         focus.wrappedValue = true
     }
 
@@ -130,7 +132,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
             // 头部随玻璃变形进出：收起时立刻离开（淡出中的它会叠在收短的那行字上），展开时等文字区让开位置再淡入
             if !shrunk, expanded || keepsHeader { header().transition(Self.headerTransition) }
             if !paletteCommands.isEmpty {
-                PiSlashPalette(commands: paletteCommands, highlighted: min(highlighted, paletteCommands.count - 1), pick: pick)
+                SlashPalette(commands: paletteCommands, highlighted: min(highlighted, paletteCommands.count - 1), pick: pick)
                     .transition(.opacity)
             }
             if accepts.contains(.cards) {
@@ -139,14 +141,18 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
             if accepts.contains(.files), !draft.files.isEmpty {
                 fileStrip.padding([.horizontal, .top], ComposerMetrics.inset).transition(.opacity)
             }
-            if form == .open, tooled { layered } else { row }
+            // 空间不足时先压缩可滚动的头部，保留编辑区与工具排。
+            Group {
+                if form == .open, tooled { layered } else { row }
+            }
+            .layoutPriority(1)
         }
         // 提交钮只有一颗，浮在右下角留出的位置上：有没有内容都不改它的位置与输入框的宽
         .overlay(alignment: .bottomTrailing) { if !shrunk { sendSlot } }
         // 整块玻璃都是输入框：点在文字区以外（边距、两个圆钮之间的空处）也聚焦，不落空（文字区只占中间一条，
         // 外面原本什么都接不住，点下去玻璃动了一下却没聚焦，得再点一次）。文字区、＋ 与提交钮在它上面，照旧自己接
         .background {
-            if !focused {
+            if !focused, !yielded {
                 Color.clear.contentShape(.rect(cornerRadius: Radius.field))
                     .onTapGesture { focus.wrappedValue = true }
                     .readerHidden(true)
@@ -166,6 +172,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     private var layered: some View {
         VStack(alignment: .leading, spacing: 0) {
             text.padding(.horizontal, Spacing.block).padding(.top, ComposerMetrics.textTop).padding(.bottom, ComposerMetrics.textBottomOpen)
+                .modifier(Yield(yielded: yielded))
             HStack(spacing: 0) {
                 if !accepts.isEmpty { plus }
                 tools().environment(\.singleLineConfig, workspace.layout == .wide)
@@ -192,6 +199,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
                         .transition(Motion.pop(reduceMotion: reduceMotion))
                 }
             }
+            .modifier(Yield(yielded: yielded))
             if !shrunk { slotSpace }
         }
     }
@@ -226,5 +234,31 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
         .frame(width: ComposerMetrics.slot, height: buttonHeight)
         // 只管钮自己进出：打第一个字时钮出现与一行变两层是同一次更新，挂在整块上的话"＋"的挪位也跟着它动画（减弱动态效果时也滑）
         .animation(Motion.fade, value: sendVisible)
+    }
+}
+
+/// 左下那一颗换成别的单一动作（`Composer.lead`）：什么字形、开没开（开着底深一档，同选中的胶囊）、此刻能不能点。
+struct ComposerLead: Equatable {
+    let icon: Icon
+    let label: LocalizedStringResource
+    var on = false
+    var enabled = true
+    let act: () -> Void
+
+    static func == (a: Self, b: Self) -> Bool {
+        a.icon == b.icon && a.label.key == b.label.key && a.on == b.on && a.enabled == b.enabled
+    }
+}
+
+/// 让出的那一栏：让出时先走（`yield`），让回来时等摆在上面的淡完（`Fade.yield`）再淡回。
+private struct Yield: ViewModifier {
+    let yielded: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(yielded ? 0 : 1)
+            .allowsHitTesting(!yielded)
+            .readerHidden(yielded)
+            .animation(yielded ? Motion.yield : Motion.fade.delay(Motion.Fade.yield), value: yielded)
     }
 }

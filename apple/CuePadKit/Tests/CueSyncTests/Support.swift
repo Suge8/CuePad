@@ -5,12 +5,10 @@ import Foundation
 
 @testable import CueSync
 
-/// 按顺序回放的同步区替身：记下每次被要的令牌与要哪些字段（nil：整条），以及每次按 ID 取了哪些记录。
 actor FakeZone: ZoneChangeSource {
   private(set) var calls: [(token: Data?, keys: [String]?)] = []
   private(set) var fetches: [[CKRecord.ID]] = []
   private var responses: [Result<ZoneChangeBatch, any Error>]
-  /// 按 ID 取整条记录时的服务器内容。
   var server: [CKRecord.ID: CKRecord] = [:]
 
   init(_ responses: [Result<ZoneChangeBatch, any Error>], server: [CKRecord] = []) {
@@ -29,20 +27,15 @@ actor FakeZone: ZoneChangeSource {
   }
 }
 
-/// 收下一切的服务器替身：记下每批上传了什么；`holding` 时第一批挂住，直到 `release`。
 actor FakeUploader: RecordUploader {
   private(set) var batches: [(saves: [String], deletes: [String])] = []
   private var gate: CheckedContinuation<Void, Never>?
   private var holding: Bool
-  private var watchers: [(id: UUID, check: @Sendable ([(saves: [String], deletes: [String])]) -> Bool, continuation: CheckedContinuation<Void, Never>)] = []
 
   init(holding: Bool = false) { self.holding = holding }
 
   func upload(saving: [CKRecord], deleting: [CKRecord.ID]) async throws -> SentRecords {
     batches.append((saving.map(\.recordID.recordName), deleting.map(\.recordName)))
-    let ready = watchers.filter { $0.check(batches) }
-    watchers.removeAll { $0.check(batches) }
-    for watcher in ready { watcher.continuation.resume() }
     if holding {
       holding = false
       await withCheckedContinuation { gate = $0 }
@@ -57,32 +50,17 @@ actor FakeUploader: RecordUploader {
     gate = nil
   }
 
-  /// 等到上传过的批次满足条件；被取消（超出测试时限）时放手，测试照常结束、报出超时，不挂住整个测试进程。
-  func waitUntil(_ check: @escaping @Sendable ([(saves: [String], deletes: [String])]) -> Bool) async {
-    if check(batches) { return }
-    let id = UUID()
-    await withTaskCancellationHandler {
-      await withCheckedContinuation { continuation in
-        if Task.isCancelled { return continuation.resume() }
-        watchers.append((id, check, continuation))
-      }
-    } onCancel: {
-      Task { await self.cancel(id) }
-    }
+  /// 等到上传过的批次满足条件；到不了就在时限前抛 `TimedOut` 并说出在等什么。
+  func waitUntil(_ what: String, _ check: @escaping @Sendable ([(saves: [String], deletes: [String])]) -> Bool) async throws {
+    try await eventually(what) { check(batches) }
   }
 
-  private func cancel(_ id: UUID) {
-    watchers.first { $0.id == id }?.continuation.resume()
-    watchers.removeAll { $0.id == id }
-  }
-
-  func uploaded(_ name: String) async { await waitUntil { $0.contains { $0.saves.contains(name) } } }
-  func deleted(_ name: String) async { await waitUntil { $0.contains { $0.deletes.contains(name) } } }
+  func uploaded(_ name: String) async throws { try await waitUntil("上传出现 \(name)") { $0.contains { $0.saves.contains(name) } } }
+  func deleted(_ name: String) async throws { try await waitUntil("删除出现 \(name)") { $0.contains { $0.deletes.contains(name) } } }
 }
 
 let testZone = CKRecordZone.ID(zoneName: "CuePadTest", ownerName: CKCurrentUserDefaultName)
 
-/// 一套 store + 同步协调器。待推送就是库里推导的那一份（`pendingSync`）。
 struct Rig {
   let fixture: Fixture
   let coordinator: SyncCoordinator
@@ -95,7 +73,6 @@ struct Rig {
 
   func recordID(_ id: UUID) -> CKRecord.ID { CKRecord.ID(recordName: id.uuidString.lowercased(), zoneID: testZone) }
 
-  /// 模拟服务器接受了此刻所有待推送的保存与删除，返回上传的记录。
   @discardableResult
   func simulatePush() async throws -> [CKRecord] {
     let batch = try await coordinator.nextBatch(.pending(excluding: []), limit: .max)
@@ -104,7 +81,6 @@ struct Rig {
     return batch.saves
   }
 
-  /// 此刻待推送的 (保存, 删除) 记录名。
   func reconcileDelta() async throws -> (saves: Set<String>, deletes: Set<String>) {
     let pending = try await store.pendingSync()
     return (Set(pending.saves.map(\.id)), Set(pending.deletes))
@@ -113,7 +89,6 @@ struct Rig {
   func id(_ uuid: UUID) -> String { uuid.uuidString.lowercased() }
 }
 
-/// 构造"远端"记录：给出字段，得到带记录类型与名称的 CKRecord。
 func remoteRecord(_ table: Table, id: UUID = UUID(), _ fields: [String: SQLValue]) -> CKRecord {
   var all = fields
   all["id"] = .text(id.uuidString.lowercased())
@@ -145,20 +120,17 @@ func sendFields(kind: String, modifiedAt: Int64) -> [String: SQLValue] {
   ]
 }
 
-/// 两台"设备"之间的假云：把一端此刻的待推送交给另一端（`pulled`），并回报发送成功。
 /// 附件同真的一样分两路：记录不带文件先到，文件经接收端的 `FileFetcher` 从云里取。
 struct Loopback {
   let a: Rig
   let b: Rig
   let cloud = SimulatedCloud()
 
-  /// 一来一回：a 的待推送到 b，再 b 的到 a。
   func exchange() async throws {
     try await deliver(from: a, to: b)
     try await deliver(from: b, to: a)
   }
 
-  /// `only`：只传这几条（马上传那一路）。
   func deliver(from: Rig, to: Rig, only names: Set<String>? = nil) async throws {
     let batch = try await from.coordinator.nextBatch(names.map { .only($0) } ?? .pending(excluding: []), limit: .max)
     guard !batch.isEmpty else { return }
@@ -186,7 +158,6 @@ struct Loopback {
 }
 
 extension SyncCoordinator {
-  /// 一批上传的结果（批就是结果里提到的这些记录）。
   func sent(_ sent: SentRecords) async -> SendOutcome {
     await self.sent(sent, for: OutgoingBatch(saves: sent.saved + sent.failedSaves.map(\.record), deletes: sent.deleted + sent.failedDeletes.map(\.id)))
   }

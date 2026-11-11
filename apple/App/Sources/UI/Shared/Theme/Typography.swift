@@ -27,14 +27,14 @@ enum Typography {
     /// 阅读：会话里的回答与你的话（Markdown 正文、列表、引用、气泡），比界面正文大两号：对话是 Cue 页与会话页的主角；标题与代码同属这一列。
     nonisolated static let readingSize: CGFloat = 16
     static let reading = Font.system(size: readingSize)
-    static let readingHeading = Font.system(size: 19, weight: .semibold)
+    static let readingHeading = Font.system(size: readingHeadingSize, weight: .semibold)
+    static let readingHeadingSize: CGFloat = 19
     nonisolated static let codeSize: CGFloat = 14
     static let code = Font.system(size: codeSize).monospaced()
     /// 注脚里的等宽字（一轮回答的工具清单）：比代码块小一档，是回答的注脚、不跟回答抢。
     static let codeNote = Font.system(size: 12).monospaced()
-    /// 回答正文里的行内代码：约是阅读正文的 0.9 倍（等宽字同字号下比中文显得大）。
-    static let inlineCode = Font.system(size: 14.5).monospaced()
-    /// 阅读列的行距：长回答是会话页的主角，行高放到约 1.6 倍。
+    static let inlineCode = code
+    /// 阅读列的额外行距；总行高由系统字体与脚本度量决定。
     static let readingLineSpacing: CGFloat = 7
     /// 醒目的一句（等你确认的问题）。
     static let titleSize: CGFloat = 18
@@ -47,9 +47,7 @@ enum Typography {
     /// ⌘K 搜索框的输入与右侧预览的标题：浮层里最大的两行字。
     static let searchField = Font.system(size: 18)
     static let previewTitle = Font.system(size: 17, weight: .bold)
-    /// 键帽（快捷键提示）。
     static let keycap = Font.system(size: 11, weight: .medium, design: .rounded)
-    /// 空态的标题。
     static let emptyTitle = Font.system(size: 17, weight: .semibold)
     /// 栏头（窗口最顶那一排）：钮上的字（收起、项目范围）；三栏栏头的标题只有一种（项目名、会话名与它前面的项目、Cue 的名字、页名），
     /// 下面或后面跟的那一行（项目介绍、Cue 的数字账）是 `toolbarSubtitle`；标题下面还有一行（任务 · 子任务）时标题收小，两行放进一个控件的高度。
@@ -62,13 +60,10 @@ enum Typography {
     static let laneTitle = Font.system(size: 13, weight: .semibold)
     static let laneCount = Font.system(size: 15, weight: .semibold)
     static let toolbarPath = Font.system(size: 11)
-    /// 侧栏最上面的 Cue 名片的名字。
     static let cueCardName = Font.system(size: 18, weight: .semibold)
-    /// 多行正文的行距：苹方的默认行高偏紧，加上这些约是 1.5 倍行高。
+    /// 卡片摘要的额外行距；紧凑内容小于长文阅读。
     static let lineSpacing: CGFloat = 4
-    /// 用量环里剩多少的数字。
     static let gaugeNumber = Font.system(size: 15, weight: .semibold, design: .rounded).monospacedDigit()
-    /// 菜单栏图标右边的计数。
     static let menuBarCount = NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .semibold)
     #else
     static let body = Font.body
@@ -121,6 +116,11 @@ enum Typography {
     static let documentTitle = Font.title.weight(.bold)
     static let documentHeading = Font.title2.weight(.semibold)
     #endif
+
+    /// 紧凑的多行旁注（规则摘要、运行日志），不沿用长文阅读的疏行距。
+    static let noteLineSpacing: CGFloat = 2
+    static let taskLineSpacing: CGFloat = 5
+    static let editorHeadingSpacing: CGFloat = 10
 
     /// 一个换行撑出的空行：`Text` 不认段距，块与块之间用一个这个字号的换行拉开。
     static func gap(_ height: CGFloat) -> Font { .system(size: height) }

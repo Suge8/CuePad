@@ -2,14 +2,12 @@ import CueStore
 import CueText
 import SwiftUI
 
-/// 一条消息的长按菜单（Mac 右键）：有哪几项、什么顺序只在 `MessageMenu`，这里只画。存为灵感进会话所属的项目；
-/// 编辑后重发放回这个会话的回复框（文字进输入框、附件进附件条），已经写了字就接在后面。只属于某一行的动作（选择文本、批注、重发、移除）由那一行给。
+/// 有哪几项、什么顺序只在 `MessageMenu`，这里只画。只属于某一行的动作（选择文本、批注、重发、移除）由那一行给。
 /// `text`：你的话是存储格式正文（复制与存为灵感连图片一起；分享只给文字），Pi 与 Cue 的回答是 Markdown。
-/// `session`：会话里的消息才有（存为灵感、编辑后重发要它）；Cue 页的菜单（`.cue`）没有这两项。
 struct MessageActions: View {
     let text: String
     let kind: MessageMenu.Kind
-    var session: PiSessionState?
+    var session: SessionState?
     var selectText: (() -> Void)?
     var annotate: (() -> Void)?
     var resend: (() -> Void)?
@@ -45,7 +43,7 @@ struct MessageActions: View {
     }
 
     /// 草稿只有一份（`AppSettings.replyDraft`）：已经写了字就接在后面，不覆盖。
-    private func editAgain(_ session: PiSessionState) {
+    private func editAgain(_ session: SessionState) {
         let settings = workspace.services.settings
         var draft = settings.replyDraft(for: session.id)
         draft.append(stored: text)

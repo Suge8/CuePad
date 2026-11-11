@@ -18,15 +18,15 @@ public enum SystemBoot {
   }()
 }
 
-extension PiSessionState {
+extension SessionState {
   /// 保留原报告，当前断言另取投影；未知不会被当成空闲或结束。所在的 Mac 不在线时也是未知，为什么在 `offlineMac`。
-  public var runtimeState: Open<PiWorkState> {
+  public var runtimeState: Open<WorkState> {
     if state == .known(.ended) || state == .known(.interrupted) { return state }
     return runtimeUntil == nil ? .unknown("unconfirmed") : state
   }
 
   /// 名册保留，过期的运行断言撤销；不捏造已交回或被中断。
-  public var runtimeSubagents: [PiSubagentState] {
+  public var runtimeSubagents: [SubagentState] {
     guard runtimeUntil == nil else { return subagents }
     return subagents.map { agent in
       var agent = agent
@@ -38,7 +38,7 @@ extension PiSessionState {
 
 extension CueStore {
   /// 只有同一次系统启动的见证（真实报告、本机收尾或启动对账写下的 `bootID`）且所属 Mac 的 lease 仍有效才确认；旧报告、摘要修改时间均不能背书。
-  public func runtimeIsConfirmed(_ session: PiSessionState, at now: Date = .now) throws -> Bool {
+  public func runtimeIsConfirmed(_ session: SessionState, at now: Date = .now) throws -> Bool {
     try runtimeDeadline(session, presences: runtimePresences(), at: now) != nil
   }
 
@@ -46,7 +46,7 @@ extension CueStore {
     Dictionary(try select(MacPresence.self).map { ($0.hostID, $0) }, uniquingKeysWith: { _, last in last })
   }
 
-  private func runtimeDeadline(_ session: PiSessionState, presences: [String: MacPresence], at now: Date) -> Date? {
+  private func runtimeDeadline(_ session: SessionState, presences: [String: MacPresence], at now: Date) -> Date? {
     guard session.state != .known(.ended), session.state != .known(.interrupted),
       let boot = session.bootID, let presence = presences[session.hostID], presence.bootID == boot,
       presence.isOnline(at: now) else { return nil }
@@ -57,8 +57,8 @@ extension CueStore {
   /// Cue 的订阅也跟随运行证明与期限；lease 到期不写库，不能只盯 writeSeq。
   public func runtimeDeadlines() throws -> [Date] {
     let sessions = try runtimeProjection(db.query(
-      "SELECT \(PiSessionState.selection) FROM piSessionStates WHERE \(PiWorkState.outsideSQL(PiWorkState.closed))"
-    ) { PiSessionState(row: $0) })
+      "SELECT \(SessionState.selection) FROM piSessionStates WHERE \(WorkState.outsideSQL(WorkState.closed))"
+    ) { SessionState(row: $0) })
     return Set(sessions.compactMap(\.runtimeUntil) + [try cueState()?.runtimeUntil].compactMap { $0 }).sorted()
   }
 
@@ -74,7 +74,7 @@ extension CueStore {
 
   /// 每批只读一次 host 集合，O(S+H)；所有运行读取共用，不按会话逐条查在线状态。
   /// 没确认的里所在的 Mac 不在线的（没有在线记录或过了期限）带上它的名字（`offlineMac`）：说的是那台 Mac 没开，不是这个会话说不准；名字只在有这样的会话时读。
-  func runtimeProjection(_ sessions: [PiSessionState]) throws -> [PiSessionState] {
+  func runtimeProjection(_ sessions: [SessionState]) throws -> [SessionState] {
     guard !sessions.isEmpty else { return [] }
     let presences = try runtimePresences(), now = timing.now()
     var names: [String: String]?
@@ -94,15 +94,15 @@ extension CueStore {
   }
 
   func select(
-    _ type: PiSessionState.Type, where condition: String = "1", _ arguments: [any SQLBindable] = [],
+    _ type: SessionState.Type, where condition: String = "1", _ arguments: [any SQLBindable] = [],
     orderBy: String = "rowid", limit: Int = -1, offset: Int = 0
-  ) throws -> [PiSessionState] {
+  ) throws -> [SessionState] {
     try runtimeProjection(db.query(
-      "SELECT \(PiSessionState.selection) FROM piSessionStates WHERE \(condition) ORDER BY \(orderBy) LIMIT ? OFFSET ?",
-      arguments + [limit, offset]) { PiSessionState(row: $0) })
+      "SELECT \(SessionState.selection) FROM piSessionStates WHERE \(condition) ORDER BY \(orderBy) LIMIT ? OFFSET ?",
+      arguments + [limit, offset]) { SessionState(row: $0) })
   }
 
-  func find(_ type: PiSessionState.Type, _ id: any SQLBindable) throws -> PiSessionState? {
+  func find(_ type: SessionState.Type, _ id: any SQLBindable) throws -> SessionState? {
     try select(type, where: "id = ?", [id]).first
   }
 }

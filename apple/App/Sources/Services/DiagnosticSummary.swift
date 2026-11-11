@@ -1,12 +1,9 @@
 import Foundation
 import MachO
 
-/// 导出诊断（设置页"上次崩溃"那一页的"导出诊断"）复制出去的那段字：存档里的每份只留要点，同一种（`signature` 相同）的并成一条、计次数、列时间。
 /// 原始 JSON 不进这段字（一份就有几十 KB，复制不完），要完整原文就分享存档里的文件（`DiagnosticArchive.url`）。
 nonisolated enum DiagnosticSummary {
-    /// 同一种列出的时间至多这么多个，再多的只计数。
     static let shownTimes = 5
-    /// 同一种里原文不同的原因（并成一种时抹掉了数字、只认终止码）至多列这么多条，再多的写"…"。
     static let shownReasons = 3
 
     static func text(_ reports: [CrashReport]) -> String {
@@ -15,7 +12,7 @@ nonisolated enum DiagnosticSummary {
         return ([head] + groups.map(block)).joined(separator: "\n\n")
     }
 
-    /// 同一种：类型、异常、信号、原因（`cause`）、栈都相同（版本不算：同一个毛病跨了几个构建仍是一种）。
+    /// 版本不算：同一个毛病跨了几个构建仍是一种。
     private static func signature(_ report: CrashReport) -> String {
         [report.kind.rawValue, report.exception ?? "", report.signal ?? "", report.cause, report.trail.first ?? ""]
             .joined(separator: "|") + report.frames.map(\.text).joined(separator: "|")

@@ -3,40 +3,41 @@ import CueSync
 import Foundation
 
 
-/// 回复框此刻该做什么：发消息、就是作答框（文字型问题）、
-/// 先在上面作答（选择、确认型问题：自由文本发出去会一直挂着，Pi 不答完题不会去看）、这里答不了（只能在 Mac 上答）。
-nonisolated enum PiReply: Equatable {
+/// 选择、确认型问题要先在上面作答：自由文本发出去会一直挂着，Pi 不答完题不会去看。
+nonisolated enum ReplyMode: Equatable {
     case message
-    case answer(PiQuestion)
+    case answer(Question)
     case answerAbove
     case unanswerable
 }
 
-/// 回复框主按钮此刻是哪一种（`MacDelivery.button`）。
-nonisolated enum PiReplyButton: Equatable {
+nonisolated enum ReplyButton: Equatable {
     case stop
     case answer
-    /// 说话（`send`）或斜杠命令（`command`）
     case send(DeliveryMode)
 }
 
-/// "发到 Mac"的界面规则：回复框的按钮、停止与命令的进度。请求本身经 `Workspace.speak` 写出。
-/// 会话能做什么只看 `AgentCapabilities`：能否停止、结束与作答都经 `PiSessionState` 上同一组规则（Cue 也经它们）。
+/// 能否停止、结束与作答都经 `SessionState` 上同一组规则（Cue 也经它们）。
 nonisolated enum MacDelivery {
-    /// 正在停止：这一轮开始后发过停止请求，它还在路上或 Mac 已受理，而这一轮还没歇下（受理只表示收到，歇下看状态）。
-    /// 进度只读投送请求，界面不另存。
-    static func stopping(_ session: PiSessionState, deliveries: [DeliveryRequest], at moment: Speech.Moment) -> Bool {
+    /// 记录 ended 不确认投送；未知请求逐条保留，不能被别的结束成功掩盖。新的结束在途时先显示它的进度。
+    static func endIssue(_ requests: [DeliveryRequest], at moment: Speech.Moment) -> Speech.Trip? {
+        let ends = requests.filter { $0.mode == .known(.end) }.map { Speech.trip($0, at: moment) }
+        guard !ends.contains(where: \.awaitingResult) else { return nil }
+        if let unknown = ends.last(where: { $0.unconfirmedReason != nil }) { return unknown }
+        return ends.last.flatMap { $0.failure != nil ? $0 : nil }
+    }
+
+    /// 受理只表示收到，歇下看状态。进度只读投送请求，界面不另存。
+    static func stopping(_ session: SessionState, deliveries: [DeliveryRequest], at moment: Speech.Moment) -> Bool {
         guard session.canStop, let turnStart = session.busySince else { return false }
         return deliveries.contains { request in
-            guard request.mode == .known(.stop), request.createdAt >= turnStart else { return false }
+            guard [.known(.stop), .known(.stopTurn)].contains(request.mode), request.createdAt >= turnStart else { return false }
             let trip = Speech.trip(request, at: moment)
             return trip.inTransit || trip == .delivered
         }
     }
 
-    /// 斜杠命令的进度（读投送请求与对话，不另存）：最近一条请求是命令时才有——在路上写"正在执行 /compact…"、没成功写原因、
-    /// 结果未确认时停止转圈、如实写未知；成功就消失。失败与未知在之后有新请求或对话时收起。
-    /// 回复框上方一行显示。
+    /// 读投送请求与对话，不另存。
     enum CommandProgress: Equatable {
         case preparing(String)
         case running(String)
@@ -55,7 +56,7 @@ nonisolated enum MacDelivery {
         }
     }
 
-    static func commandProgress(_ deliveries: [DeliveryRequest], messages: [PiChatMessage], at moment: Speech.Moment) -> CommandProgress? {
+    static func commandProgress(_ deliveries: [DeliveryRequest], messages: [ChatMessage], at moment: Speech.Moment) -> CommandProgress? {
         // 最新的一条是按写下的先后排的最后一条（`deliveryRequests(toSession:)`）：时间只到毫秒，同一毫秒的两条按时间比不出先后
         guard let latest = deliveries.last, latest.mode == .known(.command) else { return nil }
         let command = String(latest.content.prefix { !$0.isWhitespace })
@@ -73,10 +74,8 @@ nonisolated enum MacDelivery {
         }
     }
 
-    /// 回复框的主按钮（一颗，按状态切换；iOS 与 Mac 同一条）：空着而 Agent 自己在跑一轮是停止（这时最可能想做的就是叫停，同 ChatGPT、Claude），
-    /// 文字型问题是作答，其余是发送（在跑时发出就打断这一轮、以这句开新一轮）；斜杠命令由 Agent 展开执行。
-    /// 选择、确认型问题与发不了的会话没有主按钮（回复框收成一行说明）。
-    static func button(for session: PiSessionState, hasDraft: Bool, command: Bool = false) -> PiReplyButton? {
+    /// 空着而 Agent 自己在跑一轮是停止：这时最可能想做的就是叫停（同 ChatGPT、Claude）。
+    static func button(for session: SessionState, hasDraft: Bool, command: Bool = false) -> ReplyButton? {
         switch reply(to: session) {
         case .answer: return .answer
         case .message:
@@ -86,16 +85,16 @@ nonisolated enum MacDelivery {
         }
     }
 
-    static func reply(to session: PiSessionState) -> PiReply {
+    static func reply(to session: SessionState) -> ReplyMode {
         guard session.state == .known(.waitingForUser) else { return .message }
         guard let question = session.answerableQuestion else { return .unanswerable }
         return question.acceptsText ? .answer(question) : .answerAbove
     }
 }
 
-nonisolated extension PiSessionState {
-    /// 从 CuePad 能用的斜杠命令：做得到时是它报的清单，做不到时没有（输入 "/" 不弹面板，按普通文字发）。
-    func usableCommands(in catalog: AgentCatalog?) -> [PiSlashCommand] { capabilities.contains(.commands) ? catalog?.commands ?? [] : [] }
+nonisolated extension SessionState {
+    /// 做不到时没有：输入 "/" 不弹面板，按普通文字发。
+    func usableCommands(in catalog: AgentCatalog?) -> [SlashCommand] { catalog?.commands ?? [] }
 }
 
 nonisolated extension DeliveryMode {
@@ -109,7 +108,7 @@ nonisolated extension DeliveryMode {
         case .transcript: String(localized: "补写对话")
         case .config: String(localized: "模型与思考强度")
         case .end: String(localized: "结束会话")
-        case .stop: String(localized: "停止这一轮")
+        case .stop, .stopTurn: String(localized: "停止这一轮")
         case .retry: String(localized: "重试这一轮")
         case .bind: String(localized: "绑定文件夹")
         case .quota: String(localized: "刷新额度")

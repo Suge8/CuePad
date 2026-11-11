@@ -6,9 +6,7 @@ import SQLite3
 import Synchronization
 import UniformTypeIdentifiers
 
-// Kit 与 App 的测试共用的支撑：临时库、独立 sqlite3 连接、测试图片、手动时钟、等待。
 
-/// 临时目录里的真实库文件（目录的清理见 `TestLibraries`）。
 public final class Fixture: @unchecked Sendable {
   public let directory = TestLibraries.makeDirectory()
   public var url: URL { directory.appending(path: "cuepad.db") }
@@ -30,7 +28,6 @@ public enum TestLibraries {
     return root.appending(path: "\(getpid())", directoryHint: .isDirectory)
   }()
 
-  /// 本次运行里一个新的空目录。
   public static func makeDirectory() -> URL {
     let directory = run.appending(path: UUID().uuidString, directoryHint: .isDirectory)
     try! FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -49,8 +46,31 @@ public enum TestLibraries {
 }
 
 
-/// 用独立的 sqlite3 连接直接读写库文件：构造并发场景、检查落盘格式。
 public struct RawDB {
+  /// 升级验收从旧布局起步：新库按版本倒序撤掉目标版本之后各版加的列、索引与触发器，不能只把版本号拨低。
+  /// 撤法只在这一张表里：`Schema` 加了改结构的一版，就在这里补一步（没补的话，从旧库升上来会在那一版报重复列）。
+  public func restore(version: Int) throws {
+    let steps: [(version: Int, sql: String)] = [
+      (92, """
+        DROP TRIGGER cueMessages_writeSeq_insert;
+        DROP TRIGGER cueMessages_writeSeq_update;
+        DROP INDEX cueMessages_writeSeq;
+        ALTER TABLE cueMessages DROP COLUMN answeredRequests;
+        ALTER TABLE cueMessages DROP COLUMN writeSeq;
+        """),
+      (93, """
+        UPDATE deliveryRequests SET content = json_remove(content, '$.createdForTaskID') WHERE mode = 'start';
+        ALTER TABLE cards DROP COLUMN sessionBindingRevision;
+        ALTER TABLE deliveryRequests DROP COLUMN sessionBindingRevision;
+        DROP INDEX piSessionStates_createdForTaskID;
+        ALTER TABLE piSessionStates DROP COLUMN createdForTaskID;
+        """),
+      (95, "ALTER TABLE attachments DROP COLUMN registeredHere;"),
+      (96, "ALTER TABLE cueProfile DROP COLUMN voice;"),
+    ]
+    try exec((steps.filter { $0.version > version }.reversed().map(\.sql) + ["PRAGMA user_version = \(version);"]).joined(separator: "\n"))
+  }
+
   public let path: String
 
   public init(_ url: URL) { path = url.path }
@@ -65,7 +85,6 @@ public struct RawDB {
     }
   }
 
-  /// 每行每列按文本读出（NULL 为 "NULL"）。
   public func rows(_ sql: String) throws -> [[String]] {
     var handle: OpaquePointer?
     defer { sqlite3_close(handle) }
@@ -92,7 +111,6 @@ public struct RawDB {
   public func count(_ table: String) throws -> Int { Int(try rows("SELECT count(*) FROM \(table)")[0][0])! }
 }
 
-/// 纯色 PNG；`shade` 不同则字节不同。
 public func pngData(width: Int = 4, height: Int = 4, shade: CGFloat = 0.5) -> Data {
   let context = CGContext(
     data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
@@ -110,12 +128,15 @@ public func pngData(width: Int = 4, height: Int = 4, shade: CGFloat = 0.5) -> Da
 /// 这些等待取决于系统此刻多忙（机器很忙时一个进程起来要几十秒），用真钟就是和墙钟赛跑；真挂住由每个测试的统一时限报。
 public let noDeadline = ManualTiming().timing
 
-/// 手动推进的时钟：`now` 只在 `advance` 时前进，`sleep` 挂起到 `advance` 越过截止时间。
 public final class ManualTiming: Sendable {
   private struct State {
     var current: Date
     var sleepers: [UUID: (deadline: Date, continuation: CheckedContinuation<Void, Error>)] = [:]
-    var sleeperWaiters: [UUID: CheckedContinuation<Void, Never>] = [:]
+    var sleeperWaiters: [UUID: (deadline: Date?, continuation: CheckedContinuation<Void, Never>)] = [:]
+
+    func hasSleeper(until deadline: Date?) -> Bool {
+      sleepers.values.contains { deadline == nil || $0.deadline == deadline }
+    }
   }
   private let state: Mutex<State>
 
@@ -129,6 +150,7 @@ public final class ManualTiming: Sendable {
     Timing(now: { self.now }, sleep: { try await self.sleep(for: $0) }, sleepUntil: { date in try await self.sleep(until: { _ in date }) })
   }
   public var sleeperCount: Int { state.withLock { $0.sleepers.count } }
+  public func hasSleeper(until deadline: Date) -> Bool { state.withLock { $0.hasSleeper(until: deadline) } }
 
   public func advance(_ duration: Duration) {
     let due: [CheckedContinuation<Void, Error>] = state.withLock { state in
@@ -140,21 +162,26 @@ public final class ManualTiming: Sendable {
     for continuation in due { continuation.resume() }
   }
 
-  /// 等到至少有一个任务挂在 `sleep` 上（确保 `advance` 会真的唤醒它）；被取消（如超出测试时限）时立即返回。
-  public func waitForSleeper() async {
-    if sleeperCount > 0 { return }
+  /// 推进钟之前先等被测的计时器睡下。多个计时器共用钟时可指定截止时刻，避免被另一项等待提前放行。
+  public func waitForSleeper(until deadline: Date? = nil) async throws {
+    try await bounded("手动钟上有人睡下") { await self.sleeperArrives(until: deadline) }
+  }
+
+  /// 取消时立即返回。
+  private func sleeperArrives(until deadline: Date?) async {
+    if state.withLock({ $0.hasSleeper(until: deadline) }) { return }
     let id = UUID()
     await withTaskCancellationHandler {
       await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
         let ready = state.withLock { state in
-          if !state.sleepers.isEmpty || Task.isCancelled { return true }
-          state.sleeperWaiters[id] = continuation
+          if state.hasSleeper(until: deadline) || Task.isCancelled { return true }
+          state.sleeperWaiters[id] = (deadline, continuation)
           return false
         }
         if ready { continuation.resume() }
       }
     } onCancel: {
-      state.withLock { $0.sleeperWaiters.removeValue(forKey: id) }?.resume()
+      state.withLock { $0.sleeperWaiters.removeValue(forKey: id) }?.continuation.resume()
     }
   }
 
@@ -162,7 +189,6 @@ public final class ManualTiming: Sendable {
     try await sleep(until: { $0.addingTimeInterval(duration.seconds) })
   }
 
-  /// 登记一个睡眠者，截止时刻由登记那一刻的 `current` 算出（按时长睡）或直接给定（睡到某一刻）。
   private func sleep(until deadline: @escaping @Sendable (Date) -> Date) async throws {
     let id = UUID()
     try await withTaskCancellationHandler {
@@ -173,8 +199,9 @@ public final class ManualTiming: Sendable {
           let due = deadline(state.current)
           if due <= state.current { return .some(nil) }
           state.sleepers[id] = (due, continuation)
-          defer { state.sleeperWaiters = [:] }
-          return Array(state.sleeperWaiters.values)
+          let ready = state.sleeperWaiters.filter { state.hasSleeper(until: $0.value.deadline) }
+          for waiter in ready.keys { state.sleeperWaiters[waiter] = nil }
+          return ready.values.map(\.continuation)
         }
         guard let registered = waiters else { return continuation.resume(throwing: CancellationError()) }
         guard let waiters = registered else { return continuation.resume() }
@@ -187,14 +214,37 @@ public final class ManualTiming: Sendable {
 }
 
 /// 等不到时抛出：写明在等什么，测试就停在这里（接着往下跑只会在别处空等）。
-struct TimedOut: Error, CustomStringConvertible {
-  let description: String
+public struct TimedOut: Error, CustomStringConvertible {
+  public let description: String
+  public init(description: String) { self.description = description }
+}
+
+/// 一次性旗：先订阅再触发时，订阅的一侧举旗，触发的一侧用 `eventually` 等它。
+public final class Signal: Sendable {
+  private let raised = Atomic(false)
+  public init() {}
+  public func raise() { raised.store(true, ordering: .releasing) }
+  public var isRaised: Bool { raised.load(ordering: .acquiring) }
 }
 
 /// 条件等待的上限，只认一个来源：每个测试的统一时限（xc.sh 的 `TEST_TIME_LIMIT`，经 `CUEPAD_TEST_TIME_LIMIT` 交给测试进程），取它的九成。
 /// 条件要等的常是别的进程起来、答话，机器很忙时那不是几秒的事，自带一个短的墙钟上限只会假失败；挂住了仍由统一时限兜底，
 /// 取九成是让「等不到：X」这句话赶在它之前说出来。
 public let conditionBudget: Duration = .seconds(Double(ProcessInfo.processInfo.environment["CUEPAD_TEST_TIME_LIMIT"].flatMap(Int.init) ?? 120) * 0.9)
+
+/// 给一次等待加上限：到 `conditionBudget` 还没等到就抛 `TimedOut`，写明在等什么。测试里等流的下一项、等替身放行都经这里，不裸等。
+/// `wait` 要响应取消（`AsyncStream` 的迭代、库的订阅都响应），不然到了上限也回不来。
+public func bounded<T: Sendable>(_ what: String, _ wait: @escaping @Sendable () async throws -> T) async throws -> T {
+  try await withThrowingTaskGroup(of: T.self) { group in
+    group.addTask { try await wait() }
+    group.addTask {
+      try await Task.sleep(for: conditionBudget)
+      throw TimedOut(description: "等不到：\(what)")
+    }
+    defer { group.cancelAll() }
+    return try await group.next()!
+  }
+}
 
 /// 同步占住当前（主）线程，直到 `signal` 或 `conditionBudget` 到。轮询而不阻塞等：主线程阻塞等默认级线程会被
 /// Thread Performance Checker 报优先级反转，iOS 模拟器上 xcodebuild 随后收集诊断要卡满 600 秒。
@@ -223,30 +273,31 @@ public func quietPeriod(_ duration: Duration) async {
   try? await Task.sleep(for: duration)
 }
 
-/// 订阅读取直到条件成立（事件驱动，不轮询），到了上限抛 `TimedOut`。
+/// 写入的时刻只到毫秒、排先后全看它：要让下一次写入的时刻严格晚于此前的，先过这个。等墙钟走过 2 毫秒，不猜时长。
+public func nextMillisecond() async {
+  let start = Date.timeIntervalSinceReferenceDate
+  while Date.timeIntervalSinceReferenceDate - start < 0.002 { await Task.yield() }
+}
+
 public func eventually<T: Sendable & Equatable>(
   _ store: CueStore, _ read: @escaping @Sendable (isolated CueStore) throws -> T,
-  until predicate: @escaping @Sendable (T) -> Bool
+  subscribed: Signal? = nil, until predicate: @escaping @Sendable (T) -> Bool
 ) async throws -> T {
-  try await withThrowingTaskGroup(of: T.self) { group in
-    group.addTask {
-      for try await value in store.observe(read) where predicate(value) { return value }
-      throw CancellationError()
+  try await bounded("库里的读取满足条件") {
+    var first = true
+    for try await value in store.observe(read) {
+      if first { first = false; subscribed?.raise() }  // 初始值到了：订阅已就位
+      if predicate(value) { return value }
     }
-    group.addTask {
-      try await Task.sleep(for: conditionBudget)
-      throw TimedOut(description: "等不到：库里的读取满足条件")
-    }
-    defer { group.cancelAll() }
-    return try await group.next()!
+    throw CancellationError()
   }
 }
 
 struct RawError: Error { let message: String }
 
 extension CueStore {
-  /// 全部会话记录（测试核对用；界面按范围与页读，见 `piSessionPage`）。
-  public func allPiSessionStates() throws -> [PiSessionState] {
-    try piSessionPage(PiSessionQuery(limit: .max)).items.map(\.state)
+  /// 全部会话记录（测试核对用；界面按范围与页读，见 `sessionPage`）。
+  public func allSessionStates() throws -> [SessionState] {
+    try sessionPage(SessionQuery(limit: .max)).items.map(\.state)
   }
 }

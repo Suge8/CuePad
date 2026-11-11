@@ -6,8 +6,8 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// #43：另一进程在同步读出 payload 后撤回，内存中的旧 payload 不能越过撤回继续派发。
 @MainActor
+@Suite(.releasesLibraries)
 struct DeliveryPayloadTests {
     @Test func 同步已读出的旧payload被撤回后不再交出_下一句仍正常送达() async throws {
         let cloud = ReceiptTests.WeakCloud()
@@ -15,16 +15,16 @@ struct DeliveryPayloadTests {
         let mac = TestApp(sync: .built { CloudSync(store: $0) { cloud } })
         let ext = try await mac.host.connect("atlas", cwd: mac.directory.path)
         defer {
-            ext.close(bye: "quit"); mac.pi.stop()
+            ext.close(bye: "quit"); mac.bridge.stop()
             phone.services.cancelBackgroundWork(); mac.services.cancelBackgroundWork()
         }
         let recorder = try await mac.runtimeRecorder(on: TestApp.hostID)
         try await recorder.update(sessionID: "atlas", state: .settled)
-        let session = try #require(try await mac.services.store.allPiSessionStates().first)
+        let session = try #require(try await mac.services.store.allSessionStates().first)
         phone.services.startSync(); mac.services.startSync()
         try await eventually("两端同步就绪") {
-            phone.services.syncStatus == .idle && phone.services.syncReconciled
-                && mac.services.syncStatus == .idle && mac.services.syncReconciled
+            phone.services.syncState.status == .idle && phone.services.syncState.reconciled
+                && mac.services.syncState.status == .idle && mac.services.syncState.reconciled
         }
         try await mac.services.executor.start()
         // 用独立 SQLite 写者精确落在第一次发送登记之前，等价于尚未交出的 pending 被原子撤回。

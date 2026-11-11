@@ -3,12 +3,9 @@ import CueStore
 import Foundation
 import os
 
-/// 文件那一路的推：待推送的附件记录（带文件）不进后台那一路的批，在这里一条一个上传、至多 `parallel` 条同时在路上，带进度（`TransferBoard`）。
 /// 大文件传几十秒，同一刻写下的别的记录不跟着等（`sync-bench.py files` 量的就是这个）。
 ///
 /// 上传是长期操作（`FileCloud.uploadFile`）：App 退出后系统接着传，下次开始时先接上（`resume`），接上的那几条不再另传。
-/// 结果与后台那一路一样交给协调器记账（`SyncCoordinator.sent`），服务器收下了就删本机的保底（`AttachmentFiles.uploaded`）。
-/// 重试守同步层唯一的调度（`SyncCoordinator.admits(.fileUpload)`、`hold`，等待结束时 `retryDue` 接着传），空间不足的停顿也在那里（`holdFiles`）。
 /// 在路上的只记在协调器（`SyncCoordinator.fileUploads`）。
 ///
 /// 属于一代（`SyncGeneration`）。`stop` 之后不再开始新的上传、不再补位；在途的上传不取消（交给系统的长期操作，退出后系统接着传完），
@@ -24,13 +21,11 @@ actor FileSender {
   private let cloud: any FileCloud & RecordUploader
   private let coordinator: SyncCoordinator
   private let board: TransferBoard
-  /// 对过最低对端版本（`RecordSender.ready`）：文件同别的记录一样在那之后才传。
+  /// 对过最低对端版本（`RecordSender.ready`）之后文件才传，同别的记录。
   private let ready: @Sendable () async -> Bool
   private let generation: SyncGeneration
   private var stopped: Bool { generation.isOver }
-  /// 跟随提交与重试时刻的任务。
   private var tasks: [Task<Void, Never>] = []
-  /// 本代交出去的每一趟上传（等结果、记账）：`stop` 等它们放手。
   private var uploads: [UUID: Task<Void, Never>] = [:]
   /// 补位同一时刻只有一趟在跑；跑的时候又被叫到记成再补一趟（两趟交错会各自按同一个在路上的数多取）。
   private var filling = false
@@ -47,7 +42,6 @@ actor FileSender {
     self.ready = ready
   }
 
-  /// 接上上次没交回结果的，再跟随本机提交与重试的等待结束开始传。
   func start() async {
     let changes = await coordinator.store.syncChanges()  // 先订阅：返回后的提交都不会漏
     guard !stopped else { return }  // 订阅期间停下了
@@ -60,7 +54,6 @@ actor FileSender {
     await fill()
   }
 
-  /// 不再开始新的上传，等跟随的任务收尾、等每一趟上传放手（见类型注释）；在路上的上传本身不取消（退出时系统接着传完，下次 `resume`）。
   func stop() async {
     generation.end()
     let running = tasks + Array(uploads.values)
@@ -69,7 +62,6 @@ actor FileSender {
     for task in running { await task.value }
   }
 
-  /// 交出一趟上传：登记着，`stop` 等它放手。排上去到真正跑之间停下了的不开始。
   private func send(_ records: [CKRecord], _ upload: @escaping @Sendable (@escaping @Sendable (Double) -> Void) async throws -> SentRecords) {
     let id = UUID()
     uploads[id] = Task {
@@ -94,7 +86,6 @@ actor FileSender {
     }
   }
 
-  /// 补足在路上的：守重试的时刻与空间不足的停顿，先对过门槛。
   private func fill() async {
     if filling {
       refill = true
@@ -126,7 +117,6 @@ actor FileSender {
     }
   }
 
-  /// 等一个上传的结果、记账，再补下一个。本代结束了就放手：不再等、结果不记账（见类型注释）。
   private func finish(_ records: [CKRecord], _ upload: @escaping @Sendable (@escaping @Sendable (Double) -> Void) async throws -> SentRecords) async {
     let keys = records.compactMap { RecordMapper.row(from: $0)?.attachmentKey }
     let board = board, generation = generation
@@ -141,9 +131,10 @@ actor FileSender {
       let outcome = await coordinator.sent(sent, for: OutgoingBatch(saves: records, deletes: []))
       guard !outcome.paused else { return await release(records) }
       for record in sent.saved {
-        guard let key = RecordMapper.row(from: record)?.attachmentKey else { continue }
         // 删不掉的保底只多占一个硬链接，下次收下同一个文件时再删
-        do { try coordinator.store.files.uploaded(key) } catch { Self.log.error("附件的保底没能删：\(error.brief, privacy: .public)") }
+        do { try await coordinator.store.attachmentUploaded(record.recordID.recordName) } catch {
+          Self.log.error("附件的保底没能删：\(error.brief, privacy: .public)")
+        }
       }
       if !sent.saved.isEmpty { await coordinator.filesAccepted() }
       if outcome.zoneMissing { try? await cloud.saveZone() }
@@ -157,7 +148,6 @@ actor FileSender {
     await fill()
   }
 
-  /// 这一趟结束（或本代放手）：清进度、放回协调器（`fileDone`）。
   private func release(_ records: [CKRecord]) async {
     for record in records {
       if let key = RecordMapper.row(from: record)?.attachmentKey { board.clear(key) }

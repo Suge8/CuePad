@@ -7,8 +7,6 @@ import Testing
 @testable import CuePad
 
 extension AgentLibraryPhoneTests {
-    /// 手机上全局规则的文件页（真窗口里挂着 `LibraryFileScreen`）：Claude Code 另写了一份，点"合并进来"标出会并进来的段时
-    /// （`FileDraft.previewing`，按钮做的就是这一下），键盘收起、正文点不进去、读屏跳过，攒着的改动一个字没多；"取消"回到正文，键盘回来，接着打的字攒进去。
     @Test func 标出合并时键盘收起_点不进正文_取消后键盘回来接着改() async throws {
         let claude = "/Users/a/.claude/CLAUDE.md"
         let shared = "共用的\n", own = "全局规则\n"
@@ -23,7 +21,7 @@ extension AgentLibraryPhoneTests {
         try await store.recordAgentLibrary(library, texts: [Self.rulesPath: shared, claude: own])
         let workspace = Workspace(services: app.services)
         let following = Task { await workspace.follow() }
-        defer { following.cancel() }
+        defer { await following.stop() }
         try await eventually("读到要合并的全局规则") { workspace.library?.merge(into: .global) != nil }
 
         let scene = try #require(UIApplication.shared.connectedScenes.first as? UIWindowScene)
@@ -31,6 +29,7 @@ extension AgentLibraryPhoneTests {
         window.rootViewController = UIHostingController(
             rootView: NavigationStack { LibraryFileScreen(file: .instruction(.global)) }.environment(workspace).environment(app.services))
         window.makeKeyAndVisible()
+        LibraryLedger.heldByFramework(store, "正文拿过键盘：UIKit 攥着最后一个拿过键盘的文本视图，键盘的标记文字浮层还缓存着带 SwiftUI 环境的特征集合，交出键盘、关窗都不放")
         defer { window.isHidden = true }
         try await eventually("文件页挂上") { workspace.fileDrafts[FileDraftKey(host: "mac-a", file: .instruction(.global))] != nil }
         let draft = try #require(workspace.fileDrafts[FileDraftKey(host: "mac-a", file: .instruction(.global))])

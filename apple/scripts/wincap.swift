@@ -51,7 +51,13 @@ final class Writer: NSObject, SCStreamOutput {
             started = true
         }
         // 实时录：编码器忙不过来时丢这一帧，不排队
-        if (try? receiver.appendImmediately(CMReadySampleBuffer(unsafeBuffer: buffer))) == true { frames += 1 }
+        if (try? receiver.appendImmediately(CMReadySampleBuffer(unsafeBuffer: buffer))) == true {
+            if frames == 0 {
+                do { try Data().write(to: URL(filePath: out.path + ".ready"), options: .atomic) }
+                catch { fail("写不了首帧回执：\(error)") }
+            }
+            frames += 1
+        }
     }
 
     func finish() async {
@@ -61,6 +67,8 @@ final class Writer: NSObject, SCStreamOutput {
 }
 
 func record(_ filter: SCContentFilter, _ config: SCStreamConfiguration) async throws {
+    let ready = URL(filePath: out.path + ".ready")
+    if FileManager.default.fileExists(atPath: ready.path) { try FileManager.default.removeItem(at: ready) }
     config.minimumFrameInterval = CMTime(value: 1, timescale: 60)
     let writer = try Writer(out)
     let stream = SCStream(filter: filter, configuration: config, delegate: nil)

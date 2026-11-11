@@ -1,0 +1,8 @@
+{
+  "pi": { "version": "1.5.0", "npm": "@earendil-works/pi-coding-agent", "bin": "pi", "with": ["typescript@7.0.2", "@types/node@22.19.19", "pi-firecode@1.10.1"] },
+  "claude": { "version": "2.1.318", "npm": "@anthropic-ai/claude-code", "bin": "claude" },
+  "codex": { "version": "0.167.0", "npm": "@openai/codex", "bin": "codex" },
+  "grok": { "version": "1.0.70", "url": "https://x.ai/cli/grok-1.0.70-macos-aarch64", "sha256": "5c8a688251bf61e35370b828b6a353b0a20fcc3f64000de8a91d426039f29cec", "bin": "grok" },
+  "dsh": { "version": "0.2.1-rc.5", "npm": "@deepseek-ai/dsh", "bin": "dsh" },
+  "opencode": { "version": "2.2.6", "npm": "@opencode/cli", "bin": "opencode" }
+}

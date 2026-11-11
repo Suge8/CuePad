@@ -4,8 +4,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// Mac 重开（上次退出时写下了离线）：画第一帧时读到的本机会话就是确定的说法——还在的照它记下的、进程已经没了的对账成被打断，
-/// 不先闪一下"状态未确认"再变（`AppServices.launch`）。
+@Suite(.releasesLibraries)
 struct RuntimeLaunchTests {
     @Test func Mac重开_第一帧里本机的会话就是确定的说法() async throws {
         let app = TestApp(), store = app.services.store
@@ -15,7 +14,7 @@ struct RuntimeLaunchTests {
         process.standardInput = input
         process.standardOutput = FileHandle.nullDevice
         try process.run()
-        let identity = try #require(PiProcess.running(pid: process.processIdentifier))
+        let identity = try #require(SessionProcess.running(pid: process.processIdentifier))
         try await recorder.update(sessionID: "resting", state: .settled, title: "歇着的", hosted: true)
         try await recorder.update(sessionID: "gone", state: .thinking, title: "做到一半的", hosted: true, process: identity)
         try input.fileHandleForWriting.close()

@@ -2,7 +2,6 @@
 import Foundation
 import Synchronization
 
-/// 替身会话的会话文件：像 Pi 那样逐条追加（v3，每行一个条目，时间戳是条目上的时刻）。Mac 的历史索引读它、把对话与摘要写进库，
 /// 本机会话的回复在库里只有索引一个写者：测试只写会话文件，不替 Mac 写库。
 /// 假扩展收下 Cue 的话（`RecordingHost`）与剧本写会话说的往同一个文件追加：这个进程里的写入排队，一行写完再写下一行，文件头由建出文件的那一次写。
 nonisolated struct SessionFile: Sendable {
@@ -14,7 +13,6 @@ nonisolated struct SessionFile: Sendable {
     private static let stamp = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
 
     /// 用户一方说的一句。`delivery` 是 CuePad 投进来的那句的请求 id（Pi 写成 `cuepadDelivery`）；他在终端里打的没有。
-    /// `images` 是桥交来的图片块（mimeType、data）。
     func user(_ text: String, images: [[String: Any]] = [], delivery: String? = nil, at date: Date = .now) throws {
         var message: [String: Any] = [
             "role": "user", "content": [["type": "text", "text": text]] + images.map { $0.merging(["type": "image"]) { _, new in new } },
@@ -23,7 +21,6 @@ nonisolated struct SessionFile: Sendable {
         try append(message, at: date)
     }
 
-    /// 这一轮的回答：说完就收尾（`stopReason` 是 stop）。
     func reply(_ text: String, at date: Date = .now) throws {
         try append(["role": "assistant", "stopReason": "stop", "content": [["type": "text", "text": text]]], at: date)
     }
@@ -33,7 +30,6 @@ nonisolated struct SessionFile: Sendable {
         try append(["role": "assistant", "stopReason": "toolUse", "content": [["type": "text", "text": text]]], at: date)
     }
 
-    /// 调一次工具并交回结果：`images` 是结果里的图（PNG 字节，像 Pi 的 read 读进来的图片块）。
     func tool(_ name: String, id: String, arguments: [String: Any], images: [Data] = [], at date: Date = .now) throws {
         try append(["role": "assistant", "stopReason": "toolUse", "content": [["type": "toolCall", "id": id, "name": name, "arguments": arguments]]], at: date)
         let blocks: [[String: Any]] = [["type": "text", "text": "Read image file [image/png]"]]
