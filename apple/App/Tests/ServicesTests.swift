@@ -80,24 +80,6 @@ struct AgentLineTests {
 
 @Suite(.releasesLibraries)
 struct AgentUpgradeTests {
-    @Test func 已装旧版扩展时启动检查静默升级到随包版本() async throws {
-        let rig = TestApp()
-        try TestScript.install("#!/bin/sh\necho \(AgentKind.pi.facts.minimumVersion!.description)\n", at: rig.directory.appending(path: "bin/pi"))
-        let installed = rig.piPaths.extensionsDirectory.appending(path: "cuepad-bridge", directoryHint: .isDirectory)
-        try FileManager.default.createDirectory(at: installed, withIntermediateDirectories: true)
-        try "\(PiExtensionBundle.ownershipMarker)\nconst EXTENSION_VERSION = \(PiWire.oldestExtension);\n".write(to: installed.appending(path: "index.ts"), atomically: true, encoding: .utf8)
-        try "旧版留下的".write(to: installed.appending(path: "stale.ts"), atomically: true, encoding: .utf8)
-
-        try await rig.services.agents.refresh()
-
-        #expect(rig.services.agents.status(.pi)?.files == .current)
-        let entry = rig.piPaths.extensionsDirectory.appending(path: "cuepad-bridge/index.ts")
-        #expect(try String(contentsOf: entry, encoding: .utf8) == PiExtensionBundle.entry)
-        #expect(Set(try FileManager.default.contentsOfDirectory(atPath: installed.path)) == Set(PiExtensionBundle.files.keys))
-        let skill = try String(contentsOf: rig.directory.appending(path: "agents/skills/cuepad/SKILL.md"), encoding: .utf8)
-        #expect(AgentSkill.kinds(in: skill) == [.pi])
-    }
-
     @Test func 没接入过的Agent启动检查不写任何文件() async throws {
         let rig = TestApp()
         try FileManager.default.createDirectory(at: rig.directory.appending(path: "claude"), withIntermediateDirectories: true)

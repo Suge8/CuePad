@@ -33,7 +33,6 @@ nonisolated final class FakeExtension: @unchecked Sendable {
     struct Options: Sendable {
         var extensionVersion = PiExtensionBundle.version
         var cwd = "/work/project"
-        var mode = "tui"
         var model: WireModel? = WireModel(id: "test-model")
         var thinking: String? = "off"
         var models: [WireModel] = []
@@ -41,11 +40,7 @@ nonisolated final class FakeExtension: @unchecked Sendable {
         var context: (tokens: Int?, window: Int)?
         var commands: [WireCommand] = []
         var sessionFile: String? = "/work/session.jsonl"
-        var tty: String? = "ttys009"
-        var hosted = false
         var launchToken: String?
-        var env: [String: String] = ["TERM_PROGRAM": "ghostty", "__CFBundleIdentifier": "com.mitchellh.ghostty",
-                                     "TMUX_PANE": "%3", "TMUX": "/private/tmp/tmux-501/default,123,0"]
     }
 
     let sessionID: String
@@ -200,8 +195,7 @@ nonisolated final class FakeExtension: @unchecked Sendable {
     private func hello() -> [String: Any] {
         var msg: [String: Any] = [
             "t": "hello", "extensionVersion": options.extensionVersion,
-            "sessionId": sessionID, "pid": Int(pid), "cwd": options.cwd, "mode": options.mode,
-            "term": options.env,
+            "sessionId": sessionID, "pid": Int(pid), "cwd": options.cwd, "hosted": true,
             "state": Self.object(shared.withLock { $0.state }).merging(["since": Self.nowMillis, "turnSince": shared.withLock { $0.turnSince } ?? NSNull()]) { a, _ in a },
         ]
         msg["sessionFile"] = options.sessionFile ?? NSNull()
@@ -210,8 +204,6 @@ nonisolated final class FakeExtension: @unchecked Sendable {
         msg["models"] = options.models.map(\.json)
         msg["context"] = Self.contextJSON(options.context)
         msg["commands"] = options.commands.map(\.json)
-        msg["tty"] = options.tty ?? NSNull()
-        if options.hosted { msg["hosted"] = true }
         if let token = options.launchToken { msg["launchToken"] = token }
         return msg
     }

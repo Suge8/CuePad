@@ -27,7 +27,7 @@ extension DeliveryMigrationTests {
         let pending = try #require(try await app.services.store.deliveryRequests().first)
         try RawDB(app.databaseURL).restore(version: 92)
         let services = app.relaunch(), store = services.store
-        if mode != .start { try await app.host.connect("atlas", cwd: app.directory.path, hosted: true) }
+        if mode != .start { try await app.host.connect("atlas", cwd: app.directory.path) }
         let changes = app.bridge.changes()
         let recording = Task { try await services.consumeSessionChanges(changes) }
         defer { await recording.stop() }
@@ -58,7 +58,7 @@ extension DeliveryMigrationTests {
         try await app.services.store.setDirectory(app.directory.path, for: Project.defaultID)
         let workspace = Workspace(services: app.services), original = app.services.store
         let card = try await workspace.createTask("准备发布", in: Project.defaultID)
-        if mode != .start { try await app.host.connect("atlas", cwd: app.directory.path, hosted: true) }
+        if mode != .start { try await app.host.connect("atlas", cwd: app.directory.path) }
         let content = switch mode {
         case .start: LaunchRequest(project: Project.defaultID, prompt: card.body, token: "legacy-settled").stored
         case .command: "/shout 准备发布"

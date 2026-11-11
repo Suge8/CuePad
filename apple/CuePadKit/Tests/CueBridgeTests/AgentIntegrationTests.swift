@@ -16,7 +16,6 @@ struct AgentIntegrationTests {
          "XDG_CONFIG_HOME": root.appending(path: "xdg").path, "CUEPAD_AGENTS_DIR": root.appending(path: "agents").path,
          "DSH_HOME": root.appending(path: "dsh").path]
     }
-    var extensionFile: URL { paths.extensionsDirectory.appending(path: "cuepad-bridge/index.ts") }
 
     var skillFile: URL { root.appending(path: "agents/skills/cuepad/SKILL.md") }
     /// Claude Code 读技能的位置（它不读 `.agents`）；也是旧版各家副本所在的位置
@@ -121,7 +120,6 @@ struct AgentIntegrationTests {
         #expect(skill.contains("沙箱外"))
         let read = try? String(contentsOf: agentSkill(.claudeCode).appending(path: "SKILL.md"), encoding: .utf8)
         #expect((read == skill) == (kind == .claudeCode), "Claude Code 经链接读到同一份；别家不建链接")
-        #expect(FileManager.default.fileExists(atPath: extensionFile.path) == (kind == .pi))
         #expect(await integration().status(of: kind).files == .current)
 
         try await integration().uninstall(kind)
@@ -180,7 +178,6 @@ struct AgentIntegrationTests {
         await #expect(throws: AgentInstallError.self) { try await integration().install(kind) }
         await #expect(throws: AgentInstallError.self) { try await integration().uninstall(kind) }
         #expect(try String(contentsOf: file, encoding: .utf8) == mine)
-        #expect(!FileManager.default.fileExists(atPath: extensionFile.path))
     }
 
     // MARK: 升级

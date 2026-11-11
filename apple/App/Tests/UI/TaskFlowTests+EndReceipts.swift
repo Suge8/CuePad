@@ -184,7 +184,7 @@ extension TaskFlowTests {
         #expect(try await peer.services.store.deliveryRequest(automatic.id)?.status == .known(.succeeded))
         #expect(try await store.deliveryRequest(automatic.id)?.status == .known(.succeeded))
         try await store.bindSession("audit-lost", to: borrower.id)
-        let resumed = try await rig.host.connect("audit-lost", cwd: rig.directory.path, hosted: true)
+        let resumed = try await rig.host.connect("audit-lost", cwd: rig.directory.path)
         defer { resumed.close(bye: "quit") }
         await workspace.speak("继续处理", to: .session(SendTarget(kind: .piSession, name: "会话", ref: "audit-lost"), host: TestApp.hostID, mode: .send, card: borrower.id)).value
         #expect(workspace.notice?.isError != true)

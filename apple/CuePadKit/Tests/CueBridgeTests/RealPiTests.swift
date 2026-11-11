@@ -21,14 +21,13 @@ struct RealPiTests {
         try await body(pi, bridge, bridge.sessions[0])
     }
 
-    @Test(.tags(.smoke)) func installedExtensionIsLoadedByPiAndReportsTheSession() async throws {
+    @Test(.tags(.smoke)) func theBundledExtensionIsLoadedByPiAndReportsTheSession() async throws {
         try await withRig { pi, _, s in
             #expect(s.pid == pi.pid)
             #expect(s.cwd.resolvingSymlinksInPath().path == pi.cwd.resolvingSymlinksInPath().path)
             #expect(s.model?.key.id == "echo" && s.thinking == .known(.off))
             #expect(s.state == .settled)
-            #expect(s.terminal.program == "test-term" && s.terminal.bundleID == "com.example.term")
-            #expect(s.terminal.tmuxPane == "%9" && s.terminal.tmuxSocketPath == "/tmp/tmux-test/default")
+            #expect(s.hosted)
             #expect(s.sessionFile?.path.hasPrefix(pi.paths.sessionsDirectory.resolvingSymlinksInPath().path) == true
                     || s.sessionFile?.path.hasPrefix(pi.paths.sessionsDirectory.path) == true)
         }
