@@ -31,6 +31,8 @@ final class ClaudeTerminalSession: SessionLink {
     private var ready = false
     /// 在等起好的投送（`waitUntilReady`）各盯着一份登记文件；会话下桥（`close`）时停掉它们，等待随即以会话结束收场
     private var readyWaits: [UUID: FileFollower] = [:]
+    /// 盯着登记文件，`status` 的变化交给 `registryChanged`；会话下桥时停
+    private let registryFollower = FileFollower()
     private var closed = false
     var facts = SessionFacts()
     /// 刚交上来、还没见它跑起来的这句（之后主会话还没有别的钩子）：挡下的那一行按原话认它（`recorded`）
@@ -74,6 +76,10 @@ final class ClaudeTerminalSession: SessionLink {
         self.inbox = inbox
         if let runningSince { facts.startTurn(at: runningSince) }
         if waiting { facts.questions = [PiQuestion(promptID: nil, kind: .unknown("terminal"), text: String(localized: "在终端里等你"))] }
+        registryFollower.follow(only: [registry.realPath.path])
+        Task { [weak self, paths = registryFollower.paths] in
+            for await _ in paths { self?.registryChanged() }
+        }
     }
 
     func publish(_ session: inout PiSession) { facts.publish(to: &session) }
@@ -208,6 +214,7 @@ final class ClaudeTerminalSession: SessionLink {
         }
         pending = []
         closed = true
+        registryFollower.stop()
         for follower in readyWaits.values { follower.stop() }
         readyWaits = [:]
     }
@@ -283,8 +290,10 @@ final class ClaudeTerminalSession: SessionLink {
     /// 登记文件里的 `status` 随它自己的轮次变，钩子不通（没装、CuePad 之后才起来）时桥上的状态是旧的。只认 `busy`（在跑一轮或等后台任务）：
     /// `waiting` 也可能是收件箱的话被挂起、在等你批准（2.1.318 源码：对话框一律记成 `waiting`，看不出是哪种），算它在跑就会一直等下去。
     func takingTurn(_: PiSession.ID) -> Bool? {
-        (try? Data(contentsOf: registry)).flatMap(JSONValue.parse)?["status"]?.string.map { $0 == "busy" }
+        registryRecord?["status"]?.string.map { $0 == "busy" }
     }
+
+    var registryRecord: JSONValue? { (try? Data(contentsOf: registry)).flatMap(JSONValue.parse) }
 
     func end(_: PiSession.ID) async throws {
         guard kill(pid, SIGINT) == 0 else { throw PiBridgeError.sessionEnded }
