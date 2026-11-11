@@ -44,10 +44,10 @@ private struct PreviewPager: View {
     @Environment(\.palette) private var palette
     @Environment(\.closePanel) private var close
 
-    private var batch: [PiPreview] { opening.batch }
+    private var batch: [PreviewItem] { opening.batch }
     private var paged: Bool { batch.count > 1 }
     private var index: Int { opening.index(of: current) }
-    private var preview: PiPreview { batch[index] }
+    private var preview: PreviewItem { batch[index] }
     private var title: String { opening.title(of: preview) }
     private var chrome: EdgeInsets { EdgeInsets(top: Self.headerHeight, leading: 0, bottom: barHeight, trailing: 0) }
 
@@ -123,7 +123,7 @@ private struct PreviewPager: View {
         withAnimation(Motion.fade) { current = next }
     }
 
-    private func file(of preview: PiPreview) -> URL? {
+    private func file(of preview: PreviewItem) -> URL? {
         services.store.files.fileURL(for: preview.key)
     }
 

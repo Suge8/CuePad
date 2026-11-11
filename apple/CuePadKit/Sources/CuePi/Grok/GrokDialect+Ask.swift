@@ -15,9 +15,9 @@ extension GrokDialect {
             let title = current["question"]?.string ?? ""
             let labels = ACPAsk.labels(current), notes = ACPAsk.notes(current)
             let question = if current["multiSelect"]?.bool == true || labels.isEmpty {
-                PiQuestion(promptID: nil, kind: .text, text: ACPAsk.text([labels.isEmpty ? title : "\(title)（\(labels.joined(separator: " / "))）"] + notes))
+                Question(promptID: nil, kind: .text, text: ACPAsk.text([labels.isEmpty ? title : "\(title)（\(labels.joined(separator: " / "))）"] + notes))
             } else {
-                PiQuestion(promptID: nil, kind: .select, text: ACPAsk.text([title] + notes), options: labels, allowsOther: true)
+                Question(promptID: nil, kind: .select, text: ACPAsk.text([title] + notes), options: labels, allowsOther: true)
             }
             return (question, { answer in
                 switch answer {

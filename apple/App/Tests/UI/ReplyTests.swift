@@ -30,7 +30,7 @@ struct ReplyTests {
     @Test func 批注跨退出保留_随下一句发出时只带头尾摘录() async throws {
         let preferences = TempDefaults()
         let app = TestApp()
-        try await PiStateRecorder(store: app.services.store, hostID: "mac").update(sessionID: "s", state: .tool, title: "s")
+        try await StateRecorder(store: app.services.store, hostID: "mac").update(sessionID: "s", state: .tool, title: "s")
         let session = try #require(try await app.services.store.piSessionPage(.live).items.first?.state)
         let settings = settings(preferences)
         var draft = settings.replyDraft(for: session.id)

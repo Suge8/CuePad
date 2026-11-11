@@ -17,7 +17,7 @@ struct CueReferences {
     try await addProject(args, session: args.string("session").asyncMap(session))
   }
 
-  func addProject(_ args: Args, session: PiSessionState?) async throws -> UUID {
+  func addProject(_ args: Args, session: SessionState?) async throws -> UUID {
     if let ref = args.string("project") { return try await project(ref).id }
     if let home = session?.projectID, let project = try await store.projects().first(where: { $0.id == home }) { return project.id }
     return Project.defaultID
@@ -55,7 +55,7 @@ struct CueReferences {
   }
 
   /// 会话：会话 id 至少 4 位的前缀或会话名（`CueStore.sessions(matching:)`）；同名的几个里只有一个没结束就是它。写的是任务时是它在做的叶子绑着的会话。
-  func session(_ ref: String) async throws -> PiSessionState {
+  func session(_ ref: String) async throws -> SessionState {
     switch try await sessionRef(ref) {
     case .session(let session): return session
     case .task(let card):
@@ -84,7 +84,7 @@ struct CueReferences {
   }
 
   /// 对上的会话（`CueStore.sessions(matching:)`）：只有一个，或同名的几个里只有一个没结束；对不上为 nil，对上几个报错。
-  private func matchedSession(_ ref: String) async throws -> PiSessionState? {
+  private func matchedSession(_ ref: String) async throws -> SessionState? {
     let hits = try await store.sessions(matching: ref)
     let live = hits.filter { $0.state != .known(.ended) }
     if hits.count == 1 { return hits[0] }
@@ -94,7 +94,7 @@ struct CueReferences {
   }
 
   enum SessionRef {
-    case session(PiSessionState)
+    case session(SessionState)
     case task(Card)
   }
 

@@ -1,12 +1,12 @@
 import CueStore
 import Foundation
 
-/// 会话的状态只经 `PiShown` 判定。
+/// 会话的状态只经 `SessionShown` 判定。
 nonisolated enum TaskNext: Equatable, Sendable {
-    case agent(PiShown, session: PiSessionState)
+    case agent(SessionShown, session: SessionState)
     case start(leaf: Card)
 
-    init?(shown: PiShown?, session: PiSessionState?, startable leaf: Card?) {
+    init?(shown: SessionShown?, session: SessionState?, startable leaf: Card?) {
         if let shown, let session, Self.wantsLook(shown) {
             self = .agent(shown, session: session)
         } else if let leaf, session == nil {
@@ -16,7 +16,7 @@ nonisolated enum TaskNext: Equatable, Sendable {
         }
     }
 
-    private static func wantsLook(_ shown: PiShown) -> Bool {
+    private static func wantsLook(_ shown: SessionShown) -> Bool {
         switch shown.status {
         case .delivery, .working, .asking, .awaitsReply, .cueAsking, .failed, .unread, .interrupted, .unknown: true
         case .idle, .resting, .fresh, .ended: false
@@ -25,7 +25,7 @@ nonisolated enum TaskNext: Equatable, Sendable {
 
     var agentBusy: Bool { busySession != nil }
 
-    var busySession: PiSessionState? {
+    var busySession: SessionState? {
         guard case .agent(let shown, let session) = self, shown.agentBusy else { return nil }
         return session
     }
@@ -47,13 +47,13 @@ extension Workspace {
         return TaskNext(shown: agent?.shown, session: agent?.session, startable: startable)
     }
 
-    func next(for item: TaskBoard.Item, shown: PiShown?) -> TaskNext? {
+    func next(for item: TaskBoard.Item, shown: SessionShown?) -> TaskNext? {
         guard item.task.status != .done else { return nil }
         return TaskNext(shown: shown, session: item.agent?.state, startable: item.reaching ? nil : item.leaf)
     }
 
     /// 不论值不值得写进"下一步"。
-    func agent(of task: UUID, in agents: AgentLinks) -> (shown: PiShown, session: PiSessionState)? {
+    func agent(of task: UUID, in agents: AgentLinks) -> (shown: SessionShown, session: SessionState)? {
         #if os(macOS)
         guard let agent = agents.items[task].map(withLiveState) else { return nil }
         #else
@@ -76,7 +76,7 @@ extension TaskNext {
     var isRunning: Bool { if case .agent(let shown, _) = self { shown.isRunning } else { false } }
 }
 
-extension PiShown {
+extension SessionShown {
     var speaksOnTask: Bool {
         if case .unknown = status { return true }
         return needsYou || status == .interrupted || status == .unread

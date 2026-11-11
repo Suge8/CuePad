@@ -25,14 +25,14 @@ public enum SessionNameSuggestion {
     }
 }
 
-extension PiBridge {
-    public func canNameItself(_ id: PiSession.ID) -> Bool { controls[id]?.canNameItself(id) ?? false }
+extension Bridge {
+    public func canNameItself(_ id: Session.ID) -> Bool { controls[id]?.canNameItself(id) ?? false }
 
     /// 请会话那一家按它的第一句话起个短名（`SessionNameSuggestion`），不写回：还没有第一句话、这家起不了（抛 `unsupported`）、
     /// 起不出（超时、出错、空回答）都抛错。
-    public func suggestName(for id: PiSession.ID) async throws -> String {
-        guard let link = controls[id], let first = session(id: id)?.firstMessage else { throw PiBridgeError.unknownSession(id) }
-        return try await link.suggestName(from: PiSessionName.display(name: nil, firstMessage: first, folder: ""), in: id)
+    public func suggestName(for id: Session.ID) async throws -> String {
+        guard let link = controls[id], let first = session(id: id)?.firstMessage else { throw BridgeError.unknownSession(id) }
+        return try await link.suggestName(from: SessionName.display(name: nil, firstMessage: first, folder: ""), in: id)
     }
 }
 #endif

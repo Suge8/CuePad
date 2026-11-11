@@ -57,13 +57,13 @@ final class DebugVoiceLayoutScenario {
         try await recorder.update(sessionID: session, state: .thinking, title: title, directory: "demo", projectID: Project.defaultID)
         guard let target = try await store.piSessions(sessionIDs: [session])[session]?.state else { throw CueStoreError.notFound }
         let delivery = try await store.requestDelivery(title, to: target.target, on: host)
-        var tool = PiChatMessage.Tools.Item(kind: .command, target: title)
+        var tool = ChatMessage.Tools.Item(kind: .command, target: title)
         tool.cueRequests = [request]
         tool.deliveries = [delivery.id]
         _ = try await store.recordCueRound(nil, startedAt: .now, answersYou: true, tools: .init(steps: 1, items: [tool]))
-        try await store.writePiTranscript(PiTranscript(sessionID: session, messages: [
-            PiChatMessage(sessionID: session, entryID: "owned", seq: 1, role: .user, text: title, at: .now, deliveryID: delivery.id)
-        ], recap: PiRecap(lastPrompt: title)))
+        try await store.writePiTranscript(SessionTranscript(sessionID: session, messages: [
+            ChatMessage(sessionID: session, entryID: "owned", seq: 1, role: .user, text: title, at: .now, deliveryID: delivery.id)
+        ], recap: Recap(lastPrompt: title)))
         let executor = DeliveryExecutor(store: store, hostID: host, onIssue: { error in
             Task { @MainActor in DebugScene.abandon("语音停止验收", error) }
         }) { item, _ in

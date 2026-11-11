@@ -17,8 +17,8 @@ struct AgentTarget: Equatable {
 final class SendState {
     /// `ended`：不在线的会话（已结束的，或托管着、进程歇着的），发送时由它所在那台 Mac 的执行器在后台唤醒。
     enum Route {
-        case local(CuePi.PiSession)
-        case remote(PiSessionState)
+        case local(CuePi.Session)
+        case remote(SessionState)
         case ended(host: String?)
     }
 
@@ -39,12 +39,12 @@ final class SendState {
     }
 
     /// 终端里开的会话桥上已经没有、记录还没来得及标成结束的不算（发送时它走"唤醒"那条路）。
-    private func isReachable(_ state: PiSessionState) -> Bool {
+    private func isReachable(_ state: SessionState) -> Bool {
         state.hostID != services.hostID || state.hosted || liveSession(state.sessionID) != nil
     }
 
     /// 与手机的发给 Agent 输入框共用同一份规则（`HandOffTargets`）。
-    func onlineTargets(for project: UUID?) -> [PiSessionListItem] {
+    func onlineTargets(for project: UUID?) -> [SessionListItem] {
         HandOffTargets.sessions(services.liveSessions.live, project: project, at: services.speech).filter { isReachable($0.state) }
     }
 
@@ -62,7 +62,7 @@ final class SendState {
             ?? services.liveSessions.recentlyEnded.first { $0.sessionID == sessionID }?.title ?? "Agent"
     }
 
-    private func liveSession(_ sessionID: String) -> CuePi.PiSession? {
+    private func liveSession(_ sessionID: String) -> CuePi.Session? {
         services.pi.session(sessionID: sessionID)
     }
 

@@ -78,7 +78,7 @@ struct TaskLine: View {
             Group {
                 switch pace {
                 case .left(let seconds): Text(TaskPace.left(seconds))
-                case .ran(let since): LiveText(style: PiClock.Elapsed(since: since))
+                case .ran(let since): LiveText(style: SessionClock.Elapsed(since: since))
                 }
             }
             .font(TaskMetrics.caption).monospacedDigit().foregroundStyle(palette.ink3)

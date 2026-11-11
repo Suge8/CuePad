@@ -206,7 +206,7 @@ final class WideColumnView: NSView {
             }
             if let data = pasteboard.data(forType: .init(UTType.cuepadSession.identifier)) {
                 let value = try JSONDecoder().decode(DraggedSession.self, from: data)
-                workspace.openSession(PiSessionState.recordID(sessionID: value.sessionID), sessionID: value.sessionID, in: column)
+                workspace.openSession(SessionState.recordID(sessionID: value.sessionID), sessionID: value.sessionID, in: column)
                 return true
             }
         } catch { workspace.fail(error) }

@@ -22,10 +22,10 @@ extension MacSyncTests {
         let cases: [(ref: String, received: String, request: () async throws -> DeliveryRequest, sent: ([String: Any]) -> Bool)] = [
             ("command", "command", { try await store.requestDelivery("/greet world", to: target("command"), on: host, mode: .command) },
              { $0["text"] as? String == "/greet world" }),
-            ("answer", "answer", { try await store.requestAnswer(PiAnswer(promptID: "p-1", value: .option("覆盖")), to: target("answer"), on: host) },
+            ("answer", "answer", { try await store.requestAnswer(Answer(promptID: "p-1", value: .option("覆盖")), to: target("answer"), on: host) },
              { $0["promptId"] as? String == "p-1" && $0["value"] as? String == "覆盖" }),
             ("config", "config", {
-                try await store.requestConfig(PiConfig(model: PiModelKey(provider: "anthropic", id: "opus"), thinking: .high), to: target("config"), on: host)
+                try await store.requestConfig(SessionConfig(model: ModelKey(provider: "anthropic", id: "opus"), thinking: .high), to: target("config"), on: host)
             }, { $0["model"] as? [String: String] == ["provider": "anthropic", "id": "opus"] && $0["thinking"] as? String == "high" }),
             ("end", "end", { try await store.requestEnd(of: target("end"), on: host) }, { _ in true }),
             ("stop", "abort", { try await store.requestStop(of: target("stop"), on: host) }, { _ in true }),
@@ -52,7 +52,7 @@ extension MacSyncTests {
             "按这张改\n\(CueFormat.imageMarkup(key: key))", to: SendTarget(kind: .piSession, name: "app", ref: "sess-1"), on: TestApp.hostID)
         #expect(try await awaitFinished(request.id).status == .known(.succeeded))
         let path = try #require(services.store.files.fileURL(for: key)).path(percentEncoded: false)
-        #expect(blind.messages == [PiMessage(text: "按这张改\n附件：图片.png（\(path)）", deliveryID: request.id.uuidString)])
+        #expect(blind.messages == [SessionMessage(text: "按这张改\n附件：图片.png（\(path)）", deliveryID: request.id.uuidString)])
     }
 
     @Test func 斜杠命令带卡片只关联卡片_带的图片写成路径() async throws {
@@ -93,7 +93,7 @@ extension MacSyncTests {
 
     @Test
     func 请求停止_结束_改配置写给会话所在的Mac并立即上传() async throws {
-        try await PiStateRecorder(store: services.store, hostID: "mac-other").update(sessionID: "far", state: .thinking, title: "远处")
+        try await StateRecorder(store: services.store, hostID: "mac-other").update(sessionID: "far", state: .thinking, title: "远处")
         let session = try #require(try await services.store.allPiSessionStates().first)
         let uploads = Watch(rig.sync.uploads.stream)
 
@@ -105,14 +105,14 @@ extension MacSyncTests {
         #expect(end.hostID == "mac-other" && end.mode == .known(.end) && end.target.ref == "far")
         #expect(try await uploads.next("结束请求的上传") == end.id.uuidString.lowercased())
 
-        let config = try await services.configure(PiConfig(thinking: .low), for: session)
-        #expect(config.hostID == "mac-other" && config.config == PiConfig(thinking: .low) && config.target.ref == "far")
+        let config = try await services.configure(SessionConfig(thinking: .low), for: session)
+        #expect(config.hostID == "mac-other" && config.config == SessionConfig(thinking: .low) && config.target.ref == "far")
         #expect(try await uploads.next("改配置请求的上传") == config.id.uuidString.lowercased())
     }
 
     @Test
     func 主动拉取的条件_没有连着的会话时不因旧记录而拉_有本机待执行请求时拉() async throws {
-        try await PiStateRecorder(store: services.store, hostID: TestApp.hostID).update(sessionID: "stale", state: .settled, title: "旧会话")
+        try await StateRecorder(store: services.store, hostID: TestApp.hostID).update(sessionID: "stale", state: .settled, title: "旧会话")
         services.startSpeechClock()
         let waiting = Watch(services.pollingCondition())
         #expect(try await waiting.next("没有可拉的事时给出空节奏") == .some(nil))

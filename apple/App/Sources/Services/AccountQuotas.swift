@@ -90,7 +90,7 @@ extension AppServices {
     #if os(macOS)
     /// 换版本期间发不进命令，所以不算。
     /// 不同会话可能有独立的模型目录与授权；不根据当前模型推断其他会话的来源已覆盖。
-    private var quotaSessions: [PiBridge.Slot] { pi.slots.filter { $0.session.capabilities.contains(.quota) && !$0.session.upgrading } }
+    private var quotaSessions: [Bridge.Slot] { pi.slots.filter { $0.session.capabilities.contains(.quota) && !$0.session.upgrading } }
 
     private var quotaBatch: AccountQuotas.Batch {
         let sessions = quotaSessions
@@ -102,7 +102,7 @@ extension AppServices {
     }
 
     /// 经能答额度的会话里的扩展查（它有 Pi 的令牌与自动刷新，App 不碰 Pi 的登录文件）；返回第一个没查到的会话报的原因。
-    private func queryQuota(in sessions: [PiBridge.Slot]) async -> ShownText? {
+    private func queryQuota(in sessions: [Bridge.Slot]) async -> ShownText? {
         guard !sessions.isEmpty else { return ShownText("这台 Mac 上没有在线的 Pi 会话") }
         return await withTaskGroup(of: ShownText?.self) { group in
             for session in sessions {

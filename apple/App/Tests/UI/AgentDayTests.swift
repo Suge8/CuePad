@@ -15,13 +15,13 @@ struct AgentDayTests {
     var settings: AppSettings { app.services.settings }
     var workspace: Workspace { Workspace(services: app.services) }
 
-    private func item(_ sessionID: String) async throws -> PiSessionListItem {
-        try #require(try await store.piSessionPage(PiSessionQuery(limit: .max)).items.first { $0.state.sessionID == sessionID })
+    private func item(_ sessionID: String) async throws -> SessionListItem {
+        try #require(try await store.piSessionPage(SessionQuery(limit: .max)).items.first { $0.state.sessionID == sessionID })
     }
 
     private func label(_ sessionID: String) async throws -> String { workspace.shown(try await item(sessionID)).label }
 
-    private func note(_ item: PiSessionListItem) -> PiRowFacts.Note? {
+    private func note(_ item: SessionListItem) -> RowFacts.Note? {
         settings.facts(item.state, shown: workspace.shown(item), end: nil, rename: item.rename, at: .always()).note
     }
 
@@ -40,11 +40,11 @@ struct AgentDayTests {
 
     @Test func 文字题等你回答_确认与选择题等你确认() async throws {
         let recorder = try await app.runtimeRecorder(on: "mac-a")
-        let questions: [(String, PiQuestionKind)] = [("words", .text), ("yesno", .confirm), ("pick", .select)]
+        let questions: [(String, QuestionKind)] = [("words", .text), ("yesno", .confirm), ("pick", .select)]
         for (id, kind) in questions {
             try await recorder.update(
                 sessionID: id, state: .waitingForUser, title: id,
-                question: PiQuestion(promptID: "p", kind: .known(kind), text: "问题", options: kind == .select ? ["A", "B"] : []))
+                question: Question(promptID: "p", kind: .known(kind), text: "问题", options: kind == .select ? ["A", "B"] : []))
         }
 
         #expect(try await label("words") == "等你回答")
@@ -57,7 +57,7 @@ struct AgentDayTests {
         try await recorder.update(sessionID: "atlas", state: .settled, title: "atlas")
         #expect(try await label("atlas") == "新开的会话")  // 终端里刚开、还没有任何一轮：不是"该你了"
 
-        try await store.writePiTranscript(PiTranscript(sessionID: "atlas", messages: [], recap: PiRecap(lastPrompt: "跑一下测试", lastReply: "全部通过。共 214 个。")))
+        try await store.writePiTranscript(SessionTranscript(sessionID: "atlas", messages: [], recap: Recap(lastPrompt: "跑一下测试", lastReply: "全部通过。共 214 个。")))
         let done = try await item("atlas")
         #expect(workspace.shown(done).label == "有新回复")
         settings.markSeen(done.state, at: .now.addingTimeInterval(1))
@@ -85,7 +85,7 @@ struct AgentDayTests {
         let ext = try await app.host.connect("atlas", cwd: "/work/atlas", busy: true)
         try await (app.runtimeRecorder(on: TestApp.hostID)).update(sessionID: "atlas", state: .thinking, title: "atlas")
 
-        app.services.pi.setDraft(ext.id, PiDraft(text: "先看", since: .now))
+        app.services.pi.setDraft(ext.id, LiveDraft(text: "先看", since: .now))
         let row = try await item("atlas")
         #expect(workspace.shown(row).label == "输出中")
         #expect(workspace.shownInHeader(row.state, delivery: row.delivery).label == "输出中")
@@ -112,7 +112,7 @@ struct AgentDayTests {
         #expect(try await label("gone") == "正在唤醒")
         app.services.liveSessions.apply(try await LiveSessions.Page.read(from: store), at: .always())
         #expect(workspace.liveWork.contains { $0.sessionID == "gone" })
-        let list = try await PiSessionList.read(text: "", project: Project.defaultID, historyLimit: PiSessionList.pageSize, at: .always(), from: store)
+        let list = try await SessionListData.read(text: "", project: Project.defaultID, historyLimit: SessionListData.pageSize, at: .always(), from: store)
         #expect(list.now.contains { $0.state.sessionID == "gone" } && !list.historyRuns.flatMap(\.items).contains { $0.state.sessionID == "gone" })
     }
 
@@ -121,17 +121,17 @@ struct AgentDayTests {
         try await recorder.update(sessionID: "delta", state: .settled, title: "delta")
         func title() async throws -> String {
             let item = try await item("delta")
-            return PiRename.title(of: item.state, request: item.rename, at: .always())
+            return SessionRename.title(of: item.state, request: item.rename, at: .always())
         }
 
         let request = try await app.services.rename(try await item("delta").state, to: "  排队调度\n")
-        #expect(request.config == PiConfig(name: "排队调度") && PiChat.outgoing([request], messages: []).isEmpty)  // 不算发给会话的话
+        #expect(request.config == SessionConfig(name: "排队调度") && Chat.outgoing([request], messages: []).isEmpty)  // 不算发给会话的话
         #expect(try await title() == "排队调度")
         #expect(try await item("delta").delivery == nil)
 
         try await macAnswers(request, host: "mac-d", .failed(.verbatim("Pi 已经退出")))
         let failed = try await item("delta")
-        #expect(PiRename.title(of: failed.state, request: failed.rename, at: .always()) == "delta")
+        #expect(SessionRename.title(of: failed.state, request: failed.rename, at: .always()) == "delta")
         #expect(note(failed) == .renameFailed)
         settings.markSeen(failed.state, at: .now.addingTimeInterval(1))
         #expect(note(failed) == nil)  // 看过就不再写
@@ -154,13 +154,13 @@ struct AgentDayTests {
         try await recorder.update(sessionID: "ask", state: .waitingForUser, detail: "要覆盖吗？", title: "ask")
         try await recorder.update(sessionID: "broken", state: .error, title: "broken")
 
-        let all = try await PiSessionList.read(text: "", historyLimit: PiSessionList.pageSize, at: .always(), from: store)
+        let all = try await SessionListData.read(text: "", historyLimit: SessionListData.pageSize, at: .always(), from: store)
         #expect(all.now.map(\.state.sessionID) == ["ask", "broken", "busy", "idle"])
-        let home = try await PiSessionList.read(text: "", project: Project.defaultID, historyLimit: PiSessionList.pageSize, at: .always(), from: store)
+        let home = try await SessionListData.read(text: "", project: Project.defaultID, historyLimit: SessionListData.pageSize, at: .always(), from: store)
         #expect(home.now.map(\.state.sessionID) == ["ask", "broken", "idle"] && home.ended.map(\.state.sessionID) == ["done"])
-        let inTable = try await PiSessionList.read(text: "", project: table.id, historyLimit: PiSessionList.pageSize, at: .always(), from: store)
+        let inTable = try await SessionListData.read(text: "", project: table.id, historyLimit: SessionListData.pageSize, at: .always(), from: store)
         #expect(inTable.now.map(\.state.sessionID) == ["busy"])
-        let found = try await PiSessionList.read(text: "bro", historyLimit: PiSessionList.pageSize, at: .always(), from: store)
+        let found = try await SessionListData.read(text: "bro", historyLimit: SessionListData.pageSize, at: .always(), from: store)
         #expect(found.now.map(\.state.sessionID) == ["broken"])
     }
 
@@ -169,8 +169,8 @@ struct AgentDayTests {
         try await (app.runtimeRecorder(on: "mac-a")).update(sessionID: "deploy", state: .waitingForUser, title: "deploy")
         let session = try await item("deploy").state
         let workspace = Workspace(services: app.services)
-        func list() async throws -> PiSessionList {
-            try await PiSessionList.read(text: "", project: Project.defaultID, historyLimit: PiSessionList.pageSize, at: .always(), from: store)
+        func list() async throws -> SessionListData {
+            try await SessionListData.read(text: "", project: Project.defaultID, historyLimit: SessionListData.pageSize, at: .always(), from: store)
         }
 
         await workspace.end(session)

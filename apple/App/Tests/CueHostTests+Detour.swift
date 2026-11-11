@@ -134,7 +134,7 @@ extension CueHostTests {
 
     private func stuckPi(_ rig: Rig, resetsIn seconds: TimeInterval, alongside others: [AgentKind]) async throws -> Date {
         let account = PiAccount(kind: .oauth, scope: "fake-plan", name: "fake")
-        let model = PiModelOption(key: PiModelKey(provider: "fake", id: "fake-model-2"), name: "Fake Model 2", thinkingLevels: [.high], account: account)
+        let model = ModelOption(key: ModelKey(provider: "fake", id: "fake-model-2"), name: "Fake Model 2", thinkingLevels: [.high], account: account)
         try await rig.store.recordMacAgents(
             host: TestApp.hostID, name: "测试 Mac", [MacAgent(kind: .pi, model: model.key, models: [model])] + others.map { MacAgent(kind: $0, model: nil, models: []) })
         let resets = rig.clock.now.addingTimeInterval(seconds)

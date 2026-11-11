@@ -115,7 +115,7 @@ struct RailEarlier: View {
         .accessibilityValue(Text(total, format: .number))
         .accessibilityAddTraits(selected ? .isSelected : [])
         .observing(services.store, id: services.speech, into: $total, onError: workspace.fail) { [moment = services.speech] store in
-            try PiSessionList.earlier(PiSessionQuery(limit: 1), at: moment, from: store).total
+            try SessionListData.earlier(SessionQuery(limit: 1), at: moment, from: store).total
         }
     }
 }

@@ -14,7 +14,7 @@ struct HistoryRulesTests {
     final class Rig {
         let cwd: URL
         let host: PiRuntime
-        let bridge: PiBridge
+        let bridge: Bridge
         let services: AppServices
         let model: FakeModel
         var store: CueStore { services.store }
@@ -65,10 +65,10 @@ struct HistoryRulesTests {
                 try JSONSerialization.data(withJSONObject: credentials).write(to: paths.agentDirectory.appending(path: "auth.json"))
             }
 
-            bridge = PiBridge(socketDirectory: paths.socketDirectory)
+            bridge = Bridge(socketDirectory: paths.socketDirectory)
             host = PiRuntime(bridge: bridge, paths: paths, pi: { realPi })
             let mac = MacDependencies(
-                pi: bridge, hotkeys: InMemoryHotkeys(), paths: agentPaths, agents: AgentIntegrations(agents), terminal: PiTerminalJumper(),
+                pi: bridge, hotkeys: InMemoryHotkeys(), paths: agentPaths, agents: AgentIntegrations(agents), terminal: TerminalJumper(),
                 hostID: TestApp.hostID, workspaces: Workspaces(root: directory.appending(path: "CuePad", directoryHint: .isDirectory)),
                 wakeNotifications: NotificationCenter(),
                 commandLineTool: CommandLineToolInstaller(
@@ -93,8 +93,8 @@ struct HistoryRulesTests {
             }
         }
 
-        func records(_ scope: PiSessionScope) async throws -> [PiSessionState] {
-            try await store.piSessionPage(PiSessionQuery(scope: scope, limit: .max)).items.map(\.state)
+        func records(_ scope: SessionScope) async throws -> [SessionState] {
+            try await store.piSessionPage(SessionQuery(scope: scope, limit: .max)).items.map(\.state)
         }
 
         func replies(of sessionID: String) async throws -> [String] {
@@ -130,7 +130,7 @@ struct HistoryRulesTests {
         let id = try await rig.host.open(in: rig.cwd, launchToken: "hosted", name: nil, model: nil, thinking: nil)
         let session = try #require(rig.bridge.session(id: id))
         let sessionID = session.sessionID
-        _ = try await rig.bridge.send(PiMessage(text: "开场"), to: id)
+        _ = try await rig.bridge.send(SessionMessage(text: "开场"), to: id)
         try await eventually("回答落盘、索引跟上") { try await rig.replies(of: sessionID).last == "ECHO 开场" }
 
         try await idleExit(rig, sessionID)
@@ -172,7 +172,7 @@ struct HistoryRulesTests {
     }
 
     @discardableResult
-    private func expectResting(_ rig: Rig, _ sessionID: String) async throws -> PiSessionState {
+    private func expectResting(_ rig: Rig, _ sessionID: String) async throws -> SessionState {
         let current = try await rig.store.piSessionPage(.current).items.map(\.state)
         let state = try #require(current.first { $0.sessionID == sessionID }, "仍在现在")
         #expect(state.hosted && state.runtimeState == .known(.settled), "托管、歇着")

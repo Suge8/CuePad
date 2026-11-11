@@ -103,7 +103,7 @@ struct BoardLine: View {
     }
 
     private struct TimeSpent: View {
-        let clock: PiClock
+        let clock: SessionClock
         @Environment(\.palette) private var palette
 
         var body: some View {

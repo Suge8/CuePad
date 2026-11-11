@@ -12,7 +12,7 @@ enum PageSnapshots {
 
     private static var tail: Task<URL?, Never>?
 
-    static func png(for preview: PiPreview, file: URL, caches: URL) async -> URL? {
+    static func png(for preview: PreviewItem, file: URL, caches: URL) async -> URL? {
         let target = LookFiles.url("\(preview.hash).page", in: caches)
         if FileManager.default.fileExists(atPath: target.path) { return target }
         let previous = tail

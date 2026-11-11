@@ -17,7 +17,7 @@ struct CommandProgressTests {
 
     private func command() async throws -> DeliveryRequest {
         let workspace = Workspace(services: app.services)
-        let box = app.services.settings.replyDraftBinding(for: PiSessionState.recordID(sessionID: "atlas"))
+        let box = app.services.settings.replyDraftBinding(for: SessionState.recordID(sessionID: "atlas"))
         box.wrappedValue = ComposerDraft(text: "/compact")
         await workspace.speak(to: .session(
             SendTarget(kind: .piSession, name: "atlas", ref: "atlas"), host: TestApp.hostID, mode: .command, card: nil), from: box) { $0.stored }.value
@@ -54,9 +54,9 @@ struct CommandProgressTests {
         #expect(try await progress()?.failed == false)
         if laterMessage {
             let later = try #require(result.completedAt).addingTimeInterval(0.001)
-            try await store.writePiTranscript(PiTranscript(sessionID: "atlas", messages: [
-                PiChatMessage(sessionID: "atlas", entryID: "later", seq: 1, role: .user, text: "终端里说的下一句", at: later),
-            ], recap: PiRecap()))
+            try await store.writePiTranscript(SessionTranscript(sessionID: "atlas", messages: [
+                ChatMessage(sessionID: "atlas", entryID: "later", seq: 1, role: .user, text: "终端里说的下一句", at: later),
+            ], recap: Recap()))
         } else {
             await Workspace(services: app.services).speak("下一句", to: .session(
                 SendTarget(kind: .piSession, name: "atlas", ref: "atlas"), host: TestApp.hostID, mode: .send, card: nil)).value

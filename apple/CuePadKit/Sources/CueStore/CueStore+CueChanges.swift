@@ -6,7 +6,7 @@ extension CueStore {
   public func lastWrite() throws -> Int { try db.first("SELECT seq FROM writeCounter") { Int($0.int(0)) } ?? 0 }
 
   /// 子任务完成从 `marks.tasks` 之后算（Cue 接着开下一步）；整件完成不报——不是 Cue 做完的就是他点的，没人再用的会话已随之结束。等子代理停住按时刻算，序号是会话记录的，判新旧只看时刻。等子代理本身不是变化：子代理的结果交回、会话为它跑完那一轮歇下才报。
-  /// 会话停着（`PiSessionState.atStop`）：Cue 开的这一轮报给它定谁接手；他开的（`hisTurn`）已当场留给他回（`leaveHisStops`），Cue 之后看一眼再定收不收回、推不推进，停下时他在场（`SessionPresence`）就先不报、记进 `held`。管理器把上次的 `held` 交回来：等他离开，会话还停在那一次就作为变化报给 Cue。
+  /// 会话停着（`SessionState.atStop`）：Cue 开的这一轮报给它定谁接手；他开的（`hisTurn`）已当场留给他回（`leaveHisStops`），Cue 之后看一眼再定收不收回、推不推进，停下时他在场（`SessionPresence`）就先不报、记进 `held`。管理器把上次的 `held` 交回来：等他离开，会话还停在那一次就作为变化报给 Cue。
   public func cueChanges(after marks: CueMarks, held: [String: Date] = [:], at now: Date = .now) throws -> CueChanges {
     var held = held
     let tasks = try topTasks(where: "(t.completedAt IS NULL OR t.writeSeq > ?) AND \(Self.hasSession)", [marks.tasks])
@@ -14,18 +14,18 @@ extension CueStore {
     let leaves = try tasks.flatMap { task in try leaves(of: task).map { (task: task, leaf: $0) } }
     var sessions = try sessionStates(leaves.compactMap(\.leaf.piSessionID))
     // 按状态索引的排序取：缺省的 rowid 排序会扫遍几千条已结束的会话
-    for session in try select(PiSessionState.self, where: Self.isLoose("piSessionStates"), orderBy: "stateSince DESC, id") {
+    for session in try select(SessionState.self, where: Self.isLoose("piSessionStates"), orderBy: "stateSince DESC, id") {
       sessions[session.sessionID] = session
     }
     let owners = try sessionOwners(Array(sessions.keys))
     let cardSeqs = try writeSeqs(of: .cards, "id", (leaves.map(\.leaf.id) + tasks.map(\.id)).map { $0.uuidString.lowercased() })
     let sessionSeqs = try writeSeqs(of: .piSessionStates, "sessionID", Array(sessions.keys))
     func seq(_ card: Card) -> Int { cardSeqs[card.id.uuidString.lowercased()] ?? 0 }
-    func report(_ session: PiSessionState, seq: Int, task: Card?, leaf: Card?) throws {
+    func report(_ session: SessionState, seq: Int, task: Card?, leaf: Card?) throws {
       guard let change = try sessionChange(session, seq: seq, task: task, leaf: leaf) else { return }
       if session.atStop, try hisStop(session.sessionID) != nil { held[session.sessionID] = session.stateSince } else { changes.append(change) }
     }
-    func stall(_ session: PiSessionState, seq: Int, task: Card?, leaf: Card?) throws {
+    func stall(_ session: SessionState, seq: Int, task: Card?, leaf: Card?) throws {
       guard let at = session.stallsAt, at <= now, marks.stalls.map({ at > $0 }) ?? true else { return }
       // Cue 这会儿说不进去的不报：他发起的那一轮（`checkCueCanSpeak`），或在跑时 CuePad 打断不了的；叫醒它只能干看
       guard session.speakBlocked == nil, try !hisTurn(session.sessionID) else { return }
@@ -68,7 +68,7 @@ extension CueStore {
   /// 它不随写入出现，值班的 Cue 管理器按它排好醒来的时刻。
   /// 不分在不在看板上（不在的到点醒来也没有变化，只多对一次账）。
   public func nextCueStall(after now: Date) throws -> Date? {
-    try select(PiSessionState.self, where: "state = ?", [PiWorkState.delegating.rawValue])
+    try select(SessionState.self, where: "state = ?", [WorkState.delegating.rawValue])
       .compactMap { session -> Date? in
         guard let due = session.stallsAt, let until = session.runtimeUntil, due < until else { return nil }
         return due
@@ -76,9 +76,9 @@ extension CueStore {
   }
 
   /// 报告事件不替当前运行背书：presence 可以晚于新报告到，`session.runtimeState` 仍保留未确认。
-  /// 歇下要等最后一轮的回答读到才算（`PiSessionState.answered`）：状态由 Agent 报，问答由 Mac 读会话文件写，两路先后不定
+  /// 歇下要等最后一轮的回答读到才算（`SessionState.answered`）：状态由 Agent 报，问答由 Mac 读会话文件写，两路先后不定
   /// （Claude Code 的轮末标记写在报歇下的钩子之后）。读到时收尾时刻一变，这一行盖上新序号，变化随之出现。
-  private func sessionChange(_ session: PiSessionState, seq: Int, task: Card?, leaf: Card?) throws -> CueChange? {
+  private func sessionChange(_ session: SessionState, seq: Int, task: Card?, leaf: Card?) throws -> CueChange? {
     let (kind, detail): (CueChange.Kind?, String?) =
       switch session.state.known {
       case .settled where !session.answered: (nil, nil)
@@ -98,7 +98,7 @@ extension CueStore {
     try write {
       let latest = try lastWrite()
       guard latest > mark else { return (latest, nil) }
-      let stopped = try select(PiSessionState.self, where: "state IN (\(sqlList(PiWorkState.allCases.filter(\.isStopped)))) AND writeSeq > ?", [mark])
+      let stopped = try select(SessionState.self, where: "state IN (\(sqlList(WorkState.allCases.filter(\.isStopped)))) AND writeSeq > ?", [mark])
       let his = try stopped.filter { try $0.atStop && hisTurn($0.sessionID) }
       return (latest, try putLeft(his) ? CueState.recordID : nil)
     }
@@ -116,7 +116,7 @@ extension CueStore {
     let viewing = try viewers().contains { $0.sessionIDs.contains(sessionID) }
     // 窗口内有明确人类来源的话（从晚到早）；缺来源证据不等于他说过。
     let said = try select(
-      PiChatMessage.self, where: "sessionID = ? AND role = '\(PiChatRole.user.rawValue)' AND at > ?",
+      ChatMessage.self, where: "sessionID = ? AND role = '\(ChatRole.user.rawValue)' AND at > ?",
       [sessionID, timing.now() - SessionPresence.window], orderBy: "at DESC")
     let sources = try deliverySources(among: said.compactMap(\.deliveryID))
     let spokeAt = said.first { $0.source(in: sources) == .user }?.at
@@ -126,7 +126,7 @@ extension CueStore {
   private func heldChanges(_ held: [String: Date], reported: Set<String>) throws -> CueChanges {
     var result = CueChanges(due: [], held: [:], lapse: nil)
     guard !held.isEmpty else { return result }
-    let sessions = try select(PiSessionState.self, where: "sessionID IN (SELECT value FROM json_each(?))", [JSONColumn.encode(held.keys.sorted())])
+    let sessions = try select(SessionState.self, where: "sessionID IN (SELECT value FROM json_each(?))", [JSONColumn.encode(held.keys.sorted())])
     let seqs = try writeSeqs(of: .piSessionStates, "sessionID", sessions.map(\.sessionID))
     let owners = try sessionOwners(sessions.map(\.sessionID))
     for session in sessions where session.stateSince.stored == held[session.sessionID]?.stored && session.atStop {
@@ -149,8 +149,8 @@ extension CueStore {
     return [(task, leaf)]
   }
 
-  public func sessionState(_ sessionID: String) throws -> PiSessionState? {
-    try find(PiSessionState.self, PiSessionState.recordID(sessionID: sessionID))
+  public func sessionState(_ sessionID: String) throws -> SessionState? {
+    try find(SessionState.self, SessionState.recordID(sessionID: sessionID))
   }
 
   /// 请求的动作在变化里的说法（说的话没送到另报 `undelivered`，不经这里）。
@@ -175,9 +175,9 @@ extension CueStore {
     }
   }
 
-  func latestSession(of task: UUID) throws -> PiSessionState? {
+  func latestSession(of task: UUID) throws -> SessionState? {
     try select(
-      PiSessionState.self,
+      SessionState.self,
       where: "sessionID IN (SELECT piSessionID FROM cards WHERE (id = ?1 OR parentID = ?1) AND todoAt IS NOT NULL AND piSessionID IS NOT NULL)",
       [task], orderBy: "stateSince DESC, id", limit: 1
     ).first

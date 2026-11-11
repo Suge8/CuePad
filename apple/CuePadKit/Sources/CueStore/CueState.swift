@@ -3,12 +3,12 @@ import Foundation
 
 /// 同步，只有一行，只由它值班的那台 Mac 写。报告保留原值，当前断言只读 `runtimeState`：报告所属宿主必须仍在值班、同 boot 且 lease 有效；旧报告、换宿主与历史元数据不能补签证明。
 public struct CueState: Equatable, Sendable {
-  public var state: Open<PiWorkState>
+  public var state: Open<WorkState>
   public var hostID: String?
   public var bootID: String?
   /// 读时按所属宿主、boot 与 lease 推出，不落库或同步。
   public var runtimeUntil: Date?
-  public var runtimeState: Open<PiWorkState> { runtimeUntil == nil ? .unknown("unconfirmed") : state }
+  public var runtimeState: Open<WorkState> { runtimeUntil == nil ? .unknown("unconfirmed") : state }
   public var detail: String?
   public var step: CueActivity.Touch?
   public var round: UUID?
@@ -18,7 +18,7 @@ public struct CueState: Equatable, Sendable {
   public var modifiedAt: Date
 
   public init(
-    state: Open<PiWorkState>, detail: String? = nil, step: CueActivity.Touch? = nil, round: UUID? = nil, context: CueContext? = nil, left: [CueLeft] = [],
+    state: Open<WorkState>, detail: String? = nil, step: CueActivity.Touch? = nil, round: UUID? = nil, context: CueContext? = nil, left: [CueLeft] = [],
     modifiedAt: Date = .now, hostID: String? = nil, bootID: String? = nil, runtimeUntil: Date? = nil
   ) {
     self.hostID = hostID
@@ -98,7 +98,7 @@ public struct CueStir: Codable, Equatable, Sendable {
 
 /// 会话停在 `since` 起的那次停下（歇着、等回答或出错）时成立，它动起来（`stateSince` 变了）就自然作废，不用谁去清；
 /// 在那之前谁再对它说了话，待回复当场就不算（`CueStore.sessionsAwaitingReply`），不等 Mac 送到。
-/// 只有一份：待回复（`PiSessionState.awaitsReply`）与会话在问的归不归你（`waitsForCue`）都经 `CueDuty` 读它。
+/// 只有一份：待回复（`SessionState.awaitsReply`）与会话在问的归不归你（`waitsForCue`）都经 `CueDuty` 读它。
 public struct CueLeft: StoredJSON, Hashable, Sendable {
   public var sessionID: String
   public var since: Date
@@ -108,7 +108,7 @@ public struct CueLeft: StoredJSON, Hashable, Sendable {
     self.since = since
   }
 
-  public func holds(for session: PiSessionState) -> Bool {
+  public func holds(for session: SessionState) -> Bool {
     session.sessionID == sessionID && session.stateSince.stored == since.stored && session.runtimeState.known?.isStopped == true
   }
 }
@@ -122,7 +122,7 @@ public struct CueDuty: Equatable, Sendable {
     self.left = left
   }
 
-  public func leftToYou(_ session: PiSessionState) -> Bool { left.contains { $0.holds(for: session) } }
+  public func leftToYou(_ session: SessionState) -> Bool { left.contains { $0.holds(for: session) } }
 }
 
 extension CueState: Record {

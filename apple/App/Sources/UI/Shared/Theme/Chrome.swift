@@ -39,7 +39,7 @@ enum Chrome {
     static var tallRow: CGFloat { row + Spacing.group }
     /// 组头（等你、推进中）的高：字贴着下沿，离它那一组近、离上一组远。
     static let groupHeader: CGFloat = 28
-    /// 会话行行首状态标的基准直径（`PiStateDot.size`，外框 1.8 倍，Mac 18 见方，放在 `icon` 那一列里）。
+    /// 会话行行首状态标的基准直径（`StateDot.size`，外框 1.8 倍，Mac 18 见方，放在 `icon` 那一列里）。
     static let railMark: CGFloat = 10
     /// 容器的内边：选中、悬停的底离容器边这么多（底的四角与容器同心，`Rows.swift`）。
     static let pad = Spacing.tight

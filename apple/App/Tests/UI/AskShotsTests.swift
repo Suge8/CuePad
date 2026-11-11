@@ -11,7 +11,7 @@ struct AskShotsTests {
 
     private func thread() async throws -> CueThread { try await CueThread.read(from: store) }
 
-    private func send(_ names: [String], title: String) async throws -> [PiPreview] {
+    private func send(_ names: [String], title: String) async throws -> [PreviewItem] {
         let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString, directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let files = try names.map { name in
@@ -26,7 +26,7 @@ struct AskShotsTests {
         let workspace = Workspace(services: app.services)
         let project = try await store.createProject(name: "CuePad", color: "#000000")
         let task = try await store.createTask("重做提问卡", in: project.id)
-        try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "s1", state: .settled, projectID: project.id)
+        try await StateRecorder(store: store, hostID: "mac-a").update(sessionID: "s1", state: .settled, projectID: project.id)
         try await store.bindSession("s1", to: task.id)
         _ = try await send(["1-01-改前.png", "1-02-改后.png", "2-01-设置.png"], title: "别的改动")
         let one = try await send(["decision-sheet-iphone.png", "decision-sheet-iphone-dark.png", "decision-sheet-mac.png"], title: "提问卡方案 1：决定单")

@@ -81,13 +81,13 @@ extension CueHostTests {
         let project = try #require(try await rig.store.projects().first)
         let task = try await rig.store.createTask("修好登录页 晚到", in: project.id)
         try await rig.store.linkCard(task.id, toSession: "remote-1")
-        let remote = PiStateRecorder(store: rig.store, hostID: "mac-b")
+        let remote = StateRecorder(store: rig.store, hostID: "mac-b")
         try await remote.update(sessionID: "remote-1", state: .thinking, title: "修好登录页", turnStartedAt: .now)
         let settledAt = Date.now
         try await rig.say("你好")
         try await rig.message(.cue, containing: "收到：你好")
         try await eventually("这一轮做完") { try await rig.store.cueState()?.state == .known(.settled) }
-        try await remote.update(sessionID: "remote-1", state: .settled, times: PiTimes(stateSince: settledAt, busySince: nil))
+        try await remote.update(sessionID: "remote-1", state: .settled, times: SessionTimes(stateSince: settledAt, busySince: nil))
         try await rig.answered("remote-1")
         try await rig.message(.cue, containing: "登录页那边歇下了")
         await rig.stop()

@@ -118,7 +118,7 @@ extension Schema {
     CREATE INDEX piSessions_cwd ON piSessions(cwd);
     \(agentIndex)
 
-    -- 承载会话的进程：pid 与启动时刻（微秒），只在本机（PiProcess）。
+    -- 承载会话的进程：pid 与启动时刻（微秒），只在本机（SessionProcess）。
     CREATE TABLE piProcesses (sessionID TEXT PRIMARY KEY NOT NULL, pid INTEGER NOT NULL, startedAt INTEGER NOT NULL) STRICT;
 
     -- 项目绑定的代码目录：路径因设备而异，只在本机。Pi 会话按 cwd 归入项目时用它。

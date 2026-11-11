@@ -7,7 +7,7 @@ import SwiftUI
 struct MessageActions: View {
     let text: String
     let kind: MessageMenu.Kind
-    var session: PiSessionState?
+    var session: SessionState?
     var selectText: (() -> Void)?
     var annotate: (() -> Void)?
     var resend: (() -> Void)?
@@ -43,7 +43,7 @@ struct MessageActions: View {
     }
 
     /// 草稿只有一份（`AppSettings.replyDraft`）：已经写了字就接在后面，不覆盖。
-    private func editAgain(_ session: PiSessionState) {
+    private func editAgain(_ session: SessionState) {
         let settings = workspace.services.settings
         var draft = settings.replyDraft(for: session.id)
         draft.append(stored: text)

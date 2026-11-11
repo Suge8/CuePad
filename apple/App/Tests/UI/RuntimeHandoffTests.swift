@@ -12,7 +12,7 @@ struct RuntimeHandoffTests {
         defer { app.services.cancelBackgroundWork() }
         let task = try await workspace.createTask("检查部署", in: Project.defaultID)
         let target = SendTarget(kind: .piSession, name: "部署", ref: mode == .start ? nil : "atlas")
-        let text = mode == .start ? PiLaunch(project: Project.defaultID, prompt: task.body, token: UUID().uuidString).stored : task.body
+        let text = mode == .start ? LaunchRequest(project: Project.defaultID, prompt: task.body, token: UUID().uuidString).stored : task.body
         await workspace.speak(text, to: .session(target, host: "mac-worker", mode: mode, card: task.id)).value
         let request = try #require(try await store.deliveryRequests().first)
         if status == "pending" {
@@ -43,7 +43,7 @@ struct RuntimeHandoffTests {
     @Test func 开会话受理不等于正在运行_真实会话报告到来才计在跑() async throws {
         let app = TestApp(), workspace = Workspace(services: app.services), store = app.services.store
         let task = try await workspace.createTask("检查部署", in: Project.defaultID)
-        let launch = PiLaunch(project: Project.defaultID, prompt: task.body, token: UUID().uuidString)
+        let launch = LaunchRequest(project: Project.defaultID, prompt: task.body, token: UUID().uuidString)
         await workspace.speak(launch.stored, to: .session(SendTarget(kind: .piSession, name: "部署"), host: "mac-worker", mode: .start, card: task.id)).value
         let request = try #require(try await store.deliveryRequests().first)
         var row = try #require(try await store.syncRow(recordName: request.id.uuidString.lowercased()))

@@ -3,7 +3,7 @@ import SwiftUI
 
 /// 读到会话记录、确认它不在了（Mac 上的会话文件被删）时，回复框换成一句说明。
 struct SessionDock: View {
-    let session: PiSessionState
+    let session: SessionState
     let digest: SessionDigest?
     var compact = false
     var revealNote: (ReplyNote) -> Void = { _ in }
@@ -17,8 +17,8 @@ struct SessionDock: View {
         let endIssue = MacDelivery.endIssue(deliveries, at: speech)
         // 卡与回复框之间的缝在卡里（`DockedCard`）：卡升起、沉回时缝跟着长、跟着收
         VStack(spacing: 0) {
-            PiQuestionDock(session: session)
-            PiFailureDock(session: session, delivery: digest?.delivery, catalog: digest?.catalog, config: digest?.config(at: speech))
+            QuestionDock(session: session)
+            FailureDock(session: session, delivery: digest?.delivery, catalog: digest?.catalog, config: digest?.config(at: speech))
             DockedCard(endIssue?.unconfirmedReason) { reason in
                 Callout(.unknown(), text: String(localized: "结束结果尚未确认：\(reason)"), docked: true) { recoverEnd }
             }
@@ -28,12 +28,12 @@ struct SessionDock: View {
             if let digest, digest.session == nil {
                 Text("这个会话已经不在了，发不到它").font(Typography.meta).foregroundStyle(palette.ink3)
             } else {
-                PiReplyBar(
+                ReplyBar(
                     session: session, config: digest?.config(at: speech), catalog: digest?.catalog, compact: compact,
                     stopping: MacDelivery.stopping(session, deliveries: deliveries, at: speech),
                     commandProgress: MacDelivery.commandProgress(deliveries, messages: messages, at: speech),
-                    sending: PiChat.sending(deliveries, messages: messages, at: speech),
-                    recall: PiChat.lastSaid(messages),
+                    sending: Chat.sending(deliveries, messages: messages, at: speech),
+                    recall: Chat.lastSaid(messages),
                     previews: digest?.previews ?? [],
                     revealNote: revealNote,
                     sent: sent)
@@ -64,7 +64,7 @@ private struct TranscriptRequest: ViewModifier {
     func body(content: Content) -> some View {
         content.onChange(of: digest, initial: true) {
             guard !asked, let digest, let session = digest.session, services.reachesPiHost,
-                  PiChat.needsTranscript(session, messages: digest.messages) else { return }
+                  Chat.needsTranscript(session, messages: digest.messages) else { return }
             asked = true
             workspace.attempt { _ = try await services.requestTranscript(of: session) }
         }

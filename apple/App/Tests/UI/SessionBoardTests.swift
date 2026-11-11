@@ -13,7 +13,7 @@ struct SessionBoardTests {
 
     private func session(
         _ id: String, title: String, agent: AgentKind = .pi, hosted: Bool = false
-    ) async throws -> PiSessionState {
+    ) async throws -> SessionState {
         let recorder = try await rig.runtimeRecorder(on: Self.mac)
         try await recorder.update(
             sessionID: id, state: .settled, title: title, hosted: hosted, agent: agent)
@@ -25,7 +25,7 @@ struct SessionBoardTests {
     private func moves(_ sessionID: String, after task: UUID, by seconds: TimeInterval = 1) async throws {
         let done = try #require(try await store.card(task)?.completedAt)
         let at = done.addingTimeInterval(seconds)
-        try await rig.runtimeRecorder(on: Self.mac).update(sessionID: sessionID, state: .thinking, times: PiTimes(stateSince: at, busySince: at))
+        try await rig.runtimeRecorder(on: Self.mac).update(sessionID: sessionID, state: .thinking, times: SessionTimes(stateSince: at, busySince: at))
     }
 
     private func tasks() async throws -> [Card] { try await store.tasks(.todo, .inProgress, .done).flatMap(\.tasks) }
@@ -45,9 +45,9 @@ struct SessionBoardTests {
         #expect(Set(before.advancing.map(\.id)) == ["session/s1", "session/s2"])
         #expect(try await tasks().isEmpty, "没当任务用过的会话不留卡")
 
-        try await workspace.finish(PiSessionListItem(state: terminal))
+        try await workspace.finish(SessionListItem(state: terminal))
         #expect(workspace.notice?.text.visible.contains("终端未结束") == true, "终端里的会话不结束，提示如实说它还在")
-        try await workspace.finish(PiSessionListItem(state: hosted))
+        try await workspace.finish(SessionListItem(state: hosted))
         #expect(workspace.notice?.text.visible.contains("终端未结束") == false, "托管的会话结束了，提示还是原文案")
         #expect(workspace.sessionAsk == nil, "歇着的会话不问")
 
@@ -77,8 +77,8 @@ struct SessionBoardTests {
         let archived = try await session("s1", title: "修登录")
         try await rig.runtimeRecorder(on: Self.mac).update(sessionID: "s2", state: .settled, title: "补测试", projectID: project.id)
         let trashed = try #require(try await store.piSessions(sessionIDs: ["s2"])["s2"]?.state)
-        try await workspace.finish(PiSessionListItem(state: archived))
-        try await workspace.finish(PiSessionListItem(state: trashed))
+        try await workspace.finish(SessionListItem(state: archived))
+        try await workspace.finish(SessionListItem(state: trashed))
         #expect(try await TaskBoard.read(from: store).advancing.isEmpty, "完成时随卡收起")
 
         let made = try await tasks()
@@ -99,7 +99,7 @@ struct SessionBoardTests {
         #expect(held.item == nil && board.advancing.isEmpty)
 
         let workspace = Workspace(services: services)
-        try await workspace.finish(PiSessionListItem(state: held.session))
+        try await workspace.finish(SessionListItem(state: held.session))
         #expect(workspace.sessionAsk == .complete(held.session))
         #expect(try await tasks().isEmpty, "问过之前什么都不留")
 
@@ -183,7 +183,7 @@ struct SessionBoardTests {
         #expect(grok.speakBlocked != nil, "只能在终端里说话")
         #expect(SessionActions.rename(grok, in: workspace) == nil && SessionActions.rename(grok, adopts: true, in: workspace) == nil)
 
-        try await workspace.finish(PiSessionListItem(state: grok))
+        try await workspace.finish(SessionListItem(state: grok))
         let task = try #require(try await tasks().first)
         #expect(task.status == .done && task.piSessionID == "g1")
         try await store.updateCard(task.id) { $0.body = "查崩溃日志" }

@@ -29,12 +29,12 @@ extension Table {
     case .attachments: Attachment.columns
     case .piSessions: IndexedSession.columns
     case .projectDirectories: ["projectID", "directory"]
-    case .piSessionStates: PiSessionState.columns
+    case .piSessionStates: SessionState.columns
     case .agentCatalogs: AgentCatalog.columns
     case .deliveryRequests: DeliveryRequest.syncedColumns
     case .directoryBindings: DirectoryBinding.columns
-    case .piMessages: PiChatMessage.columns
-    case .previews: PiPreview.columns
+    case .piMessages: ChatMessage.columns
+    case .previews: PreviewItem.columns
     case .accountQuotas: AccountQuota.columns
     case .cueMessages: CueMessage.columns
     case .cueLines: CueMemoryLine.columns

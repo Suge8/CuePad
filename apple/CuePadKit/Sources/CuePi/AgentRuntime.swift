@@ -79,7 +79,7 @@ public struct AgentFacts: Sendable {
     var sessionFiles: SessionFileFormat?
     var channel: @Sendable (AgentIntegration, _ executable: URL?) -> (any AgentHookConfig)? = { _, _ in nil }
     var hostingNeedsChannel = false
-    /// 托管的会话是 CuePad 为它起的进程：歇满 `PiBridge.hostedIdle` 由桥请它退出（`PiBridge.reviewHosted`）；
+    /// 托管的会话是 CuePad 为它起的进程：歇满 `Bridge.hostedIdle` 由桥请它退出（`Bridge.reviewHosted`）；
     /// 不是的自己计时或住在它的服务里。
     var releasesIdleHosted = false
     /// nil 是没登录，没回答抛错。
@@ -123,13 +123,13 @@ public protocol AgentRuntime: AnyObject {
     var hostedSessionsOutliveApp: Bool { get }
     /// 等它上了桥，返回桥上的 id。会话名、模型、思考强度在开场的话之前一起生效（第一句话不会先当了会话名）：Pi 作为启动参数，其余上桥后一次配好（`configure(opened:…)`）。
     func open(
-        in directory: URL, launchToken: String, name: String?, model: PiModelKey?, thinking: PiThinkingLevel?
-    ) async throws -> PiSession.ID
-    func resume(_ session: IndexedSession) async throws -> PiSession.ID
-    func transcript(of session: IndexedSession, files: AttachmentFiles) async throws -> PiTranscript
-    func read(_ update: PiHistoryUpdate)
+        in directory: URL, launchToken: String, name: String?, model: ModelKey?, thinking: ThinkingLevel?
+    ) async throws -> Session.ID
+    func resume(_ session: IndexedSession) async throws -> Session.ID
+    func transcript(of session: IndexedSession, files: AttachmentFiles) async throws -> SessionTranscript
+    func read(_ update: HistoryUpdate)
     /// 终端里开的会话在范围里才接上桥，已接上的出了范围就下桥，每次换了范围补上此刻在跑的。托管的会话不受它管。启动后、给范围之前一个终端会话都不接。
-    func follow(_ scope: PiHistoryScope)
+    func follow(_ scope: HistoryScope)
     func integrationInstalled()
     func integrationRemoved() async
 }
@@ -139,12 +139,12 @@ extension AgentRuntime {
 
     /// 配不上就结束它再抛：开工整体失败，不留会话。
     func configure(
-        opened id: PiSession.ID, name: String?, model: PiModelKey?, thinking: PiThinkingLevel?, on bridge: PiBridge
-    ) async throws -> PiSession.ID {
+        opened id: Session.ID, name: String?, model: ModelKey?, thinking: ThinkingLevel?, on bridge: Bridge
+    ) async throws -> Session.ID {
         let name = name.flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0 }
         guard name != nil || model != nil || thinking != nil else { return id }
         do {
-            try await bridge.configure(PiConfig(model: model, thinking: thinking, name: name), in: id)
+            try await bridge.configure(SessionConfig(model: model, thinking: thinking, name: name), in: id)
         } catch {
             try? await bridge.end(id)
             throw error
@@ -153,17 +153,17 @@ extension AgentRuntime {
     }
 
     /// 状态全来自 Agent 自己报的，用不着会话文件。
-    public func read(_ update: PiHistoryUpdate) {}
+    public func read(_ update: HistoryUpdate) {}
 
     /// 终端里的会话不经接入上报（Pi 经桥扩展，装了才有）或整个接入只在接入期间运行（OpenCode）。
-    public func follow(_ scope: PiHistoryScope) {}
+    public func follow(_ scope: HistoryScope) {}
 
     public func integrationInstalled() {}
 
     public func integrationRemoved() async {}
 
-    public func transcript(of session: IndexedSession, files: AttachmentFiles) async throws -> PiTranscript {
-        try PiHistory.index(file: URL(filePath: session.path), agent: session.agent, from: nil, files: files).transcript
+    public func transcript(of session: IndexedSession, files: AttachmentFiles) async throws -> SessionTranscript {
+        try History.index(file: URL(filePath: session.path), agent: session.agent, from: nil, files: files).transcript
     }
 }
 

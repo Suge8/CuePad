@@ -5,15 +5,15 @@ import CueStore
 import Foundation
 
 struct MacDependencies {
-    var pi: PiBridge
+    var pi: Bridge
     var hotkeys: any HotkeyBackend
     var paths: AgentPaths
     var agents: AgentIntegrations
-    var terminal: PiTerminalJumper
+    var terminal: TerminalJumper
     var hostID: String
     var workspaces: Workspaces
     var wakeNotifications: NotificationCenter
-    /// `pi` 必须用同一个钟建（`PiBridge.timing`）；测试换成手动推进的。
+    /// `pi` 必须用同一个钟建（`Bridge.timing`）；测试换成手动推进的。
     var timing: Timing = .system
     /// Agent 的技能与钩子写的是 App 里那份的绝对路径，不依赖这个链接。
     var commandLineTool: CommandLineToolInstaller
@@ -41,7 +41,7 @@ struct MacDependencies {
             environment.merging(["HOME": home.path, "PATH": "/usr/bin:/bin:/usr/sbin:/sbin"]) { $1 }
         } ?? environment)
         let timing = Timing.system
-        let pi = PiBridge(socketDirectory: paths.pi.socketDirectory, timing: timing)
+        let pi = Bridge(socketDirectory: paths.pi.socketDirectory, timing: timing)
         let hooks = AgentHookServer(path: paths.pi.hookSocket)
         // 不碰真实世界时不碰真实的 `~/.local/bin`：链接放进资料库目录，除非指定了 Pi 目录与链接目录（`PiPaths.isExplicit`）
         let commandLineTool = isolated && !paths.pi.isExplicit
@@ -63,7 +63,7 @@ struct MacDependencies {
             hotkeys: CarbonHotkeyBackend(),
             paths: paths,
             agents: agents,
-            terminal: PiTerminalJumper(),
+            terminal: TerminalJumper(),
             hostID: hostID,
             workspaces: Workspaces.resolve(isolatedLibrary: isolated ? location.directory : nil),
             wakeNotifications: NSWorkspace.shared.notificationCenter,
@@ -77,7 +77,7 @@ struct MacDependencies {
                 .codex: CodexRuntime(bridge: pi, paths: paths, hooks: hooks, codex: { await agents.executable(.codex) }),
                 .opencode: OpenCodeRuntime(
                     bridge: pi, paths: paths, store: store, hostID: hostID, opencode: { await agents.executable(.opencode) },
-                    transcriptWindow: PiChat.transcriptWindow),
+                    transcriptWindow: Chat.transcriptWindow),
                 .grok: GrokRuntime(bridge: pi, paths: paths, files: store.files, grok: { await agents.executable(.grok) }),
                 .dsh: DshRuntime(bridge: pi, paths: paths, dsh: { await agents.executable(.dsh) }),
             ] },

@@ -103,7 +103,7 @@ struct CueRow: View, Equatable {
 }
 
 /// Cue 此刻在做什么只写在这里，不进对话里的哪一格（经过、醒来那一行都是记录，`CueTrace`），出现、收起与换字都不挪对话。
-/// 正在说的话（`CueKeeper.speech`）只有这个视图读它，出字时对话列表不重算；它与对话在同一次更新里拿到同一份对话，落库了（`PiDraft.landed`）就不再显示，换下是同一帧里的一减一加。
+/// 正在说的话（`CueKeeper.speech`）只有这个视图读它，出字时对话列表不重算；它与对话在同一次更新里拿到同一份对话，落库了（`LiveDraft.landed`）就不再显示，换下是同一帧里的一减一加。
 struct CueEnding: View {
     let newestSaid: Date?
     let joined: Bool
@@ -139,14 +139,14 @@ struct CueEnding: View {
 }
 
 private struct CueDoing: View {
-    let shown: PiShown
+    let shown: SessionShown
     let doing: String
     @Environment(\.palette) private var palette
 
     static let font = Typography.secondary
 
     var body: some View {
-        NoteLine { PiStateDot(shown: shown, size: 7) } label: {
+        NoteLine { StateDot(shown: shown, size: 7) } label: {
             Text(doing).font(Self.font).foregroundStyle(palette.ink2).lineLimit(1).shimmering()
         }
         .accessibilityElement(children: .ignore).accessibilityLabel(doing)

@@ -125,7 +125,7 @@ struct StyleBoard: View {
 
     private static let sizes: [(name: String, value: ControlSize)] = [("inline", .inline), ("compact", .compact), ("regular", .regular)]
 
-    private static let statuses: [PiShown.Status] = [
+    private static let statuses: [SessionShown.Status] = [
         .working(.thinking), .delivery(.inTransit(.sending)), .delivery(.inTransit(.waking)), .asking, .awaitsReply, .failed(.other), .delivery(.failed(.reported(DeliveryRequest.unexplainedFailure))),
         .cueAsking, .unread, .idle, .resting, .fresh, .ended, .interrupted, .unknown(),
     ]
@@ -133,15 +133,15 @@ struct StyleBoard: View {
     private var motion: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 16) {
-                PiStateDot(shown: PiShown(status: working ? .working(.tool) : .idle), size: 10)
+                StateDot(shown: SessionShown(status: working ? .working(.tool) : .idle), size: 10)
                 Spacer()
                 Text("\(count)").font(.title.weight(.semibold).monospacedDigit()).foregroundStyle(palette.ink).counting(count)
             }
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 104), alignment: .leading)], alignment: .leading, spacing: 10) {
                 ForEach(Self.statuses, id: \.self) { status in
-                    let shown = PiShown(status: status)
+                    let shown = SessionShown(status: status)
                     HStack(spacing: 6) {
-                        PiStateDot(shown: shown, size: 8)
+                        StateDot(shown: shown, size: 8)
                         Text(shown.label).font(.subheadline.weight(shown.isUnread ? .semibold : .medium)).foregroundStyle(shown.labelTint(palette))
                             .lineLimit(1)
                     }

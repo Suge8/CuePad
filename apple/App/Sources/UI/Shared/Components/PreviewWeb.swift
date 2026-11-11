@@ -72,7 +72,7 @@ enum PreviewWebGuard {
     }
 
     /// 网页按内容载入（about:blank 上，读不到任何文件）；别的类型（文稿）按文件载入，WebKit 才转成页面，给它一段字节只会把字节铺出来。
-    static func loadsByContent(_ file: URL) -> Bool { PiPreviewKind(fileName: file.lastPathComponent) == .web }
+    static func loadsByContent(_ file: URL) -> Bool { PreviewKind(fileName: file.lastPathComponent) == .web }
 
     static func mimeType(of file: URL) -> String { AttachmentKey.type(ofName: file.lastPathComponent)?.preferredMIMEType ?? "text/html" }
 
@@ -202,7 +202,7 @@ private enum DocumentLayout {
     case reflow, fit
 
     init?(_ file: URL) {
-        switch PiPreviewKind(fileName: file.lastPathComponent) {
+        switch PreviewKind(fileName: file.lastPathComponent) {
         case .document, .spreadsheet: self = .reflow
         case .presentation: self = .fit
         default: return nil

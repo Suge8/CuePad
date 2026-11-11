@@ -6,12 +6,12 @@ import Foundation
 /// 状态的规则只在这一处，各家把自己的事件翻译成对它的修改。歇着时压缩上下文不算新的一轮，压完计时回到压缩前。
 struct SessionFacts {
     var running = false
-    var activity: PiWorkState = .thinking
+    var activity: WorkState = .thinking
     var activityDetail: String?
-    var questions: [PiQuestion] = []
+    var questions: [Question] = []
     /// 不挡着这一轮的提问（Codex 的 `request_user_input_async`）：Agent 问完照常做事或歇下，你说了下一句（答案就是这句话）才收起，
     /// 这一轮结束不作废；在等它时也算等你回答
-    var standingQuestion: PiQuestion?
+    var standingQuestion: Question?
     var compacting = false
     var failure: String?
     /// 在飞的后台工作（按 Agent 给的 id）：还没把结果交回主会话的子代理（Claude Code 还有后台命令）。等子代理只看它，名册只给人看。
@@ -19,12 +19,12 @@ struct SessionFacts {
     /// 做完了的在主会话为它开始新的一轮（Agent 自己开，或接入补开）之前仍在飞：歇下只在那一轮做完之后，一件事只歇下一次。
     var inFlight: Set<String> = []
     private(set) var turnStartedAt: Date?
-    private(set) var subagents: [(id: String, state: PiSubagentState)] = []
+    private(set) var subagents: [(id: String, state: SubagentState)] = []
     private var beforeCompaction: (since: Date, busySince: Date?)?
 
-    /// 开始新的一轮。`start` 要早于这一轮在会话文件里可能的收尾（歇下就绪看收尾不早于它，`PiSessionState.answered`）：
+    /// 开始新的一轮。`start` 要早于这一轮在会话文件里可能的收尾（歇下就绪看收尾不早于它，`SessionState.answered`）：
     /// 取 Agent 给的开始时刻；没有就取一定在它之前的——挡住这一轮的钩子、CuePad 发出话或空输入、收到开始通知的那一刻；
-    /// 接上时已在跑的取拿到列表或快照之后会话记录里最后一轮的开始（`PiHistoryCheckpoint.lastTurnStart`）：接上的此刻、请求前的时刻、
+    /// 接上时已在跑的取拿到列表或快照之后会话记录里最后一轮的开始（`HistoryCheckpoint.lastTurnStart`）：接上的此刻、请求前的时刻、
     /// 库里旧的都分不清期间换没换轮（会晚于这一轮的收尾或早于上一轮的回答），记录里一轮都读不到才取请求前的时刻。
     mutating func startTurn(at start: Date) {
         turnStartedAt = start
@@ -40,13 +40,13 @@ struct SessionFacts {
         self.failure = failure
     }
 
-    mutating func work(_ activity: PiWorkState, detail: String? = nil) {
+    mutating func work(_ activity: WorkState, detail: String? = nil) {
         self.activity = activity
         activityDetail = detail
     }
 
     mutating func startSubagent(_ id: String, name: String, role: String, at now: Date) {
-        subagents.append((id, PiSubagentState(name: name.isEmpty ? role : name, role: role, phase: .known(.running), startedAt: now, progressAt: now)))
+        subagents.append((id, SubagentState(name: name.isEmpty ? role : name, role: role, phase: .known(.running), startedAt: now, progressAt: now)))
     }
 
     /// 子代理开始一次运行：第一次是新的一项；同一 id 再跑（Claude Code 被自己名下的后台命令叫醒、Codex 的 followup）名册里还是那一项，
@@ -59,14 +59,14 @@ struct SessionFacts {
     }
 
     /// 不在名册里的不管（如压缩上下文也会报一个没有开始的子代理）；改出了变化就是它在 `now` 有进展。
-    mutating func updateSubagent(_ id: String, at now: Date, _ change: (inout PiSubagentState) -> Void) {
+    mutating func updateSubagent(_ id: String, at now: Date, _ change: (inout SubagentState) -> Void) {
         guard let index = subagents.lastIndex(where: { $0.id == id }) else { return }
         let before = subagents[index].state
         change(&subagents[index].state)
         if subagents[index].state != before { subagents[index].state.progressAt = now }
     }
 
-    mutating func settleSubagent(_ id: String, _ phase: PiSubagentPhase, summary: String?, at now: Date) {
+    mutating func settleSubagent(_ id: String, _ phase: SubagentPhase, summary: String?, at now: Date) {
         updateSubagent(id, at: now) { agent in
             agent.phase = .known(phase)
             agent.action = summary.flatMap(\.firstLine).map { $0.clipped(ToolDetail.limit) } ?? ""
@@ -74,18 +74,18 @@ struct SessionFacts {
         }
     }
 
-    var state: (state: PiWorkState, detail: String?) {
+    var state: (state: WorkState, detail: String?) {
         if let question { return (.waitingForUser, ToolDetail.singleLine(question.text).clipped(ToolDetail.limit)) }
         if compacting { return (.compacting, nil) }
         if running { return (activity, activityDetail) }
         if !inFlight.isEmpty { return (.delegating, nil) }
-        if let failure { return (.error, PiErrorSummary(failure).line) }
+        if let failure { return (.error, ErrorSummary(failure).line) }
         return (.settled, nil)
     }
 
-    var question: PiQuestion? { questions.first ?? standingQuestion }
+    var question: Question? { questions.first ?? standingQuestion }
 
-    mutating func publish(to session: inout PiSession, at now: Date = .now) {
+    mutating func publish(to session: inout Session, at now: Date = .now) {
         let (state, detail) = state
         if state == .compacting, session.state != .compacting, !session.state.hasPendingWork {
             beforeCompaction = (session.stateSince, session.busySince)
@@ -106,9 +106,9 @@ struct SessionFacts {
     }
 }
 
-extension PiSession {
+extension Session {
     /// 与 Pi 扩展的计时同一规则。
-    mutating func enter(_ next: PiWorkState, detail: String? = nil, at now: Date = .now) {
+    mutating func enter(_ next: WorkState, detail: String? = nil, at now: Date = .now) {
         if next.phase != state.phase { stateSince = now }
         busySince = next.isWorking || next == .waitingForUser ? busySince ?? now : nil
         if next != .error { errorMessage = nil }
@@ -123,7 +123,7 @@ enum ToolDetail {
 
     static func line(_ tool: String, _ input: JSONValue?) -> String {
         guard let target = target(input) else { return name(tool).clipped(limit) }
-        return (name(tool) + PiSessionState.detailSeparator + target).clipped(limit)
+        return (name(tool) + SessionState.detailSeparator + target).clipped(limit)
     }
 
     /// 给人看的工具名：MCP 工具（`mcp__<服务>__<工具>`，Claude Code 与 Codex 的写法）照 Claude Code 终端写成"服务 - 工具 (MCP)"；
@@ -141,7 +141,7 @@ enum ToolDetail {
         ($0.replacingOccurrences(of: ".", with: ""), $0)
     })
 
-    static func line(_ tool: String, _ arguments: PiToolArguments?) -> String {
+    static func line(_ tool: String, _ arguments: ToolArguments?) -> String {
         line(tool, arguments.map { arguments -> JSONValue in
             var object: [String: JSONValue] = [:]
             if let command = arguments.command { object["command"] = .string(command) }
@@ -159,7 +159,7 @@ enum ToolDetail {
 
     static func singleLine(_ text: String) -> String {
         text.split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
-            .joined(separator: PiSessionState.detailSeparator)
+            .joined(separator: SessionState.detailSeparator)
     }
 
 }

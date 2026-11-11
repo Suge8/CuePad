@@ -24,7 +24,7 @@ final class OpenCodeBrain: HostedSession {
     private var sessionID: String?
     private var models: [OpenCodeModel] = []
     private var model: OpenCodeModel?
-    private var level: PiThinkingLevel?
+    private var level: ThinkingLevel?
     var seesImages: Bool { model?.seesImages == true }
     private var turn = OpenCodeTurn()
     private let mcpChanges = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
@@ -126,7 +126,7 @@ final class OpenCodeBrain: HostedSession {
     /// 删掉这个工作目录里崩溃留下的大脑会话：带标记、起它的服务已不在；同时在跑的另一个大脑的不动。
     private func sweep(_ client: OpenCodeClient) async throws {
         for info in try await client.sessions("&directory=" + OpenCodeClient.escaped(directory)) {
-            guard let pid = info.metadata?.cuepadBrain, PiProcess.running(pid: pid) == nil else { continue }
+            guard let pid = info.metadata?.cuepadBrain, SessionProcess.running(pid: pid) == nil else { continue }
             try await client.call("DELETE", "/api/session/\(info.id)")
         }
     }
@@ -166,7 +166,7 @@ final class OpenCodeBrain: HostedSession {
         try await client.call("DELETE", "/api/session/\(old)")
     }
 
-    func configure(model ref: String?, effort: PiThinkingLevel?) async throws {
+    func configure(model ref: String?, effort: ThinkingLevel?) async throws {
         guard let client, let sessionID, let current = model else { throw HostedSessionError.notRunning }
         let target = try ref.map(find) ?? current
         let level = effort ?? level
@@ -177,7 +177,7 @@ final class OpenCodeBrain: HostedSession {
         self.level = level
     }
 
-    func send(_ text: String, images: [PiImage], id: UUID) async throws {
+    func send(_ text: String, images: [MessageImage], id: UUID) async throws {
         guard let client, let sessionID else { throw HostedSessionError.notRunning }
         struct File: Encodable { var uri: String }
         struct Metadata: Encodable { var cuepadDelivery: String }

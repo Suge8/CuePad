@@ -53,10 +53,10 @@ final class VoiceCall {
     private(set) var userTurn: String?
     var requestState: [Request] = []
     var replyState: [Reply] = []
-    var executionState: [PiSessionListItem] = []
+    var executionState: [SessionListItem] = []
     /// 控制记录会被库定期清理；通话保留最后观察到的真实事实，不由它授予停止权限。
     var stopRequests: [DeliveryRequest] = []
-    var executions: [PiSessionListItem] { executionState }
+    var executions: [SessionListItem] { executionState }
     var requests: [Request] { requestState }
     var replies: [Reply] { replyState }
     private(set) var heard = ""

@@ -125,13 +125,13 @@ private extension Character {
 
 /// 拖到已完成、完成、置顶、改名与任务是同一组操作（`Workspace+Adopt`）：第一次这样用时当场给它建任务绑上。
 struct BoardSessionCard: View {
-    let agent: PiSessionListItem
+    let agent: SessionListItem
     let project: Project?
     var moves = true
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
-    private var session: PiSessionState { agent.state }
+    private var session: SessionState { agent.state }
 
     var body: some View {
         let pulse = workspace.pulse(of: agent)

@@ -19,7 +19,7 @@ extension CueStore {
     }
   }
 
-  /// 账号或网关来源的记录只按在线会话的证明（`PiSession.proofs`）移除；没有证明的模型（还没解析过、或会话不在线）是未知，什么都不移除，旧证明不能否定比它新的记录。
+  /// 账号或网关来源的记录只按在线会话的证明（`Session.proofs`）移除；没有证明的模型（还没解析过、或会话不在线）是未知，什么都不移除，旧证明不能否定比它新的记录。
   /// 尚待桥重新连接的有效记录也保留，避免启动时先连上的会话清掉其他账号。
   public func retainQuotaSources(on host: String, live: [QuotaWitness]) throws {
     var candidates: [QuotaCandidate] = []
@@ -33,7 +33,7 @@ extension CueStore {
       }
     }
     let online = Set(live.map(\.sessionID))
-    for state in try select(PiSessionState.self, where: "hostID = ? AND \(PiWorkState.outsideSQL(PiWorkState.closed))", [host]) where !online.contains(state.sessionID) {
+    for state in try select(SessionState.self, where: "hostID = ? AND \(WorkState.outsideSQL(WorkState.closed))", [host]) where !online.contains(state.sessionID) {
       var models = [state.model].compactMap { $0 }
       if let id = state.catalogID, let catalog = try agentCatalog(id) { models += catalog.models }
       candidates += models.map { QuotaCandidate(provider: $0.key.provider, account: $0.account, proof: nil) }
@@ -209,10 +209,10 @@ extension CueStore {
 
 public struct QuotaWitness: Sendable {
   public var sessionID: String
-  public var models: [PiModelOption]
+  public var models: [ModelOption]
   public var proofs: [PiProof]
 
-  public init(sessionID: String, models: [PiModelOption], proofs: [PiProof]) {
+  public init(sessionID: String, models: [ModelOption], proofs: [PiProof]) {
     self.sessionID = sessionID
     self.models = models
     self.proofs = proofs

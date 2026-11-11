@@ -20,7 +20,7 @@ extension DebugScene {
     }
 
     static func atlasIfAsked(_ store: CueStore) async throws {
-        let state = args.atlas.flatMap(PiWorkState.init(rawValue:))
+        let state = args.atlas.flatMap(WorkState.init(rawValue:))
         let title = args.atlasTitle
         guard state != nil || title != nil else { return }
         _ = try await demoRecorder(store).update(sessionID: "atlas", state: state ?? .tool, title: title ?? "atlas")
@@ -32,8 +32,8 @@ extension DebugScene {
         func settle(_ id: String, _ title: String, _ agent: AgentKind, minutes: Double, said: String, reply: String) async throws {
             try await recorder.update(
                 sessionID: id, state: .settled, title: title, directory: "CuePad",
-                times: PiTimes(stateSince: .now.addingTimeInterval(-minutes * 60), busySince: nil), agent: agent)
-            try await store.writePiTranscript(PiTranscript(sessionID: id, messages: [], recap: PiRecap(lastPrompt: said, lastReply: reply)))
+                times: SessionTimes(stateSince: .now.addingTimeInterval(-minutes * 60), busySince: nil), agent: agent)
+            try await store.writePiTranscript(SessionTranscript(sessionID: id, messages: [], recap: Recap(lastPrompt: said, lastReply: reply)))
         }
         try await settle("header", "header", .codex, minutes: 5, said: String(localized: "名牌两行居中", table: "Demo"), reply: String(localized: "名牌两行已居中，展开改成了 0.25 秒，手感你再试试？", table: "Demo"))
         let project = try await store.projects().first { $0.name == "CuePad" }?.id ?? Project.defaultID

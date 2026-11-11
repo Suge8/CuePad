@@ -26,7 +26,7 @@ struct HistoryImageTests {
             SessionFile.assistant("a1", "u1", text: "看到了", at: 2),
             SessionFile.user("u2", "a1", [imageBlock(pasted)], at: 3))
 
-        let update = try PiHistory.index(file: file.url, agent: .pi, from: nil, files: store.files)
+        let update = try History.index(file: file.url, agent: .pi, from: nil, files: store.files)
 
         let users = update.messages.filter { $0.role == .known(.user) }
         #expect(users.map(\.text) == ["看这张\n![](cuepad://file/\(key(sent)))", "![](cuepad://file/\(key(pasted)))"])
@@ -52,20 +52,20 @@ struct HistoryImageTests {
             SessionFile.assistant("a1", "u1", text: "看完了", at: 2),
             SessionFile.user("u2", "a1", [["type": "text", "text": "\(foreign)\n这段也看"]], at: 3))
 
-        let update = try PiHistory.index(file: file.url, agent: .pi, from: nil, files: store.files)
+        let update = try History.index(file: file.url, agent: .pi, from: nil, files: store.files)
 
         #expect(update.history.displayName == "看这份  handoff-brief.pdf")
         #expect(update.messages.first?.text == "看这份\n\n[handoff-brief.pdf](cuepad://file/\(key))")
         #expect(update.recap.pendingPrompt == "录屏.mov 这段也看")
-        #expect(PiSessionName.display(name: nil, firstMessage: String(("看这份\n\n" + local).prefix(60)), folder: "x") == "看这份  handoff-brief.pdf")
+        #expect(SessionName.display(name: nil, firstMessage: String(("看这份\n\n" + local).prefix(60)), folder: "x") == "看这份  handoff-brief.pdf")
     }
 
     @Test func 说明行不进会话名() {
         let note = "[Image: original 3000x2000, displayed at 1500x1000. Multiply coordinates by 2.00 to map to original image.]"
-        #expect(PiSessionName.display(name: nil, firstMessage: "看这张\n\n" + note, folder: "x") == "看这张")
-        #expect(PiSessionName.display(name: nil, firstMessage: "看这张\n\n[Image: original 3000x2", folder: "x") == "看这张")
-        #expect(PiSessionName.display(name: nil, firstMessage: "看这张\n\n" + note + "\n\n", folder: "x") == "看这张")
-        #expect(PiSessionName.display(name: nil, firstMessage: "[Image converted from image/webp to image/png.]", folder: "x") == "x")
+        #expect(SessionName.display(name: nil, firstMessage: "看这张\n\n" + note, folder: "x") == "看这张")
+        #expect(SessionName.display(name: nil, firstMessage: "看这张\n\n[Image: original 3000x2", folder: "x") == "看这张")
+        #expect(SessionName.display(name: nil, firstMessage: "看这张\n\n" + note + "\n\n", folder: "x") == "看这张")
+        #expect(SessionName.display(name: nil, firstMessage: "[Image converted from image/webp to image/png.]", folder: "x") == "x")
     }
 }
 #endif

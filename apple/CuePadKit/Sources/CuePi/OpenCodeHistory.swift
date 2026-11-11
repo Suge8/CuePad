@@ -88,7 +88,7 @@ struct OpenCodeMessage: Decodable, Sendable {
     }
 }
 
-/// 规则与各家同一处（`PiHistoryCheckpoint` 的 `said`、`answered`……），这里与 Pi 不同的只有：
+/// 规则与各家同一处（`HistoryCheckpoint` 的 `said`、`answered`……），这里与 Pi 不同的只有：
 /// - CuePad 发的那条在 `metadata.cuepadDelivery` 里带着投送请求 id。
 /// - 助手的一步是一条 `assistant`：`finish` 为 `tool-calls` 的只累计工具，其余结束一轮；工具的成败就在同一条里（`state.status`），结果里的图是 `state.content` 里的图片文件块。
 /// - `idle` 标记一轮彻底结束（被停止、出错时没有最后的回答）；被停下的那一步带 `aborted` 错误。
@@ -103,7 +103,7 @@ enum OpenCodeHistory {
         var cursor: String?
         /// 下一条消息的位置，也就是它的 seq
         var position: Int64 = 0
-        var history = PiHistoryCheckpoint()
+        var history = HistoryCheckpoint()
     }
 
     private static let pageSize = 100
@@ -111,11 +111,11 @@ enum OpenCodeHistory {
     /// `files` 是你的消息里的图片存进的附件目录。读到还没写完的一条就停：游标停在它前一条之后，下次从它重读。
     @concurrent static func read(
         _ client: OpenCodeClient, _ info: OpenCodeSessionInfo, from checkpoint: Checkpoint?, files: AttachmentFiles
-    ) async throws -> (checkpoint: Checkpoint, transcript: PiTranscript) {
+    ) async throws -> (checkpoint: Checkpoint, transcript: SessionTranscript) {
         var next = checkpoint ?? Checkpoint()
         next.history.sessionID = info.id
         next.history.cwd = info.location.directory
-        var transcript = PiHistory.Transcript(fallbackID: info.id, files: files)
+        var transcript = History.Transcript(fallbackID: info.id, files: files)
         while true {
             let page = try await self.page(client, session: info.id, from: next.cursor, limit: pageSize)
             if let unfinished = page.data.firstIndex(where: { !$0.isComplete }) {
@@ -127,7 +127,7 @@ enum OpenCodeHistory {
             if let cursor = page.cursor?.next, !page.data.isEmpty { next.cursor = cursor }
             guard page.data.count == pageSize else { break }
         }
-        return (next, PiTranscript(sessionID: info.id, messages: transcript.messages, recap: next.history.projectedRecap))
+        return (next, SessionTranscript(sessionID: info.id, messages: transcript.messages, recap: next.history.projectedRecap))
     }
 
     @concurrent private static func page(
@@ -137,15 +137,15 @@ enum OpenCodeHistory {
         return try await client.get(OpenCodePage<OpenCodeMessage>.self, "/api/session/\(session)/message?limit=\(limit)&\(from)")
     }
 
-    private static func ingest(_ message: OpenCodeMessage, at checkpoint: inout Checkpoint, _ transcript: inout PiHistory.Transcript) throws {
+    private static func ingest(_ message: OpenCodeMessage, at checkpoint: inout Checkpoint, _ transcript: inout History.Transcript) throws {
         try ingest(message, seq: checkpoint.position, &checkpoint.history, &transcript)
         checkpoint.position += 1
     }
 
-    static func ingest(_ message: OpenCodeMessage, seq: Int64, _ cp: inout PiHistoryCheckpoint, _ transcript: inout PiHistory.Transcript) throws {
+    static func ingest(_ message: OpenCodeMessage, seq: Int64, _ cp: inout HistoryCheckpoint, _ transcript: inout History.Transcript) throws {
         cp.seq = seq
         cp.lastActivity = message.at
-        let entry = PiHistory.Entry(id: message.id, seq: seq, at: message.at)
+        let entry = History.Entry(id: message.id, seq: seq, at: message.at)
         switch message.type {
         case "user":
             var said = transcript.said()
@@ -157,7 +157,7 @@ enum OpenCodeHistory {
         case "assistant":
             for tool in message.content ?? [] where tool.type == "tool" {
                 let id = tool.id ?? ""
-                cp.toolStarted(id: id, name: tool.name ?? "", arguments: tool.state?.input?.arguments ?? PiToolArguments())
+                cp.toolStarted(id: id, name: tool.name ?? "", arguments: tool.state?.input?.arguments ?? ToolArguments())
                 if tool.state?.error?.message == Self.declinedTool {
                     cp.toolDeclined(id: id)
                 } else if let status = tool.state?.status, status == "completed" || status == "error" {

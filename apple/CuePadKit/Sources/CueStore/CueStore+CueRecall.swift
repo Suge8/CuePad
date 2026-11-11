@@ -13,8 +13,8 @@ public struct CueRecall: Equatable, Sendable {
   }
 
   public struct Reply: Equatable, Sendable {
-    public var message: PiChatMessage
-    public var session: PiSessionState?
+    public var message: ChatMessage
+    public var session: SessionState?
   }
 }
 
@@ -42,7 +42,7 @@ extension CueStore {
     found.unlisted.cards = try unlisted("cards", card, limit)
     let reply: RecallQuery
     (found.replies, reply) = try recallReplies(patterns, limit: limit)
-    found.unlisted.replies = try unlisted(PiChatMessage.table.rawValue, reply, limit)
+    found.unlisted.replies = try unlisted(ChatMessage.table.rawValue, reply, limit)
     return found
   }
 
@@ -54,10 +54,10 @@ extension CueStore {
   }
 
   private func recallReplies(_ patterns: [any SQLBindable], limit: Int) throws -> (found: [CueRecall.Reply], query: RecallQuery) {
-    let scope = "role = '\(PiChatRole.pi.rawValue)' AND sessionID IN (\(Self.cueSessions))"
-    let reply = try recallQuery(from: PiChatMessage.table.rawValue, where: scope, hit: Self.recallText, patterns, length: "length(text)", then: "at DESC, id")
-    let replies = try select(PiChatMessage.self, where: reply.condition, reply.arguments, orderBy: reply.orderBy, limit: limit)
-    var sessions: [String: PiSessionState] = [:]
+    let scope = "role = '\(ChatRole.pi.rawValue)' AND sessionID IN (\(Self.cueSessions))"
+    let reply = try recallQuery(from: ChatMessage.table.rawValue, where: scope, hit: Self.recallText, patterns, length: "length(text)", then: "at DESC, id")
+    let replies = try select(ChatMessage.self, where: reply.condition, reply.arguments, orderBy: reply.orderBy, limit: limit)
+    var sessions: [String: SessionState] = [:]
     for id in Set(replies.map(\.sessionID)) { sessions[id] = try sessionState(id) }
     return (replies.map { CueRecall.Reply(message: $0, session: sessions[$0.sessionID]) }, reply)
   }

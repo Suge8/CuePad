@@ -26,7 +26,7 @@ struct OpenCodeServiceInfo: Equatable, Sendable {
     }
 
     /// 服务进程的启动时刻：会话在线的规则以它为界（见 `OpenCodeRuntime`）。进程已不在为 nil。
-    var startedAt: Date? { PiProcess.running(pid: pid)?.startDate }
+    var startedAt: Date? { SessionProcess.running(pid: pid)?.startDate }
 }
 
 struct OpenCodeAPIError: Error, Equatable {
@@ -196,10 +196,10 @@ struct OpenCodePrompt: Decodable, Sendable {
     struct Metadata: Decodable, Sendable { var cuepadDelivery: String? }
 }
 
-/// 工具调用的参数：原文（`json`），与摘要（`PiToolLog`）认的那几项；OpenCode 的替换写成 `oldString`/`newString`，换成摘要认的写法再解。
+/// 工具调用的参数：原文（`json`），与摘要（`ToolLog`）认的那几项；OpenCode 的替换写成 `oldString`/`newString`，换成摘要认的写法再解。
 struct OpenCodeToolInput: Decodable, Sendable {
     var json: JSONValue
-    var arguments: PiToolArguments
+    var arguments: ToolArguments
 
     private struct Replacement: Decodable {
         var path: String?
@@ -214,9 +214,9 @@ struct OpenCodeToolInput: Decodable, Sendable {
         json = try JSONValue(from: decoder)
         let replacement = try? Replacement(from: decoder)
         if let replacement, replacement.oldString != nil || replacement.newString != nil {
-            arguments = try JSONDecoder().decode(PiToolArguments.self, from: replacement.recoded())
+            arguments = try JSONDecoder().decode(ToolArguments.self, from: replacement.recoded())
         } else {
-            arguments = try PiToolArguments(from: decoder)
+            arguments = try ToolArguments(from: decoder)
         }
     }
 }
@@ -298,22 +298,22 @@ struct OpenCodeModel: Decodable, Sendable {
     struct Limit: Decodable, Sendable { var context: Int? }
     struct Capabilities: Decodable, Sendable { var input: [String]? }
 
-    var key: PiModelKey { PiModelKey(provider: providerID, id: id) }
+    var key: ModelKey { ModelKey(provider: providerID, id: id) }
 
     /// 强度只认 Pi 那几档的名字；没有强度可选的模型只有 `off`（与 Pi 的规则一致）。
-    var thinkingLevels: [PiThinkingLevel] {
-        let levels = (variants ?? []).compactMap { PiThinkingLevel(rawValue: $0.id) }
+    var thinkingLevels: [ThinkingLevel] {
+        let levels = (variants ?? []).compactMap { ThinkingLevel(rawValue: $0.id) }
         return levels.isEmpty ? [.off] : levels
     }
 
     var seesImages: Bool? { capabilities?.input.map { $0.contains("image") } }
 
-    var option: PiModelOption {
-        PiModelOption(key: key, name: name, thinkingLevels: thinkingLevels, acceptsImages: seesImages)
+    var option: ModelOption {
+        ModelOption(key: key, name: name, thinkingLevels: thinkingLevels, acceptsImages: seesImages)
     }
 
     /// 这档强度在这个模型上的写法（`variant`）：夹到它有的档，夹到 `off`（含没有强度可选的模型）就不带。
-    func variant(for level: PiThinkingLevel) -> String? {
+    func variant(for level: ThinkingLevel) -> String? {
         let level = level.clamped(to: thinkingLevels)
         return level == .off ? nil : level.rawValue
     }

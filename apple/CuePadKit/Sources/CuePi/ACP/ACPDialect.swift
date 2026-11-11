@@ -13,7 +13,7 @@ protocol ACPDialect: Sendable {
     /// `session/prompt` 先进 Agent 自己的队列、跑起来时报 `ACPSignal.turnStarted`：报之前不插话（Grok 会把插话先跑成一轮，排到这句前面），等它报了再插
     var queuesPrompts: Bool { get }
     /// 正忙时把这句并进在跑的这一轮：做不到（标准没有这个动作）返回 nil，驱动等这一轮做完再以它开新一轮；并进了返回这家怎么认它被收下
-    @MainActor func steer(_ text: String, images: [PiImage], session: String, on connection: ACPConnection) async throws -> ACPSteer?
+    @MainActor func steer(_ text: String, images: [MessageImage], session: String, on connection: ACPConnection) async throws -> ACPSteer?
     /// 改会话名：做不到返回 false
     @MainActor func rename(_ name: String, session: String, cwd: URL, on connection: ACPConnection) async throws -> Bool
     /// `session/prompt` 的 `_meta`：带上 CuePad 的投送请求 id，好在会话记录里认回（`deliveryID` 为 nil 是 CuePad 自己起的话）
@@ -55,7 +55,7 @@ extension ACPDialect {
     var connectsMCPLater: Bool { false }
     var queuesPrompts: Bool { false }
 
-    @MainActor func steer(_ text: String, images: [PiImage], session: String, on connection: ACPConnection) async throws -> ACPSteer? { nil }
+    @MainActor func steer(_ text: String, images: [MessageImage], session: String, on connection: ACPConnection) async throws -> ACPSteer? { nil }
 
     @MainActor func rename(_ name: String, session: String, cwd: URL, on connection: ACPConnection) async throws -> Bool { false }
 
@@ -75,7 +75,7 @@ extension ACPDialect {
 }
 
 enum ACPContent {
-    static func prompt(text: String, images: [PiImage]) -> [JSONValue] {
+    static func prompt(text: String, images: [MessageImage]) -> [JSONValue] {
         let text: [JSONValue] = text.isEmpty ? [] : [["type": "text", "text": .string(text)]]
         return text + images.map { ["type": "image", "mimeType": .string($0.mimeType), "data": .string($0.data.base64EncodedString())] }
     }

@@ -6,10 +6,10 @@ import Testing
 
 extension MCPTests {
   /// Cue 在 mac-a 上用 Pi 当大脑：Pi 的 Opus 花 Max 账号的额度（本周用了 86%，卡着），终端里的 Claude Code 也能用，Codex 没登录。
-  private static let opus = PiModelOption(
-    key: PiModelKey(provider: "anthropic", id: "claude-opus-5-5"), name: "Claude Opus 5.5", thinkingLevels: [.low, .medium, .high],
+  private static let opus = ModelOption(
+    key: ModelKey(provider: "anthropic", id: "claude-opus-5-5"), name: "Claude Opus 5.5", thinkingLevels: [.low, .medium, .high],
     account: PiAccount(kind: .oauth, scope: "max-1"), supportsFast: true)
-  private static let gpt = PiModelOption(key: PiModelKey(provider: "openai-codex", id: "gpt-6"), name: "GPT-6", thinkingLevels: [.low, .high])
+  private static let gpt = ModelOption(key: ModelKey(provider: "openai-codex", id: "gpt-6"), name: "GPT-6", thinkingLevels: [.low, .high])
 
   private static func enable(_ store: CueStore) async throws {
     try await store.updateCueProfile {
@@ -20,7 +20,7 @@ extension MCPTests {
       host: "mac-a", name: "工作室",
       [
         MacAgent(kind: .pi, model: opus.key, models: [opus, gpt]),
-        MacAgent(kind: .claudeCode, model: PiModelKey(provider: "claude", id: "opus"), models: []),
+        MacAgent(kind: .claudeCode, model: ModelKey(provider: "claude", id: "opus"), models: []),
       ],
       problems: [MacAgentProblem(kind: .codex, reason: .notLoggedIn)])
   }

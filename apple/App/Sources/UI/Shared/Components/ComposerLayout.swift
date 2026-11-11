@@ -9,7 +9,7 @@ enum ComposerMetrics {
     static let glyphTarget: CGFloat = 44
     static let noticeSpacing: CGFloat = 4
     static let noticePadding: CGFloat = 8
-    /// 会话页对话末尾按动态字号缩放它（`PiConversation`），外边距不缩放。
+    /// 会话页对话末尾按动态字号缩放它（`Conversation`），外边距不缩放。
     static let noticeTextHeight: CGFloat = 2 * 16 + noticeSpacing
 
     static func noticeClearance(textHeight: CGFloat) -> CGFloat {

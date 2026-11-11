@@ -15,13 +15,13 @@ import CueStore
 
 extension SendContent {
     /// 原图与类型交给 Agent、由它自行缩放；图不在本机或认不出格式抛 `SendError.attachmentUnavailable`。
-    func piImages(from files: AttachmentFiles) throws -> [PiImage] {
-        try tokens.compactMap { token -> PiImage? in
+    func piImages(from files: AttachmentFiles) throws -> [MessageImage] {
+        try tokens.compactMap { token -> MessageImage? in
             guard case .image(let key) = token else { return nil }
             guard let url = files.fileURL(for: key), let data = try? Data(contentsOf: url), let mimeType = ImageFiles.mimeType(of: data) else {
                 throw SendError.attachmentUnavailable(key)
             }
-            return PiImage(mimeType: mimeType, data: data)
+            return MessageImage(mimeType: mimeType, data: data)
         }
     }
 

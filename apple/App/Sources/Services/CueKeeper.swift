@@ -23,7 +23,7 @@ import os
 /// 平铺的对话视图（`CueView`，最近的对话与每一轮的经过）加信封；之后同一个会话里只往后加信封。
 /// 记忆的待合并的块不进 Cue 的轮：后台另起一次性的大脑合（`dreams`），不碰 Cue 的上下文与缓存，回你的那一轮不等它。
 /// 生命周期只有一个 `Phase`：起大脑中 → 值班（可能在跑一轮）→ 出问题后等着重起（没有终态，一直试下去）；Cue 此刻在做什么（`work`）由它直接得出，
-/// 每次对完账写进库（`PiStateRecorder.updateCue`；值班结束时由 `CueService` 写回歇着），大脑好不好写进本机的健康文件（`CueHealth`，`writeHealth`）。
+/// 每次对完账写进库（`StateRecorder.updateCue`；值班结束时由 `CueService` 写回歇着），大脑好不好写进本机的健康文件（`CueHealth`，`writeHealth`）。
 ///
 /// 对账：库一变（订阅，不轮询）、大脑有事件、定时器到点，都重新对一次账。定时器只有一个（`timer`），每次对账重排成最早的那个：
 /// 歇着时下一个定时、巡视或停住，等着重起时重起的时刻，一轮在跑时看门狗，你的话退回没写成时的再试与绕行里的重置时刻（`alarm`）。
@@ -76,7 +76,7 @@ final class CueKeeper {
     nonisolated static let roundsKept = 50
 
     struct Setup {
-        var recorder: PiStateRecorder
+        var recorder: StateRecorder
         /// 找起大脑要的可执行文件等（不问登录）
         var launch: @Sendable (AgentKind) async throws -> CueLaunch?
         var helper: URL
@@ -105,7 +105,7 @@ final class CueKeeper {
     var phase = Phase.starting(failures: 0)
     var brainSettings: BrainSettings?
     var shifts = 0
-    /// 最近告诉过你的那个错（`PiErrorSummary.line`）：同一个错一轮轮重复（如额度）只说一次
+    /// 最近告诉过你的那个错（`ErrorSummary.line`）：同一个错一轮轮重复（如额度）只说一次
     var toldFailure: String?
     var setback: Setback?
     /// 对账的唯一定时器（`schedule`），每次对账重排成最早的那个（`alarm`）
@@ -147,9 +147,9 @@ final class CueKeeper {
     var rounds: [CueRound] { turn.map { history + [$0.round] } ?? history }
     /// 在回答你的这一轮正在说的话（只在内存，不进 `cueState`、不入库、不同步）：只有 Cue 页末尾读它，出字时对话列表不重算。
     /// 说完的留着，由 Cue 页在对话里出现它之后换下；下一轮开始、大脑出问题时清掉。
-    let speech = PiDraftFeed()
+    let speech = LiveDraftFeed()
 
-    var work: (state: PiWorkState, detail: String?, step: CueActivity.Touch?, row: UUID?) {
+    var work: (state: WorkState, detail: String?, step: CueActivity.Touch?, row: UUID?) {
         switch phase {
         case .restarting(let failures, let reason, _) where setup.timing.isDown(after: failures): return (.error, reason.text, nil, nil)
         case .starting, .restarting: return (.settled, nil, nil, nil)

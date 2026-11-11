@@ -53,7 +53,7 @@ extension OpenCodeRuntime {
             await change(sessionID, connection) { $0.info.model = data.model }
         case "session.inbox.enqueued":
             await change(sessionID, connection, activeAt: event.at) {
-                if $0.firstMessage == nil { $0.firstMessage = data.item?.payload?.text.map { String($0.prefix(PiSessionName.firstMessageLimit)) } }
+                if $0.firstMessage == nil { $0.firstMessage = data.item?.payload?.text.map { String($0.prefix(SessionName.firstMessageLimit)) } }
             }
         case "session.inbox.delivered":
             enqueueIngest(sessionID, urgent: true)
@@ -95,7 +95,7 @@ extension OpenCodeRuntime {
             case .turnStarted:
                 tracked.facts.startTurn(at: .now)
             case .context(let used, let window):
-                tracked.context = window.map { PiContextUsage(tokens: used, window: $0) }
+                tracked.context = window.map { ContextUsage(tokens: used, window: $0) }
             case .tool(_, let name, let arguments):
                 tracked.facts.work(.tool, detail: ToolDetail.line(name, JSONValue.parse(Data(arguments.utf8))))
             case .toolDone:
@@ -171,7 +171,7 @@ extension OpenCodeRuntime {
         publish(parent)
     }
 
-    func subagent(_ id: String, of parent: String, _ body: (inout PiSubagentState) -> Void) {
+    func subagent(_ id: String, of parent: String, _ body: (inout SubagentState) -> Void) {
         guard var tracked = sessions[parent] else { return }
         let now = Date()
         if !tracked.facts.subagents.contains(where: { $0.id == id }) { tracked.facts.startSubagent(id, name: "", role: "", at: now) }
@@ -194,27 +194,27 @@ extension OpenCodeRuntime {
         return (kind, String(rest[0]), String(rest[1]))
     }
 
-    static func question(_ permission: OpenCodePermission) -> PiQuestion {
+    static func question(_ permission: OpenCodePermission) -> Question {
         let text = PermissionWording.question(.opencode, String(localized: "使用 \(permission.action)"), permission.resources)
-        return PiQuestion(
+        return Question(
             promptID: prompt(.permission, permission.sessionID, permission.id), kind: .select, text: text,
             options: [allowOnce, allowAlways, reject])
     }
 
     /// 只有一个字段的表单能从 CuePad 答（`question` 工具问一个问题时就是这样）：有选项的是选择，文字是填空，是否是确认；其余只能在 OpenCode 里答。
-    static func question(_ form: OpenCodeForm) -> PiQuestion {
+    static func question(_ form: OpenCodeForm) -> Question {
         guard form.fields.count == 1, let field = form.fields.first else {
-            return PiQuestion(promptID: nil, kind: .unknown("form"), text: String((form.title ?? "").prefix(500)))
+            return Question(promptID: nil, kind: .unknown("form"), text: String((form.title ?? "").prefix(500)))
         }
         let text = String([field.title, field.description].compactMap { $0 }.joined(separator: "\n").prefix(500))
         switch field.type {
         case "string" where field.options?.isEmpty == false:
-            return PiQuestion(
+            return Question(
                 promptID: prompt(.form, form.sessionID, form.id), kind: .select, text: text, options: field.options!.map(\.label),
                 allowsOther: field.custom == true)
-        case "string": return PiQuestion(promptID: prompt(.form, form.sessionID, form.id), kind: .text, text: text)
-        case "boolean": return PiQuestion(promptID: prompt(.form, form.sessionID, form.id), kind: .confirm, text: text)
-        default: return PiQuestion(promptID: nil, kind: .unknown(field.type), text: text)
+        case "string": return Question(promptID: prompt(.form, form.sessionID, form.id), kind: .text, text: text)
+        case "boolean": return Question(promptID: prompt(.form, form.sessionID, form.id), kind: .confirm, text: text)
+        default: return Question(promptID: nil, kind: .unknown(field.type), text: text)
         }
     }
 }

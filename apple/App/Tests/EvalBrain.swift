@@ -21,7 +21,7 @@ import Testing
 struct EvalBrain {
     let runtime: AgentKind
     let model: String
-    let effort: PiThinkingLevel
+    let effort: ThinkingLevel
 
     static let current: EvalBrain = {
         let runtime: AgentKind = switch evalEnvironment["CUEPAD_CUE_EVAL_RUNTIME"] {
@@ -36,7 +36,7 @@ struct EvalBrain {
         }
         return EvalBrain(
             runtime: runtime, model: evalEnvironment["CUEPAD_CUE_EVAL_MODEL"] ?? model,
-            effort: evalEnvironment["CUEPAD_CUE_EVAL_EFFORT"].flatMap(PiThinkingLevel.init(rawValue:)) ?? .medium)
+            effort: evalEnvironment["CUEPAD_CUE_EVAL_EFFORT"].flatMap(ThinkingLevel.init(rawValue:)) ?? .medium)
     }()
 
     var label: String { "\(runtime.name) · \(model) · \(effort.rawValue)" }

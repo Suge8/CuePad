@@ -18,7 +18,7 @@ extension ClaudeTerminalSession {
         show(at: .now)
     }
 
-    /// 这一轮在会话文件里被停下了（中断标记，`PiHistoryCheckpoint.stoppedAt`）：终端里按 Esc（停下在跑的工具、拒绝确认）时
+    /// 这一轮在会话文件里被停下了（中断标记，`HistoryCheckpoint.stoppedAt`）：终端里按 Esc（停下在跑的工具、拒绝确认）时
     /// Claude Code 一个钩子都不跑（2.1.299 实测），会话文件与登记文件（`registryChanged`）说明这一轮结束了，哪个先读到算哪个。与 `Stop` 同样收尾；停下之后才开的一轮不算。
     func stopped(at date: Date) {
         guard facts.running, let start = facts.turnStartedAt, start <= date else { return }
@@ -29,7 +29,7 @@ extension ClaudeTerminalSession {
 
     /// 新旧只按记录里的位置分，不拿那一行的时刻与钩子比：CuePad 重启、读规则升级都会从头重读，旧的那一行再来一次
     /// （之前挡下的那句、之后又交上同一句时会被吞掉）；接上之前、已读过的位置之前的都不算。
-    func recorded(_ signals: [PiRecordSignal], through offset: UInt64) {
+    func recorded(_ signals: [RecordSignal], through offset: UInt64) {
         for signal in signals where signal.end > recordRead {
             switch signal.kind {
             case .promptRefused(let text): refused(text)

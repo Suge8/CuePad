@@ -41,9 +41,9 @@ extension RealOpenCodeTests {
 
     @Test func aSessionWhoseModelCannotBeSetIsNotLeftInTheService() async throws {
         try await withOpenCode { sandbox, store, bridge, runtime in
-            await #expect(throws: PiBridgeError.unknownModel(.opencode)) {
+            await #expect(throws: BridgeError.unknownModel(.opencode)) {
                 _ = try await runtime.open(
-                    in: sandbox.work, launchToken: "token-bad", name: "配不上", model: PiModelKey(provider: openCodeTestModel.provider, id: "no-such-model"), thinking: nil)
+                    in: sandbox.work, launchToken: "token-bad", name: "配不上", model: ModelKey(provider: openCodeTestModel.provider, id: "no-such-model"), thinking: nil)
             }
             #expect(session(bridge) == nil)
             let listed = try await sandbox.api("GET", "/api/session")["data"] as? [Any]
@@ -61,7 +61,7 @@ extension RealOpenCodeTests {
             let opened = try #require(bridge.session(id: id))
             #expect(opened.agent == .opencode && opened.hosted && opened.launchToken == "token-1" && sandbox.service != nil)
             let image = pngData(width: 8, height: 8, shade: 0.9)
-            try await bridge.send(PiMessage(text: "Reply with exactly the word SEEN.", images: [PiImage(mimeType: "image/png", data: image)]), to: id)
+            try await bridge.send(SessionMessage(text: "Reply with exactly the word SEEN.", images: [MessageImage(mimeType: "image/png", data: image)]), to: id)
             let hash = SHA256.hash(data: image).map { String(format: "%02x", $0) }.joined() + ".png"
             try await eventually("带图的那句与回答进了对话") {
                 let messages = try await store.piMessages(of: opened.sessionID)
@@ -72,19 +72,19 @@ extension RealOpenCodeTests {
             #expect(sandbox.model.requests.contains { $0.prompt.contains("SEEN") && $0.images.count == 1 }, "假模型没收到图")
 
             sandbox.model.on("Explore the folder", .call("subagent", ["agent": "explore", "description": "find-readme", "prompt": "list the files in the current directory."]), .say("DONE"))
-            try await bridge.send(PiMessage(text: "Explore the folder"), to: id)
+            try await bridge.send(SessionMessage(text: "Explore the folder"), to: id)
             try await eventually("子代理出现、做完") {
                 session(bridge)?.subagents.contains { $0.name == "find-readme" && $0.role == "explore" && $0.phase == .known(.done) } == true
             }
             try await eventually("这一轮做完") { session(bridge)?.state == .settled }
 
             // 选择题：选一个，再换一次自己填一个不在选项里的答案（OpenCode 的选择题本身允许自己填）
-            for (ask, options, answer, expected) in [("Ask the color", ["Red", "Blue"], PiAnswerValue.option("Blue"), "Blue"), ("Ask the color again", ["Red", "Blue"], .text("Green"), "Green")] {
+            for (ask, options, answer, expected) in [("Ask the color", ["Red", "Blue"], AnswerValue.option("Blue"), "Blue"), ("Ask the color again", ["Red", "Blue"], .text("Green"), "Green")] {
                 let questions: [[String: any Sendable]] = [["header": "Color", "question": "Which color?", "options": options.map { ["label": $0, "description": $0] }]]
                 sandbox.model.on(ask) { request in
                     request.step == 0 ? .call("question", ["questions": questions]) : .say(request.results.last?.firstMatch(of: /="([^"]*)"/).map { String($0.1) } ?? "NO ANSWER")
                 }
-                try await bridge.send(PiMessage(text: ask), to: id)
+                try await bridge.send(SessionMessage(text: ask), to: id)
                 try await eventually("在等你回答") { session(bridge)?.question?.kind == .known(.select) }
                 let question = try #require(session(bridge)?.question)
                 #expect(question.options == options && question.allowsOther)
@@ -102,7 +102,7 @@ extension RealOpenCodeTests {
 
             let resumed = try await runtime.resume(indexed)
             #expect(bridge.session(id: resumed)?.sessionID == opened.sessionID)
-            try await bridge.send(PiMessage(text: "Reply with exactly the word BACK."), to: resumed)
+            try await bridge.send(SessionMessage(text: "Reply with exactly the word BACK."), to: resumed)
             try await eventually("接着说的回答到了") { try await replies(store, opened.sessionID).last?.contains("BACK") == true }
 
             try await sandbox.api("DELETE", "/api/session/\(opened.sessionID)")
@@ -118,7 +118,7 @@ extension RealOpenCodeTests {
         try await withOpenCode { sandbox, store, bridge, runtime in
             let id = try await runtime.open(in: sandbox.work, launchToken: "token-r", name: nil, model: nil, thinking: nil)
             let sessionID = try #require(bridge.session(id: id)?.sessionID)
-            try await bridge.send(PiMessage(text: "Reply with exactly the word FIRST."), to: id)
+            try await bridge.send(SessionMessage(text: "Reply with exactly the word FIRST."), to: id)
             try await eventually("第一句答完") { try await replies(store, sessionID).last?.contains("FIRST") == true && session(bridge)?.state == .settled }
 
             try await bridge.end(id)
@@ -132,7 +132,7 @@ extension RealOpenCodeTests {
             let resumed = try await restarted.resume(indexed)
             #expect(bridge.session(id: resumed)?.sessionID == sessionID)
             let sent = sandbox.model.requests.count
-            try await bridge.send(PiMessage(text: "Reply with exactly the word SECOND."), to: resumed)
+            try await bridge.send(SessionMessage(text: "Reply with exactly the word SECOND."), to: resumed)
             try await eventually("接着说的回答到了") { try await replies(store, sessionID).last?.contains("SECOND") == true }
             let request = try #require(sandbox.model.requests.dropFirst(sent).first { $0.prompt.contains("SECOND") })
             #expect(request.said.contains { $0.contains("FIRST") }, "模型收到的对话里没有之前说过的：\(request.said)")

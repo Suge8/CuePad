@@ -63,17 +63,17 @@ final class AppSettings {
 
     private static let seenLimit = 500
 
-    func isUnread(_ session: PiSessionState) -> Bool {
-        PiUnread.isUnread(session, seen: sessionSeen[session.sessionID], since: unreadSince)
+    func isUnread(_ session: SessionState) -> Bool {
+        Unread.isUnread(session, seen: sessionSeen[session.sessionID], since: unreadSince)
     }
 
-    func canMarkUnread(_ session: PiSessionState) -> Bool {
-        PiUnread.canMarkUnread(session, seen: sessionSeen[session.sessionID], since: unreadSince)
+    func canMarkUnread(_ session: SessionState) -> Bool {
+        Unread.canMarkUnread(session, seen: sessionSeen[session.sessionID], since: unreadSince)
     }
 
-    func markUnread(_ session: PiSessionState) { markSeen(session, at: PiUnread.markedUnread(session)) }
+    func markUnread(_ session: SessionState) { markSeen(session, at: Unread.markedUnread(session)) }
 
-    func markSeen(_ session: PiSessionState, at date: Date = .now) {
+    func markSeen(_ session: SessionState, at date: Date = .now) {
         var seen = sessionSeen
         seen[session.sessionID] = date
         if seen.count > Self.seenLimit {
@@ -142,7 +142,7 @@ final class AppSettings {
         setReplyNotes(notes, for: session)
     }
 
-    func quote(_ preview: PiPreview, in entry: UUID, for session: UUID) {
+    func quote(_ preview: PreviewItem, in entry: UUID, for session: UUID) {
         let notes = replyNotes(for: session)
         guard !notes.contains(where: { $0.preview == preview.id }) else { return }
         setReplyNotes(notes + [ReplyNote(quoting: preview, in: entry)], for: session)

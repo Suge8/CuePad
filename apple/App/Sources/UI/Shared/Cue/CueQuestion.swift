@@ -14,7 +14,7 @@ struct CueQuestionLine<Below: View>: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: Spacing.item) {
-            if tone != .ended { PiStateGlyph(status: .asking).font(Typography.title).readerHidden(true) }
+            if tone != .ended { StateGlyph(status: .asking).font(Typography.title).readerHidden(true) }
             VStack(alignment: .leading, spacing: Spacing.tight) {
                 VStack(alignment: .leading, spacing: Spacing.tight) {
                     line.fixedSize(horizontal: false, vertical: true)

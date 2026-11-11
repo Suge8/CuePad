@@ -39,7 +39,7 @@ extension WideColumnController: UIDropInteractionDelegate {
             }
         } else {
             load(DraggedSession.self, type: .cuepadSession, from: provider) {
-                self.workspace.openSession(PiSessionState.recordID(sessionID: $0.sessionID), sessionID: $0.sessionID, in: column)
+                self.workspace.openSession(SessionState.recordID(sessionID: $0.sessionID), sessionID: $0.sessionID, in: column)
             }
         }
     }

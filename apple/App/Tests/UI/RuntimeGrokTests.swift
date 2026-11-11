@@ -48,9 +48,9 @@ struct RuntimeGrokTests {
         try await store.recordMacPresence(host: TestApp.hostID) { true }
         let entries: [[String: Any]] = [
             ["session_id": "stale", "pid": unrelated.pid, "cwd": app.directory.path],
-            ["session_id": "stale", "pid": wrongSession.pid, "pid_start": try #require(PiProcess.running(pid: wrongSession.pid)).startedAt - 1, "cwd": app.directory.path],
-            ["session_id": "stale", "pid": oldRound.pid, "pid_start": try #require(PiProcess.running(pid: oldRound.pid)).startedAt, "cwd": app.directory.path],
-            ["session_id": "live", "pid": current.pid, "pid_start": try #require(PiProcess.running(pid: current.pid)).startedAt, "cwd": app.directory.path],
+            ["session_id": "stale", "pid": wrongSession.pid, "pid_start": try #require(SessionProcess.running(pid: wrongSession.pid)).startedAt - 1, "cwd": app.directory.path],
+            ["session_id": "stale", "pid": oldRound.pid, "pid_start": try #require(SessionProcess.running(pid: oldRound.pid)).startedAt, "cwd": app.directory.path],
+            ["session_id": "live", "pid": current.pid, "pid_start": try #require(SessionProcess.running(pid: current.pid)).startedAt, "cwd": app.directory.path],
         ]
         try JSONSerialization.data(withJSONObject: entries).write(to: home.appending(path: "active_sessions.json"))
         let events = app.pi.changes()
@@ -70,7 +70,7 @@ struct RuntimeGrokTests {
         #expect(summary.tally.moving == 1)
         let live = try #require(app.pi.session(sessionID: "live"))
         #expect(live.capabilities == [])
-        await #expect(throws: PiBridgeError.self) { try await app.pi.send(PiMessage(text: "不应交出"), to: live.id) }
+        await #expect(throws: BridgeError.self) { try await app.pi.send(SessionMessage(text: "不应交出"), to: live.id) }
         func append(_ kind: String, session: String, file: URL) throws {
             let update: [String: Any] = kind == "user_message_chunk"
                 ? ["sessionUpdate": kind, "content": ["type": "text", "text": "现在继续"]] : ["sessionUpdate": kind]
@@ -87,7 +87,7 @@ struct RuntimeGrokTests {
         _ = try await eventually(store, { try $0.piSessions(sessionIDs: ["stale"])["stale"]?.state }) { $0?.runtimeState.isWorking == true }
         #expect(app.pi.session(sessionID: "stale")?.pid == oldRound.pid)
         try append("turn_completed", session: "live", file: liveFile)
-        runtime.read(try PiHistory.index(file: liveFile, agent: .grok, from: nil, files: store.files))
+        runtime.read(try History.index(file: liveFile, agent: .grok, from: nil, files: store.files))
         _ = try await eventually(store, { try $0.piSessions(sessionIDs: ["live"])["live"]?.state }) { $0?.runtimeState == .known(.settled) }
         let retained = entries.filter { $0["session_id"] as? String != "live" }
         try JSONSerialization.data(withJSONObject: retained).write(to: home.appending(path: "active_sessions.json"), options: .atomic)

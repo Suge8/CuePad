@@ -9,7 +9,7 @@ import Testing
 @MainActor
 @Suite(.releasesLibraries)
 struct DeliveryConfirmationTests {
-    func session(_ app: TestApp) async throws -> (PiSessionState, FakeExtension, URL) {
+    func session(_ app: TestApp) async throws -> (SessionState, FakeExtension, URL) {
         let id = UUID().uuidString.lowercased()
         let file = app.piPaths.sessionsDirectory.appending(path: "--confirmation--/\(id).jsonl")
         try Self.write([], session: id, cwd: app.directory.path, to: file)
@@ -20,14 +20,14 @@ struct DeliveryConfirmationTests {
         return (try #require(try await app.services.store.allPiSessionStates().first { $0.sessionID == id }), ext, file)
     }
 
-    func say(_ text: String, to target: PiSessionState, in app: TestApp) async throws -> DeliveryRequest {
+    func say(_ text: String, to target: SessionState, in app: TestApp) async throws -> DeliveryRequest {
         let box = app.services.settings.replyDraftBinding(for: target.id)
         box.wrappedValue = ComposerDraft(text: text)
         await Workspace(services: app.services).speak(to: .session(target, mode: .send), from: box) { $0.stored }.value
         return try #require(try await app.services.store.deliveryRequests().first { $0.content == text })
     }
 
-    nonisolated static func write(_ messages: [PiMessage], session: String, cwd: String, to file: URL) throws {
+    nonisolated static func write(_ messages: [SessionMessage], session: String, cwd: String, to file: URL) throws {
         let log = SessionFile(url: file, sessionID: session, cwd: cwd)
         try log.reset()
         for message in messages { try log.user(message.text, delivery: message.deliveryID) }
@@ -51,7 +51,7 @@ struct DeliveryConfirmationTests {
             let cwd = app.directory.path, session = target.sessionID
             ext.onCommand = { _, command in
                 if command["t"] as? String == "send" {
-                    let message = PiMessage(text: command["text"] as? String ?? "", deliveryID: command["deliveryId"] as? String)
+                    let message = SessionMessage(text: command["text"] as? String ?? "", deliveryID: command["deliveryId"] as? String)
                     do { try Self.write([message], session: session, cwd: cwd, to: file) }
                     catch { return ["ok": false, "error": "failed: \(error)"] }
                 }
@@ -85,7 +85,7 @@ struct DeliveryConfirmationTests {
         extB.onCommand = { _, command in
             if command["t"] as? String == "send" {
                 do {
-                    try Self.write([PiMessage(text: command["text"] as? String ?? "", deliveryID: command["deliveryId"] as? String)], session: sessionB, cwd: cwd, to: fileB)
+                    try Self.write([SessionMessage(text: command["text"] as? String ?? "", deliveryID: command["deliveryId"] as? String)], session: sessionB, cwd: cwd, to: fileB)
                 } catch { return ["ok": false, "error": "failed: \(error)"] }
             }
             return ["ok": true]

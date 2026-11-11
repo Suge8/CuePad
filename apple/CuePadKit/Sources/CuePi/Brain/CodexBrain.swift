@@ -27,7 +27,7 @@ final class CodexBrain: HostedSession {
     private var models: [CodexModel] = []
     /// 在用的模型（没给时是 `thread/start` 定下的默认）与要的强度：每轮随 `turn/start` 给
     private var model: CodexModel?
-    private var level: PiThinkingLevel?
+    private var level: ThinkingLevel?
     private var fast = false
 
     var events: AsyncStream<TurnEvent> { outlet.events }
@@ -72,7 +72,7 @@ final class CodexBrain: HostedSession {
         try await driver.open("thread/start", threadParams)
     }
 
-    func configure(model id: String?, effort: PiThinkingLevel?) async throws {
+    func configure(model id: String?, effort: ThinkingLevel?) async throws {
         guard driver.thread != nil else { throw HostedSessionError.notRunning }
         if let id {
             guard let found = models.first(where: { $0.id == id }) else { throw HostedSessionError.rejected(String(localized: "Codex 没有模型 \(id)")) }
@@ -83,7 +83,7 @@ final class CodexBrain: HostedSession {
     }
 
     /// 插进的话由服务按这一轮的编号收下（`expectedTurnId`）；这一轮刚好结束就开新的一轮。
-    func send(_ text: String, images: [PiImage], id: UUID) async throws {
+    func send(_ text: String, images: [MessageImage], id: UUID) async throws {
         guard let rpc = driver.rpc, let thread = driver.thread else { throw HostedSessionError.notRunning }
         let input = CodexRPC.input(text: text, images: images), client: JSONValue = .string(id.uuidString)
         if let active = driver.turn {

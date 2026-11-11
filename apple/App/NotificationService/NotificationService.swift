@@ -41,7 +41,7 @@ final class NotificationService: UNNotificationServiceExtension, @unchecked Send
             pending.withLock { $0 = Pending(content: content, deliver: handler) }
             let kind = tap.kind
             database.fetch(withRecordID: recordID) { record, _ in
-                if let record, let text = PiAlertText.content(for: record, kind: kind) { self.apply(text) }
+                if let record, let text = AlertText.content(for: record, kind: kind) { self.apply(text) }
                 self.finish()
             }
         case nil: handler(request.content)

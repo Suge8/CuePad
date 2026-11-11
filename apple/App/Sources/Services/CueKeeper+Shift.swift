@@ -44,7 +44,7 @@ extension CueKeeper {
 
     /// Cue 的班次与后台整理记忆的都经这里：工作目录是 Cue 自己的空目录，`tools` 是 `cuepad mcp` 后面的参数。
     func startBrain(
-        _ runtime: AgentKind, _ launch: CueLaunch, model: String?, effort: PiThinkingLevel?, fast: Bool = false, systemPrompt: String, tools: [String]
+        _ runtime: AgentKind, _ launch: CueLaunch, model: String?, effort: ThinkingLevel?, fast: Bool = false, systemPrompt: String, tools: [String]
     ) async throws -> any HostedSession {
         let work = setup.directory.appending(path: "work", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
@@ -140,7 +140,7 @@ extension CueKeeper {
                 if let turn, turn.answersYou { await reply(switched, in: turn) } else { await say(.cue, switched) }
                 return
             }
-            let summary = PiErrorSummary(raw)
+            let summary = ErrorSummary(raw)
             // Cue 自己醒来的一轮第一次出错（会重试的那种）先不说：多是网络偶发，重试也失败了再告诉你；你在等的一轮立刻说
             if turn?.selfStarted != nil, setback == nil, Self.retryable(summary) { return }
             // 同一个错一轮轮重复（如额度）只说一次：按摘要认，原文里常带每次不同的请求 id；卡住后慢速周期里换着家重来的错都不再说
@@ -170,7 +170,7 @@ extension CueKeeper {
             if let failure = finished.round.failure {
                 if finished.replay { await replay(finished, failure: failure) }
                 else if let woke = finished.selfStarted { await setBack(failure, retrying: woke, as: finished.author) }
-                else if !Self.retryable(PiErrorSummary(failure)) { await setBack(failure, retrying: .message, as: .cue) }
+                else if !Self.retryable(ErrorSummary(failure)) { await setBack(failure, retrying: .message, as: .cue) }
             } else {
                 let resolved = setback?.persistent != true || setback?.wake == finished.round.wake
                 // 卡着的那家又好好做完了别的一轮：卡住的那件不等慢速周期，马上重来
@@ -268,7 +268,7 @@ extension CueKeeper {
 
     private func setBack(_ failure: String, retrying wake: CueWake, as author: CueAuthor, now: Bool = false) async {
         if let held = setback, held.persistent, held.wake != wake { return }
-        let persistent = setback?.persistent == true || !Self.retryable(PiErrorSummary(failure))
+        let persistent = setback?.persistent == true || !Self.retryable(ErrorSummary(failure))
         let at = self.now
         let latest = try? await changes(at: at).due.filter { $0.kind != .stalled }.map(\.seq).max()
         let stalls = (setback?.stalls ?? 0) + (persistent && !now ? 1 : 0)

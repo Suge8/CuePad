@@ -285,7 +285,7 @@ extension CodexRuntime {
         try await rpc.call("thread/turns/list", ["threadId": .string(thread), "limit": 1])["data"]?.array?.first
     }
 
-    private static func phase(of turn: JSONValue?) -> PiSubagentPhase {
+    private static func phase(of turn: JSONValue?) -> SubagentPhase {
         switch turn?["status"]?.string {
         case "completed": .done
         case "failed": .failed
@@ -293,7 +293,7 @@ extension CodexRuntime {
         }
     }
 
-    private func settle(_ child: String, _ phase: PiSubagentPhase, summary: String?, in session: Tracked) {
+    private func settle(_ child: String, _ phase: SubagentPhase, summary: String?, in session: Tracked) {
         guard session.facts.inFlight.contains(child), session.unread[child] == nil else { return }
         session.facts.settleSubagent(child, phase, summary: summary, at: .now)
         session.lastWords[child] = nil

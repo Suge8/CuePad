@@ -16,7 +16,7 @@ struct SessionNamingTests {
 
     /// 替身：记下被要求起名时拿到的第一句话；`held` 时停在起名中，等测试 `release`；改名照 Pi 那样把会话名报回桥上。
     final class NamingLink: SessionLink {
-        weak var bridge: PiBridge?
+        weak var bridge: Bridge?
         var able = true
         var reply: Result<String, any Error> = .success(SessionNamingTests.suggested)
         var held = false
@@ -24,16 +24,16 @@ struct SessionNamingTests {
         private(set) var renamed: [String] = []
         private var waiting: CheckedContinuation<Void, Never>?
 
-        func canNameItself(_ id: PiSession.ID) -> Bool { able }
+        func canNameItself(_ id: Session.ID) -> Bool { able }
 
-        func suggestName(from firstMessage: String, in id: PiSession.ID) async throws -> String {
+        func suggestName(from firstMessage: String, in id: Session.ID) async throws -> String {
             asked.append(firstMessage)
             if held { await withCheckedContinuation { waiting = $0 } }
             return try reply.get()
         }
 
-        func configure(_ config: PiConfig, in id: PiSession.ID) async throws {
-            guard config.fast == nil else { throw PiBridgeError.unsupported }
+        func configure(_ config: SessionConfig, in id: Session.ID) async throws {
+            guard config.fast == nil else { throw BridgeError.unsupported }
             guard let name = config.name else { return }
             renamed.append(name)
             bridge?.update(id) { $0.name = name }
@@ -49,8 +49,8 @@ struct SessionNamingTests {
         let events = app.pi.changes()
         let consume = Task { try await app.services.consumePiChanges(events) }
         link.bridge = app.pi
-        var session = PiSession(
-            id: "p1.1", sessionID: "p1", agent: .pi, sessionFile: nil, pid: 1, cwd: app.directory, terminal: PiTerminal(),
+        var session = Session(
+            id: "p1.1", sessionID: "p1", agent: .pi, sessionFile: nil, pid: 1, cwd: app.directory, terminal: TerminalIdentity(),
             state: .settled, stateSince: .now)
         session.firstMessage = Self.first
         app.pi.attach(session, via: link)
@@ -134,7 +134,7 @@ struct SessionNamingTests {
 
     @Test func 起名失败_保持第一句话_不再试() async throws {
         let link = NamingLink()
-        link.reply = .failure(PiBridgeError.rejected("failed: timeout"))
+        link.reply = .failure(BridgeError.rejected("failed: timeout"))
         try await live(link) {
             try await eventually("起过一次") { link.asked.count == 1 }
             app.pi.update("p1.1") { $0.detail = "又说了一句" }

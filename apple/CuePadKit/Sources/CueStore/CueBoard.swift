@@ -18,7 +18,7 @@ public struct HandOffPlan: Equatable, Sendable {
 /// 在做的（`active`）归值班的 Cue 管，其余是你手上的清单。
 public struct CueBoard: Equatable, Sendable {
   public var tasks: [CueBoardItem]
-  public var sessions: [PiSessionState]
+  public var sessions: [SessionState]
 
   /// 与执行集合分离，停机或离线不撤销进度。
   public var inProgress: [CueWork] { tasks.filter { $0.task.status == .inProgress }.map(CueWork.task) + sessions.map(CueWork.session) }
@@ -29,7 +29,7 @@ public struct CueBoard: Equatable, Sendable {
 
 public enum CueWork: Identifiable, Equatable, Sendable {
   case task(CueBoardItem)
-  case session(PiSessionState)
+  case session(SessionState)
 
   public var id: String {
     switch self {
@@ -40,7 +40,7 @@ public enum CueWork: Identifiable, Equatable, Sendable {
 
   public var task: Card? { if case .task(let item) = self { item.task } else { nil } }
 
-  public var sessions: [PiSessionState] { CueAgents.sessions(in: [self]) }
+  public var sessions: [SessionState] { CueAgents.sessions(in: [self]) }
 }
 
 public struct CueBoardItem: Identifiable, Equatable, Sendable {
@@ -51,20 +51,20 @@ public struct CueBoardItem: Identifiable, Equatable, Sendable {
   public var leaves: [CueBoardLeaf]
   public var id: UUID { task.id }
   public var isActive: Bool { leaves.contains(where: \.isActive) }
-  public var session: PiSessionState? { leaves.lazy.compactMap(\.session).first }
+  public var session: SessionState? { leaves.lazy.compactMap(\.session).first }
   public var reaching: Bool { leaves.contains { $0.launching || $0.sending } }
 }
 
 public struct CueBoardLeaf: Equatable, Sendable {
   public var leaf: Card
-  public var session: PiSessionState?
+  public var session: SessionState?
   /// 唯一占位入口 `handoffRequests` 的原记录；防重复，不代表此刻在跑。
   public let handoffs: [DeliveryRequest]
   private let activity: Set<DeliveryMode>
   public var launching: Bool { activity.contains(.start) }
   public var sending: Bool { activity.contains(.send) }
 
-  init(leaf: Card, session: PiSessionState?, handoffs: [DeliveryRequest], since: Date, at moment: Speech.Moment) {
+  init(leaf: Card, session: SessionState?, handoffs: [DeliveryRequest], since: Date, at moment: Speech.Moment) {
     self.leaf = leaf
     self.session = session
     self.handoffs = handoffs
@@ -89,10 +89,10 @@ public struct CueLeafDetail: Equatable, Sendable {
 }
 
 public struct CueSessionDetail: Equatable, Sendable {
-  public var session: PiSessionState
-  public var recent: [PiChatMessage]
+  public var session: SessionState
+  public var recent: [ChatMessage]
   public var cueSent: Set<UUID>
   /// 比 `recent` 更早、Cue 对这个会话说的话（开工那句与之后托付的），从早到晚：交回时逐件核对它们做到没有，
   /// 不另记"托付了什么"，会话里 Cue 说过的话就是那一份。
-  public var earlier: [PiChatMessage]
+  public var earlier: [ChatMessage]
 }

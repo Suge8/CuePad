@@ -48,7 +48,7 @@ public struct CueMessage: Identifiable, Equatable, Sendable {
   public var deliveredAt: Date?
   public var createdAt: Date
   public var modifiedAt: Date
-  public var tools: PiChatMessage.Tools?
+  public var tools: ChatMessage.Tools?
   /// 回复所对应的真实请求集合（CueKeeper 在调用开始时接走的消息 ID，同步）；空集合是主动消息，nil 是来源还未确认。
   /// 同一请求可有多条回复；有回复不代表执行完成。整轮没有正文时在经过行记录已处理的集合，不编造一句回复。
   public var answeredRequests: [UUID]? = nil
@@ -84,7 +84,7 @@ extension CueMessage: Record {
       choices: JSONColumn.decode([String].self, from: row.textOrNil(3)), asked: row.textOrNil(13).flatMap(CueAsked.init(stored:)),
       askAction: row.textOrNil(14), askRule: row.textOrNil(15), shots: JSONColumn.decodeList(CueShot.self, from: row.textOrNil(16)), urgent: row.bool(4), taskID: row.uuidOrNil(5),
       answer: row.textOrNil(6), answeredAt: row.dateOrNil(7), setAsideBy: row.uuidOrNil(17), deliveredAt: row.dateOrNil(8), createdAt: row.date(9),
-      modifiedAt: row.date(10), tools: row.textOrNil(12).flatMap(PiChatMessage.Tools.init(stored:)), answeredRequests: JSONColumn.decode([UUID].self, from: row.textOrNil(21)),
+      modifiedAt: row.date(10), tools: row.textOrNil(12).flatMap(ChatMessage.Tools.init(stored:)), answeredRequests: JSONColumn.decode([UUID].self, from: row.textOrNil(21)),
       wake: row.textOrNil(18).flatMap(CueWake.init(stored:)),
       places: JSONColumn.decode([String: CuePlace].self, from: row.textOrNil(19)) ?? [:], notify: row.textOrNil(11).flatMap(CuePush.init(rawValue:)), reachedServer: Self.reachedServer(in: row))
   }

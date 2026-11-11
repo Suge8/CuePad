@@ -67,7 +67,7 @@ struct BoardTaskCard: View {
         case .advancing:
             switch TaskPace.of(task, steps: item.steps) {
             case .left(let seconds): TaskPace.left(seconds)
-            case .ran(let since): PiClock.duration(Date.now.timeIntervalSince(since))
+            case .ran(let since): SessionClock.duration(Date.now.timeIntervalSince(since))
             case nil: nil
             }
         case .done: task.completedAt?.formatted(date: .omitted, time: .shortened)

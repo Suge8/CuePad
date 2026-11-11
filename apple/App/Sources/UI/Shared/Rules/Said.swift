@@ -50,7 +50,7 @@ nonisolated enum Listener: Equatable, Sendable {
     case cue
     case session(SendTarget, host: String, mode: DeliveryMode, card: UUID?)
 
-    static func session(_ session: PiSessionState, mode: DeliveryMode, card: UUID? = nil) -> Listener {
+    static func session(_ session: SessionState, mode: DeliveryMode, card: UUID? = nil) -> Listener {
         .session(session.target, host: session.hostID, mode: mode, card: card)
     }
 }

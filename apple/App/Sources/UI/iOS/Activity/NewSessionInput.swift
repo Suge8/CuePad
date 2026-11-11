@@ -10,8 +10,8 @@ struct NewSessionInput: View {
     @State private var choice: ProjectFolders.LaunchPlace.ID?
     @State private var draft = ComposerDraft()
     @State private var agents: MacAgents?
-    @State private var model: PiModelKey?
-    @State private var thinking: PiThinkingLevel?
+    @State private var model: ModelKey?
+    @State private var thinking: ThinkingLevel?
     @State private var fast = false
     @FocusState private var focused: Bool
 
@@ -40,7 +40,7 @@ struct NewSessionInput: View {
             header: { header.padding(.horizontal, Spacing.group).padding(.top, Spacing.item) },
             tools: {
                 if let brain {
-                    PiConfigControls(choice: brain) { agent in
+                    ConfigControls(choice: brain) { agent in
                         services.settings.lastAgent = agent
                         model = nil
                     } chooseModel: { model = $0 } chooseThinking: { thinking = $0 } chooseFast: { fast = $0 }

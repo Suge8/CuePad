@@ -21,19 +21,19 @@ struct RealCueStartTests {
             try await eventually("名字、模型与强度生效") {
                 let session = bridge.session(id: id)
                 return session?.displayName == "Cue 开的" && session?.model?.key == model
-                    && session?.thinking == .known(PiThinkingLevel.medium.clamped(to: session?.model?.thinkingLevels ?? []))
+                    && session?.thinking == .known(ThinkingLevel.medium.clamped(to: session?.model?.thinkingLevels ?? []))
             }
 
             if agent != .pi && agent != .codex {
-                await #expect(throws: PiBridgeError.unsupported) {
-                    try await bridge.configure(PiConfig(fast: true, name: "不能改名"), in: id)
+                await #expect(throws: BridgeError.unsupported) {
+                    try await bridge.configure(SessionConfig(fast: true, name: "不能改名"), in: id)
                 }
                 #expect(bridge.session(id: id)?.displayName == "Cue 开的")
             }
 
             for line in ["Reply with exactly the word READY.", "Reply with exactly the word AGAIN."] {
                 let log = ChangeLog(bridge)
-                try await bridge.send(PiMessage(text: line), to: id)
+                try await bridge.send(SessionMessage(text: line), to: id)
                 try await eventually("这一轮做完歇下") {
                     log.states.contains { $0.hasPendingWork } && bridge.session(id: id)?.state == .settled
                 }
@@ -44,7 +44,7 @@ struct RealCueStartTests {
                 // Claude Code 的别名（sonnet）在会话文件里记成它解析到的完整 id（claude-sonnet-…）
                 #expect(agent == .claudeCode ? used.model?.hasPrefix("claude-\(model.id)") == true : used.model == model.id, "\(used)")
                 let levels = bridge.session(id: id)?.model?.thinkingLevels ?? []
-                if agent != .pi && agent != .grok { #expect(used.effort == PiThinkingLevel.medium.clamped(to: levels).rawValue, "\(used)") }
+                if agent != .pi && agent != .grok { #expect(used.effort == ThinkingLevel.medium.clamped(to: levels).rawValue, "\(used)") }
             }
         }
     }
@@ -76,29 +76,29 @@ struct RealCueStartTests {
     }
 
     private func withAgent(
-        _ agent: AgentKind, _ body: (any AgentRuntime, PiBridge, URL, PiModelKey) async throws -> Void
+        _ agent: AgentKind, _ body: (any AgentRuntime, Bridge, URL, ModelKey) async throws -> Void
     ) async throws {
         switch agent {
         case .pi:
             let pi = try await PiProcess()
-            let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
+            let bridge = Bridge(socketDirectory: pi.paths.socketDirectory)
             defer { stopHostedProcesses(bridge); bridge.stop(); pi.stop() }
             try bridge.start()
             let runtime = PiRuntime(bridge: bridge, paths: pi.paths, pi: { pinnedPi.executable }, idleLimit: .seconds(120), timing: noDeadline)
             runtime.start()
-            try await body(runtime, bridge, pi.cwd, PiModelKey(provider: "fake", id: "echo"))
+            try await body(runtime, bridge, pi.cwd, ModelKey(provider: "fake", id: "echo"))
         case .codex:
             try await withCodexRig { rig in
-                try await body(rig.runtime, rig.bridge, rig.codex.work, PiModelKey(provider: CodexModel.provider, id: codexTestModel))
+                try await body(rig.runtime, rig.bridge, rig.codex.work, ModelKey(provider: CodexModel.provider, id: codexTestModel))
             }
         case .claudeCode:
             try await ClaudeTestbed.run { testbed in
                 try testbed.startConnected()
-                try await body(testbed.runtime, testbed.bridge, testbed.work, PiModelKey(provider: ClaudeCode.provider, id: claudeOtherModel))
+                try await body(testbed.runtime, testbed.bridge, testbed.work, ModelKey(provider: ClaudeCode.provider, id: claudeOtherModel))
             }
         case .opencode:
             let sandbox = try await OpenCodeSandbox()
-            let bridge = PiBridge(socketDirectory: sandbox.paths.pi.socketDirectory)
+            let bridge = Bridge(socketDirectory: sandbox.paths.pi.socketDirectory)
             let runtime = sandbox.runtime(bridge, try Fixture().store)
             let outcome: Result<Void, any Error>
             do {
@@ -111,7 +111,7 @@ struct RealCueStartTests {
             try outcome.get()
         case .grok:
             try await withGrokRig { rig in
-                try await body(rig.runtime, rig.bridge, rig.work, PiModelKey(provider: AgentKind.grok.rawValue, id: "grok-4.5"))
+                try await body(rig.runtime, rig.bridge, rig.work, ModelKey(provider: AgentKind.grok.rawValue, id: "grok-4.5"))
             }
         case .dsh:
             try await withDshRig { rig in try await body(rig.runtime, rig.bridge, rig.work, rig.model) }

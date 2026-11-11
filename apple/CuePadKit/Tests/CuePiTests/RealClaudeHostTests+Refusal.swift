@@ -15,12 +15,12 @@ extension RealClaudeHostTests {
             try testbed.startConnected()
             let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t", name: nil, model: nil, thinking: nil)
             #expect(testbed.bridge.session(id: id)?.commands.contains { $0.name == "hello" } == true)
-            let notLoggedIn = PiBridgeError.refused("Not logged in · Please run /login")
+            let notLoggedIn = BridgeError.refused("Not logged in · Please run /login")
 
             try await testbed.bridge.command("/rename 未登录也能改名", deliveryID: UUID().uuidString, in: id)
             #expect(testbed.bridge.session(id: id)?.displayName == "未登录也能改名")
             await #expect(throws: notLoggedIn) { try await testbed.bridge.command("/hello", deliveryID: UUID().uuidString, in: id) }
-            await #expect(throws: notLoggedIn) { try await testbed.bridge.send(PiMessage(text: "只回复 OK", deliveryID: UUID().uuidString), to: id) }
+            await #expect(throws: notLoggedIn) { try await testbed.bridge.send(SessionMessage(text: "只回复 OK", deliveryID: UUID().uuidString), to: id) }
         }
     }
 }

@@ -6,9 +6,9 @@ enum CueAgents {
     sessions(in: work).reduce(0) { $0 + $1.activeAgentCount }
   }
 
-  static func sessions(in work: [CueWork]) -> [PiSessionState] {
+  static func sessions(in work: [CueWork]) -> [SessionState] {
     let sessions = Dictionary(
-      work.flatMap { item -> [PiSessionState] in
+      work.flatMap { item -> [SessionState] in
         switch item {
         case .task(let task): task.leaves.compactMap(\.session)
         case .session(let session): [session]
@@ -19,7 +19,7 @@ enum CueAgents {
   }
 }
 
-extension PiSessionState {
+extension SessionState {
   public var activeAgentCount: Int {
     (runtimeState.isWorking ? 1 : 0) + runtimeSubagents.count { $0.phase == .known(.running) || $0.phase == .known(.review) }
   }

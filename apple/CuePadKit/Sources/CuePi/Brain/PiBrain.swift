@@ -41,7 +41,7 @@ final class PiBrain: HostedSession {
         let locator = ExecutableLocator(searchDirectories: path + ExecutableLocator.standard.searchDirectories)
         return locator.candidates(ClaudeCodeRuntime.facts.command).first?.path ?? ClaudeCodeRuntime.facts.command
     }
-    private var configured: (model: String?, effort: PiThinkingLevel?) = (nil, nil)
+    private var configured: (model: String?, effort: ThinkingLevel?) = (nil, nil)
     private var turn: Turn?
     private var unreceived: [UUID] = []
     private struct Turn {
@@ -79,7 +79,7 @@ final class PiBrain: HostedSession {
         }
     }
 
-    func send(_ text: String, images: [PiImage], id: UUID) async throws {
+    func send(_ text: String, images: [MessageImage], id: UUID) async throws {
         let images = images.map { ["type": "image", "data": .string($0.data.base64EncodedString()), "mimeType": .string($0.mimeType)] as JSONValue }
         unreceived.append(id)
         do {
@@ -101,12 +101,12 @@ final class PiBrain: HostedSession {
         }
     }
 
-    func configure(model: String?, effort: PiThinkingLevel?) async throws {
+    func configure(model: String?, effort: ThinkingLevel?) async throws {
         try await apply(model: model, effort: effort)
         configured = (model ?? configured.model, effort ?? configured.effort)
     }
 
-    private func apply(model: String?, effort: PiThinkingLevel?) async throws {
+    private func apply(model: String?, effort: ThinkingLevel?) async throws {
         if let model {
             let parts = model.split(separator: "/", maxSplits: 1).map(String.init)
             guard parts.count == 2 else { throw HostedSessionError.rejected(String(localized: "Pi 的模型要写成 提供方/模型：\(model)")) }

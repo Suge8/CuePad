@@ -53,13 +53,13 @@ extension RealPiTests {
             let first = try #require(bridge.sessions.first?.question?.promptID)
             try await bridge.answer(.option("Alpha"), to: first, in: s.id)
             try await eventually("问题清空") { bridge.sessions.first?.question == nil }
-            await #expect(throws: PiBridgeError.rejected("no_prompt")) { try await bridge.answer(.option("Alpha"), to: first, in: s.id) }
+            await #expect(throws: BridgeError.rejected("no_prompt")) { try await bridge.answer(.option("Alpha"), to: first, in: s.id) }
 
             try pi.prompt("/pick")
             try await eventually("新的选择框") { bridge.sessions.first?.question?.promptID.map { $0 != first } == true }
-            await #expect(throws: PiBridgeError.rejected("stale_prompt")) { try await bridge.answer(.option("Alpha"), to: first, in: s.id) }
+            await #expect(throws: BridgeError.rejected("stale_prompt")) { try await bridge.answer(.option("Alpha"), to: first, in: s.id) }
             let current = try #require(bridge.sessions.first?.question?.promptID)
-            await #expect(throws: PiBridgeError.rejected("bad_answer")) { try await bridge.answer(.option("Gamma"), to: current, in: s.id) }
+            await #expect(throws: BridgeError.rejected("bad_answer")) { try await bridge.answer(.option("Gamma"), to: current, in: s.id) }
         }
     }
 }

@@ -32,13 +32,13 @@ struct RealHostedEndTests {
             #expect(began.duration(to: .now) < .seconds(10), "起来马上结束用了 \(began.duration(to: .now))")
 
             let id = try await rig.open()
-            try await rig.bridge.send(PiMessage(text: "BUSY-HANG first"), to: id)
+            try await rig.bridge.send(SessionMessage(text: "BUSY-HANG first"), to: id)
             began = ContinuousClock.now
             try await rig.bridge.abort(id)
             try await eventually("停下了") { rig.bridge.session(id: id)?.state == .settled }
             #expect(began.duration(to: .now) < .seconds(10), "说出一句马上停止用了 \(began.duration(to: .now))")
 
-            try await rig.bridge.send(PiMessage(text: "BUSY-HANG second"), to: id)
+            try await rig.bridge.send(SessionMessage(text: "BUSY-HANG second"), to: id)
             try await eventually("这一轮在跑、停在模型里") { rig.asked("BUSY-HANG second") && rig.bridge.session(id: id)?.state.isWorking == true }
             let session = try #require(rig.bridge.session(id: id))
             began = ContinuousClock.now
@@ -49,7 +49,7 @@ struct RealHostedEndTests {
             // 前面停过一轮，会话记录里已有一条"已停止"：要的是第二句之后的那条
             let messages = try rig.record(session).messages
             let second = try #require(messages.lastIndex { $0.role == .known(.user) && $0.text.contains("BUSY-HANG second") })
-            #expect(messages[second...].contains { $0.text == PiNotice.stopped.rawValue }, "会话记录里没有被停下的这一轮：\(messages.map(\.text))")
+            #expect(messages[second...].contains { $0.text == ChatNotice.stopped.rawValue }, "会话记录里没有被停下的这一轮：\(messages.map(\.text))")
         }
     }
 
@@ -70,7 +70,7 @@ struct RealHostedEndTests {
             """#.write(to: rig.wrapper.appending(path: "late-refusal"), atomically: true, encoding: .utf8)
             rig.hang("BUSY-HANG")
             let id = try await rig.open()
-            try await rig.bridge.send(PiMessage(text: "BUSY-HANG keep going"), to: id)
+            try await rig.bridge.send(SessionMessage(text: "BUSY-HANG keep going"), to: id)
             let began = ContinuousClock.now
             try await rig.bridge.abort(id)
             try await eventually("停下了") { rig.bridge.session(id: id)?.state == .settled }
@@ -103,7 +103,7 @@ struct RealHostedEndTests {
             let resumed = try await resuming.value
             #expect(kill(old, 0) != 0, "旧进程还在")
             #expect(rig.bridge.session(id: resumed)?.pid != old)
-            try await rig.bridge.send(PiMessage(text: "PING-TWO"), to: resumed)
+            try await rig.bridge.send(SessionMessage(text: "PING-TWO"), to: resumed)
             try await rig.replied("PING-TWO", in: first)
             #expect(rig.overlaps.isEmpty, "同一会话同时有两个进程：\(rig.overlaps)")
         }
@@ -116,7 +116,7 @@ struct RealHostedEndTests {
         try await EndRig.run(.codex, timing: clock.timing) { rig in
             rig.hang("BUSY-HANG")
             let id = try await rig.open()
-            try await rig.bridge.send(PiMessage(text: "BUSY-HANG keep going"), to: id)
+            try await rig.bridge.send(SessionMessage(text: "BUSY-HANG keep going"), to: id)
             try await eventually("这一轮在跑、停在模型里") { rig.asked("BUSY-HANG") && rig.bridge.session(id: id)?.state.isWorking == true }
             let session = try #require(rig.bridge.session(id: id))
             let since = Date()

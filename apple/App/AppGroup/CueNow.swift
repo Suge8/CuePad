@@ -109,7 +109,7 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
     static let fastStale: TimeInterval = 3 * 60
     static let slowStale: TimeInterval = 15 * 60
     static let quiet = String(localized: "手上没有事")
-    /// 在一轮里、没在用工具也不知道谁叫醒的那一句：同会话与对话末尾的状态词（`PiShown` 的 working）。
+    /// 在一轮里、没在用工具也不知道谁叫醒的那一句：同会话与对话末尾的状态词（`SessionShown` 的 working）。
     static let thinking = String(localized: "思考中")
 
     var justDone: Item? { items.first { $0.kind == .done } }

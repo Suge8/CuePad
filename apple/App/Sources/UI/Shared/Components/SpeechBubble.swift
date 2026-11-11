@@ -8,7 +8,7 @@ struct SpeechBubble<Menu: View>: View {
     let box: Binding<ComposerDraft>
     /// 会话页每句都标（进了对话就不在这里），Cue 页只标你最后一句（旧的不标，免得满屏）。
     var showsDelivered = true
-    var session: PiSessionState?
+    var session: SessionState?
     var fromCue = false
     let look: BubbleLook
     @ViewBuilder var menu: (Speech.Trip) -> Menu
@@ -50,7 +50,7 @@ struct SpeechBubble<Menu: View>: View {
             if case .request(let request) = said { .sending(.of(request, session: session, trip: trip)) } else { .sending(trip == .sent ? .sent : .sending) }
         case .preparing: .arrived
         case .unconfirmed: .sending(.unconfirmed)
-        case .delivered: showsDelivered ? .delivered(said.roundTrip.map { PiClock.duration(Double($0.components.seconds)) }) : .arrived
+        case .delivered: showsDelivered ? .delivered(said.roundTrip.map { SessionClock.duration(Double($0.components.seconds)) }) : .arrived
         case .failed(let failure):
             .failed(Undelivered(reason: failure.text, resend: resend, remove: remove))
         }

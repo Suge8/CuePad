@@ -47,9 +47,9 @@ private struct PreviewPager: View {
     @State private var insets = EdgeInsets()
     @State private var finds = PreviewFinds()
 
-    private var batch: [PiPreview] { opening.batch }
+    private var batch: [PreviewItem] { opening.batch }
     private var index: Int { opening.index(of: current) }
-    private var preview: PiPreview { batch[index] }
+    private var preview: PreviewItem { batch[index] }
     private var title: String { opening.title(of: preview) }
 
     var body: some View {
@@ -121,7 +121,7 @@ private struct PreviewPager: View {
 
     private var findable: URL? { preview.kind == .pdf ? file(of: preview) : nil }
 
-    private func file(of preview: PiPreview) -> URL? {
+    private func file(of preview: PreviewItem) -> URL? {
         services.store.files.fileURL(for: preview.key)
     }
 }

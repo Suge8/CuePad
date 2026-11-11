@@ -14,7 +14,7 @@ struct RealPiQueueTests {
     func 停止原回合不遗失后续消息(stage: String) async throws {
         try await withAgent { bridge, session, folder, gate in
             let delivery = UUID().uuidString
-            try await bridge.send(PiMessage(text: work("A"), deliveryID: delivery), to: session.id)
+            try await bridge.send(SessionMessage(text: work("A"), deliveryID: delivery), to: session.id)
             try await eventually("A 的真实工具开始") { exists(folder, "A.pid") }
             let a = try pid("A", in: folder)
             let originalTurn = try #require(bridge.session(id: session.id)?.turnStartedAt).stored
@@ -23,22 +23,22 @@ struct RealPiQueueTests {
             if stage == "sdk" {
                 try await eventually("公开 SDK 队列已受理") { exists(gate, "sdk.pending") || exists(gate, "sdk.empty") }
                 try #require(exists(gate, "sdk.pending"))
-                await #expect(throws: PiBridgeError.rejected("stale_turn")) { try await bridge.abort(session.id, deliveryID: delivery, turnStartedAt: originalTurn) }
+                await #expect(throws: BridgeError.rejected("stale_turn")) { try await bridge.abort(session.id, deliveryID: delivery, turnStartedAt: originalTurn) }
                 #expect(kill(a, 0) == 0)
                 #expect(kill(a, SIGUSR1) == 0)
             } else {
-                let send = Task { try await bridge.send(PiMessage(text: "QUEUE-B " + work("B")), to: session.id) }
+                let send = Task { try await bridge.send(SessionMessage(text: "QUEUE-B " + work("B")), to: session.id) }
                 defer { try? Data().write(to: gate.appending(path: "\(held).release")); send.cancel() }
                 try await eventually("\(held) 处等待") { exists(gate, "\(held).held") }
                 if stage == "pending" {
                     try await eventually("旧停止的实际回合已结束，后续消息仍在闸内") {
                         bridge.session(id: session.id)?.turnStartedAt?.stored != originalTurn
                     }
-                    await #expect(throws: PiBridgeError.rejected("stale_turn")) {
+                    await #expect(throws: BridgeError.rejected("stale_turn")) {
                         try await bridge.abort(session.id, deliveryID: delivery, turnStartedAt: originalTurn)
                     }
                 } else if stage == "starting" {
-                    await #expect(throws: PiBridgeError.rejected("stale_turn")) { try await bridge.abort(session.id, deliveryID: delivery, turnStartedAt: originalTurn) }
+                    await #expect(throws: BridgeError.rejected("stale_turn")) { try await bridge.abort(session.id, deliveryID: delivery, turnStartedAt: originalTurn) }
                 } else if stage != "preflight-control" {
                     try await bridge.abort(session.id, deliveryID: delivery, turnStartedAt: originalTurn)
                     if stage == "preflight" { try await eventually("原回合 A 已实际退出") { kill(a, 0) != 0 } }
@@ -75,7 +75,7 @@ struct RealPiQueueTests {
         try #require(pid_t(String(contentsOf: folder.appending(path: "\(name).pid"), encoding: .utf8)))
     }
 
-    private func withAgent(_ body: (PiBridge, PiSession, URL, URL) async throws -> Void) async throws {
+    private func withAgent(_ body: (Bridge, Session, URL, URL) async throws -> Void) async throws {
         let root = try makeTempDirectory(), folder = root.appending(path: "work"), agent = root.appending(path: "agent")
         let paths = PiPaths(agentDirectory: agent, socketDirectory: root.appending(path: "s"), binDirectory: root.appending(path: "bin"))
         for directory in [folder, agent] { try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true) }
@@ -87,7 +87,7 @@ struct RealPiQueueTests {
         let process = try await ChildProcess(pinnedPi.executable, ["--mode", "rpc", "--no-extensions", "-e", PiExtensionBundle.url.path,
             "-e", fixturesDirectory.appending(path: "queue-gates.ts").path,
             "--model", "fake/echo", "--no-skills"], directory: folder, environment: environment, placement: .group, input: .pipe)
-        let bridge = PiBridge(socketDirectory: paths.socketDirectory)
+        let bridge = Bridge(socketDirectory: paths.socketDirectory)
         do {
             try bridge.start()
             try await eventually("真实 Pi 接上桥") { bridge.sessions.contains { $0.pid == process.pid } }

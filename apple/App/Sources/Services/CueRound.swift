@@ -26,15 +26,15 @@ struct CueRound: Identifiable {
     var running: CueToolCall? { calls.last { $0.finishedAt == nil } }
 
     /// 给人看的经过：做完的调用按先后（还在跑的不算，它是此刻在做的）；一个都没做完为 nil。
-    var process: PiChatMessage.Tools? {
+    var process: ChatMessage.Tools? {
         let items = calls.compactMap(\.item)
         guard !items.isEmpty else { return nil }
-        var tools = PiChatMessage.Tools()
+        var tools = ChatMessage.Tools()
         for item in items { tools.record(item) }
         return tools
     }
 
-    mutating func finish(_ id: String, result: String, failed: Bool, item: PiChatMessage.Tools.Item) {
+    mutating func finish(_ id: String, result: String, failed: Bool, item: ChatMessage.Tools.Item) {
         guard let index = calls.lastIndex(where: { $0.id == id && $0.finishedAt == nil }) else { return }
         calls[index].finishedAt = .now
         calls[index].result = result.count <= Self.resultLimit ? result : String(result.prefix(Self.resultLimit)) + "\n…"
@@ -57,6 +57,6 @@ struct CueToolCall: Identifiable {
     var finishedAt: Date?
     var result: String?
     var failed = false
-    var item: PiChatMessage.Tools.Item?
+    var item: ChatMessage.Tools.Item?
 }
 #endif

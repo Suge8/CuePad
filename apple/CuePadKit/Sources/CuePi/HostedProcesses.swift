@@ -28,7 +28,7 @@ final class HostedProcesses {
         fileprivate let era: Int
     }
 
-    private let bridge: PiBridge
+    private let bridge: Bridge
     private let timing: Timing
     private let resumptions = Resumptions()
     private var entries: [pid_t: Entry] = [:]
@@ -37,7 +37,7 @@ final class HostedProcesses {
     private var eras = 0
 
     /// `timing` 量停这一轮的时限；收进程的宽限按起进程时给它的钟（`ChildProcess`）。
-    init(bridge: PiBridge, timing: Timing) {
+    init(bridge: Bridge, timing: Timing) {
         self.bridge = bridge
         self.timing = timing
     }
@@ -73,7 +73,7 @@ final class HostedProcesses {
         entries[process.pid]?.sessionID = sessionID
     }
 
-    func retire(_ id: PiSession.ID, link: any SessionLink) {
+    func retire(_ id: Session.ID, link: any SessionLink) {
         guard let session = bridge.session(id: id) else { return }
         bridge.detach(id, reason: .closed(reason: "quit"))
         guard var entry = entries[session.pid], entry.leaving == nil else { return }
@@ -81,7 +81,7 @@ final class HostedProcesses {
         let stopping = Task { try await link.abort(id) }
         entry.leaving = Task {
             do {
-                try await withDeadline(AgentTimeouts.stop, timing: timing, orThrow: PiBridgeError.ackTimeout) {
+                try await withDeadline(AgentTimeouts.stop, timing: timing, orThrow: BridgeError.ackTimeout) {
                     try await withTaskCancellationHandler { try await stopping.value } onCancel: { stopping.cancel() }
                 }
             } catch {
@@ -94,7 +94,7 @@ final class HostedProcesses {
     }
 
     /// 各家的 `resume` 在会话不在桥上时经这里起进程：`start` 在这个会话的旧进程收完之后跑，拿到的 `Admission` 用来登记它起的进程。
-    func resume(_ sessionID: String, start: @escaping @MainActor (Admission) async throws -> PiSession.ID) async throws -> PiSession.ID {
+    func resume(_ sessionID: String, start: @escaping @MainActor (Admission) async throws -> Session.ID) async throws -> Session.ID {
         try await resumptions.resume(sessionID) { [self] in
             let admission = try admission()
             await vacate(sessionID)

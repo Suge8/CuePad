@@ -2,7 +2,7 @@
 import CueStore
 import SwiftUI
 
-/// 个数与"更早"那一页读同一个查询（`PiSessionList.earlier`），两边才对得上。
+/// 个数与"更早"那一页读同一个查询（`SessionListData.earlier`），两边才对得上。
 struct EarlierTile: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -34,7 +34,7 @@ struct EarlierTile: View {
         .frame(width: SessionRail.Form.phone.width)
         .dynamicTypeSize(...DynamicTypeSize.xxLarge)
         .observing(services.store, id: services.speech, into: $total, onError: workspace.fail) { [moment = services.speech] store in
-            try PiSessionList.earlier(PiSessionQuery(limit: 1), at: moment, from: store).total
+            try SessionListData.earlier(SessionQuery(limit: 1), at: moment, from: store).total
         }
     }
 

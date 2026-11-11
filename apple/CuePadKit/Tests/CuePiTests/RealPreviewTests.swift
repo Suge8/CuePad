@@ -18,7 +18,7 @@ struct RealPreviewTests {
     @Test func theSkillIsDiscoveredAndShowFromBashAttachesThePreviewToTheSession() async throws {
         let library = try makeTempDirectory()
         let pi = try await PiProcess(env: ["CUEPAD_LIBRARY_DIR": library.path], discoverSkills: true)
-        let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
+        let bridge = Bridge(socketDirectory: pi.paths.socketDirectory)
         defer { bridge.stop(); pi.stop() }
         try bridge.start()
         try await eventually("桥发现真实 Pi 会话") { !bridge.sessions.isEmpty }

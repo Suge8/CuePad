@@ -5,7 +5,7 @@ import SwiftUI
 
 enum SessionHeader {
     struct State: Equatable {
-        var session: PiSessionState
+        var session: SessionState
         var delivery: DeliveryRequest?
         var title: String
         var undelivered: String?

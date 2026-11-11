@@ -63,8 +63,8 @@ extension CueHostTests {
         try Data("{}\n".utf8).write(to: file)
         _ = try await rig.app.host.connect("h0", cwd: rig.folder.path, busy: true, hosted: true, sessionFile: file.path)
         try await store.linkCard(running.id, toSession: "h0")
-        let helper = PiSubagentState(name: "helper", role: "工程师", phase: .known(.running))
-        try await PiStateRecorder(store: store, hostID: TestApp.hostID)
+        let helper = SubagentState(name: "helper", role: "工程师", phase: .known(.running))
+        try await StateRecorder(store: store, hostID: TestApp.hostID)
             .update(sessionID: "h1", state: .tool, detail: "bash · swift test", hosted: true, subagents: [helper])
         try await store.linkCard(upgraded.id, toSession: "h1")
         try await eventually("记下在干活") { try await store.allPiSessionStates().filter { $0.state.isWorking }.count == 2 }

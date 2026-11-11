@@ -94,7 +94,7 @@ extension CodexRuntime {
         }
     }
 
-    func adoptFromDaemon(_ threadID: String) async throws -> PiSession.ID? {
+    func adoptFromDaemon(_ threadID: String) async throws -> Session.ID? {
         guard let rpc = try? await daemonConnection() else { return nil }
         let loaded = try await rpc.call("thread/loaded/list", [:])
         guard loaded["data"]?.array?.contains(.string(threadID)) == true,
@@ -104,7 +104,7 @@ extension CodexRuntime {
     }
 
     @discardableResult
-    private func adopt(_ thread: JSONValue, on rpc: CodexRPC) async throws -> PiSession.ID {
+    private func adopt(_ thread: JSONValue, on rpc: CodexRPC) async throws -> Session.ID {
         let threadID = thread["id"]?.string ?? ""
         let id = "\(threadID).\(rpc.pid)"
         if tracked[id] != nil { return id }
@@ -120,11 +120,11 @@ extension CodexRuntime {
         return id
     }
 
-    func makeSession(_ thread: JSONValue, pid: Int32) -> PiSession {
+    func makeSession(_ thread: JSONValue, pid: Int32) -> Session {
         let threadID = thread["id"]?.string ?? ""
-        var session = PiSession(
+        var session = Session(
             id: "\(threadID).\(pid)", sessionID: threadID, agent: .codex, sessionFile: thread["path"]?.string.map { URL(filePath: $0) },
-            pid: pid, cwd: URL(filePath: thread["cwd"]?.string ?? "/", directoryHint: .isDirectory), terminal: PiTerminal(),
+            pid: pid, cwd: URL(filePath: thread["cwd"]?.string ?? "/", directoryHint: .isDirectory), terminal: TerminalIdentity(),
             state: .settled, stateSince: .now)
         apply(thread, to: &session)
         return session
@@ -133,9 +133,9 @@ extension CodexRuntime {
     /// `settings` 为 false 时不取线程上的模型与强度，只按模型清单重认此刻的模型：托管会话订阅着线程，它的模型与强度只认开线程时的回应、
     /// `thread/settings/updated` 与 Codex 接受了的改动（`configure`）——`thread/settings/update` 只回“已排队”，紧接着读线程可能读到改之前的。
     /// 终端里的会话收不到那条通知（只发给订阅了线程的连接），终端界面里换的模型只能读线程得知。
-    func apply(_ thread: JSONValue, to session: inout PiSession, settings: Bool = true) {
+    func apply(_ thread: JSONValue, to session: inout Session, settings: Bool = true) {
         session.name = thread["name"]?.string
-        if let preview = thread["preview"]?.string, !preview.isEmpty { session.firstMessage = String(preview.prefix(PiSessionName.firstMessageLimit)) }
+        if let preview = thread["preview"]?.string, !preview.isEmpty { session.firstMessage = String(preview.prefix(SessionName.firstMessageLimit)) }
         guard settings else {
             if let model = session.model?.key.id { session.model = option(model) }
             session.availableModels = (models ?? []).map(\.option)
@@ -148,11 +148,11 @@ extension CodexRuntime {
         session.thinking = thread["reasoningEffort"]?.string.map(CodexModel.thinking)
     }
 
-    func option(_ model: String) -> PiModelOption {
-        models?.first { $0.id == model }?.option ?? PiModelOption(key: PiModelKey(provider: CodexModel.provider, id: model), name: model, thinkingLevels: [])
+    func option(_ model: String) -> ModelOption {
+        models?.first { $0.id == model }?.option ?? ModelOption(key: ModelKey(provider: CodexModel.provider, id: model), name: model, thinkingLevels: [])
     }
 
-    func attach(_ session: PiSession, prepare: (Tracked) -> Void = { _ in }) {
+    func attach(_ session: Session, prepare: (Tracked) -> Void = { _ in }) {
         let entry = Tracked(id: session.id, threadID: session.sessionID, pid: session.pid)
         prepare(entry)
         tracked[session.id] = entry
@@ -176,7 +176,7 @@ extension CodexRuntime {
         for session in tracked.values where session.pid == pid { detach(session.id) }
     }
 
-    func detach(_ id: PiSession.ID) {
+    func detach(_ id: Session.ID) {
         guard let session = tracked.removeValue(forKey: id) else { return }
         session.cancelWaits()
         threads = threads.filter { if case .session(id, _, _) = $0.value { false } else { true } }
@@ -184,7 +184,7 @@ extension CodexRuntime {
         bridge.detach(id, reason: .closed(reason: "quit"))
     }
 
-    func refresh(_ id: PiSession.ID, skills: Bool = false) {
+    func refresh(_ id: Session.ID, skills: Bool = false) {
         Task {
             do {
                 guard let session = tracked[id] else { return }
@@ -195,9 +195,9 @@ extension CodexRuntime {
                     let entries = (listed["data"]?.array?.first?["skills"]?.array ?? []).filter { $0["enabled"]?.bool != false }
                     session.skills = entries.compactMap { entry in entry["name"]?.string.flatMap { name in entry["path"]?.string.map { (name, $0) } } }
                     let modes = hosted[session.pid] == nil ? [] : Self.modeCommands
-                    let commands = Self.builtinCommands + modes + entries.compactMap { entry -> PiSlashCommand? in
+                    let commands = Self.builtinCommands + modes + entries.compactMap { entry -> SlashCommand? in
                         guard let name = entry["name"]?.string else { return nil }
-                        return PiSlashCommand(name: "skill:\(name)", summary: entry["description"]?.string.map { $0.clipped(ToolDetail.limit) }, source: .known(.skill))
+                        return SlashCommand(name: "skill:\(name)", summary: entry["description"]?.string.map { $0.clipped(ToolDetail.limit) }, source: .known(.skill))
                     }
                     bridge.update(id) { $0.commands = commands }
                 }
@@ -213,21 +213,21 @@ extension CodexRuntime {
 
     /// 能从 CuePad 执行的内置命令：Codex 的斜杠命令是终端界面自己实现的，只有这几个有对应的接口。
     private static let builtinCommands = [
-        PiSlashCommand(name: "compact", summary: String(localized: "压缩上下文"), source: .known(.builtin)),
-        PiSlashCommand(name: "name", summary: String(localized: "给会话改名"), source: .known(.builtin), hint: String(localized: "<名字>")),
-        PiSlashCommand(name: "model", summary: String(localized: "换模型"), source: .known(.builtin), hint: String(localized: "<模型>")),
+        SlashCommand(name: "compact", summary: String(localized: "压缩上下文"), source: .known(.builtin)),
+        SlashCommand(name: "name", summary: String(localized: "给会话改名"), source: .known(.builtin), hint: String(localized: "<名字>")),
+        SlashCommand(name: "model", summary: String(localized: "换模型"), source: .known(.builtin), hint: String(localized: "<模型>")),
     ]
 
     /// 托管会话切协作模式（终端会话的模式归终端界面管）
     private static let modeCommands = [
-        PiSlashCommand(name: "plan", summary: String(localized: "进 Plan 模式：先问清楚、出计划，不动手"), source: .known(.builtin), hint: String(localized: "[话]")),
-        PiSlashCommand(name: "default", summary: String(localized: "回默认模式"), source: .known(.builtin)),
+        SlashCommand(name: "plan", summary: String(localized: "进 Plan 模式：先问清楚、出计划，不动手"), source: .known(.builtin), hint: String(localized: "[话]")),
+        SlashCommand(name: "default", summary: String(localized: "回默认模式"), source: .known(.builtin)),
     ]
 
     /// 会话的控制通道：托管的是它的进程，终端里的是常驻服务（钩子的父进程就是它才算；`codex exec` 之类没有控制接口）。
     func control(_ session: Tracked) async throws -> CodexRPC {
         if let rpc = hosted[session.pid]?.rpc { return rpc }
-        guard let rpc = try await daemonConnection(), rpc.pid == session.pid else { throw PiBridgeError.unsupported }
+        guard let rpc = try await daemonConnection(), rpc.pid == session.pid else { throw BridgeError.unsupported }
         return rpc
     }
 

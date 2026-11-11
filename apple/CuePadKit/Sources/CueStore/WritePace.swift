@@ -1,6 +1,6 @@
 import Foundation
 
-/// 一条同步记录的写入节拍：会话状态（`PiSessionSnapshot`）与 Cue 此刻的样子（`CueStateContent`）共用，都由 `PiStateRecorder` 落盘。
+/// 一条同步记录的写入节拍：会话状态（`SessionSnapshot`）与 Cue 此刻的样子（`CueStateContent`）共用，都由 `StateRecorder` 落盘。
 /// 每次写入都是一次整条记录的上传与各端的下载，所以：
 /// - 与已写入的相同：不写，丢掉挂起的；
 /// - 关键变化立即写，取代挂起的：进入或离开工作（工作中→工作中之外的任何一步都算），或 `steady` 变了；

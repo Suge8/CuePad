@@ -96,7 +96,7 @@ extension CueStore {
   /// 写回结果：失败的原因随 `DeliveryOutcome.failed` 一起来，没有不带原因的失败。
   /// 只改还没有结果的（放弃的是待领取的、执行的是执行中的），不覆盖已经写下的结果。
   /// 任务的状态与正文都不因说话而变：发出的正文留在任务上，"发过没有"看投送请求。
-  /// 你的作答成功了，同一个事务里往那个会话的对话写下你答了什么（`PiChatRole.answer`；Cue 替你答的不写，记在它那一轮的经过里）。
+  /// 你的作答成功了，同一个事务里往那个会话的对话写下你答了什么（`ChatRole.answer`；Cue 替你答的不写，记在它那一轮的经过里）。
   func finishDelivery(_ request: DeliveryRequest, _ outcome: DeliveryOutcome, at completed: Date) throws -> Bool {
     try write { try applyDeliveryOutcome(request, outcome, at: completed) }
   }
@@ -122,7 +122,7 @@ extension CueStore {
     // 你写下作答请求的时刻，不是这里执行完的时刻（离线答的、Mac 晚领取的，执行晚于答）
     let seq = try db.first("SELECT MAX(seq) FROM piMessages WHERE sessionID = ?", [session]) { $0.isNull(0) ? 0 : $0.int(0) } ?? 0
     _ = try insert(
-      PiChatMessage(
+      ChatMessage(
         sessionID: session, entryID: "answer/\(id.uuidString.lowercased())", seq: seq, role: .answer, text: answer.value.said, at: request.createdAt,
         deliveryID: id, question: answer.question, shownText: answer.value.shown),
       ignoringExisting: true)

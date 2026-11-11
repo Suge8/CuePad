@@ -15,17 +15,17 @@ struct RuntimeDisplayTests {
         let workspace = Workspace(services: app.services)
         let recorder = try await app.runtimeRecorder(on: "mac-a", boot: "test-boot")
         var tasks: [UUID] = []
-        for (id, state) in [("working", PiWorkState.thinking), ("compacting", .compacting), ("delegating", .delegating)] {
+        for (id, state) in [("working", WorkState.thinking), ("compacting", .compacting), ("delegating", .delegating)] {
             let task = try await workspace.createTask(id, in: Project.defaultID)
             tasks.append(task.id)
             try await recorder.update(sessionID: id, state: state, title: id, hosted: true, subagents: [
-                PiSubagentState(name: "builder", role: "工程师", phase: .known(.running)),
-                PiSubagentState(name: "builder", role: "审查员", phase: .known(.review)),
+                SubagentState(name: "builder", role: "工程师", phase: .known(.running)),
+                SubagentState(name: "builder", role: "审查员", phase: .known(.review)),
             ])
             try await store.bindSession(id, to: task.id)
-            try await store.writePiTranscript(PiTranscript(sessionID: id, messages: [
-                PiChatMessage(sessionID: id, entryID: "u1", seq: 1, role: .user, text: "关机前的工作", at: clock.now),
-            ], recap: PiRecap(lastPrompt: "关机前的工作")))
+            try await store.writePiTranscript(SessionTranscript(sessionID: id, messages: [
+                ChatMessage(sessionID: id, entryID: "u1", seq: 1, role: .user, text: "关机前的工作", at: clock.now),
+            ], recap: Recap(lastPrompt: "关机前的工作")))
         }
         func now() async throws -> CueNow {
             CueNow(try await CueDigest.read(from: store), at: .always(at: clock.now), local: .init(waiting: nil, here: nil))
@@ -51,7 +51,7 @@ struct RuntimeDisplayTests {
         #expect(snapshot.shown(at: snapshot.at + 601).isLive && !snapshot.shown(at: snapshot.at + 601).hasConfirmedActivity)
 
         try await store.recordMacPresence(host: "mac-a", bootID: "new-system-boot") { true }
-        try await store.writePiTranscript(PiTranscript(sessionID: "compacting", messages: [], recap: PiRecap(lastReply: "晚到的历史")))
+        try await store.writePiTranscript(SessionTranscript(sessionID: "compacting", messages: [], recap: Recap(lastReply: "晚到的历史")))
         let after = try #require(try await store.piSessions(sessionIDs: ["compacting"])["compacting"]?.state)
         #expect(after.state == .known(.compacting) && after.bootID == "test-boot")
         #expect(try await !store.runtimeIsConfirmed(after, at: clock.now))
@@ -74,13 +74,13 @@ struct RuntimeDisplayTests {
         let second = try await store.createTask("审查", under: task.id)
         let a = try await app.runtimeRecorder(on: "mac-a", boot: "test-boot")
         try await a.update(sessionID: "a", state: .thinking, title: "实现", subagents: [
-            PiSubagentState(name: "builder", role: "工程师", phase: .known(.running)),
+            SubagentState(name: "builder", role: "工程师", phase: .known(.running)),
         ])
         try await store.bindSession("a", to: first.id)
         clock.advance(.seconds(240))
         let b = try await app.runtimeRecorder(on: "mac-b", boot: "test-boot")
         try await b.update(sessionID: "b", state: .delegating, title: "审查", subagents: [
-            PiSubagentState(name: "reviewer", role: "审查员", phase: .known(.running)),
+            SubagentState(name: "reviewer", role: "审查员", phase: .known(.running)),
         ])
         try await store.bindSession("b", to: second.id)
         func now() async throws -> CueNow {
@@ -118,7 +118,7 @@ struct RuntimeDisplayTests {
         let task = try await workspace.createTask("两台 Mac 并行交付", in: Project.defaultID)
         let b = try await app.runtimeRecorder(on: "mac-b", boot: "test-boot")
         try await b.update(sessionID: "b", state: .delegating, title: "审查", subagents: [
-            PiSubagentState(name: "reviewer", role: "审查员", phase: .known(.running)),
+            SubagentState(name: "reviewer", role: "审查员", phase: .known(.running)),
         ])
         try await store.bindSession("b", to: task.id)
         for index in 0..<7 {
@@ -148,7 +148,7 @@ struct RuntimeDisplayTests {
         let askLeaf = try await store.createTask("发布", under: task.id)
         let runningLeaf = try await store.createTask("测试", under: task.id)
         let a = try await app.runtimeRecorder(on: "mac-a", boot: "test-boot")
-        try await a.update(sessionID: "asking", state: .waitingForUser, title: "发布", question: PiQuestion(promptID: "p", kind: .confirm, text: "推送吗？"))
+        try await a.update(sessionID: "asking", state: .waitingForUser, title: "发布", question: Question(promptID: "p", kind: .confirm, text: "推送吗？"))
         try await store.bindSession("asking", to: askLeaf.id)
         clock.advance(.seconds(240))
         let b = try await app.runtimeRecorder(on: "mac-b", boot: "test-boot")
@@ -179,7 +179,7 @@ struct RuntimeDisplayTests {
         let secondGate = try await store.createTask("另一处确认", under: second.id)
         let recorder = try await app.runtimeRecorder(on: "worker", boot: "test-boot")
         try await recorder.update(sessionID: "shared", state: .thinking, title: "共享会话", subagents: [
-            PiSubagentState(name: "builder", role: "工程师", phase: .known(.running)),
+            SubagentState(name: "builder", role: "工程师", phase: .known(.running)),
         ])
         try await store.bindSession("shared", to: sharedLeaf.id)
         try await store.bindSession("shared", to: secondShared.id)
@@ -190,7 +190,7 @@ struct RuntimeDisplayTests {
         #expect(both.advancing == 2 && both.tally.moving == 2 && both.subagents == 1)
         clock.advance(.seconds(240))
         let gate = try await app.runtimeRecorder(on: "gate-host", boot: "test-boot")
-        let question = PiQuestion(promptID: "p", kind: .confirm, text: "发布吗？")
+        let question = Question(promptID: "p", kind: .confirm, text: "发布吗？")
         try await gate.update(sessionID: "gate", state: .waitingForUser, title: "发布确认", question: question)
         try await store.bindSession("gate", to: gateLeaf.id)
         let held = try await now()
@@ -221,10 +221,10 @@ struct RuntimeDisplayTests {
         process.standardOutput = FileHandle.nullDevice
         try process.run()
         defer { try? input.fileHandleForWriting.close(); process.waitUntilExit() }
-        let identity = try #require(PiProcess.running(pid: process.processIdentifier))
+        let identity = try #require(SessionProcess.running(pid: process.processIdentifier))
         for (id, evidence) in [("alive", identity), ("unknown", nil)] {
             let task = try await workspace.createTask(id, in: Project.defaultID)
-            let writer = evidence == nil ? PiStateRecorder(store: store, hostID: TestApp.hostID, bootID: nil) : recorder
+            let writer = evidence == nil ? StateRecorder(store: store, hostID: TestApp.hostID, bootID: nil) : recorder
             try await writer.update(sessionID: id, state: .compacting, title: id, hosted: true, process: evidence)
             try await store.bindSession(id, to: task.id)
         }

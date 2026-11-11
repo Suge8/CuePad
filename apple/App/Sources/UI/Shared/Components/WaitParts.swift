@@ -2,7 +2,7 @@ import CueStore
 import SwiftUI
 
 nonisolated extension CueWait {
-    /// Cue 的是代码写的问句（`CueMessage.headline`）与 `CueAsking.why`（只有规矩那一类有）；会话的见 `PiSessionState.asked`。
+    /// Cue 的是代码写的问句（`CueMessage.headline`）与 `CueAsking.why`（只有规矩那一类有）；会话的见 `SessionState.asked`。
     var asked: (line: String, detail: String?) {
         switch wait {
         case .message(let message, _): (message.headline ?? "", message.asking?.why)
@@ -11,10 +11,10 @@ nonisolated extension CueWait {
     }
 }
 
-nonisolated extension PiSessionState {
-    /// 选项不写进来（它们是胶囊）。在等却没报出问题时是它此刻那一句（`PiProgress.line`）。
+nonisolated extension SessionState {
+    /// 选项不写进来（它们是胶囊）。在等却没报出问题时是它此刻那一句（`SessionProgress.line`）。
     var asked: (line: String, detail: String?) {
-        let lines = (question?.text ?? PiProgress.line(of: self) ?? "").split(separator: "\n", maxSplits: 1).map(String.init)
+        let lines = (question?.text ?? SessionProgress.line(of: self) ?? "").split(separator: "\n", maxSplits: 1).map(String.init)
         return (lines.first ?? "", lines.count > 1 ? lines[1] : nil)
     }
 }

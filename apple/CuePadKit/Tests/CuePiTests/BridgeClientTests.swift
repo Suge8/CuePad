@@ -9,14 +9,14 @@ import CueStore
 @MainActor
 struct BridgeClientTests {
     let dir: URL
-    let bridge: PiBridge
+    let bridge: Bridge
 
     init() throws {
         dir = try makeTempDirectory()
-        bridge = PiBridge(socketDirectory: dir)
+        bridge = Bridge(socketDirectory: dir)
     }
 
-    private func session(_ id: String) -> PiSession? { bridge.sessions.first { $0.id == id } }
+    private func session(_ id: String) -> Session? { bridge.sessions.first { $0.id == id } }
 
     // MARK: 增量更新
 
@@ -83,12 +83,12 @@ struct BridgeClientTests {
 
     @Test func theSocketDirectoryIsOwnerOnlyAndAnInsecureOneIsRefused() throws {
         let fresh = dir.appending(path: "sub")
-        try PiBridge(socketDirectory: fresh).start()
+        try Bridge(socketDirectory: fresh).start()
         var st = stat()
         #expect(lstat(fresh.path, &st) == 0 && st.st_mode & 0o777 == 0o700 && st.st_uid == getuid())
 
         chmod(dir.path, 0o755)
-        #expect(throws: PiBridgeError.self) { try bridge.start() }
+        #expect(throws: BridgeError.self) { try bridge.start() }
     }
 
     /// 启动时同步扫一遍目录，要连的话 `start()` 返回时连接已排进对端的 backlog：此刻监听端不可读就是没连。
@@ -129,10 +129,10 @@ struct BridgeClientTests {
         try ext.start()
         try bridge.start()
         try await eventually("appeared") { session(ext.id) != nil }
-        let pending = Task { try await bridge.send(PiMessage(text: "x"), to: ext.id) }
+        let pending = Task { try await bridge.send(SessionMessage(text: "x"), to: ext.id) }
         try await eventually("命令到达") { !ext.commands.isEmpty }
         ext.crash()
-        await #expect(throws: PiBridgeError.sessionEnded) { try await pending.value }
+        await #expect(throws: BridgeError.sessionEnded) { try await pending.value }
     }
 
     // MARK: 分格观察

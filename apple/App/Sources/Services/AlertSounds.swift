@@ -34,14 +34,14 @@ nonisolated struct AlertPreference: Equatable, Sendable {
 
 /// 本机、不同步。
 nonisolated struct AlertPreferences: Equatable, Sendable {
-    private var kinds: [PiAlert: AlertPreference]
+    private var kinds: [AlertKind: AlertPreference]
 
-    subscript(kind: PiAlert) -> AlertPreference {
+    subscript(kind: AlertKind) -> AlertPreference {
         get { kinds[kind] ?? Self.fallback(kind) }
         set { kinds[kind] = newValue }
     }
 
-    private static func fallback(_ kind: PiAlert) -> AlertPreference {
+    private static func fallback(_ kind: AlertKind) -> AlertPreference {
         switch kind {
         case .waitingForUser: AlertPreference(isOn: true, sound: .chime)
         case .awaitsReply: AlertPreference(isOn: true, sound: .tap)
@@ -53,7 +53,7 @@ nonisolated struct AlertPreferences: Equatable, Sendable {
 
     /// 存成 `[种类: [on, sound]]`；没存过的种类用缺省，`sound` 为空串是"无"。
     init(stored: [String: Any]? = nil) {
-        kinds = Dictionary(uniqueKeysWithValues: PiAlert.allCases.map { kind in
+        kinds = Dictionary(uniqueKeysWithValues: AlertKind.allCases.map { kind in
             let entry = stored?[kind.rawValue] as? [String: Any], fallback = Self.fallback(kind)
             return (kind, AlertPreference(
                 isOn: entry?[Self.on] as? Bool ?? fallback.isOn,
@@ -62,7 +62,7 @@ nonisolated struct AlertPreferences: Equatable, Sendable {
     }
 
     var stored: [String: Any] {
-        Dictionary(uniqueKeysWithValues: PiAlert.allCases.map { kind in
+        Dictionary(uniqueKeysWithValues: AlertKind.allCases.map { kind in
             (kind.rawValue, [Self.on: self[kind].isOn, Self.sound: self[kind].sound?.rawValue ?? ""] as [String: Any])
         })
     }

@@ -70,19 +70,19 @@ extension DebugScene {
         if let card = try await card(in: project ?? Project.defaultID, store: workspace.services.store) { workspace.push(.card(card)) }
     }
 
-    static func demoSession(titled title: String, store: CueStore) async throws -> PiSessionState? {
-        try await store.piSessionPage(PiSessionQuery(text: title)).items.first { $0.state.title == title }?.state
+    static func demoSession(titled title: String, store: CueStore) async throws -> SessionState? {
+        try await store.piSessionPage(SessionQuery(text: title)).items.first { $0.state.title == title }?.state
     }
 
     /// 演示模式没有同步，真实状态出不来。
-    static var alertStatus: PiAlertStatus? {
+    static var alertStatus: AlertStatus? {
         switch args.alertStatus {
-        case "on": PiAlertStatus(authorization: .authorized, registration: .registered, subscription: .active)
-        case "pending": PiAlertStatus(authorization: .authorized, registration: .pending, subscription: .off)
-        case "denied": PiAlertStatus(authorization: .denied, registration: .pending, subscription: .off)
-        case "undetermined": PiAlertStatus(authorization: .notDetermined, registration: .pending, subscription: .off)
-        case "registerFailed": PiAlertStatus(authorization: .authorized, registration: .failed(String(localized: "没有连接到 Apple 推送服务", table: "Demo")), subscription: .off)
-        case "subscribeFailed": PiAlertStatus(authorization: .authorized, registration: .registered, subscription: .failed(String(localized: "iCloud 账号不可用", table: "Demo")))
+        case "on": AlertStatus(authorization: .authorized, registration: .registered, subscription: .active)
+        case "pending": AlertStatus(authorization: .authorized, registration: .pending, subscription: .off)
+        case "denied": AlertStatus(authorization: .denied, registration: .pending, subscription: .off)
+        case "undetermined": AlertStatus(authorization: .notDetermined, registration: .pending, subscription: .off)
+        case "registerFailed": AlertStatus(authorization: .authorized, registration: .failed(String(localized: "没有连接到 Apple 推送服务", table: "Demo")), subscription: .off)
+        case "subscribeFailed": AlertStatus(authorization: .authorized, registration: .registered, subscription: .failed(String(localized: "iCloud 账号不可用", table: "Demo")))
         default: nil
         }
     }

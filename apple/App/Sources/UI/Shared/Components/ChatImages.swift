@@ -28,7 +28,7 @@ struct ChatImages: View {
                     ForEach(start..<min(start + Self.perRow, hashes.count), id: \.self) { index in
                         ChatImage(
                             hash: hashes[index], side: side, fitWidth: hashes.count == 1 ? singleWidth : nil,
-                            zoom: PreviewZoomKey(group: group, preview: PiPreview.id(of: hashes[index]))
+                            zoom: PreviewZoomKey(group: group, preview: PreviewItem.id(of: hashes[index]))
                         ) { open(hashes[index]) }
                     }
                 }
@@ -93,7 +93,7 @@ struct ChatFiles: View {
     }
 }
 
-extension PiPreview {
+extension PreviewItem {
     /// 名字的扩展名与键的不一致时（键按内容认的、名字没写）接上键的：全屏页按它认类型、找本机那份。
     init?(attachment file: DraftFile) {
         guard let parts = AttachmentKey.parts(file.key) else { return nil }

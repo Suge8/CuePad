@@ -47,7 +47,7 @@ final class CueService {
     private nonisolated static let log = Logger(subsystem: AppIdentity.id, category: "cue")
 
     /// 与会话状态同一个节拍、同一条落盘链，资料库与本机 id 也取 `recorder` 的。
-    init(recorder: PiStateRecorder, sync: (any SyncControlling)?, library: URL, piAgentDirectory: URL, dependencies: CueDependencies) {
+    init(recorder: StateRecorder, sync: (any SyncControlling)?, library: URL, piAgentDirectory: URL, dependencies: CueDependencies) {
         let store = recorder.store
         setup = CueKeeper.Setup(
             recorder: recorder, launch: { [launch = dependencies.launch] in try await launch($0, store) }, helper: dependencies.helper,
@@ -98,7 +98,7 @@ final class CueService {
     }
 
     /// 不再值班：库里写回歇着（立即写、丢掉挂起的那一步），别的设备不会一直看到它在想（不在主线程上等，退出收尾时也能写）。
-    private nonisolated static func rest(_ recorder: PiStateRecorder) async {
+    private nonisolated static func rest(_ recorder: StateRecorder) async {
         do {
             try await recorder.updateCue(.settled)
         } catch {

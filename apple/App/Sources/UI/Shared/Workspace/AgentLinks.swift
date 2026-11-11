@@ -2,7 +2,7 @@ import CueStore
 import SwiftUI
 
 nonisolated struct AgentLinks: Sendable, Equatable {
-    var items: [UUID: PiSessionListItem]
+    var items: [UUID: SessionListItem]
     var launching: [UUID: AgentKind]
 
     static func read(from store: isolated CueStore) throws -> AgentLinks {
@@ -47,14 +47,14 @@ struct AgentDot: View {
             let shown = workspace.shown(item)
             #if os(iOS)
             Button { workspace.openSession(item.state.id, sessionID: item.state.sessionID) } label: {
-                PiStateDot(shown: shown, size: 8).relaySpot(session: item.state.sessionID, row: .task)
+                StateDot(shown: shown, size: 8).relaySpot(session: item.state.sessionID, row: .task)
                     .frame(width: ControlSize.target, height: ControlSize.target).contentShape(.rect)
             }
             .buttonStyle(PressStyle(.inline))
             .accessibilityLabel("\(item.state.title) \(shown.presence)")
             .accessibilityHint("看 Agent 的会话")
             #else
-            PiStateDot(shown: shown, size: 7)
+            StateDot(shown: shown, size: 7)
                 .relaySpot(session: item.state.sessionID, row: .task)
                 .sessionLink(item.state.sessionID, press: .control)
                 .help("交给了 Agent 会话「\(item.state.title)」：\(shown.presence)，点开看近况")

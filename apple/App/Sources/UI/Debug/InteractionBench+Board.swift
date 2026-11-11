@@ -15,7 +15,7 @@ extension InteractionBench {
             workspace.selectPane(.progress)
             await Task.wait(for: .seconds(1))
             for _ in 0..<2 {
-                await step("看板→会话") { workspace.openSession(PiSessionState.recordID(sessionID: session), sessionID: session) }
+                await step("看板→会话") { workspace.openSession(SessionState.recordID(sessionID: session), sessionID: session) }
                 await step("会话→看板") { workspace.selectPane(.progress) }
             }
         }

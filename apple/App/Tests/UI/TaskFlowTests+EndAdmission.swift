@@ -8,16 +8,16 @@ import Testing
 
 /// 插入点在真实桥的 SessionLink.end 内、向 Agent 交出关闭之前；已经过执行器资格判断及桥的 TaskGroup 调度。
 private final class InterleavingEndLink: SessionLink {
-    let bridge: PiBridge
+    let bridge: Bridge
     let beforeEnd: () async throws -> Void
     var handed = false
 
-    init(bridge: PiBridge, beforeEnd: @escaping () async throws -> Void) {
+    init(bridge: Bridge, beforeEnd: @escaping () async throws -> Void) {
         self.bridge = bridge
         self.beforeEnd = beforeEnd
     }
 
-    func end(_ id: PiSession.ID) async throws {
+    func end(_ id: Session.ID) async throws {
         try await beforeEnd()
         handed = true
         bridge.detach(id, reason: .closed(reason: "quit"))
@@ -32,7 +32,7 @@ extension TaskFlowTests {
         let borrower = try await workspace.createTask("继续语音", in: Project.defaultID)
         workspace.startFresh(task)
         let launch = try #require(try await eventually(store, { try $0.deliveryRequests().first { $0.mode == .known(.start) } }) { $0 != nil })
-        try await PiStateRecorder(store: store, hostID: TestApp.hostID).update(
+        try await StateRecorder(store: store, hostID: TestApp.hostID).update(
             sessionID: "interleaved", state: .thinking, projectID: Project.defaultID, launchToken: launch.launch?.token, hosted: true)
         try await store.deleteDelivery(launch.id)
         try await workspace.complete(task.id)
@@ -48,9 +48,9 @@ extension TaskFlowTests {
             #expect(workspace.notice?.isError == true)
             #expect(try await self.store.deliveryRequests().filter { $0.mode == .known(.send) }.isEmpty)
         }
-        var session = PiSession(
+        var session = Session(
             id: "interleaved.1", sessionID: "interleaved", agent: .pi, sessionFile: nil, pid: 1, cwd: rig.directory,
-            terminal: PiTerminal(), state: .thinking, stateSince: .now)
+            terminal: TerminalIdentity(), state: .thinking, stateSince: .now)
         session.hosted = true
         rig.pi.attach(session, via: link)
         defer { rig.pi.stop(); services.cancelBackgroundWork() }

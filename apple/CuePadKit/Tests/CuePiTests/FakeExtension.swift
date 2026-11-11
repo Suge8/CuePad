@@ -62,14 +62,14 @@ nonisolated final class FakeExtension: @unchecked Sendable {
     }
     private let shared = Mutex(Shared())
     private var source: DispatchSourceRead?
-    private var socketFile: PiSocketDirectory.FileIdentity?
+    private var socketFile: SocketDirectory.FileIdentity?
     private let queue = DispatchQueue(label: "fake-extension")
     /// 对每条命令回一个 ack 体（不含 t/id）；nil 表示不回。
     var onCommand: @Sendable (_ connection: Int, _ command: [String: Any]) -> [String: Any]? = { _, _ in ["ok": true] }
 
     /// 与真扩展（Node：写已断开的连接只得到 EPIPE）一样，写不会让进程收到 SIGPIPE；写与关闭互斥、关闭后的写丢掉：
     /// 回 ack 与另一条线程上的告别关闭（`close(bye:)`）会交错，关闭后再写会落到已关掉的连接或被复用的描述符上，
-    /// SIGPIPE 会杀掉整个测试宿主（同 `PiSocketConnection` 的写法）。
+    /// SIGPIPE 会杀掉整个测试宿主（同 `SocketConnection` 的写法）。
     private final class Connection: @unchecked Sendable {
         let fd: Int32
         var source: DispatchSourceRead?
@@ -138,7 +138,7 @@ nonisolated final class FakeExtension: @unchecked Sendable {
             throw POSIXError(.init(rawValue: errno)!)
         }
         shared.withLock { $0.listenFD = fd }
-        socketFile = PiSocketDirectory.identity(of: socketURL.path)
+        socketFile = SocketDirectory.identity(of: socketURL.path)
         let src = DispatchSource.makeReadSource(fileDescriptor: fd, queue: queue)
         src.setEventHandler { [weak self] in self?.accept() }
         src.setCancelHandler { Darwin.close(fd) }  // 同 Connection.close：事件源注销后才关
@@ -267,7 +267,7 @@ nonisolated final class FakeExtension: @unchecked Sendable {
         broadcast(["t": "bye", "reason": reason])
         crash()
         // 只删自己那个文件：closeAfterReply 排在队列上晚到时，同一会话（同名同 pid）的下一个假扩展可能已在这个路径上 listen 了
-        if let socketFile, PiSocketDirectory.identity(of: socketURL.path) == socketFile { unlink(socketURL.path) }
+        if let socketFile, SocketDirectory.identity(of: socketURL.path) == socketFile { unlink(socketURL.path) }
     }
 
     /// 回完手上这条命令再告别退出（Pi 收到 end 也是先回 ack 再走）：排在处理命令的同一条队列上，ack 一定先于 bye 写出。

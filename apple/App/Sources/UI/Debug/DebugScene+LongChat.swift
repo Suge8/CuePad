@@ -22,38 +22,38 @@ extension DebugScene {
     }
 
     private static func appendRounds(_ sessionID: String, rounds: Int, store: CueStore) async throws {
-        guard let session = try await store.piSessionPage(PiSessionQuery(id: PiSessionState.recordID(sessionID: sessionID))).items.first?.state else { return }
+        guard let session = try await store.piSessionPage(SessionQuery(id: SessionState.recordID(sessionID: sessionID))).items.first?.state else { return }
         let recorder = demoRecorder(store, host: session.hostID, minInterval: .zero)
-        func set(_ state: PiWorkState, detail: String? = nil, agents: [PiSubagentState]) async throws {
+        func set(_ state: WorkState, detail: String? = nil, agents: [SubagentState]) async throws {
             _ = try await recorder.update(
                 sessionID: sessionID, state: state, detail: detail, title: session.title, directory: session.folder, projectID: session.projectID, subagents: agents)
         }
-        func write(_ messages: [PiChatMessage], _ recap: PiRecap) async throws {
-            try await store.writePiTranscript(PiTranscript(sessionID: sessionID, messages: messages, recap: recap))
+        func write(_ messages: [ChatMessage], _ recap: Recap) async throws {
+            try await store.writePiTranscript(SessionTranscript(sessionID: sessionID, messages: messages, recap: recap))
         }
         for round in 0..<rounds {
             let seq = Int64(1_000_000 + round * 3)
-            let you = PiChatMessage(sessionID: sessionID, entryID: "stream-u\(round)", seq: seq, role: .user, text: longChatPrompt(round + 1), at: .now)
-            try await write([you], PiRecap(pendingPrompt: you.text))
-            var tools = PiChatMessage.Tools()
+            let you = ChatMessage(sessionID: sessionID, entryID: "stream-u\(round)", seq: seq, role: .user, text: longChatPrompt(round + 1), at: .now)
+            try await write([you], Recap(pendingPrompt: you.text))
+            var tools = ChatMessage.Tools()
             for step in 0..<15 {
                 await Task.wait(for: .milliseconds(200))
                 tools.record(.init(kind: step % 4 == 0 ? .said : .command, target: step % 4 == 0 ? String(localized: "看一下第 \(step) 步的输出", table: "Demo") : "pnpm test -- --run case\(step)"))
-                try await write([], PiRecap(pendingPrompt: you.text, pendingTools: tools))
-                let helper = PiSubagentState(name: "helper-\(round)", role: String(localized: "工程师", table: "Demo"), phase: .known(.running), action: String(localized: "第 \(step) 步", table: "Demo"), startedAt: you.at)
+                try await write([], Recap(pendingPrompt: you.text, pendingTools: tools))
+                let helper = SubagentState(name: "helper-\(round)", role: String(localized: "工程师", table: "Demo"), phase: .known(.running), action: String(localized: "第 \(step) 步", table: "Demo"), startedAt: you.at)
                 try await set(step % 2 == 0 ? .tool : .thinking, detail: step % 2 == 0 ? "bash · pnpm test case\(step)" : nil, agents: [helper])
             }
-            let answer = PiChatMessage(
+            let answer = ChatMessage(
                 sessionID: sessionID, entryID: "stream-p\(round)", seq: seq + 1, role: .pi, text: longChatReply(round + 1), at: .now, tools: tools, roundStartedAt: you.at)
-            try await write([answer], PiRecap(lastPrompt: you.text, lastReply: answer.text))
-            let helper = PiSubagentState(name: "helper-\(round)", role: String(localized: "工程师", table: "Demo"), phase: .known(.running), action: String(localized: "收尾", table: "Demo"), startedAt: you.at)
+            try await write([answer], Recap(lastPrompt: you.text, lastReply: answer.text))
+            let helper = SubagentState(name: "helper-\(round)", role: String(localized: "工程师", table: "Demo"), phase: .known(.running), action: String(localized: "收尾", table: "Demo"), startedAt: you.at)
             try await set(.delegating, agents: [helper])
             await Task.wait(for: .seconds(1))
-            let returned = PiChatMessage(
+            let returned = ChatMessage(
                 sessionID: sessionID, entryID: "stream-m\(round)", seq: seq + 2, role: .machine,
                 text: "<firecode_master_event>\nhelper-\(round) 交回：\(longChatReply(round))\n</firecode_master_event>", at: .now)
-            try await write([returned], PiRecap(lastPrompt: you.text, lastReply: answer.text))
-            try await set(.settled, agents: [PiSubagentState(name: "helper-\(round)", role: String(localized: "工程师", table: "Demo"), phase: .known(.done), startedAt: you.at, settledAt: .now)])
+            try await write([returned], Recap(lastPrompt: you.text, lastReply: answer.text))
+            try await set(.settled, agents: [SubagentState(name: "helper-\(round)", role: String(localized: "工程师", table: "Demo"), phase: .known(.done), startedAt: you.at, settledAt: .now)])
             await Task.wait(for: .seconds(1))
         }
     }

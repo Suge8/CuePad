@@ -15,18 +15,18 @@ struct HandOffInput: View {
     /// 还没有哪台 Mac 写下过自己时没有决定（`noMac`）：新用户的常态、不是出错，原因叠在输入框上方。
     nonisolated private struct Planned: Equatable, Sendable {
         var plan: HandOffPlan?
-        var bound: PiSessionListItem?
+        var bound: SessionListItem?
         var fresh: HandOffPlan?
         var opening: String?
         var noMac = false
     }
 
-    private var sessions: [PiSessionListItem] {
+    private var sessions: [SessionListItem] {
         let live = HandOffTargets.sessions(services.liveSessions.live, project: outbox.project, at: services.speech)
         guard let bound = planned?.bound, !live.contains(where: { $0.state.sessionID == bound.state.sessionID }) else { return live }
         return [bound] + live
     }
-    private var chosen: PiSessionListItem? {
+    private var chosen: SessionListItem? {
         let all = sessions
         if let choice { return all.first { $0.state.id == choice } }
         return planned?.bound.flatMap { bound in all.first { $0.state.sessionID == bound.state.sessionID } }
@@ -42,7 +42,7 @@ struct HandOffInput: View {
             if workspace.outbox == nil, !draft.isEmpty(accepting: [.files, .cards]) { workspace.outbox = outbox }
         }
     }
-    private var chosenLive: PiSessionState? {
+    private var chosenLive: SessionState? {
         guard let chosen = chosen?.state else { return nil }
         return services.liveSessions.live.contains { $0.state.id == chosen.id } ? chosen : nil
     }
@@ -50,11 +50,11 @@ struct HandOffInput: View {
         guard let digest, let id = chosenLive?.id, digest.session?.id == id else { return nil }
         return digest
     }
-    private var config: PiConfigShown? { chosenDigest?.config(at: services.speech) }
+    private var config: ConfigShown? { chosenDigest?.config(at: services.speech) }
     private var catalog: AgentCatalog? { chosenDigest?.catalog }
-    private var commands: [PiSlashCommand] { chosen?.state.usableCommands(in: catalog) ?? [] }
+    private var commands: [SlashCommand] { chosen?.state.usableCommands(in: catalog) ?? [] }
 
-    private var tools: (session: PiSessionState, models: [PiModelOption], config: PiConfigShown)? {
+    private var tools: (session: SessionState, models: [ModelOption], config: ConfigShown)? {
         guard let session = chosen?.state, let config, let models = catalog?.models, session.capabilities.contains(.model), !models.isEmpty else { return nil }
         return (session, models, config)
     }
@@ -109,14 +109,14 @@ struct HandOffInput: View {
                 }),
             ], accessibilityLabel: chosen.map { "交给 \($0.state.title)，点开换会话" } ?? "交给新会话") {
                 DestinationChip(title: Text(chosen.map { "交给 \($0.state.title)" } ?? "交给 新会话")) {
-                    if let chosen { PiStateDot(shown: workspace.shown(chosen), size: 7) }
+                    if let chosen { StateDot(shown: workspace.shown(chosen), size: 7) }
                 }
             }
             Spacer(minLength: 0)
         }
     }
 
-    private func title(_ item: PiSessionListItem) -> Dotted {
+    private func title(_ item: SessionListItem) -> Dotted {
         HandOffTargets.title(item, project: workspace.catalog?.project(item.state.projectID), shown: workspace.shown(item))
     }
 

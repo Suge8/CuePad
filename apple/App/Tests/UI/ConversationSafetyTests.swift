@@ -16,15 +16,15 @@ struct ConversationSafetyTests {
         let task = try await workspace.createTask("来源未确认", in: Project.defaultID)
         let session = UUID().uuidString.lowercased()
         _ = try await store.recordMacPresence(host: TestApp.hostID) { true }
-        try await PiStateRecorder(store: store, hostID: TestApp.hostID).update(sessionID: session, state: .thinking)
+        try await StateRecorder(store: store, hostID: TestApp.hostID).update(sessionID: session, state: .thinking)
         try await store.bindSession(session, to: task.id)
         let delivery = UUID(), at = Date.now
-        try await store.writePiTranscript(PiTranscript(
+        try await store.writePiTranscript(SessionTranscript(
             sessionID: session,
-            messages: [PiChatMessage(
+            messages: [ChatMessage(
                 sessionID: session, entryID: "unknown-origin", seq: 1, role: .user, text: "已经收到，但来源记录尚未到达",
                 at: at, deliveryID: delivery)],
-            recap: PiRecap(pendingPrompt: "已经收到，但来源记录尚未到达")))
+            recap: Recap(pendingPrompt: "已经收到，但来源记录尚未到达")))
         let host = TestApp.hostID
         try await store.updateCueProfile { $0.hostID = host; $0.enabledAt = at }
         let cue = CueTools(store: store)

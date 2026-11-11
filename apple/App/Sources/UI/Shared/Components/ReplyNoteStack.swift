@@ -4,7 +4,7 @@ import SwiftUI
 /// 批注只存在本机；改批注在对话里点那处高亮。按实际内容高度选择整块或滚动，最多占默认 4.5 行的空间，不把输入与发送挤走。
 struct ReplyNoteStack: View {
     let notes: [ReplyNote]
-    let previews: [PiPreview]
+    let previews: [PreviewItem]
     let reveal: (ReplyNote) -> Void
     let remove: (ReplyNote) -> Void
     @Environment(\.palette) private var palette
@@ -53,7 +53,7 @@ private struct ReplyNoteLayout: Layout {
 
 private struct NoteRow: View {
     let note: ReplyNote
-    let quoted: PiPreview?
+    let quoted: PreviewItem?
     let reveal: () -> Void
     let remove: () -> Void
     @Environment(\.palette) private var palette
@@ -118,8 +118,8 @@ private struct NoteRow: View {
 
 /// 预览已随对话过期、取不到时照引用时记下的类型（`ReplyNote.kind`）。
 private struct QuoteThumb: View {
-    let preview: PiPreview?
-    let kind: PiPreviewKind?
+    let preview: PreviewItem?
+    let kind: PreviewKind?
     @Environment(\.palette) private var palette
 
     #if os(iOS)
@@ -144,7 +144,7 @@ private struct QuoteThumb: View {
     }
 
     private struct Picture: View {
-        let preview: PiPreview
+        let preview: PreviewItem
         @Environment(AppServices.self) private var services
         @Environment(\.palette) private var palette
         @Environment(\.displayScale) private var scale

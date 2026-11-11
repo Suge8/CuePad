@@ -35,13 +35,13 @@ extension CueStore {
 
   /// 点名的图都在发到手机的里，不在的抛 `shotMissing`（在写事务内调用）。
   func checkShots(_ shots: [CueShot]) throws {
-    for shot in shots where try find(PiPreview.self, shot.preview) == nil { throw CueStoreError.shotMissing(shot.preview.uuidString.lowercased()) }
+    for shot in shots where try find(PreviewItem.self, shot.preview) == nil { throw CueStoreError.shotMissing(shot.preview.uuidString.lowercased()) }
   }
 
   /// Cue 写下的置手机推送标志：要提示你的（`CueMessage.alerts`）且到得了你（`reaches`）出可见通知，其余静默叫醒（`CuePush`）。它提到的那几处此刻的样子一并记下（`CuePlace`）。
   func insertCueMessage(
     _ author: CueAuthor, text: String = "", shown: ShownText? = nil, asking: CueAsking? = nil, shots: [CueShot] = [], in project: Project? = nil,
-    urgent: Bool = false, task: UUID? = nil, tools: PiChatMessage.Tools? = nil, wake: CueWake? = nil, at time: Date? = nil, answeredRequests: [UUID]? = [], id: UUID = UUID()
+    urgent: Bool = false, task: UUID? = nil, tools: ChatMessage.Tools? = nil, wake: CueWake? = nil, at time: Date? = nil, answeredRequests: [UUID]? = [], id: UUID = UUID()
   ) throws -> CueMessage {
     let now = Date.stamp
     var message = CueMessage(
@@ -59,12 +59,12 @@ extension CueStore {
   /// 值班的管理器写，在这一轮开始的位置写下，之后每做完一步、以及这一轮做完时改它的清单与是谁的那一轮（你中途插话，Cue 自己醒来的一轮就成了回答你的）。你发起的写成 `round`；Cue 自己醒来的写成没有正文的 `note`。
   @discardableResult
   public func recordCueRound(
-    _ id: UUID?, startedAt: Date, answersYou: Bool, tools: PiChatMessage.Tools?, wake: CueWake? = nil
+    _ id: UUID?, startedAt: Date, answersYou: Bool, tools: ChatMessage.Tools?, wake: CueWake? = nil
   ) throws -> UUID {
     try write { try putCueRound(id, startedAt: startedAt, answersYou: answersYou, tools: tools, wake: wake) }
   }
 
-  private func putCueRound(_ id: UUID?, startedAt: Date, answersYou: Bool, tools: PiChatMessage.Tools?, wake: CueWake? = nil) throws -> UUID {
+  private func putCueRound(_ id: UUID?, startedAt: Date, answersYou: Bool, tools: ChatMessage.Tools?, wake: CueWake? = nil) throws -> UUID {
     let author: CueAuthor = answersYou ? .round : .note
     guard let id else { return try insertCueMessage(author, text: "", tools: tools, wake: wake, at: startedAt).id }
     try db.run(
@@ -76,7 +76,7 @@ extension CueStore {
   /// 清单、最终回复和歇着在同一事务写下，避免界面先看到歇着、后看到回答。没有正文时已接走的请求集合保存到经过行，返回该行 ID。CueKeeper 准备换大脑重跑的一轮只结束本轮，不把待重交请求记成已回答。
   @discardableResult
   public func finishCueRound(
-    _ id: UUID?, startedAt: Date, answersYou: Bool, tools: PiChatMessage.Tools?, reply: String?, as author: CueAuthor, context: CueContext?, answeredRequests: [UUID] = [], hostID: String? = nil, bootID: String? = nil
+    _ id: UUID?, startedAt: Date, answersYou: Bool, tools: ChatMessage.Tools?, reply: String?, as author: CueAuthor, context: CueContext?, answeredRequests: [UUID] = [], hostID: String? = nil, bootID: String? = nil
   ) throws -> UUID? {
     try write {
       var row = try tools.map { try putCueRound(id, startedAt: startedAt, answersYou: answersYou, tools: $0) } ?? id

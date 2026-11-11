@@ -57,14 +57,14 @@ struct VoiceStopRaceTests {
                 }
                 let request = try #require(try await rig.store.deliveryRequests(toSession: session.sessionID).last { $0.content == second })
                 // 另一客户端先交出 B；停止仍留在本机队列。真实消息回执负责确认这条投送，不能靠重投探测。
-                try await rig.app.pi.send(PiMessage(text: second, deliveryID: request.id.uuidString), to: session.id)
+                try await rig.app.pi.send(SessionMessage(text: second, deliveryID: request.id.uuidString), to: session.id)
                 try await eventually("B 的工具归属与真实消息已关联") {
                     try await rig.store.outcome(of: request).status == .known(.succeeded)
                         && voice.workspace.voiceExecutions.contains { $0.state.sessionID == session.sessionID }
                 }
             } else {
                 // 另一个客户端发新用户消息，没有 Cue 的投送身份。
-                try await rig.app.pi.send(PiMessage(text: second), to: session.id)
+                try await rig.app.pi.send(SessionMessage(text: second), to: session.id)
             }
             try await eventually("B 的真实工具开始工作") { FileManager.default.fileExists(atPath: rig.folder.appending(path: "B.pid").path) }
             b = try pid("B", in: rig)

@@ -7,12 +7,12 @@ import Foundation
 /// 从 works 而不是 advancing 展开：一个会话等你会让整项任务被 held 占着，其余并行会话仍要留在推进中。歇着也是 active，不按图形的 rank 偷删。
 nonisolated struct SessionRailData: Equatable, Sendable {
     struct Waiting: Equatable, Sendable {
-        let agent: PiSessionListItem
+        let agent: SessionListItem
         let deciding: Bool
     }
 
     var waiting: [Waiting]
-    var advancing: [PiSessionListItem]
+    var advancing: [SessionListItem]
 
     static func read(from store: isolated CueStore) throws -> Self {
         let tally = try store.cueTally()
@@ -34,10 +34,10 @@ nonisolated struct SessionRailData: Equatable, Sendable {
 
 struct SessionRailRows {
     struct Item: Identifiable {
-        let session: PiSessionState
+        let session: SessionState
         let name: String
         let pulse: BoardPulse
-        let waiting: PiShown.Status?
+        let waiting: SessionShown.Status?
         var id: String { session.sessionID }
     }
 
@@ -45,8 +45,8 @@ struct SessionRailRows {
     let advancing: [Item]
     let moving: Set<String>
 
-    init(_ data: SessionRailData, pulse: (PiSessionListItem) -> BoardPulse) {
-        func item(_ value: PiSessionListItem, waiting: PiShown.Status?) -> Item {
+    init(_ data: SessionRailData, pulse: (SessionListItem) -> BoardPulse) {
+        func item(_ value: SessionListItem, waiting: SessionShown.Status?) -> Item {
             let pulse = pulse(value)
             let session = pulse.session ?? value.state
             return Item(session: session, name: value.task?.title.nonEmpty ?? session.title, pulse: pulse, waiting: waiting)

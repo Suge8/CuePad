@@ -13,7 +13,7 @@ final class ACPHost {
     }
 
     private let agent: AgentKind
-    private let bridge: PiBridge
+    private let bridge: Bridge
     private let timing: Timing
     /// 起进程要的（`model` 是开会话时要的模型，`AgentKind.modelRef` 的写法；接着旧会话时为 nil）；没装抛 `notInstalled`
     private let launching: (_ model: String?) async throws -> Launching
@@ -21,7 +21,7 @@ final class ACPHost {
     private let processes: HostedProcesses
 
     init(
-        _ agent: AgentKind, bridge: PiBridge, timing: Timing, launching: @escaping (_ model: String?) async throws -> Launching,
+        _ agent: AgentKind, bridge: Bridge, timing: Timing, launching: @escaping (_ model: String?) async throws -> Launching,
         sessionFile: @escaping (_ cwd: URL, _ sessionID: String) -> URL
     ) {
         self.agent = agent
@@ -34,13 +34,13 @@ final class ACPHost {
 
     var sessionIDs: Set<String> { processes.sessionIDs }
 
-    func open(in directory: URL, launchToken: String, model: String? = nil) async throws -> PiSession.ID {
+    func open(in directory: URL, launchToken: String, model: String? = nil) async throws -> Session.ID {
         try await host(in: directory, model: model, launchToken: launchToken, sessionID: nil, admission: try processes.admission()) {
             try await $0.open(in: directory)
         }
     }
 
-    func resume(_ session: IndexedSession) async throws -> PiSession.ID {
+    func resume(_ session: IndexedSession) async throws -> Session.ID {
         if let live = bridge.session(sessionID: session.id) {
             guard live.hosted else { throw AgentRuntimeError.openElsewhere }
             return live.id
@@ -64,7 +64,7 @@ final class ACPHost {
     private func host(
         in directory: URL, model: String?, launchToken: String?, sessionID known: String?, admission: HostedProcesses.Admission,
         open: @escaping @MainActor (ACPSession) async throws -> Void
-    ) async throws -> PiSession.ID {
+    ) async throws -> Session.ID {
         let launch = try await launching(model)
         let session = ACPSession(dialect: launch.dialect, bridge: bridge, processes: processes)
         do {
@@ -79,9 +79,9 @@ final class ACPHost {
             throw error
         }
         guard let sessionID = session.sessionID, let process = session.connection?.process else { throw AgentRuntimeError.launchFailed(agent, "") }
-        var state = PiSession(
+        var state = Session(
             id: "\(sessionID).\(process.pid)", sessionID: sessionID, agent: agent, sessionFile: sessionFile(directory, sessionID), pid: process.pid,
-            cwd: directory, terminal: PiTerminal(), state: .settled, stateSince: .now)
+            cwd: directory, terminal: TerminalIdentity(), state: .settled, stateSince: .now)
         state.hosted = true
         state.launchToken = launchToken
         processes.adopt(process, as: sessionID)

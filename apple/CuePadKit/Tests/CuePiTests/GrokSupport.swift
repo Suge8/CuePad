@@ -73,7 +73,7 @@ extension FakeModel {
 final class GrokRig {
     let root: URL
     let model: FakeModel
-    let bridge: PiBridge
+    let bridge: Bridge
     let runtime: GrokRuntime
     var home: URL { root.appending(path: "grok", directoryHint: .isDirectory) }
     var work: URL { root.appending(path: "work", directoryHint: .isDirectory) }
@@ -91,13 +91,13 @@ final class GrokRig {
         let environment = grokEnvironment(model: model, home: root.appending(path: "user"), grokHome: root.appending(path: "grok"))
             .merging(["CUEPAD_PI_SOCKET_DIR": sockets.path, "CUEPAD_LIBRARY_DIR": root.appending(path: "library").path]) { $1 }
         let paths = AgentPaths(pi: PiPaths(agentDirectory: root.appending(path: "pi"), socketDirectory: sockets), environment: environment)
-        bridge = PiBridge(socketDirectory: sockets)
+        bridge = Bridge(socketDirectory: sockets)
         runtime = GrokRuntime(bridge: bridge, paths: paths, files: scratchFiles, grok: { pinnedGrok.executable }, locate: { pinnedGrok.locator }, timing: noDeadline)
         try bridge.start()
         try runtime.start()
     }
 
-    func open(_ launchToken: String) async throws -> PiSession.ID {
+    func open(_ launchToken: String) async throws -> Session.ID {
         try await runtime.open(in: work, launchToken: launchToken, name: nil, model: nil, thinking: nil)
     }
 
@@ -108,16 +108,16 @@ final class GrokRig {
         try? FileManager.default.removeItem(at: root)
     }
 
-    func transcript(_ session: PiSession) throws -> PiHistoryUpdate {
-        try PiHistory.index(file: try #require(session.sessionFile), agent: .grok, from: nil, files: scratchFiles)
+    func transcript(_ session: Session) throws -> HistoryUpdate {
+        try History.index(file: try #require(session.sessionFile), agent: .grok, from: nil, files: scratchFiles)
     }
 
-    func replies(_ session: PiSession) -> [String] {
+    func replies(_ session: Session) -> [String] {
         ((try? transcript(session))?.messages ?? []).filter { $0.role == .known(.pi) }.map { $0.text.trimmingCharacters(in: .whitespacesAndNewlines) }
     }
 
     /// 最近一条回答里有这个词
-    func replied(_ word: String, in id: PiSession.ID) -> Bool {
+    func replied(_ word: String, in id: Session.ID) -> Bool {
         bridge.session(id: id).flatMap { replies($0).last?.contains(word) } == true
     }
 
@@ -127,7 +127,7 @@ final class GrokRig {
     }
 
     /// 会话的进程是钉住的那份 Grok（不是别处的另一个），并且在跑
-    func runsPinnedGrok(_ id: PiSession.ID) -> Bool {
+    func runsPinnedGrok(_ id: Session.ID) -> Bool {
         guard let pid = bridge.session(id: id)?.pid else { return false }
         var path = [CChar](repeating: 0, count: 4096)
         guard proc_pidpath(pid, &path, UInt32(path.count)) > 0 else { return false }

@@ -24,7 +24,7 @@ struct CueEvalFailoverTests {
             let said = "在演示项目里建个任务「整理周报」，先别开工"
             let woke = try #require(try await eval.settle { try await rig.say(said) }, "Cue 没醒")
             let rounds = eval.rounds.filter { woke.contains($0.startedAt) }
-            let failed = rounds.first?.failure.map(PiErrorSummary.init)
+            let failed = rounds.first?.failure.map(ErrorSummary.init)
             let answered: CueRound? = rounds.last { (round: CueRound) -> Bool in round.wake == .message && round.finishedAt != nil && round.failure == nil }
             let added = CueEval.calls(in: answered.map { [$0] } ?? [], "task", ["add"]).filter { CueEval.built($0.call) }
             var reply: CueMessage?

@@ -72,8 +72,8 @@ struct ReceiptTests {
         func delete(_ id: CKSubscription.ID) async throws {}
     }
 
-    private func session(in store: CueStore) async throws -> PiSessionState {
-        let recorder = PiStateRecorder(store: store, hostID: "mac-b")
+    private func session(in store: CueStore) async throws -> SessionState {
+        let recorder = StateRecorder(store: store, hostID: "mac-b")
         try await recorder.update(sessionID: "atlas", state: .thinking, title: "atlas")
         try await recorder.update(sessionID: "atlas", state: .settled)
         return try #require(try await store.allPiSessionStates().first { $0.sessionID == "atlas" })
@@ -93,7 +93,7 @@ struct ReceiptTests {
         return try #require(try await workspace.services.store.cueMessages().last { $0.author == .known(.you) })
     }
 
-    private func sayToSession(_ workspace: Workspace, _ target: PiSessionState, _ text: String) async throws -> DeliveryRequest {
+    private func sayToSession(_ workspace: Workspace, _ target: SessionState, _ text: String) async throws -> DeliveryRequest {
         let services = workspace.services
         let box = services.settings.replyDraftBinding(for: target.id)
         box.wrappedValue = ComposerDraft(text: text)
@@ -107,7 +107,7 @@ struct ReceiptTests {
         clock.advance(.seconds(target.timeIntervalSince(clock.now)))
     }
 
-    private func row(_ services: AppServices) -> PiShown? {
+    private func row(_ services: AppServices) -> SessionShown? {
         services.liveSessions.live.first { $0.state.sessionID == "atlas" }.map(Workspace(services: services).shown)
     }
 

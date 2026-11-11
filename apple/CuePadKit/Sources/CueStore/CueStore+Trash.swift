@@ -134,9 +134,9 @@ extension CueStore {
     return reclaimed
   }
 
-  static let userAttachments = "role = '\(PiChatRole.user.rawValue)' AND instr(text, ?1) > 0"
+  static let userAttachments = "role = '\(ChatRole.user.rawValue)' AND instr(text, ?1) > 0"
 
-  /// 一轮经过里带图的（`?1` 是 `Tools.imagesField` 或某个键加引号）：工具结果里的图只记在经过上（`PiChatMessage.Tools.Item.images`）。
+  /// 一轮经过里带图的（`?1` 是 `Tools.imagesField` 或某个键加引号）：工具结果里的图只记在经过上（`ChatMessage.Tools.Item.images`）。
   static let toolImages = "tools IS NOT NULL AND instr(tools, ?1) > 0"
 
   /// 还有卡片正文（含回收站里的卡）、发送记录快照（一键重发要用）、还在库里的投送请求（等派发的、等重发的，引用只读 `DeliveryRequest.attachmentKeys`）、

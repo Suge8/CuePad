@@ -32,7 +32,7 @@ extension CodexRuntime {
         guard auth["authMethod"]?.string != nil || auth["requiresOpenaiAuth"]?.bool == false else { return nil }
         let configured = try await rpc.call("config/read", [:])["config"]?["model"]?.string
         let models = try await CodexModel.list(rpc)
-        let model = (configured ?? models.first(where: \.isDefault)?.id).map { PiModelKey(provider: CodexModel.provider, id: $0) }
+        let model = (configured ?? models.first(where: \.isDefault)?.id).map { ModelKey(provider: CodexModel.provider, id: $0) }
         return MacAgent(kind: .codex, model: model, models: models.map(\.option))
     }
 }

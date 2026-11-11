@@ -63,7 +63,7 @@ extension CueStore {
   }
 
   /// 会话仍停在 `stop` 那次停下、等你里没有问着他的提问，且它与它绑着的任务（含上级）都不在 `given` 里，它的去处就是留给你回：已经留着的（他发起的那一轮停下时当场留了）不再写。不用留为 nil。
-  public func leaveUnattended(_ stop: CueLeft, given: Set<UUID>) throws -> (session: PiSessionState, record: UUID?)? {
+  public func leaveUnattended(_ stop: CueLeft, given: Set<UUID>) throws -> (session: SessionState, record: UUID?)? {
     try write {
       guard let session = try sessionState(stop.sessionID), stop.holds(for: session), try question(waitingOn: session.sessionID) == nil else { return nil }
       guard !given.contains(session.id), given.isDisjoint(with: try sessionPlaces(session.sessionID)) else { return nil }
@@ -84,11 +84,11 @@ extension CueStore {
 
   /// 去掉 `removing` 与已作废的，表里只留此刻还成立的；和库里一样就不写。必须在写事务内调用。
   @discardableResult
-  func putLeft(_ sessions: [PiSessionState], removing: String? = nil) throws -> Bool {
+  func putLeft(_ sessions: [SessionState], removing: String? = nil) throws -> Bool {
     let current = try cueState()
     let replaced = Set(sessions.map(\.sessionID) + [removing].compactMap(\.self))
     let others = current?.left.filter { !replaced.contains($0.sessionID) } ?? []
-    let live = try select(PiSessionState.self, where: "sessionID IN (SELECT value FROM json_each(?))", [JSONColumn.encode(others.map(\.sessionID))])
+    let live = try select(SessionState.self, where: "sessionID IN (SELECT value FROM json_each(?))", [JSONColumn.encode(others.map(\.sessionID))])
     let left = others.filter { entry in live.contains(where: entry.holds) } + sessions.map { CueLeft(sessionID: $0.sessionID, since: $0.stateSince) }
     guard Set(left) != Set(current?.left ?? []) else { return false }
     let next = CueState(
@@ -105,14 +105,14 @@ extension CueStore {
 
   /// 不在值班写歇着、没有上下文。只有真实报告提供宿主与 boot；缺少身份的写入保留原报告，但不签发当前运行证明。
   public func setCueState(
-    _ state: PiWorkState, detail: String? = nil, step: CueActivity.Touch? = nil, round: UUID? = nil, context: CueContext? = nil,
+    _ state: WorkState, detail: String? = nil, step: CueActivity.Touch? = nil, round: UUID? = nil, context: CueContext? = nil,
     hostID: String? = nil, bootID: String? = nil
   ) throws {
     try write { try putCueState(state, detail: detail, step: step, round: round, context: context, hostID: hostID, bootID: bootID) }
   }
 
   func putCueState(
-    _ state: PiWorkState, detail: String?, step: CueActivity.Touch?, round: UUID?, context: CueContext?, hostID: String?, bootID: String?
+    _ state: WorkState, detail: String?, step: CueActivity.Touch?, round: UUID?, context: CueContext?, hostID: String?, bootID: String?
   ) throws {
     let current = try cueState()
     let next = CueState(

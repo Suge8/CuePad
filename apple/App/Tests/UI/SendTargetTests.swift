@@ -55,7 +55,7 @@ struct SendTargetTests {
 
     private static let text = "修乱序\n按首次加入时间排"
 
-    private func remoteSession(_ id: String, title: String, state: PiWorkState = .settled) async throws {
+    private func remoteSession(_ id: String, title: String, state: WorkState = .settled) async throws {
         try await rig.runtimeRecorder(on: "mac-b").update(
             sessionID: id, state: state, title: title, directory: title, projectID: project.id)
     }
@@ -131,7 +131,7 @@ struct SendTargetTests {
         let request = try #require(try await store.deliveryRequests().first)
         #expect(request.target == SendTarget(kind: .piSession, name: "alpha", ref: "a") && request.mode == .known(.send))
         #expect(rig.host.calls == [.resume(sessionFile: file, directory: folder.path)])
-        #expect(rig.host.extensions["a"]?.messages == [PiMessage(text: Self.text, deliveryID: request.id.uuidString)])
+        #expect(rig.host.extensions["a"]?.messages == [SessionMessage(text: Self.text, deliveryID: request.id.uuidString)])
         #expect(workspace.notice != nil && workspace.notice?.isError == false)
         _ = try await eventually(store, { try $0.card(task.id)?.piSessionID }) { $0 == "a" }
     }
@@ -201,7 +201,7 @@ struct SendTargetTests {
     @Test func 本机记录里在线但桥上已没有的会话不算在线() async throws {
         _ = try await open("a", in: "/work/alpha")
         try await remoteSession("r", title: "atlas")
-        try await PiStateRecorder(store: store, hostID: TestApp.hostID).update(
+        try await StateRecorder(store: store, hostID: TestApp.hostID).update(
             sessionID: "stale", state: .settled, title: "stale", directory: "stale", projectID: project.id)
         try await eventually("liveSessions.live 有三条") { rig.services.liveSessions.live.count == 3 }
 

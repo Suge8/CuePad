@@ -14,5 +14,5 @@ nonisolated enum TaskPace: Equatable {
         return .ran(since: start)
     }
 
-    static func left(_ seconds: TimeInterval) -> String { String(localized: "约 \(PiClock.duration(seconds))") }
+    static func left(_ seconds: TimeInterval) -> String { String(localized: "约 \(SessionClock.duration(seconds))") }
 }

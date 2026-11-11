@@ -13,11 +13,11 @@ import Foundation
 /// 结束、空闲满时限、让出（桥决定）都经 `end` 下桥、收进程（`HostedProcesses`），后两者不算结束。
 @MainActor
 final class ClaudeHostedSession: SessionLink {
-    private(set) weak var bridge: PiBridge?
+    private(set) weak var bridge: Bridge?
     private(set) weak var processes: HostedProcesses?
     let brain: BrainSession?
     private(set) var stream: ClaudeStream?
-    private(set) var id: PiSession.ID?
+    private(set) var id: Session.ID?
     var facts = SessionFacts()
     var tasks = ClaudeHostedTasks()
     var permission: (request: String, permission: ClaudePermission)?
@@ -42,7 +42,7 @@ final class ClaudeHostedSession: SessionLink {
 
     let timing: Timing
 
-    init(bridge: PiBridge, processes: HostedProcesses, timing: Timing) {
+    init(bridge: Bridge, processes: HostedProcesses, timing: Timing) {
         self.bridge = bridge
         self.processes = processes
         self.timing = timing
@@ -57,14 +57,14 @@ final class ClaudeHostedSession: SessionLink {
     }
 
     private static func waits(_ timing: Timing) -> (Occurrences, PendingReplies<UUID, Void>) {
-        (Occurrences(timeout: AgentTimeouts.stop, timing: timing, timeoutError: PiBridgeError.ackTimeout),
-         PendingReplies(timeout: AgentTimeouts.stop, timing: timing, timeoutError: PiBridgeError.ackTimeout))
+        (Occurrences(timeout: AgentTimeouts.stop, timing: timing, timeoutError: BridgeError.ackTimeout),
+         PendingReplies(timeout: AgentTimeouts.stop, timing: timing, timeoutError: BridgeError.ackTimeout))
     }
 
     /// 起好的连接；没起或起不来时抛 `sessionEnded`（进程退出后写入同样抛它）
     var live: ClaudeStream {
         get throws {
-            guard let stream else { throw PiBridgeError.sessionEnded }
+            guard let stream else { throw BridgeError.sessionEnded }
             return stream
         }
     }
@@ -82,24 +82,24 @@ final class ClaudeHostedSession: SessionLink {
 
     /// 接着已结束的会话时 `known` 是索引里记下的名字与首条消息，`model` 是起进程时指定的模型（几个别名解析到同一个 id 时，之后报的 id 认回它）。
     func connect(
-        sessionID: String, cwd: URL, sessionFile: URL, model: PiModelKey?, launchToken: String?, known: (name: String?, firstMessage: String?)?
-    ) async throws -> PiSession {
+        sessionID: String, cwd: URL, sessionFile: URL, model: ModelKey?, launchToken: String?, known: (name: String?, firstMessage: String?)?
+    ) async throws -> Session {
         let stream = try live
         let info = try await stream.request(["subtype": "initialize"])
         let offered = ClaudeCode.models(in: info)
         for model in offered { resolved[model.option.key.id] = model.resolved }
         let models = offered.map(\.option)
-        let listed = (info["commands"]?.array ?? []).compactMap { command -> PiSlashCommand? in
+        let listed = (info["commands"]?.array ?? []).compactMap { command -> SlashCommand? in
             guard let name = command["name"]?.string else { return nil }
             let hint = command["argumentHint"]?.string.flatMap { $0.isEmpty ? nil : $0 }
-            return PiSlashCommand(
+            return SlashCommand(
                 name: name, summary: command["description"]?.string.map { $0.clipped(ToolDetail.limit) }, source: .known(.builtin), hint: hint)
         }
         commands = Set(listed.map(\.name))
         let pid = stream.process.pid
-        var session = PiSession(
-            id: PiSession.claudeID(sessionID: sessionID, pid: pid), sessionID: sessionID, agent: .claudeCode, sessionFile: sessionFile, pid: pid,
-            cwd: cwd, terminal: PiTerminal(), state: .settled, stateSince: .now)
+        var session = Session(
+            id: Session.claudeID(sessionID: sessionID, pid: pid), sessionID: sessionID, agent: .claudeCode, sessionFile: sessionFile, pid: pid,
+            cwd: cwd, terminal: TerminalIdentity(), state: .settled, stateSince: .now)
         session.hosted = true
         session.launchToken = launchToken
         session.name = known?.name
@@ -234,8 +234,8 @@ final class ClaudeHostedSession: SessionLink {
     }
 
     /// 几个别名可能解析到同一个 id，所以先认当前选的那项；都对不上才显示原始 id。
-    private func option(_ model: String, current: PiModelOption?, in catalog: [PiModelOption]) -> PiModelOption {
-        let matches = { (option: PiModelOption) in option.key.id == model || self.resolved[option.key.id] == model }
+    private func option(_ model: String, current: ModelOption?, in catalog: [ModelOption]) -> ModelOption {
+        let matches = { (option: ModelOption) in option.key.id == model || self.resolved[option.key.id] == model }
         if let current, matches(current) { return current }
         return catalog.first { $0.key.id == model } ?? catalog.first(where: matches) ?? ClaudeCode.model(model)
     }
@@ -264,7 +264,7 @@ final class ClaudeHostedSession: SessionLink {
             }
         case "task_notification":
             guard let task = message["task_id"]?.string else { return }
-            let phase: PiSubagentPhase = switch message["status"]?.string {
+            let phase: SubagentPhase = switch message["status"]?.string {
             case "completed": .done
             case "failed": .failed
             default: .interrupted

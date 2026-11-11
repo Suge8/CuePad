@@ -4,7 +4,7 @@ import Foundation
 /// 认调用、写这两句的在 CueAgent（`CueActivity+Calls`，只在 Mac 上有），界面各端读这边。
 public enum CueActivity {
   /// `.edit` 在 Cue 的一轮里是改任务（会话里的改文件不读这张表）。
-  public static func verb(_ kind: PiChatMessage.Tools.Kind) -> String? {
+  public static func verb(_ kind: ChatMessage.Tools.Kind) -> String? {
     switch kind {
     case .read: String(localized: "查看")
     case .talk: String(localized: "发给")
@@ -19,19 +19,19 @@ public enum CueActivity {
     }
   }
 
-  static let weight: [PiChatMessage.Tools.Kind] = [.done, .stop, .talk, .start, .add, .edit, .read]
+  static let weight: [ChatMessage.Tools.Kind] = [.done, .stop, .talk, .start, .add, .edit, .read]
 
-  public static func outcomeRank(_ kind: PiChatMessage.Tools.Kind) -> Int {
+  public static func outcomeRank(_ kind: ChatMessage.Tools.Kind) -> Int {
     [.done, .stop, .leave, .talk, .start, .add, .schedule, .edit, .read].firstIndex(of: kind) ?? .max
   }
 
   public struct Touch: Codable, Equatable, Sendable {
-    public var kind: PiChatMessage.Tools.Kind
+    public var kind: ChatMessage.Tools.Kind
     public let name: String
     public let task: UUID?
     public let session: UUID?
 
-    public init(kind: PiChatMessage.Tools.Kind, name: String, task: UUID? = nil, session: UUID? = nil) {
+    public init(kind: ChatMessage.Tools.Kind, name: String, task: UUID? = nil, session: UUID? = nil) {
       self.kind = kind
       self.name = name
       self.task = task
@@ -41,7 +41,7 @@ public enum CueActivity {
 
   public static func line(_ touch: Touch) -> String { "\(verb(touch.kind) ?? "") \(touch.name)" }
 
-  public static func touches(_ tools: PiChatMessage.Tools?) -> [Touch] {
+  public static func touches(_ tools: ChatMessage.Tools?) -> [Touch] {
     var touches: [Touch] = []
     for item in tools?.items ?? [] where !item.failed {
       guard let name = item.name, item.kind.ownLine || weight.contains(item.kind) else { continue }
@@ -55,10 +55,10 @@ public enum CueActivity {
     return touches
   }
 
-  private static func rank(_ kind: PiChatMessage.Tools.Kind) -> Int { weight.firstIndex(of: kind) ?? weight.count }
+  private static func rank(_ kind: ChatMessage.Tools.Kind) -> Int { weight.firstIndex(of: kind) ?? weight.count }
 }
 
-extension PiChatMessage.Tools.Kind {
+extension ChatMessage.Tools.Kind {
   var ownLine: Bool { self == .leave || self == .schedule }
 }
 

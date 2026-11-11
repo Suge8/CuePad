@@ -32,7 +32,7 @@ struct CaptureDraft {
 }
 
 extension Workspace {
-    func saveReply(_ text: String, of session: PiSessionState) async throws {
+    func saveReply(_ text: String, of session: SessionState) async throws {
         try await CaptureDraft(text: text, files: []).save(in: session.projectID ?? Project.defaultID, workspace: self)
     }
 }

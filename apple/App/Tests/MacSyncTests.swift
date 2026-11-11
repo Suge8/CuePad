@@ -15,19 +15,19 @@ struct MacSyncTests {
 
     /// `spoke`：留下了会话文件（说过话）；没有文件的会话结束时不进历史。
     func session(
-        _ sessionID: String, cwd: String = "/work/app", state: PiWorkState = .thinking, pid: Int32 = 100, spoke: Bool = false
-    ) -> CuePi.PiSession {
+        _ sessionID: String, cwd: String = "/work/app", state: WorkState = .thinking, pid: Int32 = 100, spoke: Bool = false
+    ) -> CuePi.Session {
         var file: URL?
         if spoke {
             file = FileManager.default.temporaryDirectory.appending(path: "mac-sync-\(UUID().uuidString).jsonl")
             FileManager.default.createFile(atPath: file!.path, contents: Data())
         }
-        return CuePi.PiSession(
+        return CuePi.Session(
             id: "\(sessionID).\(pid)", sessionID: sessionID, agent: .pi, sessionFile: file, pid: pid, cwd: URL(filePath: cwd, directoryHint: .isDirectory),
-            terminal: PiTerminal(), state: state, stateSince: .now)
+            terminal: TerminalIdentity(), state: state, stateSince: .now)
     }
 
-    func changes(_ items: [PiSessionChange]) -> AsyncStream<PiSessionChange> {
+    func changes(_ items: [SessionChange]) -> AsyncStream<SessionChange> {
         AsyncStream { continuation in
             items.forEach { continuation.yield($0) }
             continuation.finish()
@@ -140,9 +140,9 @@ struct MacSyncTests {
     }
 
     @Test func 启动时把这台Mac遗留的记录标为已结束_不动别的Mac() async throws {
-        let mine = PiStateRecorder(store: services.store, hostID: TestApp.hostID)
-        let other = PiStateRecorder(store: services.store, hostID: "mac-other")
-        try await mine.update(sessionID: "old", state: .settled, process: PiProcess(pid: 1, startedAt: 1))  // 记下的进程已不在
+        let mine = StateRecorder(store: services.store, hostID: TestApp.hostID)
+        let other = StateRecorder(store: services.store, hostID: "mac-other")
+        try await mine.update(sessionID: "old", state: .settled, process: SessionProcess(pid: 1, startedAt: 1))  // 记下的进程已不在
         try await other.update(sessionID: "theirs", state: .thinking)
 
         try services.reconcileLaunch()
@@ -154,9 +154,9 @@ struct MacSyncTests {
     /// 各家接入上桥时都报"现在"（这里的假扩展也是），起点只在桥上定一次，界面与同步记录读的是同一个。
     @Test func 重开后接回的会话沿用原来的起点_看过的不又成有新回复() async throws {
         let past = Date.now.addingTimeInterval(-3600)
-        let before = PiStateRecorder(store: services.store, hostID: TestApp.hostID)
-        try await before.update(sessionID: "s1", state: .settled, times: PiTimes(stateSince: past, busySince: nil))
-        try await before.update(sessionID: "s2", state: .thinking, times: PiTimes(stateSince: past, busySince: past))
+        let before = StateRecorder(store: services.store, hostID: TestApp.hostID)
+        try await before.update(sessionID: "s1", state: .settled, times: SessionTimes(stateSince: past, busySince: nil))
+        try await before.update(sessionID: "s2", state: .thinking, times: SessionTimes(stateSince: past, busySince: past))
         let seen = try #require(try await services.store.allPiSessionStates().first { $0.sessionID == "s1" })
         services.settings.markSeen(seen, at: past.addingTimeInterval(1))
 
@@ -166,7 +166,7 @@ struct MacSyncTests {
 
         let live = try #require(services.pi.session(id: kept.id))
         #expect(live.stateSince == seen.stateSince)
-        let row = try #require(PiSessionState.live(live, hostID: TestApp.hostID, projectID: nil, recap: PiRecap(lastReply: "做完了")))
+        let row = try #require(SessionState.live(live, hostID: TestApp.hostID, projectID: nil, recap: Recap(lastReply: "做完了")))
         #expect(!services.settings.isUnread(row))
         #expect(try #require(services.pi.session(id: changed.id)).stateSince > past)
     }

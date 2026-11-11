@@ -8,12 +8,12 @@ import Testing
 @MainActor
 @Suite(RealAgents.needs(.opencode), RealAgents.tiered, .serialized, .timeLimit(.minutes(10)))
 struct RealOpenCodeTests {
-    func session(_ bridge: PiBridge) -> PiSession? { bridge.sessions.first { $0.agent == .opencode } }
+    func session(_ bridge: Bridge) -> Session? { bridge.sessions.first { $0.agent == .opencode } }
 
-    func withOpenCode(_ body: (OpenCodeSandbox, CueStore, PiBridge, OpenCodeRuntime) async throws -> Void) async throws {
+    func withOpenCode(_ body: (OpenCodeSandbox, CueStore, Bridge, OpenCodeRuntime) async throws -> Void) async throws {
         let sandbox = try await OpenCodeSandbox()
         let store = try Fixture().store
-        let bridge = PiBridge(socketDirectory: sandbox.paths.pi.socketDirectory)
+        let bridge = Bridge(socketDirectory: sandbox.paths.pi.socketDirectory)
         let runtime = sandbox.runtime(bridge, store)
         let outcome: Result<Void, any Error>
         do {
@@ -56,30 +56,30 @@ struct RealOpenCodeTests {
             #expect(try await store.piSessions().contains { $0.id == live.sessionID && $0.agent == .opencode })
 
             let delivery = UUID()
-            try await bridge.send(PiMessage(text: "Reply with exactly the word AGAIN.", deliveryID: delivery.uuidString), to: live.id)
+            try await bridge.send(SessionMessage(text: "Reply with exactly the word AGAIN.", deliveryID: delivery.uuidString), to: live.id)
             try await eventually("CuePad 发的那句认得出来，回答也到了") {
                 let messages = try await store.piMessages(of: live.sessionID)
                 return messages.contains { $0.deliveryID == delivery } && messages.last { $0.role == .known(.pi) }?.text.contains("AGAIN") == true
             }
             #expect(sandbox.model.requests.contains { $0.prompt.contains("AGAIN") && $0.said.contains { $0.contains("PONG") } }, "第二句请求里该带着前一句")
 
-            try await bridge.configure(PiConfig(name: "改过的名字"), in: live.id)
+            try await bridge.configure(SessionConfig(name: "改过的名字"), in: live.id)
             try await eventually("改名到了") { session(bridge)?.displayName == "改过的名字" }
             let thinker = openCodeOtherModel
-            try await bridge.configure(PiConfig(model: thinker, thinking: .high), in: live.id)
+            try await bridge.configure(SessionConfig(model: thinker, thinking: .high), in: live.id)
             try await eventually("模型与强度换了") { session(bridge)?.model?.key == thinker && session(bridge)?.thinking == .known(.high) }
             let stored = try await sandbox.api("GET", "/api/session/\(live.sessionID)")["data"] as? [String: Any]
             let model = stored?["model"] as? [String: Any]
             #expect(model?["id"] as? String == thinker.id && model?["variant"] as? String == "high" && stored?["title"] as? String == "改过的名字")
-            await #expect(throws: PiBridgeError.unknownModel(.opencode)) {
-                try await bridge.configure(PiConfig(model: PiModelKey(provider: openCodeTestModel.provider, id: "no-such-model")), in: live.id)
+            await #expect(throws: BridgeError.unknownModel(.opencode)) {
+                try await bridge.configure(SessionConfig(model: ModelKey(provider: openCodeTestModel.provider, id: "no-such-model")), in: live.id)
             }
-            await #expect(throws: PiBridgeError.rejected("unknown_command")) { try await bridge.command("/no-such-command", in: live.id) }
-            try await bridge.configure(PiConfig(model: openCodeTestModel), in: live.id)
+            await #expect(throws: BridgeError.rejected("unknown_command")) { try await bridge.command("/no-such-command", in: live.id) }
+            try await bridge.configure(SessionConfig(model: openCodeTestModel), in: live.id)
 
             try await bridge.command("/compact", in: live.id)
             try await eventually("压缩上下文留下一行") {
-                try await store.piMessages(of: live.sessionID).contains { $0.text == PiNotice.compacted.rawValue }
+                try await store.piMessages(of: live.sessionID).contains { $0.text == ChatNotice.compacted.rawValue }
             }
 
             await runtime.stop()()
@@ -104,7 +104,7 @@ struct RealOpenCodeTests {
             let id = try await runtime.open(in: sandbox.work, launchToken: "token-p", name: nil, model: nil, thinking: nil)
             let sessionID = try #require(bridge.session(id: id)?.sessionID)
             try await sandbox.api("PATCH", "/api/session/\(sessionID)", ["permissions": [["action": "shell", "resource": "*", "effect": "ask"]]])
-            try await bridge.send(PiMessage(text: "Run the permission command"), to: id)
+            try await bridge.send(SessionMessage(text: "Run the permission command"), to: id)
             try await eventually("在等你确认这条命令") { session(bridge)?.question?.isAnswerable == true }
             let question = try #require(session(bridge)?.question)
             #expect(session(bridge)?.state == .waitingForUser && question.text.contains("touch \(file)"))
@@ -128,7 +128,7 @@ struct RealOpenCodeTests {
             sandbox.model.on("Run the slow command", .call("shell", ["command": "sleep 30", "description": "Run the requested command"]), .say("SLEPT"))
             let id = try await runtime.open(in: sandbox.work, launchToken: "token-s", name: nil, model: nil, thinking: nil)
             let sessionID = try #require(bridge.session(id: id)?.sessionID)
-            try await bridge.send(PiMessage(text: "Run the slow command"), to: id)
+            try await bridge.send(SessionMessage(text: "Run the slow command"), to: id)
             // 停在跑工具的那一步（它带着 aborted 的错误结束），不是还没开始的时候
             try await eventually("在跑命令") { session(bridge)?.state == .tool }
             try await bridge.abort(id)
@@ -137,7 +137,7 @@ struct RealOpenCodeTests {
                 return session(bridge)?.state == .settled && messages.map { "\($0.role.rawValue):\($0.text)" }.suffix(1) == ["system:已停止"]
             }
 
-            try await bridge.send(PiMessage(text: "Reply with exactly the word NEXT."), to: id)
+            try await bridge.send(SessionMessage(text: "Reply with exactly the word NEXT."), to: id)
             try await eventually("停下之后说的那句得到回答") { try await replies(store, sessionID).last?.contains("NEXT") == true && session(bridge)?.state == .settled }
         }
     }
@@ -148,10 +148,10 @@ struct RealOpenCodeTests {
             sandbox.model.on("Run the slow command", .call("shell", ["command": "sleep 60", "description": "Run the requested command"]), .say("SLEPT"))
             let id = try await runtime.open(in: sandbox.work, launchToken: "token-q", name: nil, model: nil, thinking: nil)
             let sessionID = try #require(bridge.session(id: id)?.sessionID)
-            try await bridge.send(PiMessage(text: "Run the slow command"), to: id)
+            try await bridge.send(SessionMessage(text: "Run the slow command"), to: id)
             try await eventually("在跑命令") { session(bridge)?.state.isWorking == true }
             let delivery = UUID()
-            try await bridge.send(PiMessage(text: "Now: what is 6+6", deliveryID: delivery.uuidString), to: id)
+            try await bridge.send(SessionMessage(text: "Now: what is 6+6", deliveryID: delivery.uuidString), to: id)
 
             try await eventually("这句开的一轮答完") {
                 let messages = try await store.piMessages(of: sessionID)
@@ -161,7 +161,7 @@ struct RealOpenCodeTests {
             let messages = try await store.piMessages(of: sessionID)
             #expect(messages.filter { $0.role == .known(.user) }.map(\.text).last?.contains("Now") == true)
             let now = try #require(messages.firstIndex { $0.deliveryID == delivery })
-            #expect(messages[..<now].contains { $0.text == PiNotice.stopped.rawValue }, "被停下的那一轮留了一行已停止")
+            #expect(messages[..<now].contains { $0.text == ChatNotice.stopped.rawValue }, "被停下的那一轮留了一行已停止")
             #expect(!messages[..<now].contains { $0.role == .known(.pi) }, "被停下的那一轮没有回答")
             #expect(messages.map(\.seq) == messages.map(\.seq).sorted())
         }
@@ -174,7 +174,7 @@ struct RealOpenCodeTests {
         try await withOpenCode { sandbox, store, bridge, runtime in
             sandbox.model.on("Run the slow command", .call("shell", ["command": "sleep 30", "description": "Run the requested command"]), .say("SLEPT"))
             let id = try await runtime.open(in: sandbox.work, launchToken: "token-now", name: nil, model: nil, thinking: nil)
-            if moment != "end on open" { try await bridge.send(PiMessage(text: "Run the slow command"), to: id) }
+            if moment != "end on open" { try await bridge.send(SessionMessage(text: "Run the slow command"), to: id) }
             let began = ContinuousClock.now
             if moment == "stop on first message" {
                 try await bridge.abort(id)
@@ -194,7 +194,7 @@ struct RealOpenCodeTests {
             sandbox.model.on("Run the slow command", .call("shell", ["command": "sleep 30", "description": "Run the requested command"]), .say("SLEPT"))
             let id = try await runtime.open(in: sandbox.work, launchToken: "token-e", name: nil, model: nil, thinking: nil)
             let sessionID = try #require(bridge.session(id: id)?.sessionID)
-            try await bridge.send(PiMessage(text: "Run the slow command"), to: id)
+            try await bridge.send(SessionMessage(text: "Run the slow command"), to: id)
             try await eventually("在跑命令") { session(bridge)?.state == .tool }
             try await bridge.end(id)
             #expect(bridge.session(id: id) == nil)

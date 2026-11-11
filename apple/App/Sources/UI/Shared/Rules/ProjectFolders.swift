@@ -2,7 +2,7 @@ import CueStore
 import Foundation
 
 /// 项目与文件夹的规则（iOS 与 Mac 共用）。绑定是 Mac 本机的事（`CueStore.setDirectory`，路径因设备而异）；
-/// 手机能看到的只有各 Mac 同步来的目录绑定（`DirectoryBinding`），要绑时经投送请求（`PiBind`）让那台 Mac 解析成完整路径。
+/// 手机能看到的只有各 Mac 同步来的目录绑定（`DirectoryBinding`），要绑时经投送请求（`BindRequest`）让那台 Mac 解析成完整路径。
 nonisolated enum ProjectFolders {
     struct LaunchPlace: Identifiable, Equatable, Sendable {
         let id: String
@@ -52,7 +52,7 @@ nonisolated enum ProjectFolders {
         let hostID: String
         let macName: String
         let folder: String
-        let target: PiFolder
+        let target: FolderSource
         let usedBy: String?
         let sessions: Int
     }
@@ -80,7 +80,7 @@ nonisolated enum ProjectFolders {
             }, uniquingKeysWith: { first, _ in first })
         var seen = own
         var result: [Candidate] = []
-        func add(host: String, macName: String, folder: String, target: PiFolder, usedBy: String?, sessions: Int) {
+        func add(host: String, macName: String, folder: String, target: FolderSource, usedBy: String?, sessions: Int) {
             let key = "\(host)/\(folder)"
             guard seen.insert(key).inserted else { return }
             result.append(Candidate(hostID: host, macName: macName, folder: folder, target: target, usedBy: usedBy ?? owners[key], sessions: sessions))

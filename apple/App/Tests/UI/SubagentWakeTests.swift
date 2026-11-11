@@ -30,7 +30,7 @@ struct SubagentWakeTests {
         try await eventually("名册写进库") { try await store.sessions(matching: session.sessionID).first?.subagents.isEmpty == false }
         session.setState(["kind": "delegating"])
         // 名册先到（立即写），随后的等子代理只是工作中细节的变化，按写入节流晚到：节流的间隔不真等
-        rig.jump(by: PiStateRecorder.detailInterval)
+        rig.jump(by: StateRecorder.detailInterval)
         try await eventually("等子代理写进库、派活那一轮的回答读到") {
             let record = try await store.sessions(matching: session.sessionID).first
             return record?.state == .known(.delegating) && record?.lastReply == "派了 ui 去跑测试"
@@ -67,16 +67,16 @@ struct SubagentWakeTests {
         let his = try await store.createTask("修好注册页 他那一轮", in: project.id)
         try await store.linkCard(his.id, toSession: "remote-his")
         let due = rig.clock.now.addingTimeInterval(60)
-        let ui = PiSubagentState(
+        let ui = SubagentState(
             name: "ui", role: "工程师", phase: .known(.running), action: "bash · swift test", startedAt: due - 3600,
-            progressAt: due - PiSessionState.stallAfter)
-        let reviewer = PiSubagentState(name: "reviewer", role: "哨兵", phase: .known(.done), startedAt: due - 3600, settledAt: due - 3000, progressAt: due - 3000)
+            progressAt: due - SessionState.stallAfter)
+        let reviewer = SubagentState(name: "reviewer", role: "哨兵", phase: .known(.done), startedAt: due - 3600, settledAt: due - 3000, progressAt: due - 3000)
         // 会话在跑只认宿主在线时报的（`runtimeUntil`）：mac-b 像醒着的 Mac 那样先报在线
         try await store.recordMacPresence(host: "mac-b") { true }
-        let remote = PiStateRecorder(store: store, hostID: "mac-b")
-        try await store.writePiTranscript(PiTranscript(
-            sessionID: "remote-his", messages: [PiChatMessage(sessionID: "remote-his", entryID: "u1", seq: 1, role: .user, text: "做到底", at: due - 3600)],
-            recap: PiRecap(lastPrompt: "做到底")))
+        let remote = StateRecorder(store: store, hostID: "mac-b")
+        try await store.writePiTranscript(SessionTranscript(
+            sessionID: "remote-his", messages: [ChatMessage(sessionID: "remote-his", entryID: "u1", seq: 1, role: .user, text: "做到底", at: due - 3600)],
+            recap: Recap(lastPrompt: "做到底")))
         try await remote.update(sessionID: "remote-his", state: .delegating, title: "修好注册页", subagents: [ui])
         try await remote.update(sessionID: "remote-1", state: .delegating, title: "修好登录页", subagents: [ui, reviewer])
         try await rig.reconciled()  // 还没停住：排好到点的那一下
@@ -107,9 +107,9 @@ struct SubagentWakeTests {
         let task = try await store.createTask("修好登录页 子代理停住 先出两次错", in: project.id)
         try await store.linkCard(task.id, toSession: "remote-2")
         let due = rig.clock.now.addingTimeInterval(60)
-        let ui = PiSubagentState(
+        let ui = SubagentState(
             name: "ui", role: "工程师", phase: .known(.running), action: "bash · swift test", startedAt: due - 3600,
-            progressAt: due - PiSessionState.stallAfter)
+            progressAt: due - SessionState.stallAfter)
         let remote = try await rig.remoteMac()
         try await remote.update(sessionID: "remote-2", state: .delegating, title: "修好登录页", subagents: [ui])
         rig.jump(to: due)

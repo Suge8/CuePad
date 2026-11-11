@@ -9,7 +9,7 @@ extension CueKeeper {
     /// `said`、`images`、`delivering` 是随信封交出去的你的消息与回答，`related` 是按其中他自己说的话在会话回复里查到的（`CueTools.related`，交话的那一处查）；
     /// 发出去就记下送达。发不进去时按大脑出了问题处理，返回 false。
     func wakeUp(
-        _ wake: CueWake, as chosen: CueAuthor? = nil, said: String? = nil, related: [String] = [], images: [PiImage] = [], delivering: [UUID] = []
+        _ wake: CueWake, as chosen: CueAuthor? = nil, said: String? = nil, related: [String] = [], images: [MessageImage] = [], delivering: [UUID] = []
     ) async throws -> Bool {
         guard let shift else { return false }
         let author = chosen ?? Self.author(of: wake)
@@ -151,7 +151,7 @@ extension CueKeeper {
 
     /// 你的消息里的图，按发给会话的同一个转换取出、交给看得了图的大脑；文字里的图片引用照留（Cue 转给会话时原样写进去）。
     /// 看不了图的，图同文件一样以路径写进信封（`CueEnvelope.delivered`），这里不交。图不在这台 Mac 上，不交图并对你说一声，不悄悄丢掉。
-    func images(in pending: [CueMessage], for brain: any HostedSession) async -> [PiImage] {
+    func images(in pending: [CueMessage], for brain: any HostedSession) async -> [MessageImage] {
         guard brain.seesImages else { return [] }
         let contents = pending.filter { $0.author == .known(.you) && CueFormat.hasAttachments($0.text) }.map { SendContent(stored: $0.text) }
         guard !contents.isEmpty else { return [] }
@@ -221,7 +221,7 @@ extension CueKeeper {
         }
     }
 
-    static func retryable(_ summary: PiErrorSummary) -> Bool { summary.failure.retries }
+    static func retryable(_ summary: ErrorSummary) -> Bool { summary.failure.retries }
 
     /// 错的原文首行（信封里那一行只放得下这么多）。
     static func firstLine(_ raw: String) -> String {

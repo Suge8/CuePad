@@ -15,9 +15,9 @@ extension MCPTests {
     }
     let task = try await store.createTask("重写发布脚本", in: project.id)
     let first = try await store.createTask("调研", under: task.id), second = try await store.createTask("改脚本", under: task.id)
-    let opening = try await store.requestLaunch(PiLaunch(project: project.id, prompt: first.body, token: "first-step"), title: first.heading, on: "mac-a", card: first.id)
+    let opening = try await store.requestLaunch(LaunchRequest(project: project.id, prompt: first.body, token: "first-step"), title: first.heading, on: "mac-a", card: first.id)
     try await store.recordMacPresence(host: "mac-a") { true }  // 会话所在的 Mac 醒着：下一步才能接着用它的会话
-    try await PiStateRecorder(store: store, hostID: "mac-a").update(
+    try await StateRecorder(store: store, hostID: "mac-a").update(
       sessionID: "s1", state: .settled, title: "调研", projectID: project.id, launchToken: opening.launch?.token, hosted: true)
     try await store.deleteDelivery(opening.id)
     try await Server.run(library: sandbox.directory) { server in
@@ -73,8 +73,8 @@ extension MCPTests {
     let sound = try await store.createTask("增加系统提示音和提示窗", under: task.id)
     let settings = try await store.createTask("设置里加开关", under: task.id)
     let docs = try await store.createTask("写说明", under: task.id)
-    let opening = try await store.requestLaunch(PiLaunch(project: project.id, prompt: sound.body, token: "first-step"), title: sound.heading, on: "mac-a", card: sound.id)
-    let recorder = PiStateRecorder(store: store, hostID: "mac-a")
+    let opening = try await store.requestLaunch(LaunchRequest(project: project.id, prompt: sound.body, token: "first-step"), title: sound.heading, on: "mac-a", card: sound.id)
+    let recorder = StateRecorder(store: store, hostID: "mac-a")
     try await recorder.update(sessionID: "s1", state: .settled, title: "s1", projectID: project.id, launchToken: opening.launch?.token, hosted: true)
     try await store.deleteDelivery(opening.id)
     try await recorder.update(sessionID: "s3", state: .settled, title: "s3", projectID: project.id, hosted: true)

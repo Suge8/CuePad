@@ -110,7 +110,7 @@ struct FolderPickerSheet: View {
         let id = project.id, name = project.shownName
         Task {
             do {
-                try await workspace.requestFolder(PiBind(project: id, folder: candidate.target), title: name, on: candidate.hostID)
+                try await workspace.requestFolder(BindRequest(project: id, folder: candidate.target), title: name, on: candidate.hostID)
                 dismiss()
             } catch {
                 phase = .failed(error.localizedDescription)

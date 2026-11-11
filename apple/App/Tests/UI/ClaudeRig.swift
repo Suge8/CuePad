@@ -17,11 +17,11 @@ final class ClaudeRig {
     let work: URL
     let bin: URL
     let environment: [String: String]
-    private(set) var bridge: PiBridge
+    private(set) var bridge: Bridge
     private(set) var hooks: AgentHookServer
     private(set) var services: AppServices
     /// 起一个 App 实例（桥、钩子 socket、AppServices）：`relaunch` 再起一次，库、设置与 Claude Code 的目录都不变
-    private let boot: () throws -> (PiBridge, AgentHookServer, AppServices)
+    private let boot: () throws -> (Bridge, AgentHookServer, AppServices)
     let model: FakeModel
     private var terminals: [Terminal] = []
     var store: CueStore { services.store }
@@ -60,10 +60,10 @@ final class ClaudeRig {
         let location = try LibraryLocation.resolve(environment: [LibraryLocation.environmentKey: root.appending(path: "Library").path])
         let defaults = TempDefaults().defaults
         boot = { [root] in
-            let bridge = PiBridge(socketDirectory: sockets, hostedIdle: hostedIdle, timing: timing)
+            let bridge = Bridge(socketDirectory: sockets, hostedIdle: hostedIdle, timing: timing)
             let hooks = AgentHookServer(path: paths.hookSocket)
             let mac = MacDependencies(
-                pi: bridge, hotkeys: InMemoryHotkeys(), paths: agentPaths, agents: AgentIntegrations(agents), terminal: PiTerminalJumper(),
+                pi: bridge, hotkeys: InMemoryHotkeys(), paths: agentPaths, agents: AgentIntegrations(agents), terminal: TerminalJumper(),
                 hostID: TestApp.hostID, workspaces: Workspaces(root: root.appending(path: "CuePad", directoryHint: .isDirectory)),
                 wakeNotifications: NotificationCenter(), timing: timing,
                 commandLineTool: CommandLineToolInstaller(helper: helper, linkDirectory: root.appending(path: "home/.local/bin"), shellPath: { nil }),

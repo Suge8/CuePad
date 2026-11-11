@@ -4,9 +4,9 @@ import SwiftUI
 @Observable
 final class AgentListModel {
     let endedOnly: Bool
-    var list: PiSessionList?
+    var list: SessionListData?
     var query = "" { didSet { resetPaging() } }
-    private(set) var limit = PiSessionList.pageSize
+    private(set) var limit = SessionListData.pageSize
 
     var searching: Bool { !query.trimmingCharacters(in: .whitespaces).isEmpty }
 
@@ -14,18 +14,18 @@ final class AgentListModel {
 
     var hasMore: Bool { list?.hasMore ?? false }
 
-    func resetPaging() { limit = PiSessionList.pageSize }
+    func resetPaging() { limit = SessionListData.pageSize }
 
     func loadMore() {
-        if let list { limit = list.loaded + PiSessionList.pageSize }
+        if let list { limit = list.loaded + SessionListData.pageSize }
     }
 
     static var noneTitle: String { String(localized: "还没有 Agent 会话") }
 }
 
-extension PiSessionList {
-    /// 正在唤醒的读的时候就排掉了（`PiSessionList.earlier`）。
-    var historyRuns: [TimeSection.Run<PiSessionListItem>] {
+extension SessionListData {
+    /// 正在唤醒的读的时候就排掉了（`SessionListData.earlier`）。
+    var historyRuns: [TimeSection.Run<SessionListItem>] {
         TimeSection.split(ended, date: \.state.stateSince, now: .now)
     }
 }
@@ -43,10 +43,10 @@ private struct AgentListReader: ViewModifier {
         content
             .environment(\.searchHighlight, model.query)
             .observing(
-                services.store, id: PiSessionList.Key(filter: .init(text: model.query, project: nil), limit: model.limit, moment: services.speech),
+                services.store, id: SessionListData.Key(filter: .init(text: model.query, project: nil), limit: model.limit, moment: services.speech),
                 into: $model.list, onError: workspace.fail
             ) { [query = model.query, endedOnly = model.endedOnly, limit = model.limit, moment = services.speech] store in
-                try PiSessionList.read(text: query, endedOnly: endedOnly, historyLimit: limit, at: moment, from: store)
+                try SessionListData.read(text: query, endedOnly: endedOnly, historyLimit: limit, at: moment, from: store)
             }
     }
 }

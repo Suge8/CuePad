@@ -27,7 +27,7 @@ struct ChatGPTTests {
         let quotas = try await eventually(rig.store, { try $0.accountQuotas() }) { $0.contains { $0.provider == "openai" } }
         let shown = QuotaMeter(try #require(quotas.first { $0.provider == "openai" }), at: .now)
         #expect(shown.windows.isEmpty)
-        #expect(!PiModelLabel.title(model, quotas: quotas, at: .now).contains("%"))
+        #expect(!ModelLabel.title(model, quotas: quotas, at: .now).contains("%"))
         if oauth {
             #expect(model.account?.label(provider: model.key.provider) == "使用 ChatGPT 套餐")
             #expect(shown.account == "使用 ChatGPT 套餐")
@@ -74,7 +74,7 @@ struct ChatGPTTests {
             #expect(workspace.shownInHeader(state, delivery: nil).label == "回答未完成")
             #expect(messages.contains { $0.notice == .truncated })
             let indexed = try #require(try await rig.store.piSession(live.sessionID))
-            let history = try PiHistory.index(file: URL(filePath: indexed.path), agent: .pi, from: nil, files: rig.store.files)
+            let history = try History.index(file: URL(filePath: indexed.path), agent: .pi, from: nil, files: rig.store.files)
             #expect(history.messages.contains { $0.notice == .truncated })
             #expect(history.messages.contains { $0.text == "PARTIAL_REPLY" })
         }

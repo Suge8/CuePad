@@ -8,7 +8,7 @@ struct PreviewReplyTests {
     @Test func 引用的预览随下一句发出_同批注一起_同一份不重复() async throws {
         let app = TestApp()
         let store = app.services.store
-        try await PiStateRecorder(store: store, hostID: "mac").update(sessionID: "s", state: .settled, title: "s")
+        try await StateRecorder(store: store, hostID: "mac").update(sessionID: "s", state: .settled, title: "s")
         let session = try #require(try await store.piSessionPage(.live).items.first?.state)
         let folder = FileManager.default.temporaryDirectory.appending(path: "preview-reply-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)

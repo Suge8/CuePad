@@ -4,16 +4,16 @@ import CueText
 import Foundation
 
 extension DebugScene {
-    static func model(_ provider: String, _ id: String, _ name: String, _ levels: [PiThinkingLevel], supportsFast: Bool = false) -> PiModelOption {
-        PiModelOption(key: PiModelKey(provider: provider, id: id), name: name, thinkingLevels: levels, supportsFast: supportsFast)
+    static func model(_ provider: String, _ id: String, _ name: String, _ levels: [ThinkingLevel], supportsFast: Bool = false) -> ModelOption {
+        ModelOption(key: ModelKey(provider: provider, id: id), name: name, thinkingLevels: levels, supportsFast: supportsFast)
     }
 
     /// Codex、Claude Code 与 Grok Build 是它们自己报的清单，照钉住版本的真 Agent 报的：Codex 的 `model/list`（GPT 系，`ultra` 不是 CuePad 认识的档，不列）、Claude Code 的 `initialize`（Claude 系）与 Grok Build 握手报的模型，提供方是这一家（`AgentKind.modelProvider`），与真会话上报的一样。OpenCode 的经 OpenRouter 转发（id 形如 `anthropic/claude-…`，标志按模型家族认）。
-    static func demoModels(for agent: AgentKind?, fast: Bool? = nil) -> PiModelState {
-        func listed(_ models: [PiModelOption], current: Int, thinking: PiThinkingLevel) -> PiModelState {
-            PiModelState(model: models[current], thinking: .known(thinking), fast: fast, models: models)
+    static func demoModels(for agent: AgentKind?, fast: Bool? = nil) -> ModelState {
+        func listed(_ models: [ModelOption], current: Int, thinking: ThinkingLevel) -> ModelState {
+            ModelState(model: models[current], thinking: .known(thinking), fast: fast, models: models)
         }
-        let levels: [PiThinkingLevel] = [.low, .medium, .high, .xhigh, .max]
+        let levels: [ThinkingLevel] = [.low, .medium, .high, .xhigh, .max]
         switch agent {
         case .opencode:
             return listed([
@@ -36,7 +36,7 @@ extension DebugScene {
             ], current: 1, thinking: .high)
         case .grok:
             let provider = AgentKind.grok.modelProvider ?? ""
-            let efforts: [PiThinkingLevel] = [.low, .medium, .high, .xhigh]
+            let efforts: [ThinkingLevel] = [.low, .medium, .high, .xhigh]
             return listed([model(provider, "grok-4.6", "Grok 4.6", efforts), model(provider, "grok-4.5", "Grok 4.5", efforts)], current: 0, thinking: .high)
         case .dsh:
             return listed([
@@ -48,9 +48,9 @@ extension DebugScene {
         }
     }
 
-    static let demoModels: PiModelState = {
+    static let demoModels: ModelState = {
         let opus = model("anthropic", "claude-opus-5-5-20260901", "Claude Opus 5.5", [.low, .medium, .high, .max])
-        return PiModelState(model: opus, thinking: .known(.medium), models: [
+        return ModelState(model: opus, thinking: .known(.medium), models: [
             opus,
             model("anthropic", "claude-sonnet-5-20260801", "Claude Sonnet 5", [.off, .low, .medium, .high]),
             model("openai-codex", "gpt-6-luna", "GPT-6 Luna", [.off, .low, .high]),
@@ -63,22 +63,22 @@ extension DebugScene {
     }()
 
     static let demoCommands = [
-        PiSlashCommand(name: "compact", summary: String(localized: "压缩当前上下文，可附上说明", table: "Demo"), source: .known(.builtin), hint: String(localized: "[说明]", table: "Demo")),
-        PiSlashCommand(name: "name", summary: String(localized: "设置会话名", table: "Demo"), source: .known(.builtin), hint: String(localized: "<名字>", table: "Demo")),
-        PiSlashCommand(name: "model", summary: String(localized: "换模型", table: "Demo"), source: .known(.builtin), hint: String(localized: "<提供方/模型>", table: "Demo")),
-        PiSlashCommand(name: "thinking", summary: String(localized: "设置思考强度", table: "Demo"), source: .known(.builtin), hint: String(localized: "<强度>", table: "Demo")),
-        PiSlashCommand(name: "new", summary: String(localized: "开一个新会话", table: "Demo"), source: .known(.builtin)),
-        PiSlashCommand(name: "clone", summary: String(localized: "在当前位置复制出一个新会话", table: "Demo"), source: .known(.builtin)),
-        PiSlashCommand(name: "reload", summary: String(localized: "重新载入扩展、skill、提示词模板与上下文文件", table: "Demo"), source: .known(.builtin)),
-        PiSlashCommand(name: "plan", summary: String(localized: "先列计划，确认后再动手", table: "Demo"), source: .known(.extension)),
-        PiSlashCommand(name: "review", summary: String(localized: "审查当前分支的改动", table: "Demo"), source: .known(.prompt)),
-        PiSlashCommand(name: "changelog", summary: String(localized: "按提交记录写更新说明", table: "Demo"), source: .known(.prompt)),
-        PiSlashCommand(name: "skill:deploy", summary: String(localized: "按清单检查并部署到生产", table: "Demo"), source: .known(.skill)),
-        PiSlashCommand(name: "skill:frontend-design", summary: String(localized: "做界面时先定视觉方向与密度", table: "Demo"), source: .known(.skill)),
+        SlashCommand(name: "compact", summary: String(localized: "压缩当前上下文，可附上说明", table: "Demo"), source: .known(.builtin), hint: String(localized: "[说明]", table: "Demo")),
+        SlashCommand(name: "name", summary: String(localized: "设置会话名", table: "Demo"), source: .known(.builtin), hint: String(localized: "<名字>", table: "Demo")),
+        SlashCommand(name: "model", summary: String(localized: "换模型", table: "Demo"), source: .known(.builtin), hint: String(localized: "<提供方/模型>", table: "Demo")),
+        SlashCommand(name: "thinking", summary: String(localized: "设置思考强度", table: "Demo"), source: .known(.builtin), hint: String(localized: "<强度>", table: "Demo")),
+        SlashCommand(name: "new", summary: String(localized: "开一个新会话", table: "Demo"), source: .known(.builtin)),
+        SlashCommand(name: "clone", summary: String(localized: "在当前位置复制出一个新会话", table: "Demo"), source: .known(.builtin)),
+        SlashCommand(name: "reload", summary: String(localized: "重新载入扩展、skill、提示词模板与上下文文件", table: "Demo"), source: .known(.builtin)),
+        SlashCommand(name: "plan", summary: String(localized: "先列计划，确认后再动手", table: "Demo"), source: .known(.extension)),
+        SlashCommand(name: "review", summary: String(localized: "审查当前分支的改动", table: "Demo"), source: .known(.prompt)),
+        SlashCommand(name: "changelog", summary: String(localized: "按提交记录写更新说明", table: "Demo"), source: .known(.prompt)),
+        SlashCommand(name: "skill:deploy", summary: String(localized: "按清单检查并部署到生产", table: "Demo"), source: .known(.skill)),
+        SlashCommand(name: "skill:frontend-design", summary: String(localized: "做界面时先定视觉方向与密度", table: "Demo"), source: .known(.skill)),
     ]
 
     /// 几家各报各的：手机发给 Agent 时换选会话才看得出命令跟着换。
-    static func demoCommands(for agent: AgentKind?) -> [PiSlashCommand] {
+    static func demoCommands(for agent: AgentKind?) -> [SlashCommand] {
         let names: Set<String>? = switch agent {
         case .codex: ["compact", "name", "model", "skill:deploy", "skill:frontend-design"]
         case .opencode: ["compact", "review", "changelog"]
@@ -88,12 +88,12 @@ extension DebugScene {
         return names.map { names in demoCommands.filter { names.contains($0.name) } } ?? demoCommands
     }
 
-    static let demoContexts: [String: PiContextUsage] = [
-        "atlas": PiContextUsage(tokens: 172_000, window: 200_000),
-        "homepage": PiContextUsage(tokens: 31_000, window: 200_000),
-        "cuepad": PiContextUsage(tokens: 96_000, window: 200_000),
-        "rename": PiContextUsage(tokens: 188_000, window: 200_000),
-        "billing": PiContextUsage(tokens: nil, window: 200_000),
+    static let demoContexts: [String: ContextUsage] = [
+        "atlas": ContextUsage(tokens: 172_000, window: 200_000),
+        "homepage": ContextUsage(tokens: 31_000, window: 200_000),
+        "cuepad": ContextUsage(tokens: 96_000, window: 200_000),
+        "rename": ContextUsage(tokens: 188_000, window: 200_000),
+        "billing": ContextUsage(tokens: nil, window: 200_000),
     ]
 
     /// Mac 上给 `-CuePadHost bare` 时本机是一家都不能用的那台（看 + 的悬停与表单里的原因）；本机的记录会被它自己的探测改写成隔离目录里真实的样子。

@@ -9,32 +9,32 @@ struct SessionGroup: Equatable {
     }
 
     let key: Key
-    let sessions: [PiSessionState]
+    let sessions: [SessionState]
 
     static func grouped(
-        live: [PiSessionState], ended: [PiSessionState], cue: CueDuty? = nil, now: Date, at moment: Speech.Moment,
+        live: [SessionState], ended: [SessionState], cue: CueDuty? = nil, now: Date, at moment: Speech.Moment,
         calendar: Calendar = .current
     ) -> [SessionGroup] {
-        let current = live.isEmpty ? [] : [SessionGroup(key: .now, sessions: PiSessionState.inListOrder(live, state: \.self, cue: cue, at: moment))]
+        let current = live.isEmpty ? [] : [SessionGroup(key: .now, sessions: SessionState.inListOrder(live, state: \.self, cue: cue, at: moment))]
         let past = TimeSection.split(ended, date: \.stateSince, now: now, calendar: calendar)
         return current + past.map { SessionGroup(key: .ended($0.section), sessions: $0.items) }
     }
 }
 
 nonisolated struct SessionSearchData: Sendable, Equatable {
-    var live: [PiSessionState]
-    var ended: [PiSessionState]
+    var live: [SessionState]
+    var ended: [SessionState]
     var endedTotal: Int
     var deliveries: [String: DeliveryRequest]
     var undelivered: [String: Int]
 
     static func read(text: String, pages: Int, at moment: Speech.Moment, from store: isolated CueStore) throws -> SessionSearchData {
-        let live = try store.piSessionPage(PiSessionQuery(scope: .live, text: text, limit: .max))
-        let ended = try store.piSessionPage(PiSessionQuery(scope: .ended, text: text, limit: PiSessionList.pageSize * pages))
+        let live = try store.piSessionPage(SessionQuery(scope: .live, text: text, limit: .max))
+        let ended = try store.piSessionPage(SessionQuery(scope: .ended, text: text, limit: SessionListData.pageSize * pages))
         return SessionSearchData(
             live: live.items.map(\.listed), ended: ended.items.map(\.listed), endedTotal: ended.total,
             deliveries: Dictionary((live.items + ended.items).compactMap { item in item.delivery.map { (item.state.sessionID, $0) } }) { first, _ in first },
-            undelivered: PiSessionListItem.undelivered(live.items + ended.items, at: moment))
+            undelivered: SessionListItem.undelivered(live.items + ended.items, at: moment))
     }
 }
 
@@ -82,9 +82,9 @@ struct SessionResultList: View {
             .padding(.top, Spacing.group).padding(.bottom, Spacing.hair)
     }
 
-    private func row(_ session: PiSessionState) -> some View {
+    private func row(_ session: SessionState) -> some View {
         let isSelected = session.sessionID == selection
-        return PiSessionRow(
+        return SessionRow(
             session: session, project: workspace.catalog?.project(session.projectID), delivery: deliveries[session.sessionID],
             undelivered: undelivered[session.sessionID] ?? 0).equatable()
             .padding(.vertical, Spacing.item)

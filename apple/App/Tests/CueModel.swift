@@ -115,7 +115,7 @@ nonisolated final class CueModel: Sendable {
         if text.contains("请建个任务并开工") { return call("task", ["action": "add", "title": "修好登录页", "project": "演示", "body": "把登录页修好"]) }
         if text.contains("请问我一个问题") { return call("tell", ["text": "要推送吗？", "ask": "push", "doing": "推送登录页的修复"]) }
         if last["role"] as? String == "user", let key = failingOnce.first(where: text.contains), once("fail:" + key) { return fail() }
-        // 额度用完（各家额度类的说法之一，`PiErrorSummary` 认作额度）：说了这句的每次都是，`blockQuota` 之后的那几次也是
+        // 额度用完（各家额度类的说法之一，`ErrorSummary` 认作额度）：说了这句的每次都是，`blockQuota` 之后的那几次也是
         let blocked = quotaBlocked.withLock { rule in
             guard rule.left > 0, last["role"] as? String == "user",
                   rule.containing.map(text.contains) ?? true else { return false }

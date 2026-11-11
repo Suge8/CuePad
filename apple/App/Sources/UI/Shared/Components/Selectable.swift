@@ -2,7 +2,7 @@ import SwiftUI
 
 #if os(iOS)
 extension EnvironmentValues {
-    /// 文字开行内选择（手机上只能整段复制）。会话的对话里关掉（`PiConversation`）：长按出的是消息菜单，挑字走菜单里的"选择文本"。
+    /// 文字开行内选择（手机上只能整段复制）。会话的对话里关掉（`Conversation`）：长按出的是消息菜单，挑字走菜单里的"选择文本"。
     @Entry var inlineTextSelection = true
 }
 #endif

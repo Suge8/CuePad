@@ -20,7 +20,7 @@ struct RealFirecodeTests {
 
     @Test func subagentsAreSummarizedOnTheMasterSessionAndTheirEventsAreNotYourPrompt() async throws {
         let pi = try await PiProcess(extraExtensions: [], firecode: true)
-        let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
+        let bridge = Bridge(socketDirectory: pi.paths.socketDirectory)
         defer { bridge.stop(); pi.stop() }
         try bridge.start()
         let log = ChangeLog(bridge)
@@ -51,7 +51,7 @@ struct RealFirecodeTests {
         }
         #expect(recap(of: bridge.sessions.first)?.lastPrompt == "派个子代理")
         try await eventually("全部歇下") { bridge.sessions.first?.state == .settled }
-        // 歇下就绪（`PiSessionState.answered`）：派活那一轮的收尾早于交回结果那一轮的开始，那一轮的收尾不早于它
+        // 歇下就绪（`SessionState.answered`）：派活那一轮的收尾早于交回结果那一轮的开始，那一轮的收尾不早于它
         let turn = try #require(bridge.sessions.first?.turnStartedAt)
         let answered = try #require(recap(of: bridge.sessions.first)?.answeredAt)
         #expect(dispatched < turn && turn <= answered, "\(dispatched) \(turn) \(answered)")
@@ -73,7 +73,7 @@ struct RealFirecodeTests {
     @Test func aHostedMasterOutlivesAKilledSubagentWhileAnotherIsStillRunning() async throws {
         let idleSeconds = 1
         let pi = try await PiProcess(extraExtensions: [], firecode: true, env: ["CUEPAD_HOSTED": "\(idleSeconds)"])
-        let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
+        let bridge = Bridge(socketDirectory: pi.paths.socketDirectory)
         defer { bridge.stop(); pi.stop() }
         try bridge.start()
         // 托管的 Pi 一起来就开始算空闲：第一句话经它自己的标准输入马上交出，不等桥发现它（同一测试进程忙时，发现会晚过这 1 秒，它已经退了）

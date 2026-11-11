@@ -19,7 +19,7 @@ struct AwaitingReplyTests {
         let recorder = try await rig.runtimeRecorder(on: "mac-a")
         try await recorder.update(
             sessionID: "billing", state: .error, detail: "connection refused", title: "billing",
-            times: PiTimes(stateSince: .now.addingTimeInterval(-600), busySince: nil))
+            times: SessionTimes(stateSince: .now.addingTimeInterval(-600), busySince: nil))
         let parent = try await store.createTask("导入旧数据")
         _ = try await store.createTask("先读一遍", under: parent.id)
         let second = try await store.createTask("再导进去", under: parent.id)
@@ -42,7 +42,7 @@ struct AwaitingReplyTests {
         var pulse = workspace.pulse(of: work.agent)
         #expect(pulse.tier == .running && pulse.word == nil)
 
-        try await recorder.update(sessionID: "billing", state: .thinking, times: PiTimes(stateSince: .now, busySince: .now))
+        try await recorder.update(sessionID: "billing", state: .thinking, times: SessionTimes(stateSince: .now, busySince: .now))
         board = try await TaskBoard.read(from: store)
         pulse = workspace.pulse(of: try #require(board.advancing.first { $0.item?.id == parent.id }).agent)
         #expect(pulse.shown?.status == .working(.thinking))

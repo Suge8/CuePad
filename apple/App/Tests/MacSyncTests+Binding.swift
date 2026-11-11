@@ -10,7 +10,7 @@ import Testing
 extension MacSyncTests {
     // 绑定由 Mac 执行（只有它有完整路径），写入只有这一条：本机的目录绑定
 
-    func bound(_ bind: PiBind) async throws -> DeliveryRequest {
+    func bound(_ bind: BindRequest) async throws -> DeliveryRequest {
         try await services.executor.start()
         let request = try await services.store.requestBind(bind, title: "App", on: TestApp.hostID)
         return try await awaitFinished(request.id)
@@ -25,13 +25,13 @@ extension MacSyncTests {
         try await store.setDirectory(second.path, for: source.id)
         defer { services.cancelBackgroundWork() }
 
-        #expect(try await bound(PiBind(project: project.id, folder: .besideSession("s1"))).status == .known(.succeeded))
+        #expect(try await bound(BindRequest(project: project.id, folder: .besideSession("s1"))).status == .known(.succeeded))
         #expect(try await store.directory(of: project.id) == app.path)
 
-        #expect(try await bound(PiBind(project: project.id, folder: .project(source.id))).status == .known(.succeeded))
+        #expect(try await bound(BindRequest(project: project.id, folder: .project(source.id))).status == .known(.succeeded))
         #expect(try await store.directory(of: project.id) == second.path)
 
-        #expect(try await bound(PiBind(project: project.id, folder: nil)).status == .known(.succeeded))
+        #expect(try await bound(BindRequest(project: project.id, folder: nil)).status == .known(.succeeded))
         #expect(try await store.directory(of: project.id) == nil)
         #expect(try await store.directory(of: source.id) == second.path)
         #expect(try RawDB(services.location.databaseURL).count("sendRecords") == 0)
@@ -43,7 +43,7 @@ extension MacSyncTests {
         let unseen = UUID()
         defer { services.cancelBackgroundWork() }
 
-        let done = try await bound(PiBind(project: unseen, folder: .besideSession("s1")))
+        let done = try await bound(BindRequest(project: unseen, folder: .besideSession("s1")))
 
         #expect(done.status == .known(.succeeded))
         #expect(try await services.store.directory(of: unseen) == app.path)
@@ -57,11 +57,11 @@ extension MacSyncTests {
         try await services.store.setDirectory(existing.path, for: project.id)
         defer { services.cancelBackgroundWork() }
 
-        let noSession = try await bound(PiBind(project: project.id, folder: .besideSession("nope")))
+        let noSession = try await bound(BindRequest(project: project.id, folder: .besideSession("nope")))
         #expect(noSession.status == .known(.failed) && noSession.reason?.text.isEmpty == false)
-        let missing = try await bound(PiBind(project: project.id, folder: .besideSession("gone-folder")))
+        let missing = try await bound(BindRequest(project: project.id, folder: .besideSession("gone-folder")))
         #expect(missing.status == .known(.failed) && missing.reason?.text == "目录不存在：gone")
-        let unbound = try await bound(PiBind(project: project.id, folder: .project(bare.id)))
+        let unbound = try await bound(BindRequest(project: project.id, folder: .project(bare.id)))
         #expect(unbound.status == .known(.failed) && unbound.reason?.text.isEmpty == false)
         #expect(try await services.store.directory(of: project.id) == existing.path)
     }
@@ -77,7 +77,7 @@ extension MacSyncTests {
             "接着做", to: SendTarget(kind: .piSession, name: "修好登录", ref: "s1"), on: TestApp.hostID)
         let resumed = try await awaitFinished(send.id)
         #expect(resumed.status == .known(.failed) && resumed.reason?.text == "目录不存在：gone")
-        let start = try await launched(PiLaunch(project: project.id, prompt: nil, token: "tok-4"), title: "App")
+        let start = try await launched(LaunchRequest(project: project.id, prompt: nil, token: "tok-4"), title: "App")
         #expect(start.status == .known(.failed) && start.reason?.text == "目录不存在：moved")
         #expect(rig.host.calls.isEmpty)
     }

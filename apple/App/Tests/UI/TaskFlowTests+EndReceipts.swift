@@ -8,29 +8,29 @@ import Testing
 @testable import CueStore
 
 final class LostEndLink: SessionLink {
-    let bridge: PiBridge
-    init(_ bridge: PiBridge) { self.bridge = bridge }
-    func end(_ id: PiSession.ID) async throws {
+    let bridge: Bridge
+    init(_ bridge: Bridge) { self.bridge = bridge }
+    func end(_ id: Session.ID) async throws {
         bridge.detach(id, reason: .closed(reason: "quit"))
         throw NSError(domain: "audit.lost-end-result", code: 1)
     }
 }
 
 private final class InterruptedEndLink: SessionLink {
-    let bridge: PiBridge
+    let bridge: Bridge
     var waiting: CheckedContinuation<Void, any Error>?
-    init(_ bridge: PiBridge) { self.bridge = bridge }
-    func end(_ id: PiSession.ID) async throws {
+    init(_ bridge: Bridge) { self.bridge = bridge }
+    func end(_ id: Session.ID) async throws {
         bridge.detach(id, reason: .closed(reason: "quit"))
         try await withCheckedThrowingContinuation { waiting = $0 }
     }
 }
 
 final class InterleavedLink: SessionLink {
-    let bridge: PiBridge
+    let bridge: Bridge
     let beforeEnd: () async throws -> Void
-    init(_ bridge: PiBridge, beforeEnd: @escaping () async throws -> Void) { self.bridge = bridge; self.beforeEnd = beforeEnd }
-    func end(_ id: PiSession.ID) async throws {
+    init(_ bridge: Bridge, beforeEnd: @escaping () async throws -> Void) { self.bridge = bridge; self.beforeEnd = beforeEnd }
+    func end(_ id: Session.ID) async throws {
         try await beforeEnd()
         bridge.detach(id, reason: .closed(reason: "quit"))
     }
@@ -46,10 +46,10 @@ extension TaskFlowTests {
         let borrower = try await workspace.createTask("继续工作", in: Project.defaultID)
         workspace.startFresh(task)
         let launch = try #require(try await eventually(store, { try $0.deliveryRequests().first { $0.mode == .known(.start) } }) { $0 != nil })
-        try await PiStateRecorder(store: store, hostID: TestApp.hostID).update(sessionID: "audit-interrupted", state: .thinking, projectID: Project.defaultID, launchToken: launch.launch?.token, hosted: true)
+        try await StateRecorder(store: store, hostID: TestApp.hostID).update(sessionID: "audit-interrupted", state: .thinking, projectID: Project.defaultID, launchToken: launch.launch?.token, hosted: true)
         try await store.deleteDelivery(launch.id)
         let link = InterruptedEndLink(rig.pi)
-        var session = PiSession(id: "audit-interrupted.1", sessionID: "audit-interrupted", agent: .pi, sessionFile: nil, pid: 1, cwd: rig.directory, terminal: PiTerminal(), state: .thinking, stateSince: .now)
+        var session = Session(id: "audit-interrupted.1", sessionID: "audit-interrupted", agent: .pi, sessionFile: nil, pid: 1, cwd: rig.directory, terminal: TerminalIdentity(), state: .thinking, stateSince: .now)
         session.hosted = true
         rig.pi.attach(session, via: link)
         try await workspace.complete(task.id)
@@ -61,7 +61,7 @@ extension TaskFlowTests {
         // 模拟进程在结束交出后中断：旧处理任务不能正常返回并继续确认结果。
         link.waiting?.resume(throwing: CancellationError())
         link.waiting = nil
-        try await PiStateRecorder(store: store, hostID: TestApp.hostID).end(sessionID: "audit-interrupted", confirming: recovery == "source" ? [automatic.id] : [])
+        try await StateRecorder(store: store, hostID: TestApp.hostID).end(sessionID: "audit-interrupted", confirming: recovery == "source" ? [automatic.id] : [])
         try await services.executor.start()
         if recovery != "source" {
             #expect(try await store.deliveryRequest(automatic.id)?.status == .known(.unconfirmed))
@@ -101,7 +101,7 @@ extension TaskFlowTests {
         let borrower = try await workspace.createTask("继续工作", in: Project.defaultID)
         workspace.startFresh(task)
         let launch = try #require(try await eventually(store, { try $0.deliveryRequests().first { $0.mode == .known(.start) } }) { $0 != nil })
-        try await PiStateRecorder(store: store, hostID: TestApp.hostID).update(sessionID: "audit-remote", state: .thinking, projectID: Project.defaultID, launchToken: launch.launch?.token, hosted: true)
+        try await StateRecorder(store: store, hostID: TestApp.hostID).update(sessionID: "audit-remote", state: .thinking, projectID: Project.defaultID, launchToken: launch.launch?.token, hosted: true)
         try await store.deleteDelivery(launch.id)
         let state = try #require(try await store.piSessions(sessionIDs: ["audit-remote"])["audit-remote"]?.state)
         for id in [borrower.id, state.id] {
@@ -117,7 +117,7 @@ extension TaskFlowTests {
             #expect(try await self.store.applyRemote([.save(row, systemFields: Data())]).isEmpty)
             #expect(try await self.store.card(borrower.id)?.piSessionID == "audit-remote")
         }
-        var session = PiSession(id: "audit-remote.1", sessionID: "audit-remote", agent: .pi, sessionFile: nil, pid: 1, cwd: rig.directory, terminal: PiTerminal(), state: .thinking, stateSince: .now)
+        var session = Session(id: "audit-remote.1", sessionID: "audit-remote", agent: .pi, sessionFile: nil, pid: 1, cwd: rig.directory, terminal: TerminalIdentity(), state: .thinking, stateSince: .now)
         session.hosted = true
         rig.pi.attach(session, via: link)
         try await services.executor.start()
@@ -138,10 +138,10 @@ extension TaskFlowTests {
         let borrower = try await workspace.createTask("继续工作", in: Project.defaultID)
         workspace.startFresh(task)
         let launch = try #require(try await eventually(store, { try $0.deliveryRequests().first { $0.mode == .known(.start) } }) { $0 != nil })
-        let recorder = PiStateRecorder(store: store, hostID: TestApp.hostID)
+        let recorder = StateRecorder(store: store, hostID: TestApp.hostID)
         try await recorder.update(sessionID: "audit-lost", state: .thinking, projectID: Project.defaultID, launchToken: launch.launch?.token, hosted: true)
         try await store.deleteDelivery(launch.id)
-        var session = PiSession(id: "audit-lost.1", sessionID: "audit-lost", agent: .pi, sessionFile: nil, pid: 1, cwd: rig.directory, terminal: PiTerminal(), state: .thinking, stateSince: .now)
+        var session = Session(id: "audit-lost.1", sessionID: "audit-lost", agent: .pi, sessionFile: nil, pid: 1, cwd: rig.directory, terminal: TerminalIdentity(), state: .thinking, stateSince: .now)
         session.hosted = true
         rig.pi.attach(session, via: LostEndLink(rig.pi))
         try await workspace.complete(task.id)

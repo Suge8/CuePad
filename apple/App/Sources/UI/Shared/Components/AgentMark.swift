@@ -16,14 +16,14 @@ nonisolated extension AgentKind {
     }
 }
 
-nonisolated extension PiSessionState {
+nonisolated extension SessionState {
     /// 其他版本写的、不认识的 Agent 为 nil，不标。
     var agentMark: String? { agent.known?.name }
 }
 
 /// 会话列表的行只放标志（`named` 为 false）：行里名字优先，名字后再跟一串文字标、加上 Cue 的小头像，窄处名字会被挤成"…"。
 struct AgentMark: View {
-    let session: PiSessionState
+    let session: SessionState
     var font = Typography.meta
     var named = true
     @Environment(\.palette) private var palette

@@ -2,18 +2,18 @@ import CueStore
 import Foundation
 import Observation
 
-/// 此刻有事的 Pi 会话（同步记录里在线的，加上还有话发给它的已结束会话，即 `PiSessionQuery.current`）：整个 App 一份，一个订阅读一次，各处不各自订阅、各读一页：
+/// 此刻有事的 Pi 会话（同步记录里在线的，加上还有话发给它的已结束会话，即 `SessionQuery.current`）：整个 App 一份，一个订阅读一次，各处不各自订阅、各读一页：
 /// 读一页要查会话、项目、最近的投送请求、改名与没送达的话，会话状态每变一次，订阅了几处就读几遍。
 /// 下面这些由 `items` 推出，各自相等就不写——读它们的视图只在自己用的那份变了才重算。
 @Observable
 final class LiveSessions {
     /// 第一份在 App 打开资料库时当场读到（`init`），之后从它接着订阅：没有"还没读到"这一态。
-    private(set) var items: [PiSessionListItem] = []
+    private(set) var items: [SessionListItem] = []
     private(set) var total = 0
-    private(set) var live: [PiSessionListItem] = []
-    private(set) var current: [PiSessionListItem] = []
+    private(set) var live: [SessionListItem] = []
+    private(set) var current: [SessionListItem] = []
     /// 以下四项都按 Pi 的会话 id。
-    private(set) var recaps: [String: PiRecap] = [:]
+    private(set) var recaps: [String: Recap] = [:]
     private(set) var deliveries: [String: DeliveryRequest] = [:]
     private(set) var renames: [String: DeliveryRequest] = [:]
     private(set) var answers: [String: DeliveryRequest] = [:]
@@ -23,7 +23,7 @@ final class LiveSessions {
     /// Cue 在值班时的那一份（`CueStore.cueDuty`，与会话一起读；它那台 Mac 的在线期限到点由订阅重读）。不在值班为 nil。
     private(set) var cue: CueDuty?
     /// 这次运行里在这台 Mac 上结束的会话（运行之前就已结束的历史会话不在其中），最近结束的在前，只留最近的几个。iOS 上没有。
-    private(set) var recentlyEnded: [PiSessionState] = []
+    private(set) var recentlyEnded: [SessionState] = []
     /// 最近一次交给（`CueRelayStage` 画）：比已算过的更新的交给（`CueFlight.Facts`），`at` 变成新的就播一次；打开资料库时已有的不算。
     /// 叫醒那一路不在这里（`CueWatch.wake`）。
     /// 与会话一起读：重排"在做"那一列的那次写入（话在路上、新会话出现）与这次接力同一份到达界面，量落点时那一列已经排好。
@@ -47,7 +47,7 @@ final class LiveSessions {
     }
 
     /// 这个会话正在问的那道题已有的作答请求；题换了、没答过为 nil。
-    func answer(to session: PiSessionState) -> DeliveryRequest? {
+    func answer(to session: SessionState) -> DeliveryRequest? {
         guard let promptID = session.answerableQuestion?.promptID, let request = answers[session.sessionID], request.answer?.promptID == promptID else { return nil }
         return request
     }
@@ -57,9 +57,9 @@ final class LiveSessions {
     func relays(task: UUID) -> Bool { flight?.ends.contains { $0.task == task } == true }
 
     nonisolated struct Page: Sendable, Equatable {
-        var items: [PiSessionListItem]
+        var items: [SessionListItem]
         var total: Int
-        var ended: [PiSessionState] = []
+        var ended: [SessionState] = []
         var cue: CueDuty?
         var handoffs: [String: CueHandoff]
         var relays: CueFlight.Facts
@@ -95,7 +95,7 @@ final class LiveSessions {
         set(\.deliveries, Dictionary(current.compactMap { item in item.delivery.map { (item.state.sessionID, $0) } }) { first, _ in first })
         set(\.renames, Dictionary(current.compactMap { item in item.rename.map { (item.state.sessionID, $0) } }) { first, _ in first })
         set(\.answers, Dictionary(current.compactMap { item in item.answer.map { (item.state.sessionID, $0) } }) { first, _ in first })
-        set(\.undelivered, PiSessionListItem.undelivered(live, at: moment))
+        set(\.undelivered, SessionListItem.undelivered(live, at: moment))
         set(\.handoffs, page.handoffs)
         set(\.cue, page.cue)
         set(\.rail, page.rail)

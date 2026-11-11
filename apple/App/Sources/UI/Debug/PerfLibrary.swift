@@ -119,9 +119,9 @@ enum PerfLibrary {
         }
     }
 
-    private static func tools(_ random: inout SeededRandom) -> PiChatMessage.Tools {
+    private static func tools(_ random: inout SeededRandom) -> ChatMessage.Tools {
         let edits = random.next(4), reads = random.next(6), commands = random.next(5)
-        var items: [PiChatMessage.Tools.Item] = []
+        var items: [ChatMessage.Tools.Item] = []
         for _ in 0..<edits { items.append(.init(kind: .edit, target: "src/module\(random.next(40)).swift", added: random.next(60), removed: random.next(20))) }
         for _ in 0..<reads { items.append(.init(kind: .read, target: "docs/note\(random.next(40)).md")) }
         for _ in 0..<commands { items.append(.init(kind: .command, target: "pnpm test --filter pkg\(random.next(9))")) }

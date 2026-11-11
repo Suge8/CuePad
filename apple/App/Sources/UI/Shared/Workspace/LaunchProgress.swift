@@ -16,7 +16,7 @@ nonisolated struct LaunchProgress: Sendable, Equatable {
 
     enum Phase: Equatable {
         case idle
-        case sending(PiDelivery.Transit)
+        case sending(DeliveryShown.Transit)
         case opening
         case unconfirmed(String)
         case failed(Speech.Failure)
@@ -61,7 +61,7 @@ nonisolated struct SessionLaunch: Equatable, Sendable {
     let token: String
 
     func progress(from store: isolated CueStore) throws -> LaunchProgress {
-        let claimed = try store.piSessionPage(PiSessionQuery(launchToken: token, limit: 1)).items.first
+        let claimed = try store.piSessionPage(SessionQuery(launchToken: token, limit: 1)).items.first
         let current = try store.deliveryRequest(request)
         let others = try current?.cardID.map { try store.unresolvedLaunches(for: $0).filter { $0.id != request } } ?? []
         return LaunchProgress(

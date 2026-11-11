@@ -154,7 +154,7 @@ extension CueKeeper {
     /// 哪一轮接走只按大脑报的 `TurnEvent.received`，接走你的话（`delivering`）的那一轮才回答你。
     /// 重点不经这里：一轮中途插规矩，模型会回应那句插话、盖掉这一轮给你的回复；规矩只在换班次时随系统提示生效（`outworn`）。
     /// 插不进去按大脑出了问题处理，返回 false。
-    private func interject(_ text: String, images: [PiImage], delivering ids: [UUID]) async -> Bool {
+    private func interject(_ text: String, images: [MessageImage], delivering ids: [UUID]) async -> Bool {
         guard let shift else { return false }
         let sending = UUID()
         do {

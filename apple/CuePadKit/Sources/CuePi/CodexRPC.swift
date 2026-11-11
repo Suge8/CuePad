@@ -14,10 +14,10 @@ final class CodexRPC {
     var onNotification: ((String, JSONValue) -> Void)?
     /// 服务端请求（方法、请求 id、参数）：接了返回 true，之后用 `respond` 回它
     var onRequest: ((String, JSONValue, JSONValue) -> Bool)?
-    /// 一个线程正在说的这条回答（`PiDraft`，一个 `agentMessage` 项的正文，拼法见 `DraftParts`）；起点是这一项开始（`item/started`）时 Codex 自己的时刻（通知的 `emittedAtMs`，与会话文件同一时钟），落库按这一项的 id 认（`PiDraft.record`）；正常说完的留着。
+    /// 一个线程正在说的这条回答（`LiveDraft`，一个 `agentMessage` 项的正文，拼法见 `DraftParts`）；起点是这一项开始（`item/started`）时 Codex 自己的时刻（通知的 `emittedAtMs`，与会话文件同一时钟），落库按这一项的 id 认（`LiveDraft.record`）；正常说完的留着。
     /// 过程中的说明（`phase` 为 commentary）说完就清，不等工具那一项开始：两者之间 Codex 先跑 PreToolUse 钩子，状态已切到工具，草稿再留着就和工具那一行叠着；
     /// 说明也不进对话（`CodexHistory` 只收 final_answer），留着换不下。只有订阅了线程的连接（自己起的进程）收得到增量
-    var onDraft: ((_ threadID: String, PiDraft?) -> Void)?
+    var onDraft: ((_ threadID: String, LiveDraft?) -> Void)?
     private var drafts: [String: DraftParts] = [:]
     /// 只调一次
     var onClose: (() -> Void)?
@@ -33,7 +33,7 @@ final class CodexRPC {
 
     var isClosed: Bool { replies.isClosed }
 
-    static func input(text: String, images: [PiImage]) -> [JSONValue] {
+    static func input(text: String, images: [MessageImage]) -> [JSONValue] {
         let text: [JSONValue] = text.isEmpty ? [] : [["type": "text", "text": .string(text), "text_elements": []]]
         return text + images.map { ["type": "image", "url": .string("data:\($0.mimeType);base64,\($0.data.base64EncodedString())")] }
     }
@@ -177,7 +177,7 @@ final class CodexRPC {
     }
 
     private static func parts(_ thread: String, item: String, since: Date? = nil) -> DraftParts {
-        DraftParts(message: item, since: since, record: PiChatMessage.recordID(sessionID: thread, entryID: item))
+        DraftParts(message: item, since: since, record: ChatMessage.recordID(sessionID: thread, entryID: item))
     }
 
     private func clearDraft(_ thread: String) {

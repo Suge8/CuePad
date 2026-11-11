@@ -13,7 +13,7 @@ extension UnsafeRawBufferPointer {
 
 struct SessionFileFormat: Sendable {
     /// 损坏或不认识的行跳过。
-    typealias Ingest = @Sendable (UnsafeRawBufferPointer, inout PiHistoryCheckpoint, inout PiHistory.Transcript) throws -> Void
+    typealias Ingest = @Sendable (UnsafeRawBufferPointer, inout HistoryCheckpoint, inout History.Transcript) throws -> Void
 
     enum Naming: Sendable {
         /// 文件名以会话 id 结尾（Pi 的 `<时刻>_<id>.jsonl`、Codex 的 `rollout-<时刻>-<id>.jsonl`）：会话文件先建出来、文件头随后才写，
@@ -34,7 +34,7 @@ struct SessionFileFormat: Sendable {
     var sidecar: Sidecar?
 
     /// 另存会话名的文件：每次读会话文件都读它一次，取到的是 Agent 此刻的会话名（你起的或它自己起的，分不出），盖过会话文件里读到的。
-    /// 它会在会话文件不动时单独变（一轮结束后才起好名、改名不写会话文件）：索引器也盯着它、按它的修改时间认会话文件读没读过（`PiHistoryIndexer`）。
+    /// 它会在会话文件不动时单独变（一轮结束后才起好名、改名不写会话文件）：索引器也盯着它、按它的修改时间认会话文件读没读过（`HistoryIndexer`）。
     struct Sidecar: Sendable {
         let file: @Sendable (_ sessionFile: URL) -> URL
         let name: @Sendable (_ contents: Data, _ sessionID: String) -> String?
@@ -61,7 +61,7 @@ struct SessionFileFormat: Sendable {
         return file.deletingLastPathComponent().deletingLastPathComponent().lastPathComponent.removingPercentEncoding
     }
 
-    func isSession(_ checkpoint: PiHistoryCheckpoint) -> Bool {
+    func isSession(_ checkpoint: HistoryCheckpoint) -> Bool {
         if case .id = naming { return true }
         return checkpoint.sessionID != nil
     }

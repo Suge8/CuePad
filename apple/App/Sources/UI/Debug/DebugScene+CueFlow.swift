@@ -66,7 +66,7 @@ extension DebugScene {
         try await beat(FlowBeat.thinking)
         let roundtable = try await store.projects().first { $0.name == String(localized: "圆桌", table: "Demo") }?.id
         let name = String(localized: "登录回调超时", table: "Demo")
-        var tools = PiChatMessage.Tools()
+        var tools = ChatMessage.Tools()
         tools.record(.init(kind: .read, target: String(localized: "看板", table: "Demo")))
         let row = try await store.recordCueRound(nil, startedAt: startedAt, answersYou: true, tools: tools)
         try await store.setDemoCueState(.tool, step: .init(kind: .add, name: name), round: row, context: context)

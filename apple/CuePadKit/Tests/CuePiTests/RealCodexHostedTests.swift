@@ -9,7 +9,7 @@ import Testing
 @MainActor
 @Suite(RealAgents.needs(.codex), RealAgents.tiered)
 struct RealCodexHostedTests {
-    func open(_ rig: CodexRig, _ token: String) async throws -> PiSession.ID {
+    func open(_ rig: CodexRig, _ token: String) async throws -> Session.ID {
         let id = try await rig.runtime.open(in: rig.codex.work, launchToken: token, name: nil, model: nil, thinking: nil)
         let opened = try #require(rig.bridge.session(id: id))
         #expect(opened.hosted && opened.agent == .codex && opened.launchToken == token)
@@ -24,8 +24,8 @@ struct RealCodexHostedTests {
             let log = ChangeLog(rig.bridge)
             let id = try await open(rig, "token-1")
             let delivery = UUID()
-            let image = PiImage(mimeType: "image/png", data: try solidPNG(red: 1, green: 0, blue: 0))
-            try await rig.bridge.send(PiMessage(text: "What color is this image? Answer with one lowercase word.", images: [image], deliveryID: delivery.uuidString), to: id)
+            let image = MessageImage(mimeType: "image/png", data: try solidPNG(red: 1, green: 0, blue: 0))
+            try await rig.bridge.send(SessionMessage(text: "What color is this image? Answer with one lowercase word.", images: [image], deliveryID: delivery.uuidString), to: id)
             // 上下文余量（`thread/tokenUsage/updated`）、歇下（Stop 钩子）与会话文件里的回答走三条通道，先后不定：一起等
             try await eventually("这一轮做完、报了上下文余量、回答落盘") {
                 log.states.contains(.thinking) && rig.bridge.session(id: id).map {
@@ -43,19 +43,19 @@ struct RealCodexHostedTests {
         }
     }
 
-    /// 正在说的话按身份认落库（`PiDraft.record`）：同一轮里先说完的说明已写进会话文件，最终回答还在出字时不算落库，说完落盘后才算。
+    /// 正在说的话按身份认落库（`LiveDraft.record`）：同一轮里先说完的说明已写进会话文件，最终回答还在出字时不算落库，说完落盘后才算。
     @Test func theFinalAnswerIsStillSpeakingAfterACommentaryOfTheSameTurnHasBeenWritten() async throws {
         try await withCodexRig { rig in
             let hold = rig.model.gate()
             rig.model.on("Say hi") { _ in .say("hi") }
             rig.model.on("Explain slowly") { _ in .commentary("Looking it up.", then: .stream(["Final ", "answer"], until: hold)) }
             let id = try await open(rig, "token-1")
-            try await rig.bridge.send(PiMessage(text: "Say hi", images: []), to: id)
+            try await rig.bridge.send(SessionMessage(text: "Say hi", images: []), to: id)
             try await eventually("上一轮的回答落盘、歇下") {
                 rig.bridge.session(id: id).map { $0.state == .settled && rig.replies($0).last == "hi" } == true
             }
 
-            try await rig.bridge.send(PiMessage(text: "Explain slowly", images: []), to: id)
+            try await rig.bridge.send(SessionMessage(text: "Explain slowly", images: []), to: id)
             try await hold.reached()
             let file = try #require(rig.bridge.session(id: id)?.sessionFile)
             try await eventually("说明已写进会话文件，最终回答在出字") {
@@ -80,16 +80,16 @@ struct RealCodexHostedTests {
             try await eventually("模型清单报上来") { rig.bridge.session(id: id)?.availableModels.isEmpty == false }
             let session = try #require(rig.bridge.session(id: id))
             let other = try #require(session.availableModels.first { $0.key.id != codexTestModel })
-            try await rig.bridge.configure(PiConfig(model: other.key), in: id)
+            try await rig.bridge.configure(SessionConfig(model: other.key), in: id)
             #expect(rig.bridge.session(id: id)?.model?.key == other.key)
-            try await rig.bridge.configure(PiConfig(model: PiModelKey(provider: CodexModel.provider, id: codexTestModel), thinking: .high, name: "看图"), in: id)
+            try await rig.bridge.configure(SessionConfig(model: ModelKey(provider: CodexModel.provider, id: codexTestModel), thinking: .high, name: "看图"), in: id)
             #expect(rig.bridge.session(id: id)?.model?.key.id == codexTestModel)
             #expect(rig.bridge.session(id: id)?.thinking == .known(.high))
             #expect(rig.bridge.session(id: id)?.displayName == "看图")
-            let unknown = await #expect(throws: PiBridgeError.unknownModel(.codex)) { try await rig.bridge.command("/model no-such-model", in: id) }
+            let unknown = await #expect(throws: BridgeError.unknownModel(.codex)) { try await rig.bridge.command("/model no-such-model", in: id) }
             #expect(unknown?.localizedDescription == "Codex 里没有这个模型")
 
-            try await rig.bridge.send(PiMessage(text: "Reply OK."), to: id)
+            try await rig.bridge.send(SessionMessage(text: "Reply OK."), to: id)
             try await eventually("换到的模型与强度用在了请求里") { rig.model.requests.last?.effort == "high" }
             #expect(rig.model.requests.last?.model == codexTestModel)
         }
@@ -100,7 +100,7 @@ struct RealCodexHostedTests {
             rig.model.on("Reply OK", .fail("bad things happened"))
             let id = try await open(rig, "token-4")
 
-            try await rig.bridge.send(PiMessage(text: "Reply OK."), to: id)
+            try await rig.bridge.send(SessionMessage(text: "Reply OK."), to: id)
             try await eventually("这一轮失败，带着原因") { rig.bridge.session(id: id)?.detail?.contains("bad things happened") == true }
             let session = try #require(rig.bridge.session(id: id))
             #expect(session.state == .error)
@@ -119,7 +119,7 @@ struct RealCodexHostedTests {
             let id = try await open(rig, "token-2")
             let marker = rig.codex.work.appending(path: "marker.txt")
 
-            try await rig.bridge.send(PiMessage(text: "Make the marker file."), to: id)
+            try await rig.bridge.send(SessionMessage(text: "Make the marker file."), to: id)
             try await eventually("等你确认") { rig.bridge.session(id: id)?.question != nil }
             let question = try #require(rig.bridge.session(id: id)?.question)
             #expect(rig.bridge.session(id: id)?.state == .waitingForUser)
@@ -140,7 +140,7 @@ struct RealCodexHostedTests {
     @Test(.tags(.smoke)) func anEndedSessionIsResumedWithItsConversation() async throws {
         try await withCodexRig { rig in
             let id = try await open(rig, "token-resume")
-            try await rig.bridge.send(PiMessage(text: "Remember the word PAPAYA."), to: id)
+            try await rig.bridge.send(SessionMessage(text: "Remember the word PAPAYA."), to: id)
             let session = try #require(rig.bridge.session(id: id))
             try await eventually("第一轮答完") { rig.bridge.session(id: id)?.state == .settled && rig.replies(session).count == 1 }
 
@@ -151,7 +151,7 @@ struct RealCodexHostedTests {
             let resumed = try await rig.runtime.resume(
                 IndexedSession(id: session.sessionID, path: file.path, cwd: rig.codex.work.path, lastActivityAt: .now, agent: .codex))
             #expect(rig.bridge.session(id: resumed)?.hosted == true && rig.bridge.session(id: resumed)?.sessionID == session.sessionID)
-            try await rig.bridge.send(PiMessage(text: "Which word?"), to: resumed)
+            try await rig.bridge.send(SessionMessage(text: "Which word?"), to: resumed)
             try await eventually("接着回答了") { rig.replies(session).count == 2 }
             let request = try #require(rig.model.requests.last)
             #expect(request.said.suffix(2) == ["Remember the word PAPAYA.", "Which word?"], "恢复后模型看到先前的对话：\(request.said)")
@@ -166,16 +166,16 @@ struct RealCodexHostedTests {
             rig.model.on("Take your time", .held(gate, then: .say("TOO LATE")))
             let id = try await open(rig, "token-stop")
 
-            try await rig.bridge.send(PiMessage(text: "Take your time."), to: id)
+            try await rig.bridge.send(SessionMessage(text: "Take your time."), to: id)
             try await gate.reached()
             try await rig.bridge.abort(id)
             try await eventually("停下了，在途的请求被断开") { rig.bridge.session(id: id)?.state == .settled && gate.waiting == 0 }
 
-            try await rig.bridge.send(PiMessage(text: "Reply with the single word NEXT."), to: id)
+            try await rig.bridge.send(SessionMessage(text: "Reply with the single word NEXT."), to: id)
             let session = try #require(rig.bridge.session(id: id))
             try await eventually("下一句照常回答") { rig.replies(session).last?.contains("NEXT") == true }
             #expect(!rig.replies(session).contains("TOO LATE"))
-            #expect(try rig.transcript(session).messages.contains { $0.role == .known(.system) && $0.text == PiNotice.stopped.rawValue })
+            #expect(try rig.transcript(session).messages.contains { $0.role == .known(.system) && $0.text == ChatNotice.stopped.rawValue })
         }
     }
 
@@ -186,7 +186,7 @@ struct RealCodexHostedTests {
             rig.model.onTitle { _ in .say(#"{"title":"Fix blank login page"}"#) }
             let id = try await open(rig, "token-name")
             #expect(rig.bridge.canNameItself(id))
-            try await rig.bridge.send(PiMessage(text: "Fix the login page that renders blank after sign-in. Reply with OK only."), to: id)
+            try await rig.bridge.send(SessionMessage(text: "Fix the login page that renders blank after sign-in. Reply with OK only."), to: id)
             try await eventually("这一轮做完、第一句话上报") {
                 rig.bridge.session(id: id).map { $0.state == .settled && $0.firstMessage != nil && rig.replies($0).last != nil } == true
             }
@@ -194,7 +194,7 @@ struct RealCodexHostedTests {
             #expect(name == "Fix blank login page")
             #expect(rig.bridge.session(id: id)?.name == nil, "只起名，不写回")
             #expect(rig.bridge.sessions.map(\.id) == [id], "临时线程不是会话")
-            try await rig.bridge.configure(PiConfig(name: name), in: id)
+            try await rig.bridge.configure(SessionConfig(name: name), in: id)
             let thread = try await rig.runtime.control(try #require(rig.runtime.tracked[id])).call("thread/read", ["threadId": .string(try #require(rig.bridge.session(id: id)).sessionID)])
             #expect(thread["thread"]?["name"]?.string == name, "写进了 Codex")
         }
@@ -210,7 +210,7 @@ struct RealCodexHostedTests {
             try await eventually("命令清单里有这个技能") { rig.bridge.session(id: id)?.commands.contains { $0.name == "skill:kiwi-echo" } == true }
 
             let delivery = UUID()
-            try await rig.bridge.send(PiMessage(text: "/skill:kiwi-echo banana", deliveryID: delivery.uuidString), to: id)
+            try await rig.bridge.send(SessionMessage(text: "/skill:kiwi-echo banana", deliveryID: delivery.uuidString), to: id)
             let session = try #require(rig.bridge.session(id: id))
             try await eventually("模型收到了技能的内容") { rig.model.requests.last?.messages.contains { $0.text.contains("Reply with exactly KIWI-7") } == true }
             try await eventually("这一轮做完") { rig.bridge.session(id: id)?.state == .settled && !rig.replies(session).isEmpty }

@@ -164,8 +164,8 @@ enum SyncBench {
         return writes
     }
 
-    private static func onlineSession(on host: String, _ services: AppServices) async -> PiSessionState? {
-        let page: PiSessionPage
+    private static func onlineSession(on host: String, _ services: AppServices) async -> SessionState? {
+        let page: SessionListPage
         do {
             page = try await services.store.piSessionPage(.current)
         } catch {

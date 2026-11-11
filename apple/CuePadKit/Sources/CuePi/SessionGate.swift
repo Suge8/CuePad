@@ -13,10 +13,10 @@ final class SessionGate {
     }
 
     private var generation = 0
-    private var busy: Set<PiSession.ID> = []
-    private var queue: [PiSession.ID: [Waiter]] = [:]
+    private var busy: Set<Session.ID> = []
+    private var queue: [Session.ID: [Waiter]] = [:]
 
-    func run<T>(_ id: PiSession.ID, _ body: () async throws -> T) async throws -> T {
+    func run<T>(_ id: Session.ID, _ body: () async throws -> T) async throws -> T {
         let admittedGeneration = generation
         try await enter(id)
         defer { leave(id) }
@@ -31,11 +31,11 @@ final class SessionGate {
         for id in Array(queue.keys) { abort(id) }
     }
 
-    func abort(_ id: PiSession.ID) {
+    func abort(_ id: Session.ID) {
         for waiter in queue.removeValue(forKey: id) ?? [] { waiter.continuation.resume(throwing: CancellationError()) }
     }
 
-    private func enter(_ id: PiSession.ID) async throws {
+    private func enter(_ id: Session.ID) async throws {
         guard busy.contains(id) else {
             busy.insert(id)
             return
@@ -48,14 +48,14 @@ final class SessionGate {
         }
     }
 
-    private func leave(_ id: PiSession.ID) {
+    private func leave(_ id: Session.ID) {
         guard var waiting = queue[id], !waiting.isEmpty else { return _ = busy.remove(id) }
         let next = waiting.removeFirst()
         queue[id] = waiting.isEmpty ? nil : waiting
         next.continuation.resume()
     }
 
-    private func cancel(_ token: UUID, in id: PiSession.ID) {
+    private func cancel(_ token: UUID, in id: Session.ID) {
         guard let index = queue[id]?.firstIndex(where: { $0.token == token }) else { return }
         let waiter = queue[id]!.remove(at: index)
         if queue[id]?.isEmpty == true { queue[id] = nil }

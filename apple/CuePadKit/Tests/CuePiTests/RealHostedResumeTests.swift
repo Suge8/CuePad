@@ -26,7 +26,7 @@ struct RealHostedResumeTests {
             #expect(rig.bridge.session(id: a)?.sessionID == first.sessionID)
             #expect(rig.launched.count == 2, "起了 \(rig.launched.count - 1) 个新进程")
             #expect(rig.overlaps.isEmpty, "同一会话同时有两个进程：\(rig.overlaps)")
-            try await rig.bridge.send(PiMessage(text: "PING-TWO"), to: a)
+            try await rig.bridge.send(SessionMessage(text: "PING-TWO"), to: a)
             try await rig.replied("PING-TWO", in: first)
         }
     }
@@ -60,7 +60,7 @@ struct RealHostedResumeTests {
             let kept = try await two.value
             let session = try #require(rig.bridge.session(id: kept), "留下的那个恢复拿回的会话不在桥上")
             try await eventually("别的进程都收掉") { rig.launched.filter { kill($0, 0) == 0 } == [session.pid] }
-            try await rig.bridge.send(PiMessage(text: "PING-TWO"), to: kept)
+            try await rig.bridge.send(SessionMessage(text: "PING-TWO"), to: kept)
             try await rig.replied("PING-TWO", in: first)
         }
     }
@@ -69,7 +69,7 @@ struct RealHostedResumeTests {
     @Test(arguments: [(Hosting.codex, "waiting"), (.claude, "launching"), (.codex, "launching"), (.grok, "launching")])
     func quittingTheAppDuringAResumeLeavesNoProcess(_ hosting: Hosting, _ phase: String) async throws {
         try await EndRig.run(hosting, timing: noDeadline) { rig in
-            let first: PiSession
+            let first: Session
             if phase == "waiting" {
                 first = try await quitWhileSlow(rig)
             } else {
@@ -88,7 +88,7 @@ struct RealHostedResumeTests {
     }
 
     /// 开一个会话说一句，闲置到点被请退出；外壳在真 Agent 退出后还握着 3 秒（旧进程还在），返回那时的会话。
-    private func quitWhileSlow(_ rig: EndRig) async throws -> PiSession {
+    private func quitWhileSlow(_ rig: EndRig) async throws -> Session {
         try rig.mark("slow", true)
         let id = try await rig.open()
         try rig.mark("slow", false)

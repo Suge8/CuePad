@@ -157,7 +157,7 @@ extension View {
     func menuLabel(_ spoken: LocalizedStringResource) -> some View { accessibilityElement(children: .ignore).accessibilityLabel(spoken) }
 }
 
-/// 全 App 唯一的"什么时候"写法。会话的计时会随时间刷新（`PiElapsed`）；灵感卡、回收站这些不加定时器，写的是打开时的值。
+/// 全 App 唯一的"什么时候"写法。会话的计时会随时间刷新（`SessionElapsed`）；灵感卡、回收站这些不加定时器，写的是打开时的值。
 nonisolated enum DateLabel {
     static func short(_ date: Date, now: Date = .now, calendar: Calendar = .current) -> String {
         let elapsed = Int(now.timeIntervalSince(date))

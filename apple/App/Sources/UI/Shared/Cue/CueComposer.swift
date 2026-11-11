@@ -28,7 +28,7 @@ struct CueComposer: View {
     @Environment(\.panelCovered) private var covered
     @State private var launch = RelayLaunch()
     #if os(macOS)
-    @State private var opening: PiConfigPick?
+    @State private var opening: ConfigPick?
     #else
     /// 接通时输入框有焦点：挂断后还给它。
     @State private var focusAfterCall = false
@@ -197,7 +197,7 @@ struct CueComposer: View {
 #if os(macOS)
 /// 大脑的可选与当前由这一排自己订阅：读到、变了只重算这一排，不重算整个输入框。
 private struct CueBrainRow: View {
-    @Binding var opening: PiConfigPick?
+    @Binding var opening: ConfigPick?
     @State private var brain: AgentModelChoice?
 
     var body: some View {

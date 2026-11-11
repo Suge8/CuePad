@@ -27,7 +27,7 @@ extension InteractionBench {
     ]
 
     static func arrange(_ item: WideCase, in workspace: Workspace, sessions: [String]) {
-        let ids = sessions.prefix(2).map { PiSessionState.recordID(sessionID: $0) }
+        let ids = sessions.prefix(2).map { SessionState.recordID(sessionID: $0) }
         workspace.services.settings.navigationPane = .progress
         workspace.services.settings.cueOpen = true
         workspace.services.settings.railExpanded = true
@@ -41,7 +41,7 @@ extension InteractionBench {
         guard !selected.isEmpty else { return }
         guard sessions.count >= 2, let view = window.contentView else { throw DebugScene.Unmet("宽屏测量需要两份会话与已上屏的窗口") }
         let settings = workspace.services.settings
-        let ids = sessions.prefix(2).map { PiSessionState.recordID(sessionID: $0) }
+        let ids = sessions.prefix(2).map { SessionState.recordID(sessionID: $0) }
         for (index, id) in ids.enumerated() { settings.setReplyDraft(ComposerDraft(text: "宽屏草稿 \(index)"), for: id) }
         workspace.cue.draft = ComposerDraft(text: "宽屏 Cue 草稿")
         let height = window.contentLayoutRect.height

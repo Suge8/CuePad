@@ -25,8 +25,8 @@ struct NewSessionForm: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @State private var chosen: String?
-    @State private var model: PiModelKey?
-    @State private var thinking: PiThinkingLevel?
+    @State private var model: ModelKey?
+    @State private var thinking: ThinkingLevel?
     @State private var fast = false
     @State private var prompt = ""
 
@@ -54,7 +54,7 @@ struct NewSessionForm: View {
                 .paper(cornerRadius: Radius.block)
                 .accessibilityLabel("开场的话")
             if let agents, let agent {
-                PiConfigControls(choice: choice(agents, agent)) {
+                ConfigControls(choice: choice(agents, agent)) {
                     services.settings.lastAgent = $0
                     model = nil
                 } chooseModel: { model = $0 } chooseThinking: { thinking = $0 } chooseFast: { fast = $0 }

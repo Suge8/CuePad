@@ -109,7 +109,7 @@ struct CueStatusLine: View {
             } else if case .away(let line, let failed) = cue.now.cue {
                 Text(line).foregroundStyle(failed ? palette.failure : palette.ink3).id(line).transition(.handOff)
             } else if let shown {
-                PiShownLabel(shown: shown).id(shown.label).transition(.handOff)
+                SessionShownLabel(shown: shown).id(shown.label).transition(.handOff)
             }
         }
         .font(font)
@@ -119,7 +119,7 @@ struct CueStatusLine: View {
     }
 
 
-    private var shown: PiShown? {
+    private var shown: SessionShown? {
         #if os(macOS)
         workspace.cue.presence.shown?.speaking(workspace.services.cue.keeper?.speech.draft != nil)
         #else

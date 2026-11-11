@@ -22,7 +22,7 @@ extension SessionTaskTests {
         // 没有检查点、从头读：首次回填，或升级作废检查点之后
         func backfill() async {
             await services.consumePiHistory(AsyncStream { continuation in
-                continuation.yield(.updated(try! PiHistory.index(file: file, agent: .pi, from: nil, transcript: false, files: store.files)))
+                continuation.yield(.updated(try! History.index(file: file, agent: .pi, from: nil, transcript: false, files: store.files)))
                 continuation.yield(.backfillFinished(sessionFiles: [file]))
                 continuation.finish()
             }, agent: .pi)
@@ -51,17 +51,17 @@ extension SessionTaskTests {
         let byCue = UUID(), byPad = UUID(), byCueLater = UUID()
         try await store.recordSend("先跑测试", to: target, delivery: byCue, origin: .known(.cue))
         try await store.recordSend("别动登录页样式", to: target, delivery: byPad)
-        func said(_ seq: Int64, _ text: String, _ delivery: UUID?) -> PiChatMessage {
-            PiChatMessage(sessionID: "s1", entryID: "u\(seq)", seq: seq, role: .user, text: text, at: .now, deliveryID: delivery)
+        func said(_ seq: Int64, _ text: String, _ delivery: UUID?) -> ChatMessage {
+            ChatMessage(sessionID: "s1", entryID: "u\(seq)", seq: seq, role: .user, text: text, at: .now, deliveryID: delivery)
         }
-        let reply = PiChatMessage(sessionID: "s1", entryID: "a2", seq: 2, role: .pi, text: "测试全过", at: .now)
-        try await store.writePiTranscript(PiTranscript(
+        let reply = ChatMessage(sessionID: "s1", entryID: "a2", seq: 2, role: .pi, text: "测试全过", at: .now)
+        try await store.writePiTranscript(SessionTranscript(
             sessionID: "s1", messages: [said(1, "先跑测试", byCue), reply, said(3, "别动登录页样式", byPad), said(4, "顺便看下注册页", nil)],
-            recap: PiRecap()))
+            recap: Recap()))
         try await recorder.update(sessionID: "s1", state: .thinking)  // 终端里那句开的这一轮在跑
 
-        let digest = try await SessionDigest.read(PiSessionState.recordID(sessionID: "s1"), sessionID: "s1", from: store)
-        #expect(PiChat.entries(digest.messages, cueSent: digest.cueSent).filter { $0.role == .user }.map(\.fromCue) == [true, false, false])
+        let digest = try await SessionDigest.read(SessionState.recordID(sessionID: "s1"), sessionID: "s1", from: store)
+        #expect(Chat.entries(digest.messages, cueSent: digest.cueSent).filter { $0.role == .user }.map(\.fromCue) == [true, false, false])
         let cue = CueTools(store: store, wait: 0)
         let peek = try #require(await cue.call("task", ["action": "peek", "task": task.id.uuidString]))
         #expect(peek.text.contains("你：先跑测试") && peek.text.contains("他：别动登录页样式") && peek.text.contains("他：顺便看下注册页"))
@@ -71,7 +71,7 @@ extension SessionTaskTests {
         #expect(try await store.deliveryRequests().isEmpty)
 
         try await store.recordSend("再跑一遍", to: target, delivery: byCueLater, origin: .known(.cue))
-        try await store.writePiTranscript(PiTranscript(sessionID: "s1", messages: [said(5, "再跑一遍", byCueLater)], recap: PiRecap()))
+        try await store.writePiTranscript(SessionTranscript(sessionID: "s1", messages: [said(5, "再跑一遍", byCueLater)], recap: Recap()))
         let interrupted = try #require(await cue.call("task", ["action": "say", "task": task.id.uuidString, "text": "只跑登录的"]))
         #expect(!interrupted.isError && interrupted.text.contains("对「修登录」的会话说"))
 
@@ -90,14 +90,14 @@ extension SessionTaskTests {
         try await recorder.update(sessionID: "s1", state: .settled, title: "修登录")
         let target = SendTarget(kind: .piSession, name: "修登录", ref: "s1")
         var seq: Int64 = 0
-        func open(_ role: PiChatRole, _ text: String, at time: Date = .now, delivery: UUID? = nil) async throws -> Int {
+        func open(_ role: ChatRole, _ text: String, at time: Date = .now, delivery: UUID? = nil) async throws -> Int {
             let mark = try await store.lastWrite()
             seq += 2
             try await recorder.update(sessionID: "s1", state: .thinking, turnStartedAt: .now)
-            try await store.writePiTranscript(PiTranscript(sessionID: "s1", messages: [
-                PiChatMessage(sessionID: "s1", entryID: "o\(seq)", seq: seq - 1, role: role, text: text, at: time, deliveryID: delivery),
-                PiChatMessage(sessionID: "s1", entryID: "a\(seq)", seq: seq, role: .pi, text: "好", at: .now),
-            ], recap: PiRecap(lastPrompt: text, lastReply: "好", answeredAt: .now)))
+            try await store.writePiTranscript(SessionTranscript(sessionID: "s1", messages: [
+                ChatMessage(sessionID: "s1", entryID: "o\(seq)", seq: seq - 1, role: role, text: text, at: time, deliveryID: delivery),
+                ChatMessage(sessionID: "s1", entryID: "a\(seq)", seq: seq, role: .pi, text: "好", at: .now),
+            ], recap: Recap(lastPrompt: text, lastReply: "好", answeredAt: .now)))
             return mark
         }
         func settle(after mark: Int) async throws -> (line: String?, his: Bool) {
@@ -144,7 +144,7 @@ extension SessionTaskTests {
         }
         try await store.recordMacPresence(host: "mac-b") { true }  // mac-b 醒着：它的在线记录同步到这里
         let recorder = try await app.runtimeRecorder(on: services.hostID)
-        let questions = [("s1", PiQuestion(promptID: "p", kind: .confirm, text: "继续？")), ("s2", PiQuestion(promptID: nil, kind: .confirm, text: "在终端里确认"))]
+        let questions = [("s1", Question(promptID: "p", kind: .confirm, text: "继续？")), ("s2", Question(promptID: nil, kind: .confirm, text: "在终端里确认"))]
         for (session, question) in questions {
             try await recorder.update(sessionID: session, state: .thinking, title: session)
             try await recorder.update(sessionID: session, state: .waitingForUser, question: question)
@@ -171,7 +171,7 @@ extension SessionTaskTests {
         try await eventually("Cue 那台过期、等的变 2 件") { counts.withLock { $0.last } == 2 }
         #expect(try await shown() == ["s1": "等你确认", "s2": "等你确认"])
         try await recorder.update(sessionID: "s3", state: .thinking, title: "s3")
-        try await recorder.update(sessionID: "s3", state: .waitingForUser, question: PiQuestion(promptID: "p3", kind: .confirm, text: "删旧分支？"))
+        try await recorder.update(sessionID: "s3", state: .waitingForUser, question: Question(promptID: "p3", kind: .confirm, text: "删旧分支？"))
         #expect(try await store.piSessions(sessionIDs: ["s3"])["s3"]?.state.notify == .alert(.waitingForUser))
 
         try await store.recordMacPresence(host: "mac-b") { true }

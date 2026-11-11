@@ -7,19 +7,19 @@ import Testing
 @testable import CuePi
 
 final class HistoryEventLog: Sendable {
-    private let recorded = Mutex<[PiHistoryEvent]>([])
+    private let recorded = Mutex<[HistoryEvent]>([])
     /// 订阅的任务要引用自己，只能在初始化完成后起，所以放在锁里补上。
     private let task = Mutex<Task<Void, Never>?>(nil)
 
-    /// `live` 是在线会话的文件（桥给的，`PiBridge.sessionFiles`）；只看回填的不给。
-    init(_ indexer: PiHistoryIndexer, following live: some AsyncSequence<Set<URL>, Never> & Sendable = AsyncStream { $0.finish() }) {
+    /// `live` 是在线会话的文件（桥给的，`Bridge.sessionFiles`）；只看回填的不给。
+    init(_ indexer: HistoryIndexer, following live: some AsyncSequence<Set<URL>, Never> & Sendable = AsyncStream { $0.finish() }) {
         let stream = indexer.events(following: live, scope: .all)
         task.withLock { $0 = Task { [weak self] in for await e in stream { self?.recorded.withLock { $0.append(e) } } } }
     }
     deinit { task.withLock { $0?.cancel() } }
 
-    var events: [PiHistoryEvent] { recorded.withLock { $0 } }
-    var updates: [PiHistoryUpdate] { events.compactMap { if case .updated(let u) = $0 { u } else { nil } } }
+    var events: [HistoryEvent] { recorded.withLock { $0 } }
+    var updates: [HistoryUpdate] { events.compactMap { if case .updated(let u) = $0 { u } else { nil } } }
     var finishedBackfill: Bool { events.contains { if case .backfillFinished = $0 { true } else { false } } }
 }
 
@@ -47,9 +47,9 @@ struct HistoryIndexerTests {
         let upToDate = try makeSession("p2", "b.jsonl", prompt: "known", modified: now.addingTimeInterval(-200))
         try makeSession("p2", "c.jsonl", prompt: "new", modified: now.addingTimeInterval(-100))
         let modified = try upToDate.url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
-        let known = try PiHistory.index(file: upToDate.url, agent: .pi, from: nil, modified: modified, files: scratchFiles).checkpoint
+        let known = try History.index(file: upToDate.url, agent: .pi, from: nil, modified: modified, files: scratchFiles).checkpoint
 
-        let log = HistoryEventLog(PiHistoryIndexer(sessions: root) { url in url.lastPathComponent == "b.jsonl" ? PiHistoryStart(checkpoint: known, hasTranscript: true) : nil })
+        let log = HistoryEventLog(HistoryIndexer(sessions: root) { url in url.lastPathComponent == "b.jsonl" ? HistoryStart(checkpoint: known, hasTranscript: true) : nil })
         try await eventually("回填完成") { log.finishedBackfill }
         #expect(log.updates.map { $0.file.lastPathComponent } == ["c.jsonl", "a.jsonl"])
         if case .backfillFinished = log.events.last! {} else { Issue.record("backfillFinished 应是最后一个事件") }
@@ -59,7 +59,7 @@ struct HistoryIndexerTests {
         let top = try makeSession("p1", "a.jsonl", prompt: "top", modified: Date())
         try makeSession("p1/subagents", "w.jsonl", prompt: "worker", modified: Date())
         let (live, files) = AsyncStream<Set<URL>>.makeStream()
-        let log = HistoryEventLog(PiHistoryIndexer(sessions: root), following: live)
+        let log = HistoryEventLog(HistoryIndexer(sessions: root), following: live)
         try await eventually("回填完成") { log.finishedBackfill }
         #expect(log.updates.map { $0.file.lastPathComponent } == ["a.jsonl"])
         guard case .backfillFinished(let found?) = log.events.last! else { Issue.record("backfillFinished 应是最后一个事件"); return }
@@ -83,7 +83,7 @@ struct HistoryIndexerTests {
         let url = day.appending(path: "rollout-2026-10-14T15-57-42-live.jsonl")
         try FileManager.default.createDirectory(at: day, withIntermediateDirectories: true)
         FileManager.default.createFile(atPath: url.path, contents: nil)
-        let log = HistoryEventLog(PiHistoryIndexer(sessions: root, agent: .codex), following: AsyncStream { $0.yield([url]) })
+        let log = HistoryEventLog(HistoryIndexer(sessions: root, agent: .codex), following: AsyncStream { $0.yield([url]) })
         try await eventually("回填完成") { log.finishedBackfill }
         #expect(log.updates.isEmpty)
 
@@ -105,7 +105,7 @@ struct HistoryIndexerTests {
         let sessions = root.appending(path: "agent/sessions")  // 连上层目录也还不存在
         let project = sessions.appending(path: "--work-x--")
         let files = [project.appending(path: "a.jsonl"), project.appending(path: "b.jsonl")]
-        let log = HistoryEventLog(PiHistoryIndexer(sessions: sessions), following: AsyncStream { $0.yield(Set(files)) })
+        let log = HistoryEventLog(HistoryIndexer(sessions: sessions), following: AsyncStream { $0.yield(Set(files)) })
         try await eventually("回填完成") { log.finishedBackfill }
 
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)

@@ -11,7 +11,7 @@ public struct CueChange: Equatable, Sendable {
     /// 记下已知道的（`CueStore.markCueTold`）不再报（`detail` 是 Mac 报的原因）。会话那边在等它接着说，所以与等回答一样立即叫醒它
     case undelivered
     case done
-    /// 会话在等子代理，在跑的子代理都 `PiSessionState.stallAfter` 没有进展（`PiSessionState.stallsAt` 到了）：多半卡住了。
+    /// 会话在等子代理，在跑的子代理都 `SessionState.stallAfter` 没有进展（`SessionState.stallsAt` 到了）：多半卡住了。
     /// 这不是一次写入，是时间到了：同一段停滞只报一次（`CueMarks.stalls`），有了新进展再停住是新的一段；`seq` 是会话记录的，
     /// 会话别的写入也会让它变，判这一段是不是新的只看 `at`。Cue 此刻说不进去的（他发起的那一轮、打断不了的）不报
     case stalled
@@ -20,17 +20,17 @@ public struct CueChange: Equatable, Sendable {
   public var kind: Kind
   public var task: Card?
   public var leaf: Card?
-  public var session: PiSessionState?
+  public var session: SessionState?
   /// 这一轮是他的（`CueStore.hisTurn`，由事实推出，不另存）：Cue 说的不算；扩展投进来的机器消息开的轮跟着它之前那句。
   public var byUser = false
   public var at: Date
   public var seq: Int
   public var detail: String?
-  public var recap: PiRecap?
+  public var recap: Recap?
   public var interrupted = false
 }
 
-extension PiSessionState {
+extension SessionState {
   /// 被打断的不算，Cue 让它接着做。等子代理停住时会话还在做，与完成、发送失败一样总报给 Cue。
   var atStop: Bool {
     switch runtimeState.known {
@@ -80,7 +80,7 @@ public struct CueMarks: Codable, Equatable, Sendable {
   public init(_ both: Int, stalls: Date? = nil) { self.init(sessions: both, tasks: both, stalls: stalls) }
 }
 
-extension PiSessionState {
+extension SessionState {
   public static let stallAfter: TimeInterval = 20 * 60
 
   /// 不在等子代理、没有在跑的子代理（只剩 Claude Code 的后台命令，它不报进展），或有在跑的不知道进展时刻，为 nil。

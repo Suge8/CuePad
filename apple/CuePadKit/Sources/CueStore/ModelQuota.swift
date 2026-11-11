@@ -1,6 +1,6 @@
 import Foundation
 
-extension PiModelOption {
+extension ModelOption {
   /// 这个模型花的是哪个账号的额度（`AccountQuota`），关联不上为 nil：回复框的模型胶囊、模型菜单的分组标题与 Cue 的 `setup look` 都只认这一条。
   /// 原生订阅按提供方与授权分区对上；网关只在模型明确指定完整上游（最长的 route 前缀）且只对上一个账号时关联，auto 与多个账号不猜实际路由；
   /// 网关的授权根本不报额度时给那条"不支持"的记录。

@@ -12,10 +12,10 @@ extension CueStore {
   public func cueBoard() throws -> CueBoard {
     CueBoard(
       tasks: try boardItems(try topTasks(where: Self.onBoard)),
-      sessions: try select(PiSessionState.self, where: Self.isLoose("piSessionStates"), orderBy: "stateSince DESC, id"))
+      sessions: try select(SessionState.self, where: Self.isLoose("piSessionStates"), orderBy: "stateSince DESC, id"))
   }
 
-  public func cueRecentlyDone(limit: Int) throws -> [(task: Card, session: PiSessionState)] {
+  public func cueRecentlyDone(limit: Int) throws -> [(task: Card, session: SessionState)] {
     try topTasks(where: "t.completedAt IS NOT NULL AND \(Self.hasSession)", orderBy: Self.recentlyDone, limit: limit)
       .compactMap { task in try latestSession(of: task.id).map { (task, $0) } }
   }
@@ -29,7 +29,7 @@ extension CueStore {
   /// 完成那一下与会话的这次变化同一毫秒，多半就是同一件事。
   static func isLoose(_ alias: String) -> String {
     """
-    \(PiWorkState.outsideSQL([.ended], column: "\(alias).state"))
+    \(WorkState.outsideSQL([.ended], column: "\(alias).state"))
       AND NOT EXISTS (SELECT 1 FROM cards c WHERE c.piSessionID = \(alias).sessionID AND \(taskOpen))
       AND NOT EXISTS (
         SELECT 1 FROM cards c WHERE c.piSessionID = \(alias).sessionID AND \(taskDoneOnBoard) AND c.completedAt >= \(alias).stateSince)
@@ -98,14 +98,14 @@ extension CueStore {
     try sessionState(sessionID).map { try sessionDetail($0, rounds: rounds) }
   }
 
-  private func sessionDetail(_ session: PiSessionState, rounds: Int) throws -> CueSessionDetail {
+  private func sessionDetail(_ session: SessionState, rounds: Int) throws -> CueSessionDetail {
     let recent = try select(
-      PiChatMessage.self, where: "sessionID = ? AND role IN ('\(PiChatRole.user.rawValue)', '\(PiChatRole.pi.rawValue)')", [session.sessionID],
+      ChatMessage.self, where: "sessionID = ? AND role IN ('\(ChatRole.user.rawValue)', '\(ChatRole.pi.rawValue)')", [session.sessionID],
       orderBy: "seq DESC, id DESC", limit: rounds * 2
     ).reversed()
     let before = try recent.first.map { first in
       try select(
-        PiChatMessage.self, where: "sessionID = ? AND role = '\(PiChatRole.user.rawValue)' AND deliveryID IS NOT NULL AND seq < ?", [session.sessionID, first.seq],
+        ChatMessage.self, where: "sessionID = ? AND role = '\(ChatRole.user.rawValue)' AND deliveryID IS NOT NULL AND seq < ?", [session.sessionID, first.seq],
         orderBy: "seq, id")
     } ?? []
     let cueSent = try cueSentDeliveries(among: (recent + before).compactMap(\.deliveryID))
@@ -113,19 +113,19 @@ extension CueStore {
       session: session, recent: Array(recent), cueSent: cueSent, earlier: before.filter { $0.saidByCue(cueSent) })
   }
 
-  public func sessions(matching ref: String) throws -> [PiSessionState] {
+  public func sessions(matching ref: String) throws -> [SessionState] {
     let key = ref.trimmingCharacters(in: .whitespaces)
     let byID = try select(
-      PiSessionState.self, where: "sessionID = ?1 OR (length(?1) >= 4 AND sessionID >= ?1 AND sessionID < ?1 || '~')", [key],
+      SessionState.self, where: "sessionID = ?1 OR (length(?1) >= 4 AND sessionID >= ?1 AND sessionID < ?1 || '~')", [key],
       orderBy: "stateSince DESC, id")
     if !byID.isEmpty { return byID }
-    return try select(PiSessionState.self, where: "title = ? COLLATE NOCASE", [key], orderBy: "stateSince DESC, id")
+    return try select(SessionState.self, where: "title = ? COLLATE NOCASE", [key], orderBy: "stateSince DESC, id")
   }
 
 
   /// 一件顶层任务的交付物（唯一的规则）：它与它的子任务用过的会话（正在用的与换下来的）在任务开工（`Card.startedAt`，没开始过按排进待办的时刻）之后发到手机的预览，从早到晚。开工前的不算：会话被另一件事接着用时，前一件的图不会算到这件上。
   /// 不另记“哪些是交付物”：会话发到手机本来就是给人看的。
-  public func deliverables(of task: UUID) throws -> [PiPreview] {
+  public func deliverables(of task: UUID) throws -> [PreviewItem] {
     try db.query(
       """
       WITH used(session) AS (
@@ -133,12 +133,12 @@ extension CueStore {
         WHERE (id = ?1 OR parentID = ?1) AND todoAt IS NOT NULL AND deletedAt IS NULL AND piSessionID IS NOT NULL
         UNION SELECT f.value FROM cards c, json_each(c.formerSessionIDs) f
         WHERE (c.id = ?1 OR c.parentID = ?1) AND c.todoAt IS NOT NULL AND c.deletedAt IS NULL AND c.formerSessionIDs IS NOT NULL)
-      SELECT DISTINCT \(PiPreview.columns.map { "p.\($0)" }.joined(separator: ", "))
+      SELECT DISTINCT \(PreviewItem.columns.map { "p.\($0)" }.joined(separator: ", "))
       FROM previews p JOIN used u ON u.session = p.sessionID JOIN cards t ON t.id = ?1
       WHERE p.createdAt >= COALESCE(t.startedAt, t.todoAt)
       ORDER BY p.createdAt, p.id
       """, [task]
-    ) { PiPreview(row: $0) }
+    ) { PreviewItem(row: $0) }
   }
 
   func topTasks(
@@ -159,10 +159,10 @@ extension CueStore {
       uniqueKeysWithValues: try select(Card.self, where: "id IN (SELECT value FROM json_each(?))", [Self.idList(ids)]).map { ($0.id, $0) })
   }
 
-  func sessionStates(_ sessionIDs: [String]) throws -> [String: PiSessionState] {
+  func sessionStates(_ sessionIDs: [String]) throws -> [String: SessionState] {
     guard !sessionIDs.isEmpty else { return [:] }
     return Dictionary(
-      try select(PiSessionState.self, where: "sessionID IN (SELECT value FROM json_each(?))", [JSONColumn.encode(sessionIDs)]).map { ($0.sessionID, $0) },
+      try select(SessionState.self, where: "sessionID IN (SELECT value FROM json_each(?))", [JSONColumn.encode(sessionIDs)]).map { ($0.sessionID, $0) },
       uniquingKeysWith: { first, _ in first })
   }
 }

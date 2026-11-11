@@ -177,7 +177,7 @@ extension CueStore {
     }
     guard !messageIDs.isEmpty || !sessions.isEmpty else { return }
     let messages = try select(
-      PiChatMessage.self,
+      ChatMessage.self,
       where: """
         (id IN (SELECT value FROM json_each(?1)) OR (sessionID IN (SELECT value FROM json_each(?2)) AND deliveryID IN (SELECT value FROM json_each(?3))))
           AND role IN ('user', 'machine') AND deliveryID IS NOT NULL

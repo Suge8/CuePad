@@ -154,7 +154,7 @@ private struct CueCallRow: View {
 
     private var target: Text {
         let detail = call.step.map(CueActivity.line) ?? call.detail ?? ""
-        let action = detail.hasPrefix(call.name) ? String(detail.dropFirst(call.name.count)).trimmingPrefix(PiSessionState.detailSeparator) : Substring(detail)
+        let action = detail.hasPrefix(call.name) ? String(detail.dropFirst(call.name.count)).trimmingPrefix(SessionState.detailSeparator) : Substring(detail)
         return Text("\(Text(call.name).fontWeight(.semibold).foregroundStyle(palette.ink2))  \(String(action))")
     }
 
@@ -205,7 +205,7 @@ private enum CueRunFormat {
         switch seconds {
         case ..<1: String(localized: "\(Int((seconds * 1000).rounded())) 毫秒")
         case ..<10: String(localized: "\(seconds.formatted(.number.precision(.fractionLength(1)))) 秒")
-        default: PiClock.duration(seconds)
+        default: SessionClock.duration(seconds)
         }
     }
 

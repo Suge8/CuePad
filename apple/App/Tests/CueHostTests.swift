@@ -26,7 +26,7 @@ struct CueHostTests {
         let rig = try await Rig()
         let store = rig.store
         let busy = Task {
-            let recorder = PiStateRecorder(store: store, hostID: "mac-busy", minInterval: .zero)  // 每次都当场写：不留合并的定时写入（它攥着库到间隔结束）
+            let recorder = StateRecorder(store: store, hostID: "mac-busy", minInterval: .zero)  // 每次都当场写：不留合并的定时写入（它攥着库到间隔结束）
             var round = 0
             while !Task.isCancelled {
                 round += 1

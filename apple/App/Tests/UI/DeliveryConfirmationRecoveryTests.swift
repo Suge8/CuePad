@@ -131,7 +131,7 @@ extension DeliveryConfirmationTests {
         defer { ext.close(bye: "quit"); app.pi.stop(); app.services.cancelBackgroundWork() }
         let request = try await say("升级之前可能已经交出", to: target, in: app)
         if hasMessage {
-            try Self.write([PiMessage(text: request.content, deliveryID: request.id.uuidString)], session: target.sessionID, cwd: app.directory.path, to: file)
+            try Self.write([SessionMessage(text: request.content, deliveryID: request.id.uuidString)], session: target.sessionID, cwd: app.directory.path, to: file)
         }
         try RawDB(app.databaseURL).restore(version: 90)
         try RawDB(app.databaseURL).exec("""
@@ -186,7 +186,7 @@ extension DeliveryConfirmationTests {
             await workspace.speak("继续处理另一处", to: .session(SendTarget(kind: .piSession, name: "另一处", ref: other.sessionID), host: host, mode: .send, card: nil)).value
             try await eventually("正常历史已处理断线之后的文件事件") { try await store.piCheckpoint(of: other.sessionID) != nil }
         }
-        try await PiStateRecorder(store: store, hostID: host).update(sessionID: "later-session", state: .thinking)
+        try await StateRecorder(store: store, hostID: host).update(sessionID: "later-session", state: .thinking)
         workspace.perform { try await $0.bindSession("later-session", to: taskID) }
         try await eventually("用户后来手动绑定完成") { try await store.leafSession(taskID) == "later-session" }
         try Self.write(ext.messages, session: target.sessionID, cwd: app.directory.path, to: file)

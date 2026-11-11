@@ -93,7 +93,7 @@ extension Workspace {
     func pressed(at point: CGPoint) { press.record(point) }
 
     /// 项目页的任务行、看板的卡同一条规则：看板的卡是此刻干活那一步的（`TaskBoard.Item.agent`，有子任务的也是），任务行是这条自己交给的（做完了也算）。
-    func enter(_ task: Card, session: PiSessionState?, in column: Column = .main) {
+    func enter(_ task: Card, session: SessionState?, in column: Column = .main) {
         guard let session else { return openTask(task) }
         openTask = nil
         openSession(session.id, sessionID: session.sessionID, in: column)

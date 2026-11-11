@@ -25,7 +25,7 @@ struct TaskFlowTests {
         #expect(try await store.children(of: task.id).isEmpty)
         #expect(try await next(task) == .start(leaf: task))
 
-        try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "s1", state: .settled, title: "atlas", hosted: true)
+        try await StateRecorder(store: store, hostID: "mac-a").update(sessionID: "s1", state: .settled, title: "atlas", hosted: true)
         let session = try #require(try await store.allPiSessionStates().first)
         let delivers = Mutex(false)
         let executor = DeliveryExecutor(store: store, hostID: "mac-a", onIssue: { Issue.record("\($0)") }) { [store, atlas] request, _ in
@@ -70,7 +70,7 @@ struct TaskFlowTests {
         let second = try await store.createTask("补重连用例", in: project.id)
         workspace.startFresh(first)
         let launch = try #require(try await eventually(store, { try $0.deliveryRequests().first { $0.mode == .known(.start) } }) { $0 != nil })
-        try await PiStateRecorder(store: store, hostID: "mac-other").update(
+        try await StateRecorder(store: store, hostID: "mac-other").update(
             sessionID: "s1", state: .thinking, title: "atlas", projectID: project.id, launchToken: launch.launch?.token, hosted: true)
         try await store.deleteDelivery(launch.id)
         rig.services.liveSessions.apply(try await LiveSessions.Page.read(from: store), at: .always())
@@ -99,7 +99,7 @@ struct TaskFlowTests {
         let third = try await store.createTask("发版\n打 tag 再发", under: task.id)
         workspace.startFresh(first)
         let opening = try #require(try await eventually(store, { try $0.deliveryRequests().first { $0.mode == .known(.start) } }) { $0 != nil })
-        try await PiStateRecorder(store: store, hostID: "mac-other").update(
+        try await StateRecorder(store: store, hostID: "mac-other").update(
             sessionID: "s1", state: .settled, title: "atlas", projectID: project.id, launchToken: opening.launch?.token, hosted: true)
         try await store.deleteDelivery(opening.id)
         rig.services.liveSessions.apply(try await LiveSessions.Page.read(from: store), at: .always())

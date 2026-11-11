@@ -13,7 +13,7 @@ struct RetryTests {
     @Test func 重试_当场在路上_Mac让扩展重跑_对话里不多一句话() async throws {
         let ext = try await app.host.connect("atlas", cwd: "/work/atlas")
         ext.setState(["kind": "error", "error": "fetch failed"])
-        try await PiStateRecorder(store: store, hostID: TestApp.hostID).update(
+        try await StateRecorder(store: store, hostID: TestApp.hostID).update(
             sessionID: "atlas", state: .error, detail: "fetch failed", failure: .network, title: "atlas", directory: "/work/atlas")
         let session = try #require(try await store.allPiSessionStates().first)
         #expect(session.canRetry)
@@ -23,7 +23,7 @@ struct RetryTests {
         workspace.retry(session)
         let request = try #require(try await eventually(store, { try $0.deliveryRequests(toSession: "atlas").last }) { $0 != nil })
         #expect(request.mode == .known(.retry) && request.hostID == TestApp.hostID)
-        let item = try #require(try await store.piSessionPage(PiSessionQuery()).items.first)
+        let item = try #require(try await store.piSessionPage(SessionQuery()).items.first)
         #expect(workspace.shown(item).status == .delivery(.inTransit(.sending)))
 
         try await app.services.executor.start()

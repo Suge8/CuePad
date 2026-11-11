@@ -52,19 +52,19 @@ public struct MacAgents: Equatable, Sendable {
 /// 没有模型清单的（OpenCode）两者都空。
 public struct MacAgent: Codable, Equatable, Sendable, Identifiable {
   public let kind: AgentKind
-  public let model: PiModelKey?
-  public let models: [PiModelOption]
+  public let model: ModelKey?
+  public let models: [ModelOption]
 
   public var id: AgentKind { kind }
 
-  public init(kind: AgentKind, model: PiModelKey?, models: [PiModelOption]) {
+  public init(kind: AgentKind, model: ModelKey?, models: [ModelOption]) {
     self.kind = kind
     self.model = model
-    let missing = model.flatMap { key in models.contains { $0.key == key } ? nil : PiModelOption(key: key, name: "", thinkingLevels: []) }
+    let missing = model.flatMap { key in models.contains { $0.key == key } ? nil : ModelOption(key: key, name: "", thinkingLevels: []) }
     self.models = (missing.map { [$0] } ?? []) + models
   }
 
-  public var defaultModel: PiModelOption? { model.flatMap { key in models.first { $0.key == key } } }
+  public var defaultModel: ModelOption? { model.flatMap { key in models.first { $0.key == key } } }
 }
 
 public struct MacAgentProblem: Codable, Equatable, Sendable {

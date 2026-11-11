@@ -14,7 +14,7 @@ struct RuntimeLaunchTests {
         process.standardInput = input
         process.standardOutput = FileHandle.nullDevice
         try process.run()
-        let identity = try #require(PiProcess.running(pid: process.processIdentifier))
+        let identity = try #require(SessionProcess.running(pid: process.processIdentifier))
         try await recorder.update(sessionID: "resting", state: .settled, title: "歇着的", hosted: true)
         try await recorder.update(sessionID: "gone", state: .thinking, title: "做到一半的", hosted: true, process: identity)
         try input.fileHandleForWriting.close()

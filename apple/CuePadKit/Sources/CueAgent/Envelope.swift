@@ -179,7 +179,7 @@ public enum CueEnvelope {
       case .failed: "出错"
       case .undelivered: "发送失败"
       case .done: "完成"
-      case .stalled: "等子代理 \(Int(PiSessionState.stallAfter / 60)) 分钟没动静"
+      case .stalled: "等子代理 \(Int(SessionState.stallAfter / 60)) 分钟没动静"
       }
     var text = "[\(label)\(change.byUser ? " · 他说的" : "")] \(where_(change))"
     if let detail = change.detail, !detail.isEmpty { text += "：\(clip(detail, 120))" }
@@ -210,7 +210,7 @@ public enum CueEnvelope {
   }
 
   /// 信封与 peek 共用。
-  static func sessionLine(_ session: PiSessionState, now: Date, left: [CueLeft] = []) -> String {
+  static func sessionLine(_ session: SessionState, now: Date, left: [CueLeft] = []) -> String {
     var parts = [sessionName(session), "\(state(session.state)) \(duration(now.timeIntervalSince(session.stateSince)))"]
     if left.contains(where: { $0.holds(for: session) }) { parts.append(leftNote) }
     if let recent = recent(session) { parts.append("近况：\(clip(recent, 80))") }
@@ -220,7 +220,7 @@ public enum CueEnvelope {
   static let leftNote = "待回复"
 
   /// 会话在 Cue 眼里的称呼：会话名与短 id（Cue 的工具给 session 时写它）。
-  static func sessionName(_ session: PiSessionState) -> String { "会话「\(session.title)」（\(session.shortID)）" }
+  static func sessionName(_ session: SessionState) -> String { "会话「\(session.title)」（\(session.shortID)）" }
 
   private static func leafParts(_ leaf: CueBoardLeaf, named name: String?, now: Date, left: [CueLeft]) -> [String] {
     let state = leaf.session.map { state($0.state) } ?? (leaf.launching ? "正在开会话" : leaf.sending ? "发送中" : "没开工")
@@ -232,14 +232,14 @@ public enum CueEnvelope {
 
   /// 近况只写此刻还开着的：在等的提问、正在做的动作、正在处理的话。做完的回复不写：歇下时已作为变化报过（带那件事的近况），
   /// 每次醒来再列一遍只是重复；要看就 peek 那件事。
-  private static func recent(_ session: PiSessionState) -> String? {
+  private static func recent(_ session: SessionState) -> String? {
     if session.state == .known(.waitingForUser), let question = session.question { return question.text }
     if session.state.isWorking, let detail = session.detail { return detail }
     return session.pendingPrompt.map { "在处理：\($0)" }
   }
 
   /// 会话状态在 Cue 眼里的说法（看板、变化与 peek 共用）。
-  static func state(_ state: Open<PiWorkState>) -> String {
+  static func state(_ state: Open<WorkState>) -> String {
     switch state.known {
     case .thinking, .tool, .compacting: "工作中"
     case .delegating: "等子代理交回"

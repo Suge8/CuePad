@@ -105,7 +105,7 @@ extension Error {
   var diagnosis: String { "\(localizedDescription)（\(self)）" }
 }
 
-public enum PiAlertSubscriptionStatus: Equatable, Sendable {
+public enum AlertSubscriptionStatus: Equatable, Sendable {
   case off
   case active
   case offline
@@ -115,7 +115,7 @@ public enum PiAlertSubscriptionStatus: Equatable, Sendable {
 public struct SyncState: Equatable, Sendable {
   public var status: SyncStatus
   public var issues: [SyncIssue]
-  public var alerts: PiAlertSubscriptionStatus
+  public var alerts: AlertSubscriptionStatus
   /// 在拉积压：本机的数据还没跟上服务器。上传不算（`status` 的 `.syncing` 两者都算）。
   public var catchingUp: Bool
   /// 这台的库和 iCloud 完整对过至少一遍：库里有同步区令牌（拉完第一遍才存，换账号、云端数据被删或重置时清掉）。
@@ -125,7 +125,7 @@ public struct SyncState: Equatable, Sendable {
   public var filesOverQuota: Bool
 
   public init(
-    status: SyncStatus, issues: [SyncIssue], alerts: PiAlertSubscriptionStatus = .off, catchingUp: Bool = false, reconciled: Bool = false,
+    status: SyncStatus, issues: [SyncIssue], alerts: AlertSubscriptionStatus = .off, catchingUp: Bool = false, reconciled: Bool = false,
     filesOverQuota: Bool = false
   ) {
     self.status = status

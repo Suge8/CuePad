@@ -3,7 +3,7 @@ import SwiftUI
 
 extension View {
     /// `session` 为 nil 时不弹。
-    func agentBusyDialog(_ session: PiSessionState?, isPresented: Binding<Bool>, confirm: @escaping @MainActor () -> Void) -> some View {
+    func agentBusyDialog(_ session: SessionState?, isPresented: Binding<Bool>, confirm: @escaping @MainActor () -> Void) -> some View {
         let ends = session?.endsWithTask ?? true
         let endsMessage: LocalizedStringResource = "完成会把它的会话一起结束。"
         let staysMessage: LocalizedStringResource = "这是你在终端里开的会话，完成不会结束它。"

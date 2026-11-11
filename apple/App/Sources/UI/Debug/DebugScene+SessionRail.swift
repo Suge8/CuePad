@@ -49,8 +49,8 @@ extension DebugScene {
             try await store.recordMacPresence(host: host, bootID: boot) { true }
             _ = try await store.updateCueProfile { $0.hostID = host; $0.enabledAt = .now }
             try await store.setCueState(.settled, hostID: host, bootID: boot)
-            let recorder = PiStateRecorder(store: store, hostID: host, bootID: boot)
-            let samples: [(String, AgentKind, PiWorkState)] = [
+            let recorder = StateRecorder(store: store, hostID: host, bootID: boot)
+            let samples: [(String, AgentKind, WorkState)] = [
                 ("notes-edit", .claudeCode, .waitingForUser), ("release", .codex, .waitingForUser), ("docs", .codex, .settled),
                 ("billing", .opencode, .error), ("atlas", .pi, .tool), ("review", .codex, .delegating),
                 ("cuepad", .claudeCode, .thinking), ("migrate", .pi, .compacting), ("homepage", .codex, .tool),
@@ -61,15 +61,15 @@ extension DebugScene {
                 let (id, agent, state) = sample
                 let start = Date.now.addingTimeInterval(Double(index - samples.count) * 60)
                 let question = state == .waitingForUser
-                    ? PiQuestion(promptID: nil, kind: .unknown("editor"), text: String(localized: "编辑提交说明", table: "Demo")) : nil
+                    ? Question(promptID: nil, kind: .unknown("editor"), text: String(localized: "编辑提交说明", table: "Demo")) : nil
                 let helpers = state == .delegating ? ["billing", "sync"].map {
-                    PiSubagentState(name: $0, role: "review", phase: .known(.running), action: "", startedAt: start)
+                    SubagentState(name: $0, role: "review", phase: .known(.running), action: "", startedAt: start)
                 } : []
                 _ = try await recorder.update(
                     sessionID: id, state: state, failure: state == .error ? .quota : nil, title: id, directory: id, question: question,
-                    times: PiTimes(stateSince: start, busySince: state.isWorking ? start : nil), subagents: helpers, agent: agent)
-                try await store.writePiTranscript(PiTranscript(
-                    sessionID: id, messages: [], recap: PiRecap(lastPrompt: "README", lastReply: state == .settled ? "README.md" : nil)))
+                    times: SessionTimes(stateSince: start, busySince: state.isWorking ? start : nil), subagents: helpers, agent: agent)
+                try await store.writePiTranscript(SessionTranscript(
+                    sessionID: id, messages: [], recap: Recap(lastPrompt: "README", lastReply: state == .settled ? "README.md" : nil)))
             }
             try await store.leaveToYou("docs")
         }

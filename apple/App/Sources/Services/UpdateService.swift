@@ -17,17 +17,17 @@ protocol AppUpdater: AnyObject {
 /// 没有更新器（不是正式版签名：本机构建与测试不去读真实的更新源与偏好）时全部无操作。
 ///
 /// 装更新要重启 CuePad。托管的 Pi 脱离 App，新版经桥认回；靠管道连着 App 的 Claude Code、Codex 与 CuePad 拉起的 OpenCode 服务随 App 退出被收掉。
-/// 所以还有撑不过重启的托管会话在干活或等你确认（`PiWorkState.hasPendingWork`，含等子代理）时，就先不重启，等它们都空下来再自动装；等着时可以现在就装。
+/// 所以还有撑不过重启的托管会话在干活或等你确认（`WorkState.hasPendingWork`，含等子代理）时，就先不重启，等它们都空下来再自动装；等着时可以现在就装。
 @Observable
 final class UpdateService {
     @ObservationIgnored private let updater: (any AppUpdater)?
-    @ObservationIgnored private let bridge: PiBridge
+    @ObservationIgnored private let bridge: Bridge
     @ObservationIgnored private let runtimes: [AgentKind: any AgentRuntime]
     @ObservationIgnored private var install: (() -> Void)?
     @ObservationIgnored private var watcher: Task<Void, Never>?
     private(set) var waitingFor: Int?
 
-    init(updater: (any AppUpdater)?, bridge: PiBridge, runtimes: [AgentKind: any AgentRuntime]) {
+    init(updater: (any AppUpdater)?, bridge: Bridge, runtimes: [AgentKind: any AgentRuntime]) {
         self.updater = updater
         self.bridge = bridge
         self.runtimes = runtimes

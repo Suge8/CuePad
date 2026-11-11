@@ -5,11 +5,11 @@ import Foundation
 public struct AgentCatalog: Identifiable, Equatable, Sendable {
   public let id: UUID
   public var hostID: String
-  public var models: [PiModelOption]
-  public var commands: [PiSlashCommand]
+  public var models: [ModelOption]
+  public var commands: [SlashCommand]
   public var modifiedAt: Date
 
-  public init(id: UUID, hostID: String, models: [PiModelOption], commands: [PiSlashCommand], modifiedAt: Date) {
+  public init(id: UUID, hostID: String, models: [ModelOption], commands: [SlashCommand], modifiedAt: Date) {
     self.id = id
     self.hostID = hostID
     self.models = models
@@ -18,11 +18,11 @@ public struct AgentCatalog: Identifiable, Equatable, Sendable {
   }
 
   /// 带上主机：回收只动本机写的。
-  public static func recordID(host: String, models: [PiModelOption], commands: [PiSlashCommand]) -> UUID {
+  public static func recordID(host: String, models: [ModelOption], commands: [SlashCommand]) -> UUID {
     DeterministicID.uuid("agent-catalog/\(host)/\(JSONColumn.encode(models))/\(JSONColumn.encode(commands))")
   }
 
-  public init(host: String, models: [PiModelOption], commands: [PiSlashCommand], at now: Date) {
+  public init(host: String, models: [ModelOption], commands: [SlashCommand], at now: Date) {
     self.init(id: Self.recordID(host: host, models: models, commands: commands), hostID: host, models: models, commands: commands, modifiedAt: now)
   }
 }
@@ -33,8 +33,8 @@ extension AgentCatalog: Record {
   var bindings: [any SQLBindable] { [id, hostID, JSONColumn.encodeList(models), JSONColumn.encodeList(commands), modifiedAt] }
   init(row: Row) {
     self.init(
-      id: row.uuid(0), hostID: row.text(1), models: JSONColumn.decodeList(PiModelOption.self, from: row.textOrNil(2)),
-      commands: JSONColumn.decodeList(PiSlashCommand.self, from: row.textOrNil(3)), modifiedAt: row.date(4))
+      id: row.uuid(0), hostID: row.text(1), models: JSONColumn.decodeList(ModelOption.self, from: row.textOrNil(2)),
+      commands: JSONColumn.decodeList(SlashCommand.self, from: row.textOrNil(3)), modifiedAt: row.date(4))
   }
 }
 

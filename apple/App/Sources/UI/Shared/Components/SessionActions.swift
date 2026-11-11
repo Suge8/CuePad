@@ -3,9 +3,9 @@ import SwiftUI
 
 /// 会话出现的每一处共用这一份，有哪几项、什么顺序只在这里。看板上不归没做完的事的会话卡（`board`）与任务同一组操作：多一项完成（在做或在等你时先问，`Workspace.finish`），置顶与重命名都落在当场给它建的那件任务上（`Workspace+Adopt`）。重命名与结束要再确认，交给窗口上那一格（`Workspace.sessionAsk`）。
 struct SessionActions: View {
-    let session: PiSessionState
+    let session: SessionState
     var task: SessionTask?
-    var board: PiSessionListItem?
+    var board: SessionListItem?
     var ending = false
     @Environment(Workspace.self) private var workspace
 
@@ -32,7 +32,7 @@ struct SessionActions: View {
         #endif
     }
 
-    static func rename(_ session: PiSessionState, task: SessionTask? = nil, adopts: Bool = false, in workspace: Workspace) -> RowAction? {
+    static func rename(_ session: SessionState, task: SessionTask? = nil, adopts: Bool = false, in workspace: Workspace) -> RowAction? {
         guard MacDelivery.canRename(session) else { return nil }
         let ask = SessionAsk.rename(session, shown: task?.title.nonEmpty ?? session.title, adopts: adopts)
         #if os(macOS)
@@ -43,18 +43,18 @@ struct SessionActions: View {
     }
 
     /// 结束不是删除（对话留着，再说话就恢复），用墨色，确认框里再说清后果。
-    static func end(_ session: PiSessionState, ending: Bool, recovering: Bool = false, in workspace: Workspace) -> RowAction? {
+    static func end(_ session: SessionState, ending: Bool, recovering: Bool = false, in workspace: Workspace) -> RowAction? {
         guard session.canEnd || recovering else { return nil }
         return RowAction("结束会话", icon: .endSession, enabled: !ending) { workspace.sessionAsk = .end(session) }
     }
 
-    static func swipes(_ session: PiSessionState, task: SessionTask?, ending: Bool, in workspace: Workspace) -> RowSwipes {
+    static func swipes(_ session: SessionState, task: SessionTask?, ending: Bool, in workspace: Workspace) -> RowSwipes {
         RowSwipes(trailing: [end(session, ending: ending, in: workspace), rename(session, task: task, in: workspace)].compactMap { $0 })
     }
 }
 
 struct MarkUnreadButton: View {
-    let session: PiSessionState
+    let session: SessionState
     @Environment(AppServices.self) private var services
 
     var body: some View {
@@ -65,9 +65,9 @@ struct MarkUnreadButton: View {
 }
 
 enum SessionAsk: Identifiable, Equatable {
-    case rename(PiSessionState, shown: String, adopts: Bool)
-    case end(PiSessionState)
-    case complete(PiSessionState)
+    case rename(SessionState, shown: String, adopts: Bool)
+    case end(SessionState)
+    case complete(SessionState)
 
     var id: String {
         switch self {

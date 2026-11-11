@@ -76,7 +76,7 @@ extension RealClaudeTerminalTests {
             #expect(await !terminal.screen.contains("2. 咖啡"))
             testbed.presence.isPresent = true
             try await eventually("CuePad 上只显示") { testbed.bridge.session(id: session.id)?.question.map { $0.promptID == nil } == true }
-            await #expect(throws: PiBridgeError.rejected("no_prompt")) {
+            await #expect(throws: BridgeError.rejected("no_prompt")) {
                 try await testbed.bridge.answer(.option("咖啡"), to: try #require(held.promptID), in: session.id)
             }
             try await eventually("终端里问") { await terminal.screen.contains("2. 咖啡") }
@@ -142,7 +142,7 @@ extension RealClaudeTerminalTests {
             try await eventually("终端里弹出确认") { await terminal.screen.contains("Do you want to proceed?") }
             try await terminal.press("Enter", on: "Do you want to proceed?") { testbed.bridge.session(id: session.id)?.question == nil }
             #expect(FileManager.default.fileExists(atPath: touched.path))
-            await #expect(throws: PiBridgeError.rejected("no_prompt")) {
+            await #expect(throws: BridgeError.rejected("no_prompt")) {
                 try await testbed.bridge.answer(.confirmed(false), to: try #require(permission.promptID), in: session.id)
             }
         }

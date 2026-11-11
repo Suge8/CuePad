@@ -27,7 +27,7 @@ extension DebugScene {
         await Task.wait(for: .milliseconds(5))
         _ = try await demoRecorder(store).update(
             sessionID: "notes", state: .settled, title: "notes", directory: "notes", projectID: projects.first { $0.name == "Career" }?.id,
-            times: PiTimes(stateSince: .now.addingTimeInterval(-6 * 60), busySince: nil), modelState: demoModels, commands: demoCommands)
+            times: SessionTimes(stateSince: .now.addingTimeInterval(-6 * 60), busySince: nil), modelState: demoModels, commands: demoCommands)
         let cuepad = tasks.filter { $0.projectID == projects.first { $0.name == "CuePad" }?.id && !$0.body.hasPrefix(String(localized: "投送队列超时报错不发键", table: "Demo")) }
         if let started = cuepad.first { try await store.setStatus(started.id, .inProgress) }
         // Flow 只有一条在推进的任务、没有 Agent：项目的"此刻"是这条任务
@@ -60,20 +60,20 @@ extension DebugScene {
         let screenshot = try screenshotMarkup(store), pdf = try demoPDF(store)
         let looked = try Self.screenshotPNG().map { try store.files.store($0) }
         let messages = [
-            PiChatMessage(
+            ChatMessage(
                 sessionID: "notes", entryID: "u9", seq: 8, role: .user, text: String(localized: "把登录页的新样子、手机上的截图和评审结论发给我看看，样子参考这张", table: "Demo") + (screenshot.map { "\n" + $0 } ?? "")
                     + "\n" + pdf.markup,
                 at: first.addingTimeInterval(-50)),
-            PiChatMessage(
+            ChatMessage(
                 sessionID: "notes", entryID: "p9", seq: 9, role: .pi, text: notesPreviewReply,
                 at: last.addingTimeInterval(2), tools: .init(steps: 2, items: [
                     .init(kind: .command, target: "npx playwright screenshot --device 'iPhone 15' login-v2.html login-mobile.png"),
                     .init(kind: .read, target: "login-mobile.png", images: looked.map { [$0] }),
                 ]), roundStartedAt: first.addingTimeInterval(-50)),
         ]
-        try await store.writePiTranscript(PiTranscript(
+        try await store.writePiTranscript(SessionTranscript(
             sessionID: "notes", messages: messages,
-            recap: PiRecap(lastPrompt: messages[0].text, lastReply: messages.last?.text)))
+            recap: Recap(lastPrompt: messages[0].text, lastReply: messages.last?.text)))
     }
 
 }

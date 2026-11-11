@@ -21,7 +21,7 @@ final class AppServices {
 
     let store: CueStore
     #if os(macOS)
-    let pi: PiBridge
+    let pi: Bridge
     let cue: CueService
     #endif
 
@@ -102,16 +102,16 @@ final class AppServices {
     @ObservationIgnored var windowShell: MainShellWindow?
 
     @ObservationIgnored let paths: AgentPaths
-    @ObservationIgnored let terminal: PiTerminalJumper
+    @ObservationIgnored let terminal: TerminalJumper
     @ObservationIgnored let hooks: AgentHookServer
     @ObservationIgnored let runtimes: [AgentKind: any AgentRuntime]
     @ObservationIgnored let pasteboard: NSPasteboard
-    @ObservationIgnored let historyStore: PiHistoryPersistence
+    @ObservationIgnored let historyStore: HistoryPersistence
     @ObservationIgnored let hotkeyBackend: any HotkeyBackend
     @ObservationIgnored let hostID: String
     @ObservationIgnored let workspaces: Workspaces
     @ObservationIgnored let wakeNotifications: NotificationCenter
-    @ObservationIgnored let piStateRecorder: PiStateRecorder
+    @ObservationIgnored let piStateRecorder: StateRecorder
     @ObservationIgnored let presence: MacPresenceKeeper
     /// 同步表 `macAgents` 的唯一写入口；Cue 启用前也经它问。
     @ObservationIgnored let macAgents: MacAgentsRecorder
@@ -163,7 +163,7 @@ final class AppServices {
         hostID = mac.hostID
         workspaces = mac.workspaces
         wakeNotifications = mac.wakeNotifications
-        piStateRecorder = PiStateRecorder(store: store, hostID: mac.hostID, timing: mac.timing)
+        piStateRecorder = StateRecorder(store: store, hostID: mac.hostID, timing: mac.timing)
         presence = MacPresenceKeeper(store: store, sync: self.sync, host: mac.hostID)
         viewer = ViewerKeeper(store: store, sync: self.sync, device: mac.hostID)
         pi = mac.pi
@@ -181,7 +181,7 @@ final class AppServices {
             store: store, sync: self.sync, host: mac.hostID, files: AgentLibraryFiles(access: agents.integration.fileAccess, trash: trash))
         commandLineTool = mac.commandLineTool
         updates = UpdateService(updater: mac.updater, bridge: mac.pi, runtimes: runtimes)
-        historyStore = PiHistoryPersistence(storage: store, host: mac.hostID)
+        historyStore = HistoryPersistence(storage: store, host: mac.hostID)
         cue = CueService(
             recorder: piStateRecorder, sync: self.sync, library: location.directory,
             piAgentDirectory: mac.paths.pi.agentDirectory, dependencies: mac.cue)

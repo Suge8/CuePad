@@ -6,13 +6,13 @@ import CuePi
 
 /// 会话所在的 Mac 不是本机、本机正在和 iCloud 对时，到的先不滑上来（`ChatScroll`）。
 struct SessionChat: View {
-    let session: PiSessionState
+    let session: SessionState
     let digest: SessionDigest
     let readingWidth: CGFloat
     let inset: CGFloat
     @Binding var follow: ChatFollow
     #if os(macOS)
-    var slot: PiBridge.Slot?
+    var slot: Bridge.Slot?
     #endif
     @State private var derived = ChatDerived()
     @Environment(AppServices.self) private var services
@@ -21,10 +21,10 @@ struct SessionChat: View {
         let _ = derived.refresh(digest, at: services.speech)
         let items = derived.items
         ChatColumn(
-            followKey: PiConversation.followKey(
+            followKey: Conversation.followKey(
                 session: session, messages: digest.messages, previews: digest.previews, deliveries: digest.deliveries, at: services.speech),
             readingWidth: readingWidth, inset: inset, follow: $follow, marks: derived.marks, ids: items.map(\.id),
-            paging: PiConversation.paging,
+            paging: Conversation.paging,
             holding: services.isCatchingUp(on: session.hostID)
         ) { window in
             conversation(window: window)
@@ -35,8 +35,8 @@ struct SessionChat: View {
         }
     }
 
-    private func conversation(window: ChatWindow) -> PiConversation {
-        var conversation = PiConversation(
+    private func conversation(window: ChatWindow) -> Conversation {
+        var conversation = Conversation(
             session: session, items: derived.items, messages: digest.messages, window: window,
             fetching: digest.fetchingTranscript(at: services.speech))
         #if os(macOS)

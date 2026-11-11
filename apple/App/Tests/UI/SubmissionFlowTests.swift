@@ -10,11 +10,11 @@ struct SubmissionFlowTests {
     let app = TestApp()
     var store: CueStore { app.services.store }
 
-    @Test(arguments: [PiQuestionKind.text, .select])
-    func 文字作答只交答案_卡片附件批注留在回复框(kind: PiQuestionKind) async throws {
+    @Test(arguments: [QuestionKind.text, .select])
+    func 文字作答只交答案_卡片附件批注留在回复框(kind: QuestionKind) async throws {
         let recorder = try await app.runtimeRecorder(on: "mac-a")
         try await recorder.update(sessionID: "atlas", state: .waitingForUser, title: "atlas",
-                                  question: PiQuestion(promptID: "question", kind: kind, text: "喝什么？", options: ["茶"], allowsOther: true))
+                                  question: Question(promptID: "question", kind: kind, text: "喝什么？", options: ["茶"], allowsOther: true))
         let session = try #require(try await store.allPiSessionStates().first)
         let card = try await store.createCard(body: "稍后再发的卡片")
         let file = DraftFile(key: try store.files.store(pngData()), name: "")
@@ -29,7 +29,7 @@ struct SubmissionFlowTests {
         await sending.value
 
         let request = try #require(try await store.deliveryRequests().first)
-        #expect(request.answer == PiAnswer(promptID: "question", value: .text("咖啡")))
+        #expect(request.answer == Answer(promptID: "question", value: .text("咖啡")))
         #expect(box.wrappedValue.files == [file])
         #expect(box.wrappedValue.attachments.map(\.card) == [card.id])
         #expect(box.wrappedValue.attachments.map(\.content) == ["稍后再发的卡片"])

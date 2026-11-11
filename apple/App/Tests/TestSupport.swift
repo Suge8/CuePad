@@ -123,7 +123,7 @@ final class TestApp {
     let pasteboard = NSPasteboard(name: .init("cuepad-tests-\(UUID().uuidString)"))
     /// socket 路径有 104 字节上限，所以假扩展的目录放在短路径下。
     let socketDirectory = URL(filePath: "/tmp/cat-\(UUID().uuidString.prefix(8))", directoryHint: .isDirectory)
-    lazy var pi = PiBridge(socketDirectory: socketDirectory, timing: timing)
+    lazy var pi = Bridge(socketDirectory: socketDirectory, timing: timing)
     lazy var host = RecordingHost(bridge: pi, socketDirectory: socketDirectory, sessions: piPaths.sessionsDirectory)
     lazy var claude = PipedHostedAgent(bridge: pi, agent: .claudeCode)
     #else
@@ -209,7 +209,7 @@ final class TestApp {
         #endif
     }
 
-    func runtimeRecorder(on host: String, boot: String = TestBoot.id) async throws -> PiStateRecorder {
+    func runtimeRecorder(on host: String, boot: String = TestBoot.id) async throws -> StateRecorder {
         try await services.store.runtimeRecorder(on: host, boot: boot, minInterval: .zero, timing: timing)
     }
 
@@ -342,7 +342,7 @@ final class TestApp {
             hotkeys: hotkeys,
             paths: AgentPaths(pi: piPaths, environment: agentHomes),
             agents: AgentIntegrations(agentIntegration),
-            terminal: PiTerminalJumper(),
+            terminal: TerminalJumper(),
             hostID: hostID,
             workspaces: workspaces,
             wakeNotifications: wakeCenter,
@@ -378,7 +378,7 @@ extension Task {
 }
 
 extension Workspace {
-    func said(_ draft: ComposerDraft, to session: PiSessionState, mode: DeliveryMode, card: UUID? = nil) async throws -> DeliveryRequest {
+    func said(_ draft: ComposerDraft, to session: SessionState, mode: DeliveryMode, card: UUID? = nil) async throws -> DeliveryRequest {
         var box = draft
         let binding = Binding(get: { box }, set: { box = $0 })
         await speak(to: .session(session, mode: mode, card: card), from: binding) { $0.stored }.value
@@ -387,8 +387,8 @@ extension Workspace {
 }
 
 extension CueStore {
-    func allPiSessionStates() throws -> [PiSessionState] {
-        try piSessionPage(PiSessionQuery(limit: .max)).items.map(\.state)
+    func allPiSessionStates() throws -> [SessionState] {
+        try piSessionPage(SessionQuery(limit: .max)).items.map(\.state)
     }
 }
 

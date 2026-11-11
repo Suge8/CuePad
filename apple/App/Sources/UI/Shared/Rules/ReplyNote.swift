@@ -13,7 +13,7 @@ nonisolated struct ReplyNote: Identifiable, Equatable, Codable, Sendable {
     var note = ""
     var preview: UUID?
     /// 没有它的旧草稿照常解出来（只是过期后是一张纸）。
-    var kind: PiPreviewKind?
+    var kind: PreviewKind?
 
     init(entry: UUID, run: Int, location: Int, quote: String, note: String = "") {
         self.entry = entry
@@ -23,7 +23,7 @@ nonisolated struct ReplyNote: Identifiable, Equatable, Codable, Sendable {
         self.note = note
     }
 
-    init(quoting preview: PiPreview, in entry: UUID) {
+    init(quoting preview: PreviewItem, in entry: UUID) {
         self.init(entry: entry, run: 0, location: 0, quote: preview.title)
         self.preview = preview.id
         kind = preview.kind
@@ -31,7 +31,7 @@ nonisolated struct ReplyNote: Identifiable, Equatable, Codable, Sendable {
 
     /// 引用的那份预览，按编号从这个会话此刻的预览里取（`SessionDigest.previews`）：引用只记编号，画面显示时再取，
     /// 预览随对话过期删掉后取不到（nil），这一行仍照标题发出。
-    func quoted(in previews: [PiPreview]) -> PiPreview? {
+    func quoted(in previews: [PreviewItem]) -> PreviewItem? {
         preview.flatMap { id in previews.first { $0.id == id } }
     }
 

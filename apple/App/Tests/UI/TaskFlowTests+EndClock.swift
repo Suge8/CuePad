@@ -18,10 +18,10 @@ extension TaskFlowTests {
         let borrower = try await workspace.createTask("新任务", in: Project.defaultID)
         workspace.startFresh(task)
         let launch = try #require(try await eventually(store, { try $0.deliveryRequests().first { $0.mode == .known(.start) } }) { $0 != nil })
-        let recorder = PiStateRecorder(store: store, hostID: TestApp.hostID, timing: clock.timing)
+        let recorder = StateRecorder(store: store, hostID: TestApp.hostID, timing: clock.timing)
         try await recorder.update(sessionID: "audit-clock", state: .thinking, projectID: Project.defaultID, launchToken: launch.launch?.token, hosted: true)
         try await store.deleteDelivery(launch.id)
-        var session = PiSession(id: "audit-clock.1", sessionID: "audit-clock", agent: .pi, sessionFile: nil, pid: 1, cwd: rig.directory, terminal: PiTerminal(), state: .thinking, stateSince: .now)
+        var session = Session(id: "audit-clock.1", sessionID: "audit-clock", agent: .pi, sessionFile: nil, pid: 1, cwd: rig.directory, terminal: TerminalIdentity(), state: .thinking, stateSince: .now)
         session.hosted = true
         rig.pi.attach(session, via: LostEndLink(rig.pi))
         try await workspace.complete(task.id)

@@ -43,14 +43,14 @@ struct RealClaudeTerminalTests {
 
             let delivery = UUID().uuidString
             let start = Date()
-            try await testbed.bridge.send(PiMessage(text: "只回复 PONG", deliveryID: delivery), to: session.id)
+            try await testbed.bridge.send(SessionMessage(text: "只回复 PONG", deliveryID: delivery), to: session.id)
             try await testbed.waitForTurn(session.id, since: start)
             try await testbed.waitForDraftLanded(session.id)  // 一轮歇下时会话文件可能还没写完
             let said = try testbed.transcript(testbed.bridge.session(id: session.id)?.sessionFile).messages.filter { $0.role == .known(.user) }
             #expect(said.map(\.text) == ["只回复 PONG"])
             #expect(said.first?.deliveryID == UUID(uuidString: delivery))
-            await #expect(throws: PiBridgeError.unsupported) {
-                try await testbed.bridge.send(PiMessage(text: "看图", images: [PiImage(mimeType: "image/png", data: redPNG)]), to: session.id)
+            await #expect(throws: BridgeError.unsupported) {
+                try await testbed.bridge.send(SessionMessage(text: "看图", images: [MessageImage(mimeType: "image/png", data: redPNG)]), to: session.id)
             }
         }
     }
@@ -61,7 +61,7 @@ struct RealClaudeTerminalTests {
             testbed.model.on({ $0.model == "claude-nosuch-9" }) { _ in .fail("model: claude-nosuch-9", status: 404) }
             let terminal = try await testbed.terminal(["--model", "claude-nosuch-9"])
             let session = try await testbed.waitForSession(pid: terminal.pid)
-            try await testbed.bridge.send(PiMessage(text: "say hi"), to: session.id)
+            try await testbed.bridge.send(SessionMessage(text: "say hi"), to: session.id)
             @MainActor func reply() -> String? { (try? testbed.transcript(session.sessionFile))?.messages.last { $0.role == .known(.pi) }?.text }
             try await eventually("这一轮出错、那句原话进了对话") {
                 testbed.bridge.session(id: session.id)?.state == .error && reply() != nil
@@ -81,7 +81,7 @@ struct RealClaudeTerminalTests {
             let terminal = try await testbed.terminal(mode: "bypassPermissions")
             let session = try await testbed.waitForSession(pid: terminal.pid)
 
-            try await testbed.bridge.send(PiMessage(text: "INBOX-PROBE 只回复 OK"), to: session.id)
+            try await testbed.bridge.send(SessionMessage(text: "INBOX-PROBE 只回复 OK"), to: session.id)
 
             let file = try #require(testbed.bridge.session(id: session.id)?.sessionFile)
             var sent: Substring?
@@ -107,10 +107,10 @@ struct RealClaudeTerminalTests {
 
             testbed.on("SLEEP-RUN") { $0.step == 0 ? .call("Bash", ["command": #"python3 -c "import time; time.sleep(100)""#, "description": "slow"]) : .say("ZEBRA") }
             testbed.on("只回复 MANGO", .say("MANGO"))
-            try await testbed.bridge.send(PiMessage(text: "SLEEP-RUN"), to: session.id)
+            try await testbed.bridge.send(SessionMessage(text: "SLEEP-RUN"), to: session.id)
             try await testbed.waitOnScreen("在跑命令", on: terminal, in: session.id) { testbed.bridge.session(id: session.id)?.detail?.contains("time.sleep(100)") == true }
-            await #expect(throws: PiBridgeError.rejected("failed: 终端里的 Claude Code 在跑，CuePad 打断不了它：在终端里按 Esc，或等它做完再说")) {
-                try await testbed.bridge.send(PiMessage(text: "只回复 MANGO"), to: session.id)
+            await #expect(throws: BridgeError.rejected("failed: 终端里的 Claude Code 在跑，CuePad 打断不了它：在终端里按 Esc，或等它做完再说")) {
+                try await testbed.bridge.send(SessionMessage(text: "只回复 MANGO"), to: session.id)
             }
             // 钩子报"在跑"时，会话文件可能还没写到盘上（Claude Code 的写队列每 100 毫秒才刷一次）：先等这一轮的话落盘再看
             try await eventually("SLEEP-RUN 落盘") { (try? testbed.transcript(session.sessionFile))?.messages.contains { $0.text.contains("SLEEP-RUN") } == true }
@@ -119,9 +119,9 @@ struct RealClaudeTerminalTests {
             try await terminal.keys("Escape")
             try await eventually("按 Esc 后歇下") { testbed.bridge.session(id: session.id)?.state == .settled }
             // 登记文件回到 idle 就歇下，中断标记随写队列晚一拍落盘
-            try await eventually("中断标记落盘") { (try? testbed.transcript(session.sessionFile))?.messages.last?.text == PiNotice.stopped.rawValue }
+            try await eventually("中断标记落盘") { (try? testbed.transcript(session.sessionFile))?.messages.last?.text == ChatNotice.stopped.rawValue }
             let delivery = UUID()
-            try await testbed.bridge.send(PiMessage(text: "只回复 MANGO", deliveryID: delivery.uuidString), to: session.id)
+            try await testbed.bridge.send(SessionMessage(text: "只回复 MANGO", deliveryID: delivery.uuidString), to: session.id)
             try await testbed.waitOnScreen("话送到了", on: terminal, in: session.id) {
                 (try? testbed.transcript(session.sessionFile).messages.contains { $0.deliveryID == delivery }) == true
             }
@@ -148,10 +148,10 @@ struct RealClaudeTerminalTests {
             let session = try await testbed.waitForSession(pid: terminal.pid)
             let log = ChangeLog(testbed.bridge)
 
-            try await testbed.bridge.configure(PiConfig(name: "CuePad 改的名"), in: session.id)
+            try await testbed.bridge.configure(SessionConfig(name: "CuePad 改的名"), in: session.id)
             try await eventually("终端里显示新名字") { await terminal.screen.contains("CuePad 改的名") }
             #expect(testbed.bridge.session(id: session.id)?.displayName == "CuePad 改的名")
-            await #expect(throws: PiBridgeError.unsupported) { try await testbed.bridge.abort(session.id) }
+            await #expect(throws: BridgeError.unsupported) { try await testbed.bridge.abort(session.id) }
 
             try await testbed.bridge.end(session.id)
 
@@ -167,7 +167,7 @@ struct RealClaudeTerminalTests {
             let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t", name: nil, model: nil, thinking: nil)
             let sessionID = try #require(testbed.bridge.session(id: id)).sessionID
             let start = Date()
-            try await testbed.bridge.send(PiMessage(text: "只回复 OK"), to: id)
+            try await testbed.bridge.send(SessionMessage(text: "只回复 OK"), to: id)
             try await testbed.waitForTurn(id, since: start)
             let log = ChangeLog(testbed.bridge)
 
@@ -190,7 +190,7 @@ struct RealClaudeTerminalTests {
             let session = try await testbed.waitForSession(pid: terminal.pid)
 
             let delivery = UUID().uuidString
-            try await testbed.bridge.send(PiMessage(text: "只回复 HELLO", deliveryID: delivery), to: session.id)
+            try await testbed.bridge.send(SessionMessage(text: "只回复 HELLO", deliveryID: delivery), to: session.id)
             try await eventually("话送到了") {
                 (try? testbed.transcript(session.sessionFile).messages.contains { $0.deliveryID == UUID(uuidString: delivery) }) == true
             }

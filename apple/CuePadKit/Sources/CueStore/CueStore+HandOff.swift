@@ -24,7 +24,7 @@ extension CueStore {
 
   /// 正文发出后留在任务上。接着用上一步的会话时话送到才绑上（同开新会话“开成了才绑”），送到前算发送中（`sendingLeaves`）。叶子已绑着会话（不带 `fresh`）抛 `alreadyStarted`：话在会话里说；正在开会话抛 `launching`，话还在送抛 `sending`。`agent`、`model`、`thinking` 只用于开新会话，开哪家见 `launchAgent`。
   public func startLeaf(
-    _ leaf: UUID, agent: AgentKind? = nil, fresh: Bool = false, model: String? = nil, thinking: PiThinkingLevel? = nil,
+    _ leaf: UUID, agent: AgentKind? = nil, fresh: Bool = false, model: String? = nil, thinking: ThinkingLevel? = nil,
     host: String, cue: Bool = false
   ) throws -> DeliveryRequest {
     let plan = try handOffPlan(leaf, host: host, fresh: fresh, agent: agent)
@@ -40,7 +40,7 @@ extension CueStore {
     case .launch(let project, let host):
       let kind = try launchAgent(agent, on: host)
       let key = try model.map { try cueModelKey($0, of: kind, host: host) }
-      let launch = PiLaunch(
+      let launch = LaunchRequest(
         project: project, prompt: content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : content, token: UUID().uuidString,
         agent: kind, model: key, thinking: thinking)
       return try requestLaunch(launch, title: plan.name ?? "", on: host, card: card.id, cue: cue)
@@ -69,7 +69,7 @@ extension CueStore {
   }
 
   /// 已结束的也算：执行的 Mac 连上目标会话时先恢复它（`MacExecutor`）。
-  func continuableSession(for leaf: UUID, agent: AgentKind?, ignoringEndOf: String? = nil) throws -> PiSessionState? {
+  func continuableSession(for leaf: UUID, agent: AgentKind?, ignoringEndOf: String? = nil) throws -> SessionState? {
     let top = try topTask(of: leaf)
     guard top != leaf, let task = try find(Card.self, top) else { return nil }
     let ending = Set(try db.query(

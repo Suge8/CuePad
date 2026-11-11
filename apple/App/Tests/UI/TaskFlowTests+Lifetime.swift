@@ -70,7 +70,7 @@ extension TaskFlowTests {
         try await store.deleteDelivery(launch.id)
         let services = rig.relaunch(), reopened = Workspace(services: services)
         let phone = TestApp(host: "phone"), phoneWorkspace = Workspace(services: phone.services)
-        for id in [task.id, PiSessionState.recordID(sessionID: sessionID)] {
+        for id in [task.id, SessionState.recordID(sessionID: sessionID)] {
             let row = try #require(try await services.store.syncRow(recordName: id.uuidString.lowercased()))
             #expect(try await phone.services.store.applyRemote([.save(row, systemFields: Data())]).isEmpty)
         }

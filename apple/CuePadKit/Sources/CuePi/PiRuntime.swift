@@ -7,12 +7,12 @@ import OSLog
 /// 托管的进程与终端里开的会话是同一个模型：它自己管生死，CuePad 只是连上去看和发的客户端。
 /// - 脱离 App（`ChildProcess.Placement.detached`）：连上桥、确认读得懂托管约定后认领它，之后 App 退出、更新、崩溃都不影响它，新起的 App 经桥重新看到它；认领之前 App 没了，它随之结束（这时它还什么都没收到）；
 /// - 经环境变量 `CUEPAD_HOSTED`（值是空闲多少秒后退出，格式见 README「协议」）告诉扩展，空闲满时限就自己退出；
-/// - 有哪些托管会话只看桥（`hosted` 与 hello 里的 pid），这里不记进程；结束、让出由桥做（`PiBridge` 的托管会话一节）；
-/// - 让出的那个退出后，让接手的进程重新载入会话（`PiBridge.reload`）：它这期间没写过就接上那一轮、不分支，写过就由扩展提示一句。
+/// - 有哪些托管会话只看桥（`hosted` 与 hello 里的 pid），这里不记进程；结束、让出由桥做（`Bridge` 的托管会话一节）；
+/// - 让出的那个退出后，让接手的进程重新载入会话（`Bridge.reload`）：它这期间没写过就接上那一轮、不分支，写过就由扩展提示一句。
 @MainActor
 public final class PiRuntime: AgentRuntime {
     private static let log = Logger(subsystem: AppIdentity.id, category: "pi-host")
-    private let bridge: PiBridge
+    private let bridge: Bridge
     private let paths: PiPaths
     private let pi: @Sendable () async -> URL?
     private let locate: @Sendable () async -> ExecutableLocator
@@ -23,7 +23,7 @@ public final class PiRuntime: AgentRuntime {
 
     /// - Parameter pi: 这台 Mac 上够新的 `pi`（检测时挑中的那个，`AgentStatus.executable`；没有为 nil）。
     public init(
-        bridge: PiBridge, paths: PiPaths, pi: @escaping @Sendable () async -> URL?,
+        bridge: Bridge, paths: PiPaths, pi: @escaping @Sendable () async -> URL?,
         locate: @escaping @Sendable () async -> ExecutableLocator = { await .system },
         idleLimit: Duration = AgentTimeouts.hostedIdle, timing: Timing = .system
     ) {
@@ -55,8 +55,8 @@ public final class PiRuntime: AgentRuntime {
 
     /// 等它连上桥后返回。会话名、模型与思考强度是 Pi 的启动参数（`--name`、`--model`、`--thinking`），给了就一起生效；模型不存在、没登录这类起来就退出的，抛 `exited` 并带上 Pi 的原话。
     public func open(
-        in directory: URL, launchToken: String, name: String?, model: PiModelKey?, thinking: PiThinkingLevel?
-    ) async throws -> PiSession.ID {
+        in directory: URL, launchToken: String, name: String?, model: ModelKey?, thinking: ThinkingLevel?
+    ) async throws -> Session.ID {
         var arguments: [String] = []
         if let name, !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { arguments += ["--name", name] }
         if let model { arguments += ["--model", "\(model.provider)/\(model.id)"] }
@@ -64,7 +64,7 @@ public final class PiRuntime: AgentRuntime {
         return try await launch(arguments, in: directory, environment: ["CUEPAD_LAUNCH_TOKEN": launchToken]).id
     }
 
-    public func resume(_ session: IndexedSession) async throws -> PiSession.ID {
+    public func resume(_ session: IndexedSession) async throws -> Session.ID {
         try await resumptions.resume(session.id) { [self] in
             try await launch(["--session", session.path], in: URL(filePath: session.cwd, directoryHint: .isDirectory), environment: [:]).id
         }
@@ -75,7 +75,7 @@ public final class PiRuntime: AgentRuntime {
     /// 启动并等它的会话连上桥；进程先退出或超时（这时让它退出）都抛错。
     /// 连上的扩展必须读得懂托管约定（报出 `hosted`、CuePad 读得懂它）：不然起出的进程既不会空闲自退、CuePad 也不认它是托管的，
     /// 成了没人管的孤儿。磁盘上的扩展不是随包版本（接入修复失败、Pi 太旧没修、别人改过）时就是这样，这时让它退出并报错。
-    private func launch(_ arguments: [String], in directory: URL, environment: [String: String]) async throws -> PiSession {
+    private func launch(_ arguments: [String], in directory: URL, environment: [String: String]) async throws -> Session {
         guard let executable = await pi() else { throw AgentRuntimeError.notInstalled(.pi) }
         let changes = bridge.changes()  // 先订阅再启动：连上的那一刻不会漏
         let environment = await locate().environment(
@@ -87,10 +87,10 @@ public final class PiRuntime: AgentRuntime {
             executable, ["--mode", "rpc"] + arguments, directory: directory, environment: environment,
             placement: .detached, input: .lifeline)
         let pid = process.pid
-        let session: PiSession
+        let session: Session
         do {
             session = try await withDeadline(AgentTimeouts.launch, timing: timing, orThrow: PiHostError.notConnected) {
-                try await withThrowingTaskGroup(of: PiSession?.self) { group in
+                try await withThrowingTaskGroup(of: Session?.self) { group in
                     group.addTask {
                         for await change in changes {
                             if case .appeared(let session) = change, session.pid == pid { return session }
@@ -120,7 +120,7 @@ public final class PiRuntime: AgentRuntime {
         return session
     }
 
-    private func reloadSuccessor(of session: PiSession) {
+    private func reloadSuccessor(of session: Session) {
         guard session.agent == .pi, session.hosted,
               let successor = bridge.sessions.first(where: { $0.agent == .pi && $0.sessionID == session.sessionID && !$0.hosted }),
               !bridge.ending.contains(successor.id) else { return }

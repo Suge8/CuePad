@@ -34,7 +34,7 @@ enum GrokHistory {
     }
     static let deliveryPrefix = "cuepad-"
 
-    static func ingest(_ raw: UnsafeRawBufferPointer, _ cp: inout PiHistoryCheckpoint, _ transcript: inout PiHistory.Transcript) throws {
+    static func ingest(_ raw: UnsafeRawBufferPointer, _ cp: inout HistoryCheckpoint, _ transcript: inout History.Transcript) throws {
         cp.seq += 1
         guard let data = raw.borrowedData, let line = JSONValue.parse(data),
               let params = line["params"], let update = params["update"]
@@ -44,7 +44,7 @@ enum GrokHistory {
         let time = meta?["agentTimestampMs"]?.number.map { Date(timeIntervalSince1970: $0 / 1000) }
             ?? line["timestamp"]?.number.map { Date(timeIntervalSince1970: $0) }
         if let time { cp.lastActivity = time }
-        let entry = PiHistory.Entry(id: meta?["eventId"]?.string ?? "\(cp.seq)", seq: cp.seq, at: time ?? cp.lastActivity ?? .distantPast)
+        let entry = History.Entry(id: meta?["eventId"]?.string ?? "\(cp.seq)", seq: cp.seq, at: time ?? cp.lastActivity ?? .distantPast)
         let kind = update["sessionUpdate"]?.string
         if kind == "user_message_chunk" {
             guard update["_meta"]?["hideFromScrollback"]?.bool != true else { return }
@@ -57,7 +57,7 @@ enum GrokHistory {
         case "tool_call":
             guard let id = update["toolCallId"]?.string else { return }
             let name = update["_meta"]?["x.ai/tool"]?["name"]?.string ?? update["title"]?.string ?? "tool"
-            let arguments = (update["rawInput"]?.data).flatMap { try? JSONDecoder().decode(PiToolArguments.self, from: $0) } ?? PiToolArguments()
+            let arguments = (update["rawInput"]?.data).flatMap { try? JSONDecoder().decode(ToolArguments.self, from: $0) } ?? ToolArguments()
             cp.toolStarted(id: id, name: name, arguments: arguments)
             try settled(update, into: &cp, transcript: transcript)
         case "tool_call_update":
@@ -73,7 +73,7 @@ enum GrokHistory {
         }
     }
 
-    private static func hold(_ content: JSONValue?, _ entry: PiHistory.Entry, into cp: inout PiHistoryCheckpoint, transcript: inout PiHistory.Transcript) throws {
+    private static func hold(_ content: JSONValue?, _ entry: History.Entry, into cp: inout HistoryCheckpoint, transcript: inout History.Transcript) throws {
         var said = transcript.said()
         if let held = cp.held {
             said.restore(text: held.text, stored: held.stored)
@@ -85,20 +85,20 @@ enum GrokHistory {
         case "image": try said.image(content?["data"]?.string.flatMap { Data(base64Encoded: $0) })
         default: break
         }
-        let first = cp.held.map { PiHistory.Entry(id: $0.id, seq: $0.seq, at: $0.at) } ?? entry
-        cp.held = PiHistoryCheckpoint.Held(text: said.text, stored: said.stored, id: first.id, seq: first.seq, at: first.at)
+        let first = cp.held.map { History.Entry(id: $0.id, seq: $0.seq, at: $0.at) } ?? entry
+        cp.held = HistoryCheckpoint.Held(text: said.text, stored: said.stored, id: first.id, seq: first.seq, at: first.at)
     }
 
-    private static func release(_ prompt: String?, into cp: inout PiHistoryCheckpoint, transcript: inout PiHistory.Transcript) {
+    private static func release(_ prompt: String?, into cp: inout HistoryCheckpoint, transcript: inout History.Transcript) {
         guard let held = cp.held else { return }
         cp.held = nil
         var said = transcript.said()
         said.restore(text: held.text, stored: held.stored)
         let delivery = prompt.flatMap { $0.hasPrefix(deliveryPrefix) ? String($0.dropFirst(deliveryPrefix.count)) : nil }
-        cp.said(said, PiHistory.Entry(id: held.id, seq: held.seq, at: held.at), deliveryID: delivery, into: &transcript)
+        cp.said(said, History.Entry(id: held.id, seq: held.seq, at: held.at), deliveryID: delivery, into: &transcript)
     }
 
-    private static func settled(_ update: JSONValue, into cp: inout PiHistoryCheckpoint, transcript: PiHistory.Transcript) throws {
+    private static func settled(_ update: JSONValue, into cp: inout HistoryCheckpoint, transcript: History.Transcript) throws {
         guard let id = update["toolCallId"]?.string, let status = update["status"]?.string, status == "completed" || status == "failed" else { return }
         let images = (update["content"]?.array ?? []).compactMap { $0["content"] }.filter { $0["type"]?.string == "image" }
             .map { $0["data"]?.string.flatMap { Data(base64Encoded: $0) } }

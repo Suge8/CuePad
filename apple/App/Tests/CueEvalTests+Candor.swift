@@ -65,13 +65,13 @@ extension CueEvalTests {
     /// 先记下会话、再绑：没绑之前它的动静不叫醒 Cue。
     static func remoteSession(_ rig: CueHostTests.Rig, bound card: Card, reply: String) async throws {
         let id = "s-remote01"
-        let recorder = PiStateRecorder(store: rig.store, hostID: "mac-b")
+        let recorder = StateRecorder(store: rig.store, hostID: "mac-b")
         try await recorder.update(sessionID: id, state: .thinking, title: card.heading)
         try await recorder.update(sessionID: id, state: .settled)
-        try await rig.store.writePiTranscript(PiTranscript(sessionID: id, messages: [
-            PiChatMessage(sessionID: id, entryID: "u1", seq: 1, role: .user, text: card.body, at: .now - 600),
-            PiChatMessage(sessionID: id, entryID: "a1", seq: 2, role: .pi, text: reply, at: .now - 300),
-        ], recap: PiRecap()))
+        try await rig.store.writePiTranscript(SessionTranscript(sessionID: id, messages: [
+            ChatMessage(sessionID: id, entryID: "u1", seq: 1, role: .user, text: card.body, at: .now - 600),
+            ChatMessage(sessionID: id, entryID: "a1", seq: 2, role: .pi, text: reply, at: .now - 300),
+        ], recap: Recap()))
         try await rig.store.linkCard(card.id, toSession: id)
     }
 

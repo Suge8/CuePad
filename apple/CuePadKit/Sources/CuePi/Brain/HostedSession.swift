@@ -11,7 +11,7 @@ public struct CueBrainConfig: Sendable {
     /// 运行时自己的模型写法（Pi 是 `提供方/模型`）；nil 用运行时的默认
     public let model: String?
     /// 思考强度：各家共用 Pi 的档位，各实现映射到自己的写法、夹到模型支持的档位
-    public let effort: PiThinkingLevel?
+    public let effort: ThinkingLevel?
     public let fast: Bool
     /// 整份替换运行时内置的系统提示，不是追加。
     public let systemPrompt: String
@@ -21,7 +21,7 @@ public struct CueBrainConfig: Sendable {
     public let timing: Timing
 
     public init(
-        runtime: AgentKind, executable: URL, model: String?, effort: PiThinkingLevel?, fast: Bool = false, systemPrompt: String,
+        runtime: AgentKind, executable: URL, model: String?, effort: ThinkingLevel?, fast: Bool = false, systemPrompt: String,
         workingDirectory: URL, mcp: [String], environment: [String: String], timing: Timing = .system
     ) {
         self.runtime = runtime
@@ -44,10 +44,10 @@ public enum TurnEvent: Sendable, Equatable {
     /// 交给 `send` 的那一句（参数是发送时给的标识）进了这一轮：各家按运行时报的那一刻报，报在接走它的那一轮里（插进去时在跑的那一轮
     /// 可能正好收尾，接走它的是下一轮）；没有在跑的一轮时报的，是接下来开始的那一轮接走的。
     case received(UUID)
-    /// 规则同 `PiDraft`，随增量报（不节流），nil 是清掉；`turnFinished` 时还留着的就是这一轮的回答，没有就是这一轮没说话。各家都在协议层得出（逐字增量累积，每段说完时换成运行时给的定稿，不发增量也有），回答不另取一份
-    case speaking(PiDraft?)
+    /// 规则同 `LiveDraft`，随增量报（不节流），nil 是清掉；`turnFinished` 时还留着的就是这一轮的回答，没有就是这一轮没说话。各家都在协议层得出（逐字增量累积，每段说完时换成运行时给的定稿，不发增量也有），回答不另取一份
+    case speaking(LiveDraft?)
     /// 上下文用量，各家同一口径：`used` 是最近一次模型请求的输入 token 合计（含缓存的读与写，不含输出）；`window` 是在用模型的上下文窗口，
-    /// 运行时没报时为 nil。托管会话在桥上显示的（`PiSession.context`）也是这一份
+    /// 运行时没报时为 nil。托管会话在桥上显示的（`Session.context`）也是这一份
     case context(used: Int, window: Int?)
     /// 开始调一个工具：`id` 是运行时给这次调用的编号（做完时对上）；名字去掉 CuePad 的 MCP 前缀并小写（`task`、`read`；
     /// Codex 跑的命令记作 `bash`，参数是 `{"command": …}`），参数是 JSON 原文
@@ -72,12 +72,12 @@ public protocol HostedSession: AnyObject {
     /// 模型能看图（起好之后才算数）；看不了时别交图，交了各家也只是丢掉或报错
     var seesImages: Bool { get }
     /// 说一句话（可带图，按各家原生的图片输入交）：空闲时开始一轮，正忙时插进当前这一轮；接走它的那一轮报 `received(id)`
-    func send(_ text: String, images: [PiImage], id: UUID) async throws
+    func send(_ text: String, images: [MessageImage], id: UUID) async throws
     /// 开新会话：清掉此前的对话，系统提示、工具、模型与强度不变，下一句从空白的对话说起。只在空闲时调
     func newSession() async throws
     /// 就地换模型（运行时自己的写法，同 `CueBrainConfig.model`）与思考强度：进程与上下文不动，下一次请求模型起生效（`seesImages` 随新模型）。
     /// nil 的那项不动：运行时的默认取不回来，回到默认要换大脑。运行时不认（没有这个模型、没登录这家提供方……）时抛，在用的不变
-    func configure(model: String?, effort: PiThinkingLevel?) async throws
+    func configure(model: String?, effort: ThinkingLevel?) async throws
     /// 结束进程：返回的等待在进程（连同它起的子进程）退出后结束，不需要主线程（App 退出时在主线程之外等）；随后发 `exited(nil)`
     func stop() -> @concurrent @Sendable () async -> Void
 }

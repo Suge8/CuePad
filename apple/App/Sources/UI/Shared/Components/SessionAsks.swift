@@ -3,7 +3,7 @@ import SwiftUI
 
 /// "改名"停用时用系统工具栏按钮而不是提示框：iOS 的提示框不画按钮的停用态，点不了也看不出来。
 private struct RenameSheet: View {
-    let target: PiSessionState
+    let target: SessionState
     let shown: String
     let adopts: Bool
     @Environment(Workspace.self) private var workspace
@@ -13,7 +13,7 @@ private struct RenameSheet: View {
     @FocusState private var focused: Bool
 
     private var changed: String? {
-        guard let name = PiRename.clean(name), name != PiRename.clean(shown) else { return nil }
+        guard let name = SessionRename.clean(name), name != SessionRename.clean(shown) else { return nil }
         return name
     }
 
@@ -109,7 +109,7 @@ private struct SessionAsks: ViewModifier {
     private static let message: LocalizedStringResource = "对话会保留，再给它发消息会在后台恢复"
 
     private struct Renaming: Identifiable {
-        let session: PiSessionState
+        let session: SessionState
         let shown: String
         let adopts: Bool
         var id: UUID { session.id }
@@ -123,17 +123,17 @@ private struct SessionAsks: ViewModifier {
         }
     }
 
-    private var completing: PiSessionState? { if case .complete(let session) = workspace.sessionAsk { session } else { nil } }
-    private var ending: PiSessionState? { if case .end(let session) = workspace.sessionAsk { session } else { nil } }
+    private var completing: SessionState? { if case .complete(let session) = workspace.sessionAsk { session } else { nil } }
+    private var ending: SessionState? { if case .end(let session) = workspace.sessionAsk { session } else { nil } }
 
-    private func end(_ session: PiSessionState) { Task { await workspace.end(session) } }
+    private func end(_ session: SessionState) { Task { await workspace.end(session) } }
 
     /// 这一种在问时是它的会话；关掉时只清自己这一种（另一种已经换上来就不动）。
-    private func asked(_ pick: @escaping (SessionAsk) -> PiSessionState?) -> Binding<PiSessionState?> {
+    private func asked(_ pick: @escaping (SessionAsk) -> SessionState?) -> Binding<SessionState?> {
         Binding { workspace.sessionAsk.flatMap(pick) } set: { if $0 == nil, workspace.sessionAsk.flatMap(pick) != nil { workspace.sessionAsk = nil } }
     }
 }
 
 extension MacDelivery {
-    static func canRename(_ session: PiSessionState) -> Bool { session.capabilities.contains(.rename) }
+    static func canRename(_ session: SessionState) -> Bool { session.capabilities.contains(.rename) }
 }

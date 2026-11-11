@@ -17,7 +17,7 @@ struct CueWaitEyebrow: View {
             project
             name.layoutPriority(-1)
             Spacer(minLength: Spacing.group)
-            LiveText(style: PiClock.Waited(since: wait.since)).monospacedDigit().fixedSize()
+            LiveText(style: SessionClock.Waited(since: wait.since)).monospacedDigit().fixedSize()
             if count > 1 { position.padding(.leading, Spacing.item) }
         }
         .font(Typography.caption)

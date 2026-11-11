@@ -159,7 +159,7 @@ nonisolated struct RuntimeTimeline {
             }
             works.append(entry)
         }
-        func owner(_ task: UUID?, _ session: PiSessionState) -> Int? {
+        func owner(_ task: UUID?, _ session: SessionState) -> Int? {
             task.flatMap { owners["task/\($0.uuidString)"] } ?? owners["session/\(session.sessionID)"]
         }
         for waiting in source.waiting {

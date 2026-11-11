@@ -30,9 +30,9 @@ struct AuthIsolationTests {
         }
         try #require(replied, "GPT 应在 Claude 授权返回前完成回答")
         let state = try #require(try await store.allPiSessionStates().first)
-        let next = PiModelKey(provider: "openai", id: "echo-next")
+        let next = ModelKey(provider: "openai", id: "echo-next")
 
-        workspace.attempt { _ = try await rig.services.configure(PiConfig(model: next), for: state) }
+        workspace.attempt { _ = try await rig.services.configure(SessionConfig(model: next), for: state) }
         let configured = try await Self.withoutClaude(at: endpoint) {
             _ = try await eventually(store, { try $0.allPiSessionStates().first?.model?.key }) { $0 == next }
         }
@@ -44,13 +44,13 @@ struct AuthIsolationTests {
         #expect(claude.account?.kind == .oauth)
         #expect(claude.account?.scope == nil)
         let quotas = try await store.accountQuotas()
-        #expect(!PiModelLabel.title(claude, quotas: quotas, at: .now).contains("%"))
+        #expect(!ModelLabel.title(claude, quotas: quotas, at: .now).contains("%"))
         #expect(try #require(quotas.first { $0.provider == "anthropic" && $0.hostID == TestApp.hostID }).status == .unobserved)
 
         let quota = Task { await rig.services.refreshQuota(.manual) }
         defer { await quota.stop() }
         try await Self.control("entered", at: endpoint)
-        workspace.attempt { _ = try await rig.services.configure(PiConfig(model: PiModelKey(provider: "openai", id: "echo")), for: current) }
+        workspace.attempt { _ = try await rig.services.configure(SessionConfig(model: ModelKey(provider: "openai", id: "echo")), for: current) }
         _ = try await eventually(store, { try $0.allPiSessionStates().first?.model?.key.id }) { $0 == "echo" }
         workspace.speak("/model openai/echo-next", to: .session(current, mode: .command))
         _ = try await eventually(store, { try $0.allPiSessionStates().first?.model?.key.id }) { $0 == "echo-next" }

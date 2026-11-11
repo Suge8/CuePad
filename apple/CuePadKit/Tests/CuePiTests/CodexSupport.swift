@@ -226,7 +226,7 @@ struct DaemonDirectory: Equatable, CustomStringConvertible {
 final class CodexRig {
     let codex: CodexHome
     let hooks: AgentHookServer
-    let bridge: PiBridge
+    let bridge: Bridge
     let runtime: CodexRuntime
     let presence: TestPresence
     /// 托管的 Codex 经它起时有（`readFault`）
@@ -244,7 +244,7 @@ final class CodexRig {
         let codex = try CodexHome(model: try await FakeModel(), modelName: model)
         let presence = TestPresence()
         let hooks = AgentHookServer(path: codex.paths.pi.hookSocket)
-        let bridge = PiBridge(socketDirectory: codex.sockets)
+        let bridge = Bridge(socketDirectory: codex.sockets)
         let locator = codex.locator
         let fault = try readFault.map { try CodexReadFault(around: pinnedCodex.executable, in: codex.root, mode: $0) }
         let launch = fault?.executable
@@ -286,17 +286,17 @@ final class CodexRig {
         }
     }
 
-    var session: PiSession? { bridge.sessions.first { $0.agent == .codex } }
+    var session: Session? { bridge.sessions.first { $0.agent == .codex } }
 
-    func transcript(_ session: PiSession) throws -> PiHistoryUpdate {
-        try PiHistory.index(file: try #require(session.sessionFile), agent: .codex, from: nil, files: scratchFiles)
+    func transcript(_ session: Session) throws -> HistoryUpdate {
+        try History.index(file: try #require(session.sessionFile), agent: .codex, from: nil, files: scratchFiles)
     }
 
-    func replies(_ session: PiSession) -> [String] {
+    func replies(_ session: Session) -> [String] {
         ((try? transcript(session))?.messages ?? []).filter { $0.role == .known(.pi) }.map(\.text)
     }
 
-    func draftLanded(_ id: PiSession.ID) -> Bool {
+    func draftLanded(_ id: Session.ID) -> Bool {
         guard let draft = bridge.slots.first(where: { $0.id == id })?.draft else { return true }
         let session = bridge.session(id: id)
         let newest = session.flatMap { try? transcript($0) }?.messages.last { $0.role == .known(.pi) }

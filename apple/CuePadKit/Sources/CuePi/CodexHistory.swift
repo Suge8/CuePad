@@ -38,7 +38,7 @@ enum CodexHistory {
         }
     }
 
-    static func ingest(_ raw: UnsafeRawBufferPointer, _ cp: inout PiHistoryCheckpoint, _ transcript: inout PiHistory.Transcript) throws {
+    static func ingest(_ raw: UnsafeRawBufferPointer, _ cp: inout HistoryCheckpoint, _ transcript: inout History.Transcript) throws {
         cp.seq += 1
         guard let data = raw.borrowedData, let line = try? decoder.decode(Line.self, from: data)
         else { return }
@@ -54,22 +54,22 @@ enum CodexHistory {
         case ("event_msg", "task_started"):
             cp.roundStarted(at: at)
         case ("event_msg", "turn_aborted"):
-            cp.interrupted(PiHistory.Entry(id: "aborted-\(cp.seq)", seq: cp.seq, at: at), into: &transcript)
+            cp.interrupted(History.Entry(id: "aborted-\(cp.seq)", seq: cp.seq, at: at), into: &transcript)
         case ("event_msg", "task_complete"):
-            cp.answered("", PiHistory.Entry(id: "complete-\(cp.seq)", seq: cp.seq, at: at), into: &transcript)
+            cp.answered("", History.Entry(id: "complete-\(cp.seq)", seq: cp.seq, at: at), into: &transcript)
         case ("event_msg", "item_completed"):
             guard let item = line.payload.item else { return }
-            try completed(item, PiHistory.Entry(id: item.id ?? "\(cp.seq)", seq: cp.seq, at: at), into: &cp, transcript: &transcript)
+            try completed(item, History.Entry(id: item.id ?? "\(cp.seq)", seq: cp.seq, at: at), into: &cp, transcript: &transcript)
         default:
             break
         }
     }
 
-    private static func completed(_ item: Item, _ entry: PiHistory.Entry, into cp: inout PiHistoryCheckpoint, transcript: inout PiHistory.Transcript) throws {
+    private static func completed(_ item: Item, _ entry: History.Entry, into cp: inout HistoryCheckpoint, transcript: inout History.Transcript) throws {
         switch item.type {
         case "UserMessage":
             var said = transcript.said()
-            // 用技能说的（技能条目在前、话在后，`CodexRuntime.input`）写回你发的样子：`/skill:名字 话`，同 Pi 的 `PiSkillCall.line`
+            // 用技能说的（技能条目在前、话在后，`CodexRuntime.input`）写回你发的样子：`/skill:名字 话`，同 Pi 的 `SkillCall.line`
             var skill = item.content?.first { $0.type == "skill" }?.name.map { "/skill:\($0)" }
             for input in item.content ?? [] {
                 switch input.type {
@@ -105,7 +105,7 @@ enum CodexHistory {
     private struct ToolCall {
         var id: String
         var name: String
-        var arguments: PiToolArguments
+        var arguments: ToolArguments
         var failed: Bool
         var images: [Data?] = []
     }
@@ -114,7 +114,7 @@ enum CodexHistory {
         let id = item.id ?? UUID().uuidString
         switch item.type {
         case "CommandExecution":
-            var arguments = PiToolArguments()
+            var arguments = ToolArguments()
             arguments.command = item.command?.last
             return [ToolCall(id: id, name: "bash", arguments: arguments, failed: item.status != "completed" || (item.exitCode ?? 0) != 0)]
         case "FileChange":
@@ -124,14 +124,14 @@ enum CodexHistory {
             }
         case "McpToolCall":
             return [ToolCall(
-                id: id, name: item.tool ?? "mcp", arguments: PiToolArguments(), failed: item.status.map { $0 != "completed" } ?? false,
+                id: id, name: item.tool ?? "mcp", arguments: ToolArguments(), failed: item.status.map { $0 != "completed" } ?? false,
                 images: item.result?.images ?? [])]
         case "ImageView":
-            var arguments = PiToolArguments()
+            var arguments = ToolArguments()
             arguments.path = item.path.flatMap { URL(string: $0)?.path }
             return [ToolCall(id: id, name: "read", arguments: arguments, failed: false, images: [item.path.flatMap(ToolImage.data(at:))])]
         case "WebSearch":
-            var arguments = PiToolArguments()
+            var arguments = ToolArguments()
             arguments.pattern = item.query
             return [ToolCall(id: id, name: "grep", arguments: arguments, failed: false)]
         default:
@@ -283,8 +283,8 @@ enum CodexHistory {
             case unifiedDiff = "unified_diff"
         }
 
-        /// 摘要只要路径与行数：删掉的与加上的行分别当作新旧两段交给 `PiToolArguments`，按行比较得出同样的数。
-        func arguments(path: String) -> PiToolArguments {
+        /// 摘要只要路径与行数：删掉的与加上的行分别当作新旧两段交给 `ToolArguments`，按行比较得出同样的数。
+        func arguments(path: String) -> ToolArguments {
             var object: [String: String] = ["path": path]
             switch type {
             case "add":
@@ -297,7 +297,7 @@ enum CodexHistory {
                 object["oldText"] = lines.filter { $0.hasPrefix("-") }.map { $0.dropFirst() }.joined(separator: "\n")
                 object["newText"] = lines.filter { $0.hasPrefix("+") }.map { $0.dropFirst() }.joined(separator: "\n")
             }
-            return (try? JSONEncoder().encode(object)).flatMap { try? JSONDecoder().decode(PiToolArguments.self, from: $0) } ?? PiToolArguments()
+            return (try? JSONEncoder().encode(object)).flatMap { try? JSONDecoder().decode(ToolArguments.self, from: $0) } ?? ToolArguments()
         }
     }
 }

@@ -6,7 +6,7 @@ extension CueStore {
     try select(Card.self, where: "id >= ?1 AND id < ?1 || '~'", [prefix.lowercased()], orderBy: "id")
   }
 
-  public func previews(idPrefix prefix: String) throws -> [PiPreview] {
-    try select(PiPreview.self, where: "id >= ?1 AND id < ?1 || '~'", [prefix.lowercased()], orderBy: "id")
+  public func previews(idPrefix prefix: String) throws -> [PreviewItem] {
+    try select(PreviewItem.self, where: "id >= ?1 AND id < ?1 || '~'", [prefix.lowercased()], orderBy: "id")
   }
 }

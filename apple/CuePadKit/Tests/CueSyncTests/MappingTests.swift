@@ -18,19 +18,19 @@ import Testing
       $0.variableValues = ["k": "v"]
     }
     try await store.recordSend("x", to: SendTarget(kind: .piSession, name: "n", ref: "r"), card: card.id)
-    try await PiStateRecorder(store: store, hostID: "mac").update(
+    try await StateRecorder(store: store, hostID: "mac").update(
       sessionID: "s1", state: .waitingForUser, detail: "确认？", title: "t", directory: "/work/p", projectID: project.id,
-      context: PiContextUsage(tokens: 1_000, window: 200_000), commands: [PiSlashCommand(name: "compact", summary: "压缩", source: .known(.builtin))])
+      context: ContextUsage(tokens: 1_000, window: 200_000), commands: [SlashCommand(name: "compact", summary: "压缩", source: .known(.builtin))])
     try await store.requestDelivery("deliver me", to: SendTarget(kind: .piSession, name: "n", ref: "r"), on: "mac", card: card.id)
     try await store.setDirectory("/work/p", for: project.id)
     try await store.publishDirectoryBindings(host: "mac")
-    try await store.writePiTranscript(PiTranscript(
+    try await store.writePiTranscript(SessionTranscript(
       sessionID: "s1",
       messages: [
-        PiChatMessage(sessionID: "s1", entryID: "e1", seq: 1, role: .user, text: "修好登录", at: .now),
-        PiChatMessage(sessionID: "s1", entryID: "answer/1", seq: 1, role: .answer, text: "覆盖", at: .now, question: "要覆盖 public/feed.xml 吗？"),
+        ChatMessage(sessionID: "s1", entryID: "e1", seq: 1, role: .user, text: "修好登录", at: .now),
+        ChatMessage(sessionID: "s1", entryID: "answer/1", seq: 1, role: .answer, text: "覆盖", at: .now, question: "要覆盖 public/feed.xml 吗？"),
       ],
-      recap: PiRecap(pendingPrompt: "修好登录")))
+      recap: Recap(pendingPrompt: "修好登录")))
     let page = rig.fixture.directory.appending(path: "demo.html")
     try Data("<h1>登录页</h1>".utf8).write(to: page)
     _ = try await store.addPreviews([(page, "登录页")], sessionID: "s1")
@@ -88,7 +88,7 @@ import Testing
     #expect(push.encryptedValues["token"] as? String == "private-push-token" && push["token"] == nil)
 
     let names = ["projects": "name", "sendRecords": "content"]
-    let answer = PiChatMessage.recordID(sessionID: "s1", entryID: "answer/1").uuidString.lowercased()
+    let answer = ChatMessage.recordID(sessionID: "s1", entryID: "answer/1").uuidString.lowercased()
     let asked = RecordMapper.record(from: try #require(try await store.syncRow(recordName: answer)), zoneID: testZone)
     #expect(asked.encryptedValues["question"] as? String == "要覆盖 public/feed.xml 吗？" && asked["question"] == nil)
     for key in try await store.pendingSync().saves {

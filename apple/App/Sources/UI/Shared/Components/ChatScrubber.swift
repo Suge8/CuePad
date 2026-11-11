@@ -21,7 +21,7 @@ struct ChatScrubber: View {
     @State private var hovering = false
     @State private var keyboard = false
 
-    static func marks(_ entries: [PiChatEntry]) -> [ChatMark] {
+    static func marks(_ entries: [ChatEntry]) -> [ChatMark] {
         ChatMark.enough(entries.compactMap { entry in
             switch entry.role {
             case .user, .answer, .outgoing: ChatMark(id: entry.id, kind: .said, preview: ChatMark.firstLine(entry.text))
