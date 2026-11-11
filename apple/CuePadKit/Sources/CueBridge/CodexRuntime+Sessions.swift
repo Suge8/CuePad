@@ -5,121 +5,6 @@ import Foundation
 import OSLog
 
 extension CodexRuntime {
-    private func daemonSocket() async -> String? {
-        if let controlSocket { return controlSocket }
-        guard let codex = try? await executable(),
-              let result = await ChildProcess.run(codex.url, ["app-server", "daemon", "version"], environment: codex.environment, timeout: AgentTimeouts.command, timing: timing),
-              let info = JSONValue.parse(Data(result.output.utf8)), info["status"]?.string == "running", let path = info["socketPath"]?.string
-        else { return nil }
-        controlSocket = path
-        return path
-    }
-
-    /// 服务没跑为 nil。`stop` 取消正在连的那次，连上后核对没被取消才装上。
-    private func daemonConnection() async throws -> CodexRPC? {
-        guard !stopped else { return nil }
-        if let daemon, !daemon.isClosed { return daemon }
-        let task = connecting ?? {
-            let attempt = Task { try await connectDaemon() }
-            connecting = attempt
-            return attempt
-        }()
-        defer { if connecting == task { connecting = nil } }
-        return try await task.value
-    }
-
-    private func connectDaemon() async throws -> CodexRPC? {
-        guard let path = await daemonSocket() else { return nil }
-        let rpc = try await CodexRPC.connect(socket: path)
-        guard !Task.isCancelled, !stopped else {
-            rpc.close()
-            return nil
-        }
-        let pid = rpc.pid
-        rpc.onNotification = { [weak self] method, params in self?.notification(method, params, from: pid) }
-        rpc.onClose = { [weak self, weak rpc] in
-            if let self, self.daemon === rpc { self.daemon = nil }
-        }
-        daemon = rpc
-        watchExit(pid)
-        return rpc
-    }
-
-    /// 同一时刻只有一次在做，做的时候又来的并进再做一遍（范围到那时才读）；`stop` 取消它。
-    func discover() async {
-        guard !stopped else { return }
-        if let scan = scanning {
-            scan.again = true
-            await scan.task?.value
-            return
-        }
-        let scan = Scan()
-        scanning = scan
-        scan.task = Task {
-            repeat {
-                scan.again = false
-                await scanDaemon()
-            } while scan.again && !Task.isCancelled
-            if scanning === scan { scanning = nil }
-        }
-        await scan.task?.value
-    }
-
-    private func scanDaemon() async {
-        do {
-            guard let rpc = try await daemonConnection() else { return }
-            let loaded = try await rpc.call("thread/loaded/list", [:])
-            var children: [JSONValue] = []
-            for threadID in loaded["data"]?.array?.compactMap(\.string) ?? [] where tracked["\(threadID).\(rpc.pid)"] == nil {
-                try Task.checkCancellation()
-                // Codex 自己起的临时线程（起标题等）不是会话
-                guard let thread = try await rpc.call("thread/read", ["threadId": .string(threadID)])["thread"],
-                      thread["ephemeral"]?.bool != true else { continue }
-                try Task.checkCancellation()
-                if thread["parentThreadId"]?.string != nil {
-                    children.append(thread)
-                } else if scope.covers(sessionID: threadID) {
-                    try await adopt(thread, on: rpc)
-                }
-            }
-            for child in children {
-                try Task.checkCancellation()
-                guard let id = child["id"]?.string, threads["\(id).\(rpc.pid)"] == nil else { continue }
-                threads["\(id).\(rpc.pid)"] = .asking([])
-                await register(child, on: rpc)
-            }
-        } catch is CancellationError {
-        } catch {
-            Self.log.notice("没能读出常驻服务里的会话：\(String(describing: error))")
-        }
-    }
-
-    func adoptFromDaemon(_ threadID: String) async throws -> Session.ID? {
-        guard let rpc = try? await daemonConnection() else { return nil }
-        let loaded = try await rpc.call("thread/loaded/list", [:])
-        guard loaded["data"]?.array?.contains(.string(threadID)) == true,
-              let thread = try await rpc.call("thread/read", ["threadId": .string(threadID)])["thread"],
-              thread["parentThreadId"]?.string == nil, thread["ephemeral"]?.bool != true else { return nil }
-        return try await adopt(thread, on: rpc)
-    }
-
-    @discardableResult
-    private func adopt(_ thread: JSONValue, on rpc: CodexRPC) async throws -> Session.ID {
-        let threadID = thread["id"]?.string ?? ""
-        let id = "\(threadID).\(rpc.pid)"
-        if tracked[id] != nil { return id }
-        // 正在跑一轮：接上时就是工作中（钩子要等下一个事件才来），从这一轮的开始算
-        let last = try await Self.lastTurn(threadID, on: rpc)
-        try Task.checkCancellation()
-        let running = last?["status"]?.string == "inProgress"
-        if tracked[id] != nil { return id }
-        // thread/read 不返回 serviceTier；resume 虽然返回，却会订阅线程并接走终端的审批，所以保持未知。
-        attach(makeSession(thread, pid: rpc.pid)) { session in
-            if running { self.startTurn(session, at: Self.startedAt(last)) }
-        }
-        return id
-    }
-
     func makeSession(_ thread: JSONValue, pid: Int32) -> Session {
         let threadID = thread["id"]?.string ?? ""
         var session = Session(
@@ -130,9 +15,8 @@ extension CodexRuntime {
         return session
     }
 
-    /// `settings` 为 false 时不取线程上的模型与强度，只按模型清单重认此刻的模型：托管会话订阅着线程，它的模型与强度只认开线程时的回应、
+    /// `settings` 为 false 时不取线程上的模型与强度，只按模型清单重认此刻的模型：会话订阅着线程，它的模型与强度只认开线程时的回应、
     /// `thread/settings/updated` 与 Codex 接受了的改动（`configure`）——`thread/settings/update` 只回“已排队”，紧接着读线程可能读到改之前的。
-    /// 终端里的会话收不到那条通知（只发给订阅了线程的连接），终端界面里换的模型只能读线程得知。
     func apply(_ thread: JSONValue, to session: inout Session, settings: Bool = true) {
         session.name = thread["name"]?.string
         if let preview = thread["preview"]?.string, !preview.isEmpty { session.firstMessage = String(preview.prefix(SessionName.firstMessageLimit)) }
@@ -152,35 +36,26 @@ extension CodexRuntime {
         models?.first { $0.id == model }?.option ?? ModelOption(key: ModelKey(provider: CodexModel.provider, id: model), name: model, thinkingLevels: [])
     }
 
-    func attach(_ session: Session, prepare: (Tracked) -> Void = { _ in }) {
-        let entry = Tracked(id: session.id, threadID: session.sessionID, pid: session.pid)
-        prepare(entry)
+    func attach(_ session: Session, driver: CodexDriver) {
+        let entry = Tracked(id: session.id, threadID: session.sessionID, driver: driver, pid: session.pid)
         tracked[session.id] = entry
         var session = session
         entry.facts.publish(to: &session)
         bridge.attach(session, via: self)
-        watchExit(session.pid)
         refresh(session.id, skills: true)
     }
 
-    private func watchExit(_ pid: Int32) {
-        guard exitWatchers[pid] == nil else { return }
-        exitWatchers[pid] = ProcessExitWatcher(pid: pid) { [weak self] in self?.processGone(pid) }
-    }
-
     func processGone(_ pid: Int32) {
-        exitWatchers.removeValue(forKey: pid)?.cancel()
         hosted[pid] = nil
-        marks = marks.filter { $0.value != pid }
         threads = threads.filter { !$0.key.hasSuffix(".\(pid)") }
         for session in tracked.values where session.pid == pid { detach(session.id) }
     }
 
     func detach(_ id: Session.ID) {
         guard let session = tracked.removeValue(forKey: id) else { return }
-        session.cancelWaits()
+        session.ending?.cancel()
         threads = threads.filter { if case .session(id, _, _) = $0.value { false } else { true } }
-        release(session)
+        session.reply = nil
         bridge.detach(id, reason: .closed(reason: "quit"))
     }
 
@@ -188,14 +63,13 @@ extension CodexRuntime {
         Task {
             do {
                 guard let session = tracked[id] else { return }
-                let rpc = try await control(session)
+                let rpc = try control(session)
                 if models == nil { models = try await CodexModel.list(rpc) }
                 if skills, let cwd = bridge.session(id: id)?.cwd {
                     let listed = try await rpc.call("skills/list", ["cwds": [.string(cwd.path)]])
                     let entries = (listed["data"]?.array?.first?["skills"]?.array ?? []).filter { $0["enabled"]?.bool != false }
                     session.skills = entries.compactMap { entry in entry["name"]?.string.flatMap { name in entry["path"]?.string.map { (name, $0) } } }
-                    let modes = hosted[session.pid] == nil ? [] : Self.modeCommands
-                    let commands = Self.builtinCommands + modes + entries.compactMap { entry -> SlashCommand? in
+                    let commands = Self.builtinCommands + entries.compactMap { entry -> SlashCommand? in
                         guard let name = entry["name"]?.string else { return nil }
                         return SlashCommand(name: "skill:\(name)", summary: entry["description"]?.string.map { $0.clipped(ToolDetail.limit) }, source: .known(.skill))
                     }
@@ -203,31 +77,24 @@ extension CodexRuntime {
                 }
                 let read = try await rpc.call("thread/read", ["threadId": .string(session.threadID)])
                 guard let thread = read["thread"] else { return }
-                let hosted = hosted[session.pid] != nil
-                bridge.update(id) { self.apply(thread, to: &$0, settings: !hosted) }
+                bridge.update(id) { self.apply(thread, to: &$0, settings: false) }
             } catch {
                 Self.log.notice("没能读出 Codex 会话的设置：\(String(describing: error))")
             }
         }
     }
 
-    /// 能从 CuePad 执行的内置命令：Codex 的斜杠命令是终端界面自己实现的，只有这几个有对应的接口。
+    /// 能从 CuePad 执行的内置命令：Codex 的斜杠命令是终端界面自己实现的，只有这几个有对应的接口（`plan`、`default` 切协作模式）。
     private static let builtinCommands = [
         SlashCommand(name: "compact", summary: String(localized: "压缩上下文"), source: .known(.builtin)),
         SlashCommand(name: "name", summary: String(localized: "给会话改名"), source: .known(.builtin), hint: String(localized: "<名字>")),
         SlashCommand(name: "model", summary: String(localized: "换模型"), source: .known(.builtin), hint: String(localized: "<模型>")),
-    ]
-
-    /// 托管会话切协作模式（终端会话的模式归终端界面管）
-    private static let modeCommands = [
         SlashCommand(name: "plan", summary: String(localized: "进 Plan 模式：先问清楚、出计划，不动手"), source: .known(.builtin), hint: String(localized: "[话]")),
         SlashCommand(name: "default", summary: String(localized: "回默认模式"), source: .known(.builtin)),
     ]
 
-    /// 会话的控制通道：托管的是它的进程，终端里的是常驻服务（钩子的父进程就是它才算；`codex exec` 之类没有控制接口）。
-    func control(_ session: Tracked) async throws -> CodexRPC {
-        if let rpc = hosted[session.pid]?.rpc { return rpc }
-        guard let rpc = try await daemonConnection(), rpc.pid == session.pid else { throw BridgeError.unsupported }
+    func control(_ session: Tracked) throws -> CodexRPC {
+        guard let rpc = session.driver.rpc else { throw HostedSessionError.notRunning }
         return rpc
     }
 

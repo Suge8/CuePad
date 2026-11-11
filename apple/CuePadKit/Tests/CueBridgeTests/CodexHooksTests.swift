@@ -62,4 +62,36 @@ struct CodexHooksTests {
         }
     }
 }
+
+extension CodexHome {
+    @MainActor fileprivate func hookTrust() async throws -> [(command: String, event: String, trust: String)] {
+        try await listedHooks().map { ($0["command"]?.string ?? "", $0["eventName"]?.string ?? "", $0["trustStatus"]?.string ?? "") }
+    }
+
+    @MainActor fileprivate func trustEverything() async throws {
+        var state: [String: JSONValue] = [:]
+        for entry in try await listedHooks() { state[entry["key"]!.string!] = ["trusted_hash": entry["currentHash"]!] }
+        try await withCodex { try await $0.call("config/batchWrite", ["edits": [["keyPath": "hooks.state", "value": .object(state), "mergeStrategy": "upsert"]]]) }
+    }
+
+    @MainActor private func listedHooks() async throws -> [JSONValue] {
+        var entries: [JSONValue] = []
+        try await withCodex { rpc in
+            let list = try await rpc.call("hooks/list", ["cwds": [.string(home.path)]])
+            entries = list["data"]?.array?.first?["hooks"]?.array ?? []
+        }
+        return entries
+    }
+
+    @MainActor private func withCodex(_ body: (CodexRPC) async throws -> Void) async throws {
+        let rpc = try await CodexRPC.launch(pinnedCodex.executable, environment: environment)
+        do {
+            try await body(rpc)
+        } catch {
+            await rpc.shutdown()
+            throw error
+        }
+        await rpc.shutdown()
+    }
+}
 #endif

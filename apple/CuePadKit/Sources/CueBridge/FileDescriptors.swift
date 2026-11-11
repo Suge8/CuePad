@@ -79,19 +79,6 @@ enum UnixSocket {
         return getpeereid(fd, &euid, &egid) == 0 && euid == getuid()
     }
 
-    static func peerPID(_ fd: Int32) -> pid_t {
-        var pid: pid_t = 0
-        var length = socklen_t(MemoryLayout<pid_t>.size)
-        getsockopt(fd, SOL_LOCAL, LOCAL_PEERPID, &pid, &length)
-        return pid
-    }
-
-    /// 读等不到数据时至多等 `limit`（nil 不限）：握手这类一问一答的同步读不让对端卡住调用方。
-    static func setReadTimeout(_ fd: Int32, _ limit: Duration?) {
-        var time = timeval(tv_sec: Int(limit?.components.seconds ?? 0), tv_usec: 0)
-        setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &time, socklen_t(MemoryLayout<timeval>.size))
-    }
-
     private static func open() throws(Failure) -> Int32 {
         let fd = socket(AF_UNIX, SOCK_STREAM, 0)
         guard fd >= 0 else { throw .socket(errno) }

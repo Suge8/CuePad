@@ -5,19 +5,17 @@ import Foundation
 /// app-server 没有起名的接口，照 Codex 终端界面自动起名（0.166 起的 `thread_title.rs`）：在承载这个会话的进程里开一个用完不留的临时线程（`ephemeral`，只读、不审批，钩子、工具、MCP 都关），
 /// 用输出格式跑一轮拿到 `{title}`，再退订它；只回不写（写回由 App 复核后走改名，即 `thread/name/set`）。模型用终端界面起名的那个（账号的模型清单里有时，低强度），没有就用会话当前的模型。
 /// 临时线程报出 `thread/started` 时已记为不是子代理（`notification`），它的推送只到这里（`naming`），不进会话。
-/// 终端里的会话不起：终端界面自己会起。
 extension CodexRuntime {
     static let namingModel = "gpt-5.6-luna"
 
-    /// 临时线程里关掉的功能：照终端界面起名开的临时线程（`temporary_structured_request.rs`）。钩子必须关：
-    /// 托管进程起的线程会把 CuePad 的钩子当成一个新会话报上来。
+    /// 临时线程里关掉的功能：照终端界面起名开的临时线程（`temporary_structured_request.rs`）。
     private static let namingOff = [
         "apps", "code_mode", "code_mode_only", "context_management", "current_time_reminder", "deferred_executor", "goals", "hooks",
         "image_generation", "memories", "multi_agent", "multi_agent_v2", "plugins", "request_permissions_tool", "shell_snapshot",
         "shell_tool", "standalone_web_search", "token_budget", "tool_suggest", "unified_exec", "view_image",
     ]
 
-    public func canNameItself(_ id: Session.ID) -> Bool { tracked[id].map { hosted[$0.pid]?.rpc != nil } ?? false }
+    public func canNameItself(_ id: Session.ID) -> Bool { tracked[id] != nil }
 
     public func suggestName(from firstMessage: String, in id: Session.ID) async throws -> String {
         let title = try await suggestion(from: firstMessage, in: id)
@@ -26,7 +24,8 @@ extension CodexRuntime {
     }
 
     private func suggestion(from firstMessage: String, in id: Session.ID) async throws -> String {
-        guard let session = tracked[id], let rpc = hosted[session.pid]?.rpc else { throw BridgeError.unsupported }
+        guard let session = tracked[id] else { throw BridgeError.unsupported }
+        let rpc = try control(session)
         let cwd = bridge.session(id: id)?.cwd.path(percentEncoded: false) ?? "/"
         let luna = models?.contains { $0.id == Self.namingModel } == true
         let model = luna ? Self.namingModel : bridge.session(id: id)?.model?.key.id

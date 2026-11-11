@@ -126,20 +126,13 @@ enum ToolDetail {
         return (name(tool) + SessionState.detailSeparator + target).clipped(limit)
     }
 
-    /// 给人看的工具名：MCP 工具（`mcp__<服务>__<工具>`，Claude Code 与 Codex 的写法）照 Claude Code 终端写成"服务 - 工具 (MCP)"；
-    /// Codex 钩子里命名空间下的内置工具是命名空间直接拼工具名（`clock` 与 `sleep` 成了 `clocksleep`，同 MCP 的 `mcp__<服务>__` 拼工具名），
-    /// 写回 Codex 自己的写法（`clock.sleep`）。
+    /// 给人看的工具名：MCP 工具（`mcp__<服务>__<工具>`，Claude Code 与 Codex 的写法）照 Claude Code 终端写成"服务 - 工具 (MCP)"。
     static func name(_ tool: String) -> String {
-        if let namespaced = codexNamespaced[tool] { return namespaced }
         let prefix = "mcp__"
         guard tool.hasPrefix(prefix), let split = tool.dropFirst(prefix.count).range(of: "__") else { return tool }
         let rest = tool.dropFirst(prefix.count)
         return "\(rest[..<split.lowerBound]) - \(rest[split.upperBound...]) (MCP)"
     }
-
-    private static let codexNamespaced = Dictionary(uniqueKeysWithValues: ["clock.sleep", "image_gen.generation", "web.search"].map {
-        ($0.replacingOccurrences(of: ".", with: ""), $0)
-    })
 
     static func line(_ tool: String, _ arguments: ToolArguments?) -> String {
         line(tool, arguments.map { arguments -> JSONValue in
