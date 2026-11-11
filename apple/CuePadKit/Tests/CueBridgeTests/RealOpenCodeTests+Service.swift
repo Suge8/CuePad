@@ -53,6 +53,42 @@ extension RealOpenCodeTests {
         }
     }
 
+    /// 升级前留在库里的非托管历史（索引与已结束的记录）：托管会话的快照、重连、删除都不动它，投送也读不了它的对话。
+    @Test func anUnhostedSessionLeftInTheIndexStaysThroughSnapshotReconnectAndDeletion() async throws {
+        try await withOpenCode { sandbox, store, bridge, runtime in
+            let foreign = IndexedSession(
+                id: "ses_terminal", path: OpenCodeRuntime.path("ses_terminal"), cwd: sandbox.work.path, title: "终端里的", lastActivityAt: .now, agent: .opencode)
+            try await store.upsertSession(foreign, host: "mac")
+            func kept() async throws -> Bool {
+                let state = try await store.sessionItems(sessionIDs: [foreign.id])[foreign.id]?.state.state
+                return try await store.indexedSession(foreign.id) != nil && state == .known(.ended)
+            }
+
+            let id = try await runtime.open(in: sandbox.work, launchToken: "t-own", name: nil, model: nil, thinking: nil)
+            let hosted = try #require(bridge.session(id: id)?.sessionID)
+            try await bridge.send(SessionMessage(text: "Reply with exactly the word OWN."), to: id)
+            try await eventually("托管的那句答完、进了索引") {
+                let indexed = try await store.indexedSession(hosted)
+                return try await replies(store, hosted).last?.contains("OWN") == true && indexed != nil
+            }
+            await quietPeriod(.seconds(2))  // 快照后的回填对账没有事件可等
+            #expect(try await kept(), "连上后的回填删了非托管的历史")
+            await #expect(throws: BridgeError.unknownSession(foreign.id)) { try await runtime.transcript(of: foreign, files: store.files) }
+
+            await runtime.stop()()
+            let reconnected = sandbox.runtime(bridge, store)
+            try reconnected.start()
+            _ = try await reconnected.resume(try #require(try await store.indexedSession(hosted)))
+            await quietPeriod(.seconds(2))
+            #expect(try await kept(), "重连后的回填删了非托管的历史")
+
+            try await sandbox.api("DELETE", "/api/session/\(hosted)")
+            try await eventually("删掉的托管会话索引也删了") { try await store.indexedSession(hosted) == nil }
+            #expect(try await kept(), "删一个托管会话连带删了非托管的历史")
+            await reconnected.stop()()
+        }
+    }
+
     @Test func aSessionWhoseModelCannotBeSetIsNotLeftInTheService() async throws {
         try await withOpenCode { sandbox, store, bridge, runtime in
             await #expect(throws: BridgeError.unknownModel(.opencode)) {
