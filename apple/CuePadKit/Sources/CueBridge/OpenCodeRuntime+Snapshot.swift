@@ -5,7 +5,8 @@ import Foundation
 extension OpenCodeRuntime {
     func snapshot(_ connection: Connection) async throws {
         let client = connection.client
-        let all = try await client.sessions().filter { !$0.isCueBrain }
+        let hosted = try await store.hostedSessionIDs(of: .opencode, host: hostID).union(sessions.keys)
+        let all = try await client.sessions().filter { hosted.contains($0.parentID ?? $0.id) }
         let asked = Date.now  // 对话里读不到一轮时的开始：快照里在跑的那一轮此刻之后才收尾
         let active = Set(try await client.get(OpenCodeData<[String: JSONValue]>.self, "/api/session/active").data.keys)
         var started: [String: Date] = [:]
@@ -62,12 +63,11 @@ extension OpenCodeRuntime {
             sessions[id]?.firstMessage = try await checkpoint(of: id)?.history.firstMessage
         }
         guard self.connection === connection else { return }
-        listed = present
         connection.ready = true
         for (id, tracked) in sessions where tracked.online { publish(id) }
         for waiter in waiters.values { waiter.resume(returning: connection) }
         waiters = [:]
-        Task { await backfill(topLevel, connection) }
+        Task { await backfill(topLevel, gone: hosted.subtracting(present), connection) }
     }
 
     private func refreshLive(_ id: String, _ tracked: Tracked, _ client: OpenCodeClient) async throws {
@@ -125,7 +125,7 @@ extension OpenCodeRuntime {
             session.name = tracked.info.title
             session.firstMessage = tracked.firstMessage
             session.launchToken = tracked.launchToken
-            session.hosted = tracked.hosted
+            session.hosted = true
             session.model = model
             session.thinking = model.flatMap { Self.thinking(tracked.info.model?.variant, of: $0) }
             session.availableModels = catalog?.models.map(\.option) ?? []

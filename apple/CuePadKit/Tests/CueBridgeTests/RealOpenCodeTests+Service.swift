@@ -7,35 +7,85 @@ import Testing
 @testable import CueBridge
 
 extension RealOpenCodeTests {
-    @Test func reconnectingKeepsTheFirstMessageAndOnlyTheServiceCuePadStartedIsStopped() async throws {
+    /// 用户的服务先开着，终端里也开了会话：只有 CuePad 开的会话上桥、进索引；接入停了再开（同 App 重启），靠资料库里记下的托管认回它，
+    /// 首条消息还在，终端的会话照样不理；用户的服务不随接入停，CuePad 拉起的才停。
+    @Test func reconnectingRecognisesOnlyHostedSessionsAndOnlyTheServiceCuePadStartedIsStopped() async throws {
         try await withOpenCode { sandbox, store, bridge, runtime in
+            var mirror = SessionMirror(recorder: StateRecorder(store: store, hostID: "mac"))
+            let changes = bridge.changes()
+            let recording = Task { for await change in changes { _ = try? await mirror.apply(change) } }
+            defer { recording.cancel() }
             try await sandbox.run(["service", "start"])
-            _ = await ChildProcess.run(
-                OpenCodeSandbox.pinned.executable, ["run", "-m", "\(openCodeTestModel.provider)/no-such-model-xyz", "say hi"], directory: sandbox.work, environment: sandbox.environment,
-                timeout: .seconds(120))
-            try await eventually("终端的会话出现、名字是首条消息") { session(bridge)?.displayName.contains("say hi") == true }
-            let terminalService = try #require(sandbox.service)
+            try await sandbox.run(["run", "Reply with exactly the word PONG and nothing else."])
+            let terminal = try #require((try await sandbox.api("GET", "/api/session")["data"] as? [[String: Any]])?.first?["id"] as? String)
+
+            let id = try await runtime.open(in: sandbox.work, launchToken: "t-hosted", name: nil, model: nil, thinking: nil)
+            let hosted = try #require(bridge.session(id: id)?.sessionID)
+            try await bridge.send(SessionMessage(text: "Reply with exactly the word HOSTED."), to: id)
+            try await eventually("托管的那句答完") { try await replies(store, hosted).last?.contains("HOSTED") == true && session(bridge)?.state == .settled }
+            try await eventually("托管记进资料库") { try await store.hostedSessionIDs(of: .opencode, host: "mac") == [hosted] }
+            #expect(bridge.sessions.map(\.sessionID) == [hosted])
+            #expect(try await store.indexedSession(terminal) == nil, "终端的会话进了索引")
+            let userService = try #require(sandbox.service)
 
             await runtime.stop()()
-            #expect(sandbox.service?.pid == terminalService.pid && kill(terminalService.pid, 0) == 0, "终端拉起的服务不动")
+            #expect(sandbox.service?.pid == userService.pid && kill(userService.pid, 0) == 0, "用户的服务不动")
             // 第二次重开时会话索引已是最新、不再读对话：首条消息只能从读到哪了里取
             for _ in 0..<2 {
                 let reconnected = sandbox.runtime(bridge, store)
                 try reconnected.start()
-                try await eventually("重新接上") { session(bridge) != nil }
-                await quietPeriod(.seconds(2))  // 名字被改写没有事件可等
-                #expect(session(bridge)?.displayName.contains("say hi") == true, "名字仍是首条消息：\(String(describing: session(bridge)?.displayName))")
+                try await eventually("重新接上托管的会话") { session(bridge) != nil }
+                await quietPeriod(.seconds(2))  // 终端的会话被接上、首条消息丢掉都没有事件可等
+                #expect(bridge.sessions.map(\.sessionID) == [hosted])
+                #expect(session(bridge)?.firstMessage?.contains("HOSTED") == true, "首条消息：\(String(describing: session(bridge)?.firstMessage))")
+                #expect(try await store.indexedSession(terminal) == nil)
                 await reconnected.stop()()
             }
 
             try await sandbox.run(["service", "stop"])
-            try await eventually("服务停了") { kill(terminalService.pid, 0) != 0 }
+            try await eventually("服务停了") { kill(userService.pid, 0) != 0 }
             let host = sandbox.runtime(bridge, store)
             try host.start()
             _ = try await host.open(in: sandbox.work, launchToken: "t-service", name: nil, model: nil, thinking: nil)
             let started = try #require(sandbox.service)
             await host.stop()()
             try await eventually("CuePad 拉起的服务停掉了") { kill(started.pid, 0) != 0 && sandbox.service == nil }
+        }
+    }
+
+    /// 升级前留在库里的非托管历史（索引与已结束的记录）：托管会话的快照、重连、删除都不动它，投送也读不了它的对话。
+    @Test func anUnhostedSessionLeftInTheIndexStaysThroughSnapshotReconnectAndDeletion() async throws {
+        try await withOpenCode { sandbox, store, bridge, runtime in
+            let foreign = IndexedSession(
+                id: "ses_terminal", path: OpenCodeRuntime.path("ses_terminal"), cwd: sandbox.work.path, title: "终端里的", lastActivityAt: .now, agent: .opencode)
+            try await store.upsertSession(foreign, host: "mac")
+            func kept() async throws -> Bool {
+                let state = try await store.sessionItems(sessionIDs: [foreign.id])[foreign.id]?.state.state
+                return try await store.indexedSession(foreign.id) != nil && state == .known(.ended)
+            }
+
+            let id = try await runtime.open(in: sandbox.work, launchToken: "t-own", name: nil, model: nil, thinking: nil)
+            let hosted = try #require(bridge.session(id: id)?.sessionID)
+            try await bridge.send(SessionMessage(text: "Reply with exactly the word OWN."), to: id)
+            try await eventually("托管的那句答完、进了索引") {
+                let indexed = try await store.indexedSession(hosted)
+                return try await replies(store, hosted).last?.contains("OWN") == true && indexed != nil
+            }
+            await quietPeriod(.seconds(2))  // 快照后的回填对账没有事件可等
+            #expect(try await kept(), "连上后的回填删了非托管的历史")
+            await #expect(throws: BridgeError.unknownSession(foreign.id)) { try await runtime.transcript(of: foreign, files: store.files) }
+
+            await runtime.stop()()
+            let reconnected = sandbox.runtime(bridge, store)
+            try reconnected.start()
+            _ = try await reconnected.resume(try #require(try await store.indexedSession(hosted)))
+            await quietPeriod(.seconds(2))
+            #expect(try await kept(), "重连后的回填删了非托管的历史")
+
+            try await sandbox.api("DELETE", "/api/session/\(hosted)")
+            try await eventually("删掉的托管会话索引也删了") { try await store.indexedSession(hosted) == nil }
+            #expect(try await kept(), "删一个托管会话连带删了非托管的历史")
+            await reconnected.stop()()
         }
     }
 
