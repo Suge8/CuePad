@@ -98,7 +98,7 @@ struct RealClaudeTerminalTests {
         }
     }
 
-    /// 照原因在终端里按 Esc：Claude Code 不跑钩子，会话照会话文件里的中断标记歇下（已停止）。
+    /// 照原因在终端里按 Esc：Claude Code 不跑钩子，会话照登记文件回到 idle 或会话文件里的中断标记歇下（已停止）。
     @Test func aMessageWhileBusyIsRefusedWithTheReason() async throws {
         try await ClaudeTestbed.run(settings: #"{"skipDangerousModePermissionPrompt": true}"#) { testbed in
             try testbed.startConnected()
@@ -118,7 +118,8 @@ struct RealClaudeTerminalTests {
 
             try await terminal.keys("Escape")
             try await eventually("按 Esc 后歇下") { testbed.bridge.session(id: session.id)?.state == .settled }
-            #expect(try testbed.transcript(session.sessionFile).messages.last?.text == PiNotice.stopped.rawValue)
+            // 登记文件回到 idle 就歇下，中断标记随写队列晚一拍落盘
+            try await eventually("中断标记落盘") { (try? testbed.transcript(session.sessionFile))?.messages.last?.text == PiNotice.stopped.rawValue }
             let delivery = UUID()
             try await testbed.bridge.send(PiMessage(text: "只回复 MANGO", deliveryID: delivery.uuidString), to: session.id)
             try await testbed.waitOnScreen("话送到了", on: terminal, in: session.id) {
