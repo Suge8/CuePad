@@ -19,15 +19,14 @@ extension CueKeeper {
             for try await moment in store.observe({
                 DreamMoment(memory: try $0.cueMemoryVersion(), said: try $0.sessionMessagesThrough(), busy: try $0.cueState()?.state.known?.isWorking == true)
             }) where !moment.busy {
-                // 书签在对话末尾之后，是清过同步数据、次序重新数了：同没有书签一样夹在此刻
-                if progress.heard.map({ $0 > moment.said }) ?? true {
-                    progress.heard = moment.said
+                let heard = progress.heard ?? moment.said
+                if progress.heard == nil {
+                    progress.heard = heard
                     save()
                 }
-                var merging = moment.memory != seen
+                let merging = moment.memory != seen
                 seen = moment.memory
-                // 积压着的（停用、离线时攒下的）一批批听完
-                while await dream(merging: merging, after: progress.heard ?? moment.said) { merging = false }
+                await dream(merging: merging, after: heard)
             }
         } catch {
             Self.log.error("Cue 订阅记忆失败：\(error.localizedDescription, privacy: .public)")
@@ -45,25 +44,24 @@ extension CueKeeper {
     nonisolated static let heardBatch = 40
     nonisolated static let heardLimit = 200
 
-    /// 做一次（`merging`：记忆变过，看有没有待合并的块；`heard` 之后他说的话够一批就一起听），返回听没听一批（听了可能还有下一批）。
+    /// 做一次（`merging`：记忆变过，看有没有待合并的块；`heard` 之后他说的话够一批就一起听）。
     /// Cue 的那家与模型、强度用低档（模型照用户给 Cue 选的，各家都起得来、不另猜模型名），
     /// 系统提示与输入见 `CuePrompt.dream`、`dreamInput`，工具是 `cuepad mcp --dream` 那一组，不带 Cue 的会话。一轮做完或进程退出就停。
     /// 交出去的那一批不论做没做成都算听过（书签移到其中最后一句）：没做成的不重听，那几句以后照样查得到（said），他再说起时补上；
     /// 重听的话大脑起不来的那段时间里每来一句新话就白起一次。
-    private func dream(merging: Bool, after heard: Int64) async -> Bool {
-        var brain: (any HostedSession)?, listened = false
+    private func dream(merging: Bool, after heard: Int64) async {
+        var brain: (any HostedSession)?
         do {
             let new = try await store.said(after: heard, limit: Self.heardLimit)
             let listening = new.said.count >= Self.heardBatch
-            guard merging || listening else { return false }
+            guard merging || listening else { return }
             let asked = listening ? try await store.cueHabitQuestions() : []
             guard let input = CuePrompt.dreamInput(CueMemoryView(try await store.cueMemory()), said: listening ? new.said : [], asked: asked),
                   let profile = try await store.cueProfile(), let runtime = profile.runtime.known, let launch = try await setup.launch(runtime)
-            else { return false }
+            else { return }
             if listening {
                 progress.heard = new.through
                 save()
-                listened = true
             }
             let started = try await startBrain(
                 runtime, launch, model: profile.model, effort: .low, systemPrompt: CuePrompt.dream(runtime: runtime), tools: ["--dream"])
@@ -82,7 +80,6 @@ extension CueKeeper {
             Self.log.error("Cue 整理记忆没起来：\(error.localizedDescription, privacy: .public)")
         }
         await brain?.stop()()
-        return listened
     }
 
 }
