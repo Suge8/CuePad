@@ -2,62 +2,53 @@
 import CueStore
 import Foundation
 
-/// CuePad 的条目合并进用户自己的配置文件（别人的条目原样留着），卸载只删 CuePad 的条目，认 CuePad 的条目只看命令（`<cuepad> hook <agent>`，路径可能是旧位置）。
-protocol AgentHookConfig: Sendable {
-    /// 不含 `files(command:)` 判定用的记录。
-    var writtenFiles: [URL] { get }
-    func files(command: String) -> AgentStatus.Files
-    func install(command: String) async throws
-    func uninstall() async throws
+/// 迁移代码（#202）：旧版 CuePad 接入 Claude Code、Codex 时往它们的配置里写过钩子（命令 `<cuepad> hook <agent>`），现在接入只写技能。
+/// 启动时删掉 CuePad 的条目，旧版都升级后连同这两个文件、`JSONSourceTree` 与 `cuepad hook` 一起删。
+extension AgentIntegration {
+    /// 不看这家此刻接没接入；隔离运行不能动的目录不碰。Codex 的信任要起 `codex` 才删得掉，`codex` 为 nil 时留到找得到它的那次启动。
+    /// 一家没删成不影响另一家，抛第一个错；没删成的下次启动再删。
+    @concurrent public func removeOldHooks(codex: URL?) async throws {
+        var failure: OldHooksError?
+        if isWritable(.claudeCode) {
+            let hooks = HookFile(agent: .claudeCode, file: home(of: .claudeCode).appending(path: "settings.json"), skillDirectory: skillDirectory)
+            do { try hooks.remove() } catch { failure = OldHooksError(file: hooks.file, reason: error) }
+        }
+        if isWritable(.codex) {
+            let hooks = CodexHooks(home: home(of: .codex), skillDirectory: skillDirectory, codex: codex, locate: locate, environment: paths.environment)
+            do { try await hooks.remove() } catch { failure = failure ?? OldHooksError(file: hooks.hooks.file, reason: error) }
+        }
+        // 记录放在 CuePad 自己的技能目录里：没接入任何一家时删完只剩空目录
+        if touchesShared, (try? FileManager.default.contentsOfDirectory(atPath: skillDirectory.path))?.isEmpty == true { try? FileManager.default.removeItem(at: skillDirectory) }
+        if let failure { throw failure }
+    }
+}
+
+struct OldHooksError: LocalizedError {
+    let file: URL
+    let reason: any Error
+
+    var errorDescription: String? {
+        String(localized: "CuePad 以前写进 \(UserHome.shown(file.path)) 的钩子没能删掉，下次启动再试：\(reason.localizedDescription)")
+    }
 }
 
 /// Claude Code 的 `settings.json`、Codex 的 `hooks.json` 两家同一种结构：
-/// `{"hooks": {"<事件>": [{"matcher"?, "hooks": [{"type": "command", "command", "timeout", …}]}]}}`。
+/// `{"hooks": {"<事件>": [{"matcher"?, "hooks": [{"type": "command", "command", …}]}]}}`。认 CuePad 的组只看命令（路径可能是 App 的旧位置）。
 ///
-/// - 每个事件一组，追加在用户已有的组之后；文件按原文就地插入、删除（`JSONSourceTree`），用户的格式、键序与未知键一字不动。
-/// - 卸载后与装之前逐字节一致：CuePad 建的结构（文件、`hooks`、事件数组）空了一并删掉，用户原有的空结构留着。哪些是 CuePad 建的
-///   从文件本身看不出来（用户的 `"Stop": []` 插进一组后与 CuePad 新建的一模一样），所以第一次装时记下装之前有什么（`Footprint`，
-///   放在 CuePad 自己的技能目录里，卸载时删掉）。记录丢了时什么结构都当作用户的，卸载只删组。
-/// - 用户的文件不是 JSON 对象、`hooks` 或事件的形状不对时不改它、抛错。
-struct HookFile: AgentHookConfig {
-    struct Event: Sendable {
-        var name: String
-        /// 只对这些工具（或 MCP 服务）触发；nil 是全部
-        var matcher: String? = nil
-        /// 秒：放行的事件 CuePad 收到就回，CuePad 卡住时也不让 Agent 等太久；要等人作答的给足一天
-        var timeout: Int
-        var statusMessage: String? = nil
-    }
-
+/// - 按原文就地删（`JSONSourceTree`），用户的格式、键序与未知键一字不动。
+/// - CuePad 建的结构（文件、`hooks`、事件数组）空了一并删掉：哪些是 CuePad 建的，旧版装时记在 `Footprint`（CuePad 技能目录里），
+///   删完连它一起删。记录丢了时什么结构都当作用户的，只删组。
+/// - 文件不是 JSON 时：有记录就抛错、不改它；没记录就当没有 CuePad 的条目。
+struct HookFile {
     let agent: AgentKind
     let file: URL
     let footprintFile: URL
-    let events: [Event]
 
-    init(agent: AgentKind, file: URL, skillDirectory: URL, events: [Event]) {
+    init(agent: AgentKind, file: URL, skillDirectory: URL) {
         self.agent = agent
         self.file = file
         footprintFile = skillDirectory.appending(path: "\(agent.rawValue)-hooks.json")
-        self.events = events
     }
-
-    /// Claude Code 把各层配置的钩子合并着跑，所以写用户级的 `<配置目录>/settings.json`。
-    /// 上报状态的事件同步跑（保持先后），CuePad 当场放行；要人作答的挡住等 CuePad 答复：权限确认（终端里同时照常弹出，哪边先答算哪边）、
-    /// AskUserQuestion（官方的作答路径是它的 PreToolUse：返回 allow 与带答案的 `updatedInput`；PermissionRequest 会不会为它触发文档没写）、MCP 服务要你填的表单（Elicitation）。
-    /// 一次工具调用只触发一组：其余工具的 PreToolUse 用排除 AskUserQuestion 的正则（Claude Code 的 matcher 是 JavaScript 正则）。
-    static func claudeCode(home: URL, skillDirectory: URL) -> HookFile {
-        let quick = ["SessionStart", "SessionEnd", "UserPromptSubmit", "PostToolUse", "PostToolUseFailure", "Stop", "StopFailure",
-                     "PreCompact", "PostCompact", "SubagentStart", "SubagentStop", "PostModelSwitch", "ElicitationResult"]
-        let events = quick.map { Event(name: $0, timeout: 10) } + [
-            Event(name: "PreToolUse", matcher: "^(?!AskUserQuestion$)", timeout: 10),
-            Event(name: "PreToolUse", matcher: "AskUserQuestion", timeout: 86_400),
-            Event(name: "PermissionRequest", timeout: 86_400),
-            Event(name: "Elicitation", timeout: 86_400),
-        ]
-        return HookFile(agent: .claudeCode, file: home.appending(path: "settings.json"), skillDirectory: skillDirectory, events: events)
-    }
-
-    var writtenFiles: [URL] { [file] }
 
     struct Footprint: Codable, Equatable {
         var file: Bool
@@ -69,56 +60,38 @@ struct HookFile: AgentHookConfig {
         static let unknown = Footprint(file: true)
     }
 
-    func footprint() -> Footprint? {
-        (try? Data(contentsOf: footprintFile)).flatMap { try? JSONDecoder().decode(Footprint.self, from: $0) }
+    /// 记录在但读不出来时抛错（读不了就分不清哪些结构是 CuePad 建的）；内容坏了当作没有记录。
+    func footprint() throws -> Footprint? {
+        try Self.readIfPresent(footprintFile).flatMap { try? JSONDecoder().decode(Footprint.self, from: $0) }
     }
 
-    func save(_ footprint: Footprint) throws {
-        try FileManager.default.createDirectory(at: footprintFile.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try JSONEncoder().encode(footprint).write(to: footprintFile, options: .atomic)
-    }
-
-    func group(_ event: Event, command: String) -> [String: Any] {
-        var handler: [String: Any] = ["type": "command", "command": command, "timeout": event.timeout]
-        if let message = event.statusMessage { handler["statusMessage"] = message }
-        var group: [String: Any] = ["hooks": [handler]]
-        if let matcher = event.matcher { group["matcher"] = matcher }
-        return group
-    }
-
-    func files(command: String) -> AgentStatus.Files {
-        guard let text = try? Data(contentsOf: file), let tree = try? JSONSourceTree(text) else { return .missing }
-        let ours = ourGroups(in: tree)
-        guard !ours.isEmpty else { return .missing }
-        let found = Dictionary(grouping: ours, by: \.event).mapValues { $0.compactMap { Self.json($0.node, in: text) as NSDictionary? } }
-        let expected = Dictionary(grouping: events, by: \.name).mapValues { $0.map { group($0, command: command) as NSDictionary } }
-        return found == expected ? .current : .outdated
-    }
-
-    /// 下标是 Codex 信任的键要用的。
-    func ourGroups(in tree: JSONSourceTree) -> [(event: String, index: Int, node: JSONSourceTree.Node)] {
-        (tree.root.member("hooks")?.members ?? []).flatMap { member in
-            (member.value.elements ?? []).enumerated().filter { isOurs($0.element, in: tree.text) }.map { (member.key, $0.offset, $0.element) }
+    /// 只有文件不在才是 nil；在而读不出来（权限等）抛错：当成没有就会删掉记录、留下旧条目，或漏掉要删的信任。
+    static func readIfPresent(_ file: URL) throws -> Data? {
+        do {
+            return try Data(contentsOf: file)
+        } catch CocoaError.fileReadNoSuchFile {
+            return nil
         }
     }
 
-    func install(command: String) throws {
-        let original = try? Data(contentsOf: file)
-        guard original.map({ (try? JSONSourceTree($0)) != nil }) ?? true else { throw HookFileError.malformed(file.path) }
-        var footprint = footprint() ?? Footprint(file: original != nil)
-        let kept = try removingOurs(from: original ?? Data("{}".utf8), dropping: nil)
-        let appended = try appending(events.map { ($0.name, group($0, command: command)) }, to: kept)
-        footprint.hooksObject = footprint.hooksObject || appended.createdHooks
-        footprint.events += appended.createdEvents.filter { !footprint.events.contains($0) }
-        try save(footprint)
-        try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-        if appended.text != original { try appended.text.write(to: file, options: .atomic) }
+    /// CuePad 的每一条命令在哪：事件、组号、组里的条目号（Codex 信任的键要用）。
+    func ourHandlers(in tree: JSONSourceTree) -> [(event: String, group: Int, handler: Int)] {
+        (tree.root.member("hooks")?.members ?? []).flatMap { member in
+            (member.value.elements ?? []).enumerated().flatMap { group in
+                (group.element.member("hooks")?.elements ?? []).enumerated().filter { isOurs($0.element, in: tree.text) }
+                    .map { (member.key, group.offset, $0.offset) }
+            }
+        }
     }
 
-    func uninstall() throws {
-        let footprint = footprint() ?? .unknown
-        if let original = try? Data(contentsOf: file) {
-            guard (try? JSONSourceTree(original)) != nil else { throw HookFileError.malformed(file.path) }
+    func remove() throws {
+        let recorded = FileManager.default.fileExists(atPath: footprintFile.path)
+        let footprint = try self.footprint() ?? .unknown
+        if let original = try Self.readIfPresent(file) {
+            guard (try? JSONSourceTree(original)) != nil else {
+                if recorded { throw HookFileError.malformed }
+                return
+            }
             let text = try removingOurs(from: original, dropping: footprint)
             if !footprint.file, try JSONSourceTree(text).root.members.isEmpty {
                 try FileManager.default.removeItem(at: file)
@@ -126,10 +99,9 @@ struct HookFile: AgentHookConfig {
                 try text.write(to: file, options: .atomic)
             }
         }
-        if FileManager.default.fileExists(atPath: footprintFile.path) { try FileManager.default.removeItem(at: footprintFile) }
+        if recorded { try FileManager.default.removeItem(at: footprintFile) }
     }
 
-    /// 路径可能是 App 的旧位置，可能带引号。
     private func isOurCommand(_ command: String) -> Bool {
         let suffix = " hook \(agent.rawValue)"
         guard command.hasSuffix(suffix) else { return false }
@@ -137,25 +109,24 @@ struct HookFile: AgentHookConfig {
         return URL(filePath: executable).lastPathComponent == "cuepad"
     }
 
-    static func json(_ node: JSONSourceTree.Node, in text: Data) -> [String: Any]? {
-        (try? JSONSerialization.jsonObject(with: text[node.range])) as? [String: Any]
+    /// 组里的一条命令（`{"type": "command", "command", …}`）
+    private func isOurs(_ handler: JSONSourceTree.Node, in text: Data) -> Bool {
+        let object = (try? JSONSerialization.jsonObject(with: text[handler.range])) as? [String: Any]
+        return (object?["command"] as? String).map(isOurCommand) ?? false
     }
 
-    private func isOurs(_ node: JSONSourceTree.Node, in text: Data) -> Bool {
-        ((Self.json(node, in: text)?["hooks"] as? [[String: Any]]) ?? []).contains { ($0["command"] as? String).map(isOurCommand) ?? false }
-    }
-
-    /// `dropping` 为 nil 时结构都留着（升级时用）。一次删一处、重新扫描，删法是插入的逆操作。
-    private func removingOurs(from text: Data, dropping footprint: Footprint?) throws -> Data {
+    /// 一次删一处、重新扫描：组里只删 CuePad 的命令（用户可能往旧版建的组里加过自己的），组空了才删整组。
+    private func removingOurs(from text: Data, dropping footprint: Footprint) throws -> Data {
         var text = text
         while true {
             let tree = try JSONSourceTree(text)
             guard let hooks = tree.root.member("hooks") else { return text }
-            if let array = hooks.members.first(where: { $0.value.elements?.contains { isOurs($0, in: text) } == true })?.value {
-                text = array.removing(element: array.elements!.firstIndex { isOurs($0, in: text) }!, in: text)
+            if let found = ourHandlers(in: tree).first, let groups = hooks.member(found.event),
+               let handlers = groups.elements?[found.group].member("hooks") {
+                text = handlers.elements?.count == 1
+                    ? groups.removing(element: found.group, in: text) : handlers.removing(element: found.handler, in: text)
                 continue
             }
-            guard let footprint else { return text }
             if let event = hooks.members.first(where: { footprint.events.contains($0.key) && $0.value.elements?.isEmpty == true })?.key {
                 text = hooks.removing(member: event, in: text)
             } else if footprint.hooksObject, hooks.members.isEmpty {
@@ -165,52 +136,11 @@ struct HookFile: AgentHookConfig {
             }
         }
     }
-
-    private func appending(
-        _ groups: [(event: String, group: [String: Any])], to text: Data
-    ) throws -> (text: Data, createdHooks: Bool, createdEvents: [String]) {
-        func encoded(_ value: Any) throws -> String {
-            String(decoding: try JSONSerialization.data(withJSONObject: value, options: [.sortedKeys, .withoutEscapingSlashes, .fragmentsAllowed]), as: UTF8.self)
-        }
-        let events = groups.reduce(into: [String]()) { if !$0.contains($1.event) { $0.append($1.event) } }
-        func members(of event: String) -> [[String: Any]] { groups.filter { $0.event == event }.map(\.group) }
-        let tree = try JSONSourceTree(text)
-        guard let hooks = tree.root.member("hooks") else {
-            let body = try events.map { try encoded($0) + ":" + encoded(members(of: $0)) }.joined(separator: ",")
-            return (tree.root.inserting(member: "\"hooks\":{" + body + "}", in: text), true, events)
-        }
-        guard hooks.memberList != nil else { throw HookFileError.unexpectedShape(file.path) }
-        var edits: [(at: Int, text: String)] = []
-        var created: [(event: String, member: String)] = []
-        for event in events {
-            if let array = hooks.member(event) {
-                guard array.elements != nil else { throw HookFileError.unexpectedShape(file.path) }
-                // 同一事件的几组一次插进去（空数组里逐个插会缺逗号）
-                edits.append(array.insertion(element: try members(of: event).map(encoded).joined(separator: ",")))
-            } else {
-                created.append((event, (try encoded(event)) + ":" + (try encoded(members(of: event)))))
-            }
-        }
-        // 新建的事件一次插进去（空对象里逐个插会缺逗号）
-        if !created.isEmpty { edits.append(hooks.insertion(member: created.map(\.member).joined(separator: ","))) }
-        var result = text
-        // 同一位置的插入按原顺序：从后往前插，同位置的后一个先插
-        for edit in edits.enumerated().sorted(by: { ($0.element.at, $0.offset) > ($1.element.at, $1.offset) }).map(\.element) {
-            result.insert(contentsOf: Data(edit.text.utf8), at: result.startIndex + edit.at)
-        }
-        return (result, false, created.map(\.event))
-    }
 }
 
 enum HookFileError: Error, Equatable, LocalizedError {
-    case malformed(String)
-    case unexpectedShape(String)
+    case malformed
 
-    var errorDescription: String? {
-        switch self {
-        case .malformed(let path): String(localized: "\(path) 不是有效的 JSON，CuePad 没有改它")
-        case .unexpectedShape(let path): String(localized: "\(path) 里的 hooks 格式不对，CuePad 没有改它")
-        }
-    }
+    var errorDescription: String? { String(localized: "文件不是有效的 JSON，CuePad 没有改它") }
 }
 #endif

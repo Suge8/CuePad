@@ -89,6 +89,99 @@ struct AgentUpgradeTests {
         #expect(rig.services.agents.status(.claudeCode) == AgentStatus(presence: .found(nil), files: .missing))
         #expect(FileManager.default.subpaths(atPath: rig.directory.appending(path: "claude").path) == [])
     }
+
+    /// 旧版接入时往两家配置里写过钩子，装时把它建了哪些结构记在技能目录里（`HookFile.Footprint`）；这里照它写下的原样摆好。
+    @Test func 启动时删掉旧版写进ClaudeCode与Codex的钩子_用户自己的条目一字不动() async throws {
+        let rig = TestApp()
+        let old = "/Applications/CuePad.app/Contents/Helpers/cuepad"
+        let claude = rig.directory.appending(path: "claude/settings.json"), codex = rig.directory.appending(path: "codex/hooks.json")
+        let footprints = rig.directory.appending(path: "agents/skills/cuepad")
+        let mine = """
+            {
+              "theme": "dark",
+              "hooks": {
+                "Stop": [ { "hooks": [ { "type": "command", "command": "true" } ] } ]
+              }
+            }
+
+            """
+        let ours = #"{"hooks":[{"command":"\#(old) hook claude","timeout":10,"type":"command"}]}"#
+        let written = mine.replacingOccurrences(of: "} ] } ]", with: "} ] },\(ours) ],\"SessionStart\":[\(ours)]")
+        for (file, text) in [
+            (claude, written), (footprints.appending(path: "claude-hooks.json"), #"{"file":true,"hooksObject":false,"events":["SessionStart"]}"#),
+            (codex, #"{"hooks":{"Stop":[{"hooks":[{"command":"\#(old) hook codex","timeout":10,"type":"command"}]}]}}"#),
+            (footprints.appending(path: "codex-hooks.json"), #"{"file":false,"hooksObject":true,"events":["Stop"]}"#),
+        ] {
+            try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try text.write(to: file, atomically: true, encoding: .utf8)
+        }
+
+        try await rig.services.agents.refresh()
+
+        #expect(try String(contentsOf: claude, encoding: .utf8) == mine)
+        #expect(!FileManager.default.fileExists(atPath: codex.path))
+        #expect(!FileManager.default.fileExists(atPath: footprints.path), "装时的记录随之删掉，CuePad 的技能目录空了也删掉")
+    }
+
+    private static let old = "/Applications/CuePad.app/Contents/Helpers/cuepad"
+
+    private func place(_ files: [(URL, String)]) throws {
+        for (file, text) in files {
+            try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try text.write(to: file, atomically: true, encoding: .utf8)
+        }
+    }
+
+    @Test func 用户往旧版建的钩子组里加了自己的命令_只删CuePad那条() async throws {
+        let rig = TestApp()
+        let claude = rig.directory.appending(path: "claude/settings.json")
+        try place([
+            (claude, #"{"hooks":{"Stop":[{"hooks":[{"command":"\#(Self.old) hook claude","timeout":10,"type":"command"},{"type":"command","command":"my-own"}]}]}}"#),
+            (rig.directory.appending(path: "agents/skills/cuepad/claude-hooks.json"), #"{"file":true,"hooksObject":true,"events":["Stop"]}"#),
+        ])
+
+        try await rig.services.agents.refresh()
+
+        #expect(try String(contentsOf: claude, encoding: .utf8) == #"{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"my-own"}]}]}}"#)
+    }
+
+    @Test func 设置文件一时读不了_报出来记录留着_能读了再删() async throws {
+        let rig = TestApp()
+        let claude = rig.directory.appending(path: "claude/settings.json"), footprint = rig.directory.appending(path: "agents/skills/cuepad/claude-hooks.json")
+        try place([
+            (claude, #"{"theme":"dark","hooks":{"Stop":[{"hooks":[{"command":"\#(Self.old) hook claude","timeout":10,"type":"command"}]}]}}"#),
+            (footprint, #"{"file":true,"hooksObject":true,"events":["Stop"]}"#),
+        ])
+        try FileManager.default.setAttributes([.posixPermissions: 0], ofItemAtPath: claude.path)
+
+        await #expect(throws: (any Error).self) { try await rig.services.agents.refresh() }
+        #expect(FileManager.default.fileExists(atPath: footprint.path))
+
+        try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: claude.path)
+        try await rig.services.agents.refresh()
+        #expect(try String(contentsOf: claude, encoding: .utf8) == #"{"theme":"dark"}"#)
+    }
+
+    /// 信任的键按 `hooks.json` 的真实路径算（`/var` 是 `/private/var`）。没有 codex 删不了信任：不报错、什么都不动，等它回来。
+    @Test func Codex的配置一时读不了_报出来钩子留着_没有codex时不动也不报() async throws {
+        let rig = TestApp()
+        let hooks = rig.directory.appending(path: "codex/hooks.json"), config = rig.directory.appending(path: "codex/config.toml")
+        let footprint = rig.directory.appending(path: "agents/skills/cuepad/codex-hooks.json")
+        try place([
+            (hooks, #"{"hooks":{"Stop":[{"hooks":[{"command":"\#(Self.old) hook codex","timeout":10,"type":"command"}]}]}}"#),
+            (footprint, #"{"file":false,"hooksObject":true,"events":["Stop"]}"#),
+        ])
+        let real = try #require(realpath(hooks.path, nil).map { String(cString: $0) })
+        try place([(config, "[hooks.state.\"\(real):stop:0:0\"]\ntrusted_hash = \"sha256:00\"\n")])
+        try FileManager.default.setAttributes([.posixPermissions: 0], ofItemAtPath: config.path)
+
+        await #expect(throws: (any Error).self) { try await rig.services.agents.refresh() }
+        #expect(FileManager.default.fileExists(atPath: hooks.path) && FileManager.default.fileExists(atPath: footprint.path))
+
+        try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: config.path)
+        try await rig.services.agents.refresh()
+        #expect(FileManager.default.fileExists(atPath: hooks.path) && FileManager.default.fileExists(atPath: footprint.path))
+    }
 }
 
 @Suite(.releasesLibraries)

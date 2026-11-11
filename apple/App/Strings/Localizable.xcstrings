@@ -203,22 +203,6 @@
         }
       }
     },
-    "%@ 不是有效的 JSON，CuePad 没有改它" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ isn't valid JSON; CuePad left it unchanged"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ 不是有效的 JSON，CuePad 没有改它"
-          }
-        }
-      }
-    },
     "%@ 不能换这一项" : {
       "localizations" : {
         "en" : {
@@ -448,7 +432,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ is an extension installed by an older CuePad and conflicts with Pi running in the background. Delete it, then send again."
+            "value" : "%@ is an extension installed by an older CuePad and conflicts with Pi started in the background. Delete it, then send again"
           }
         },
         "zh-Hans" : {
@@ -847,22 +831,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ 里没有这个模型"
-          }
-        }
-      }
-    },
-    "%@ 里的 hooks 格式不对，CuePad 没有改它" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The hooks in %@ are malformed; CuePad left it unchanged"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ 里的 hooks 格式不对，CuePad 没有改它"
           }
         }
       }
@@ -2843,6 +2811,22 @@
         }
       }
     },
+    "Agent 的接入没能更新：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn’t update agent connections: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agent 的接入没能更新：%@"
+          }
+        }
+      }
+    },
     "Agent 等你回答" : {
       "localizations" : {
         "en" : {
@@ -3143,22 +3127,6 @@
         }
       }
     },
-    "Codex 没有信任 CuePad 的钩子（它的信任规则可能变了），钩子不会执行" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Codex doesn't trust CuePad's hooks (its trust rules may have changed), so they won't run"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Codex 没有信任 CuePad 的钩子（它的信任规则可能变了），钩子不会执行"
-          }
-        }
-      }
-    },
     "Codex 没有模型 %@" : {
       "localizations" : {
         "en" : {
@@ -3235,22 +3203,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Codex 的自定提示词"
-          }
-        }
-      }
-    },
-    "Codex 读不了 hooks.json：%@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Codex can't read hooks.json: %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Codex 读不了 hooks.json：%@"
           }
         }
       }
@@ -3481,50 +3433,18 @@
       },
       "shouldTranslate" : false
     },
-    "CuePad 写给 Agent 的技能或扩展没能升级：%@" : {
+    "CuePad 以前写进 %@ 的钩子没能删掉，下次启动再试：%@" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "CuePad's skills or extensions for agents couldn't be upgraded: %@"
+            "value" : "Couldn’t remove the hooks an older CuePad added to %@. Will retry next launch: %@"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "CuePad 写给 Agent 的技能或扩展没能升级：%@"
-          }
-        }
-      }
-    },
-    "CuePad 在后台开 Pi 会话也要先接入。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "CuePad also needs Pi connected to start Pi sessions in the background."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "CuePad 在后台开 Pi 会话也要先接入。"
-          }
-        }
-      }
-    },
-    "CuePad 在后台开的 %@ 会话出现在 CuePad 里；它的网页与桌面版里开的会话不接。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ sessions that CuePad starts in the background show up in CuePad; sessions started in its web or desktop app don’t."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "CuePad 在后台开的 %@ 会话出现在 CuePad 里；它的网页与桌面版里开的会话不接。"
+            "value" : "CuePad 以前写进 %1$@ 的钩子没能删掉，下次启动再试：%2$@"
           }
         }
       }
@@ -3669,6 +3589,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "CuePad 诊断摘要：%1$lld 份，%2$lld 种"
+          }
+        }
+      }
+    },
+    "CuePad 里只有它在后台开过的 %@ 会话，终端里开的不会出现。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CuePad shows only the %@ sessions it started in the background; sessions started in Terminal don’t appear."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CuePad 里只有它在后台开过的 %@ 会话，终端里开的不会出现。"
+          }
+        }
+      }
+    },
+    "CuePad 里只有它在后台开过的 %@ 会话，网页与桌面版里开的不会出现。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CuePad shows only the %@ sessions it started in the background; sessions from its web and desktop apps don’t appear."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CuePad 里只有它在后台开过的 %@ 会话，网页与桌面版里开的不会出现。"
           }
         }
       }
@@ -6175,18 +6127,18 @@
         }
       }
     },
-    "会写入 %@（配置文件里只加 CuePad 自己的条目）；关掉即删除。" : {
+    "会写入 %@；关掉即删除。" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Writes %@ (only CuePad's own entries in config files). Turning it off removes them."
+            "value" : "Writes %@; turning it off removes them."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "会写入 %@（配置文件里只加 CuePad 自己的条目）；关掉即删除。"
+            "value" : "会写入 %@；关掉即删除。"
           }
         }
       }
@@ -7883,22 +7835,6 @@
         }
       }
     },
-    "写入扩展与技能" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Adds an extension and a skill"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "写入扩展与技能"
-          }
-        }
-      }
-    },
     "写入技能" : {
       "localizations" : {
         "en" : {
@@ -7915,50 +7851,18 @@
         }
       }
     },
-    "写入技能与钩子" : {
+    "写入技能，读进它的会话记录" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Adds a skill and hooks"
+            "value" : "Adds a skill and reads its sessions"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "写入技能与钩子"
-          }
-        }
-      }
-    },
-    "写入技能，直连它的后台服务" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Adds a skill and connects to its server"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "写入技能，直连它的后台服务"
-          }
-        }
-      }
-    },
-    "写入技能，跟读它的会话记录" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Adds a skill and follows its session logs"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "写入技能，跟读它的会话记录"
+            "value" : "写入技能，读进它的会话记录"
           }
         }
       }
@@ -14327,6 +14231,22 @@
         }
       }
     },
+    "技能在新开的会话里生效。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The skill takes effect in new sessions."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "技能在新开的会话里生效。"
+          }
+        }
+      }
+    },
     "把任务的正文交给 Agent，开始做" : {
       "localizations" : {
         "en" : {
@@ -14663,22 +14583,6 @@
         }
       }
     },
-    "接不上：%@ 是别人的同名文件" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Can't connect: %@ belongs to something else"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "接不上：%@ 是别人的同名文件"
-          }
-        }
-      }
-    },
     "接入" : {
       "localizations" : {
         "en" : {
@@ -14743,82 +14647,18 @@
         }
       }
     },
-    "接入后新开的会话里生效。" : {
+    "接入后，这台 Mac 上的 %@ 会话记录都能在 CuePad 里翻看，终端里开的也在；对其中一个发话，CuePad 在后台接着它。" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Takes effect in new sessions."
+            "value" : "Once connected, all %@ sessions on this Mac show up in CuePad, including ones started in Terminal. Message one and CuePad continues it in the background."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "接入后新开的会话里生效。"
-          }
-        }
-      }
-    },
-    "接入后运行中的会话 /reload 后生效。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Running sessions pick it up after /reload."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "接入后运行中的会话 /reload 后生效。"
-          }
-        }
-      }
-    },
-    "接入后，在终端和桌面版里开的 %@ 会话也出现在 CuePad 里：在 Mac 和手机上看它在做什么、发话、回答它的提问。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Once connected, %@ sessions started in Terminal or the desktop app show up in CuePad too: see what they're doing, message them, and answer their questions from your Mac or phone."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "接入后，在终端和桌面版里开的 %@ 会话也出现在 CuePad 里：在 Mac 和手机上看它在做什么、发话、回答它的提问。"
-          }
-        }
-      }
-    },
-    "接入后，在终端里开的 %@ 会话也出现在 CuePad 里：在 Mac 和手机上看它在做什么、发话、回答它的提问。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Once connected, %@ sessions started in Terminal show up in CuePad too: see what they're doing, message them, and answer their questions from your Mac or phone."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "接入后，在终端里开的 %@ 会话也出现在 CuePad 里：在 Mac 和手机上看它在做什么、发话、回答它的提问。"
-          }
-        }
-      }
-    },
-    "接入后，在终端里开的 %@ 会话也出现在 CuePad 里：在 Mac 和手机上看它在做什么。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Once connected, %@ sessions started in Terminal show up in CuePad too: see what they're doing from your Mac or phone."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "接入后，在终端里开的 %@ 会话也出现在 CuePad 里：在 Mac 和手机上看它在做什么。"
+            "value" : "接入后，这台 Mac 上的 %@ 会话记录都能在 CuePad 里翻看，终端里开的也在；对其中一个发话，CuePad 在后台接着它。"
           }
         }
       }
@@ -15739,6 +15579,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "文件…"
+          }
+        }
+      }
+    },
+    "文件不是有效的 JSON，CuePad 没有改它" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The file isn’t valid JSON, so CuePad left it unchanged"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文件不是有效的 JSON，CuePad 没有改它"
           }
         }
       }
@@ -18655,22 +18511,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "没有找到 %@"
-          }
-        }
-      }
-    },
-    "没有找到 codex 命令：Codex 的钩子要它来信任与撤销" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "codex command not found: Codex hooks need it to trust and revoke them"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "没有找到 codex 命令：Codex 的钩子要它来信任与撤销"
           }
         }
       }
@@ -23251,22 +23091,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "还没开启"
-          }
-        }
-      }
-    },
-    "还没接入 CuePad（在设置里打开）" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "not connected to CuePad (turn on in Settings)"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "还没接入 CuePad（在设置里打开）"
           }
         }
       }

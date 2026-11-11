@@ -35,12 +35,6 @@ public struct AgentIntegration: Sendable {
 
     public var touchesShared: Bool { fileAccess.touchesShared }
 
-    /// `executable` 写、删时要给（Codex 写、删信任要起它）；只看状态时不用。
-    func channel(_ kind: AgentKind, executable: URL? = nil) -> (any AgentHookConfig)? { kind.facts.channel(self, executable) }
-
-    /// App 被移动后路径变了，钩子就成了旧版，启动时重写。
-    func hookCommand(_ kind: AgentKind) -> String { "\(AgentSkill.shellQuoted(cuepad.path)) hook \(kind.rawValue)" }
-
     private static func linksSkill(_ kind: AgentKind) -> Bool { !kind.facts.sharedSkills.reaches(group: "") }
 
     var skillDirectory: URL { paths.agentsDirectory.appending(path: "skills/\(AgentSkill.name)", directoryHint: .isDirectory) }
@@ -48,13 +42,13 @@ public struct AgentIntegration: Sendable {
     func agentSkillDirectory(_ kind: AgentKind) -> URL { home(of: kind).appending(path: "skills/\(AgentSkill.name)", directoryHint: .isDirectory) }
 
     public func writtenFiles(of kind: AgentKind) -> [URL] {
-        [skillFile] + (Self.linksSkill(kind) ? [agentSkillDirectory(kind)] : []) + (channel(kind)?.writtenFiles ?? [])
+        [skillFile] + (Self.linksSkill(kind) ? [agentSkillDirectory(kind)] : [])
     }
 
     @concurrent public func status(of kind: AgentKind) async -> AgentStatus {
         let found = await detect(kind)
         let lacking = found.presence == .notFound ? await lacking(kind.facts.installPrerequisite) : nil
-        return AgentStatus(presence: found.presence, files: files(of: kind), executable: found.executable, lacking: lacking)
+        return AgentStatus(presence: found.presence, files: skillState(of: kind), executable: found.executable, lacking: lacking)
     }
 
     /// 隔离运行写不了、Agent 不在或太旧、或同名文件不是 CuePad 写的时拒绝，且什么都不写。
@@ -67,17 +61,14 @@ public struct AgentIntegration: Sendable {
         case .tooOld(let version): throw AgentInstallError.tooOld(kind, found: version)
         case .found: break
         }
-        if case .foreign(let path) = files(of: kind) { throw AgentInstallError.foreign(path) }
+        if case .foreign(let path) = skillState(of: kind) { throw AgentInstallError.foreign(path) }
         try writeSkill(for: connectedKinds.union([kind]))
-        try await channel(kind, executable: found.executable)?.install(command: hookCommand(kind))
     }
 
-    /// Agent 已经卸掉了也能删；隔离运行写不了、有别人的同名文件时什么都不删。`executable` 是检测时挑中的那个（`AgentStatus.executable`）：
-    /// Codex 删信任要起它，其余不用。
-    @concurrent public func uninstall(_ kind: AgentKind, executable: URL? = nil) async throws {
+    /// Agent 已经卸掉了也能删；隔离运行写不了、有别人的同名文件时什么都不删。
+    @concurrent public func uninstall(_ kind: AgentKind) async throws {
         guard isWritable(kind) else { throw AgentInstallError.isolated(kind) }
-        if case .foreign(let path) = files(of: kind) { throw AgentInstallError.foreign(path) }
-        try await channel(kind, executable: executable)?.uninstall()
+        if case .foreign(let path) = skillState(of: kind) { throw AgentInstallError.foreign(path) }
         let left = connectedKinds.subtracting([kind])
         if Self.linksSkill(kind), RelativeLink.isLink(agentSkillDirectory(kind)) { try FileManager.default.removeItem(at: agentSkillDirectory(kind)) }
         if left.isEmpty {
@@ -119,18 +110,6 @@ public struct AgentIntegration: Sendable {
         let kinds = skill.flatMap(AgentSkill.kinds(in:)) ?? []
         guard kinds.contains(kind) else { return .missing }
         return skill == AgentSkill.text(cuepad: cuepad, for: kinds) && linked ? .current : .outdated
-    }
-
-    private func files(of kind: AgentKind) -> AgentStatus.Files {
-        let skillState = skillState(of: kind)
-        if case .foreign = skillState { return skillState }
-        let other = channel(kind)?.files(command: hookCommand(kind)) ?? skillState
-        if case .foreign = other { return other }
-        switch (skillState, other) {
-        case (.missing, .missing): return .missing
-        case (.current, .current): return .current
-        default: return .outdated
-        }
     }
 
     private func abbreviated(_ file: URL) -> String { UserHome.shown(file.path) }

@@ -14,10 +14,9 @@ struct MacDependencies {
     var wakeNotifications: NotificationCenter
     /// `bridge` 必须用同一个钟建（`Bridge.timing`）；测试换成手动推进的。
     var timing: Timing = .system
-    /// Agent 的技能与钩子写的是 App 里那份的绝对路径，不依赖这个链接。
+    /// Agent 的技能写的是 App 里那份的绝对路径，不依赖这个链接。
     var commandLineTool: CommandLineToolInstaller
     var updater: (any AppUpdater)?
-    var hooks: AgentHookServer
     /// OpenCode 的会话索引由它的接入直接写进资料库，所以等资料库打开后再建（参数就是它）。
     var runtimes: @MainActor (CueStore) -> [AgentKind: any AgentRuntime]
     var pasteboard: NSPasteboard
@@ -32,8 +31,8 @@ struct MacDependencies {
         let environment = ProcessInfo.processInfo.environment
         let isolated = !location.touchesRealWorld
         AppServices.log.notice("库：\(String(describing: location.origin), privacy: .public)，碰真实世界：\(!isolated, privacy: .public)")
-        let sockets = AgentHookEnvelope.socketDirectory(environment: environment, isolatedLibrary: isolated ? location.directory : nil)
-        // 另起的连接目录也交给 CuePad 起的每个子进程（托管的 Agent 的钩子、Cue 的大脑），它们才连回这个 App 而不是正式版
+        let sockets = PiPaths.socketDirectory(environment: environment, isolatedLibrary: isolated ? location.directory : nil)
+        // 另起的连接目录也交给 CuePad 起的每个子进程（托管的 Pi、Cue 的大脑），它们才连回这个 App 而不是正式版
         if isolated { setenv("CUEPAD_PI_SOCKET_DIR", sockets.path, 1) }
         let agentHome = isolated ? DebugHooks.agentHome : nil
         let paths = AgentPaths(pi: PiPaths(socketDirectory: sockets), environment: agentHome.map { home in
@@ -41,7 +40,6 @@ struct MacDependencies {
         } ?? environment)
         let timing = Timing.system
         let bridge = Bridge(socketDirectory: paths.pi.socketDirectory, timing: timing)
-        let hooks = AgentHookServer(path: paths.pi.hookSocket)
         // 不碰真实世界时不碰真实的 `~/.local/bin`：链接放进资料库目录，除非指定了 Pi 目录与链接目录（`PiPaths.isExplicit`）
         let commandLineTool = isolated && !paths.pi.isExplicit
             ? CommandLineToolInstaller(linkDirectory: location.directory.appending(path: "bin", directoryHint: .isDirectory))
@@ -68,7 +66,6 @@ struct MacDependencies {
             timing: timing,
             commandLineTool: commandLineTool,
             updater: AppIdentity.isRelease ? SparkleUpdater() : DebugHooks.updater,
-            hooks: hooks,
             runtimes: { store in [
                 .pi: PiRuntime(bridge: bridge, paths: paths.pi, cleansInstalledExtension: agents.integration.touches(.pi), pi: { await agents.executable(.pi) }),
                 .claudeCode: ClaudeCodeRuntime(bridge: bridge, paths: paths, store: store, claude: { await agents.executable(.claudeCode) }),

@@ -6,11 +6,10 @@ import Foundation
 func emit(_ data: Data, to handle: FileHandle) { try? handle.write(contentsOf: data) }
 
 let arguments = Array(CommandLine.arguments.dropFirst())
-// Agent 的钩子：不经资料库、不读写帮助与错误格式，见 `HookCommand`
-if arguments.count == 2, arguments[0] == "hook", let agent = AgentKind(rawValue: arguments[1]) {
-  emit(
-    HookCommand.run(agent: agent, input: FileHandle.standardInput.readDataToEndOfFile(), environment: ProcessInfo.processInfo.environment),
-    to: .standardOutput)
+// 旧版 CuePad 写进 Claude Code、Codex 钩子配置的命令（启动时清掉，#202）：没清掉的还会调它。读完输入、不输出、退出码 0，
+// 两家都当钩子没给决定、照常往下走（Claude Code 官方 hooks 文档 "Exit code 0"，Codex hooks/src/events 里 stdout 为空的分支）
+if arguments.count == 2, arguments[0] == "hook", AgentKind(rawValue: arguments[1]) != nil {
+  _ = FileHandle.standardInput.readDataToEndOfFile()
   exit(0)
 }
 

@@ -31,23 +31,6 @@ struct JSONSourceTree {
             return Self.removing(range, from: text)
         }
 
-        func insertion(element: String) -> (at: Int, text: String) {
-            guard let last = elements?.last else { return (range.lowerBound + 1, element) }
-            return (last.range.upperBound, "," + element)
-        }
-
-        func insertion(member: String) -> (at: Int, text: String) {
-            guard let last = memberList?.last else { return (range.lowerBound + 1, member) }
-            return (last.value.range.upperBound, "," + member)
-        }
-
-        func inserting(member: String, in text: Data) -> Data {
-            let edit = insertion(member: member)
-            var result = text
-            result.insert(contentsOf: Data(edit.text.utf8), at: result.startIndex + edit.at)
-            return result
-        }
-
         private static func removing(_ range: Range<Int>, from text: Data) -> Data {
             var result = text
             result.removeSubrange((result.startIndex + range.lowerBound)..<(result.startIndex + range.upperBound))

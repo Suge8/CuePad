@@ -9,14 +9,14 @@ RPC 扩展对自身发 SIGTERM 是这版运行时的已验证收尾路径，不�
 
 ## 协议
 
-Pi 的桥扩展（`Extension/cuepad-bridge/`，装成 Pi 扩展目录下的同名目录）与 `PiWire` 之间的线上约定。字段的语义与上报时机见扩展源码的注释；这里只列消息与字段。
+Pi 的桥扩展（`Extension/cuepad-bridge/`，随 App 打包，CuePad 托管的 pi 经 `--extension` 载入）与 `PiWire` 之间的线上约定。字段的语义与上报时机见扩展源码的注释；这里只列消息与字段。
 
 - 传输：Unix socket，一行一个 JSON（`\n` 结尾）。路径 `<socket 目录>/<sessionId>.<pid>.sock`，缺省目录 `/tmp/cuepad-<uid>`（`sun_path` 上限 104 字节，所以不用 `$TMPDIR`）；权限与改名的做法在 `connection.ts`。
 - 版本声明的精确格式 `const EXTENSION_VERSION = <数字>;` 是兼容接口：在跑的扩展核对磁盘、Swift 的随包版本读取、Python 的 lint 与同步测量（共用 `apple/scripts/_pi_extension.py`）都按它解析。数字只在入口声明一份；不再增加 JSON 清单或第二份配置。
-- 版本：`EXTENSION_VERSION`（入口 `index.ts` 里）是唯一的版本号（`PiExtensionBundle.version` 从文件解析），扩展改了就升。会话握手时报的版本与随包版本不同，或 CuePad 装完新版扩展后，CuePad 发 `upgrade`；扩展读磁盘上的版本，不同就等会话连同子代理都歇下时重新载入（重新载入会中断进程内子代理在飞的回合，所以可能等几个小时）。
+- 版本：`EXTENSION_VERSION`（入口 `index.ts` 里）是唯一的版本号（`PiExtensionBundle.version` 从文件解析），扩展改了就升。会话握手时报的版本与随包版本不同（App 更新前起的托管会话还跑着旧版），CuePad 发 `upgrade`；扩展读它所在目录（App 里随包的那份）的版本，不同就等会话连同子代理都歇下时重新载入（重新载入会中断进程内子代理在飞的回合，所以可能等几个小时）。
 - 兼容：CuePad 读得懂从 `PiWire.oldestExtension` 到随包版本的扩展，等换新扩展的这段照常收发。只加命令、加 CuePad 可以没有的字段不提它，旧扩展不认的命令回 `bad_request`；改了 CuePad 读的格式、已有命令的含义，或 CuePad 要靠新字段才对时提到那一版。区间外的会话只读出身份、不发命令，等它换上新扩展（`Session.upgrading`）。
 - 连接断开只表示下线。显式结束要等 `bye quit` 后断开；重载、切换与未告别断线不报结束成功。同一 Pi 会话的全部已知承载进程都收尾后才完成。
-- 扩展只在 `tui`、`rpc` 模式启用；`print`/`json`（`pi -p`、FireCode 子代理的同进程子会话）不开 socket。
+- 扩展只在 `rpc` 模式开 socket；`tui`、`print`/`json`（`pi -p`、FireCode 子代理的同进程子会话）不开。
 
 环境变量（CuePad → 扩展）：
 
@@ -27,13 +27,15 @@ Pi 的桥扩展（`Extension/cuepad-bridge/`，装成 Pi 扩展目录下的同�
 | `CUEPAD_HOSTED` | 后台托管：正整数，空闲多少秒后自己退出；缺省或不是正数就不是托管。扩展读出后从环境里删掉 |
 | `CUEPAD_PROBE` | 探测模式：不开 socket，`session_start` 时往描述符 1 写一行 `{"cuepadProbe": {model, models}}` |
 
+调试时手动起一个连上隔离实例的 Pi 会话：`CUEPAD_PI_SOCKET_DIR=$(python3 apple/scripts/app.py sockets) CUEPAD_HOSTED=3600 pi --mode rpc -e apple/CuePadKit/Sources/CueBridge/Extension/cuepad-bridge`（扩展目录就是随包的那份）。终端里的 `pi` 不上桥。
+
 环境变量（扩展 → 命令）：`CUEPAD_SESSION_ID`，扩展设在所在进程的环境里，值是它服务的会话；同进程的子代理会话与命令都继承它，`cuepad show` 先认它（`AgentKind.watchedSessionVariable`）。
 
 扩展 → CuePad：
 
 | `t` | 字段 |
 | --- | --- |
-| `hello` | 连接后第一条：`extensionVersion`、`sessionId`、`sessionFile`（可空）、`pid`、`cwd`、`mode`（`tui`/`rpc`）、`tty`、`term`（终端相关环境变量）、`state`、`launchToken`、`hosted`，以及 `info` 的全部字段 |
+| `hello` | 连接后第一条：`extensionVersion`、`sessionId`、`sessionFile`（可空）、`pid`、`cwd`、`state`、`launchToken`、`hosted`（恒为 `true`；不是 `true` 的连接 CuePad 不收：旧版装进 Pi 扩展目录的那份在终端里的 pi 里也会来连），以及 `info` 的全部字段 |
 | `state` | 只在状态切换时发：`state{kind, since, busySince, turnSince, …}`，时刻都是毫秒 |
 | `info` | 只带变了的项（没出现的键不变，`null` 是新值）：`name`、`firstMessage`、`question{id, kind, text, options}`、`subagents[{name, role, state, action, startedAt, settledAt, model}]`、`model{provider, id, name, thinking, images, supportsFast, account{kind, scope, source?, route?, name?}}`、`thinking`、`fast`、`models`、`proofs[{provider, id, account, at}]`、`context{tokens, window}`、`commands[{name, description, source, hint}]` |
 | `draft` | 正在说的话：`text`（`null` 是清掉）、`since` |
@@ -74,7 +76,7 @@ CuePad → 扩展（都带 `id`）：
 | `title` | `instructions`（给模型的说明）、`text`（会话的第一句话）、`timeoutMs`：回 `ack` 的 `title` 是模型的原话，CuePad 整理成名字（`SessionNameSuggestion.cleaned`，空的算失败），不写回会话（CuePad 核对后用 `config` 改名），v63 起（之前的要 `limit`） | `bad_request`、`no_model`、`failed: <原因>` |
 
 `{"t":"upgrade"}`：请扩展核对磁盘上的扩展版本。不带 `id`，扩展不回 `ack`，CuePad 读不懂的扩展也发。
-**这一行的格式永远不能变**，扩展也要一直认它：要叫醒的也有 CuePad 读不懂的旧扩展，它们只认得出这一行（与 hello 里身份那几项、`bye`）；格式一变，旧会话就再也换不上新扩展（与扩展装在 Pi 扩展目录下的路径必须稳定是同一类约束）。
+**这一行的格式永远不能变**，扩展也要一直认它：要叫醒的也有 CuePad 读不懂的旧扩展，它们只认得出这一行（与 hello 里身份那几项、`bye`）；格式一变，旧会话就再也换不上新扩展（与随包扩展在 App 里的路径必须稳定是同一类约束）。
 
 `send` 缺省是人类发送；`cueTurn` 出现即是 Cue 的发送策略，空对象没有接管忙轮的许可。桥在实际派发前按 Store 权威的 Unix 毫秒表示核对当前 peer 的轮次时间与 `SendPolicy.cue`；扩展在停止、提交与推进排队消息前，以 SDK 的忙闲事实及当前投影最后一条用户消息的 `cuepadDelivery` 核对许可标识。SDK 有待处理消息时，即使 `isIdle` 为真也不放行 Cue：公开接口没有队列来源证据，不能用当前轮的许可抢先。缺证据回 `unconfirmed_turn`，标识不同回 `user_turn`，都未提交这句话、也不打断原轮。不按会话名字、目录或是否托管过滤辅助 RPC。
 
