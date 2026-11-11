@@ -17,13 +17,13 @@ extension AppServices {
     func recordSpeech(_ stored: String, to listener: Listener) async throws -> UUID {
         switch listener {
         case .cue:
-            try await store.addCueMessage(.you, text: stored).id
+            return try await store.addCueMessage(.you, text: stored).id
         case .session(let target, let host, let mode, let card):
+            try await requireAwake(host)
             if let session = target.ref, mode == .send {
-                try await store.speak(stored, to: session, name: target.name, card: card, host: host).id
-            } else {
-                try await store.requestDelivery(stored, to: target, on: host, mode: mode, card: card).id
+                return try await store.speak(stored, to: session, name: target.name, card: card, host: host).id
             }
+            return try await store.requestDelivery(stored, to: target, on: host, mode: mode, card: card).id
         }
     }
 

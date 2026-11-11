@@ -125,6 +125,34 @@ struct ReceiptTests {
     }
 
     @Test
+    func 那台Mac已知没开_这句不写下字留在输入框_同步断着说不准时照常排着() async throws {
+        let cloud = WeakCloud { [clock] in clock.now }
+        let app = TestApp(sync: .built { CloudSync(store: $0) { cloud } }, timing: clock.timing)
+        let services = app.services!
+        let store = services.store
+        let target = try await session(in: store)
+        try await store.recordMacPresence(host: "mac-b") { false }
+        services.startSync()
+        defer { services.cancelBackgroundWork() }
+        try await eventually("同步通了") { services.syncState.status == .idle && services.syncState.reconciled }
+        let workspace = Workspace(services: services)
+        let box = services.settings.replyDraftBinding(for: target.id)
+
+        box.wrappedValue = ComposerDraft(text: "改完再跑一遍")
+        await workspace.speak(to: .session(target, mode: .send), from: box) { $0.stored }.value
+        #expect(workspace.notice?.isError == true)
+        #expect(box.wrappedValue.text == "改完再跑一遍")
+        #expect(try await store.deliveryRequests().isEmpty)
+
+        await cloud.setDown(true)
+        await services.syncNow()
+        try await eventually("连不上 iCloud") { services.syncState.status == .offline }
+        await workspace.speak(to: .session(target, mode: .send), from: box) { $0.stored }.value
+        #expect(try await store.deliveryRequests().map(\.content) == ["改完再跑一遍"])
+        #expect(box.wrappedValue.text.isEmpty)
+    }
+
+    @Test
     func 说的话到服务器是已发出_回执是已送达_一次失败不让别的话变红_断着时排着不到点_没回执到点() async throws {
         let cloud = WeakCloud { [clock] in clock.now }
         let app = TestApp(sync: .built { CloudSync(store: $0) { cloud } }, timing: clock.timing)

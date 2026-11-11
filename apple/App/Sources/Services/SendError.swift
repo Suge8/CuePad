@@ -25,6 +25,8 @@ nonisolated enum SendError: Error, Equatable {
     /// 已领取、已进入同步发送，或本机快照不足以证明尚未交出，不能安全撤回。
     case alreadyHanded
     case alreadyHeard
+    /// 要它做事的那台 Mac 已知不在线（参数是它的名字），请求没有写下。
+    case macOff(String)
 }
 
 extension SendError: ShownError {
@@ -44,6 +46,7 @@ extension SendError: ShownError {
         case .directoryMissing(let folder): "目录不存在：\(folder)"
         case .alreadyHanded: "这句可能已经交出，不能安全撤回"
         case .alreadyHeard: "Cue 已经收到这句了，撤不回"
+        case .macOff(let mac): "「\(mac)」没开，没有发出"
         }
     }
 }
