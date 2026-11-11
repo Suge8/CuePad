@@ -5,7 +5,7 @@ import Darwin
 import Foundation
 import Testing
 @testable import CuePad
-@testable import CuePi
+@testable import CueBridge
 
 /// 用户验收：真实 Pi 与桥扩展执行隔离 Python 工具；只替换语音媒体与付费模型。
 /// A 停止排队后，终端或同一通话开 B；旧停止必须明确结束而 B 的真实进程继续活着。

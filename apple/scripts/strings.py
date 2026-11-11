@@ -85,8 +85,8 @@ def keep_source(key, entry):
         unit["state"] = "translated"
 
 
-# 两端构建里各自要有抽取结果的目标（CuePi 只在 Mac 上编）
-EXPECTED = {"Debug": ("CuePad", "CueStore", "CueSync", "CuePi", "CueEditor"), "Debug-iphonesimulator": ("CuePad", "CueStore", "CueSync", "CueEditor")}
+# 两端构建里各自要有抽取结果的目标（CueBridge 只在 Mac 上编）
+EXPECTED = {"Debug": ("CuePad", "CueStore", "CueSync", "CueBridge", "CueEditor"), "Debug-iphonesimulator": ("CuePad", "CueStore", "CueSync", "CueEditor")}
 
 
 def sync():

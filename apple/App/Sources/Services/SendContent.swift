@@ -10,7 +10,7 @@ nonisolated struct SendContent: Sendable {
 }
 
 #if os(macOS)
-import CuePi
+import CueBridge
 import CueStore
 
 extension SendContent {

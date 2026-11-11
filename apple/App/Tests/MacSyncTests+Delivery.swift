@@ -6,7 +6,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
-@testable import CuePi
+@testable import CueBridge
 
 extension MacSyncTests {
     func awaitFinished(_ id: UUID) async throws -> DeliveryRequest {

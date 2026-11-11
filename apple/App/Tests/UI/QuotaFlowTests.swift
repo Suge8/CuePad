@@ -5,7 +5,7 @@ import CueStore
 import Foundation
 import Testing
 @testable import CuePad
-@testable import CuePi
+@testable import CueBridge
 
 @Suite(.releasesLibraries)
 struct QuotaFlowTests {

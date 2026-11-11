@@ -1,6 +1,6 @@
 #if os(macOS)
 import CueAgent
-import CuePi
+import CueBridge
 import CueStore
 import CueTestSupport
 import CueText
@@ -171,7 +171,7 @@ extension CueHostTests {
         /// 起 Pi 时多带收尾闸扩展（`settle-gate.ts`）、交给它的每一行另记一份（`handed`）的启动脚本。
         private static func gatedPi() throws -> URL {
             let gate = URL(filePath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-                .appending(path: "CuePadKit/Tests/CuePiTests/Fixtures/settle-gate.ts")
+                .appending(path: "CuePadKit/Tests/CueBridgeTests/Fixtures/settle-gate.ts")
             let script = TestLibraries.makeDirectory().appending(path: "pi")
             try """
                 #!/bin/sh

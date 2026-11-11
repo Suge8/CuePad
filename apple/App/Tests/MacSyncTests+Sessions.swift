@@ -6,7 +6,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
-@testable import CuePi
+@testable import CueBridge
 
 extension MacSyncTests {
     @Test func 手机经同步切换Mac在线会话的加速_结果与状态回到手机() async throws {

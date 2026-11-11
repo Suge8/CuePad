@@ -1,5 +1,5 @@
 #if os(macOS)
-import CuePi
+import CueBridge
 import CueStore
 import Foundation
 
@@ -122,7 +122,7 @@ final class MacExecutor {
         }
     }
 
-    private func send(_ content: String, of request: DeliveryRequest, to session: CuePi.Session) async throws -> DeliveryOutcome {
+    private func send(_ content: String, of request: DeliveryRequest, to session: CueBridge.Session) async throws -> DeliveryOutcome {
         var outgoing = try DeliveryMessage.make(content, request: request, session: session, files: store.files)
         if request.isFromCue {
             let context = try await store.cueSendContext(in: session.sessionID)
@@ -183,7 +183,7 @@ final class MacExecutor {
         }
     }
 
-    private func connect(_ target: SendTarget, access: DeliveryAdmission.Access) async throws -> (sessionID: String, id: CuePi.Session.ID, resumed: Bool) {
+    private func connect(_ target: SendTarget, access: DeliveryAdmission.Access) async throws -> (sessionID: String, id: CueBridge.Session.ID, resumed: Bool) {
         let ref = try sessionID(of: target)
         if let live = pi.session(sessionID: ref) { return (ref, live.id, false) }
         if case .existingOnly = access { throw BridgeError.sessionEnded }

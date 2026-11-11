@@ -86,7 +86,7 @@ if uncovered:
     print("没跑、不算通过的：")
     for reason, count in sorted(uncovered.items()):
         print(f"  {reason}（{count} 个用例）")
-if any("CuePiTests" in l for l in lines):
+if any("CueBridgeTests" in l for l in lines):
     cache = os.environ.get("TEST_RUNNER_CUEPAD_AGENTS_CACHE") or os.environ.get("CUEPAD_AGENTS_CACHE")
     agents = os.path.join(os.path.dirname(os.path.abspath(__file__)), "agents.py")
     listing = subprocess.run([sys.executable, "-I", agents, "status"], capture_output=True, text=True,

@@ -4,7 +4,7 @@ import CueText
 import Foundation
 import UniformTypeIdentifiers
 #if os(macOS)
-import CuePi
+import CueBridge
 #endif
 
 /// 复制不是发送，不记发送记录。
@@ -34,7 +34,7 @@ extension AppServices {
 }
 
 #if os(macOS)
-extension CuePi.Session {
+extension CueBridge.Session {
     var sendTarget: SendTarget { SendTarget(kind: .piSession, name: displayName, ref: sessionID) }
 }
 #endif

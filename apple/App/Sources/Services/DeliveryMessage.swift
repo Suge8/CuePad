@@ -1,6 +1,6 @@
 #if os(macOS)
 import CueStore
-import CuePi
+import CueBridge
 import Foundation
 
 enum DeliveryMessage {

@@ -1,5 +1,5 @@
 #if os(macOS)
-@testable import CuePi
+@testable import CueBridge
 import CueStore
 import CueTestSupport
 import Foundation

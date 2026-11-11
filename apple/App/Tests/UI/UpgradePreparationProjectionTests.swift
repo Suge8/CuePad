@@ -6,7 +6,7 @@ import CueText
 import Foundation
 import Testing
 @testable import CuePad
-@testable import CuePi
+@testable import CueBridge
 
 extension UpgradePreparationTests {
     @Test(arguments: ["withdraw", "end", "offline"])

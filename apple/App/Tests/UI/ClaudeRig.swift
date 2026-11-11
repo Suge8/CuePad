@@ -7,7 +7,7 @@ import Darwin
 import Foundation
 import Testing
 @testable import CuePad
-@testable import CuePi
+@testable import CueBridge
 
 /// App 装上真 Claude Code（钉住的版本，`ClaudeSandbox` 隔离、假模型回 `ECHO <你的话>`）的流程测试台：全部状态落在临时目录，不碰 ~/.claude。
 /// 接入装好（`AgentIntegration.install`，CuePad 跟读全部会话），钩子调的 `cuepad` 不存在：钩子都不通，终端里的会话只经 `claude agents --json` 补上、没有收件箱令牌。

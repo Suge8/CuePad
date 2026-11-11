@@ -2,7 +2,7 @@
 import CueAgent
 import CueStore
 import CueTestSupport
-@testable import CuePi
+@testable import CueBridge
 import Foundation
 import Synchronization
 import Testing

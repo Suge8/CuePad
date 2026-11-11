@@ -5,7 +5,7 @@ import CueSync
 import os
 #if os(macOS)
 import AppKit
-import CuePi
+import CueBridge
 #else
 import UIKit
 #endif

@@ -1,5 +1,5 @@
 #if os(macOS)
-import CuePi
+import CueBridge
 import CueStore
 import Foundation
 import os
@@ -8,7 +8,7 @@ import os
 /// 首次回填按批写（`AppServices.backfillBatch`），之后文件一变化就写，不节流：Mac 本机界面也读同步记录，这里的延迟就是 Mac 上看到的延迟。
 ///
 /// Store 读写失败时，该文件的索引不再写回：库异常时反复重写只会放大问题。失败作为错误抛给调用方报告。
-/// 检查点解码失败（格式随 CuePi 升级失效）是合法的"从头重读"：当作没有检查点，有这种文件时回填完成汇总记一行。
+/// 检查点解码失败（格式随 CueBridge 升级失效）是合法的"从头重读"：当作没有检查点，有这种文件时回填完成汇总记一行。
 actor HistoryPersistence {
     private static let log = Logger(subsystem: AppIdentity.id, category: "pi-history")
     private let storage: CueStore
@@ -16,7 +16,7 @@ actor HistoryPersistence {
     private let host: String
     private var starts: [String: IndexedSessionStart]?
     private var blocked: Set<String> = []
-    /// 回填期间检查点格式已过期（CuePi 升级）、从头重读的文件数与回填开始的时刻：不为 0 时回填完成汇总记一行
+    /// 回填期间检查点格式已过期（CueBridge 升级）、从头重读的文件数与回填开始的时刻：不为 0 时回填完成汇总记一行
     private var outdated = 0
     private var backfillStarted: ContinuousClock.Instant?
 

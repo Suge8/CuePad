@@ -1,5 +1,5 @@
 #if os(macOS)
-import CuePi
+import CueBridge
 #endif
 import CueStore
 import CueTestSupport

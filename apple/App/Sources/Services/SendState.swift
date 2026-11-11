@@ -1,5 +1,5 @@
 #if os(macOS)
-import CuePi
+import CueBridge
 import CueStore
 import CueText
 import Foundation
@@ -17,7 +17,7 @@ struct AgentTarget: Equatable {
 final class SendState {
     /// `ended`：不在线的会话（已结束的，或托管着、进程歇着的），发送时由它所在那台 Mac 的执行器在后台唤醒。
     enum Route {
-        case local(CuePi.Session)
+        case local(CueBridge.Session)
         case remote(SessionState)
         case ended(host: String?)
     }
@@ -62,7 +62,7 @@ final class SendState {
             ?? services.liveSessions.recentlyEnded.first { $0.sessionID == sessionID }?.title ?? "Agent"
     }
 
-    private func liveSession(_ sessionID: String) -> CuePi.Session? {
+    private func liveSession(_ sessionID: String) -> CueBridge.Session? {
         services.pi.session(sessionID: sessionID)
     }
 

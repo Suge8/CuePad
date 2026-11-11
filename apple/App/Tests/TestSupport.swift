@@ -10,7 +10,7 @@ import Testing
 @testable import CuePad
 #if os(macOS)
 import AppKit
-@testable import CuePi
+@testable import CueBridge
 #else
 import UIKit
 #endif

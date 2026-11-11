@@ -1,7 +1,7 @@
 #if DEBUG
 #if os(macOS)
 import AppKit
-import CuePi
+import CueBridge
 #endif
 
 extension DebugSceneEntry {

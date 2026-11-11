@@ -2,7 +2,7 @@ import CueStore
 import Foundation
 import Observation
 #if os(macOS)
-import CuePi
+import CueBridge
 #endif
 
 /// 账号额度的唯一界面订阅，与额度刷新唯一的一份状态（`phase`）。

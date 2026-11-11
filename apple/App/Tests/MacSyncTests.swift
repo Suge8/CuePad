@@ -6,7 +6,7 @@ import Testing
 import AppKit
 import Synchronization
 @testable import CuePad
-@testable import CuePi
+@testable import CueBridge
 
 @Suite(.releasesLibraries)
 struct MacSyncTests {
@@ -16,13 +16,13 @@ struct MacSyncTests {
     /// `spoke`：留下了会话文件（说过话）；没有文件的会话结束时不进历史。
     func session(
         _ sessionID: String, cwd: String = "/work/app", state: WorkState = .thinking, pid: Int32 = 100, spoke: Bool = false
-    ) -> CuePi.Session {
+    ) -> CueBridge.Session {
         var file: URL?
         if spoke {
             file = FileManager.default.temporaryDirectory.appending(path: "mac-sync-\(UUID().uuidString).jsonl")
             FileManager.default.createFile(atPath: file!.path, contents: Data())
         }
-        return CuePi.Session(
+        return CueBridge.Session(
             id: "\(sessionID).\(pid)", sessionID: sessionID, agent: .pi, sessionFile: file, pid: pid, cwd: URL(filePath: cwd, directoryHint: .isDirectory),
             terminal: TerminalIdentity(), state: state, stateSince: .now)
     }

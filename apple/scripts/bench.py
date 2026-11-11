@@ -34,7 +34,7 @@ JUDGE_MODEL = os.environ.get("CUEPAD_BENCH_JUDGE_MODEL", "anthropic/claude-sonne
 # anthropic/ 开头的走用户 Pi 的订阅登录；别的提供方的地址与密钥在 models.json 里
 SUBSCRIBED = JUDGE_MODEL.startswith("anthropic/")
 REPO = Path(__file__).resolve().parents[2]
-SUBSCRIPTION = REPO / "apple/CuePadKit/Sources/CuePi/Brain/claude-subscription.ts"
+SUBSCRIPTION = REPO / "apple/CuePadKit/Sources/CueBridge/Brain/claude-subscription.ts"
 PI = Path.home() / ".local/bin/pi"
 PI_AUTH = Path.home() / ".pi/agent/auth.json"
 PI_MODELS = Path.home() / ".pi/agent/models.json"

@@ -1,7 +1,7 @@
 import CueStore
 import SwiftUI
 #if os(macOS)
-import CuePi
+import CueBridge
 #endif
 
 

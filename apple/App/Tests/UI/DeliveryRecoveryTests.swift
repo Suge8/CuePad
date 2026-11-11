@@ -5,7 +5,7 @@ import Foundation
 import SwiftUI
 import Testing
 @testable import CuePad
-@testable import CuePi
+@testable import CueBridge
 @testable import CueStore
 
 @MainActor

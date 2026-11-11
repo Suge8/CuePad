@@ -3,7 +3,7 @@ import Foundation
 import Testing
 @testable import CuePad
 #if os(macOS)
-import CuePi
+import CueBridge
 #endif
 
 @Suite(.releasesLibraries)

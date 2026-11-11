@@ -1,6 +1,6 @@
 #if os(macOS)
 import AppKit
-import CuePi
+import CueBridge
 import CueStore
 import Foundation
 import os
@@ -261,7 +261,7 @@ extension AppServices {
         await flush()
     }
 
-    func jumpToTerminal(_ id: CuePi.Session.ID) async throws -> JumpResult {
+    func jumpToTerminal(_ id: CueBridge.Session.ID) async throws -> JumpResult {
         guard let session = pi.session(id: id) else { throw BridgeError.unknownSession(id) }
         return await terminal.jump(to: session)
     }

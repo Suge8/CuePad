@@ -6,7 +6,7 @@ import Darwin
 import Foundation
 import Testing
 @testable import CuePad
-@testable import CuePi
+@testable import CueBridge
 
 /// 托管的真 Claude Code（钉住的版本，`ClaudeSandbox` 隔离、假模型回 `ECHO <你的话>`）歇满空闲时限被请退出、进程还没走的那段里，
 /// 从 Mac 本机发话：投送接着这个会话、得到回复，旧进程收掉（不是报"会话已经结束"）。

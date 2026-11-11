@@ -10,7 +10,7 @@ let package = Package(
         .library(name: "CueText", targets: ["CueText"]),
         .library(name: "CueStore", targets: ["CueStore"]),
         .library(name: "CueEditor", targets: ["CueEditor"]),
-        .library(name: "CuePi", targets: ["CuePi"]),
+        .library(name: "CueBridge", targets: ["CueBridge"]),
         .library(name: "CueSync", targets: ["CueSync"]),
         .library(name: "CueAgent", targets: ["CueAgent"]),
         .executable(name: "cuepad", targets: ["CueCLI"]),
@@ -24,7 +24,7 @@ let package = Package(
         .target(name: "CueStore", dependencies: ["CueText"]),
         .target(name: "CueEditor", dependencies: ["CueText"]),
         // 仅 macOS，iOS 目标不依赖。
-        .target(name: "CuePi", dependencies: ["CueStore", "CueText", "CueAgent"], exclude: ["README.md"], resources: [.copy("Extension"), .copy("Brain/claude-subscription.ts"), .copy("Brain/cue-tools.ts"), .copy("Brain/cue-fast.ts"), .copy("Dsh/dsh-cuepad.mjs")]),
+        .target(name: "CueBridge", dependencies: ["CueStore", "CueText", "CueAgent"], exclude: ["README.md"], resources: [.copy("Extension"), .copy("Brain/claude-subscription.ts"), .copy("Brain/cue-tools.ts"), .copy("Brain/cue-fast.ts"), .copy("Dsh/dsh-cuepad.mjs")]),
         .target(name: "CueSync", dependencies: ["CueStore", "CueText"]),
         .target(name: "CueAgent", dependencies: ["CueStore", "CueText"]),
         // 只给测试目标依赖。
@@ -36,7 +36,7 @@ let package = Package(
         .testTarget(name: "CueTextTests", dependencies: ["CueText"]),
         .testTarget(name: "CueStoreTests", dependencies: ["CueStore", "CueText", "CueTestSupport"]),
         .testTarget(name: "CueEditorTests", dependencies: ["CueEditor", "CueTestSupport"]),
-        .testTarget(name: "CuePiTests", dependencies: ["CuePi", "CueStore", "CueTestSupport"], exclude: ["Fixtures"]),
+        .testTarget(name: "CueBridgeTests", dependencies: ["CueBridge", "CueStore", "CueTestSupport"], exclude: ["Fixtures"]),
     ]
 )
 

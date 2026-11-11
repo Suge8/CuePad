@@ -1,5 +1,5 @@
 #if os(macOS)
-import CuePi
+import CueBridge
 import CueStore
 import Foundation
 
@@ -12,7 +12,7 @@ struct DeliveryConfirmation {
     /// 终端里的 Claude Code 到期没把话写进会话文件：它没说为什么，常见的是这两种（`Session.confirmsFromHistory`）
     static let notTaken = ShownText("Claude Code 没有收下这句话：可能在它的终端里等你批准，或被它的设置（crossSessionInbound）挡下了。去终端里看一眼，CuePad 不会自动重发")
 
-    func pending(in session: CuePi.Session, reason: ShownText? = nil) -> DeliveryOutcome {
+    func pending(in session: CueBridge.Session, reason: ShownText? = nil) -> DeliveryOutcome {
         .confirming { request in
             do {
                 if let file = session.sessionFile {
@@ -51,7 +51,7 @@ struct DeliveryConfirmation {
     }
 
     private func verify(
-        _ request: DeliveryRequest, agent: AgentKind, connection: CuePi.Session.ID?, file: URL?, reason: ShownText?
+        _ request: DeliveryRequest, agent: AgentKind, connection: CueBridge.Session.ID?, file: URL?, reason: ShownText?
     ) async -> DeliveryOutcome {
         let uncertain = reason ?? (agent == .pi ? Speech.unconfirmedReason : Self.notTaken)
         guard let file else { return .unconfirmed(uncertain) }
@@ -73,7 +73,7 @@ struct DeliveryConfirmation {
     }
 
     private func inspect(
-        _ request: DeliveryRequest, agent: AgentKind, history: AsyncThrowingStream<HistoryUpdate?, Error>, connection: CuePi.Session.ID?, file: URL,
+        _ request: DeliveryRequest, agent: AgentKind, history: AsyncThrowingStream<HistoryUpdate?, Error>, connection: CueBridge.Session.ID?, file: URL,
         uncertain: ShownText
     ) async throws -> DeliveryOutcome {
         if try await received(request) { return .succeeded }
@@ -94,7 +94,7 @@ struct DeliveryConfirmation {
     }
 
     private func wait(
-        _ request: DeliveryRequest, agent: AgentKind, history: AsyncThrowingStream<HistoryUpdate?, Error>, connection: CuePi.Session.ID?, file: URL,
+        _ request: DeliveryRequest, agent: AgentKind, history: AsyncThrowingStream<HistoryUpdate?, Error>, connection: CueBridge.Session.ID?, file: URL,
         until deadline: Date, uncertain: ShownText
     ) async throws -> DeliveryOutcome {
         try await withThrowingTaskGroup(of: DeliveryOutcome.self) { group in

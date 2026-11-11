@@ -2,7 +2,7 @@
 import CueAgent
 import CueStore
 import CueTestSupport
-@testable import CuePi
+@testable import CueBridge
 import Foundation
 import Testing
 @testable import CuePad
@@ -18,7 +18,7 @@ struct SessionTaskTests {
         try await store.setDirectory("/work/x", for: project.id)
         try await enableCue()
         try services.reconcileLaunch()  // Mac 启动
-        var session = CuePi.Session(
+        var session = CueBridge.Session(
             id: "s1.100", sessionID: "s1", agent: .pi, sessionFile: URL(filePath: "/tmp/never-\(UUID().uuidString).jsonl"), pid: 100,
             cwd: URL(filePath: "/work/x", directoryHint: .isDirectory), terminal: TerminalIdentity(),
             state: .settled, stateSince: .now)

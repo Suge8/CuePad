@@ -1,7 +1,7 @@
 #if os(macOS)
 import AppKit
 import CueAgent
-import CuePi
+import CueBridge
 import CueStore
 import Foundation
 import Testing
@@ -163,7 +163,7 @@ struct HistoryRulesTests {
         #expect(try await rig.records(.live).isEmpty)
     }
 
-    /// 闲置到点时扩展做的事就是给自己发 SIGTERM（lifecycle.ts 的 IdleExit）；到点本身由 CuePiTests 的 anIdleHostedSessionExitsAfterTheIdleLimit 守，
+    /// 闲置到点时扩展做的事就是给自己发 SIGTERM（lifecycle.ts 的 IdleExit）；到点本身由 CueBridgeTests 的 anIdleHostedSessionExitsAfterTheIdleLimit 守，
     /// 这里歇下就直接发，不等墙钟（托管的闲置时限最小一秒，四次就是好几秒）。
     private func idleExit(_ rig: Rig, _ sessionID: String) async throws {
         try await eventually("这一轮歇下") { rig.bridge.session(sessionID: sessionID)?.state == .settled }
