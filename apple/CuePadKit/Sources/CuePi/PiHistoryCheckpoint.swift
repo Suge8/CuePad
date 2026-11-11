@@ -32,10 +32,10 @@ public struct PiHistoryCheckpoint: Sendable, Codable, Equatable {
     /// 你说的一句、还在等它的投送请求 id：Grok 把发它的请求 id 写在它之后的那几行上（`GrokHistory`），等到下一行再照常 `said`
     var held: Held?
 
-    /// 读会话的规则的版本：规则变了、已读过的部分要按新规则重读时（长度截断的回答改记未完成、工具结果里的图、Agent 自己起的会话名）加一，
+    /// 读会话的规则的版本：规则变了、已读过的部分要按新规则重读时（长度截断的回答改记未完成、工具结果里的图、Agent 自己起的会话名、Claude Code 推迟补写的 turn_duration 的归属）加一，
     /// 旧版本的检查点解不开，各家的会话在窗口内从头重读、对话按新规则改写（`CueStore.applyTranscript` 只改写变了的）。
     struct ReadRules: Codable, Equatable {
-        static let current = 3
+        static let current = 4
         let version: Int
 
         init() { version = Self.current }
@@ -64,6 +64,8 @@ public struct PiHistoryCheckpoint: Sendable, Codable, Equatable {
         var tools = PiToolLog()
         /// 这一轮里你拒绝过它要用的工具（这一轮因此停下时写"已拒绝"）
         var declined = false
+        /// 这一轮说完了的那条助手消息的 id（Claude Code：`stop_reason` 不是 `tool_use`，没有文字）：紧接着它写的 `turn_duration` 才收这一轮（`ClaudeHistory`）
+        var endedBy: String?
     }
 
     struct Held: Sendable, Codable, Equatable {

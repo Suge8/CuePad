@@ -24,7 +24,11 @@ enum ClaudeHistory {
             switch line.subtype {
             case "compact_boundary": cp.compacted(entry, into: &transcript)
             case "agents_killed": transcript.signals.append(.agentsStopped(at: entry.at))
-            case "stop_hook_summary", "turn_duration": if cp.round != nil { cp.answered("", entry, into: &transcript) }
+            case "stop_hook_summary": if cp.round != nil { cp.answered("", entry, into: &transcript) }
+            // 进程内队友还在跑时，2.1.318 把那一轮的这一行推迟到队友都停下才写，可能落在下一轮中途（停掉队友的那次工具调用之后）。
+            // 认它接在哪一行后面（parentUuid），不认时长：等后台结果的一轮按时写的这一行也从更早那一轮的开头量起
+            case "turn_duration":
+                if let ended = cp.round?.endedBy, ended == line.parentUuid { cp.answered("", entry, into: &transcript) }
             // 这句没开成一轮（钩子挡下、拦停，2.1.318 写 `informational` 带 `promptSubmitEnding`）：不跑 `Stop`，那句也不写进会话。
             // `no_verdict` 是钩子没跑，CuePad 也没收到这句的钩子，不算
             default:
@@ -50,6 +54,7 @@ enum ClaudeHistory {
                 cp.answered(text, entry, into: &transcript)
             } else {
                 cp.spoke(text, entry)
+                cp.round?.endedBy = message.stopReason.map { $0 != "tool_use" } == true ? entry.id : nil
             }
         default:
             break
@@ -112,6 +117,7 @@ enum ClaudeHistory {
         var type: String
         var subtype: String?
         var uuid: String?
+        var parentUuid: String?
         var timestamp: String?
         var sessionId: String?
         var cwd: String?
