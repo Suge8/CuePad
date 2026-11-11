@@ -2,7 +2,7 @@ import Foundation
 
 /// Mac 写，手机与 Mac 的界面都只读它。记录 id 由 Pi 自己的会话 id 算出（Pi 重启、恢复会话后不变），所以在线与历史是同一条记录的不同状态。
 /// 说过话（有会话文件）的会话才进历史；会话文件被删时才删记录。
-/// 不经任务开的会话（终端里的、“新会话”）不绑任务，要为它的结果负责时再绑（`CueStore.bindSession`）。
+/// 不经任务开的会话（“新会话”、接着的历史会话）不绑任务，要为它的结果负责时再绑（`CueStore.bindSession`）。
 public struct SessionState: Identifiable, Equatable, Sendable {
   public let id: UUID
   public var sessionID: String
@@ -46,7 +46,8 @@ public struct SessionState: Identifiable, Equatable, Sendable {
   public var modifiedAt: Date
   /// 发起方生成的标识（`LaunchRequest` 的 `token`），发起方据此等到并打开“自己开的那个”会话；其余会话为 nil。
   public var launchToken: String?
-  /// 没有终端界面，没有终端可跳。托管的进程闲置退出后记录留着（歇着，`hosted` 仍为真）：它仍在“现在”，发话时 Mac 把它唤醒——“托管且进程不在”就是这样表达的。
+  /// 这台 Mac（`hostID`）托管过它：CuePad 在后台开的或接着的，结束后也留着（`CueStore.hostedSessionIDs` 靠它认）；在不在线只看 `state`。
+  /// 没托管过的只是会话文件回填的历史。托管的进程闲置退出后是歇着：仍在“现在”，发话时 Mac 把它唤醒。
   public var hosted: Bool
   /// 创建此会话的任务；唯一生命周期来源，纯关联与后来的发送不改变它。未知来源不授权自动结束。
   public internal(set) var createdForTaskID: UUID?
@@ -106,22 +107,19 @@ public struct SessionState: Identifiable, Equatable, Sendable {
     self.failure = failure
   }
 
-  /// 本版本不认识的 Agent 只能发文字。
-  public var capabilities: AgentCapabilities { agent.known.map { .of($0, hosted: hosted, model: model) } ?? [] }
+  /// 本版本不认识的 Agent（更新版本的 Mac 上新接的一家）一样也不认。
+  public var capabilities: AgentCapabilities { agent.known.map { .of($0, model: model) } ?? [] }
 
   // 下面几条是界面与 Cue 共用的唯一一份：做不到的操作界面上不露出，Cue 要做时报错。
 
-  /// 只结束为任务创建、CuePad 托管且做得到结束的。终端里你自己开的会话不结束（结束它就是关掉你的终端进程），只随那件事收起；
-  /// 完成前的确认照这个说（App 的 `agentBusyDialog`）。
-  public var endsWithTask: Bool { createdForTaskID != nil && hosted && canEnd }
+  /// 只结束为任务创建的；完成前的确认照这个说（App 的 `agentBusyDialog`）。
+  public var endsWithTask: Bool { createdForTaskID != nil && canEnd }
 
-  public var canEnd: Bool {
-    capabilities.contains(.end) && state != .known(.ended)
-  }
+  public var canEnd: Bool { state != .known(.ended) }
 
   /// 等你确认时不算：它在等你答，停止会让人以为把问题也撤了；等子代理时这一轮已经歇下，没有可停的。
   public var canStop: Bool {
-    capabilities.contains(.abort) && runtimeState.known?.isTurnRunning == true && state != .known(.waitingForUser)
+    runtimeState.known?.isTurnRunning == true && state != .known(.waitingForUser)
   }
 
   /// 原样重跑出错的那一轮，不在对话里多一句话；这一类错重跑有用才行（`FailureKind.retries`，没记种类的按其余）。
@@ -129,11 +127,8 @@ public struct SessionState: Identifiable, Equatable, Sendable {
     state == .known(.error) && capabilities.contains(.retry) && failure?.known?.retries != false
   }
 
-  /// nil 是能说。回复框与 Cue 说话都认它。
-  public var speakBlocked: String? { capabilities.speakBlocked(in: runtimeState.known, agent: agent.known) }
-
   public var answerableQuestion: Question? {
-    guard runtimeState == .known(.waitingForUser), capabilities.contains(.answer), let question, question.isAnswerable else { return nil }
+    guard runtimeState == .known(.waitingForUser), let question, question.isAnswerable else { return nil }
     return question
   }
 

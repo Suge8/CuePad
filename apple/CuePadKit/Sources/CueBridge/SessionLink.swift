@@ -3,7 +3,7 @@ import CueStore
 import Foundation
 
 /// 一个会话一条的（Pi、Claude Code）不看 `id`；一个接入承载多个会话的（Codex、OpenCode）由接入自己遵守、按 `id` 找会话。
-/// 桥（`Bridge`）按会话找到它转交命令；这个 Agent 的这类会话做不到的（`AgentCapabilities`）桥先拒绝，到不了这里。
+/// 桥（`Bridge`）按会话找到它转交命令；这家或这个模型做不到的（`AgentCapabilities`）桥先拒绝，到不了这里。
 @MainActor
 public protocol SessionLink: AnyObject {
     /// 以这句话开新一轮：会话歇着就直接开始，在跑（含压缩、等你确认）就先打断这一轮。受理即返回，不等模型做完；

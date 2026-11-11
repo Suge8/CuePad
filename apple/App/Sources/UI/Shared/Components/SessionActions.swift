@@ -20,15 +20,14 @@ struct SessionActions: View {
             let item: CardMenu.Item = task.isPinned ? .unpin : .pin
             Button(item.title, icon: item.icon) { workspace.setPinned(task.id, !task.isPinned) }
         }
-        if let rename = Self.rename(session, task: task, adopts: board != nil, in: workspace) { RowActionButtons(actions: [rename]) }
+        RowActionButtons(actions: [Self.rename(session, task: task, adopts: board != nil, in: workspace)])
         if let end = Self.end(session, ending: ending, in: workspace) { RowActionButtons(actions: [end]) }
         #if os(iOS)
         Section { RemoteMacActions(host: session.hostID) }
         #endif
     }
 
-    static func rename(_ session: SessionState, task: SessionTask? = nil, adopts: Bool = false, in workspace: Workspace) -> RowAction? {
-        guard MacDelivery.canRename(session) else { return nil }
+    static func rename(_ session: SessionState, task: SessionTask? = nil, adopts: Bool = false, in workspace: Workspace) -> RowAction {
         let ask = SessionAsk.rename(session, shown: task?.title.nonEmpty ?? session.title, adopts: adopts)
         #if os(macOS)
         return RowAction("重命名…", icon: .rename) { workspace.sessionAsk = ask }

@@ -1,7 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// 点了立即显示完成，停留 `linger` 再写入、由列表移走：看得清，也来得及反悔，这段时间里再点一下就撤销。还有没完成的子任务时先问一起完成；它的 Agent 还在做或在等你时先问一句（`agentBusyDialog`：托管的会话一起结束，终端里你开的不结束）。
+/// 点了立即显示完成，停留 `linger` 再写入、由列表移走：看得清，也来得及反悔，这段时间里再点一下就撤销。还有没完成的子任务时先问一起完成；它的 Agent 还在做或在等你时先问一句（`agentBusyDialog`：为这件事开的会话一起结束，别的不结束）。
 /// 状态只是这一行界面上的过渡，完成与否以 Store 为准：写入落地或别处改了，这一行回到 `idle`。
 struct TaskCheck: Equatable {
     enum Phase { case idle, pending, committed }

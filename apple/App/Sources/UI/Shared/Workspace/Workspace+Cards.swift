@@ -26,14 +26,12 @@ extension Workspace {
     /// 已经完成的不动：界面手里的副本可能已过时（别的设备刚做完），再来一次不能把它翻回去（`CueStore.completeTask`）。
     /// 绑着的会话里绑着的事都做完了的一起结束，结束哪些只由 Store 定（与 Cue 的 done 同一条规则）。
     func complete(_ id: UUID) async throws {
-        let (status, ended, terminalKept) = try await services.store.completeTask(id)
+        let (status, ended) = try await services.store.completeTask(id)
         for request in ended { _ = services.uploaded(request) }
         // 做完了就给一个归档（不自动归档）
         guard status == .done else { return }
         let archiving = NoticeAction(title: String(localized: "归档")) { try await $0.archive(id) }
-        // 终端里你自己开的会话不替你结束，如实说它还在
-        let text: LocalizedStringResource = terminalKept ? "已完成，终端未结束" : "已完成"
-        say(text, action: archiving)
+        say("已完成", action: archiving)
     }
 
     func reopen(_ id: UUID) async throws {

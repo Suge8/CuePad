@@ -37,8 +37,7 @@ struct DeliveryConfirmation {
                 return pending(in: session, reason: request.reason)
             }
             // 重开时会话多半还没回到桥上：按索引里的会话文件接着核对
-            let hosted = try await store.sessionState(sessionID)?.hosted ?? false
-            guard let indexed = try await store.indexedSession(sessionID), indexed.agent.confirmsFromHistory(hosted: hosted) else {
+            guard let indexed = try await store.indexedSession(sessionID), indexed.agent.confirmsFromHistory else {
                 return .unconfirmed(DeliveryRequest.interruptedReason)
             }
             return .confirming { current in

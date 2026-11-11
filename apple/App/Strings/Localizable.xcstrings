@@ -443,6 +443,22 @@
         }
       }
     },
+    "%@ 是旧版 CuePad 装的扩展，与后台启动的 Pi 冲突；删掉它再发" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ is an extension installed by an older CuePad and conflicts with Pi running in the background. Delete it, then send again."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 是旧版 CuePad 装的扩展，与后台启动的 Pi 冲突；删掉它再发"
+          }
+        }
+      }
+    },
     "%@ 没执行成功：%@" : {
       "localizations" : {
         "en" : {
@@ -3063,22 +3079,6 @@
         }
       }
     },
-    "Claude Code 没有收下这句话：可能在它的终端里等你批准，或被它的设置（crossSessionInbound）挡下了。去终端里看一眼，CuePad 不会自动重发" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Claude Code didn’t take this message. It may be waiting for your approval in its terminal, or its crossSessionInbound setting blocked it. Check the terminal; CuePad won’t resend it."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Claude Code 没有收下这句话：可能在它的终端里等你批准，或被它的设置（crossSessionInbound）挡下了。去终端里看一眼，CuePad 不会自动重发"
-          }
-        }
-      }
-    },
     "Claude Code 读不到「%@」的项目规则" : {
       "localizations" : {
         "en" : {
@@ -3091,22 +3091,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Claude Code 读不到「%@」的项目规则"
-          }
-        }
-      }
-    },
-    "Codex 出错了" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Codex ran into an error"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Codex 出错了"
           }
         }
       }
@@ -3925,22 +3909,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Pi 的系统提示"
-          }
-        }
-      }
-    },
-    "Pi 里的 CuePad 扩展不是这个版本的，没能在后台启动；在 CuePad 设置里修复 Pi 接入后再发" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Pi's CuePad extension doesn't match this version, so Pi couldn't start in the background. Repair the Pi connection in CuePad Settings, then send again."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Pi 里的 CuePad 扩展不是这个版本的，没能在后台启动；在 CuePad 设置里修复 Pi 接入后再发"
           }
         }
       }
@@ -5663,22 +5631,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "中"
-          }
-        }
-      }
-    },
-    "中途停下" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "stop"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "中途停下"
           }
         }
       }
@@ -8203,22 +8155,6 @@
         }
       }
     },
-    "切换模型" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "switch models"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "切换模型"
-          }
-        }
-      }
-    },
     "刚从更早的灵感里拿回来" : {
       "localizations" : {
         "en" : {
@@ -9159,22 +9095,6 @@
         }
       }
     },
-    "发图片" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "send images"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "发图片"
-          }
-        }
-      }
-    },
     "发布或部署" : {
       "localizations" : {
         "en" : {
@@ -9251,22 +9171,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "发给过 Agent"
-          }
-        }
-      }
-    },
-    "发话" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "send messages"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "发话"
           }
         }
       }
@@ -10415,22 +10319,6 @@
         }
       }
     },
-    "回答提问" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "answer questions"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "回答提问"
-          }
-        }
-      }
-    },
     "回答未完成" : {
       "localizations" : {
         "en" : {
@@ -11227,38 +11115,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "在等你回答"
-          }
-        }
-      }
-    },
-    "在终端里等你" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Waiting for you in the terminal"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在终端里等你"
-          }
-        }
-      }
-    },
-    "在终端里跑着：按 Esc 或等它做完" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Running in Terminal: press Esc or wait"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在终端里跑着：按 Esc 或等它做完"
           }
         }
       }
@@ -12383,22 +12239,6 @@
         }
       }
     },
-    "工具" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "a tool"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "工具"
-          }
-        }
-      }
-    },
     "已交回" : {
       "localizations" : {
         "en" : {
@@ -12759,22 +12599,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已完成 %lld"
-          }
-        }
-      }
-    },
-    "已完成，终端未结束" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Done · still open"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已完成，终端未结束"
           }
         }
       }
@@ -13763,22 +13587,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "忘掉这一条？"
-          }
-        }
-      }
-    },
-    "快满了。Agent 会在到顶前自动压缩。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Almost full. The agent compacts automatically before it runs out."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "快满了。Agent 会在到顶前自动压缩。"
           }
         }
       }
@@ -15631,22 +15439,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "改于 %@"
-          }
-        }
-      }
-    },
-    "改会话名" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "rename sessions"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "改会话名"
           }
         }
       }
@@ -19859,22 +19651,6 @@
         }
       }
     },
-    "用斜杠命令" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "use slash commands"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "用斜杠命令"
-          }
-        }
-      }
-    },
     "用时 %@" : {
       "localizations" : {
         "en" : {
@@ -21175,54 +20951,6 @@
         }
       }
     },
-    "终端里开的会话不能%@，CuePad 在后台开的都能做。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sessions started in Terminal can't %@. Sessions CuePad starts in the background can."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "终端里开的会话不能%@，CuePad 在后台开的都能做。"
-          }
-        }
-      }
-    },
-    "终端里的 %@ 只能在终端里说话：CuePad 只看得到它在做什么" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ in the terminal only takes messages there. CuePad can only see what it's doing."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "终端里的 %@ 只能在终端里说话：CuePad 只看得到它在做什么"
-          }
-        }
-      }
-    },
-    "终端里的 %@ 在跑，CuePad 打断不了它：在终端里按 Esc，或等它做完再说" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ is running in the terminal and CuePad can't interrupt it. Press Esc in the terminal, or wait until it's done."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "终端里的 %@ 在跑，CuePad 打断不了它：在终端里按 Esc，或等它做完再说"
-          }
-        }
-      }
-    },
     "终端里的会话还没起好，没有发出，可以重发" : {
       "localizations" : {
         "en" : {
@@ -21331,22 +21059,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "结束结果尚未确认：%@"
-          }
-        }
-      }
-    },
-    "结束这个会话" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "end the session"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "结束这个会话"
           }
         }
       }
@@ -23923,6 +23635,22 @@
         }
       }
     },
+    "这个会话不是为这件事开的，完成不会结束它。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This session wasn't started for this task. Completing won't end it."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这个会话不是为这件事开的，完成不会结束它。"
+          }
+        }
+      }
+    },
     "这个会话已经不在了，发不到它" : {
       "localizations" : {
         "en" : {
@@ -24611,22 +24339,6 @@
         }
       }
     },
-    "这是你在终端里开的会话，完成不会结束它。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "You started this session in Terminal. Completing won't end it."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这是你在终端里开的会话，完成不会结束它。"
-          }
-        }
-      }
-    },
     "这是灵感，没有状态：要做的事另建任务，或把这条灵感接进一条任务" : {
       "localizations" : {
         "en" : {
@@ -24847,22 +24559,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "连不上"
-          }
-        }
-      }
-    },
-    "连不上 Codex 的常驻服务" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Can't reach the Codex background service"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "连不上 Codex 的常驻服务"
           }
         }
       }

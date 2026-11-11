@@ -84,7 +84,6 @@ struct AgentRow: View {
         let lines = [
             shown,
             kind == .pi ? String(localized: "CuePad 在后台开 Pi 会话也要先接入。") : String(localized: "不接入也能让 CuePad 在后台开 \(name) 会话。"),
-            kind.limits,
             String(localized: "它也学会用 cuepad 记灵感、看和改任务，把页面和截图发到手机上看。"),
             kind == .codex ? String(localized: "Codex 在沙箱里跑命令，写入 CuePad 时会请你批准。") : nil,
             kind == .opencode ? String(localized: "会话直连 OpenCode 的后台服务，不用另装。") : nil,
@@ -159,18 +158,6 @@ extension AgentKind {
         case .grok: String(localized: "写入技能，跟读它的会话记录")
         case .dsh: String(localized: "写入技能")
         }
-    }
-
-    /// 由 `AgentCapabilities.of` 推出；CuePad 在后台开的什么都能做。
-    var limits: String? {
-        let missing = AgentCapabilities.all.subtracting(.of(self, hosted: false, model: nil))
-        let names: [(AgentCapabilities, String)] = [
-            (.speak, String(localized: "发话")), (.images, String(localized: "发图片")), (.abort, String(localized: "中途停下")), (.model, String(localized: "切换模型")),
-            (.rename, String(localized: "改会话名")), (.commands, String(localized: "用斜杠命令")), (.answer, String(localized: "回答提问")),
-            (.end, String(localized: "结束这个会话")),
-        ]
-        let lacking = names.filter { missing.contains($0.0) }.map(\.1)
-        return lacking.isEmpty ? nil : String(localized: "终端里开的会话不能\(lacking.joined(separator: String(localized: "、")))，CuePad 在后台开的都能做。")
     }
 }
 

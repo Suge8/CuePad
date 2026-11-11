@@ -6,7 +6,7 @@ extension View {
     func agentBusyDialog(_ session: SessionState?, isPresented: Binding<Bool>, confirm: @escaping @MainActor () -> Void) -> some View {
         let ends = session?.endsWithTask ?? true
         let endsMessage: LocalizedStringResource = "完成会把它的会话一起结束。"
-        let staysMessage: LocalizedStringResource = "这是你在终端里开的会话，完成不会结束它。"
+        let staysMessage: LocalizedStringResource = "这个会话不是为这件事开的，完成不会结束它。"
         let endsTitle: LocalizedStringResource = "完成并结束会话"
         let staysTitle: LocalizedStringResource = "完成"
         return dialog(

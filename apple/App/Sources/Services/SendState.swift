@@ -38,14 +38,9 @@ final class SendState {
         projects = result
     }
 
-    /// 终端里开的会话桥上已经没有、记录还没来得及标成结束的不算（发送时它走"唤醒"那条路）。
-    private func isReachable(_ state: SessionState) -> Bool {
-        state.hostID != services.hostID || state.hosted || liveSession(state.sessionID) != nil
-    }
-
     /// 与手机的发给 Agent 输入框共用同一份规则（`HandOffTargets`）。
     func onlineTargets(for project: UUID?) -> [SessionListItem] {
-        HandOffTargets.sessions(services.liveSessions.live, project: project, at: services.speech).filter { isReachable($0.state) }
+        HandOffTargets.sessions(services.liveSessions.live, project: project, at: services.speech)
     }
 
     func route(of sessionID: String, host: String? = nil) -> Route {

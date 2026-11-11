@@ -13,7 +13,7 @@ public struct CueChange: Equatable, Sendable {
     case done
     /// 会话在等子代理，在跑的子代理都 `SessionState.stallAfter` 没有进展（`SessionState.stallsAt` 到了）：多半卡住了。
     /// 这不是一次写入，是时间到了：同一段停滞只报一次（`CueMarks.stalls`），有了新进展再停住是新的一段；`seq` 是会话记录的，
-    /// 会话别的写入也会让它变，判这一段是不是新的只看 `at`。Cue 此刻说不进去的（他发起的那一轮、打断不了的）不报
+    /// 会话别的写入也会让它变，判这一段是不是新的只看 `at`。Cue 此刻说不进去的（他发起的那一轮）不报
     case stalled
   }
 

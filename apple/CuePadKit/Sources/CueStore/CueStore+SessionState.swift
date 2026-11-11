@@ -59,10 +59,11 @@ extension CueStore {
   }
 
   /// 源端实际结束与所覆盖请求同事务确认；集合由领取时固定，不能按写入时的请求、状态快照或时间扩大。
+  /// 托管标记留着：结束了也算这台托管过（`hostedSessionIDs`）；读它的对账、收尾都只看没收尾的记录，已结束的不会被当成在线。
   func endSessionState(host: String, sessionID: String, bootID: String?, at now: Date, confirming requests: Set<UUID>) throws {
     try write {
       try db.run(
-        "UPDATE piSessionStates SET state = ?, bootID = ?, \(Self.cleared), stateSince = ?, hosted = NULL, modifiedAt = ? WHERE id = ? AND state != ?",
+        "UPDATE piSessionStates SET state = ?, bootID = ?, \(Self.cleared), stateSince = ?, modifiedAt = ? WHERE id = ? AND state != ?",
         [WorkState.ended.rawValue, bootID, now, Date.stamp, SessionState.recordID(sessionID: sessionID), WorkState.ended.rawValue])
       try db.run("DELETE FROM piProcesses WHERE sessionID = ?", [sessionID])
       try db.run("""
@@ -75,7 +76,7 @@ extension CueStore {
   }
 
   /// 确实没了的三种：记下的进程不是那一个了；记录是上一次系统启动见证的；托管的歇着或出错、却没记着进程的（托管的进程都由 CuePad 起、记着，只在收尾时删掉；更早的版本收尾时还清掉了见证的启动）。
-  /// 其余不动：记下的进程还在的（托管的 Pi 不随 App 退出，终端里的会话也还开着），与没记下进程、又没有死亡证据的，都由桥重新连上后接着写，或在进程退出时收尾。返回可沿用的状态与计时：旧 boot 与无证据的历史不带给新进程。
+  /// 其余不动：记下的进程还在的（托管的 Pi 不随 App 退出），与没记下进程、又没有死亡证据的，都由桥重新连上后接着写，或在进程退出时收尾。返回可沿用的状态与计时：旧 boot 与无证据的历史不带给新进程。
   func reconcileSessionStates(host: String, bootID: String?, running: (SessionProcess) -> Bool, at now: Date) throws -> [String: (state: WorkState, times: SessionTimes)] {
     try write {
       let before = try db.query(
@@ -201,7 +202,7 @@ public struct SessionSnapshot: Paced {
   }
 
   /// 这一刻说不上来、不等于没有的几项（为 nil 时沿用上一次写下的）：一轮的开始（中途重连的进程从头记起）、认领标识
-  /// （托管的进程让给终端里的那个时，后者不带）、上下文余量（换模型的间隙）、项目（工作目录此刻不在哪个项目里）。
+  /// （接着的进程不带）、上下文余量（换模型的间隙）、项目（工作目录此刻不在哪个项目里）。
   mutating func keepingUnknown(from previous: SessionSnapshot) {
     turnStartedAt = turnStartedAt ?? previous.turnStartedAt
     launchToken = launchToken ?? previous.launchToken

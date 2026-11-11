@@ -55,7 +55,7 @@ struct HandOffInput: View {
     private var commands: [SlashCommand] { chosen?.state.usableCommands(in: catalog) ?? [] }
 
     private var tools: (session: SessionState, models: [ModelOption], config: ConfigShown)? {
-        guard let session = chosen?.state, let config, let models = catalog?.models, session.capabilities.contains(.model), !models.isEmpty else { return nil }
+        guard let session = chosen?.state, let config, let models = catalog?.models, !models.isEmpty else { return nil }
         return (session, models, config)
     }
 

@@ -12,7 +12,7 @@ public enum AgentKind: String, CaseIterable, Sendable, Identifiable, Codable {
   public var id: Self { self }
 
   /// 交出后收没收下只看会话文件里有没有这句话（App 的 `DeliveryConfirmation`，重开后接着核对也按它）：Pi 的回执先于写会话文件。
-  public func confirmsFromHistory(hosted: Bool) -> Bool { self == .pi }
+  public var confirmsFromHistory: Bool { self == .pi }
 
   public var name: String {
     switch self {
@@ -64,54 +64,21 @@ public enum AgentKind: String, CaseIterable, Sendable, Identifiable, Codable {
   }
 }
 
-/// 只由 Agent 与会话在哪跑定：Mac 与手机按同一条规则从会话记录推出，执行端不另做判断。
+/// 因家或因模型而异的几样：Mac 与手机按同一条规则从会话记录推出（不同步、不落库），执行端不另做判断。
+/// 说话、停下、换模型、改名、斜杠命令、作答、结束每家都有：会话都是 CuePad 在后台托管的。
 public struct AgentCapabilities: OptionSet, Sendable, Hashable {
   public let rawValue: Int
   public init(rawValue: Int) { self.rawValue = rawValue }
 
   public static let images = AgentCapabilities(rawValue: 1 << 0)
-  public static let abort = AgentCapabilities(rawValue: 1 << 1)
-  public static let model = AgentCapabilities(rawValue: 1 << 2)
-  public static let rename = AgentCapabilities(rawValue: 1 << 3)
-  public static let commands = AgentCapabilities(rawValue: 1 << 4)
-  public static let answer = AgentCapabilities(rawValue: 1 << 5)
-  public static let end = AgentCapabilities(rawValue: 1 << 6)
-  public static let speak = AgentCapabilities(rawValue: 1 << 7)
-  public static let retry = AgentCapabilities(rawValue: 1 << 8)
+  public static let retry = AgentCapabilities(rawValue: 1 << 1)
   /// 查订阅额度：只有 CuePad 的 Pi 扩展会查。一台 Mac 能不能答额度只看它上面有没有在线、带这一项的会话。
-  public static let quota = AgentCapabilities(rawValue: 1 << 9)
+  public static let quota = AgentCapabilities(rawValue: 1 << 2)
 
-  public static let all: AgentCapabilities = [.speak, .images, .abort, .model, .rename, .commands, .answer, .end]
-
-  /// 在线时说不了话（没有 `.speak`）的只能在它的终端里说；在跑时说话要先停下这一轮，停不下（没有 `.abort`）就说不了。
-  /// 只有终端里的 Claude Code 这样：CuePad 只能经它的收件箱说话，前台工具跑着时收件箱的话要等工具跑完才读到（`priority: "now"` 也一样），收件箱也没有停下这一轮的办法（Claude Code 2.1.299 实测与源码）。
-  /// 界面的回复框、Cue 说话与 Mac 执行发话都只认这里；不排队，歇下再说。
-  public func speakBlocked(in state: WorkState?, agent: AgentKind?) -> String? {
-    if !contains(.speak), state != .ended {
-      return String(localized: "终端里的 \(agent?.name ?? "Agent") 只能在终端里说话：CuePad 只看得到它在做什么")
-    }
-    guard state?.isTurnRunning == true, !contains(.abort) else { return nil }
-    return String(localized: "终端里的 \(agent?.name ?? "Agent") 在跑，CuePad 打断不了它：在终端里按 Esc，或等它做完再说")
-  }
-
-  public static func of(_ agent: AgentKind, hosted: Bool, model: ModelOption?) -> AgentCapabilities {
-    var capabilities = of(agent, hosted: hosted)
+  public static func of(_ agent: AgentKind, model: ModelOption?) -> AgentCapabilities {
+    var capabilities: AgentCapabilities = agent == .pi ? [.images, .retry, .quota] : .images
     if model?.acceptsImages == false { capabilities.remove(.images) }
     return capabilities
-  }
-
-  private static func of(_ agent: AgentKind, hosted: Bool) -> AgentCapabilities {
-    if hosted { return agent == .pi ? .all.union([.retry, .quota]) : .all }
-    switch agent {
-    // dsh 只有 CuePad 托管的会话（它的 web 与桌面版的会话不接）
-    case .pi: return .all.union([.retry, .quota])
-    case .opencode, .dsh: return .all
-    // 终端里的会话经它的收件箱说话与改名（只收文字）、经钩子作答、像 Ctrl-C 那样结束；停止这一轮、换模型、斜杠命令只有托管的能做
-    case .claudeCode: return [.speak, .answer, .rename, .end]
-    case .codex: return [.speak, .images, .abort, .model, .rename, .commands, .answer]
-    // 终端里的会话只读跟读它的会话记录，CuePad 碰不到它的输入
-    case .grok: return []
-    }
   }
 }
 

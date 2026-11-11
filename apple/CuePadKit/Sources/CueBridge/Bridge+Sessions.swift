@@ -26,7 +26,7 @@ extension Bridge {
         replace(slot, with: session)
     }
 
-    /// 历史索引读到的会话名放到在线的同一会话上：各家自己起的、改的名字有的只落在文件里（Claude Code 的 `ai-title`、终端里的 Grok 与 Codex），
+    /// 历史索引读到的会话名放到在线的同一会话上：各家自己起的、改的名字有的只落在文件里（Claude Code 的 `ai-title`、Grok、Codex），
     /// 这是它们到在线会话的唯一入口。名字这次变了才换（文件落后于接入报来的改名时不倒回去），在线的还没名字时补上（CuePad 重开后接回）。
     public func read(_ update: HistoryUpdate) {
         guard let name = update.history.name else { return }

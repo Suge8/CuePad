@@ -73,7 +73,7 @@ public enum CueStoreError: Error, Equatable {
   case cannotStop(String)
   /// 会话还在用：没做完的事绑着它，或有话正送进去（参数是会话名）。
   case sessionInUse(String)
-  /// 会话在跑，Cue 这会儿说不了（参数是会话名与原因）：会打断他发起的那一轮，或停不下这一轮（`SessionState.speakBlocked`）。
+  /// 会话在跑，Cue 这会儿说不了（参数是会话名与原因）：会打断他发起的那一轮。
   case cannotSpeakNow(String, String)
   /// 会话所在的 Mac 此刻不在线，对它说话、停止都送不到（参数是会话名与那台 Mac 的名字，`SessionState.offlineMac`）。
   case macOffline(String, String)
@@ -81,15 +81,11 @@ public enum CueStoreError: Error, Equatable {
   case sessionUnconfirmed(String)
   /// 会话正在跑的这一轮查不到是谁开的，说话会打断它（参数是会话名）。
   case turnSourceUnconfirmed(String)
-  /// 会话开在终端里、CuePad 只读跟读它（`AgentCapabilities.speak`），对它说不了话（参数是会话名）。
-  case terminalOnly(String)
-  /// 会话不能从 CuePad 结束（参数是会话名）。
-  case cannotEnd(String)
   /// 会话没停着，没有可留给他回的停下（参数是会话名）。
   case notStopped(String)
   /// model 不在这家能选的里面（参数是 Agent 名、Cue 写的 model 与能选的，`CueStore.cueModelKey`）。
   case unknownModel(agent: String, model: String, choices: [String])
-  /// 会话换不了模型（参数是会话名）。
+  /// 会话的记录还没到，换不了模型（参数是会话名）。
   case cannotChangeModel(String)
   /// 答案不在可选的里面（参数是可选的答案）。
   case invalidAnswer([String])
@@ -154,18 +150,16 @@ extension CueStoreError: LocalizedError {
     case .invalidModel(let agent): "\(agent) 的 model 写成 provider/id：提供方与模型 id 用 / 隔开（Claude Code、Codex 只写 id）"
     case .unknownModel(let agent, let model, let choices):
       "\(agent) 没有 \(model)：" + (choices.count <= Self.choicesListed ? "能选的是 \(choices.joined(separator: "、"))，照抄其一" : "用 setup look agents 看能选的，照抄其一")
-    case .cannotChangeModel(let title): "会话「\(title)」换不了模型（这一家在终端里开的会话不能从 CuePad 换）：用 start 带 fresh:true 和 model 开新会话"
-    case .cannotStop(let title): "会话「\(title)」现在停不了：没在跑一轮、在等回答，或它在终端里开、不能从 CuePad 停止"
+    case .cannotChangeModel(let title): "会话「\(title)」换不了模型（它的记录还没到）：用 start 带 fresh:true 和 model 开新会话"
+    case .cannotStop(let title): "会话「\(title)」现在停不了：没在跑一轮，或在等回答"
     case .cannotSpeakNow(let title, let why): "会话「\(title)」\(why)：没说出去。等它歇下（会叫醒你）再说"
     case .macOffline(let title, let mac):
       "会话「\(title)」所在的「\(mac)」此刻不在线（睡着、关机或 CuePad 没开）：这次没有发出，那台开机前对它做什么都送不到。别重试，等它开机；急的用 tell 告诉他"
     case .sessionUnconfirmed(let title):
       "会话「\(title)」此刻在做什么还没确认（它所在的 Mac 这次开机后还没报过它，或报的状态这个版本不认识）：这次没有发出。等它报了再说；要看它最后在做什么用 task peek"
     case .turnSourceUnconfirmed(let title): "会话「\(title)」正在跑的这一轮查不到是谁开的：现在说会打断它，没说出去。等它歇下（会叫醒你）再说"
-    case .terminalOnly(let title): "会话「\(title)」开在终端里，CuePad 只看得到它在做什么、对它说不了话：要它做的 tell 他在终端里说；它退出后再 say 会在后台接着它"
     case .sessionEnding: String(localized: "会话正在结束，确认结束结果后才能关联或发送")
     case .sessionInUse(let title): "会话「\(title)」还在用（没做完的事绑着它，或有话正送进去），没结束：那件事做完时 done 那件事"
-    case .cannotEnd(let title): "会话「\(title)」不能从 CuePad 结束（终端里开的这类）：要收掉就 tell 他在终端里退出"
     case .notStopped(let title): "会话「\(title)」没停着（在跑、被打断或已结束）：留给他回只用在它歇着、在等回答或出错时"
     case .invalidAnswer(let options): "会话在等提问的回答，答案要是其中之一（原文或从 1 起的序号）：\(options.joined(separator: " / "))"
     case .memoryLineTooLong(let limit): String(localized: "一条记忆最多 \(limit) 字节（UTF-8）")

@@ -2,7 +2,7 @@
 import CueStore
 import Foundation
 
-/// 一个会话一条记录：同一会话同时有两个进程（后台托管的那个正在让给你在终端里打开的那个）时，记录跟着你的；
+/// 一个会话一条记录：同一会话同时有两个进程时，记录跟着其中一个；
 /// 其中一个结束而另一个还在时，记录不标为结束，换由还在的那个写。进程都退出时怎么收尾（历史、歇着、删除）只由 `StateRecorder.exited` 定，
 /// 重载扩展（`SessionEndReason.reload`）不是退出：同一进程马上以新扩展连回来接着写。
 /// 标题：会话自己报了名字或首条消息就用它的，否则用会话索引里的（接上的老会话在第一句话之前就有标题，不必去读会话文件）。
@@ -42,8 +42,7 @@ public struct SessionMirror {
     }
 
     private func owner(of sessionID: String) -> Session? {
-        let processes = live.values.filter { $0.sessionID == sessionID }
-        return processes.first { !$0.hosted } ?? processes.first
+        live.values.first { $0.sessionID == sessionID }
     }
 
     private func record(_ session: Session) async throws -> String? {

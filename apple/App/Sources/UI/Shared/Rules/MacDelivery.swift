@@ -17,7 +17,7 @@ nonisolated enum ReplyButton: Equatable {
     case send(DeliveryMode)
 }
 
-/// 会话能做什么只看 `AgentCapabilities`：能否停止、结束与作答都经 `SessionState` 上同一组规则（Cue 也经它们）。
+/// 能否停止、结束与作答都经 `SessionState` 上同一组规则（Cue 也经它们）。
 nonisolated enum MacDelivery {
     /// 记录 ended 不确认投送；未知请求逐条保留，不能被别的结束成功掩盖。新的结束在途时先显示它的进度。
     static func endIssue(_ requests: [DeliveryRequest], at moment: Speech.Moment) -> Speech.Trip? {
@@ -94,7 +94,7 @@ nonisolated enum MacDelivery {
 
 nonisolated extension SessionState {
     /// 做不到时没有：输入 "/" 不弹面板，按普通文字发。
-    func usableCommands(in catalog: AgentCatalog?) -> [SlashCommand] { capabilities.contains(.commands) ? catalog?.commands ?? [] : [] }
+    func usableCommands(in catalog: AgentCatalog?) -> [SlashCommand] { catalog?.commands ?? [] }
 }
 
 nonisolated extension DeliveryMode {

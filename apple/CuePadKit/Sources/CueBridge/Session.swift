@@ -80,7 +80,7 @@ public struct Session: Identifiable, Sendable, Equatable {
     /// CuePad 在后台托管的 Pi（RPC 模式，没有终端界面）：启动时经环境变量 `CUEPAD_HOSTED` 告诉扩展，扩展在 hello 里带回
     public internal(set) var hosted = false
     /// 见 `AgentKind.confirmsFromHistory`
-    public var confirmsFromHistory: Bool { agent.confirmsFromHistory(hosted: hosted) }
+    public var confirmsFromHistory: Bool { agent.confirmsFromHistory }
     /// 未选模型时 `model` 与 `thinking` 为 nil
     public internal(set) var model: ModelOption? = nil
     public internal(set) var thinking: Open<ThinkingLevel>? = nil
@@ -94,7 +94,7 @@ public struct Session: Identifiable, Sendable, Equatable {
 
     public var modelState: ModelState { ModelState(model: model, thinking: thinking, fast: fast, models: availableModels) }
 
-    public var capabilities: AgentCapabilities { .of(agent, hosted: hosted, model: model) }
+    public var capabilities: AgentCapabilities { .of(agent, model: model) }
 
     var carried: (state: WorkState, times: SessionTimes) { (state, SessionTimes(stateSince: stateSince, busySince: busySince)) }
 
