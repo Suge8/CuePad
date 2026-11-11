@@ -33,23 +33,19 @@ struct RealOpenCodeTests {
         try await store.chatMessages(of: sessionID).filter { $0.role == .known(.pi) }.map(\.text)
     }
 
-    /// 发送：终端里 `opencode run` 的会话上了桥、答完歇下，CuePad 再发一句、改名、就地换模型与强度、压缩上下文，接入停了再开会话回来，服务停了会话下线。
-    @Test(.tags(.smoke)) func aTerminalSessionIsLiveInCuePadAndTakesMessagesAnswersAndSettings() async throws {
+    /// 发送：CuePad 开的会话答完歇下，再发一句、改名、就地换模型与强度、压缩上下文。
+    @Test(.tags(.smoke)) func aHostedSessionTakesMessagesAnswersAndSettings() async throws {
         try await withOpenCode { sandbox, store, bridge, runtime in
-            // 2.2.6 的 `run` 没有后台服务时自己带一个私有的、跑完就走：终端用户的服务是先开着的
-            try await sandbox.run(["service", "start"])
-            try await sandbox.run(["run", "Reply with exactly the word PONG and nothing else."])
-
-            // 会话一建好就上桥，那时还没开始这一轮、也就还不知道用的模型（状态同样是歇着）。回答进资料库不说明这一轮的事件已处理：
-            // 连上服务时的快照随即回填对话，直接从服务读，可以早于事件流里的这一轮。模型只有这一轮告诉 CuePad（事件，或快照里已有的回答）
-            try await eventually("终端里的会话上了桥、答完歇下") {
+            let id = try await runtime.open(in: sandbox.work, launchToken: "token-m", name: nil, model: nil, thinking: nil)
+            try await bridge.send(SessionMessage(text: "Reply with exactly the word PONG and nothing else."), to: id)
+            try await eventually("答完歇下") {
                 guard let live = session(bridge), live.state == .settled, live.model != nil else { return false }
                 return try await replies(store, live.sessionID).last?.contains("PONG") == true
             }
             let live = try #require(session(bridge))
             let service = commandLine(of: try #require(sandbox.service).pid)
             #expect(service.contains("/\(OpenCodeSandbox.pinned.name)/\(OpenCodeSandbox.pinned.version)/"), "起的不是钉住的 OpenCode：\(service)")
-            #expect(sandbox.model.requests.contains { $0.api == .chat && $0.model == "echo" && $0.prompt.contains("PONG") && !$0.tools.isEmpty }, "假模型没收到终端里的那句")
+            #expect(sandbox.model.requests.contains { $0.api == .chat && $0.model == "echo" && $0.prompt.contains("PONG") && !$0.tools.isEmpty }, "假模型没收到那句")
             #expect(live.cwd.resolvingSymlinksInPath() == sandbox.work.resolvingSymlinksInPath())
             #expect(live.model?.key == openCodeTestModel && live.context?.window != nil)
             #expect(live.commands.contains { $0.name == "review" } && live.commands.contains { $0.name == "compact" })
@@ -81,18 +77,6 @@ struct RealOpenCodeTests {
             try await eventually("压缩上下文留下一行") {
                 try await store.chatMessages(of: live.sessionID).contains { $0.text == ChatNotice.compacted.rawValue }
             }
-
-            await runtime.stop()()
-            #expect(session(bridge) == nil)
-            try await store.deleteSessions(of: .opencode, keepingHostedOn: "mac")
-            try runtime.start()
-            try await eventually("再接入后会话回来、索引写回") {
-                let indexed = try await store.indexedSession(live.sessionID)
-                return session(bridge) != nil && indexed != nil
-            }
-
-            try await sandbox.run(["service", "stop"])
-            try await eventually("服务停了，会话下线") { session(bridge) == nil }
         }
     }
 

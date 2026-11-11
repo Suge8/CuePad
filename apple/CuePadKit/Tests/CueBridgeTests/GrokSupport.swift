@@ -92,7 +92,7 @@ final class GrokRig {
             .merging(["CUEPAD_PI_SOCKET_DIR": sockets.path, "CUEPAD_LIBRARY_DIR": root.appending(path: "library").path]) { $1 }
         let paths = AgentPaths(pi: PiPaths(agentDirectory: root.appending(path: "pi"), socketDirectory: sockets), environment: environment)
         bridge = Bridge(socketDirectory: sockets)
-        runtime = GrokRuntime(bridge: bridge, paths: paths, files: scratchFiles, grok: { pinnedGrok.executable }, locate: { pinnedGrok.locator }, timing: noDeadline)
+        runtime = GrokRuntime(bridge: bridge, paths: paths, grok: { pinnedGrok.executable }, locate: { pinnedGrok.locator }, timing: noDeadline)
         try bridge.start()
         try runtime.start()
     }
