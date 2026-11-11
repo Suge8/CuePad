@@ -102,7 +102,7 @@ struct TaskCountTests {
         let live = try await store.createTask("修登录")
         try await recorder.update(sessionID: "login", state: .thinking, title: "修登录")
         try await store.bindSession("login", to: live.id)
-        try await recorder.update(sessionID: "term", state: .settled, title: "终端里的")
+        try await recorder.update(sessionID: "term", state: .settled, title: "无主的")
         func inEnvelope() async throws -> Int { try await store.cueBoard().active.count }  // 信封的"在做 N 件"数的就是它
 
         var board = try await TaskBoard.read(from: store)

@@ -197,16 +197,5 @@ struct SendTargetTests {
         #expect(macLaunch.launch?.project == cueLaunch.launch?.project && macLaunch.hostID == cueLaunch.hostID)
         #expect(macLaunch.target.name == cueLaunch.target.name)
     }
-
-    @Test func 本机记录里在线但桥上已没有的会话不算在线() async throws {
-        _ = try await open("a", in: "/work/alpha")
-        try await remoteSession("r", title: "atlas")
-        try await StateRecorder(store: store, hostID: TestApp.hostID).update(
-            sessionID: "stale", state: .settled, title: "stale", directory: "stale", projectID: project.id)
-        try await eventually("liveSessions.live 有三条") { rig.services.liveSessions.live.count == 3 }
-
-        #expect(Set(workspace.sendState.onlineTargets(for: project.id).map(\.state.sessionID)) == ["a", "r"])
-        if case .ended = workspace.sendState.route(of: "stale") {} else { Issue.record("发送时它是已结束的会话") }
-    }
 }
 #endif

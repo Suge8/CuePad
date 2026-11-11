@@ -188,34 +188,20 @@ extension MacSyncTests {
         #expect(woke.due.map { "\($0.kind)\($0.interrupted ? "（被打断）" : "") \($0.session?.sessionID ?? "")" } == (running ? ["settled s1"] : []))
     }
 
-    @Test(arguments: [true, false])
-    func 进程没了的会话仍认它报过的斜杠命令(hosted: Bool) async throws {
+    @Test(arguments: [false, true])
+    func 进程没了的会话仍认它报过的斜杠命令(ended: Bool) async throws {
         var live = session("s1", state: .settled, spoke: true)
-        live.hosted = hosted
+        live.hosted = true
         live.commands = [SlashCommand(name: "default", summary: "回默认模式", source: .known(.builtin))]
         try await services.consumeSessionChanges(changes([.appeared(live), .ended(live, reason: .disconnected)]))
-        if !hosted { try await StateRecorder(store: services.store, hostID: TestApp.hostID).end(sessionID: "s1") }
+        if ended { try await StateRecorder(store: services.store, hostID: TestApp.hostID).end(sessionID: "s1") }
 
         let stored = try #require(try await services.store.allSessionStates().first)
-        #expect(stored.state == .known(hosted ? .settled : .ended))
+        #expect(stored.state == .known(ended ? .ended : .settled))
         let catalogID = try #require(stored.catalogID)
         let catalog = try await services.store.agentCatalog(catalogID)
         #expect(catalog?.models.isEmpty ?? true)  // 可选模型不留
         #expect(Slash.line(of: ComposerDraft(text: "/default"), in: stored.usableCommands(in: catalog), for: stored) == "/default")
-    }
-
-    @Test func 同一会话换到用户的终端里_记录跟着新进程_后台进程退出不结束记录() async throws {
-        var hosted = session("s1", pid: 100)
-        hosted.hosted = true
-        var mine = session("s1", pid: 200)
-        mine.state = .tool
-        try await services.consumeSessionChanges(changes([
-            .appeared(hosted), .appeared(mine), .stateChanged(hosted, from: .thinking), .ended(hosted, reason: .closed(reason: "quit")),
-        ]))
-
-        let records = try await services.store.allSessionStates()
-        #expect(records.count == 1)
-        #expect(records.first?.hosted == false && records.first?.state == .known(.tool))
     }
 }
 #endif

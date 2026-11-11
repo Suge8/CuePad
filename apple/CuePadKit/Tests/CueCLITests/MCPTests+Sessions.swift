@@ -74,18 +74,12 @@ extension MCPTests {
       #expect(requests.map(\.mode) == [.known(.config), .known(.send)] && requests.allSatisfy(\.isFromCue))
       #expect(requests.first?.config == SessionConfig(model: ModelKey(provider: "openai", id: "gpt-6-luna"), thinking: .high))
       #expect(requests.last?.content == "用 luna 重试")
-
-      let reason = try await server.refused("task", ["action": "say", "task": claude.id.uuidString, "text": "换个模型", "model": "opus"])
-      #expect(reason.contains("换不了模型") && reason.contains("fresh"))
       #expect(try await store.deliveryRequests().count == 2)
 
       let question = Question(promptID: "p", kind: .confirm, text: "继续？")
       try await recorder.update(sessionID: "s1", state: .waitingForUser, question: question)
-      try await recorder.update(sessionID: "c1", state: .waitingForUser, question: question, agent: .claudeCode)
       let answer = ["action": "say", "task": pi.id.uuidString, "model": "openai/gpt-6-sol", "effort": "low"]
       try await server.refused("task", answer.merging(["text": "也许"]) { $1 })
-      #expect(try await store.deliveryRequests().count == 2)
-      #expect(try await server.refused("task", ["action": "say", "task": claude.id.uuidString, "text": "yes", "model": "opus"]).contains("换不了模型"))
       #expect(try await store.deliveryRequests().count == 2)
       _ = try await server.call("task", answer.merging(["text": "yes"]) { $1 })
       let answered = try await store.deliveryRequests(toSession: "s1").suffix(2)
@@ -95,7 +89,7 @@ extension MCPTests {
       _ = try await server.call("task", ["action": "start", "task": claude.id.uuidString, "agent": "claude", "model": "opus", "fresh": true])
       let launch = try #require(try await store.deliveryRequests().first { $0.mode == .known(.start) })
       #expect(launch.launch?.agent == .claudeCode && launch.launch?.model == ModelKey(provider: "claude", id: "opus"))
-      // 换下来的是终端里他自己开的会话：不替他结束（结束就是关掉他的终端进程）
+      // 换下来的会话只是关联过、不是为这件事开的：不结束
       #expect(try await store.deliveryRequests(toSession: "c1").allSatisfy { $0.mode != .known(.end) })
     }
   }

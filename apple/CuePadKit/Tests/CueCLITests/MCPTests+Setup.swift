@@ -5,7 +5,7 @@ import Foundation
 import Testing
 
 extension MCPTests {
-  /// Cue 在 mac-a 上用 Pi 当大脑：Pi 的 Opus 花 Max 账号的额度（本周用了 86%，卡着），终端里的 Claude Code 也能用，Codex 没登录。
+  /// Cue 在 mac-a 上用 Pi 当大脑：Pi 的 Opus 花 Max 账号的额度（本周用了 86%，卡着），Claude Code 也能用，Codex 没登录。
   private static let opus = ModelOption(
     key: ModelKey(provider: "anthropic", id: "claude-opus-5-5"), name: "Claude Opus 5.5", thinkingLevels: [.low, .medium, .high],
     account: PiAccount(kind: .oauth, scope: "max-1"), supportsFast: true)
@@ -62,7 +62,7 @@ extension MCPTests {
       let overview = try await server.call("setup", ["action": "look"])
       for expected in [
         "大脑：Pi · 默认（anthropic/claude-opus-5-5）", "在「工作室」", "健康：值班中", "429 rate limited", "codex 用不了：没登录",
-        "他在终端里开的 Claude Code 会话：不能发图、停下这一轮、换模型、用斜杠命令", "anthropic「Max」（吃紧） 5 小时 已过重置时间，等新的观测；本周 已用 86%", "卡着", "记忆 2 条（重点 1 条）",
+        "- claude 能用", "anthropic「Max」（吃紧） 5 小时 已过重置时间，等新的观测；本周 已用 86%", "卡着", "记忆 2 条（重点 1 条）",
         "官网（\(folder)）",
       ] {
         #expect(overview.contains(expected), "\(expected) 不在：\n\(overview)")

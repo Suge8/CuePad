@@ -12,14 +12,6 @@ import Testing
     Dictionary(uniqueKeysWithValues: try await store.sessionPage(SessionQuery(limit: .max)).items.map { ($0.state.sessionID, $0.state) })
   }
 
-  /// 没说过话的删掉、托管的歇着到用户结束，见 App 的 `HistoryRulesTests`。
-  @Test func 终端里说过话的会话进程退出_进历史() async throws {
-    try await recorder.update(sessionID: "terminal", state: .settled, title: "terminal")
-    try await recorder.exited(sessionID: "terminal", spoke: true)
-    #expect(try await states()["terminal"]?.state == .known(.ended))
-    #expect(try await store.sessionPage(.current).items.isEmpty)
-  }
-
   /// 对账时进程一律判为不在。
   @Test func 启动对账_托管的歇着_其余记为已结束_没有会话文件的清掉_在线的不动() async throws {
     let recorder = recorder

@@ -13,7 +13,7 @@ struct SessionTaskTests {
     var services: AppServices { rig.services }
     var store: CueStore { services.store }
 
-    @Test func 终端里开的会话_不长任务_Cue的信封里看得到_能对它说话_也能为它建任务() async throws {
+    @Test func 不经任务开的会话_不长任务_Cue的信封里看得到_能对它说话_也能为它建任务() async throws {
         let project = try await store.createProject(name: "圆桌", color: "#000000")
         try await store.setDirectory("/work/x", for: project.id)
         try await enableCue()
@@ -23,6 +23,7 @@ struct SessionTaskTests {
             cwd: URL(filePath: "/work/x", directoryHint: .isDirectory), terminal: TerminalIdentity(),
             state: .settled, stateSince: .now)
         session.name = "修登录"
+        session.hosted = true
         try await bridge(.appeared(session))
 
         let empty = try await TaskBoard.read(from: store)

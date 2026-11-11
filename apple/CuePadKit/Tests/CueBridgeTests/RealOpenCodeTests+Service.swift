@@ -89,6 +89,37 @@ extension RealOpenCodeTests {
         }
     }
 
+    /// 对终端里开过的会话（没有认领标识）发话，CuePad 在后台接着它；结束后它仍算这台托管过：重连后照样认它、读得到它的对话。
+    @Test func aResumedTerminalSessionStaysHostedAfterItEnds() async throws {
+        try await withOpenCode { sandbox, store, bridge, runtime in
+            let recorder = StateRecorder(store: store, hostID: "mac")
+            var mirror = SessionMirror(recorder: recorder)
+            let changes = bridge.changes()
+            let recording = Task { for await change in changes { _ = try? await mirror.apply(change) } }
+            defer { recording.cancel() }
+            try await sandbox.run(["service", "start"])
+            try await sandbox.run(["run", "Reply with exactly the word PONG and nothing else."])
+            let id = try #require((try await sandbox.api("GET", "/api/session")["data"] as? [[String: Any]])?.first?["id"] as? String)
+            let history = IndexedSession(id: id, path: OpenCodeRuntime.path(id), cwd: sandbox.work.path, title: "终端里的", lastActivityAt: .now, agent: .opencode)
+            try await store.upsertSession(history, host: "mac")
+            await #expect(throws: BridgeError.unknownSession(id)) { try await runtime.transcript(of: history, files: store.files) }
+
+            let live = try await runtime.resume(history)
+            try await eventually("接着它，记成托管") { try await store.hostedSessionIDs(of: .opencode, host: "mac") == [id] }
+            try await bridge.end(live)
+            try await recorder.end(sessionID: id)
+            #expect(try await store.sessionItems(sessionIDs: [id])[id]?.state.state == .known(.ended))
+            #expect(try await store.hostedSessionIDs(of: .opencode, host: "mac") == [id], "结束后不算托管过了")
+
+            await runtime.stop()()
+            let reconnected = sandbox.runtime(bridge, store)
+            try reconnected.start()
+            let transcript = try await reconnected.transcript(of: history, files: store.files)
+            #expect(transcript.messages.contains { $0.role == .known(.user) && $0.text.contains("PONG") })
+            await reconnected.stop()()
+        }
+    }
+
     @Test func aSessionWhoseModelCannotBeSetIsNotLeftInTheService() async throws {
         try await withOpenCode { sandbox, store, bridge, runtime in
             await #expect(throws: BridgeError.unknownModel(.opencode)) {

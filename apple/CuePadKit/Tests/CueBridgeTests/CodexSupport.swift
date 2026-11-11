@@ -216,21 +216,4 @@ final class CodexRig {
         return draft.landed(newestReply: newest?.at, record: newest?.id)
     }
 }
-
-@MainActor
-final class TestPresence: UserPresence {
-    var isPresent = false {
-        didSet {
-            guard isPresent else { return }
-            for waiter in waiters { waiter.resume() }
-            waiters = []
-        }
-    }
-    private var waiters: [CheckedContinuation<Void, Never>] = []
-
-    func untilPresent() async {
-        guard !isPresent else { return }
-        await withCheckedContinuation { waiters.append($0) }
-    }
-}
 #endif
