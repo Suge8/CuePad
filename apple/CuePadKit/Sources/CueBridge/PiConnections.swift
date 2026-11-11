@@ -101,7 +101,7 @@ final class PiConnections {
             guard let work = hello.state.work else { throw HandlingError.unknownState(hello.state.kind) }
             var session = Session(
                 id: name, sessionID: hello.sessionId, agent: .pi, sessionFile: hello.sessionFile.map { URL(filePath: $0) }, pid: hello.pid,
-                cwd: URL(filePath: hello.cwd, directoryHint: .isDirectory), terminal: TerminalIdentity(), state: work.state, detail: work.detail,
+                cwd: URL(filePath: hello.cwd, directoryHint: .isDirectory), state: work.state, detail: work.detail,
                 errorMessage: hello.state.errorMessage, stateSince: hello.state.sinceDate, busySince: hello.state.busySinceDate)
             session.turnStartedAt = hello.state.turnSinceDate
             hello.info.apply(to: &session)
@@ -115,7 +115,7 @@ final class PiConnections {
             guard hello.hosted else { throw HandlingError.notHosted }
             var session = Session(
                 id: name, sessionID: hello.sessionId, agent: .pi, sessionFile: hello.sessionFile.map { URL(filePath: $0) }, pid: hello.pid, cwd: URL(filePath: hello.cwd, directoryHint: .isDirectory),
-                terminal: TerminalIdentity(), state: .settled, upgrading: true, stateSince: Date())
+                state: .settled, upgrading: true, stateSince: Date())
             session.name = hello.name
             session.firstMessage = hello.firstMessage
             link.extensionVersion = hello.extensionVersion

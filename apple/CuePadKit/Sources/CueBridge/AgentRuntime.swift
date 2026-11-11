@@ -118,7 +118,6 @@ public protocol AgentRuntime: AnyObject {
     ) async throws -> Session.ID
     func resume(_ session: IndexedSession) async throws -> Session.ID
     func transcript(of session: IndexedSession, files: AttachmentFiles) async throws -> SessionTranscript
-    func integrationInstalled()
     func integrationRemoved() async
 }
 
@@ -139,8 +138,6 @@ extension AgentRuntime {
         }
         return id
     }
-
-    public func integrationInstalled() {}
 
     public func integrationRemoved() async {}
 

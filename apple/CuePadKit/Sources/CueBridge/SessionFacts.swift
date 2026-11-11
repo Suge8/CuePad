@@ -23,7 +23,7 @@ struct SessionFacts {
     private var beforeCompaction: (since: Date, busySince: Date?)?
 
     /// 开始新的一轮。`start` 要早于这一轮在会话文件里可能的收尾（歇下就绪看收尾不早于它，`SessionState.answered`）：
-    /// 取 Agent 给的开始时刻；没有就取一定在它之前的——挡住这一轮的钩子、CuePad 发出话或空输入、收到开始通知的那一刻；
+    /// 取 Agent 给的开始时刻；没有就取一定在它之前的——CuePad 发出话或空输入、收到开始通知的那一刻；
     /// 接上时已在跑的取拿到列表或快照之后会话记录里最后一轮的开始（`HistoryCheckpoint.lastTurnStart`）：接上的此刻、请求前的时刻、
     /// 库里旧的都分不清期间换没换轮（会晚于这一轮的收尾或早于上一轮的回答），记录里一轮都读不到才取请求前的时刻。
     mutating func startTurn(at start: Date) {

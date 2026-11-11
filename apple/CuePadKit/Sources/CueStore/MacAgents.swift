@@ -76,20 +76,17 @@ public struct MacAgentProblem: Codable, Equatable, Sendable {
     self.reason = reason
   }
 
-  /// 要你动手的几种（Mac 的接入面板按它给"安装""登录"、勾上接入）与别的（版本太旧、问不出模型……，只写出来）。
+  /// 要你动手的几种（Mac 的接入面板按它给"安装""登录"）与别的（版本太旧、问不出模型……，只写出来）。
   /// 同步记录里存的是种类（别的带句式与参数，`ShownText`），各端按自己的语言写出（`description`，接在 Agent 名后面读）。
   public enum Reason: Equatable, Sendable, Codable, CustomStringConvertible {
     case notInstalled
     case notLoggedIn
-    /// 登录了、只差接入（只有 Pi：托管的 Pi 经桥扩展上报）
-    case notConnected
     case other(ShownText)
 
     public var description: String {
       switch self {
       case .notInstalled: String(localized: "没装")
       case .notLoggedIn: String(localized: "没登录")
-      case .notConnected: String(localized: "还没接入 CuePad（在设置里打开）")
       case .other(let text): text.text
       }
     }

@@ -55,7 +55,7 @@ final class HostedProcesses {
         return Admission(era: era)
     }
 
-    /// 进程一起来就登记（不等握手、不等连上：钩子据此认出托管进程自己的，`stop()` 也收得到它）；进程退出时摘掉。
+    /// 进程一起来就登记（不等握手、不等连上：`stop()` 也收得到它）；进程退出时摘掉。
     /// `admission` 之后被 `stop()` 过就不登记：收掉它，抛 `CancellationError`。开新会话时会话 id 还不知道，连上后 `adopt`。
     func admit(_ process: ChildProcess, for sessionID: String?, _ admission: Admission) async throws {
         guard era == admission.era else {

@@ -2,44 +2,6 @@
 import CueStore
 import Foundation
 
-/// 来自扩展 hello 里的环境变量。
-public struct TerminalIdentity: Sendable, Equatable {
-    public var tty: String?
-    public var program: String?
-    public var bundleID: String?
-    public var tmuxPane: String?
-    public var tmuxSocketPath: String?
-
-    public init(tty: String? = nil, program: String? = nil, bundleID: String? = nil,
-                tmuxPane: String? = nil, tmuxSocketPath: String? = nil) {
-        self.tty = tty
-        self.program = program
-        self.bundleID = bundleID
-        self.tmuxPane = tmuxPane
-        self.tmuxSocketPath = tmuxSocketPath
-    }
-
-    static func controllingTerminal(of pid: Int32) -> String? {
-        var info = proc_bsdinfo()
-        let size = Int32(MemoryLayout<proc_bsdinfo>.size)
-        guard proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, size) == size, info.e_tdev != UInt32(bitPattern: -1),
-              let name = devname(dev_t(bitPattern: info.e_tdev), S_IFCHR) else { return nil }
-        let tty = String(cString: name)
-        return tty == "??" ? nil : tty
-    }
-
-    init(tty: String?, environment env: [String: String]) {
-        self.init(
-            tty: tty,
-            program: env["TERM_PROGRAM"],
-            bundleID: env["__CFBundleIdentifier"],
-            tmuxPane: env["TMUX_PANE"],
-            // TMUX=<socket路径>,<server pid>,<session>
-            tmuxSocketPath: env["TMUX"].flatMap { $0.split(separator: ",", omittingEmptySubsequences: false).first.map(String.init) }
-        )
-    }
-}
-
 /// 状态与随会话同步的各块值直接用 CueStore 的类型：桥解码出来什么样，记录器就原样写什么样。
 public struct Session: Identifiable, Sendable, Equatable {
     /// `<sessionId>.<pid>`：同一会话被两个进程同时打开时也唯一；Pi 的等于 socket 文件名去掉 `.sock`
@@ -48,11 +10,9 @@ public struct Session: Identifiable, Sendable, Equatable {
     public let agent: AgentKind
     /// 首条消息落盘前该文件还不存在；`--no-session` 时为 nil，OpenCode 的会话在它的数据库里，也为 nil。
     public let sessionFile: URL?
-    /// 承载这个会话的进程：Pi、Claude Code 是会话自己的进程；Codex 是承载终端会话的常驻服务，OpenCode 是它的后台服务（同一进程承载多个会话）
+    /// 承载这个会话的进程：OpenCode 是它的后台服务（同一进程承载多个会话），其余是 CuePad 为这个会话起的进程
     public let pid: Int32
     public let cwd: URL
-    /// 启动时从会话列表补上的会话没有终端的环境变量，第一次钩子才带来
-    public internal(set) var terminal: TerminalIdentity
     public internal(set) var state: WorkState
     /// CuePad 读不懂这一版扩展（`PiWire.reads`）。这段时间读不到它在做什么（`state` 只是填的歇着）、也发不进命令；
     /// 同步记录不写、界面不换上桥上的状态，都照它最后一次读到的样子。
