@@ -6,7 +6,7 @@ import AppKit
 /// - `pinch:x,y,倍数` 触控板捏合（大于 1 是放大，约半秒）；`smart:x,y` 智能缩放（双指轻点两下）；
 /// - `swipe:x,y,dx,dy` 触控板双指滑动（dx、dy 是手指走的点数，往右、往下为正；约 0.3 秒，没有惯性）：翻页照真的走；
 ///   滚动视图自己的滚动（放大后的图双指看图）在进程内合成不了——系统的滚动视图在别的线程按窗口服务器送来的滑动滚（responsive scrolling），
-///   不认合成的；后台看图用 `drag`，要真滚走下面占前台的 `hidscroll`；`jump:x,y,dy` 让那一点的滚动视图一下往下挪 dy 点（负数往上；只为把内容摆到要看的地方，如 PDF 翻到后页、对话翻回前面）；
+///   不认合成的；后台看图用 `drag`，要真滚走下面占前台的 `hidscroll`；`jump:x,y,dy[,dx]` 让那一点的滚动视图一下往下挪 dy 点、往右挪 dx 点（负数往上、往左；只为把内容摆到要看的地方，如 PDF 翻到后页、对话翻回前面、看板横滚到中间）；
 /// - `left`、`right`、`space`、`esc` 按一下那个键；`wait:秒` 多等一会儿；`width:宽,秒` 像拖窗口右边那样逐帧把窗口改到这么宽（左上角不动）；
 /// - 占前台的真实输入（要 `-CuePadForeground YES`，`DebugForeground`）：`front:x,y` 借前台、把指针放到那一点；`hidpinch:x,y,倍数`、
 ///   `hidscroll:x,y,dx,dy`（手指走 0.5 秒、松手后惯性约 0.6 秒）、`hiddrag:x1,y1,x2,y2,秒`（按住鼠标拖过去，拖窗口边就是真的改窗口宽）在 HID 层发给窗口服务器（同触控板，经它派给指针下的窗口、系统滚动视图自己的线程）；
@@ -61,13 +61,13 @@ extension DebugScene {
                 send(magnify(n[0], n[1], in: window, phase: 2, by: per))
             }
             send(magnify(n[0], n[1], in: window, phase: 4, by: 0))
-        case ("jump", 3):
+        case ("jump", 3), ("jump", 4):
             // 贴底跟随的对话据这两个通知知道是"用户在滚"，不把偏移拉回去；滚动交给那里的滚动视图一份不挂窗口的滚动，一下挪完
             guard let target = window.contentView?.superview?.hitTest(NSPoint(x: n[0], y: window.frame.height - n[1]))?.enclosingScrollView else { break }
             NotificationCenter.default.post(name: NSScrollView.willStartLiveScrollNotification, object: target)
-            let steps = Self.frames / 2
-            for (phase, dy) in [(Int64(1), 0.0)] + Array(repeating: (Int64(2), -n[2] / Double(steps)), count: steps) + [(4, 0)] {
-                scroll(n[0], n[1], in: window, phase: phase, dx: 0, dy: dy, detached: true).map { target.scrollWheel(with: $0) }
+            let steps = Self.frames / 2, dx = n.count > 3 ? -n[3] / Double(steps) : 0
+            for (phase, dy, dx) in [(Int64(1), 0.0, 0.0)] + Array(repeating: (Int64(2), -n[2] / Double(steps), dx), count: steps) + [(4, 0, 0)] {
+                scroll(n[0], n[1], in: window, phase: phase, dx: dx, dy: dy, detached: true).map { target.scrollWheel(with: $0) }
                 await Task.wait(for: Self.frame)
             }
             NotificationCenter.default.post(name: NSScrollView.didEndLiveScrollNotification, object: target)

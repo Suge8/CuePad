@@ -8,21 +8,20 @@ struct TaskBoardPage: View {
     @Environment(\.headInset) private var inset
     @State private var board: TaskBoard?
 
-    static let margin = Spacing.page - BoardCardMetrics.inset
-
-    /// 栏头右边距与看板的页边、卡离列边加起来一样多，抵掉了。
     private static let menu = SearchSlot.reserve + Spacing.item + ControlMetrics.height
 
+    /// 滚动区的边就是两端列的边，看板里不另留页边（`margin: 0`）：放不下横滑时，滚过去的列画到滚动区的边为止，
+    /// 页边留在滚动区里面的话，列会滑进栏头左右那几颗钮底下（#86）。
     private var trailing: CGFloat {
         let alert = SyncAlertSlot.needed(services) ? Spacing.item + ControlMetrics.height : 0
-        return inset.trailing - Spacing.page + Self.menu + alert
+        return inset.trailing - BoardCardMetrics.inset + Self.menu + alert
     }
 
     var body: some View {
         let scope = workspace.scopedProject
-        BoardColumns(board: (board ?? .empty).only(scope), adding: Bindable(workspace).addsTask, newTaskProject: scope ?? workspace.currentProject, margin: Self.margin)
+        BoardColumns(board: (board ?? .empty).only(scope), adding: Bindable(workspace).addsTask, newTaskProject: scope ?? workspace.currentProject, margin: 0)
             .padding(.trailing, trailing)
-            .padding(.leading, inset.leading - Spacing.page)
+            .padding(.leading, inset.leading - BoardCardMetrics.inset)
             .environment(\.boardBand, Chrome.band)
             // 换范围是整块换内容：列里按卡挪位的动画与列头数字滚动都不跟着走（跟着走时四列每帧重排、数字每帧在 CPU 上重画，掉帧半秒）。
             // `animation = nil` 挡不住里层的 `.animation(_:value:)`，只有 `disablesAnimations` 挡得住

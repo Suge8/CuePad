@@ -112,7 +112,7 @@ extension PhoneVoiceViewState {
                                status: execution.status?.label ?? String(localized: "状态等待同步"),
                                stop: sessionUnavailable || execution.title == nil ? nil : .stop(execution.target))
                      }, readings: replies.map { reply in
-                         .init(id: reply.id, excerpt: reply.message.map { String($0.text.prefix(80)) } ?? String(localized: "回复等待同步"),
+                         .init(id: reply.id, excerpt: reply.message.map { CueVoiceState<PhoneVoiceAction>.Reading.excerpt(of: $0.text) } ?? String(localized: "回复等待同步"),
                                status: reply.readback.phoneStatus,
                                recovery: !sessionUnavailable && canRepeat && reply.message != nil && reply.readback != .sending && reply.readback != .queued
                                    ? .repeatReply(reply.id) : nil)
