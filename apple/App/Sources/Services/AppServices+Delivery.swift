@@ -40,7 +40,7 @@ extension AppServices {
     }
 
     /// 你要一台 Mac 做的事（说话、停下、结束、开会话、回答、改设置……）都经这里写成请求并立即上传。
-    /// 那台已知不在线（`CueStore.macKnownOff`）时不写、抛 `SendError.macOff`：写了没人领，到派发期限才作废，这之前界面只能说"已发出"。
+    /// 那台说了离开、还没回来（`CueStore.macKnownOff`）时不写、抛 `SendError.macOff`：写了没人领，到派发期限才作废，这之前界面只能说"已发出"。
     func request(on host: String, _ write: () async throws -> DeliveryRequest) async throws -> DeliveryRequest {
         try await requireAwake(host)
         return uploaded(try await write())

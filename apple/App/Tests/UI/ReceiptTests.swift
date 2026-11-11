@@ -76,7 +76,6 @@ struct ReceiptTests {
         let recorder = StateRecorder(store: store, hostID: "mac-b")
         try await recorder.update(sessionID: "atlas", state: .thinking, title: "atlas")
         try await recorder.update(sessionID: "atlas", state: .settled)
-        try await store.recordMacPresence(host: "mac-b") { true }
         return try #require(try await store.allSessionStates().first { $0.sessionID == "atlas" })
     }
 
