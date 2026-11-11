@@ -7,7 +7,7 @@ import Foundation
 /// 被停下（`interrupted`）的照常结束、不报失败。`tool.called` 不带名字，名字在它之前的 `tool.input.started` 里。
 /// 发送标识是这句的 `metadata.cuepadDelivery`，在它进收件箱（`enqueued`）时记下；收件箱里的一句送进会话（`session.inbox.delivered`，同一事务里成为对话里的消息）的那一刻算收下（`received`）。
 /// 正在说的话的 `since` 取这一步开始（`step.started` 的 `started`）的时刻，不取第一个增量到的时刻：对话里这条回答的时刻是这条消息建立的时刻
-/// （`OpenCodeMessage.at`，同一个毫秒数、同一种换算），早于第一个字；取后者，界面认不出它已落库（`PiDraft.landed`），说完后草稿与
+/// （`OpenCodeMessage.at`，同一个毫秒数、同一种换算），早于第一个字；取后者，界面认不出它已落库（`LiveDraft.landed`），说完后草稿与
 /// 对话里的回答会叠成两份。没看到这一步开始（中途连上）的回答不给草稿。服务不续传：断线重连后从头再来（换一个新的）。
 struct OpenCodeTurn {
     private var draft: DraftParts?

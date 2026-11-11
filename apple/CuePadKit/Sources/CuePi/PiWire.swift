@@ -7,7 +7,7 @@ enum PiWire {
     /// CuePad 读得懂的最旧扩展版本：从它到随包版本，扩展说的格式 CuePad 都照常读、命令照常发。扩展要等会话连同子代理都歇下才换上新版本
     /// （`SelfReload`），可能等几个小时，这期间会话照常收话。只加命令、加 CuePad 可以没有的字段不提它（旧扩展不认的命令回 `bad_request`）；
     /// 改了 CuePad 读的格式、已有命令的含义，或 CuePad 要靠某个新字段才对时，提到那一版。区间外的 hello 只读身份（`IdentityHello`），
-    /// 命令除 `upgrade` 外一条不发，会话等它换上新扩展（`PiSession.upgrading`）
+    /// 命令除 `upgrade` 外一条不发，会话等它换上新扩展（`Session.upgrading`）
     static let oldestExtension = 56
 
     static func reads(extensionVersion version: Int?) -> Bool { version.map { (oldestExtension...PiExtensionBundle.version).contains($0) } == true }
@@ -22,15 +22,15 @@ enum PiWire {
         var busySince: Double?
         var turnSince: Double?
 
-        var work: (state: PiWorkState, detail: String?)? {
+        var work: (state: WorkState, detail: String?)? {
             switch kind {
             case "idle", "done": (.settled, nil)
             case "thinking": (.thinking, nil)
-            case "tool": (.tool, detail.map { "\(tool ?? "?")\(PiSessionState.detailSeparator)\($0)" } ?? tool ?? "?")
+            case "tool": (.tool, detail.map { "\(tool ?? "?")\(SessionState.detailSeparator)\($0)" } ?? tool ?? "?")
             case "delegating": (.delegating, nil)
             case "compacting": (.compacting, nil)
             case "waiting_user": (.waitingForUser, title)
-            case "error": (.error, PiErrorSummary(error ?? "").line)  // 手机上没有悬停看原文
+            case "error": (.error, ErrorSummary(error ?? "").line)  // 手机上没有悬停看原文
             default: nil
             }
         }
@@ -77,7 +77,7 @@ enum PiWire {
 
     /// 每个 hello 先按它读：读得懂这一版扩展（`reads`）才往下读完整的 `Hello`，读不懂的只留认得出会话的几项（其余字段读不出就当没有），
     /// 这几项的键与含义永远不变。`hosted` 也读：托管的与终端里的同一会话并存时记录跟哪个、界面标不标后台看它。
-    /// `sessionFile` 也读：进程退出时说没说过话（`PiSession.spoke`）看它，读不到就会把说过话的会话当成没说话、删掉记录与摘要。
+    /// `sessionFile` 也读：进程退出时说没说过话（`Session.spoke`）看它，读不到就会把说过话的会话当成没说话、删掉记录与摘要。
     struct IdentityHello: Decodable {
         var extensionVersion: Int?
         var sessionId: String
@@ -106,9 +106,9 @@ enum PiWire {
     }
 
     /// `info` 消息只带变了的几项：键出现就是新值（null 是“没有”），没出现就是不变（模型表和命令清单很大，上下文用量每轮都变，不整份重发）。hello 带全部。
-    /// 问答近况不走这里：对话与摘要只来自会话文件（`PiHistory`）。
+    /// 问答近况不走这里：对话与摘要只来自会话文件（`History`）。
     struct Info: Decodable {
-        private var updates: [@Sendable (inout PiSession) -> Void] = []
+        private var updates: [@Sendable (inout Session) -> Void] = []
 
         private enum CodingKeys: String, CodingKey {
             case name, firstMessage, question, subagents, model, thinking, fast, models, proofs, context, commands
@@ -117,7 +117,7 @@ enum PiWire {
         init(from decoder: any Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
             func field<Value: Decodable & Sendable>(
-                _ key: CodingKeys, _ type: Value.Type, _ set: @escaping @Sendable (inout PiSession, Value?) -> Void
+                _ key: CodingKeys, _ type: Value.Type, _ set: @escaping @Sendable (inout Session, Value?) -> Void
             ) throws {
                 guard c.contains(key) else { return }
                 let value = try c.decodeIfPresent(type, forKey: key)
@@ -129,21 +129,21 @@ enum PiWire {
             try field(.subagents, [WireSubagent].self) { session, roster in
                 session.subagents = Self.stamped(roster?.map(\.subagent) ?? [], since: session.subagents, at: Date())
             }
-            try field(.model, PiModelOption.self) { $0.model = $1 }
-            try field(.thinking, Open<PiThinkingLevel>.self) { $0.thinking = $1 }
+            try field(.model, ModelOption.self) { $0.model = $1 }
+            try field(.thinking, Open<ThinkingLevel>.self) { $0.thinking = $1 }
             try field(.fast, Bool.self) { $0.fast = $1 }
-            try field(.models, [PiModelOption].self) { $0.availableModels = $1 ?? [] }
+            try field(.models, [ModelOption].self) { $0.availableModels = $1 ?? [] }
             try field(.proofs, [PiProof].self) { $0.proofs = $1 ?? [] }
-            try field(.context, PiContextUsage.self) { $0.context = $1 }
+            try field(.context, ContextUsage.self) { $0.context = $1 }
             try field(.commands, [WireCommand].self) { $0.commands = $1?.map(\.command) ?? [] }
         }
 
-        func apply(to session: inout PiSession) {
+        func apply(to session: inout Session) {
             for update in updates { update(&session) }
         }
 
-        /// 名册不带进展时刻，Mac 收到时记（`PiSubagentState.progressAt`）。FireCode 的名字在一个指挥官下唯一，所以按名字对上上一份。
-        private static func stamped(_ roster: [PiSubagentState], since previous: [PiSubagentState], at now: Date) -> [PiSubagentState] {
+        /// 名册不带进展时刻，Mac 收到时记（`SubagentState.progressAt`）。FireCode 的名字在一个指挥官下唯一，所以按名字对上上一份。
+        private static func stamped(_ roster: [SubagentState], since previous: [SubagentState], at now: Date) -> [SubagentState] {
             roster.map { agent in
                 var agent = agent
                 let before = previous.first { $0.name == agent.name }
@@ -161,7 +161,7 @@ enum PiWire {
         var text: String
         var options: [String]?
 
-        var question: PiQuestion { PiQuestion(promptID: id, kind: Open(rawValue: kind), text: text, options: options ?? []) }
+        var question: Question { Question(promptID: id, kind: Open(rawValue: kind), text: text, options: options ?? []) }
     }
 
     private struct WireSubagent: Decodable {
@@ -173,9 +173,9 @@ enum PiWire {
         var settledAt: Double?
         var model: String?
 
-        var subagent: PiSubagentState {
+        var subagent: SubagentState {
             func date(_ milliseconds: Double?) -> Date? { milliseconds.map { Date(timeIntervalSince1970: $0 / 1000) } }
-            return PiSubagentState(
+            return SubagentState(
                 name: name, role: role, phase: Open(rawValue: state), action: action, startedAt: date(startedAt), settledAt: date(settledAt),
                 model: model)
         }
@@ -187,7 +187,7 @@ enum PiWire {
         var source: String
         var hint: String?
 
-        var command: PiSlashCommand { PiSlashCommand(name: name, summary: description, source: Open(rawValue: source), hint: hint) }
+        var command: SlashCommand { SlashCommand(name: name, summary: description, source: Open(rawValue: source), hint: hint) }
     }
 
     struct Ack: Decodable {
@@ -216,9 +216,9 @@ enum PiWire {
         var text: String?
         var since: Double?
 
-        var draft: PiDraft? {
+        var draft: LiveDraft? {
             guard let text, let since else { return nil }
-            return PiDraft(text: text, since: Date(timeIntervalSince1970: since / 1000))
+            return LiveDraft(text: text, since: Date(timeIntervalSince1970: since / 1000))
         }
     }
 
@@ -229,7 +229,7 @@ enum PiWire {
         case info(Info)
         case ack(Ack)
         case bye(Bye)
-        case draft(PiDraft?)
+        case draft(LiveDraft?)
         case quota(QuotaReport)
     }
 
@@ -267,7 +267,7 @@ enum PiWire {
         var turnStartedAt: Int64?
     }
 
-    static func sendCommand(id: String, _ message: PiMessage) throws -> Data {
+    static func sendCommand(id: String, _ message: SessionMessage) throws -> Data {
         let cueTurn: Command.CueTurn? = if case .cue(let deliveryID, _) = message.policy { .init(deliveryId: deliveryID) } else { nil }
         return try encodeLine(Command(
             t: "send", id: id, text: message.text,
@@ -293,13 +293,13 @@ enum PiWire {
     private struct ConfigCommand: Encodable {
         var t = "config"
         var id: String
-        var model: PiModelKey?
+        var model: ModelKey?
         var thinking: String?
         var fast: Bool?
         var name: String?
     }
 
-    static func configCommand(id: String, model: PiModelKey?, thinking: PiThinkingLevel?, fast: Bool? = nil, name: String?) throws -> Data {
+    static func configCommand(id: String, model: ModelKey?, thinking: ThinkingLevel?, fast: Bool? = nil, name: String?) throws -> Data {
         try encodeLine(ConfigCommand(id: id, model: model, thinking: thinking?.rawValue, fast: fast, name: name))
     }
 
@@ -326,7 +326,7 @@ enum PiWire {
         var value: Value
     }
 
-    static func answerCommand(id: String, promptID: String, _ answer: PiAnswerValue) throws -> Data {
+    static func answerCommand(id: String, promptID: String, _ answer: AnswerValue) throws -> Data {
         switch answer {
         case .option(let value), .text(let value): try encodeLine(AnswerCommand(id: id, promptId: promptID, value: value))
         case .confirmed(let value): try encodeLine(AnswerCommand(id: id, promptId: promptID, value: value))

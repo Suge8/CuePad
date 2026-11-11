@@ -43,7 +43,7 @@ extension CueTools {
             "action": ["type": "string", "enum": TaskAction.allCases.map(\.rawValue)],
             "task": string, "session": string, "title": name, "project": string, "steps": ["type": "array", "items": name], "body": string,
             "agent": ["type": "string", "enum": AgentKind.allCases.map(\.rawValue)], "model": ["type": "string", "description": "provider/id"],
-            "effort": ["type": "string", "enum": PiThinkingLevel.allCases.map(\.rawValue)], "text": string,
+            "effort": ["type": "string", "enum": ThinkingLevel.allCases.map(\.rawValue)], "text": string,
             "evidence": ["type": "array", "items": ["type": "string", "description": "宽不过 \(evidenceLimit)"], "maxItems": evidenceCount],
             "show": show, "fresh": ["type": "boolean"], "reopen": ["type": "boolean"], "start": ["type": "boolean"],
           ], required: ["action"]),

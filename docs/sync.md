@@ -28,7 +28,7 @@
 
 ## 发送
 
-发给 Agent 与 Cue 的话经 `Workspace.speak` 入库，界面不等上传或结果；说不了的情况在 `AgentCapabilities.speakBlocked`，Pi 与终端里 Claude Code 的话按会话文件核对送达，在 `PiDeliveryConfirmation`。
+发给 Agent 与 Cue 的话经 `Workspace.speak` 入库，界面不等上传或结果；说不了的情况在 `AgentCapabilities.speakBlocked`，Pi 与终端里 Claude Code 的话按会话文件核对送达，在 `DeliveryConfirmation`。
 
 ## 附件的文件
 
@@ -81,7 +81,7 @@ Cue 等结果的窗口是 `Speech.cueWait`；Cue 看失败见 `cueChanges`。
 
 ## Agent 与 Cue 的通知
 
-到不到你只有 `CueStore.reaches` 一处，他此刻在哪台设备前只按最近一次来到哪台（`Viewer`）；进了等你的事手机总会被叫醒，到不到你只定出不出通知（`CuePush`、`PiPush`）。手机锁屏通知怎么由服务端生成在 `AlertSubscriptions`，两端怎么发在 `AlertCenter`。代码里没写的取舍：
+到不到你只有 `CueStore.reaches` 一处，他此刻在哪台设备前只按最近一次来到哪台（`Viewer`）；进了等你的事手机总会被叫醒，到不到你只定出不出通知（`CuePush`、`AlertPush`）。手机锁屏通知怎么由服务端生成在 `AlertSubscriptions`，两端怎么发在 `AlertCenter`。代码里没写的取舍：
 
 - 实时活动、小组件与 App 使用同一份运行投影，Mac 发布者直接订阅 Store，不依赖界面订阅。快照过期只撤销运行证据；未知只保留已有活动，不授权新建，也不冒充完成。各 host 到期后的计数由 `CueNow.nextShownChange` 安排系统重画。
 - 实时活动由 Mac 经 APNs 更新，不靠 CloudKit 唤醒；手机不拿本地旧库覆盖。令牌私有 iCloud 加密同步，中转内容不留存，密钥只在服务端。APNs 收下不证明已上屏，岛更新不证明手机资料库已同步。[部署与隐私边界](../relay/README.md)。

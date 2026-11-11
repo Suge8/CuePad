@@ -9,7 +9,7 @@ import Testing
 @MainActor
 @Suite(.releasesLibraries)
 struct UpgradePreparationTests {
-    func oldSession(_ app: TestApp) async throws -> (PiSessionState, FakeExtension) {
+    func oldSession(_ app: TestApp) async throws -> (SessionState, FakeExtension) {
         let ext = try await app.host.connect("upgrade-target", cwd: app.directory.path, extensionVersion: 0)
         let recorder = try await app.runtimeRecorder(on: TestApp.hostID)
         try await recorder.update(sessionID: ext.sessionID, state: .settled)
@@ -140,8 +140,8 @@ struct UpgradePreparationTests {
         let app = TestApp(), store = app.services.store
         let id = "compound.1", sessionID = "compound"
         let link = StartedOperation(bridge: app.pi, id: id)
-        app.pi.attach(PiSession(id: id, sessionID: sessionID, agent: .pi, sessionFile: nil, pid: 1,
-                                cwd: app.directory, terminal: PiTerminal(), state: .settled, stateSince: .now), via: link)
+        app.pi.attach(Session(id: id, sessionID: sessionID, agent: .pi, sessionFile: nil, pid: 1,
+                                cwd: app.directory, terminal: TerminalIdentity(), state: .settled, stateSince: .now), via: link)
         let recorder = try await app.runtimeRecorder(on: TestApp.hostID)
         try await recorder.update(sessionID: sessionID, state: .settled)
         let target = try #require(try await store.allPiSessionStates().first { $0.sessionID == sessionID })
@@ -159,14 +159,14 @@ struct UpgradePreparationTests {
 }
 
 private final class StartedOperation: SessionLink {
-    let bridge: PiBridge
+    let bridge: Bridge
     let id: String
     private(set) var operations = 0
-    init(bridge: PiBridge, id: String) { self.bridge = bridge; self.id = id }
-    func send(_ message: PiMessage, in _: String) async throws {
+    init(bridge: Bridge, id: String) { self.bridge = bridge; self.id = id }
+    func send(_ message: SessionMessage, in _: String) async throws {
         operations += 1
         bridge.update(id) { $0.upgrading = true }
-        throw PiBridgeError.upgradingExtension
+        throw BridgeError.upgradingExtension
     }
 }
 #endif

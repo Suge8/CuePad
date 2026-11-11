@@ -208,7 +208,7 @@ extension CueTools {
   private struct Launch {
     var agent: AgentKind?
     var model: String?
-    var thinking: PiThinkingLevel?
+    var thinking: ThinkingLevel?
     var fresh: Bool
     var host: String
 
@@ -237,9 +237,9 @@ extension CueTools {
     return try await spoken(request, "已请求「\(leaf.heading)」沿用上一步的会话，正文作为下一句", tail: leaf.id.shortID, from: host)
   }
 
-  static func effort(_ args: Args) throws -> PiThinkingLevel? {
-    try args.string("effort").map { raw -> PiThinkingLevel in
-      guard let level = PiThinkingLevel(rawValue: raw) else { throw Failure("effort 只能是 \(PiThinkingLevel.allCases.map(\.rawValue).joined(separator: " / "))") }
+  static func effort(_ args: Args) throws -> ThinkingLevel? {
+    try args.string("effort").map { raw -> ThinkingLevel in
+      guard let level = ThinkingLevel(rawValue: raw) else { throw Failure("effort 只能是 \(ThinkingLevel.allCases.map(\.rawValue).joined(separator: " / "))") }
       return level
     }
   }

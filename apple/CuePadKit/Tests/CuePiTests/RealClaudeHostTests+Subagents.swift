@@ -12,7 +12,7 @@ extension RealClaudeHostTests {
             let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t", name: nil, model: nil, thinking: nil)
             testbed.playBackgroundWork()
             let start = Date()
-            _ = try await testbed.bridge.send(PiMessage(text: ClaudeTestbed.backgroundWork), to: id)
+            _ = try await testbed.bridge.send(SessionMessage(text: ClaudeTestbed.backgroundWork), to: id)
             try await testbed.finishBackgroundWork(id)
             try await testbed.expectSettledOnce(id, since: start, reply: "BG_DONE", roster: .done)
         }
@@ -24,7 +24,7 @@ extension RealClaudeHostTests {
             let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t", name: nil, model: nil, thinking: nil)
             testbed.playEarlyReport()
             let start = Date()
-            _ = try await testbed.bridge.send(PiMessage(text: ClaudeTestbed.earlyReport), to: id)
+            _ = try await testbed.bridge.send(SessionMessage(text: ClaudeTestbed.earlyReport), to: id)
             try await testbed.finishEarlyReport(id)
             try await testbed.expectSettledOnce(id, since: start, reply: "NESTED_DONE", roster: .done, waits: 2)
         }
@@ -36,9 +36,9 @@ extension RealClaudeHostTests {
             let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t", name: nil, model: nil, thinking: nil)
             testbed.playLongSubagent()
             let start = Date()
-            _ = try await testbed.bridge.send(PiMessage(text: ClaudeTestbed.longSubagent), to: id)
+            _ = try await testbed.bridge.send(SessionMessage(text: ClaudeTestbed.longSubagent), to: id)
             try await eventually("等子代理") { testbed.bridge.session(id: id)?.state == .delegating }
-            _ = try await testbed.bridge.send(PiMessage(text: ClaudeTestbed.stopSubagent), to: id)
+            _ = try await testbed.bridge.send(SessionMessage(text: ClaudeTestbed.stopSubagent), to: id)
             try await testbed.expectSettledOnce(id, since: start, reply: "STOPPED", roster: .interrupted)
         }
     }

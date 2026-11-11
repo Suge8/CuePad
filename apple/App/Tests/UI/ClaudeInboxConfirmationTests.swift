@@ -8,7 +8,7 @@ import Testing
 @testable import CuePi
 
 /// 发给终端里的 Claude Code 的话（经它的收件箱，它不回话）：会话文件里出现了才算送达。它挂起（等你在终端里批准）或丢掉的，
-/// 到期报未确认、写明可能的原因，不报送达。这些局面由它自己的设置与启动方式决定，CuePad 不预判（`PiSession.confirmsFromHistory`）。
+/// 到期报未确认、写明可能的原因，不报送达。这些局面由它自己的设置与启动方式决定，CuePad 不预判（`Session.confirmsFromHistory`）。
 /// 会话都先于 CuePad 开着、钩子不通（`ClaudeRig`），所以 CuePad 只拿到收件箱、没有令牌。
 @Suite(
     .releasesLibraries,
@@ -67,7 +67,7 @@ struct ClaudeInboxConfirmationTests {
             try await clock.waitForSleeper(until: deadline)
             clock.advance(.seconds(Speech.receiptLimit + 1))
             try await eventually("到期报未确认") { try await rig.store.deliveryRequest(request.id)?.status == .known(.unconfirmed) }
-            #expect(try await rig.store.deliveryRequest(request.id)?.reason == PiDeliveryConfirmation.notTaken)
+            #expect(try await rig.store.deliveryRequest(request.id)?.reason == DeliveryConfirmation.notTaken)
 
             // 跳过权限确认的会话把挂起的话摆在输入框的位置等你选（终端里打不进字）：挂起本身就是它处理过的证据
             guard situation != .inheritsBypass else { return }
@@ -114,7 +114,7 @@ struct ClaudeInboxConfirmationTests {
         }
     }
 
-    /// 核对途中退出再打开 CuePad：新实例接着核对（`PiDeliveryConfirmation.recover`），之后它收下了就是送达，不停在中断未确认。
+    /// 核对途中退出再打开 CuePad：新实例接着核对（`DeliveryConfirmation.recover`），之后它收下了就是送达，不停在中断未确认。
     @Test func 核对途中重开App_之后收下了算送达() async throws {
         var terminal: ClaudeRig.Terminal?
         try await ClaudeRig.run(settings: #"{"skipDangerousModePermissionPrompt": true}"#, before: {

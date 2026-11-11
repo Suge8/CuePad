@@ -14,7 +14,7 @@ nonisolated struct DebugArgs: Decodable {
     let alertStatus: String?
     /// `-CuePadAllKinds YES|<批数>`（配 `-CuePadDemo YES -CuePadScene session -CuePadSession scratch`）：scratch 会话里发每种类型各一份的交付物、一个 3D 模型与一张"下载中"，两份一批
     let allKinds: String?
-    /// `-CuePadAtlas <PiWorkState>`：atlas 会话此刻的状态
+    /// `-CuePadAtlas <WorkState>`：atlas 会话此刻的状态
     let atlas: String?
     /// `-CuePadAtlasTitle <名>`：atlas 会话的名字
     let atlasTitle: String?

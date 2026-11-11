@@ -5,7 +5,7 @@ import Foundation
 
 @MainActor
 struct MacDeliveryPreparation {
-    let pi: PiBridge
+    let pi: Bridge
 
     func current(_ request: DeliveryRequest) -> DeliveryAdmission {
         guard let mode = request.mode.known, DeliveryMode.requiresReadySession.contains(mode),
@@ -28,7 +28,7 @@ struct MacDeliveryPreparation {
         }
     }
 
-    private static func isReady(_ sessionID: String, in pi: PiBridge) -> Bool {
+    private static func isReady(_ sessionID: String, in pi: Bridge) -> Bool {
         pi.session(sessionID: sessionID).map { !$0.upgrading } ?? false
     }
 }

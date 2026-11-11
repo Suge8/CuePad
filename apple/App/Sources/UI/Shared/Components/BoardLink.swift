@@ -2,7 +2,7 @@ import CueStore
 import SwiftUI
 
 struct BoardLink<Label: View>: View {
-    let to: PiSessionState
+    let to: SessionState
     @ViewBuilder let label: Label
     @Environment(Workspace.self) private var workspace
 
@@ -35,7 +35,7 @@ struct BoardLink<Label: View>: View {
 }
 
 struct OpenSessionBeside: View {
-    let session: PiSessionState
+    let session: SessionState
     @Environment(Workspace.self) private var workspace
 
     var body: some View {

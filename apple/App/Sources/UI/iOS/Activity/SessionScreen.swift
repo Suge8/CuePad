@@ -9,7 +9,7 @@ struct SessionScreen: View {
     @Environment(\.palette) private var palette
     @State private var digest: SessionDigest?
     @State private var taskLink: SessionTaskLink?
-    @State private var lastSeen: PiSessionState?
+    @State private var lastSeen: SessionState?
     @State private var follow = ChatFollow()
 
     /// `seed`：推入前读好的这一页，首帧即用，之后以 Store 的观察流为准。
@@ -20,7 +20,7 @@ struct SessionScreen: View {
     }
 
     private static let readingWidth = Spacing.reading
-    private var session: PiSessionState? { digest?.session ?? lastSeen }
+    private var session: SessionState? { digest?.session ?? lastSeen }
     private var shownEnd: Speech.Trip? { DeliveryRequest.shownEnd(in: digest?.deliveries ?? [], at: services.speech) }
 
     var body: some View {
@@ -40,12 +40,12 @@ struct SessionScreen: View {
             if shownEnd?.inTransit == true {
                 Text("正在结束…").font(Typography.caption).foregroundStyle(palette.ink3)
             } else if let session {
-                PiSessionSubtitle(session: session, delivery: digest?.delivery, undelivered: PiChat.undeliveredNote(digest?.undelivered(at: services.speech) ?? 0))
+                SessionSubtitle(session: session, delivery: digest?.delivery, undelivered: Chat.undeliveredNote(digest?.undelivered(at: services.speech) ?? 0))
             }
         } trailing: {
             if let session {
                 Menu {
-                    if let title = PiPlace.menuTitle(of: session, project: digest?.project) { Section { } header: { Text(title) } }
+                    if let title = SessionPlace.menuTitle(of: session, project: digest?.project) { Section { } header: { Text(title) } }
                     if let taskLink { SessionTaskBindItems(session: session, link: taskLink) }
                     SessionActions(session: session, task: digest?.task, ending: shownEnd?.inTransit == true)
                 } label: {
@@ -102,10 +102,10 @@ private struct DigestKey: Equatable {
 
 #if os(iOS)
 extension View {
-    func countsAsPiViewer() -> some View { modifier(PiViewing()) }
+    func countsAsViewer() -> some View { modifier(CountsAsViewer()) }
 }
 
-private struct PiViewing: ViewModifier {
+private struct CountsAsViewer: ViewModifier {
     @Environment(AppServices.self) private var services
     @Environment(\.pageActive) private var active
     @State private var appeared = false

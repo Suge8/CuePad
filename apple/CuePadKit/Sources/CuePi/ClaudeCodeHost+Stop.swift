@@ -25,7 +25,7 @@ extension ClaudeHostedSession {
     }
 
     func closeClears() {
-        clearWaits.closeAll(PiBridgeError.sessionEnded)
+        clearWaits.closeAll(BridgeError.sessionEnded)
         clearing.removeAll()
     }
 

@@ -19,7 +19,7 @@ struct SessionRailCell: View {
     let form: SessionRail.Form
     let moves: Bool
     let selected: Bool
-    let open: (PiSessionState, SessionRail.Opening) -> Void
+    let open: (SessionState, SessionRail.Opening) -> Void
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -83,7 +83,7 @@ struct SessionRailCell: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 RailLine(height: item.waiting == nil ? Chrome.row : Chrome.tallRow) {
-                    PiStateDot(shown: item.shown, size: Chrome.railMark)
+                    StateDot(shown: item.shown, size: Chrome.railMark)
                 } rest: {
                     if item.waiting == nil {
                         name.font(Typography.body)
@@ -136,7 +136,7 @@ struct SessionRailCell: View {
     private var signal: some View {
         Group {
             if let waiting = item.waiting {
-                PiStateGlyph(status: waiting).font(Glyph.small)
+                StateGlyph(status: waiting).font(Glyph.small)
             } else {
                 BoardLine(pulse: item.pulse, moves: moves, detail: .now)
             }
@@ -177,9 +177,9 @@ private struct SessionRailTime: View {
 }
 
 extension SessionRailRows.Item {
-    var shown: PiShown {
-        guard let waiting else { return pulse.shown ?? PiShown(status: .unknown()) }
-        return PiShown(status: waiting, clock: pulse.shown?.clock)
+    var shown: SessionShown {
+        guard let waiting else { return pulse.shown ?? SessionShown(status: .unknown()) }
+        return SessionShown(status: waiting, clock: pulse.shown?.clock)
     }
 
     var resting: Bool { waiting == nil && pulse.tier == .resting }

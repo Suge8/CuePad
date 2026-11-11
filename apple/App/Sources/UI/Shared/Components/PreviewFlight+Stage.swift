@@ -7,7 +7,7 @@ extension PreviewFlight {
     struct Stage: NSViewRepresentable {
         let flight: PreviewFlight
         let key: PreviewZoomKey
-        let kind: PiPreviewKind?
+        let kind: PreviewKind?
         let page: String?
         let chrome: EdgeInsets
         @Binding var landed: Bool
@@ -30,7 +30,7 @@ extension PreviewFlight.Stage {
     final class Mark: NSView {
         weak var flight: PreviewFlight?
         var key = PreviewZoomKey(group: "", preview: UUID())
-        var kind: PiPreviewKind?
+        var kind: PreviewKind?
         var page: String?
         var dark = false
         var chrome = EdgeInsets()
@@ -71,10 +71,10 @@ extension PreviewFlight.Stage {
 }
 
 struct PreviewPlace {
-    let kind: PiPreviewKind?
+    let kind: PreviewKind?
     let area: CGRect
 
-    static func swaps(_ kind: PiPreviewKind?) -> Bool { [.web, .markdown, .diff].contains(kind) }
+    static func swaps(_ kind: PreviewKind?) -> Bool { [.web, .markdown, .diff].contains(kind) }
 
     /// 网页：快照是 `PageSnapshots.viewport` 宽排的首屏，全屏页里的网页一个 CSS 像素一点、从内容区左上排起，
     /// 快照照这个比例摆在左上、多出内容区的那截裁掉：字号、标题与第一张卡的位置同真网页，只有随宽度伸缩的块宽一点。

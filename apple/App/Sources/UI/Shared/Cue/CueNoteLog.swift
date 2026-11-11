@@ -98,7 +98,7 @@ private struct CueNoteLine: View {
         }
     }
 
-    private static func outcome(_ kind: PiChatMessage.Tools.Kind) -> Text {
+    private static func outcome(_ kind: ChatMessage.Tools.Kind) -> Text {
         switch kind {
         case .leave: Text("留给你")
         case .done: Text("做完了")

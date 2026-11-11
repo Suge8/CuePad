@@ -160,7 +160,7 @@ export function findModel(ctx: ExtensionContext, reference: string): Model | und
 }
 
 /** 上报首条用户消息的字符数上限：它只用来当单行显示名，界面与 Pi 自己的会话列表都只显示一行，
- * 不必把可能几 MB 的首条消息（贴入的日志、代码）在每次连接与同步时传来传去。与 CuePi 的 `PiSessionName.firstMessageLimit` 相同。 */
+ * 不必把可能几 MB 的首条消息（贴入的日志、代码）在每次连接与同步时传来传去。与 CuePi 的 `SessionName.firstMessageLimit` 相同。 */
 const FIRST_MESSAGE_LIMIT = 200;
 
 export function reason(error: unknown): string {
@@ -175,7 +175,7 @@ export function messageText(message: object): string {
 	return content.filter((block) => block?.type === "text").map((block) => block.text).join(" ");
 }
 
-/** 文字块按换行连接，与对话读会话文件取回答的规则一致（CuePi 的 `PiHistory`）。 */
+/** 文字块按换行连接，与对话读会话文件取回答的规则一致（CuePi 的 `History`）。 */
 export function replyText(message: object): string {
 	const content = "content" in message && Array.isArray(message.content) ? message.content : [];
 	return content.filter((block) => block?.type === "text").map((block) => block.text).join("\n");

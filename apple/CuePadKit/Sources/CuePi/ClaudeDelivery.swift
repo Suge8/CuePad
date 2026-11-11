@@ -6,11 +6,11 @@ import Foundation
 /// 它以 `command_lifecycle` 报这一条 queued → started → completed 或 cancelled。started 不算：没登录、模型不可用、额度用完时
 /// 也先报 started，连 `system/status` 的 requesting 也报，再合成一条出错回答、以 `is_error` 的 `result` 收尾、报 cancelled。
 /// 所以模型开始回话（`ClaudeStream.onReply`；压缩是 `status` 的 compacting）或 completed 才算送达；cancelled 之前这一轮出错收尾就是没送达
-/// （`PiBridgeError.refused`，原因是它的原话）；开始后被停下、没出错的 cancelled 是收下了（停下这一轮不改它送达过）；
+/// （`BridgeError.refused`，原因是它的原话）；开始后被停下、没出错的 cancelled 是收下了（停下这一轮不改它送达过）；
 /// 等不到（`AgentTimeouts.reply`）与进程退出是未确认。
 @MainActor
 final class ClaudeDelivery {
-    private let verdicts = PendingReplies<String, Void>(timeout: AgentTimeouts.reply, timeoutError: PiBridgeError.ackTimeout)
+    private let verdicts = PendingReplies<String, Void>(timeout: AgentTimeouts.reply, timeoutError: BridgeError.ackTimeout)
     /// 已 started、还没定下的那一条（小写的 uuid），与这一轮出错收尾的原话
     private var running: String?
     private var failure: String?
@@ -27,7 +27,7 @@ final class ClaudeDelivery {
             case "started": (running, failure) = (id, nil)
             case "completed": settle(id, .success(()))
             // 没出错的取消是开始后被停下（停止、或为下一句停下这一轮）：它已经收下了这句
-            case "cancelled": settle(id, failure.map { .failure(PiBridgeError.refused($0)) } ?? .success(()))
+            case "cancelled": settle(id, failure.map { .failure(BridgeError.refused($0)) } ?? .success(()))
             default: break
             }
         case "system" where message["subtype"]?.string == "status" && message["status"]?.string == "compacting":
@@ -53,7 +53,7 @@ final class ClaudeDelivery {
         self.failure = said.isEmpty ? self.failure ?? failure : said
     }
 
-    func close() { verdicts.closeAll(PiBridgeError.sessionEnded) }
+    func close() { verdicts.closeAll(BridgeError.sessionEnded) }
 
     private func settle(_ id: String, _ result: Result<Void, any Error>) {
         verdicts.resolve(id, with: result)

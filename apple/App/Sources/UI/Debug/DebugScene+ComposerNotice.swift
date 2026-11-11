@@ -18,8 +18,8 @@ extension DebugScene {
             while !Task.isCancelled {
                 try await Task.sleep(for: .seconds(3))
                 let name = args.session ?? "atlas"
-                guard let session = try await store.piSessionPage(PiSessionQuery(text: name)).items.first?.state else { throw CueStoreError.notFound }
-                let config = try await store.requestConfig(PiConfig(thinking: .high), to: session.target, on: host)
+                guard let session = try await store.piSessionPage(SessionQuery(text: name)).items.first?.state else { throw CueStoreError.notFound }
+                let config = try await store.requestConfig(SessionConfig(thinking: .high), to: session.target, on: host)
                 for try await failed in store.observe({ try $0.deliveryRequest(config.id)?.status == .known(.failed) }) where failed { break }
                 let command = try await store.requestDelivery("/compact", to: session.target, on: session.hostID, mode: .command)
                 try await Task.sleep(for: .seconds(1.5))

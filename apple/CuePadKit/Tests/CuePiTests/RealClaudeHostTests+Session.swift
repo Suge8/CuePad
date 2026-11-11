@@ -14,16 +14,16 @@ extension RealClaudeHostTests {
             testbed.on("只回复 OK", .say("OK"))
             testbed.model.on({ $0.model == "no-such-model" }) { _ in .fail("model: no-such-model", status: 404) }  // Claude Code 换模型前问一次服务端
             let first = Date()
-            try await testbed.bridge.send(PiMessage(text: "只回复 OK"), to: id)
+            try await testbed.bridge.send(SessionMessage(text: "只回复 OK"), to: id)
             try await testbed.waitForTurn(id, since: first)
             try await testbed.waitForDraftLanded(id)
             #expect(testbed.bridge.session(id: id)?.model?.key.id == claudeTestModel, "\(String(describing: testbed.bridge.session(id: id)?.model))")
             #expect(testbed.model.requests.last { $0.prompt.contains("只回复 OK") }?.model.contains(claudeTestModel) == true)
-            let other = PiModelKey(provider: ClaudeCode.provider, id: claudeOtherModel)
+            let other = ModelKey(provider: ClaudeCode.provider, id: claudeOtherModel)
 
-            try await testbed.bridge.configure(PiConfig(model: other, thinking: .low, name: "托管改名"), in: id)
-            await #expect(throws: PiBridgeError.unknownModel(.claudeCode)) {
-                try await testbed.bridge.configure(PiConfig(model: PiModelKey(provider: ClaudeCode.provider, id: "no-such-model")), in: id)
+            try await testbed.bridge.configure(SessionConfig(model: other, thinking: .low, name: "托管改名"), in: id)
+            await #expect(throws: BridgeError.unknownModel(.claudeCode)) {
+                try await testbed.bridge.configure(SessionConfig(model: ModelKey(provider: ClaudeCode.provider, id: "no-such-model")), in: id)
             }
             // rename_session 回了之后 Claude Code 才把名字登记进会话名册（2.1.318 的 applyRenamedSessionName，先写 agent-name 行再登记）：
             // 登记前到的 /rename 被它当成"更新的改名先到了"丢掉（会话文件里：Session is named: 托管改名 (a newer rename landed first)），名字停在托管改名
@@ -40,10 +40,10 @@ extension RealClaudeHostTests {
                 let lines = ((try? String(contentsOf: file, encoding: .utf8)) ?? "").split(separator: "\n").filter { $0.contains("title") || $0.contains("rename") }
                 throw Stuck(description: "等不到：斜杠命令改了名、歇下；名字 \(String(describing: session?.displayName))，状态 \(String(describing: session?.state))；会话文件里与改名有关的行：\n\(lines.joined(separator: "\n"))")
             }
-            await #expect(throws: PiBridgeError.rejected("unknown_command")) { try await testbed.bridge.command("/no-such-command", in: id) }
+            await #expect(throws: BridgeError.rejected("unknown_command")) { try await testbed.bridge.command("/no-such-command", in: id) }
 
             let start = Date()
-            try await testbed.bridge.send(PiMessage(text: "只回复 OK"), to: id)
+            try await testbed.bridge.send(SessionMessage(text: "只回复 OK"), to: id)
             try await testbed.waitForTurn(id, since: start)
             try await testbed.waitForDraftLanded(id)
             let answered = try #require(lastAnswer(in: file))
@@ -81,11 +81,11 @@ extension RealClaudeHostTests {
             }
 
             let start = Date()
-            try await testbed.bridge.send(PiMessage(text: "记住暗号 BANANA42，只回复 OK"), to: id)
+            try await testbed.bridge.send(SessionMessage(text: "记住暗号 BANANA42，只回复 OK"), to: id)
             try await testbed.waitForTurn(id, since: start)
-            let other = PiModelKey(provider: ClaudeCode.provider, id: claudeOtherModel)
-            try await testbed.bridge.configure(PiConfig(model: other), in: id)
-            let writing = Task { try await testbed.bridge.send(PiMessage(text: "写一篇两千字的茶叶史"), to: id) }
+            let other = ModelKey(provider: ClaudeCode.provider, id: claudeOtherModel)
+            try await testbed.bridge.configure(SessionConfig(model: other), in: id)
+            let writing = Task { try await testbed.bridge.send(SessionMessage(text: "写一篇两千字的茶叶史"), to: id) }
             try await gate.reached()
             try await testbed.bridge.abort(id)
             try await eventually("停下") { testbed.bridge.session(id: id)?.state == .settled }
@@ -107,7 +107,7 @@ extension RealClaudeHostTests {
             let resumed = try await resuming.value
             #expect(testbed.bridge.session(id: resumed)?.sessionID == first.sessionID)
             let asked = Date()
-            try await testbed.bridge.send(PiMessage(text: "刚才的暗号是什么？只回复暗号"), to: resumed)
+            try await testbed.bridge.send(SessionMessage(text: "刚才的暗号是什么？只回复暗号"), to: resumed)
             try await testbed.waitForTurn(resumed, since: asked)
             try await testbed.waitForDraftLanded(resumed)
             #expect(testbed.bridge.session(id: resumed)?.model?.key == other, "\(String(describing: testbed.bridge.session(id: resumed)?.model))")

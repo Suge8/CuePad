@@ -20,16 +20,16 @@ struct ClaudeTerminalReadyTests {
 
         let clock = ManualTiming()
         let terminal = ClaudeTerminalSession(
-            id: "t", pid: getpid(), bridge: PiBridge(socketDirectory: directory), gate: PresenceGate(presence: TestPresence()),
+            id: "t", pid: getpid(), bridge: Bridge(socketDirectory: directory), gate: PresenceGate(presence: TestPresence()),
             inbox: inbox.path, registry: registry, timing: clock.timing, runningSince: nil, waiting: false)
-        let sending = Task { try await terminal.send(PiMessage(text: "你好"), in: "t") }
+        let sending = Task { try await terminal.send(SessionMessage(text: "你好"), in: "t") }
         try await eventually("在等它起好，或已经送了") { clock.sleeperCount > 0 || inbox.knocked }
         clock.advance(AgentTimeouts.terminalReady)
-        await #expect(throws: PiBridgeError.rejected("not_ready")) { try await sending.value }
+        await #expect(throws: BridgeError.rejected("not_ready")) { try await sending.value }
         #expect(!inbox.knocked, "没起好时收件箱里不该有话")
 
         try Data(#"{"pid": 1, "status": "idle"}"#.utf8).write(to: registry, options: .atomic)
-        try await terminal.send(PiMessage(text: "你好"), in: "t")
+        try await terminal.send(SessionMessage(text: "你好"), in: "t")
         #expect(inbox.knocked)
     }
 
@@ -41,7 +41,7 @@ struct ClaudeTerminalReadyTests {
             let session = try await fake.appear()
             let outcome = Outcome()
             Task {
-                do { try await testbed.bridge.send(PiMessage(text: "你好"), to: session.id) } catch { outcome.error = error }
+                do { try await testbed.bridge.send(SessionMessage(text: "你好"), to: session.id) } catch { outcome.error = error }
                 outcome.done = true
             }
             try await Task.sleep(for: .milliseconds(300))  // 让它进到等起好
@@ -49,7 +49,7 @@ struct ClaudeTerminalReadyTests {
 
             fake.kill()
             try await eventually("进程一退投送就结束") { outcome.done }
-            #expect(outcome.error as? PiBridgeError == .unknownSession(session.id))
+            #expect(outcome.error as? BridgeError == .unknownSession(session.id))
             #expect(!fake.inbox.knocked, "话没写进收件箱")
         }
     }
@@ -62,7 +62,7 @@ struct ClaudeTerminalReadyTests {
             let session = try await fake.appear()
             let outcome = Outcome()
             Task {
-                do { try await testbed.bridge.send(PiMessage(text: "你好"), to: session.id) } catch { outcome.error = error }
+                do { try await testbed.bridge.send(SessionMessage(text: "你好"), to: session.id) } catch { outcome.error = error }
                 outcome.done = true
             }
             try await eventually("送出去了") { outcome.done }
@@ -120,7 +120,7 @@ private final class FakeTerminal {
 
     deinit { process.terminate() }
 
-    func appear() async throws -> PiSession {
+    func appear() async throws -> Session {
         let input: JSONValue = ["hook_event_name": "SessionStart", "session_id": .string(sessionID), "cwd": .string(testbed.work.path)]
         let envelope = AgentHookEnvelope(
             agent: .claudeCode, input: input.data,

@@ -5,7 +5,7 @@ import Foundation
 import Testing
 @testable import CuePi
 
-/// 端到端：钉住版本的真 Grok（ACP）+ 假模型（Responses，`FakeModel`）+ `GrokRuntime` 与 `PiBridge`。零网络、不用任何登录。
+/// 端到端：钉住版本的真 Grok（ACP）+ 假模型（Responses，`FakeModel`）+ `GrokRuntime` 与 `Bridge`。零网络、不用任何登录。
 @MainActor
 @Suite(RealAgents.needs(.grok), RealAgents.tiered)
 struct RealGrokTests {
@@ -18,7 +18,7 @@ struct RealGrokTests {
             #expect(opened.hosted && opened.agent == .grok && opened.launchToken == "token-1")
             #expect(rig.runsPinnedGrok(id))
             let delivery = UUID()
-            let message = PiMessage(text: "What color is this image? Answer with one lowercase word.", images: [PiImage(mimeType: "image/png", data: redPNG)], deliveryID: delivery.uuidString)
+            let message = SessionMessage(text: "What color is this image? Answer with one lowercase word.", images: [MessageImage(mimeType: "image/png", data: redPNG)], deliveryID: delivery.uuidString)
             try await rig.bridge.send(message, to: id)
             try await eventually("这一轮做完、报了上下文余量、回答落盘") {
                 log.states.contains(.thinking) && rig.bridge.session(id: id).map {
@@ -34,12 +34,12 @@ struct RealGrokTests {
             #expect(mine.text.hasPrefix("What color is this image?") && mine.text.contains("![](cuepad://file/"))
 
             let other = try #require(session.availableModels.first { $0.key.id != session.model?.key.id })
-            try await rig.bridge.configure(PiConfig(model: other.key, thinking: .high, name: "看图"), in: id)
+            try await rig.bridge.configure(SessionConfig(model: other.key, thinking: .high, name: "看图"), in: id)
             #expect(rig.bridge.session(id: id)?.model?.key == other.key)
             #expect(rig.bridge.session(id: id)?.thinking == .known(.high))
             #expect(rig.bridge.session(id: id)?.displayName == "看图")
-            let unknown = await #expect(throws: PiBridgeError.unknownModel(.grok)) {
-                try await rig.bridge.configure(PiConfig(model: PiModelKey(provider: AgentKind.grok.rawValue, id: "no-such-model")), in: id)
+            let unknown = await #expect(throws: BridgeError.unknownModel(.grok)) {
+                try await rig.bridge.configure(SessionConfig(model: ModelKey(provider: AgentKind.grok.rawValue, id: "no-such-model")), in: id)
             }
             #expect(unknown?.localizedDescription == "Grok Build 里没有这个模型")
         }
@@ -51,7 +51,7 @@ struct RealGrokTests {
             let id = try await rig.open("token-2")
             let marker = rig.work.appending(path: "marker.txt")
 
-            try await rig.bridge.send(PiMessage(text: "Use the run_terminal_command tool to run exactly: echo ok > marker.txt  Then reply with only DONE."), to: id)
+            try await rig.bridge.send(SessionMessage(text: "Use the run_terminal_command tool to run exactly: echo ok > marker.txt  Then reply with only DONE."), to: id)
             try await eventually("等你确认") { rig.bridge.session(id: id)?.question != nil }
             let question = try #require(rig.bridge.session(id: id)?.question)
             #expect(rig.bridge.session(id: id)?.state == .waitingForUser)
@@ -67,7 +67,7 @@ struct RealGrokTests {
                 #expect(rig.replied("DONE", in: id) && results.last?.results.last?.contains("exit: 0") == true, "\(results.map(\.results))")
             } else {
                 #expect(results.isEmpty, "拒绝后 Grok 不再请求模型：\(results.map(\.results))")
-                try await rig.bridge.send(PiMessage(text: "Reply with the single word NEXT."), to: id)
+                try await rig.bridge.send(SessionMessage(text: "Reply with the single word NEXT."), to: id)
                 try await eventually("拒绝之后还能接着说") { rig.replied("NEXT", in: id) }
             }
         }
@@ -76,7 +76,7 @@ struct RealGrokTests {
     @Test func aQuestionIsAnsweredFromCuePadOneByOne() async throws {
         try await withGrokRig { rig in
             let id = try await rig.open("token-ask")
-            try await rig.bridge.send(PiMessage(text: """
+            try await rig.bridge.send(SessionMessage(text: """
                 Use the ask_user_question tool once to ask me exactly two single-select questions: "Which drink?" with options Tea \
                 (description: hot) and Coffee (description: strong), then "Which size?" with options Small (description: small cup) \
                 and Large (description: large cup). Then reply with only my two answers.
@@ -86,7 +86,7 @@ struct RealGrokTests {
             let drink = try #require(rig.bridge.session(id: id)?.question)
             #expect(rig.bridge.session(id: id)?.state == .waitingForUser)
             #expect(drink.kind == .known(.select) && Set(drink.options) == ["Tea", "Coffee"] && drink.allowsOther && drink.text.contains("Coffee："), "\(drink)")
-            await #expect(throws: PiBridgeError.rejected("bad_answer")) { try await rig.bridge.answer(.option("Milk"), to: try #require(drink.promptID), in: id) }
+            await #expect(throws: BridgeError.rejected("bad_answer")) { try await rig.bridge.answer(.option("Milk"), to: try #require(drink.promptID), in: id) }
             try await rig.bridge.answer(.option("Coffee"), to: try #require(drink.promptID), in: id)
 
             let size = try #require(rig.bridge.session(id: id)?.question)
@@ -106,13 +106,13 @@ struct RealGrokTests {
             let gate = rig.model.gate()
             rig.model.on({ $0.prompt.contains("numbers from 1 to 400") }) { _ in .stream(["1\n", "2\n", "3\n"], until: gate) }
             let id = try await rig.open("token-3")
-            try await rig.bridge.send(PiMessage(text: "Write the numbers from 1 to 400, one per line."), to: id)
+            try await rig.bridge.send(SessionMessage(text: "Write the numbers from 1 to 400, one per line."), to: id)
             try await gate.reached()
             try await eventually("在说") { rig.bridge.session(id: id)?.state == .thinking && rig.bridge.slots.first { $0.id == id }?.draft != nil }
 
             try await rig.bridge.abort(id)
             try await eventually("停下歇着") { rig.bridge.session(id: id)?.state == .settled }
-            try await rig.bridge.send(PiMessage(text: "Reply with the single word NEXT."), to: id)
+            try await rig.bridge.send(SessionMessage(text: "Reply with the single word NEXT."), to: id)
             try await eventually("接着回答了") { rig.replied("NEXT", in: id) }
         }
     }
@@ -121,7 +121,7 @@ struct RealGrokTests {
     @Test(.tags(.smoke)) func anEndedSessionIsResumedByANewProcessWithItsConversation() async throws {
         try await withGrokRig { rig in
             let id = try await rig.open("token-4")
-            try await rig.bridge.send(PiMessage(text: "Remember the word PAPAYA. Reply with only OK."), to: id)
+            try await rig.bridge.send(SessionMessage(text: "Remember the word PAPAYA. Reply with only OK."), to: id)
             try await eventually("记下了") { rig.replied("OK", in: id) && rig.bridge.session(id: id)?.state == .settled }
             let session = try #require(rig.bridge.session(id: id))
             let pid = try #require(session.pid)
@@ -133,7 +133,7 @@ struct RealGrokTests {
             let resumed = try await rig.runtime.resume(IndexedSession(id: session.sessionID, path: file.path, cwd: rig.work.path, lastActivityAt: .now, agent: .grok))
             let back = try #require(rig.bridge.session(id: resumed))
             #expect(back.hosted && back.sessionID == session.sessionID && back.pid != pid && rig.runsPinnedGrok(resumed))
-            try await rig.bridge.send(PiMessage(text: "What word did I ask you to remember? Reply with only the word."), to: resumed)
+            try await rig.bridge.send(SessionMessage(text: "What word did I ask you to remember? Reply with only the word."), to: resumed)
             try await eventually("接着回答了") { rig.replied("PAPAYA", in: resumed) }
         }
     }

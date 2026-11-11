@@ -17,20 +17,20 @@ extension CodexRuntime {
         "shell_tool", "standalone_web_search", "token_budget", "tool_suggest", "unified_exec", "view_image",
     ]
 
-    public func canNameItself(_ id: PiSession.ID) -> Bool { tracked[id].map { hosted[$0.pid]?.rpc != nil } ?? false }
+    public func canNameItself(_ id: Session.ID) -> Bool { tracked[id].map { hosted[$0.pid]?.rpc != nil } ?? false }
 
-    public func suggestName(from firstMessage: String, in id: PiSession.ID) async throws -> String {
+    public func suggestName(from firstMessage: String, in id: Session.ID) async throws -> String {
         let title = try await suggestion(from: firstMessage, in: id)
-        guard let name = SessionNameSuggestion.cleaned(title) else { throw PiBridgeError.rejected("failed: empty title") }
+        guard let name = SessionNameSuggestion.cleaned(title) else { throw BridgeError.rejected("failed: empty title") }
         return name
     }
 
-    private func suggestion(from firstMessage: String, in id: PiSession.ID) async throws -> String {
-        guard let session = tracked[id], let rpc = hosted[session.pid]?.rpc else { throw PiBridgeError.unsupported }
+    private func suggestion(from firstMessage: String, in id: Session.ID) async throws -> String {
+        guard let session = tracked[id], let rpc = hosted[session.pid]?.rpc else { throw BridgeError.unsupported }
         let cwd = bridge.session(id: id)?.cwd.path(percentEncoded: false) ?? "/"
         let luna = models?.contains { $0.id == Self.namingModel } == true
         let model = luna ? Self.namingModel : bridge.session(id: id)?.model?.key.id
-        return try await withDeadline(SessionNameSuggestion.budget, timing: timing, orThrow: PiBridgeError.rejected("failed: timeout")) { @MainActor in
+        return try await withDeadline(SessionNameSuggestion.budget, timing: timing, orThrow: BridgeError.rejected("failed: timeout")) { @MainActor in
             let effective = try await rpc.call("config/read", ["cwd": .string(cwd)])
             var config: [String: JSONValue] = Dictionary(uniqueKeysWithValues: Self.namingOff.map { ("features.\($0)", false) })
             config["web_search"] = "disabled"
@@ -40,7 +40,7 @@ extension CodexRuntime {
             ]
             if let model { start["model"] = .string(model) }
             guard let thread = try await rpc.call("thread/start", .object(start))["thread"]?["id"]?.string else {
-                throw PiBridgeError.rejected("failed: no thread")
+                throw BridgeError.rejected("failed: no thread")
             }
             let key = "\(thread).\(rpc.pid)"
             let turn = CodexNamingTurn()
@@ -60,7 +60,7 @@ extension CodexRuntime {
             if luna { params["effort"] = "low" }
             _ = try await rpc.call("turn/start", .object(params))
             let reply = try await turn.value()
-            guard let title = JSONValue.parse(Data(reply.utf8))?["title"]?.string else { throw PiBridgeError.rejected("failed: not a title") }
+            guard let title = JSONValue.parse(Data(reply.utf8))?["title"]?.string else { throw BridgeError.rejected("failed: not a title") }
             return title
         }
     }
@@ -78,7 +78,7 @@ final class CodexNamingTurn {
             text = params["item"]?["text"]?.string
         case "turn/completed":
             let status = params["turn"]?["status"]?.string
-            guard status == "completed", let text else { return finish(.failure(PiBridgeError.rejected("failed: \(status ?? "?")"))) }
+            guard status == "completed", let text else { return finish(.failure(BridgeError.rejected("failed: \(status ?? "?")"))) }
             finish(.success(text))
         default:
             break

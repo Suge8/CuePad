@@ -8,7 +8,7 @@ import UIKit
 
 /// 点开的通知按种类路由（`AlertRoute`），交给链接同一个入口（`AppServices.pendingDeepLink`）。进程只有一个，由 App 代理持有并在启动完成前设为代理，冷启动时点开的通知才不会丢。
 /// 提示到不到你只有一条规则（`CueStore.reaches`）；手机自己前台收到推送时再按本机此刻开着哪一页定弹不弹。
-/// - iOS：通知都是 CloudKit 订阅在服务端生成的锁屏通知，这里另管远程通知注册（`PiAlertStatus`）。
+/// - iOS：通知都是 CloudKit 订阅在服务端生成的锁屏通知，这里另管远程通知注册（`AlertStatus`）。
 /// - Mac：不收推送，通知都是这里发的本地通知（`post`）。
 /// - 周额度提醒（`remind`）两端都经 `post` 排成定时本地通知：到点时 App 不必在跑，手机上也不靠推送。
 @Observable
@@ -204,7 +204,7 @@ struct AlertMessage {
     var body: String
 
     init(_ alert: SessionAlert) {
-        let tap = PiAlertTap(kind: alert.kind, sessionState: alert.session)
+        let tap = AlertTap(kind: alert.kind, sessionState: alert.session)
         route = .session(tap)
         thread = tap.thread
         (title, body) = alert.content
@@ -225,12 +225,12 @@ struct AlertMessage {
 
 /// Cue 的消息带选项来问、urgent 的，都算"等你"。手机的 CloudKit 推送与本地通知（`userInfo` 由这里写）都从 userInfo 认出。
 nonisolated enum AlertRoute: Equatable {
-    case session(PiAlertTap)
+    case session(AlertTap)
     case cue
     case quota
 
     /// 周额度提醒没有开关（nil）。
-    var kind: PiAlert? {
+    var kind: AlertKind? {
         switch self {
         case .session(let tap): tap.kind
         case .cue: .waitingForUser
@@ -267,10 +267,10 @@ nonisolated enum AlertRoute: Equatable {
         case Self.cueSubject: self = .cue
         case Self.quotaSubject: self = .quota
         case Self.sessionSubject:
-            guard let kind = (userInfo[Self.kindKey] as? String).flatMap(PiAlert.init(rawValue:)),
+            guard let kind = (userInfo[Self.kindKey] as? String).flatMap(AlertKind.init(rawValue:)),
                 let record = (userInfo[Self.recordKey] as? String).flatMap(UUID.init(uuidString:))
             else { return nil }
-            self = .session(PiAlertTap(kind: kind, sessionState: record))
+            self = .session(AlertTap(kind: kind, sessionState: record))
         default:
             switch CloudAlert(userInfo: userInfo) {
             case .session(let tap): self = .session(tap)

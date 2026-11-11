@@ -12,8 +12,8 @@ extension DebugScene {
 
     nonisolated static func boot(of host: String) -> String? { demoHosts.contains(host) ? demoBoot : SystemBoot.id }
 
-    static func demoRecorder(_ store: CueStore, host: String = "demo-mac", minInterval: Duration = PiStateRecorder.detailInterval) -> PiStateRecorder {
-        PiStateRecorder(store: store, hostID: host, minInterval: minInterval, bootID: boot(of: host))
+    static func demoRecorder(_ store: CueStore, host: String = "demo-mac", minInterval: Duration = StateRecorder.detailInterval) -> StateRecorder {
+        StateRecorder(store: store, hostID: host, minInterval: minInterval, bootID: boot(of: host))
     }
 
     private static var presenceKeeper: Task<Void, Never>?
@@ -41,7 +41,7 @@ extension DebugScene {
 extension CueStore {
     /// 演示里写 Cue 此刻：记在 Cue 运行的那台 Mac 名下、带那台的开机标识（`DebugScene.boot(of:)`），同值班的管理器写下的一样，名牌与页头才认它。
     func setDemoCueState(
-        _ state: PiWorkState, detail: String? = nil, step: CueActivity.Touch? = nil, round: UUID? = nil, context: CueContext? = nil
+        _ state: WorkState, detail: String? = nil, step: CueActivity.Touch? = nil, round: UUID? = nil, context: CueContext? = nil
     ) throws {
         let host = try cueProfile()?.hostID
         try setCueState(state, detail: detail, step: step, round: round, context: context, hostID: host, bootID: host.flatMap(DebugScene.boot(of:)))

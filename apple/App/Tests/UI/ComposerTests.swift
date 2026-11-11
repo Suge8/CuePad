@@ -10,8 +10,8 @@ struct ComposerTests {
     let app = TestApp()
     var store: CueStore { app.services.store }
 
-    private func session(project: UUID? = nil) async throws -> PiSessionState {
-        try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "atlas", state: .settled, title: "atlas", projectID: project)
+    private func session(project: UUID? = nil) async throws -> SessionState {
+        try await StateRecorder(store: store, hostID: "mac-a").update(sessionID: "atlas", state: .settled, title: "atlas", projectID: project)
         return try #require(try await store.allPiSessionStates().first)
     }
 
@@ -67,7 +67,7 @@ struct ComposerTests {
         #expect(workspace.notice?.text.visible == "已记到 圆桌" && workspace.notice?.link == .project(project.id))
 
         try await workspace.saveReply("没归属的", of: try await {
-            try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "loose", state: .settled, title: "loose")
+            try await StateRecorder(store: store, hostID: "mac-a").update(sessionID: "loose", state: .settled, title: "loose")
             return try #require(try await store.allPiSessionStates().first { $0.sessionID == "loose" })
         }())
         #expect(try await store.cards(in: Project.defaultID).map(\.body) == ["没归属的"])

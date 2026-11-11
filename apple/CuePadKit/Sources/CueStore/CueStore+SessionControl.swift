@@ -4,15 +4,15 @@ import Foundation
 extension CueStore {
   /// 界面的回复框与 Cue 的 say 共用这一条。会话在等 CuePad 能代答的提问时，这句就是答案（`answerValue`），答不上抛 `invalidAnswer`，什么都不写；否则发出（规则见 `say`）。带 `config` 时先请会话换上，换不了模型抛 `cannotChangeModel`，什么都不写。会话已结束也照说：执行它的 Mac 先恢复它。说话不改任务的状态：已完成的事收到话仍是完成。`name` 与 `host` 是会话记录还没到时的称呼与执行的 Mac。
   public func speak(
-    _ content: String, to sessionID: String, name: String = "", card: UUID? = nil, config: PiConfig? = nil,
+    _ content: String, to sessionID: String, name: String = "", card: UUID? = nil, config: SessionConfig? = nil,
     host: String, cue: Bool = false
   ) throws -> DeliveryRequest {
     try write {
       let session = try sessionTarget(sessionID, name: name)
-      var answer: PiAnswer?
+      var answer: Answer?
       if let question = session.state?.answerableQuestion, let promptID = question.promptID, let kind = question.kind.known {
         let value = CueFormat.plainText(content).trimmingCharacters(in: .whitespacesAndNewlines)
-        answer = PiAnswer(promptID: promptID, value: try Self.answerValue(value, kind: kind, options: question.options, allowsOther: question.allowsOther, leading: cue))
+        answer = Answer(promptID: promptID, value: try Self.answerValue(value, kind: kind, options: question.options, allowsOther: question.allowsOther, leading: cue))
       }
       try requestConfig(config, in: session, host: host, cue: cue)
       if let answer {
@@ -34,7 +34,7 @@ extension CueStore {
   }
 
   /// 必须在写事务内、写别的之前调用：抛错时什么都没写。换不了模型（记录没到也算不知道、不换）抛 `cannotChangeModel`。
-  private func requestConfig(_ config: PiConfig?, in session: SessionTarget, host: String, cue: Bool) throws {
+  private func requestConfig(_ config: SessionConfig?, in session: SessionTarget, host: String, cue: Bool) throws {
     guard let config else { return }
     guard session.state?.capabilities.contains(.model) == true else { throw CueStoreError.cannotChangeModel(session.target.name) }
     _ = try insertDelivery(config.stored, to: session.target, on: session.host(or: host), mode: .config, cue: cue)
@@ -52,7 +52,7 @@ extension CueStore {
   /// 唯一的一处：“他说的”标记、他那一轮里 Cue 不插嘴、停下归谁接手都只认它。扩展投进来的机器消息（FireCode 交回子代理结果、审查结论）开的轮不另算：它是那句话派出去的活交回来了，从那句起到真正歇下是一件事。会话里还没有你一方的话为 nil。
   func turnOpener(_ sessionID: String) throws -> TurnOpener? {
     guard let last = try select(
-      PiChatMessage.self, where: "sessionID = ? AND role = '\(PiChatRole.user.rawValue)'", [sessionID], orderBy: "seq DESC, id DESC", limit: 1
+      ChatMessage.self, where: "sessionID = ? AND role = '\(ChatRole.user.rawValue)'", [sessionID], orderBy: "seq DESC, id DESC", limit: 1
     ).first else { return nil }
     switch last.source(in: try deliverySources(among: [last.deliveryID].compactMap(\.self))) {
     case .cue: return .cue
@@ -64,7 +64,7 @@ extension CueStore {
   enum TurnOpener { case user, cue, unconfirmed }
 
   /// 收自己写的回答的以外，Cue 说的（`leading`）开头正好是一个选项、后面紧跟标点或空白就按那个选项答，后面的说明不送，工具结果会告诉它；你在回复框里写的不这样截，免得说明悄悄丢掉。只认开头：说明里才提到选项（“不换，仍按 A”）猜不准。
-  private static func answerValue(_ value: String, kind: PiQuestionKind, options: [String], allowsOther: Bool, leading: Bool) throws -> PiAnswerValue {
+  private static func answerValue(_ value: String, kind: QuestionKind, options: [String], allowsOther: Bool, leading: Bool) throws -> AnswerValue {
     switch kind {
     case .text: return .text(value)
     case .select:
@@ -120,14 +120,14 @@ extension CueStore {
 
   struct SessionTarget {
     var target: SendTarget
-    var state: PiSessionState?
+    var state: SessionState?
 
     func host(or initiator: String?) -> String? { state?.hostID ?? initiator }
     func host(or initiator: String) -> String { state?.hostID ?? initiator }
   }
 
   func sessionTarget(_ sessionID: String, name: String) throws -> SessionTarget {
-    let state = try find(PiSessionState.self, PiSessionState.recordID(sessionID: sessionID))
+    let state = try find(SessionState.self, SessionState.recordID(sessionID: sessionID))
     return SessionTarget(target: SendTarget(kind: .piSession, name: state?.title ?? name, ref: sessionID), state: state)
   }
 }

@@ -7,9 +7,9 @@ import Foundation
 final class ClaudeStream {
     let process: ChildProcess
     var onMessage: ((JSONValue) -> Void)?
-    /// 主会话（`parent_tool_use_id` 为空）正在说的这条回答（`PiDraft`，拼法见 `DraftParts`）；正常说完的留着，不清。
-    /// 起点是第一段定稿那一行的 `timestamp`，定稿之前是收到 `message_start` 的时刻（`PiDraft.since`）。
-    var onDraft: ((PiDraft?) -> Void)?
+    /// 主会话（`parent_tool_use_id` 为空）正在说的这条回答（`LiveDraft`，拼法见 `DraftParts`）；正常说完的留着，不清。
+    /// 起点是第一段定稿那一行的 `timestamp`，定稿之前是收到 `message_start` 的时刻（`LiveDraft.since`）。
+    var onDraft: ((LiveDraft?) -> Void)?
     private var speech = DraftParts()
     /// 正在说的文字块的块号（`content_block_start` 给的）；不发增量时没有，定稿接在最后一段后面
     private var openBlock: Int?
@@ -17,7 +17,7 @@ final class ClaudeStream {
     var onClose: (() -> Void)?
     /// 主会话的模型开始回话（流里的 `message_start`）：请求被模型收下了。没登录、模型不可用、额度用完时没有它（`ClaudeDelivery`）
     var onReply: (() -> Void)?
-    private let replies = PendingReplies<String, JSONValue>(timeout: AgentTimeouts.reply, timeoutError: PiBridgeError.ackTimeout)
+    private let replies = PendingReplies<String, JSONValue>(timeout: AgentTimeouts.reply, timeoutError: BridgeError.ackTimeout)
     private var inputClosed = false
 
     init(executable: URL, arguments: [String], directory: URL, environment: [String: String], timing: Timing = .system) async throws {
@@ -40,7 +40,7 @@ final class ClaudeStream {
         message["type"]?.string == "system" && message["subtype"]?.string == "status" && message["status"]?.string == "requesting"
     }
 
-    static func content(text: String, images: [PiImage]) -> JSONValue {
+    static func content(text: String, images: [MessageImage]) -> JSONValue {
         var content: [JSONValue] = text.isEmpty ? [] : [["type": "text", "text": .string(text)]]
         for image in images {
             content.append(["type": "image", "source": ["type": "base64", "media_type": .string(image.mimeType), "data": .string(image.data.base64EncodedString())]])
@@ -50,7 +50,7 @@ final class ClaudeStream {
 
     /// 写一条。输入已关或进程已退出时抛 `sessionEnded`。
     func write(_ message: JSONValue) throws {
-        guard !inputClosed, !isClosed else { throw PiBridgeError.sessionEnded }
+        guard !inputClosed, !isClosed else { throw BridgeError.sessionEnded }
         process.write(message.data)
     }
 
@@ -68,7 +68,7 @@ final class ClaudeStream {
     }
 
     @discardableResult
-    func setEffort(_ level: PiThinkingLevel) async throws -> String {
+    func setEffort(_ level: ThinkingLevel) async throws -> String {
         let effort = ClaudeCode.effort(level)
         _ = try await request(["subtype": "apply_flag_settings", "settings": ["effortLevel": .string(effort)]])
         return effort
@@ -98,7 +98,7 @@ final class ClaudeStream {
         guard let request = response?["request_id"]?.string else { return }
         replies.resolve(request, with: response?["subtype"]?.string == "success"
             ? .success(response?["response"] ?? .object([:]))
-            : .failure(PiBridgeError.rejected(response?["error"]?.string ?? "failed")))
+            : .failure(BridgeError.rejected(response?["error"]?.string ?? "failed")))
     }
 
     private func isMain(_ message: JSONValue) -> Bool { message["parent_tool_use_id"] == nil || message["parent_tool_use_id"] == .null }
@@ -150,7 +150,7 @@ final class ClaudeStream {
     }
 
     private func closed() {
-        replies.closeAll(PiBridgeError.sessionEnded)
+        replies.closeAll(BridgeError.sessionEnded)
         onClose?()
     }
 }

@@ -11,7 +11,7 @@ struct MachineNote: Equatable {
     var detail: String
     var fromFireCode: Bool
 
-    init(_ envelope: PiEnvelope) {
+    init(_ envelope: MessageEnvelope) {
         let body = envelope.body.trimmingCharacters(in: .whitespacesAndNewlines)
         let lines = body.components(separatedBy: "\n")
         let heading = lines.first ?? ""
@@ -25,7 +25,7 @@ struct MachineNote: Equatable {
             failed = errorAt != nil
             let content = marker.map { rest[($0 + 1)...].filter { line in !Self.elapsed.contains { line.hasPrefix($0) } }.joined(separator: "\n") }
             who = marker == nil ? String(localized: "子代理") : String(localized: "子代理 \(String(heading.prefix { $0 != " " }))")
-            line = PiProgress.firstSentence(content) ?? heading
+            line = SessionProgress.firstSentence(content) ?? heading
             detail = afterHeading
         case "firecode_review":
             who = String(localized: "审查")
@@ -33,11 +33,11 @@ struct MachineNote: Equatable {
             detail = afterHeading
         case "firecode_watcher":
             who = String(localized: "观察员")
-            line = PiProgress.firstSentence(afterHeading) ?? heading
+            line = SessionProgress.firstSentence(afterHeading) ?? heading
             detail = afterHeading
         default:
             who = envelope.name.isEmpty ? String(localized: "扩展") : envelope.name
-            line = PiProgress.firstSentence(body) ?? ""
+            line = SessionProgress.firstSentence(body) ?? ""
             detail = body
         }
         if detail == line { detail = "" }

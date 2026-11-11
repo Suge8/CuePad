@@ -36,7 +36,7 @@ extension VoiceCall {
     nonisolated struct Read: Equatable, Sendable {
         let end: Int
         let requests: [CueMessage]
-        let executions: [PiSessionListItem]
+        let executions: [SessionListItem]
         let stops: [DeliveryRequest]
     }
 

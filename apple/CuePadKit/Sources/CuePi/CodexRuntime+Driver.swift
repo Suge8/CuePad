@@ -19,7 +19,7 @@ final class CodexDriver {
     private var finishedTurn: String?
     private var lastError: String?
     /// 一轮开跑（`turn/started`）或结束，见 `interrupt`
-    private let activations = Occurrences(timeout: AgentTimeouts.stop, timeoutError: PiBridgeError.ackTimeout)
+    private let activations = Occurrences(timeout: AgentTimeouts.stop, timeoutError: BridgeError.ackTimeout)
     var onEvent: (TurnEvent) -> Void = { _ in }
     var onNotification: (String, JSONValue) -> Void = { _, _ in }
 
@@ -39,7 +39,7 @@ final class CodexDriver {
         }
         let process = rpc.process
         rpc.onClose = { [weak self] in
-            self?.activations.closeAll(PiBridgeError.sessionEnded)
+            self?.activations.closeAll(BridgeError.sessionEnded)
             Task { [weak self] in
                 let reason = await process?.exited()
                 self?.onEvent(.exited(reason))

@@ -6,7 +6,7 @@ import SwiftUI
 /// 等待到点只显示静态未确认，不提供安全重发。
 enum BubbleTrip: Hashable {
     case arrived
-    case sending(PiDelivery.Transit)
+    case sending(DeliveryShown.Transit)
     case delivered(String?)
     case failed(Undelivered)
 
@@ -61,7 +61,7 @@ private struct TripMark: View {
                         Button(MessageMenu.Item.remove.title, icon: MessageMenu.Item.remove.icon, role: .destructive, action: undelivered.remove)
                     }
                 } label: {
-                    PiStateGlyph.undelivered
+                    StateGlyph.undelivered
                 }
                 .menuStyle(.button).buttonStyle(PressStyle(.inline))
                 #if os(macOS)

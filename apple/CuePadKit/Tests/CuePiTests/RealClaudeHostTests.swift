@@ -17,7 +17,7 @@ struct RealClaudeHostTests {
             let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t-wrapped", name: nil, model: nil, thinking: nil)
             let sessionID = try #require(testbed.bridge.session(id: id)?.sessionID)
 
-            try await testbed.bridge.send(PiMessage(text: "Reply with the single word WRAPPED."), to: id)
+            try await testbed.bridge.send(SessionMessage(text: "Reply with the single word WRAPPED."), to: id)
             try await eventually("这一轮开始又结束") {
                 log.states.contains { $0.isWorking } && testbed.bridge.session(id: id)?.state.isWorking == false
             }
@@ -33,7 +33,7 @@ struct RealClaudeHostTests {
             try testbed.startConnected()
             testbed.on("BUSY-HANG") { _ in .stream(["Working on it"]) }
             let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t-busy", name: nil, model: nil, thinking: nil)
-            try await testbed.bridge.send(PiMessage(text: "BUSY-HANG"), to: id)
+            try await testbed.bridge.send(SessionMessage(text: "BUSY-HANG"), to: id)
             try await eventually("这一轮在跑、停在模型里") {
                 testbed.model.requests.contains { $0.prompt.contains("BUSY-HANG") } && testbed.bridge.session(id: id)?.state.isWorking == true
             }
@@ -64,9 +64,9 @@ struct RealClaudeHostTests {
             #expect(session.commands.contains { $0.name == "compact" })
 
             let delivery = UUID().uuidString
-            let image = PiImage(mimeType: "image/png", data: redPNG)
+            let image = MessageImage(mimeType: "image/png", data: redPNG)
             let start = Date()
-            try await testbed.bridge.send(PiMessage(text: "不用工具，直接看图：它是红色还是蓝色？只答颜色词", images: [image], deliveryID: delivery), to: id)
+            try await testbed.bridge.send(SessionMessage(text: "不用工具，直接看图：它是红色还是蓝色？只答颜色词", images: [image], deliveryID: delivery), to: id)
             try await testbed.waitForTurn(id, since: start)
             try await testbed.waitForDraftLanded(id)
 
@@ -90,7 +90,7 @@ struct RealClaudeHostTests {
             testbed.on("TOUCH") { $0.step == 0 ? .call("Bash", ["command": "touch \(touched.path)", "description": "touch"]) : .say("DONE") }
 
             let asked = Date()
-            try await testbed.bridge.send(PiMessage(text: "TOUCH it"), to: id)
+            try await testbed.bridge.send(SessionMessage(text: "TOUCH it"), to: id)
             let permission = try await testbed.waitForQuestion(id)
             #expect(permission.kind == .known(.confirm) && permission.text.hasPrefix("允许 Claude Code 使用 Bash？"), "\(permission.text)")
             #expect(!FileManager.default.fileExists(atPath: touched.path), "没答之前不跑")

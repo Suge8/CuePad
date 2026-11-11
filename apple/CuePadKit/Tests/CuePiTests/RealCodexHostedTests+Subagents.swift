@@ -23,7 +23,7 @@ extension RealCodexHostedTests {
             let id = try await open(rig, "token-3")
             let log = ChangeLog(rig.bridge)
 
-            try await rig.bridge.send(PiMessage(text: "Spawn one subagent called pong and tell me what it said."), to: id)
+            try await rig.bridge.send(SessionMessage(text: "Spawn one subagent called pong and tell me what it said."), to: id)
             // 变化日志经异步流收下，比桥上的会话晚一拍：等它也收到这次变化
             try await eventually("这一轮做完") { rig.bridge.session(id: id)?.state == .settled && log.states.contains(.thinking) && log.states.last == .settled }
             #expect(log.settles == 1, "\(log.states)")
@@ -37,7 +37,7 @@ extension RealCodexHostedTests {
             let files = try #require(FileManager.default.enumerator(at: rig.codex.home.appending(path: "sessions"), includingPropertiesForKeys: nil))
                 .compactMap { $0 as? URL }.filter { $0.pathExtension == "jsonl" }
             #expect(files.count == 2)
-            let history = HistoryEventLog(PiHistoryIndexer(agent: .codex, paths: rig.codex.paths, files: scratchFiles) { _ in nil }!)
+            let history = HistoryEventLog(HistoryIndexer(agent: .codex, paths: rig.codex.paths, files: scratchFiles) { _ in nil }!)
             try await eventually("回填完") { history.finishedBackfill }
             // 主会话文件在这一轮歇下后可能还在写，会多一次更新：只看更新了哪些会话
             #expect(Set(history.updates.map(\.checkpoint.sessionID)) == [main])
@@ -62,7 +62,7 @@ extension RealCodexHostedTests {
             let id = try await open(rig, "token-wake")
             let log = ChangeLog(rig.bridge)
 
-            try await rig.bridge.send(PiMessage(text: "Spawn one subagent called fruit and do not wait for it."), to: id)
+            try await rig.bridge.send(SessionMessage(text: "Spawn one subagent called fruit and do not wait for it."), to: id)
 
             try await gate.reached()
             // 变化日志经异步流收下，比桥上的会话晚一拍：等它也收到这次变化
@@ -80,7 +80,7 @@ extension RealCodexHostedTests {
                 rig.model.requests.filter(main).count > asked && rig.bridge.session(id: id)?.state == .settled && log.states.last == .settled
             }
             #expect(log.settles == 1, "\(log.states)")
-            // 歇下就绪（`PiSessionState.answered`）：派活那一轮的收尾早于补的那一轮的开始（CuePad 发出空输入的时刻），那一轮的收尾不早于它
+            // 歇下就绪（`SessionState.answered`）：派活那一轮的收尾早于补的那一轮的开始（CuePad 发出空输入的时刻），那一轮的收尾不早于它
             let settled = try #require(rig.bridge.session(id: id))
             let turn = try #require(settled.turnStartedAt), answered = try #require(try rig.transcript(settled).recap.answeredAt)
             #expect(dispatched < turn && turn <= answered, "\(dispatched) \(turn) \(answered)")

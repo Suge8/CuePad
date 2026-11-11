@@ -206,10 +206,10 @@ private struct NotificationSection: View {
         }
     }
 
-    private func row(_ title: LocalizedStringResource, kind: PiAlert, help: LocalizedStringResource) -> some View {
+    private func row(_ title: LocalizedStringResource, kind: AlertKind, help: LocalizedStringResource) -> some View {
         @Bindable var settings = services.settings
         // 设置行的图标是墨色线条：形状与提示带的状态图形同一个
-        return SettingRow(title: title, icon: Image(PiShown(status: SessionAlert.status(kind)).icon), help: help) {
+        return SettingRow(title: title, icon: Image(SessionShown(status: SessionAlert.status(kind)).icon), help: help) {
             HStack(spacing: Spacing.group) {
                 Picker("提示音", selection: Binding(get: { settings.alerts[kind].sound }, set: { sound in
                     settings.alerts[kind].sound = sound

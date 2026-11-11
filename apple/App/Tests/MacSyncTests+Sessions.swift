@@ -32,13 +32,13 @@ extension MacSyncTests {
             }
             return ["ok": true]
         }
-        let stateID = PiSessionState.recordID(sessionID: "fast")
+        let stateID = SessionState.recordID(sessionID: "fast")
         _ = try await eventually(mac.services.store, { try $0.allPiSessionStates().first }, until: { $0?.sessionID == "fast" })
         await mac.services.upload(stateID)
         await phone.services.syncNow()
         let session = try #require(try await eventually(phone.services.store, { try $0.allPiSessionStates().first }, until: { $0?.sessionID == "fast" }))
 
-        let request = try await phone.services.configure(PiConfig(fast: true), for: session)
+        let request = try await phone.services.configure(SessionConfig(fast: true), for: session)
         await phone.services.upload(request.id)
         await mac.services.syncNow()
         let result = try #require(try await eventually(mac.services.store, { try $0.deliveryRequest(request.id) }, until: { $0?.isOpen == false }))
@@ -52,7 +52,7 @@ extension MacSyncTests {
         #expect(try await phone.services.store.allPiSessionStates().first?.fast == true)
     }
 
-    func launched(_ launch: PiLaunch, title: String = "app", card: UUID? = nil) async throws -> DeliveryRequest {
+    func launched(_ launch: LaunchRequest, title: String = "app", card: UUID? = nil) async throws -> DeliveryRequest {
         try await services.executor.start()
         let request = try await services.store.requestLaunch(launch, title: title, on: TestApp.hostID, card: card)
         return try await awaitFinished(request.id)
@@ -77,7 +77,7 @@ extension MacSyncTests {
         defer { services.cancelBackgroundWork() }
 
         let request = try await services.store.requestConfig(
-            PiConfig(name: "登录重试"), to: SendTarget(kind: .piSession, name: "修好登录", ref: "s1"), on: TestApp.hostID)
+            SessionConfig(name: "登录重试"), to: SendTarget(kind: .piSession, name: "修好登录", ref: "s1"), on: TestApp.hostID)
         let done = try await awaitFinished(request.id)
 
         #expect(done.status == .known(.succeeded))
@@ -94,7 +94,7 @@ extension MacSyncTests {
         let task = try await services.store.createTask("上线", in: project.id)
         let step = try await services.store.createTask("备份数据库\n先把库备份一份", under: task.id)
 
-        #expect(try await launched(PiLaunch(project: project.id, prompt: step.body, token: "tok-6"), card: step.id).status == .known(.succeeded))
+        #expect(try await launched(LaunchRequest(project: project.id, prompt: step.body, token: "tok-6"), card: step.id).status == .known(.succeeded))
         #expect(rig.host.extensions["new-tok-6"]?.received == ["send"])
         guard case .open(_, _, let name, _, _) = try #require(rig.host.calls.first) else {
             Issue.record("没有开新会话")
@@ -104,21 +104,21 @@ extension MacSyncTests {
 
         let png = pngData()
         let hash = try services.store.files.store(png)
-        let shown = try await launched(PiLaunch(project: project.id, prompt: "看这张设计稿\n\n![](cuepad://file/\(hash))", token: "tok-5"), title: "App")
+        let shown = try await launched(LaunchRequest(project: project.id, prompt: "看这张设计稿\n\n![](cuepad://file/\(hash))", token: "tok-5"), title: "App")
         #expect(rig.host.extensions["new-tok-5"]?.messages == [
-            PiMessage(text: "看这张设计稿", images: [PiImage(mimeType: "image/png", data: png)], deliveryID: shown.id.uuidString)
+            SessionMessage(text: "看这张设计稿", images: [MessageImage(mimeType: "image/png", data: png)], deliveryID: shown.id.uuidString)
         ])
 
         // 文件在原处换成一行"附件：文件名（路径）"，路径是附件目录里本机那份
         let source = FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString)-方案.pdf")
         try Data("%PDF-1.4 方案".utf8).write(to: source)
         let pdf = try services.store.files.store(fileAt: source)
-        let withFile = try await launched(PiLaunch(project: project.id, prompt: "照这份方案做\n\n[方案.pdf](cuepad://file/\(pdf))", token: "tok-7"), title: "App")
+        let withFile = try await launched(LaunchRequest(project: project.id, prompt: "照这份方案做\n\n[方案.pdf](cuepad://file/\(pdf))", token: "tok-7"), title: "App")
         let path = try #require(services.store.files.fileURL(for: pdf)).path(percentEncoded: false)
         #expect(path.hasPrefix(services.location.caches.path(percentEncoded: false)))
-        #expect(rig.host.extensions["new-tok-7"]?.messages == [PiMessage(text: "照这份方案做\n\n附件：方案.pdf（\(path)）", deliveryID: withFile.id.uuidString)])
+        #expect(rig.host.extensions["new-tok-7"]?.messages == [SessionMessage(text: "照这份方案做\n\n附件：方案.pdf（\(path)）", deliveryID: withFile.id.uuidString)])
 
-        #expect(try await launched(PiLaunch(project: project.id, prompt: nil, token: "tok-2")).status == .known(.succeeded))
+        #expect(try await launched(LaunchRequest(project: project.id, prompt: nil, token: "tok-2")).status == .known(.succeeded))
         #expect(rig.host.extensions["new-tok-2"]?.commands.isEmpty == true)
     }
 
@@ -131,18 +131,18 @@ extension MacSyncTests {
         let store = services.store
         try await services.executor.start()
         let request = try await store.requestLaunch(
-            PiLaunch(project: project.id, prompt: "看看测试为什么挂", token: "tok-cue"), title: "App", on: TestApp.hostID, cue: true)
+            LaunchRequest(project: project.id, prompt: "看看测试为什么挂", token: "tok-cue"), title: "App", on: TestApp.hostID, cue: true)
         #expect(try await awaitFinished(request.id).status == .known(.succeeded))
         let ext = try #require(rig.host.extensions["new-tok-cue"])
         let received = try #require(ext.messages.first)
         let delivery = try #require(received.deliveryID.flatMap(UUID.init(uuidString:)))
-        let said = PiChatMessage(sessionID: ext.sessionID, entryID: "u0", seq: 0, role: .user, text: received.text, at: .now, deliveryID: delivery)
-        try await store.writePiTranscript(PiTranscript(sessionID: ext.sessionID, messages: [said], recap: PiRecap(lastPrompt: said.text)))
+        let said = ChatMessage(sessionID: ext.sessionID, entryID: "u0", seq: 0, role: .user, text: received.text, at: .now, deliveryID: delivery)
+        try await store.writePiTranscript(SessionTranscript(sessionID: ext.sessionID, messages: [said], recap: Recap(lastPrompt: said.text)))
         #expect(try await store.deliveryRequest(request.id)?.status == .known(.succeeded))
         try await store.deleteDelivery(request.id)
 
         let derived = ChatDerived()
-        derived.refresh(try await SessionDigest.read(PiSessionState.recordID(sessionID: ext.sessionID), sessionID: ext.sessionID, from: store), at: .always())
+        derived.refresh(try await SessionDigest.read(SessionState.recordID(sessionID: ext.sessionID), sessionID: ext.sessionID, from: store), at: .always())
         #expect(try #require(derived.items.first).fromCue)
     }
 
@@ -154,13 +154,13 @@ extension MacSyncTests {
         let file = FileManager.default.temporaryDirectory.appending(path: "mac-sync-\(UUID().uuidString).jsonl")
         FileManager.default.createFile(atPath: file.path, contents: Data())
         let turn = Date.now.addingTimeInterval(-30 * 60)
-        let said = PiChatMessage(sessionID: "s1", entryID: "u1", seq: 1, role: .user, text: "发版", at: turn)
+        let said = ChatMessage(sessionID: "s1", entryID: "u1", seq: 1, role: .user, text: "发版", at: turn)
         try await services.piStateRecorder.update(
-            sessionID: "s1", state: .thinking, title: "发版", directory: "/work/app", times: PiTimes(stateSince: turn, busySince: turn), turnStartedAt: turn)
+            sessionID: "s1", state: .thinking, title: "发版", directory: "/work/app", times: SessionTimes(stateSince: turn, busySince: turn), turnStartedAt: turn)
         if !running {
-            try await store.writePiTranscript(PiTranscript(
-                sessionID: "s1", messages: [said], recap: PiRecap(lastPrompt: "发版", lastReply: "发好了", answeredAt: turn.addingTimeInterval(60))))
-            try await services.piStateRecorder.update(sessionID: "s1", state: .settled, times: PiTimes(stateSince: turn.addingTimeInterval(60), busySince: nil))
+            try await store.writePiTranscript(SessionTranscript(
+                sessionID: "s1", messages: [said], recap: Recap(lastPrompt: "发版", lastReply: "发好了", answeredAt: turn.addingTimeInterval(60))))
+            try await services.piStateRecorder.update(sessionID: "s1", state: .settled, times: SessionTimes(stateSince: turn.addingTimeInterval(60), busySince: nil))
         }
         try services.reconcileLaunch()  // 更新后的 App 启动对账
         let mark = try await store.lastWrite()
@@ -170,8 +170,8 @@ extension MacSyncTests {
         let old = try await rig.host.connect(
             "s1", cwd: "/work/app", busy: running, extensionVersion: upgrading ? PiWire.oldestExtension - 1 : PiExtensionBundle.version, sessionFile: file.path)
         if running {
-            try await store.writePiTranscript(PiTranscript(
-                sessionID: "s1", messages: [said], recap: PiRecap(lastPrompt: "发版", lastReply: "发好了", answeredAt: .now)))
+            try await store.writePiTranscript(SessionTranscript(
+                sessionID: "s1", messages: [said], recap: Recap(lastPrompt: "发版", lastReply: "发好了", answeredAt: .now)))
         }
         old.close(bye: "reload")
         try await rig.host.connect("s1", cwd: "/work/app", sessionFile: file.path)
@@ -192,16 +192,16 @@ extension MacSyncTests {
     func 进程没了的会话仍认它报过的斜杠命令(hosted: Bool) async throws {
         var live = session("s1", state: .settled, spoke: true)
         live.hosted = hosted
-        live.commands = [PiSlashCommand(name: "default", summary: "回默认模式", source: .known(.builtin))]
+        live.commands = [SlashCommand(name: "default", summary: "回默认模式", source: .known(.builtin))]
         try await services.consumePiChanges(changes([.appeared(live), .ended(live, reason: .disconnected)]))
-        if !hosted { try await PiStateRecorder(store: services.store, hostID: TestApp.hostID).end(sessionID: "s1") }
+        if !hosted { try await StateRecorder(store: services.store, hostID: TestApp.hostID).end(sessionID: "s1") }
 
         let stored = try #require(try await services.store.allPiSessionStates().first)
         #expect(stored.state == .known(hosted ? .settled : .ended))
         let catalogID = try #require(stored.catalogID)
         let catalog = try await services.store.agentCatalog(catalogID)
         #expect(catalog?.models.isEmpty ?? true)  // 可选模型不留
-        #expect(PiSlash.line(of: ComposerDraft(text: "/default"), in: stored.usableCommands(in: catalog), for: stored) == "/default")
+        #expect(Slash.line(of: ComposerDraft(text: "/default"), in: stored.usableCommands(in: catalog), for: stored) == "/default")
     }
 
     @Test func 同一会话换到用户的终端里_记录跟着新进程_后台进程退出不结束记录() async throws {

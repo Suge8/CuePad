@@ -7,29 +7,29 @@ extension DebugScene {
     struct ChatTurn {
         var you: String
         var pi: String?
-        var tools: PiChatMessage.Tools?
+        var tools: ChatMessage.Tools?
         var asked: Date
         var answered: Date
     }
 
     static func writeChat(_ sessionID: String, _ turns: [ChatTurn], store: CueStore) async throws {
-        var messages: [PiChatMessage] = []
+        var messages: [ChatMessage] = []
         for (index, turn) in turns.enumerated() {
-            messages.append(PiChatMessage(sessionID: sessionID, entryID: "u\(index)", seq: Int64(index * 2), role: .user, text: turn.you, at: turn.asked))
+            messages.append(ChatMessage(sessionID: sessionID, entryID: "u\(index)", seq: Int64(index * 2), role: .user, text: turn.you, at: turn.asked))
             if let reply = turn.pi {
-                messages.append(PiChatMessage(
+                messages.append(ChatMessage(
                     sessionID: sessionID, entryID: "p\(index)", seq: Int64(index * 2 + 1), role: .pi, text: reply, at: turn.answered,
                     tools: turn.tools, roundStartedAt: turn.asked))
             }
         }
         let done = turns.last { $0.pi != nil }
         let pending = turns.last.flatMap { $0.pi == nil ? $0 : nil }
-        try await store.writePiTranscript(PiTranscript(
+        try await store.writePiTranscript(SessionTranscript(
             sessionID: sessionID, messages: messages,
-            recap: PiRecap(lastPrompt: done?.you, lastReply: done?.pi, pendingPrompt: pending?.you, pendingTools: pending?.tools)))
+            recap: Recap(lastPrompt: done?.you, lastReply: done?.pi, pendingPrompt: pending?.you, pendingTools: pending?.tools)))
     }
 
-    private static let notesWeek = PiChatMessage.Tools(
+    private static let notesWeek = ChatMessage.Tools(
         steps: 7,
         items: [
             .init(kind: .read, target: "notes/2026-W39.md"), .init(kind: .read, target: "notes/2026-W40.md"), .init(kind: .read, target: "notes/inbox.md"),
@@ -37,7 +37,7 @@ extension DebugScene {
             .init(kind: .command, target: "git status --short"), .init(kind: .command, target: "make lint-notes", failed: true),
         ])
 
-    private static let testRun = PiChatMessage.Tools(
+    private static let testRun = ChatMessage.Tools(
         steps: 4,
         items: [
             .init(kind: .read, target: "scheduler/queue.ts"), .init(kind: .read, target: "scheduler/queue.test.ts"),
@@ -143,7 +143,7 @@ extension DebugScene {
 
     static func seedChats(_ store: CueStore) async throws {
         let now = Date.now
-        func chat(_ sessionID: String, _ turns: [(you: String, pi: String?, tools: PiChatMessage.Tools?, minutes: Double)], startedMinutesAgo: Double) async throws {
+        func chat(_ sessionID: String, _ turns: [(you: String, pi: String?, tools: ChatMessage.Tools?, minutes: Double)], startedMinutesAgo: Double) async throws {
             var clock = now.addingTimeInterval(-startedMinutesAgo * 60)
             var rounds: [ChatTurn] = []
             for turn in turns {
@@ -203,15 +203,15 @@ extension DebugScene {
 
     static func relayLaterTurn(_ store: CueStore) async throws {
         let now = Date.now
-        try await store.writePiTranscript(PiTranscript(
+        try await store.writePiTranscript(SessionTranscript(
             sessionID: "relay",
             messages: [
-                PiChatMessage(sessionID: "relay", entryID: "u2", seq: 4, role: .user, text: String(localized: "迁移重跑了吗", table: "Demo"), at: now),
-                PiChatMessage(
+                ChatMessage(sessionID: "relay", entryID: "u2", seq: 4, role: .user, text: String(localized: "迁移重跑了吗", table: "Demo"), at: now),
+                ChatMessage(
                     sessionID: "relay", entryID: "p2", seq: 5, role: .pi, text: String(localized: "重跑过了：第 14 步已经过去，迁移全部完成。", table: "Demo"),
                     at: now.addingTimeInterval(0.5), roundStartedAt: now),
             ],
-            recap: PiRecap(lastPrompt: String(localized: "迁移重跑了吗", table: "Demo"), lastReply: String(localized: "重跑过了：第 14 步已经过去，迁移全部完成。", table: "Demo"))))
+            recap: Recap(lastPrompt: String(localized: "迁移重跑了吗", table: "Demo"), lastReply: String(localized: "重跑过了：第 14 步已经过去，迁移全部完成。", table: "Demo"))))
     }
 
     private static var skillSaid: String { """

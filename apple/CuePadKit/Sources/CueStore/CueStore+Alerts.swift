@@ -1,19 +1,19 @@
 import Foundation
 
 public enum AlertSubject: Hashable, Sendable {
-  case session(UUID, PiAlert)
+  case session(UUID, AlertKind)
   case cue
 }
 
 /// 到得了你的出那种提示的可见通知（同时叫醒 App 拉一次）；该你接、你却正在 Mac 上开着它的只静默叫醒 App 拉一次，灵动岛与小组件照样跟上：一件事进了等你，手机总会被叫醒，到不到你只定出不出通知。
-public enum PiPush: Hashable, Sendable {
-  case alert(PiAlert)
+public enum AlertPush: Hashable, Sendable {
+  case alert(AlertKind)
   case wake
 
   static let wakeValue = "wake"
 
   public init?(rawValue: String) {
-    if rawValue == Self.wakeValue { self = .wake } else if let alert = PiAlert(rawValue: rawValue) { self = .alert(alert) } else { return nil }
+    if rawValue == Self.wakeValue { self = .wake } else if let alert = AlertKind(rawValue: rawValue) { self = .alert(alert) } else { return nil }
   }
 
   public var rawValue: String {
@@ -29,12 +29,12 @@ extension CueStore {
   public func reaches(_ subject: AlertSubject) throws -> Bool {
     switch subject {
     case .cue: try !watchedOnMac(\.cue)
-    case .session(let id, let alert): try find(PiSessionState.self, id).map { try push(alert, $0) == .alert(alert) } ?? false
+    case .session(let id, let alert): try find(SessionState.self, id).map { try push(alert, $0) == .alert(alert) } ?? false
     }
   }
 
   /// 不该你接的不推；你没在看（没在哪台在线的 Mac 上开着这个会话页）才出通知，开着就只叫醒。做完了只在 Cue 不值班时算；值班时留给你回的另按待回复提示（`flagLeftToYou`），其余归 Cue 接。
-  func push(_ alert: PiAlert, _ state: PiSessionState) throws -> PiPush? {
+  func push(_ alert: AlertKind, _ state: SessionState) throws -> AlertPush? {
     let cue = try cueDuty()
     let yours = switch alert {
     case .waitingForUser: state.asksYou(cue)

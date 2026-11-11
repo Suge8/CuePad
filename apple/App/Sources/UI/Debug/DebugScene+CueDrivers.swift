@@ -28,11 +28,11 @@ extension DebugScene {
             try await store.setDemoCueState(.thinking, round: row)
             let talks = round % 2 == 0
             return ("wake", {
-                var tools = PiChatMessage.Tools()
+                var tools = ChatMessage.Tools()
                 tools.record(.init(
                     kind: talks ? .talk : .leave,
                     target: talks ? String(localized: "对 \(woke[0]) 说：测试跑完把结果贴过来", table: "Demo") : String(localized: "「\(woke[0])」留给你回", table: "Demo"),
-                    name: woke[0], session: PiSessionState.recordID(sessionID: woke[0])))
+                    name: woke[0], session: SessionState.recordID(sessionID: woke[0])))
                 _ = try await store.recordCueRound(row, startedAt: .now, answersYou: false, tools: tools)
                 try await store.setDemoCueState(.settled)
             })
@@ -44,7 +44,7 @@ extension DebugScene {
     static func replyBlinkIfAsked(_ store: CueStore) async {
         let recorder = demoRecorder(store)
         let title = String(localized: "底栏换系统液态玻璃", table: "Demo")
-        func set(_ state: PiWorkState) async throws {
+        func set(_ state: WorkState) async throws {
             _ = try await recorder.update(sessionID: "blink", state: state, title: title, directory: "CuePad", agent: .claudeCode)
         }
         await everyIfAsked("CuePadReplyBlink", every: args.driveOpts.replyBlink) {
@@ -58,7 +58,7 @@ extension DebugScene {
     static func settleAsks(_ store: CueStore) async {
         await running("撤回等你的提问") {
             for asked in try await store.cueMessagesWaitingForYou() { _ = try await store.endCueQuestion(asked.id, .withdrawn) }
-            for session in try await store.piSessionPage(PiSessionQuery(limit: 500)).items.map(\.state) where session.state == .known(.waitingForUser) {
+            for session in try await store.piSessionPage(SessionQuery(limit: 500)).items.map(\.state) where session.state == .known(.waitingForUser) {
                 _ = try await demoRecorder(store, host: session.hostID).update(sessionID: session.sessionID, state: .settled, title: session.title)
             }
         }
@@ -162,13 +162,13 @@ extension DebugScene {
             String(localized: "看一下测试跑完没有，跑完把结果贴给我", table: "Demo"), to: SendTarget(kind: .piSession, name: session.title, ref: session.sessionID), on: session.hostID, cue: true)
     }
 
-    private static func relayStart(_ store: CueStore, on launcher: PiStateRecorder) async throws -> (DeliveryRequest, String)? {
+    private static func relayStart(_ store: CueStore, on launcher: StateRecorder) async throws -> (DeliveryRequest, String)? {
         let tasks = try await store.tasks(.todo).flatMap(\.tasks)
         let parents = Set(tasks.compactMap(\.parentID))
         guard let task = tasks.first(where: { $0.piSessionID == nil && !parents.contains($0.id) }) else { return nil }
         let token = UUID().uuidString
         let request = try await store.requestLaunch(
-            PiLaunch(project: task.projectID, prompt: task.body, token: token), title: task.heading, on: "demo-mac", card: task.id, cue: true)
+            LaunchRequest(project: task.projectID, prompt: task.body, token: token), title: task.heading, on: "demo-mac", card: task.id, cue: true)
         try await Task.sleep(for: .seconds(0.8))
         let session = "launched-\(token.prefix(8))"
         try await launcher.update(sessionID: session, state: .thinking, title: task.heading, directory: "demo", projectID: task.projectID, launchToken: token)

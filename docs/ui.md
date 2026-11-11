@@ -13,7 +13,7 @@
 - 选中只有一套：中性淡底加墨字（字半粗），选中不把字与图标染成靛青（会话条去处的图标平时就是强调色，选中不变）。形状按所在的容器分，各一个出处：玻璃里的分段 `PaneSegment`，列表行与只有图标的格 `RowStyle`（规则在各自头注释）。筛选胶囊、项目范围、星期这类开关同样只用这一种底与墨字。
 - 项目色只上图形，不写成字、不做成圆点：圆点和彩字会被读成状态。
 - 图标默认不套装饰圆底：分组标题与项目标直接给字形着色；等你用裸问号，实心圆徽只强调失败。任务待办是空圈、进行中是静止开口弧（不表示百分比），有子任务时分段环才表达真实完成比例，原生圆钮表达操作容器，两者不属于图标装饰，不一并去掉；圆钮内部不重复套装饰圆。
-- 同一状态处处同一个样子，用户只学一次。每种图形只有一个出处：任务圈 `TaskRingView`（有子任务的按子任务分段，做到哪只画在圈上、不另写"n/m"）、任务行 `TaskLine`（项目页，要你管的才写状态词）、看板卡（`BoardTaskCard`、`BoardSessionCard`、等你列的 `BoardWaitCard`，推进中卡下沿的线 `BoardLine` 只按 `BoardPulse` 画）、会话状态 `PiShown`、出错 `FailureMark`、等你（拍板赭黄，`Palette.waiting` 列着现成的几样；待回复是墨点，会话条、会话行、看板卡与经过里同一个，出自 `PiShown.icon`）、一件拍板怎么答 `WaitAnswer`（Cue 页拍板卡、会话页问题卡同一个，按问题种类给；进展页只看不答）；新界面引用它们，不另画。对勾只表示完成与记下。
+- 同一状态处处同一个样子，用户只学一次。每种图形只有一个出处：任务圈 `TaskRingView`（有子任务的按子任务分段，做到哪只画在圈上、不另写"n/m"）、任务行 `TaskLine`（项目页，要你管的才写状态词）、看板卡（`BoardTaskCard`、`BoardSessionCard`、等你列的 `BoardWaitCard`，推进中卡下沿的线 `BoardLine` 只按 `BoardPulse` 画）、会话状态 `SessionShown`、出错 `FailureMark`、等你（拍板赭黄，`Palette.waiting` 列着现成的几样；待回复是墨点，会话条、会话行、看板卡与经过里同一个，出自 `SessionShown.icon`）、一件拍板怎么答 `WaitAnswer`（Cue 页拍板卡、会话页问题卡同一个，按问题种类给；进展页只看不答）；新界面引用它们，不另画。对勾只表示完成与记下。
 - 会话条只用一套分组，各端只差排版（`SessionRail` 头注释，导航见 [layout.md](layout.md)）。不提供旧样式切换。
 - logo 就是 Cue 本人：App 图标、菜单栏、图标族、落地页同一个形象。
 - 灵动岛是例外的小视口，各态放什么在 `CueActivityViews` 头注释。扩展只在内容更新时过渡，不移植 App 的循环头像，也不为动画发推送；系统将动画限制在两秒内，Always-On 低亮度时不播（[Apple](https://developer.apple.com/documentation/widgetkit/animating-data-updates-in-widgets-and-live-activities)）。

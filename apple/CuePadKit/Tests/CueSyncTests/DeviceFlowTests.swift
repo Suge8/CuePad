@@ -18,14 +18,14 @@ import Testing
   }
 
   @Test func piSessionStateWrittenOnTheMacIsVisibleOnThePhoneAndKeptAsEndedWhenTheSessionEnds() async throws {
-    let recorder = PiStateRecorder(store: mac.store, hostID: "mac", timing: clock.timing)
-    let question = PiQuestion(promptID: "p-1", kind: .select, text: "确认写入？", options: ["是", "否"])
-    let recap = PiRecap(lastPrompt: "修好登录", lastReply: "改好了：\n- 换了令牌", pendingPrompt: "再跑一遍测试")
-    let times = PiTimes(stateSince: Date(timeIntervalSince1970: 2_000), busySince: Date(timeIntervalSince1970: 1_000))
+    let recorder = StateRecorder(store: mac.store, hostID: "mac", timing: clock.timing)
+    let question = Question(promptID: "p-1", kind: .select, text: "确认写入？", options: ["是", "否"])
+    let recap = Recap(lastPrompt: "修好登录", lastReply: "改好了：\n- 换了令牌", pendingPrompt: "再跑一遍测试")
+    let times = SessionTimes(stateSince: Date(timeIntervalSince1970: 2_000), busySince: Date(timeIntervalSince1970: 1_000))
     try await recorder.update(
       sessionID: "s1", state: .waitingForUser, detail: "确认写入？", title: "fix bug", directory: "/Users/me/cuepad", question: question, times: times)
-    let said = PiChatMessage(sessionID: "s1", entryID: "u1", seq: 2, role: .user, text: "再跑一遍测试", at: Date(timeIntervalSince1970: 3_000), deliveryID: UUID())
-    try await mac.store.writePiTranscript(PiTranscript(sessionID: "s1", messages: [said], recap: recap))
+    let said = ChatMessage(sessionID: "s1", entryID: "u1", seq: 2, role: .user, text: "再跑一遍测试", at: Date(timeIntervalSince1970: 3_000), deliveryID: UUID())
+    try await mac.store.writePiTranscript(SessionTranscript(sessionID: "s1", messages: [said], recap: recap))
     try await cloud.exchange()
 
     let seen = try #require(try await phone.store.allPiSessionStates().first)
@@ -77,13 +77,13 @@ import Testing
   }
 
   @Test func modelChoicesTravelToThePhoneAndTheConfigRequestTravelsBackToTheMac() async throws {
-    let recorder = PiStateRecorder(store: mac.store, hostID: "mac", timing: clock.timing)
-    let sonnet = PiModelOption(key: PiModelKey(provider: "anthropic", id: "sonnet"), name: "Sonnet", thinkingLevels: [.off, .low, .medium])
-    let opus = PiModelOption(key: PiModelKey(provider: "anthropic", id: "opus"), name: "Opus", thinkingLevels: [.off, .high], supportsFast: true)
-    let compact = PiSlashCommand(name: "compact", summary: "压缩上下文", source: .known(.builtin))
+    let recorder = StateRecorder(store: mac.store, hostID: "mac", timing: clock.timing)
+    let sonnet = ModelOption(key: ModelKey(provider: "anthropic", id: "sonnet"), name: "Sonnet", thinkingLevels: [.off, .low, .medium])
+    let opus = ModelOption(key: ModelKey(provider: "anthropic", id: "opus"), name: "Opus", thinkingLevels: [.off, .high], supportsFast: true)
+    let compact = SlashCommand(name: "compact", summary: "压缩上下文", source: .known(.builtin))
     try await recorder.update(
       sessionID: "s1", state: .settled, title: "t", directory: "/Users/me/app",
-      modelState: PiModelState(model: sonnet, thinking: .known(.low), fast: false, models: [sonnet, opus]), commands: [compact])
+      modelState: ModelState(model: sonnet, thinking: .known(.low), fast: false, models: [sonnet, opus]), commands: [compact])
     try await cloud.exchange()
 
     let seen = try #require(try await phone.store.allPiSessionStates().first)
@@ -92,7 +92,7 @@ import Testing
     let catalog = try #require(try await phone.store.agentCatalog(catalogID))
     #expect(catalog.models == [sonnet, opus] && catalog.commands == [compact])
 
-    let config = PiConfig(model: opus.key, thinking: .high, fast: true)
+    let config = SessionConfig(model: opus.key, thinking: .high, fast: true)
     let target = SendTarget(kind: .piSession, name: "t", ref: "s1")
     let made = try await phone.store.requestConfig(config, to: target, on: "mac")
     try await cloud.exchange()
@@ -118,8 +118,8 @@ import Testing
     #expect(roundTrip >= .zero && roundTrip < .seconds(60))
     #expect(try await mac.store.deliveryRequest(request.id)?.roundTrip == nil)  // 执行方不算往返
 
-    let said = PiChatMessage(sessionID: "s1", entryID: "u1", seq: 1, role: .user, text: request.content, at: .now, deliveryID: request.id)
-    try await mac.store.writePiTranscript(PiTranscript(sessionID: "s1", messages: [said], recap: PiRecap()))
+    let said = ChatMessage(sessionID: "s1", entryID: "u1", seq: 1, role: .user, text: request.content, at: .now, deliveryID: request.id)
+    try await mac.store.writePiTranscript(SessionTranscript(sessionID: "s1", messages: [said], recap: Recap()))
     try await cloud.deliver(from: mac, to: phone, only: [mac.id(request.id)])  // 回执马上传
     #expect(try await phone.store.deliveryRequest(request.id) != nil)
     try await cloud.exchange()  // 消息上了服务器、到了手机
@@ -138,7 +138,7 @@ import Testing
     ) { _, _ in .succeeded }
     try await executor.start()
     let target = SendTarget(kind: .piSession, name: "fix bug", ref: "s1")
-    let mine = try await phone.store.requestAnswer(PiAnswer(promptID: "p-1", value: .option("另存为 feed-full.xml"), question: "要覆盖 public/feed.xml 吗？"), to: target, on: "mac")
+    let mine = try await phone.store.requestAnswer(Answer(promptID: "p-1", value: .option("另存为 feed-full.xml"), question: "要覆盖 public/feed.xml 吗？"), to: target, on: "mac")
     try await cloud.exchange()
     _ = try await eventually(mac.store, { try $0.deliveryRequests().allSatisfy { $0.status == .known(.succeeded) } }) { $0 }
     try await clock.waitForSleeper(until: clock.now.addingTimeInterval(DeliveryExecutor.retention.seconds))
@@ -190,12 +190,12 @@ import Testing
   }
 
   @Test func sessionsReportingTheSameModelListShareOneThatStateChangesDoNotResend() async throws {
-    let recorder = PiStateRecorder(store: mac.store, hostID: "mac", timing: clock.timing)
-    let options = (0..<300).map { PiModelOption(key: PiModelKey(provider: "p", id: "model-\($0)-with-a-long-identifier"), name: "Model \($0)", thinkingLevels: [.off, .high]) }
-    let models = PiModelState(model: options[0], models: options)
+    let recorder = StateRecorder(store: mac.store, hostID: "mac", timing: clock.timing)
+    let options = (0..<300).map { ModelOption(key: ModelKey(provider: "p", id: "model-\($0)-with-a-long-identifier"), name: "Model \($0)", thinkingLevels: [.off, .high]) }
+    let models = ModelState(model: options[0], models: options)
     try await recorder.update(sessionID: "s1", state: .thinking, title: "t", directory: "/Users/me/app", modelState: models)
     try await recorder.update(sessionID: "s2", state: .thinking, title: "u", directory: "/Users/me/app", modelState: models)
-    let scoped = PiModelState(model: options[0], models: Array(options.prefix(2)))
+    let scoped = ModelState(model: options[0], models: Array(options.prefix(2)))
     try await recorder.update(sessionID: "s3", state: .thinking, title: "v", directory: "/Users/me/app", modelState: scoped)
     try await cloud.exchange()
     let states = Dictionary(uniqueKeysWithValues: try await phone.store.allPiSessionStates().map { ($0.sessionID, $0.catalogID) })

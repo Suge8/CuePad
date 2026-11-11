@@ -22,7 +22,7 @@ nonisolated enum Route: Hashable {
         .session(SessionRoute(id: id, sessionID: sessionID, seed: seed))
     }
 
-    static func session(_ sessionID: String) -> Route { .session(PiSessionState.recordID(sessionID: sessionID), sessionID: sessionID) }
+    static func session(_ sessionID: String) -> Route { .session(SessionState.recordID(sessionID: sessionID), sessionID: sessionID) }
 
 
 }

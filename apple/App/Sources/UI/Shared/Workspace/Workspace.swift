@@ -10,7 +10,7 @@ final class Workspace {
         let id = UUID()
         var text: Dotted
         var tone: Tone
-        var status: PiShown.Status?
+        var status: SessionShown.Status?
         var link: Route?
         var action: NoticeAction?
 

@@ -31,8 +31,8 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     /// 有工具排（`tools`：会话的模型与思考强度）。一直展开的有工具时才分两层（文字在上、＋工具提交钮一排在下），没有工具的照旧一排；
     /// 会收起的在聚焦时文字下面多一排。
     var tooled = false
-    /// 这个会话此刻能用的斜杠命令：输入 "/" 时弹出面板（`PiSlashPalette`）；空表示不弹。
-    var commands: [PiSlashCommand] = []
+    /// 这个会话此刻能用的斜杠命令：输入 "/" 时弹出面板（`SlashPalette`）；空表示不弹。
+    var commands: [SlashCommand] = []
     var shortcuts: [ReplyShortcut: () -> Void] = [:]
     /// 空着时按 ↑ 放进来的话，存储格式（回复框：你在这个会话里说过的上一句，文字与附件）。
     var recall: String?
@@ -72,9 +72,9 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     private var hasContent: Bool { !draft.isEmpty(accepting: accepts) }
     private var sendVisible: Bool { !shrunk && (hasContent || submitsEmpty || showsSendEmpty) }
 
-    private var paletteCommands: [PiSlashCommand] {
+    private var paletteCommands: [SlashCommand] {
         guard expanded, dismissedPalette != draft.text else { return [] }
-        return PiSlash.matches(draft.text, in: commands) ?? []
+        return Slash.matches(draft.text, in: commands) ?? []
     }
 
     /// 此刻能用的快捷键：发送的两种要有内容。
@@ -100,8 +100,8 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
         return true
     }
 
-    private func pick(_ command: PiSlashCommand) {
-        draft.text = PiSlash.insertion(for: command)
+    private func pick(_ command: SlashCommand) {
+        draft.text = Slash.insertion(for: command)
         focus.wrappedValue = true
     }
 
@@ -132,7 +132,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
             // 头部随玻璃变形进出：收起时立刻离开（淡出中的它会叠在收短的那行字上），展开时等文字区让开位置再淡入
             if !shrunk, expanded || keepsHeader { header().transition(Self.headerTransition) }
             if !paletteCommands.isEmpty {
-                PiSlashPalette(commands: paletteCommands, highlighted: min(highlighted, paletteCommands.count - 1), pick: pick)
+                SlashPalette(commands: paletteCommands, highlighted: min(highlighted, paletteCommands.count - 1), pick: pick)
                     .transition(.opacity)
             }
             if accepts.contains(.cards) {

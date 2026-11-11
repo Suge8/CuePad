@@ -8,7 +8,7 @@ import Foundation
 struct CodexModel {
     let id: String
     let name: String
-    let efforts: [PiThinkingLevel]
+    let efforts: [ThinkingLevel]
     let seesImages: Bool
     let supportsFast: Bool
     let isDefault: Bool
@@ -16,12 +16,12 @@ struct CodexModel {
     /// 模型的提供方写成 Codex 自己（`AgentKind.modelProvider`），不用线程上的 `modelProvider`（openai 等）：Codex 的模型 id 在它自己的命名空间里。
     static let provider = AgentKind.codex.modelProvider!
 
-    var option: PiModelOption {
-        PiModelOption(key: PiModelKey(provider: Self.provider, id: id), name: name, thinkingLevels: efforts, acceptsImages: seesImages, supportsFast: supportsFast)
+    var option: ModelOption {
+        ModelOption(key: ModelKey(provider: Self.provider, id: id), name: name, thinkingLevels: efforts, acceptsImages: seesImages, supportsFast: supportsFast)
     }
 
-    static func thinking(_ effort: String) -> Open<PiThinkingLevel> { Open(rawValue: effort == "none" ? "off" : effort) }
-    static func effort(_ level: PiThinkingLevel) -> String { level == .off ? "none" : level.rawValue }
+    static func thinking(_ effort: String) -> Open<ThinkingLevel> { Open(rawValue: effort == "none" ? "off" : effort) }
+    static func effort(_ level: ThinkingLevel) -> String { level == .off ? "none" : level.rawValue }
 
     static func failure(of turn: JSONValue?) -> String {
         let message = [turn?["error"]?["message"]?.string, turn?["error"]?["additionalDetails"]?.string].compactMap { $0 }.filter { !$0.isEmpty }

@@ -7,14 +7,14 @@ import Testing
 
 private let longCommand = "echo " + String(repeating: "a", count: 200)
 
-/// 端到端：真实 Pi（钉住的版本）+ 安装器装进临时 agent 目录的真实扩展 + 假模型 + `PiBridge`。
+/// 端到端：真实 Pi（钉住的版本）+ 安装器装进临时 agent 目录的真实扩展 + 假模型 + `Bridge`。
 @MainActor
 @Suite(RealAgents.needs(.pi), RealAgents.tiered)
 struct RealPiTests {
     /// 起 Pi、等桥发现它，测试体结束后停掉 Pi 与桥（Pi 进程的生命周期必须覆盖整个测试体）。
-    func withRig(_ body: (PiProcess, PiBridge, PiSession) async throws -> Void) async throws {
+    func withRig(_ body: (PiProcess, Bridge, Session) async throws -> Void) async throws {
         let pi = try await PiProcess()
-        let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
+        let bridge = Bridge(socketDirectory: pi.paths.socketDirectory)
         defer { bridge.stop(); pi.stop() }
         try bridge.start()
         try await eventually("桥发现真实 Pi 会话") { !bridge.sessions.isEmpty }
@@ -40,37 +40,37 @@ struct RealPiTests {
             #expect(s.availableModels.first { $0.key.id == "echo" }?.thinkingLevels == [.off])
             #expect(s.availableModels.first { $0.key.id == "echo-think" }?.thinkingLevels == [.off, .minimal, .low, .medium, .high])
 
-            try await bridge.configure(PiConfig(model: PiModelKey(provider: "fake", id: "echo-think"), thinking: .high), in: s.id)
+            try await bridge.configure(SessionConfig(model: ModelKey(provider: "fake", id: "echo-think"), thinking: .high), in: s.id)
             try await eventually("上报跟上") { bridge.sessions.first?.model?.key.id == "echo-think" && bridge.sessions.first?.thinking == .known(.high) }
 
-            try await bridge.configure(PiConfig(thinking: .low), in: s.id)
+            try await bridge.configure(SessionConfig(thinking: .low), in: s.id)
             try await eventually("只改强度") { bridge.sessions.first?.thinking == .known(.low) }
 
-            try await bridge.configure(PiConfig(model: PiModelKey(provider: "fake", id: "echo"), thinking: .high), in: s.id)
+            try await bridge.configure(SessionConfig(model: ModelKey(provider: "fake", id: "echo"), thinking: .high), in: s.id)
             try await eventually("不支持思考的模型把强度夹到 off") { bridge.sessions.first?.model?.key.id == "echo" && bridge.sessions.first?.thinking == .known(.off) }
 
-            await #expect(throws: PiBridgeError.unknownModel(.pi)) {
-                try await bridge.configure(PiConfig(model: PiModelKey(provider: "fake", id: "nope")), in: s.id)
+            await #expect(throws: BridgeError.unknownModel(.pi)) {
+                try await bridge.configure(SessionConfig(model: ModelKey(provider: "fake", id: "nope")), in: s.id)
             }
 
             #expect(bridge.sessions.first?.capabilities.contains(.images) == true)
-            try await bridge.configure(PiConfig(model: PiModelKey(provider: "fake", id: "echo-b")), in: s.id)
+            try await bridge.configure(SessionConfig(model: ModelKey(provider: "fake", id: "echo-b")), in: s.id)
             try await eventually("不能看图") { bridge.sessions.first?.capabilities.contains(.images) == false }
-            await #expect(throws: PiBridgeError.unsupported) {
-                try await bridge.send(PiMessage(text: "看图", images: [PiImage(mimeType: "image/png", data: Data([0x89]))]), to: s.id)
+            await #expect(throws: BridgeError.unsupported) {
+                try await bridge.send(SessionMessage(text: "看图", images: [MessageImage(mimeType: "image/png", data: Data([0x89]))]), to: s.id)
             }
-            try await bridge.configure(PiConfig(model: PiModelKey(provider: "fake", id: "echo")), in: s.id)
+            try await bridge.configure(SessionConfig(model: ModelKey(provider: "fake", id: "echo")), in: s.id)
             try await eventually("又能看图") { bridge.sessions.first?.capabilities.contains(.images) == true }
 
-            try await bridge.configure(PiConfig(name: "登录修复"), in: s.id)
+            try await bridge.configure(SessionConfig(name: "登录修复"), in: s.id)
             try await eventually("改名") { bridge.sessions.first?.displayName == "登录修复" }
-            await #expect(throws: PiBridgeError.rejected("bad_request")) { try await bridge.configure(PiConfig(name: "  "), in: s.id) }
+            await #expect(throws: BridgeError.rejected("bad_request")) { try await bridge.configure(SessionConfig(name: "  "), in: s.id) }
         }
     }
 
     @Test func choicesFollowPisModelScopeAndAlwaysIncludeTheCurrentModel() async throws {
         let pi = try await PiProcess(extraArguments: ["--model", "fake/echo", "--models", "fake/echo-think"])
-        let bridge = PiBridge(socketDirectory: pi.paths.socketDirectory)
+        let bridge = Bridge(socketDirectory: pi.paths.socketDirectory)
         defer { bridge.stop(); pi.stop() }
         try bridge.start()
         try await eventually("桥发现真实 Pi 会话") { !bridge.sessions.isEmpty }
@@ -97,7 +97,7 @@ struct RealPiTests {
     @Test func endedSessionIsInHistoryRightAwayAndTheEndEventCarriesItsName() async throws {
         try await withRig { pi, bridge, s in
             let ended = ChangeLog(bridge)
-            let history = HistoryEventLog(PiHistoryIndexer(agent: .pi, paths: AgentPaths(pi: pi.paths), files: scratchFiles) { _ in nil }!, following: bridge.sessionFiles)
+            let history = HistoryEventLog(HistoryIndexer(agent: .pi, paths: AgentPaths(pi: pi.paths), files: scratchFiles) { _ in nil }!, following: bridge.sessionFiles)
             try await eventually("回填完成") { history.finishedBackfill }
 
             try pi.prompt("记进历史")
@@ -118,7 +118,7 @@ struct RealPiTests {
             pi.model.on("歇一下", .call("bash", ["command": "sleep 0.3"]), .say("TOOL_DONE"))
             try pi.prompt("歇一下")
             try await eventually("一轮结束") { log.states.last == .settled }
-            let working = log.changes.compactMap { change -> PiSession? in
+            let working = log.changes.compactMap { change -> Session? in
                 guard case .stateChanged(let session, _) = change else { return nil }
                 switch session.state {
                 case .thinking, .tool: return session
@@ -143,7 +143,7 @@ struct RealPiTests {
             pi.model.on("跑命令", .call("bash", ["command": command]), .say("TOOL_DONE"))
             try pi.prompt("跑命令")
             try await eventually("一轮结束") { log.states.last == .settled }
-            let prefix = "bash\(PiSessionState.detailSeparator)"
+            let prefix = "bash\(SessionState.detailSeparator)"
             let details = log.details.compactMap { $0?.hasPrefix(prefix) == true ? String($0!.dropFirst(prefix.count)) : nil }
             #expect(details.first == expected)
             #expect(details.allSatisfy { $0.count <= 120 && !$0.contains("second") })

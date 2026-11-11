@@ -104,7 +104,7 @@ extension CueHostTests {
 
     @Test func 额度卡住时新变化不催重来_你的一轮做完就接着做定时() async throws {
         let rig = try await Rig(timing: { $0.slowRestarts = [.seconds(3600)] })
-        let remote = PiStateRecorder(store: rig.store, hostID: "mac-b")
+        let remote = StateRecorder(store: rig.store, hostID: "mac-b")
         try await remote.update(sessionID: "remote-retry", state: .thinking, title: "旁边的工作", turnStartedAt: .now)
         rig.model.blockQuota(times: 1)
         let reminder = try await rig.store.noteCueLine("核对发布结果", source: .you, remindAt: .now)

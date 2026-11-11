@@ -10,8 +10,8 @@ struct HistoryTests {
     let dir: URL
     init() throws { dir = try makeTempDirectory() }
 
-    private func index(_ file: SessionFile, from checkpoint: PiHistoryCheckpoint? = nil) throws -> PiHistoryUpdate {
-        try PiHistory.index(file: file.url, from: checkpoint)
+    private func index(_ file: SessionFile, from checkpoint: HistoryCheckpoint? = nil) throws -> HistoryUpdate {
+        try History.index(file: file.url, from: checkpoint)
     }
 
     // MARK: 会话标题
@@ -53,7 +53,7 @@ struct HistoryTests {
 
         #expect(update.messages.map(\.role.known) == [.user, .pi, .system, .system, .system, .user])
         #expect(update.messages[2...4].map(\.text) == ["已压缩上下文", "已压缩上下文", "已压缩上下文"])
-        #expect(update.messages[2].id == PiChatMessage.recordID(sessionID: update.sessionID, entryID: "c1") && update.messages[2].seq == 7 && update.messages[2].at == SessionFile.date(6))
+        #expect(update.messages[2].id == ChatMessage.recordID(sessionID: update.sessionID, entryID: "c1") && update.messages[2].seq == 7 && update.messages[2].at == SessionFile.date(6))
         #expect(update.messages[5].text == "Say hello to world." && update.messages[5].deliveryID == nil)
         #expect(update.recap.lastReply == "reply one" && update.recap.pendingPrompt == "Say hello to world.")  // 系统行不动问答摘要
     }

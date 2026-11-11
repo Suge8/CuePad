@@ -17,7 +17,7 @@ extension CueTools {
           "action": ["type": "string", "enum": ["look", "set", "project", "tidy"]],
           "part": ["type": "string", "enum": LookPart.allCases.map(\.rawValue)],
           "agent": ["type": "string", "enum": AgentKind.allCases.map(\.rawValue)], "model": string,
-          "effort": ["type": "string", "enum": PiThinkingLevel.allCases.map(\.rawValue)], "fast": ["type": "boolean"], "name": string,
+          "effort": ["type": "string", "enum": ThinkingLevel.allCases.map(\.rawValue)], "fast": ["type": "boolean"], "name": string,
           "project": string, "new": ["type": "boolean"], "title": string, "intro": string, "folder": string,
         ], required: ["action"]),
       "annotations": ["readOnlyHint": false, "destructiveHint": false, "idempotentHint": false, "openWorldHint": false],
@@ -84,7 +84,7 @@ extension CueTools {
 
     var effort = current.effort
     if let raw = args.string("effort") {
-      guard let level = PiThinkingLevel(rawValue: raw) else { throw Failure("effort 写 \(PiThinkingLevel.allCases.map(\.rawValue).joined(separator: " / "))") }
+      guard let level = ThinkingLevel(rawValue: raw) else { throw Failure("effort 写 \(ThinkingLevel.allCases.map(\.rawValue).joined(separator: " / "))") }
       effort = .known(level)
       if let levels = option?.thinkingLevels, level.clamped(to: levels) != level {
         notes.append("这个模型没有 \(raw)，实际按 \(level.clamped(to: levels).rawValue)")

@@ -37,7 +37,7 @@ struct SessionList<Top: View>: View {
     }
 
     /// 换搜索词时整段换掉、不做动画（逐行挪动会让新旧两批字叠在一起）；同一筛选下会话进出、换状态才有动画。
-    @ViewBuilder private func sessions(_ list: PiSessionList) -> some View {
+    @ViewBuilder private func sessions(_ list: SessionListData) -> some View {
         if list.isEmpty {
             empty
         } else {
@@ -81,9 +81,9 @@ struct SessionList<Top: View>: View {
     }
 
     /// 会话记录没有删除（会话文件在 Mac 上，归 Pi 管）。
-    private func row(_ item: PiSessionListItem, in list: PiSessionList, end: Speech.Trip?) -> some View {
+    private func row(_ item: SessionListItem, in list: SessionListData, end: Speech.Trip?) -> some View {
         let ending = end?.inTransit == true
-        let row = SessionRow(item: item, showsPlace: list.showsPlace, end: end)
+        let row = SessionListRow(item: item, showsPlace: list.showsPlace, end: end)
         // 行的边距挂在最外层：挂在自绘轻扫里面传不到列表上
         #if os(iOS)
         let card = row.rowSwipes(SessionActions.swipes(item.state, task: item.task, ending: ending, in: workspace), clipped: false)
@@ -118,8 +118,8 @@ extension SessionList where Top == EmptyView {
     init(model: AgentListModel) { self.init(model: model) { EmptyView() } }
 }
 
-private struct SessionRow: View {
-    let item: PiSessionListItem
+private struct SessionListRow: View {
+    let item: SessionListItem
     let showsPlace: Bool
     var end: Speech.Trip?
     @Environment(Workspace.self) private var workspace
@@ -128,7 +128,7 @@ private struct SessionRow: View {
     var body: some View {
         let session = item.state
         Button { workspace.openSession(session.id, sessionID: session.sessionID) } label: {
-            PiSessionRow(session: session, project: showsPlace ? item.project : nil, delivery: item.delivery, end: end, rename: item.rename, task: item.task?.title, undelivered: item.undelivered(at: services.speech), style: .page).equatable()
+            SessionRow(session: session, project: showsPlace ? item.project : nil, delivery: item.delivery, end: end, rename: item.rename, task: item.task?.title, undelivered: item.undelivered(at: services.speech), style: .page).equatable()
                 .contentShape(.rect(cornerRadius: Radius.card))
         }
         .buttonStyle(PressStyle(.card))

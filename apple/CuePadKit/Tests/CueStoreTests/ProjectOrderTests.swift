@@ -21,9 +21,9 @@ import Testing
     try await store.setStatus(done.id, .done)
     // 每次一个新的记录器：同一个会攒着上次的一轮开始时刻、还按间隔压写入。新一轮的开始时刻在隔开之后才取：
     // 库里时刻按毫秒存，先取再隔开会和上一步的写入落在同一毫秒，并列时按项目 id 排，顺序随机（#69）
-    func session(_ state: PiWorkState, newTurn: Bool = false) async throws {
+    func session(_ state: WorkState, newTurn: Bool = false) async throws {
       await nextMillisecond()
-      _ = try await PiStateRecorder(store: store, hostID: "mac").update(
+      _ = try await StateRecorder(store: store, hostID: "mac").update(
         sessionID: "s1", state: state, title: "s", projectID: talk.id, turnStartedAt: newTurn ? .now : nil)
     }
     try await session(.thinking, newTurn: true)

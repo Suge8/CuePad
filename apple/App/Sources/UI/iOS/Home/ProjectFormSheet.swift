@@ -53,7 +53,7 @@ struct ProjectFormSheet: View {
     private func save() {
         let folder = folder, name = draft.trimmedName
         let saved = draft.save(in: workspace) { id in
-            if let folder { try await workspace.requestFolder(PiBind(project: id, folder: folder.target), title: name, on: folder.hostID) }
+            if let folder { try await workspace.requestFolder(BindRequest(project: id, folder: folder.target), title: name, on: folder.hostID) }
         }
         if saved { dismiss() }
     }

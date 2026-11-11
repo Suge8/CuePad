@@ -10,27 +10,27 @@ import Foundation
 /// 不装 Grok 自己的钩子（`~/.grok/hooks`）：会话记录已给出一轮的起止与工具，钩子多给的只有等你确认。Grok 也跑 Claude Code 格式的钩子，CuePad 写给 Claude Code 的钩子在终端的 Grok 里也会被调起，钩子入口只认 Claude Code 发的。
 @MainActor
 public final class GrokRuntime: AgentRuntime {
-    private let bridge: PiBridge
+    private let bridge: Bridge
     private let paths: AgentPaths
     private let files: AttachmentFiles
     private let host: ACPHost
-    private var terminals: [PiSession.ID: Terminal] = [:]
+    private var terminals: [Session.ID: Terminal] = [:]
     private var watcher: DirectoryWatcher?
-    private var scope = PiHistoryScope.sessions([])
+    private var scope = HistoryScope.sessions([])
     private var stopped = true
 
     private final class Terminal {
         var facts = SessionFacts()
-        let process: PiProcess
-        var checkpoint: PiHistoryCheckpoint?
+        let process: SessionProcess
+        var checkpoint: HistoryCheckpoint?
         var awaitingReport: DirectoryWatcher?
         var exit: ProcessExitWatcher?
 
-        init(process: PiProcess) { self.process = process }
+        init(process: SessionProcess) { self.process = process }
     }
 
     public init(
-        bridge: PiBridge, paths: AgentPaths, files: AttachmentFiles, grok: @escaping @Sendable () async -> URL?,
+        bridge: Bridge, paths: AgentPaths, files: AttachmentFiles, grok: @escaping @Sendable () async -> URL?,
         locate: @escaping @Sendable () async -> ExecutableLocator = { await .system }, timing: Timing = .system
     ) {
         self.bridge = bridge
@@ -51,7 +51,7 @@ public final class GrokRuntime: AgentRuntime {
         host.start()
     }
 
-    public func follow(_ scope: PiHistoryScope) {
+    public func follow(_ scope: HistoryScope) {
         self.scope = scope
         refresh()
     }
@@ -64,15 +64,15 @@ public final class GrokRuntime: AgentRuntime {
     }
 
     public func open(
-        in directory: URL, launchToken: String, name: String?, model: PiModelKey?, thinking: PiThinkingLevel?
-    ) async throws -> PiSession.ID {
+        in directory: URL, launchToken: String, name: String?, model: ModelKey?, thinking: ThinkingLevel?
+    ) async throws -> Session.ID {
         let id = try await host.open(in: directory, launchToken: launchToken)
         return try await configure(opened: id, name: name, model: model, thinking: thinking, on: bridge)
     }
 
-    public func resume(_ session: IndexedSession) async throws -> PiSession.ID { try await host.resume(session) }
+    public func resume(_ session: IndexedSession) async throws -> Session.ID { try await host.resume(session) }
 
-    public func read(_ update: PiHistoryUpdate) {
+    public func read(_ update: HistoryUpdate) {
         guard let (id, terminal) = terminals.first(where: { bridge.session(id: $0.key)?.sessionID == update.sessionID }) else { return }
         guard terminal.process.isRunning else { return detach(id) }
         guard current(update.checkpoint, for: terminal) else { return }
@@ -107,14 +107,14 @@ public final class GrokRuntime: AgentRuntime {
             terminal.exit = ProcessExitWatcher(pid: entry.pid) { [weak self] in self?.detach(id) }
             terminal.awaitingReport = try? DirectoryWatcher(file) { [weak self] in self?.refresh() }
         }
-        guard let checkpoint = try? PiHistory.index(file: file, agent: .grok, from: terminal.checkpoint, transcript: false, files: files).checkpoint else { return }
+        guard let checkpoint = try? History.index(file: file, agent: .grok, from: terminal.checkpoint, transcript: false, files: files).checkpoint else { return }
         let confirmed = current(checkpoint, for: terminal)
         terminal.checkpoint = checkpoint
         guard confirmed else { return }
         terminal.awaitingReport = nil
-        var session = PiSession(
+        var session = Session(
             id: id, sessionID: entry.sessionID, agent: .grok, sessionFile: file, pid: entry.pid,
-            cwd: URL(filePath: entry.cwd, directoryHint: .isDirectory), terminal: PiTerminal(tty: PiTerminal.controllingTerminal(of: entry.pid)),
+            cwd: URL(filePath: entry.cwd, directoryHint: .isDirectory), terminal: TerminalIdentity(tty: TerminalIdentity.controllingTerminal(of: entry.pid)),
             state: .settled, stateSince: .now)
         session.name = checkpoint.name
         follow(terminal, checkpoint)
@@ -122,7 +122,7 @@ public final class GrokRuntime: AgentRuntime {
         bridge.attach(session, via: self)
     }
 
-    private func current(_ checkpoint: PiHistoryCheckpoint, for terminal: Terminal) -> Bool {
+    private func current(_ checkpoint: HistoryCheckpoint, for terminal: Terminal) -> Bool {
         let start = terminal.process.startDate
         guard let reported = checkpoint.lastActivity, reported >= start,
               checkpoint.round.map({ $0.startedAt.map { $0 >= start } ?? false }) ?? true else { return false }
@@ -130,7 +130,7 @@ public final class GrokRuntime: AgentRuntime {
         return reported > last || (reported == last && checkpoint.offset >= previous.offset)
     }
 
-    private func follow(_ terminal: Terminal, _ checkpoint: PiHistoryCheckpoint) {
+    private func follow(_ terminal: Terminal, _ checkpoint: HistoryCheckpoint) {
         terminal.checkpoint = checkpoint
         if let round = checkpoint.round {
             if !terminal.facts.running { terminal.facts.startTurn(at: round.startedAt ?? .now) }
@@ -139,7 +139,7 @@ public final class GrokRuntime: AgentRuntime {
         }
     }
 
-    private func detach(_ id: PiSession.ID) {
+    private func detach(_ id: Session.ID) {
         guard let terminal = terminals.removeValue(forKey: id) else { return }
         terminal.exit?.cancel()
         bridge.detach(id, reason: .closed(reason: "quit"))
@@ -152,7 +152,7 @@ public final class GrokRuntime: AgentRuntime {
         var pidStart: Int64?
         var cwd: String
 
-        var process: PiProcess? { pidStart.map { PiProcess(pid: pid, startedAt: $0) } }
+        var process: SessionProcess? { pidStart.map { SessionProcess(pid: pid, startedAt: $0) } }
 
         private enum CodingKeys: String, CodingKey {
             case sessionID = "session_id"

@@ -7,11 +7,11 @@ import Foundation
 @MainActor
 public final class AgentHookCall {
     public let envelope: AgentHookEnvelope
-    private let connection: PiSocketConnection
+    private let connection: SocketConnection
     private var done = false
     public var onClose: (@MainActor () -> Void)?
 
-    init(envelope: AgentHookEnvelope, connection: PiSocketConnection) {
+    init(envelope: AgentHookEnvelope, connection: SocketConnection) {
         self.envelope = envelope
         self.connection = connection
     }
@@ -42,7 +42,7 @@ public final class AgentHookServer {
     private var listener: Int32 = -1
     private var source: DispatchSourceRead?
     private(set) var handlers: [AgentKind: @MainActor (AgentHookCall) -> Void] = [:]
-    private var open: [ObjectIdentifier: PiSocketConnection] = [:]
+    private var open: [ObjectIdentifier: SocketConnection] = [:]
 
     public init(path: URL = PiPaths().hookSocket) {
         self.path = path
@@ -52,12 +52,12 @@ public final class AgentHookServer {
         handlers[agent] = handler
     }
 
-    /// 所在目录要先经 `PiSocketDirectory.prepare` 建好、校验过。
+    /// 所在目录要先经 `SocketDirectory.prepare` 建好、校验过。
     public func start() throws {
         guard listener < 0 else { return }
-        try PiSocketDirectory.prepare(path.deletingLastPathComponent())
+        try SocketDirectory.prepare(path.deletingLastPathComponent())
         let fd: Int32
-        do { fd = try UnixSocket.listen(path.path) } catch .pathTooLong { throw PiBridgeError.socketDirectoryTooLong }
+        do { fd = try UnixSocket.listen(path.path) } catch .pathTooLong { throw BridgeError.socketDirectoryTooLong }
         listener = fd
         let source = DispatchSource.makeReadSource(fileDescriptor: fd, queue: .main)
         source.setEventHandler { [weak self] in MainActor.assumeIsolated { self?.acceptAll() } }
@@ -80,12 +80,12 @@ public final class AgentHookServer {
             let fd = accept(listener, nil, nil)
             guard fd >= 0 else { return }
             _ = fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) & ~O_NONBLOCK)
-            guard let connection = try? PiSocketConnection(peer: fd) else { continue }
+            guard let connection = try? SocketConnection(peer: fd) else { continue }
             Task { await serve(connection) }
         }
     }
 
-    private func serve(_ connection: PiSocketConnection) async {
+    private func serve(_ connection: SocketConnection) async {
         open[ObjectIdentifier(connection)] = connection
         defer { open[ObjectIdentifier(connection)] = nil }
         var call: AgentHookCall?

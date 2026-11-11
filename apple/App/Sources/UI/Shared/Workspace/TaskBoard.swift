@@ -38,7 +38,7 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         var steps: TaskProgress?
         var leaf: Card?
         /// 卡上的状态、线、"下一步"与点卡进哪个会话都只看它；没有会话为 nil，点卡打开任务。
-        var agent: PiSessionListItem?
+        var agent: SessionListItem?
         var reaching = false
         var shot: CueShown?
         var id: UUID { task.id }
@@ -49,9 +49,9 @@ nonisolated struct TaskBoard: Sendable, Equatable {
     struct Work: Identifiable, Sendable, Equatable {
         var work: CueWork
         var item: Item?
-        var loose: PiSessionListItem?
+        var loose: SessionListItem?
         var id: String { work.id }
-        var agent: PiSessionListItem? { item?.agent ?? loose }
+        var agent: SessionListItem? { item?.agent ?? loose }
 
         var project: UUID {
             switch work {
@@ -61,12 +61,12 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         }
     }
 
-    static func home(_ session: PiSessionState) -> UUID { session.projectID ?? Project.defaultID }
+    static func home(_ session: SessionState) -> UUID { session.projectID ?? Project.defaultID }
 
     struct Held: Identifiable, Sendable, Equatable {
         /// 与推进中那张卡同一种身份，换列认得出是同一张；并行的几步同时等你时只有第一张是 `task/…`。
         var id: String
-        var session: PiSessionState
+        var session: SessionState
         var item: Item?
         var deciding: Bool
 
@@ -194,7 +194,7 @@ nonisolated struct TaskBoard: Sendable, Equatable {
             advancing: try tally.advancing.map { work in
                 switch work {
                 case .task(let board): Work(work: work, item: try item(board.task))
-                case .session(let state): Work(work: work, loose: agents[state.sessionID] ?? PiSessionListItem(state: state))
+                case .session(let state): Work(work: work, loose: agents[state.sessionID] ?? SessionListItem(state: state))
                 }
             },
             held: try heldCards(tally, from: store, item: item),

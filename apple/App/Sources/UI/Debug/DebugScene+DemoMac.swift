@@ -91,15 +91,15 @@ extension DebugScene {
 
     private static func cycle(_ services: AppServices) async throws {
         let store = services.store
-        let query = PiSessionQuery(id: PiSessionState.recordID(sessionID: "scratch"))
+        let query = SessionQuery(id: SessionState.recordID(sessionID: "scratch"))
         let recorder = demoRecorder(store)
-        func set(_ state: PiWorkState, _ detail: String, question: PiQuestion? = nil) async throws {
+        func set(_ state: WorkState, _ detail: String, question: Question? = nil) async throws {
             guard let session = try await store.piSessionPage(query).items.first?.state else { return }
             try await replay(session, as: state, detail: detail, question: question, recorder: recorder)
         }
         // 说过话的会话做完一轮才是"有新回复"（刚开的还是新会话）
-        try await store.writePiTranscript(PiTranscript(
-            sessionID: "scratch", messages: [], recap: PiRecap(lastPrompt: String(localized: "先跑一遍测试", table: "Demo"), lastReply: String(localized: "全部通过。", table: "Demo"))))
+        try await store.writePiTranscript(SessionTranscript(
+            sessionID: "scratch", messages: [], recap: Recap(lastPrompt: String(localized: "先跑一遍测试", table: "Demo"), lastReply: String(localized: "全部通过。", table: "Demo"))))
         while !Task.isCancelled {
             guard let session = try await store.piSessionPage(query).items.first?.state else { return }
             _ = try await store.requestDelivery(String(localized: "再跑一遍测试", table: "Demo"), to: session.target, on: session.hostID, mode: .send)
@@ -109,7 +109,7 @@ extension DebugScene {
             }
             // 每个状态停留的时长是演示节奏，不是在等别的事
             await Task.wait(for: .seconds(2.5))
-            try await set(.waitingForUser, String(localized: "要提交吗？", table: "Demo"), question: PiQuestion(promptID: "cycle", kind: .confirm, text: String(localized: "要提交吗？", table: "Demo")))
+            try await set(.waitingForUser, String(localized: "要提交吗？", table: "Demo"), question: Question(promptID: "cycle", kind: .confirm, text: String(localized: "要提交吗？", table: "Demo")))
             await Task.wait(for: .seconds(3))
             try await set(.error, String(localized: "模型拒绝了请求（400）", table: "Demo"))
             await Task.wait(for: .seconds(3))
@@ -118,7 +118,7 @@ extension DebugScene {
 
     private static func playRound(for request: UUID, store: CueStore, host: String) async throws {
         guard let ref = try await store.deliveryRequest(request)?.target.ref,
-              let session = try await store.piSessionPage(PiSessionQuery(id: PiSessionState.recordID(sessionID: ref))).items.first?.state
+              let session = try await store.piSessionPage(SessionQuery(id: SessionState.recordID(sessionID: ref))).items.first?.state
         else { return }
         let recorder = demoRecorder(store, host: host)
         await Task.wait(for: .seconds(0.8))
@@ -129,11 +129,11 @@ extension DebugScene {
 
     /// 演示会话换一个状态：名字、所在、模型、命令与上下文照旧（记录器每次整份写入，不带上就被清掉）。
     private static func replay(
-        _ session: PiSessionState, as state: PiWorkState, detail: String? = nil, question: PiQuestion? = nil, recorder: PiStateRecorder
+        _ session: SessionState, as state: WorkState, detail: String? = nil, question: Question? = nil, recorder: StateRecorder
     ) async throws {
         _ = try await recorder.update(
             sessionID: session.sessionID, state: state, detail: detail, title: session.title, directory: session.folder, projectID: session.projectID,
-            question: question, modelState: PiModelState(model: session.model, thinking: session.thinking, fast: session.fast, models: demoModels.models),
+            question: question, modelState: ModelState(model: session.model, thinking: session.thinking, fast: session.fast, models: demoModels.models),
             context: session.context, commands: demoCommands, agent: session.agent.known)
     }
 }

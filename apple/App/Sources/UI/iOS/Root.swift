@@ -96,12 +96,12 @@ struct RouteView: View {
         case .settings: SettingsScreen()
         case .conflicts: ConflictsScreen()
         case .progress: ProgressScreen()
-        case .cue: CuePage().countsAsPiViewer()
+        case .cue: CuePage().countsAsViewer()
         case .search: SearchScreen()
         case .earlier: EarlierPage()
         case .library: LibraryScreen()
         case .libraryFile(let file): LibraryFileScreen(file: file)
-        case .session(let route): SessionScreen(id: route.id, seed: route.seed).countsAsPiViewer()
+        case .session(let route): SessionScreen(id: route.id, seed: route.seed).countsAsViewer()
         case .card(let id):
             if let zoom {
                 CardEditorScreen(cardID: id).navigationTransition(.zoom(sourceID: id, in: zoom))

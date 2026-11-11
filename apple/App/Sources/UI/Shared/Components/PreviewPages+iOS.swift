@@ -10,7 +10,7 @@ import SwiftUI
 // 每页铺满整屏：会滚的（图、PDF、文本、网页）铺到两条栏后面、按 `previewInsets` 让出内容边，其余排在两条栏之间（全屏页给的安全区）。
 
 struct PreviewPage: View {
-    let preview: PiPreview
+    let preview: PreviewItem
     let file: URL
     let active: Bool
     @Environment(\.previewLook) private var look
@@ -144,7 +144,7 @@ extension UIScrollView {
 
 /// 3D 要转着看时点"转动查看"，进系统的快速查看（拖动在那里是转模型），不让同一个拖动既转模型又翻页。
 struct PreviewStill: View {
-    let preview: PiPreview
+    let preview: PreviewItem
     let file: URL
     @Environment(\.palette) private var palette
     @Environment(AppServices.self) private var services

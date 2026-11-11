@@ -3,7 +3,7 @@ import Foundation
 
 /// 口径是还剩多少（剩余，不是已用）：用户要回答的是"还够不够用"，满格是满额、往下掉是在用，同电量一样不用换算。
 /// 读数（含读屏的说法与"照这速度多久用完"）全在 `now` 那一刻算定：过了重置时间的窗口显示等待更新，不画数值，不请求、也不跑定时器——界面只在新观测到达或重画时换读数，
-/// 倒计时是自己走字的计时文字（`Countdown`，与"x 分钟前"的 `PiClock.Live` 同一种做法）。档位按已用算，与上下文用量同一个口径（`UsageLevel`）。
+/// 倒计时是自己走字的计时文字（`Countdown`，与"x 分钟前"的 `SessionClock.Live` 同一种做法）。档位按已用算，与上下文用量同一个口径（`UsageLevel`）。
 nonisolated struct QuotaMeter: Equatable {
     struct Window: Equatable, Identifiable {
         let name: String
@@ -11,7 +11,7 @@ nonisolated struct QuotaMeter: Equatable {
         /// 匀速线：按窗口已过的时间，匀速用的话此刻该还剩多少（0 到 1）；已重置为 nil
         let even: Double?
         let resetsAt: Date
-        /// 照这速度还能用多久的短语："约 2 小时"（时长写法同 `PiClock.duration`）；剩的不比匀速线少（重置前用不完）为 nil
+        /// 照这速度还能用多久的短语："约 2 小时"（时长写法同 `SessionClock.duration`）；剩的不比匀速线少（重置前用不完）为 nil
         let runway: String?
         let level: UsageLevel
         let id: QuotaWindow.ID
@@ -29,7 +29,7 @@ nonisolated struct QuotaMeter: Equatable {
             left = 1 - used
             even = pace > 0 ? 1 - pace : nil
             resetsAt = window.resetsAt
-            runway = window.exhaustion(at: now).map { String(localized: "约 \(PiClock.duration($0.timeIntervalSince(now)))") }
+            runway = window.exhaustion(at: now).map { String(localized: "约 \(SessionClock.duration($0.timeIntervalSince(now)))") }
             level = UsageLevel(used: used)
             id = window.id
             let reset = String(localized: "\(Countdown(end: window.resetsAt).format(now))后重置")
@@ -63,7 +63,7 @@ nonisolated struct QuotaMeter: Equatable {
     init(_ quota: AccountQuota, at now: Date, source: String? = nil) {
         provider = quota.provider
         id = quota.id
-        account = Dotted(quota.account?.label(provider: quota.provider) ?? PiProvider(id: quota.provider).account, source).visible
+        account = Dotted(quota.account?.label(provider: quota.provider) ?? Provider(id: quota.provider).account, source).visible
         (product, identity) = Self.names(quota)
         self.source = source
         usageURL = quota.account?.usageURL(provider: quota.provider)
@@ -92,7 +92,7 @@ nonisolated struct QuotaMeter: Equatable {
 
     static func names(_ quota: AccountQuota) -> (product: String, identity: String?) {
         guard quota.account?.source != nil, let name = quota.account?.name else {
-            return (quota.account?.label(provider: quota.provider) ?? PiProvider(id: quota.provider).account, nil)
+            return (quota.account?.label(provider: quota.provider) ?? Provider(id: quota.provider).account, nil)
         }
         let parts = name.components(separatedBy: " / ").dropFirst()
         return (parts.first ?? name, parts.count > 1 ? parts.dropFirst().joined(separator: " / ") : nil)
@@ -151,7 +151,7 @@ nonisolated struct QuotaMeter: Equatable {
     struct Countdown: DiscreteFormatStyle {
         let end: Date
 
-        func format(_ now: Date) -> String { PiClock.duration(max(end.timeIntervalSince(now), 60)) }
+        func format(_ now: Date) -> String { SessionClock.duration(max(end.timeIntervalSince(now), 60)) }
 
         func discreteInput(after now: Date) -> Date? {
             let left = end.timeIntervalSince(now)

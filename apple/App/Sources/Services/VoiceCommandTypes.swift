@@ -12,7 +12,7 @@ nonisolated enum VoiceRequestReference: Hashable, Codable, Sendable {
 /// 执行前同事务重验全部字段，Agent 接收端仍核对原 delivery；任何一项已变就拒绝，不能按 sessionID 改停后来的工作。
 nonisolated struct VoiceExecutionTarget: Hashable, Codable, Sendable {
     let request: UUID
-    let turn: PiTurnTarget
+    let turn: TurnTarget
 }
 
 /// 用户的每次新动作各有 command ID；同一动作的重复包不能重复执行。断线不自动重发命令。

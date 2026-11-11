@@ -11,7 +11,7 @@ public enum AgentKind: String, CaseIterable, Sendable, Identifiable, Codable {
 
   public var id: Self { self }
 
-  /// 交出后收没收下只看会话文件里有没有这句话（App 的 `PiDeliveryConfirmation`，重开后接着核对也按它）：
+  /// 交出后收没收下只看会话文件里有没有这句话（App 的 `DeliveryConfirmation`，重开后接着核对也按它）：
   /// Pi 的回执先于写会话文件；终端里的 Claude Code 收件箱不回话，收下之前还按它的设置决定挂起等你批准、丢掉，或排到这一轮之后
   /// （`crossSessionInbound`、跳过权限确认、没带收件箱令牌，2.1.318 源码与实测），外面看不全，所以不预判，只认会话文件。
   public func confirmsFromHistory(hosted: Bool) -> Bool { self == .pi || (self == .claudeCode && !hosted) }
@@ -50,17 +50,17 @@ public enum AgentKind: String, CaseIterable, Sendable, Identifiable, Codable {
     }
   }
 
-  public func modelRef(_ key: PiModelKey) -> String { modelProvider != nil ? key.id : "\(key.provider)/\(key.id)" }
+  public func modelRef(_ key: ModelKey) -> String { modelProvider != nil ? key.id : "\(key.provider)/\(key.id)" }
 
-  public func modelKey(_ ref: String) -> PiModelKey? {
+  public func modelKey(_ ref: String) -> ModelKey? {
     let parts = ref.split(separator: "/", maxSplits: 1).map(String.init)
-    if parts.count == 2 { return PiModelKey(provider: parts[0], id: parts[1]) }
+    if parts.count == 2 { return ModelKey(provider: parts[0], id: parts[1]) }
     guard parts.count == 1, let modelProvider else { return nil }
-    return PiModelKey(provider: modelProvider, id: parts[0])
+    return ModelKey(provider: modelProvider, id: parts[0])
   }
 
   /// 读不出抛 `invalidModel`（Cue 写的 model）。
-  public func requiredModelKey(_ ref: String) throws -> PiModelKey {
+  public func requiredModelKey(_ ref: String) throws -> ModelKey {
     guard let key = modelKey(ref) else { throw CueStoreError.invalidModel(name) }
     return key
   }
@@ -88,7 +88,7 @@ public struct AgentCapabilities: OptionSet, Sendable, Hashable {
   /// 在线时说不了话（没有 `.speak`）的只能在它的终端里说；在跑时说话要先停下这一轮，停不下（没有 `.abort`）就说不了。
   /// 只有终端里的 Claude Code 这样：CuePad 只能经它的收件箱说话，前台工具跑着时收件箱的话要等工具跑完才读到（`priority: "now"` 也一样），收件箱也没有停下这一轮的办法（Claude Code 2.1.299 实测与源码）。
   /// 界面的回复框、Cue 说话与 Mac 执行发话都只认这里；不排队，歇下再说。
-  public func speakBlocked(in state: PiWorkState?, agent: AgentKind?) -> String? {
+  public func speakBlocked(in state: WorkState?, agent: AgentKind?) -> String? {
     if !contains(.speak), state != .ended {
       return String(localized: "终端里的 \(agent?.name ?? "Agent") 只能在终端里说话：CuePad 只看得到它在做什么")
     }
@@ -96,7 +96,7 @@ public struct AgentCapabilities: OptionSet, Sendable, Hashable {
     return String(localized: "终端里的 \(agent?.name ?? "Agent") 在跑，CuePad 打断不了它：在终端里按 Esc，或等它做完再说")
   }
 
-  public static func of(_ agent: AgentKind, hosted: Bool, model: PiModelOption?) -> AgentCapabilities {
+  public static func of(_ agent: AgentKind, hosted: Bool, model: ModelOption?) -> AgentCapabilities {
     var capabilities = of(agent, hosted: hosted)
     if model?.acceptsImages == false { capabilities.remove(.images) }
     return capabilities

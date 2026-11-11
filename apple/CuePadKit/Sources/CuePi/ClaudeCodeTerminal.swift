@@ -17,9 +17,9 @@ import Foundation
 ///   挂住钩子时终端不弹，所以按人在不在（`PresenceGate`）分：人在就放行、终端里问，CuePad 只显示；人不在就挂住等 CuePad 答，人回来就放行。
 @MainActor
 final class ClaudeTerminalSession: SessionLink {
-    let id: PiSession.ID
+    let id: Session.ID
     let pid: Int32
-    private weak var bridge: PiBridge?
+    private weak var bridge: Bridge?
     private let gate: PresenceGate
     /// 收件箱 socket（钩子环境里的 `CLAUDE_CODE_MESSAGING_SOCKET`，或会话登记文件里的）
     var inbox: String?
@@ -45,7 +45,7 @@ final class ClaudeTerminalSession: SessionLink {
     private var pending: [Pending] = []
 
     private struct Pending {
-        var question: PiQuestion
+        var question: Question
         var kind: Kind
         /// 挂着的钩子；交给终端了（放行了）为 nil，这时只显示
         var call: AgentHookCall?
@@ -63,7 +63,7 @@ final class ClaudeTerminalSession: SessionLink {
     /// - Parameter runningSince: 接上时已在跑（在忙或在等你）这一轮的开始（取法见 `SessionFacts.startTurn(at:)`）
     /// - Parameter recordLength: 接上时会话文件的长度：在它之前写下的收尾的行都是接上之前的事（`recorded`）
     init(
-        id: PiSession.ID, pid: Int32, bridge: PiBridge, gate: PresenceGate, inbox: String?, registry: URL, timing: Timing,
+        id: Session.ID, pid: Int32, bridge: Bridge, gate: PresenceGate, inbox: String?, registry: URL, timing: Timing,
         runningSince: Date?, waiting: Bool, recordLength: UInt64 = 0
     ) {
         recordRead = recordLength
@@ -75,14 +75,14 @@ final class ClaudeTerminalSession: SessionLink {
         self.gate = gate
         self.inbox = inbox
         if let runningSince { facts.startTurn(at: runningSince) }
-        if waiting { facts.questions = [PiQuestion(promptID: nil, kind: .unknown("terminal"), text: String(localized: "在终端里等你"))] }
+        if waiting { facts.questions = [Question(promptID: nil, kind: .unknown("terminal"), text: String(localized: "在终端里等你"))] }
         registryFollower.follow(only: [registry.realPath.path])
         Task { [weak self, paths = registryFollower.paths] in
             for await _ in paths { self?.registryChanged() }
         }
     }
 
-    func publish(_ session: inout PiSession) { facts.publish(to: &session) }
+    func publish(_ session: inout Session) { facts.publish(to: &session) }
 
     func handle(_ event: String, _ input: JSONValue, call: AgentHookCall) {
         let agent = input["agent_id"]?.string
@@ -94,7 +94,7 @@ final class ClaudeTerminalSession: SessionLink {
             if let title = input["session_title"]?.string, !title.isEmpty { session.name = title }
             // CuePad 经收件箱发的那句带着说明，与会话历史一样去掉
             if session.firstMessage == nil, event == "UserPromptSubmit", let prompt = input["prompt"]?.string.map(ClaudeHistory.withoutPeerWrapper), !prompt.isEmpty {
-                session.firstMessage = String(prompt.prefix(PiSessionName.firstMessageLimit))
+                session.firstMessage = String(prompt.prefix(SessionName.firstMessageLimit))
             }
             // 模型随 SessionStart 来：会话可能已由启动时的列表扫描先补上了（`discover`），钩子晚到也要取
             if let model = input["model"]?.string { session.model = ClaudeCode.model(model) }
@@ -168,13 +168,13 @@ final class ClaudeTerminalSession: SessionLink {
         let properties = input["requested_schema"]?["properties"]?.object ?? [:]
         guard input["mode"]?.string ?? "form" == "form", properties.count == 1, let (field, schema) = properties.first,
               let type = schema["type"]?.string, ["string", "boolean"].contains(type) else {
-            let question = PiQuestion(promptID: nil, kind: .unknown("elicitation"), text: text)
+            let question = Question(promptID: nil, kind: .unknown("elicitation"), text: text)
             return hold(Pending(question: question, kind: .elicitation(field: "", type: "", values: nil), call: call, agent: agent), answerable: false, at: now)
         }
         let values = schema["enum"]?.array?.compactMap(\.string)
-        let kind: PiQuestionKind = type == "boolean" ? .confirm : values?.isEmpty == false ? .select : .text
+        let kind: QuestionKind = type == "boolean" ? .confirm : values?.isEmpty == false ? .select : .text
         let title = [schema["title"]?.string ?? schema["description"]?.string].compactMap { $0 }
-        let question = PiQuestion(promptID: UUID().uuidString, kind: kind, text: ([text] + title).joined(separator: "\n"), options: values ?? [])
+        let question = Question(promptID: UUID().uuidString, kind: kind, text: ([text] + title).joined(separator: "\n"), options: values ?? [])
         hold(Pending(question: question, kind: .elicitation(field: field, type: type, values: values), call: call, agent: agent), answerable: true, at: now)
     }
 
@@ -242,8 +242,8 @@ final class ClaudeTerminalSession: SessionLink {
     }
 
     /// 只在歇着时送到（在跑时桥先拒收，见 `AgentCapabilities.speakBlocked`）：`next` 让它马上开这一轮。
-    func send(_ message: PiMessage, in _: PiSession.ID) async throws {
-        guard !message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw PiBridgeError.rejected("empty") }
+    func send(_ message: SessionMessage, in _: Session.ID) async throws {
+        guard !message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw BridgeError.rejected("empty") }
         var line: [String: JSONValue] = [
             "type": "user", "message": ["role": "user", "content": .string(ClaudeInbox.userNote + message.text)], "priority": "next",
         ]
@@ -251,17 +251,17 @@ final class ClaudeTerminalSession: SessionLink {
         try await post(.object(line))
     }
 
-    func configure(_ config: PiConfig, in _: PiSession.ID) async throws {
-        guard config.fast == nil else { throw PiBridgeError.unsupported }
+    func configure(_ config: SessionConfig, in _: Session.ID) async throws {
+        guard config.fast == nil else { throw BridgeError.unsupported }
         let name = config.name
-        guard let name else { throw PiBridgeError.unsupported }
+        guard let name else { throw BridgeError.unsupported }
         try await post(["type": "control", "action": "rename", "name": .string(name)])
         bridge?.update(id) { $0.name = name }
     }
 
-    func answer(_ answer: PiAnswerValue, to promptID: String, in _: PiSession.ID) async throws {
+    func answer(_ answer: AnswerValue, to promptID: String, in _: Session.ID) async throws {
         guard let index = pending.firstIndex(where: { $0.question.promptID == promptID }), let call = pending[index].call else {
-            throw PiBridgeError.rejected(pending.contains { $0.call != nil } ? "stale_prompt" : "no_prompt")
+            throw BridgeError.rejected(pending.contains { $0.call != nil } ? "stale_prompt" : "no_prompt")
         }
         let output: JSONValue = switch pending[index].kind {
         case .permission(let permission):
@@ -278,29 +278,29 @@ final class ClaudeTerminalSession: SessionLink {
         show(at: .now)
     }
 
-    private static func value(_ answer: PiAnswerValue, _ type: String, _ values: [String]?) throws -> JSONValue {
+    private static func value(_ answer: AnswerValue, _ type: String, _ values: [String]?) throws -> JSONValue {
         switch (answer, type) {
         case (.confirmed(let yes), "boolean"): return .bool(yes)
         case (.option(let label), "string") where values?.contains(label) == true: return .string(label)
         case (.text(let text), "string") where values?.isEmpty != false: return .string(text)
-        default: throw PiBridgeError.rejected("bad_answer")
+        default: throw BridgeError.rejected("bad_answer")
         }
     }
 
     /// 登记文件里的 `status` 随它自己的轮次变，钩子不通（没装、CuePad 之后才起来）时桥上的状态是旧的。只认 `busy`（在跑一轮或等后台任务）：
     /// `waiting` 也可能是收件箱的话被挂起、在等你批准（2.1.318 源码：对话框一律记成 `waiting`，看不出是哪种），算它在跑就会一直等下去。
-    func takingTurn(_: PiSession.ID) -> Bool? {
+    func takingTurn(_: Session.ID) -> Bool? {
         registryRecord?["status"]?.string.map { $0 == "busy" }
     }
 
     var registryRecord: JSONValue? { (try? Data(contentsOf: registry)).flatMap(JSONValue.parse) }
 
-    func end(_: PiSession.ID) async throws {
-        guard kill(pid, SIGINT) == 0 else { throw PiBridgeError.sessionEnded }
+    func end(_: Session.ID) async throws {
+        guard kill(pid, SIGINT) == 0 else { throw BridgeError.sessionEnded }
     }
 
     private func post(_ line: JSONValue) async throws {
-        guard let inbox else { throw PiBridgeError.unsupported }
+        guard let inbox else { throw BridgeError.unsupported }
         if !ready {
             try await waitUntilReady()
             ready = true
@@ -317,7 +317,7 @@ final class ClaudeTerminalSession: SessionLink {
     /// 盯文件变化等（`FileFollower`），不轮询。进程存亡只认运行时的退出监视：它让会话下桥（`close`），这里随即报会话已结束——
     /// 话确定没写进收件箱，所以是 `unknownSession`（确定没发出），不是表示"写了之后断开、结果未知"的 `sessionEnded`。
     private func waitUntilReady() async throws {
-        guard !closed else { throw PiBridgeError.unknownSession(id) }
+        guard !closed else { throw BridgeError.unknownSession(id) }
         let follower = FileFollower()
         let key = UUID()
         readyWaits[key] = follower
@@ -327,14 +327,14 @@ final class ClaudeTerminalSession: SessionLink {
         }
         follower.follow(only: [registry.realPath.path])
         do {
-            try await withDeadline(AgentTimeouts.terminalReady, timing: timing, orThrow: PiBridgeError.rejected("not_ready")) { [registry] in
+            try await withDeadline(AgentTimeouts.terminalReady, timing: timing, orThrow: BridgeError.rejected("not_ready")) { [registry] in
                 for await _ in follower.paths {
                     if (try? Data(contentsOf: registry)).flatMap(JSONValue.parse)?["status"]?.string != nil { return }
                 }
                 throw CancellationError()
             }
         } catch is CancellationError where closed {
-            throw PiBridgeError.unknownSession(id)
+            throw BridgeError.unknownSession(id)
         }
     }
 }

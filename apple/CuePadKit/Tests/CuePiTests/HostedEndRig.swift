@@ -45,12 +45,12 @@ final class EndRig {
     private let idle: ManualTiming
     private static let idleLimit: Duration = .seconds(60)
     let model: FakeModel
-    let bridge: PiBridge
+    let bridge: Bridge
     let runtime: any AgentRuntime
     let work: URL
     let wrapper: URL
     private let root: URL
-    private let modelKey: PiModelKey?
+    private let modelKey: ModelKey?
     private let claude: ClaudeTestbed?
     private let hooks: AgentHookServer?
 
@@ -102,7 +102,7 @@ final class EndRig {
         let pi = PiPaths(agentDirectory: root.appending(path: "pi"), socketDirectory: sockets)
         let executable = wrapper.appending(path: hosting.pinned.command)
         let locator = ExecutableLocator(searchDirectories: [wrapper, hosting.pinned.bin])
-        bridge = PiBridge(socketDirectory: sockets, hostedIdle: Self.idleLimit, timing: idle.timing)
+        bridge = Bridge(socketDirectory: sockets, hostedIdle: Self.idleLimit, timing: idle.timing)
         try bridge.start()
         var hooks: AgentHookServer?
         switch hosting {
@@ -142,7 +142,7 @@ final class EndRig {
                 "DEEPSEEK_SEARCH_BASE_URL": model.baseURL, "DSH_TELEMETRY_DISABLED": "1",
             ])
             runtime = DshRuntime(bridge: bridge, paths: AgentPaths(pi: pi, environment: environment), dsh: { executable }, locate: { locator }, timing: timing)
-            modelKey = PiModelKey(provider: "deepseek-official", id: "deepseek-flash")
+            modelKey = ModelKey(provider: "deepseek-official", id: "deepseek-flash")
         }
         self.hooks = hooks
     }
@@ -198,13 +198,13 @@ final class EndRig {
     }
 
     /// 这个会话歇下、闲置计时起了，拨到点：桥请它退出（`idleOut` 之后外壳写下 `eof.<进程号>`）。
-    func idleOut(_ id: PiSession.ID) async throws {
+    func idleOut(_ id: Session.ID) async throws {
         let due = idle.now.addingTimeInterval(Self.idleLimit.seconds)
         try await eventually("歇下、闲置计时起了") { bridge.session(id: id)?.state == .settled && idle.hasSleeper(until: due) }
         idle.advance(Self.idleLimit)
     }
 
-    func open() async throws -> PiSession.ID {
+    func open() async throws -> Session.ID {
         try await runtime.open(in: work, launchToken: "t-\(UUID().uuidString)", name: nil, model: modelKey, thinking: nil)
     }
 
@@ -216,29 +216,29 @@ final class EndRig {
     func asked(_ token: String) -> Bool { model.requests.contains { !$0.tools.isEmpty && $0.prompt.contains(token) } }
 
     /// 发一句话、等它的回答落进会话记录（假模型的回答是 `ECHO <你的话>`），返回那时的会话。
-    func converse(_ token: String, in id: PiSession.ID) async throws -> PiSession {
-        try await bridge.send(PiMessage(text: token), to: id)
+    func converse(_ token: String, in id: Session.ID) async throws -> Session {
+        try await bridge.send(SessionMessage(text: token), to: id)
         let session = try #require(bridge.session(id: id))
         try await replied(token, in: session)
         return bridge.session(id: id) ?? session
     }
 
-    func replied(_ token: String, in session: PiSession) async throws {
+    func replied(_ token: String, in session: Session) async throws {
         try await eventually("\(token) 的回答落进会话记录") {
             (try? self.record(session))?.messages.contains { $0.role == .known(.pi) && $0.text.contains(token) } == true
         }
     }
 
-    func record(_ session: PiSession) throws -> PiHistoryUpdate {
-        try PiHistory.index(file: try #require(session.sessionFile), agent: session.agent, from: nil, files: scratchFiles)
+    func record(_ session: Session) throws -> HistoryUpdate {
+        try History.index(file: try #require(session.sessionFile), agent: session.agent, from: nil, files: scratchFiles)
     }
 
-    func indexed(_ session: PiSession) -> IndexedSession {
+    func indexed(_ session: Session) -> IndexedSession {
         IndexedSession(id: session.sessionID, path: session.sessionFile?.path ?? "", cwd: work.path, lastActivityAt: .now, agent: session.agent)
     }
 
     /// 同 `MacExecutor.connect`：桥上有这个会话就用它，没有就接着它。
-    func connect(_ indexed: IndexedSession) async throws -> PiSession.ID {
+    func connect(_ indexed: IndexedSession) async throws -> Session.ID {
         if let live = bridge.session(sessionID: indexed.id) { return live.id }
         return try await runtime.resume(indexed)
     }

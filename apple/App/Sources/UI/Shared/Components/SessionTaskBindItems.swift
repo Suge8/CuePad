@@ -2,7 +2,7 @@ import CueStore
 import SwiftUI
 
 struct SessionTaskBindItems: View {
-    let session: PiSessionState
+    let session: SessionState
     let link: SessionTaskLink
     @Environment(Workspace.self) private var workspace
 

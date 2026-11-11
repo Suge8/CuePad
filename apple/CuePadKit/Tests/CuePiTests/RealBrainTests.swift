@@ -21,7 +21,7 @@ private let otherModels: [AgentKind: String] = [
 ]
 private let echoServer = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "Fixtures/mcp-echo.mjs")
 /// 缺省 off：最便宜，Codex、Claude Code 还会走夹取
-private let effort = environment["CUEPAD_BRAIN_EFFORT"].flatMap(PiThinkingLevel.init(rawValue:)) ?? .off
+private let effort = environment["CUEPAD_BRAIN_EFFORT"].flatMap(ThinkingLevel.init(rawValue:)) ?? .off
 
 @MainActor
 @Suite(RealAgents.tiered)
@@ -138,7 +138,7 @@ struct RealBrainTests {
         try RealAgents.require(runtime)
         try await withRig(runtime) { rig in
         #expect(rig.brain.seesImages)
-        try await rig.brain.send("What color is this image? Reply with only the color name in English.", images: [PiImage(mimeType: "image/png", data: redPNG)], id: UUID())
+        try await rig.brain.send("What color is this image? Reply with only the color name in English.", images: [MessageImage(mimeType: "image/png", data: redPNG)], id: UUID())
         try await rig.finished()
 
         #expect(rig.failures == [], "\(rig.events)")

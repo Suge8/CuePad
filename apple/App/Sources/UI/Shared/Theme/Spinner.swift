@@ -38,7 +38,7 @@ struct Spinner: View {
 }
 
 /// 全 App 唯一的"话在路上"。`size` 是框的边长，飞机占它的 86%。
-/// `landed`：话已经出了这台设备（已发出、送达中，`PiDelivery.Transit`），飞机停着不飞。
+/// `landed`：话已经出了这台设备（已发出、送达中，`DeliveryShown.Transit`），飞机停着不飞。
 struct OnTheWay: View {
     let size: CGFloat
     let color: Color

@@ -46,16 +46,16 @@ extension CueEvalTests {
             try await eval.trigger {
                 // 在另一台 Mac 上：e2e 最后一次进展再过 3 秒满 20 分钟
                 let due = Date.now.addingTimeInterval(3)
-                let e2e = PiSubagentState(
+                let e2e = SubagentState(
                     name: "e2e", role: "工程师", phase: .known(.running), action: "bash · npx playwright test reset-password", startedAt: due - 1800,
-                    progressAt: due - PiSessionState.stallAfter)
+                    progressAt: due - SessionState.stallAfter)
                 try await rig.store.recordMacPresence(host: "mac-b") { true }
-                try await PiStateRecorder(store: rig.store, hostID: "mac-b")
+                try await StateRecorder(store: rig.store, hostID: "mac-b")
                     .update(sessionID: id, state: .delegating, title: Self.title, turnStartedAt: due - 1900, subagents: [e2e])
-                let prompt = PiChatMessage(sessionID: id, entryID: "u1", seq: 1, role: .user, text: first, at: due - 3600, deliveryID: delivery)
-                let reply = PiChatMessage(sessionID: id, entryID: "a1", seq: 2, role: .pi, text: dispatched, at: due - 1800)
-                try await rig.store.writePiTranscript(PiTranscript(
-                    sessionID: id, messages: [prompt, reply], recap: PiRecap(lastPrompt: oneLine(first), lastReply: dispatched, answeredAt: due - 1800)))
+                let prompt = ChatMessage(sessionID: id, entryID: "u1", seq: 1, role: .user, text: first, at: due - 3600, deliveryID: delivery)
+                let reply = ChatMessage(sessionID: id, entryID: "a1", seq: 2, role: .pi, text: dispatched, at: due - 1800)
+                try await rig.store.writePiTranscript(SessionTranscript(
+                    sessionID: id, messages: [prompt, reply], recap: Recap(lastPrompt: oneLine(first), lastReply: dispatched, answeredAt: due - 1800)))
             }
             let toIt = eval.calls("task", "say").filter { !$0.call.failed && CueEval.refers($0.args, to: id, title: Self.title, cards: [task]) }
             let said = toIt.compactMap { $0.args["text"] as? String }
@@ -179,7 +179,7 @@ extension CueEvalTests {
     }
 
     /// show 点名的图（file 写编号前缀）是会话发来的哪几张；认不出的略过
-    static func shown(_ show: Any?, in previews: [PiPreview]) -> [PiPreview] {
+    static func shown(_ show: Any?, in previews: [PreviewItem]) -> [PreviewItem] {
         (show as? [[String: Any]] ?? []).compactMap { item in
             guard let key = (item["file"] as? String)?.lowercased(), !key.isEmpty else { return nil }
             return previews.first { $0.id.uuidString.lowercased().hasPrefix(key) }

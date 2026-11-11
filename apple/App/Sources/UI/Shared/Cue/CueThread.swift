@@ -126,7 +126,7 @@ nonisolated struct CueThread: Equatable, Sendable {
         return stamps
     }
 
-    /// 回答按答的那一刻插进对话，与会话里的作答、预览卡同一条规则（`PiChat.entries`）。
+    /// 回答按答的那一刻插进对话，与会话里的作答、预览卡同一条规则（`Chat.entries`）。
     /// 结果卡只挂点名的那几张图，这件活发到手机的其余文件在它的会话里。
     private static func rows(
         _ messages: [CueMessage], waiting: Set<UUID>, shots: [UUID: [CueShown]], lines: [UUID: CueMemoryLine]
@@ -183,7 +183,7 @@ nonisolated struct CueThread: Equatable, Sendable {
 }
 
 nonisolated struct CueShown: Identifiable, Equatable, Sendable {
-    let preview: PiPreview
+    let preview: PreviewItem
     let look: String
     var id: UUID { preview.id }
 }

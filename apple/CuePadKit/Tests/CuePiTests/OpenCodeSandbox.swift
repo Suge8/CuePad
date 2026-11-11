@@ -6,8 +6,8 @@ import Testing
 @testable import CuePi
 
 /// 测试用的模型提供方：`fake`（`FakeModel`，两个模型，窗口不同、都有 low / high 两档强度）。`echo` 是缺省，`echo-b` 是就地换到的那个
-let openCodeTestModel = PiModelKey(provider: OpenCodeSandbox.fake, id: "echo")
-let openCodeOtherModel = PiModelKey(provider: OpenCodeSandbox.fake, id: "echo-b")
+let openCodeTestModel = ModelKey(provider: OpenCodeSandbox.fake, id: "echo")
+let openCodeOtherModel = ModelKey(provider: OpenCodeSandbox.fake, id: "echo-b")
 
 /// 一台隔离的 OpenCode：钉住版本的 v2（`PinnedAgent.opencode`），HOME、XDG 与配置目录都在临时目录里，绝不碰真实的 ~/.config/opencode 与它的库，
 /// 也没有任何登录或密钥——提供方 `fake` 经配置里的 `baseURL` 指到本用例的假模型（`FakeModel`，Chat Completions）。
@@ -60,7 +60,7 @@ final class OpenCodeSandbox: Sendable {
         ]
     }
 
-    @MainActor func runtime(_ bridge: PiBridge, _ store: CueStore) -> OpenCodeRuntime {
+    @MainActor func runtime(_ bridge: Bridge, _ store: CueStore) -> OpenCodeRuntime {
         OpenCodeRuntime(bridge: bridge, paths: paths, store: store, hostID: "mac", opencode: { Self.pinned.executable }, locate: { Self.pinned.locator })
     }
 
@@ -93,7 +93,7 @@ final class OpenCodeSandbox: Sendable {
     }
 
     /// 失败现场：服务里每个会话的消息与待答表单、桥上的会话，写进临时目录外的一个文件（临时目录随后删掉），路径记进测试结果。
-    @MainActor func dump(_ bridge: PiBridge) async {
+    @MainActor func dump(_ bridge: Bridge) async {
         guard let sessions = try? await api("GET", "/api/session?limit=100")["data"] as? [[String: Any]] else { return }
         var dump: [String: Any] = ["sessions": sessions, "bridge": String(describing: bridge.sessions.filter { $0.agent == .opencode })]
         for id in sessions.compactMap({ $0["id"] as? String }) {

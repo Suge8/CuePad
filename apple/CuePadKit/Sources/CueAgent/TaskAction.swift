@@ -3,7 +3,7 @@ import CueStore
 enum TaskAction: String, CaseIterable {
   case add, edit, start, bind, unbind, say, peek, stop, leave, take, done
 
-  var kind: PiChatMessage.Tools.Kind? {
+  var kind: ChatMessage.Tools.Kind? {
     switch self {
     case .add: .add
     case .edit: .edit

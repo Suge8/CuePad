@@ -32,7 +32,7 @@ extension CueStore {
   }
 
   /// 来源与可结束能力是不同事实；全局仍有使用者、在途消息或同任务下一步会接续时必须保留。
-  func taskSessionCanEnd(_ session: PiSessionState) throws -> Bool {
+  func taskSessionCanEnd(_ session: SessionState) throws -> Bool {
     guard session.endsWithTask, let owner = session.createdForTaskID,
       let card = try find(Card.self, owner) else { return false }
     let topID = try card.parentID.map { try ancestors(of: $0).last ?? $0 } ?? owner

@@ -22,7 +22,7 @@ struct CueActivityTests {
         try await store.bindSession("testflight", to: step.id)
         try await recorder.update(sessionID: "zoom", state: .thinking, title: "canvas-zoom", projectID: project.id)
         try await store.bindSession("zoom", to: canvas.id)
-        try await recorder.update(sessionID: "zoom", state: .waitingForUser, question: PiQuestion(promptID: "p", kind: .confirm, text: "改锚点？\n会动到缩放"))
+        try await recorder.update(sessionID: "zoom", state: .waitingForUser, question: Question(promptID: "p", kind: .confirm, text: "改锚点？\n会动到缩放"))
 
         // 实时活动只在 iPhone 上：按手机推（和 iCloud 对过、不是哪台 Mac），Mac 上的本机事实在 CueGateTests
         func now() async throws -> CueNow { CueNow(try await CueDigest.read(from: store), at: .always(), local: CueNow.Local(waiting: nil, here: nil)) }
@@ -40,7 +40,7 @@ struct CueActivityTests {
         #expect(kinds(cue) == [.asks, .running, .done] && cue.advancing == 1)
         #expect(cue.items[1].name == "发布 v1.4")
         #expect(cue.first == CueNow.Wait(
-            title: "canvas-zoom", detail: "改锚点？", open: DeepLink.session(PiSessionState.recordID(sessionID: "zoom")).url, allow: nil))
+            title: "canvas-zoom", detail: "改锚点？", open: DeepLink.session(SessionState.recordID(sessionID: "zoom")).url, allow: nil))
 
         try await recorder.update(sessionID: "zoom", state: .thinking)
         cue = try await now()

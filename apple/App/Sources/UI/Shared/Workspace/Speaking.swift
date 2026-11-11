@@ -24,26 +24,26 @@ extension Workspace {
 
     @discardableResult
     func reply(
-        to session: PiSessionState, commands: [PiSlashCommand], from box: Binding<ComposerDraft>, accepting kinds: ComposerKinds,
+        to session: SessionState, commands: [SlashCommand], from box: Binding<ComposerDraft>, accepting kinds: ComposerKinds,
         mode: DeliveryMode = .send, card: UUID? = nil, saying: Dotted? = nil
     ) -> Task<Void, Never> {
-        if let line = PiSlash.line(of: box.wrappedValue.accepting(kinds), in: commands, for: session) {
+        if let line = Slash.line(of: box.wrappedValue.accepting(kinds), in: commands, for: session) {
             return speak(to: .session(session, mode: .command, card: card), from: box, keeping: { ComposerDraft(notes: $0.notes) }, saying: saying) { _ in line }
         }
         return speak(to: .session(session, mode: mode, card: card), from: box, saying: saying) { draft in
             let draft = draft.accepting(kinds)
-            return PiSlash.said(draft, in: commands, for: session) ?? draft.stored
+            return Slash.said(draft, in: commands, for: session) ?? draft.stored
         }
     }
 
     @discardableResult
-    func answer(_ session: PiSessionState, from box: Binding<ComposerDraft>) -> Task<Void, Never> {
+    func answer(_ session: SessionState, from box: Binding<ComposerDraft>) -> Task<Void, Never> {
         speak(to: .session(session, mode: .send), from: box, keeping: { var kept = $0; kept.text = ""; return kept }) {
             $0.text.trimmingCharacters(in: .whitespacesAndNewlines)
         }
     }
 
-    func quote(_ preview: PiPreview, in entry: UUID, of session: PiSessionState) {
+    func quote(_ preview: PreviewItem, in entry: UUID, of session: SessionState) {
         services.settings.quote(preview, in: entry, for: session.id)
         replyFocus = session.id
     }

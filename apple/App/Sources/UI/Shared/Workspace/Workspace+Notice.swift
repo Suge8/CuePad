@@ -7,13 +7,13 @@ extension Workspace {
     private static let lastingNotice: Duration = .seconds(8)
 
     /// 收已经拼好的 `Dotted`；界面字面量走下面那个（进目录、按当前语言取字）。
-    func say(_ text: Dotted, tone: Notice.Tone = .done, status: PiShown.Status? = nil, link: Route? = nil, action: NoticeAction? = nil) {
+    func say(_ text: Dotted, tone: Notice.Tone = .done, status: SessionShown.Status? = nil, link: Route? = nil, action: NoticeAction? = nil) {
         notice = Notice(text: text, tone: tone, status: status, link: link, action: action)
         holdNotice(false)
     }
 
     func say(
-        _ text: LocalizedStringResource, tone: Notice.Tone = .done, status: PiShown.Status? = nil, link: Route? = nil, action: NoticeAction? = nil
+        _ text: LocalizedStringResource, tone: Notice.Tone = .done, status: SessionShown.Status? = nil, link: Route? = nil, action: NoticeAction? = nil
     ) {
         say(Dotted(String(localized: text)), tone: tone, status: status, link: link, action: action)
     }

@@ -5,14 +5,14 @@ import SwiftUI
 /// 可选什么、当前是什么由放它的那一处订阅好交进来（`observingCueBrain`）：手机的面板开时才建这一排，名牌一直订阅着，长出的第一帧就是真的。
 struct CueConfigControls<Trailing: View>: View {
     let choice: AgentModelChoice?
-    var opening: Binding<PiConfigPick?> = .constant(nil)
+    var opening: Binding<ConfigPick?> = .constant(nil)
     var alignment = Alignment.leading
     @Environment(AppServices.self) private var services
     @Environment(Workspace.self) private var workspace
 
     let trailing: Trailing
 
-    init(choice: AgentModelChoice?, opening: Binding<PiConfigPick?> = .constant(nil), alignment: Alignment = .leading,
+    init(choice: AgentModelChoice?, opening: Binding<ConfigPick?> = .constant(nil), alignment: Alignment = .leading,
          @ViewBuilder trailing: () -> Trailing = { EmptyView() }) {
         self.choice = choice
         self.opening = opening
@@ -22,7 +22,7 @@ struct CueConfigControls<Trailing: View>: View {
 
     var body: some View {
         let choice = choice ?? AgentModelChoice(agents: [], agent: nil, model: nil, thinking: nil)
-        PiConfigControls(choice: choice, opening: opening) { agent in
+        ConfigControls(choice: choice, opening: opening) { agent in
             update {
                 $0.runtime = .known(agent)
                 $0.model = nil
@@ -58,7 +58,7 @@ struct CueConfigControls<Trailing: View>: View {
         return AgentModelChoice(
             agents: agents.agents.filter { !$0.models.isEmpty },
             agent: runtime,
-            model: profile.model.flatMap { ref in runtime.map { $0.modelKey(ref) ?? PiModelKey(provider: "", id: ref) } },
+            model: profile.model.flatMap { ref in runtime.map { $0.modelKey(ref) ?? ModelKey(provider: "", id: ref) } },
             thinking: profile.effort?.known, fast: profile.fast)
     }
 }

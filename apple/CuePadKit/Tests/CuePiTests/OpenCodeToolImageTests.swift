@@ -12,8 +12,8 @@ struct OpenCodeToolImageTests {
         let fixture = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "Fixtures/opencode/imageToolResult.json")
         let page = try JSONDecoder().decode(OpenCodePage<OpenCodeMessage>.self, from: Data(contentsOf: fixture))
         let files = try Fixture().store.files
-        var checkpoint = PiHistoryCheckpoint()
-        var transcript = PiHistory.Transcript(fallbackID: "s", files: files)
+        var checkpoint = HistoryCheckpoint()
+        var transcript = History.Transcript(fallbackID: "s", files: files)
         for (seq, message) in page.data.enumerated() { try OpenCodeHistory.ingest(message, seq: Int64(seq), &checkpoint, &transcript) }
 
         let answer = try #require(transcript.messages.last)

@@ -20,12 +20,12 @@ extension TaskFlowTests {
         default: try await workspace.complete(task.id)
         }
         let closed = try #require(try await store.card(task.id))
-        let recorder = PiStateRecorder(store: store, hostID: TestApp.hostID)
+        let recorder = StateRecorder(store: store, hostID: TestApp.hostID)
         if shared {
             try await recorder.update(sessionID: "late-session", state: .thinking, projectID: Project.defaultID, hosted: true)
             try await store.bindSession("late-session", to: borrower.id)
         }
-        for state in [PiWorkState.thinking, .settled] {
+        for state in [WorkState.thinking, .settled] {
             try await recorder.update(sessionID: "late-session", state: state, projectID: Project.defaultID, launchToken: launch.launch?.token, hosted: true)
         }
         let after = try #require(try await store.card(task.id))
@@ -54,7 +54,7 @@ extension TaskFlowTests {
             #expect(try await peer.services.store.applyRemote([.save(row, systemFields: Data())]).isEmpty)
         }
         try await workspace.complete(task.id)
-        try await PiStateRecorder(store: peer.services.store, hostID: "other-mac").update(
+        try await StateRecorder(store: peer.services.store, hostID: "other-mac").update(
             sessionID: "cloud-late", state: .thinking, projectID: Project.defaultID, launchToken: launch.launch?.token, hosted: true)
         let session = try #require(try await peer.services.store.piSessions(sessionIDs: ["cloud-late"])["cloud-late"]?.state)
         let row = try #require(try await peer.services.store.syncRow(recordName: session.id.uuidString.lowercased()))
@@ -85,7 +85,7 @@ extension TaskFlowTests {
         case "trash": try await workspace.trash(task.id)
         default: try await workspace.complete(task.id)
         }
-        try await PiStateRecorder(store: peer.services.store, hostID: "other-mac").update(
+        try await StateRecorder(store: peer.services.store, hostID: "other-mac").update(
             sessionID: "source-first", state: .thinking, projectID: Project.defaultID, launchToken: launch.launch?.token, hosted: true)
         #expect(try await peer.services.store.deliveryRequests().filter { $0.mode == .known(.end) }.isEmpty)
         var closed = try #require(try await store.syncRow(recordName: task.id.uuidString.lowercased()))

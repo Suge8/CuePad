@@ -17,7 +17,7 @@ extension DeliveryMigrationTests {
         let workspace = Workspace(services: app.services)
         let card = try await task ? workspace.createTask("升级中的任务", in: Project.defaultID) : app.services.store.createCard(body: "升级中的灵感")
         let content = switch mode {
-        case .start: PiLaunch(project: Project.defaultID, prompt: card.body, token: "legacy-launch").stored
+        case .start: LaunchRequest(project: Project.defaultID, prompt: card.body, token: "legacy-launch").stored
         case .command: "/shout \(card.body)"
         default: card.body
         }
@@ -60,7 +60,7 @@ extension DeliveryMigrationTests {
         let card = try await workspace.createTask("准备发布", in: Project.defaultID)
         if mode != .start { try await app.host.connect("atlas", cwd: app.directory.path, hosted: true) }
         let content = switch mode {
-        case .start: PiLaunch(project: Project.defaultID, prompt: card.body, token: "legacy-settled").stored
+        case .start: LaunchRequest(project: Project.defaultID, prompt: card.body, token: "legacy-settled").stored
         case .command: "/shout 准备发布"
         default: card.body
         }

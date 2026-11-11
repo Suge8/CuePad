@@ -35,10 +35,10 @@ struct ConversationRuleTests {
             SessionFile.user("u3", "a2", "<some_event>\n子任务完成\n</some_event>", at: 5), SessionFile.assistant("a3", "u3", text: "汇报", at: 6),
             SessionFile.user("u4", "a3", "第三问", at: 7), SessionFile.assistant("a4", "u4", text: nil, stop: "aborted", at: 8))
 
-        let read = try PiHistory.index(file: stopped.url, from: nil)
+        let read = try History.index(file: stopped.url, from: nil)
         try await fixture.store.writePiTranscript(read.transcript)
 
-        #expect(read.recap == PiRecap(lastPrompt: "第二问", lastReply: "汇报", pendingPrompt: nil, answeredAt: SessionFile.date(8)))
+        #expect(read.recap == Recap(lastPrompt: "第二问", lastReply: "汇报", pendingPrompt: nil, answeredAt: SessionFile.date(8)))
         #expect(try await fixture.store.piMessages(of: "stopped").map { "\($0.role.rawValue):\($0.text)" } == [
             "user:第一问", "pi:第一答", "user:第二问", "pi:说了半句", "system:已停止", "machine:<some_event>\n子任务完成\n</some_event>", "pi:汇报",
             "user:第三问", "system:已停止",
@@ -48,8 +48,8 @@ struct ConversationRuleTests {
             [{"id":"u1","type":"user","text":"写个故事","time":{"created":1000000}},
              {"id":"a1","type":"assistant","error":{"type":"aborted"},"content":[{"type":"text","text":"从前有座山"}],"time":{"created":1000400,"completed":1006000}}]
             """
-        var checkpoint = PiHistoryCheckpoint()
-        var transcript = PiHistory.Transcript(fallbackID: "s", files: scratchFiles)
+        var checkpoint = HistoryCheckpoint()
+        var transcript = History.Transcript(fallbackID: "s", files: scratchFiles)
         for (seq, message) in try JSONDecoder().decode([OpenCodeMessage].self, from: Data(json.utf8)).enumerated() {
             try OpenCodeHistory.ingest(message, seq: Int64(seq), &checkpoint, &transcript)
         }
@@ -61,7 +61,7 @@ struct ConversationRuleTests {
             ["type": "task_started"], user("u1", "建个文件"),
             item(["type": "CommandExecution", "id": "c1", "command": ["/bin/zsh", "-lc", "touch x"], "status": "declined"]), ["type": "turn_aborted"],
         ])
-        #expect(try PiHistory.index(file: codex, agent: .codex, from: nil, files: scratchFiles).messages.map(\.text) == ["建个文件", "已拒绝"])
+        #expect(try History.index(file: codex, agent: .codex, from: nil, files: scratchFiles).messages.map(\.text) == ["建个文件", "已拒绝"])
     }
 
     @Test func theAnswerIsTimedFromYourMessageToWhenItWasDone() throws {
@@ -69,8 +69,8 @@ struct ConversationRuleTests {
             [{"id":"u1","type":"user","text":"跑一下","time":{"created":1000000}},
              {"id":"a1","type":"assistant","finish":"stop","content":[{"type":"text","text":"跑完了"}],"time":{"created":1000400,"completed":1006000}}]
             """
-        var checkpoint = PiHistoryCheckpoint()
-        var transcript = PiHistory.Transcript(fallbackID: "s", files: scratchFiles)
+        var checkpoint = HistoryCheckpoint()
+        var transcript = History.Transcript(fallbackID: "s", files: scratchFiles)
         for (seq, message) in try JSONDecoder().decode([OpenCodeMessage].self, from: Data(json.utf8)).enumerated() {
             try OpenCodeHistory.ingest(message, seq: Int64(seq), &checkpoint, &transcript)
         }
@@ -83,10 +83,10 @@ struct ConversationRuleTests {
     @Test func codexsFinalAnswerIsTheAnswerBeforeTheRoundIsMarkedComplete() throws {
         let file = try codexFile([["type": "task_started"], user("u1", "Reply with WRAPPED"), agent("m1", "WRAPPED", "final_answer")])
 
-        let read = try PiHistory.index(file: file, agent: .codex, from: nil, files: scratchFiles)
+        let read = try History.index(file: file, agent: .codex, from: nil, files: scratchFiles)
 
         #expect(read.messages.map { "\($0.role.rawValue):\($0.text)" } == ["user:Reply with WRAPPED", "pi:WRAPPED"])
-        #expect(read.recap == PiRecap(lastPrompt: "Reply with WRAPPED", lastReply: "WRAPPED", pendingPrompt: nil, answeredAt: second(3)))
+        #expect(read.recap == Recap(lastPrompt: "Reply with WRAPPED", lastReply: "WRAPPED", pendingPrompt: nil, answeredAt: second(3)))
     }
 
     @Test func aSteeredMessageInTheSameTurnGetsItsOwnAnswer() throws {
@@ -95,12 +95,12 @@ struct ConversationRuleTests {
             user("u2", "顺便：6+6 等于几"), agent("m2", "12", "commentary"), agent("m3", "LONG-DONE", "final_answer"), ["type": "task_complete"],
         ])
 
-        let read = try PiHistory.index(file: file, agent: .codex, from: nil, files: scratchFiles)
+        let read = try History.index(file: file, agent: .codex, from: nil, files: scratchFiles)
 
         #expect(read.messages.map { "\($0.role.rawValue):\($0.text)" } == [
             "user:跑 sleep 20，跑完回 LONG-DONE", "pi:先跑命令。", "user:顺便：6+6 等于几", "pi:LONG-DONE",
         ])
-        #expect(read.recap == PiRecap(lastPrompt: "顺便：6+6 等于几", lastReply: "LONG-DONE", pendingPrompt: nil, answeredAt: second(7)))
+        #expect(read.recap == Recap(lastPrompt: "顺便：6+6 等于几", lastReply: "LONG-DONE", pendingPrompt: nil, answeredAt: second(7)))
     }
 }
 #endif

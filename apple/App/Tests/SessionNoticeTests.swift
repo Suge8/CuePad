@@ -10,9 +10,9 @@ struct SessionNoticeTests {
     let app = TestApp()
     var store: CueStore { app.services.store }
 
-    private func recorder() -> PiStateRecorder { PiStateRecorder(store: store, hostID: "mac") }
+    private func recorder() -> StateRecorder { StateRecorder(store: store, hostID: "mac") }
 
-    private func live() async throws -> [PiSessionListItem] {
+    private func live() async throws -> [SessionListItem] {
         app.services.liveSessions.apply(try await LiveSessions.Page.read(from: store), at: .always())
         return app.services.liveSessions.live
     }
@@ -30,7 +30,7 @@ struct SessionNoticeTests {
         #expect(done.first?.session == settled.first?.id)
         #expect(tracker.alerts(for: settled, cue: nil, since: .distantPast).isEmpty)
 
-        let question = PiQuestion(promptID: "p", kind: .select, text: "要覆盖 feed.xml 吗？\n会丢掉手写的条目", options: ["覆盖", "取消"])
+        let question = Question(promptID: "p", kind: .select, text: "要覆盖 feed.xml 吗？\n会丢掉手写的条目", options: ["覆盖", "取消"])
         try await recorder.update(sessionID: "s1", state: .waitingForUser, question: question)
         let waiting = try #require(tracker.alerts(for: try await live(), cue: nil, since: .distantPast).first)
         #expect(waiting.kind == .waitingForUser && waiting.text.visible == "homepage 等你拍板：要覆盖 feed.xml 吗？")
@@ -41,16 +41,16 @@ struct SessionNoticeTests {
         let recorder = recorder()
         var tracker = SessionAlertTracker()
         let start = Date(timeIntervalSinceNow: -600)
-        try await recorder.update(sessionID: "s1", state: .thinking, title: "notes", times: PiTimes(stateSince: start, busySince: start))
+        try await recorder.update(sessionID: "s1", state: .thinking, title: "notes", times: SessionTimes(stateSince: start, busySince: start))
         _ = tracker.alerts(for: try await live(), cue: nil, since: .distantPast)
 
         let away = start.addingTimeInterval(60), active = start.addingTimeInterval(120)
-        try await recorder.update(sessionID: "s1", state: .settled, times: PiTimes(stateSince: away, busySince: nil))
+        try await recorder.update(sessionID: "s1", state: .settled, times: SessionTimes(stateSince: away, busySince: nil))
         #expect(tracker.alerts(for: try await live(), cue: nil, since: active).isEmpty)
 
-        try await recorder.update(sessionID: "s1", state: .thinking, times: PiTimes(stateSince: active.addingTimeInterval(10), busySince: active.addingTimeInterval(10)))
+        try await recorder.update(sessionID: "s1", state: .thinking, times: SessionTimes(stateSince: active.addingTimeInterval(10), busySince: active.addingTimeInterval(10)))
         _ = tracker.alerts(for: try await live(), cue: nil, since: active)
-        try await recorder.update(sessionID: "s1", state: .settled, times: PiTimes(stateSince: active.addingTimeInterval(20), busySince: nil))
+        try await recorder.update(sessionID: "s1", state: .settled, times: SessionTimes(stateSince: active.addingTimeInterval(20), busySince: nil))
         #expect(tracker.alerts(for: try await live(), cue: nil, since: active).map(\.kind) == [.settled])
     }
 

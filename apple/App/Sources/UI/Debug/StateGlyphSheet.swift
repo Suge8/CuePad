@@ -2,7 +2,7 @@
 import CueStore
 import SwiftUI
 
-/// 每行画的就是 App 里的那个视图（`PiStateDot`、`CueAvatar`），不另画一份；放不放循环随 `LoopsPlay`。
+/// 每行画的就是 App 里的那个视图（`StateDot`、`CueAvatar`），不另画一份；放不放循环随 `LoopsPlay`。
 struct StateGlyphSheet: View {
     @Environment(\.palette) private var palette
 
@@ -12,9 +12,9 @@ struct StateGlyphSheet: View {
                 section("会话状态")
                 ForEach(Self.sessions, id: \.0) { name, status in
                     row(name) {
-                        PiStateDot(shown: PiShown(status: status), size: 12)
-                        PiStateDot(shown: PiShown(status: status), size: 7)
-                        Image(PiShown(status: status).icon).font(.system(size: 13, weight: .semibold)).foregroundStyle(PiShown(status: status).tint(palette))
+                        StateDot(shown: SessionShown(status: status), size: 12)
+                        StateDot(shown: SessionShown(status: status), size: 7)
+                        Image(SessionShown(status: status).icon).font(.system(size: 13, weight: .semibold)).foregroundStyle(SessionShown(status: status).tint(palette))
                     }
                 }
                 section("Cue 页经过（平时 / 还没处理）")
@@ -55,7 +55,7 @@ struct StateGlyphSheet: View {
         .frame(minHeight: height)
     }
 
-    private static let sessions: [(String, PiShown.Status)] = [
+    private static let sessions: [(String, SessionShown.Status)] = [
         ("在跑", .working(.thinking)),
         ("压缩上下文", .working(.compacting)),
         ("等子代理", .working(.delegating)),

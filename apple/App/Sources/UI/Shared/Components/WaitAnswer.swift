@@ -29,7 +29,7 @@ struct WaitAnswer: View {
 }
 
 private struct SessionAnswer: View {
-    let session: PiSessionState
+    let session: SessionState
     let replyElsewhere: Bool
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -40,11 +40,11 @@ private struct SessionAnswer: View {
     @Environment(\.panelCovered) private var covered
     #endif
 
-    private var question: PiQuestion? { session.answerableQuestion }
+    private var question: Question? { session.answerableQuestion }
 
     private struct Pending {
         let promptID: String
-        let value: PiAnswerValue
+        let value: AnswerValue
         var requestID: UUID?
         var error: String?
     }
@@ -56,7 +56,7 @@ private struct SessionAnswer: View {
         return pending
     }
 
-    private var tapped: PiAnswerValue? { unseen.map(\.value) ?? request?.answer?.value }
+    private var tapped: AnswerValue? { unseen.map(\.value) ?? request?.answer?.value }
     private var writeError: String? { unseen?.error }
     private var sent: Speech.Trip? { unseen == nil ? request.map { Speech.trip($0, at: services.speech) } : nil }
 
@@ -68,7 +68,7 @@ private struct SessionAnswer: View {
         switch question?.kind.known {
         case .confirm: answers([.confirmed(false), .confirmed(true)])
         case .select:
-            answers((question?.options ?? []).map(PiAnswerValue.option), numbered: replyElsewhere,
+            answers((question?.options ?? []).map(AnswerValue.option), numbered: replyElsewhere,
                     other: replyElsewhere && question?.allowsOther == true)
         case .text: if !replyElsewhere { WaitReply(session: session) }
         case nil:
@@ -85,7 +85,7 @@ private struct SessionAnswer: View {
         ChipFlow { content() }.frame(maxWidth: .infinity, alignment: .trailing)
     }
 
-    private func answers(_ values: [PiAnswerValue], numbered: Bool = false, other: Bool = false) -> some View {
+    private func answers(_ values: [AnswerValue], numbered: Bool = false, other: Bool = false) -> some View {
         VStack(alignment: .trailing, spacing: Spacing.tight) {
             chips {
                 ForEach(Array(values.enumerated()), id: \.offset) { index, value in
@@ -119,7 +119,7 @@ private struct SessionAnswer: View {
         return failure.map { ($0, true) }
     }
 
-    private func chip(_ value: PiAnswerValue, number: Int?) -> some View {
+    private func chip(_ value: AnswerValue, number: Int?) -> some View {
         let busy = answering && tapped == value
         return Button { answer(value) } label: {
             HStack(spacing: Spacing.glyph) {
@@ -142,7 +142,7 @@ private struct SessionAnswer: View {
     /// 胶囊至少这么宽："否""是"这类一个字的不缩成一颗圆点。
     private static let minWidth: CGFloat = 32
 
-    private func answer(_ value: PiAnswerValue) {
+    private func answer(_ value: AnswerValue) {
         guard let promptID = question?.promptID else { return }
         withAnimation(Motion.fade) { pending = Pending(promptID: promptID, value: value) }
         Task {
@@ -158,7 +158,7 @@ private struct SessionAnswer: View {
 
 /// 草稿就是会话页回复框那一份（`AppSettings.replyDraft`，两处写的是同一句）；只发文字，草稿里的卡片与图片留给会话页。
 private struct WaitReply: View {
-    let session: PiSessionState
+    let session: SessionState
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette

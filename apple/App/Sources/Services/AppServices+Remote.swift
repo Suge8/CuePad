@@ -5,18 +5,18 @@ import Foundation
 
 extension AppServices {
 
-    /// `init` 里、第一次读库之前调用。进程确实没了的收尾，还在的留给桥重新连上；重新接上时状态种类没变就沿用原来的起点（`PiBridge.attach`）。
-    static func launch(_ store: CueStore, on host: String, bridge: PiBridge) throws {
+    /// `init` 里、第一次读库之前调用。进程确实没了的收尾，还在的留给桥重新连上；重新接上时状态种类没变就沿用原来的起点（`Bridge.attach`）。
+    static func launch(_ store: CueStore, on host: String, bridge: Bridge) throws {
         bridge.carryOver(try store.launchMac(host: host) { $0.isRunning })
     }
 
-    func consumePiChanges(_ changes: AsyncStream<PiSessionChange>) async throws {
-        var mirror = PiSessionMirror(recorder: piStateRecorder)
+    func consumePiChanges(_ changes: AsyncStream<SessionChange>) async throws {
+        var mirror = SessionMirror(recorder: piStateRecorder)
         let namer = SessionNamer(bridge: pi, store: store)
         for await change in changes {
             if let alerted = try await mirror.apply(change) {
                 // 带通知标志的写入立即上传（不阻塞后面的会话变化）：排在其余待推送后面要多等，期间状态还可能前进而把它作废
-                let record = PiSessionState.recordID(sessionID: alerted)
+                let record = SessionState.recordID(sessionID: alerted)
                 Task { await upload(record) }
             }
             switch change {

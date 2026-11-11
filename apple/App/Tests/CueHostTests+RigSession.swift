@@ -32,7 +32,7 @@ extension CueHostTests.Rig {
     func answered(_ sessionID: String, reply: String = "好了") async throws {
         try await eventually("歇下写进库") { try await self.store.sessions(matching: sessionID).first?.state == .known(.settled) }
         guard let file = app.host.sessionFiles[sessionID] else {
-            return try await store.writePiTranscript(PiTranscript(sessionID: sessionID, messages: [], recap: PiRecap(lastPrompt: "接着做", lastReply: reply, answeredAt: .now)))
+            return try await store.writePiTranscript(SessionTranscript(sessionID: sessionID, messages: [], recap: Recap(lastPrompt: "接着做", lastReply: reply, answeredAt: .now)))
         }
         try file.reply(reply)
     }

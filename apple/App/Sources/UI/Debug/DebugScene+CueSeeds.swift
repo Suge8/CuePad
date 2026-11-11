@@ -65,20 +65,20 @@ extension DebugScene {
         try await store.recordMacPresence(host: "demo-mac", bootID: demoBoot) { true }
         let recorder = demoRecorder(store)
         let asked = String(localized: "加在「安装」后面吗？", table: "Demo")
-        let rows: [(id: String, title: String, agent: AgentKind, state: PiWorkState, detail: String?, question: PiQuestion?, tokens: Int, model: Bool)] = [
+        let rows: [(id: String, title: String, agent: AgentKind, state: WorkState, detail: String?, question: Question?, tokens: Int, model: Bool)] = [
             ("cue-pi-long", String(localized: "把 README 的截图换成 Swift 版并补上深色模式的那一张", table: "Demo"), .pi, .settled, nil, nil, 100_000, true),
             ("cue-codex-short", "greet", .codex, .waitingForUser, String(localized: "要覆盖 tests/test_greet.py 吗？", table: "Demo"), nil, 150_000, false),
             ("cue-codex-long", String(localized: "为 greet 添加 --upper 参数并验证测试输出原文", table: "Demo"), .codex, .tool, "bash · python3 -m unittest", nil, 188_000, true),
             ("cue-claude-short", "faq", .claudeCode, .settled, nil, nil, 150_000, false),
             ("cue-claude-long", String(localized: "评估 README 是否需要加一节 FAQ 并跑一遍测试", table: "Demo"), .claudeCode, .waitingForUser, asked,
-             PiQuestion(promptID: "cuerows-confirm", kind: .confirm, text: asked), 100_000, false),
+             Question(promptID: "cuerows-confirm", kind: .confirm, text: asked), 100_000, false),
         ]
         for row in rows {
             _ = try await recorder.update(
                 sessionID: row.id, state: row.state, detail: row.detail, title: row.title, directory: "greet", question: row.question,
                 modelState: row.model ? demoModels(for: row.agent) : nil,
-                context: PiContextUsage(tokens: row.tokens, window: 200_000), agent: row.agent)
-            try await store.writePiTranscript(PiTranscript(sessionID: row.id, messages: [], recap: PiRecap(lastPrompt: row.title, lastReply: String(localized: "好了", table: "Demo"))))
+                context: ContextUsage(tokens: row.tokens, window: 200_000), agent: row.agent)
+            try await store.writePiTranscript(SessionTranscript(sessionID: row.id, messages: [], recap: Recap(lastPrompt: row.title, lastReply: String(localized: "好了", table: "Demo"))))
             let task = try await store.createTask(row.title)
             try await store.linkCard(task.id, toSession: row.id)
         }
@@ -86,7 +86,7 @@ extension DebugScene {
     }
 
     @discardableResult
-    static func seedEvidence(_ store: CueStore, session: String, title: String, png: Data) async throws -> PiPreview {
+    static func seedEvidence(_ store: CueStore, session: String, title: String, png: Data) async throws -> PreviewItem {
         let file = FileManager.default.temporaryDirectory.appending(path: "cuepad-demo-\(session).png")
         try png.write(to: file)
         return try await store.addPreviews([(file, title)], sessionID: session)[0].preview

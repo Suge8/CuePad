@@ -28,7 +28,7 @@ struct GlobalShortcutTests {
 }
 
 @Suite(.releasesLibraries)
-struct PiHistoryPersistenceTests {
+struct HistoryPersistenceTests {
     private func sessionFile(in rig: TestApp, lines: [String]) throws -> URL {
         let directory = rig.piPaths.sessionsDirectory.appending(path: "--work-x--")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -45,8 +45,8 @@ struct PiHistoryPersistenceTests {
         let file = try sessionFile(in: rig, lines: [header, firstPrompt])
         try await rig.services.store.upsertPiSession(IndexedSession(
             id: "worker-1", path: "/gone/--work-x--/subagents/w.jsonl", cwd: "/work/x", title: "子任务", lastActivityAt: .now), host: TestApp.hostID)
-        let events = AsyncStream<PiHistoryEvent> { continuation in
-            continuation.yield(.updated(try! PiHistory.index(file: file, agent: .pi, from: nil, files: rig.services.store.files)))
+        let events = AsyncStream<HistoryEvent> { continuation in
+            continuation.yield(.updated(try! History.index(file: file, agent: .pi, from: nil, files: rig.services.store.files)))
             continuation.yield(.backfillFinished(sessionFiles: [file]))
             continuation.finish()
         }

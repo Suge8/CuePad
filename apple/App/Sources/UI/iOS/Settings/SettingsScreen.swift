@@ -96,12 +96,12 @@ private struct AlertSection: View {
     @Environment(\.openURL) private var openURL
 
     var body: some View {
-        let live = PiAlertStatus(
+        let live = AlertStatus(
             authorization: alerts.authorization, registration: alerts.registration, subscription: services.syncState.alerts)
         let status = DebugHooks.preset.alertStatus ?? live
         Section {
             Label {
-                StatusText(title: status.title, detail: status.detail, reserve: PiAlertStatus.offline.detail)
+                StatusText(title: status.title, detail: status.detail, reserve: AlertStatus.offline.detail)
             } icon: {
                 Image(status.state == .on ? .alertsOn : status.state == .pending ? .alertsPending : .alertsOff)
                     .foregroundStyle(status.state == .problem ? palette.failure : palette.ink2)

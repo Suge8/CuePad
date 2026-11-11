@@ -64,14 +64,14 @@ extension RealPiTests {
             try await bridge.abort(s.id)
             try await eventually("这一轮结束") { [.settled, .error].contains(bridge.sessions.first?.state) }
             #expect(bridge.sessions.first?.state == .settled, "\(String(describing: bridge.sessions.first?.detail))")
-            let messages = try PiHistory.index(file: #require(s.sessionFile), from: nil).messages
-            #expect(messages.map(\.text) == ["跑个慢命令", PiNotice.stopped.rawValue])
+            let messages = try History.index(file: #require(s.sessionFile), from: nil).messages
+            #expect(messages.map(\.text) == ["跑个慢命令", ChatNotice.stopped.rawValue])
         }
     }
 
     @Test func sendDeliversTextAndImageIntoTheModelContext() async throws {
         try await withRig { _, bridge, s in
-            try await bridge.send(PiMessage(text: "look", images: [PiImage(mimeType: "image/png", data: tinyPNG)]), to: s.id)
+            try await bridge.send(SessionMessage(text: "look", images: [MessageImage(mimeType: "image/png", data: tinyPNG)]), to: s.id)
             try await eventually("回复写入") { !fileTexts("assistant", in: s.sessionFile).isEmpty }
             let prompt = try #require(fileMessages(in: s.sessionFile).first { $0.role == "user" })
             #expect(prompt.text.hasPrefix("look") && prompt.images == 1)
@@ -88,20 +88,20 @@ extension RealPiTests {
             try pi.prompt("跑个慢命令")
             try await eventually("在跑工具") { bridge.sessions.first?.state == .tool }
             let first = UUID(), second = UUID(), log = ChangeLog(bridge)
-            try await bridge.send(PiMessage(text: "FIRST", deliveryID: first.uuidString), to: s.id)
-            try await bridge.send(PiMessage(text: "SECOND", deliveryID: second.uuidString), to: s.id)
+            try await bridge.send(SessionMessage(text: "FIRST", deliveryID: first.uuidString), to: s.id)
+            try await bridge.send(SessionMessage(text: "SECOND", deliveryID: second.uuidString), to: s.id)
 
             try await eventually("最后一句答完") {
                 fileTexts("assistant", in: s.sessionFile).last?.hasPrefix("ECHO SECOND") == true && bridge.sessions.first?.state == .settled && log.states.last == .settled
             }
             #expect(log.settles == 1, "被停下的两轮都不算歇下：\(log.states)")
-            let messages = try PiHistory.index(file: #require(s.sessionFile), from: nil).messages
+            let messages = try History.index(file: #require(s.sessionFile), from: nil).messages
             let users = messages.filter { $0.role == .known(.user) }
             #expect(users.map(\.text) == ["跑个慢命令", "FIRST", "SECOND"])
             #expect(users.map(\.deliveryID) == [nil, first, second])
             #expect(!fileTexts("assistant", in: s.sessionFile).contains { $0 == "TOOL_DONE" || $0.contains("FIRST") }, "被停下的两轮都没有做完")
             // Pi 把这两轮记成 error（"The operation was aborted."）：对话里照停下处理，各留一行"已停止"
-            #expect(messages.map(\.text).filter { $0 == PiNotice.stopped.rawValue }.count == 2, "\(messages.map(\.text))")
+            #expect(messages.map(\.text).filter { $0 == ChatNotice.stopped.rawValue }.count == 2, "\(messages.map(\.text))")
         }
     }
 
@@ -150,18 +150,18 @@ extension RealPiTests {
             pi.model.on(prompt, times: 1, .fail("fake model failure"))
             try pi.prompt(prompt)
             try await eventually("出错") { bridge.sessions.first?.state == .error }
-            #expect(try PiHistory.index(file: file, from: nil).messages.map(\.text) == [prompt])
+            #expect(try History.index(file: file, from: nil).messages.map(\.text) == [prompt])
 
             try await bridge.retry(s.id)
             try await eventually("重跑做完") { recap(of: bridge.sessions.first)?.lastReply == "ECHO 跑一遍" }
             try await eventually("歇下") { bridge.sessions.first?.state == .settled }
-            #expect(try PiHistory.index(file: file, from: nil).messages.map(\.text) == [prompt, "ECHO 跑一遍"])
+            #expect(try History.index(file: file, from: nil).messages.map(\.text) == [prompt, "ECHO 跑一遍"])
             #expect(pi.model.requests.last?.messages.map(\.role) == [.user], "重跑的请求里没有出错的那一轮")
 
             try pi.prompt("再来")
             try await eventually("下一句") { recap(of: bridge.sessions.first)?.lastReply == "ECHO 再来" }
             #expect(pi.model.requests.last?.messages.map(\.role) == [.user, .assistant, .user])
-            await #expect(throws: PiBridgeError.rejected("nothing_to_retry")) { try await bridge.retry(s.id) }
+            await #expect(throws: BridgeError.rejected("nothing_to_retry")) { try await bridge.retry(s.id) }
         }
     }
 

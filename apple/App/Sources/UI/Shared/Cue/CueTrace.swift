@@ -39,8 +39,8 @@ struct CueTrace: View {
         }
     }
 
-    /// 查看是眼睛：Cue 看的是会话与任务，不是文件；留给你画待回复的图形，只取状态那一处（`PiShown.icon`），不读会话此刻的状态。
-    static func icon(_ kind: PiChatMessage.Tools.Kind) -> Icon {
+    /// 查看是眼睛：Cue 看的是会话与任务，不是文件；留给你画待回复的图形，只取状态那一处（`SessionShown.icon`），不读会话此刻的状态。
+    static func icon(_ kind: ChatMessage.Tools.Kind) -> Icon {
         switch kind {
         case .read: .looked
         case .talk: .handOff
@@ -48,7 +48,7 @@ struct CueTrace: View {
         case .start: .started
         case .stop: .endSession
         case .done: .complete
-        case .leave: PiShown(status: .awaitsReply).icon
+        case .leave: SessionShown(status: .awaitsReply).icon
         case .schedule: .schedule
         case .edit: .write
         case .command, .search, .other, .said, .ask: .tool

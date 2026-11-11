@@ -63,7 +63,7 @@ struct NoticeCapsule: View {
     @ViewBuilder private func message(inset: CGFloat) -> some View {
         let label = HStack(spacing: Spacing.glyph) {
             Label { Text(notice.text) } icon: {
-                if let status = notice.status { PiStateGlyph(status: status) } else { Image(notice.tone.icon) }
+                if let status = notice.status { StateGlyph(status: status) } else { Image(notice.tone.icon) }
             }
             if notice.link != nil { Chevron(.forward).foregroundStyle(palette.ink3) }
         }

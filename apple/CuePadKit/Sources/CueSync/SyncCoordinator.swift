@@ -43,7 +43,7 @@ actor SyncCoordinator {
     var holding: Hold?
     var reconciled = false
     var issues: [SyncIssue] = []
-    var alerts = PiAlertSubscriptionStatus.off
+    var alerts = AlertSubscriptionStatus.off
     /// 之后传上去一个才清掉；别的记录照常同步，所以不进 `status`。
     var filesHeldUntil: ContinuousClock.Instant?
 
@@ -105,8 +105,8 @@ actor SyncCoordinator {
   /// 停下时不拉、不传，账号、同步区与上传失败都不改状态。
   var stopped: Bool { needsDecision != nil || status == .outdated }
 
-  var alertSubscription: PiAlertSubscriptionStatus { facts.alerts }
-  func setAlerts(_ alerts: PiAlertSubscriptionStatus) { facts.alerts = alerts }
+  var alertSubscription: AlertSubscriptionStatus { facts.alerts }
+  func setAlerts(_ alerts: AlertSubscriptionStatus) { facts.alerts = alerts }
 
   /// 之后重新开始同步（元数据、令牌与账号这里已清掉）。没有等你决定的事什么都不做：免得误擦数据。
   func resolve(_ resolution: SyncResolution) async throws {

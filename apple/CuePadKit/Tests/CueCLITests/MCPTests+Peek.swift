@@ -9,17 +9,17 @@ extension MCPTests {
     let store = sandbox.store
     let task = try await store.createTask("跑测试")
     try await store.linkCard(task.id, toSession: "s1")
-    try await PiStateRecorder(store: store, hostID: "mac").update(sessionID: "s1", state: .settled, title: "跑测试")
+    try await StateRecorder(store: store, hostID: "mac").update(sessionID: "s1", state: .settled, title: "跑测试")
     let older = String(repeating: "旧", count: 500), output = "结论：全部通过\n" + String(repeating: "过", count: 4500) + "\n证据：退出码 0"
-    try await store.writePiTranscript(PiTranscript(
+    try await store.writePiTranscript(SessionTranscript(
       sessionID: "s1",
       messages: [
-        PiChatMessage(sessionID: "s1", entryID: "1", seq: 1, role: .user, text: "跑一遍", at: .now),
-        PiChatMessage(sessionID: "s1", entryID: "2", seq: 2, role: .pi, text: older, at: .now),
-        PiChatMessage(sessionID: "s1", entryID: "3", seq: 3, role: .user, text: "贴输出", at: .now),
-        PiChatMessage(sessionID: "s1", entryID: "4", seq: 4, role: .pi, text: output, at: .now),
+        ChatMessage(sessionID: "s1", entryID: "1", seq: 1, role: .user, text: "跑一遍", at: .now),
+        ChatMessage(sessionID: "s1", entryID: "2", seq: 2, role: .pi, text: older, at: .now),
+        ChatMessage(sessionID: "s1", entryID: "3", seq: 3, role: .user, text: "贴输出", at: .now),
+        ChatMessage(sessionID: "s1", entryID: "4", seq: 4, role: .pi, text: output, at: .now),
       ],
-      recap: PiRecap()))
+      recap: Recap()))
     try await Server.run(library: sandbox.directory) { server in
       let text = try await server.call("task", ["action": "peek", "task": task.id.uuidString])
       // 开头 1000 字与结尾 3000 字里的"过"都在、中间的没了：长串重复字符的子串查找不可靠，按个数比
@@ -36,14 +36,14 @@ extension MCPTests {
     let first = try await store.createTask("查首页", under: task.id), second = try await store.createTask("查价格页", under: task.id)
     for step in [first, second] { try await store.linkCard(step.id, toSession: "s1") }
     _ = try await store.completeTask(first.id)
-    try await PiStateRecorder(store: store, hostID: "mac").update(sessionID: "s1", state: .settled, title: "查死链")
-    try await store.writePiTranscript(PiTranscript(
+    try await StateRecorder(store: store, hostID: "mac").update(sessionID: "s1", state: .settled, title: "查死链")
+    try await store.writePiTranscript(SessionTranscript(
       sessionID: "s1",
       messages: [
-        PiChatMessage(sessionID: "s1", entryID: "1", seq: 1, role: .user, text: "查首页", at: .now),
-        PiChatMessage(sessionID: "s1", entryID: "2", seq: 2, role: .pi, text: "首页 3 个死链", at: .now),
+        ChatMessage(sessionID: "s1", entryID: "1", seq: 1, role: .user, text: "查首页", at: .now),
+        ChatMessage(sessionID: "s1", entryID: "2", seq: 2, role: .pi, text: "首页 3 个死链", at: .now),
       ],
-      recap: PiRecap()))
+      recap: Recap()))
     try await Server.run(library: sandbox.directory) { server in
       let text = try await server.call("task", ["action": "peek", "task": task.id.uuidString])
       #expect(text.components(separatedBy: "首页 3 个死链").count == 2, "\(text)")
@@ -80,7 +80,7 @@ extension MCPTests {
     let first = try await store.createTask("加 --lang", under: task.id), second = try await store.createTask("写 README", under: task.id)
     try await store.linkCard(first.id, toSession: "s1")
     try await store.linkCard(second.id, toSession: "s2")
-    let recorder = PiStateRecorder(store: store, hostID: "mac-a")
+    let recorder = StateRecorder(store: store, hostID: "mac-a")
     for session in ["s1", "s2"] { try await recorder.update(sessionID: session, state: .settled) }
     try await Server.run(library: sandbox.directory) { server in
       func shown(_ step: Card) async throws -> Bool { try await server.call("task", ["action": "peek"]).contains("· \(step.heading) ›") }

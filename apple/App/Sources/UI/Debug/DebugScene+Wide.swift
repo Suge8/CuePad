@@ -10,7 +10,7 @@ extension DebugScene {
         guard let name = args.layoutOpts.wideReverse else { return }
         await running("摆宽屏组合") {
             await seedRemote(workspace.services)
-            let sessions = try await workspace.services.store.piSessionPage(PiSessionQuery(limit: 2)).items.map(\.state.sessionID)
+            let sessions = try await workspace.services.store.piSessionPage(SessionQuery(limit: 2)).items.map(\.state.sessionID)
             guard let item = InteractionBench.wideCases.first(where: { $0.name == name }), sessions.count == 2 else {
                 throw Unmet("没有「\(name)」这种组合，或库里的会话不够两份")
             }

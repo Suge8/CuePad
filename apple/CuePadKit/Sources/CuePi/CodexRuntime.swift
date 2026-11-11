@@ -8,7 +8,7 @@ import OSLog
 /// 子线程没有订阅者，它的推送广播给所有连接（实测、文档没写），所以子代理只认 app-server 的子线程推送。钩子不行：`SubagentStop` 只在正常做完时发，出错、被停没有；v2 `followup_task` 再跑不发 `SubagentStart`。
 /// 父线程歇着时子代理做完，Codex 不自己接着跑（结果在它的历史或邮箱里等下一轮）：最后一个落定时 CuePad 补一轮空输入（`wake`）。
 /// 常驻服务里的线程在终端退出后还会挂着（没有订阅者、闲置约 30 分钟后才卸载并报 `SessionEnd`，实测、文档没写），这段时间它仍在线、能收话。
-/// 正在说的话（`PiDraft`）与上下文余量只有托管的会话有：增量与用量只发给订阅了线程的连接（自己起的进程）；终端里的会话不订阅，也就没有。
+/// 正在说的话（`LiveDraft`）与上下文余量只有托管的会话有：增量与用量只发给订阅了线程的连接（自己起的进程）；终端里的会话不订阅，也就没有。
 /// 控制只经 app-server 的接口，不为观察而订阅（`thread/resume` 会把终端的事件与审批抢走）：说话在跑就先 `turn/interrupt`（`turn/steer` 要等在跑的工具做完才读到，不是打断）。
 /// 常驻服务把 `thread/status/changed`、`thread/name/updated`、`thread/closed` 广播给所有连接：钩子漏掉的歇下（出错时没有 `Stop`）与改名靠它们补上。
 /// 常驻服务的控制 socket 在哪由 `codex app-server daemon version` 告诉（服务在跑时才有），不自己拼路径。
@@ -22,13 +22,13 @@ import OSLog
 @MainActor
 public final class CodexRuntime: AgentRuntime, SessionLink {
     static let log = Logger(subsystem: AppIdentity.id, category: "codex")
-    let bridge: PiBridge
+    let bridge: Bridge
     private let paths: AgentPaths
     private let hooks: AgentHookServer
     let codex: @Sendable () async -> URL?
     private let locate: @Sendable () async -> ExecutableLocator
     let gate: PresenceGate
-    var tracked: [PiSession.ID: Tracked] = [:]
+    var tracked: [Session.ID: Tracked] = [:]
     var hosted: [Int32: CodexDriver] = [:]
     /// 托管会话的进程按会话（线程 id）登记，请退出与接着都经它（`HostedProcesses`）
     let processes: HostedProcesses
@@ -47,7 +47,7 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
         case asking([(method: String, params: JSONValue)])
         /// 刚起的线程，推送先到、`thread/read` 还读不到它（实测偶发，负载高时更常见），或这次读被取消、没及时回：留着已收下的推送，下一条推送来时再问
         case unreadable([(method: String, params: JSONValue)])
-        case session(PiSession.ID, name: String, role: String)
+        case session(Session.ID, name: String, role: String)
         /// 沿父线程到顶也不是跟踪着的会话，或报出来的顶层线程：之后的推送不再问
         case foreign
 
@@ -63,10 +63,10 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
     var models: [CodexModel]?
     var stopped = true
     let timing: Timing
-    var scope = PiHistoryScope.sessions([])
+    var scope = HistoryScope.sessions([])
 
     public init(
-        bridge: PiBridge, paths: AgentPaths, hooks: AgentHookServer, codex: @escaping @Sendable () async -> URL?,
+        bridge: Bridge, paths: AgentPaths, hooks: AgentHookServer, codex: @escaping @Sendable () async -> URL?,
         locate: @escaping @Sendable () async -> ExecutableLocator = { await .system }, presence: any UserPresence = SystemPresence(),
         timing: Timing = .system
     ) {
@@ -83,7 +83,7 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
     enum Restart { case stopping, stopped }
 
     final class Tracked {
-        let id: PiSession.ID
+        let id: Session.ID
         let threadID: String
         let pid: Int32
         var facts = SessionFacts()
@@ -108,7 +108,7 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
         let stopPhase = StopPhase()
         var skills: [(name: String, path: String)] = []
 
-        init(id: PiSession.ID, threadID: String, pid: Int32) {
+        init(id: Session.ID, threadID: String, pid: Int32) {
             self.id = id
             self.threadID = threadID
             self.pid = pid
@@ -136,7 +136,7 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
         }
     }
 
-    public func follow(_ scope: PiHistoryScope) {
+    public func follow(_ scope: HistoryScope) {
         self.scope = scope
         for session in tracked.values where hosted[session.pid] == nil && !scope.covers(sessionID: session.threadID) { detach(session.id) }
         if scope != .sessions([]) { Task { await discover() } }
@@ -168,8 +168,8 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
     }
 
     public func open(
-        in directory: URL, launchToken: String, name: String?, model: PiModelKey?, thinking: PiThinkingLevel?
-    ) async throws -> PiSession.ID {
+        in directory: URL, launchToken: String, name: String?, model: ModelKey?, thinking: ThinkingLevel?
+    ) async throws -> Session.ID {
         let id = try await launch(sessionID: nil, admission: try processes.admission()) { driver, rpc in
             let started = try await driver.open("thread/start", .object(try await self.sandbox(in: directory.path, on: rpc).merging(["cwd": .string(directory.path)]) { $1 }))
             return self.attachHosted(started, rpc: rpc, launchToken: launchToken)
@@ -178,7 +178,7 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
     }
 
     /// 恢复时它被别处拿着写（终端里刚开）也改走控制 socket；常驻服务里也没有它才报错。
-    public func resume(_ session: IndexedSession) async throws -> PiSession.ID {
+    public func resume(_ session: IndexedSession) async throws -> Session.ID {
         if let live = bridge.session(sessionID: session.id) { return live.id }
         return try await processes.resume(session.id) { [self] admission in
             if let id = try await adoptFromDaemon(session.id) { return id }
@@ -212,8 +212,8 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
 
     /// 连同握手至多 `AgentTimeouts.launch`，超时或出错时停掉进程。
     private func launch(
-        sessionID: String?, admission: HostedProcesses.Admission, _ body: @escaping @MainActor (CodexDriver, CodexRPC) async throws -> PiSession.ID
-    ) async throws -> PiSession.ID {
+        sessionID: String?, admission: HostedProcesses.Admission, _ body: @escaping @MainActor (CodexDriver, CodexRPC) async throws -> Session.ID
+    ) async throws -> Session.ID {
         let codex = try await executable()
         let mark = UUID().uuidString
         let driver = CodexDriver()
@@ -241,7 +241,7 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
         }
     }
 
-    private func attachHosted(_ result: JSONValue, rpc: CodexRPC, launchToken: String?) -> PiSession.ID {
+    private func attachHosted(_ result: JSONValue, rpc: CodexRPC, launchToken: String?) -> Session.ID {
         var session = makeSession(result["thread"] ?? .object([:]), pid: rpc.pid)
         session.hosted = true
         session.fast = result["serviceTier"]?.string == "priority"

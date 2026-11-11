@@ -1,12 +1,12 @@
 import CueStore
 import SwiftUI
 
-/// 做完的几步与说过的话来自会话文件（`PiRecap.pendingTools`），正在跑的来自会话状态（`detail`），两者不重叠。
-/// Mac 上正在说的话出字时（`PiShown.speaking`）这一块是草稿的标题，说的话就是下面的草稿，不再列一遍。
+/// 做完的几步与说过的话来自会话文件（`Recap.pendingTools`），正在跑的来自会话状态（`detail`），两者不重叠。
+/// Mac 上正在说的话出字时（`SessionShown.speaking`）这一块是草稿的标题，说的话就是下面的草稿，不再列一遍。
 /// 工具结果里有图时，标题行下面总挂着这一轮的图（收着、展开都在，`ChatImages`），点开全屏看：用户看得到 Agent 看到的，Agent 不必为了给人看再发一遍。
 /// 在跑的与做完后的同一种排法、同样高（同样的步骤时）：Mac 上正在说的话落库时原位换下，这一块不跳（`SessionDraft`）。
 struct RoundProcess: View {
-    let tools: PiChatMessage.Tools?
+    let tools: ChatMessage.Tools?
     let ending: Ending
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -15,16 +15,16 @@ struct RoundProcess: View {
 
     nonisolated enum Ending: Equatable {
         case took(String)
-        case live(PiShown, doing: String, step: Icon?)
+        case live(SessionShown, doing: String, step: Icon?)
 
         static var speaking: Ending {
-            let shown = PiShown(state: .known(.thinking)).speaking(true)
+            let shown = SessionShown(state: .known(.thinking)).speaking(true)
             return .live(shown, doing: shown.label, step: nil)
         }
     }
 
     var body: some View {
-        if let line = PiChat.processLine(tools), let tools {
+        if let line = Chat.processLine(tools), let tools {
             VStack(alignment: .leading, spacing: 0) {
                 Button { expanded.toggle() } label: { header(line) }
                     .buttonStyle(PressStyle())
@@ -51,7 +51,7 @@ struct RoundProcess: View {
             .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: expanded)
         } else if case .live(let shown, let doing, _) = ending, !shown.speaking {
             // 还没调过工具：此刻在做的（在想、只说了话），一行：对话末尾只给它留一行（`ChatLiveSlot`）
-            NoteLine { PiStateDot(shown: shown, size: 6) } label: { Text(doing).lineLimit(1).shimmering() }
+            NoteLine { StateDot(shown: shown, size: 6) } label: { Text(doing).lineLimit(1).shimmering() }
                 .accessibilityElement(children: .ignore).accessibilityLabel(doing)
         }
     }
@@ -70,7 +70,7 @@ struct RoundProcess: View {
         NoteLine(open: expanded) {
             switch ending {
             case .took: Image(.tool).imageScale(.small)
-            case .live(let shown, _, _): PiStateDot(shown: shown, size: 6)
+            case .live(let shown, _, _): StateDot(shown: shown, size: 6)
             }
         } label: {
             Text(line).lineLimit(typeSize.isAccessibilitySize ? nil : 1)
@@ -88,7 +88,7 @@ struct RoundProcess: View {
         }
     }
 
-    @ViewBuilder private func list(_ tools: PiChatMessage.Tools) -> some View {
+    @ViewBuilder private func list(_ tools: ChatMessage.Tools) -> some View {
         ForEach(Array(tools.items.enumerated()), id: \.offset) { _, item in row(item) }
         let listed = tools.items.count { $0.kind != .said }
         if tools.steps > listed {
@@ -96,7 +96,7 @@ struct RoundProcess: View {
         }
     }
 
-    @ViewBuilder private func row(_ item: PiChatMessage.Tools.Item) -> some View {
+    @ViewBuilder private func row(_ item: ChatMessage.Tools.Item) -> some View {
         if item.kind == .said {
             SaidRow(text: item.target, lines: 3)
         } else {
@@ -105,11 +105,11 @@ struct RoundProcess: View {
     }
 
 
-    @ViewBuilder private func status(_ item: PiChatMessage.Tools.Item) -> some View {
+    @ViewBuilder private func status(_ item: ChatMessage.Tools.Item) -> some View {
         if item.failed {
             Text("失败").font(Typography.caption).foregroundStyle(palette.failure)
         } else if item.added != nil || item.removed != nil {
-            Text(PiChat.diffLabel(added: item.added, removed: item.removed)).font(Typography.caption.monospacedDigit()).foregroundStyle(palette.ink3)
+            Text(Chat.diffLabel(added: item.added, removed: item.removed)).font(Typography.caption.monospacedDigit()).foregroundStyle(palette.ink3)
         }
     }
 
@@ -138,7 +138,7 @@ struct RoundProcess: View {
     }
 
     /// 会话里的几类；Cue 的动作只在 Cue 页的经过里（`CueTrace.icon`），会话里没有。
-    static func icon(_ kind: PiChatMessage.Tools.Kind) -> Icon {
+    static func icon(_ kind: ChatMessage.Tools.Kind) -> Icon {
         switch kind {
         case .edit: .editFile
         case .command: .terminal

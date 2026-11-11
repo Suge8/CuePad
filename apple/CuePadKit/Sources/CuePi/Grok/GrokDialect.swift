@@ -66,7 +66,7 @@ struct GrokDialect: ACPDialect {
             meta: ["agentProfile": profile, "yoloMode": true])
     }
 
-    @MainActor func steer(_ text: String, images: [PiImage], session: String, on connection: ACPConnection) async throws -> ACPSteer? {
+    @MainActor func steer(_ text: String, images: [MessageImage], session: String, on connection: ACPConnection) async throws -> ACPSteer? {
         guard images.isEmpty else { return nil }
         try await connection.call("_x.ai/interject", ["sessionId": .string(session), "text": .string(text)])
         return ACPSteer()

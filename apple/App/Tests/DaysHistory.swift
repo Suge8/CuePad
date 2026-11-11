@@ -77,9 +77,9 @@ final class DaysHistory {
         let first = "\(title)\n\(body)", id = "done-\(index)", delivery = UUID()
         let task = try await store.createTask(first, in: project)
         try await store.recordSend(first, to: SendTarget(kind: .piSession, name: title, ref: id), card: task.id, delivery: delivery, origin: .known(.cue))
-        let prompt = PiChatMessage(sessionID: id, entryID: "u1", seq: 1, role: .user, text: first, at: at(day, 60), deliveryID: delivery)
-        let answer = PiChatMessage(sessionID: id, entryID: "a1", seq: 2, role: .pi, text: reply, at: at(day, 180))
-        try await store.writePiTranscript(PiTranscript(sessionID: id, messages: [prompt, answer], recap: PiRecap(lastPrompt: title, lastReply: reply, answeredAt: at(day, 180))))
+        let prompt = ChatMessage(sessionID: id, entryID: "u1", seq: 1, role: .user, text: first, at: at(day, 60), deliveryID: delivery)
+        let answer = ChatMessage(sessionID: id, entryID: "a1", seq: 2, role: .pi, text: reply, at: at(day, 180))
+        try await store.writePiTranscript(SessionTranscript(sessionID: id, messages: [prompt, answer], recap: Recap(lastPrompt: title, lastReply: reply, answeredAt: at(day, 180))))
         try await store.setStatus(task.id, .done)
     }
 
@@ -111,9 +111,9 @@ nonisolated struct Seeded: Sendable {
     let author: CueAuthor
     let text: String
     let at: Date
-    var tools: [PiChatMessage.Tools.Item] = []
+    var tools: [ChatMessage.Tools.Item] = []
 
-    init(_ author: CueAuthor, _ text: String, _ at: Date, tools: [PiChatMessage.Tools.Item] = []) {
+    init(_ author: CueAuthor, _ text: String, _ at: Date, tools: [ChatMessage.Tools.Item] = []) {
         (self.author, self.text, self.at, self.tools) = (author, text, at, tools)
     }
 }
@@ -123,7 +123,7 @@ extension CueStore {
     func seed(_ log: [Seeded]) throws {
         try write {
             for entry in log {
-                let tools = entry.tools.isEmpty ? nil : PiChatMessage.Tools(steps: entry.tools.count, items: entry.tools)
+                let tools = entry.tools.isEmpty ? nil : ChatMessage.Tools(steps: entry.tools.count, items: entry.tools)
                 let message = try insertCueMessage(entry.author, text: entry.text, tools: tools, at: entry.at)
                 if entry.author == .you { try db.run("UPDATE cueMessages SET deliveredAt = ? WHERE id = ?", [entry.at, message.id]) }
             }
@@ -141,7 +141,7 @@ enum DaysScript {
 
     struct Routine {
         let ask: String, reply: String
-        let step: PiChatMessage.Tools.Item
+        let step: ChatMessage.Tools.Item
     }
 
     static let routine: [Routine] = ([
@@ -159,7 +159,7 @@ enum DaysScript {
         ("搜索变慢是怎么回事", "索引没覆盖新加的字段，会话加了索引，查询从 1.2 秒降到 80 毫秒。", "搜索变慢"),
         ("给通知中心加个全部已读", "加好了，测试过了，已 done。", "通知中心全部已读"),
         ("把日志保留期改成 30 天", "改了，旧日志下次清理时按新规则删。", "日志保留期"),
-    ] as [(String, String, String)]).map { Routine(ask: $0.0, reply: $0.1, step: PiChatMessage.Tools.Item(kind: .talk, target: "\($0.2)：让会话跟进")) }
+    ] as [(String, String, String)]).map { Routine(ask: $0.0, reply: $0.1, step: ChatMessage.Tools.Item(kind: .talk, target: "\($0.2)：让会话跟进")) }
 
     static let learned = [
         "演示项目的测试用 vitest，跑全量约 40 秒", "官网用 Astro，部署在 Cloudflare Pages", "CI 跑在自建 runner 上，周末偶尔排队",

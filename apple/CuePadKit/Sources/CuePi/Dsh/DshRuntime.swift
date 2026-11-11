@@ -12,11 +12,11 @@ import Foundation
 /// - 开会话时要的模型在起进程时就给（插件的 `CUEPAD_MODEL`）：dsh-acp 握手时按它判定收不收图，之后换到能看图的模型也一样。
 @MainActor
 public final class DshRuntime: AgentRuntime {
-    private let bridge: PiBridge
+    private let bridge: Bridge
     private let host: ACPHost
 
     public init(
-        bridge: PiBridge, paths: AgentPaths, dsh: @escaping @Sendable () async -> URL?,
+        bridge: Bridge, paths: AgentPaths, dsh: @escaping @Sendable () async -> URL?,
         locate: @escaping @Sendable () async -> ExecutableLocator = { await .system }, timing: Timing = .system
     ) {
         host = ACPHost(.dsh, bridge: bridge, timing: timing, launching: { model in
@@ -34,14 +34,14 @@ public final class DshRuntime: AgentRuntime {
     public func stop() -> @concurrent @Sendable () async -> Void { host.stop() }
 
     public func open(
-        in directory: URL, launchToken: String, name: String?, model: PiModelKey?, thinking: PiThinkingLevel?
-    ) async throws -> PiSession.ID {
+        in directory: URL, launchToken: String, name: String?, model: ModelKey?, thinking: ThinkingLevel?
+    ) async throws -> Session.ID {
         // 模型在起进程时给，不再经 `configure` 换：dsh-acp 握手时按开会话的模型判定收不收图
         let id = try await host.open(in: directory, launchToken: launchToken, model: model.map(AgentKind.dsh.modelRef))
         return try await configure(opened: id, name: name, model: nil, thinking: thinking, on: bridge)
     }
 
-    public func resume(_ session: IndexedSession) async throws -> PiSession.ID { try await host.resume(session) }
+    public func resume(_ session: IndexedSession) async throws -> Session.ID { try await host.resume(session) }
 
     /// 会话文件：`<存储根>/<工作目录的键>/<会话 id>/session.v4.jsonl`，键照 dsh 的 `projectKey`（分隔符成 `-`，其余不安全的字成 `~XXXX`，
     /// 按 UTF-16 码元，至多 251 个，前后各加 `--`）。
@@ -82,7 +82,7 @@ struct DshDialect: ACPDialect {
     }
 
     /// 插件回这句消息的 id，它被一轮收下时报 `_cuepad/claimed`（`dsh-cuepad.mjs`）。
-    @MainActor func steer(_ text: String, images: [PiImage], session: String, on connection: ACPConnection) async throws -> ACPSteer? {
+    @MainActor func steer(_ text: String, images: [MessageImage], session: String, on connection: ACPConnection) async throws -> ACPSteer? {
         let images: [JSONValue] = images.map { ["mimeType": .string($0.mimeType), "data": .string($0.data.base64EncodedString())] }
         do {
             let steered = try await connection.call("_cuepad/steer", ["sessionId": .string(session), "text": .string(text), "images": .array(images)])

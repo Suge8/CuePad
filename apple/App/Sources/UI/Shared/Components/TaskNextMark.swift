@@ -22,7 +22,7 @@ struct TaskNextMark: View {
         HStack(spacing: Spacing.glyph) {
             switch next {
             case .agent(let shown, let session):
-                PiStateDot(shown: shown, size: Self.dot).relaySpot(session: session.sessionID, row: .task)
+                StateDot(shown: shown, size: Self.dot).relaySpot(session: session.sessionID, row: .task)
                 if shown.speaksOnTask { Text(shown.label).foregroundStyle(shown.labelTint(palette)) }
             case .start:
                 Image(.start).font(Self.glyph)

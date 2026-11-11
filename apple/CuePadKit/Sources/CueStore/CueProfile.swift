@@ -6,7 +6,7 @@ public struct CueProfile: Equatable, Sendable {
   public var runtime: Open<AgentKind>
   public var model: String?
   /// 全新的设置是低（大脑默认要快）；nil 是交给运行时取档。
-  public var effort: Open<PiThinkingLevel>?
+  public var effort: Open<ThinkingLevel>?
   public var fast: Bool
   public var voice: Open<CueVoice>
   public var enabledAt: Date?
@@ -17,7 +17,7 @@ public struct CueProfile: Equatable, Sendable {
 
   public var callVoice: CueVoice { voice.known ?? .default }
 
-  /// 唯一规则：启用了，运行它的那台 Mac 在线，大脑也没停在起不来（`state` 不是出错）。值班时会话等的回答 CuePad 答得了就归 Cue，不算等你（`PiSessionState.asksYou`）。
+  /// 唯一规则：启用了，运行它的那台 Mac 在线，大脑也没停在起不来（`state` 不是出错）。值班时会话等的回答 CuePad 答得了就归 Cue，不算等你（`SessionState.asksYou`）。
   public func onDuty(_ state: CueState?, hostOnline: Bool) -> Bool { activeHost != nil && hostOnline && state?.state != .known(.error) }
 
   public static let defaultName = "Cue"
@@ -27,7 +27,7 @@ public struct CueProfile: Equatable, Sendable {
 
   public init(
     name: String = CueProfile.defaultName, hostID: String? = nil, runtime: Open<AgentKind> = .known(.pi), model: String? = nil,
-    effort: Open<PiThinkingLevel>? = .known(.low), fast: Bool = false, voice: Open<CueVoice> = .known(.default), enabledAt: Date? = nil, modifiedAt: Date = .now
+    effort: Open<ThinkingLevel>? = .known(.low), fast: Bool = false, voice: Open<CueVoice> = .known(.default), enabledAt: Date? = nil, modifiedAt: Date = .now
   ) {
     self.name = name
     self.hostID = hostID

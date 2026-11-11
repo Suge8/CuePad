@@ -39,11 +39,11 @@ public enum CueStoreError: Error, Equatable {
   case notATask
   /// 预览的文件不存在、读不了或不是文件（参数是它的路径）。
   case previewUnreadable(String)
-  /// 预览的文件超过 `PiPreview.maxBytes`（参数是它的路径与字节数）。
+  /// 预览的文件超过 `PreviewItem.maxBytes`（参数是它的路径与字节数）。
   case previewTooLarge(String, bytes: Int)
   /// 预览不支持这种文件（参数是扩展名，空为没有扩展名）。
   case previewUnsupported(String)
-  /// 发到手机的一份标题不合 `PiPreview.titleRule`（参数是文件名与哪里不合）。
+  /// 发到手机的一份标题不合 `PreviewItem.titleRule`（参数是文件名与哪里不合）。
   case previewTitle(String, PreviewTitleProblem)
   /// 资料库文件只能读（多半是 Agent 的沙箱挡住了写入）。
   case readOnlyLibrary
@@ -73,9 +73,9 @@ public enum CueStoreError: Error, Equatable {
   case cannotStop(String)
   /// 会话还在用：没做完的事绑着它，或有话正送进去（参数是会话名）。
   case sessionInUse(String)
-  /// 会话在跑，Cue 这会儿说不了（参数是会话名与原因）：会打断他发起的那一轮，或停不下这一轮（`PiSessionState.speakBlocked`）。
+  /// 会话在跑，Cue 这会儿说不了（参数是会话名与原因）：会打断他发起的那一轮，或停不下这一轮（`SessionState.speakBlocked`）。
   case cannotSpeakNow(String, String)
-  /// 会话所在的 Mac 此刻不在线，对它说话、停止都送不到（参数是会话名与那台 Mac 的名字，`PiSessionState.offlineMac`）。
+  /// 会话所在的 Mac 此刻不在线，对它说话、停止都送不到（参数是会话名与那台 Mac 的名字，`SessionState.offlineMac`）。
   case macOffline(String, String)
   /// 会话此刻在做什么还没确认：那台 Mac 这次开机后没报过它、或报的状态这个版本不认识（参数是会话名）。
   case sessionUnconfirmed(String)
@@ -139,9 +139,9 @@ extension CueStoreError: LocalizedError {
     case .notATask: String(localized: "这是灵感，没有状态：要做的事另建任务，或把这条灵感接进一条任务")
     case .previewUnreadable(let path): "读不了这个文件（不存在、不是文件或没有权限）：\(path)"
     case .previewTooLarge(let path, let bytes):
-      "文件 \((Double(bytes) / 1_000_000).formatted(.number.precision(.fractionLength(1)))) MB，超过单个上限 \(PiPreview.maxBytes / 1_000_000) MB：\(path)。压缩或裁短后再发"
-    case .previewUnsupported(let ext): "不支持预览\(ext.isEmpty ? "没有扩展名的文件" : " .\(ext) 文件")，可发：\(PiPreviewKind.supportedList)"
-    case .previewTitle(let name, let problem): "\(name) 的标题\(problem.phrase)。标题要\(PiPreview.titleRule)，如“改后：会话列表的分组标题”"
+      "文件 \((Double(bytes) / 1_000_000).formatted(.number.precision(.fractionLength(1)))) MB，超过单个上限 \(PreviewItem.maxBytes / 1_000_000) MB：\(path)。压缩或裁短后再发"
+    case .previewUnsupported(let ext): "不支持预览\(ext.isEmpty ? "没有扩展名的文件" : " .\(ext) 文件")，可发：\(PreviewKind.supportedList)"
+    case .previewTitle(let name, let problem): "\(name) 的标题\(problem.phrase)。标题要\(PreviewItem.titleRule)，如“改后：会话列表的分组标题”"
     case .readOnlyLibrary: String(localized: "资料库是只读的，写不进去")
     case .noSession(let title): "「\(title)」还没有会话：先 start 开工，它的正文会作为第一句"
     case .alreadyStarted(let title): "「\(title)」已有会话：用 say 对它说话"

@@ -26,7 +26,7 @@ nonisolated enum VoiceEndReason: String, Codable, Sendable {
 }
 
 /// Mac 唯一 VoiceCall 的只读投影。处理/说来自 Mac 的控制事件，不用手机音量猜测；结束不推断业务已撤销或执行已停止。
-/// 正文和持久化业务状态仍从 CueMessage/PiSessionState 读取，信令不复制聊天历史。
+/// 正文和持久化业务状态仍从 CueMessage/SessionState 读取，信令不复制聊天历史。
 nonisolated struct VoiceCallProjection: Equatable, Codable, Sendable {
     enum Phase: Equatable, Codable, Sendable {
         case connecting, listening, processing, speaking, closing

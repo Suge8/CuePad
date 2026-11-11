@@ -5,7 +5,7 @@ import SwiftUI
 /// 状态只是这一行界面上的过渡，完成与否以 Store 为准：写入落地或别处改了，这一行回到 `idle`。
 struct TaskCheck: Equatable {
     enum Phase { case idle, pending, committed }
-    enum Ask: Equatable { case steps, agent(PiSessionState) }
+    enum Ask: Equatable { case steps, agent(SessionState) }
 
     var phase = Phase.idle
     var ask: Ask?
@@ -17,7 +17,7 @@ struct TaskCheck: Equatable {
 
 extension Workspace {
     /// `busy`：在做或在等你的会话（`TaskNext.busySession`），完成前先问它。
-    func tap(_ check: Binding<TaskCheck>, task: Card, subtasks: TaskProgress?, busy: PiSessionState?) {
+    func tap(_ check: Binding<TaskCheck>, task: Card, subtasks: TaskProgress?, busy: SessionState?) {
         if task.status == .done {
             let id = task.id
             return attempt { try await self.reopen(id) }
@@ -100,7 +100,7 @@ private struct TaskCheckFlow: ViewModifier {
         .onChange(of: task?.completedAt) { check.phase = .idle }
     }
 
-    private var busy: PiSessionState? { if case .agent(let session) = check.ask { session } else { nil } }
+    private var busy: SessionState? { if case .agent(let session) = check.ask { session } else { nil } }
 
     private func asking(_ ask: TaskCheck.Ask) -> Binding<Bool> {
         Binding(get: { check.ask == ask }, set: { if !$0, check.ask == ask { check.ask = nil } })

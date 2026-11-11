@@ -30,11 +30,11 @@ extension Workspace {
             readings: voice.replies.map { voiceReading($0, call: voice) })
     }
 
-    var stoppableVoiceExecutions: [PiSessionListItem] {
+    var stoppableVoiceExecutions: [SessionListItem] {
         voiceExecutions.filter { $0.state.canStop && !voiceStopping($0) }
     }
 
-    private func voiceStopping(_ execution: PiSessionListItem) -> Bool {
+    private func voiceStopping(_ execution: SessionListItem) -> Bool {
         MacDelivery.stopping(execution.state, deliveries: [execution.delivery].compactMap(\.self), at: services.speech)
     }
 

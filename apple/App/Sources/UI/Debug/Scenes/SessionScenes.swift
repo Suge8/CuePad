@@ -4,7 +4,7 @@ import Foundation
 
 extension DebugSceneEntry {
     /// session：整页打开 `-CuePadSession <会话名>`（iOS 默认 homepage；`-CuePadNotify YES` 走点锁屏通知的那条路进去；`-CuePadStream YES` 像真 Agent 一轮一轮追加）。
-    /// 配 `-CuePadDemo YES` 写入 Mac 同步来的演示会话（`DebugScene+PiDemo.swift`）；长对话见 `DebugScene+LongChat.swift`。
+    /// 配 `-CuePadDemo YES` 写入 Mac 同步来的演示会话（`DebugScene+SessionDemo.swift`）；长对话见 `DebugScene+LongChat.swift`。
     /// send（iOS）：从卡片"发到 Mac"先选会话；给了 `-CuePadSession` 就当已选好，直接进它的近况页（卡片预填在回复框里）。
     static let session = DebugSceneEntry("session", "send") { workspace, project in
         try await DebugScene.openSession(workspace, project: project)

@@ -14,7 +14,7 @@ extension RealCodexHostedTests {
     private func dispatch(
         _ rig: CodexRig, _ children: [String], parent: FakeGate, then: FakeReply = .say("DISPATCHED"),
         child: @escaping @Sendable (FakeRequest) -> FakeReply
-    ) async throws -> PiSession.ID {
+    ) async throws -> Session.ID {
         let fault = try #require(rig.readFault)
         let prompt = "Spawn subagents: \(children.joined(separator: ", "))."
         rig.model.on("Child task: ", reply: child)
@@ -26,13 +26,13 @@ extension RealCodexHostedTests {
         }
         rig.model.on({ $0.said.contains { $0.contains(prompt) } && $0.messages.contains { $0.text.contains("BANANA") } }) { _ in .say("BANANA") }
         let id = try await open(rig, "token-settle")
-        try await rig.bridge.send(PiMessage(text: prompt), to: id)
+        try await rig.bridge.send(SessionMessage(text: prompt), to: id)
         try await parent.reached()
         try await eventually("子线程的第一条推送都读不到") { fault.threads("fail").count == children.count }
         return id
     }
 
-    private func owner(_ rig: CodexRig, _ id: PiSession.ID, thread: String) -> CodexRuntime.Owner? {
+    private func owner(_ rig: CodexRig, _ id: Session.ID, thread: String) -> CodexRuntime.Owner? {
         rig.runtime.threads["\(thread).\(rig.runtime.tracked[id]?.pid ?? 0)"]
     }
 
@@ -76,7 +76,7 @@ extension RealCodexHostedTests {
             try await eventually("歇下前的再问挂住") { rig.runtime.tracked[id]?.ending != nil && fault.threads("hold") == [child] }
             #expect(rig.bridge.session(id: id)?.state == .thinking)
 
-            try await rig.bridge.send(PiMessage(text: "Reply with the single word KIWI."), to: id)
+            try await rig.bridge.send(SessionMessage(text: "Reply with the single word KIWI."), to: id)
             try await eventually("新一轮开始，再问收场") {
                 if case .asking = owner(rig, id, thread: child) { return false }
                 return rig.runtime.tracked[id]?.ending == nil

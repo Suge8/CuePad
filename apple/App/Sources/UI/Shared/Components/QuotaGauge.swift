@@ -31,7 +31,7 @@ struct QuotaDetail: View {
                     }
                 }
                 if let updated = meters.filter({ $0.status == nil }).compactMap(\.updatedAt).min() {
-                    LiveText(style: PiClock.ago(updated).live(.list)) { Text("\($0)更新") }
+                    LiveText(style: SessionClock.ago(updated).live(.list)) { Text("\($0)更新") }
                         .font(Typography.caption).foregroundStyle(palette.ink3)
                         .help(updated.formatted(date: .abbreviated, time: .standard))
                 }
@@ -112,7 +112,7 @@ private struct QuotaAccount: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.item) {
             HStack(spacing: Self.iconGap) {
-                PiProvider(id: meter.provider).mark?.image
+                Provider(id: meter.provider).mark?.image
                     .foregroundStyle(palette.ink2)
                     .frame(width: iconColumn)
                 MetaLine(gap: Spacing.item) { title } meta: { status }
@@ -147,7 +147,7 @@ private struct QuotaAccount: View {
     @ViewBuilder private var status: some View {
         switch meter.status {
         case .stale(let observedAt):
-            LiveText(style: PiClock.ago(observedAt).live(.list)) { Text($0) }
+            LiveText(style: SessionClock.ago(observedAt).live(.list)) { Text($0) }
                 .font(Typography.meta).foregroundStyle(palette.ink2)
                 .accessibilityLabel(Text("上次观测于 \(observedAt, format: .dateTime)"))
         case .failed: Text("查询失败").font(Typography.meta).foregroundStyle(palette.failure)
@@ -271,11 +271,11 @@ struct QuotaRings: View {
                 Text("额度").foregroundStyle(palette.ink3)
                 Spacer(minLength: 0)
             } else if rings.isEmpty { Text("额度").font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink3).fixedSize() }
-            ForEach(rings, id: \.id) { ModelBadge(mark: PiProvider(id: $0.provider).mark, binding: $0.window) }
+            ForEach(rings, id: \.id) { ModelBadge(mark: Provider(id: $0.provider).mark, binding: $0.window) }
         }
         .foregroundStyle(palette.ink2)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("额度")
-        .accessibilityValue(Dotted(rings.map { String(localized: "\(PiProvider(id: $0.provider).account) \($0.window.name)剩 \($0.window.percent)") }).spoken)
+        .accessibilityValue(Dotted(rings.map { String(localized: "\(Provider(id: $0.provider).account) \($0.window.name)剩 \($0.window.percent)") }).spoken)
     }
 }

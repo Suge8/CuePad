@@ -83,15 +83,15 @@ import Testing
     let server = FakeUploader()
     let sender = RecordSender(uploader: server, coordinator: rig.coordinator)
     await sender.start()
-    let recorder = PiStateRecorder(store: rig.store, hostID: "mac", timing: ManualTiming().timing)  // 节流的定时器不会自己到点
+    let recorder = StateRecorder(store: rig.store, hostID: "mac", timing: ManualTiming().timing)  // 节流的定时器不会自己到点
     try await recorder.update(sessionID: "s1", state: .thinking, title: "修登录")
-    let state = PiSessionState.recordID(sessionID: "s1").uuidString.lowercased()
+    let state = SessionState.recordID(sessionID: "s1").uuidString.lowercased()
     try await server.uploaded(state)
     try await recorder.update(sessionID: "s1", state: .tool, detail: "bash")  // 挂起的细节
     await sender.flush()  // 发送者闲下来：回答从提交触发开始算
 
-    let reply = PiChatMessage(sessionID: "s1", entryID: "a1", seq: 1, role: .pi, text: "改好了，测试全过", at: .now)
-    try await rig.store.writePiTranscript(PiTranscript(sessionID: "s1", messages: [reply], recap: PiRecap(lastPrompt: "修登录", lastReply: "改好了，测试全过")))
+    let reply = ChatMessage(sessionID: "s1", entryID: "a1", seq: 1, role: .pi, text: "改好了，测试全过", at: .now)
+    try await rig.store.writePiTranscript(SessionTranscript(sessionID: "s1", messages: [reply], recap: Recap(lastPrompt: "修登录", lastReply: "改好了，测试全过")))
     let message = try #require(try RawDB(rig.fixture.url).rows("SELECT id FROM piMessages").first?[0])
     try await server.waitUntil("答复与会话状态再次出现在上传里") { batches in
       batches.contains { $0.saves.contains(message) } && batches.filter { $0.saves.contains(state) }.count >= 2

@@ -16,7 +16,7 @@ extension RealClaudeHostTests {
             testbed.on("茶叶史", .held(gate, then: .say("LATE")))
             testbed.on("只回复 AFTER", .say("AFTER"))
 
-            let writing = Task { try await testbed.bridge.send(PiMessage(text: "写一篇两千字的茶叶史"), to: id) }
+            let writing = Task { try await testbed.bridge.send(SessionMessage(text: "写一篇两千字的茶叶史"), to: id) }
             try await gate.reached()
             try await eventually("在跑") { testbed.bridge.session(id: id)?.state.isWorking == true }
             try await testbed.bridge.abort(id)
@@ -25,7 +25,7 @@ extension RealClaudeHostTests {
             try await eventually("假模型被断开") { gate.waiting == 0 }
 
             let after = Date()
-            try await testbed.bridge.send(PiMessage(text: "只回复 AFTER"), to: id)
+            try await testbed.bridge.send(SessionMessage(text: "只回复 AFTER"), to: id)
             try await testbed.waitForTurn(id, since: after)
             try await testbed.waitForDraftLanded(id)
             let said = try testbed.transcript(testbed.bridge.session(id: id)?.sessionFile).messages
@@ -42,7 +42,7 @@ extension RealClaudeHostTests {
             testbed.on("说一半", .stream(["前半句，", "后半句"], until: gate))
 
             let after = Date()
-            let sending = Task { try await testbed.bridge.send(PiMessage(text: "说一半"), to: id) }
+            let sending = Task { try await testbed.bridge.send(SessionMessage(text: "说一半"), to: id) }
             try await gate.reached()
             try await eventually("在跑") { testbed.bridge.session(id: id)?.state.isWorking == true }
             // 会话文件这时可能还没写出来
@@ -65,14 +65,14 @@ extension RealClaudeHostTests {
             testbed.on("SLEEP") { $0.step == 0 ? .call("Bash", ["command": slowTool(pidFile, never), "description": "slow"]) : .say("SLEPT") }
             testbed.on("只回复 AFTER", .say("AFTER"))
 
-            try await testbed.bridge.send(PiMessage(text: "SLEEP now"), to: id)
+            try await testbed.bridge.send(SessionMessage(text: "SLEEP now"), to: id)
             try await eventually("在跑命令") { testbed.bridge.session(id: id)?.state == .tool && toolPid(pidFile) != nil }
             try await testbed.bridge.abort(id)
             try await eventually("停下") { testbed.bridge.session(id: id)?.state == .settled }
             try await eventually("命令的进程退了") { kill(toolPid(pidFile)!, 0) != 0 }
 
             let after = Date()
-            try await testbed.bridge.send(PiMessage(text: "只回复 AFTER"), to: id)
+            try await testbed.bridge.send(SessionMessage(text: "只回复 AFTER"), to: id)
             try await testbed.waitForTurn(id, since: after)
             try await testbed.waitForDraftLanded(id)
             #expect(try testbed.transcript(testbed.bridge.session(id: id)?.sessionFile).recap.lastReply == "AFTER")
@@ -90,7 +90,7 @@ extension RealClaudeHostTests {
             testbed.on("ZEBRA") { $0.step == 0 ? .call("Bash", ["command": command, "description": "zebra"]) : .say("ZEBRA") }
             testbed.on("只回复 MANGO", .say("MANGO"))
 
-            try await testbed.bridge.send(PiMessage(text: "ZEBRA go"), to: id)
+            try await testbed.bridge.send(SessionMessage(text: "ZEBRA go"), to: id)
             if toolRunning {
                 try await eventually("在跑命令") { testbed.bridge.session(id: id)?.detail?.contains("time.sleep(100") == true && toolPid(pidFile) != nil }
             } else {
@@ -98,7 +98,7 @@ extension RealClaudeHostTests {
             }
             let delivery = UUID().uuidString
             let asked = Date()
-            try await testbed.bridge.send(PiMessage(text: "只回复 MANGO", deliveryID: delivery), to: id)
+            try await testbed.bridge.send(SessionMessage(text: "只回复 MANGO", deliveryID: delivery), to: id)
             try await testbed.waitForTurn(id, since: asked)
             try await testbed.waitForDraftLanded(id)
 
@@ -108,7 +108,7 @@ extension RealClaudeHostTests {
             #expect(!FileManager.default.fileExists(atPath: never.path))
             let said = try testbed.transcript(session.sessionFile).messages
             let mango = try #require(said.firstIndex { $0.deliveryID == UUID(uuidString: delivery) })
-            #expect(said[..<mango].contains { $0.text == PiNotice.stopped.rawValue }, "\(said.map(\.text))")
+            #expect(said[..<mango].contains { $0.text == ChatNotice.stopped.rawValue }, "\(said.map(\.text))")
             #expect(said.last?.text.contains("MANGO") == true, "\(said.map(\.text))")
         }
     }

@@ -49,38 +49,38 @@ extension AppServices {
     }
 
     /// 问题不能从这里作答时抛 `SendError.unanswerable`。
-    func answer(_ value: PiAnswerValue, to session: PiSessionState) async throws -> DeliveryRequest {
+    func answer(_ value: AnswerValue, to session: SessionState) async throws -> DeliveryRequest {
         guard let question = session.question, question.isAnswerable, let promptID = question.promptID else {
             throw SendError.unanswerable
         }
         return uploaded(try await store.requestAnswer(
-            PiAnswer(promptID: promptID, value: value, question: question.text), to: session.target,
+            Answer(promptID: promptID, value: value, question: question.text), to: session.target,
             on: session.hostID))
     }
 
-    func configure(_ config: PiConfig, for session: PiSessionState) async throws -> DeliveryRequest {
+    func configure(_ config: SessionConfig, for session: SessionState) async throws -> DeliveryRequest {
         uploaded(try await store.requestConfig(config, to: session.target, on: session.hostID))
     }
 
     /// 新名为空时抛 `CueStoreError.blankDeliveryContent`。
     @discardableResult
-    func rename(_ session: PiSessionState, to name: String) async throws -> DeliveryRequest {
-        guard let name = PiRename.clean(name) else { throw CueStoreError.blankDeliveryContent }
-        return try await configure(PiConfig(name: name), for: session)
+    func rename(_ session: SessionState, to name: String) async throws -> DeliveryRequest {
+        guard let name = SessionRename.clean(name) else { throw CueStoreError.blankDeliveryContent }
+        return try await configure(SessionConfig(name: name), for: session)
     }
 
     /// 会话记录与对话都留着，之后再给它发消息会在后台恢复；已经结束的会话也算成功。
-    func end(_ session: PiSessionState) async throws -> DeliveryRequest {
+    func end(_ session: SessionState) async throws -> DeliveryRequest {
         uploaded(try await store.requestEnd(of: session.target, on: session.hostID))
     }
 
     /// 只停指挥官自己这一轮，子代理照常跑；已经结束或空闲的会话也算成功。
-    func stop(_ session: PiSessionState) async throws -> DeliveryRequest {
+    func stop(_ session: SessionState) async throws -> DeliveryRequest {
         uploaded(try await store.requestStop(of: session.target, on: session.hostID))
     }
 
     /// 不补发用户消息；还在路上时再点不会再发一条（Store 去重）。
-    func retry(_ session: PiSessionState) async throws -> DeliveryRequest {
+    func retry(_ session: SessionState) async throws -> DeliveryRequest {
         uploaded(try await store.requestRetry(of: session.target, on: session.hostID))
     }
 
@@ -89,18 +89,18 @@ extension AppServices {
     /// `intent`：首次、安全替换或确认后重复，由 Store 在事务里按任务已有请求核对。
     func launchSession(
         in project: UUID, prompt: String?, title: String, on host: String, card: UUID?, agent: AgentKind,
-        model: PiModelKey? = nil, thinking: PiThinkingLevel? = nil, fast: Bool = false, intent: SessionLaunchIntent = .new
+        model: ModelKey? = nil, thinking: ThinkingLevel? = nil, fast: Bool = false, intent: SessionLaunchIntent = .new
     ) async throws -> SessionLaunch {
         let token = UUID().uuidString
         let request = uploaded(try await store.requestLaunch(
-            PiLaunch(project: project, prompt: prompt, token: token, agent: agent, model: model, thinking: thinking, fast: fast),
+            LaunchRequest(project: project, prompt: prompt, token: token, agent: agent, model: model, thinking: thinking, fast: fast),
             title: title, on: host, card: card, intent: intent))
         if case .replacing(let previous) = intent { Task { await upload(previous, deleted: true) } }
         return SessionLaunch(request: request.id, token: token)
     }
 
-    /// `PiBind.folder` 为 nil 是解除；手机没有完整路径，由那台 Mac 解析并写本机的目录绑定。
-    func requestBind(_ bind: PiBind, title: String, on host: String) async throws -> DeliveryRequest {
+    /// `BindRequest.folder` 为 nil 是解除；手机没有完整路径，由那台 Mac 解析并写本机的目录绑定。
+    func requestBind(_ bind: BindRequest, title: String, on host: String) async throws -> DeliveryRequest {
         uploaded(try await store.requestBind(bind, title: title, on: host))
     }
 
@@ -112,11 +112,11 @@ extension AppServices {
         uploaded(try await store.requestLibraryEdit(edit, title: title, on: host))
     }
 
-    func requestTranscript(of session: PiSessionState) async throws -> DeliveryRequest {
+    func requestTranscript(of session: SessionState) async throws -> DeliveryRequest {
         uploaded(try await store.requestTranscript(of: session))
     }
 }
 
-nonisolated extension PiSessionState {
+nonisolated extension SessionState {
     var target: SendTarget { SendTarget(kind: .piSession, name: title, ref: sessionID) }
 }

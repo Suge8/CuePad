@@ -31,8 +31,8 @@ import Testing
     let longAgo = now.addingTimeInterval(-30 * 86_400)
     for id in ["quiet", "active"] {
       try await store.upsertPiSession(IndexedSession(id: id, path: "/s/\(id).jsonl", cwd: "/w", lastActivityAt: id == "quiet" ? longAgo : now.addingTimeInterval(9 * 86_400)), host: "mac")
-      try await store.writePiTranscript(PiTranscript(
-        sessionID: id, messages: [PiChatMessage(sessionID: id, entryID: "e", seq: 1, role: .user, text: "x", at: longAgo)], recap: PiRecap()))
+      try await store.writePiTranscript(SessionTranscript(
+        sessionID: id, messages: [ChatMessage(sessionID: id, entryID: "e", seq: 1, role: .user, text: "x", at: longAgo)], recap: Recap()))
     }
     let shared = try await store.addPreviews([file("s.txt", "shared")].map { (url: $0, title: $0.lastPathComponent) }, sessionID: "quiet")[0].preview
     _ = try await store.addPreviews([file("s.txt", "shared")].map { (url: $0, title: $0.lastPathComponent) }, sessionID: "active")

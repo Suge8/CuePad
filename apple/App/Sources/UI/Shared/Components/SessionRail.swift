@@ -3,7 +3,7 @@ import SwiftUI
 
 /// 分组格会话条：等你在上面、推进中在下面独立滚。尺寸只影响排版，三端共用数据、注意顺序与动画预算。
 /// 手机（`phone`，60 点竖条）：每组一张纸（列的纸色），格铺满纸，在默认字号、650 点高内完整放下十个会话。
-/// 宽屏（`wide`）：不铺纸，组就是会话条那一块上的一段行，靠组头与间距分开；每个会话一行（`RailLine`），行首那一列是会话的状态标（`PiStateDot`），名字在它右边。
+/// 宽屏（`wide`）：不铺纸，组就是会话条那一块上的一段行，靠组头与间距分开；每个会话一行（`RailLine`），行首那一列是会话的状态标（`StateDot`），名字在它右边。
 /// 组头是小号淡字组名加着色计数，左沿同行首那一列、字贴着下沿，离它那一组近、离上一组远。
 /// 等你组每行两行高（`Chrome.tallRow`），推进中一行一种高（`Chrome.row`），长相在 `SessionRailCell`。
 /// 等你过多时自身也能滚、最多占一半可用高度，不能把推进中或待回复挤到再也点不到。一组多到要滚时下沿淡出一截（`Chrome.scrollFade`），看得出下面还有；
@@ -26,8 +26,8 @@ struct SessionRail: View {
     let data: SessionRailData
     let form: Form
     var marked: Set<String> = []
-    let pulse: (PiSessionListItem) -> BoardPulse
-    let open: (PiSessionState, Opening) -> Void
+    let pulse: (SessionListItem) -> BoardPulse
+    let open: (SessionState, Opening) -> Void
 
     var body: some View {
         // 常驻的栏同页头限制可见字号；全文留在读屏标签，不能让大字把组头计数挤成省略号。
@@ -40,7 +40,7 @@ private struct SessionRailContent: View {
     let rows: SessionRailRows
     let form: SessionRail.Form
     let marked: Set<String>
-    let open: (PiSessionState, SessionRail.Opening) -> Void
+    let open: (SessionState, SessionRail.Opening) -> Void
     @Environment(\.palette) private var palette
     @ScaledMetric(relativeTo: .caption2) private var tileHeight: CGFloat = 52
 

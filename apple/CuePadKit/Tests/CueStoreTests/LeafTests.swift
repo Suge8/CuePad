@@ -22,7 +22,7 @@ import Testing
   }
 
   @Test func 交给其他Agent的会话_只做它做得到的() async throws {
-    let recorder = PiStateRecorder(store: store, hostID: "mac")
+    let recorder = StateRecorder(store: store, hostID: "mac")
     let claude = try await store.createTask("修乱序")
     let first = try await store.createTask("复现", under: claude.id)
     try await store.linkCard(first.id, toSession: "claude-1")
@@ -45,7 +45,7 @@ import Testing
     let project = try await store.createProject(name: "圆桌", color: "#111")
     let first = try await store.createTask("修乱序", in: project.id)
     let second = try await store.createTask("改文案", in: project.id)
-    let recorder = PiStateRecorder(store: store, hostID: "mac")
+    let recorder = StateRecorder(store: store, hostID: "mac")
     for session in ["s1", "s2", "s3"] { try await recorder.update(sessionID: session, state: .settled, projectID: project.id) }
     try await store.bindSession("s1", to: first.id)
     try await store.bindSession("s1", to: second.id)
@@ -69,8 +69,8 @@ import Testing
   @Test func 开新会话后又改绑_不被新会话抢回() async throws {
     let project = try await store.createProject(name: "圆桌", color: "#111")
     let task = try await store.createTask("修乱序", in: project.id)
-    let recorder = PiStateRecorder(store: store, hostID: "mac-a")
-    _ = try await store.requestLaunch(PiLaunch(project: project.id, prompt: "修乱序", token: "t-new"), title: "修乱序", on: "mac-a", card: task.id)
+    let recorder = StateRecorder(store: store, hostID: "mac-a")
+    _ = try await store.requestLaunch(LaunchRequest(project: project.id, prompt: "修乱序", token: "t-new"), title: "修乱序", on: "mac-a", card: task.id)
     try await recorder.update(sessionID: "s-new", state: .thinking, title: "修乱序", launchToken: "t-new")
     #expect(try await store.card(task.id)?.piSessionID == "s-new")
 
@@ -88,7 +88,7 @@ import Testing
     let taken = try await store.createTask("已有会话", in: project.id)
     let finished = try await store.createTask("做完了", in: project.id)
     _ = try await store.createTask("别的项目")
-    try await PiStateRecorder(store: store, hostID: "mac").update(sessionID: "s1", state: .settled, projectID: project.id)
+    try await StateRecorder(store: store, hostID: "mac").update(sessionID: "s1", state: .settled, projectID: project.id)
     try await store.bindSession("s1", to: taken.id)
     try await store.setStatus(finished.id, .done)
 

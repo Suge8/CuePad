@@ -3,11 +3,11 @@ import CuePi
 import CueStore
 import SwiftUI
 
-extension PiSessionState {
+extension SessionState {
     /// 状态记录按节流写，会落后几秒，界面读这个。摘要（问与答、这一轮已做完的步骤）不在桥上，取同步记录里的。正自己换上新扩展的（`upgrading`）桥上读不到状态，为 nil：界面照同步记录里最后一次读到的样子。
-    static func live(_ session: CuePi.PiSession, hostID: String, projectID: UUID?, recap: PiRecap?) -> PiSessionState? {
+    static func live(_ session: CuePi.Session, hostID: String, projectID: UUID?, recap: Recap?) -> SessionState? {
         guard !session.upgrading else { return nil }
-        return PiSessionState(
+        return SessionState(
             id: recordID(sessionID: session.sessionID), sessionID: session.sessionID, hostID: hostID, title: session.displayName,
             projectID: projectID, state: .known(session.state), detail: session.detail, folder: session.cwd.lastPathComponent,
             lastPrompt: recap?.lastPrompt, lastReply: recap?.lastReply, question: session.question, notify: nil,
@@ -18,19 +18,19 @@ extension PiSessionState {
     }
 }
 
-extension CuePi.PiSession {
+extension CuePi.Session {
     /// 跳转至少要激活终端应用，所以后台托管的与没报终端的（OpenCode 的服务）没有。
     var canJump: Bool { !hosted && terminal.bundleID != nil }
 }
 
 extension SessionDigest {
     static func read(sessionID: String, from store: isolated CueStore) throws -> SessionDigest {
-        try read(PiSessionState.recordID(sessionID: sessionID), sessionID: sessionID, from: store)
+        try read(SessionState.recordID(sessionID: sessionID), sessionID: sessionID, from: store)
     }
 
-    func live(_ session: CuePi.PiSession?, hostID: String, project: Project?) -> SessionDigest {
+    func live(_ session: CuePi.Session?, hostID: String, project: Project?) -> SessionDigest {
         guard let session,
-              let state = PiSessionState.live(
+              let state = SessionState.live(
                 session, hostID: hostID, projectID: project?.id ?? self.session?.projectID, recap: self.session.map(\.recap))
         else { return self }
         var digest = self
@@ -114,8 +114,8 @@ struct SessionPage: View {
     private func headerState(_ digest: SessionDigest, menu: Bool, task: SessionTaskLink?) -> SessionHeader.State? {
         guard let session = digest.session else { return nil }
         return SessionHeader.State(
-            session: session, delivery: digest.delivery, title: digest.title(at: services.speech) ?? session.title, undelivered: PiChat.undeliveredNote(digest.undelivered(at: services.speech)),
-            ending: DeliveryRequest.shownEnd(in: digest.deliveries, at: services.speech)?.inTransit == true, place: PiPlace.menuTitle(of: session, project: digest.project),
+            session: session, delivery: digest.delivery, title: digest.title(at: services.speech) ?? session.title, undelivered: Chat.undeliveredNote(digest.undelivered(at: services.speech)),
+            ending: DeliveryRequest.shownEnd(in: digest.deliveries, at: services.speech)?.inTransit == true, place: SessionPlace.menuTitle(of: session, project: digest.project),
             pin: digest.task, showsHeader: follow.showsHeader, showsMenu: menu, task: task)
     }
 
@@ -139,7 +139,7 @@ private struct SessionLink: ViewModifier {
         let opened = workspace.shownSessions.contains { $0.sessionID == sessionID }
         let button = Button {
             workspace.searching = false
-            workspace.openSession(PiSessionState.recordID(sessionID: sessionID), sessionID: sessionID,
+            workspace.openSession(SessionState.recordID(sessionID: sessionID), sessionID: sessionID,
                                   in: NSEvent.modifierFlags.contains(.command) ? .beside : .main)
         } label: {
             content.contentShape(.rect)
@@ -155,19 +155,19 @@ private struct SessionLink: ViewModifier {
 
 extension Workspace {
     /// 本机在线的会话换上桥上的实时状态（同步记录按节流写，会落后几秒）；其余原样。
-    func withLiveState(_ session: PiSessionState) -> PiSessionState {
+    func withLiveState(_ session: SessionState) -> SessionState {
         guard let live = services.pi.session(sessionID: session.sessionID) else { return session }
         return .live(live, hostID: services.hostID, projectID: sendState.projects[live.id] ?? session.projectID, recap: session.recap) ?? session
     }
 
-    func withLiveState(_ item: PiSessionListItem) -> PiSessionListItem {
+    func withLiveState(_ item: SessionListItem) -> SessionListItem {
         var item = item
         item.state = withLiveState(item.state)
         return item
     }
 
     /// 跳到会话所在的终端；只能大致定位或失败时说一句。
-    func jumpToTerminal(_ id: CuePi.PiSession.ID) {
+    func jumpToTerminal(_ id: CuePi.Session.ID) {
         Task {
             do {
                 let result = try await services.jumpToTerminal(id)

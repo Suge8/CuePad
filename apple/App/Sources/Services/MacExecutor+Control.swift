@@ -8,7 +8,7 @@ extension MacExecutor {
         guard let target = request.stopTurn, target.hostID == hostID, target.bootID == SystemBoot.id,
               request.target.ref == target.sessionID, let live = pi.session(sessionID: target.sessionID),
               live.turnStartedAt?.stored == target.turnStartedAtMilliseconds else {
-            throw PiBridgeError.rejected("stale_turn")
+            throw BridgeError.rejected("stale_turn")
         }
         try await pi.abort(live.id, deliveryID: target.deliveryID.uuidString, turnStartedAt: target.turnStartedAtMilliseconds)
     }

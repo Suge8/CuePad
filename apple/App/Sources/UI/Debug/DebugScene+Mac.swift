@@ -18,7 +18,7 @@ extension DebugScene {
         presetColumns(workspace.services.settings)
         if let prepare = entry?.prepare { await running("摆画面") { try await prepare(workspace, opened) } }
         if let beside = args.layoutOpts.beside {
-            workspace.openSession(PiSessionState.recordID(sessionID: beside), sessionID: beside, in: .beside)
+            workspace.openSession(SessionState.recordID(sessionID: beside), sessionID: beside, in: .beside)
         }
         if args.demoMac { Task { await runDemoMac(workspace.services) } }
         presetDrawers(workspace)

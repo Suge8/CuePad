@@ -27,7 +27,7 @@ extension ClaudeTestbed {
     }
 
     /// 交回子代理结果的那一轮做完、只剩后台命令在跑时，放它做完（终端里子代理做完就记成做完，早于交回它的那一轮，名册不够）。
-    func finishBackgroundWork(_ id: PiSession.ID) async throws {
+    func finishBackgroundWork(_ id: Session.ID) async throws {
         try await eventually("交回子代理的那一轮做完，只等后台命令") {
             guard let session = bridge.session(id: id), session.state == .delegating else { return false }
             return (try? transcript(session.sessionFile))?.recap.lastReply?.contains("SUB_DONE") == true
@@ -39,7 +39,7 @@ extension ClaudeTestbed {
     private var nestedRelease: URL { root.appending(path: "nested-release") }
 
     /// 子代理的后台命令等 `finishEarlyReport` 放行：先交回 WAITING、主线程答完，命令才做完（睡 5 秒时，慢机器上命令先做完，子代理不会先交回 WAITING）。
-    func finishEarlyReport(_ id: PiSession.ID) async throws {
+    func finishEarlyReport(_ id: Session.ID) async throws {
         try await eventually("子代理交回 WAITING，只等它的后台命令") {
             guard let session = bridge.session(id: id), session.state == .delegating else { return false }
             return (try? transcript(session.sessionFile))?.recap.lastReply?.contains("WAITING") == true

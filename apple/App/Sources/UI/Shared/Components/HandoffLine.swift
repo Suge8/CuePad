@@ -3,7 +3,7 @@ import SwiftUI
 
 extension Workspace {
     /// 各处只经这里问。别的状态没有：状态由状态标与状态词表达。`shown`：调用处已推好的样子；不给时这里推。
-    func handoff(of session: PiSessionState, shown: PiShown? = nil) -> CueHandoff? {
+    func handoff(of session: SessionState, shown: SessionShown? = nil) -> CueHandoff? {
         let id = session.sessionID
         guard let handoff = services.liveSessions.handoffs[id],
               (shown ?? self.shown(session, delivery: services.liveSessions.deliveries[id])).status == .resting else { return nil }
@@ -31,7 +31,7 @@ struct HandoffLine: View {
 }
 
 struct HandoffButton: View {
-    let session: PiSessionState
+    let session: SessionState
     @Environment(Workspace.self) private var workspace
 
     var body: some View {

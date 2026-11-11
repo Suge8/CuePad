@@ -29,7 +29,7 @@ extension Workspace {
     func sessionRoute(_ id: UUID, sessionID: String?) -> Route? {
         if let sessionID { return .session(id, sessionID: sessionID) }
         do {
-            let found = try services.store.snapshot { try $0.piSessionPage(PiSessionQuery(id: id)).items.first?.state.sessionID }.value
+            let found = try services.store.snapshot { try $0.piSessionPage(SessionQuery(id: id)).items.first?.state.sessionID }.value
             return found.map { .session(id, sessionID: $0) }
         } catch {
             fail(error)

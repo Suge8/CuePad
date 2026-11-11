@@ -25,12 +25,12 @@ extension GrokRuntime {
         let meta = connection.agent["_meta"]
         await connection.shutdown()
         guard meta?["defaultAuthMethodId"]?.string != nil, let state = meta?["modelState"] else { return nil }
-        let models = (state["availableModels"]?.array ?? []).compactMap { model -> PiModelOption? in
+        let models = (state["availableModels"]?.array ?? []).compactMap { model -> ModelOption? in
             guard let id = model["modelId"]?.string else { return nil }
-            let levels = (model["_meta"]?["reasoningEfforts"]?.array ?? []).compactMap { $0["value"]?.string.flatMap(PiThinkingLevel.init(rawValue:)) }
-            return PiModelOption(key: PiModelKey(provider: AgentKind.grok.rawValue, id: id), name: model["name"]?.string ?? id, thinkingLevels: levels)
+            let levels = (model["_meta"]?["reasoningEfforts"]?.array ?? []).compactMap { $0["value"]?.string.flatMap(ThinkingLevel.init(rawValue:)) }
+            return ModelOption(key: ModelKey(provider: AgentKind.grok.rawValue, id: id), name: model["name"]?.string ?? id, thinkingLevels: levels)
         }
-        let current = state["currentModelId"]?.string.map { PiModelKey(provider: AgentKind.grok.rawValue, id: $0) }
+        let current = state["currentModelId"]?.string.map { ModelKey(provider: AgentKind.grok.rawValue, id: $0) }
         return MacAgent(kind: .grok, model: current, models: models)
     }
 }

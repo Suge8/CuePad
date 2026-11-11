@@ -27,7 +27,7 @@ struct ClaudeIdleResumeTests {
         let id = try await rig.runtime.open(in: rig.work, launchToken: "hosted", name: nil, model: nil, thinking: nil)
         let session = try #require(rig.bridge.session(id: id))
         let sessionID = session.sessionID
-        try await rig.bridge.send(PiMessage(text: "开场"), to: id)
+        try await rig.bridge.send(SessionMessage(text: "开场"), to: id)
         // 第一句话前 Claude Code 自己加了一段 system-reminder，假模型照样回声
         try await eventually("回答落盘、索引跟上") { try await rig.replies(of: sessionID).last?.hasSuffix("开场") == true }
 

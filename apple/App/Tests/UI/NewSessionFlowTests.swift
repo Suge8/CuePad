@@ -109,7 +109,7 @@ struct NewSessionFlowTests {
         #expect(try await requests == [second.request], "重试替换失败的那条")
 
         let token = try #require(try await store.deliveryRequest(second.request)?.launch?.token)
-        try await PiStateRecorder(store: store, hostID: host).update(sessionID: "s1", state: .thinking, title: "修乱序", launchToken: token)
+        try await StateRecorder(store: store, hostID: host).update(sessionID: "s1", state: .thinking, title: "修乱序", launchToken: token)
         try await eventually("认领到新会话") { launching.launch == nil }
         let route: SessionRoute? = if case .session(let route) = workspace.mainRoute { route } else { nil }
         switch entry {
@@ -123,7 +123,7 @@ struct NewSessionFlowTests {
             #if os(iOS)
             #expect(workspace.newSession == nil)
             #endif
-            #expect(route?.id == PiSessionState.recordID(sessionID: "s1"), "输入框收起，进入新会话")
+            #expect(route?.id == SessionState.recordID(sessionID: "s1"), "输入框收起，进入新会话")
         }
     }
 
@@ -162,7 +162,7 @@ struct NewSessionFlowTests {
         defer { app.services.cancelBackgroundWork() }
         let workspace = Workspace(services: app.services)
         let (task, launching, submit) = try await open(entry, in: workspace)
-        let other = try await store.requestLaunch(PiLaunch(project: Project.defaultID, prompt: nil, token: "elsewhere"), title: "修乱序", on: host, card: task.id)
+        let other = try await store.requestLaunch(LaunchRequest(project: Project.defaultID, prompt: nil, token: "elsewhere"), title: "修乱序", on: host, card: task.id)
         await submit()?.value
         #expect(launching.launch == nil)
         #expect(launching.error == CueStoreError.deliveryAlreadyHanded.localizedDescription)
@@ -178,7 +178,7 @@ struct NewSessionFlowTests {
         #expect(launching.launch == first, "可能已开过：关上也接着等")
 
         let token = try #require(try await store.deliveryRequest(first.request)?.launch?.token)
-        try await PiStateRecorder(store: store, hostID: host).update(sessionID: "s1", state: .thinking, title: "修乱序", launchToken: token)
+        try await StateRecorder(store: store, hostID: host).update(sessionID: "s1", state: .thinking, title: "修乱序", launchToken: token)
         try await eventually("晚到的认领收尾这一次") { launching.launch == nil }
         let route: SessionRoute? = if case .session(let route) = workspace.mainRoute { route } else { nil }
         #if os(macOS)

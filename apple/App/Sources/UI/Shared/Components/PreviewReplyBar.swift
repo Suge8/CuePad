@@ -4,7 +4,7 @@ import SwiftUI
 /// Cue 页说出去的是一句普通的话"关于「标题」：……"（Cue 的输入框没有批注）。
 struct PreviewReplyBar: View {
     let reply: PreviewReply
-    let preview: PiPreview
+    let preview: PreviewItem
     let about: String
     let entry: UUID?
     let done: () -> Void
@@ -20,7 +20,7 @@ struct PreviewReplyBar: View {
         }
     }
 
-    @ViewBuilder private func quote(in session: PiSessionState) -> some View {
+    @ViewBuilder private func quote(in session: SessionState) -> some View {
         if let entry {
             Button("回复", icon: .reply) {
                 workspace.quote(preview, in: entry, of: session)

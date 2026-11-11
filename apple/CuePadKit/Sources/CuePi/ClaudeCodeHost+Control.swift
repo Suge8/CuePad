@@ -12,22 +12,22 @@ extension ClaudeHostedSession {
         return process
     }
 
-    func send(_ message: PiMessage, in _: PiSession.ID) async throws {
+    func send(_ message: SessionMessage, in _: Session.ID) async throws {
         guard !message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !message.images.isEmpty else {
-            throw PiBridgeError.rejected("empty")
+            throw BridgeError.rejected("empty")
         }
         try await deliver(hosted(ClaudeStream.content(text: message.text, images: message.images), uuid: message.deliveryID))
         // 托管进程自己的钩子不登记，首条消息由这里记，与终端会话的 `UserPromptSubmit` 同一规则
         if !message.text.isEmpty, let id {
-            bridge?.update(id) { if $0.firstMessage == nil { $0.firstMessage = String(message.text.prefix(PiSessionName.firstMessageLimit)) } }
+            bridge?.update(id) { if $0.firstMessage == nil { $0.firstMessage = String(message.text.prefix(SessionName.firstMessageLimit)) } }
         }
     }
 
     /// 斜杠命令就是以 / 开头的一句话：托管进程会执行它（内置命令、skill、自定义命令）。
-    func command(_ line: String, deliveryID: String?, in _: PiSession.ID) async throws {
-        guard line.hasPrefix("/") else { throw PiBridgeError.rejected("bad_request") }
+    func command(_ line: String, deliveryID: String?, in _: Session.ID) async throws {
+        guard line.hasPrefix("/") else { throw BridgeError.rejected("bad_request") }
         let name = line.dropFirst().split(separator: " ", maxSplits: 1).first.map(String.init) ?? ""
-        guard commands.contains(name) else { throw PiBridgeError.rejected("unknown_command") }
+        guard commands.contains(name) else { throw BridgeError.rejected("unknown_command") }
         try await deliver(hosted(.string(line), uuid: deliveryID))
     }
 
@@ -42,16 +42,16 @@ extension ClaudeHostedSession {
         Self.userMessage(content, extra: ["session_id": "", "uuid": .string(uuid ?? UUID().uuidString), "priority": "next"])
     }
 
-    func abort(_: PiSession.ID) async throws {
+    func abort(_: Session.ID) async throws {
         // 卡在"等上一轮停下"的发话以取消结束，不再各等到时限
         stopPhase.cancelAll()
         try await interrupt(restarting: false)
     }
 
-    func configure(_ config: PiConfig, in _: PiSession.ID) async throws {
-        guard config.fast == nil else { throw PiBridgeError.unsupported }
+    func configure(_ config: SessionConfig, in _: Session.ID) async throws {
+        guard config.fast == nil else { throw BridgeError.unsupported }
         let model = config.model, thinking = config.thinking, name = config.name
-        guard let id else { throw PiBridgeError.sessionEnded }
+        guard let id else { throw BridgeError.sessionEnded }
         let stream = try live
         if let model {
             // Claude Code 换模型时先向服务端核对：只有"不支持这个模型"才是模型表里没有，别的（网络、限流、认证、余额）照原话报。
@@ -59,11 +59,11 @@ extension ClaudeHostedSession {
             // 但 400 也可能是别的原因（官方余额不足："Your credit balance is too low…"），所以 400/404 还要原文里点了这次的模型 id 才算
             do {
                 try await stream.setModel(model.id)
-            } catch PiBridgeError.rejected(let reason) {
+            } catch BridgeError.rejected(let reason) {
                 let text = reason.lowercased()
                 let unknown = ["unsupported model", "not found", "unknown model", "invalid model"].contains { text.contains($0) }
                     || (["api error: 400", "api error: 404"].contains { text.contains($0) } && text.contains(model.id.lowercased()))
-                throw unknown ? PiBridgeError.unknownModel(.claudeCode) : PiBridgeError.rejected("failed: \(reason)")
+                throw unknown ? BridgeError.unknownModel(.claudeCode) : BridgeError.rejected("failed: \(reason)")
             }
             bridge?.update(id) { session in session.model = session.availableModels.first { $0.key == model } ?? ClaudeCode.model(model.id) }
         }
@@ -77,8 +77,8 @@ extension ClaudeHostedSession {
         }
     }
 
-    func answer(_ answer: PiAnswerValue, to promptID: String, in _: PiSession.ID) async throws {
-        guard let waiting = permission else { throw PiBridgeError.rejected("no_prompt") }
+    func answer(_ answer: AnswerValue, to promptID: String, in _: Session.ID) async throws {
+        guard let waiting = permission else { throw BridgeError.rejected("no_prompt") }
         let decision = try waiting.permission.decision(answer, to: promptID)
         permission = nil
         try live.write(["type": "control_response", "response": ["subtype": "success", "request_id": .string(waiting.request), "response": decision]])
@@ -86,7 +86,7 @@ extension ClaudeHostedSession {
         publish(at: .now)
     }
 
-    func end(_ id: PiSession.ID) async throws {
+    func end(_ id: Session.ID) async throws {
         _ = try live
         processes?.retire(id, link: self)
     }

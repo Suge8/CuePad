@@ -24,7 +24,7 @@ extension DeliveryStatus {
 /// 读到本版本不认识的值（`Open.unknown`）时 Mac 端不执行它。
 public enum DeliveryMode: String, Sendable, CaseIterable {
   /// 你说的话（唯一一种）：会话歇着就以它开新一轮，在跑就先打断这一轮再开（忙不忙以 Mac 执行时的会话为准，写请求时看到的状态可能已经过时）。没有排队；未确认不自动重发。
-  /// 用提示词模板或技能说的（`/名字 …`，回复框按 `PiSlash.speaks` 认）也是它：由 Agent 展开，展开后的那条消息带着请求 id
+  /// 用提示词模板或技能说的（`/名字 …`，回复框按 `Slash.speaks` 认）也是它：由 Agent 展开，展开后的那条消息带着请求 id
   case send
   /// 撤回另一条尚未派发的投送；正文为原请求 id，由执行 Mac 原子核对后处理。
   case withdraw
@@ -40,12 +40,12 @@ public enum DeliveryMode: String, Sendable, CaseIterable {
   case stop
   /// 只停止正文指定的投送所开启的回合；Agent 接收端核对身份后同步停止。旧 Mac 不认识此方式，明确拒绝，不退化为 stop。
   case stopTurn
-  /// 接着会话出错的那一轮重试（`PiSessionState.canRetry`）：不补发用户消息，也不发“继续”。
+  /// 接着会话出错的那一轮重试（`SessionState.canRetry`）：不补发用户消息，也不发“继续”。
   /// 会话在跑或最后一轮不是出错结束的，扩展拒绝（`nothing_to_retry`）
   case retry
   /// 请 Mac 给项目绑定文件夹（或解除绑定）
   case bind
-  /// 斜杠命令：正文是以 / 开头的整行，由 Agent 执行；以 Agent 可证实的受理为送达（Pi 执行了扩展命令、压缩做完；OpenCode 的模板经它的命令端点，端点执行完才回，`PiSlash.speaks`）。
+  /// 斜杠命令：正文是以 / 开头的整行，由 Agent 执行；以 Agent 可证实的受理为送达（Pi 执行了扩展命令、压缩做完；OpenCode 的模板经它的命令端点，端点执行完才回，`Slash.speaks`）。
   /// 不是“你说的话”：不在对话里挂气泡，带着卡片时只把卡片关联到会话；结果若在会话文件里（压缩）对话里自然有
   case command
   /// 请 Mac 刷新订阅额度：由 Mac 上能答额度的会话里的扩展查一次（`AccountQuota`），新值随同步回来；查不到时照常按失败写回（原因写进手机额度明细的那一行，不弹提示），读数仍是上次的值与更新时间
@@ -159,20 +159,20 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   }
 
   /// `launch`、`bind`、`tidyOrders`、`libraryEdit`、`answer`、`config` 按 `mode` 取请求的内容；其他方式、读不出的为 nil。
-  public var launch: PiLaunch? { mode == .known(.start) ? PiLaunch(stored: content) : nil }
+  public var launch: LaunchRequest? { mode == .known(.start) ? LaunchRequest(stored: content) : nil }
 
   /// 开工的是开场的话里的。写下时登记附件记录、执行的 Mac 取文件、回收附件时算引用，都只读这里。
   public var attachmentKeys: [String] { CueFormat.attachmentKeys(in: launch?.prompt ?? content) }
 
-  public var bind: PiBind? { mode == .known(.bind) ? PiBind(stored: content) : nil }
+  public var bind: BindRequest? { mode == .known(.bind) ? BindRequest(stored: content) : nil }
 
   public var tidyOrders: [TidyOrder]? { mode == .known(.tidy) ? JSONColumn.decode([TidyOrder].self, from: content) : nil }
 
   public var libraryEdit: LibraryEdit? { mode == .known(.libraryEdit) ? LibraryEdit(stored: content) : nil }
 
-  public var answer: PiAnswer? { mode == .known(.answer) ? PiAnswer(stored: content) : nil }
+  public var answer: Answer? { mode == .known(.answer) ? Answer(stored: content) : nil }
 
-  public var config: PiConfig? { mode == .known(.config) ? PiConfig(stored: content) : nil }
+  public var config: SessionConfig? { mode == .known(.config) ? SessionConfig(stored: content) : nil }
 
   public var isRename: Bool { config?.name != nil }
 

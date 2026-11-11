@@ -8,7 +8,7 @@ struct CardActions: View {
     var selectable = false
     var leaf = false
     var opens = false
-    var session: PiSessionState?
+    var session: SessionState?
     @Environment(Workspace.self) private var workspace
 
     var body: some View {

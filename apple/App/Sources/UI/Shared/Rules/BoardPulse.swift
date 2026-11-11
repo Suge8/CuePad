@@ -1,7 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// 推进中一张卡此刻的样子（任务卡与没绑任务的会话卡同一条规则）只按这一份分；会话的状态只经 `PiShown` 判定。
+/// 推进中一张卡此刻的样子（任务卡与没绑任务的会话卡同一条规则）只按这一份分；会话的状态只经 `SessionShown` 判定。
 struct BoardPulse: Equatable {
     enum Tier: Int, CaseIterable, Comparable {
         case needsYou, running, resting
@@ -20,22 +20,22 @@ struct BoardPulse: Equatable {
     nonisolated enum Gait: Equatable, Sendable { case think, tool, compact }
 
     enum Word: Equatable {
-        case state(PiShown)
-        case context(PiContextMeter)
+        case state(SessionShown)
+        case context(ContextMeter)
     }
 
-    var shown: PiShown?
-    var session: PiSessionState?
+    var shown: SessionShown?
+    var session: SessionState?
     var handoff: CueHandoff?
 
-    init(shown: PiShown? = nil, session: PiSessionState? = nil, handoff: CueHandoff? = nil) {
+    init(shown: SessionShown? = nil, session: SessionState? = nil, handoff: CueHandoff? = nil) {
         self.shown = shown
         self.session = session
         self.handoff = handoff
     }
 
-    var fullContext: PiContextMeter? {
-        session?.context.flatMap(PiContextMeter.init).flatMap { $0.level == .critical ? $0 : nil }
+    var fullContext: ContextMeter? {
+        session?.context.flatMap(ContextMeter.init).flatMap { $0.level == .critical ? $0 : nil }
     }
 
     var word: Word? {
@@ -81,7 +81,7 @@ struct BoardPulse: Equatable {
 
 extension Workspace {
     /// Mac 上本机在线的会话换上桥上的实时状态。任务行（项目页）给的是窗口那一份里交给这条的会话，规则相同。
-    func pulse(of agent: PiSessionListItem?) -> BoardPulse {
+    func pulse(of agent: SessionListItem?) -> BoardPulse {
         guard let agent else { return BoardPulse() }
         #if os(macOS)
         let live = withLiveState(agent)

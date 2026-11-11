@@ -1,12 +1,12 @@
 import Foundation
 
 /// 一个会话索引的写入：索引、检查点（nil：保留已存的）与同一次读会话文件得到的对话（见 `CueStore.upsertPiSessions`）。
-public struct PiSessionUpsert: Sendable {
+public struct SessionUpsert: Sendable {
   public var session: IndexedSession
   public var checkpoint: Data?
-  public var transcript: PiTranscript?
+  public var transcript: SessionTranscript?
 
-  public init(session: IndexedSession, checkpoint: Data?, transcript: PiTranscript?) {
+  public init(session: IndexedSession, checkpoint: Data?, transcript: SessionTranscript?) {
     self.session = session
     self.checkpoint = checkpoint
     self.transcript = transcript

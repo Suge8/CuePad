@@ -22,7 +22,7 @@ extension RealClaudeHostTests {
             let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t", name: nil, model: nil, thinking: nil)
             let session = try #require(testbed.bridge.session(id: id))
             // 这句话收下（`command_lifecycle` 的 completed）要等这一轮做完，所以另起；问到模型时它早发过 init 了
-            let sending = Task { try await testbed.bridge.send(PiMessage(text: "BUSY-HANG keep going"), to: id) }
+            let sending = Task { try await testbed.bridge.send(SessionMessage(text: "BUSY-HANG keep going"), to: id) }
             try await gate.reached()
             let began = ContinuousClock.now
             if action == "stop" {
@@ -65,7 +65,7 @@ extension RealClaudeHostTests {
             #expect(pids().count == 3)
             #expect(pids().filter { kill($0, 0) == 0 } == [pids()[2]])
             let asked = Date()
-            try await testbed.bridge.send(PiMessage(text: "只回复 OK"), to: resumed)
+            try await testbed.bridge.send(SessionMessage(text: "只回复 OK"), to: resumed)
             try await testbed.waitForTurn(resumed, since: asked)
         }
     }
@@ -74,12 +74,12 @@ extension RealClaudeHostTests {
     private var listing: String { #"[ "$1" = agents ] && exec "$REAL" "$@"; "# }
 
     /// 开一个托管会话、说一轮（会话文件有了才接得着）。
-    private func openWithATurn(_ testbed: ClaudeTestbed) async throws -> (PiSession.ID, IndexedSession) {
+    private func openWithATurn(_ testbed: ClaudeTestbed) async throws -> (Session.ID, IndexedSession) {
         testbed.on("只回复 OK", .say("OK"))
         let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t", name: nil, model: nil, thinking: nil)
         let session = try #require(testbed.bridge.session(id: id))
         let start = Date()
-        try await testbed.bridge.send(PiMessage(text: "只回复 OK"), to: id)
+        try await testbed.bridge.send(SessionMessage(text: "只回复 OK"), to: id)
         try await testbed.waitForTurn(id, since: start)
         let indexed = IndexedSession(
             id: session.sessionID, path: session.sessionFile!.path, cwd: testbed.work.path, lastActivityAt: .now, agent: .claudeCode)

@@ -24,8 +24,8 @@ extension DebugScene {
             try await store.setStatus(started.id, .inProgress)
             break
         }
-        // 在等你、不带 CuePad 答得了的问题：Cue 值班时也不归它答，算拍板（`PiSessionState.asksYou`）
-        func session(_ state: PiWorkState) async throws {
+        // 在等你、不带 CuePad 答得了的问题：Cue 值班时也不归它答，算拍板（`SessionState.asksYou`）
+        func session(_ state: WorkState) async throws {
             _ = try await recorder.update(sessionID: "renew", state: state, title: "renew", directory: "renew")
         }
         while !Task.isCancelled {

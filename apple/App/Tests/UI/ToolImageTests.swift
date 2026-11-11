@@ -7,7 +7,7 @@ import ImageIO
 import Testing
 @testable import CuePad
 
-/// 各家同一条路（`PiHistory.Transcript.toolImages`）：会话文件的形状照各家真机读图时写下的（Codex 0.166 的 view_image、Grok 1.0.70 的 read_file）。
+/// 各家同一条路（`History.Transcript.toolImages`）：会话文件的形状照各家真机读图时写下的（Codex 0.166 的 view_image、Grok 1.0.70 的 read_file）。
 @MainActor
 @Suite(.releasesLibraries)
 struct ToolImageTests {
@@ -25,7 +25,7 @@ struct ToolImageTests {
         try log.tool("read", id: "c2", arguments: ["path": "icon.png"], images: [icon])
         try log.tool("read", id: "c3", arguments: ["path": "shot.png"], images: [shot])
         try log.reply("截好了")
-        let update = try PiHistory.index(file: file, agent: .pi, from: nil, files: files)
+        let update = try History.index(file: file, agent: .pi, from: nil, files: files)
         await app.services.consumePiHistory(AsyncStream { $0.yield(.updated(update)); $0.finish() }, agent: .pi)
 
         let round = try #require(try await store.piMessages(of: "s").last { $0.role == .known(.pi) })
@@ -36,8 +36,8 @@ struct ToolImageTests {
         let stored = try JSONEncoder().encode(update.checkpoint)
         var old = try #require(try JSONSerialization.jsonObject(with: stored) as? [String: Any])
         old["rules"] = 1
-        #expect(throws: (any Error).self) { try JSONDecoder().decode(PiHistoryCheckpoint.self, from: JSONSerialization.data(withJSONObject: old)) }
-        #expect(try JSONDecoder().decode(PiHistoryCheckpoint.self, from: stored) == update.checkpoint)
+        #expect(throws: (any Error).self) { try JSONDecoder().decode(HistoryCheckpoint.self, from: JSONSerialization.data(withJSONObject: old)) }
+        #expect(try JSONDecoder().decode(HistoryCheckpoint.self, from: stored) == update.checkpoint)
         let shrunk = try #require(files.fileURL(for: images[0]))
         let size = try #require(CGImageSourceCreateWithURL(shrunk as CFURL, nil).flatMap { CGImageSourceCopyPropertiesAtIndex($0, 0, nil) } as? [CFString: Any])
         #expect(size[kCGImagePropertyPixelWidth] as? Int == 1600 && size[kCGImagePropertyPixelHeight] as? Int == 1000)
@@ -99,7 +99,7 @@ struct ToolImageTests {
         let shot = app.directory.appending(path: "shot.png")
         try pngData(width: 2400, height: 1200, shade: 0.4).write(to: shot)
         let file = try agent == .codex ? Self.codex(app.directory, shot: shot) : Self.grok(app.directory, shot: shot)
-        let update = try PiHistory.index(file: file, agent: agent, from: nil, files: files)
+        let update = try History.index(file: file, agent: agent, from: nil, files: files)
         await app.services.consumePiHistory(AsyncStream { $0.yield(.updated(update)); $0.finish() }, agent: agent)
 
         let round = try #require(try await store.piMessages(of: "s").last { $0.role == .known(.pi) })

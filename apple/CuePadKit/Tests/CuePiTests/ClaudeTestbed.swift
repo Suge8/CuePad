@@ -28,7 +28,7 @@ final class ClaudeTestbed {
     let environment: [String: String]
     let model: FakeModel
     let paths: AgentPaths
-    let bridge: PiBridge
+    let bridge: Bridge
     let hooks: AgentHookServer
     let runtime: ClaudeCodeRuntime
     let presence: TestPresence
@@ -38,7 +38,7 @@ final class ClaudeTestbed {
     private var terminals: [ClaudeTerminal] = []
     private var reading: Task<Void, Never>?
     /// CuePad 读到的会话记录（交给 `runtime.read` 的每一次），按先后
-    private(set) var reads: [PiHistoryUpdate] = []
+    private(set) var reads: [HistoryUpdate] = []
 
     /// 剧本只认带工具清单的请求（一轮真正的对话，含子代理的）：上面那类旁问的转录里也有你的话，不能让它们撞上剧本。
     func on(_ prompt: String, _ steps: FakeReply...) {
@@ -90,7 +90,7 @@ final class ClaudeTestbed {
         paths = AgentPaths(pi: PiPaths(agentDirectory: root.appending(path: "pi"), socketDirectory: sockets), environment: environment)
         store = try CueStore(location: .isolated(root.appending(path: "store", directoryHint: .isDirectory)))
         files = store.files
-        bridge = PiBridge(socketDirectory: sockets, hostedIdle: idleLimit, timing: bridgeTiming)
+        bridge = Bridge(socketDirectory: sockets, hostedIdle: idleLimit, timing: bridgeTiming)
         log = ChangeLog(bridge)
         try bridge.start()
         hooks = AgentHookServer(path: paths.pi.hookSocket)
@@ -141,7 +141,7 @@ final class ClaudeTestbed {
     }
 
     private func startReading() {
-        guard let indexer = PiHistoryIndexer(agent: .claudeCode, paths: paths, files: files, start: { _ in nil }) else { return }
+        guard let indexer = HistoryIndexer(agent: .claudeCode, paths: paths, files: files, start: { _ in nil }) else { return }
         reading = Task { [weak self, runtime, bridge] in
             for await case .updated(let update) in indexer.events(following: bridge.sessionFiles, scope: .all) {
                 self?.reads.append(update)
@@ -171,18 +171,18 @@ final class ClaudeTestbed {
     }
 
     /// 同 `MacExecutor.connect`：桥上有这个会话就用它，没有就接着它。
-    func connect(_ indexed: IndexedSession) async throws -> PiSession.ID {
+    func connect(_ indexed: IndexedSession) async throws -> Session.ID {
         if let live = bridge.session(sessionID: indexed.id) { return live.id }
         return try await runtime.resume(indexed)
     }
 
-    func session(pid: Int32) -> PiSession? { bridge.sessions.first { $0.pid == pid && $0.agent == .claudeCode } }
+    func session(pid: Int32) -> Session? { bridge.sessions.first { $0.pid == pid && $0.agent == .claudeCode } }
 
-    func record(_ id: PiSession.ID) async throws {
+    func record(_ id: Session.ID) async throws {
         let session = try #require(bridge.session(id: id))
-        try await PiStateRecorder(store: store, hostID: "mac").update(
+        try await StateRecorder(store: store, hostID: "mac").update(
             sessionID: session.sessionID, state: session.state,
-            modelState: PiModelState(model: session.model, thinking: session.thinking, models: session.availableModels), agent: .claudeCode)
+            modelState: ModelState(model: session.model, thinking: session.thinking, models: session.availableModels), agent: .claudeCode)
     }
 
     /// 停掉起的 Claude Code 并等它们退出：都该自己收拾掉收件箱 socket（只有 SIGKILL 会让它留在 /tmp/cc-socks）。

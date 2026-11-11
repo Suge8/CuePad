@@ -41,7 +41,7 @@ extension CueStore {
       ORDER BY rank
       """
     ) { row in
-      let launch = row.isNull(2) ? nil : PiLaunch(stored: row.text(2))
+      let launch = row.isNull(2) ? nil : LaunchRequest(stored: row.text(2))
       return (card: row.uuid(0), handoff: row.isNull(2) ? AgentHandoff.session(row.text(1)) : .launching(launch?.opening ?? .pi))
     }
     return Dictionary(rows.map { ($0.card, $0.handoff) }, uniquingKeysWith: { first, _ in first })

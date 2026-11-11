@@ -69,7 +69,7 @@ private struct AgentStrip: View {
             let state = item.state
             #endif
             let shown = workspace.shown(state, delivery: item.delivery)
-            let look = TaskAgentLook(shown, line: PiProgress.note(of: state, failure: shown.undelivered?.text))
+            let look = TaskAgentLook(shown, line: SessionProgress.note(of: state, failure: shown.undelivered?.text))
             Button { workspace.openSession(state.id, sessionID: state.sessionID) } label: { strip(look, shown: shown, session: state) }
                 .buttonStyle(PressStyle(.wide))
                 .accessibilityElement(children: .combine)
@@ -77,11 +77,11 @@ private struct AgentStrip: View {
         }
     }
 
-    private func strip(_ look: TaskAgentLook, shown: PiShown, session: PiSessionState) -> some View {
+    private func strip(_ look: TaskAgentLook, shown: SessionShown, session: SessionState) -> some View {
         BubbleStrip(mark: session.agent.known?.mark.image ?? Image(.terminal), markLabel: session.agentMark) {
             VStack(alignment: .leading, spacing: Spacing.hair) {
                 HStack(spacing: Spacing.glyph) {
-                    PiStateDot(shown: shown, size: BubbleMetrics.dot).relaySpot(session: session.sessionID, row: .task)
+                    StateDot(shown: shown, size: BubbleMetrics.dot).relaySpot(session: session.sessionID, row: .task)
                     Text(look.title).font(BubbleMetrics.strong).foregroundStyle(palette.ink).lineLimit(1)
                 }
                 if let handoff = workspace.handoff(of: session, shown: shown) {

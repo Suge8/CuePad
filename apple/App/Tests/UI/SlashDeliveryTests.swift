@@ -10,9 +10,9 @@ import Testing
 @Suite(.releasesLibraries)
 struct SlashDeliveryTests {
     static let commands = [
-        PiSlashCommand(name: "greet", summary: "Greet someone", source: .known(.prompt)),
-        PiSlashCommand(name: "skill:careful", summary: "Work carefully", source: .known(.skill)),
-        PiSlashCommand(name: "shout", summary: "Shout the arguments", source: .known(.extension)),
+        SlashCommand(name: "greet", summary: "Greet someone", source: .known(.prompt)),
+        SlashCommand(name: "skill:careful", summary: "Work carefully", source: .known(.skill)),
+        SlashCommand(name: "shout", summary: "Shout the arguments", source: .known(.extension)),
     ]
 
     enum Agent: String, CaseIterable { case delivers, refuses }
@@ -35,7 +35,7 @@ struct SlashDeliveryTests {
         let request = try #require(try await store.deliveryRequests(toSession: id).last)
         let said = !line.hasPrefix("/shout")
         #expect(request.mode == .known(said ? .send : .command))
-        #expect(PiChat.outgoing([request], messages: []).map(\.id) == (said ? [request.id] : []), "说的话挂气泡，命令不挂")
+        #expect(Chat.outgoing([request], messages: []).map(\.id) == (said ? [request.id] : []), "说的话挂气泡，命令不挂")
 
         try await app.services.executor.start()
         let done = try await store.outcome(of: request)
@@ -44,12 +44,12 @@ struct SlashDeliveryTests {
         switch agent {
         case .delivers:
             #expect(delivered == .delivered)
-            #expect(PiChat.outgoing([done], messages: messages).isEmpty, "气泡由对话换下")
+            #expect(Chat.outgoing([done], messages: messages).isEmpty, "气泡由对话换下")
             #expect(messages.compactMap(\.deliveryID) == (said ? [request.id] : []))
             #expect(MacDelivery.commandProgress([done], messages: messages, at: app.services.speech) == nil)
         case .refuses:
             #expect(delivered.failure != nil && delivered.unconfirmedReason == nil, "明确拒收是没送到，写原因")
-            if said { #expect(PiChat.outgoing([done], messages: messages).map(\.id) == [request.id], "没送到的话留在对话里等重发") }
+            if said { #expect(Chat.outgoing([done], messages: messages).map(\.id) == [request.id], "没送到的话留在对话里等重发") }
             else { #expect(MacDelivery.commandProgress([done], messages: messages, at: app.services.speech)?.failed == true) }
         }
         #expect(ext.messages.map(\.deliveryID) == (said ? [request.id.uuidString] : []), "说的话带着请求 id 交出")
@@ -88,7 +88,7 @@ struct SlashDeliveryTests {
         app.claude.host("claude", state: .settled)
         try await app.runtimeRecorder(on: TestApp.hostID).update(sessionID: "claude", state: .settled, agent: .claudeCode)
         let session = try #require(try await store.allPiSessionStates().first { $0.sessionID == "claude" })
-        let review = PiSlashCommand(name: "review", summary: "Review the changes", source: .known(.builtin))
+        let review = SlashCommand(name: "review", summary: "Review the changes", source: .known(.builtin))
 
         let box = app.services.settings.replyDraftBinding(for: session.id)
         box.wrappedValue = ComposerDraft(text: "/review 登录页")

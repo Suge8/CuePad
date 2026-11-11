@@ -38,7 +38,7 @@ extension ACPSession: HostedSession {
 
     /// 插不进这一轮时等它变了再看：排着的那一句跑起来了就并进；做完了开新的一轮——一轮结束时 Agent 可能当场接着自己开一轮
     /// （Grok 的搁浅插话），那就等它也做完。
-    func send(_ text: String, images: [PiImage], id: UUID) async throws {
+    func send(_ text: String, images: [MessageImage], id: UUID) async throws {
         let text = text.hasPrefix("/") ? " " + text : text
         while facts.running {
             let connection = try live

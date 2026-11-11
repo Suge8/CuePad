@@ -64,11 +64,11 @@ extension CueStore {
     return try homeLeaf(card)
   }
 
-  public func requestAnswer(_ answer: PiAnswer, to target: SendTarget, on host: String, cue: Bool = false) throws -> DeliveryRequest {
+  public func requestAnswer(_ answer: Answer, to target: SendTarget, on host: String, cue: Bool = false) throws -> DeliveryRequest {
     try requestDelivery(answer.stored, to: target, on: host, mode: .answer, cue: cue)
   }
 
-  public func requestConfig(_ config: PiConfig, to target: SendTarget, on host: String) throws -> DeliveryRequest {
+  public func requestConfig(_ config: SessionConfig, to target: SendTarget, on host: String) throws -> DeliveryRequest {
     try requestDelivery(config.stored, to: target, on: host, mode: .config)
   }
 
@@ -96,7 +96,7 @@ extension CueStore {
 
   /// 给了 `card`：会话开好、带着这次的 `token` 记下时，它关联到那个会话（`claimLaunchedCards`），会话名按它定。同一任务未收尾的请求禁止冒充首次提交；安全替换同事务撤旧写新，撤不回就拒绝；重复须明确确认。
   public func requestLaunch(
-    _ launch: PiLaunch, title: String, on host: String, card: UUID? = nil, cue: Bool = false, intent: SessionLaunchIntent = .new
+    _ launch: LaunchRequest, title: String, on host: String, card: UUID? = nil, cue: Bool = false, intent: SessionLaunchIntent = .new
   ) throws -> DeliveryRequest {
     try write {
       let previous: UUID? = if case .replacing(let id) = intent { id } else { nil }
@@ -154,13 +154,13 @@ extension CueStore {
       """)
     for request in requests {
       guard let launch = request.launch,
-        let session = try select(PiSessionState.self, where: "launchToken = ?", [launch.token]).first else { continue }
+        let session = try select(SessionState.self, where: "launchToken = ?", [launch.token]).first else { continue }
       try recordSessionCreationInTransaction(session.sessionID, from: request)
       try linkDeliveredCardInTransaction(request, toSession: session.sessionID)
     }
   }
 
-  public func requestBind(_ bind: PiBind, title: String, on host: String) throws -> DeliveryRequest {
+  public func requestBind(_ bind: BindRequest, title: String, on host: String) throws -> DeliveryRequest {
     try requestDelivery(bind.stored, to: SendTarget(kind: .mac, name: title, ref: nil), on: host, mode: .bind)
   }
 

@@ -55,7 +55,7 @@ struct ProjectCard: View {
 
     @ViewBuilder private var updated: some View {
         if modifiedAt.timeIntervalSince1970 > 0 {
-            LiveText(style: PiClock.ago(modifiedAt).live(.list)) { Text("\($0)更新") }
+            LiveText(style: SessionClock.ago(modifiedAt).live(.list)) { Text("\($0)更新") }
                 .foregroundStyle(palette.ink3)
         } else {
             Text("尚未更新").foregroundStyle(palette.ink3)

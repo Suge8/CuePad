@@ -4,20 +4,20 @@ import Foundation
 
 
 /// 选择、确认型问题要先在上面作答：自由文本发出去会一直挂着，Pi 不答完题不会去看。
-nonisolated enum PiReply: Equatable {
+nonisolated enum ReplyMode: Equatable {
     case message
-    case answer(PiQuestion)
+    case answer(Question)
     case answerAbove
     case unanswerable
 }
 
-nonisolated enum PiReplyButton: Equatable {
+nonisolated enum ReplyButton: Equatable {
     case stop
     case answer
     case send(DeliveryMode)
 }
 
-/// 会话能做什么只看 `AgentCapabilities`：能否停止、结束与作答都经 `PiSessionState` 上同一组规则（Cue 也经它们）。
+/// 会话能做什么只看 `AgentCapabilities`：能否停止、结束与作答都经 `SessionState` 上同一组规则（Cue 也经它们）。
 nonisolated enum MacDelivery {
     /// 记录 ended 不确认投送；未知请求逐条保留，不能被别的结束成功掩盖。新的结束在途时先显示它的进度。
     static func endIssue(_ requests: [DeliveryRequest], at moment: Speech.Moment) -> Speech.Trip? {
@@ -28,7 +28,7 @@ nonisolated enum MacDelivery {
     }
 
     /// 受理只表示收到，歇下看状态。进度只读投送请求，界面不另存。
-    static func stopping(_ session: PiSessionState, deliveries: [DeliveryRequest], at moment: Speech.Moment) -> Bool {
+    static func stopping(_ session: SessionState, deliveries: [DeliveryRequest], at moment: Speech.Moment) -> Bool {
         guard session.canStop, let turnStart = session.busySince else { return false }
         return deliveries.contains { request in
             guard [.known(.stop), .known(.stopTurn)].contains(request.mode), request.createdAt >= turnStart else { return false }
@@ -56,7 +56,7 @@ nonisolated enum MacDelivery {
         }
     }
 
-    static func commandProgress(_ deliveries: [DeliveryRequest], messages: [PiChatMessage], at moment: Speech.Moment) -> CommandProgress? {
+    static func commandProgress(_ deliveries: [DeliveryRequest], messages: [ChatMessage], at moment: Speech.Moment) -> CommandProgress? {
         // 最新的一条是按写下的先后排的最后一条（`deliveryRequests(toSession:)`）：时间只到毫秒，同一毫秒的两条按时间比不出先后
         guard let latest = deliveries.last, latest.mode == .known(.command) else { return nil }
         let command = String(latest.content.prefix { !$0.isWhitespace })
@@ -75,7 +75,7 @@ nonisolated enum MacDelivery {
     }
 
     /// 空着而 Agent 自己在跑一轮是停止：这时最可能想做的就是叫停（同 ChatGPT、Claude）。
-    static func button(for session: PiSessionState, hasDraft: Bool, command: Bool = false) -> PiReplyButton? {
+    static func button(for session: SessionState, hasDraft: Bool, command: Bool = false) -> ReplyButton? {
         switch reply(to: session) {
         case .answer: return .answer
         case .message:
@@ -85,16 +85,16 @@ nonisolated enum MacDelivery {
         }
     }
 
-    static func reply(to session: PiSessionState) -> PiReply {
+    static func reply(to session: SessionState) -> ReplyMode {
         guard session.state == .known(.waitingForUser) else { return .message }
         guard let question = session.answerableQuestion else { return .unanswerable }
         return question.acceptsText ? .answer(question) : .answerAbove
     }
 }
 
-nonisolated extension PiSessionState {
+nonisolated extension SessionState {
     /// 做不到时没有：输入 "/" 不弹面板，按普通文字发。
-    func usableCommands(in catalog: AgentCatalog?) -> [PiSlashCommand] { capabilities.contains(.commands) ? catalog?.commands ?? [] : [] }
+    func usableCommands(in catalog: AgentCatalog?) -> [SlashCommand] { capabilities.contains(.commands) ? catalog?.commands ?? [] : [] }
 }
 
 nonisolated extension DeliveryMode {

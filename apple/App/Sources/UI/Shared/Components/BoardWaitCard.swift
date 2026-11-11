@@ -11,8 +11,8 @@ struct BoardWaitCard: View {
     var body: some View {
         BoardLink(to: held.session) {
             #if os(macOS)
-            // 悬停提示里等了多久跟着走：到下一次换字的时刻（`PiClock.Waited`）只重画卡面，挂着菜单的那一层不随时间重建
-            Moments(next: PiClock.Waited(since: held.session.stateSince).discreteInput(after:)) { now in face.help(tip(at: now)) }
+            // 悬停提示里等了多久跟着走：到下一次换字的时刻（`SessionClock.Waited`）只重画卡面，挂着菜单的那一层不随时间重建
+            Moments(next: SessionClock.Waited(since: held.session.stateSince).discreteInput(after:)) { now in face.help(tip(at: now)) }
             #else
             face
             #endif
@@ -25,7 +25,7 @@ struct BoardWaitCard: View {
 
     private var face: some View {
         BoardCardLayout(advancing: false, pulse: leftPulse) {
-            PiStateGlyph(status: held.deciding ? .asking : .awaitsReply).font(.system(size: TaskMetrics.ring))
+            StateGlyph(status: held.deciding ? .asking : .awaitsReply).font(.system(size: TaskMetrics.ring))
                 .frame(width: TaskMetrics.cardLead, height: TaskMetrics.cardLead)
             if let project { BoardProjectGlyph(project: project) }
             if held.item?.task.isPinned == true { BoardPin() }
@@ -39,20 +39,20 @@ struct BoardWaitCard: View {
         if let item = held.item {
             CardActions(card: item.task, leaf: item.steps == nil, opens: true, session: held.session)
         } else {
-            SessionActions(session: held.session, board: PiSessionListItem(state: held.session))
+            SessionActions(session: held.session, board: SessionListItem(state: held.session))
         }
     }
 
     private var leftPulse: BoardPulse {
         guard arrival?.from == .advancing else { return BoardPulse() }
-        return workspace.pulse(of: held.item?.agent ?? PiSessionListItem(state: held.session))
+        return workspace.pulse(of: held.item?.agent ?? SessionListItem(state: held.session))
     }
 
     #if os(macOS)
     private func tip(at now: Date) -> String {
         Dotted(
             workspace.catalog?.project(held.project)?.shownName, held.deciding ? held.session.asked.line : String(localized: "待回复"),
-            PiClock.Waited(since: held.session.stateSince).format(now)
+            SessionClock.Waited(since: held.session.stateSince).format(now)
         ).visible
     }
     #endif

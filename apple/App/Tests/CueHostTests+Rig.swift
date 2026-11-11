@@ -160,7 +160,7 @@ extension CueHostTests {
             }
         }
 
-        func chose(model: String, effort: PiThinkingLevel) async throws {
+        func chose(model: String, effort: ThinkingLevel) async throws {
             try await services.updateCue {
                 $0.model = model
                 $0.effort = .known(effort)
@@ -212,7 +212,7 @@ extension CueHostTests {
 
         /// 另一台 Mac（mac-b）醒着、它的在线记录同步到了这里：它上面的会话这才算在跑，Cue 才能对它说话（`CueStore.runtimeIsConfirmed`）。
         /// 返回替那台 Mac 写会话状态的记录器。
-        func remoteMac() async throws -> PiStateRecorder { try await app.runtimeRecorder(on: "mac-b") }
+        func remoteMac() async throws -> StateRecorder { try await app.runtimeRecorder(on: "mac-b") }
 
         var health: CueHealth? { CueHealth.read(library: app.directory.appending(path: "Library")) }
 

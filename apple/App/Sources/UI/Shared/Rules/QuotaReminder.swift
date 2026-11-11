@@ -31,7 +31,7 @@ nonisolated struct QuotaReminder {
             let meter = QuotaMeter.Window(window, at: fireAt)
             return QuotaReminder(
                 id: "\(prefix)\(quota.id)/\(Int((window.resetsAt.timeIntervalSince1970 / 60).rounded()))", fireAt: fireAt,
-                title: String(localized: "\(PiProvider(id: quota.provider).account) \(meter.name)还剩 \(meter.percent)"),
+                title: String(localized: "\(Provider(id: quota.provider).account) \(meter.name)还剩 \(meter.percent)"),
                 body: body(resetsAt: window.resetsAt, fireAt: fireAt))
         }
     }

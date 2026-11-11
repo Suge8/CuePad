@@ -16,7 +16,7 @@ public struct SendRecord: Identifiable, Equatable, Sendable {
   public var cardID: UUID?
   public var sentAt: Date
   public var modifiedAt: Date
-  /// 送出它的投送请求（消息的 `PiChatMessage.deliveryID` 与它对上）与请求的来源：请求完成后会被清理，这两项留下来。
+  /// 送出它的投送请求（消息的 `ChatMessage.deliveryID` 与它对上）与请求的来源：请求完成后会被清理，这两项留下来。
   public var deliveryID: UUID?
   public var origin: Open<DeliveryOrigin>?
 }

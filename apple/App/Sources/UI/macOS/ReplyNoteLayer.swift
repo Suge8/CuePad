@@ -4,14 +4,14 @@ import CueStore
 import SwiftUI
 
 extension View {
-    func replyNotes(session: UUID, messages: [PiChatMessage]) -> some View {
+    func replyNotes(session: UUID, messages: [ChatMessage]) -> some View {
         modifier(ReplyNoteLayer(session: session, messages: messages))
     }
 }
 
 private struct ReplyNoteLayer: ViewModifier {
     let session: UUID
-    let messages: [PiChatMessage]
+    let messages: [ChatMessage]
     @Environment(AppServices.self) private var services
     @State private var watch = WatchHandle()
     @State private var prose = ProseCache()
@@ -191,7 +191,7 @@ private struct Anchored: Layout {
 private final class ProseCache {
     private var texts: [UUID: (source: String, prose: [String])] = [:]
 
-    func texts(of message: PiChatMessage) -> [String] {
+    func texts(of message: ChatMessage) -> [String] {
         if let hit = texts[message.id], hit.source == message.text { return hit.prose }
         let prose = MarkdownText.proseTexts(message.text)
         texts[message.id] = (message.text, prose)

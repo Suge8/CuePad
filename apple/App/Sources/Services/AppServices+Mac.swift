@@ -23,7 +23,7 @@ extension AppServices {
         }
         follow { await self.historyStore.keepPruned() }
         startStrayFileCleanup()
-        // 启动对账在 `init` 里已做完（`launch`）：重新接上的会话沿用对账前的起点（`PiBridge.carryOver`）
+        // 启动对账在 `init` 里已做完（`launch`）：重新接上的会话沿用对账前的起点（`Bridge.carryOver`）
         startRuntimes()
         follow(reporting: { .syncUnavailable(String(localized: "Agent 状态没能写入同步记录：\(String(describing: $0))")) }) {
             try await self.consumePiChanges(piChanges)
@@ -146,7 +146,7 @@ extension AppServices {
 
 
     /// 不经主线程：回填时每个文件都来取一次，主线程同时在画界面。
-    nonisolated func loadHistoryStart(for file: URL) async -> PiHistoryStart? {
+    nonisolated func loadHistoryStart(for file: URL) async -> HistoryStart? {
         do {
             return try await historyStore.start(for: file)
         } catch {
@@ -192,8 +192,8 @@ extension AppServices {
     private func runtimeIndexes(_ agent: AgentKind) -> Bool { paths.sessionsDirectory(of: agent) == nil }
 
     private func index(_ agent: AgentKind, connected: Bool) async {
-        if let indexer = PiHistoryIndexer(
-            agent: agent, paths: paths, transcriptWindow: PiChat.transcriptWindow, files: store.files,
+        if let indexer = HistoryIndexer(
+            agent: agent, paths: paths, transcriptWindow: Chat.transcriptWindow, files: store.files,
             start: { [weak self] file in await self?.loadHistoryStart(for: file) }) {
             let scope = connected ? .all : await hostedScope(of: agent)
             runtimes[agent]?.follow(scope)
@@ -215,7 +215,7 @@ extension AppServices {
     }
 
     /// 读不出来就只跟在线的。
-    private func hostedScope(of agent: AgentKind) async -> PiHistoryScope {
+    private func hostedScope(of agent: AgentKind) async -> HistoryScope {
         do {
             return try await historyStore.hostedScope(of: agent)
         } catch {
@@ -228,9 +228,9 @@ extension AppServices {
     static let backfillBatch = 200
 
     /// 先落检查点再写会话行；读到的会话名也交给这家的接入（会话状态有要从文件里得知的，`AgentRuntime.read`）。
-    func consumePiHistory(_ events: AsyncStream<PiHistoryEvent>, agent: AgentKind) async {
+    func consumePiHistory(_ events: AsyncStream<HistoryEvent>, agent: AgentKind) async {
         await historyStore.beginBackfill()
-        var pending: [PiHistoryUpdate] = []
+        var pending: [HistoryUpdate] = []
         var backfilling = true
         func flush() async {
             guard !pending.isEmpty else { return }
@@ -261,8 +261,8 @@ extension AppServices {
         await flush()
     }
 
-    func jumpToTerminal(_ id: CuePi.PiSession.ID) async throws -> PiJumpResult {
-        guard let session = pi.session(id: id) else { throw PiBridgeError.unknownSession(id) }
+    func jumpToTerminal(_ id: CuePi.Session.ID) async throws -> JumpResult {
+        guard let session = pi.session(id: id) else { throw BridgeError.unknownSession(id) }
         return await terminal.jump(to: session)
     }
 }

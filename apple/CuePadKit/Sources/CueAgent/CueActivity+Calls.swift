@@ -33,7 +33,7 @@ extension CueActivity {
     let args = Parsed(arguments)
     func line(_ action: String, _ target: String? = nil) -> String {
       guard let target else { return action }
-      return action + PiSessionState.detailSeparator + target.clipped(targetLimit)
+      return action + SessionState.detailSeparator + target.clipped(targetLimit)
     }
     switch tool {
     case "task": return args.line("action") == "peek" && args.board ? "看板" : "看任务"
@@ -57,11 +57,11 @@ extension CueActivity {
   /// 做完的一次调用在经过清单里的一条：动到的任务与会话是开始时认出的（`named`，新建的那件开始时还没有，做成了再认，`Named.added`），记在这一条上；
   /// 认不出（写错了、调用失败）就照它写的引用，不带任务与会话。
   /// 对你说的话（tell）已在对话里：清单里只留首行。记忆的 UUID 是 Cue 内部的身份，不写给人看。
-  public static func item(tool: String, arguments: String, named: Named, failed: Bool, store: CueStore) async -> PiChatMessage.Tools.Item {
+  public static func item(tool: String, arguments: String, named: Named, failed: Bool, store: CueStore) async -> ChatMessage.Tools.Item {
     let args = Parsed(arguments)
-    func item(_ kind: PiChatMessage.Tools.Kind, _ target: String, at place: Named? = nil) -> PiChatMessage.Tools.Item {
+    func item(_ kind: ChatMessage.Tools.Kind, _ target: String, at place: Named? = nil) -> ChatMessage.Tools.Item {
       .init(
-        kind: kind, target: target.clipped(PiChatMessage.Tools.targetLimit), failed: failed, task: place?.task, name: place?.name,
+        kind: kind, target: target.clipped(ChatMessage.Tools.targetLimit), failed: failed, task: place?.task, name: place?.name,
         session: place?.session)
     }
     switch tool {
@@ -87,7 +87,7 @@ extension CueActivity {
         // 挂在任务上的点了开那件任务（气泡里就是这条定时）；没挂的不能点
         var task: UUID?
         if !failed, let ref = args.line("task") { task = try? await CueReferences(store: store).task(ref).id }
-        return .init(kind: .schedule, target: "定时：\(text)".clipped(PiChatMessage.Tools.targetLimit), failed: failed, task: task, name: text)
+        return .init(kind: .schedule, target: "定时：\(text)".clipped(ChatMessage.Tools.targetLimit), failed: failed, task: task, name: text)
       case "zoom": return item(.read, "翻记忆")
       case "forget": return item(.other, "忘掉一条记忆")
       case "pin": return item(.other, (args.raw["pinned"] as? Bool) == false ? "一条记忆取消重点" : "一条记忆标为重点")
@@ -104,7 +104,7 @@ extension CueActivity {
   /// setup 的一次调用（正在用时那一句与经过里那一条同一句）："看设置 · quota""改大脑：agent=codex""建项目「官网」"。
   static func setupWords(_ args: Parsed) -> String {
     switch args.line("action") {
-    case "look": return "看设置" + (args.line("part").map { PiSessionState.detailSeparator + $0 } ?? "")
+    case "look": return "看设置" + (args.line("part").map { SessionState.detailSeparator + $0 } ?? "")
     case "set":
       let changed = ["agent", "model", "effort", "name"].compactMap { key in args.line(key).map { "\(key)=\($0)" } }
         + [(args.raw["fast"] as? Bool).map { "fast=\($0)" }].compactMap(\.self)
@@ -118,7 +118,7 @@ extension CueActivity {
   /// Cue 写的那件活或那个会话，与工具同一个认法（session 写成任务的编号也认作那件任务）：`name` 是它叫什么，认不出照它写的；没指哪一处为 nil。
   public struct Named: Sendable {
     public let task: UUID?
-    /// 是会话时（`PiSessionState.id`）
+    /// 是会话时（`SessionState.id`）
     public let session: UUID?
     public let name: String?
     /// "「名字」"
@@ -132,7 +132,7 @@ extension CueActivity {
 
     /// 开始时认，与工具同一个认法（`CueTools.place`）：add 要建的那件还没有，只照标题叫它（按标题去找会认成同名的旧任务，比如早做完的那件）。
     init(_ args: Parsed, tool: String, store: CueStore) async {
-      var task: Card?, found: PiSessionState?
+      var task: Card?, found: SessionState?
       switch try? await CueReferences(store: store).place(Args(args.raw)) {
       case .session(let state): found = state
       case .task(let card): task = card

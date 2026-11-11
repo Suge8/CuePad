@@ -9,8 +9,8 @@ nonisolated enum CuePresence: Equatable, Sendable {
     case asleep
     case unconfirmed(String)
     case idle
-    case sending(PiDelivery.Transit)
-    case working(PiWorkState, detail: String?, step: CueActivity.Touch?)
+    case sending(DeliveryShown.Transit)
+    case working(WorkState, detail: String?, step: CueActivity.Touch?)
     case unreachable(String)
 
     /// `moment`：此刻与到 Cue 那台 Mac 的同步从什么时候起通着（`AppServices.speech`）。
@@ -42,17 +42,17 @@ nonisolated enum CuePresence: Equatable, Sendable {
 
     var isUsingTool: Bool { if case .working(.tool, _, _) = self { true } else { false } }
 
-    var shown: PiShown? {
+    var shown: SessionShown? {
         switch self {
-        case .sending(let transit): PiShown(status: .delivery(.inTransit(transit)))
-        case .working(let state, _, _): PiShown(status: .working(state))
+        case .sending(let transit): SessionShown(status: .delivery(.inTransit(transit)))
+        case .working(let state, _, _): SessionShown(status: .working(state))
         case .disabled, .asleep, .unconfirmed, .idle, .unreachable: nil
         }
     }
 
     var progress: String? {
         guard case .working(_, let detail, let step) = self else { return nil }
-        return step.map(CueActivity.line) ?? detail.flatMap(PiProgress.action).map(PiProgress.gist) ?? shown?.label
+        return step.map(CueActivity.line) ?? detail.flatMap(SessionProgress.action).map(SessionProgress.gist) ?? shown?.label
     }
 
     /// 这一句总写在名字下面（Cue 那一行、页头、小组件），不再带名字。

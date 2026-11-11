@@ -53,11 +53,11 @@ enum DeliverableLooks {
 
     private static let memory = NSCache<NSString, Entry>()
 
-    static func cached(_ preview: PiPreview, box: LookBox) -> DeliverableLook? {
+    static func cached(_ preview: PreviewItem, box: LookBox) -> DeliverableLook? {
         memory.object(forKey: key(preview, box) as NSString)?.look
     }
 
-    static func load(_ preview: PiPreview, file: URL, box: LookBox, scale: CGFloat, caches: URL) async -> DeliverableLook {
+    static func load(_ preview: PreviewItem, file: URL, box: LookBox, scale: CGFloat, caches: URL) async -> DeliverableLook {
         if let cached = cached(preview, box: box) { return cached }
         let key = key(preview, box)
         async let detail = detail(preview, file: file)
@@ -78,7 +78,7 @@ enum DeliverableLooks {
         return look
     }
 
-    private static func image(_ preview: PiPreview, file: URL, box: LookBox, scale: CGFloat, caches: URL) async -> CGImage? {
+    private static func image(_ preview: PreviewItem, file: URL, box: LookBox, scale: CGFloat, caches: URL) async -> CGImage? {
         switch preview.kind {
         case .image: await decode(file, box: box)
         case .web: if let snapshot = await PageSnapshots.png(for: preview, file: file, caches: caches) { await decode(snapshot, box: box) } else { nil }
@@ -89,7 +89,7 @@ enum DeliverableLooks {
         }
     }
 
-    private static func detail(_ preview: PiPreview, file: URL) async -> String? {
+    private static func detail(_ preview: PreviewItem, file: URL) async -> String? {
         switch preview.kind {
         case .audio, .video: await duration(file)
         case .pdf: await pageCount(file).map { String(localized: "\($0) 页") }
@@ -98,7 +98,7 @@ enum DeliverableLooks {
     }
 
     /// 自己排出来的那几类（`rendered`）的画法变过就换一个 `pageLook`，磁盘上旧画法的那张不再认。
-    private static func key(_ preview: PiPreview, _ box: LookBox) -> String {
+    private static func key(_ preview: PreviewItem, _ box: LookBox) -> String {
         let page = drawn(preview.kind) ? "-\(pageLook)\(box.dark ? "-dark" : "")" : ""
         return "\(preview.hash)@\(box.width)x\(box.height)\(box.fills ? "fill" : "fit")\(box.framed ? "-framed" : "")\(page)"
     }
@@ -106,7 +106,7 @@ enum DeliverableLooks {
     private static let pageLook = "faded"
 
     /// 按外观画（`LookBox.dark`），深色下不再压暗。
-    static func drawn(_ kind: PiPreviewKind?) -> Bool { [.markdown, .diff, .text].contains(kind) }
+    static func drawn(_ kind: PreviewKind?) -> Bool { [.markdown, .diff, .text].contains(kind) }
 
     /// 沿长的那一边挪到细节最多的地方：截图与页面上有字、有控件的地方细节多，空白的底没有，页面的标题与表单、几张方案图各自不同的那一块都落在框里。
     /// 不用 Vision 的注意力显著热图：白底页面上它热成一大片，按重心居中常落在两块内容之间的空白上；模拟器上请求出错，截图、录屏里全落到兜底。

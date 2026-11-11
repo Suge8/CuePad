@@ -45,7 +45,7 @@ nonisolated struct CueWakeHeader: Equatable, Sendable {
 
         /// 会话叫醒的一轮里 Cue 对一件任务做的（经过只记任务，不记它绑的会话）也算落在这一处——它醒来就是为这个会话，
         /// 对别的会话做的（转给另一个会话）才是落在别处。
-        func settled(by touch: CueActivity.Touch) -> PiChatMessage.Tools.Kind? {
+        func settled(by touch: CueActivity.Touch) -> ChatMessage.Tools.Kind? {
             guard [.talk, .leave, .done, .stop].contains(touch.kind) else { return nil }
             let here = switch target {
             case .session(let id, _): touch.session.map { $0 == id } ?? (touch.task != nil)
@@ -67,7 +67,7 @@ nonisolated struct CueWakeHeader: Equatable, Sendable {
             for stir in stirs.reversed() where seen.insert(stir.session ?? stir.task?.uuidString ?? "").inserted {
                 if let id = stir.session {
                     places.append(Place(
-                        title: row.name(session: id), kind: stir.kind, target: .session(PiSessionState.recordID(sessionID: id), sessionID: id)))
+                        title: row.name(session: id), kind: stir.kind, target: .session(SessionState.recordID(sessionID: id), sessionID: id)))
                 } else if let task = stir.task {
                     places.append(Place(title: row.name(task: task), kind: stir.kind, target: .task(task)))
                 }
@@ -75,7 +75,7 @@ nonisolated struct CueWakeHeader: Equatable, Sendable {
             self.places = places
         case .schedule(let fires):
             places = fires.lazy.compactMap { fire in lines[fire.line].map { (fire, $0) } }.first.map { fire, line in
-                let title = PiProgress.gist(line.text)
+                let title = SessionProgress.gist(line.text)
                 let last = CueScheduled.Last(due: fire.due, at: row.createdAt)
                 return [Place(
                     title: fires.count > 1 ? String(localized: "\(title) 等 \(fires.count) 条") : title, target: line.task.map(Target.task) ?? .schedules,
@@ -98,13 +98,13 @@ nonisolated extension CuePlace {
 }
 
 extension CueChange.Kind {
-    /// 形状借那时那一处的状态图形（`PiShown.icon`），不画那一处此刻的状态——此刻在跑的会话在这里也不动。
+    /// 形状借那时那一处的状态图形（`SessionShown.icon`），不画那一处此刻的状态——此刻在跑的会话在这里也不动。
     var icon: Icon {
         switch self {
         // 停下是会话这一轮跑完：借在跑的心电线静止形（省略号是"歇着"那个此刻的状态，单看不知所云）
         case .settled: .session
-        case .waitingForUser: PiShown(status: .asking).icon
-        case .failed: PiShown(status: .failed(.other)).icon
+        case .waitingForUser: SessionShown(status: .asking).icon
+        case .failed: SessionShown(status: .failed(.other)).icon
         case .undelivered: .undelivered
         case .done: .complete
         // 等子代理那两颗点，小点空心：交出去的没动静了（与"停下了"的省略号形状不同族）
@@ -113,7 +113,7 @@ extension CueChange.Kind {
     }
 
     /// 经过是历史，平时一律灰；只有还没处理的那一条着这件事的颜色（`CueNoteLog` 的 `openTint`），已经处理过的不再像在报警。做完、停下了从不着色。
-    func isUnresolved(_ status: PiShown.Status, session: PiSessionState, since: Date) -> Bool {
+    func isUnresolved(_ status: SessionShown.Status, session: SessionState, since: Date) -> Bool {
         guard session.stateSince <= since else { return false }
         return switch self {
         case .waitingForUser: status == .asking

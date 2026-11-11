@@ -3,10 +3,10 @@ import SwiftUI
 
 /// 会话发到手机的文件在会话页里只有这一个样子。
 struct PreviewBatch: View {
-    let previews: [PiPreview]
+    let previews: [PreviewItem]
     let group: String
-    let reply: (PiPreview) -> Void
-    let open: (PiPreview) -> Void
+    let reply: (PreviewItem) -> Void
+    let open: (PreviewItem) -> Void
 
     var body: some View {
         strip
@@ -38,7 +38,7 @@ struct PreviewBatch: View {
         }
     }
 
-    private func tile(_ preview: PiPreview, _ shape: DeliverableTile.Shape) -> some View {
+    private func tile(_ preview: PreviewItem, _ shape: DeliverableTile.Shape) -> some View {
         DeliverableTile(
             preview: preview, label: preview.title, shape: shape, captioned: true, zoom: PreviewZoomKey(group: group, preview: preview.id), open: open)
         .contextMenu { Button("回复", icon: .reply) { reply(preview) } }
@@ -76,12 +76,12 @@ struct DeliverableTile: View {
 
     static let captionGap: CGFloat = 5
 
-    let preview: PiPreview
+    let preview: PreviewItem
     let label: String
     let shape: Shape
     let captioned: Bool
     let zoom: PreviewZoomKey
-    let open: (PiPreview) -> Void
+    let open: (PreviewItem) -> Void
     @Environment(AppServices.self) private var services
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
@@ -143,7 +143,7 @@ struct DeliverableTile: View {
     private var kindIcon: Icon { Self.icon(preview.kind) }
 
     /// 回复框里引用的那一行（`ReplyNoteStack`）没有画面时也写它。
-    static func icon(_ kind: PiPreviewKind?) -> Icon {
+    static func icon(_ kind: PreviewKind?) -> Icon {
         switch kind {
         case .audio: .audio
         case .video: .play

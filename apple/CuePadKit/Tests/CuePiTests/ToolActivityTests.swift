@@ -23,8 +23,8 @@ struct ToolActivityTests {
         #"{"type":"message","id":"\#(id)","parentId":"\#(parent)","timestamp":"\#(SessionFile.stamp(second))","message":{"role":"toolResult","toolCallId":"\#(call)","toolName":"\#(name)","content":[{"type":"text","text":"\#(output)"}],"isError":\#(failed),"durationMs":12,"timestamp":\#(second)}}"#
     }
 
-    private func index(_ file: SessionFile, from checkpoint: PiHistoryCheckpoint? = nil) throws -> PiHistoryUpdate {
-        try PiHistory.index(file: file.url, from: checkpoint)
+    private func index(_ file: SessionFile, from checkpoint: HistoryCheckpoint? = nil) throws -> HistoryUpdate {
+        try History.index(file: file.url, from: checkpoint)
     }
 
     private func busyRound() throws -> SessionFile {

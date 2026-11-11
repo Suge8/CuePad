@@ -34,7 +34,7 @@ extension AppServices {
 }
 
 #if os(macOS)
-extension CuePi.PiSession {
+extension CuePi.Session {
     var sendTarget: SendTarget { SendTarget(kind: .piSession, name: displayName, ref: sessionID) }
 }
 #endif

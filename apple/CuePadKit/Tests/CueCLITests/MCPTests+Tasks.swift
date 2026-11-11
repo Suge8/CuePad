@@ -10,7 +10,7 @@ extension MCPTests {
     let alpha = try await sandbox.project("甲")
     let beta = try await sandbox.project("乙")
     try await store.updateCueProfile { $0.hostID = "mac-a"; $0.enabledAt = .now }
-    try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "free-session", state: .settled, title: "空闲会话", hosted: true)
+    try await StateRecorder(store: store, hostID: "mac-a").update(sessionID: "free-session", state: .settled, title: "空闲会话", hosted: true)
     try await Server.run(library: sandbox.directory) { server in
       let first = try await server.call("task", ["action": "add", "title": "同名任务", "project": "甲"])
       let second = try await server.call("task", ["action": "add", "title": "同名任务", "project": "乙"])
@@ -55,7 +55,7 @@ extension MCPTests {
     let task = try await store.createTask("已有任务")
     try await store.setStatus(task.id, .inProgress)
     let started = try #require(try await store.card(task.id)?.startedAt)
-    try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "session-one", state: .thinking, title: "已有会话", hosted: true)
+    try await StateRecorder(store: store, hostID: "mac-a").update(sessionID: "session-one", state: .thinking, title: "已有会话", hosted: true)
     try await Server.run(library: sandbox.directory) { server in
       let args = ["action": "bind", "task": task.id.uuidString, "session": "session-one"]
       _ = try await server.call("task", args)
@@ -95,7 +95,7 @@ extension MCPTests {
       _ = try await server.call("task", ["action": "start", "task": taskID])
       #expect(try await store.deliveryRequests().first?.launch?.project == project.id)
 
-      try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "s9", state: .settled, projectID: project.id)
+      try await StateRecorder(store: store, hostID: "mac-a").update(sessionID: "s9", state: .settled, projectID: project.id)
       try await store.bindSession("s9", to: step.id)
       #expect(try await server.refused("task", ["action": "start", "task": taskID]).contains("say"))
       #expect(try await store.deliveryRequests().count == 1)
@@ -111,8 +111,8 @@ extension MCPTests {
       $0.enabledAt = .now
     }
     let task = try await store.createTask("修好登录页", in: project.id)
-    let launch = try await store.requestLaunch(PiLaunch(project: project.id, prompt: task.body, token: "fix-login"), title: task.heading, on: "mac-a", card: task.id)
-    try await PiStateRecorder(store: store, hostID: "mac-a").update(
+    let launch = try await store.requestLaunch(LaunchRequest(project: project.id, prompt: task.body, token: "fix-login"), title: task.heading, on: "mac-a", card: task.id)
+    try await StateRecorder(store: store, hostID: "mac-a").update(
       sessionID: "s1", state: .settled, title: "修好登录页", projectID: project.id, launchToken: launch.launch?.token, hosted: true)
     try await store.deleteDelivery(launch.id)
     try await Server.run(library: sandbox.directory) { server in

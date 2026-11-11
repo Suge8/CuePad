@@ -33,7 +33,7 @@ enum CueQuotaWords {
   }
 
   /// 带上重置时刻：额度用完时 Cue 只看 `setup look agents` 一次，换不了模型就照它定时接着做。
-  static func binding(_ quota: AccountQuota, model: PiModelKey, at now: Date) -> String {
+  static func binding(_ quota: AccountQuota, model: ModelKey, at now: Date) -> String {
     guard let window = live(quota, at: now)?.binding(at: now, model: model.id) else { return "\(account(quota)) \(status(quota, at: now))" }
     return "\(account(quota)) \(name(window)) 已用 \(percent(window, at: now))，\(CueScheduleWords.time(window.resetsAt, now: now)) 重置"
   }

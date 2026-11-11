@@ -26,7 +26,7 @@ extension DeliveryRecoveryTests {
             let row = try #require(try await store.syncRow(recordName: id.uuidString.lowercased()))
             #expect(try await remote.applyRemote([.save(row, systemFields: Data())]).isEmpty)
         }
-        try await PiStateRecorder(store: remote, hostID: TestApp.hostID).update(sessionID: "chosen-session", state: .thinking)
+        try await StateRecorder(store: remote, hostID: TestApp.hostID).update(sessionID: "chosen-session", state: .thinking)
         let phoneWorkspace = Workspace(services: phone.services)
         let taskID = task.id
         phoneWorkspace.perform { try await $0.bindSession("chosen-session", to: taskID) }

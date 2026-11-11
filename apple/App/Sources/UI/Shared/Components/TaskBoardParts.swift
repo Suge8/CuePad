@@ -224,7 +224,7 @@ struct BoardColumn: View {
     }
 
     private func drop(session id: String) {
-        let loose = board.advancing.compactMap(\.loose) + board.held.filter { $0.item == nil }.map { PiSessionListItem(state: $0.session) }
+        let loose = board.advancing.compactMap(\.loose) + board.held.filter { $0.item == nil }.map { SessionListItem(state: $0.session) }
         guard column == .done, let agent = loose.first(where: { $0.state.sessionID == id }) else { return }
         workspace.attempt { try await workspace.finish(agent) }
     }

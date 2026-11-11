@@ -77,7 +77,7 @@ extension CueTools {
   static let overviewLimit = 60
 
   /// 会话是哪家 Agent 的（本版本不认识的写 Agent）。
-  static func agentName(_ session: PiSessionState) -> String { session.agent.known?.name ?? "Agent" }
+  static func agentName(_ session: SessionState) -> String { session.agent.known?.name ?? "Agent" }
 
   func peek(_ card: Card) async throws -> Result {
     let detail = try await store.cueTaskDetail(card.id)
@@ -113,7 +113,7 @@ extension CueTools {
     return .ok(lines.joined(separator: "\n"))
   }
 
-  func peek(_ session: PiSessionState) async throws -> Result {
+  func peek(_ session: SessionState) async throws -> Result {
     guard let detail = try await store.cueSessionDetail(session.sessionID) else { throw Failure("找不到会话「\(session.title)」") }
     let bound = try await store.tasks(boundTo: session.sessionID)
     let left = try await store.cueState()?.left ?? []
@@ -128,7 +128,7 @@ extension CueTools {
   }
 
   /// 发到手机的文件，每份一行：id（提问与做完的 show 照它点名）、标题、类型、发来的时刻与本机路径（读文件工具按扩展名认类型，本机那份的扩展名由附件的键定）。
-  private func deliveredLines(_ previews: [PiPreview]) -> [String] {
+  private func deliveredLines(_ previews: [PreviewItem]) -> [String] {
     guard !previews.isEmpty else { return [] }
     return ["发到手机的（id，图片、PDF 用 read 打开）："] + previews.map { preview in
       "  - \(preview.id.shortID) 「\(preview.title)」\(preview.kind?.label ?? preview.name) · \(Self.clock(preview.createdAt)) · "
@@ -140,7 +140,7 @@ extension CueTools {
     date.formatted(.verbatim("\(month: .twoDigits)-\(day: .twoDigits) \(hour: .twoDigits(clock: .twentyFourHour, hourCycle: .zeroBased)):\(minute: .twoDigits)", timeZone: .current, calendar: .current))
   }
 
-  private static func sessionHead(_ session: PiSessionState, now: Date, left: [CueLeft]) -> String {
+  private static func sessionHead(_ session: SessionState, now: Date, left: [CueLeft]) -> String {
     var head = "\(agentName(session))会话「\(session.title)」\(CueEnvelope.state(session.state)) \(CueEnvelope.duration(now.timeIntervalSince(session.stateSince)))"
     if left.contains(where: { $0.holds(for: session) }) { head += " · " + CueEnvelope.leftNote }
     if let question = session.question {
@@ -151,7 +151,7 @@ extension CueTools {
 
   /// 会话带的子代理此刻怎样，每个一行、缩进两格：名册是 Agent 报给 Mac 的（FireCode 的名册、Claude Code 的后台任务……），
   /// 主会话嘴上说在等的，照这里看是不是真在等。
-  private static func subagentLines(_ session: PiSessionState, now: Date) -> [String] {
+  private static func subagentLines(_ session: SessionState, now: Date) -> [String] {
     guard !session.subagents.isEmpty else { return [] }
     let running = session.subagents.count(where: \.isRunning)
     return ["  子代理 \(session.subagents.count) 个，" + (running == 0 ? "都不在跑：" : "\(running) 个在跑：")]
@@ -160,7 +160,7 @@ extension CueTools {
       }
   }
 
-  private static func subagentPhase(_ agent: PiSubagentState, now: Date) -> String {
+  private static func subagentPhase(_ agent: SubagentState, now: Date) -> String {
     let settled = agent.settledAt.map { " \(clock($0))" } ?? ""
     return switch agent.phase.known {
     case .running: "在跑" + (agent.progressAt.map { now.timeIntervalSince($0) >= 60 ? "，\(CueEnvelope.duration(now.timeIntervalSince($0)))没动静" : "" } ?? "")
@@ -178,7 +178,7 @@ extension CueTools {
   /// 前面先列更早你对它说过的（`earlier`，重发的同一句、最近几轮里你说过的只列一次；他或 Agent 说的同一句截短了，不算列过）：托付的事常在几轮之前，交回时不提它就会被漏掉
   /// （长程评测里"做完顺手升版本号"漏核对就 done，实测）。你说的每一句在这里只出现一次、原文照列不截：截掉的后半句里可能正是要核对的那件；
   /// 这是 Cue 自己写的短话（长程评测 234 句 say 中位 92 字、最长 347 字）。
-  /// 这一轮还没答完时末尾再列它到目前最后说的一段（`PiRecap.pendingTools`）：会话停下来问之前说的（测试过没过、倾向哪个）常是拿主意的依据，
+  /// 这一轮还没答完时末尾再列它到目前最后说的一段（`Recap.pendingTools`）：会话停下来问之前说的（测试过没过、倾向哪个）常是拿主意的依据，
   /// 答完前它只在这一轮的经过里、不进对话（短场景"放行过的不再问"没它就看不到测试已过，答成不推送）。
   private static func conversation(_ detail: CueSessionDetail, opening: String? = nil) -> [String] {
     var lines: [String] = [], listed = Set(detail.recent.filter { $0.saidByCue(detail.cueSent) }.map { flat(CueFormat.plainText($0.text)) })

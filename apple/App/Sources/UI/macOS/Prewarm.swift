@@ -23,14 +23,14 @@ struct Prewarm: View {
     private static let bubbleFrames = 12
 
     /// 回复框要一个会话：已结束的、不属于任何项目的占位，不写进任何地方。
-    private static let session = PiSessionState(
+    private static let session = SessionState(
         id: UUID(), sessionID: "prewarm", hostID: "", title: "", projectID: nil, state: .known(.ended), detail: nil, folder: nil,
         lastPrompt: nil, lastReply: nil, question: nil, notify: nil, stateSince: .distantPast, busySince: nil, createdAt: .distantPast,
         modifiedAt: .distantPast)
 
     private static let messages = [
-        PiChatMessage(sessionID: "prewarm", entryID: "1", seq: 1, role: .user, text: "把这个函数改成异步的", at: .distantPast),
-        PiChatMessage(
+        ChatMessage(sessionID: "prewarm", entryID: "1", seq: 1, role: .user, text: "把这个函数改成异步的", at: .distantPast),
+        ChatMessage(
             sessionID: "prewarm", entryID: "2", seq: 2, role: .pi,
             text: "改好了：\n\n- 调用方都加了 `await`\n- 错误经 `throws` 抛出\n\n```swift\nfunc load() async throws {}\n```\n\n| 文件 | 改动 |\n| --- | --- |\n| a.swift | +3 −1 |", at: .distantPast),
     ]
@@ -40,10 +40,10 @@ struct Prewarm: View {
             switch step {
             case .conversation:
                 ChatScroll(followKey: 0, readingWidth: Spacing.reading, inset: Spacing.page, follow: $follow) {
-                    PiConversation(
-                        session: Self.session, items: PiChat.entries(Self.messages), messages: Self.messages, window: ChatWindow(count: PiConversation.firstWindow, earlier: 0) {})
+                    Conversation(
+                        session: Self.session, items: Chat.entries(Self.messages), messages: Self.messages, window: ChatWindow(count: Conversation.firstWindow, earlier: 0) {})
                 }
-            case .replyBar: PiReplyBar(session: Self.session, config: nil, catalog: nil, stopping: false) {}
+            case .replyBar: ReplyBar(session: Self.session, config: nil, catalog: nil, stopping: false) {}
             case .newSession: NewSessionForm(agents: nil) { _, _ in }
             case .taskBubble:
                 if let warmTask {

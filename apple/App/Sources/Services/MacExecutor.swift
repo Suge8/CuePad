@@ -6,11 +6,11 @@ import Foundation
 /// 全 App 经桥给 Agent 会话发消息，经各 Agent 的接入在后台开会话、接着会话的只有这里；成功送出的话记发送记录。
 final class MacExecutor {
     let store: CueStore
-    let pi: PiBridge
+    let pi: Bridge
     private let runtimes: [AgentKind: any AgentRuntime]
     let hostID: String
     private let workspaces: Workspaces
-    let recorder: PiStateRecorder
+    let recorder: StateRecorder
     private let library: AgentLibraryKeeper
     private let upload: @Sendable (UUID) async -> Void
     private let fetchFile: FileFetching
@@ -19,7 +19,7 @@ final class MacExecutor {
     private var running: DeliveryExecutor?
 
     init(
-        store: CueStore, pi: PiBridge, runtimes: [AgentKind: any AgentRuntime], hostID: String, workspaces: Workspaces, recorder: PiStateRecorder,
+        store: CueStore, pi: Bridge, runtimes: [AgentKind: any AgentRuntime], hostID: String, workspaces: Workspaces, recorder: StateRecorder,
         library: AgentLibraryKeeper, upload: @escaping @Sendable (UUID) async -> Void, fetchFile: @escaping FileFetching,
         refreshQuota: @escaping AccountQuotas.Query,
         reportIssue: @escaping @MainActor (String) -> Void
@@ -47,7 +47,7 @@ final class MacExecutor {
                 do { return try await store.completeDeliveryWithdrawal(request, on: hostID, refused: ShownText(SendError.alreadyHanded)) }
                 catch { return .unconfirmed(ShownText(error)) }
             }
-            return await PiDeliveryConfirmation(store: store, pi: pi).recover(request)
+            return await DeliveryConfirmation(store: store, pi: pi).recover(request)
         }, preparation: { [pi] request in
             await MacDeliveryPreparation(pi: pi).current(request)
         }) { [weak self] request, access in
@@ -112,7 +112,7 @@ final class MacExecutor {
     /// 送出后记发送记录，带上请求 id，扩展写进会话文件的那条消息据此与请求气泡对上。
     private func deliver(_ request: DeliveryRequest, access: DeliveryAdmission.Access) async throws -> DeliveryOutcome {
         let (_, id, resumed) = try await connect(request.target, access: access)
-        guard let session = pi.session(id: id) else { throw PiBridgeError.unknownSession(id) }
+        guard let session = pi.session(id: id) else { throw BridgeError.unknownSession(id) }
         do {
             let result = try await send(request.content, of: request, to: session)
             return resumed ? DeliveryRefusal.afterStarting(result) : result
@@ -122,7 +122,7 @@ final class MacExecutor {
         }
     }
 
-    private func send(_ content: String, of request: DeliveryRequest, to session: CuePi.PiSession) async throws -> DeliveryOutcome {
+    private func send(_ content: String, of request: DeliveryRequest, to session: CuePi.Session) async throws -> DeliveryOutcome {
         var outgoing = try DeliveryMessage.make(content, request: request, session: session, files: store.files)
         if request.isFromCue {
             let context = try await store.cueSendContext(in: session.sessionID)
@@ -133,7 +133,7 @@ final class MacExecutor {
         do { try await pi.send(outgoing, to: session.id) }
         catch {
             guard session.agent == .pi, !DeliveryRefusal.definitelyNotHanded(error) else { throw error }
-            return PiDeliveryConfirmation(store: store, pi: pi).pending(in: session, reason: ShownText(error))
+            return DeliveryConfirmation(store: store, pi: pi).pending(in: session, reason: ShownText(error))
         }
         do {
             try await store.linkDeliveredCard(request, toSession: session.sessionID)
@@ -142,7 +142,7 @@ final class MacExecutor {
         }
         // 其余接入沿用各自的受理合同，不抹掉已有能力。
         guard !session.confirmsFromHistory else {
-            return PiDeliveryConfirmation(store: store, pi: pi).pending(in: session)
+            return DeliveryConfirmation(store: store, pi: pi).pending(in: session)
         }
         await record(content, of: request, to: session.sendTarget)
         return .succeeded
@@ -183,10 +183,10 @@ final class MacExecutor {
         }
     }
 
-    private func connect(_ target: SendTarget, access: DeliveryAdmission.Access) async throws -> (sessionID: String, id: CuePi.PiSession.ID, resumed: Bool) {
+    private func connect(_ target: SendTarget, access: DeliveryAdmission.Access) async throws -> (sessionID: String, id: CuePi.Session.ID, resumed: Bool) {
         let ref = try sessionID(of: target)
         if let live = pi.session(sessionID: ref) { return (ref, live.id, false) }
-        if case .existingOnly = access { throw PiBridgeError.sessionEnded }
+        if case .existingOnly = access { throw BridgeError.sessionEnded }
         guard let indexed = try await store.piSession(ref) else { throw SendError.sessionNotOnThisMac(target.name) }
         try requireDirectory(URL(filePath: indexed.cwd, directoryHint: .isDirectory))
         try Task.checkCancellation()
@@ -212,7 +212,7 @@ final class MacExecutor {
         let id = try await runtime(launch.opening).open(
             in: directory, launchToken: launch.token, name: launch.name, model: launch.model, thinking: launch.thinking)
         if launch.fast || pi.session(id: id)?.fast == true {
-            do { try await pi.configure(PiConfig(fast: launch.fast), in: id) }
+            do { try await pi.configure(SessionConfig(fast: launch.fast), in: id) }
             catch { try? await pi.end(id); throw error }
         }
         let opened = clock.now
@@ -267,7 +267,7 @@ final class MacExecutor {
         }
     }
 
-    private func directory(of folder: PiFolder) async throws -> URL {
+    private func directory(of folder: FolderSource) async throws -> URL {
         switch folder {
         case .project(let id):
             guard let path = try await store.directory(of: id) else {

@@ -40,7 +40,7 @@ struct SendTests {
         #expect(request.hostID == TestApp.hostID && request.handledBy == TestApp.hostID)
         #expect(request.target == SendTarget(kind: .piSession, name: "work", ref: "sess-1"))
         #expect(ext.messages == [
-            PiMessage(text: "before\n\nafter", images: [PiImage(mimeType: "image/png", data: png)], deliveryID: request.id.uuidString)
+            SessionMessage(text: "before\n\nafter", images: [MessageImage(mimeType: "image/png", data: png)], deliveryID: request.id.uuidString)
         ])
         #expect(try await services.store.deliveryRequests().count == 1)
         let records = try RawDB(services.location.databaseURL).rows("SELECT targetKind, targetName, targetRef, content, cardID FROM sendRecords")

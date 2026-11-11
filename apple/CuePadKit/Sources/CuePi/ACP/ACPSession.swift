@@ -11,13 +11,13 @@ import Foundation
 @MainActor
 final class ACPSession {
     let dialect: any ACPDialect
-    private(set) weak var bridge: PiBridge?
+    private(set) weak var bridge: Bridge?
     private(set) weak var processes: HostedProcesses?
     let brain: BrainSession?
     private(set) var connection: ACPConnection?
     private(set) var sessionID: String?
     private(set) var cwd: URL?
-    private(set) var id: PiSession.ID?
+    private(set) var id: Session.ID?
     var facts = SessionFacts()
     private(set) var opened: JSONValue = [:]
     var options: [JSONValue] = []
@@ -37,7 +37,7 @@ final class ACPSession {
     /// 停下这一轮后它的结束不算出错
     private var stopping = false
     /// 等这一轮变化的（排着的那一句跑起来、这一轮结束）；进程退出时也放行。大脑等一轮自然做完，不限时
-    private let changes = Occurrences(timeout: nil, timeoutError: PiBridgeError.ackTimeout)
+    private let changes = Occurrences(timeout: nil, timeoutError: BridgeError.ackTimeout)
     /// 停下这一轮后等它结束的：取消的回应不来（Agent 收下取消却不回也不断线）时到 `AgentTimeouts.stop` 放弃
     private let stops: Occurrences
     let stopPhase = StopPhase()
@@ -48,26 +48,26 @@ final class ACPSession {
     private var contextUsed: Int?
     var contextWindow: Int?
     var brainSetup: (config: CueBrainConfig, setup: ACPBrainSetup)?
-    var configured: (model: String?, effort: PiThinkingLevel?) = (nil, nil)
+    var configured: (model: String?, effort: ThinkingLevel?) = (nil, nil)
 
-    init(dialect: any ACPDialect, bridge: PiBridge, processes: HostedProcesses, timing: Timing = .system) {
+    init(dialect: any ACPDialect, bridge: Bridge, processes: HostedProcesses, timing: Timing = .system) {
         self.dialect = dialect
         self.bridge = bridge
         self.processes = processes
         brain = nil
-        stops = Occurrences(timeout: AgentTimeouts.stop, timing: timing, timeoutError: PiBridgeError.ackTimeout)
+        stops = Occurrences(timeout: AgentTimeouts.stop, timing: timing, timeoutError: BridgeError.ackTimeout)
     }
 
     init(dialect: any ACPDialect) {
         self.dialect = dialect
         brain = BrainSession()
-        stops = Occurrences(timeout: AgentTimeouts.stop, timeoutError: PiBridgeError.ackTimeout)
+        stops = Occurrences(timeout: AgentTimeouts.stop, timeoutError: BridgeError.ackTimeout)
     }
 
     /// 起好的连接；没起或进程已退出时抛错（托管会话 `sessionEnded`，大脑 `notRunning`）
     var live: ACPConnection {
         get throws {
-            guard let connection, !connection.isClosed else { throw brain == nil ? PiBridgeError.sessionEnded : HostedSessionError.notRunning }
+            guard let connection, !connection.isClosed else { throw brain == nil ? BridgeError.sessionEnded : HostedSessionError.notRunning }
             return connection
         }
     }
@@ -110,7 +110,7 @@ final class ACPSession {
         contextWindow = currentModel.flatMap { dialect.window(of: $0, in: opened) }
     }
 
-    func attach(_ session: PiSession) {
+    func attach(_ session: Session) {
         id = session.id
         var session = session
         publishOptions(to: &session)
@@ -323,9 +323,9 @@ final class ACPSession {
         case "tool_call_update":
             toolSettled(update)
         case "available_commands_update":
-            let listed = (update["availableCommands"]?.array ?? []).compactMap { command -> PiSlashCommand? in
+            let listed = (update["availableCommands"]?.array ?? []).compactMap { command -> SlashCommand? in
                 guard let name = command["name"]?.string else { return nil }
-                return PiSlashCommand(
+                return SlashCommand(
                     name: name, summary: command["description"]?.string.map { $0.clipped(ToolDetail.limit) }, source: .known(.builtin),
                     hint: command["input"]?["hint"]?.string)
             }

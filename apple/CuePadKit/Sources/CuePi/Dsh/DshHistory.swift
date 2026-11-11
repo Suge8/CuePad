@@ -4,7 +4,7 @@ import CueText
 import Foundation
 
 /// dsh 会话文件（`DshRuntime.sessions` 下的 `<编码后的工作目录>/<会话 id>/session.v4.jsonl`，明文，见 `DshRuntime` 头注释）的逐行解码，
-/// 规则与 Pi 的对话、摘要一致（见 `PiHistory`）。
+/// 规则与 Pi 的对话、摘要一致（见 `History`）。
 ///
 /// - 第一行是会话头（`type: session`）：会话 id、工作目录；子代理自己的会话（`delegationDepth` 大于 0）不是会话列表里的会话。
 /// - 一行一个事件 `{type, seq, time, data}`：`turn/start` 开始一轮，`turn/end` 结束（`aborted` 是被停下）；`user/message` 里来源是
@@ -17,7 +17,7 @@ import Foundation
 enum DshHistory {
     static let fileName = "session.v4.jsonl"
 
-    static func ingest(_ raw: UnsafeRawBufferPointer, _ cp: inout PiHistoryCheckpoint, _ transcript: inout PiHistory.Transcript) throws {
+    static func ingest(_ raw: UnsafeRawBufferPointer, _ cp: inout HistoryCheckpoint, _ transcript: inout History.Transcript) throws {
         cp.seq += 1
         guard let bytes = raw.borrowedData, let line = try? decoder.decode(Line.self, from: bytes)
         else { return }
@@ -25,7 +25,7 @@ enum DshHistory {
         if let time { cp.lastActivity = time }
         let at = time ?? cp.lastActivity ?? .distantPast
         let data = line.data
-        let entry = PiHistory.Entry(id: data?.id ?? data?.message?.id ?? "\(cp.seq)", seq: cp.seq, at: at)
+        let entry = History.Entry(id: data?.id ?? data?.message?.id ?? "\(cp.seq)", seq: cp.seq, at: at)
         switch line.type {
         case "session":
             cp.sessionID = line.id
@@ -43,7 +43,7 @@ enum DshHistory {
             cp.spoke(blocks.compactMap { $0.type == "text" ? $0.text : nil }.joined(separator: "\n"), entry)
         case "tool/call":
             guard let id = data?.callId else { return }
-            let arguments = data?.arguments.flatMap { try? decoder.decode(PiToolArguments.self, from: Data($0.utf8)) } ?? PiToolArguments()
+            let arguments = data?.arguments.flatMap { try? decoder.decode(ToolArguments.self, from: Data($0.utf8)) } ?? ToolArguments()
             cp.toolStarted(id: id, name: data?.name ?? "", arguments: arguments)
         case "tool/result":
             guard let id = data?.message?.toolCallId else { return }
@@ -60,7 +60,7 @@ enum DshHistory {
         }
     }
 
-    private static func said(_ data: Line.Payload, _ entry: PiHistory.Entry, into cp: inout PiHistoryCheckpoint, transcript: inout PiHistory.Transcript) throws {
+    private static func said(_ data: Line.Payload, _ entry: History.Entry, into cp: inout HistoryCheckpoint, transcript: inout History.Transcript) throws {
         let text = (data.content ?? []).compactMap { $0.type == "text" ? $0.text : nil }.joined(separator: "\n")
         switch data.source?.kind {
         case "user":

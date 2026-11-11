@@ -4,13 +4,13 @@ import CueText
 import Foundation
 
 extension CodexRuntime {
-    public func send(_ message: PiMessage, in id: PiSession.ID) async throws {
-        guard let session = tracked[id] else { throw PiBridgeError.unknownSession(id) }
+    public func send(_ message: SessionMessage, in id: Session.ID) async throws {
+        guard let session = tracked[id] else { throw BridgeError.unknownSession(id) }
         try await deliver(Self.input(message.text, images: message.images, skills: session.skills), clientID: CodexHistory.clientID(for: message.deliveryID), to: session)
     }
 
     /// 以这个会话的 `/skill:名字` 开头的是用这个技能说的——技能条目在前、其余的话在后（同在 Codex 里选了技能再打字），投送请求 id 照样随这条消息进会话文件；名字不是它的技能的照原文。
-    static func input(_ text: String, images: [PiImage], skills: [(name: String, path: String)]) -> [JSONValue] {
+    static func input(_ text: String, images: [MessageImage], skills: [(name: String, path: String)]) -> [JSONValue] {
         let head = text.prefix { !$0.isWhitespace }
         guard head.hasPrefix("/skill:"), let skill = skills.first(where: { "/skill:\($0.name)" == head }) else {
             return CodexRPC.input(text: text, images: images)
@@ -43,9 +43,9 @@ extension CodexRuntime {
         publish(session)
     }
 
-    public func command(_ line: String, deliveryID _: String?, in id: PiSession.ID) async throws {
-        guard let session = tracked[id] else { throw PiBridgeError.unknownSession(id) }
-        guard line.hasPrefix("/") else { throw PiBridgeError.rejected("bad_request") }
+    public func command(_ line: String, deliveryID _: String?, in id: Session.ID) async throws {
+        guard let session = tracked[id] else { throw BridgeError.unknownSession(id) }
+        guard line.hasPrefix("/") else { throw BridgeError.rejected("bad_request") }
         let parts = line.dropFirst().split(separator: " ", maxSplits: 1)
         let name = parts.first.map(String.init) ?? ""
         let argument = parts.count > 1 ? parts[1].trimmingCharacters(in: .whitespaces) : ""
@@ -53,29 +53,29 @@ extension CodexRuntime {
         case "compact":
             try await call(session, "thread/compact/start", ["threadId": .string(session.threadID)])
         case "name":
-            guard !argument.isEmpty else { throw PiBridgeError.rejected("missing_argument") }
-            try await configure(PiConfig(name: argument), in: id)
+            guard !argument.isEmpty else { throw BridgeError.rejected("missing_argument") }
+            try await configure(SessionConfig(name: argument), in: id)
         case "model":
-            guard !argument.isEmpty else { throw PiBridgeError.rejected("missing_argument") }
-            try await configure(PiConfig(model: PiModelKey(provider: CodexModel.provider, id: argument)), in: id)
+            guard !argument.isEmpty else { throw BridgeError.rejected("missing_argument") }
+            try await configure(SessionConfig(model: ModelKey(provider: CodexModel.provider, id: argument)), in: id)
         case "plan", "default":
-            guard hosted[session.pid] != nil else { throw PiBridgeError.rejected("unknown_command") }
+            guard hosted[session.pid] != nil else { throw BridgeError.rejected("unknown_command") }
             try await collaborate(name == "plan" ? "plan" : "default", in: session)
             if !argument.isEmpty {
                 try await deliver(CodexRPC.input(text: argument, images: []), clientID: CodexHistory.clientID(for: nil), to: session)
             }
         case _ where name.hasPrefix("skill:"):
-            guard session.skills.contains(where: { "skill:\($0.name)" == name }) else { throw PiBridgeError.rejected("unknown_command") }
+            guard session.skills.contains(where: { "skill:\($0.name)" == name }) else { throw BridgeError.rejected("unknown_command") }
             try await deliver(Self.input(line, images: [], skills: session.skills), clientID: CodexHistory.clientID(for: nil), to: session)
         default:
-            throw PiBridgeError.rejected("unknown_command")
+            throw BridgeError.rejected("unknown_command")
         }
     }
 
     /// 实验接口。模型与强度照会话此刻的，说明用这个模式内置的。
     private func collaborate(_ mode: String, in session: Tracked) async throws {
         let current = bridge.session(id: session.id)
-        guard let model = current?.model?.key.id else { throw PiBridgeError.rejected("failed: " + String(localized: "不知道这个会话用的模型")) }
+        guard let model = current?.model?.key.id else { throw BridgeError.rejected("failed: " + String(localized: "不知道这个会话用的模型")) }
         var settings: [String: JSONValue] = ["model": .string(model), "developer_instructions": .null]
         if case .known(let level)? = current?.thinking { settings["reasoning_effort"] = .string(CodexModel.effort(level)) }
         try await call(session, "thread/settings/update", [
@@ -83,8 +83,8 @@ extension CodexRuntime {
         ])
     }
 
-    public func abort(_ id: PiSession.ID) async throws {
-        guard let session = tracked[id] else { throw PiBridgeError.unknownSession(id) }
+    public func abort(_ id: Session.ID) async throws {
+        guard let session = tracked[id] else { throw BridgeError.unknownSession(id) }
         session.stopPhase.cancelAll()
         try await interrupt(session)
     }
@@ -101,13 +101,13 @@ extension CodexRuntime {
         } catch CodexRPCError.server(-32600, _) {
             // 这一轮在问与停之间自己结束了（"no active turn to interrupt"）：要的就是它不在跑
         } catch CodexRPCError.server(_, let message) {
-            throw PiBridgeError.rejected("failed: \(message)")
+            throw BridgeError.rejected("failed: \(message)")
         }
     }
 
-    public func configure(_ config: PiConfig, in id: PiSession.ID) async throws {
+    public func configure(_ config: SessionConfig, in id: Session.ID) async throws {
         let model = config.model, thinking = config.thinking, name = config.name
-        guard let session = tracked[id] else { throw PiBridgeError.unknownSession(id) }
+        guard let session = tracked[id] else { throw BridgeError.unknownSession(id) }
         if let name {
             try await call(session, "thread/name/set", ["threadId": .string(session.threadID), "name": .string(name)])
             bridge.update(id) { $0.name = name }
@@ -117,8 +117,8 @@ extension CodexRuntime {
         if models == nil { models = try await CodexModel.list(rpc) }
         let target = model?.id ?? bridge.session(id: id)?.model?.key.id
         let entry = models?.first { $0.id == target }
-        if model != nil, entry == nil { throw PiBridgeError.unknownModel(.codex) }
-        if config.fast == true, entry?.supportsFast != true { throw PiBridgeError.unsupported }
+        if model != nil, entry == nil { throw BridgeError.unknownModel(.codex) }
+        if config.fast == true, entry?.supportsFast != true { throw BridgeError.unsupported }
         var settings: [String: JSONValue] = ["threadId": .string(session.threadID)]
         if let model { settings["model"] = .string(model.id) }
         if let thinking { settings["effort"] = .string(CodexModel.effort(thinking.clamped(to: entry?.efforts ?? []))) }
@@ -134,8 +134,8 @@ extension CodexRuntime {
     }
 
     /// 终端里的会话 Codex 没有让终端退出的接口（能力表里没有，桥先拒绝）。托管的这一刻下桥，`tracked` 留到进程退出：停下这一轮还要用它。
-    public func end(_ id: PiSession.ID) throws {
-        guard let session = tracked[id], hosted[session.pid] != nil else { throw PiBridgeError.unsupported }
+    public func end(_ id: Session.ID) throws {
+        guard let session = tracked[id], hosted[session.pid] != nil else { throw BridgeError.unsupported }
         processes.retire(id, link: self)
     }
 
@@ -145,7 +145,7 @@ extension CodexRuntime {
             let params = options.merging(["threadId": .string(session.threadID), "input": .array(input)]) { $1 }
             try await control(session).call("turn/start", .object(params))
         } catch CodexRPCError.server(_, let message) {
-            throw PiBridgeError.rejected("failed: \(message)")
+            throw BridgeError.rejected("failed: \(message)")
         }
     }
 
@@ -153,7 +153,7 @@ extension CodexRuntime {
         do {
             try await control(session).call(method, params)
         } catch CodexRPCError.server(_, let message) {
-            throw PiBridgeError.rejected("failed: \(message)")
+            throw BridgeError.rejected("failed: \(message)")
         }
     }
 }

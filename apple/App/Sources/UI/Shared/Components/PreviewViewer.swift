@@ -3,20 +3,20 @@ import SwiftUI
 
 /// `reply` 为 nil 时照挂全屏页的那一页（`previewPresenter` 的 `reply`），只有拍板卡另给（那几个选项）。
 struct PreviewOpening: Identifiable, Equatable {
-    let preview: PiPreview
-    let batch: [PiPreview]
+    let preview: PreviewItem
+    let batch: [PreviewItem]
     let group: String
     var reply: PreviewReply?
     var looks: [UUID: String] = [:]
 
     var id: UUID { preview.id }
 
-    /// 这一批在对话里的那一条（`group` 就是它的 id：会话里是 `PiChatEntry.id`，Cue 页是那条消息）；会话底栏的"回复"用它（`PreviewReplyBar`）。
+    /// 这一批在对话里的那一条（`group` 就是它的 id：会话里是 `ChatEntry.id`，Cue 页是那条消息）；会话底栏的"回复"用它（`PreviewReplyBar`）。
     var entry: UUID? { UUID(uuidString: group) }
 
     func index(of current: UUID) -> Int { batch.firstIndex { $0.id == current } ?? 0 }
 
-    func title(of preview: PiPreview) -> String { looks[preview.id] ?? preview.title }
+    func title(of preview: PreviewItem) -> String { looks[preview.id] ?? preview.title }
 
     func neighbor(of current: UUID, step: Int) -> UUID? {
         let next = index(of: current) + step
@@ -28,7 +28,7 @@ struct PreviewOpening: Identifiable, Equatable {
 
 enum PreviewReply: Equatable {
     case cue
-    case session(PiSessionState)
+    case session(SessionState)
     case answer(CueMessage)
 }
 
@@ -61,7 +61,7 @@ struct PreviewContent: View {
     /// 一行不宽过它，居中；Mac 飞出的落点按它算（`PreviewFlight`）。
     static let measure: CGFloat = 680
 
-    let preview: PiPreview
+    let preview: PreviewItem
     let file: URL?
     var active = true
     @Environment(\.palette) private var palette

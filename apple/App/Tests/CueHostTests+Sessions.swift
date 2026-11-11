@@ -41,7 +41,7 @@ extension CueHostTests {
         func glanced(_ round: CueNoteRound) -> Bool {
             guard let place = round.header?.places.first, round.header?.places.count == 1 else { return false }
             return round.outcome?.kind == .leave && place.title == title && place.kind == .settled
-                && place.target == .session(PiSessionState.recordID(sessionID: session.sessionID), sessionID: session.sessionID)
+                && place.target == .session(SessionState.recordID(sessionID: session.sessionID), sessionID: session.sessionID)
         }
         let first = try await notes()
         #expect(first.count == 1 && first.allSatisfy(glanced), "\(first)")

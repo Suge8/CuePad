@@ -41,7 +41,7 @@ extension OpenCodeRuntime {
         for child in all where child.parentID != nil && child.updatedAt >= connection.startedAt {
             guard let parent = child.parentID, sessions[parent] != nil else { continue }
             parents[child.id] = parent
-            let phase: PiSubagentPhase = if active.contains(child.id) { .running } else {
+            let phase: SubagentPhase = if active.contains(child.id) { .running } else {
                 switch child.outcome {
                 case "failed": .failed
                 case "interrupted": .interrupted
@@ -83,7 +83,7 @@ extension OpenCodeRuntime {
         try await catalog(tracked.directory, client)
         sessions[id]?.facts.questions = permissions.map(Self.question) + forms.map(Self.question)
         let window = OpenCodeTurn.window(of: last?.model, in: catalogs[tracked.directory]?.models ?? [])
-        sessions[id]?.context = window.map { PiContextUsage(tokens: last?.tokens?.prompt, window: $0) }
+        sessions[id]?.context = window.map { ContextUsage(tokens: last?.tokens?.prompt, window: $0) }
         sessions[id]?.facts.compacting = compaction?.status == "running"
         if tracked.info.model == nil { sessions[id]?.info.model = last?.model }
         if tracked.facts.failure != nil, let error = last?.error?.message { sessions[id]?.facts.failure = error }
@@ -96,8 +96,8 @@ extension OpenCodeRuntime {
         let commands = try await client.get(OpenCodeData<[OpenCodeCommand]>.self, "/api/command", directory: directory).data
         let catalog = Catalog(
             models: models,
-            commands: [PiSlashCommand(name: Self.compact, summary: String(localized: "压缩上下文"), source: .known(.builtin))]
-                + commands.map { PiSlashCommand(name: $0.name, summary: $0.description.map { String($0.prefix(120)) }, source: .known(.prompt)) })
+            commands: [SlashCommand(name: Self.compact, summary: String(localized: "压缩上下文"), source: .known(.builtin))]
+                + commands.map { SlashCommand(name: $0.name, summary: $0.description.map { String($0.prefix(120)) }, source: .known(.prompt)) })
         catalogs[directory] = catalog
         return catalog
     }
@@ -110,17 +110,17 @@ extension OpenCodeRuntime {
         ended[sessionID].map { time > $0 } ?? true
     }
 
-    func bridgeID(_ sessionID: String, _ connection: Connection) -> PiSession.ID { "\(sessionID).\(connection.pid)" }
+    func bridgeID(_ sessionID: String, _ connection: Connection) -> Session.ID { "\(sessionID).\(connection.pid)" }
 
     func publish(_ sessionID: String) {
         guard let connection, connection.ready, var tracked = sessions[sessionID], tracked.online else { return }
         let id = bridgeID(sessionID, connection)
         let catalog = catalogs[tracked.directory]
         let model = tracked.info.model.map { ref in
-            catalog?.models.first { $0.key == PiModelKey(provider: ref.providerID, id: ref.id) }?.option
-                ?? PiModelOption(key: PiModelKey(provider: ref.providerID, id: ref.id), name: ref.id, thinkingLevels: [.off])
+            catalog?.models.first { $0.key == ModelKey(provider: ref.providerID, id: ref.id) }?.option
+                ?? ModelOption(key: ModelKey(provider: ref.providerID, id: ref.id), name: ref.id, thinkingLevels: [.off])
         }
-        func fill(_ session: inout PiSession) {
+        func fill(_ session: inout Session) {
             tracked.facts.publish(to: &session)
             session.name = tracked.info.title
             session.firstMessage = tracked.firstMessage
@@ -133,9 +133,9 @@ extension OpenCodeRuntime {
             session.commands = catalog?.commands ?? []
         }
         if bridge.session(id: id) == nil {
-            var session = PiSession(
+            var session = Session(
                 id: id, sessionID: sessionID, agent: .opencode, sessionFile: nil, pid: connection.pid,
-                cwd: URL(filePath: tracked.directory, directoryHint: .isDirectory), terminal: PiTerminal(),
+                cwd: URL(filePath: tracked.directory, directoryHint: .isDirectory), terminal: TerminalIdentity(),
                 state: .settled, stateSince: .now)
             fill(&session)
             bridge.attach(session, via: self)
@@ -146,7 +146,7 @@ extension OpenCodeRuntime {
     }
 
     /// 强度是模型的 `variant`；没设（`default`）时，没有强度可选的模型是 `off`，有的不知道是哪一档。
-    static func thinking(_ variant: String?, of model: PiModelOption) -> Open<PiThinkingLevel>? {
+    static func thinking(_ variant: String?, of model: ModelOption) -> Open<ThinkingLevel>? {
         guard let variant, variant != "default" else { return model.thinkingLevels == [.off] ? .known(.off) : nil }
         return Open(rawValue: variant)
     }

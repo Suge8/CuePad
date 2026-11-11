@@ -5,7 +5,7 @@ import Darwin
 import Foundation
 
 
-extension PiSession {
+extension Session {
     static func claudeID(sessionID: String, pid: Int32) -> String { "\(sessionID).\(pid)" }
 }
 
@@ -13,31 +13,31 @@ enum ClaudeCode {
     /// 模型的提供方写成 Agent 自己：Claude Code 的模型名（`opus`、`sonnet`）在它自己的命名空间里
     static let provider = AgentKind.claudeCode.modelProvider!
 
-    /// 一轮出错的原文（交给 `PiErrorSummary` 归类）：状态码与详情在前，错误类型与 Claude Code 写进对话的那句原话按提供方错误体写，
+    /// 一轮出错的原文（交给 `ErrorSummary` 归类）：状态码与详情在前，错误类型与 Claude Code 写进对话的那句原话按提供方错误体写，
     /// 归类认类型、说明带上原话（对话里那条回答就是它，不再另显示一处）。
     static func failure(code: String, status: Int? = nil, details: String? = nil, message: String?) -> String {
         let body: JSONValue = ["error": ["type": .string(code), "message": message.map(JSONValue.string) ?? .null]]
         return [status.map(String.init), details, String(decoding: body.data, as: UTF8.self)].compactMap { $0 }.joined(separator: " ")
     }
 
-    static func model(_ id: String, name: String? = nil, levels: [PiThinkingLevel] = []) -> PiModelOption {
-        PiModelOption(key: PiModelKey(provider: provider, id: id), name: name ?? id, thinkingLevels: levels)
+    static func model(_ id: String, name: String? = nil, levels: [ThinkingLevel] = []) -> ModelOption {
+        ModelOption(key: ModelKey(provider: provider, id: id), name: name ?? id, thinkingLevels: levels)
     }
 
     /// 去掉 `default` 那项（"Default (recommended)"）：它解析到的是推荐的模型，不一定是配置的，名字也不说是哪个模型；
     /// 按解析出的 id 认回模型时（探测的默认、托管会话报的模型）落到同一个模型的别名上（`sonnet` 排在完整 id 前面）。
-    static func models(in info: JSONValue) -> [(option: PiModelOption, resolved: String?)] {
+    static func models(in info: JSONValue) -> [(option: ModelOption, resolved: String?)] {
         (info["models"]?.array ?? []).compactMap { model in
             guard let value = model["value"]?.string, value != "default" else { return nil }
-            let levels = model["supportedEffortLevels"]?.array?.compactMap { $0.string.flatMap(PiThinkingLevel.init(rawValue:)) } ?? []
+            let levels = model["supportedEffortLevels"]?.array?.compactMap { $0.string.flatMap(ThinkingLevel.init(rawValue:)) } ?? []
             return (self.model(value, name: model["displayName"]?.string, levels: levels), model["resolvedModel"]?.string)
         }
     }
 
     /// Claude Code 的强度档（`--effort`、`effortLevel`）：没有关掉思考的档，更低的夹到 low。
-    static let efforts: [PiThinkingLevel] = [.low, .medium, .high, .xhigh, .max]
+    static let efforts: [ThinkingLevel] = [.low, .medium, .high, .xhigh, .max]
 
-    static func effort(_ level: PiThinkingLevel) -> String { level.clamped(to: efforts).rawValue }
+    static func effort(_ level: ThinkingLevel) -> String { level.clamped(to: efforts).rawValue }
 
     static func sessionFile(home: URL, cwd: URL, sessionID: String) -> URL {
         let encoded = String(decoding: realPath(cwd).utf16.map { unit -> UInt16 in
@@ -77,37 +77,37 @@ struct ClaudePermission {
     }
 
     /// 显示的问题；`answerable` 为 false 或交给终端时没有作答标识（只显示）。
-    func question(answerable: Bool = true) -> PiQuestion {
+    func question(answerable: Bool = true) -> Question {
         let id = answerable && self.answerable ? promptID : nil
         if let asked {
             let header = input["questions"]?.array?.first?["header"]?.string
             let text = [header, asked.question].compactMap { $0 }.joined(separator: "\n")
             // 终端里每道选择题都有"自己填"（Type something）
-            return PiQuestion(promptID: id, kind: .select, text: text.clipped(Self.textLimit), options: asked.options, allowsOther: true)
+            return Question(promptID: id, kind: .select, text: text.clipped(Self.textLimit), options: asked.options, allowsOther: true)
         }
         let text = PermissionWording.question(.claudeCode, String(localized: "使用 \(ToolDetail.name(tool))"), [ToolDetail.target(input), input["description"]?.string])
-        return PiQuestion(promptID: id, kind: .confirm, text: text)
+        return Question(promptID: id, kind: .confirm, text: text)
     }
 
     /// 作答写成 Claude Code 的决定（`{behavior, updatedInput}` 或 `{behavior: deny, message}`）；答案对不上抛 `rejected("bad_answer")`。
-    func decision(_ answer: PiAnswerValue, to id: String) throws -> JSONValue {
+    func decision(_ answer: AnswerValue, to id: String) throws -> JSONValue {
         if isQuestion { return ["behavior": "allow", "updatedInput": try answered(answer, to: id)] }
-        guard id == promptID else { throw PiBridgeError.rejected("stale_prompt") }
+        guard id == promptID else { throw BridgeError.rejected("stale_prompt") }
         switch answer {
         case .confirmed(true): return ["behavior": "allow", "updatedInput": input]
         case .confirmed(false): return ["behavior": "deny", "message": .string(PermissionWording.denied)]
-        default: throw PiBridgeError.rejected("bad_answer")
+        default: throw BridgeError.rejected("bad_answer")
         }
     }
 
-    func answered(_ answer: PiAnswerValue, to id: String) throws -> JSONValue {
-        guard id == promptID, answerable else { throw PiBridgeError.rejected("stale_prompt") }
-        guard let asked, case .object(var updated) = input else { throw PiBridgeError.rejected("bad_answer") }
+    func answered(_ answer: AnswerValue, to id: String) throws -> JSONValue {
+        guard id == promptID, answerable else { throw BridgeError.rejected("stale_prompt") }
+        guard let asked, case .object(var updated) = input else { throw BridgeError.rejected("bad_answer") }
         let chosen: String
         switch answer {
         case .option(let label) where asked.options.contains(label): chosen = label
         case .text(let text) where !text.isEmpty: chosen = text
-        default: throw PiBridgeError.rejected("bad_answer")
+        default: throw BridgeError.rejected("bad_answer")
         }
         updated["answers"] = [asked.question: .string(chosen)]
         return .object(updated)

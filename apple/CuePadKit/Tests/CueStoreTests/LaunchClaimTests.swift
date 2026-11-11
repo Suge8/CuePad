@@ -10,18 +10,18 @@ import Testing
     try await store.setDirectory("/work", for: project.id)
     let bound = try await store.createTask("修乱序", in: project.id), handed = try await store.createTask("改文案", in: project.id)
     for (leaf, token) in [(bound, "t-bound"), (handed, "t-handed")] {  // 同界面的"开新会话"：请求带着叶子自己
-      _ = try await store.requestLaunch(PiLaunch(project: project.id, prompt: nil, token: token), title: "圆桌", on: "mac-a", card: leaf.id)
+      _ = try await store.requestLaunch(LaunchRequest(project: project.id, prompt: nil, token: token), title: "圆桌", on: "mac-a", card: leaf.id)
     }
     #expect(try await store.launchingLeaves([bound.id, handed.id]) == [bound.id, handed.id])
 
-    try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "s1", state: .settled, projectID: project.id)
+    try await StateRecorder(store: store, hostID: "mac-a").update(sessionID: "s1", state: .settled, projectID: project.id)
     try await store.bindSession("s1", to: bound.id)
     try await store.unbindSession(from: bound.id)
     await nextMillisecond()
     _ = try await store.requestDelivery("先看看", to: SendTarget(kind: .piSession, name: "notes", ref: "s2"), on: "mac-a", card: handed.id)
     #expect(try await store.launchingLeaves([bound.id, handed.id]).isEmpty)
 
-    try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "s-late", state: .thinking, title: "圆桌", launchToken: "t-handed")
+    try await StateRecorder(store: store, hostID: "mac-a").update(sessionID: "s-late", state: .thinking, title: "圆桌", launchToken: "t-handed")
     #expect(try await store.card(handed.id)?.piSessionID == nil)
     #expect(try await store.handedSessions()[handed.id] == .session("s2"))
   }
@@ -36,7 +36,7 @@ import Testing
     ) { _, _ in .succeeded }
     try await executor.start()
     let launch = try await store.requestLaunch(
-      PiLaunch(project: project.id, prompt: idea.body, token: "t-late"), title: "圆桌", on: "mac-a", card: idea.id)
+      LaunchRequest(project: project.id, prompt: idea.body, token: "t-late"), title: "圆桌", on: "mac-a", card: idea.id)
     let plain = try await store.requestDelivery("别的", to: SendTarget(kind: .piSession, name: "notes", ref: "s2"), on: "mac-a", mode: .quota)
     _ = try await eventually(store, { try $0.deliveryRequests().filter { $0.status == .known(.succeeded) }.count }) { $0 == 2 }
 
@@ -46,7 +46,7 @@ import Testing
     #expect(try await store.deliveryRequest(launch.id) != nil)
     #expect(try await store.handedSessions() == [idea.id: .launching(.pi)])
 
-    try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "s-late", state: .thinking, title: "圆桌", launchToken: "t-late")
+    try await StateRecorder(store: store, hostID: "mac-a").update(sessionID: "s-late", state: .thinking, title: "圆桌", launchToken: "t-late")
     #expect(try await store.card(idea.id)?.piSessionID == "s-late")
 
     try await clock.waitForSleeper(until: clock.now.addingTimeInterval(DeliveryExecutor.retention.seconds))

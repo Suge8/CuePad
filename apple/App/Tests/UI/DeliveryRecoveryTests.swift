@@ -25,7 +25,7 @@ struct DeliveryRecoveryTests {
         return try #require(done)
     }
 
-    private func session(_ app: TestApp, reply: String) async throws -> (PiSessionState, FakeExtension) {
+    private func session(_ app: TestApp, reply: String) async throws -> (SessionState, FakeExtension) {
         let id = UUID().uuidString.lowercased()
         let ext = try await app.host.connect(id, cwd: app.directory.path)
         ext.onCommand = { [weak ext] _, command in
@@ -42,18 +42,18 @@ struct DeliveryRecoveryTests {
         return (try #require(try await app.services.store.allPiSessionStates().first { $0.sessionID == id }), ext)
     }
 
-    private func say(_ text: String, to session: PiSessionState, app: TestApp) async throws -> DeliveryRequest {
+    private func say(_ text: String, to session: SessionState, app: TestApp) async throws -> DeliveryRequest {
         let box = app.services.settings.replyDraftBinding(for: session.id)
         box.wrappedValue = ComposerDraft(text: text)
         await Workspace(services: app.services).speak(to: .session(session, mode: .send), from: box) { $0.stored }.value
         return try #require(try await app.services.store.deliveryRequests().first { $0.content == text })
     }
 
-    private func history(_ messages: [PiMessage], session: String, app: TestApp) async throws {
+    private func history(_ messages: [SessionMessage], session: String, app: TestApp) async throws {
         let file = app.directory.appending(path: "late.jsonl"), log = SessionFile(url: file, sessionID: session, cwd: app.directory.path)
         try log.reset()
         for message in messages { try log.user(message.text, delivery: message.deliveryID) }
-        let update = try PiHistory.index(file: file, agent: .pi, from: nil, files: app.services.store.files)
+        let update = try History.index(file: file, agent: .pi, from: nil, files: app.services.store.files)
         await app.services.consumePiHistory(AsyncStream { $0.yield(.updated(update)); $0.finish() }, agent: .pi)
     }
 
@@ -72,7 +72,7 @@ struct DeliveryRecoveryTests {
         #expect(uncertain.status == .known(.unconfirmed))
         #expect(uncertain.failure == nil)
         #expect(ext.messages.map(\.text) == ["从中断的地方继续"])
-        #expect(PiChat.outgoing([uncertain], messages: []).map(\.id) == [request.id])
+        #expect(Chat.outgoing([uncertain], messages: []).map(\.id) == [request.id])
 
         let workspace = Workspace(services: app.services)
         await workspace.resend(.request(uncertain), restoringInto: app.services.settings.replyDraftBinding(for: target.id)).value
@@ -85,7 +85,7 @@ struct DeliveryRecoveryTests {
         try await history(ext.messages, session: target.sessionID, app: app)
         let digest = try await SessionDigest.read(target.id, sessionID: target.sessionID, from: store)
         #expect(digest.messages.filter { $0.role == .known(.user) }.map(\.text) == ["从中断的地方继续"])
-        #expect(PiChat.outgoing(digest.deliveries, messages: digest.messages).isEmpty)
+        #expect(Chat.outgoing(digest.deliveries, messages: digest.messages).isEmpty)
         #expect(try await store.latest(of: request)?.status == .known(.succeeded))
         await app.services.executor.beginStop()()
     }
@@ -128,7 +128,7 @@ struct DeliveryRecoveryTests {
         let arrived = try #require(try await phone.services.store.latest(of: request))
         #expect(Said.request(arrived).trip(at: .always()) == .delivered)
         let digest = try await SessionDigest.read(target.id, sessionID: target.sessionID, from: phone.services.store)
-        #expect(PiChat.outgoing(digest.deliveries, messages: digest.messages).isEmpty)
+        #expect(Chat.outgoing(digest.deliveries, messages: digest.messages).isEmpty)
         #expect(digest.messages.map(\.text) == ["只上传一次结果"])
         await mac.services.executor.beginStop()()
     }
@@ -155,7 +155,7 @@ struct DeliveryRecoveryTests {
         defer { app.pi.stop(); app.services.cancelBackgroundWork() }
         let runtime = PipedHostedAgent(bridge: app.pi, agent: .claudeCode)
         runtime.host("other", state: .settled)
-        try await PiStateRecorder(store: store, hostID: TestApp.hostID).update(sessionID: "other", state: .settled, agent: .claudeCode)
+        try await StateRecorder(store: store, hostID: TestApp.hostID).update(sessionID: "other", state: .settled, agent: .claudeCode)
         let target = try #require(try await store.allPiSessionStates().first)
         let request = try await say("继续检查结果", to: target, app: app)
         try await app.services.executor.start()
@@ -221,7 +221,7 @@ struct DeliveryRecoveryTests {
         clock.advance(AgentTimeouts.ack)
         _ = try await outcome(request, in: store)
         let workspace = Workspace(services: app.services), taskID = task.id
-        try await PiStateRecorder(store: store, hostID: host).update(sessionID: "later-session", state: .thinking)
+        try await StateRecorder(store: store, hostID: host).update(sessionID: "later-session", state: .thinking)
         workspace.perform { try await $0.bindSession("later-session", to: taskID) }
         try await eventually("手动改绑生效") { try await store.leafSession(taskID) == "later-session" }
         try await history(ext.messages, session: target.sessionID, app: app)

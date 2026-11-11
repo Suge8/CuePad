@@ -69,7 +69,7 @@ extension CueTools {
   }
 
   /// 一个模型："anthropic/claude-opus-5-5（Claude Opus 5.5，默认）· 强度 low/medium/high · fast · 不能看图 · 额度：anthropic 本周 已用 85%"。
-  private static func model(_ option: PiModelOption, of agent: MacAgent, quotas: [AccountQuota], now: Date) -> String {
+  private static func model(_ option: ModelOption, of agent: MacAgent, quotas: [AccountQuota], now: Date) -> String {
     let named = [option.name.isEmpty ? nil : option.name, option.key == agent.model ? "默认" : nil].compactMap(\.self)
     var parts = [agent.kind.modelRef(option.key) + (named.isEmpty ? "" : "（\(named.joined(separator: "，"))）")]
     if !option.thinkingLevels.isEmpty { parts.append("强度 " + option.thinkingLevels.map(\.rawValue).joined(separator: "/")) }

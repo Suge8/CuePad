@@ -39,7 +39,7 @@ extension CueKeeper {
 
     /// 返回告诉你的那句；nil 是没换：照常报错，慢速周期到点再换着试（`steer`）。
     func failOver(_ failure: String) async -> ShownText? {
-        let summary = PiErrorSummary(failure)
+        let summary = ErrorSummary(failure)
         guard !summary.failure.retries, let settings = brainSettings, let from = settings.runtime.known else { return nil }
         let now = self.now
         do {

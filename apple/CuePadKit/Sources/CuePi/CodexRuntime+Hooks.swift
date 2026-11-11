@@ -30,7 +30,7 @@ extension CodexRuntime {
             if hosted[pid] == nil { startTurn(session, at: now) }
             bridge.update(id) { s in
                 if s.firstMessage == nil, let prompt = input["prompt"]?.string, !prompt.isEmpty {
-                    s.firstMessage = String(prompt.prefix(PiSessionName.firstMessageLimit))
+                    s.firstMessage = String(prompt.prefix(SessionName.firstMessageLimit))
                 }
             }
             refresh(id)
@@ -79,10 +79,10 @@ extension CodexRuntime {
 
     /// 子代理的钩子（`transcript` 为 false）带的会话文件是子代理自己的，不用。
     private func adoptFromHook(_ threadID: String, pid: Int32, _ input: JSONValue, transcript: Bool) -> Tracked {
-        let session = PiSession(
+        let session = Session(
             id: "\(threadID).\(pid)", sessionID: threadID, agent: .codex,
             sessionFile: transcript ? input["transcript_path"]?.string.map { URL(filePath: $0) } : nil,
-            pid: pid, cwd: URL(filePath: input["cwd"]?.string ?? "/", directoryHint: .isDirectory), terminal: PiTerminal(),
+            pid: pid, cwd: URL(filePath: input["cwd"]?.string ?? "/", directoryHint: .isDirectory), terminal: TerminalIdentity(),
             state: .settled, stateSince: .now)
         attach(session)
         return tracked[session.id]!
@@ -103,12 +103,12 @@ extension CodexRuntime {
             }
             guard hold != nil else {
                 call.finish()
-                session.facts.questions = [PiQuestion(promptID: nil, kind: .confirm, text: text)]
+                session.facts.questions = [Question(promptID: nil, kind: .confirm, text: text)]
                 return publish(session)
             }
         }
         session.reply = .hook(call, hold: hold)
-        session.facts.questions = [PiQuestion(promptID: promptID, kind: .confirm, text: text)]
+        session.facts.questions = [Question(promptID: promptID, kind: .confirm, text: text)]
         call.onClose = { [weak self, weak session] in
             guard let self, let session, case .hook(let held, _) = session.reply, held === call else { return }
             self.release(session)
@@ -122,7 +122,7 @@ extension CodexRuntime {
         guard case .hook(let call, _) = session.reply else { return }
         session.reply = nil
         call.finish()
-        session.facts.questions = session.facts.questions.map { PiQuestion(promptID: nil, kind: $0.kind, text: $0.text, options: $0.options) }
+        session.facts.questions = session.facts.questions.map { Question(promptID: nil, kind: $0.kind, text: $0.text, options: $0.options) }
         publish(session)
     }
 
@@ -147,11 +147,11 @@ extension CodexRuntime {
         return answerable
     }
 
-    static func userInput(_ arguments: JSONValue, promptID: String?) -> PiQuestion {
+    static func userInput(_ arguments: JSONValue, promptID: String?) -> Question {
         let first = arguments["questions"]?.array?.first ?? .object([:])
         let text = [first["header"]?.string, first["question"]?.string].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: "\n")
         let options = (first["options"]?.array ?? []).compactMap { $0["label"]?.string }
-        return PiQuestion(
+        return Question(
             promptID: promptID, kind: options.isEmpty ? .text : .select, text: String(text.prefix(500)), options: options,
             allowsOther: first["isOther"]?.bool == true)
     }
@@ -159,30 +159,30 @@ extension CodexRuntime {
     static let asyncQuestionTool = "request_user_input_async"
 
     /// `request_user_input_async` 的参数一次可以几个，标题就是完整的问题；Codex 的界面总给自由作答，所以只有一个时也能自己填。
-    static func asyncQuestion(_ arguments: JSONValue?) -> PiQuestion? {
+    static func asyncQuestion(_ arguments: JSONValue?) -> Question? {
         let questions = (arguments?["questions"]?.array ?? []).compactMap { question -> (title: String, options: [String])? in
             guard let title = question["title"]?.string, !title.isEmpty else { return nil }
             return (title, (question["options"]?.array ?? []).compactMap(\.string))
         }
         guard let first = questions.first else { return nil }
         guard questions.count > 1 else {
-            return PiQuestion(
+            return Question(
                 promptID: UUID().uuidString, kind: first.options.isEmpty ? .text : .select, text: String(first.title.prefix(500)),
                 options: first.options, allowsOther: !first.options.isEmpty)
         }
         let text = questions.map { $0.options.isEmpty ? $0.title : "\($0.title)（\($0.options.joined(separator: " / "))）" }.joined(separator: "\n")
-        return PiQuestion(promptID: UUID().uuidString, kind: .text, text: String(text.prefix(500)))
+        return Question(promptID: UUID().uuidString, kind: .text, text: String(text.prefix(500)))
     }
 
-    public func answer(_ answer: PiAnswerValue, to promptID: String, in id: PiSession.ID) async throws {
-        guard let session = tracked[id], let question = session.facts.question else { throw PiBridgeError.rejected("no_prompt") }
-        guard question.promptID == promptID else { throw PiBridgeError.rejected("stale_prompt") }
+    public func answer(_ answer: AnswerValue, to promptID: String, in id: Session.ID) async throws {
+        guard let session = tracked[id], let question = session.facts.question else { throw BridgeError.rejected("no_prompt") }
+        guard question.promptID == promptID else { throw BridgeError.rejected("stale_prompt") }
         guard let reply = session.reply else {
             let text: String
             switch answer {
             case .option(let option) where question.options.contains(option): text = option
             case .text(let written) where question.acceptsText: text = written
-            default: throw PiBridgeError.rejected("bad_answer")
+            default: throw BridgeError.rejected("bad_answer")
             }
             try await deliver(CodexRPC.input(text: text, images: []), clientID: CodexHistory.clientID(for: nil), to: session)
             session.facts.standingQuestion = nil
@@ -197,7 +197,7 @@ extension CodexRuntime {
              (.request(let rpc, let requestID, let questionID), .text(let text)) where question.acceptsText:
             rpc.respond(to: requestID, result: ["answers": [questionID: ["answers": [.string(text)]]]])
         default:
-            throw PiBridgeError.rejected("bad_answer")
+            throw BridgeError.rejected("bad_answer")
         }
         session.reply = nil
         session.facts.questions = []

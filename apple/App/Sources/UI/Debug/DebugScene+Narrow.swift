@@ -13,7 +13,7 @@ extension DebugScene {
                 let id = "ask-\(index + 1)"
                 _ = try await recorder.update(
                     sessionID: id, state: .waitingForUser, title: id, directory: "demo",
-                    question: PiQuestion(promptID: nil, kind: .unknown("editor"), text: String(localized: "编辑提交说明", table: "Demo")),
+                    question: Question(promptID: nil, kind: .unknown("editor"), text: String(localized: "编辑提交说明", table: "Demo")),
                     agent: .codex)
             }
             if let pane = args.layoutOpts.narrowPane.flatMap(NavigationPane.init(rawValue:)) {

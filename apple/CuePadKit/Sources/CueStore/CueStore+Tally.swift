@@ -7,7 +7,7 @@ import Foundation
 public struct CueTally: Equatable, Sendable {
   public enum Wait: Identifiable, Equatable, Sendable {
     case message(CueMessage, task: UUID?)
-    case session(PiSessionState, task: UUID?)
+    case session(SessionState, task: UUID?)
 
     public var id: String {
       switch self {
@@ -24,10 +24,10 @@ public struct CueTally: Equatable, Sendable {
   }
 
   public struct Reply: Identifiable, Equatable, Sendable {
-    public var session: PiSessionState
+    public var session: SessionState
     public var task: UUID?
 
-    public init(session: PiSessionState, task: UUID?) {
+    public init(session: SessionState, task: UUID?) {
       self.session = session
       self.task = task
     }

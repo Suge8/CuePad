@@ -3,7 +3,7 @@ import CueStore
 import SwiftUI
 
 extension View {
-    func replyNotes(session: UUID, messages: [PiChatMessage]) -> some View {
+    func replyNotes(session: UUID, messages: [ChatMessage]) -> some View {
         modifier(ReplyNoteLayer(session: session, messages: messages))
     }
 }
@@ -24,7 +24,7 @@ struct ReplyTextOpener: Equatable {
 
 private struct ReplyNoteLayer: ViewModifier {
     let session: UUID
-    let messages: [PiChatMessage]
+    let messages: [ChatMessage]
     @Environment(AppServices.self) private var services
     @State private var opened: Opened?
     @State private var edit: ReplyNote.Edit?
@@ -55,7 +55,7 @@ private struct ReplyNoteLayer: ViewModifier {
 struct ReplyTextSheet: View {
     enum Purpose { case select, annotate }
 
-    let message: PiChatMessage
+    let message: ChatMessage
     let purpose: Purpose
     let session: UUID
     let order: [UUID]

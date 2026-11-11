@@ -68,7 +68,7 @@ nonisolated extension CueNow {
         return items.filter { $0.kind != .done }.prefix(itemLimit - 1) + [done]
     }
 
-    private static func title(_ state: PiSessionState) -> String { state.title.isEmpty ? String(localized: "会话") : state.title }
+    private static func title(_ state: SessionState) -> String { state.title.isEmpty ? String(localized: "会话") : state.title }
 
     static func wait(_ wait: CueTally.Wait, name: String) -> Wait {
         switch wait {

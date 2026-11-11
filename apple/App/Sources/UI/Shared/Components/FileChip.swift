@@ -66,7 +66,7 @@ struct FileChip: View {
             }
         }
         .frame(width: thumbSide, height: thumbSide)
-        .previewSource(PreviewZoomKey(group: group, preview: PiPreview.id(of: key)), cornerRadius: Radius.chip) { [files = services.store.files, key] in
+        .previewSource(PreviewZoomKey(group: group, preview: PreviewItem.id(of: key)), cornerRadius: Radius.chip) { [files = services.store.files, key] in
             await AttachmentLooks.picture(key, in: files)
         }
     }
@@ -92,7 +92,7 @@ struct ImageTile: View {
             workspace.openAttachment(DraftFile(key: key, name: ""), among: among, group: group, with: openPreview)
         } label: {
             Thumbnail(hash: key, height: side, cornerRadius: Radius.block).frame(width: side).id(place.isAway)
-                .previewSource(PreviewZoomKey(group: group, preview: PiPreview.id(of: key)), cornerRadius: Radius.block) { [files = services.store.files, key, side, scale] in
+                .previewSource(PreviewZoomKey(group: group, preview: PreviewItem.id(of: key)), cornerRadius: Radius.block) { [files = services.store.files, key, side, scale] in
                     await Thumbnail.picture(key, height: side, scale: scale, in: files)
                 }
         }

@@ -16,8 +16,8 @@ extension DshDialect {
             let labels = ACPAsk.labels(current)
             let lines = [current["header"]?.string, current["question"]?.string, current["detail"]?.string].compactMap(\.self) + ACPAsk.notes(current)
             let question = labels.isEmpty
-                ? PiQuestion(promptID: nil, kind: .text, text: ACPAsk.text(lines))
-                : PiQuestion(promptID: nil, kind: .select, text: ACPAsk.text(lines), options: labels, allowsOther: true)
+                ? Question(promptID: nil, kind: .text, text: ACPAsk.text(lines))
+                : Question(promptID: nil, kind: .select, text: ACPAsk.text(lines), options: labels, allowsOther: true)
             return (question, { answer in
                 switch answer {
                 case .option(let label) where labels.contains(label): ["id": id, "selected": [.string(label)]]

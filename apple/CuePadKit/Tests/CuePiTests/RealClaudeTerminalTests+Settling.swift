@@ -45,7 +45,7 @@ extension RealClaudeTerminalTests {
                 await terminal.screen.contains("blocked-by-user-hook") && testbed.bridge.session(id: session.id)?.state == .settled
             }
             let start = Date()
-            try await testbed.bridge.send(PiMessage(text: "只回复 OK"), to: session.id)
+            try await testbed.bridge.send(SessionMessage(text: "只回复 OK"), to: session.id)
             try await testbed.waitForTurn(session.id, since: start)
             try await testbed.waitForDraftLanded(session.id)
             #expect(try testbed.transcript(session.sessionFile).recap.lastReply == "OK")
@@ -70,7 +70,7 @@ extension RealClaudeTerminalTests {
                 await terminal.screen.contains("blocked-by-user-hook") && testbed.bridge.session(id: session.id)?.state == .settled
             }
             let start = Date()
-            try await testbed.bridge.send(PiMessage(text: "RUN-AFTER now"), to: session.id)
+            try await testbed.bridge.send(SessionMessage(text: "RUN-AFTER now"), to: session.id)
             try await testbed.waitOnScreen("这一轮在跑命令，CuePad 读过它写下的工具调用", on: terminal, in: session.id) {
                 testbed.bridge.session(id: session.id)?.detail?.contains("echo RAN") == true && testbed.hasRead(#""name":"Bash""#, in: session.sessionFile)
             }
@@ -98,7 +98,7 @@ extension RealClaudeTerminalTests {
                 return now?.firstMessage?.contains("BLOCKME") == true && now?.state == .settled
             }
             let start = Date()
-            try await testbed.bridge.send(PiMessage(text: "只回复 OK"), to: session.id)
+            try await testbed.bridge.send(SessionMessage(text: "只回复 OK"), to: session.id)
             try await testbed.waitForTurn(session.id, since: start)
             try await testbed.waitForDraftLanded(session.id)
             #expect(try testbed.transcript(session.sessionFile).recap.lastReply == "OK")
@@ -145,7 +145,7 @@ extension RealClaudeTerminalTests {
             try await terminal.keys("Escape")
             try await testbed.waitOnScreen("按 Esc 后歇下", on: terminal, in: session.id) { testbed.bridge.session(id: session.id)?.state == .settled }
             let start = Date()
-            try await testbed.bridge.send(PiMessage(text: "只回复 OK"), to: session.id)
+            try await testbed.bridge.send(SessionMessage(text: "只回复 OK"), to: session.id)
             try await testbed.waitForTurn(session.id, since: start)
             try await testbed.waitForDraftLanded(session.id)
             #expect(try testbed.transcript(session.sessionFile).recap.lastReply == "OK")

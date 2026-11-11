@@ -25,7 +25,7 @@ extension Workspace {
     func openAttachment(_ file: DraftFile, among files: [DraftFile] = [], group: String, with opener: PreviewOpener?) {
         let store = services.store.files, files = files.isEmpty ? [file] : files
         guard store.fileURL(for: file.key) != nil else { return fetchFile(file.key) }
-        let batch = files.filter { $0 == file || store.fileURL(for: $0.key) != nil }.compactMap(PiPreview.init(attachment:))
+        let batch = files.filter { $0 == file || store.fileURL(for: $0.key) != nil }.compactMap(PreviewItem.init(attachment:))
         guard let opened = batch.first(where: { $0.key == file.key }) else { return }
         let opening = PreviewOpening(preview: opened, batch: batch, group: group)
         if let opener { return opener(opening) }

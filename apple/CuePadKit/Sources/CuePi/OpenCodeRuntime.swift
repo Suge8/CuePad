@@ -12,7 +12,7 @@ public final class OpenCodeRuntime: AgentRuntime, SessionLink {
     static let log = Logger(subsystem: AppIdentity.id, category: "opencode")
     static let allowOnce = String(localized: "允许"), allowAlways = String(localized: "总是允许"), reject = String(localized: "拒绝")
 
-    let bridge: PiBridge
+    let bridge: Bridge
     let paths: AgentPaths
     let store: CueStore
     let hostID: String
@@ -24,7 +24,7 @@ public final class OpenCodeRuntime: AgentRuntime, SessionLink {
     private var watcher: FileFollower?
     private var watching: Task<Void, Never>?
     var connection: Connection?
-    var stopPhases: [PiSession.ID: StopPhase] = [:]
+    var stopPhases: [Session.ID: StopPhase] = [:]
     var waiters: [UUID: CheckedContinuation<Connection, any Error>] = [:]
 
     var sessions: [String: Tracked] = [:]
@@ -57,7 +57,7 @@ public final class OpenCodeRuntime: AgentRuntime, SessionLink {
 
     struct Catalog {
         var models: [OpenCodeModel]
-        var commands: [PiSlashCommand]
+        var commands: [SlashCommand]
     }
 
     struct Tracked {
@@ -67,14 +67,14 @@ public final class OpenCodeRuntime: AgentRuntime, SessionLink {
         var launchToken: String?
         var facts = SessionFacts()
         var turn = OpenCodeTurn()
-        var context: PiContextUsage?
+        var context: ContextUsage?
         var firstMessage: String?
 
         var directory: String { info.location.directory }
     }
 
     public init(
-        bridge: PiBridge, paths: AgentPaths, store: CueStore, hostID: String, opencode: @escaping @Sendable () async -> URL?,
+        bridge: Bridge, paths: AgentPaths, store: CueStore, hostID: String, opencode: @escaping @Sendable () async -> URL?,
         locate: @escaping @Sendable () async -> ExecutableLocator = { await .system },
         transcriptWindow: TimeInterval = .infinity, timing: Timing = .system
     ) {

@@ -75,8 +75,8 @@ struct AgentProbe {
     struct PluginReply: Decodable {
         let cuepadProbe: Models
         struct Models: Decodable {
-            let model: PiModelOption?
-            let models: [PiModelOption]
+            let model: ModelOption?
+            let models: [ModelOption]
         }
 
         init?(line: Data) {

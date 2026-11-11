@@ -5,7 +5,7 @@ import Foundation
 
 /// CuePad 送进去的话：托管进程的 stream-json 与收件箱 socket 都把投送请求 id 当作这条消息的 `uuid`（插进去的是 `source_uuid`）。
 enum ClaudeHistory {
-    static func ingest(_ raw: UnsafeRawBufferPointer, _ cp: inout PiHistoryCheckpoint, _ transcript: inout PiHistory.Transcript) throws {
+    static func ingest(_ raw: UnsafeRawBufferPointer, _ cp: inout HistoryCheckpoint, _ transcript: inout History.Transcript) throws {
         cp.seq += 1
         guard let data = raw.borrowedData, let line = try? decoder.decode(Line.self, from: data)
         else { return }
@@ -14,7 +14,7 @@ enum ClaudeHistory {
         if cp.sessionID == nil { cp.sessionID = line.sessionId }
         if cp.cwd == nil { cp.cwd = line.cwd }
         guard line.isSidechain != true else { return }
-        let entry = PiHistory.Entry(id: line.uuid ?? "\(cp.seq)", seq: cp.seq, at: time ?? cp.lastActivity ?? .distantPast)
+        let entry = History.Entry(id: line.uuid ?? "\(cp.seq)", seq: cp.seq, at: time ?? cp.lastActivity ?? .distantPast)
         switch line.type {
         case "custom-title":
             cp.named(line.customTitle, byYou: true)
@@ -47,7 +47,7 @@ enum ClaudeHistory {
             guard let message = line.message, case .blocks(let blocks) = message.content ?? .blocks([]),
                   message.model != syntheticModel || line.isApiErrorMessage == true else { return }
             for call in blocks where call.type == "tool_use" {
-                cp.toolStarted(id: call.id ?? "", name: call.name ?? "", arguments: call.input ?? PiToolArguments())
+                cp.toolStarted(id: call.id ?? "", name: call.name ?? "", arguments: call.input ?? ToolArguments())
             }
             let text = blocks.compactMap { $0.type == "text" ? $0.text : nil }.joined(separator: "\n")
             if let stop = message.stopReason, stop != "tool_use", !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -61,7 +61,7 @@ enum ClaudeHistory {
         }
     }
 
-    private static func user(_ line: Line, _ entry: PiHistory.Entry, into cp: inout PiHistoryCheckpoint, transcript: inout PiHistory.Transcript) throws {
+    private static func user(_ line: Line, _ entry: History.Entry, into cp: inout HistoryCheckpoint, transcript: inout History.Transcript) throws {
         guard let content = line.message?.content else { return }
         if case .blocks(let blocks) = content, blocks.contains(where: { $0.type == "tool_result" }) {
             // 你拒绝了要用的工具与停下了在跑的工具，Claude Code 写的一样（同一句拒绝、`toolDenialKind: user-rejected`，2.1.299 实测），
@@ -78,8 +78,8 @@ enum ClaudeHistory {
     }
 
     private static func said(
-        _ content: Content, peer: Bool, _ entry: PiHistory.Entry, deliveryID: String?, into cp: inout PiHistoryCheckpoint,
-        transcript: inout PiHistory.Transcript
+        _ content: Content, peer: Bool, _ entry: History.Entry, deliveryID: String?, into cp: inout HistoryCheckpoint,
+        transcript: inout History.Transcript
     ) throws {
         var said = transcript.said()
         try content.said(into: &said, peer: peer)
@@ -180,7 +180,7 @@ enum ClaudeHistory {
             var source: Source?
             var id: String?
             var name: String?
-            var input: PiToolArguments?
+            var input: ToolArguments?
             var toolUseID: String?
             var isError: Bool?
             var content: Content?
@@ -211,7 +211,7 @@ enum ClaudeHistory {
             }
         }
 
-        func said(into said: inout PiHistory.Said, peer: Bool) throws {
+        func said(into said: inout History.Said, peer: Bool) throws {
             func text(_ s: String?) { said.text(peer ? s.map(ClaudeHistory.withoutPeerWrapper) : s) }
             switch self {
             case .text(let s): text(s)

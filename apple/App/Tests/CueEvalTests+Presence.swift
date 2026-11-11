@@ -81,7 +81,7 @@ extension CueEvalTests {
             return [
                 Check(.result, "没对会话说话（没 say）", eval.calls("task", "say").isEmpty),
                 Check(.ask, "没收回（没 take）", !eval.calls("task", "take").contains { !$0.call.failed }),
-                Check(.result, "会话行显示待回复", PiShown(session, cue: duty, at: .always()).label == "待回复"),
+                Check(.result, "会话行显示待回复", SessionShown(session, cue: duty, at: .always()).label == "待回复"),
                 Check(.ask, "没发等你", try await eval.said().allSatisfy { $0.choices == nil }),
                 Check(.interrupt, "没打扰他（没 tell）", eval.calls("tell").isEmpty),
             ]

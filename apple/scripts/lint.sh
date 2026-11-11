@@ -104,9 +104,9 @@ forbid "界面上请求到哪了只读 Speech.trip（发送中、已送达、没
   '\.isOpen\b|\.status\s*[!=]=\s*\.known\(\.(?:pending|executing|succeeded|failed)\)|\.status\.known\b' \
   'App/Sources/[!U]*/**' 'App/Sources/*.swift' 'App/Sources/UI/Debug/**' 'App/Tests/**' 'CuePadKit/**'
 forbid "一行里用“·”隔开几段的字只经 Dotted 或 Dot（Atoms.swift）：屏幕写“·”、读屏读逗号；直接拼的分隔点读屏会念出来" \
-  '(?: · |Text\("·"\))' 'App/AppGroup/Dotted.swift' '**/Components/Atoms.swift' '**/PiProgress.swift' 'App/Sources/UI/Debug/**' 'App/Tests/**' 'CuePadKit/**'
+  '(?: · |Text\("·"\))' 'App/AppGroup/Dotted.swift' '**/Components/Atoms.swift' '**/SessionProgress.swift' 'App/Sources/UI/Debug/**' 'App/Tests/**' 'CuePadKit/**'
 forbid "你说出去的话用 SpeechBubble 画（状态只从记录推出，见 Speech）；UserBubble 只给已进对话的话（会话对话与近况）" \
-  '\bUserBubble\s*\(' '**/Components/PiBubbles.swift' '**/Components/SpeechBubble.swift' '**/Components/PiConversation.swift' '**/Components/PiConversationBlocks.swift'
+  '\bUserBubble\s*\(' '**/Components/Bubbles.swift' '**/Components/SpeechBubble.swift' '**/Components/Conversation.swift' '**/Components/ConversationBlocks.swift'
 # 例外：小组件与实时活动（扩展里没有 PressStyle）；设置里的网页链接（下划线、手形，同系统链接）；输入框里图片角上的移除（压在图片的暗底上，不铺悬停底）
 forbid "自绘的可点控件用 PressStyle（按种类 Press）或 RowStyle，不用 .plain/.borderless：Mac 的悬停淡底与按下只在这两处，用了 plain 指针过去没有回应（docs/ui.md 悬停）" \
   'buttonStyle\(\.(?:plain|borderless)\)' 'App/Sources/UI/iOS/**' '**/*+iOS.swift' 'App/Widget/**' '**/Settings/SettingRow.swift' '**/Components/Composer+Attachments.swift'
@@ -120,8 +120,8 @@ FORBID_IN=App/Sources/UI forbid "UI 下不写 extension AppServices：业务规�
 # 测试宿主就是正式版的 App 身份，.standard 就是正式版的偏好域
 FORBID_IN="App/Tests CuePadKit/Tests" forbid "测试不碰 UserDefaults.standard：测试宿主就是正式版的 App 身份，读写的是真实偏好域；用库目录里具名的域（App/Tests/IsolationTests.swift）" \
   '\bUserDefaults\.standard\b'
-# 拼装写法（一个个字段传）是演示与测试图方便的；真实写入只经 PiSessionSnapshot 的 update(_:)。参数可能换行，所以跨行认
-FORBID_U=1 forbid "生产代码不调 PiStateRecorder.update(sessionID: …)：它只给 UI/Debug 与测试拼状态用；真实会话的状态经 PiSessionMirror 产出 PiSessionSnapshot，再 update(_:)" \
+# 拼装写法（一个个字段传）是演示与测试图方便的；真实写入只经 SessionSnapshot 的 update(_:)。参数可能换行，所以跨行认
+FORBID_U=1 forbid "生产代码不调 StateRecorder.update(sessionID: …)：它只给 UI/Debug 与测试拼状态用；真实会话的状态经 SessionMirror 产出 SessionSnapshot，再 update(_:)" \
   '(?<!func )\bupdate\(\s*sessionID:' 'App/Sources/UI/Debug/**' '**/Tests/**'
 FORBID_IN="CuePadKit/Sources/CueStore App/Sources/Services/AppServices+StrayFiles.swift" forbid "附件文件与资料库不按文件时刻定去留：拷贝、还原、同步会改写或带走时刻，按时刻猜「刚存的」曾删掉写者还没提交引用的文件（#102）。谁还要它只看库里的记录与引用、运行的持有（AttachmentRun 的锁）与草稿" \
   '\b(?:(?:(?:content|attribute)ModificationDate|contentAccessDate|creationDate|modificationDate|addedToDirectoryDate)(?:Key)?|st_[acmb]tim(?:e|espec)\w*|storedBefore)\b'

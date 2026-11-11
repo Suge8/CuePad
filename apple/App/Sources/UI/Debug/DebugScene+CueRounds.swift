@@ -4,14 +4,14 @@ import Foundation
 
 extension DebugScene {
     static func step(
-        _ kind: PiChatMessage.Tools.Kind, _ target: String, _ task: Card? = nil, session: String? = nil
-    ) -> PiChatMessage.Tools.Item {
+        _ kind: ChatMessage.Tools.Kind, _ target: String, _ task: Card? = nil, session: String? = nil
+    ) -> ChatMessage.Tools.Item {
         .init(
             kind: kind, target: target, task: task?.id, name: task?.heading ?? session,
-            session: session.map(PiSessionState.recordID(sessionID:)))
+            session: session.map(SessionState.recordID(sessionID:)))
     }
-    static func process(_ items: PiChatMessage.Tools.Item...) -> PiChatMessage.Tools {
-        var tools = PiChatMessage.Tools()
+    static func process(_ items: ChatMessage.Tools.Item...) -> ChatMessage.Tools {
+        var tools = ChatMessage.Tools()
         for item in items { tools.record(item) }
         return tools
     }
@@ -52,7 +52,7 @@ extension DebugScene {
                 step(.edit, String(localized: "改「导入旧数据」", table: "Demo"), importing), step(.read, String(localized: "看「导入旧数据」的近况", table: "Demo"), importing),
                 step(.done, String(localized: "做完「README 截图」", table: "Demo"), panel),
                 step(.leave, String(localized: "「notes」留给你回", table: "Demo"), session: "notes")), wake: stirred(.settled, "atlas"))
-            try await store.setDemoCueState(.tool, step: .init(kind: .stop, name: "billing", session: PiSessionState.recordID(sessionID: "billing")), round: row, context: context)
+            try await store.setDemoCueState(.tool, step: .init(kind: .stop, name: "billing", session: SessionState.recordID(sessionID: "billing")), round: row, context: context)
         case "sending":
             _ = try await store.addCueMessage(.you, text: String(localized: "顺便看看登录回调那个超时", table: "Demo"))
         // 你说去睡了，一夜里 Cue 陆续说了几句

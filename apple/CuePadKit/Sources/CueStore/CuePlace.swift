@@ -25,7 +25,7 @@ public struct CuePlace: Codable, Equatable, Sendable {
     }
     var places: [String: CuePlace] = [:]
     for session in sessions {
-      let title = try db.first("SELECT title FROM piSessionStates WHERE id = ?", [PiSessionState.recordID(sessionID: session)]) { $0.text(0) }
+      let title = try db.first("SELECT title FROM piSessionStates WHERE id = ?", [SessionState.recordID(sessionID: session)]) { $0.text(0) }
       if let title { places[key(session: session)] = CuePlace(name: title.isEmpty ? nil : title) }
     }
     for id in tasks {

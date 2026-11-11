@@ -84,7 +84,7 @@ struct PhoneVoiceViewState {
         let target: VoiceExecutionTarget
         /// 同步记录尚未到达时为 nil，不能拿内部标识当标题。
         let title: String?
-        let status: PiShown?
+        let status: SessionShown?
         var id: VoiceExecutionTarget { target }
     }
 
@@ -109,7 +109,7 @@ struct PhoneVoiceViewState {
     let replyPage: Page
     let executionPage: Page
 
-    fileprivate init(phone: VoicePhonePresentation, records: PhoneVoiceRecords?, shown: (PiSessionListItem) -> PiShown) {
+    fileprivate init(phone: VoicePhonePresentation, records: PhoneVoiceRecords?, shown: (SessionListItem) -> SessionShown) {
         let byID = Dictionary(uniqueKeysWithValues: (records?.messages ?? []).map { ($0.id, $0) })
         phase = phone.phase
         response = phone.response
@@ -142,7 +142,7 @@ struct PhoneVoiceViewState {
 
 private nonisolated struct PhoneVoiceRecords: Equatable, Sendable {
     let messages: [CueMessage]
-    let executions: [String: PiSessionListItem]
+    let executions: [String: SessionListItem]
 }
 
 private nonisolated struct PhoneVoiceRecordIDs: Equatable, Sendable {

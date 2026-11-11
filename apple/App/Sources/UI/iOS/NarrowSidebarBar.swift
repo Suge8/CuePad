@@ -110,7 +110,7 @@ private struct QuotaButton: View {
         let rings = quotas.compactMap { quota in quota.binding(at: now).map { (provider: quota.provider, window: QuotaMeter.Window($0, at: now)) } }
         return Group {
             if let tightest = rings.min(by: { $0.window.left < $1.window.left }) {
-                ModelBadge(mark: PiProvider(id: tightest.provider).mark, binding: tightest.window)
+                ModelBadge(mark: Provider(id: tightest.provider).mark, binding: tightest.window)
             } else {
                 Text("额度").font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink3).fixedSize()
             }
@@ -118,7 +118,7 @@ private struct QuotaButton: View {
         .foregroundStyle(palette.ink2)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("额度")
-        .accessibilityValue(Dotted(rings.map { String(localized: "\(PiProvider(id: $0.provider).account) \($0.window.name)剩 \($0.window.percent)") }).spoken)
+        .accessibilityValue(Dotted(rings.map { String(localized: "\(Provider(id: $0.provider).account) \($0.window.name)剩 \($0.window.percent)") }).spoken)
     }
 }
 

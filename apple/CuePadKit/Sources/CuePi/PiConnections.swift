@@ -7,13 +7,13 @@ import Foundation
 @MainActor
 final class PiConnections {
     private let directory: URL
-    weak var bridge: PiBridge?
+    weak var bridge: Bridge?
     private var links: [String: PiConnection] = [:]
     private var watcher: DirectoryWatcher?
     // 没告别就断线可能早于进程退出，等退出后再清残留 socket。
     private var orphanExitWatchers: [String: ProcessExitWatcher] = [:]
     // 同名 socket 重建后必须重连，所以按文件身份记不兼容，而非名字。
-    private var incompatible: [String: PiSocketDirectory.FileIdentity] = [:]
+    private var incompatible: [String: SocketDirectory.FileIdentity] = [:]
 
     init(directory: URL) {
         self.directory = directory
@@ -21,7 +21,7 @@ final class PiConnections {
 
     func start() throws {
         guard watcher == nil else { return }
-        try PiSocketDirectory.prepare(directory)
+        try SocketDirectory.prepare(directory)
         watcher = try DirectoryWatcher(directory) { [weak self] in self?.scan() }
         scan()
     }
@@ -32,7 +32,7 @@ final class PiConnections {
         for link in links.values {
             link.connection.close()
             link.exitWatcher?.cancel()
-            link.replies.closeAll(PiBridgeError.sessionEnded)
+            link.replies.closeAll(BridgeError.sessionEnded)
         }
         links = [:]
         for watcher in orphanExitWatchers.values { watcher.cancel() }
@@ -54,9 +54,9 @@ final class PiConnections {
     private func connect(_ name: String) {
         guard let bridge else { return }
         let path = socketPath(name)
-        guard PiSocketDirectory.isOwnSocket(path), let file = PiSocketDirectory.identity(of: path), incompatible[name] != file else { return }
+        guard SocketDirectory.isOwnSocket(path), let file = SocketDirectory.identity(of: path), incompatible[name] != file else { return }
         do {
-            let link = PiConnection(connection: try PiSocketConnection(path: path), file: file, bridge: bridge)
+            let link = PiConnection(connection: try SocketConnection(path: path), file: file, bridge: bridge)
             links[name] = link
             Task { await consume(link, name: name) }
         } catch UnixSocket.Failure.connect(let code) where code == ECONNREFUSED {
@@ -72,14 +72,14 @@ final class PiConnections {
     /// 还活着的不删、不重试：扩展 listen 好才把 socket 改名进来，活着的进程留下的没人 listen 的只有 /reload 时还没删的旧文件，新文件改名进来时目录会再变一次。
     @discardableResult
     private func removeIfStale(_ name: String) -> Bool {
-        guard let pid = PiSocketDirectory.pid(fromSocketName: name + ".sock"), PiSocketDirectory.processIsDead(pid) else { return false }
+        guard let pid = SocketDirectory.pid(fromSocketName: name + ".sock"), SocketDirectory.processIsDead(pid) else { return false }
         return unlink(socketPath(name)) == 0
     }
 
     private func consume(_ link: PiConnection, name: String) async {
         for await line in link.connection.lines {
             guard links[name] === link else { return }
-            // 读不懂的扩展：之后的消息格式不可知，只认告别（重载的告别要认得出，`PiSessionEndReason.reload`），等连接断开
+            // 读不懂的扩展：之后的消息格式不可知，只认告别（重载的告别要认得出，`SessionEndReason.reload`），等连接断开
             if link.session?.upgrading == true {
                 link.bye = PiWire.identityBye(line) ?? link.bye
                 continue
@@ -101,9 +101,9 @@ final class PiConnections {
             guard link.id == nil else { throw HandlingError.duplicateHello }
             guard "\(hello.sessionId).\(hello.pid)" == name else { throw HandlingError.nameMismatch }
             guard let work = hello.state.work else { throw HandlingError.unknownState(hello.state.kind) }
-            var session = PiSession(
+            var session = Session(
                 id: name, sessionID: hello.sessionId, agent: .pi, sessionFile: hello.sessionFile.map { URL(filePath: $0) }, pid: hello.pid,
-                cwd: URL(filePath: hello.cwd, directoryHint: .isDirectory), terminal: PiTerminal(tty: hello.tty, environment: hello.term),
+                cwd: URL(filePath: hello.cwd, directoryHint: .isDirectory), terminal: TerminalIdentity(tty: hello.tty, environment: hello.term),
                 state: work.state, detail: work.detail,
                 errorMessage: hello.state.errorMessage, stateSince: hello.state.sinceDate, busySince: hello.state.busySinceDate)
             session.turnStartedAt = hello.state.turnSinceDate
@@ -116,9 +116,9 @@ final class PiConnections {
         case .upgrading(let hello):
             guard link.id == nil else { throw HandlingError.duplicateHello }
             guard "\(hello.sessionId).\(hello.pid)" == name else { throw HandlingError.nameMismatch }
-            var session = PiSession(
+            var session = Session(
                 id: name, sessionID: hello.sessionId, agent: .pi, sessionFile: hello.sessionFile.map { URL(filePath: $0) }, pid: hello.pid, cwd: URL(filePath: hello.cwd, directoryHint: .isDirectory),
-                terminal: PiTerminal(), state: .settled, upgrading: true, stateSince: Date())
+                terminal: TerminalIdentity(), state: .settled, upgrading: true, stateSince: Date())
             session.name = hello.name
             session.firstMessage = hello.firstMessage
             session.hosted = hello.hosted
@@ -156,7 +156,7 @@ final class PiConnections {
         case duplicateHello, nameMismatch, unknownState(String), messageBeforeHello
     }
 
-    private func appear(_ session: PiSession, on link: PiConnection) {
+    private func appear(_ session: Session, on link: PiConnection) {
         link.id = session.id
         link.exitWatcher = ProcessExitWatcher(pid: session.pid) { [weak self] in self?.processExited(session.id) }
         bridge?.attach(session, via: link)
@@ -173,14 +173,14 @@ final class PiConnections {
     /// 正常退出时扩展自己已删。
     private func processExited(_ name: String) {
         let path = socketPath(name)
-        if PiSocketDirectory.isOwnSocket(path) { unlink(path) }
+        if SocketDirectory.isOwnSocket(path) { unlink(path) }
         orphanExitWatchers.removeValue(forKey: name)?.cancel()
     }
 
     private func finish(_ link: PiConnection, name: String) {
         guard links[name] === link else { return }
         links[name] = nil
-        link.replies.closeAll(PiBridgeError.sessionEnded)
+        link.replies.closeAll(BridgeError.sessionEnded)
         // 没有告别就断开 = 进程被强杀，socket 文件会残留：进程已确认退出就现在删，否则等它的退出通知
         if link.bye == nil, link.id != nil, !removeIfStale(name), let watcher = link.exitWatcher {
             orphanExitWatchers[name] = watcher

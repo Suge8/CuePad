@@ -69,10 +69,10 @@ extension CueTools {
   }
 
   /// say 带的 model、effort（说话与作答之前先换上）；model 的写法同 start，只写 id 时提供方按会话是哪家补，不在它的模型表里当场退回。都没带为 nil。
-  private func config(_ args: Args, of session: String, host: String) async throws -> PiConfig? {
+  private func config(_ args: Args, of session: String, host: String) async throws -> SessionConfig? {
     let effort = try Self.effort(args)
-    guard let raw = args.string("model") else { return effort.map { PiConfig(thinking: $0) } }
+    guard let raw = args.string("model") else { return effort.map { SessionConfig(thinking: $0) } }
     let agent = try await store.piSessions(sessionIDs: [session])[session]?.state.agent.known
-    return PiConfig(model: try await store.cueModelKey(raw, of: agent ?? .pi, host: host, session: session), thinking: effort)
+    return SessionConfig(model: try await store.cueModelKey(raw, of: agent ?? .pi, host: host, session: session), thinking: effort)
   }
 }

@@ -11,7 +11,7 @@ import SwiftUI
 // 文本、文稿、表格、演示文稿、3D 与认不出的类型仍嵌快速查看：这些系统才认得全，也没有要和翻页抢的手势。
 
 struct PreviewPage: View {
-    let preview: PiPreview
+    let preview: PreviewItem
     let file: URL
     let active: Bool
 

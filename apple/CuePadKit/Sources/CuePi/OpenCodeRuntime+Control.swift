@@ -5,18 +5,18 @@ import Foundation
 extension OpenCodeRuntime {
     /// 在线会话的命令入口：事件流断开期间（`ready` 为假）会话还在线，只是状态不是最新的，命令等重连并拉完快照（至多 `AgentTimeouts.launch`，同开会话），
     /// 不当成会话已结束。
-    private func live(_ id: PiSession.ID) async throws -> (Connection, Tracked, String) {
-        guard let current = connection else { throw PiBridgeError.sessionEnded }
+    private func live(_ id: Session.ID) async throws -> (Connection, Tracked, String) {
+        guard let current = connection else { throw BridgeError.sessionEnded }
         if !current.ready { _ = try await ensureService() }
         guard let connection, connection === current, let sessionID = bridge.session(id: id)?.sessionID, let tracked = sessions[sessionID], tracked.online else {
-            throw PiBridgeError.sessionEnded
+            throw BridgeError.sessionEnded
         }
         return (connection, tracked, sessionID)
     }
 
     /// `interrupt` 受理即回、清掉这一轮已记下的唤醒，之后收进来的话在被停下的这一轮收尾时开出新一轮（服务的 `SessionRunCoordinator`），所以不会并进被停下的这一轮。
     /// 原生的 `interrupt?resume=true` 是“先收话再打断”：两次请求之间这一轮到了步骤边界就会把话读进将被停下的这一轮，不用。
-    public func send(_ message: PiMessage, in id: PiSession.ID) async throws {
+    public func send(_ message: SessionMessage, in id: Session.ID) async throws {
         var target: (Connection, String)?
         // 等重连与停下上一轮是可被停止取消的一段；prompt 交出后不取消（话已收下）
         try await stopPhase(id).run { [self] in
@@ -35,9 +35,9 @@ extension OpenCodeRuntime {
     }
 
     /// `/compact` 不开轮，照它的缺省（下一个步骤边界压缩）；其余命令展开成这一轮的提示词，与 `send` 同一规则。
-    public func command(_ line: String, deliveryID _: String?, in id: PiSession.ID) async throws {
+    public func command(_ line: String, deliveryID _: String?, in id: Session.ID) async throws {
         let (connection, tracked, sessionID) = try await live(id)
-        guard line.hasPrefix("/") else { throw PiBridgeError.rejected("bad_request") }
+        guard line.hasPrefix("/") else { throw BridgeError.rejected("bad_request") }
         let parts = line.dropFirst().split(separator: " ", maxSplits: 1, omittingEmptySubsequences: false)
         let name = parts.first.map(String.init) ?? ""
         let arguments = parts.count > 1 ? String(parts[1]) : ""
@@ -47,18 +47,18 @@ extension OpenCodeRuntime {
             return
         }
         guard try await catalog(tracked.directory, connection.client).commands.contains(where: { $0.name == name }) else {
-            throw PiBridgeError.rejected("unknown_command")
+            throw BridgeError.rejected("unknown_command")
         }
         struct Command: Encodable { var name: String; var text: String }
         try await interrupt(sessionID, connection)
         do {
             try await connection.client.call("POST", "/api/session/\(sessionID)/command", body: Command(name: name, text: arguments))
         } catch let error as OpenCodeAPIError {
-            throw PiBridgeError.rejected(error.tag == "CommandNotFoundError" ? "unknown_command" : "failed: \(error.message)")
+            throw BridgeError.rejected(error.tag == "CommandNotFoundError" ? "unknown_command" : "failed: \(error.message)")
         }
     }
 
-    public func abort(_ id: PiSession.ID) async throws {
+    public func abort(_ id: Session.ID) async throws {
         stopPhase(id).cancelAll()
         try await stopPhase(id).run(cancellable: false) { [self] in
             let (connection, _, sessionID) = try await live(id)
@@ -66,7 +66,7 @@ extension OpenCodeRuntime {
         }
     }
 
-    private func stopPhase(_ id: PiSession.ID) -> StopPhase {
+    private func stopPhase(_ id: Session.ID) -> StopPhase {
         if let phase = stopPhases[id] { return phase }
         let phase = StopPhase()
         stopPhases[id] = phase
@@ -78,10 +78,10 @@ extension OpenCodeRuntime {
         try await connection.client.call("POST", "/api/session/\(sessionID)/interrupt")
     }
 
-    public func answer(_ answer: PiAnswerValue, to promptID: String, in id: PiSession.ID) async throws {
+    public func answer(_ answer: AnswerValue, to promptID: String, in id: Session.ID) async throws {
         let (connection, tracked, _) = try await live(id)
         guard let question = tracked.facts.questions.first(where: { $0.promptID == promptID }), let target = Self.parse(promptID) else {
-            throw PiBridgeError.rejected("stale_prompt")
+            throw BridgeError.rejected("stale_prompt")
         }
         if target.kind == .permission {
             let decision: String
@@ -89,7 +89,7 @@ extension OpenCodeRuntime {
             case .option(Self.allowOnce), .confirmed(true): decision = "once"
             case .option(Self.allowAlways): decision = "always"
             case .option(Self.reject), .confirmed(false): decision = "reject"
-            default: throw PiBridgeError.rejected("bad_answer")
+            default: throw BridgeError.rejected("bad_answer")
             }
             struct Reply: Encodable { var decision: String }
             try await connection.client.call(
@@ -97,22 +97,22 @@ extension OpenCodeRuntime {
             return
         }
         let forms = try await connection.client.get(OpenCodeData<[OpenCodeForm]>.self, "/api/session/\(target.sessionID)/form").data
-        guard let field = forms.first(where: { $0.id == target.id })?.fields.first else { throw PiBridgeError.rejected("stale_prompt") }
+        guard let field = forms.first(where: { $0.id == target.id })?.fields.first else { throw BridgeError.rejected("stale_prompt") }
         let value: OpenCodeAnswer
         switch (question.kind.known, answer) {
         case (.select, .option(let label)):
-            guard let option = field.options?.first(where: { $0.label == label }) else { throw PiBridgeError.rejected("bad_answer") }
+            guard let option = field.options?.first(where: { $0.label == label }) else { throw BridgeError.rejected("bad_answer") }
             value = .string(option.value)
         case (_, .text(let text)) where question.acceptsText: value = .string(text)
         case (.confirm, .confirmed(let yes)): value = .bool(yes)
-        default: throw PiBridgeError.rejected("bad_answer")
+        default: throw BridgeError.rejected("bad_answer")
         }
         struct Reply: Encodable { var answer: [String: OpenCodeAnswer] }
         try await connection.client.call("POST", "/api/session/\(target.sessionID)/form/\(target.id)/reply", body: Reply(answer: [field.key: value]))
     }
 
-    public func configure(_ config: PiConfig, in id: PiSession.ID) async throws {
-        guard config.fast == nil else { throw PiBridgeError.unsupported }
+    public func configure(_ config: SessionConfig, in id: Session.ID) async throws {
+        guard config.fast == nil else { throw BridgeError.unsupported }
         let model = config.model, thinking = config.thinking, name = config.name
         let (connection, tracked, sessionID) = try await live(id)
         if let name {
@@ -121,11 +121,11 @@ extension OpenCodeRuntime {
         }
         if model != nil || thinking != nil {
             let current = tracked.info.model
-            guard let key = model ?? current.map({ PiModelKey(provider: $0.providerID, id: $0.id) }) else { throw PiBridgeError.unknownModel(.opencode) }
+            guard let key = model ?? current.map({ ModelKey(provider: $0.providerID, id: $0.id) }) else { throw BridgeError.unknownModel(.opencode) }
             // 服务刚起时头一次取到的模型表是空的（实测 2.0.25：约 0.2 秒后才有），开会话紧接着配模型就会撞上：没找到先重取一次再说
             var target = try await catalog(tracked.directory, connection.client).models.first { $0.key == key }
             if target == nil { target = try await catalog(tracked.directory, connection.client, reload: true).models.first { $0.key == key } }
-            guard let target else { throw PiBridgeError.unknownModel(.opencode) }
+            guard let target else { throw BridgeError.unknownModel(.opencode) }
             let variants = (target.variants ?? []).map(\.id)
             let variant: String? = if let thinking { target.variant(for: thinking) }
                 else { current?.variant.flatMap { variants.contains($0) ? $0 : nil } }
@@ -136,7 +136,7 @@ extension OpenCodeRuntime {
     }
 
     /// 结束：停下在跑的一轮，会话下线（它还在服务里，再有活动——终端里接着说、CuePad 接着它——就重新上线）。
-    public func end(_ id: PiSession.ID) async throws {
+    public func end(_ id: Session.ID) async throws {
         let (connection, _, sessionID) = try await live(id)
         try await interrupt(sessionID, connection)
         guard self.connection === connection, sessions[sessionID]?.online == true else { return }
@@ -146,8 +146,8 @@ extension OpenCodeRuntime {
     }
 
     public func open(
-        in directory: URL, launchToken: String, name: String?, model: PiModelKey?, thinking: PiThinkingLevel?
-    ) async throws -> PiSession.ID {
+        in directory: URL, launchToken: String, name: String?, model: ModelKey?, thinking: ThinkingLevel?
+    ) async throws -> Session.ID {
         let connection = try await ensureService()
         struct Create: Encodable { var location: OpenCodeLocation }
         let data = try await connection.client.call(
@@ -167,21 +167,21 @@ extension OpenCodeRuntime {
         }
     }
 
-    public func resume(_ session: IndexedSession) async throws -> PiSession.ID {
+    public func resume(_ session: IndexedSession) async throws -> Session.ID {
         let connection = try await ensureService()
         let online = sessions[session.id]?.online == true
         let info: OpenCodeSessionInfo
         do {
             info = try await connection.client.get(OpenCodeData<OpenCodeSessionInfo>.self, "/api/session/\(session.id)").data
         } catch let error as OpenCodeAPIError where error.status == 404 {
-            throw PiBridgeError.unknownSession(session.id)
+            throw BridgeError.unknownSession(session.id)
         }
         return try await host(info, connection) { if !online { $0.hosted = true } }
     }
 
     /// 让 CuePad 托管的会话上线；已经在线的（比如终端里正开着）不算托管。
-    func host(_ info: OpenCodeSessionInfo, _ connection: Connection, _ body: (inout Tracked) -> Void) async throws -> PiSession.ID {
-        guard self.connection === connection else { throw PiBridgeError.sessionEnded }
+    func host(_ info: OpenCodeSessionInfo, _ connection: Connection, _ body: (inout Tracked) -> Void) async throws -> Session.ID {
+        guard self.connection === connection else { throw BridgeError.sessionEnded }
         var tracked = sessions[info.id] ?? Tracked(info: info)
         tracked.online = true
         ended[info.id] = nil

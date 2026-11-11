@@ -21,7 +21,7 @@ extension Workspace {
     }
 
     /// 真实会话的既有投影；选择范围后只停那个会话的当前回合，不把 Cue 的话当作执行确认。
-    var voiceExecutions: [PiSessionListItem] { voice?.executions ?? [] }
+    var voiceExecutions: [SessionListItem] { voice?.executions ?? [] }
 
     func stopVoiceExecution(_ sessionID: String) async throws -> DeliveryRequest {
         guard let voice else { throw CueStoreError.notFound }

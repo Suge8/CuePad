@@ -46,14 +46,14 @@ extension CueHostTests.Rig {
     /// 叫醒的 Cue 看得到它。
     func spoke(_ said: String, in sessionID: String) async throws {
         try app.host.sessionFiles[sessionID]!.spoke(said)
-        let shown = said.trimmingCharacters(in: .whitespacesAndNewlines).clipped(PiChatMessage.Tools.saidLimit)
+        let shown = said.trimmingCharacters(in: .whitespacesAndNewlines).clipped(ChatMessage.Tools.saidLimit)
         try await eventually("「\(said.prefix(20))」读进这一轮的经过") {
             try await self.store.sessions(matching: sessionID).first?.pendingTools?.items.last { $0.kind == .said }?.target == shown
         }
     }
 
     @MainActor @discardableResult
-    func shots(_ files: [(name: String, title: String)], from work: Working, drawing: @MainActor (String) throws -> Data = mockShot) async throws -> [PiPreviewAdded] {
+    func shots(_ files: [(name: String, title: String)], from work: Working, drawing: @MainActor (String) throws -> Data = mockShot) async throws -> [PreviewAdded] {
         var sent: [(url: URL, title: String)] = []
         for (name, title) in files {
             let url = app.directory.appending(path: name)

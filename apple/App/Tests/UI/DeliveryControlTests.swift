@@ -28,7 +28,7 @@ struct DeliveryControlTests {
         let task = try await store.createTask("上传结果", under: parent.id)
         try await store.updateCueProfile { $0.hostID = host; $0.enabledAt = .now }
         let target = SendTarget(kind: .piSession, name: "发布", ref: mode == .start ? nil : "atlas")
-        let text = mode == .start ? PiLaunch(project: Project.defaultID, prompt: task.body, token: UUID().uuidString).stored : task.body
+        let text = mode == .start ? LaunchRequest(project: Project.defaultID, prompt: task.body, token: UUID().uuidString).stored : task.body
         await Workspace(services: app.services).speak(text, to: .session(target, host: host, mode: mode, card: task.id)).value
         let request = try #require(try await store.deliveryRequests().first)
         try RawDB(app.services.location.databaseURL).exec(
@@ -67,7 +67,7 @@ struct DeliveryControlTests {
         let uncertain = try await store.outcome(of: first)
         #expect(uncertain.status == .known(.unconfirmed))
         if mode == .retry {
-            #expect(PiDelivery.phase(of: uncertain, for: session, at: .always()) == nil)
+            #expect(DeliveryShown.phase(of: uncertain, for: session, at: .always()) == nil)
             #expect(workspace.shownInHeader(session, delivery: uncertain).status == .failed(.network))
             await workspace.retry(session).value
         } else {

@@ -8,7 +8,7 @@ import SwiftUI
 /// 一行里用"·"隔开几段的字（"25 条灵感 · 3 项任务"）：屏幕上写"·"，读屏读逗号停顿。全 App 拼这种分段只经这里——
 /// 别处直接写 " · " 的字面量会被 lint.sh 拦下；显示用 `Text(dotted)`（自带读屏文字），要字符串时取 `visible` / `spoken`。
 nonisolated struct Dotted: Hashable, Sendable {
-    /// 分段处的写法（唯一一处字面量）；`PiProgress.action` 解析的同步数据另用 `PiSessionState.detailSeparator`。
+    /// 分段处的写法（唯一一处字面量）；`SessionProgress.action` 解析的同步数据另用 `SessionState.detailSeparator`。
     static let separator = " · "
 
     let parts: [String]

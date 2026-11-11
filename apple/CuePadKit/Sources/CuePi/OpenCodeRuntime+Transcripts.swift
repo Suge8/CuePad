@@ -6,7 +6,7 @@ import OSLog
 extension OpenCodeRuntime {
     static func path(_ sessionID: String) -> String { "opencode:\(sessionID)" }
 
-    public func transcript(of session: IndexedSession, files: AttachmentFiles) async throws -> PiTranscript {
+    public func transcript(of session: IndexedSession, files: AttachmentFiles) async throws -> SessionTranscript {
         let connection = try await ensureService()
         let info = try await connection.client.get(OpenCodeData<OpenCodeSessionInfo>.self, "/api/session/\(session.id)").data
         return try await OpenCodeHistory.read(connection.client, info, from: nil, files: files).transcript
@@ -17,14 +17,14 @@ extension OpenCodeRuntime {
             let stored = Dictionary(
                 try await store.piSessions().filter { $0.agent == .opencode }.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
             guard self.connection === connection else { return }  // 读的时候停下了（断开接入）：索引已删，不再写回
-            var summaries: [PiSessionUpsert] = []
+            var summaries: [SessionUpsert] = []
             let recent = Date().addingTimeInterval(-transcriptWindow)
             for info in infos {
                 if let indexed = stored[info.id], abs(indexed.lastActivityAt.timeIntervalSince(info.updatedAt)) < 0.001 { continue }
                 if info.updatedAt > recent {
                     enqueueIngest(info.id, urgent: false)
                 } else {
-                    summaries.append(PiSessionUpsert(session: indexed(info, firstMessage: nil), checkpoint: nil, transcript: nil))
+                    summaries.append(SessionUpsert(session: indexed(info, firstMessage: nil), checkpoint: nil, transcript: nil))
                 }
             }
             if !summaries.isEmpty { try await store.upsertPiSessions(summaries, host: hostID) }
@@ -38,7 +38,7 @@ extension OpenCodeRuntime {
     private func indexed(_ info: OpenCodeSessionInfo, firstMessage: String?) -> IndexedSession {
         IndexedSession(
             id: info.id, path: Self.path(info.id), cwd: info.location.directory,
-            title: PiSessionName.display(name: info.title, firstMessage: firstMessage, folder: URL(filePath: info.location.directory).lastPathComponent),
+            title: SessionName.display(name: info.title, firstMessage: firstMessage, folder: URL(filePath: info.location.directory).lastPathComponent),
             lastActivityAt: info.updatedAt, agent: .opencode)
     }
 
@@ -83,7 +83,7 @@ extension OpenCodeRuntime {
             guard self.connection === connection, sessions[sessionID] != nil else { return }
             checkpoints[sessionID] = next
             try await store.upsertPiSessions(
-                [PiSessionUpsert(
+                [SessionUpsert(
                     session: indexed(info, firstMessage: next.history.firstMessage), checkpoint: try JSONEncoder().encode(next),
                     transcript: transcript)],
                 host: hostID)

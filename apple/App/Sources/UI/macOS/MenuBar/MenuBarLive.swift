@@ -4,7 +4,7 @@ import SwiftUI
 
 /// 区头只写"在做"：几件推进中已写在面板顶上的数字账（`CueLedger`），不另按会话数一遍。
 struct MenuBarLive: View {
-    let rows: [PiSessionState]
+    let rows: [SessionState]
     let open: (Route) -> Void
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -13,7 +13,7 @@ struct MenuBarLive: View {
 
     private static let limit = 4
     private static let spacing: CGFloat = 9
-    private static let style = PiSessionRow.Style.compact
+    private static let style = SessionRow.Style.compact
 
     var body: some View {
         VStack(alignment: .leading, spacing: Self.spacing) {
@@ -35,8 +35,8 @@ struct MenuBarLive: View {
         .animation(Motion.fade, value: showsAll)
     }
 
-    private func row(_ session: PiSessionState) -> some View {
-        PiSessionRow(
+    private func row(_ session: SessionState) -> some View {
+        SessionRow(
             session: session, project: workspace.catalog?.project(session.projectID),
             delivery: services.liveSessions.deliveries[session.sessionID], rename: services.liveSessions.renames[session.sessionID],
             undelivered: services.liveSessions.undelivered[session.sessionID] ?? 0).equatable()
@@ -51,7 +51,7 @@ struct MenuBarLive: View {
 private struct LiveMoreFold: View {
     let hidden: Int
     @Binding var expanded: Bool
-    let style: PiSessionRow.Style
+    let style: SessionRow.Style
     @Environment(\.palette) private var palette
 
     var body: some View {

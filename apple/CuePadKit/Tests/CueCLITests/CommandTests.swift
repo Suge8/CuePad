@@ -156,7 +156,7 @@ import Testing
     let task = try await sb.store.createTask("关联已有会话")
     try await sb.store.setStatus(task.id, .inProgress)
     let started = try #require(try await sb.store.card(task.id)?.startedAt)
-    try await PiStateRecorder(store: sb.store, hostID: "mac-a").update(sessionID: "session-one", state: .thinking, title: "已有会话", hosted: true)
+    try await StateRecorder(store: sb.store, hostID: "mac-a").update(sessionID: "session-one", state: .thinking, title: "已有会话", hosted: true)
     let id = task.id.uuidString
     #expect((await sb.run("task", "bind", id, "session-one")).code == 0)
     #expect(try await sb.store.card(task.id)?.piSessionID == "session-one")

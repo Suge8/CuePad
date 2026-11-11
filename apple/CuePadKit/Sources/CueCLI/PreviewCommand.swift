@@ -20,13 +20,13 @@ extension Command {
 
   static let show = Command(
     path: ["show"], summary: "把文件发到用户手机上的 CuePad：当前 Agent 会话的对话里出现一张卡片", arguments: "<文件…> --title <标题>…",
-    options: [Opt("title", "按文件的先后每个一句，\(PiPreview.titleRule)", value: "标题")],
+    options: [Opt("title", "按文件的先后每个一句，\(PreviewItem.titleRule)", value: "标题")],
     notes: """
       会话取 Agent 给每条命令带的环境变量里第一个有值的：\(sessionVariables.joined(separator: "、"))。\(AgentKind.watchedSessionVariable) 是 CuePad 的 Pi 扩展给的、用户在看的会话，子代理发的也落在它的对话里。都没有就报错，不猜。
       一次给几个文件是同一张卡，点开后左右切换；用户看到的是标题，不是文件名。
-      可发：\(PiPreviewKind.supportedList)；单个不超过 \(PiPreview.maxBytes / 1_000_000) MB。Markdown 排成文稿，diff、patch 是增删对照。
+      可发：\(PreviewKind.supportedList)；单个不超过 \(PreviewItem.maxBytes / 1_000_000) MB。Markdown 排成文稿，diff、patch 是增删对照。
       网页只读、不联网、读不到别的文件；outsideReferences 是页面引用了、手机上因此缺失的地址。经 iCloud 同步，CuePad.app 需要在运行。
-      \(Schema.output("[\(PreviewOutput.fields.description("Preview"))]", "kind：\(PiPreviewKind.allCases.map(\.rawValue).joined(separator: "、"))"))
+      \(Schema.output("[\(PreviewOutput.fields.description("Preview"))]", "kind：\(PreviewKind.allCases.map(\.rawValue).joined(separator: "、"))"))
       """
   ) { call in
     let paths = call.args.positionals
@@ -36,7 +36,7 @@ extension Command {
     }
     let titles = call.args.all("title")
     guard titles.count == paths.count else {
-      throw CLIError.usage("\(paths.count) 个文件要 \(paths.count) 个 --title（给了 \(titles.count) 个），按文件的先后每个一句，\(PiPreview.titleRule)")
+      throw CLIError.usage("\(paths.count) 个文件要 \(paths.count) 个 --title（给了 \(titles.count) 个），按文件的先后每个一句，\(PreviewItem.titleRule)")
     }
     let directory = URL(filePath: call.directory, directoryHint: .isDirectory)
     let urls = paths.map { URL(filePath: $0, relativeTo: directory).standardizedFileURL }

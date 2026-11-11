@@ -35,7 +35,7 @@ struct RealCodexTerminalTests {
             #expect(!session.hosted && session.agent == .codex)
 
             let hello = UUID()
-            try await rig.bridge.send(PiMessage(text: "Reply with the single word PONG.", deliveryID: hello.uuidString), to: session.id)
+            try await rig.bridge.send(SessionMessage(text: "Reply with the single word PONG.", deliveryID: hello.uuidString), to: session.id)
             try await eventually("回答了 CuePad 的话") { rig.replies(session).last?.uppercased().contains("PONG") == true }
             #expect(try rig.transcript(session).messages.contains { $0.deliveryID == hello && $0.text == "Reply with the single word PONG." })
             try await eventually("终端里也显示了这句话") { terminal.printed("PONG") }
@@ -43,7 +43,7 @@ struct RealCodexTerminalTests {
     }
 
     /// 终端界面起来、在终端里说一句、答完歇下：返回这时桥上的会话
-    private func answered(_ terminal: CodexTerminal, _ rig: CodexRig) async throws -> PiSession {
+    private func answered(_ terminal: CodexTerminal, _ rig: CodexRig) async throws -> Session {
         try await eventually("终端界面起来了") { terminal.printed("OpenAI Codex") }
         try terminal.type("Reply with the single word READY.")
         try await eventually("终端会话的回答") {
@@ -61,10 +61,10 @@ struct RealCodexTerminalTests {
             let id = session.id
 
             // 在跑时说：停下这一轮（连同在跑的命令），以这句开新一轮。回答用生造的词：被停下那一轮说过的过程说明也算它的回答，可能提到要说的词
-            try await rig.bridge.send(PiMessage(text: "Run the shell command `sleep 60`, then reply with the single word ZEBRA."), to: id)
+            try await rig.bridge.send(SessionMessage(text: "Run the shell command `sleep 60`, then reply with the single word ZEBRA."), to: id)
             try await eventually("在跑命令") { rig.bridge.session(id: id)?.detail?.contains("sleep 60") == true }
             let now = UUID(), busy = ChangeLog(rig.bridge)
-            try await rig.bridge.send(PiMessage(text: "Reply with the single word MANGO.", deliveryID: now.uuidString), to: id)
+            try await rig.bridge.send(SessionMessage(text: "Reply with the single word MANGO.", deliveryID: now.uuidString), to: id)
             try await eventually("这句开的新一轮答完") {
                 rig.bridge.session(id: id)?.state == .settled && rig.replies(session).last?.uppercased().contains("MANGO") == true
                     && busy.states.last == .settled
@@ -72,27 +72,27 @@ struct RealCodexTerminalTests {
             #expect(busy.settles == 1, "被停下的那一轮不算歇下：\(busy.states)")
             let said = try rig.transcript(session).messages
             let mango = try #require(said.firstIndex { $0.deliveryID == now })
-            #expect(said[..<mango].last { $0.role != .known(.pi) }?.text == PiNotice.stopped.rawValue, "被停下的那一轮留了一行已停止")
+            #expect(said[..<mango].last { $0.role != .known(.pi) }?.text == ChatNotice.stopped.rawValue, "被停下的那一轮留了一行已停止")
 
-            try await rig.bridge.send(PiMessage(text: "Run the shell command `sleep 60`, then reply with the single word LATE."), to: id)
+            try await rig.bridge.send(SessionMessage(text: "Run the shell command `sleep 60`, then reply with the single word LATE."), to: id)
             try await eventually("在跑命令") { rig.bridge.session(id: id)?.detail?.contains("sleep 60") == true }
             try await rig.bridge.abort(id)
             try await eventually("停下了") { rig.bridge.session(id: id)?.state == .settled }
             // 停下时还没说出那句回答（这一轮说过的过程说明照对话规则算它的回答）
             #expect(rig.replies(session).last?.uppercased().contains("LATE") != true, "\(rig.replies(session))")
 
-            try await rig.bridge.configure(PiConfig(thinking: .medium, name: "终端里的会话"), in: id)
+            try await rig.bridge.configure(SessionConfig(thinking: .medium, name: "终端里的会话"), in: id)
             #expect(rig.bridge.session(id: id)?.displayName == "终端里的会话")
             #expect(rig.bridge.session(id: id)?.thinking == .known(.medium))
             try await rig.bridge.command("/compact", in: id)
             try await eventually("压缩了上下文") {
-                (try? rig.transcript(session).messages.contains { $0.role == .known(.system) && $0.text == PiNotice.compacted.rawValue }) == true
+                (try? rig.transcript(session).messages.contains { $0.role == .known(.system) && $0.text == ChatNotice.compacted.rawValue }) == true
             }
             try await eventually("压完歇下") { rig.bridge.session(id: id)?.state == .settled }
 
-            try await rig.bridge.send(PiMessage(text: "Run the shell command `sleep 45`, then reply with the single word LATE."), to: id)
+            try await rig.bridge.send(SessionMessage(text: "Run the shell command `sleep 45`, then reply with the single word LATE."), to: id)
             try await eventually("在跑命令") { rig.bridge.session(id: id)?.detail?.contains("sleep 45") == true }
-            let later = PiBridge(socketDirectory: rig.codex.root.appending(path: "s2"))
+            let later = Bridge(socketDirectory: rig.codex.root.appending(path: "s2"))
             try later.start()
             let runtime = CodexRuntime(
                 bridge: later, paths: rig.codex.paths, hooks: rig.hooks, codex: { [locator = rig.codex.locator] in locator.candidates("codex").first },
@@ -103,7 +103,7 @@ struct RealCodexTerminalTests {
                 later.session(sessionID: session.sessionID).map { $0.displayName == "终端里的会话" && $0.state.isWorking } ?? false
             }
             let lateID = try #require(later.session(sessionID: session.sessionID)?.id)
-            try await later.send(PiMessage(text: "Reply with the single word KIWI."), to: lateID)
+            try await later.send(SessionMessage(text: "Reply with the single word KIWI."), to: lateID)
             try await eventually("停下那一轮、答了新的一句") {
                 later.session(id: lateID)?.state == .settled && rig.replies(session).last?.uppercased().contains("KIWI") == true
             }
@@ -140,7 +140,7 @@ struct RealCodexTerminalTests {
             try await eventually("这一轮结束、在等子代理") { rig.session?.state == .delegating }
             let session = try #require(rig.session)
 
-            let later = PiBridge(socketDirectory: rig.codex.root.appending(path: "s2"))
+            let later = Bridge(socketDirectory: rig.codex.root.appending(path: "s2"))
             try later.start()
             let runtime = CodexRuntime(
                 bridge: later, paths: rig.codex.paths, hooks: AgentHookServer(path: rig.codex.root.appending(path: "s2/hooks.sock")),
@@ -217,7 +217,7 @@ struct RealCodexTerminalTests {
             let approval = "Yes, "
             @MainActor func fetch(_ file: String) async throws {
                 let text = "Make the file \(file)"
-                try await rig.bridge.send(PiMessage(text: text), to: id)
+                try await rig.bridge.send(SessionMessage(text: text), to: id)
             }
             // 在终端里答：确认框弹出来后（从 `since` 起找）按 y，界面偶尔吞掉刚弹出时的按键，还在等就每秒再按；在 CuePad 里答：每个问题答一次
             @MainActor func fetched(_ file: String, inTerminalSince since: Int? = nil) async throws {
