@@ -44,7 +44,7 @@ final class CodexDriver {
         rpc.onClose = { [weak self] in
             self?.activations.closeAll(BridgeError.sessionEnded)
             Task { [weak self] in
-                let reason = await process?.exited()
+                let reason = await process.exited()
                 self?.onEvent(.exited(reason))
             }
         }
@@ -157,15 +157,10 @@ final class CodexDriver {
             lastError = CodexModel.failure(of: params)
         case "item/started" where turn != nil:
             guard let item = params["item"] else { return }
-            let id = item["id"]?.string ?? ""
-            switch item["type"]?.string {
-            case "userMessage":
+            if item["type"]?.string == "userMessage" {
                 if let sent = item["clientId"]?.string.flatMap(UUID.init(uuidString:)) { onEvent(.received(sent)) }
-            case "mcpToolCall":
-                onEvent(.tool(id: id, name: item["tool"]?.string ?? "?", arguments: String(decoding: (item["arguments"] ?? [:]).data, as: UTF8.self)))
-            case "commandExecution":
-                onEvent(.tool(id: id, name: "bash", arguments: jsonString(["command": item["command"]?.string ?? ""])))
-            default: break
+            } else if let tool = Self.tool(item) {
+                onEvent(.tool(id: item["id"]?.string ?? "", name: tool.name, arguments: String(decoding: tool.arguments.data, as: UTF8.self)))
             }
         case "item/completed" where turn != nil:
             guard let item = params["item"] else { return }
@@ -176,6 +171,8 @@ final class CodexDriver {
                 onEvent(.toolDone(id: id, result: error ?? brainText(item["result"]?["content"]), failed: failed || error != nil))
             case "commandExecution":
                 onEvent(.toolDone(id: id, result: item["aggregatedOutput"]?.string ?? "", failed: failed))
+            case "fileChange":
+                onEvent(.toolDone(id: id, result: "", failed: failed))
             default: break
             }
         case "thread/tokenUsage/updated":
@@ -183,6 +180,16 @@ final class CodexDriver {
             if let input = usage?["last"]?["inputTokens"]?.int { onEvent(.context(used: input, window: usage?["modelContextWindow"]?.int)) }
         default:
             break
+        }
+    }
+
+    /// 工具一项（命令、改文件、MCP 工具）的名字与参数；不是这几种的为 nil。命令记作 `bash`、改文件记作 `edit`（参数是第一个文件）。
+    static func tool(_ item: JSONValue) -> (name: String, arguments: JSONValue)? {
+        switch item["type"]?.string {
+        case "mcpToolCall": (item["tool"]?.string ?? "?", item["arguments"] ?? [:])
+        case "commandExecution": ("bash", ["command": .string(item["command"]?.string ?? "")])
+        case "fileChange": ("edit", ["path": item["changes"]?.array?.first?["path"] ?? .null])
+        default: nil
         }
     }
 

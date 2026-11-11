@@ -12,8 +12,6 @@ extension CodexRuntime {
         guard let threadID = params["threadId"]?.string else { return }
         if let turn = naming["\(threadID).\(pid)"] { return turn.receive(method, params) }
         guard let session = tracked["\(threadID).\(pid)"] else { return child(method, params, thread: threadID, pid: pid) }
-        // 托管会话的一轮归它的驱动（`event`），下面两项只管终端会话
-        let terminal = hosted[pid] == nil
         switch method {
         case "thread/settings/updated":
             if let settings = params["threadSettings"] {
@@ -27,23 +25,11 @@ extension CodexRuntime {
         case "thread/name/updated":
             bridge.update(session.id) { $0.name = params["threadName"]?.string }
             return
-        case "thread/status/changed" where terminal:
-            switch params["status"]?["type"]?.string {
-            // 钩子漏报的歇下（出错的一轮没有 Stop）；钩子的 Stop 晚到也只是再歇一次。睡着等（`clock.sleep`）时不报 idle（实测）
-            case "idle" where session.facts.running:
-                endTurn(session)
-            case "systemError":
-                endTurn(session, failure: session.lastError ?? String(localized: "Codex 出错了"))
-                if session.lastError == nil { readFailure(session) }
-            default: return
-            }
-        case "error" where terminal && params["willRetry"]?.bool != true:
-            // 出错的原文（常驻服务也广播）；随后的 systemError 用它
-            session.lastError = CodexModel.failure(of: params)
-            return
-        // 以下只有开出这个线程的连接（托管的进程）收得到
+        case "item/started", "item/completed":
+            guard let item = params["item"] else { return }
+            self.item(item, started: method == "item/started", in: session)
         case "serverRequest/resolved":
-            guard case .request = session.reply else { return }
+            guard session.reply?.request == params["requestId"] else { return }
             session.reply = nil
             session.facts.questions = []
         case "thread/closed":
@@ -54,6 +40,30 @@ extension CodexRuntime {
         publish(session)
     }
 
+    /// 线程里的一项：你说的话收起不挡着这一轮的提问，Codex 登记了的这种提问、压缩、派出的子代理（任务名是 `agentPath` 的末段，同认出后名册里的名字 `owner`；
+    /// 已认出的同名线程不再等：早到的推送，或前几轮派过同名的）。
+    private func item(_ item: JSONValue, started: Bool, in session: Tracked) {
+        switch (item["type"]?.string, started) {
+        case ("userMessage", true):
+            let text = (item["content"]?.array ?? []).compactMap { $0["type"]?.string == "text" ? $0["text"]?.string : nil }.joined(separator: "\n")
+            guard !text.isEmpty else { return }
+            session.facts.standingQuestion = nil
+            bridge.update(session.id) { s in
+                if s.firstMessage == nil { s.firstMessage = String(text.prefix(SessionName.firstMessageLimit)) }
+            }
+        case ("agentMessage", false) where item["delivery"]?.string == "async":
+            session.facts.standingQuestion = Self.asyncQuestion(item["questions"])
+        case ("contextCompaction", _):
+            session.facts.compacting = started
+        case ("subAgentActivity", true) where item["kind"]?.string == "started":
+            guard let name = item["agentPath"]?.string?.split(separator: "/").last.map(String.init) else { return }
+            let known = threads.values.contains { if case .session(session.id, name, _) = $0 { true } else { false } }
+            if !known { session.spawned.insert(name) }
+        default:
+            break
+        }
+    }
+
     /// 托管会话的一轮（它的驱动报的）接到桥上。以一句话开新一轮时（`deliver`），这一轮开始就是那句开出的，之后的结束照常歇下。
     func event(_ event: TurnEvent, from pid: Int32) {
         if case .exited = event { return processGone(pid) }
@@ -61,49 +71,31 @@ extension CodexRuntime {
         switch event {
         case .turnStarted:
             session.restarting = nil
-            startTurn(session, at: .now)
+            startTurn(session, at: session.sentAt ?? .now)
         case .failed(let text):
             session.lastError = text
             return
         case .turnFinished:
             endTurn(session, failure: session.lastError)
+        case .tool(_, let name, let arguments):
+            session.facts.work(.tool, detail: ToolDetail.line(name, JSONValue.parse(Data(arguments.utf8))))
+        case .toolDone:
+            session.facts.work(.thinking)
         case .speaking, .context:
             return bridge.show(event, in: session.id)
-        case .tool, .toolDone, .exited, .received:
+        case .exited, .received:
             return
         }
         publish(session)
     }
 
-    /// 出错的原文只在开出线程的连接上（`error` 通知），常驻服务只广播 `systemError`，而且它先于这一轮落定：此刻读 `thread/turns/list`
-    /// 偶尔还是 `interrupted`、没有原因（实测，之后没有任何通知再来）。会话文件里这一轮的 `task_complete` 记录带着原文，是落定的标志，
-    /// 一定会写：盯着会话文件，等到这一轮的结束记录出现就取原文。
-    private func readFailure(_ session: Tracked) {
-        guard let file = bridge.session(id: session.id)?.sessionFile else { return }
-        session.failureWatch?.cancel()
-        session.failureWatch = Task {
-            let follower = FileFollower()
-            defer { follower.stop() }
-            follower.follow(only: [file.realPath.path])
-            for await _ in follower.paths {
-                guard tracked[session.id] === session, !Task.isCancelled else { return }
-                guard let turn = await CodexHistory.lastTurn(in: file), turn.finished else { continue }
-                if let failure = turn.failure, session.facts.failure != nil {
-                    session.facts.failure = failure
-                    publish(session)
-                }
-                return
-            }
-        }
-    }
-
     /// 同一进程上还有认不出主人的线程（推送先到、还在问或第一次没读到），或这一轮派出的子代理还没露面（推送还没到，`spawned`）时先不歇下：
     /// 不等就会先报歇下、认出后再进“等子代理”。由这次结束触发一起再问一遍、等派出的认出，至多 `AgentTimeouts.settleAsk`：认出的进名册，
     /// 仍读不到、没及时回的等它下一条推送再问（`resolve`）；问完歇下。
-    /// 这一轮出错的原因只记在 `facts.failure`，只有新一轮开始（`startTurn`）清空：同一轮后到的结束信号（终端的 idle、Stop、Interrupt）
-    /// 不带原因，推迟中、歇下后都不动它。
-    func endTurn(_ session: Tracked, failure: String? = nil) {
-        release(session)
+    /// 这一轮出错的原因只记在 `facts.failure`，只有新一轮开始（`startTurn`）清空。
+    func endTurn(_ session: Tracked, failure: String?) {
+        session.reply = nil
+        session.sentAt = nil
         guard session.restarting == nil else { session.restarting = .stopped; return }
         if let failure { session.facts.failure = failure }
         guard session.ending == nil else { return }
@@ -145,9 +137,10 @@ extension CodexRuntime {
         }
     }
 
-    /// `start` 是这一轮开始的时刻，早于它可能的结束：Codex 给的 `Turn.startedAt`，CuePad 补开的是发出的时刻，钩子没有时刻用收到的时刻。开始一轮只经这里。
+    /// `start` 是这一轮开始的时刻，早于它可能的结束。开始一轮只经这里。
     func startTurn(_ session: Tracked, at start: Date) {
-        session.cancelWaits()
+        session.sentAt = nil
+        session.ending?.cancel()
         session.ending = nil
         session.spawned = []
         session.lastError = nil
@@ -185,7 +178,7 @@ extension CodexRuntime {
         let key = "\(thread).\(pid)"
         if case .unreadable(let queued) = threads[key] { threads[key] = .asking(queued) }
         while true {
-            guard let rpc = hosted[pid]?.rpc ?? daemon.flatMap({ $0.pid == pid ? $0 : nil }) else {
+            guard let rpc = hosted[pid]?.rpc else {
                 threads[key] = nil
                 return
             }
@@ -266,21 +259,21 @@ extension CodexRuntime {
             default: return
             }
         default:
-            if method == "item/completed", let item = params["item"], item["type"]?.string == "agentMessage", let text = item["text"]?.string {
+            let item = params["item"]
+            if method == "item/completed", item?["type"]?.string == "agentMessage", let text = item?["text"]?.string {
                 session.lastWords[child] = text
             }
-            session.facts.updateSubagent(child, at: now) { $0.progressAt = now }
+            let tool = method == "item/started" ? item.flatMap(CodexDriver.tool) : nil
+            session.facts.updateSubagent(child, at: now) { agent in
+                if let tool { agent.action = ToolDetail.line(tool.name, tool.arguments) }
+                agent.progressAt = now
+            }
         }
         publish(session)
     }
 
-    /// 一轮的开始时刻（`Turn.startedAt`，Unix 秒）；没给的（`turn/start` 的回应里是 null）为此刻。
-    static func startedAt(_ turn: JSONValue?) -> Date {
-        turn?["startedAt"]?.number.map { Date(timeIntervalSince1970: $0) } ?? .now
-    }
-
-    /// 线程最近的一轮。接上时在不在跑看它（`inProgress`），不看 `thread/read` 给的线程状态：子代理睡着等（`clock.sleep`）时
-    /// 读到的是 idle，它这一轮还没结束（实测）。推送里的 idle 不同，睡着等时不报（见 `notification`）。
+    /// 线程最近的一轮。认出子代理时在不在跑看它（`inProgress`），不看 `thread/read` 给的线程状态：子代理睡着等（`clock.sleep`）时
+    /// 读到的是 idle，它这一轮还没结束（实测）。
     static func lastTurn(_ thread: String, on rpc: CodexRPC) async throws -> JSONValue? {
         try await rpc.call("thread/turns/list", ["threadId": .string(thread), "limit": 1])["data"]?.array?.first
     }
@@ -305,10 +298,9 @@ extension CodexRuntime {
         }
     }
 
-    /// 终端会话这一轮发出就算开始（常驻服务不报开始）。空输入的一轮先把子代理的结果取进来再请求模型；带文字的一轮先请求模型，v2 的结果要到之后才取出，模型会答“还没收到”。
+    /// 空输入的一轮先把子代理的结果取进来再请求模型；带文字的一轮先请求模型，v2 的结果要到之后才取出，模型会答“还没收到”。
     /// 同 Codex 的 `wake_on_agent_messages`（openai/codex#54961，未发布、默认关、不管 v1，发布并默认开启后改用它），边界也照它：
     /// 父线程上一轮被停下、在 Plan 模式、这一批没有交回结果（都被停下）的不补，直接歇下。
-    /// 终端里这一轮显示为一段没有提问的回答；它不触发 `UserPromptSubmit`，输入框里打了一半的话不受影响（实测）。
     private func wake(_ session: Tracked) {
         let batch = session.facts.inFlight
         guard !session.facts.running, batch == Set(session.unread.keys) else { return }
@@ -323,16 +315,11 @@ extension CodexRuntime {
                 session.facts.inFlight = []
                 return publish(session)
             }
-            let hostedSession = hosted[session.pid] != nil
-            if !hostedSession {
-                startTurn(session, at: .now)
-                publish(session)
-            }
             do {
                 try await turnStart(session, [])
             } catch {
-                // 没开成：终端会话收回发出时算的开始，托管的这一批不再等，都带着原因歇下
-                guard tracked[session.id] === session, session.facts.running != hostedSession else { return }
+                // 没开成：这一批不再等，带着原因歇下
+                guard tracked[session.id] === session, !session.facts.running else { return }
                 session.unread = [:]
                 session.facts.inFlight = []
                 session.facts.endTurn(failure: error.localizedDescription)
