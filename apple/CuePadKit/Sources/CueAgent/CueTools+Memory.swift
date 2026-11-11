@@ -27,10 +27,15 @@ extension CueTools {
   static let excerptLimit = 200
   static let excerptLead = 40
 
-  /// recall 查到的一条会话里的话（Agent 的回复，`his` 是他说的）：哪个会话、什么时候、命中的那一段。
-  func replyLine(_ reply: CueRecall.Reply, his: Bool = false, around words: [String]) -> String {
-    let name = reply.session.map(CueEnvelope.sessionName) ?? "会话（\(reply.message.sessionID.prefix(8))）"
-    return "\(name) \(iso(reply.message.at)) \(his ? "他说" : "回复")：\(Self.excerpt(reply.message.text, around: words))"
+  /// 查到的一条会话里的话（Agent 的回复，或他说的）：哪个会话、什么时候、命中的那一段。
+  func replyLine(_ reply: CueRecall.Reply, around words: [String]) -> String {
+    let said = reply.message.role == .known(.user) ? "他说" : "回复"
+    return "\(Self.sessionName(reply)) \(iso(reply.message.at)) \(said)：\(Self.excerpt(reply.message.text, around: words))"
+  }
+
+  /// 一条消息所在会话的叫法（记录已清掉的只剩 id）。
+  static func sessionName(_ reply: CueRecall.Reply) -> String {
+    reply.session.map(CueEnvelope.sessionName) ?? "会话（\(reply.message.sessionID.prefix(8))）"
   }
 
   func memory(_ args: Args) async throws -> Result {
@@ -54,9 +59,8 @@ extension CueTools {
       lines += found.messages.map { "对话 \(iso($0.createdAt)) \($0.author.rawValue)：\(Self.excerpt(CueFormat.plainText($0.text), around: words))" }
       lines += found.cards.map { "\($0.isTask ? "任务" : "灵感")「\($0.heading)」（\($0.id.shortID)）" }
       lines += found.replies.map { replyLine($0, around: words) }
-      lines += found.said.map { replyLine($0, his: true, around: words) }
       let more = found.unlisted
-      let unlisted = [("记忆", more.lines), ("对话", more.messages), ("任务", more.cards), ("会话回复", more.replies), ("他在会话里说的", more.said)].filter { $0.1 > 0 }
+      let unlisted = [("记忆", more.lines), ("对话", more.messages), ("任务", more.cards), ("会话回复", more.replies)].filter { $0.1 > 0 }
       if !unlisted.isEmpty {
         lines.append("还有命中没列出：" + unlisted.map { "\($0.0) \($0.1) 条" }.joined(separator: "、") + "。要查全就加上更具体的词、换个说法再查。")
       }
@@ -112,6 +116,20 @@ extension CueTools {
       return .ok("重点：\n\(view.pinnedText)\n\n\(view.viewText ?? "其余记忆：没有。")")
     case let other: throw Failure("memory 没有 \(other)：可用 note / recall / zoom / forget / pin / remind / schedules")
     }
+  }
+
+  /// 做梦查他以前在会话里说过没有（`CueStore.recallSaid`）。
+  func said(_ args: Args) async throws -> Result {
+    let query = try args.required("query")
+    let found = try await store.recallSaid(query), words = CueStore.recallWords(query)
+    return .ok(found.isEmpty ? "没找到。" : found.map { replyLine($0, around: words) }.joined(separator: "\n"))
+  }
+
+  /// 做梦问他一次要不要把常交代的做法记成重点（`CueAsk.habit`）：他答了交给 Cue 记。
+  func ask(_ args: Args) async throws -> Result {
+    let asking = try CueAsking(.habit, action: args.string("doing"), rule: args.string("rule"))
+    try await store.addCueMessage(.cue, text: try args.required("text"), ask: asking)
+    return .ok("已问他。")
   }
 
   /// range 来自生成摘要的同一份输入；存储层在事务内核对输入，不重新给旧文本绑定当前指纹。

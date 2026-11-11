@@ -8,7 +8,7 @@ extension CueTools {
     let related = try await args.string("task").asyncMap(task)
     let shots = try CueShot.checked(try await shots(args.raw["show"]))
     let ask = try args.string("ask").map { raw -> CueAsking in
-      guard let ask = CueAsk(rawValue: raw) else { throw Failure("ask 只能是这几类：\(CuePrompt.asks)；别的事你自己定，做完告诉他") }
+      guard let ask = CueAsk(rawValue: raw), CueAsk.byCue.contains(ask) else { throw Failure("ask 只能是这几类：\(CuePrompt.asks)；别的事你自己定，做完告诉他") }
       return try CueAsking(ask, action: args.string("doing"), rule: args.string("rule"))
     }
     if ask == nil, !shots.isEmpty { throw Failure("show 只跟着 ask：要他看的图放在提问上") }

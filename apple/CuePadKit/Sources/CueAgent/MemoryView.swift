@@ -3,7 +3,7 @@ import Foundation
 
 /// Cue 的记忆视图（OptMem 的读法）：重点全部列出（在系统提示里，`pinnedText`，过了 `CueMemoryLine.pinnedHard` 叫 Cue 自己收口）；其余按快照位置铺成对齐的 2 的幂块，越新越细、总行数固定在预算内
 /// （按预算二分 alpha，见 `cover`），放在新会话的第一条输入里（`viewText`）。块有摘要用摘要，没有就拆成两半直到有摘要或单行；
-/// 输入就绪的缺失摘要列成"待合并"（`merges`，子块写完由回执接续父块），视图里不列，由后台整理记忆的一次性大脑写（`dreamText`，`CueKeeper` 起；重点只归 Cue 整理，做梦不碰）。摘要可以一层层展开（`zoom`）。
+/// 输入就绪的缺失摘要列成"待合并"（`merges`，子块写完由回执接续父块），视图里不列，由后台整理记忆的一次性大脑写（`CuePrompt.dreamInput`，`CueKeeper` 起；重点只归 Cue 整理，做梦不碰）。摘要可以一层层展开（`zoom`）。
 /// 参考 https://github.com/VictorTaelin/OptMem 的 `_cover` / `cover`。
 public struct CueMemoryView: Equatable, Sendable {
   public typealias Entry = CueMemoryInput
@@ -71,9 +71,6 @@ public struct CueMemoryView: Equatable, Sendable {
   static func kilobytes(_ bytes: Int) -> String {
     (Double(bytes) / 1024).formatted(.number.precision(.fractionLength(0...1)).locale(Locale(identifier: "en_US_POSIX"))) + "KB"
   }
-
-  /// 交给整理记忆的大脑的输入（规则在它的系统提示里，`CuePrompt.dream`）：待合并的块（`mergeText`）；没有为 nil。
-  public var dreamText: String? { mergeText.map { "<merge>\n\($0)\n</merge>" } }
 
   /// 新会话第一条输入里的 `<memory>` 块：其余的记忆，从早到晚、越早越粗；没有为 nil。
   public var viewText: String? {

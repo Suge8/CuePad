@@ -7,7 +7,7 @@ extension CueTools {
   static func definitions(_ toolset: Toolset) -> [[String: Any]] {
     switch toolset {
     case .cue: definitions
-    case .dream: [merge]
+    case .dream: [merge, said, ask]
     }
   }
 
@@ -17,6 +17,24 @@ extension CueTools {
       "description": "把一块待合并的记忆写成一行摘要（≤\(CueMemoryLine.maxBytes) 字节）：range 原样复制块头的引用，绑定生成时输入；输入变化则拒绝写入；回执若带 <merge>，继续合并其中新就绪的父块。",
       "inputSchema": schema(["range": string, "text": string], required: ["range", "text"]),
       "annotations": ["readOnlyHint": false, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false],
+    ]
+  }
+
+  private static var said: [String: Any] {
+    [
+      "name": "said",
+      "description": "按词找他以前在各会话里说过的话（带会话名与时刻）：词之间空格隔开，命中任一个就算，词越少见越靠前。",
+      "inputSchema": schema(["query": string], required: ["query"]),
+      "annotations": ["readOnlyHint": true, "destructiveHint": false, "idempotentHint": true, "openWorldHint": false],
+    ]
+  }
+
+  private static var ask: [String: Any] {
+    [
+      "name": "ask",
+      "description": "问他一次要不要\(CueAsk.habit.definition)。text 是给他看的一句话；doing 与 rule 是卡片上的短语（各一行、≤\(CueAsking.phraseLimit) 字）。",
+      "inputSchema": schema(["text": string, "doing": string, "rule": string], required: ["text", "doing", "rule"]),
+      "annotations": ["readOnlyHint": false, "destructiveHint": false, "idempotentHint": false, "openWorldHint": false],
     ]
   }
 
@@ -59,7 +77,7 @@ extension CueTools {
           """,
         "inputSchema": schema(
           [
-            "text": string, "ask": ["type": "string", "enum": CueAsk.allCases.map(\.rawValue)], "doing": string, "rule": string,
+            "text": string, "ask": ["type": "string", "enum": CueAsk.byCue.map(\.rawValue)], "doing": string, "rule": string,
             "urgent": ["type": "boolean"], "task": string, "withdraw": string, "restore": string, "show": show,
           ],
           required: []),

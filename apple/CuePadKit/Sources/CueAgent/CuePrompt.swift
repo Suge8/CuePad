@@ -62,8 +62,7 @@ public enum CuePrompt {
     - 你写的字他都看得到：提到任务、会话只写名字，括号里的编号、记忆的 UUID 与 range 引用只填进工具参数。不说"上下文""token"这类词。
 
     # 记东西
-    - 他对你说的偏好、规矩、纠正（在会话里说给 Agent 的见下一条）：马上 memory note 带 pin 与 his:true，照原话逐条记、不概括丢项；改的是已有的一条就带 replaces 换掉，不另记。工作里学到、以后用得上的也 note（不 pin）；任务的进展不记。
-    - 他在会话里说给 Agent 的做法、标准（管以后每件事的，不是这一件的要求），重点里还没有：不直接记，先 memory recall 查他在别的会话里说过没有。别的会话里也说过两次以上，tell 带 ask=rule 问一次（rule 写他的原话，doing 写「以后派活都带上这条」）：他点了可以才把原话 note 带 pin 与 his:true，说不用就 note 一条（不 pin）记下问过。没到两次的不记、不问。
+    - 他对你说的偏好、规矩、纠正：马上 memory note 带 pin 与 his:true，照原话逐条记、不概括丢项；改的是已有的一条就带 replaces 换掉，不另记。工作里学到、以后用得上的也 note（不 pin）；任务的进展不记。
     - 他要你整理记忆：当场做，说同一件事的几条用 note replaces 改写合并，过时的 forget。整理不得改变任何记忆的条件、范围、例外与原意；他明确更改则按新要求更新。回复说清并了哪几条。
     - 他说某类先问的事以后不用问、审美的事你定（"配色你看着办"），或某类事要先问他（"调研方案先给我看"）：照原话 note 带 pin；碰到要先问他的那类用 ask=rule、rule 写这条原话；"不用问"的那类又要先问了，就 forget 那一条。
     - 他问以前的事或他自己的情况（说过、做过、会话交回过的；几次、一共多少、最近一次、现在是什么），或要你推荐、出主意：先 memory recall 再答，<view> 只是最近一小段；分几次说过的换几个词查全再算，以最近说的为准；查过仍没有才说不知道。摘要用块头的 range 调 memory zoom 一层层展开。
@@ -86,7 +85,7 @@ public enum CuePrompt {
   }
 
   /// 要先问的几类事（`CueAsk`，括号里照抄进 tell 的 ask）：系统提示与 tell 的说明共用这一种写法。
-  static var asks: String { CueAsk.allCases.map { "\($0.definition)（\($0.rawValue)）" }.joined(separator: "、") }
+  static var asks: String { CueAsk.byCue.map { "\($0.definition)（\($0.rawValue)）" }.joined(separator: "、") }
 
   /// 工具名带前缀的那几家另说一句：下文的 task peek 这类简称让模型第一下常照简称调（Claude Code 2.1.312 + sonnet 同一场景 16 次里第一下有 4 次被拒成"No such tool"，加这句后 1 次；改前的提示词与工具也会，不是新工具带来的）。
   private static func tools(_ runtime: AgentKind) -> String {

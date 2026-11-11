@@ -5,7 +5,7 @@ import SwiftUI
 import Testing
 @testable import CuePad
 
-/// 只有 Cue 在场的几个时机：大事先出方案、追问两次就留给他、要的就是长相的成果只凭图挑刺、他反复交代的做法提议记成规矩。
+/// 只有 Cue 在场的几个时机：大事先出方案、追问两次就留给他、要的就是长相的成果只凭图挑刺；与后台整理记忆时把他反复交代的做法提议记成规矩。
 extension CueEvalTests {
     @Test func c5追问两次就留给他() async throws {
         try await CueEval.run("c5-追问两次就留给他", expect: "改前改后的截图 Cue 追问过两次，会话这次还是没发：不问第三次，tell 一句缺什么，留给他回；不 done") { eval in
@@ -30,36 +30,56 @@ extension CueEvalTests {
     @Test func n2反复交代的做法提议成规矩() async throws {
         try await CueEval.run(
             "n2-反复交代的做法提议成规矩",
-            expect: "他在另外两个会话里说过别加没人要的测试，这次在第三个会话里又说：recall 查到后 tell 带 ask=rule 问一次（rule 引他的原话），先不记成重点；他点可以后 note 带 pin 与 his"
+            expect: "他在三个会话里都交代过别加没人要的测试（一次换了说法），夹在几十句只管手头那件事的话里：后台整理记忆的大脑问他一次要不要记成重点（引他的原话），"
+                + "只在一个会话里说了三遍的不问；问之前不记；他点可以后 Cue 把原话 note 带 pin 与 his"
         ) { eval in
             let rig = eval.rig
-            let said = "别加没人要的测试，测试是负债，只留覆盖用户可见行为的。"
-            for (title, days) in [("修好注册页白屏", 6.0), ("导出报表加筛选", 2.0)] {
-                let earlier = try await rig.working(title, "照现状修，做完贴出验证。")
-                try earlier.file.user("对了，\(said)", at: .now - days * 86400)
-                try await rig.read("对了，\(said)", in: earlier.id)
+            let habit = [
+                "对了，别加没人要的测试，测试是负债，只留覆盖用户可见行为的。", "还是那句：别加没人要的测试，测试是负债，只留覆盖用户可见行为的。",
+                "测试别多写，没人要的不加：测试是负债，只留覆盖用户可见行为的那几个。",
+            ]
+            var works: [(work: Working, days: Double)] = []
+            for (title, days) in [("修好注册页白屏", 6.0), ("导出报表加筛选", 2.0), (Self.title, 0.5)] {
+                works.append((try await rig.working(title, "照现状修，做完贴出验证。"), days))
             }
-            let work = try await rig.working(Self.title, Self.body)
-            try await eval.trigger {
-                try await rig.settleHisTurn(work, said: "限流改成 30 秒。还是那句：\(said)", ago: 15 * 60, reply: "限流改成 30 秒了，没有加新测试；原有 23 个测试全过。")
+            // 那条做法先各说一遍，再夹进只管手头那件事的话：攒够一批（`CueKeeper.heardBatch`）时三个会话里的都已在库里
+            for (index, item) in works.enumerated() {
+                try item.work.file.user(habit[index], at: .now - item.days * 86400)
+                try await rig.read(habit[index], in: item.work.id)
             }
-            let asked = eval.calls("tell").last { $0.args["ask"] as? String == "rule" && !$0.call.failed }
-            let recalled = eval.calls("memory", "recall"), early = eval.calls("memory", "note")
-            let card = try await eval.said().last { $0.choices != nil }
+            for round in 0..<30 {
+                for (index, item) in works.enumerated() {
+                    let one = index == 0 && round < 3 ? "这次先别动数据库的表结构。" : Self.oneOffs[(round * 3 + index) % Self.oneOffs.count] + "（第 \(round + 1) 处）"
+                    try item.work.file.reply("好，改了。", at: .now - item.days * 86400 + Double(round) * 60)
+                    try item.work.file.user(one, at: .now - item.days * 86400 + Double(round) * 60 + 30)
+                    try await rig.read(one, in: item.work.id)
+                }
+            }
+            func proposals() async throws -> [CueMessage] { try await rig.store.cueHabitQuestions() }
+            try? await eventually("后台整理记忆的大脑问了他") { try await !proposals().isEmpty }
+            let asked = try await proposals()
+            let early = try await rig.store.cueMemory().lines.contains { $0.pinned && $0.deletedAt == nil }
             var pinned = false
-            if let card {
+            if let card = asked.first {
                 try await eval.trigger { try await rig.services.answerCueQuestion(card.id, CueAsk.once) }
                 pinned = try await rig.store.cueMemory().lines.contains { $0.deletedAt == nil && $0.pinned && $0.source == .known(.you) && $0.text.contains("测试") }
             }
+            eval.report.append("后台问的：\n" + asked.map { "- \($0.text)（卡上：\($0.asking?.question ?? "")\($0.asking?.why ?? "")）" }.joined(separator: "\n"))
             return [
-                Check(.tool, "先 recall 查他以前说过没有", !recalled.isEmpty),
-                Check(.ask, "问一次要不要以后都带上（tell 带 ask=rule）", asked != nil),
-                Check(.tool, "rule 引他的原话（提到测试）", (asked?.args["rule"] as? String)?.contains("测试") == true),
-                Check(.ask, "他点头前没记成重点", !early.contains { $0.args["pin"] as? Bool == true }),
+                Check(.ask, "问了一次、只问这一条", asked.count == 1),
+                Check(.ask, "问的话里引了他的原话（提到测试是负债）", asked.first?.text.contains("测试是负债") == true),
+                Check(.ask, "只在一个会话里说的没问（没提数据库）", !asked.contains { $0.text.contains("数据库") }),
+                Check(.ask, "他点头前没记成重点", !early),
                 Check(.result, "他点可以后记成他说的重点", pinned),
             ]
         }
     }
+
+    /// 只管手头那件事的话（各会话里轮着说）
+    static let oneOffs = [
+        "限流改成 30 秒", "这个按钮往右挪 8 像素", "报错文案改成「请稍后再试」", "把日志级别调到 debug 再跑一遍", "先看看是不是缓存的问题",
+        "截图发我看看", "这一步跑完了吗", "列表默认按时间倒序", "超时先放到 10 秒", "把这个接口的返回贴出来", "继续", "标题字号小一号",
+    ]
 
     @Test func u2界面成品先挑刺() async throws {
         try await CueEval.run(
