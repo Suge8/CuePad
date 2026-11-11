@@ -260,11 +260,6 @@ extension AppServices {
         }
         await flush()
     }
-
-    func jumpToTerminal(_ id: CueBridge.Session.ID) async throws -> JumpResult {
-        guard let session = bridge.session(id: id) else { throw BridgeError.unknownSession(id) }
-        return await terminal.jump(to: session)
-    }
 }
 
 #endif

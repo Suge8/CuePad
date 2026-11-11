@@ -4381,22 +4381,6 @@
       },
       "shouldTranslate" : false
     },
-    "tmux 没能切到 %@（会话可能没有附着的客户端）" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "tmux couldn't switch to %@ (the session may have no attached client)"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "tmux 没能切到 %@（会话可能没有附着的客户端）"
-          }
-        }
-      }
-    },
     "{{%@}}" : {
       "localizations" : {
 
@@ -5519,22 +5503,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "不提供查询"
-          }
-        }
-      }
-    },
-    "不知道会话运行在哪个终端应用里" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Couldn't tell which terminal app the session is running in"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "不知道会话运行在哪个终端应用里"
           }
         }
       }
@@ -16239,22 +16207,6 @@
         }
       }
     },
-    "无法控制该终端应用（可能没有授予自动化权限）：%@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Can't control the terminal app (Automation permission may be missing): %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无法控制该终端应用（可能没有授予自动化权限）：%@"
-          }
-        }
-      }
-    },
     "无法注册：%@" : {
       "localizations" : {
         "en" : {
@@ -16895,34 +16847,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "最高"
-          }
-        }
-      }
-    },
-    "有 %lld 个终端匹配，无法确定是哪一个" : {
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld terminal matches, but it couldn't be identified"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld terminals match; couldn't tell which one"
-                }
-              }
-            }
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "有 %lld 个终端匹配，无法确定是哪一个"
           }
         }
       }
@@ -18735,22 +18659,6 @@
         }
       }
     },
-    "没有 tty 信息，无法定位标签页" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No tty info, so the tab can't be found"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "没有 tty 信息，无法定位标签页"
-          }
-        }
-      }
-    },
     "没有删掉的东西" : {
       "localizations" : {
         "en" : {
@@ -18827,22 +18735,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "没有在推进的会话"
-          }
-        }
-      }
-    },
-    "没有工作目录或 tty 匹配的终端/标签页" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No terminal or tab matches the working folder or tty"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "没有工作目录或 tty 匹配的终端/标签页"
           }
         }
       }
@@ -21235,22 +21127,6 @@
         }
       }
     },
-    "终端应用 %@ 没有在运行" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Terminal app %@ isn't running"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "终端应用 %@ 没有在运行"
-          }
-        }
-      }
-    },
     "终端里开的会话不能%@，CuePad 在后台开的都能做。" : {
       "localizations" : {
         "en" : {
@@ -23127,22 +23003,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "跟随系统"
-          }
-        }
-      }
-    },
-    "跳到所在终端" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Go to Terminal"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "跳到所在终端"
           }
         }
       }

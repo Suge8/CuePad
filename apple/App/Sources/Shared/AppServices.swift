@@ -102,7 +102,6 @@ final class AppServices {
     @ObservationIgnored var windowShell: MainShellWindow?
 
     @ObservationIgnored let paths: AgentPaths
-    @ObservationIgnored let terminal: TerminalJumper
     @ObservationIgnored let hooks: AgentHookServer
     @ObservationIgnored let runtimes: [AgentKind: any AgentRuntime]
     @ObservationIgnored let pasteboard: NSPasteboard
@@ -170,7 +169,6 @@ final class AppServices {
         pasteboard = mac.pasteboard
         hotkeyBackend = mac.hotkeys
         paths = mac.paths
-        terminal = mac.terminal
         hooks = mac.hooks
         runtimes = mac.runtimes(store)
         agents = mac.agents
