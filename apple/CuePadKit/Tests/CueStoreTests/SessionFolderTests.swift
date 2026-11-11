@@ -7,11 +7,11 @@ import Testing
   var store: CueStore { fixture.store }
 
   private func index(_ id: String, cwd: String) async throws {
-    try await store.upsertPiSession(IndexedSession(id: id, path: "/s/\(id).jsonl", cwd: cwd, lastActivityAt: Date()), host: "mac-a")
+    try await store.upsertSession(IndexedSession(id: id, path: "/s/\(id).jsonl", cwd: cwd, lastActivityAt: Date()), host: "mac-a")
   }
 
   private func projects() async throws -> [String: UUID?] {
-    Dictionary(uniqueKeysWithValues: try await store.allPiSessionStates().map { ($0.sessionID, $0.projectID) })
+    Dictionary(uniqueKeysWithValues: try await store.allSessionStates().map { ($0.sessionID, $0.projectID) })
   }
 
   @Test func bindingAFolderPutsExistingSessionsIntoTheProjectAndUnbindingTakesThemOut() async throws {

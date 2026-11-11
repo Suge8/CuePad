@@ -2,7 +2,7 @@ import Foundation
 
 extension CueStore {
   /// `catalog`：`writesCatalog` 为真（这个会话报的变了或还没写过）才写它，不必每次状态变化都去比一遍几十 KB 的清单。
-  func writePiState(
+  func writeSessionState(
     sessionID: String, hostID: String, bootID: String?, content: SessionSnapshot, catalog: AgentCatalog?, writesCatalog: Bool, notify: AlertKind?
   ) throws {
     try write {
@@ -22,7 +22,7 @@ extension CueStore {
         event.runtimeUntil = now
         record.notify = try push(notify, event)
       }
-      // 摘要不归这里写：它是对话的投影，只由 `writePiTranscript` 写（新记录插入时先空着）
+      // 摘要不归这里写：它是对话的投影，只由 `writeTranscript` 写（新记录插入时先空着）
       // 最后一轮的开始不知道（CuePad 在一轮中途重启，各家的事实从头记起）时留着库里的：这一轮的回答照样不早于它
       let assignments = SessionState.columns.dropFirst()
         .filter { $0 != "createdAt" && $0 != "createdForTaskID" && $0 != "notify" && !SessionState.recapColumns.contains($0) }
@@ -50,7 +50,7 @@ extension CueStore {
   /// 一个会话的进程没了（不是你结束的：歇满被请退出、崩溃、被杀）：托管的记为歇着（仍可唤醒、不进历史），
   /// 其余记为已结束、进历史；记录上手上还有活（在跑一轮、等你确认、子代理还在跑）的都记为做到一半被打断（`WorkState.interrupted`）。
   /// `bootID` 是见证这次收尾的系统启动（`close`）。
-  func losePiState(host: String, sessionID: String, bootID: String?, at now: Date) throws {
+  func loseSessionState(host: String, sessionID: String, bootID: String?, at now: Date) throws {
     try write {
       try close(where: "id = ?", [SessionState.recordID(sessionID: sessionID)], boot: bootID, at: now)
       try db.run("DELETE FROM piProcesses WHERE sessionID = ?", [sessionID])
@@ -59,7 +59,7 @@ extension CueStore {
   }
 
   /// 源端实际结束与所覆盖请求同事务确认；集合由领取时固定，不能按写入时的请求、状态快照或时间扩大。
-  func endPiState(host: String, sessionID: String, bootID: String?, at now: Date, confirming requests: Set<UUID>) throws {
+  func endSessionState(host: String, sessionID: String, bootID: String?, at now: Date, confirming requests: Set<UUID>) throws {
     try write {
       try db.run(
         "UPDATE piSessionStates SET state = ?, bootID = ?, \(Self.cleared), stateSince = ?, hosted = NULL, modifiedAt = ? WHERE id = ? AND state != ?",
@@ -76,7 +76,7 @@ extension CueStore {
 
   /// 确实没了的三种：记下的进程不是那一个了；记录是上一次系统启动见证的；托管的歇着或出错、却没记着进程的（托管的进程都由 CuePad 起、记着，只在收尾时删掉；更早的版本收尾时还清掉了见证的启动）。
   /// 其余不动：记下的进程还在的（托管的 Pi 不随 App 退出，终端里的会话也还开着），与没记下进程、又没有死亡证据的，都由桥重新连上后接着写，或在进程退出时收尾。返回可沿用的状态与计时：旧 boot 与无证据的历史不带给新进程。
-  func reconcilePiStates(host: String, bootID: String?, running: (SessionProcess) -> Bool, at now: Date) throws -> [String: (state: WorkState, times: SessionTimes)] {
+  func reconcileSessionStates(host: String, bootID: String?, running: (SessionProcess) -> Bool, at now: Date) throws -> [String: (state: WorkState, times: SessionTimes)] {
     try write {
       let before = try db.query(
         // `+hostID`：不走 hostID 索引（这台 Mac 的会话几乎就是全部），改走 state 索引只读没收尾的那几条
@@ -152,7 +152,7 @@ extension CueStore {
     }
   }
 
-  func deletePiState(host: String, sessionID: String) throws {
+  func deleteSessionState(host: String, sessionID: String) throws {
     try write {
       try db.run("DELETE FROM piSessionStates WHERE id = ?", [SessionState.recordID(sessionID: sessionID)])
       try db.run("DELETE FROM piProcesses WHERE sessionID = ?", [sessionID])
@@ -172,7 +172,7 @@ public struct SessionProcess: Equatable, Sendable {
   }
 }
 
-/// 加一个会话字段：这里加一个属性，桥上产出时填上，再在 `writePiState` 写进记录。
+/// 加一个会话字段：这里加一个属性，桥上产出时填上，再在 `writeSessionState` 写进记录。
 public struct SessionSnapshot: Paced {
   public let sessionID: String
   public var state: WorkState

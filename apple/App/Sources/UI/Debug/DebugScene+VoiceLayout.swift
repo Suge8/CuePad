@@ -1,5 +1,5 @@
 #if os(macOS) && DEBUG
-import CuePi
+import CueBridge
 import CueStore
 import Foundation
 

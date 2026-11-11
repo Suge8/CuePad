@@ -1,7 +1,7 @@
 import CryptoKit
 import CueStore
 #if os(macOS)
-import CuePi
+import CueBridge
 #endif
 import Foundation
 import Testing

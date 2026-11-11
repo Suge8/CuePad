@@ -25,24 +25,24 @@ import Testing
     try await recorder.update(
       sessionID: "s1", state: .waitingForUser, detail: "确认写入？", title: "fix bug", directory: "/Users/me/cuepad", question: question, times: times)
     let said = ChatMessage(sessionID: "s1", entryID: "u1", seq: 2, role: .user, text: "再跑一遍测试", at: Date(timeIntervalSince1970: 3_000), deliveryID: UUID())
-    try await mac.store.writePiTranscript(SessionTranscript(sessionID: "s1", messages: [said], recap: recap))
+    try await mac.store.writeTranscript(SessionTranscript(sessionID: "s1", messages: [said], recap: recap))
     try await cloud.exchange()
 
-    let seen = try #require(try await phone.store.allPiSessionStates().first)
+    let seen = try #require(try await phone.store.allSessionStates().first)
     #expect(seen.sessionID == "s1" && seen.state == .known(.waitingForUser) && seen.detail == "确认写入？" && seen.title == "fix bug")
     #expect(seen.folder == "cuepad")  // 手机没有工作目录，副行靠它写出文件夹名
     #expect(seen.lastPrompt == recap.lastPrompt && seen.lastReply == recap.lastReply && seen.question == question)
     #expect(seen.pendingPrompt == recap.pendingPrompt)
-    #expect(try await phone.store.piMessages(of: "s1").map { [$0.text, $0.deliveryID?.uuidString] } == [[said.text, said.deliveryID?.uuidString]])
+    #expect(try await phone.store.chatMessages(of: "s1").map { [$0.text, $0.deliveryID?.uuidString] } == [[said.text, said.deliveryID?.uuidString]])
     #expect(seen.stateSince == times.stateSince && seen.busySince == times.busySince)
 
     try await recorder.update(sessionID: "s1", state: .settled)
     try await cloud.exchange()
-    #expect(try await phone.store.allPiSessionStates().first?.state == .known(.settled))
+    #expect(try await phone.store.allSessionStates().first?.state == .known(.settled))
 
     try await recorder.end(sessionID: "s1")
     try await cloud.exchange()
-    let ended = try #require(try await phone.store.allPiSessionStates().first)
+    let ended = try #require(try await phone.store.allSessionStates().first)
     #expect(ended.state == .known(.ended) && ended.lastReply == recap.lastReply)  // 跑完的结论在手机上还看得到
   }
 
@@ -71,7 +71,7 @@ import Testing
     #expect(seen == preview)  // 标题、文件名、大小、哈希都到了
     #expect(try Data(contentsOf: #require(phone.store.files.fileURL(for: seen.key))) == Data("<h1>登录页</h1>".utf8))
 
-    try await mac.store.prunePiMessages(olderThan: 7 * 86_400, now: .now.addingTimeInterval(8 * 86_400))
+    try await mac.store.pruneMessages(olderThan: 7 * 86_400, now: .now.addingTimeInterval(8 * 86_400))
     try await cloud.exchange()
     #expect(try await phone.store.previews(of: "s1").isEmpty && phone.store.files.fileURL(for: seen.key) == nil)
   }
@@ -86,7 +86,7 @@ import Testing
       modelState: ModelState(model: sonnet, thinking: .known(.low), fast: false, models: [sonnet, opus]), commands: [compact])
     try await cloud.exchange()
 
-    let seen = try #require(try await phone.store.allPiSessionStates().first)
+    let seen = try #require(try await phone.store.allSessionStates().first)
     #expect(seen.model == sonnet && seen.thinking == .known(.low) && seen.fast == false)
     let catalogID = try #require(seen.catalogID)
     let catalog = try #require(try await phone.store.agentCatalog(catalogID))
@@ -119,11 +119,11 @@ import Testing
     #expect(try await mac.store.deliveryRequest(request.id)?.roundTrip == nil)  // 执行方不算往返
 
     let said = ChatMessage(sessionID: "s1", entryID: "u1", seq: 1, role: .user, text: request.content, at: .now, deliveryID: request.id)
-    try await mac.store.writePiTranscript(SessionTranscript(sessionID: "s1", messages: [said], recap: Recap()))
+    try await mac.store.writeTranscript(SessionTranscript(sessionID: "s1", messages: [said], recap: Recap()))
     try await cloud.deliver(from: mac, to: phone, only: [mac.id(request.id)])  // 回执马上传
     #expect(try await phone.store.deliveryRequest(request.id) != nil)
     try await cloud.exchange()  // 消息上了服务器、到了手机
-    #expect(try await phone.store.piMessages(of: "s1").map(\.deliveryID) == [request.id])
+    #expect(try await phone.store.chatMessages(of: "s1").map(\.deliveryID) == [request.id])
     #expect(try await mac.store.deliveryRequest(request.id) == nil)
     try await cloud.exchange()  // 收走同步过去
     #expect(try await phone.store.deliveryRequest(request.id) == nil)
@@ -146,7 +146,7 @@ import Testing
     _ = try await eventually(mac.store, { try $0.deliveryRequests().count }) { $0 == 0 }
     try await cloud.exchange()
 
-    let lines = try await phone.store.piMessages(of: "s1")
+    let lines = try await phone.store.chatMessages(of: "s1")
     #expect(lines.map { [$0.role.rawValue, $0.text, $0.question ?? ""] } == [["answer", "另存为 feed-full.xml", "要覆盖 public/feed.xml 吗？"]])
     #expect(lines.first?.deliveryID == mine.id)
     #expect(try await phone.store.deliveryRequests().isEmpty)
@@ -198,7 +198,7 @@ import Testing
     let scoped = ModelState(model: options[0], models: Array(options.prefix(2)))
     try await recorder.update(sessionID: "s3", state: .thinking, title: "v", directory: "/Users/me/app", modelState: scoped)
     try await cloud.exchange()
-    let states = Dictionary(uniqueKeysWithValues: try await phone.store.allPiSessionStates().map { ($0.sessionID, $0.catalogID) })
+    let states = Dictionary(uniqueKeysWithValues: try await phone.store.allSessionStates().map { ($0.sessionID, $0.catalogID) })
     let shared = try #require(states["s1"] ?? nil)
     #expect(states["s2"] == shared && states["s3"] != shared)
     let own = try #require(states["s3"] ?? nil)
@@ -209,7 +209,7 @@ import Testing
     #expect(!pending.contains(mac.id(shared)))  // 清单没改，不再上传
     try await cloud.exchange()
 
-    let seen = try #require(try await phone.store.allPiSessionStates().first { $0.sessionID == "s1" })
+    let seen = try #require(try await phone.store.allSessionStates().first { $0.sessionID == "s1" })
     #expect(seen.state == .known(.settled) && seen.detail == "做完了")
     #expect(try await phone.store.agentCatalog(shared)?.models.count == 300)
 

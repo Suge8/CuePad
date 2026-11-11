@@ -26,7 +26,7 @@ struct TaskFlowTests {
         #expect(try await next(task) == .start(leaf: task))
 
         try await StateRecorder(store: store, hostID: "mac-a").update(sessionID: "s1", state: .settled, title: "atlas", hosted: true)
-        let session = try #require(try await store.allPiSessionStates().first)
+        let session = try #require(try await store.allSessionStates().first)
         let delivers = Mutex(false)
         let executor = DeliveryExecutor(store: store, hostID: "mac-a", onIssue: { Issue.record("\($0)") }) { [store, atlas] request, _ in
             guard delivers.withLock({ $0 }) else { return .failed(.verbatim("会话在送达前关掉了")) }

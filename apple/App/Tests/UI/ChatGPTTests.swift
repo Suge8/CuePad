@@ -1,5 +1,5 @@
 #if os(macOS)
-import CuePi
+import CueBridge
 import CueStore
 import Foundation
 import Testing
@@ -19,7 +19,7 @@ struct ChatGPTTests {
             QuotaWindow(seconds: 604_800, used: 0.91, resetsAt: .now.addingTimeInterval(3600)),
         ], complete: true, account: PiAccount(kind: .oauth, scope: "another-codex-authorization")), host: TestApp.hostID)
         _ = try await rig.host.open(in: rig.cwd, launchToken: "quota", name: nil, model: nil, thinking: nil)
-        let records = try await eventually(rig.store, { try $0.allPiSessionStates() }) { $0.first?.model != nil }
+        let records = try await eventually(rig.store, { try $0.allSessionStates() }) { $0.first?.model != nil }
         let model = try #require(records.first?.model)
 
         let failure = await rig.services.refreshQuota(.manual)
@@ -51,8 +51,8 @@ struct ChatGPTTests {
 
         workspace.send(prompt, to: AgentTarget(session: live.sessionID))
 
-        let messages = try await eventually(rig.store, { try $0.piMessages(of: live.sessionID) }) { $0.contains { $0.text == "PARTIAL_REPLY" } }
-        let state = try #require(try await eventually(rig.store, { try $0.allPiSessionStates().first }) {
+        let messages = try await eventually(rig.store, { try $0.chatMessages(of: live.sessionID) }) { $0.contains { $0.text == "PARTIAL_REPLY" } }
+        let state = try #require(try await eventually(rig.store, { try $0.allSessionStates().first }) {
             $0?.lastReply == "PARTIAL_REPLY" && $0?.state.known?.isWorking == false
         })
         #expect(state.lastReply == "PARTIAL_REPLY")
@@ -73,7 +73,7 @@ struct ChatGPTTests {
             #expect(state.detail == "回答未完成：达到输出长度上限")
             #expect(workspace.shownInHeader(state, delivery: nil).label == "回答未完成")
             #expect(messages.contains { $0.notice == .truncated })
-            let indexed = try #require(try await rig.store.piSession(live.sessionID))
+            let indexed = try #require(try await rig.store.indexedSession(live.sessionID))
             let history = try History.index(file: URL(filePath: indexed.path), agent: .pi, from: nil, files: rig.store.files)
             #expect(history.messages.contains { $0.notice == .truncated })
             #expect(history.messages.contains { $0.text == "PARTIAL_REPLY" })

@@ -169,7 +169,7 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         let others = try store.boardItems((todo + finished + held).filter { !started.contains($0.id) })
         let boards = Dictionary((working + others).map { ($0.id, $0) }) { first, _ in first }
         let loose = tally.advancing.compactMap { if case .session(let state) = $0 { state } else { nil } }
-        let agents = try store.piSessions(sessionIDs: boards.values.compactMap(\.session?.sessionID) + loose.map(\.sessionID))
+        let agents = try store.sessionItems(sessionIDs: boards.values.compactMap(\.session?.sessionID) + loose.map(\.sessionID))
         func item(_ task: Card) throws -> Item {
             let progress = steps[task.id]
             let leaf = progress == nil ? task : task.status == .inProgress ? try store.workingLeaf(of: task.id) : nil

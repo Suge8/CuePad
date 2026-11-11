@@ -45,9 +45,9 @@ struct AnswerLineTests {
         let recorder = StateRecorder(store: store, hostID: "mac")
         let question = Question(promptID: "p-1", kind: .select, text: "要覆盖 public/feed.xml 吗？", options: ["覆盖", "另存为 feed-full.xml"])
         try await recorder.update(sessionID: "s", state: .waitingForUser, title: "homepage", question: question)
-        let session = try #require(try await store.allPiSessionStates().first)
+        let session = try #require(try await store.allSessionStates().first)
         let asked = Date.now
-        try await store.writePiTranscript(SessionTranscript(
+        try await store.writeTranscript(SessionTranscript(
             sessionID: "s", messages: [ChatMessage(sessionID: "s", entryID: "u1", seq: 1, role: .user, text: "把 RSS 改成全文", at: asked.addingTimeInterval(-60))],
             recap: Recap(lastPrompt: "把 RSS 改成全文")))
         let executor = DeliveryExecutor(store: store, hostID: "mac", onIssue: { Issue.record("\($0)") }) { _, _ in .succeeded }
@@ -56,20 +56,20 @@ struct AnswerLineTests {
         let request = try await app.services.answer(.option("另存为 feed-full.xml"), to: session)
         _ = try await store.requestAnswer(Answer(promptID: "p-1", value: .option("覆盖"), question: question.text), to: session.target, on: "mac", cue: true)
         // Mac 晚了一阵才领到（离线答的、Mac 睡着）：这期间你在终端里又说了一句；回答仍排在答的那一刻，在这句之前
-        try await store.writePiTranscript(SessionTranscript(
+        try await store.writeTranscript(SessionTranscript(
             sessionID: "s", messages: [ChatMessage(sessionID: "s", entryID: "u2", seq: 2, role: .user, text: "顺便把 Atom 也输出", at: .now.addingTimeInterval(30))],
             recap: Recap(lastPrompt: "顺便把 Atom 也输出")))
         try await executor.start()
         _ = try await eventually(store, { try $0.deliveryRequests().allSatisfy { !$0.isOpen } }) { $0 }
-        try await store.writePiTranscript(SessionTranscript(
+        try await store.writeTranscript(SessionTranscript(
             sessionID: "s",
             messages: [ChatMessage(sessionID: "s", entryID: "a1", seq: 3, role: .pi, text: "另存好了。", at: .now.addingTimeInterval(60))],
             recap: Recap(lastPrompt: "把 RSS 改成全文", lastReply: "另存好了。")))
 
-        let entries = Chat.entries(try await store.piMessages(of: "s"))
+        let entries = Chat.entries(try await store.chatMessages(of: "s"))
         #expect(entries.map(\.role) == [.user, .answer, .user, .pi])
         #expect(entries[1].text == "另存为 feed-full.xml" && entries[1].question == question.text)
-        #expect(try await store.piMessages(of: "s").filter { $0.role == .known(.answer) }.map(\.deliveryID) == [request.id])
+        #expect(try await store.chatMessages(of: "s").filter { $0.role == .known(.answer) }.map(\.deliveryID) == [request.id])
         #expect(ChatScrubber.marks(entries).map(\.preview) == ["把 RSS 改成全文", "另存为 feed-full.xml", "顺便把 Atom 也输出"])
     }
 }

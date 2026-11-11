@@ -17,7 +17,7 @@ struct SessionBoardTests {
         let recorder = try await rig.runtimeRecorder(on: Self.mac)
         try await recorder.update(
             sessionID: id, state: .settled, title: title, hosted: hosted, agent: agent)
-        return try #require(try await store.piSessions(sessionIDs: [id])[id]?.state)
+        return try #require(try await store.sessionItems(sessionIDs: [id])[id]?.state)
     }
 
     /// 会话在这件任务完成之后有了新状态：时刻显式排在完成之后（收起按时刻严格先后判定，不靠真实时钟走过一毫秒）。
@@ -33,7 +33,7 @@ struct SessionBoardTests {
     private func names(_ task: UUID, _ sessionID: String) async throws -> [String] {
         let board = try await TaskBoard.read(from: store)
         let item = try #require(board.item(task))
-        let row = try #require(try await store.piSessions(sessionIDs: [sessionID])[sessionID])
+        let row = try #require(try await store.sessionItems(sessionIDs: [sessionID])[sessionID])
         return [item.task.title(session: item.agent?.shownTitle(at: services.speech)), row.name(at: services.speech)]
     }
 
@@ -76,7 +76,7 @@ struct SessionBoardTests {
         let project = try await store.createProject(name: "回收", color: "#000000")
         let archived = try await session("s1", title: "修登录")
         try await rig.runtimeRecorder(on: Self.mac).update(sessionID: "s2", state: .settled, title: "补测试", projectID: project.id)
-        let trashed = try #require(try await store.piSessions(sessionIDs: ["s2"])["s2"]?.state)
+        let trashed = try #require(try await store.sessionItems(sessionIDs: ["s2"])["s2"]?.state)
         try await workspace.finish(SessionListItem(state: archived))
         try await workspace.finish(SessionListItem(state: trashed))
         #expect(try await TaskBoard.read(from: store).advancing.isEmpty, "完成时随卡收起")

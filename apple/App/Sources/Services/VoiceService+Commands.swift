@@ -107,7 +107,7 @@ extension VoiceService {
                 guard let call, let mediaSession else { return .rejected(reason: .originalMissing) }
                 return try call.repeatReply(id, mediaSession: mediaSession)
             case .stop(let target):
-                guard services.pi.session(sessionID: target.turn.sessionID)?.turnStartedAt?.stored == target.turn.turnStartedAtMilliseconds else {
+                guard services.bridge.session(sessionID: target.turn.sessionID)?.turnStartedAt?.stored == target.turn.turnStartedAtMilliseconds else {
                     return .rejected(reason: .turnChanged)
                 }
                 let stop = try await services.store.stopVoiceExecution(target.turn, requests: [target.request], command: command.id.rawValue)

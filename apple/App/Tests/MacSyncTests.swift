@@ -6,7 +6,7 @@ import Testing
 import AppKit
 import Synchronization
 @testable import CuePad
-@testable import CuePi
+@testable import CueBridge
 
 @Suite(.releasesLibraries)
 struct MacSyncTests {
@@ -16,13 +16,13 @@ struct MacSyncTests {
     /// `spoke`：留下了会话文件（说过话）；没有文件的会话结束时不进历史。
     func session(
         _ sessionID: String, cwd: String = "/work/app", state: WorkState = .thinking, pid: Int32 = 100, spoke: Bool = false
-    ) -> CuePi.Session {
+    ) -> CueBridge.Session {
         var file: URL?
         if spoke {
             file = FileManager.default.temporaryDirectory.appending(path: "mac-sync-\(UUID().uuidString).jsonl")
             FileManager.default.createFile(atPath: file!.path, contents: Data())
         }
-        return CuePi.Session(
+        return CueBridge.Session(
             id: "\(sessionID).\(pid)", sessionID: sessionID, agent: .pi, sessionFile: file, pid: pid, cwd: URL(filePath: cwd, directoryHint: .isDirectory),
             terminal: TerminalIdentity(), state: state, stateSince: .now)
     }
@@ -131,12 +131,12 @@ struct MacSyncTests {
 
     @Test func 会话显示名写进同步记录_改名后跟上() async throws {
         var named = session("s1", cwd: "/work/app")
-        try await services.consumePiChanges(changes([.appeared(named)]))
-        #expect(try await services.store.allPiSessionStates().first?.title == "app")  // 没有名字和消息时是文件夹名
+        try await services.consumeSessionChanges(changes([.appeared(named)]))
+        #expect(try await services.store.allSessionStates().first?.title == "app")  // 没有名字和消息时是文件夹名
 
         named.name = "登录修复"
-        try await services.consumePiChanges(changes([.infoChanged(named)]))
-        #expect(try await services.store.allPiSessionStates().first?.title == "登录修复")
+        try await services.consumeSessionChanges(changes([.infoChanged(named)]))
+        #expect(try await services.store.allSessionStates().first?.title == "登录修复")
     }
 
     @Test func 启动时把这台Mac遗留的记录标为已结束_不动别的Mac() async throws {
@@ -147,7 +147,7 @@ struct MacSyncTests {
 
         try services.reconcileLaunch()
 
-        let states = Dictionary(uniqueKeysWithValues: try await services.store.allPiSessionStates().map { ($0.sessionID, $0.state) })
+        let states = Dictionary(uniqueKeysWithValues: try await services.store.allSessionStates().map { ($0.sessionID, $0.state) })
         #expect(states == ["old": .known(.ended), "theirs": .known(.thinking)])
     }
 
@@ -157,18 +157,18 @@ struct MacSyncTests {
         let before = StateRecorder(store: services.store, hostID: TestApp.hostID)
         try await before.update(sessionID: "s1", state: .settled, times: SessionTimes(stateSince: past, busySince: nil))
         try await before.update(sessionID: "s2", state: .thinking, times: SessionTimes(stateSince: past, busySince: past))
-        let seen = try #require(try await services.store.allPiSessionStates().first { $0.sessionID == "s1" })
+        let seen = try #require(try await services.store.allSessionStates().first { $0.sessionID == "s1" })
         services.settings.markSeen(seen, at: past.addingTimeInterval(1))
 
         try services.reconcileLaunch()
         let kept = try await rig.host.connect("s1", cwd: "/work/s1")
         let changed = try await rig.host.connect("s2", cwd: "/work/s2")
 
-        let live = try #require(services.pi.session(id: kept.id))
+        let live = try #require(services.bridge.session(id: kept.id))
         #expect(live.stateSince == seen.stateSince)
         let row = try #require(SessionState.live(live, hostID: TestApp.hostID, projectID: nil, recap: Recap(lastReply: "做完了")))
         #expect(!services.settings.isUnread(row))
-        #expect(try #require(services.pi.session(id: changed.id)).stateSince > past)
+        #expect(try #require(services.bridge.session(id: changed.id)).stateSince > past)
     }
 
     @Test func 本机标识由硬件UUID稳定派生_不含原值() {

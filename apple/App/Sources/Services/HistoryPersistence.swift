@@ -1,5 +1,5 @@
 #if os(macOS)
-import CuePi
+import CueBridge
 import CueStore
 import Foundation
 import os
@@ -8,15 +8,15 @@ import os
 /// 首次回填按批写（`AppServices.backfillBatch`），之后文件一变化就写，不节流：Mac 本机界面也读同步记录，这里的延迟就是 Mac 上看到的延迟。
 ///
 /// Store 读写失败时，该文件的索引不再写回：库异常时反复重写只会放大问题。失败作为错误抛给调用方报告。
-/// 检查点解码失败（格式随 CuePi 升级失效）是合法的"从头重读"：当作没有检查点，有这种文件时回填完成汇总记一行。
+/// 检查点解码失败（格式随 CueBridge 升级失效）是合法的"从头重读"：当作没有检查点，有这种文件时回填完成汇总记一行。
 actor HistoryPersistence {
     private static let log = Logger(subsystem: AppIdentity.id, category: "pi-history")
     private let storage: CueStore
-    /// 这台 Mac：会话文件索引也写成这台 Mac 的会话同步记录（见 `CueStore.upsertPiSession`）。
+    /// 这台 Mac：会话文件索引也写成这台 Mac 的会话同步记录（见 `CueStore.upsertSession`）。
     private let host: String
     private var starts: [String: IndexedSessionStart]?
     private var blocked: Set<String> = []
-    /// 回填期间检查点格式已过期（CuePi 升级）、从头重读的文件数与回填开始的时刻：不为 0 时回填完成汇总记一行
+    /// 回填期间检查点格式已过期（CueBridge 升级）、从头重读的文件数与回填开始的时刻：不为 0 时回填完成汇总记一行
     private var outdated = 0
     private var backfillStarted: ContinuousClock.Instant?
 
@@ -85,7 +85,7 @@ actor HistoryPersistence {
                 agent: update.agent)
             return SessionUpsert(session: session, checkpoint: try JSONEncoder().encode(update.checkpoint), transcript: update.transcript)
         }
-        try await storage.upsertPiSessions(batch, host: host)
+        try await storage.upsertSessions(batch, host: host)
         for (item, update) in zip(batch, updates) {
             let previous = starts?[item.session.path].flatMap { $0.id == item.session.id ? $0 : nil }
             starts?[item.session.path] = IndexedSessionStart(
@@ -96,7 +96,7 @@ actor HistoryPersistence {
     func keepPruned(timing: Timing = .system) async {
         repeat {
             do {
-                try await storage.prunePiMessages(olderThan: Chat.transcriptWindow, now: timing.now())
+                try await storage.pruneMessages(olderThan: Chat.transcriptWindow, now: timing.now())
             } catch {
                 Self.log.error("清理对话失败：\(String(describing: error))")
             }
@@ -117,7 +117,7 @@ actor HistoryPersistence {
         guard let files else { return false }
         let paths = Set(files.map(\.path))
         let started = ContinuousClock.now
-        let removed = try await storage.retainPiSessions(paths: paths, agent: agent, host: host)
+        let removed = try await storage.retainSessions(paths: paths, agent: agent, host: host)
         if removed > 0 {
             // 删掉的那几条不再是"索引过"：下次要时从 Store 重读
             starts = nil
@@ -126,19 +126,19 @@ actor HistoryPersistence {
         return true
     }
 
-    /// 同步记录不动；这台 Mac 托管过的会话留着（`CueStore.deletePiSessions`），下次接入从头回填。
+    /// 同步记录不动；这台 Mac 托管过的会话留着（`CueStore.deleteSessions`），下次接入从头回填。
     func forget(_ agent: AgentKind) async throws {
-        try await storage.deletePiSessions(of: agent, keepingHostedOn: host)
+        try await storage.deleteSessions(of: agent, keepingHostedOn: host)
         starts = nil
     }
 
     func hostedScope(of agent: AgentKind) async throws -> HistoryScope {
-        .sessions(try await storage.hostedPiSessionIDs(of: agent, host: host))
+        .sessions(try await storage.hostedSessionIDs(of: agent, host: host))
     }
 
     private func loadedStarts() async throws -> [String: IndexedSessionStart] {
         if let starts { return starts }
-        let loaded = try await storage.piIndexStarts()
+        let loaded = try await storage.indexStarts()
         starts = loaded
         return loaded
     }

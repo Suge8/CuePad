@@ -4,7 +4,7 @@ import CueTestSupport
 import Foundation
 import Testing
 @testable import CuePad
-@testable import CuePi
+@testable import CueBridge
 @testable import CueStore
 
 extension DeliveryConfirmationTests {
@@ -25,7 +25,7 @@ extension DeliveryConfirmationTests {
         let app = TestApp(timing: clock.timing)
         // 这里只推进业务时钟；socket 的真实关闭必须能直接结束确认，不等超时。
         let (target, ext, file) = try await session(app)
-        defer { ext.close(bye: "quit"); app.pi.stop(); app.services.cancelBackgroundWork() }
+        defer { ext.close(bye: "quit"); app.bridge.stop(); app.services.cancelBackgroundWork() }
         let request = try await say("最后检查这句话", to: target, in: app)
         try await app.services.executor.start()
         let phase = try await settledDispatch(request, in: app)
@@ -53,7 +53,7 @@ extension DeliveryConfirmationTests {
         let clock = ManualTiming()
         let app = TestApp(timing: clock.timing)
         let (target, ext, file) = try await session(app)
-        defer { ext.close(bye: "quit"); app.pi.stop(); app.services.cancelBackgroundWork() }
+        defer { ext.close(bye: "quit"); app.bridge.stop(); app.services.cancelBackgroundWork() }
         let request = try await say("重开仍只有这个意图", to: target, in: app)
         try await app.services.executor.start()
         let before = try await settledDispatch(request, in: app)
@@ -69,14 +69,14 @@ extension DeliveryConfirmationTests {
         let other = try await app.host.connect("other", cwd: app.directory.path)
         let recorder = try await app.runtimeRecorder(on: TestApp.hostID)
         try await recorder.update(sessionID: "other", state: .settled)
-        let targetB = try #require(try await services.store.allPiSessionStates().first { $0.sessionID == "other" })
+        let targetB = try #require(try await services.store.allSessionStates().first { $0.sessionID == "other" })
         let next = try await say("另一个会话照常工作", to: targetB, in: app)
         #expect(try await services.store.outcome(of: next).status == .known(.succeeded))
         let resumed = try #require(try await services.store.deliveryRequest(request.id))
         #expect(resumed.status == .known(.confirming) && resumed.deadlineAt == due)
         try Self.write(ext.messages, session: target.sessionID, cwd: app.directory.path, to: file)
         #expect(try await services.store.outcome(of: request).status == .known(.succeeded))
-        #expect(try await services.store.piMessages(of: target.sessionID).map(\.text) == ["重开仍只有这个意图"])
+        #expect(try await services.store.chatMessages(of: target.sessionID).map(\.text) == ["重开仍只有这个意图"])
         #expect(ext.messages.count == 1)
         other.close(bye: "quit")
         await services.executor.beginStop()()
@@ -89,7 +89,7 @@ extension DeliveryConfirmationTests {
         let phone = TestApp(timing: clock.timing, host: "phone")
         let (target, ext, _) = try await session(mac)
         ext.onCommand = { _, command in command["t"] as? String == "send" ? nil : ["ok": true] }
-        defer { ext.close(bye: "quit"); mac.pi.stop(); mac.services.cancelBackgroundWork(); phone.services.cancelBackgroundWork() }
+        defer { ext.close(bye: "quit"); mac.bridge.stop(); mac.services.cancelBackgroundWork(); phone.services.cancelBackgroundWork() }
         let request = try await say("确认状态丢在路上", to: target, in: mac)
         try await mac.services.executor.start()
         try await eventually("外部 Agent 已收到但尚未回 ACK") { ext.messages.count == 1 }
@@ -107,7 +107,7 @@ extension DeliveryConfirmationTests {
             try expectPortableReason(resolved.reason)
         }
         await mac.services.executor.beginStop()()
-        mac.pi.stop()
+        mac.bridge.stop()
         #expect(try await phone.services.store.applyRemote([.save(row, systemFields: Data())]).isEmpty)
         phone.services.startSpeechClock()
         if !ackAfterDeadline {
@@ -128,7 +128,7 @@ extension DeliveryConfirmationTests {
     func 旧83已领取记录不补造期限_先查真实历史_无证据保守收敛且不重派(hasMessage: Bool) async throws {
         let app = TestApp()
         let (target, ext, file) = try await session(app)
-        defer { ext.close(bye: "quit"); app.pi.stop(); app.services.cancelBackgroundWork() }
+        defer { ext.close(bye: "quit"); app.bridge.stop(); app.services.cancelBackgroundWork() }
         let request = try await say("升级之前可能已经交出", to: target, in: app)
         if hasMessage {
             try Self.write([SessionMessage(text: request.content, deliveryID: request.id.uuidString)], session: target.sessionID, cwd: app.directory.path, to: file)
@@ -162,7 +162,7 @@ extension DeliveryConfirmationTests {
         let clock = ManualTiming()
         let app = TestApp(timing: clock.timing)
         let (target, ext, file) = try await session(app)
-        defer { ext.close(bye: "quit"); app.pi.stop(); app.services.cancelBackgroundWork() }
+        defer { ext.close(bye: "quit"); app.bridge.stop(); app.services.cancelBackgroundWork() }
         try await app.connect(.pi)
         app.services.start()
         let store = app.services.store
@@ -184,7 +184,7 @@ extension DeliveryConfirmationTests {
         if disconnected {
             let other = try await app.host.connect("receipt-barrier", cwd: app.directory.path)
             await workspace.speak("继续处理另一处", to: .session(SendTarget(kind: .piSession, name: "另一处", ref: other.sessionID), host: host, mode: .send, card: nil)).value
-            try await eventually("正常历史已处理断线之后的文件事件") { try await store.piCheckpoint(of: other.sessionID) != nil }
+            try await eventually("正常历史已处理断线之后的文件事件") { try await store.checkpoint(of: other.sessionID) != nil }
         }
         try await StateRecorder(store: store, hostID: host).update(sessionID: "later-session", state: .thinking)
         workspace.perform { try await $0.bindSession("later-session", to: taskID) }

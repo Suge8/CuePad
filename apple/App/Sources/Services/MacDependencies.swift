@@ -1,11 +1,11 @@
 #if os(macOS)
 import AppKit
-import CuePi
+import CueBridge
 import CueStore
 import Foundation
 
 struct MacDependencies {
-    var pi: Bridge
+    var bridge: Bridge
     var hotkeys: any HotkeyBackend
     var paths: AgentPaths
     var agents: AgentIntegrations
@@ -13,7 +13,7 @@ struct MacDependencies {
     var hostID: String
     var workspaces: Workspaces
     var wakeNotifications: NotificationCenter
-    /// `pi` 必须用同一个钟建（`Bridge.timing`）；测试换成手动推进的。
+    /// `bridge` 必须用同一个钟建（`Bridge.timing`）；测试换成手动推进的。
     var timing: Timing = .system
     /// Agent 的技能与钩子写的是 App 里那份的绝对路径，不依赖这个链接。
     var commandLineTool: CommandLineToolInstaller
@@ -41,7 +41,7 @@ struct MacDependencies {
             environment.merging(["HOME": home.path, "PATH": "/usr/bin:/bin:/usr/sbin:/sbin"]) { $1 }
         } ?? environment)
         let timing = Timing.system
-        let pi = Bridge(socketDirectory: paths.pi.socketDirectory, timing: timing)
+        let bridge = Bridge(socketDirectory: paths.pi.socketDirectory, timing: timing)
         let hooks = AgentHookServer(path: paths.pi.hookSocket)
         // 不碰真实世界时不碰真实的 `~/.local/bin`：链接放进资料库目录，除非指定了 Pi 目录与链接目录（`PiPaths.isExplicit`）
         let commandLineTool = isolated && !paths.pi.isExplicit
@@ -59,7 +59,7 @@ struct MacDependencies {
         // 冒充了这台就会在真实目录里恢复、开会话（#34）
         if isolated { precondition(hostID != HostIdentity.current(), "隔离实例不能用这台 Mac 的标识（-CuePadHost 换个名字）") }
         return MacDependencies(
-            pi: pi,
+            bridge: bridge,
             hotkeys: CarbonHotkeyBackend(),
             paths: paths,
             agents: agents,
@@ -72,14 +72,14 @@ struct MacDependencies {
             updater: AppIdentity.isRelease ? SparkleUpdater() : DebugHooks.updater,
             hooks: hooks,
             runtimes: { store in [
-                .pi: PiRuntime(bridge: pi, paths: paths.pi, pi: { await agents.executable(.pi) }),
-                .claudeCode: ClaudeCodeRuntime(bridge: pi, paths: paths, hooks: hooks, store: store, claude: { await agents.executable(.claudeCode) }),
-                .codex: CodexRuntime(bridge: pi, paths: paths, hooks: hooks, codex: { await agents.executable(.codex) }),
+                .pi: PiRuntime(bridge: bridge, paths: paths.pi, pi: { await agents.executable(.pi) }),
+                .claudeCode: ClaudeCodeRuntime(bridge: bridge, paths: paths, hooks: hooks, store: store, claude: { await agents.executable(.claudeCode) }),
+                .codex: CodexRuntime(bridge: bridge, paths: paths, hooks: hooks, codex: { await agents.executable(.codex) }),
                 .opencode: OpenCodeRuntime(
-                    bridge: pi, paths: paths, store: store, hostID: hostID, opencode: { await agents.executable(.opencode) },
+                    bridge: bridge, paths: paths, store: store, hostID: hostID, opencode: { await agents.executable(.opencode) },
                     transcriptWindow: Chat.transcriptWindow),
-                .grok: GrokRuntime(bridge: pi, paths: paths, files: store.files, grok: { await agents.executable(.grok) }),
-                .dsh: DshRuntime(bridge: pi, paths: paths, dsh: { await agents.executable(.dsh) }),
+                .grok: GrokRuntime(bridge: bridge, paths: paths, files: store.files, grok: { await agents.executable(.grok) }),
+                .dsh: DshRuntime(bridge: bridge, paths: paths, dsh: { await agents.executable(.dsh) }),
             ] },
             pasteboard: .general,
             cue: CueDependencies(

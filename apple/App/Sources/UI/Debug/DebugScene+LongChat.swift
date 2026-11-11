@@ -22,14 +22,14 @@ extension DebugScene {
     }
 
     private static func appendRounds(_ sessionID: String, rounds: Int, store: CueStore) async throws {
-        guard let session = try await store.piSessionPage(SessionQuery(id: SessionState.recordID(sessionID: sessionID))).items.first?.state else { return }
+        guard let session = try await store.sessionPage(SessionQuery(id: SessionState.recordID(sessionID: sessionID))).items.first?.state else { return }
         let recorder = demoRecorder(store, host: session.hostID, minInterval: .zero)
         func set(_ state: WorkState, detail: String? = nil, agents: [SubagentState]) async throws {
             _ = try await recorder.update(
                 sessionID: sessionID, state: state, detail: detail, title: session.title, directory: session.folder, projectID: session.projectID, subagents: agents)
         }
         func write(_ messages: [ChatMessage], _ recap: Recap) async throws {
-            try await store.writePiTranscript(SessionTranscript(sessionID: sessionID, messages: messages, recap: recap))
+            try await store.writeTranscript(SessionTranscript(sessionID: sessionID, messages: messages, recap: recap))
         }
         for round in 0..<rounds {
             let seq = Int64(1_000_000 + round * 3)

@@ -5,7 +5,7 @@ import Foundation
 import SwiftUI
 import Testing
 @testable import CuePad
-@testable import CuePi
+@testable import CueBridge
 @testable import CueStore
 
 @MainActor
@@ -39,7 +39,7 @@ struct DeliveryRecoveryTests {
         }
         let recorder = try await app.runtimeRecorder(on: TestApp.hostID)
         try await recorder.update(sessionID: id, state: .settled)
-        return (try #require(try await app.services.store.allPiSessionStates().first { $0.sessionID == id }), ext)
+        return (try #require(try await app.services.store.allSessionStates().first { $0.sessionID == id }), ext)
     }
 
     private func say(_ text: String, to session: SessionState, app: TestApp) async throws -> DeliveryRequest {
@@ -54,14 +54,14 @@ struct DeliveryRecoveryTests {
         try log.reset()
         for message in messages { try log.user(message.text, delivery: message.deliveryID) }
         let update = try History.index(file: file, agent: .pi, from: nil, files: app.services.store.files)
-        await app.services.consumePiHistory(AsyncStream { $0.yield(.updated(update)); $0.finish() }, agent: .pi)
+        await app.services.consumeHistory(AsyncStream { $0.yield(.updated(update)); $0.finish() }, agent: .pi)
     }
 
     @Test(arguments: ["timeout", "disconnect", "failed", "ack"])
     func 回执丢失或弱确认都不授权重发_晚到历史接替原气泡(reply: String) async throws {
         let app = TestApp(timing: clock.timing), store = app.services.store
         let (target, ext) = try await session(app, reply: reply)
-        defer { ext.close(bye: "quit"); app.pi.stop(); app.services.cancelBackgroundWork() }
+        defer { ext.close(bye: "quit"); app.bridge.stop(); app.services.cancelBackgroundWork() }
         let request = try await say("从中断的地方继续", to: target, app: app)
         try await app.services.executor.start()
         if reply == "timeout" {
@@ -93,7 +93,7 @@ struct DeliveryRecoveryTests {
     @Test func 重开App与更新的旧pending同步都不能再派发已领取的话() async throws {
         let app = TestApp(timing: clock.timing), store = app.services.store
         let (target, ext) = try await session(app, reply: "ack")
-        defer { ext.close(bye: "quit"); app.pi.stop(); app.services.cancelBackgroundWork() }
+        defer { ext.close(bye: "quit"); app.bridge.stop(); app.services.cancelBackgroundWork() }
         let request = try await say("不要再上传一次", to: target, app: app)
         var old = try #require(try await store.syncRow(recordName: request.id.uuidString.lowercased()))
         try RawDB(app.services.location.databaseURL).exec(
@@ -113,7 +113,7 @@ struct DeliveryRecoveryTests {
         let mac = TestApp(timing: clock.timing), phone = TestApp(host: "phone"), store = mac.services.store
         let (target, ext) = try await session(mac, reply: "ack")
         defer {
-            ext.close(bye: "quit"); mac.pi.stop()
+            ext.close(bye: "quit"); mac.bridge.stop()
             mac.services.cancelBackgroundWork(); phone.services.cancelBackgroundWork()
         }
         let request = try await say("只上传一次结果", to: target, app: phone)
@@ -122,7 +122,7 @@ struct DeliveryRecoveryTests {
         try await mac.services.executor.start()
         _ = try await outcome(request, in: store)
         try await history(ext.messages, session: target.sessionID, app: mac)
-        let message = try #require(try await store.piMessages(of: target.sessionID).first)
+        let message = try #require(try await store.chatMessages(of: target.sessionID).first)
         let row = try #require(try await store.syncRow(recordName: message.id.uuidString.lowercased()))
         #expect(try await phone.services.store.applyRemote([.save(row, systemFields: Data())]).isEmpty)
         let arrived = try #require(try await phone.services.store.latest(of: request))
@@ -136,7 +136,7 @@ struct DeliveryRecoveryTests {
     @Test func 明确再说一次保留原来的未知_不伪装成安全重发() async throws {
         let app = TestApp(timing: clock.timing), store = app.services.store
         let (target, ext) = try await session(app, reply: "ack")
-        defer { ext.close(bye: "quit"); app.pi.stop(); app.services.cancelBackgroundWork() }
+        defer { ext.close(bye: "quit"); app.bridge.stop(); app.services.cancelBackgroundWork() }
         let first = try await say("继续检查", to: target, app: app)
         try await app.services.executor.start()
         let uncertain = try await outcome(first, in: store)
@@ -152,11 +152,11 @@ struct DeliveryRecoveryTests {
 
     @Test func 其他接入仍保留各自的受理合同() async throws {
         let app = TestApp(timing: clock.timing), store = app.services.store
-        defer { app.pi.stop(); app.services.cancelBackgroundWork() }
-        let runtime = PipedHostedAgent(bridge: app.pi, agent: .claudeCode)
+        defer { app.bridge.stop(); app.services.cancelBackgroundWork() }
+        let runtime = PipedHostedAgent(bridge: app.bridge, agent: .claudeCode)
         runtime.host("other", state: .settled)
         try await StateRecorder(store: store, hostID: TestApp.hostID).update(sessionID: "other", state: .settled, agent: .claudeCode)
-        let target = try #require(try await store.allPiSessionStates().first)
+        let target = try #require(try await store.allSessionStates().first)
         let request = try await say("继续检查结果", to: target, app: app)
         try await app.services.executor.start()
         let done = try await outcome(request, in: store)
@@ -168,7 +168,7 @@ struct DeliveryRecoveryTests {
     @Test func Cue旧请求不能越过派发时新开始的人类轮() async throws {
         let app = TestApp(timing: clock.timing), store = app.services.store
         let (target, ext) = try await session(app, reply: "ack")
-        defer { ext.close(bye: "quit"); app.pi.stop(); app.services.cancelBackgroundWork() }
+        defer { ext.close(bye: "quit"); app.bridge.stop(); app.services.cancelBackgroundWork() }
         let task = try await store.createTask("修复发布")
         try await store.bindSession(target.sessionID, to: task.id)
         let host = TestApp.hostID
@@ -181,8 +181,8 @@ struct DeliveryRecoveryTests {
         await app.services.executor.beginStop()()
         try await history(ext.messages, session: target.sessionID, app: app)
         ext.setState(["kind": "thinking"])
-        try await eventually("宿主开始 Cue 的一轮") { app.pi.session(id: ext.id)?.turnStartedAt != nil }
-        let began = try #require(app.pi.session(id: ext.id)?.turnStartedAt)
+        try await eventually("宿主开始 Cue 的一轮") { app.bridge.session(id: ext.id)?.turnStartedAt != nil }
+        let began = try #require(app.bridge.session(id: ext.id)?.turnStartedAt)
         let recorder = try await app.runtimeRecorder(on: host)
         try await recorder.update(sessionID: target.sessionID, state: .thinking, turnStartedAt: began)
         let queued = try #require(await cue.call("task", ["action": "say", "task": task.id.uuidString, "text": "接着检查上传"]))
@@ -192,19 +192,19 @@ struct DeliveryRecoveryTests {
         // 库还是 Cue 的旧报告，宿主已进入另一轮：不能拿旧报告授权打断。
         let newTurn = Int64(began.addingTimeInterval(1).timeIntervalSince1970 * 1000)
         ext.sendRaw("{\"t\":\"state\",\"state\":{\"kind\":\"thinking\",\"since\":\(newTurn),\"turnSince\":\(newTurn)}}")
-        try await eventually("桥看到后来的一轮") { app.pi.session(id: ext.id)?.turnStartedAt != began }
+        try await eventually("桥看到后来的一轮") { app.bridge.session(id: ext.id)?.turnStartedAt != began }
         try await app.services.executor.start()
         let rejected = try await outcome(second, in: store)
         #expect(rejected.status == .known(.failed))
         #expect(ext.messages.map(\.text) == ["先检查一次"])
-        #expect(app.pi.session(id: ext.id)?.state == .thinking)
+        #expect(app.bridge.session(id: ext.id)?.state == .thinking)
         await app.services.executor.beginStop()()
     }
 
     @Test func Cue超时后的历史补齐来源_清理请求后仍保留_不抢后来手动绑定() async throws {
         let app = TestApp(timing: clock.timing), store = app.services.store
         let (target, ext) = try await session(app, reply: "timeout")
-        defer { ext.close(bye: "quit"); app.pi.stop(); app.services.cancelBackgroundWork() }
+        defer { ext.close(bye: "quit"); app.bridge.stop(); app.services.cancelBackgroundWork() }
         let task = try await store.createTask("修复发布")
         try await store.bindSession(target.sessionID, to: task.id)
         let host = TestApp.hostID

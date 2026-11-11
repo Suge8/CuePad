@@ -12,7 +12,7 @@ struct ChatTests {
         let target = SendTarget(kind: .piSession, name: "relay", ref: "relay")
         let lost = try await store.requestDelivery("改完再跑一遍", to: target, on: "mac-fail", mode: .send)
         _ = try await store.requestDelivery("还在路上的一句", to: target, on: "mac-wait", mode: .send)
-        func item() async throws -> SessionListItem { try #require(try await store.piSessionPage(SessionQuery()).items.first) }
+        func item() async throws -> SessionListItem { try #require(try await store.sessionPage(SessionQuery()).items.first) }
         #expect(try await item().undelivered(at: .always()) == 0)
 
         let executor = DeliveryExecutor(store: store, hostID: "mac-fail", onIssue: { _ in }) { _, _ in .failed(.verbatim("Pi 已经退出")) }

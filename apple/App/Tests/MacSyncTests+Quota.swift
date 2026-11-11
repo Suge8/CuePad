@@ -5,14 +5,14 @@ import Foundation
 import Testing
 @testable import CuePad
 
-@testable import CuePi
+@testable import CueBridge
 
 extension MacSyncTests {
     // 订阅额度只有 Mac 写，手机只读
 
     func recordingQuotas() {
-        let changes = services.pi.changes()
-        services.follow { [services] in try? await services.consumePiChanges(changes) }
+        let changes = services.bridge.changes()
+        services.follow { [services] in try? await services.consumeSessionChanges(changes) }
     }
 
     static let resetsAt = Date(timeIntervalSince1970: 1_800_000_000)

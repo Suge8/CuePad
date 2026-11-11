@@ -11,8 +11,8 @@
 #   xc.sh test kit [xcodebuild 参数…]               CuePadKit 在 macOS 上的测试，如 -only-testing:CueSyncTests/PendingTests
 #   xc.sh agents <status|install> [家…]              测试连的真 Agent：按 CuePadKit/Tests/agents.json 钉住的版本装进专用缓存（agents.py 头注释）。
 #                                                   没装的家，它的用例跳过，test 的结论页单列为「没跑、不算通过的」；TEST_RUNNER_CUEPAD_AGENT_MATRIX=full 时缺一家就失败。
-#                                                   真 Agent 用例默认只跑每家的冒烟（标签 smoke，CuePiTests/RealAgents.swift），其余同样列为没跑；
-#                                                   TEST_RUNNER_CUEPAD_AGENT_TESTS=all 跑全量，-only-testing 点名 CuePiTests/Real 开头的套件时自动全量
+#                                                   真 Agent 用例默认只跑每家的冒烟（标签 smoke，CueBridgeTests/RealAgents.swift），其余同样列为没跑；
+#                                                   TEST_RUNNER_CUEPAD_AGENT_TESTS=all 跑全量，-only-testing 点名 CueBridgeTests/Real 开头的套件时自动全量
 #     test 只打印编译的警告与错误、失败的用例；收尾一页结论（test_summary.py）：Swift Testing 与 XCTest 各自的通过、失败、跳过数，首个失败（用例、断言原文、文件行），
 #       跳过的套件与原因，最慢 5 个，完整日志路径（App 日志、每条用例都在里面：apple/.derived/test.log）。退出码是 xcodebuild 的
 #   xc.sh shot <mac|ios|ipad> [图.png] [-- 启动参数…] [, [图.png] [-- 启动参数…]]…
@@ -146,7 +146,7 @@ sign_development() {
 case "$cmd" in
   check)
     "$APPLE_DIR/scripts/lint.sh"
-    # Kit 的 macOS 构建（CuePi、命令行工具只在这里编到）与 iOS 编译产物目录不同，并行跑
+    # Kit 的 macOS 构建（CueBridge、命令行工具只在这里编到）与 iOS 编译产物目录不同，并行跑
     kit_build & kit=$!
     # 归档（Release）是整模块编译，Debug 是按文件分批的增量编译：同一份源码，有些诊断（如 nonisolated 类型里静态存非 Sendable 值）只有整模块才报，
     # 整模块编译与优化档位无关（-Onone 同样报），所以 Mac App 用 Debug 加整模块编一遍（不签名）。Mac 独有的代码也只在这里编到，连测试目标（iOS 那份编不到 #if os(macOS) 的测试，它们的警告只在这里报）。产物与 Debug 增量构建分开，免得交替时互相作废

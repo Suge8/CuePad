@@ -1,5 +1,5 @@
 #if os(macOS)
-@testable import CuePi
+@testable import CueBridge
 import CueTestSupport
 import CueAgent
 import Foundation
@@ -40,7 +40,7 @@ extension TaskFlowTests {
     @Test(arguments: ["source", "ui", "cue"])
     func 结束交出后执行器中断_按源端证据或明确恢复收敛(recovery: String) async throws {
         let services = try #require(rig.services), workspace = Workspace(services: services)
-        defer { rig.pi.stop(); services.cancelBackgroundWork() }
+        defer { rig.bridge.stop(); services.cancelBackgroundWork() }
         try await rig.offersPi()
         let task = try await workspace.createTask("准备发布", in: Project.defaultID)
         let borrower = try await workspace.createTask("继续工作", in: Project.defaultID)
@@ -48,10 +48,10 @@ extension TaskFlowTests {
         let launch = try #require(try await eventually(store, { try $0.deliveryRequests().first { $0.mode == .known(.start) } }) { $0 != nil })
         try await StateRecorder(store: store, hostID: TestApp.hostID).update(sessionID: "audit-interrupted", state: .thinking, projectID: Project.defaultID, launchToken: launch.launch?.token, hosted: true)
         try await store.deleteDelivery(launch.id)
-        let link = InterruptedEndLink(rig.pi)
+        let link = InterruptedEndLink(rig.bridge)
         var session = Session(id: "audit-interrupted.1", sessionID: "audit-interrupted", agent: .pi, sessionFile: nil, pid: 1, cwd: rig.directory, terminal: TerminalIdentity(), state: .thinking, stateSince: .now)
         session.hosted = true
-        rig.pi.attach(session, via: link)
+        rig.bridge.attach(session, via: link)
         try await workspace.complete(task.id)
         let automatic = try #require(try await store.deliveryRequests().first { $0.mode == .known(.end) })
         try await services.executor.start()
@@ -66,7 +66,7 @@ extension TaskFlowTests {
         if recovery != "source" {
             #expect(try await store.deliveryRequest(automatic.id)?.status == .known(.unconfirmed))
             await #expect(throws: CueStoreError.sessionEnding) { try await store.bindSession("audit-interrupted", to: borrower.id) }
-            let ended = try #require(try await store.piSessions(sessionIDs: ["audit-interrupted"])["audit-interrupted"]?.state)
+            let ended = try #require(try await store.sessionItems(sessionIDs: ["audit-interrupted"])["audit-interrupted"]?.state)
             #expect(ended.state == .known(.ended) && !ended.canEnd)
             if recovery == "ui" {
                 let issue = MacDelivery.endIssue(try await store.deliveryRequests(toSession: ended.sessionID), at: services.speech)
@@ -87,7 +87,7 @@ extension TaskFlowTests {
             #expect(MacDelivery.endIssue(try await store.deliveryRequests(toSession: ended.sessionID), at: services.speech) == nil)
         }
         #expect(try await store.deliveryRequest(automatic.id)?.status == .known(.succeeded))
-        #expect(try await store.piSessions(sessionIDs: ["audit-interrupted"])["audit-interrupted"]?.state.state == .known(.ended))
+        #expect(try await store.sessionItems(sessionIDs: ["audit-interrupted"])["audit-interrupted"]?.state.state == .known(.ended))
         try await store.bindSession("audit-interrupted", to: borrower.id)
         #expect(try await store.card(borrower.id)?.piSessionID == "audit-interrupted")
         await services.executor.beginStop()()
@@ -95,7 +95,7 @@ extension TaskFlowTests {
 
     @Test func 远端后到关联保留_不能撤回执行端已受理的结束() async throws {
         let services = try #require(rig.services), workspace = Workspace(services: services), peer = TestApp(host: "phone")
-        defer { rig.pi.stop(); services.cancelBackgroundWork(); peer.services.cancelBackgroundWork() }
+        defer { rig.bridge.stop(); services.cancelBackgroundWork(); peer.services.cancelBackgroundWork() }
         try await rig.offersPi()
         let task = try await workspace.createTask("准备发布", in: Project.defaultID)
         let borrower = try await workspace.createTask("继续工作", in: Project.defaultID)
@@ -103,14 +103,14 @@ extension TaskFlowTests {
         let launch = try #require(try await eventually(store, { try $0.deliveryRequests().first { $0.mode == .known(.start) } }) { $0 != nil })
         try await StateRecorder(store: store, hostID: TestApp.hostID).update(sessionID: "audit-remote", state: .thinking, projectID: Project.defaultID, launchToken: launch.launch?.token, hosted: true)
         try await store.deleteDelivery(launch.id)
-        let state = try #require(try await store.piSessions(sessionIDs: ["audit-remote"])["audit-remote"]?.state)
+        let state = try #require(try await store.sessionItems(sessionIDs: ["audit-remote"])["audit-remote"]?.state)
         for id in [borrower.id, state.id] {
             let row = try #require(try await store.syncRow(recordName: id.uuidString.lowercased()))
             #expect(try await peer.services.store.applyRemote([.save(row, systemFields: Data())]).isEmpty)
         }
         try await workspace.complete(task.id)
         let automatic = try #require(try await store.deliveryRequests().first { $0.mode == .known(.end) })
-        let link = InterleavedLink(rig.pi) { () async throws -> Void in
+        let link = InterleavedLink(rig.bridge) { () async throws -> Void in
             #expect(try await self.store.deliveryRequest(automatic.id)?.status == .known(.executing))
             try await peer.services.store.bindSession("audit-remote", to: borrower.id)
             let row = try #require(try await peer.services.store.syncRow(recordName: borrower.id.uuidString.lowercased()))
@@ -119,11 +119,11 @@ extension TaskFlowTests {
         }
         var session = Session(id: "audit-remote.1", sessionID: "audit-remote", agent: .pi, sessionFile: nil, pid: 1, cwd: rig.directory, terminal: TerminalIdentity(), state: .thinking, stateSince: .now)
         session.hosted = true
-        rig.pi.attach(session, via: link)
+        rig.bridge.attach(session, via: link)
         try await services.executor.start()
         #expect(try await store.outcome(of: automatic).status == .known(.succeeded))
         #expect(try await store.card(borrower.id)?.piSessionID == "audit-remote")
-        #expect(try await store.piSessions(sessionIDs: ["audit-remote"])["audit-remote"]?.state.state == .known(.ended))
+        #expect(try await store.sessionItems(sessionIDs: ["audit-remote"])["audit-remote"]?.state.state == .known(.ended))
         await services.executor.beginStop()()
     }
 
@@ -132,7 +132,7 @@ extension TaskFlowTests {
         let clock = ManualTiming()
         let rig = TestApp(timing: clock.timing), store = rig.services.store, peer = TestApp(host: "phone")
         let services = try #require(rig.services), workspace = Workspace(services: services)
-        defer { rig.pi.stop(); services.cancelBackgroundWork(); peer.services.cancelBackgroundWork() }
+        defer { rig.bridge.stop(); services.cancelBackgroundWork(); peer.services.cancelBackgroundWork() }
         try await rig.offersPi()
         let task = try await workspace.createTask("准备发布", in: Project.defaultID)
         let borrower = try await workspace.createTask("继续工作", in: Project.defaultID)
@@ -143,7 +143,7 @@ extension TaskFlowTests {
         try await store.deleteDelivery(launch.id)
         var session = Session(id: "audit-lost.1", sessionID: "audit-lost", agent: .pi, sessionFile: nil, pid: 1, cwd: rig.directory, terminal: TerminalIdentity(), state: .thinking, stateSince: .now)
         session.hosted = true
-        rig.pi.attach(session, via: LostEndLink(rig.pi))
+        rig.bridge.attach(session, via: LostEndLink(rig.bridge))
         try await workspace.complete(task.id)
         let automatic = try #require(try await store.deliveryRequests().first { $0.mode == .known(.end) })
         let pending = try #require(try await store.syncRow(recordName: automatic.id.uuidString.lowercased()))
@@ -152,10 +152,10 @@ extension TaskFlowTests {
         let uncertain = try #require(try await store.syncRow(recordName: automatic.id.uuidString.lowercased()))
         #expect(try await peer.services.store.applyRemote([.save(uncertain, systemFields: Data()), .save(pending, systemFields: Data()), .save(uncertain, systemFields: Data())]).isEmpty)
         #expect(try await peer.services.store.deliveryRequest(automatic.id)?.status == .known(.unconfirmed))
-        #expect(rig.pi.session(sessionID: "audit-lost") == nil)
+        #expect(rig.bridge.session(sessionID: "audit-lost") == nil)
         var explicit: DeliveryRequest?
         if explicitOnly {
-            let state = try #require(try await store.piSessions(sessionIDs: ["audit-lost"])["audit-lost"]?.state)
+            let state = try #require(try await store.sessionItems(sessionIDs: ["audit-lost"])["audit-lost"]?.state)
             var oldEnd = try #require(try await store.syncRow(recordName: state.id.uuidString.lowercased()))
             oldEnd.fields["state"] = .text("ended")
             oldEnd.fields["stateSince"] = clock.timing.now().addingTimeInterval(-1).sqlValue
@@ -163,7 +163,7 @@ extension TaskFlowTests {
             #expect(try await store.applyRemote([.save(oldEnd, systemFields: Data())]).isEmpty)
             #expect(try await store.deliveryRequest(automatic.id)?.status == .known(.unconfirmed))
             await #expect(throws: CueStoreError.sessionEnding) { try await store.bindSession("audit-lost", to: borrower.id) }
-            let ended = try #require(try await store.piSessions(sessionIDs: ["audit-lost"])["audit-lost"]?.state)
+            let ended = try #require(try await store.sessionItems(sessionIDs: ["audit-lost"])["audit-lost"]?.state)
             explicit = try await services.end(ended)
             #expect(try await store.outcome(of: explicit!).status == .known(.succeeded))
         } else {
@@ -172,7 +172,7 @@ extension TaskFlowTests {
         await services.executor.beginStop()()
         try await services.executor.start()
         #expect(try await store.deliveryRequest(automatic.id)?.status == .known(.succeeded))
-        let ended = try #require(try await store.piSessions(sessionIDs: ["audit-lost"])["audit-lost"]?.state)
+        let ended = try #require(try await store.sessionItems(sessionIDs: ["audit-lost"])["audit-lost"]?.state)
         #expect(ended.state == .known(.ended))
         for id in [ended.id, borrower.id, automatic.id] + [explicit?.id].compactMap({ $0 }) {
             let row = try #require(try await store.syncRow(recordName: id.uuidString.lowercased()))

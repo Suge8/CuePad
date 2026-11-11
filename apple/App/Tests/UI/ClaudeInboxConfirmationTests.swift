@@ -5,7 +5,7 @@ import Darwin
 import Foundation
 import Testing
 @testable import CuePad
-@testable import CuePi
+@testable import CueBridge
 
 /// 发给终端里的 Claude Code 的话（经它的收件箱，它不回话）：会话文件里出现了才算送达。它挂起（等你在终端里批准）或丢掉的，
 /// 到期报未确认、写明可能的原因，不报送达。这些局面由它自己的设置与启动方式决定，CuePad 不预判（`Session.confirmsFromHistory`）。

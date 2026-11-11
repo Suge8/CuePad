@@ -1,5 +1,5 @@
 #if os(macOS)
-import CuePi
+import CueBridge
 import Foundation
 import Testing
 @testable import CuePad
@@ -33,7 +33,7 @@ struct UpdateTests {
         claude.set(delegating, .settled)
         try await eventually("会断的都空下来就装") { updater.installs == 1 }
         #expect(updates.waitingFor == nil)
-        #expect(rig.pi.sessions.first { $0.sessionID == "pi-hosted" }?.state.hasPendingWork == true)
+        #expect(rig.bridge.sessions.first { $0.sessionID == "pi-hosted" }?.state.hasPendingWork == true)
     }
 
     @Test func 等着时点现在就装_立刻装_之后会话空下来不再装第二次() async throws {
@@ -49,7 +49,7 @@ struct UpdateTests {
         #expect(updates.waitingNote == nil)
 
         rig.claude.set(working, .settled)
-        try await eventually("会话空下来") { rig.pi.sessions.first?.state == .settled }
+        try await eventually("会话空下来") { rig.bridge.sessions.first?.state == .settled }
         #expect(updater.installs == 1)
     }
 

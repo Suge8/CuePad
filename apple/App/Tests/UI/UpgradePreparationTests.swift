@@ -4,7 +4,7 @@ import CueTestSupport
 import Foundation
 import Testing
 @testable import CuePad
-@testable import CuePi
+@testable import CueBridge
 
 @MainActor
 @Suite(.releasesLibraries)
@@ -13,7 +13,7 @@ struct UpgradePreparationTests {
         let ext = try await app.host.connect("upgrade-target", cwd: app.directory.path, extensionVersion: 0)
         let recorder = try await app.runtimeRecorder(on: TestApp.hostID)
         try await recorder.update(sessionID: ext.sessionID, state: .settled)
-        return (try #require(try await app.services.store.allPiSessionStates().first { $0.sessionID == ext.sessionID }), ext)
+        return (try #require(try await app.services.store.allSessionStates().first { $0.sessionID == ext.sessionID }), ext)
     }
 
     func prepared(_ request: DeliveryRequest, in app: TestApp) async throws -> DeliveryRequest {
@@ -28,7 +28,7 @@ struct UpgradePreparationTests {
         let other = try await app.host.connect(UUID().uuidString.lowercased(), cwd: app.directory.path)
         let recorder = try await app.runtimeRecorder(on: TestApp.hostID)
         try await recorder.update(sessionID: other.sessionID, state: .settled)
-        let target = try #require(try await app.services.store.allPiSessionStates().first { $0.sessionID == other.sessionID })
+        let target = try #require(try await app.services.store.allSessionStates().first { $0.sessionID == other.sessionID })
         let request = try await Workspace(services: app.services).said(ComposerDraft(text: "其他会话先完成"), to: target, mode: .send)
         #expect(try await app.services.store.outcome(of: request).status == .known(.succeeded))
         #expect(other.messages.map(\.text) == ["其他会话先完成"])
@@ -37,7 +37,7 @@ struct UpgradePreparationTests {
     @Test func 升级准备保留原请求与原因_不挡其他会话_重连后只派发一次() async throws {
         let app = TestApp(), store = app.services.store
         let (target, old) = try await oldSession(app)
-        defer { old.crash(); app.pi.stop(); app.services.cancelBackgroundWork() }
+        defer { old.crash(); app.bridge.stop(); app.services.cancelBackgroundWork() }
         let request = try await Workspace(services: app.services).said(ComposerDraft(text: "升级好后处理这一句"), to: target, mode: .send)
         try await app.services.executor.start()
         let waiting = try await prepared(request, in: app)
@@ -62,7 +62,7 @@ struct UpgradePreparationTests {
         let clock = ManualTiming()
         let app = TestApp(timing: clock.timing)
         let (target, old) = try await oldSession(app)
-        defer { old.crash(); app.pi.stop(); app.services.cancelBackgroundWork() }
+        defer { old.crash(); app.bridge.stop(); app.services.cancelBackgroundWork() }
         let workspace = Workspace(services: app.services)
         let request = try await workspace.said(ComposerDraft(text: "取消后不要派发"), to: target, mode: .send)
         try await app.services.executor.start()
@@ -70,7 +70,7 @@ struct UpgradePreparationTests {
         #expect(waiting.status == .known(.preparing))
         guard waiting.status == .known(.preparing) else { await app.services.executor.beginStop()(); return }
         let due = try #require(waiting.dispatchDeadline)
-        app.pi.update(old.id) { $0.name = "仍在升级" }
+        app.bridge.update(old.id) { $0.name = "仍在升级" }
         try await sendOther(in: app)
         #expect(try await app.services.store.deliveryRequest(request.id)?.dispatchDeadline == due)
         switch action {
@@ -80,7 +80,7 @@ struct UpgradePreparationTests {
         default:
             await app.services.executor.beginStop()()
             old.crash()
-            try await eventually("升级时旧连接已经断开") { app.pi.session(sessionID: target.sessionID) == nil }
+            try await eventually("升级时旧连接已经断开") { app.bridge.session(sessionID: target.sessionID) == nil }
             clock.advance(.seconds(20))
             app.relaunch()
             try await app.services.executor.start()
@@ -105,7 +105,7 @@ struct UpgradePreparationTests {
     @Test func 就绪事件不是派发许可_轮到它前再升级仍留在准备() async throws {
         let app = TestApp(), store = app.services.store
         let (target, old) = try await oldSession(app)
-        defer { old.crash(); app.pi.stop(); app.services.cancelBackgroundWork() }
+        defer { old.crash(); app.bridge.stop(); app.services.cancelBackgroundWork() }
         let workspace = Workspace(services: app.services)
         let request = try await workspace.said(ComposerDraft(text: "只在真实就绪时派发"), to: target, mode: .send)
         try await app.services.executor.start()
@@ -116,13 +116,13 @@ struct UpgradePreparationTests {
         blocker.onCommand = { _, command in command["t"] as? String == "send" ? nil : ["ok": true] }
         let recorder = try await app.runtimeRecorder(on: TestApp.hostID)
         try await recorder.update(sessionID: blocker.sessionID, state: .settled)
-        let blockingTarget = try #require(try await store.allPiSessionStates().first { $0.sessionID == blocker.sessionID })
+        let blockingTarget = try #require(try await store.allSessionStates().first { $0.sessionID == blocker.sessionID })
         _ = try await workspace.said(ComposerDraft(text: "在另一处等ACK"), to: blockingTarget, mode: .send)
         try await eventually("另一处已接手") { blocker.messages.count == 1 }
         old.close(bye: "reload")
         let ready = try await app.host.connect(target.sessionID, cwd: app.directory.path)
         try await eventually("准备任务收到就绪事件") { try await store.deliveryRequest(request.id)?.reason != first.reason }
-        app.pi.update(ready.id) { $0.upgrading = true }
+        app.bridge.update(ready.id) { $0.upgrading = true }
         let command = try #require(blocker.commands.first { $0.json["t"] as? String == "send" })
         let id = try #require(command.json["id"] as? String)
         blocker.sendRaw("{\"t\":\"ack\",\"id\":\"\(id)\",\"ok\":true}")
@@ -130,7 +130,7 @@ struct UpgradePreparationTests {
         let again = try await prepared(request, in: app)
         #expect(again.status == .known(.preparing) && again.dispatchDeadline == first.dispatchDeadline)
         #expect(ready.messages.isEmpty)
-        app.pi.update(ready.id) { $0.upgrading = false }
+        app.bridge.update(ready.id) { $0.upgrading = false }
         #expect(try await store.outcome(of: request).status == .known(.succeeded))
         #expect(ready.messages.map(\.deliveryID) == [request.id.uuidString])
         await app.services.executor.beginStop()()
@@ -139,18 +139,18 @@ struct UpgradePreparationTests {
     @Test func 已开始操作再报升级不能回退准备重做() async throws {
         let app = TestApp(), store = app.services.store
         let id = "compound.1", sessionID = "compound"
-        let link = StartedOperation(bridge: app.pi, id: id)
-        app.pi.attach(Session(id: id, sessionID: sessionID, agent: .pi, sessionFile: nil, pid: 1,
+        let link = StartedOperation(bridge: app.bridge, id: id)
+        app.bridge.attach(Session(id: id, sessionID: sessionID, agent: .pi, sessionFile: nil, pid: 1,
                                 cwd: app.directory, terminal: TerminalIdentity(), state: .settled, stateSince: .now), via: link)
         let recorder = try await app.runtimeRecorder(on: TestApp.hostID)
         try await recorder.update(sessionID: sessionID, state: .settled)
-        let target = try #require(try await store.allPiSessionStates().first { $0.sessionID == sessionID })
-        defer { app.pi.stop(); app.services.cancelBackgroundWork() }
+        let target = try #require(try await store.allSessionStates().first { $0.sessionID == sessionID })
+        defer { app.bridge.stop(); app.services.cancelBackgroundWork() }
         let request = try await Workspace(services: app.services).said(ComposerDraft(text: "不能把整个操作重做"), to: target, mode: .send)
         try await app.services.executor.start()
         let result = try await store.outcome(of: request)
         #expect(result.status == .known(.unconfirmed))
-        app.pi.update(id) { $0.upgrading = false }
+        app.bridge.update(id) { $0.upgrading = false }
         try await sendOther(in: app)
         #expect(link.operations == 1)
         #expect(try await store.deliveryRequest(request.id)?.status == .known(.unconfirmed))

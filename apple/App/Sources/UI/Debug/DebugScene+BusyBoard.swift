@@ -10,7 +10,7 @@ extension DebugScene {
 
     private static func busyBoard(_ store: CueStore) async throws {
         let recorder = demoRecorder(store)
-        guard try await store.piSessionPage(SessionQuery(text: "share")).items.isEmpty else { return }
+        guard try await store.sessionPage(SessionQuery(text: "share")).items.isEmpty else { return }
         let now = Date.now
         func session(_ id: String, _ state: WorkState, _ detail: String?, busy minutes: Double, earlier: [Double] = [], prompt: String, subagents: [SubagentState]? = nil) async throws {
             let since = now.addingTimeInterval(-minutes * 60)
@@ -22,7 +22,7 @@ extension DebugScene {
             let messages = said.enumerated().map { index, line in
                 ChatMessage(sessionID: id, entryID: "said-\(index)", seq: Int64(index), role: .user, text: line.0, at: now.addingTimeInterval(-line.1 * 60))
             }
-            try await store.writePiTranscript(SessionTranscript(sessionID: id, messages: messages, recap: Recap(lastPrompt: lastPrompt, lastReply: String(localized: "读完了。", table: "Demo"), pendingPrompt: prompt)))
+            try await store.writeTranscript(SessionTranscript(sessionID: id, messages: messages, recap: Recap(lastPrompt: lastPrompt, lastReply: String(localized: "读完了。", table: "Demo"), pendingPrompt: prompt)))
         }
         try await session("widget", .tool, "edit · Widgets/TaskEntry.swift", busy: 12, earlier: [170, 150, 95, 70, 40, 25], prompt: String(localized: "小组件里列出进行中的任务", table: "Demo"))
         try await session("undo", .thinking, nil, busy: 3, earlier: [18], prompt: String(localized: "把连续拖拽合并成一条撤销记录", table: "Demo"))

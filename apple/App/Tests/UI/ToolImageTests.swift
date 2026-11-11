@@ -1,5 +1,5 @@
 #if os(macOS)
-import CuePi
+import CueBridge
 import CueStore
 import CueTestSupport
 import Foundation
@@ -26,9 +26,9 @@ struct ToolImageTests {
         try log.tool("read", id: "c3", arguments: ["path": "shot.png"], images: [shot])
         try log.reply("截好了")
         let update = try History.index(file: file, agent: .pi, from: nil, files: files)
-        await app.services.consumePiHistory(AsyncStream { $0.yield(.updated(update)); $0.finish() }, agent: .pi)
+        await app.services.consumeHistory(AsyncStream { $0.yield(.updated(update)); $0.finish() }, agent: .pi)
 
-        let round = try #require(try await store.piMessages(of: "s").last { $0.role == .known(.pi) })
+        let round = try #require(try await store.chatMessages(of: "s").last { $0.role == .known(.pi) })
         let images = try #require(round.tools?.images)
         #expect(images.count == 2)
         #expect(round.tools?.steps == 33)  // 31 条命令 + 读两个文件（同一个文件读两次只算一次）
@@ -100,9 +100,9 @@ struct ToolImageTests {
         try pngData(width: 2400, height: 1200, shade: 0.4).write(to: shot)
         let file = try agent == .codex ? Self.codex(app.directory, shot: shot) : Self.grok(app.directory, shot: shot)
         let update = try History.index(file: file, agent: agent, from: nil, files: files)
-        await app.services.consumePiHistory(AsyncStream { $0.yield(.updated(update)); $0.finish() }, agent: agent)
+        await app.services.consumeHistory(AsyncStream { $0.yield(.updated(update)); $0.finish() }, agent: agent)
 
-        let round = try #require(try await store.piMessages(of: "s").last { $0.role == .known(.pi) })
+        let round = try #require(try await store.chatMessages(of: "s").last { $0.role == .known(.pi) })
         let key = try #require(round.tools?.images.first)
         let size = try #require(
             files.fileURL(for: key).flatMap { CGImageSourceCreateWithURL($0 as CFURL, nil) }.flatMap { CGImageSourceCopyPropertiesAtIndex($0, 0, nil) }

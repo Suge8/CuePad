@@ -25,7 +25,7 @@ extension CueStore {
         AND NOT EXISTS (SELECT 1 FROM piMessages n WHERE n.sessionID = p.sessionID AND n.role IN ('user', 'answer')
           AND (n.seq > p.seq OR (n.seq = p.seq AND n.id > p.id)))
       """, [JSONColumn.encode(deliveries.sorted { $0.uuidString < $1.uuidString })]) { $0.text(0) }
-    let items = try piSessions(sessionIDs: sessions)
+    let items = try sessionItems(sessionIDs: sessions)
     return sessions.sorted().compactMap { items[$0] }
   }
 

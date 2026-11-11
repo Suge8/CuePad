@@ -1,6 +1,6 @@
 #if os(macOS) && DEBUG
 import AppKit
-import CuePi
+import CueBridge
 import CueStore
 import SwiftUI
 

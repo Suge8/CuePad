@@ -15,7 +15,7 @@ struct SubmissionFlowTests {
         let recorder = try await app.runtimeRecorder(on: "mac-a")
         try await recorder.update(sessionID: "atlas", state: .waitingForUser, title: "atlas",
                                   question: Question(promptID: "question", kind: kind, text: "喝什么？", options: ["茶"], allowsOther: true))
-        let session = try #require(try await store.allPiSessionStates().first)
+        let session = try #require(try await store.allSessionStates().first)
         let card = try await store.createCard(body: "稍后再发的卡片")
         let file = DraftFile(key: try store.files.store(pngData()), name: "")
         let outbox = Outbox(content: card.body, card: card.id)
@@ -39,7 +39,7 @@ struct SubmissionFlowTests {
     @Test func 停止被拒绝_回复框操作显示执行端原因() async throws {
         let recorder = try await app.runtimeRecorder(on: "mac-a")
         try await recorder.update(sessionID: "atlas", state: .thinking, title: "atlas")
-        let session = try #require(try await store.allPiSessionStates().first)
+        let session = try #require(try await store.allSessionStates().first)
         let workspace = Workspace(services: app.services)
         let executor = DeliveryExecutor(store: store, hostID: "mac-a", onIssue: { Issue.record("\($0)") }) { _, _ in
             .failed(.verbatim("Agent 拒绝停止"))

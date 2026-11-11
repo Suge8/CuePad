@@ -58,7 +58,7 @@ extension DebugScene {
     static func settleAsks(_ store: CueStore) async {
         await running("撤回等你的提问") {
             for asked in try await store.cueMessagesWaitingForYou() { _ = try await store.endCueQuestion(asked.id, .withdrawn) }
-            for session in try await store.piSessionPage(SessionQuery(limit: 500)).items.map(\.state) where session.state == .known(.waitingForUser) {
+            for session in try await store.sessionPage(SessionQuery(limit: 500)).items.map(\.state) where session.state == .known(.waitingForUser) {
                 _ = try await demoRecorder(store, host: session.hostID).update(sessionID: session.sessionID, state: .settled, title: session.title)
             }
         }

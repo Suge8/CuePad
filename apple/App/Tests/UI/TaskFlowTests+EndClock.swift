@@ -1,5 +1,5 @@
 #if os(macOS)
-@testable import CuePi
+@testable import CueBridge
 import CueTestSupport
 import Foundation
 import Testing
@@ -12,7 +12,7 @@ extension TaskFlowTests {
         let clock = ManualTiming(start: Date().addingTimeInterval(-60))
         let rig = TestApp(timing: clock.timing), store = rig.services.store, peer = TestApp(host: "phone")
         let services = try #require(rig.services), workspace = Workspace(services: services)
-        defer { rig.pi.stop(); services.cancelBackgroundWork(); peer.services.cancelBackgroundWork() }
+        defer { rig.bridge.stop(); services.cancelBackgroundWork(); peer.services.cancelBackgroundWork() }
         try await rig.offersPi()
         let task = try await workspace.createTask("旧任务", in: Project.defaultID)
         let borrower = try await workspace.createTask("新任务", in: Project.defaultID)
@@ -23,7 +23,7 @@ extension TaskFlowTests {
         try await store.deleteDelivery(launch.id)
         var session = Session(id: "audit-clock.1", sessionID: "audit-clock", agent: .pi, sessionFile: nil, pid: 1, cwd: rig.directory, terminal: TerminalIdentity(), state: .thinking, stateSince: .now)
         session.hosted = true
-        rig.pi.attach(session, via: LostEndLink(rig.pi))
+        rig.bridge.attach(session, via: LostEndLink(rig.bridge))
         try await workspace.complete(task.id)
         let old = try #require(try await store.deliveryRequests().first { $0.mode == .known(.end) })
         try await services.executor.start()
@@ -32,7 +32,7 @@ extension TaskFlowTests {
         #expect(try await peer.services.store.applyRemote([.save(uncertain, systemFields: Data())]).isEmpty)
         clock.advance(.seconds(1))
         try await recorder.end(sessionID: "audit-clock", confirming: [old.id])
-        let ended = try #require(try await store.piSessions(sessionIDs: ["audit-clock"])["audit-clock"]?.state)
+        let ended = try #require(try await store.sessionItems(sessionIDs: ["audit-clock"])["audit-clock"]?.state)
         let endedRow = try #require(try await store.syncRow(recordName: ended.id.uuidString.lowercased()))
         #expect(try await peer.services.store.applyRemote([.save(endedRow, systemFields: Data())]).isEmpty)
         #expect(try await peer.services.store.deliveryRequest(old.id)?.status == .known(.unconfirmed))
@@ -57,25 +57,25 @@ extension TaskFlowTests {
         await remoteExecutor.stop()
         let lateRow = try #require(try await peer.services.store.syncRow(recordName: late.id.uuidString.lowercased()))
         var handed = 0
-        let live = InterleavedLink(rig.pi) { () async throws -> Void in
+        let live = InterleavedLink(rig.bridge) { () async throws -> Void in
             handed += 1
             #expect(try await store.applyRemote([.save(lateRow, systemFields: Data())]).isEmpty)
         }
-        rig.pi.attach(session, via: live)
+        rig.bridge.attach(session, via: live)
         if automatic { try await workspace.complete(borrower.id) }
-        else { await workspace.end(try #require(try await store.piSessions(sessionIDs: ["audit-clock"])["audit-clock"]?.state)) }
+        else { await workspace.end(try #require(try await store.sessionItems(sessionIDs: ["audit-clock"])["audit-clock"]?.state)) }
         let newEnd = try #require(try await store.deliveryRequests().first { $0.mode == .known(.end) && $0.id != old.id && ($0.content != "end") == automatic })
         try await services.executor.start()
         let outcome = try await store.outcome(of: newEnd)
         #expect(outcome.status == .known(.succeeded))
-        #expect(rig.pi.session(sessionID: "audit-clock") == nil)
+        #expect(rig.bridge.session(sessionID: "audit-clock") == nil)
         #expect(handed == 1)
         #expect(try await store.deliveryRequest(late.id)?.status == .known(.unconfirmed))
         #expect(try await store.applyRemote([.save(success, systemFields: Data()), .save(endedRow, systemFields: Data())]).isEmpty)
         #expect(try await store.deliveryRequest(late.id)?.status == .known(.unconfirmed))
         #expect(MacDelivery.endIssue(try await store.deliveryRequests(toSession: "audit-clock"), at: services.speech)?.unconfirmedReason != nil)
         let prior = Set(try await store.deliveryRequests().map(\.id))
-        await workspace.end(try #require(try await store.piSessions(sessionIDs: ["audit-clock"])["audit-clock"]?.state))
+        await workspace.end(try #require(try await store.sessionItems(sessionIDs: ["audit-clock"])["audit-clock"]?.state))
         let followup = try #require(try await store.deliveryRequests().last { $0.mode == .known(.end) && !prior.contains($0.id) })
         #expect(try await store.outcome(of: followup).status == .known(.succeeded))
         #expect(try await store.deliveryRequest(late.id)?.status == .known(.succeeded))

@@ -24,7 +24,7 @@ nonisolated struct SessionRailData: Equatable, Sendable {
         let advancing = tally.works.flatMap(\.sessions)
             .sorted { ($0.stateSince, $0.sessionID) > ($1.stateSince, $1.sessionID) }
             .filter { seen.insert($0.sessionID).inserted }
-        let items = try store.piSessions(sessionIDs: waiting.map(\.sessionID) + advancing.map(\.sessionID))
+        let items = try store.sessionItems(sessionIDs: waiting.map(\.sessionID) + advancing.map(\.sessionID))
         let decisions = Set(asking.map(\.sessionID))
         return Self(
             waiting: waiting.map { Waiting(agent: items[$0.sessionID]!, deciding: decisions.contains($0.sessionID)) },

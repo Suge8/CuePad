@@ -14,7 +14,7 @@ extension TaskFlowTests {
         workspace.startFresh(task)
         let launch = try #require(try await eventually(store, { try $0.deliveryRequests().first { $0.mode == .known(.start) } }) { $0 != nil })
         let ext = try await rig.host.connect("pending-send", cwd: rig.directory.path, hosted: true, launchToken: launch.launch?.token)
-        defer { ext.close(bye: "quit"); rig.pi.stop(); rig.services.cancelBackgroundWork() }
+        defer { ext.close(bye: "quit"); rig.bridge.stop(); rig.services.cancelBackgroundWork() }
         let accept = ext.onCommand
         ext.onCommand = { [weak ext] _, command in
             if command["t"] as? String == "send" { return nil }

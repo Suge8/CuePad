@@ -70,7 +70,7 @@ extension CueHostTests {
     static func handedBack(_ rig: Rig, _ title: String, in sessionID: String, _ replies: [String]) async throws {
         let project = try #require(try await rig.store.projects().first)
         try await rig.store.linkCard(try await rig.store.createTask(title, in: project.id).id, toSession: sessionID)
-        try await rig.store.writePiTranscript(SessionTranscript(sessionID: sessionID, messages: replies.enumerated().map { index, text in
+        try await rig.store.writeTranscript(SessionTranscript(sessionID: sessionID, messages: replies.enumerated().map { index, text in
             ChatMessage(sessionID: sessionID, entryID: "a\(index)", seq: Int64(index + 1), role: .pi, text: text, at: .now)
         }, recap: Recap()))
     }

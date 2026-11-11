@@ -1,6 +1,6 @@
 #if os(macOS)
 import CueStore
-import CuePi
+import CueBridge
 
 nonisolated enum DeliveryRefusal {
     static func afterStarting(_ outcome: DeliveryOutcome) -> DeliveryOutcome {

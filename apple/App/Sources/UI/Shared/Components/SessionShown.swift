@@ -237,7 +237,7 @@ extension Workspace {
     /// 只随出字开始、结束通知，不随每个增量（`Bridge.Slot.speaking`）。
     private func speaking(_ session: SessionState) -> Bool {
         #if os(macOS)
-        services.pi.slot(sessionID: session.sessionID)?.speaking ?? false
+        services.bridge.slot(sessionID: session.sessionID)?.speaking ?? false
         #else
         false
         #endif

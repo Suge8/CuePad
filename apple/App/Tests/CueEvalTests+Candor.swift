@@ -68,7 +68,7 @@ extension CueEvalTests {
         let recorder = StateRecorder(store: rig.store, hostID: "mac-b")
         try await recorder.update(sessionID: id, state: .thinking, title: card.heading)
         try await recorder.update(sessionID: id, state: .settled)
-        try await rig.store.writePiTranscript(SessionTranscript(sessionID: id, messages: [
+        try await rig.store.writeTranscript(SessionTranscript(sessionID: id, messages: [
             ChatMessage(sessionID: id, entryID: "u1", seq: 1, role: .user, text: card.body, at: .now - 600),
             ChatMessage(sessionID: id, entryID: "a1", seq: 2, role: .pi, text: reply, at: .now - 300),
         ], recap: Recap()))

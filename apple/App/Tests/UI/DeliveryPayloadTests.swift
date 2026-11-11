@@ -15,12 +15,12 @@ struct DeliveryPayloadTests {
         let mac = TestApp(sync: .built { CloudSync(store: $0) { cloud } })
         let ext = try await mac.host.connect("atlas", cwd: mac.directory.path)
         defer {
-            ext.close(bye: "quit"); mac.pi.stop()
+            ext.close(bye: "quit"); mac.bridge.stop()
             phone.services.cancelBackgroundWork(); mac.services.cancelBackgroundWork()
         }
         let recorder = try await mac.runtimeRecorder(on: TestApp.hostID)
         try await recorder.update(sessionID: "atlas", state: .settled)
-        let session = try #require(try await mac.services.store.allPiSessionStates().first)
+        let session = try #require(try await mac.services.store.allSessionStates().first)
         phone.services.startSync(); mac.services.startSync()
         try await eventually("两端同步就绪") {
             phone.services.syncState.status == .idle && phone.services.syncState.reconciled

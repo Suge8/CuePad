@@ -25,7 +25,7 @@ public struct SessionFolder: Sendable, Equatable {
   }
 }
 
-/// 会话列表的一页（Mac 与手机共用的唯一查询，见 `CueStore.piSessionPage`）。条件之间是"且"。
+/// 会话列表的一页（Mac 与手机共用的唯一查询，见 `CueStore.sessionPage`）。条件之间是"且"。
 /// 历史会话有几千条：界面只读需要的范围与页，不整表读。
 public struct SessionQuery: Sendable, Equatable {
   public var scope: SessionScope

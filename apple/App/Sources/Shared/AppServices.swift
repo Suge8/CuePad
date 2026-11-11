@@ -5,7 +5,7 @@ import CueSync
 import os
 #if os(macOS)
 import AppKit
-import CuePi
+import CueBridge
 #else
 import UIKit
 #endif
@@ -21,7 +21,7 @@ final class AppServices {
 
     let store: CueStore
     #if os(macOS)
-    let pi: Bridge
+    let bridge: Bridge
     let cue: CueService
     #endif
 
@@ -66,7 +66,7 @@ final class AppServices {
     /// iOS 整个进后台时取消、回前台再开。
     @ObservationIgnored var polling: Task<Void, Never>?
     var hasOpenDeliveries = false
-    var piViewers = 0
+    var sessionViewers = 0
     /// 只由 `CueViewing` 增减；算不算在看的规则在它那里。
     var cueViewers = 0
     #if os(macOS)
@@ -111,14 +111,14 @@ final class AppServices {
     @ObservationIgnored let hostID: String
     @ObservationIgnored let workspaces: Workspaces
     @ObservationIgnored let wakeNotifications: NotificationCenter
-    @ObservationIgnored let piStateRecorder: StateRecorder
+    @ObservationIgnored let stateRecorder: StateRecorder
     @ObservationIgnored let presence: MacPresenceKeeper
     /// 同步表 `macAgents` 的唯一写入口；Cue 启用前也经它问。
     @ObservationIgnored let macAgents: MacAgentsRecorder
     /// 同步表 `agentLibraries` 的唯一写入口，整理与改规则也经它。
     @ObservationIgnored let library: AgentLibraryKeeper
     @ObservationIgnored lazy var executor = MacExecutor(
-        store: store, pi: pi, runtimes: runtimes, hostID: hostID, workspaces: workspaces, recorder: piStateRecorder, library: library,
+        store: store, bridge: bridge, runtimes: runtimes, hostID: hostID, workspaces: workspaces, recorder: stateRecorder, library: library,
         upload: { [weak self] id in await self?.upload(id) },
         fetchFile: { [sync] key in try await sync.fetchFile(key) },
         refreshQuota: { [weak self] in await self?.refreshQuota(.manual) },
@@ -138,9 +138,9 @@ final class AppServices {
         case syncUnavailable(String)
         case widgetDataUnavailable(String)
         #if os(macOS)
-        case piBridgeUnavailable(String)
+        case bridgeUnavailable(String)
         /// Pi 历史索引读写 Store 失败；该会话文件不再写回。
-        case piHistoryUnavailable(String)
+        case historyUnavailable(String)
         #endif
     }
 
@@ -148,7 +148,7 @@ final class AppServices {
     #if os(macOS)
     init(location: LibraryLocation, defaults: UserDefaults, sync: SyncSource, mac: MacDependencies) throws {
         let store = try CueStore(location: location, timing: mac.timing)
-        try Self.launch(store, on: mac.hostID, bridge: mac.pi)
+        try Self.launch(store, on: mac.hostID, bridge: mac.bridge)
         self.store = store
         settings = AppSettings(defaults: defaults)
         self.location = location
@@ -163,10 +163,10 @@ final class AppServices {
         hostID = mac.hostID
         workspaces = mac.workspaces
         wakeNotifications = mac.wakeNotifications
-        piStateRecorder = StateRecorder(store: store, hostID: mac.hostID, timing: mac.timing)
+        stateRecorder = StateRecorder(store: store, hostID: mac.hostID, timing: mac.timing)
         presence = MacPresenceKeeper(store: store, sync: self.sync, host: mac.hostID)
         viewer = ViewerKeeper(store: store, sync: self.sync, device: mac.hostID)
-        pi = mac.pi
+        bridge = mac.bridge
         pasteboard = mac.pasteboard
         hotkeyBackend = mac.hotkeys
         paths = mac.paths
@@ -180,10 +180,10 @@ final class AppServices {
         library = AgentLibraryKeeper(
             store: store, sync: self.sync, host: mac.hostID, files: AgentLibraryFiles(access: agents.integration.fileAccess, trash: trash))
         commandLineTool = mac.commandLineTool
-        updates = UpdateService(updater: mac.updater, bridge: mac.pi, runtimes: runtimes)
+        updates = UpdateService(updater: mac.updater, bridge: mac.bridge, runtimes: runtimes)
         historyStore = HistoryPersistence(storage: store, host: mac.hostID)
         cue = CueService(
-            recorder: piStateRecorder, sync: self.sync, library: location.directory,
+            recorder: stateRecorder, sync: self.sync, library: location.directory,
             piAgentDirectory: mac.paths.pi.agentDirectory, dependencies: mac.cue)
     }
     #else

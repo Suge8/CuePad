@@ -178,7 +178,7 @@ extension SessionState {
 
 extension SessionState: Record {
   static let table = Table.piSessionStates
-  /// 只由 `writePiTranscript` 写
+  /// 只由 `writeTranscript` 写
   static let recapColumns: Set<String> = ["lastPrompt", "lastReply", "pendingPrompt", "pendingTools", "answeredAt"]
   static let columns = [
     "id", "sessionID", "hostID", "title", "projectID", "state", "detail", "stateSince", "createdAt", "modifiedAt", "notify", "folder",

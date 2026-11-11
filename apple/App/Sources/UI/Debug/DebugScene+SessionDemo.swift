@@ -17,15 +17,15 @@ extension DebugScene {
     static func seedRemote(_ services: AppServices) async {
         await running("演示 Pi 会话") {
             try await keepDemoPresence(services.store)
-            try await seedPiSessions(services)
+            try await seedSessions(services)
         }
     }
 
-    private static func seedPiSessions(_ services: AppServices) async throws {
+    private static func seedSessions(_ services: AppServices) async throws {
         let store = services.store
         // 演示库的会话索引已写成历史；这里补的是演示 Mac 的在线会话，它有在线的就是写过了。只看演示 Mac：
         // 截图实例的连接目录是各检出共用的，别处起的 Pi 会话会先连上来，算上它就一个演示会话都不补
-        let live = try await store.piSessionPage(.live).items
+        let live = try await store.sessionPage(.live).items
         guard !live.contains(where: { $0.state.hostID == "demo-mac" }) else { return }
         let projects = try await store.projects()
         func project(_ name: String) -> UUID? { projects.first { $0.name == name }?.id }
@@ -77,7 +77,7 @@ extension DebugScene {
         for (id, name, recap) in history {
             _ = try await recorder.update(
                 sessionID: id, state: .settled, detail: nil, title: id, directory: id, projectID: name.flatMap(project), agent: demoAgents[id])
-            try await store.writePiTranscript(SessionTranscript(sessionID: id, messages: [], recap: recap))
+            try await store.writeTranscript(SessionTranscript(sessionID: id, messages: [], recap: recap))
             try await recorder.end(sessionID: id)
         }
         let since: [String: TimeInterval] = [
@@ -101,7 +101,7 @@ extension DebugScene {
                 hosted: id == "scratch", modelState: demoModels(for: demoAgents[id], fast: id == "scratch" ? false : nil),
                 context: demoContexts[id] ?? ContextUsage(tokens: 12_000, window: 200_000), commands: demoCommands(for: demoAgents[id]),
                 agent: demoAgents[id])
-            try await store.writePiTranscript(SessionTranscript(
+            try await store.writeTranscript(SessionTranscript(
                 sessionID: id, messages: messages,
                 recap: Recap(lastPrompt: recap.lastPrompt, lastReply: recap.lastReply, pendingPrompt: recap.pendingPrompt)))
         }
@@ -130,11 +130,11 @@ extension DebugScene {
             sessionID: "relay", state: .settled, title: "relay", directory: "relay", times: SessionTimes(stateSince: .now.addingTimeInterval(-32 * 60), busySince: nil))
         try await seedChats(store)
         if args.longChat { try await seedLongChat(store, project: project("CuePad")) }
-        try await store.writePiTranscript(SessionTranscript(
+        try await store.writeTranscript(SessionTranscript(
             sessionID: "notes",
             messages: [ChatMessage(sessionID: "notes", entryID: "compaction-demo", seq: 99, role: .system, text: ChatNotice.compacted.rawValue, at: .now.addingTimeInterval(-1_800))],
             recap: Recap(lastPrompt: String(localized: "整理一下这周的会议记录", table: "Demo"), lastReply: String(localized: "整理好了，放在 `notes/2026-W40.md`。三件待办：**续费域名**、评审计费额度、补 scheduler 测试。", table: "Demo"))))
-        let states = try await store.piSessionPage(SessionQuery(limit: 100)).items.map(\.state)
+        let states = try await store.sessionPage(SessionQuery(limit: 100)).items.map(\.state)
         // -CuePadCommand YES：atlas 的会话页回复框上方有一条在路上的命令（看进度行；没有执行它的 Mac，一直在路上）
         if args.driveOpts.command, let atlas = states.first(where: { $0.sessionID == "atlas" }) {
             _ = try await services.store.requestDelivery("/compact", to: atlas.target, on: atlas.hostID, mode: .command)
@@ -147,7 +147,7 @@ extension DebugScene {
             let mini = demoRecorder(store, host: relay.hostID)
             _ = try await mini.update(sessionID: "quote", state: .settled, title: "quote", directory: "quote", projectID: project(String(localized: "装修", table: "Demo")))
             try await mini.end(sessionID: "quote")
-            if let quote = try await store.piSessionPage(SessionQuery(text: "quote")).items.first(where: { $0.state.sessionID == "quote" })?.state {
+            if let quote = try await store.sessionPage(SessionQuery(text: "quote")).items.first(where: { $0.state.sessionID == "quote" })?.state {
                 _ = try await services.store.requestDelivery(String(localized: "把报价单备份到网盘", table: "Demo"), to: quote.target, on: quote.hostID, mode: .send)
             }
             let seeded = Date.now

@@ -6,7 +6,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
-@testable import CuePi
+@testable import CueBridge
 
 extension MacSyncTests {
     func awaitFinished(_ id: UUID) async throws -> DeliveryRequest {
@@ -94,7 +94,7 @@ extension MacSyncTests {
     @Test
     func 请求停止_结束_改配置写给会话所在的Mac并立即上传() async throws {
         try await StateRecorder(store: services.store, hostID: "mac-other").update(sessionID: "far", state: .thinking, title: "远处")
-        let session = try #require(try await services.store.allPiSessionStates().first)
+        let session = try #require(try await services.store.allSessionStates().first)
         let uploads = Watch(rig.sync.uploads.stream)
 
         let stop = try await services.stop(session)
@@ -133,7 +133,7 @@ extension MacSyncTests {
         services.start()
         defer { services.cancelBackgroundWork() }
         try await eventually("Cue 在这台值班") { services.cue.onDuty }
-        #expect(services.pi.slots.isEmpty && !services.hasOpenDeliveries)
+        #expect(services.bridge.slots.isEmpty && !services.hasOpenDeliveries)
         #expect(services.pollingCadence != nil)
     }
 

@@ -1,7 +1,7 @@
 #if os(macOS)
 import AppKit
 import CueAgent
-import CuePi
+import CueBridge
 import CueStore
 import Foundation
 import Testing
@@ -68,7 +68,7 @@ struct HistoryRulesTests {
             bridge = Bridge(socketDirectory: paths.socketDirectory)
             host = PiRuntime(bridge: bridge, paths: paths, pi: { realPi })
             let mac = MacDependencies(
-                pi: bridge, hotkeys: InMemoryHotkeys(), paths: agentPaths, agents: AgentIntegrations(agents), terminal: TerminalJumper(),
+                bridge: bridge, hotkeys: InMemoryHotkeys(), paths: agentPaths, agents: AgentIntegrations(agents), terminal: TerminalJumper(),
                 hostID: TestApp.hostID, workspaces: Workspaces(root: directory.appending(path: "CuePad", directoryHint: .isDirectory)),
                 wakeNotifications: NotificationCenter(),
                 commandLineTool: CommandLineToolInstaller(
@@ -94,11 +94,11 @@ struct HistoryRulesTests {
         }
 
         func records(_ scope: SessionScope) async throws -> [SessionState] {
-            try await store.piSessionPage(SessionQuery(scope: scope, limit: .max)).items.map(\.state)
+            try await store.sessionPage(SessionQuery(scope: scope, limit: .max)).items.map(\.state)
         }
 
         func replies(of sessionID: String) async throws -> [String] {
-            guard let indexed = try await store.piSession(sessionID) else { return [] }
+            guard let indexed = try await store.indexedSession(sessionID) else { return [] }
             let text = (try? String(contentsOf: URL(filePath: indexed.path), encoding: .utf8)) ?? ""
             return text.split(separator: "\n").compactMap { line in
                 guard let object = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any],
@@ -163,7 +163,7 @@ struct HistoryRulesTests {
         #expect(try await rig.records(.live).isEmpty)
     }
 
-    /// 闲置到点时扩展做的事就是给自己发 SIGTERM（lifecycle.ts 的 IdleExit）；到点本身由 CuePiTests 的 anIdleHostedSessionExitsAfterTheIdleLimit 守，
+    /// 闲置到点时扩展做的事就是给自己发 SIGTERM（lifecycle.ts 的 IdleExit）；到点本身由 CueBridgeTests 的 anIdleHostedSessionExitsAfterTheIdleLimit 守，
     /// 这里歇下就直接发，不等墙钟（托管的闲置时限最小一秒，四次就是好几秒）。
     private func idleExit(_ rig: Rig, _ sessionID: String) async throws {
         try await eventually("这一轮歇下") { rig.bridge.session(sessionID: sessionID)?.state == .settled }
@@ -173,7 +173,7 @@ struct HistoryRulesTests {
 
     @discardableResult
     private func expectResting(_ rig: Rig, _ sessionID: String) async throws -> SessionState {
-        let current = try await rig.store.piSessionPage(.current).items.map(\.state)
+        let current = try await rig.store.sessionPage(.current).items.map(\.state)
         let state = try #require(current.first { $0.sessionID == sessionID }, "仍在现在")
         #expect(state.hosted && state.runtimeState == .known(.settled), "托管、歇着")
         let shown = Workspace(services: rig.services).shown(state, delivery: nil)

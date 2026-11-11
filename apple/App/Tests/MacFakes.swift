@@ -1,6 +1,6 @@
 #if os(macOS)
 import CueStore
-@testable import CuePi
+@testable import CueBridge
 import Foundation
 @testable import CuePad
 
@@ -203,6 +203,6 @@ final class RecordingCueNotifier: CueNotifying {
 }
 
 extension AppServices {
-    func reconcileLaunch() throws { try Self.launch(store, on: hostID, bridge: pi) }
+    func reconcileLaunch() throws { try Self.launch(store, on: hostID, bridge: bridge) }
 }
 #endif

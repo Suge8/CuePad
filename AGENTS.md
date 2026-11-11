@@ -37,4 +37,4 @@ Swift 原生应用（macOS / iOS / iPadOS），产品见 [README.md](README.md)�
 - 性能测量、交互预算、同步测量 → [docs/perf.md](docs/perf.md)
 - 改 Cue 的提示词、工具说明、信封或记忆的前后评测，记忆基准 → [docs/cue-eval.md](docs/cue-eval.md)
 - 签名、发布、Sparkle、CloudKit 结构部署 → [docs/release.md](docs/release.md)
-- Agent 桥、socket 协议、各家接入 → [CuePi README](apple/CuePadKit/Sources/CuePi/README.md)
+- Agent 桥、socket 协议、各家接入 → [CueBridge README](apple/CuePadKit/Sources/CueBridge/README.md)

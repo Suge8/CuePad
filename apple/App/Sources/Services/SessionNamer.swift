@@ -1,5 +1,5 @@
 #if os(macOS)
-import CuePi
+import CueBridge
 import CueStore
 import Foundation
 import OSLog
@@ -19,13 +19,13 @@ final class SessionNamer {
         self.store = store
     }
 
-    func consider(_ session: CuePi.Session) {
+    func consider(_ session: CueBridge.Session) {
         guard session.name == nil, session.firstMessage != nil, !session.upgrading, bridge.canNameItself(session.id),
               tried.insert(session.sessionID).inserted else { return }
         Task { await name(session.id, sessionID: session.sessionID) }
     }
 
-    private func name(_ id: CuePi.Session.ID, sessionID: String) async {
+    private func name(_ id: CueBridge.Session.ID, sessionID: String) async {
         do {
             guard try await store.wantsSuggestedName(sessionID) else { return }
             let name = try await bridge.suggestName(for: id)

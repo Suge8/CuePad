@@ -1,6 +1,6 @@
 #if os(macOS)
 @testable import CueStore
-@testable import CuePi
+@testable import CueBridge
 import CueTestSupport
 import Foundation
 import Testing
@@ -22,16 +22,16 @@ struct DeliveryDispatchTests {
         let executor = DeliveryExecutor(store: store, hostID: TestApp.hostID, timing: clock.timing, onIssue: { Issue.record("\($0)") }, preparation: { request in
             await MainActor.run {
                 if request.handledBy != nil {
-                    app.pi.update(ext.id) { $0.upgrading = true }
+                    app.bridge.update(ext.id) { $0.upgrading = true }
                     clock.advance(.seconds(DeliveryRequest.phaseLimit + 1))
                 }
-                return MacDeliveryPreparation(pi: app.pi).current(request)
+                return MacDeliveryPreparation(bridge: app.bridge).current(request)
             }
         }) { _, _ in
             Issue.record("已到期且目标在升级，不应交给执行回调")
             return .succeeded
         }
-        defer { ext.close(bye: "quit"); app.pi.stop(); app.services.cancelBackgroundWork() }
+        defer { ext.close(bye: "quit"); app.bridge.stop(); app.services.cancelBackgroundWork() }
         try await executor.start()
         let failed = try await eventually(store, { try $0.deliveryRequest(request.id) }) { $0?.status == .known(.failed) }
         #expect(failed?.handledBy == nil)

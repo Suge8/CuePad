@@ -12,7 +12,7 @@ import Testing
     try await recorder.update(sessionID: "s1", state: state, times: SessionTimes(stateSince: clock.now, busySince: nil))
   }
 
-  private func current() async throws -> SessionState { try #require(try await store.allPiSessionStates().first) }
+  private func current() async throws -> SessionState { try #require(try await store.allSessionStates().first) }
 
   @Test func compactingWhileSettledAndFallingBackIsNotANewRound() async throws {
     let recorder = StateRecorder(store: store, hostID: "mac", timing: clock.timing)

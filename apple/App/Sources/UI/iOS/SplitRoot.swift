@@ -102,7 +102,7 @@ private struct WideSessionHeading: View {
                 if let shown, let taskLink { SessionTaskBindItems(session: shown, link: taskLink) }
             }
             .observing(services.store, id: session.id, into: $state, onError: workspace.fail) { [id = session.id] store in
-                try store.piSessionPage(SessionQuery(id: id)).items.first?.listed
+                try store.sessionPage(SessionQuery(id: id)).items.first?.listed
             }
             .observing(services.store, id: SessionTaskLink.Key(session: shown?.sessionID, project: shown?.projectID), into: $taskLink, onError: workspace.fail) { [shown] store in
                 try SessionTaskLink.read(sessionID: shown?.sessionID ?? "", project: shown?.projectID, from: store)

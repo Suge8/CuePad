@@ -1,6 +1,6 @@
 #if os(macOS)
 import CueAgent
-import CuePi
+import CueBridge
 import CueStore
 import CueTestSupport
 import CueText
@@ -37,7 +37,7 @@ extension CueHostTests {
             try await store.linkCard(step.id, toSession: "s\(index)")
             sessions.append(try await rig.app.host.connect("s\(index)", cwd: rig.folder.path, busy: true, sessionFile: file.path))
         }
-        try await eventually("三个会话都记下在干活") { try await store.allPiSessionStates().filter { $0.state.isWorking }.count == 3 }
+        try await eventually("三个会话都记下在干活") { try await store.allSessionStates().filter { $0.state.isWorking }.count == 3 }
 
         try await rig.say("念一下看板")
         let board = try await rig.message(.cue, containing: "看板：")
@@ -67,10 +67,10 @@ extension CueHostTests {
         try await StateRecorder(store: store, hostID: TestApp.hostID)
             .update(sessionID: "h1", state: .tool, detail: "bash · swift test", hosted: true, subagents: [helper])
         try await store.linkCard(upgraded.id, toSession: "h1")
-        try await eventually("记下在干活") { try await store.allPiSessionStates().filter { $0.state.isWorking }.count == 2 }
+        try await eventually("记下在干活") { try await store.allSessionStates().filter { $0.state.isWorking }.count == 2 }
 
         try rig.services.reconcileLaunch()  // 启动对账：桥上的托管会话还连着，它的进程还在
-        let states = Dictionary(uniqueKeysWithValues: try await store.allPiSessionStates().map { ($0.sessionID, $0) })
+        let states = Dictionary(uniqueKeysWithValues: try await store.allSessionStates().map { ($0.sessionID, $0) })
         #expect(states["h0"]?.state == .known(.thinking))
         #expect(states["h1"]?.state == .known(.tool) && states["h1"]?.detail == "bash · swift test" && states["h1"]?.subagents == [helper])
         try await rig.say("念一下看板")

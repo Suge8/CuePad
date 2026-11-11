@@ -1,5 +1,5 @@
 #if os(macOS)
-import CuePi
+import CueBridge
 import CueStore
 import Foundation
 import Testing
@@ -20,11 +20,11 @@ struct SendTargetTests {
         try await rig.services.store.setDirectory("/work", for: project.id)
         try await rig.offersPi()
         workspace = Workspace(services: rig.services)
-        let changes = rig.pi.changes()  // 先订阅再连上会话：桥的变化写成同步记录
-        try rig.pi.start()
+        let changes = rig.bridge.changes()  // 先订阅再连上会话：桥的变化写成同步记录
+        try rig.bridge.start()
         let services: AppServices = rig.services
         Task {
-            do { try await services.consumePiChanges(changes) } catch { Issue.record(error) }
+            do { try await services.consumeSessionChanges(changes) } catch { Issue.record(error) }
         }
         rig.services.startLiveSessions()
     }
@@ -36,13 +36,13 @@ struct SendTargetTests {
         let ext = FakeExtension(directory: rig.socketDirectory, sessionID: sessionID, pid: pid, options: .init(cwd: directory, sessionFile: file.path))
         try ext.start()
         opened.extensions.append(ext)
-        try await eventually("rig.pi.session(id: ext.id) != nil") { rig.pi.session(id: ext.id) != nil }
+        try await eventually("rig.bridge.session(id: ext.id) != nil") { rig.bridge.session(id: ext.id) != nil }
         return ext
     }
 
     private func end(_ ext: FakeExtension) async throws {
         ext.close(bye: "quit")
-        try await eventually("rig.pi.session(id: ext.id) == nil") { rig.pi.session(id: ext.id) == nil }
+        try await eventually("rig.bridge.session(id: ext.id) == nil") { rig.bridge.session(id: ext.id) == nil }
     }
 
     private func leaf(in project: Project, session: String? = nil) async throws -> Card {
@@ -120,7 +120,7 @@ struct SendTargetTests {
         let folder = rig.directory.appending(path: "work/alpha", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let file = "/sessions/--work-alpha--/a.jsonl"
-        try await store.upsertPiSession(IndexedSession(id: "a", path: file, cwd: folder.path, title: "alpha", lastActivityAt: .now), host: TestApp.hostID)
+        try await store.upsertSession(IndexedSession(id: "a", path: file, cwd: folder.path, title: "alpha", lastActivityAt: .now), host: TestApp.hostID)
         try await rig.services.executor.start()
         defer { rig.services.cancelBackgroundWork() }
         try await end(alpha)
@@ -173,7 +173,7 @@ struct SendTargetTests {
         workspace.handOff(forMac)
         let mac = try #require(try await eventually(store, { try $0.deliveryRequests().first }) { $0 != nil })
         #expect(mac.hostID == "mac-b" && mac.mode == .known(.send) && mac.target == SendTarget(kind: .piSession, name: "atlas", ref: "r"))
-        #expect(rig.host.calls.isEmpty && rig.pi.sessions.isEmpty, "本机没有执行它")
+        #expect(rig.host.calls.isEmpty && rig.bridge.sessions.isEmpty, "本机没有执行它")
         #expect(try await store.card(forMac.id)?.piSessionID == nil, "还没送达，这一步还没绑上")
         await #expect(throws: CueStoreError.turnSourceUnconfirmed("atlas")) { try await store.startLeaf(forCue.id, host: TestApp.hostID, cue: true) }
         #expect(try await store.deliveryRequests().map(\.id) == [mac.id], "Cue 被退回时什么都没写")

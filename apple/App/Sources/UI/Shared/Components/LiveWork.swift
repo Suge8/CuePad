@@ -6,7 +6,7 @@ extension Workspace {
     var liveWork: [SessionState] {
         let sessions = services.liveSessions
         #if os(macOS)
-        let live = services.pi.sessions.compactMap {
+        let live = services.bridge.sessions.compactMap {
             SessionState.live($0, hostID: services.hostID, projectID: sendState.projects[$0.id], recap: sessions.recaps[$0.sessionID])
         }
         #else

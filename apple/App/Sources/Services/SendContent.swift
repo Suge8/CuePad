@@ -10,12 +10,12 @@ nonisolated struct SendContent: Sendable {
 }
 
 #if os(macOS)
-import CuePi
+import CueBridge
 import CueStore
 
 extension SendContent {
     /// 原图与类型交给 Agent、由它自行缩放；图不在本机或认不出格式抛 `SendError.attachmentUnavailable`。
-    func piImages(from files: AttachmentFiles) throws -> [MessageImage] {
+    func messageImages(from files: AttachmentFiles) throws -> [MessageImage] {
         try tokens.compactMap { token -> MessageImage? in
             guard case .image(let key) = token else { return nil }
             guard let url = files.fileURL(for: key), let data = try? Data(contentsOf: url), let mimeType = ImageFiles.mimeType(of: data) else {

@@ -5,7 +5,7 @@ import CueStore
 import Foundation
 import Testing
 @testable import CuePad
-@testable import CuePi
+@testable import CueBridge
 
 @Suite(.releasesLibraries)
 struct QuotaFlowTests {
@@ -34,8 +34,8 @@ struct QuotaFlowTests {
     @Test func 额度失败与过期不变满_换授权不继承旧观测() async throws {
         let app = TestApp()
         let services = app.services!
-        let changes = services.pi.changes()
-        services.follow(reporting: { .syncUnavailable(String(describing: $0)) }) { try await services.consumePiChanges(changes) }
+        let changes = services.bridge.changes()
+        services.follow(reporting: { .syncUnavailable(String(describing: $0)) }) { try await services.consumeSessionChanges(changes) }
         defer { services.cancelBackgroundWork() }
         let ext = try await app.host.connect("quota", cwd: "/work/quota")
         ext.onCommand = { [weak ext] _, command in

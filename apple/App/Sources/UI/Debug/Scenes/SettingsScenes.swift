@@ -1,7 +1,7 @@
 #if DEBUG
 #if os(macOS)
 import AppKit
-import CuePi
+import CueBridge
 #endif
 
 extension DebugSceneEntry {
@@ -42,9 +42,9 @@ extension DebugSceneEntry {
     /// updatewait：托管的 Pi 在干活时检查更新——它撑得过重启，更新不等它、直接装（演示更新器打一个点）。托管的会话由 socket 目录里的假扩展连上来，连上后检查一次。
     static let updateWait = DebugSceneEntry("updatewait") { workspace, _ in
         await DebugScene.connectAgents(workspace.services)
-        let pi = workspace.services.pi
-        let busy = { pi.sessions.contains { $0.hosted && $0.state.hasPendingWork } }
-        if !busy() { for await _ in pi.changes() where busy() { break } }
+        let bridge = workspace.services.bridge
+        let busy = { bridge.sessions.contains { $0.hosted && $0.state.hasPendingWork } }
+        if !busy() { for await _ in bridge.changes() where busy() { break } }
         workspace.services.updates.checkForUpdates()
         SettingsPane.open(.general)
         DebugScene.mainWindow?.animationBehavior = .none

@@ -1,5 +1,5 @@
 #if os(macOS)
-import CuePi
+import CueBridge
 import CueStore
 import CueText
 import Foundation
@@ -17,7 +17,7 @@ struct AgentTarget: Equatable {
 final class SendState {
     /// `ended`：不在线的会话（已结束的，或托管着、进程歇着的），发送时由它所在那台 Mac 的执行器在后台唤醒。
     enum Route {
-        case local(CuePi.Session)
+        case local(CueBridge.Session)
         case remote(SessionState)
         case ended(host: String?)
     }
@@ -32,7 +32,7 @@ final class SendState {
 
     func refreshSessionProjects() async throws {
         var result: [String: UUID] = [:]
-        for slot in services.pi.slots {
+        for slot in services.bridge.slots {
             if let project = try await services.store.project(containing: slot.cwd) { result[slot.id] = project.id }
         }
         projects = result
@@ -62,8 +62,8 @@ final class SendState {
             ?? services.liveSessions.recentlyEnded.first { $0.sessionID == sessionID }?.title ?? "Agent"
     }
 
-    private func liveSession(_ sessionID: String) -> CuePi.Session? {
-        services.pi.session(sessionID: sessionID)
+    private func liveSession(_ sessionID: String) -> CueBridge.Session? {
+        services.bridge.session(sessionID: sessionID)
     }
 
     /// 正文原样写：收不了图片的会话由 Mac 交出时把图片写成路径（`MacExecutor`）。提示只说写出了，到哪了看任务那一行。

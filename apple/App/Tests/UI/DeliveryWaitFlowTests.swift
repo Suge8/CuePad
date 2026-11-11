@@ -26,7 +26,7 @@ struct DeliveryWaitFlowTests {
         try await services.executor.start()
         defer {
             atlas.close(bye: "quit")
-            app.pi.stop()
+            app.bridge.stop()
             services.cancelBackgroundWork()
         }
 
@@ -48,7 +48,7 @@ extension UpgradePreparationTests {
         let clock = ManualTiming()
         let app = TestApp(timing: clock.timing), store = app.services.store
         let (target, old) = try await oldSession(app)
-        defer { old.crash(); app.pi.stop(); app.services.cancelBackgroundWork() }
+        defer { old.crash(); app.bridge.stop(); app.services.cancelBackgroundWork() }
         let workspace = Workspace(services: app.services)
         let request = try await workspace.said(ComposerDraft(text: "排到期了的一句"), to: target, mode: .send)
         try await app.services.executor.start()
@@ -59,7 +59,7 @@ extension UpgradePreparationTests {
         blocker.onCommand = { _, command in command["t"] as? String == "send" ? nil : ["ok": true] }
         let recorder = try await app.runtimeRecorder(on: TestApp.hostID)
         try await recorder.update(sessionID: blocker.sessionID, state: .settled)
-        let blockingTarget = try #require(try await store.allPiSessionStates().first { $0.sessionID == blocker.sessionID })
+        let blockingTarget = try #require(try await store.allSessionStates().first { $0.sessionID == blocker.sessionID })
         _ = try await workspace.said(ComposerDraft(text: "在另一处等ACK"), to: blockingTarget, mode: .send)
         try await eventually("另一处已接手") { blocker.messages.count == 1 }
 

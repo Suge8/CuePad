@@ -15,7 +15,7 @@ struct PhoneVoiceHost<Content: View>: View {
         let ids = phone.recordIDs
         content(PhoneVoiceViewState(phone: phone, records: records, shown: { workspace.shownInHeader($0.state, delivery: nil) }), workspace.performPhoneVoice)
             .observing(workspace.services.store, id: ids, into: $records, onError: workspace.fail) { store in
-                try PhoneVoiceRecords(messages: store.cueMessages(ids.messages), executions: store.piSessions(sessionIDs: ids.sessions))
+                try PhoneVoiceRecords(messages: store.cueMessages(ids.messages), executions: store.sessionItems(sessionIDs: ids.sessions))
             }
     }
 }

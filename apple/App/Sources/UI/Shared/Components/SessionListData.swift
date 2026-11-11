@@ -36,8 +36,8 @@ nonisolated struct SessionListData: Sendable, Equatable {
             let ended = try earlier(SessionQuery(text: text, project: project, limit: historyLimit), at: moment, from: store)
             return SessionListData(filter: Filter(text: text, project: project), pinned: [], now: [], ended: ended.items, endedTotal: ended.total)
         }
-        let pinned = try store.piSessionPage(SessionQuery(scope: .all, text: text, project: project, pinned: true, limit: .max)).items
-        let live = try store.piSessionPage(SessionQuery(scope: .current, text: text, project: project, pinned: false, limit: .max)).items
+        let pinned = try store.sessionPage(SessionQuery(scope: .all, text: text, project: project, pinned: true, limit: .max)).items
+        let live = try store.sessionPage(SessionQuery(scope: .current, text: text, project: project, pinned: false, limit: .max)).items
             .filter { $0.isCurrent(at: moment) }
         let deliveries = Dictionary(live.compactMap { item in item.delivery.map { (item.state.sessionID, $0) } }) { first, _ in first }
         let now = SessionState.inListOrder(live, state: \.state, deliveries: deliveries, cue: try store.cueDuty(), at: moment)
@@ -54,8 +54,8 @@ nonisolated struct SessionListData: Sendable, Equatable {
     static func earlier(_ query: SessionQuery, at moment: Speech.Moment, from store: isolated CueStore) throws -> SessionListPage {
         var query = query
         query.scope = .ended
-        query.excluding = try store.piSessionPage(.current).items
+        query.excluding = try store.sessionPage(.current).items
             .filter { $0.state.state == .known(.ended) && $0.isCurrent(at: moment) }.map(\.state.sessionID)
-        return try store.piSessionPage(query)
+        return try store.sessionPage(query)
     }
 }

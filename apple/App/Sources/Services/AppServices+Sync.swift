@@ -81,9 +81,9 @@ extension AppServices {
         #if os(macOS)
         DebugHooks.pollsLikePhone
             ? .phone(hasOpenDeliveries: hasOpenDeliveries, isWatching: true, doorbell: doorbellFallback)
-            : .mac(waiting: hasOpenDeliveries || !pi.slots.isEmpty || cue.onDuty, doorbell: doorbellFallback)
+            : .mac(waiting: hasOpenDeliveries || !bridge.slots.isEmpty || cue.onDuty, doorbell: doorbellFallback)
         #else
-        .phone(hasOpenDeliveries: hasOpenDeliveries, isWatching: piViewers > 0 || cueViewers > 0, doorbell: doorbellFallback)
+        .phone(hasOpenDeliveries: hasOpenDeliveries, isWatching: sessionViewers > 0 || cueViewers > 0, doorbell: doorbellFallback)
         #endif
     }
 
@@ -168,7 +168,7 @@ extension AppServices {
     }
 
     /// 只有要当场生效的请求（停止、改名、补对话）看它。说的话不看：写下就排着，恢复后自动发出。
-    var reachesPiHost: Bool {
+    var reachesHost: Bool {
         #if os(iOS)
         speech.reachableSince != nil  // 演示 Mac 在本机库里接手时一直算通（`SpeechClock`）
         #else

@@ -4,7 +4,7 @@ import CueTestSupport
 import Foundation
 import Testing
 @testable import CuePad
-@testable import CuePi
+@testable import CueBridge
 @testable import CueStore
 
 @MainActor
@@ -54,10 +54,10 @@ struct DeliveryControlTests {
             if kind == "end" { ext?.closeAfterReply(bye: "quit") }
             return ["ok": true]
         }
-        defer { ext.close(bye: "quit"); app.pi.stop(); app.services.cancelBackgroundWork() }
+        defer { ext.close(bye: "quit"); app.bridge.stop(); app.services.cancelBackgroundWork() }
         let recorder = try await app.runtimeRecorder(on: TestApp.hostID)
         try await recorder.update(sessionID: "atlas", state: .error, detail: "fetch failed", failure: .network)
-        let session = try #require(try await store.allPiSessionStates().first)
+        let session = try #require(try await store.allSessionStates().first)
         let workspace = Workspace(services: app.services)
         if mode == .retry { await workspace.retry(session).value } else { await workspace.end(session) }
         let first = try #require(try await store.deliveryRequests().first)
@@ -77,7 +77,7 @@ struct DeliveryControlTests {
         let second = try #require(try await store.deliveryRequests().first { $0.id != first.id })
         #expect(try await store.outcome(of: second).status == .known(.succeeded))
         #expect(try await store.deliveryRequest(first.id)?.status == .known(mode == .end ? .succeeded : .unconfirmed))
-        if mode == .end { #expect(app.pi.session(sessionID: "atlas") == nil) }
+        if mode == .end { #expect(app.bridge.session(sessionID: "atlas") == nil) }
         #expect(ext.received.filter { $0 == mode.rawValue }.count == 2)
         await app.services.executor.beginStop()()
     }

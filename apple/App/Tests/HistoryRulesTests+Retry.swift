@@ -1,5 +1,5 @@
 #if os(macOS)
-import CuePi
+import CueBridge
 import CueStore
 import Foundation
 import Testing
@@ -18,11 +18,11 @@ extension HistoryRulesTests {
         try await eventually("出错") { try await rig.records(.live).first?.state == .known(.error) }
         let failed = try #require(try await rig.records(.live).first)
         #expect(failed.canRetry)
-        try await eventually("对话里只有你的话") { try await rig.store.piMessages(of: sessionID).map(\.text) == [prompt] }
+        try await eventually("对话里只有你的话") { try await rig.store.chatMessages(of: sessionID).map(\.text) == [prompt] }
 
         workspace.retry(failed)
 
-        try await eventually("重跑做完") { try await rig.store.piMessages(of: sessionID).map(\.text) == [prompt, "ECHO \(prompt)"] }
+        try await eventually("重跑做完") { try await rig.store.chatMessages(of: sessionID).map(\.text) == [prompt, "ECHO \(prompt)"] }
         try await eventually("歇下") { try await rig.records(.live).first?.state == .known(.settled) }
         #expect(try RawDB(rig.services.location.databaseURL).count("sendRecords") == 1)
     }

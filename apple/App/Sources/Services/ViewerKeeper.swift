@@ -133,7 +133,7 @@ nonisolated final class ViewerKeeper: Sendable {
     private func record(in store: isolated CueStore) throws -> UUID? {
         let viewing = state.withLock { $0.viewing }
         let sessionIDs = try viewing.sessions.compactMap { page in
-            try page.sessionID ?? store.piSessionPage(SessionQuery(id: page.id)).items.first?.state.sessionID
+            try page.sessionID ?? store.sessionPage(SessionQuery(id: page.id)).items.first?.state.sessionID
         }
         return try store.recordViewing(device: device, sessionIDs: Set(sessionIDs), cue: viewing.cue)
     }

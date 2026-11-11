@@ -16,7 +16,7 @@ nonisolated enum SendError: Error, Equatable {
     /// 问题只能在 Pi 里回答（多行编辑、自定义界面）。
     case unanswerable
     /// 这台 Mac 上找不到这个会话的会话文件（被删了，或不是这台 Mac 上的会话）。
-    case piSessionNotOnThisMac
+    case sessionFileMissing
     /// 手机请这台 Mac 绑成另一个项目的目录，而那个项目还没有绑定文件夹。
     case noCodeDirectory(String)
     case projectNotHere
@@ -38,7 +38,7 @@ extension SendError: ShownError {
         case .noAgent(true, let why): "这台 Mac 上开不了会话：\(why)"
         case .noAgent(false, let why): "那台 Mac 上开不了会话：\(why)"
         case .unanswerable: "这个问题只能在 Mac 终端里的 Agent 那边回答"
-        case .piSessionNotOnThisMac: "这台 Mac 上找不到这个会话（会话文件可能已被删除）"
+        case .sessionFileMissing: "这台 Mac 上找不到这个会话（会话文件可能已被删除）"
         case .noCodeDirectory(let project): "项目「\(project)」还没有绑定文件夹，不知道目录在哪"
         case .projectNotHere: "这个项目还没同步到这台 Mac，稍后再开"
         case .directoryMissing(let folder): "目录不存在：\(folder)"

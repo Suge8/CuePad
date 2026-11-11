@@ -4,7 +4,7 @@ import CueTestSupport
 import Foundation
 import Testing
 @testable import CuePad
-@testable import CuePi
+@testable import CueBridge
 
 /// 各家的目录都在临时目录里（`TestApp.agentHomes`）。
 @MainActor

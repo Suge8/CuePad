@@ -1,6 +1,6 @@
 #if os(macOS)
 import CueAgent
-import CuePi
+import CueBridge
 import CueStore
 import CueText
 import Foundation
@@ -156,7 +156,7 @@ extension CueKeeper {
         let contents = pending.filter { $0.author == .known(.you) && CueFormat.hasAttachments($0.text) }.map { SendContent(stored: $0.text) }
         guard !contents.isEmpty else { return [] }
         do {
-            return try contents.flatMap { try $0.piImages(from: store.files) }
+            return try contents.flatMap { try $0.messageImages(from: store.files) }
         } catch {
             await say(.cue, ShownText("你发的图没能交给我：\(ShownText(error).embedded)"))
             return []

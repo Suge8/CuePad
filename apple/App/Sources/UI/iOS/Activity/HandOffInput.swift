@@ -88,7 +88,7 @@ struct HandOffInput: View {
             let opening = try store.opening(of: plan.leaf, true)
             guard case .session(let id, _, _) = plan.destination else { return Planned(plan: plan, fresh: plan, opening: opening) }
             return Planned(
-                plan: plan, bound: try store.piSessions(sessionIDs: [id])[id], fresh: try store.handOffPlan(card, host: nil, fresh: true), opening: opening)
+                plan: plan, bound: try store.sessionItems(sessionIDs: [id])[id], fresh: try store.handOffPlan(card, host: nil, fresh: true), opening: opening)
         }
         // 改模型、思考强度的请求与目录记录不在会话列表那一页里：只读选中的那个（会话变了就带着新的会话状态重读）
         .observing(services.store, id: chosenLive, into: $digest, onError: workspace.fail) { [session = chosenLive] store in

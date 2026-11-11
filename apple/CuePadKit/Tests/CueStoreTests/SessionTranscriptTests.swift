@@ -15,17 +15,17 @@ import Testing
     let now = Date.now
     let longAgo = now.addingTimeInterval(-30 * 86_400)
     for (id, activity) in [("quiet", longAgo), ("active", now.addingTimeInterval(7 * 86_400))] {
-      try await store.upsertPiSession(IndexedSession(id: id, path: "/s/\(id).jsonl", cwd: "/w", lastActivityAt: activity), host: "mac")
+      try await store.upsertSession(IndexedSession(id: id, path: "/s/\(id).jsonl", cwd: "/w", lastActivityAt: activity), host: "mac")
       // 两个会话的消息都很旧：active 只是之后没有新消息，文件里仍有别的活动
-      try await store.writePiTranscript(SessionTranscript(sessionID: id, messages: [message(id, id, at: longAgo)], recap: Recap()))
+      try await store.writeTranscript(SessionTranscript(sessionID: id, messages: [message(id, id, at: longAgo)], recap: Recap()))
     }
 
-    try await store.prunePiMessages(olderThan: 7 * 86_400, now: now)
-    #expect(try await store.piMessages(of: "quiet").count == 1)  // 刚补写的：留着
+    try await store.pruneMessages(olderThan: 7 * 86_400, now: now)
+    #expect(try await store.chatMessages(of: "quiet").count == 1)  // 刚补写的：留着
 
-    try await store.prunePiMessages(olderThan: 7 * 86_400, now: now.addingTimeInterval(8 * 86_400))
-    #expect(try await store.piMessages(of: "quiet").isEmpty)
-    #expect(try await store.piMessages(of: "active").count == 1)  // 会话还在活动：消息再旧也留着
+    try await store.pruneMessages(olderThan: 7 * 86_400, now: now.addingTimeInterval(8 * 86_400))
+    #expect(try await store.chatMessages(of: "quiet").isEmpty)
+    #expect(try await store.chatMessages(of: "active").count == 1)  // 会话还在活动：消息再旧也留着
   }
 
   @Test func imagesInMessagesAreRegisteredAndReclaimedWithTheConversation() async throws {
@@ -34,13 +34,13 @@ import Testing
     let only = try store.files.store(pngData(width: 8, height: 8, shade: 0.1))
     let shared = try store.files.store(pngData(width: 8, height: 8, shade: 0.9))
     _ = try await store.createCard(body: CueFormat.imageMarkup(key: shared))
-    try await store.upsertPiSession(IndexedSession(id: "s", path: "/s/s.jsonl", cwd: "/w", lastActivityAt: longAgo), host: "mac")
+    try await store.upsertSession(IndexedSession(id: "s", path: "/s/s.jsonl", cwd: "/w", lastActivityAt: longAgo), host: "mac")
     let text = "看\n\(CueFormat.imageMarkup(key: only))\n\(CueFormat.imageMarkup(key: shared))"
-    try await store.writePiTranscript(
+    try await store.writeTranscript(
       SessionTranscript(sessionID: "s", messages: [ChatMessage(sessionID: "s", entryID: "u", seq: 1, role: .user, text: text, at: longAgo)], recap: Recap()))
     #expect(try await store.hasAttachment(only))
 
-    try await store.prunePiMessages(olderThan: 7 * 86_400, now: now.addingTimeInterval(8 * 86_400))
+    try await store.pruneMessages(olderThan: 7 * 86_400, now: now.addingTimeInterval(8 * 86_400))
 
     let cached = { (key: String) in FileManager.default.fileExists(atPath: store.files.directory.appending(path: key).path) }
     #expect(try await !store.hasAttachment(only) && !cached(only))

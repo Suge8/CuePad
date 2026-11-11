@@ -31,7 +31,7 @@ struct ReplyTests {
         let preferences = TempDefaults()
         let app = TestApp()
         try await StateRecorder(store: app.services.store, hostID: "mac").update(sessionID: "s", state: .tool, title: "s")
-        let session = try #require(try await app.services.store.piSessionPage(.live).items.first?.state)
+        let session = try #require(try await app.services.store.sessionPage(.live).items.first?.state)
         let settings = settings(preferences)
         var draft = settings.replyDraft(for: session.id)
         draft.text = "按这个改"

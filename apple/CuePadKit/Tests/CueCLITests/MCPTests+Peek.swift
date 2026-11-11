@@ -11,7 +11,7 @@ extension MCPTests {
     try await store.linkCard(task.id, toSession: "s1")
     try await StateRecorder(store: store, hostID: "mac").update(sessionID: "s1", state: .settled, title: "跑测试")
     let older = String(repeating: "旧", count: 500), output = "结论：全部通过\n" + String(repeating: "过", count: 4500) + "\n证据：退出码 0"
-    try await store.writePiTranscript(SessionTranscript(
+    try await store.writeTranscript(SessionTranscript(
       sessionID: "s1",
       messages: [
         ChatMessage(sessionID: "s1", entryID: "1", seq: 1, role: .user, text: "跑一遍", at: .now),
@@ -37,7 +37,7 @@ extension MCPTests {
     for step in [first, second] { try await store.linkCard(step.id, toSession: "s1") }
     _ = try await store.completeTask(first.id)
     try await StateRecorder(store: store, hostID: "mac").update(sessionID: "s1", state: .settled, title: "查死链")
-    try await store.writePiTranscript(SessionTranscript(
+    try await store.writeTranscript(SessionTranscript(
       sessionID: "s1",
       messages: [
         ChatMessage(sessionID: "s1", entryID: "1", seq: 1, role: .user, text: "查首页", at: .now),

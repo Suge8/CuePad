@@ -1,6 +1,6 @@
 #if os(macOS)
 import CueStore
-@testable import CuePi
+@testable import CueBridge
 import Foundation
 import Testing
 @testable import CuePad
@@ -43,7 +43,7 @@ struct HistoryPersistenceTests {
     @Test func 回填完成后_不在会话列表里的旧行被删除() async throws {
         let rig = TestApp()
         let file = try sessionFile(in: rig, lines: [header, firstPrompt])
-        try await rig.services.store.upsertPiSession(IndexedSession(
+        try await rig.services.store.upsertSession(IndexedSession(
             id: "worker-1", path: "/gone/--work-x--/subagents/w.jsonl", cwd: "/work/x", title: "子任务", lastActivityAt: .now), host: TestApp.hostID)
         let events = AsyncStream<HistoryEvent> { continuation in
             continuation.yield(.updated(try! History.index(file: file, agent: .pi, from: nil, files: rig.services.store.files)))
@@ -51,9 +51,9 @@ struct HistoryPersistenceTests {
             continuation.finish()
         }
 
-        await rig.services.consumePiHistory(events, agent: .pi)
+        await rig.services.consumeHistory(events, agent: .pi)
 
-        #expect(try await rig.services.store.piSessions().map(\.id) == ["sess-1"])
+        #expect(try await rig.services.store.indexedSessions().map(\.id) == ["sess-1"])
     }
 }
 
@@ -130,26 +130,26 @@ struct AgentIndexingTests {
         try claudeSession(in: rig, id: hosted)
         try claudeSession(in: rig, id: terminal)
         let services: AppServices = rig.services, store = services.store
-        try await services.piStateRecorder.update(sessionID: hosted, state: .settled, launchToken: "launch-1", hosted: true, agent: .claudeCode)
-        try await services.piStateRecorder.end(sessionID: hosted)
+        try await services.stateRecorder.update(sessionID: hosted, state: .settled, launchToken: "launch-1", hosted: true, agent: .claudeCode)
+        try await services.stateRecorder.end(sessionID: hosted)
         services.start()
         defer { services.cancelBackgroundWork() }
         func indexed(_ ids: Set<String>) async throws {
-            _ = try await eventually(store, { Set(try $0.piSessions().filter { $0.agent == .claudeCode }.map(\.id)) }) { $0 == ids }
+            _ = try await eventually(store, { Set(try $0.indexedSessions().filter { $0.agent == .claudeCode }.map(\.id)) }) { $0 == ids }
         }
 
-        let said = try await eventually(store, { try $0.piMessages(of: hosted).map(\.text) }) { !$0.isEmpty }
+        let said = try await eventually(store, { try $0.chatMessages(of: hosted).map(\.text) }) { !$0.isEmpty }
         #expect(said == ["修一下登录", "修好了"])
         #expect(services.agents.status(.claudeCode)?.isConnected == false)
-        #expect(try await Set(store.piSessions().filter { $0.agent == .claudeCode }.map(\.id)) == [hosted])
+        #expect(try await Set(store.indexedSessions().filter { $0.agent == .claudeCode }.map(\.id)) == [hosted])
 
         try await rig.connect(.claudeCode)
         try await indexed([hosted, terminal])
-        #expect(try await store.allPiSessionStates().contains { $0.sessionID == terminal })
+        #expect(try await store.allSessionStates().contains { $0.sessionID == terminal })
 
         try await services.agents.uninstall(.claudeCode)
         try await indexed([hosted])
-        #expect(try await store.allPiSessionStates().contains { $0.sessionID == terminal }, "同步出去的会话记录不动")
+        #expect(try await store.allSessionStates().contains { $0.sessionID == terminal }, "同步出去的会话记录不动")
 
         try await services.agents.install(.claudeCode)
         try await indexed([hosted, terminal])

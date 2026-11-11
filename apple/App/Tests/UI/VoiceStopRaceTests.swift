@@ -5,7 +5,7 @@ import Darwin
 import Foundation
 import Testing
 @testable import CuePad
-@testable import CuePi
+@testable import CueBridge
 
 /// 用户验收：真实 Pi 与桥扩展执行隔离 Python 工具；只替换语音媒体与付费模型。
 /// A 停止排队后，终端或同一通话开 B；旧停止必须明确结束而 B 的真实进程继续活着。
@@ -33,9 +33,9 @@ struct VoiceStopRaceTests {
     }
 
     private func exercise(_ next: String, rig: CueHostTests.Rig, voice: VoiceFlowFixture, process: ChildProcess) async throws {
-        try await eventually("真实 Pi 连上窗口使用的桥") { rig.app.pi.sessions.contains { $0.pid == process.pid } }
-        let session = try #require(rig.app.pi.sessions.first { $0.pid == process.pid })
-        try await eventually("真实会话进库") { try await rig.store.allPiSessionStates().contains { $0.sessionID == session.sessionID } }
+        try await eventually("真实 Pi 连上窗口使用的桥") { rig.app.bridge.sessions.contains { $0.pid == process.pid } }
+        let session = try #require(rig.app.bridge.sessions.first { $0.pid == process.pid })
+        try await eventually("真实会话进库") { try await rig.store.allSessionStates().contains { $0.sessionID == session.sessionID } }
         try await voice.connect()
         let first = work("A", in: rig)
         _ = try await voice.handoff("请对隔离会话说「\(first)」")
@@ -57,14 +57,14 @@ struct VoiceStopRaceTests {
                 }
                 let request = try #require(try await rig.store.deliveryRequests(toSession: session.sessionID).last { $0.content == second })
                 // 另一客户端先交出 B；停止仍留在本机队列。真实消息回执负责确认这条投送，不能靠重投探测。
-                try await rig.app.pi.send(SessionMessage(text: second, deliveryID: request.id.uuidString), to: session.id)
+                try await rig.app.bridge.send(SessionMessage(text: second, deliveryID: request.id.uuidString), to: session.id)
                 try await eventually("B 的工具归属与真实消息已关联") {
                     try await rig.store.outcome(of: request).status == .known(.succeeded)
                         && voice.workspace.voiceExecutions.contains { $0.state.sessionID == session.sessionID }
                 }
             } else {
                 // 另一个客户端发新用户消息，没有 Cue 的投送身份。
-                try await rig.app.pi.send(SessionMessage(text: second), to: session.id)
+                try await rig.app.bridge.send(SessionMessage(text: second), to: session.id)
             }
             try await eventually("B 的真实工具开始工作") { FileManager.default.fileExists(atPath: rig.folder.appending(path: "B.pid").path) }
             b = try pid("B", in: rig)

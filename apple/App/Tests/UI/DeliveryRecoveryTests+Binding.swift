@@ -3,7 +3,7 @@ import CueTestSupport
 import Foundation
 import Testing
 @testable import CuePad
-@testable import CuePi
+@testable import CueBridge
 @testable import CueStore
 
 extension DeliveryRecoveryTests {
@@ -11,7 +11,7 @@ extension DeliveryRecoveryTests {
     func 手机明确关联之后_另一台Mac的旧ACK与卡片云回声不能抢回(unbind: Bool) async throws {
         let mac = TestApp(), phone = TestApp(host: "phone")
         let store = mac.services.store, remote = phone.services.store
-        defer { mac.pi.stop(); mac.services.cancelBackgroundWork(); phone.services.cancelBackgroundWork() }
+        defer { mac.bridge.stop(); mac.services.cancelBackgroundWork(); phone.services.cancelBackgroundWork() }
         let ext = try await mac.host.connect("old-session", cwd: mac.directory.path)
         defer { ext.close(bye: "quit") }
         ext.onCommand = { _, command in command["t"] as? String == "send" ? nil : ["ok": true] }
@@ -55,7 +55,7 @@ extension DeliveryRecoveryTests {
     @Test func 同一关联意图_正文编辑与送达乱序重放后两端收敛() async throws {
         let mac = TestApp(), phone = TestApp(host: "phone")
         let store = mac.services.store, remote = phone.services.store
-        defer { mac.pi.stop(); mac.services.cancelBackgroundWork(); phone.services.cancelBackgroundWork() }
+        defer { mac.bridge.stop(); mac.services.cancelBackgroundWork(); phone.services.cancelBackgroundWork() }
         let ext = try await mac.host.connect("audit-session", cwd: mac.directory.path)
         defer { ext.close(bye: "quit") }
         ext.onCommand = { _, command in command["t"] as? String == "send" ? nil : ["ok": true] }

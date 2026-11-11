@@ -4,7 +4,7 @@ import CueTestSupport
 import Foundation
 import Testing
 @testable import CuePad
-@testable import CuePi
+@testable import CueBridge
 
 extension AgentLibraryTests {
     @Test func 去重只留一份_格式不对的照列出来_都能撤销() async throws {

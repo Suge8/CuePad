@@ -1,6 +1,6 @@
 import Foundation
 
-/// 该整理的一件（`AgentLibrary.tidies`），只在有问题时出现。判定规则在 CuePi 的 `LibrarySkillScan`、`LibraryInstructionScan`。不弹确认，移走的进系统废纸篓，本机做完给一条可撤销的提示。
+/// 该整理的一件（`AgentLibrary.tidies`），只在有问题时出现。判定规则在 CueBridge 的 `LibrarySkillScan`、`LibraryInstructionScan`。不弹确认，移走的进系统废纸篓，本机做完给一条可撤销的提示。
 /// `id` 由种类推出，重扫后不变；整理请求（`TidyOrder`）按它指认，照执行时的文件做（那时多出来的同类问题一并做），那件已不在就不做（一件都不在时 `AgentLibraryError.tidyGone`）。
 public struct LibraryTidy: Codable, Equatable, Sendable, Identifiable {
   public let id: String

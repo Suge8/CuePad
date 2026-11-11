@@ -1,5 +1,5 @@
 #if os(macOS)
-import CuePi
+import CueBridge
 import CueStore
 import CueTestSupport
 import Foundation
@@ -14,7 +14,7 @@ struct VoiceExecutionTests {
     @Test func Cue先提问再收尾_两条真实回复都归到原语音请求() async throws {
         let rig = try await CueHostTests.Rig()
         let fixture = VoiceFlowFixture(rig.services)
-        defer { fixture.call.hangUp(); rig.services.cancelBackgroundWork(); rig.app.pi.stop(); rig.model.stop() }
+        defer { fixture.call.hangUp(); rig.services.cancelBackgroundWork(); rig.app.bridge.stop(); rig.model.stop() }
         try await fixture.connect()
         let request = try await fixture.handoff("请问我一个问题")
         try await eventually("提问与收尾都可见") { fixture.call.replies.count == 2 }
@@ -28,7 +28,7 @@ struct VoiceExecutionTests {
     func 只停本次语音实际派出的工作_挂断不影响停止与状态回写(whileClosing: Bool) async throws {
         let rig = try await CueHostTests.Rig()
         let fixture = VoiceFlowFixture(rig.services)
-        defer { fixture.call.hangUp(); rig.services.cancelBackgroundWork(); rig.app.pi.stop(); rig.model.stop() }
+        defer { fixture.call.hangUp(); rig.services.cancelBackgroundWork(); rig.app.bridge.stop(); rig.model.stop() }
         try await fixture.connect()
         _ = try await fixture.handoff("请建个任务并开工")
         try await eventually("语音确实经 Cue 建卡开会话") { !rig.app.host.extensions.isEmpty }
@@ -68,7 +68,7 @@ struct VoiceExecutionTests {
     @Test func 别处开启新回合后_语音历史不能再授权停止该会话() async throws {
         let rig = try await CueHostTests.Rig()
         let fixture = VoiceFlowFixture(rig.services)
-        defer { fixture.call.hangUp(); rig.services.cancelBackgroundWork(); rig.app.pi.stop(); rig.model.stop() }
+        defer { fixture.call.hangUp(); rig.services.cancelBackgroundWork(); rig.app.bridge.stop(); rig.model.stop() }
         try await fixture.connect()
         _ = try await fixture.handoff("请建个任务并开工")
         try await eventually("开出实际会话") { !rig.app.host.extensions.isEmpty }

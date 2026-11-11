@@ -1,11 +1,11 @@
 #if os(macOS)
-import CuePi
+import CueBridge
 import CueStore
 import SwiftUI
 
 extension SessionState {
     /// 状态记录按节流写，会落后几秒，界面读这个。摘要（问与答、这一轮已做完的步骤）不在桥上，取同步记录里的。正自己换上新扩展的（`upgrading`）桥上读不到状态，为 nil：界面照同步记录里最后一次读到的样子。
-    static func live(_ session: CuePi.Session, hostID: String, projectID: UUID?, recap: Recap?) -> SessionState? {
+    static func live(_ session: CueBridge.Session, hostID: String, projectID: UUID?, recap: Recap?) -> SessionState? {
         guard !session.upgrading else { return nil }
         return SessionState(
             id: recordID(sessionID: session.sessionID), sessionID: session.sessionID, hostID: hostID, title: session.displayName,
@@ -18,7 +18,7 @@ extension SessionState {
     }
 }
 
-extension CuePi.Session {
+extension CueBridge.Session {
     /// 跳转至少要激活终端应用，所以后台托管的与没报终端的（OpenCode 的服务）没有。
     var canJump: Bool { !hosted && terminal.bundleID != nil }
 }
@@ -28,7 +28,7 @@ extension SessionDigest {
         try read(SessionState.recordID(sessionID: sessionID), sessionID: sessionID, from: store)
     }
 
-    func live(_ session: CuePi.Session?, hostID: String, project: Project?) -> SessionDigest {
+    func live(_ session: CueBridge.Session?, hostID: String, project: Project?) -> SessionDigest {
         guard let session,
               let state = SessionState.live(
                 session, hostID: hostID, projectID: project?.id ?? self.session?.projectID, recap: self.session.map(\.recap))
@@ -55,7 +55,7 @@ struct SessionPage: View {
     @State private var secondary = false
 
     var body: some View {
-        let slot = services.pi.slot(sessionID: sessionID)
+        let slot = services.bridge.slot(sessionID: sessionID)
         let live = slot?.session
         let project = live.flatMap { workspace.catalog?.project(workspace.sendState.projects[$0.id]) }
         let digest = (stored ?? SessionDigest(session: nil, project: nil, deliveries: [])).live(live, hostID: services.hostID, project: project)
@@ -156,7 +156,7 @@ private struct SessionLink: ViewModifier {
 extension Workspace {
     /// 本机在线的会话换上桥上的实时状态（同步记录按节流写，会落后几秒）；其余原样。
     func withLiveState(_ session: SessionState) -> SessionState {
-        guard let live = services.pi.session(sessionID: session.sessionID) else { return session }
+        guard let live = services.bridge.session(sessionID: session.sessionID) else { return session }
         return .live(live, hostID: services.hostID, projectID: sendState.projects[live.id] ?? session.projectID, recap: session.recap) ?? session
     }
 
@@ -167,7 +167,7 @@ extension Workspace {
     }
 
     /// 跳到会话所在的终端；只能大致定位或失败时说一句。
-    func jumpToTerminal(_ id: CuePi.Session.ID) {
+    func jumpToTerminal(_ id: CueBridge.Session.ID) {
         Task {
             do {
                 let result = try await services.jumpToTerminal(id)

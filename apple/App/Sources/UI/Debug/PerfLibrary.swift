@@ -15,7 +15,7 @@ enum PerfLibrary {
     static let projectCount = 50
     static let cardCount = 5000
     nonisolated static let imageCount = 300
-    static let piSessionCount = 200
+    static let sessionCount = 200
     static let bigProject = "大项目"
     private static let bigProjectCards = 1200
     private static let defaultCards = 300
@@ -62,9 +62,9 @@ enum PerfLibrary {
             let name = targets[index % targets.count]
             try await store.recordSend(card.body, to: SendTarget(kind: .piSession, name: name), card: card.id)
         }
-        for index in 0..<piSessionCount {
+        for index in 0..<sessionCount {
             let cwd = index % 2 == 0 ? "\(home)Project/perf-\(index % boundProjects)" : "/Users/dev/work/repo-\(index)"
-            try await store.upsertPiSession(IndexedSession(
+            try await store.upsertSession(IndexedSession(
                 id: "perf-\(index)", path: "/tmp/perf-\(index).jsonl", cwd: cwd,
                 title: sentence(&random, chinese: index % 2 == 0, words: 3...9),
                 lastActivityAt: .now.addingTimeInterval(-Double(index) * 3_600)), host: "perf-mac")

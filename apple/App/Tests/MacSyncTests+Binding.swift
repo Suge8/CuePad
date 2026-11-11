@@ -5,7 +5,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
-@testable import CuePi
+@testable import CueBridge
 
 extension MacSyncTests {
     // 绑定由 Mac 执行（只有它有完整路径），写入只有这一条：本机的目录绑定

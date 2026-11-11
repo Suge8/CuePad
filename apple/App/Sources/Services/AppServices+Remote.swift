@@ -1,5 +1,5 @@
 #if os(macOS)
-import CuePi
+import CueBridge
 import CueStore
 import Foundation
 
@@ -10,9 +10,9 @@ extension AppServices {
         bridge.carryOver(try store.launchMac(host: host) { $0.isRunning })
     }
 
-    func consumePiChanges(_ changes: AsyncStream<SessionChange>) async throws {
-        var mirror = SessionMirror(recorder: piStateRecorder)
-        let namer = SessionNamer(bridge: pi, store: store)
+    func consumeSessionChanges(_ changes: AsyncStream<SessionChange>) async throws {
+        var mirror = SessionMirror(recorder: stateRecorder)
+        let namer = SessionNamer(bridge: bridge, store: store)
         for await change in changes {
             if let alerted = try await mirror.apply(change) {
                 // 带通知标志的写入立即上传（不阻塞后面的会话变化）：排在其余待推送后面要多等，期间状态还可能前进而把它作废

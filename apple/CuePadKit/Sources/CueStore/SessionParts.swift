@@ -1,6 +1,6 @@
 import Foundation
 
-// 会话记录上随 Pi 桥上报的几块值：弹窗、模型配置、上下文余量、斜杠命令、子代理。桥（CuePi）直接解码成这些类型，
+// 会话记录上随 Pi 桥上报的几块值：弹窗、模型配置、上下文余量、斜杠命令、子代理。桥（CueBridge）直接解码成这些类型，
 // 记录器原样写入同步记录；这里的 Codable 形状就是同步字段里 JSON 的格式（线上格式不能改）。
 
 public enum QuestionKind: String, Sendable, CaseIterable, Codable {

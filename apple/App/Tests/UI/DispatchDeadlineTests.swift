@@ -22,7 +22,7 @@ struct DispatchDeadlineTests {
         try await mac.services.executor.start()
         defer {
             atlas.close(bye: "quit")
-            mac.pi.stop()
+            mac.bridge.stop()
             for side in [mac, phone] { side.services.cancelBackgroundWork() }
         }
 

@@ -1,7 +1,7 @@
 import Foundation
 
 /// 一份 SKILL.md：开头 `---` 之间的 frontmatter 与之后的正文。读名字与说明、文件页写回（只换 name、description 与正文）都只经这里；
-/// 四家最严的格式判定在 CuePi 的扫描。
+/// 四家最严的格式判定在 CueBridge 的扫描。
 /// - 读：顶层的 `name`、`description` 按 YAML 的标量读（普通、单双引号、`|` `>` 块与跨行的折叠，`SkillDocument+YAML`）；
 ///   块写法末尾的换行不算（名字与说明是一段字，不是文件）。没有收尾 `---` 的不算 frontmatter，整份是正文。
 /// - 写：没改的那一项、其余键、注释、空行与换行符（`\r\n` 的文件写回仍是 `\r\n`）一个字节不动；改了的只换掉那个键占的几行，

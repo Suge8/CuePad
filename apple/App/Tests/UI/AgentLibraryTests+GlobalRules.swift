@@ -4,7 +4,7 @@ import CueTestSupport
 import Foundation
 import Testing
 @testable import CuePad
-@testable import CuePi
+@testable import CueBridge
 
 extension AgentLibraryTests {
     /// ~/.agents 常是一个仓库，它的 AGENTS.md 只给在那里干活的 Agent 看：不当全局规则，不并进去，也不让别家链过去。

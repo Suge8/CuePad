@@ -6,7 +6,7 @@ import CueTestSupport
 import Foundation
 import Testing
 @testable import CuePad
-@testable import CuePi
+@testable import CueBridge
 
 extension AgentLibraryTests {
     /// 这里的"手机"是第二个 Mac 进程：Mac 上的工作区只看本机的快照，手机那样读（`agentLibrary(host: nil)`）由测试自己读库。

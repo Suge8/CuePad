@@ -46,16 +46,16 @@ extension TaskFlowTests {
         default: try await workspace.complete(id)
         }
         #expect(try await store.deliveryRequests().isEmpty)
-        #expect(try await store.piSessions(sessionIDs: ["voice"])["voice"]?.state.state == .known(.thinking))
+        #expect(try await store.sessionItems(sessionIDs: ["voice"])["voice"]?.state.state == .known(.thinking))
     }
 
     #if os(macOS)
     @Test func 自己创建的会话_清理投送并重开后仍收尾_执行前新借用阻止自动结束_明确结束仍有效() async throws {
         try await rig.offersPi()
         try await store.setDirectory(rig.directory.path, for: Project.defaultID)
-        let changes = rig.pi.changes()
-        let recording = Task { try await rig.services.consumePiChanges(changes) }
-        defer { await recording.stop(); rig.pi.stop(); rig.services.cancelBackgroundWork() }
+        let changes = rig.bridge.changes()
+        let recording = Task { try await rig.services.consumeSessionChanges(changes) }
+        defer { await recording.stop(); rig.bridge.stop(); rig.services.cancelBackgroundWork() }
         try await rig.services.executor.start()
         let workspace = Workspace(services: rig.services)
         let task = try await workspace.createTask("准备发布", in: Project.defaultID)
@@ -85,7 +85,7 @@ extension TaskFlowTests {
         try await services.executor.start()
         #expect(try await services.store.outcome(of: end).status == .known(.failed))
         #expect(!ext.commands.contains { $0.json["t"] as? String == "end" })
-        let session = try #require(try await services.store.piSessions(sessionIDs: [sessionID])[sessionID]?.state)
+        let session = try #require(try await services.store.sessionItems(sessionIDs: [sessionID])[sessionID]?.state)
         await reopened.end(session)
         let explicit = try #require(try await services.store.deliveryRequests().first { $0.mode == .known(.end) && $0.id != end.id })
         #expect(try await services.store.outcome(of: explicit).status == .known(.succeeded))

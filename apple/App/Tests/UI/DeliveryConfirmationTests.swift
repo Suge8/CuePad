@@ -3,7 +3,7 @@ import CueTestSupport
 import Foundation
 import Testing
 @testable import CuePad
-@testable import CuePi
+@testable import CueBridge
 @testable import CueStore
 
 @MainActor
@@ -17,7 +17,7 @@ struct DeliveryConfirmationTests {
         ext.onCommand = { _, _ in ["ok": true] }
         let recorder = try await app.runtimeRecorder(on: TestApp.hostID)
         try await recorder.update(sessionID: id, state: .settled)
-        return (try #require(try await app.services.store.allPiSessionStates().first { $0.sessionID == id }), ext, file)
+        return (try #require(try await app.services.store.allSessionStates().first { $0.sessionID == id }), ext, file)
     }
 
     func say(_ text: String, to target: SessionState, in app: TestApp) async throws -> DeliveryRequest {
@@ -46,7 +46,7 @@ struct DeliveryConfirmationTests {
     func ACK前后真实用户消息都自动确认_不等回答_不闪未确认(beforeACK: Bool) async throws {
         let app = TestApp(), store = app.services.store
         let (target, ext, file) = try await session(app)
-        defer { ext.close(bye: "quit"); app.pi.stop(); app.services.cancelBackgroundWork() }
+        defer { ext.close(bye: "quit"); app.bridge.stop(); app.services.cancelBackgroundWork() }
         if beforeACK {
             let cwd = app.directory.path, session = target.sessionID
             ext.onCommand = { _, command in
@@ -68,7 +68,7 @@ struct DeliveryConfirmationTests {
         }
         let arrived = try await store.outcome(of: request)
         #expect(arrived.status == .known(.succeeded))
-        #expect(try await store.piMessages(of: target.sessionID).map(\.text) == ["只等我这句话落盘"])
+        #expect(try await store.chatMessages(of: target.sessionID).map(\.text) == ["只等我这句话落盘"])
         #expect(ext.messages.count == 1)
         await app.services.executor.beginStop()()
     }
@@ -80,7 +80,7 @@ struct DeliveryConfirmationTests {
         defer { gate.continuation.finish() }
         let (first, extA, _) = try await session(app)
         let (second, extB, fileB) = try await session(app)
-        defer { extA.close(bye: "quit"); extB.close(bye: "quit"); app.pi.stop(); app.services.cancelBackgroundWork() }
+        defer { extA.close(bye: "quit"); extB.close(bye: "quit"); app.bridge.stop(); app.services.cancelBackgroundWork() }
         let cwd = app.directory.path, sessionB = second.sessionID
         extB.onCommand = { _, command in
             if command["t"] as? String == "send" {
@@ -110,7 +110,7 @@ struct DeliveryConfirmationTests {
         let clock = ManualTiming()
         let mac = TestApp(timing: clock.timing), phone = TestApp(timing: clock.timing, host: "phone")
         let (target, ext, _) = try await session(mac)
-        defer { ext.close(bye: "quit"); mac.pi.stop(); mac.services.cancelBackgroundWork(); phone.services.cancelBackgroundWork() }
+        defer { ext.close(bye: "quit"); mac.bridge.stop(); mac.services.cancelBackgroundWork(); phone.services.cancelBackgroundWork() }
         let request = try await say("不依赖接收端活着", to: target, in: mac)
         try await mac.services.executor.start()
         let confirming = try await settledDispatch(request, in: mac)
@@ -120,7 +120,7 @@ struct DeliveryConfirmationTests {
         phone.services.startSpeechClock()
         let due = try #require(Speech.deadline(confirming))
         await mac.services.executor.beginStop()()
-        mac.pi.stop()
+        mac.bridge.stop()
         try await clock.waitForSleeper()
         clock.advance(.seconds(due.timeIntervalSince(clock.now) + 1))
         try await eventually("发送端自己的时钟结束等待") { phone.services.speech.now >= due }
