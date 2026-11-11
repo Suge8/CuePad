@@ -27,6 +27,7 @@ struct ChildProcessTests {
         clock.advance(AgentTimeouts.endGrace)
     }
 
+    /// 组长（外壳）收到 SIGTERM 先走了，组里不理 SIGTERM 的子进程也照样有宽限，推过宽限才 SIGKILL。
     @Test func aTimeoutEndsTheChildrenHoldingTheOutputToo() async throws {
         let marker = try makeTempDirectory().appending(path: "child.pid")
         let script = "sh -c \"trap '' TERM; echo \\$\\$ > '\(marker.path)'; sleep 30\" & wait"
@@ -37,6 +38,9 @@ struct ChildProcessTests {
         clock.advance(.seconds(1))
         guard case .timedOut = await call.value else { Issue.record("没按超时结束"); return }
         let child = try #require(pid_t(try String(contentsOf: marker, encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)))
+        try await clock.waitForSleeper()
+        #expect(kill(child, 0) == 0, "宽限之前就被强杀了")
+        clock.advance(AgentTimeouts.endGrace)
         try await eventually("子进程也结束了") { kill(child, 0) != 0 }
     }
 

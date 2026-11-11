@@ -25,6 +25,34 @@ struct RealClaudeHostTests {
         }
     }
 
+    /// 外壳不转发信号（`passThrough`）、App 退出时这一轮还在跑（关了输入 Claude Code 也不走）：宽限到点的 SIGTERM 要到 Claude Code 本人，
+    /// 它自己收拾掉收件箱 socket，不是外壳先死、它跟着被整组强杀（#155）。宽限按手动钟，拨到才发 SIGTERM。
+    @Test func aWrappedClaudeBusyAtQuitCleansUpOnSIGTERM() async throws {
+        let clock = ManualTiming()
+        try await ClaudeTestbed.run(wrapper: ClaudeTestbed.passThrough, timing: clock.timing) { testbed in
+            try testbed.startConnected()
+            testbed.on("BUSY-HANG") { _ in .stream(["Working on it"]) }
+            let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t-busy", name: nil, model: nil, thinking: nil)
+            try await testbed.bridge.send(PiMessage(text: "BUSY-HANG"), to: id)
+            try await eventually("这一轮在跑、停在模型里") {
+                testbed.model.requests.contains { $0.prompt.contains("BUSY-HANG") } && testbed.bridge.session(id: id)?.state.isWorking == true
+            }
+            let wrapper = try #require(testbed.bridge.session(id: id)).pid
+            let claude = try #require(claudeChildren(of: wrapper).first)
+            let inbox = "/tmp/cc-socks/\(claude).sock"
+            #expect(FileManager.default.fileExists(atPath: inbox), "收件箱 socket 不在 \(inbox)")
+
+            let due = clock.now.addingTimeInterval(AgentTimeouts.endGrace.seconds)
+            let quitting = Task { await testbed.runtime.stop()() }
+            try await eventually("关了输入、在等宽限") { clock.hasSleeper(until: due) }
+            #expect(kill(claude, 0) == 0, "关了输入它就走了，走不到 SIGTERM")
+            clock.advance(AgentTimeouts.endGrace)
+            try await eventually("Claude Code 收到 SIGTERM 退出") { kill(claude, 0) != 0 }
+            #expect(!FileManager.default.fileExists(atPath: inbox), "收件箱 socket 留下了：它被强杀、没能收尾")
+            await quitting.value
+        }
+    }
+
     /// 真进程起来、假模型收到了这句话与这张图，是同一条证据：回答是假模型照请求回的 ECHO。
     @Test func aNewHostedSessionTakesAMessageWithAnImage() async throws {
         try await ClaudeTestbed.run { testbed in
