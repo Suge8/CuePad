@@ -164,17 +164,16 @@ final class CodexDriver {
             }
         case "item/completed" where turn != nil:
             guard let item = params["item"] else { return }
-            let id = item["id"]?.string ?? "", failed = ["failed", "declined"].contains(item["status"]?.string)
-            switch item["type"]?.string {
-            case "mcpToolCall":
-                let error = item["error"]?["message"]?.string
-                onEvent(.toolDone(id: id, result: error ?? brainText(item["result"]?["content"]), failed: failed || error != nil))
-            case "commandExecution":
-                onEvent(.toolDone(id: id, result: item["aggregatedOutput"]?.string ?? "", failed: failed))
-            case "fileChange":
-                onEvent(.toolDone(id: id, result: "", failed: failed))
-            default: break
+            guard Self.tool(item) != nil else { return }
+            let failed = ["failed", "declined"].contains(item["status"]?.string) || item["error"]?["message"] != nil
+                || item["success"]?.bool == false || item["failure"].map { $0 != .null } == true
+            let result = switch item["type"]?.string {
+            case "mcpToolCall": item["error"]?["message"]?.string ?? brainText(item["result"]?["content"])
+            case "commandExecution": item["aggregatedOutput"]?.string ?? ""
+            case "dynamicToolCall": (item["contentItems"]?.array ?? []).compactMap { $0["text"]?.string }.joined(separator: "\n")
+            default: ""
             }
+            onEvent(.toolDone(id: item["id"]?.string ?? "", result: result, failed: failed))
         case "thread/tokenUsage/updated":
             let usage = params["tokenUsage"]
             if let input = usage?["last"]?["inputTokens"]?.int { onEvent(.context(used: input, window: usage?["modelContextWindow"]?.int)) }
@@ -183,13 +182,26 @@ final class CodexDriver {
         }
     }
 
-    /// 工具一项（命令、改文件、MCP 工具）的名字与参数；不是这几种的为 nil。命令记作 `bash`、改文件记作 `edit`（参数是第一个文件）。
+    /// 线程里不是工具的项：别的一律当工具（以后的新工具如实显示在跑，不退回思考中）。`functionCallOutput` 是工具的结果，不是又一次调用。
+    private static let notTools: Set = [
+        "userMessage", "agentMessage", "reasoning", "plan", "contextCompaction", "hookPrompt", "enteredReviewMode", "exitedReviewMode",
+        "subAgentActivity", "functionCallOutput",
+    ]
+
+    /// 工具一项的名字与参数（参数只取界面那一行要的，见 `ToolDetail.target`）；不是工具的为 nil。命令记作 `bash`、改文件记作 `edit`（参数是第一个文件），
+    /// 内置的带命名空间的工具照 Codex 自己的写法（`clock.sleep`），认不得的用项的类型名。
     static func tool(_ item: JSONValue) -> (name: String, arguments: JSONValue)? {
-        switch item["type"]?.string {
-        case "mcpToolCall": (item["tool"]?.string ?? "?", item["arguments"] ?? [:])
+        guard let type = item["type"]?.string, !notTools.contains(type) else { return nil }
+        return switch type {
+        case "mcpToolCall", "dynamicToolCall": (item["tool"]?.string ?? type, item["arguments"] ?? [:])
         case "commandExecution": ("bash", ["command": .string(item["command"]?.string ?? "")])
         case "fileChange": ("edit", ["path": item["changes"]?.array?.first?["path"] ?? .null])
-        default: nil
+        case "imageView": ("view_image", ["path": item["path"] ?? .null])
+        case "webSearch": ("web.search", ["query": item["query"] ?? .null])
+        case "sleep": ("clock.sleep", [:])
+        case "imageGeneration": ("image_gen.generation", ["description": item["revisedPrompt"] ?? .null])
+        case "collabAgentToolCall": (item["tool"]?.string ?? type, ["description": item["prompt"] ?? .null])
+        default: (type, [:])
         }
     }
 
