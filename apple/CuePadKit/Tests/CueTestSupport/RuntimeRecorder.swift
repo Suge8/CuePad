@@ -11,9 +11,9 @@ extension CueStore {
   /// （`runtimeIsConfirmed`）。
   /// 不在历史回填时调用；要演重启或离线的用例自行改在线记录。
   public func runtimeRecorder(
-    on host: String, boot: String = TestBoot.id, minInterval: Duration = PiStateRecorder.detailInterval, timing: Timing = .system
-  ) throws -> PiStateRecorder {
+    on host: String, boot: String = TestBoot.id, minInterval: Duration = StateRecorder.detailInterval, timing: Timing = .system
+  ) throws -> StateRecorder {
     _ = try recordMacPresence(host: host, bootID: boot) { true }
-    return PiStateRecorder(store: self, hostID: host, minInterval: minInterval, timing: timing, bootID: boot)
+    return StateRecorder(store: self, hostID: host, minInterval: minInterval, timing: timing, bootID: boot)
   }
 }

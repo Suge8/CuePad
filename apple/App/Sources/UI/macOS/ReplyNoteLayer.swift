@@ -4,23 +4,20 @@ import CueStore
 import SwiftUI
 
 extension View {
-    /// 会话页的批注层：在 Agent 的回答里选中一段、松开鼠标，指针下方浮出"批注"；点它就地写一句，写下的进这个会话回复框的草稿
-    /// （`AppSettings.replyNotes`），随下一句发出（`ReplyNote`）。点对话里的高亮改那一条。
-    /// 选区怎么读、为什么挂在指针处见 `SelectionWatch`。
-    func replyNotes(session: UUID, messages: [PiChatMessage]) -> some View {
+    func replyNotes(session: UUID, messages: [ChatMessage]) -> some View {
         modifier(ReplyNoteLayer(session: session, messages: messages))
     }
 }
 
 private struct ReplyNoteLayer: ViewModifier {
     let session: UUID
-    let messages: [PiChatMessage]
+    let messages: [ChatMessage]
     @Environment(AppServices.self) private var services
     @State private var watch = WatchHandle()
     @State private var prose = ProseCache()
     @State private var float: Floating?
 
-    /// 浮在对话上的那一块：选中后的"批注"钮，或正在写的那条批注（新的记下时才进草稿，回复框不在写的时候长高、把对话顶走）。
+    /// 新的批注记下时才进草稿：回复框不在写的时候长高、把对话顶走。
     enum Floating: Equatable {
         case offer(ReplyNote, at: Spot)
         case editing(ReplyNote.Edit, at: Spot)
@@ -70,14 +67,11 @@ private struct ReplyNoteLayer: ViewModifier {
         }
     }
 
-    /// 半行高（阅读字号的字高加行距）：挂点在一行字中间。
     private static let lineHalf: CGFloat = {
-        let font = NSFont.systemFont(ofSize: Typography.readingSize)
+        let font = Typography.readingFont
         return (font.ascender - font.descender + font.leading + Typography.readingLineSpacing) / 2
     }()
 
-    /// 松开鼠标后的选区：落在某条回答里就在松手那一行下面浮出"批注"，否则收起；正在写批注时不动。
-    /// 松手处常拖出了字外（行尾右边的空白、段落下面），挂点收回到那段字里最近的一行，浮层也不出这段字的左右。
     private func selectionChanged(_ selection: SelectionWatch.Selection?) {
         if case .editing = float { return }
         float = selection.flatMap { selection in
@@ -89,7 +83,6 @@ private struct ReplyNoteLayer: ViewModifier {
         }
     }
 
-    /// 选区所在的那条回答：交互视图的整段字就是某条回答的某一段可选文字（`MarkdownText.proseTexts`），从最新的往前认。
     private func note(for selection: SelectionWatch.Selection) -> ReplyNote? {
         for message in messages.reversed() where message.role == .known(.pi) {
             guard let run = prose.texts(of: message).firstIndex(of: selection.text) else { continue }
@@ -104,7 +97,6 @@ private struct ReplyNoteLayer: ViewModifier {
     }
 }
 
-/// 浮层挂在哪：`point` 是某一行字的中间（对话区里的坐标），`columns` 是浮层左右不出的范围（那段字的左右边）。
 private struct Spot: Equatable {
     var point: CGPoint
     var columns: ClosedRange<CGFloat> = -.infinity ... .infinity
@@ -118,8 +110,7 @@ private extension ReplyNoteLayer.Floating {
     }
 }
 
-/// 写一条批注：只有一行输入（原文已在对话里高亮着，不再重复）。批注一定要有字：↩ 或点别处记下；新的没写字时 ↩ 不收起、
-/// 点别处就是不要；已有的那条清空后记下就删掉。esc 放弃这次的改动。字先留在这里、记下时才写进草稿：打字时对话里的高亮与回复框不跟着重算。
+/// 字先留在这里、记下时才写进草稿：打字时对话里的高亮与回复框不跟着重算。
 /// `done` 只调一次（收起时还会失去焦点）：给字是记下，nil 是不要这条。
 private struct NoteEditor: View {
     let note: ReplyNote
@@ -157,7 +148,6 @@ private struct NoteEditor: View {
         .onChange(of: focused) { if !focused { commit() } }
     }
 
-    /// 新的一条没写字时 ↩ 不收起：批注一定要写。
     private func submit() {
         guard note.note.isEmpty, text.allSatisfy(\.isWhitespace) else { return commit() }
         focused = true
@@ -175,12 +165,10 @@ private struct NoteEditor: View {
     }
 }
 
-/// 把浮着的那一块挂在挂点那一行：默认在这一行下面（拖选多是从上往下，松手处是选区末尾，往下放不遮住选中的字），下面放不下就放到这一行上面；
-/// 左右不出那段字，也不出对话区。按它自己的理想尺寸排，不读几何。
+/// 默认在这一行下面：拖选多是从上往下，松手处是选区末尾，往下放不遮住选中的字。
 private struct Anchored: Layout {
     let spot: Spot
 
-    /// 离挂点上下各让开这么多（`ReplyNoteLayer.lineHalf` 再多一点），不压住挂点那一行。
     let gap: CGFloat
     private static let margin: CGFloat = 8
 
@@ -203,7 +191,7 @@ private struct Anchored: Layout {
 private final class ProseCache {
     private var texts: [UUID: (source: String, prose: [String])] = [:]
 
-    func texts(of message: PiChatMessage) -> [String] {
+    func texts(of message: ChatMessage) -> [String] {
         if let hit = texts[message.id], hit.source == message.text { return hit.prose }
         let prose = MarkdownText.proseTexts(message.text)
         texts[message.id] = (message.text, prose)
@@ -211,12 +199,10 @@ private final class ProseCache {
     }
 }
 
-/// 批注层拿到它垫的那层视图（点高亮时读指针位置）。
 private final class WatchHandle {
     weak var view: SelectionWatch?
 }
 
-/// 批注层每次重算都经这里把最新的回调交给 AppKit 那一侧。
 private struct WatchView: NSViewRepresentable {
     let watch: WatchHandle
     let changed: (SelectionWatch.Selection?) -> Void
@@ -230,9 +216,6 @@ private struct WatchView: NSViewRepresentable {
     func updateNSView(_ view: SelectionWatch, context: Context) { view.changed = changed }
 }
 
-/// 垫在对话区底下、与它同框的 AppKit 视图：所在窗口里松开鼠标时读一次这一下选的字，滚动或敲键时报"没有选区"（让浮着的钮让开）；
-/// 也把窗口坐标换成对话区里的坐标。整页一个，平时不做事。
-///
 /// 读选区：SwiftUI 的可选文字（`textSelection`）在 Mac 上每个 `Text` 是一个交互视图，读屏接口（公开）给出它整段的字与选区，
 /// 不经剪贴板、不碰私有类名。拖选时它不成为第一响应者，在别段选字时先前那段的选区也不清掉（macOS 26 实测），所以按下时记下各段的选区，
 /// 松开后找这一下选区变了的那段。读屏接口给不出选区的位置（量出来是零），所以浮层挂在指针处。
@@ -247,7 +230,6 @@ private final class SelectionWatch: NSView {
 
     var changed: (Selection?) -> Void = { _ in }
     private var monitor: Any?
-    /// 按下鼠标时各段的选区：松开时没变的不算这一下选的。
     private var before: [ObjectIdentifier: NSRange] = [:]
 
     override func viewDidMoveToWindow() {
@@ -280,7 +262,6 @@ private final class SelectionWatch: NSView {
         }
     }
 
-    /// 对话区里此刻选中的字：`counts` 认可的段里离窗口坐标 `point` 最近的那段；输入框（文本视图）里的不算。
     private func selection(near point: NSPoint, counts: (NSView, NSRange) -> Bool) -> Selection? {
         let candidates = texts.compactMap { view -> (Selection, CGFloat)? in
             let range = view.accessibilitySelectedTextRange()
@@ -298,7 +279,6 @@ private final class SelectionWatch: NSView {
         window?.contentView.map { Self.texts(in: $0, within: convert(bounds, to: nil)) } ?? []
     }
 
-    /// 有读屏值（字）的视图，输入框除外；只往与对话区相交的子树里找。
     private static func texts(in view: NSView, within area: NSRect) -> [NSView] {
         guard view.convert(view.bounds, to: nil).intersects(area) else { return [] }
         let own: [NSView] = !(view is NSText) && view.accessibilityValue() is String ? [view] : []

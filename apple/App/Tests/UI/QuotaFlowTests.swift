@@ -5,16 +5,16 @@ import CueStore
 import Foundation
 import Testing
 @testable import CuePad
-@testable import CuePi
+@testable import CueBridge
 
-/// #41：用户打开额度后，失败、过期与换授权不能伪装成新额度；只替换外部 bridge。
+@Suite(.releasesLibraries)
 struct QuotaFlowTests {
-    /// 菜单栏真实宿主摘下、挂回同一个视图：每次打开由额度视图自己查询，无须 AppDelegate 再发一次。
-    @Test func 菜单栏面板每次打开都刷新额度() async throws {
+    @Test
+    func 菜单栏面板每次打开都刷新额度() async throws {
         let app = TestApp(), services = app.services!
         let workspace = Workspace(services: services)
         let following = Task { await workspace.follow() }
-        defer { following.cancel(); services.cancelBackgroundWork() }
+        defer { await following.stop(); services.cancelBackgroundWork() }
         let ext = try await app.host.connect("menu-quota", cwd: "/work/quota")
         try await eventually("菜单栏资料库就绪") { workspace.isLibraryReady }
         let panel = MenuBarPanel()
@@ -34,8 +34,8 @@ struct QuotaFlowTests {
     @Test func 额度失败与过期不变满_换授权不继承旧观测() async throws {
         let app = TestApp()
         let services = app.services!
-        let changes = services.pi.changes()
-        services.follow(reporting: { .syncUnavailable(String(describing: $0)) }) { try await services.consumePiChanges(changes) }
+        let changes = services.bridge.changes()
+        services.follow(reporting: { .syncUnavailable(String(describing: $0)) }) { try await services.consumeSessionChanges(changes) }
         defer { services.cancelBackgroundWork() }
         let ext = try await app.host.connect("quota", cwd: "/work/quota")
         ext.onCommand = { [weak ext] _, command in

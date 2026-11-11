@@ -4,11 +4,11 @@ import CueTestSupport
 import Foundation
 import Testing
 @testable import CuePad
-@testable import CuePi
+@testable import CueBridge
 @testable import CueStore
 
-/// #43：一次未知不授权重投旧请求，也不能永久锁住用户明确发起的新控制意图。
 @MainActor
+@Suite(.releasesLibraries)
 struct DeliveryControlTests {
     @Test(arguments: [DeliveryMode.send, .start], [
         ("unconfirmed", false), ("unconfirmed", true), ("future-outcome", false), ("future-outcome", true),
@@ -28,10 +28,9 @@ struct DeliveryControlTests {
         let task = try await store.createTask("上传结果", under: parent.id)
         try await store.updateCueProfile { $0.hostID = host; $0.enabledAt = .now }
         let target = SendTarget(kind: .piSession, name: "发布", ref: mode == .start ? nil : "atlas")
-        let text = mode == .start ? PiLaunch(project: Project.defaultID, prompt: task.body, token: UUID().uuidString).stored : task.body
+        let text = mode == .start ? LaunchRequest(project: Project.defaultID, prompt: task.body, token: UUID().uuidString).stored : task.body
         await Workspace(services: app.services).speak(text, to: .session(target, host: host, mode: mode, card: task.id)).value
         let request = try #require(try await store.deliveryRequests().first)
-        // 写回前崩溃／丢回执：已交出的原意图留在库里，未确认不是未开工。
         try RawDB(app.services.location.databaseURL).exec(
             "UPDATE deliveryRequests SET status = '\(status)', handledBy = '\(host)', deadlineAt = createdAt - 1000 WHERE id = '\(request.id.uuidString.lowercased())'")
         let occupied = try #require(try await store.handoffRequests(for: [task.id])[task.id])
@@ -55,10 +54,10 @@ struct DeliveryControlTests {
             if kind == "end" { ext?.closeAfterReply(bye: "quit") }
             return ["ok": true]
         }
-        defer { ext.close(bye: "quit"); app.pi.stop(); app.services.cancelBackgroundWork() }
+        defer { ext.close(bye: "quit"); app.bridge.stop(); app.services.cancelBackgroundWork() }
         let recorder = try await app.runtimeRecorder(on: TestApp.hostID)
         try await recorder.update(sessionID: "atlas", state: .error, detail: "fetch failed", failure: .network)
-        let session = try #require(try await store.allPiSessionStates().first)
+        let session = try #require(try await store.allSessionStates().first)
         let workspace = Workspace(services: app.services)
         if mode == .retry { await workspace.retry(session).value } else { await workspace.end(session) }
         let first = try #require(try await store.deliveryRequests().first)
@@ -68,7 +67,7 @@ struct DeliveryControlTests {
         let uncertain = try await store.outcome(of: first)
         #expect(uncertain.status == .known(.unconfirmed))
         if mode == .retry {
-            #expect(PiDelivery.phase(of: uncertain, for: session, at: .always()) == nil)
+            #expect(DeliveryShown.phase(of: uncertain, for: session, at: .always()) == nil)
             #expect(workspace.shownInHeader(session, delivery: uncertain).status == .failed(.network))
             await workspace.retry(session).value
         } else {
@@ -77,7 +76,8 @@ struct DeliveryControlTests {
         }
         let second = try #require(try await store.deliveryRequests().first { $0.id != first.id })
         #expect(try await store.outcome(of: second).status == .known(.succeeded))
-        #expect(try await store.deliveryRequest(first.id)?.status == .known(.unconfirmed))
+        #expect(try await store.deliveryRequest(first.id)?.status == .known(mode == .end ? .succeeded : .unconfirmed))
+        if mode == .end { #expect(app.bridge.session(sessionID: "atlas") == nil) }
         #expect(ext.received.filter { $0 == mode.rawValue }.count == 2)
         await app.services.executor.beginStop()()
     }

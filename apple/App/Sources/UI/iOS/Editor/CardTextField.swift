@@ -5,13 +5,11 @@ import CueText
 import PhotosUI
 import SwiftUI
 
-/// 手机上一段正文的编辑器：键盘上方的工具栏插图（相册）、插文件（系统的文件选择器）、填变量取值；灵感的纸页与任务气泡里的正文共用。
 /// 正文的读写都经 `CardEditing`（编辑器是唯一写者）。
 struct CardTextField: View {
     let card: Card
     let editing: CardEditing
     let theme: CueEditorTheme
-    /// 高贴着字、自己不滚（`IOSEditorHost.fits`）。
     var fits = false
     @Environment(Workspace.self) private var workspace
     @State private var pickingImage = false
@@ -30,7 +28,7 @@ struct CardTextField: View {
             onVariables: { editingVariables = true },
             selectionActions: [.convertToTasks(from: card, workspace: workspace)],
             onError: workspace.fail,
-            fits: fits)
+            fits: fits, bottomInset: fits ? 0 : theme.verticalInset)
         .overlay { AttachmentSpotLayer(spot: editing.handle.spot) }
         .photosPicker(isPresented: $pickingImage, selection: $pickedImage, matching: .images)
         .onChange(of: pickedImage) { insertPicked() }
@@ -59,7 +57,6 @@ struct CardTextField: View {
     }
 }
 
-/// 变量取值：逐个填写，↩ 提交并关闭；取值存在卡片上。
 private struct VariablesSheet: View {
     let card: Card
     let names: [String]

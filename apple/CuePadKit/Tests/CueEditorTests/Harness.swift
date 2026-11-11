@@ -17,7 +17,7 @@ func makePNG(width: Int = 1600, height: Int = 1000, seed: Int = 0, color: NSColo
 }
 
 extension CueEditorTheme {
-    /// 测试用的最小主题：系统字体、固定色。App 的纸页主题在 App 里，不在这个包。
+    /// App 的纸页主题在 App 里，不在这个包。
     static let test = CueEditorTheme(
         font: .systemFont(ofSize: 15),
         headingFont: .systemFont(ofSize: 18, weight: .semibold), codeFont: .monospacedSystemFont(ofSize: 13, weight: .regular),
@@ -53,25 +53,6 @@ final class EditorHarness {
     /// 让出主线程一小段：分片布局、异步缩略图都排在主队列里，同步测试体里推进不了它们。
     func pump(_ seconds: TimeInterval = 0.05) async {
         try? await Task.sleep(for: .seconds(seconds))
-    }
-
-    /// 只含一张图片的行的布局矩形（文本视图坐标）。
-    func imageLineFrames() -> [CGRect] {
-        var frames: [CGRect] = []
-        let origin = textView.textContainerOrigin
-        textView.textLayoutManager!.enumerateTextLayoutFragments(from: nil, options: []) { fragment in
-            if (fragment.textElement as? NSTextParagraph)?.attributedString.string.trimmingCharacters(in: .newlines) == "\u{FFFC}" {
-                frames.append(fragment.layoutFragmentFrame.offsetBy(dx: origin.x, dy: origin.y))
-            }
-            return true
-        }
-        return frames
-    }
-
-    func renderedCenterColor(of rect: CGRect) -> NSColor? {
-        let rep = textView.bitmapImageRepForCachingDisplay(in: rect)!
-        textView.cacheDisplay(in: rect, to: rep)
-        return rep.colorAt(x: rep.pixelsWide / 2, y: rep.pixelsHigh / 2)?.usingColorSpace(.sRGB)
     }
 
     func privatePasteboard() -> NSPasteboard {

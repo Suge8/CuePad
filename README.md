@@ -26,12 +26,12 @@
 
 ## Why CuePad
 
-- **Cue runs your agents for you.** Say what you want, typed on the Mac or from your phone. Cue turns it into tasks, starts and names agent sessions, answers their routine questions, checks their evidence and signs off finished work. It comes back only for what can't be undone (pushing, releasing, deleting): everything waiting on you is one number, *Waiting N*, one tap each.
+- **Cue runs your agents for you.** Say what you want by typing or calling Cue on the Mac, or from your phone. Cue turns it into tasks, starts and names agent sessions, answers their routine questions, checks their evidence and signs off finished work. It comes back only for what can't be undone (pushing, releasing, deleting): everything waiting on you is one number, *Waiting N*, one tap each.
 - **On schedule.** "Every Monday at 9, clean up stale branches": a schedule can repeat and hang on a task, and Cue starts the work when it's due. If the Mac was asleep, it catches up once when it wakes.
-- **One home for skills and rules.** Skills live in `~/.agents/skills`, rules in one `AGENTS.md` for all your agents (and one per project). CuePad marks which agent can't read what and lets you edit any skill or rule right in the app, from your phone too. One tap gathers scattered skills and links Claude Code in; duplicate skills and diverging rule files are a tap away from one copy — and on the Mac, every change can be undone.
+- **One home for skills and rules.** Skills live in `~/.agents/skills`, global rules in one `~/.config/agents/AGENTS.md` that every agent's own rules file links to (until then, CuePad lists the file each agent actually reads) (and one `AGENTS.md` per project). CuePad marks which agent can't read what and lets you edit any skill or rule right in the app, from your phone too. One tap gathers scattered skills and links Claude Code in; duplicate skills and diverging rule files are a tap away from one copy — and on the Mac, every change can be undone.
 - **Every agent on one board.** Tasks move through four lanes — to do, advancing, waiting on you, done — with each session's live state next to them: thinking, running a tool, waiting, finished.
 - **Your phone is the remote.** Answer an agent's question or permission request from anywhere. Agents send you screenshots, pages, PDFs and recordings to check, each captioned with what to look at.
-- **Ideas first.** Plain Markdown with inline images and `{{variables}}`. When it's time to act, drag an idea onto a task and it joins the task's notes; every send is logged and can be resent.
+- **Ideas first.** Plain Markdown with inline images (including HTTP/HTTPS image links) and `{{variables}}`. Edit directly; the More menu shares text, original images, or the whole idea laid out as a readable image. Shared images use the idea’s title as their filename; original images are numbered. When it's time to act, drag an idea onto a task and it joins the task's notes; every send is logged and can be resent.
 - **Yours.** Everything lives in a SQLite library on your device and syncs through your own private iCloud database. No CuePad account, no telemetry. Live Activity summaries pass through a stateless relay to Apple’s push service; the relay doesn’t retain them.
 
 | | |
@@ -40,8 +40,6 @@
 | Cue reports back with proof, and asks only what needs you | Every task on one board; answer Cue in one tap |
 | <img src="design/readme/session.png" alt="Annotate any part of an agent's reply" width="400" /> | <img src="design/readme/iphone-demo.png" alt="An agent's work, previewed on the iPhone" width="400" /> |
 | Agents send you pages and screenshots; annotate any part of a reply | Check an agent's work from your phone |
-
-> The interface is in Simplified Chinese for now.
 
 ## Quick start
 
@@ -57,6 +55,12 @@ A build from source is ad-hoc signed, keeps its own library in `~/Library/Applic
 **2. Connect your agents.** On first launch CuePad finds the agents on this Mac — [Pi](https://pi.dev), Claude Code, Codex, OpenCode, Grok Build, [DeepSeek Harness](https://www.npmjs.com/package/@deepseek-ai/dsh) — and connects the ones you tick; one that's missing or signed out is one click to install or sign in. Each row says what it will write before anything is written, and turning an agent off later removes all of it. Work happens in the project's folder, `~/CuePad/<project>` unless you point it at your own code.
 
 **3. Hand off your first job.** Press `Option + Shift + Space` anywhere and tell Cue what you want, e.g. *"Add a dark mode toggle to ~/code/my-app and show me a screenshot."* Or write a task and press **Start**. Cue picks the agent, starts the session, and the result lands back in CuePad.
+
+### Call Cue
+
+With Cue enabled, choose **Call Cue** in the reply box: on the Mac it sits with the reply box's tools; on iPhone and iPad it takes the send button's place while the box is empty, and during a call the box turns into the call bar with mute and end. Calls use ChatGPT voice and require Codex to be signed in with your ChatGPT account on the Mac. On iPhone or iPad, use the same iCloud account and keep a Mac with Cue enabled online; your ChatGPT and Codex sign-in stays on the Mac. The call keeps going when you switch apps or lock your phone or iPad; a phone call or Siri taking over the audio ends it.
+
+Requests and results stay in the conversation, so you can read them during or after a call. Open call details (on iPhone and iPad, tap the call bar) to browse records, recover an original request, ask Cue to say a result again, or stop work when those actions are available. Ending the call does not stop work already handed to Cue.
 
 ## `cuepad` for your agents
 

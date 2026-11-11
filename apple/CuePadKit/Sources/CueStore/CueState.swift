@@ -1,31 +1,24 @@
 import CueText
 import Foundation
 
-/// Cue 此刻在做什么（同步，只有一行，只由它值班的那台 Mac 写）：与 Agent 会话同一套工作状态（`PiWorkState`）。
-/// 一轮里是思考（`thinking`）或调用工具（`tool`：碰到任务与会话的一步是 `step`，其余是 `detail`），一轮之间歇着（`settled`），
-/// 大脑起不来是出错（`error`，`detail` 是原因）。报告保留原值，当前断言只读 `runtimeState`：
-/// 报告所属宿主必须仍在值班、同 boot 且 lease 有效；旧报告、换宿主与历史元数据不能补签证明。
+/// 同步，只有一行，只由它值班的那台 Mac 写。报告保留原值，当前断言只读 `runtimeState`：报告所属宿主必须仍在值班、同 boot 且 lease 有效；旧报告、换宿主与历史元数据不能补签证明。
 public struct CueState: Equatable, Sendable {
-  public var state: Open<PiWorkState>
+  public var state: Open<WorkState>
   public var hostID: String?
   public var bootID: String?
   /// 读时按所属宿主、boot 与 lease 推出，不落库或同步。
   public var runtimeUntil: Date?
-  public var runtimeState: Open<PiWorkState> { runtimeUntil == nil ? .unknown("unconfirmed") : state }
-  /// 正在跑的那一步没碰任务与会话时的一句（"动作 · 目标"、看板、回想，`CueActivity.detail`）；出错时是原因
+  public var runtimeState: Open<WorkState> { runtimeUntil == nil ? .unknown("unconfirmed") : state }
   public var detail: String?
-  /// 正在跑的那一步碰到的那一处（类别与对象，与每一步记下的同一对，`CueActivity.step`）：各端按按钮动词表写成一句（`CueActivity.line`）
   public var step: CueActivity.Touch?
-  /// 在跑的这一轮的经过那一行（`CueStore.recordCueRound`）；还没调过工具、歇着时没有
   public var round: UUID?
-  /// 它这个班次的上下文（`CueContext`），值班的 Mac 随状态写；不在值班、这个班次还没请求过模型为 nil
   public var context: CueContext?
   /// 留给你回的会话（`CueLeft`，只由 `CueStore.putLeft` 写，`setCueState` 不动它）
   public var left: [CueLeft]
   public var modifiedAt: Date
 
   public init(
-    state: Open<PiWorkState>, detail: String? = nil, step: CueActivity.Touch? = nil, round: UUID? = nil, context: CueContext? = nil, left: [CueLeft] = [],
+    state: Open<WorkState>, detail: String? = nil, step: CueActivity.Touch? = nil, round: UUID? = nil, context: CueContext? = nil, left: [CueLeft] = [],
     modifiedAt: Date = .now, hostID: String? = nil, bootID: String? = nil, runtimeUntil: Date? = nil
   ) {
     self.hostID = hostID
@@ -43,17 +36,15 @@ public struct CueState: Equatable, Sendable {
   static let recordID = DeterministicID.uuid("cue-state")
 }
 
-/// Cue 此刻的上下文（一个会话一份）：用了多少 token。用到 `renewAt` 后，下一次醒来先开新会话（`CueKeeper`）。
 /// 随 `CueState` 同步，各端的上下文那一行只读它。旧版本存过的模型窗口（`window`）与会话起点（`since`）读时略过。
 public struct CueContext: StoredJSON, Equatable, Sendable {
   public var used: Int
 
-  /// 换新线：10 万 token。按真实时间线每次醒来约涨 8k，10 万与 6 万每天的花费只差约 1%，换新却从每天约 13 次降到约 8 次：
-  /// 换新只省后面几轮的缓存读，代价是重写视图并丢掉会话里原样的经过，线太低就换得太勤；再往上每次醒来读的上下文变长，花费又涨回去。
+  /// 换新线：换新只省后面几轮的缓存读，代价是重写视图、丢掉会话里原样的经过，线低换得太勤；线高每次醒来读的上下文变长，花费涨回去。
+  /// 按真实时间线（每次醒来约涨 8k），10 万比 6 万每天花费只差约 1%，换新从每天约 13 次降到约 8 次。
   /// 管理器经 `CueTiming.renewAt` 读它（评测可缩短），界面直接读它。
   public static let renewAt = 100_000
 
-  /// token 数的写法（各端的上下文用量与 Mac 的运行情况同一种）：不到一千写原数，往上写 5.3k、128k。
   public static func tokens(_ count: Int) -> String {
     count >= 1000 ? "\((Double(count) / 1000).formatted(.number.precision(.fractionLength(0...1))))k" : "\(count)"
   }
@@ -63,24 +54,17 @@ public struct CueContext: StoredJSON, Equatable, Sendable {
   }
 }
 
-/// Cue 这一轮为什么醒（值班的管理器起一轮时定下）。交给大脑的信封照它写"醒来："；Cue 自己醒来的一轮把它记在这一轮的经过那一行上
-/// （`CueMessage.wake`，随那一行同步），Cue 页那一节的第一行照它写、点了去叫醒它的会话，叫醒的接力（`CueFlight`）也只读它。
-/// 旧版本存下的、已不再有的原因（换新、改了设置、整理记忆）读出为 nil，那一节照没有醒来原因的旧动态显示。
+/// 值班的管理器起一轮时定下。Cue 自己醒来的一轮把它记在这一轮的经过那一行上（`CueMessage.wake`，随那一行同步），Cue 页、叫醒的接力（`CueFlight`）都只读它。
+/// 旧版本存下的、已不再有的原因读出为 nil，那一节照没有醒来原因的旧动态显示。
 public enum CueWake: StoredJSON, Equatable, Sendable {
-  /// 刚启用：第一次醒来
   case enabled
-  /// 你发来新消息
   case message
-  /// 在做的事里有动静（`CueChange`）：哪几处，按事件时刻从早到晚
   case sessionActivity([CueStir])
-  /// 空闲巡视
   case idle
-  /// 定时到点：到点的那几条定时
   case schedule([CueFire])
 }
 
-/// 定时到点叫醒 Cue 的一条：哪条定时（`CueMemoryLine`）、本该几点（那时的 `remindAt`）。叫醒得比本该晚过 `lateAfter` 就是错过了、醒来才补上
-/// （Mac 睡着、App 没开）：只是一句事实，经过、信封与任务气泡都按这一轮开始的时刻与它算（`late`），不另存状态。
+/// 叫醒得比本该晚过 `lateAfter` 就是错过了、醒来才补上（Mac 睡着、App 没开）：只是一句事实，经过、信封与任务气泡都按这一轮开始的时刻与它算（`late`），不另存状态。
 public struct CueFire: Codable, Equatable, Sendable {
   public var line: UUID
   public var due: Date
@@ -90,19 +74,15 @@ public struct CueFire: Codable, Equatable, Sendable {
     self.due = due
   }
 
-  /// 本该 `due` 的一次在 `at` 才叫醒，算不算错过了、醒来才补上
   public static func late(_ due: Date, at: Date) -> Bool { at.timeIntervalSince(due) > lateAfter }
 
   /// 晚这么久算错过：准点时只差对账的那一下，Cue 正忙一轮时也就等几分钟
   private static let lateAfter: TimeInterval = 10 * 60
 }
 
-/// 叫醒 Cue 的一处动静：`CueChange` 里界面要的那点——出了什么事、在哪个会话、哪件任务。那一处当时叫什么在这一行的 `CueMessage.places` 里（加密同步）。
 public struct CueStir: Codable, Equatable, Sendable {
   public var kind: CueChange.Kind
-  /// Pi 的会话 id；任务完成这类不在会话上的为 nil
   public var session: String?
-  /// 变化所在的那件（叶子，任务本身的变化是任务）
   public var task: UUID?
 
   public init(kind: CueChange.Kind, session: String? = nil, task: UUID? = nil) {
@@ -116,10 +96,9 @@ public struct CueStir: Codable, Equatable, Sendable {
   }
 }
 
-/// 会话的这一次停下留给你回：你发起的一轮停下当场留（`CueStore.leaveHisStops`），Cue 发起的由它核对后留（`leaveToYou`），它看过也可收回（`takeBack`）。
 /// 会话停在 `since` 起的那次停下（歇着、等回答或出错）时成立，它动起来（`stateSince` 变了）就自然作废，不用谁去清；
 /// 在那之前谁再对它说了话，待回复当场就不算（`CueStore.sessionsAwaitingReply`），不等 Mac 送到。
-/// 只有一份：待回复（`PiSessionState.awaitsReply`）与会话在问的归不归你（`waitsForCue`）都经 `CueDuty` 读它。
+/// 只有一份：待回复（`SessionState.awaitsReply`）与会话在问的归不归你（`waitsForCue`）都经 `CueDuty` 读它。
 public struct CueLeft: StoredJSON, Hashable, Sendable {
   public var sessionID: String
   public var since: Date
@@ -129,14 +108,11 @@ public struct CueLeft: StoredJSON, Hashable, Sendable {
     self.since = since
   }
 
-  /// 这一条说的就是会话此刻的这次停下。
-  public func holds(for session: PiSessionState) -> Bool {
+  public func holds(for session: SessionState) -> Bool {
     session.sessionID == sessionID && session.stateSince.stored == since.stored && session.runtimeState.known?.isStopped == true
   }
 }
 
-/// Cue 在值班时各端看会话要用的那一份（`CueStore.cueDuty`；不在值班为 nil）：它的名字（"等 X 回答"）与留给你回的会话。
-/// 会话等的是 Cue 还是你（`PiSessionState.waitsForCue`、`asksYou`）、待回复（`awaitsReply`）都只读它。
 public struct CueDuty: Equatable, Sendable {
   public var name: String
   public var left: [CueLeft]
@@ -146,7 +122,7 @@ public struct CueDuty: Equatable, Sendable {
     self.left = left
   }
 
-  public func leftToYou(_ session: PiSessionState) -> Bool { left.contains { $0.holds(for: session) } }
+  public func leftToYou(_ session: SessionState) -> Bool { left.contains { $0.holds(for: session) } }
 }
 
 extension CueState: Record {

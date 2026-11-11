@@ -18,20 +18,18 @@ extension SyncBench {
             Task { await follow(store.observe { try $0.cueMessages(limit: 200) }, prefix: "msg") { Seen($0) } }
             Task { await follow(store.observe { try $0.deliveryRequests() }, prefix: "req") { Seen($0) } }
             Task {
-                for await status in Observations({ String(describing: services.syncStatus) }) { mark("sync-status", ["s": status]) }
+                for await status in Observations({ String(describing: services.syncState.status) }) { mark("sync-status", ["s": status]) }
             }
             Task {
                 for await live in Observations({ services.relay?.isLive ?? false }) { mark("relay", ["live": live]) }
             }
         }
 
-        /// 一条说的话此刻的样子里记录方关心的几样。
         struct Seen {
             let id: UUID
             let created: Date
             let reachedServer: Bool
             let done: Date?
-            /// Cue 消息是谁说的（you、cue）；请求没有。
             var author: String?
 
             init(_ message: CueMessage) {
@@ -75,7 +73,6 @@ extension SyncBench {
             if let done = item.done, was?.done == nil { mark(prefix == "msg" ? "msg-delivered" : "req-done", id.merging(["at": done.timeIntervalSince1970] as [String: any Sendable]) { $1 }) }
         }
 
-        /// 已经画过的 Cue 消息。
         private static var shown: Set<UUID> = []
 
         /// 页面的订阅拿到新值（`Observing` 写进页面状态那一刻，`DebugHooks.observed`）：Cue 页里第一次出现的话，

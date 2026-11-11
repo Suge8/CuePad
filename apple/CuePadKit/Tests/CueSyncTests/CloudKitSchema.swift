@@ -3,16 +3,12 @@ import Foundation
 
 @testable import CueSync
 
-/// CloudKit 数据结构（cktool 的 .ckdb 文本），由记录映射推出，不手写第二份：
-/// 每个同步表一个记录类型，另有最低对端版本（`PeerFloor`）、门铃密钥与活动取证（各在独立私有区）；字段名与类型取自表的真实列（TEXT→STRING，INTEGER→INT64）；
-/// `RecordMapper.encryptedColumns` 里的字段声明为加密；订阅谓词用到的字段（`AlertSubscriptions.queriedColumns`）与每个类型的
-/// recordName 建可查询索引；附件记录另有资产字段 `file`。权限只给私有库所需的创建者与 iCloud 用户。
+/// CloudKit 数据结构（cktool 的 .ckdb 文本），由记录映射推出，不手写第二份。
 /// 只生成部署产物，App 不用：提交的文件是 `apple/CloudKit/cuepad.ckdb`，`CloudKitSchemaTests` 比对它、按需重新生成。
 ///
 /// 生产环境的结构只能增不能删，开发环境导入的结构也不能删掉生产里已有的字段与类型：已下线的（`retired`）照原样声明，
 /// 客户端不再读写它们。
 enum CloudKitSchema {
-  /// 生产环境里部署过、已不再使用的字段（按记录类型）与记录类型。
   static let retiredFields: [String: [(name: String, declaration: String)]] = [
     "sessionViewers": [("sessionID", "STRING")],
     "cards": [("cueFollows", "INT64"), ("isFavorite", "INT64"), ("numbering", "STRING")],
@@ -75,6 +71,9 @@ enum CloudKitSchema {
     types.append(recordType(
       ActivityDiagnosticCloud.recordType,
       [("\"___recordID\"", "REFERENCE QUERYABLE"), (ActivityDiagnosticCloud.field, "ENCRYPTED BYTES")]))
+    types.append(recordType(
+      DiagnosticZone.recordType,
+      [("\"___recordID\"", "REFERENCE QUERYABLE"), (DiagnosticZone.contentField, "ENCRYPTED BYTES"), (DiagnosticZone.nameField, "ENCRYPTED STRING")]))
     for retired in retiredTypes {
       types.append(recordType(retired.name, [("\"___recordID\"", "REFERENCE QUERYABLE")] + retired.fields))
     }

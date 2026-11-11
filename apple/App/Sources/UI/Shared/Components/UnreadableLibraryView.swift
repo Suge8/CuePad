@@ -1,6 +1,5 @@
 import SwiftUI
 
-/// "读不出资料库"页（启动时库打不开、目录读取失败共用）：人话说明、折叠的原文、重试、导出诊断（复制到剪贴板）。
 /// 没有任何写入入口：库没读出来，这时写进去的东西没有可靠的去处。
 struct UnreadableLibraryView: View {
     let failure: LibraryFailure
@@ -8,10 +7,9 @@ struct UnreadableLibraryView: View {
     @Environment(\.palette) private var palette
     @State private var details = false
 
-    /// 纸离窗口或屏幕左右边的距离：与各平台页面内容的边距一致。
     private static let margin = Spacing.page
 
-    /// 纸最宽多少：整窗只有这一张（Mac 主窗口、iPad）时不铺满，同启动时打不开库那一扇窗的宽。
+    /// 整窗只有这一张（Mac 主窗口、iPad）时不铺满，同启动时打不开库那一扇窗的宽。
     private static let widest: CGFloat = 520
 
     var body: some View {

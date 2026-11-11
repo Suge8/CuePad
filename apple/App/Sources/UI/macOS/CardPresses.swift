@@ -2,11 +2,7 @@
 import Foundation
 import Observation
 
-/// 各张卡的按下、打开与选中状态（Mac）。按卡分开、各自可观察：按下、打开、选中时只有这张卡的视图重算，
-/// 墙上其余卡片与"更早"各行不受牵动（大项目里有上千张）。
-///
-/// 批量选择：⌘ 点一张卡、右键"选择"或栏头"⋯"里的"选择灵感"开始，之后点卡就是选上或取消，底部换成批量操作栏（`SelectionBar`）；
-/// 取消到一条都不剩也还在选择中，按操作栏的"完成"（Esc）或切页、打开卡才回到平常。
+/// 按卡分开、各自可观察：按下、打开、选中时只有这张卡的视图重算，墙上其余卡片与"更早"各行不受牵动（大项目里有上千张）。
 @Observable
 final class CardPresses {
     /// 编辑页挂在屏上的卡：比 `Workspace.openCard` 晚一步清空，淡出期间仍在。
@@ -14,16 +10,13 @@ final class CardPresses {
     private(set) var isSelecting = false
     /// 选中的卡（批量操作）。只有底部的操作栏读它，卡各自读自己的 `CardPresence.selected`。
     private(set) var selected: Set<UUID> = []
-    /// 当前页能选的卡（"全选"的范围），由看得见的项目页报来，按页上的顺序。
     @ObservationIgnored var selectable: [UUID] = []
 
     @ObservationIgnored private var presences: [UUID: CardPresence] = [:]
-    /// 鼠标停在哪张卡上、正按着哪张卡（卡片报上来的悬停与 AppKit 的鼠标事件，见 `mouse(down:)`）。
     @ObservationIgnored private var hovered: UUID?
     @ObservationIgnored private var pressed: UUID?
     private static let releaseGrace: Duration = .milliseconds(80)
 
-    /// 这张卡的按下状态；卡片视图只观察自己的那一个。
     func presence(of card: UUID) -> CardPresence {
         if let presence = presences[card] { return presence }
         let presence = CardPresence()
@@ -33,7 +26,7 @@ final class CardPresses {
 
     func beginSelecting() { isSelecting = true }
 
-    /// 点卡时先问这里：在选择中或按着 ⌘ 时这一下是选上或取消（返回 true，不打开）。
+    /// 在选择中或按着 ⌘ 时这一下是选上或取消（返回 true，不打开）。
     func takesClick(on card: UUID, command: Bool) -> Bool {
         guard isSelecting || command else { return false }
         toggle(card)
@@ -64,7 +57,6 @@ final class CardPresses {
         presence(of: card).selected = on
     }
 
-    /// 设成某张卡时编辑页立即挂上，墙上那张卡保持按下，直到 `opened`。
     func present(_ card: UUID) {
         guard presented != card else { return }
         dismiss()
@@ -77,15 +69,13 @@ final class CardPresses {
         presented = nil
     }
 
-    /// 编辑页准备好、开始淡入：墙上那张卡放开。
     func opened(_ card: UUID) {
         presence(of: card).opening = false
     }
 
-    /// ⌘⌫ 删的那张：鼠标停着的卡；批量选择中、编辑页开着时没有。
     var deletable: UUID? { isSelecting || presented != nil ? nil : hovered }
 
-    /// 鼠标进出一张卡。拖出卡片也就不再按着它（与按钮拖出即松开一致）。
+    /// 拖出卡片也就不再按着它（与按钮拖出即松开一致）。
     func hover(_ card: UUID, inside: Bool) {
         if inside {
             hovered = card
@@ -95,8 +85,6 @@ final class CardPresses {
         }
     }
 
-    /// AppKit 分发鼠标按下、松开时调用（本地事件监听，早于 SwiftUI 按钮识别按下）：按下时鼠标停着的那张卡在这一轮就显出按下，
-    /// 点下的第一帧就有反馈。
     func mouse(down: Bool) {
         guard down else {
             // 松开到"打开中"接上之间隔着一两次更新：这时就放开，卡片会先亮一下再压暗回去。
@@ -121,11 +109,8 @@ final class CardPresses {
 
 @Observable
 final class CardPresence {
-    /// 鼠标正按着这张卡（见 `CardPresses.mouse(down:)`）。
     fileprivate(set) var pressing = false
-    /// 刚点开、编辑页还在看不见地准备：卡保持按下，编辑页开始淡入时放开（`CardPresses.opened`）。
     fileprivate(set) var opening = false
-    /// 卡显出按下的样子（见 `CardOpenStyle`）。
     var held: Bool { pressing || opening }
     fileprivate(set) var selected = false
 }

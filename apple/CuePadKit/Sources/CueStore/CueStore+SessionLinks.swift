@@ -2,8 +2,7 @@ import CueText
 import Foundation
 
 extension CueStore {
-  /// 记录一次投送或复制：内容快照、目标、时间。发送记录只记"内容"的投送——说给 Agent 的话、发到应用、复制；命令与设置（config、answer、end、stop、bind、command）不记。发给 Pi 会话时，灵感与任务都在同一事务里记下交给了哪个会话（`linkCard`；任务行据此显示会话状态）。执行投送的那台 Mac 记，
-  /// 请求从哪台设备发来都一样。灵感发出去不变成任务。经投送请求送出的带上请求的 id 与来源（`delivery`、`origin`）。
+  /// 发送记录只记“内容”的投送。发给 Pi 会话时，灵感与任务都在同一事务里记下交给了哪个会话（`linkCard`）。执行投送的那台 Mac 记，请求从哪台设备发来都一样。灵感发出去不变成任务。
   @discardableResult
   public func recordSend(
     _ content: String, to target: SendTarget, card: UUID? = nil, delivery: UUID? = nil, origin: Open<DeliveryOrigin>? = nil
@@ -12,7 +11,11 @@ extension CueStore {
       if let delivery, let existing = try select(SendRecord.self, where: "deliveryID = ?", [delivery]).first { return existing }
       let record = try insertSendRecord(content, to: target, card: card, delivery: delivery, origin: origin)
       if let card, target.kind == .known(.piSession), let session = target.ref {
-        try linkCardInTransaction(card, toSession: session, at: Date.stamp)
+        if let delivery {
+          if let request = try find(DeliveryRequest.self, delivery) { try linkDeliveredCardInTransaction(request, toSession: session) }
+        } else {
+          try linkCardInTransaction(card, toSession: session, at: Date.stamp)
+        }
       }
       return record
     }
@@ -42,12 +45,29 @@ extension CueStore {
 
   /// 执行中的主动关联，不同于历史记账。请求写下后用户已经改绑或解绑的，不能被晚到的 ACK 抢回去。
   public func linkDeliveredCard(_ request: DeliveryRequest, toSession session: String) throws {
-    guard let card = request.cardID else { return }
-    try write {
-      guard try find(DeliveryRequest.self, request.id)?.cardID == card,
-        try db.first("SELECT 1 FROM deliveryRequests r WHERE r.id = ? AND \(Self.latestHandoff("r"))", [request.id], { _ in true }) != nil
-      else { return }
-      try linkCardInTransaction(card, toSession: session, at: Date.stamp)
+    try write { try linkDeliveredCardInTransaction(request, toSession: session) }
+  }
+
+  func linkDeliveredCardInTransaction(_ request: DeliveryRequest, toSession session: String) throws {
+    guard let card = request.cardID, try acceptsSessionBinding(request),
+      try find(DeliveryRequest.self, request.id)?.cardID == card else { return }
+    try linkExactCardInTransaction(card, toSession: session, at: Date.stamp)
+    if var revision = request.sessionBindingRevision, try find(Card.self, card)?.sessionBindingRevision?.fulfilled != true {
+      revision.fulfilled = true
+      try db.run("UPDATE cards SET sessionBindingRevision = ?, modifiedAt = ? WHERE id = ?", [revision.stored, Date.stamp, card])
+    }
+  }
+
+  /// 卡片、请求或成功回执晚到时兑现原关联意图；只用仍在库里的请求及其修订，不从发送历史猜测。
+  /// start 的目标由 launchToken 认领；已有会话的内容与命令按成功请求的固定目标补齐。
+  func reconcileDeliveredCards(cards: Set<UUID> = [], deliveries: Set<UUID> = []) throws {
+    guard !cards.isEmpty || !deliveries.isEmpty else { return }
+    let requests = try select(DeliveryRequest.self, where: """
+      status = 'succeeded' AND mode IN ('send', 'command') AND targetKind = 'piSession' AND targetRef IS NOT NULL
+        AND (cardID IN (SELECT value FROM json_each(?1)) OR id IN (SELECT value FROM json_each(?2)))
+      """, [Self.idList(cards), Self.idList(deliveries)])
+    for request in requests {
+      if let session = request.target.ref { try linkDeliveredCardInTransaction(request, toSession: session) }
     }
   }
 
@@ -56,21 +76,25 @@ extension CueStore {
     Set(try deliverySources(among: deliveries).compactMap { $0.value == .cue ? $0.key : nil })
   }
 
-  /// 把灵感或任务关联到一个会话（没开始的任务进行中；完成了的不变：说话不改任务的状态），不写发送记录：
-  /// 发给 Agent 的命令带着卡片时用（命令不是内容的投送，发送记录只记内容）。任务的会话只记在叶子上（`homeLeaf`）；
-  /// 一个叶子最多一个会话，一个会话可以绑好几个叶子。
+  /// 不写发送记录：发给 Agent 的命令带着卡片时用。没开始的任务进行中；完成了的不变：说话不改任务的状态。任务的会话只记在叶子上（`homeLeaf`）；一个叶子最多一个会话，一个会话可以绑好几个叶子。
   public func linkCard(_ card: UUID, toSession session: String) throws {
     try write { try linkCardInTransaction(card, toSession: session, at: Date.stamp) }
   }
 
   private func linkCardInTransaction(_ card: UUID, toSession session: String, at now: Date) throws {
     guard let link = try link(of: card) else { return }
+    let leaf = link.isTask ? try homeLeaf(card) : card
+    try linkExactCardInTransaction(leaf, toSession: session, at: now)
+  }
+
+  private func linkExactCardInTransaction(_ id: UUID, toSession session: String, at now: Date) throws {
+    guard let card = try find(Card.self, id), card.piSessionID != session else { return }
     try db.run(
       """
-      UPDATE cards SET \(Self.keepingFormerSession("?1")), piSessionID = ?1, modifiedAt = ?2,
-        startedAt = CASE WHEN todoAt IS NOT NULL THEN COALESCE(startedAt, ?2) END
+      UPDATE cards SET \(Self.keepingFormerSession("?1")), piSessionID = ?1, modifiedAt = ?2
       WHERE id = ?3
-      """, [session, now, link.isTask ? try homeLeaf(card) : card])
+      """, [session, now, id])
+    if card.isTask { try beginTask(id, at: now) }
   }
 
   /// 叶子换上会话 `new`（SQL 表达式）的 UPDATE 里与 `piSessionID` 一起写的：换下的会话记进 `formerSessionIDs` 末尾，
@@ -87,36 +111,31 @@ extension CueStore {
     """
   }
 
-  /// 把会话绑到叶子任务 `task` 上（会话页的"绑定到任务"、任务的右键）：叶子是没有子任务的任务，有子任务的抛 `notALeaf`，不是任务抛 `notATask`。
-  /// 叶子原来绑着的会话换成这个；同一个会话可以绑好几个叶子（已完成的事绑着的会话照样能绑给新的事）。没开始的任务置为进行中，完成了的不变。
-  /// 绑会话不发任务的正文：它在做的事已经在会话里，要说的话在会话里说。
+  /// 有子任务的抛 `notALeaf`，不是任务抛 `notATask`。叶子原来绑着的会话换成这个；同一个会话可以绑好几个叶子。没开始的任务置为进行中，完成了的不变。绑会话不发任务的正文：它在做的事已经在会话里。
   public func bindSession(_ sessionID: String, to task: UUID) throws {
     try write {
       guard let link = try link(of: task) else { throw CueStoreError.notFound }
       guard link.isTask else { throw CueStoreError.notATask }
       guard try homeLeaf(task) == task else { throw CueStoreError.notALeaf }
-      try forgetHandoffs(of: task)
+      guard let session = try sessionState(sessionID) else { throw CueStoreError.notFound }
+      guard link.project == (session.projectID ?? Project.defaultID) else { throw CueStoreError.invalidProject }
+      let current = try find(Card.self, task)
+      guard current?.piSessionID != sessionID || current?.sessionBindingRevision?.explicit != true else { return }
+      try requireSessionAvailable(sessionID)
+      _ = try reviseSessionBinding(task, explicit: true)
       try linkCardInTransaction(task, toSession: sessionID, at: Date.stamp)
-      try endUnusedSessions(of: task, cue: false)
     }
   }
 
-  /// 解开叶子任务 `task` 绑着的会话：任务状态不变，会话照常（没有别的任务绑着它就是没绑任务的会话）。
   public func unbindSession(from task: UUID) throws {
     try write {
-      try forgetHandoffs(of: task)
-      try db.run("UPDATE cards SET piSessionID = NULL, modifiedAt = ? WHERE id = ? AND piSessionID IS NOT NULL", [Date.stamp, task])
+      let card = try requireLeaf(task)
+      guard card.piSessionID != nil || card.sessionBindingRevision?.explicit != true else { return }
+      _ = try reviseSessionBinding(task, explicit: true)
+      try db.run("UPDATE cards SET piSessionID = NULL, modifiedAt = ? WHERE id = ?", [Date.stamp, task])
     }
   }
 
-  /// 用户亲手绑定、解绑后，旧请求不再有主动关联权限；迟到 ACK、会话认领与历史都不能抢回新绑定。
-  /// 不依赖发起设备与执行设备时钟一致。
-  private func forgetHandoffs(of task: UUID) throws {
-    try db.run("UPDATE deliveryRequests SET cardID = NULL, modifiedAt = ? WHERE cardID = ? AND mode IN ('start', 'send', 'command')", [Date.stamp, task])
-  }
-
-  /// 这个会话属于的叶子任务：正在用它的与以前用过它的（`formerSessionIDs`；没删除、没归档，含完成了的），先开始的在前；子任务带着上级。
-  /// 正在用它的是 `piSessionID` 等于它的那几个。
   public func tasks(boundTo sessionID: String) throws -> [LeafTask] {
     try select(
       Card.self,
@@ -133,7 +152,6 @@ extension CueStore {
     try tasks(boundTo: sessionID).flatMap { [$0.task.id, $0.parent?.id] }.compactMap(\.self)
   }
 
-  /// 能绑会话的叶子（没完成、没绑会话、没删除、没归档）：子任务带着上级一起给，界面写"上级 · 子任务"。顺序同 `tasks(in:_:)`
   /// （项目页的任务顺序：同级手动顺序，子任务紧跟上级）。`project` 是会话所在的项目；会话没归项目（文件夹没绑给哪个项目）时列默认项目的。
   public func bindableTasks(in project: UUID?) throws -> [LeafTask] {
     let open = try tasks(in: project ?? Project.defaultID, .todo, .inProgress)
@@ -148,7 +166,6 @@ extension CueStore {
     return result
   }
 
-  /// 表 `alias` 里的任务是叶子：没有（没删除的）子任务。
   static func isLeaf(_ alias: String) -> String {
     "NOT EXISTS (SELECT 1 FROM cards s WHERE s.parentID = \(alias).id AND s.todoAt IS NOT NULL AND s.deletedAt IS NULL)"
   }

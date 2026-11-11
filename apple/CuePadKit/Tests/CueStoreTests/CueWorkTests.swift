@@ -2,21 +2,18 @@ import CueStore
 import Foundation
 import Testing
 
-/// Cue 收尾一件事、它醒来看到的变化、"等你"由事实推出。
 @Suite struct CueWorkTests {
   let fixture = try! Fixture()
   var store: CueStore { fixture.store }
 
-  /// Cue 收尾整件事：还有子任务没做完时不行（说还剩几个）；子任务都做完了，任务完成，各子任务上的会话请它结束——
-  /// 只结束绑着的事都做完了的：一个会话还绑着别的没做完的事就留着，那件事完成（你点圆圈也一样）时才结束。
   @Test func aTaskWithStepsCompletesOnlyWhenEveryStepIsDone() async throws {
     let task = try await store.createTask("发布")
     let steps = [try await store.createTask("改脚本", under: task.id), try await store.createTask("跑检查", under: task.id)]
     let other = try await store.createTask("写周报")
-    let recorder = PiStateRecorder(store: store, hostID: "mac")
+    let recorder = StateRecorder(store: store, hostID: "mac")
     for (step, session) in zip(steps, ["s1", "s2"]) {
-      try await store.linkCard(step.id, toSession: session)
-      try await recorder.update(sessionID: session, state: .settled, title: session, hosted: true)
+      let launch = try await store.requestLaunch(LaunchRequest(project: step.projectID, prompt: step.body, token: session), title: step.heading, on: "mac", card: step.id)
+      try await recorder.update(sessionID: session, state: .settled, title: session, launchToken: launch.launch?.token, hosted: true)
     }
     try await store.bindSession("s1", to: other.id)
     try await store.setStatus(steps[0].id, .done)
@@ -29,8 +26,6 @@ import Testing
     #expect(try await store.completeTask(other.id).ended.compactMap(\.target.ref) == ["s1"])
   }
 
-  /// 会话归哪件事只有一条规则（`sessionOwners`）：绑着它的任务里没做完的那件，再是最近开始的；只剩做完的也算（问题没答就还是在等你）。
-  /// 等你落在哪件事上与报给 Cue 的变化归到同一件，一个会话只报一次。
   @Test func aSessionBelongsToItsOpenTaskBeforeADoneOne() async throws {
     let open = try await store.createTask("还在做的那件")
     let done = try await store.createTask("做完的那件")

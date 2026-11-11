@@ -4,11 +4,10 @@ import UniformTypeIdentifiers
 
 /// 能发到手机上看的文件类型（唯一定义）：按文件名的扩展名得出系统类型（UTType），归进第一个它属于的类。
 /// 两端怎么显示各自在 App 的 `PreviewPage`：网页只读、不联网；Markdown 按文稿排版；改动（diff、patch）是增删对照；其余用系统的视图。
-public enum PiPreviewKind: String, Codable, Sendable, CaseIterable {
+public enum PreviewKind: String, Codable, Sendable, CaseIterable {
   // 顺序即归类的先后：SVG 也是图片、HTML、Markdown 与 diff 也是文本，先认出来的算数
   case web, markdown, image, video, audio, pdf, document, spreadsheet, presentation, model, diff, text
 
-  /// 属于这一类的系统类型；具体类型（带扩展名的）会写进"可发什么"。
   private var types: [UTType] {
     switch self {
     case .web: [.html, .svg]
@@ -54,7 +53,6 @@ public enum PiPreviewKind: String, Codable, Sendable, CaseIterable {
   /// 系统认得、这里却显示不了的：.svgz 是 gzip 压缩的 SVG，网页预览按原字节载入、不解压。
   private static let unreadable: Set<String> = ["svgz"]
 
-  /// 给 Agent 与用户看的"可发什么"：网页（html、htm、svg）、Markdown（md、markdown）、图片、……
   public static let supportedList = allCases.map { kind in
     let extensions = kind.types.flatMap { $0.tags[.filenameExtension] ?? [] }.filter { !unreadable.contains($0) }
     return extensions.isEmpty || extensions == [kind.label.lowercased()] ? kind.label : "\(kind.label)（\(extensions.joined(separator: "、"))）"
@@ -62,15 +60,13 @@ public enum PiPreviewKind: String, Codable, Sendable, CaseIterable {
 }
 
 /// 一份预览：Agent 发到手机上要用户看一眼或拍板的一个文件（同步表 `previews`，Mac 写、各端读）。随会话的对话走、随对话过期，不做版本与作品库。
-/// 文件按内容哈希存在附件目录、经附件记录同步，这里只记它属于哪个 Agent 会话、叫什么、多大。对话里的位置由创建时间定（`PiChat.entries`）。
+/// 文件按内容哈希存在附件目录、经附件记录同步，这里只记它属于哪个 Agent 会话、叫什么、多大。对话里的位置由创建时间定（`Chat.entries`）。
 /// 以后的网页地址类预览（Mac 上运行着的页面，没有文件）是这里另一种内容：引用它（回复框的 `ReplyNote`）与对话里的位置只认 `id`、`title`、
 /// `createdAt`，不假设一定有文件。
-public struct PiPreview: Identifiable, Equatable, Sendable {
+public struct PreviewItem: Identifiable, Equatable, Sendable {
   public let id: UUID
-  /// Agent 自己的会话 id（同 `PiSessionState.sessionID`）
   public var sessionID: String
   public var hash: String
-  /// 原文件名（含扩展名，类型由它定）
   public var name: String
   /// 一句标题：这份是什么、看哪里（Agent 发时每份一句、同批各不相同，宽不过 `titleLimit`），缩略图下、全屏页顶上与 Cue 的清单里都写它
   public var title: String
@@ -85,10 +81,8 @@ public struct PiPreview: Identifiable, Equatable, Sendable {
   /// 标题怎么写（接在"每个一句，"或"标题要"后面）：技能、命令的帮助与标题不合时的报错共用这一句。
   public static let titleRule = "说清这份是什么、看哪里，用和用户对话的语言；一行、宽不过 \(titleLimit)（约 \(titleLimit / 2) 个汉字），同一次发的各不相同"
 
-  /// 这台设备不认识的类型（别的版本发来的）为 nil
-  public var kind: PiPreviewKind? { PiPreviewKind(fileName: name) }
+  public var kind: PreviewKind? { PreviewKind(fileName: name) }
 
-  /// 附件的键：扩展名由文件名定（`AttachmentKey.make(hash:name:)`），本机文件 `AttachmentFiles.fileURL(for:)` 按它找。
   public var key: String { AttachmentKey.make(hash: hash, name: name) }
 
   public init(id: UUID = UUID(), sessionID: String, hash: String, name: String, title: String, byteCount: Int, createdAt: Date? = nil) {
@@ -104,7 +98,7 @@ public struct PiPreview: Identifiable, Equatable, Sendable {
   }
 }
 
-extension PiPreview: Record {
+extension PreviewItem: Record {
   static let table = Table.previews
   static let columns = ["id", "sessionID", "hash", "name", "title", "byteCount", "createdAt", "modifiedAt"]
   var bindings: [any SQLBindable] { [id, sessionID, hash, name, title, byteCount, createdAt, modifiedAt] }
@@ -120,7 +114,6 @@ extension PiPreview: Record {
   }
 }
 
-/// 一份预览的标题哪里不合 `PiPreview.titleRule`：报错说出这一条，Agent 照着改一处就对。
 public enum PreviewTitleProblem: Equatable, Sendable {
   case blank, multiline, tooWide(Int), repeated
 
@@ -128,16 +121,15 @@ public enum PreviewTitleProblem: Equatable, Sendable {
     switch self {
     case .blank: "是空的"
     case .multiline: "不止一行"
-    case .tooWide(let width): "宽 \(width)，超过 \(PiPreview.titleLimit)"
+    case .tooWide(let width): "宽 \(width)，超过 \(PreviewItem.titleLimit)"
     case .repeated: "与同一次发的另一份重复"
     }
   }
 }
 
-/// `CueStore.addPreviews` 的结果，一个文件一份：预览，以及 HTML 里引用了、手机上预览时拿不到的外部资源。
-public struct PiPreviewAdded: Equatable, Sendable {
-  public var preview: PiPreview
-  /// 页面引用的本地文件或网络地址（预览只读单个文件、不联网）：缺的会显示不全，给 Agent 看，让它改成单文件再发。最多 `PiPreviewAdded.referenceLimit` 个
+public struct PreviewAdded: Equatable, Sendable {
+  public var preview: PreviewItem
+  /// 页面引用的本地文件或网络地址（预览只读单个文件、不联网）：缺的会显示不全，给 Agent 看，让它改成单文件再发。最多 `PreviewAdded.referenceLimit` 个
   public var outsideReferences: [String]
 
   static let referenceLimit = 5
@@ -145,19 +137,19 @@ public struct PiPreviewAdded: Equatable, Sendable {
 
 extension CueStore {
   /// 把一次发来的几个文件（一批）放进某个 Agent 会话的预览：按内容哈希存进附件目录（同内容共用一份），在同一事务里登记附件记录与预览记录（同步给手机）。
-  /// 同一批 = 同一创建时间，对话里据此收成一张卡（`PiChat.entries`），不为"一批"另加同步字段。所以一个会话里每批的创建时间各不相同：
+  /// 同一批 = 同一创建时间，对话里据此收成一张卡（`Chat.entries`），不为"一批"另加同步字段。所以一个会话里每批的创建时间各不相同：
   /// 不晚于这个会话已有最后一条预览时（两次调用落在同一毫秒、或时钟往回调过）取它之后 1 毫秒；查与写在同一个写事务里，并发的命令行也排得开。
-  /// 批内 id 按参数顺序从小到大，同一时刻里按 id 排出的就是参数顺序。每份带自己的一句标题（`PiPreview.title`），同一批里各不相同：用户分得清哪张是哪张，不靠文件名。
+  /// 批内 id 按参数顺序从小到大，同一时刻里按 id 排出的就是参数顺序。每份带自己的一句标题（`PreviewItem.title`），同一批里各不相同：用户分得清哪张是哪张，不靠文件名。
   /// 任一个标题空着、太长或与同批重复，文件不存在、不是文件、太大或类型不支持时抛 `CueStoreError.preview…`，一个都不留下。
   /// HTML 引用的外部资源只列出来让 Agent 改成单文件，不在这里替它内联：样式里的 url()、字体、模块脚本都要处理，漏一类就是静默缺图。
-  public func addPreviews(_ sent: [(url: URL, title: String)], sessionID: String) throws -> [PiPreviewAdded] {
+  public func addPreviews(_ sent: [(url: URL, title: String)], sessionID: String) throws -> [PreviewAdded] {
     var titles: [String] = []
     for file in sent {
       let title = file.title.trimmingCharacters(in: .whitespacesAndNewlines)
       let width = CueName.width(title)
       let problem: PreviewTitleProblem? =
         if title.isEmpty { .blank } else if title.contains(where: \.isNewline) { .multiline }
-        else if width > PiPreview.titleLimit { .tooWide(width) } else if titles.contains(title) { .repeated } else { nil }
+        else if width > PreviewItem.titleLimit { .tooWide(width) } else if titles.contains(title) { .repeated } else { nil }
       if let problem { throw CueStoreError.previewTitle(file.url.lastPathComponent, problem) }
       titles.append(title)
     }
@@ -167,8 +159,8 @@ extension CueStore {
       guard attributes?[.type] as? FileAttributeType == .typeRegular, let size = attributes?[.size] as? Int else {
         throw CueStoreError.previewUnreadable(url.path)
       }
-      guard let kind = PiPreviewKind(fileName: url.lastPathComponent) else { throw CueStoreError.previewUnsupported(url.pathExtension.lowercased()) }
-      guard size <= PiPreview.maxBytes else { throw CueStoreError.previewTooLarge(url.path, bytes: size) }
+      guard let kind = PreviewKind(fileName: url.lastPathComponent) else { throw CueStoreError.previewUnsupported(url.pathExtension.lowercased()) }
+      guard size <= PreviewItem.maxBytes else { throw CueStoreError.previewTooLarge(url.path, bytes: size) }
       return (url: url, kind: kind, size: size)
     }
     let hashes = try checked.map { file in
@@ -182,7 +174,7 @@ extension CueStore {
       let latest = try db.query("SELECT max(createdAt) FROM previews WHERE sessionID = ?", [sessionID]) { $0.dateOrNil(0) }.first ?? nil
       let createdAt = latest.map { max(Date.stamp, $0.addingTimeInterval(0.001)) } ?? Date.stamp
       let previews = checked.indices.map { index in
-        PiPreview(
+        PreviewItem(
           id: ids[index], sessionID: sessionID, hash: hashes[index], name: checked[index].url.lastPathComponent, title: titles[index],
           byteCount: checked[index].size, createdAt: createdAt)
       }
@@ -193,24 +185,23 @@ extension CueStore {
       return previews
     }
     return zip(previews, checked).map { preview, file in
-      PiPreviewAdded(preview: preview, outsideReferences: file.kind == .web ? PiPreviewAdded.outsideReferences(inHTMLAt: file.url) : [])
+      PreviewAdded(preview: preview, outsideReferences: file.kind == .web ? PreviewAdded.outsideReferences(inHTMLAt: file.url) : [])
     }
   }
 
-  /// 一个会话的预览，从早到晚。
-  public func previews(of sessionID: String) throws -> [PiPreview] {
-    try select(PiPreview.self, where: "sessionID = ?", [sessionID], orderBy: "createdAt, id")
+  public func previews(of sessionID: String) throws -> [PreviewItem] {
+    try select(PreviewItem.self, where: "sessionID = ?", [sessionID], orderBy: "createdAt, id")
   }
 
   /// 按 id 取几份预览（Cue 点名的图，`CueMessage.shots`）；不在了的不在结果里。
-  public func previews(_ ids: some Collection<UUID>) throws -> [UUID: PiPreview] {
+  public func previews(_ ids: some Collection<UUID>) throws -> [UUID: PreviewItem] {
     guard !ids.isEmpty else { return [:] }
-    let found = try select(PiPreview.self, where: "id IN (SELECT value FROM json_each(?))", [Self.idList(ids)])
+    let found = try select(PreviewItem.self, where: "id IN (SELECT value FROM json_each(?))", [Self.idList(ids)])
     return Dictionary(uniqueKeysWithValues: found.map { ($0.id, $0) })
   }
 }
 
-extension PiPreviewAdded {
+extension PreviewAdded {
   /// 页面里 `<link href>`（样式、图标）与 `<script|img|source|video|audio|iframe src>` 指向的不是 data:、blob:、页内锚点的地址，按出现的先后、去重。
   /// 先去掉内联脚本的正文：脚本里拼出来的标签（`'<img src="' + x + '">'`）不是页面引用的文件。
   static func outsideReferences(inHTMLAt url: URL) -> [String] {

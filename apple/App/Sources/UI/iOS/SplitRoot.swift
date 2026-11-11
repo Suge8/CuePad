@@ -2,13 +2,7 @@
 import CueStore
 import SwiftUI
 
-/// iPad 宽屏（宽窗）：会话条（`WideRail`，导航只在这一处）、主区（浏览页、辅助页、一个会话或并排两个）、右边一直是 Cue。尺寸与自动收起同 Mac（`WideMetrics`）。
-/// 主区与 Cue 的页自己画页顶（`floatingHeader`）；会话页上面是会话的栏头（`WideSessionTitle`），项目页上面一排写项目名与介绍（`WideProjectHeading`，页里不另写）。
-/// Cue 钮在会话条顶上那一排（`RailTopTools`）：露着时点了收起，收着时放回；收起的 Cue 仍挂着，只是藏起。
-/// 会话条藏起时那一排（侧栏钮、搜索、Cue 钮）原地浮在主区左上角，主区的栏头左边让出它们（`Chrome.headLead`）；放不下时侧栏钮从左缘拉出会话条的抽屉（`RailDrawer`）。
-/// 放不下时同一块是窗口右缘的抽屉（同 Mac，`CueDock`，`Workspace.cueDrawer`）：一个窗口只挂这一份 Cue 页，跨过临界宽不重建。
-/// Cue 的名牌长开着（原位的模态浮出，`ModalHost`）时读屏只读 Cue 那一块：宽屏的名牌只长在 Cue 里（Cue 不进主区），右栏与抽屉同一块，
-/// 所以这里把它以外的（主区、会话条与它的抽屉、浮着的那一排、提示横幅）整块藏起；Cue 那一块里由名牌所在的页藏起旁边的（`FloatingHeader`）。
+/// Cue 的名牌长开着时读屏只读 Cue 那一块：宽屏的名牌只长在 Cue 里，所以其余整块藏起；Cue 那一块里由名牌所在的页藏起旁边的（`FloatingHeader`）。
 struct SplitRoot: View {
     @Environment(Workspace.self) private var workspace
     @Environment(ModalHost.self) private var modals: ModalHost?
@@ -56,7 +50,7 @@ struct SplitRoot: View {
     }
 
     private var cue: some View {
-        CuePage().countsAsPiViewer()
+        CuePage().countsAsViewer()
             .environment(\.headerHost, .panel)
             .modifier(KeyboardHold())
     }
@@ -66,7 +60,6 @@ struct SplitRoot: View {
     }
 }
 
-/// 主区的一边：会话的栏头或项目页那一排（左边让出 `headInset`：会话条藏起时浮在左上角的那一排钮），下面是这一页。
 private struct DestinationColumn: View {
     let route: Route
     let column: Workspace.Column
@@ -85,7 +78,6 @@ private struct DestinationColumn: View {
                     .toolbarVisibility(.hidden, for: .navigationBar)
                     .navigationDestination(for: Route.self) { RouteView(route: $0) }
             }
-            // 会话的栏头是写着字的一排：对话到它下沿淡出，同 Mac（`Bars`）
             .fadesUnderHead(route.isSession)
         }
     }
@@ -100,13 +92,20 @@ private struct WideSessionHeading: View {
     let column: Workspace.Column
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
-    @State private var state: PiSessionState??
+    @State private var state: SessionState??
+    @State private var taskLink: SessionTaskLink?
 
     var body: some View {
         let shown = (state ?? nil) ?? session.seed?.session
         WideSessionTitle(title: shown?.title ?? "", project: workspace.catalog?.project(shown?.projectID)?.shownName, column: column)
+            .contextMenu {
+                if let shown, let taskLink { SessionTaskBindItems(session: shown, link: taskLink) }
+            }
             .observing(services.store, id: session.id, into: $state, onError: workspace.fail) { [id = session.id] store in
-                try store.piSessionPage(PiSessionQuery(id: id)).items.first?.listed
+                try store.sessionPage(SessionQuery(id: id)).items.first?.listed
+            }
+            .observing(services.store, id: SessionTaskLink.Key(session: shown?.sessionID, project: shown?.projectID), into: $taskLink, onError: workspace.fail) { [shown] store in
+                try SessionTaskLink.read(sessionID: shown?.sessionID ?? "", project: shown?.projectID, from: store)
             }
     }
 }

@@ -31,9 +31,10 @@ nonisolated final class MacPresenceKeeper: Sendable {
             goingToSleep()
         }
         defer { center.removeObserver(sleeping) }
+        let wakes = center.notifications(named: NSWorkspace.didWakeNotification)  // 在第一次写下在线之前订上
         try await withThrowingDiscardingTaskGroup { group in
             group.addTask {
-                for await _ in center.notifications(named: NSWorkspace.didWakeNotification) {
+                for await _ in wakes {
                     self.awake.withLock { $0 = true }
                     try await self.publish()
                 }
@@ -54,7 +55,8 @@ nonisolated final class MacPresenceKeeper: Sendable {
     /// 在系统发将睡眠通知的线程上同步等离线这一条写完、传完：这是系统给的唯一一段能拖住睡眠的时间（等的工作不在主线程上，不会互等）。
     private func goingToSleep() {
         let done = DispatchSemaphore(value: 0)
-        Task.detached { [self] in
+        // 等的是系统发通知的线程（主线程，用户交互级）：干活的任务取同一优先级，信号量的等待不会让高优先级线程卡在低优先级后面
+        Task.detached(priority: Task.currentPriority) { [self] in
             do {
                 if try await !signOff() { Self.log.error("将睡眠：离线已写入本机，但尚未确认 iCloud 已接受") }
             } catch {

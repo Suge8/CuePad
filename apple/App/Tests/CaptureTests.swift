@@ -4,7 +4,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 分享扩展 → 主 App 的数据通路：扩展只写共享容器里的待入库目录，主 App 入库成卡片。
+@Suite(.releasesLibraries)
 struct CaptureTests {
     let app = TestApp()
     var services: AppServices { app.services }
@@ -13,7 +13,6 @@ struct CaptureTests {
 
     private func hash(of data: Data) throws -> String { try services.store.files.store(data) }
 
-    /// 扩展拷到临时目录的那份。
     private func shared(_ data: Data, named name: String) throws -> ShareContent.File {
         let url = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString + "-" + name)
         try data.write(to: url)
@@ -51,7 +50,6 @@ struct CaptureTests {
         #expect(Set(try await services.store.cards(in: Project.defaultID).map(\.body)) == ["b", "c"])
     }
 
-    /// 扩展还没写完的条目跳过、不删；入库失败的条目（这里是图读不出来）保留并报告；都不挡其他条目。
     @Test func 没写完与入库失败的条目都留着_不影响其他条目() async throws {
         let unfinished = queue.appending(path: "half-written", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: unfinished, withIntermediateDirectories: true)
@@ -81,7 +79,6 @@ struct CaptureTests {
         #expect(bodies == ["来自扩展"])
     }
 
-    /// 启动跟随者、Darwin 通知、回到前台会同时触发入库；入库后删条目失败（条目被锁）再重试也一样：一次分享只出一张卡。
     @Test func 同一次分享并发入库与删除失败后重试都只出一张卡() async throws {
         try CaptureQueue.enqueue(ShareContent(text: "并发的一条"), project: Project.defaultID, into: queue)
         async let first: Void = services.drainCaptures()

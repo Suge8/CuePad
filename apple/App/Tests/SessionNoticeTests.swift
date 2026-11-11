@@ -5,16 +5,14 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 手机在前台时的会话提示：本机已同步来的会话状态出现"等你确认"、"做完了"转换时，窗口顶上弹一行（点它进该会话）；
-/// 正看着那个会话时不弹。转换的判定是 `PiAlert` 的同一条规则（Mac 置位推送标志也用它），这里只管"读到的版本"怎么变成提示。
+@Suite(.releasesLibraries)
 struct SessionNoticeTests {
     let app = TestApp()
     var store: CueStore { app.services.store }
 
-    private func recorder() -> PiStateRecorder { PiStateRecorder(store: store, hostID: "mac") }
+    private func recorder() -> StateRecorder { StateRecorder(store: store, hostID: "mac") }
 
-    /// 前台提示读的版本：`LiveSessions` 里在线的（`startSessionAlerts` 同一条路）。
-    private func live() async throws -> [PiSessionListItem] {
+    private func live() async throws -> [SessionListItem] {
         app.services.liveSessions.apply(try await LiveSessions.Page.read(from: store), at: .always())
         return app.services.liveSessions.live
     }
@@ -32,27 +30,27 @@ struct SessionNoticeTests {
         #expect(done.first?.session == settled.first?.id)
         #expect(tracker.alerts(for: settled, cue: nil, since: .distantPast).isEmpty)
 
-        let question = PiQuestion(promptID: "p", kind: .select, text: "要覆盖 feed.xml 吗？\n会丢掉手写的条目", options: ["覆盖", "取消"])
+        let question = Question(promptID: "p", kind: .select, text: "要覆盖 feed.xml 吗？\n会丢掉手写的条目", options: ["覆盖", "取消"])
         try await recorder.update(sessionID: "s1", state: .waitingForUser, question: question)
         let waiting = try #require(tracker.alerts(for: try await live(), cue: nil, since: .distantPast).first)
         #expect(waiting.kind == .waitingForUser && waiting.text.visible == "homepage 等你拍板：要覆盖 feed.xml 吗？")
     }
 
-    /// App 不在前台时发生的转换（冷启动、从后台回来后才同步到）不在前台补报：那一下系统推送已经提示过了。
+    /// 不在前台时的转换那一下系统推送已经提示过了，所以不补报。
     @Test func 回到前台之前就发生的转换不补报_之后的照常提示() async throws {
         let recorder = recorder()
         var tracker = SessionAlertTracker()
         let start = Date(timeIntervalSinceNow: -600)
-        try await recorder.update(sessionID: "s1", state: .thinking, title: "notes", times: PiTimes(stateSince: start, busySince: start))
+        try await recorder.update(sessionID: "s1", state: .thinking, title: "notes", times: SessionTimes(stateSince: start, busySince: start))
         _ = tracker.alerts(for: try await live(), cue: nil, since: .distantPast)
 
         let away = start.addingTimeInterval(60), active = start.addingTimeInterval(120)
-        try await recorder.update(sessionID: "s1", state: .settled, times: PiTimes(stateSince: away, busySince: nil))
+        try await recorder.update(sessionID: "s1", state: .settled, times: SessionTimes(stateSince: away, busySince: nil))
         #expect(tracker.alerts(for: try await live(), cue: nil, since: active).isEmpty)
 
-        try await recorder.update(sessionID: "s1", state: .thinking, times: PiTimes(stateSince: active.addingTimeInterval(10), busySince: active.addingTimeInterval(10)))
+        try await recorder.update(sessionID: "s1", state: .thinking, times: SessionTimes(stateSince: active.addingTimeInterval(10), busySince: active.addingTimeInterval(10)))
         _ = tracker.alerts(for: try await live(), cue: nil, since: active)
-        try await recorder.update(sessionID: "s1", state: .settled, times: PiTimes(stateSince: active.addingTimeInterval(20), busySince: nil))
+        try await recorder.update(sessionID: "s1", state: .settled, times: SessionTimes(stateSince: active.addingTimeInterval(20), busySince: nil))
         #expect(tracker.alerts(for: try await live(), cue: nil, since: active).map(\.kind) == [.settled])
     }
 
@@ -73,7 +71,6 @@ struct SessionNoticeTests {
         #expect(!workspace.showsAlert(about: session))
     }
 
-    /// 提示弹出后才进了那个会话：横幅当场撤下，不在正看着的会话页上停满 5 秒。
     @Test func 进了提示说的那个会话_横幅撤下_别的提示留着() {
         let session = UUID()
         let workspace = Workspace(services: app.services)

@@ -1,17 +1,13 @@
 #if os(macOS)
 import CueAgent
-import CuePi
+import CueBridge
 import CueStore
 import CueTestSupport
 import Foundation
 import Testing
 @testable import CuePad
 
-/// 额度、登录卡住时换家（绕行）：换到能用的那家、你设定的那家重置一到就回去、都卡着时每个慢速周期换一家试，好了就留下。
 extension CueHostTests {
-    /// 你在 Cue 页选了 Pi 的 Fake Model 2、强度高，你的一轮碰上 Pi 额度用完（读得到几点重置），这台 Mac 上还能用 Claude Code：
-    /// 设置换过去（模型清空、fast 关），只说一句从哪换到哪、几点重置，不再报那个错；健康里记着这次换大脑。替身的 Claude Code 在这台 Mac 上起不来：
-    /// 说一次起不来，你的话还等着。到了 Pi 的重置时刻（慢速重试还远）换回 Pi，连同你选的模型与强度，你的话交给它答一次，说一句恢复了。
     /// 重置时刻正赶在 Cue 对账途中（它又试了一次 Claude Code）走过：不能因为排定时器时已过就漏掉，等到下一次重起（一小时后）才换回。
     @Test func 额度用完换到另一家_重置时刻一到换回你选的模型与强度() async throws {
         let rig = try await Rig(timing: { $0.slowRestarts = [.seconds(3600)] })
@@ -44,8 +40,6 @@ extension CueHostTests {
         await rig.stop()
     }
 
-    /// 额度用完（读不到几点重置）换到 Claude Code，那家也起不来：不一直守着它重试，慢速周期到点轮到 Pi 再试（每个周期只试一家），
-    /// Pi 好了就留在 Pi、你选的模型与强度照旧，你的话答上一次，只在答上的那一轮说一句恢复了。
     @Test func 换到的那家也起不来_慢速周期轮回Pi_好了就留下() async throws {
         let rig = try await Rig(timing: { $0.slowRestarts = [.seconds(60)] })
         try await rig.store.recordMacAgents(
@@ -71,8 +65,6 @@ extension CueHostTests {
         await rig.stop()
     }
 
-    /// 定时那一轮碰上 Pi 额度用完（读得到几点重置），换到 Claude Code 又起不来，手上没有要交给它的话：到了 Pi 的重置时刻（慢速重试还远）
-    /// 换回 Pi、起好，卡着的定时接着做完，说一句恢复了。
     @Test func 定时卡住换家又起不来_重置时刻一到换回Pi做完定时() async throws {
         let rig = try await Rig(timing: { $0.slowRestarts = [.seconds(3600)] })
         let resets = try await stuckPi(rig, resetsIn: 60, alongside: [.claudeCode])
@@ -91,7 +83,6 @@ extension CueHostTests {
         await rig.stop()
     }
 
-    /// 你的一轮碰上额度用完，这台 Mac 上只有 Pi（读得到几点重置）：那个错只说一次；不等慢速重试（还远），到了重置时刻就重来、做完，说一句恢复了。
     @Test func 额度用完没得换_重置时刻一到就重来() async throws {
         let rig = try await Rig(timing: { $0.slowRestarts = [.seconds(3600)] })
         let resets = try await stuckPi(rig, resetsIn: 60, alongside: [])
@@ -110,8 +101,7 @@ extension CueHostTests {
 
     enum Stuck: Sendable { case message, schedule }
 
-    /// 你的一轮或定时那一轮（Cue 自己醒来的）碰上 Pi 额度用完，换到 Claude Code（只说这一句，这次故障就算告诉过你）；它起不来、快的重试还没用完
-    /// （你的话等着交时每次对账都马上再试一次，快的那几次留得够多），Pi 就到了重置时刻，换回 Pi 做完卡着的那件：做完的那一轮说一句恢复了，中间没说过起不来。
+    /// 它起不来、快的重试还没用完（你的话等着交时每次对账都马上再试一次，快的那几次留得够多），Pi 就到了重置时刻，换回 Pi 做完卡着的那件。
     @Test(arguments: [Stuck.message, .schedule])
     func 换家后做完卡着的那件_说一句恢复了_不说起不来(_ stuck: Stuck) async throws {
         let rig = try await Rig(timing: { ($0.restarts, $0.slowRestarts) = (Array(repeating: .seconds(3600), count: 8), [.seconds(3600)]) })
@@ -137,16 +127,14 @@ extension CueHostTests {
         await rig.stop()
     }
 
-    /// 跳到重置时刻的前一刻，等 Cue 对过账：调用方断言这时还没换回、没重来。
     private func untilReset(_ rig: Rig, _ resets: Date) async throws {
         rig.jump(to: resets - 1)
         try await rig.reconciled()
     }
 
-    /// 这台 Mac 上能用 Pi（默认模型 Fake Model 2，额度读得到：此刻用满、`seconds` 秒后重置）与 `others`；返回重置时刻。
     private func stuckPi(_ rig: Rig, resetsIn seconds: TimeInterval, alongside others: [AgentKind]) async throws -> Date {
         let account = PiAccount(kind: .oauth, scope: "fake-plan", name: "fake")
-        let model = PiModelOption(key: PiModelKey(provider: "fake", id: "fake-model-2"), name: "Fake Model 2", thinkingLevels: [.high], account: account)
+        let model = ModelOption(key: ModelKey(provider: "fake", id: "fake-model-2"), name: "Fake Model 2", thinkingLevels: [.high], account: account)
         try await rig.store.recordMacAgents(
             host: TestApp.hostID, name: "测试 Mac", [MacAgent(kind: .pi, model: model.key, models: [model])] + others.map { MacAgent(kind: $0, model: nil, models: []) })
         let resets = rig.clock.now.addingTimeInterval(seconds)

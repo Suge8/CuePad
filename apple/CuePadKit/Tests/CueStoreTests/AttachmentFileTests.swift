@@ -3,7 +3,6 @@ import CueStore
 import Foundation
 import Testing
 
-/// 附件文件经 `files` 同步写入（不经 actor），按键存在缓存目录、上传前在库旁留保底；附件记录（同步用）在引用它的写入里登记。
 @Suite struct AttachmentFileTests {
   let fixture = try! Fixture()
   var store: CueStore { fixture.store }
@@ -49,30 +48,39 @@ import Testing
     #expect(throws: CueStoreError.fileTooLarge(limit: AttachmentFiles.maxBytes)) { try store.files.store(fileAt: url) }
   }
 
-  /// 缓存可被系统清掉：服务器收下之前由库旁的保底补回，收下之后保底删掉，本机没有了就是没有（再从 iCloud 取）。
-  @Test func backupCoversClearedCacheUntilUploaded() throws {
-    let key = try store.files.store(pngData(width: 6, height: 6))
+  /// 同一个库的另一个进程里做的事，做完它就退出了（持有它存过的文件的那次运行随之结束）。
+  private func inEndedRun<T: Sendable>(_ body: (CueStore) async throws -> T) async throws -> T {
+    let earlier = try CueStore(location: .isolated(fixture.directory))
+    let result = try await body(earlier)
+    earlier.files.endRun()
+    return result
+  }
+
+  @Test func backupCoversClearedCacheUntilUploaded() async throws {
+    let key = try await inEndedRun { earlier in
+      let key = try earlier.files.store(pngData(width: 6, height: 6))
+      _ = try await earlier.createCard(body: "![](cuepad://file/\(key))")
+      return key
+    }
+    _ = try await store.removeStrayFiles(drafts: [])
     try FileManager.default.removeItem(at: cached)
     #expect(store.files.fileURL(for: key) != nil)
     #expect(FileManager.default.fileExists(atPath: cached.appending(path: key).path))
 
-    try store.files.uploaded(key)
-    #expect(!FileManager.default.fileExists(atPath: backups.appending(path: key).path) && store.files.fileURL(for: key) != nil)
+    try await store.attachmentUploaded(try #require(try RawDB(fixture.url).rows("SELECT id FROM attachments").first?[0]))
     try FileManager.default.removeItem(at: cached)
     #expect(store.files.fileURL(for: key) == nil)
   }
 
-  /// 服务器早已收下的内容再存一次（缓存被清后又粘贴了同一张）：引用它时认出记录已上传，存入时新留的保底删掉。
   @Test func storingUploadedContentAgainKeepsNoBackupOnceReferenced() async throws {
     let key = try store.files.store(pngData(width: 7, height: 7))
     _ = try await store.createCard(body: "![](cuepad://file/\(key))")
     let id = try #require(try RawDB(fixture.url).rows("SELECT id FROM attachments").first?[0])
     try RawDB(fixture.url).exec("INSERT INTO syncRecords (recordName, recordType, pushedModifiedAt) VALUES ('\(id)', 'attachments', 1)")
-    try store.files.uploaded(key)
+    try await store.attachmentUploaded(id)
     try FileManager.default.removeItem(at: cached)
 
     _ = try store.files.store(pngData(width: 7, height: 7))
-    #expect(FileManager.default.fileExists(atPath: backups.appending(path: key).path))
     _ = try await store.createCard(body: "又一张 ![](cuepad://file/\(key))")
     #expect(!FileManager.default.fileExists(atPath: backups.appending(path: key).path) && store.files.fileURL(for: key) != nil)
   }
@@ -97,30 +105,101 @@ import Testing
     #expect(try records().count == 3)
   }
 
-  /// 启动时的清理：没有记录、没被正文或草稿引用、在这次启动之前存下的才删（缓存与保底一起）；这次运行里刚存的、被引用的都留着。
-  @Test func strayFilesGoButReferencedDraftedAndFreshOnesStay() async throws {
-    let stray = try store.files.store(pngData(width: 2, height: 2, shade: 0.1))
-    let used = try store.files.store(pngData(width: 2, height: 2, shade: 0.3))
-    let drafted = try store.files.store(pngData(width: 2, height: 2, shade: 0.5))
-    _ = try await store.createCard(body: "![](cuepad://file/\(used))")
-    // 上次运行留下的、又在这次选进来的：同内容已在本机（直接用那份），拷来的文件还带着很早的时刻
-    let again = pngData(width: 2, height: 2, shade: 0.9)
-    let reused = try store.files.store(again)
-    let old = try file(named: "旧图.png", again)
-    try FileManager.default.setAttributes([.creationDate: Date.distantPast, .modificationDate: Date.distantPast], ofItemAtPath: old.path)
-    let copied = try file(named: "拷来的.pdf", Data("很早的文件".utf8))
-    try FileManager.default.setAttributes([.creationDate: Date.distantPast, .modificationDate: Date.distantPast], ofItemAtPath: copied.path)
-    let launched = Date.now
-    let fresh = try store.files.store(pngData(width: 2, height: 2, shade: 0.7))
-    #expect(try store.files.store(fileAt: old) == reused)
-    let pdf = try store.files.store(fileAt: copied)
+  @Test func strayFilesGoButReferencedDraftedAndPendingOnesStay() async throws {
+    let (stray, used, drafted, edited) = try await inEndedRun { earlier in
+      let keys = try [0.1, 0.3, 0.5, 0.9].map { try earlier.files.store(pngData(width: 2, height: 2, shade: $0)) }
+      _ = try await earlier.createCard(body: "![](cuepad://file/\(keys[1]))")
+      let card = try await earlier.createCard(body: "![](cuepad://file/\(keys[3]))")
+      try await earlier.updateCard(card.id) { $0.body = "图删了" }
+      try await earlier.purgeCard(card.id)
+      return (keys[0], keys[1], keys[2], keys[3])
+    }
+    #if os(macOS)  // 同时开着库的另一个进程（命令行）只在 Mac 上有，iOS 的运行不用锁（`AttachmentRun.locks`）
+    let cli = try CueStore(location: .isolated(fixture.directory))
+    let pending = try cli.files.store(pngData(width: 2, height: 2, shade: 0.7))
+    #endif
 
-    #expect(try await store.removeStrayFiles(before: launched, drafts: ["看 ![](cuepad://file/\(drafted))"]) == 1)
-    #expect(store.files.fileURL(for: stray) == nil && !FileManager.default.fileExists(atPath: backups.appending(path: stray).path))
-    for kept in [used, drafted, fresh, reused, pdf] { #expect(store.files.fileURL(for: kept) != nil) }
+    #expect(try await store.removeStrayFiles(drafts: ["看 ![](cuepad://file/\(drafted))"]) == 2)
+    for gone in [stray, edited] {
+      #expect(store.files.fileURL(for: gone) == nil && !FileManager.default.fileExists(atPath: backups.appending(path: gone).path))
+    }
+    #expect(try await !store.hasAttachment(edited))
+    try FileManager.default.removeItem(at: cached)
+    for kept in [used, drafted] { #expect(store.files.fileURL(for: kept) != nil) }
+    #if os(macOS)
+    _ = try await cli.createCard(body: "![](cuepad://file/\(pending))")
+    #expect(try await cli.hasAttachment(pending) && cli.files.fileURL(for: pending) != nil)
+    #endif
   }
 
-  /// 键来自同步记录：拼不出附件目录外的路径。
+  /// 别处来的记录不收：收了会把删除同步出去，那台的图就没了。
+  @Test func recordFromElsewhereArrivingBeforeItsCardSurvivesCleanup() async throws {
+    let other = try Fixture()
+    let key = try other.store.files.store(pngData(width: 9, height: 9, shade: 0.42))
+    let card = try await other.store.createCard(body: "看 ![](cuepad://file/\(key))")
+    let record = try #require(try RawDB(other.url).rows("SELECT id FROM attachments").first?[0])
+    let attachmentRow = try #require(try await other.store.syncRow(recordName: record))
+    let cardRow = try #require(try await other.store.syncRow(recordName: card.id.uuidString.lowercased()))
+
+    _ = try await store.applyRemote([.save(attachmentRow, systemFields: Data())])
+    _ = try await store.removeStrayFiles(drafts: [])
+    _ = try await store.applyRemote([.save(cardRow, systemFields: Data())])
+    #expect(try await store.hasAttachment(key))
+    #expect(try await store.pendingSync().deletes.isEmpty)
+  }
+
+  @Test func cleanupKeepsAnotherDevicesRecordOfTheSameContent() async throws {
+    let png = pngData(width: 11, height: 11, shade: 0.33)
+    let key = try await inEndedRun { earlier in
+      let key = try earlier.files.store(png)
+      let card = try await earlier.createCard(body: "![](cuepad://file/\(key))")
+      try await earlier.updateCard(card.id) { $0.body = "图删了" }
+      try await earlier.purgeCard(card.id)
+      return key
+    }
+    let other = try Fixture()
+    _ = try other.store.files.store(png)
+    let card = try await other.store.createCard(body: "看 ![](cuepad://file/\(key))")
+    let theirs = try #require(try RawDB(other.url).rows("SELECT id FROM attachments").first?[0])
+    _ = try await store.applyRemote([.save(try #require(try await other.store.syncRow(recordName: theirs)), systemFields: Data())])
+
+    _ = try await store.removeStrayFiles(drafts: [])
+    #expect(try RawDB(fixture.url).rows("SELECT id FROM attachments") == [[theirs]])
+    #expect(store.files.fileURL(for: key) != nil)
+    _ = try await store.applyRemote([.save(try #require(try await other.store.syncRow(recordName: card.id.uuidString.lowercased())), systemFields: Data())])
+    #expect(try await store.hasAttachment(key) && store.files.fileURL(for: key) != nil)
+  }
+
+  @Test func referencingContentRegisteredElsewhereRegistersOwnRecord() async throws {
+    let a = try Fixture()
+    let png = pngData(width: 13, height: 13, shade: 0.27)
+    let (key, theirs, theirCard) = try await {
+      let writer = try CueStore(location: .isolated(a.directory))  // A 上存图建卡的那次运行，随后结束
+      let key = try writer.files.store(png)
+      let card = try await writer.createCard(body: "![](cuepad://file/\(key))")
+      writer.files.endRun()
+      return (key, try #require(try RawDB(a.url).rows("SELECT id FROM attachments").first?[0]), card.id)
+    }()
+    let aCache = a.directory.appending(path: "Caches/CuePadAttachments/\(key)")
+    _ = try await store.applyRemote([.save(try #require(try await a.store.syncRow(recordName: theirs)), systemFields: Data())])
+    try store.files.adopt(fileAt: aCache, key: key)  // 文件那一路取来
+    let card = try await store.createCard(body: "也用 ![](cuepad://file/\(key))")
+
+    try await a.store.updateCard(theirCard) { $0.body = "图删了" }
+    try await a.store.purgeCard(theirCard)
+    _ = try await a.store.removeStrayFiles(drafts: [])
+    #expect(try await !a.store.hasAttachment(key))
+    _ = try await store.applyRemote([.delete(SyncKey(table: .attachments, id: theirs))])
+    #expect(try await store.hasAttachment(key) && store.files.fileURL(for: key) != nil)
+
+    let mine = try #require(try RawDB(fixture.url).rows("SELECT id FROM attachments").first?[0])
+    for name in [mine, card.id.uuidString.lowercased()] {
+      _ = try await a.store.applyRemote([.save(try #require(try await store.syncRow(recordName: name)), systemFields: Data())])
+    }
+    try a.store.files.adopt(fileAt: cached.appending(path: key), key: key)
+    #expect(try await a.store.hasAttachment(key) && a.store.files.fileURL(for: key) != nil)
+  }
+
   @Test(arguments: ["../cuepad.db", "deadbeef", String(repeating: "0", count: 64), String(repeating: "0", count: 64) + "./x"])
   func unknownOrMalformedKeyIsNotFound(key: String) throws {
     _ = try store.files.store(pngData(width: 4, height: 4))

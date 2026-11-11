@@ -1,6 +1,6 @@
 #if os(macOS)
 import CueAgent
-import CuePi
+import CueBridge
 import CueStore
 import CueTestSupport
 import CueText
@@ -16,7 +16,7 @@ import Testing
 nonisolated let evalEnvironment = ProcessInfo.processInfo.environment
 let evalOutput = URL(filePath: evalEnvironment["CUEPAD_CUE_EVAL_OUT"] ?? "/tmp/cue-eval/latest", directoryHint: .isDirectory)
 
-@Suite(.enabled(if: evalEnvironment["CUEPAD_CUE_EVAL"] == "1", "CUEPAD_CUE_EVAL=1 才跑"), .timeLimit(.minutes(10)))
+@Suite(.releasesLibraries, .enabled(if: evalEnvironment["CUEPAD_CUE_EVAL"] == "1", "CUEPAD_CUE_EVAL=1 才跑"), .timeLimit(.minutes(10)))
 struct CueEvalTests {
     @Test func a新活派发() async throws {
         try await CueEval.run("a-新活派发", expect: "建一个任务（标题不超宽、一次建成）、放进演示、开工，回复一两句；不发等你、不问用户") { eval in

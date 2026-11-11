@@ -5,18 +5,16 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 输入组件的两条跨边界合同：草稿（文字、带上的卡片）写成什么样的投送请求正文（附件见 `SpeakTests`）；Pi 的一条回答存为卡片落在哪、正文是什么。
+@Suite(.releasesLibraries)
 struct ComposerTests {
     let app = TestApp()
     var store: CueStore { app.services.store }
 
-    private func session(project: UUID? = nil) async throws -> PiSessionState {
-        try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "atlas", state: .settled, title: "atlas", projectID: project)
-        return try #require(try await store.allPiSessionStates().first)
+    private func session(project: UUID? = nil) async throws -> SessionState {
+        try await StateRecorder(store: store, hostID: "mac-a").update(sessionID: "atlas", state: .settled, title: "atlas", projectID: project)
+        return try #require(try await store.allSessionStates().first)
     }
 
-    /// 发给 Agent 时用"＋ 选灵感"带上本项目置顶的灵感：卡片作为这次消息的附件跟着发出（任务的正文在前、灵感在后），
-    /// 卡片本身不动——仍置顶在原项目里。选卡片的面板里本项目置顶的排在最前。
     @Test func 交给Agent时带上置顶的灵感作附件_正文含它_灵感原地不动_面板里置顶的在最前() async throws {
         let project = try await store.createProject(name: "圆桌", color: "#000000")
         let target = try await session(project: project.id)
@@ -40,8 +38,6 @@ struct ComposerTests {
         #expect(try await store.cards(in: project.id).filter(\.isPinned).map(\.id) == [reference.id])
     }
 
-    /// 发给 Agent 的输入框是为某件任务打开的：请求始终关联这件任务（打开时定下，不随附件增删），
-    /// 即使附件里只剩置顶的灵感，状态点也在任务上、灵感行不出现。
     @Test func 交给Agent时附件里没有那件任务_请求仍关联它_状态点在任务不在灵感() async throws {
         let project = try await store.createProject(name: "圆桌", color: "#000000")
         let target = try await session(project: project.id)
@@ -71,8 +67,8 @@ struct ComposerTests {
         #expect(workspace.notice?.text.visible == "已记到 圆桌" && workspace.notice?.link == .project(project.id))
 
         try await workspace.saveReply("没归属的", of: try await {
-            try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "loose", state: .settled, title: "loose")
-            return try #require(try await store.allPiSessionStates().first { $0.sessionID == "loose" })
+            try await StateRecorder(store: store, hostID: "mac-a").update(sessionID: "loose", state: .settled, title: "loose")
+            return try #require(try await store.allSessionStates().first { $0.sessionID == "loose" })
         }())
         #expect(try await store.cards(in: Project.defaultID).map(\.body) == ["没归属的"])
         #expect(workspace.notice?.text.visible == "已记到 默认" && workspace.notice?.link == .project(Project.defaultID))

@@ -24,7 +24,6 @@ struct CuePadApp: App {
 enum Launch {
     case ready(AppServices)
     case failed(LibraryFailure)
-    /// 作为单元测试宿主：不打开真实资料库。
     case testHost
 
     static func make() -> Launch {

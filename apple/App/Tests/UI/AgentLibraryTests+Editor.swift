@@ -6,15 +6,13 @@ import Testing
 @testable import CuePad
 
 extension AgentLibraryTests {
-    /// 规则的文件页（`FileDraft`，Mac 与手机的文件页同一份）：文件还没有时停手就建出它，之后停手就存进文件；别处改了而你没在改，当场跟上；
-    /// 你改着时别处也改了，你的字留着、不再自动写，等你选——换成文件里的（排着没存的那一版也不再写），或留你的盖过它。
     @Test func 规则的文件页自动存_跟上别处的改动_两边都改时由你选() async throws {
-        let file = agents.appending(path: "AGENTS.md")
+        let file = rules
         let keeping = keep()
-        defer { keeping.cancel() }
+        defer { await keeping.stop() }
         let workspace = Workspace(services: services)
         let following = Task { await workspace.follow() }
-        defer { following.cancel() }
+        defer { await following.stop() }
         func snapshot(_ text: String) async throws -> String? {
             try await eventually("快照读到 \(text)") { workspace.library?.instruction(.global)?.hash == hash(text) }
             return try await self.text(.instruction(.global), in: try #require(workspace.library))
@@ -42,7 +40,6 @@ extension AgentLibraryTests {
         draft.takeFile()
         #expect(draft.body == "别处又改\n" && !draft.dirty)
 
-        // 停手前（自动存还排着）别处改了、换成文件里的、马上离开：排着的那一版不再写
         // 不等快照：照编辑页收到快照那一下直接跟，整段在自动存的停顿之内做完
         draft.changed(body: "排着没存的\n")
         try write("别处再改\n", file)
@@ -60,17 +57,15 @@ extension AgentLibraryTests {
         #expect(read(file) == "还是我的\n" && draft.state == .saved && !draft.dirty)
     }
 
-    /// 技能的文件页：name、description 两个输入框与正文分开改，写回 SKILL.md 时别的 frontmatter 键原样留着；
-    /// name 改得和文件夹名不一样，重扫后这个技能带上哪里不对（标在 name 那个框下）。
     @Test func 技能的文件页改name与description与正文_写回文件_其余键留着() async throws {
         let directory = agents.appending(path: "skills/pr")
         let file = directory.appending(path: "SKILL.md")
         try write("---\nname: pr\ndescription: >\n  写 PR\n  描述\nlicense: MIT\n---\n\n旧的正文\n", file)
         let keeping = keep()
-        defer { keeping.cancel() }
+        defer { await keeping.stop() }
         let workspace = Workspace(services: services)
         let following = Task { await workspace.follow() }
-        defer { following.cancel() }
+        defer { await following.stop() }
         try await eventually("快照读到这个技能") { workspace.library?.skill(at: directory.path) != nil }
         let skill = try #require(workspace.library?.skill(at: directory.path))
         #expect(skill.description == "写 PR 描述")
@@ -93,21 +88,20 @@ extension AgentLibraryTests {
         #expect(workspace.library?.skill(at: directory.path)?.problem?.field == .name)
     }
 
-    /// 写入在途时文件在别处改了：冲突提示要留着，旧写入完成不能把它盖成"已保存"。
     @Test func 写入途中别处改了_冲突提示保持() async throws {
-        let file = agents.appending(path: "AGENTS.md")
+        let file = rules
         try write("# a\n", file)
         let keeping = keep()
-        defer { keeping.cancel() }
+        defer { await keeping.stop() }
         let workspace = Workspace(services: services)
         let following = Task { await workspace.follow() }
-        defer { following.cancel() }
+        defer { await following.stop() }
         try await eventually("快照有全局规则") { workspace.library?.instruction(.global)?.hash == hash("# a\n") }
         let draft = FileDraft(.instruction(.global), text: "# a\n", workspace: workspace)
 
         draft.changed(body: "mine\n")
         let writing = Task { await draft.send() }
-        await Task.yield()
+        try await yieldUntil("写入进入保存中") { draft.state == .saving }
         #expect(draft.state == .saving, "写入在途中")
         try write("ext\n", file)
         draft.follow("ext\n")
@@ -117,7 +111,7 @@ extension AgentLibraryTests {
     }
 
     private func ready(_ text: String) async throws -> (FileDraft, Task<Void, Never>, Task<Void, Never>) {
-        try write(text, agents.appending(path: "AGENTS.md"))
+        try write(text, rules)
         let keeping = keep()
         let workspace = Workspace(services: services)
         let following = Task { await workspace.follow() }
@@ -125,38 +119,45 @@ extension AgentLibraryTests {
         return (FileDraft(.instruction(.global), text: text, workspace: workspace), keeping, following)
     }
 
-    /// 自己那次写入在途时又打了字，自己写入的回声先到：不是别处的改动，不报冲突，后来打的字照常写。
     @Test func 自己写入的回声先到_期间又打了字_不报冲突() async throws {
         let (draft, keeping, following) = try await ready("# a\n")
-        defer { keeping.cancel(); following.cancel() }
+        defer { await keeping.stop(); await following.stop() }
         draft.changed(body: "v1\n")
         let writing = Task { await draft.send() }
-        await Task.yield()
+        try await yieldUntil("写入进入保存中") { draft.state == .saving }
         draft.changed(body: "v2\n")
         draft.follow("v1\n")
         await writing.value
         #expect(!draft.conflicted, "把自己的写入误报成冲突：\(draft.state)")
         await draft.leave()
-        #expect(read(agents.appending(path: "AGENTS.md")) == "v2\n" && draft.state == .saved)
+        #expect(read(rules) == "v2\n" && draft.state == .saved)
     }
 
-    /// 冲突后文件被改回打开时的样子、或改成和我的字一样：冲突自动解除，不留冲突条。
     @Test func 冲突后文件改回基准或变得和我的一样_冲突自动解除() async throws {
         let (draft, keeping, following) = try await ready("# a\n")
-        defer { keeping.cancel(); following.cancel() }
+        defer { await keeping.stop(); await following.stop() }
         draft.changed(body: "mine\n")
         draft.follow("ext\n")
         #expect(draft.conflicted)
         draft.follow("# a\n")
         #expect(!draft.conflicted && draft.dirty, "回到基准：没有别处的改动了，我的字照常存")
         await draft.leave()
-        #expect(draft.state == .saved && read(agents.appending(path: "AGENTS.md")) == "mine\n")
+        #expect(draft.state == .saved && read(rules) == "mine\n")
 
         draft.changed(body: "mine2\n")
         draft.follow("ext2\n")
         #expect(draft.conflicted)
         draft.follow("mine2\n")
         #expect(draft.state == .saved && !draft.dirty, "变得和我的一样：已保存")
+    }
+}
+
+/// 只让出执行权、不睡：状态在主线程上同步翻转、转眼又翻走时，轮询睡眠会错过那一刻。
+private func yieldUntil(_ what: String, _ condition: () -> Bool) async throws {
+    let deadline = ContinuousClock.now + conditionBudget
+    while !condition() {
+        guard ContinuousClock.now < deadline else { throw TimedOut(description: "等不到：\(what)") }
+        await Task.yield()
     }
 }
 #endif

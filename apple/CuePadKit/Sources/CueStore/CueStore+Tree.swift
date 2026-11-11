@@ -1,13 +1,13 @@
 import Foundation
 
 /// 层级查询（写入时的校验与连带操作用）：只问需要的那几行，走 `cards_parentID` 索引，不把全部卡片读成层级图。
-/// 只看没删除的卡片；上级不在（没到、在回收站）的按顶层看待。递归用 `UNION`（去重）：远端并发留下的环到重复处就停。
+/// 默认只看没删除的卡片；收尾查创建来源时子树可包含已删除节点。上级不在（没到、在回收站）的按顶层看待。递归用 `UNION`（去重）：远端并发留下的环到重复处就停。
 extension CueStore {
   /// 子树（含起点）的 id 查询，作子查询用。`seed` 是给出起点 id 的查询，如 `SELECT ?3`。
-  static func subtree(from seed: String) -> String {
+  static func subtree(from seed: String, includingDeleted: Bool = false) -> String {
     """
     WITH RECURSIVE sub(id) AS (
-      \(seed) UNION SELECT c.id FROM cards c JOIN sub ON c.parentID = sub.id WHERE c.deletedAt IS NULL)
+      \(seed) UNION SELECT c.id FROM cards c JOIN sub ON c.parentID = sub.id WHERE \(includingDeleted ? "1" : "c.deletedAt IS NULL"))
     SELECT id FROM sub
     """
   }

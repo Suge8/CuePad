@@ -2,7 +2,7 @@ import CueStore
 import Foundation
 import Observation
 
-/// 分享扩展的状态与动作：读取分享内容、选项目、存进待入库目录。界面（`ShareViews`）只画它。
+/// 界面（`ShareViews`）只画它。
 @MainActor @Observable
 final class ShareModel {
     enum State: Equatable {
@@ -14,8 +14,8 @@ final class ShareModel {
 
     private(set) var state = State.loading
     private(set) var content: ShareContent?
-    /// 可选的项目（主 App 写的快照；从没打开过主 App 则为空，存进默认项目）。
-    let projects: [ProjectsSnapshot.Project]
+    /// 主 App 写的项目列表；缺快照时为 nil，仍可存进默认项目。
+    let projects: [ProjectsSnapshot.Entry]?
     var selectedProject = Project.defaultID
 
     private let providers: [NSItemProvider]
@@ -24,7 +24,7 @@ final class ShareModel {
     init(providers: [NSItemProvider], location: LibraryLocation) {
         self.providers = providers
         self.location = location
-        projects = Snapshots.read(ProjectsSnapshot.self, from: location.snapshotsDirectory)?.projects ?? []
+        projects = Snapshots.read(ProjectsSnapshot.self, from: location.snapshotsDirectory)?.projects
     }
 
     func load() async {

@@ -37,8 +37,6 @@ import Testing
 
   // MARK: 回收站
 
-  /// 项目进回收站时它的卡随项目隐藏（不逐卡记）；恢复、永久删除项目都不带走早先单独删的卡：恢复后它们仍在回收站，
-  /// 项目还在回收站时恢复其中一张落到默认项目，项目永久删除后另一张挪进默认项目、仍在回收站。
   @Test func trashRestoreAndPurgeOfAProjectNeverTakeCardsTrashedOnTheirOwn() async throws {
     let p = try await store.createProject(name: "P", color: "#111")
     let kept = try await store.createCard(in: p.id, body: "kept")

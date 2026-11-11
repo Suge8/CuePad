@@ -2,7 +2,6 @@ import CueStore
 import Foundation
 import Testing
 
-/// Agent 发到手机上看的文件：按内容哈希存进附件目录，预览记录属于某个 Agent 会话。
 @Suite struct PreviewTests {
   let fixture = try! Fixture()
   var store: CueStore { fixture.store }
@@ -14,8 +13,6 @@ import Testing
     return url
   }
 
-  /// 同一批 = 同一创建时间：同一会话里后发的一批即使时钟落在已有预览当时或之前（同一毫秒、时钟回拨），也排在它之后，不与它合成一张卡；
-  /// 别的会话不受影响。
   @Test func aLaterBatchNeverSharesACreationTimeWithAnEarlierOneInTheSameSession() async throws {
     let first = try await store.addPreviews([file("a.png", "a"), file("b.png", "b")].map { (url: $0, title: $0.lastPathComponent) }, sessionID: "s1").map(\.preview)
     let ahead = first[0].createdAt.addingTimeInterval(60)
@@ -29,24 +26,24 @@ import Testing
     #expect(elsewhere.createdAt < ahead)
   }
 
-  /// 会话安静够久、对话被清掉时，它的预览和文件一起清；还有别的预览用着同一份文件的留着。
   @Test func previewsGoWithTheirQuietSessionAndASharedFileStaysWhileUsed() async throws {
     let now = Date.now
     let longAgo = now.addingTimeInterval(-30 * 86_400)
     for id in ["quiet", "active"] {
-      try await store.upsertPiSession(IndexedSession(id: id, path: "/s/\(id).jsonl", cwd: "/w", lastActivityAt: id == "quiet" ? longAgo : now.addingTimeInterval(9 * 86_400)), host: "mac")
-      try await store.writePiTranscript(PiTranscript(
-        sessionID: id, messages: [PiChatMessage(sessionID: id, entryID: "e", seq: 1, role: .user, text: "x", at: longAgo)], recap: PiRecap()))
+      try await store.upsertSession(IndexedSession(id: id, path: "/s/\(id).jsonl", cwd: "/w", lastActivityAt: id == "quiet" ? longAgo : now.addingTimeInterval(9 * 86_400)), host: "mac")
+      try await store.writeTranscript(SessionTranscript(
+        sessionID: id, messages: [ChatMessage(sessionID: id, entryID: "e", seq: 1, role: .user, text: "x", at: longAgo)], recap: Recap()))
     }
     let shared = try await store.addPreviews([file("s.txt", "shared")].map { (url: $0, title: $0.lastPathComponent) }, sessionID: "quiet")[0].preview
     _ = try await store.addPreviews([file("s.txt", "shared")].map { (url: $0, title: $0.lastPathComponent) }, sessionID: "active")
     let only = try await store.addPreviews([file("o.txt", "only")].map { (url: $0, title: $0.lastPathComponent) }, sessionID: "quiet")[0].preview
 
-    try await store.prunePiMessages(olderThan: 7 * 86_400, now: now.addingTimeInterval(8 * 86_400))
+    try await store.pruneMessages(olderThan: 7 * 86_400, now: now.addingTimeInterval(8 * 86_400))
 
     let quiet = try await store.previews(of: "quiet"), active = try await store.previews(of: "active")
     #expect(quiet.isEmpty && active.count == 1)
-    #expect(store.files.fileURL(for: shared.key) != nil && store.files.fileURL(for: only.key) == nil)
+    let cached = { (key: String) in FileManager.default.fileExists(atPath: store.files.directory.appending(path: key).path) }
+    #expect(cached(shared.key) && !cached(only.key))
     #expect(try RawDB(fixture.url).rows("SELECT hash FROM attachments") == [[shared.hash]])
   }
 }

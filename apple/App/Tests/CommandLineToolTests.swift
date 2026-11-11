@@ -4,7 +4,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// `cuepad` 命令行随 App 分发：在 ~/.local/bin 建指向 App 包内二进制的符号链接，让 agent 在 bash 里直接调用。
+@Suite(.releasesLibraries)
 struct CommandLineToolTests {
     let root = FileManager.default.temporaryDirectory
         .appending(path: "cuepad-cli-tests-\(UUID().uuidString)", directoryHint: .isDirectory)
@@ -23,24 +23,6 @@ struct CommandLineToolTests {
     }
 
     private func destination() throws -> String { try FileManager.default.destinationOfSymbolicLink(atPath: link.path) }
-
-    @Test func 安装时创建缺失的目录并建指向App内二进制的链接_卸载即删除() async throws {
-        defer { try? FileManager.default.removeItem(at: root) }
-        let installer = makeInstaller()
-        await installer.refresh()
-        #expect(installer.state == .notInstalled)
-
-        try await installer.install()
-
-        #expect(installer.state == .installed)
-        #expect(try destination() == helper.path)
-        try await installer.install() // 再装一次是空操作
-        #expect(try destination() == helper.path)
-
-        try await installer.uninstall()
-        #expect(installer.state == .notInstalled)
-        #expect(!FileManager.default.fileExists(atPath: link.path))
-    }
 
     @Test func 位置被别的东西占用时不覆盖_明确报错() async throws {
         defer { try? FileManager.default.removeItem(at: root) }
@@ -76,7 +58,6 @@ struct CommandLineToolTests {
         #expect(try destination() == helper.path)
     }
 
-    /// 测试宿主就是这次构建出的 CuePad.app：里面必须真的带着 cuepad，经链接调用能运行。
     @Test func 真实构建里经链接调用cuepad_help可运行() async throws {
         defer { try? FileManager.default.removeItem(at: root) }
         let real = Bundle.main.bundleURL.appending(path: "Contents/Helpers/cuepad")

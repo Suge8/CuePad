@@ -26,7 +26,7 @@ extension Schema {
       isPinned INTEGER NOT NULL, variableValues TEXT NOT NULL, sortKey TEXT NOT NULL, conflictOf TEXT,
       deletedAt INTEGER, createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL,
       parentID TEXT, todoAt INTEGER, startedAt INTEGER, completedAt INTEGER, piSessionID TEXT, archivedAt INTEGER,
-      formerSessionIDs TEXT, writeSeq INTEGER NOT NULL DEFAULT 0
+      formerSessionIDs TEXT, sessionBindingRevision TEXT, writeSeq INTEGER NOT NULL DEFAULT 0
     ) STRICT;
     CREATE INDEX cards_projectID_sortKey ON cards(projectID, sortKey);
     CREATE INDEX cards_parentID ON cards(parentID);
@@ -46,7 +46,7 @@ extension Schema {
 
     CREATE TABLE attachments (
       id TEXT PRIMARY KEY NOT NULL, hash TEXT NOT NULL, byteCount INTEGER NOT NULL, format TEXT NOT NULL,
-      createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL
+      createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL, registeredHere INTEGER
     ) STRICT;
     CREATE INDEX attachments_hash ON attachments(hash);
 
@@ -56,10 +56,11 @@ extension Schema {
       projectID TEXT, state TEXT NOT NULL, detail TEXT, notify TEXT, folder TEXT,
       lastPrompt TEXT, lastReply TEXT, question TEXT, busySince INTEGER, launchToken TEXT, hosted INTEGER, subagents TEXT, pendingPrompt TEXT,
       pendingTools TEXT, model TEXT, thinking TEXT, context TEXT, agent TEXT, catalogID TEXT, turnStartedAt INTEGER, answeredAt INTEGER,
-      failure TEXT, bootID TEXT, fast INTEGER, stateSince INTEGER NOT NULL,
+      failure TEXT, bootID TEXT, fast INTEGER, createdForTaskID TEXT, stateSince INTEGER NOT NULL,
       createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL, writeSeq INTEGER NOT NULL DEFAULT 0
     ) STRICT;
     CREATE INDEX piSessionStates_hostID ON piSessionStates(hostID);
+    \(taskOriginIndex)
     CREATE INDEX piSessionStates_sessionID ON piSessionStates(sessionID);
     \(stateIndex)
     \(launchTokenIndex)
@@ -105,7 +106,7 @@ extension Schema {
       id TEXT PRIMARY KEY NOT NULL, content TEXT NOT NULL, targetKind TEXT NOT NULL, targetName TEXT NOT NULL,
       targetRef TEXT, hostID TEXT NOT NULL, mode TEXT NOT NULL, cardID TEXT, status TEXT NOT NULL,
       failure TEXT, handledBy TEXT, createdAt INTEGER NOT NULL, completedAt INTEGER, modifiedAt INTEGER NOT NULL,
-      resultReceivedAt INTEGER, origin TEXT, cueToldAt INTEGER, writeSeq INTEGER NOT NULL DEFAULT 0, serverAt INTEGER, deadlineAt INTEGER
+      resultReceivedAt INTEGER, origin TEXT, cueToldAt INTEGER, writeSeq INTEGER NOT NULL DEFAULT 0, serverAt INTEGER, deadlineAt INTEGER, sessionBindingRevision TEXT
     ) STRICT;
     CREATE INDEX deliveryRequests_status ON deliveryRequests(status, createdAt);
 
@@ -117,7 +118,7 @@ extension Schema {
     CREATE INDEX piSessions_cwd ON piSessions(cwd);
     \(agentIndex)
 
-    -- 承载会话的进程：pid 与启动时刻（微秒），只在本机（PiProcess）。
+    -- 承载会话的进程：pid 与启动时刻（微秒），只在本机（SessionProcess）。
     CREATE TABLE piProcesses (sessionID TEXT PRIMARY KEY NOT NULL, pid INTEGER NOT NULL, startedAt INTEGER NOT NULL) STRICT;
 
     -- 项目绑定的代码目录：路径因设备而异，只在本机。Pi 会话按 cwd 归入项目时用它。
@@ -133,7 +134,7 @@ extension Schema {
     CREATE TABLE cueMessages (
       id TEXT PRIMARY KEY NOT NULL, author TEXT NOT NULL, text TEXT NOT NULL, choices TEXT, urgent INTEGER NOT NULL,
       taskID TEXT, answer TEXT, answeredAt INTEGER, deliveredAt INTEGER, createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL,
-      notify TEXT, tools TEXT, ask TEXT, askAction TEXT, askRule TEXT, askShots TEXT, setAsideBy TEXT, wake TEXT, places TEXT, shownText TEXT
+      notify TEXT, tools TEXT, ask TEXT, askAction TEXT, askRule TEXT, askShots TEXT, setAsideBy TEXT, wake TEXT, places TEXT, shownText TEXT, answeredRequests TEXT, writeSeq INTEGER NOT NULL DEFAULT 0
     ) STRICT;
     CREATE INDEX cueMessages_createdAt ON cueMessages(createdAt);
     \(openQuestionIndex)
@@ -149,7 +150,7 @@ extension Schema {
     CREATE INDEX cueLines_remindAt ON cueLines(remindAt) WHERE remindAt IS NOT NULL;
     CREATE TABLE cueProfile (
       id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, hostID TEXT, runtime TEXT NOT NULL, model TEXT, effort TEXT, fast INTEGER,
-      enabledAt INTEGER, modifiedAt INTEGER NOT NULL
+      enabledAt INTEGER, modifiedAt INTEGER NOT NULL, voice TEXT
     ) STRICT;
     -- lineIDs：生成摘要时有序输入的完整指纹；事实或行序变了，摘要随之作废
     CREATE TABLE cueSummaries (

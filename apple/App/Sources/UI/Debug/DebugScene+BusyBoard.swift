@@ -2,36 +2,33 @@
 import CueStore
 import Foundation
 
-/// `-CuePadBusyBoard YES`（配 tasks 画面与 `-CuePadDemo YES`）：推进中那一列里再放几件 Agent 正在多步推进的任务——
-/// 运行工具的、刚想的、派了子代理的、被打断的，与一件有三个子任务（登录回调）、做到第二步、第二步的会话在跑测试的（行尾估还要多久）；只写一次。
-/// 每个会话之前还说过几句（`earlier`，几分钟前），卡下沿那条线的过去一句一颗点；这一轮的那句在 `busy` 分钟前。
 extension DebugScene {
     static func seedBusyBoard(_ store: CueStore) async {
-        guard defaults.bool(forKey: "CuePadBusyBoard") else { return }
+        guard args.busyBoard else { return }
         await running("推进中的演示任务") { try await busyBoard(store) }
     }
 
     private static func busyBoard(_ store: CueStore) async throws {
         let recorder = demoRecorder(store)
-        guard try await store.piSessionPage(PiSessionQuery(text: "share")).items.isEmpty else { return }
+        guard try await store.sessionPage(SessionQuery(text: "share")).items.isEmpty else { return }
         let now = Date.now
-        func session(_ id: String, _ state: PiWorkState, _ detail: String?, busy minutes: Double, earlier: [Double] = [], prompt: String, subagents: [PiSubagentState]? = nil) async throws {
+        func session(_ id: String, _ state: WorkState, _ detail: String?, busy minutes: Double, earlier: [Double] = [], prompt: String, subagents: [SubagentState]? = nil) async throws {
             let since = now.addingTimeInterval(-minutes * 60)
             _ = try await recorder.update(
                 sessionID: id, state: state, detail: detail, title: id, directory: id,
-                times: PiTimes(stateSince: since, busySince: state == .interrupted ? nil : since), subagents: subagents)
+                times: SessionTimes(stateSince: since, busySince: state == .interrupted ? nil : since), subagents: subagents)
             let lastPrompt = String(localized: "先读一遍相关代码", table: "Demo")
             let said = earlier.map { (lastPrompt, $0) } + [(prompt, minutes)]
             let messages = said.enumerated().map { index, line in
-                PiChatMessage(sessionID: id, entryID: "said-\(index)", seq: Int64(index), role: .user, text: line.0, at: now.addingTimeInterval(-line.1 * 60))
+                ChatMessage(sessionID: id, entryID: "said-\(index)", seq: Int64(index), role: .user, text: line.0, at: now.addingTimeInterval(-line.1 * 60))
             }
-            try await store.writePiTranscript(PiTranscript(sessionID: id, messages: messages, recap: PiRecap(lastPrompt: lastPrompt, lastReply: String(localized: "读完了。", table: "Demo"), pendingPrompt: prompt)))
+            try await store.writeTranscript(SessionTranscript(sessionID: id, messages: messages, recap: Recap(lastPrompt: lastPrompt, lastReply: String(localized: "读完了。", table: "Demo"), pendingPrompt: prompt)))
         }
         try await session("widget", .tool, "edit · Widgets/TaskEntry.swift", busy: 12, earlier: [170, 150, 95, 70, 40, 25], prompt: String(localized: "小组件里列出进行中的任务", table: "Demo"))
         try await session("undo", .thinking, nil, busy: 3, earlier: [18], prompt: String(localized: "把连续拖拽合并成一条撤销记录", table: "Demo"))
         try await session("export", .delegating, nil, busy: 26, earlier: [40], prompt: String(localized: "导出 PNG 时保留透明背景", table: "Demo"), subagents: [
-            PiSubagentState(name: String(localized: "渲染", table: "Demo"), role: String(localized: "工程师", table: "Demo"), phase: .known(.running), action: String(localized: "改 Exporter.render", table: "Demo"), startedAt: now.addingTimeInterval(-600)),
-            PiSubagentState(name: String(localized: "截图对比", table: "Demo"), role: String(localized: "哨兵", table: "Demo"), phase: .known(.running), action: String(localized: "运行 pnpm test export", table: "Demo"), startedAt: now.addingTimeInterval(-300)),
+            SubagentState(name: String(localized: "渲染", table: "Demo"), role: String(localized: "工程师", table: "Demo"), phase: .known(.running), action: String(localized: "改 Exporter.render", table: "Demo"), startedAt: now.addingTimeInterval(-600)),
+            SubagentState(name: String(localized: "截图对比", table: "Demo"), role: String(localized: "哨兵", table: "Demo"), phase: .known(.running), action: String(localized: "运行 pnpm test export", table: "Demo"), startedAt: now.addingTimeInterval(-300)),
         ])
         try await session("share", .interrupted, nil, busy: 48, earlier: [90, 60], prompt: String(localized: "分享扩展一次收多张图片", table: "Demo"))
         try await session("gateway", .tool, "bash · pnpm test -- auth", busy: 7, earlier: [35, 20], prompt: String(localized: "换成统一网关并跑测试", table: "Demo"))
@@ -51,10 +48,9 @@ extension DebugScene {
         try await store.linkCard(second.id, toSession: "gateway")
     }
 
-    /// `-CuePadCanvasSteps YES`（配 tasks 画面，两端）：待办里"画布缩放锚点跟随指针"写上正文与三个子任务（第一个做完），
-    /// 进展页的看板上点它的卡看任务气泡的正文与子任务（演示库里另一件有子任务的"发言轮次乱序"在等你那一列，点它是去 Cue 页那一问、不开气泡）。
+    /// 进展页的看板上点它的卡看任务气泡的正文与子任务；演示库里另一件有子任务的"发言轮次乱序"在等你那一列，点它是去 Cue 页那一问、不开气泡。
     static func seedCanvasSteps(_ store: CueStore) async {
-        guard defaults.bool(forKey: "CuePadCanvasSteps") else { return }
+        guard args.canvasSteps else { return }
         await running("画布任务的子任务") { try await canvasSteps(store) }
     }
 

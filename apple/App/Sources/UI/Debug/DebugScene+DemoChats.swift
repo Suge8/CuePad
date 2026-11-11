@@ -4,37 +4,32 @@ import CueText
 import SwiftUI
 
 extension DebugScene {
-    /// 会话里的一轮：你的话、Pi 的回答（还没答完是 nil）与这一轮的工具活动，问与答的时刻。
     struct ChatTurn {
         var you: String
         var pi: String?
-        var tools: PiChatMessage.Tools?
+        var tools: ChatMessage.Tools?
         var asked: Date
         var answered: Date
     }
 
-    /// 把几轮写成会话的对话与摘要（最后一轮没答完，它的话是进行中的提问、它的工具活动是这一轮已做完的几步）。演示对话与大库的长对话共用。
     static func writeChat(_ sessionID: String, _ turns: [ChatTurn], store: CueStore) async throws {
-        var messages: [PiChatMessage] = []
+        var messages: [ChatMessage] = []
         for (index, turn) in turns.enumerated() {
-            messages.append(PiChatMessage(sessionID: sessionID, entryID: "u\(index)", seq: Int64(index * 2), role: .user, text: turn.you, at: turn.asked))
+            messages.append(ChatMessage(sessionID: sessionID, entryID: "u\(index)", seq: Int64(index * 2), role: .user, text: turn.you, at: turn.asked))
             if let reply = turn.pi {
-                messages.append(PiChatMessage(
+                messages.append(ChatMessage(
                     sessionID: sessionID, entryID: "p\(index)", seq: Int64(index * 2 + 1), role: .pi, text: reply, at: turn.answered,
                     tools: turn.tools, roundStartedAt: turn.asked))
             }
         }
         let done = turns.last { $0.pi != nil }
         let pending = turns.last.flatMap { $0.pi == nil ? $0 : nil }
-        try await store.writePiTranscript(PiTranscript(
+        try await store.writeTranscript(SessionTranscript(
             sessionID: sessionID, messages: messages,
-            recap: PiRecap(lastPrompt: done?.you, lastReply: done?.pi, pendingPrompt: pending?.you, pendingTools: pending?.tools)))
+            recap: Recap(lastPrompt: done?.you, lastReply: done?.pi, pendingPrompt: pending?.you, pendingTools: pending?.tools)))
     }
 
-    /// 两台 Mac 的项目目录绑定（名字是各自报的，`seedMacAgents`）：Mac Studio 绑了全部带目录的项目，MacBook Air 只绑了 CuePad（新会话里 CuePad 要选 Mac）。
-    /// 绑定由本机目录推导，所以先只留 CuePad 的目录发布第二台，再把目录放回去。
-
-    private static let notesWeek = PiChatMessage.Tools(
+    private static let notesWeek = ChatMessage.Tools(
         steps: 7,
         items: [
             .init(kind: .read, target: "notes/2026-W39.md"), .init(kind: .read, target: "notes/2026-W40.md"), .init(kind: .read, target: "notes/inbox.md"),
@@ -42,8 +37,7 @@ extension DebugScene {
             .init(kind: .command, target: "git status --short"), .init(kind: .command, target: "make lint-notes", failed: true),
         ])
 
-    /// 演示用的工具活动：跑测试那一轮读了测试、跑了测试（一次失败），没有改代码。
-    private static let testRun = PiChatMessage.Tools(
+    private static let testRun = ChatMessage.Tools(
         steps: 4,
         items: [
             .init(kind: .read, target: "scheduler/queue.ts"), .init(kind: .read, target: "scheduler/queue.test.ts"),
@@ -90,7 +84,6 @@ extension DebugScene {
         ```
         """, table: "Demo") }
 
-    /// 演示用的改动（notes 会话最后一批，`seedPreviews`）：两个文件，有增有删。
     static let loginDiff = """
         diff --git a/login/LoginView.swift b/login/LoginView.swift
         index 3f1c2aa..8b0d913 100644
@@ -126,12 +119,10 @@ extension DebugScene {
         +}
         """
 
-    /// 演示用的一张图（手机上的登录页）存进附件目录，返回正文里引用它的写法；你的话带图片的演示（对话里的、还在路上的）用它。
     static func screenshotMarkup(_ store: CueStore) throws -> String? {
         try screenshotPNG().map { CueFormat.imageMarkup(key: try store.files.store($0)) }
     }
 
-    /// 手机宽度下登录页的"截图"：渐变底上一张白卡、两个输入框和一个按钮。
     static func screenshotPNG() -> Data? {
         let view = ZStack {
             LinearGradient(colors: [Color(red: 0.93, green: 0.95, blue: 1), Color(red: 0.99, green: 0.95, blue: 0.97)], startPoint: .topLeading, endPoint: .bottomTrailing)
@@ -150,11 +141,9 @@ extension DebugScene {
         return renderer.cgImage.map { DemoLibrary.encode($0) }
     }
 
-    /// 演示对话：notes 是几轮做完的对话（带工具活动与用时、Markdown），atlas 在处理新的话，homepage、rename 停在问题上，
-    /// relay 在另一台 Mac 上（第二句是斜杠技能，存的是 Pi 展开后的样子；发过去的一条没能送达、之后又问了一轮（`relayLaterTurn`），一条已送达还没进对话）。
     static func seedChats(_ store: CueStore) async throws {
         let now = Date.now
-        func chat(_ sessionID: String, _ turns: [(you: String, pi: String?, tools: PiChatMessage.Tools?, minutes: Double)], startedMinutesAgo: Double) async throws {
+        func chat(_ sessionID: String, _ turns: [(you: String, pi: String?, tools: ChatMessage.Tools?, minutes: Double)], startedMinutesAgo: Double) async throws {
             var clock = now.addingTimeInterval(-startedMinutesAgo * 60)
             var rounds: [ChatTurn] = []
             for turn in turns {
@@ -169,7 +158,6 @@ extension DebugScene {
             (String(localized: "整理一下这周的会议记录", table: "Demo"), String(localized: "整理好了，放在 `notes/2026-W40.md`。三件待办：\n\n- **续费域名**（周五前）\n- 评审计费额度\n- 补 scheduler 测试", table: "Demo"), Self.notesWeek, 1.5),
             (String(localized: "续费域名那条加上负责人和链接", table: "Demo"), String(localized: "加好了：负责人写的是你，链接指向注册商的续费页。", table: "Demo"), .init(steps: 1, items: [.init(kind: .edit, target: "notes/2026-W40.md", added: 2, removed: 1)]), 0.4),
             (String(localized: "再把评审计费额度拆成两步", table: "Demo"), String(localized: "拆成了两步：\n\n1. 先对一遍额度表和账单的口径\n2. 再看超额时的提示文案\n\n都放在待办的同一节下面。", table: "Demo"), .init(steps: 2, items: [.init(kind: .read, target: "notes/2026-W40.md"), .init(kind: .edit, target: "notes/2026-W40.md", added: 5, removed: 1)]), 0.8),
-            // 最坏的 Markdown：宽表（对齐语法、代码单元格、中英混排长单元格）、引用、嵌套列表、标题、链接、长代码行
             (String(localized: "把三个排序方案的对比做成表格", table: "Demo"), String(localized: """
             ## 对比结果
 
@@ -213,21 +201,19 @@ extension DebugScene {
         ], startedMinutesAgo: 10)
     }
 
-    /// relay 在没送到的那句之后又问的一轮（此刻写下，晚于那句）。
     static func relayLaterTurn(_ store: CueStore) async throws {
         let now = Date.now
-        try await store.writePiTranscript(PiTranscript(
+        try await store.writeTranscript(SessionTranscript(
             sessionID: "relay",
             messages: [
-                PiChatMessage(sessionID: "relay", entryID: "u2", seq: 4, role: .user, text: String(localized: "迁移重跑了吗", table: "Demo"), at: now),
-                PiChatMessage(
+                ChatMessage(sessionID: "relay", entryID: "u2", seq: 4, role: .user, text: String(localized: "迁移重跑了吗", table: "Demo"), at: now),
+                ChatMessage(
                     sessionID: "relay", entryID: "p2", seq: 5, role: .pi, text: String(localized: "重跑过了：第 14 步已经过去，迁移全部完成。", table: "Demo"),
                     at: now.addingTimeInterval(0.5), roundStartedAt: now),
             ],
-            recap: PiRecap(lastPrompt: String(localized: "迁移重跑了吗", table: "Demo"), lastReply: String(localized: "重跑过了：第 14 步已经过去，迁移全部完成。", table: "Demo"))))
+            recap: Recap(lastPrompt: String(localized: "迁移重跑了吗", table: "Demo"), lastReply: String(localized: "重跑过了：第 14 步已经过去，迁移全部完成。", table: "Demo"))))
     }
 
-    /// "/skill:eli5 为什么在等锁" 经 Pi 展开后进会话文件的样子（`PiSkillCall`）。
     private static var skillSaid: String { """
         <skill name="eli5" location="/Users/demo/.agents/skills/eli5/SKILL.md">
         References are relative to /Users/demo/.agents/skills/eli5.
@@ -242,9 +228,6 @@ extension DebugScene {
         \(String(localized: "为什么在等锁", table: "Demo"))
         """ }
 
-    /// `-CuePadDemoMac YES`：演示库里一台会回话的"demo-mac"。发给它的会话的话，像真的经同步那样慢慢走完：
-    /// 等一会儿才被接手（发送中）→ 送达用一会儿（送达中）→ 会话状态再晚一点才同步过来（思考中）→ 这一轮做完（该你了），
-    /// 录"发出 → 返回列表 → 状态流转"用。Cue 运行在它上面时，你对 Cue 说的话一会儿后交给 Cue（已送达），它想一会儿回一句（`demoCueAnswers`）。
-    /// 同步替身报连不上 iCloud 时（`-CuePadSync offline`）它收不到，恢复后再接手。
+    /// 发给它的会话的话，像真的经同步那样慢慢走完，录"发出 → 返回列表 → 状态流转"用。Cue 运行在它上面时，你对 Cue 说的话一会儿后交给 Cue（已送达），它想一会儿回一句（`demoCueAnswers`）。同步替身报连不上 iCloud 时（`-CuePadSync offline`）它收不到，恢复后再接手。
 }
 #endif

@@ -1,33 +1,20 @@
 import QuartzCore
 import SwiftUI
 
-/// 常驻循环动效的唯一宿主：Agent 在跑的心电线（`heartbeat`）、话在路上的纸飞机（`flight`）、等你确认的外扩波纹（`ripple`）、
-/// 等待的转圈（`orbit`，经 `Spinner`）、换模型与思考强度在路上时的呼吸（`pulse`）、进行中文字与最高思考强度上扫过的光（`sheen`）、
-/// 看板推进中卡下沿那条线在跑的那一截（`wave`，`BoardLine`）、等子代理交回的两颗点（`relay`）与 Cue 小人的帧序列（`sprite`，动作表在 `CueSprite`）。
 /// 用 Core Animation 而不是 SwiftUI 的 repeatForever 或符号动效：后两者每帧都在 App 进程里重算，
 /// 列表里有几个在工作的会话时，静止不动也要占约 9% CPU；CA 的动画交给渲染服务，App 进程不参与，离屏不画。
 /// 放不放只看 `LoopsPlay`，不放时调用方换静止的样子。
 struct LoopLayer {
     enum Kind: Equatable {
-        /// 一圈淡轨道上一段弧匀速转，1.1s 一圈；线宽是直径的 14%。
         case orbit
-        /// 心电线：淡色的一段心电波形上，一截实色沿波形从左走到右，1.4s 一趟；线宽是边长的 9%，淡波形是三成的颜色。
+        case voice(VoiceRibbon)
         case heartbeat
-        /// 话在路上：一架纸飞机（与发送钮、"已送达"同一架，`Icon.send`）从左下飞进来、在正中停一下、朝机头的右上飞出去，裁在自己的框里，
-        /// 一趟 `Flight.period` 秒。"发出"一族只有纸飞机：发送中、已送达都是它，胖箭头只表示方向。
-        /// 不播时（截图、Mac 不在前台时只画的那一帧）停在正中；不放循环动效时调用方换静止符号。
+        /// "发出"一族只有纸飞机（与发送钮、"已送达"同一架，`Icon.send`）：发送中、已送达都是它，胖箭头只表示方向。不播时（截图、Mac 不在前台时只画的那一帧）停在正中。
         case flight
-        /// 一圈细线从内切圆的大小往外扩到 1.6 倍、淡到看不见，2.4s 一次；线宽是边长的 7%。
-        case ripple
-        /// 一道横向的光带（宽是整体的一半）从左外扫到右外，1.8s 一趟。
         case sheen
-        /// 铺满的一层颜色从无到有再回去，一明一暗 1.4s（盖在内容上，内容看起来在呼吸）。
         case pulse
-        /// 看板线在跑的那一截（`WaveStrip`）：一条预先画好的周期线整条匀速横移一个周期，或子代理轨上的短划往前跑；渲染服务只挪层、动虚线相位。
         case wave(WaveStrip)
-        /// 等子代理交回：一大一小两颗点，小的回来贴住大点，`RelayMark.period` 一趟（`LoopLayer+Cue`）。
         case relay
-        /// 小人的帧序列与整只的动作（`CueSprite`，`LoopLayer+Cue`）。
         case sprite(CueSprite, CueAtlas.Sheet)
     }
 
@@ -78,7 +65,9 @@ struct LoopLayer {
         func show(_ kind: Kind, color: CGColor?, intro: Bool) {
             // 调用方每帧重算时（软糖放着，`JellyFrame`）值没变不碰图层
             guard kind != self.kind || color != self.color else { return }
-            if kind != self.kind {
+            if case .voice = kind, case .voice = self.kind {
+                self.kind = kind
+            } else if kind != self.kind {
                 self.kind = kind
                 root.sublayers?.forEach { $0.removeFromSuperlayer() }
                 root.addSublayer(Self.make(kind, intro: intro))
@@ -93,6 +82,8 @@ struct LoopLayer {
             CATransaction.setDisableActions(true)
             let bounds = root.bounds
             switch kind {
+            case .voice(let ribbon):
+                (loop as? VoiceRibbonLayer)?.show(ribbon, in: bounds, color: color)
             case .orbit:
                 loop.frame = bounds
                 let width = min(bounds.width, bounds.height) * 0.14
@@ -118,16 +109,15 @@ struct LoopLayer {
                     fly.animations = Self.flightPath(side: side)
                     plane.add(fly, forKey: "loop")
                 }
-            case .heartbeat, .ripple:
+            case .heartbeat:
                 loop.frame = bounds
                 let side = min(bounds.width, bounds.height)
-                let paths = Self.strokes(kind, side: side)
+                let wave = InkStateGeometry.heartbeat(in: CGRect(x: 0, y: 0, width: side, height: side))
                 for (index, shape) in (loop.sublayers ?? []).compactMap({ $0 as? CAShapeLayer }).enumerated() {
                     shape.frame = CGRect(x: (bounds.width - side) / 2, y: (bounds.height - side) / 2, width: side, height: side)
-                    shape.path = paths[index]
-                    shape.lineWidth = side * (kind == .ripple ? 0.07 : 0.09)
-                    // 心电线的第一层是垫底的淡波形
-                    shape.strokeColor = kind == .heartbeat && index == 0 ? color?.copy(alpha: (color?.alpha ?? 1) * 0.3) : color
+                    shape.path = wave
+                    shape.lineWidth = side * InkStateGeometry.heartbeatStrokeRatio
+                    shape.strokeColor = index == 0 ? color?.copy(alpha: (color?.alpha ?? 1) * 0.3) : color
                 }
             case .pulse:
                 loop.frame = bounds
@@ -153,6 +143,8 @@ struct LoopLayer {
 
         private static func make(_ kind: Kind, intro: Bool) -> CALayer {
             switch kind {
+            case .voice:
+                return VoiceRibbonLayer()
             case .orbit:
                 let layer = CALayer()
                 let track = CAShapeLayer(), arc = CAShapeLayer()
@@ -169,7 +161,6 @@ struct LoopLayer {
             case .heartbeat:
                 let layer = CALayer()
                 let base = stroke(), run = stroke()
-                // 一截实色沿波形走：终点先走、起点晚一点跟上，两者之间就是走着的那一截
                 let head = CAKeyframeAnimation(keyPath: "strokeEnd")
                 head.values = [0, 1, 1]
                 head.keyTimes = [0, 0.78, 1]
@@ -191,21 +182,6 @@ struct LoopLayer {
                 let fly = CAAnimationGroup()
                 fly.duration = Flight.period
                 layer.addSublayer(loop(fly, on: plane))
-                return layer
-            case .ripple:
-                let layer = CALayer()
-                let ring = stroke()
-                let grow = CABasicAnimation(keyPath: "transform.scale")
-                grow.fromValue = 1
-                grow.toValue = 1.6
-                let fade = CABasicAnimation(keyPath: "opacity")
-                fade.fromValue = 0.5
-                fade.toValue = 0
-                let wave = CAAnimationGroup()
-                wave.animations = [grow, fade]
-                wave.duration = 2.4
-                wave.timingFunction = CAMediaTimingFunction(controlPoints: 0.2, 0.6, 0.3, 1)
-                layer.addSublayer(loop(wave, on: ring))
                 return layer
             case .pulse:
                 let layer = CALayer()
@@ -238,34 +214,12 @@ struct LoopLayer {
             }
         }
 
-        /// 只描边、圆头圆角的一层（心电线、波纹）。
         private static func stroke() -> CAShapeLayer {
             let shape = CAShapeLayer()
             shape.fillColor = nil
             shape.lineCap = .round
             shape.lineJoin = .round
             return shape
-        }
-
-        /// 形状类动效每一层的路径（心电线、波纹，都是描边），画在边长 `side` 的正方形里（设计稿是 22 × 22、y 朝下的格子）。
-        private static func strokes(_ kind: Kind, side: CGFloat) -> [CGPath] {
-            let unit = side / 22
-            func path(_ points: [CGPoint]) -> CGPath {
-                let path = CGMutablePath()
-                path.addLines(between: points.map { CGPoint(x: $0.x * unit, y: $0.y * unit) })
-                return path
-            }
-            switch kind {
-            case .heartbeat:
-                let wave = path([CGPoint(x: 1, y: 11), CGPoint(x: 5.5, y: 11), CGPoint(x: 7.5, y: 4.5), CGPoint(x: 11, y: 17.5),
-                                 CGPoint(x: 13.5, y: 8), CGPoint(x: 15, y: 11), CGPoint(x: 21, y: 11)])
-                return [wave, wave]
-            case .ripple:
-                let inset = side * 0.07 / 2
-                return [CGPath(ellipseIn: CGRect(x: inset, y: inset, width: side - inset * 2, height: side - inset * 2), transform: nil)]
-            default:
-                return []
-            }
         }
 
         /// 挂一条常驻循环：退到后台再回来时不被系统摘掉；最高 `Motion.Beat.frameRate` 帧；起点按全局时钟对齐到周期的整数倍，
@@ -307,14 +261,15 @@ extension LoopLayer: NSViewRepresentable {
     var wrappedValue: Bool { pageActive && !reduceMotion && !LowPowerMode.shared.isOn }
 }
 
-/// 省电模式开着（`ProcessInfo.isLowPowerModeEnabled`，随系统的变化通知更新）。
 @Observable private final class LowPowerMode {
     static let shared = LowPowerMode()
-    private(set) var isOn = ProcessInfo.processInfo.isLowPowerModeEnabled
+    private(set) var isOn: Bool
 
     private init() {
+        let changes = NotificationCenter.default.notifications(named: .NSProcessInfoPowerStateDidChange)
+        isOn = ProcessInfo.processInfo.isLowPowerModeEnabled  // 订上之后再读：其间的切换不漏
         Task {
-            for await _ in NotificationCenter.default.notifications(named: .NSProcessInfoPowerStateDidChange) {
+            for await _ in changes {
                 isOn = ProcessInfo.processInfo.isLowPowerModeEnabled
             }
         }

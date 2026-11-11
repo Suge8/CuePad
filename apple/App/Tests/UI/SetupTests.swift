@@ -6,23 +6,18 @@ import SwiftUI
 import Testing
 @testable import CuePad
 
-/// 首次打开的接入面板：Cue 从没在哪台 Mac 上设过时自己弹一次，一处接入检测到的 Agent 并在这台启用 Cue，之后对 Cue 说的话直接交给它；
-/// 一家都用不了时，推荐 Claude Code，一行一个按钮：安装（后台跑官方脚本）→ 登录（打开浏览器）→ 启用，没做成的就地写原因、可再点；
-/// 装了没登录的一打开就是登录，Pi 缺 Node.js 时先给官网；
-/// 换新 Mac、还没和 iCloud 对过时不提议在这台启用，对过发现 Cue 在别处就只管接入；已接入只差 Cue 的老用户也弹一次，停用过 Cue 的不弹。
 @MainActor
+@Suite(.releasesLibraries)
 struct SetupTests {
     let app = TestApp()
     var services: AppServices { app.services }
 
-    /// 像启动时那样请工作区决定弹不弹（`AppDelegate` 同一个调用），再像面板打开时那样检测、问各家能不能用。
     private func launch(reconciled: Bool = true) async throws -> Workspace {
         services.startSync()
         try await app.syncs(reconciled: reconciled)
         return await reopen()
     }
 
-    /// 再打开一次（`relaunch` 之后）：弹不弹不看同步。
     private func reopen() async -> Workspace {
         let workspace = Workspace(services: services)
         workspace.offerSetup()
@@ -30,7 +25,6 @@ struct SetupTests {
         return workspace
     }
 
-    /// 面板此刻的 Cue 那一行与 Agent 那几行（读这台写下的各家能不能用，同面板）。
     private func panel(_ workspace: Workspace) async throws -> (cue: Workspace.SetupCue, rows: [SetupRow]) {
         let here = try await services.store.macAgents(on: TestApp.hostID)
         return (workspace.setupCue(here: here), workspace.setupRows(here: here))
@@ -133,7 +127,7 @@ struct SetupTests {
         #expect(try await panel(workspace).cue == .waiting("正在从 iCloud 同步…"))
 
         let following = Task { await workspace.followCue() }
-        defer { following.cancel() }
+        defer { await following.stop() }
         _ = try await services.store.updateCueProfile { profile in  // 第一遍拉回来的：Cue 在原来那台上
             profile.hostID = "mac-old"
             profile.enabledAt = .now

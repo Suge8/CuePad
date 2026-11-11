@@ -219,22 +219,6 @@
         }
       }
     },
-    "%@ 不是有效的 JSON，CuePad 没有改它" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ isn't valid JSON; CuePad left it unchanged"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ 不是有效的 JSON，CuePad 没有改它"
-          }
-        }
-      }
-    },
     "%@ 不能换这一项" : {
       "localizations" : {
         "en" : {
@@ -459,6 +443,22 @@
         }
       }
     },
+    "%@ 是旧版 CuePad 装的扩展，与后台启动的 Pi 冲突；删掉它再发" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ is an extension installed by an older CuePad and conflicts with Pi started in the background. Delete it, then send again"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 是旧版 CuePad 装的扩展，与后台启动的 Pi 冲突；删掉它再发"
+          }
+        }
+      }
+    },
     "%@ 没执行成功：%@" : {
       "localizations" : {
         "en" : {
@@ -535,6 +535,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ 没链到全局规则"
+          }
+        }
+      }
+    },
+    "%@ 的全局规则" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ Global Rules"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 的全局规则"
           }
         }
       }
@@ -771,6 +787,22 @@
         }
       }
     },
+    "%@ 读这份" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Read by %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 读这份"
+          }
+        }
+      }
+    },
     "%@ 起不来了" : {
       "localizations" : {
         "en" : {
@@ -819,18 +851,18 @@
         }
       }
     },
-    "%@ 里的 hooks 格式不对，CuePad 没有改它" : {
+    "%@ 链着这份" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "The hooks in %@ are malformed; CuePad left it unchanged"
+            "value" : "Linked by %@"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ 里的 hooks 格式不对，CuePad 没有改它"
+            "value" : "%@ 链着这份"
           }
         }
       }
@@ -1858,6 +1890,50 @@
         }
       }
     },
+    "%lld 未完成" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld open"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld open"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 未完成"
+          }
+        }
+      }
+    },
+    "%lld 未通过" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld not passed"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 未通过"
+          }
+        }
+      }
+    },
     "%lld 条" : {
       "localizations" : {
         "en" : {
@@ -2094,6 +2170,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld 毫秒"
+          }
+        }
+      }
+    },
+    "%lld 灵感" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld idea"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld ideas"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 灵感"
           }
         }
       }
@@ -2723,6 +2827,22 @@
         }
       }
     },
+    "Agent 的接入没能更新：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn’t update agent connections: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agent 的接入没能更新：%@"
+          }
+        }
+      }
+    },
     "Agent 等你回答" : {
       "localizations" : {
         "en" : {
@@ -2899,6 +3019,22 @@
         }
       }
     },
+    "ChatGPT 拒绝了这次通话（%lld）：套餐不含语音或额度已用完" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ChatGPT declined the call (%lld): your plan doesn't include voice, or you've used up your limit"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ChatGPT 拒绝了这次通话（%lld）：套餐不含语音或额度已用完"
+          }
+        }
+      }
+    },
     "ChatGPT 暂不提供额度数据" : {
       "localizations" : {
         "en" : {
@@ -2959,22 +3095,6 @@
         }
       }
     },
-    "Codex 出错了" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Codex ran into an error"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Codex 出错了"
-          }
-        }
-      }
-    },
     "Codex 在沙箱里跑命令，写入 CuePad 时会请你批准。" : {
       "localizations" : {
         "en" : {
@@ -3007,18 +3127,18 @@
         }
       }
     },
-    "Codex 没有信任 CuePad 的钩子（它的信任规则可能变了），钩子不会执行" : {
+    "Codex 没响应，看看 Mac 上的提示" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Codex doesn't trust CuePad's hooks (its trust rules may have changed), so they won't run"
+            "value" : "Codex is stuck. Check your Mac."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Codex 没有信任 CuePad 的钩子（它的信任规则可能变了），钩子不会执行"
+            "value" : "Codex 没响应，看看 Mac 上的提示"
           }
         }
       }
@@ -3035,6 +3155,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Codex 没有模型 %@"
+          }
+        }
+      }
+    },
+    "Codex 的 ChatGPT 登录不可用或已过期：在 Codex 里重新登录后再通话" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Codex's ChatGPT sign-in is unavailable or expired. Sign in again in Codex, then call."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Codex 的 ChatGPT 登录不可用或已过期：在 Codex 里重新登录后再通话"
           }
         }
       }
@@ -3083,22 +3219,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Codex 的自定提示词"
-          }
-        }
-      }
-    },
-    "Codex 读不了 hooks.json：%@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Codex can't read hooks.json: %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Codex 读不了 hooks.json：%@"
           }
         }
       }
@@ -3285,6 +3405,22 @@
         }
       }
     },
+    "Cue 还没启用，启用后才能通话" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Turn on Cue to call it"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cue 还没启用，启用后才能通话"
+          }
+        }
+      }
+    },
     "Cue 页读到的位置" : {
       "localizations" : {
         "en" : {
@@ -3313,50 +3449,18 @@
       },
       "shouldTranslate" : false
     },
-    "CuePad 写给 Agent 的技能或扩展没能升级：%@" : {
+    "CuePad 以前写进 %@ 的钩子没能删掉，下次启动再试：%@" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "CuePad's skills or extensions for agents couldn't be upgraded: %@"
+            "value" : "Couldn’t remove the hooks an older CuePad added to %@. Will retry next launch: %@"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "CuePad 写给 Agent 的技能或扩展没能升级：%@"
-          }
-        }
-      }
-    },
-    "CuePad 在后台开 Pi 会话也要先接入。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "CuePad also needs Pi connected to start Pi sessions in the background."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "CuePad 在后台开 Pi 会话也要先接入。"
-          }
-        }
-      }
-    },
-    "CuePad 在后台开的 %@ 会话出现在 CuePad 里；它的网页与桌面版里开的会话不接。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ sessions that CuePad starts in the background show up in CuePad; sessions started in its web or desktop app don’t."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "CuePad 在后台开的 %@ 会话出现在 CuePad 里；它的网页与桌面版里开的会话不接。"
+            "value" : "CuePad 以前写进 %1$@ 的钩子没能删掉，下次启动再试：%2$@"
           }
         }
       }
@@ -3473,18 +3577,82 @@
         }
       }
     },
+    "CuePad 答不了这类提问" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CuePad can't answer this kind of question."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CuePad 答不了这类提问"
+          }
+        }
+      }
+    },
+    "CuePad 答不了这类提问，只能结束这个会话" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CuePad can't answer this kind of question. You can only end the session."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CuePad 答不了这类提问，只能结束这个会话"
+          }
+        }
+      }
+    },
     "CuePad 诊断摘要：%lld 份，%lld 种" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "CuePad diagnostics summary: %lld reports, %lld kinds"
+            "value" : "CuePad diagnostics — Reports: %1$lld; Issue types: %2$lld"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "CuePad 诊断摘要：%1$lld 份，%2$lld 种"
+          }
+        }
+      }
+    },
+    "CuePad 里只有它在后台开过的 %@ 会话，终端里开的不会出现。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CuePad shows only the %@ sessions it started in the background; sessions started in Terminal don’t appear."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CuePad 里只有它在后台开过的 %@ 会话，终端里开的不会出现。"
+          }
+        }
+      }
+    },
+    "CuePad 里只有它在后台开过的 %@ 会话，网页与桌面版里开的不会出现。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CuePad shows only the %@ sessions it started in the background; sessions from its web and desktop apps don’t appear."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CuePad 里只有它在后台开过的 %@ 会话，网页与桌面版里开的不会出现。"
           }
         }
       }
@@ -3553,6 +3721,22 @@
         }
       }
     },
+    "Mac 上的 Codex 没响应：看看有没有系统提示在等你确认" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Codex isn't responding. Check for a system prompt waiting for you."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mac 上的 Codex 没响应：看看有没有系统提示在等你确认"
+          }
+        }
+      }
+    },
     "Mac 上的 CuePad 在执行过程中退出，送达尚未确认，不会自动重发" : {
       "localizations" : {
         "en" : {
@@ -3597,6 +3781,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Mac 不在线：唤醒它、开着 UU 远程再试"
+          }
+        }
+      }
+    },
+    "Mac 已断开连接" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The Mac disconnected"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mac 已断开连接"
           }
         }
       }
@@ -3725,22 +3925,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Pi 的系统提示"
-          }
-        }
-      }
-    },
-    "Pi 里的 CuePad 扩展不是这个版本的，没能在后台启动；在 CuePad 设置里修复 Pi 接入后再发" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Pi's CuePad extension doesn't match this version, so Pi couldn't start in the background. Repair the Pi connection in CuePad Settings, then send again."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Pi 里的 CuePad 扩展不是这个版本的，没能在后台启动；在 CuePad 设置里修复 Pi 接入后再发"
           }
         }
       }
@@ -4197,22 +4381,6 @@
       },
       "shouldTranslate" : false
     },
-    "tmux 没能切到 %@（会话可能没有附着的客户端）" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "tmux couldn't switch to %@ (the session may have no attached client)"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "tmux 没能切到 %@（会话可能没有附着的客户端）"
-          }
-        }
-      }
-    },
     "{{%@}}" : {
       "localizations" : {
 
@@ -4395,6 +4563,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "「%@」没开"
+          }
+        }
+      }
+    },
+    "「%@」没开，没有发出" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%@” is off. Not sent."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "「%@」没开，没有发出"
           }
         }
       }
@@ -5147,6 +5331,22 @@
         }
       }
     },
+    "下一页" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Next page"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下一页"
+          }
+        }
+      }
+    },
     "下载中 %@" : {
       "localizations" : {
         "en" : {
@@ -5307,22 +5507,6 @@
         }
       }
     },
-    "不知道会话运行在哪个终端应用里" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Couldn't tell which terminal app the session is running in"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "不知道会话运行在哪个终端应用里"
-          }
-        }
-      }
-    },
     "不知道这个会话用的模型" : {
       "localizations" : {
         "en" : {
@@ -5463,22 +5647,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "中"
-          }
-        }
-      }
-    },
-    "中途停下" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "stop"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "中途停下"
           }
         }
       }
@@ -5991,18 +6159,18 @@
         }
       }
     },
-    "会写入 %@（配置文件里只加 CuePad 自己的条目）；关掉即删除。" : {
+    "会写入 %@；关掉即删除。" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Writes %@ (only CuePad's own entries in config files). Turning it off removes them."
+            "value" : "Writes %@; turning it off removes them."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "会写入 %@（配置文件里只加 CuePad 自己的条目）；关掉即删除。"
+            "value" : "会写入 %@；关掉即删除。"
           }
         }
       }
@@ -6055,22 +6223,6 @@
         }
       }
     },
-    "会话一直没连上 CuePad" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The session never connected to CuePad"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "会话一直没连上 CuePad"
-          }
-        }
-      }
-    },
     "会话名" : {
       "localizations" : {
         "en" : {
@@ -6083,6 +6235,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "会话名"
+          }
+        }
+      }
+    },
+    "会话回复框的文字与批注会保留；其他未发送内容请先保存或发出" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Text and annotations in session reply drafts are kept. Save or send other unsent content before reopening"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "会话回复框的文字与批注会保留；其他未发送内容请先保存或发出"
           }
         }
       }
@@ -6135,6 +6303,22 @@
         }
       }
     },
+    "会话扩展需升级后才能按原回合停止，没有停止会话" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Update the session extension to stop a specific turn. The session was not stopped."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "会话扩展需升级后才能按原回合停止，没有停止会话"
+          }
+        }
+      }
+    },
     "会话操作已经开始，结果尚未确认：%@" : {
       "localizations" : {
         "en" : {
@@ -6163,6 +6347,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "会话有动静"
+          }
+        }
+      }
+    },
+    "会话正在结束，确认结束结果后才能关联或发送" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This session is ending. Wait until the outcome is confirmed before linking a task or sending a message."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "会话正在结束，确认结束结果后才能关联或发送"
           }
         }
       }
@@ -6215,6 +6415,22 @@
         }
       }
     },
+    "会话等待同步" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Waiting for session to sync"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "会话等待同步"
+          }
+        }
+      }
+    },
     "会话结束了" : {
       "localizations" : {
         "en" : {
@@ -6227,6 +6443,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "会话结束了"
+          }
+        }
+      }
+    },
+    "会话还没起好，没有发出，可以重发" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The session isn't ready yet. Not sent; you can send it again."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "会话还没起好，没有发出，可以重发"
           }
         }
       }
@@ -6807,6 +7039,102 @@
         }
       }
     },
+    "停止「%@」" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stop “%@”"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "停止「%@」"
+          }
+        }
+      }
+    },
+    "停止哪个会话？" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Which session should stop?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "停止哪个会话？"
+          }
+        }
+      }
+    },
+    "停止执行" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stop work"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "停止执行"
+          }
+        }
+      }
+    },
+    "停止试听" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stop Preview"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "停止试听"
+          }
+        }
+      }
+    },
+    "停止请求已受理" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stop request accepted"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "停止请求已受理"
+          }
+        }
+      }
+    },
+    "停止请求已提交" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stop request submitted"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "停止请求已提交"
+          }
+        }
+      }
+    },
     "停止这一轮" : {
       "localizations" : {
         "en" : {
@@ -7363,6 +7691,22 @@
         }
       }
     },
+    "内容太长，无法排成一张清晰的图片，请分成几条灵感后重试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This is too long for a readable image. Split it into a few ideas and try again."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "内容太长，无法排成一张清晰的图片，请分成几条灵感后重试"
+          }
+        }
+      }
+    },
     "内置" : {
       "localizations" : {
         "en" : {
@@ -7459,6 +7803,22 @@
         }
       }
     },
+    "再说一遍" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Say it again"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "再说一遍"
+          }
+        }
+      }
+    },
     "写入" : {
       "localizations" : {
         "en" : {
@@ -7507,22 +7867,6 @@
         }
       }
     },
-    "写入扩展与技能" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Adds an extension and a skill"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "写入扩展与技能"
-          }
-        }
-      }
-    },
     "写入技能" : {
       "localizations" : {
         "en" : {
@@ -7539,50 +7883,18 @@
         }
       }
     },
-    "写入技能与钩子" : {
+    "写入技能，读进它的会话记录" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Adds a skill and hooks"
+            "value" : "Adds a skill and reads its sessions"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "写入技能与钩子"
-          }
-        }
-      }
-    },
-    "写入技能，直连它的后台服务" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Adds a skill and connects to its server"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "写入技能，直连它的后台服务"
-          }
-        }
-      }
-    },
-    "写入技能，跟读它的会话记录" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Adds a skill and follows its session logs"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "写入技能，跟读它的会话记录"
+            "value" : "写入技能，读进它的会话记录"
           }
         }
       }
@@ -7747,6 +8059,22 @@
         }
       }
     },
+    "分享原图" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Share Original Images"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "分享原图"
+          }
+        }
+      }
+    },
     "分享原始文件…" : {
       "localizations" : {
         "en" : {
@@ -7759,6 +8087,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "分享原始文件…"
+          }
+        }
+      }
+    },
+    "分享文字" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Share Text"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "分享文字"
           }
         }
       }
@@ -7791,22 +8135,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "切换栏焦点"
-          }
-        }
-      }
-    },
-    "切换模型" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "switch models"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "切换模型"
           }
         }
       }
@@ -8367,6 +8695,22 @@
         }
       }
     },
+    "原回合已结束或更换，停止请求不再适用，没有停止后来的工作" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The original turn has ended or changed. This stop request no longer applies; later work was not stopped."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "原回合已结束或更换，停止请求不再适用，没有停止后来的工作"
+          }
+        }
+      }
+    },
     "原因" : {
       "localizations" : {
         "en" : {
@@ -8447,6 +8791,22 @@
         }
       }
     },
+    "原记录不可用，无法继续此操作" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The original record is unavailable"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "原记录不可用，无法继续此操作"
+          }
+        }
+      }
+    },
     "原话" : {
       "localizations" : {
         "en" : {
@@ -8459,6 +8819,70 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "原话"
+          }
+        }
+      }
+    },
+    "原请求已处理，无需再次提交" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The original request was already handled"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "原请求已处理，无需再次提交"
+          }
+        }
+      }
+    },
+    "原请求来源不匹配，操作未执行" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The request origin does not match. No action was taken"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "原请求来源不匹配，操作未执行"
+          }
+        }
+      }
+    },
+    "原请求的送达尚未确认，不能重复提交" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delivery is unconfirmed. The request cannot be submitted again"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "原请求的送达尚未确认，不能重复提交"
+          }
+        }
+      }
+    },
+    "原通话已被替换或不可用，请在 Mac 的通话详情查看或恢复原请求" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The original call was replaced or is unavailable. View or recover the original request in call details on your Mac"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "原通话已被替换或不可用，请在 Mac 的通话详情查看或恢复原请求"
           }
         }
       }
@@ -8655,22 +9079,6 @@
         }
       }
     },
-    "发图片" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "send images"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "发图片"
-          }
-        }
-      }
-    },
     "发布或部署" : {
       "localizations" : {
         "en" : {
@@ -8747,22 +9155,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "发给过 Agent"
-          }
-        }
-      }
-    },
-    "发话" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "send messages"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "发话"
           }
         }
       }
@@ -8927,6 +9319,22 @@
         }
       }
     },
+    "取消静音" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unmute"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "取消静音"
+          }
+        }
+      }
+    },
     "变量取值" : {
       "localizations" : {
         "en" : {
@@ -9015,18 +9423,18 @@
         }
       }
     },
-    "只存在这台设备上，不会自动上传。导出诊断复制每次出事的要点，发给开发者；开发者要完整原文时，再分享原始文件。" : {
+    "只有 CuePad 最近 15 分钟的日志，标成私密的内容系统已打码。经你自己的 iCloud 送到你的 Mac（~/Library/Logs/CuePad），不经别人。" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Stays on this device and is never uploaded. Export Diagnostics copies the key facts of each incident to send to the developer; share the raw files only if the developer asks for them."
+            "value" : "Only CuePad's logs from the last 15 minutes, with private values redacted by the system. They go to your Mac (~/Library/Logs/CuePad) through your own iCloud, never through anyone else."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "只存在这台设备上，不会自动上传。导出诊断复制每次出事的要点，发给开发者；开发者要完整原文时，再分享原始文件。"
+            "value" : "只有 CuePad 最近 15 分钟的日志，标成私密的内容系统已打码。经你自己的 iCloud 送到你的 Mac（~/Library/Logs/CuePad），不经别人。"
           }
         }
       }
@@ -9623,6 +10031,22 @@
         }
       }
     },
+    "和 Cue 通话" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Call Cue"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "和 Cue 通话"
+          }
+        }
+      }
+    },
     "唤醒 %@ 接着说" : {
       "localizations" : {
         "en" : {
@@ -9751,6 +10175,22 @@
         }
       }
     },
+    "回到首页" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Back to first page"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "回到首页"
+          }
+        }
+      }
+    },
     "回复" : {
       "localizations" : {
         "en" : {
@@ -9799,6 +10239,22 @@
         }
       }
     },
+    "回复等待同步" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Waiting for reply to sync"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "回复等待同步"
+          }
+        }
+      }
+    },
     "回收站" : {
       "localizations" : {
         "en" : {
@@ -9843,22 +10299,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "回答上面的问题"
-          }
-        }
-      }
-    },
-    "回答提问" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "answer questions"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "回答提问"
           }
         }
       }
@@ -9987,6 +10427,54 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "图片缺失"
+          }
+        }
+      }
+    },
+    "图片还没到这台设备，请在正文中点按图片下载，再重试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This image isn’t on this device yet. Tap it in the editor to download it, then try again."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "图片还没到这台设备，请在正文中点按图片下载，再重试"
+          }
+        }
+      }
+    },
+    "图片链接无法访问，请检查链接" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The image link couldn't be reached. Check the URL."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "图片链接无法访问，请检查链接"
+          }
+        }
+      }
+    },
+    "图片链接暂时无法访问，请稍后重试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The image link is unavailable. Please try again later."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "图片链接暂时无法访问，请稍后重试"
           }
         }
       }
@@ -10135,22 +10623,6 @@
         }
       }
     },
-    "在 Mac 的终端里开一个 Agent，或在这里开新会话" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Start an agent in a terminal on your Mac, or start a new session here"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在 Mac 的终端里开一个 Agent，或在这里开新会话"
-          }
-        }
-      }
-    },
     "在 TestFlight 里更新" : {
       "localizations" : {
         "en" : {
@@ -10227,6 +10699,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "在「设置 › 你的名字 › iCloud › 使用 iCloud 的 App」里打开 CuePad（没登录 iCloud 时先登录）；打开后自动开始同步，本机数据不受影响"
+          }
+        }
+      }
+    },
+    "在「语言与地区」的「应用程序」中添加或选择 CuePad，再选择语言；移除 CuePad 可恢复跟随系统" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In Language & Region, add or select CuePad under Applications, then choose a language. Remove CuePad to follow the system language."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在「语言与地区」的「应用程序」中添加或选择 CuePad，再选择语言；移除 CuePad 可恢复跟随系统"
           }
         }
       }
@@ -10599,38 +11087,6 @@
         }
       }
     },
-    "在终端里等你" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Waiting for you in the terminal"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在终端里等你"
-          }
-        }
-      }
-    },
-    "在终端里跑着：按 Esc 或等它做完" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Running in Terminal: press Esc or wait"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在终端里跑着：按 Esc 或等它做完"
-          }
-        }
-      }
-    },
     "在访达中显示" : {
       "localizations" : {
         "en" : {
@@ -10695,6 +11151,22 @@
         }
       }
     },
+    "在这里开新会话；Mac 上接入的 Agent，它的会话记录也会出现在这里" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start a new session here. Sessions from agents connected on your Mac also show up here."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在这里开新会话；Mac 上接入的 Agent，它的会话记录也会出现在这里"
+          }
+        }
+      }
+    },
     "地球" : {
       "localizations" : {
         "en" : {
@@ -10723,6 +11195,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "填进来"
+          }
+        }
+      }
+    },
+    "声音" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voice"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "声音"
           }
         }
       }
@@ -11027,6 +11515,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "存到"
+          }
+        }
+      }
+    },
+    "存在这台设备上，连着 iCloud 时经你自己的 iCloud 送到你的 Mac，不经别人。要发给别人时，导出诊断复制每次出事的要点；要完整原文时，再分享原始文件。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kept on this device and, when iCloud is connected, sent to your Mac through your own iCloud, never through anyone else. To send them to someone, Export Diagnostics copies the key facts of each incident; share the raw files only if they need the full text."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "存在这台设备上，连着 iCloud 时经你自己的 iCloud 送到你的 Mac，不经别人。要发给别人时，导出诊断复制每次出事的要点；要完整原文时，再分享原始文件。"
           }
         }
       }
@@ -11527,6 +12031,22 @@
         }
       }
     },
+    "尚未更新" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not updated yet"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "尚未更新"
+          }
+        }
+      }
+    },
     "尚未派发：%@" : {
       "localizations" : {
         "en" : {
@@ -11587,6 +12107,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "尚未观测到额度"
+          }
+        }
+      }
+    },
+    "尚未载入" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not loaded yet"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "尚未载入"
           }
         }
       }
@@ -11699,22 +12235,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "工作中"
-          }
-        }
-      }
-    },
-    "工具" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "a tool"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "工具"
           }
         }
       }
@@ -11891,6 +12411,22 @@
         }
       }
     },
+    "已加入朗读队列" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Added to the reading queue"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已加入朗读队列"
+          }
+        }
+      }
+    },
     "已卸载，CuePad 的技能还留着" : {
       "localizations" : {
         "en" : {
@@ -11935,6 +12471,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已发出"
+          }
+        }
+      }
+    },
+    "已发出 %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sent at %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已发出 %@"
           }
         }
       }
@@ -12003,6 +12555,22 @@
         }
       }
     },
+    "已存下，连上 iCloud 后自动发出" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saved, will send when iCloud connects"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已存下，连上 iCloud 后自动发出"
+          }
+        }
+      }
+    },
     "已完成" : {
       "localizations" : {
         "en" : {
@@ -12031,22 +12599,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已完成 %lld"
-          }
-        }
-      }
-    },
-    "已完成，终端未结束" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Done · still open"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已完成，终端未结束"
           }
         }
       }
@@ -12203,6 +12755,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已接到「%@」的正文后面"
+          }
+        }
+      }
+    },
+    "已提交语音，朗读尚未确认" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Submitted for speech; playback unconfirmed"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已提交语音，朗读尚未确认"
           }
         }
       }
@@ -12783,22 +13351,6 @@
         }
       }
     },
-    "开新会话" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "New Session"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "开新会话"
-          }
-        }
-      }
-    },
     "开新会话交给它" : {
       "localizations" : {
         "en" : {
@@ -12911,6 +13463,22 @@
         }
       }
     },
+    "当前连接不支持通话，请更新手机和 Mac 上的 CuePad" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This connection does not support calls. Update CuePad on this device and your Mac"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "当前连接不支持通话，请更新手机和 Mac 上的 CuePad"
+          }
+        }
+      }
+    },
     "待办" : {
       "localizations" : {
         "en" : {
@@ -13019,22 +13587,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "忘掉这一条？"
-          }
-        }
-      }
-    },
-    "快满了。Agent 会在到顶前自动压缩。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Almost full. The agent compacts automatically before it runs out."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "快满了。Agent 会在到顶前自动压缩。"
           }
         }
       }
@@ -13163,6 +13715,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "我在你的 Mac 上干活，接上 Mac 就能叫我"
+          }
+        }
+      }
+    },
+    "我在听" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Listening"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "我在听"
           }
         }
       }
@@ -13327,6 +13895,38 @@
         }
       }
     },
+    "打开 CuePad" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open CuePad"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开 CuePad"
+          }
+        }
+      }
+    },
+    "打开 CuePad 后可选项目；当前存入默认项目" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open CuePad to choose a project. Saving to Default for now"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开 CuePad 后可选项目；当前存入默认项目"
+          }
+        }
+      }
+    },
     "打开任务" : {
       "localizations" : {
         "en" : {
@@ -13423,6 +14023,22 @@
         }
       }
     },
+    "打开语言与地区设置" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Language & Region settings"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开语言与地区设置"
+          }
+        }
+      }
+    },
     "打开这件事的 Agent 会话" : {
       "localizations" : {
         "en" : {
@@ -13435,6 +14051,54 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "打开这件事的 Agent 会话"
+          }
+        }
+      }
+    },
+    "打断本轮" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Interrupt"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打断本轮"
+          }
+        }
+      }
+    },
+    "执行回合已变化，没有停止后来的工作" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The execution turn changed. Later work was not stopped"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "执行回合已变化，没有停止后来的工作"
+          }
+        }
+      }
+    },
+    "执行记录" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Execution history"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "执行记录"
           }
         }
       }
@@ -13615,6 +14279,22 @@
         }
       }
     },
+    "技能在新开的会话里生效。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The skill takes effect in new sessions."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "技能在新开的会话里生效。"
+          }
+        }
+      }
+    },
     "把任务的正文交给 Agent，开始做" : {
       "localizations" : {
         "en" : {
@@ -13675,6 +14355,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "把技能与规则收到一处"
+          }
+        }
+      }
+    },
+    "把最近日志发到 Mac" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Send Recent Logs to Mac"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "把最近日志发到 Mac"
           }
         }
       }
@@ -13787,6 +14483,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "挂到 %@"
+          }
+        }
+      }
+    },
+    "挂断" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "End call"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "挂断"
           }
         }
       }
@@ -13919,18 +14631,18 @@
         }
       }
     },
-    "接不上：%@ 是别人的同名文件" : {
+    "排成图片分享" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Can't connect: %@ belongs to something else"
+            "value" : "Share as Image"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "接不上：%@ 是别人的同名文件"
+            "value" : "排成图片分享"
           }
         }
       }
@@ -13999,82 +14711,18 @@
         }
       }
     },
-    "接入后新开的会话里生效。" : {
+    "接入后，这台 Mac 上的 %@ 会话记录都能在 CuePad 里翻看，终端里开的也在；对其中一个发话，CuePad 在后台接着它。" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Takes effect in new sessions."
+            "value" : "Once connected, all %@ sessions on this Mac show up in CuePad, including ones started in Terminal. Message one and CuePad continues it in the background."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "接入后新开的会话里生效。"
-          }
-        }
-      }
-    },
-    "接入后运行中的会话 /reload 后生效。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Running sessions pick it up after /reload."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "接入后运行中的会话 /reload 后生效。"
-          }
-        }
-      }
-    },
-    "接入后，在终端和桌面版里开的 %@ 会话也出现在 CuePad 里：在 Mac 和手机上看它在做什么、发话、回答它的提问。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Once connected, %@ sessions started in Terminal or the desktop app show up in CuePad too: see what they're doing, message them, and answer their questions from your Mac or phone."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "接入后，在终端和桌面版里开的 %@ 会话也出现在 CuePad 里：在 Mac 和手机上看它在做什么、发话、回答它的提问。"
-          }
-        }
-      }
-    },
-    "接入后，在终端里开的 %@ 会话也出现在 CuePad 里：在 Mac 和手机上看它在做什么、发话、回答它的提问。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Once connected, %@ sessions started in Terminal show up in CuePad too: see what they're doing, message them, and answer their questions from your Mac or phone."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "接入后，在终端里开的 %@ 会话也出现在 CuePad 里：在 Mac 和手机上看它在做什么、发话、回答它的提问。"
-          }
-        }
-      }
-    },
-    "接入后，在终端里开的 %@ 会话也出现在 CuePad 里：在 Mac 和手机上看它在做什么。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Once connected, %@ sessions started in Terminal show up in CuePad too: see what they're doing from your Mac or phone."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "接入后，在终端里开的 %@ 会话也出现在 CuePad 里：在 Mac 和手机上看它在做什么。"
+            "value" : "接入后，这台 Mac 上的 %@ 会话记录都能在 CuePad 里翻看，终端里开的也在；对其中一个发话，CuePad 在后台接着它。"
           }
         }
       }
@@ -14271,22 +14919,6 @@
         }
       }
     },
-    "插话（会打断这一轮）" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Interject (interrupts this turn)"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "插话（会打断这一轮）"
-          }
-        }
-      }
-    },
     "搜索" : {
       "localizations" : {
         "en" : {
@@ -14427,6 +15059,54 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "撤销完成"
+          }
+        }
+      }
+    },
+    "操作失败，请检查 Mac 上的资料库" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The action failed. Check the library on your Mac"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "操作失败，请检查 Mac 上的资料库"
+          }
+        }
+      }
+    },
+    "操作暂不可用，请稍后再试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Action unavailable. Try again later"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "操作暂不可用，请稍后再试"
+          }
+        }
+      }
+    },
+    "操作未执行" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Action not performed"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "操作未执行"
           }
         }
       }
@@ -14715,22 +15395,6 @@
         }
       }
     },
-    "改会话名" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "rename sessions"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "改会话名"
-          }
-        }
-      }
-    },
     "改动" : {
       "localizations" : {
         "en" : {
@@ -14979,6 +15643,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "文件…"
+          }
+        }
+      }
+    },
+    "文件不是有效的 JSON，CuePad 没有改它" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The file isn’t valid JSON, so CuePad left it unchanged"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文件不是有效的 JSON，CuePad 没有改它"
           }
         }
       }
@@ -15303,22 +15983,6 @@
         }
       }
     },
-    "无法控制该终端应用（可能没有授予自动化权限）：%@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Can't control the terminal app (Automation permission may be missing): %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无法控制该终端应用（可能没有授予自动化权限）：%@"
-          }
-        }
-      }
-    },
     "无法注册：%@" : {
       "localizations" : {
         "en" : {
@@ -15351,6 +16015,38 @@
         }
       }
     },
+    "无法读取通话记录，请检查连接后重试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cannot read call history. Check your connection and try again"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法读取通话记录，请检查连接后重试"
+          }
+        }
+      }
+    },
+    "无法连接 Mac，请确认 Mac 已开机并联网" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cannot connect to Mac. Make sure it is on and online"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法连接 Mac，请确认 Mac 已开机并联网"
+          }
+        }
+      }
+    },
     "日期" : {
       "localizations" : {
         "en" : {
@@ -15363,22 +16059,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "日期"
-          }
-        }
-      }
-    },
-    "旧版 Pi 扩展文件没能删掉：%@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Couldn't remove the old Pi extension file: %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "旧版 Pi 扩展文件没能删掉：%@"
           }
         }
       }
@@ -15731,6 +16411,22 @@
         }
       }
     },
+    "更改后需重新打开 CuePad" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reopen CuePad after changing the language"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "更改后需重新打开 CuePad"
+          }
+        }
+      }
+    },
     "更早" : {
       "localizations" : {
         "en" : {
@@ -15931,34 +16627,6 @@
         }
       }
     },
-    "有 %lld 个终端匹配，无法确定是哪一个" : {
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld terminal matches, but it couldn't be identified"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld terminals match; couldn't tell which one"
-                }
-              }
-            }
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "有 %lld 个终端匹配，无法确定是哪一个"
-          }
-        }
-      }
-    },
     "有一件做完了" : {
       "localizations" : {
         "en" : {
@@ -16103,6 +16771,54 @@
         }
       }
     },
+    "有问题" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Needs attention"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "有问题"
+          }
+        }
+      }
+    },
+    "朗读尚未确认" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Playback unconfirmed"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "朗读尚未确认"
+          }
+        }
+      }
+    },
+    "朗读记录" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Speech history"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "朗读记录"
+          }
+        }
+      }
+    },
     "未命名的 Mac" : {
       "localizations" : {
         "en" : {
@@ -16183,6 +16899,22 @@
         }
       }
     },
+    "未能交给 Cue" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn’t send to Cue"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未能交给 Cue"
+          }
+        }
+      }
+    },
     "未送达，" : {
       "localizations" : {
         "en" : {
@@ -16195,6 +16927,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "未送达，"
+          }
+        }
+      }
+    },
+    "未通过" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not passed"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未通过"
           }
         }
       }
@@ -16295,6 +17043,22 @@
         }
       }
     },
+    "本项目没有可绑定的任务" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No Tasks to Link in This Project"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "本项目没有可绑定的任务"
+          }
+        }
+      }
+    },
     "本项目没有在跑的会话" : {
       "localizations" : {
         "en" : {
@@ -16387,6 +17151,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "查看"
+          }
+        }
+      }
+    },
+    "查看图片" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "View Image"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "查看图片"
           }
         }
       }
@@ -16791,6 +17571,38 @@
         }
       }
     },
+    "正在停止…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stopping…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在停止…"
+          }
+        }
+      }
+    },
+    "正在准备图片…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preparing images…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在准备图片…"
+          }
+        }
+      }
+    },
     "正在压缩上下文" : {
       "localizations" : {
         "en" : {
@@ -16835,6 +17647,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在发给 Agent"
+          }
+        }
+      }
+    },
+    "正在发送…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sending…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在发送…"
           }
         }
       }
@@ -16899,6 +17727,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在唤醒 Agent"
+          }
+        }
+      }
+    },
+    "正在回应" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Responding"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在回应"
           }
         }
       }
@@ -16999,6 +17843,22 @@
         }
       }
     },
+    "正在提交语音…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Submitting for speech…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在提交语音…"
+          }
+        }
+      }
+    },
     "正在改名" : {
       "localizations" : {
         "en" : {
@@ -17063,6 +17923,22 @@
         }
       }
     },
+    "正在读取…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loading…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在读取…"
+          }
+        }
+      }
+    },
     "正在读这台 Mac 上的技能与规则…" : {
       "localizations" : {
         "en" : {
@@ -17091,6 +17967,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在连接 iCloud…"
+          }
+        }
+      }
+    },
+    "正在连接…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connecting…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在连接…"
           }
         }
       }
@@ -17415,6 +18307,22 @@
         }
       }
     },
+    "没发出去：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't send: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没发出去：%@"
+          }
+        }
+      }
+    },
     "没发给过 Agent" : {
       "localizations" : {
         "en" : {
@@ -17443,22 +18351,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "没发过"
-          }
-        }
-      }
-    },
-    "没开成会话：%@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Couldn't open the session: %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "没开成会话：%@"
           }
         }
       }
@@ -17559,22 +18451,6 @@
         }
       }
     },
-    "没有 tty 信息，无法定位标签页" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No tty info, so the tab can't be found"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "没有 tty 信息，无法定位标签页"
-          }
-        }
-      }
-    },
     "没有删掉的东西" : {
       "localizations" : {
         "en" : {
@@ -17655,22 +18531,6 @@
         }
       }
     },
-    "没有工作目录或 tty 匹配的终端/标签页" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No terminal or tab matches the working folder or tty"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "没有工作目录或 tty 匹配的终端/标签页"
-          }
-        }
-      }
-    },
     "没有待办" : {
       "localizations" : {
         "en" : {
@@ -17715,22 +18575,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "没有找到 %@"
-          }
-        }
-      }
-    },
-    "没有找到 codex 命令：Codex 的钩子要它来信任与撤销" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "codex command not found: Codex hooks need it to trust and revoke them"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "没有找到 codex 命令：Codex 的钩子要它来信任与撤销"
           }
         }
       }
@@ -18019,6 +18863,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "没能查到最新额度：%@"
+          }
+        }
+      }
+    },
+    "没能生成图片，请检查灵感内容后再分享" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't create the image. Check the idea's content and share again."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没能生成图片，请检查灵感内容后再分享"
           }
         }
       }
@@ -18567,6 +19427,22 @@
         }
       }
     },
+    "状态等待同步" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Waiting for status to sync"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "状态等待同步"
+          }
+        }
+      }
+    },
     "现在" : {
       "localizations" : {
         "en" : {
@@ -18723,22 +19599,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "用户强制退出"
-          }
-        }
-      }
-    },
-    "用斜杠命令" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "use slash commands"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "用斜杠命令"
           }
         }
       }
@@ -19223,6 +20083,22 @@
         }
       }
     },
+    "知道了" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OK"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "知道了"
+          }
+        }
+      }
+    },
     "磁盘写入异常" : {
       "localizations" : {
         "en" : {
@@ -19331,6 +20207,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "稍后会自动重试"
+          }
+        }
+      }
+    },
+    "稍后重试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retrying soon"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "稍后重试"
           }
         }
       }
@@ -19803,6 +20695,38 @@
         }
       }
     },
+    "等待回应" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Waiting for reply"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "等待回应"
+          }
+        }
+      }
+    },
+    "等待提交语音" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Waiting to submit for speech"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "等待提交语音"
+          }
+        }
+      }
+    },
     "等待目标就绪" : {
       "localizations" : {
         "en" : {
@@ -19979,70 +20903,6 @@
         }
       }
     },
-    "终端应用 %@ 没有在运行" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Terminal app %@ isn't running"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "终端应用 %@ 没有在运行"
-          }
-        }
-      }
-    },
-    "终端里开的会话不能%@，CuePad 在后台开的都能做。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sessions started in Terminal can't %@. Sessions CuePad starts in the background can."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "终端里开的会话不能%@，CuePad 在后台开的都能做。"
-          }
-        }
-      }
-    },
-    "终端里的 %@ 只能在终端里说话：CuePad 只看得到它在做什么" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ in the terminal only takes messages there. CuePad can only see what it's doing."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "终端里的 %@ 只能在终端里说话：CuePad 只看得到它在做什么"
-          }
-        }
-      }
-    },
-    "终端里的 %@ 在跑，CuePad 打断不了它：在终端里按 Esc，或等它做完再说" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ is running in the terminal and CuePad can't interrupt it. Press Esc in the terminal, or wait until it's done."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "终端里的 %@ 在跑，CuePad 打断不了它：在终端里按 Esc，或等它做完再说"
-          }
-        }
-      }
-    },
     "绑定会话" : {
       "localizations" : {
         "en" : {
@@ -20091,6 +20951,22 @@
         }
       }
     },
+    "结束" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "End"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "结束"
+          }
+        }
+      }
+    },
     "结束会话" : {
       "localizations" : {
         "en" : {
@@ -20123,22 +20999,6 @@
         }
       }
     },
-    "结束这个会话" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "end the session"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "结束这个会话"
-          }
-        }
-      }
-    },
     "结束这个会话？" : {
       "localizations" : {
         "en" : {
@@ -20155,6 +21015,22 @@
         }
       }
     },
+    "结束通话" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "End call"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "结束通话"
+          }
+        }
+      }
+    },
     "结果" : {
       "localizations" : {
         "en" : {
@@ -20167,6 +21043,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "结果"
+          }
+        }
+      }
+    },
+    "结果来源尚未确认" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Result source unconfirmed"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "结果来源尚未确认"
           }
         }
       }
@@ -20311,6 +21203,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "网络连接中断"
+          }
+        }
+      }
+    },
+    "网络连接断了" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The network connection dropped"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "网络连接断了"
           }
         }
       }
@@ -20999,6 +21907,22 @@
         }
       }
     },
+    "记录已变化，请回到首页" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Records changed. Return to the first page"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "记录已变化，请回到首页"
+          }
+        }
+      }
+    },
     "记忆" : {
       "localizations" : {
         "en" : {
@@ -21027,6 +21951,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "设备过热，被系统结束"
+          }
+        }
+      }
+    },
+    "设备连接已更换" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The device connection changed"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "设备连接已更换"
           }
         }
       }
@@ -21079,6 +22019,22 @@
         }
       }
     },
+    "试听" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preview Voice"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "试听"
+          }
+        }
+      }
+    },
     "该你了" : {
       "localizations" : {
         "en" : {
@@ -21107,6 +22063,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "详情"
+          }
+        }
+      }
+    },
+    "语言" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Language"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "语言"
           }
         }
       }
@@ -21159,6 +22131,54 @@
         }
       }
     },
+    "请先在 Mac 上启用并配置 Cue" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enable and configure Cue on your Mac first"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请先在 Mac 上启用并配置 Cue"
+          }
+        }
+      }
+    },
+    "请先在 Mac 上安装 Codex" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Install Codex on your Mac first"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请先在 Mac 上安装 Codex"
+          }
+        }
+      }
+    },
+    "请先在 Mac 上登录 Codex" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sign in to Codex on your Mac first"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请先在 Mac 上登录 Codex"
+          }
+        }
+      }
+    },
     "请按下组合键…" : {
       "localizations" : {
         "en" : {
@@ -21171,6 +22191,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "请按下组合键…"
+          }
+        }
+      }
+    },
+    "请求「%@」：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Request “%@”: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请求「%1$@」：%2$@"
           }
         }
       }
@@ -21219,6 +22255,54 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "请求已放弃，尚未派发"
+          }
+        }
+      }
+    },
+    "请求已记下" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Request recorded"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请求已记下"
+          }
+        }
+      }
+    },
+    "请求摘要「%@…」：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Request excerpt “%@…”: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请求摘要「%1$@…」：%2$@"
+          }
+        }
+      }
+    },
+    "请求记录" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Request history"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请求记录"
           }
         }
       }
@@ -21415,6 +22499,22 @@
         }
       }
     },
+    "账号已更换" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The account changed"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "账号已更换"
+          }
+        }
+      }
+    },
     "账号额度见列表，路由账号未知" : {
       "localizations" : {
         "en" : {
@@ -21599,22 +22699,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "跟随系统"
-          }
-        }
-      }
-    },
-    "跳到所在终端" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Go to Terminal"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "跳到所在终端"
           }
         }
       }
@@ -21907,6 +22991,22 @@
         }
       }
     },
+    "返回编辑" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Back to Editing"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "返回编辑"
+          }
+        }
+      }
+    },
     "还有 %lld 个" : {
       "localizations" : {
         "en" : {
@@ -22059,22 +23159,6 @@
         }
       }
     },
-    "还没接入 CuePad（在设置里打开）" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "not connected to CuePad (turn on in Settings)"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "还没接入 CuePad（在设置里打开）"
-          }
-        }
-      }
-    },
     "还没有" : {
       "localizations" : {
         "en" : {
@@ -22107,18 +23191,18 @@
         }
       }
     },
-    "还没有 Agent 会话。在终端里开一个，会话就会出现在这里" : {
+    "还没有 Agent 会话。开个新会话，或在设置里接入 Agent 读进它的会话记录" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No agent sessions yet. Start one in Terminal and it'll show up here."
+            "value" : "No agent sessions yet. Start a new session, or connect an agent in Settings to bring in its sessions."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "还没有 Agent 会话。在终端里开一个，会话就会出现在这里"
+            "value" : "还没有 Agent 会话。开个新会话，或在设置里接入 Agent 读进它的会话记录"
           }
         }
       }
@@ -22471,6 +23555,22 @@
         }
       }
     },
+    "这个会话不是为这件事开的，完成不会结束它。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This session wasn't started for this task. Completing won't end it."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这个会话不是为这件事开的，完成不会结束它。"
+          }
+        }
+      }
+    },
     "这个会话已经不在了，发不到它" : {
       "localizations" : {
         "en" : {
@@ -22531,6 +23631,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "这个命令需要带上参数"
+          }
+        }
+      }
+    },
+    "这个接入不支持按原回合停止，没有停止会话" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This agent cannot stop a specific turn. The session was not stopped."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这个接入不支持按原回合停止，没有停止会话"
           }
         }
       }
@@ -22615,22 +23731,6 @@
         }
       }
     },
-    "这个问题只能在 Mac 终端里的 Agent 那边回答" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This question can only be answered in the agent's Terminal on the Mac"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这个问题只能在 Mac 终端里的 Agent 那边回答"
-          }
-        }
-      }
-    },
     "这个问题已经答过了，或 Agent 已经不在等这个问题" : {
       "localizations" : {
         "en" : {
@@ -22643,38 +23743,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "这个问题已经答过了，或 Agent 已经不在等这个问题"
-          }
-        }
-      }
-    },
-    "这个问题要在 Mac 上回答" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Answer this question on the Mac"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这个问题要在 Mac 上回答"
-          }
-        }
-      }
-    },
-    "这个问题要在终端里的 Agent 那边回答" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Answer this question in the agent's terminal"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这个问题要在终端里的 Agent 那边回答"
           }
         }
       }
@@ -22771,6 +23839,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "这件已经不用整理了"
+          }
+        }
+      }
+    },
+    "这份回复没有可朗读的文字" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This reply has no text to read aloud."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这份回复没有可朗读的文字"
           }
         }
       }
@@ -23127,22 +24211,6 @@
         }
       }
     },
-    "这是你在终端里开的会话，完成不会结束它。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "You started this session in Terminal. Completing won't end it."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这是你在终端里开的会话，完成不会结束它。"
-          }
-        }
-      }
-    },
     "这是灵感，没有状态：要做的事另建任务，或把这条灵感接进一条任务" : {
       "localizations" : {
         "en" : {
@@ -23203,6 +24271,54 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "这条提问已经结束了"
+          }
+        }
+      }
+    },
+    "这条灵感没有可分享的图片" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This idea has no images to share"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这条灵感没有可分享的图片"
+          }
+        }
+      }
+    },
+    "这条通话记录太大，无法读取" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This call record is too large to load"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这条通话记录太大，无法读取"
+          }
+        }
+      }
+    },
+    "这次通话有话没交给 Cue" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Some of what you said didn't reach Cue"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这次通话有话没交给 Cue"
           }
         }
       }
@@ -23319,22 +24435,6 @@
         }
       }
     },
-    "连不上 Codex 的常驻服务" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Can't reach the Codex background service"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "连不上 Codex 的常驻服务"
-          }
-        }
-      }
-    },
     "连不上 iCloud" : {
       "localizations" : {
         "en" : {
@@ -23395,6 +24495,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "退出 CuePad"
+          }
+        }
+      }
+    },
+    "退出不保留草稿中的卡片和图片" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Draft cards and images are lost on quit"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "退出不保留草稿中的卡片和图片"
           }
         }
       }
@@ -23847,6 +24963,358 @@
         }
       }
     },
+    "通话出错：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Call error: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通话出错：%@"
+          }
+        }
+      }
+    },
+    "通话协议不兼容，请更新手机和 Mac 上的 CuePad" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Call protocols are incompatible. Update CuePad on this device and your Mac"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通话协议不兼容，请更新手机和 Mac 上的 CuePad"
+          }
+        }
+      }
+    },
+    "通话已结束" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Call ended"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通话已结束"
+          }
+        }
+      }
+    },
+    "通话控制连接断了" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The call's control connection dropped"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通话控制连接断了"
+          }
+        }
+      }
+    },
+    "通话操作未确认，请检查连接后重试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Call action unconfirmed. Check the connection before trying again"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通话操作未确认，请检查连接后重试"
+          }
+        }
+      }
+    },
+    "通话断开了：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Call dropped: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通话断开了：%@"
+          }
+        }
+      }
+    },
+    "通话暂不可用" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Call unavailable"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通话暂不可用"
+          }
+        }
+      }
+    },
+    "通话服务出错（%lld），请稍后重试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Call service error (%lld). Try again later"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通话服务出错（%lld），请稍后重试"
+          }
+        }
+      }
+    },
+    "通话服务出错，请稍后重试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Call service error. Try again later"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通话服务出错，请稍后重试"
+          }
+        }
+      }
+    },
+    "通话未连接" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Call disconnected"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通话未连接"
+          }
+        }
+      }
+    },
+    "通话正忙，请稍后再试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Call is busy. Try again later"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通话正忙，请稍后再试"
+          }
+        }
+      }
+    },
+    "通话没能建立（%lld）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't start the call (%lld)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通话没能建立（%lld）"
+          }
+        }
+      }
+    },
+    "通话没能建立：服务器的回应认不出" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't start the call: unexpected server response"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通话没能建立：服务器的回应认不出"
+          }
+        }
+      }
+    },
+    "通话的声音连接断了" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The call's audio connection dropped"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通话的声音连接断了"
+          }
+        }
+      }
+    },
+    "通话要用 Codex 的 ChatGPT 登录：这台 Mac 没装 Codex" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Calls use Codex's ChatGPT sign-in, and Codex isn't installed on this Mac"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通话要用 Codex 的 ChatGPT 登录：这台 Mac 没装 Codex"
+          }
+        }
+      }
+    },
+    "通话记录暂不可用" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Call records unavailable"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通话记录暂不可用"
+          }
+        }
+      }
+    },
+    "通话记录暂不可用，请检查 Mac 上的资料库" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Call records are unavailable. Check the library on your Mac"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通话记录暂不可用，请检查 Mac 上的资料库"
+          }
+        }
+      }
+    },
+    "通话详情" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Call details"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通话详情"
+          }
+        }
+      }
+    },
+    "通话请求被拒绝（%lld），请在 Mac 上检查账号和语音权限" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Call request rejected (%lld). Check your account and voice access on your Mac"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通话请求被拒绝（%lld），请在 Mac 上检查账号和语音权限"
+          }
+        }
+      }
+    },
+    "通话连接已满，请稍后再试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Call capacity reached. Try again later"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通话连接已满，请稍后再试"
+          }
+        }
+      }
+    },
+    "通话连接或发送超时，请重新接通；已有请求和回复仍然保留" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The connection or send timed out. Reconnect to continue; your requests and replies are still here."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通话连接或发送超时，请重新接通；已有请求和回复仍然保留"
+          }
+        }
+      }
+    },
+    "通话连接超时" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The call timed out"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通话连接超时"
+          }
+        }
+      }
+    },
     "那台 Mac 上开不了会话：%@" : {
       "localizations" : {
         "en" : {
@@ -24039,6 +25507,38 @@
         }
       }
     },
+    "重开后生效" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reopen CuePad to apply"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重开后生效"
+          }
+        }
+      }
+    },
+    "重新交给 Cue" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retry handoff"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重新交给 Cue"
+          }
+        }
+      }
+    },
     "重新打开" : {
       "localizations" : {
         "en" : {
@@ -24051,6 +25551,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "重新打开"
+          }
+        }
+      }
+    },
+    "重新接通" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reconnect"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重新接通"
           }
         }
       }
@@ -24131,6 +25647,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "重试这一轮"
+          }
+        }
+      }
+    },
+    "链接没有返回可读取的图片，请检查链接后重试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The link did not return a readable image. Check the link and try again."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "链接没有返回可读取的图片，请检查链接后重试"
           }
         }
       }
@@ -24547,6 +26079,22 @@
         }
       }
     },
+    "静音" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mute"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "静音"
+          }
+        }
+      }
+    },
     "靶心" : {
       "localizations" : {
         "en" : {
@@ -24591,6 +26139,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "音频"
+          }
+        }
+      }
+    },
+    "音频已中断" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Audio was interrupted"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "音频已中断"
           }
         }
       }
@@ -24879,6 +26443,54 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "高"
+          }
+        }
+      }
+    },
+    "麦克风已静音" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Microphone muted"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "麦克风已静音"
+          }
+        }
+      }
+    },
+    "麦克风权限未开启" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No microphone access"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "麦克风权限未开启"
+          }
+        }
+      }
+    },
+    "麦克风权限未开启：在系统设置中允许 CuePad 使用麦克风后重新接通" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Allow CuePad to use your microphone in System Settings, then reconnect."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "麦克风权限未开启：在系统设置中允许 CuePad 使用麦克风后重新接通"
           }
         }
       }

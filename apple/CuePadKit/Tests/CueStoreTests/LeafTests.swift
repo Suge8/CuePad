@@ -3,7 +3,6 @@ import CueText
 import Foundation
 import Testing
 
-/// 任务 → 子任务 → 会话：叶子（没有子任务的任务）才有会话；一个叶子最多一个会话，一个会话可以绑好几个叶子。
 @Suite struct LeafTests {
   let fixture = try! Fixture()
   var store: CueStore { fixture.store }
@@ -17,16 +16,13 @@ import Testing
     let upper = try #require(try await store.card(task.id))
     #expect(upper.piSessionID == nil)
 
-    // 再加一个子任务不动：会话已经在第一个子任务上
     let next = try await store.createTask("改排序", under: task.id)
     #expect(try await store.card(step.id)?.piSessionID == "s1")
     #expect(next.piSessionID == nil)
   }
 
-  /// 终端里开的 Claude Code、Codex 会话不是什么都做得到（`AgentCapabilities`）：Cue 对它们的开工、停止、收尾与界面同一组规则——
-  /// 收不了图片的正文照原样写（图片由 Mac 交出时写成路径），停不了这一轮就报停不了，结束不了的会话事做完了也留着。
   @Test func 交给其他Agent的会话_只做它做得到的() async throws {
-    let recorder = PiStateRecorder(store: store, hostID: "mac")
+    let recorder = StateRecorder(store: store, hostID: "mac")
     let claude = try await store.createTask("修乱序")
     let first = try await store.createTask("复现", under: claude.id)
     try await store.linkCard(first.id, toSession: "claude-1")
@@ -49,6 +45,8 @@ import Testing
     let project = try await store.createProject(name: "圆桌", color: "#111")
     let first = try await store.createTask("修乱序", in: project.id)
     let second = try await store.createTask("改文案", in: project.id)
+    let recorder = StateRecorder(store: store, hostID: "mac")
+    for session in ["s1", "s2", "s3"] { try await recorder.update(sessionID: session, state: .settled, projectID: project.id) }
     try await store.bindSession("s1", to: first.id)
     try await store.bindSession("s1", to: second.id)
     #expect(try await store.card(second.id)?.status == .inProgress)
@@ -68,15 +66,15 @@ import Testing
     #expect(try await store.tasks(boundTo: "s3").map { [$0.task.id, $0.parent?.id] } == [[step.id, second.id]])
   }
 
-  /// 从任务开了新会话、又亲手改绑：以后一次为准，那个新会话的记录再写（或同步过来）也不把任务抢回去。
   @Test func 开新会话后又改绑_不被新会话抢回() async throws {
     let project = try await store.createProject(name: "圆桌", color: "#111")
     let task = try await store.createTask("修乱序", in: project.id)
-    let recorder = PiStateRecorder(store: store, hostID: "mac-a")
-    _ = try await store.requestLaunch(PiLaunch(project: project.id, prompt: "修乱序", token: "t-new"), title: "修乱序", on: "mac-a", card: task.id)
+    let recorder = StateRecorder(store: store, hostID: "mac-a")
+    _ = try await store.requestLaunch(LaunchRequest(project: project.id, prompt: "修乱序", token: "t-new"), title: "修乱序", on: "mac-a", card: task.id)
     try await recorder.update(sessionID: "s-new", state: .thinking, title: "修乱序", launchToken: "t-new")
     #expect(try await store.card(task.id)?.piSessionID == "s-new")
 
+    try await recorder.update(sessionID: "s-old", state: .settled, projectID: project.id)
     try await store.bindSession("s-old", to: task.id)
     try await recorder.update(sessionID: "s-new", state: .settled, title: "修乱序", launchToken: "t-new")
 
@@ -90,6 +88,7 @@ import Testing
     let taken = try await store.createTask("已有会话", in: project.id)
     let finished = try await store.createTask("做完了", in: project.id)
     _ = try await store.createTask("别的项目")
+    try await StateRecorder(store: store, hostID: "mac").update(sessionID: "s1", state: .settled, projectID: project.id)
     try await store.bindSession("s1", to: taken.id)
     try await store.setStatus(finished.id, .done)
 

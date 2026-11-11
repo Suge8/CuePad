@@ -2,11 +2,10 @@
 import CueSync
 import SwiftUI
 
-/// 设置（项目页末尾、宽屏侧栏底部与 Cue 面板推入），按要紧排，分组与说法同 Mac 设置窗口的通用页：Cue（名字与在哪台 Mac 上运行，`CueSettingsSection`）、
-/// iCloud 同步、通知、外观、启动问题、上次崩溃、版本；启动问题与上次崩溃有才出现。
 struct SettingsScreen: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         SettingsForm {
@@ -14,11 +13,16 @@ struct SettingsScreen: View {
             SyncSection()
             if services.sync != nil || Self.previewsAlerts { AlertSection() }
             Section {
-                LabeledContent {
+                if typeSize.isAccessibilitySize {
                     ThemePicker()
-                } label: {
-                    Label("外观", icon: .appearance)
+                } else {
+                    LabeledContent {
+                        ThemePicker()
+                    } label: {
+                        Label("外观", icon: .appearance)
+                    }
                 }
+                LanguageRow()
             }
             if !services.startupIssues.isEmpty {
                 Section("启动问题") {
@@ -27,7 +31,14 @@ struct SettingsScreen: View {
                     }
                 }
             }
-            if services.diagnostics.latest != nil { Section { LastCrashRow() } }
+            if services.diagnostics.latest != nil || services.diagnostics.canSend {
+                Section {
+                    LastCrashRow()
+                    if services.diagnostics.canSend { SendLogsRow() }
+                } footer: {
+                    if services.diagnostics.canSend { Text(SendLogsRow.note).lineLimit(nil).fixedSize(horizontal: false, vertical: true) }
+                }
+            }
             Section {} footer: {
                 Text("CuePad \(AppServices.version)").font(Typography.meta.monospacedDigit()).foregroundStyle(palette.ink3)
                     .frame(maxWidth: .infinity)
@@ -41,7 +52,6 @@ struct SettingsScreen: View {
     private static var previewsAlerts: Bool { DebugHooks.preset.alertStatus != nil }
 }
 
-/// 设置页的表单：分组是纸色的行、底是页面色，宽屏上限宽居中（分段控件与说明不被拉成一长条）。
 struct SettingsForm<Content: View>: View {
     @ViewBuilder var content: Content
     @Environment(\.palette) private var palette
@@ -79,7 +89,6 @@ private struct StatusText: View {
     }
 }
 
-/// 通知：一行状态（权限、推送注册、服务端订阅哪一步不通就写哪一步），能在这里解决的给按钮。
 private struct AlertSection: View {
     @Environment(AppServices.self) private var services
     @Environment(AlertCenter.self) private var alerts
@@ -87,12 +96,12 @@ private struct AlertSection: View {
     @Environment(\.openURL) private var openURL
 
     var body: some View {
-        let live = PiAlertStatus(
-            authorization: alerts.authorization, registration: alerts.registration, subscription: services.alertSubscription)
+        let live = AlertStatus(
+            authorization: alerts.authorization, registration: alerts.registration, subscription: services.syncState.alerts)
         let status = DebugHooks.preset.alertStatus ?? live
         Section {
             Label {
-                StatusText(title: status.title, detail: status.detail, reserve: PiAlertStatus.offline.detail)
+                StatusText(title: status.title, detail: status.detail, reserve: AlertStatus.offline.detail)
             } icon: {
                 Image(status.state == .on ? .alertsOn : status.state == .pending ? .alertsPending : .alertsOff)
                     .foregroundStyle(status.state == .problem ? palette.failure : palette.ink2)
@@ -123,7 +132,6 @@ private struct AlertSection: View {
     }
 }
 
-/// iCloud 同步：一行状态，需要决定时给出两个选择，没开 iCloud 时打开设置，按了有用时是立即同步（`AppServices.canSyncNow`）；有两个版本的灵感或任务时一行推入处理，没能同步的记录可展开。
 private struct SyncSection: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -133,7 +141,7 @@ private struct SyncSection: View {
 
     var body: some View {
         Section {
-            let summary = SyncSummary(services.syncStatus)
+            let summary = SyncSummary(services.syncState.status)
             Label {
                 StatusText(title: summary.title, detail: summary.detail, reserve: SyncSummary(.offline).detail)
             } icon: {
@@ -143,16 +151,15 @@ private struct SyncSection: View {
                     Image(summary.icon).foregroundStyle(palette.color(summary.tone))
                 }
             }
-            // 要你决定、冲突与没能同步的记录都只在有同步时出现，按状态排；立即同步要有同步才点得动
-            if case .needsDecision = services.syncStatus {
+            if case .needsDecision = services.syncState.status {
                 Group {
                     Button(SyncChoices.upload.title, icon: .uploadLocal) { choices.resolve(.uploadLocal, services) }
                     Button(SyncChoices.erase.title, icon: .replaceWithCloud, role: .destructive) { confirmErase = true }
                 }
                 .disabled(choices.working)
-            } else if services.syncStatus == .noAccount {
+            } else if services.syncState.status == .noAccount {
                 Button(SyncSummary.settingsTitle, icon: .settings) { openURL(SyncSummary.settings) }
-            } else if services.syncStatus == .outdated {
+            } else if services.syncState.status == .outdated {
                 Button(SyncSummary.updateTitle, icon: .updates) { openURL(SyncSummary.update) }
             } else if services.canSyncNow {
                 Button("立即同步", icon: .syncNow) { Task { await services.syncNow() } }
@@ -161,7 +168,7 @@ private struct SyncSection: View {
             if let failure = choices.failure {
                 Label { Text(failure).font(Typography.meta) } icon: { FailureMark() }
             }
-            if services.syncFilesOverQuota {
+            if services.syncState.filesOverQuota {
                 Label { Text(FileStatus.overQuota).font(Typography.meta) } icon: { Image(.syncPaused).foregroundStyle(palette.color(.notice)) }
             }
             if !services.conflicts.isEmpty {
@@ -170,9 +177,9 @@ private struct SyncSection: View {
                         .foregroundStyle(palette.ink)
                 }
             }
-            if !services.syncIssues.isEmpty {
-                DisclosureGroup("\(services.syncIssues.count) 条记录没能同步") {
-                    ForEach(Array(services.syncIssues.enumerated()), id: \.offset) { _, issue in
+            if !services.syncState.issues.isEmpty {
+                DisclosureGroup("\(services.syncState.issues.count) 条记录没能同步") {
+                    ForEach(Array(services.syncState.issues.enumerated()), id: \.offset) { _, issue in
                         Text(issue.text).font(Typography.meta)
                         if let detail = issue.detail {
                             DisclosureGroup("详情") {
@@ -186,7 +193,7 @@ private struct SyncSection: View {
         } header: {
             Text("iCloud 同步")
         } footer: {
-            if case .needsDecision = services.syncStatus {
+            if case .needsDecision = services.syncState.status {
                 Text("上传：\(SyncChoices.upload.consequence)。替换：\(SyncChoices.erase.consequence)。")
             }
         }

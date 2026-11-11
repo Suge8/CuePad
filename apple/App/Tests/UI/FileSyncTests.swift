@@ -7,13 +7,12 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 别的设备写下的灵感带着文件：灵感与附件记录先到，文件另取。Mac 全取；手机自动取小的（不大于 `FileFetcher.phoneAutoLimit`），
-/// 大的用到时才取（`AppServices.fetchFile`），取到的就是那份文件。按流量计费的网络上手机不自动取，这里测不到（路径监视器是系统的）。
+/// 按流量计费的网络上手机不自动取，这里测不到（路径监视器是系统的）。
 @MainActor
+@Suite(.releasesLibraries)
 struct FileSyncTests {
     let directory = TestLibraries.makeDirectory()
 
-    /// 别的设备传上去的附件记录：文件就是 `data`。
     private func attachment(_ data: Data, format: String) throws -> (record: CKRecord, key: String) {
         let hash = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
         let file = directory.appending(path: "upload-\(UUID().uuidString)")

@@ -5,6 +5,7 @@ import Testing
 import UIKit
 @testable import CuePad
 
+@Suite(.releasesLibraries)
 struct IOSTests {
     @Test func 模拟器里App_Group权限生效_真实位置在共享容器里_偏好用该组的套件() throws {
         guard case .appGroup(let container) = LibraryLocation.Base.platform else {

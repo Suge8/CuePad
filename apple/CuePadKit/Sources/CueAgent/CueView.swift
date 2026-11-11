@@ -2,8 +2,7 @@ import CueStore
 import CueText
 import Foundation
 
-/// 新会话第一条输入里的对话视图（`CueKeeper`），在记忆视图之后、信封之前，接上此前的经过。从库里的对话现拼：他的话、你的回复与 tell、
-/// 每一轮的经过（那一行的清单，`CueStore.recordCueRound`），一条一行，带序号与绝对时刻，从早到晚；从最新的往前取到 `budget` 字。
+/// 新会话第一条输入里的对话视图（`CueKeeper`），在记忆视图之后、信封之前，接上此前的经过。从库里的对话现拼，一条一行，带序号与绝对时刻，从早到晚；从最新的往前取到 `budget` 字。
 /// 提问的回答另起一行，排在回答的时刻。换新之后的各轮照常留在会话里，下一次换新时再并进视图。
 public enum CueView {
   /// 5000 字：换新那一刻实测 5000 字与 1.2 万字接得一样好，按真实时间线算每天便宜约 20%（冷了换新要整段重写起点，起点越小越省）。
@@ -95,7 +94,7 @@ public enum CueView {
   }
 
   /// 一轮的经过：清单里的每一步（对他说的话与提问已是自己的一行，不重复：Cue 的一轮里这两类只来自 tell），没成的标出。
-  private static func round(_ tools: PiChatMessage.Tools?) -> String? {
+  private static func round(_ tools: ChatMessage.Tools?) -> String? {
     let steps = (tools?.items ?? []).filter { $0.kind != .said && $0.kind != .ask }.map { $0.target + ($0.failed ? "（没成）" : "") }
     guard !steps.isEmpty else { return nil }
     return ("你这一轮：" + steps.joined(separator: "；")).clipped(roundLimit)

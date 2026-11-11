@@ -43,7 +43,6 @@ struct AllowOnceIntent: LiveActivityIntent {
     }
 }
 
-/// 回答 Cue 的一条提问（选第几项由调用方给）。
 @MainActor protocol CueQuestionAnswering: Sendable {
     func answerCueQuestion(_ message: UUID, _ choice: String) async throws
 }

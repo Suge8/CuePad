@@ -54,6 +54,10 @@ enum InteractionBench {
         "收起任务": (14, 2),
         "发送·会话页": (14, 1),
         "发送·Cue 页": (14, 1),
+        // 和 Cue 通话：输入框原地换成通话条与变回来同发送（一次提交，其余是渲染端的过渡）
+        "接通·Cue 页": (14, 1),
+        "在听·Cue 页": (14, 1),
+        "挂断·Cue 页": (14, 1),
         // 设置是另一扇窗：打开同首访要建内容，收起同收编辑页
         "开设置": (28, 2),
         "关设置": (14, 2),
@@ -61,7 +65,7 @@ enum InteractionBench {
 
     private static let turns = TurnLog()
     /// 记下行的位置（`benchSpot`）：只在单次交互的测量里。
-    static let locatesRows = DebugScene.defaults.string(forKey: "CuePadBench") == "interact"
+    static let locatesRows = DebugScene.args.driveOpts.bench == "interact"
     /// 报了位置的行在窗口里的位置（左上为原点，`benchSpot`）：任务行按任务，看板卡、对话里的一条按各自的身份。
     static var rows: [AnyHashable: CGRect] = [:]
 
@@ -72,10 +76,10 @@ enum InteractionBench {
     private static func measureAll(_ workspace: Workspace) async throws {
         waitForTracer()
         if PerfProbe.firstSeen["content"] == nil { await PerfProbe.wait(for: "content") }
-        if UserDefaults.standard.bool(forKey: "CuePadDemo") { await DebugScene.seedRemote(workspace.services) }
+        if DebugScene.args.demo { await DebugScene.seedRemote(workspace.services) }
         // `-CuePadInteractOnly 会话页,开编辑页`：只量这几项，前后对比时省下整套流程（列的项之间要自己够得着，如开编辑页配收编辑页）
         // Cue 页的对话在等之前写好（库里没有时）：用户点开 Cue 页时对话早在库里
-        let only = UserDefaults.standard.string(forKey: "CuePadInteractOnly").map { Set($0.split(separator: ",").map(String.init)) }
+        let only = DebugScene.args.driveOpts.interactOnly.map { Set($0.split(separator: ",").map(String.init)) }
         let measuresCue = only.map { $0.contains("发送·Cue 页") } ?? true
         if measuresCue { await DebugScene.seedCue(workspace.services) }
         await Task.wait(for: .seconds(3))
@@ -88,7 +92,7 @@ enum InteractionBench {
         let foreground = borrowed && NSApp.isActive
         let store = workspace.services.store
         let projects = (workspace.catalog?.projects ?? []).map(\.id)
-        let sessions = try await store.piSessionPage(PiSessionQuery(limit: 3)).items.map(\.state.sessionID)
+        let sessions = try await store.sessionPage(SessionQuery(limit: 3)).items.map(\.state.sessionID)
         func step(_ name: String, _ action: () -> Void) async {
             if let only, !only.contains(name) { return }
             // 每一项在 trace 里是一段区间（CUEPAD_TRACE 录的掉帧、采样按它对到是哪一项）
@@ -128,11 +132,11 @@ enum InteractionBench {
         for id in sessions.prefix(2) { await step("会话页") { workspace.show(.session(id)) } }
         // 发送：回复框里写好几行再按 ⌘↩（主菜单"回复"的项经响应链交给文字区，这里直接交给它），量输入框收起、话贴到对话末尾、滚到最新那一下。
         // 大库在最长的那段对话里发，演示库在最近的会话里发；Cue 页先写好一段对话（库里没有时）
-        let longest = try await store.piSessionPage(PiSessionQuery(id: PiSessionState.recordID(sessionID: PerfLibrary.longestChat))).items.first
+        let longest = try await store.sessionPage(SessionQuery(id: SessionState.recordID(sessionID: PerfLibrary.longestChat))).items.first
         if let id = longest?.state.sessionID ?? sessions.first, only.map({ $0.contains("发送·会话页") }) ?? true {
             workspace.show(.session(id))
             for _ in 0..<2 {
-                workspace.services.settings.setReplyDraft(ComposerDraft(text: sample), for: PiSessionState.recordID(sessionID: id))
+                workspace.services.settings.setReplyDraft(ComposerDraft(text: sample), for: SessionState.recordID(sessionID: id))
                 await step("发送·会话页") { sendShortcut(in: window, field: "回复") }
             }
         }
@@ -203,7 +207,7 @@ enum InteractionBench {
             }
         }
         // 会话条开合（256 与藏起）与 Cue 收起、放回在卡最多的项目页上量：主区整页按新的宽重排。会话条走 ⌃⌘S 那条路（主菜单动作经响应链），不直接调方法
-        if let big = workspace.catalog?.cardCounts.max(by: { $0.value < $1.value })?.key {
+        if let big = workspace.catalog?.summaries.max(by: { $0.value.cardCount < $1.value.cardCount })?.key {
             await step("页面回访") { workspace.show(.project(big)) }
             for _ in 0..<2 {
                 await step("侧栏收起") { NSApp.sendAction(#selector(AppDelegate.toggleCueSidebar(_:)), to: nil, from: nil) }

@@ -18,16 +18,13 @@ struct WidePage {
     private struct Reading {
         let column: WideSlot
         let scroll: ObjectIdentifier
-        /// 可视区正中那一条与它离正中多远。
         let anchor: (id: AnyHashable, offset: CGFloat)
         let top: CGFloat
         let bottom: CGFloat
-        /// 那一条报的框与可视区（托管视图坐标）：认不出时看是测量没对上还是它真的走了。
         let frame: CGRect?
         let visible: CGRect
     }
 
-    /// 一栏的阅读位置：保住了、验不了（没东西可滚、没滚到中段、中段没认出一条），或没保住（对象换了、那一条不见了、被滚回一端）。
     /// 验不了不是通过：`perf-mac.sh` 在大库上把它判失败（大库的列与对话都长到能滚，就是为验这一条）。
     enum Verdict: String { case ok, untested, broken }
 
@@ -149,7 +146,6 @@ struct WidePage {
 
     private static func round(_ value: CGFloat) -> Double { Double((value * 10).rounded() / 10) }
 
-    /// 栏里看得见的滚动视图：没被藏起、不透明、真落在栏里（离开的页面常留在视图树里，只是藏起或透明），从左到右。
     private static func scrolls(in column: WideColumnView) -> [NSScrollView] {
         func visit(_ view: NSView) -> [NSScrollView] {
             guard !view.isHidden, view.alphaValue > 0, view.layer?.opacity != 0 else { return [] }
@@ -164,7 +160,6 @@ struct WidePage {
             .map(\.element)
     }
 
-    /// 栏里竖着能滚 `minimumTravel` 以上的（看板的每一列、对话），从左到右。
     private static func scrollables(in column: WideColumnView) -> [NSScrollView] {
         scrolls(in: column).filter(isScrollable)
     }
@@ -173,15 +168,12 @@ struct WidePage {
         (scroll.documentView?.frame.height ?? 0) - scroll.contentView.bounds.height >= minimumTravel
     }
 
-    /// 可视区离文档顶、底多远（文档视图翻没翻转都按看到的顶与底算）。
     private static func ends(of scroll: NSScrollView) -> (top: CGFloat, bottom: CGFloat)? {
         guard let document = scroll.documentView else { return nil }
         let visible = scroll.contentView.bounds, height = document.frame.height
         return document.isFlipped ? (visible.minY, height - visible.maxY) : (height - visible.maxY, visible.minY)
     }
 
-    /// 报了位置的条目里落在这个滚动视图可视区里的（中心在里面）：它与离可视区正中多远。两样都按窗口算。
-    /// 可视区在窗口里的框（左上为原点，同 `benchSpot` 报的位置）。
     private static func visible(_ scroll: NSScrollView, in column: WideColumnView) -> CGRect {
         guard let root = scroll.window?.contentView else { return .zero }
         let rect = scroll.contentView.convert(scroll.contentView.bounds, to: root)

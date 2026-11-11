@@ -3,7 +3,7 @@ import CueEditor
 import Foundation
 import Synchronization
 
-/// 目录里放真实文件的内存附件库：CueEditor 只经 `CueFileStore` 协议读写附件。
+/// CueEditor 只经 `CueFileStore` 协议读写附件。
 final class DirectoryFileStore: CueFileStore, Sendable {
     private struct Stored {
         var files: [String: URL] = [:]
@@ -18,7 +18,6 @@ final class DirectoryFileStore: CueFileStore, Sendable {
 
     func store(_ data: Data) throws -> String { try store(data, format: "png") }
 
-    /// 键与附件的键同形（`AttachmentKey`）：哈希接扩展名。
     private func store(_ data: Data, format: String) throws -> String {
         let id = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined() + "." + format
         let url = directory.appendingPathComponent(id)
@@ -30,21 +29,4 @@ final class DirectoryFileStore: CueFileStore, Sendable {
     func store(fileAt url: URL) throws -> String { try store(Data(contentsOf: url), format: url.pathExtension.lowercased()) }
 
     func fileURL(for id: String) -> URL? { stored.withLock { $0.files[id] } }
-}
-
-#if canImport(AppKit)
-import AppKit
-#elseif canImport(UIKit)
-import UIKit
-#endif
-
-/// 分片预布局走到了文末：每一段都已真正排好，不再是估算高度。
-@MainActor
-func laidOutToTheEnd(_ layout: NSTextLayoutManager) -> Bool {
-    var done = true
-    layout.enumerateTextLayoutFragments(from: nil, options: []) { fragment in
-        done = fragment.state == .layoutAvailable
-        return done
-    }
-    return done
 }

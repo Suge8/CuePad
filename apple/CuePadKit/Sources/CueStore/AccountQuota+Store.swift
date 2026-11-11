@@ -1,7 +1,7 @@
 import Foundation
 
 extension CueStore {
-  /// 各来源的账号额度；网关的请求能力记录仅在没有账号清单时显示。`host` 给了只要那台 Mac 观测到的：Cue 只看它运行的那台（额度是各台各登各的）。
+  /// `host` 给了只要那台 Mac 观测到的（额度是各台各登各的）。
   public func accountQuotas(on host: String? = nil) throws -> [AccountQuota] {
     let all = try host.map { try select(AccountQuota.self, where: "hostID = ?", [$0], orderBy: "modifiedAt DESC, id") }
       ?? select(AccountQuota.self, orderBy: "modifiedAt DESC, id")
@@ -19,12 +19,8 @@ extension CueStore {
     }
   }
 
-  /// 会话共同决定有效来源；尚待桥重新连接的有效记录也保留，避免启动时先连上的会话清掉其他账号。
-  /// 账号或网关来源的记录只按证明移除：可能拥有它的每个模型（同一提供方，或证明过这个来源的）都证明了别的授权，且证明不早于这条记录最近的结果。
-  /// 证明只来自在线会话（`PiSession.proofs`，每次解析成功都推进时刻，解析失败不抹掉，含模型范围外、额度查询解析到的）；
-  /// 没有证明的模型（还没解析过、或会话不在线只剩存下的模型表）是未知，什么都不移除；旧证明不能否定比它新的记录。
-  /// 网关来源归哪些提供方：来源那一条记下的证明过它的提供方（`sourceOwners`，含模型范围外的、会话已退出的），与在线会话证明过它的。各来源只看自己的模型，互不影响。
-  /// 未解析的那条在这个提供方此刻还有未解析的模型、且这个提供方没有不早于它的证明时保留。
+  /// 账号或网关来源的记录只按在线会话的证明（`Session.proofs`）移除；没有证明的模型（还没解析过、或会话不在线）是未知，什么都不移除，旧证明不能否定比它新的记录。
+  /// 尚待桥重新连接的有效记录也保留，避免启动时先连上的会话清掉其他账号。
   public func retainQuotaSources(on host: String, live: [QuotaWitness]) throws {
     var candidates: [QuotaCandidate] = []
     for witness in live {
@@ -37,7 +33,7 @@ extension CueStore {
       }
     }
     let online = Set(live.map(\.sessionID))
-    for state in try select(PiSessionState.self, where: "hostID = ? AND \(PiWorkState.outsideSQL(PiWorkState.closed))", [host]) where !online.contains(state.sessionID) {
+    for state in try select(SessionState.self, where: "hostID = ? AND \(WorkState.outsideSQL(WorkState.closed))", [host]) where !online.contains(state.sessionID) {
       var models = [state.model].compactMap { $0 }
       if let id = state.catalogID, let catalog = try agentCatalog(id) { models += catalog.models }
       candidates += models.map { QuotaCandidate(provider: $0.key.provider, account: $0.account, proof: nil) }
@@ -71,23 +67,16 @@ extension CueStore {
     }
   }
 
-  /// 记下一次观测（只有 Mac 写）。先后只看 `requestedAt`（结果所属操作期间的一个时刻，见 `QuotaReport.requestedAt`）：
-  /// 比这条记录已收下的早就丢掉，所以先结束的操作不会盖过后开始的，几个会话进程的结果怎么交错到达都一样。
-  /// 只在值有意义地变化时写——状态、窗口、某个窗口的整数百分比、重置时间变了——或上次写已超过 `touchAfter`（只为"更新于"不过时）；
-  /// 否则只在本机推进排序时刻、不改版本不同步，每次回复都来的观测不会每次都写库与同步。
-  /// 提供方未解析的授权（`scope` 为 nil：还没查，或查时解析失败）是这台 Mac 上这个提供方的一条，不关联任何账号的数值，与证明了身份的结果按同一个时刻排先后：
-  /// 已有证明了身份的账号或来源时不再写"还没查"；查时解析失败只在这个提供方没有不早于它的证明时写；同一提供方证明了身份、且不早于它的结果到来时移除它。
-  /// 证明既看额度记录（网关来源那一条记下的每个提供方与时刻，`owners`），也看在线会话的证明（`proofs`，同 `retainQuotaSources`），
-  /// 写入与保留核对用同一个判断，到达先后不影响结果。网关来源一级的报告带来的提供方与时刻只并进那一条（取较晚的，不删），较早的报告被丢掉时也并：
-  /// 那次解析是真的证明；并进时移除这些提供方不晚于它的未解析那条。
-  /// 网关清单里各账号的报告用清单的排序时刻。返回是否写了。
+  /// 先后只看 `requestedAt`（见 `QuotaReport.requestedAt`）：比已收下的早就丢掉，几个会话进程的结果怎么交错到达都一样。
+  /// 只在值有意义地变化，或上次写已超过 `touchAfter` 时才写；否则只在本机推进排序时刻、不同步，免得每次回复都写库与同步。
+  /// 提供方未解析的授权（`scope` 为 nil）在已有证明了身份的账号或来源时不写；写入与保留（`retainQuotaSources`）用同一个判断，到达先后不影响结果。
+  /// 网关来源一级的报告带来的提供方与时刻只并进那一条（取较晚的，不删），较早的报告被丢掉时也并：那次解析是真的证明。
   @discardableResult
   public func recordQuota(_ report: QuotaReport, host: String, proofs: [PiProof] = []) throws -> Bool {
     try write { try applyQuota(report, host: host, proofs: proofs) }
   }
 
-  /// 同一台 Mac、同一网关来源，来源一级只有规范的那一条（`AccountQuota.recordID`）：写它时删掉同来源的别的来源一级记录
-  /// （如按 Pi 提供方名定 id 时写下的），删除随同步到手机。
+  /// 来源一级只有规范的那一条（`AccountQuota.recordID`）：写它时删掉同来源的旧记录（如按 Pi 提供方名定 id 时写下的），删除随同步到手机。
   private func applyQuota(_ report: QuotaReport, host: String, proofs: [PiProof]) throws -> Bool {
     guard let source = report.account.source, report.account.route == nil else { return try applyReport(report, host: host, proofs: proofs) }
     let id = AccountQuota.recordID(provider: report.provider, host: host, account: report.account)
@@ -154,12 +143,11 @@ extension CueStore {
     return true
   }
 
-  /// 这个 Pi 提供方有没有不早于 `since` 的证明：不经额度记录上记着的提供方名（几个提供方共用一个网关来源时那里只有一个）。
+  /// 不经额度记录上记着的提供方名：几个提供方共用一个网关来源时那里只有一个。
   private static func proves(_ proofs: [PiProof], _ provider: String, _ kind: PiAccount.Kind, since: Date) -> Bool {
     proofs.contains { $0.provider == provider && $0.account.kind == kind && $0.at >= since }
   }
 
-  /// 这个提供方有没有证明了身份的结果：它自己写的原生账号或来源那一条，或记下它证明过的网关来源；给了 `since` 时只算不早于它的。
   private func hasProvenPeer(of report: QuotaReport, on host: String, since start: Date?) throws -> Bool {
     let owners = try sourceOwners(on: host)
     return try select(AccountQuota.self, where: "hostID = ?", [host]).contains { peer in
@@ -172,13 +160,12 @@ extension CueStore {
     }
   }
 
-  /// 网关来源那一条记下的证明过它的 Pi 提供方与各自最近的时刻（本机列 `owners`，不同步）。
+  /// 本机列 `owners`，不同步。
   private func sourceOwners(on host: String) throws -> [UUID: [String: Date]] {
     let rows = try db.query("SELECT id, owners FROM accountQuotas WHERE hostID = ? AND owners IS NOT NULL", [host]) { ($0.uuid(0), $0.text(1)) }
     return Dictionary(rows.map { ($0.0, Self.decodeOwners($0.1)) }, uniquingKeysWith: { $1 })
   }
 
-  /// 把这些提供方与时刻并进来源那一条（取较晚的，不删），并移除它们不晚于这次证明的未解析那条。返回是否移除了记录。
   private func mergeOwners(_ owners: [String: Date], into id: UUID, kind: PiAccount.Kind, host: String) throws -> Bool {
     guard !owners.isEmpty, let text = try db.first("SELECT owners FROM accountQuotas WHERE id = ?", [id], { $0.textOrNil(0) }) else { return false }
     let merged = (text.map(Self.decodeOwners) ?? [:]).merging(owners, uniquingKeysWith: max)
@@ -210,7 +197,6 @@ extension CueStore {
     }
   }
 
-  /// 请 `host` 那台 Mac 读取额度清单（手机上的额度面板打开时）：与发送共用投送请求与执行器，方式是 `quota`；
   /// 已有一条在路上时返回它，不再写第二条。
   public func requestQuotaRefresh(on host: String) throws -> DeliveryRequest {
     let mode = DeliveryMode.quota
@@ -221,20 +207,18 @@ extension CueStore {
   }
 }
 
-/// 一个在线会话交给额度保留核对的事实：它的模型表与它证明过的授权。
 public struct QuotaWitness: Sendable {
   public var sessionID: String
-  public var models: [PiModelOption]
+  public var models: [ModelOption]
   public var proofs: [PiProof]
 
-  public init(sessionID: String, models: [PiModelOption], proofs: [PiProof]) {
+  public init(sessionID: String, models: [ModelOption], proofs: [PiProof]) {
     self.sessionID = sessionID
     self.models = models
     self.proofs = proofs
   }
 }
 
-/// 可能拥有某条额度记录的一个模型：这一次解析出的授权，与它最近的证明（没有是未知）。
 private struct QuotaCandidate {
   let provider: String
   let account: PiAccount?

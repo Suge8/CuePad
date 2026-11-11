@@ -2,12 +2,9 @@
 import CueStore
 import SwiftUI
 
-/// 菜单栏面板（`MenuBarPad`）里"在做"那一块：区头只写"在做"（几件推进中写在面板顶上的数字账 `CueLedger`，不另按会话数一遍），下面是此刻在做的会话（`Workspace.liveWork`，要你注意的在前，
-/// 行同会话列表 `PiSessionRow` 的紧凑样子）。先列 `limit` 个（面板只是一瞥），多出的收成末尾一行"还有 N 个"，点开就地列全、末行换成"收起"——
-/// 看全在原地，不用跳去主窗口；点会话在主窗口里打开它的整页（读与回复在主窗口）。放不下时在里面滚（`HugHeight`）。
-/// 手机、iPad 上进行中的会话在会话条上。
+/// 区头只写"在做"：几件推进中已写在面板顶上的数字账（`CueLedger`），不另按会话数一遍。
 struct MenuBarLive: View {
-    let rows: [PiSessionState]
+    let rows: [SessionState]
     let open: (Route) -> Void
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -16,7 +13,7 @@ struct MenuBarLive: View {
 
     private static let limit = 4
     private static let spacing: CGFloat = 9
-    private static let style = PiSessionRow.Style.compact
+    private static let style = SessionRow.Style.compact
 
     var body: some View {
         VStack(alignment: .leading, spacing: Self.spacing) {
@@ -38,8 +35,8 @@ struct MenuBarLive: View {
         .animation(Motion.fade, value: showsAll)
     }
 
-    private func row(_ session: PiSessionState) -> some View {
-        PiSessionRow(
+    private func row(_ session: SessionState) -> some View {
+        SessionRow(
             session: session, project: workspace.catalog?.project(session.projectID),
             delivery: services.liveSessions.deliveries[session.sessionID], rename: services.liveSessions.renames[session.sessionID],
             undelivered: services.liveSessions.undelivered[session.sessionID] ?? 0).equatable()
@@ -51,11 +48,10 @@ struct MenuBarLive: View {
     }
 }
 
-/// "在做"列末的那一行：收着时写"还有 N 个"，展开后写"收起"；箭头随之转向。
 private struct LiveMoreFold: View {
     let hidden: Int
     @Binding var expanded: Bool
-    let style: PiSessionRow.Style
+    let style: SessionRow.Style
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -78,9 +74,7 @@ private struct LiveMoreFold: View {
     }
 }
 
-/// 让滚动区贴着内容的高：放得下就是内容那么高（外面的玻璃不往下多长一截），放不下就是给的那么高、在里面滚。
-/// 不用 `ViewThatFits` 排两份：两份内容各有各的状态
-/// （"还有 N 个"展开了，量出来放不下，就换成另一份收着的）。
+/// 不用 `ViewThatFits` 排两份：两份内容各有各的状态（"还有 N 个"展开了，量出来放不下，就换成另一份收着的）。
 /// 里面不放懒加载栈：它第一次量出的高是估的（实测估 882、实为 641），下一帧才改成真的，外面的面板挨一下不带动画的改高。
 private struct HugHeight: Layout {
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {

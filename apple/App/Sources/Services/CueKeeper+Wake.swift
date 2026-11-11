@@ -1,16 +1,15 @@
 #if os(macOS)
 import CueAgent
-import CuePi
+import CueBridge
 import CueStore
 import CueText
 import Foundation
 
 extension CueKeeper {
-    /// 发一个信封让 Cue 醒来，这一轮的回复写成谁的按醒来原因定（`author(of:)`）；`said`、`images`、`delivering` 是随信封交出去的你的消息与回答，
-    /// `related` 是按其中他自己说的话在会话回复里查到的（`CueTools.related`，交话的那一处查）；
+    /// `said`、`images`、`delivering` 是随信封交出去的你的消息与回答，`related` 是按其中他自己说的话在会话回复里查到的（`CueTools.related`，交话的那一处查）；
     /// 发出去就记下送达。发不进去时按大脑出了问题处理，返回 false。
     func wakeUp(
-        _ wake: CueWake, as chosen: CueAuthor? = nil, said: String? = nil, related: [String] = [], images: [PiImage] = [], delivering: [UUID] = []
+        _ wake: CueWake, as chosen: CueAuthor? = nil, said: String? = nil, related: [String] = [], images: [MessageImage] = [], delivering: [UUID] = []
     ) async throws -> Bool {
         guard let shift else { return false }
         let author = chosen ?? Self.author(of: wake)
@@ -77,14 +76,12 @@ extension CueKeeper {
         return true
     }
 
-    /// 会话停下叫醒的一轮报给 Cue 的停下（歇着、等回答、出错的会话与那次停下的起点）；别的原因醒来没有。
     private static func stops(in wake: CueWake, _ due: [CueChange]) -> [CueLeft] {
         guard case .sessionActivity = wake else { return [] }
         return due.filter { [.settled, .waitingForUser, .failed].contains($0.kind) }
             .compactMap { $0.session.map { CueLeft(sessionID: $0.sessionID, since: $0.stateSince) } }
     }
 
-    /// 定时到点的一轮要列给它的那几条定时（带 UUID、本该几点与挂着的任务）；别的原因醒来没有。
     private func fired(of wake: CueWake) async throws -> [CueEnvelope.Fired] {
         guard case .schedule(let fires) = wake else { return [] }
         let lines = try await store.cueLines(fires.map(\.line))
@@ -104,17 +101,15 @@ extension CueKeeper {
         return used >= setup.timing.renewAt || now.timeIntervalSince(last) > setup.timing.cacheLifetime.seconds
     }
 
-    /// 记下送达并立即上传（不等上传完就接着对账）。先把交出去还没答上的落盘（`save`）：送达写下之后崩溃，下次值班据此退回。
+    /// 先把交出去还没答上的落盘（`save`）：送达写下之后崩溃，下次值班据此退回。
     func markDelivered(_ ids: [UUID]) async throws {
         if !ids.isEmpty { save() }
         try await store.markCueMessagesDelivered(ids)
         unfetchable.subtract(ids)
-        guard !ids.isEmpty else { return }
         let upload = setup.upload
         Task { await upload(ids) }
     }
 
-    /// 这会儿交得出去的：你的话里的附件都在这台 Mac 上（图交给大脑、文件的路径写进话里，`CueEnvelope.delivered`）。
     /// 不在的在旁边取（`fetchAttachments`，从这台开始等起至多 `DeliveryRequest.phaseLimit`），取到了再对一次账：等文件不挡后面的话。
     /// 不从写下算：手机离线时写下、连上才到的话照样等得到附件，手机与这台的钟差也不混进来。
     /// 取不来或到点的对你说一声，话照交。
@@ -156,12 +151,12 @@ extension CueKeeper {
 
     /// 你的消息里的图，按发给会话的同一个转换取出、交给看得了图的大脑；文字里的图片引用照留（Cue 转给会话时原样写进去）。
     /// 看不了图的，图同文件一样以路径写进信封（`CueEnvelope.delivered`），这里不交。图不在这台 Mac 上，不交图并对你说一声，不悄悄丢掉。
-    func images(in pending: [CueMessage], for brain: any HostedSession) async -> [PiImage] {
+    func images(in pending: [CueMessage], for brain: any HostedSession) async -> [MessageImage] {
         guard brain.seesImages else { return [] }
         let contents = pending.filter { $0.author == .known(.you) && CueFormat.hasAttachments($0.text) }.map { SendContent(stored: $0.text) }
         guard !contents.isEmpty else { return [] }
         do {
-            return try contents.flatMap { try $0.piImages(from: store.files) }
+            return try contents.flatMap { try $0.messageImages(from: store.files) }
         } catch {
             await say(.cue, ShownText("你发的图没能交给我：\(ShownText(error).embedded)"))
             return []
@@ -171,13 +166,12 @@ extension CueKeeper {
     /// 这一轮写给你的话（回复、回答你的一轮出错）：提不提示你、一轮只响一次都在 `CueStore.replyCueRound`。
     func reply(_ text: ShownText, in turn: Turn) async {
         do {
-            try await store.replyCueRound(startedAt: turn.round.startedAt, reply: text, as: turn.author, answersYou: turn.answersYou)
+            try await store.replyCueRound(startedAt: turn.round.startedAt, reply: text, as: turn.author, answersYou: turn.answersYou, answeredRequests: turn.delivered)
         } catch {
             Self.log.error("Cue 这一轮的话没能写进资料库：\(error.localizedDescription, privacy: .public)")
         }
     }
 
-    /// `urgent`：要提示你（`CueMessage.urgent`）。
     func say(_ author: CueAuthor, _ text: ShownText, urgent: Bool = false) async {
         do {
             try await store.addCueMessage(author, shown: text, urgent: urgent)
@@ -205,9 +199,8 @@ extension CueKeeper {
         }
     }
 
-    /// 交出去没答上的你的话退回没送达、重新交，连同此前没退回成的（`owed`）。退回你的话只经这里：出了问题、换班次、不再值班（`retire`），
-    /// 换了 Agent 重来（`replay`），一轮的回答没写进库，上次没收好尾（`run`）。没写成的留在 `owed`（落盘），对账时再试（`alarm` 排着）：
-    /// 你的话只在答上或退回写进库之后才放下。
+    /// 交出去没答上的你的话退回没送达、重新交，连同此前没退回成的（`owed`）；退回你的话只经这里。
+    /// 没写成的留在 `owed`（落盘），对账时再试（`alarm` 排着）：你的话只在答上或退回写进库之后才放下。
     func giveBack(_ ids: [UUID]) async {
         owed.formUnion(ids)
         guard !owed.isEmpty else { return }
@@ -220,7 +213,7 @@ extension CueKeeper {
         save()
     }
 
-    /// 这一轮的回复写成谁的：你发来消息、刚启用写成 cue；其余写成 note（不写回复，只给醒来后出错重试时判断是不是在回答你，`Turn.answersYou`）。
+    /// `note` 不写回复，只给醒来后出错重试时判断是不是在回答你（`Turn.answersYou`）。
     static func author(of wake: CueWake) -> CueAuthor {
         switch wake {
         case .message, .enabled: .cue
@@ -228,8 +221,7 @@ extension CueKeeper {
         }
     }
 
-    /// 重试可能好的错：额度、登录类的不算。
-    static func retryable(_ summary: PiErrorSummary) -> Bool { summary.failure.retries }
+    static func retryable(_ summary: ErrorSummary) -> Bool { summary.failure.retries }
 
     /// 错的原文首行（信封里那一行只放得下这么多）。
     static func firstLine(_ raw: String) -> String {

@@ -1,5 +1,5 @@
 #if os(macOS)
-import CuePi
+import CueBridge
 import CueStore
 import CueTestSupport
 import Foundation
@@ -21,7 +21,7 @@ import Testing
 struct EvalBrain {
     let runtime: AgentKind
     let model: String
-    let effort: PiThinkingLevel
+    let effort: ThinkingLevel
 
     static let current: EvalBrain = {
         let runtime: AgentKind = switch evalEnvironment["CUEPAD_CUE_EVAL_RUNTIME"] {
@@ -36,19 +36,15 @@ struct EvalBrain {
         }
         return EvalBrain(
             runtime: runtime, model: evalEnvironment["CUEPAD_CUE_EVAL_MODEL"] ?? model,
-            effort: evalEnvironment["CUEPAD_CUE_EVAL_EFFORT"].flatMap(PiThinkingLevel.init(rawValue:)) ?? .medium)
+            effort: evalEnvironment["CUEPAD_CUE_EVAL_EFFORT"].flatMap(ThinkingLevel.init(rawValue:)) ?? .medium)
     }()
 
-    /// .md 与 score.json 里写的大脑：大脑、模型与强度
     var label: String { "\(runtime.name) · \(model) · \(effort.rawValue)" }
 
-    /// Codex 的登录：用户的 Codex 存的那一份，拷一份进临时的配置目录
     private static let codexAuth = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".codex/auth.json")
 
-    /// Pi 的登录：用户的 Pi 存的那一份，只读
     private static let piAuth = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".pi/agent/auth.json")
 
-    /// Pi 自定的提供方（非 Anthropic 的模型用）：用户的 Pi 那一份，拷进临时的配置目录
     private static let piModels = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".pi/agent/models.json")
 
     /// 评测给 Pi 多加载的只读扩展：每次请求模型前记下系统提示首块是不是计费标识（在大脑自己的扩展之后加载，看到的是它们改过的），

@@ -3,21 +3,15 @@ import CueEditor
 import SwiftUI
 import UIKit
 
-/// 对编辑器的操作口：插入图片与文件、取当前正文与选中部分。
 final class IOSEditorHandle {
     fileprivate weak var view: CueTextView?
-    /// 点的那个附件在哪（全屏页从那里放大，`AttachmentSpotLayer` 盖在编辑器上）
     let spot = AttachmentSpot()
-    /// 停用时编辑器拿着键盘：再启用时还给它
     fileprivate var refocus = false
 
     var text: String? { view?.storedText }
-    /// 选中部分的存储格式；没选中为 nil。
     var selection: String? { view?.selectedStoredText }
-    /// 相册、文件选择器选来的。
     func insert(_ files: [IncomingFile]) { view?.insert(files) }
     func focus() { view?.becomeFirstResponder() }
-    /// 换掉整篇正文（文件在 Mac 上被改了、你还没动过，文件页跟上）：光标留在原来的位置附近。
     func replace(_ text: String) {
         guard let view else { return }
         let location = view.selectedRange.location
@@ -26,13 +20,13 @@ final class IOSEditorHandle {
     }
 }
 
-/// iOS CueTextView 的 SwiftUI 宿主。正文只在创建时载入一次，之后编辑器是这张卡正文的唯一写者。
+/// 正文只在创建时载入一次，之后编辑器是这张卡正文的唯一写者。
 struct IOSEditorHost: UIViewRepresentable {
     let initialText: String
     let theme: CueEditorTheme
     let handle: IOSEditorHandle
     let onChange: (String) -> Void
-    /// 插图、插文件与变量取值；都为 nil 时键盘上方只有"收起键盘"（技能与规则是纯文字，`LibraryFileScreen`）。
+    /// 都为 nil 时键盘上方只有"收起键盘"。
     var onInsertImage: (() -> Void)?
     var onInsertFile: (() -> Void)?
     var onVariables: (() -> Void)?
@@ -40,6 +34,7 @@ struct IOSEditorHost: UIViewRepresentable {
     var onError: (any Error) -> Void = { _ in }
     /// 高贴着字、自己不滚（任务气泡：整张纸一起滚）；否则铺满给的地方、在里面滚（纸页）。
     var fits = false
+    var bottomInset: CGFloat = 0
     /// false：盖着别的东西、看不见时（技能与规则文件页标出合并时）收起键盘、不接输入、读屏跳过；回到 true 时之前拿着键盘的再拿回来。
     var editable = true
     @Environment(AppServices.self) private var services
@@ -59,7 +54,6 @@ struct IOSEditorHost: UIViewRepresentable {
             view.alwaysBounceVertical = false
         }
         handle.view = view
-        // 新建的空卡直接进入输入
         if initialText.isEmpty { DispatchQueue.main.async { view.becomeFirstResponder() } }
         if let range = DebugHooks.preset.editorSelection {
             DebugHooks.later(.milliseconds(500)) {
@@ -71,12 +65,13 @@ struct IOSEditorHost: UIViewRepresentable {
     }
 
     func updateUIView(_ view: CueTextView, context: Context) {
+        // 光标跟随避开的是滚动 inset；只给正文末尾留白，UIKit 输入时仍会把光标推到纸边。
+        if view.contentInset.bottom != bottomInset { view.contentInset.bottom = bottomInset }
         view.onChange = onChange
         view.selectionActions = selectionActions
         view.onError = onError
         view.onOpenAttachment = { [weak view, handle, workspace, openPreview] key, name, picture in
             guard let view else { return }
-            // 编辑器自己会滚：框换到它露出的那一块的坐标
             let frame = picture.offsetBy(dx: -view.contentOffset.x, dy: -view.contentOffset.y)
             handle.spot.open(DraftFile(key: key, name: name), at: frame, in: workspace, with: openPreview)
         }
@@ -84,7 +79,7 @@ struct IOSEditorHost: UIViewRepresentable {
         context.coordinator.insertFile = onInsertFile ?? {}
         context.coordinator.variables = onVariables ?? {}
         if view.isEditable != editable { setEditable(view) }
-        if view.theme.textColor != theme.textColor || view.theme.horizontalInset != theme.horizontalInset || view.theme.title?.color != theme.title?.color {
+        if view.theme != theme {
             view.theme = theme
         }
     }
@@ -97,7 +92,6 @@ struct IOSEditorHost: UIViewRepresentable {
         view.isEditable = editable
         view.isSelectable = editable
         view.isAccessibilityElement = editable
-        // 点不进去：不接点按，键盘也就叫不出来
         view.isUserInteractionEnabled = editable
         if editable, handle.refocus { view.becomeFirstResponder() }
     }
@@ -110,10 +104,9 @@ struct IOSEditorHost: UIViewRepresentable {
     }
 }
 
-/// 键盘上方的工具栏：插图、插文件、变量取值、收起键盘。格式就是正文里的 Markdown 原文，没有格式按钮。
 final class KeyboardBar: UIToolbar {
-    /// 随 SwiftUI 更新而替换的动作（工具栏本身只建一次）：插图、插文件与变量由外部弹出选择器与面板。
-    /// 也是宿主的协调者：跟着附件传输重画文件牌的那个任务挂在这里，编辑器拆掉时取消（`AttachmentLooks.follow`）。
+    private static let itemSize: CGFloat = 44
+    /// 随 SwiftUI 更新而替换的动作（工具栏本身只建一次）。也是宿主的协调者：跟着附件传输重画文件牌的任务挂在这里，编辑器拆掉时取消。
     final class Actions {
         var insertImage: () -> Void = {}
         var insertFile: () -> Void = {}
@@ -122,14 +115,18 @@ final class KeyboardBar: UIToolbar {
     }
 
     init(textView: CueTextView, actions: Actions, plain: Bool) {
-        super.init(frame: CGRect(x: 0, y: 0, width: 0, height: 44))
+        super.init(frame: CGRect(x: 0, y: 0, width: 0, height: Self.itemSize))
         func item(_ label: String, _ icon: Icon, _ action: @escaping (CueTextView) -> Void) -> UIBarButtonItem {
-            let item = UIBarButtonItem(image: icon.platformImage, primaryAction: UIAction { [weak textView] _ in
+            let button = UIButton(type: .system, primaryAction: UIAction { [weak textView] _ in
                 guard let textView else { return }
                 action(textView)
             })
-            item.accessibilityLabel = label
-            return item
+            button.setImage(icon.platformImage, for: .normal)
+            button.accessibilityLabel = label
+            button.addInteraction(UIToolTipInteraction(defaultToolTip: label))
+            button.widthAnchor.constraint(greaterThanOrEqualToConstant: Self.itemSize).isActive = true
+            button.heightAnchor.constraint(equalToConstant: Self.itemSize).isActive = true
+            return UIBarButtonItem(customView: button)
         }
         items = (plain ? [] : [
             item(String(localized: "插入图片"), .photo) { _ in actions.insertImage() },

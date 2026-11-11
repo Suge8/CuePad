@@ -1,0 +1,107 @@
+#if os(macOS)
+import CueStore
+import Foundation
+
+/// dsh-acp 缺的标准部分由随包插件补上（`dsh-cuepad.mjs` 头注释）。
+/// - 会话放哪：用户自己的 DSH_HOME（登录、`acp` profile 里的设置与缺省模型照用），存储根却是 CuePad 在它下面的 `cuepad/sessions`，明文。
+///   dsh 的存储是内部格式——按代际迁移、默认每批追加一个 zstd 帧、一个根只认一种编码（混进别的编码它整根拒读），同一根里的明文与压缩
+///   不能并存。CuePad 跟读、补写对话要逐行读，所以托管会话进自己的明文根，代价是它们不出现在 dsh 的 web、桌面版的历史里；
+///   在 CuePad 的历史里照常接着说。
+/// - 不跟读用户在 web、桌面版里的会话：zstd 要另加解压依赖，旧会话还停在 v0–v3 各代的格式（每代各一份解码），读出来也只能看不能控
+///   （那些会话的进程不是 CuePad 起的，没有通道）。为只读的历史不值。
+/// - 开会话时要的模型在起进程时就给（插件的 `CUEPAD_MODEL`）：dsh-acp 握手时按它判定收不收图，之后换到能看图的模型也一样。
+@MainActor
+public final class DshRuntime: AgentRuntime {
+    private let bridge: Bridge
+    private let host: ACPHost
+
+    public init(
+        bridge: Bridge, paths: AgentPaths, dsh: @escaping @Sendable () async -> URL?,
+        locate: @escaping @Sendable () async -> ExecutableLocator = { await .system }, timing: Timing = .system
+    ) {
+        host = ACPHost(.dsh, bridge: bridge, timing: timing, launching: { model in
+            guard let executable = await dsh() else { throw AgentRuntimeError.notInstalled(.dsh) }
+            try DshLaunch.prepare(.hosted)
+            let environment = await locate().environment(
+                launching: executable, overrides: DshLaunch.environment(paths, model: model))
+            return ACPHost.Launching(executable: executable, environment: environment, dialect: DshDialect(patch: .hosted))
+        }, sessionFile: { cwd, id in Self.sessionFile(home: paths.home(of: .dsh), cwd: cwd, id: id) })
+        self.bridge = bridge
+    }
+
+    public func start() throws { host.start() }
+
+    public func stop() -> @concurrent @Sendable () async -> Void { host.stop() }
+
+    public func open(
+        in directory: URL, launchToken: String, name: String?, model: ModelKey?, thinking: ThinkingLevel?
+    ) async throws -> Session.ID {
+        // 模型在起进程时给，不再经 `configure` 换：dsh-acp 握手时按开会话的模型判定收不收图
+        let id = try await host.open(in: directory, launchToken: launchToken, model: model.map(AgentKind.dsh.modelRef))
+        return try await configure(opened: id, name: name, model: nil, thinking: thinking, on: bridge)
+    }
+
+    public func resume(_ session: IndexedSession) async throws -> Session.ID { try await host.resume(session) }
+
+    /// 会话文件：`<存储根>/<工作目录的键>/<会话 id>/session.v4.jsonl`，键照 dsh 的 `projectKey`（分隔符成 `-`，其余不安全的字成 `~XXXX`，
+    /// 按 UTF-16 码元，至多 251 个，前后各加 `--`）。
+    nonisolated static func sessionFile(home: URL, cwd: URL, id: String) -> URL {
+        var readable = "", separated = false
+        for unit in cwd.path.utf16 {
+            let scalar = Unicode.Scalar(unit)
+            if unit == 0x2F || unit == 0x5C || unit == 0x3A {
+                if !separated { readable += "-" }
+                separated = true
+                continue
+            }
+            separated = false
+            if let scalar, scalar.isASCII, scalar == "." || scalar == "_" || scalar == "-" || scalar.properties.isAlphabetic || ("0"..."9").contains(scalar) {
+                readable.unicodeScalars.append(scalar)
+            } else {
+                readable += "~" + String(format: "%04X", unit)
+            }
+        }
+        let trimmed = String(readable.drop { $0 == "-" })
+        let key = "--" + String((trimmed.isEmpty ? "root" : trimmed).prefix(251)) + "--"
+        return home.appending(path: sessions, directoryHint: .isDirectory).appending(path: key).appending(path: id).appending(path: DshHistory.fileName)
+    }
+}
+
+/// 大脑的系统提示、只读工具与临时存储都在启动参数指的补丁与环境里（`DshLaunch`），`session/new` 照标准。
+struct DshDialect: ACPDialect {
+    var patch: DshLaunch.Patch = .brain
+    /// 插件回"歇着，走 session/prompt"的错误码（`dsh-cuepad.mjs` 的 `steer`）
+    static let idle = -32001
+
+    var agent: AgentKind { .dsh }
+    var arguments: [String] { DshLaunch.arguments(patch) }
+
+    func brain(_ config: CueBrainConfig, directory: URL) throws -> ACPBrainSetup {
+        try DshLaunch.prepare(.brain)
+        return ACPBrainSetup(environment: try DshLaunch.brainEnvironment(in: directory, prompt: config.systemPrompt, model: config.model), meta: nil)
+    }
+
+    /// 插件回这句消息的 id，它被一轮收下时报 `_cuepad/claimed`（`dsh-cuepad.mjs`）。
+    @MainActor func steer(_ text: String, images: [MessageImage], session: String, on connection: ACPConnection) async throws -> ACPSteer? {
+        let images: [JSONValue] = images.map { ["mimeType": .string($0.mimeType), "data": .string($0.data.base64EncodedString())] }
+        do {
+            let steered = try await connection.call("_cuepad/steer", ["sessionId": .string(session), "text": .string(text), "images": .array(images)])
+            return ACPSteer(claim: steered["messageId"]?.string)
+        } catch ACPError.server(Self.idle, _) {
+            return nil
+        }
+    }
+
+    func signals(_ method: String, _ params: JSONValue) -> [ACPSignal] {
+        guard method == "_cuepad/claimed", let message = params["messageId"]?.string else { return [] }
+        return [.claimed(message)]
+    }
+
+    @MainActor func rename(_ name: String, session: String, cwd: URL, on connection: ACPConnection) async throws -> Bool {
+        try await connection.call("_cuepad/rename", ["sessionId": .string(session), "name": .string(name)])
+        return true
+    }
+
+    func promptMeta(deliveryID: String?) -> JSONValue? { deliveryID.map { ["cuepadDelivery": .string($0)] } }
+}
+#endif

@@ -1,14 +1,8 @@
 #if os(iOS)
 import SwiftUI
 
-/// 从页顶那一排长出面板的一块实底玻璃（Cue 的名牌）：收着时只占 `head` 的宽、居中，同一块玻璃长高、长宽（`GrownWidth`）。
-/// `head` 里的几块不另画玻璃（`headerGrown`）；`head` 可以跟着开合换排法（Cue 的名牌长成名片），在同一块玻璃里一起长。
-/// 面板的几行按长大后的位置排好、淡入并下移 6 点，玻璃还在长的那几帧里不画到玻璃外面。开着时是模态浮出（`ModalHost.Modal`，规矩在 `PanelModal+iOS.swift`）：
-/// 点面板外（整窗任何地方）只收起、那一下不落到下面，背后的页面不压色；读屏只读这一块（所在的页藏起旁边的），关后焦点回到 `head`。
-/// 离开页面时收起，开合轻触感一下；提示横幅盖在这一排上时收着的整块让开，开着的只让开 `head`。开没开由调用方持有，`head` 里的按钮经 `grow` 开合
-/// （无回弹弹簧 `Motion.nudge`，减弱动态效果时直接到终态）。
-/// 里面的高度只在开合时变：长大的动画里挨一下不带动画的改高，整块玻璃就有几帧不画。面板能长到的高不让键盘：键盘起落时里面不跟着重排
-/// （Cue 的名牌开面板前先收起键盘，按的是收完的高）。
+/// 开没开由调用方持有，`head` 里的按钮经 `grow` 开合。
+/// 里面的高度只在开合时变：长大的动画里挨一下不带动画的改高，整块玻璃就有几帧不画。面板能长到的高不让键盘：键盘起落时里面不跟着重排（Cue 的名牌开面板前先收起键盘，按的是收完的高）。
 /// 只放在页自己画的那一排里（窄屏的 Cue 页、iPad 右侧的 Cue 面板，`HeaderHost`）。额度不用它：额度是从钮长出的居中浮窗（`popup`）。
 struct GrowPanel<Head: View, Panel: View>: View {
     @Binding var open: Bool
@@ -20,7 +14,6 @@ struct GrowPanel<Head: View, Panel: View>: View {
     @Environment(\.pageActive) private var active
     @Environment(ModalHost.self) private var host: ModalHost?
     @State private var token = UUID()
-    /// 这块玻璃此刻在窗口里的框：开的那一下交给窗口那一层（之后每变一次报一次）。
     @State private var frame = Frame()
     @AccessibilityFocusState private var headFocused: Bool
 
@@ -65,7 +58,6 @@ struct GrowPanel<Head: View, Panel: View>: View {
             open = false
             host?.uncover(token)
         }
-        // 窄屏滑走了这一页（它还留着）也收起
         .onChange(of: active) { if !active { open = false } }
     }
 }
@@ -96,7 +88,6 @@ private struct GrownWidth: Layout {
 }
 
 extension Binding<Bool> {
-    /// 开合面板：给了 `to` 就到那一态（已经是就不动），不给就换一态。
     func grow(to value: Bool? = nil, reduceMotion: Bool) {
         let next = value ?? !wrappedValue
         guard next != wrappedValue else { return }

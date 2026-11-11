@@ -2,9 +2,7 @@ import CueStore
 import CueText
 
 extension CuePrompt {
-  /// 后台整理记忆的大脑的系统提示（`CueKeeper` 起的一次性大脑，工具是 merge、said、ask）：输入是 `dreamInput`。
-  /// 它做两件事：把旧记忆并成摘要；从他在各会话里说的话里找出反复交代的做法，问他一次要不要记成重点（他答了由 Cue 记：重点只归 Cue 写）。
-  /// 后一件不放在 Cue 的轮里：那里只看得到手头这一个会话，查别的会话要占它的一轮与常驻提示。
+  /// 输入是 `dreamInput`。找反复交代的做法不放在 Cue 的轮里：那里只看得到手头这一个会话，查别的会话要占它的一轮与常驻提示。他答了由 Cue 记：重点只归 Cue 写。
   public static func dream(runtime: AgentKind) -> String {
     let merge = CueMCPServer.toolName("merge", on: runtime), said = CueMCPServer.toolName("said", on: runtime)
     let ask = CueMCPServer.toolName("ask", on: runtime)

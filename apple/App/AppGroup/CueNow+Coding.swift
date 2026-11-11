@@ -16,6 +16,9 @@ nonisolated extension CueNow {
     }
 
     /// 旧缓存没有 host 期限与贡献归属，只能保留任务和最后进度，不能据旧正数签发当前运行断言。
+    /// 写这种快照的是 ios/2610262136…ios/2610301244 这几个 TestFlight 构建，读到它的有两处：App Group 里的 `cue.json`（构建过期也不清，没启动过新版就一直在）
+    /// 与它们开着的实时活动（系统最多留 12 小时）。这些构建都过期（最后一个约 2027-01-28）后才删这里与 `slot` 的缺省，同时给 `CueNow.fileName` 换新名（#111），
+    /// 旧文件从此读不到（同 `ProjectsSnapshot` 换名）。
     private mutating func migrateUnconfirmedRuntime() {
         self = settled
         items = items.enumerated().map { index, item in

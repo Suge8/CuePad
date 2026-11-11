@@ -1,9 +1,8 @@
 import CueStore
 import Foundation
 
-/// Cue 的记忆视图（OptMem 的读法）：重点全部列出（在系统提示里，`pinnedText`，过了 `CueMemoryLine.pinnedHard` 叫 Cue 自己收口）；其余按快照位置铺成对齐的 2 的幂块，越新越细、总行数固定在预算内
-/// （按预算二分 alpha，见 `cover`），放在新会话的第一条输入里（`viewText`）。块有摘要用摘要，没有就拆成两半直到有摘要或单行；
-/// 输入就绪的缺失摘要列成"待合并"（`merges`，子块写完由回执接续父块），视图里不列，由后台整理记忆的一次性大脑写（`CuePrompt.dreamInput`，`CueKeeper` 起；重点只归 Cue 整理，做梦不碰）。摘要可以一层层展开（`zoom`）。
+/// Cue 的记忆视图（OptMem 的读法）：重点全部列出（在系统提示里，`pinnedText`）；其余铺成对齐的 2 的幂块，越新越细、总行数固定在预算内，放在新会话的第一条输入里（`viewText`）。
+/// 缺摘要的块里输入已就绪的列成"待合并"（`merges`），视图里不列，由后台整理记忆的一次性大脑写（`CuePrompt.dreamInput`）；重点只归 Cue 整理，做梦不碰。
 /// 参考 https://github.com/VictorTaelin/OptMem 的 `_cover` / `cover`。
 public struct CueMemoryView: Equatable, Sendable {
   public typealias Entry = CueMemoryInput
@@ -17,7 +16,6 @@ public struct CueMemoryView: Equatable, Sendable {
   public var pinned: [CueMemoryLine]
   public var entries: [Entry]
   public var merges: [Merge]
-  /// 重点合计字节（`CueMemoryLine.bytes`）
   public var pinnedBytes: Int
   /// 重点过了硬线（`CueMemoryLine.pinnedHard`）：系统提示里叫 Cue 合并
   public var pinnedOverBudget: Bool { pinnedBytes > CueMemoryLine.pinnedHard }
@@ -56,7 +54,6 @@ public struct CueMemoryView: Equatable, Sendable {
     self.merges = merges.sorted { ($0.range.hi - $0.range.lo, $0.range.lo) < ($1.range.hi - $1.range.lo, $1.range.lo) }
   }
 
-  /// 系统提示里的重点（班次内不变）：先一行用量，过了硬线跟一句叫 Cue 合并。
   public var pinnedText: String {
     guard !pinned.isEmpty else { return "还没有。" }
     var out = ["\(pinned.count) 条，\(Self.kilobytes(pinnedBytes)) / \(Self.kilobytes(CueMemoryLine.pinnedHard))"]
@@ -67,7 +64,6 @@ public struct CueMemoryView: Equatable, Sendable {
     return out.joined(separator: "\n")
   }
 
-  /// "3.2KB"：一位小数，整数不带 .0。
   static func kilobytes(_ bytes: Int) -> String {
     (Double(bytes) / 1024).formatted(.number.precision(.fractionLength(0...1)).locale(Locale(identifier: "en_US_POSIX"))) + "KB"
   }
@@ -99,7 +95,6 @@ public struct CueMemoryView: Equatable, Sendable {
     return line.shown() + (line.deletedAt != nil ? "（已忘掉）" : line.pinned ? "（重点）" : "")
   }
 
-  /// 输入已经就绪的待合并块；没有为 nil。
   var mergeText: String? {
     guard !merges.isEmpty else { return nil }
     return merges.map { "\($0.range.label) range=\($0.range.reference)\n\($0.source)" }.joined(separator: "\n\n")

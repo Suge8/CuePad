@@ -1,7 +1,7 @@
 import CueStore
 import Foundation
 
-/// `setup look`：Cue 读自己与它运行的那台 Mac。总览每块几行；`part` 给那一块的全部。只读库与本机的健康文件（`CueHealth`），不碰别的。
+/// 总览每块几行；`part` 给那一块的全部。只读库与本机的健康文件（`CueHealth`），不碰别的。
 extension CueTools {
   func look(_ part: LookPart?) async throws -> String {
     let now = Date()
@@ -25,8 +25,6 @@ extension CueTools {
     return lines.joined(separator: "\n")
   }
 
-  // MARK: 大脑
-
   private func brain(_ profile: CueProfile, mac: MacAgents, now: Date, detail: Bool) -> [String] {
     let agent = profile.runtime.known.flatMap(mac.agent)
     var lines = ["大脑：\(Self.brainLine(profile, agent: agent)) · 在「\(mac.shownName)」"]
@@ -37,7 +35,6 @@ extension CueTools {
     if let failover = health.failover {
       lines.append("最近自动换大脑 \(CueScheduleWords.time(failover.at, now: now))：从 \(failover.from.name) 换到 \(failover.to.name)，\(failover.reason)")
     }
-    if detail, let agent { lines += Self.limits(agent.kind).map { "  \($0)" } }
     return lines
   }
 
@@ -51,8 +48,6 @@ extension CueTools {
     }
   }
 
-  // MARK: Agent
-
   private func agents(_ mac: MacAgents, profile: CueProfile, quotas: [AccountQuota], now: Date, detail: Bool) -> [String] {
     guard mac.modifiedAt != .distantPast else { return ["Agent：\(mac.whyNone)"] }
     var lines = ["Agent（「\(mac.shownName)」，开工不写 agent 用 \(mac.kinds.first?.rawValue ?? "无")）："]
@@ -65,7 +60,6 @@ extension CueTools {
       let model = agent.model.map { " · 默认 \(kind.modelRef($0))" } ?? ""
       let count = agent.models.isEmpty ? " · 没有模型清单（用它自己的默认）" : " · \(agent.models.count) 个模型"
       lines.append("- \(kind.rawValue) 能用\(brain)\(model)\(count)")
-      lines += Self.limits(kind).map { "  \($0)" }
       guard detail else { continue }
       lines += agent.models.map { option in "  - " + Self.model(option, of: agent, quotas: quotas, now: now) }
     }
@@ -73,7 +67,7 @@ extension CueTools {
   }
 
   /// 一个模型："anthropic/claude-opus-5-5（Claude Opus 5.5，默认）· 强度 low/medium/high · fast · 不能看图 · 额度：anthropic 本周 已用 85%"。
-  private static func model(_ option: PiModelOption, of agent: MacAgent, quotas: [AccountQuota], now: Date) -> String {
+  private static func model(_ option: ModelOption, of agent: MacAgent, quotas: [AccountQuota], now: Date) -> String {
     let named = [option.name.isEmpty ? nil : option.name, option.key == agent.model ? "默认" : nil].compactMap(\.self)
     var parts = [agent.kind.modelRef(option.key) + (named.isEmpty ? "" : "（\(named.joined(separator: "，"))）")]
     if !option.thinkingLevels.isEmpty { parts.append("强度 " + option.thinkingLevels.map(\.rawValue).joined(separator: "/")) }
@@ -82,23 +76,6 @@ extension CueTools {
     if let quota = option.quota(in: quotas) { parts.append("额度：" + CueQuotaWords.binding(quota, model: option.key, at: now)) }
     return parts.joined(separator: " · ")
   }
-
-  /// 这家的边界：他在终端里开的会话少了哪几样（CuePad 托管的、你开的会话什么都能做）。
-  static func limits(_ kind: AgentKind) -> [String] {
-    let hosted = AgentCapabilities.of(kind, hosted: true, model: nil), terminal = AgentCapabilities.of(kind, hosted: false, model: nil)
-    let missing = abilities.filter { hosted.contains($0.0) && !terminal.contains($0.0) }.map(\.1)
-    guard !missing.isEmpty else { return [] }
-    if terminal.isEmpty { return ["他在终端里开的 \(kind.name) 会话你只能看，说不了话"] }
-    let busy = terminal.contains(.speak) && !terminal.contains(.abort) ? "；它在跑时说不进去，等它歇下" : ""
-    return ["他在终端里开的 \(kind.name) 会话：不能\(missing.joined(separator: "、"))\(busy)"]
-  }
-
-  private static let abilities: [(AgentCapabilities, String)] = [
-    (.speak, "说话"), (.images, "发图"), (.abort, "停下这一轮"), (.model, "换模型"), (.rename, "改名"), (.commands, "用斜杠命令"),
-    (.answer, "回答它的提问"), (.end, "收掉"), (.retry, "重跑出错的一轮"),
-  ]
-
-  // MARK: 额度
 
   private func quota(_ quotas: [AccountQuota], mac: MacAgents, now: Date, detail: Bool) -> [String] {
     guard !quotas.isEmpty else { return ["额度：这台 Mac 没有订阅额度的记录（按量计费的不报，订阅的要等用过一次才观测到）"] }
@@ -111,8 +88,6 @@ extension CueTools {
       return lines
     }
   }
-
-  // MARK: 记忆、技能、项目
 
   private func memory() async throws -> String {
     let kept = try await store.cueMemory().lines.filter { $0.deletedAt == nil && $0.remindAt == nil }
@@ -148,6 +123,7 @@ extension CueTools {
         case .global: "全局规则"
         case .piSystem: "Pi 的系统提示"
         case .project(let id): "\(scope(.project(id)))的规则"
+        case .agent(let agent, _): "\(agent.name) 自己的全局规则（还没换成共享那份）"
         }
       let unseen = library.unseen(instruction)
       let note = instruction.hash == nil ? "（还没有这个文件）" : unseen.isEmpty ? "" : "（\(unseen.map(\.name).joined(separator: "、")) 读不到）"
@@ -172,7 +148,6 @@ extension CueTools {
 
   private struct ProjectFacts {
     let projects: [Project]
-    /// 这台 Mac 上绑的文件夹
     let local: [UUID: String]
     let elsewhere: [DirectoryBinding]
     let here: String
@@ -185,11 +160,10 @@ extension CueTools {
       elsewhere: try await store.directoryBindings().filter { $0.hostID != host }, here: host)
   }
 
-  /// 总览列这么多个项目，多的只报个数。
   private static let projectsListed = 20
 
   private func projects(_ facts: ProjectFacts, detail: Bool) -> [String] {
-    func folder(_ project: Project) -> String? { facts.local[project.id].map { NSString(string: $0).abbreviatingWithTildeInPath } }
+    func folder(_ project: Project) -> String? { facts.local[project.id].map { UserHome.shown($0) } }
     guard detail else {
       let names = facts.projects.prefix(Self.projectsListed).map { project in project.name + (folder(project).map { "（\($0)）" } ?? "") }
       let more = facts.projects.count > Self.projectsListed ? "…等 \(facts.projects.count) 个" : ""

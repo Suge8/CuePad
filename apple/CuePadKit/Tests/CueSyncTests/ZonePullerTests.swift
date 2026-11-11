@@ -5,8 +5,6 @@ import Testing
 
 @testable import CueSync
 
-/// 没有令牌时（新装、令牌过期）按版本对账：不把整个同步区的正文下载一遍，
-/// 只取本机没有或较旧的；本机推送过而服务器上已没有的，按在别处删掉处理；之后从存在库里的令牌增量拉。
 @Suite struct ZonePullerTests {
   let rig = try! Rig()
   var store: CueStore { rig.store }
@@ -15,7 +13,6 @@ import Testing
     .success(ZoneChangeBatch(modifications: records, deletions: [], token: Data(token.utf8), moreComing: more))
   }
 
-  /// 只带版本的那份（对账那一遍服务器给的样子）。
   private func version(of record: CKRecord) -> CKRecord {
     let stub = CKRecord(recordType: record.recordType, recordID: record.recordID)
     stub["modifiedAt"] = record["modifiedAt"]
@@ -87,12 +84,13 @@ import Testing
     #expect(try await store.cards(in: Project.defaultID).isEmpty)
   }
 
-  /// 拉到的一页没能应用（这里是期间换了账号、停下来等你决定）：令牌不前移，之后从同一处再拉。
   @Test func aPageThatWasNotAppliedDoesNotMoveTheToken() async throws {
-    await rig.coordinator.account("user-a")
+    let gate = AccountGate()
+    await rig.coordinator.use(gate)
+    await rig.coordinator.account("user-a", from: gate.begin(closing: false))
     try await store.setSyncState(ZonePuller.tokenKey, Data("t0".utf8))
     let fresh = remoteRecord(.cards, cardFields(body: "别处新建", modifiedAt: 2_000))
-    let zone = SwitchingZone(page: ZoneChangeBatch(modifications: [fresh], deletions: [], token: Data("t1".utf8), moreComing: false), coordinator: rig.coordinator)
+    let zone = SwitchingZone(page: ZoneChangeBatch(modifications: [fresh], deletions: [], token: Data("t1".utf8), moreComing: false), coordinator: rig.coordinator, gate: gate)
 
     await #expect(throws: (any Error).self) { try await ZonePuller(source: zone, coordinator: rig.coordinator).pull() }
 
@@ -100,7 +98,6 @@ import Testing
     #expect(try await store.cards(in: Project.defaultID).isEmpty)
   }
 
-  /// 同时来的几次拉取一个接一个跑：不会两个同时拉、用同一个令牌拉两遍。
   @Test func concurrentPullsRunOneAfterAnother() async throws {
     try await store.setSyncState(ZonePuller.tokenKey, Data("0".utf8))
     let zone = CountingZone()
@@ -115,22 +112,22 @@ import Testing
     #expect(Set(tokens).count == tokens.count)
   }
 
-  /// 拉一页时那头换了账号。
   actor SwitchingZone: ZoneChangeSource {
     let page: ZoneChangeBatch
     let coordinator: SyncCoordinator
-    init(page: ZoneChangeBatch, coordinator: SyncCoordinator) {
+    let gate: AccountGate
+    init(page: ZoneChangeBatch, coordinator: SyncCoordinator, gate: AccountGate) {
       self.page = page
       self.coordinator = coordinator
+      self.gate = gate
     }
     func changes(since token: Data?, keys: [String]) async throws -> ZoneChangeBatch {
-      await coordinator.account("user-b")
+      await coordinator.account("user-b", from: gate.begin(closing: false))
       return page
     }
     func records(_ ids: [CKRecord.ID]) async throws -> [CKRecord] { [] }
   }
 
-  /// 每次给一页空变化、令牌加一，记下同时在拉的最多几个与每次带的令牌。
   actor CountingZone: ZoneChangeSource {
     private var active = 0
     private(set) var mostAtOnce = 0

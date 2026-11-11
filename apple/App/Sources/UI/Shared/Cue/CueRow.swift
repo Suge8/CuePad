@@ -1,7 +1,6 @@
 import CueStore
 import SwiftUI
 
-/// 对话里的一段（约 `CuePage.segment` 格，`ChatSegments`）：只按各格的内容比较。
 struct CueSegment: View, Equatable {
     let rows: [CueRow]
 
@@ -13,7 +12,7 @@ struct CueSegment: View, Equatable {
     var body: some View {
         ChatRows(ids: rows.map(\.row.id), spacing: 0) {
             ForEach(rows, id: \.row.id) { row in
-                row.equatable().benchSpot(row.row.id).transition(CueRow.arrives(row.row, swapsInPlace: services.cueSwapsInPlace) ? CueBubble.arrival : .identity)
+                row.equatable().benchSpot(row.row.id).transition(CueRow.arrives(row.row, swapsInPlace: services.cueOnDutyHere) ? CueBubble.arrival : .identity)
             }
         }
     }
@@ -26,7 +25,6 @@ struct CueRow: View, Equatable {
     let shots: [CueShown]
     let joined: Bool
     let stamp: Date?
-    /// 你最后一句：气泡旁标已送达（`BubbleTrip.delivered`）。
     let delivered: Bool
     /// 这一格是新消息：左边一颗小点（`CueUnreadDot`），末尾进出滚动区时报给页面（`CueViewing`）。
     /// 页边距（`chatMargin`）放得下时在气泡外隔一条缝；放不下（iPhone、窄窗口的 iPad）点骑在气泡左缘上（`straddlesDot`），离屏缘约 12 点：
@@ -37,7 +35,6 @@ struct CueRow: View, Equatable {
     @Environment(Workspace.self) private var workspace
     @Environment(\.chatMargin) private var margin
 
-    /// 这一格排出来什么样只看这几样。
     nonisolated struct Key: Equatable {
         let row: CueThread.Row, shots: [CueShown], joined: Bool, stamp: Date?, delivered: Bool, unread: Bool
     }
@@ -71,7 +68,6 @@ struct CueRow: View, Equatable {
             }
     }
 
-    /// 新来时把上面的对话撑上去、自己淡入的那几种（`ChatScroll.rise`、`CueBubble.arrival`）：Cue 新说的一句与结果卡。
     /// `swapsInPlace`：Cue 在这台 Mac 值班，它的话原位换下正在说的那句（`CueEnding`），直接出现。你的话由回复框那头的发出动画接上，其余各格直接出现。
     static func arrives(_ row: CueThread.Row, swapsInPlace: Bool) -> Bool {
         switch row {
@@ -106,16 +102,10 @@ struct CueRow: View, Equatable {
     private var straddlesDot: Bool { margin < CueUnreadDot.room }
 }
 
-/// Cue 页对话的末尾：此刻在做的那一行（`CueDoing`）的位置一直占着（`ChatLiveSlot`，没有时留白）：Cue 此刻在做什么只写在这里，
-/// 不进对话里的哪一格（经过、醒来那一行都是记录，`CueTrace`），出现、收起与换字都不挪对话。
-/// Cue 在这台 Mac 值班时，在回答你的一轮出字就在这一行上方逐字长出正在说的话
-/// （`CueKeeper.speech`，同会话页的 `SessionDraft`）：只有这个视图读它，出字时对话列表不重算；它与对话在同一次更新里拿到同一份对话，
-/// 落库了（`PiDraft.landed`）就不再显示，换下是同一帧里的一减一加。有草稿时（说着、已落库而 Cue 的状态还没歇下）那一行留白（话已经在说、说完了）；
-/// 中途转成工具调用时桥清掉草稿，那一行写进展。进展那一行被换下时直接拿掉，不与正在说的话叠着淡出。别的 Mac 与手机只有进展那一行。
+/// Cue 此刻在做什么只写在这里，不进对话里的哪一格（经过、醒来那一行都是记录，`CueTrace`），出现、收起与换字都不挪对话。
+/// 正在说的话（`CueKeeper.speech`）只有这个视图读它，出字时对话列表不重算；它与对话在同一次更新里拿到同一份对话，落库了（`LiveDraft.landed`）就不再显示，换下是同一帧里的一减一加。
 struct CueEnding: View {
-    /// 对话里最近一条 Cue 的话的时刻
     let newestSaid: Date?
-    /// 对话最后一格是 Cue 的话：正在说的这句落库后与它连成一串，说着的时候就排成那个样子。
     let joined: Bool
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -124,7 +114,7 @@ struct CueEnding: View {
         VStack(alignment: .leading, spacing: 0) {
             #if os(macOS)
             let draft = services.cue.keeper?.speech.draft
-            if let draft, !draft.landed(newestReply: newestSaid) {
+            if let draft, !draft.landed(newestReply: newestSaid, record: nil) {
                 // 与落库后的那句（`CueSays`）同一颗气泡、同一个位置，换下时正文不动
                 BubbleWidth(fraction: CueBubble.cueWidth, edge: .leading) {
                     MarkdownText(source: draft.text).equatable().cueBubble(joined: joined)
@@ -148,31 +138,17 @@ struct CueEnding: View {
     }
 }
 
-/// Cue 此刻在做的那一行（对话末尾，`CueEnding`）：状态标加一句它在做什么（`CuePresence.progress`：碰到任务与会话的一步写成"发给 登录回调超时"，与这一轮的经过同一套动词，`CueActivity.line`），
-/// 仍是旁注、不铺底，左缘对着 Cue 气泡的左缘；字比旁注大一档（正文的次一级）：这是你刚说完在等的那件事，比经过与动态要紧。
 private struct CueDoing: View {
-    let shown: PiShown
+    let shown: SessionShown
     let doing: String
     @Environment(\.palette) private var palette
 
     static let font = Typography.secondary
 
     var body: some View {
-        // 一行：它的位置只留一行（`ChatLiveSlot`）
-        NoteLine { PiStateDot(shown: shown, size: 7) } label: {
+        NoteLine { StateDot(shown: shown, size: 7) } label: {
             Text(doing).font(Self.font).foregroundStyle(palette.ink2).lineLimit(1).shimmering()
         }
         .accessibilityElement(children: .ignore).accessibilityLabel(doing)
-    }
-}
-
-extension AppServices {
-    /// Cue 的话原位换下正在说的那句（Cue 在这台 Mac 值班，`CueEnding`），新到时不另外长出来（`CueRow.arrives`）。
-    var cueSwapsInPlace: Bool {
-        #if os(macOS)
-        cue.keeper != nil
-        #else
-        false
-        #endif
     }
 }

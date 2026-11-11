@@ -1,0 +1,72 @@
+import CueStore
+import SwiftUI
+
+enum ComposerKey { case up, down, accept, dismiss }
+
+struct SlashPalette: View {
+    let commands: [SlashCommand]
+    let highlighted: Int
+    let pick: (SlashCommand) -> Void
+    @Environment(\.palette) private var palette
+
+    private static let maxHeight: CGFloat = 264
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(spacing: Spacing.hair) {
+                    ForEach(Array(commands.enumerated()), id: \.element.id) { index, command in
+                        row(command, highlighted: index == highlighted).id(command.id)
+                    }
+                }
+                .padding(.horizontal, Spacing.block).padding(.vertical, Spacing.tight)
+            }
+            .frame(maxHeight: Self.maxHeight)
+            .fixedSize(horizontal: false, vertical: true)
+            .onChange(of: highlighted) { _, index in
+                if commands.indices.contains(index) { proxy.scrollTo(commands[index].id) }
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("斜杠命令")
+    }
+
+    private func row(_ command: SlashCommand, highlighted: Bool) -> some View {
+        Button { pick(command) } label: {
+            HStack(alignment: .firstTextBaseline, spacing: Spacing.item) {
+                VStack(alignment: .leading, spacing: Spacing.hair) {
+                    HStack(spacing: Spacing.item) {
+                        Text("/" + command.name).font(Typography.body.weight(.semibold)).foregroundStyle(palette.ink)
+                        if let hint = command.hint { Text(hint).font(Typography.meta).foregroundStyle(palette.ink3) }
+                    }
+                    .lineLimit(1)
+                    if let summary = command.summary {
+                        Text(summary).font(Typography.meta).foregroundStyle(palette.ink2).lineLimit(1)
+                    }
+                }
+                Spacer(minLength: 8)
+                Text(command.source.label).font(Typography.caption).foregroundStyle(palette.ink3)
+            }
+            .padding(.vertical, Spacing.item)
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            .contentShape(.rect)
+        }
+        .buttonStyle(RowStyle(selected: highlighted))
+        .accessibilityLabel("/" + command.name)
+        .accessibilityValue([command.hint, command.summary, command.source.label].compactMap { $0 }.joined(separator: "，"))
+        .accessibilityAddTraits(highlighted ? .isSelected : [])
+    }
+}
+
+nonisolated extension Open<CommandSource> {
+    var label: String {
+        switch self {
+        case .known(.builtin): String(localized: "内置")
+        case .known(.extension): String(localized: "扩展")
+        case .known(.prompt): String(localized: "模板")
+        // 不用"技能"那个键：它是技能与规则页顶的那一段，英文是复数 Skills；这里是一条命令的来源，英文同 Extension、Template 用单数
+        case .known(.skill): String(localized: "技能命令")
+        case .unknown: String(localized: "其他")
+        }
+    }
+}

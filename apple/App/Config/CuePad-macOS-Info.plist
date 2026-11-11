@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSAudioCaptureUsageDescription</key>
+	<string>语音验收时抓取本实例播放的合成语音，送入临时麦克风。</string>
 	<key>CuePadAppID</key>
 	<string>$(CUEPAD_APP_ID)</string>
 	<key>CuePadRelease</key>

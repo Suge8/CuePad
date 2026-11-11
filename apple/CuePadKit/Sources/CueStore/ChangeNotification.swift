@@ -54,7 +54,6 @@ final class ChangeListener: Sendable {
     self.tokens = tokens
   }
 
-  /// 上次取走之后收到通知的表。
   func drain() -> Set<Table> {
     posted.tables.withLock { tables in
       defer { tables = [] }

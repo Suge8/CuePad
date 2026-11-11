@@ -2,8 +2,6 @@ import CueStore
 import Foundation
 import Testing
 
-/// 项目只有一种顺序（`CueStore.projectOrder`）：置顶在前，其余按最近的进展——灵感的新建与编辑、任务开始与做完、会话一轮开始或答完。
-/// 归档、取回、删除、恢复不动顺序；会话只变状态也不动。
 @Suite struct ProjectOrderTests {
   let fixture = try! Fixture()
   var store: CueStore { fixture.store }
@@ -23,13 +21,12 @@ import Testing
     try await store.setStatus(done.id, .done)
     // 每次一个新的记录器：同一个会攒着上次的一轮开始时刻、还按间隔压写入。新一轮的开始时刻在隔开之后才取：
     // 库里时刻按毫秒存，先取再隔开会和上一步的写入落在同一毫秒，并列时按项目 id 排，顺序随机（#69）
-    func session(_ state: PiWorkState, newTurn: Bool = false) async throws {
-      try await Task.sleep(for: .milliseconds(2))
-      _ = try await PiStateRecorder(store: store, hostID: "mac").update(
+    func session(_ state: WorkState, newTurn: Bool = false) async throws {
+      await nextMillisecond()
+      _ = try await StateRecorder(store: store, hostID: "mac").update(
         sessionID: "s1", state: state, title: "s", projectID: talk.id, turnStartedAt: newTurn ? .now : nil)
     }
     try await session(.thinking, newTurn: true)
-    // 起点：都在很久以前，收拾的那个项目最早
     try at("UPDATE projects SET createdAt = 1000, modifiedAt = 1000")
     try at("UPDATE cards SET todoAt = 1000, startedAt = NULL, completedAt = 1000, modifiedAt = 1000 WHERE id = '\(done.id.uuidString.lowercased())'")
     try at("UPDATE cards SET modifiedAt = 3000 WHERE id = '\(note.id.uuidString.lowercased())'")
@@ -46,10 +43,10 @@ import Testing
     try await session(.waitingForUser)
     #expect(try await order() == ["置顶", "灵感", "任务", "会话", "收拾好"])
 
-    try await Task.sleep(for: .milliseconds(2))
+    await nextMillisecond()
     try await store.setStatus(task.id, .inProgress)
     #expect(try await order() == ["置顶", "任务", "灵感", "会话", "收拾好"])
-    try await Task.sleep(for: .milliseconds(2))
+    await nextMillisecond()
     try await store.updateCard(note.id) { $0.body = "n2" }
     #expect(try await order() == ["置顶", "灵感", "任务", "会话", "收拾好"])
     try await session(.thinking, newTurn: true)

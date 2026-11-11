@@ -4,8 +4,7 @@ import Synchronization
 import Testing
 @testable import CuePad
 
-/// 任务优先的主动线，按用户走的路写：建任务 → 开始把正文交给 Agent（话在路上、没送到可重发、送达后正文留着）→ 完成并归档；中途撤销。
-/// 规则单测（行的状态怎么推）都从这些动作里走一遍，不单独测；各处写的任务数见 `TaskCountTests`，整理层级见 `TaskOutlineTests`。
+@Suite(.releasesLibraries)
 struct TaskFlowTests {
     let rig = TestApp()
     var store: CueStore { rig.services.store }
@@ -19,7 +18,6 @@ struct TaskFlowTests {
         let idea = try await store.createCard(in: project.id, body: "日志在 logs/0918.txt")
         let workspace = Workspace(services: rig.services)
 
-        // 灵感拖到任务上：接在正文后面，灵感进回收站，不拆出别的卡
         try await workspace.mergeIdea(idea.id, into: created.id)
         let task = try #require(try await store.card(created.id))
         #expect(task.title == "修乱序" && task.rest == "日志在 logs/0918.txt")
@@ -27,15 +25,16 @@ struct TaskFlowTests {
         #expect(try await store.children(of: task.id).isEmpty)
         #expect(try await next(task) == .start(leaf: task))
 
-        // 开始：正文连同标题交出去；话在路上、没送到都看会话那一格，不再给"开始"
-        try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "s1", state: .settled, title: "atlas", hosted: true)
+        try await StateRecorder(store: store, hostID: "mac-a").update(sessionID: "s1", state: .settled, title: "atlas", hosted: true)
+        let session = try #require(try await store.allSessionStates().first)
         let delivers = Mutex(false)
         let executor = DeliveryExecutor(store: store, hostID: "mac-a", onIssue: { Issue.record("\($0)") }) { [store, atlas] request, _ in
             guard delivers.withLock({ $0 }) else { return .failed(.verbatim("会话在送达前关掉了")) }
             _ = try? await store.recordSend(request.content, to: atlas, card: request.cardID)
             return .succeeded
         }
-        let request = try await store.requestDelivery(Outgoing.text(of: task), to: atlas, on: "mac-a", card: task.id)
+        await workspace.speak(Outgoing.text(of: task), to: .session(session, mode: .send, card: task.id)).value
+        let request = try #require(try await store.deliveryRequests().first)
         guard case .agent(let sending, _) = try await next(task) else { throw Unexpected.next }
         #expect(sending.isRunning && sending.undelivered == nil)
         try await executor.start()
@@ -43,33 +42,37 @@ struct TaskFlowTests {
         guard case .agent(let failed, _) = try await next(task) else { throw Unexpected.next }
         #expect(failed.undelivered != nil)
 
-        // 重发送达：任务进行中并记着会话，正文留在任务上
         delivers.withLock { $0 = true }
-        let renewed = try await store.requestDelivery(Outgoing.text(of: task), to: atlas, on: "mac-a", card: task.id)
+        await workspace.speak(Outgoing.text(of: task), to: .session(session, mode: .send, card: task.id)).value
+        let renewed = try #require(try await store.deliveryRequests().first { $0.id != request.id })
         _ = try await eventually(store, { try $0.card(task.id)?.piSessionID }) { $0 == "s1" }
         #expect(try await store.outcome(of: renewed).status == .known(.succeeded))
         await executor.stop()
         let started = try #require(try await store.card(task.id))
         #expect(started.status == .inProgress && started.body == "修乱序\n\n日志在 logs/0918.txt")
 
-        // 任务不自动完成；用户勾选，提示里给归档
         try await workspace.complete(task.id)
         #expect(workspace.notice?.text.visible == "已完成")
         let archive = try #require(workspace.notice?.action)
         #expect(archive.title == "归档")
-        try await archive.run()
+        try await archive.run(workspace)
         #expect(try await store.card(task.id)?.archivedAt != nil)
     }
 
     // MARK: 会话与任务
 
     #if os(macOS)
-    @Test func 一个会话绑两件事_绑定不发正文_都做完才结束会话() async throws {
+    @Test func 自有会话再借给第二件事_绑定不发正文_都做完才结束会话() async throws {
         let workspace = Workspace(services: rig.services)
         let project = try await store.createProject(name: "圆桌", color: "#000000")
+        try await rig.offersPi()
         let first = try await store.createTask("复现乱序\n先复现，别改代码", in: project.id)
         let second = try await store.createTask("补重连用例", in: project.id)
-        try await PiStateRecorder(store: store, hostID: "mac-other").update(sessionID: "s1", state: .thinking, title: "atlas", hosted: true)
+        workspace.startFresh(first)
+        let launch = try #require(try await eventually(store, { try $0.deliveryRequests().first { $0.mode == .known(.start) } }) { $0 != nil })
+        try await StateRecorder(store: store, hostID: "mac-other").update(
+            sessionID: "s1", state: .thinking, title: "atlas", projectID: project.id, launchToken: launch.launch?.token, hosted: true)
+        try await store.deleteDelivery(launch.id)
         rig.services.liveSessions.apply(try await LiveSessions.Page.read(from: store), at: .always())
 
         try await store.bindSession("s1", to: first.id)
@@ -85,8 +88,6 @@ struct TaskFlowTests {
         #expect(try await ends() == ["s1"])
     }
 
-    /// 分步做一件事（与 Cue 同一条规则）：上一步做完、下一步还没开工时会话留着；下一步"开始"接着用它——只发这一步的标题与正文，不开新会话；
-    /// 要新会话就在"绑定会话"里选"开新会话"：第一句先带顶层任务的标题与正文作背景，再接这一步的；最后一步做完，会话才结束。
     @Test func 分步做_下一步接着用上一步的会话_最后一步做完才结束() async throws {
         try await rig.offersPi()
         let workspace = Workspace(services: rig.services)
@@ -96,7 +97,11 @@ struct TaskFlowTests {
         let first = try await store.createTask("加 --lang", under: task.id)
         let second = try await store.createTask("写 README", under: task.id)
         let third = try await store.createTask("发版\n打 tag 再发", under: task.id)
-        try await PiStateRecorder(store: store, hostID: "mac-other").update(sessionID: "s1", state: .settled, title: "atlas", hosted: true)
+        workspace.startFresh(first)
+        let opening = try #require(try await eventually(store, { try $0.deliveryRequests().first { $0.mode == .known(.start) } }) { $0 != nil })
+        try await StateRecorder(store: store, hostID: "mac-other").update(
+            sessionID: "s1", state: .settled, title: "atlas", projectID: project.id, launchToken: opening.launch?.token, hosted: true)
+        try await store.deleteDelivery(opening.id)
         rig.services.liveSessions.apply(try await LiveSessions.Page.read(from: store), at: .always())
         try await store.bindSession("s1", to: first.id)
         let requests = { [store] (mode: DeliveryMode) in try await store.deliveryRequests().filter { $0.mode == .known(mode) } }
@@ -118,7 +123,6 @@ struct TaskFlowTests {
         #expect(try await requests(.end).map(\.target.ref) == ["s1"])
     }
 
-    /// 行尾那一格是"开始"；点它开一个会话，正在开时不再给"开始"，没开成不算交给过，重新给"开始"，没开成的原因留在任务上。
     @Test func 点开始交给Agent_正在开时不再给开始_没开成重新给且留下原因() async throws {
         try await rig.offersPi()
         let workspace = Workspace(services: rig.services)
@@ -138,13 +142,16 @@ struct TaskFlowTests {
         _ = try await eventually(store, { try $0.deliveryRequest(request.id)?.status }) { $0 == .known(.failed) }
         await executor.stop()
         #expect(try await next(task) == .start(leaf: task))
-        try await eventually("没开成的原因留在任务上") { workspace.launchFailures[task.id] == "没开成会话：这台 Mac 上开不了会话" }
+        #expect(try await store.card(task.id)?.status == .inProgress)
+        try await eventually("没开成的原因留在任务上") {
+            workspace.sessionLaunching(.card(task.id)).outcome(at: rig.services.speech)?.text == "这台 Mac 上开不了会话"
+        }
     }
     #endif
 
     // MARK: 撤销与批量
 
-    /// 撤销前任务在回执之后又被改过：不撤（免得盖掉后来写的），提示"已改过，无法撤销"；没改过的撤销照常（上一条用例）。
+    /// 撤了会盖掉回执之后写的改动，所以不撤。
     @Test func 撤销前任务已改过_不撤并提示() async throws {
         let workspace = Workspace(services: rig.services)
         let check = try await store.createTask("上线前检查")
@@ -177,9 +184,8 @@ struct TaskFlowTests {
         try await store.updateCard(crash.id) { $0.variableValues = ["平台": "iOS"] }
         try await workspace.mergeIdea(crash.id, into: check.id)
         #expect(workspace.notice?.text.visible == "已接到「上线前检查」的正文后面")
-        // 灵感填好的变量随正文接过去，没填的留着占位符
         #expect(try await store.card(check.id)?.body == body + "\n\n看下 iOS 崩溃率，{{阈值}}")
-        try await #require(workspace.notice?.action).run()
+        try await #require(workspace.notice?.action).run(workspace)
         #expect(try await store.card(check.id)?.body == body)
         #expect(try await store.cards(in: Project.defaultID).map(\.id) == [crash.id])
 
@@ -187,17 +193,16 @@ struct TaskFlowTests {
         try await workspace.trash(idea.id)
         #expect(workspace.notice?.text.visible == "已删除")
         #expect(try await store.trashedCards().map(\.id) == [idea.id])
-        try await #require(workspace.notice?.action).run()
+        try await #require(workspace.notice?.action).run(workspace)
         #expect(try await store.trashedCards().isEmpty)
 
-        // 灵感拖到"添加任务"上：照它新建一条任务（填好的变量换成值），灵感进回收站；撤销后新任务进回收站、灵感回来
         let flaky = try await store.createCard(body: "排查 {{平台}} 闪退")
         try await store.updateCard(flaky.id) { $0.variableValues = ["平台": "iOS"] }
         try await workspace.newTask(fromIdea: flaky.id)
         #expect(workspace.notice?.text.visible == "已新建任务「排查 iOS 闪退」")
         let spawned = try #require(try await store.tasks(.todo).flatMap(\.tasks).first { $0.body == "排查 iOS 闪退" })
         #expect(try await store.trashedCards().map(\.id) == [flaky.id])
-        try await #require(workspace.notice?.action).run()
+        try await #require(workspace.notice?.action).run(workspace)
         #expect(try await store.trashedCards().map(\.id) == [spawned.id])
         #expect(try await store.cards(in: Project.defaultID).contains { $0.id == flaky.id })
 
@@ -206,13 +211,17 @@ struct TaskFlowTests {
         workspace.convertToTasks("- 写发布说明\n\n- 更新截图", in: project.id)
         try await eventually("转好任务") { workspace.notice?.text.visible == "已转为 2 个任务" }
         #expect(try await store.tasks(.todo).flatMap(\.tasks).filter { $0.projectID == project.id }.map(\.body) == ["写发布说明", "更新截图"])
+        try await store.trashProject(project.id)
+        workspace.notice = nil
+        workspace.convertToTasks("不能落到默认项目", in: project.id)
+        try await eventually("选区目标已删除时显示错误") { workspace.notice?.isError == true }
+        #expect(try await store.tasks(.todo).flatMap(\.tasks).allSatisfy { $0.body != "不能落到默认项目" })
     }
 
     // MARK: 共用的小件
 
     private enum Unexpected: Error { case next }
 
-    /// 任务行"下一步"那一格（叶子，与行上读的同一份交给的会话）。
     private func next(_ task: Card) async throws -> TaskNext? {
         let agents = try await AgentLinks.read(from: store)
         return Workspace(services: rig.services).next(for: task, in: agents, steps: nil)

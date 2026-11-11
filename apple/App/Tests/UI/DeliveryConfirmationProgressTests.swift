@@ -3,7 +3,7 @@ import CueTestSupport
 import Foundation
 import Testing
 @testable import CuePad
-@testable import CuePi
+@testable import CueBridge
 @testable import CueStore
 
 extension DeliveryConfirmationTests {
@@ -15,7 +15,7 @@ extension DeliveryConfirmationTests {
             if command["t"] as? String == "end" { ext?.closeAfterReply(bye: "quit") }
             return ["ok": true]
         }
-        defer { ext.close(bye: "quit"); app.pi.stop(); app.services.cancelBackgroundWork() }
+        defer { ext.close(bye: "quit"); app.bridge.stop(); app.services.cancelBackgroundWork() }
         try await app.connect(.pi)
         app.services.start()
         let request = try await say("真实消息比ACK先回来", to: target, in: app)
@@ -31,7 +31,7 @@ extension DeliveryConfirmationTests {
         #expect(try await store.outcome(of: end).status == .known(.succeeded))
         let final = try #require(try await store.deliveryRequest(request.id))
         #expect(final.status == .known(.succeeded) && final.deadlineAt == positive.deadlineAt)
-        #expect(try await store.piMessages(of: target.sessionID).map(\.text) == ["真实消息比ACK先回来"])
+        #expect(try await store.chatMessages(of: target.sessionID).map(\.text) == ["真实消息比ACK先回来"])
         #expect(ext.messages.count == 1)
         await app.services.executor.beginStop()()
     }
@@ -40,7 +40,7 @@ extension DeliveryConfirmationTests {
         let clock = ManualTiming()
         let app = TestApp(timing: clock.timing)
         let (target, ext, _) = try await session(app)
-        defer { ext.close(bye: "quit"); app.pi.stop(); app.services.cancelBackgroundWork() }
+        defer { ext.close(bye: "quit"); app.bridge.stop(); app.services.cancelBackgroundWork() }
         let request = try await say("截止时间不随版本续长", to: target, in: app)
         try await app.services.executor.start()
         let confirming = try await settledDispatch(request, in: app)
@@ -66,7 +66,7 @@ extension DeliveryConfirmationTests {
         defer { app.services.cancelBackgroundWork() }
         let recorder = try await app.runtimeRecorder(on: TestApp.hostID)
         try await recorder.update(sessionID: "atlas", state: .error, detail: "network", failure: .network)
-        let target = try #require(try await store.allPiSessionStates().first)
+        let target = try #require(try await store.allSessionStates().first)
         let workspace = Workspace(services: app.services)
         if mode == .retry { await workspace.retry(target).value } else { await workspace.end(target) }
         let first = try #require(try await store.deliveryRequests().first)
@@ -87,20 +87,16 @@ extension DeliveryConfirmationTests {
     @Test(arguments: [false, true])
     func 启动Agent不是写盘确认_确认窗口从交出后起算_退出不能遗留启动或重开旧请求(cancelOpening: Bool) async throws {
         let clock = ManualTiming()
-        let app = TestApp(timing: clock.timing), workspace = Workspace(services: app.services)
+        let app = TestApp(timing: clock.timing)
         defer {
             for ext in app.host.extensions.values { ext.close(bye: "quit") }
-            app.pi.stop(); app.services.cancelBackgroundWork()
+            app.bridge.stop(); app.services.cancelBackgroundWork()
         }
         try await app.offersPi()
         let gate = AsyncStream<Void>.makeStream()
         app.host.openingGate = gate.stream
         app.host.writesMessages = false
-        let opening = Task {
-            try await workspace.startSession(in: Project.defaultID, prompt: "只开一次", title: "检查", card: nil, agent: .pi) { _ in }
-        }
-        defer { opening.cancel() }
-        try await eventually("表单写下开会话意图") { try await app.services.store.deliveryRequests().count == 1 }
+        _ = try await app.services.launchSession(in: Project.defaultID, prompt: "只开一次", title: "检查", on: TestApp.hostID, card: nil, agent: .pi)
         let request = try #require(try await app.services.store.deliveryRequests().first)
         try await app.services.executor.start()
         try await eventually("开始起 Agent") { !app.host.calls.isEmpty }
@@ -128,8 +124,6 @@ extension DeliveryConfirmationTests {
             #expect(try await app.services.store.outcome(of: request).status == .known(.unconfirmed))
             #expect(app.host.calls.count == 1)
         }
-        opening.cancel()
-        _ = await opening.result
         await app.services.executor.beginStop()()
     }
 

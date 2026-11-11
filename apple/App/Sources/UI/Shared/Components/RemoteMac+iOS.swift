@@ -2,13 +2,11 @@
 import CueStore
 import SwiftUI
 
-/// Cue 页页顶那一排最右的圆钮"在 Mac 上操作"（`CueHeader` 摆它；规则在 `MacRemote`、`Workspace+Remote`）：
-/// 点一下连 Mac——只有一台直接连，几台时连上次那台、还没连过先选一台；长按是菜单：连另一台、在 UU 远程里重新选择 Mac。
+/// 规则在 `MacRemote`、`Workspace+Remote`。
 struct RemoteMacButton: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @State private var macs: [MacAgents]?
-    /// 几台 Mac、还没连过时先选的那几台
     @State private var choosing: [MacAgents]?
 
     var body: some View {
@@ -42,7 +40,6 @@ struct RemoteMacButton: View {
     }
 }
 
-/// 会话菜单（`SessionActions`）里的两项：在这个会话所在的那台 Mac 上操作；这台绑过 UU 远程的电脑时，还能重新选择。
 struct RemoteMacActions: View {
     let host: String
     @Environment(Workspace.self) private var workspace

@@ -9,16 +9,14 @@ public enum SendTargetKind: String, Sendable, CaseIterable {
 
 public struct SendRecord: Identifiable, Equatable, Sendable {
   public let id: UUID
-  /// 发送时的内容快照；卡片之后改动或删除都不影响。
   public var content: String
   public var targetKind: Open<SendTargetKind>
   public var targetName: String
-  /// Pi 会话 id 或应用 bundle id。
   public var targetRef: String?
   public var cardID: UUID?
   public var sentAt: Date
   public var modifiedAt: Date
-  /// 送出它的投送请求（消息的 `PiChatMessage.deliveryID` 与它对上）与请求的来源：请求完成后会被清理，这两项留下来。
+  /// 送出它的投送请求（消息的 `ChatMessage.deliveryID` 与它对上）与请求的来源：请求完成后会被清理，这两项留下来。
   public var deliveryID: UUID?
   public var origin: Open<DeliveryOrigin>?
 }
@@ -39,7 +37,6 @@ public struct SendTarget: Equatable, Sendable {
   }
 }
 
-/// 一张卡最近一次发送：何时、发给谁。
 public struct LastSend: Equatable, Sendable {
   public var sentAt: Date
   public var target: SendTarget

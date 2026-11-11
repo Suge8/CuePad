@@ -3,10 +3,8 @@ import CueStore
 import Foundation
 import os
 
-/// 同步逻辑：远端变更应用、上传批次与结果处理、账号与状态。不碰网络：拉取器（`ZonePuller.pulled`）、发送者（`sent`、`nextBatch`）
-/// 与账号检查（`CloudSync`）把服务器给的直接交进来。待推送只有库里推导的一份（`CueStore.pendingSync`）。
-/// 失败（服务器的与本机读写的）只经 `failed` 按 `SyncFault` 改状态、记问题，下次什么时候再发只经 `hold`（`SyncCoordinator+Hold`）；
-/// 任何一次请求成功经 `succeeded` 收掉离线、同步出错与请求类的问题，并提前结束连不上的等待（`connected`）。
+/// 不碰网络：服务器给的由拉取器（`ZonePuller.pulled`）、发送者（`sent`、`nextBatch`）与账号检查（`CloudSync`）直接交进来。
+/// 失败只经 `failed` 改状态、记问题，下次什么时候再发只经 `hold`（`SyncCoordinator+Hold`）；请求成功只经 `succeeded`。
 actor SyncCoordinator {
   static let issueLimit = 50
   static let log = Logger(subsystem: AppIdentity.id, category: "delivery")
@@ -15,14 +13,15 @@ actor SyncCoordinator {
 
   let store: CueStore
   nonisolated let zoneID: CKRecordZone.ID
-  private let states = Broadcast(latest: Facts().state)
-  /// 服务器收下了本机的一批改动（`CloudSync.acceptedUpdates`）。
+  private let states = Broadcast(latest: Facts().state(accountUnconfirmed: false))
+  private var published = Facts().state(accountUnconfirmed: false)
+  /// 认清了没有不是这里的事实，这里只读（`CloudSync.start` 交进来）。
+  private var gate = AccountGate()
   nonisolated let acceptances = Broadcast<Void>()
   /// 重试的等待结束了（到点、连通了、收下了一批）：发送者接着发，拉取器补上被挡下的那一拉（`SyncCoordinator+Hold`）。
   nonisolated let retryDue = Broadcast<Void>(bufferingPolicy: .bufferingNewest(1))
   var backoff = Backoff()
   var retryTimer: Task<Void, Never>?
-  /// 正在等着自己恢复的这一段（`noteWaiting`）：进入、恢复各记一条日志，其间的重试不记。
   var outage: (fault: SyncFault, began: ContinuousClock.Instant)?
   /// 这一版传不上去的记录与它的修改时间（删除记 `.min`）：附件文件不在本机、服务器拒收（`SyncFault.rejected`）。
   /// 同一版不再每批重试、重复报告，也不挡别的记录；改过再试，重启 App 也再试一次。
@@ -35,48 +34,54 @@ actor SyncCoordinator {
   var fileUploads: Set<String> = []
   var quotaTimer: Task<Void, Never>?
 
-  /// 协调器自己记的事实。`status` 不含 `.syncing`；上传与拉积压的忙闲分开记。对外的快照只在发布处推出（`state`）。
+  /// `status` 不含 `.syncing`；对外的快照只在发布处推出（`state`）。
   struct Facts {
     var status = SyncStatus.starting
     var sending = false
     var catchingUp = false
-    /// 下次最早什么时候发、因为什么（`hold`）；nil 是不用等。服务器要求的等待（`Hold.server`）在界面上算同步中，只从这里读。
+    /// 服务器要求的等待（`Hold.server`）在界面上算同步中，只从这里读。
     var holding: Hold?
-    /// 连着时账号没认清（账号变了之后取不到账号名、认账号失败）：不知道此刻是不是上次同步的那个账号，不拉不传，显示账号暂不可用，
-    /// 认清了（`account`）才放开。没连着时的认不了照旧（`accountStatus`）：那时本来就还没开始拉传。
-    var accountPending = false
-    /// 库里有同步区令牌（`token()`、`setToken` 读写时记下）
     var reconciled = false
     var issues: [SyncIssue] = []
-    var alerts = PiAlertSubscriptionStatus.off
-    /// 文件那一路因 iCloud 空间不足停着、到这一刻再试（`holdFiles`）；之后传上去一个才清掉：别的记录照常同步，所以不进 `status`。
+    var alerts = AlertSubscriptionStatus.off
+    /// 之后传上去一个才清掉；别的记录照常同步，所以不进 `status`。
     var filesHeldUntil: ContinuousClock.Instant?
 
-    /// 显示的状态：账号待核对时显示账号暂不可用（停下了、没有账号这些更要紧的照显示）。
-    var shown: SyncStatus {
-      guard accountPending else { return status }
+    func shown(accountUnconfirmed: Bool) -> SyncStatus {
+      guard accountUnconfirmed else { return status }
       return switch status {
       case .needsDecision, .outdated, .noAccount, .accountRestricted: status
       default: .accountUnavailable
       }
     }
 
-    /// 界面看到的快照："同步中"是底层空闲、而一轮上传或拉积压正在进行，或服务器要求等着再发。
-    var state: SyncState {
-      SyncState(
+    func state(accountUnconfirmed: Bool) -> SyncState {
+      let shown = shown(accountUnconfirmed: accountUnconfirmed)
+      return SyncState(
         status: shown == .idle && (sending || catchingUp || holding?.server == true) ? .syncing : shown, issues: issues, alerts: alerts, catchingUp: catchingUp,
         reconciled: reconciled, filesOverQuota: filesHeldUntil != nil)
     }
   }
 
   var facts = Facts() {
-    didSet {
-      let state = facts.state
-      if state != oldValue.state { states.yield(state) }
-    }
+    didSet { publish() }
   }
 
-  var state: SyncState { facts.state }
+  var state: SyncState { facts.state(accountUnconfirmed: gate.current == .unconfirmed) }
+
+  private func publish() {
+    let state = state
+    guard state != published else { return }
+    published = state
+    states.yield(state)
+  }
+
+  func use(_ gate: AccountGate) {
+    self.gate = gate
+    publish()
+  }
+
+  func gateChanged() { publish() }
   var status: SyncStatus { facts.status }
   var issues: [SyncIssue] { facts.issues }
 
@@ -85,23 +90,25 @@ actor SyncCoordinator {
     self.zoneID = zoneID
   }
 
-  // MARK: 订阅
-
-  /// 先给出当前快照，之后每次变化给出新快照。
-  nonisolated var stateUpdates: AsyncStream<SyncState> { states.stream() }
-
-  /// 能不能和服务器同步：有可用的账号，也没有停下（`stopped`）。
-  var canSync: Bool {
-    !stopped && !facts.accountPending && ![.noAccount, .accountRestricted].contains(status)
+  /// 退避与空间不足的计时只弱持这里：同步整个没了（退出登录、换库、关掉 App 的服务）时，在等的计时不再攥着它与资料库直到到点。
+  deinit {
+    retryTimer?.cancel()
+    quotaTimer?.cancel()
   }
 
-  /// 停下了：等你决定，或这台要更新（`SyncStatus.outdated`）。停下时不拉、不传，账号、同步区与上传失败都不改状态。
+  nonisolated var stateUpdates: AsyncStream<SyncState> { states.stream() }
+
+  var canSync: Bool {
+    !stopped && gate.current == .open && ![.noAccount, .accountRestricted].contains(status)
+  }
+
+  /// 停下时不拉、不传，账号、同步区与上传失败都不改状态。
   var stopped: Bool { needsDecision != nil || status == .outdated }
 
-  var alertSubscription: PiAlertSubscriptionStatus { facts.alerts }
-  func setAlerts(_ alerts: PiAlertSubscriptionStatus) { facts.alerts = alerts }
+  var alertSubscription: AlertSubscriptionStatus { facts.alerts }
+  func setAlerts(_ alerts: AlertSubscriptionStatus) { facts.alerts = alerts }
 
-  /// 用户对 `needsDecision` 的选择。之后重新开始同步（元数据、令牌与账号这里已清掉）。没有等你决定的事什么都不做：免得误擦数据。
+  /// 之后重新开始同步（元数据、令牌与账号这里已清掉）。没有等你决定的事什么都不做：免得误擦数据。
   func resolve(_ resolution: SyncResolution) async throws {
     guard needsDecision != nil else { return }
     switch resolution {
@@ -115,15 +122,11 @@ actor SyncCoordinator {
     facts.status = .starting
   }
 
-  // MARK: 拉取器、发送者与账号检查交进来的
-
-  /// 发送者有一批在路上，或因服务器要求等着重发：界面显示同步中。
   func setSending(_ busy: Bool) { facts.sending = busy }
 
-  /// 拉取器开始、结束拉积压（没有令牌时的对账，或一拉不止一页）。
   func setCatchingUp(_ busy: Bool) { facts.catchingUp = busy }
 
-  /// 同步区令牌：只有库里一份（`ZonePuller.tokenKey`），读写都经这两处，顺带记下有没有（`SyncState.reconciled` 的唯一来源）。
+  /// 令牌读写只经 `token()`、`setToken`，顺带记下有没有（`SyncState.reconciled` 的唯一来源）。
   func token() async throws -> Data? {
     let token = try await store.syncState(ZonePuller.tokenKey)
     facts.reconciled = token != nil
@@ -140,8 +143,7 @@ actor SyncCoordinator {
     do { _ = try await token() } catch { failed(error) }
   }
 
-  /// 拉取器拉到的一页：应用完才返回；整页没能应用（库写不进去、停下了）时抛出，拉取器不前移令牌。
-  /// 单条记录不合法只报告（见 `ZonePuller`）。页里的门槛高于这台的，整页不应用，更新后从这页接着拉。
+  /// 应用完才返回；整页没能应用（库写不进去、停下了）时抛出，拉取器不前移令牌。单条记录不合法只报告。
   func pulled(_ modifications: [CKRecord], _ deletions: [(id: CKRecord.ID, recordType: String)]) async throws {
     guard canSync else { throw SyncPaused() }
     try meet(modifications)
@@ -149,7 +151,6 @@ actor SyncCoordinator {
     try await applyFetched(modifications, deletions)  // 没应用成的由拉取器报（`failed`）
   }
 
-  /// 云端的最低对端版本（`PeerFloor`）高于这台能同步的结构版本：停下，抛出 `SyncPaused`。
   func meet(_ records: [CKRecord]) throws {
     guard let floor = PeerFloor.version(in: records), floor > CueStore.supportedSchemaVersions.upperBound else { return }
     facts.status = .outdated
@@ -161,8 +162,9 @@ actor SyncCoordinator {
   }
 
   /// 认到的账号状态。可用时仍是正在连接，第一次请求成功（`succeeded`）才算已同步：认了账号不等于连得上、对过门槛。
-  func accountStatus(_ account: CKAccountStatus) {
-    guard !stopped else { return }
+  /// 认账号的结论（这个、`account`、`accountFailed`）都要带那一次的凭据：不是最新在认的那次就不写（`AccountGate.Check`）。
+  func accountStatus(_ account: CKAccountStatus, from check: AccountGate.Check) {
+    guard !stopped, gate.admits(check) else { return }
     switch account {
     case .available:
       if [.noAccount, .accountRestricted, .accountUnavailable].contains(status) { facts.status = .starting }
@@ -173,24 +175,25 @@ actor SyncCoordinator {
     }
   }
 
-  /// 此刻登录的 iCloud 账号（用户记录名）。第一次同步记下；和上次同步的不是同一个时，本机数据属于上一个账号，停下来等你决定。
-  func account(_ name: String) async {
-    facts.accountPending = false  // 认清了：是不是上次那个由下面判断
-    guard !stopped else { return }
-    let current = Data(name.utf8)
+  func account(_ name: String, from check: AccountGate.Check) async {
+    guard !stopped, gate.admits(check) else { return }
+    let gate = gate
     do {
-      guard let last = try await store.syncState(Self.accountKey) else { return try await store.setSyncState(Self.accountKey, current) }
-      if last != current { facts.status = .needsDecision(.accountSwitched) }
+      let match = try await store.matchAccount(Data(name.utf8), key: Self.accountKey) { gate.admits(check) }
+      // 回到这里的途中又起了一次认：这次的结论已经过时（之后同步地写，新一次的写排在后面）
+      guard match == .switched, !stopped, gate.admits(check) else { return }
+      facts.status = .needsDecision(.accountSwitched)
     } catch {
+      guard gate.admits(check) else { return }
       failed(error)
     }
   }
 
-  /// 连着时认账号失败（`CloudSync`）：认清之前不拉不传（`Facts.accountPending`）。
-  func accountUnconfirmed() { facts.accountPending = true }
+  func accountFailed(_ error: any Error, from check: AccountGate.Check) {
+    guard gate.admits(check) else { return }
+    if SyncFault(error).isOffline { failed(error) } else { accountStatus(.couldNotDetermine, from: check) }
+  }
 
-  /// 同步区不在了（`deletedByUser`：你在 iCloud 设置里删了 CuePad 的数据）：同步过的（有令牌或推送过的记录）是云端数据被删除或重置，
-  /// 停下来等你决定；从没同步过的不用管，第一次上传时建区。
   func zoneMissing(deletedByUser: Bool) async {
     guard !stopped else { return }
     do {
@@ -204,10 +207,6 @@ actor SyncCoordinator {
     }
   }
 
-  // MARK: 成功与失败
-
-  /// 一次请求成功（拉完、收下了上传、对过门槛）：连上了。正在连接、连不上、账号暂不可用回到空闲，请求类的问题消失，没有失败类的问题了就不再是同步出错；
-  /// 连不上的等待提前结束（`connected`）。停下时不改状态。
   func succeeded() {
     connected()
     noteRecovered()
@@ -222,7 +221,6 @@ actor SyncCoordinator {
     facts = next
   }
 
-  /// 一次请求失败，按归类改状态（只在这里）：连不上显示离线、账号与配额写明、要等的不改、其余报告并显示同步出错。返回归类。
   /// 只在正常状态之间切换：要你决定、这台要更新这些更要紧的状态不被盖过。
   @discardableResult
   func failed(_ error: any Error, kind: SyncIssue.Kind = .request, recordType: String? = nil, recordName: String? = nil) -> SyncFault {
@@ -239,11 +237,7 @@ actor SyncCoordinator {
     return fault
   }
 
-  // MARK: 报告
-
-  /// 记一条问题：同一类、同一条记录只留最新的一条（`SyncIssue.sameAs`）。失败类的让状态变成同步出错。
-  /// 错误不直接报，经 `failed` 归类：连不上、要等、账号的不是问题。新出现的问题记一条 error 日志（`reason` 是给日志的原因，见 `Error.brief`；
-  /// 没给时只记哪类问题、哪条记录：`detail` 可能带记录内容）。
+  /// 错误不直接报，经 `failed` 归类：连不上、要等、账号的不是问题。日志只写 `reason`（见 `Error.brief`），没给时只记哪类问题、哪条记录：`detail` 可能带记录内容。
   func report(
     _ problem: SyncIssue.Problem, detail: String? = nil, kind: SyncIssue.Kind, recordType: String?, recordName: String?, reason: String? = nil
   ) {
@@ -263,5 +257,20 @@ actor SyncCoordinator {
   func recordID(_ name: String) -> CKRecord.ID { CKRecord.ID(recordName: name, zoneID: zoneID) }
 }
 
-/// 停下了（等你决定，或这台要更新）：这一页不应用，令牌不前移。
 struct SyncPaused: Error {}
+
+enum AccountMatch { case recorded, same, switched }
+
+extension CueStore {
+  /// 比对并记下同步的账号，在资料库自己的队列上一步做完：读、比、写之间插不进别的读写（另一次认的比对排在前或后，不交错）。
+  /// `latest` 不是 true（这一次已被更新的一次取代）就什么都不写，返回 nil。查过之后、写下之前另起的那次排在这次之后读，等同于这次更早写完；
+  /// 不把判定和写入挪进闸门的锁里：那样起新的一次认要在锁里等资料库写入。
+  fileprivate func matchAccount(_ current: Data, key: String, latest: @Sendable () -> Bool) throws -> AccountMatch? {
+    guard latest() else { return nil }
+    guard let last = try syncState(key) else {
+      try setSyncState(key, current)
+      return .recorded
+    }
+    return last == current ? .same : .switched
+  }
+}

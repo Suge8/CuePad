@@ -1,8 +1,7 @@
 #if os(macOS)
 import SwiftUI
 
-/// 回收站：删除的项目（连同其卡片）与单独删除的卡片；可恢复、永久删除、清空。
-/// 顶上不写页名，也没有顶上那一排：清空回收站在主栏栏头的"⋯"里（它看回收站有没有东西，页面的数据不进栏头）。
+/// 清空回收站在主栏栏头的"⋯"里：它自己看回收站有没有东西，页面的数据不进栏头。
 struct TrashPage: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -60,7 +59,6 @@ struct TrashPage: View {
     }
 }
 
-/// 回收站的一行：指针停着时铺行的淡底（`RowStyle`），行尾浮出恢复与永久删除、盖住删除时间（`hoverReveal`；右键菜单里也有）。
 private struct TrashRow<Icon: View>: View {
     let item: TrashItem
     let restore: () -> Void

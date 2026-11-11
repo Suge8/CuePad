@@ -2,8 +2,6 @@ import CueEditor
 import CueStore
 import SwiftUI
 
-/// 文件页上半：文件在别处改过的那一条、同名的分段加"只留这份"或另写了一份的"合并进来"、全局规则还空着时的起步规则、技能的名字与说明两个框；都没有时不占位置，
-/// 正文从页顶下开始。两端同一份，只有摆法随端：Mac 与正文同一列（`LibraryLayout.column`），手机是铺满的一块。
 struct LibraryFileTop: View {
     let file: LibraryFile
     let library: AgentLibrary
@@ -75,7 +73,6 @@ struct LibraryFileBody: View {
         }
     }
 
-    // 底色同各自的页（Mac 桌面色、手机纸色）
     #if os(macOS)
     private static func theme(_ palette: Palette) -> CueEditorTheme {
         .editor(palette, horizontalInset: LibraryLayout.textInset, maxTextWidth: LibraryLayout.column)
@@ -88,8 +85,6 @@ struct LibraryFileBody: View {
 }
 
 extension View {
-    /// 文件页挂上与跟着文件走（两端同一份）：读这一份的各份正文（`observingLibraryTexts`），对上快照的哈希就载入改动（`Workspace.fileDraft`），
-    /// 之后正文变了就跟（`FileDraft.follow`）；快照里没有这一份了调 `onGone`；"已保存"、"已跟上"亮一会儿就收（`FileDraft.settleSoon`）。
     func loadingFileDraft(
         of file: LibraryFile, in library: AgentLibrary?, texts: Binding<[String: String]?>, onGone: @escaping () -> Void
     ) -> some View {

@@ -1,0 +1,63 @@
+#if os(macOS)
+import CryptoKit
+import CueStore
+import Foundation
+
+/// Pi 与 CuePad 桥用到的全部目录，唯一权威来源。
+public struct PiPaths: Sendable, Equatable {
+    public var agentDirectory: URL
+    /// 桥 socket 目录。`sun_path` 上限 104 字节，所以不用 `$TMPDIR`；扩展端用同一缺省值。
+    public var socketDirectory: URL
+
+    public var extensionsDirectory: URL { agentDirectory.appending(path: "extensions", directoryHint: .isDirectory) }
+    public var sessionsDirectory: URL { agentDirectory.appending(path: "sessions", directoryHint: .isDirectory) }
+    /// 缺省 `~/.local/bin`：不需要管理员权限。
+    public var binDirectory: URL
+    /// Pi 目录与链接目录都是指定的（参数或环境变量），不是缺省的真实位置。不碰真实世界的进程（装着正式版的 Mac 上的本机构建）只在这时接入 Agent，
+    /// 不会把真实 `~/.pi` 与 `~/.local/bin` 里的东西改成指向开发构建。
+    public var isExplicit: Bool
+
+    public init(
+        agentDirectory: URL? = nil,
+        socketDirectory: URL? = nil,
+        binDirectory: URL? = nil,
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) {
+        self.agentDirectory = agentDirectory ?? Self.defaultAgentDirectory(environment)
+        self.socketDirectory = socketDirectory ?? Self.socketDirectory(environment: environment)
+        let binOverride = environment["CUEPAD_BIN_DIR"].flatMap { $0.isEmpty ? nil : URL(filePath: UserHome.expanding($0), directoryHint: .isDirectory) }
+        self.binDirectory = binDirectory ?? binOverride
+            ?? UserHome.directory.appending(path: ".local/bin", directoryHint: .isDirectory)
+        let agentGiven = agentDirectory != nil || !(environment[PiRuntime.facts.homeVariable] ?? "").isEmpty
+        isExplicit = agentGiven && (binDirectory != nil || binOverride != nil)
+    }
+
+    /// 由 CuePad 启动的 Pi 要带的环境：连接目录总带（桥在这里找它），Pi 目录不是默认的才带（读写同一份会话与扩展）。
+    public var launchEnvironment: [String: String] {
+        var environment = ["CUEPAD_PI_SOCKET_DIR": socketDirectory.path]
+        if !isDefaultAgentDirectory {
+            environment[PiRuntime.facts.homeVariable] = agentDirectory.path
+        }
+        return environment
+    }
+
+    /// `CUEPAD_PI_SOCKET_DIR`，缺省 `/tmp/cuepad-<uid>`（扩展端用同一缺省值）。不碰真实世界的进程（`isolatedLibrary` 是它的资料库目录）
+    /// 没给时按资料库目录另起一个：缺省目录是正式版的，用它桥会连上正式版托管的会话。
+    public static func socketDirectory(environment: [String: String], isolatedLibrary: URL? = nil) -> URL {
+        if let given = environment["CUEPAD_PI_SOCKET_DIR"], !given.isEmpty { return URL(filePath: given, directoryHint: .isDirectory) }
+        let suffix = isolatedLibrary.map { "-" + Insecure.SHA1.hash(data: Data($0.standardizedFileURL.path.utf8)).prefix(4).map { String(format: "%02x", $0) }.joined() } ?? ""
+        return URL(filePath: "/tmp/cuepad-\(getuid())\(suffix)", directoryHint: .isDirectory)
+    }
+
+    private var isDefaultAgentDirectory: Bool {
+        agentDirectory.standardizedFileURL == Self.defaultAgentDirectory([:]).standardizedFileURL
+    }
+
+    private static func defaultAgentDirectory(_ environment: [String: String]) -> URL {
+        if let dir = environment[PiRuntime.facts.homeVariable], !dir.isEmpty {
+            return URL(filePath: UserHome.expanding(dir), directoryHint: .isDirectory)
+        }
+        return UserHome.directory.appending(path: ".pi/agent", directoryHint: .isDirectory)
+    }
+}
+#endif

@@ -1,10 +1,8 @@
-/// 交给了会话的叶子任务，在任务气泡最下面那一条上此刻怎么说：一句标题、一句说明。
-/// 状态只经 `PiShown` 判定，两端同一份说法。说明不复述右边的"去会话"：只是叫你去会话里看、回、接着说的，不写。
+/// 状态只经 `SessionShown` 判定，两端同一份说法。说明不复述右边的"去会话"：只是叫你去会话里看、回、接着说的，不写。
 struct TaskAgentLook: Equatable {
     var title: String, note: String?
 
-    /// `line`：会话此刻的进展或出错原因（`PiProgress.note`）。
-    init(_ shown: PiShown, line: String?) {
+    init(_ shown: SessionShown, line: String?) {
         switch shown.status {
         case .delivery(.failed): (title, note) = (shown.label, line)
         case .working, .delivery, .cueAsking:

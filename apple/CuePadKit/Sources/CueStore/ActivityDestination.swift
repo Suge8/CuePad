@@ -2,7 +2,7 @@ import Foundation
 
 /// 一台手机开着的实时活动推送地址：只由这台手机写，Mac 读后经中转发 ActivityKit 推送。
 /// 令牌只放在用户自己的 iCloud 加密字段里；没有业务内容、不是第二份 Cue 状态。
-/// 每台设备一条，换令牌覆盖、结束删除；未能报结束的最迟按系统的八小时上限失效。
+/// 未能报结束的最迟按系统的八小时上限失效。
 public struct ActivityDestination: Equatable, Sendable {
   public var device: String
   public var activityID: String

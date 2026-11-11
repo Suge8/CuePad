@@ -3,8 +3,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 会话回复框：草稿只有一份（`AppSettings`，iOS 与 Mac 同一份）：离开会话再回来还在；文字与批注存在本机偏好、跨退出保留，
-/// 带上的卡片与图片只留在这次运行；批注随下一句发出；iOS"发到 Mac"带来的卡片写进同一份草稿。
+@Suite(.releasesLibraries)
 struct ReplyTests {
     /// 偏好放在临时目录（`TempDefaults`）：按名字开的套件落进本机的 ~/Library/Preferences，每跑一次留一个文件。
     private func settings(_ preferences: TempDefaults) -> AppSettings {
@@ -28,13 +27,11 @@ struct ReplyTests {
         #expect(relaunched.replyDraft(for: session).attachments.isEmpty)
     }
 
-    /// 批注随下一句发出，排在你写的话前面：原文已在 Agent 的上下文里，只带认得出位置的摘录（列表符、换行收掉，过长只留头尾），
-    /// 不重发原文。
     @Test func 批注跨退出保留_随下一句发出时只带头尾摘录() async throws {
         let preferences = TempDefaults()
         let app = TestApp()
-        try await PiStateRecorder(store: app.services.store, hostID: "mac").update(sessionID: "s", state: .tool, title: "s")
-        let session = try #require(try await app.services.store.piSessionPage(.live).items.first?.state)
+        try await StateRecorder(store: app.services.store, hostID: "mac").update(sessionID: "s", state: .tool, title: "s")
+        let session = try #require(try await app.services.store.sessionPage(.live).items.first?.state)
         let settings = settings(preferences)
         var draft = settings.replyDraft(for: session.id)
         draft.text = "按这个改"
@@ -56,7 +53,6 @@ struct ReplyTests {
             """)
     }
 
-    /// 回复框收附件：带上的卡片里的图片照引用发出（怎么交给收不了图片的会话由 Mac 定）。只收文字的是作答框（`accepting([])`）：卡片里的附件只留文件名。
     @Test func 回复框收附件_作答框只有文字() {
         let image = "![](cuepad://file/\(String(repeating: "a", count: 64)).png)"
         let draft = ComposerDraft(text: "按这张改", attachments: [Outbox(content: "登录页\n\n\(image)\n\n按钮改圆角", card: UUID())])

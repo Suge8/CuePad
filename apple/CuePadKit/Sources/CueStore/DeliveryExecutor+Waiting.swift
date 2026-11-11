@@ -1,7 +1,6 @@
 import Foundation
 
-/// 缺前提时在旁边等（`DeliveryExecutor` 头注释）：取附件、等现有会话就绪。两种等待都不抓一份期限，到点从库里重读这条请求的派发期限
-/// （`untilDue`）：锚点只有一个（`DeliveryRequest.dispatchDeadline`），期限监视、SQL 与这里读的是同一份。
+/// 缺前提时在旁边等：取附件、等现有会话就绪。两种等待都不抓一份期限，到点从库里重读（`untilDue`），锚点只有一个（`DeliveryRequest.dispatchDeadline`）。
 extension DeliveryExecutor {
   /// 订阅同一份派发期限；锚点尚未落定就等它，删除则取消等待，不能把两者当作到期。
   func untilDue(_ id: DeliveryRequest.ID) async throws {
@@ -18,7 +17,6 @@ extension DeliveryExecutor {
     throw CancellationError()
   }
 
-  /// 库里这条的派发期限已到（不在了算到了）。
   func isDue(_ id: DeliveryRequest.ID) async throws -> Bool {
     guard let current = try await store.deliveryRequest(id) else { return true }
     return isExpired(current)

@@ -1,6 +1,6 @@
 #if os(macOS)
 import CueAgent
-import CuePi
+import CueBridge
 @testable import CueStore
 import CueTestSupport
 import CueText
@@ -11,19 +11,22 @@ import Testing
 /// Cue 在 Mac 上值班，端到端：真实的 Pi 当大脑（RPC），真实的 `cuepad mcp`（App 里的那份）读写同一个隔离库，
 /// 模型是本进程里的假 OpenAI 端点（按剧本回，零网络），执行器开的会话由假扩展扮演（`RecordingHost`）。
 /// Pi 的配置在临时目录（`PI_CODING_AGENT_DIR`），不碰 ~/.pi 与真实资料库。
-/// 本机的 Pi（真 Pi 的测试共用）
-nonisolated let realPi = ProcessInfo.processInfo.environment["CUEPAD_TEST_PI"].map { URL(filePath: $0) }
-    ?? FileManager.default.homeDirectoryForCurrentUser.appending(path: ".local/bin/pi")
+/// 钉住的 Pi（`PinnedAgent.pi`，`xc.sh agents install pi` 装进专用缓存），真 Pi 的测试共用
+nonisolated let realPi = PinnedAgent.pi.executable
 
-@Suite(.enabled(if: FileManager.default.isExecutableFile(atPath: realPi.path), "需要 ~/.local/bin/pi"), .serialized)
+extension Trait where Self == ConditionTrait {
+    /// 钉住的 Pi 没装时跳过（原因以「未覆盖：」开头，xc.sh 汇总后列出）；完整矩阵时照跑，起 Pi 时失败
+    static var pinnedPi: Self { .enabled(if: PinnedAgent.pi.uncovered == nil, Comment(rawValue: PinnedAgent.pi.uncovered ?? "")) }
+}
+
+@Suite(.releasesLibraries, .pinnedPi, .serialized)
 struct CueHostTests {
-    /// 你的话送进 Cue 不受库忙不忙影响：十个会话的状态一刻不停地写着，说的话照样交给 Cue——
     /// 不是等写入歇下才交。不量时长：写入到交出去为止一直在继续，交不出去由测试时限报。
     @Test func 库正忙时你的话马上送进Cue() async throws {
         let rig = try await Rig()
         let store = rig.store
         let busy = Task {
-            let recorder = PiStateRecorder(store: store, hostID: "mac-busy")
+            let recorder = StateRecorder(store: store, hostID: "mac-busy", minInterval: .zero)  // 每次都当场写：不留合并的定时写入（它攥着库到间隔结束）
             var round = 0
             while !Task.isCancelled {
                 round += 1
@@ -33,8 +36,8 @@ struct CueHostTests {
                 try? await Task.sleep(for: .milliseconds(20))
             }
         }
-        defer { busy.cancel() }
-        try await eventually("写入已经跑起来") { try await store.allPiSessionStates().count == 10 }
+        defer { await busy.stop() }
+        try await eventually("写入已经跑起来") { try await store.allSessionStates().count == 10 }
         try await rig.say("库正忙时说的")
         try await eventually("交给 Cue") {
             try await store.cueMessages().contains { $0.text == "库正忙时说的" && $0.deliveredAt != nil }
@@ -43,20 +46,18 @@ struct CueHostTests {
         await rig.stop()
     }
 
-    /// 你说一句，Cue 的回答落库（写成 Cue 说的）；你的消息记下已交给大脑。Cue 的大脑不是 Agent 会话：不在会话列表、历史与 Pi 的会话目录里。
     @Test func 你说一句_Cue的回答落库() async throws {
         let rig = try await Rig()
         try await rig.say("你好")
         try await rig.message(.cue, containing: "收到：你好")
         #expect(try await rig.store.cueMessages().first { $0.author == .known(.you) }?.deliveredAt != nil)
-        #expect(rig.services.pi.sessions.isEmpty)
-        #expect(try await rig.store.allPiSessionStates().isEmpty)
+        #expect(rig.services.bridge.sessions.isEmpty)
+        #expect(try await rig.store.allSessionStates().isEmpty)
         let sessions = rig.app.piPaths.sessionsDirectory
         #expect(((try? FileManager.default.contentsOfDirectory(atPath: sessions.path)) ?? []).isEmpty)
         await rig.stop()
     }
 
-    /// 你在 Cue 页发图：资料库里的图片引用转成图片交给大脑（假模型收到的是图片，不只是文字里的引用），Cue 照图回答。
     @Test func 你发图_Cue看得见() async throws {
         let rig = try await Rig()
         try await rig.say("这是什么？\n\(try rig.image())")
@@ -64,7 +65,6 @@ struct CueHostTests {
         await rig.stop()
     }
 
-    /// 模型看不了图：同看不了图的会话一样，图写成"附件：图片.png（本机路径）"交给它（不另附图），Cue 照常回答。
     @Test func 模型看不了图_图写成路径交给它() async throws {
         let rig = try await Rig(seesImages: false)
         let image = try rig.image()
@@ -90,7 +90,6 @@ struct CueHostTests {
         await rig.stop()
     }
 
-    /// 额度只看 Cue 运行的这台 Mac（额度各台各登各的）：别的 Mac 上吃紧的账号不写进信封，这台的照写。
     @Test func 信封里的额度只写这台Mac的() async throws {
         let rig = try await Rig()
         let tight = [QuotaWindow(seconds: 18_000, used: 0.9, resetsAt: .now.addingTimeInterval(3600), isBinding: true)]
@@ -113,8 +112,6 @@ struct CueHostTests {
         await rig.stop()
     }
 
-    /// 手上什么都没有时启用、巡视也到点了：Cue 都不醒来说"没有在做的事"，对话里只有你说的与它的回答，没有醒来记录那一行
-    /// （Cue 页空着时是能说什么的空态）。
     @Test func 空库启用与巡视_不说空话() async throws {
         let rig = try await Rig(patrolAfter: .zero)
         try await rig.say("你好")

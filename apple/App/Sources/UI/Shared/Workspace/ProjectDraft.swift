@@ -1,8 +1,7 @@
 import CueStore
 import Foundation
 
-/// 项目表单的内容，两端同一份（Mac 的 `ProjectForm`、手机的 `ProjectFormSheet`），从打开表单的那次请求（`ProjectFormRequest`）起草：新建时是默认图标与第一种颜色，编辑时预填这个项目；
-/// 名称去掉首尾空白后不能是空的，一句话介绍空白即没有。新建时绑哪个文件夹两端不同（Mac 本机选，手机请那台 Mac 绑），由保存时的 `created` 接着做。
+/// 新建时绑哪个文件夹两端不同（Mac 本机选，手机请那台 Mac 绑），由 `save` 的 `created` 接着做。
 struct ProjectDraft {
     let project: Project?
     var name: String
@@ -28,7 +27,7 @@ struct ProjectDraft {
 
     var trimmedName: String { name.trimmingCharacters(in: .whitespaces) }
 
-    /// 写进库（出错交给 `attempt`），名称是空的不写、返回 false（表单不关）；新建的项目建好后调 `created`。
+    /// 名称是空的不写、返回 false（表单不关）；写库出错交给 `attempt`。
     func save(in workspace: Workspace, created: @escaping @MainActor (UUID) async throws -> Void) -> Bool {
         guard canSave else { return false }
         // 名字没改就留存的那份：默认项目显示的是这台设备语言的名字，原样存回去就成了改名

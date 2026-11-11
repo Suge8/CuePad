@@ -5,19 +5,18 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 新会话安全替换与主动重复：编辑、关闭不等回执；第二次副作用须由可撤回事实或用户明确确认授权。
-/// "手机"开新会话走新会话输入框调的同一条 `launchSession`；那台 Mac 写回什么由服务器的回声给。
+/// "手机"开新会话走新会话输入框调的同一条 `AppServices.launchSession`；那台 Mac 写回什么由服务器的回声给。
 @MainActor
+@Suite(.releasesLibraries)
 struct LaunchLockTests {
     let clock = ManualTiming()
     private let month = Duration.seconds(30 * 86_400)
 
     private func launch(_ phone: TestApp, replacing previous: SessionLaunch? = nil) async throws -> SessionLaunch {
-        try await Workspace(services: phone.services).launchSession(
+        try await phone.services.launchSession(
             in: Project.defaultID, prompt: "hi", title: "CuePad", on: "mac-gone", card: nil, agent: .pi, intent: previous.map { .replacing($0.request) } ?? .new)
     }
 
-    /// 服务器收下（回声）；`status` 给了就同时带上那台 Mac 写回的状态。
     private func serverHas(_ phone: TestApp, _ launch: SessionLaunch, status: String? = nil) async throws {
         var row = try #require(try await phone.services.store.syncRow(recordName: launch.request.uuidString.lowercased()))
         if let status {
@@ -31,10 +30,7 @@ struct LaunchLockTests {
     }
 
     private func shown(_ phone: TestApp, _ launch: SessionLaunch) async throws -> LaunchProgress.Phase {
-        for try await progress in phone.services.store.observe({ try launch.progress(from: $0) }) {
-            return progress.phase(at: .always(at: clock.now))
-        }
-        throw CancellationError()
+        try await awaitNext("会话启动进度", from: phone.services.store.observe({ try launch.progress(from: $0) })).phase(at: .always(at: clock.now))
     }
 
     @Test func 离线一直没传上去_不锁_再开时撤回它() async throws {
@@ -72,7 +68,7 @@ struct LaunchLockTests {
         await #expect(throws: CueStoreError.deliveryAlreadyHanded) { try await launch(phone, replacing: first) }
         let before = try await phone.services.store.deliveryRequests().map(\.id)
         #expect(before == (status == "missing" ? [] : [first.request]))
-        let second = try await Workspace(services: phone.services).launchSession(
+        let second = try await phone.services.launchSession(
             in: Project.defaultID, prompt: "hi", title: "CuePad", on: "mac-gone", card: nil, agent: .pi,
             intent: .repeatingConfirmed)
         #expect(Set(try await phone.services.store.deliveryRequests().map(\.id)) == Set(before + [second.request]))
@@ -83,7 +79,7 @@ struct LaunchLockTests {
         defer { phone.services.cancelBackgroundWork() }
         let first = try await launch(phone)
         let row = try #require(try await store.syncRow(recordName: first.request.uuidString.lowercased()))
-        #expect(try await store.reserveDeliveryPayload(row.id, modifiedAt: row.modifiedAt))
+        #expect(try await store.reserveForUpload([(row.id, row.table, row.modifiedAt)]).isEmpty)
         await #expect(throws: CueStoreError.deliveryAlreadyHanded) { try await launch(phone, replacing: first) }
         #expect(try await store.deliveryRequests().map(\.id) == [first.request])
     }

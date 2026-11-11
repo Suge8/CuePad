@@ -1,21 +1,11 @@
 import CueStore
 import SwiftUI
 
-/// 看板上的一件任务：待办、推进中、已完成三列同一种卡（等你列是同样的卡，`BoardWaitCard`），卡上只有标题与一个状态记号，其余收进悬停提示。
-/// 纸色、标题的墨与字重、圈的深浅随列的轻重（`TaskBoard.Column`，`BoardWeight.swift`）。
-/// - 开头是完成圈（`TaskCheckButton`，空心描边；做完是石绿的对勾），看全部项目时标题前一个项目小图形（`BoardProjectGlyph`，Mac 上悬停是项目联动）；
-/// - 推进中下沿是那条线（`BoardLine`：过去说过的几句、此刻在跑或停住，右端是此刻状态多久与要你管的状态词），歇着的标题淡一档；已完成卡尾是 Cue 点名的成果图；
-/// - 悬停提示：项目、多久（推进中是跑了多久或估还要多久，已完成是几点做完）与交给了哪家 Agent。
-/// 上级收成一张：状态、"下一步"与点卡都只看卡上写的会话（`TaskBoard.Item.agent`，此刻干活那一步的，与列同一次读）。点圈完成（`TaskCheck`）；
-/// 点卡的其余地方同任务行（`Workspace.enter`）：有会话就进那个会话，没有打开任务气泡。长按（Mac 右键）是这件任务的菜单（`CardActions`，各处同一份），
-/// 点卡进的是会话时第一项"打开任务"，推进中在用的会话还能结束时多一项"结束会话"。置顶的（`Card.isPinned`）标题前一枚图钉。
-/// Mac 上指针停在卡上卡亮一档（`PressFeedback` 的卡），还没交出去的叶子这时右端浮出"▶ 开始"（不占排版，盖住标题的尾巴）。
+/// 上级收成一张：状态、"下一步"与点卡都只看卡上写的会话（`TaskBoard.Item.agent`，此刻干活那一步的）。
 struct BoardTaskCard: View {
     let item: TaskBoard.Item
     let column: TaskBoard.Column
-    /// 标题前的项目小图形：看全部项目时才有。
     let project: Project?
-    /// 下沿那条线可以动（`BoardLine.moves`）。
     var moves = true
     var openShot: (PreviewOpening) -> Void = { _ in }
     @State private var check = TaskCheck()
@@ -24,14 +14,12 @@ struct BoardTaskCard: View {
     @Environment(\.palette) private var palette
 
     private var task: Card { item.task }
-    /// 卡上写的名字：标题，为空时是绑着的会话名（`Card.title(session:)`）。
     private var title: String { task.title(session: item.agent?.shownTitle(at: workspace.services.speech)) }
     private var advancing: Bool { column == .advancing }
 
     var body: some View {
         let now = workspace.pulse(of: item.agent)
         let next = workspace.next(for: item, shown: now.shown)
-        // 刚从推进中飞出来的也要线（`BoardCardLayout` 起飞时还带着它，随即淡掉）
         let pulse = advancing || arrival?.from == .advancing ? now : BoardPulse()
         framed {
             BoardCardLayout(advancing: advancing, pulse: pulse, moves: moves) {
@@ -67,21 +55,19 @@ struct BoardTaskCard: View {
         #endif
     }
 
-    /// 标题：墨与字重随列（`TaskBoard.Column.titleInk`）；推进中歇着的淡一档；点圈停留的那一下最淡、划线（看得清刚勾掉的是哪条）。
     private func title(resting: Bool) -> some View {
         let ink = check.phase != .idle ? palette.ink3 : resting ? palette.ink2 : column.titleInk(palette)
         return BoardCardTitle(title.textGlyphs).fontWeight(column.titleWeight)
             .strikethrough(check.phase != .idle, color: palette.ink3).foregroundStyle(ink)
     }
 
-    /// 悬停提示：项目 · 多久 · 哪家 Agent。
     private var tip: String {
         let agent = item.agent?.state.agentMark
         let time: String? = switch column {
         case .advancing:
             switch TaskPace.of(task, steps: item.steps) {
             case .left(let seconds): TaskPace.left(seconds)
-            case .ran(let since): PiClock.duration(Date.now.timeIntervalSince(since))
+            case .ran(let since): SessionClock.duration(Date.now.timeIntervalSince(since))
             case nil: nil
             }
         case .done: task.completedAt?.formatted(date: .omitted, time: .shortened)
@@ -90,7 +76,6 @@ struct BoardTaskCard: View {
         return Dotted(item.project?.shownName, time, agent).visible
     }
 
-    /// 读屏在标题后面多念的：置顶了、在等哪一处做完。
     private func aside(_ pulse: BoardPulse) -> String? {
         Dotted(task.isPinned ? String(localized: "已置顶") : nil, pulse.handoff?.waiting).nonEmpty?.spoken
     }
@@ -111,15 +96,10 @@ struct BoardTaskCard: View {
         if let next { workspace.follow(next) }
     }
 
-    /// 长按（Mac 右键）菜单：点卡进的是会话时第一项"打开任务"（`CardActions.opens`）；歇着、在等 Cue 交出去的那一处时先是去那一处（`HandoffButton`）。
     @ViewBuilder private var menu: some View {
         let session = item.agent?.state
         if let session { OpenSessionBeside(session: session); HandoffButton(session: session) }
-        #if os(macOS)
         CardActions(card: task, leaf: item.steps == nil, opens: session != nil, session: session)
-        #else
-        CardActions(card: task, opens: session != nil, session: session)
-        #endif
     }
 
     #if os(macOS)
@@ -147,7 +127,6 @@ struct BoardTaskCard: View {
 }
 
 #if os(macOS)
-/// 指针停在卡上时（`buttonHovered`，卡的 `PressFeedback` 给）右端浮出的"▶ 开始"：垫一块卡的纸色（`rowSurface`，随列）、靠字那一侧淡入，盖住标题的尾巴，不挪字。
 private struct StartReveal: View {
     let next: TaskNext?
     @Environment(\.buttonHovered) private var hovered

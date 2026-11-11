@@ -5,11 +5,11 @@ import Foundation
 import Testing
 
 extension MCPTests {
-  /// Cue 在 mac-a 上用 Pi 当大脑：Pi 的 Opus 花 Max 账号的额度（本周用了 86%，卡着），终端里的 Claude Code 也能用，Codex 没登录。
-  private static let opus = PiModelOption(
-    key: PiModelKey(provider: "anthropic", id: "claude-opus-5-5"), name: "Claude Opus 5.5", thinkingLevels: [.low, .medium, .high],
+  /// Cue 在 mac-a 上用 Pi 当大脑：Pi 的 Opus 花 Max 账号的额度（本周用了 86%，卡着），Claude Code 也能用，Codex 没登录。
+  private static let opus = ModelOption(
+    key: ModelKey(provider: "anthropic", id: "claude-opus-5-5"), name: "Claude Opus 5.5", thinkingLevels: [.low, .medium, .high],
     account: PiAccount(kind: .oauth, scope: "max-1"), supportsFast: true)
-  private static let gpt = PiModelOption(key: PiModelKey(provider: "openai-codex", id: "gpt-6"), name: "GPT-6", thinkingLevels: [.low, .high])
+  private static let gpt = ModelOption(key: ModelKey(provider: "openai-codex", id: "gpt-6"), name: "GPT-6", thinkingLevels: [.low, .high])
 
   private static func enable(_ store: CueStore) async throws {
     try await store.updateCueProfile {
@@ -20,12 +20,11 @@ extension MCPTests {
       host: "mac-a", name: "工作室",
       [
         MacAgent(kind: .pi, model: opus.key, models: [opus, gpt]),
-        MacAgent(kind: .claudeCode, model: PiModelKey(provider: "claude", id: "opus"), models: []),
+        MacAgent(kind: .claudeCode, model: ModelKey(provider: "claude", id: "opus"), models: []),
       ],
       problems: [MacAgentProblem(kind: .codex, reason: .notLoggedIn)])
   }
 
-  /// Cue 写错模型名（如把 claude 拼成 claaude）：开工当场退回、列出能选的，不写投送请求；照抄清单里的就开得出来。
   @Test func cueTypoModelIsRefusedBeforeAnythingIsSent() async throws {
     let sandbox = try Fixture()
     let store = sandbox.store
@@ -63,13 +62,12 @@ extension MCPTests {
       let overview = try await server.call("setup", ["action": "look"])
       for expected in [
         "大脑：Pi · 默认（anthropic/claude-opus-5-5）", "在「工作室」", "健康：值班中", "429 rate limited", "codex 用不了：没登录",
-        "他在终端里开的 Claude Code 会话：不能发图、停下这一轮、换模型、用斜杠命令", "anthropic「Max」（吃紧） 5 小时 已过重置时间，等新的观测；本周 已用 86%", "卡着", "记忆 2 条（重点 1 条）",
+        "- claude 能用", "anthropic「Max」（吃紧） 5 小时 已过重置时间，等新的观测；本周 已用 86%", "卡着", "记忆 2 条（重点 1 条）",
         "官网（\(folder)）",
       ] {
         #expect(overview.contains(expected), "\(expected) 不在：\n\(overview)")
       }
       let agents = try await server.call("setup", ["action": "look", "part": "agents"])
-      // 模型那一行带着卡着的窗口几点重置：额度用完时看这一块就够定时接着做
       let opus = try #require(agents.split(separator: "\n").first { $0.contains("anthropic/claude-opus-5-5（") }, "\(agents)")
       #expect(opus.contains("（Claude Opus 5.5，默认） · 强度 low/medium/high · fast · 额度：anthropic「Max」 本周 已用 86%，") && opus.hasSuffix(" 重置"), "\(opus)")
       #expect(agents.contains("openai-codex/gpt-6（GPT-6） · 强度 low/high"), "\(agents)")
@@ -94,7 +92,6 @@ extension MCPTests {
       let changed = try #require(try await store.cueProfile())
       #expect(changed.model == "openai-codex/gpt-6" && changed.effort == .known(.high))
 
-      // 模型回到默认要重开大脑（同管理器）
       #expect(try await server.call("setup", ["action": "set", "model": "default"]).contains("换新大脑"))
       #expect(try await store.cueProfile()?.model == nil)
 
@@ -112,7 +109,6 @@ extension MCPTests {
     let folder = sandbox.directory.appending(path: "site", directoryHint: .isDirectory)
     try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     try await Server.run(library: sandbox.directory) { server in
-      // 拼错的名字不静默新建
       #expect(try await server.refused("setup", ["action": "project", "project": "官网", "intro": "公司落地页"]).contains("没有项目「官网」"))
       #expect(try await store.projects().map(\.name) == ["默认"])
 

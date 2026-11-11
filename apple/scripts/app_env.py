@@ -10,7 +10,14 @@ CHECKOUT = os.path.dirname(APPLE)
 BUNDLE_ID = re.search(r"^CUEPAD_APP_ID *= *(\S+)", open(f"{APPLE}/App/Config/Signing.xcconfig").read(), re.M)[1]
 RUNTIME = f"/tmp/cuepad-xc-{os.getuid()}"  # xc.sh 的入口锁与持有者登记（_lock.py），模拟器的就绪文件（按设备分）
 SLOT, READY = f"{APPLE}/.derived/mac-app.lock", f"{APPLE}/.derived/mac-ready"
-SIM_RUN = f"{APPLE}/.derived/sim-run.json"  # run 留在模拟器里的实例：看守的 PID、实例的 PID、模拟器（app_sim.keep）
+# run 留在模拟器里的实例：看守的 PID、实例的 PID、模拟器（app_sim.keep）。每个角色一份：没给 CUEPAD_RUN_ROLE 的是单个 run，
+# 再 run 先收掉它；xc.sh fleet 给 iphone、ipad 各一个角色，同一个检出里两台模拟器同时留着实例，互不收掉
+RUN_ROLE = os.environ.get("CUEPAD_RUN_ROLE", "")
+SIM_RUN_GLOB = f"{APPLE}/.derived/sim-run*.json"
+
+
+def sim_run(role=RUN_ROLE):
+    return f"{APPLE}/.derived/sim-run{'-' + role if role else ''}.json"
 # 实例借着前台却没到前台时写它（DebugForeground），看守替它拉到前台：别的应用在前台时 App 自己 activate 会被系统忽略
 FRONT = f"{APPLE}/.derived/mac-front"
 FRONT_RETRY = 0.3  # 拉了还没到前台时隔多久再拉
@@ -37,6 +44,11 @@ def die(message):
 REAL_LIBRARY = os.path.expanduser("~/Library/Application Support/CuePad")
 
 
+def disclaimed(argv):
+    """起 Mac 实例的命令行：经 disclaim.py 让实例成为自己的 TCC 责任进程（不然麦克风等权限记在起它的那个 App 头上，见 disclaim.py）。"""
+    return [sys.executable, "-I", f"{APPLE}/scripts/disclaim.py", *argv]
+
+
 def isolated_env(library, sockets=SOCKETS):
     library = os.path.realpath(library)
     if library == REAL_LIBRARY or library.startswith(REAL_LIBRARY + "/"):
@@ -51,15 +63,18 @@ def isolated_env(library, sockets=SOCKETS):
         home = os.path.realpath(fake_home)
         if home == os.path.realpath(os.path.expanduser("~")):
             die("CUEPAD_FAKE_HOME 不能是真的家目录")
-        for key in ("CUEPAD_BIN_DIR", "CUEPAD_WORKSPACE_DIR", *AGENT_HOMES, "XDG_CONFIG_HOME"):
+        for key in ("CUEPAD_BIN_DIR", "CUEPAD_WORKSPACE_DIR", "CUEPAD_DEVICE_LOGS_DIR", *AGENT_HOMES, "XDG_CONFIG_HOME"):
             env.pop(key, None)
         # Foundation 的家目录看 CFFIXED_USER_HOME；没给 CLAUDE_CONFIG_DIR 的 Claude Code 从钥匙串读真实的登录
         return dict(env, HOME=home, CFFIXED_USER_HOME=home, CLAUDE_CONFIG_DIR=f"{home}/.claude")
-    return dict(env, CUEPAD_BIN_DIR=f"{library}/bin", CUEPAD_WORKSPACE_DIR=f"{library}/CuePad",
+    # 各台设备经 iCloud 送来的诊断（LibraryLocation.deviceLogs），xc.sh diag 用 CUEPAD_DIAG_DIR 指过来读
+    return dict(env, CUEPAD_BIN_DIR=f"{library}/bin", CUEPAD_WORKSPACE_DIR=f"{library}/CuePad", CUEPAD_DEVICE_LOGS_DIR=f"{library}/Logs",
                 **{key: f"{agents}/{name}" for key, name in AGENT_HOMES.items()})
 
 
 # 各家配置目录的变量 → 隔离库里的目录名；XDG 两项是 OpenCode 的服务登记（XDG_STATE_HOME）与会话数据（XDG_DATA_HOME），
-# 不换的话隔离实例会连上用户在跑的 OpenCode 服务、或把拉起的服务落在真实目录；CUEPAD_AGENTS_DIR 是几家共读的 ~/.agents（技能与规则）
+# 不换的话隔离实例会连上用户在跑的 OpenCode 服务、或把拉起的服务落在真实目录；CUEPAD_AGENTS_DIR 是几家共读的 ~/.agents（技能），
+# CUEPAD_AGENTS_CONFIG_DIR 是全局规则共享那份所在的 ~/.config/agents（不换 XDG_CONFIG_HOME：实例里起的 git、gh 还要读真实的配置）
 AGENT_HOMES = {"PI_CODING_AGENT_DIR": "pi", "CLAUDE_CONFIG_DIR": "claude", "CODEX_HOME": "codex", "OPENCODE_CONFIG_DIR": "opencode",
-               "GROK_HOME": "grok", "XDG_STATE_HOME": "state", "XDG_DATA_HOME": "data", "CUEPAD_AGENTS_DIR": "shared"}
+               "GROK_HOME": "grok", "XDG_STATE_HOME": "state", "XDG_DATA_HOME": "data", "CUEPAD_AGENTS_DIR": "shared",
+               "CUEPAD_AGENTS_CONFIG_DIR": "agents-config"}

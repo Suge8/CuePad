@@ -1,5 +1,5 @@
 #if os(macOS)
-import CuePi
+import CueBridge
 import CueStore
 import CueTestSupport
 import CueText
@@ -14,10 +14,12 @@ extension CueHostTests.Rig {
         let project = try #require(try await store.projects().first { $0.name == "演示" })
         let first = "\(title)\n\(rest)"
         let task = try await store.createTask(first, in: project.id)
-        let id = "s-\(UUID().uuidString.prefix(8).lowercased())", delivery = UUID()
-        try await store.recordSend(first, to: SendTarget(kind: .piSession, name: title, ref: id), card: task.id, delivery: delivery, origin: .known(.cue))
-        // Cue 派的活是 CuePad 开的会话（能从 CuePad 结束）
-        let session = try await app.host.connect(id, cwd: folder.path, busy: true, hosted: true)
+        let request = try await store.startLeaf(task.id, host: services.hostID, cue: true)
+        #expect(try await store.outcome(of: request).status == .known(.succeeded))
+        let started = try await eventually(store, { try $0.card(task.id) }) { $0?.piSessionID != nil }
+        let id = try #require(started?.piSessionID)
+        let session = try #require(app.host.extensions[id])
+        session.setState(["kind": "thinking"])
         // 像真扩展那样：作答后收起提问、回到工作中（假扩展默认只回 ack）
         let ack = session.onCommand
         session.onCommand = { [weak session] connection, command in
@@ -29,16 +31,14 @@ extension CueHostTests.Rig {
         }
         session.sendInfo(["name": title])
         let file = try #require(app.host.sessionFiles[id])
-        try file.user(first, delivery: delivery.uuidString)
         try await read(first, in: id)
         try await eventually("会话在干活写进库") { try await self.store.sessions(matching: id).first?.state.isWorking == true }
         return Working(task: task, session: session, file: file)
     }
 
-    /// 等 Mac 把会话文件里你的这句话读进库（对话里最后一句你的话就是它）：之后叫醒的 Cue 看得到它与它之前的对话。
     func read(_ text: String, in sessionID: String) async throws {
         try await eventually("「\(text.prefix(20))」读进库") {
-            try await self.store.piMessages(of: sessionID).last { $0.role == .known(.user) }?.text == text
+            try await self.store.chatMessages(of: sessionID).last { $0.role == .known(.user) }?.text == text
         }
     }
 
@@ -46,15 +46,14 @@ extension CueHostTests.Rig {
     /// 叫醒的 Cue 看得到它。
     func spoke(_ said: String, in sessionID: String) async throws {
         try app.host.sessionFiles[sessionID]!.spoke(said)
-        let shown = said.trimmingCharacters(in: .whitespacesAndNewlines).clipped(PiChatMessage.Tools.saidLimit)
+        let shown = said.trimmingCharacters(in: .whitespacesAndNewlines).clipped(ChatMessage.Tools.saidLimit)
         try await eventually("「\(said.prefix(20))」读进这一轮的经过") {
             try await self.store.sessions(matching: sessionID).first?.pendingTools?.items.last { $0.kind == .said }?.target == shown
         }
     }
 
-    /// 会话发来几张效果图（默认按文件名画，见 `mockShot`）。
     @MainActor @discardableResult
-    func shots(_ files: [(name: String, title: String)], from work: Working, drawing: @MainActor (String) throws -> Data = mockShot) async throws -> [PiPreviewAdded] {
+    func shots(_ files: [(name: String, title: String)], from work: Working, drawing: @MainActor (String) throws -> Data = mockShot) async throws -> [PreviewAdded] {
         var sent: [(url: URL, title: String)] = []
         for (name, title) in files {
             let url = app.directory.appending(path: name)
@@ -64,7 +63,6 @@ extension CueHostTests.Rig {
         return try await store.addPreviews(sent, sessionID: work.id)
     }
 
-    /// 会话做完这一轮歇下，回复是 `reply`。
     func settle(_ work: Working, reply text: String) async throws {
         work.session.setState(["kind": "idle"])
         try await answered(work.id, reply: text)
@@ -84,7 +82,6 @@ extension CueHostTests.Rig {
         try await settle(work, reply: text)
     }
 
-    /// 他 `ago` 秒前直接在会话里（终端里打的，不带 Cue 的发送记录）说了 `said`，会话做完他这一轮、回复 `reply` 后歇下。
     func settleHisTurn(_ work: Working, said: String, ago: TimeInterval, reply text: String) async throws {
         try work.file.reply("后端做完了：发重置邮件的接口、令牌校验与限流，14 个测试全过。", at: .now - ago - 60)
         try work.file.user(said, at: .now - ago)
@@ -92,7 +89,6 @@ extension CueHostTests.Rig {
         try await answered(work.id, reply: text)
     }
 
-    /// 他 `ago` 秒前直接在会话里说了 `his`，之后 Cue 说了 `cue`（发送记录是 Cue 的）开了这一轮，做完回复 `reply` 后歇下。
     func settleCueTurn(_ work: Working, his: String, ago: TimeInterval, cue: String, reply text: String) async throws {
         let delivery = UUID()
         try await store.recordSend(cue, to: SendTarget(kind: .piSession, name: work.task.heading, ref: work.id), card: work.task.id, delivery: delivery, origin: .known(.cue))
@@ -104,7 +100,6 @@ extension CueHostTests.Rig {
         try await answered(work.id, reply: text)
     }
 
-    /// 会话这一轮说了 `said` 后停下来问一个选择题（问他的对话框由工具调起：这段话在这一轮的经过里，这一轮没收尾）。
     func ask(_ work: Working, said: String, question: String, options: [String]) async throws {
         try await spoke(said, in: work.id)
         work.session.sendInfo(["question": ["id": "p1", "kind": "select", "text": question, "options": options]])

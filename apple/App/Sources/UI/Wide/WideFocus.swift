@@ -2,11 +2,9 @@ import SwiftUI
 import CueStore
 import UniformTypeIdentifiers
 
-/// 宽屏窗口里各自托管的几块：主区（并排时是左半）、并排的右半、右边的 Cue。各是一个托管视图，两块不共用 SwiftUI 内部的焦点与无障碍桥。
 enum WideSlot: CaseIterable {
     case main, beside, cue
 
-    /// 放会话的那一边（Cue 不是）。
     var column: Workspace.Column? {
         switch self {
         case .main: .main
@@ -94,7 +92,6 @@ final class WideFocus {
         focus(shown[next])
     }
 
-    /// ⌘⌥← / →：有焦点的会话挪向那一边（只在并排两个会话时有可挪的），焦点跟着它过去。
     func move(to target: Workspace.Column, in workspace: Workspace) {
         guard let source = current?.column else { return }
         workspace.moveSession(from: source, to: target)
@@ -111,7 +108,6 @@ struct WideColumnHost<Content: View>: NSViewRepresentable {
     let focus: WideFocus
     let origin: CGFloat
     let width: CGFloat
-    /// 会话条与 Cue 的宽：它们一变，这一块滑到新位置（`WideColumnSlide`）；只是窗口改宽时不滑。
     let shape: WideMetrics.Shape
     /// 收起的 Cue 仍挂着（回来时对话、滚动位置都在），只是藏起：看不见、点不到、⌃Tab 跳过。
     var hidden = false
@@ -162,7 +158,6 @@ final class WideColumnView: NSView {
     let slot: WideSlot
     let focus: WideFocus
     let workspace: Workspace
-    /// 会话条开合、Cue 收起或放回时这一块怎么滑（`WideColumnSlide`）。
     private(set) lazy var slide = WideColumnSlide(slot: slot) { [unowned self] in self.isHidden = $0 }
     override var acceptsFirstResponder: Bool { true }
     override var mouseDownCanMoveWindow: Bool { false }
@@ -182,7 +177,6 @@ final class WideColumnView: NSView {
         host.autoresizingMask = [.width, .height]
         addSubview(host)
         host.wantsLayer = true
-        // 会话拖进主区的两边；Cue 那一块不接
         if slot.column != nil { registerForDraggedTypes([.init(DraggedColumn.type.identifier), .init(UTType.cuepadSession.identifier)]) }
     }
 
@@ -212,7 +206,7 @@ final class WideColumnView: NSView {
             }
             if let data = pasteboard.data(forType: .init(UTType.cuepadSession.identifier)) {
                 let value = try JSONDecoder().decode(DraggedSession.self, from: data)
-                workspace.openSession(PiSessionState.recordID(sessionID: value.sessionID), sessionID: value.sessionID, in: column)
+                workspace.openSession(SessionState.recordID(sessionID: value.sessionID), sessionID: value.sessionID, in: column)
                 return true
             }
         } catch { workspace.fail(error) }
@@ -229,7 +223,6 @@ struct WideColumnHost<Content: View>: UIViewControllerRepresentable {
     let focus: WideFocus
     let origin: CGFloat
     let width: CGFloat
-    /// 会话条与 Cue 的宽：它们一变，这一块滑到新位置（`WideColumnSlide`）；只是窗口改宽时不滑。
     let shape: WideMetrics.Shape
     var hidden = false
     @ViewBuilder let content: Content
@@ -252,7 +245,6 @@ struct WideColumnHost<Content: View>: UIViewControllerRepresentable {
     }
 }
 
-/// 排到它时报一声的空层（`WideColumnController.lastLayout`）。
 nonisolated private final class LayoutMark: CALayer {
     var laidOut: (@MainActor () -> Void)?
 
@@ -269,7 +261,6 @@ final class WideColumnController: UIHostingController<AnyView> {
     let drop = WideDropState()
     let focus: WideFocus
     let workspace: Workspace
-    /// 会话条开合、Cue 收起或放回时这一块怎么滑（`WideColumnSlide`）。
     private(set) lazy var slide = WideColumnSlide(slot: slot) { [unowned self] in self.view.isHidden = $0 }
     /// 块的图层最后一个子层：CA 提交时按层树先父后子排版，排到它时这一次提交里块里各处托管的页都已摆到层上，页里各层的补位在这里接上（`WideColumnSlide.laidOut`）。
     /// 在块自己排完时（`viewDidLayoutSubviews`）接的话，SwiftUI 还没把页摆到层上，补的全是 0，居中的、靠右的只跟着整块平移、第一帧先跳到反方向。

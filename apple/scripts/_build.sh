@@ -55,9 +55,10 @@ own_warnings() {
 kit_build() {
   local log status=0
   log="$(mktemp)"
+  echo "原始输出：$log" >&2
   (cd "$APPLE_DIR/CuePadKit" && swift build --quiet) 2>&1 | tee "$log" || status=$?
   own_warnings "$APPLE_DIR/CuePadKit/.build/warnings" <"$log" || true
-  rm -f "$log"
+  [ "$status" != 0 ] || rm -f "$log"
   return $status
 }
 
@@ -78,12 +79,13 @@ no_warnings() {
 xcb() {
   local log status=0
   log="$(mktemp)"
+  echo "原始输出：$log" >&2
   xcodebuild -project "$APPLE_DIR/CuePad.xcodeproj" -scheme CuePad -configuration "$configuration" \
     -destination "$destination" -derivedDataPath "$DERIVED" "$@" \
     "${shared_modules[@]}" "${quiet_diagnostics[@]}" ${build_settings[@]+"${build_settings[@]}"} 2>&1 \
-    | tee "$log" | { grep -v 'failed with exit code 0 but produced no further output' || true; } || status=$?
+    | tee "$log" | { grep --line-buffered -v 'failed with exit code 0 but produced no further output' || true; } || status=$?
   own_warnings "$DERIVED/warnings-$platform" <"$log" || warned=1
-  rm -f "$log"
+  [ "$status" != 0 ] || rm -f "$log"
   return $status
 }
 

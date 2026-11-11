@@ -3,13 +3,13 @@ import CueTestSupport
 import Foundation
 import Testing
 @testable import CuePad
-@testable import CuePi
+@testable import CueBridge
 @testable import CueStore
 
-/// #43：ACK 后由程序核对真实历史；发送端有界等待，不借重投探测。
 @MainActor
+@Suite(.releasesLibraries)
 struct DeliveryConfirmationTests {
-    func session(_ app: TestApp) async throws -> (PiSessionState, FakeExtension, URL) {
+    func session(_ app: TestApp) async throws -> (SessionState, FakeExtension, URL) {
         let id = UUID().uuidString.lowercased()
         let file = app.piPaths.sessionsDirectory.appending(path: "--confirmation--/\(id).jsonl")
         try Self.write([], session: id, cwd: app.directory.path, to: file)
@@ -17,18 +17,17 @@ struct DeliveryConfirmationTests {
         ext.onCommand = { _, _ in ["ok": true] }
         let recorder = try await app.runtimeRecorder(on: TestApp.hostID)
         try await recorder.update(sessionID: id, state: .settled)
-        return (try #require(try await app.services.store.allPiSessionStates().first { $0.sessionID == id }), ext, file)
+        return (try #require(try await app.services.store.allSessionStates().first { $0.sessionID == id }), ext, file)
     }
 
-    func say(_ text: String, to target: PiSessionState, in app: TestApp) async throws -> DeliveryRequest {
+    func say(_ text: String, to target: SessionState, in app: TestApp) async throws -> DeliveryRequest {
         let box = app.services.settings.replyDraftBinding(for: target.id)
         box.wrappedValue = ComposerDraft(text: text)
         await Workspace(services: app.services).speak(to: .session(target, mode: .send), from: box) { $0.stored }.value
         return try #require(try await app.services.store.deliveryRequests().first { $0.content == text })
     }
 
-    /// 会话文件换成只有这几句你的话（`SessionFile`）。
-    nonisolated static func write(_ messages: [PiMessage], session: String, cwd: String, to file: URL) throws {
+    nonisolated static func write(_ messages: [SessionMessage], session: String, cwd: String, to file: URL) throws {
         let log = SessionFile(url: file, sessionID: session, cwd: cwd)
         try log.reset()
         for message in messages { try log.user(message.text, delivery: message.deliveryID) }
@@ -47,12 +46,12 @@ struct DeliveryConfirmationTests {
     func ACK前后真实用户消息都自动确认_不等回答_不闪未确认(beforeACK: Bool) async throws {
         let app = TestApp(), store = app.services.store
         let (target, ext, file) = try await session(app)
-        defer { ext.close(bye: "quit"); app.pi.stop(); app.services.cancelBackgroundWork() }
+        defer { ext.close(bye: "quit"); app.bridge.stop(); app.services.cancelBackgroundWork() }
         if beforeACK {
             let cwd = app.directory.path, session = target.sessionID
             ext.onCommand = { _, command in
                 if command["t"] as? String == "send" {
-                    let message = PiMessage(text: command["text"] as? String ?? "", deliveryID: command["deliveryId"] as? String)
+                    let message = SessionMessage(text: command["text"] as? String ?? "", deliveryID: command["deliveryId"] as? String)
                     do { try Self.write([message], session: session, cwd: cwd, to: file) }
                     catch { return ["ok": false, "error": "failed: \(error)"] }
                 }
@@ -69,7 +68,7 @@ struct DeliveryConfirmationTests {
         }
         let arrived = try await store.outcome(of: request)
         #expect(arrived.status == .known(.succeeded))
-        #expect(try await store.piMessages(of: target.sessionID).map(\.text) == ["只等我这句话落盘"])
+        #expect(try await store.chatMessages(of: target.sessionID).map(\.text) == ["只等我这句话落盘"])
         #expect(ext.messages.count == 1)
         await app.services.executor.beginStop()()
     }
@@ -81,12 +80,12 @@ struct DeliveryConfirmationTests {
         defer { gate.continuation.finish() }
         let (first, extA, _) = try await session(app)
         let (second, extB, fileB) = try await session(app)
-        defer { extA.close(bye: "quit"); extB.close(bye: "quit"); app.pi.stop(); app.services.cancelBackgroundWork() }
+        defer { extA.close(bye: "quit"); extB.close(bye: "quit"); app.bridge.stop(); app.services.cancelBackgroundWork() }
         let cwd = app.directory.path, sessionB = second.sessionID
         extB.onCommand = { _, command in
             if command["t"] as? String == "send" {
                 do {
-                    try Self.write([PiMessage(text: command["text"] as? String ?? "", deliveryID: command["deliveryId"] as? String)], session: sessionB, cwd: cwd, to: fileB)
+                    try Self.write([SessionMessage(text: command["text"] as? String ?? "", deliveryID: command["deliveryId"] as? String)], session: sessionB, cwd: cwd, to: fileB)
                 } catch { return ["ok": false, "error": "failed: \(error)"] }
             }
             return ["ok": true]
@@ -96,7 +95,7 @@ struct DeliveryConfirmationTests {
         try await app.services.executor.start()
         _ = try await settledDispatch(pendingA, in: app)
         let sendingB = Workspace(services: app.services).speak("第二处先完成", to: .session(second, mode: .send))
-        defer { sendingB.cancel() }
+        defer { await sendingB.stop() }
         try await eventually("写下第二处的新意图") { try await store.deliveryRequests().contains { $0.content == "第二处先完成" } }
         let pendingB = try #require(try await store.deliveryRequests().first { $0.content == "第二处先完成" })
         try await eventually("第二处收到话，不等第一处的历史或上传") { extB.messages.count == 1 }
@@ -111,7 +110,7 @@ struct DeliveryConfirmationTests {
         let clock = ManualTiming()
         let mac = TestApp(timing: clock.timing), phone = TestApp(timing: clock.timing, host: "phone")
         let (target, ext, _) = try await session(mac)
-        defer { ext.close(bye: "quit"); mac.pi.stop(); mac.services.cancelBackgroundWork(); phone.services.cancelBackgroundWork() }
+        defer { ext.close(bye: "quit"); mac.bridge.stop(); mac.services.cancelBackgroundWork(); phone.services.cancelBackgroundWork() }
         let request = try await say("不依赖接收端活着", to: target, in: mac)
         try await mac.services.executor.start()
         let confirming = try await settledDispatch(request, in: mac)
@@ -121,8 +120,8 @@ struct DeliveryConfirmationTests {
         phone.services.startSpeechClock()
         let due = try #require(Speech.deadline(confirming))
         await mac.services.executor.beginStop()()
-        mac.pi.stop()
-        await clock.waitForSleeper()
+        mac.bridge.stop()
+        try await clock.waitForSleeper()
         clock.advance(.seconds(due.timeIntervalSince(clock.now) + 1))
         try await eventually("发送端自己的时钟结束等待") { phone.services.speech.now >= due }
         let received = try #require(try await phone.services.store.deliveryRequest(request.id))

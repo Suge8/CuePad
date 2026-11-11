@@ -1,8 +1,6 @@
 #if os(iOS)
 import SwiftUI
 
-/// 墙上的一张灵感。点开用系统缩放过渡放大成纸页；轻扫同所有灵感（`CardMenu.swipes`）；交给过 Agent 时右上角是那个会话的状态点；
-/// 长按是菜单，菜单出来后往外一拖就拖起来：拖到上面任务纸的一行上接进那条任务（`TaskOutline`），拖到纸底"添加任务"上照它新建一条（`newTaskDrop`）。
 struct CardTileView: View {
     /// 会话点（看得见的那颗，不是它 44 的点按格）往卡的右内边里收一截：点离卡右边与标题离左边看着一样。
     private static let dotTuck: CGFloat = 6
@@ -16,7 +14,6 @@ struct CardTileView: View {
     var body: some View {
         let card = entry.card, text = entry.text
         NavigationLink(value: Route.card(card.id)) {
-            // 标题与正文挨着读成一段，日期另起一小段
             VStack(alignment: .leading, spacing: Spacing.tight) {
                 if let image = text.images.first {
                     Thumbnail(hash: image, height: 96, cornerRadius: Radius.block).padding(.bottom, Spacing.tight)
@@ -51,7 +48,6 @@ struct CardTileView: View {
     }
 }
 
-/// "更早"的一组：标题行（按月的组可折叠，折叠时带张数）。
 struct OlderGroupHeader: View {
     let group: OlderGroup
     @Binding var expanded: Set<OlderGroup.Period>
@@ -74,7 +70,6 @@ struct OlderGroupHeader: View {
                 if collapsible && !open { Text("\(group.cards.count) 条").font(Typography.caption).foregroundStyle(palette.ink3) }
             }
             .padding(.horizontal, Spacing.tight)
-            // 能折起的月份要点得到；周标题只是标题，紧贴它下面那组
             .frame(minHeight: collapsible ? 44 : nil)
             .padding(.top, collapsible ? Spacing.tight : Spacing.group).padding(.bottom, collapsible ? 0 : Spacing.tight)
             .contentShape(.rect)
@@ -85,8 +80,6 @@ struct OlderGroupHeader: View {
     }
 }
 
-/// "更早"与置顶的灵感里的一行。每行是懒加载列表里独立的一项：同组的行拼成一张纸（首尾圆角），
-/// 大项目几百张旧卡也只创建屏幕内的行。置顶的（`pinned`）行首一枚图钉，那一组不另起组名。同墙上的卡，能拖进任务或拖成新任务。
 struct OlderRow: View {
     let entry: CardEntry
     let lastTarget: String?
@@ -124,7 +117,6 @@ struct OlderRow: View {
         }
         .buttonStyle(.row)
         .background(palette.paper, in: .rect)
-        // 一组行拼成一张纸：每行按它在组里的位置裁角，也是它的行容器
         .clipShape(shape)
         .rowContainer(shape, flush: true)
         .zoomSource(card.id, in: zoom)

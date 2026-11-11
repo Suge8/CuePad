@@ -1,6 +1,5 @@
 import Foundation
 
-/// 小组件、分享扩展与实时活动打开主 App 的链接：`cuepad://speak`、`cuepad://project/<id>`、`cuepad://card/<id>`、`cuepad://cue`、`cuepad://session/<id>`。
 nonisolated enum DeepLink: Equatable, Sendable {
     static let scheme = "cuepad"
 
@@ -9,7 +8,7 @@ nonisolated enum DeepLink: Equatable, Sendable {
     case project(UUID)
     case card(UUID)
     case cue
-    /// 打开一个会话（会话状态记录的 id，`PiSessionState.id`）：实时活动里会话在问的那件"打开"。
+    /// 打开一个会话（会话状态记录的 id，`SessionState.id`）：实时活动里会话在问的那件"打开"。
     case session(UUID)
     /// 网易 UU 远程绑定完回跳（`MacRemote`）：选好的电脑的加密标识，或失败的错误码；`nonce` 认是哪一次绑定。
     case remoteBound(device: String?, error: String?, nonce: String?)
@@ -70,7 +69,6 @@ nonisolated enum DeepLink: Equatable, Sendable {
 }
 
 nonisolated private extension URL {
-    /// 只接有值的参数。
     func appending(present items: [(String, String?)]) -> URL {
         appending(queryItems: items.compactMap { name, value in value.map { URLQueryItem(name: name, value: $0) } })
     }

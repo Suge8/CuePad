@@ -2,14 +2,7 @@
 import CueStore
 import SwiftUI
 
-/// 主窗口：左栏（会话条，`WideRail`，导航只在这一处）、主区（浏览页、辅助页、一个会话或并排两个，`MainColumn`）、右边一直是 Cue（`CueColumn`）。
-/// 三栏各自的栏头都排在窗口最顶那一排（红绿灯那一排，`Chrome.band`），同一基线；窗口工具栏只留一条空的，给这一排定高、把红绿灯放在它中线上。
-/// 尺寸与自动收起只在 `WideMetrics`。会话条的开合钮钉在红绿灯右边（`SidebarToggle`），会话条藏起时它在主区那一段的最顶一排上，主区栏头左边让出它（`Chrome.headLead`）；
-/// 会话条放不下时开合钮从左缘拉出它的抽屉（`RailDrawer`，开合钮压在抽屉之上、位置不动）。Cue 收起后右上一颗 Cue 钮（`CueButton`），它压在最右那一块的栏头右端，那一块的栏头让出它（`headInset`）。
-/// 收起的 Cue 仍挂着（对话、滚动位置都在），只是藏起。放不下时同一块是窗口右缘的抽屉（`CueDock`，`Workspace.cueDrawer`），点 Cue 钮拉出、盖在主区上，
-/// 开着时右上不再画 Cue 钮；一个窗口只挂这一份 Cue 页，跨过临界宽不重建。
-/// 资料库读不出时整窗只有一张"读不出资料库"的卡（`CatalogGate` 挂在三栏外面，同启动时打不开库、同 iOS 的整窗）：三栏都读它，每栏各放一张就是一屏两三张一样的卡；
-/// 会话条也藏起——点进去的哪一页都读不出，一屏只留重试这一个焦点。
+/// 资料库读不出时整窗只有一张"读不出资料库"的卡（`CatalogGate` 挂在三栏外面）：每栏各放一张就是一屏两三张一样的卡；会话条也藏起，一屏只留重试这一个焦点。
 struct MainWindow: View {
     @State var workspace: Workspace
     @Environment(\.palette) private var palette
@@ -18,7 +11,6 @@ struct MainWindow: View {
 
     var body: some View {
         CatalogGate { columns }
-        // 三栏从窗口上沿起，栏头排进红绿灯那一排（各栏里自己让出这一排）
         .ignoresSafeArea(.container, edges: .top)
         .previewPresenter(Bindable(workspace).preview, reply: nil)
         .background(palette.desk)
@@ -75,7 +67,6 @@ struct MainWindow: View {
 private struct WindowPanels: View {
     @Bindable var workspace: Workspace
     @State private var searchScope = SearchScope.cards
-    /// ⌘K 面板启动后空闲时（`Prewarm` 同一时机）就挂上，之后一直挂着（`keptPanel`）。
     @State private var mountsPalette = false
 
     var body: some View {
@@ -105,7 +96,6 @@ struct EditorLayer: View {
     }
 }
 
-/// 底部输入条：盖着一页（`Workspace.overlay`；灵感的编辑页含淡出途中）时不显示，底栏只有一套，先退后进；⌘K 打开时只是藏起来（不卸下），关掉面板的同一帧就回来。
 /// 只在项目页与归档放：回收站、进展页与会话页不是记灵感的地方（进展页的主操作是新任务、新会话，会话页有回复框），它只会压住列表最后几行。
 struct CaptureSlot: View {
     @Environment(Workspace.self) private var workspace
@@ -127,7 +117,6 @@ struct CaptureSlot: View {
 }
 
 private extension Route {
-    /// 底部输入栏放不放（规则在 `CaptureSlot`）。
     var takesCapture: Bool {
         switch self {
         case .project, .archive: true
@@ -137,15 +126,14 @@ private extension Route {
 }
 
 extension Workspace {
-    /// ⌥⌘N（"文件 › 新会话"）与看板推进中列头的 ＋（`openNewSession`）：弹出新会话的表单（表单只有这一个出处，挂在主窗口上），开在 `project`（nil 是当前项目）。
+    /// 弹出新会话的表单（表单只有这一个出处，挂在主窗口上）。
     func newSession(in project: UUID? = nil) {
         newSessionProject = project
         showsNewSession = true
     }
 }
 
-/// 窗口级快捷键：⌘1–9 切项目。⌘N 记一条灵感、⌥⌘N 新会话、⌘K 搜索、⌘⇧T 进展页、⌃⌘S 会话条开合、⌃⌘I 右栏（Cue）开合与设置（⌘,）在主菜单，Esc 关浮层在 `PanelHost`。
-/// ⌘1–9 的唯一处理者在这里。
+/// ⌘1–9 切项目的唯一处理者；别的快捷键在主菜单，Esc 关浮层在 `PanelHost`。
 private struct WorkspaceShortcuts: View {
     let workspace: Workspace
 

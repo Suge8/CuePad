@@ -4,9 +4,6 @@ import Foundation
 import Testing
 
 extension MCPTests {
-  /// 带选项的"等你"只给收不回的那几类事（`CueAsk`），选项由 CuePad 给：Cue 自拟的确认（"照这个做吗"）发不出去。
-  /// 第二项照实际范围写：任务在项目里是"以后「项目」里推送不用问"，不关联任务时是"以后推送代码都不用问"；
-  /// 选了第二项就把这句原话记成一条他说的重点（不用先问的例外只在记忆里，问完任务挪了项目也照字面那句）。
   @Test func onlyIrreversibleThingsAreAskedAndAlwaysAllowIsRemembered() async throws {
     let sandbox = try Fixture()
     let store = sandbox.store
@@ -32,7 +29,6 @@ extension MCPTests {
       #expect(try await store.endCueQuestion(global.id, .answered(CueAsk.once)) == nil)
       #expect(try await store.cueMemory().lines.map(\.text) == ["以后「演示」里推送代码不用问"])
 
-      // 同一句再选一次用记着的那条，不记第二遍；项目名长到一条记忆放不下的，第二项截短项目名，选了照样记得下
       let again = try await store.createTask("修好注册页", in: demo.id)
       _ = try await server.call("tell", ["text": "要推送吗？", "ask": "push", "doing": "推送注册页的修复", "task": again.id.uuidString])
       let repeated = try #require(try await store.cueMessagesWaitingForYou().last)
@@ -47,7 +43,6 @@ extension MCPTests {
       #expect(try await store.cueLine(kept)?.text == scoped)
       #expect(try await store.cueMemory().lines.count == 2)
 
-      // 提问写出要做的动作，规矩那一类还要写出是哪条规矩；卡片与通知只露这两样
       #expect(try await server.refused("tell", ["text": "要推送吗？", "ask": "merge", "task": task.id.uuidString]).contains("doing"))
       let long = String(repeating: "长", count: CueAsking.phraseLimit + 1)
       #expect(try await server.refused("tell", ["text": "合并吗？", "ask": "merge", "doing": long, "task": task.id.uuidString]).contains("doing"))
@@ -61,7 +56,6 @@ extension MCPTests {
     }
   }
 
-  /// Cue 撤回自己问过、他还没答的一条：从"等你"里消失，不交回给 Cue；同一次可以换个问法再问。他再点那条，报已经结束；撤回过的不能再撤。
   @Test func cueWithdrawsItsQuestion() async throws {
     let sandbox = try Fixture()
     let store = sandbox.store

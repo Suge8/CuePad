@@ -4,6 +4,7 @@ import Testing
 @testable import CuePad
 
 /// fixture 由 main 83d308687 的真实 CueNow / CueActivityState 与 JSONEncoder 生成，非当前编码器反推。
+@Suite(.releasesLibraries)
 struct RuntimeSnapshotUpgradeTests {
     @Test(arguments: [nil, 3] as [Int?])
     func 更新后读旧缓存和已有活动_保留任务与最后进度_无证明不假忙也不结束已有活动(_ agents: Int?) async throws {

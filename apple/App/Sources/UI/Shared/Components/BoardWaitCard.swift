@@ -1,11 +1,6 @@
 import CueStore
 import SwiftUI
 
-/// 等你列的一张卡（`TaskBoard.Held`）：一个在等你的会话，与看板别的卡同一种（`BoardCardLayout`，一个记号加名字）。
-/// - 记号说状态：会话在问你是赭黄问号（`PiStateGlyph(.asking)`），待回复是墨点（`PiStateGlyph(.awaitsReply)`，各处待回复同一个，赭黄只给拍板）。
-/// - 名字同别的列：绑着的任务名，没绑任务的会话名，换列不换名字，折几行同别的卡（`BoardCardMetrics.title`）；看全部项目时前面是项目小图形。
-///   问什么在 Mac 的悬停提示里（项目、问句或"待回复"、等了多久）与点进去看。
-/// 点卡进那个会话。长按（Mac 右键）是这件事的菜单，同别的列：任务的（`CardActions`，第一项"打开任务"），没绑任务的会话同推进中的会话卡（`SessionActions` 的 `board`：完成、置顶、改名当场建任务），也只接拖到已完成。
 struct BoardWaitCard: View {
     let held: TaskBoard.Held
     let project: Project?
@@ -16,8 +11,8 @@ struct BoardWaitCard: View {
     var body: some View {
         BoardLink(to: held.session) {
             #if os(macOS)
-            // 悬停提示里等了多久跟着走：到下一次换字的时刻（`PiClock.Waited`）只重画卡面，挂着菜单的那一层不随时间重建
-            Moments(next: PiClock.Waited(since: held.session.stateSince).discreteInput(after:)) { now in face.help(tip(at: now)) }
+            // 悬停提示里等了多久跟着走：到下一次换字的时刻（`SessionClock.Waited`）只重画卡面，挂着菜单的那一层不随时间重建
+            Moments(next: SessionClock.Waited(since: held.session.stateSince).discreteInput(after:)) { now in face.help(tip(at: now)) }
             #else
             face
             #endif
@@ -30,7 +25,7 @@ struct BoardWaitCard: View {
 
     private var face: some View {
         BoardCardLayout(advancing: false, pulse: leftPulse) {
-            PiStateGlyph(status: held.deciding ? .asking : .awaitsReply).font(.system(size: TaskMetrics.ring))
+            StateGlyph(status: held.deciding ? .asking : .awaitsReply).font(.system(size: TaskMetrics.ring))
                 .frame(width: TaskMetrics.cardLead, height: TaskMetrics.cardLead)
             if let project { BoardProjectGlyph(project: project) }
             if held.item?.task.isPinned == true { BoardPin() }
@@ -42,28 +37,22 @@ struct BoardWaitCard: View {
     @ViewBuilder private var menu: some View {
         OpenSessionBeside(session: held.session)
         if let item = held.item {
-            #if os(macOS)
             CardActions(card: item.task, leaf: item.steps == nil, opens: true, session: held.session)
-            #else
-            CardActions(card: item.task, opens: true, session: held.session)
-            #endif
         } else {
-            SessionActions(session: held.session, board: PiSessionListItem(state: held.session))
+            SessionActions(session: held.session, board: SessionListItem(state: held.session))
         }
     }
 
-    /// 刚从推进中飞来时起飞那一下还带着的那条线（`BoardCardLayout`）：任务的或会话的此刻那条。
     private var leftPulse: BoardPulse {
         guard arrival?.from == .advancing else { return BoardPulse() }
-        return workspace.pulse(of: held.item?.agent ?? PiSessionListItem(state: held.session))
+        return workspace.pulse(of: held.item?.agent ?? SessionListItem(state: held.session))
     }
 
     #if os(macOS)
-    /// 项目、问句（待回复写"待回复"）、等了多久，一行。
     private func tip(at now: Date) -> String {
         Dotted(
             workspace.catalog?.project(held.project)?.shownName, held.deciding ? held.session.asked.line : String(localized: "待回复"),
-            PiClock.Waited(since: held.session.stateSince).format(now)
+            SessionClock.Waited(since: held.session.stateSince).format(now)
         ).visible
     }
     #endif

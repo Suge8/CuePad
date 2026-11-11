@@ -1,8 +1,7 @@
 #if os(macOS)
 import SwiftUI
 
-/// 设置里"自动检查更新"那一行，状态写当前版本；立即检查在菜单"CuePad › 检查更新…"（Mac 上它的标准位置）。
-/// 更新等后台会话做完再装时（`UpdateService`），状态接着写等几个，后面是"现在就装"。
+/// 立即检查在菜单"CuePad › 检查更新…"，不在这一行。
 struct UpdateRow: View {
     @Environment(AppServices.self) private var services
 

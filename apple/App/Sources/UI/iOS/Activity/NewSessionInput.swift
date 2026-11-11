@@ -2,67 +2,19 @@
 import CueStore
 import SwiftUI
 
-/// 新会话：一个浮在键盘上方的输入框，写的就是给 Pi 的第一句话；头部落点胶囊选在哪开（只列项目，默认 Agent 页正筛着的项目，没筛时是最近活跃的；项目绑在几台 Mac 上时写上 Mac 名）。
-/// 工具排与 Mac 的新会话表单、Cue 同一排（`PiConfigControls.init(choice:)`）：Agent 只列那台 Mac 上能用的（`MacAgents`），默认上次选的（`MacAgents.preferred`，选了就记作下次的默认）；
-/// 模型与思考强度默认跟着这家的默认，换了 Agent 或 Mac 回到默认。一家都不能用时输入框上方写那台为什么（`whyNone`）、开不了。
-/// 发送钮就是开始：Mac 开好、带着这次标识的会话同步过来时自动收起并进入它；等待时仍可编辑或关闭；明确失败可安全重试，未知或查不到结果时再开须确认重复风险。
-/// 新会话的目录只由项目绑定的文件夹推出；还没绑的项目也直接开：发给 Cue 运行的那台 Mac（没启用 Cue 时按名字排第一台，`CueStore.workMac`），
-/// 它开工时建好工作区并绑定。
 struct NewSessionInput: View {
-    /// 打开时带的（`Workspace.newSession`）：`project` 是先选中的项目（Agent 页筛着的）。
-    struct Start: Identifiable {
-        let id = UUID()
-        var project: UUID?
-        /// 已经发出的那一次：同一任务重开表单时从库中恢复，接着看进度并确认重复风险。
-        var launched: SessionLaunch?
-        /// 从"发给 Agent"选了新会话：任务的正文与补的话带过来作开场。
-        var draft: ComposerDraft?
-        /// 为哪件任务开的（发给 Agent 时定下）：开好后关联它。
-        var card: UUID?
-        /// 显示的目标名：为任务开的是它的标题（`CueStore.handOffPlan`，与会话名同一条规则）；nil 时以项目名称呼。
-        var name: String?
-        /// 默认由哪台 Mac 开（`CueStore.handOffPlan` 定下的）；nil 是按项目的第一处绑定。
-        var host: String?
-
-        /// 默认在哪开：先选中的项目（有 `host` 时是它在那台 Mac 上的绑定），没有就是第一处。
-        func place(among places: [ProjectFolders.LaunchPlace]) -> ProjectFolders.LaunchPlace? {
-            project.flatMap { project in
-                let own = places.filter { $0.project.id == project }
-                return own.first { host != nil && $0.host == host } ?? own.first
-            } ?? places.first
-        }
-
-        /// 在 `host` 那台 Mac、项目的文件夹（没绑的那台先建工作区）用 `agent`（与 `model`、`thinking`，nil 是默认）开新会话，`draft` 作开场：
-        /// 开好后关联 `card`（会话名按它定，`CueStore.requestLaunch`；没有就是带上的第一张）。`intent` 区分安全替换与确认后另开。
-        func launch(
-            in project: Project, on host: String, draft: ComposerDraft, agent: AgentKind, model: PiModelKey?, thinking: PiThinkingLevel?, fast: Bool = false,
-            intent: SessionLaunchIntent, workspace: Workspace
-        ) async throws -> SessionLaunch {
-            try await workspace.launchSession(
-                in: project.id, prompt: draft.stored.nonEmpty, title: name ?? project.shownName, on: host,
-                card: card ?? draft.attachments.first?.card, agent: agent, model: model, thinking: thinking, fast: fast, intent: intent)
-        }
-    }
-
-    let start: Start
+    let start: SessionStart
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @State private var choice: ProjectFolders.LaunchPlace.ID?
     @State private var draft = ComposerDraft()
-    @State private var launched: SessionLaunch?
-    @State private var progress: LaunchProgress?
-    /// 由哪台 Mac 开（`LaunchPlace.host`）、那台上能用的几家；还没读到为 nil。
     @State private var agents: MacAgents?
-    /// 这次指定的模型与思考强度（nil 是这家的默认）。
-    @State private var model: PiModelKey?
-    @State private var thinking: PiThinkingLevel?
+    @State private var model: ModelKey?
+    @State private var thinking: ThinkingLevel?
     @State private var fast = false
-    @State private var sending = false
-    @State private var confirmingAgain = false
     @FocusState private var focused: Bool
 
-    /// 只列项目，按所有项目选择器的同一个顺序（`ProjectCatalog.projects`，最近活跃的在前）。
     private var places: [ProjectFolders.LaunchPlace] {
         ProjectFolders.launchPlaces(
             projects: workspace.catalog?.projects ?? [], bindings: workspace.catalog?.bindings ?? [], host: nil, workMac: workspace.catalog?.workMac?.hostID)
@@ -71,17 +23,14 @@ struct NewSessionInput: View {
         let places = places
         return places.first { $0.id == choice } ?? start.place(among: places)
     }
-    private var phase: LaunchProgress.Phase { progress?.phase(at: services.speech) ?? .idle }
-    private var submission: LaunchProgress.Submission { progress?.submission(at: services.speech) ?? .safe }
+    private var launching: SessionLaunching { workspace.sessionLaunching(start.launchKey) }
+    private var phase: LaunchProgress.Phase { launching.phase(at: services.speech) }
     private var agent: AgentKind? { agents?.preferred(services.settings.lastAgent) }
     private var brain: AgentModelChoice? {
         guard chosen?.host != nil, let agents, let agent else { return nil }
         return AgentModelChoice(agents: agents.agents, agent: agent, model: model, thinking: thinking, fast: fast)
     }
-    private var canStart: Bool {
-        chosen?.host != nil && agent != nil && !sending
-            && (launched == nil || progress?.launch == launched?.request) && submission != .waiting
-    }
+    private var canStart: Bool { chosen?.host != nil && agent != nil && launching.canSubmit(at: services.speech) }
 
     var body: some View {
         Composer(
@@ -91,30 +40,23 @@ struct NewSessionInput: View {
             header: { header.padding(.horizontal, Spacing.group).padding(.top, Spacing.item) },
             tools: {
                 if let brain {
-                    PiConfigControls(choice: brain) { agent in
+                    ConfigControls(choice: brain) { agent in
                         services.settings.lastAgent = agent
                         model = nil
                     } chooseModel: { model = $0 } chooseThinking: { thinking = $0 } chooseFast: { fast = $0 }
-                    .disabled(sending)
+                    .disabled(launching.sending)
                 }
             },
             send: {
-                Button(action: { launch() }) { SendGlyph(canStart ? .ready : .idle) }
+                Button(action: launch) { SendGlyph(canStart ? .ready : .idle) }
                     .buttonStyle(PressStyle(.button)).disabled(!canStart).accessibilityLabel("开始")
             })
         .composerNotice(status != nil) { if let status { statusLine(status).font(Typography.caption) } }
-        .dialog("再开一个会话？", isPresented: $confirmingAgain, message: "上一次可能已经开了会话，再开可能让 Agent 重复操作。原请求会保留。", buttons: [
-            DialogButton(title: "仍然再开") { launch(confirmedAgain: true) },
-        ])
+        .confirmsLaunchAgain(launching)
         .onAppear {
-            if launched == nil { launched = start.launched }
+            workspace.resume(start, opened: Workspace.entering(start))
             if let seed = start.draft, draft.isEmpty(accepting: [.files, .cards]) { draft = seed }
             focused = true
-        }
-        .observing(services.store, id: launched, into: $progress, onError: workspace.fail) {
-            [launched] store in
-            guard let launched else { return LaunchProgress() }
-            return try launched.progress(from: store)
         }
         .observing(services.store, id: chosen?.host, into: $agents, onError: workspace.fail) {
             [host = chosen?.host] store in
@@ -123,14 +65,8 @@ struct NewSessionInput: View {
         }
         // 换了 Mac：模型清单是另一份，回到默认
         .onChange(of: chosen?.host) { model = nil }
-        .onChange(of: progress?.claimed?.id) { _, session in
-            guard let session else { return }
-            workspace.newSession = nil
-            workspace.openSession(session)
-        }
     }
 
-    /// 头部：落点胶囊；进度或原因叠在输入框上方（`status`）。Agent 与模型在工具排里。
     private var header: some View {
         HStack(spacing: Spacing.item) {
             MenuButton(sections: [ChoiceMenu.Section(choices: places.map { place in
@@ -142,12 +78,11 @@ struct NewSessionInput: View {
                     if let project = chosen?.project { ProjectGlyph(project: project, size: 13) }
                 }
             }
-            .disabled(sending)
+            .disabled(launching.sending)
             Spacer(minLength: 0)
         }
     }
 
-    /// 输入框上方叠着的那一行（`composerNotice`）：发出后的进度，上一次没能打开的原因，或开不了的原因；都没有为 nil。
     private enum Status {
         case noMac, phase(LaunchProgress.Phase), noAgents(MacAgents)
     }
@@ -155,7 +90,7 @@ struct NewSessionInput: View {
     private var status: Status? {
         if chosen != nil, chosen?.host == nil { return .noMac }
         if phase != .idle { return .phase(phase) }
-        // 那台一家都不能用时先说它：同步通了也开不了
+        // 那台一家都不能用：同步通了也开不了，所以要写原因
         if let agents, agents.agents.isEmpty { return .noAgents(agents) }
         return nil
     }
@@ -173,20 +108,8 @@ struct NewSessionInput: View {
         }
     }
 
-    private func launch(confirmedAgain: Bool = false) {
-        guard let place = chosen, let host = place.host, let agent, let brain, canStart else { return }
-        if submission == .confirm, !confirmedAgain { confirmingAgain = true; return }
-        let intent: SessionLaunchIntent = launched.map {
-            confirmedAgain ? .repeatingConfirmed : .replacing($0.request)
-        } ?? .new
-        let claim = workspace.claimImports(draft)
-        sending = true
-        workspace.attempt {
-            defer { sending = false }
-            let draft = await claim.settled()
-            launched = try await start.launch(
-                in: place.project, on: host, draft: draft, agent: agent, model: brain.model, thinking: brain.shownThinking, fast: brain.launchFast, intent: intent, workspace: workspace)
-        }
+    private func launch() {
+        workspace.submitSession(start, in: chosen, draft: draft, choice: brain, opened: Workspace.entering(start))
     }
 }
 #endif

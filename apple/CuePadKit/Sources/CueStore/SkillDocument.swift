@@ -1,7 +1,7 @@
 import Foundation
 
 /// 一份 SKILL.md：开头 `---` 之间的 frontmatter 与之后的正文。读名字与说明、文件页写回（只换 name、description 与正文）都只经这里；
-/// 四家最严的格式判定在 CuePi 的扫描。
+/// 四家最严的格式判定在 CueBridge 的扫描。
 /// - 读：顶层的 `name`、`description` 按 YAML 的标量读（普通、单双引号、`|` `>` 块与跨行的折叠，`SkillDocument+YAML`）；
 ///   块写法末尾的换行不算（名字与说明是一段字，不是文件）。没有收尾 `---` 的不算 frontmatter，整份是正文。
 /// - 写：没改的那一项、其余键、注释、空行与换行符（`\r\n` 的文件写回仍是 `\r\n`）一个字节不动；改了的只换掉那个键占的几行，
@@ -13,17 +13,13 @@ public struct SkillDocument: Equatable, Sendable {
   /// 收尾那条 `---` 之后的正文，不含紧跟着的空行（文件页的正文从第一行字起，不空出一行）；没有 frontmatter 时是全文
   public let body: String
   private let text: String
-  /// frontmatter 在原文里的位置；没有为 nil
   private let header: Header?
 
   enum Key: String { case name, description }
 
   private struct Header: Equatable, Sendable {
-    /// frontmatter 第一行的起点（开头那条 `---` 之后）：新加的键写在这里
     let start: String.Index
-    /// 正文的起点（收尾 `---` 与其后空行之后）
     let bodyStart: String.Index
-    /// 收尾那条 `---` 后面还有换行（没有时正文要先补一个）
     let closed: Bool
     let fields: [Key: Field]
   }
@@ -32,7 +28,6 @@ public struct SkillDocument: Equatable, Sendable {
   private struct Field: Equatable, Sendable {
     /// 换成新的 `键: 值` 的那段：键那行到值的末尾（值写在下一行时只到冒号），行尾的注释不在其中
     let key: Range<String.Index>
-    /// 写在下一行起的值占的几行，连同它前面那个换行：写回时删掉
     let value: Range<String.Index>?
     let quote: Character?
     /// 这个键下面还留着注释行：换成块写法会把它们读进值里

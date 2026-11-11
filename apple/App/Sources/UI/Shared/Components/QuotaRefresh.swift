@@ -2,7 +2,6 @@ import CueStore
 import SwiftUI
 
 extension View {
-    /// 额度在这里出现时自动刷新（`AccountQuotas`）：这一页在前台（手机还要在前台运行）、可问的来源变了、打开明细（`open` 变真）各问一次。
     /// 每处额度只挂一次，挂在额度环或额度钮上（Mac 侧栏那一行、菜单栏面板、手机侧栏的额度钮、宽屏进展页顶栏）；明细不另挂。
     func refreshesQuota(open: Bool) -> some View { modifier(QuotaRefreshOnAppear(open: open)) }
 }
@@ -35,8 +34,7 @@ private struct QuotaRefreshOnAppear: ViewModifier {
     }
 }
 
-/// 明细最底下那一行：最近一次刷新没查到时写原因（那台 Mac 写回的，或这台问不到的），右边是"重试"；重试在查时原因留着、按钮换成在查，
-/// 查到了这一行收起。从没失败过的自动刷新在查时不占地方。重试是手动触发，不受冷却限制（`AccountQuotas.cooldown`）。
+/// 重试是手动触发，不受冷却限制（`AccountQuotas.cooldown`）；从没失败过的自动刷新在查时不占地方。
 struct QuotaRefreshNote: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette

@@ -1,6 +1,5 @@
 import Foundation
 
-/// 排墙所需的卡片事实；由 `Card` 与该项目的最近发送时间得到。
 nonisolated struct CardStamp: Equatable, Sendable {
     var id: UUID
     var modifiedAt: Date
@@ -8,14 +7,11 @@ nonisolated struct CardStamp: Equatable, Sendable {
     var isPinned: Bool
 }
 
-/// 项目页的灵感分区：置顶（`isPinned`，长期参考，一行一条）、工作集卡片墙、更早。
-///
 /// 墙只在打开另一个项目或跨天时重排；同一次打开里，墙上的卡编辑后原地不动（保住"它在左上角"的空间记忆），
 /// 排好之后新建或再次编辑的卡插到墙首，删除的卡离开；没有新编辑却新出现的卡按规则补到墙尾或进更早。
 nonisolated struct WallArrangement: Equatable, Sendable {
     static let recentDays = 14.0
     static let unsentDays = 30.0
-    /// 墙上最多几张（不含置顶的）。
     static let capacity = 14
 
     var project: UUID
@@ -35,7 +31,6 @@ nonisolated struct WallArrangement: Equatable, Sendable {
             older: candidates.map(\.id).filter { !eligibleSet.contains($0) })
     }
 
-    /// 卡片数据变化后的新分区：换项目或跨天时整体重排，否则保持已有位置。
     func refreshed(with cards: [CardStamp], project: UUID, now: Date, calendar: Calendar) -> WallArrangement {
         guard project == self.project, calendar.isDate(now, inSameDayAs: arrangedAt) else {
             return Self.arrange(cards, project: project, now: now)
@@ -70,7 +65,6 @@ nonisolated struct WallArrangement: Equatable, Sendable {
     }
 }
 
-/// "更早"列表的一组：三个月内按周（周首取日历设置），更久按月；只有几条（`fewLimit` 以内）时不分，排成一组。
 nonisolated struct OlderGroup: Equatable, Sendable {
     enum Period: Hashable, Sendable {
         /// 只有几条时的唯一一组：分组的标题会比内容还多。
@@ -93,10 +87,8 @@ nonisolated struct OlderGroup: Equatable, Sendable {
         return only.isMonth
     }
 
-    /// 按月的组（三个月以前）：可折叠，默认收起。
     var isMonth: Bool { if case .month = period { true } else { false } }
 
-    /// 组与组内卡片都是新的在前。
     static func group(_ cards: [CardStamp], now: Date, calendar: Calendar) -> [OlderGroup] {
         let sorted = cards.sorted(by: { $0.modifiedAt > $1.modifiedAt })
         if sorted.count <= fewLimit { return sorted.isEmpty ? [] : [OlderGroup(period: .all, cards: sorted.map(\.id))] }
@@ -113,7 +105,6 @@ nonisolated struct OlderGroup: Equatable, Sendable {
         return mergingSparseMonths(groups, dates: Dictionary(uniqueKeysWithValues: sorted.map { ($0.id, $0.modifiedAt) }), calendar: calendar)
     }
 
-    /// 按周的组按月份归拢；某个月的各周都只有一条时并成 `sparseMonth`。组本来就新的在前、同月相邻。
     /// 月份取这一周里最新那张卡自己的日期（不取周一所在的月：周一落在上个月的那一周里，9/2 的卡属于九月）。
     private static func mergingSparseMonths(_ groups: [OlderGroup], dates: [UUID: Date], calendar: Calendar) -> [OlderGroup] {
         var result: [OlderGroup] = []

@@ -3,10 +3,9 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 在 Mac 上操作（`Workspace+Remote`）：替身记下拉起了哪些链接（只用替身，不真去拉起 UU 远程）。
-/// 第一次连一台 Mac 先去 UU 里选电脑，回跳后记下并直接远控，以后一点即连；没装 UU 时提示去 App Store；
-/// 几台 Mac 时先选一台，之后连上次那台；回跳的 nonce 对不上的不认；远控照官方示例带回跳，UU 回了失败就说原因、标识失效的请用户重新选。
+/// 替身记下拉起了哪些链接（只用替身，不真去拉起 UU 远程）。
 @MainActor
+@Suite(.releasesLibraries)
 struct MacRemoteTests {
     private final class Apps {
         var installed = true
@@ -35,7 +34,6 @@ struct MacRemoteTests {
         #expect(query(authorize, "callback") == "cuepad://uu-bound")
         let nonce = try #require(query(authorize, "nonce"))
 
-        // 回跳先经链接认出来（同系统打开 cuepad://uu-bound?…）；nonce 对不上的不认
         await workspace.remoteBound(device: "enc-x", error: nil, nonce: "other")
         #expect(apps.opened.count == 1)
         let link = try #require(DeepLink(url: URL(string: "cuepad://uu-bound?anonymous_device_id=a%2Bb%2Fc%3D%3D&nonce=\(nonce)")!))
@@ -47,7 +45,6 @@ struct MacRemoteTests {
         await workspace.operate(on: "studio")
         #expect(apps.opened.count == 3 && query(apps.opened.last, "anonymous_device_id") == "a+b/c==")
 
-        // 重新选择：再去 UU 里选一次
         await workspace.rebindMac("studio")
         #expect(apps.opened.last?.path() == "/device/authorize")
     }
@@ -71,7 +68,7 @@ struct MacRemoteTests {
 
         workspace.open(try #require(callback("&status=failure&reason=device_not_found")))
         #expect(app.services.settings.remoteDevices["studio"] == nil)
-        try await #require(workspace.notice?.action).run()
+        try await #require(workspace.notice?.action).run(workspace)
         #expect(apps.opened.last?.path() == "/device/authorize")
     }
 
@@ -85,7 +82,7 @@ struct MacRemoteTests {
         #expect(apps.opened.isEmpty)
         let notice = try #require(workspace.notice)
         #expect(notice.text.parts.joined().contains("UU 远程"))
-        try await #require(notice.action).run()
+        try await #require(notice.action).run(workspace)
         #expect(apps.opened == [MacRemote.appStore])
 
         apps.installed = true

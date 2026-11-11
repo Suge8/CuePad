@@ -1,10 +1,11 @@
 #if os(macOS)
 import CueStore
-@testable import CuePi
+@testable import CueBridge
 import Foundation
 import Testing
 @testable import CuePad
 
+@Suite(.releasesLibraries)
 struct GlobalShortcutTests {
     @Test func 启动时按设置注册_更换成功才落设置_失败回滚() throws {
         let rig = TestApp()
@@ -18,7 +19,6 @@ struct GlobalShortcutTests {
         #expect(defaults.string(forKey: "slot") == "Alt+KeyQ")
         #expect(rig.hotkeys.active == [Shortcut(keyCode: 12, modifiers: .option)])
 
-        // 另一个组合已被占用：抛错，旧的继续生效，设置不变
         let taken = Shortcut(keyCode: 13, modifiers: .option)
         _ = try rig.hotkeys.register(taken) {}
         #expect(throws: HotkeyError.occupied(taken)) { try hotkey.set("Alt+KeyW") }
@@ -27,7 +27,8 @@ struct GlobalShortcutTests {
     }
 }
 
-struct PiHistoryPersistenceTests {
+@Suite(.releasesLibraries)
+struct HistoryPersistenceTests {
     private func sessionFile(in rig: TestApp, lines: [String]) throws -> URL {
         let directory = rig.piPaths.sessionsDirectory.appending(path: "--work-x--")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -39,45 +40,24 @@ struct PiHistoryPersistenceTests {
     private let header = #"{"type":"session","version":3,"id":"sess-1","timestamp":"2026-01-01T00:00:00.000Z","cwd":"/work/x"}"#
     private let firstPrompt = #"{"type":"message","id":"m1","parentId":null,"timestamp":"2026-01-01T00:00:01.000Z","message":{"role":"user","content":"fix the build","timestamp":1}}"#
 
-    /// 续读从检查点接着读（读多少由 CuePiTests 的 HistoryTests 证明）：这里只管检查点落进本机会话表、重启后按文件路径取得回来。
-    @Test func 索引结果与检查点写入本机会话表_重启后按文件取得回检查点() async throws {
-        let rig = TestApp()
-        let file = try sessionFile(in: rig, lines: [header, firstPrompt])
-        let events = AsyncStream<PiHistoryEvent> { continuation in
-            continuation.yield(.updated(try! PiHistory.index(file: file, agent: .pi, from: nil, files: rig.services.store.files)))
-            continuation.yield(.backfillFinished(sessionFiles: [file]))
-            continuation.finish()
-        }
-
-        await rig.services.consumePiHistory(events, agent: .pi)
-
-        let rows = try await rig.services.store.piSessions()
-        #expect(rows.map(\.id) == ["sess-1"])
-        #expect(rows[0].cwd == "/work/x")
-        #expect(rows[0].path == file.path)
-        #expect(rows[0].title == "fix the build")
-        #expect(try await rig.relaunch().historyStore.start(for: file)?.checkpoint != nil)
-    }
-
-    /// 历史与 Pi 自己的会话列表一致：回填没看到的文件（已删除，或子代理会话这类不在会话列表里的）不再留在历史里。
     @Test func 回填完成后_不在会话列表里的旧行被删除() async throws {
         let rig = TestApp()
         let file = try sessionFile(in: rig, lines: [header, firstPrompt])
-        try await rig.services.store.upsertPiSession(IndexedSession(
+        try await rig.services.store.upsertSession(IndexedSession(
             id: "worker-1", path: "/gone/--work-x--/subagents/w.jsonl", cwd: "/work/x", title: "子任务", lastActivityAt: .now), host: TestApp.hostID)
-        let events = AsyncStream<PiHistoryEvent> { continuation in
-            continuation.yield(.updated(try! PiHistory.index(file: file, agent: .pi, from: nil, files: rig.services.store.files)))
+        let events = AsyncStream<HistoryEvent> { continuation in
+            continuation.yield(.updated(try! History.index(file: file, agent: .pi, from: nil, files: rig.services.store.files)))
             continuation.yield(.backfillFinished(sessionFiles: [file]))
             continuation.finish()
         }
 
-        await rig.services.consumePiHistory(events, agent: .pi)
+        await rig.services.consumeHistory(events, agent: .pi)
 
-        #expect(try await rig.services.store.piSessions().map(\.id) == ["sess-1"])
+        #expect(try await rig.services.store.indexedSessions().map(\.id) == ["sess-1"])
     }
 }
 
-/// 设置里各家接入后的那一行是同一种写法：已接入 · 名字与版本（各家 `--version` 的原话各不相同）；写在哪、何时生效在悬停提示里。
+@Suite(.releasesLibraries)
 struct AgentLineTests {
     @Test func 各家接入后都写已接入与版本() async throws {
         let rig = TestApp()
@@ -98,27 +78,8 @@ struct AgentLineTests {
     }
 }
 
+@Suite(.releasesLibraries)
 struct AgentUpgradeTests {
-    /// 装过的不再询问：App 更新后启动检查就把旧版的扩展静默升级到随包版本，缺的技能一起补上（几家共读的那一份）。
-    /// 旧版是单文件扩展（v37 及更早）：装上目录，没有 Pi 会话开着旧扩展就删掉旧文件，扩展目录里只剩一份。
-    @Test func 已装旧版扩展时启动检查静默升级到随包版本() async throws {
-        let rig = TestApp()
-        try TestScript.install("#!/bin/sh\necho \(AgentKind.pi.facts.minimumVersion!.description)\n", at: rig.directory.appending(path: "bin/pi"))
-        let legacy = rig.piPaths.extensionsDirectory.appending(path: "cuepad-bridge.ts")
-        try FileManager.default.createDirectory(at: rig.piPaths.extensionsDirectory, withIntermediateDirectories: true)
-        try "\(PiExtensionBundle.ownershipMarker)\nconst EXTENSION_VERSION = 37;\n".write(to: legacy, atomically: true, encoding: .utf8)
-
-        try await rig.services.agents.refresh()
-
-        #expect(rig.services.agents.status(.pi)?.files == .current)
-        let entry = rig.piPaths.extensionsDirectory.appending(path: "cuepad-bridge/index.ts")
-        #expect(try String(contentsOf: entry, encoding: .utf8) == PiExtensionBundle.entry)
-        #expect(!FileManager.default.fileExists(atPath: legacy.path))
-        let skill = try String(contentsOf: rig.directory.appending(path: "agents/skills/cuepad/SKILL.md"), encoding: .utf8)
-        #expect(AgentSkill.kinds(in: skill) == [.pi])
-    }
-
-    /// 没装过的不碰：检测完什么都不写，等用户自己接入。
     @Test func 没接入过的Agent启动检查不写任何文件() async throws {
         let rig = TestApp()
         try FileManager.default.createDirectory(at: rig.directory.appending(path: "claude"), withIntermediateDirectories: true)
@@ -128,12 +89,103 @@ struct AgentUpgradeTests {
         #expect(rig.services.agents.status(.claudeCode) == AgentStatus(presence: .found(nil), files: .missing))
         #expect(FileManager.default.subpaths(atPath: rig.directory.appending(path: "claude").path) == [])
     }
+
+    /// 旧版接入时往两家配置里写过钩子，装时把它建了哪些结构记在技能目录里（`HookFile.Footprint`）；这里照它写下的原样摆好。
+    @Test func 启动时删掉旧版写进ClaudeCode与Codex的钩子_用户自己的条目一字不动() async throws {
+        let rig = TestApp()
+        let old = "/Applications/CuePad.app/Contents/Helpers/cuepad"
+        let claude = rig.directory.appending(path: "claude/settings.json"), codex = rig.directory.appending(path: "codex/hooks.json")
+        let footprints = rig.directory.appending(path: "agents/skills/cuepad")
+        let mine = """
+            {
+              "theme": "dark",
+              "hooks": {
+                "Stop": [ { "hooks": [ { "type": "command", "command": "true" } ] } ]
+              }
+            }
+
+            """
+        let ours = #"{"hooks":[{"command":"\#(old) hook claude","timeout":10,"type":"command"}]}"#
+        let written = mine.replacingOccurrences(of: "} ] } ]", with: "} ] },\(ours) ],\"SessionStart\":[\(ours)]")
+        for (file, text) in [
+            (claude, written), (footprints.appending(path: "claude-hooks.json"), #"{"file":true,"hooksObject":false,"events":["SessionStart"]}"#),
+            (codex, #"{"hooks":{"Stop":[{"hooks":[{"command":"\#(old) hook codex","timeout":10,"type":"command"}]}]}}"#),
+            (footprints.appending(path: "codex-hooks.json"), #"{"file":false,"hooksObject":true,"events":["Stop"]}"#),
+        ] {
+            try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try text.write(to: file, atomically: true, encoding: .utf8)
+        }
+
+        try await rig.services.agents.refresh()
+
+        #expect(try String(contentsOf: claude, encoding: .utf8) == mine)
+        #expect(!FileManager.default.fileExists(atPath: codex.path))
+        #expect(!FileManager.default.fileExists(atPath: footprints.path), "装时的记录随之删掉，CuePad 的技能目录空了也删掉")
+    }
+
+    private static let old = "/Applications/CuePad.app/Contents/Helpers/cuepad"
+
+    private func place(_ files: [(URL, String)]) throws {
+        for (file, text) in files {
+            try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try text.write(to: file, atomically: true, encoding: .utf8)
+        }
+    }
+
+    @Test func 用户往旧版建的钩子组里加了自己的命令_只删CuePad那条() async throws {
+        let rig = TestApp()
+        let claude = rig.directory.appending(path: "claude/settings.json")
+        try place([
+            (claude, #"{"hooks":{"Stop":[{"hooks":[{"command":"\#(Self.old) hook claude","timeout":10,"type":"command"},{"type":"command","command":"my-own"}]}]}}"#),
+            (rig.directory.appending(path: "agents/skills/cuepad/claude-hooks.json"), #"{"file":true,"hooksObject":true,"events":["Stop"]}"#),
+        ])
+
+        try await rig.services.agents.refresh()
+
+        #expect(try String(contentsOf: claude, encoding: .utf8) == #"{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"my-own"}]}]}}"#)
+    }
+
+    @Test func 设置文件一时读不了_报出来记录留着_能读了再删() async throws {
+        let rig = TestApp()
+        let claude = rig.directory.appending(path: "claude/settings.json"), footprint = rig.directory.appending(path: "agents/skills/cuepad/claude-hooks.json")
+        try place([
+            (claude, #"{"theme":"dark","hooks":{"Stop":[{"hooks":[{"command":"\#(Self.old) hook claude","timeout":10,"type":"command"}]}]}}"#),
+            (footprint, #"{"file":true,"hooksObject":true,"events":["Stop"]}"#),
+        ])
+        try FileManager.default.setAttributes([.posixPermissions: 0], ofItemAtPath: claude.path)
+
+        await #expect(throws: (any Error).self) { try await rig.services.agents.refresh() }
+        #expect(FileManager.default.fileExists(atPath: footprint.path))
+
+        try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: claude.path)
+        try await rig.services.agents.refresh()
+        #expect(try String(contentsOf: claude, encoding: .utf8) == #"{"theme":"dark"}"#)
+    }
+
+    /// 信任的键按 `hooks.json` 的真实路径算（`/var` 是 `/private/var`）。没有 codex 删不了信任：不报错、什么都不动，等它回来。
+    @Test func Codex的配置一时读不了_报出来钩子留着_没有codex时不动也不报() async throws {
+        let rig = TestApp()
+        let hooks = rig.directory.appending(path: "codex/hooks.json"), config = rig.directory.appending(path: "codex/config.toml")
+        let footprint = rig.directory.appending(path: "agents/skills/cuepad/codex-hooks.json")
+        try place([
+            (hooks, #"{"hooks":{"Stop":[{"hooks":[{"command":"\#(Self.old) hook codex","timeout":10,"type":"command"}]}]}}"#),
+            (footprint, #"{"file":false,"hooksObject":true,"events":["Stop"]}"#),
+        ])
+        let real = try #require(realpath(hooks.path, nil).map { String(cString: $0) })
+        try place([(config, "[hooks.state.\"\(real):stop:0:0\"]\ntrusted_hash = \"sha256:00\"\n")])
+        try FileManager.default.setAttributes([.posixPermissions: 0], ofItemAtPath: config.path)
+
+        await #expect(throws: (any Error).self) { try await rig.services.agents.refresh() }
+        #expect(FileManager.default.fileExists(atPath: hooks.path) && FileManager.default.fileExists(atPath: footprint.path))
+
+        try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: config.path)
+        try await rig.services.agents.refresh()
+        #expect(FileManager.default.fileExists(atPath: hooks.path) && FileManager.default.fileExists(atPath: footprint.path))
+    }
 }
 
-/// "接入"管终端里的会话与历史：整个会话目录只为接入了的 Agent 回填，关掉时删掉这家的本地索引，同步出去的会话记录不动。
-/// CuePad 托管过的会话不论接入都读得到对话。
+@Suite(.releasesLibraries)
 struct AgentIndexingTests {
-    /// 在 Claude Code 的配置目录里放一个做完一轮的会话文件。
     private func claudeSession(in rig: TestApp, id: String) throws {
         let project = rig.directory.appending(path: "claude/projects/-work-x")
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
@@ -153,38 +205,34 @@ struct AgentIndexingTests {
         try claudeSession(in: rig, id: hosted)
         try claudeSession(in: rig, id: terminal)
         let services: AppServices = rig.services, store = services.store
-        try await services.piStateRecorder.update(sessionID: hosted, state: .settled, launchToken: "launch-1", hosted: true, agent: .claudeCode)
-        try await services.piStateRecorder.end(sessionID: hosted)
+        try await services.stateRecorder.update(sessionID: hosted, state: .settled, launchToken: "launch-1", hosted: true, agent: .claudeCode)
+        try await services.stateRecorder.end(sessionID: hosted)
         services.start()
         defer { services.cancelBackgroundWork() }
         func indexed(_ ids: Set<String>) async throws {
-            _ = try await eventually(store, { Set(try $0.piSessions().filter { $0.agent == .claudeCode }.map(\.id)) }) { $0 == ids }
+            _ = try await eventually(store, { Set(try $0.indexedSessions().filter { $0.agent == .claudeCode }.map(\.id)) }) { $0 == ids }
         }
 
-        let said = try await eventually(store, { try $0.piMessages(of: hosted).map(\.text) }) { !$0.isEmpty }
+        let said = try await eventually(store, { try $0.chatMessages(of: hosted).map(\.text) }) { !$0.isEmpty }
         #expect(said == ["修一下登录", "修好了"])
         #expect(services.agents.status(.claudeCode)?.isConnected == false)
-        #expect(try await Set(store.piSessions().filter { $0.agent == .claudeCode }.map(\.id)) == [hosted])
+        #expect(try await Set(store.indexedSessions().filter { $0.agent == .claudeCode }.map(\.id)) == [hosted])
 
         try await rig.connect(.claudeCode)
         try await indexed([hosted, terminal])
-        #expect(try await store.allPiSessionStates().contains { $0.sessionID == terminal })
+        #expect(try await store.allSessionStates().contains { $0.sessionID == terminal })
 
         try await services.agents.uninstall(.claudeCode)
         try await indexed([hosted])
-        #expect(try await store.allPiSessionStates().contains { $0.sessionID == terminal }, "同步出去的会话记录不动")
+        #expect(try await store.allSessionStates().contains { $0.sessionID == terminal }, "同步出去的会话记录不动")
 
-        // 再接入：从头回填回来
         try await services.agents.install(.claudeCode)
         try await indexed([hosted, terminal])
     }
 }
 
-/// 启用只是"换到这台运行、记下启用时刻"：你选的 Agent、模型、强度原样不动；选的 Agent 这台用不了（启用时重新问出的这台 Mac 上能用的
-/// Agent 里没有它）才换成第一家能用的，模型属于原来那家，一并清掉，强度留着（交给运行时取档）。
-/// 一家都不能用时报出各家为什么。
+@Suite(.releasesLibraries)
 struct CueEnableTests {
-    /// 起一个对过 iCloud 的 App（启用的前提）。
     private func launch() async throws -> TestApp {
         let app = TestApp()
         app.services.startSync()

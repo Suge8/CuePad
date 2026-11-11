@@ -21,7 +21,6 @@ public final class JumpTiming: Sendable {
       sleepUntil: { try await self.sleep(until: $0) })
   }
 
-  /// 往前跳 `duration`：睡到这之前的马上醒。
   public func jump(by duration: Duration) {
     let woken = state.withLock { state in
       state.skipped += duration.seconds
@@ -31,7 +30,6 @@ public final class JumpTiming: Sendable {
     for waiter in woken { waiter.resume() }
   }
 
-  /// 照真钟睡剩下的时长，其间跳过就按跳后的此刻重算。
   private func sleep(until deadline: Date) async throws {
     while true {
       try Task.checkCancellation()

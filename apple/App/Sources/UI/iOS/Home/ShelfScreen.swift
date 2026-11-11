@@ -1,177 +1,30 @@
 #if os(iOS)
-import CueStore
 import SwiftUI
 
-/// 书架（项目｜进展的"项目"段，没打开具体项目时的落点）：窄屏在根上的侧栏里，宽屏在主区。右上"新建项目"。
-/// 只排项目（在发生什么在进展页）：置顶项目是纸卡（`pinnedGrid`：图标、名字、介绍），其余排成一张纸上的行（只有图标与名字）。
-/// 窄屏末尾一组归档、回收站、设置（同步到不了 Mac 时设置那一行带点，`AppServices.macAlert`），点了推入；宽屏不放这一组。
 struct ShelfScreen: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.horizontalSizeClass) private var sizeClass
-    @Environment(\.dynamicTypeSize) private var typeSize
-
-    private var narrow: Bool { sizeClass == .compact }
 
     var body: some View {
         ScrollView {
-            if let catalog = workspace.catalog { content(catalog) }
+            if let catalog = workspace.catalog {
+                ProjectList(projects: catalog.projects, placesAtEnd: sizeClass == .compact) {
+                    ChipFlow(spacing: Spacing.part) {
+                        ProjectListPlace(title: "归档", icon: .archive, route: .archive)
+                        ProjectListPlace(title: "回收站", icon: .trash, route: .trash)
+                        if sizeClass == .compact {
+                            ProjectListPlace(title: "设置", icon: .settings, route: .settings, alert: services.macAlert)
+                        }
+                    }
+                }
+            }
         }
         .refreshable { await services.syncNow() }
         .floatingHeader("项目") { NewProjectButton() }
     }
-
-    private func content(_ catalog: ProjectCatalog) -> some View {
-        let pinned = catalog.projects.filter(\.isPinned)
-        let rest = catalog.projects.filter { !$0.isPinned }
-        let wide = !narrow && !typeSize.isAccessibilitySize
-        return LazyVStack(alignment: .leading, spacing: Self.sectionGap) {
-            if !pinned.isEmpty {
-                // 置顶卡平分整行：iPhone 至多两列，宽屏至多四列，不留一排窄卡靠左
-                pinnedGrid(pinned, columns: typeSize.isAccessibilitySize ? 1 : min(pinned.count, wide ? 4 : 2))
-            }
-            if !rest.isEmpty {
-                VStack(spacing: 0) {
-                    ForEach(rest) { ShelfRow(project: $0) }
-                }
-                .padding(.vertical, Self.paperInset)
-                .rowPaper(cornerRadius: Radius.sheet)
-            }
-            if narrow { ShelfFooter() }
-        }
-        .padding(.horizontal, Spacing.page)
-        .padding(.bottom, Spacing.section)
-        .animation(Motion.nudge, value: catalog.projects.map(\.id))
-        // 宽屏不把一行项目拉满整屏
-        .frame(maxWidth: Self.readableWidth)
-        .frame(maxWidth: .infinity)
-    }
-
-    private static let readableWidth: CGFloat = 1080
-    private static let sectionGap: CGFloat = 20
-    /// 纸的上下沿比行间多留的白。
-    static let paperInset: CGFloat = 6
-
-    /// 置顶卡按行排：每行 `columns` 张平分整行，最后一行不满时那几张也平分整行，不留空格；最后一行只剩一张时它占满整行、
-    /// 横着排成矮的一条（`wide`）——不让单出来的那张（常是最不活跃、甚至空的项目）成为首屏最大的一块。
-    /// 一行里的卡同高。置顶的不多，不用懒加载。
-    private func pinnedGrid(_ pinned: [Project], columns: Int) -> some View {
-        VStack(spacing: Spacing.group) {
-            ForEach(Array(stride(from: 0, to: pinned.count, by: columns)), id: \.self) { start in
-                let row = pinned[start..<min(start + columns, pinned.count)]
-                HStack(spacing: Spacing.group) {
-                    ForEach(row) { PinnedShelfCard(project: $0, wide: row.count == 1 && columns > 1) }
-                }
-                .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-    }
 }
 
-/// 置顶项目的纸卡：项目色从上沿淡下来的一层底、图标、名字、介绍。`wide`：一行里单出来的那张占满整行，横着排成矮的一条，图标在左。
-private struct PinnedShelfCard: View {
-    let project: Project
-    var wide = false
-    @Environment(\.palette) private var palette
-    @ScaledMetric(relativeTo: .title3) private var glyph: CGFloat = 22
-
-    var body: some View {
-        let wash = palette.projectWash(project.color)
-        NavigationLink(value: Route.project(project.id)) {
-            Group {
-                if wide {
-                    HStack(spacing: Spacing.group) {
-                        ProjectGlyph(project: project, size: glyph)
-                        VStack(alignment: .leading, spacing: Spacing.tight) { lines }
-                        Spacer(minLength: 0)
-                    }
-                } else {
-                    VStack(alignment: .leading, spacing: Spacing.tight) {
-                        ProjectGlyph(project: project, size: glyph).padding(.bottom, Spacing.item)
-                        lines
-                        Spacer(minLength: 0)
-                    }
-                }
-            }
-            .padding(Spacing.block)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            // 渐变只铺在填充上（不用渐变描边，见 docs/ui.md「渲染性能约束」）
-            .background(
-                LinearGradient(colors: [wash, wash.opacity(0)], startPoint: wide ? .leading : .top, endPoint: .center),
-                in: .rect(cornerRadius: Radius.sheet))
-            .paper(cornerRadius: Radius.sheet)
-        }
-        .buttonStyle(PressStyle(.card))
-        .projectActions(project, cornerRadius: Radius.sheet)
-        .accessibilityElement(children: .combine)
-    }
-
-    /// 没写介绍也占着介绍那一行：置顶卡一样高，单出来的一张、一整行都没介绍的不比别的行矮。
-    @ViewBuilder private var lines: some View {
-        let intro = project.intro?.nonEmpty
-        Text(project.shownName).font(Typography.title.weight(.bold)).foregroundStyle(palette.ink).lineLimit(1)
-        Text(intro ?? " ").font(Typography.meta).foregroundStyle(palette.ink2).lineLimit(1)
-            .accessibilityHidden(intro == nil) // 合并：卡片合并成一个元素，直接写就藏得住；readerHidden 的容器会把介绍挡在合并外
-    }
-}
-
-/// 项目的一行，长相同侧栏的项目行：图标与名字（条数、状态与"此刻"都不写：在发生什么在进展页）。辅助字号下名字可换行。
-private struct ShelfRow: View {
-    let project: Project
-    @Environment(\.palette) private var palette
-    @Environment(\.dynamicTypeSize) private var typeSize
-    @ScaledMetric(relativeTo: .body) private var glyph: CGFloat = 17
-
-    var body: some View {
-        NavigationLink(value: Route.project(project.id)) {
-            Label {
-                Text(project.shownName).font(Typography.body.weight(.medium)).foregroundStyle(palette.ink).lineLimit(typeSize.isAccessibilitySize ? 3 : 1)
-            } icon: {
-                ProjectGlyph(project: project, size: glyph)
-            }
-            .padding(.horizontal, Spacing.inset).frame(maxWidth: .infinity, minHeight: RowMetrics.height, alignment: .leading)
-            .contentShape(.rect)
-        }
-        .buttonStyle(.row)
-        .projectActions(project, cornerRadius: Radius.sheet)
-        .accessibilityElement(children: .combine)
-    }
-}
-
-/// 项目段末尾那一组：归档、回收站、设置，点了推入。
-private struct ShelfFooter: View {
-    @Environment(AppServices.self) private var services
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        VStack(spacing: 0) {
-            ShelfLine(route: .archive, icon: .archive, title: String(localized: "归档"))
-            ShelfLine(route: .trash, icon: .trash, title: String(localized: "回收站"))
-            ShelfLine(route: .settings, icon: .settings, title: String(localized: "设置"), alert: services.macAlert)
-        }
-        .padding(.vertical, ShelfScreen.paperInset)
-        .rowPaper(cornerRadius: Radius.sheet)
-    }
-}
-
-/// 末尾那一组的一行（`LinkRow`）：图标、名字，行尾是同步到不了 Mac 的点（只有设置）与箭头，点进一页。
-private struct ShelfLine: View {
-    let route: Route
-    let icon: Icon
-    let title: String
-    var alert: SyncSummary?
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        NavigationLink(value: route) {
-            LinkRow(title: Text(title), alert: alert.map { palette.color($0.tone) }) { IconImage(icon) }
-        }
-        .buttonStyle(.row)
-        .accessibilityValue(alert?.title ?? "")
-    }
-}
-
-/// "新建项目"：iPad 宽屏在书架页顶右边（窄屏是侧栏那一排左边第二颗，`NarrowSidebarBar`）。
 private struct NewProjectButton: View {
     @Environment(Workspace.self) private var workspace
 

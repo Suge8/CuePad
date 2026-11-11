@@ -3,7 +3,6 @@ import Synchronization
 import Testing
 @testable import CueSync
 
-/// "有理由等就拉"：按档位隔着拉，节奏变了先立即拉一次，档位走完或不再等即停。
 @Suite
 struct SyncPollerTests {
   let time = ManualTiming()
@@ -54,7 +53,7 @@ struct SyncPollerTests {
     await asks.next()
     condition.input.yield(every5)  // 开始在等：开始时的那一拉由 App 的立即同步拉，这里等第一个间隔
     for _ in 0..<3 {
-      await time.waitForSleeper()
+      try await time.waitForSleeper()
       time.advance(.seconds(5))
       await fetched.next()
     }
@@ -78,7 +77,7 @@ struct SyncPollerTests {
 
     await asks.next()
     condition.input.yield(slow)
-    await time.waitForSleeper()  // 睡在 10 秒的间隔里
+    try await time.waitForSleeper()  // 睡在 10 秒的间隔里
 
     await asks.next()
     condition.input.yield(SyncPoller.Cadence(every: .seconds(2)))  // 来了要等的东西：不等睡醒，马上拉

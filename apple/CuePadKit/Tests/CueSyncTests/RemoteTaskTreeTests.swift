@@ -6,9 +6,6 @@ import Testing
 @testable import CueSync
 
 /// 远端变更下的任务层级不变量：两台设备离线并发地挪任务，合并后可能出现环、任务超过两级、子任务与父任务不在同一项目。
-/// 应用远端变更后按确定的规则收敛（各设备算出同一结果），修正写回并推送：
-/// 环里 id 最小的那条回到顶层；第三级的任务提到第二级（挂到上级的上级下）；子任务下的提示词改挂到顶层任务；子任务跟随父任务的项目。
-/// 父任务还没到（乱序）的不动。
 @Suite struct RemoteTaskTreeTests {
   let rig = try! Rig()
   var store: CueStore { rig.store }
@@ -50,8 +47,6 @@ import Testing
     }
   }
 
-  /// 随机造一片合规的层级，再像远端批量应用那样改几张卡（改上级——含挂到自己、后代、灵感下——、项目、是不是任务，或删掉），
-  /// 应用后用户读到的层级必须满足规则：上级是任务、与下级同项目、不成环、任务最多两级。
   @Test
   func 随机的远端批量改动之后_层级总是合规() async throws {
     var random = Random(state: 20_261_011)
@@ -146,7 +141,6 @@ import Testing
       fields["piSessionID"] = session.map { .text($0) } ?? .null
       return remoteRecord(.cards, id: card.id, fields)
     }
-    // 另一台设备给"上线"加了两个子任务（备份已完成）
     let changes = [record(first, parent: top.id, sortKey: "a", done: true), record(second, parent: top.id, sortKey: "b")]
     try await rig.coordinator.pulled(changes, [])
 

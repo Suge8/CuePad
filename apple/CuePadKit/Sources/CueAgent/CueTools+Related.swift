@@ -3,10 +3,9 @@ import Foundation
 import NaturalLanguage
 
 extension CueTools {
-  /// 他交出去的几句里的短问句（`question(in:)`），各按它的词在你管过的会话回复里查（同 memory recall 会话回复那一类的排法与截段），
-  /// 随信封或插给在跑那一轮的话带上（`CueEnvelope.related`）。先给每句它查到的第一条，再按句子先后补满：一句查到的几条不占满别的问句的名额。
-  /// 合起来至多 `relatedLimit` 条，问句更多时每句一条、至多 `relatedCap` 条。一句一句判、一句一句查：几句拼在一起，长交代把整段撑过 `questionLimit`，
-  /// 里面的问句就查不到。
+  /// 他交出去的几句里的短问句（`question(in:)`），各按它的词在你管过的会话回复里查（排法与截段同 memory recall），随信封或插给在跑那一轮的话带上（`CueEnvelope.related`）。
+  /// 先给每句它查到的第一条，再按句子先后补满：一句查到的几条不占满别的问句的名额。合起来至多 `relatedLimit` 条，问句更多时每句一条、至多 `relatedCap` 条。
+  /// 一句一句判、一句一句查：几句拼在一起，长交代把整段撑过 `questionLimit`，里面的问句就查不到。
   public func related(to said: [String]) async throws -> [String] {
     var found: [[String]] = []
     for question in said.compactMap(Self.question(in:)) {
@@ -34,7 +33,6 @@ extension CueTools {
     return asks(last) ? last : nil
   }
 
-  /// 算短问句的上限（字）
   static let questionLimit = 120
   /// 带上的会话回复一般至多几条（每句问句也至多查这么多条）
   static let relatedLimit = 2

@@ -5,9 +5,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// Rig 驱动这台 Mac 上的会话：开工、歇下、答完。
 extension CueHostTests.Rig {
-    /// 请 Cue 建任务并开工，会话开出来后绑上叶子、改成这个标题（标题进信封，假模型按它演），然后让会话做完一轮歇下；
     /// 会话要等开工这一轮做完才歇下：同一刻歇下的，状态记进库时可能已落在这一轮前移的基线之前，Cue 就看不到这处变化。
     /// 等的是开工结果之后那句回复、且 Cue 空闲：只等"办好了"会撞上更早一轮的同一句。
     func settleTask(titled title: String) async throws {
@@ -15,9 +13,9 @@ extension CueHostTests.Rig {
         try await eventually("开工这一轮做完") { try await self.store.cueState()?.state == .known(.settled) && self.model.answered("开新会话") }
         try await eventually("执行器开出会话") { !self.app.host.extensions.isEmpty }
         let session = try #require(app.host.extensions.values.first)
-        // 假扩展不报会话名，标题取历史索引读会话文件得到的第一句（`recordPiState`）：索引读过（有了检查点）再报状态，几轮的标题才一样。
-        // 不认索引里有没有这个会话：投送确认会先按桥上的名字记下它、检查点空着（`seedPiSession`）
-        try await eventually("Mac 读过会话文件") { try await self.store.piCheckpoint(of: session.sessionID) != nil }
+        // 假扩展不报会话名，标题取历史索引读会话文件得到的第一句：索引读过（有了检查点）再报状态，几轮的标题才一样。
+        // 不认索引里有没有这个会话：投送确认会先按桥上的名字记下它、检查点空着（`seedSession`）
+        try await eventually("Mac 读过会话文件") { try await self.store.checkpoint(of: session.sessionID) != nil }
         let task = try #require(try await store.cueBoard().tasks.first?.task)
         // 认领：真实扩展在 hello 里带开会话的标识，假扩展不带，这里直接把叶子绑上它
         try await store.linkCard(task.id, toSession: session.sessionID)
@@ -34,7 +32,7 @@ extension CueHostTests.Rig {
     func answered(_ sessionID: String, reply: String = "好了") async throws {
         try await eventually("歇下写进库") { try await self.store.sessions(matching: sessionID).first?.state == .known(.settled) }
         guard let file = app.host.sessionFiles[sessionID] else {
-            return try await store.writePiTranscript(PiTranscript(sessionID: sessionID, messages: [], recap: PiRecap(lastPrompt: "接着做", lastReply: reply, answeredAt: .now)))
+            return try await store.writeTranscript(SessionTranscript(sessionID: sessionID, messages: [], recap: Recap(lastPrompt: "接着做", lastReply: reply, answeredAt: .now)))
         }
         try file.reply(reply)
     }

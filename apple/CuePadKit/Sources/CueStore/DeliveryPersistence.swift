@@ -7,7 +7,7 @@ extension CueStore {
     try write {
       try db.run("""
         UPDATE deliveryRequests SET serverAt = createdAt
-        WHERE hostID = ? AND serverAt IS NULL AND status IN ('pending', 'preparing') AND handledBy IS NULL
+        WHERE hostID = ? AND serverAt IS NULL AND status IN (\(DeliveryStatus.waitingSQL)) AND handledBy IS NULL
         """, [host])
       return try pendingDeliveries(for: host)
     }
@@ -15,7 +15,7 @@ extension CueStore {
 
   func pendingDeliveries(for host: String) throws -> [DeliveryRequest] {
     try select(
-      DeliveryRequest.self, where: "status IN ('pending', 'preparing') AND handledBy IS NULL AND hostID = ?", [host],
+      DeliveryRequest.self, where: "status IN (\(DeliveryStatus.waitingSQL)) AND handledBy IS NULL AND hostID = ?", [host],
       orderBy: "CASE WHEN mode = 'withdraw' THEN 0 ELSE 1 END, createdAt, rowid")
   }
 
@@ -26,20 +26,33 @@ extension CueStore {
       try db.run(
         """
         UPDATE deliveryRequests AS r SET status = 'executing', handledBy = ?, deadlineAt = ?, failure = NULL,
-          modifiedAt = MAX(modifiedAt + 1, ?) WHERE id = ? AND status IN ('pending', 'preparing') AND handledBy IS NULL
+          modifiedAt = MAX(modifiedAt + 1, ?) WHERE id = ? AND status IN (\(DeliveryStatus.waitingSQL)) AND handledBy IS NULL
           AND \(DeliveryRequest.dispatchDeadlineSQL("r")) > ?
           AND NOT (\(Self.abandonedDelivery))
         """, [host, deadline, Date.stamp, id, timing.now()])
-      return db.changes > 0 ? try find(DeliveryRequest.self, id) : nil
+      guard db.changes > 0, var claimed = try find(DeliveryRequest.self, id) else { return nil }
+      guard try permitsTaskSessionEnd(claimed) else {
+        _ = try applyDeliveryOutcome(claimed, .failed(ShownText(CueStoreError.sessionInUse(claimed.target.name))), at: timing.now())
+        return nil
+      }
+      if claimed.mode == .known(.end) {
+        claimed.coveredEndRequests = [claimed.id]
+        if claimed.content == "end", let session = claimed.target.ref {
+          claimed.coveredEndRequests.formUnion(try db.query("""
+            SELECT id FROM deliveryRequests WHERE mode = 'end' AND targetRef = ? AND hostID = ? AND handledBy = ?
+              AND status IN ('executing', 'confirming', 'unconfirmed', 'pending')
+            """, [session, host, host]) { $0.uuid(0) })
+        }
+      }
+      return claimed
     }
   }
 
-  /// 派发期限不变（`DeliveryRequest.dispatchDeadline`）。
   func reserveDeliveryTarget(_ id: UUID, host: String) throws -> DeliveryRequest? {
     try write {
       try db.run("""
         UPDATE deliveryRequests AS r SET status = 'preparing', handledBy = ?, failure = ?,
-          modifiedAt = MAX(modifiedAt + 1, ?) WHERE id = ? AND status IN ('pending', 'preparing') AND handledBy IS NULL
+          modifiedAt = MAX(modifiedAt + 1, ?) WHERE id = ? AND status IN (\(DeliveryStatus.waitingSQL)) AND handledBy IS NULL
           AND \(DeliveryRequest.dispatchDeadlineSQL("r")) > ?
           AND NOT (\(Self.abandonedDelivery))
         """, [host, DeliveryPreparation.ready.stored, Date.stamp, id, timing.now()])
@@ -83,23 +96,14 @@ extension CueStore {
   /// 写回结果：失败的原因随 `DeliveryOutcome.failed` 一起来，没有不带原因的失败。
   /// 只改还没有结果的（放弃的是待领取的、执行的是执行中的），不覆盖已经写下的结果。
   /// 任务的状态与正文都不因说话而变：发出的正文留在任务上，"发过没有"看投送请求。
-  /// 你的作答成功了，同一个事务里往那个会话的对话写下你答了什么（`PiChatRole.answer`；Cue 替你答的不写，记在它那一轮的经过里）。
+  /// 你的作答成功了，同一个事务里往那个会话的对话写下你答了什么（`ChatRole.answer`；Cue 替你答的不写，记在它那一轮的经过里）。
   func finishDelivery(_ request: DeliveryRequest, _ outcome: DeliveryOutcome, at completed: Date) throws -> Bool {
     try write { try applyDeliveryOutcome(request, outcome, at: completed) }
   }
 
   private func applyDeliveryOutcome(_ request: DeliveryRequest, _ outcome: DeliveryOutcome, at completed: Date) throws -> Bool {
     let id = request.id
-    let (status, reason): (DeliveryStatus, ShownText?) =
-      switch outcome {
-      case .succeeded: (.succeeded, nil)
-      case .confirming where request.deadlineAt.map({ completed < $0 }) != true:
-        (.unconfirmed, Speech.unconfirmedReason)
-      case .confirming: (.confirming, nil)
-      case .failed(let reason): (.failed, reason)
-      case .unconfirmed(let reason): (.unconfirmed, reason)
-      }
-    let deadline = status == .confirming ? completed.addingTimeInterval(Speech.receiptLimit) : request.deadlineAt
+    let (status, reason, deadline) = request.progress(after: outcome, at: completed)
     try db.run(
       """
       UPDATE deliveryRequests SET status = ?, failure = ?, completedAt = ?, deadlineAt = ?, modifiedAt = MAX(modifiedAt + 1, ?)
@@ -110,6 +114,7 @@ extension CueStore {
       let current = try find(DeliveryRequest.self, id)
       return current?.status == .known(status) && current?.reason == reason
     }
+    if status == .succeeded { try reconcileDeliveredCards(deliveries: [id]) }
     guard changed, status == .succeeded, let request = try find(DeliveryRequest.self, id), !request.isFromCue,
       let answer = request.answer, let session = request.target.ref
     else { return changed }
@@ -117,7 +122,7 @@ extension CueStore {
     // 你写下作答请求的时刻，不是这里执行完的时刻（离线答的、Mac 晚领取的，执行晚于答）
     let seq = try db.first("SELECT MAX(seq) FROM piMessages WHERE sessionID = ?", [session]) { $0.isNull(0) ? 0 : $0.int(0) } ?? 0
     _ = try insert(
-      PiChatMessage(
+      ChatMessage(
         sessionID: session, entryID: "answer/\(id.uuidString.lowercased())", seq: seq, role: .answer, text: answer.value.said, at: request.createdAt,
         deliveryID: id, question: answer.question, shownText: answer.value.shown),
       ignoringExisting: true)
@@ -164,7 +169,7 @@ extension CueStore {
       try db.run(
         """
         UPDATE deliveryRequests AS r SET status = 'preparing', handledBy = NULL, failure = ?, modifiedAt = MAX(modifiedAt + 1, ?)
-        WHERE id = ? AND status = ? AND status IN ('pending', 'preparing')
+        WHERE id = ? AND status = ? AND status IN (\(DeliveryStatus.waitingSQL))
         """, [reason.stored, Date.stamp, request.id, request.status.rawValue])
       guard db.changes > 0, let current = try find(DeliveryRequest.self, request.id) else { return nil }
       if let due = current.dispatchDeadline, timing.now() >= due {
@@ -200,12 +205,9 @@ extension CueStore {
       where: "hostID = ? AND (status IN ('executing', 'confirming', 'unconfirmed') OR (status = 'pending' AND handledBy IS NOT NULL))", [host])
   }
 
-  /// 删除完成时间早于 `cutoff` 的请求；返回还剩什么：`transient` 是按保留期清的还有（下一轮一个保留期后），`oldestKept` 是下面留到 7 天的里最早完成的那条（下一轮等它到期）。
-  /// 带着灵感或任务、已成功的开新会话请求在被认领前留着（会话记录可能晚到，认领靠它，见 `claimLaunchedCards`），
-  /// 最多等到完成时间早于 `claimCutoff`（会话记录始终没到）；认领了、失败了、或之后又交给了别处（不会再被认领）就按保留期清理。
-  /// 发出的话（`send`）不按保留期清：送到的等它在对话里的那条消息上了服务器再收走（`markPushed`），气泡才不会在消息到别的设备之前没了；
-  /// 没能送达的留着等用户重发或移除（重发写成后移除它）；没能开成的开新会话请求同样留着：新会话输入框按它显示原因、解锁，再开时移除它。结果未确认的留着等正证据来对账，之后与它们同样到期清掉。Cue 发起的请求失败了留着给 Cue 醒来时看（`cueChanges`）。
-  /// 这几种都至多留到完成早于 `keptCutoff`。
+  /// 删除完成时间早于 `cutoff` 的请求；返回还剩什么：`transient` 是按保留期清的还有（下一轮一个保留期后），`oldestKept` 是留到 7 天的里最早完成的那条（下一轮等它到期）。
+  /// 认领靠请求留着：带着灵感或任务、已成功的开新会话请求在被认领前留着（`claimLaunchedCards`），有可靠修订的原关联未决同样等到 `claimCutoff`。发出的话不按普通保留期清：消息上云且原关联已解决才提前收走（`markPushed`），否则等到 `keptCutoff`；没能送达、没能开成的留着等用户重发或移除；结果未确认的留着等正证据对账；Cue 发起的失败请求留着给 Cue 看（`cueChanges`）。
+  /// 成功请求的关联等待有界：send 七天、command 六十秒、start 六百秒，均从完成时间算，不续期；超窗只删除请求，不改关联修订。
   func deleteCompletedDeliveries(before cutoff: Date, claimCutoff: Date, keptCutoff: Date) throws -> (transient: Bool, oldestKept: Date?) {
     let done = "status IN ('\(DeliveryStatus.succeeded.rawValue)', '\(DeliveryStatus.failed.rawValue)', '\(DeliveryStatus.unconfirmed.rawValue)')"
     let kept = """
@@ -217,9 +219,19 @@ extension CueStore {
       """
     let arguments: [any SQLBindable] = [cutoff, claimCutoff, keptCutoff]
     return try write {
-      try db.run(
-        "DELETE FROM deliveryRequests WHERE \(done) AND completedAt < ?1 AND NOT (\(awaitingClaim)) AND NOT (\(kept))",
-        arguments)
+      let expired = try select(DeliveryRequest.self,
+        where: """
+          \(done) AND ((completedAt < ?1 AND NOT (\(awaitingClaim)) AND NOT (\(kept)))
+            OR (mode = 'send' AND status = 'succeeded' AND \(Self.deliveryMessageUploaded)))
+          """, arguments)
+      for (mode, requests) in Dictionary(grouping: expired, by: \.mode) {
+        let bindingCutoff = switch mode {
+        case .known(.send): keptCutoff
+        case .known(.start): claimCutoff
+        default: cutoff
+        }
+        try removeDeliveries(requests, completedBefore: bindingCutoff)
+      }
       let transient = try db.first("SELECT 1 FROM deliveryRequests WHERE \(done) AND NOT (\(kept))", arguments) { _ in true } != nil
       let oldestKept = try db.first("SELECT MIN(completedAt) FROM deliveryRequests WHERE \(done) AND (\(kept))", arguments) { $0.dateOrNil(0) } ?? nil
       return (transient, oldestKept)

@@ -1,5 +1,5 @@
 #if os(macOS)
-import CuePi
+import CueBridge
 import CueStore
 import CueTestSupport
 import CueText
@@ -7,7 +7,6 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 会话停下时归谁、打扰不打扰：要按他口味定的（请他选）、他自己那一轮里只应一声的（收回）、要他看完再聊的（一句结论再留给他）。
 extension CueEvalTests {
     @Test func y审美取舍请他选() async throws {
         try await CueEval.run(

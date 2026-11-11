@@ -13,22 +13,18 @@ nonisolated struct BrainUsage {
     static let header = "输入 | 缓存读 | 缓存写 | 输出 | 费用"
     var cells: String { "\(input) | \(cacheRead) | \(cacheWrite) | \(output) | $\(String(format: "%.4f", cost))" }
 
-    /// Pi 每次请求模型前的计费标识记录（`EvalBrain.billingLog` 写）
     static func billingLog(in root: URL) -> URL { root.appending(path: "billing.jsonl") }
 
-    /// 请求数、系统提示首块带计费标识的请求数
     static func billing(in root: URL) -> (requests: Int, marked: Int) {
         let requests = ((try? String(contentsOf: billingLog(in: root), encoding: .utf8)) ?? "").split(separator: "\n")
             .compactMap { (try? JSONSerialization.jsonObject(with: Data($0.utf8))) as? [String: Any] }
         return (requests.count, requests.count { $0["billing"] as? Bool == true })
     }
 
-    /// Cue 的大脑的 stdout 副本放在哪（`EvalBrain.launch` 写）
     static func directory(in root: URL) -> URL { root.appending(path: "usage", directoryHint: .isDirectory) }
     /// 后台整理记忆（做梦）的大脑的 stdout 副本：逐轮开销与换新只读 Cue 的，不读这里
     static func dreamDirectory(in root: URL) -> URL { directory(in: root).appending(path: "dream", directoryHint: .isDirectory) }
 
-    /// 一次后台做梦：进程的起止（副本文件的建立与最后写入）与开销
     struct Dream {
         let started, finished: Date
         let usage: BrainUsage
@@ -45,7 +41,6 @@ nonisolated struct BrainUsage {
         }
     }
 
-    /// 每个大脑进程一个文件，按起进程的先后；每轮一项
     static func rounds(in root: URL) -> [BrainUsage] {
         files(in: directory(in: root)).flatMap { file in
             let events = events(file)
@@ -141,7 +136,6 @@ nonisolated struct BrainUsage {
         return rounds
     }
 
-    /// Pi 一条助手消息 `message_end` 报的开销
     private static func assistant(_ event: [String: Any]) -> BrainUsage? {
         guard event["type"] as? String == "message_end", let message = event["message"] as? [String: Any], message["role"] as? String == "assistant",
             let usage = message["usage"] as? [String: Any]
@@ -151,7 +145,6 @@ nonisolated struct BrainUsage {
             output: usage["output"] as? Int ?? 0, cost: (usage["cost"] as? [String: Any])?["total"] as? Double ?? 0)
     }
 
-    /// 写进 score.json、记忆基准题目 json 的样子
     var json: [String: Any] { ["input": input, "cacheRead": cacheRead, "cacheWrite": cacheWrite, "output": output, "cost": cost] }
 
     init(input: Int = 0, cacheRead: Int = 0, cacheWrite: Int = 0, output: Int = 0, cost: Double = 0) {

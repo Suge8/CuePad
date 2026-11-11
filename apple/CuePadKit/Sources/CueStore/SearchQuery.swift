@@ -8,13 +8,9 @@ public struct SearchQuery: Sendable, ExpressibleByStringLiteral {
   public var text: String
   /// 限定所属项目；nil 表示不限；空集合无结果。
   public var projects: Set<UUID>?
-  /// true 只要含附件（图片或文件）的卡，false 只要不含附件的卡，nil 不限。
   public var hasAttachments: Bool?
-  /// 发送条件：不限、从未发送过、或发送过（可限目标）。
   public var sent: SendCondition
-  /// 卡片最近修改时间落在区间内（含两端）。
   public var modifiedIn: ClosedRange<Date>?
-  /// true 只搜回收站里的内容（含随项目进回收站的卡片），false 只搜未删除内容。
   public var inTrash: Bool
 
   public init(
@@ -36,7 +32,6 @@ public struct SearchQuery: Sendable, ExpressibleByStringLiteral {
 
 public enum SendCondition: Equatable, Sendable {
   case any
-  /// 从未发送过（没有任何关联该卡的发送记录）。
   case never
   /// 至少发送过一次；可限目标种类与名称（名称精确匹配），都省略表示发到哪里都行。
   case sent(kind: Open<SendTargetKind>? = nil, name: String? = nil)
@@ -45,8 +40,6 @@ public enum SendCondition: Equatable, Sendable {
 public struct SearchResults: Sendable {
   /// 项目名命中的项目；只在有关键词、没有卡片筛选、第一页时返回。
   public var projects: [Project]
-  /// 当前页的卡片，按最近修改。
   public var cards: [Card]
-  /// 符合条件的卡片总数（不受分页影响）。
   public var totalCards: Int
 }

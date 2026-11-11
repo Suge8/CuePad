@@ -1,9 +1,6 @@
 #if os(iOS)
 import SwiftUI
 
-/// 搜索页（窄屏项目页顶上的搜索框与进展页的搜索钮、宽屏侧栏顶上的搜索框或 ⌘K，同 Mac 的 ⌘K）：各宽度都推在当前页上，退出就是返回。
-/// 搜索框是页顶那一排中间那一块（`floatingHeader`）。两个范围——灵感与任务（`CardSearchResults`）、会话（`SessionList`）——是结果最上面那排胶囊的头一块分段（页顶中间是搜索框），
-/// 随结果滚走，不在顶上另占一排；一个搜索词两边共用，换范围不清空。进入、在搜索页上再点搜索框或再按 ⌘K 都聚焦搜索框。
 struct SearchScreen: View {
     @State private var query = PaletteQuery()
     @State private var scope = DebugHooks.preset.searchScope
@@ -18,7 +15,6 @@ struct SearchScreen: View {
     var body: some View {
         TurnStack {
             switch scope {
-            // 换范围同全 App 的切页（`Motion.turn`）：灵感与任务在左、会话在右
             case .cards: CardSearchResults(query: $query) { scopes }.transition(Motion.turn(from: .leading, reduceMotion: reduceMotion))
             case .sessions:
                 SessionList(model: sessions) { ChipRow { scopes }.padding(.horizontal, -Spacing.page) }
@@ -40,7 +36,6 @@ struct SearchScreen: View {
         return min(Self.maxField, max(0, width - sides))
     }
 
-    /// 范围：结果最上面那排胶囊的头一块（`SearchScopePanes`，同 Mac ⌘K 的那一组）。
     private var scopes: some View {
         SearchScopePanes(scope: $scope).frame(height: Self.scopeHeight).turnSteady()
     }

@@ -1,13 +1,10 @@
 #if os(iOS)
 import SwiftUI
 
-/// 浮在键盘上方的输入框（新会话、发给 Agent 共用）：不弹面板，背后的页面不压色（内容直接透在玻璃后面），浮起时随键盘升上来。
-/// 点空白处或往下拖收起（输入框跟手往下走，没拖够就回位）。
 struct FloatingInput<Content: View>: View {
     let isPresented: Bool
     let close: () -> Void
     @ViewBuilder let content: () -> Content
-    /// 没拖够松手时弹回原位。
     @GestureState(resetTransaction: Transaction(animation: Motion.nudge)) private var drag: CGFloat = 0
 
     private static var dismissDistance: CGFloat { 60 }
@@ -16,7 +13,6 @@ struct FloatingInput<Content: View>: View {
     var body: some View {
         ZStack(alignment: .bottom) {
             if isPresented {
-                // 背后的页面不压色、不虚化（沉浸式，同回复框）：这一层透明，只接点按收起
                 Color.clear.contentShape(.rect).ignoresSafeArea()
                     .gesture(DragGesture(minimumDistance: 0).onEnded { _ in dismiss() })
                     .readerHidden(true)

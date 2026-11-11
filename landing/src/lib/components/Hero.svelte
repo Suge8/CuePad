@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { observeVideo } from '$lib/video';
 	import { gsap, REDUCED } from '$lib/gsap';
 	import { i18n, t, LINKS } from '$lib/i18n.svelte';
 	import Icon from './Icon.svelte';
@@ -19,7 +20,6 @@
 		squiggle.classList.add('drawn');
 	}
 
-	// Redraw the underline whenever the headline language changes
 	let booted = false;
 	$effect(() => {
 		i18n.lang;
@@ -41,31 +41,12 @@
 			cleanups.push(() => target.removeEventListener(ev, fn, opts));
 		};
 
-		/* Ambient loop: pause offscreen; frozen poster with reduced motion */
-		const artVideo = artEl.querySelector('video');
-		if (artVideo) {
-			if (REDUCED()) {
-				artVideo.removeAttribute('autoplay');
-				artVideo.pause();
-			} else {
-				const io = new IntersectionObserver(
-					(entries) => {
-						for (const e of entries) {
-							if (e.isIntersecting) artVideo.play().catch(() => {});
-							else artVideo.pause();
-						}
-					},
-					{ threshold: 0.1 }
-				);
-				io.observe(artVideo);
-				cleanups.push(() => io.disconnect());
-			}
-		}
+		const artVideo = artEl.querySelector('video')!;
+		cleanups.push(observeVideo(artVideo, 0.1, 'static'));
 
 		if (REDUCED()) return () => cleanups.forEach((fn) => fn());
 
 		const ctx = gsap.context(() => {
-			/* Scroll: art drifts up as the hero leaves */
 			gsap.to(artEl, {
 				yPercent: -12,
 				ease: 'none',
@@ -74,7 +55,6 @@
 
 			if (window.matchMedia('(pointer: fine)').matches) {
 				const stage = stageEl;
-				/* Mouse: stage tilt + art parallax */
 				const xTo = gsap.quickTo(artEl, 'x', { duration: 0.7, ease: 'power3.out' });
 				const yTo = gsap.quickTo(artEl, 'y', { duration: 0.7, ease: 'power3.out' });
 				let tx = 0,
@@ -111,7 +91,6 @@
 					if (!tiltRaf) tiltRaf = requestAnimationFrame(stepTilt);
 				});
 
-				/* Magnetic primary buttons */
 				hero.querySelectorAll('.btn-primary').forEach((btn) => {
 					on(btn, 'mousemove', ((e: MouseEvent) => {
 						const r = (btn as HTMLElement).getBoundingClientRect();
@@ -129,7 +108,6 @@
 			}
 		}, hero);
 
-		/* Scroll parallax on the stage shot */
 		if (window.matchMedia('(min-width: 48rem)').matches) {
 			const cells = stageEl.querySelectorAll('[data-px]');
 			let ticking = false;

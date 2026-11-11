@@ -5,14 +5,12 @@ import Foundation
 /// 都先去掉引号里转述的原话，再按句子、小句读：认的是表态与承诺的句式，不认措辞清单之外的说法，边界写在各条上。
 /// 改了认法，拿现有输出（各遍的 .md）重放一遍，看翻了哪些、翻得对不对，再跑评测。
 enum EvalReading {
-    /// 去掉引号里转述的原话（“”「」""）
     static func unquoted(_ text: String) -> String { text.replacing(/“[^”]*”|「[^」]*」|"[^"]*"/, with: "") }
 
     static func sentences(_ text: String) -> [Substring] { text.split(whereSeparator: { "。！？!?；;\n".contains($0) }) }
 
     static func clauses(_ sentence: Substring) -> [Substring] { sentence.split(whereSeparator: { "，,：:".contains($0) }) }
 
-    /// 他问起早先的事，Cue 说了不知道、查不到（没答对时，成绩单分"说不知道"与"答错"）
     static func admitsUnknown(_ text: String) -> Bool {
         text.contains(/不记得|不确定|没找到|查不到|没有记录|没查到|不知道|答不出|答不上|报不出|没统计|没查退信|没有.{0,6}记录/)
     }
@@ -136,7 +134,6 @@ enum EvalReading {
                     guard clock.clock, ["15:00", "15：00", "15点", "下午3点", "下午三点", "3点", "三点"].contains(clock.text) else { return false }
                     var named = groups[index].filter { !$0.clock }
                     if named.isEmpty {
-                        // 离它最近的那组日子（一样近取前面那组）
                         let others = groups.indices.filter { $0 != index && groups[$0].contains { !$0.clock } }
                         func gap(_ other: Int) -> (Int, Int) {
                             let group = groups[other], after = group[0].start >= clock.end

@@ -4,8 +4,7 @@ import Foundation
 
 /// Mac 的提示。来源只有同步来的状态，不收推送（docs/sync.md「Agent 与 Cue 的通知」）。
 extension AppServices {
-    /// - Agent：不分会话在本机还是别的 Mac，同一条路——在线会话（`LiveSessions`）每次变化，`SessionAlertTracker` 认出可能要提示的动静
-    ///   （本次运行第一次读到的只记基线），逐条交给 `AlertCenter.post`（到不到你在那里问）。Cue 的由 `CueService.followNotifications` 读库发。
+    /// - Agent：不分会话在本机还是别的 Mac，同一条路；本次运行第一次读到的只记基线。Cue 的由 `CueService.followNotifications` 读库发。
     /// - Cue 留给你回的停下：状态没变，会话记录上的手机推送标志由会话所在的这台 Mac 补上（`CueStore.flagLeftToYou`）。
     func startAlerts() {
         follow(reporting: { .syncUnavailable(String(localized: "Cue 留给你回的会话没能推到手机：\(String(describing: $0))")) }) { [store, sync, hostID] in

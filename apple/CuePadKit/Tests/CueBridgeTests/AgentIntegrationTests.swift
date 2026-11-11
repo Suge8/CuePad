@@ -1,0 +1,195 @@
+#if os(macOS)
+import CueStore
+import CueTestSupport
+import Foundation
+import Testing
+@testable import CueBridge
+
+/// 接入 Agent 只在临时目录里装：各家的配置目录经它们自己认的环境变量指到临时目录，`pi` 是报版本的假脚本；绝不碰真实的 ~/.pi、~/.claude 等。
+struct AgentIntegrationTests {
+    let root: URL
+    let paths: PiPaths
+    let bin: URL
+    var cuepad: URL { root.appending(path: "CuePad.app/Contents/Helpers/cuepad") }
+    var environment: [String: String] {
+        ["CLAUDE_CONFIG_DIR": root.appending(path: "claude").path, "CODEX_HOME": root.appending(path: "codex").path, "GROK_HOME": root.appending(path: "grok").path,
+         "XDG_CONFIG_HOME": root.appending(path: "xdg").path, "CUEPAD_AGENTS_DIR": root.appending(path: "agents").path,
+         "DSH_HOME": root.appending(path: "dsh").path]
+    }
+
+    var skillFile: URL { root.appending(path: "agents/skills/cuepad/SKILL.md") }
+    /// Claude Code 读技能的位置（它不读 `.agents`）；也是旧版各家副本所在的位置
+    func agentSkill(_ kind: AgentKind) -> URL {
+        let home = switch kind {
+        case .pi: paths.agentDirectory
+        case .claudeCode: root.appending(path: "claude")
+        case .codex: root.appending(path: "codex")
+        case .opencode: root.appending(path: "xdg/opencode")
+        case .grok: root.appending(path: "grok")
+        case .dsh: root.appending(path: "dsh")
+        }
+        return home.appending(path: "skills/cuepad")
+    }
+
+    init() throws {
+        root = try makeTempDirectory()
+        paths = PiPaths(agentDirectory: root.appending(path: "pi"), socketDirectory: root.appending(path: "s"))
+        bin = root.appending(path: "bin")
+        try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
+    }
+
+    private func integration(cuepad: URL? = nil) -> AgentIntegration {
+        AgentIntegration(paths: AgentPaths(pi: paths, environment: environment), locate: { ExecutableLocator(searchDirectories: [bin]) }, cuepad: cuepad ?? self.cuepad,
+            timing: noDeadline)
+    }
+
+    private func fakeAgent(_ command: String, printing output: String = "") throws {
+        try TestScript.install("#!/bin/sh\nprintf '%s\\n' '\(output)'\n", at: bin.appending(path: command))
+    }
+
+    private func installAll() throws {
+        try fakeAgent("pi", printing: PiRuntime.facts.minimumVersion!.description)
+        try fakeAgent("claude", printing: "2.1.299 (Claude Code)")
+        try fakeAgent("codex")
+        try fakeAgent("grok", printing: "grok 1.0.52 (0920c8169e27)")
+        try fakeAgent("opencode", printing: "2.0.25")
+    }
+
+    private func contents(_ directory: URL) -> [String] {
+        FileManager.default.subpaths(atPath: directory.path)?.sorted() ?? []
+    }
+
+    // MARK: 检测
+
+    @Test(arguments: [
+        (AgentKind.pi, "0.84.3", AgentStatus.Presence.tooOld(AgentVersion(0, 84, 3))),
+        (.pi, "command not found: hello", .notFound),
+        (.opencode, "1.19.0", .tooOld(AgentVersion(1, 19, 0))),
+        (.claudeCode, "2.1.168 (Claude Code)", .tooOld(AgentVersion(2, 1, 168))),
+        (.dsh, "0.2.1-rc.1", .tooOld(AgentVersion(0, 2, 1, prerelease: "rc.1"))),
+    ])
+    func anAgentTooOldOrWithoutAVersionIsNotConnectable(kind: AgentKind, output: String, presence: AgentStatus.Presence) async throws {
+        try fakeAgent(kind.facts.command, printing: output)
+        #expect(await integration().status(of: kind).presence == presence)
+    }
+
+    /// 时限用手动钟，命令真被问到之后才推进。
+    @Test func anAgentThatDoesNotAnswerTheVersionIsUnresponsiveNotMissing() async throws {
+        let asked = root.appending(path: "asked")
+        try TestScript.install("#!/bin/sh\n. \"$0.env\"\ntouch \"$ASKED\"\nexec sleep 300\n", at: bin.appending(path: "pi"), variables: ["ASKED": asked.path])
+        let clock = ManualTiming()
+        let integration = AgentIntegration(
+            paths: AgentPaths(pi: paths, environment: environment), locate: { [bin] in ExecutableLocator(searchDirectories: [bin]) }, cuepad: cuepad,
+            timing: clock.timing)
+        async let status = integration.status(of: .pi)
+        try await eventually("它被问到了") { !fileGone(asked) }
+        try await clock.waitForSleeper()
+        clock.advance(AgentTimeouts.command)
+        #expect(await status.presence == .unresponsive)
+    }
+
+    /// 只看安装脚本会用的 Node（PATH 里第一个）：免得点了安装才被脚本拒。
+    @Test func installPrerequisiteCountsOnlyTheNodeTheInstallerWillUse() async throws {
+        let later = root.appending(path: "later-bin")
+        try FileManager.default.createDirectory(at: later, withIntermediateDirectories: true)
+        try fakeAgent("node", printing: "v20.11.0")
+        try TestScript.install("#!/bin/sh\necho v22.19.0\n", at: later.appending(path: "node"))
+        let integration = AgentIntegration(
+            paths: AgentPaths(pi: paths, environment: environment), locate: { [bin] in ExecutableLocator(searchDirectories: [bin, later]) }, cuepad: cuepad,
+            timing: noDeadline)
+        #expect(await integration.status(of: .pi).lacking == AgentKind.pi.facts.installPrerequisite)
+    }
+
+    // MARK: 接入与删除
+
+    @Test(arguments: AgentKind.allCases)
+    func installWritesTheSkillWhereTheAgentReadsItAndUninstallLeavesNoTrace(kind: AgentKind) async throws {
+        try installAll()
+        let home = agentSkill(kind).deletingLastPathComponent().deletingLastPathComponent()
+        try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
+        try #"{"theme": "用户自己的"}"#.write(to: home.appending(path: "settings.json"), atomically: true, encoding: .utf8)
+        let before = contents(root)
+
+        try await integration().install(kind)
+
+        let skill = try String(contentsOf: skillFile, encoding: .utf8)
+        #expect(skill.hasPrefix("---\nname: cuepad\ndescription: "))
+        #expect(skill.contains("\(cuepad.path) --help"))
+        #expect(skill.contains("\(cuepad.path) show <文件…>"))
+        #expect(skill.contains("沙箱外"))
+        let read = try? String(contentsOf: agentSkill(.claudeCode).appending(path: "SKILL.md"), encoding: .utf8)
+        #expect((read == skill) == (kind == .claudeCode), "Claude Code 经链接读到同一份；别家不建链接")
+        #expect(await integration().status(of: kind).files == .current)
+
+        try await integration().uninstall(kind)
+
+        #expect(contents(root) == before)
+        #expect(await integration().status(of: kind).files == .missing)
+    }
+
+    @Test func uninstallWorksAfterTheAgentIsGone() async throws {
+        try fakeAgent("claude", printing: "2.1.299 (Claude Code)")
+        try await integration().install(.claudeCode)
+        try FileManager.default.removeItem(at: bin.appending(path: "claude"))
+
+        #expect(await integration().status(of: .claudeCode) == AgentStatus(presence: .found(nil), files: .current))  // 配置目录还在：算用过
+        try await integration().uninstall(.claudeCode)
+        #expect(!FileManager.default.fileExists(atPath: skillFile.path))
+        #expect(!RelativeLink.isLink(agentSkill(.claudeCode)))
+    }
+
+    @Test func agentsShareOneSkillAndUninstallingOneKeepsTheOthers() async throws {
+        try installAll()
+        try await integration().install(.pi)
+        try await integration().install(.opencode)
+        try await integration().uninstall(.opencode)
+        #expect(await integration().status(of: .opencode).files == .missing)
+        #expect(await integration().status(of: .pi).files == .current)
+        #expect(FileManager.default.fileExists(atPath: skillFile.path))
+    }
+
+    /// OpenCode 每次运行（`--version` 也是）都往 `$XDG_DATA_HOME/opencode/log` 写日志，检测时它的数据目录是一个用完即删的临时目录。替身照 OpenCode 的样子写日志，并记下给它的数据目录（没给时只记不写，不碰真实目录）。
+    @Test func askingTheVersionLeavesNothingInTheAgentsDataDirectory() async throws {
+        let record = root.appending(path: "data-home.txt")
+        try TestScript.install("""
+        #!/bin/sh
+        . "$0.env"
+        printf '%s' "${XDG_DATA_HOME-unset}" > "$RECORD"
+        if [ -n "$XDG_DATA_HOME" ]; then mkdir -p "$XDG_DATA_HOME/opencode/log" && echo started >> "$XDG_DATA_HOME/opencode/log/opencode.log"; fi
+        echo 'opencode v2.0.29'
+        """, at: bin.appending(path: "opencode"), variables: ["RECORD": record.path])
+
+        #expect(await integration().status(of: .opencode).presence == .found(AgentVersion(2, 0, 29)))
+        let dataHome = try String(contentsOf: record, encoding: .utf8)
+        #expect(dataHome != "unset" && !dataHome.isEmpty, "给了它数据目录，不落到用户的 ~/.local/share")
+        #expect(!FileManager.default.fileExists(atPath: dataHome), "临时数据目录用完删掉")
+    }
+
+    @Test(arguments: [(AgentKind.pi, false), (.claudeCode, true)])
+    func foreignFilesWithTheSameNameAreNeverTouched(kind: AgentKind, inAgentDirectory: Bool) async throws {
+        try installAll()
+        let mine = "---\nname: cuepad\n---\n我自己的\n"
+        let file = inAgentDirectory ? agentSkill(kind).appending(path: "SKILL.md") : skillFile
+        try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try mine.write(to: file, atomically: true, encoding: .utf8)
+        let shown = UserHome.shown((inAgentDirectory ? agentSkill(kind) : skillFile).path)
+        #expect(await integration().status(of: kind).files == .foreign(shown))
+        await #expect(throws: AgentInstallError.self) { try await integration().install(kind) }
+        await #expect(throws: AgentInstallError.self) { try await integration().uninstall(kind) }
+        #expect(try String(contentsOf: file, encoding: .utf8) == mine)
+    }
+
+    // MARK: 升级
+
+    @Test func aMovedAppMakesInstalledFilesOutdatedAndInstallRewritesThem() async throws {
+        try installAll()
+        try await integration().install(.pi)
+        let moved = root.appending(path: "Other/CuePad.app/Contents/Helpers/cuepad")
+
+        #expect(await integration(cuepad: moved).status(of: .pi).files == .outdated)
+        try await integration(cuepad: moved).install(.pi)
+        #expect(try String(contentsOf: skillFile, encoding: .utf8).contains(moved.path))
+        #expect(await integration(cuepad: moved).status(of: .pi).files == .current)
+    }
+}
+#endif

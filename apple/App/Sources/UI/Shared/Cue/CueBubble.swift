@@ -2,9 +2,7 @@ import CueText
 import CueStore
 import SwiftUI
 
-/// Cue 页的对话气泡（你的话、Cue 的话）：只有 Cue 页是两边对说，会话页你的话是另一种（`BubbleLook.session`）。
-/// 说话的那一边下角收成小角，像从那一边递过来的一张纸条：一眼分得出谁说的，不画尾巴；
-/// 同一边连着说的几颗收紧成一串（`joinedGap`），后面几颗那一边的上角也收小，连成一列。圆角、内边距只在这里定。
+/// 圆角、内边距只在这里定。
 enum CueBubble {
     #if os(macOS)
     static let padding = EdgeInsets(top: Spacing.group, leading: Spacing.block, bottom: Spacing.group, trailing: Spacing.block)
@@ -19,7 +17,6 @@ enum CueBubble {
     static let cueWidth: CGFloat = 0.9
     #endif
 
-    /// `joined`：上面紧挨着同一边的一颗。
     static func shape(_ edge: HorizontalEdge, joined: Bool = false) -> UnevenRoundedRectangle {
         let top = joined ? Radius.chip : Radius.sheet
         return switch edge {
@@ -33,27 +30,18 @@ enum CueBubble {
     static let arrival = AnyTransition.opacity.animation(Motion.fade.delay(Motion.Glide.duration))
 }
 
-/// Cue 说的一句：靠左的一颗纸做的气泡（`cueBubble`），里面是 Markdown（同会话里 Agent 的回答），下面是它点名的图（`CueShots`：结束了回到问的位置的提问，
-/// 你的回答在答的那一刻另成一格，见 `CueAnswer`、`CueThread.rows`）；它第一次提到一件活时底下一行这件活（`CueTaskLine`）。
-/// `card`：结果卡（点名了图的做完，哪句算只在 `CueThread.rows` 定）——不是气泡而是一张纸（`paper`），不与上下的气泡连成一串；
-/// 第一行是一句平常的话时（"「X」做完了"）单独加粗作标题，一眼先读到做完了什么，再看证据与图。
-/// 结束了的提问（答了、撤回、你没选直接说了）回到对话里时字与拍板卡上同一句：代码写的问句（`CueAsking.question`，规矩那一类下面一行引的规矩），
-/// 淡一档（次一级的墨、不加粗：已经过去了，还在等你的在输入框上方的拍板卡里，`CueWaitDock`），Cue 的原话收着、点"原话"展开；
-/// 答之前读的与答之后回看的不是两种说法，你回答气泡里引的也是这一句。
-/// 长按（Mac 右键）是消息菜单（`MessageMenu.Kind.cue`），预览就是这颗气泡或这张纸。
+/// `card`：结果卡（点名了图的做完，哪句算只在 `CueThread.rows` 定），不是气泡而是一张纸。
+/// 结束了的提问回到对话里时字与拍板卡上同一句（代码写的问句 `CueAsking.question`），Cue 的原话收着、点"原话"展开：答之前读的与答之后回看的不是两种说法，你回答气泡里引的也是这一句。
 struct CueSays: View {
     let message: CueMessage
-    /// 它第一次提到的那件活（`CueThread.Row`）
     var task: UUID?
-    /// Cue 点名的图（`CueThread.shots`）与点开一张：全屏左右翻的就是这几张，底栏是关于它对 Cue 说
     var shots: [CueShown] = []
     var open: (PreviewOpening) -> Void = { _ in }
     var card = false
-    /// 上面紧挨着 Cue 的另一句（`CueBubble.shape`）。
     var joined = false
+    @ScaledMetric(relativeTo: .body) private var readingSpacing = Typography.readingLineSpacing
     @Environment(\.palette) private var palette
     @State private var selecting = false
-    /// 提问的原话展开着。
     @State private var reading = false
 
     var body: some View {
@@ -95,7 +83,7 @@ struct CueSays: View {
         if let title = parts.title {
             VStack(alignment: .leading, spacing: Spacing.tight) {
                 Text(Self.inline(title)).font(Typography.reading.weight(.semibold)).foregroundStyle(palette.ink)
-                    .lineSpacing(Typography.readingLineSpacing)
+                    .lineSpacing(readingSpacing)
                     .fixedSize(horizontal: false, vertical: true)
                 if !parts.body.isEmpty { MarkdownText(source: parts.body).equatable() }
             }
@@ -104,7 +92,6 @@ struct CueSays: View {
         }
     }
 
-    /// 第一行是平常的一句话（不是标题、列表、引用、代码、表格）时拆出来作标题，其余是正文。
     private static func headline(_ text: String) -> (title: String?, body: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let lines = trimmed.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: false)
@@ -113,7 +100,6 @@ struct CueSays: View {
         return (first, rest)
     }
 
-    /// 标题行里的行内记号（粗体、代码、链接）照样认，不露出星号与反引号。
     private static func inline(_ line: String) -> AttributedString {
         AttributedString(inlineMarkdown: line)
     }
@@ -124,7 +110,6 @@ struct CueSays: View {
     }
 }
 
-/// `CueSays` 的底：气泡（`cueBubble`），或结果卡的一张纸；长按的预览照这个形状裁。
 private struct CueSaysSurface: ViewModifier {
     let card: Bool
     let joined: Bool
@@ -144,8 +129,6 @@ private struct CueSaysSurface: ViewModifier {
     }
 }
 
-/// 你对 Cue 一条提问的回答（`CueThread.Row.answer`）：你那一边的一颗气泡（`AnswerBubble`，同会话里的作答），是选的那一项（更旧版本存下的另外一句照原文）；
-/// 问的那句隔开了（`quoted`）才在字上面引一行答的是哪张卡（`CueMessage.headline`，点它跳回问的那句）。从刻度滑条跳过来时描一圈。
 struct CueAnswer: View {
     let question: CueMessage
     let quoted: Bool
@@ -164,7 +147,6 @@ struct CueAnswer: View {
 }
 
 extension View {
-    /// Cue 的话的气泡：纸色实底（`Palette.paper`，比桌面亮一级），你的话是比桌面深一级的牛皮纸色（`Palette.bubble`）。正在说的话（Mac）与说完落库的那句同一颗。
     /// 只铺一层底：不用卡片那套渐变、一线高光与描边（`paper()`）——气泡小，看不出差别，长对话滚动时每颗多出的层逐帧都要更新；
     /// 增强对比度时才描边（`Palette.bubbleEdge`）。
     func cueBubble(joined: Bool) -> some View {
@@ -181,7 +163,6 @@ private struct CueBubbleSurface: ViewModifier {
     }
 }
 
-/// "原话"开关：问句是代码写的（`CueAsking.question`），Cue 的原话收着、点它展开。
 private struct OriginalToggle: View {
     @Binding var open: Bool
     @Environment(\.palette) private var palette

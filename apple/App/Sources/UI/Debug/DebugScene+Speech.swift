@@ -17,12 +17,12 @@ extension DebugScene {
     }
 
     private static func presetSpeechBody(_ workspace: Workspace) async throws {
-        guard let speech = defaults.string(forKey: "CuePadSpeech") else { return }
+        guard let speech = args.driveOpts.speech else { return }
         let services = workspace.services
         let box: Binding<ComposerDraft>, listener: Listener
         if scene == "session" {
-            let title = defaults.string(forKey: "CuePadSession") ?? "homepage"
-            guard let session = try await services.store.piSessionPage(PiSessionQuery(text: title)).items.first(where: { $0.state.title == title })?.state
+            let title = args.session ?? "homepage"
+            guard let session = try await services.store.sessionPage(SessionQuery(text: title)).items.first(where: { $0.state.title == title })?.state
             else { return }
             box = services.settings.replyDraftBinding(for: session.id)
             listener = .session(session, mode: .send)
@@ -31,12 +31,12 @@ extension DebugScene {
             listener = .cue
         }
         box.wrappedValue.text = String(localized: "把重连用例也跑一遍，结果贴给我", table: "Demo")
-        if defaults.double(forKey: "CuePadImportDelay") > 0 {
+        if args.driveOpts.importDelay > 0 {
             // 这句带一个还在存的附件（`DebugHooks.importDelay` 拉长）：按下发送时它还没存好
             let url = FileManager.default.temporaryDirectory.appending(path: String(localized: "季度复盘.txt", table: "Demo"))
             try Data(String(localized: "季度复盘的要点", table: "Demo").utf8).write(to: url)
             workspace.importFiles([.file(url)], into: box)
-        } else if defaults.bool(forKey: "CuePadFiles") {
+        } else if args.files {
             let pdf = try demoPDF(services.store)
             let image = try services.store.files.store(swatch(red: 0.85, green: 0.47, blue: 0.29))
             box.wrappedValue.files = [DraftFile(key: image, name: ""), pdf]
@@ -84,10 +84,10 @@ extension DebugScene {
 
     static func pressSendIfAsked(session: Bool, _ press: () -> Void) async {
         if !session, cueFlows { return await pressForCueFlow(press) }
-        guard defaults.string(forKey: "CuePadSpeech") == "press", (scene == "session") == session else { return }
+        guard args.driveOpts.speech == "press", (scene == "session") == session else { return }
         // 等的这几秒里输入框可能重建（页面换了身份）：旧的那个任务被取消，不能再按、再量，否则一次按下记成两条
-        guard await Task.wait(for: .seconds(seconds("CuePadPressAfter", default: 3))) else { return }
-        guard let log = defaults.string(forKey: "CuePadFlightLog").map({ URL(fileURLWithPath: $0) }) else { return press() }
+        guard await Task.wait(for: .seconds(args.driveOpts.pressAfter ?? 3)) else { return }
+        guard let log = args.driveOpts.flightLog.map({ URL(fileURLWithPath: $0) }) else { return press() }
         await running("量按下发送") { try await measureFlight("press", seconds: flightProbe, into: log, act: press) }
     }
 }

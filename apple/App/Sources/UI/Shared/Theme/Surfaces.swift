@@ -1,23 +1,18 @@
 import SwiftUI
 
 extension View {
-    /// 纸面：从上沿极轻地亮到纸色的实底 + 上沿一线高光 + 1px 半透明描边；抬起的纸浅色下多一层柔影（深色只留描边）。
-    /// `wash`：要你看的那张纸铺这种状态的淡底（`PiShown.wash`），代替纸色。
     func paper(cornerRadius: CGFloat = Radius.card, lifted: Bool = false, wash: Color? = nil) -> some View {
         modifier(PaperSurface(radius: cornerRadius, lifted: lifted, wash: wash))
     }
 
-    /// 浮在回复框上方、要你处理的卡（Cue 页的拍板卡与它的叠边、会话页的问题卡、没能结束、出错）：同一张不透明的纸、抬起的影，与输入框同圆角。
     /// 不用玻璃：拍板卡后面垫着叠边，玻璃不叠玻璃；卡浮在对话上，对话从它后面滚过，半透的面透出后面的字。
     func dockedPaper() -> some View { paper(cornerRadius: Radius.field, lifted: true) }
 
-    /// 计数变化时数字滚动过去（增大往上滚、减小往下滚），不整块换字。
     func counting(_ value: Int) -> some View {
         contentTransition(.numericText(value: Double(value))).animation(Motion.nudge, value: value)
     }
 
     /// 控件层玻璃；"降低透明度"开启时退回实底。玻璃不叠玻璃：调用方不在玻璃里再套玻璃。
-    /// `ink`：默认垫实底（写着字的玻璃）；只有图标的圆钮给 `.clear`（`GlassInk`）。
     func glass<S: Shape>(in shape: S, interactive: Bool = false, ink: GlassInk = .solid) -> some View {
         modifier(GlassSurface(shape: shape, interactive: interactive, ink: ink))
     }
@@ -62,11 +57,9 @@ private struct ElevationShadow: ViewModifier {
 }
 
 extension View {
-    /// 投影；`nil` 不投（修饰符照挂，开关时视图的身份不变）。
     func elevation(_ level: Elevation?) -> some View { modifier(ElevationShadow(level: level)) }
 }
 
-/// 玻璃上的字要多好读。
 enum GlassInk {
     case clear
     /// 写着字的（默认；顶栏标题、输入框、搜索框、提示横幅、状态行）：玻璃里垫一层页面底色（`Palette.inkWell`），边缘仍是玻璃的光。内容一直滚到这些玻璃后面，
@@ -146,21 +139,14 @@ private struct GlassSurface<S: Shape>: ViewModifier {
 
 /// 按压反馈只有这几类（`PressStyle` 按种类、列表的行 `RowStyle`、系统的主按钮）。调用处只说按的是哪一种（`Press`），两端写法相同；
 /// 每种在各平台长什么样只在 `PressFeedback` 定，行的底只在 `RowMetrics` 定。
-/// 手机：按下快、松开带一点回弹，按种类缩到不同比例，按下有一下轻触感；行只亮底不缩放（一屏几十行，缩放会让列表显得软）；减弱动态效果时只降透明度。
 /// Mac 照原生控件（访达、邮件、备忘录的按钮、列表与卡片都这样）：按下的那一刻变淡（卡片压暗一层），松开即复原，
 /// 不缩放、不回弹、不震动——缩放与回弹是触屏的习惯，在指针下显得软、慢；触控板的震动在 macOS 只给对齐这类反馈，点按钮不震。
-/// Mac 悬停：指针一进来就有回应（同 macOS 26 工具栏玻璃钮的悬停，与 Linear、Raycast、Arc），淡入淡出 `Motion.fade`、不挪位置不缩放：
-/// 按钮在自己的框上浮一层淡底（`fill`，形状随框：方的、矮的是圆与胶囊，高的是圆角矩形），卡片整张亮一档（按下压暗的一半）。
+/// Mac 悬停：指针一进来就有回应（同 macOS 26 工具栏玻璃钮的悬停，与 Linear、Raycast、Arc），淡入淡出 `Motion.fade`、不挪位置不缩放；iPad 的指针用系统给按钮的悬停效果。
 /// 指针照 HIG 与访达、邮件：按钮、行、卡片都是箭头，手形只给打开网页的链接（`pointerStyle(.link)`）——手形在 Mac 上读作"这是网页链接"。
-/// iPad 的指针用系统给按钮的悬停效果（自定义样式的按钮照样有），行另见 `RowStyle`。
 enum Press {
-    /// 圆钮、图标按钮。
     case button
-    /// 标准按钮、胶囊。
     case control
-    /// 整张卡片。
     case card
-    /// 整宽的一条（虚线框的"写正文"）。
     case wide
     /// 字里行间的小钮（"显示更多"、折叠开合、行内的链与清掉）：标签就是那几个字或一个图标、不另画框。
     /// Mac 的悬停底向外宽出一圈（`HoverShape.inlineOutset`），不贴着字；手机按下只变淡、不缩放不震（同系统的 plain），一行字缩一下显得软。
@@ -217,7 +203,7 @@ struct PressFeedback: ViewModifier {
     #else
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// 各种类缩到多少：大面积只缩一点，不然文字发虚。
+    /// 大面积只缩一点，不然文字发虚。
     private var scale: CGFloat {
         switch kind {
         case .button: 0.9
@@ -239,14 +225,12 @@ struct PressFeedback: ViewModifier {
             .sensoryFeedback(.impact(flexibility: .soft, intensity: 0.55), trigger: active) { _, now in now && kind != .inline }
     }
 
-    /// 字里行间的小钮按下时变淡到多少（同系统 plain 按钮）。
     private static let inlineDimmed = 0.5
     #endif
 }
 
 #if os(macOS)
 extension EnvironmentValues {
-    /// 指针此刻停在所在的这颗按钮上（`PressFeedback` 给标签里的内容）：悬停时要换颜色、露出记号的按钮读它，不各自再挂 `onHover`。
     @Entry var buttonHovered = false
 }
 
@@ -267,9 +251,7 @@ extension View {
     }
 }
 
-/// 按钮悬停那层淡底的形状：随按钮的框——方的是圆、矮的是胶囊（同圆钮与胶囊控件），高的是圆角不超过 `Radius.card` 的圆角矩形。
 nonisolated private struct HoverShape: Shape {
-    /// 字里行间的小钮（`Press.inline`）的悬停底比字宽出的一圈。
     static let inlineOutset = EdgeInsets(top: -2, leading: -6, bottom: -2, trailing: -6)
 
     func path(in rect: CGRect) -> Path {

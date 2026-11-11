@@ -1,11 +1,11 @@
 #if os(macOS)
-import CuePi
+import CueBridge
+import CueStore
 import Foundation
 import Observation
 
 nonisolated enum CommandLineToolError: Error, Equatable, LocalizedError {
     case unavailable
-    /// 链接的位置已被别的东西占用，不覆盖。
     case occupied(String)
 
     var errorDescription: String? {
@@ -16,15 +16,13 @@ nonisolated enum CommandLineToolError: Error, Equatable, LocalizedError {
     }
 }
 
-/// 把 App 包内的 `cuepad` 命令行工具装进 PATH：在 `~/.local/bin/cuepad` 建符号链接（不做需要提权的 /usr/local/bin）。
-/// 只认自己的链接：位置上是别的东西时不覆盖、不删除。App 换了位置后链接指向旧地方，能检测出来并修复。
+/// 在 `~/.local/bin/cuepad` 建符号链接，不做需要提权的 /usr/local/bin。只认自己的链接：位置上是别的东西时不覆盖、不删除。
 @Observable
 final class CommandLineToolInstaller {
     enum State: Equatable {
         case unavailable
         case notInstalled
         case installed
-        /// 是本 App 的链接，但指向别处（App 被移动或换了副本）；安装即修复。
         case stale
         /// 位置上是别的文件（nil）或别人的链接（指向哪）。
         case blocked(link: String?)
@@ -37,10 +35,9 @@ final class CommandLineToolInstaller {
     let helper: URL
     let linkDirectory: URL
     var link: URL { linkDirectory.appending(path: "cuepad") }
-    var linkDirectoryDisplay: String { (linkDirectory.path as NSString).abbreviatingWithTildeInPath }
-    /// 让 shell 找得到链接要加进 shell 配置的那一行。
+    var linkDirectoryDisplay: String { UserHome.shown(linkDirectory.path) }
     var pathExport: String {
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let home = UserHome.directory.path
         let directory = linkDirectory.path.hasPrefix(home + "/") ? "$HOME" + linkDirectory.path.dropFirst(home.count) : linkDirectory.path
         return "export PATH=\"\(directory):$PATH\""
     }
@@ -49,7 +46,7 @@ final class CommandLineToolInstaller {
 
     init(
         helper: URL = Bundle.main.bundleURL.appending(path: "Contents/Helpers/cuepad"),
-        linkDirectory: URL = FileManager.default.homeDirectoryForCurrentUser.appending(path: ".local/bin", directoryHint: .isDirectory),
+        linkDirectory: URL,
         shellPath: @escaping @Sendable () async -> String? = { await ExecutableLocator.loginShellPath() }
     ) {
         self.helper = helper

@@ -1,28 +1,23 @@
 import CueStore
 import SwiftUI
 
-/// 点完成圈的这一下（任务行、任务标题、子任务，Mac 与手机同一份）：点了立即显示完成（圈落下对勾、标题划线、手机一下成功触感），
-/// 停留 `linger` 再写入、由列表移走——看得清，也来得及反悔：这段时间里再点一下就撤销。还有没完成的子任务时先问一起完成；
-/// 它的 Agent 还在做或在等你时先问一句（`agentBusyDialog`：托管的会话一起结束，终端里你开的不结束；`Workspace.complete`）。已完成的点一下立即回到待办（`Workspace.reopen`）。
+/// 点了立即显示完成，停留 `linger` 再写入、由列表移走：看得清，也来得及反悔，这段时间里再点一下就撤销。还有没完成的子任务时先问一起完成；它的 Agent 还在做或在等你时先问一句（`agentBusyDialog`：为这件事开的会话一起结束，别的不结束）。
 /// 状态只是这一行界面上的过渡，完成与否以 Store 为准：写入落地或别处改了，这一行回到 `idle`。
 struct TaskCheck: Equatable {
     enum Phase { case idle, pending, committed }
-    enum Ask: Equatable { case steps, agent(PiSessionState) }
+    enum Ask: Equatable { case steps, agent(SessionState) }
 
     var phase = Phase.idle
     var ask: Ask?
 
-    /// 完成后停留多久再写入：够看清对勾、来得及反悔。
     static let linger: Duration = .milliseconds(800)
 
-    /// 界面上这一条显示为完成（勾了还没写入也算）。
     func done(_ task: Card) -> Bool { task.status == .done || phase != .idle }
 }
 
 extension Workspace {
-    /// 点完成圈（圈本身、读屏的默认动作同一条路）。
     /// `busy`：在做或在等你的会话（`TaskNext.busySession`），完成前先问它。
-    func tap(_ check: Binding<TaskCheck>, task: Card, subtasks: TaskProgress?, busy: PiSessionState?) {
+    func tap(_ check: Binding<TaskCheck>, task: Card, subtasks: TaskProgress?, busy: SessionState?) {
         if task.status == .done {
             let id = task.id
             return attempt { try await self.reopen(id) }
@@ -42,12 +37,10 @@ extension Workspace {
     }
 }
 
-/// 完成圈的按钮：`TaskRingView` 加点按区（`target` 比圈大，圈在其中居中）与 `TaskCheck` 的确认、停留与写入。
 /// Mac 上不用 Button（`ListPress`）：成百上千地出现在任务行里，每颗 Button 一套焦点、按键与读屏的机器，150 条任务点开"还有 N 条"多约 55M 指令。
 struct TaskCheckButton: View {
     let task: Card
     var subtasks: TaskProgress?
-    /// 这件事的"下一步"（`TaskNext`）：会话在做或在等你时完成前先问一句，在跑时圈上此刻那一段走流光（`TaskRingView`）。
     var next: TaskNext?
     let size: CGFloat
     let target: CGSize
@@ -80,8 +73,7 @@ struct TaskCheckButton: View {
 }
 
 extension View {
-    /// 完成这一下的后半程（完成圈、看板上拖到做完同一份）：`Workspace.tap` 定下要问的就弹确认（`TaskCheck.Ask`），
-    /// 进了停留就停 `linger` 再写入（设为完成，不是翻转：等待时别处已做完也不会被翻回去），写不成恢复、照常报错。`task` 为 nil 时什么都不做。
+    /// 停留后写入的是设为完成，不是翻转：等待时别处已做完也不会被翻回去。
     func taskCheck(_ task: Card?, subtasks: TaskProgress?, check: Binding<TaskCheck>) -> some View {
         modifier(TaskCheckFlow(task: task, subtasks: subtasks, check: check))
     }
@@ -108,13 +100,12 @@ private struct TaskCheckFlow: ViewModifier {
         .onChange(of: task?.completedAt) { check.phase = .idle }
     }
 
-    private var busy: PiSessionState? { if case .agent(let session) = check.ask { session } else { nil } }
+    private var busy: SessionState? { if case .agent(let session) = check.ask { session } else { nil } }
 
     private func asking(_ ask: TaskCheck.Ask) -> Binding<Bool> {
         Binding(get: { check.ask == ask }, set: { if !$0, check.ask == ask { check.ask = nil } })
     }
 
-    /// 写入失败时这一行恢复为未完成，错误照常提示。
     private func commit() {
         guard let id = task?.id else { return }
         check.phase = .committed

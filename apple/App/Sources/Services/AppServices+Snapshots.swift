@@ -5,12 +5,11 @@ import UIKit
 import WidgetKit
 #endif
 
-/// 给小组件与分享扩展的快照：跟随资料库变化写进共享容器。扩展不打开资料库。
+/// 扩展不打开资料库。
 /// 只写内容真正变了的那份；小组件显示默认项目与 Cue，只有这两份变了才刷新它们（刷新次数有系统预算）。
 /// 每次运行的第一份全写、本地活动照发：留在共享容器与系统里的那份可能是旧版本写的，结构变了这版就解不出来（小组件读成空的），不能拿它比。
 /// 本地实时活动与小组件读同一份 Cue 此刻；远程活动只用它开启，已有内容由 Mac 经 APNs 更新（`CueLiveActivity`）。
 extension AppServices {
-    /// 库变了、此刻或本机事实变了（`CueFeed`，同一次读带着小组件另要的）时按 Cue 的现状改快照，直到任务取消。
     func startSnapshots() {
         follow(reporting: { .widgetDataUnavailable("\($0)") }) {
             for try await seen in self.cueUpdates() {
@@ -26,13 +25,13 @@ extension AppServices {
 
     /// 远程活动只在身份已确认且资料已对账后开启；不用 CueFeed 在换号、清库前排队的旧快照。
     func remoteActivityState() throws -> CueActivityState? {
-        guard syncReconciled, [.idle, .syncing].contains(syncStatus) else { return nil }
+        guard syncState.reconciled, [.idle, .syncing].contains(syncState.status) else { return nil }
         let digest = try store.snapshot { try CueDigest.read(from: $0) }.value
         return try ActivityPush.fitted(CueActivityState(now: Self.cueNow(digest, at: speech, local: cueLocal)))
     }
     #endif
 
-    /// Cue 此刻：小组件、实时活动与 Cue 那一行（`CueWatch`）都经这里推（调试时可钉成一份样例，`-CuePadCueNow`）。
+    /// 小组件、实时活动与 Cue 那一行（`CueWatch`）都经这里推。
     /// 按推出的这一刻推：说的话的此刻（`SpeechClock`）只在时限到点、同步通断时走，库变了时它可能停在很久以前，
     /// 拿它算会把早过了 `doneWindow` 的"刚做完"当成新的、过时时刻也从那时算。
     static func cueNow(_ digest: CueDigest, at moment: Speech.Moment, local: CueNow.Local) -> CueNow {
@@ -41,7 +40,6 @@ extension AppServices {
         return DebugHooks.preset.cueNow ?? CueNow(digest, at: moment, local: local)
     }
 
-    /// Cue 此刻要的本机事实：还没和 iCloud 对过时为什么等（与启用入口同一处判断 `CueGate`），这台 Mac 是哪台。
     var cueLocal: CueNow.Local {
         #if os(macOS)
         let here: String? = hostID
@@ -51,8 +49,7 @@ extension AppServices {
         return CueNow.Local(waiting: CueGate.of(self, running: nil, name: nil).waitingReason, here: here)
     }
 
-    /// 按当前库内容更新快照，也是观察的落点：进入后台前（`resend`：岛按此刻重发一次，过时时刻从这时算）、
-    /// 推送叫醒拉完之后（回调一返回系统就可能挂起 App，`IOSAppDelegate`）也直接调，不等那条异步的观察。
+    /// 也是观察的落点：进入后台前（`resend`：岛按此刻重发一次，过时时刻从这时算）、推送叫醒拉完之后（回调一返回系统就可能挂起 App，`IOSAppDelegate`）也直接调，不等那条异步的观察。
     ///
     /// 读库、发布活动与角标、落盘是一个单元，按到达先后串行（活动与角标会让出主线程）。读在轮到自己时才做：
     /// 每个单元读到的都不比前一个单元更旧，最后一个单元写下的就是最新一次读取，旧读取不会晚于新读取写回。
@@ -117,7 +114,6 @@ extension AppServices {
         #endif
     }
 
-    /// 和上次写出的一样（`same`，默认相等）就不写；返回写了没有。
     @discardableResult
     private func write<S: SnapshotFile & Equatable>(_ snapshot: S, over old: S?, same: (S, S) -> Bool = (==)) throws -> Bool {
         if let old, same(snapshot, old) { return false }
@@ -126,7 +122,6 @@ extension AppServices {
     }
 }
 
-/// 快照的全部内容：与上次写出的比较，决定写哪份、要不要刷新小组件。
 nonisolated struct WidgetSnapshots: Equatable, Sendable {
     var projects: ProjectsSnapshot
     var home: DefaultProjectSnapshot
@@ -157,10 +152,10 @@ extension CueStore {
         let latest = cards.sorted { $0.modifiedAt > $1.modifiedAt }.prefix(Self.widgetCardLimit)
         return WidgetContent(
             projects: ProjectsSnapshot(projects: try projects().map {
-                ProjectsSnapshot.Project(id: $0.id, name: $0.shownName, color: $0.color, icon: $0.icon)
+                ProjectsSnapshot.Entry(id: $0.id, name: $0.name, color: $0.color, icon: $0.icon)
             }),
             home: DefaultProjectSnapshot(
-                name: try project(Project.defaultID)?.shownName ?? "",
+                name: try project(Project.defaultID)?.name ?? "",
                 cards: latest.map {
                     DefaultProjectSnapshot.Card(id: $0.id, title: $0.heading, modifiedAt: $0.modifiedAt)
                 },

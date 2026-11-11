@@ -1,11 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// 一问要你定什么，问句只这一套画法：问句（Cue 的是代码写的 `CueMessage.headline`，会话的是问题第一行）与下面那一句
-/// （`note`：Cue 的只有规矩那一类引他的原话 `CueAsking.why`，会话的是问题的说明），两行同一条左缘、都不限行；`below` 接在同一条左缘下面（原话）。
-/// Cue 页拍板卡、全屏预览的底栏与对话里答完的问句共用，按 `Tone` 分两档：
-/// - `card`：拍板卡与预览底栏上，左边赭黄问号（全卡唯一的状态色），问句是标题字；
-/// - `ended`：对话里已结束的（`CueSays`），不挂问号、正文字不加粗、次一级的墨，与还在等你的一眼分开。
+/// 问句只这一套画法：拍板卡、全屏预览的底栏与对话里答完的问句共用。
 struct CueQuestionLine<Below: View>: View {
     enum Tone { case card, ended }
 
@@ -13,11 +9,12 @@ struct CueQuestionLine<Below: View>: View {
     let note: String?
     var tone = Tone.card
     @ViewBuilder var below: Below
+    @ScaledMetric(relativeTo: .body) private var readingSpacing = Typography.readingLineSpacing
     @Environment(\.palette) private var palette
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: Spacing.item) {
-            if tone != .ended { PiStateGlyph(status: .asking).font(Typography.title).readerHidden(true) }
+            if tone != .ended { StateGlyph(status: .asking).font(Typography.title).readerHidden(true) }
             VStack(alignment: .leading, spacing: Spacing.tight) {
                 VStack(alignment: .leading, spacing: Spacing.tight) {
                     line.fixedSize(horizontal: false, vertical: true)
@@ -25,7 +22,6 @@ struct CueQuestionLine<Below: View>: View {
                         Text(CueQuestionLine<EmptyView>.keepingTail(note)).font(Typography.secondary).foregroundStyle(palette.ink2).fixedSize(horizontal: false, vertical: true)
                     }
                 }
-                // 读屏读成一句（问句，下面那一句）
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel([question, note].compactMap(\.self).joined(separator: "，"))
                 below
@@ -38,7 +34,7 @@ struct CueQuestionLine<Below: View>: View {
         let line = Text(CueQuestionLine<EmptyView>.keepingTail(question))
         switch tone {
         case .card: line.font(Typography.title).foregroundStyle(palette.ink)
-        case .ended: line.font(Typography.reading).foregroundStyle(palette.ink2).lineSpacing(Typography.readingLineSpacing)
+        case .ended: line.font(Typography.reading).foregroundStyle(palette.ink2).lineSpacing(readingSpacing)
         }
     }
 }
@@ -54,7 +50,6 @@ extension CueQuestionLine where Below == EmptyView {
         self.init(message: message, tone: tone) { EmptyView() }
     }
 
-    /// 拍板卡上的一件（Cue 的提问或会话在问的，`CueWait.asked`）。
     init(wait: CueWait) {
         let asked = wait.asked
         self.init(question: asked.line, note: asked.detail) { EmptyView() }
@@ -81,10 +76,8 @@ extension CueQuestionLine where Below == EmptyView {
     private static let tailLength = 4
 }
 
-/// Cue 一问的选项，一行排完：第一项"可以"是按字宽的实底主按钮（全卡唯一的靛青）靠右，其余（"以后……不用问"）是同一行左边的小字链接：
-/// 一问的主动作只有"可以"，放宽规矩是顺手的事，不和它抢。拍板的答法（`WaitAnswer`：Cue 页拍板卡）与全屏预览的底栏共用；会话的选项胶囊同样靠右（`WaitAnswer`）。
-/// 主按钮总在右下角同一处，不随卡宽铺开，不窄过 `onceWidth`；链接长了在左边折行。辅助功能字号时竖排：按钮在上、链接在下，都靠右。
-/// Cue 停用着答不了时（`CueWatch.canHear`）写"启用 Cue 后再答"在左边链接的位置；只留"可以"、降成次级并停用，不和启用那颗主按钮抢（同屏只一个主动作），启用后恢复。
+/// 一问的主动作只有"可以"，放宽规矩是顺手的事，不和它抢。
+/// Cue 停用着答不了时（`CueWatch.canHear`）只留"可以"、降成次级并停用，不和启用那颗主按钮抢（同屏只一个主动作），启用后恢复。
 struct CueChoices: View {
     let message: CueMessage
     var disabled = false
@@ -98,7 +91,7 @@ struct CueChoices: View {
     #else
     static let onceWidth: CGFloat = 88
     #endif
-    /// 按钮左右的内边距（`ControlSurface`）：最小宽要扣掉它才是字的宽
+    /// `ControlSurface` 按钮左右内边距之和：最小宽要扣掉它才是字的宽。
     private static let inset: CGFloat = 32
 
     var body: some View {
@@ -135,14 +128,12 @@ struct CueChoices: View {
         .disabled(disabled)
     }
 
-    /// 链接上下让出的点按余量：小字本身太矮，按不准。
     private static let linkInset: CGFloat = 6
 
     private func note(_ text: String) -> some View {
         Text(text).font(Typography.meta).foregroundStyle(palette.ink2)
     }
 
-    /// 主按钮"可以"：按字宽，不窄过 `onceWidth`；停用着降成次级并停用。
     private func once(_ option: String, paused: Bool) -> some View {
         Button { pick(option) } label: {
             Text(message.shownChoice(option)).multilineTextAlignment(.center).frame(minWidth: Self.onceWidth - Self.inset)
@@ -153,11 +144,7 @@ struct CueChoices: View {
     }
 }
 
-/// Cue 点名要你看的图（提问卡与结果卡，`CueShown`，至多 `CueShot.limit` 张），按 Cue 给的先后：一排靠左、一行排完不横滑，每张同样大的方形缩略图
-/// （边长 `ShotRow`：放得下就是 `side`，不然几张平分可用宽），取细节最多的那一段填满（`LookBox.framed`）。缩略图本来看不全、都要点开，它只管认出是哪张、邀请点开；
-/// 要看什么由每张正下方那一句说（与图同宽、向下换行；含"："的拆两行，前半加粗是名字、后半是说明），辅助功能字号下也一样。
-/// 格窄、一行只排得下七八个字，折行时句尾几个字粘成一块（`CueQuestionLine.keepingTail`），不剩一两个字挂在下一行。
-/// 点一张全屏看整张，左右翻的就是这几张，页顶写看什么；底栏按 `reply`（拍板卡里是那几个选项，没给照 Cue 页的）。
+/// 缩略图本来看不全、都要点开，它只管认出是哪张、邀请点开；要看什么由每张正下方那一句说。
 /// `chosen`："可以"选的就是其中这一张（`chosen(for:in:)`），它描一圈主按钮的靛青。
 struct CueShots: View {
     let shots: [CueShown]
@@ -174,7 +161,6 @@ struct CueShots: View {
     #endif
     nonisolated fileprivate static let gap = PreviewBatch.gap
 
-    /// 在 `width` 宽里排 `count` 张时每张的边长（`ShotRow` 照它排）：放得下是 `side`，不然几张平分。
     nonisolated static func cell(count: Int, width: CGFloat) -> CGFloat {
         let gaps = gap * CGFloat(count - 1)
         guard width.isFinite else { return side }
@@ -207,9 +193,7 @@ struct CueShots: View {
         }
     }
 
-    /// 看什么：读屏读图的标签（`DeliverableTile` 的 label），这里只给眼睛看。
     private func caption(_ look: String) -> some View {
-        // 名字与说明之间是"："（英文是": "）
         let split = look.range(of: "：") ?? look.range(of: ": ")
         let parts = split.map { [String(look[..<$0.lowerBound]), String(look[$0.upperBound...])] } ?? [look]
         return VStack(alignment: .leading, spacing: Spacing.hair) {
@@ -222,7 +206,6 @@ struct CueShots: View {
     }
 }
 
-/// 一排等宽的格，靠左、顶端对齐、一行排完不横滑：格宽是 `CueShots.cell`。
 private struct ShotRow: Layout {
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         guard !subviews.isEmpty else { return .zero }

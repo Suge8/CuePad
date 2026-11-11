@@ -1,16 +1,17 @@
 import CueStore
 import SwiftUI
 
-/// 项目的任务在哪个文件夹里做，给人看的那一句：项目页介绍之后（Mac 的介绍行、手机页顶那块玻璃的第二行、iPad 侧栏在旁边时页里那一行，`ProjectIntroLine`）
-/// 与"⋯"里文件夹那一组的组头（`ProjectActions`）只读这一份。
-/// - Mac：绑着的写本机路径（`Workspaces.shown`），点了在访达里显示；没绑的写开工时会建的工作区"~/CuePad/<名> · 开工时建好"。
-/// - 手机：写在哪台 Mac 上（同步来的绑定只有文件夹名，`ProjectFolders.place`）；一台 Mac 都没有时写要一台装了 CuePad 的 Mac。
+/// 项目页介绍之后（`ProjectIntroLine`）与"⋯"里文件夹那一组的组头（`ProjectActions`）只读这一份。
 struct ProjectPlace: Equatable {
     let text: Dotted
-    /// 绑着本机的文件夹（只在 Mac 上有）：点了在访达里显示。
     let folder: URL?
-    /// 头一段是本机路径（Mac）：放不下从中间省略，头尾都要紧；手机上是几段"X 上的 Y"，放不下整段整段地从尾部去掉（`ProjectPlaceLabel`）。
     let isPath: Bool
+
+    var shortText: Dotted {
+        guard isPath, let path = text.parts.first else { return text }
+        let name = URL(filePath: path, directoryHint: .isDirectory).lastPathComponent
+        return Dotted([name] + text.parts.dropFirst())
+    }
 }
 
 extension Workspace {
@@ -19,7 +20,7 @@ extension Workspace {
         guard let catalog else { return nil }
         #if os(macOS)
         if let directory = catalog.directories[project.id] {
-            return ProjectPlace(text: Dotted(Workspaces.shown(directory)), folder: URL(filePath: directory, directoryHint: .isDirectory), isPath: true)
+            return ProjectPlace(text: Dotted(UserHome.shown(directory)), folder: URL(filePath: directory, directoryHint: .isDirectory), isPath: true)
         }
         return ProjectPlace(text: Dotted(pendingFolder(of: project), ProjectFolders.pending), folder: nil, isPath: true)
         #else
@@ -28,15 +29,14 @@ extension Workspace {
     }
 
     #if os(macOS)
-    /// 没绑文件夹的项目第一次开工时建的工作区，给人看的写法（`Workspaces.shown`）；接入面板说任务在哪做也读它。
+    /// 接入面板说任务在哪做也读它。
     func pendingFolder(of project: Project) -> String {
-        Workspaces.shown(services.workspaces.directory(for: project.name).path(percentEncoded: false))
+        UserHome.shown(services.workspaces.directory(for: project.name).path(percentEncoded: false))
     }
     #endif
 }
 
-/// `ProjectPlace` 那一句（`icon` 时前面一枚文件夹图标），一行：本机路径太长从中间省略；几段的放得下几段写几段，去掉的接一个"…"，
-/// 不拦腰截断一段（连头一段都放不下才从尾部省略），读屏照读全部。Mac 上绑着本机文件夹的点了在访达里显示。
+/// 一行：几段的放得下几段写几段，去掉的接一个"…"，不拦腰截断一段（连头一段都放不下才从尾部省略），读屏照读全部。
 struct ProjectPlaceLabel: View {
     let place: ProjectPlace
     var icon = true
@@ -45,7 +45,7 @@ struct ProjectPlaceLabel: View {
         let label = HStack(spacing: Spacing.tight) {
             if icon { Image(.folder).imageScale(.small).readerHidden(true) }
             if place.isPath {
-                Text(place.text).lineLimit(1).truncationMode(.middle)
+                Text(place.shortText).lineLimit(1).truncationMode(.middle).accessibilityLabel(place.text.spoken)
             } else {
                 segments
             }
@@ -54,9 +54,9 @@ struct ProjectPlaceLabel: View {
         if let folder = place.folder {
             Button { NSWorkspace.shared.activateFileViewerSelecting([folder]) } label: { label }
                 .buttonStyle(PressStyle(.inline))
-                .help("在访达中显示")
+                .help(place.text.visible)
         } else {
-            label
+            label.help(place.text.visible)
         }
         #else
         label
@@ -76,10 +76,8 @@ struct ProjectPlaceLabel: View {
     }
 }
 
-/// 项目的一句介绍接它的文件夹（`ProjectPlace`）：`inHeader` 时是手机页顶那块玻璃的第二行（小一号、同一档墨、不带图标，同 `floatingHeader` 的信息行）；
 /// 宽屏（Mac、iPad）项目页最上面那一行不写介绍（`intro: false`）：项目名与介绍已在主栏栏头（`WideProjectHeading`），这里只剩文件夹与"规则"。
-/// 目录读到之前、没写介绍时也占着这一行的高：下面的任务纸与墙、玻璃里的标题不上下跳。介绍优先占宽，文件夹在后面省略（规则见 `ProjectPlaceLabel`）。
-/// 绑着文件夹的项目（技能与规则的快照里有它）行末一个"规则"，点了直接打开这个项目的 AGENTS.md 编辑页；手机页顶那块玻璃里不放，在右上"⋯"里。
+/// 目录读到之前、没写介绍时也占着这一行的高：下面的任务纸与墙、玻璃里的标题不上下跳。介绍优先占宽，文件夹在后面省略。
 struct ProjectIntroLine: View {
     let project: Project?
     var inHeader = false

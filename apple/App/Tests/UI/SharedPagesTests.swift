@@ -3,14 +3,13 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 两端共用的页面状态：回收站的内容与操作、新会话从发出到认领的进度。
+@Suite(.releasesLibraries)
 struct SharedPagesTests {
     let app = TestApp()
     var store: CueStore { app.services.store }
 
     // MARK: 回收站
 
-    /// 永久删除走界面同一个入口（`Workspace.purge`）：项目连同它的卡一起没了，单独删的卡还在回收站。恢复见下一条。
     @Test func 回收站列出删除的项目与卡片_永久删除项目连同它的卡() async throws {
         let project = try await store.createProject(name: "旧项目", color: "#000000")
         _ = try await store.createCard(in: project.id, body: "项目里的一条")
@@ -30,7 +29,6 @@ struct SharedPagesTests {
         #expect(try await store.cards(in: project.id).isEmpty)
     }
 
-    /// 恢复后给一句提示写明落点、点它过去（与删除时的"已删除 · 撤销"对称）；卡片所在的项目还在回收站时落到默认项目。
     @Test func 回收站恢复后提示落点_点它过去() async throws {
         let project = try await store.createProject(name: "圆桌", color: "#000000")
         let card = try await store.createCard(in: project.id, body: "项目里的一条")
@@ -61,11 +59,11 @@ struct SharedPagesTests {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = try #require(TimeZone(secondsFromGMT: 8 * 3_600))
         let now = try #require(calendar.date(from: DateComponents(year: 2026, month: 10, day: 31, hour: 23, minute: 59, second: 50)))
-        let recorder = PiStateRecorder(store: store, hostID: "mac-a")
+        let recorder = StateRecorder(store: store, hostID: "mac-a")
         for (id, date) in [("future", now + 20), ("today", now - 3_600), ("week", now - 3 * 86_400)] {
-            try await recorder.update(sessionID: id, state: .ended, title: id, times: PiTimes(stateSince: date, busySince: nil))
+            try await recorder.update(sessionID: id, state: .ended, title: id, times: SessionTimes(stateSince: date, busySince: nil))
         }
-        let list = try await PiSessionList.read(text: "", historyLimit: PiSessionList.pageSize, at: .always(at: now), from: store)
+        let list = try await SessionListData.read(text: "", historyLimit: SessionListData.pageSize, at: .always(at: now), from: store)
         let before = TimeSection.split(list.ended, date: \.state.stateSince, now: now, calendar: calendar)
         #expect(before.map(\.section) == [.today, .thisWeek])
         #expect(before.first?.items.map(\.state.sessionID) == ["future", "today"])
@@ -78,13 +76,13 @@ struct SharedPagesTests {
 
     @Test func 新会话认领时_时间异常的历史仍只有一组和一份会话() async throws {
         let project = try await store.createProject(name: "圆桌", color: "#000000")
-        let recorder = PiStateRecorder(store: store, hostID: "mac-a")
+        let recorder = StateRecorder(store: store, hostID: "mac-a")
         let now = Date.now
         for (id, date) in [("future", now.addingTimeInterval(90 * 86_400)), ("today", now), ("past", now.addingTimeInterval(-90 * 86_400))] {
-            try await recorder.update(sessionID: id, state: .ended, title: id, times: PiTimes(stateSince: date, busySince: nil))
+            try await recorder.update(sessionID: id, state: .ended, title: id, times: SessionTimes(stateSince: date, busySince: nil))
         }
         func checkList() async throws {
-            let list = try await PiSessionList.read(text: "", historyLimit: PiSessionList.pageSize, at: .always(), from: store)
+            let list = try await SessionListData.read(text: "", historyLimit: SessionListData.pageSize, at: .always(), from: store)
             let sections = list.historyRuns.map(\.section)
             let rows = list.pinned + list.now + list.historyRuns.flatMap(\.items)
             #expect(Set(sections).count == sections.count)
@@ -92,8 +90,8 @@ struct SharedPagesTests {
             #expect(Set(rows.map(\.state.sessionID)).isSuperset(of: ["future", "today", "past"]))
             #expect(rows.filter { $0.state.sessionID == "new" }.count == 1)
         }
-        let launch = try await NewSessionInput.Start(project: project.id).launch(
-            in: project, on: "mac-a", draft: ComposerDraft(text: "检查重连"), agent: .pi, model: nil, thinking: nil, intent: .new, workspace: Workspace(services: app.services))
+        let launch = try await app.services.launchSession(
+            in: project.id, prompt: "检查重连", title: project.shownName, on: "mac-a", card: nil, agent: .pi)
         try await recorder.update(sessionID: "new", state: .thinking, title: "新会话", launchToken: launch.token)
         #expect(try await launch.progress(from: store).claimed?.sessionID == "new")
         try await checkList()
@@ -104,7 +102,7 @@ struct SharedPagesTests {
 
     @Test func 新会话从发出到认领_失败带着原因() async throws {
         let project = try await store.createProject(name: "圆桌", color: "#000000")
-        let request = try await store.requestLaunch(PiLaunch(project: project.id, prompt: nil, token: "tok-1"), title: "圆桌", on: "mac-a", card: nil)
+        let request = try await store.requestLaunch(LaunchRequest(project: project.id, prompt: nil, token: "tok-1"), title: "圆桌", on: "mac-a", card: nil)
         func phase() async throws -> LaunchProgress.Phase {
             try await SessionLaunch(request: request.id, token: "tok-1").progress(from: store).phase(at: .always())
         }
@@ -115,12 +113,12 @@ struct SharedPagesTests {
         _ = try await eventually(store, { try SessionLaunch(request: request.id, token: "tok-1").progress(from: $0).phase(at: .always()) }) { $0 == .opening }
         #expect(try await phase() == .opening)
 
-        try await PiStateRecorder(store: store, hostID: "mac-a").update(sessionID: "s1", state: .thinking, title: "圆桌", launchToken: "tok-1")
+        try await StateRecorder(store: store, hostID: "mac-a").update(sessionID: "s1", state: .thinking, title: "圆桌", launchToken: "tok-1")
         let claimed = try await SessionLaunch(request: request.id, token: "tok-1").progress(from: store)
         #expect(claimed.phase(at: .always()) == .claimed && claimed.claimed?.sessionID == "s1")
         await executor.stop()
 
-        let refused = try await store.requestLaunch(PiLaunch(project: project.id, prompt: nil, token: "tok-2"), title: "圆桌", on: "mac-b", card: nil)
+        let refused = try await store.requestLaunch(LaunchRequest(project: project.id, prompt: nil, token: "tok-2"), title: "圆桌", on: "mac-b", card: nil)
         let failing = DeliveryExecutor(store: store, hostID: "mac-b", onIssue: { _ in }) { _, _ in .failed(.verbatim("文件夹不在了")) }
         try await failing.start()
         _ = try await eventually(store, { try $0.deliveryRequest(refused.id)?.isOpen }) { $0 == false }

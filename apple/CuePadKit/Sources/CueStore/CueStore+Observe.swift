@@ -6,7 +6,6 @@ extension CueStore {
   /// 只要"变了就叫我"的也读一个会跟着变的值（计数、版本、列表），不单独订阅表。
   /// 结果随时间变的（读里登记了 `expire(at:)`，如 Cue 那台 Mac 算不算在线）到点也重读，不轮询。
   /// 突发的多次写入会合并为一次重读。`read` 在只读连接（`rereader`）的隔离域内、一个读事务里执行，可直接调用查询方法：
-  /// `store.observe { try $0.cards(in: id) }`
   /// 订阅以表为粒度：别的行改动同一张表也会重读，但结果和上一次一样就不产出——比较只在读取的这一侧做一次，
   /// 不把没变的数据送到主线程、也不让界面白白重算。`initial` 是调用方手里已有的值，当作"上一次"：重新订阅后第一份没变也不产出。
   /// 读里按行收窄过的表（`narrow`）例外：只改动那张表别的行的写入不叫醒它。
@@ -16,14 +15,14 @@ extension CueStore {
     observe(read, reading: Set(Table.allCases), scopes: [:], since: nil, last: initial, expiry: nil)
   }
 
-  /// 从主线程当场读到的那份（`snapshot`）接着订阅：不重读，之后的变化照 `observe`；快照之后已有写入的，马上重读一次。
+  /// 不重读；快照之后已有写入的，马上重读一次。
   public nonisolated func observe<T: Sendable & Equatable>(
     from snapshot: Snapshot<T>, _ read: @escaping @Sendable (isolated CueStore) throws -> T
   ) -> AsyncThrowingStream<T, Error> {
     observe(read, reading: snapshot.tables, scopes: snapshot.scopes, since: snapshot.version, last: snapshot.value, expiry: snapshot.expiry)
   }
 
-  /// 主线程上当场读一次（只读连接，不等队列）：界面第一帧要的值，读到的表与时刻一并记下，交给 `observe(from:)` 接着订阅。
+  /// 读到的表与时刻一并记下，交给 `observe(from:)` 接着订阅。
   @MainActor
   public func snapshot<T: Sendable>(_ read: @Sendable (isolated CueStore) throws -> T) throws -> Snapshot<T> {
     // 先取提交数再读：其间有提交的，接着订阅时多重读一次，不会漏
@@ -32,7 +31,6 @@ extension CueStore {
     return Snapshot(value: value, tables: tables, scopes: scopes, version: since, expiry: expiry)
   }
 
-  /// 订阅 `tables`（`since` 见 `Subscriptions.add`），每个信号重读一次；`last` 是第一次比较的"上一次"，`expiry` 是它到点重读的时刻。
   private nonisolated func observe<T: Sendable & Equatable>(
     _ read: @escaping @Sendable (isolated CueStore) throws -> T, reading tables: Set<Table>, scopes: [Table: [RowScope]], since: Int?, last initial: T?,
     expiry firstExpiry: Date?
@@ -40,12 +38,15 @@ extension CueStore {
     AsyncThrowingStream { continuation in
       let (signals, signal) = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
       let (subscriptions, rereader) = (self.subscriptions, self.rereader!)
+      let run = UUID()
+      subscriptions.began(run)
       let task = Task {
         let token = subscriptions.add(signal, reading: tables, scopes: scopes, since: since)
         var timer: Task<Void, Never>?
         defer {
           timer?.cancel()
           subscriptions.remove(token)
+          subscriptions.finished(run)
         }
         let timing = self.timing
         func schedule(_ expiry: Date?) {
@@ -77,11 +78,17 @@ extension CueStore {
       continuation.onTermination = { _ in
         signal.finish()
         task.cancel()
+        subscriptions.stopping(run, task)
       }
     }
   }
 
-  /// 在只读连接上读一次（一个读事务：读里的几条查询看到的是同一刻的库），带回读到的表、其中按行收窄的（同一次读里又整表读过的不算收窄）
+  /// 等读的一方已经停下的订阅收完尾：重读任务是订阅自己起的，读的一方停了它还要再走几步才放掉资料库，调用方等不到它。
+  /// 还有人在读的订阅不等。给要确认资料库放掉了的收尾用（测试），`observe` 的调用方不必等它。
+  public nonisolated func stoppedSubscriptions() async {
+    for task in subscriptions.stopped { await task.value }
+  }
+
   /// 与结果随时间变的时刻。
   private func tracked<T>(_ read: (isolated CueStore) throws -> T) throws -> (T, Set<Table>, [Table: [RowScope]], Date?) {
     try db.exec("BEGIN")
@@ -97,7 +104,6 @@ extension CueStore {
   /// 这次读只依赖 `table` 里 `column` 满足 `includes` 的行：先按 SQL 条件 `candidates`（绑定 `arguments`；可走索引，要排除这一列为 NULL 的行）取候选行再逐行精判，
   /// 把这些行（rowid）交给 `body`，并登记给订阅——之后的写入只改动这张表的别的行（改动前不在其中、改动后也不满足）时不叫醒它。`body` 里对这张表的读不算整表依赖，
   /// 要只读这些行（如 `rowid IN`）；同一次读里收窄几次各记一份，任一命中就叫醒；别处再整表读这张表的，收窄作废。不在订阅里读时只取行、不登记。
-  /// 会话状态每变一次，项目引导这类只看几行的订阅就不必重读。
   @discardableResult
   func narrow<T>(
     _ table: Table, column: String, candidates: String, arguments: [any SQLBindable] = [], to includes: @escaping @Sendable (String) -> Bool,
@@ -112,7 +118,6 @@ extension CueStore {
     }
   }
 
-  /// 这次提交会不会改变订阅者读到的：碰了它整表读的表，或碰了它收窄的表里任一份依赖的行（原来在其中的，或改动后满足条件的）。判断不出来按会。
   func touches(_ tables: Set<Table>, _ changes: Changes, reading: Set<Table>, scopes: [Table: [RowScope]]) -> Bool {
     let touched = reading.intersection(tables)
     if touched.contains(where: { scopes[$0] == nil }) { return true }
@@ -134,7 +139,6 @@ extension CueStore {
 
 }
 
-/// 主线程当场读到的一份（`CueStore.snapshot`）：值，加上从它接着订阅（`observe(from:)`）要的读到的表、当时的提交数与到点重读的时刻。
 public struct Snapshot<Value: Sendable>: Sendable {
   public let value: Value
   let tables: Set<Table>
@@ -143,7 +147,6 @@ public struct Snapshot<Value: Sendable>: Sendable {
   let expiry: Date?
 }
 
-/// 一次读依赖的一张表里的那些行（`CueStore.narrow`）：读时满足条件的行，与判断改动后的行满不满足用的列、候选条件（连同绑定的参数）与精判。
 struct RowScope: Sendable {
   let column: String
   let candidates: String

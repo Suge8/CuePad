@@ -2,8 +2,7 @@ import Foundation
 
 /// 一台 Mac 在不在线（同步表 `macPresence`，每台 Mac 一条，只由它自己写；手机与别的 Mac 只读）：Mac 在不在、Cue 在不在值班
 /// （`CueProfile.onDuty`、Cue 页的"在睡觉"）都只从这里推出。记录只有一个期限：此刻早于 `onlineUntil` 就在线，没有记录是不在线。
-/// 醒着的 Mac 每 `renewal` 续一次，把期限推到此刻加 `lifetime`；将睡眠、退出时写成此刻（当场离线）；启动时画第一帧之前写下在线（`launchMac`），
-/// 醒来立即续期（其余写的时机在 App 的 `MacPresenceKeeper`）。到期由订阅重读（`expire(at:)`），不轮询；期限是那台 Mac 的时钟写的，各端时钟大致对准即可。
+/// 醒着的 Mac 每 `renewal` 续一次；将睡眠、退出时写成此刻（当场离线）。到期由订阅重读（`expire(at:)`），不轮询；期限是那台 Mac 的时钟写的，各端时钟大致对准即可。
 public struct MacPresence: Equatable, Sendable {
   public var hostID: String
   public var onlineUntil: Date
@@ -18,6 +17,10 @@ public struct MacPresence: Equatable, Sendable {
   public static let lifetime: TimeInterval = 2 * Double(renewal.components.seconds)
 
   func isOnline(at now: Date) -> Bool { now < onlineUntil }
+
+  /// 将睡眠、退出时它当场写下的离线（期限就是写的那一刻）。到期没续不算：它崩溃、断电了，或者本机手里这份只是旧了
+  ///（手机在后台十几分钟没拉到续期是常事），那是没消息。
+  var saidGoodbye: Bool { onlineUntil <= modifiedAt }
 
   public static func recordID(host: String) -> UUID { DeterministicID.uuid("mac-presence/\(host)") }
 }
@@ -46,16 +49,16 @@ extension CueStore {
   }
 
   /// 这台 Mac 的 App 启动：打开资料库之后、画第一帧之前，在资料库的队列上当场写完（调用方等着，那时还没有别的写在排队）——
-  /// 先对账这台 Mac 上次留下的会话记录（`reconcilePiStates`，`running` 判断记下的进程是不是还是那一个），再写下在线。
+  /// 先对账这台 Mac 上次留下的会话记录（`reconcileSessionStates`，`running` 判断记下的进程是不是还是那一个），再写下在线。
   /// 退出时写下的是离线：不先写在线，第一帧读到的本机会话与 Cue 都是"状态未确认"，要等启动后的续期才变；在线又必须在对账之后，
-  /// 不然进程已经没了的记录会被当成确认的在跑。返回对账后可沿用的状态与计时（`PiBridge.carryOver`）。
+  /// 不然进程已经没了的记录会被当成确认的在跑。返回对账后可沿用的状态与计时（`Bridge.carryOver`）。
   public nonisolated func launchMac(
-    host: String, bootID: String? = SystemBoot.id, running: @Sendable (PiProcess) -> Bool
-  ) throws -> [String: (state: PiWorkState, times: PiTimes)] {
+    host: String, bootID: String? = SystemBoot.id, running: @Sendable (SessionProcess) -> Bool
+  ) throws -> [String: (state: WorkState, times: SessionTimes)] {
     let now = timing.now()
     return try queue!.sync {
       try assumeIsolated { store in
-        let open = try store.reconcilePiStates(host: host, bootID: bootID, running: running, at: now)
+        let open = try store.reconcileSessionStates(host: host, bootID: bootID, running: running, at: now)
         try store.recordMacPresence(host: host, bootID: bootID) { true }
         return open
       }
@@ -70,4 +73,11 @@ extension CueStore {
   }
 
   public func macOnline(_ host: String) throws -> Bool { try macOnlineUntil(host) != nil }
+
+  /// 那台 Mac 自己说了离开（`MacPresence.saidGoodbye`）、之后没再上线时它的名字。在线、没有记录、只是到期没续，
+  /// 或本机同步不通说不准（`Speech.Moment.seesPresence`）都为 nil：没消息不是知道它不在。
+  public func macKnownOff(_ host: String, at moment: Speech.Moment) throws -> String? {
+    guard moment.seesPresence(of: host), try find(MacPresence.self, MacPresence.recordID(host: host))?.saidGoodbye == true else { return nil }
+    return try macAgents(on: host).shownName
+  }
 }

@@ -5,7 +5,7 @@ import ImageIO
 extension Schema {
   /// 78：附件换成按键存取（`AttachmentKey`、`AttachmentFiles`）。
   /// - 正文与文字里的 `![](cuepad://img/<hash>)` 改写成 `![](cuepad://file/<键>)`；
-  /// - 附件记录的 format 换成键的扩展名（预览的按文件名，`PiPreview.key`；"bin" 是旧版给非图片写的）；同一份内容的几份预览文件名扩展名不同时，
+  /// - 附件记录的 format 换成键的扩展名（预览的按文件名，`PreviewItem.key`；"bin" 是旧版给非图片写的）；同一份内容的几份预览文件名扩展名不同时，
   ///   多出的键各补一条记录（id 由键推出，各台补出同一行；只在文件在本机的那台补，免得传一条没文件的记录）；
   ///   被引用、文件在本机却没有记录的同样补登记；
   /// - 库旁的 `Attachments/<hash>` 按键链进缓存目录，服务器还没收下记录的留作保底（`Attachments/<键>`），旧名删掉。
@@ -32,7 +32,6 @@ extension Schema {
       if formats[hash] == nil { formats[hash] = format }
       if previewFormats[hash]?.contains(format) != true { previewFormats[hash, default: []].append(format) }
     }
-    /// 这个哈希的扩展名；nil 是这台推不出来
     func format(of hash: String) -> String? {
       if let known = formats[hash] { return known }
       if let record = recorded[hash], record.format != legacyBinary { return record.format }
@@ -101,7 +100,6 @@ extension Schema {
     return { for url in obsolete { try? FileManager.default.removeItem(at: url) } }
   }
 
-  /// 旧版给非图片附件写的 format
   static let legacyBinary = "bin"
   static let legacyImagePrefix = "![](cuepad://img/"
   private static var legacyImage: Regex<(Substring, Substring)> { /!\[\]\(cuepad:\/\/img\/([0-9a-f]{64})\)/ }

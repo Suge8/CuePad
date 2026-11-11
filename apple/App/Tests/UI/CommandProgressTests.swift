@@ -1,19 +1,23 @@
 #if os(macOS)
+import CueBridge
 import CueStore
 import CueTestSupport
 import Foundation
 import Testing
 @testable import CuePad
 
-/// #43 复审：从回复框提交命令，明确拒绝与结果未确认分别展示；后来有对话或新请求时收起。
 @MainActor
+@Suite(.releasesLibraries)
 struct CommandProgressTests {
-    let app = TestApp()
+    let clock = ManualTiming()
+    let app: TestApp
     var store: CueStore { app.services.store }
+
+    init() { app = TestApp(timing: clock.timing) }
 
     private func command() async throws -> DeliveryRequest {
         let workspace = Workspace(services: app.services)
-        let box = app.services.settings.replyDraftBinding(for: PiSessionState.recordID(sessionID: "atlas"))
+        let box = app.services.settings.replyDraftBinding(for: SessionState.recordID(sessionID: "atlas"))
         box.wrappedValue = ComposerDraft(text: "/compact")
         await workspace.speak(to: .session(
             SendTarget(kind: .piSession, name: "atlas", ref: "atlas"), host: TestApp.hostID, mode: .command, card: nil), from: box) { $0.stored }.value
@@ -21,7 +25,7 @@ struct CommandProgressTests {
     }
 
     private func progress() async throws -> MacDelivery.CommandProgress? {
-        MacDelivery.commandProgress(try await store.deliveryRequests(toSession: "atlas"), messages: try await store.piMessages(of: "atlas"), at: app.services.speech)
+        MacDelivery.commandProgress(try await store.deliveryRequests(toSession: "atlas"), messages: try await store.chatMessages(of: "atlas"), at: app.services.speech)
     }
 
     @Test(arguments: ["timeout", "disconnect", "failed"], [true, false])
@@ -35,10 +39,14 @@ struct CommandProgressTests {
             default: return ["ok": false, "error": "failed: Nothing to compact (session too small)"]
             }
         }
-        defer { ext.close(bye: "quit"); app.pi.stop(); app.services.cancelBackgroundWork() }
+        defer { ext.close(bye: "quit"); app.bridge.stop(); app.services.cancelBackgroundWork() }
         let request = try await command()
         #expect(try await progress() == .running("/compact"))
         try await app.services.executor.start()
+        if fault == "timeout" {
+            try await eventually("命令交给了宿主") { ext.received.contains("command") }
+            clock.advance(AgentTimeouts.ack)
+        }
         let result = try await store.outcome(of: request)
         #expect(result.status == .known(.unconfirmed))
         #expect(try await progress() != .running("/compact"))
@@ -46,9 +54,9 @@ struct CommandProgressTests {
         #expect(try await progress()?.failed == false)
         if laterMessage {
             let later = try #require(result.completedAt).addingTimeInterval(0.001)
-            try await store.writePiTranscript(PiTranscript(sessionID: "atlas", messages: [
-                PiChatMessage(sessionID: "atlas", entryID: "later", seq: 1, role: .user, text: "终端里说的下一句", at: later),
-            ], recap: PiRecap()))
+            try await store.writeTranscript(SessionTranscript(sessionID: "atlas", messages: [
+                ChatMessage(sessionID: "atlas", entryID: "later", seq: 1, role: .user, text: "终端里说的下一句", at: later),
+            ], recap: Recap()))
         } else {
             await Workspace(services: app.services).speak("下一句", to: .session(
                 SendTarget(kind: .piSession, name: "atlas", ref: "atlas"), host: TestApp.hostID, mode: .send, card: nil)).value
@@ -62,7 +70,7 @@ struct CommandProgressTests {
         ext.onCommand = { _, command in
             command["t"] as? String == "command" ? ["ok": false, "error": "unknown_command"] : ["ok": true]
         }
-        defer { ext.close(bye: "quit"); app.pi.stop(); app.services.cancelBackgroundWork() }
+        defer { ext.close(bye: "quit"); app.bridge.stop(); app.services.cancelBackgroundWork() }
         try await app.services.executor.start()
         let request = try await command()
         #expect(try await store.outcome(of: request).status == .known(.failed))

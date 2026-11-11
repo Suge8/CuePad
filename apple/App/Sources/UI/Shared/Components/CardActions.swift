@@ -1,19 +1,14 @@
 import CueStore
 import SwiftUI
 
-/// 灵感与任务的菜单（长按 / Mac 右键，或任务气泡与纸页的"⋯"），iOS 与 Mac 共用：有哪几项、什么顺序只在 `CardMenu`，这里只画。
+/// 有哪几项、什么顺序只在 `CardMenu`，这里只画。
 struct CardActions: View {
     let card: Card
-    /// "⋯"里的那一份（`CardMenu.more`）；false 是长按菜单。
     var more = false
-    /// 在能批量选择的地方（Mac 项目页的墙与列表）：菜单里多一项"选择"。
     var selectable = false
-    /// 这是 Mac 上的叶子任务（没有子任务）：没做完时多一项"绑定会话"（会话列表在 Mac 上，手机不传）。
     var leaf = false
-    /// 点它进的是会话（`Workspace.enter`）：长按菜单第一项"打开任务"。
     var opens = false
-    /// 它此刻在用的会话（叶子交给的那个；有子任务的是此刻干活的那一步的）：还能结束时长按菜单多一项"结束会话"。
-    var session: PiSessionState?
+    var session: SessionState?
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
@@ -29,9 +24,7 @@ struct CardActions: View {
         switch item {
         case .move: moveMenu
         case .bindSession:
-            #if os(macOS)
             Menu(item.title, icon: item.icon) { SessionBindItems(leaf: card) }
-            #endif
         case .endSession:
             if let session, let end = SessionActions.end(session, ending: false, in: workspace) { RowActionButtons(actions: [end]) }
         default:
@@ -52,7 +45,6 @@ struct CardActions: View {
     }
 }
 
-/// 每一项的字、图标与颜色语义：长按菜单、"⋯"与轻扫共用一份。
 extension CardMenu.Item {
     var title: LocalizedStringResource {
         switch self {
@@ -104,8 +96,7 @@ extension CardMenu.Item {
 }
 
 extension CardMenu.Item {
-    /// 这一项对 `card` 做什么，菜单、"⋯"与轻扫都按它执行；子菜单（移到项目、绑定会话）与此处做不了的（手机上的选择、
-    /// Mac 上的"更多"、不在大纲里的缩进）为 nil。`structure` 是它在任务大纲里此刻能不能缩进、反缩进。
+    /// 子菜单（移到项目、绑定会话）与此处做不了的（手机上的选择、Mac 上的"更多"、不在大纲里的缩进）为 nil。
     func run(on card: Card, in workspace: Workspace, structure: TaskStructure? = nil) -> (() -> Void)? {
         let id = card.id
         switch self {
@@ -128,7 +119,6 @@ extension CardMenu.Item {
         case .outdent: return structure?.outdent
         case .more:
             #if os(iOS)
-            // 点这一行进的是会话时，气泡里另有"打开任务"：判断同长按菜单，按此刻交给的会话算
             return {
                 let opens = workspace.agentLinks.items[card.id] != nil
                 workspace.moreCard = CardMoreRequest(card: card, opens: opens, source: workspace.press.source)
@@ -140,14 +130,12 @@ extension CardMenu.Item {
         }
     }
 
-    /// 轻扫露出的这一项（也是同源的读屏动作）。
     func rowAction(on card: Card, in workspace: Workspace, structure: TaskStructure? = nil) -> RowAction? {
         run(on: card, in: workspace, structure: structure).map { RowAction(title, icon: icon, tone: tone, run: $0) }
     }
 }
 
 extension RowSwipes {
-    /// 一条灵感或任务的轻扫（`CardMenu.swipes`）；`structure` 是它在任务大纲里此刻能不能缩进、反缩进。
     static func card(_ card: Card, workspace: Workspace, structure: TaskStructure? = nil) -> RowSwipes {
         let swipes = CardMenu.swipes(for: card, indent: structure?.indent != nil)
         let action = { (item: CardMenu.Item) in item.rowAction(on: card, in: workspace, structure: structure) }

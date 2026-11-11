@@ -75,7 +75,8 @@ extension EditorCore {
         let lineRange = NSRange(location: range.location, length: range.length - (hasNewline ? 1 : 0))
         let line = decorations.style(ofLine: text.substring(with: lineRange), at: range.location)
         let title = range.location == 0 ? style.title : nil
-        guard title != nil || line.kind != .body || !line.inlineCode.isEmpty || !line.links.isEmpty else { return nil }
+        let blank = lineRange.length == 0 && line.kind == .body ? style.blankLineHeight : nil
+        guard title != nil || blank != nil || line.kind != .body || line.markerLength > 0 || !line.inlineCode.isEmpty || !line.links.isEmpty || !line.emphasis.isEmpty else { return nil }
         let paragraph = NSMutableAttributedString(attributedString: storage.attributedSubstring(from: range))
         if let title {
             // 标题行不认 Markdown 记号：它就是一件事的名字
@@ -84,6 +85,11 @@ extension EditorCore {
             spacing.paragraphSpacing = title.spacing
             paragraph.addAttributes(
                 [.font: title.font, .foregroundColor: title.color, .paragraphStyle: spacing], range: NSRange(location: 0, length: paragraph.length))
+        } else if let blank {
+            let spacing = NSMutableParagraphStyle()
+            spacing.minimumLineHeight = blank
+            spacing.maximumLineHeight = blank
+            paragraph.addAttributes([.font: CueFont.systemFont(ofSize: blank), .paragraphStyle: spacing], range: NSRange(location: 0, length: paragraph.length))
         } else {
             decorate(paragraph, line: line)
         }
@@ -103,8 +109,10 @@ extension EditorCore {
             paragraph.addAttribute(.paragraphStyle, value: paragraphStyle(hangingIndent: hang), range: whole)
         }
         if line.markerLength > 0 {
-            paragraph.addAttribute(.foregroundColor, value: style.markerColor, range: NSRange(location: 0, length: line.markerLength))
+            paragraph.addAttributes([.foregroundColor: style.markerColor, .font: isCode ? style.codeFont : style.font],
+                                    range: NSRange(location: 0, length: line.markerLength))
         }
+        for marker in line.emphasis { paragraph.addAttribute(.foregroundColor, value: style.markerColor, range: marker) }
         for link in line.links {
             // 链接是正文的墨色加下划线，不另上色：签名色只给焦点
             paragraph.addAttribute(.underlineStyle, value: NSUnderlineStyle.single.rawValue, range: link.label)
@@ -126,7 +134,6 @@ extension EditorCore {
         return paragraph
     }
 
-    // MARK: 刷新已排版的段落
     // TextKit 不会因为装饰上下文变了就重新询问未被编辑的段落，必须发一次"仅属性"的编辑通知；
     // 通知不改文本、不进撤销栈，`storageDidProcessEditing` 对它直接忽略。
 

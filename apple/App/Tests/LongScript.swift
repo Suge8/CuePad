@@ -1,7 +1,6 @@
 #if os(macOS)
 import Foundation
 
-/// 长程剧本里会话的长回复与他贴来的长文：撑大 Cue 的上下文（peek 给最新回答全文），也藏着后面要用的事实。
 enum LongScript {
     static let mailReport = """
         查清楚了。结论：演示项目线上发信走的是 Postmark；SendGrid 那套是 2024 年迁移前留下的旧配置，已经不用了。这个月额度还剩 6,288 封，照现在的量月底前够用。

@@ -3,12 +3,11 @@ import SwiftUI
 
 /// 分组格会话条：等你在上面、推进中在下面独立滚。尺寸只影响排版，三端共用数据、注意顺序与动画预算。
 /// 手机（`phone`，60 点竖条）：每组一张纸（列的纸色），格铺满纸，在默认字号、650 点高内完整放下十个会话。
-/// 宽屏（`wide`）：不铺纸，组就是会话条那一块上的一段行，靠组头与间距分开；每个会话一行（`RailLine`），行首那一列是会话的状态标（`PiStateDot`），名字在它右边。
+/// 宽屏（`wide`）：不铺纸，组就是会话条那一块上的一段行，靠组头与间距分开；每个会话一行（`RailLine`），行首那一列是会话的状态标（`StateDot`），名字在它右边。
 /// 组头是小号淡字组名加着色计数，左沿同行首那一列、字贴着下沿，离它那一组近、离上一组远。
 /// 等你组每行两行高（`Chrome.tallRow`），推进中一行一种高（`Chrome.row`），长相在 `SessionRailCell`。
 /// 等你过多时自身也能滚、最多占一半可用高度，不能把推进中或待回复挤到再也点不到。一组多到要滚时下沿淡出一截（`Chrome.scrollFade`），看得出下面还有；
 /// 放得下时不淡。两组为空时手机保留列宽、不重排对话；宽屏在那儿写一行"没有在推进的会话"（`SessionRailEmpty`），不留一大块不知道是不是没读到的空白。
-/// 宽屏的行增删：留下的行按 `Motion.nudge` 让位，进出的淡入淡出（减弱动态效果时不挪、只淡）。
 /// 点按只回报会话与意图（`Opening`：默认，或 ⌘ 点的并排）；右键是会话的菜单（`OpenSessionBeside` 与 `SessionActions`，同会话出现的每一处）。`marked` 是调用方主区开着的会话投影，不在组件内记选中。
 /// 被否决的：宽屏每组一张纸（等你赭黄、推进中白纸）——三种材质叠在侧栏底上像一摞卡片，不像一条栏；行首放 Agent 标志——同一家的都一样，零信息，状态挤成标志底下一截细线读不出。
 struct SessionRail: View {
@@ -27,8 +26,8 @@ struct SessionRail: View {
     let data: SessionRailData
     let form: Form
     var marked: Set<String> = []
-    let pulse: (PiSessionListItem) -> BoardPulse
-    let open: (PiSessionState, Opening) -> Void
+    let pulse: (SessionListItem) -> BoardPulse
+    let open: (SessionState, Opening) -> Void
 
     var body: some View {
         // 常驻的栏同页头限制可见字号；全文留在读屏标签，不能让大字把组头计数挤成省略号。
@@ -41,7 +40,7 @@ private struct SessionRailContent: View {
     let rows: SessionRailRows
     let form: SessionRail.Form
     let marked: Set<String>
-    let open: (PiSessionState, SessionRail.Opening) -> Void
+    let open: (SessionState, SessionRail.Opening) -> Void
     @Environment(\.palette) private var palette
     @ScaledMetric(relativeTo: .caption2) private var tileHeight: CGFloat = 52
 

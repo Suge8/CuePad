@@ -3,20 +3,20 @@
 # 复现挑刺官第 2 轮崩溃前的操作序列。只发普通文字、[[slow]] 与 [[fail]]。
 # 开新会话前等上一轮结束：测试用假模型在流进行中切换会话会读到空会话而崩溃，那不是要复现的情形。
 # 用法：python3 pi-real-churn.py <agent 目录> <socket 目录> <工作目录> [轮数=20]
-import json, os, queue, shutil, subprocess, sys, threading, time
+import json, os, queue, subprocess, sys, threading, time
 agent, sock, cwd = sys.argv[1], sys.argv[2], sys.argv[3]
 rounds = int(sys.argv[4]) if len(sys.argv) > 4 else 20
 here = os.path.dirname(os.path.abspath(__file__))
 kit = os.path.join(here, "..", "CuePadKit")
 pi = os.path.expanduser("~/.local/bin/pi")
-os.makedirs(os.path.join(agent, "extensions"), exist_ok=True)
-shutil.copytree(os.path.join(kit, "Sources/CuePi/Extension/cuepad-bridge"), os.path.join(agent, "extensions/cuepad-bridge"), dirs_exist_ok=True)
 os.makedirs(sock, mode=0o700, exist_ok=True); os.chmod(sock, 0o700)
 env = {k: v for k, v in os.environ.items() if not k.startswith(("HERDR", "TMUX"))}
-env.update(PI_CODING_AGENT_DIR=agent, CUEPAD_PI_SOCKET_DIR=sock)
+# 同 CuePad 托管的进程（PiRuntime.launch）：显式加载随包的桥扩展、带托管标记，不然扩展什么都不做
+env.update(PI_CODING_AGENT_DIR=agent, CUEPAD_PI_SOCKET_DIR=sock, CUEPAD_HOSTED="3600")
 proc = subprocess.Popen(
     [pi, "--mode", "rpc", "--offline", "--no-context-files", "--no-skills", "--no-prompt-templates", "--no-themes",
-     "--model", "fake/echo", "--thinking", "off", "-e", os.path.join(here, "pi-stress-model.ts")],
+     "--model", "fake/echo", "--thinking", "off", "-e", os.path.join(kit, "Sources/CueBridge/Extension/cuepad-bridge"),
+     "-e", os.path.join(here, "pi-stress-model.ts")],
     cwd=cwd, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=open(os.path.join(agent, "pi-stderr.log"), "w"), text=True)
 settled, renewed = queue.Queue(), queue.Queue()
 def read_events():

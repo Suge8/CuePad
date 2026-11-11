@@ -5,7 +5,7 @@ import SwiftUI
 import Testing
 @testable import CuePad
 
-/// 只有 Cue 在场的几个时机：大事先出方案、追问两次就留给他、要的就是长相的成果只凭图挑刺；与后台整理记忆时把他反复交代的做法提议记成规矩。
+/// 只有 Cue 在场的几个时机：追问两次就留给他、要的就是长相的成果只凭图挑刺；与后台整理记忆时把他反复交代的做法提议记成规矩。
 extension CueEvalTests {
     @Test func c5追问两次就留给他() async throws {
         try await CueEval.run("c5-追问两次就留给他", expect: "改前改后的截图 Cue 追问过两次，会话这次还是没发：不问第三次，tell 一句缺什么，留给他回；不 done") { eval in

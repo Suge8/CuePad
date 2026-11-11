@@ -27,11 +27,14 @@ final class Followers {
         }
     }
 
-    func cancelAll() {
+    /// 返回的任务在全部跟随者退场后结束：被取消的跟随者还要把手上那一步走完才放掉服务（测试收尾等它；退出不等）。
+    /// 再取消一次返回的还是它。
+    @discardableResult
+    func cancelAll() -> Task<Void, Never>? {
         sink?.finish()
         sink = nil
         supervisor?.cancel()
-        supervisor = nil
+        return supervisor
     }
 }
 
@@ -40,7 +43,6 @@ extension AppServices {
         tasks.add(body)
     }
 
-    /// 同上；出错时报告 `issue` 一次，被取消不算出错。
     func follow(reporting issue: @escaping @Sendable (any Error) -> StartupIssue, _ body: @escaping @MainActor () async throws -> Void) {
         follow {
             do {

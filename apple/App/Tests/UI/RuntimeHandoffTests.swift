@@ -3,7 +3,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// #43：投送占位防止重复，不是 Agent 当前在跑的证据。
+@Suite(.releasesLibraries)
 struct RuntimeHandoffTests {
     @Test(arguments: [DeliveryMode.send, .start], ["unconfirmed", "future_ack", "pending"])
     func 未确认交接仍在推进中但不算在跑(mode: DeliveryMode, status: String) async throws {
@@ -12,11 +12,10 @@ struct RuntimeHandoffTests {
         defer { app.services.cancelBackgroundWork() }
         let task = try await workspace.createTask("检查部署", in: Project.defaultID)
         let target = SendTarget(kind: .piSession, name: "部署", ref: mode == .start ? nil : "atlas")
-        let text = mode == .start ? PiLaunch(project: Project.defaultID, prompt: task.body, token: UUID().uuidString).stored : task.body
+        let text = mode == .start ? LaunchRequest(project: Project.defaultID, prompt: task.body, token: UUID().uuidString).stored : task.body
         await workspace.speak(text, to: .session(target, host: "mac-worker", mode: mode, card: task.id)).value
         let request = try #require(try await store.deliveryRequests().first)
         if status == "pending" {
-            // 服务器收下了（派发期限从这一刻起算），那台 Mac 一直没领取
             let row = try #require(try await store.syncRow(recordName: request.id.uuidString.lowercased()))
             try await store.markPushed([(row, Data(), clock.now)])
         }
@@ -44,7 +43,7 @@ struct RuntimeHandoffTests {
     @Test func 开会话受理不等于正在运行_真实会话报告到来才计在跑() async throws {
         let app = TestApp(), workspace = Workspace(services: app.services), store = app.services.store
         let task = try await workspace.createTask("检查部署", in: Project.defaultID)
-        let launch = PiLaunch(project: Project.defaultID, prompt: task.body, token: UUID().uuidString)
+        let launch = LaunchRequest(project: Project.defaultID, prompt: task.body, token: UUID().uuidString)
         await workspace.speak(launch.stored, to: .session(SendTarget(kind: .piSession, name: "部署"), host: "mac-worker", mode: .start, card: task.id)).value
         let request = try #require(try await store.deliveryRequests().first)
         var row = try #require(try await store.syncRow(recordName: request.id.uuidString.lowercased()))

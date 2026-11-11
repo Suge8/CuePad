@@ -1,19 +1,13 @@
 import Foundation
 
-/// 推进中与等你：Cue 那一行、任务看板中间两列、小组件、实时活动与 Dock 角标读的同一份，只在这里算。
-/// 等你是总称：卡在你这里的都算，分两种——拍板（`waiting`，在卡上点完）与待回复（`replies`，进会话说）。"等你 N"数两种（App 里的 `CueNow.needsYou`），只说拍板的地方只数 `waiting`。
-/// - 拍板：Cue 带选项问你、还没结束的消息（`cueMessagesWaitingForYou`），加上会话里在等你回答的（`sessionsAskingYou`，规则在 `PiSessionState.asksYou`）。
-///   一处在等就是一件：同一件任务上 Cue 在问、它的会话也在问，算两件。每件带上它落在哪件顶层任务上（消息的 `taskID`、会话归的那件 `sessionOwners`），没落在任务上的为 nil。
-/// - 待回复：Cue 留给你回、此刻歇着的会话（`sessionsAwaitingReply`，规则在 `PiSessionState.awaitsReply`），等得最久的在前，同样带上它归的顶层任务。
-/// - 被等你占着的（`held`）：它的会话在问你或待回复的顶层任务。一件事只在一处：它只算等你，不论状态是待办、进行中还是做完——
-///   推进中在这里去掉它们；任务看板与实时活动按列分时也先看它（App 里的 `TaskBoard.Column.of`）。
-///   Cue 落在任务上的提问不占着它：那件事留在原处（Cue 还在管它多半是推进中），提问只在 Cue 页答。
-/// - 推进中：Cue 此刻在做的（`CueBoard.active`，即它信封里的"在做"）里不在等你的：被会话等你占着的事与在问你、待回复的单独会话去掉；先后同看板。
-///   进行中而会话都结束了、没人在做的事不算，它留在你的任务清单里（任务看板的待办）。
+/// 推进中与等你只在这里算：Cue 那一行、任务看板中间两列、小组件、实时活动与 Dock 角标读的同一份。等你是总称，分拍板（`waiting`）与待回复（`replies`）两种；“等你 N”数两种（App 里的 `CueNow.needsYou`），只说拍板的地方只数 `waiting`。
+/// 拍板：Cue 带选项问你、还没结束的消息，加上会话里在等你回答的；待回复：Cue 留给你回、此刻歇着的会话，等得最久的在前。每件带上它落在哪件顶层任务上，没落在任务上的为 nil。同一件任务上 Cue 在问、它的会话也在问，算两件。
+/// 推进中：已开始未完成的任务与单独活会话（`CueBoard.inProgress`），去掉被等你占着的。
+/// 被等你占着的（`held`）：它的会话在问你或待回复的顶层任务。一件事只在一处：它只算等你，不论状态是待办、进行中还是做完——推进中在这里去掉它们；任务看板与实时活动按列分时也先看它（App 里的 `TaskBoard.Column.of`）。Cue 落在任务上的提问不占着它：那件事留在原处，提问只在 Cue 页答。会话结束、出错或离线不撤销任务进度。
 public struct CueTally: Equatable, Sendable {
   public enum Wait: Identifiable, Equatable, Sendable {
     case message(CueMessage, task: UUID?)
-    case session(PiSessionState, task: UUID?)
+    case session(SessionState, task: UUID?)
 
     public var id: String {
       switch self {
@@ -22,7 +16,6 @@ public struct CueTally: Equatable, Sendable {
       }
     }
 
-    /// 落在哪件顶层任务上。
     public var task: UUID? {
       switch self {
       case .message(_, let task), .session(_, let task): task
@@ -30,12 +23,11 @@ public struct CueTally: Equatable, Sendable {
     }
   }
 
-  /// 待回复的一个会话，带它归的顶层任务（没绑任务为 nil）。
   public struct Reply: Identifiable, Equatable, Sendable {
-    public var session: PiSessionState
+    public var session: SessionState
     public var task: UUID?
 
-    public init(session: PiSessionState, task: UUID?) {
+    public init(session: SessionState, task: UUID?) {
       self.session = session
       self.task = task
     }
@@ -55,13 +47,10 @@ public struct CueTally: Equatable, Sendable {
       }
     }
   }
-  /// 拍板。
   public var waiting: [Wait]
   public var replies: [Reply]
-  /// 参与工作的 Agent 总数（`CueAgents`），在按等你分列之前算：任务的一处在问你，不会漏掉同任务的其它工作会话。
   public var agents: Int { CueAgents.count(in: works) }
 
-  /// 推进中那几件里正在运行的子代理：共享同一主会话的任务不重复数它的名册。
   public var subagents: Int { CueAgents.sessions(in: advancing).reduce(0) { $0 + $1.runtimeSubagents.count(where: \.isRunning) } }
 
   public var held: Set<UUID> {
@@ -83,10 +72,9 @@ extension CueStore {
     let replying = try sessionsAwaitingReply()
     let owners = try sessionOwners(replying.map(\.sessionID))
     return CueTally(
-      works: try cueBoard().active, waiting: waiting, replies: replying.map { CueTally.Reply(session: $0, task: owners[$0.sessionID]?.task.id) })
+      works: try cueBoard().inProgress, waiting: waiting, replies: replying.map { CueTally.Reply(session: $0, task: owners[$0.sessionID]?.task.id) })
   }
 
-  /// 只有拍板那一份（`CueTally.waiting`，同一条规则）：Cue 页的拍板卡只读它，不连带推进中的那些读取。
   public func cueWaiting() throws -> [CueTally.Wait] {
     let messages = try cueMessagesWaitingForYou()
     let sessions = try sessionsAskingYou()
@@ -95,16 +83,13 @@ extension CueStore {
       + sessions.map { CueTally.Wait.session($0, task: owners[$0.sessionID]?.task.id) }
   }
 
-  /// 这件任务所在的顶层任务（上级不在库里或不可见时按顶层看待，同 `Card.parentID`）；任务不在库里为 nil。
   private func topLevelTask(_ id: UUID) throws -> UUID? {
     guard var card = try card(id) else { return nil }
     while let parent = card.parentID, let above = try self.card(parent), above.deletedAt == nil { card = above }
     return card.id
   }
 
-  /// 会话此刻归哪件事：绑着它的叶子（`Card.piSessionID`）与叶子的顶层任务，按会话 id；没绑着任务的不在其中。唯一的规则，
-  /// 等你的计数、报给 Cue 的变化（`cueChanges`）、会话行与会话条写的名字（`PiSessionListItem.task`）、App 的改名都读它：
-  /// 没删除、没归档的任务，做完了的也算（它的问题没答就还是在等你）；绑着几件时归没做完的，再归最近开始的——做完的旧任务不抢正在用它的那件。
+  /// 唯一的规则。等你的计数、报给 Cue 的变化、会话行与会话条写的名字、App 的改名都读它：没删除、没归档的任务，做完了的也算（它的问题没答就还是在等你）；绑着几件时归没做完的，再归最近开始的——做完的旧任务不抢正在用它的那件。
   public func sessionOwners(_ sessionIDs: [String]) throws -> [String: (task: Card, leaf: Card)] {
     guard !sessionIDs.isEmpty else { return [:] }
     let leaves = try select(

@@ -6,12 +6,20 @@ struct RelayCredentials: Sendable {
     static let context = "cuepad-relay-v1"
     let room: String
     private let key: Curve25519.Signing.PrivateKey
+    let voiceKey: SymmetricKey
 
     init(secret: Data) throws {
         let seed = HKDF<SHA256>.deriveKey(
             inputKeyMaterial: SymmetricKey(data: secret), info: Data("\(Self.context) signing".utf8), outputByteCount: 32)
         key = try Curve25519.Signing.PrivateKey(rawRepresentation: seed.withUnsafeBytes { Data($0) })
         room = key.publicKey.rawRepresentation.base64URL
+        voiceKey = HKDF<SHA256>.deriveKey(inputKeyMaterial: SymmetricKey(data: secret),
+                                        info: Data(VoiceSignalFormat.keyContext.utf8), outputByteCount: 32)
+    }
+
+    func signVoice(_ claim: VoiceRegistrationClaim) throws -> Data {
+        guard claim.room == room else { throw VoiceSignalError.invalid }
+        return try key.signature(for: claim.signatureInput())
     }
 
     func sign(_ nonce: String) throws -> String {
@@ -20,11 +28,8 @@ struct RelayCredentials: Sendable {
 }
 
 enum RelayError: LocalizedError {
-    /// 中转没按协议回（握手的帧不对）。
     case unexpectedFrame
-    /// `Relay.handshakeLimit` 内没连上、入房。
     case handshakeTimeout
-    /// 心跳没有回应。
     case silent
 
     var errorDescription: String? {

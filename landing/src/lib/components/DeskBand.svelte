@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { observeVideo } from '$lib/video';
 	import { gsap, REDUCED } from '$lib/gsap';
 	import { t } from '$lib/i18n.svelte';
 
@@ -7,21 +8,8 @@
 	let video: HTMLVideoElement;
 
 	onMount(() => {
-		/* Ambient loop: pause offscreen; frozen poster with reduced motion */
-		if (REDUCED()) {
-			video.removeAttribute('autoplay');
-			return;
-		}
-		const io = new IntersectionObserver(
-			(entries) => {
-				for (const e of entries) {
-					if (e.isIntersecting) video.play().catch(() => {});
-					else video.pause();
-				}
-			},
-			{ threshold: 0.05 }
-		);
-		io.observe(video);
+		const stopVideo = observeVideo(video, 0.05, 'static');
+		if (REDUCED()) return stopVideo;
 
 		const ctx = gsap.context(() => {
 			gsap.fromTo(
@@ -36,7 +24,7 @@
 		}, band);
 		return () => {
 			ctx.revert();
-			io.disconnect();
+			stopVideo();
 		};
 	});
 </script>

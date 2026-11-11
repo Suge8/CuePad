@@ -4,12 +4,11 @@ import CueTestSupport
 import Foundation
 import Testing
 @testable import CuePad
-@testable import CuePi
+@testable import CueBridge
 
-/// 技能与规则：Mac 照各家的文件写下快照（每台一条、内容变了才写、写了就传），文件就是事实；动作只有一键整理、去重、合并，
-/// 不弹确认，做完一条可撤销的提示，撤销恢复这一次的全部改动；改文件带基准，文件在别处改过就退回；手机发来的整理与改文件由 Mac 照做。
-/// 各家的目录都在临时目录里（`TestApp.agentHomes`），移走的进库里的废纸篓。
+/// 各家的目录都在临时目录里（`TestApp.agentHomes`）。
 @MainActor
+@Suite(.releasesLibraries)
 struct AgentLibraryTests {
     let app = TestApp()
     var services: AppServices { app.services }
@@ -17,6 +16,7 @@ struct AgentLibraryTests {
 
     func home(_ name: String) -> URL { app.directory.appending(path: name, directoryHint: .isDirectory) }
     var agents: URL { home("agents") }
+    var rules: URL { home("config/agents").appending(path: "AGENTS.md") }
     var claude: URL { home("claude") }
     var codex: URL { home("codex") }
     var dsh: URL { home("dsh") }
@@ -36,18 +36,15 @@ struct AgentLibraryTests {
 
     nonisolated func hash(_ text: String) -> String { LibraryEdit.base(of: text) }
 
-    /// 这份文件同步来的正文（文件页读的那一条，对上快照的哈希才算）。
     func text(_ file: LibraryFile, in library: AgentLibrary, store: CueStore? = nil) async throws -> String? {
         let texts = try await (store ?? self.store).agentLibraryTexts(host: library.hostID, paths: library.textPaths(for: file))
         return library.arrived(file, in: texts) ?? nil
     }
 
-    /// 文件页那几份同步来的正文（合并稿照它算）。
     func texts(_ file: LibraryFile, in library: AgentLibrary) async throws -> [String: String] {
         try await store.agentLibraryTexts(host: library.hostID, paths: library.textPaths(for: file))
     }
 
-    /// 像启动时那样跟着文件写快照；等到库里这台的快照满足条件。
     func keep() -> Task<Void, Never> { Task { try? await services.library.keep() } }
 
     func library(_ what: String, _ condition: @escaping @Sendable (AgentLibrary) -> Bool) async throws -> AgentLibrary {
@@ -55,7 +52,6 @@ struct AgentLibraryTests {
         return try #require(try await eventually(store, { try $0.agentLibrary(host: host) }) { $0.map(condition) ?? false })
     }
 
-    /// 一键整理只做不用你选的（旧目录里的、Claude Code 与 dsh 读不到的、空目录）；内容不同的全局规则留给合并。
     /// dsh 只读 `.agents/skills` 一层：分类里的链给它，搬到第一层的不用。
     @Test func 一键整理只做不用选的几件_撤销恢复这一次的全部改动() async throws {
         for directory in [claude, codex, dsh] { try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true) }
@@ -63,14 +59,13 @@ struct AgentLibraryTests {
         try skill("retro", in: codex.appending(path: "skills"))
         try FileManager.default.createDirectory(at: codex.appending(path: "skills/codex-primary-runtime"), withIntermediateDirectories: true)
         try skill("openai-docs", in: codex.appending(path: "skills/.system"))
-        // claude.ai 同步的按账号分一层
         try skill("from-claude-ai", in: claude.appending(path: "skills/synced/account-a"))
         try skill("pdf", in: claude.appending(path: "skills/synced/account-b"))
         try write("# 原则\n\n先读后写\n", claude.appending(path: "CLAUDE.md"))
         try write("# 原则\n\n先读后写\n\n求证：以证据为准\n", codex.appending(path: "AGENTS.md"))
         let uploads = app.sync.uploads.stream
         let keeping = keep()
-        defer { keeping.cancel() }
+        defer { await keeping.stop() }
 
         let found = try await library("扫出五件") { $0.tidies.count == 5 }
         let workspace = Workspace(services: services)
@@ -81,8 +76,7 @@ struct AgentLibraryTests {
         #expect(found.instruction(.global)?.hash == nil)
         // 快照与各份正文同一批传，批内按记录名排
         let snapshot = AgentLibrary.recordID(host: TestApp.hostID).uuidString.lowercased()
-        var uploaded = uploads.makeAsyncIterator()
-        while let name = await uploaded.next(), name != snapshot {}
+        try await awaitNext("快照上传", from: uploads) { $0 == snapshot }
 
         await workspace.tidy(found.automaticOrders, in: found)
 
@@ -94,11 +88,11 @@ struct AgentLibraryTests {
         #expect(RelativeLink.points(dsh.appending(path: "skills/write-swift"), to: agents.appending(path: "skills/development/write-swift")))
         #expect(!exists(dsh.appending(path: "skills/retro")), "第一层的 dsh 自己读得到")
         #expect(!exists(codex.appending(path: "skills/codex-primary-runtime")))
-        #expect(!RelativeLink.isLink(claude.appending(path: "CLAUDE.md")) && !exists(agents.appending(path: "AGENTS.md")), "规则一个字没动")
+        #expect(!RelativeLink.isLink(claude.appending(path: "CLAUDE.md")) && !exists(rules), "规则一个字没动")
         let tidied = try await library("只剩要合并的全局规则") { $0.tidies.map(\.id) == ["global-instructions"] }
         #expect(tidied.skills.allSatisfy(\.unseenBy.isEmpty) && tidied.skills.map(\.name) == ["write-swift", "retro"])
 
-        try await #require(workspace.notice?.action).run()
+        try await #require(workspace.notice?.action).run(workspace)
 
         #expect(exists(codex.appending(path: "skills/retro/SKILL.md")) && !exists(moved))
         #expect(!exists(claude.appending(path: "skills/write-swift")) && !exists(claude.appending(path: "skills/retro")) && !exists(dsh.appending(path: "skills/write-swift")))
@@ -106,8 +100,6 @@ struct AgentLibraryTests {
         _ = try await library("撤销后又是五件") { $0.tidies.count == 5 }
     }
 
-    /// 改文件带着改之前看到的内容（基准）写进文件；文件在别处改过就不写、退回"Mac 上刚改过"，文件页跟上文件此刻的样子。
-    /// Claude Code 读不到项目的 AGENTS.md 时，内容不同的几份合并进它，个人的 CLAUDE.local.md 不碰。手机发来的改文件与合并经云由 Mac 照做，在 `+Sync` 里测。
     @Test func 改规则带基准_别处改过就退回_合并项目里的CLAUDE文件() async throws {
         try FileManager.default.createDirectory(at: claude, withIntermediateDirectories: true)
         let folder = home("work/site")
@@ -118,10 +110,10 @@ struct AgentLibraryTests {
         try write("# 藏在 .claude 里的\n", folder.appending(path: ".claude/CLAUDE.md"))
         try write("# 我自己的\n", folder.appending(path: "CLAUDE.local.md"))
         let keeping = keep()
-        defer { keeping.cancel() }
+        defer { await keeping.stop() }
         let workspace = Workspace(services: services)
         let following = Task { await workspace.follow() }
-        defer { following.cancel() }
+        defer { await following.stop() }
 
         let found = try await library("扫出项目规则") { $0.instruction(.project(project.id))?.hash == hash("# Site\n") }
         #expect(found.merge(into: .project(project.id))?.writers == [.claudeCode] && found.automaticOrders.isEmpty)
@@ -147,7 +139,6 @@ struct AgentLibraryTests {
         _ = try await library("合并后 Claude Code 经链接读 AGENTS.md") { $0.tidies.isEmpty && $0.instruction(.project(project.id))?.readers == [.claudeCode] }
     }
 
-    /// 合并之后又改过（文件页改了合并的规则）：撤销整个不做、说明原因，后来的改动留着。留着的 Pi 系统提示、各家自管的技能照样跟着文件变。
     @Test func 合并之后又改过_撤销整个不做_留着的系统提示照样跟着文件() async throws {
         for directory in [claude, codex, pi] { try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true) }
         try FileManager.default.createDirectory(at: codex.appending(path: "skills/.system"), withIntermediateDirectories: true)
@@ -155,7 +146,7 @@ struct AgentLibraryTests {
         try write("规则二\n", codex.appending(path: "AGENTS.md"))
         try write("你是 Pi\n", pi.appending(path: "SYSTEM.md"))
         let keeping = keep()
-        defer { keeping.cancel() }
+        defer { await keeping.stop() }
         let found = try await library("扫出全局规则") { !$0.tidies.isEmpty }
         let workspace = Workspace(services: services)
         await workspace.tidy([TidyOrder(tidy: "global-instructions")], in: found)
@@ -165,10 +156,10 @@ struct AgentLibraryTests {
         try await workspace.saveFile(
             LibraryEdit(file: .instruction(.global), base: global.hash ?? "", text: "规则一\n\n规则二\n\n后来加的\n"), in: merged)
 
-        await #expect(throws: AgentLibraryError.changedSinceTidy) { try await undo.run() }
+        await #expect(throws: AgentLibraryError.changedSinceTidy) { try await undo.run(workspace) }
 
-        #expect(read(agents.appending(path: "AGENTS.md")) == "规则一\n\n规则二\n\n后来加的\n")
-        #expect(RelativeLink.points(claude.appending(path: "CLAUDE.md"), to: agents.appending(path: "AGENTS.md")))
+        #expect(read(rules) == "规则一\n\n规则二\n\n后来加的\n")
+        #expect(RelativeLink.points(claude.appending(path: "rules/AGENTS.md"), to: rules))
         _ = try await library("读到后来加的") { $0.instruction(.global)?.hash == hash("规则一\n\n规则二\n\n后来加的\n") }
         await quietPeriod(.milliseconds(300))  // 前面那些改动的跟随都过去了：下面这次只能由盯着 SYSTEM.md 读到
         try Data("你是 Pi，改过\n".utf8).write(to: pi.appending(path: "SYSTEM.md"))  // 原地写，不换文件，所在目录不变

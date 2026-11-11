@@ -3,7 +3,6 @@ import CueText
 import Foundation
 
 extension CueTools {
-  /// setup 的说明与参数：Cue 读自己与它运行的那台 Mac（大脑、Agent 与模型、额度、技能与规则、项目、健康，`look` 在 `CueTools+SetupLook`），改自己的大脑设置与项目。
   static var setupDefinition: [String: Any] {
     [
       "name": "setup",
@@ -18,7 +17,7 @@ extension CueTools {
           "action": ["type": "string", "enum": ["look", "set", "project", "tidy"]],
           "part": ["type": "string", "enum": LookPart.allCases.map(\.rawValue)],
           "agent": ["type": "string", "enum": AgentKind.allCases.map(\.rawValue)], "model": string,
-          "effort": ["type": "string", "enum": PiThinkingLevel.allCases.map(\.rawValue)], "fast": ["type": "boolean"], "name": string,
+          "effort": ["type": "string", "enum": ThinkingLevel.allCases.map(\.rawValue)], "fast": ["type": "boolean"], "name": string,
           "project": string, "new": ["type": "boolean"], "title": string, "intro": string, "folder": string,
         ], required: ["action"]),
       "annotations": ["readOnlyHint": false, "destructiveHint": false, "idempotentHint": false, "openWorldHint": false],
@@ -43,8 +42,6 @@ extension CueTools {
     case let other: throw Failure("setup 没有 \(other)：可用 look / set / project / tidy")
     }
   }
-
-  // MARK: set
 
   /// 写 `model` 时回到这家默认的写法。
   static let defaultModel = "default"
@@ -87,7 +84,7 @@ extension CueTools {
 
     var effort = current.effort
     if let raw = args.string("effort") {
-      guard let level = PiThinkingLevel(rawValue: raw) else { throw Failure("effort 写 \(PiThinkingLevel.allCases.map(\.rawValue).joined(separator: " / "))") }
+      guard let level = ThinkingLevel(rawValue: raw) else { throw Failure("effort 写 \(ThinkingLevel.allCases.map(\.rawValue).joined(separator: " / "))") }
       effort = .known(level)
       if let levels = option?.thinkingLevels, level.clamped(to: levels) != level {
         notes.append("这个模型没有 \(raw)，实际按 \(level.clamped(to: levels).rawValue)")
@@ -119,8 +116,6 @@ extension CueTools {
     return "\(profile.runtime.known?.name ?? profile.runtime.rawValue) · \(model) · 强度 \(effort) · fast \(profile.fast ? "开" : "关") · 名字 \(profile.name)"
   }
 
-  // MARK: project
-
   /// Cue 新建的项目用的颜色：同新建项目表单的第一种（App 的 `Palette.projectColors`）。
   static let newProjectColor = "#D9774B"
 
@@ -139,7 +134,7 @@ extension CueTools {
       done.append("建好了项目「\(ref)」")
     } else {
       guard title != nil || intro != nil || folder != nil else { throw Failure("project 要给 title、intro 或 folder；新建带 new:true") }
-      project = try await self.project(ref)
+      project = try await self.references.project(ref)
     }
     if title != nil || intro != nil {
       try await store.updateProject(project.id) { edited in
@@ -160,7 +155,7 @@ extension CueTools {
   private func folderPath(_ raw: String) throws -> String? {
     let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
     guard trimmed != Self.cleared else { return nil }
-    let expanded = NSString(string: trimmed).expandingTildeInPath
+    let expanded = UserHome.expanding(trimmed)
     guard expanded.hasPrefix("/") else { throw Failure("folder 写绝对路径或 ~/ 开头：\(raw)") }
     let url = URL(filePath: expanded, directoryHint: .isDirectory).standardizedFileURL
     var isDirectory: ObjCBool = false
@@ -170,8 +165,6 @@ extension CueTools {
     let path = url.path(percentEncoded: false)
     return path.count > 1 && path.hasSuffix("/") ? String(path.dropLast()) : path
   }
-
-  // MARK: tidy
 
   /// 请这台 Mac 做一键整理（`AgentLibrary.automaticOrders`），等结果同说话（`spoken`）。
   private func tidy() async throws -> Result {

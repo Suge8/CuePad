@@ -4,18 +4,9 @@ import Foundation
 import SQLite3
 
 /// 同步测量的模拟云（`sync-bench.py` 默认）：同一台机器上几个进程共用一个 SQLite 文件当同步区，不连 iCloud、不吃设备限流。
-/// 同步代码照真的跑（`CloudSync` 只换掉网络那一头，同 `SimulatedCloud`），每个请求按延迟模型睡一段（`Latency`，脚本写在目录里的 latency.json，
-/// 数值与出处只在脚本头注释；没有这个文件就不睡）：
-/// 上传先睡六成再落盘、再睡剩下的（服务器收下在回包之前），拉取先睡六成再读。令牌是写入序号，一页至多 `page` 条（`moreComing`）。
-/// 带文件的记录另按文件大小与速率（`Latency.assetUp`、`assetDown`）多睡、按 CloudKit 的节奏报进度：上传在落盘之前，取文件在读出之后；
-/// 拉取与按 ID 取不带文件。
-/// 不模拟：改记录冲突（serverRecordChanged）、cloudd 的排队。限流与空间满只在脚本要时注入（`admit`、`quotaFile`）。门铃的密钥是这次运行的（文件里一份），房间不与别的运行重合。
-/// 每个请求（认账号除外）记进 requests 表：时刻、进程、种类、结果、回给它的 Retry-After，脚本按它数各进程发了几次、守没守 Retry-After；
-/// 拉取与上传另记模型抽到的用时（drawn）与回到调用方的时刻（done），两者之差是落盘与调用方那头没及时接回来的部分；
-/// 另记带了哪些记录（names：上传的是存与删的，拉取的是拉回的，每条 `类型:记录名`，逗号隔开）与落盘的时刻（landed：上传写进同步区、拉取读出的那一刻），
-/// 对得出某条记录在哪个上传里、被哪一拉带回。
+/// 每个请求按延迟模型睡一段（`Latency`，脚本写在目录里的 latency.json，数值与出处只在脚本头注释；没有这个文件就不睡）。
+/// 不模拟：改记录冲突（serverRecordChanged）、cloudd 的排队。限流与空间满只在脚本要时注入（`admit`、`quotaFile`）。
 struct SharedCloud: SyncCloud {
-  /// 每种请求的用时分布：对数正态，按中位与 p95 定。
   struct Latency: Decodable, Sendable {
     var upload: [Double]
     var fetch: [Double]
@@ -27,13 +18,11 @@ struct SharedCloud: SyncCloud {
 
     static let none = Latency(upload: [0, 0], fetch: [0, 0], records: [0, 0], other: [0, 0])
 
-    /// 这些记录里带的文件按速率要传多久（秒）。
     static func transfer(_ records: [CKRecord], rate: Double?) -> Double {
       guard let rate, rate > 0 else { return 0 }
       return Double(records.compactMap(\.fileBytes).reduce(0, +)) / rate
     }
 
-    /// 一次请求的总用时（秒）。
     static func draw(_ spec: [Double]) -> Double {
       guard spec.count == 2, spec[0] > 0 else { return 0 }
       let sigma = log(max(spec[1], spec[0]) / spec[0]) / 1.645
@@ -49,7 +38,6 @@ struct SharedCloud: SyncCloud {
   /// 脚本放了这个文件就是 iCloud 空间满了：带文件的保存逐条以 quotaExceeded 被拒（别的记录照收）。
   private let quotaFile: URL
 
-  /// 脚本写的限流窗口（throttle.json）：到 `until`（墙钟秒）之前到了服务器的请求回 429，带 `retryAfter`。
   private struct Throttle: Decodable {
     var until: Double
     var retryAfter: Double
@@ -82,20 +70,7 @@ struct SharedCloud: SyncCloud {
     let total = Latency.draw(latency.fetch)
     let row = try admit("fetch", drawn: total)
     try? await Task.sleep(for: .seconds(total * 0.6))
-    let after = token.flatMap { Int64(String(decoding: $0, as: UTF8.self)) } ?? 0
-    let batch = try database { db in
-      let rows = try db.rows("SELECT seq, name, type, data FROM records WHERE seq > ? ORDER BY seq LIMIT \(Self.page + 1)", after)
-      let taken = rows.prefix(Self.page)
-      var batch = ZoneChangeBatch(modifications: [], deletions: [], token: Data(String(taken.last?.seq ?? after).utf8), moreComing: rows.count > Self.page)
-      for row in taken {
-        if let data = row.data {
-          batch.modifications.append(try Self.record(data))
-        } else {
-          batch.deletions.append((CKRecord.ID(recordName: row.name, zoneID: Self.zoneID), row.type))
-        }
-      }
-      return batch
-    }
+    let batch = try database { db in try Self.changes(in: "records", zoneID: Self.zoneID, since: token, db) }
     let landed = Date.now.timeIntervalSince1970
     try? await Task.sleep(for: .seconds(total * 0.4))
     finish(row, landed: landed, names: batch.modifications.map { "\($0.recordType):\($0.recordID.recordName)" } + batch.deletions.map { "\($0.recordType):\($0.id.recordName)" })
@@ -128,7 +103,7 @@ struct SharedCloud: SyncCloud {
     return found
   }
 
-  /// 按传输时长睡，每 `progressTick` 报一次进度（同 CloudKit 的回调节奏）。
+  /// 进度回调的节奏同 CloudKit。
   private func transfer(_ seconds: Double, _ progress: @Sendable (Double) -> Void) async {
     let began = ContinuousClock.now
     progress(0)
@@ -157,23 +132,7 @@ struct SharedCloud: SyncCloud {
       return SentRecords(failedSaves: saving.map { ($0, CKError(.quotaExceeded)) })
     }
     await transfer(Latency.transfer(saving, rate: latency.assetUp), progress)
-    try database { db in
-      try db.run("BEGIN IMMEDIATE")
-      do {
-        for record in saving {
-          let data = try NSKeyedArchiver.archivedData(withRootObject: record, requiringSecureCoding: true)
-          try db.run("INSERT OR REPLACE INTO records (name, type, data, seq) VALUES (?, ?, ?, (SELECT IFNULL(MAX(seq), 0) + 1 FROM records))",
-                     record.recordID.recordName, record.recordType, data)
-        }
-        for id in deleting {
-          try db.run("UPDATE records SET data = NULL, seq = (SELECT IFNULL(MAX(seq), 0) + 1 FROM records) WHERE name = ?", id.recordName)
-        }
-        try db.run("COMMIT")
-      } catch {
-        try? db.run("ROLLBACK")
-        throw error
-      }
-    }
+    try database { db in try Self.write(into: "records", saving: saving, deleting: deleting, db) }
     let landed = Date.now.timeIntervalSince1970
     try? await Task.sleep(for: .seconds(total * 0.4))
     finish(row, landed: landed, names: saving.map { "\($0.recordType):\($0.recordID.recordName)" } + deleting.map { "-:\($0.recordName)" })
@@ -183,6 +142,59 @@ struct SharedCloud: SyncCloud {
   func saveZone() async throws {
     try admit("other")
     await wait(latency.other)
+  }
+
+  /// 诊断区另一张表：拉同步区拉不到它。没有任何一条（从没传过）时同 CloudKit 报区不在。
+  func diagnosticChanges(since token: Data?) async throws -> ZoneChangeBatch {
+    let row = try admit("diagnostics-fetch")
+    await wait(latency.fetch)
+    let batch = try database { db in
+      guard try db.double("SELECT COUNT(*) FROM diagnostics") ?? 0 > 0 else { throw CKError(.zoneNotFound) }
+      return try Self.changes(in: "diagnostics", zoneID: DiagnosticZone.zoneID, since: token, db)
+    }
+    finish(row, landed: Date.now.timeIntervalSince1970, names: batch.modifications.map(\.recordID.recordName))
+    return batch
+  }
+
+  func uploadDiagnostics(saving: [CKRecord], deleting: [CKRecord.ID]) async throws -> SentRecords {
+    let row = try admit("diagnostics-upload")
+    await wait(latency.upload)
+    try database { db in try Self.write(into: "diagnostics", saving: saving, deleting: deleting, db) }
+    finish(row, landed: Date.now.timeIntervalSince1970, names: saving.map(\.recordID.recordName) + deleting.map { "-:\($0.recordName)" })
+    return SentRecords(saved: saving, deleted: deleting)
+  }
+
+  private static func changes(in table: String, zoneID: CKRecordZone.ID, since token: Data?, _ db: Connection) throws -> ZoneChangeBatch {
+    let after = token.flatMap { Int64(String(decoding: $0, as: UTF8.self)) } ?? 0
+    let rows = try db.rows("SELECT seq, name, type, data FROM \(table) WHERE seq > ? ORDER BY seq LIMIT \(page + 1)", after)
+    let taken = rows.prefix(page)
+    var batch = ZoneChangeBatch(modifications: [], deletions: [], token: Data(String(taken.last?.seq ?? after).utf8), moreComing: rows.count > page)
+    for row in taken {
+      if let data = row.data {
+        batch.modifications.append(try record(data))
+      } else {
+        batch.deletions.append((CKRecord.ID(recordName: row.name, zoneID: zoneID), row.type))
+      }
+    }
+    return batch
+  }
+
+  private static func write(into table: String, saving: [CKRecord], deleting: [CKRecord.ID], _ db: Connection) throws {
+    try db.run("BEGIN IMMEDIATE")
+    do {
+      for record in saving {
+        let data = try NSKeyedArchiver.archivedData(withRootObject: record, requiringSecureCoding: true)
+        try db.run("INSERT OR REPLACE INTO \(table) (name, type, data, seq) VALUES (?, ?, ?, (SELECT IFNULL(MAX(seq), 0) + 1 FROM \(table)))",
+                   record.recordID.recordName, record.recordType, data)
+      }
+      for id in deleting {
+        try db.run("UPDATE \(table) SET data = NULL, seq = (SELECT IFNULL(MAX(seq), 0) + 1 FROM \(table)) WHERE name = ?", id.recordName)
+      }
+      try db.run("COMMIT")
+    } catch {
+      try? db.run("ROLLBACK")
+      throw error
+    }
   }
   func subscriptions() async throws -> [CKSubscription.ID: CKSubscription] { [:] }
   func save(_ subscription: CKSubscription) async throws {}
@@ -226,7 +238,6 @@ struct SharedCloud: SyncCloud {
 
   private func wait(_ spec: [Double]) async { try? await Task.sleep(for: .seconds(Latency.draw(spec))) }
 
-  /// 存下的一条记录；只有取文件（`downloadFile`）带着文件，拉取与按 ID 取同 CloudKit 那样不带（`FileCloud`）。
   private static func record(_ data: Data, withFile: Bool = false) throws -> CKRecord {
     guard let record = try NSKeyedUnarchiver.unarchivedObject(ofClass: CKRecord.self, from: data) else { throw CKError(.internalError) }
     if !withFile { record[RecordMapper.fileKey] = nil }
@@ -250,6 +261,7 @@ struct SharedCloud: SyncCloud {
         PRAGMA journal_mode = WAL;
         CREATE TABLE IF NOT EXISTS records (name TEXT PRIMARY KEY, type TEXT NOT NULL, data BLOB, seq INTEGER NOT NULL);
         CREATE INDEX IF NOT EXISTS records_seq ON records(seq);
+        CREATE TABLE IF NOT EXISTS diagnostics (name TEXT PRIMARY KEY, type TEXT NOT NULL, data BLOB, seq INTEGER NOT NULL);
         CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value BLOB);
         CREATE TABLE IF NOT EXISTS requests (t REAL NOT NULL, pid INTEGER NOT NULL, kind TEXT NOT NULL, result TEXT NOT NULL, wait REAL, drawn REAL, done REAL, landed REAL, names TEXT);
         """)
@@ -327,7 +339,6 @@ struct SharedCloud: SyncCloud {
 }
 
 extension CKRecord {
-  /// 带的文件有多大（没有文件为 nil）。
   var fileBytes: Int? {
     guard let url = (self[RecordMapper.fileKey] as? CKAsset)?.fileURL else { return nil }
     return (try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? Int

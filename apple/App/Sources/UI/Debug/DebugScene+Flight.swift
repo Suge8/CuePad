@@ -4,10 +4,8 @@ import CueText
 import SwiftUI
 
 extension DebugScene {
-    /// 覆盖三道错开的接力与最后一圈落点反馈。
     static let flightProbe = 2.4
 
-    /// `act`：开始量之后当场做的那一下（按发送钮，`pressSendIfAsked`）。
     static func measureFlight(_ kind: String, seconds: Double, into log: URL, act: () -> Void = {}) async throws {
         let turns = TurnLog(), frames = FlightFrames()
         let instructions = instructionsMillions(), energy = energyMillijoules()

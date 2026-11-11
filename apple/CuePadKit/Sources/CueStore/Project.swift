@@ -1,5 +1,10 @@
 import Foundation
 
+/// 创建时所选项目不存在或已在回收站的处理方式；默认严格拒绝。
+public enum MissingProject: Sendable {
+  case reject, useDefault
+}
+
 public struct Project: Identifiable, Equatable, Sendable {
   public let id: UUID
   /// 库里存的名字（Cue、命令行与同步看的都是它）；界面显示读 `shownName`。写入时空名抛 `blankProjectName`，别处（旧版本、同步）可能留下空名。
@@ -7,7 +12,6 @@ public struct Project: Identifiable, Equatable, Sendable {
   public var icon: String?
   public var color: String
   public var isPinned: Bool
-  /// 可选的一句话介绍（项目页顶栏、书架项目卡）。
   public var intro: String?
   /// 回收站中的项目；其卡片随之进回收站（由项目推导，卡片自身不记）。
   public internal(set) var deletedAt: Date?
@@ -22,7 +26,7 @@ public struct Project: Identifiable, Equatable, Sendable {
   public var isDefault: Bool { id == Self.defaultID }
 
   /// 建库时默认项目的名字（`Schema.defaultProject`）：库里存、同步的都是这一份，各台设备离线建出的才是同一版。
-  static let defaultName = "默认"
+  public static let defaultName = "默认"
 
   /// 给人看的名字（界面上写项目都读它）：没改过名的默认项目按这台设备的语言写，空名写 `untitled`，别的照存的。
   public var shownName: String { Self.shownName(id: id, name: name) }
@@ -48,10 +52,10 @@ public struct Project: Identifiable, Equatable, Sendable {
   }
 }
 
-/// 项目的灵感数（散放在列表里的，不含任务、挂在任务下的与空白灵感）。
 public struct ProjectSummary: Equatable, Sendable {
   public var projectID: UUID
   public var cardCount: Int
+  public var modifiedAt: Date
 }
 
 extension Project: Record {

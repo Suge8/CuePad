@@ -1,0 +1,336 @@
+#if os(macOS)
+import CueStore
+import Foundation
+
+/// 桥协议的线上格式：一行一个 JSON。扩展端见 `Extension/cuepad-bridge/`。
+enum PiWire {
+    /// CuePad 读得懂的最旧扩展版本：从它到随包版本，扩展说的格式 CuePad 都照常读、命令照常发。扩展要等会话连同子代理都歇下才换上新版本
+    /// （`SelfReload`），可能等几个小时，这期间会话照常收话。只加命令、加 CuePad 可以没有的字段不提它（旧扩展不认的命令回 `bad_request`）；
+    /// 改了 CuePad 读的格式、已有命令的含义，或 CuePad 要靠某个新字段才对时，提到那一版。区间外的 hello 只读身份（`IdentityHello`），
+    /// 命令除 `upgrade` 外一条不发，会话等它换上新扩展（`Session.upgrading`）
+    static let oldestExtension = 56
+
+    static func reads(extensionVersion version: Int?) -> Bool { version.map { (oldestExtension...PiExtensionBundle.version).contains($0) } == true }
+
+    struct State: Decodable {
+        var kind: String
+        var tool: String?
+        var detail: String?
+        var title: String?
+        var error: String?
+        var since: Double
+        var busySince: Double?
+        var turnSince: Double?
+
+        var work: (state: WorkState, detail: String?)? {
+            switch kind {
+            case "idle", "done": (.settled, nil)
+            case "thinking": (.thinking, nil)
+            case "tool": (.tool, detail.map { "\(tool ?? "?")\(SessionState.detailSeparator)\($0)" } ?? tool ?? "?")
+            case "delegating": (.delegating, nil)
+            case "compacting": (.compacting, nil)
+            case "waiting_user": (.waitingForUser, title)
+            case "error": (.error, ErrorSummary(error ?? "").line)  // 手机上没有悬停看原文
+            default: nil
+            }
+        }
+
+        var errorMessage: String? { kind == "error" ? error ?? "" : nil }
+
+        var sinceDate: Date { Date(timeIntervalSince1970: since / 1000) }
+        var busySinceDate: Date? { busySince.map { Date(timeIntervalSince1970: $0 / 1000) } }
+        var turnSinceDate: Date? { turnSince.map { Date(timeIntervalSince1970: $0 / 1000) } }
+    }
+
+    struct Hello: Decodable {
+        var extensionVersion: Int
+        var sessionId: String
+        var sessionFile: String?
+        var pid: Int32
+        var cwd: String
+        var state: State
+        var launchToken: String?
+        var hosted: Bool
+        var info: Info
+
+        enum CodingKeys: String, CodingKey {
+            case extensionVersion, sessionId, sessionFile, pid, cwd, state, launchToken, hosted
+        }
+
+        init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            extensionVersion = try c.decode(Int.self, forKey: .extensionVersion)
+            sessionId = try c.decode(String.self, forKey: .sessionId)
+            sessionFile = try c.decodeIfPresent(String.self, forKey: .sessionFile)
+            pid = try c.decode(Int32.self, forKey: .pid)
+            cwd = try c.decode(String.self, forKey: .cwd)
+            state = try c.decode(State.self, forKey: .state)
+            launchToken = try c.decodeIfPresent(String.self, forKey: .launchToken)
+            hosted = try c.decode(Bool.self, forKey: .hosted)
+            info = try Info(from: decoder)
+        }
+    }
+
+    /// 每个 hello 先按它读：读得懂这一版扩展（`reads`）才往下读完整的 `Hello`，读不懂的只留认得出会话的几项（其余字段读不出就当没有），
+    /// 这几项的键与含义永远不变。`hosted` 也读：只有托管的会话上桥，旧版装进 Pi 扩展目录的那份在终端里的 pi 里也会来连。
+    /// `sessionFile` 也读：进程退出时说没说过话（`Session.spoke`）看它，读不到就会把说过话的会话当成没说话、删掉记录与摘要。
+    struct IdentityHello: Decodable {
+        var extensionVersion: Int?
+        var sessionId: String
+        var sessionFile: String?
+        var pid: Int32
+        var cwd: String
+        var name: String?
+        var firstMessage: String?
+        var hosted: Bool
+
+        enum CodingKeys: String, CodingKey {
+            case extensionVersion, sessionId, sessionFile, pid, cwd, name, firstMessage, hosted
+        }
+
+        init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            extensionVersion = try? c.decode(Int.self, forKey: .extensionVersion)
+            sessionId = try c.decode(String.self, forKey: .sessionId)
+            sessionFile = try? c.decode(String.self, forKey: .sessionFile)
+            pid = try c.decode(Int32.self, forKey: .pid)
+            cwd = try c.decode(String.self, forKey: .cwd)
+            name = try? c.decode(String.self, forKey: .name)
+            firstMessage = try? c.decode(String.self, forKey: .firstMessage)
+            hosted = (try? c.decode(Bool.self, forKey: .hosted)) ?? false
+        }
+    }
+
+    /// `info` 消息只带变了的几项：键出现就是新值（null 是“没有”），没出现就是不变（模型表和命令清单很大，上下文用量每轮都变，不整份重发）。hello 带全部。
+    /// 问答近况不走这里：对话与摘要只来自会话文件（`History`）。
+    struct Info: Decodable {
+        private var updates: [@Sendable (inout Session) -> Void] = []
+
+        private enum CodingKeys: String, CodingKey {
+            case name, firstMessage, question, subagents, model, thinking, fast, models, proofs, context, commands
+        }
+
+        init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            func field<Value: Decodable & Sendable>(
+                _ key: CodingKeys, _ type: Value.Type, _ set: @escaping @Sendable (inout Session, Value?) -> Void
+            ) throws {
+                guard c.contains(key) else { return }
+                let value = try c.decodeIfPresent(type, forKey: key)
+                updates.append { set(&$0, value) }
+            }
+            try field(.name, String.self) { $0.name = $1 }
+            try field(.firstMessage, String.self) { $0.firstMessage = $1 }
+            try field(.question, WireQuestion.self) { $0.question = $1?.question }
+            try field(.subagents, [WireSubagent].self) { session, roster in
+                session.subagents = Self.stamped(roster?.map(\.subagent) ?? [], since: session.subagents, at: Date())
+            }
+            try field(.model, ModelOption.self) { $0.model = $1 }
+            try field(.thinking, Open<ThinkingLevel>.self) { $0.thinking = $1 }
+            try field(.fast, Bool.self) { $0.fast = $1 }
+            try field(.models, [ModelOption].self) { $0.availableModels = $1 ?? [] }
+            try field(.proofs, [PiProof].self) { $0.proofs = $1 ?? [] }
+            try field(.context, ContextUsage.self) { $0.context = $1 }
+            try field(.commands, [WireCommand].self) { $0.commands = $1?.map(\.command) ?? [] }
+        }
+
+        func apply(to session: inout Session) {
+            for update in updates { update(&session) }
+        }
+
+        /// 名册不带进展时刻，Mac 收到时记（`SubagentState.progressAt`）。FireCode 的名字在一个指挥官下唯一，所以按名字对上上一份。
+        private static func stamped(_ roster: [SubagentState], since previous: [SubagentState], at now: Date) -> [SubagentState] {
+            roster.map { agent in
+                var agent = agent
+                let before = previous.first { $0.name == agent.name }
+                var unstamped = before
+                unstamped?.progressAt = nil
+                agent.progressAt = unstamped == agent ? before?.progressAt : now
+                return agent
+            }
+        }
+    }
+
+    private struct WireQuestion: Decodable {
+        var id: String?
+        var kind: String
+        var text: String
+        var options: [String]?
+
+        var question: Question { Question(promptID: id, kind: Open(rawValue: kind), text: text, options: options ?? []) }
+    }
+
+    private struct WireSubagent: Decodable {
+        var name: String
+        var role: String
+        var state: String
+        var action: String
+        var startedAt: Double?
+        var settledAt: Double?
+        var model: String?
+
+        var subagent: SubagentState {
+            func date(_ milliseconds: Double?) -> Date? { milliseconds.map { Date(timeIntervalSince1970: $0 / 1000) } }
+            return SubagentState(
+                name: name, role: role, phase: Open(rawValue: state), action: action, startedAt: date(startedAt), settledAt: date(settledAt),
+                model: model)
+        }
+    }
+
+    private struct WireCommand: Decodable {
+        var name: String
+        var description: String?
+        var source: String
+        var hint: String?
+
+        var command: SlashCommand { SlashCommand(name: name, summary: description, source: Open(rawValue: source), hint: hint) }
+    }
+
+    struct Ack: Decodable {
+        var id: String?
+        var ok: Bool
+        var error: String?
+        var title: String?
+    }
+
+    struct Bye: Decodable { var reason: String }
+
+    /// 请扩展核对磁盘上的扩展版本、不同就歇下时重新载入（`SelfReload.check`）。格式跨扩展版本不变、没有 id、扩展不回 ack：
+    /// 要叫醒的也有 CuePad 读不懂的旧扩展，它们只认得出这一行（见 CueBridge README「协议」）。
+    static let upgrade = Data(#"{"t":"upgrade"}"#.utf8) + Data([0x0A])
+
+    /// 读不懂的扩展的连接里只认告别（`IdentityHello` 同理）：格式可能已变，读不出就当不是。
+    static func identityBye(_ line: Data) -> Bye? {
+        struct Tagged: Decodable { var t: String; var reason: String }
+        guard let tagged = try? JSONDecoder().decode(Tagged.self, from: line), tagged.t == "bye" else { return nil }
+        return Bye(reason: tagged.reason)
+    }
+    struct StateMessage: Decodable { var state: State }
+
+    /// `text` 为 null 是清掉。
+    struct Draft: Decodable {
+        var text: String?
+        var since: Double?
+
+        var draft: LiveDraft? {
+            guard let text, let since else { return nil }
+            return LiveDraft(text: text, since: Date(timeIntervalSince1970: since / 1000))
+        }
+    }
+
+    enum Message {
+        case hello(Hello)
+        case upgrading(IdentityHello)
+        case state(State)
+        case info(Info)
+        case ack(Ack)
+        case bye(Bye)
+        case draft(LiveDraft?)
+        case quota(QuotaReport)
+    }
+
+    enum DecodeError: Error { case unknownType(String) }
+
+    static func decode(_ line: Data) throws -> Message {
+        struct Envelope: Decodable { var t: String }
+        let decoder = JSONDecoder()
+        switch try decoder.decode(Envelope.self, from: line).t {
+        case "hello":
+            let identity = try decoder.decode(IdentityHello.self, from: line)
+            return reads(extensionVersion: identity.extensionVersion) ? .hello(try decoder.decode(Hello.self, from: line)) : .upgrading(identity)
+        case "state": return .state(try decoder.decode(StateMessage.self, from: line).state)
+        case "info": return .info(try decoder.decode(Info.self, from: line))
+        case "ack": return .ack(try decoder.decode(Ack.self, from: line))
+        case "bye": return .bye(try decoder.decode(Bye.self, from: line))
+        case "draft": return .draft(try decoder.decode(Draft.self, from: line).draft)
+        case "quota":
+            let seconds = JSONDecoder()
+            seconds.dateDecodingStrategy = .secondsSince1970  // 重置时刻是 Unix 秒
+            return .quota(try seconds.decode(QuotaReport.self, from: line))
+        case let other: throw DecodeError.unknownType(other)
+        }
+    }
+
+    private struct Command: Encodable {
+        struct CueTurn: Encodable { var deliveryId: String? }
+        struct Image: Encodable { var mimeType: String; var data: String }
+        var t: String
+        var id: String
+        var text: String
+        var images: [Image]?
+        var deliveryId: String?
+        var cueTurn: CueTurn?
+        var turnStartedAt: Int64?
+    }
+
+    static func sendCommand(id: String, _ message: SessionMessage) throws -> Data {
+        let cueTurn: Command.CueTurn? = if case .cue(let deliveryID, _) = message.policy { .init(deliveryId: deliveryID) } else { nil }
+        return try encodeLine(Command(
+            t: "send", id: id, text: message.text,
+            images: message.images.isEmpty ? nil : message.images.map { .init(mimeType: $0.mimeType, data: $0.data.base64EncodedString()) },
+            deliveryId: message.deliveryID, cueTurn: cueTurn))
+    }
+
+    static func abortTurnCommand(id: String, deliveryID: String, turnStartedAt: Int64) throws -> Data {
+        try encodeLine(Command(t: "abortTurn", id: id, text: "", deliveryId: deliveryID, turnStartedAt: turnStartedAt))
+    }
+
+    static func slashCommand(id: String, line: String) throws -> Data {
+        try encodeLine(Command(t: "command", id: id, text: line))
+    }
+
+    private struct Bare: Encodable {
+        var t: String
+        var id: String
+    }
+
+    static func bare(_ t: String, id: String) throws -> Data { try encodeLine(Bare(t: t, id: id)) }
+
+    private struct ConfigCommand: Encodable {
+        var t = "config"
+        var id: String
+        var model: ModelKey?
+        var thinking: String?
+        var fast: Bool?
+        var name: String?
+    }
+
+    static func configCommand(id: String, model: ModelKey?, thinking: ThinkingLevel?, fast: Bool? = nil, name: String?) throws -> Data {
+        try encodeLine(ConfigCommand(id: id, model: model, thinking: thinking?.rawValue, fast: fast, name: name))
+    }
+
+    /// 带回合身份的停止（`abortTurnSince`）与起名（`titleSince`）认得的最早扩展版本：更早的会话换上新扩展前，前者拒绝（`upgrade_stop_turn`），后者不起名（`PiConnection.canNameItself`）。
+    /// 起名从 63 起：之前的扩展要命令带 `limit`，不带就回 `bad_request`。
+    static let abortTurnSince = 60
+    static let titleSince = 63
+
+    private struct TitleCommand: Encodable {
+        var t = "title"
+        var id: String
+        var instructions = SessionNameSuggestion.instructions
+        var text: String
+        var timeoutMs = Int(SessionNameSuggestion.budget.seconds * 1000)
+    }
+
+    /// 扩展挑模型、问一次，只回不写。
+    static func titleCommand(id: String, text: String) throws -> Data { try encodeLine(TitleCommand(id: id, text: text)) }
+
+    private struct AnswerCommand<Value: Encodable>: Encodable {
+        var t = "answer"
+        var id: String
+        var promptId: String
+        var value: Value
+    }
+
+    static func answerCommand(id: String, promptID: String, _ answer: AnswerValue) throws -> Data {
+        switch answer {
+        case .option(let value), .text(let value): try encodeLine(AnswerCommand(id: id, promptId: promptID, value: value))
+        case .confirmed(let value): try encodeLine(AnswerCommand(id: id, promptId: promptID, value: value))
+        }
+    }
+
+    private static func encodeLine(_ command: some Encodable) throws -> Data {
+        try JSONEncoder().encode(command) + Data([0x0A])
+    }
+}
+#endif

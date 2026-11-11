@@ -1,22 +1,19 @@
 #if os(macOS)
-import CuePi
+import CueBridge
 import CueStore
 import CueTestSupport
 import Foundation
 import Testing
 @testable import CuePad
 
-/// 剧本的骨架：叫醒、接手 Cue 开出的会话、读每一步里的工具调用与回复。长程（`Duty`）与多日（`CueEvalDaysTests`）的剧本都从它派生。
 @MainActor
 class EvalScript {
     let eval: CueEval
     var rig: CueHostTests.Rig { eval.rig }
     var sessions: [ScriptedSession] = []
     var steps: [Step] = []
-    /// 剧本没按预想走的地方（Cue 没开工评测替它开、没叫醒）
     var notes: [String] = []
 
-    /// 剧本的一步：叫醒的事、这次醒来的时段（没叫醒为 nil）、事出在哪个会话
     struct Step {
         let label: String
         let window: ClosedRange<Date>?
@@ -27,13 +24,11 @@ class EvalScript {
 
     // MARK: 剧本的动作
 
-    /// 他对 Cue 说一句，等 Cue 做完这次醒来引起的。
     @discardableResult
     func say(_ label: String, _ text: String) async throws -> Step {
         try await step(label, on: nil) { try await self.rig.say(text) }
     }
 
-    /// 会话有动静，等 Cue 做完这次醒来引起的。
     @discardableResult
     func event(_ label: String, on session: ScriptedSession, _ act: () async throws -> Void) async throws -> Step {
         try await step(label, on: session, act)
@@ -47,7 +42,6 @@ class EvalScript {
         return step
     }
 
-    /// 他交代的事开出的会话：Cue 开工时执行器开出假扩展（new-<令牌>），开场白的发送记录把任务绑上它。
     /// Cue 这一步没开工（先对齐、没建）就由评测替它开，记一笔：后面的剧本要有这个会话。
     func adopt(_ topic: Regex<Substring>, after step: Step, title: String, in projectName: String) async throws -> ScriptedSession {
         let started = calls(step, "task", ["start"]).contains { !$0.call.failed }
@@ -81,8 +75,6 @@ class EvalScript {
         return session
     }
 
-    /// 他在一件事上接着交代：Cue 可能对原来的会话说，可能对剧本里另一个会话说（那件已做完、会话已结束，转给更早那件还开着的会话），
-    /// 也可能另建任务开新会话。接着演的是它真送到的那个：开了新会话用新的，说给了别的会话用那个。
     func continuing(_ session: ScriptedSession, _ topic: Regex<Substring>, after step: Step) async throws -> ScriptedSession {
         guard calls(step, "task", ["start"]).contains(where: { !$0.call.failed }) else {
             for other in sessions { try await other.refresh(rig) }
@@ -128,12 +120,10 @@ class EvalScript {
         CueEval.calls(in: rounds(step), tool, actions)
     }
 
-    /// 这几步里成功对 `session` 说的话（say 的 text）
     func says(_ steps: [Step], to session: ScriptedSession) -> [String] {
         steps.flatMap { calls($0, "task", ["say"]) }.filter { !$0.call.failed && target($0.args) === session }.compactMap { $0.args["text"] as? String }
     }
 
-    /// 这几步里 `session` 收到的作答（`ScriptedSession.answers`）
     func answers(_ steps: [Step], to session: ScriptedSession) -> [String] { steps.compactMap(\.window).flatMap(session.answers(in:)) }
 
     /// 他问起早先的事：答对才过；没答对时标出是说不知道还是答错（乱编）
@@ -151,28 +141,23 @@ class EvalScript {
         return Check(kind, label, false, note: made ? "（答错，编造）" : "（答错）")
     }
 
-    /// 这一步里 Cue 写的消息（回复、tell、完成的结果）
     func messages(_ step: Step) async throws -> [String] {
         guard let window = step.window else { return [] }
         return try await eval.said(since: window.lowerBound).filter { $0.createdAt <= window.upperBound }.map(\.text)
     }
 
-    /// 这一步里回他的话（Cue 回复他、不关联任务、不带选项的）
     func replies(_ step: Step) async throws -> [String] {
         guard let window = step.window else { return [] }
         return try await eval.said(since: window.lowerBound)
             .filter { $0.author == .known(.cue) && $0.choices == nil && $0.taskID == nil && $0.createdAt <= window.upperBound }.map(\.text)
     }
 
-    /// 回答他的那句（这一步里）
     func reply(_ step: Step) async throws -> String? { try await replies(step).last }
 
-    /// 这一步里告诉他的：Cue 写的消息，加 tell 的 text
     func told(_ step: Step) async throws -> [String] {
         try await messages(step) + calls(step, "tell").compactMap { $0.args["text"] as? String }
     }
 
-    /// 对同一个会话把同一件事说了两遍的会话（`similar`）
     func resaid() -> [ScriptedSession] {
         sessions.filter { session in
             let said = says(steps, to: session)
@@ -180,7 +165,6 @@ class EvalScript {
         }
     }
 
-    /// .md 里统计段的尾巴：剧本没按预想走的地方，与每一步叫醒了几轮、调了哪些工具
     func stepTable() -> [String] {
         notes.map { "- \($0)" } + ["", "| 步 | 叫醒的事 | 轮数 | 工具调用 |", "| --- | --- | --- | --- |"]
             + steps.enumerated().map { index, step in
@@ -189,7 +173,6 @@ class EvalScript {
             }
     }
 
-    /// 工具参数指的是哪个会话（`CueEval.refers`）
     func target(_ args: [String: Any]) -> ScriptedSession? {
         sessions.first { CueEval.refers(args, to: $0.id, title: $0.title, cards: $0.cards) }
     }
@@ -198,7 +181,6 @@ class EvalScript {
         (["title", "body", "text"].compactMap { args[$0] as? String } + (args["steps"] as? [String] ?? [])).joined(separator: "\n")
     }
 
-    /// 两句话几乎一样：去掉空白与标点后，相邻两字的集合重合八成以上
     static func similar(_ a: String, _ b: String) -> Bool {
         func pairs(_ text: String) -> Set<String> {
             let characters = Array(text.filter { !$0.isWhitespace && !$0.isPunctuation })
@@ -211,7 +193,6 @@ class EvalScript {
 
 }
 
-/// 一段剧本：跑完判定（`script`），写进 .md 的统计（`summarize`）不论跑没跑完都写。
 @MainActor
 protocol Playable: EvalScript {
     func script() async throws -> [Check]
