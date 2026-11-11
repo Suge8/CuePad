@@ -77,6 +77,9 @@ struct CueVoiceState<Operation: CueVoiceOperation> {
         let excerpt: String
         let status: String
         let recovery: Recovery?
+
+        /// 正文第一行的纯文字：朗读记录里不露 Markdown 标记。
+        static func excerpt(of text: String) -> String { String((MarkdownBlock.firstPlainLine(text) ?? text).prefix(80)) }
     }
 
     struct Execution: Identifiable {

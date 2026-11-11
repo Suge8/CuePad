@@ -59,12 +59,9 @@ extension Workspace {
         case .unconfirmed(let reason): reason
         }
         let repeatable = call.canRepeat && !reply.text.isEmpty && reply.delivery != .sending && reply.delivery != .queued
-        return .init(id: reply.id, excerpt: String((MarkdownBlock.firstPlainLine(reply.text) ?? reply.text).prefix(Self.voiceReadingExcerptLimit)), status: status,
+        return .init(id: reply.id, excerpt: CueVoicePresentation.Reading.excerpt(of: reply.text), status: status,
                      recovery: repeatable ? .repeatReply(reply.id) : nil)
     }
-
-    /// 详情只保留用于选择结果的一行摘录，避免重建第二份聊天正文。
-    private static let voiceReadingExcerptLimit = 80
 
     private func voiceIssues(_ voice: VoiceCall) -> [CueVoicePresentation.Issue] {
         var issues: [CueVoicePresentation.Issue] = voice.requests.compactMap { request in
