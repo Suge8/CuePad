@@ -39,19 +39,21 @@ struct CueEvalTests {
                 Check(.ask, "没发等你", try await eval.said().allSatisfy { $0.choices == nil }),
                 Check(.ask, "没问用户", reply.map { !$0.text.contains("？") && !$0.text.contains("?") } == true),
                 Check(.interrupt, "他发起的一轮不另 tell", eval.calls("tell").isEmpty),
+                Check(.result, "正文写了做法（做事的标准里用得上的）", Self.body(added)?.contains(/极简|最轻|中间层|根因|补丁|收口|防御/) == true),
             ]
         }
     }
 
-    @Test func r大事先对齐() async throws {
-        try await CueEval.run("r-大事先对齐", expect: "他要重新设计设置页（界面设计、没说清要做成什么样）：建任务但不开工，回复里一两句说清打算、等他点头") { eval in
+    @Test func r大事先出方案() async throws {
+        try await CueEval.run("r-大事先出方案", expect: "他要重新设计设置页（界面重做）：不问他要不要开始，直接开工，正文写明这一轮只出方案、不实现，回复一句先出方案给他看") { eval in
             try await eval.trigger { try await eval.rig.say("演示项目的设置页太乱了，重新设计一下") }
-            let reply = try await eval.reply()
+            let reply = try await eval.reply(), body = Self.body(eval.calls("task", "add"))
             return [
-                Check(.result, "建了任务", eval.calls("task", "add").contains { !$0.call.failed }),
-                Check(.ask, "没开工（没 start、没开会话）", eval.calls("task", "start").isEmpty
-                    && !eval.rig.app.host.calls.contains { if case .open = $0 { true } else { false } }),
-                Check(.ask, "回复一两句说了打算", reply.map { sentences($0.text) <= 3 } == true),
+                Check(.result, "开工（开出了会话）", eval.rig.app.host.calls.contains { if case .open = $0 { true } else { false } }),
+                Check(.result, "正文写明这一轮只出方案、不实现", body?.contains(/只出方案|不实现|不要?改|不动手|先不/) == true),
+                Check(.result, "正文写了界面的标准", body?.contains(/设计语言|布局|焦点|物料|占位|标签/) == true),
+                Check(.interrupt, "回复一两句", reply.map { sentences($0.text) <= 2 } == true),
+                Check(.ask, "没问他要不要开始", reply.map { !$0.text.contains("？") && !$0.text.contains("?") && !$0.text.contains("点头") } == true),
             ]
         }
     }
@@ -70,20 +72,26 @@ struct CueEvalTests {
     }
 
     @Test func c验收证据充分() async throws {
-        try await CueEval.run("c-验收证据充分", expect: "回复有测试输出与前后对比、发来一张截图：done 带 1–3 条短证据，不另外 tell") { eval in
+        try await CueEval.run("c-验收证据充分", expect: "回复有测试输出与前后对比、发来一张截图：先让会话收口一次（不 done、不打扰他）；它复查完交回，done 带 1–3 条短证据，不另外 tell") { eval in
             let rig = eval.rig
             let work = try await rig.working(Self.title, Self.body)
             try await rig.shots([("登录页改前改后.png", "登录页 忘记密码 改前改后")], from: work, drawing: { _ in try loginShot() })
             try await eval.trigger { try await rig.settle(work, reply: Self.doneReply) }
+            let closing = eval.calls("task", "say"), early = eval.calls("task", "done"), told = eval.calls("tell"), read = eval.calls("read")
+            try await eval.trigger { try await rig.resettle(work, reply: Self.closedReply) }
             let done = eval.calls("task", "done")
             let evidence = done.first { !$0.call.failed }?.args["evidence"] as? [String] ?? []
             return [
+                Check(.result, "先收口：say 让会话对照做法复查", closing.contains { ($0.args["text"] as? String)?.contains(/补丁|双事实源|重复|收口/) == true }),
+                Check(.result, "收口前没 done", early.isEmpty),
+                Check(.interrupt, "收口没打扰他（没 tell）", told.isEmpty),
+                Check(.result, "收口只问一次", eval.calls("task", "say").isEmpty),
                 Check(.result, "done 了", done.contains { !$0.call.failed }),
                 Check(.tool, "一次成（证据没因超宽被退回）", !done.isEmpty && done.allSatisfy { !$0.call.failed }),
                 Check(.tool, "证据 1–3 条", (1...3).contains(evidence.count)),
                 Check(.interrupt, "没另外 tell", eval.calls("tell").isEmpty),
                 // 读文件的参数名 Claude Code 是 file_path、Pi 是 path
-                Check(.result, "打开看了截图（附加）", eval.calls("read").contains { (($0.args["file_path"] ?? $0.args["path"]) as? String)?.hasSuffix(".png") == true }),
+                Check(.result, "打开看了截图（附加）", read.contains { (($0.args["file_path"] ?? $0.args["path"]) as? String)?.hasSuffix(".png") == true }),
             ]
         }
     }

@@ -40,8 +40,13 @@ class EvalScript {
     }
 
     func step(_ label: String, on session: ScriptedSession?, _ act: () async throws -> Void) async throws -> Step {
-        let window = try await eval.settle(act)
+        var window = try await eval.settle(act)
         if window == nil { notes.append("「\(label)」没叫醒 Cue") }
+        // Cue 在这一步里问了哪个会话收口，那个会话答完、Cue 再醒的那几轮也算这一步的
+        for asked in sessions where asked.askedToClose {
+            let more = try await eval.settle { try await asked.answerClosing(rig: self.rig) }
+            if let from = window?.lowerBound, let more { window = from...more.upperBound }
+        }
         let step = Step(label: label, window: window, session: session)
         steps.append(step)
         return step

@@ -75,6 +75,28 @@ extension CueEvalTests {
         截图都发到手机了：一路的方案稿 A/B、中途两版，和最终版。
         """
 
+    /// add 写的正文（第一次建成的那条）
+    static func body(_ added: [(call: CueToolCall, args: [String: Any])]) -> String? { added.first { !$0.call.failed }?.args["body"] as? String }
+
+    /// Cue 收口那一问（它早先说过的，摆现场用；措辞以系统提示为准，这里只要是那个意思）
+    static let closing = "交回前对照正文里的做法复查这次改动：有没有表面补丁、双事实源、能并掉的重复分支、多余的防御与测试、没人用了的代码与文档？范围内该收口的直接做完并补上证据，没有就说没有。"
+
+    /// 会话收口后的交回：复查了什么、收了什么，证据仍在
+    static let closedReply = """
+        对照做法复查过了，收了两处：
+        - 限频与令牌过期原先各自读一遍配置，并成一处 `resetPolicy`
+        - 删掉没人用了的旧模板函数 `renderLegacyVerifyMail`
+        其余没有要收口的：没有为不会发生的情况加防御，测试只覆盖四条要求。
+
+        ```
+        $ npm test
+        Tests: 23 passed, 23 total
+        $ npm run lint
+        ✔ No problems
+        ```
+        界面没动，截图同上一轮。
+        """
+
     static let doneReply = """
         忘记密码做好了。
 

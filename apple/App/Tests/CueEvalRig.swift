@@ -69,6 +69,22 @@ extension CueHostTests.Rig {
         try await answered(work.id, reply: text)
     }
 
+    /// 会话收到 Cue 刚说的那句（假扩展已记进会话文件）接着干，做完回复 `reply` 后又歇下。
+    func resettle(_ work: Working, reply text: String) async throws {
+        work.session.setState(["kind": "thinking"])
+        try await eventually("会话又在干活写进库") { try await self.store.sessions(matching: work.id).first?.state.isWorking == true }
+        try await settle(work, reply: text)
+    }
+
+    /// 会话早先交回过 `handed`，Cue 说了 `cue`（收口、挑刺那一问）开了这一轮，做完回复 `reply` 后歇下。
+    func settleClosed(_ work: Working, handed: String, cue: String, reply text: String) async throws {
+        let delivery = UUID()
+        try await store.recordSend(cue, to: SendTarget(kind: .piSession, name: work.task.heading, ref: work.id), card: work.task.id, delivery: delivery, origin: .known(.cue))
+        try work.file.reply(handed, at: .now - 300)
+        try work.file.user(cue, delivery: delivery.uuidString, at: .now - 240)
+        try await settle(work, reply: text)
+    }
+
     /// 他 `ago` 秒前直接在会话里（终端里打的，不带 Cue 的发送记录）说了 `said`，会话做完他这一轮、回复 `reply` 后歇下。
     func settleHisTurn(_ work: Working, said: String, ago: TimeInterval, reply text: String) async throws {
         try work.file.reply("后端做完了：发重置邮件的接口、令牌校验与限流，14 个测试全过。", at: .now - ago - 60)
