@@ -43,6 +43,16 @@ public struct PiHistoryUpdate: Sendable {
     public var recap: PiRecap { checkpoint.projectedRecap }
     public var transcript: PiTranscript { PiTranscript(sessionID: sessionID, messages: messages, recap: recap) }
     public var bytesRead: Int
+    public var signals: [PiRecordSignal] = []
+}
+
+/// 会话记录里 Agent 收尾却不跑钩子时写下的那几行（终端里的接入凭它收尾，`AgentRuntime.read`）：只随读到那一行的这一次交出，不进检查点，
+/// 之后读到新内容不重放；从头重读时会再交一次。
+public enum PiRecordSignal: Sendable, Equatable {
+    /// 这句没开成一轮（Claude Code 的钩子挡下、拦停），带着那一行的正文：原话写在末尾的 "Original prompt: " 之后，钩子要求不显示原话时没有
+    case promptRefused(String)
+    /// 你停掉了全部后台子代理（Claude Code 的 `agents_killed`）
+    case agentsStopped(at: Date)
 }
 
 public enum PiHistoryEvent: Sendable {
@@ -106,7 +116,7 @@ public enum PiHistory {
             sessionID: state.sessionID, cwd: state.cwd, name: state.name, firstMessage: state.firstMessage, lastActivity: state.lastActivity)
         return PiHistoryUpdate(
             file: file, agent: agent, checkpoint: state, history: history, messages: transcript.messages, includesTranscript: wanted,
-            renamed: state.name != resumed?.name, bytesRead: Int(consumed - start))
+            renamed: state.name != resumed?.name, bytesRead: Int(consumed - start), signals: transcript.signals)
     }
 
     /// 逐个完整行（不含换行）交给 `body`；返回消费到的偏移（总在一个换行之后，末尾的半行不算）。
@@ -182,6 +192,7 @@ public enum PiHistory {
         /// 读的会话文件（不在文件里的为 nil）：dsh 的图片按它找到所在的 dsh 目录
         var file: URL? = nil
         var messages: [PiChatMessage] = []
+        var signals: [PiRecordSignal] = []
 
         mutating func add(
             _ cp: PiHistoryCheckpoint, _ entry: Entry, role: PiChatRole, text: String, tools: PiChatMessage.Tools? = nil,

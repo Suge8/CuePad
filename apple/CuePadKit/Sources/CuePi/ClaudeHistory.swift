@@ -23,10 +23,14 @@ enum ClaudeHistory {
         case "system":
             switch line.subtype {
             case "compact_boundary": cp.compacted(entry, into: &transcript)
-            case "agents_killed": cp.agentsStoppedAt = entry.at
+            case "agents_killed": transcript.signals.append(.agentsStopped(at: entry.at))
             case "stop_hook_summary", "turn_duration": if cp.round != nil { cp.answered("", entry, into: &transcript) }
-            // 这句没开成一轮（钩子挡下、拦停，2.1.318 写 `informational` 带 `promptSubmitEnding`）：不跑 `Stop`，那句也不写进会话
-            default: if line.promptSubmitEnding != nil { cp.promptEndedAt = entry.at }
+            // 这句没开成一轮（钩子挡下、拦停，2.1.318 写 `informational` 带 `promptSubmitEnding`）：不跑 `Stop`，那句也不写进会话。
+            // `no_verdict` 是钩子没跑，CuePad 也没收到这句的钩子，不算
+            default:
+                if let kind = line.promptSubmitEnding?.ending?.kind, ["blocked_by_hook", "stopped_by_hook"].contains(kind) {
+                    transcript.signals.append(.promptRefused(line.content?.string ?? ""))
+                }
             }
         case "user":
             try user(line, entry, into: &cp, transcript: &transcript)
@@ -122,9 +126,19 @@ enum ClaudeHistory {
         var message: Message?
         var attachment: Attachment?
         var promptSubmitEnding: PromptSubmitEnding?
+        var content: Text?
     }
 
-    private struct PromptSubmitEnding: Decodable {}
+    /// 只要字符串；别的行的同名字段不是字符串时不拖累整行
+    private struct Text: Decodable {
+        var string: String?
+        init(from decoder: any Decoder) { string = try? decoder.singleValueContainer().decode(String.self) }
+    }
+
+    private struct PromptSubmitEnding: Decodable {
+        var ending: Ending?
+        struct Ending: Decodable { var kind: String? }
+    }
 
     private struct Origin: Decodable { var kind: String? }
 

@@ -33,9 +33,10 @@ final class ClaudeTerminalSession: SessionLink {
     private var readyWaits: [UUID: FileFollower] = [:]
     private var closed = false
     var facts = SessionFacts()
-    /// 收到上一个钩子的时刻（接上时为接上的此刻）与这一轮之前的那一次（`promptEnded` 的界）
-    private var lastHookAt = Date.now
-    private(set) var hookBeforeTurn: Date?
+    /// 刚交上来、还没见它跑起来的这句（之后主会话还没有别的钩子）：挡下的那一行按原话认它（`recorded`）
+    var unconfirmedPrompt: String?
+    /// 先于这句的钩子读到的挡下那一行的正文（钩子并行跑，Claude Code 不等 CuePad 的钩子就写下它）：只认紧接着的那个 `UserPromptSubmit`
+    var refusedAhead: String?
     /// 要你回答的（同一时刻可能有好几个：子代理并行时各自要确认），按到达先后；会话的 `question` 是第一个
     private var pending: [Pending] = []
 
@@ -90,11 +91,15 @@ final class ClaudeTerminalSession: SessionLink {
             if event == "PostModelSwitch", let model = input["to_model"]?.string { session.model = ClaudeCode.model(model) }
         }
         let tool = input["tool_name"]?.string ?? "?"
-        defer { lastHookAt = now }
+        // 主会话又有了别的钩子：这句跑起来了，挡下的那一行不会再来；先读到的那一行也不是之后这句的
+        let refused = refusedAhead
+        if agent == nil { (unconfirmedPrompt, refusedAhead) = (nil, nil) }
         switch event {
         case "UserPromptSubmit":
+            let prompt = input["prompt"]?.string ?? ""
+            if let refused, Self.refuses(refused, prompt) { break }  // 挡下的那一行先读到了：这一轮没开成
             facts.startTurn(at: now)  // 钩子挡着这一句：收到它一定早于这一轮的回答
-            hookBeforeTurn = lastHookAt
+            unconfirmedPrompt = prompt
         case "PreToolUse" where tool == "AskUserQuestion":
             let ask = ClaudePermission(tool: tool, input: input["tool_input"] ?? .object([:]))
             return hold(Pending(question: ask.question(), kind: .ask(ask), call: call, agent: agent), answerable: ask.answerable, at: now)

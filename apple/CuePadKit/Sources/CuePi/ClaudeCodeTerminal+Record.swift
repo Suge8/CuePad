@@ -12,19 +12,33 @@ extension ClaudeTerminalSession {
         show(at: .now)
     }
 
-    /// 你的 `UserPromptSubmit` 钩子挡下了这句（CuePad 的钩子已开了这一轮）：Claude Code 不跑这一轮，也不跑 `Stop`。几个钩子并行跑，
-    /// 挡下的那一行可能早于 CuePad 收到自己的钩子（2.1.318 实测早 3 毫秒），不能拿这一轮的开始比；这句一定在上一个钩子之后才交上来，
-    /// 早于它的是之前那句的。
-    func promptEnded(at date: Date) {
-        guard facts.running, let after = hookBeforeTurn, after < date else { return }
+    func recorded(_ signal: PiRecordSignal) {
+        switch signal {
+        case .promptRefused(let text): refused(text)
+        case .agentsStopped(let date): agentsStopped(at: date)
+        }
+    }
+
+    /// 你的 `UserPromptSubmit` 钩子挡下了这句（CuePad 的钩子可能已开了这一轮）：Claude Code 不跑这一轮，也不跑 `Stop`。按原话配对，不比先后：
+    /// 几个钩子并行跑，那一行可能早于 CuePad 收到自己的钩子（2.1.318 实测早 3 毫秒），也可能晚于它。CuePad 已收到这句就收掉这一轮，
+    /// 还没收到就记下，等紧接着的那个 `UserPromptSubmit`（`handle`）。
+    private func refused(_ text: String) {
+        guard facts.running, let prompt = unconfirmedPrompt, Self.refuses(text, prompt) else { return refusedAhead = text }
+        unconfirmedPrompt = nil
         settlePending(agent: nil, when: "Stop")
         facts.endTurn()
         show(at: .now)
     }
 
+    /// 那一行的原话在正文末尾（2.1.318 源码：`<钩子的话>\n\nOriginal prompt: <这句>`）；钩子要求不显示原话时没有这一段，认作就是这句
+    static func refuses(_ text: String, _ prompt: String) -> Bool {
+        let marker = "\n\nOriginal prompt: "
+        return !text.contains(marker) || text.hasSuffix(marker + prompt)
+    }
+
     /// 你在终端里停掉了全部后台子代理（主会话歇着时按 Ctrl-C，2.1.318）：Claude Code 不开一轮，不跑 `Stop` 也不跑 `SubagentStop`，
-    /// 只在会话文件里写一行。那时在跑的子代理记成被停下、出在飞清单；后台命令不受影响，留着。之后才开始的不算（每次读到都会再判一次）。
-    func agentsStopped(at date: Date) {
+    /// 只在会话文件里写一行。那时在跑的子代理记成被停下、出在飞清单；后台命令不受影响，留着。之后才开始的不算（从头重读时旧的那一行会再来）。
+    private func agentsStopped(at date: Date) {
         let stopped = facts.subagents.filter { $0.state.phase == .known(.running) && $0.state.startedAt.map { $0 <= date } == true }.map(\.id)
         guard !stopped.isEmpty else { return }
         for agent in stopped { facts.settleSubagent(agent, .interrupted, summary: nil, at: .now) }
