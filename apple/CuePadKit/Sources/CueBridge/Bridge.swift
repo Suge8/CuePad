@@ -115,9 +115,8 @@ extension Bridge {
         if case .cue(let deliveryID, let turnStartedAt) = message.policy {
             guard !peer.upgrading, peer.state != .ended, peer.state != .interrupted else { throw BridgeError.rejected("unconfirmed_turn") }
             if peer.state.hasPendingWork {
-                guard let deliveryID, !deliveryID.isEmpty, let turnStartedAt, let current = peer.turnStartedAt else { throw BridgeError.rejected("unconfirmed_turn") }
-                // 接入可能有亚毫秒，Store 往返只有毫秒；复用存储合同，不按任意容差放宽。
-                guard turnStartedAt.stored == current.stored else { throw BridgeError.rejected("user_turn") }
+                guard let deliveryID, !deliveryID.isEmpty, let turnStartedAt, peer.turnStartedAt != nil else { throw BridgeError.rejected("unconfirmed_turn") }
+                guard peer.isCurrentTurn(turnStartedAt.stored) else { throw BridgeError.rejected("user_turn") }
             }
         }
         if let why = peer.capabilities.speakBlocked(in: peer.state, agent: peer.agent) {
@@ -172,7 +171,7 @@ extension Bridge {
     /// 已经空闲时什么也不发生（也成功）；只停它自己这一轮，它派出的子代理照常跑。
     /// 有目标的停止不取消本桥排着的新消息；真实回合身份交给接收端同步核对。
     public func abort(_ id: Session.ID, deliveryID: String, turnStartedAt: Int64) async throws {
-        guard session(id: id)?.turnStartedAt?.stored == turnStartedAt else { throw BridgeError.rejected("stale_turn") }
+        guard session(id: id)?.isCurrentTurn(turnStartedAt) == true else { throw BridgeError.rejected("stale_turn") }
         try await control(id, needs: .abort).abort(id, deliveryID: deliveryID, turnStartedAt: turnStartedAt)
     }
 

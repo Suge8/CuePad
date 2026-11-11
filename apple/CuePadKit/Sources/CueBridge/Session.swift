@@ -67,6 +67,8 @@ public struct Session: Identifiable, Sendable, Equatable {
     public internal(set) var busySince: Date? = nil
     /// Pi 由扩展报（每次模型回合开始），其余由接入记（`SessionFacts.startTurn(at:)`）
     public internal(set) var turnStartedAt: Date? = nil
+    /// Cue 与语音拿来接管、停下这一轮的凭据（同步记录里的毫秒）还是不是这一轮：核对只在这里。接入记的开始有亚毫秒，按存的毫秒比，不按任意容差放宽。
+    public func isCurrentTurn(_ startedAt: Int64) -> Bool { turnStartedAt?.stored == startedAt }
     /// `/name` 设的会话名
     public internal(set) var name: String? = nil
     public internal(set) var firstMessage: String? = nil
