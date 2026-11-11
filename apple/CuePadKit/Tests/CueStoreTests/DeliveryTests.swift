@@ -50,6 +50,31 @@ import Testing
   }
 
   @Test
+  func restartingDoesNotWaitForTheLastRoundsHandlerThatIgnoresCancellation() async throws {
+    let handler = Handler()
+    let (opened, open) = AsyncStream<Void>.makeStream()
+    defer { open.finish() }
+    let entered = Signal()
+    let executor = DeliveryExecutor(store: store, hostID: "mac-a", timing: clock.timing, onIssue: { Issue.record("执行器意外上报：\($0)") }) { request, _ in
+      guard request.content == "卡住" else { return await handler.handle(request) }
+      entered.raise()
+      await Task { for await _ in opened {} }.value
+      return .succeeded
+    }
+    try await executor.start()
+    _ = try await store.requestDelivery("卡住", to: pi, on: "mac-a")
+    try await eventually("上一轮的 handler 开始执行") { entered.isRaised }
+    await executor.stop()
+
+    let restarted = Task { try await executor.start() }
+    let next = try await store.requestDelivery("下一条", to: pi, on: "mac-a")
+    _ = try await eventually(store, { try $0.deliveryRequest(next.id)?.status }) { $0 == .known(.succeeded) }
+    try await restarted.value
+    #expect(await handler.seen.map(\.content) == ["下一条"])
+    await executor.stop()
+  }
+
+  @Test
   func sentMessagesOutliveTheRetention() async throws {
     let handler = Handler()
     await handler.setOutcome(.failed(.verbatim("Pi 已经退出")))

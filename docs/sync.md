@@ -65,7 +65,6 @@ Cue 等结果的窗口是 `Speech.cueWait`；Cue 看失败见 `cueChanges`。
 
 ## 失败与重试
 
-- 复测失败路径用 `research/sync-faults` 分支的故障探针（内存替身注入延迟与错误，Kit 与 App 两层，不合并）：叠到改动上跑 `xc.sh test kit -only-testing:CueSyncTests/SyncFaultProbeTests`、`xc.sh test mac|ios -only-testing:CuePadTests/SyncFaultProbeTests`。探针里挂得比 `RequestLimits.request` 久的数据库请求要按 CloudKit 的空闲超时到点失败，才和真机一致。
 - 没在真网络上确认的：断网时 CloudKit 整批抛的是 `partialFailure` 包着 -1009，还是 URL 错误原样；区忙带不带 `retryAfterSeconds`。归类（`SyncFault`）对这几种包法给同一个结论，所以不影响行为。
 
 ## 最低对端版本
