@@ -16,7 +16,8 @@ extension CueHostTests.Rig {
         let task = try await store.createTask(first, in: project.id)
         let id = "s-\(UUID().uuidString.prefix(8).lowercased())", delivery = UUID()
         try await store.recordSend(first, to: SendTarget(kind: .piSession, name: title, ref: id), card: task.id, delivery: delivery, origin: .known(.cue))
-        let session = try await app.host.connect(id, cwd: folder.path, busy: true)
+        // Cue 派的活是 CuePad 开的会话（能从 CuePad 结束）
+        let session = try await app.host.connect(id, cwd: folder.path, busy: true, hosted: true)
         // 像真扩展那样：作答后收起提问、回到工作中（假扩展默认只回 ack）
         let ack = session.onCommand
         session.onCommand = { [weak session] connection, command in
@@ -69,13 +70,6 @@ extension CueHostTests.Rig {
         try await answered(work.id, reply: text)
     }
 
-    /// 会话收到 Cue 刚说的那句（假扩展已记进会话文件）接着干，做完回复 `reply` 后又歇下。
-    func resettle(_ work: Working, reply text: String) async throws {
-        work.session.setState(["kind": "thinking"])
-        try await eventually("会话又在干活写进库") { try await self.store.sessions(matching: work.id).first?.state.isWorking == true }
-        try await settle(work, reply: text)
-    }
-
     /// 这件事返工过几轮：每一轮会话交回 `handed`、Cue 接着说了 `cue`（发送记录是 Cue 的）；最后那句开的这一轮做完，回复 `reply` 后歇下。
     func settleReworked(_ work: Working, rounds: [(handed: String, cue: String)], reply text: String) async throws {
         var at = Date.now - Double(rounds.count) * 300
@@ -115,6 +109,14 @@ extension CueHostTests.Rig {
         try await spoke(said, in: work.id)
         work.session.sendInfo(["question": ["id": "p1", "kind": "select", "text": question, "options": options]])
         work.session.setState(["kind": "waiting_user", "title": question])
+    }
+
+    /// 他 15 分钟前直接在会话里说了 `his`（不在场），会话照做后说了 `said`、停下来问 `question`：这一轮是他的，提问当场留给他。
+    func askInHisTurn(_ work: Working, his: String, said: String, question: String, options: [String]) async throws {
+        try work.file.reply("收到，在做。", at: .now - 16 * 60)
+        try work.file.user(his, at: .now - 15 * 60)
+        try await read(his, in: work.id)  // 他 15 分钟前说的，早已读进库
+        try await ask(work, said: said, question: question, options: options)
     }
 }
 

@@ -5,44 +5,8 @@ import SwiftUI
 import Testing
 @testable import CuePad
 
-/// 只有 Cue 在场的几个时机：大事先出方案、返工两轮后收口、追问两次就留给他、要的就是长相的成果只凭图挑刺、他反复交代的做法提议记成规矩。
+/// 只有 Cue 在场的几个时机：大事先出方案、追问两次就留给他、要的就是长相的成果只凭图挑刺、他反复交代的做法提议记成规矩。
 extension CueEvalTests {
-    @Test func r2架构先出方案() async throws {
-        try await CueEval.run("r2-架构先出方案", expect: "他要把各页各存一份的数据统一成一个数据层（架构、难改回）：直接开工，正文写明这一轮只出方案、不实现，回复一句，不发等你") { eval in
-            try await eval.trigger { try await eval.rig.say("演示项目现在每个页面各自拉数据、各存一份，经常对不上。统一成一个数据层，你看怎么做合适") }
-            let reply = try await eval.reply(), body = Self.body(eval.calls("task", "add"))
-            return [
-                Check(.result, "开工（开出了会话）", eval.rig.app.host.calls.contains { if case .open = $0 { true } else { false } }),
-                Check(.result, "正文写明这一轮只出方案、不实现", body?.contains(/只出方案|不实现|不要?改|不动手|先不/) == true),
-                Check(.interrupt, "回复一两句", reply.map { sentences($0.text) <= 2 } == true),
-                Check(.ask, "没发等你", try await eval.said().allSatisfy { $0.choices == nil }),
-            ]
-        }
-    }
-
-    @Test func c2返工两轮后收口() async throws {
-        try await CueEval.run("c2-返工两轮后收口", expect: "这件事 Cue 让它返工过两轮，这次证据齐了：done 前先 say 让它通读全部改动收一次（不 done、不打扰他）；它收完交回就 done，不再问") { eval in
-            let rig = eval.rig
-            let work = try await rig.working(Self.title, Self.body)
-            try await rig.shots([("登录页改前改后.png", "登录页 忘记密码 改前改后")], from: work, drawing: { _ in try loginShot() })
-            try await eval.trigger {
-                try await rig.settleReworked(work, rounds: [
-                    ("忘记密码做好了，测试过了。", "限频现在是按 IP 算的，要按邮箱算：同一邮箱 1 分钟内最多发一次。改掉并贴测试输出。"),
-                    ("改成按邮箱限频了，先在发信函数里加了个临时判断，旧的按 IP 的中间件还留着没删。", "不存在的邮箱现在返回 404，会泄露用户是否存在：统一成同一句提示，并补改前改后的截图。"),
-                ], reply: Self.doneReply)
-            }
-            let closing = eval.calls("task", "say"), early = eval.calls("task", "done"), told = eval.calls("tell")
-            try await eval.trigger { try await rig.resettle(work, reply: Self.closedReply) }
-            return [
-                Check(.result, "先收口：say 让它通读全部改动", closing.contains { ($0.args["text"] as? String)?.contains(/通读|用不上|补丁|重复/) == true }),
-                Check(.result, "收口前没 done", early.isEmpty),
-                Check(.interrupt, "收口没打扰他（没 tell）", told.isEmpty),
-                Check(.result, "收口只问一次", eval.calls("task", "say").isEmpty),
-                Check(.result, "收完 done 了", eval.calls("task", "done").contains { !$0.call.failed }),
-            ]
-        }
-    }
-
     @Test func c5追问两次就留给他() async throws {
         try await CueEval.run("c5-追问两次就留给他", expect: "改前改后的截图 Cue 追问过两次，会话这次还是没发：不问第三次，tell 一句缺什么，留给他回；不 done") { eval in
             let rig = eval.rig

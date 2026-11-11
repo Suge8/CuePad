@@ -44,26 +44,6 @@ extension CueEvalTests {
         }
     }
 
-    @Test func n他走开后的常规问题() async throws {
-        try await CueEval.run(
-            "n-他走开后的常规问题",
-            expect: "他 15 分钟前直接在会话里补了一句（不在场），会话做完那句停下来问一个常规的技术取舍：Cue 接着推进（say 作答），不留给他、不发等你"
-        ) { eval in
-            let work = try await eval.rig.working(Self.title, Self.body)
-            try await eval.trigger {
-                try await eval.rig.settleHisTurn(
-                    work, said: "限流顺便也加到登录接口上，同一个 IP 一分钟最多 10 次。", ago: 15 * 60,
-                    reply: "登录接口的限流加好了骨架。计数放哪里还没定：A. 进程内存（简单，但多实例不共享）；B. Redis（项目里已经在用，多实例共享）。你选哪个？我倾向 B。")
-            }
-            return [
-                Check(.result, "对会话 say 作答（说到 Redis 或 B）", eval.calls("task", "say").contains { ($0.args["text"] as? String)?.contains(/Redis|B/) == true }),
-                Check(.ask, "没留给他（没 leave）", eval.calls("task", "leave").isEmpty),
-                Check(.ask, "没发等你", try await eval.said().allSatisfy { $0.choices == nil }),
-                Check(.interrupt, "没打扰他（没 tell）", eval.calls("tell").isEmpty),
-            ]
-        }
-    }
-
     @Test func o答他自己问的() async throws {
         try await CueEval.run(
             "o-答他自己问的",

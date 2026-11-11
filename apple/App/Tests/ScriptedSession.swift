@@ -32,7 +32,6 @@ final class ScriptedSession {
             fake.onCommand = { [weak fake] connection, command in
                 switch command["t"] as? String {
                 case "send":
-                    if (command["text"] as? String)?.contains(/通读这件事的全部改动/) == true { inbox.closing.withLock { $0 = true } }
                     fake?.setState(["kind": "thinking"])
                 case "answer":
                     if let value = command["value"] as? String { inbox.answers.withLock { $0.append((value, .now)) } }
@@ -50,17 +49,6 @@ final class ScriptedSession {
     /// 收到的作答（选项原文或填的字、收到的时刻）：在扩展的 socket 队列上收，换进程也不丢
     nonisolated final class Inbox: Sendable {
         let answers = Mutex<[(value: String, at: Date)]>([])
-        /// Cue 问了收口那一问（`CuePrompt.stopsAndFollowUp`），还没答
-        let closing = Mutex(false)
-    }
-
-    /// Cue 问了收口那一问、还没答。
-    var askedToClose: Bool { inbox.closing.withLock { $0 } }
-
-    /// 答收口那一问（真会话会答；剧本的回复是定好的，不会自己接这一句）：通读过、没有要收的，结果与证据不变。
-    func answerClosing(rig: CueHostTests.Rig) async throws {
-        inbox.closing.withLock { $0 = false }
-        try await settle("通读过这件事的全部改动：没有前几轮留下、现在用不上的代码，没有重复的分支与临时补丁，没有要收的。上一条的结果与证据不变。", rig: rig)
     }
 
     /// `window` 里收到的作答（同 `Working.answers`：只认会话收到的）
