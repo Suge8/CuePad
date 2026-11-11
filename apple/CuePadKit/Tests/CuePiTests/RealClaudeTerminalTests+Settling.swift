@@ -128,5 +128,74 @@ extension RealClaudeTerminalTests {
             #expect(try testbed.transcript(session.sessionFile).recap.lastReply == "OK")
         }
     }
+    /// 你的 `UserPromptSubmit` 钩子还在查这句时在终端里按 Esc：Claude Code 杀掉钩子、把这句放回输入框，会话记录一行不写，不跑 `Stop`，
+    /// 只有登记文件的 `status` 回到 `idle`。会话照它歇下，CuePad 的下一句照常收下。
+    @Test func escWhileTheUsersPromptHookRunsSettlesTheSession() async throws {
+        let (settings, started, release) = Self.holdingHook()
+        defer { try? Data().write(to: release) }
+        try await ClaudeTestbed.run(settings: settings) { testbed in
+            try testbed.startConnected()
+            testbed.on("只回复 OK", .say("OK"))
+            let terminal = try await testbed.terminal()
+            let session = try await testbed.waitForSession(pid: terminal.pid)
+            try await terminal.type("HOLDME 只回复 OK")
+            try await testbed.waitOnScreen("你的钩子在查这句，CuePad 开了这一轮", on: terminal, in: session.id) {
+                FileManager.default.fileExists(atPath: started.path) && testbed.bridge.session(id: session.id)?.state.isWorking == true
+            }
+            try await terminal.keys("Escape")
+            try await testbed.waitOnScreen("按 Esc 后歇下", on: terminal, in: session.id) { testbed.bridge.session(id: session.id)?.state == .settled }
+            let start = Date()
+            try await testbed.bridge.send(PiMessage(text: "只回复 OK"), to: session.id)
+            try await testbed.waitForTurn(session.id, since: start)
+            try await testbed.waitForDraftLanded(session.id)
+            #expect(try testbed.transcript(session.sessionFile).recap.lastReply == "OK")
+        }
+    }
+
+    /// CuePad 收到这句的钩子时，登记文件可能还是这句之前的 `idle`（Claude Code 在钩子开跑前写 `busy`，实测只早几毫秒，写盘晚了就倒过来）。
+    /// 测试台在你的钩子查这句时把这句之前的登记文件写回去，再让这一轮跑一条命令：命令跑完之前不歇下。
+    @Test func aTurnStillShownIdleInTheRegistryRunsUntilItsEnd() async throws {
+        let (hooks, started, release) = Self.holdingHook()
+        defer { try? Data().write(to: release) }
+        let settings = hooks.replacingOccurrences(of: #"{"hooks""#, with: #"{"permissions": {"allow": ["Bash"]}, "hooks""#)
+        let command = "while [ ! -e finish ]; do sleep 0.05; done; echo RAN"
+        try await ClaudeTestbed.run(settings: settings) { testbed in
+            try testbed.startConnected()
+            testbed.on("HOLDME") { $0.step == 0 ? .call("Bash", ["command": command, "description": "wait"]) : .say("RAN") }
+            let terminal = try await testbed.terminal()
+            let session = try await testbed.waitForSession(pid: terminal.pid)
+            let registry = testbed.config.appending(path: "sessions/\(terminal.pid).json")
+            var before = Data()
+            try await eventually("登记文件写下 idle") {
+                before = (try? Data(contentsOf: registry)) ?? Data()
+                return JSONValue.parse(before)?["status"]?.string == "idle"
+            }
+            let start = Date()
+            try await terminal.type("HOLDME run")
+            try await testbed.waitOnScreen("你的钩子在查这句，CuePad 开了这一轮", on: terminal, in: session.id) {
+                FileManager.default.fileExists(atPath: started.path) && testbed.bridge.session(id: session.id)?.state.isWorking == true
+            }
+            try before.write(to: registry, options: .atomic)
+            await quietPeriod(.milliseconds(500))
+            #expect(testbed.bridge.session(id: session.id)?.state.isWorking == true, "\(String(describing: testbed.bridge.session(id: session.id)?.state))")
+            try Data().write(to: release)
+            try await testbed.waitOnScreen("这一轮在跑命令", on: terminal, in: session.id) {
+                testbed.bridge.session(id: session.id)?.detail?.contains("echo RAN") == true
+            }
+            #expect(testbed.bridge.session(id: session.id)?.state.isWorking == true, "命令还在跑：\(String(describing: testbed.bridge.session(id: session.id)?.state))")
+            try Data().write(to: testbed.work.appending(path: "finish"))
+            try await testbed.waitForTurn(session.id, since: start)
+            try await testbed.waitForDraftLanded(session.id)
+            #expect(try testbed.transcript(session.sessionFile).recap.lastReply == "RAN")
+        }
+    }
+
+    /// 你的 `UserPromptSubmit` 钩子对含 HOLDME 的那句开跑时建 `started`，挂到 `release` 出现才放行
+    private static func holdingHook() -> (settings: String, started: URL, release: URL) {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "hold-\(UUID().uuidString)")
+        let (started, release) = (directory.appending(path: "started"), directory.appending(path: "release"))
+        let command = "grep -q HOLDME && { mkdir -p '\(directory.path)'; touch '\(started.path)'; while [ ! -e '\(release.path)' ]; do sleep 0.05; done; }; exit 0"
+        return (#"{"hooks": {"UserPromptSubmit": [{"hooks": [{"type": "command", "command": "\#(command)"}]}]}}"#, started, release)
+    }
 }
 #endif
