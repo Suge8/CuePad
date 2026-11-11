@@ -1918,6 +1918,22 @@
         }
       }
     },
+    "%lld 未通过" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld not passed"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 未通过"
+          }
+        }
+      }
+    },
     "%lld 条" : {
       "localizations" : {
         "en" : {

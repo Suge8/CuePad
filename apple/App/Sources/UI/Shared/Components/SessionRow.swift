@@ -198,7 +198,7 @@ private struct SubagentCount: View {
         let running = Text("\(summary.running)").foregroundStyle(summary.running > 0 ? palette.signature : palette.ink2).fontWeight(.semibold)
         Text("\(Image(.branch))\u{2009}\(running)/\(summary.total)")
             .monospacedDigit().foregroundStyle(palette.ink2)
-            .accessibilityLabel(Dotted(summary.lead, summary.tail, summary.failure).spoken)
+            .accessibilityLabel(Dotted(summary.lead, summary.tail, summary.failure, summary.rejection).spoken)
     }
 }
 

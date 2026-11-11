@@ -40,13 +40,17 @@ struct SubagentList: View {
                         Dot().foregroundStyle(palette.failure)
                         Text(failure).foregroundStyle(palette.failure).monospacedDigit().rollingCount(summary.failed)
                     }
+                    if let rejection = summary.rejection {
+                        Dot()
+                        Text(rejection).foregroundStyle(palette.ink3).monospacedDigit().rollingCount(summary.rejected)
+                    }
                     DisclosureChevron(open: expanded)
                 }
-                .handOff(id: [summary.running > 0 ? "running" : "total", summary.tail == nil ? nil : "total", summary.failure == nil ? nil : "failed"].compactMap { $0 })
+                .handOff(id: [summary.running > 0 ? "running" : "total", summary.tail == nil ? nil : "total", summary.failure == nil ? nil : "failed", summary.rejection == nil ? nil : "rejected"].compactMap { $0 })
             }
         }
         .buttonStyle(PressStyle(.inline))
-        .accessibilityLabel(Dotted(summary.lead, summary.tail, summary.failure).spoken)
+        .accessibilityLabel(Dotted(summary.lead, summary.tail, summary.failure, summary.rejection).spoken)
         .accessibilityExpanded(expanded)
     }
 

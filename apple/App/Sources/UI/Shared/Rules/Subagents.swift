@@ -43,6 +43,7 @@ nonisolated struct SubagentSummary: Equatable {
     let running: Int
     let total: Int
     let failed: Int
+    let rejected: Int
     let lineup: [SubagentState]
 
     var lead: String { running > 0 ? String(localized: "\(running) 个在跑") : String(localized: "\(total) 个子代理") }
@@ -51,11 +52,14 @@ nonisolated struct SubagentSummary: Equatable {
 
     var failure: String? { failed > 0 ? String(localized: "\(failed) 失败") : nil }
 
+    var rejection: String? { rejected > 0 ? String(localized: "\(rejected) 未通过") : nil }
+
     init?(_ agents: [SubagentState]) {
         guard !agents.isEmpty else { return nil }
         running = agents.filter(\.isRunning).count
         total = agents.count
         failed = agents.filter { $0.phase == .known(.failed) }.count
+        rejected = agents.filter { $0.phase == .known(.rejected) }.count
         lineup = agents.filter(\.isRunning) + agents.filter { $0.phase == .known(.failed) } + agents.filter { !$0.isRunning && $0.phase != .known(.failed) }
     }
 }
