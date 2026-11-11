@@ -165,8 +165,10 @@ extension CueTools {
     return switch agent.phase.known {
     case .running: "在跑" + (agent.progressAt.map { now.timeIntervalSince($0) >= 60 ? "，\(CueEnvelope.duration(now.timeIntervalSince($0)))没动静" : "" } ?? "")
     case .review: "在被审查"
+    case .paused: "临时故障，等到点自动续跑"
     case .done: "交回了" + settled
     case .failed: "失败了" + settled
+    case .rejected: "审查没通过" + settled
     case .interrupted: "被停下" + settled
     case .idle: "歇着"
     case nil: agent.phase.rawValue

@@ -19,7 +19,7 @@ nonisolated extension SubagentState {
         switch phase.known {
         case .running: SessionShown(state: .known(.thinking))
         case .failed: SessionShown(state: .known(.error))
-        case .review, .done, .interrupted, .idle: SessionShown(state: .known(.settled))
+        case .review, .paused, .done, .rejected, .interrupted, .idle: SessionShown(state: .known(.settled))
         case nil: SessionShown(state: .unknown(phase.rawValue))
         }
     }
@@ -28,8 +28,10 @@ nonisolated extension SubagentState {
         switch phase.known {
         case .running: String(localized: "工作中")
         case .review: String(localized: "审查中")
+        case .paused: String(localized: "稍后重试")
         case .done: String(localized: "已交回")
         case .failed: String(localized: "失败")
+        case .rejected: String(localized: "未通过")
         case .interrupted: String(localized: "被中断")
         case .idle: String(localized: "空闲")
         case nil: shown.label
@@ -41,6 +43,7 @@ nonisolated struct SubagentSummary: Equatable {
     let running: Int
     let total: Int
     let failed: Int
+    let rejected: Int
     let lineup: [SubagentState]
 
     var lead: String { running > 0 ? String(localized: "\(running) 个在跑") : String(localized: "\(total) 个子代理") }
@@ -49,11 +52,14 @@ nonisolated struct SubagentSummary: Equatable {
 
     var failure: String? { failed > 0 ? String(localized: "\(failed) 失败") : nil }
 
+    var rejection: String? { rejected > 0 ? String(localized: "\(rejected) 未通过") : nil }
+
     init?(_ agents: [SubagentState]) {
         guard !agents.isEmpty else { return nil }
         running = agents.filter(\.isRunning).count
         total = agents.count
         failed = agents.filter { $0.phase == .known(.failed) }.count
+        rejected = agents.filter { $0.phase == .known(.rejected) }.count
         lineup = agents.filter(\.isRunning) + agents.filter { $0.phase == .known(.failed) } + agents.filter { !$0.isRunning && $0.phase != .known(.failed) }
     }
 }
