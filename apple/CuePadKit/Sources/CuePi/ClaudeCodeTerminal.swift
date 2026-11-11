@@ -37,6 +37,8 @@ final class ClaudeTerminalSession: SessionLink {
     var unconfirmedPrompt: String?
     /// 先于这句的钩子读到的挡下那一行的正文（钩子并行跑，Claude Code 不等 CuePad 的钩子就写下它）：只认紧接着的那个 `UserPromptSubmit`
     var refusedAhead: String?
+    /// 会话记录里已经算过的位置：之前的收尾的行是旧的（从头重读、接上之前写的），不再算
+    var recordRead: UInt64
     /// 要你回答的（同一时刻可能有好几个：子代理并行时各自要确认），按到达先后；会话的 `question` 是第一个
     private var pending: [Pending] = []
 
@@ -57,10 +59,12 @@ final class ClaudeTerminalSession: SessionLink {
     }
 
     /// - Parameter runningSince: 接上时已在跑（在忙或在等你）这一轮的开始（取法见 `SessionFacts.startTurn(at:)`）
+    /// - Parameter recordLength: 接上时会话文件的长度：在它之前写下的收尾的行都是接上之前的事（`recorded`）
     init(
         id: PiSession.ID, pid: Int32, bridge: PiBridge, gate: PresenceGate, inbox: String?, registry: URL, timing: Timing,
-        runningSince: Date?, waiting: Bool
+        runningSince: Date?, waiting: Bool, recordLength: UInt64 = 0
     ) {
+        recordRead = recordLength
         self.id = id
         self.pid = pid
         self.registry = registry

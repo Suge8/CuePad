@@ -23,7 +23,7 @@ enum ClaudeHistory {
         case "system":
             switch line.subtype {
             case "compact_boundary": cp.compacted(entry, into: &transcript)
-            case "agents_killed": transcript.signals.append(.agentsStopped(at: entry.at))
+            case "agents_killed": transcript.signal(.agentsStopped)
             case "stop_hook_summary": if cp.round != nil { cp.answered("", entry, into: &transcript) }
             // 进程内队友还在跑时，2.1.318 把那一轮的这一行推迟到队友都停下才写，可能落在下一轮中途（停掉队友的那次工具调用之后）。
             // 认它接在哪一行后面（parentUuid），不认时长：等后台结果的一轮按时写的这一行也从更早那一轮的开头量起
@@ -33,7 +33,7 @@ enum ClaudeHistory {
             // `no_verdict` 是钩子没跑，CuePad 也没收到这句的钩子，不算
             default:
                 if let kind = line.promptSubmitEnding?.ending?.kind, ["blocked_by_hook", "stopped_by_hook"].contains(kind) {
-                    transcript.signals.append(.promptRefused(line.content?.string ?? ""))
+                    transcript.signal(.promptRefused(line.content?.string ?? ""))
                 }
             }
         case "user":

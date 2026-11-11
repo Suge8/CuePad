@@ -92,7 +92,7 @@ public final class ClaudeCodeRuntime: AgentRuntime {
     public func read(_ update: PiHistoryUpdate) {
         for (id, terminal) in terminals where bridge.session(id: id)?.sessionID == update.sessionID {
             if let stoppedAt = update.checkpoint.stoppedAt { terminal.stopped(at: stoppedAt) }
-            for signal in update.signals { terminal.recorded(signal) }
+            terminal.recorded(update.signals, through: update.checkpoint.offset)
         }
     }
 
@@ -196,7 +196,7 @@ public final class ClaudeCodeRuntime: AgentRuntime {
     private func attach(_ session: PiSession, inbox: String?, registry: URL, runningSince: Date?, waiting: Bool) -> ClaudeTerminalSession {
         let terminal = ClaudeTerminalSession(
             id: session.id, pid: session.pid, bridge: bridge, gate: gate, inbox: inbox, registry: registry,
-            timing: timing, runningSince: runningSince, waiting: waiting)
+            timing: timing, runningSince: runningSince, waiting: waiting, recordLength: session.sessionFile.flatMap { ClaudeTerminalSession.length(of: $0) } ?? 0)
         terminals[session.id] = terminal
         let pid = session.pid
         if exitWatchers[pid] == nil {

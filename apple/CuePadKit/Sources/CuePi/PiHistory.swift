@@ -46,13 +46,19 @@ public struct PiHistoryUpdate: Sendable {
     public var signals: [PiRecordSignal] = []
 }
 
-/// 会话记录里 Agent 收尾却不跑钩子时写下的那几行（终端里的接入凭它收尾，`AgentRuntime.read`）：只随读到那一行的这一次交出，不进检查点，
-/// 之后读到新内容不重放；从头重读时会再交一次。
-public enum PiRecordSignal: Sendable, Equatable {
-    /// 这句没开成一轮（Claude Code 的钩子挡下、拦停），带着那一行的正文：原话写在末尾的 "Original prompt: " 之后，钩子要求不显示原话时没有
-    case promptRefused(String)
-    /// 你停掉了全部后台子代理（Claude Code 的 `agents_killed`）
-    case agentsStopped(at: Date)
+/// 会话记录里 Agent 收尾却不跑钩子时写下的那一行（终端里的接入凭它收尾，`AgentRuntime.read`）：只随读到那一行的这一次交出，不进检查点，
+/// 之后读到新内容不重放；从头重读时会再交一次，新旧按 `end` 在记录里的位置分（`ClaudeTerminalSession.recorded`）。
+public struct PiRecordSignal: Sendable, Equatable {
+    public enum Kind: Sendable, Equatable {
+        /// 这句没开成一轮（Claude Code 的钩子挡下、拦停），带着那一行的正文：原话写在末尾的 "Original prompt: " 之后，钩子要求不显示原话时没有
+        case promptRefused(String)
+        /// 你停掉了全部后台子代理（Claude Code 的 `agents_killed`）
+        case agentsStopped
+    }
+
+    public var kind: Kind
+    /// 那一行之后的字节偏移（同 `PiHistoryCheckpoint.offset`）
+    public var end: UInt64
 }
 
 public enum PiHistoryEvent: Sendable {
@@ -102,7 +108,10 @@ public enum PiHistory {
         if state.cwd == nil { state.cwd = format.cwd(of: file) }
         let start = state.offset
         var transcript = Transcript(fallbackID: format.sessionID(of: file), files: wanted ? files : nil, file: file)
-        let consumed = try forEachLine(handle, from: start, size: size) { line in try format.ingest(line, &state, &transcript) }
+        let consumed = try forEachLine(handle, from: start, size: size) { line, end in
+            transcript.lineEnd = end
+            try format.ingest(line, &state, &transcript)
+        }
         if !wanted { transcript.messages = [] }
         if let sidecar = format.sidecar {
             let named = sidecar.file(file)
@@ -119,9 +128,9 @@ public enum PiHistory {
             renamed: state.name != resumed?.name, bytesRead: Int(consumed - start), signals: transcript.signals)
     }
 
-    /// 逐个完整行（不含换行）交给 `body`；返回消费到的偏移（总在一个换行之后，末尾的半行不算）。
+    /// 逐个完整行（不含换行）与它之后的偏移交给 `body`；返回消费到的偏移（总在一个换行之后，末尾的半行不算）。
     private static func forEachLine(
-        _ handle: FileHandle, from start: UInt64, size: UInt64, _ body: (UnsafeRawBufferPointer) throws -> Void
+        _ handle: FileHandle, from start: UInt64, size: UInt64, _ body: (UnsafeRawBufferPointer, UInt64) throws -> Void
     ) throws -> UInt64 {
         try handle.seek(toOffset: start)
         // 缓冲按剩余字节分配：启动回填时绝大多数文件没有新内容，每个都分配并清零 8 MB 是回填的主要开销
@@ -144,12 +153,13 @@ public enum PiHistory {
                     let end = base.distance(to: UnsafeRawPointer(hit))
                     let piece = UnsafeRawBufferPointer(start: base + position, count: end - position)
                     if carry.isEmpty {
-                        try body(piece)
+                        consumed += UInt64(piece.count + 1)
+                        try body(piece, consumed)
                     } else {
                         carry.append(contentsOf: piece)
-                        try carry.withUnsafeBytes { try body($0) }
+                        consumed += UInt64(carry.count + 1)
+                        try carry.withUnsafeBytes { try body($0, consumed) }
                     }
-                    consumed += UInt64((carry.isEmpty ? piece.count : carry.count) + 1)
                     carry.removeAll(keepingCapacity: true)
                     position = end + 1
                 }
@@ -193,6 +203,10 @@ public enum PiHistory {
         var file: URL? = nil
         var messages: [PiChatMessage] = []
         var signals: [PiRecordSignal] = []
+        /// 正在读的这一行之后的字节偏移
+        var lineEnd: UInt64 = 0
+
+        mutating func signal(_ kind: PiRecordSignal.Kind) { signals.append(PiRecordSignal(kind: kind, end: lineEnd)) }
 
         mutating func add(
             _ cp: PiHistoryCheckpoint, _ entry: Entry, role: PiChatRole, text: String, tools: PiChatMessage.Tools? = nil,

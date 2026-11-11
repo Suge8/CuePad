@@ -12,11 +12,20 @@ extension ClaudeTerminalSession {
         show(at: .now)
     }
 
-    func recorded(_ signal: PiRecordSignal) {
-        switch signal {
-        case .promptRefused(let text): refused(text)
-        case .agentsStopped(let date): agentsStopped(at: date)
+    /// 新旧只按记录里的位置分，不拿那一行的时刻与钩子比：CuePad 重启、读规则升级都会从头重读，旧的那一行再来一次
+    /// （之前挡下的那句、之后又交上同一句时会被吞掉）；接上之前、已读过的位置之前的都不算。
+    func recorded(_ signals: [PiRecordSignal], through offset: UInt64) {
+        for signal in signals where signal.end > recordRead {
+            switch signal.kind {
+            case .promptRefused(let text): refused(text)
+            case .agentsStopped: agentsStopped()
+            }
         }
+        recordRead = max(recordRead, offset)
+    }
+
+    nonisolated static func length(of file: URL) -> UInt64? {
+        (try? FileManager.default.attributesOfItem(atPath: file.path)[.size] as? NSNumber)?.uint64Value
     }
 
     /// 你的 `UserPromptSubmit` 钩子挡下了这句（CuePad 的钩子可能已开了这一轮）：Claude Code 不跑这一轮，也不跑 `Stop`。按原话配对，不比先后：
@@ -37,9 +46,9 @@ extension ClaudeTerminalSession {
     }
 
     /// 你在终端里停掉了全部后台子代理（主会话歇着时按 Ctrl-C，2.1.318）：Claude Code 不开一轮，不跑 `Stop` 也不跑 `SubagentStop`，
-    /// 只在会话文件里写一行。那时在跑的子代理记成被停下、出在飞清单；后台命令不受影响，留着。之后才开始的不算（从头重读时旧的那一行会再来）。
-    private func agentsStopped(at date: Date) {
-        let stopped = facts.subagents.filter { $0.state.phase == .known(.running) && $0.state.startedAt.map { $0 <= date } == true }.map(\.id)
+    /// 只在会话文件里写一行。那时在跑的子代理记成被停下、出在飞清单；后台命令不受影响，留着。
+    private func agentsStopped() {
+        let stopped = facts.subagents.filter { $0.state.phase == .known(.running) }.map(\.id)
         guard !stopped.isEmpty else { return }
         for agent in stopped { facts.settleSubagent(agent, .interrupted, summary: nil, at: .now) }
         facts.inFlight.subtract(stopped)
