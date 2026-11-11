@@ -4,7 +4,7 @@ import CueStore
 import CueText
 import Foundation
 
-/// 没在跑时来的 `result`（大脑的 `/clear`、子代理交回时的空转）不报成一轮。
+/// 没在跑时来的 `result`（大脑的 `/clear`、子代理交回时的空转）不报成一轮。后台任务落定后什么时候算歇下见 `ClaudeHostedTasks`。
 /// 上下文用量取模型回答带的 `usage`：为 0 的是 Claude Code 合成的回答（报错等），不算；`result` 的用量是整轮累加的、停在模型回话之前时全是 0，不用。
 /// 停下（`interrupt`）：发出的话还没等到 `system/init` 时中断不起作用（实测 2.1.299），先等它开跑。托管会话的发话与斜杠命令是先停下再送进去开新一轮，被停下的那一轮不算歇下；
 /// 不用 `priority: "now"`：前台工具跑着时它不中止，等工具跑完并进这一轮（实测 2.1.299，各权限模式）。
@@ -203,8 +203,8 @@ final class ClaudeHostedSession: SessionLink {
     }
 
     private func result(_ message: JSONValue, at now: Date) {
-        // 一轮在跑时的 `result` 是那一轮的；`/clear` 的回应在歇着时来
-        if !facts.running { endClear(.success(())) }
+        // 一轮在跑时的 `result` 是那一轮的；`/clear` 的回应在歇着时来，为通知跑的那一轮歇着时也可能来
+        if !tasks.answered(message), !facts.running { endClear(.success(())) }
         var window = contextWindow
         for usage in (message["modelUsage"]?.object ?? [:]).values {
             if let reported = usage["contextWindow"]?.int { window = reported }
@@ -222,6 +222,8 @@ final class ClaudeHostedSession: SessionLink {
         if restart {
             restart = false
             startTurn(at: now)
+        } else if let owed = tasks.owedSince {
+            startTurn(at: owed)
         }
         release()
     }
@@ -258,6 +260,8 @@ final class ClaudeHostedSession: SessionLink {
             // 后台跑的命令（`local_bash`）也报成任务，不是子代理
             guard let task = message["task_id"]?.string, message["task_type"]?.string == "local_agent" else { return }
             facts.runSubagent(task, name: message["description"]?.string ?? "", role: message["subagent_type"]?.string ?? "", at: now)
+        case "task_updated":
+            if let task = message["task_id"]?.string, let end = message["patch"]?["end_time"]?.number { tasks.ended(task, at: end) }
         case "task_progress":
             if let task = message["task_id"]?.string, let action = message["description"]?.string {
                 facts.updateSubagent(task, at: now) { $0.action = action.clipped(ToolDetail.limit) }
@@ -270,16 +274,16 @@ final class ClaudeHostedSession: SessionLink {
             default: .interrupted
             }
             facts.settleSubagent(task, phase, summary: message["summary"]?.string, at: now)
-            if tasks.settled(task, completed: phase == .done) { beginTurn() }
+            if let start = tasks.settled(task, run: message["run_id"]?.string, completed: phase == .done, at: now) { beginTurn(at: start) }
             facts.inFlight = tasks.inFlight
         default:
             break
         }
     }
 
-    /// 开始时刻是此刻：发出话的那一刻、收到开它的 `task_notification` 或它开始请求模型的那一刻，都早于这一轮的回答。
-    func beginTurn() {
-        if !facts.running { startTurn(at: .now) }
+    /// 开始时刻缺省是此刻：发出话的那一刻或它开始请求模型的那一刻，都早于这一轮的回答；为后台任务跑的那一轮从任务结束算起（`ClaudeHostedTasks`）。
+    func beginTurn(at start: Date = .now) {
+        if !facts.running { startTurn(at: start) }
     }
 
     func publish(at now: Date) {

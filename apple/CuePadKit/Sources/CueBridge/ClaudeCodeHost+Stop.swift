@@ -40,6 +40,7 @@ extension ClaudeHostedSession {
             // 还没见它的 `system/init` 也照停，不等 init（#81：起得慢就等满 `AgentTimeouts.stop`）：话已交出、中断排在它后面，
             // Claude Code 照样停下这一轮、回 `result`（2.1.318 实测：冻住进程时话与中断一起读到，这一轮不问模型就收尾）
             guard facts.running else { return }
+            tasks.forgetOwed()
             stopping = true
             restart = restarting
             let seen = closing.count
