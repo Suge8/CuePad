@@ -41,7 +41,7 @@ struct RealHostTests {
 
         let resumed = try await resume(host, file, in: pi, on: bridge)
 
-        #expect(resumed.sessionID == sessionID && resumed.hosted)
+        #expect(resumed.sessionID == sessionID)
         try await bridge.send(SessionMessage(text: "后台接着说"), to: resumed.id)
         try await eventually("后台进程回答了") { fileTexts("assistant", in: file).last == "ECHO 后台接着说" }
     }
@@ -86,7 +86,6 @@ struct RealHostTests {
         let log = ChangeLog(bridge)
         try await bridge.command("/reload", in: resumed.id)
         try await eventually("重载后重新连上") { !log.ended.isEmpty && bridge.sessions.contains { $0.sessionID == sessionID } }
-        #expect(bridge.sessions.first { $0.sessionID == sessionID }?.hosted == true)
     }
 
     @Test func aNewSessionStartsInTheBackgroundAndIsClaimedByItsToken() async throws {
@@ -100,7 +99,7 @@ struct RealHostTests {
 
         let opened = try #require(bridge.session(id: try await host.open(in: pi.cwd, launchToken: "tok-1", name: nil, model: nil, thinking: nil)))
 
-        #expect(opened.launchToken == "tok-1" && opened.hosted)
+        #expect(opened.launchToken == "tok-1")
         try await bridge.send(SessionMessage(text: "开场的话"), to: opened.id)
         try await eventually("回答了开场的话") {
             recap(of: bridge.sessions.first { $0.id == opened.id })?.lastReply == "ECHO 开场的话"
@@ -163,7 +162,7 @@ struct RealHostTests {
         try bridge.start()
         let gate = pi.hold("先忙着")
         try pi.prompt("先忙着")
-        try await eventually("桥认出在忙的托管会话") { bridge.sessions.first.map { $0.hosted && busy($0.state) } == true }
+        try await eventually("桥认出在忙的托管会话") { bridge.sessions.first.map { busy($0.state) } == true }
         let log = ChangeLog(bridge)
 
         gate.open()
@@ -194,7 +193,7 @@ struct RealHostTests {
         defer { stopHostedProcesses(next); next.stop() }
         try next.start()
         try await eventually("新的桥看到它做完了这一轮") {
-            next.sessions.first { $0.pid == opened.pid }.map { $0.hosted && $0.state == .settled } == true
+            next.sessions.first { $0.pid == opened.pid }?.state == .settled
         }
         #expect(first.sessions.isEmpty)
         let again = try #require(next.sessions.first { $0.pid == opened.pid })
@@ -222,7 +221,7 @@ struct RealHostTests {
         let left = try await PiProcess(bridgeExtension: shipped, alongside: pi, sessionFile: file)
         defer { left.stop() }
         try await eventually("旧扩展的托管进程上了桥") {
-            log.changes.contains { if case .appeared(let s) = $0 { s.sessionID == sessionID && s.upgrading && s.hosted } else { false } }
+            log.changes.contains { if case .appeared(let s) = $0 { s.sessionID == sessionID && s.upgrading } else { false } }
         }
         old.stop()
 

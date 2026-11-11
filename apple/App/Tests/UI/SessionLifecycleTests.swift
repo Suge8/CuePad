@@ -76,7 +76,6 @@ struct SendPrecisionTests {
         var live = Session(
             id: "claude-peer", sessionID: "claude-session", agent: .claudeCode, sessionFile: nil, pid: 0,
             cwd: app.directory, terminal: TerminalIdentity(), state: .settled, stateSince: started)
-        live.hosted = true
         facts.publish(to: &live, at: started)
         let peer = Peer()
         app.bridge.attach(live, via: peer)

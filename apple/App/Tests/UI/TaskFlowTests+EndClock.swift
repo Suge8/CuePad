@@ -21,8 +21,7 @@ extension TaskFlowTests {
         let recorder = StateRecorder(store: store, hostID: TestApp.hostID, timing: clock.timing)
         try await recorder.update(sessionID: "audit-clock", state: .thinking, projectID: Project.defaultID, launchToken: launch.launch?.token, hosted: true)
         try await store.deleteDelivery(launch.id)
-        var session = Session(id: "audit-clock.1", sessionID: "audit-clock", agent: .pi, sessionFile: nil, pid: 1, cwd: rig.directory, terminal: TerminalIdentity(), state: .thinking, stateSince: .now)
-        session.hosted = true
+        let session = Session(id: "audit-clock.1", sessionID: "audit-clock", agent: .pi, sessionFile: nil, pid: 1, cwd: rig.directory, terminal: TerminalIdentity(), state: .thinking, stateSince: .now)
         rig.bridge.attach(session, via: LostEndLink(rig.bridge))
         try await workspace.complete(task.id)
         let old = try #require(try await store.deliveryRequests().first { $0.mode == .known(.end) })

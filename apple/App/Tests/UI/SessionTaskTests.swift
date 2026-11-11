@@ -23,7 +23,6 @@ struct SessionTaskTests {
             cwd: URL(filePath: "/work/x", directoryHint: .isDirectory), terminal: TerminalIdentity(),
             state: .settled, stateSince: .now)
         session.name = "修登录"
-        session.hosted = true
         try await bridge(.appeared(session))
 
         let empty = try await TaskBoard.read(from: store)

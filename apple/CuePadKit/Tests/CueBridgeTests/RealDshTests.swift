@@ -87,7 +87,7 @@ struct RealDshTests {
 
             let restarted = rig.newRuntime()
             let resumed = try await restarted.resume(IndexedSession(id: session.sessionID, path: file.path, cwd: rig.work.path, lastActivityAt: .now, agent: .dsh))
-            #expect(rig.bridge.session(id: resumed)?.hosted == true && rig.bridge.session(id: resumed)?.sessionID == session.sessionID)
+            #expect(rig.bridge.session(id: resumed)?.sessionID == session.sessionID)
             try await rig.bridge.send(SessionMessage(text: "Reply with exactly the word SECOND."), to: resumed)
             try await rig.settled(resumed, replying: "SECOND")
             let request = try #require(rig.fake.requests.first { $0.prompt.contains("SECOND") })

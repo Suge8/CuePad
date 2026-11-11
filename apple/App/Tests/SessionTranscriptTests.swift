@@ -168,6 +168,7 @@ struct SessionTranscriptTests {
             continuation.yield(.ended(idle, reason: .closed(reason: "quit")))
             continuation.finish()
         })
+        try await StateRecorder(store: store, hostID: TestApp.hostID).end(sessionID: "s1")  // 托管的进程退出只是歇着，结束要你来
         #expect(try await record("s1").pendingPrompt == nil)
 
         await services.consumeHistory(AsyncStream { continuation in

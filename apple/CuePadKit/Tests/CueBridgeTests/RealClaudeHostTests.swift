@@ -42,7 +42,7 @@ struct RealClaudeHostTests {
             try testbed.startConnected()
             let id = try await testbed.runtime.open(in: testbed.work, launchToken: "token-1", name: nil, model: nil, thinking: nil)
             let session = try #require(testbed.bridge.session(id: id))
-            #expect(session.hosted && session.launchToken == "token-1" && session.agent == .claudeCode)
+            #expect(session.launchToken == "token-1" && session.agent == .claudeCode)
             #expect(session.availableModels.contains { $0.key.id == claudeTestModel })
             #expect(session.commands.contains { $0.name == "compact" })
 

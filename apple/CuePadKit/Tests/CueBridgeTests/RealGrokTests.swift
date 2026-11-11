@@ -15,7 +15,7 @@ struct RealGrokTests {
             let id = try await rig.open("token-1")
 
             let opened = try #require(rig.bridge.session(id: id))
-            #expect(opened.hosted && opened.agent == .grok && opened.launchToken == "token-1")
+            #expect(opened.agent == .grok && opened.launchToken == "token-1")
             #expect(rig.runsPinnedGrok(id))
             let delivery = UUID()
             let message = SessionMessage(text: "What color is this image? Answer with one lowercase word.", images: [MessageImage(mimeType: "image/png", data: redPNG)], deliveryID: delivery.uuidString)
@@ -132,7 +132,7 @@ struct RealGrokTests {
             let file = try #require(session.sessionFile)
             let resumed = try await rig.runtime.resume(IndexedSession(id: session.sessionID, path: file.path, cwd: rig.work.path, lastActivityAt: .now, agent: .grok))
             let back = try #require(rig.bridge.session(id: resumed))
-            #expect(back.hosted && back.sessionID == session.sessionID && back.pid != pid && rig.runsPinnedGrok(resumed))
+            #expect(back.sessionID == session.sessionID && back.pid != pid && rig.runsPinnedGrok(resumed))
             try await rig.bridge.send(SessionMessage(text: "What word did I ask you to remember? Reply with only the word."), to: resumed)
             try await eventually("接着回答了") { rig.replied("PAPAYA", in: resumed) }
         }

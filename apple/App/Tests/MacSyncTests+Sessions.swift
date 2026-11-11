@@ -191,7 +191,6 @@ extension MacSyncTests {
     @Test(arguments: [false, true])
     func 进程没了的会话仍认它报过的斜杠命令(ended: Bool) async throws {
         var live = session("s1", state: .settled, spoke: true)
-        live.hosted = true
         live.commands = [SlashCommand(name: "default", summary: "回默认模式", source: .known(.builtin))]
         try await services.consumeSessionChanges(changes([.appeared(live), .ended(live, reason: .disconnected)]))
         if ended { try await StateRecorder(store: services.store, hostID: TestApp.hostID).end(sessionID: "s1") }

@@ -27,7 +27,6 @@ struct RealPiTests {
             #expect(s.cwd.resolvingSymlinksInPath().path == pi.cwd.resolvingSymlinksInPath().path)
             #expect(s.model?.key.id == "echo" && s.thinking == .known(.off))
             #expect(s.state == .settled)
-            #expect(s.hosted)
             #expect(s.sessionFile?.path.hasPrefix(pi.paths.sessionsDirectory.resolvingSymlinksInPath().path) == true
                     || s.sessionFile?.path.hasPrefix(pi.paths.sessionsDirectory.path) == true)
         }

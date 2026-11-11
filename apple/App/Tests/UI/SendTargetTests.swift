@@ -136,6 +136,27 @@ struct SendTargetTests {
         _ = try await eventually(store, { try $0.card(task.id)?.piSessionID }) { $0 == "a" }
     }
 
+    /// 对没托管过的历史会话（没有认领标识）发话，CuePad 在后台接着它；结束后它仍算这台托管过：没接入的那几家按这份名单回填、OpenCode 按它认会话。
+    @Test func 接着没托管过的历史会话_结束后仍算这台托管过() async throws {
+        let folder = rig.directory.appending(path: "work/history", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try await store.upsertSession(
+            IndexedSession(id: "h", path: "/sessions/--work-history--/h.jsonl", cwd: folder.path, title: "history", lastActivityAt: .now), host: TestApp.hostID)
+        #expect(try await store.hostedSessionIDs(of: .pi, host: TestApp.hostID).isEmpty)
+        try await rig.services.executor.start()
+        defer { rig.services.cancelBackgroundWork() }
+
+        workspace.send("接着做", to: AgentTarget(session: "h"))
+        try await eventually("接着它、话送到") { rig.host.extensions["h"]?.messages.isEmpty == false }
+        let live = try #require(try await eventually(store, { try $0.sessionState("h") }) { $0?.hosted == true && $0?.state != .known(.ended) })
+        #expect(live.launchToken == nil)
+
+        await workspace.end(live)
+        _ = try await eventually(store, { try $0.sessionState("h")?.state }) { $0 == .known(.ended) }
+        #expect(workspace.notice?.isError != true)
+        #expect(try await store.hostedSessionIDs(of: .pi, host: TestApp.hostID) == ["h"], "结束后不算托管过了")
+    }
+
     @Test func 唤醒不了_会话文件不在这台Mac上_没送到_这一步不绑会话() async throws {
         let alpha = try await open("a", in: "/work/alpha")
         try await rig.services.executor.start()

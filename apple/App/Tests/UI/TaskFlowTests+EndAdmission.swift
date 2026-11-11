@@ -48,10 +48,9 @@ extension TaskFlowTests {
             #expect(workspace.notice?.isError == true)
             #expect(try await self.store.deliveryRequests().filter { $0.mode == .known(.send) }.isEmpty)
         }
-        var session = Session(
+        let session = Session(
             id: "interleaved.1", sessionID: "interleaved", agent: .pi, sessionFile: nil, pid: 1, cwd: rig.directory,
             terminal: TerminalIdentity(), state: .thinking, stateSince: .now)
-        session.hosted = true
         rig.bridge.attach(session, via: link)
         defer { rig.bridge.stop(); services.cancelBackgroundWork() }
         try await services.executor.start()

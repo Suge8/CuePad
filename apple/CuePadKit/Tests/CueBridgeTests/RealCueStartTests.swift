@@ -17,7 +17,7 @@ struct RealCueStartTests {
             // 强度给的不是测试台配置里的 low：生效了才看得出来
             let id = try await runtime.open(in: work, launchToken: "cue-1", name: "Cue 开的", model: model, thinking: .medium)
             let opened = try #require(bridge.session(id: id))
-            #expect(opened.hosted && opened.agent == agent && opened.launchToken == "cue-1")
+            #expect(opened.agent == agent && opened.launchToken == "cue-1")
             try await eventually("名字、模型与强度生效") {
                 let session = bridge.session(id: id)
                 return session?.displayName == "Cue 开的" && session?.model?.key == model
