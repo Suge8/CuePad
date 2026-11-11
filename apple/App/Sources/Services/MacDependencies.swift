@@ -73,7 +73,7 @@ struct MacDependencies {
             hooks: hooks,
             runtimes: { store in [
                 .pi: PiRuntime(bridge: bridge, paths: paths.pi, pi: { await agents.executable(.pi) }),
-                .claudeCode: ClaudeCodeRuntime(bridge: bridge, paths: paths, hooks: hooks, store: store, claude: { await agents.executable(.claudeCode) }),
+                .claudeCode: ClaudeCodeRuntime(bridge: bridge, paths: paths, store: store, claude: { await agents.executable(.claudeCode) }),
                 .codex: CodexRuntime(bridge: bridge, paths: paths, hooks: hooks, codex: { await agents.executable(.codex) }),
                 .opencode: OpenCodeRuntime(
                     bridge: bridge, paths: paths, store: store, hostID: hostID, opencode: { await agents.executable(.opencode) },

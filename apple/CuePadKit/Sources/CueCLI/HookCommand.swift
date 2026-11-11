@@ -7,7 +7,7 @@ import Foundation
 enum HookCommand {
   static func run(agent: AgentKind, input: Data, environment: [String: String]) -> Data {
     let relayed = environment.filter { key, _ in AgentHookEnvelope.relayedPrefixes.contains { key.hasPrefix($0) } }
-    let pid = environment["CLAUDE_PID"].flatMap(Int32.init) ?? getppid()
+    let pid = getppid()
     let envelope = AgentHookEnvelope(agent: agent, input: input, environment: relayed, pid: pid, tty: controllingTerminal(of: pid))
     guard var line = try? JSONEncoder().encode(envelope), let fd = connect(AgentHookEnvelope.socketPath(environment: environment).path) else {
       return Data()

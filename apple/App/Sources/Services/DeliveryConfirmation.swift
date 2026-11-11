@@ -9,9 +9,6 @@ struct DeliveryConfirmation {
     let store: CueStore
     let bridge: Bridge
 
-    /// 终端里的 Claude Code 到期没把话写进会话文件：它没说为什么，常见的是这两种（`Session.confirmsFromHistory`）
-    static let notTaken = ShownText("Claude Code 没有收下这句话：可能在它的终端里等你批准，或被它的设置（crossSessionInbound）挡下了。去终端里看一眼，CuePad 不会自动重发")
-
     func pending(in session: CueBridge.Session, reason: ShownText? = nil) -> DeliveryOutcome {
         .confirming { request in
             do {
@@ -53,7 +50,7 @@ struct DeliveryConfirmation {
     private func verify(
         _ request: DeliveryRequest, agent: AgentKind, connection: CueBridge.Session.ID?, file: URL?, reason: ShownText?
     ) async -> DeliveryOutcome {
-        let uncertain = reason ?? (agent == .pi ? Speech.unconfirmedReason : Self.notTaken)
+        let uncertain = reason ?? Speech.unconfirmedReason
         guard let file else { return .unconfirmed(uncertain) }
         let following = History.following(file: file, agent: agent, files: store.files)
         let result: DeliveryOutcome
@@ -116,7 +113,7 @@ struct DeliveryConfirmation {
                 var due = deadline
                 while true {
                     try await store.timing.sleepUntil(due)
-                    // 在跑这一轮时送到的话，Claude Code 排到这一轮结束才收：到期时还在跑就接着等，不当成没收下。
+                    // 在跑这一轮时送到的话，Agent 排到这一轮结束才收：到期时还在跑就接着等，不当成没收下。
                     // 只在这里等、不改库里的期限：同步不让核对期限往后挪（`DeliveryRequest.mergingProgress`），各端到期先显示送达未确认，收下了再变送达
                     guard let connection, await bridge.isTurnRunning(connection) else { return .unconfirmed(uncertain) }
                     due = store.timing.now().addingTimeInterval(Speech.receiptLimit)

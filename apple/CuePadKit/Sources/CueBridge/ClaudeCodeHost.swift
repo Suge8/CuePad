@@ -9,7 +9,7 @@ import Foundation
 /// 停下（`interrupt`）：发出的话还没等到 `system/init` 时中断不起作用（实测 2.1.299），先等它开跑。托管会话的发话与斜杠命令是先停下再送进去开新一轮，被停下的那一轮不算歇下；
 /// 不用 `priority: "now"`：前台工具跑着时它不中止，等工具跑完并进这一轮（实测 2.1.299，各权限模式）。
 /// 大脑（不挂桥）与其余控制请求一律回错误，免得这一轮卡住。
-/// 托管会话的权限模式固定 auto（同终端里 Claude Code 的内置默认），所以不另设模式开关：用户的 allow / deny / ask 规则照旧生效。它自己也会跑用户装的钩子（`ClaudeCodeRuntime` 按进程认出来直接放行，不重复登记）。
+/// 托管会话的权限模式固定 auto（同终端里 Claude Code 的内置默认），所以不另设模式开关：用户的 allow / deny / ask 规则照旧生效。
 /// 结束、空闲满时限、让出（桥决定）都经 `end` 下桥、收进程（`HostedProcesses`），后两者不算结束。
 @MainActor
 final class ClaudeHostedSession: SessionLink {
