@@ -37,7 +37,8 @@ public final class PiRuntime: AgentRuntime {
     }
 
     public func start() {
-        do { try removeInstalledExtension() } catch { Self.log.error("旧版装进 Pi 扩展目录的桥扩展没能清掉：\(String(describing: error))") }
+        guard cleansInstalledExtension else { return }
+        do { try PiInstalledExtension.remove(from: paths.extensionsDirectory) } catch { Self.log.error("旧版装进 Pi 扩展目录的桥扩展没能清掉：\(String(describing: error))") }
     }
 
     /// 托管的 Pi 会话不随 CuePad 退出（新会话组、空闲由扩展自退），没有要关的。
@@ -108,7 +109,8 @@ public final class PiRuntime: AgentRuntime {
     }
 
     private func removeInstalledExtension() throws {
-        if cleansInstalledExtension { try PiInstalledExtension.remove(from: paths.extensionsDirectory) }
+        if cleansInstalledExtension { return try PiInstalledExtension.remove(from: paths.extensionsDirectory) }
+        if let left = PiInstalledExtension.directory(in: paths.extensionsDirectory) { throw PiHostError.legacyExtension(UserHome.shown(left.path)) }
     }
 }
 
@@ -117,6 +119,8 @@ public enum PiHostError: Error, Equatable {
     case exited(String?)
     /// 等了很久 Pi 都没连上（已让它退出）
     case notConnected
+    /// Pi 扩展目录里还有旧版 CuePad 装的桥扩展，这次运行又不能删它（参数是它的位置，`~` 缩写；`PiInstalledExtension`）
+    case legacyExtension(String)
 }
 
 extension PiHostError: ShownError {
@@ -124,6 +128,7 @@ extension PiHostError: ShownError {
         switch self {
         case .exited(let reason): reason.map { "在后台启动的 Pi 没连上就退出了：\($0)" } ?? "在后台启动的 Pi 没连上就退出了"
         case .notConnected: "在后台启动的 Pi 一直没连上"
+        case .legacyExtension(let path): "\(path) 是旧版 CuePad 装的扩展，与后台启动的 Pi 冲突；删掉它再发"
         }
     }
 }
