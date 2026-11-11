@@ -137,5 +137,35 @@ struct RealGrokTests {
             try await eventually("接着回答了") { rig.replied("PAPAYA", in: resumed) }
         }
     }
+
+    /// 终端里还开着这个会话（真的终端界面）时不接，它退出后照常接着。
+    @Test func aSessionStillOpenInATerminalIsNotResumedUntilItExits() async throws {
+        try await withGrokRig { rig in
+            let id = try await rig.open("token-5")
+            try await rig.bridge.send(SessionMessage(text: "Remember the word PAPAYA. Reply with only OK."), to: id)
+            try await eventually("记下了") { rig.replied("OK", in: id) && rig.bridge.session(id: id)?.state == .settled }
+            let session = try #require(rig.bridge.session(id: id))
+            let indexed = IndexedSession(
+                id: session.sessionID, path: try #require(session.sessionFile).path, cwd: rig.work.path, lastActivityAt: .now, agent: .grok)
+            try await rig.bridge.end(id)
+            try await eventually("下线") { rig.bridge.session(id: id) == nil }
+
+            let terminal = try await rig.terminal(resuming: session.sessionID)
+            do {
+                try await eventually("终端里开着") { GrokRuntime.openSessions(in: rig.home).contains(session.sessionID) }
+                await #expect(throws: AgentRuntimeError.openElsewhere) { try await rig.runtime.resume(indexed) }
+                #expect(rig.bridge.session(sessionID: session.sessionID) == nil)
+            } catch {
+                await terminal.stop()
+                throw error
+            }
+            await terminal.stop()
+            // `script` 把 Grok 放在自己的会话里：它走了伪终端才挂断，Grok 随后才退出
+            try await eventually("终端里退出了") { !GrokRuntime.openSessions(in: rig.home).contains(session.sessionID) }
+
+            let resumed = try await rig.runtime.resume(indexed)
+            #expect(rig.bridge.session(id: resumed)?.sessionID == session.sessionID)
+        }
+    }
 }
 #endif

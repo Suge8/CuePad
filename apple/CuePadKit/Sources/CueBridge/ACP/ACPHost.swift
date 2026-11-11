@@ -37,11 +37,13 @@ final class ACPHost {
         }
     }
 
-    func resume(_ session: IndexedSession) async throws -> Session.ID {
+    /// `admit` 在这个会话的旧进程收完之后、起新进程之前跑：这家要先核对的（会话正开在别处）在这里抛。
+    func resume(_ session: IndexedSession, admit: @escaping @MainActor () throws -> Void = {}) async throws -> Session.ID {
         if let live = bridge.session(sessionID: session.id) { return live.id }
         let directory = URL(filePath: session.cwd, directoryHint: .isDirectory)
         return try await processes.resume(session.id) { [self] admission in
-            try await host(in: directory, model: nil, launchToken: nil, sessionID: session.id, admission: admission) {
+            try admit()
+            return try await host(in: directory, model: nil, launchToken: nil, sessionID: session.id, admission: admission) {
                 try await $0.load(session.id, in: directory)
             }
         }

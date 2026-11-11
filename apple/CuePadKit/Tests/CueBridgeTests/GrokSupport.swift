@@ -97,6 +97,15 @@ final class GrokRig {
         try runtime.start()
     }
 
+    /// 终端界面里接着这个会话的真 Grok：`script` 给它一个伪终端。
+    func terminal(resuming sessionID: String) async throws -> ChildProcess {
+        let environment = grokEnvironment(model: model, home: root.appending(path: "user"), grokHome: home)
+            .merging(["PATH": "/usr/bin:/bin", "TERM": "xterm-256color"]) { $1 }
+        return try await ChildProcess(
+            URL(filePath: "/usr/bin/script"), ["-q", "/dev/null", pinnedGrok.executable.path, "--resume", sessionID],
+            directory: work, environment: environment, placement: .group, input: .pipe)
+    }
+
     func open(_ launchToken: String) async throws -> Session.ID {
         try await runtime.open(in: work, launchToken: launchToken, name: nil, model: nil, thinking: nil)
     }
