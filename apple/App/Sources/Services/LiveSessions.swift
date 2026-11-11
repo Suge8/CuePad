@@ -12,10 +12,11 @@ final class LiveSessions {
     private(set) var total = 0
     private(set) var live: [PiSessionListItem] = []
     private(set) var current: [PiSessionListItem] = []
-    /// 以下三项都按 Pi 的会话 id。
+    /// 以下四项都按 Pi 的会话 id。
     private(set) var recaps: [String: PiRecap] = [:]
     private(set) var deliveries: [String: DeliveryRequest] = [:]
     private(set) var renames: [String: DeliveryRequest] = [:]
+    private(set) var answers: [String: DeliveryRequest] = [:]
     private(set) var undelivered: [String: Int] = [:]
     /// 停着、这次停下 Cue 交出去的那一处还没做完的会话在等谁；各处都经 `Workspace.handoff(of:)` 读它。
     private(set) var handoffs: [String: CueHandoff] = [:]
@@ -43,6 +44,12 @@ final class LiveSessions {
         page = start.value
         seen = start.value.relays.latest
         apply(start.value, at: moment)
+    }
+
+    /// 这个会话正在问的那道题已有的作答请求；题换了、没答过为 nil。
+    func answer(to session: PiSessionState) -> DeliveryRequest? {
+        guard let promptID = session.answerableQuestion?.promptID, let request = answers[session.sessionID], request.answer?.promptID == promptID else { return nil }
+        return request
     }
 
     func relays(session: String) -> Bool { flight?.ends.contains { $0.session == session } == true }
@@ -87,6 +94,7 @@ final class LiveSessions {
         set(\.recaps, Dictionary(live.map { ($0.state.sessionID, $0.state.recap) }) { first, _ in first })
         set(\.deliveries, Dictionary(current.compactMap { item in item.delivery.map { (item.state.sessionID, $0) } }) { first, _ in first })
         set(\.renames, Dictionary(current.compactMap { item in item.rename.map { (item.state.sessionID, $0) } }) { first, _ in first })
+        set(\.answers, Dictionary(current.compactMap { item in item.answer.map { (item.state.sessionID, $0) } }) { first, _ in first })
         set(\.undelivered, PiSessionListItem.undelivered(live, at: moment))
         set(\.handoffs, page.handoffs)
         set(\.cue, page.cue)

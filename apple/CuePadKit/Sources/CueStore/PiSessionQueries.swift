@@ -85,12 +85,13 @@ extension CueStore {
     let projects = Dictionary(uniqueKeysWithValues: try self.projects().map { ($0.id, $0) })
     let deliveries = try latestDeliveries(to: ids)
     let renames = try latestRenames(to: ids)
+    let answers = try latestDeliveries(to: ids, modes: [.answer])
     let unsettled = try unsettledTalk(to: ids)
     let tasks = try sessionOwners(ids).mapValues { SessionTask(id: $0.task.id, isPinned: $0.task.isPinned, title: CueSummary.title(of: $0.leaf.body)) }
     return states.map {
       PiSessionListItem(
         state: $0, project: $0.projectID.flatMap { projects[$0] }, delivery: deliveries[$0.sessionID], rename: renames[$0.sessionID],
-        unsettled: unsettled[$0.sessionID] ?? [], task: tasks[$0.sessionID])
+        answer: answers[$0.sessionID], unsettled: unsettled[$0.sessionID] ?? [], task: tasks[$0.sessionID])
     }
   }
 
@@ -162,13 +163,13 @@ extension CueStore {
     return Dictionary(grouping: requests) { $0.target.ref ?? "" }
   }
 
-  /// 发给这些会话的最近一条投送请求（只算 `DeliveryMode.toSession` 的方式），按 Pi 的会话 id。
+  /// 发给这些会话的最近一条投送请求（只算 `modes` 里的方式，默认 `DeliveryMode.toSession`），按 Pi 的会话 id。
   /// 一次查询按会话聚合；投送请求完成后不久就被执行它的 Mac 清理，表一直很小。
-  func latestDeliveries(to sessionIDs: [String]) throws -> [String: DeliveryRequest] {
+  func latestDeliveries(to sessionIDs: [String], modes: Set<DeliveryMode> = DeliveryMode.toSession) throws -> [String: DeliveryRequest] {
     guard !sessionIDs.isEmpty else { return [:] }
     let requests = try select(
       DeliveryRequest.self,
-      where: "targetKind = '\(SendTargetKind.piSession.rawValue)' AND mode IN (\(sqlList(DeliveryMode.toSession))) AND targetRef IN (SELECT value FROM json_each(?))",
+      where: "targetKind = '\(SendTargetKind.piSession.rawValue)' AND mode IN (\(sqlList(modes))) AND targetRef IN (SELECT value FROM json_each(?))",
       [JSONColumn.encode(sessionIDs)], orderBy: "createdAt DESC, rowid DESC")
     var latest: [String: DeliveryRequest] = [:]
     for request in requests {
