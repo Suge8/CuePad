@@ -79,7 +79,7 @@ final class DaysHistory {
         try await store.recordSend(first, to: SendTarget(kind: .piSession, name: title, ref: id), card: task.id, delivery: delivery, origin: .known(.cue))
         let prompt = ChatMessage(sessionID: id, entryID: "u1", seq: 1, role: .user, text: first, at: at(day, 60), deliveryID: delivery)
         let answer = ChatMessage(sessionID: id, entryID: "a1", seq: 2, role: .pi, text: reply, at: at(day, 180))
-        try await store.writePiTranscript(SessionTranscript(sessionID: id, messages: [prompt, answer], recap: Recap(lastPrompt: title, lastReply: reply, answeredAt: at(day, 180))))
+        try await store.writeTranscript(SessionTranscript(sessionID: id, messages: [prompt, answer], recap: Recap(lastPrompt: title, lastReply: reply, answeredAt: at(day, 180))))
         try await store.setStatus(task.id, .done)
     }
 

@@ -53,14 +53,14 @@ struct SessionTranscriptTests {
             }
             continuation.onTermination = { _ in task.cancel() }
         }
-        await services.consumePiHistory(events, agent: .pi)
+        await services.consumeHistory(events, agent: .pi)
     }
 
     private func live(_ sessionID: String, file: URL) async throws -> CueBridge.Session {
         let session = CueBridge.Session(
             id: "\(sessionID).100", sessionID: sessionID, agent: .pi, sessionFile: file, pid: 100, cwd: URL(filePath: "/work/x", directoryHint: .isDirectory),
             terminal: TerminalIdentity(), state: .thinking, stateSince: .now)
-        try await services.consumePiChanges(AsyncStream { continuation in
+        try await services.consumeSessionChanges(AsyncStream { continuation in
             continuation.yield(.appeared(session))
             continuation.finish()
         })
@@ -68,7 +68,7 @@ struct SessionTranscriptTests {
     }
 
     private func record(_ sessionID: String) async throws -> SessionState {
-        try #require(try await store.allPiSessionStates().first { $0.sessionID == sessionID })
+        try #require(try await store.allSessionStates().first { $0.sessionID == sessionID })
     }
 
     @Test func 近7天活跃的会话写出全部消息_更早的只写摘要_摘要与对话一致() async throws {
@@ -77,10 +77,10 @@ struct SessionTranscriptTests {
 
         await backfill()
 
-        let messages = try await store.piMessages(of: "recent")
+        let messages = try await store.chatMessages(of: "recent")
         #expect(messages.map(\.text) == ["第一问", "第一答", "第二问", "第二答"])
         #expect(messages.map(\.role) == [.known(.user), .known(.pi), .known(.user), .known(.pi)])
-        #expect(try await store.piMessages(of: "old").isEmpty)
+        #expect(try await store.chatMessages(of: "old").isEmpty)
         for sessionID in ["recent", "old"] {
             let state = try await record(sessionID)
             #expect(state.lastPrompt == "第二问" && state.lastReply == "第二答" && state.pendingPrompt == nil)
@@ -97,7 +97,7 @@ struct SessionTranscriptTests {
         let finished = try await eventually(store, { try $0.deliveryRequest(request.id) }, until: { $0?.isOpen == false })
         #expect(finished?.status == .known(.succeeded))
 
-        #expect(try await store.piMessages(of: "old").map(\.text) == ["第一问", "第一答", "第二问", "第二答"])
+        #expect(try await store.chatMessages(of: "old").map(\.text) == ["第一问", "第一答", "第二问", "第二答"])
         #expect(try RawDB(services.location.databaseURL).count("sendRecords") == 0)
     }
 
@@ -134,16 +134,16 @@ struct SessionTranscriptTests {
         let stale = ChatMessage(
             sessionID: "old", entryID: "a1", seq: 2, role: .pi, text: "没通过", at: at.addingTimeInterval(3),
             tools: .init(items: [.init(kind: .command, target: "false", failed: true)]), roundStartedAt: at)
-        try await store.writePiTranscript(SessionTranscript(sessionID: "old", messages: [stale], recap: Recap()))
+        try await store.writeTranscript(SessionTranscript(sessionID: "old", messages: [stale], recap: Recap()))
         let real = realpath(file.path, nil)!
         defer { free(real) }
-        try await store.upsertPiSession(
+        try await store.upsertSession(
             IndexedSession(id: "old", path: String(cString: real), cwd: "/work/x", lastActivityAt: at, agent: .pi), checkpoint: Data("旧格式".utf8),
             host: TestApp.hostID)
 
         await backfill()
 
-        let reply = try #require(try await store.piMessages(of: "old").first { $0.role == .known(.pi) })
+        let reply = try #require(try await store.chatMessages(of: "old").first { $0.role == .known(.pi) })
         #expect(reply.tools?.steps == 1 && reply.tools?.steps == reply.tools?.items.count)
     }
 
@@ -163,14 +163,14 @@ struct SessionTranscriptTests {
 
         var idle = session
         idle.state = .settled
-        try await services.consumePiChanges(AsyncStream { continuation in
+        try await services.consumeSessionChanges(AsyncStream { continuation in
             continuation.yield(.stateChanged(idle, from: .thinking))
             continuation.yield(.ended(idle, reason: .closed(reason: "quit")))
             continuation.finish()
         })
         #expect(try await record("s1").pendingPrompt == nil)
 
-        await services.consumePiHistory(AsyncStream { continuation in
+        await services.consumeHistory(AsyncStream { continuation in
             continuation.yield(.updated(try! History.index(file: file, agent: .pi, from: nil, files: store.files)))
             continuation.finish()
         }, agent: .pi)
@@ -183,9 +183,9 @@ struct SessionTranscriptTests {
         let file = try sessionFile("s1", at: .now.addingTimeInterval(-60))
         _ = try await live("s1", file: file)
         let indexer = HistoryIndexer(agent: .pi, paths: AgentPaths(pi: rig.piPaths), files: store.files) { _ in nil }!
-        let consuming = Task { await services.consumePiHistory(indexer.events(following: AsyncStream { $0.yield([file]) }, scope: .all), agent: .pi) }
+        let consuming = Task { await services.consumeHistory(indexer.events(following: AsyncStream { $0.yield([file]) }, scope: .all), agent: .pi) }
         defer { await consuming.stop() }
-        _ = try await eventually(store, { try $0.piMessages(of: "s1").count }, until: { $0 == 4 })
+        _ = try await eventually(store, { try $0.chatMessages(of: "s1").count }, until: { $0 == 4 })
 
         let handle = try FileHandle(forWritingTo: file)
         try handle.seekToEnd()
@@ -193,7 +193,7 @@ struct SessionTranscriptTests {
         try handle.close()
 
         _ = try await eventually(store, {
-            try $0.piMessages(of: "s1").last?.text == "第三问" && $0.allPiSessionStates().first?.pendingPrompt == "第三问"
+            try $0.chatMessages(of: "s1").last?.text == "第三问" && $0.allSessionStates().first?.pendingPrompt == "第三问"
         }) { $0 }
     }
 
@@ -216,8 +216,8 @@ struct SessionTranscriptTests {
     @Test func 一直开着的Mac每天清理一次对话() async throws {
         let old = try sessionFile("old", at: .now.addingTimeInterval(-30 * 86_400))
         await backfill()
-        try await store.writePiTranscript(try History.index(file: old, agent: .pi, from: nil, files: store.files).transcript)
-        #expect(try await store.piMessages(of: "old").count == 4)
+        try await store.writeTranscript(try History.index(file: old, agent: .pi, from: nil, files: store.files).transcript)
+        #expect(try await store.chatMessages(of: "old").count == 4)
 
         let days = Mutex(0)
         let timing = Timing(now: { Date.now.addingTimeInterval(Double(days.withLock { $0 }) * 86_400) }) { _ in
@@ -227,7 +227,7 @@ struct SessionTranscriptTests {
         let pruning = Task { await services.historyStore.keepPruned(timing: timing) }
         defer { await pruning.stop() }
 
-        _ = try await eventually(store, { try $0.piMessages(of: "old").count }, until: { $0 == 0 })
+        _ = try await eventually(store, { try $0.chatMessages(of: "old").count }, until: { $0 == 0 })
     }
 }
 #endif

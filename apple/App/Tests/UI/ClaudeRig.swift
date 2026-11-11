@@ -63,7 +63,7 @@ final class ClaudeRig {
             let bridge = Bridge(socketDirectory: sockets, hostedIdle: hostedIdle, timing: timing)
             let hooks = AgentHookServer(path: paths.hookSocket)
             let mac = MacDependencies(
-                pi: bridge, hotkeys: InMemoryHotkeys(), paths: agentPaths, agents: AgentIntegrations(agents), terminal: TerminalJumper(),
+                bridge: bridge, hotkeys: InMemoryHotkeys(), paths: agentPaths, agents: AgentIntegrations(agents), terminal: TerminalJumper(),
                 hostID: TestApp.hostID, workspaces: Workspaces(root: root.appending(path: "CuePad", directoryHint: .isDirectory)),
                 wakeNotifications: NotificationCenter(), timing: timing,
                 commandLineTool: CommandLineToolInstaller(helper: helper, linkDirectory: root.appending(path: "home/.local/bin"), shellPath: { nil }),
@@ -134,7 +134,7 @@ final class ClaudeRig {
     }
 
     func replies(of sessionID: String) async throws -> [String] {
-        guard let indexed = try await store.piSession(sessionID) else { return [] }
+        guard let indexed = try await store.indexedSession(sessionID) else { return [] }
         return Self.texts(in: URL(filePath: indexed.path), role: "assistant")
     }
 

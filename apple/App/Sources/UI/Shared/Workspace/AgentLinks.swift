@@ -7,7 +7,7 @@ nonisolated struct AgentLinks: Sendable, Equatable {
 
     static func read(from store: isolated CueStore) throws -> AgentLinks {
         let handed = try store.handedSessions()
-        let sessions = try store.piSessions(sessionIDs: handed.values.compactMap { if case .session(let id) = $0 { id } else { nil } })
+        let sessions = try store.sessionItems(sessionIDs: handed.values.compactMap { if case .session(let id) = $0 { id } else { nil } })
         return AgentLinks(
             items: handed.compactMapValues { if case .session(let id) = $0 { sessions[id] } else { nil } },
             launching: handed.compactMapValues { if case .launching(let kind) = $0 { kind } else { nil } })

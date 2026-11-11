@@ -100,7 +100,7 @@ public actor StateRecorder {
   public func end(sessionID: String, confirming requests: Set<UUID> = []) async throws {
     sessions.removeValue(forKey: sessionID)?.pace.timer?.task.cancel()
     let now = timing.now()
-    try await persist { [store, hostID, bootID] in try await store.endPiState(host: hostID, sessionID: sessionID, bootID: bootID, at: now, confirming: requests) }
+    try await persist { [store, hostID, bootID] in try await store.endSessionState(host: hostID, sessionID: sessionID, bootID: bootID, at: now, confirming: requests) }
   }
 
   /// 启动对账（历史回填完成后）：歇着的托管会话没有会话文件索引的（文件被删的、从没落盘的）删掉记录；此刻在线的（本记录器正在跟的）不动——
@@ -122,9 +122,9 @@ public actor StateRecorder {
     let id = sessionID
     let now = timing.now()
     if spoke {
-      try await persist { [store, hostID, bootID] in try await store.losePiState(host: hostID, sessionID: id, bootID: bootID, at: now) }
+      try await persist { [store, hostID, bootID] in try await store.loseSessionState(host: hostID, sessionID: id, bootID: bootID, at: now) }
     } else {
-      try await persist { [store, hostID] in try await store.deletePiState(host: hostID, sessionID: id) }
+      try await persist { [store, hostID] in try await store.deleteSessionState(host: hostID, sessionID: id) }
     }
   }
 
@@ -146,7 +146,7 @@ public actor StateRecorder {
 
   /// 把 `content` 记为已写入，返回对应的落盘操作。`notify` 是手机通知标志（只发 `AlertKind.entering` 定义的两种转换）：
   /// 一次性事件，只存在于未上传的版本上——置位后，同一状态下的后续写入（如仍在等、只换了问题文本）在上传之前沿用它
-  /// （见 `writePiState`）；服务端接受上传即清掉（`CueStore.markPushed`），此后本机的任何改动都不会再带上，订阅不会为同一次
+  /// （见 `writeSessionState`）；服务端接受上传即清掉（`CueStore.markPushed`），此后本机的任何改动都不会再带上，订阅不会为同一次
   /// 等待重复通知。状态一旦前进（如用户答完回到思考中），未上传的标志随之作废——已恢复工作的会话不该再提示"等你确认"。
   /// 会话结束（`end`）清掉标志，未上传的也不再通知。
   private func commit(
@@ -156,7 +156,7 @@ public actor StateRecorder {
     if writesCatalog { session.catalog = content.catalog(host: hostID, at: now) }
     _ = session.pace.commit(content, at: now)
     return { [store, hostID, bootID, catalog = session.catalog] in
-      try await store.writePiState(
+      try await store.writeSessionState(
         sessionID: sessionID, hostID: hostID, bootID: bootID, content: content, catalog: catalog, writesCatalog: writesCatalog, notify: notify)
     }
   }

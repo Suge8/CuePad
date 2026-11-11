@@ -14,7 +14,7 @@ struct DeliveryLaunchTests {
         let app = TestApp(), store = app.services.store
         defer {
             for ext in app.host.extensions.values { ext.close(bye: "quit") }
-            app.pi.stop(); app.services.cancelBackgroundWork()
+            app.bridge.stop(); app.services.cancelBackgroundWork()
         }
         try await app.offersPi()
         app.host.openingRejection = reason
@@ -25,7 +25,7 @@ struct DeliveryLaunchTests {
         let request = try #require(try await store.deliveryRequests().first)
         try await app.services.executor.start()
         let result = try await store.outcome(of: request)
-        #expect(app.pi.sessions.count == 1)
+        #expect(app.bridge.sessions.count == 1)
         #expect(result.status == .known(.unconfirmed))
         try await eventually("任务那一行收到未知结果") { launching.progress?.request?.status == .known(.unconfirmed) }
         switch launching.phase(at: app.services.speech) {

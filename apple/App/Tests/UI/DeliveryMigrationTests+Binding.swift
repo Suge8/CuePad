@@ -11,7 +11,7 @@ extension DeliveryMigrationTests {
         let app = TestApp()
         defer {
             for ext in app.host.extensions.values { ext.close(bye: "quit") }
-            app.pi.stop(); app.services.cancelBackgroundWork()
+            app.bridge.stop(); app.services.cancelBackgroundWork()
         }
         try await app.services.store.setDirectory(app.directory.path, for: Project.defaultID)
         let workspace = Workspace(services: app.services)
@@ -28,8 +28,8 @@ extension DeliveryMigrationTests {
         try RawDB(app.databaseURL).restore(version: 92)
         let services = app.relaunch(), store = services.store
         if mode != .start { try await app.host.connect("atlas", cwd: app.directory.path, hosted: true) }
-        let changes = app.pi.changes()
-        let recording = Task { try await services.consumePiChanges(changes) }
+        let changes = app.bridge.changes()
+        let recording = Task { try await services.consumeSessionChanges(changes) }
         defer { await recording.stop() }
         try await services.executor.start()
         let migrated = try #require(try await store.deliveryRequest(pending.id))
@@ -37,7 +37,7 @@ extension DeliveryMigrationTests {
         let sessionID = mode == .start ? "new-legacy-launch" : "atlas"
         #expect(try await store.card(card.id)?.piSessionID == sessionID)
         #expect(try await store.card(card.id)?.isTask == task)
-        #expect(try await store.piSessions(sessionIDs: [sessionID])[sessionID]?.state.createdForTaskID == nil)
+        #expect(try await store.sessionItems(sessionIDs: [sessionID])[sessionID]?.state.createdForTaskID == nil)
         if task {
             try await store.unbindSession(from: card.id)
             // 与发送执行器相同的回执入口：升级后的明确解绑不能被迁移的旧请求重放。
@@ -52,7 +52,7 @@ extension DeliveryMigrationTests {
         let app = TestApp()
         defer {
             for ext in app.host.extensions.values { ext.close(bye: "quit") }
-            app.pi.stop(); app.services.cancelBackgroundWork()
+            app.bridge.stop(); app.services.cancelBackgroundWork()
         }
         #expect(CueStore.schemaVersion(of: app.databaseURL) == CueStore.supportedSchemaVersions.upperBound && CueStore.peerFloor == 93)
         try await app.services.store.setDirectory(app.directory.path, for: Project.defaultID)
@@ -67,8 +67,8 @@ extension DeliveryMigrationTests {
         await workspace.speak(content, to: .session(
             SendTarget(kind: .piSession, name: "会话", ref: mode == .start ? nil : "atlas"), host: TestApp.hostID, mode: mode, card: card.id)).value
         let request = try #require(try await original.deliveryRequests().first)
-        let changes = app.pi.changes()
-        let recording = Task { try await app.services.consumePiChanges(changes) }
+        let changes = app.bridge.changes()
+        let recording = Task { try await app.services.consumeSessionChanges(changes) }
         try await app.services.executor.start()
         #expect(try await original.outcome(of: request).status == .known(.succeeded))
         let sessionID = mode == .start ? "new-legacy-settled" : "atlas"
@@ -91,7 +91,7 @@ extension DeliveryMigrationTests {
         #expect(try await store.card(card.id)?.piSessionID == sessionID)
         try await Workspace(services: services).complete(card.id)
         #expect(try await store.deliveryRequests().filter { $0.mode == .known(.end) }.isEmpty)
-        #expect(try await store.piSessions(sessionIDs: [sessionID])[sessionID]?.state.createdForTaskID == nil)
+        #expect(try await store.sessionItems(sessionIDs: [sessionID])[sessionID]?.state.createdForTaskID == nil)
     }
 
 }

@@ -37,7 +37,7 @@ struct CueHostTests {
             }
         }
         defer { await busy.stop() }
-        try await eventually("写入已经跑起来") { try await store.allPiSessionStates().count == 10 }
+        try await eventually("写入已经跑起来") { try await store.allSessionStates().count == 10 }
         try await rig.say("库正忙时说的")
         try await eventually("交给 Cue") {
             try await store.cueMessages().contains { $0.text == "库正忙时说的" && $0.deliveredAt != nil }
@@ -51,8 +51,8 @@ struct CueHostTests {
         try await rig.say("你好")
         try await rig.message(.cue, containing: "收到：你好")
         #expect(try await rig.store.cueMessages().first { $0.author == .known(.you) }?.deliveredAt != nil)
-        #expect(rig.services.pi.sessions.isEmpty)
-        #expect(try await rig.store.allPiSessionStates().isEmpty)
+        #expect(rig.services.bridge.sessions.isEmpty)
+        #expect(try await rig.store.allSessionStates().isEmpty)
         let sessions = rig.app.piPaths.sessionsDirectory
         #expect(((try? FileManager.default.contentsOfDirectory(atPath: sessions.path)) ?? []).isEmpty)
         await rig.stop()

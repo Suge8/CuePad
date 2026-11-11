@@ -90,7 +90,7 @@ extension AppServices {
     #if os(macOS)
     /// 换版本期间发不进命令，所以不算。
     /// 不同会话可能有独立的模型目录与授权；不根据当前模型推断其他会话的来源已覆盖。
-    private var quotaSessions: [Bridge.Slot] { pi.slots.filter { $0.session.capabilities.contains(.quota) && !$0.session.upgrading } }
+    private var quotaSessions: [Bridge.Slot] { bridge.slots.filter { $0.session.capabilities.contains(.quota) && !$0.session.upgrading } }
 
     private var quotaBatch: AccountQuotas.Batch {
         let sessions = quotaSessions
@@ -106,8 +106,8 @@ extension AppServices {
         guard !sessions.isEmpty else { return ShownText("这台 Mac 上没有在线的 Pi 会话") }
         return await withTaskGroup(of: ShownText?.self) { group in
             for session in sessions {
-                group.addTask { [pi, id = session.id] in
-                    do { try await pi.refreshQuota(in: id); return nil }
+                group.addTask { [bridge, id = session.id] in
+                    do { try await bridge.refreshQuota(in: id); return nil }
                     catch { return ShownText(error) }
                 }
             }

@@ -39,7 +39,7 @@ public final class ClaudeCodeRuntime: AgentRuntime {
     }
 
     private func checkpoint(of sessionID: String) async -> HistoryCheckpoint? {
-        guard let data = try? await store.piCheckpoint(of: sessionID) else { return nil }
+        guard let data = try? await store.checkpoint(of: sessionID) else { return nil }
         return try? JSONDecoder().decode(HistoryCheckpoint.self, from: data)
     }
 

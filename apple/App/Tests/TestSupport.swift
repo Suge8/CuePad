@@ -123,9 +123,9 @@ final class TestApp {
     let pasteboard = NSPasteboard(name: .init("cuepad-tests-\(UUID().uuidString)"))
     /// socket 路径有 104 字节上限，所以假扩展的目录放在短路径下。
     let socketDirectory = URL(filePath: "/tmp/cat-\(UUID().uuidString.prefix(8))", directoryHint: .isDirectory)
-    lazy var pi = Bridge(socketDirectory: socketDirectory, timing: timing)
-    lazy var host = RecordingHost(bridge: pi, socketDirectory: socketDirectory, sessions: piPaths.sessionsDirectory)
-    lazy var claude = PipedHostedAgent(bridge: pi, agent: .claudeCode)
+    lazy var bridge = Bridge(socketDirectory: socketDirectory, timing: timing)
+    lazy var host = RecordingHost(bridge: bridge, socketDirectory: socketDirectory, sessions: piPaths.sessionsDirectory)
+    lazy var claude = PipedHostedAgent(bridge: bridge, agent: .claudeCode)
     #else
     let pasteboardName = UIPasteboard.Name("cuepad-tests-\(UUID().uuidString)")
     #endif
@@ -338,7 +338,7 @@ final class TestApp {
 
     private func makeServices() -> AppServices {
         let mac = MacDependencies(
-            pi: pi,
+            bridge: bridge,
             hotkeys: hotkeys,
             paths: AgentPaths(pi: piPaths, environment: agentHomes),
             agents: AgentIntegrations(agentIntegration),
@@ -387,8 +387,8 @@ extension Workspace {
 }
 
 extension CueStore {
-    func allPiSessionStates() throws -> [SessionState] {
-        try piSessionPage(SessionQuery(limit: .max)).items.map(\.state)
+    func allSessionStates() throws -> [SessionState] {
+        try sessionPage(SessionQuery(limit: .max)).items.map(\.state)
     }
 }
 

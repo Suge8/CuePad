@@ -81,7 +81,7 @@ struct SyncWiringTests {
         defer { services.cancelBackgroundWork() }
         let before = try await workspace.createCard(body: "换账号前记的", in: Project.defaultID)
         try await eventually("传上去") { await cloud.saved.contains(before.id.uuidString.lowercased()) }
-        try await services.store.upsertPiSession(IndexedSession(id: "s1", path: "/p", cwd: "/c", lastActivityAt: .now), host: "mac-a")
+        try await services.store.upsertSession(IndexedSession(id: "s1", path: "/p", cwd: "/c", lastActivityAt: .now), host: "mac-a")
 
         await cloud.signIn("另一个账号")
         accountChanges.post(name: .CKAccountChanged, object: nil)
@@ -98,7 +98,7 @@ struct SyncWiringTests {
         case .eraseLocal:
             #expect(try await services.store.card(before.id) == nil)
             #expect(try await services.store.card(waiting.id) == nil)
-            #expect(try await services.store.piSessions().map(\.id) == ["s1"])
+            #expect(try await services.store.indexedSessions().map(\.id) == ["s1"])
             #expect(await cloud.records(ids).isEmpty)
         }
     }

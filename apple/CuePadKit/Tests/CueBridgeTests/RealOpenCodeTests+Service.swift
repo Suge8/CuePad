@@ -48,7 +48,7 @@ extension RealOpenCodeTests {
             #expect(session(bridge) == nil)
             let listed = try await sandbox.api("GET", "/api/session")["data"] as? [Any]
             #expect(listed?.isEmpty == true, "服务里还留着：\(String(describing: listed))")
-            #expect(try await store.piSessions().isEmpty)
+            #expect(try await store.indexedSessions().isEmpty)
         }
     }
 
@@ -64,7 +64,7 @@ extension RealOpenCodeTests {
             try await bridge.send(SessionMessage(text: "Reply with exactly the word SEEN.", images: [MessageImage(mimeType: "image/png", data: image)]), to: id)
             let hash = SHA256.hash(data: image).map { String(format: "%02x", $0) }.joined() + ".png"
             try await eventually("带图的那句与回答进了对话") {
-                let messages = try await store.piMessages(of: opened.sessionID)
+                let messages = try await store.chatMessages(of: opened.sessionID)
                 return messages.contains { $0.role == .known(.user) && $0.text.contains("cuepad://file/\(hash)") }
                     && messages.last?.role == .known(.pi)
             }
@@ -97,7 +97,7 @@ extension RealOpenCodeTests {
 
             try await bridge.end(id)
             #expect(bridge.session(id: id) == nil)
-            let indexed = try #require(try await store.piSession(opened.sessionID))
+            let indexed = try #require(try await store.indexedSession(opened.sessionID))
             #expect(indexed.agent == .opencode)
 
             let resumed = try await runtime.resume(indexed)
@@ -107,7 +107,7 @@ extension RealOpenCodeTests {
 
             try await sandbox.api("DELETE", "/api/session/\(opened.sessionID)")
             try await eventually("删掉的会话下线、索引也删了") {
-                let indexed = try await store.piSession(opened.sessionID)
+                let indexed = try await store.indexedSession(opened.sessionID)
                 return bridge.session(id: resumed) == nil && indexed == nil
             }
         }
@@ -125,7 +125,7 @@ extension RealOpenCodeTests {
             let service = try #require(sandbox.service)
             await runtime.stop()()
             try await eventually("CuePad 拉起的服务随接入停了") { kill(service.pid, 0) != 0 && sandbox.service == nil }
-            let indexed = try #require(try await store.piSession(sessionID))
+            let indexed = try #require(try await store.indexedSession(sessionID))
 
             let restarted = sandbox.runtime(bridge, store)
             try restarted.start()

@@ -15,7 +15,7 @@ extension OpenCodeRuntime {
     func backfill(_ infos: [OpenCodeSessionInfo], _ connection: Connection) async {
         do {
             let stored = Dictionary(
-                try await store.piSessions().filter { $0.agent == .opencode }.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+                try await store.indexedSessions().filter { $0.agent == .opencode }.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
             guard self.connection === connection else { return }  // 读的时候停下了（断开接入）：索引已删，不再写回
             var summaries: [SessionUpsert] = []
             let recent = Date().addingTimeInterval(-transcriptWindow)
@@ -27,7 +27,7 @@ extension OpenCodeRuntime {
                     summaries.append(SessionUpsert(session: indexed(info, firstMessage: nil), checkpoint: nil, transcript: nil))
                 }
             }
-            if !summaries.isEmpty { try await store.upsertPiSessions(summaries, host: hostID) }
+            if !summaries.isEmpty { try await store.upsertSessions(summaries, host: hostID) }
             guard self.connection === connection else { return }
             await retainIndex()
         } catch {
@@ -45,7 +45,7 @@ extension OpenCodeRuntime {
     func retainIndex() async {
         guard let listed else { return }
         do {
-            try await store.retainPiSessions(paths: Set(listed.map(Self.path)), agent: .opencode, host: hostID)
+            try await store.retainSessions(paths: Set(listed.map(Self.path)), agent: .opencode, host: hostID)
         } catch {
             Self.log.error("OpenCode 会话索引对账失败：\(String(describing: error), privacy: .public)")
         }
@@ -70,7 +70,7 @@ extension OpenCodeRuntime {
 
     func checkpoint(of sessionID: String) async throws -> OpenCodeHistory.Checkpoint? {
         if let checkpoint = checkpoints[sessionID] { return checkpoint }
-        return try await store.piCheckpoint(of: sessionID).flatMap { try? JSONDecoder().decode(OpenCodeHistory.Checkpoint.self, from: $0) }
+        return try await store.checkpoint(of: sessionID).flatMap { try? JSONDecoder().decode(OpenCodeHistory.Checkpoint.self, from: $0) }
     }
 
     private func ingest(_ sessionID: String) async {
@@ -82,7 +82,7 @@ extension OpenCodeRuntime {
             // 读的时候会话被删了：删除时已对过账，这里再写就把索引写回来了
             guard self.connection === connection, sessions[sessionID] != nil else { return }
             checkpoints[sessionID] = next
-            try await store.upsertPiSessions(
+            try await store.upsertSessions(
                 [SessionUpsert(
                     session: indexed(info, firstMessage: next.history.firstMessage), checkpoint: try JSONEncoder().encode(next),
                     transcript: transcript)],

@@ -68,7 +68,7 @@ extension DebugScene {
                 _ = try await recorder.update(
                     sessionID: id, state: state, failure: state == .error ? .quota : nil, title: id, directory: id, question: question,
                     times: SessionTimes(stateSince: start, busySince: state.isWorking ? start : nil), subagents: helpers, agent: agent)
-                try await store.writePiTranscript(SessionTranscript(
+                try await store.writeTranscript(SessionTranscript(
                     sessionID: id, messages: [], recap: Recap(lastPrompt: "README", lastReply: state == .settled ? "README.md" : nil)))
             }
             try await store.leaveToYou("docs")

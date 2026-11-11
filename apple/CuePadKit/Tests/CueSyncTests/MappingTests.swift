@@ -24,7 +24,7 @@ import Testing
     try await store.requestDelivery("deliver me", to: SendTarget(kind: .piSession, name: "n", ref: "r"), on: "mac", card: card.id)
     try await store.setDirectory("/work/p", for: project.id)
     try await store.publishDirectoryBindings(host: "mac")
-    try await store.writePiTranscript(SessionTranscript(
+    try await store.writeTranscript(SessionTranscript(
       sessionID: "s1",
       messages: [
         ChatMessage(sessionID: "s1", entryID: "e1", seq: 1, role: .user, text: "修好登录", at: .now),

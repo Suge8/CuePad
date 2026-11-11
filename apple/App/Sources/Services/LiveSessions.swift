@@ -66,9 +66,9 @@ final class LiveSessions {
         var rail: SessionRailData
 
         static func read(from store: isolated CueStore, endedOn host: String? = nil, since: Date = .now) throws -> Page {
-            let items = try store.piSessionPage(.current).items
+            let items = try store.sessionPage(.current).items
             return Page(
-                items: items, total: try store.piSessionCount(),
+                items: items, total: try store.sessionCount(),
                 ended: try host.map { try store.endedSessions(on: $0, since: since, limit: LiveSessions.endedWindow) } ?? [],
                 cue: try store.cueDuty(), handoffs: try store.handoffs(items.map(\.state)), relays: try CueFlight.Facts.read(from: store), rail: try SessionRailData.read(from: store))
         }

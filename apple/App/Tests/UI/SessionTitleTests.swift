@@ -22,8 +22,8 @@ struct SessionTitleTests {
 
     private func indexed(_ file: URL, _ agent: AgentKind, id: String) async throws -> String {
         let update = try History.index(file: file, agent: agent, from: nil, files: store.files)
-        await app.services.consumePiHistory(AsyncStream { $0.yield(.updated(update)); $0.finish() }, agent: agent)
-        return try #require(try await store.piSessions(sessionIDs: [id])[id]).name(at: app.services.speech)
+        await app.services.consumeHistory(AsyncStream { $0.yield(.updated(update)); $0.finish() }, agent: agent)
+        return try #require(try await store.sessionItems(sessionIDs: [id])[id]).name(at: app.services.speech)
     }
 
     private func claude(_ id: String, _ extra: [[String: Any]]) throws -> URL {
@@ -75,8 +75,8 @@ struct SessionTitleTests {
 
     @Test func 在线会话的名字只在文件里_读到后补上_不倒回接入报来的改名() async throws {
         defer { app.services.cancelBackgroundWork() }
-        let events = app.pi.changes()
-        let consume = Task { try await app.services.consumePiChanges(events) }
+        let events = app.bridge.changes()
+        let consume = Task { try await app.services.consumeSessionChanges(events) }
         defer { await consume.stop() }
         final class Link: SessionLink {}
         let file = try claude("c9", [])
@@ -84,8 +84,8 @@ struct SessionTitleTests {
             id: "c9.1", sessionID: "c9", agent: .claudeCode, sessionFile: file, pid: 1, cwd: app.directory, terminal: TerminalIdentity(),
             state: .settled, stateSince: .now)
         live.firstMessage = "帮我看看登录页为什么白屏"
-        app.pi.attach(live, via: Link())
-        let shown: @Sendable (isolated CueStore) throws -> String? = { try $0.piSessions(sessionIDs: ["c9"])["c9"]?.state.title }
+        app.bridge.attach(live, via: Link())
+        let shown: @Sendable (isolated CueStore) throws -> String? = { try $0.sessionItems(sessionIDs: ["c9"])["c9"]?.state.title }
         _ = try await eventually(store, shown) { $0 == "帮我看看登录页为什么白屏" }
 
         let first = try History.index(file: file, agent: .claudeCode, from: nil, files: store.files)
@@ -95,16 +95,16 @@ struct SessionTitleTests {
             ["type": "ai-title", "aiTitle": "排查登录页白屏", "sessionId": "c9"],
         ], to: file)
         let titled = try History.index(file: file, agent: .claudeCode, from: first.checkpoint, files: store.files)
-        await app.services.consumePiHistory(AsyncStream { $0.yield(.updated(titled)); $0.finish() }, agent: .claudeCode)
+        await app.services.consumeHistory(AsyncStream { $0.yield(.updated(titled)); $0.finish() }, agent: .claudeCode)
         _ = try await eventually(store, shown) { $0 == "排查登录页白屏" }
         let board = try await TaskBoard.read(from: store)
         #expect(board.advancing.first { $0.id == "session/c9" }?.loose?.name(at: app.services.speech) == "排查登录页白屏")
 
-        app.pi.update(live.id) { $0.name = "登录白屏" }
+        app.bridge.update(live.id) { $0.name = "登录白屏" }
         _ = try await eventually(store, shown) { $0 == "登录白屏" }
         let stale = try History.index(file: file, agent: .claudeCode, from: titled.checkpoint, files: store.files)
-        await app.services.consumePiHistory(AsyncStream { $0.yield(.updated(stale)); $0.finish() }, agent: .claudeCode)
-        #expect(app.pi.session(sessionID: "c9")?.name == "登录白屏", "文件还没写下改名：不倒回去")
+        await app.services.consumeHistory(AsyncStream { $0.yield(.updated(stale)); $0.finish() }, agent: .claudeCode)
+        #expect(app.bridge.session(sessionID: "c9")?.name == "登录白屏", "文件还没写下改名：不倒回去")
         consume.cancel()
         _ = await consume.result
     }
@@ -118,10 +118,10 @@ struct SessionTitleTests {
         func title(_ name: String) throws {
             try JSONSerialization.data(withJSONObject: ["generated_title": name, "title_is_manual": false]).write(to: summary, options: .atomic)
         }
-        let row: @Sendable (isolated CueStore) throws -> String? = { try $0.piSessions(sessionIDs: ["g2"])["g2"]?.state.title }
+        let row: @Sendable (isolated CueStore) throws -> String? = { try $0.sessionItems(sessionIDs: ["g2"])["g2"]?.state.title }
         func indexing(following live: Set<URL>) -> Task<Void, Never> {
             let indexer = HistoryIndexer(agent: .grok, paths: paths, files: store.files) { [services = app.services] in await services.loadHistoryStart(for: $0) }!
-            return Task { await app.services.consumePiHistory(indexer.events(following: AsyncStream { $0.yield(live) }, scope: .all), agent: .grok) }
+            return Task { await app.services.consumeHistory(indexer.events(following: AsyncStream { $0.yield(live) }, scope: .all), agent: .grok) }
         }
 
         try title("黑屏视频")

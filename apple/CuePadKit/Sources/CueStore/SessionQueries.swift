@@ -2,7 +2,7 @@ import CueText
 import Foundation
 
 extension CueStore {
-  public func piSessionPage(_ query: SessionQuery) throws -> SessionListPage {
+  public func sessionPage(_ query: SessionQuery) throws -> SessionListPage {
     let (condition, arguments) = try Self.condition(query)
     // 只有一种状态的范围里"已结束的排后面"是常量，留着它 SQLite 就不走按状态的索引、把整个范围排一遍（真实库已结束的一页 17 万步对 3 千步）
     let endedLast = query.scope == .all || query.scope == .current ? "state = '\(WorkState.ended.rawValue)', " : ""
@@ -68,14 +68,14 @@ extension CueStore {
 
   /// 一批会话（Pi 的会话 id）的列表项，按会话 id 索引；没有记录的 id 不在结果里。行与卡上要显示几十个会话的状态时一次读出，
   /// 不必一个会话查一次。
-  public func piSessions(sessionIDs: [String]) throws -> [String: SessionListItem] {
+  public func sessionItems(sessionIDs: [String]) throws -> [String: SessionListItem] {
     guard !sessionIDs.isEmpty else { return [:] }
     let ids = String(decoding: try JSONEncoder().encode(sessionIDs), as: UTF8.self)
     let states = try select(SessionState.self, where: "sessionID IN (SELECT value FROM json_each(?))", [ids])
     return Dictionary(try listItems(states).map { ($0.state.sessionID, $0) }, uniquingKeysWith: { first, _ in first })
   }
 
-  public func piSessionCount() throws -> Int {
+  public func sessionCount() throws -> Int {
     try db.first("SELECT count(*) FROM piSessionStates") { Int($0.int(0)) } ?? 0
   }
 

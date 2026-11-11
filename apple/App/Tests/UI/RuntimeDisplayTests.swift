@@ -23,7 +23,7 @@ struct RuntimeDisplayTests {
                 SubagentState(name: "builder", role: "审查员", phase: .known(.review)),
             ])
             try await store.bindSession(id, to: task.id)
-            try await store.writePiTranscript(SessionTranscript(sessionID: id, messages: [
+            try await store.writeTranscript(SessionTranscript(sessionID: id, messages: [
                 ChatMessage(sessionID: id, entryID: "u1", seq: 1, role: .user, text: "关机前的工作", at: clock.now),
             ], recap: Recap(lastPrompt: "关机前的工作")))
         }
@@ -51,17 +51,17 @@ struct RuntimeDisplayTests {
         #expect(snapshot.shown(at: snapshot.at + 601).isLive && !snapshot.shown(at: snapshot.at + 601).hasConfirmedActivity)
 
         try await store.recordMacPresence(host: "mac-a", bootID: "new-system-boot") { true }
-        try await store.writePiTranscript(SessionTranscript(sessionID: "compacting", messages: [], recap: Recap(lastReply: "晚到的历史")))
-        let after = try #require(try await store.piSessions(sessionIDs: ["compacting"])["compacting"]?.state)
+        try await store.writeTranscript(SessionTranscript(sessionID: "compacting", messages: [], recap: Recap(lastReply: "晚到的历史")))
+        let after = try #require(try await store.sessionItems(sessionIDs: ["compacting"])["compacting"]?.state)
         #expect(after.state == .known(.compacting) && after.bootID == "test-boot")
         #expect(try await !store.runtimeIsConfirmed(after, at: clock.now))
         #expect(try await now().tally.moving == 0)
         for id in tasks { #expect(try await store.card(id)?.status == .inProgress) }
-        let reports = try await store.piSessions(sessionIDs: ["working", "compacting", "delegating"])
+        let reports = try await store.sessionItems(sessionIDs: ["working", "compacting", "delegating"])
         #expect(reports["working"]?.state.state == .known(.thinking))
         #expect(reports["delegating"]?.state.state == .known(.delegating))
         for id in ["working", "compacting", "delegating"] {
-            #expect(try await store.piMessages(of: id).map(\.text) == ["关机前的工作"])
+            #expect(try await store.chatMessages(of: id).map(\.text) == ["关机前的工作"])
         }
     }
 
@@ -230,10 +230,10 @@ struct RuntimeDisplayTests {
         }
         _ = app.relaunch()
         #expect(identity.isRunning)
-        let alive = try #require(try await store.piSessions(sessionIDs: ["alive"])["alive"]?.state)
+        let alive = try #require(try await store.sessionItems(sessionIDs: ["alive"])["alive"]?.state)
         #expect(try await store.runtimeIsConfirmed(alive))
         #expect(alive.state == .known(.compacting))
-        let unknown = try #require(try await store.piSessions(sessionIDs: ["unknown"])["unknown"]?.state)
+        let unknown = try #require(try await store.sessionItems(sessionIDs: ["unknown"])["unknown"]?.state)
         #expect(try await !store.runtimeIsConfirmed(unknown))
         #expect(unknown.state == .known(.compacting) && workspace.shown(unknown, delivery: nil).status == .unknown())
     }

@@ -2,7 +2,7 @@ import CueText
 import Foundation
 
 /// 会话记录上的摘要（列表预览、会话页顶部用）：对话（`ChatMessage`）的投影，由同一个写者（Mac 读会话文件）
-/// 在写对话的同一事务里写（`CueStore.writePiTranscript`），界面直接读、不和对话对账。等你回答的弹窗（`question`）
+/// 在写对话的同一事务里写（`CueStore.writeTranscript`），界面直接读、不和对话对账。等你回答的弹窗（`question`）
 /// 不在对话里，来自 Pi 桥，由状态记录器写。`lastPrompt` 与 `lastReply` 是最近一轮做完的问答，在这一轮结束时一起更新；
 /// 机器消息触发的轮没有新的提问，回答照常更新、提问沿用。
 public struct Recap: Sendable, Equatable, Codable {
@@ -32,7 +32,7 @@ public struct Recap: Sendable, Equatable, Codable {
   }
 }
 
-/// Mac 从一个会话文件读出的一段对话，与会话记录上的摘要一起写（`CueStore.writePiTranscript`）。
+/// Mac 从一个会话文件读出的一段对话，与会话记录上的摘要一起写（`CueStore.writeTranscript`）。
 public struct SessionTranscript: Equatable, Sendable {
   public var sessionID: String
   public var messages: [ChatMessage]
@@ -46,7 +46,7 @@ public struct SessionTranscript: Equatable, Sendable {
 }
 
 extension CueStore {
-  public func piMessages(of sessionID: String) throws -> [ChatMessage] {
+  public func chatMessages(of sessionID: String) throws -> [ChatMessage] {
     try select(ChatMessage.self, where: "sessionID = ?", [sessionID], orderBy: "seq, role, id")
   }
 
@@ -77,14 +77,14 @@ extension CueStore {
   }
 
   /// 写一段对话，并在同一事务里把摘要写到会话记录上：摘要只有这一个写者，界面不必和对话对账。
-  public func writePiTranscript(_ transcript: SessionTranscript) throws {
+  public func writeTranscript(_ transcript: SessionTranscript) throws {
     try write { try applyTranscript(transcript) }
   }
 
   /// 在调用方的写事务里写对话与摘要（原样写会话文件的投影；"已结束的会话没有进行中的提问"在读出时定，见
   /// `SessionState.pendingPrompt`）。会话记录还不存在时只写消息。
   func applyTranscript(_ transcript: SessionTranscript) throws {
-    try applyPiMessages(transcript.messages, session: transcript.sessionID)
+    try applyMessages(transcript.messages, session: transcript.sessionID)
     let recap = transcript.recap
     for key in recap.pendingTools?.images ?? [] { try registerAttachment(key) }
     try db.run(
@@ -97,16 +97,16 @@ extension CueStore {
   }
 
   /// 定点核对只补真实用户消息与送达证据，不改正常索引的检查点和轮次摘要。
-  public func writePiDeliveryReceipts(_ messages: [ChatMessage]) throws {
+  public func writeDeliveryReceipts(_ messages: [ChatMessage]) throws {
     let receipts = messages.filter { $0.deliveryID != nil && [.known(.user), .known(.machine)].contains($0.role) }
     try write {
       for (session, messages) in Dictionary(grouping: receipts, by: \.sessionID) {
-        try applyPiMessages(messages, session: session)
+        try applyMessages(messages, session: session)
       }
     }
   }
 
-  private func applyPiMessages(_ messages: [ChatMessage], session: String) throws {
+  private func applyMessages(_ messages: [ChatMessage], session: String) throws {
     for message in messages {
       try registerAttachments(in: message.text)
       for key in message.tools?.images ?? [] { try registerAttachment(key) }
@@ -145,7 +145,7 @@ extension CueStore {
   /// 对话也是 `window` 之前写出的（按需补写的留够 `window`）。在写对话的那台 Mac 上调用。
   /// 对话没了的会话的预览（`window` 之前发的）一起删，文件没有别的预览或图片用着时随之删掉；对话里的图片（你的话里的、工具结果里的）同样，
   /// 没有卡片、发送记录、别的对话用着时随之删掉。
-  public func prunePiMessages(olderThan window: TimeInterval, now: Date = .now) throws {
+  public func pruneMessages(olderThan window: TimeInterval, now: Date = .now) throws {
     let cutoff = now.addingTimeInterval(-window)
     try removingFiles {
       try write {

@@ -30,7 +30,7 @@ struct RealOpenCodeTests {
     }
 
     func replies(_ store: CueStore, _ sessionID: String) async throws -> [String] {
-        try await store.piMessages(of: sessionID).filter { $0.role == .known(.pi) }.map(\.text)
+        try await store.chatMessages(of: sessionID).filter { $0.role == .known(.pi) }.map(\.text)
     }
 
     /// 发送：终端里 `opencode run` 的会话上了桥、答完歇下，CuePad 再发一句、改名、就地换模型与强度、压缩上下文，接入停了再开会话回来，服务停了会话下线。
@@ -53,12 +53,12 @@ struct RealOpenCodeTests {
             #expect(live.cwd.resolvingSymlinksInPath() == sandbox.work.resolvingSymlinksInPath())
             #expect(live.model?.key == openCodeTestModel && live.context?.window != nil)
             #expect(live.commands.contains { $0.name == "review" } && live.commands.contains { $0.name == "compact" })
-            #expect(try await store.piSessions().contains { $0.id == live.sessionID && $0.agent == .opencode })
+            #expect(try await store.indexedSessions().contains { $0.id == live.sessionID && $0.agent == .opencode })
 
             let delivery = UUID()
             try await bridge.send(SessionMessage(text: "Reply with exactly the word AGAIN.", deliveryID: delivery.uuidString), to: live.id)
             try await eventually("CuePad 发的那句认得出来，回答也到了") {
-                let messages = try await store.piMessages(of: live.sessionID)
+                let messages = try await store.chatMessages(of: live.sessionID)
                 return messages.contains { $0.deliveryID == delivery } && messages.last { $0.role == .known(.pi) }?.text.contains("AGAIN") == true
             }
             #expect(sandbox.model.requests.contains { $0.prompt.contains("AGAIN") && $0.said.contains { $0.contains("PONG") } }, "第二句请求里该带着前一句")
@@ -79,15 +79,15 @@ struct RealOpenCodeTests {
 
             try await bridge.command("/compact", in: live.id)
             try await eventually("压缩上下文留下一行") {
-                try await store.piMessages(of: live.sessionID).contains { $0.text == ChatNotice.compacted.rawValue }
+                try await store.chatMessages(of: live.sessionID).contains { $0.text == ChatNotice.compacted.rawValue }
             }
 
             await runtime.stop()()
             #expect(session(bridge) == nil)
-            try await store.deletePiSessions(of: .opencode, keepingHostedOn: "mac")
+            try await store.deleteSessions(of: .opencode, keepingHostedOn: "mac")
             try runtime.start()
             try await eventually("再接入后会话回来、索引写回") {
-                let indexed = try await store.piSession(live.sessionID)
+                let indexed = try await store.indexedSession(live.sessionID)
                 return session(bridge) != nil && indexed != nil
             }
 
@@ -113,7 +113,7 @@ struct RealOpenCodeTests {
             try await bridge.answer(allow ? .option(question.options[0]) : .confirmed(false), to: try #require(question.promptID), in: id)
 
             try await eventually("答了之后这一轮做完") {
-                let messages = try await store.piMessages(of: sessionID)
+                let messages = try await store.chatMessages(of: sessionID)
                 return session(bridge)?.state == .settled && messages.last.map { allow ? $0.role == .known(.pi) && $0.text.contains("DONE") : $0.text == "已拒绝" } == true
             }
             #expect(FileManager.default.fileExists(atPath: sandbox.work.appending(path: file).path) == allow)
@@ -133,7 +133,7 @@ struct RealOpenCodeTests {
             try await eventually("在跑命令") { session(bridge)?.state == .tool }
             try await bridge.abort(id)
             try await eventually("停下了，对话里留下'已停止'") {
-                let messages = try await store.piMessages(of: sessionID)
+                let messages = try await store.chatMessages(of: sessionID)
                 return session(bridge)?.state == .settled && messages.map { "\($0.role.rawValue):\($0.text)" }.suffix(1) == ["system:已停止"]
             }
 
@@ -154,11 +154,11 @@ struct RealOpenCodeTests {
             try await bridge.send(SessionMessage(text: "Now: what is 6+6", deliveryID: delivery.uuidString), to: id)
 
             try await eventually("这句开的一轮答完") {
-                let messages = try await store.piMessages(of: sessionID)
+                let messages = try await store.chatMessages(of: sessionID)
                 return session(bridge)?.state == .settled && messages.last?.role == .known(.pi)
                     && messages.contains { $0.deliveryID == delivery }
             }
-            let messages = try await store.piMessages(of: sessionID)
+            let messages = try await store.chatMessages(of: sessionID)
             #expect(messages.filter { $0.role == .known(.user) }.map(\.text).last?.contains("Now") == true)
             let now = try #require(messages.firstIndex { $0.deliveryID == delivery })
             #expect(messages[..<now].contains { $0.text == ChatNotice.stopped.rawValue }, "被停下的那一轮留了一行已停止")
@@ -199,7 +199,7 @@ struct RealOpenCodeTests {
             try await bridge.end(id)
             #expect(bridge.session(id: id) == nil)
             try await eventually("对话里留下'已停止'") {
-                try await store.piMessages(of: sessionID).map { "\($0.role.rawValue):\($0.text)" }.suffix(1) == ["system:已停止"]
+                try await store.chatMessages(of: sessionID).map { "\($0.role.rawValue):\($0.text)" }.suffix(1) == ["system:已停止"]
             }
         }
     }

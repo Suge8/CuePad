@@ -30,7 +30,7 @@ extension TaskFlowTests {
         }
         let after = try #require(try await store.card(task.id))
         #expect(after.status == closed.status && after.archivedAt == closed.archivedAt && after.deletedAt == closed.deletedAt)
-        #expect(try await store.piSessions(sessionIDs: ["late-session"])["late-session"]?.state.createdForTaskID == task.id)
+        #expect(try await store.sessionItems(sessionIDs: ["late-session"])["late-session"]?.state.createdForTaskID == task.id)
         let requests = try await store.deliveryRequests()
         #expect(requests.filter { $0.mode == .known(.start) }.count == 1)
         #expect(requests.filter { $0.mode == .known(.send) }.isEmpty)
@@ -56,7 +56,7 @@ extension TaskFlowTests {
         try await workspace.complete(task.id)
         try await StateRecorder(store: peer.services.store, hostID: "other-mac").update(
             sessionID: "cloud-late", state: .thinking, projectID: Project.defaultID, launchToken: launch.launch?.token, hosted: true)
-        let session = try #require(try await peer.services.store.piSessions(sessionIDs: ["cloud-late"])["cloud-late"]?.state)
+        let session = try #require(try await peer.services.store.sessionItems(sessionIDs: ["cloud-late"])["cloud-late"]?.state)
         let row = try #require(try await peer.services.store.syncRow(recordName: session.id.uuidString.lowercased()))
         #expect(try await store.applyRemote([.save(row, systemFields: Data())]).isEmpty)
         #expect(try await store.applyRemote([.save(row, systemFields: Data())]).isEmpty)

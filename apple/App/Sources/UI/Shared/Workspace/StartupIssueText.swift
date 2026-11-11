@@ -6,8 +6,8 @@ extension AppServices.StartupIssue {
         case .widgetDataUnavailable(let detail): String(localized: "小组件数据没能更新：\(detail)")
         case .syncUnavailable(let detail): String(localized: "iCloud 同步出了问题：\(detail)")
         #if os(macOS)
-        case .piBridgeUnavailable(let detail): String(localized: "Agent 连接不可用：\(detail)")
-        case .piHistoryUnavailable(let detail): String(localized: "Agent 历史索引出错：\(detail)")
+        case .bridgeUnavailable(let detail): String(localized: "Agent 连接不可用：\(detail)")
+        case .historyUnavailable(let detail): String(localized: "Agent 历史索引出错：\(detail)")
         #endif
         }
     }

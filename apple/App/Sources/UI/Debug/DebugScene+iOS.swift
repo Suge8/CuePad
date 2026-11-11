@@ -71,7 +71,7 @@ extension DebugScene {
     }
 
     static func demoSession(titled title: String, store: CueStore) async throws -> SessionState? {
-        try await store.piSessionPage(SessionQuery(text: title)).items.first { $0.state.title == title }?.state
+        try await store.sessionPage(SessionQuery(text: title)).items.first { $0.state.title == title }?.state
     }
 
     /// 演示模式没有同步，真实状态出不来。

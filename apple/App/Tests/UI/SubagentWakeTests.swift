@@ -74,7 +74,7 @@ struct SubagentWakeTests {
         // 会话在跑只认宿主在线时报的（`runtimeUntil`）：mac-b 像醒着的 Mac 那样先报在线
         try await store.recordMacPresence(host: "mac-b") { true }
         let remote = StateRecorder(store: store, hostID: "mac-b")
-        try await store.writePiTranscript(SessionTranscript(
+        try await store.writeTranscript(SessionTranscript(
             sessionID: "remote-his", messages: [ChatMessage(sessionID: "remote-his", entryID: "u1", seq: 1, role: .user, text: "做到底", at: due - 3600)],
             recap: Recap(lastPrompt: "做到底")))
         try await remote.update(sessionID: "remote-his", state: .delegating, title: "修好注册页", subagents: [ui])

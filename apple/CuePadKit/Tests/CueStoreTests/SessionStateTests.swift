@@ -11,7 +11,7 @@ import Testing
   private func recorder() -> StateRecorder { StateRecorder(store: store, hostID: "mac-a", timing: clock.timing) }
 
   private func states() async throws -> [String: SessionState] {
-    Dictionary(uniqueKeysWithValues: try await store.allPiSessionStates().map { ($0.sessionID, $0) })
+    Dictionary(uniqueKeysWithValues: try await store.allSessionStates().map { ($0.sessionID, $0) })
   }
 
   /// 挂起的旧细节不能在更新的状态之后落盘，否则手机上的会话会一直显示"工作中"。
@@ -57,13 +57,13 @@ import Testing
 
   @Test func aSessionIsOneRecordAcrossHistoryRestartAndEnd() async throws {
     let recorder = recorder()
-    try await store.upsertPiSession(indexed("s1"), host: "mac-a")
+    try await store.upsertSession(indexed("s1"), host: "mac-a")
     try await recorder.update(sessionID: "s1", state: .thinking, title: "修好登录")
-    try await store.upsertPiSession(indexed("s1", title: "改了名", at: 2_000), host: "mac-a")
+    try await store.upsertSession(indexed("s1", title: "改了名", at: 2_000), host: "mac-a")
     #expect(try await states()["s1"]?.state == .known(.thinking))
 
     try await recorder.end(sessionID: "s1")
-    #expect(try await store.allPiSessionStates().count == 1)
+    #expect(try await store.allSessionStates().count == 1)
     #expect(try await states()["s1"]?.state == .known(.ended))
   }
 

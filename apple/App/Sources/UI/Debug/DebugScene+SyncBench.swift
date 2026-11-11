@@ -167,7 +167,7 @@ enum SyncBench {
     private static func onlineSession(on host: String, _ services: AppServices) async -> SessionState? {
         let page: SessionListPage
         do {
-            page = try await services.store.piSessionPage(.current)
+            page = try await services.store.sessionPage(.current)
         } catch {
             DebugScene.abandon("同步测量读会话", error)
         }

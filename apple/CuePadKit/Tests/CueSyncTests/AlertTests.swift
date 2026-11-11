@@ -17,7 +17,7 @@ import Testing
     try await recorder.update(sessionID: "s1", state: .thinking, title: "secret title")
     try await recorder.update(sessionID: "s1", state: .waitingForUser, detail: "secret question")
 
-    let state = try #require(try await rig.store.allPiSessionStates().first)
+    let state = try #require(try await rig.store.allSessionStates().first)
     let record = RecordMapper.record(from: try #require(try await rig.store.syncRow(recordName: state.id.uuidString.lowercased())), zoneID: zone)
 
     #expect(record["notify"] as? String == "waitingForUser" && record.encryptedValues["notify"] == nil)
@@ -34,7 +34,7 @@ import Testing
     try await recorder.update(sessionID: "s1", state: .waitingForUser)  // 置位，还没上传
     try await recorder.update(sessionID: "s1", state: .thinking)  // 继续工作
 
-    let id = try #require(try await rig.store.allPiSessionStates().first).id
+    let id = try #require(try await rig.store.allSessionStates().first).id
     let record = try #require(try await rig.coordinator.record(for: rig.recordID(id)))
     #expect(record["notify"] == nil)
     #expect(record["state"] as? String == "thinking")
@@ -49,7 +49,7 @@ import Testing
 
     try await recorder.update(sessionID: "s1", state: .waitingForUser, detail: "q2")
 
-    let id = try #require(try await rig.store.allPiSessionStates().first).id
+    let id = try #require(try await rig.store.allSessionStates().first).id
     let record = try #require(try await rig.coordinator.record(for: rig.recordID(id)))
     #expect(record["notify"] == nil && record.encryptedValues["detail"] as? String == "q2")
   }
@@ -60,7 +60,7 @@ import Testing
     let question = Question(promptID: "p1", kind: .select, text: "要覆盖 public/feed.xml 吗？\n会丢掉手写的条目", options: ["覆盖", "取消"])
     try await recorder.update(sessionID: "s1", state: .waitingForUser, title: "homepage", question: question)
 
-    let state = try #require(try await rig.store.allPiSessionStates().first)
+    let state = try #require(try await rig.store.allSessionStates().first)
     let record = RecordMapper.record(from: try #require(try await rig.store.syncRow(recordName: state.id.uuidString.lowercased())), zoneID: zone)
 
     let waiting = try #require(AlertText.content(for: record, kind: .waitingForUser))
@@ -130,7 +130,7 @@ import Testing
       if let said {
         let message = ChatMessage(sessionID: "s1", entryID: UUID().uuidString, seq: 1, role: .user, text: said, at: .now, deliveryID: nil)
         let recap = Recap(lastPrompt: said, lastReply: "改好了\n细节见下", answeredAt: .now)
-        try await rig.store.writePiTranscript(SessionTranscript(sessionID: "s1", messages: [message], recap: recap))
+        try await rig.store.writeTranscript(SessionTranscript(sessionID: "s1", messages: [message], recap: recap))
       }
       try await recorder.update(sessionID: "s1", state: .settled)
     }

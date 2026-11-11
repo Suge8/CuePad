@@ -58,8 +58,7 @@ extension Workspace {
     }
 
     private var sessionPlacement: SessionPlacement {
-        let pi = services.pi
-        return SessionPlacement(sessions: pi.slots.map { "\($0.id) \($0.cwd.path)" }, directories: catalog?.directories)
+        SessionPlacement(sessions: services.bridge.slots.map { "\($0.id) \($0.cwd.path)" }, directories: catalog?.directories)
     }
 }
 #endif

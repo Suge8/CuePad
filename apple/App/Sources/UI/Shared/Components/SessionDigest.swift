@@ -49,10 +49,10 @@ nonisolated struct SessionDigest: Sendable, Equatable {
     }
 
     static func read(_ id: UUID, sessionID: String?, from store: isolated CueStore) throws -> SessionDigest {
-        let item = try store.piSessionPage(SessionQuery(id: id)).items.first
+        let item = try store.sessionPage(SessionQuery(id: id)).items.first
         let session = item?.state
         let ref = session?.sessionID ?? sessionID
-        let messages = try ref.map { try store.piMessages(of: $0) } ?? []
+        let messages = try ref.map { try store.chatMessages(of: $0) } ?? []
         return SessionDigest(
             session: session,
             project: try session?.projectID.flatMap { try store.project($0) },

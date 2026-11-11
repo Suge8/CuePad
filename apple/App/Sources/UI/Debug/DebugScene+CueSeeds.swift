@@ -57,7 +57,7 @@ extension DebugScene {
     }
 
     private static func seedCueRows(_ store: CueStore) async throws {
-        guard try await store.piSessionCount() == 0 else { return }
+        guard try await store.sessionCount() == 0 else { return }
         _ = try await store.updateCueProfile { profile in
             profile.hostID = "demo-mac"
             profile.enabledAt = .now
@@ -78,7 +78,7 @@ extension DebugScene {
                 sessionID: row.id, state: row.state, detail: row.detail, title: row.title, directory: "greet", question: row.question,
                 modelState: row.model ? demoModels(for: row.agent) : nil,
                 context: ContextUsage(tokens: row.tokens, window: 200_000), agent: row.agent)
-            try await store.writePiTranscript(SessionTranscript(sessionID: row.id, messages: [], recap: Recap(lastPrompt: row.title, lastReply: String(localized: "好了", table: "Demo"))))
+            try await store.writeTranscript(SessionTranscript(sessionID: row.id, messages: [], recap: Recap(lastPrompt: row.title, lastReply: String(localized: "好了", table: "Demo"))))
             let task = try await store.createTask(row.title)
             try await store.linkCard(task.id, toSession: row.id)
         }

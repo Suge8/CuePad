@@ -40,7 +40,7 @@ struct AlertRoutingTests {
 
     @Test func 点Pi通知_打开该会话_别的通知不改去处() async throws {
         try await StateRecorder(store: app.services.store, hostID: "mac-a").update(sessionID: "atlas", state: .settled, title: "atlas")
-        let session = try #require(try await app.services.store.allPiSessionStates().first)
+        let session = try #require(try await app.services.store.allSessionStates().first)
         let alerts = alertCenter()
         let workspace = Workspace(services: app.services)
         let following = Task { await workspace.follow() }
@@ -130,9 +130,9 @@ struct AlertRoutingTests {
     @Test func 点通知进会话页_对话显示出来() async throws {
         let store = app.services.store
         try await StateRecorder(store: store, hostID: "mac-a").update(sessionID: "atlas", state: .settled, title: "atlas")
-        let session = try #require(try await store.allPiSessionStates().first)
+        let session = try #require(try await store.allSessionStates().first)
         let said = ChatMessage(sessionID: "atlas", entryID: "u1", seq: 1, role: .user, text: "接口约定改成 v2", at: .now)
-        try await store.writePiTranscript(SessionTranscript(sessionID: "atlas", messages: [said], recap: Recap(pendingPrompt: said.text)))
+        try await store.writeTranscript(SessionTranscript(sessionID: "atlas", messages: [said], recap: Recap(pendingPrompt: said.text)))
 
         let alerts = alertCenter()
         alerts.receive(payload(subscription: "cuepad.pi.waiting", record: session.id))

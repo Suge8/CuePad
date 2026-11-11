@@ -23,12 +23,12 @@ struct LaunchAttachmentTests {
         for side in [mac, phone] { side.services.startSync() }
         defer {
             for ext in mac.host.extensions.values { ext.close(bye: "quit") }
-            mac.pi.stop()
+            mac.bridge.stop()
             for side in [mac, phone] { side.services.cancelBackgroundWork() }
         }
         try await mac.services.executor.start()
-        let changes = mac.pi.changes()
-        let recording = Task { try await mac.services.consumePiChanges(changes) }
+        let changes = mac.bridge.changes()
+        let recording = Task { try await mac.services.consumeSessionChanges(changes) }
         defer { await recording.stop() }
 
         let shot = pngData(width: 12, height: 9)
@@ -47,7 +47,7 @@ struct LaunchAttachmentTests {
         await phone.services.syncNow()
         await mac.services.syncNow()
         #expect(try await mac.services.store.outcome(of: request).status == .known(.succeeded))
-        let sessions = try await eventually(mac.services.store, { try $0.allPiSessionStates() }) { $0.contains { $0.launchToken != nil } }
+        let sessions = try await eventually(mac.services.store, { try $0.allSessionStates() }) { $0.contains { $0.launchToken != nil } }
         for session in sessions { await mac.services.upload(session.id) }
         await mac.services.upload(request.id)
         await mac.services.syncNow()
@@ -76,7 +76,7 @@ struct LaunchAttachmentTests {
         }
         try await mac.services.executor.start()
         defer {
-            mac.pi.stop()
+            mac.bridge.stop()
             mac.services.cancelBackgroundWork()
             phone.services.cancelBackgroundWork()
         }

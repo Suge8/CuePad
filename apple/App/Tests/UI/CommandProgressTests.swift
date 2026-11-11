@@ -25,7 +25,7 @@ struct CommandProgressTests {
     }
 
     private func progress() async throws -> MacDelivery.CommandProgress? {
-        MacDelivery.commandProgress(try await store.deliveryRequests(toSession: "atlas"), messages: try await store.piMessages(of: "atlas"), at: app.services.speech)
+        MacDelivery.commandProgress(try await store.deliveryRequests(toSession: "atlas"), messages: try await store.chatMessages(of: "atlas"), at: app.services.speech)
     }
 
     @Test(arguments: ["timeout", "disconnect", "failed"], [true, false])
@@ -39,7 +39,7 @@ struct CommandProgressTests {
             default: return ["ok": false, "error": "failed: Nothing to compact (session too small)"]
             }
         }
-        defer { ext.close(bye: "quit"); app.pi.stop(); app.services.cancelBackgroundWork() }
+        defer { ext.close(bye: "quit"); app.bridge.stop(); app.services.cancelBackgroundWork() }
         let request = try await command()
         #expect(try await progress() == .running("/compact"))
         try await app.services.executor.start()
@@ -54,7 +54,7 @@ struct CommandProgressTests {
         #expect(try await progress()?.failed == false)
         if laterMessage {
             let later = try #require(result.completedAt).addingTimeInterval(0.001)
-            try await store.writePiTranscript(SessionTranscript(sessionID: "atlas", messages: [
+            try await store.writeTranscript(SessionTranscript(sessionID: "atlas", messages: [
                 ChatMessage(sessionID: "atlas", entryID: "later", seq: 1, role: .user, text: "终端里说的下一句", at: later),
             ], recap: Recap()))
         } else {
@@ -70,7 +70,7 @@ struct CommandProgressTests {
         ext.onCommand = { _, command in
             command["t"] as? String == "command" ? ["ok": false, "error": "unknown_command"] : ["ok": true]
         }
-        defer { ext.close(bye: "quit"); app.pi.stop(); app.services.cancelBackgroundWork() }
+        defer { ext.close(bye: "quit"); app.bridge.stop(); app.services.cancelBackgroundWork() }
         try await app.services.executor.start()
         let request = try await command()
         #expect(try await store.outcome(of: request).status == .known(.failed))

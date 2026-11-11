@@ -69,7 +69,7 @@ public enum HistoryEvent: Sendable {
 }
 
 /// 一家 Agent 的哪些会话归 CuePad 管：接入了的是全部（会话目录整个回填，终端里开的会话接上桥）；没接入的只有 CuePad 托管过的
-/// （`CueStore.hostedPiSessionIDs`），终端里开的不回填、不上桥。接入的含义只在这里：索引与各家接入（`AgentRuntime.follow`）都按它。
+/// （`CueStore.hostedSessionIDs`），终端里开的不回填、不上桥。接入的含义只在这里：索引与各家接入（`AgentRuntime.follow`）都按它。
 public enum HistoryScope: Sendable, Equatable {
     case all
     case sessions(Set<String>)

@@ -44,16 +44,16 @@ struct HistoryFailureTests {
         try breakPiSessionTable()
 
         #expect(await services.loadHistoryStart(for: broken) == nil)
-        guard case .piHistoryUnavailable(let message)? = services.startupIssues.first else {
+        guard case .historyUnavailable(let message)? = services.startupIssues.first else {
             Issue.record("读检查点失败没有进入 startupIssues：\(services.startupIssues)")
             return
         }
         #expect(message.contains(broken.path))
 
-        await services.consumePiHistory(events(for: [broken, healthy]), agent: .pi)
+        await services.consumeHistory(events(for: [broken, healthy]), agent: .pi)
 
         #expect(services.startupIssues.count == 2, "broken 不再写回，healthy 仍尝试写入（并同样失败）")
-        guard case .piHistoryUnavailable(let second)? = services.startupIssues.last else { return }
+        guard case .historyUnavailable(let second)? = services.startupIssues.last else { return }
         #expect(second.contains(healthy.path))
     }
 
@@ -66,11 +66,11 @@ struct HistoryFailureTests {
             CREATE TRIGGER rejectBad BEFORE INSERT ON piSessions WHEN NEW.id = 'bad' BEGIN SELECT RAISE(ABORT, 'boom'); END;
             """, nil, nil, nil) == SQLITE_OK else { throw BreakFailed() }
 
-        await services.consumePiHistory(events(for: [bad, good]), agent: .pi)
+        await services.consumeHistory(events(for: [bad, good]), agent: .pi)
 
-        #expect(try await services.store.piSessions().map(\.id) == ["good"])
+        #expect(try await services.store.indexedSessions().map(\.id) == ["good"])
         #expect(services.startupIssues.count == 1)
-        guard case .piHistoryUnavailable(let message)? = services.startupIssues.first else { return }
+        guard case .historyUnavailable(let message)? = services.startupIssues.first else { return }
         #expect(message.contains(bad.path) && !message.contains(good.path))
     }
 }

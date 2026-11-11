@@ -103,7 +103,7 @@ struct SessionTaskTests {
         try await store.bindSession("s1", to: old.id)
         let mark = try await store.lastWrite()
         try await recorder.update(sessionID: "s1", state: .thinking, turnStartedAt: .now)
-        try await store.writePiTranscript(SessionTranscript(sessionID: "s1", messages: [], recap: Recap(lastPrompt: "修登录", lastReply: "修好了", answeredAt: .now)))
+        try await store.writeTranscript(SessionTranscript(sessionID: "s1", messages: [], recap: Recap(lastPrompt: "修登录", lastReply: "修好了", answeredAt: .now)))
         try await recorder.update(sessionID: "s1", state: .settled)
         try await workspace.complete(old.id)
         #expect(try await store.cueChanges(after: CueMarks(mark)).due.filter { $0.kind == .settled }.map(\.task?.id) == [old.id])
@@ -162,7 +162,7 @@ struct SessionTaskTests {
         func ended(_ id: String) async throws -> Bool {
             let end = try #require(try await store.deliveryRequests(toSession: id).last { $0.mode == .known(.end) })
             #expect(try await store.outcome(of: end).status == .known(.succeeded))
-            return try await store.piSessions(sessionIDs: [id])[id]?.state.state == .known(.ended)
+            return try await store.sessionItems(sessionIDs: [id])[id]?.state.state == .known(.ended)
         }
 
         let busy = try #require(await cue.call("task", ["action": "done", "session": "s1"]))
@@ -224,7 +224,7 @@ struct SessionTaskTests {
     }
 
     func reply(_ text: String, to sessionID: String, in workspace: Workspace) async throws {
-        let session = try #require(try await store.piSessions(sessionIDs: [sessionID])[sessionID]?.state)
+        let session = try #require(try await store.sessionItems(sessionIDs: [sessionID])[sessionID]?.state)
         let box = services.settings.replyDraftBinding(for: session.id)
         box.wrappedValue = ComposerDraft(text: text)
         await workspace.speak(to: .session(session, mode: .send), from: box) { $0.text }.value
@@ -240,7 +240,7 @@ struct SessionTaskTests {
     }
 
     func bridge(_ change: SessionChange) async throws {
-        try await services.consumePiChanges(AsyncStream { continuation in
+        try await services.consumeSessionChanges(AsyncStream { continuation in
             continuation.yield(change)
             continuation.finish()
         })

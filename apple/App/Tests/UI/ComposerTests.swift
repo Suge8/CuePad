@@ -12,7 +12,7 @@ struct ComposerTests {
 
     private func session(project: UUID? = nil) async throws -> SessionState {
         try await StateRecorder(store: store, hostID: "mac-a").update(sessionID: "atlas", state: .settled, title: "atlas", projectID: project)
-        return try #require(try await store.allPiSessionStates().first)
+        return try #require(try await store.allSessionStates().first)
     }
 
     @Test func 交给Agent时带上置顶的灵感作附件_正文含它_灵感原地不动_面板里置顶的在最前() async throws {
@@ -68,7 +68,7 @@ struct ComposerTests {
 
         try await workspace.saveReply("没归属的", of: try await {
             try await StateRecorder(store: store, hostID: "mac-a").update(sessionID: "loose", state: .settled, title: "loose")
-            return try #require(try await store.allPiSessionStates().first { $0.sessionID == "loose" })
+            return try #require(try await store.allSessionStates().first { $0.sessionID == "loose" })
         }())
         #expect(try await store.cards(in: Project.defaultID).map(\.body) == ["没归属的"])
         #expect(workspace.notice?.text.visible == "已记到 默认" && workspace.notice?.link == .project(Project.defaultID))

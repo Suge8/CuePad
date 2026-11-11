@@ -36,10 +36,10 @@ struct ConversationRuleTests {
             SessionFile.user("u4", "a3", "第三问", at: 7), SessionFile.assistant("a4", "u4", text: nil, stop: "aborted", at: 8))
 
         let read = try History.index(file: stopped.url, from: nil)
-        try await fixture.store.writePiTranscript(read.transcript)
+        try await fixture.store.writeTranscript(read.transcript)
 
         #expect(read.recap == Recap(lastPrompt: "第二问", lastReply: "汇报", pendingPrompt: nil, answeredAt: SessionFile.date(8)))
-        #expect(try await fixture.store.piMessages(of: "stopped").map { "\($0.role.rawValue):\($0.text)" } == [
+        #expect(try await fixture.store.chatMessages(of: "stopped").map { "\($0.role.rawValue):\($0.text)" } == [
             "user:第一问", "pi:第一答", "user:第二问", "pi:说了半句", "system:已停止", "machine:<some_event>\n子任务完成\n</some_event>", "pi:汇报",
             "user:第三问", "system:已停止",
         ])

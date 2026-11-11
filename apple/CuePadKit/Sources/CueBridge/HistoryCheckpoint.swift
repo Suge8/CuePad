@@ -169,7 +169,7 @@ extension HistoryCheckpoint {
     }
 
     /// 被停下的那条里说了一半的（`said`）也算回答，它就是最后一段。系统行用这一条的 id；说了一半的那段与它同在一条里，
-    /// id 后加 `#said`，同序号时说的话排在系统行前（`CueStore.piMessages`）。
+    /// id 后加 `#said`，同序号时说的话排在系统行前（`CueStore.chatMessages`）。
     mutating func interrupted(_ entry: History.Entry, said: String = "", into transcript: inout History.Transcript) {
         guard let current = round else { return }
         spoke(said, History.Entry(id: entry.id + "#said", seq: entry.seq, at: entry.at))

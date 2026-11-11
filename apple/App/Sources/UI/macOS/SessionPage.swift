@@ -55,7 +55,7 @@ struct SessionPage: View {
     @State private var secondary = false
 
     var body: some View {
-        let slot = services.pi.slot(sessionID: sessionID)
+        let slot = services.bridge.slot(sessionID: sessionID)
         let live = slot?.session
         let project = live.flatMap { workspace.catalog?.project(workspace.sendState.projects[$0.id]) }
         let digest = (stored ?? SessionDigest(session: nil, project: nil, deliveries: [])).live(live, hostID: services.hostID, project: project)
@@ -156,7 +156,7 @@ private struct SessionLink: ViewModifier {
 extension Workspace {
     /// 本机在线的会话换上桥上的实时状态（同步记录按节流写，会落后几秒）；其余原样。
     func withLiveState(_ session: SessionState) -> SessionState {
-        guard let live = services.pi.session(sessionID: session.sessionID) else { return session }
+        guard let live = services.bridge.session(sessionID: session.sessionID) else { return session }
         return .live(live, hostID: services.hostID, projectID: sendState.projects[live.id] ?? session.projectID, recap: session.recap) ?? session
     }
 

@@ -61,7 +61,7 @@ nonisolated struct SessionLaunch: Equatable, Sendable {
     let token: String
 
     func progress(from store: isolated CueStore) throws -> LaunchProgress {
-        let claimed = try store.piSessionPage(SessionQuery(launchToken: token, limit: 1)).items.first
+        let claimed = try store.sessionPage(SessionQuery(launchToken: token, limit: 1)).items.first
         let current = try store.deliveryRequest(request)
         let others = try current?.cardID.map { try store.unresolvedLaunches(for: $0).filter { $0.id != request } } ?? []
         return LaunchProgress(

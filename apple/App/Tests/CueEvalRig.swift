@@ -38,7 +38,7 @@ extension CueHostTests.Rig {
 
     func read(_ text: String, in sessionID: String) async throws {
         try await eventually("「\(text.prefix(20))」读进库") {
-            try await self.store.piMessages(of: sessionID).last { $0.role == .known(.user) }?.text == text
+            try await self.store.chatMessages(of: sessionID).last { $0.role == .known(.user) }?.text == text
         }
     }
 

@@ -19,7 +19,7 @@ struct ConversationSafetyTests {
         try await StateRecorder(store: store, hostID: TestApp.hostID).update(sessionID: session, state: .thinking)
         try await store.bindSession(session, to: task.id)
         let delivery = UUID(), at = Date.now
-        try await store.writePiTranscript(SessionTranscript(
+        try await store.writeTranscript(SessionTranscript(
             sessionID: session,
             messages: [ChatMessage(
                 sessionID: session, entryID: "unknown-origin", seq: 1, role: .user, text: "已经收到，但来源记录尚未到达",
@@ -37,7 +37,7 @@ struct ConversationSafetyTests {
         #expect(result.text.contains("查不到是谁开的"))
         #expect(!result.text.contains("他发起的一轮"))
         #expect(try await store.deliveryRequests().isEmpty)
-        #expect(try await store.piMessages(of: session).map(\.text) == ["已经收到，但来源记录尚未到达"])
+        #expect(try await store.chatMessages(of: session).map(\.text) == ["已经收到，但来源记录尚未到达"])
     }
 }
 #endif

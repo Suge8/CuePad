@@ -45,7 +45,7 @@ extension CueStore {
   }
 
   /// 这台 Mac 的 App 启动：打开资料库之后、画第一帧之前，在资料库的队列上当场写完（调用方等着，那时还没有别的写在排队）——
-  /// 先对账这台 Mac 上次留下的会话记录（`reconcilePiStates`，`running` 判断记下的进程是不是还是那一个），再写下在线。
+  /// 先对账这台 Mac 上次留下的会话记录（`reconcileSessionStates`，`running` 判断记下的进程是不是还是那一个），再写下在线。
   /// 退出时写下的是离线：不先写在线，第一帧读到的本机会话与 Cue 都是"状态未确认"，要等启动后的续期才变；在线又必须在对账之后，
   /// 不然进程已经没了的记录会被当成确认的在跑。返回对账后可沿用的状态与计时（`Bridge.carryOver`）。
   public nonisolated func launchMac(
@@ -54,7 +54,7 @@ extension CueStore {
     let now = timing.now()
     return try queue!.sync {
       try assumeIsolated { store in
-        let open = try store.reconcilePiStates(host: host, bootID: bootID, running: running, at: now)
+        let open = try store.reconcileSessionStates(host: host, bootID: bootID, running: running, at: now)
         try store.recordMacPresence(host: host, bootID: bootID) { true }
         return open
       }

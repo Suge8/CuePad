@@ -76,7 +76,7 @@ struct ReceiptTests {
         let recorder = StateRecorder(store: store, hostID: "mac-b")
         try await recorder.update(sessionID: "atlas", state: .thinking, title: "atlas")
         try await recorder.update(sessionID: "atlas", state: .settled)
-        return try #require(try await store.allPiSessionStates().first { $0.sessionID == "atlas" })
+        return try #require(try await store.allSessionStates().first { $0.sessionID == "atlas" })
     }
 
     private func enableCue(in store: CueStore) async throws {

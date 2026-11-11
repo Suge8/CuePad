@@ -47,7 +47,7 @@ extension Workspace {
     func pushName(of leaf: UUID) async throws {
         let store = services.store
         guard let card = try await store.card(leaf), card.isTask, !card.heading.isEmpty, let sessionID = card.piSessionID,
-            let session = try await store.piSessions(sessionIDs: [sessionID])[sessionID]
+            let session = try await store.sessionItems(sessionIDs: [sessionID])[sessionID]
         else { return }
         let name = CueName.clipped(card.heading)
         guard MacDelivery.canRename(session.state), name != session.shownTitle(at: services.speech) else { return }

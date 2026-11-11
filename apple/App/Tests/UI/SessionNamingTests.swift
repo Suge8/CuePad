@@ -46,14 +46,14 @@ struct SessionNamingTests {
     }
 
     private func live(_ link: NamingLink, until stop: () async throws -> Void) async throws {
-        let events = app.pi.changes()
-        let consume = Task { try await app.services.consumePiChanges(events) }
-        link.bridge = app.pi
+        let events = app.bridge.changes()
+        let consume = Task { try await app.services.consumeSessionChanges(events) }
+        link.bridge = app.bridge
         var session = Session(
             id: "p1.1", sessionID: "p1", agent: .pi, sessionFile: nil, pid: 1, cwd: app.directory, terminal: TerminalIdentity(),
             state: .settled, stateSince: .now)
         session.firstMessage = Self.first
-        app.pi.attach(session, via: link)
+        app.bridge.attach(session, via: link)
         try await stop()
         consume.cancel()
         _ = await consume.result
@@ -61,13 +61,13 @@ struct SessionNamingTests {
     }
 
     private func shown() async throws -> String? {
-        try await store.piSessions(sessionIDs: ["p1"])["p1"]?.name(at: app.services.speech)
+        try await store.sessionItems(sessionIDs: ["p1"])["p1"]?.name(at: app.services.speech)
     }
 
     @Test func 会话有了第一句话_起好的短名成了会话名() async throws {
         let link = NamingLink()
         try await live(link) {
-            _ = try await eventually(store, { try $0.piSessions(sessionIDs: ["p1"])["p1"]?.state.title }) { $0 == Self.suggested }
+            _ = try await eventually(store, { try $0.sessionItems(sessionIDs: ["p1"])["p1"]?.state.title }) { $0 == Self.suggested }
             #expect(link.asked == [Self.first])
             #expect(try await shown() == Self.suggested)
         }
@@ -78,13 +78,13 @@ struct SessionNamingTests {
         link.held = true
         try await live(link) {
             try await eventually("开始起名") { !link.asked.isEmpty }
-            _ = try await eventually(store, { try $0.piSessions(sessionIDs: ["p1"])["p1"] != nil }) { $0 }
+            _ = try await eventually(store, { try $0.sessionItems(sessionIDs: ["p1"])["p1"] != nil }) { $0 }
             let task = try await Workspace(services: app.services).createTask("登录白屏", in: Project.defaultID)
             try await store.bindSession("p1", to: task.id)
             link.release()
             await quietPeriod(.milliseconds(300))
             #expect(!link.renamed.contains(Self.suggested), "写回前再核对一遍：任务标题为准")
-            #expect(try await store.piSessions(sessionIDs: ["p1"])["p1"]?.state.title != Self.suggested)
+            #expect(try await store.sessionItems(sessionIDs: ["p1"])["p1"]?.state.title != Self.suggested)
             #expect(try await shown() == "登录白屏")
         }
     }
@@ -94,12 +94,12 @@ struct SessionNamingTests {
         link.held = true
         try await live(link) {
             try await eventually("开始起名") { !link.asked.isEmpty }
-            let state = try await eventually(store, { try $0.piSessions(sessionIDs: ["p1"])["p1"]?.state }) { $0 != nil }
+            let state = try await eventually(store, { try $0.sessionItems(sessionIDs: ["p1"])["p1"]?.state }) { $0 != nil }
             try await app.services.rename(try #require(state), to: "我起的名字")
             link.release()
             await quietPeriod(.milliseconds(300))
             #expect(!link.renamed.contains(Self.suggested), "发过改名就不写起好的名字")
-            #expect(try await store.piSessions(sessionIDs: ["p1"])["p1"]?.state.title != Self.suggested)
+            #expect(try await store.sessionItems(sessionIDs: ["p1"])["p1"]?.state.title != Self.suggested)
         }
     }
 
@@ -108,11 +108,11 @@ struct SessionNamingTests {
         link.able = false
         try await live(link) {
             let task = try await Workspace(services: app.services).createTask("登录白屏", in: Project.defaultID)
-            _ = try await eventually(store, { try $0.piSessions(sessionIDs: ["p1"])["p1"] != nil }) { $0 }
+            _ = try await eventually(store, { try $0.sessionItems(sessionIDs: ["p1"])["p1"] != nil }) { $0 }
             try await store.bindSession("p1", to: task.id)
             link.able = true
-            app.pi.update("p1.1") { $0.detail = "又说了一句" }
-            _ = try await eventually(store, { try $0.piSessions(sessionIDs: ["p1"])["p1"]?.state.detail }) { $0 == "又说了一句" }
+            app.bridge.update("p1.1") { $0.detail = "又说了一句" }
+            _ = try await eventually(store, { try $0.sessionItems(sessionIDs: ["p1"])["p1"]?.state.detail }) { $0 == "又说了一句" }
             await quietPeriod(.milliseconds(300))
             #expect(link.asked.isEmpty)
             #expect(try await shown() == "登录白屏")
@@ -123,11 +123,11 @@ struct SessionNamingTests {
         let link = NamingLink()
         link.able = false
         try await live(link) {
-            _ = try await eventually(store, { try $0.piSessions(sessionIDs: ["p1"])["p1"] != nil }) { $0 }
+            _ = try await eventually(store, { try $0.sessionItems(sessionIDs: ["p1"])["p1"] != nil }) { $0 }
             #expect(link.asked.isEmpty)
             link.able = true
-            app.pi.update("p1.1") { $0.detail = "换上了新扩展" }
-            _ = try await eventually(store, { try $0.piSessions(sessionIDs: ["p1"])["p1"]?.state.title }) { $0 == Self.suggested }
+            app.bridge.update("p1.1") { $0.detail = "换上了新扩展" }
+            _ = try await eventually(store, { try $0.sessionItems(sessionIDs: ["p1"])["p1"]?.state.title }) { $0 == Self.suggested }
             #expect(link.asked == [Self.first])
         }
     }
@@ -137,8 +137,8 @@ struct SessionNamingTests {
         link.reply = .failure(BridgeError.rejected("failed: timeout"))
         try await live(link) {
             try await eventually("起过一次") { link.asked.count == 1 }
-            app.pi.update("p1.1") { $0.detail = "又说了一句" }
-            _ = try await eventually(store, { try $0.piSessions(sessionIDs: ["p1"])["p1"]?.state.detail }) { $0 == "又说了一句" }
+            app.bridge.update("p1.1") { $0.detail = "又说了一句" }
+            _ = try await eventually(store, { try $0.sessionItems(sessionIDs: ["p1"])["p1"]?.state.detail }) { $0 == "又说了一句" }
             await quietPeriod(.milliseconds(300))
             #expect(link.asked.count == 1)
             #expect(try await shown() == Self.first)

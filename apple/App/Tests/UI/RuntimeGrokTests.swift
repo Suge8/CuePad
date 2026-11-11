@@ -53,24 +53,24 @@ struct RuntimeGrokTests {
             ["session_id": "live", "pid": current.pid, "pid_start": try #require(SessionProcess.running(pid: current.pid)).startedAt, "cwd": app.directory.path],
         ]
         try JSONSerialization.data(withJSONObject: entries).write(to: home.appending(path: "active_sessions.json"))
-        let events = app.pi.changes()
-        let consume = Task { try await app.services.consumePiChanges(events) }
+        let events = app.bridge.changes()
+        let consume = Task { try await app.services.consumeSessionChanges(events) }
         defer { await consume.stop() }
-        let runtime = GrokRuntime(bridge: app.pi, paths: paths, files: store.files, grok: { executable })
+        let runtime = GrokRuntime(bridge: app.bridge, paths: paths, files: store.files, grok: { executable })
         defer { _ = runtime.stop() }
         try runtime.start()
         runtime.follow(.sessions(["stale", "live"]))
-        _ = try await eventually(store, { try $0.piSessions(sessionIDs: ["live"])["live"]?.state }) { $0?.runtimeState.isWorking == true }
-        #expect(app.pi.sessions.map(\.sessionID) == ["live"])
-        let stale = try #require(try await store.piSessions(sessionIDs: ["stale"])["stale"]?.state)
+        _ = try await eventually(store, { try $0.sessionItems(sessionIDs: ["live"])["live"]?.state }) { $0?.runtimeState.isWorking == true }
+        #expect(app.bridge.sessions.map(\.sessionID) == ["live"])
+        let stale = try #require(try await store.sessionItems(sessionIDs: ["stale"])["stale"]?.state)
         #expect(stale.state == .known(.compacting) && stale.bootID == "old-boot")
         #expect(try await !store.runtimeIsConfirmed(stale))
         #expect(workspace.shown(stale, delivery: nil).status == .unknown())
         let summary = CueNow(try await CueDigest.read(from: store), at: .always(), local: .init(waiting: nil, here: nil))
         #expect(summary.tally.moving == 1)
-        let live = try #require(app.pi.session(sessionID: "live"))
+        let live = try #require(app.bridge.session(sessionID: "live"))
         #expect(live.capabilities == [])
-        await #expect(throws: BridgeError.self) { try await app.pi.send(SessionMessage(text: "不应交出"), to: live.id) }
+        await #expect(throws: BridgeError.self) { try await app.bridge.send(SessionMessage(text: "不应交出"), to: live.id) }
         func append(_ kind: String, session: String, file: URL) throws {
             let update: [String: Any] = kind == "user_message_chunk"
                 ? ["sessionUpdate": kind, "content": ["type": "text", "text": "现在继续"]] : ["sessionUpdate": kind]
@@ -84,15 +84,15 @@ struct RuntimeGrokTests {
         }
         try append("turn_completed", session: "stale", file: staleFile)
         try append("user_message_chunk", session: "stale", file: staleFile)
-        _ = try await eventually(store, { try $0.piSessions(sessionIDs: ["stale"])["stale"]?.state }) { $0?.runtimeState.isWorking == true }
-        #expect(app.pi.session(sessionID: "stale")?.pid == oldRound.pid)
+        _ = try await eventually(store, { try $0.sessionItems(sessionIDs: ["stale"])["stale"]?.state }) { $0?.runtimeState.isWorking == true }
+        #expect(app.bridge.session(sessionID: "stale")?.pid == oldRound.pid)
         try append("turn_completed", session: "live", file: liveFile)
         runtime.read(try History.index(file: liveFile, agent: .grok, from: nil, files: store.files))
-        _ = try await eventually(store, { try $0.piSessions(sessionIDs: ["live"])["live"]?.state }) { $0?.runtimeState == .known(.settled) }
+        _ = try await eventually(store, { try $0.sessionItems(sessionIDs: ["live"])["live"]?.state }) { $0?.runtimeState == .known(.settled) }
         let retained = entries.filter { $0["session_id"] as? String != "live" }
         try JSONSerialization.data(withJSONObject: retained).write(to: home.appending(path: "active_sessions.json"), options: .atomic)
-        _ = try await eventually(store, { try $0.piSessions(sessionIDs: ["live"])["live"]?.state }) { $0?.state == .known(.ended) }
-        #expect(app.pi.session(sessionID: "live") == nil)
+        _ = try await eventually(store, { try $0.sessionItems(sessionIDs: ["live"])["live"]?.state }) { $0?.state == .known(.ended) }
+        #expect(app.bridge.session(sessionID: "live") == nil)
         consume.cancel()
         _ = await consume.result
         await runtime.stop()()

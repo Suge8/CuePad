@@ -25,7 +25,7 @@ extension Workspace {
 
     func stopVoiceExecution(_ sessionID: String) async throws -> DeliveryRequest {
         guard let voice else { throw CueStoreError.notFound }
-        guard let turn = services.pi.session(sessionID: sessionID)?.turnStartedAt else { throw CueStoreError.cannotStop(sessionID) }
+        guard let turn = services.bridge.session(sessionID: sessionID)?.turnStartedAt else { throw CueStoreError.cannotStop(sessionID) }
         let ids = voice.requests.compactMap(\.message)
         let target = try await services.store.voiceExecutionTarget(sessionID, requests: ids, turnStartedAt: turn)
         let request = try await services.store.stopVoiceExecution(target, requests: ids)

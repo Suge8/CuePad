@@ -25,7 +25,7 @@ struct SpeakTests {
 
     private func session(host: String = "mac-b") async throws -> SessionState {
         try await StateRecorder(store: store, hostID: host).update(sessionID: "atlas", state: .settled, title: "atlas")
-        return try #require(try await store.allPiSessionStates().first)
+        return try #require(try await store.allSessionStates().first)
     }
 
     private func youSaid() async throws -> [CueMessage] {

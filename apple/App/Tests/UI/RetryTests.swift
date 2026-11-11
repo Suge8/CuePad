@@ -15,7 +15,7 @@ struct RetryTests {
         ext.setState(["kind": "error", "error": "fetch failed"])
         try await StateRecorder(store: store, hostID: TestApp.hostID).update(
             sessionID: "atlas", state: .error, detail: "fetch failed", failure: .network, title: "atlas", directory: "/work/atlas")
-        let session = try #require(try await store.allPiSessionStates().first)
+        let session = try #require(try await store.allSessionStates().first)
         #expect(session.canRetry)
 
         let workspace = Workspace(services: app.services)
@@ -23,7 +23,7 @@ struct RetryTests {
         workspace.retry(session)
         let request = try #require(try await eventually(store, { try $0.deliveryRequests(toSession: "atlas").last }) { $0 != nil })
         #expect(request.mode == .known(.retry) && request.hostID == TestApp.hostID)
-        let item = try #require(try await store.piSessionPage(SessionQuery()).items.first)
+        let item = try #require(try await store.sessionPage(SessionQuery()).items.first)
         #expect(workspace.shown(item).status == .delivery(.inTransit(.sending)))
 
         try await app.services.executor.start()

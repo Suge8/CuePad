@@ -72,7 +72,7 @@ extension CueTools {
   private func config(_ args: Args, of session: String, host: String) async throws -> SessionConfig? {
     let effort = try Self.effort(args)
     guard let raw = args.string("model") else { return effort.map { SessionConfig(thinking: $0) } }
-    let agent = try await store.piSessions(sessionIDs: [session])[session]?.state.agent.known
+    let agent = try await store.sessionItems(sessionIDs: [session])[session]?.state.agent.known
     return SessionConfig(model: try await store.cueModelKey(raw, of: agent ?? .pi, host: host, session: session), thinking: effort)
   }
 }

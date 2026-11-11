@@ -24,7 +24,7 @@ extension DebugScene {
         }
         let done = turns.last { $0.pi != nil }
         let pending = turns.last.flatMap { $0.pi == nil ? $0 : nil }
-        try await store.writePiTranscript(SessionTranscript(
+        try await store.writeTranscript(SessionTranscript(
             sessionID: sessionID, messages: messages,
             recap: Recap(lastPrompt: done?.you, lastReply: done?.pi, pendingPrompt: pending?.you, pendingTools: pending?.tools)))
     }
@@ -203,7 +203,7 @@ extension DebugScene {
 
     static func relayLaterTurn(_ store: CueStore) async throws {
         let now = Date.now
-        try await store.writePiTranscript(SessionTranscript(
+        try await store.writeTranscript(SessionTranscript(
             sessionID: "relay",
             messages: [
                 ChatMessage(sessionID: "relay", entryID: "u2", seq: 4, role: .user, text: String(localized: "迁移重跑了吗", table: "Demo"), at: now),

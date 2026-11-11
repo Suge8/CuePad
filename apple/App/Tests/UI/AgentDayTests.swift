@@ -16,7 +16,7 @@ struct AgentDayTests {
     var workspace: Workspace { Workspace(services: app.services) }
 
     private func item(_ sessionID: String) async throws -> SessionListItem {
-        try #require(try await store.piSessionPage(SessionQuery(limit: .max)).items.first { $0.state.sessionID == sessionID })
+        try #require(try await store.sessionPage(SessionQuery(limit: .max)).items.first { $0.state.sessionID == sessionID })
     }
 
     private func label(_ sessionID: String) async throws -> String { workspace.shown(try await item(sessionID)).label }
@@ -57,7 +57,7 @@ struct AgentDayTests {
         try await recorder.update(sessionID: "atlas", state: .settled, title: "atlas")
         #expect(try await label("atlas") == "新开的会话")  // 终端里刚开、还没有任何一轮：不是"该你了"
 
-        try await store.writePiTranscript(SessionTranscript(sessionID: "atlas", messages: [], recap: Recap(lastPrompt: "跑一下测试", lastReply: "全部通过。共 214 个。")))
+        try await store.writeTranscript(SessionTranscript(sessionID: "atlas", messages: [], recap: Recap(lastPrompt: "跑一下测试", lastReply: "全部通过。共 214 个。")))
         let done = try await item("atlas")
         #expect(workspace.shown(done).label == "有新回复")
         settings.markSeen(done.state, at: .now.addingTimeInterval(1))
@@ -85,12 +85,12 @@ struct AgentDayTests {
         let ext = try await app.host.connect("atlas", cwd: "/work/atlas", busy: true)
         try await (app.runtimeRecorder(on: TestApp.hostID)).update(sessionID: "atlas", state: .thinking, title: "atlas")
 
-        app.services.pi.setDraft(ext.id, LiveDraft(text: "先看", since: .now))
+        app.services.bridge.setDraft(ext.id, LiveDraft(text: "先看", since: .now))
         let row = try await item("atlas")
         #expect(workspace.shown(row).label == "输出中")
         #expect(workspace.shownInHeader(row.state, delivery: row.delivery).label == "输出中")
 
-        app.services.pi.setDraft(ext.id, nil)
+        app.services.bridge.setDraft(ext.id, nil)
         #expect(workspace.shown(row).label == "思考中")
     }
     #endif

@@ -33,7 +33,7 @@ extension DebugScene {
             try await recorder.update(
                 sessionID: id, state: .settled, title: title, directory: "CuePad",
                 times: SessionTimes(stateSince: .now.addingTimeInterval(-minutes * 60), busySince: nil), agent: agent)
-            try await store.writePiTranscript(SessionTranscript(sessionID: id, messages: [], recap: Recap(lastPrompt: said, lastReply: reply)))
+            try await store.writeTranscript(SessionTranscript(sessionID: id, messages: [], recap: Recap(lastPrompt: said, lastReply: reply)))
         }
         try await settle("header", "header", .codex, minutes: 5, said: String(localized: "名牌两行居中", table: "Demo"), reply: String(localized: "名牌两行已居中，展开改成了 0.25 秒，手感你再试试？", table: "Demo"))
         let project = try await store.projects().first { $0.name == "CuePad" }?.id ?? Project.defaultID

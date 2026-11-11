@@ -54,7 +54,7 @@ extension CueEvalTests {
                     .update(sessionID: id, state: .delegating, title: Self.title, turnStartedAt: due - 1900, subagents: [e2e])
                 let prompt = ChatMessage(sessionID: id, entryID: "u1", seq: 1, role: .user, text: first, at: due - 3600, deliveryID: delivery)
                 let reply = ChatMessage(sessionID: id, entryID: "a1", seq: 2, role: .pi, text: dispatched, at: due - 1800)
-                try await rig.store.writePiTranscript(SessionTranscript(
+                try await rig.store.writeTranscript(SessionTranscript(
                     sessionID: id, messages: [prompt, reply], recap: Recap(lastPrompt: oneLine(first), lastReply: dispatched, answeredAt: due - 1800)))
             }
             let toIt = eval.calls("task", "say").filter { !$0.call.failed && CueEval.refers($0.args, to: id, title: Self.title, cards: [task]) }
@@ -98,7 +98,7 @@ extension CueEvalTests {
             try await rig.store.setStatus(work.task.id, .done)
             let initialEnd = try #require(try await rig.store.deliveryRequests(toSession: work.id).first { $0.mode == .known(.end) })
             #expect(try await rig.store.outcome(of: initialEnd).status == .known(.succeeded))
-            try await eventually("第一次完成已结束会话") { rig.services.pi.session(id: work.session.id) == nil }
+            try await eventually("第一次完成已结束会话") { rig.services.bridge.session(id: work.session.id) == nil }
             let asked = "复查一遍：限流有没有绕过的办法？"
             try work.file.reply(Self.doneReply, at: .now - 600)
             let request = try await rig.store.requestDelivery(

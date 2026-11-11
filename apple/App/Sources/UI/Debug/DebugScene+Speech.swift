@@ -22,7 +22,7 @@ extension DebugScene {
         let box: Binding<ComposerDraft>, listener: Listener
         if scene == "session" {
             let title = args.session ?? "homepage"
-            guard let session = try await services.store.piSessionPage(SessionQuery(text: title)).items.first(where: { $0.state.title == title })?.state
+            guard let session = try await services.store.sessionPage(SessionQuery(text: title)).items.first(where: { $0.state.title == title })?.state
             else { return }
             box = services.settings.replyDraftBinding(for: session.id)
             listener = .session(session, mode: .send)

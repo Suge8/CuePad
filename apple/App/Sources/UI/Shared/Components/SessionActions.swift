@@ -22,7 +22,7 @@ struct SessionActions: View {
         }
         if let rename = Self.rename(session, task: task, adopts: board != nil, in: workspace) { RowActionButtons(actions: [rename]) }
         #if os(macOS)
-        if let bridge = workspace.services.pi.session(sessionID: session.sessionID), bridge.canJump {
+        if let bridge = workspace.services.bridge.session(sessionID: session.sessionID), bridge.canJump {
             Button("跳到所在终端", icon: .terminal) { workspace.jumpToTerminal(bridge.id) }
         }
         #endif
@@ -38,7 +38,7 @@ struct SessionActions: View {
         #if os(macOS)
         return RowAction("重命名…", icon: .rename) { workspace.sessionAsk = ask }
         #else
-        return RowAction("重命名", icon: .rename, tone: .quiet, enabled: workspace.services.reachesPiHost) { workspace.sessionAsk = ask }
+        return RowAction("重命名", icon: .rename, tone: .quiet, enabled: workspace.services.reachesHost) { workspace.sessionAsk = ask }
         #endif
     }
 

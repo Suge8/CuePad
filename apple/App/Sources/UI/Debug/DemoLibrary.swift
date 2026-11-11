@@ -43,7 +43,7 @@ enum DemoLibrary {
         try await seedQuotas(store)
         let home = demoHome
         for (index, item) in [("cuepad", String(localized: "规划投送队列的重试边界", table: "Demo")), ("atlas", String(localized: "多 Agent 调度压测", table: "Demo")), ("homepage", String(localized: "首页改版文案", table: "Demo"))].enumerated() {
-            try await store.upsertPiSession(IndexedSession(
+            try await store.upsertSession(IndexedSession(
                 id: "demo-\(index)", path: "/tmp/demo-\(index).jsonl", cwd: "\(home)Project/\(item.0)",
                 title: item.1, lastActivityAt: .now.addingTimeInterval(-Double(index + 1) * 5400)), host: "demo-mac")
         }

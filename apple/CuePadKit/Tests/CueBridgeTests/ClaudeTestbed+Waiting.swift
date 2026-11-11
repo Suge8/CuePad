@@ -81,7 +81,7 @@ extension ClaudeTestbed {
         let update = try transcript(file)
         let session = IndexedSession(
             id: try #require(update.checkpoint.sessionID), path: update.file.path, cwd: work.path, lastActivityAt: .now, agent: .claudeCode)
-        try await store.upsertPiSessions([SessionUpsert(session: session, checkpoint: try JSONEncoder().encode(update.checkpoint), transcript: nil)], host: "mac")
+        try await store.upsertSessions([SessionUpsert(session: session, checkpoint: try JSONEncoder().encode(update.checkpoint), transcript: nil)], host: "mac")
     }
 
     /// 回答写进会话文件可能晚于这一轮歇下，等它落盘。

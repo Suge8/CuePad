@@ -9,7 +9,7 @@ struct PreviewReplyTests {
         let app = TestApp()
         let store = app.services.store
         try await StateRecorder(store: store, hostID: "mac").update(sessionID: "s", state: .settled, title: "s")
-        let session = try #require(try await store.piSessionPage(.live).items.first?.state)
+        let session = try #require(try await store.sessionPage(.live).items.first?.state)
         let folder = FileManager.default.temporaryDirectory.appending(path: "preview-reply-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let files = ["login.diff", "review.md"].map { folder.appending(path: $0) }
@@ -36,7 +36,7 @@ struct PreviewReplyTests {
             预览「改动：错误提示」和预览「评审结论」：按这个改
             """)
 
-        try await store.prunePiMessages(olderThan: 0, now: .now.addingTimeInterval(60))
+        try await store.pruneMessages(olderThan: 0, now: .now.addingTimeInterval(60))
         let expired = try await SessionDigest.read(session.id, sessionID: session.sessionID, from: store)
         #expect(expired.previews.isEmpty && draft.notes.allSatisfy { $0.quoted(in: expired.previews) == nil })
         #expect(draft.notes.compactMap(\.kind) == [.diff, .markdown])

@@ -37,7 +37,7 @@ extension TaskFlowTests {
         try await store.deleteDelivery(launch.id)
         try await workspace.complete(task.id)
         let end = try #require(try await store.deliveryRequests().first { $0.mode == .known(.end) })
-        let link = InterleavingEndLink(bridge: rig.pi) { () async throws -> Void in
+        let link = InterleavingEndLink(bridge: rig.bridge) { () async throws -> Void in
             #expect(try await self.store.deliveryRequest(end.id)?.status == .known(.executing))
             var refused = false
             do { try await self.store.bindSession("interleaved", to: borrower.id) }
@@ -52,8 +52,8 @@ extension TaskFlowTests {
             id: "interleaved.1", sessionID: "interleaved", agent: .pi, sessionFile: nil, pid: 1, cwd: rig.directory,
             terminal: TerminalIdentity(), state: .thinking, stateSince: .now)
         session.hosted = true
-        rig.pi.attach(session, via: link)
-        defer { rig.pi.stop(); services.cancelBackgroundWork() }
+        rig.bridge.attach(session, via: link)
+        defer { rig.bridge.stop(); services.cancelBackgroundWork() }
         try await services.executor.start()
         #expect(try await store.outcome(of: end).status == .known(.succeeded))
         #expect(link.handed)

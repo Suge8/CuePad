@@ -49,7 +49,7 @@ public struct SessionMirror {
     private func record(_ session: Session) async throws -> String? {
         guard !session.upgrading else { return nil }
         let title = session.name != nil || session.firstMessage != nil
-            ? session.displayName : try await store.piSession(session.sessionID)?.title ?? session.displayName
+            ? session.displayName : try await store.indexedSession(session.sessionID)?.title ?? session.displayName
         let snapshot = session.snapshot(title: title, projectID: try await store.project(containing: session.cwd)?.id)
         return try await recorder.update(snapshot) == nil ? nil : session.sessionID
     }

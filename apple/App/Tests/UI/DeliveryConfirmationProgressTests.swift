@@ -15,7 +15,7 @@ extension DeliveryConfirmationTests {
             if command["t"] as? String == "end" { ext?.closeAfterReply(bye: "quit") }
             return ["ok": true]
         }
-        defer { ext.close(bye: "quit"); app.pi.stop(); app.services.cancelBackgroundWork() }
+        defer { ext.close(bye: "quit"); app.bridge.stop(); app.services.cancelBackgroundWork() }
         try await app.connect(.pi)
         app.services.start()
         let request = try await say("真实消息比ACK先回来", to: target, in: app)
@@ -31,7 +31,7 @@ extension DeliveryConfirmationTests {
         #expect(try await store.outcome(of: end).status == .known(.succeeded))
         let final = try #require(try await store.deliveryRequest(request.id))
         #expect(final.status == .known(.succeeded) && final.deadlineAt == positive.deadlineAt)
-        #expect(try await store.piMessages(of: target.sessionID).map(\.text) == ["真实消息比ACK先回来"])
+        #expect(try await store.chatMessages(of: target.sessionID).map(\.text) == ["真实消息比ACK先回来"])
         #expect(ext.messages.count == 1)
         await app.services.executor.beginStop()()
     }
@@ -40,7 +40,7 @@ extension DeliveryConfirmationTests {
         let clock = ManualTiming()
         let app = TestApp(timing: clock.timing)
         let (target, ext, _) = try await session(app)
-        defer { ext.close(bye: "quit"); app.pi.stop(); app.services.cancelBackgroundWork() }
+        defer { ext.close(bye: "quit"); app.bridge.stop(); app.services.cancelBackgroundWork() }
         let request = try await say("截止时间不随版本续长", to: target, in: app)
         try await app.services.executor.start()
         let confirming = try await settledDispatch(request, in: app)
@@ -66,7 +66,7 @@ extension DeliveryConfirmationTests {
         defer { app.services.cancelBackgroundWork() }
         let recorder = try await app.runtimeRecorder(on: TestApp.hostID)
         try await recorder.update(sessionID: "atlas", state: .error, detail: "network", failure: .network)
-        let target = try #require(try await store.allPiSessionStates().first)
+        let target = try #require(try await store.allSessionStates().first)
         let workspace = Workspace(services: app.services)
         if mode == .retry { await workspace.retry(target).value } else { await workspace.end(target) }
         let first = try #require(try await store.deliveryRequests().first)
@@ -90,7 +90,7 @@ extension DeliveryConfirmationTests {
         let app = TestApp(timing: clock.timing)
         defer {
             for ext in app.host.extensions.values { ext.close(bye: "quit") }
-            app.pi.stop(); app.services.cancelBackgroundWork()
+            app.bridge.stop(); app.services.cancelBackgroundWork()
         }
         try await app.offersPi()
         let gate = AsyncStream<Void>.makeStream()

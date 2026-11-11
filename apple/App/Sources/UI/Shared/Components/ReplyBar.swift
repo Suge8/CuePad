@@ -54,7 +54,7 @@ struct ReplyBar: View {
 
     private var accepts: ComposerKinds { answering == nil ? .reply : [] }
     private var commands: [SlashCommand] { answering == nil ? session.usableCommands(in: catalog) : [] }
-    private var reachable: Bool { services.reachesPiHost }
+    private var reachable: Bool { services.reachesHost }
     private var hasDraft: Bool { !draft.isEmpty(accepting: accepts) }
     private var canSend: Bool { hasDraft && speakBlocked == nil }
     /// 发送钮的说明写全文，占位写短的（手机一行放不下全文）；作答不是说话，不受它管。

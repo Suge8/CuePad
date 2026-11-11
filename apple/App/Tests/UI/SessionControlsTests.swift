@@ -16,7 +16,7 @@ struct SessionControlsTests {
         try await recorder.update(
             sessionID: "atlas", state: .settled, title: "atlas", directory: "/w/atlas",
             modelState: ModelState(model: opus, thinking: .known(.low), models: [opus, luna]))
-        return try #require(try await store.piSessionPage(SessionQuery()).items.first?.state)
+        return try #require(try await store.sessionPage(SessionQuery()).items.first?.state)
     }
 
     private func shown(_ session: SessionState) async throws -> ConfigShown {
@@ -35,7 +35,7 @@ struct SessionControlsTests {
         let question = Question(promptID: "p-1", kind: .select, text: "喝什么？", options: ["茶", "咖啡"], allowsOther: allowsOther)
         let recorder = try await app.runtimeRecorder(on: "mac-a")
         try await recorder.update(sessionID: "atlas", state: .waitingForUser, title: "atlas", question: question)
-        let session = try #require(try await store.allPiSessionStates().first)
+        let session = try #require(try await store.allSessionStates().first)
 
         #expect(MacDelivery.reply(to: session) == (allowsOther ? .answer(question) : .answerAbove))
     }
@@ -51,7 +51,7 @@ struct SessionControlsTests {
         #expect(try await shown(atlas).failure == nil)
 
         try await StateRecorder(store: store, hostID: "mac-a").end(sessionID: "atlas")
-        let ended = try #require(try await store.allPiSessionStates().first)
+        let ended = try #require(try await store.allSessionStates().first)
         #expect(ended.state == .known(.ended))
         _ = try await app.services.configure(SessionConfig(model: luna.key), for: ended)
         #expect(try await shown(ended).model == luna)

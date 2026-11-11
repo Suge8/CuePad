@@ -296,8 +296,8 @@ public func eventually<T: Sendable & Equatable>(
 struct RawError: Error { let message: String }
 
 extension CueStore {
-  /// 全部会话记录（测试核对用；界面按范围与页读，见 `piSessionPage`）。
-  public func allPiSessionStates() throws -> [SessionState] {
-    try piSessionPage(SessionQuery(limit: .max)).items.map(\.state)
+  /// 全部会话记录（测试核对用；界面按范围与页读，见 `sessionPage`）。
+  public func allSessionStates() throws -> [SessionState] {
+    try sessionPage(SessionQuery(limit: .max)).items.map(\.state)
   }
 }

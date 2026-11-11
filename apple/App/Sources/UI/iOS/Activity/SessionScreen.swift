@@ -125,7 +125,7 @@ private struct CountsAsViewer: ViewModifier {
     private func count(_ on: Bool) {
         guard on != counted else { return }
         counted = on
-        services.piViewers += on ? 1 : -1
+        services.sessionViewers += on ? 1 : -1
     }
 }
 #endif

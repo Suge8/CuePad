@@ -13,14 +13,14 @@ extension MacSyncTests {
         let cloud = SimulatedCloud([CKRecord.peerFloor(CueStore.peerFloor)])
         let mac = TestApp(sync: .built { CloudSync(store: $0) { cloud } })
         let phone = TestApp(sync: .built { CloudSync(store: $0) { cloud } }, host: "phone")
-        let changes = mac.pi.changes()
-        try mac.pi.start()
+        let changes = mac.bridge.changes()
+        try mac.bridge.start()
         _ = try await mac.runtimeRecorder(on: TestApp.hostID)
-        let recording = Task { try await mac.services.consumePiChanges(changes) }
+        let recording = Task { try await mac.services.consumeSessionChanges(changes) }
         for side in [mac, phone] { side.services.startSync() }
         defer {
             recording.cancel()
-            mac.pi.stop()
+            mac.bridge.stop()
             for side in [mac, phone] { side.services.cancelBackgroundWork() }
         }
         try await mac.services.executor.start()
@@ -33,10 +33,10 @@ extension MacSyncTests {
             return ["ok": true]
         }
         let stateID = SessionState.recordID(sessionID: "fast")
-        _ = try await eventually(mac.services.store, { try $0.allPiSessionStates().first }, until: { $0?.sessionID == "fast" })
+        _ = try await eventually(mac.services.store, { try $0.allSessionStates().first }, until: { $0?.sessionID == "fast" })
         await mac.services.upload(stateID)
         await phone.services.syncNow()
-        let session = try #require(try await eventually(phone.services.store, { try $0.allPiSessionStates().first }, until: { $0?.sessionID == "fast" }))
+        let session = try #require(try await eventually(phone.services.store, { try $0.allSessionStates().first }, until: { $0?.sessionID == "fast" }))
 
         let request = try await phone.services.configure(SessionConfig(fast: true), for: session)
         await phone.services.upload(request.id)
@@ -44,12 +44,12 @@ extension MacSyncTests {
         let result = try #require(try await eventually(mac.services.store, { try $0.deliveryRequest(request.id) }, until: { $0?.isOpen == false }))
         #expect(result.status == .known(.succeeded))
         try #require(ext.commands.last?.json["fast"] as? Bool == true)
-        _ = try await eventually(mac.services.store, { try $0.allPiSessionStates().first?.fast }, until: { $0 == true })
+        _ = try await eventually(mac.services.store, { try $0.allSessionStates().first?.fast }, until: { $0 == true })
         await mac.services.upload(stateID, request.id)
         await phone.services.syncNow()
         let received = try #require(try await eventually(phone.services.store, { try $0.deliveryRequest(request.id) }, until: { $0?.isOpen == false }))
         #expect(received.status == .known(.succeeded))
-        #expect(try await phone.services.store.allPiSessionStates().first?.fast == true)
+        #expect(try await phone.services.store.allSessionStates().first?.fast == true)
     }
 
     func launched(_ launch: LaunchRequest, title: String = "app", card: UUID? = nil) async throws -> DeliveryRequest {
@@ -66,7 +66,7 @@ extension MacSyncTests {
 
     func indexed(_ id: String, cwd: URL) async throws -> IndexedSession {
         let session = IndexedSession(id: id, path: "/sessions/--work-app--/\(id).jsonl", cwd: cwd.path, title: "修好登录", lastActivityAt: .now)
-        try await services.store.upsertPiSession(session, host: TestApp.hostID)
+        try await services.store.upsertSession(session, host: TestApp.hostID)
         return session
     }
 
@@ -137,7 +137,7 @@ extension MacSyncTests {
         let received = try #require(ext.messages.first)
         let delivery = try #require(received.deliveryID.flatMap(UUID.init(uuidString:)))
         let said = ChatMessage(sessionID: ext.sessionID, entryID: "u0", seq: 0, role: .user, text: received.text, at: .now, deliveryID: delivery)
-        try await store.writePiTranscript(SessionTranscript(sessionID: ext.sessionID, messages: [said], recap: Recap(lastPrompt: said.text)))
+        try await store.writeTranscript(SessionTranscript(sessionID: ext.sessionID, messages: [said], recap: Recap(lastPrompt: said.text)))
         #expect(try await store.deliveryRequest(request.id)?.status == .known(.succeeded))
         try await store.deleteDelivery(request.id)
 
@@ -148,38 +148,38 @@ extension MacSyncTests {
 
     @Test(arguments: [true, false], [true, false])
     func 会话重载扩展接回_这期间做完一轮的才叫醒Cue(running: Bool, upgrading: Bool) async throws {
-        let changes = rig.pi.changes()
-        try rig.pi.start()
+        let changes = rig.bridge.changes()
+        try rig.bridge.start()
         let services: AppServices = services, store = services.store
         let file = FileManager.default.temporaryDirectory.appending(path: "mac-sync-\(UUID().uuidString).jsonl")
         FileManager.default.createFile(atPath: file.path, contents: Data())
         let turn = Date.now.addingTimeInterval(-30 * 60)
         let said = ChatMessage(sessionID: "s1", entryID: "u1", seq: 1, role: .user, text: "发版", at: turn)
-        try await services.piStateRecorder.update(
+        try await services.stateRecorder.update(
             sessionID: "s1", state: .thinking, title: "发版", directory: "/work/app", times: SessionTimes(stateSince: turn, busySince: turn), turnStartedAt: turn)
         if !running {
-            try await store.writePiTranscript(SessionTranscript(
+            try await store.writeTranscript(SessionTranscript(
                 sessionID: "s1", messages: [said], recap: Recap(lastPrompt: "发版", lastReply: "发好了", answeredAt: turn.addingTimeInterval(60))))
-            try await services.piStateRecorder.update(sessionID: "s1", state: .settled, times: SessionTimes(stateSince: turn.addingTimeInterval(60), busySince: nil))
+            try await services.stateRecorder.update(sessionID: "s1", state: .settled, times: SessionTimes(stateSince: turn.addingTimeInterval(60), busySince: nil))
         }
         try services.reconcileLaunch()  // 更新后的 App 启动对账
         let mark = try await store.lastWrite()
-        let consuming = Task { try await services.consumePiChanges(changes) }
+        let consuming = Task { try await services.consumeSessionChanges(changes) }
         defer { await consuming.stop() }
 
         let old = try await rig.host.connect(
             "s1", cwd: "/work/app", busy: running, extensionVersion: upgrading ? PiWire.oldestExtension - 1 : PiExtensionBundle.version, sessionFile: file.path)
         if running {
-            try await store.writePiTranscript(SessionTranscript(
+            try await store.writeTranscript(SessionTranscript(
                 sessionID: "s1", messages: [said], recap: Recap(lastPrompt: "发版", lastReply: "发好了", answeredAt: .now)))
         }
         old.close(bye: "reload")
         try await rig.host.connect("s1", cwd: "/work/app", sessionFile: file.path)
 
         // 接回的那一次写入落了盘（记录的状态与起点跟上桥上的）才看 Cue 的变化，不然歇着的那一例还没写就判过了
-        try await eventually("桥上以新扩展接回") { services.pi.session(sessionID: "s1").map { $0.state == .settled && !$0.upgrading } == true }
-        let live = try #require(services.pi.session(sessionID: "s1"))
-        let stored = try await eventually(store, { try $0.allPiSessionStates().first }, until: {
+        try await eventually("桥上以新扩展接回") { services.bridge.session(sessionID: "s1").map { $0.state == .settled && !$0.upgrading } == true }
+        let live = try #require(services.bridge.session(sessionID: "s1"))
+        let stored = try await eventually(store, { try $0.allSessionStates().first }, until: {
             $0?.state == .known(.settled) && abs(($0?.stateSince ?? .distantPast).timeIntervalSince(live.stateSince)) < 0.001
         })
         #expect(try await store.macOnline(TestApp.hostID))
@@ -193,10 +193,10 @@ extension MacSyncTests {
         var live = session("s1", state: .settled, spoke: true)
         live.hosted = hosted
         live.commands = [SlashCommand(name: "default", summary: "回默认模式", source: .known(.builtin))]
-        try await services.consumePiChanges(changes([.appeared(live), .ended(live, reason: .disconnected)]))
+        try await services.consumeSessionChanges(changes([.appeared(live), .ended(live, reason: .disconnected)]))
         if !hosted { try await StateRecorder(store: services.store, hostID: TestApp.hostID).end(sessionID: "s1") }
 
-        let stored = try #require(try await services.store.allPiSessionStates().first)
+        let stored = try #require(try await services.store.allSessionStates().first)
         #expect(stored.state == .known(hosted ? .settled : .ended))
         let catalogID = try #require(stored.catalogID)
         let catalog = try await services.store.agentCatalog(catalogID)
@@ -209,11 +209,11 @@ extension MacSyncTests {
         hosted.hosted = true
         var mine = session("s1", pid: 200)
         mine.state = .tool
-        try await services.consumePiChanges(changes([
+        try await services.consumeSessionChanges(changes([
             .appeared(hosted), .appeared(mine), .stateChanged(hosted, from: .thinking), .ended(hosted, reason: .closed(reason: "quit")),
         ]))
 
-        let records = try await services.store.allPiSessionStates()
+        let records = try await services.store.allSessionStates()
         #expect(records.count == 1)
         #expect(records.first?.hosted == false && records.first?.state == .known(.tool))
     }

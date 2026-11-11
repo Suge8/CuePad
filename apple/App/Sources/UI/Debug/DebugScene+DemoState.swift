@@ -71,7 +71,7 @@ extension DebugScene {
                     .init(kind: .read, target: "login-mobile.png", images: looked.map { [$0] }),
                 ]), roundStartedAt: first.addingTimeInterval(-50)),
         ]
-        try await store.writePiTranscript(SessionTranscript(
+        try await store.writeTranscript(SessionTranscript(
             sessionID: "notes", messages: messages,
             recap: Recap(lastPrompt: messages[0].text, lastReply: messages.last?.text)))
     }
