@@ -183,7 +183,6 @@ extension OpenCodeRuntime {
         ended[info.id] = nil
         if let launchToken { tracked.launchToken = launchToken }
         sessions[info.id] = tracked
-        listed?.insert(info.id)
         try await catalog(info.location.directory, connection.client)
         publish(info.id)
         return bridgeID(info.id, connection)

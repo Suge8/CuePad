@@ -35,8 +35,6 @@ public final class OpenCodeRuntime: AgentRuntime, SessionLink {
     /// 在 CuePad 里结束的时刻：此后的活动才让它重新上线（`revives`）
     var ended: [String: Date] = [:]
     var catalogs: [String: Catalog] = [:]
-    /// 服务里的托管会话（会话索引对账用）；还没拉到完整列表时为 nil
-    var listed: Set<String>?
     var checkpoints: [String: OpenCodeHistory.Checkpoint] = [:]
     var ingestQueue: [String] = []
     var ingesting: Task<Void, Never>?
@@ -155,7 +153,6 @@ public final class OpenCodeRuntime: AgentRuntime, SessionLink {
         childTurns = [:]
         ended = [:]
         catalogs = [:]
-        listed = nil
         ingestQueue = []
     }
 

@@ -37,8 +37,7 @@ extension OpenCodeRuntime {
         case "session.deleted":
             guard let tracked = sessions.removeValue(forKey: sessionID) else { return }
             if tracked.online { bridge.detach(bridgeID(sessionID, connection), reason: .closed(reason: "deleted")) }
-            listed?.remove(sessionID)
-            await retainIndex()
+            await dropIndex([sessionID])
         case "session.renamed":
             await change(sessionID, connection) { $0.info.title = data.title }
         case "session.model.selected":

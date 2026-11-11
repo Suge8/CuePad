@@ -63,12 +63,11 @@ extension OpenCodeRuntime {
             sessions[id]?.firstMessage = try await checkpoint(of: id)?.history.firstMessage
         }
         guard self.connection === connection else { return }
-        listed = present
         connection.ready = true
         for (id, tracked) in sessions where tracked.online { publish(id) }
         for waiter in waiters.values { waiter.resume(returning: connection) }
         waiters = [:]
-        Task { await backfill(topLevel, connection) }
+        Task { await backfill(topLevel, gone: hosted.subtracting(present), connection) }
     }
 
     private func refreshLive(_ id: String, _ tracked: Tracked, _ client: OpenCodeClient) async throws {
