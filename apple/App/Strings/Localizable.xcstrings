@@ -35,18 +35,18 @@
       },
       "shouldTranslate" : false
     },
-    "# 做事的标准\n\n- 把这个项目当成你自己的作品：分析要彻底，建议要大胆。\n- 先读懂再改：读相关代码与调用处；版本与 API 用法查一手来源，不凭印象。\n- 修根因，不打表面补丁；同一根因的其他出现处一并修。\n- 用当下最轻的做法：不加用不到的抽象、中间层与配置，不为不会发生的情况写防御。\n- 同一条规则、配置、状态只留一个权威来源；这次改动造成的死代码、过时的文档与测试一并删掉。\n- 只做被要求的；看到范围外的问题，在回复末尾提一句，不顺手改。\n- 测试只写覆盖用户可见行为的，不为凑数写。\n- 做完跑一次能覆盖这次改动的检查，贴出输出；没验到的写明没验。\n- 界面沿用项目已有的组件与设计语言：标题直接说内容，不加不带信息的说明句与小标签，一屏一个焦点。\n- 推送、发布、删除数据这类收不回的事，做之前先问。\n" : {
+    "# 做事的标准\n\n- 把这个项目当成你自己的作品：分析要彻底，建议要大胆。\n- 版本与 API 用法查一手来源，不凭印象。\n- 修根因，不打表面补丁；同一根因的其他出现处一并修。\n- 用当下最轻的做法：不加用不到的抽象、中间层与配置，不为不会发生的情况写防御。\n- 同一条规则、配置、状态只留一个权威来源；这次改动造成的死代码、过时的文档与测试一并删掉。\n- 只做被要求的；看到范围外的问题，在回复末尾提一句，不顺手改。\n- 测试只写覆盖用户可见行为的，不为凑数写。\n- 验证只跑一次能覆盖这次改动的检查；没验到的写明没验。\n- 界面沿用项目已有的组件与设计语言：标题直接说内容，不加不带信息的说明句与小标签，一屏一个焦点。\n- 推送、发布、删除数据这类收不回的事，做之前先问。\n" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "# How to work\n\n- Treat this project as your own work: be thorough in your analysis and bold in what you recommend.\n- Read before you change: read the related code and its callers; check versions and API usage against primary sources, not memory.\n- Fix the root cause, not the symptom; fix every other place the same cause shows up.\n- Use the lightest current approach: no unused abstractions, layers or config, and no defenses for cases that can't happen.\n- Keep one source of truth for each rule, config and piece of state; delete the dead code, stale docs and tests this change leaves behind.\n- Do only what was asked; mention out-of-scope problems at the end of your reply instead of fixing them.\n- Write only tests that cover user-visible behavior; none to pad the count.\n- When done, run one check that covers this change and paste its output; say what you couldn't verify.\n- Build UI from the project's existing components and design language: titles state the content, no filler captions or small labels, one focus per screen.\n- Ask before anything that can't be undone: pushing, releasing, deleting data.\n\n"
+            "value" : "# How to work\n\n- Treat this project as your own work: be thorough in your analysis and bold in what you recommend.\n- Check versions and API usage against primary sources, not memory.\n- Fix the root cause, not the symptom; fix every other place the same cause shows up.\n- Use the lightest current approach: no unused abstractions, layers or config, and no defenses for cases that can't happen.\n- Keep one source of truth for each rule, config and piece of state; delete the dead code, stale docs and tests this change leaves behind.\n- Do only what was asked; mention out-of-scope problems at the end of your reply instead of fixing them.\n- Write only tests that cover user-visible behavior; none to pad the count.\n- Verify with one check that covers this change; say what you couldn't verify.\n- Build UI from the project's existing components and design language: titles state the content, no filler captions or small labels, one focus per screen.\n- Ask before anything that can't be undone: pushing, releasing, deleting data.\n\n"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "# 做事的标准\n\n- 把这个项目当成你自己的作品：分析要彻底，建议要大胆。\n- 先读懂再改：读相关代码与调用处；版本与 API 用法查一手来源，不凭印象。\n- 修根因，不打表面补丁；同一根因的其他出现处一并修。\n- 用当下最轻的做法：不加用不到的抽象、中间层与配置，不为不会发生的情况写防御。\n- 同一条规则、配置、状态只留一个权威来源；这次改动造成的死代码、过时的文档与测试一并删掉。\n- 只做被要求的；看到范围外的问题，在回复末尾提一句，不顺手改。\n- 测试只写覆盖用户可见行为的，不为凑数写。\n- 做完跑一次能覆盖这次改动的检查，贴出输出；没验到的写明没验。\n- 界面沿用项目已有的组件与设计语言：标题直接说内容，不加不带信息的说明句与小标签，一屏一个焦点。\n- 推送、发布、删除数据这类收不回的事，做之前先问。\n"
+            "value" : "# 做事的标准\n\n- 把这个项目当成你自己的作品：分析要彻底，建议要大胆。\n- 版本与 API 用法查一手来源，不凭印象。\n- 修根因，不打表面补丁；同一根因的其他出现处一并修。\n- 用当下最轻的做法：不加用不到的抽象、中间层与配置，不为不会发生的情况写防御。\n- 同一条规则、配置、状态只留一个权威来源；这次改动造成的死代码、过时的文档与测试一并删掉。\n- 只做被要求的；看到范围外的问题，在回复末尾提一句，不顺手改。\n- 测试只写覆盖用户可见行为的，不为凑数写。\n- 验证只跑一次能覆盖这次改动的检查；没验到的写明没验。\n- 界面沿用项目已有的组件与设计语言：标题直接说内容，不加不带信息的说明句与小标签，一屏一个焦点。\n- 推送、发布、删除数据这类收不回的事，做之前先问。\n"
           }
         }
       }
