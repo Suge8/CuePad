@@ -76,7 +76,7 @@ extension Bridge {
 
     /// 歇着满 `hostedIdle` 时请它退出（不算结束，发话时再接着；`AgentFacts.releasesIdleHosted`）。
     func reviewHosted() {
-        for slot in slots where slot.session.hosted && !releasing.contains(slot.id) {
+        for slot in slots where !releasing.contains(slot.id) {
             let session = slot.session
             let busy = session.state.hasPendingWork
             if !session.agent.facts.releasesIdleHosted {

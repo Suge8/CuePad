@@ -68,7 +68,7 @@ final class UpdateService {
     }
 
     private var busy: Int {
-        bridge.sessions.count { $0.hosted && $0.state.hasPendingWork && runtimes[$0.agent]?.hostedSessionsOutliveApp != true }
+        bridge.sessions.count { $0.state.hasPendingWork && runtimes[$0.agent]?.hostedSessionsOutliveApp != true }
     }
 
     private func postpone(_ install: @escaping () -> Void) -> Bool {

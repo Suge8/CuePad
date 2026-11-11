@@ -114,11 +114,7 @@ struct ReplyBar: View {
         .font(Typography.meta).foregroundStyle(progress.failed ? palette.failure : palette.ink3)
     }
 
-    #if os(iOS)
-    private static let unanswerable: LocalizedStringResource = "这个问题要在 Mac 上回答"
-    #else
-    private static let unanswerable: LocalizedStringResource = "这个问题要在终端里的 Agent 那边回答"
-    #endif
+    private static let unanswerable: LocalizedStringResource = "CuePad 答不了这类提问，只能结束这个会话"
 
     private var shortcuts: [ReplyShortcut: () -> Void] {
         var map: [ReplyShortcut: () -> Void] = [:]

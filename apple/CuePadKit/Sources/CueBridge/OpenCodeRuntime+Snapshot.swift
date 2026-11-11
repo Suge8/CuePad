@@ -125,7 +125,6 @@ extension OpenCodeRuntime {
             session.name = tracked.info.title
             session.firstMessage = tracked.firstMessage
             session.launchToken = tracked.launchToken
-            session.hosted = true
             session.model = model
             session.thinking = model.flatMap { Self.thinking(tracked.info.model?.variant, of: $0) }
             session.availableModels = catalog?.models.map(\.option) ?? []

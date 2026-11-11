@@ -100,7 +100,6 @@ final class ClaudeHostedSession: SessionLink {
         var session = Session(
             id: Session.claudeID(sessionID: sessionID, pid: pid), sessionID: sessionID, agent: .claudeCode, sessionFile: sessionFile, pid: pid,
             cwd: cwd, terminal: TerminalIdentity(), state: .settled, stateSince: .now)
-        session.hosted = true
         session.launchToken = launchToken
         session.name = known?.name
         session.firstMessage = known?.firstMessage

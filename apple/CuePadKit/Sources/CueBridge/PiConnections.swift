@@ -107,7 +107,6 @@ final class PiConnections {
             hello.info.apply(to: &session)
             session.launchToken = hello.launchToken
             link.extensionVersion = hello.extensionVersion
-            session.hosted = true
             appear(session, on: link)
             link.offerUpgrade()
         case .upgrading(let hello):
@@ -119,7 +118,6 @@ final class PiConnections {
                 terminal: TerminalIdentity(), state: .settled, upgrading: true, stateSince: Date())
             session.name = hello.name
             session.firstMessage = hello.firstMessage
-            session.hosted = true
             link.extensionVersion = hello.extensionVersion
             appear(session, on: link)
             link.offerUpgrade()

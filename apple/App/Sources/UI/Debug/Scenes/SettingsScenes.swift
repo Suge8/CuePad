@@ -43,7 +43,7 @@ extension DebugSceneEntry {
     static let updateWait = DebugSceneEntry("updatewait") { workspace, _ in
         await DebugScene.connectAgents(workspace.services)
         let bridge = workspace.services.bridge
-        let busy = { bridge.sessions.contains { $0.hosted && $0.state.hasPendingWork } }
+        let busy = { bridge.sessions.contains { $0.state.hasPendingWork } }
         if !busy() { for await _ in bridge.changes() where busy() { break } }
         workspace.services.updates.checkForUpdates()
         SettingsPane.open(.general)

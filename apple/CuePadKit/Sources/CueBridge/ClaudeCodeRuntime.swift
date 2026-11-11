@@ -52,7 +52,7 @@ public final class ClaudeCodeRuntime: AgentRuntime {
     }
 
     public func resume(_ session: IndexedSession) async throws -> Session.ID {
-        if let live = bridge.sessions.first(where: { $0.agent == .claudeCode && $0.sessionID == session.id && $0.hosted }) { return live.id }
+        if let live = bridge.sessions.first(where: { $0.agent == .claudeCode && $0.sessionID == session.id }) { return live.id }
         return try await hosted.resume(session.id) { [self] admission in
             // 终端里开着它时两个进程会同写一个会话文件：问 Claude Code 自己
             if try await running().contains(where: { $0.sessionID == session.id }) { throw AgentRuntimeError.openElsewhere }

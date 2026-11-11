@@ -76,7 +76,6 @@ final class ACPHost {
         var state = Session(
             id: "\(sessionID).\(process.pid)", sessionID: sessionID, agent: agent, sessionFile: sessionFile(directory, sessionID), pid: process.pid,
             cwd: directory, terminal: TerminalIdentity(), state: .settled, stateSince: .now)
-        state.hosted = true
         state.launchToken = launchToken
         processes.adopt(process, as: sessionID)
         session.attach(state)
