@@ -76,7 +76,14 @@ struct ReplyBar: View {
                 if expanded {
                     MacInputNotice(failure: config?.failure)
                     if let recache {
-                        Text("缓存已冷，这一句会重读约 \(CueContext.tokens(recache))").font(Typography.caption).foregroundStyle(palette.ink3)
+                        Group {
+                            if cache?.estimated == true {
+                                Text("缓存可能已冷，这一句可能重读约 \(CueContext.tokens(recache))")
+                            } else {
+                                Text("缓存已冷，这一句会重读约 \(CueContext.tokens(recache))")
+                            }
+                        }
+                        .font(Typography.caption).foregroundStyle(palette.ink3)
                     }
                 }
             }

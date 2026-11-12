@@ -33,9 +33,9 @@ struct ToolLog: Codable, Equatable {
     }
 
     /// 一次模型请求的缓存读写：`recached` 是没接上缓存、原价重送的量（接上了为 0）。
-    mutating func requested(context: Int, recached: Int, warmUntil: Date?) {
+    mutating func requested(context: Int, recached: Int, warmUntil: Date, estimated: Bool) {
         let missed = (activity.cache?.recached ?? 0) + recached
-        activity.cache = Tools.Cache(recached: missed > 0 ? missed : nil, context: context, warmUntil: warmUntil)
+        activity.cache = Tools.Cache(recached: missed > 0 ? missed : nil, context: context, warmUntil: warmUntil, estimated: estimated ? true : nil)
     }
 
     mutating func say(_ text: String) {
