@@ -27,7 +27,7 @@ struct BoardColumn: View {
     @State private var focal: String?
 
     var body: some View {
-        fed
+        lane
             .cardDrop(isEnabled: column != .waiting, hover: { targeted = $0 != nil && column != .todo }) { card, _ in
                 if let task = card.task { drop(task, before: nil) }
                 if let session = card.session { drop(session: session) }
@@ -38,14 +38,6 @@ struct BoardColumn: View {
             .zIndex(moves?.lands(in: board.flights(column)) == true ? 1 : 0)
     }
 
-    @ViewBuilder private var fed: some View {
-        if column == .advancing {
-            let sessions = board.advancing.compactMap(\.agent?.state.sessionID).sorted()
-            lane.modifier(SaidReading(sessions: sessions))
-        } else {
-            lane
-        }
-    }
 
     @ViewBuilder private var lane: some View {
         #if os(iOS)
@@ -306,19 +298,6 @@ private struct ShotPresenter: ViewModifier {
     }
 }
 
-/// 一列一次读，会话换了才重新订阅，读到的没变不送到界面。
-private struct SaidReading: ViewModifier {
-    let sessions: [String]
-    @State private var said: [String: [Date]]?
-    @Environment(Workspace.self) private var workspace
-
-    func body(content: Content) -> some View {
-        content
-            .environment(\.boardSaid, said ?? [:])
-            .observing(workspace.services.store, id: sessions, into: $said) { [sessions] in try $0.recentSaid(in: sessions, limit: BoardLine.maxSaid) }
-    }
-}
-
 private enum AdvancingSlot: Identifiable {
     case gap(pinned: Bool, BoardPulse.Tier)
     case work(TaskBoard.Work, moves: Bool)
@@ -333,7 +312,7 @@ private enum AdvancingSlot: Identifiable {
     static func slots(_ groups: [(pinned: Bool, tier: BoardPulse.Tier, work: [TaskBoard.Work])], gaps: Bool) -> [AdvancingSlot] {
         groups.enumerated().flatMap { offset, group -> [AdvancingSlot] in
             let gap = gaps && offset > 0 && !(group.pinned && groups[offset - 1].pinned)
-            let cards = group.work.enumerated().map { AdvancingSlot.work($1, moves: group.tier == .running && $0 < BoardLine.maxMoving) }
+            let cards = group.work.enumerated().map { AdvancingSlot.work($1, moves: group.tier == .running && $0 < BoardNow.maxMoving) }
             return (gap ? [.gap(pinned: group.pinned, group.tier)] : []) + cards
         }
     }

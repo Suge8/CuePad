@@ -41,8 +41,6 @@ enum BoardCardMetrics {
     static let gap = Spacing.item
     /// 列与列之间不另留缝（`BoardWidths`）。否决过：列间再留 20——四列三道缝连同卡离列边共白占约 100，1280 宽时待办一行只剩三四个字。
     static var columnGap: CGFloat { 2 * inset }
-    /// 推进中卡下沿那条线最窄多宽才画（`BoardLineRow`）：过去两颗点与现在一截波读得出来；再窄整条不画，只留读数。
-    nonisolated static let lineMin: CGFloat = 40
     static let rowPadding = Spacing.group
     static let rowGap: CGFloat = 6
     static let rowTitle = Typography.secondary.weight(.medium)
@@ -51,10 +49,12 @@ enum BoardCardMetrics {
     static let pad = Spacing.item
     static let footGap = Spacing.tight
     static let foot: CGFloat = 18
+    static let vitals: CGFloat = 14
     #else
     static let pad = Spacing.group
     static let footGap = Spacing.glyph
     static let foot: CGFloat = 24
+    static let vitals = foot
     #endif
     /// 卡脚里项目图形占的宽（名字放不下时只留它，`BoardFoot`）。
     static var footGlyph: CGFloat { TaskMetrics.cardGlyph + ProjectGlyph.margin }
@@ -66,5 +66,4 @@ enum BoardCardMetrics {
     static let tagMax: CGFloat = 104
     /// 手机的行里的卡。
     static let titleRow: CGFloat = 24
-    static let waveBottom: CGFloat = 6
 }

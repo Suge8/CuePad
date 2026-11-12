@@ -63,7 +63,7 @@ struct BoardWaitCard: View {
     }
 
     private var rowFace: some View {
-        BoardCardLayout(advancing: false, pulse: leftPulse, project: project) {
+        BoardCardLayout(advancing: false, project: project) {
             StateGlyph(status: held.deciding ? .asking : .awaitsReply).font(.system(size: TaskMetrics.ring))
                 .frame(width: TaskMetrics.cardLead, height: TaskMetrics.cardLead)
         } title: {
@@ -84,11 +84,6 @@ struct BoardWaitCard: View {
         } else {
             SessionActions(session: held.session, board: SessionListItem(state: held.session))
         }
-    }
-
-    private var leftPulse: BoardPulse {
-        guard arrival?.from == .advancing else { return BoardPulse() }
-        return workspace.pulse(of: held.item?.agent ?? SessionListItem(state: held.session))
     }
 
     #if os(macOS)

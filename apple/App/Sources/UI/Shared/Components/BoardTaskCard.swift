@@ -10,7 +10,6 @@ struct BoardTaskCard: View {
     var openShot: (PreviewOpening) -> Void = { _ in }
     @State private var check = TaskCheck()
     @Environment(Workspace.self) private var workspace
-    @Environment(\.boardArrival) private var arrival
     @Environment(\.boardRow) private var row
     @Environment(\.palette) private var palette
 
@@ -21,7 +20,7 @@ struct BoardTaskCard: View {
     var body: some View {
         let now = workspace.pulse(of: item.agent)
         let next = workspace.next(for: item, shown: now.shown)
-        let pulse = advancing || arrival?.from == .advancing ? now : BoardPulse()
+        let pulse = advancing ? now : BoardPulse()
         let hero = column == .done && !row ? item.shot : nil
         framed {
             VStack(alignment: .leading, spacing: 0) {
@@ -39,7 +38,7 @@ struct BoardTaskCard: View {
                 if hero == nil, let shot = item.shot { BoardShot(shot: shot, group: task.id.uuidString, open: openShot) }
             }
             }
-            .boardCard(column, flat: column.light && hero == nil)
+            .boardCard(column, flat: column.light && hero == nil, running: moves && pulse.tier == .running)
             .boardRescue(advancing ? item.agent?.state : nil)
         }
         .help(tip)

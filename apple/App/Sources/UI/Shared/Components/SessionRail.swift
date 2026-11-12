@@ -59,11 +59,11 @@ private struct SessionRailContent: View {
             let advancingRoom = geometry.size.height - (rows.waiting.isEmpty ? 0 : waitingHeight + Chrome.groupGap)
             VStack(spacing: Chrome.groupGap) {
                 if !rows.waiting.isEmpty {
-                    group(rows.waiting, column: .waiting, moving: [], overflows: waitingIdeal > waitingCap)
+                    group(rows.waiting, column: .waiting, overflows: waitingIdeal > waitingCap)
                         .frame(height: waitingHeight)
                 }
                 if !rows.advancing.isEmpty {
-                    group(rows.advancing, column: .advancing, moving: rows.moving, overflows: idealHeight(rows.advancing) > advancingRoom)
+                    group(rows.advancing, column: .advancing, overflows: idealHeight(rows.advancing) > advancingRoom)
                         .frame(maxHeight: idealHeight(rows.advancing))
                 }
                 if rows.waiting.isEmpty, rows.advancing.isEmpty, !phone { SessionRailEmpty() }
@@ -91,7 +91,7 @@ private struct SessionRailContent: View {
     }
 
     /// `overflows`：这一组放不下、要滚（宽屏下沿淡出一截，滚到底时最后一行在淡出的上面）。
-    private func group(_ items: [SessionRailRows.Item], column: TaskBoard.Column, moving: Set<String>, overflows: Bool) -> some View {
+    private func group(_ items: [SessionRailRows.Item], column: TaskBoard.Column, overflows: Bool) -> some View {
         let fades = overflows && !phone
         return VStack(spacing: 0) {
             SessionRailHeader(column: column, count: items.count, form: form)
@@ -100,7 +100,7 @@ private struct SessionRailContent: View {
                 ScrollView {
                     LazyVStack(spacing: cellGap) {
                         ForEach(items) { item in
-                            SessionRailCell(item: item, form: form, moves: moving.contains(item.id), selected: marked.contains(item.id), open: open)
+                            SessionRailCell(item: item, form: form, selected: marked.contains(item.id), open: open)
                                 .frame(height: rowHeight(item))
                                 .id(item.id)
                                 .transition(.opacity)

@@ -4,7 +4,10 @@ import SwiftUI
 extension View {
     /// 平放的纸不加模糊阴影：侧栏开合时整面墙每帧重画，靠纸与桌面的明度、色相差把纸托出来。
     /// `flat`：清单里的一行（待办、没有成果图的已完成），不垫纸，指针停上去才有淡底。
-    func boardCard(_ column: TaskBoard.Column, flat: Bool = false) -> some View { modifier(BoardCardFrame(column: column, flat: flat)) }
+    /// `running`：卡边有一道光绕着走（推进中在跑的卡，一列至多 `BoardNow.maxMoving` 张）。
+    func boardCard(_ column: TaskBoard.Column, flat: Bool = false, running: Bool = false) -> some View {
+        modifier(BoardCardFrame(column: column, flat: flat, running: running))
+    }
 
     /// 只这一个小修饰读它：指针换项目时重算的是各卡的透明度，不是整张卡。
     func boardDim(project: UUID?) -> some View {
@@ -23,6 +26,8 @@ extension EnvironmentValues {
 private struct BoardCardFrame: ViewModifier {
     let column: TaskBoard.Column
     let flat: Bool
+    let running: Bool
+    @LoopsPlay private var plays
     #if os(macOS)
     @Environment(\.buttonHovered) private var hovered
     #endif
@@ -40,6 +45,7 @@ private struct BoardCardFrame: ViewModifier {
                 }
             }
             .modifier(Surface(column: column, flat: flat && !row, lit: lit))
+            .overlay { if running, plays, !row { LoopLayer(kind: .aura(radius: TaskMetrics.cardRadius), color: palette.signature).allowsHitTesting(false) } }
             .contentShape(.rect(cornerRadius: TaskMetrics.cardRadius))
     }
 
@@ -184,7 +190,7 @@ struct BoardSessionCard: View {
             } title: {
                 BoardCardTitle(name).foregroundStyle(resting ? palette.ink2 : palette.ink)
             }
-            .boardCard(.advancing)
+            .boardCard(.advancing, running: moves && pulse.tier == .running)
         }
         .boardRescue(session)
         .help(Dotted(project?.shownName, session.agentMark).visible)
@@ -194,12 +200,10 @@ struct BoardSessionCard: View {
     }
 }
 
-/// 列里的卡上下两层，四列同高（换列时飞的那张不变大小）：
-/// 上层固定两行高——标题至多两行，只写了一行时第二行是旁注（`note`：这件事此刻最该知道的一句），右上角是哪家 Agent 的标志；
-/// 卡脚左端项目，右端这一列要说的那一样——推进中是线与读数，别的列是 `facts`。
-/// 状态图标不画：卡在哪一列已经说了；状态词不放在标题右端而放在线的右端：窄列里标题会只剩四五个字。
-/// 否决过：不预留（一行写得下的卡就一行高，同一列高高低低）、预留了空着（每张卡里白占一行）。
-/// 手机的行里格子窄而矮，还是一排：图标、项目小图形、标题，线贴在下沿。
+/// 列里的卡：标题（至多两行，右上角是哪家 Agent 的标志）、推进中多一行此刻在干什么（`BoardNow`）、卡脚。
+/// 卡脚左端项目，右端这一列要说的那一样——推进中是上下文与时长（`BoardVitals`），别的列是 `facts`。
+/// 状态词不放在标题右端：窄列里标题会只剩四五个字。
+/// 手机的行里格子窄而矮，还是一排：图标、项目小图形、标题，推进中的右端写时长与要你管的状态词。
 struct BoardCardLayout<Icon: View, Title: View, Facts: View, Trailing: View>: View {
     let advancing: Bool
     var pulse = BoardPulse()
@@ -214,7 +218,6 @@ struct BoardCardLayout<Icon: View, Title: View, Facts: View, Trailing: View>: Vi
     let facts: Facts
     let trailing: Trailing
     @Environment(\.boardRow) private var row
-    @Environment(\.boardArrival) private var arrival
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.palette) private var palette
 
@@ -237,75 +240,43 @@ struct BoardCardLayout<Icon: View, Title: View, Facts: View, Trailing: View>: Vi
     var body: some View {
         if !row {
             VStack(alignment: .leading, spacing: BoardCardMetrics.footGap) {
-                HStack(alignment: .top, spacing: Spacing.item) {
-                    if compact {
-                        VStack(alignment: .leading, spacing: Spacing.hair) {
-                            HStack(alignment: .firstTextBaseline, spacing: Spacing.tight) { title }.font(TaskMetrics.lineFont)
-                            if let note { noteLine(note) }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    } else {
-                        BoardTitleBlock {
-                            Text(verbatim: Array(repeating: "国", count: BoardCardMetrics.lines(typeSize)).joined(separator: "\n")).hidden().readerHidden(true)
-                            HStack(alignment: .firstTextBaseline, spacing: Spacing.tight) { title }
-                            noteLine(note ?? "")
-                        }
-                        .font(Typography.bodyStrong)
-                        .clipped()
+                HStack(alignment: compact ? .top : .firstTextBaseline, spacing: Spacing.item) {
+                    VStack(alignment: .leading, spacing: Spacing.hair) {
+                        HStack(alignment: .firstTextBaseline, spacing: Spacing.tight) { title }.font(compact ? TaskMetrics.lineFont : Typography.bodyStrong)
+                        if compact, let note { noteLine(note) }
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     // 有就地处理的钮时它占右上角（真的那颗浮在卡上，`boardRescue`；这里只留出它的宽）
                     if let session, BoardRescue.kind(of: session) != nil, !compact {
                         BoardRescue(session: session).hidden()
                     } else if let session {
-                        AgentMark(session: session, font: TaskMetrics.caption, named: false).frame(height: BoardCardMetrics.titleRow)
+                        AgentMark(session: session, font: TaskMetrics.caption, named: false)
                     }
                     trailing
                 }
+                if advancing, pulse.shown != nil || note != nil { BoardNow(pulse: pulse, said: note, moves: moves) }
                 BoardFoot(glyph: BoardCardMetrics.footGlyph) {
                     if let project { BoardProjectTag(project: project) } else { Color.clear.frame(width: 0) }
                     foot
                 }
-                .frame(height: BoardCardMetrics.foot)
+                .frame(height: advancing ? BoardCardMetrics.vitals : BoardCardMetrics.foot)
             }
             .padding(.vertical, compact ? BoardCardMetrics.compactPad : BoardCardMetrics.pad)
-        } else if advancing {
-            line
-                .frame(maxHeight: .infinity)
-                .padding(.bottom, WaveStrip.height + BoardCardMetrics.waveBottom)
-                .overlay(alignment: .bottomLeading) { rowLine(moves: moves).opacity(lineShown) }
         } else {
-            line.frame(maxHeight: .infinity).overlay(alignment: .bottomLeading) { if left { rowLine(moves: false).opacity(leftShown).animation(Motion.fade, value: arrival?.landed) } }
+            line.frame(maxHeight: .infinity)
         }
     }
 
-    /// 从推进中飞来的那张先带着线，落下时淡成这一列的事实；飞进推进中的那张落下才画线。线淡得比飞快（`Motion.fade`），不在别的字上多压几帧。
-    private var left: Bool { !advancing && arrival?.from == .advancing }
-    private var leftShown: Double { arrival?.landed == false ? 1 : 0 }
-    private var lineShown: Double { arrival.map { $0.from == .advancing || $0.landed ? 1 : 0 } ?? 1 }
-
-    @ViewBuilder private var foot: some View {
-        if advancing {
-            BoardLine(pulse: pulse, moves: moves).opacity(lineShown)
-        } else {
-            HStack(spacing: Spacing.glyph) {
-                Spacer(minLength: 0)
-                HStack(spacing: Spacing.glyph) { facts }.fixedSize()
-            }
-            .font(TaskMetrics.caption).lineLimit(1)
-            .opacity(left ? 1 - leftShown : 1)
-            .overlay { if left { BoardLine(pulse: pulse, moves: false).opacity(leftShown) } }
-            .animation(Motion.fade, value: arrival?.landed)
+    private var foot: some View {
+        HStack(spacing: Spacing.glyph) {
+            Spacer(minLength: 0)
+            if advancing { BoardVitals(pulse: pulse) } else { HStack(spacing: Spacing.glyph) { facts }.fixedSize() }
         }
+        .font(TaskMetrics.caption).lineLimit(1)
     }
 
     private func noteLine(_ note: String) -> some View {
         Text(verbatim: note).font(TaskMetrics.caption).foregroundStyle(palette.ink3).lineLimit(1).readerHidden(true)
-    }
-
-    private func rowLine(moves: Bool) -> some View {
-        BoardLine(pulse: pulse, moves: moves)
-            .padding(.leading, pulse.word == nil ? TaskMetrics.cardLead + BoardCardMetrics.rowGap : 0)
-            .padding(.bottom, BoardCardMetrics.waveBottom)
     }
 
     private var line: some View {
@@ -317,31 +288,21 @@ struct BoardCardLayout<Icon: View, Title: View, Facts: View, Trailing: View>: Vi
             }
             .font(BoardCardMetrics.rowTitle).lineLimit(BoardCardMetrics.lines(typeSize))
             Spacer(minLength: 0)
+            if advancing {
+                Group {
+                    if pulse.speaks { BoardWord(pulse: pulse) }
+                    if let clock = pulse.shown?.clock { TimeSpent(clock: clock) }
+                }
+                .font(TaskMetrics.caption).lineLimit(1).fixedSize()
+            }
             trailing
         }
         .frame(minHeight: BoardCardMetrics.titleRow)
     }
 }
 
-/// 三样：两行高的占位（按中文排，中文行比西文行高）、标题、旁注。标题只占了一行时旁注排在第二行；占了两行就排到块外、被裁掉。
-private struct BoardTitleBlock: Layout {
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        CGSize(width: proposal.width ?? 0, height: subviews[0].sizeThatFits(.unspecified).height)
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let width = ProposedViewSize(width: bounds.width, height: nil)
-        let title = subviews[1], note = subviews[2]
-        let noteHeight = note.sizeThatFits(width).height
-        let fits = title.sizeThatFits(width).height + noteHeight <= bounds.height + 0.5
-        subviews[0].place(at: bounds.origin, proposal: width)
-        title.place(at: bounds.origin, proposal: width)
-        note.place(at: CGPoint(x: bounds.minX, y: fits ? bounds.maxY - noteHeight : bounds.maxY + noteHeight), proposal: width)
-    }
-}
-
-/// 卡脚两样：左端项目、右端这一列的事实。事实先占它非要不可的宽（读数；推进中的线不算，`BoardLineRow`），项目名用剩下的、放不下就截；
-/// 名字连两三个字都写不下时只留图形。再剩的都归右端（线画在里面）。`HStack` 排不出：线来多少占多少，按优先级排要么项目名被挤没、要么读数被截。
+/// 卡脚两样：左端项目、右端这一列的事实。事实先占它非要不可的宽，项目名用剩下的、放不下就截；
+/// 名字连两三个字都写不下时只留图形。再剩的都归右端。
 struct BoardFoot: Layout {
     let glyph: CGFloat
     private static let nameMin: CGFloat = 36
