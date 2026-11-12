@@ -11,7 +11,7 @@ Mac 上的 CuePad 落成 <目录>/<设备>/<文件>（DiagnosticInbox.swift）�
 CUEPAD_DIAG_DIR=<库目录>/Logs。<设备> 是目录名（Mac 是电脑名，iPhone、iPad 是型号代号如 iPhone18,1：iOS 不给 App 用户起的设备名），写开头几个字也行。
 系统的崩溃报告走 devicectl（Xcode 自带；无线连接也行，不要 root）：systemCrashLogs 域的列出与拷出，拷出不删手机上的；手机选 CUEPAD_DIAG_DEVICE
 （名字或 UDID），没给时取唯一一台配对过的真机。直连取手机的系统日志不做：devicectl 没有日志流，sysdiagnose 要管理员密码，log collect --device 要 root，
-idevicesyslog 要用户在 Finder 里另开无线显示（docs/diagnose.md）。要点的格式与 App 里"导出诊断"同一套（DiagnosticSummary.swift）。"""
+idevicesyslog 要用户在 Finder 里另开无线显示。要点的格式与 App 里"导出诊断"同一套（DiagnosticSummary.swift）。"""
 import json
 import os
 import re
@@ -31,7 +31,7 @@ def devicectl(*args, timeout=None):
         done = subprocess.run(["xcrun", "devicectl", *args, "-q", "-j", out.name], capture_output=True, text=True, timeout=timeout)
         if done.returncode:
             sys.exit(f"devicectl {' '.join(args[:3])} 失败：{(done.stderr or done.stdout).strip()}\n"
-                     "连不上就请用户解锁手机、和这台 Mac 连同一个网络；不在身边就请用户在设置里导出诊断（docs/diagnose.md）")
+                     "连不上就请用户解锁手机、和这台 Mac 连同一个网络；不在身边就请用户在设置里导出诊断")
         return json.load(open(out.name))["result"]
 
 
@@ -44,7 +44,7 @@ def device():
     if len(devices) != 1:
         names = "、".join(f'{d["state"]["name"]}（{d["hardware"]["udid"]}）' for d in devices)
         sys.exit(f"配对过的真机有 {len(devices)} 台{('：' + names) if names else ''}；用 CUEPAD_DIAG_DEVICE=<名字或 UDID> 指定一台。"
-                 "手机不在身边就请用户在设置里导出诊断（docs/diagnose.md）")
+                 "手机不在身边就请用户在设置里导出诊断")
     return devices[0]["hardware"]["udid"], devices[0]["state"]["name"]
 
 def out_dir(udid):

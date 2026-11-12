@@ -2,11 +2,11 @@
 # iOS：testflight = 归档 → 导出并上传 App Store Connect；device = 开发构建并装到连接的真机。
 # 手动签名：证书与描述文件由 provision.py 经 API 创建（Xcode 自动签名的 API 密钥管不了 App Group / iCloud 容器）。
 # 描述文件全机一份：生成到最后一个签名步骤（归档导出、真机构建）持着签名锁（_lock.sh 规则 3），上传与安装不在锁里。
-# testflight 打包前确认部署完成：docs/release.md「待部署到生产」没有条目、CloudKit 生产结构不缺字段（ck-production.sh，Mac 发版也跑）；
+# testflight 打包前确认部署完成：apple/scripts/AGENTS.md「待部署到生产」没有条目、CloudKit 生产结构不缺字段（ck-production.sh，Mac 发版也跑）；
 # 门铃与实时活动中转打包前、归档后各核对一次（check_relay）。
-# 上传后在这个提交上打 ios/<构建号> 标签并推到远端：release-mac.sh 据它核对发版顺序（docs/release.md「发版顺序」），也是这一版源码的唯一记号。
+# 上传后在这个提交上打 ios/<构建号> 标签并推到远端：release-mac.sh 据它核对发版顺序，也是这一版源码的唯一记号。
 # testflight 只经 xc.sh release ios 运行：release-context.py 拿全机发布锁、给这次尝试一个新目录（CUEPAD_RELEASE_OUT），源码取自固定提交的快照。
-# 前提：docs/release.md。
+# 前提：apple/scripts/AGENTS.md 里的一次性前置。
 set -euo pipefail
 SCRIPTS="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(cd "$SCRIPTS/../.." && pwd)"
@@ -29,10 +29,10 @@ provision="$APPLE_DIR/scripts/provision.py"
 
 case "$mode" in
   testflight)
-    docs="$APPLE_DIR/../docs/release.md"
-    grep -q '^### 待部署到生产$' "$docs" || { echo "docs/release.md 里没有「### 待部署到生产」这一节" >&2; exit 1; }
+    docs="$APPLE_DIR/scripts/AGENTS.md"
+    grep -q '^### 待部署到生产$' "$docs" || { echo "apple/scripts/AGENTS.md 里没有「### 待部署到生产」这一节" >&2; exit 1; }
     pending="$(awk '/^### 待部署到生产$/ { on = 1; next } /^#/ { on = 0 } on && /^- /' "$docs")"
-    [ -z "$pending" ] || { printf 'docs/release.md「待部署到生产」还有没部署的，部署完删掉条目再发 iOS 版：\n%s\n' "$pending" >&2; exit 1; }
+    [ -z "$pending" ] || { printf 'apple/scripts/AGENTS.md「待部署到生产」还有没部署的，部署完删掉条目再发 iOS 版：\n%s\n' "$pending" >&2; exit 1; }
     "$APPLE_DIR/scripts/ck-production.sh"
     check_relay
     signing_begin

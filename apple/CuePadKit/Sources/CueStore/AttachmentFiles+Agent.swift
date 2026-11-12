@@ -1,7 +1,7 @@
 import CueText
 import Foundation
 
-/// 这一行给 Agent 读，不进界面字目录（docs/i18n.md）：固定这一种中文写法，读回也只认它。
+/// 这一行给 Agent 读，不进界面字目录（apple/App/Strings/AGENTS.md）：固定这一种中文写法，读回也只认它。
 extension AttachmentFiles {
   public func agentLine(key: String, name: String) -> String? {
     fileURL(for: key).map { Self.label + name + "（" + $0.path(percentEncoded: false) + "）" }

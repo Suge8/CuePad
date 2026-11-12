@@ -11,7 +11,7 @@ public struct MacPresence: Equatable, Sendable {
 
   /// 醒着时多久续一次。在线记录只在 Mac 没打招呼就消失时（崩溃、断电、断网、将睡眠那一条没传出去）靠期限兜底，
   /// 正常的睡眠与退出当场写离线；取 5 分钟：兜底时最晚 `lifetime`（10 分钟）后在等 Cue 的提问回到等你，
-  /// 而续期只是每台醒着的 Mac 每小时 12 次小上传。再短，手机收到的同步推送随之翻倍（取舍见 docs/sync.md「Mac 在线」）。
+  /// 而续期只是每台醒着的 Mac 每小时 12 次小上传。再短，手机收到的同步推送随之翻倍。
   public static let renewal: Duration = .seconds(5 * 60)
   /// 一次续期管多久：两个续期间隔。晚一次续期（上传慢、系统忙时定时器推迟）不会被说成离线，错过两次才算。
   public static let lifetime: TimeInterval = 2 * Double(renewal.components.seconds)

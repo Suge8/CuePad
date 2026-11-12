@@ -58,7 +58,7 @@ def verified(commit):
 def attempt(platform, resume, uploads):
     fixed = RELEASES / platform
     if fixed.exists() or fixed.is_symlink():
-        fail(f"旧版留下的 {fixed} 还在：是链接就删掉；是目录先确认里面没有待恢复的公证（submission.json），再手工删掉或移走（docs/release.md）")
+        fail(f"旧版留下的 {fixed} 还在：是链接就删掉；是目录先确认里面没有待恢复的公证（submission.json），再手工删掉或移走")
     if subprocess.run(["git", "-C", CHECKOUT, "status", "--porcelain", "--untracked-files=no"],
                       capture_output=True, text=True, check=True).stdout:
         fail("工作区有没提交的改动，不发布；在干净的检出里发")

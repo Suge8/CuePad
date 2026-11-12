@@ -31,7 +31,7 @@ struct PhoneBoard: View {
     static let gap: CGFloat = 12
 }
 
-/// 一次排版里算完，不经几何读数写回状态（docs/ui.md）。
+/// 一次排版里算完，不经几何读数写回状态：写回影响自身排版的状态会形成布局反馈环。
 private struct BoardRows: Layout {
     let gap: CGFloat
 

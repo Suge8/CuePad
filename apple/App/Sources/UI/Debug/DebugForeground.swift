@@ -41,7 +41,7 @@ enum DebugForeground {
     /// 非占前台不可的（`what` 说是谁）：借不到就报错退出。
     static func require(_ window: NSWindow, for what: String) {
         guard !borrow(window) else { return }
-        FileHandle.standardError.write(Data("\(what) 要占前台：加 -CuePadForeground YES（docs/verify.md「占前台」）\n".utf8))
+        FileHandle.standardError.write(Data("\(what) 要占前台：加 -CuePadForeground YES（apple/scripts/AGENTS.md「占前台」）\n".utf8))
         exit(2)
     }
 

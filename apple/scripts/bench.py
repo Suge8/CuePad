@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""记忆基准（LongMemEval、LoCoMo、ConvoMem）给 Cue 的长期记忆打分：抽题、判分、出报告。跑法见 docs/cue-eval.md「记忆基准」。
+"""记忆基准（LongMemEval、LoCoMo、ConvoMem）给 Cue 的长期记忆打分：抽题、判分、出报告。跑法见 cue-eval.sh：改前改后各跑一遍再 judge。
 
   bench.py sample BENCH [--data DIR] [--holdout]  下载 BENCH（lme / locomo / convomem）的官方数据到 DIR（缺省 ~/Library/Caches/cuepad-bench/BENCH：可重下的缓存，缺时才下），
                                       按层抽 100 题（种子 42）写成评测读的 DIR/sample.jsonl；--holdout 另抽一份与它不相交、各层题数相同的 holdout.jsonl
+                                      改提示词时在 sample 上挑改法，在 holdout 上验（cue-eval.sh 的 CUEPAD_BENCH_DATA 指向它）
   bench.py judge RUN [RUN…]           给每个 RUN/<题号>.json 判分（各家的判分提示，经 Pi 用 claude-sonnet-5-5），按给的先后比这几遍，写最后一个 RUN/report.md
 
 三家的差别只在各自的读入（benches/ 里各家一个 `Bench` 子类：读官方数据、分层、把历史排成一句一条、判分提示与怎么读判词），

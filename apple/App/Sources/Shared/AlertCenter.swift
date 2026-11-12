@@ -27,7 +27,7 @@ final class AlertCenter: NSObject, UNUserNotificationCenterDelegate {
     var isAuthorized: Bool { authorization == .authorized || authorization == .provisional }
 
     /// 不碰真实世界的（`LibraryLocation.touchesRealWorld`：测试、验收与装着正式版的 Mac 上的本机构建）默认不要通知权限、不发系统通知、不设角标：这些按 bundle id 记，与正式版同一个；
-    /// 没人去点的权限弹窗还会一直留在系统里、盖住之后起的每个实例。Debug 构建给 `-CuePadNotifications YES` 时照常（docs/verify.md「通知」）。
+    /// 没人去点的权限弹窗还会一直留在系统里、盖住之后起的每个实例。Debug 构建给 `-CuePadNotifications YES` 时照常（apple/scripts/AGENTS.md「通知」）。
     var delivers: Bool { services.map { $0.location.touchesRealWorld || DebugHooks.deliversNotifications } ?? false }
 
     /// 用户可能在系统设置里改过：回到前台、后台写角标时重新读。

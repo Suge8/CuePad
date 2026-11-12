@@ -10,7 +10,7 @@ nonisolated enum BubbleSource: Equatable {
 }
 
 /// 不摆左右：摆在旁边会盖住被点的那一行、尾巴落在字上。
-/// 不量自己的高：摆在上面时按底边对齐（`bottom`）——摆法从不读回排版的结果，没有几何读数回写的环（docs/ui.md）。
+/// 不量自己的高：摆在上面时按底边对齐（`bottom`）——摆法从不读回排版的结果，没有几何读数回写的环。
 nonisolated struct BubblePlacement: Equatable {
     /// 内容会翻页、会换的（任务气泡、"更多"）或自己排几栏的（额度明细）给定宽（`fixed`），翻页、换一条时宽不跳；随内容（`fitting`）的一两行说明不铺成一大块。都不超过容器。
     enum Width: Equatable {

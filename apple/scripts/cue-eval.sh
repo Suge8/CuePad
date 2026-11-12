@@ -8,7 +8,7 @@
 #   failover  换大脑（CueEvalFailoverTests）：换上的那家缺省 codex，不能是 pi
 #   bench     记忆基准（CueEvalBenchTests）
 # 大脑用 CUEPAD_CUE_EVAL_RUNTIME 选（缺省 pi），换模型与强度的变量见 EvalBrain 头注释，照样带 TEST_RUNNER_ 前缀传。
-# 读结果、比成绩见 docs/cue-eval.md。
+# 比成绩用 score.py；记忆基准抽题与判分用 bench.py，只跑几题、同时跑几题用 CUEPAD_BENCH_ONLY=<题号,…>、_LANES（缺省 8，同样带前缀）。
 set -euo pipefail
 [ $# -ge 2 ] || { sed -n '2,11p' "$0" >&2; exit 2; }
 mode=$1 out=$2; shift 2
