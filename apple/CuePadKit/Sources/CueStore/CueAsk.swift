@@ -98,11 +98,7 @@ public struct CueAsking: Equatable, Sendable {
   }
 
   fileprivate static func phrase(_ text: String?, _ field: String, _ hint: String, limit: Int) throws -> String {
-    // 模型常在中文里打半角的逗号、分号、冒号：紧跟汉字的换成全角；前面不是汉字的不动（“v1.2,v1.3”“12:30”）
-    let wide = [(",", "，"), (";", "；"), (":", "：")].reduce(text ?? "") {
-      $0.replacingOccurrences(of: "(?<=\\p{Han})\($1.0) ?", with: $1.1, options: .regularExpression)
-    }
-    let trimmed = wide.trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "。？?！!"))
+    let trimmed = (text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "。？?！!"))
     guard !trimmed.isEmpty, trimmed.count <= limit, !trimmed.contains(where: \.isNewline) else {
       throw CueStoreError.phrase(field: field, hint: hint, limit: limit)
     }
