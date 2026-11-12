@@ -20,7 +20,7 @@ Debug 认的启动参数只在 `DebugScene+Args*.swift` 的字段注释里（拼
 - 系统岛的轮播验收加 `-CuePadCueCycle YES -CuePadCueCycleSeconds 6`，由本地演示更新系统活动；录屏仍经 `xc.sh rec`。这是状态变化的过渡，不是常驻循环。模拟器回桌面或打开通知中心后也可能挂起演示 App，轮播会停；只以实际变更的帧为证，不用录制请求时长推算帧率。App 的 `-CuePadReduceMotion` 与语言参数不传进 Widget 进程：系统岛需在租到的模拟器设置对应语言、减少动态效果后验收，结束还原。
 - 页面打开后第一次切换（第一次进入发送、工作、同步这类）要从启动前录（`CUEPAD_REC_LAUNCH=1`）：就绪后才开录的话，打开时的样子已经过去了，录不到那一下。
 - 录屏只在画面变时出帧，逐帧看用 `ffmpeg -i out.mov -fps_mode vfr …`；铺成一张图：`ffmpeg -i out.mov -vf "fps=8,crop=宽:高:x:y,tile=8x2" -frames:v 1 strip.png`。裁图、缩放用 `sips`（本机没装 ImageMagick）。
-- 验收用户装着的版本前，核对 `~/Applications/CuePad.app` 的 `CFBundleVersion` 与 `~/.pi/agent/extensions/cuepad-bridge/index.ts` 的 `EXTENSION_VERSION` 就是要验的那一版（只读）。
+- 验收用户装着的版本前，核对 `~/Applications/CuePad.app` 的 `CFBundleVersion` 就是要验的那一版（只读；Pi 的桥扩展随包，不另核对）。
 
 ## 占前台
 
