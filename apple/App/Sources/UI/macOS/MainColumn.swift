@@ -75,7 +75,7 @@ private struct MainHead: View {
         switch workspace.mainRoute {
         case .project: WideProjectHeading()
         case .shelf: WideHeading(title: String(localized: "项目"))
-        case .earlier: WideHeading(title: String(localized: "更早"))
+        case .earlier: WideHeading(title: String(localized: "历史"))
         case .archive: WideHeading(title: String(localized: "归档"))
         case .trash: WideHeading(title: String(localized: "回收站"))
         case .library: LibraryPanesSlot()

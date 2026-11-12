@@ -12,8 +12,8 @@ extension UTType {
     nonisolated static let cuepadSession = UTType(exportedAs: "\(AppIdentity.id).session", conformingTo: .data)
 }
 
-/// Agent 标志不占行首（同一家的都一样），在悬停提示与读屏里。
-/// 等你组第二行一直占着（没有原文时只写状态词），整组行高一律、不随状态跳。
+/// 宽屏每行两行、同高（`Chrome.tallRow`），不随状态跳：第一行名字与读数，第二行是挑哪个先看要的——哪个项目（图形带项目色）、
+/// 它要什么或刚在做什么、哪一家 Agent（行尾的小标志）。Agent 标志不占行首：同一家的都一样，行首留给状态。
 struct SessionRailCell: View {
     let item: SessionRailRows.Item
     let form: SessionRail.Form
@@ -21,6 +21,7 @@ struct SessionRailCell: View {
     let selected: Bool
     let open: (SessionState, SessionRail.Opening) -> Void
     @Environment(\.palette) private var palette
+    @Environment(Workspace.self) private var workspace
 
     var body: some View {
         Group {
@@ -42,7 +43,9 @@ struct SessionRailCell: View {
         .help(help)
     }
 
-    private var help: String { Dotted(item.name, item.shown.label, item.ask, item.session.agentMark).visible }
+    private var help: String { Dotted(item.name, project?.shownName, item.shown.label, item.ask ?? item.doing, item.session.agentMark).visible }
+
+    private var project: Project? { workspace.catalog?.project(item.session.projectID) }
 
     @ViewBuilder private var control: some View {
         #if os(macOS)
@@ -82,16 +85,10 @@ struct SessionRailCell: View {
                 .padding(.vertical, Spacing.tight)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                RailLine(height: item.waiting == nil ? Chrome.row : Chrome.tallRow) {
+                RailLine(height: Chrome.tallRow) {
                     StateDot(shown: item.shown, size: Chrome.railMark)
                 } rest: {
-                    if item.waiting == nil {
-                        name.font(Typography.body)
-                        Spacer(minLength: Spacing.item)
-                        SessionRailReadout(item: item)
-                    } else {
-                        asking
-                    }
+                    lines
                 }
             }
         }
@@ -105,19 +102,26 @@ struct SessionRailCell: View {
             .lineLimit(1)
     }
 
-    private var asking: some View {
+    private var lines: some View {
         VStack(alignment: .leading, spacing: Spacing.hair) {
             HStack(spacing: Spacing.item) {
                 name.font(Typography.body)
                 Spacer(minLength: 0)
-                SessionRailTime(item: item).font(Typography.caption).fixedSize()
+                if item.waiting == nil { SessionRailReadout(item: item) } else { SessionRailTime(item: item).font(Typography.caption).fixedSize() }
             }
             HStack(spacing: Spacing.tight) {
-                Text(item.shown.label).fontWeight(.semibold).foregroundStyle(item.shown.labelTint(palette)).fixedSize()
-                if let ask = item.ask {
-                    Dot().foregroundStyle(palette.ink3)
-                    Text(verbatim: ask).foregroundStyle(palette.ink2)
+                if let project { ProjectGlyph(project: project, size: 10) }
+                if item.waiting != nil {
+                    Text(item.shown.label).fontWeight(.semibold).foregroundStyle(item.shown.labelTint(palette)).fixedSize()
+                    if let ask = item.ask {
+                        Dot().foregroundStyle(palette.ink3)
+                        Text(verbatim: ask).foregroundStyle(palette.ink2)
+                    }
+                } else {
+                    Text(verbatim: Dotted(project?.shownName, item.doing).visible).foregroundStyle(palette.ink3)
                 }
+                Spacer(minLength: 0)
+                if let agent = item.session.agent.known { agent.mark.image.font(Glyph.small).foregroundStyle(palette.ink3).readerHidden(true) }
             }
             .font(Typography.caption)
             .lineLimit(1)
@@ -184,8 +188,12 @@ extension SessionRailRows.Item {
 
     var resting: Bool { waiting == nil && pulse.tier == .resting }
 
-    var ask: String? {
-        let text = waiting == .asking ? session.question?.displayText ?? session.detail : session.lastReply
+    var ask: String? { Self.firstLine(waiting == .asking ? session.question?.displayText ?? session.detail : session.lastReply) }
+
+    /// 没在等你的会话第二行写的：此刻在做的那一步，没有就是它上一句回答的头一行。
+    var doing: String? { Self.firstLine(session.detail) ?? Self.firstLine(session.lastReply) }
+
+    private static func firstLine(_ text: String?) -> String? {
         let line = text?.split(whereSeparator: \.isNewline).first.map(String.init)
         return line?.isEmpty == false ? line : nil
     }

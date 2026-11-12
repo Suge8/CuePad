@@ -110,32 +110,54 @@ struct RailCue: View {
     }
 }
 
-/// 个数与"更早"那一页读同一个查询，两边对得上。
-struct RailEarlier: View {
+/// 会话条最下一组：最近结束的会话，拿两组剩下的高（`SessionRail.footer`），放不下的滚。组头整行是去"历史"那一页的入口，行尾是总数——
+/// 与那一页读同一个查询，两边对得上。行同上面两组（`SessionRailCell`）：点了打开，⌘ 点并排。
+struct RailRecent: View {
+    let marked: Set<String>
+    let open: (SessionState, SessionRail.Opening) -> Void
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
-    @State private var total: Int?
+    @State private var page: SessionListPage?
+
+    private static let limit = 30
 
     var body: some View {
-        let total = total ?? 0
-        let selected = workspace.mainRoute == .earlier && !workspace.cueHome
-        Button { workspace.show(.earlier) } label: {
-            RailLine {
-                Image(.session).font(Glyph.control).foregroundStyle(palette.signature)
-            } rest: {
-                Text("更早").font(Typography.body.weight(selected ? .semibold : .regular)).foregroundStyle(palette.ink).lineLimit(1)
-                Spacer(minLength: 0)
-                Text(total, format: .number).font(Typography.caption).foregroundStyle(palette.ink3).monospacedDigit()
+        let items = page?.items ?? []
+        VStack(spacing: 0) {
+            Button { workspace.show(.earlier) } label: {
+                HStack(spacing: Spacing.glyph) {
+                    Text("最近").lineLimit(1)
+                    Spacer(minLength: 0)
+                    Text(page?.total ?? 0, format: .number).monospacedDigit()
+                    Chevron(.forward)
+                }
+                .font(Typography.label).foregroundStyle(palette.ink3)
+                .padding(.horizontal, RowMetrics.bleed)
+                .padding(.bottom, Spacing.tight)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                .contentShape(.rect)
             }
+            .buttonStyle(PressStyle())
+            .frame(height: Chrome.groupHeader)
+            .disabled(items.isEmpty)
+            .help("历史")
+            ScrollView {
+                LazyVStack(spacing: Spacing.hair) {
+                    ForEach(items, id: \.state.sessionID) { item in
+                        let pulse = workspace.pulse(of: item), session = pulse.session ?? item.state
+                        let row = SessionRailRows.Item(session: session, name: item.task?.title.nonEmpty ?? session.title, pulse: pulse, waiting: nil)
+                        SessionRailCell(item: row, form: .wide, moves: false, selected: marked.contains(row.id), open: open)
+                            .frame(height: Chrome.tallRow)
+                    }
+                }
+                .padding(.horizontal, RowMetrics.bleed)
+                .safeAreaPadding(.bottom, Chrome.pad)
+            }
+            .scrollIndicators(.hidden)
         }
-        .buttonStyle(RowStyle(selected: selected))
-        .disabled(total == 0)
-        .accessibilityLabel(Text("更早"))
-        .accessibilityValue(Text(total, format: .number))
-        .accessibilityAddTraits(selected ? .isSelected : [])
-        .observing(services.store, id: services.speech, into: $total, onError: workspace.fail) { [moment = services.speech] store in
-            try SessionListData.earlier(SessionQuery(limit: 1), at: moment, from: store).total
+        .observing(services.store, id: services.speech, into: $page, onError: workspace.fail) { [moment = services.speech, limit = Self.limit] store in
+            try SessionListData.earlier(SessionQuery(limit: limit), at: moment, from: store)
         }
     }
 }
