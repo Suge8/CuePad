@@ -5,6 +5,7 @@ CuePadKit 的字查主程序这份，String(localized:) 默认就是 main bundle
   strings.py sync    用 mac 与 ios 构建留下的 .stringsdata 更新目录（xc.sh strings 先编两端再调它）：新字进来等翻译，代码里没了的删掉；
                      缺英文的写进 apple/.derived/strings-todo.json（键 → 出处）
   strings.py set     从标准输入读 {"中文键": "English" | {"one": "…", "other": "…"}} 写进英文（复数按第一个数字参数分）；占位符要与键一致
+  strings.py find <词>  列出键里含这个词的界面字与它们的英文：给新字定名词的英文前先查，同一个词只有一种译法
   strings.py check   xc.sh check 在 iOS 构建后调：这次构建抽到的字都在目录里，每条都有英文且占位符对得上
 """
 import json, os, re, subprocess, sys
@@ -139,6 +140,13 @@ def put():
         sys.exit("没写进去的：\n" + "\n".join(bad))
 
 
+def find():
+    word = sys.argv[2]
+    for key, entry in sorted(load("Localizable")["strings"].items(), key=lambda item: len(item[0])):
+        if word in key:
+            print(f"{key} → {' | '.join(english(entry))}")
+
+
 def check():
     catalogs = {t: load(t)["strings"] for t in CATALOGS}
     bad = [f"{os.path.relpath(d['source'], APPLE)}:{s['location']['startingLine']} 「{s['key']}」不在目录里"
@@ -150,4 +158,4 @@ def check():
 
 
 if __name__ == "__main__":
-    {"sync": sync, "set": put, "check": check}[sys.argv[1] if len(sys.argv) > 1 else ""]()
+    {"sync": sync, "set": put, "find": find, "check": check}[sys.argv[1] if len(sys.argv) > 1 else ""]()
