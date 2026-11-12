@@ -149,8 +149,10 @@ struct BoardLineRow: Layout {
         Plan(line: nil, pair: tight.pair, spare: true), Plan(line: nil, pair: tight.pair, spare: false),
     ]
 
+    /// 没给宽时报的是非要不可的那一样（状态词，没有就是时长）的宽：卡脚按它给项目名让地方（`BoardFoot`）。
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        CGSize(width: proposal.width ?? 0, height: proposal.height ?? WaveStrip.height)
+        let needed = { (subviews.first { $0[Part.self] == .word } ?? subviews.first { $0[Part.self] == .time })?.sizeThatFits(.unspecified).width ?? 0 }
+        return CGSize(width: proposal.width ?? needed(), height: proposal.height ?? WaveStrip.height)
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {

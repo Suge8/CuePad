@@ -7175,18 +7175,18 @@
         }
       }
     },
-    "菜单栏面板 ⌘↩ 直接发出" : {
+    "菜单栏面板 ↩ 直接发出" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Menu bar panel sends on ⌘↩"
+            "value" : "Menu bar panel sends on ↩"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "菜单栏面板 ⌘↩ 直接发出"
+            "value" : "菜单栏面板 ↩ 直接发出"
           }
         }
       }

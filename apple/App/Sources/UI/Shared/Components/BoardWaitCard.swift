@@ -24,12 +24,16 @@ struct BoardWaitCard: View {
     }
 
     private var face: some View {
-        BoardCardLayout(advancing: false, pulse: leftPulse) {
+        BoardCardLayout(advancing: false, pulse: leftPulse, project: project) {
             StateGlyph(status: held.deciding ? .asking : .awaitsReply).font(.system(size: TaskMetrics.ring))
                 .frame(width: TaskMetrics.cardLead, height: TaskMetrics.cardLead)
-            if let project { BoardProjectGlyph(project: project) }
+        } title: {
             if held.item?.task.isPinned == true { BoardPin() }
             BoardCardTitle(held.title).foregroundStyle(palette.ink)
+        } facts: {
+            // 拍板与待回复原来靠图标分，现在写成字；等了多久跟着走
+            Text(held.deciding ? "拍板" : "待回复").fontWeight(.semibold).foregroundStyle(held.deciding ? palette.waiting : palette.ink2)
+            LiveText(style: SessionClock.Elapsed(since: held.session.stateSince)).foregroundStyle(palette.ink3)
         }
         .boardCard(.waiting)
     }

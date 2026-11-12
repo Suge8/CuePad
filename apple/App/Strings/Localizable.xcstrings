@@ -14407,6 +14407,22 @@
         }
       }
     },
+    "拍板" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your call"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "拍板"
+          }
+        }
+      }
+    },
     "拍照" : {
       "localizations" : {
         "en" : {
@@ -21811,38 +21827,6 @@
         }
       }
     },
-    "记下灵感 → %@（⌘↩）" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Jot down an idea → %@ (⌘↩)"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "记下灵感 → %@（⌘↩）"
-          }
-        }
-      }
-    },
-    "记下灵感（⌘↩）" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Jot down an idea (⌘↩)"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "记下灵感（⌘↩）"
-          }
-        }
-      }
-    },
     "记下的灵感、建的任务都能在这里搜到" : {
       "localizations" : {
         "en" : {
@@ -21859,18 +21843,18 @@
         }
       }
     },
-    "记下（⌘↩）" : {
+    "记下（↩）" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Save (⌘↩)"
+            "value" : "Save (↩)"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "记下（⌘↩）"
+            "value" : "记下（↩）"
           }
         }
       }

@@ -173,8 +173,24 @@ struct BoardColumn: View {
             .paper(cornerRadius: TaskMetrics.cardRadius)
     }
 
-    private func empty(_ text: LocalizedStringResource) -> some View {
-        Text(text).font(Typography.secondary).foregroundStyle(palette.ink3).multilineTextAlignment(.center)
+    /// 能添东西的列空着时，这一格就是添加的入口（列头那颗"+"的同一个动作）；手机的行里添加在行脊上，这一格只是说明。
+    @ViewBuilder private func empty(_ text: LocalizedStringResource) -> some View {
+        if !isRow, let add = LaneAdd.of(column, in: workspace) {
+            Button(action: add.action) {
+                vacancy(text) { Label(add.title, icon: .add).font(Typography.secondary.weight(.semibold)).foregroundStyle(palette.ink2) }
+                    .padding(.vertical, Spacing.group).contentShape(.rect)
+            }
+            .buttonStyle(PressStyle(.card))
+        } else {
+            vacancy(text) { EmptyView() }
+        }
+    }
+
+    private func vacancy(_ text: LocalizedStringResource, @ViewBuilder lead: () -> some View) -> some View {
+        VStack(spacing: Spacing.tight) {
+            lead()
+            Text(text).font(Typography.secondary).foregroundStyle(palette.ink3).multilineTextAlignment(.center)
+        }
             .padding(.horizontal, BoardCardMetrics.inset)
             .frame(maxWidth: .infinity, minHeight: isRow ? nil : 64, maxHeight: isRow ? .infinity : nil)
             .background(RoundedRectangle(cornerRadius: TaskMetrics.cardRadius).strokeBorder(palette.hair, style: StrokeStyle(lineWidth: 1, dash: [4, 4])))

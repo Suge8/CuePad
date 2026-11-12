@@ -8,7 +8,6 @@ struct BoardColumns: View {
     let margin: CGFloat
     @State private var showsEarlier = DebugHooks.preset.showsDone
 
-    @Environment(\.dynamicTypeSize) private var typeSize
     #if os(macOS)
     @Environment(\.boardBand) private var band
     #endif
@@ -30,7 +29,7 @@ struct BoardColumns: View {
             ForEach(TaskBoard.Column.allCases, id: \.self) { item in
                 BoardColumn(column: item, board: board, adding: $adding, newTaskProject: newTaskProject, earlier: $showsEarlier)
                     .frame(width: width)
-                    .environment(\.boardTitle, BoardCardMetrics.title(item, cardWidth: width - 2 * BoardCardMetrics.inset, typeSize: typeSize))
+                    .environment(\.boardOneLine, width >= BoardWidths.oneLine)
             }
         }
         #if os(macOS)
@@ -43,10 +42,17 @@ struct BoardColumns: View {
 /// 否决过：按内容分宽（推进中、等你有卡时不低于均分，待办、已完成与空列让宽到 140）——卡一换列整排列宽跟着换档、卡跟着折行，
 /// 眼睛要重新找；临界宽也跟着看板另算一份，换页时会话条自己开合。
 enum BoardWidths {
-    /// 放得下圈与折几行后够读的标题（`BoardCardMetrics.title`）；四列连同页边放进主区最窄（`WideMetrics.narrowestMain`）。
+    /// 两行够读完一个标题（一行九个汉字上下）、卡脚放得下项目名与读数；四列连同页边放进主区最窄（`WideMetrics.narrowestMain`）。
     static let minColumn: CGFloat = 175
     /// 列与列之间：列没有底，相邻两列的卡靠各自离列边的 `BoardCardMetrics.inset` 分开（看着隔 `BoardCardMetrics.columnGap`），不另留缝。
     static let gap = BoardCardMetrics.columnGap - 2 * BoardCardMetrics.inset
+
+    /// 一行写得下二十二个汉字（大库里标题九到二十二个字）的列宽。
+    #if os(macOS)
+    static let oneLine: CGFloat = 348
+    #else
+    static let oneLine: CGFloat = 420
+    #endif
 
     static func column(room: CGFloat) -> CGFloat {
         let count = CGFloat(TaskBoard.Column.allCases.count)

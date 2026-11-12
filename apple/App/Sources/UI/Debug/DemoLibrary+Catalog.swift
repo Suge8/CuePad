@@ -68,7 +68,7 @@ extension DemoLibrary {
     static let tasks: [DemoTask] = [
         ("CuePad", String(localized: "投送队列超时报错不发键", table: "Demo"), false),
         ("CuePad", String(localized: "导入旧数据时保留回收站", table: "Demo"), false),
-        ("CuePad", String(localized: "菜单栏面板 ⌘↩ 直接发出", table: "Demo"), false),
+        ("CuePad", String(localized: "菜单栏面板 ↩ 直接发出", table: "Demo"), false),
         ("CuePad", String(localized: "小组件显示进行中的任务", table: "Demo"), false),
         ("CuePad", String(localized: "分享扩展支持多张图片", table: "Demo"), false),
         ("CuePad", String(localized: "设置页加快捷键冲突提示", table: "Demo"), false),

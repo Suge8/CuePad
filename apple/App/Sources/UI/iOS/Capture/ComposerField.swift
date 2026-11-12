@@ -283,12 +283,20 @@ final class GrowingTextView: UITextView {
             return switch key.keyCode {
             case .keyboardUpArrow: keys(.up)
             case .keyboardDownArrow: keys(.down)
-            case .keyboardReturnOrEnter, .keyboardTab: keys(.accept)
+            case .keyboardReturnOrEnter: keys(.accept) || sends(key)
+            case .keyboardTab: keys(.accept)
             case .keyboardEscape: keys(.dismiss)
             default: false
             }
         }
         if !handled { super.pressesBegan(presses, with: event) }
+    }
+
+    /// 外接键盘的 ↩ 发送（空着时什么都不做），⇧↩ 照常换行；屏幕键盘的换行键不走按键事件，仍是换行。
+    private func sends(_ key: UIKey) -> Bool {
+        guard !key.modifierFlags.contains(.shift) else { return false }
+        shortcut(.send)?()
+        return true
     }
 
     /// 光标跟随造成的滚动（不是用户在拖）走短动画，不再瞬间跳一行。
