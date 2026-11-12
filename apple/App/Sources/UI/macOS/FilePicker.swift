@@ -1,7 +1,7 @@
 #if os(macOS)
 import AppKit
 
-/// 非模态（`begin`）：不像 `runModal` 那样把主线程关在面板的嵌套事件循环里，也不是 NSWindow sheet（docs/ui.md）。已有一个面板开着时再要一个，只是把它带到前面。
+/// 非模态（`begin`）：不像 `runModal` 那样把主线程关在面板的嵌套事件循环里，也不是 NSWindow sheet（开、关各约 300ms 的嵌套循环）。已有一个面板开着时再要一个，只是把它带到前面。
 enum FilePicker {
     private static var open: NSOpenPanel?
 

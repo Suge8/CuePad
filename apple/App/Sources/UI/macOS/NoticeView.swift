@@ -1,7 +1,7 @@
 #if os(macOS)
 import SwiftUI
 
-/// 原地淡入淡出、不从顶边滑进：开合不逐帧排版（docs/ui.md「宽屏开合」）。
+/// 原地淡入淡出、不从顶边滑进：开合不逐帧排版。
 struct NoticeView: View {
     @Environment(Workspace.self) private var workspace
 

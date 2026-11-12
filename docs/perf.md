@@ -18,7 +18,7 @@
 
 ### 开合的逐帧量法
 
-宽屏开合（做法在 [ui.md](ui.md)「宽屏开合」）量两样，缺一不可：
+宽屏开合（做法在 `WideColumnSlide`、`WideSlide` 头注释）量两样，缺一不可：
 
 - 主线程开销：`xc.sh perf ab <旧> <新> 3 mac 1 -CuePadInteractOnly "侧栏收起,侧栏展开,Cue 收起,Cue 放回"`，再加宽屏阈值那几项（`宽屏收窄·…`、`宽屏展开·…`、`宽屏反向·…`、`Cue 收钮·…`、`Cue 露出·…`）。比指令、掉帧与点击那一圈之外最长的一圈（`interact.jsonl` 的 `heavy`）；点击那一圈有时拆成两圈，加起来才是它。「宽屏反向」的每帧位移在大库上常读成 128 或 256，是主线程忙时漏采，跳没跳以录屏为准。
 - 屏上每样东西是不是连续地走：`xc.sh rec mac -- -CuePadDemo YES … -CuePadWindowSize 1512x900 -CuePadSidebarCycle YES`（`fast` 中途反向；`-CuePadRightCycle` 开合 Cue；`-CuePadWideReverse <组合>` 跨临界宽），再用 `apple/scripts/frame-track.py` 逐帧量左对齐、居中、靠右三类东西的左缘。每段单调、没有反向步才算过；`fast` 看按下前后位置是否连着。会话、看板、项目三页各量收起、展开与 `fast`。

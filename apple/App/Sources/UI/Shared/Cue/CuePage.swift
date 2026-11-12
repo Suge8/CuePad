@@ -59,7 +59,7 @@ struct CuePage: View {
                     .padding(.horizontal, Self.inset)
                     .frame(maxWidth: Self.readingWidth)
             }
-            // 原地淡入淡出、对话这一下就让到终点的宽：开合不逐帧排版（docs/ui.md「宽屏开合」）
+            // 原地淡入淡出、对话这一下就让到终点的宽：开合不逐帧排版
             if cue.showsRun, let keeper = services.cue.keeper {
                 CueRunPanel(keeper: keeper)
                     .padding([.trailing, .bottom], Spacing.group)
@@ -87,7 +87,7 @@ struct CuePage: View {
 
     private var railInset: CGFloat { workspace.layout == .narrow ? SessionRail.chatInset : 0 }
 
-    /// 读不出来时也排一个真的视图：读库的订阅挂在页上，等视图出现才启动（docs/ui.md）。
+    /// 读不出来时也排一个真的视图：读库的订阅挂在页上，等视图出现才启动。
     @ViewBuilder private var chat: some View {
         Group {
             if let thread, !thread.rows.isEmpty {
