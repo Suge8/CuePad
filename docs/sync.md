@@ -2,13 +2,13 @@
 
 ## 拉取节奏与门铃
 
-- 实测（2026-10，正式中转、CloudKit 开发环境）：服务器收下到对方入库，只靠按节奏拉中位 1.0～1.8 秒，门铃 0.5 秒；中转停掉 2 秒内发现并退回按节奏拉，起来后 4～8 秒连回。
+- 实测（正式中转、CloudKit 开发环境）：服务器收下到对方入库，只靠按节奏拉中位 1.0～1.8 秒，门铃 0.5 秒；中转停掉 2 秒内发现并退回按节奏拉，起来后 4～8 秒连回。
 - 中转放在香港自建：Cloudflare、Vercel 的默认域名在大陆遭 DNS 污染、按 SNI 阻断。
-- Cue 值班是等待理由：手机对 Cue 说的一句曾 21 秒才交给它，当时 Mac 没有等待理由、一次都没拉。没开 1 秒一档：Cue 回一句本身要十几到几十秒。
+- Cue 值班是等待理由：不是的话，手机对 Cue 说的一句要等 Mac 别的理由才拉（曾 21 秒）。没开 1 秒一档：Cue 回一句本身要十几到几十秒。
 
 ## 用户离开时的 Mac
 
-用户离开后 App Nap 把 App 放进后台节流档，别的程序占满 CPU 时整个进程拿不到 CPU，按节奏的拉取能停几分钟（正式版出现过 406 秒）。两样都要，缺一样仍会饿几十秒（2026-10 加压复测：都不做拉取间隔最大 59.5 秒，只做后一样 39.8 秒，都做 2.9 秒）：
+用户离开后 App Nap 把 App 放进后台节流档，别的程序占满 CPU 时整个进程拿不到 CPU，按节奏的拉取能停几分钟（正式版出现过 406 秒）。两样都要，缺一样仍会饿几十秒（加压实测：都不做拉取间隔最大 59.5 秒，只做后一样 39.8 秒，都做 2.9 秒）：
 
 - 有等待理由期间持有系统活动（`AppServices.holdActivityWhilePolling`）：不持有时整个进程都在饿。
 - 订阅重读走自己的只读连接（`CueStore` 头注释），外部提交按表叫醒（`ChangeNotification`），没人看得到主窗口时内容摘下（`MainShellWindow.parkWhileUnseen`）：持有活动后剩下的排队来自同一条队列上的活。
@@ -39,11 +39,7 @@
 
 技能与规则的快照：500 个技能的快照实测约 230KB，正文另算。
 
-在线记录复用现有续期，不加每会话心跳。实时活动的有效期限参与内容比较，需要续期时会有额外活动更新，不能称为零流量。
-
-## 失败与重试
-
-- 没在真网络上确认的：断网时 CloudKit 整批抛的是 `partialFailure` 包着 -1009，还是 URL 错误原样；区忙带不带 `retryAfterSeconds`。归类（`SyncFault`）对这几种包法给同一个结论，所以不影响行为。
+在线记录复用现有续期，不加每会话心跳。
 
 ## 同步不通时说的话
 
@@ -53,7 +49,7 @@
 
 - 实时活动、小组件与 App 使用同一份运行投影，Mac 发布者直接订阅 Store，不依赖界面订阅。快照过期只撤销运行证据；未知只保留已有活动，不授权新建，也不冒充完成。各 host 到期后的计数由 `CueNow.nextShownChange` 安排系统重画。
 - 实时活动由 Mac 经 APNs 更新，不靠 CloudKit 唤醒；手机不拿本地旧库覆盖。令牌私有 iCloud 加密同步，中转内容不留存，密钥只在服务端。APNs 收下不证明已上屏，岛更新不证明手机资料库已同步。[部署与隐私边界](../relay/README.md)。
-- ActivityKit 推送仍受网络、优先级与系统预算限制，不保证秒到；活动最多八小时，本次不远程开启。`stale-date` 只标过时，不会取得新事实。依据：[ActivityKit](https://developer.apple.com/documentation/activitykit/starting-and-updating-live-activities-with-activitykit-push-notifications)、[后台通知](https://developer.apple.com/documentation/usernotifications/pushing-background-updates-to-your-app)。
+- ActivityKit 推送仍受网络、优先级与系统预算限制，不保证秒到；活动最多八小时，只在 App 里开启、推送只更新。`stale-date` 只标过时，不会取得新事实。依据：[ActivityKit](https://developer.apple.com/documentation/activitykit/starting-and-updating-live-activities-with-activitykit-push-notifications)、[后台通知](https://developer.apple.com/documentation/usernotifications/pushing-background-updates-to-your-app)。
 
 ## 排查与真机验证
 
@@ -71,11 +67,11 @@ CloudKit 日志里的错误详情是 `<private>`。要复现：拿用户库的�
 
 同步是否真在跑以库为准（只读复制出来看）：`syncState` 有一行 `zoneToken`，`syncRecords` 的行数随推送增长到与同步表记录数相当。真机验证：装发布版 → 设置里的 iCloud 同步先显示"正在连接 iCloud…"再变"已同步" → 几分钟内复制库检查这两张表 → 另一台设备上看到同一批项目、灵感与任务。
 
-验证生产环境的订阅能否创建：用 Developer ID 描述文件签名、带 production 容器权限的最小 Mac 程序保存订阅，打印完整的 CKError（看 `description`，`localizedDescription` 会丢掉服务端的说明）。开发环境的 Mac 描述文件按 Provisioning UDID 登记设备，不是 Hardware UUID。
+验证生产环境的订阅能否创建：用 Developer ID 描述文件签名、带 production 容器权限的最小 Mac 程序保存订阅，打印完整的 CKError（看 `description`，`localizedDescription` 会丢掉服务端的说明）。
 
 ### 实时活动的手机取证
 
-`xc.sh activity-log <输出.json>` 无报告时输出 `[]`；失败非零退出，保留旧导出。iCloud 只留最后上传的快照，不自动清理。跨网络、后台和真实撤销待 TestFlight 验收。
+`xc.sh activity-log <输出.json>` 无报告时输出 `[]`；失败非零退出，保留旧导出。iCloud 只留最后上传的快照，不自动清理。
 
 ### 推送叫醒被系统结束的 App
 
@@ -83,7 +79,7 @@ CloudKit 日志里的错误详情是 `<private>`。要复现：拿用户库的�
 
 以下需签名设备与另一台同环境设备。隔离模拟器能核对入库后的展示和 ActivityKit 内容，不能证明真实通知可达、后台预算、锁屏数据保护或低电量行为。Apple Silicon 模拟器可配 APNs 沙箱推送，仍不代表真机调度。
 
-1. 两端在同一个环境：生产订阅部署之后，手机装 TestFlight 版、Mac 用正式版；之前用 `xc.sh device` 装的开发构建，Mac 那头起连开发环境的实例（见 [perf.md](perf.md)「同步测量」）。手机打开一次、确认设置里通知那一行正常，主屏放 Cue 小组件。
+1. 两端在同一个环境：手机装 TestFlight 版、Mac 用正式版；或手机用 `xc.sh device` 装开发构建，Mac 那头起连开发环境的实例（见 [perf.md](perf.md)「同步测量」）。手机打开一次、确认设置里通知那一行正常，主屏放 Cue 小组件。
 2. 打开 CuePad 后回主屏、锁屏放一会儿（不要划掉；要验冷启动，等系统回收它，或打开几个大 App 挤掉它）。
 3. 在 Mac 上让 Cue 对你说一句不带选项的话（只走静默推送），再说一句带选项的（可见通知，同时叫醒 App）。
 4. 不打开 App，分别核对小组件与实时活动；前者取决于 CloudKit 唤醒及 WidgetKit 刷新预算，后者应由 ActivityKit 推送换成最新计数与问题。再打开 App 核对资料库，不能用岛已更新替代这一步。
