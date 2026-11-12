@@ -21,7 +21,7 @@
 
 - 长期操作跨重启只在开发环境验过（`SYNC_BENCH_CLOUD=real sync-bench.py fileresume`：传到四成时杀掉再起，接上、不从头传）；被系统结束、手机上的后台传完没有在真机上验。
 - 空间满只在模拟云验过（`sync-bench.py filesquota`）。真 iCloud 满了时不带文件的小记录会不会也被拒没有验证到。
-- 按流量计费的网络不自动取只读路径监视器，没有自动测试；自动取的其余条件由 `FileSyncTests` 覆盖。
+- 按流量计费的网络下不自动取：这一条（判定来自系统的网络路径监视器）没有自动测试；自动取的其余条件由 `FileSyncTests` 覆盖。
 
 ## 说的话的链路
 
@@ -63,15 +63,13 @@ log show --last 30m --info --debug --predicate "subsystem == \"$id\" OR (process
 log stream --info --predicate 'process == "CuePad" AND subsystem BEGINSWITH "com.apple.cloudkit"'
 ```
 
-CloudKit 日志里的错误详情是 `<private>`。要复现：拿用户库的副本、清掉 `syncState`，在带生产签名的最小程序里用真实同步代码跑一遍、读问题列表——它会真的上传副本里的待推送记录，只在确认副本内容就是用户本机那份时做。
+CloudKit 日志里的错误详情是 `<private>`。
 
 同步是否真在跑以库为准（只读复制出来看）：`syncState` 有一行 `zoneToken`，`syncRecords` 的行数随推送增长到与同步表记录数相当。真机验证：装发布版 → 设置里的 iCloud 同步先显示"正在连接 iCloud…"再变"已同步" → 几分钟内复制库检查这两张表 → 另一台设备上看到同一批项目、灵感与任务。
 
-验证生产环境的订阅能否创建：用 Developer ID 描述文件签名、带 production 容器权限的最小 Mac 程序保存订阅，打印完整的 CKError（看 `description`，`localizedDescription` 会丢掉服务端的说明）。
-
 ### 实时活动的手机取证
 
-`xc.sh activity-log <输出.json>` 无报告时输出 `[]`；失败非零退出，保留旧导出。iCloud 只留最后上传的快照，不自动清理。
+`xc.sh activity-log [输出.json]` 无报告时输出 `[]`；失败非零退出，保留旧导出。iCloud 只留最后上传的快照，不自动清理。
 
 ### 推送叫醒被系统结束的 App
 
