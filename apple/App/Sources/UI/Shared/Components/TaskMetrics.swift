@@ -30,7 +30,7 @@ enum TaskMetrics {
     static let ringColumn: CGFloat = 18
     static let columnGap = Spacing.item
     static let cardPadding = Spacing.group
-    static let cardRadius = Radius.block
+    static let cardRadius = Radius.card
     static let cardLead: CGFloat = 16
     static let cardGlyph: CGFloat = 12
     #endif

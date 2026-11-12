@@ -158,8 +158,8 @@ private struct FocalGround: ViewModifier {
 
     func body(content: Content) -> some View {
         content.background {
-            RoundedRectangle(cornerRadius: Radius.sheet).fill(palette.desk).elevation(.lifted)
+            RoundedRectangle(cornerRadius: Radius.field).fill(palette.desk).elevation(.lifted)
         }
-        .contentShape(.rect(cornerRadius: Radius.sheet))
+        .contentShape(.rect(cornerRadius: Radius.field))
     }
 }
