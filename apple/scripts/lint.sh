@@ -170,4 +170,7 @@ python3 "$scripts/lint_expiry.py" || status=1
 # Schema.baseVersion 不高于已发布标签的最小结构版本（规则在 lint_schema.py 头注释）；同样要 git，暂存区副本里没有
 [ "${1:-}" = --staged ] || python3 "$scripts/lint_schema.py" || status=1
 
+# 文档指向的名字还在（lint_docs.py 头注释）；要 git
+[ "${1:-}" = --staged ] || python3 "$scripts/lint_docs.py" || status=1
+
 exit $status
