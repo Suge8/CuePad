@@ -5,6 +5,9 @@ extension EnvironmentValues {
     @Entry var boardSaid: [String: [Date]] = [:]
 }
 
+/// 回合条：你每说一次话起一节（`recentSaid`），一节的长短是那一轮花的时间（开方后按比例，长的不把短的挤没），越早的越淡；
+/// 最右一节是此刻这一轮——在跑的有一道光从头走到尾，停下要你管的末端一截状态色，歇着的与过去的同色。
+/// 否决过：发丝线上几颗点加一截波浪——点读不出是回合，波浪只是装饰，细到在卡上像没画完。
 /// 右段固定占 `nowShare`：每张卡的现在在同一位置、同一长度，一列读起来整齐。
 /// 一列里排在第 `maxMoving` 条以后的静止（`moves` 由列按先后给）："同屏最多几条"要逐行读几何才判得出，每行一个几何读数的开销比省下的动画还大，按列里的先后数是最轻的等价做法：列从上往下读，排在前面的就是一屏里先看到的。
 struct BoardLine: View {
@@ -21,16 +24,13 @@ struct BoardLine: View {
     static let maxTracks = 3
     nonisolated static let maxSaid = 6
     private static let nowShare: CGFloat = 0.42
-    nonisolated fileprivate static let stroke: CGFloat = 1.5
-    private static let endDot: CGFloat = 6
+    /// 停下的那一节末端染状态色的一截。
+    private static let endCap: CGFloat = 10
 
     var body: some View {
         Group {
             if detail == .now {
-                HStack(spacing: 0) {
-                    if pulse.tier == .running { Circle().fill(pulse.tint(palette)).frame(width: Self.endDot, height: Self.endDot) }
-                    now(joint: false)
-                }
+                now
             } else {
                 history
             }
@@ -45,10 +45,11 @@ struct BoardLine: View {
                 if let handoff = pulse.handoff {
                     HandoffLine(handoff: handoff).font(TaskMetrics.caption).foregroundStyle(palette.ink2).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
                 } else {
-                    let marks = PastDots.marks(said: pulse.session.flatMap { said[$0.sessionID] } ?? [], origin: pulse.session?.createdAt)
+                    let marks = PastBars.marks(said: pulse.session.flatMap { said[$0.sessionID] } ?? [], origin: pulse.session?.createdAt)
                     LineSplit(share: Self.nowShare) {
-                        past(marks)
-                        now(joint: !marks.isEmpty)
+                        PastBars(marks: marks)
+                            .fill(LinearGradient(stops: [.init(color: palette.track.opacity(0), location: 0), .init(color: palette.track, location: 0.3)], startPoint: .leading, endPoint: .trailing))
+                        now
                     }
                 }
             }
@@ -68,38 +69,21 @@ struct BoardLine: View {
         }
     }
 
-    private func past(_ marks: [CGFloat]) -> some View {
-        PastLine(marks: marks)
-            .fill(LinearGradient(stops: [.init(color: palette.track.opacity(0), location: 0), .init(color: palette.track, location: 0.3)], startPoint: .leading, endPoint: .trailing))
-            .overlay { PastDots(marks: marks, pick: .earlier).fill(palette.ink3) }
-            .overlay { PastDots(marks: marks, pick: .last).fill(pulse.lastSaidTint(palette)) }
-    }
-
-    @ViewBuilder private func now(joint: Bool) -> some View {
+    @ViewBuilder private var now: some View {
         switch pulse.trace {
         case .running(let gait, let subagents):
             let strip = WaveStrip(gait: gait, tracks: min(subagents, Self.maxTracks))
-            Group {
-                if moves && plays {
-                    LoopLayer(kind: .wave(strip), color: pulse.tint(palette))
-                } else {
-                    strip.still.stroke(pulse.tint(palette), style: StrokeStyle(lineWidth: strip.lineWidth, lineCap: .round, lineJoin: .round))
-                }
-            }
-            .clipped()
-            .mask {
-                LinearGradient(stops: [.init(color: strip.tracks > 0 ? .black : .clear, location: 0), .init(color: .black, location: 0.25),
-                                       .init(color: .black, location: 0.85), .init(color: .clear, location: 1)], startPoint: .leading, endPoint: .trailing)
+            if moves && plays {
+                LoopLayer(kind: .wave(strip), color: pulse.tint(palette))
+            } else {
+                strip.still.fill(palette.track).overlay { strip.head.fill(pulse.tint(palette)) }
             }
         case .stopped(let broken):
-            tail(dashed: broken, joint: joint).overlay(alignment: .trailing) { Circle().fill(pulse.tint(palette)).frame(width: Self.endDot, height: Self.endDot) }
+            NowBar(dashed: broken).fill(palette.track)
+                .overlay(alignment: .trailing) { Capsule().fill(pulse.tint(palette)).frame(width: Self.endCap, height: WaveStrip.bar) }
         case .resting:
-            tail(dashed: false, joint: joint)
+            NowBar(dashed: false).fill(palette.track)
         }
-    }
-
-    private func tail(dashed: Bool, joint: Bool) -> some View {
-        Tail(joint: joint).stroke(palette.track, style: StrokeStyle(lineWidth: Self.stroke, lineCap: .round, dash: dashed ? [4, 4] : []))
     }
 
     private struct TimeSpent: View {
@@ -199,28 +183,30 @@ private struct LineSplit: Layout {
     }
 }
 
-nonisolated private struct PastDots: Shape {
-    enum Pick { case earlier, last }
+nonisolated private struct PastBars: Shape {
     let marks: [CGFloat]
-    let pick: Pick
 
+    /// 一节最短这么长（含它后面的缝）：再短读不出是一节。
     static let spacing: CGFloat = 9
-    static let hole: CGFloat = 4.5
+    static let gap: CGFloat = 3
 
     func path(in rect: CGRect) -> Path {
-        let xs = Self.xs(marks, width: rect.width)
-        let radius: CGFloat = pick == .last ? 3 : 2.5
+        let ends = marks.isEmpty ? [rect.width] : Self.ends(marks, width: rect.width)
+        var x: CGFloat = 0
         return Path { path in
-            for x in pick == .last ? xs.suffix(1) : xs.dropLast() {
-                path.addEllipse(in: CGRect(x: x - radius, y: rect.midY - radius, width: radius * 2, height: radius * 2))
+            for end in ends {
+                let bar = CGRect(x: x, y: rect.midY - WaveStrip.bar / 2, width: end - Self.gap - x, height: WaveStrip.bar)
+                if bar.width >= WaveStrip.bar { path.addRoundedRect(in: bar, cornerSize: CGSize(width: WaveStrip.bar / 2, height: WaveStrip.bar / 2)) }
+                x = end
             }
         }
     }
 
-    static func xs(_ marks: [CGFloat], width: CGFloat) -> [CGFloat] {
+    /// 各节的右端：从右往左排，太挤的往左让，让到左沿外的（最早的几节）不画。
+    static func ends(_ marks: [CGFloat], width: CGFloat) -> [CGFloat] {
         var xs = marks.map { $0 * width }
         for index in xs.indices.reversed().dropFirst() { xs[index] = min(xs[index], xs[index + 1] - spacing) }
-        return xs.indices.compactMap { index in index == xs.count - 1 ? max(xs[index], spacing) : xs[index] >= spacing ? xs[index] : nil }
+        return xs.filter { $0 >= spacing }
     }
 
     /// 会话记录晚于第一句才建的，第一句前也留一分钟那么宽。
@@ -237,29 +223,19 @@ nonisolated private struct PastDots: Shape {
     }
 }
 
-nonisolated private struct PastLine: Shape {
-    let marks: [CGFloat]
+/// 此刻这一节不在跑时的样子：一整节；断了的（被打断）切成几小段。
+nonisolated private struct NowBar: Shape {
+    let dashed: Bool
+    private static let dash: (on: CGFloat, off: CGFloat) = (6, 4)
 
     func path(in rect: CGRect) -> Path {
-        let half = BoardLine.stroke / 2
-        var x: CGFloat = 0
+        let radius = CGSize(width: WaveStrip.bar / 2, height: WaveStrip.bar / 2)
+        let y = rect.midY - WaveStrip.bar / 2
         return Path { path in
-            for dot in PastDots.xs(marks, width: rect.width) {
-                if dot - PastDots.hole > x { path.addRect(CGRect(x: x, y: rect.midY - half, width: dot - PastDots.hole - x, height: half * 2)) }
-                x = dot + PastDots.hole
+            guard dashed else { return path.addRoundedRect(in: CGRect(x: rect.minX, y: y, width: rect.width, height: WaveStrip.bar), cornerSize: radius) }
+            for x in stride(from: rect.minX, to: rect.maxX - Self.dash.on, by: Self.dash.on + Self.dash.off) {
+                path.addRoundedRect(in: CGRect(x: x, y: y, width: Self.dash.on, height: WaveStrip.bar), cornerSize: radius)
             }
-            if rect.maxX > x { path.addRect(CGRect(x: x, y: rect.midY - half, width: rect.maxX - x, height: half * 2)) }
-        }
-    }
-}
-
-nonisolated private struct Tail: Shape {
-    let joint: Bool
-
-    func path(in rect: CGRect) -> Path {
-        Path { path in
-            path.move(to: CGPoint(x: joint ? PastDots.hole : 0, y: rect.midY))
-            path.addLine(to: CGPoint(x: rect.maxX - 3, y: rect.midY))
         }
     }
 }

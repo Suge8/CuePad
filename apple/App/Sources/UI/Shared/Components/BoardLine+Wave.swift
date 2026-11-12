@@ -1,128 +1,96 @@
 import QuartzCore
 import SwiftUI
 
+/// 回合条上"此刻这一轮"在跑时的那一节：一条淡的底，一道光从头走到尾。
+/// 想的时候光长而慢，跑工具时短而快，压缩上下文时反着走（往回收）；有子代理在跑就分成几条细的，各走各的、错开。
 nonisolated struct WaveStrip: Equatable, Sendable {
     let gait: BoardPulse.Gait
     let tracks: Int
 
-    static let period: CGFloat = 120
     static let height: CGFloat = 12
-    static let line: CGFloat = 1.5
-    static let laneLine: CGFloat = 1.3
-    static let laneGap: CGFloat = 4
-    static let fork: CGFloat = 14
-    static let dash: [CGFloat] = [8, 40]
-    static let laneSeconds = 1.6
-    static let laneOpacity: CGFloat = 0.28
+    /// 回合条一节的粗细（过去的各节同粗，`BoardLine`）。
+    static let bar: CGFloat = 4
+    private static let lane: CGFloat = 2
+    private static let laneGap: CGFloat = 2
+    private static let baseOpacity: CGFloat = 0.2
+    /// 光的头后面那一点收尾，占一节的几分之几：头不是一刀切的硬边。
+    private static let edge = 0.03
+    private static let frames = 24
 
-    private var mid: CGFloat { Self.height / 2 }
-    var lineWidth: CGFloat { tracks > 0 ? Self.laneLine : Self.line }
+    private var lanes: Int { max(tracks, 1) }
+    private var thick: CGFloat { tracks > 0 ? Self.lane : Self.bar }
 
-    private var seconds: Double {
+    private var comet: (seconds: Double, tail: Double) {
         switch gait {
-        case .think: 6
-        case .tool: 3
-        case .compact: 4
+        case .think: (2.6, 0.55)
+        case .tool: (1.3, 0.3)
+        case .compact: (1.8, 0.4)
         }
     }
 
-    private func y(_ x: CGFloat) -> CGFloat {
-        let turn = 2 * CGFloat.pi * x / Self.period
-        switch gait {
-        case .think: return mid - 1.4 * sin(turn * 2) - 0.5 * sin(turn * 5)
-        case .compact: return mid - 1.1 * sin(turn * 10)
-        case .tool:
-            // 平线上几个宽窄不一的圆鼓包（高斯形）：中心、宽、高
-            let bumps: [(CGFloat, CGFloat, CGFloat)] = [(18, 5, 2.6), (52, 4, 1.5), (64, 5, 3), (98, 6, 2.2)]
-            return bumps.reduce(mid + 1) { y, bump in y - bump.2 * exp(-pow((x - bump.0) / bump.1, 2)) }
-        }
+    fileprivate func rects(in bounds: CGRect) -> [CGRect] {
+        let total = CGFloat(lanes) * thick + CGFloat(lanes - 1) * Self.laneGap
+        return (0..<lanes).map { CGRect(x: bounds.minX, y: bounds.midY - total / 2 + CGFloat($0) * (thick + Self.laneGap), width: bounds.width, height: thick) }
     }
 
-    private func main(width: CGFloat) -> Path {
-        Path { path in
-            path.move(to: CGPoint(x: 0, y: y(0)))
-            for x in stride(from: CGFloat(2), through: width, by: 2) {
-                path.addLine(to: CGPoint(x: x, y: y(x.truncatingRemainder(dividingBy: Self.period))))
-            }
-        }
-    }
+    /// 不放动画时（排在后面的卡、省电、减弱动态）：底是轨道色，光停在靠右的一截。
+    var still: some Shape { WaveBars(strip: self, head: false) }
+    var head: some Shape { WaveBars(strip: self, head: true) }
 
-    private func lane(_ index: Int, width: CGFloat) -> Path {
-        let y = mid + (CGFloat(index) - CGFloat(tracks - 1) / 2) * Self.laneGap
-        return Path { path in
-            path.move(to: CGPoint(x: 0, y: mid))
-            path.addCurve(to: CGPoint(x: Self.fork, y: y), control1: CGPoint(x: Self.fork * 0.55, y: mid), control2: CGPoint(x: Self.fork * 0.45, y: y))
-            path.addLine(to: CGPoint(x: width, y: y))
-        }
+    /// 光的三个色标（尾、头、头后的收尾）在头走到 `at` 时的位置。渐变层的色标只认 0…1，出界的夹住。
+    private func stops(_ at: Double) -> [NSNumber] {
+        [at - comet.tail, at, at + Self.edge].map { NSNumber(value: min(max($0, 0), 1)) }
     }
-
-    var still: some Shape { WaveLine(strip: self) }
 
     // MARK: Core Animation（`LoopLayer.Kind.wave`）
 
     func make() -> CALayer {
         let layer = CALayer()
-        layer.masksToBounds = true
-        let band = CALayer()
-        for index in 0..<max(tracks * 2, 1) {
-            let shape = CAShapeLayer()
-            shape.fillColor = nil
-            shape.lineCap = .round
-            shape.lineJoin = .round
-            shape.lineWidth = lineWidth
-            if tracks > 0, !index.isMultiple(of: 2) { shape.lineDashPattern = Self.dash.map { $0 as NSNumber } }
-            band.addSublayer(shape)
+        for _ in 0..<lanes {
+            let lane = CAGradientLayer()
+            lane.startPoint = CGPoint(x: gait == .compact ? 1 : 0, y: 0.5)
+            lane.endPoint = CGPoint(x: gait == .compact ? 0 : 1, y: 0.5)
+            lane.locations = stops(0.7)
+            lane.masksToBounds = true
+            layer.addSublayer(lane)
         }
-        layer.addSublayer(band)
         return layer
     }
 
     func loops(in layer: CALayer) -> [(CAAnimation, CALayer)] {
-        guard let band = layer.sublayers?.first, let shapes = band.sublayers else { return [] }
-        guard tracks > 0 else {
-            let drift = CABasicAnimation(keyPath: "transform.translation.x")
-            drift.fromValue = 0
-            drift.toValue = -Self.period
-            drift.duration = seconds
-            drift.timingFunction = CAMediaTimingFunction(name: .linear)
-            return [(drift, band)]
-        }
-        let cycle = Self.dash.reduce(0, +)
-        return (0..<tracks).map { index in
-            let offset = cycle * CGFloat(index) / CGFloat(tracks)
-            let flow = CABasicAnimation(keyPath: "lineDashPhase")
-            flow.fromValue = cycle + offset
-            flow.toValue = offset
-            flow.duration = Self.laneSeconds
-            flow.timingFunction = CAMediaTimingFunction(name: .linear)
-            return (flow, shapes[index * 2 + 1])
+        (layer.sublayers ?? []).enumerated().map { index, lane in
+            let run = CAKeyframeAnimation(keyPath: "locations")
+            // 头从左沿外走到尾也出了右沿：按帧给，夹过的两端之间直接插值的话尾巴一路是零长
+            run.values = (0...Self.frames).map { stops(Double($0) / Double(Self.frames) * (1 + comet.tail + Self.edge)) }
+            run.duration = comet.seconds
+            run.timeOffset = comet.seconds * Double(index) / Double(lanes)
+            return (run, lane)
         }
     }
 
     func layout(_ layer: CALayer, in bounds: CGRect, color: CGColor?) {
         layer.frame = bounds
-        guard let band = layer.sublayers?.first else { return }
-        let width = tracks > 0 ? bounds.width : bounds.width + Self.period
-        band.frame = CGRect(x: 0, y: 0, width: width, height: bounds.height)
-        for (index, shape) in (band.sublayers ?? []).compactMap({ $0 as? CAShapeLayer }).enumerated() {
-            shape.frame = band.bounds
-            let path = tracks > 0 ? lane(index / 2, width: width) : main(width: width)
-            shape.path = path.cgPath
-            let base = tracks > 0 && index.isMultiple(of: 2)
-            shape.strokeColor = base ? color?.copy(alpha: (color?.alpha ?? 1) * Self.laneOpacity) : color
-        }
-    }
-
-    fileprivate func path(width: CGFloat) -> Path {
-        guard tracks > 0 else { return main(width: width) }
-        return Path { path in
-            for index in 0..<tracks { path.addPath(lane(index, width: width)) }
+        for (lane, rect) in zip(layer.sublayers ?? [], rects(in: CGRect(origin: .zero, size: bounds.size))) {
+            lane.frame = rect
+            lane.cornerRadius = rect.height / 2
+            lane.backgroundColor = color?.copy(alpha: (color?.alpha ?? 1) * Self.baseOpacity)
+            (lane as? CAGradientLayer)?.colors = [color?.copy(alpha: 0), color, color?.copy(alpha: 0)].compactMap { $0 }
         }
     }
 }
 
-nonisolated private struct WaveLine: Shape {
+nonisolated private struct WaveBars: Shape {
     let strip: WaveStrip
+    let head: Bool
+    /// 静止时光停在一节的哪一段。
+    private static let rest: ClosedRange<CGFloat> = 0.45...0.8
 
-    func path(in rect: CGRect) -> Path { strip.path(width: rect.width) }
+    func path(in rect: CGRect) -> Path {
+        Path { path in
+            for lane in strip.rects(in: rect) {
+                let bar = head ? CGRect(x: lane.minX + lane.width * Self.rest.lowerBound, y: lane.minY, width: lane.width * (Self.rest.upperBound - Self.rest.lowerBound), height: lane.height) : lane
+                path.addRoundedRect(in: bar, cornerSize: CGSize(width: bar.height / 2, height: bar.height / 2))
+            }
+        }
+    }
 }
