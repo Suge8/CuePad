@@ -62,6 +62,8 @@ nonisolated struct LayoutArgs: Decodable, DebugArgGroup {
     let sidebarCycle: String?
     /// `-CuePadSoftKeyboard YES`（iOS）：模拟器里聚焦也弹出系统键盘
     let softKeyboard: Bool
+    /// `-CuePadStepOpen <序号>`（配会话画面）：做完的各轮清单里第几步（从 0 数）一出现就点开
+    let stepOpen: Int?
     /// `-CuePadTasksOpen YES`：项目页任务纸的"还有 N 条"与"已完成 M"一开始就展开
     let tasksOpen: Bool
     /// `-CuePadToolsOpen YES`：每一轮的经过、子代理名册与 Cue 页折起的醒来记录与经过一开始就全部展开

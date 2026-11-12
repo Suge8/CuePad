@@ -21,8 +21,6 @@ public struct CueChange: Equatable, Sendable {
   public var task: Card?
   public var leaf: Card?
   public var session: SessionState?
-  /// 这一轮是他的（`CueStore.hisTurn`，由事实推出，不另存）：Cue 说的不算；扩展投进来的机器消息开的轮跟着它之前那句。
-  public var byUser = false
   public var at: Date
   public var seq: Int
   public var detail: String?
@@ -31,36 +29,8 @@ public struct CueChange: Equatable, Sendable {
 }
 
 extension SessionState {
-  /// 被打断的不算，Cue 让它接着做。等子代理停住时会话还在做，与完成、发送失败一样总报给 Cue。
-  var atStop: Bool {
-    switch runtimeState.known {
-    case .settled: answered
-    case .waitingForUser, .error: true
-    default: false
-    }
-  }
-}
-
-/// Cue 发进去的话不算他说的。他发起的一轮停下时他在场，先不报给 Cue，等他离开（`CueStore.cueChanges`）。
-public struct SessionPresence: Equatable, Sendable {
-  var viewing: Bool
-  var spokeAt: Date?
-
-  /// 10 分钟：比读完一段回复、想一想再回的时间长，比 Agent 一轮常见的十几分钟短——他说完走开，这一轮做完时多半已经不算在场；
-  /// 与常见即时通讯"多久没动静算离开"同一个量级。
-  /// 也是 Mac 上多久没动键盘鼠标就算人走开了（`ViewerKeeper`）：在场只有这一个口径。
-  public static let window: TimeInterval = 10 * 60
-
-  /// 没有新的动静就在这一刻算离开：只有说过话的那一半会到点；开着的那一半由设备写下离开（`Viewer`），不到点。
-  var lapse: Date? { viewing ? nil : spokeAt.map { $0 + Self.window } }
-}
-
-public struct CueChanges: Equatable, Sendable {
-  public var due: [CueChange]
-  /// 值班的管理器记着，下次对账交回来。
-  public var held: [String: Date]
-  /// 开着的那一半由设备写下离开，管理器的订阅就醒。
-  public var lapse: Date?
+  /// 停下等人接手（`WorkState.isStopped`），歇着的要读到这一轮的回答（`answered`）。等子代理停住时会话还在做，不算。
+  var atStop: Bool { runtimeState.known?.isStopped == true && (runtimeState != .known(.settled) || answered) }
 }
 
 /// 一轮做完时，会话的动静从醒来时读到的序号算起（这一轮里写进来的下次还在），完成从这一轮结束时算起（这一轮里多是 Cue 自己做完的）。

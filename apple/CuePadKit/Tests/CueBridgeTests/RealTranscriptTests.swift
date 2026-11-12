@@ -37,7 +37,8 @@ struct RealTranscriptTests {
         #expect(messages.map(\.role.known) == [.user, .pi, .user, .pi, .machine, .pi])
         #expect(messages.map(\.text).prefix(4) == ["第一问", "ECHO 第一问", "跑个命令", "TOOL_DONE"])
         #expect(!messages.contains { $0.text.contains("TOOL-OUTPUT-42\n") || $0.text == "TOOL-OUTPUT-42" })  // 工具输出不进对话
-        #expect(messages.map { $0.tools?.steps } == [nil, nil, nil, 1, nil, nil])
+        // 没调工具的一轮也带着这一轮的缓存读数（`Tools.cache`），所以按步数比
+        #expect(messages.map { $0.tools?.steps ?? 0 } == [0, 0, 0, 1, 0, 0])
         #expect(messages[3].roundStartedAt.map { $0 <= messages[3].at } == true)
         #expect(messages.map(\.seq) == messages.map(\.seq).sorted() && Set(messages.map(\.seq)).count == 6)
         #expect(update.recap.lastPrompt == "跑个命令" && update.recap.lastReply?.contains("子任务完成") == true)

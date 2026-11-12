@@ -181,7 +181,7 @@ public enum CueEnvelope {
       case .done: "完成"
       case .stalled: "等子代理 \(Int(SessionState.stallAfter / 60)) 分钟没动静"
       }
-    var text = "[\(label)\(change.byUser ? " · 他说的" : "")] \(where_(change))"
+    var text = "[\(label)] \(where_(change))"
     if let detail = change.detail, !detail.isEmpty { text += "：\(clip(detail, 120))" }
     if reply, let reply = change.recap?.lastReply { text += " · 回复：\(clip(reply, 160))" }
     return text

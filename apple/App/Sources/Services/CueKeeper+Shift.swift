@@ -177,7 +177,6 @@ extension CueKeeper {
                 if resolved { setback = nil } else { setback?.retryAt = now }
                 await recovered(resolved)
                 await markTold(finished.round)
-                if let held = finished.held { progress.held = held }
                 await advanceBaseline(from: finished.mark, seen: finished.round.startedAt)
             }
         case .exited(let reason):
@@ -250,8 +249,8 @@ extension CueKeeper {
         }
     }
 
-    func changes(at now: Date) async throws -> CueChanges {
-        try await store.cueChanges(after: progress.marks ?? CueMarks(0), held: progress.held, at: now)
+    func changes(at now: Date) async throws -> [CueChange] {
+        try await store.cueChanges(after: progress.marks ?? CueMarks(0), at: now)
     }
 
     /// 一轮做完、没出错：会话的动静从醒来时读到的写入序号之后算（这一轮里才写进库的下次还在，哪怕事件时刻更早），
@@ -270,7 +269,7 @@ extension CueKeeper {
         if let held = setback, held.persistent, held.wake != wake { return }
         let persistent = setback?.persistent == true || !Self.retryable(ErrorSummary(failure))
         let at = self.now
-        let latest = try? await changes(at: at).due.filter { $0.kind != .stalled }.map(\.seq).max()
+        let latest = try? await changes(at: at).filter { $0.kind != .stalled }.map(\.seq).max()
         let stalls = (setback?.stalls ?? 0) + (persistent && !now ? 1 : 0)
         let delay: Duration?
         if now { delay = .zero }

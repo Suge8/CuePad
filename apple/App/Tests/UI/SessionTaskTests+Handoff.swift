@@ -76,7 +76,7 @@ extension SessionTaskTests {
         #expect(!interrupted.isError && interrupted.text.contains("对「修登录」的会话说"))
     }
 
-    @Test func 停下归谁接手_Cue开的归Cue_他开的他在场时归他_子代理交回跟着开它的那句() async throws {
+    @Test func 停下归开这一轮的人_Cue开的报给Cue_他开的不报_子代理交回跟着开它的那句() async throws {
         try await enableCue()
         let task = try await store.createTask("修登录")
         try await store.linkCard(task.id, toSession: "s1")
@@ -84,47 +84,42 @@ extension SessionTaskTests {
         try await recorder.update(sessionID: "s1", state: .settled, title: "修登录")
         let target = SendTarget(kind: .piSession, name: "修登录", ref: "s1")
         var seq: Int64 = 0
-        func open(_ role: ChatRole, _ text: String, at time: Date = .now, delivery: UUID? = nil) async throws -> Int {
+        func open(_ role: ChatRole, _ text: String, delivery: UUID? = nil) async throws -> Int {
             let mark = try await store.lastWrite()
             seq += 2
             try await recorder.update(sessionID: "s1", state: .thinking, turnStartedAt: .now)
             try await store.writeTranscript(SessionTranscript(sessionID: "s1", messages: [
-                ChatMessage(sessionID: "s1", entryID: "o\(seq)", seq: seq - 1, role: role, text: text, at: time, deliveryID: delivery),
+                ChatMessage(sessionID: "s1", entryID: "o\(seq)", seq: seq - 1, role: role, text: text, at: .now, deliveryID: delivery),
                 ChatMessage(sessionID: "s1", entryID: "a\(seq)", seq: seq, role: .pi, text: "好", at: .now),
             ], recap: Recap(lastPrompt: text, lastReply: "好", answeredAt: .now)))
             return mark
         }
-        func settle(after mark: Int) async throws -> (line: String?, his: Bool) {
+        func settle(after mark: Int) async throws -> String? {
             try await recorder.update(sessionID: "s1", state: .settled)
-            let changes = try await store.cueChanges(after: CueMarks(mark))
             let envelope = CueEnvelope.render(CueEnvelope.Input(
-                now: .now, projects: [], changes: changes.due, board: try await store.cueBoard(), waiting: [], wake: .sessionActivity([])))
-            return (envelope.split(separator: "\n").first { $0.hasPrefix("- [歇下") }.map(String.init), changes.held["s1"] != nil)
+                now: .now, projects: [], changes: try await store.cueChanges(after: CueMarks(mark)), board: try await store.cueBoard(), waiting: [],
+                wake: .sessionActivity([])))
+            return envelope.split(separator: "\n").first { $0.hasPrefix("- [歇下") }.map(String.init)
         }
 
-        var stop = try await settle(after: try await open(.user, "先跑测试", at: .now - 11 * 60))
-        #expect(stop.line?.hasPrefix("- [歇下 · 他说的] 修登录") == true && !stop.his)
+        #expect(try await settle(after: try await open(.user, "先跑测试")) == nil)
 
         let byPad = UUID()
         try await store.recordSend("别动登录页样式", to: target, delivery: byPad)
-        stop = try await settle(after: try await open(.user, "别动登录页样式", delivery: byPad))
-        #expect(stop.line == nil && stop.his)
+        #expect(try await settle(after: try await open(.user, "别动登录页样式", delivery: byPad)) == nil)
 
         let returned = "<firecode_master_event>\n子代理交回：测试全过\n</firecode_master_event>"
         var machine = try await open(.machine, returned)
         let said = try #require(await CueTools(store: store, wait: 0).call("task", ["action": "say", "task": task.id.uuidString, "text": "顺便跑一遍 lint"]))
         #expect(said.isError && said.text.contains("他发起的一轮"))
-        stop = try await settle(after: machine)
-        #expect(stop.line == nil && stop.his)
+        #expect(try await settle(after: machine) == nil)
 
         let byCue = UUID()
         try await store.recordSend("再跑一遍", to: target, delivery: byCue, origin: .known(.cue))
-        stop = try await settle(after: try await open(.user, "再跑一遍", delivery: byCue))
-        #expect(stop.line?.hasPrefix("- [歇下] 修登录") == true && !stop.his)
+        #expect(try await settle(after: try await open(.user, "再跑一遍", delivery: byCue))?.hasPrefix("- [歇下] 修登录") == true)
 
         machine = try await open(.machine, returned)
-        stop = try await settle(after: machine)
-        #expect(stop.line?.hasPrefix("- [歇下] 修登录") == true && !stop.his)
+        #expect(try await settle(after: machine)?.hasPrefix("- [歇下] 修登录") == true)
     }
 
     @Test

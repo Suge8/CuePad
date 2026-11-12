@@ -86,6 +86,7 @@ final class MacExecutor {
             return try await store.completeDeliveryWithdrawal(request, on: hostID, refused: ShownText(SendError.alreadyHanded))
         case .start: return try await startSession(request)
         case .transcript: try await writeTranscript(of: request.content)
+        case .step: try await AppServices.fillStep(request.content, in: store)
         case .bind: try await bindFolder(request)
         case .quota: if let failure = await refreshQuota() { return .failed(failure) }
         case .end: try await end(request)

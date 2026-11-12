@@ -6363,22 +6363,6 @@
         }
       }
     },
-    "会话文件里找不到这一步了" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This step is no longer in the session file"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "会话文件里找不到这一步了"
-          }
-        }
-      }
-    },
     "会话有动静" : {
       "localizations" : {
         "en" : {
@@ -9307,6 +9291,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "发送（%@）；按住只记下"
+          }
+        }
+      }
+    },
+    "取一步的详情" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Step Details"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "取一步的详情"
           }
         }
       }
@@ -17547,6 +17547,22 @@
         }
       }
     },
+    "正在从 Mac 取" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fetching from your Mac"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在从 Mac 取"
+          }
+        }
+      }
+    },
     "正在从 Mac 取对话…" : {
       "localizations" : {
         "en" : {
@@ -22155,6 +22171,22 @@
         }
       }
     },
+    "详情没同步过来，再点一次" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Details did not sync. Tap again."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "详情没同步过来，再点一次"
+          }
+        }
+      }
+    },
     "语言" : {
       "localizations" : {
         "en" : {
@@ -23527,6 +23559,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "还没醒过"
+          }
+        }
+      }
+    },
+    "这一步没有更多内容" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nothing more to show for this step"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这一步没有更多内容"
           }
         }
       }
@@ -25475,6 +25523,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "那台 Mac 没有写回结果"
+          }
+        }
+      }
+    },
+    "那台 Mac 没有回音" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No reply from that Mac"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "那台 Mac 没有回音"
           }
         }
       }

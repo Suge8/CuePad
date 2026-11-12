@@ -57,6 +57,12 @@ enum CodexHistory {
             cp.interrupted(History.Entry(id: "aborted-\(cp.seq)", seq: cp.seq, at: at), into: &transcript)
         case ("event_msg", "task_complete"):
             cp.answered("", History.Entry(id: "complete-\(cp.seq)", seq: cp.seq, at: at), into: &transcript)
+        case ("event_msg", "token_count"):
+            // 每次模型请求写完它的各项之后一行。只有回答、没调工具的一轮，这一行落在回答之后，那一轮已经结束：照常记进缓存的前后，那一轮上不显示。
+            // 输入里含缓存命中的；Codex 不报保留时长
+            if let usage = line.payload.info?.last {
+                cp.requested(id: nil, read: usage.cached, fresh: usage.input - usage.cached, lifetime: nil, at: at)
+            }
         case ("event_msg", "item_completed"):
             guard let item = line.payload.item else { return }
             try completed(item, History.Entry(id: item.id ?? "\(cp.seq)", seq: cp.seq, at: at), into: &cp, transcript: &transcript)
@@ -102,6 +108,14 @@ enum CodexHistory {
         }
     }
 
+    /// 改文件的一项里每个文件算一步，调用 id 是那一项的 id 接着路径；各家的 id 里都没有空格。
+    private static let changeSeparator = " "
+
+    static func changeCall(_ call: String) -> (item: String, path: String?) {
+        guard let cut = call.firstRange(of: changeSeparator) else { return (call, nil) }
+        return (String(call[..<cut.lowerBound]), String(call[cut.upperBound...]))
+    }
+
     private struct ToolCall {
         var id: String
         var name: String
@@ -120,7 +134,7 @@ enum CodexHistory {
         case "FileChange":
             let failed = item.status.map { $0 != "completed" } ?? false
             return (item.changes ?? [:]).sorted { $0.key < $1.key }.map { path, change in
-                ToolCall(id: id + path, name: "edit", arguments: change.arguments(path: path), failed: failed)
+                ToolCall(id: id + changeSeparator + path, name: "edit", arguments: change.arguments(path: path), failed: failed)
             }
         case "McpToolCall":
             return [ToolCall(
@@ -204,10 +218,32 @@ enum CodexHistory {
         var cwd: String?
         var parentThreadID: String?
         var item: Item?
+        var info: TokenInfo?
 
         private enum CodingKeys: String, CodingKey {
-            case type, id, cwd, item
+            case type, id, cwd, item, info
             case parentThreadID = "parent_thread_id"
+        }
+    }
+
+    /// 限额更新时也写一行 `token_count`，那时 `info` 为空。形状不认得时当没有，不连累整行。
+    private struct TokenInfo: Decodable {
+        var last: Usage?
+
+        struct Usage: Decodable {
+            var input: Int
+            var cached: Int
+
+            private enum CodingKeys: String, CodingKey {
+                case input = "input_tokens"
+                case cached = "cached_input_tokens"
+            }
+        }
+
+        private enum CodingKeys: String, CodingKey { case last = "last_token_usage" }
+
+        init(from decoder: any Decoder) throws {
+            last = try? decoder.container(keyedBy: CodingKeys.self).decodeIfPresent(Usage.self, forKey: .last)
         }
     }
 

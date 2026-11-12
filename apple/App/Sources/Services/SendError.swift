@@ -27,6 +27,8 @@ nonisolated enum SendError: Error, Equatable {
     case alreadyHeard
     /// 要它做事的那台 Mac 已知不在线（参数是它的名字），请求没有写下。
     case macOff(String)
+    /// 请那台 Mac 当场办的事（取一步的详情）等回执的时限内没有结果。
+    case noReply
 }
 
 extension SendError: ShownError {
@@ -47,6 +49,7 @@ extension SendError: ShownError {
         case .alreadyHanded: "这句可能已经交出，不能安全撤回"
         case .alreadyHeard: "Cue 已经收到这句了，撤不回"
         case .macOff(let mac): "「\(mac)」没开，没有发出"
+        case .noReply: "那台 Mac 没有回音"
         }
     }
 }

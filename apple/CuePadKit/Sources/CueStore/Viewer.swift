@@ -1,8 +1,7 @@
 import Foundation
 
-/// 一台设备此刻开着哪些页（同步表 `sessionViewers`，每台设备一条，只由它自己写）：开着的会话页与 Cue 页，与他最近一次来到这台的时刻。两处读它——
-/// - 会话停下时他在不在场（`SessionPresence`）的一半，另一半是他最近在里面说过话；Cue 值班的那台 Mac 读。
-/// - 提示到不到他（`CueStore.reaches`）：他在某台 Mac 上开着那一页，手机推送标志不置、Mac 不发通知。
+/// 一台设备此刻开着哪些页（同步表 `sessionViewers`，每台设备一条，只由它自己写）：开着的会话页与 Cue 页，与他最近一次来到这台的时刻。
+/// 读它的是提示到不到他（`CueStore.reaches`）：他在某台 Mac 上开着那一页，手机推送标志不置、Mac 不发通知。
 ///
 /// 他此刻在哪台设备前只有一个判断：最近一次来到哪台（`arrivedAt` 最晚的那台，`CueStore.leftFor`），同即时通讯"以最近有真人操作的那台为准"。
 /// 来到一台是一次真人操作：手机是 App 回到前台；Mac 是他在别的设备上之后，回到这台的第一下键盘鼠标。Mac 读到别的设备比自己来得晚，就算人不在跟前
@@ -33,12 +32,6 @@ extension Viewer: Record {
 }
 
 extension CueStore {
-  public func viewers() throws -> [Viewer] {
-    try viewing().filter { viewer in
-      try find(MacPresence.self, MacPresence.recordID(host: viewer.device)) == nil || macOnline(viewer.device)
-    }
-  }
-
   /// 他此刻在某台在线的 Mac 上开着这一页（`opens`）：提示到不到他的一半（`reaches`）。手机的那条不算（理由见 `Viewer`）。
   func watchedOnMac(_ opens: (Viewer) -> Bool) throws -> Bool {
     try viewing().contains { try opens($0) && macOnline($0.device) }

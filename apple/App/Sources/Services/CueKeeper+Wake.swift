@@ -19,7 +19,7 @@ extension CueKeeper {
         let changes = try await self.changes(at: now)
         let envelope = CueEnvelope.render(CueEnvelope.Input(
             now: setup.timing.clock(), projects: try await store.projects(),
-            changes: changes.due, recaps: try await CueTools(store: store).recaps(for: changes.due), board: board, waiting: try await store.cueMessagesWaitingForYou(), left: try await store.cueState()?.left ?? [],
+            changes: changes, recaps: try await CueTools(store: store).recaps(for: changes), board: board, waiting: try await store.cueMessagesWaitingForYou(), left: try await store.cueState()?.left ?? [],
             wake: wake, fired: try await fired(of: wake), schedules: try await store.cueScheduleLines(), language: CueInterface.current.writing(after: said),
             quotas: try await store.accountQuotas(on: setup.recorder.hostID), retrying: retrying.map(Self.firstLine),
             related: related))
@@ -53,7 +53,7 @@ extension CueKeeper {
         }
         var turn = Turn(
             author: author, round: beginRound(wake, sent: [sent], at: now), selfStarted: wake == .message ? nil : wake, delivered: shift.taken,
-            mark: mark, held: changes.held, stops: Self.stops(in: wake, changes.due))
+            mark: mark, stops: Self.stops(in: wake, changes))
         if !shift.taken.isEmpty { turn.author = .cue }
         // Cue 自己醒来的一轮醒来就写下经过那一行：为什么醒在它上面，各端马上画得出叫醒的那一下
         if !turn.answersYou {

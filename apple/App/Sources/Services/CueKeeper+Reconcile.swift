@@ -102,7 +102,7 @@ extension CueKeeper {
             let changes = try await self.changes(at: now)
             if let held = setback {
                 // 等子代理停住只按时刻认新旧：它的序号是会话记录的，会话处理交回、又回到等子代理时也会变
-                let fresh = changes.due.contains { $0.kind == .stalled ? $0.at > held.since : $0.seq > held.latest ?? Int.min }
+                let fresh = changes.contains { $0.kind == .stalled ? $0.at > held.since : $0.seq > held.latest ?? Int.min }
                 if fresh {
                     setback = nil
                 } else if held.retryAt.map({ now >= $0 }) == true {
@@ -113,16 +113,10 @@ extension CueKeeper {
                     return [deadlines.min(), held.retryAt].compactMap(\.self).min()
                 }
             }
-            if !changes.due.isEmpty {
-                _ = try await wakeUp(.sessionActivity(changes.due.map(CueStir.init)))
+            if !changes.isEmpty {
+                _ = try await wakeUp(.sessionActivity(changes.map(CueStir.init)))
                 return nil
             }
-            // 没叫醒 Cue：他新在场的停下记下，不再记的划掉（叫醒的一轮做完才换）
-            if changes.held != progress.held {
-                progress.held = changes.held
-                save()
-            }
-            if let lapse = changes.lapse { deadlines.append(lapse) }
 
             let idleSince = try await store.cueLastYou()?.said ?? profile.enabledAt ?? shift.startedAt
             if try await !store.cueBoardActive(), let due = patrolDue(idleSince: idleSince, lastRequest: shift.lastRequest, now: now),
