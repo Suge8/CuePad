@@ -54,7 +54,7 @@ extension InteractionBench {
         defer { watch.stop() }
         for item in selected {
             arrange(item, in: workspace, sessions: sessions)
-            let threshold = WideMetrics.railThreshold(cueOpen: true), cueThreshold = WideMetrics.cueThreshold
+            let threshold = WideMetrics.railThreshold, cueThreshold = WideMetrics.cueThreshold(rail: false)
             resize(threshold)
             await Task.wait(for: .seconds(1))
             await WidePage.scrollToMiddle(wideColumns(in: view))

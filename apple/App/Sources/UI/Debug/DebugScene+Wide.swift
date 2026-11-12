@@ -43,7 +43,7 @@ extension DebugScene {
         await Task.wait(for: .seconds(1.5))
         guard let window = mainWindow else { return }
         let size = window.contentLayoutRect.size
-        let threshold = WideMetrics.railThreshold(cueOpen: workspace.services.settings.cueOpen)
+        let threshold = WideMetrics.railThreshold
         guard size.width == threshold else { abandon("宽屏反向", Unmet("窗口宽 \(size.width) 不在临界宽度 \(threshold)")) }
         let hold = args.layoutOpts.wideHold ?? 50
         while !Task.isCancelled {

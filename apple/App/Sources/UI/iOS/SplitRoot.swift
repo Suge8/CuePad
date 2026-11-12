@@ -15,7 +15,7 @@ struct SplitRoot: View {
             let sizes = WideMetrics(width: geometry.size.width, workspace: workspace)
             HStack(spacing: 0) {
                 if sizes.railFits { WideRail(width: sizes.rail, sizes: sizes) }
-                WideColumnHost(slot: .main, focus: focus, origin: sizes.rail, width: sizes.leading, shape: sizes.shape) {
+                WideColumnHost(slot: .main, focus: focus, origin: sizes.rail, width: sizes.leading, shape: sizes.shape, hidden: sizes.home) {
                     destination(workspace.mainRoute, column: .main)
                         .environment(\.headInset, EdgeInsets(top: 0, leading: Chrome.headLead(rail: sizes.rail), bottom: 0, trailing: Spacing.page))
                 }

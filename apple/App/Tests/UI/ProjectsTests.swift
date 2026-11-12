@@ -14,7 +14,7 @@ struct ProjectsTests {
         Task { await workspace.follow() }
     }
 
-    @Test func 启动是项目列表_失效设置清掉_数字键按当下顺序取() async throws {
+    @Test func 启动在Cue_主区留着项目列表_失效设置清掉_数字键按当下顺序取() async throws {
         _ = try await store.createProject(name: "A", color: "#000000")
         let pinned = try await store.createProject(name: "B", color: "#000000")
         try await store.updateProject(pinned.id) { $0.isPinned = true }
@@ -30,7 +30,7 @@ struct ProjectsTests {
         let fresh = Workspace(services: services)
         let freshCatalog = observing(fresh)
         defer { await freshCatalog.stop() }
-        #expect(fresh.mainRoute == .shelf && fresh.shownPane == .projects)
+        #expect(fresh.cueHome && fresh.mainRoute == .shelf && fresh.shownPane == nil)
         let last = try await store.createProject(name: "C", color: "#000000")
         try await store.updateProject(last.id) { $0.isPinned = true }
         try await eventually("fresh.catalog?.projects.first?.id == last.id") { fresh.catalog?.projects.first?.id == last.id }

@@ -47,6 +47,7 @@ struct WideRail: View {
             if let sizes { RailTopTools(sizes: sizes, floating: false) }
             #endif
             RailGroup {
+                RailCue()
                 RailRow(title: "项目", icon: .folder, selected: workspace.shownPane == .projects) { workspace.selectPane(.projects) }
                 RailRow(title: "进展", icon: .task, selected: workspace.shownPane == .progress) { workspace.selectPane(.progress) }
                 RailEarlier()

@@ -8,7 +8,8 @@ struct NarrowNavigation {
     var sidebarOpen = false
 }
 
-/// 右边一直是 Cue，不进导航：它收没收起是用户的选择（`AppSettings.cueOpen`），放不下时住进右缘抽屉、开没开是这一刻的呈现（`Workspace.cueDrawer`）。
+/// Cue 是落点（`home`，同手机以 Cue 为根）：没去别处时它铺满会话条之外；去了项目、进展或会话，它让到右边——那时它收没收起是用户的选择
+/// （`AppSettings.cueOpen`），放不下时住进右缘抽屉、开没开是这一刻的呈现（`Workspace.cueDrawer`）。
 /// 同一个会话最多在一边，回复草稿仍按会话 id 由 AppSettings 持有。
 struct WideNavigation {
     enum Main {
@@ -26,6 +27,8 @@ struct WideNavigation {
         }
     }
 
+    /// Cue 铺满着：主区那一页留着不拆（回去时滚动位置都在），只是让出去、订阅暂停。
+    var home = true
     var main: Main = .browse {
         didSet { if case .session = main {} else { beside = nil } }
     }
@@ -93,7 +96,8 @@ extension Workspace {
     }
 
     var shownPane: NavigationPane? {
-        switch mainRoute {
+        if cueHome { return nil }
+        return switch mainRoute {
         case .shelf, .project: .projects
         case .progress: .progress
         default: nil
@@ -102,6 +106,10 @@ extension Workspace {
 
     var besideSession: SessionRoute? {
         if case .wide(let state) = navigation { state.beside } else { nil }
+    }
+
+    var cueHome: Bool {
+        if case .wide(let state) = navigation { state.home } else { false }
     }
 
     var navigationPane: NavigationPane { services.settings.navigationPane }
@@ -145,6 +153,7 @@ extension Workspace {
         case .wide(let state):
             var narrow: NarrowNavigation
             switch mainRoute {
+            case _ where state.home: narrow = NarrowNavigation()
             case .shelf, .progress: narrow = NarrowNavigation(sidebarOpen: true)
             case .project: narrow = NarrowNavigation(path: [mainRoute], sidebarOpen: true)
             default: narrow = NarrowNavigation(path: [mainRoute])
@@ -152,7 +161,7 @@ extension Workspace {
             if let session = state.beside { narrow.path.append(.session(session)) }
             navigation = .narrow(narrow)
         case .narrow(let state):
-            var wide = WideNavigation()
+            var wide = WideNavigation(home: state.path.isEmpty && !state.sidebarOpen)
             if let page = state.path.last { wide.main = WideNavigation.Main(page) }
             navigation = .wide(wide)
         }
@@ -162,9 +171,10 @@ extension Workspace {
 extension Workspace.Navigation {
     var trail: String {
         switch self {
-        case .narrow(let state): (["cue"] + state.path.map(\.trail)).joined(separator: " > ") + (state.sidebarOpen ? " + sidebar" : "")
+        case .narrow(let state): return (["cue"] + state.path.map(\.trail)).joined(separator: " > ") + (state.sidebarOpen ? " + sidebar" : "")
         case .wide(let state):
-            switch state.main {
+            if state.home { return "wide cue" }
+            return switch state.main {
             case .browse: "wide browse"
             case .session: state.beside == nil ? "wide session" : "wide session | session"
             case .page(let route): "wide \(route.trail)"

@@ -90,6 +90,26 @@ struct RailTool: View {
 }
 #endif
 
+/// 会话条最上一行：选中时 Cue 铺满会话条之外（`Workspace.goHome`），同手机以 Cue 为根。
+struct RailCue: View {
+    @Environment(Workspace.self) private var workspace
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        let cue = workspace.cue, selected = workspace.cueHome
+        Button { workspace.goHome() } label: {
+            RailLine {
+                CueAvatar(cue.beat, size: .inline)
+            } rest: {
+                Text(verbatim: cue.name).font(Typography.body.weight(selected ? .semibold : .regular)).foregroundStyle(palette.ink).lineLimit(1)
+            }
+        }
+        .buttonStyle(RowStyle(selected: selected))
+        .accessibilityLabel(Text(verbatim: cue.name))
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+}
+
 /// 个数与"更早"那一页读同一个查询，两边对得上。
 struct RailEarlier: View {
     @Environment(Workspace.self) private var workspace
@@ -99,7 +119,7 @@ struct RailEarlier: View {
 
     var body: some View {
         let total = total ?? 0
-        let selected = workspace.mainRoute == .earlier
+        let selected = workspace.mainRoute == .earlier && !workspace.cueHome
         Button { workspace.show(.earlier) } label: {
             RailLine {
                 Image(.session).font(Glyph.control).foregroundStyle(palette.signature)

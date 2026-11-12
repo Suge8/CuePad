@@ -94,10 +94,13 @@ struct WideSessionTitle: View {
                 #if os(macOS)
                 if column == .main { SearchSlot() }
                 #endif
-                Button("关闭", icon: .close) { workspace.closeColumn(column) }
-                    .labelStyle(.iconOnly)
-                    .buttonStyle(ControlButtonStyle(kind: .circular))
-                    .font(Typography.body)
+                // 只开一个会话时没有 ×：会话是去处，换去处靠会话条；并排的两半才各有一颗
+                if workspace.besideSession != nil {
+                    Button("关闭", icon: .close) { workspace.closeColumn(column) }
+                        .labelStyle(.iconOnly)
+                        .buttonStyle(ControlButtonStyle(kind: .circular))
+                        .font(Typography.body)
+                }
             }
         }
         .font(Typography.toolbarTitle)
