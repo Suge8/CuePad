@@ -8,12 +8,12 @@
 - `xc.sh shot` 截的是点击之前的画面：要看点击后的结果，用 `rec` 录屏取最后一帧。
 - Mac 浮层与气泡（点开后的样子、摆在哪）：`xc.sh rec mac -- … -CuePadClick x,y` 在后台点开，取录屏末帧，不占前台。
 - Mac 菜单快捷键（如全屏页里 PDF 的 ⌘F 查找条）：`-CuePadClick "wait:1;cmd:f;type:词"`，`cmd:键` 从窗口焦点沿响应链发主菜单那一项的动作（后台窗口收不到菜单快捷键），同样取录屏末帧。
-- Mac 系统菜单：`xc.sh run mac -- … -CuePadForeground YES -CuePadClick x,y` 让实例自己点开，再按窗口截菜单那扇窗（`screencapture -l`，窗口号从 CGWindowList 按 PID 取），截完 `xc.sh stop`。iPhone、iPad 的菜单没有从代码打开的接口：`xc.sh run` 后用 axe 点开。
-- iPhone 系统返回（返回钮、左缘滑动）只能真操作：另起 axe 点或滑（`axe swipe --start-x 5 … --duration 1 --delta 5`；从 x=1 起或滑得快，系统不认作边缘滑动），每步后 `axe describe-ui` 看左上那颗钮核对回到了哪。
+- Mac 系统菜单：`xc.sh run mac -- … -CuePadForeground YES -CuePadClick x,y` 让实例自己点开，再按窗口截菜单那扇窗（`screencapture -l`，窗口号是 `bcu find-roots --pid <PID> --kind menu` 那一行的 id；那行写 no window id 时从 CGWindowList 按 PID 取），截完 `xc.sh stop`。iPhone、iPad 的菜单没有从代码打开的接口：`xc.sh run` 后按截图的坐标 `ui.py … tap x,y` 点开。
+- iPhone 系统返回（返回钮、左缘滑动）只能真操作：另起 axe 点或滑（`axe swipe --start-x 5 … --duration 1 --delta 5`；从 x=1 起或滑得快，系统不认作边缘滑动），每步后 `ui.py … read` 看左上那颗钮核对回到了哪。
 - 改了图标生成器先看 `-CuePadScene icons`（iPad）。模拟器桌面上加小组件脚本不做，看 `-CuePadScene widgets`。改了样式令牌（色板、圆角、字号、图标尺寸、间距、投影、动效）看 `-CuePadScene tokens`（Mac、iPad，`-theme light|dark` 切浅深）。
 - 改了状态图形或 Cue 头像的各拍，看 `-CuePadScene stateicons`（会话状态、经过那一行、头像各拍四档，一屏放不下加 `-CuePadSheetEnd YES` 截底半）。换拍的软糖与小动作录 `-CuePadCueCycle YES`（走一圈 `CueNowSamples.tour`，`-CuePadCueCycleSeconds <秒>` 改每拍停多久，默认 2.6；停着的拍子每 15～20 秒才动一下，看小动作录 `-CuePadCueNow quiet` 一分钟）。
-- 灵动岛用 `xc.sh run ios -- -CuePadScene cue -CuePadCueNow busy -CuePadLiveActivity YES` 租到自己的模拟器，axe 按该 UDID 回桌面、截图、长按与锁屏；展开态按住时拍。`activity` 画面只预览共享视图，不证明系统宽度、状态栏或高度限制。分别在 iPhone 17 与 18 Pro/Pro Max 核对时间和电量；大数、未知数样例在 `CueActivitySamples`。双活动要用另一个调试身份的隔离合成活动：同一 App 的多个活动仍会合成一个紧凑展示，不能证明最小态或系统窄位。
-- 系统岛的轮播验收加 `-CuePadCueCycle YES -CuePadCueCycleSeconds 6`，由本地演示更新系统活动；录屏仍经 `xc.sh rec`。这是状态变化的过渡，不是常驻循环。模拟器回桌面或打开通知中心后也可能挂起演示 App，轮播会停；只以实际变更的帧为证，不用录制请求时长推算帧率。App 的 `-CuePadReduceMotion` 与语言参数不传进 Widget 进程：系统岛需在租到的模拟器设置对应语言、减少动态效果后验收，结束还原。
+- 灵动岛用 `xc.sh run ios -- -CuePadScene cue -CuePadCueNow busy -CuePadLiveActivity YES` 租到自己的模拟器（`CUEPAD_IOS_DEVICE` 换机型），axe 按该 UDID 回桌面、截图、长按与锁屏；展开态按住时拍。`activity` 画面只预览共享视图，不证明系统宽度、状态栏或高度限制。分别在 iPhone 17 与 18 Pro/Pro Max 核对时间和电量；大数、未知数样例在 `CueActivitySamples`。双活动要用另一个调试身份的隔离合成活动：同一 App 的多个活动仍会合成一个紧凑展示，不能证明最小态或系统窄位。
+- 系统岛的轮播验收加 `-CuePadCueCycle YES -CuePadCueCycleSeconds 6`，由本地演示更新系统活动。模拟器回桌面或打开通知中心后也可能挂起演示 App，轮播会停；只以实际变更的帧为证，不用录制请求时长推算帧率。App 的 `-CuePadReduceMotion` 与语言参数不传进 Widget 进程：系统岛需在租到的模拟器设置对应语言、减少动态效果后验收，结束还原。
 - 页面打开后第一次切换（第一次进入发送、工作、同步这类）要从启动前录（`CUEPAD_REC_LAUNCH=1`）：就绪后才开录的话，打开时的样子已经过去了，录不到那一下。
 - 录屏只在画面变时出帧，逐帧看用 `ffmpeg -i out.mov -fps_mode vfr …`；铺成一张图：`ffmpeg -i out.mov -vf "fps=8,crop=宽:高:x:y,tile=8x2" -frames:v 1 strip.png`。裁图、缩放用 `sips`（本机没装 ImageMagick）。
 - 验收用户装着的版本前，核对 `~/Applications/CuePad.app` 的 `CFBundleVersion` 就是要验的那一版（只读；Pi 的桥扩展随包，不另核对）。
@@ -46,7 +46,7 @@ CUEPAD_SHOT_LIBRARY=/tmp/cuepad-copy apple/scripts/xc.sh shot mac …
 
 ```bash
 pid=$(apple/scripts/xc.sh run mac -- -CuePadDemo YES -CuePadScene sessions)
-bcu find-roots --app CuePad    # 用 "pid $pid" 那一行的 window 根
+bcu find-roots --pid "$pid"
 apple/scripts/xc.sh stop       # 验完就收；忘了 5 分钟后会自己退出
 ```
 
@@ -71,7 +71,7 @@ apple/scripts/xc.sh stop       # 验完就收；忘了 5 分钟后会自己退�
 
 - `accept` 打印的时刻是各端读完界面那一刻，分辨率是一轮读界面的时长（iPad 约 1～3 秒，Mac 不到 1 秒），不是同步时延；时延用 `sync-bench.py`（[perf.md](perf.md)）。
 - 真云有 CloudKit 限流（[perf.md](perf.md)「真 CloudKit」），模拟器是否与这台 Mac 的正式版共用那份没测过，少跑。
-- 验不了：推送、真网络、两个账号间的隔离；只能真机、真账号验收。
+- 模拟云验不了推送、真网络、两个账号间的隔离：真网络与账号隔离用 `fleet up --real`（两台模拟器登不同的测试账号就是隔离），推送只能真机验。
 
 ## 读屏验收
 
@@ -94,6 +94,6 @@ CUEPAD_FAKE_HOME=$PWD/apple/.derived/fakehome apple/scripts/xc.sh run mac -- -Cu
 
 - 给了 `-CuePadNotifications YES` 时 Mac 的提示音装进真实的 ~/Library/Sounds。
 - 产物目录里的构建拿不到通知权限（日志 `Failed to find or validate client`）：复制成 `~/Applications/CuePad Notify.app`（别的名字，不覆盖 `CuePad.app`），改掉 `CFBundleIdentifier` 再 ad-hoc 重签名，用 `open -n -g --env …` 带上 `app_env.py` 的 `isolated_env` 那几个目录启动；验完删掉副本，系统设置的通知列表里会留下这个 bundle id。
-- 触发会话状态：在 `CUEPAD_PI_SOCKET_DIR` 里放一个说桥协议的假扩展（协议见 CueBridge README）。
+- 触发会话状态：`python3 apple/scripts/sync-bench.py --fake-extension "$(python3 apple/scripts/app.py sockets)" "$PWD"` 起同步测量用的假扩展，几个会话轮流切到思考、工具、做完、空闲（`_sync_run.py` 的 `STATES`）；要别的状态照它改，协议见 CueBridge README。
 - 系统要等自己的通知处理（含 Apple 智能摘要）走完才呈现，实测有时 20 秒；横幅 5 秒就收，边等边找（`bcu find-roots --app NotificationCenter` 里的 dialog）。
 - 实际播了哪个文件看 `systemsoundserverd` 日志的 `mAudioToken`（通知中心那行 `Playing notification sound` 找不到文件时也照打，实际播的是兜底音）；Dock 角标读 Dock 里这一项的 `AXStatusLabel`。
