@@ -53,6 +53,23 @@ struct ProjectsTests {
         #expect(only.mainRoute == .shelf && services.settings.currentProject == nil)
     }
 
+    @Test func 并排着回到Cue再变窄_只剩Cue_没回Cue时两个会话都在栈里() {
+        let workspace = Workspace(services: services)
+        workspace.openSession(UUID(), sessionID: "a")
+        workspace.openSession(UUID(), sessionID: "b", in: .beside)
+        #expect(workspace.navigation.trail == "wide session | session")
+
+        workspace.setLayout(.narrow)
+        #expect(workspace.navigation.trail == "cue > session > session")
+
+        workspace.setLayout(.wide)
+        workspace.openSession(UUID(), sessionID: "a")
+        workspace.openSession(UUID(), sessionID: "b", in: .beside)
+        workspace.goHome()
+        workspace.setLayout(.narrow)
+        #expect(workspace.navigation.trail == "cue")
+    }
+
     @Test func 往失效项目存东西_落到默认项目_写入时被删则纠正并提示() async throws {
         let trashed = try await store.createProject(name: "A", color: "#000000")
         try await store.trashProject(trashed.id)

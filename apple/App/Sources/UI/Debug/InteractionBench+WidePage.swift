@@ -61,7 +61,8 @@ struct WidePage {
             if settled() { return }
             await NextFrame.wait()
         }
-        // 排成真的之后中段那一屏可能整屏是不报位置的内容（对话里一长串步骤）：往上挪半屏再认，到认得出一条或快到顶为止
+        // 实测（大库、一个会话加 Cue）：一下跳到中段后到时限那一屏还没有一条报位置，再滚一下就报了（原因没查清：只有这里是一下跳过去的，人滚与跳去某一条都有后续的滚动读数）。
+        // 往上挪半屏再认，到认得出一条或快到顶为止
         for _ in 0..<nudges {
             for column in columns {
                 for scroll in scrollables(in: column) where items(in: column, shownBy: scroll).isEmpty {
