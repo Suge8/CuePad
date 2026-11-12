@@ -49,7 +49,7 @@ extension DebugScene {
                     if let outcome = await DemoAgentLibrary.apply(request, store: store) { return outcome }
                     #if os(macOS)
                     if request.mode == .known(.step) {
-                        do { try await AppServices.fillStep(request.content, in: store) } catch { return .failed(ShownText(error)) }
+                        do { try await AppServices.fillStep(request.content, in: store, runtimes: [:]) } catch { return .failed(ShownText(error)) }
                     }
                     #endif
                     if quotaFails, request.mode == .known(.quota) { return .failed(ShownText("这台 Mac 上没有在线的 Pi 会话")) }
