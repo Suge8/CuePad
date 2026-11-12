@@ -69,7 +69,8 @@ extension DebugScene {
                 at: last.addingTimeInterval(2), tools: .init(steps: 2, items: [
                     .init(kind: .command, target: "npx playwright screenshot --device 'iPhone 15' login-v2.html login-mobile.png"),
                     .init(kind: .read, target: "login-mobile.png", images: looked.map { [$0] }),
-                ]), roundStartedAt: first.addingTimeInterval(-50)),
+                // 缓存一小时前就冷了：回复框上方提醒这一句要重读多少
+                ], cache: .init(context: 164_000, warmUntil: .now.addingTimeInterval(-3_600))), roundStartedAt: first.addingTimeInterval(-50)),
         ]
         try await store.writeTranscript(SessionTranscript(
             sessionID: "notes", messages: messages,

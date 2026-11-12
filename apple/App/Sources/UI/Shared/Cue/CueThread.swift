@@ -88,6 +88,11 @@ nonisolated struct CueThread: Equatable, Sendable {
             }
         }
 
+        /// 醒来的几轮排成一块，不管隔了多久（`CueNoteLog`）：下一格离它多远从最后那一轮算。
+        var end: Date {
+            if case .notes(let rounds) = self { rounds[rounds.count - 1].date } else { date }
+        }
+
         static func answerID(of question: UUID) -> UUID {
             var bytes = question.uuid
             bytes.0 ^= 0xA5
@@ -116,7 +121,7 @@ nonisolated struct CueThread: Equatable, Sendable {
         var previous: Date?
         let calendar = Calendar.current
         for row in rows {
-            defer { previous = row.date }
+            defer { previous = row.end }
             guard let previous else {
                 stamps[row.id] = row.date
                 continue
@@ -159,7 +164,7 @@ nonisolated struct CueThread: Equatable, Sendable {
                 // 一轮的经过（为什么醒、做了什么）；有正文的是旧版本写下的动态，不再显示
                 guard message.text.isEmpty else { continue }
                 var group: [CueNoteRound] = []
-                if case .notes(let open) = rows.last, let last = open.last, CueNoteRound.continues(last, at: message.createdAt) {
+                if case .notes(let open) = rows.last {
                     group = open
                     rows.removeLast()
                 }

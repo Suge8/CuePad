@@ -35,6 +35,7 @@ struct SessionDock: View {
                     sending: Chat.sending(deliveries, messages: messages, at: speech),
                     recall: Chat.lastSaid(messages),
                     previews: digest?.previews ?? [],
+                    cache: messages.last { $0.role == .known(.pi) }?.tools?.cache,
                     revealNote: revealNote,
                     sent: sent)
             }

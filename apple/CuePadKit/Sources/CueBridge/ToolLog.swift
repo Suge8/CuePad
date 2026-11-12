@@ -29,7 +29,13 @@ struct ToolLog: Codable, Equatable {
 
     mutating func finish(id: String, failed: Bool, images: [String] = []) {
         guard let call = pending.removeValue(forKey: id) else { return }
-        settle(call, failed: failed, images: images)
+        settle(call, id: id, failed: failed, images: images)
+    }
+
+    /// 一次模型请求的缓存读写：`recached` 是没接上缓存、原价重送的量（接上了为 0）。
+    mutating func requested(context: Int, recached: Int, warmUntil: Date?) {
+        let missed = (activity.cache?.recached ?? 0) + recached
+        activity.cache = Tools.Cache(recached: missed > 0 ? missed : nil, context: context, warmUntil: warmUntil)
     }
 
     mutating func say(_ text: String) {
@@ -40,12 +46,12 @@ struct ToolLog: Codable, Equatable {
 
     func summary() -> Tools? {
         var log = self
-        for (_, call) in log.pending.sorted(by: { $0.key < $1.key }) { log.settle(call, failed: false) }
+        for (id, call) in log.pending.sorted(by: { $0.key < $1.key }) { log.settle(call, id: id, failed: false) }
         if let answer = log.activity.items.lastIndex(where: { $0.kind == .said }) { log.activity.items.remove(at: answer) }
         return log.activity == Tools() ? nil : log.activity
     }
 
-    private mutating func settle(_ call: Call, failed: Bool, images: [String] = []) {
+    private mutating func settle(_ call: Call, id: String, failed: Bool, images: [String] = []) {
         if !failed, call.kind == .edit || call.kind == .read,
            let index = activity.items.firstIndex(where: { $0.kind == call.kind && $0.target == call.target && !$0.failed }) {
             let item = activity.items[index]
@@ -53,10 +59,39 @@ struct ToolLog: Codable, Equatable {
             activity.items[index].removed = item.removed.map { $0 + (call.removed ?? 0) } ?? call.removed
             let fresh = images.filter { !(item.images ?? []).contains($0) }
             if !fresh.isEmpty { activity.items[index].images = (item.images ?? []) + fresh }
+            activity.items[index].calls = (item.calls ?? []) + [id]
             return
         }
-        activity.record(.init(
-            kind: call.kind, target: call.target, failed: failed, added: call.added, removed: call.removed, images: images.isEmpty ? nil : images))
+        var item = Tools.Item(
+            kind: call.kind, target: call.target, failed: failed, added: call.added, removed: call.removed, images: images.isEmpty ? nil : images)
+        item.calls = [id]
+        activity.record(item)
+    }
+}
+
+/// 一次模型请求的用量里与缓存有关的几项，各家的键名都认（Pi：`input`、`cacheRead`、`cacheWrite`、`cacheWrite1h`；
+/// Claude Code 照 Anthropic 的 `usage`）。哪一项类型不对就当没有：不能因为用量丢掉整行消息。
+struct CacheUsage: Decodable {
+    var read = 0
+    var fresh = 0
+    /// Agent 报了写进哪一档才知道（Anthropic 的 5 分钟与 1 小时）；只读没写的那次不报，沿用上一次的。
+    var lifetime: TimeInterval?
+
+    private enum Keys: String, CodingKey {
+        case input, cacheRead, cacheWrite, cacheWrite1h
+        case inputTokens = "input_tokens", readTokens = "cache_read_input_tokens", writeTokens = "cache_creation_input_tokens"
+        case creation = "cache_creation"
+    }
+    private enum Tiers: String, CodingKey { case hour = "ephemeral_1h_input_tokens", minutes = "ephemeral_5m_input_tokens" }
+
+    init(from decoder: any Decoder) throws {
+        guard let c = try? decoder.container(keyedBy: Keys.self) else { return }
+        func int(_ key: Keys) -> Int { (try? c.decodeIfPresent(Int.self, forKey: key)) ?? 0 }
+        read = int(.cacheRead) + int(.readTokens)
+        fresh = int(.input) + int(.cacheWrite) + int(.inputTokens) + int(.writeTokens)
+        let tiers = try? c.nestedContainer(keyedBy: Tiers.self, forKey: .creation)
+        func tier(_ key: Tiers) -> Int { (try? tiers?.decodeIfPresent(Int.self, forKey: key)) ?? 0 }
+        if int(.cacheWrite1h) > 0 || tier(.hour) > 0 { lifetime = 3_600 } else if tier(.minutes) > 0 { lifetime = 300 }
     }
 }
 

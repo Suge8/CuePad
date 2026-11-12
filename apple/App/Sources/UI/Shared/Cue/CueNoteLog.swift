@@ -3,53 +3,67 @@ import CueText
 import SwiftUI
 
 /// 要你拍板的不在这里：在输入框上方的拍板卡里（`CueWaitDock`），这里只留一句发生过什么。
-/// 一行是一条记录，定格在写下那一刻：图标与字只按记录画（`CueWakeHeader`、`CueMessage.tools`），那一处之后改名、再动起来都不变；这一轮此刻在做什么只写在对话末尾那一行（`CueEnding`）。
+/// 连着的几轮（中间没人说话）排成一块，一处一行（`CueNoteFold`）：同一个会话停下十几次是一行带次数，不是十几行。
+/// 字定格在写下那一刻：图标与字只按记录画（`CueWakeHeader`、`CueMessage.tools`），那一处之后改名、再动起来都不变；这一轮此刻在做什么只写在对话末尾那一行（`CueEnding`）。
 /// Cue 这一轮不写话（系统提示「说话」），去处只从动作推出，三处说同一套话。
 struct CueNoteLog: View {
     let rounds: [CueNoteRound]
-    @State private var expanded = DebugHooks.preset.toolsOpen
-
-    static let foldAfter = 6
-    static let shownWhenFolded = 5
 
     var body: some View {
-        let folded = !expanded && rounds.count > Self.foldAfter
-        let shown = folded ? Array(rounds.suffix(Self.shownWhenFolded)) : rounds
+        let folds = CueNoteFold.folds(rounds)
+        let newest = Self.newest(folds)
         BubbleWidth(fraction: CueBubble.cueWidth, edge: .leading) {
             VStack(alignment: .leading, spacing: 0) {
-                if folded {
-                    Button { expanded = true } label: {
-                        CueNoteRow { Image(.earlier) } text: { Text("更早还醒过 \(rounds.count - shown.count) 次") }
-                    }
-                    .buttonStyle(.row)
-                }
-                let newest = Self.newest(shown)
-                ForEach(shown) { round in CueNoteLine(round: round, newest: newest.contains(round.id)) }
+                ForEach(folds) { fold in CueNoteLine(fold: fold, newest: newest.contains(fold.id)) }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            .animation(Motion.fade, value: folds)
         }
         .transition(.entry)
     }
 
-    private static func newest(_ rounds: [CueNoteRound]) -> Set<CueNoteRound.ID> {
-        var seen = Set<CueWakeHeader.Target>(), out = Set<CueNoteRound.ID>()
-        for round in rounds.reversed() {
-            guard let places = round.header?.places, places.count == 1 else { continue }
-            if seen.insert(places[0].target).inserted { out.insert(round.id) }
+    private static func newest(_ folds: [CueNoteFold]) -> Set<CueNoteFold.ID> {
+        var seen = Set<CueWakeHeader.Target>(), out = Set<CueNoteFold.ID>()
+        for fold in folds.reversed() {
+            guard let places = fold.last.header?.places, places.count == 1 else { continue }
+            if seen.insert(places[0].target).inserted { out.insert(fold.id) }
         }
         return out
     }
 }
 
 private struct CueNoteLine: View {
-    let round: CueNoteRound
+    let fold: CueNoteFold
     let newest: Bool
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
+    private var round: CueNoteRound { fold.last }
+
     var body: some View {
         let places = round.header?.places ?? []
-        link(places, row: CueNoteRow(time: round.date, tint: tint(places)) { glyph(places) } text: { line(places) })
+        link(places, row: CueNoteRow(time: round.date, tint: tint(places)) { glyph(places) } text: { words(places) })
+    }
+
+    /// 放不下时先收短名字：去处与次数在句尾，整句截断会先丢掉它们。
+    private func words(_ places: [CueWakeHeader.Place]) -> some View {
+        ViewThatFits(in: .horizontal) {
+            counted(line(places)).fixedSize()
+            if places.count == 1 {
+                counted(line(places.map { $0.titled($0.title.clipped(14)) })).fixedSize()
+                counted(line(places.map { $0.titled($0.title.clipped(8)) }))
+            }
+        }
+    }
+
+    private func counted(_ line: Text) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: Spacing.tight) {
+            line
+            if fold.rounds.count > 1 {
+                Dot()
+                Text("\(fold.rounds.count) 次").monospacedDigit().fixedSize().contentTransition(.numericText())
+            }
+        }
     }
 
     @ViewBuilder private func link(_ places: [CueWakeHeader.Place], row: some View) -> some View {
@@ -141,7 +155,8 @@ struct CueNoteRow<Glyph: View, Words: View>: View {
                 MetaLine(gap: Note.spacing) {
                     words
                 } meta: {
-                    Text(ChatTime.time(time)).monospacedDigit().foregroundStyle(palette.ink3)
+                    Text(verbatim: [ChatTime.day(time), ChatTime.time(time)].compactMap { $0 }.joined(separator: " "))
+                        .monospacedDigit().foregroundStyle(palette.ink3)
                         .frame(minWidth: CueNoteRows.timeWidth, alignment: .trailing)
                 }
             } else {
