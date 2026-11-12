@@ -36,4 +36,4 @@ fi
 [ "$(git rev-parse HEAD)" = "$head" ] || stop "跑的中途 HEAD 变了：结果不对应 $head，重跑"
 clean
 outcome=success note="本机通过：$passed"
-echo "签核通过：${head:0:9}（$passed）"
+echo "签核通过：${head:0:9}（${passed}）"
