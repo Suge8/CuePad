@@ -12,13 +12,15 @@ extension UTType {
     nonisolated static let cuepadSession = UTType(exportedAs: "\(AppIdentity.id).session", conformingTo: .data)
 }
 
-/// 宽屏每行两行、同高（`Chrome.tallRow`），不随状态跳：第一行名字与读数，第二行是挑哪个先看要的——哪个项目（图形带项目色）、
-/// 它要什么或刚在做什么、哪一家 Agent（行尾的小标志）。Agent 标志不占行首：同一家的都一样，行首留给状态。
+/// 宽屏有两种行。等你的两行（`Chrome.tallRow`）：第一行名字与等了多久，第二行是先看哪个要的——哪个项目（图形带项目色）、它要什么、
+/// 哪一家 Agent（行尾的小标志）。排在项目下面的一行（`compact`）：项目已经由上一行说了，只有名字与读数。
+/// 行首只有一个点、三种样子（`RailDot`）：要你的实心带状态色，在跑的实心靛青，歇着的空心——会话条上只要分得出这三样，细分的状态在读数那个词与会话页里。
 struct SessionRailCell: View {
     let item: SessionRailRows.Item
     let form: SessionRail.Form
     let moves: Bool
     let selected: Bool
+    var compact = false
     let open: (SessionState, SessionRail.Opening) -> Void
     @Environment(\.palette) private var palette
     @Environment(Workspace.self) private var workspace
@@ -85,10 +87,16 @@ struct SessionRailCell: View {
                 .padding(.vertical, Spacing.tight)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                RailLine(height: Chrome.tallRow) {
-                    StateDot(shown: item.shown, size: Chrome.railMark)
+                RailLine(height: compact ? Chrome.row : Chrome.tallRow) {
+                    RailDot(item: item)
                 } rest: {
-                    lines
+                    if compact {
+                        name.font(Typography.body)
+                        Spacer(minLength: Spacing.item)
+                        SessionRailReadout(item: item)
+                    } else {
+                        lines
+                    }
                 }
             }
         }
@@ -148,6 +156,21 @@ struct SessionRailCell: View {
         .frame(height: WaveStrip.height)
         .readerHidden(true)
     }
+}
+
+private struct RailDot: View {
+    let item: SessionRailRows.Item
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        Group {
+            if item.resting { Circle().strokeBorder(palette.ink3, lineWidth: 1.5) } else { Circle().fill(item.shown.tint(palette)) }
+        }
+        .frame(width: Self.size, height: Self.size)
+        .readerHidden(true)
+    }
+
+    private static let size: CGFloat = 8
 }
 
 private struct SessionRailReadout: View {

@@ -5,7 +5,7 @@ import SwiftUI
 /// 手机（`phone`，60 点竖条）：每组一张纸（列的纸色），格铺满纸，在默认字号、650 点高内完整放下十个会话。
 /// 宽屏（`wide`）：不铺纸，组就是会话条那一块上的一段行，靠组头与间距分开；每个会话一行（`RailLine`），行首那一列是会话的状态标（`StateDot`），名字在它右边。
 /// 组头是小号淡字组名加着色计数，左沿同行首那一列、字贴着下沿，离它那一组近、离上一组远。
-/// 宽屏每行两行高（`Chrome.tallRow`），长相在 `SessionRailCell`。两组下面剩的高给 `footer`（会话条的"最近"，`RailRecent`），它至少留着组头那一行。
+/// 等你组每行两行高（`Chrome.tallRow`），推进中一行一种高（`Chrome.row`），长相在 `SessionRailCell`。
 /// 等你过多时自身也能滚、最多占一半可用高度，不能把推进中或待回复挤到再也点不到。一组多到要滚时下沿淡出一截（`Chrome.scrollFade`），看得出下面还有；
 /// 放得下时不淡。两组为空时手机保留列宽、不重排对话；宽屏在那儿写一行"没有在推进的会话"（`SessionRailEmpty`），不留一大块不知道是不是没读到的空白。
 /// 点按只回报会话与意图（`Opening`：默认，或 ⌘ 点的并排）；右键是会话的菜单（`OpenSessionBeside` 与 `SessionActions`，同会话出现的每一处）。`marked` 是调用方主区开着的会话投影，不在组件内记选中。
@@ -26,13 +26,12 @@ struct SessionRail: View {
     let data: SessionRailData
     let form: Form
     var marked: Set<String> = []
-    var footer: AnyView?
     let pulse: (SessionListItem) -> BoardPulse
     let open: (SessionState, Opening) -> Void
 
     var body: some View {
         // 常驻的栏同页头限制可见字号；全文留在读屏标签，不能让大字把组头计数挤成省略号。
-        SessionRailContent(rows: SessionRailRows(data, pulse: pulse), form: form, marked: marked, footer: footer, open: open)
+        SessionRailContent(rows: SessionRailRows(data, pulse: pulse), form: form, marked: marked, open: open)
             .dynamicTypeSize(...DynamicTypeSize.xxLarge)
     }
 }
@@ -41,7 +40,6 @@ private struct SessionRailContent: View {
     let rows: SessionRailRows
     let form: SessionRail.Form
     let marked: Set<String>
-    let footer: AnyView?
     let open: (SessionState, SessionRail.Opening) -> Void
     @Environment(\.palette) private var palette
     @ScaledMetric(relativeTo: .caption2) private var tileHeight: CGFloat = 52
@@ -58,8 +56,7 @@ private struct SessionRailContent: View {
             // 两组各要多高、放不放得下只由这里的可用高度与行数推出（不读滚动区的几何）：等你最多一半，推进中拿剩下的
             let waitingIdeal = idealHeight(rows.waiting), waitingCap = geometry.size.height * (rows.advancing.isEmpty ? 1 : 0.5)
             let waitingHeight = min(waitingIdeal, waitingCap)
-            let footerLeast = footer == nil ? 0 : Chrome.groupHeader + Chrome.groupGap
-            let advancingRoom = geometry.size.height - (rows.waiting.isEmpty ? 0 : waitingHeight + Chrome.groupGap) - footerLeast
+            let advancingRoom = geometry.size.height - (rows.waiting.isEmpty ? 0 : waitingHeight + Chrome.groupGap)
             VStack(spacing: Chrome.groupGap) {
                 if !rows.waiting.isEmpty {
                     group(rows.waiting, column: .waiting, moving: [], overflows: waitingIdeal > waitingCap)
@@ -67,14 +64,10 @@ private struct SessionRailContent: View {
                 }
                 if !rows.advancing.isEmpty {
                     group(rows.advancing, column: .advancing, moving: rows.moving, overflows: idealHeight(rows.advancing) > advancingRoom)
-                        .frame(height: min(idealHeight(rows.advancing), max(0, advancingRoom)))
+                        .frame(maxHeight: idealHeight(rows.advancing))
                 }
                 if rows.waiting.isEmpty, rows.advancing.isEmpty, !phone { SessionRailEmpty() }
-                if let footer {
-                    footer.frame(minHeight: Chrome.groupHeader, maxHeight: .infinity, alignment: .top).clipped()
-                } else {
-                    Spacer(minLength: 0)
-                }
+                Spacer(minLength: 0)
             }
             .frame(maxWidth: .infinity)
         }
@@ -89,7 +82,8 @@ private struct SessionRailContent: View {
     private var cellGap: CGFloat { phone ? Chrome.cellGap : Spacing.hair }
 
     private func rowHeight(_ item: SessionRailRows.Item) -> CGFloat {
-        phone ? tileHeight : Chrome.tallRow
+        if phone { return tileHeight }
+        return item.waiting == nil ? Chrome.row : Chrome.tallRow
     }
 
     private func idealHeight(_ items: [SessionRailRows.Item]) -> CGFloat {

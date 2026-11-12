@@ -110,55 +110,91 @@ struct RailCue: View {
     }
 }
 
-/// 会话条最下一组：最近结束的会话，拿两组剩下的高（`SessionRail.footer`），放不下的滚。组头整行是去"历史"那一页的入口，行尾是总数——
-/// 与那一页读同一个查询，两边对得上。行同上面两组（`SessionRailCell`）：点了打开，⌘ 点并排。
-struct RailRecent: View {
+/// 会话条上的会话：只有等你的常驻在上面（没有就整组不在），其余的收在各自的项目下面——项目一行写它有几个在推进，点开才列出来。
+/// 否决过：推进中全部列出（十几行、每行一种状态标，读不过来，看板与 Cue 已经有同一份）；下面的空处填最近结束的会话（栏一直是满的，眼睛没处歇）。
+/// 点项目那一行去它的页并展开，再点一次收起；展开着的记在这个窗口里，不存。没归项目的会话算在默认项目下。
+struct RailSessions: View {
+    let data: SessionRailData
     let marked: Set<String>
     let open: (SessionState, SessionRail.Opening) -> Void
     @Environment(Workspace.self) private var workspace
-    @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
-    @State private var page: SessionListPage?
-
-    private static let limit = 30
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var expanded: Set<UUID> = []
 
     var body: some View {
-        let items = page?.items ?? []
-        VStack(spacing: 0) {
-            Button { workspace.show(.earlier) } label: {
-                HStack(spacing: Spacing.glyph) {
-                    Text("最近").lineLimit(1)
-                    Spacer(minLength: 0)
-                    Text(page?.total ?? 0, format: .number).monospacedDigit()
-                    Chevron(.forward)
+        let rows = SessionRailRows(data, pulse: workspace.pulse)
+        let byProject = Dictionary(grouping: rows.advancing) { $0.session.projectID ?? Project.defaultID }
+        ScrollView {
+            VStack(spacing: Chrome.groupGap) {
+                if !rows.waiting.isEmpty {
+                    VStack(spacing: Spacing.hair) {
+                        header(Text(verbatim: TaskBoard.Column.waiting.title), count: rows.waiting.count, ink: TaskBoard.Column.waiting.countInk(palette))
+                        ForEach(rows.waiting) { cell($0) }
+                    }
+                    .transition(.opacity)
                 }
-                .font(Typography.label).foregroundStyle(palette.ink3)
-                .padding(.horizontal, RowMetrics.bleed)
-                .padding(.bottom, Spacing.tight)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
-                .contentShape(.rect)
-            }
-            .buttonStyle(PressStyle())
-            .frame(height: Chrome.groupHeader)
-            .disabled(items.isEmpty)
-            .help("历史")
-            ScrollView {
-                LazyVStack(spacing: Spacing.hair) {
-                    ForEach(items, id: \.state.sessionID) { item in
-                        let pulse = workspace.pulse(of: item), session = pulse.session ?? item.state
-                        let row = SessionRailRows.Item(session: session, name: item.task?.title.nonEmpty ?? session.title, pulse: pulse, waiting: nil)
-                        SessionRailCell(item: row, form: .wide, moves: false, selected: marked.contains(row.id), open: open)
-                            .frame(height: Chrome.tallRow)
+                VStack(spacing: Spacing.hair) {
+                    Button { workspace.selectPane(.projects) } label: { header(Text("项目"), count: nil, ink: palette.ink3).contentShape(.rect) }
+                        .buttonStyle(PressStyle())
+                    ForEach(workspace.catalog?.projects ?? []) { project in
+                        let sessions = byProject[project.id] ?? []
+                        projectRow(project, running: sessions.count)
+                        if expanded.contains(project.id) { ForEach(sessions) { cell($0, compact: true) } }
                     }
                 }
-                .padding(.horizontal, RowMetrics.bleed)
-                .safeAreaPadding(.bottom, Chrome.pad)
             }
-            .scrollIndicators(.hidden)
+            .padding(.horizontal, RowMetrics.bleed)
+            .safeAreaPadding(.bottom, Chrome.pad)
+            .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion) ?? Motion.fade, value: expanded)
+            .animation(Motion.fade, value: rows.waiting.map(\.id))
         }
-        .observing(services.store, id: services.speech, into: $page, onError: workspace.fail) { [moment = services.speech, limit = Self.limit] store in
-            try SessionListData.earlier(SessionQuery(limit: limit), at: moment, from: store)
+        .scrollIndicators(.hidden)
+        .dynamicTypeSize(...DynamicTypeSize.xxLarge)
+    }
+
+    private func cell(_ item: SessionRailRows.Item, compact: Bool = false) -> some View {
+        SessionRailCell(item: item, form: .wide, moves: false, selected: marked.contains(item.id), compact: compact, open: open)
+            .transition(.opacity)
+    }
+
+    private func header(_ title: Text, count: Int?, ink: Color) -> some View {
+        HStack(spacing: Spacing.glyph) {
+            title.foregroundStyle(palette.ink3).lineLimit(1)
+            if let count { Text(count, format: .number).foregroundStyle(ink).monospacedDigit() }
         }
+        .font(Typography.label)
+        .padding(.bottom, Spacing.tight)
+        .frame(maxWidth: .infinity, alignment: .bottomLeading)
+        .frame(height: Chrome.groupHeader, alignment: .bottom)
+        .accessibilityAddTraits(.isHeader)
+    }
+
+    private func projectRow(_ project: Project, running: Int) -> some View {
+        let selected = workspace.mainRoute == .project(project.id) && !workspace.cueHome
+        let open = expanded.contains(project.id)
+        return Button {
+            if selected, running > 0 { expanded.formSymmetricDifference([project.id]) } else {
+                workspace.show(.project(project.id))
+                if running > 0 { expanded.insert(project.id) }
+            }
+        } label: {
+            RailLine {
+                ProjectGlyph(project: project)
+            } rest: {
+                Text(verbatim: project.shownName).font(Typography.body.weight(selected ? .semibold : .regular)).foregroundStyle(palette.ink).lineLimit(1)
+                Spacer(minLength: Spacing.item)
+                if running > 0 {
+                    Circle().fill(palette.signature).frame(width: 6, height: 6)
+                    Text(running, format: .number).font(Typography.caption).foregroundStyle(palette.ink3).monospacedDigit()
+                    Chevron(.forward).foregroundStyle(palette.ink3).rotationEffect(.degrees(open ? 90 : 0))
+                }
+            }
+        }
+        .buttonStyle(RowStyle(selected: selected))
+        .accessibilityLabel(Text(verbatim: project.shownName))
+        .accessibilityValue(running > 0 ? Text(running, format: .number) : Text(verbatim: ""))
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
 
