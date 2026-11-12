@@ -67,6 +67,4 @@ xcrun cktool export-schema $C --output-file /tmp/dev.ckdb
 
 查询订阅不在 `.ckdb` 里、cktool 看不到，却随 schema 部署：生产里没部署过的查询订阅建不了（CKErrorDomain 12，"attempting to create a subscription in a production container"），已部署的按通知形状匹配，所以改定义（谓词、选项、通知文案 key、content-available）后，先用开发签名的构建在开发容器里保存同样的订阅，再 Deploy Schema Changes。确认页显示 0 项、不列订阅，部署照样生效。数据库订阅不受此限。
 
-### 待部署到生产
-
-这一节还有条目时 `release ios` 拒绝发版；部署完成并回读核对后删除对应条目。字段由 `ck-production.sh` 另行核对。
+改了订阅定义、还没部署到生产时，在 `apple/CloudKit/pending-production.txt` 记一行：有条目时 `release ios` 拒绝发版，部署并回读核对后删掉。

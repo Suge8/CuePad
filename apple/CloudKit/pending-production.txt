@@ -1,0 +1,2 @@
+# 还没部署到 CloudKit 生产环境的订阅定义，一行一条；这里有条目时 release ios 拒绝发版（release-ios.sh）。
+# 字段与记录类型不用登记：ck-production.sh 自己核对。部署并回读核对后删掉对应的行（步骤在 apple/scripts/AGENTS.md「CloudKit 数据结构」）。
