@@ -97,7 +97,7 @@ struct BoardWaitCard: View {
     #endif
 }
 
-/// 摊开的与收着的同一副骨架，也是推进中那张卡的骨架（`BoardCardLayout`）：名字与 Agent、等你的那一句，卡脚（`BoardWaitFoot`）是项目与等了多久。
+/// 摊开的与收着的同一副骨架，也是推进中那张卡的骨架（`BoardCardLayout`）：名字带拍板还是待回复、Agent，等你的那一句，卡脚（`BoardWaitFoot`）是项目与等了多久。
 /// 摊开的那张只是反色、那一句用大字写全，句子与卡脚之间放成果图与作答。
 private struct BoardWaitFace: View {
     let held: TaskBoard.Held
@@ -111,13 +111,16 @@ private struct BoardWaitFace: View {
                 HStack(alignment: .firstTextBaseline, spacing: Spacing.tight) {
                     if held.item?.task.isPinned == true { BoardPin() }
                     BoardCardTitle(held.title).foregroundStyle(palette.ink)
+                    Text(held.deciding ? "拍板" : "待回复").font(TaskMetrics.caption.weight(.semibold)).foregroundStyle(palette.waiting).fixedSize()
+                        .padding(.leading, Spacing.hair)
                 }
                 .font(Typography.bodyStrong).frame(maxWidth: .infinity, alignment: .leading)
                 AgentMark(session: held.session, font: TaskMetrics.caption, named: false)
             }
-            let kind = Text(held.deciding ? "拍板" : "待回复").font(TaskMetrics.caption.weight(.semibold)).foregroundStyle(palette.waiting)
-            let said = Text(verbatim: ask ?? "").font(focal ? Typography.title : TaskMetrics.caption).foregroundStyle(focal ? palette.ink : palette.ink2)
-            Text("\(kind) \(said)").lineLimit(focal ? Self.focalLines : Self.foldedLines).multilineTextAlignment(.leading)
+            if let ask {
+                Text(verbatim: ask).font(focal ? Typography.title : TaskMetrics.caption).foregroundStyle(focal ? palette.ink : palette.ink2)
+                    .lineLimit(focal ? Self.focalLines : Self.foldedLines).multilineTextAlignment(.leading)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(.rect)

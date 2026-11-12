@@ -1,6 +1,8 @@
 import SwiftUI
 
 enum TaskMetrics {
+    /// 看板上的卡一律这个圆角（四列、摊开的那张、拖动时的轮廓）。
+    static let cardRadius = Radius.sheet
     #if os(iOS)
     nonisolated static let rowHeight: CGFloat = 44
     static let caption = Typography.meta
@@ -14,7 +16,6 @@ enum TaskMetrics {
     static let ringColumn: CGFloat = 44
     static let columnGap: CGFloat = 2
     static let cardPadding = Spacing.group
-    static let cardRadius = Radius.card
     static let cardLead: CGFloat = 24
     static let cardGlyph: CGFloat = 13
     #else
@@ -30,7 +31,6 @@ enum TaskMetrics {
     static let ringColumn: CGFloat = 18
     static let columnGap = Spacing.item
     static let cardPadding = Spacing.group
-    static let cardRadius = Radius.card
     static let cardLead: CGFloat = 16
     static let cardGlyph: CGFloat = 12
     #endif
