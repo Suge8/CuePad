@@ -3,7 +3,7 @@
 改 Cue 通话（接通、音频、信令、交接、朗读）后照这里验；参数与日志节点在 `DebugScene+Voice.swift`、`DebugScene+PhoneVoiceCall.swift` 头注释，通用的起实例与读界面办法在 [verify.md](verify.md)「交互验收」。
 
 - 文件声源不经语音处理（麦克风经系统的那一套）：Cue 在停顿处抢话的多少只在真机上作数。录下的对方声音，内容用本机转写核对。手机进后台、被收走声音（中断）、信令断开也能在模拟器上验：
-  1. Mac：`xc.sh run mac -- -CuePadCueBrain apple/scripts/cue-brain-stub.py -CuePadVoiceToken <令牌> -CuePadSharedCloud <目录> -CuePadVoiceLog <mac.log>`。
+  1. Mac：`apple/scripts/voice-token.py <令牌文件>` 取令牌，再 `xc.sh run mac -- -CuePadCueBrain apple/scripts/cue-brain-stub.py -CuePadVoiceToken <令牌文件> -CuePadSharedCloud <目录> -CuePadVoiceLog <mac.log>`。
   2. 手机：`xc.sh run ios -- -CuePadSharedCloud <同一目录> -CuePadVoice <wav> -CuePadVoiceLog <ios.log> -CuePadVoiceSeconds 40`，后台加 `-CuePadVoicePlayInBackground YES`，中断加 `-CuePadVoiceInterruptAfter 6`，信令断开加 `-CuePadVoiceDropRelay <在听后秒>,<断多久秒>`（两端都认；Mac 端 `-CuePadVoiceFailProjection <在听后秒>,<多久秒>` 让投影发送失败；Mac 端给 `-CuePadVoiceSeconds` 就在接通后这么久挂断，验 Mac 先结束）。
   3. 后台：ios.log 出现 `waiting-background` 后 `xcrun simctl launch <UDID> com.apple.Preferences`。应看到 `app-background` 之后才 `play`，Mac 日志有这句的 `user-said` 与委派，最后 `ended(… hungUp)`。
   4. 信令断开：断得比 15 秒短的，ios.log 依次 `relay-drop`、`link relinking(…)`、`link bound(…)`，通话照常、`projection` 补到最新；更长的在断开后约 15 秒 `ended(… networkFailed)`。Mac 日志对应 `relinking`、`relinked`。投影发送失败的：Mac 只有 `projection-fail`、没有 `relinking`，窗口过后手机 `projection` 接着更新。手机加 `-CuePadVoiceRepeatOnReturn YES` 在中转连回时请重说：Mac 记 `relinked by command(…)`，手机 `repeat-result` 后 `projection` 照常更新。
