@@ -5523,6 +5523,22 @@
         }
       }
     },
+    "不用" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No thanks"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不用"
+          }
+        }
+      }
+    },
     "不知道这个会话用的模型" : {
       "localizations" : {
         "en" : {
@@ -21907,6 +21923,22 @@
         }
       }
     },
+    "记住" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remember this"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "记住"
+          }
+        }
+      }
+    },
     "记到 %@" : {
       "localizations" : {
         "en" : {
@@ -21951,22 +21983,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "记忆"
-          }
-        }
-      }
-    },
-    "记成重点" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Make it a key point"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "记成重点"
           }
         }
       }

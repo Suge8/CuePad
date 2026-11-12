@@ -11,8 +11,13 @@ extension AppServices {
     }
 
     /// 选"以后……不用问"时 Store 同时把这句原话记成一条重点记忆，一起上传。
-    func answerCueQuestion(_ message: UUID, _ choice: String) async throws {
-        let noted = try await store.endCueQuestion(message, .answered(choice))
+    func answerCueQuestion(_ message: UUID, _ choice: String) async throws { try await endCueQuestion(message, .answered(choice)) }
+
+    /// 点掉不答（`CueAsk.declinable`）：不交给 Cue、不叫醒它。
+    func declineCueQuestion(_ message: UUID) async throws { try await endCueQuestion(message, .withdrawn) }
+
+    private func endCueQuestion(_ message: UUID, _ end: CueQuestionEnd) async throws {
+        let noted = try await store.endCueQuestion(message, end)
         #if os(iOS)
         await resendSnapshots()
         #endif

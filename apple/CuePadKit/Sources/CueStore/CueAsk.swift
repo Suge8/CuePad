@@ -49,6 +49,10 @@ public enum CueAsk: String, CaseIterable, Sendable {
   /// "以后不用问"等于把他的口味交给 Cue 的口味，还会让卡上一次误点悄悄拿走以后每次长相的决定；他真要 Cue 定，会说出来、记成规矩。
   public var allowable: Bool { !quotesYou && self != .taste }
 
+  /// 能不能点掉不答（卡上多一颗叉）：只有常说的做法那一类，它是后台自己冒出来的，没有会话在等。
+  /// 别的类不同意多半带着理由或别的做法，在 Cue 页底下说。
+  public var declinable: Bool { self == .habit }
+
   /// 选了它 `CueStore.endCueQuestion` 把这句原话记成一条他说的重点，范围就在字面上；项目名长到一条记忆放不下的截短（`CueMemoryLine.fitting`）。
   public func always(in project: String?) -> String? {
     guard allowable else { return nil }
@@ -76,10 +80,11 @@ public struct CueAsking: Equatable, Sendable {
     self.rule = ask.quotesYou ? try Self.phrase(rule, "带 ask 要写 rule", "依据的规矩，照他的原话，如“改数据库结构前先问我”", limit: Self.phraseLimit) : nil
   }
 
-  /// 常说的做法那一类：动作只有“记成重点”这一个，不由模型写；`practice` 是那条做法。
+  /// 常说的做法那一类：动作只有“记住”这一个，不由模型写；`practice` 是那条做法。
+  /// 卡上不说“重点”：他说“记住”，要的就是以后每次照做，这正是重点；分哪一档是记忆页的事。
   public init(habit practice: String?) throws {
     ask = .habit
-    action = String(localized: "记成重点")
+    action = String(localized: "记住")
     rule = try Self.phrase(practice, "要写 rule", "那条做法，照他的话，如“不加没人要的测试”", limit: Self.phraseLimit)
   }
 

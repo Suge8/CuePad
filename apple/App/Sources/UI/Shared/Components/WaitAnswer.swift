@@ -15,15 +15,21 @@ struct WaitAnswer: View {
     var body: some View {
         switch wait {
         case .message(let message, _):
-            CueChoices(message: message, disabled: ending) { choice in
-                ending = true
-                workspace.attempt {
-                    defer { ending = false }
-                    try await workspace.services.answerCueQuestion(message.id, choice)
-                }
+            CueChoices(message: message, disabled: ending, pick: { choice in end { try await $0.answerCueQuestion(message.id, choice) } }) {
+                end { try await $0.declineCueQuestion(message.id) }
             }
         case .session(let session, _):
             SessionAnswer(session: session, replyElsewhere: replyElsewhere)
+        }
+    }
+}
+
+extension WaitAnswer {
+    private func end(_ write: @escaping (AppServices) async throws -> Void) {
+        ending = true
+        workspace.attempt {
+            defer { ending = false }
+            try await write(workspace.services)
         }
     }
 }
