@@ -22203,6 +22203,22 @@
         }
       }
     },
+    "详情没同步过来，再点一次" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Details did not sync. Tap again."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "详情没同步过来，再点一次"
+          }
+        }
+      }
+    },
     "语言" : {
       "localizations" : {
         "en" : {

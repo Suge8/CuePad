@@ -35,7 +35,7 @@ struct RoundProcess: View {
             let expanded = !tools.items.isEmpty && (toggled ?? (open || DebugHooks.preset.toolsOpen))
             VStack(alignment: .leading, spacing: 0) {
                 Button {
-                    if !expanded { stay?() }
+                    stay?(!expanded)
                     toggled = !expanded
                 } label: { header(line, open: tools.items.isEmpty ? nil : expanded) }
                     .buttonStyle(PressStyle())

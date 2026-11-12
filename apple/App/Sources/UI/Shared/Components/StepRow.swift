@@ -60,21 +60,27 @@ struct StepRow: View {
     }
 
     private func toggle() {
-        guard opened == nil else { return opened = nil }
-        stay?()
+        guard opened == nil else {
+            stay?(false)
+            return opened = nil
+        }
+        stay?(true)
         if let detail = item.detail { return opened = .ready(detail) }
         opened = .loading
         Task {
             do {
                 #if os(macOS)
                 if services.holdsSteps(of: session) {
-                    let detail = await services.stepDetail(item.calls ?? [], in: session)
-                    if opened == .loading { opened = .ready(detail ?? ToolCallDetail()) }
+                    let detail = try await AppServices.stepDetail(item.calls ?? [], of: session.sessionID, in: services.store)
+                    if opened == .loading { opened = .ready(detail) }
                     return
                 }
                 #endif
                 guard let place else { return }
                 try await services.fetchStep(place.index, of: place.message, in: session)
+                // Mac 办完了，写上的详情随同步稍后到（`onChange`）；这之间那条回答被重读改写的话它就没了，不一直等
+                try await Task.sleep(for: .seconds(10))
+                if opened == .loading { opened = .missing(String(localized: "详情没同步过来，再点一次")) }
             } catch {
                 if opened == .loading { opened = .missing(ShownText(error).text) }
             }

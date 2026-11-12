@@ -21,6 +21,7 @@ nonisolated struct ChatFollow: Equatable {
         didSet {
             if scrolling {
                 jumping = false
+                staying = false
                 target = nil
                 owesLanding = false
             }
@@ -33,6 +34,7 @@ nonisolated struct ChatFollow: Equatable {
     /// 已请滚动区跳到某一条（`jump(to:)`）、还没离开最新处：跳的那一下顶栏让开、回复框收起，滚动区排好了下一帧才滚过去，
     /// 这期间的读数还报着在最新处，不算回到了最新。离开最新处（跳过去了）、用户自己滚、回到最新时放掉；跳到的就在最新处时，用户一滚就重新贴上。
     private var jumping = false
+    private var staying = false
     private var withinSlack = true
     private var revealed = false
     static let slack: CGFloat = 24
@@ -64,7 +66,7 @@ nonisolated struct ChatFollow: Equatable {
         self.nearOldest = nearOldest
         withinSlack = near
         if !near { jumping = false }
-        if near, !jumping {
+        if near, !jumping, !staying {
             atNewest = true
             revealed = false
         } else if byUser {
@@ -74,14 +76,15 @@ nonisolated struct ChatFollow: Equatable {
     }
 
     /// 你点开了对话里的一块（一轮的经过、其中一步）：贴着最新时内容变高是往上顶的，点的那一行会被顶出屏幕。
-    /// 所以和你自己滚走一样解除贴底，它往下长、点的那一行不动；顶栏留着（你没去看历史）。
-    /// 长出来的还没把最新处推远时读数仍报着在最新处，不算回到了最新（同 `jumping`：先长出一行"正在取"、取到了才长出整块）；
-    /// 推远之后收起、读数报回在最新处，重新贴上。
-    mutating func stay() {
-        guard atNewest else { return }
-        atNewest = false
-        revealed = true
-        jumping = true
+    /// 所以点开时和你自己滚走一样解除贴底，它往下长、点的那一行不动；顶栏留着（你没去看历史）。
+    /// 开着的期间读数报着在最新处也不贴回去（长出来的可能还没把最新处推远：先长出一行"正在取"、取到了才长出整块）；
+    /// 收起、你自己滚、回到最新时放掉，读数报回在最新处就重新贴上。
+    mutating func stay(_ open: Bool) {
+        if open, atNewest {
+            atNewest = false
+            revealed = true
+        }
+        staying = open
     }
 
     mutating func reveal() {
@@ -100,6 +103,7 @@ nonisolated struct ChatFollow: Equatable {
         atNewest = true
         revealed = false
         jumping = false
+        staying = false
         target = nil
         toNewest = ToNewest(sent: sent)
     }
@@ -146,9 +150,9 @@ struct ChatJump: Equatable {
 /// 点开对话里的一块时叫它（`ChatFollow.stay`）；比较的规则同 `ChatJump`。
 struct ChatStay: Equatable {
     let column: UUID
-    let stay: () -> Void
+    let stay: (Bool) -> Void
 
-    func callAsFunction() { stay() }
+    func callAsFunction(_ open: Bool) { stay(open) }
 
     nonisolated static func == (a: Self, b: Self) -> Bool { a.column == b.column }
 }

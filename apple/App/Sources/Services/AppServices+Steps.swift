@@ -15,16 +15,15 @@ extension AppServices {
     }
 
     #if os(macOS)
-    /// 会话所在的 Mac 办别的设备的请求（`DeliveryMode.step`）：取了写在那一步上。这一步没有可看的（看图、搜网）照样写下一份空的，那边不再等。
+    /// 会话所在的 Mac 办别的设备的请求（`DeliveryMode.step`）：取了写在那一步上。会话文件没了、读不了按失败写回原因，不写一份空的。
     nonisolated static func fillStep(_ content: String, in store: CueStore) async throws {
-        guard let step = try await store.stepCalls(content), let indexed = try await store.indexedSession(step.session)
-        else { throw SendError.sessionFileMissing }
-        try await store.fillStep(content, with: await ToolCallDetail.read(file: URL(filePath: indexed.path), calls: step.calls) ?? ToolCallDetail())
+        guard let step = try await store.stepCalls(content) else { throw SendError.sessionFileMissing }
+        try await store.fillStep(content, with: try await stepDetail(step.calls, of: step.session, in: store))
     }
 
-    func stepDetail(_ calls: [String], in session: SessionState) async -> ToolCallDetail? {
-        guard let indexed = try? await store.indexedSession(session.sessionID) else { return nil }
-        return await ToolCallDetail.read(file: URL(filePath: indexed.path), calls: calls)
+    nonisolated static func stepDetail(_ calls: [String], of sessionID: String, in store: CueStore) async throws -> ToolCallDetail {
+        guard let indexed = try await store.indexedSession(sessionID) else { throw SendError.sessionFileMissing }
+        do { return try await ToolCallDetail.read(file: URL(filePath: indexed.path), calls: calls) } catch { throw SendError.sessionFileMissing }
     }
     #endif
 

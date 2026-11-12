@@ -6,9 +6,9 @@ extension ToolCallDetail {
     /// 按调用 id 在会话文件里找它的参数与结果。不按各家的行格式解：整行当 JSON 树，认三种形状——
     /// 带这个 id 与参数的对象、指着这个 id 的结果对象（Pi 的 `toolCall`/`toolCallId`、Claude Code 的 `tool_use`/`tool_use_id`），
     /// 与 Codex 做完的一项（同一个对象里带着命令与输出，或各文件的改动；改文件的一步 id 后面接着路径，`CodexHistory.changeCall`）。
-    /// 找不到（文件没了、别家的格式）为 nil。
-    @concurrent public static func read(file: URL, calls: [String]) async -> ToolCallDetail? {
-        guard let data = try? Data(contentsOf: file, options: .mappedIfSafe) else { return nil }
+    /// 文件读不了抛出；读到了却没有这次调用的命令、改动与文字输出（看了一张图、搜了一下网、别家的格式）是一份空的。
+    @concurrent public static func read(file: URL, calls: [String]) async throws -> ToolCallDetail {
+        let data = try Data(contentsOf: file, options: .mappedIfSafe)
         var commands: [String] = [], diffs: [String] = [], outputs: [String] = []
         // 一步里的几次调用在文件里挨着：从第一次找到的地方往后找，不为每个 id 从头扫一遍（会话文件可以有几百 MB）
         var from = data.startIndex
@@ -48,11 +48,10 @@ extension ToolCallDetail {
             if !called || output == nil, from > data.startIndex { _ = scan(from: data.startIndex) } else if let first { from = first }
             if let output, !output.isEmpty { outputs.append(output) }
         }
-        let detail = ToolCallDetail(
+        return ToolCallDetail(
             command: commands.isEmpty ? nil : commands.joined(separator: "\n"), diff: diffs.isEmpty ? nil : diffs.joined(separator: "\n@@\n"),
             output: outputs.joined(separator: "\n")
         ).fitted()
-        return detail.isEmpty ? nil : detail
     }
 
     private static func changes(_ input: [String: Any]) -> [String] {
