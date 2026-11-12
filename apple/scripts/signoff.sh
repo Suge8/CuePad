@@ -5,7 +5,7 @@
 # 开发机上冷跑约 5 分半、改一个文件后约 3 分半（2026-11 实测）。云端只在合并进主干后跑一遍全量兜底（swift.yml），发布只认那一遍全绿的提交。
 # 签的是别人拿得到的那一份：提交已推送、工作区干净（连未跟踪的文件）、签的那一刻含最新的 origin/main。
 # 签完主干又前进了，这条状态照样算数（不要求重签：每合进一个 PR 其余的都得重跑）：与后来合进主干的改动合起来才坏的，由主干那一遍兜住。
-# 真 Agent 用例跑每家的冒烟、钉住的家缺一家就红（xc.sh 头注释）；没动 apple/ 的改动（文档、设计稿、落地页）只跑 lint。
+# 真 Agent 用例跑每家的冒烟、钉住的家缺一家就红（xc.sh 头注释），动了读会话与对话落库的代码就全量跑；没动 apple/ 的改动（文档、设计稿、落地页）只跑 lint。
 set -euo pipefail
 xc="$1"
 scripts="$(cd "$(dirname "$0")" && pwd)"
@@ -27,6 +27,8 @@ if git diff --quiet origin/main HEAD -- apple; then
   passed="lint（没动 apple/）"
 else
   export TEST_RUNNER_CUEPAD_AGENT_MATRIX=full
+  # 读会话与对话落库的代码动了就把真 Agent 的用例全量跑上（缺省只跑一小组）：云端 CI 全量跑，这里不跑就要等合并后才知道红
+  git diff --quiet origin/main HEAD -- apple/CuePadKit/Sources/CueBridge apple/CuePadKit/Sources/CueStore || export TEST_RUNNER_CUEPAD_AGENT_TESTS=all
   "$xc" agents install
   "$xc" check
   "$xc" test kit

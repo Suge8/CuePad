@@ -113,7 +113,7 @@ struct RoundProcess: View {
         if item.kind == .said {
             SaidRow(text: item.target, lines: 3)
         } else {
-            StepRow(item: item, session: session, place: message.map { ($0, index) })
+            StepRow(item: item, session: session, message: message, index: index)
         }
     }
 

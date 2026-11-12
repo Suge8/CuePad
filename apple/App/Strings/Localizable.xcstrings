@@ -21183,6 +21183,22 @@
         }
       }
     },
+    "缓存可能已冷，这一句可能重读约 %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cache may be cold. This message may re-read about %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "缓存可能已冷，这一句可能重读约 %@"
+          }
+        }
+      }
+    },
     "缓存失效，重读 %@" : {
       "localizations" : {
         "en" : {
