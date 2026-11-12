@@ -5,7 +5,7 @@ import SwiftUI
 /// Mac 上正在说的话出字时（`SessionShown.speaking`）这一块是草稿的标题，说的话就是下面的草稿，不再列一遍。
 /// 工具结果里有图时，标题行下面总挂着这一轮的图（收着、展开都在，`ChatImages`），点开全屏看：用户看得到 Agent 看到的，Agent 不必为了给人看再发一遍。
 /// 在跑的与做完后的同一种排法、同样高（同样的步骤时，清单都开着）：Mac 上正在说的话落库时原位换下，这一块不跳（`SessionDraft`）。
-/// 清单里的一步点开看里面（`StepRow`）；缓存没接上的一轮在标题行里写重读了多少（`Chat.processLine`）。
+/// 清单里的一步点开看里面（`StepRow`）；标题行是用时（在跑的是此刻在做的）接每类一个图标配个数，图标与清单那一类的同一个；缓存没接上的一轮在末尾另起一行写重读了多少（`Chat.process`）。
 struct RoundProcess: View {
     let tools: ChatMessage.Tools?
     let ending: Ending
@@ -31,17 +31,21 @@ struct RoundProcess: View {
     }
 
     var body: some View {
-        if let line = Chat.processLine(tools), let tools {
+        let process = Chat.process(tools)
+        if let process, let tools, tools.steps > 0 {
             let expanded = !tools.items.isEmpty && (toggled ?? (open || DebugHooks.preset.toolsOpen))
             VStack(alignment: .leading, spacing: 0) {
                 Button {
                     stay?(!expanded)
                     toggled = !expanded
-                } label: { header(line, open: tools.items.isEmpty ? nil : expanded) }
+                } label: { header(process, open: tools.items.isEmpty ? nil : expanded) }
                     .buttonStyle(PressStyle())
                     .allowsHitTesting(!tools.items.isEmpty)
-                    .accessibilityLabel(spoken(line))
+                    .accessibilityLabel(spoken(process))
                     .accessibilityExpanded(tools.items.isEmpty ? nil : expanded)
+                    #if os(macOS)
+                    .help(process.spoken.visible)
+                    #endif
                 if !tools.images.isEmpty {
                     NoteThread { ChatImages(hashes: tools.images, alignment: .leading, side: Self.imageSide).padding(.vertical, Spacing.hair) }
                 }
@@ -59,44 +63,62 @@ struct RoundProcess: View {
                         }
                     }
                 }
+                recached(process)
             }
             .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: expanded)
             .onChange(of: open) { toggled = nil }
-        } else if case .live(let shown, let doing, _) = ending, !shown.speaking {
+        } else {
             // 还没调过工具：此刻在做的（在想、只说了话），一行：对话末尾只给它留一行（`ChatLiveSlot`）
-            NoteLine { StateDot(shown: shown, size: 6) } label: { Text(doing).lineLimit(1).shimmering() }
-                .accessibilityElement(children: .ignore).accessibilityLabel(doing)
+            let live: (SessionShown, String)? = if case .live(let shown, let doing, _) = ending, !shown.speaking { (shown, doing) } else { nil }
+            if live != nil || process?.recached != nil {
+                VStack(alignment: .leading, spacing: 0) {
+                    if let (shown, doing) = live {
+                        NoteLine { StateDot(shown: shown, size: 6) } label: { Text(doing).lineLimit(1).shimmering() }
+                            .accessibilityElement(children: .ignore).accessibilityLabel(doing)
+                    }
+                    recached(process)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private func recached(_ process: Chat.Process?) -> some View {
+        if let recached = process?.recached {
+            NoteLine(icon: .retry) { Text(recached).foregroundStyle(palette.ink3) }
         }
     }
 
     private static let imageSide: CGFloat = 88
 
-    private func spoken(_ line: Dotted) -> String {
+    private func spoken(_ process: Chat.Process) -> String {
         let end: String? = switch ending {
         case .took(let took): took
         case .live(_, let doing, _): doing
         }
-        return [line.spoken, end].compactMap { $0 }.joined(separator: "，")
+        return [process.spoken.spoken, end].compactMap { $0 }.joined(separator: "，")
     }
 
-    private func header(_ line: Dotted, open: Bool?) -> some View {
+    private func header(_ process: Chat.Process, open: Bool?) -> some View {
         NoteLine(open: open) {
             switch ending {
             case .took: Image(.tool).imageScale(.small)
             case .live(let shown, _, _): StateDot(shown: shown, size: 6)
             }
         } label: {
-            Text(line).lineLimit(typeSize.isAccessibilitySize ? nil : 1)
-                .fixedSize(horizontal: false, vertical: typeSize.isAccessibilitySize).layoutPriority(-1)
-            switch ending {
-            case .took(let took):
-                Dot()
-                Text(took).fixedSize()
-            case .live(_, let doing, nil):
-                Dot()
-                Text(doing).lineLimit(1).shimmering()
-            case .live:
-                EmptyView()
+            HStack(alignment: .firstTextBaseline, spacing: Spacing.item) {
+                switch ending {
+                case .took(let took): Text(took).fixedSize()
+                case .live(_, let doing, nil): Text(doing).lineLimit(1).shimmering()
+                case .live: EmptyView()
+                }
+                ForEach(process.counts, id: \.kind) { count in
+                    HStack(alignment: .firstTextBaseline, spacing: Spacing.hair) {
+                        Image(Self.icon(count.kind)).font(Typography.caption2)
+                        Text(verbatim: "\(count.count)")
+                    }
+                    .fixedSize().foregroundStyle(palette.ink3)
+                }
+                if let steps = process.steps { Text(steps).fixedSize().foregroundStyle(palette.ink3) }
             }
         }
     }
