@@ -11,7 +11,6 @@ struct StyleBoard: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                swatches
                 controls
                 surfaces
                 presses
@@ -24,44 +23,13 @@ struct StyleBoard: View {
         .task { await play() }
     }
 
-    private var swatches: some View {
-        let tokens: [(String, Color)] = [
-            ("sidebar", palette.sidebar), ("desk", palette.desk), ("paper", palette.paper),
-            ("ink", palette.ink), ("ink2", palette.ink2), ("ink3", palette.ink3),
-            ("signature", palette.signature), ("selection", palette.selection), ("waiting", palette.waiting),
-            ("failure", palette.failure), ("replied", palette.replied), ("bubble", palette.bubble),
-            ("hair", palette.hair), ("fill", palette.fill), ("track", palette.track), ("signatureFill", palette.signatureFill),
-        ]
-        return LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4), spacing: 8) {
-            ForEach(tokens, id: \.0) { name, color in
-                VStack(spacing: 4) {
-                    RoundedRectangle(cornerRadius: Radius.block).fill(color).frame(height: 44)
-                        .overlay(RoundedRectangle(cornerRadius: Radius.block).strokeBorder(palette.hair))
-                    Text(name).font(.caption2.monospaced()).foregroundStyle(palette.ink2)
-                }
-            }
-        }
-    }
-
     private var surfaces: some View {
-        VStack(spacing: 12) {
-            HStack(spacing: 12) {
-                Text("纸").frame(maxWidth: .infinity, minHeight: 72).paper(lifted: true)
-                Text("玻璃").frame(maxWidth: .infinity, minHeight: 72).glass(in: .rect(cornerRadius: Radius.card))
-            }
-            HStack(spacing: 8) {
-                ForEach(Self.radii, id: \.name) { radius in
-                    Text(radius.name).font(.caption2.monospaced()).frame(maxWidth: .infinity, minHeight: 56)
-                        .background(palette.fill, in: .rect(cornerRadius: radius.value))
-                }
-            }
+        HStack(spacing: 12) {
+            Text("纸").frame(maxWidth: .infinity, minHeight: 72).paper(lifted: true)
+            Text("玻璃").frame(maxWidth: .infinity, minHeight: 72).glass(in: .rect(cornerRadius: Radius.card))
         }
         .foregroundStyle(palette.ink)
     }
-
-    private static let radii: [(name: String, value: CGFloat)] = [
-        ("chip", Radius.chip), ("block", Radius.block), ("card", Radius.card), ("sheet", Radius.sheet), ("field", Radius.field),
-    ]
 
     private var presses: some View {
         VStack(alignment: .leading, spacing: 12) {

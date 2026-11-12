@@ -20,7 +20,7 @@ extension View {
 
 /// 浮起的高度：投影只有这几档，Theme 以外不写 `.shadow(`（`lint.sh` 查）。新东西先问它浮得多高，不另配一组数。
 /// 深色下平放的东西靠描边分层，抬起的纸不投影（`paper`）。
-enum Elevation {
+enum Elevation: CaseIterable {
     /// 卡片角上的小圆钮。
     case hover
     /// 抬起的纸。

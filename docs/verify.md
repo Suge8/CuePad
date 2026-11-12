@@ -10,7 +10,7 @@
 - Mac 菜单快捷键（如全屏页里 PDF 的 ⌘F 查找条）：`-CuePadClick "wait:1;cmd:f;type:词"`，`cmd:键` 从窗口焦点沿响应链发主菜单那一项的动作（后台窗口收不到菜单快捷键），同样取录屏末帧。
 - Mac 系统菜单：`xc.sh run mac -- … -CuePadForeground YES -CuePadClick x,y` 让实例自己点开，再按窗口截菜单那扇窗（`screencapture -l`，窗口号从 CGWindowList 按 PID 取），截完 `xc.sh stop`。iPhone、iPad 的菜单没有从代码打开的接口：`xc.sh run` 后用 axe 点开。
 - iPhone 系统返回（返回钮、左缘滑动）只能真操作：另起 axe 点或滑（`axe swipe --start-x 5 … --duration 1 --delta 5`；从 x=1 起或滑得快，系统不认作边缘滑动），每步后 `axe describe-ui` 看左上那颗钮核对回到了哪。
-- 改了图标生成器先看 `-CuePadScene icons`（iPad）。模拟器桌面上加小组件脚本不做，看 `-CuePadScene widgets`。
+- 改了图标生成器先看 `-CuePadScene icons`（iPad）。模拟器桌面上加小组件脚本不做，看 `-CuePadScene widgets`。改了样式令牌（色板、圆角、字号、图标尺寸、间距、投影、动效）看 `-CuePadScene tokens`（Mac、iPad，`-theme light|dark` 切浅深）。
 - 改了状态图形或 Cue 头像的各拍，看 `-CuePadScene stateicons`（会话状态、经过那一行、头像各拍四档，一屏放不下加 `-CuePadSheetEnd YES` 截底半）。换拍的软糖与小动作录 `-CuePadCueCycle YES`（走一圈 `CueNowSamples.tour`，`-CuePadCueCycleSeconds <秒>` 改每拍停多久，默认 2.6；停着的拍子每 15～20 秒才动一下，看小动作录 `-CuePadCueNow quiet` 一分钟）。
 - 灵动岛用 `xc.sh run ios -- -CuePadScene cue -CuePadCueNow busy -CuePadLiveActivity YES` 租到自己的模拟器，axe 按该 UDID 回桌面、截图、长按与锁屏；展开态按住时拍。`activity` 画面只预览共享视图，不证明系统宽度、状态栏或高度限制。分别在 iPhone 17 与 18 Pro/Pro Max 核对时间和电量；大数、未知数样例在 `CueActivitySamples`。双活动要用另一个调试身份的隔离合成活动：同一 App 的多个活动仍会合成一个紧凑展示，不能证明最小态或系统窄位。
 - 系统岛的轮播验收加 `-CuePadCueCycle YES -CuePadCueCycleSeconds 6`，由本地演示更新系统活动；录屏仍经 `xc.sh rec`。这是状态变化的过渡，不是常驻循环。模拟器回桌面或打开通知中心后也可能挂起演示 App，轮播会停；只以实际变更的帧为证，不用录制请求时长推算帧率。App 的 `-CuePadReduceMotion` 与语言参数不传进 Widget 进程：系统岛需在租到的模拟器设置对应语言、减少动态效果后验收，结束还原。
