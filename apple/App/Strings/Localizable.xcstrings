@@ -7467,6 +7467,22 @@
         }
       }
     },
+    "全部归档做完的（置顶的留着）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Archive All Completed (Pinned Stay)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "全部归档做完的（置顶的留着）"
+          }
+        }
+      }
+    },
     "全部项目" : {
       "localizations" : {
         "en" : {
@@ -14363,22 +14379,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "把任务的正文交给 Agent，开始做"
-          }
-        }
-      }
-    },
-    "把做完的任务全部归档（置顶的留着）：不占列表，照样搜得到" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Archive all completed tasks except pinned ones. They leave the list but stay searchable."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "把做完的任务全部归档（置顶的留着）：不占列表，照样搜得到"
           }
         }
       }

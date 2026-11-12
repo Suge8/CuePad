@@ -131,24 +131,17 @@ struct SessionRailCell: View {
             .lineLimit(1)
     }
 
-    /// 等你的一张卡：纸色同看板等你那一列的卡，浮起一档。三行：名字与等了多久，它要你做什么，左边哪个项目（图形带名字）、右边哪家 Agent 的标志。
+    /// 等你的一张卡：纸色同看板等你那一列的卡，浮起一档。两行：名字与等了多久，左边哪个项目（图形带名字）、右边哪家 Agent 的标志；它要你做什么在悬停提示里、点开就是。
     /// 开着的那张描一圈墨边。
     private var card: some View {
         VStack(alignment: .leading, spacing: Spacing.tight) {
+            // 等你确认还是待回复只画行首那个图形（同看板等你那一列的卡），字在悬停提示与读屏里：两张卡各多一行状态字，这一组读着像表单
             HStack(alignment: .firstTextBaseline, spacing: Spacing.item) {
+                if let waiting = item.waiting { StateGlyph(status: waiting).font(Glyph.small).frame(width: 11) }
                 name.font(Typography.body)
                 Spacer(minLength: 0)
                 SessionRailTime(item: item).font(Typography.caption).fixedSize()
             }
-            HStack(spacing: Spacing.tight) {
-                Text(item.shown.label).fontWeight(.semibold).foregroundStyle(item.shown.labelTint(palette)).fixedSize()
-                if let ask = item.ask {
-                    Dot().foregroundStyle(palette.ink3)
-                    Text(verbatim: ask).foregroundStyle(palette.ink2)
-                }
-            }
-            .font(Typography.caption)
-            .lineLimit(1)
             HStack(spacing: Spacing.tight) {
                 if let project {
                     ProjectGlyph(project: project, size: 11)

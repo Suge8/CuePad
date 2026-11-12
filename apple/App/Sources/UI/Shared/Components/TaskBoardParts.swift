@@ -76,7 +76,7 @@ struct BoardColumn: View {
             .scrollClipDisabled()
             .modifier(LaneAnchor(column, rewind: rewind))
             .boardLane(column)
-            .boardTopRow(column: column, count: board.count(column), archives: column == .done && !(board.done.isEmpty && board.earlier.isEmpty))
+            .boardTopRow(column: column, count: board.count(column), archives: archives)
             .background { BoardLane(targeted: lit) }
         #else
         ScrollView { cards }
@@ -86,7 +86,7 @@ struct BoardColumn: View {
             .boardLane(column)
             .safeAreaPadding(.top, BoardColumnHeader.height + BoardCardMetrics.inset)
             .overlay(alignment: .top) {
-                BoardColumnHeader(column: column, count: board.count(column))
+                BoardColumnHeader(column: column, count: board.count(column), archives: archives)
                     .padding(.horizontal, TaskMetrics.cardPadding)
                     .glass(in: .rect(cornerRadius: TaskMetrics.cardRadius))
                     .padding([.horizontal, .top], BoardCardMetrics.inset)
@@ -94,6 +94,8 @@ struct BoardColumn: View {
             .background { BoardLane(targeted: lit) }
         #endif
     }
+
+    private var archives: Bool { column == .done && !(board.done.isEmpty && board.earlier.isEmpty) }
 
     /// 打开添加任务时待办回到开头（行滑到首格，列滚回顶）：添加那一行在待办最前，滚过的列要把它带进视野。
     private var rewind: UUID? { adding && column == .todo ? board.todo.first?.id : nil }
@@ -204,15 +206,6 @@ struct BoardColumn: View {
             .buttonStyle(PressStyle())
             .accessibilityValue(showsEarlier.wrappedValue ? "已展开" : "已折叠")
             Spacer(minLength: 0)
-            // Mac 的在列头（`BoardColumnHeader.archives`）
-            #if os(iOS)
-            if showsEarlier.wrappedValue {
-                Button { workspace.attempt { try await workspace.archiveCompletedTasks() } } label: {
-                    Text("全部归档").frame(minHeight: TaskMetrics.chipTarget).contentShape(.rect)
-                }
-                .buttonStyle(PressStyle())
-            }
-            #endif
         }
         .font(Typography.meta).foregroundStyle(palette.ink3)
         .padding(.horizontal, Spacing.tight)
