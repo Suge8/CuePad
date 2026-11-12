@@ -1,7 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// 等你列是全页唯一要你动手的地方，一次只摊开一张（`focal`）：它与页面反色（浅色里是深的、深色里是浅的），问的那句用大字，成果图与选项都在卡上，当场答。
+/// 等你列是全页唯一要你动手的地方，一次只摊开一张（`focal`）：它与页面反色（浅色里是深的、深色里是浅的），骨架与别的卡一样，问的那句用大字，成果图与选项都在卡上，当场答。
 /// 别的收成一张小卡，点一下换它摊开；摊开的那张点问句进会话。否决过：每张都摊开（三四件等你时一列全是选项，分不出先看哪件）。
 struct BoardWaitCard: View {
     let held: TaskBoard.Held
@@ -14,9 +14,6 @@ struct BoardWaitCard: View {
     @Environment(\.boardRow) private var row
     @Environment(\.colorScheme) private var scheme
     @Environment(\.palette) private var palette
-    /// 列窄时（侧栏与 Cue 都开着的小窗）摊开的那张收一档：边距与问句的字号都小一号，不然一句话折成五六行。
-    @State private var narrow = false
-    nonisolated private static let roomy: CGFloat = 240
 
     var body: some View {
         Group {
@@ -24,18 +21,22 @@ struct BoardWaitCard: View {
                 link { rowFace.boardCard(.waiting) }
             } else if focal {
                 // 选项不放进打开会话的那颗钮里：钮里不套钮
-                VStack(alignment: .leading, spacing: narrow ? Spacing.group : Spacing.block) {
-                    link { BoardWaitFace(held: held, project: project, ask: ask, size: narrow ? .focalNarrow : .focal) }
+                VStack(alignment: .leading, spacing: Spacing.group) {
+                    link { BoardWaitFace(held: held, ask: ask, focal: true) }
                     if let shot = held.item?.shot { BoardShot(shot: shot, group: held.id, hero: true, open: openShot) }
                     WaitAnswer(wait: .session(held.session, task: held.item?.id), leading: true)
+                    BoardWaitFoot(held: held, project: project)
                 }
-                .padding(narrow ? Spacing.group : Spacing.panel)
+                .padding(.horizontal, TaskMetrics.cardPadding).padding(.vertical, BoardCardMetrics.pad)
                 .modifier(FocalGround())
-                .onGeometryChange(for: Bool.self) { $0.size.width < Self.roomy } action: { narrow = $0 }
                 .environment(\.colorScheme, scheme == .dark ? .light : .dark)
             } else {
                 Button(action: focus) {
-                    BoardWaitFace(held: held, project: project, ask: ask, size: .folded).padding(.vertical, BoardCardMetrics.pad).boardCard(.waiting)
+                    VStack(alignment: .leading, spacing: BoardCardMetrics.footGap) {
+                        BoardWaitFace(held: held, ask: ask)
+                        BoardWaitFoot(held: held, project: project)
+                    }
+                    .padding(.vertical, BoardCardMetrics.pad).boardCard(.waiting)
                 }
                 .buttonStyle(PressStyle(.card))
                 .accessibilityLabel(spoken)
@@ -96,22 +97,15 @@ struct BoardWaitCard: View {
     #endif
 }
 
-/// 摊开的那张，上面一行小字：拍板还是待回复、项目、哪个会话、等了多久、哪家 Agent；下面是等你的那一句。
+/// 摊开的与收着的同一副骨架，也是推进中那张卡的骨架（`BoardCardLayout`）：名字与 Agent、等你的那一句，卡脚（`BoardWaitFoot`）是项目与等了多久。
+/// 摊开的那张只是反色、那一句用大字写全，句子与卡脚之间放成果图与作答。
 private struct BoardWaitFace: View {
     let held: TaskBoard.Held
-    let project: Project?
     let ask: String?
-    let size: Size
+    var focal = false
     @Environment(\.palette) private var palette
 
-    enum Size { case folded, focalNarrow, focal }
-
     var body: some View {
-        if size == .folded { folded } else { open }
-    }
-
-    /// 收着的小卡与推进中的卡同一副骨架（`BoardCardLayout`）：名字与 Agent、等你的那一句、项目与等了多久。
-    private var folded: some View {
         VStack(alignment: .leading, spacing: BoardCardMetrics.footGap) {
             HStack(alignment: .firstTextBaseline, spacing: Spacing.item) {
                 HStack(alignment: .firstTextBaseline, spacing: Spacing.tight) {
@@ -121,59 +115,30 @@ private struct BoardWaitFace: View {
                 .font(Typography.bodyStrong).frame(maxWidth: .infinity, alignment: .leading)
                 AgentMark(session: held.session, font: TaskMetrics.caption, named: false)
             }
-            HStack(alignment: .firstTextBaseline, spacing: Spacing.tight) {
-                Text("\(kind.fontWeight(.semibold).foregroundStyle(palette.waiting)) \(Text(verbatim: ask ?? "").foregroundStyle(palette.ink2))")
-                    .lineLimit(Self.foldedLines).multilineTextAlignment(.leading)
-            }
-            BoardFoot(glyph: BoardCardMetrics.footGlyph) {
-                if let project { BoardProjectTag(project: project) } else { Color.clear.frame(width: 0) }
-                HStack { Spacer(minLength: 0); waited }
-            }
-            .frame(height: BoardCardMetrics.vitals)
-        }
-        .font(TaskMetrics.caption)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .contentShape(.rect)
-    }
-
-    private var kind: Text { Text(held.deciding ? "拍板" : "待回复") }
-    private var waited: some View { TimeSpent(clock: .waiting(since: held.session.stateSince)).lineLimit(1).fixedSize() }
-
-    private var open: some View {
-        VStack(alignment: .leading, spacing: Spacing.item) {
-            // 名字写不下三四个字就不写（只剩一个"…"）；别的一直在
-            ViewThatFits(in: .horizontal) {
-                meta(named: true)
-                meta(named: false)
-            }
-            .font(TaskMetrics.caption)
-            HStack(alignment: .firstTextBaseline, spacing: Spacing.tight) {
-                if held.item?.task.isPinned == true { BoardPin() }
-                Text(verbatim: ask ?? held.title).font(font).foregroundStyle(palette.ink)
-                    .lineLimit(Self.focalLines).multilineTextAlignment(.leading)
-            }
+            let kind = Text(held.deciding ? "拍板" : "待回复").font(TaskMetrics.caption.weight(.semibold)).foregroundStyle(palette.waiting)
+            let said = Text(verbatim: ask ?? "").font(focal ? Typography.title : TaskMetrics.caption).foregroundStyle(focal ? palette.ink : palette.ink2)
+            Text("\(kind) \(said)").lineLimit(focal ? Self.focalLines : Self.foldedLines).multilineTextAlignment(.leading)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(.rect)
     }
-
-    private func meta(named: Bool) -> some View {
-        HStack(spacing: Spacing.glyph) {
-            kind.fontWeight(.semibold).foregroundStyle(palette.waiting).fixedSize()
-            if let project { ProjectGlyph(project: project, size: TaskMetrics.cardGlyph).help(project.shownName) }
-            // 问句是大字时才另写名字（没有问句时大字就是名字）
-            if named, ask != nil { Text(verbatim: held.title).foregroundStyle(palette.ink3).lineLimit(1).frame(minWidth: Self.nameMin, alignment: .leading) }
-            Spacer(minLength: Spacing.item)
-            waited
-            AgentMark(session: held.session, font: TaskMetrics.caption, named: false).fixedSize()
-        }
-    }
-
-    private var font: Font { size == .focalNarrow ? Typography.title : Typography.heading }
 
     private static let focalLines = 6
     private static let foldedLines = 2
-    private static let nameMin: CGFloat = 48
+}
+
+private struct BoardWaitFoot: View {
+    let held: TaskBoard.Held
+    let project: Project?
+
+    var body: some View {
+        BoardFoot(glyph: BoardCardMetrics.footGlyph) {
+            if let project { BoardProjectTag(project: project) } else { Color.clear.frame(width: 0) }
+            HStack { Spacer(minLength: 0); TimeSpent(clock: .waiting(since: held.session.stateSince)).lineLimit(1).fixedSize() }
+        }
+        .font(TaskMetrics.caption)
+        .frame(height: BoardCardMetrics.vitals)
+    }
 }
 
 /// 反色的那一面：读的是已经翻过来的配色（调用方在它外面换了 `colorScheme`），所以这里的桌面色就是对面那套的。
@@ -183,8 +148,8 @@ private struct FocalGround: ViewModifier {
 
     func body(content: Content) -> some View {
         content.background {
-            RoundedRectangle(cornerRadius: Radius.field).fill(palette.desk).elevation(.lifted)
+            RoundedRectangle(cornerRadius: TaskMetrics.cardRadius).fill(palette.desk).elevation(.lifted)
         }
-        .contentShape(.rect(cornerRadius: Radius.field))
+        .contentShape(.rect(cornerRadius: TaskMetrics.cardRadius))
     }
 }
