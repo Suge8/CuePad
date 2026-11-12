@@ -27,7 +27,7 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
     var decay: [Decay] = []
     var unconfirmed = false
     var cueUntil: Date? = nil
-    /// 参与工作的 Agent 总数；旧快照没有证明时保持未知。
+    /// 参与工作的 Agent 总数；还没从库推出过（`empty`）时未知。
     var agentCount: Int? = nil
 
     enum CodingKeys: String, CodingKey {
@@ -188,7 +188,7 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
         name: "Cue", cue: .idle, tally: Tally(), advancing: 0, subagents: 0, items: [], first: nil, at: .distantPast)
 }
 
-nonisolated extension CueNow: SnapshotFile { static let fileName = "cue.json" }
+nonisolated extension CueNow: SnapshotFile { static let fileName = "cue-v2.json" }
 
 nonisolated extension CueNow {
     struct Entry: Hashable, Sendable, Identifiable {
