@@ -26,7 +26,7 @@ struct EarlierTile: View {
                 .accessibilityLabel(Text("更早"))
                 .accessibilityValue(Text(total, format: .number))
             } else {
-                // 读库的订阅要挂在一个真的视图上（docs/ui.md）
+                // 读库的订阅要挂在一个真的视图上：订阅等视图出现才启动，什么都不排它就不启动，页面永远空白
                 Color.clear.frame(height: 0)
             }
         }

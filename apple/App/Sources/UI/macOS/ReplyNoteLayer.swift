@@ -219,7 +219,7 @@ private struct WatchView: NSViewRepresentable {
 /// 读选区：SwiftUI 的可选文字（`textSelection`）在 Mac 上每个 `Text` 是一个交互视图，读屏接口（公开）给出它整段的字与选区，
 /// 不经剪贴板、不碰私有类名。拖选时它不成为第一响应者，在别段选字时先前那段的选区也不清掉（macOS 26 实测），所以按下时记下各段的选区，
 /// 松开后找这一下选区变了的那段。读屏接口给不出选区的位置（量出来是零），所以浮层挂在指针处。
-/// 否决的：每条回答换成 TextKit 文本视图（长对话太重）、发"复制"去取（覆盖剪贴板）、每块挂悬停跟踪（`docs/ui.md`）。
+/// 否决的：每条回答换成 TextKit 文本视图（长对话太重）、发"复制"去取（覆盖剪贴板）、每块挂悬停跟踪。
 private final class SelectionWatch: NSView {
     struct Selection {
         let text: String
