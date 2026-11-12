@@ -16,6 +16,7 @@ struct BoardLane: View {
 /// 三端的新会话都只在这里，另外只有会话列表空着时那一颗（`SessionList`）。动作直接调工作区，不经环境交下来：环境里的闭包没法比较，页每更新一次就让读它的列头全部重算。
 struct LaneAdd {
     let title: LocalizedStringResource
+    var icon = Icon.add
     let action: () -> Void
 
     static func of(_ column: TaskBoard.Column, in workspace: Workspace) -> LaneAdd? {
@@ -58,7 +59,7 @@ struct LaneAddButton: View {
     private func button(disc: CGFloat?) -> some View {
         Button(action: add.action) {
             if let disc {
-                Label(add.title, icon: .add).labelStyle(.iconOnly)
+                Label(add.title, icon: add.icon).labelStyle(.iconOnly)
                     .frame(width: disc, height: disc)
                     .background(palette.fill, in: .circle)
                     #if os(iOS)
@@ -66,11 +67,13 @@ struct LaneAddButton: View {
                     #endif
                     .contentShape(.rect)
             } else {
-                Label(add.title, icon: .add).labelStyle(.iconOnly).contentShape(.rect)
+                Label(add.title, icon: add.icon).labelStyle(.iconOnly).contentShape(.rect)
             }
         }
-        .foregroundStyle(disc == nil ? palette.signature : palette.ink)
+        // 加号是这一列的主动作；别的（已完成的全部归档）是收拾，淡一档
+        .foregroundStyle(add.icon != .add ? palette.ink3 : disc == nil ? palette.signature : palette.ink)
         .buttonStyle(PressStyle(disc == nil ? .inline : .button))
+        .help(Text(add.title))
     }
 }
 
@@ -88,6 +91,8 @@ extension Workspace {
 struct BoardColumnHeader: View {
     let column: TaskBoard.Column
     let count: Int
+    /// 已完成那一列有做完的任务：列尾那一格（别的列放加号的地方）是全部归档。批量归档只有这一个入口，不随"更早做完的"展没展开。
+    var archives = false
     @Environment(\.palette) private var palette
     @Environment(Workspace.self) private var workspace
 
@@ -99,11 +104,18 @@ struct BoardColumnHeader: View {
             .accessibilityLabel(column.title)
             .accessibilityValue("\(count)")
             .accessibilityAddTraits(.isHeader)
-            if let add = LaneAdd.of(column, in: workspace) {
+            if let add = archives ? archive : LaneAdd.of(column, in: workspace) {
                 LaneAddButton(add, cell: CGSize(width: Self.add, height: Self.height)).font(Self.font)
             }
         }
         .frame(height: Self.height)
+    }
+
+    private var archive: LaneAdd {
+        let scope = workspace.catalog?.project(workspace.scopedProject)?.shownName
+        return LaneAdd(title: scope.map { "归档「\($0)」做完的（置顶的留着）" } ?? "全部归档做完的（置顶的留着）", icon: .archive) {
+            workspace.attempt { try await workspace.archiveCompletedTasks() }
+        }
     }
 
     private var row: some View {

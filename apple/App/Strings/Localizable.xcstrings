@@ -7451,18 +7451,18 @@
         }
       }
     },
-    "全部归档做完的" : {
+    "全部归档做完的（置顶的留着）" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Archive All Done Tasks"
+            "value" : "Archive All Completed (Pinned Stay)"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "全部归档做完的"
+            "value" : "全部归档做完的（置顶的留着）"
           }
         }
       }
@@ -13519,6 +13519,22 @@
         }
       }
     },
+    "归档「%@」做完的（置顶的留着）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Archive Completed in “%@” (Pinned Stay)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "归档「%@」做完的（置顶的留着）"
+          }
+        }
+      }
+    },
     "当前模型不支持加速" : {
       "localizations" : {
         "en" : {
@@ -14399,22 +14415,6 @@
         }
       }
     },
-    "把做完的任务全部归档（置顶的留着）：不占列表，照样搜得到" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Archive all completed tasks except pinned ones. They leave the list but stay searchable."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "把做完的任务全部归档（置顶的留着）：不占列表，照样搜得到"
-          }
-        }
-      }
-    },
     "把常说的做法记成重点" : {
       "localizations" : {
         "en" : {
@@ -14779,22 +14779,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "接入 Agent"
-          }
-        }
-      }
-    },
-    "接入 Agent…" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Connect Agents…"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "接入 Agent…"
           }
         }
       }
@@ -21215,6 +21199,22 @@
         }
       }
     },
+    "缓存可能已冷，这一句可能重读约 %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cache may be cold. This message may re-read about %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "缓存可能已冷，这一句可能重读约 %@"
+          }
+        }
+      }
+    },
     "缓存失效，重读 %@" : {
       "localizations" : {
         "en" : {
@@ -26463,22 +26463,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "项目范围"
-          }
-        }
-      }
-    },
-    "项目范围、归档做完的、接入 Agent" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Project scope, archive done, connect agents"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "项目范围、归档做完的、接入 Agent"
           }
         }
       }

@@ -121,7 +121,7 @@ struct Palette {
     var onFill: Color { Color(hex: 0xFFFDF8) }
 
 
-    /// 等你确认：赭黄，全 App 只有等你与拍板用它。对比度 4.7，深色 6.9。别的"要你处理"（同步、连接）按 `StatusTone.notice` 用墨色，出错是 `FailureMark`。
+    /// 等你确认：赭黄，全 App 只有等你、拍板与会话里缓存失效那一行的感叹号（多花了钱，字照旧是墨色）用它。对比度 4.7，深色 6.9。别的"要你处理"（同步、连接）按 `StatusTone.notice` 用墨色，出错是 `FailureMark`。
     var waiting: Color { dark ? Color(hex: 0xEDBD57) : Color(hex: 0x845A06) }
     /// 等你的实底胶囊（实时活动里等你的数）。字 6.0，深色 4.6。
     var waitingFill: Color { dark ? Color(hex: 0x9C6A08) : Color(hex: 0x845A06) }

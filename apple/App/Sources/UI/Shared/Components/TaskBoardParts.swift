@@ -28,9 +28,16 @@ struct BoardColumn: View {
     @State private var opened: PreviewOpening?
     /// 等你列摊开的是哪张；没点过、或点的那张答完走了，就是最前一张（等得最久的）。
     @State private var focal: String?
+    #if os(iOS)
+    /// 手机那一行是横着滑的，更早做完的几百条排不进去：点了另出一页竖着列。
+    @State private var listsEarlier = false
+    #endif
 
     var body: some View {
         lane
+            #if os(iOS)
+            .sheet(isPresented: $listsEarlier) { earlierList }
+            #endif
             .overlay(alignment: .topLeading) { if lit, let slot, let at = position(of: slot) { mark(at: at).transition(.opacity) } }
             .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: slot)
             .coordinateSpace(.named(space))
@@ -73,7 +80,7 @@ struct BoardColumn: View {
             .scrollClipDisabled()
             .modifier(LaneAnchor(column, rewind: rewind))
             .boardLane(column)
-            .boardTopRow(column: column, count: board.count(column), targeted: lit)
+            .boardTopRow(column: column, count: board.count(column), archives: archives, targeted: lit)
         #else
         ScrollView { cards }
             .scrollBounceBehavior(.basedOnSize)
@@ -82,7 +89,7 @@ struct BoardColumn: View {
             .boardLane(column)
             .safeAreaPadding(.top, BoardColumnHeader.height + BoardCardMetrics.inset)
             .overlay(alignment: .top) {
-                BoardColumnHeader(column: column, count: board.count(column))
+                BoardColumnHeader(column: column, count: board.count(column), archives: archives)
                     .padding(.horizontal, TaskMetrics.cardPadding)
                     .glass(in: .rect(cornerRadius: TaskMetrics.cardRadius))
                     .padding([.horizontal, .top], BoardCardMetrics.inset)
@@ -90,6 +97,8 @@ struct BoardColumn: View {
             .background { BoardLane(targeted: lit) }
         #endif
     }
+
+    private var archives: Bool { column == .done && !(board.done.isEmpty && board.earlier.isEmpty) }
 
     /// 打开添加任务时待办回到开头（行滑到首格，列滚回顶）：添加那一行在待办最前，滚过的列要把它带进视野。
     private var rewind: UUID? { adding && column == .todo ? board.todo.first?.id : nil }
@@ -263,6 +272,9 @@ struct BoardColumn: View {
     private var earlierToggle: some View {
         HStack(spacing: Spacing.group) {
             Button {
+                #if os(iOS)
+                if row { listsEarlier = true; return }
+                #endif
                 withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { showsEarlier.wrappedValue.toggle() }
             } label: {
                 HStack(spacing: Spacing.tight) {
@@ -274,18 +286,35 @@ struct BoardColumn: View {
             .buttonStyle(PressStyle())
             .accessibilityValue(showsEarlier.wrappedValue ? "已展开" : "已折叠")
             Spacer(minLength: 0)
-            if showsEarlier.wrappedValue {
-                Button { workspace.attempt { try await workspace.archiveCompletedTasks() } } label: {
-                    Text("全部归档").frame(minHeight: TaskMetrics.chipTarget).contentShape(.rect)
-                }
-                .buttonStyle(PressStyle())
-                    .help("把做完的任务全部归档（置顶的留着）：不占列表，照样搜得到")
-            }
         }
         .font(Typography.meta).foregroundStyle(palette.ink3)
         .padding(.horizontal, Spacing.tight)
         .frame(maxHeight: isRow ? .infinity : nil)
     }
+
+    #if os(iOS)
+    private var earlierList: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: BoardCardMetrics.gap) {
+                HStack {
+                    Text("更早做完的 \(board.earlier.count)").font(Typography.bodyStrong).monospacedDigit()
+                    Spacer(minLength: Spacing.item)
+                    Button("全部归档") {
+                        listsEarlier = false
+                        workspace.attempt { try await workspace.archiveCompletedTasks() }
+                    }
+                    .font(Typography.secondary)
+                }
+                .padding(.vertical, Spacing.item)
+                ForEach(board.earlier) { card($0) }
+            }
+            .padding(Spacing.inset)
+        }
+        .background(palette.desk)
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
+    }
+    #endif
 
     private func drop(_ id: UUID, at slot: Int?) {
         guard let item = board.item(id) else { return }

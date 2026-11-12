@@ -20,11 +20,13 @@ struct CueAvatar: View {
 
     let beat: CueBeat
     let size: Size
+    /// 头像后面垫的淡圆底；放在自己有底的格里时不要（会话条最上那一格）。
+    let plate: Bool
     @Environment(\.palette) private var palette
     @LoopsPlay private var loops
 
-    init(_ beat: CueBeat, size: Size) {
-        (self.beat, self.size) = (beat, size)
+    init(_ beat: CueBeat, size: Size, plate: Bool = true) {
+        (self.beat, self.size, self.plate) = (beat, size, plate)
     }
 
     var body: some View {
@@ -36,7 +38,7 @@ struct CueAvatar: View {
                 Jelly(value: beat, look: { $0.still }, move: JellyMove.cue) { beat, phase in
                     face(beat, intro: phase == .entering).padding(side * 0.06).frame(width: side, height: side).cueMarks(size: side, beat: beat)
                 }
-                .background(palette.hair, in: .circle)
+                .background(plate ? palette.hair : .clear, in: .circle)
             }
         }
         .readerHidden(true)

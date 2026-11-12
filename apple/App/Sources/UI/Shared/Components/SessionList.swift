@@ -148,7 +148,7 @@ struct EarlierPage: View {
 
     var body: some View {
         #if os(iOS)
-        SessionList(model: model).floatingHeader("更早")
+        SessionList(model: model).floatingHeader("历史")
         #else
         SessionList(model: model)
         #endif

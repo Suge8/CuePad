@@ -154,9 +154,10 @@ extension HistoryCheckpoint {
     /// 一次模型请求的用量（`read` 从缓存读的，`fresh` 原价送的：没缓存的输入加写进缓存的）。`id` 相同的只记一次。
     /// `lifetime` 是 Agent 报的保留时长；没报而 `tiered`（Anthropic 的模型，只有 5 分钟与 1 小时两档）时从这个会话见过的推：
     /// 隔了 5 分钟以上还接得上，就是 1 小时那一档（Pi 的会话文件不写档位）。
+    /// 都没有时按 `guess` 估，记成估的：缺省一小时（过了一小时哪家的缓存都多半不在了，不会乱报），知道得更细的给自己的。
     /// 没接上缓存的判定照 whycodes：上一次读过至少 `cacheFloor`、这一次读的不到它的四分之一、原价送的至少 `cacheFloor`；
     /// 比 Claude Code 用量页的口径（少读 5% 且 2000 以上）保守，正常往后追加的不会误报。刚压缩完的那一次是预料中的重建。
-    mutating func requested(id: String?, read: Int, fresh: Int, lifetime: TimeInterval?, tiered: Bool = false, at: Date) {
+    mutating func requested(id: String?, read: Int, fresh: Int, lifetime: TimeInterval?, tiered: Bool = false, guess: TimeInterval = 3_600, at: Date) {
         guard read + fresh > 0, id == nil || id != cache.counted else { return }
         let before = cache.lastRead ?? 0
         let missed = !cache.rebuilt && before >= Self.cacheFloor && read < before / 4 && fresh >= Self.cacheFloor
@@ -166,7 +167,7 @@ extension HistoryCheckpoint {
         cache.lastRead = read
         cache.lastAt = at
         cache.rebuilt = false
-        round?.tools.requested(context: read + fresh, recached: missed ? fresh : 0, warmUntil: cache.lifetime.map { at + $0 })
+        round?.tools.requested(context: read + fresh, recached: missed ? fresh : 0, warmUntil: at + (cache.lifetime ?? guess), estimated: cache.lifetime == nil)
     }
 
     static let cacheFloor = 2_048

@@ -14,7 +14,7 @@ struct EarlierTile: View {
             if let total, total > 0 {
                 Button { workspace.push(.earlier) } label: {
                     VStack(spacing: Spacing.hair) {
-                        Text("更早").foregroundStyle(palette.ink2)
+                        Text("历史").foregroundStyle(palette.ink2)
                         Text(total, format: .number).foregroundStyle(palette.ink3).monospacedDigit()
                     }
                     .font(Typography.caption2.weight(.semibold))
@@ -23,7 +23,7 @@ struct EarlierTile: View {
                 }
                 .buttonStyle(PressStyle(.card))
                 .paper(cornerRadius: Radius.block)
-                .accessibilityLabel(Text("更早"))
+                .accessibilityLabel(Text("历史"))
                 .accessibilityValue(Text(total, format: .number))
             } else {
                 // 读库的订阅要挂在一个真的视图上：订阅等视图出现才启动，什么都不排它就不启动，页面永远空白

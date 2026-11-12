@@ -33,7 +33,7 @@ struct CueButton: View {
     }
 }
 
-/// 放得下时是右边那一栏，放不下时是右缘的抽屉（`Workspace.cueDrawer`），只是同一块的两种摆法，窗口跨过临界宽不拆不建：对话、滚动位置、输入框里的话都在。
+/// 铺满时（`WideMetrics.home`）占会话条之外的整块；让到右边后，放得下时是右边那一栏，放不下时是右缘的抽屉（`Workspace.cueDrawer`），只是同一块的两种摆法，窗口跨过临界宽不拆不建：对话、滚动位置、输入框里的话都在。
 /// 摆法只有一个数：露出多宽（`shown`：放得下时是右边那一栏的宽，收起是 0；放不下时抽屉开着是整栏、关着是 0），块的左缘在窗口右缘往里这么远；
 /// 露出 0 时排在窗口右缘外，滑出去落定才藏起（看不见、点不到、⌃Tab 跳过），订阅暂停（`pageActive`）。
 /// 收起与放回、跨过临界宽、抽屉开合都只是这个数变了，同一段渲染端的平移（`WideColumnSlide`）：主区跟着让出时，块的左缘每一帧贴着主区的右缘。
@@ -47,20 +47,26 @@ struct CueDock<Column: View>: View {
     var bleed = EdgeInsets()
     @ViewBuilder let column: (_ fits: Bool) -> Column
     @Environment(Workspace.self) private var workspace
+    @Environment(\.palette) private var palette
 
     var body: some View {
         let open = !sizes.cueFits && workspace.cueDrawer
         let shown = sizes.cueFits ? sizes.cue : open ? WideMetrics.cue : 0
+        let block = sizes.home ? sizes.cue : WideMetrics.cue
+        // 铺满时随窗口变宽不算换形（拖窗口不起滑动）；铺满与让到右边之间、会话条开合才滑
+        let shape = sizes.home ? WideMetrics.Shape(rail: sizes.rail, cue: -1) : WideMetrics.Shape(rail: -1, cue: shown)
         ZStack(alignment: .trailing) {
             if open { DrawerCatcher { workspace.hideCue(fits: false) }.transition(.identity) }
-            WideColumnHost(slot: .cue, focus: focus, origin: width - shown, width: WideMetrics.cue, shape: WideMetrics.Shape(rail: 0, cue: shown), hidden: shown == 0) {
+            WideColumnHost(slot: .cue, focus: focus, origin: width - shown, width: block, shape: shape, hidden: shown == 0) {
                 column(sizes.cueFits)
+                    // 铺满时它盖在藏起的会话条上（会话条藏起时照原宽画在下面，`WideRail`）：同主区铺满桌面色，不透出来
+                    .background { if sizes.home { palette.desk.ignoresSafeArea() } }
                     .modifier(DrawerSurface(shown: !sizes.cueFits, bleed: bleed))
                     .environment(\.pageActive, shown > 0)
             }
-            .frame(width: WideMetrics.cue)
+            .frame(width: block)
             .reachesWindowBottom()
-            .padding(.trailing, shown - WideMetrics.cue)
+            .padding(.trailing, shown - block)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
     }

@@ -3,16 +3,7 @@ import SwiftUI
 
 /// 选中的项目进了回收站就当作全部项目（`Workspace.scopedProject`）。
 struct ProjectScopeItems: View {
-    @Environment(Workspace.self) private var workspace
-
-    var body: some View {
-        let current = workspace.catalog?.project(workspace.scopedProject)
-        Menu {
-            ProjectScopePicker().pickerStyle(.inline)
-        } label: {
-            Label("项目范围：\(current?.shownName ?? String(localized: "全部项目"))", icon: .filter)
-        }
-    }
+    var body: some View { ProjectScopePicker().pickerStyle(.inline) }
 }
 
 private struct ProjectScopePicker: View {

@@ -2,7 +2,7 @@ import CueEditor
 import SwiftUI
 
 /// 一样东西此刻要不要你注意（同步、Pi 连接、命令行、崩溃这类状态），全 App 着色只按它：平静是次要墨色；要你处理是墨色，
-/// 靠图形与比平静更深的字抢眼（赭黄只留给 Agent 等你确认）；出错是胭脂。
+/// 靠图形与比平静更深的字抢眼（赭黄只留给 Agent 等你确认，和会话里缓存失效那一行的感叹号）；出错是胭脂。
 nonisolated enum StatusTone: Equatable {
     case calm, notice, failure
 }

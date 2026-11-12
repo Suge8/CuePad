@@ -107,24 +107,44 @@ nonisolated enum Chat {
         return SessionClock.duration(message.at.timeIntervalSince(started))
     }
 
-    /// 按做了什么报数（改、跑、读、搜），不报总步数。读、改同一个文件只算一次，与清单的行同一口径。
+    /// 一轮的经过报的数：按做了什么分类（改、跑、读、搜），不报总步数。读、改同一个文件只算一次，与清单的行同一口径。
     /// 不写出错几处：中途出的错它多半自己解决了，没解决的回答里会说；哪步出错展开清单在原位标着。
-    static func processLine(_ tools: ChatMessage.Tools?) -> Dotted? {
+    struct Process: Equatable {
+        /// 标题行里一类一格：图标（与清单那一类的同一个）配个数；`spoken` 是读屏与悬停时的整句。
+        struct Count: Equatable {
+            let kind: ChatMessage.Tools.Kind
+            let count: Int
+            let spoken: String
+        }
+
+        var counts: [Count] = []
+        /// 按类数不全时写总步数：清单没列全（`Tools.itemLimit`）时只有改动数得全
+        var steps: String?
+        /// 这一轮缓存没接上，重读了多少：自成一行，不进标题行
+        var recached: String?
+
+        var spoken: Dotted { Dotted(counts.map(\.spoken) + [steps]) }
+    }
+
+    static func process(_ tools: ChatMessage.Tools?) -> Process? {
         guard let tools else { return nil }
         let recached = tools.cache?.recached.map { String(localized: "缓存失效，重读 \(CueContext.tokens($0))") }
-        guard tools.steps > 0 else { return recached.map { Dotted([$0]) } }
+        guard tools.steps > 0 else { return recached.map { Process(recached: $0) } }
         func count(_ kind: ChatMessage.Tools.Kind) -> Int { tools.items.count { $0.kind == kind } }
         let edits = tools.items.count { $0.kind == .edit && !$0.failed }
-        let changed = edits > 0 ? String(localized: "改了 \(edits) 个文件") : nil
-        let steps = String(localized: "共 \(tools.steps) 步")
-        // 清单没列全（`Tools.itemLimit`）时只有改动数得全，其余按类数不出来
-        guard tools.steps == tools.items.count(where: { $0.kind != .said }) else { return Dotted([changed, steps, recached]) }
-        let commands = count(.command), reads = count(.read), searches = count(.search), others = count(.other)
-        let parts = [
-            changed, commands > 0 ? String(localized: "跑了 \(commands) 条命令") : nil, reads > 0 ? String(localized: "读了 \(reads) 个文件") : nil,
-            searches > 0 ? String(localized: "搜了 \(searches) 次") : nil, others > 0 ? String(localized: "\(others) 次工具") : nil,
-        ]
-        return Dotted((parts.contains { $0 != nil } ? parts : [steps]) + [recached])
+        var counts = [Process.Count(kind: .edit, count: edits, spoken: String(localized: "改了 \(edits) 个文件"))]
+        let complete = tools.steps == tools.items.count { $0.kind != .said }
+        if complete {
+            let commands = count(.command), reads = count(.read), searches = count(.search), others = count(.other)
+            counts += [
+                .init(kind: .command, count: commands, spoken: String(localized: "跑了 \(commands) 条命令")),
+                .init(kind: .read, count: reads, spoken: String(localized: "读了 \(reads) 个文件")),
+                .init(kind: .search, count: searches, spoken: String(localized: "搜了 \(searches) 次")),
+                .init(kind: .other, count: others, spoken: String(localized: "\(others) 次工具")),
+            ]
+        }
+        counts.removeAll { $0.count == 0 }
+        return Process(counts: counts, steps: complete && !counts.isEmpty ? nil : String(localized: "共 \(tools.steps) 步"), recached: recached)
     }
 
     static func diffLabel(added: Int?, removed: Int?) -> String {
