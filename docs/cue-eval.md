@@ -1,6 +1,6 @@
 # Cue 评测
 
-改 Cue 的系统提示、工具说明、信封或记忆前后各跑一遍，比同一套场景里真模型的做法。
+要量一处改动（系统提示、工具说明、信封、记忆）对 Cue 做法的影响时，在同一套场景里比改前改后真模型的做法。
 
 ## 三套场景
 
@@ -23,24 +23,23 @@ apple/scripts/cue-eval.sh short /tmp/cue-eval/new-short-1   # 另有 long、days
 
 ## 成绩单
 
-改系统提示、工具、记忆前后，短场景、长程、多日各跑两遍（Pi + sonnet · medium），每遍一个目录，再比：
+短场景、长程、多日每组各跑两遍（Pi + sonnet · medium），每遍一个目录，再比：
 
 ```bash
 python3 apple/scripts/score.py /tmp/cue-eval/base-short-{1,2} /tmp/cue-eval/base-long-{1,2} /tmp/cue-eval/base-days-{1,2} \
   --vs /tmp/cue-eval/new-short-{1,2} /tmp/cue-eval/new-long-{1,2} /tmp/cue-eval/new-days-{1,2}
 ```
 
-- 整理场景 `m-整理钉着的记忆` 的自动检查只确认有回复与记忆产物；运行后用 `python3 apple/scripts/memory-judge.py RUN [RUN…]` 验收，全部通过才算完成。
-- 改判分规范时，先把旧分数和原始经过另存，再在副本上重判，保留前后理由。用固定材料核对同义表达、交换句序同判，以及删通过条件、反转免询问、免 lint、仅运行不要求通过均被拒绝；原材料只写“先跑”而丢失“通过”的也应判失败。对照放临时目录，不用重跑产品来覆盖旧失败；真实输出若丢项仍不通过。
+- 整理场景 `m-整理钉着的记忆` 的自动检查只确认有回复与记忆产物，过没过用 `python3 apple/scripts/memory-judge.py RUN [RUN…]` 判。
 - 长程剧本里的会话答不了挑刺的追问：那几件到剧本结束可能没收尾，靠它们收尾的判定记"不计"。比完成数时把这一层算进去。
 - 怎么看：差值没超过组内差的不算改动的效果；再看翻转、组内不稳与每遍都没过的。改了判定的措辞，它在成绩单里就是另一条，改前改后各列一次。
 - 多日另记合并：见 .md 的「多日」；单列的轮另出一表。
 
-记忆工具改身份或区间引用时（规则在 `CueMemoryRange`、`CueStore+CueMemory` 的注释），核对原始调用中的 UUID 与 `range` 是否从输入原样复制，并检查工具结果及库内命中对象；不能只凭最终回复判通过。竞态验收用隔离库走真实 MCP，覆盖输入变化拒绝、未变及区间外追加成功，再跑模型场景；核对模型确实使用子块写入回执的新输入与引用。
+评记忆工具的身份或区间引用（规则在 `CueMemoryRange`、`CueStore+CueMemory` 的注释）看原始调用：UUID 与 `range` 是否从输入原样复制，工具结果与库内命中的是哪一条；最终回复看不出来。
 
 ## 记忆基准
 
-改 Cue 的提示词或 recall 前后各跑一遍，用 LongMemEval（`lme`）、LoCoMo（`locomo`）、ConvoMem（`convomem`）给长期记忆打分：
+要量提示词或 recall 的改动对长期记忆的影响时，改前改后各跑一遍，用 LongMemEval（`lme`）、LoCoMo（`locomo`）、ConvoMem（`convomem`）给长期记忆打分：
 
 ```bash
 B=locomo
