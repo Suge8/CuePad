@@ -41,10 +41,10 @@ public struct HistoryCheckpoint: Sendable, Codable, Equatable {
         var counted: String?
     }
 
-    /// 读会话的规则的版本：规则变了、已读过的部分要按新规则重读时（长度截断的回答改记未完成、工具结果里的图、Agent 自己起的会话名、Claude Code 推迟补写的 turn_duration 的归属、每一步的调用 id 与缓存读写）加一，
+    /// 读会话的规则的版本：规则变了、已读过的部分要按新规则重读时（长度截断的回答改记未完成、工具结果里的图、Agent 自己起的会话名、Claude Code 推迟补写的 turn_duration 的归属、每一步的调用 id 与缓存读写、Codex 的缓存读写与改文件一步的调用 id）加一，
     /// 旧版本的检查点解不开，各家的会话在窗口内从头重读、对话按新规则改写（`CueStore.applyTranscript` 只改写变了的）。
     struct ReadRules: Codable, Equatable {
-        static let current = 5
+        static let current = 6
         let version: Int
 
         init() { version = Self.current }

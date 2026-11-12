@@ -45,6 +45,7 @@ enum DebugScene {
         preset.searchText = searchText
         preset.editorSelection = editorSelection
         preset.toolsOpen = args.layoutOpts.toolsOpen
+        preset.stepOpen = args.layoutOpts.stepOpen
         preset.crashSheet = args.crashSheet
         preset.demoMac = args.demoMac
         // 流程演示与 Cue 的 sending 自己摆送达，不要演示 Mac 来接手，但话在路上要算同步通着（隔离库没有同步，不然是"没有在同步"）
