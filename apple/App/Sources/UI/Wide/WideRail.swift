@@ -8,7 +8,7 @@ import SwiftUI
 /// 宽 `Chrome.rail`，不能拖：它是每个自动藏起临界宽的一项（`WideMetrics`），拖宽要么逐帧挪三栏（违背 Mac 开合不逐帧挪位置），要么只拖一条线、松手才变，换来的只是二十来点。
 /// 被否决的：收起成一列图标条（`Chrome` 头注释）；浮起的一块（macOS 26 那样离窗边一档、圆角，红绿灯坐在里面）——四周一圈桌面色的缝分散左边的注意力，macOS 27 也改回贴边；
 /// 开合钮与搜索放在会话条顶上一行（占一整行，搜索与会话条无关）；开合钮做成玻璃圆钮（圆底压在会话条与主区的分界上）。
-/// 进展、历史两行的图标是强调色（签名色靛青，HIG「Sidebars」："By default, sidebar icons use your app's accent color."）：是静止的符号、自成一组在会话的上面，
+/// 进展那一行的图标是强调色（签名色靛青，HIG「Sidebars」："By default, sidebar icons use your app's accent color."）：是静止的符号、自成一组在会话的上面，
 /// 与下面会动的靛青心电线、赭黄与胭脂的状态标靠形状和位置分开；会话行首只画状态标，不用强调色。
 struct WideRail: View {
     let width: CGFloat
@@ -49,7 +49,6 @@ struct WideRail: View {
             RailGroup {
                 RailCue()
                 RailRow(title: "进展", icon: .task, selected: workspace.shownPane == .progress) { workspace.selectPane(.progress) }
-                RailRow(title: "历史", icon: .session, selected: workspace.mainRoute == .earlier && !workspace.cueHome) { workspace.show(.earlier) }
             }
             RailSessions(data: services.liveSessions.rail, marked: Set(workspace.shownSessions.compactMap(\.sessionID))) { session, opening in
                 workspace.openSession(session.id, sessionID: session.sessionID, in: opening == .beside ? .beside : .main)

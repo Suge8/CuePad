@@ -261,7 +261,7 @@ private struct RailProjectSessions: View {
             return SessionRailRows.Item(session: session, name: item.task?.title.nonEmpty ?? session.title, pulse: pulse, waiting: nil)
         }
         let hidden = (page?.total ?? 0) - ended.count
-        Group {
+        VStack(spacing: Spacing.hair) {
             ForEach(live + ended) { item in
                 SessionRailCell(item: item, form: .wide, moves: false, selected: marked.contains(item.id), compact: true, open: open)
             }
@@ -270,9 +270,14 @@ private struct RailProjectSessions: View {
                     RailLine { Color.clear } rest: {
                         Text("还有 \(hidden) 个会话").font(Typography.caption).foregroundStyle(palette.ink3).lineLimit(1)
                     }
+                    .padding(.leading, SessionRailCell.indent)
                 }
                 .buttonStyle(RowStyle())
             }
+        }
+        // 引线在项目图形那一列的中线上，从项目那一行往下贯到最后一个会话：看得出这几行归上面那个项目
+        .overlay(alignment: .leading) {
+            Rectangle().fill(palette.hair).frame(width: 1).padding(.leading, Chrome.icon / 2).padding(.vertical, Spacing.tight)
         }
         .transition(.opacity)
         .observing(services.store, id: Reading(project: project, limit: limit, moment: services.speech), into: $page, onError: workspace.fail) {

@@ -12,9 +12,10 @@ extension UTType {
     nonisolated static let cuepadSession = UTType(exportedAs: "\(AppIdentity.id).session", conformingTo: .data)
 }
 
-/// 宽屏有两种行。等你的两行（`Chrome.tallRow`）：第一行名字与等了多久，第二行是先看哪个要的——哪个项目（图形带项目色）、它要什么、
-/// 哪一家 Agent（行尾的小标志）。排在项目下面的一行（`compact`）：项目已经由上一行说了，只有名字与读数。
-/// 行首只有一个点、三种样子（`RailDot`）：要你的实心带状态色，在跑的实心靛青，歇着的空心——会话条上只要分得出这三样，细分的状态在读数那个词与会话页里。
+/// 宽屏有两种行。等你的两行（`Chrome.tallRow`）：行首是它的项目（同下面项目那一组的图形），第一行名字与等了多久，第二行它要什么、
+/// 行尾哪一家 Agent。排在项目下面的一行（`compact`）：缩进一格，项目已经由上一行说了，只有名字与读数。
+/// 行首不放状态点：只有在推进的画看板推进中那个记号（同项目行尾数的那个），歇着、结束的不画、名字淡一档——没事的不该有记号要人去认。
+/// 否决过：每种状态一个图形（七八种，认不过来）；实心、空心的点分在跑与歇着（两种点摆在一起读不出哪个是哪个）。
 struct SessionRailCell: View {
     let item: SessionRailRows.Item
     let form: SessionRail.Form
@@ -44,6 +45,9 @@ struct SessionRailCell: View {
         .accessibilityIdentifier("session-rail-\(item.id)")
         .help(help)
     }
+
+    /// 项目下面的会话缩进这么多：行首那一列的中线上画一道引线（`RailProjectSessions`）。
+    static let indent: CGFloat = Spacing.group
 
     private var help: String { Dotted(item.name, project?.shownName, item.shown.label, item.ask ?? item.doing, item.session.agentMark).visible }
 
@@ -88,7 +92,13 @@ struct SessionRailCell: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 RailLine(height: compact ? Chrome.row : Chrome.tallRow) {
-                    RailDot(item: item)
+                    if !compact {
+                        ProjectGlyph(project: project)
+                    } else if item.waiting == nil, item.pulse.tier == .running {
+                        BoardLaneMark(column: .advancing, size: 12)
+                    } else {
+                        Color.clear
+                    }
                 } rest: {
                     if compact {
                         name.font(Typography.body)
@@ -98,6 +108,7 @@ struct SessionRailCell: View {
                         lines
                     }
                 }
+                .padding(.leading, compact ? Self.indent : 0)
             }
         }
         .contentShape(.rect)
@@ -118,7 +129,6 @@ struct SessionRailCell: View {
                 if item.waiting == nil { SessionRailReadout(item: item) } else { SessionRailTime(item: item).font(Typography.caption).fixedSize() }
             }
             HStack(spacing: Spacing.tight) {
-                if let project { ProjectGlyph(project: project, size: 10) }
                 if item.waiting != nil {
                     Text(item.shown.label).fontWeight(.semibold).foregroundStyle(item.shown.labelTint(palette)).fixedSize()
                     if let ask = item.ask {
@@ -156,21 +166,6 @@ struct SessionRailCell: View {
         .frame(height: WaveStrip.height)
         .readerHidden(true)
     }
-}
-
-private struct RailDot: View {
-    let item: SessionRailRows.Item
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        Group {
-            if item.resting { Circle().strokeBorder(palette.ink3, lineWidth: 1.5) } else { Circle().fill(item.shown.tint(palette)) }
-        }
-        .frame(width: Self.size, height: Self.size)
-        .readerHidden(true)
-    }
-
-    private static let size: CGFloat = 8
 }
 
 private struct SessionRailReadout: View {
