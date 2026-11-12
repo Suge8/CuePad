@@ -1,7 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// 等你列是全页唯一要你动手的地方，一次只摊开一张（`focal`）：它与页面反色（浅色里是深的、深色里是浅的），骨架与别的卡一样，问的那句用大字，成果图与选项都在卡上，当场答。
+/// 等你列是全页唯一要你动手的地方，一次只摊开一张（`focal`）：它与页面反色（浅色里是深的、深色里是浅的），骨架与别的卡一样，问的那句写全，成果图与选项都在卡上，当场答。
 /// 别的收成一张小卡，点一下换它摊开；摊开的那张点问句进会话。否决过：每张都摊开（三四件等你时一列全是选项，分不出先看哪件）。
 struct BoardWaitCard: View {
     let held: TaskBoard.Held
@@ -98,7 +98,7 @@ struct BoardWaitCard: View {
 }
 
 /// 摊开的与收着的同一副骨架，也是推进中那张卡的骨架（`BoardCardLayout`）：名字带拍板还是待回复、Agent，等你的那一句，卡脚（`BoardWaitFoot`）是项目与等了多久。
-/// 摊开的那张只是反色、那一句用大字写全，句子与卡脚之间放成果图与作答。
+/// 摊开的那张只是反色、那一句用正文字号写全（不比名字大：名字是这张卡的标题），句子与卡脚之间放成果图与作答。
 private struct BoardWaitFace: View {
     let held: TaskBoard.Held
     let ask: String?
@@ -118,7 +118,7 @@ private struct BoardWaitFace: View {
                 AgentMark(session: held.session, font: TaskMetrics.caption, named: false)
             }
             if let ask {
-                Text(verbatim: ask).font(focal ? Typography.title : TaskMetrics.caption).foregroundStyle(focal ? palette.ink : palette.ink2)
+                Text(verbatim: ask).font(focal ? Typography.body : TaskMetrics.caption).foregroundStyle(focal ? palette.ink : palette.ink2)
                     .lineLimit(focal ? Self.focalLines : Self.foldedLines).multilineTextAlignment(.leading)
             }
         }
