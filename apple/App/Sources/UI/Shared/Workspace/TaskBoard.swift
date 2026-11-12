@@ -143,16 +143,20 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         return board
     }
 
-    /// "全部"里相邻的卡可能是别的项目，拖动不悄悄换项目。位置没变、或它挂在已完成的上级下（显示在顶层、但不是顶层）时为 nil。
+    /// 待办里的卡换位置，或推进中的任务拖回待办落在哪。"全部"里相邻的卡可能是别的项目，拖动不悄悄换项目。
+    /// 位置没变、它挂在已完成的上级下（显示在顶层、但不是顶层）、或这张卡不能落进待办（等你的）时为 nil：
+    /// 插入线只在不为 nil 时画（`insertsBefore`），线在哪、卡就落在哪。
     func move(_ id: UUID, before target: UUID?) -> TaskMove? {
-        guard let dragged = todo.first(where: { $0.id == id })?.task, dragged.parentID == nil, id != target else { return nil }
+        let current = todo.firstIndex { $0.id == id }
+        let card = current.map { todo[$0].task } ?? advancing.lazy.compactMap(\.item).first { $0.id == id }?.task
+        guard let dragged = card, dragged.parentID == nil, id != target else { return nil }
         func previous(in list: ArraySlice<Item>) -> UUID? {
             list.last { $0.task.projectID == dragged.projectID && $0.task.parentID == nil && $0.id != id }?.id
         }
         let rest = todo.filter { $0.id != id }
         let index = target.flatMap { target in rest.firstIndex { $0.id == target } } ?? rest.count
         let after = previous(in: rest[..<index])
-        guard let current = todo.firstIndex(where: { $0.id == id }), after != previous(in: todo[..<current]) else { return nil }
+        if let current, after == previous(in: todo[..<current]) { return nil }
         return TaskMove(slot: .top(project: dragged.projectID), after: after)
     }
 

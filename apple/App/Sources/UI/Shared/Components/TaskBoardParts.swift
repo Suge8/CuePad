@@ -20,6 +20,8 @@ struct BoardColumn: View {
     @Environment(\.cardDrags) private var drags
     @State private var ownEarlier = DebugHooks.preset.showsDone
     @State private var targeted = false
+    /// 指针在待办的某张卡上（那张卡自己画插入线）。
+    @State private var onCard = false
     @State private var finishing: TaskBoard.Item?
     @State private var check = TaskCheck()
     @State private var opened: PreviewOpening?
@@ -28,7 +30,7 @@ struct BoardColumn: View {
 
     var body: some View {
         lane
-            .cardDrop(isEnabled: column != .waiting, hover: { targeted = $0 != nil && column != .todo }) { card, _ in
+            .cardDrop(isEnabled: column != .waiting, hover: { targeted = $0 != nil }) { card, _ in
                 if let task = card.task { drop(task, before: nil) }
                 if let session = card.session { drop(session: session) }
             }
@@ -63,8 +65,7 @@ struct BoardColumn: View {
             .scrollClipDisabled()
             .modifier(LaneAnchor(column, rewind: rewind))
             .boardLane(column)
-            .boardTopRow(column: column, count: board.count(column))
-            .background { BoardLane(targeted: lit) }
+            .boardTopRow(column: column, count: board.count(column), targeted: lit)
         #else
         ScrollView { cards }
             .scrollBounceBehavior(.basedOnSize)
@@ -87,7 +88,16 @@ struct BoardColumn: View {
 
     private var showsEarlier: Binding<Bool> { earlier ?? $ownEarlier }
 
-    private var lit: Bool { targeted && drags?.current != nil }
+    /// 待办按位置落：亮的是插入线，不是整列（拖的是没绑任务的会话时才亮整列，它不落进来、是要它停下）。
+    private var lit: Bool {
+        guard targeted, let card = drags?.current else { return false }
+        return column != .todo || card.session != nil
+    }
+
+    /// 指针在待办的卡下面的空处：线画在最后一张后面，放下就落在末尾。
+    private var tail: Bool {
+        column == .todo && targeted && !onCard && (drags?.current?.task).map { board.move($0, before: nil) != nil } == true
+    }
 
     private var isRow: Bool {
         #if os(iOS)
@@ -110,7 +120,13 @@ struct BoardColumn: View {
                 newTask.transition(.opacity)
             }
             ForEach(board.todo) { item in
-                card(item).boardDraggable(item.id, session: item.agent?.state.sessionID).insertsBefore(item.id) { drop($0, before: item.id) }
+                card(item).boardDraggable(item.id, session: item.agent?.state.sessionID)
+                    .insertsBefore(item.id, lands: { board.move($0, before: item.id) != nil }, over: { onCard = $0 }) { drop($0, before: item.id) }
+            }
+            if !board.todo.isEmpty {
+                Color.clear.frame(height: 0)
+                    .overlay { if tail { InsertionMark().allowsHitTesting(false).transition(.opacity) } }
+                    .animation(Motion.fade, value: tail)
             }
             if board.todo.isEmpty && !adding { empty("没有待办") }
         case .advancing:
@@ -226,12 +242,17 @@ struct BoardColumn: View {
         let fromTodo = board.todo.contains { $0.id == id }
         switch column {
         case .todo:
+            let move = board.move(id, before: target)
             if fromTodo {
-                guard let move = board.move(id, before: target) else { return }
+                guard let move else { return }
                 workspace.perform { try await $0.moveCard(id, to: move.slot, after: move.after) }
             } else if board.advancing.contains(where: { $0.item?.id == id }) {
-                // 推进中的任务拖回待办：算没开始（它的会话照旧活着，解开后单独一张留在推进中）。等你的不接：那一列按会话在不在问你分，改了状态也还在那儿
-                workspace.perform { try await $0.setStatus(id, .todo) }
+                // 推进中的任务拖回待办：算没开始（它的会话照旧活着，解开后单独一张留在推进中），落在线画的那个位置。
+                // 等你的不接：那一列按会话在不在问你分，改了状态也还在那儿
+                workspace.perform {
+                    try await $0.setStatus(id, .todo)
+                    if let move { try await $0.moveCard(id, to: move.slot, after: move.after) }
+                }
             }
         case .advancing:
             if fromTodo { start(item.task) }
