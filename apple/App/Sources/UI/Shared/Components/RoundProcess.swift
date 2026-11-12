@@ -84,7 +84,7 @@ struct RoundProcess: View {
 
     @ViewBuilder private func recached(_ process: Chat.Process?) -> some View {
         if let recached = process?.recached {
-            NoteLine(icon: .retry) { Text(recached).foregroundStyle(palette.ink3) }
+            NoteLine { Image(.failure).foregroundStyle(palette.waiting) } label: { Text(recached).foregroundStyle(palette.waiting) }
         }
     }
 
@@ -168,7 +168,7 @@ struct RoundProcess: View {
         switch kind {
         case .edit: .editFile
         case .command: .terminal
-        case .read: .readFile
+        case .read: .looked
         case .search: .search
         case .said: .said
         case .other, .talk, .start, .add, .done, .stop, .ask, .leave, .schedule: .tool
