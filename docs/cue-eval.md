@@ -5,30 +5,17 @@
 ## 三套场景
 
 ```bash
-# 短场景
-TEST_RUNNER_CUEPAD_CUE_EVAL=1 TEST_RUNNER_CUEPAD_CUE_EVAL_RUNTIME=pi TEST_RUNNER_CUEPAD_CUE_EVAL_OUT=/tmp/cue-eval/new-short-1 CUEPAD_TEST_TIME_LIMIT=900 \
-  apple/scripts/xc.sh test mac -parallel-testing-enabled YES -only-testing:CuePadTests/CueEvalTests
-# 长程（十分钟左右）：_RUNS=2 同时跑两遍、第 n 遍写到"输出目录-n"
-TEST_RUNNER_CUEPAD_CUE_EVAL=1 TEST_RUNNER_CUEPAD_CUE_EVAL_RUNTIME=pi TEST_RUNNER_CUEPAD_CUE_EVAL_OUT=/tmp/cue-eval/new-long TEST_RUNNER_CUEPAD_CUE_EVAL_RUNS=2 CUEPAD_TEST_TIME_LIMIT=3600 \
-  apple/scripts/xc.sh test mac -parallel-testing-enabled YES -only-testing:CuePadTests/CueEvalLongTests
-# 多日记忆（十分钟左右）：一次一遍
-TEST_RUNNER_CUEPAD_CUE_EVAL=1 TEST_RUNNER_CUEPAD_CUE_EVAL_RUNTIME=pi TEST_RUNNER_CUEPAD_CUE_EVAL_OUT=/tmp/cue-eval/new-days-1 CUEPAD_TEST_TIME_LIMIT=1700 \
-  apple/scripts/xc.sh test mac -only-testing:CuePadTests/CueEvalDaysTests
+apple/scripts/cue-eval.sh short /tmp/cue-eval/new-short-1   # 另有 long、days、failover、bench，用法在脚本头注释
 ```
 
-- 只改了一两类行为时，短场景可用 `-only-testing:'CuePadTests/CueEvalTests/<函数名>()'` 只跑受影响的几个，结论照样看两遍以上。
+- 只改了一两类行为时，短场景可只跑受影响的几个（带 `-only-testing`），结论照样看两遍以上。
 - 这一遍的系统提示在 `system-prompt.md`。有场景没过时非零退出，输出照样写完。每个场景的库留在 `<场景>.library`，用 `CUEPAD_SHOT_LIBRARY=<它> xc.sh shot mac out.png -- -CuePadScene cue` 看。
 - 开销是大脑自报的 token 与费用。缓存跨场景命中一小时，先后跑的缓存读写会不同。
 - 做事的标准不在 Cue 的系统提示里（在各家读的规则文件里，全局规则空着时文件页给起步规则）。评测里 Cue 派的会话照真实的搭：由 CuePad 开的（能从 CuePad 结束）。
 
 ## 换大脑
 
-Pi 额度用完、自动换到这台 Mac 上另一家真的 Agent 之后，那家能不能起来接着答（`CueEvalFailoverTests`）。换上的那家用 `_RUNTIME` 选，不能是 Pi：
-
-```bash
-TEST_RUNNER_CUEPAD_CUE_EVAL=1 TEST_RUNNER_CUEPAD_CUE_EVAL_RUNTIME=codex TEST_RUNNER_CUEPAD_CUE_EVAL_OUT=/tmp/cue-eval/failover CUEPAD_TEST_TIME_LIMIT=900 \
-  apple/scripts/xc.sh test mac -only-testing:CuePadTests/CueEvalFailoverTests
-```
+`cue-eval.sh failover <输出目录>`：Pi 额度用完、自动换到这台 Mac 上另一家真的 Agent 之后，那家能不能起来接着答。
 
 ## 会话在问问题：一张表
 
@@ -58,8 +45,7 @@ python3 apple/scripts/score.py /tmp/cue-eval/base-short-{1,2} /tmp/cue-eval/base
 ```bash
 B=locomo
 python3 apple/scripts/bench.py sample $B
-TEST_RUNNER_CUEPAD_BENCH_DATA=~/Library/Caches/cuepad-bench/$B/sample.jsonl TEST_RUNNER_CUEPAD_CUE_EVAL_RUNTIME=pi TEST_RUNNER_CUEPAD_CUE_EVAL_OUT=/tmp/cue-eval/$B-after \
-  CUEPAD_TEST_TIME_LIMIT=7200 apple/scripts/xc.sh test mac -only-testing:CuePadTests/CueEvalBenchTests
+apple/scripts/cue-eval.sh bench /tmp/cue-eval/$B-after $B
 python3 apple/scripts/bench.py judge /tmp/cue-eval/$B-before /tmp/cue-eval/$B-after
 ```
 

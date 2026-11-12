@@ -30,51 +30,7 @@ Bun 服务，无第三方依赖。门铃让同一个人的几台设备即时知�
    mkdir -p /opt/cuepad-relay && cp server.ts activity.ts apns.ts ingress.ts auth.ts voice.ts /opt/cuepad-relay/   # root 所有，服务只读
    ```
 
-4. 写 `/etc/systemd/system/cuepad-relay.service`，然后 `systemctl daemon-reload && systemctl enable --now cuepad-relay`：
-
-   ```ini
-   [Unit]
-   Description=CuePad relay
-   After=network-online.target
-   Wants=network-online.target
-
-   [Service]
-   User=cuepad-relay
-   Group=cuepad-relay
-   WorkingDirectory=/opt/cuepad-relay
-   Environment=HOST=127.0.0.1 PORT=8080 TRUST_PROXY=loopback
-   ExecStart=/usr/local/bin/bun server.ts
-   Restart=always
-   RestartSec=2
-   NoNewPrivileges=yes
-   ProtectSystem=strict
-   ProtectHome=yes
-   PrivateTmp=yes
-   PrivateDevices=yes
-   ProtectKernelTunables=yes
-   ProtectKernelModules=yes
-   ProtectKernelLogs=yes
-   ProtectControlGroups=yes
-   ProtectClock=yes
-   ProtectHostname=yes
-   ProtectProc=invisible
-   ProcSubset=pid
-   RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
-   RestrictNamespaces=yes
-   RestrictRealtime=yes
-   RestrictSUIDSGID=yes
-   LockPersonality=yes
-   CapabilityBoundingSet=
-   AmbientCapabilities=
-   SystemCallArchitectures=native
-   SystemCallFilter=@system-service
-   UMask=0077
-
-   [Install]
-   WantedBy=multi-user.target
-   ```
-
-   不要加 `MemoryDenyWriteExecute`：Bun 的 JIT 要可写可执行的内存。`systemd-analyze security cuepad-relay` 应在 1.5 左右（OK）。
+4. 把 [`cuepad-relay.service`](cuepad-relay.service) 拷到 `/etc/systemd/system/`，然后 `systemctl daemon-reload && systemctl enable --now cuepad-relay`。`systemd-analyze security cuepad-relay` 应在 1.5 左右（OK）。
 5. 按 [Caddy 官方文档](https://caddyserver.com/docs/install#debian-ubuntu-raspbian) 用 apt 装 Caddy，`/etc/caddy/Caddyfile` 写成（换成你的域名，可以写多个），再 `systemctl reload caddy`：
 
    ```
