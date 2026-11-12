@@ -15,18 +15,19 @@ Swift 原生应用（macOS / iOS / iPadOS）。术语见 [WORDS.md](WORDS.md)。
 ## 护栏
 
 - 冻结：两份 README 与落地页（`landing/`）现在是占位，`design/readme/` 的截图不重拍；等用户说大更新落地再重写，期间只改 lint 要求与 `Palette` 同步的 `landing/src/styles/base.css` 令牌。
-- 对外发布只在用户明确要求时做（docs/release.md）。
-- 本机构建不开真实资料库：一打开就会升级结构、改写数据并同步出去，正式版之后就打不开了。看真实数据只用只读副本（docs/verify.md「真实数据复现」）。
+- 对外发布只在用户明确要求时做（apple/scripts/AGENTS.md）。
+- 本机构建不开真实资料库：一打开就会升级结构、改写数据并同步出去，正式版之后就打不开了。看真实数据只用只读副本（apple/scripts/AGENTS.md「真实数据复现」）。
 - 测试只用替身，不向其他应用发键鼠事件；全局热键真按下去的那一下只能人工验证。
-- 用户可见行为的端到端测试从 `Workspace` 的方法走（界面的按钮、菜单调的就是它），断言库、提示与回复框，放在 `App/Tests/UI` 的流程测试里；接线与长相用交互验收（docs/verify.md）。
+- 用户可见行为的端到端测试从 `Workspace` 的方法走（界面的按钮、菜单调的就是它），断言库、提示与回复框，放在 `App/Tests/UI` 的流程测试里；接线与长相用交互验收（apple/scripts/AGENTS.md）。
 - 跨会话、暂不做的待办在 GitHub Issues（`gh issue list`）。
 
 ## 文档
 
-踩到的坑不记进文档：修成脚本的报错、lint 或代码旁的一句注释。`docs/` 只收做错了伤到用户数据、线上用户或正式版，而机器拦不住的事；不加新文件。
+文档不是现状证据，现状以代码、脚本与测试为准。文档只装三类：代码看不出的理由与否决项、跨模块的叫法（WORDS.md）、要在第三方控制台上手工做的事。踩到的坑修成脚本的报错、lint 或代码旁的一句注释，不记进文档；不写版本史、复盘、源码镜像，以及 `xc.sh help`、脚本头注释、类型头注释里查得到的东西。新增 Markdown 要进 `lint_docs.py` 的清单。
 
-- 给界面加字、补英文 → [docs/i18n.md](docs/i18n.md)
-- 验收、测量、真机诊断，看真实数据 → [docs/verify.md](docs/verify.md)
-- 同步、通知的不变量与排查 → [docs/sync.md](docs/sync.md)
-- 签名、发布、CloudKit 结构部署 → [docs/release.md](docs/release.md)
-- Pi 桥扩展的协议约定与边界 → [CueBridge README](apple/CuePadKit/Sources/CueBridge/README.md)
+改哪里，先读最近那一层的 `AGENTS.md`：
+
+- 发布、签名、CloudKit 结构部署，看真实数据、通知验收、查日志 → [apple/scripts/AGENTS.md](apple/scripts/AGENTS.md)
+- 给界面加字、补英文 → [apple/App/Strings/AGENTS.md](apple/App/Strings/AGENTS.md)
+- Pi 桥扩展的协议约定 → [CueBridge README](apple/CuePadKit/Sources/CueBridge/README.md)
+- 中转的部署 → [relay/README.md](relay/README.md)

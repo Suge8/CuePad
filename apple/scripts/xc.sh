@@ -31,7 +31,7 @@
 #   xc.sh perf idle <mac|ios> [次数] [秒] [启动参数…]   静置时的 CPU、指令、唤醒、能耗、内存与启动到就绪（perf-idle.sh）
 #   xc.sh perf launch mac [次数] [启动参数…]            冷启动：到主窗口上屏、首屏内容出来、能交互（perf-launch.sh）
 #   xc.sh perf ab <旧检出> <新检出> <轮数> <perf 的参数…>   新旧交替跑同一条 perf（含 idle、launch），每轮一行、最后对比表，前台阻塞到结束（perf-ab.py）
-#   xc.sh release <mac|ios> | device | provision    发布与签名（docs/release.md）；用到描述文件的那一段全机排队（_lock.sh 规则 3）
+#   xc.sh release <mac|ios> | device | provision    发布与签名（apple/scripts/AGENTS.md）；用到描述文件的那一段全机排队（_lock.sh 规则 3）
 #   xc.sh diag [<设备> [all]] | ios crashes [all] | ips <文件…>
 #                                                   真机诊断，只读：读各台设备经 iCloud 送到 Mac 的诊断与日志、拉连着的手机的系统崩溃报告，按发布归档符号化（device_diag.py 头注释）
 # 启动参数原样传给 App（如 -CuePadDemo YES -CuePadScene editor -theme dark；Debug 认的参数见 UI/Debug/DebugScene+Args*.swift 的字段注释，画面见 DebugScene+Scenes.swift）。

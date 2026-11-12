@@ -18,7 +18,7 @@ import Testing
     let generated = try await CloudKitSchema.generate()
     if Self.regenerating { return try generated.write(to: Self.schemaFile, atomically: true, encoding: .utf8) }
     let committed = try String(contentsOf: Self.schemaFile, encoding: .utf8)
-    #expect(generated == committed, "记录映射变了：运行 TEST_RUNNER_CUEPAD_REGENERATE_SCHEMA=1 apple/scripts/xc.sh test kit -only-testing:CueSyncTests/CloudKitSchemaTests 重新生成，再导入开发环境（docs/release.md「CloudKit 数据结构」）")
+    #expect(generated == committed, "记录映射变了：运行 TEST_RUNNER_CUEPAD_REGENERATE_SCHEMA=1 apple/scripts/xc.sh test kit -only-testing:CueSyncTests/CloudKitSchemaTests 重新生成，再导入开发环境（apple/scripts/AGENTS.md「CloudKit 数据结构」）")
   }
 
   @Test func encryptedFieldsAreNeverUsableInSubscriptionsOrIndexes() {

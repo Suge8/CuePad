@@ -8,7 +8,7 @@
   profiles                      创建并安装描述文件：iOS（App Store；有已登记设备时再建 Development）与 macOS（Developer ID；
                                 有已登记的 Mac 时再建 Development，CloudKit 开发环境只能用它）
   device <UDID> <名称> [MAC_OS] 登记一台真机（Mac 用 Provisioning UDID，不是 Hardware UUID）
-  devid-csr                     为 Developer ID Application 证书生成私钥与 CSR（证书只有账号持有人能创建，见 docs/release.md）
+  devid-csr                     为 Developer ID Application 证书生成私钥与 CSR（证书只有账号持有人能创建，见 apple/scripts/AGENTS.md）
   devid-import <.cer 路径>      把网页上下载的 Developer ID 证书连同私钥导入专用钥匙串
   unlock                        解锁专用钥匙串并加入搜索列表（发布脚本用）
   all                           ids → identity distribution → profiles
@@ -224,7 +224,7 @@ def ensure_mac_profile(ids):
     if certs:
         create_mac_profile(ids, MAC_PROFILE, "MAC_APP_DIRECT", certs)
     else:
-        print("本机没有 Developer ID Application 证书：跳过 macOS 描述文件（见 docs/release.md）")
+        print("本机没有 Developer ID Application 证书：跳过 macOS 描述文件（见 apple/scripts/AGENTS.md）")
     macs = [x["id"] for x in api("GET", "/v1/devices?filter[platform]=MAC_OS&filter[status]=ENABLED&limit=200")["data"]]
     certs = local_cert_ids("Apple Development", "DEVELOPMENT")
     if macs and certs:
