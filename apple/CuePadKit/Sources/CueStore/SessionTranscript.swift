@@ -50,6 +50,16 @@ extension CueStore {
     try select(ChatMessage.self, where: "sessionID = ?", [sessionID], orderBy: "seq, role, id")
   }
 
+  /// 这几个会话各自最新那条回答带的提示缓存（会话条等你的卡写它还热多久）；没带的会话不在结果里。走 `piMessages_sessionID_seq`。
+  public func latestCaches(in sessions: [String]) throws -> [String: ChatMessage.Tools.Cache] {
+    try sessions.reduce(into: [:]) { caches, session in
+      let stored = try db.first(
+        "SELECT tools FROM piMessages WHERE sessionID = ? AND role = '\(ChatRole.pi.rawValue)' ORDER BY seq DESC LIMIT 1", [session]
+      ) { $0.textOrNil(0) }
+      caches[session] = (stored ?? nil).flatMap(ChatMessage.Tools.init(stored:))?.cache
+    }
+  }
+
   /// 这几个会话里你这边最近说的几句的时刻（你打的、CuePad 替你或 Cue 发的、你的作答，不分谁说），每个会话从早到晚、至多 `limit` 句；
   /// 没说过话的会话不在结果里。看板推进中一列的线一次读完（`BoardLine`），不读正文：每个会话先倒着找到第 `limit` 句的时刻，再从那里顺着取，都走 `piMessages_sessionID_at`。
   public func recentSaid(in sessions: [String], limit: Int) throws -> [String: [Date]] {
