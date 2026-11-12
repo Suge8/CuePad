@@ -84,7 +84,7 @@ struct RoundProcess: View {
 
     @ViewBuilder private func recached(_ process: Chat.Process?) -> some View {
         if let recached = process?.recached {
-            NoteLine { Image(.failure).foregroundStyle(palette.waiting) } label: { Text(recached).foregroundStyle(palette.waiting) }
+            NoteLine { Image(.failure).foregroundStyle(palette.waiting) } label: { Text(recached).foregroundStyle(palette.ink3) }
         }
     }
 
