@@ -20,8 +20,9 @@ struct BoardColumn: View {
     @Environment(\.cardDrags) private var drags
     @State private var ownEarlier = DebugHooks.preset.showsDone
     @State private var targeted = false
-    /// 指针在待办的某张卡上（那张卡自己画插入线）。
-    @State private var onCard = false
+    /// 待办里拖着的卡会落在第几张之前（`TaskBoard.slots` 里离指针最近的一处）；各卡的位置只在拖着时有。
+    @State private var slot: Int?
+    @State private var frames: [UUID: CGRect] = [:]
     @State private var finishing: TaskBoard.Item?
     @State private var check = TaskCheck()
     @State private var opened: PreviewOpening?
@@ -30,8 +31,15 @@ struct BoardColumn: View {
 
     var body: some View {
         lane
-            .cardDrop(isEnabled: column != .waiting, hover: { targeted = $0 != nil }) { card, _ in
-                if let task = card.task { drop(task, before: nil) }
+            .overlay(alignment: .topLeading) { if lit, let slot, let at = position(of: slot) { mark(at: at).transition(.opacity) } }
+            .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: slot)
+            .coordinateSpace(.named(space))
+            // 一列只这一个落点：卡上不另挂（里外两层互相抢，线与底时有时无）。不接的卡（`accepts`）拖过来不亮、不画线，放下也不动
+            .cardDrop(isEnabled: drags?.current.map(accepts) == true, hover: { point in
+                targeted = point != nil
+                slot = point.flatMap(slot)
+            }) { card, point in
+                if let task = card.task { drop(task, at: slot(at: point)) }
                 if let session = card.session { drop(session: session) }
             }
             .taskCheck(finishing?.task, subtasks: finishing?.steps, check: $check)
@@ -88,15 +96,63 @@ struct BoardColumn: View {
 
     private var showsEarlier: Binding<Bool> { earlier ?? $ownEarlier }
 
-    /// 待办按位置落：亮的是插入线，不是整列（拖的是没绑任务的会话时才亮整列，它不落进来、是要它停下）。
-    private var lit: Bool {
-        guard targeted, let card = drags?.current else { return false }
-        return column != .todo || card.session != nil
+    /// 接得住的卡拖到这一列上就亮；待办另画一条线说落在哪（`slot`）。
+    private var lit: Bool { targeted && drags?.current.map(accepts) == true }
+
+    private var space: String { "board-lane-\(column)" }
+
+    private func loose(_ session: String) -> SessionListItem? {
+        (board.advancing.compactMap(\.loose) + board.held.filter { $0.item == nil }.map { SessionListItem(state: $0.session) }).first { $0.state.sessionID == session }
     }
 
-    /// 指针在待办的卡下面的空处：线画在最后一张后面，放下就落在末尾。
-    private var tail: Bool {
-        column == .todo && targeted && !onCard && (drags?.current?.task).map { board.move($0, before: nil) != nil } == true
+    /// 放下会不会有事发生，与 `drop` 的两个分支一一对应。
+    private func accepts(_ card: DraggedCard) -> Bool {
+        switch (column, card) {
+        case (.waiting, _), (_, .idea), (.advancing, .session): false
+        // 推进中的任务拖回待办；待办里的换位置
+        case (.todo, .task(let id)): board.advancing.contains { $0.item?.id == id } || !board.slots(for: id).isEmpty
+        case (.advancing, .task(let id)): board.todo.contains { $0.id == id }
+        case (.done, .task(let id)): board.item(id).map { $0.task.status != .done } ?? false
+        case (.todo, .session(let id)): loose(id)?.state.canEnd == true
+        case (.done, .session(let id)): loose(id) != nil
+        }
+    }
+
+    /// 手机的行是横着排的一条，按横向算。
+    private func along(_ point: CGPoint) -> CGFloat { isRow ? point.x : point.y }
+
+    private func slot(at point: CGPoint) -> Int? {
+        guard column == .todo, let id = drags?.current?.task else { return nil }
+        let at = along(point)
+        return board.slots(for: id).compactMap { slot in position(of: slot).map { (slot, abs($0 - at)) } }.min { $0.1 < $1.1 }?.0
+    }
+
+    /// 两张卡之间那道缝的正中；没排出来的卡（滚出去很远的）没有位置。
+    private func position(of slot: Int) -> CGFloat? {
+        func frame(_ index: Int) -> CGRect? { board.todo.indices.contains(index) ? frames[board.todo[index].id] : nil }
+        let half = gap / 2
+        switch (frame(slot - 1), frame(slot)) {
+        case let (before?, after?): return isRow ? (before.maxX + after.minX) / 2 : (before.maxY + after.minY) / 2
+        case let (before?, nil): return (isRow ? before.maxX : before.maxY) + half
+        case let (nil, after?): return (isRow ? after.minX : after.minY) - half
+        case (nil, nil): return nil
+        }
+    }
+
+    private var gap: CGFloat {
+        #if os(iOS)
+        row ? BoardRowMetrics.gap : BoardCardMetrics.gap
+        #else
+        BoardCardMetrics.gap
+        #endif
+    }
+
+    @ViewBuilder private func mark(at position: CGFloat) -> some View {
+        if isRow {
+            Capsule().fill(palette.signature).frame(width: 3).padding(.vertical, Spacing.item).offset(x: position - 1.5).allowsHitTesting(false)
+        } else {
+            InsertionMark().padding(.horizontal, BoardCardMetrics.inset).offset(y: position - InsertionMark.ring / 2).allowsHitTesting(false)
+        }
     }
 
     private var isRow: Bool {
@@ -120,13 +176,7 @@ struct BoardColumn: View {
                 newTask.transition(.opacity)
             }
             ForEach(board.todo) { item in
-                card(item).boardDraggable(item.id, session: item.agent?.state.sessionID)
-                    .insertsBefore(item.id, lands: { board.move($0, before: item.id) != nil }, over: { onCard = $0 }) { drop($0, before: item.id) }
-            }
-            if !board.todo.isEmpty {
-                Color.clear.frame(height: 0)
-                    .overlay { if tail { InsertionMark().allowsHitTesting(false).transition(.opacity) } }
-                    .animation(Motion.fade, value: tail)
+                card(item).boardDraggable(item.id, session: item.agent?.state.sessionID).boardSlot(item.id, in: space, frames: $frames)
             }
             if board.todo.isEmpty && !adding { empty("没有待办") }
         case .advancing:
@@ -237,17 +287,18 @@ struct BoardColumn: View {
         .frame(maxHeight: isRow ? .infinity : nil)
     }
 
-    private func drop(_ id: UUID, before target: UUID?) {
+    private func drop(_ id: UUID, at slot: Int?) {
         guard let item = board.item(id) else { return }
         let fromTodo = board.todo.contains { $0.id == id }
         switch column {
         case .todo:
-            let move = board.move(id, before: target)
+            let move = slot.flatMap { board.move(id, before: board.todo.indices.contains($0) ? board.todo[$0].id : nil) }
             if fromTodo {
                 guard let move else { return }
                 workspace.perform { try await $0.moveCard(id, to: move.slot, after: move.after) }
             } else if board.advancing.contains(where: { $0.item?.id == id }) {
-                // 推进中的任务拖回待办：算没开始（它的会话照旧活着，解开后单独一张留在推进中），落在线画的那个位置。
+                // 推进中的任务拖回待办：算没开始（它的会话照旧活着，解开后单独一张留在推进中），落在线画的那个位置；
+                // 没有线时（它那个项目在待办里一张都没有）落在项目排到的地方。
                 // 等你的不接：那一列按会话在不在问你分，改了状态也还在那儿
                 workspace.perform {
                     try await $0.setStatus(id, .todo)
@@ -264,8 +315,7 @@ struct BoardColumn: View {
     }
 
     private func drop(session id: String) {
-        let loose = board.advancing.compactMap(\.loose) + board.held.filter { $0.item == nil }.map { SessionListItem(state: $0.session) }
-        guard let agent = loose.first(where: { $0.state.sessionID == id }) else { return }
+        guard let agent = loose(id) else { return }
         switch column {
         case .done: workspace.attempt { try await workspace.finish(agent) }
         // 没绑任务的会话没有"待办"：拖过去是要它停下，走结束会话那一问（对话留着，再说话就恢复）

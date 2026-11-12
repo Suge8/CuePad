@@ -7,30 +7,24 @@ extension View {
 
     func boardDraggable(session: String) -> some View { cardDraggable(.session(session), session: session, shape: .rect(cornerRadius: TaskMetrics.cardRadius)) }
 
-    /// `lands`：拖着的这张放在这里会不会落在这张卡前面；不会就不画线（放下也不挪）。`over`：指针在不在这张卡上。
-    func insertsBefore(_ id: UUID, lands: @escaping (UUID) -> Bool, over: @escaping (Bool) -> Void, perform: @escaping (UUID) -> Void) -> some View {
-        modifier(InsertBefore(id: id, lands: lands, over: over, perform: perform))
-    }
+    /// 待办的卡报自己在列里的位置，只在拖着时报：平时滚动不写状态。
+    func boardSlot(_ id: UUID, in space: String, frames: Binding<[UUID: CGRect]>) -> some View { modifier(BoardSlotFrame(id: id, space: space, frames: frames)) }
 }
 
-private struct InsertBefore: ViewModifier {
+private struct BoardSlotFrame: ViewModifier {
     let id: UUID
-    let lands: (UUID) -> Bool
-    let over: (Bool) -> Void
-    let perform: (UUID) -> Void
-    @State private var targeted = false
+    let space: String
+    @Binding var frames: [UUID: CGRect]
     @Environment(\.cardDrags) private var drags
 
+    // 量的那层拖起来才放进去：新放进去的视图一定报一次位置；挂在卡上、只换闭包里的开关的话，卡没动就不报
     func body(content: Content) -> some View {
-        let shown = targeted && (drags?.current?.task).map(lands) == true
-        content
-            .overlay(alignment: .top) {
-                if shown { InsertionMark().offset(y: -8).allowsHitTesting(false).transition(.opacity) }
+        content.background {
+            if drags?.current?.task != nil {
+                Color.clear
+                    .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(space)) } action: { frames[id] = $0 }
+                    .onDisappear { frames[id] = nil }
             }
-            .cardDrop(hover: { targeted = $0 != nil; over(targeted) }) { card, _ in
-                if let task = card.task { perform(task) }
-            }
-            .animation(Motion.fade, value: shown)
-            .sensoryFeedback(.selection, trigger: shown) { _, now in now }
+        }
     }
 }
