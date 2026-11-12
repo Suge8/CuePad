@@ -9,6 +9,8 @@ nonisolated struct SessionRailData: Equatable, Sendable {
     struct Waiting: Equatable, Sendable {
         let agent: SessionListItem
         let deciding: Bool
+        /// 它最新那条回答带的提示缓存：卡上写还热多久（`SessionRailCell`）。
+        let cache: ChatMessage.Tools.Cache?
     }
 
     var waiting: [Waiting]
@@ -26,8 +28,9 @@ nonisolated struct SessionRailData: Equatable, Sendable {
             .filter { seen.insert($0.sessionID).inserted }
         let items = try store.sessionItems(sessionIDs: waiting.map(\.sessionID) + advancing.map(\.sessionID))
         let decisions = Set(asking.map(\.sessionID))
+        let caches = try store.latestCaches(in: waiting.map(\.sessionID))
         return Self(
-            waiting: waiting.map { Waiting(agent: items[$0.sessionID]!, deciding: decisions.contains($0.sessionID)) },
+            waiting: waiting.map { Waiting(agent: items[$0.sessionID]!, deciding: decisions.contains($0.sessionID), cache: caches[$0.sessionID]) },
             advancing: advancing.map { items[$0.sessionID]! })
     }
 }
@@ -38,6 +41,7 @@ struct SessionRailRows {
         let name: String
         let pulse: BoardPulse
         let waiting: SessionShown.Status?
+        var cache: ChatMessage.Tools.Cache?
         var id: String { session.sessionID }
     }
 
@@ -45,12 +49,12 @@ struct SessionRailRows {
     let advancing: [Item]
 
     init(_ data: SessionRailData, pulse: (SessionListItem) -> BoardPulse) {
-        func item(_ value: SessionListItem, waiting: SessionShown.Status?) -> Item {
+        func item(_ value: SessionListItem, waiting: SessionShown.Status?, cache: ChatMessage.Tools.Cache? = nil) -> Item {
             let pulse = pulse(value)
             let session = pulse.session ?? value.state
-            return Item(session: session, name: value.task?.title.nonEmpty ?? session.title, pulse: pulse, waiting: waiting)
+            return Item(session: session, name: value.task?.title.nonEmpty ?? session.title, pulse: pulse, waiting: waiting, cache: cache)
         }
-        waiting = data.waiting.map { item($0.agent, waiting: $0.deciding ? .asking : .awaitsReply) }
+        waiting = data.waiting.map { item($0.agent, waiting: $0.deciding ? .asking : .awaitsReply, cache: $0.cache) }
         advancing = data.advancing.map { item($0, waiting: nil) }.enumerated().sorted {
             let left = $0.element.pulse, right = $1.element.pulse
             return (left.tier, left.shown?.rank ?? 0, $0.offset) < (right.tier, right.shown?.rank ?? 0, $1.offset)

@@ -50,6 +50,16 @@ extension CueStore {
     try select(ChatMessage.self, where: "sessionID = ?", [sessionID], orderBy: "seq, role, id")
   }
 
+  /// 这几个会话各自最新那条回答带的提示缓存（会话条等你的卡写它还热多久）；没带的会话不在结果里。走 `piMessages_sessionID_seq`。
+  public func latestCaches(in sessions: [String]) throws -> [String: ChatMessage.Tools.Cache] {
+    try sessions.reduce(into: [:]) { caches, session in
+      let stored = try db.first(
+        "SELECT tools FROM piMessages WHERE sessionID = ? AND role = '\(ChatRole.pi.rawValue)' ORDER BY seq DESC LIMIT 1", [session]
+      ) { $0.textOrNil(0) }
+      caches[session] = (stored ?? nil).flatMap(ChatMessage.Tools.init(stored:))?.cache
+    }
+  }
+
   /// 请 `host` 那台 Mac 把这个会话的对话补写进来（7 天前活跃过、还没同步对话的会话，手机打开时发）。
   /// 已有一条还没被领取的补写请求就是它，不再写第二条：Mac 没回应时它在页面上超时，再打开会话也不会越攒越多；
   /// 那台 Mac 醒来领取一条就够。
