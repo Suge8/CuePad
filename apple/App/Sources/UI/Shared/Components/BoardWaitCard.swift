@@ -110,7 +110,7 @@ private struct BoardWaitFace: View {
         if size == .folded { folded } else { open }
     }
 
-    /// 收着的小卡与推进中的卡同一副骨架（`BoardCardLayout`）：名字与 Agent、状态标带等你的那一句、项目与等了多久。
+    /// 收着的小卡与推进中的卡同一副骨架（`BoardCardLayout`）：名字与 Agent、等你的那一句、项目与等了多久。
     private var folded: some View {
         VStack(alignment: .leading, spacing: BoardCardMetrics.footGap) {
             HStack(alignment: .firstTextBaseline, spacing: Spacing.item) {
@@ -122,13 +122,12 @@ private struct BoardWaitFace: View {
                 AgentMark(session: held.session, font: TaskMetrics.caption, named: false)
             }
             HStack(alignment: .firstTextBaseline, spacing: Spacing.tight) {
-                StateDot(shown: SessionShown(status: held.deciding ? .asking : .awaitsReply), size: BoardNow.mark)
                 Text("\(kind.fontWeight(.semibold).foregroundStyle(palette.waiting)) \(Text(verbatim: ask ?? "").foregroundStyle(palette.ink2))")
                     .lineLimit(Self.foldedLines).multilineTextAlignment(.leading)
             }
             BoardFoot(glyph: BoardCardMetrics.footGlyph) {
                 if let project { BoardProjectTag(project: project) } else { Color.clear.frame(width: 0) }
-                HStack { Spacer(minLength: 0); waited }
+                HStack { Spacer(minLength: 0); TimeSpent(clock: .waiting(since: held.session.stateSince)).lineLimit(1).fixedSize() }
             }
             .frame(height: BoardCardMetrics.vitals)
         }

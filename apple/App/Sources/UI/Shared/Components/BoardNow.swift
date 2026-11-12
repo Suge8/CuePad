@@ -12,7 +12,7 @@ struct BoardNow: View {
     @LoopsPlay private var plays
 
     static let maxMoving = 8
-    static let mark: CGFloat = 8
+    private static let mark: CGFloat = 8
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: Spacing.tight) {
