@@ -76,7 +76,7 @@ struct BoardColumn: View {
             .scrollClipDisabled()
             .modifier(LaneAnchor(column, rewind: rewind))
             .boardLane(column)
-            .boardTopRow(column: column, count: board.count(column))
+            .boardTopRow(column: column, count: board.count(column), archives: column == .done && !(board.done.isEmpty && board.earlier.isEmpty))
             .background { BoardLane(targeted: lit) }
         #else
         ScrollView { cards }
@@ -204,13 +204,15 @@ struct BoardColumn: View {
             .buttonStyle(PressStyle())
             .accessibilityValue(showsEarlier.wrappedValue ? "已展开" : "已折叠")
             Spacer(minLength: 0)
+            // Mac 的在列头（`BoardColumnHeader.archives`）
+            #if os(iOS)
             if showsEarlier.wrappedValue {
                 Button { workspace.attempt { try await workspace.archiveCompletedTasks() } } label: {
                     Text("全部归档").frame(minHeight: TaskMetrics.chipTarget).contentShape(.rect)
                 }
                 .buttonStyle(PressStyle())
-                    .help("把做完的任务全部归档（置顶的留着）：不占列表，照样搜得到")
             }
+            #endif
         }
         .font(Typography.meta).foregroundStyle(palette.ink3)
         .padding(.horizontal, Spacing.tight)

@@ -181,7 +181,7 @@ struct RailSessions: View {
                     ForEach(shownProjects(running: byProject)) { project in
                         let sessions = byProject[project.id] ?? []
                         projectRow(project, running: sessions.count { $0.pulse.tier == .running })
-                        if expanded.contains(project.id) { RailProjectSessions(project: project.id, live: sessions, marked: marked, open: open) }
+                        if expanded.contains(project.id) { RailProjectSessions(project: project.id, waiting: Set(rows.waiting.map(\.id)), marked: marked, open: open) }
                     }
                 }
             }
@@ -273,17 +273,19 @@ struct RailSessions: View {
     }
 }
 
-/// 展开的项目下面列的会话：在推进的全在，再按最近补已结束的到 `cap` 条，多的收在"还有 N 个会话"一行里、点一下多列 `step` 条
+/// 展开的项目下面列的会话，同手机会话列表按项目筛出来的那一份（`SessionListData.read`）：没结束的与置顶的全在（等你的常驻在上面，这里不再列），
+/// 再按最近补已结束的到 `cap` 条，多的收在"还有 N 个会话"一行里、点一下多列 `step` 条
 /// （同 Codex、Cindy 一个项目先列 5 条，Buzz 列 7 条、每次多 10 条；三家都不让上限藏起在跑的）。
+/// 不从会话条那份（`SessionRailData`，Cue 管着的）取：绑在待办或已做完的任务上、还没结束的会话不在那一份里，这里再不列就只剩搜索找得到。
 private struct RailProjectSessions: View {
     let project: UUID
-    let live: [SessionRailRows.Item]
+    let waiting: Set<String>
     let marked: Set<String>
     let open: (SessionState, SessionRail.Opening) -> Void
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
-    @State private var page: SessionListPage?
+    @State private var list: SessionListData?
     @State private var extra = 0
 
     private static let cap = 5
@@ -296,14 +298,15 @@ private struct RailProjectSessions: View {
     }
 
     var body: some View {
-        let limit = max(0, Self.cap - live.count) + extra
-        let ended = (page?.items ?? []).prefix(limit).map { item in
+        let live = ((list?.pinned ?? []) + (list?.now ?? [])).filter { !waiting.contains($0.state.sessionID) }
+        let ended = (list?.ended ?? []).prefix(max(0, Self.cap - live.count) + extra)
+        let hidden = (list?.endedTotal ?? 0) - ended.count
+        let items = (live + ended).map { item in
             let pulse = workspace.pulse(of: item), session = pulse.session ?? item.state
             return SessionRailRows.Item(session: session, name: item.task?.title.nonEmpty ?? session.title, pulse: pulse, waiting: nil)
         }
-        let hidden = (page?.total ?? 0) - ended.count
         VStack(spacing: Spacing.hair) {
-            ForEach(live + ended) { item in
+            ForEach(items) { item in
                 SessionRailCell(item: item, form: .wide, moves: false, selected: marked.contains(item.id), compact: true, open: open)
             }
             if hidden > 0 {
@@ -321,9 +324,9 @@ private struct RailProjectSessions: View {
             Rectangle().fill(palette.hair).frame(width: 1).padding(.leading, Chrome.icon / 2).padding(.vertical, Spacing.tight)
         }
         .transition(.opacity.combined(with: .offset(y: -Spacing.tight)))
-        .observing(services.store, id: Reading(project: project, limit: limit, moment: services.speech), into: $page, onError: workspace.fail) {
-            [project, limit, moment = services.speech] store in
-            try SessionListData.earlier(SessionQuery(project: project, limit: limit), at: moment, from: store)
+        .observing(services.store, id: Reading(project: project, limit: Self.cap + extra, moment: services.speech), into: $list, onError: workspace.fail) {
+            [project, limit = Self.cap + extra, moment = services.speech] store in
+            try SessionListData.read(text: "", project: project, historyLimit: limit, at: moment, from: store)
         }
     }
 }

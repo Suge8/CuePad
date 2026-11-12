@@ -158,7 +158,7 @@ extension Workspace {
             case .project: narrow = NarrowNavigation(path: [mainRoute], sidebarOpen: true)
             default: narrow = NarrowNavigation(path: [mainRoute])
             }
-            if let session = state.beside { narrow.path.append(.session(session)) }
+            if !state.home, let session = state.beside { narrow.path.append(.session(session)) }
             navigation = .narrow(narrow)
         case .narrow(let state):
             var wide = WideNavigation(home: state.path.isEmpty && !state.sidebarOpen)

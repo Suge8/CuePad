@@ -75,8 +75,11 @@ extension Workspace {
 struct BoardColumnHeader: View {
     let column: TaskBoard.Column
     let count: Int
+    /// 已完成那一列有做完的任务：Mac 鼠标停在列头上，个数换成"全部归档"（另有右键）。这是批量归档唯一的入口，不随"更早做完的"展没展开。
+    var archives = false
     @Environment(\.palette) private var palette
     @Environment(Workspace.self) private var workspace
+    @State private var hovered = false
 
     var body: some View {
         HStack(spacing: 0) {
@@ -86,11 +89,27 @@ struct BoardColumnHeader: View {
             .accessibilityLabel(column.title)
             .accessibilityValue("\(count)")
             .accessibilityAddTraits(.isHeader)
+            if archives, hovered {
+                Button("全部归档", action: archive)
+                    .buttonStyle(PressStyle(.inline))
+                    .font(Self.font).foregroundStyle(palette.signature)
+                    .help("把做完的任务全部归档（置顶的留着）：不占列表，照样搜得到")
+            }
             if let add = LaneAdd.of(column, in: workspace) {
                 LaneAddButton(add, cell: CGSize(width: Self.add, height: Self.height)).font(Self.font)
             }
         }
         .frame(height: Self.height)
+        #if os(macOS)
+        .contentShape(.rect)
+        .onHover { hovered = $0 }
+        .presetHover($hovered)
+        .contextMenu { if archives { Button("全部归档", icon: .archive, action: archive) } }
+        #endif
+    }
+
+    private func archive() {
+        workspace.attempt { try await workspace.archiveCompletedTasks() }
     }
 
     private var row: some View {
@@ -99,7 +118,9 @@ struct BoardColumnHeader: View {
             Text(column.title).font(Self.font).foregroundStyle(column.light ? palette.ink3 : palette.ink2).truncationMode(.tail)
                 .padding(.leading, Spacing.glyph)
             Spacer(minLength: Spacing.tight)
-            Text("\(count)").font(column.light ? Self.font : Self.countFont).monospacedDigit().foregroundStyle(column.countInk(palette)).counting(count).fixedSize()
+            if !(archives && hovered) {
+                Text("\(count)").font(column.light ? Self.font : Self.countFont).monospacedDigit().foregroundStyle(column.countInk(palette)).counting(count).fixedSize()
+            }
         }
     }
 

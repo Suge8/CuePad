@@ -47,6 +47,7 @@ struct CueDock<Column: View>: View {
     var bleed = EdgeInsets()
     @ViewBuilder let column: (_ fits: Bool) -> Column
     @Environment(Workspace.self) private var workspace
+    @Environment(\.palette) private var palette
 
     var body: some View {
         let open = !sizes.cueFits && workspace.cueDrawer
@@ -58,6 +59,8 @@ struct CueDock<Column: View>: View {
             if open { DrawerCatcher { workspace.hideCue(fits: false) }.transition(.identity) }
             WideColumnHost(slot: .cue, focus: focus, origin: width - shown, width: block, shape: shape, hidden: shown == 0) {
                 column(sizes.cueFits)
+                    // 铺满时它盖在藏起的会话条上（会话条藏起时照原宽画在下面，`WideRail`）：同主区铺满桌面色，不透出来
+                    .background { if sizes.home { palette.desk.ignoresSafeArea() } }
                     .modifier(DrawerSurface(shown: !sizes.cueFits, bleed: bleed))
                     .environment(\.pageActive, shown > 0)
             }
