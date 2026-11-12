@@ -21,7 +21,7 @@ struct RealHostTests {
 
     /// 空闲时限给得短：测试进程意外退出时，留下的托管进程不久也会自己退。
     private func host(_ pi: PiProcess, _ bridge: Bridge, idleLimit: Duration = .seconds(120)) -> PiRuntime {
-        PiRuntime(bridge: bridge, paths: pi.paths, cleansInstalledExtension: true, pi: { pinnedPi.executable }, idleLimit: idleLimit, timing: noDeadline)
+        PiRuntime(bridge: bridge, paths: pi.paths, pi: { pinnedPi.executable }, idleLimit: idleLimit, timing: noDeadline)
     }
 
     private func resume(_ host: PiRuntime, _ file: URL, in pi: PiProcess, on bridge: Bridge) async throws -> Session {

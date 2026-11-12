@@ -443,22 +443,6 @@
         }
       }
     },
-    "%@ 是旧版 CuePad 装的扩展，与后台启动的 Pi 冲突；删掉它再发" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ is an extension installed by an older CuePad and conflicts with Pi started in the background. Delete it, then send again"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ 是旧版 CuePad 装的扩展，与后台启动的 Pi 冲突；删掉它再发"
-          }
-        }
-      }
-    },
     "%@ 没执行成功：%@" : {
       "localizations" : {
         "en" : {
@@ -3464,22 +3448,6 @@
 
       },
       "shouldTranslate" : false
-    },
-    "CuePad 以前写进 %@ 的钩子没能删掉，下次启动再试：%@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Couldn’t remove the hooks an older CuePad added to %@. Will retry next launch: %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "CuePad 以前写进 %1$@ 的钩子没能删掉，下次启动再试：%2$@"
-          }
-        }
-      }
     },
     "CuePad 备了一份起步规则" : {
       "localizations" : {
@@ -15675,22 +15643,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "文件…"
-          }
-        }
-      }
-    },
-    "文件不是有效的 JSON，CuePad 没有改它" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The file isn’t valid JSON, so CuePad left it unchanged"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "文件不是有效的 JSON，CuePad 没有改它"
           }
         }
       }

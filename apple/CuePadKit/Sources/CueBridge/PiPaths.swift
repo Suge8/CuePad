@@ -9,7 +9,6 @@ public struct PiPaths: Sendable, Equatable {
     /// 桥 socket 目录。`sun_path` 上限 104 字节，所以不用 `$TMPDIR`；扩展端用同一缺省值。
     public var socketDirectory: URL
 
-    public var extensionsDirectory: URL { agentDirectory.appending(path: "extensions", directoryHint: .isDirectory) }
     public var sessionsDirectory: URL { agentDirectory.appending(path: "sessions", directoryHint: .isDirectory) }
     /// 缺省 `~/.local/bin`：不需要管理员权限。
     public var binDirectory: URL
