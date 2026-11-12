@@ -9,7 +9,7 @@
 # 更新源 SUFeedURL 直接是这里的 appcast.xml（releases/latest/download/appcast.xml），核对与回读都从 App 的 Info.plist 读这个地址。
 # 打包前先核对生产环境的 CloudKit 结构（ck-production.sh），缺字段就不发；待部署清单只拦 iOS（release-ios.sh）。
 # 也核对发版顺序（check_ios_floor）：这一版的同步下界不高于 TestFlight 上处理好的最新 iOS 版。门铃中转打包前、导出后各核对一次（check_relay）。
-# 前提：apple/scripts/AGENTS.md 里的一次性前置；gh 已登录且有仓库写权限。
+# 前提：apple/App/Config/AGENTS.md 里的一次性前置；gh 已登录且有仓库写权限。
 set -euo pipefail
 SCRIPTS="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(cd "$SCRIPTS/../.." && pwd)"

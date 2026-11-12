@@ -32,7 +32,7 @@ Bun 服务，无第三方依赖。门铃让同一个人的几台设备即时知�
 
 6. `curl https://relay.example.com/health` 返回 `ok`。要实时活动的，`/v1/activity/health` 还须返回 204（见下）；发布脚本两样都核对。
 7. 把 `apple/App/Config/Signing.xcconfig` 的 `CUEPAD_RELAY_HOST` 换成你的域名，重新编译 App。
-8. 你自己的 iCloud 容器里要有记录类型 `relaySecrets`：按 [apple/scripts/AGENTS.md](../apple/scripts/AGENTS.md)「CloudKit 数据结构」导入 `apple/CloudKit/cuepad.ckdb`。
+8. 你自己的 iCloud 容器里要有记录类型 `relaySecrets`：按 [apple/CloudKit/AGENTS.md](../apple/CloudKit/AGENTS.md)导入 `apple/CloudKit/cuepad.ckdb`。
 
 不装 Caddy 也可以让 Bun 自己提供 TLS（`CERT`、`KEY`，见 `server.ts` 头注释），证书续期后要重启。
 

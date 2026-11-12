@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # 只读核对生产环境的 CloudKit 结构：导出生产结构，和 apple/CloudKit/cuepad.ckdb 逐字段比（字段名与整条定义：类型、加密、索引），
-# 生产缺的列出来、以 1 退出。生产里写没部署的字段或类型会让整条记录保存失败，所以 release-mac.sh 与 release-ios.sh 打包前都先跑它；缺的照 apple/scripts/AGENTS.md 部署。
-# 管理令牌在钥匙串 cuepad-cloudkit-management-token（见 apple/scripts/AGENTS.md），团队来自凭据文件的 CUEPAD_TEAM_ID。
+# 生产缺的列出来、以 1 退出。生产里写没部署的字段或类型会让整条记录保存失败，所以 release-mac.sh 与 release-ios.sh 打包前都先跑它；缺的照 apple/CloudKit/AGENTS.md 部署。
+# 管理令牌在钥匙串 cuepad-cloudkit-management-token（见 apple/App/Config/AGENTS.md），团队来自凭据文件的 CUEPAD_TEAM_ID。
 set -euo pipefail
 APPLE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 # shellcheck source=_signing.sh source-path=SCRIPTDIR
@@ -9,7 +9,7 @@ APPLE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 require_asc
 
 token="$(security find-generic-password -a cuepad -s cuepad-cloudkit-management-token -w)" \
-  || { echo "钥匙串里没有 CloudKit 管理令牌 cuepad-cloudkit-management-token（见 apple/scripts/AGENTS.md）" >&2; exit 1; }
+  || { echo "钥匙串里没有 CloudKit 管理令牌 cuepad-cloudkit-management-token（见 apple/App/Config/AGENTS.md）" >&2; exit 1; }
 production="$(mktemp)"
 trap 'rm -f "$production"' EXIT
 CLOUDKIT_MANAGEMENT_TOKEN="$token" xcrun cktool export-schema --team-id "$CUEPAD_TEAM_ID" \

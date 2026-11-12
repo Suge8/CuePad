@@ -25,7 +25,7 @@ def run(*args, **kwargs):
 try:
     identity = local_identity("Developer ID Application")
     if not identity:
-        raise SystemExit("缺少 Developer ID Application 签名身份（见 apple/scripts/AGENTS.md）")
+        raise SystemExit("缺少 Developer ID Application 签名身份（见 apple/App/Config/AGENTS.md）")
     profile = None
     for candidate in pathlib.Path(PROFILES_DIR).glob("*.provisionprofile"):
         decoded = run("security", "cms", "-D", "-i", str(candidate), capture_output=True).stdout
