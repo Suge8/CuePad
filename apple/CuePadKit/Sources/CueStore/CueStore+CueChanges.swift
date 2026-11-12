@@ -86,7 +86,7 @@ extension CueStore {
       detail: detail, recap: session.recap, interrupted: session.state == .known(.interrupted))
   }
 
-  /// 他发起的一轮停下时，CuePad 当场把这次停下留给他回（歇着、出错的待回复，在等回答的成了他的拍板），不等 Cue 醒来判断。Cue 开的那一轮停下仍报给 Cue 定（`cueChanges`）。返回的序号下次从它之后算：Cue 收回的不会再留回去。值班的管理器每次对账先做，Cue 在跑一轮也不等。
+  /// 他发起的一轮停下时，CuePad 当场把这次停下留给他回（歇着、出错、被打断的待回复，在等回答的成了他的拍板），不等 Cue 醒来判断。Cue 开的那一轮停下仍报给 Cue 定（`cueChanges`）。返回的序号下次从它之后算：Cue 收回的不会再留回去。值班的管理器每次对账先做，Cue 在跑一轮也不等。
   public func leaveHisStops(after mark: Int) throws -> (mark: Int, left: UUID?) {
     try write {
       let latest = try lastWrite()

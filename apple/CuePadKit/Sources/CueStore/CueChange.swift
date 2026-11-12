@@ -29,14 +29,8 @@ public struct CueChange: Equatable, Sendable {
 }
 
 extension SessionState {
-  /// 被打断的不算，Cue 让它接着做。等子代理停住时会话还在做，与完成、发送失败一样总报给 Cue。
-  var atStop: Bool {
-    switch runtimeState.known {
-    case .settled: answered
-    case .waitingForUser, .error: true
-    default: false
-    }
-  }
+  /// 停下等人接手（`WorkState.isStopped`），歇着的要读到这一轮的回答（`answered`）。等子代理停住时会话还在做，不算。
+  var atStop: Bool { runtimeState.known?.isStopped == true && (runtimeState != .known(.settled) || answered) }
 }
 
 /// 一轮做完时，会话的动静从醒来时读到的序号算起（这一轮里写进来的下次还在），完成从这一轮结束时算起（这一轮里多是 Cue 自己做完的）。

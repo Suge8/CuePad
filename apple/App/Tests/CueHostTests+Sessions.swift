@@ -61,7 +61,9 @@ extension CueHostTests {
         await rig.stop()
     }
 
-    @Test func 他开的一轮停下不叫醒Cue_当场留给他回() async throws {
+    /// `stop` 是假扩展报的停下（被打断是做到一半进程没了）。
+    @Test(arguments: ["idle", "waiting_user", "error", "interrupted"])
+    func 他开的一轮停下不叫醒Cue_当场留给他回(stop: String) async throws {
         let rig = try await Rig()
         try await rig.settleTask(titled: "修好登录页 只看看")
         func woke() -> Int { rig.rounds.filter(\.wake.isSessionActivity).count }
@@ -74,10 +76,15 @@ extension CueHostTests {
         try file.user("顺便看下注册页", at: .now - 15 * 60)  // 早过了"刚说过话"：停下时他不在场也不叫醒
         session.setState(["kind": "thinking"])
         try await eventually("在干活写进库") { try await rig.store.sessions(matching: session.sessionID).first?.state.isWorking == true }
-        session.setState(["kind": "idle"])
-        try await rig.answered(session.sessionID)
+        switch stop {
+        case "idle":
+            session.setState(["kind": "idle"])
+            try await rig.answered(session.sessionID)
+        case "interrupted": session.crash()
+        default: session.setState(["kind": stop, "title": "要换个做法吗？", "error": "500 Internal server error"])
+        }
         try await eventually("他那一轮的停下留给他回") {
-            guard let state = try await rig.store.sessionState(session.sessionID), state.answered else { return false }
+            guard let state = try await rig.store.sessionState(session.sessionID) else { return false }
             return try await rig.store.cueState()?.left.contains { $0.holds(for: state) } == true
         }
         try await rig.reconciled()

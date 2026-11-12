@@ -52,7 +52,7 @@ extension CueTools {
           say 与接着用上一步会话的 start 至多等 \(Int(Speech.cueWait)) 秒，结果写明送没送到；
           peek{task?|session?}：只读。都不带：所有没做完的事、不归没做完的事的活会话，和最近完成的几件（各带会话）。带 task：叶子、正文、近况、最近几轮问答（"他"是用户，"你"是你）与最新回答（超 \(latestReplyLimit) 字截掉中间）、这一轮没答完时最后说的、发到手机的文件（带本机路径）。带 session：那个会话；
           stop{task|session}：停下会话这一轮；
-          leave{task|session}：把你发起的、停着的那一轮（歇下、等回答或出错）留给他回：歇着、出错的显示"待回复"，等回答的成了他的拍板，都进等你；他或你再对它说话就作废。已 tell 带 ask 问他的不用再 leave；
+          leave{task|session}：把你发起的、停着的那一轮（歇下、等回答、出错或被打断）留给他回：歇着、出错、被打断的显示"待回复"，等回答的成了他的拍板，都进等你；他或你再对它说话就作废。已 tell 带 ask 问他的不用再 leave；
           take{task|session}：收回留给他回的（待回复，或成了他拍板的等回答），出了等你；要推进直接 say，不用先收回；
           done{task|session,evidence?,show?}：做完。顶层任务要 evidence：1–\(evidenceCount) 条结论，每条宽不过 \(evidenceLimit)（约 20 个汉字，如"\(evidenceExample)"），CuePad 把标题与证据拼成结果告诉他。show 是结果上挂的图，写法同 tell 的 show；不带就不挂图。下一步还用它的会话就留着，否则结束会话（结束的照样能 say）；已完成的再 done 只结束没人再用的会话，不要 evidence、show。给 session 是收掉那个会话：没做完的事在用、或有话正送进去的不收。
           """,
