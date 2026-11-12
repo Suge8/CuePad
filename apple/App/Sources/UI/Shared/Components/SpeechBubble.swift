@@ -6,10 +6,11 @@ struct SpeechBubble<Menu: View>: View {
     let said: Said
     /// 重发时撤回了旧的却写不进新的：原文放回这个去处的输入框。
     let box: Binding<ComposerDraft>
-    /// 会话页每句都标（进了对话就不在这里），Cue 页只标你最后一句（旧的不标，免得满屏）。
+    /// 会话页还没进对话的都标（连着几句只标最后一句，`marksTransit`），Cue 页只标你最后一句（旧的不标，免得满屏）。
     var showsDelivered = true
     var session: SessionState?
     var fromCue = false
+    var marksTransit = true
     let look: BubbleLook
     @ViewBuilder var menu: (Speech.Trip) -> Menu
     @State private var confirmingAgain = false
@@ -21,7 +22,7 @@ struct SpeechBubble<Menu: View>: View {
     var body: some View {
         let trip = said.trip(at: services.speech), shown = bubble(trip)
         VStack(alignment: .trailing, spacing: look.statusSpacing) {
-            UserBubble(stored: said.content, look: look, trip: shown, highlighted: highlight == said.id, fromCue: fromCue) { menu(trip) }
+            UserBubble(stored: said.content, look: look, trip: shown, highlighted: highlight == said.id, fromCue: fromCue, marksTransit: marksTransit) { menu(trip) }
             if case .preparing(let reason) = trip {
                 VStack(alignment: .trailing, spacing: Spacing.tight) {
                     Text(verbatim: reason)

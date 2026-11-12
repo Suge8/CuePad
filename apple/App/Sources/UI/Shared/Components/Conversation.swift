@@ -143,11 +143,14 @@ private struct ChatSegment: View, Equatable {
 
     var body: some View {
         ChatRows(ids: items.map(\.id), spacing: Conversation.spacing) {
-            ForEach(items) { item in row(item).benchSpot(item.id) }
+            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                row(item, last: !(items.indices.contains(index + 1) && items[index + 1].role.isOutgoing)).benchSpot(item.id)
+            }
         }
     }
 
-    @ViewBuilder private func row(_ entry: ChatEntry) -> some View {
+    /// `last`：后面不是又一句还没到的（连着几句还没进对话只最后一句画记号，`UserBubble.marksTransit`）。
+    @ViewBuilder private func row(_ entry: ChatEntry, last: Bool) -> some View {
         switch entry.role {
         case .user:
             UserBubble(stored: entry.text, look: .session, highlighted: entry.id == highlight, fromCue: entry.fromCue) {
@@ -155,7 +158,7 @@ private struct ChatSegment: View, Equatable {
             }
                 .padding(.top, Self.turnGap)
         case .outgoing(let request):
-            outgoing(request).padding(.top, Self.turnGap)
+            outgoing(request, marksTransit: last).padding(.top, Self.turnGap)
         case .answer:
             // 你答了它的提问：你那一边的一颗气泡，字上面一行答的是哪个问题（问题答完就不在对话里了，引用不能点）
             AnswerBubble(answer: entry.text, quote: entry.question.map { BubbleQuote(text: $0) }, look: .session, highlighted: entry.id == highlight) {
@@ -181,9 +184,9 @@ private struct ChatSegment: View, Equatable {
 
 
 extension ChatSegment {
-    private func outgoing(_ request: DeliveryRequest) -> some View {
+    private func outgoing(_ request: DeliveryRequest, marksTransit: Bool) -> some View {
         let session = session, said = Said.request(request), box = services.settings.replyDraftBinding(for: session.id)
-        return SpeechBubble(said: said, box: box, session: session, fromCue: request.isFromCue, look: .session) { trip in
+        return SpeechBubble(said: said, box: box, session: session, fromCue: request.isFromCue, marksTransit: marksTransit, look: .session) { trip in
             if trip.unconfirmedReason != nil {
                 Button(MessageMenu.Item.copy.title, icon: MessageMenu.Item.copy.icon) { workspace.copy(request.content) }
             } else {

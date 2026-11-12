@@ -42,6 +42,8 @@ struct UserBubble<Menu: View>: View {
     var trip = BubbleTrip.arrived
     var highlighted = false
     var fromCue = false
+    /// 在路上、已送达的记号画不画：连着几句还没进对话时只最后一句画（在路上的照旧淡着），没送到的总画。
+    var marksTransit = true
     var quote: BubbleQuote?
     @ViewBuilder var menu: Menu
     @State private var expanded = false
@@ -49,18 +51,21 @@ struct UserBubble<Menu: View>: View {
 
     var body: some View {
         let parts = BubbleParts(stored), text = parts.text, images = parts.images, skill = SkillCall.parse(text)
+        let mark: BubbleTrip = switch trip {
+        case .sending, .delivered: marksTransit ? trip : .arrived
+        case .arrived, .failed: trip
+        }
         BubbleWidth(fraction: Self.widthFraction, edge: .trailing) {
             VStack(alignment: .trailing, spacing: Spacing.tight) {
-                if fromCue { CueByline() }
                 if !text.isEmpty || images.isEmpty {
                     BubbleText(
-                        text: skill?.line ?? text, look: look, highlighted: highlighted, trip: trip, lineLimit: expanded ? nil : Self.foldedLines,
+                        text: skill?.line ?? text, look: look, highlighted: highlighted, trip: trip, fromCue: fromCue, lineLimit: expanded ? nil : Self.foldedLines,
                         truncated: $truncated, expand: truncated && !expanded ? { expanded = true } : nil, quote: quote)
-                    .tripMark(images.isEmpty && parts.files.isEmpty ? trip : .arrived, above: look.padding.bottom)
+                    .tripMark(images.isEmpty && parts.files.isEmpty ? mark : .arrived, above: look.padding.bottom)
                 }
                 if let skill, !skill.body.isEmpty { SkillBody(skill: skill) }
-                if !images.isEmpty { ChatImages(hashes: images, trip: trip).tripMark(parts.files.isEmpty ? trip : .arrived, above: 0) }
-                if !parts.files.isEmpty { ChatFiles(files: parts.files, trip: trip).tripMark(trip, above: 0) }
+                if !images.isEmpty { ChatImages(hashes: images, trip: trip).tripMark(parts.files.isEmpty ? mark : .arrived, above: 0) }
+                if !parts.files.isEmpty { ChatFiles(files: parts.files, trip: trip).tripMark(mark, above: 0) }
             }
             #if os(iOS)
             .contentShape(.contextMenuPreview, look.shape)
@@ -114,6 +119,8 @@ struct BubbleText: View {
     let look: BubbleLook
     var highlighted = false
     var trip = BubbleTrip.arrived
+    /// Cue 替你说的：不垫底、描一圈边，字前面是它的头像（`CueMark`）。与你说的同样高、同样的间距。
+    var fromCue = false
     var lineLimit: Int?
     var truncated: Binding<Bool>?
     var expand: (() -> Void)?
@@ -122,15 +129,18 @@ struct BubbleText: View {
 
     var body: some View {
         let shape = look.shape
-        VStack(alignment: .leading, spacing: Spacing.tight) {
-            if let quote { QuoteLine(quote: quote) }
-            Paragraphs(verbatim: text, lineSpacing: Typography.readingLineSpacing, lineLimit: lineLimit)
-                .font(Typography.reading).foregroundStyle(palette.ink)
-                .background(alignment: .topLeading) { if let truncated, let lineLimit { truncationProbe(truncated, lineLimit: lineLimit) } }
-            if let expand { expandButton(expand).frame(maxWidth: .infinity, alignment: .trailing) }
+        HStack(alignment: .firstTextBaseline, spacing: Spacing.item) {
+            if fromCue { CueMark().alignmentGuide(.firstTextBaseline) { $0[.bottom] - 3 } }
+            VStack(alignment: .leading, spacing: Spacing.tight) {
+                if let quote { QuoteLine(quote: quote) }
+                Paragraphs(verbatim: text, lineSpacing: Typography.readingLineSpacing, lineLimit: lineLimit)
+                    .font(Typography.reading).foregroundStyle(palette.ink)
+                    .background(alignment: .topLeading) { if let truncated, let lineLimit { truncationProbe(truncated, lineLimit: lineLimit) } }
+                if let expand { expandButton(expand).frame(maxWidth: .infinity, alignment: .trailing) }
+            }
         }
             .padding(look.padding)
-            .background(palette.bubble, in: shape)
+            .background(fromCue ? .clear : palette.bubble, in: shape)
             .overlay { edge(shape) }
             .opacity(trip.opacity)
             .animation(Motion.fade, value: highlighted)
@@ -158,7 +168,13 @@ struct BubbleText: View {
         switch trip {
         case .failed: shape.strokeBorder(palette.failure, lineWidth: 1)
         case .arrived, .sending, .delivered:
-            if highlighted { shape.strokeBorder(palette.signature, lineWidth: 2) } else if let edge = palette.bubbleEdge { shape.strokeBorder(edge) }
+            if highlighted {
+                shape.strokeBorder(palette.signature, lineWidth: 2)
+            } else if fromCue {
+                shape.strokeBorder(palette.track)
+            } else if let edge = palette.bubbleEdge {
+                shape.strokeBorder(edge)
+            }
         }
     }
 }

@@ -62,17 +62,17 @@ struct CueAvatar: View {
     }
 }
 
-struct CueByline: View {
+/// 会话里 Cue 替你说的那一句，气泡里字前面的头像：这句是它说的。
+struct CueMark: View {
     @Environment(Workspace.self) private var workspace
-    @Environment(\.palette) private var palette
 
     var body: some View {
-        let cue = workspace.cue
-        HStack(spacing: Spacing.glyph) {
-            CueAvatar(.resting, size: .inline)
-            Text(cue.name).font(Typography.meta.weight(.semibold)).foregroundStyle(palette.ink2)
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(cue.name) 说")
+        let name = workspace.cue.name
+        CueAvatar(.resting, size: .inline)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("\(name) 说")
+            #if os(macOS)
+            .help(name)
+            #endif
     }
 }
