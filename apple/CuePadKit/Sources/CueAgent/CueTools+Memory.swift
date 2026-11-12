@@ -120,7 +120,7 @@ extension CueTools {
 
   /// 做梦问他一次要不要把常交代的做法记成重点（`CueAsk.habit`）：他答了交给 Cue 记。
   func ask(_ args: Args) async throws -> Result {
-    let asking = try CueAsking(.habit, action: args.string("doing"), rule: args.string("rule"))
+    let asking = try CueAsking(habit: args.string("rule"))
     try await store.addCueMessage(.cue, text: try args.required("text"), ask: asking)
     return .ok("已问他。")
   }

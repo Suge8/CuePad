@@ -76,12 +76,14 @@ extension CueQuestionLine where Below == EmptyView {
     private static let tailLength = 4
 }
 
-/// 一问的主动作只有"可以"，放宽规矩是顺手的事，不和它抢。
+/// 一问的主动作只有"可以"（一颗对勾，读屏念"可以"），放宽规矩是顺手的事，不和它抢。
+/// 能点掉的那一类（`CueAsk.declinable`）对勾旁多一颗叉：单独一颗对勾，人会找叉。
 /// Cue 停用着答不了时（`CueWatch.canHear`）只留"可以"、降成次级并停用，不和启用那颗主按钮抢（同屏只一个主动作），启用后恢复。
 struct CueChoices: View {
     let message: CueMessage
     var disabled = false
     let pick: (String) -> Void
+    var decline: (() -> Void)?
     @Environment(Workspace.self) private var workspace
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.palette) private var palette
@@ -91,7 +93,7 @@ struct CueChoices: View {
     #else
     static let onceWidth: CGFloat = 88
     #endif
-    /// `ControlSurface` 按钮左右内边距之和：最小宽要扣掉它才是字的宽。
+    /// `ControlSurface` 按钮左右内边距之和：最小宽要扣掉它才是里面那颗对勾占的宽。
     private static let inset: CGFloat = 32
 
     var body: some View {
@@ -102,7 +104,13 @@ struct CueChoices: View {
             if !paused { ForEach(options.dropFirst(), id: \.self) { link($0) } }
         }
         .multilineTextAlignment(accessible ? .trailing : .leading)
-        let primary = once(options.first ?? CueAsk.once, paused: paused).lineLimit(1).fixedSize()
+        let primary = HStack(spacing: Spacing.item) {
+            if !paused, let decline, message.asking?.ask.declinable == true {
+                Button(action: decline) { Image(.close) }.buttonStyle(ControlButtonStyle(kind: .round)).accessibilityLabel("不用").disabled(disabled)
+            }
+            once(options.first ?? CueAsk.once, paused: paused)
+        }
+        .fixedSize()
         if accessible {
             VStack(alignment: .trailing, spacing: Spacing.tight) {
                 primary
@@ -136,7 +144,7 @@ struct CueChoices: View {
 
     private func once(_ option: String, paused: Bool) -> some View {
         Button { pick(option) } label: {
-            Text(message.shownChoice(option)).multilineTextAlignment(.center).frame(minWidth: Self.onceWidth - Self.inset)
+            Image(.checked).font(Glyph.large.weight(.semibold)).frame(minWidth: Self.onceWidth - Self.inset)
         }
         .buttonStyle(ControlButtonStyle(kind: paused ? .secondary : .primary))
         .accessibilityLabel(message.shownChoice(option))

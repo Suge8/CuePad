@@ -97,7 +97,8 @@ package enum CuePush: String, Sendable {
   case wake = "said"
 }
 
-/// 一条提问怎么结束（`CueStore.endCueQuestion`）：几种结局落到同一个状态上（`CueMessage.answeredAt`），没有"关掉"。
+/// 一条提问怎么结束（`CueStore.endCueQuestion`）：几种结局落到同一个状态上（`CueMessage.answeredAt`）。
+/// `withdrawn` 是 Cue 撤回，或他点掉了能点掉的那一类（`CueAsk.declinable`）：都不交给 Cue。
 /// 你的话也可能只是别的想法：Cue 读了判断不是在答它，就放回"等你"（`CueStore.restoreCueQuestion`）；那句没交给 Cue 就撤回了，也放回。
 /// 你在挂着它的会话里开口（`CueStore.questionsOn`），它同样当场收起，算你在那边答了：不交给 Cue、不叫醒它；那句撤回或移除了才放回。
 public enum CueQuestionEnd: Equatable, Sendable {

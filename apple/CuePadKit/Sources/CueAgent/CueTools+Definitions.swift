@@ -31,8 +31,8 @@ extension CueTools {
   private static var ask: [String: Any] {
     [
       "name": "ask",
-      "description": "问他一次要不要\(CueAsk.habit.definition)。text 是给他看的一句话；doing 与 rule 是卡片上的短语（各一行、≤\(CueAsking.phraseLimit) 字）。",
-      "inputSchema": schema(["text": string, "doing": string, "rule": string], required: ["text", "doing", "rule"]),
+      "description": "问他一次要不要\(CueAsk.habit.definition)。text 是给他看的一句话；rule 是卡片上的那条做法（一行、≤\(CueAsking.phraseLimit) 字）。",
+      "inputSchema": schema(["text": string, "rule": string], required: ["text", "rule"]),
       "annotations": ["readOnlyHint": false, "destructiveHint": false, "idempotentHint": false, "openWorldHint": false],
     ]
   }

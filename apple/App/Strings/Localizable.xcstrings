@@ -1248,6 +1248,22 @@
         }
       }
     },
+    "%@？" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@？"
+          }
+        }
+      }
+    },
     "%lld" : {
       "localizations" : {
 
@@ -5503,6 +5519,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "不提供查询"
+          }
+        }
+      }
+    },
+    "不用" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No thanks"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不用"
           }
         }
       }
@@ -21887,6 +21919,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "记下（⌘↩）"
+          }
+        }
+      }
+    },
+    "记住" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remember this"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "记住"
           }
         }
       }
