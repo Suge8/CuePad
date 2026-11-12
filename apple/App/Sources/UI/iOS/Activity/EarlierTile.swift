@@ -26,7 +26,7 @@ struct EarlierTile: View {
                 .accessibilityLabel(Text("更早"))
                 .accessibilityValue(Text(total, format: .number))
             } else {
-                // 读库的订阅要挂在一个真的视图上（docs/layout.md）
+                // 读库的订阅要挂在一个真的视图上（docs/ui.md）
                 Color.clear.frame(height: 0)
             }
         }

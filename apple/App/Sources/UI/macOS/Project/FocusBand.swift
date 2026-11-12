@@ -1,7 +1,7 @@
 #if os(macOS)
 import SwiftUI
 
-/// 展开收起按 docs/layout.md 的 Mac 开合规则一步到位。
+/// 展开收起按 docs/ui.md 的 Mac 开合规则一步到位。
 /// 收起其余任务时纸底那一行留在原来的屏幕位置（`TaskFoldAnchor`），长列表底部收起不会跳到卡片墙。
 /// 纸上不写"任务"的段标题：纸是页面最上面的第一块、行首都是任务圈，不用标题也认得出（读屏念"任务"）。
 struct FocusBand: View {

@@ -18,7 +18,7 @@ Swift 原生应用（macOS / iOS / iPadOS）。叫法见 [WORDS.md](WORDS.md)。
 ## 护栏
 
 - 并行工作在自己的检出里做：在主检出里 `git worktree add ../CuePad-wt/<名> -b feat/<名>`。主检出只读：那里常有别人没提交的改动。
-- 冻结：两份 README、`landing/`、`design/readme/` 的截图与文案在高速开发期不跟功能走，不改、不重拍、不重新部署，直到用户说解冻；唯一例外是 lint 要求与 `Palette` 同步的 `landing/src/styles/base.css` 令牌。产品现状以代码为准。
+- 冻结：两份 README 与落地页（`landing/`）现在是占位，`design/readme/` 的截图不重拍；等用户说大更新落地再重写，期间只改 lint 要求与 `Palette` 同步的 `landing/src/styles/base.css` 令牌。
 - 发布只在干净检出运行 `xc.sh release`，对外发布只在用户明确要求时做（见 docs/release.md）。
 - 本机构建只开隔离库（隔离哪些目录只在 `app_env.py` 的 `isolated_env`）；手动起一个连上 `xc.sh` 起的实例的 Pi 会话见 CueBridge README「调试」。不读写真实资料库（位置见 `LibraryLocation`）、偏好域（App 身份前缀，`Signing.xcconfig` 的 `CUEPAD_APP_ID`）、`~/.pi` 与 `~/.local/bin`：本机构建一打开真实库就会升级结构、改写数据并同步出去，正式版之后就打不开了。看真实数据只用只读副本（docs/verify.md「真实数据复现」）。
 - 测试只用替身，不向其他应用发键鼠事件；全局热键的物理触发与跨应用粘贴只能人工验证。
@@ -27,8 +27,7 @@ Swift 原生应用（macOS / iOS / iPadOS）。叫法见 [WORDS.md](WORDS.md)。
 
 ## 碰到这些先读
 
-- 界面配色、动效、悬停、圆角、渲染性能 → [docs/ui.md](docs/ui.md)
-- 页面结构、导航与栏、浮层、开合、布局稳定 → [docs/layout.md](docs/layout.md)
+- 界面：配色、选中与悬停、栏头与页顶、浮层、开合、布局稳定、渲染性能 → [docs/ui.md](docs/ui.md)
 - 加、改界面上的字，英文版 → [docs/i18n.md](docs/i18n.md)
 - 同步、投送请求、CloudKit 订阅、通知、同步排查 → [docs/sync.md](docs/sync.md)
 - 截图验收、交互验收、通知验收、要占前台（截系统菜单、在前台量帧） → [docs/verify.md](docs/verify.md)
