@@ -135,8 +135,7 @@ struct RailSessions: View {
                     .transition(.opacity)
                 }
                 VStack(spacing: Spacing.hair) {
-                    Button { workspace.selectPane(.projects) } label: { header(Text("项目"), count: nil, ink: palette.ink3).contentShape(.rect) }
-                        .buttonStyle(PressStyle())
+                    projectsHeader
                     ForEach(workspace.catalog?.projects ?? []) { project in
                         let sessions = byProject[project.id] ?? []
                         projectRow(project, running: sessions.count)
@@ -168,6 +167,24 @@ struct RailSessions: View {
         .frame(maxWidth: .infinity, alignment: .bottomLeading)
         .frame(height: Chrome.groupHeader, alignment: .bottom)
         .accessibilityAddTraits(.isHeader)
+    }
+
+    /// 组头就是去项目总览页的那一行：行尾的个数与箭头说它点得进去，悬停、选中同别的行。
+    private var projectsHeader: some View {
+        let selected = workspace.mainRoute == .shelf && !workspace.cueHome
+        return Button { workspace.selectPane(.projects) } label: {
+            HStack(spacing: Spacing.glyph) {
+                Text("项目").fontWeight(selected ? .semibold : nil).foregroundStyle(selected ? palette.ink : palette.ink3).lineLimit(1)
+                Spacer(minLength: 0)
+                Text(workspace.catalog?.projects.count ?? 0, format: .number).monospacedDigit().foregroundStyle(palette.ink3)
+                Chevron(.forward).foregroundStyle(palette.ink3)
+            }
+            .font(Typography.label)
+            .frame(height: Chrome.row)
+            .contentShape(.rect)
+        }
+        .buttonStyle(RowStyle(selected: selected))
+        .accessibilityAddTraits(selected ? [.isHeader, .isSelected] : .isHeader)
     }
 
     private func projectRow(_ project: Project, running: Int) -> some View {
