@@ -8,8 +8,7 @@ import SwiftUI
 /// 宽 `Chrome.rail`，不能拖：它是每个自动藏起临界宽的一项（`WideMetrics`），拖宽要么逐帧挪三栏（违背 Mac 开合不逐帧挪位置），要么只拖一条线、松手才变，换来的只是二十来点。
 /// 被否决的：收起成一列图标条（`Chrome` 头注释）；浮起的一块（macOS 26 那样离窗边一档、圆角，红绿灯坐在里面）——四周一圈桌面色的缝分散左边的注意力，macOS 27 也改回贴边；
 /// 开合钮与搜索放在会话条顶上一行（占一整行，搜索与会话条无关；搜索在最下一排的小钮里，主要靠 ⌘K）；开合钮做成玻璃圆钮（圆底压在会话条与主区的分界上）。
-/// 进展那一行的图标是强调色（签名色靛青，HIG「Sidebars」："By default, sidebar icons use your app's accent color."）：是静止的符号、自成一组在会话的上面，
-/// 与下面会动的靛青心电线、赭黄与胭脂的状态标靠形状和位置分开；会话行首只画状态标，不用强调色。
+/// 最上面是两格去处（`RailHome`）：Cue 与进展，各带一个数。进展的图标是强调色（签名色靛青，HIG「Sidebars」："By default, sidebar icons use your app's accent color."）。
 struct WideRail: View {
     let width: CGFloat
     #if os(iOS)
@@ -46,10 +45,7 @@ struct WideRail: View {
             #if os(iOS)
             if let sizes { RailTopTools(sizes: sizes, floating: false) }
             #endif
-            RailGroup {
-                RailCue()
-                RailRow(title: "进展", icon: .task, selected: workspace.shownPane == .progress) { workspace.selectPane(.progress) }
-            }
+            RailHome()
             RailSessions(data: services.liveSessions.rail, marked: Set(workspace.shownSessions.compactMap(\.sessionID))) { session, opening in
                 workspace.openSession(session.id, sessionID: session.sessionID, in: opening == .beside ? .beside : .main)
             }
@@ -87,7 +83,8 @@ struct RailTopTools: View {
             tool(.sidebar, "显示或隐藏侧栏（⌃⌘S）") { workspace.toggleRail(sizes) }
                 .railWaitingDot(hidden: !workspace.railShown(sizes))
             tool(.search, "搜索") { workspace.openSearch() }
-            CueButton(fits: sizes.cueFits, shown: workspace.cueShown(sizes)).frame(width: Chrome.control, height: Chrome.control)
+            // Cue 铺满时它没有可收可放的（去 Cue 是下面那一格）
+            if !sizes.home { CueButton(fits: sizes.cueFits, shown: workspace.cueShown(sizes)).frame(width: Chrome.control, height: Chrome.control) }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.leading, floating ? Chrome.lead : RowMetrics.bleed)

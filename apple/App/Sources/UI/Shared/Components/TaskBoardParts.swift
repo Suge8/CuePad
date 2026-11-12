@@ -23,9 +23,16 @@ struct BoardColumn: View {
     @State private var finishing: TaskBoard.Item?
     @State private var check = TaskCheck()
     @State private var opened: PreviewOpening?
+    #if os(iOS)
+    /// 手机那一行是横着滑的，更早做完的几百条排不进去：点了另出一页竖着列。
+    @State private var listsEarlier = false
+    #endif
 
     var body: some View {
         fed
+            #if os(iOS)
+            .sheet(isPresented: $listsEarlier) { earlierList }
+            #endif
             .cardDrop(isEnabled: column != .waiting, hover: { targeted = $0 != nil && column != .todo }) { card, _ in
                 if let task = card.task { drop(task, before: nil) }
                 if let session = card.session { drop(session: session) }
@@ -183,6 +190,9 @@ struct BoardColumn: View {
     private var earlierToggle: some View {
         HStack(spacing: Spacing.group) {
             Button {
+                #if os(iOS)
+                if row { listsEarlier = true; return }
+                #endif
                 withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { showsEarlier.wrappedValue.toggle() }
             } label: {
                 HStack(spacing: Spacing.tight) {
@@ -206,6 +216,30 @@ struct BoardColumn: View {
         .padding(.horizontal, Spacing.tight)
         .frame(maxHeight: isRow ? .infinity : nil)
     }
+
+    #if os(iOS)
+    private var earlierList: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: BoardCardMetrics.gap) {
+                HStack {
+                    Text("更早做完的 \(board.earlier.count)").font(Typography.bodyStrong).monospacedDigit()
+                    Spacer(minLength: Spacing.item)
+                    Button("全部归档") {
+                        listsEarlier = false
+                        workspace.attempt { try await workspace.archiveCompletedTasks() }
+                    }
+                    .font(Typography.secondary)
+                }
+                .padding(.vertical, Spacing.item)
+                ForEach(board.earlier) { card($0) }
+            }
+            .padding(Spacing.inset)
+        }
+        .background(palette.desk)
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
+    }
+    #endif
 
     private func drop(_ id: UUID, before target: UUID?) {
         guard let item = board.item(id) else { return }

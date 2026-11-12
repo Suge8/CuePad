@@ -47,6 +47,11 @@ struct SessionRailCell: View {
         .help(help)
     }
 
+    private var besides: Bool {
+        guard let main = workspace.session(in: .main) else { return false }
+        return main.sessionID != item.id && workspace.besideSession?.sessionID != item.id
+    }
+
     /// 项目下面的会话缩进这么多：行首那一列的中线上画一道引线（`RailProjectSessions`）。
     static let indent: CGFloat = Spacing.group
 
@@ -102,6 +107,16 @@ struct SessionRailCell: View {
                     SessionRailReadout(item: item)
                 }
                 .padding(.leading, Self.indent)
+                #if os(macOS)
+                // 并排的看得见的入口（另有 ⌘ 点与右键）：主区开着别的会话时，悬停的行尾露出来
+                .hoverReveal(when: besides) {
+                    Button("在旁边打开", icon: .rightColumn) { open(item.session, .beside) }
+                        .labelStyle(.iconOnly)
+                        .buttonStyle(ControlButtonStyle(kind: .icon, size: .compact))
+                        .help("在旁边打开")
+                        .padding(.horizontal, Spacing.tight)
+                }
+                #endif
             } else {
                 card
             }

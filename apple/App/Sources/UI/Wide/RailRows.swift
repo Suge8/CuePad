@@ -90,23 +90,70 @@ struct RailTool: View {
 }
 #endif
 
-/// 会话条最上一行：选中时 Cue 铺满会话条之外（`Workspace.goHome`），同手机以 Cue 为根。
-struct RailCue: View {
+/// 会话条最上的两格：Cue（选中时它铺满会话条之外，`Workspace.goHome`，同手机以 Cue 为根）与进展。两个最常回的去处并排各占一格，不是两行字：
+/// Cue 那格的头像带新消息的点（同收着时右上那颗钮）；进展那格右上是几件在推进（`CueNow.Tally.moving`）。Cue 那格不写"等你 N"：
+/// 它数的还有 Cue 自己的提问，紧挨着下面只数会话的"等你"组头，两个数对不上。
+/// 选中的那格是浮起的纸，另一格是淡底。
+struct RailHome: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
     var body: some View {
-        let cue = workspace.cue, selected = workspace.cueHome
-        Button { workspace.goHome() } label: {
-            RailLine {
-                CueAvatar(cue.beat, size: .inline)
-            } rest: {
-                Text(verbatim: cue.name).font(Typography.body.weight(selected ? .semibold : .regular)).foregroundStyle(palette.ink).lineLimit(1)
+        let cue = workspace.cue, tally = cue.now.tally
+        HStack(spacing: Spacing.item) {
+            tile(Text(verbatim: cue.name), selected: workspace.cueHome) { workspace.goHome() } icon: {
+                CueAvatar(cue.beat, size: .row).overlay(alignment: .topTrailing) { CueDot().offset(x: 2, y: -2) }
+            } count: {
+                EmptyView()
             }
+            tile(Text("进展"), selected: workspace.shownPane == .progress) { workspace.selectPane(.progress) } icon: {
+                Image(.task).font(Glyph.large).foregroundStyle(palette.signature)
+            } count: {
+                if tally.moving > 0 {
+                    BoardLaneMark(column: .advancing, size: 12)
+                    Text(tally.moving, format: .number).foregroundStyle(palette.ink3)
+                }
+            }
+            .accessibilityValue(tally.moving > 0 ? Text("\(tally.moving) 推进中") : Text(verbatim: ""))
         }
-        .buttonStyle(RowStyle(selected: selected))
-        .accessibilityLabel(Text(verbatim: cue.name))
+        .padding(.horizontal, RowMetrics.bleed)
+    }
+
+    private func tile(
+        _ title: Text, selected: Bool, action: @escaping () -> Void, @ViewBuilder icon: () -> some View, @ViewBuilder count: () -> some View
+    ) -> some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: Spacing.item) {
+                HStack(alignment: .top, spacing: Spacing.tight) {
+                    icon().frame(width: Self.icon, height: Self.icon)
+                    Spacer(minLength: 0)
+                    count().font(Typography.caption.weight(.semibold)).monospacedDigit()
+                }
+                title.font(Typography.body.weight(selected ? .semibold : .regular)).foregroundStyle(palette.ink).lineLimit(1)
+            }
+            .padding(Spacing.group)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .modifier(TileSurface(selected: selected))
+            .contentShape(.rect(cornerRadius: Radius.card))
+        }
+        .buttonStyle(PressStyle(.button))
+        .accessibilityLabel(title)
         .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    private static let icon: CGFloat = 32
+}
+
+private struct TileSurface: ViewModifier {
+    let selected: Bool
+    @Environment(\.palette) private var palette
+
+    func body(content: Content) -> some View {
+        if selected {
+            content.paper(cornerRadius: Radius.card, lifted: true)
+        } else {
+            content.background(palette.fill, in: .rect(cornerRadius: Radius.card, style: .continuous))
+        }
     }
 }
 
