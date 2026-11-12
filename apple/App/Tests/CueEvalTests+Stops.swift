@@ -39,24 +39,6 @@ extension CueEvalTests {
         }
     }
 
-    @Test func z只是应一声() async throws {
-        try await CueEval.run(
-            "z-只是应一声",
-            expect: "他 15 分钟前在会话里说限流那条先不做，会话只应了一声（「好，限流不做，同意。」）就歇下、没在等他（CuePad 已当场留给他）：task take 收回、不 tell、不发等你"
-        ) { eval in
-            let work = try await eval.rig.working(Self.title, Self.body)
-            try await eval.trigger {
-                try await eval.rig.settleHisTurn(work, said: "限流那条先不做了，以后再说。", ago: 15 * 60, reply: "好，限流不做，同意。")
-            }
-            let session = try #require(try await eval.rig.store.sessions(matching: work.id).first)
-            return [
-                Check(.interrupt, "收回了，不再待回复", !session.awaitsReply(try await eval.rig.store.cueDuty())),
-                Check(.ask, "没发等你", try await eval.said().allSatisfy { $0.choices == nil }),
-                Check(.interrupt, "没打扰他（没 tell）", eval.calls("tell").isEmpty),
-            ]
-        }
-    }
-
     @Test func o调研交回要他看() async throws {
         try await CueEval.run(
             "o3-调研交回要他看",

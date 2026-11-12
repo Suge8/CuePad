@@ -154,7 +154,10 @@ extension MacSyncTests {
         let file = FileManager.default.temporaryDirectory.appending(path: "mac-sync-\(UUID().uuidString).jsonl")
         FileManager.default.createFile(atPath: file.path, contents: Data())
         let turn = Date.now.addingTimeInterval(-30 * 60)
-        let said = ChatMessage(sessionID: "s1", entryID: "u1", seq: 1, role: .user, text: "发版", at: turn)
+        // Cue 开的这一轮：他开的停下不报给 Cue（`leaveHisStops`）
+        let delivery = UUID()
+        try await store.recordSend("发版", to: SendTarget(kind: .piSession, name: "发版", ref: "s1"), delivery: delivery, origin: .known(.cue))
+        let said = ChatMessage(sessionID: "s1", entryID: "u1", seq: 1, role: .user, text: "发版", at: turn, deliveryID: delivery)
         try await services.stateRecorder.update(
             sessionID: "s1", state: .thinking, title: "发版", directory: "/work/app", times: SessionTimes(stateSince: turn, busySince: turn), turnStartedAt: turn)
         if !running {
@@ -185,7 +188,7 @@ extension MacSyncTests {
         #expect(try await store.macOnline(TestApp.hostID))
         #expect(stored?.runtimeState == .known(.settled))
         let woke = try await store.cueChanges(after: CueMarks(mark))
-        #expect(woke.due.map { "\($0.kind)\($0.interrupted ? "（被打断）" : "") \($0.session?.sessionID ?? "")" } == (running ? ["settled s1"] : []))
+        #expect(woke.map { "\($0.kind)\($0.interrupted ? "（被打断）" : "") \($0.session?.sessionID ?? "")" } == (running ? ["settled s1"] : []))
     }
 
     @Test(arguments: [false, true])

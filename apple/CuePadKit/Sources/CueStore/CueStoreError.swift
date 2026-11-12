@@ -152,7 +152,7 @@ extension CueStoreError: LocalizedError {
       "\(agent) 没有 \(model)：" + (choices.count <= Self.choicesListed ? "能选的是 \(choices.joined(separator: "、"))，照抄其一" : "用 setup look agents 看能选的，照抄其一")
     case .cannotChangeModel(let title): "会话「\(title)」换不了模型（它的记录还没到）：用 start 带 fresh:true 和 model 开新会话"
     case .cannotStop(let title): "会话「\(title)」现在停不了：没在跑一轮，或在等回答"
-    case .cannotSpeakNow(let title, let why): "会话「\(title)」\(why)：没说出去。等它歇下（会叫醒你）再说"
+    case .cannotSpeakNow(let title, let why): "会话「\(title)」\(why)：没说出去。这一轮停下也归他，不会叫醒你；要他知道的 tell 他"
     case .macOffline(let title, let mac):
       "会话「\(title)」所在的「\(mac)」此刻不在线（睡着、关机或 CuePad 没开）：这次没有发出，那台开机前对它做什么都送不到。别重试，等它开机；急的用 tell 告诉他"
     case .sessionUnconfirmed(let title):

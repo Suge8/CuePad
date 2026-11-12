@@ -44,30 +44,6 @@ extension CueEvalTests {
         }
     }
 
-    @Test func o答他自己问的() async throws {
-        try await CueEval.run(
-            "o-答他自己问的",
-            expect: "他 15 分钟前在会话里自己问了个问题（不在场），会话答完停下等他一句话：CuePad 已当场留给他（待回复），Cue 不替他接（不 say）、不收回、不 tell"
-        ) { eval in
-            let rig = eval.rig
-            let work = try await rig.working(Self.title, Self.body)
-            try await eval.trigger {
-                try await rig.settleHisTurn(
-                    work, said: "等下，重置令牌为什么要存哈希而不是原文？", ago: 15 * 60,
-                    reply: "存哈希是为了库被拖走时令牌不能直接拿来用：令牌本身就等于一次性密码，原文落库的话，谁读到库谁就能重置任何人的密码。验证时把用户带来的令牌同样哈希再比对就行，代价只是一次 SHA-256。")
-            }
-            let session = try #require(try await rig.store.sessions(matching: work.id).first)
-            let duty = try await rig.store.cueDuty()
-            return [
-                Check(.result, "没对会话说话（没 say）", eval.calls("task", "say").isEmpty),
-                Check(.ask, "没收回（没 take）", !eval.calls("task", "take").contains { !$0.call.failed }),
-                Check(.result, "会话行显示待回复", SessionShown(session, cue: duty, at: .always()).label == "待回复"),
-                Check(.ask, "没发等你", try await eval.said().allSatisfy { $0.choices == nil }),
-                Check(.interrupt, "没打扰他（没 tell）", eval.calls("tell").isEmpty),
-            ]
-        }
-    }
-
     @Test func t他刚说过话_Cue说的那一轮做完照样收尾() async throws {
         try await CueEval.run(
             "t-Cue说的那一轮做完照样收尾",
@@ -81,32 +57,8 @@ extension CueEvalTests {
                     work, his: "进度怎么样了？", ago: 7 * 60, cue: "把测试输出和改前改后的截图补上。", reply: Self.doneReply)
             }
             return [
-                Check(.result, "被叫醒（这一停没标他说的）", eval.round?.sent.contains { $0.contains("[歇下] \(Self.title)") } == true),
+                Check(.result, "被叫醒", eval.round?.sent.contains { $0.contains("[歇下] \(Self.title)") } == true),
                 Check(.result, "done 了", eval.calls("task", "done").contains { !$0.call.failed }),
-            ]
-        }
-    }
-
-    @Test func q他离开后接着推进() async throws {
-        try await CueEval.run(
-            "q-他离开后接着推进",
-            expect: "他在会话里发起的一轮停下问常规取舍时他正在手机上开着它（归他，不叫醒 Cue）；他离开那一页后 Cue 被叫醒，接着推进（say 作答）"
-        ) { eval in
-            let rig = eval.rig
-            let work = try await rig.working(Self.title, Self.body)
-            try await rig.store.recordViewing(device: "phone", sessionIDs: [work.id], cue: false)
-            let viewing = Date.now
-            try await rig.settleHisTurn(
-                work, said: "限流顺便也加到登录接口上，同一个 IP 一分钟最多 10 次。", ago: 15 * 60,
-                reply: "登录接口的限流加好了骨架。计数放哪里还没定：A. 进程内存（简单，但多实例不共享）；B. Redis（项目里已经在用，多实例共享）。你选哪个？我倾向 B。")
-            try await eventually("这一停写进库") {
-                try await rig.store.sessions(matching: work.id).first.map { $0.state == .known(.settled) && $0.answered } == true
-            }
-            try await eval.trigger { try await rig.store.recordViewing(device: "phone", sessionIDs: [], cue: false) }
-            return [
-                Check(.interrupt, "他开着时没叫醒 Cue（之后只有他离开后那一轮）", rig.rounds.filter { $0.startedAt >= viewing }.count == 1),
-                Check(.result, "他离开后被叫醒（信封里这一停标着他说的）", eval.round?.sent.contains { $0.contains("他说的") } == true),
-                Check(.result, "接着推进（say 说到 Redis 或 B）", eval.calls("task", "say").contains { ($0.args["text"] as? String)?.contains(/Redis|B/) == true }),
             ]
         }
     }

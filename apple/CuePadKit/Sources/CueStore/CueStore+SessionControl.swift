@@ -40,7 +40,7 @@ extension CueStore {
     _ = try insertDelivery(config.stored, to: session.target, on: session.host(or: host), mode: .config, cue: cue)
   }
 
-  /// Cue 这会儿说不了就抛 `cannotSpeakNow`、什么都不写，它歇下时 Cue 被叫醒再说：会打断他发起的那一轮（`checkCueCanSpeak`）。正文原样写：收不了图片的会话由 Mac 交出时把图片写成路径。必须在写事务内调用。
+  /// Cue 这会儿说不了就抛 `cannotSpeakNow`、什么都不写：会打断他发起的那一轮（`checkCueCanSpeak`），那一轮停下也归他（`leaveHisStops`），不叫醒 Cue。正文原样写：收不了图片的会话由 Mac 交出时把图片写成路径。必须在写事务内调用。
   func say(_ content: String, to session: SessionTarget, card: UUID?, host: String, cue: Bool) throws -> DeliveryRequest {
     if cue {
       guard let state = session.state else { throw CueStoreError.sessionUnconfirmed(session.target.name) }

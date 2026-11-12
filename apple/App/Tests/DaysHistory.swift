@@ -93,8 +93,8 @@ final class DaysHistory {
         fake.sendInfo(["name": title])
         let file = try #require(rig.app.host.sessionFiles[id])
         try file.user(first, delivery: delivery.uuidString, at: started)
-        // 会话每次交回后让它继续的也是 Cue（带发送记录）：没有记录就算他在会话里说的，之后那一停标"他说的"、CuePad 当场留给他回，
-        // 剧本要考的作答（S3）与兑现（访问量）就成了该留着不动
+        // 会话每次交回后让它继续的也是 Cue（带发送记录）：没有记录就算他在会话里说的，之后那一停当场留给他回、不叫醒 Cue，
+        // 剧本要考的作答（S3）与兑现（访问量）就考不到
         for (text, at) in replies {
             let resumed = UUID()
             try await rig.store.recordSend("继续", to: SendTarget(kind: .piSession, name: title, ref: id), card: task.id, delivery: resumed, origin: .known(.cue))
