@@ -87,16 +87,16 @@ extension CueStore {
     return patterns.isEmpty ? [] : try recallSessions(Self.saidByHim, patterns, limit: limit).found
   }
 
-  /// 会话对话读进这台的次序（rowid；写入只追加与原地改，次序不变）到哪了：做梦订阅它，有新的话才看。
+  /// 会话对话读进这台的次序（`arrival`：原地改不变，删了也不复用）到哪了：做梦订阅它，有新的话才看。
   public func sessionMessagesThrough() throws -> Int64 {
-    try db.first("SELECT COALESCE(max(rowid), 0) FROM \(ChatMessage.table.rawValue)") { $0.int(0) } ?? 0
+    try db.first("SELECT COALESCE(max(arrival), 0) FROM \(ChatMessage.table.rawValue)") { $0.int(0) } ?? 0
   }
 
   /// 读进这台的次序在 `heard` 之后他说的话，从早到晚至多 `limit` 句；没有新的 `through` 就是 `heard`。
   public func said(after heard: Int64, limit: Int) throws -> CueSaid {
-    let said = try replies(where: "rowid > ? AND \(Self.saidByHim)", [heard], orderBy: "rowid", limit: limit)
+    let said = try replies(where: "arrival > ? AND \(Self.saidByHim)", [heard], orderBy: "arrival", limit: limit)
     let through = try said.last.flatMap { last in
-      try db.first("SELECT rowid FROM \(ChatMessage.table.rawValue) WHERE id = ?", [last.message.id]) { $0.int(0) }
+      try db.first("SELECT arrival FROM \(ChatMessage.table.rawValue) WHERE id = ?", [last.message.id]) { $0.int(0) }
     }
     return CueSaid(said: said, through: through ?? heard)
   }

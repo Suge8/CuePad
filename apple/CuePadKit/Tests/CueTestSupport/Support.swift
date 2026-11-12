@@ -67,6 +67,20 @@ public struct RawDB {
         """),
       (95, "ALTER TABLE attachments DROP COLUMN registeredHere;"),
       (96, "ALTER TABLE cueProfile DROP COLUMN voice;"),
+      (97, """
+        CREATE TABLE piMessages_rowid (
+          id TEXT PRIMARY KEY NOT NULL, sessionID TEXT NOT NULL, seq INTEGER NOT NULL, role TEXT NOT NULL, text TEXT NOT NULL,
+          at INTEGER NOT NULL, tools TEXT, roundStartedAt INTEGER, deliveryID TEXT,
+          createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL, question TEXT, shownText TEXT
+        ) STRICT;
+        INSERT INTO piMessages_rowid (rowid, id, sessionID, seq, role, text, at, tools, roundStartedAt, deliveryID, createdAt, modifiedAt, question, shownText)
+          SELECT arrival, id, sessionID, seq, role, text, at, tools, roundStartedAt, deliveryID, createdAt, modifiedAt, question, shownText FROM piMessages;
+        DROP TABLE piMessages;
+        ALTER TABLE piMessages_rowid RENAME TO piMessages;
+        CREATE INDEX piMessages_sessionID_seq ON piMessages(sessionID, seq);
+        CREATE INDEX piMessages_sessionID_at ON piMessages(sessionID, at, createdAt);
+        CREATE INDEX piMessages_modified ON piMessages(id, modifiedAt);
+        """),
     ]
     try exec((steps.filter { $0.version > version }.reversed().map(\.sql) + ["PRAGMA user_version = \(version);"]).joined(separator: "\n"))
   }

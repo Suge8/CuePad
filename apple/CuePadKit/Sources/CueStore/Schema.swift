@@ -9,7 +9,8 @@
 /// - 列只用 TEXT / INTEGER，能直接映射 CKRecord 字段。
 ///
 /// 同步表里的本机列（不进 CKRecord，记录映射的列表里没有它们）：deliveryRequests.resultReceivedAt、serverAt（服务器收下它的时刻）、cueToldAt（Cue 已知道没送到）；
-/// piSessionStates、cards、deliveryRequests、cueMessages 的 writeSeq（本机写入序号，见 `writeSeq`）；attachments.registeredHere（这台设备登记的，见 `registerAttachment`）。
+/// piSessionStates、cards、deliveryRequests、cueMessages 的 writeSeq（本机写入序号，见 `writeSeq`）；attachments.registeredHere（这台设备登记的，见 `registerAttachment`）；
+/// piMessages.arrival（读进这台的次序，这张表的主键让给了它、id 改由 UNIQUE 守，见 `messageArrivalUpgrade`）。
 ///
 /// 本机表（不同步）：`Table.synced` 之外的表，另有 piProcesses、syncRecords、syncState，以及 searchIndex（FTS5，由触发器随同步表维护，可随时重建）；
 /// cueSummaries 是 Cue 记忆的摘要缓存，可随时丢弃重建。
@@ -138,6 +139,7 @@ enum Schema {
     "ALTER TABLE attachments ADD COLUMN registeredHere INTEGER;",
     // 96：Cue 通话的音色（`CueVoice`）；空着的按默认
     "ALTER TABLE cueProfile ADD COLUMN voice TEXT;",
+    messageArrivalUpgrade,
   ]
 
   static let activityDestinationsTable = """

@@ -89,7 +89,7 @@ extension Schema {
     ) STRICT;
 
     CREATE TABLE piMessages (
-      id TEXT PRIMARY KEY NOT NULL, sessionID TEXT NOT NULL, seq INTEGER NOT NULL, role TEXT NOT NULL, text TEXT NOT NULL,
+      arrival INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE, sessionID TEXT NOT NULL, seq INTEGER NOT NULL, role TEXT NOT NULL, text TEXT NOT NULL,
       at INTEGER NOT NULL, tools TEXT, roundStartedAt INTEGER, deliveryID TEXT,
       createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL, question TEXT, shownText TEXT
     ) STRICT;
