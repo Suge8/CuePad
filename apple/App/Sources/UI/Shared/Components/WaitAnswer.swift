@@ -75,13 +75,16 @@ private struct SessionAnswer: View {
 
     var body: some View {
         switch question?.kind.known {
-        case .confirm: answers([.confirmed(false), .confirmed(true)])
+        case .confirm: answers([.confirmed(false), .confirmed(true)], rows: leading, across: true)
         case .select:
             answers((question?.options ?? []).map(AnswerValue.option), numbered: replyElsewhere,
                     other: replyElsewhere && question?.allowsOther == true, rows: leading)
         case .text: if !replyElsewhere { WaitReply(session: session) }
         case nil:
-            if !replyElsewhere {
+            // 看板上待回复的卡（它没在问，只是说完了等你回话）当场回一句；问了应用里答不了的题才只给打开会话
+            if leading, session.question == nil {
+                WaitReply(session: session, prompt: String(localized: "回复"))
+            } else if !replyElsewhere {
                 chips {
                     Button("打开会话") { workspace.openSession(session.id, sessionID: session.sessionID) }
                         .buttonStyle(ControlButtonStyle(kind: .secondary))
@@ -94,12 +97,13 @@ private struct SessionAnswer: View {
         ChipFlow(leading: leading) { content() }.frame(maxWidth: .infinity, alignment: leading ? .leading : .trailing)
     }
 
-    /// `rows`：一项一行、铺满卡宽、长的折行写全（看板的卡窄，长选项挤成胶囊读不了）。
-    private func answers(_ values: [AnswerValue], numbered: Bool = false, other: Bool = false, rows: Bool = false) -> some View {
+    /// `rows`：一项一行、铺满卡宽、长的折行写全（看板的卡窄，长选项挤成胶囊读不了）；`across`：就两项的确认题并排各占一半。
+    private func answers(_ values: [AnswerValue], numbered: Bool = false, other: Bool = false, rows: Bool = false, across: Bool = false) -> some View {
         VStack(alignment: leading ? .leading : .trailing, spacing: Spacing.tight) {
             Group {
                 if rows {
-                    VStack(spacing: Spacing.tight) { ForEach(Array(values.enumerated()), id: \.offset) { row($1) } }
+                    let stack = across ? AnyLayout(HStackLayout(spacing: Spacing.glyph)) : AnyLayout(VStackLayout(spacing: Spacing.glyph))
+                    stack { ForEach(Array(values.enumerated()), id: \.offset) { row($0.element) } }
                 } else {
                     chips {
                         ForEach(Array(values.enumerated()), id: \.offset) { index, value in
@@ -157,17 +161,19 @@ private struct SessionAnswer: View {
         .accessibilityLabel(busy ? String(localized: "\(value.label)，送达中") : value.label)
     }
 
+    /// 点下的那一项反白（墨底），别的不动：答了哪项一眼看得出，不靠主色推着人选。
     private func row(_ value: AnswerValue) -> some View {
-        let busy = answering && tapped == value
+        let picked = tapped == value, busy = answering && picked
         return Button { answer(value) } label: {
             HStack(spacing: Spacing.glyph) {
                 Text(value.label).multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
                 if busy { Spinner(.small) }
             }
-            .font(Typography.secondary.weight(.medium)).foregroundStyle(palette.ink)
-            .padding(.horizontal, Spacing.group).padding(.vertical, Spacing.item)
-            .background(palette.paper, in: RoundedRectangle(cornerRadius: Radius.chip))
+            .font(Typography.body.weight(.medium)).foregroundStyle(picked ? palette.desk : palette.ink)
+            .padding(.horizontal, Spacing.block).padding(.vertical, Spacing.group)
+            .frame(minHeight: ControlSize.regular.height)
+            .background(picked ? palette.ink : palette.fill, in: RoundedRectangle(cornerRadius: Radius.block))
             .contentShape(.rect)
         }
         .buttonStyle(PressStyle(.card))
@@ -194,6 +200,7 @@ private struct SessionAnswer: View {
 /// 草稿就是会话页回复框那一份（`AppSettings.replyDraft`，两处写的是同一句）；只发文字，草稿里的卡片与图片留给会话页。
 private struct WaitReply: View {
     let session: SessionState
+    var prompt = String(localized: "回答")
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -204,7 +211,7 @@ private struct WaitReply: View {
     var body: some View {
         // 一行时字与发送钮同一条中线（字的格至少与钮同高、竖直居中）；写成几行长高时钮贴在最后一行旁（底对齐，上下边距让最后一行对着钮的中线）
         HStack(alignment: .bottom, spacing: Spacing.glyph) {
-            TextField(String(localized: "回答"), text: box.text, palette: palette, axis: .vertical)
+            TextField(prompt, text: box.text, palette: palette, axis: .vertical)
                 .textFieldStyle(.plain).font(Typography.secondary).lineLimit(1...4)
                 .padding(.vertical, Self.textInset)
                 .frame(minHeight: ComposerMetrics.glyphTarget)
@@ -212,7 +219,7 @@ private struct WaitReply: View {
             Button(action: send) { SendGlyph(canSend ? .ready : .idle) }
                 .buttonStyle(PressStyle(.button))
                 .disabled(!canSend)
-                .accessibilityLabel("回答")
+                .accessibilityLabel(prompt)
         }
         .padding(.leading, Spacing.group).padding(.trailing, Spacing.hair).padding(.vertical, Spacing.hair)
         .background(palette.fill, in: Radius.nested)

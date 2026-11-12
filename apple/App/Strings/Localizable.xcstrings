@@ -12159,6 +12159,22 @@
         }
       }
     },
+    "展开作答" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Expands to answer"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "展开作答"
+          }
+        }
+      }
+    },
     "展开编辑" : {
       "localizations" : {
         "en" : {

@@ -109,14 +109,17 @@ struct BoardColumnHeader: View {
     private var row: some View {
         HStack(spacing: 0) {
             BoardLaneMark(column: column, size: Self.mark)
-            Text(column.title).font(Self.font).foregroundStyle(column.light ? palette.ink3 : palette.ink2).truncationMode(.tail)
+            Text(column.title).font(titleFont).foregroundStyle(column == .waiting ? palette.ink : column.light ? palette.ink3 : palette.ink2).truncationMode(.tail)
                 .padding(.leading, Spacing.glyph)
             // 数紧跟列名：四列同一种排法，右端只留给"+"，有没有它数都在同一处
-            Text("\(count)").font(column.light ? Self.font : Self.countFont).monospacedDigit().foregroundStyle(column.countInk(palette)).counting(count).fixedSize()
+            Text("\(count)").font(column == .waiting ? titleFont : column.light ? Self.font : Self.countFont).monospacedDigit().foregroundStyle(column.countInk(palette)).counting(count).fixedSize()
                 .padding(.leading, Spacing.glyph)
             Spacer(minLength: Spacing.tight)
         }
     }
+
+    /// 等你的列头比别的大一号：全页的焦点在这一列。
+    private var titleFont: Font { column == .waiting ? Typography.title : Self.font }
 
     private static let font = Typography.laneTitle
     private static let countFont = Typography.laneCount

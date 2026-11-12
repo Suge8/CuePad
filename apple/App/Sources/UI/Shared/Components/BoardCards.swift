@@ -250,7 +250,7 @@ struct BoardCardLayout<Icon: View, Title: View, Facts: View, Trailing: View>: Vi
                             HStack(alignment: .firstTextBaseline, spacing: Spacing.tight) { title }
                             noteLine(note ?? "")
                         }
-                        .font(TaskMetrics.lineFont)
+                        .font(Typography.bodyStrong)
                         .clipped()
                     }
                     // 有就地处理的钮时它占右上角（真的那颗浮在卡上，`boardRescue`；这里只留出它的宽）
@@ -359,46 +359,6 @@ struct BoardFoot: Layout {
         tag.place(at: CGPoint(x: bounds.minX, y: bounds.midY), anchor: .leading, proposal: ProposedViewSize(width: width, height: bounds.height))
         let used = width > 0 ? width + gap : 0
         facts.place(at: CGPoint(x: bounds.minX + used, y: bounds.midY), anchor: .leading, proposal: ProposedViewSize(width: bounds.width - used, height: bounds.height))
-    }
-}
-
-/// 卡住的会话就地处理的那一颗：额度用完去管理用量，出错的重试，上下文快满的压缩（规则同会话页的 `FailureDock`、`ContextGauge`）。
-/// 原因卡上一直写着（线右端的状态词），这颗是中性的小钮，不加红框。
-struct BoardRescue: View {
-    let session: SessionState
-    @Environment(Workspace.self) private var workspace
-
-    enum Kind { case usage(URL), retry, compact }
-
-    static func kind(of session: SessionState) -> Kind? {
-        if let url = session.usageURL { return .usage(url) }
-        if session.canRetry { return .retry }
-        if session.context.flatMap(ContextMeter.init)?.level == .critical { return .compact }
-        return nil
-    }
-
-    var body: some View {
-        Group {
-            switch Self.kind(of: session) {
-            case .usage(let url): Link("管理用量", destination: url)
-            case .retry: Button("重试") { workspace.retry(session) }
-            case .compact: Button("现在压缩") { workspace.speak("/compact", to: .session(session, mode: .command)) }
-            case nil: EmptyView()
-            }
-        }
-        .buttonStyle(ControlButtonStyle(kind: .secondary, size: .inline))
-        .fixedSize()
-    }
-}
-
-extension View {
-    /// 浮在卡的右上角、不放进卡里：会话卡整张是一颗按钮（`BoardLink`），钮里不套钮。
-    func boardRescue(_ session: SessionState?) -> some View {
-        overlay(alignment: .topTrailing) {
-            if let session, BoardRescue.kind(of: session) != nil {
-                BoardRescue(session: session).padding(.trailing, TaskMetrics.cardPadding).padding(.top, BoardCardMetrics.pad)
-            }
-        }
     }
 }
 
