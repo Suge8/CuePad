@@ -76,42 +76,30 @@ extension CueStore {
       mode: .transcript)
   }
 
-  /// 请 `host` 那台 Mac 取第 `item` 步的里面（`ToolCallDetail`），写在那一步上同步回来。`message` 是做完的一轮的那条回答，nil 是在跑的这一轮。
-  public func requestStep(_ item: Int, of message: UUID?, in session: SessionState) throws -> DeliveryRequest {
+  /// 请 `host` 那台 Mac 取那条回答里第 `item` 步的里面（`ToolCallDetail`），写在那一步上同步回来。
+  /// 只认做完的一轮：在跑的一轮每多一步都在变，按位置认不住（同一个文件再读一次就并进前面那一步）。
+  public func requestStep(_ item: Int, of message: UUID, in session: SessionState) throws -> DeliveryRequest {
     try requestDelivery(
-      StepRequest(session: session.sessionID, message: message, item: item).stored,
-      to: SendTarget(kind: .piSession, name: session.title, ref: session.sessionID), on: session.hostID, mode: .step)
+      StepRequest(message: message, item: item).stored, to: SendTarget(kind: .piSession, name: session.title, ref: session.sessionID),
+      on: session.hostID, mode: .step)
   }
 
-  /// 请求（`DeliveryMode.step` 的正文）指的那一步是会话里的哪几次调用。那条回答、那一轮或那一步已不在为 nil。
+  /// 请求（`DeliveryMode.step` 的正文）指的那一步：哪个会话、会话里的哪几次调用。那条回答或那一步已不在为 nil。
   public func stepCalls(_ content: String) throws -> (session: String, calls: [String])? {
-    guard let step = StepRequest(stored: content), let items = try stepTools(step)?.items, items.indices.contains(step.item),
-          let calls = items[step.item].calls else { return nil }
-    return (step.session, calls)
+    guard let step = StepRequest(stored: content), let message = try find(ChatMessage.self, step.message),
+          let items = message.tools?.items, items.indices.contains(step.item), let calls = items[step.item].calls else { return nil }
+    return (message.sessionID, calls)
   }
 
-  /// 读会话重写这条回答、这一轮接着往下做时，写上的照旧带着（`Tools.keepingDetails`）。
-  public func fillStep(_ content: String, with detail: ToolCallDetail) throws {
+  /// `calls` 是取详情时那一步的几次调用：取的那一下这条回答被重读改写、那个位置已不是这几次调用就抛 `notFound`，不把详情写到别的步上。
+  /// 之后再改写时同样几次调用的那一步照旧带着（`Tools.keepingDetails`）。
+  public func fillStep(_ content: String, calls: [String], with detail: ToolCallDetail) throws {
     try write {
-      guard let step = StepRequest(stored: content), var tools = try stepTools(step), tools.items.indices.contains(step.item) else { throw CueStoreError.notFound }
+      guard let step = StepRequest(stored: content), var tools = try find(ChatMessage.self, step.message)?.tools,
+            tools.items.indices.contains(step.item), tools.items[step.item].calls == calls else { throw CueStoreError.notFound }
       tools.items[step.item].detail = detail
-      if let message = step.message {
-        try db.run("UPDATE piMessages SET tools = ?1, modifiedAt = ?2 WHERE id = ?3", [tools.stored, Date.stamp, message])
-      } else {
-        try db.run(
-          "UPDATE piSessionStates SET pendingTools = ?1, modifiedAt = ?2 WHERE id = ?3",
-          [tools.stored, Date.stamp, SessionState.recordID(sessionID: step.session)])
-      }
+      try db.run("UPDATE piMessages SET tools = ?1, modifiedAt = ?2 WHERE id = ?3", [tools.stored, Date.stamp, step.message])
     }
-  }
-
-  private func stepTools(_ step: StepRequest) throws -> ChatMessage.Tools? {
-    if let message = step.message { return try find(ChatMessage.self, message)?.tools }
-    return try storedTools("SELECT pendingTools FROM piSessionStates WHERE id = ?", SessionState.recordID(sessionID: step.session))
-  }
-
-  private func storedTools(_ sql: String, _ id: any SQLBindable) throws -> ChatMessage.Tools? {
-    try db.first(sql, [id]) { $0.textOrNil(0) }?.flatMap(ChatMessage.Tools.init(stored:))
   }
 
   /// 写一段对话，并在同一事务里把摘要写到会话记录上：摘要只有这一个写者，界面不必和对话对账。
@@ -123,19 +111,15 @@ extension CueStore {
   /// `SessionState.pendingPrompt`）。会话记录还不存在时只写消息。
   func applyTranscript(_ transcript: SessionTranscript) throws {
     try applyMessages(transcript.messages, session: transcript.sessionID)
-    var recap = transcript.recap
+    let recap = transcript.recap
     for key in recap.pendingTools?.images ?? [] { try registerAttachment(key) }
-    let id = SessionState.recordID(sessionID: transcript.sessionID)
-    if let pending = recap.pendingTools {
-      recap.pendingTools = pending.keepingDetails(of: try storedTools("SELECT pendingTools FROM piSessionStates WHERE id = ? AND instr(pendingTools, '\"detail\"') > 0", id))
-    }
     try db.run(
       """
       UPDATE piSessionStates SET lastPrompt = ?1, lastReply = ?2, pendingPrompt = ?3, pendingTools = ?4, answeredAt = ?7, modifiedAt = ?5
       WHERE id = ?6 AND (lastPrompt IS NOT ?1 OR lastReply IS NOT ?2 OR pendingPrompt IS NOT ?3 OR pendingTools IS NOT ?4 OR answeredAt IS NOT ?7)
       """,
       [recap.lastPrompt, recap.lastReply, recap.pendingPrompt, recap.pendingTools?.stored, Date.stamp,
-       id, recap.answeredAt])
+       SessionState.recordID(sessionID: transcript.sessionID), recap.answeredAt])
   }
 
   /// 定点核对只补真实用户消息与送达证据，不改正常索引的检查点和轮次摘要。
@@ -154,7 +138,8 @@ extension CueStore {
       for key in message.tools?.images ?? [] { try registerAttachment(key) }
       if try insert(message, ignoringExisting: true) { continue }
       // 已写过的消息只有正文和工具活动会变（读会话文件的规则升级后重读）：同样的内容不改写，免得重复上传
-      let tools = try message.tools?.keepingDetails(of: storedTools("SELECT tools FROM piMessages WHERE id = ? AND instr(tools, '\"detail\"') > 0", message.id))
+      let written = try db.first("SELECT tools FROM piMessages WHERE id = ? AND instr(tools, '\"detail\"') > 0", [message.id]) { $0.textOrNil(0) }
+      let tools = message.tools?.keepingDetails(of: written?.flatMap(ChatMessage.Tools.init(stored:)))
       try db.run(
         "UPDATE piMessages SET text = ?1, tools = ?2, modifiedAt = ?3 WHERE id = ?4 AND (text IS NOT ?1 OR tools IS NOT ?2)",
         [message.text, tools?.stored, Date.stamp, message.id])

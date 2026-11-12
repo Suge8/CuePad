@@ -2,7 +2,7 @@ import CueStore
 import SwiftUI
 
 /// 清单里的一步，点开在原位看里面：命令全文或改动，下面是输出的末尾（`ToolCallDetail`）。
-/// 会话所在的 Mac 上当场回会话文件取；别的设备上请那台 Mac 取了写在这一步上、随同步回来。
+/// 会话所在的 Mac 上当场回会话文件取；别的设备上请那台 Mac 取了写在这一步上、随同步回来（做完的一轮才行，`CueStore.requestStep`）。
 struct StepRow: View {
     let item: ChatMessage.Tools.Item
     let session: SessionState
@@ -18,7 +18,7 @@ struct StepRow: View {
     enum Opened: Equatable { case loading, ready(ToolCallDetail), missing(String) }
 
     var body: some View {
-        if item.calls != nil {
+        if item.calls != nil, services.holdsSteps(of: session) || message != nil {
             VStack(alignment: .leading, spacing: 0) {
                 Button(action: toggle) { row(open: opened != nil) }
                     .buttonStyle(PressStyle())
@@ -77,6 +77,7 @@ struct StepRow: View {
                     return
                 }
                 #endif
+                guard let message else { return }
                 try await services.fetchStep(index, of: message, in: session)
                 // Mac 办完了，写上的详情随同步稍后到（`onChange`）；这之间那条回答被重读改写的话它就没了，不一直等
                 try await Task.sleep(for: .seconds(10))
