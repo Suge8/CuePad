@@ -13,7 +13,7 @@ ROOT = os.path.abspath("..")
 DOCS = re.compile(r"^(?:docs/.+|WORDS|AGENTS|landing/AGENTS|design/tools/AGENTS|relay/README|apple/.+/README)\.md$")
 SOURCE = (".swift", ".ts", ".mjs", ".py", ".sh", ".xcconfig", ".plist", ".entitlements", ".svelte", ".css", ".yml", ".pbxproj")
 FOREIGN = set("""
-AXStatusLabel preferences.plist
+AXStatusLabel preferences.plist MemoryDenyWriteExecute LoadCredential
 """.split())
 
 tracked = subprocess.run(["git", "ls-files"], cwd=ROOT, capture_output=True, text=True, check=True).stdout.split("\n")

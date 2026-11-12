@@ -25,6 +25,8 @@ Pi 的桥扩展（`Extension/cuepad-bridge/`，随 App 打包，CuePad 托管的
 
 `end` 只对自身发 SIGTERM，不向第三方 PID 发强杀。
 
+网关成功清单的 `accounts` 与 `activeScopes` 同事务更新，只移除该来源已经撤销的账号；损坏清单不部分写入。
+
 magpie v0.1.2190 的 [公开结构](https://github.com/yetone/magpie/blob/v0.1.2190/internal/provider/quotas.go) 与[网关接口](https://github.com/yetone/magpie/blob/v0.1.2190/internal/gateway/gateway.go)已核对。GET `/v1/magpie/quotas` 不保证更新 Claude 观测：Claude Code 回答或 `/usage` 才更新。官方另有 POST `/v1/magpie/quotas/refresh`，可能在账号目录运行 CLI；CuePad 不自动调用它，不复制上游登录或以反复 GET 冒充实时刷新。
 
 单网关不显示来源标签，多来源时才按已有 Mac 名称与同机网关编号区分，不把地址拼进账号名；明细里同一产品只有一个账号时只写产品名，有几个时才接账号名（邮箱的 @ 前那段不重复就只写它，全名在悬停提示里）。
