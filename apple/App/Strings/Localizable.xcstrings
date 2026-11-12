@@ -21167,6 +21167,22 @@
         }
       }
     },
+    "缓存 %lldm 过期" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cache %lldm left"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "缓存 %lldm 过期"
+          }
+        }
+      }
+    },
     "缓存可能已冷，这一句可能重读约 %@" : {
       "localizations" : {
         "en" : {
@@ -21211,6 +21227,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "缓存已冷，这一句会重读约 %@"
+          }
+        }
+      }
+    },
+    "缓存约 %lldm 过期" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cache ~%lldm left"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "缓存约 %lldm 过期"
           }
         }
       }
