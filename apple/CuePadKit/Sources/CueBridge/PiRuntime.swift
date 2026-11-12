@@ -1,7 +1,6 @@
 #if os(macOS)
 import CueStore
 import Foundation
-import OSLog
 
 /// 托管的进程是 CuePad 起的 Pi：它自己管生死，CuePad 只是连上去看和发的客户端。
 /// - 启动时显式加载随包的桥扩展（`PiExtensionBundle.url`），不经 Pi 扩展目录；终端里开的 pi 不加载它，与 CuePad 无关；
@@ -10,36 +9,29 @@ import OSLog
 /// - 有哪些托管会话只看桥（hello 里的 pid），这里不记进程；结束由桥做（`Bridge` 的托管会话一节）。
 @MainActor
 public final class PiRuntime: AgentRuntime {
-    private static let log = Logger(subsystem: AppIdentity.id, category: "pi-host")
     private let bridge: Bridge
     private let paths: PiPaths
-    private let cleansInstalledExtension: Bool
     private let pi: @Sendable () async -> URL?
     private let locate: @Sendable () async -> ExecutableLocator
     private let idleLimit: Duration
     private let timing: Timing
     private let resumptions = Resumptions()
 
-    /// - Parameter cleansInstalledExtension: 可以动 `paths` 的 Pi 目录（`AgentIntegration.touches(.pi)`）：清掉旧版装进去的扩展（`PiInstalledExtension`）。
     /// - Parameter pi: 这台 Mac 上够新的 `pi`（检测时挑中的那个，`AgentStatus.executable`；没有为 nil）。
     public init(
-        bridge: Bridge, paths: PiPaths, cleansInstalledExtension: Bool, pi: @escaping @Sendable () async -> URL?,
+        bridge: Bridge, paths: PiPaths, pi: @escaping @Sendable () async -> URL?,
         locate: @escaping @Sendable () async -> ExecutableLocator = { await .system },
         idleLimit: Duration = AgentTimeouts.hostedIdle, timing: Timing = .system
     ) {
         self.bridge = bridge
         self.paths = paths
-        self.cleansInstalledExtension = cleansInstalledExtension
         self.pi = pi
         self.locate = locate
         self.idleLimit = idleLimit
         self.timing = timing
     }
 
-    public func start() {
-        guard cleansInstalledExtension else { return }
-        do { try PiInstalledExtension.remove(from: paths.extensionsDirectory) } catch { Self.log.error("旧版装进 Pi 扩展目录的桥扩展没能清掉：\(String(describing: error))") }
-    }
+    public func start() {}
 
     /// 托管的 Pi 会话不随 CuePad 退出（新会话组、空闲由扩展自退），没有要关的。
     public func stop() -> @concurrent @Sendable () async -> Void { {} }
@@ -66,10 +58,9 @@ public final class PiRuntime: AgentRuntime {
 
     nonisolated static let hostedVariable = "CUEPAD_HOSTED"
 
-    /// 启动并等它的会话连上桥；旧版装进 Pi 扩展目录的那份清不掉、进程先退出或超时（这时让它退出）都抛错。
+    /// 启动并等它的会话连上桥；进程先退出或超时（这时让它退出）都抛错。
     private func launch(_ arguments: [String], in directory: URL, environment: [String: String]) async throws -> Session {
         guard let executable = await pi() else { throw AgentRuntimeError.notInstalled(.pi) }
-        try removeInstalledExtension()
         let changes = bridge.changes()  // 先订阅再启动：连上的那一刻不会漏
         let environment = await locate().environment(
             launching: executable,
@@ -107,11 +98,6 @@ public final class PiRuntime: AgentRuntime {
         process.release()
         return session
     }
-
-    private func removeInstalledExtension() throws {
-        if cleansInstalledExtension { return try PiInstalledExtension.remove(from: paths.extensionsDirectory) }
-        if let left = PiInstalledExtension.directory(in: paths.extensionsDirectory) { throw PiHostError.legacyExtension(UserHome.shown(left.path)) }
-    }
 }
 
 public enum PiHostError: Error, Equatable {
@@ -119,8 +105,6 @@ public enum PiHostError: Error, Equatable {
     case exited(String?)
     /// 等了很久 Pi 都没连上（已让它退出）
     case notConnected
-    /// Pi 扩展目录里还有旧版 CuePad 装的桥扩展，这次运行又不能删它（参数是它的位置，`~` 缩写；`PiInstalledExtension`）
-    case legacyExtension(String)
 }
 
 extension PiHostError: ShownError {
@@ -128,7 +112,6 @@ extension PiHostError: ShownError {
         switch self {
         case .exited(let reason): reason.map { "在后台启动的 Pi 没连上就退出了：\($0)" } ?? "在后台启动的 Pi 没连上就退出了"
         case .notConnected: "在后台启动的 Pi 一直没连上"
-        case .legacyExtension(let path): "\(path) 是旧版 CuePad 装的扩展，与后台启动的 Pi 冲突；删掉它再发"
         }
     }
 }

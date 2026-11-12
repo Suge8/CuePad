@@ -122,7 +122,7 @@ final class AgentIntegrations {
         await integration.probe(statuses)
     }
 
-    /// 升级技能、删掉旧版写的钩子（`AgentIntegration.removeOldHooks`）；哪样失败都照做其余的，抛第一个错，状态仍反映磁盘上的旧版。
+    /// 升级技能；哪家失败都照做其余的，抛第一个错，状态仍反映磁盘上的旧版。
     func refresh() async throws {
         await redetect()
         var failure: (any Error)?
@@ -130,7 +130,6 @@ final class AgentIntegrations {
         where isWritable(kind) && statuses[kind]?.files == .outdated && statuses[kind]?.isAvailable == true {
             do { try await install(kind) } catch { failure = failure ?? error }
         }
-        do { try await integration.removeOldHooks(codex: statuses[.codex]?.executable) } catch { failure = failure ?? error }
         if let failure { throw failure }
     }
 

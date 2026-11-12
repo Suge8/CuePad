@@ -84,7 +84,7 @@ struct RealCueStartTests {
             let bridge = Bridge(socketDirectory: pi.paths.socketDirectory)
             defer { stopHostedProcesses(bridge); bridge.stop(); pi.stop() }
             try bridge.start()
-            let runtime = PiRuntime(bridge: bridge, paths: pi.paths, cleansInstalledExtension: true, pi: { pinnedPi.executable }, idleLimit: .seconds(120), timing: noDeadline)
+            let runtime = PiRuntime(bridge: bridge, paths: pi.paths, pi: { pinnedPi.executable }, idleLimit: .seconds(120), timing: noDeadline)
             runtime.start()
             try await body(runtime, bridge, pi.cwd, ModelKey(provider: "fake", id: "echo"))
         case .codex:
