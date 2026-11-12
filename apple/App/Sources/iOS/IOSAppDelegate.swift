@@ -50,6 +50,7 @@ final class IOSAppDelegate: NSObject, UIApplicationDelegate {
     /// 要紧的变化的推送（见 `AlertSubscriptions`：静默的与带 content-available 的可见通知，后台也会把 App 叫起来一会儿）：拉到推送说的变化再交还系统
     /// （冷启动时等同步启动完，见 `CloudSync.syncNow`）；交还前当场刷新小组件与角标，拉取失败如实返回。
     /// 回调返回后系统可能挂起，不依赖异步观察；远程实时活动由 Mac 经 APNs 更新，不在此用本地库覆盖。
+    /// 用户从后台划掉 App 之后系统不再为后台通知拉起它（被系统回收的照常拉起）：那之后小组件不更新不是这条路坏了。
     func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable: Any]) async -> UIBackgroundFetchResult {
         guard case .ready(let services) = launch else { return .failed }
         return await services.refreshFromPush()
