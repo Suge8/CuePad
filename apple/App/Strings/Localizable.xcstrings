@@ -2130,6 +2130,34 @@
         }
       }
     },
+    "%lld 次" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld time"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld times"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 次"
+          }
+        }
+      }
+    },
     "%lld 次工具" : {
       "localizations" : {
         "en" : {
@@ -6335,6 +6363,22 @@
         }
       }
     },
+    "会话文件里找不到这一步了" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This step is no longer in the session file"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "会话文件里找不到这一步了"
+          }
+        }
+      }
+    },
     "会话有动静" : {
       "localizations" : {
         "en" : {
@@ -7511,6 +7555,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "共 %lld 处"
+          }
+        }
+      }
+    },
+    "共 %lld 步" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld step"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld steps"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "共 %lld 步"
           }
         }
       }
@@ -14919,6 +14991,34 @@
         }
       }
     },
+    "搜了 %lld 次" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Searched %lld time"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Searched %lld times"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "搜了 %lld 次"
+          }
+        }
+      }
+    },
     "搜索" : {
       "localizations" : {
         "en" : {
@@ -16471,35 +16571,7 @@
         }
       }
     },
-    "更早还醒过 %lld 次" : {
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "Woke %lld more time earlier"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "Woke %lld more times earlier"
-                }
-              }
-            }
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "更早还醒过 %lld 次"
-          }
-        }
-      }
-    },
-    "最低" : {
+        "最低" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -16511,6 +16583,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "最低"
+          }
+        }
+      }
+    },
+    "更早的输出未显示" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Earlier output not shown"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "更早的输出未显示"
           }
         }
       }
@@ -21079,6 +21167,38 @@
         }
       }
     },
+    "缓存失效，重读 %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cache missed, re-read %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "缓存失效，重读 %@"
+          }
+        }
+      }
+    },
+    "缓存已冷，这一句会重读约 %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cache is cold. This message re-reads about %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "缓存已冷，这一句会重读约 %@"
+          }
+        }
+      }
+    },
     "编辑" : {
       "localizations" : {
         "en" : {
@@ -22371,6 +22491,34 @@
         }
       }
     },
+    "读了 %lld 个文件" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Read %lld file"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Read %lld files"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "读了 %lld 个文件"
+          }
+        }
+      }
+    },
     "读取" : {
       "localizations" : {
         "en" : {
@@ -22643,7 +22791,7 @@
         }
       }
     },
-    "跑了 %lld 步" : {
+    "跑了 %lld 条命令" : {
       "localizations" : {
         "en" : {
           "variations" : {
@@ -22651,13 +22799,13 @@
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "Ran %lld step"
+                  "value" : "Ran %lld command"
                 }
               },
               "other" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "Ran %lld steps"
+                  "value" : "Ran %lld commands"
                 }
               }
             }
@@ -22666,7 +22814,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "跑了 %lld 步"
+            "value" : "跑了 %lld 条命令"
           }
         }
       }

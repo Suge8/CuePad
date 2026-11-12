@@ -14,6 +14,8 @@ struct ReplyBar: View {
     var sending = false
     var recall: String?
     var previews: [PreviewItem] = []
+    /// 最新那条回答带的提示缓存（`ChatMessage.Tools.Cache`）：过了 `warmUntil` 还没说下一句，写字时提醒这一句要重读多少。
+    var cache: ChatMessage.Tools.Cache?
     var revealNote: (ReplyNote) -> Void = { _ in }
     let sent: () -> Void
     @Environment(Workspace.self) private var workspace
@@ -24,6 +26,7 @@ struct ReplyBar: View {
     @FocusState private var focused: Bool
     @Environment(\.panelCovered) private var covered
     @State private var opening: ConfigPick?
+    @State private var cold = false
 
     /// 回复框的草稿（每个会话一份，`AppSettings.replyDraft`）只在回复框里读写：会话页不经手它，
     /// 打字时只有回复框（与列表里那一行）重算，会话页、对话都不动。
@@ -68,12 +71,31 @@ struct ReplyBar: View {
         case .answerAbove: notice("先在上面作答", icon: .above)
         case .unanswerable: notice(Self.unanswerable, icon: .mac)
         case .message, .answer:
-            composer.composerNotice(commandProgress != nil || expanded && config?.failure != nil) {
+            composer.composerNotice(commandProgress != nil || expanded && (config?.failure != nil || recache != nil)) {
                 if let commandProgress { progressLine(commandProgress) }
-                if expanded { MacInputNotice(failure: config?.failure) }
+                if expanded {
+                    MacInputNotice(failure: config?.failure)
+                    if let recache {
+                        Text("缓存已冷，这一句会重读约 \(CueContext.tokens(recache))").font(Typography.caption).foregroundStyle(palette.ink3)
+                    }
+                }
+            }
+            .task(id: cache?.warmUntil) {
+                cold = false
+                guard let until = cache?.warmUntil else { return }
+                try? await Task.sleep(for: .seconds(max(0, until.timeIntervalSinceNow)))
+                cold = !Task.isCancelled
             }
         }
     }
+
+    /// 小上下文重读不值一提；这一轮还在跑时缓存正被用着。
+    private var recache: Int? {
+        guard cold, !session.runtimeState.isWorking, let context = cache?.context, context >= Self.recacheWorthSaying else { return nil }
+        return context
+    }
+
+    private static let recacheWorthSaying = 20_000
 
     private var expanded: Bool { form == .open || focused || !form.isCapsule && !draft.isEmpty(accepting: accepts.union(.notes)) }
 

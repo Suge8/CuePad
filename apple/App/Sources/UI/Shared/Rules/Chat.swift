@@ -18,6 +18,8 @@ nonisolated struct ChatEntry: Identifiable, Equatable, Sendable {
     var previews: [PreviewItem] = []
     var question: String?
     var fromCue = false
+    /// 最新做完的那一轮：它之后你还没说下一句（发出、还在路上的也算说了）。这一轮的经过开着（`RoundProcess`）。
+    var latest = false
 }
 
 private nonisolated extension ChatEntry {
@@ -94,7 +96,10 @@ nonisolated enum Chat {
                 fromCue: message.saidByCue(cueSent)))
         }
         place(before: nil)
-        return entries + outgoing[tail...].map(ChatEntry.outgoing)
+        entries += outgoing[tail...].map(ChatEntry.outgoing)
+        let yours = entries.lastIndex { [.user, .answer].contains($0.role) || $0.role.isOutgoing } ?? -1
+        if let last = entries.lastIndex(where: { $0.role == .pi }), last > yours { entries[last].latest = true }
+        return entries
     }
 
     static func took(_ message: ChatMessage) -> String? {
@@ -102,11 +107,24 @@ nonisolated enum Chat {
         return SessionClock.duration(message.at.timeIntervalSince(started))
     }
 
-    /// 步数是调用数（读、改同一个文件只算一步，与清单的行同一口径）。不写出错几处：中途出的错它多半自己解决了，没解决的回答里会说；哪步出错展开清单在原位标着。
+    /// 按做了什么报数（改、跑、读、搜），不报总步数。读、改同一个文件只算一次，与清单的行同一口径。
+    /// 不写出错几处：中途出的错它多半自己解决了，没解决的回答里会说；哪步出错展开清单在原位标着。
     static func processLine(_ tools: ChatMessage.Tools?) -> Dotted? {
-        guard let tools, tools.steps > 0 else { return nil }
+        guard let tools else { return nil }
+        let recached = tools.cache?.recached.map { String(localized: "缓存失效，重读 \(CueContext.tokens($0))") }
+        guard tools.steps > 0 else { return recached.map { Dotted([$0]) } }
+        func count(_ kind: ChatMessage.Tools.Kind) -> Int { tools.items.count { $0.kind == kind } }
         let edits = tools.items.count { $0.kind == .edit && !$0.failed }
-        return Dotted([String(localized: "跑了 \(tools.steps) 步"), edits > 0 ? String(localized: "改了 \(edits) 个文件") : nil])
+        let changed = edits > 0 ? String(localized: "改了 \(edits) 个文件") : nil
+        let steps = String(localized: "共 \(tools.steps) 步")
+        // 清单没列全（`Tools.itemLimit`）时只有改动数得全，其余按类数不出来
+        guard tools.steps == tools.items.count(where: { $0.kind != .said }) else { return Dotted([changed, steps, recached]) }
+        let commands = count(.command), reads = count(.read), searches = count(.search), others = count(.other)
+        let parts = [
+            changed, commands > 0 ? String(localized: "跑了 \(commands) 条命令") : nil, reads > 0 ? String(localized: "读了 \(reads) 个文件") : nil,
+            searches > 0 ? String(localized: "搜了 \(searches) 次") : nil, others > 0 ? String(localized: "\(others) 次工具") : nil,
+        ]
+        return Dotted((parts.contains { $0 != nil } ? parts : [steps]) + [recached])
     }
 
     static func diffLabel(added: Int?, removed: Int?) -> String {
