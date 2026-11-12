@@ -76,6 +76,13 @@ public struct CueAsking: Equatable, Sendable {
     self.rule = ask.quotesYou ? try Self.phrase(rule, "带 ask 要写 rule", "依据的规矩，照他的原话，如“改数据库结构前先问我”", limit: Self.phraseLimit) : nil
   }
 
+  /// 常说的做法那一类：动作只有“记成重点”这一个，不由模型写；`practice` 是那条做法。
+  public init(habit practice: String?) throws {
+    ask = .habit
+    action = String(localized: "记成重点")
+    rule = try Self.phrase(practice, "要写 rule", "那条做法，照他的话，如“不加没人要的测试”", limit: Self.phraseLimit)
+  }
+
   /// 照存下的读回（`CueMessage.asking`、通知服务扩展读的同步记录）：认不出类别（更新的版本写的）、没有动作短语（旧版本写的，
   /// 或引你原话的那两类没写原话）的不算，卡片、摘要与通知照普通的话写它的第一行，回答的引用也是这一行。
   package init?(stored ask: CueAsk?, action: String?, rule: String?) {
@@ -86,7 +93,11 @@ public struct CueAsking: Equatable, Sendable {
   }
 
   fileprivate static func phrase(_ text: String?, _ field: String, _ hint: String, limit: Int) throws -> String {
-    let trimmed = (text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "。？?！!"))
+    // 模型常在中文里打半角的逗号、分号、冒号：紧跟汉字的换成全角；前面不是汉字的不动（“v1.2,v1.3”“12:30”）
+    let wide = [(",", "，"), (";", "；"), (":", "：")].reduce(text ?? "") {
+      $0.replacingOccurrences(of: "(?<=\\p{Han})\($1.0) ?", with: $1.1, options: .regularExpression)
+    }
+    let trimmed = wide.trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "。？?！!"))
     guard !trimmed.isEmpty, trimmed.count <= limit, !trimmed.contains(where: \.isNewline) else {
       throw CueStoreError.phrase(field: field, hint: hint, limit: limit)
     }
@@ -94,7 +105,8 @@ public struct CueAsking: Equatable, Sendable {
   }
 
   public var question: String {
-    let text = String(localized: "可以\(action)吗？")
+    // 常说的做法那一类问的是记不记，不是准不准做：不套“可以…吗”
+    let text = ask == .habit ? String(localized: "\(action)？") : String(localized: "可以\(action)吗？")
     guard let range = text.range(of: action) else { return text }
     // 动作两头的字母或数字与句子里的汉字之间空一格（"可以合并进 main 吗？"），同界面上中英文混排的写法；英文句子本有空格，不加
     func gap(_ a: Character?, _ b: Character?) -> String {
@@ -110,7 +122,11 @@ public struct CueAsking: Equatable, Sendable {
 
   /// 问句下面那一句（拍板卡、全屏预览底栏、对话里答完的那句、通知、实时活动都只读它）：只有引你原话的那两类有——
   /// 这一问为什么来问他只有这句说得出。别的类不写：问句已经说了是什么事，"按你的口味定""请你允许推送代码"这类泛泛的依据只是复述。
-  public var why: String? { rule.map { String(localized: "你说过「\($0)」。") } }
+  /// 常说的做法那一类只放那条做法本身：它就是要记的东西，不是依据，再套“你说过「…」”是多一层壳。
+  public var why: String? {
+    guard let rule else { return nil }
+    return ask == .habit ? rule : String(localized: "你说过「\(rule)」。")
+  }
 }
 
 /// 写下就不再变；那一份不在了（会话的预览过期删掉）就不显示。

@@ -1248,6 +1248,22 @@
         }
       }
     },
+    "%@？" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@？"
+          }
+        }
+      }
+    },
     "%lld" : {
       "localizations" : {
 
@@ -21935,6 +21951,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "记忆"
+          }
+        }
+      }
+    },
+    "记成重点" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Make it a key point"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "记成重点"
           }
         }
       }
