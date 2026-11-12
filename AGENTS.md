@@ -17,7 +17,7 @@ Swift 原生应用（macOS / iOS / iPadOS）。术语见 [WORDS.md](WORDS.md)。
 
 ## 护栏
 
-- 并行工作在自己的检出里做：在主检出里 `git worktree add ../CuePad-wt/<名> -b feat/<名>`。主检出只读：那里常有别人没提交的改动。
+- 并行工作在自己的检出里做：在主检出里 `git worktree add ../CuePad-wt/<名> -b feat/<名>`。主检出里不改、不提交（那里可能有别人没提交的改动）；自己的 PR 合并后在主检出跑一次 `git pull --ff-only`，被本地改动挡住就留着并在交回里说。
 - 冻结：两份 README 与落地页（`landing/`）现在是占位，`design/readme/` 的截图不重拍；等用户说大更新落地再重写，期间只改 lint 要求与 `Palette` 同步的 `landing/src/styles/base.css` 令牌。
 - 发布只在干净检出运行 `xc.sh release`，对外发布只在用户明确要求时做（见 docs/release.md）。
 - 本机构建只开隔离库（隔离哪些目录只在 `app_env.py` 的 `isolated_env`）；手动起一个连上 `xc.sh` 起的实例的 Pi 会话见 CueBridge README「调试」。不读写真实资料库（位置见 `LibraryLocation`）、偏好域（App 身份前缀，`Signing.xcconfig` 的 `CUEPAD_APP_ID`）、`~/.pi` 与 `~/.local/bin`：本机构建一打开真实库就会升级结构、改写数据并同步出去，正式版之后就打不开了。看真实数据只用只读副本（docs/verify.md「真实数据复现」）。

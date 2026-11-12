@@ -2,7 +2,7 @@
 import CueStore
 import Foundation
 
-/// Mac 的提示。来源只有同步来的状态，不收推送（docs/sync.md「Agent 与 Cue 的通知」）。
+/// Mac 的提示。来源只有同步来的状态，不收推送。
 extension AppServices {
     /// - Agent：不分会话在本机还是别的 Mac，同一条路；本次运行第一次读到的只记基线。Cue 的由 `CueService.followNotifications` 读库发。
     /// - Cue 留给你回的停下：状态没变，会话记录上的手机推送标志由会话所在的这台 Mac 补上（`CueStore.flagLeftToYou`）。
