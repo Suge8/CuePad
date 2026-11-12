@@ -131,7 +131,7 @@ struct SessionRailCell: View {
             .lineLimit(1)
     }
 
-    /// 等你的一张卡：纸色同看板等你那一列的卡，浮起一档。两行：名字与等了多久，左边哪个项目（图形带名字）、右边哪家 Agent 的标志；它要你做什么在悬停提示里、点开就是。
+    /// 等你的一张卡：纸色同看板等你那一列的卡，浮起一档。两行：名字与等了多久，左边哪个项目（图形带名字）、右边用的模型与哪家 Agent 的标志；它要你做什么在悬停提示里、点开就是。
     /// 开着的那张描一圈墨边。
     private var card: some View {
         VStack(alignment: .leading, spacing: Spacing.tight) {
@@ -147,7 +147,8 @@ struct SessionRailCell: View {
                     ProjectGlyph(project: project, size: 11)
                     Text(verbatim: project.shownName).foregroundStyle(palette.ink3)
                 }
-                Spacer(minLength: 0)
+                Spacer(minLength: Spacing.item)
+                if let model = item.session.model { Text(verbatim: ModelName.short(model)).foregroundStyle(palette.ink3).layoutPriority(1) }
                 if let agent = item.session.agent.known { agent.mark.image.font(Glyph.row).foregroundStyle(palette.ink2).readerHidden(true) }
             }
             .font(Typography.caption)
