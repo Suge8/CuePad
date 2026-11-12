@@ -38,7 +38,7 @@
   所以它给的绝对值偏乐观，看前后差；和真环境差多少以确认运行为准。
 - 灵动岛（`island`）：模拟器上量不到推送本身：`simctl push` 不收只有 content-available 的推送（"no user visible content"），
   可见推送由系统直接出通知、不经 App；本机构建 ad-hoc 签名不带推送权限，系统不在后台叫起它（"doesn't declare the proper UIBackgroundMode"），补签推送权限的包起不来（要描述文件）。
-  推送到达、后台叫醒、岛画到锁屏上只能真机验（[sync.md](sync.md)「推送叫醒被系统结束的 App」）。
+  推送到达、后台叫醒、岛画到锁屏上只能真机验。
 - 量不了的：手机真的被挂起、App Nap 与系统节流（直接起的进程不被节流；隐藏的 Mac 实例窗口仍在画，`parkWhileUnseen` 不生效）；真机的网络。
 - 限流（`throttle`）：模拟云的限流不拦门铃，正式版被限时门铃也会断、退回轮询，要看这种就加 `SYNC_BENCH_RELAY=0`。
 - 常驻开销（`idle`）：实例是 Debug 构建、带界面，同步只占进程开销的一小部分，前后对比看指令与请求数。

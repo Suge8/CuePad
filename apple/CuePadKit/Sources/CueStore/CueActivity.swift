@@ -1,6 +1,6 @@
 import Foundation
 
-/// 一次调用有两种说法，各给一拨读者，不合成一份：给人看的（这里，动词与按钮同名，会改）；给 Cue 看的（`Tools.Item.target`，由 `CueActivity.item` 写）跟工具名与系统提示走，改了等于改提示词，要做前后评测（docs/cue-eval.md）。
+/// 一次调用有两种说法，各给一拨读者，不合成一份：给人看的（这里，动词与按钮同名，会改）；给 Cue 看的（`Tools.Item.target`，由 `CueActivity.item` 写）跟工具名与系统提示走，改了等于改提示词，要做前后评测（apple/scripts/cue-eval.sh）。
 /// 认调用、写这两句的在 CueAgent（`CueActivity+Calls`，只在 Mac 上有），界面各端读这边。
 public enum CueActivity {
   /// `.edit` 在 Cue 的一轮里是改任务（会话里的改文件不读这张表）。
