@@ -107,7 +107,43 @@ private struct BoardWaitFace: View {
     enum Size { case folded, focalNarrow, focal }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: size == .folded ? Spacing.tight : Spacing.item) {
+        if size == .folded { folded } else { open }
+    }
+
+    /// 收着的小卡与推进中的卡同一副骨架（`BoardCardLayout`）：名字与 Agent、状态标带等你的那一句、项目与等了多久。
+    private var folded: some View {
+        VStack(alignment: .leading, spacing: BoardCardMetrics.footGap) {
+            HStack(alignment: .firstTextBaseline, spacing: Spacing.item) {
+                HStack(alignment: .firstTextBaseline, spacing: Spacing.tight) {
+                    if held.item?.task.isPinned == true { BoardPin() }
+                    BoardCardTitle(held.title).foregroundStyle(palette.ink)
+                }
+                .font(Typography.bodyStrong).frame(maxWidth: .infinity, alignment: .leading)
+                AgentMark(session: held.session, font: TaskMetrics.caption, named: false)
+            }
+            HStack(alignment: .firstTextBaseline, spacing: Spacing.tight) {
+                StateDot(shown: SessionShown(status: held.deciding ? .asking : .awaitsReply), size: BoardNow.mark)
+                Text("\(kind.fontWeight(.semibold).foregroundStyle(palette.waiting)) \(Text(verbatim: ask ?? "").foregroundStyle(palette.ink2))")
+                    .lineLimit(Self.foldedLines).multilineTextAlignment(.leading)
+            }
+            BoardFoot(glyph: BoardCardMetrics.footGlyph) {
+                if let project { BoardProjectTag(project: project) } else { Color.clear.frame(width: 0) }
+                HStack { Spacer(minLength: 0); waited }
+            }
+            .frame(height: BoardCardMetrics.vitals)
+        }
+        .font(TaskMetrics.caption)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(.rect)
+    }
+
+    private var kind: Text { Text(held.deciding ? "拍板" : "待回复") }
+    private var waited: some View {
+        LiveText(style: SessionClock.Waited(since: held.session.stateSince)).foregroundStyle(palette.ink3).lineLimit(1).fixedSize()
+    }
+
+    private var open: some View {
+        VStack(alignment: .leading, spacing: Spacing.item) {
             // 放不下就少写：先去掉会话名与 Agent，再去掉项目——哪种与等了多久一直在
             ViewThatFits(in: .horizontal) {
                 meta(name: true, project: true)
@@ -118,7 +154,7 @@ private struct BoardWaitFace: View {
             HStack(alignment: .firstTextBaseline, spacing: Spacing.tight) {
                 if held.item?.task.isPinned == true { BoardPin() }
                 Text(verbatim: ask ?? held.title).font(font).foregroundStyle(palette.ink)
-                    .lineLimit(size == .folded ? Self.foldedLines : Self.focalLines).multilineTextAlignment(.leading)
+                    .lineLimit(Self.focalLines).multilineTextAlignment(.leading)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -127,23 +163,17 @@ private struct BoardWaitFace: View {
 
     private func meta(name: Bool, project shown: Bool) -> some View {
         HStack(spacing: Spacing.glyph) {
-            Text(held.deciding ? "拍板" : "待回复").fontWeight(.semibold).foregroundStyle(palette.waiting).fixedSize()
+            kind.fontWeight(.semibold).foregroundStyle(palette.waiting).fixedSize()
             // 这一行窄：项目只画图形（名字在悬停提示里），地方留给会话名
             if shown, let project { ProjectGlyph(project: project, size: TaskMetrics.cardGlyph).help(project.shownName) }
             if name, ask != nil { Text(verbatim: held.title).foregroundStyle(palette.ink3).lineLimit(1).frame(minWidth: Self.nameMin, alignment: .leading) }
             Spacer(minLength: Spacing.item)
-            LiveText(style: SessionClock.Waited(since: held.session.stateSince)).foregroundStyle(palette.ink3).lineLimit(1).fixedSize()
+            waited
             if name { AgentMark(session: held.session, font: TaskMetrics.caption, named: false).fixedSize() }
         }
     }
 
-    private var font: Font {
-        switch size {
-        case .folded: Typography.bodyStrong
-        case .focalNarrow: Typography.title
-        case .focal: Typography.heading
-        }
-    }
+    private var font: Font { size == .focalNarrow ? Typography.title : Typography.heading }
 
     private static let focalLines = 6
     private static let foldedLines = 2
