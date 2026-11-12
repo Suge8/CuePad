@@ -2,7 +2,7 @@ import CueStore
 import CueText
 import Foundation
 
-/// Cue 的工具与后台整理记忆的工具（merge）：定义与实现。都经 `CueStore` 的业务操作，写出的投送请求与消息标明来自 Cue。
+/// Cue 的工具与后台整理记忆的工具（merge、said、ask）：定义与实现。都经 `CueStore` 的业务操作，写出的投送请求与消息标明来自 Cue。
 /// 返回一两句人话加 id，只有正文（各家大脑给模型看的都是这一份）；出错给出路（`isError`）。
 public struct CueTools: Sendable {
   let store: CueStore
@@ -47,6 +47,8 @@ public struct CueTools: Sendable {
       case (.cue, "memory"): return try await memory(args)
       case (.cue, "setup"): return try await setup(args)
       case (.dream, "merge"): return try await merge(args)
+      case (.dream, "said"): return try await said(args)
+      case (.dream, "ask"): return try await ask(args)
       default: return nil
       }
     } catch {

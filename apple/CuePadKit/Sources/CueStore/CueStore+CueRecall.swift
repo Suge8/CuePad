@@ -18,6 +18,12 @@ public struct CueRecall: Equatable, Sendable {
   }
 }
 
+/// `through` 是其中最后一句的次序：听到哪了只能是交出去的最后一句。
+public struct CueSaid: Equatable, Sendable {
+  public var said: [CueRecall.Reply]
+  public var through: Int64
+}
+
 extension CueStore {
   static let cueSessions = """
     SELECT piSessionID FROM cards WHERE piSessionID IS NOT NULL
@@ -41,7 +47,7 @@ extension CueStore {
     found.cards = try select(Card.self, where: card.condition, card.arguments, orderBy: card.orderBy, limit: limit)
     found.unlisted.cards = try unlisted("cards", card, limit)
     let reply: RecallQuery
-    (found.replies, reply) = try recallReplies(patterns, limit: limit)
+    (found.replies, reply) = try recallSessions(Self.cueReplies, patterns, limit: limit)
     found.unlisted.replies = try unlisted(ChatMessage.table.rawValue, reply, limit)
     return found
   }
@@ -50,16 +56,49 @@ extension CueStore {
   /// 四类都查在真实库上一句要 80–190 毫秒，都排在资料库的队列上。
   public func recallCueReplies(_ query: String, limit: Int) throws -> [CueRecall.Reply] {
     let patterns = Self.recallPatterns(query)
-    return patterns.isEmpty ? [] : try recallReplies(patterns, limit: limit).found
+    return patterns.isEmpty ? [] : try recallSessions(Self.cueReplies, patterns, limit: limit).found
   }
 
-  private func recallReplies(_ patterns: [any SQLBindable], limit: Int) throws -> (found: [CueRecall.Reply], query: RecallQuery) {
-    let scope = "role = '\(ChatRole.pi.rawValue)' AND sessionID IN (\(Self.cueSessions))"
+  private static let cueReplies = "role = '\(ChatRole.pi.rawValue)' AND sessionID IN (\(cueSessions))"
+
+  private func recallSessions(_ scope: String, _ patterns: [any SQLBindable], limit: Int) throws -> (found: [CueRecall.Reply], query: RecallQuery) {
     let reply = try recallQuery(from: ChatMessage.table.rawValue, where: scope, hit: Self.recallText, patterns, length: "length(text)", then: "at DESC, id")
-    let replies = try select(ChatMessage.self, where: reply.condition, reply.arguments, orderBy: reply.orderBy, limit: limit)
+    return (try replies(where: reply.condition, reply.arguments, orderBy: reply.orderBy, limit: limit), reply)
+  }
+
+  private func replies(where condition: String, _ arguments: [any SQLBindable], orderBy: String, limit: Int) throws -> [CueRecall.Reply] {
+    let messages = try select(ChatMessage.self, where: condition, arguments, orderBy: orderBy, limit: limit)
     var sessions: [String: SessionState] = [:]
-    for id in Set(replies.map(\.sessionID)) { sessions[id] = try sessionState(id) }
-    return (replies.map { CueRecall.Reply(message: $0, session: sessions[$0.sessionID]) }, reply)
+    for id in Set(messages.map(\.sessionID)) { sessions[id] = try sessionState(id) }
+    return messages.map { CueRecall.Reply(message: $0, session: sessions[$0.sessionID]) }
+  }
+
+  /// 他在会话里说的话：你一方的话里有正证据是他的——终端里打的（没有投送），或 CuePad 替他发的（请求或发送记录上没有来源；Cue 送的写着来源）。
+  /// 不限 Cue 管过的会话：他在自己开的会话里交代的做法也是他的规矩的来处。
+  static let saidByHim = """
+    role = '\(ChatRole.user.rawValue)' AND (deliveryID IS NULL OR deliveryID IN (
+      SELECT id FROM deliveryRequests WHERE origin IS NULL
+      UNION SELECT deliveryID FROM sendRecords WHERE origin IS NULL AND deliveryID IS NOT NULL))
+    """
+
+  /// 排法同 `recallCue`：做梦查一条做法他以前说过没有。
+  public func recallSaid(_ query: String, limit: Int = 20) throws -> [CueRecall.Reply] {
+    let patterns = Self.recallPatterns(query)
+    return patterns.isEmpty ? [] : try recallSessions(Self.saidByHim, patterns, limit: limit).found
+  }
+
+  /// 会话对话读进这台的次序（`arrival`：原地改不变，删了也不复用）到哪了：做梦订阅它，有新的话才看。
+  public func sessionMessagesThrough() throws -> Int64 {
+    try db.first("SELECT COALESCE(max(arrival), 0) FROM \(ChatMessage.table.rawValue)") { $0.int(0) } ?? 0
+  }
+
+  /// 读进这台的次序在 `heard` 之后他说的话，从早到晚至多 `limit` 句；没有新的 `through` 就是 `heard`。
+  public func said(after heard: Int64, limit: Int) throws -> CueSaid {
+    let said = try replies(where: "arrival > ? AND \(Self.saidByHim)", [heard], orderBy: "arrival", limit: limit)
+    let through = try said.last.flatMap { last in
+      try db.first("SELECT arrival FROM \(ChatMessage.table.rawValue) WHERE id = ?", [last.message.id]) { $0.int(0) }
+    }
+    return CueSaid(said: said, through: through ?? heard)
   }
 
   private static let recallText = "(text LIKE ? ESCAPE '\\')"

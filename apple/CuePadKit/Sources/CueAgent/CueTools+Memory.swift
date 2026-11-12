@@ -27,8 +27,8 @@ extension CueTools {
   static let excerptLead = 40
 
   func replyLine(_ reply: CueRecall.Reply, around words: [String]) -> String {
-    let name = reply.session.map(CueEnvelope.sessionName) ?? "会话（\(reply.message.sessionID.prefix(8))）"
-    return "\(name) \(iso(reply.message.at)) 回复：\(Self.excerpt(reply.message.text, around: words))"
+    let name = reply.session.map(CueEnvelope.sessionName) ?? "会话（\(reply.message.sessionID.prefix(8))）", said = reply.message.role == .known(.user) ? "他说" : "回复"
+    return "\(name) \(iso(reply.message.at)) \(said)：\(Self.excerpt(reply.message.text, around: words))"
   }
 
   func memory(_ args: Args) async throws -> Result {
@@ -109,6 +109,20 @@ extension CueTools {
       return .ok("重点：\n\(view.pinnedText)\n\n\(view.viewText ?? "其余记忆：没有。")")
     case let other: throw Failure("memory 没有 \(other)：可用 note / recall / zoom / forget / pin / remind / schedules")
     }
+  }
+
+  /// 做梦查他以前在会话里说过没有（`CueStore.recallSaid`）。
+  func said(_ args: Args) async throws -> Result {
+    let query = try args.required("query")
+    let found = try await store.recallSaid(query), words = CueStore.recallWords(query)
+    return .ok(found.isEmpty ? "没找到。" : found.map { replyLine($0, around: words) }.joined(separator: "\n"))
+  }
+
+  /// 做梦问他一次要不要把常交代的做法记成重点（`CueAsk.habit`）：他答了交给 Cue 记。
+  func ask(_ args: Args) async throws -> Result {
+    let asking = try CueAsking(.habit, action: args.string("doing"), rule: args.string("rule"))
+    try await store.addCueMessage(.cue, text: try args.required("text"), ask: asking)
+    return .ok("已问他。")
   }
 
   /// range 来自生成摘要的同一份输入；存储层在事务内核对输入，不重新给旧文本绑定当前指纹。

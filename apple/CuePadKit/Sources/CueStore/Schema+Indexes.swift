@@ -28,6 +28,23 @@ extension Schema {
     """
   /// 清理过期对话（`CueStore.pruneMessages`，启动时一次）按会话取最后的时刻：只读索引，不逐条读消息正文（冷读约 190ms → 15ms）。
   static let transcriptAgeIndex = "CREATE INDEX piMessages_sessionID_at ON piMessages(sessionID, at, createdAt);"
+  /// 97：会话对话读进这台的次序（`arrival`，本机列）删了也不复用（AUTOINCREMENT）：做梦听到哪了的书签记的是它（`CueStore.said(after:limit:)`），
+  /// 隐含的 rowid 在最新的那批被删掉（清理过期对话、重置同步）后会从头再用，新说的话就落在书签之前、听不到。
+  /// 主键换不了，只能整表重建；原来的次序照搬，id 的唯一改由 UNIQUE 守（写入照旧按它判重）。
+  static let messageArrivalUpgrade: Upgrade = """
+    CREATE TABLE piMessages_arrival (
+      arrival INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE, sessionID TEXT NOT NULL, seq INTEGER NOT NULL, role TEXT NOT NULL, text TEXT NOT NULL,
+      at INTEGER NOT NULL, tools TEXT, roundStartedAt INTEGER, deliveryID TEXT,
+      createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL, question TEXT, shownText TEXT
+    ) STRICT;
+    INSERT INTO piMessages_arrival
+      SELECT rowid, id, sessionID, seq, role, text, at, tools, roundStartedAt, deliveryID, createdAt, modifiedAt, question, shownText FROM piMessages;
+    DROP TABLE piMessages;
+    ALTER TABLE piMessages_arrival RENAME TO piMessages;
+    CREATE INDEX piMessages_sessionID_seq ON piMessages(sessionID, seq);
+    \(transcriptAgeIndex)
+    \(modifiedIndex(.piMessages))
+    """
   /// 本机会话索引按 Agent 取、删（启动时对每家接入各一次）：表里存着检查点，整表扫一次约 35ms。
   static let agentIndex = "CREATE INDEX piSessions_agent ON piSessions(agent);"
   /// Cue 还开着的提问（首屏读、每次 Cue 的对话变化重读）：部分索引只收这几条，条件与查询同出 `CueStore.openQuestion`（不一样就用不上）。

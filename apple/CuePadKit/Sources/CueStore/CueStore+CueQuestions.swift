@@ -88,6 +88,11 @@ extension CueStore {
       [oldest.createdAt, Self.idList(recent.map(\.id))], orderBy: "createdAt, rowid")
   }
 
+  /// 问过你要不要记成重点的做法（答了、收起、撤回的都算），从新到旧：同一条不问第二遍。
+  public func cueHabitQuestions() throws -> [CueMessage] {
+    try select(CueMessage.self, where: "ask = ?", [CueAsk.habit.rawValue], orderBy: "createdAt DESC, rowid DESC")
+  }
+
   /// 走部分索引（`Schema.answeredIndex`），写法不一样就用不上。
   static let answered = "choices IS NOT NULL AND answer IS NOT NULL"
 }

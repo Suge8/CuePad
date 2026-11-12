@@ -86,7 +86,7 @@ public enum CuePrompt {
   }
 
   /// 要先问的几类事（`CueAsk`，括号里照抄进 tell 的 ask）：系统提示与 tell 的说明共用这一种写法。
-  static var asks: String { CueAsk.allCases.map { "\($0.definition)（\($0.rawValue)）" }.joined(separator: "、") }
+  static var asks: String { CueAsk.byCue.map { "\($0.definition)（\($0.rawValue)）" }.joined(separator: "、") }
 
   /// 工具名带前缀的那几家另说一句：下文的 task peek 这类简称让模型第一下常照简称调（Claude Code 2.1.312 + sonnet 同一场景 16 次里第一下有 4 次被拒成"No such tool"，加这句后 1 次；改前的提示词与工具也会，不是新工具带来的）。
   private static func tools(_ runtime: AgentKind) -> String {

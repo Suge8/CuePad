@@ -4,8 +4,12 @@ import Foundation
 /// 唯一定义，Cue 的提示词与工具说明照它写：收不回或越出它职责的事，与只能按你口味定的审美取舍。只有这几类能写带选项的“等你”（`CueStore.addCueMessage` 的 `ask`）；调研方案、技术取舍、实现路线、子任务与整件事算不算做完，Cue 自己定，做完告诉你。
 /// 选项也由这里给（`choices`），Cue 不能自拟确认；别的想法（不同意、选别的方案、补一句条件）他在 Cue 页底下直接说，卡随之收起；在挂着它的会话里说也一样（`CueQuestionEnd`）。
 /// 给人看的句子都由这里拼，各处不按类别另写；`definition` 只给 Cue 看。
+/// 另有一类不归 Cue 问（`habit`）：你在各会话里反复交代的做法，后台整理记忆的大脑问一次要不要记成重点（`CuePrompt.dream`）；单立一类，问过哪些才查得准（`CueStore.cueHabitQuestions`）。
 public enum CueAsk: String, CaseIterable, Sendable {
-  case push, merge, release, delete, outside, budget, taste, rule
+  case push, merge, release, delete, outside, budget, taste, rule, habit
+
+  /// Cue 自己能问的那几类：它的提示词与 tell 的 ask 照这个列。
+  public static let byCue = allCases.filter { $0 != .habit }
 
   /// 范围要与 `definition` 一样大：选项照它写，选了放行的是整类。
   public var name: String {
@@ -18,6 +22,7 @@ public enum CueAsk: String, CaseIterable, Sendable {
     case .budget: String(localized: "超出预算")
     case .taste: String(localized: "审美取舍")
     case .rule: String(localized: "你的规矩要先问的事")
+    case .habit: String(localized: "把常说的做法记成重点")
     }
   }
 
@@ -31,14 +36,18 @@ public enum CueAsk: String, CaseIterable, Sendable {
     case .budget: "超出预算"
     case .taste: "只能按他口味定的审美取舍（界面长相、配色、文案语气）"
     case .rule: "他的规矩明确要先问的事，或要违反、改动他的规矩"
+    case .habit: "把他在各会话里反复交代的一条做法记成重点"
     }
   }
 
   public static let once = String(localized: "可以")
 
-  /// 能不能放行（提问有第二项"以后……不用问"）。规矩那一类不能：一律放行等于没有规矩。审美那一类也不能：问的是选哪个方案而不是准不准做，
+  /// 引他的原话（`CueAsking.rule`）：规矩那一类引依据的规矩，常说的做法那一类引那条做法。
+  public var quotesYou: Bool { self == .rule || self == .habit }
+
+  /// 能不能放行（提问有第二项"以后……不用问"）。规矩那一类不能：一律放行等于没有规矩。常说的做法那一类问的是记不记，也不能。审美那一类也不能：问的是选哪个方案而不是准不准做，
   /// "以后不用问"等于把他的口味交给 Cue 的口味，还会让卡上一次误点悄悄拿走以后每次长相的决定；他真要 Cue 定，会说出来、记成规矩。
-  public var allowable: Bool { self != .rule && self != .taste }
+  public var allowable: Bool { !quotesYou && self != .taste }
 
   /// 选了它 `CueStore.endCueQuestion` 把这句原话记成一条他说的重点，范围就在字面上；项目名长到一条记忆放不下的截短（`CueMemoryLine.fitting`）。
   public func always(in project: String?) -> String? {
@@ -60,17 +69,17 @@ public struct CueAsking: Equatable, Sendable {
 
   public static let phraseLimit = 30
 
-  /// 动作必填，规矩那一类还要写规矩；都是一行、不超过 `phraseLimit` 字，不合要求抛 `phrase`。
+  /// 动作必填，引你原话的那两类（`CueAsk.quotesYou`）还要写那句原话；都是一行、不超过 `phraseLimit` 字，不合要求抛 `phrase`。
   public init(_ ask: CueAsk, action: String?, rule: String? = nil) throws {
     self.ask = ask
     self.action = try Self.phrase(action, "带 ask 要写 doing", "要做的动作，如“推送 scheduler 的重连修复”", limit: Self.phraseLimit)
-    self.rule = ask == .rule ? try Self.phrase(rule, "带 ask 要写 rule", "依据的规矩，照他的原话，如“改数据库结构前先问我”", limit: Self.phraseLimit) : nil
+    self.rule = ask.quotesYou ? try Self.phrase(rule, "带 ask 要写 rule", "依据的规矩，照他的原话，如“改数据库结构前先问我”", limit: Self.phraseLimit) : nil
   }
 
   /// 照存下的读回（`CueMessage.asking`、通知服务扩展读的同步记录）：认不出类别（更新的版本写的）、没有动作短语（旧版本写的，
-  /// 或规矩那一类没写规矩）的不算，卡片、摘要与通知照普通的话写它的第一行，回答的引用也是这一行。
+  /// 或引你原话的那两类没写原话）的不算，卡片、摘要与通知照普通的话写它的第一行，回答的引用也是这一行。
   package init?(stored ask: CueAsk?, action: String?, rule: String?) {
-    guard let ask, let action, ask != .rule || rule != nil else { return nil }
+    guard let ask, let action, !ask.quotesYou || rule != nil else { return nil }
     self.ask = ask
     self.action = action
     self.rule = rule
@@ -99,7 +108,7 @@ public struct CueAsking: Equatable, Sendable {
     return String(text[..<range.lowerBound]) + gap(before, action.first) + action + gap(action.last, after) + String(text[range.upperBound...])
   }
 
-  /// 问句下面那一句（拍板卡、全屏预览底栏、对话里答完的那句、通知、实时活动都只读它）：只有规矩那一类引他自己的原话——
+  /// 问句下面那一句（拍板卡、全屏预览底栏、对话里答完的那句、通知、实时活动都只读它）：只有引你原话的那两类有——
   /// 这一问为什么来问他只有这句说得出。别的类不写：问句已经说了是什么事，"按你的口味定""请你允许推送代码"这类泛泛的依据只是复述。
   public var why: String? { rule.map { String(localized: "你说过「\($0)」。") } }
 }
