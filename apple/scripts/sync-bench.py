@@ -6,7 +6,7 @@ B 代替手机（模拟器登不了 iCloud；拉取节奏按手机那档，进�
 云有两种（SYNC_BENCH_CLOUD）：
   sim（默认）两个实例共用这次运行自己的模拟云（SharedCloud：一个 SQLite 文件，同步代码照真的跑），每个请求按 LATENCY 睡一段；门铃照常连正式中转（房间按这次运行的密钥）。
       测的是我们自己代码的调度与排队，不连 iCloud、不吃也不制造设备限流。A/B 一律用它。
-  real      连 CloudKit 开发环境，只做少量确认：限流按设备与容器算，与这台的正式版共用一份（实测见 docs/perf.md「真 CloudKit」）。
+  real      连 CloudKit 开发环境，只做少量确认：限流按设备与容器算，与这台的正式版共用一份，测多了拖慢用户自己的同步。
       所以：上一次 real 运行结束不满 REAL_COOLDOWN 秒、或最近 5 分钟这台有 429，就不跑（ab 里两次之间等冷却）；每次运行连预热至多 REAL_LIMIT 秒，
       到点收掉实例、已量到的照记；每个实例至多 REAL_BUDGET 个请求，用满当断网、不再打 iCloud。库留在 REAL_LIBS 里接着用，不每次从头拉开发区的历史。
 LATENCY（中位、p95，秒，对数正态；版本 MODEL）：每种请求在 App 里从发起到返回的用时（`CloudOutage` 在真 CloudKit 运行里记下，`request_timings`，结果里的"请求用时"）。
@@ -41,7 +41,7 @@ LATENCY（中位、p95，秒，对数正态；版本 MODEL）：每种请求在 
 每次跑之前拿全机测量锁（flock，进程退出就放；拿到后把 {pid, start（ps 的启动时刻）, checkout, what, since} 登记在锁文件里，退出不清空）：real 拿 LOCK（与别的连 CloudKit 的探针共用，不同时用 cloudd），
 sim 拿 SIM_LOCK（几个模拟云运行不同时抢 CPU；不碰 cloudd，不必等 real）；构建在锁外。
 结果在 OUT_ROOT/<时刻>-<场景>/：a.log、b.log（实例的全部输出）、result.json（每个指标的样本、负载、构建、云）；对比的汇总在 ab-*.json。
-限制见 docs/perf.md「同步测量」，口径见 _sync_scenes.py。只结束自己起的进程。
+口径见 _sync_scenes.py。只结束自己起的进程。
 """
 import fcntl, json, os, signal, subprocess, sys, time
 from datetime import datetime

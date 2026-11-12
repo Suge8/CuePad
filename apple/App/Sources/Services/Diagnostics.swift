@@ -4,7 +4,7 @@ import Observation
 import os
 
 /// MetricKit 的诊断一般在下次启动或隔天才交来。存本机（`DiagnosticArchive`），连着 iCloud 时经你自己的私有库送到你的 Mac（`DiagnosticOutbox`），
-/// Mac 落成文件给 agent 读（`DiagnosticInbox`，docs/diagnose.md）；不经别人。手机与 Mac 都不在手边、要发给别人时用设置页"导出诊断"。
+/// Mac 落成文件给 agent 读（`DiagnosticInbox`）；不经别人。手机与 Mac 都不在手边、要发给别人时用设置页"导出诊断"。
 @Observable
 final class Diagnostics {
     private(set) var reports: [CrashReport]

@@ -33,12 +33,12 @@
 #   xc.sh perf ab <旧检出> <新检出> <轮数> <perf 的参数…>   新旧交替跑同一条 perf（含 idle、launch），每轮一行、最后对比表，前台阻塞到结束（perf-ab.py）
 #   xc.sh release <mac|ios> | device | provision    发布与签名（docs/release.md）；用到描述文件的那一段全机排队（_lock.sh 规则 3）
 #   xc.sh diag [<设备> [all]] | ios crashes [all] | ips <文件…>
-#                                                   真机诊断，只读：读各台设备经 iCloud 送到 Mac 的诊断与日志、拉连着的手机的系统崩溃报告，按发布归档符号化（device_diag.py 头注释，docs/diagnose.md）
+#                                                   真机诊断，只读：读各台设备经 iCloud 送到 Mac 的诊断与日志、拉连着的手机的系统崩溃报告，按发布归档符号化（device_diag.py 头注释）
 # 启动参数原样传给 App（如 -CuePadDemo YES -CuePadScene editor -theme dark；Debug 认的参数见 UI/Debug/DebugScene+Args*.swift 的字段注释，画面见 DebugScene+Scenes.swift）。
 # 实例的隔离、每个检出一份、一定退出见 app.py 头注释；排队、在等谁、等待上限、任务时限、结束时的用时行见 _lock.sh；模拟器槽位见 _lock.sh 与 _sim.sh。
 # CUEPAD_SHOT_LIBRARY 换隔离库目录（默认 apple/.derived/library[-ios|-ipad]，如真实库的只读副本）。
 # 产物目录是本检出的 apple/.derived（perf 的 Release 构建在 apple/.derived-perf，check 的 Mac 整模块编译在 apple/.derived-wmo，Kit 的测试在 apple/.derived/kit-<平台>，check 的 Kit 构建在 CuePadKit/.build）：每个检出一份增量。
-# 本机构建一律 ad-hoc 签名（工程默认，见 Signing.xcconfig）；CUEPAD_SIGN=development 只给同步测量（docs/perf.md「同步测量」）。
+# 本机构建一律 ad-hoc 签名（工程默认，见 Signing.xcconfig）；CUEPAD_SIGN=development 只给同步测量（sync-bench.py）。
 # 每个测试最多 TEST_TIME_LIMIT 秒（_lock.sh；CUEPAD_TEST_TIME_LIMIT 覆盖，给真模型的评测用，任务时限随它变；Xcode 的测试时限，对 Swift Testing 与主线程死锁也生效）：超时记一条 "Time limit was exceeded"，非零退出。
 # Kit 的测试因此也走 xcodebuild：swift test（Swift 6.4）没有测试时限的参数，Swift Testing 的 .timeLimit 只取消测试任务、要等它自己结束，
 # 不响应取消的等待会让整个测试进程挂到任务时限。xcodebuild 只把 TEST_RUNNER_ 开头的环境变量交给测试进程（去掉前缀），测试进程的工作目录是 /private/tmp。

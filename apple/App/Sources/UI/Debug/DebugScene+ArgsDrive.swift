@@ -21,7 +21,7 @@ nonisolated struct DriveArgs: Decodable, DebugArgGroup {
     let closed: Double
     /// `-CuePadCommand YES`：从标准输入读命令（同步测量的实例用）
     let command: Bool
-    /// `-CuePadCueBrain <可执行文件>`（仅 Mac）：Cue 的大脑换成这个替身（如 `scripts/cue-brain-stub.py`），量值班开销用（docs/perf.md）
+    /// `-CuePadCueBrain <可执行文件>`（仅 Mac）：Cue 的大脑换成这个替身（如 `scripts/cue-brain-stub.py`），量值班开销用
     let cueBrain: String?
     /// `-CuePadCueFlow YES`：走一遍从发送到回话的流程（量法见 `-CuePadCueFlowLog`）
     let cueFlow: Bool
