@@ -25,6 +25,9 @@ final class UpdateService {
     @ObservationIgnored private let runtimes: [AgentKind: any AgentRuntime]
     @ObservationIgnored private var install: (() -> Void)?
     @ObservationIgnored private var watcher: Task<Void, Never>?
+    @ObservationIgnored private var nudges: Task<Void, Never>?
+    /// 发版脚本发完时发的进程间通知（`release-mac.sh`）：这台装着的正式版当场查一次，不等定期检查。装与重启照常走更新窗与 `postpone`。
+    static let checkNow = "\(AppIdentity.id).check-update"
     private(set) var waitingFor: Int?
 
     init(updater: (any AppUpdater)?, bridge: Bridge, runtimes: [AgentKind: any AgentRuntime]) {
@@ -32,6 +35,15 @@ final class UpdateService {
         self.bridge = bridge
         self.runtimes = runtimes
         updater?.postponeRelaunch = { [weak self] install in self?.postpone(install) ?? false }
+        guard updater != nil else { return }
+        let asked = DarwinNotifications.notifications(named: Self.checkNow)
+        nudges = Task { [weak self] in
+            for await _ in asked { self?.checkForUpdates() }
+        }
+    }
+
+    isolated deinit {
+        nudges?.cancel()
     }
 
     var isAvailable: Bool { updater != nil }

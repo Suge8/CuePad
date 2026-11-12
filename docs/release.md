@@ -9,7 +9,7 @@
 
 同步下界（`Schema.peerFloor`）抬高的那一版先发 iOS 的理由：Mac 经 Sparkle 几分钟就装上，iOS 要等苹果处理十几分钟到一小时，反过来发，这段时间里手机停下收发。下界没变的版本先后随意。
 
-每次发 Mac 都把这一版装进本机 `~/Applications/CuePad.app` 并重启到新版（导出的包在这次尝试目录的 `export/CuePad.app`），不等 Sparkle。
+`release mac` 发完叫本机装着的正式版查一次更新，装与重启走它自己的更新窗。
 
 ## 签名
 

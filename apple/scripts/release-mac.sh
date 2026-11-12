@@ -167,3 +167,5 @@ wait_match "$(sed -n 's/.*enclosure url="\([^"]*\)".*/\1/p' "$appcast")" "$updat
 wait_match "$DOWNLOAD/$ASSET" "$zip"
 "$APPLE_DIR/scripts/sparkle.sh" verify "$check/${update##*/}" "$check/appcast.xml"
 echo "已发布：$DOWNLOAD/${ASSET}（mac/${build_version}）"
+# 叫本机装着的正式版现在查一次更新，不等它一天一次的定期检查：装与重启走它自己的更新窗，在干活的托管会话由它护着（UpdateService），脚本不替它退出、不替换它
+notifyutil -p "$(plist CFBundleIdentifier).check-update"
