@@ -6,7 +6,7 @@ Swift 原生应用（macOS / iOS / iPadOS）。术语见 [WORDS.md](WORDS.md)。
 
 ## 命令
 
-- 构建、测试、截图、录屏、测量、发布只经 `apple/scripts/xc.sh`（用法见头注释），提交前跑 `xc.sh check`。它在前台跑到结束，排队与时限都在里面。
+- 构建、测试、截图、录屏、测量、发布只经 `apple/scripts/xc.sh`（`xc.sh help` 列出全部命令），提交前跑 `xc.sh check`。它在前台跑到结束，排队与时限都在里面。
 - 调试实例用 `xc.sh shot|rec|run` 起，`run` 起的用 `xc.sh stop` 收；多张图在一次调用里拍（用 `,` 隔开）。
 - 合并前的门是本机的 `xc.sh signoff`：推送后跑，过了主干的规则才让 PR 合并（`gh pr merge` 不带 `--admin`）；改了再推就重签。合并后在主检出跑一次 `git pull --ff-only`，被本地改动挡住就留着并在交回里说。
 - 云端 CI 只在合并进主干后跑兜底，不用守着。合并前先看主干最近一遍（`gh run list --branch main`），红的先处理：改动造成的修或回退那次合并，runner 自己崩的重跑。
@@ -16,8 +16,8 @@ Swift 原生应用（macOS / iOS / iPadOS）。术语见 [WORDS.md](WORDS.md)。
 
 - 冻结：两份 README 与落地页（`landing/`）现在是占位，`design/readme/` 的截图不重拍；等用户说大更新落地再重写，期间只改 lint 要求与 `Palette` 同步的 `landing/src/styles/base.css` 令牌。
 - 对外发布只在用户明确要求时做（docs/release.md）。
-- 不读写真实资料库、正式版的偏好域、`~/.pi` 与 `~/.local/bin`：本机构建一打开真实库就会升级结构、改写数据并同步出去，正式版之后就打不开了。看真实数据只用只读副本（docs/verify.md「真实数据复现」）。
-- 测试只用替身，不向其他应用发键鼠事件；全局热键的物理触发与跨应用粘贴只能人工验证。
+- 本机构建不开真实资料库：一打开就会升级结构、改写数据并同步出去，正式版之后就打不开了。看真实数据只用只读副本（docs/verify.md「真实数据复现」）。正式版的偏好域、`~/.pi` 与 `~/.local/bin` 可以读，不写：那是用户在用的设置、Pi 配置与正式版装的命令行。
+- 测试只用替身，不向其他应用发键鼠事件；全局热键真按下去的那一下只能人工验证。
 - 用户可见行为的端到端测试从 `Workspace` 的方法走（界面的按钮、菜单调的就是它），断言库、提示与回复框，放在 `App/Tests/UI` 的流程测试里；接线与长相用交互验收（docs/verify.md）。
 - 跨会话、暂不做的待办在 GitHub Issues（`gh issue list`）。
 

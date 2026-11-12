@@ -44,6 +44,7 @@
 # 不响应取消的等待会让整个测试进程挂到任务时限。xcodebuild 只把 TEST_RUNNER_ 开头的环境变量交给测试进程（去掉前缀），测试进程的工作目录是 /private/tmp。
 # 提交钩子：git config core.hooksPath apple/scripts/hooks（每个仓库一次）。
 set -euo pipefail
+case "${1:-help}" in help|-h|--help) sed -n '2,/^set -euo/{/^set -euo/d;s/^# \{0,1\}//;p;}' "$0"; exit 0 ;; esac
 
 APPLE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 [ "${1:-}" != release ] || exec python3 "$APPLE_DIR/scripts/release-context.py" run "${@:2}"
@@ -66,7 +67,7 @@ export TEST_RUNNER_PI_OFFLINE=1
 # 同时跑的测试最多这么多个（Swift Testing 的并行宽度；不限时它把用例全数同时起）：测试起的是真 Agent 进程，3 核的 CI 机器上同时起几十个，
 # 不少用例等到超时（实测 76 条）。按核数给，CUEPAD_TEST_WIDTH 覆盖
 export TEST_RUNNER_SWT_EXPERIMENTAL_MAXIMUM_PARALLELIZATION_WIDTH="${CUEPAD_TEST_WIDTH:-$(sysctl -n hw.ncpu)}"
-USAGE="用法：$0 <check|signoff|build|strings|test|agents|shot|rec|run|stop|fleet|explore|perf|release|device|provision|activity-log|diag> [mac|ios|ipad|kit] …（见脚本头注释）"
+USAGE="用法：$0 <check|signoff|build|strings|test|agents|shot|rec|run|stop|fleet|explore|perf|release|device|provision|activity-log|diag> [mac|ios|ipad|kit] …（xc.sh help 看全部）"
 
 cmd="${1:-}"; platform="${2:-}"
 case "$cmd" in
