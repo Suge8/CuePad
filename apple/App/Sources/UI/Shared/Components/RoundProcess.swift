@@ -10,11 +10,14 @@ struct RoundProcess: View {
     let tools: ChatMessage.Tools?
     let ending: Ending
     let session: SessionState
+    /// 做完的一轮是哪条回答（别的设备点开一步时请 Mac 写在它上面，`StepRow`）；在跑的一轮为 nil。
+    var message: UUID?
     /// 在跑的与最新做完的那一轮清单开着（`ChatEntry.latest`），你发出下一句就收起；之后你点开、收起的照你的。
     var open = true
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.chatStay) private var stay
     @State private var toggled: Bool?
 
     nonisolated enum Ending: Equatable {
@@ -31,7 +34,10 @@ struct RoundProcess: View {
         if let line = Chat.processLine(tools), let tools {
             let expanded = !tools.items.isEmpty && (toggled ?? (open || DebugHooks.preset.toolsOpen))
             VStack(alignment: .leading, spacing: 0) {
-                Button { toggled = !expanded } label: { header(line, open: tools.items.isEmpty ? nil : expanded) }
+                Button {
+                    if !expanded { stay?() }
+                    toggled = !expanded
+                } label: { header(line, open: tools.items.isEmpty ? nil : expanded) }
                     .buttonStyle(PressStyle())
                     .allowsHitTesting(!tools.items.isEmpty)
                     .accessibilityLabel(spoken(line))
@@ -96,18 +102,18 @@ struct RoundProcess: View {
     }
 
     @ViewBuilder private func list(_ tools: ChatMessage.Tools) -> some View {
-        ForEach(Array(tools.items.enumerated()), id: \.offset) { _, item in row(item) }
+        ForEach(Array(tools.items.enumerated()), id: \.offset) { index, item in row(item, at: index) }
         let listed = tools.items.count { $0.kind != .said }
         if tools.steps > listed {
             Text("另有 \(tools.steps - listed) 步未列出").font(Typography.caption).foregroundStyle(palette.ink3).noteGlyph(.indent)
         }
     }
 
-    @ViewBuilder private func row(_ item: ChatMessage.Tools.Item) -> some View {
+    @ViewBuilder private func row(_ item: ChatMessage.Tools.Item, at index: Int) -> some View {
         if item.kind == .said {
             SaidRow(text: item.target, lines: 3)
         } else {
-            StepRow(item: item, session: session)
+            StepRow(item: item, session: session, place: message.map { ($0, index) })
         }
     }
 

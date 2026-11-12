@@ -73,6 +73,17 @@ nonisolated struct ChatFollow: Equatable {
         }
     }
 
+    /// 你点开了对话里的一块（一轮的经过、其中一步）：贴着最新时内容变高是往上顶的，点的那一行会被顶出屏幕。
+    /// 所以和你自己滚走一样解除贴底，它往下长、点的那一行不动；顶栏留着（你没去看历史）。
+    /// 长出来的还没把最新处推远时读数仍报着在最新处，不算回到了最新（同 `jumping`：先长出一行"正在取"、取到了才长出整块）；
+    /// 推远之后收起、读数报回在最新处，重新贴上。
+    mutating func stay() {
+        guard atNewest else { return }
+        atNewest = false
+        revealed = true
+        jumping = true
+    }
+
     mutating func reveal() {
         if !atNewest { revealed = true }
     }
@@ -132,6 +143,16 @@ struct ChatJump: Equatable {
     nonisolated static func == (a: Self, b: Self) -> Bool { a.column == b.column }
 }
 
+/// 点开对话里的一块时叫它（`ChatFollow.stay`）；比较的规则同 `ChatJump`。
+struct ChatStay: Equatable {
+    let column: UUID
+    let stay: () -> Void
+
+    func callAsFunction() { stay() }
+
+    nonisolated static func == (a: Self, b: Self) -> Bool { a.column == b.column }
+}
+
 nonisolated enum ChatLayout {
     static let edge: CGFloat = 16
 
@@ -142,6 +163,7 @@ extension EnvironmentValues {
     @Entry var chatHighlight: UUID?
     @Entry var chatTarget: UUID?
     @Entry var chatJump: ChatJump?
+    @Entry var chatStay: ChatStay?
     @Entry var chatBottomInset: CGFloat = 0
     @Entry var chatHeight: CGFloat = .infinity
     @Entry var chatMargin: CGFloat = 0

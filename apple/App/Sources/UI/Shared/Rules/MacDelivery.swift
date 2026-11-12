@@ -106,6 +106,7 @@ nonisolated extension DeliveryMode {
         case .answer: String(localized: "作答")
         case .start: String(localized: "新会话")
         case .transcript: String(localized: "补写对话")
+        case .step: String(localized: "取一步的详情")
         case .config: String(localized: "模型与思考强度")
         case .end: String(localized: "结束会话")
         case .stop, .stopTurn: String(localized: "停止这一轮")

@@ -180,9 +180,11 @@ extension ChatMessage {
       /// 可控范围由这条因果链与会话当前轮次共同证明，不按工具参数、标题或时间窗口猜归属。
       public var cueRequests: [UUID]? = nil
       public var deliveries: [UUID]? = nil
-      /// 这一步是会话文件里的哪几次调用（Agent 给调用起的 id；读、改同一个文件并成一步的有几个）：会话所在的 Mac 按它回会话文件取命令全文与输出（`ToolCallDetail`）。
+      /// 这一步是会话文件里的哪几次调用（Agent 给调用起的 id；读、改同一个文件并成一步的有几个）：会话所在的 Mac 按它回会话文件取命令全文与输出（`ToolCallDetail.read`）。
       /// 更早写下的经过与 Cue 的一步没有，为 nil
       public var calls: [String]? = nil
+      /// 别的设备点开过这一步：会话所在的 Mac 取了写在这里（`DeliveryMode.step`）。读会话文件写出的经过里没有。
+      public var detail: ToolCallDetail? = nil
 
       public init(
         kind: Kind, target: String, failed: Bool = false, added: Int? = nil, removed: Int? = nil, task: UUID? = nil, name: String? = nil,

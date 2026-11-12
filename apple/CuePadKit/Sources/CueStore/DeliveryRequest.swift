@@ -33,6 +33,8 @@ public enum DeliveryMode: String, Sendable, CaseIterable {
   case start
   /// 请 Mac 从会话文件把这个会话的对话补写进来（7 天前活跃过的会话，手机打开时发）
   case transcript
+  /// 请 Mac 取一步的里面（命令全文、改动、输出的末尾），写在那条回答的那一步上；正文是 `StepRequest`
+  case step
   case config
   /// 结束会话（Pi 进程正常收尾退出，会话记录与会话文件都留着）
   case end
@@ -65,11 +67,16 @@ public enum DeliveryMode: String, Sendable, CaseIterable {
   public var landsAsMessage: Bool {
     switch self {
     case .send, .start: true
-    case .withdraw, .answer, .transcript, .config, .end, .stop, .stopTurn, .retry, .bind, .command, .quota, .tidy, .libraryEdit: false
+    case .withdraw, .answer, .transcript, .step, .config, .end, .stop, .stopTurn, .retry, .bind, .command, .quota, .tidy, .libraryEdit: false
     }
   }
 
   static let landsAsMessageSQL = sqlList(allCases.filter(\.landsAsMessage).sorted { $0.rawValue < $1.rawValue })
+}
+
+struct StepRequest: StoredJSON {
+  var message: UUID
+  var item: Int
 }
 
 /// 请求是谁写的：没有值是你（界面或命令行）；Cue 写的标 `cue`。

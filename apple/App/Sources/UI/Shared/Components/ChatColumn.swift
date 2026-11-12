@@ -84,6 +84,7 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
         .environment(\.chatHighlight, highlight.id)
         .environment(\.chatTarget, follow.target?.id)
         .environment(\.chatJump, ChatJump(column: column) { follow.seek($0) })
+        .environment(\.chatStay, ChatStay(column: column) { follow.stay() })
         .onChange(of: pendingJump) {
             guard let target = pendingJump else { return }
             pendingJump = nil

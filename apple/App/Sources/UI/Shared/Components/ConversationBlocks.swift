@@ -54,7 +54,7 @@ struct ReplyBlock: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.item) {
-            if let took { RoundProcess(tools: tools, ending: .took(took), session: session, open: latest) }
+            if let took { RoundProcess(tools: tools, ending: .took(took), session: session, message: id, open: latest) }
             MarkdownText(source: text, notes: notes).equatable()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
