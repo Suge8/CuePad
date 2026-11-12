@@ -234,8 +234,13 @@ struct BoardColumn: View {
         let fromTodo = board.todo.contains { $0.id == id }
         switch column {
         case .todo:
-            guard fromTodo, let move = board.move(id, before: target) else { return }
-            workspace.perform { try await $0.moveCard(id, to: move.slot, after: move.after) }
+            if fromTodo {
+                guard let move = board.move(id, before: target) else { return }
+                workspace.perform { try await $0.moveCard(id, to: move.slot, after: move.after) }
+            } else if board.advancing.contains(where: { $0.item?.id == id }) {
+                // 推进中的任务拖回待办：算没开始（它的会话照旧活着，解开后单独一张留在推进中）。等你的不接：那一列按会话在不在问你分，改了状态也还在那儿
+                workspace.perform { try await $0.setStatus(id, .todo) }
+            }
         case .advancing:
             if fromTodo { start(item.task) }
         case .done:
