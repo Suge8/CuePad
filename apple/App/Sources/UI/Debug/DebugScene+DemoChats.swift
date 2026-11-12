@@ -37,12 +37,42 @@ extension DebugScene {
             .init(kind: .command, target: "git status --short"), .init(kind: .command, target: "make lint-notes", failed: true),
         ])
 
-    private static let testRun = ChatMessage.Tools(
-        steps: 4,
-        items: [
-            .init(kind: .read, target: "scheduler/queue.ts"), .init(kind: .read, target: "scheduler/queue.test.ts"),
-            .init(kind: .command, target: "pnpm vitest run scheduler"), .init(kind: .command, target: "pnpm vitest run scheduler --reporter=verbose", failed: true),
-        ])
+    /// 每一步带着调用 id，对得上 `seedStepFile` 写的那份会话文件：点开一步走的是真的那条路（`ToolCallDetail`）。隔了一夜才问的，缓存没接上。
+    private static let testRun: ChatMessage.Tools = {
+        var tools = ChatMessage.Tools(
+            steps: 4,
+            items: [
+                .init(kind: .read, target: "scheduler/queue.ts"), .init(kind: .edit, target: "scheduler/queue.test.ts", added: 2, removed: 1),
+                .init(kind: .command, target: "pnpm vitest run scheduler"), .init(kind: .command, target: "pnpm vitest run scheduler --reporter=verbose", failed: true),
+            ], cache: .init(recached: 182_400, context: 190_300))
+        for index in tools.items.indices { tools.items[index].calls = ["demo-step-\(index)"] }
+        return tools
+    }()
+
+    static func seedStepFile(_ store: CueStore, host: String) async throws {
+        func call(_ index: Int, _ arguments: [String: Any], _ output: String) -> [[String: Any]] {
+            [["type": "message", "message": ["role": "assistant", "content": [["type": "toolCall", "id": "demo-step-\(index)", "arguments": arguments]]]],
+             ["type": "message", "message": ["role": "toolResult", "toolCallId": "demo-step-\(index)", "content": [["type": "text", "text": output]]]]]
+        }
+        let verbose = [
+            " ❯ scheduler/order.test.ts > keeps first-join order after reconnect",
+            "   AssertionError: expected [ 'sora', 'lin', 'jie', 'mia', 'wang', 'ito' ] to deeply equal [ 'lin', 'jie', 'mia', 'wang', 'sora', 'ito' ]",
+            " ❯ scheduler/order.test.ts > login callback retries through the new gateway", "   Error: timeout of 5000ms exceeded (gateway: legacy)", "",
+            " Test Files  1 failed | 1 passed (2)", "      Tests  2 failed | 10 passed (12)", "   Duration  1.84s",
+        ].joined(separator: "\n")
+        let lines = call(0, ["path": "scheduler/queue.ts"], "export function sortQueue(queue: Participant[]) {\n  return [...queue].sort((a, b) => a.joinedAt - b.joinedAt)\n}")
+            + call(1, [
+                "path": "scheduler/queue.test.ts", "oldText": "  expect(order(room)).toEqual(joined)",
+                "newText": "  expect(order(room)).toEqual(firstJoined)\n  expect(order(rejoin(room, 5))).toEqual(firstJoined)",
+            ], "Successfully replaced text in scheduler/queue.test.ts.")
+            + call(2, ["command": "pnpm vitest run scheduler"], " ✓ scheduler/queue.test.ts (10)\n ❯ scheduler/order.test.ts (2)\n\n Test Files  1 failed | 1 passed (2)\n      Tests  2 failed | 10 passed (12)")
+            + call(3, ["command": "pnpm vitest run scheduler --reporter=verbose 2>&1 | tail -20"], verbose)
+        let file = FileManager.default.temporaryDirectory.appending(path: "cuepad-demo-atlas.jsonl")
+        try lines.map { String(decoding: try JSONSerialization.data(withJSONObject: $0), as: UTF8.self) }.joined(separator: "\n")
+            .write(to: file, atomically: true, encoding: .utf8)
+        try await store.upsertSessions(
+            [SessionUpsert(session: IndexedSession(id: "atlas", path: file.path, cwd: "", lastActivityAt: .now), checkpoint: nil, transcript: nil)], host: host)
+    }
 
     static var loginPage: String { """
         <!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -183,6 +213,7 @@ extension DebugScene {
             """, table: "Demo"), .init(steps: 3, items: [.init(kind: .read, target: "bench/sorting.md"), .init(kind: .read, target: "bench/results.csv"), .init(kind: .edit, target: "notes/sorting-compare.md", added: 24)]), 1.0),
         ], startedMinutesAgo: 20)
         try await seedPreviews(store, now: now)
+        try await seedStepFile(store, host: "demo-mac")
         try await chat("atlas", [
             (String(localized: "跑一下 scheduler 的测试，失败的话先别改代码，告诉我原因", table: "Demo"), String(localized: "12 个用例里有 **2 个失败**：\n\n1. 发言轮次在 5 人以上时，第 6 位被排到了最前——队列按加入时间排序，但重连的人会拿到新的时间戳。\n2. 登录回调走了旧网关，超时后没有重试。\n\n第一个建议改成按首次加入时间排序，改动在 `scheduler/queue.ts`：\n\n```ts\nqueue.sort((a, b) => a.firstJoinedAt - b.firstJoinedAt)\n```\n\n要我先改第一个吗？", table: "Demo"), Self.testRun, 2),
             (String(localized: "按你说的改成首次加入时间排序，把断言也改了，再跑一遍", table: "Demo"), nil, .init(

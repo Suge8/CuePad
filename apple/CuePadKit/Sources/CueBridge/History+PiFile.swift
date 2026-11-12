@@ -26,6 +26,8 @@ extension History {
         var cuepadDelivery: String?
         var toolCallId: String?
         var isError: Bool?
+        var usage: CacheUsage?
+        var model: String?
     }
 
     private enum Content: Decodable {
@@ -123,6 +125,10 @@ extension History {
                 try message.content?.said(into: &said)
                 cp.said(said, entry, deliveryID: message.cuepadDelivery, into: &transcript)
             case "assistant":
+                if let usage = message.usage {
+                    cp.requested(
+                        id: nil, read: usage.read, fresh: usage.fresh, lifetime: usage.lifetime, tiered: message.model?.contains("claude") == true, at: entry.at)
+                }
                 for call in message.content?.toolCalls ?? [] {
                     cp.toolStarted(id: call.id ?? "", name: call.name ?? "", arguments: call.arguments ?? ToolArguments())
                 }

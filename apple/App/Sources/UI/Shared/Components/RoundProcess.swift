@@ -4,14 +4,18 @@ import SwiftUI
 /// 做完的几步与说过的话来自会话文件（`Recap.pendingTools`），正在跑的来自会话状态（`detail`），两者不重叠。
 /// Mac 上正在说的话出字时（`SessionShown.speaking`）这一块是草稿的标题，说的话就是下面的草稿，不再列一遍。
 /// 工具结果里有图时，标题行下面总挂着这一轮的图（收着、展开都在，`ChatImages`），点开全屏看：用户看得到 Agent 看到的，Agent 不必为了给人看再发一遍。
-/// 在跑的与做完后的同一种排法、同样高（同样的步骤时）：Mac 上正在说的话落库时原位换下，这一块不跳（`SessionDraft`）。
+/// 在跑的与做完后的同一种排法、同样高（同样的步骤时，清单都开着）：Mac 上正在说的话落库时原位换下，这一块不跳（`SessionDraft`）。
+/// 清单里的一步点开看里面（`StepRow`）；缓存没接上的一轮在标题行里写重读了多少（`Chat.processLine`）。
 struct RoundProcess: View {
     let tools: ChatMessage.Tools?
     let ending: Ending
+    let session: SessionState
+    /// 在跑的与最新做完的那一轮清单开着（`ChatEntry.latest`），你发出下一句就收起；之后你点开、收起的照你的。
+    var open = true
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var typeSize
-    @State private var expanded = DebugHooks.preset.toolsOpen
+    @State private var toggled: Bool?
 
     nonisolated enum Ending: Equatable {
         case took(String)
@@ -25,11 +29,13 @@ struct RoundProcess: View {
 
     var body: some View {
         if let line = Chat.processLine(tools), let tools {
+            let expanded = !tools.items.isEmpty && (toggled ?? (open || DebugHooks.preset.toolsOpen))
             VStack(alignment: .leading, spacing: 0) {
-                Button { expanded.toggle() } label: { header(line) }
+                Button { toggled = !expanded } label: { header(line, open: tools.items.isEmpty ? nil : expanded) }
                     .buttonStyle(PressStyle())
+                    .allowsHitTesting(!tools.items.isEmpty)
                     .accessibilityLabel(spoken(line))
-                    .accessibilityExpanded(expanded)
+                    .accessibilityExpanded(tools.items.isEmpty ? nil : expanded)
                 if !tools.images.isEmpty {
                     NoteThread { ChatImages(hashes: tools.images, alignment: .leading, side: Self.imageSide).padding(.vertical, Spacing.hair) }
                 }
@@ -49,6 +55,7 @@ struct RoundProcess: View {
                 }
             }
             .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: expanded)
+            .onChange(of: open) { toggled = nil }
         } else if case .live(let shown, let doing, _) = ending, !shown.speaking {
             // 还没调过工具：此刻在做的（在想、只说了话），一行：对话末尾只给它留一行（`ChatLiveSlot`）
             NoteLine { StateDot(shown: shown, size: 6) } label: { Text(doing).lineLimit(1).shimmering() }
@@ -66,8 +73,8 @@ struct RoundProcess: View {
         return [line.spoken, end].compactMap { $0 }.joined(separator: "，")
     }
 
-    private func header(_ line: Dotted) -> some View {
-        NoteLine(open: expanded) {
+    private func header(_ line: Dotted, open: Bool?) -> some View {
+        NoteLine(open: open) {
             switch ending {
             case .took: Image(.tool).imageScale(.small)
             case .live(let shown, _, _): StateDot(shown: shown, size: 6)
@@ -100,16 +107,7 @@ struct RoundProcess: View {
         if item.kind == .said {
             SaidRow(text: item.target, lines: 3)
         } else {
-            ToolRow(icon: Self.icon(item.kind), target: Text(item.target), truncation: item.kind == .command ? .tail : .middle) { status(item) }
-        }
-    }
-
-
-    @ViewBuilder private func status(_ item: ChatMessage.Tools.Item) -> some View {
-        if item.failed {
-            Text("失败").font(Typography.caption).foregroundStyle(palette.failure)
-        } else if item.added != nil || item.removed != nil {
-            Text(Chat.diffLabel(added: item.added, removed: item.removed)).font(Typography.caption.monospacedDigit()).foregroundStyle(palette.ink3)
+            StepRow(item: item, session: session)
         }
     }
 

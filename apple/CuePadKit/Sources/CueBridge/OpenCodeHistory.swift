@@ -155,6 +155,9 @@ enum OpenCodeHistory {
             }
             cp.said(said, entry, deliveryID: message.metadata?.cuepadDelivery, into: &transcript)
         case "assistant":
+            if let tokens = message.tokens {
+                cp.requested(id: message.id, read: tokens.cache?.read ?? 0, fresh: tokens.input + (tokens.cache?.write ?? 0), lifetime: nil, at: message.at)
+            }
             for tool in message.content ?? [] where tool.type == "tool" {
                 let id = tool.id ?? ""
                 cp.toolStarted(id: id, name: tool.name ?? "", arguments: tool.state?.input?.arguments ?? ToolArguments())
