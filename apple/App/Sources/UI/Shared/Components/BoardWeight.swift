@@ -35,4 +35,7 @@ extension TaskBoard.Column {
     }
 
     var rowTiers: Int { light ? 1 : 3 }
+
+    /// 列宽的份数：待办与已完成是清单，地方让给正在发生的两列。固定的比例，不随列里有几张卡变（按内容分宽否决过，见 `BoardWidths`）。
+    var share: CGFloat { light ? 0.85 : 1.15 }
 }

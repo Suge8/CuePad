@@ -85,14 +85,16 @@ struct InsertionLine: View {
     }
 }
 
+/// 落点的线：强调色（墨色的线在深色里是一条白杠，与卡上的字一个颜色、分不出是标记），头上一颗空心圈标出从哪一级起。
 struct InsertionMark: View {
     static let ring: CGFloat = 9
+    private static let line: CGFloat = 2.5
     @Environment(\.palette) private var palette
 
     var body: some View {
         HStack(spacing: 0) {
-            Circle().strokeBorder(palette.ink, lineWidth: 2).frame(width: Self.ring, height: Self.ring)
-            Capsule().fill(palette.ink).frame(height: 2)
+            Circle().strokeBorder(palette.signature, lineWidth: Self.line).frame(width: Self.ring, height: Self.ring)
+            Capsule().fill(palette.signature).frame(height: Self.line)
         }
     }
 }

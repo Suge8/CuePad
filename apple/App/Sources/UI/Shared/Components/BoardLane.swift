@@ -28,8 +28,10 @@ struct LaneAdd {
     }
 }
 
-/// 命中与排版分开：格多宽就占多宽的排版，钮本身至少 `ControlSize.target` 宽（手机 44、Mac 28），
-/// 居中浮在格上、两边压过旁边的数，不占排版——按命中宽排会把列名挤短（手机横屏四列的待办列头里，英文"To Do"就截成"To…"）。
+/// 列头里是一颗垫着淡底的圆钮（`cell` 的宽就是它的直径）：光一个"+"字在列头里认不出是钮。
+/// Mac 上钮就是这颗圆，悬停的底也只是它——钮比圆宽时悬停的底盖到旁边的数上、高出列头。
+/// 手机上命中与排版分开：圆照样只占 `cell` 那么宽的排版，钮本身至少 `ControlSize.target` 宽，居中浮在格上、不占排版——
+/// 按命中宽排会把列名挤短（手机横屏四列的待办列头里，英文"To Do"就截成"To…"）。
 /// 列头高本来就不低于 target，只横着扩。钮点得到的就是它自己的框：标签上外扩的 contentShape 出了按钮的框不认（实测），所以扩的是钮、不是形状。
 struct LaneAddButton: View {
     let add: LaneAdd
@@ -43,23 +45,34 @@ struct LaneAddButton: View {
 
     var body: some View {
         if let cell {
+            #if os(macOS)
+            button(disc: cell.width).frame(height: cell.height)
+            #else
             Color.clear.frame(width: cell.width, height: cell.height)
-                .overlay { button.frame(width: max(cell.width, ControlSize.target), height: cell.height) }
+                .overlay { button(disc: cell.width).frame(width: max(cell.width, ControlSize.target), height: cell.height) }
+            #endif
         } else {
-            button
+            button(disc: nil)
         }
     }
 
-    private var button: some View {
+    private func button(disc: CGFloat?) -> some View {
         Button(action: add.action) {
-            Label(add.title, icon: add.icon)
-                .labelStyle(.iconOnly)
-                .frame(maxWidth: cell == nil ? nil : .infinity, maxHeight: cell == nil ? nil : .infinity)
-                .contentShape(.rect)
+            if let disc {
+                Label(add.title, icon: add.icon).labelStyle(.iconOnly)
+                    .frame(width: disc, height: disc)
+                    .background(palette.fill, in: .circle)
+                    #if os(iOS)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    #endif
+                    .contentShape(.rect)
+            } else {
+                Label(add.title, icon: add.icon).labelStyle(.iconOnly).contentShape(.rect)
+            }
         }
-        // 加号是这一列的主动作（签名色）；别的（已完成的全部归档）是收拾，淡一档
-        .foregroundStyle(add.icon == .add ? palette.signature : palette.ink3)
-        .buttonStyle(PressStyle(.inline))
+        // 加号是这一列的主动作；别的（已完成的全部归档）是收拾，淡一档
+        .foregroundStyle(add.icon != .add ? palette.ink3 : disc == nil ? palette.signature : palette.ink)
+        .buttonStyle(PressStyle(disc == nil ? .inline : .button))
         .help(Text(add.title))
     }
 }
@@ -108,12 +121,17 @@ struct BoardColumnHeader: View {
     private var row: some View {
         HStack(spacing: 0) {
             BoardLaneMark(column: column, size: Self.mark)
-            Text(column.title).font(Self.font).foregroundStyle(column.light ? palette.ink3 : palette.ink2).truncationMode(.tail)
+            Text(column.title).font(titleFont).foregroundStyle(column == .waiting ? palette.ink : column.light ? palette.ink3 : palette.ink2).truncationMode(.tail)
+                .padding(.leading, Spacing.glyph)
+            // 数紧跟列名：四列同一种排法，右端只留给"+"，有没有它数都在同一处
+            Text("\(count)").font(column == .waiting ? titleFont : column.light ? Self.font : Self.countFont).monospacedDigit().foregroundStyle(column.countInk(palette)).counting(count).fixedSize()
                 .padding(.leading, Spacing.glyph)
             Spacer(minLength: Spacing.tight)
-            Text("\(count)").font(column.light ? Self.font : Self.countFont).monospacedDigit().foregroundStyle(column.countInk(palette)).counting(count).fixedSize()
         }
     }
+
+    /// 等你的列头比别的大一号：全页的焦点在这一列。
+    private var titleFont: Font { column == .waiting ? Typography.title : Self.font }
 
     private static let font = Typography.laneTitle
     private static let countFont = Typography.laneCount

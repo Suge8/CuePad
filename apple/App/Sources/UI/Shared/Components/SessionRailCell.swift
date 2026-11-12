@@ -20,7 +20,6 @@ extension UTType {
 struct SessionRailCell: View {
     let item: SessionRailRows.Item
     let form: SessionRail.Form
-    let moves: Bool
     let selected: Bool
     var compact = false
     let open: (SessionState, SessionRail.Opening) -> Void
@@ -93,7 +92,7 @@ struct SessionRailCell: View {
                 VStack(spacing: Spacing.hair) {
                     mark.frame(height: 16)
                     name.font(Typography.caption2)
-                    signal.frame(width: 34)
+                    StateDot(shown: item.shown, size: Chrome.railMark)
                 }
                 .padding(.horizontal, Spacing.hair)
                 .padding(.vertical, Spacing.tight)
@@ -169,17 +168,6 @@ struct SessionRailCell: View {
         .readerHidden(true)
     }
 
-    private var signal: some View {
-        Group {
-            if let waiting = item.waiting {
-                StateGlyph(status: waiting).font(Glyph.small)
-            } else {
-                BoardLine(pulse: item.pulse, moves: moves, detail: .now)
-            }
-        }
-        .frame(height: WaveStrip.height)
-        .readerHidden(true)
-    }
 }
 
 private struct SessionRailReadout: View {

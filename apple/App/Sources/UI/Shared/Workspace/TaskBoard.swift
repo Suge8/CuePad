@@ -143,16 +143,32 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         return board
     }
 
-    /// "全部"里相邻的卡可能是别的项目，拖动不悄悄换项目。位置没变、或它挂在已完成的上级下（显示在顶层、但不是顶层）时为 nil。
+    /// 能在待办里定位置的卡：待办的，或推进中的任务（拖回待办）；挂在已完成的上级下的（显示在顶层、但不是顶层）与等你的不能。
+    private func placeable(_ id: UUID) -> Card? {
+        let card = todo.first { $0.id == id }?.task ?? advancing.lazy.compactMap(\.item).first { $0.id == id }?.task
+        return card?.parentID == nil ? card : nil
+    }
+
+    /// 这张卡在待办里能落的各处（第几张之前，`todo.count` 是末尾）。待办按项目分段排，卡不悄悄换项目：
+    /// 能落的只有它那个项目那一段的里面与两头，落在别处的话放下后卡会跳回自己那一段。插入线只画在这些位置上（看板取离指针最近的一处）。
+    /// 它原来的位置也在内（放下不动）；它那个项目在待办里一张都没有时为空（拖回待办落在项目排到的地方，没有线可画）。
+    func slots(for id: UUID) -> [Int] {
+        guard let project = placeable(id)?.projectID else { return [] }
+        func own(_ index: Int) -> Bool { todo.indices.contains(index) && todo[index].task.projectID == project }
+        return (0...todo.count).filter { own($0 - 1) || own($0) }
+    }
+
+    /// 位置没变时为 nil。
     func move(_ id: UUID, before target: UUID?) -> TaskMove? {
-        guard let dragged = todo.first(where: { $0.id == id })?.task, dragged.parentID == nil, id != target else { return nil }
+        let current = todo.firstIndex { $0.id == id }
+        guard let dragged = placeable(id), id != target else { return nil }
         func previous(in list: ArraySlice<Item>) -> UUID? {
             list.last { $0.task.projectID == dragged.projectID && $0.task.parentID == nil && $0.id != id }?.id
         }
         let rest = todo.filter { $0.id != id }
         let index = target.flatMap { target in rest.firstIndex { $0.id == target } } ?? rest.count
         let after = previous(in: rest[..<index])
-        guard let current = todo.firstIndex(where: { $0.id == id }), after != previous(in: todo[..<current]) else { return nil }
+        if let current, after == previous(in: todo[..<current]) { return nil }
         return TaskMove(slot: .top(project: dragged.projectID), after: after)
     }
 

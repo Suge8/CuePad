@@ -1543,6 +1543,22 @@
         }
       }
     },
+    "做完了，预发上是这个样子。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Done — here is how it looks on staging."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "做完了，预发上是这个样子。"
+          }
+        }
+      }
+    },
     "做界面时先定视觉方向与密度" : {
       "localizations" : {
         "en" : {
@@ -7175,18 +7191,18 @@
         }
       }
     },
-    "菜单栏面板 ⌘↩ 直接发出" : {
+    "菜单栏面板 ↩ 直接发出" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Menu bar panel sends on ⌘↩"
+            "value" : "Menu bar panel sends on ↩"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "菜单栏面板 ⌘↩ 直接发出"
+            "value" : "菜单栏面板 ↩ 直接发出"
           }
         }
       }

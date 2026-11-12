@@ -1,6 +1,8 @@
 import SwiftUI
 
 enum TaskMetrics {
+    /// 看板上的卡一律这个圆角（四列、摊开的那张、拖动时的轮廓）。
+    static let cardRadius = Radius.sheet
     #if os(iOS)
     nonisolated static let rowHeight: CGFloat = 44
     static let caption = Typography.meta
@@ -14,7 +16,6 @@ enum TaskMetrics {
     static let ringColumn: CGFloat = 44
     static let columnGap: CGFloat = 2
     static let cardPadding = Spacing.group
-    static let cardRadius = Radius.card
     static let cardLead: CGFloat = 24
     static let cardGlyph: CGFloat = 13
     #else
@@ -30,71 +31,41 @@ enum TaskMetrics {
     static let ringColumn: CGFloat = 18
     static let columnGap = Spacing.item
     static let cardPadding = Spacing.group
-    static let cardRadius = Radius.block
     static let cardLead: CGFloat = 16
     static let cardGlyph: CGFloat = 12
     #endif
 }
 
-/// 标题与线之间那一截（Mac 6、手机 8）不能再窄：再贴近，线读起来像标题的下划线或删除线。
 enum BoardCardMetrics {
     static let inset = Spacing.item
     static let gap = Spacing.item
     /// 列与列之间不另留缝（`BoardWidths`）。否决过：列间再留 20——四列三道缝连同卡离列边共白占约 100，1280 宽时待办一行只剩三四个字。
     static var columnGap: CGFloat { 2 * inset }
-    static let leadGap = Spacing.item
-    /// 推进中卡下沿那条线最窄多宽才画（`BoardLineRow`）：过去两颗点与现在一截波读得出来；再窄整条不画，只留读数。
-    nonisolated static let lineMin: CGFloat = 40
     static let rowPadding = Spacing.group
     static let rowGap: CGFloat = 6
     static let rowTitle = Typography.secondary.weight(.medium)
+    /// 列里的卡：字离上下边、标题与卡脚之间、卡脚的高（放得下线，也放得下"开始"的点按区）。
     #if os(macOS)
-    static let titlePadding = Spacing.group
-    static let lightPadding: CGFloat = 7
-    static let titleTop: CGFloat = 6
-    static let titleRow: CGFloat = 20
-    static let waveBottom: CGFloat = 4
+    static let pad = Spacing.group
+    static let footGap = Spacing.glyph
+    static let foot: CGFloat = 18
+    static let vitals: CGFloat = 16
     #else
-    static let titlePadding = Spacing.block
-    static let lightPadding = Spacing.item
-    static let titleTop = Spacing.item
-    static let titleRow: CGFloat = 24
-    static let waveBottom: CGFloat = 6
+    static let pad = Spacing.group
+    static let footGap = Spacing.glyph
+    static let foot: CGFloat = 24
+    static let vitals = foot
     #endif
-    /// 推进中的卡与别的列的卡同高：线占掉的那一截从上下两份 `titlePadding` 里出。
-    static var waveGap: CGFloat { 2 * titlePadding - titleTop - WaveStrip.height - waveBottom }
-
-    /// 带着项目小图形一行放不下 `glyphLine` 个字时项目小图形让位，只留状态圈：项目色在会话条、项目页与悬停提示里都有，窄卡上字要紧。
-    /// 列式卡至少三行，一行放不下 `twoLine` 个字时辅助字号再多一行。标题多是十到十二个字（大库里九到二十二个），一行八个字、两行一行五个字都会截成"改走统…"。行数是上限、不预留：一行写得下的卡就一行高，不在标题下空一块；所以上限不给一行——宽列里二十来个字的标题给一行只会截断（1512 宽等你列的"README 截图换成 Swif…"）。
-    /// 手机的行里卡总窄（`cardWidth` 给 nil）：两行，卡铺满行给的格，不另留高。
-    static func title(_ column: TaskBoard.Column, cardWidth: CGFloat?, typeSize: DynamicTypeSize) -> BoardTitle {
-        let more = typeSize.isAccessibilitySize ? 1 : 0
-        guard let cardWidth else { return BoardTitle(lines: 2 + more) }
-        let room = cardWidth - 2 * TaskMetrics.cardPadding, size = titleSize(typeSize)
-        let glyph = (room - lead(glyph: true)) / size >= glyphLine
-        let chars = (room - lead(glyph: glyph)) / size
-        let lines = max(3, (chars >= twoLine ? 2 : 3) + more)
-        return BoardTitle(lines: lines, padding: column.light ? lightPadding : titlePadding, glyph: glyph)
-    }
-
-    private static let twoLine: CGFloat = 7
-    private static let glyphLine: CGFloat = 6
-    private static func lead(glyph: Bool) -> CGFloat {
-        TaskMetrics.cardLead + leadGap * 2 + (glyph ? TaskMetrics.cardGlyph + leadGap : 0)
-    }
-
-    /// 中文字宽等于字号。
-    private static func titleSize(_ typeSize: DynamicTypeSize) -> CGFloat {
-        #if os(macOS)
-        Typography.bodySize
-        #else
-        UIFont.preferredFont(forTextStyle: .body, compatibleWith: UITraitCollection(preferredContentSizeCategory: UIContentSizeCategory(typeSize))).pointSize
-        #endif
-    }
-}
-
-struct BoardTitle: Equatable {
-    var lines = 1
-    var padding: CGFloat = 0
-    var glyph = true
+    /// 卡脚里项目图形占的宽（名字放不下时只留它，`BoardFoot`）。
+    static var footGlyph: CGFloat { TaskMetrics.cardGlyph + ProjectGlyph.margin }
+    /// 清单里的一行上下的边。
+    static let compactPad = Spacing.glyph
+    /// 标题至多几行（列里的卡上层就这么高）。
+    nonisolated static func lines(_ typeSize: DynamicTypeSize) -> Int { typeSize.isAccessibilitySize ? 3 : 2 }
+    /// 卡脚里项目名最宽：约七个汉字，再长就截，给线与读数留地方。
+    static let tagMax: CGFloat = 104
+    /// 手机的行里的卡。
+    static let titleRow: CGFloat = 24
+    /// 推进中的行下沿给读数留的高。
+    static let rowFact: CGFloat = 18
 }

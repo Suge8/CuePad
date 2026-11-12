@@ -10,7 +10,7 @@ struct BoardTaskCard: View {
     var openShot: (PreviewOpening) -> Void = { _ in }
     @State private var check = TaskCheck()
     @Environment(Workspace.self) private var workspace
-    @Environment(\.boardArrival) private var arrival
+    @Environment(\.boardRow) private var row
     @Environment(\.palette) private var palette
 
     private var task: Card { item.task }
@@ -20,20 +20,26 @@ struct BoardTaskCard: View {
     var body: some View {
         let now = workspace.pulse(of: item.agent)
         let next = workspace.next(for: item, shown: now.shown)
-        let pulse = advancing || arrival?.from == .advancing ? now : BoardPulse()
+        let pulse = advancing ? now : BoardPulse()
+        let hero = column == .done && !row ? item.shot : nil
         framed {
-            BoardCardLayout(advancing: advancing, pulse: pulse, moves: moves) {
+            VStack(alignment: .leading, spacing: 0) {
+            if let hero { BoardShot(shot: hero, group: task.id.uuidString, hero: true, open: openShot).padding(.top, TaskMetrics.cardPadding) }
+            BoardCardLayout(advancing: advancing, pulse: pulse, moves: moves, project: project, note: note, session: item.agent?.state, compact: column.light) {
                 ring(next: next).opacity(column.leadOpacity)
-                if let project { BoardProjectGlyph(project: project) }
+            } title: {
                 if task.isPinned { BoardPin() }
                 title(resting: pulse.tier == .resting && advancing)
+            } facts: {
+                if let steps = item.steps { Text(verbatim: "\(steps.done)/\(steps.total)").monospacedDigit().foregroundStyle(palette.ink3) }
+                if let finished { Text(verbatim: finished).monospacedDigit().foregroundStyle(palette.ink3) }
+                if column == .todo { BoardStart(next: next, since: task.todoAt ?? task.createdAt) }
             } trailing: {
-                if let shot = item.shot { BoardShot(shot: shot, group: task.id.uuidString, open: openShot) }
+                if hero == nil, let shot = item.shot { BoardShot(shot: shot, group: task.id.uuidString, open: openShot) }
             }
-            #if os(macOS)
-            .overlay(alignment: .trailing) { StartReveal(next: next) }
-            #endif
-            .boardCard(column)
+            }
+            .boardCard(column, flat: column.light && hero == nil, running: moves && pulse.tier == .running)
+            .boardRescue(advancing ? item.agent?.state : nil)
         }
         .help(tip)
         .taskSpoken(task, title: title, subtasks: item.steps, next: next, aside: aside(pulse), check: $check, open: open, follow: { follow(next) }) {
@@ -55,11 +61,20 @@ struct BoardTaskCard: View {
         #endif
     }
 
-    private func title(resting: Bool) -> some View {
+    /// 列里的卡没有圈，Cue 交过来的那道光落在标题上；行里的落在圈上（`TaskCheckButton`）。
+    @ViewBuilder private func title(resting: Bool) -> some View {
         let ink = check.phase != .idle ? palette.ink3 : resting ? palette.ink2 : column.titleInk(palette)
-        return BoardCardTitle(title.textGlyphs).fontWeight(column.titleWeight)
+        let title = BoardCardTitle(title.textGlyphs).fontWeight(column.titleWeight)
             .strikethrough(check.phase != .idle, color: palette.ink3).foregroundStyle(ink)
+        if row { title } else { title.relaySpot(task: task.id) }
     }
+
+    /// 第二行那一句：会话此刻在做什么（做完的是它最后说的头一句），没有会话的是任务正文的头一行。
+    private var note: String? {
+        item.agent.flatMap { SessionProgress.said(of: $0.state) } ?? SessionProgress.firstLine(task.rest)
+    }
+
+    private var finished: String? { column == .done ? task.completedAt.map { DateLabel.short($0) } : nil }
 
     private var tip: String {
         let agent = item.agent?.state.agentMark
@@ -126,22 +141,28 @@ struct BoardTaskCard: View {
     #endif
 }
 
-#if os(macOS)
-private struct StartReveal: View {
+/// 待办的卡脚右端：平时写记下多久了；Mac 上指针停在卡上时换成"开始"（一列十几张，一直写着是一墙"开始"），触屏没有悬停、两样都写。
+private struct BoardStart: View {
     let next: TaskNext?
-    @Environment(\.buttonHovered) private var hovered
-    @Environment(\.rowSurface) private var surface
+    let since: Date
     @Environment(\.palette) private var palette
+    #if os(macOS)
+    @Environment(\.buttonHovered) private var hovered
+    #endif
 
     var body: some View {
-        if hovered, let next, next.starts {
-            let surface = surface ?? palette.paper
-            HStack(spacing: 0) {
-                LinearGradient(colors: [surface.opacity(0), surface], startPoint: .leading, endPoint: .trailing).frame(width: RowMetrics.revealFade)
-                TaskNextMark(next: next).environment(\.rowHovered, true).background(surface)
-            }
-            .transition(.opacity)
+        let start = next.flatMap { $0.starts ? $0 : nil }
+        #if os(macOS)
+        if hovered, let start {
+            TaskNextMark(next: start).environment(\.rowHovered, true).transition(.opacity)
+        } else {
+            age.transition(.opacity)
         }
+        #else
+        age
+        if let start { TaskNextMark(next: start) }
+        #endif
     }
+
+    private var age: some View { Text(verbatim: DateLabel.short(since)).foregroundStyle(palette.ink3) }
 }
-#endif

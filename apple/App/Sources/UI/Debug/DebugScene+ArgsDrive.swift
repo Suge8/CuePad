@@ -68,7 +68,7 @@ nonisolated struct DriveArgs: Decodable, DebugArgGroup {
     let traceWait: Bool
     /// `-CuePadVisitCue <秒>`：说完这么久去 Cue 页，停够读到它再回原来那页，录"别处时有提示、读过就没了"
     let visitCue: Double
-    /// `-CuePadWaitKinds YES`：等你里各种问题都有（再一张 Cue 的删目录一问）
+    /// `-CuePadWaitKinds YES`：等你里各种问题都有（再一张 Cue 的删目录一问），已完成里一件带成果图
     let waitKinds: Bool
     /// `-CuePadWake <秒>`（配 `-CuePadDemo YES`，一直循环）：每隔这么久 Cue 被在线会话叫醒一次（配 `-CuePadFlightLog` 量开销）
     let wake: Double

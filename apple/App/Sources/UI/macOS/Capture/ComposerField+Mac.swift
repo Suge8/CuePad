@@ -4,7 +4,7 @@ import CueEditor
 import SwiftUI
 
 /// 焦点由调用方的 `.focused` 交给文本视图；文本视图自己拿到、交出焦点（点进来、Esc）时再报回 `focus`。
-/// ⌘↩ 等回复框快捷键是主菜单"回复"里的项，经响应链交到这里（`performReplyShortcut`）。
+/// ↩ 发送、⇧↩ 换行在文字区自己接（`doCommandBy`）；带 ⌘ 的回复框快捷键是主菜单"回复"里的项，经响应链交到这里（`performReplyShortcut`）。
 struct ComposerField: NSViewRepresentable {
     @Binding var text: String
     let prompt: String
@@ -126,6 +126,11 @@ struct ComposerField: NSViewRepresentable {
                 }
             // 输入法组字期间的按键属于输入法
             if let key, !view.hasMarkedText(), parent.keys(key) { return true }
+            // ↩ 与 ⇧↩ 系统都记成 insertNewline:，按修饰键分：不带 ⇧ 的发送（空着时什么都不做，不留空行），带的照常换行
+            if selector == #selector(NSResponder.insertNewline(_:)), !view.hasMarkedText(), NSApp.currentEvent?.modifierFlags.contains(.shift) != true {
+                parent.shortcut(.send)?()
+                return true
+            }
             guard selector == #selector(NSResponder.cancelOperation(_:)) else { return false }
             view.window?.makeFirstResponder(nil)
             return true

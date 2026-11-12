@@ -9,16 +9,6 @@ struct BoardPulse: Equatable {
         static func < (lhs: Self, rhs: Self) -> Bool { lhs.rawValue < rhs.rawValue }
     }
 
-    /// 卡下沿那条线"现在"那一截：装饰，不对应真实事件。
-    enum Trace: Equatable {
-        case running(Gait, subagents: Int)
-        case stopped(broken: Bool)
-        /// 歇着：一条淡线、不带点——横线就是"没在动"。等高的卡下沿不空着，不像没画完。
-        case resting
-    }
-
-    nonisolated enum Gait: Equatable, Sendable { case think, tool, compact }
-
     enum Word: Equatable {
         case state(SessionShown)
         case context(ContextMeter)
@@ -51,31 +41,12 @@ struct BoardPulse: Equatable {
         return shown.isRunning ? .running : .resting
     }
 
-    var trace: Trace {
-        switch tier {
-        case .resting: return .resting
-        case .needsYou: return .stopped(broken: shown?.status == .interrupted)
-        case .running:
-            let subagents = session?.runtimeSubagents.count { $0.phase == .known(.running) } ?? 0
-            let gait: Gait = switch shown?.status {
-            case .working(.tool): .tool
-            case .working(.compacting): .compact
-            default: .think
-            }
-            return .running(gait, subagents: subagents)
-        }
-    }
-
     func tint(_ palette: Palette) -> Color {
         switch word {
         case .state(let shown): shown.labelTint(palette)
         case .context: palette.failure
         case nil: tier == .running ? palette.signature : palette.ink3
         }
-    }
-
-    func lastSaidTint(_ palette: Palette) -> Color {
-        tier == .running ? tint(palette) : palette.ink3
     }
 }
 

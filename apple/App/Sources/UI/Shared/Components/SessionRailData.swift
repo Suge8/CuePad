@@ -47,7 +47,6 @@ struct SessionRailRows {
 
     let waiting: [Item]
     let advancing: [Item]
-    let moving: Set<String>
 
     init(_ data: SessionRailData, pulse: (SessionListItem) -> BoardPulse) {
         func item(_ value: SessionListItem, waiting: SessionShown.Status?, cache: ChatMessage.Tools.Cache? = nil) -> Item {
@@ -60,6 +59,5 @@ struct SessionRailRows {
             let left = $0.element.pulse, right = $1.element.pulse
             return (left.tier, left.shown?.rank ?? 0, $0.offset) < (right.tier, right.shown?.rank ?? 0, $1.offset)
         }.map(\.element)
-        moving = Set(advancing.filter { $0.pulse.tier == .running }.prefix(BoardLine.maxMoving).map(\.id))
     }
 }

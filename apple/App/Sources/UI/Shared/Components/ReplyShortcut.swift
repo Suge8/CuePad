@@ -2,6 +2,7 @@ import Foundation
 
 /// 唯一定义：Mac 主菜单的"回复"一组、iPad 外接键盘的按键命令都读它。
 /// 由回复框的文字区接（`ComposerField`：Mac 是主菜单项经响应链找到它，iPad 是它的按键命令），所以只在回复框聚焦时可用。
+/// 发送平时按的是不带修饰的 ↩（⇧↩ 换行，文字区自己接）；这里的 ⌘↩ 是它在菜单里的那一份，照样能发。
 enum ReplyShortcut: Int, CaseIterable {
     case send
     case model
@@ -32,7 +33,8 @@ enum ReplyShortcut: Int, CaseIterable {
     var symbols: String {
         switch self {
         case .recall: "↑"
-        case .send, .model, .thinking: "⌘" + (shift ? "⇧" : "") + (input == "\r" ? "↩" : input.uppercased())
+        case .send: "↩"
+        case .model, .thinking: "⌘" + (shift ? "⇧" : "") + input.uppercased()
         }
     }
 

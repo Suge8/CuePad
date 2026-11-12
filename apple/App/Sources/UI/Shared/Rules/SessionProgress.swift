@@ -24,6 +24,15 @@ nonisolated enum SessionProgress {
         }
     }
 
+    /// 看板卡上那一句，只写人话、不写工具与命令：在跑的是你这一轮让它做的那句，歇下的是它最后说的头一句。
+    static func said(of session: SessionState) -> String? {
+        switch session.runtimeState.known {
+        case .thinking, .tool, .compacting: firstLine(session.pendingPrompt)
+        case .delegating: SubagentLine.of(session.runtimeSubagents) ?? firstLine(session.pendingPrompt)
+        case .waitingForUser, .error, .settled, .ended, .interrupted, nil: line(of: session)
+        }
+    }
+
     /// Mac 同步来的工具详情是"工具名 · 目标"。
     static func action(_ detail: String) -> String? {
         let parts = detail.split(separator: SessionState.detailSeparator, maxSplits: 1).map(String.init)

@@ -119,6 +119,8 @@ extension SessionShown {
     var mark: StateMark {
         switch status {
         case .working(.delegating): .loop(.relay)
+        case .working(.tool): .loop(.orbit)
+        case .working(.compacting): .loop(.squeeze)
         case .working: .loop(.heartbeat)
         case .delivery(.preparing), .delivery(.failed), .delivery(.inTransit(.unconfirmed)): .icon
         case .delivery: .flight

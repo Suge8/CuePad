@@ -195,7 +195,7 @@ struct RailSessions: View {
     }
 
     private func cell(_ item: SessionRailRows.Item) -> some View {
-        SessionRailCell(item: item, form: .wide, moves: false, selected: marked.contains(item.id), open: open)
+        SessionRailCell(item: item, form: .wide, selected: marked.contains(item.id), open: open)
             .transition(.opacity)
     }
 
@@ -307,7 +307,7 @@ private struct RailProjectSessions: View {
         }
         VStack(spacing: Spacing.hair) {
             ForEach(items) { item in
-                SessionRailCell(item: item, form: .wide, moves: false, selected: marked.contains(item.id), compact: true, open: open)
+                SessionRailCell(item: item, form: .wide, selected: marked.contains(item.id), compact: true, open: open)
             }
             if hidden > 0 {
                 Button { extra += Self.step } label: {

@@ -78,7 +78,7 @@ struct CaptureComposer: View {
             .buttonStyle(PressStyle(.button))
             .disabled(saving)
             .accessibilityLabel("记下")
-            .help("记下（⌘↩）")
+            .help("记下（↩）")
     }
 
     private func save() {
