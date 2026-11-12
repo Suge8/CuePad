@@ -56,11 +56,15 @@ extension InteractionBench {
             arrange(item, in: workspace, sessions: sessions)
             let split = item.sessions > 1
             let threshold = WideMetrics.railThreshold(split: split), cueThreshold = WideMetrics.cueThreshold(split: split)
-            resize(threshold)
+            // 基线在会话条与 Cue 都露着的最窄宽上读（Cue 的临界宽）：会话条的临界宽上 Cue 已经收成钮，它那一栏没有能滚的、读不到阅读位置。
+            // 两个宽上主区一样宽（都是最窄），主区的那一条不因此挪。
+            resize(cueThreshold)
             await Task.wait(for: .seconds(1))
             await WidePage.scrollToMiddle(wideColumns(in: view))
             let before = snapshot(workspace, ids: ids)
             let page = WidePage(wideColumns(in: view))
+            resize(threshold)
+            await Task.wait(for: .seconds(1))
             func step(_ name: String, width: CGFloat, rail: CGFloat, cue: Bool, reverse: Bool = false) async {
                 guard only?.contains(name) ?? true else {
                     // 不量也照样改宽：下一步才是从阈值另一侧跨过来（反向那一下停回原宽，不必做）
