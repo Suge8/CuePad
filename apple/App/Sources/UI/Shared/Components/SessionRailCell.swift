@@ -12,10 +12,11 @@ extension UTType {
     nonisolated static let cuepadSession = UTType(exportedAs: "\(AppIdentity.id).session", conformingTo: .data)
 }
 
-/// 宽屏有两种行。等你的两行（`Chrome.tallRow`）：行首是它的项目（同下面项目那一组的图形），第一行名字与等了多久，第二行它要什么、
-/// 行尾哪一家 Agent。排在项目下面的一行（`compact`）：缩进一格，项目已经由上一行说了，只有名字与读数。
+/// 宽屏有两种样子。等你的是一张卡（`card`）：会话条上唯一要你动手的，长得不同于下面的行。排在项目下面的一行（`compact`）：缩进一格，
+/// 项目已经由上一行说了，只有名字与读数。
 /// 行首不放状态点：只有在推进的画看板推进中那个记号（同项目行尾数的那个），歇着、结束的不画、名字淡一档——没事的不该有记号要人去认。
-/// 否决过：每种状态一个图形（七八种，认不过来）；实心、空心的点分在跑与歇着（两种点摆在一起读不出哪个是哪个）。
+/// 否决过：每种状态一个图形（七八种，认不过来）；实心、空心的点分在跑与歇着（两种点摆在一起读不出哪个是哪个）；
+/// 等你的行首放项目的图形（只看图形认不出是哪个项目，写名字才认得）。
 struct SessionRailCell: View {
     let item: SessionRailRows.Item
     let form: SessionRail.Form
@@ -51,7 +52,8 @@ struct SessionRailCell: View {
 
     private var help: String { Dotted(item.name, project?.shownName, item.shown.label, item.ask ?? item.doing, item.session.agentMark).visible }
 
-    private var project: Project? { workspace.catalog?.project(item.session.projectID) }
+    /// 没归项目的会话算在默认项目下（同会话条的分组与历史的查询）。
+    private var project: Project? { workspace.catalog?.project(item.session.projectID ?? Project.defaultID) }
 
     @ViewBuilder private var control: some View {
         #if os(macOS)
@@ -90,25 +92,17 @@ struct SessionRailCell: View {
                 .padding(.horizontal, Spacing.hair)
                 .padding(.vertical, Spacing.tight)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                RailLine(height: compact ? Chrome.row : Chrome.tallRow) {
-                    if !compact {
-                        ProjectGlyph(project: project)
-                    } else if item.waiting == nil, item.pulse.tier == .running {
-                        BoardLaneMark(column: .advancing, size: 12)
-                    } else {
-                        Color.clear
-                    }
+            } else if compact {
+                RailLine {
+                    if item.waiting == nil, item.pulse.tier == .running { BoardLaneMark(column: .advancing, size: 12) } else { Color.clear }
                 } rest: {
-                    if compact {
-                        name.font(Typography.body)
-                        Spacer(minLength: Spacing.item)
-                        SessionRailReadout(item: item)
-                    } else {
-                        lines
-                    }
+                    name.font(Typography.body)
+                    Spacer(minLength: Spacing.item)
+                    SessionRailReadout(item: item)
                 }
-                .padding(.leading, compact ? Self.indent : 0)
+                .padding(.leading, Self.indent)
+            } else {
+                card
             }
         }
         .contentShape(.rect)
@@ -121,29 +115,28 @@ struct SessionRailCell: View {
             .lineLimit(1)
     }
 
-    private var lines: some View {
-        VStack(alignment: .leading, spacing: Spacing.hair) {
-            HStack(spacing: Spacing.item) {
+    /// 等你的一张卡：纸色同看板等你那一列的卡，三行都是字——名字与等了多久、它要你做什么、哪个项目的哪家 Agent。
+    private var card: some View {
+        VStack(alignment: .leading, spacing: Spacing.tight) {
+            HStack(alignment: .firstTextBaseline, spacing: Spacing.item) {
                 name.font(Typography.body)
                 Spacer(minLength: 0)
-                if item.waiting == nil { SessionRailReadout(item: item) } else { SessionRailTime(item: item).font(Typography.caption).fixedSize() }
+                SessionRailTime(item: item).font(Typography.caption).fixedSize()
             }
             HStack(spacing: Spacing.tight) {
-                if item.waiting != nil {
-                    Text(item.shown.label).fontWeight(.semibold).foregroundStyle(item.shown.labelTint(palette)).fixedSize()
-                    if let ask = item.ask {
-                        Dot().foregroundStyle(palette.ink3)
-                        Text(verbatim: ask).foregroundStyle(palette.ink2)
-                    }
-                } else {
-                    Text(verbatim: Dotted(project?.shownName, item.doing).visible).foregroundStyle(palette.ink3)
+                Text(item.shown.label).fontWeight(.semibold).foregroundStyle(item.shown.labelTint(palette)).fixedSize()
+                if let ask = item.ask {
+                    Dot().foregroundStyle(palette.ink3)
+                    Text(verbatim: ask).foregroundStyle(palette.ink2)
                 }
-                Spacer(minLength: 0)
-                if let agent = item.session.agent.known { agent.mark.image.font(Glyph.small).foregroundStyle(palette.ink3).readerHidden(true) }
             }
             .font(Typography.caption)
             .lineLimit(1)
+            Text(verbatim: Dotted(project?.shownName, item.session.agentMark).visible).font(Typography.caption).foregroundStyle(palette.ink3).lineLimit(1)
         }
+        .padding(Spacing.item)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .paper(cornerRadius: Radius.row, wash: TaskBoard.Column.waiting.paper(palette))
     }
 
     private var mark: some View {

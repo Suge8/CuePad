@@ -129,7 +129,7 @@ struct RailSessions: View {
         ScrollView {
             VStack(spacing: Chrome.groupGap) {
                 if !rows.waiting.isEmpty {
-                    VStack(spacing: Spacing.hair) {
+                    VStack(spacing: Spacing.tight) {
                         header(Text(verbatim: TaskBoard.Column.waiting.title), count: rows.waiting.count, ink: TaskBoard.Column.waiting.countInk(palette))
                         ForEach(rows.waiting) { cell($0) }
                     }
@@ -139,7 +139,7 @@ struct RailSessions: View {
                     projectsHeader
                     ForEach(shownProjects(running: byProject)) { project in
                         let sessions = byProject[project.id] ?? []
-                        projectRow(project, running: sessions.count)
+                        projectRow(project, running: sessions.count { $0.pulse.tier == .running })
                         if expanded.contains(project.id) { RailProjectSessions(project: project.id, live: sessions, marked: marked, open: open) }
                     }
                 }
@@ -219,7 +219,7 @@ struct RailSessions: View {
                 Spacer(minLength: Spacing.item)
                 if running > 0 {
                     BoardLaneMark(column: .advancing, size: 12)
-                    Text(running, format: .number).font(Typography.caption).foregroundStyle(TaskBoard.Column.advancing.countInk(palette)).monospacedDigit()
+                    Text(running, format: .number).font(Typography.caption).foregroundStyle(palette.ink3).monospacedDigit()
                 }
                 if open || selected { Chevron(.forward).foregroundStyle(palette.ink3).rotationEffect(.degrees(open ? 90 : 0)) }
             }
@@ -279,7 +279,7 @@ private struct RailProjectSessions: View {
         .overlay(alignment: .leading) {
             Rectangle().fill(palette.hair).frame(width: 1).padding(.leading, Chrome.icon / 2).padding(.vertical, Spacing.tight)
         }
-        .transition(.opacity)
+        .transition(.opacity.combined(with: .offset(y: -Spacing.tight)))
         .observing(services.store, id: Reading(project: project, limit: limit, moment: services.speech), into: $page, onError: workspace.fail) {
             [project, limit, moment = services.speech] store in
             try SessionListData.earlier(SessionQuery(project: project, limit: limit), at: moment, from: store)
