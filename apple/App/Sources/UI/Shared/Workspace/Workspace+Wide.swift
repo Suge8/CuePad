@@ -9,10 +9,21 @@ extension Workspace {
             remember(route)
             state.main = WideNavigation.Main(route)
         }
+        state.home = false
         cueDrawer = false
         railDrawer = false
         navigation = .wide(state)
         willSelect(mainRoute, from: previous)
+    }
+
+    /// 回到 Cue 铺满（会话条最上那一行）：主区的页留着，再点它那一行就回去。
+    func goHome() {
+        guard case .wide(var state) = navigation, !state.home else { return }
+        openTask = nil
+        state.home = true
+        cueDrawer = false
+        railDrawer = false
+        navigation = .wide(state)
     }
 
     /// 会话条的开合钮与 ⌃⌘S：放得下时开合用户的选择（`railExpanded`），放不下时拉出、收回左缘的抽屉（`railDrawer`），同 Cue 放不下时的右缘抽屉。
@@ -52,7 +63,7 @@ extension Workspace {
     /// 收起露着的 Cue（Cue 栏头最右那颗、iPad 的 Cue 钮、⌃⌘I）：在抽屉里（放不下，`fits` 为假）只关抽屉，不改用户放不放回右边的选择；在右边的收成钮。
     func hideCue(fits: Bool) {
         cueDrawer = false
-        if fits { services.settings.cueOpen = false }
+        if fits, !cueHome { services.settings.cueOpen = false }
     }
 
     func cueShown(_ sizes: WideMetrics) -> Bool { sizes.cue > 0 || !sizes.cueFits && cueDrawer }
@@ -74,6 +85,7 @@ extension Workspace {
             if state.beside?.id == session.id { state.beside = nil }
             state.main = .session(session)
         }
+        state.home = false
         presentWide(state)
         #if os(macOS)
         if let alerts = services.alerts { Task { await alerts.dismiss(session: session.id) } }
@@ -113,14 +125,14 @@ extension Workspace {
         if mainRoute != previous { willSelect(mainRoute, from: previous) }
     }
 
-    /// 会话栏头的 ×：关左半时右半的会话占满主区，只有一个时回项目列表或进展（`browseRoute`）；关右半回到只开一个。不另存返回来源。
+    /// 并排时栏头的 ×：关左半时右半的会话占满主区，关右半回到只开一个。只开一个时没有 ×（换去处靠会话条），键盘的返回回到 Cue。不另存返回来源。
     func closeColumn(_ column: Column) {
         guard case .wide(var state) = navigation else { return }
         switch column {
         case .main:
             let beside = state.beside
             state.beside = nil
-            state.main = beside.map(WideNavigation.Main.session) ?? .browse
+            if let beside { state.main = .session(beside) } else { state.main = .browse; state.home = true }
         case .beside: state.beside = nil
         }
         presentWide(state)

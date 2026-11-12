@@ -15,7 +15,7 @@ struct SplitRoot: View {
             let sizes = WideMetrics(width: geometry.size.width, workspace: workspace)
             HStack(spacing: 0) {
                 if sizes.railFits { WideRail(width: sizes.rail, sizes: sizes) }
-                WideColumnHost(slot: .main, focus: focus, origin: sizes.rail, width: sizes.leading, shape: sizes.shape) {
+                WideColumnHost(slot: .main, focus: focus, origin: sizes.rail, width: sizes.leading, shape: sizes.shape, hidden: sizes.home) {
                     destination(workspace.mainRoute, column: .main)
                         .environment(\.headInset, EdgeInsets(top: 0, leading: Chrome.headLead(rail: sizes.rail), bottom: 0, trailing: Spacing.page))
                 }
@@ -30,16 +30,14 @@ struct SplitRoot: View {
                 }
                 Spacer(minLength: 0)
             }
-            // 藏起时顶上那一排原地浮着；放不下时拉出的抽屉里有同一排（同一个位置），抽屉开着就不再浮一份
-            .overlay(alignment: .topLeading) { if !workspace.railShown(sizes) { RailTopTools(sizes: sizes, floating: true) } }
-            .overlay(alignment: .leading) {
-                if !sizes.railFits { RailDrawer(open: workspace.railDrawer, close: { workspace.railDrawer = false }) { WideRail(width: Chrome.rail, sizes: sizes) } }
-            }
+            .overlay { if !sizes.home { railChrome(sizes) } }
             .readerHidden(covered)
             // 排在最上：抽屉开着时它与接点按的底盖住浮着的那一排与会话条的抽屉
             .overlay {
                 CueDock(sizes: sizes, width: geometry.size.width, focus: focus, bleed: EdgeInsets(top: geometry.safeAreaInsets.top, leading: 0, bottom: 0, trailing: 0)) { _ in cue }
             }
+            // Cue 铺满时它那一块伸到窗口左缘（会话条藏起）：浮着的那一排与会话条的抽屉排在它上面，不然点不到（同 Mac 的 `MainWindow`）
+            .overlay { if sizes.home { railChrome(sizes).readerHidden(covered) } }
             .reportsWideFits(sizes, to: workspace)
             // 桌面色一处铺满窗口（托管的几块是透明的，`WideColumnController`）：几块的上沿排在状态栏底下，状态栏那一条也要是桌面色
             .background(palette.desk)
@@ -47,6 +45,15 @@ struct SplitRoot: View {
         .overlay(alignment: .top) { NoticeBanner().readerHidden(covered) }
         .environment(\.wideWindowID, focus.windowID)
         .onChange(of: covered) { DebugHooks.readerLayers(outsideCue: covered, drawer: workspace.cueDrawer) }
+    }
+
+    /// 藏起时顶上那一排原地浮着；放不下时拉出的抽屉里有同一排（同一个位置），抽屉开着就不再浮一份。
+    private func railChrome(_ sizes: WideMetrics) -> some View {
+        ZStack(alignment: .topLeading) {
+            if !workspace.railShown(sizes) { RailTopTools(sizes: sizes, floating: true) }
+            if !sizes.railFits { RailDrawer(open: workspace.railDrawer, close: { workspace.railDrawer = false }) { WideRail(width: Chrome.rail, sizes: sizes) } }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     private var cue: some View {

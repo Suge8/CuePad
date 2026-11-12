@@ -6,10 +6,13 @@ import SwiftUI
 /// 它嵌在自己的托管视图里（`WideColumnHost`）：在窗口的托管视图里时 Cue 页的滚动区伸到标题栏底下，系统在那一截盖上滚动边缘效果、栏头看不见（`ColumnHostingView`）。
 struct CueColumn: View {
     let fits: Bool
+    /// 铺满着：栏头左边让出会话条藏起时的开合钮（`lead`），没有收起右栏那颗（换去处靠会话条）。
+    let home: Bool
+    let lead: CGFloat
 
     var body: some View {
         VStack(spacing: 0) {
-            CueTitle(fits: fits)
+            CueTitle(fits: fits, home: home, lead: lead)
             CuePage().fadesUnderHead()
         }
         .ignoresSafeArea(.container, edges: .top)
@@ -19,6 +22,8 @@ struct CueColumn: View {
 /// 大脑那一排要的（`observingCueBrain`）随栏头一直订阅着：面板开时才建，长出的第一帧就是真的。
 struct CueTitle: View {
     let fits: Bool
+    let home: Bool
+    let lead: CGFloat
     @Environment(Workspace.self) private var workspace
     @State private var panel = BubbleSwitch()
     @State private var brain: AgentModelChoice?
@@ -34,13 +39,18 @@ struct CueTitle: View {
                 .accessibilityAddTraits(.isHeader)
                 .accessibilityHint(panel.open ? "收起" : "换模型，看它刚记下的，去记忆与设置")
                 .bubble(isPresented: $panel.open, width: .fixed(Self.panelWidth)) { CueNowPanel(brain: brain, close: { panel.open = false }) }
-            Button("收起右栏", icon: .rightColumn) { workspace.hideCue(fits: fits) }
-                .labelStyle(.iconOnly)
-                .buttonStyle(ControlButtonStyle(kind: .icon))
-                .padding(.leading, Spacing.item)
-                .help("收起右栏（⌃⌘I）")
+            if home {
+                Spacer(minLength: 0)
+            } else {
+                Button("收起右栏", icon: .rightColumn) { workspace.hideCue(fits: fits) }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(ControlButtonStyle(kind: .icon))
+                    .padding(.leading, Spacing.item)
+                    .help("收起右栏（⌃⌘I）")
+            }
         }
-        .padding(.horizontal, Spacing.page)
+        .padding(.leading, home ? lead : Spacing.page)
+        .padding(.trailing, Spacing.page)
         .frame(height: Chrome.band)
         .windowDragArea()
         .observingCueBrain(into: $brain)

@@ -19,7 +19,6 @@ extension DebugSceneEntry {
         if DebugScene.args.demo { await DebugScene.seedCue(workspace.services) }
         if let draft = DebugScene.args.cueOpts.draft { workspace.cue.draft.text = draft }
         workspace.show(.cue)
-        if workspace.layout == .wide { workspace.sidebarOpen = true }
         if scene == "cuememory" { workspace.cue.showsMemory = true } else { workspace.cue.showsSchedules = scene == "cueschedules" }
         if DebugScene.args.layoutOpts.panelCycle { Task { await DebugScene.cyclePanel() } }
         #endif

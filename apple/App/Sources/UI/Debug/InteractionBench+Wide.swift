@@ -3,7 +3,7 @@ import AppKit
 import CueStore
 
 /// 宽屏自动阈值（`-CuePadBench interact` 的最后一段）：三种主区（看板、一个会话、并排两个会话）各在两道临界宽度上下 1 点来回改窗口宽（同人拖窗口边的那一下）：
-/// 会话条自动藏起（`WideMetrics.railThreshold`，256 ↔ 0）与 Cue 自动收成钮（`cueThreshold`）。临界宽不随主区放什么变，三种主区量的是同一下里各页重排的开销。每一下按 `measure` 的口径量回合、指令与掉帧，行里另记：
+/// 会话条自动藏起（`WideMetrics.railThreshold`，256 ↔ 0，那时 Cue 早已收成钮）与 Cue 自动收成钮（`cueThreshold`，会话条开着）。临界宽只随并排与否变，三种主区量的是同一下里各页重排的开销。每一下按 `measure` 的口径量回合、指令与掉帧，行里另记：
 /// - `railPt`、`cue`：停下后会话条的宽与 Cue 露没露着，`railOK` 是这两样都对，`crossed` 是这一下真的跨过了阈值（会话条换了宽或 Cue 换了样；反向那一项是主区真的滑起来了）；
 ///   `stateOK`：偏好（会话条开合、Cue 开合、项目｜进展、当前项目）、主区去处与各份草稿都没被改；`page`：页面没被重建、每块停在中段读的那一项还在眼前（`WidePage`；ok、验不了的 untested、没保住的 broken，`pageUntested` 列出验不了的滚动视图，哪一栏第几个、为什么），
 ///   `pages` 是逐栏的判定、锚点、跨阈值前后离顶与离底的距离、锚点离可视区正中多远、锚点的框与可视区（窗口坐标）。除了验不了，任一项不对 `perf-mac.sh` 判失败；
@@ -54,13 +54,18 @@ extension InteractionBench {
         defer { watch.stop() }
         for item in selected {
             arrange(item, in: workspace, sessions: sessions)
-            let threshold = WideMetrics.railThreshold(cueOpen: true), cueThreshold = WideMetrics.cueThreshold
-            resize(threshold)
+            let split = item.sessions > 1
+            let threshold = WideMetrics.railThreshold(split: split), cueThreshold = WideMetrics.cueThreshold(split: split)
+            // 基线在会话条与 Cue 都露着的最窄宽上读（Cue 的临界宽）：会话条的临界宽上 Cue 已经收成钮，它那一栏没有能滚的、读不到阅读位置。
+            // 两个宽上主区一样宽（都是最窄），主区的那一条不因此挪。
+            resize(cueThreshold)
             await Task.wait(for: .seconds(1))
             await WidePage.scrollToMiddle(wideColumns(in: view))
             let before = snapshot(workspace, ids: ids)
             let page = WidePage(wideColumns(in: view))
-            func step(_ name: String, width: CGFloat, rail: CGFloat, cue: Bool = true, reverse: Bool = false) async {
+            resize(threshold)
+            await Task.wait(for: .seconds(1))
+            func step(_ name: String, width: CGFloat, rail: CGFloat, cue: Bool, reverse: Bool = false) async {
                 guard only?.contains(name) ?? true else {
                     // 不量也照样改宽：下一步才是从阈值另一侧跨过来（反向那一下停回原宽，不必做）
                     if !reverse { resize(width) }
@@ -121,15 +126,15 @@ extension InteractionBench {
             }
             let narrow: CGFloat = 0, wide = Chrome.rail
             for _ in 0..<2 {
-                await step("宽屏收窄·\(item.name)", width: threshold - 1, rail: narrow)
-                await step("宽屏展开·\(item.name)", width: threshold, rail: wide)
+                await step("宽屏收窄·\(item.name)", width: threshold - 1, rail: narrow, cue: false)
+                await step("宽屏展开·\(item.name)", width: threshold, rail: wide, cue: false)
             }
-            await step("宽屏反向·\(item.name)", width: threshold - 1, rail: wide, reverse: true)
+            await step("宽屏反向·\(item.name)", width: threshold - 1, rail: wide, cue: false, reverse: true)
             resize(cueThreshold)
             await Task.wait(for: .seconds(1))
             for _ in 0..<2 {
-                await step("Cue 收钮·\(item.name)", width: cueThreshold - 1, rail: narrow, cue: false)
-                await step("Cue 露出·\(item.name)", width: cueThreshold, rail: narrow)
+                await step("Cue 收钮·\(item.name)", width: cueThreshold - 1, rail: wide, cue: false)
+                await step("Cue 露出·\(item.name)", width: cueThreshold, rail: wide, cue: true)
             }
         }
     }

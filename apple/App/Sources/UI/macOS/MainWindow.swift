@@ -33,8 +33,10 @@ struct MainWindow: View {
             HStack(spacing: 0) {
                 // 放不下时也挂着（宽 0、不放循环动效、订阅暂停）：窗口拖窄跨过临界宽的那一下主区从它上面滑过去，露出的是它本身
                 WideRail(width: sizes.rail)
-                WideColumnHost(slot: .main, focus: focus, origin: sizes.rail, width: sizes.leading, shape: sizes.shape) {
+                // Cue 铺满时主区让出去（宽 0）、页留着不拆，订阅暂停
+                WideColumnHost(slot: .main, focus: focus, origin: sizes.rail, width: sizes.leading, shape: sizes.shape, hidden: sizes.home) {
                     MainColumn().environment(\.headInset, Self.inset(leading: Chrome.headLead(rail: sizes.rail), trailing: sizes.split ? Spacing.page : trail))
+                        .environment(\.pageActive, !sizes.home)
                 }
                 .frame(width: sizes.leading)
                 if sizes.split {
@@ -45,17 +47,24 @@ struct MainWindow: View {
                 }
                 Spacer(minLength: 0)
             }
-            .overlay(alignment: .leading) {
-                if !sizes.railFits { RailDrawer(open: workspace.railDrawer, close: { workspace.railDrawer = false }) { WideRail(width: Chrome.rail) } }
-            }
-            .overlay(alignment: .topLeading) { SidebarToggle(sizes: sizes) }
+            .overlay { if !sizes.home { railChrome(sizes) } }
             .reportsWideFits(sizes, to: workspace)
             .overlay(alignment: .topTrailing) {
                 if !workspace.cueShown(sizes) { CueButton(fits: sizes.cueFits).padding(.trailing, Spacing.page).frame(height: Chrome.band) }
             }
             // 排在最上：抽屉开着时它与接点按的底盖住会话条、开合钮与别的抽屉
-            .overlay { CueDock(sizes: sizes, width: geometry.size.width, focus: focus) { CueColumn(fits: $0) } }
+            .overlay { CueDock(sizes: sizes, width: geometry.size.width, focus: focus) { CueColumn(fits: $0, home: sizes.home, lead: Chrome.headLead(rail: sizes.rail)) } }
+            // Cue 铺满时它那一块伸到窗口左缘（会话条藏起）：开合钮与会话条的抽屉排在它上面，不然点不到
+            .overlay { if sizes.home { railChrome(sizes) } }
         }
+    }
+
+    private func railChrome(_ sizes: WideMetrics) -> some View {
+        ZStack(alignment: .topLeading) {
+            if !sizes.railFits { RailDrawer(open: workspace.railDrawer, close: { workspace.railDrawer = false }) { WideRail(width: Chrome.rail) } }
+            SidebarToggle(sizes: sizes)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     private static func inset(leading: CGFloat = Spacing.page, trailing: CGFloat) -> EdgeInsets {
