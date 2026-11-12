@@ -1,6 +1,6 @@
 # Contributing to CuePad
 
-Thanks for your interest in CuePad. To build and run it, follow [Quick start](../README.md#quick-start) in the README. Project conventions, commands and guardrails are in [AGENTS.md](../AGENTS.md), with topic notes in [docs/](../docs/). Code comments and docs are mostly in Chinese; issues and PRs in English are fine.
+Thanks for your interest in CuePad. To build and run it you need macOS 26 and Xcode 27, no Apple developer account: open `apple/CuePad.xcodeproj`, pick the CuePad scheme and My Mac, then ⌘R. Project conventions, commands and guardrails are in [AGENTS.md](../AGENTS.md), with topic notes in [docs/](../docs/). Code comments and docs are mostly in Chinese; issues and PRs in English are fine.
 
 ## Setup
 
