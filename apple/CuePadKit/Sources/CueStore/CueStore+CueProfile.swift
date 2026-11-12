@@ -51,7 +51,7 @@ extension CueStore {
     return CueDuty(name: profile.name, left: state?.left ?? [])
   }
 
-  /// 会话没停着（在跑、被打断、已结束）抛 `notStopped`。你发起的一轮停下不经这里，当场留给你（`leaveHisStops`）。
+  /// 会话没停着（在跑、已结束）抛 `notStopped`。你发起的一轮停下不经这里，当场留给你（`leaveHisStops`）。
   @discardableResult
   public func leaveToYou(_ sessionID: String) throws -> UUID {
     try write {

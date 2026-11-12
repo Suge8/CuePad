@@ -44,8 +44,8 @@ public enum WorkState: String, Sendable, CaseIterable {
   /// 与 `isTurnRunning` 的差别只有等子代理（这时指挥官自己没在跑一轮，但托管的进程还有活）。
   public var hasPendingWork: Bool { isWorking || self == .waitingForUser }
 
-  /// 停下等人接手：这一轮做完歇着、在等回答，或出错。会话停下时谁接手（Cue 接着推进，还是留给你回，`CueLeft`）只说这几种。
-  var isStopped: Bool { self == .settled || self == .waitingForUser || self == .error }
+  /// 停下等人接手：这一轮做完歇着、在等回答、出错，或做到一半被打断。会话停下时谁接手（Cue 接着推进，还是留给你回，`CueLeft`）只说这几种。
+  var isStopped: Bool { self == .settled || self == .waitingForUser || self == .error || self == .interrupted }
 }
 
 extension WorkState {

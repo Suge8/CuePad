@@ -37,7 +37,7 @@ import Testing
     try await store.runtimeRecorder(on: "mac").update(sessionID: "s1", state: .waitingForUser, detail: "确认写入？")
 
     #expect(try await store.cueTally().waiting.map(\.task) == [open.id])
-    let changes = try await store.cueChanges(after: since).due.filter { $0.session?.sessionID == "s1" }
+    let changes = try await store.cueChanges(after: since).filter { $0.session?.sessionID == "s1" }
     #expect(changes.map(\.kind) == [.waitingForUser])
     #expect(changes.map(\.task?.id) == [open.id] && changes.map(\.leaf?.id) == [open.id])
 

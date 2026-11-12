@@ -47,7 +47,7 @@ extension CueHostTests {
         try await eventually("工具当场报了没送到") { rig.model.answered("没送到——会话已关闭") }
         try await eventually("这一轮做完、记下 Cue 已知道") {
             let failed = try await rig.store.deliveryRequests(toSession: "remote-3").contains { $0.failure != nil }
-            let reported = try await rig.store.cueChanges(after: CueMarks(0)).due.contains { $0.kind == .undelivered }
+            let reported = try await rig.store.cueChanges(after: CueMarks(0)).contains { $0.kind == .undelivered }
             return failed && !reported
         }
         await macB.stop()

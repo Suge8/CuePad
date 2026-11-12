@@ -39,24 +39,6 @@ extension CueEvalTests {
         }
     }
 
-    @Test func z只是应一声() async throws {
-        try await CueEval.run(
-            "z-只是应一声",
-            expect: "他 15 分钟前在会话里说限流那条先不做，会话只应了一声（「好，限流不做，同意。」）就歇下、没在等他（CuePad 已当场留给他）：task take 收回、不 tell、不发等你"
-        ) { eval in
-            let work = try await eval.rig.working(Self.title, Self.body)
-            try await eval.trigger {
-                try await eval.rig.settleHisTurn(work, said: "限流那条先不做了，以后再说。", ago: 15 * 60, reply: "好，限流不做，同意。")
-            }
-            let session = try #require(try await eval.rig.store.sessions(matching: work.id).first)
-            return [
-                Check(.interrupt, "收回了，不再待回复", !session.awaitsReply(try await eval.rig.store.cueDuty())),
-                Check(.ask, "没发等你", try await eval.said().allSatisfy { $0.choices == nil }),
-                Check(.interrupt, "没打扰他（没 tell）", eval.calls("tell").isEmpty),
-            ]
-        }
-    }
-
     @Test func o调研交回要他看() async throws {
         try await CueEval.run(
             "o3-调研交回要他看",
@@ -95,5 +77,24 @@ extension CueEvalTests {
         推荐 APNs 直连：现在只有 iOS，少一个第三方依赖、数据不出苹果。
         要你定的：安卓版一年内做不做——要做就直接上 FCM，省得以后迁移。
         """
+
+    @Test func t他刚说过话_Cue说的那一轮做完照样收尾() async throws {
+        try await CueEval.run(
+            "t-Cue说的那一轮做完照样收尾",
+            expect: "他 7 分钟前在会话里说过话，之后 Cue 说的那句开的一轮做完（带测试输出与截图）：归 Cue，被叫醒、核对后 done"
+        ) { eval in
+            let rig = eval.rig
+            let work = try await rig.working(Self.title, Self.body)
+            try await rig.shots([("登录页改前改后.png", "登录页 忘记密码 改前改后")], from: work, drawing: { _ in try loginShot() })
+            try await eval.trigger {
+                try await rig.settleCueTurn(
+                    work, his: "进度怎么样了？", ago: 7 * 60, cue: "把测试输出和改前改后的截图补上。", reply: Self.doneReply)
+            }
+            return [
+                Check(.result, "被叫醒", eval.round?.sent.contains { $0.contains("[歇下] \(Self.title)") } == true),
+                Check(.result, "done 了", eval.calls("task", "done").contains { !$0.call.failed }),
+            ]
+        }
+    }
 }
 #endif

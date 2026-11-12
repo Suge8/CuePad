@@ -169,7 +169,7 @@ extension Schema {
     \(agentLibrariesTable)
     \(agentLibraryFilesTable)
     \(activityDestinationsTable)
-    -- 每台设备自己写：此刻开着哪些会话、开没开着 Cue 页、他最近一次来到这台的时刻（会话停下时他在不在场的一半；提示到不到他）。
+    -- 每台设备自己写：此刻开着哪些会话、开没开着 Cue 页、他最近一次来到这台的时刻（提示到不到他）。
     CREATE TABLE sessionViewers (
       id TEXT PRIMARY KEY NOT NULL, device TEXT NOT NULL, sessionIDs TEXT, modifiedAt INTEGER NOT NULL, cue INTEGER, arrivedAt INTEGER
     ) STRICT;
