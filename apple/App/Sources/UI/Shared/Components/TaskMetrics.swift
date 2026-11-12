@@ -46,10 +46,10 @@ enum BoardCardMetrics {
     static let rowTitle = Typography.secondary.weight(.medium)
     /// 列里的卡：字离上下边、标题与卡脚之间、卡脚的高（放得下线，也放得下"开始"的点按区）。
     #if os(macOS)
-    static let pad = Spacing.item
-    static let footGap = Spacing.tight
+    static let pad = Spacing.group
+    static let footGap = Spacing.glyph
     static let foot: CGFloat = 18
-    static let vitals: CGFloat = 14
+    static let vitals: CGFloat = 16
     #else
     static let pad = Spacing.group
     static let footGap = Spacing.glyph
@@ -66,4 +66,6 @@ enum BoardCardMetrics {
     static let tagMax: CGFloat = 104
     /// 手机的行里的卡。
     static let titleRow: CGFloat = 24
+    /// 推进中的行下沿给读数留的高。
+    static let rowFact: CGFloat = 18
 }

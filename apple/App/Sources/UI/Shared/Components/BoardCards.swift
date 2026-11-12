@@ -203,7 +203,7 @@ struct BoardSessionCard: View {
 /// 列里的卡：标题（至多两行，右上角是哪家 Agent 的标志）、推进中多一行此刻在干什么（`BoardNow`）、卡脚。
 /// 卡脚左端项目，右端这一列要说的那一样——推进中是上下文与时长（`BoardVitals`），别的列是 `facts`。
 /// 状态词不放在标题右端：窄列里标题会只剩四五个字。
-/// 手机的行里格子窄而矮，还是一排：图标、项目小图形、标题，推进中的右端写时长与要你管的状态词。
+/// 手机的行里格子窄而矮，还是一排：图标、项目小图形、标题，推进中的下沿写要你管的状态词与时长。
 struct BoardCardLayout<Icon: View, Title: View, Facts: View, Trailing: View>: View {
     let advancing: Bool
     var pulse = BoardPulse()
@@ -262,6 +262,17 @@ struct BoardCardLayout<Icon: View, Title: View, Facts: View, Trailing: View>: Vi
                 .frame(height: advancing ? BoardCardMetrics.vitals : BoardCardMetrics.foot)
             }
             .padding(.vertical, compact ? BoardCardMetrics.compactPad : BoardCardMetrics.pad)
+        } else if advancing {
+            // 读数在标题下面另起一行：并排的话窄格里标题被挤没
+            line.frame(maxHeight: .infinity).padding(.bottom, BoardCardMetrics.rowFact)
+                .overlay(alignment: .bottomLeading) {
+                    HStack(spacing: Spacing.tight) {
+                        if pulse.speaks { BoardWord(pulse: pulse) }
+                        if let clock = pulse.shown?.clock { TimeSpent(clock: clock) }
+                    }
+                    .font(TaskMetrics.caption).lineLimit(1)
+                    .padding(.leading, TaskMetrics.cardLead + BoardCardMetrics.rowGap).padding(.bottom, Spacing.glyph)
+                }
         } else {
             line.frame(maxHeight: .infinity)
         }
@@ -288,13 +299,6 @@ struct BoardCardLayout<Icon: View, Title: View, Facts: View, Trailing: View>: Vi
             }
             .font(BoardCardMetrics.rowTitle).lineLimit(BoardCardMetrics.lines(typeSize))
             Spacer(minLength: 0)
-            if advancing {
-                Group {
-                    if pulse.speaks { BoardWord(pulse: pulse) }
-                    if let clock = pulse.shown?.clock { TimeSpent(clock: clock) }
-                }
-                .font(TaskMetrics.caption).lineLimit(1).fixedSize()
-            }
             trailing
         }
         .frame(minHeight: BoardCardMetrics.titleRow)

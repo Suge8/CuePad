@@ -96,7 +96,7 @@ struct BoardWaitCard: View {
     #endif
 }
 
-/// 上面一行小字：拍板还是待回复、项目、哪个会话、等了多久、哪家 Agent；下面是等你的那一句。
+/// 摊开的那张，上面一行小字：拍板还是待回复、项目、哪个会话、等了多久、哪家 Agent；下面是等你的那一句。
 private struct BoardWaitFace: View {
     let held: TaskBoard.Held
     let project: Project?
@@ -127,7 +127,7 @@ private struct BoardWaitFace: View {
             }
             BoardFoot(glyph: BoardCardMetrics.footGlyph) {
                 if let project { BoardProjectTag(project: project) } else { Color.clear.frame(width: 0) }
-                HStack { Spacer(minLength: 0); TimeSpent(clock: .waiting(since: held.session.stateSince)).lineLimit(1).fixedSize() }
+                HStack { Spacer(minLength: 0); waited }
             }
             .frame(height: BoardCardMetrics.vitals)
         }
@@ -137,17 +137,14 @@ private struct BoardWaitFace: View {
     }
 
     private var kind: Text { Text(held.deciding ? "拍板" : "待回复") }
-    private var waited: some View {
-        LiveText(style: SessionClock.Waited(since: held.session.stateSince)).foregroundStyle(palette.ink3).lineLimit(1).fixedSize()
-    }
+    private var waited: some View { TimeSpent(clock: .waiting(since: held.session.stateSince)).lineLimit(1).fixedSize() }
 
     private var open: some View {
         VStack(alignment: .leading, spacing: Spacing.item) {
-            // 放不下就少写：先去掉会话名与 Agent，再去掉项目——哪种与等了多久一直在
+            // 名字写不下三四个字就不写（只剩一个"…"）；别的一直在
             ViewThatFits(in: .horizontal) {
-                meta(name: true, project: true)
-                meta(name: false, project: true)
-                meta(name: false, project: false)
+                meta(named: true)
+                meta(named: false)
             }
             .font(TaskMetrics.caption)
             HStack(alignment: .firstTextBaseline, spacing: Spacing.tight) {
@@ -160,15 +157,15 @@ private struct BoardWaitFace: View {
         .contentShape(.rect)
     }
 
-    private func meta(name: Bool, project shown: Bool) -> some View {
+    private func meta(named: Bool) -> some View {
         HStack(spacing: Spacing.glyph) {
             kind.fontWeight(.semibold).foregroundStyle(palette.waiting).fixedSize()
-            // 这一行窄：项目只画图形（名字在悬停提示里），地方留给会话名
-            if shown, let project { ProjectGlyph(project: project, size: TaskMetrics.cardGlyph).help(project.shownName) }
-            if name, ask != nil { Text(verbatim: held.title).foregroundStyle(palette.ink3).lineLimit(1).frame(minWidth: Self.nameMin, alignment: .leading) }
+            if let project { ProjectGlyph(project: project, size: TaskMetrics.cardGlyph).help(project.shownName) }
+            // 问句是大字时才另写名字（没有问句时大字就是名字）
+            if named, ask != nil { Text(verbatim: held.title).foregroundStyle(palette.ink3).lineLimit(1).frame(minWidth: Self.nameMin, alignment: .leading) }
             Spacer(minLength: Spacing.item)
             waited
-            if name { AgentMark(session: held.session, font: TaskMetrics.caption, named: false).fixedSize() }
+            AgentMark(session: held.session, font: TaskMetrics.caption, named: false).fixedSize()
         }
     }
 
@@ -176,7 +173,6 @@ private struct BoardWaitFace: View {
 
     private static let focalLines = 6
     private static let foldedLines = 2
-    /// 会话名至少写得下三四个字才写，不然只剩一个"…"。
     private static let nameMin: CGFloat = 48
 }
 

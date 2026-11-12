@@ -244,8 +244,13 @@ struct BoardColumn: View {
 
     private func drop(session id: String) {
         let loose = board.advancing.compactMap(\.loose) + board.held.filter { $0.item == nil }.map { SessionListItem(state: $0.session) }
-        guard column == .done, let agent = loose.first(where: { $0.state.sessionID == id }) else { return }
-        workspace.attempt { try await workspace.finish(agent) }
+        guard let agent = loose.first(where: { $0.state.sessionID == id }) else { return }
+        switch column {
+        case .done: workspace.attempt { try await workspace.finish(agent) }
+        // 没绑任务的会话没有"待办"：拖过去是要它停下，走结束会话那一问（对话留着，再说话就恢复）
+        case .todo: if agent.state.canEnd { workspace.sessionAsk = .end(agent.state) }
+        case .advancing, .waiting: break
+        }
     }
 
     private func start(_ task: Card) { workspace.handOff(task) }

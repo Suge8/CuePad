@@ -84,6 +84,15 @@ private struct SessionAnswer: View {
             // 看板上待回复的卡（它没在问，只是说完了等你回话）当场回一句；问了应用里答不了的题才只给打开会话
             if leading, session.question == nil {
                 WaitReply(session: session, prompt: String(localized: "回复"))
+            } else if leading {
+                // 卡上只这一件能做的事：铺满卡宽、字居中，同选项那一行的样子
+                Button { workspace.openSession(session.id, sessionID: session.sessionID) } label: {
+                    Text("打开会话").font(Typography.body.weight(.medium)).foregroundStyle(palette.ink)
+                        .frame(maxWidth: .infinity, minHeight: ControlSize.regular.height)
+                        .background(palette.fill, in: RoundedRectangle(cornerRadius: Radius.block))
+                        .contentShape(.rect)
+                }
+                .buttonStyle(PressStyle(.card))
             } else if !replyElsewhere {
                 chips {
                     Button("打开会话") { workspace.openSession(session.id, sessionID: session.sessionID) }

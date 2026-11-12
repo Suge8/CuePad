@@ -140,6 +140,10 @@ extension DebugScene {
             _ = try await store.leaveToYou("notes")
             if args.driveOpts.waitKinds {
                 for id in ["homepage", "deploy", "rename"] { _ = try await store.leaveToYou(id) }
+                // 已完成列里一件带成果图的
+                if let done = try await store.tasks(.done).flatMap(\.tasks).first(where: { $0.parentID == nil }) {
+                    _ = try await store.addCueMessage(.cue, text: String(localized: "做完了，预发上是这个样子。", table: "Demo"), shots: try await deployShots(store), task: done.id)
+                }
                 try await store.markCueRead(through: .now)
             }
             try await seedReplies(args.replies, store: store)
