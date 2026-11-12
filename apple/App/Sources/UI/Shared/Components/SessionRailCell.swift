@@ -57,15 +57,16 @@ struct SessionRailCell: View {
 
     @ViewBuilder private var control: some View {
         #if os(macOS)
-        Button { open(item.session, (NSApp.currentEvent?.modifierFlags.contains(.command) == true) ? .beside : .primary) } label: { label }
-            .buttonStyle(RowStyle(selected: selected))
+        let button = Button { open(item.session, (NSApp.currentEvent?.modifierFlags.contains(.command) == true) ? .beside : .primary) } label: { label }
+        // 卡自己有面，不要行的悬停底（它比卡宽出一圈）
+        if compact { button.buttonStyle(RowStyle(selected: selected)) } else { button.buttonStyle(PressStyle(.button)) }
         #else
         if form == .phone {
             Button { open(item.session, .primary) } label: { label }
                 .buttonStyle(RowStyle(selected: selected))
         } else {
             label
-                .row(selected: selected)
+                .row(selected: selected && compact)
                 .gesture(SessionTap { open(item.session, $0 ? .beside : .primary) })
                 .focusable(interactions: .activate)
                 .onKeyPress(.space) { open(item.session, .primary); return .handled }
@@ -115,7 +116,8 @@ struct SessionRailCell: View {
             .lineLimit(1)
     }
 
-    /// 等你的一张卡：纸色同看板等你那一列的卡，三行都是字——名字与等了多久、它要你做什么、哪个项目的哪家 Agent。
+    /// 等你的一张卡：纸色同看板等你那一列的卡，浮起一档。三行：名字与等了多久，它要你做什么，左边哪个项目（图形带名字）、右边哪家 Agent 的标志。
+    /// 开着的那张描一圈墨边。
     private var card: some View {
         VStack(alignment: .leading, spacing: Spacing.tight) {
             HStack(alignment: .firstTextBaseline, spacing: Spacing.item) {
@@ -132,11 +134,21 @@ struct SessionRailCell: View {
             }
             .font(Typography.caption)
             .lineLimit(1)
-            Text(verbatim: Dotted(project?.shownName, item.session.agentMark).visible).font(Typography.caption).foregroundStyle(palette.ink3).lineLimit(1)
+            HStack(spacing: Spacing.tight) {
+                if let project {
+                    ProjectGlyph(project: project, size: 11)
+                    Text(verbatim: project.shownName).foregroundStyle(palette.ink3)
+                }
+                Spacer(minLength: 0)
+                if let agent = item.session.agent.known { agent.mark.image.font(Glyph.row).foregroundStyle(palette.ink2).readerHidden(true) }
+            }
+            .font(Typography.caption)
+            .lineLimit(1)
         }
-        .padding(Spacing.item)
+        .padding(.horizontal, Spacing.group).padding(.vertical, Spacing.item)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .paper(cornerRadius: Radius.row, wash: TaskBoard.Column.waiting.paper(palette))
+        .paper(cornerRadius: Radius.card, lifted: true, wash: TaskBoard.Column.waiting.paper(palette))
+        .overlay { if selected { RoundedRectangle(cornerRadius: Radius.card, style: .continuous).strokeBorder(palette.ink2, lineWidth: 1.5) } }
     }
 
     private var mark: some View {
