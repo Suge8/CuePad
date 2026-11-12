@@ -13,7 +13,7 @@ sys.dont_write_bytecode = True
 ROOT = os.path.abspath("..")
 # 仓库里的 Markdown 只有这些：新加一份先想它是不是该写成报错、lint 或代码旁的注释（AGENTS.md「文档」），确要加再登记
 AGENT_DOCS = """AGENTS.md WORDS.md landing/AGENTS.md design/tools/AGENTS.md relay/README.md apple/scripts/AGENTS.md
-apple/App/Strings/AGENTS.md apple/CuePadKit/Sources/CueBridge/README.md""".split()
+apple/App/Strings/AGENTS.md apple/CloudKit/AGENTS.md apple/App/Config/AGENTS.md apple/CuePadKit/Sources/CueBridge/README.md""".split()
 OTHER_DOCS = "README.md README.zh-CN.md THIRD-PARTY-NOTICES.md .github/CONTRIBUTING.md .github/SECURITY.md".split()
 DOCS = re.compile("^(?:" + "|".join(map(re.escape, AGENT_DOCS)) + ")$")
 SOURCE = (".swift", ".ts", ".mjs", ".py", ".sh", ".xcconfig", ".plist", ".entitlements", ".svelte", ".css", ".yml", ".pbxproj")

@@ -15,7 +15,7 @@ Swift 原生应用（macOS / iOS / iPadOS）。术语见 [WORDS.md](WORDS.md)。
 ## 护栏
 
 - 冻结：两份 README 与落地页（`landing/`）现在是占位，`design/readme/` 的截图不重拍；等用户说大更新落地再重写，期间只改 lint 要求与 `Palette` 同步的 `landing/src/styles/base.css` 令牌。
-- 对外发布只在用户明确要求时做（apple/scripts/AGENTS.md）。
+- 对外发布只在用户明确要求时做。
 - 本机构建不开真实资料库：一打开就会升级结构、改写数据并同步出去，正式版之后就打不开了。看真实数据只用只读副本（apple/scripts/AGENTS.md「真实数据复现」）。
 - 测试只用替身，不向其他应用发键鼠事件；全局热键真按下去的那一下只能人工验证。
 - 用户可见行为的端到端测试从 `Workspace` 的方法走（界面的按钮、菜单调的就是它），断言库、提示与回复框，放在 `App/Tests/UI` 的流程测试里；接线与长相用交互验收（apple/scripts/AGENTS.md）。
@@ -27,7 +27,9 @@ Swift 原生应用（macOS / iOS / iPadOS）。术语见 [WORDS.md](WORDS.md)。
 
 改哪里，先读最近那一层的 `AGENTS.md`：
 
-- 发布、签名、CloudKit 结构部署，看真实数据、通知验收、查日志 → [apple/scripts/AGENTS.md](apple/scripts/AGENTS.md)
+- 看真实数据、通知验收、查日志 → [apple/scripts/AGENTS.md](apple/scripts/AGENTS.md)
+- 签名、换成自己的身份 → [apple/App/Config/AGENTS.md](apple/App/Config/AGENTS.md)
+- CloudKit 结构导入与生产部署 → [apple/CloudKit/AGENTS.md](apple/CloudKit/AGENTS.md)
 - 给界面加字、补英文 → [apple/App/Strings/AGENTS.md](apple/App/Strings/AGENTS.md)
 - Pi 桥扩展的协议约定 → [CueBridge README](apple/CuePadKit/Sources/CueBridge/README.md)
 - 中转的部署 → [relay/README.md](relay/README.md)

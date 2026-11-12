@@ -6,7 +6,7 @@
 # 门铃与实时活动中转打包前、归档后各核对一次（check_relay）。
 # 上传后在这个提交上打 ios/<构建号> 标签并推到远端：release-mac.sh 据它核对发版顺序，也是这一版源码的唯一记号。
 # testflight 只经 xc.sh release ios 运行：release-context.py 拿全机发布锁、给这次尝试一个新目录（CUEPAD_RELEASE_OUT），源码取自固定提交的快照。
-# 前提：apple/scripts/AGENTS.md 里的一次性前置。
+# 前提：apple/App/Config/AGENTS.md 里的一次性前置。
 set -euo pipefail
 SCRIPTS="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(cd "$SCRIPTS/../.." && pwd)"
