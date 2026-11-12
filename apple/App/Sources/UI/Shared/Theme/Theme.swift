@@ -8,7 +8,7 @@ nonisolated enum StatusTone: Equatable {
 }
 
 extension TextField where Label == Text {
-    /// 自己画底的一行输入（纸、玻璃上）：占位字用第三档墨色。系统的占位灰在纸与玻璃上不到 4.5:1，与输入框里的占位字也不同深（docs/ui.md）。
+    /// 自己画底的一行输入（纸、玻璃上）：占位字用第三档墨色。系统的占位灰在纸与玻璃上不到 4.5:1，与输入框里的占位字也不同深。
     init(_ prompt: String, text: Binding<String>, palette: Palette, axis: Axis = .horizontal) {
         self.init(text: text, prompt: Text(prompt).foregroundStyle(palette.ink3), axis: axis) { Text(prompt) }
     }

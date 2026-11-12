@@ -1,75 +1,38 @@
 # Cue 评测
 
-改 Cue 的系统提示、工具说明、信封或记忆前后各跑一遍，比同一套场景里真模型的做法。大脑缺省是这台 Mac 上 Claude Code 自己的登录，换 Pi、Codex 与换模型、强度见 `EvalBrain` 头注释（Pi 没有 Anthropic 登录时，`_MODEL` 给 ~/.pi/agent/models.json 里的提供方，如 `magpie/claude/claude-sonnet-5-5`）；经 xcodebuild 传的环境变量要加 `TEST_RUNNER_` 前缀。
+改 Cue 的系统提示、工具说明、信封或记忆前后各跑一遍，比同一套场景里真模型的做法。
 
 ## 三套场景
 
 ```bash
-# 短场景
-TEST_RUNNER_CUEPAD_CUE_EVAL=1 TEST_RUNNER_CUEPAD_CUE_EVAL_RUNTIME=pi TEST_RUNNER_CUEPAD_CUE_EVAL_OUT=/tmp/cue-eval/new-short-1 CUEPAD_TEST_TIME_LIMIT=900 \
-  apple/scripts/xc.sh test mac -parallel-testing-enabled YES -only-testing:CuePadTests/CueEvalTests
-# 长程（十分钟左右）：_RUNS=2 同时跑两遍、第 n 遍写到"输出目录-n"
-TEST_RUNNER_CUEPAD_CUE_EVAL=1 TEST_RUNNER_CUEPAD_CUE_EVAL_RUNTIME=pi TEST_RUNNER_CUEPAD_CUE_EVAL_OUT=/tmp/cue-eval/new-long TEST_RUNNER_CUEPAD_CUE_EVAL_RUNS=2 CUEPAD_TEST_TIME_LIMIT=3600 \
-  apple/scripts/xc.sh test mac -parallel-testing-enabled YES -only-testing:CuePadTests/CueEvalLongTests
-# 多日记忆（十分钟左右）：一次一遍
-TEST_RUNNER_CUEPAD_CUE_EVAL=1 TEST_RUNNER_CUEPAD_CUE_EVAL_RUNTIME=pi TEST_RUNNER_CUEPAD_CUE_EVAL_OUT=/tmp/cue-eval/new-days-1 CUEPAD_TEST_TIME_LIMIT=1700 \
-  apple/scripts/xc.sh test mac -only-testing:CuePadTests/CueEvalDaysTests
+apple/scripts/cue-eval.sh short /tmp/cue-eval/new-short-1   # 另有 long、days、failover、bench，用法在脚本头注释
 ```
 
-- 长程、多日考什么、怎么换新，在 `CueEvalLongTests`、`CueEvalDaysTests` 的头注释。只改了一两类行为时，短场景可用 `-only-testing:'CuePadTests/CueEvalTests/<函数名>()'` 只跑受影响的几个，结论照样看两遍以上。
-- 输出目录里有什么见 `CueEvalTests` 头注释；这一遍的系统提示在 `system-prompt.md`。有场景没过时非零退出，输出照样写完。每个场景的库留在 `<场景>.library`，用 `CUEPAD_SHOT_LIBRARY=<它> xc.sh shot mac out.png -- -CuePadScene cue` 看。
-- 开销是大脑自报的 token 与费用，逐轮开销与换新只数 Cue 的（做梦的另存，`EvalBrain`）。缓存跨场景命中一小时，先后跑的缓存读写会不同。
+- 只改了一两类行为时，短场景可只跑受影响的几个（带 `-only-testing`），结论照样看两遍以上。
+- 这一遍的系统提示在 `system-prompt.md`。有场景没过时非零退出，输出照样写完。每个场景的库留在 `<场景>.library`，用 `CUEPAD_SHOT_LIBRARY=<它> xc.sh shot mac out.png -- -CuePadScene cue` 看。
+- 开销是大脑自报的 token 与费用。缓存跨场景命中一小时，先后跑的缓存读写会不同。
+- 做事的标准不在 Cue 的系统提示里（在各家读的规则文件里，全局规则空着时文件页给起步规则）。评测里 Cue 派的会话照真实的搭：由 CuePad 开的（能从 CuePad 结束）。
 
 ## 换大脑
 
-Pi 额度用完、自动换到这台 Mac 上另一家真的 Agent 之后，那家能不能起来接着答（`CueEvalFailoverTests`）。换上的那家用 `_RUNTIME` 选，不能是 Pi：
-
-```bash
-TEST_RUNNER_CUEPAD_CUE_EVAL=1 TEST_RUNNER_CUEPAD_CUE_EVAL_RUNTIME=codex TEST_RUNNER_CUEPAD_CUE_EVAL_OUT=/tmp/cue-eval/failover CUEPAD_TEST_TIME_LIMIT=900 \
-  apple/scripts/xc.sh test mac -only-testing:CuePadTests/CueEvalFailoverTests
-```
+`cue-eval.sh failover <输出目录>`：Pi 额度用完、自动换到这台 Mac 上另一家真的 Agent 之后，那家能不能起来接着答。
 
 ## 会话在问问题：一张表
 
-会话停下来问问题时 Cue 怎么办，照一张表跑（`CueEvalTests.会话在问`，表在它的头注释）：问的是常规取舍还是先问的那几类 × 他放行过没有 × 这一轮是 Cue 派的还是他自己发起的。先问的那几类每格换推送、发布、删数据各跑一遍，一遍 14 个场景（`问-<事>-<放行>-<谁的一轮>`）。看一格过没过把三种事合起来数，结论看三遍以上：模型同一格几遍之间会有一两次不同。
-
-## 其余专门场景
-
-| 场景 | 设定 | 该怎么做 |
-| --- | --- | --- |
-| w | 他亲口放行过推送 | 照原话记成重点；会话再问推送时直接答，不问 |
-| i、j | 他的规矩要先问的事、与规矩无关的事 | 前者 ask=rule 带那条规矩，后者自己定 |
-| x | 一次性的定时到点（提醒他的约定） | 一条 tell 带 urgent |
-| x2 | 他要每周定时做一件事 | 建任务不开工，remind 带 repeat 与 task |
-| x3 | 挂在任务上的每周定时到点 | 开工那件任务，不 done、不打扰 |
-| k、y | 会话交回界面方案、停下问配色 | ask=taste 带方案图（每个方案一张、推荐的在前），不留给他；他点可以后转给会话 |
-| o | 他自己那一轮（CuePad 已留给他回）：会话答了他问的 | 留着待回复，不收回、不 say、不 tell |
-| z | 他那一轮会话只应了一声 | task take 收回，不 tell |
-| o3 | 调研交回，正文写他看完再定 | 一句 tell 说结论与要他定的，再留给他回，先不 done |
-| r | 界面重做这类大的、难改回的事 | 直接开工，正文写明这一轮只出方案、不实现；回复一句，不问要不要开始 |
-| c | 一次交回、证据充分 | 直接 done，不追加要求 |
-| c5 | 同一条证据追问过两次还没补上 | 不问第三次：tell 一句缺什么，留给他 |
-| u2 | 界面成品的截图满是模板痕迹 | read 打开图，say 带百分制分数与具体扣分处，不 done、不 tell |
-| n2 | 他在三个会话里交代过同一条做法（一次换了说法），夹在几十句只管手头那件事的话里 | 后台整理记忆的大脑问他一次要不要记成重点（引他的原话），只在一个会话里说的不问；他点可以，Cue 把原话记成他说的重点 |
-
-他发起的一轮与会话的常规停下另判"没 tell"。做事的标准不在 Cue 的系统提示里（在各家读的规则文件里，全局规则空着时文件页给起步规则）。评测里 Cue 派的会话照真实的搭：由 CuePad 开的（能从 CuePad 结束）。
-
-长程剧本里的会话答不了挑刺的追问：那几件到剧本结束可能没收尾，靠它们收尾的判定记"不计"。比完成数时把这一层算进去。
+表与各格的判定在 `CueEvalTests+Asked.swift` 头注释；一遍 14 个场景（`问-<事>-<放行>-<谁的一轮>`）。看一格过没过把三种事合起来数，结论看三遍以上：模型同一格几遍之间会有一两次不同。
 
 ## 成绩单
 
-改系统提示、工具、记忆前后，短场景、长程、多日各跑两遍（Pi + sonnet · medium），每遍一个目录，再比（用法与输出在 `score.py` 头注释）：
+改系统提示、工具、记忆前后，短场景、长程、多日各跑两遍（Pi + sonnet · medium），每遍一个目录，再比：
 
 ```bash
 python3 apple/scripts/score.py /tmp/cue-eval/base-short-{1,2} /tmp/cue-eval/base-long-{1,2} /tmp/cue-eval/base-days-{1,2} \
   --vs /tmp/cue-eval/new-short-{1,2} /tmp/cue-eval/new-long-{1,2} /tmp/cue-eval/new-days-{1,2}
 ```
 
-- 整理场景 `m整理钉着的记忆` 的自动检查只确认有回复与记忆产物；运行后用 `python3 apple/scripts/memory-judge.py RUN [RUN…]` 验收（判什么在它的 `RUBRIC`），全部通过才算完成。
+- 整理场景 `m-整理钉着的记忆` 的自动检查只确认有回复与记忆产物；运行后用 `python3 apple/scripts/memory-judge.py RUN [RUN…]` 验收，全部通过才算完成。
 - 改判分规范时，先把旧分数和原始经过另存，再在副本上重判，保留前后理由。用固定材料核对同义表达、交换句序同判，以及删通过条件、反转免询问、免 lint、仅运行不要求通过均被拒绝；原材料只写“先跑”而丢失“通过”的也应判失败。对照放临时目录，不用重跑产品来覆盖旧失败；真实输出若丢项仍不通过。
-- 判定的类别见 `CheckKind`，出错调用的分法见 `CallFailure`；前提这一遍没出现的判定记"不计"，不进通过数。
-- 判定按工具调用、库里的结果、会话收到的命令（替他答了哪个选项看会话收到的作答）与消息字段判；只能读 Cue 写的字的几处收在 `EvalReading`。
-- 打扰 = tell（不含 ask、撤回、放回）+ task leave（他收到"待回复"）+ 其他推送（管理器写的 urgent，如出错）；回他的话不算。
+- 长程剧本里的会话答不了挑刺的追问：那几件到剧本结束可能没收尾，靠它们收尾的判定记"不计"。比完成数时把这一层算进去。
 - 怎么看：差值没超过组内差的不算改动的效果；再看翻转、组内不稳与每遍都没过的。改了判定的措辞，它在成绩单里就是另一条，改前改后各列一次。
 - 多日另记合并：见 .md 的「多日」；单列的轮另出一表。
 
@@ -77,13 +40,12 @@ python3 apple/scripts/score.py /tmp/cue-eval/base-short-{1,2} /tmp/cue-eval/base
 
 ## 记忆基准
 
-改 Cue 的提示词或 recall 前后各跑一遍，用 LongMemEval（`lme`）、LoCoMo（`locomo`）、ConvoMem（`convomem`）给长期记忆打分（抽题、判分在 `bench.py` 头注释，每题怎么跑在 `CueEvalBenchTests` 头注释）：
+改 Cue 的提示词或 recall 前后各跑一遍，用 LongMemEval（`lme`）、LoCoMo（`locomo`）、ConvoMem（`convomem`）给长期记忆打分：
 
 ```bash
 B=locomo
 python3 apple/scripts/bench.py sample $B
-TEST_RUNNER_CUEPAD_BENCH_DATA=~/Library/Caches/cuepad-bench/$B/sample.jsonl TEST_RUNNER_CUEPAD_CUE_EVAL_RUNTIME=pi TEST_RUNNER_CUEPAD_CUE_EVAL_OUT=/tmp/cue-eval/$B-after \
-  CUEPAD_TEST_TIME_LIMIT=7200 apple/scripts/xc.sh test mac -only-testing:CuePadTests/CueEvalBenchTests
+apple/scripts/cue-eval.sh bench /tmp/cue-eval/$B-after $B
 python3 apple/scripts/bench.py judge /tmp/cue-eval/$B-before /tmp/cue-eval/$B-after
 ```
 

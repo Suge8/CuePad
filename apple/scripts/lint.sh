@@ -84,7 +84,7 @@ forbid "字号只经 Typography 的角色与 Glyph，不写系统文字样式（
   '**/Theme/**' 'App/Sources/UI/Debug/**' '**/Tests/**' 'App/Widget/**'
 forbid "小东西冒出来、收回去用 Motion.pop（AppGroup/Motion.swift）：从 0.9 长到原大并淡入，减弱动态效果时只淡；各处写的 .scale 起点不一（0、0.6），从 0 长读作跳出来" \
   '(?:\.transition\(\s*|\bAnyTransition)\.scale\b' 'App/AppGroup/Motion.swift'
-forbid "Mac 主窗口里从控件弹出的说明与小表单用 bubble(isPresented:) 或 HelpButton，不用系统 popover：它另起一扇窗，第一次弹 85～113ms，开着时主窗口的快捷键不响应（docs/layout.md）；设置窗口与只编进 iOS 的文件例外" \
+forbid "Mac 主窗口里从控件弹出的说明与小表单用 bubble(isPresented:) 或 HelpButton，不用系统 popover：它另起一扇窗，第一次弹 85～113ms，开着时主窗口的快捷键不响应（docs/ui.md）；设置窗口与只编进 iOS 的文件例外" \
   '\.popover\(' 'App/Sources/UI/iOS/**' '**/*+iOS.swift' 'App/Sources/UI/macOS/Settings/**' 'App/Sources/UI/Debug/**'
 forbid "色值只在色板（AppGroup/Palette.swift）：界面取 palette 的令牌，新颜色先进色板、定语义名与浅深两档，一样东西只有一份颜色" \
   '\b(?:Color|UIColor|NSColor|CGColor)\(\s*(?:hex|red|white|hue|srgbRed|calibratedRed|displayP3Red|deviceRed|calibratedWhite)\s*:' \
@@ -155,6 +155,7 @@ FORBID_U=1 forbid "通知先订再消费：任务外先 let 流，任务里 for 
 # 间距只经 Spacing 的几档（规则在 lint_spacing.py 头注释）
 python3 "$scripts/lint_spacing.py" || status=1
 
+python3 "$scripts/lint_tokens.py" || status=1
 # 环境值的类型里带闭包却比不了（规则与原因在 lint_env.py 头注释）
 python3 "$scripts/lint_env.py" || status=1
 
@@ -169,5 +170,8 @@ python3 "$scripts/lint_expiry.py" || status=1
 
 # Schema.baseVersion 不高于已发布标签的最小结构版本（规则在 lint_schema.py 头注释）；同样要 git，暂存区副本里没有
 [ "${1:-}" = --staged ] || python3 "$scripts/lint_schema.py" || status=1
+
+# 文档指向的名字还在（lint_docs.py 头注释）；要 git
+[ "${1:-}" = --staged ] || python3 "$scripts/lint_docs.py" || status=1
 
 exit $status

@@ -6,7 +6,7 @@ import UIKit
 /// 左边还有一份时左缘右滑是翻回上一份。"放大着没有""翻过没有"都直接看手指下的滚动区，不另存状态。
 /// 做法：给系统的每个关闭手势配一个只看不拦的守门手势，系统的要等它失败才能开始；守门的在手指落下那一刻就定（让给页里就认下，否则失败）。
 /// SwiftUI 的 zoom 转场没有"可不可以开始收起"的接口（UIKit 的 `interactiveDismissShouldBegin`），系统手势按它们公开的 `name` 认。
-/// 顺带关掉分页滚动区的滚动边缘效果：系统在栏后面按它垫一层雾（docs/layout.md「栏头与页顶」不垫），`scrollEdgeEffectHidden` 管不到 `TabView` 的分页。
+/// 顺带关掉分页滚动区的滚动边缘效果：系统在栏后面按它垫一层雾（docs/ui.md「栏头与页顶」不垫），`scrollEdgeEffectHidden` 管不到 `TabView` 的分页。
 struct PreviewDismissGuard: UIViewRepresentable {
     func makeUIView(context: Context) -> Anchor { Anchor() }
     func updateUIView(_ view: Anchor, context: Context) {}

@@ -5,7 +5,7 @@ CuePadKit 的字查主程序这份，String(localized:) 默认就是 main bundle
   strings.py sync    用 mac 与 ios 构建留下的 .stringsdata 更新目录（xc.sh strings 先编两端再调它）：新字进来等翻译，代码里没了的删掉；
                      缺英文的写进 apple/.derived/strings-todo.json（键 → 出处）
   strings.py set     从标准输入读 {"中文键": "English" | {"one": "…", "other": "…"}} 写进英文（复数按第一个数字参数分）；占位符要与键一致
-  strings.py check   xc.sh check 在 iOS 构建后调：这次构建抽到的字都在目录里，每条都有英文且占位符对得上
+  strings.py check   xc.sh check 在 iOS 构建后调：这次构建抽到的字都在目录里，每条都有英文且占位符对得上，界面字里没有退役的叫法（RETIRED）
 """
 import json, os, re, subprocess, sys
 from glob import glob
@@ -17,6 +17,14 @@ TODO = f"{APPLE}/.derived/strings-todo.json"
 APP_TARGETS = ("CuePad", "CuePadWidget", "CuePadShare", "CuePadNotify")  # 测试目标与命令行工具的字不上界面
 HAN = re.compile(r"[\u3000-\u303f\u4e00-\u9fff\uff00-\uffef]")
 SPEC = re.compile(r"%(?:\d+\$)?[-+ 0#]*\d*(?:\.\d+)?(?:hh|h|ll|l|q|z|t|j|L)?([@dDiuUxXoOfeEgGcCsSpaA%])")
+# 现在的叫法 → 界面上不再用的旧叫法与近义词（WORDS.md 只列现在的）。只收不会在别的意思下出现的词：看语境才分得出的（侧栏、历史、保存）留给 WORDS.md
+RETIRED = {
+    "任务与灵感不互转": "设为任务 改回灵感", "子任务": "步骤", "置顶": "钉住 星标", "默认项目": "未分类 收件箱", "项目": "目标卡",
+    "只记下": "记一笔", "进展": "任务页", "会话条": "图标条 标签栏", "并排": "分屏 左栏", "任务气泡": "浮窗 详情页", "批注": "评论",
+    "预览": "交付物", "在 Mac 上操作": "远程桌面 投屏", "历史": "终端会话 只读会话", "拉取": "轮询", "Cue": "管家 助手 总控",
+    "做完或完成": "验收 收尾", "拍板": "审批", "待回复": "等你回话", "新消息": "未读消息", "重点": "允许清单 一直记着",
+    "定时": "计划任务 闹钟 提醒", "规则": "指令", "诊断或最近日志": "上报 反馈",
+}
 
 
 def stringsdata(configs):
@@ -147,6 +155,8 @@ def check():
            for _, d in stringsdata(["Debug-iphonesimulator"]) for t, strings in d["tables"].items() for s in strings
            if s["key"] not in catalogs.get(t, {})]
     bad += [f"「{k}」{why}" for c in catalogs.values() for k, e in c.items() if (why := problems(k, e))]
+    bad += [f"「{k}」里的“{old}”界面上叫“{now}”（WORDS.md）"
+            for k in catalogs["Localizable"] for now, olds in RETIRED.items() for old in olds.split() if old in k]
     if bad:
         sys.exit("\n".join(sorted(set(bad))) + "\n界面文字没对齐：xc.sh strings 收进目录，strings.py set 补英文（见头注释）")
 

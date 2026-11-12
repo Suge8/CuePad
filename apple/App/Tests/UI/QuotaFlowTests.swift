@@ -17,6 +17,9 @@ struct QuotaFlowTests {
         defer { await following.stop(); services.cancelBackgroundWork() }
         let ext = try await app.host.connect("menu-quota", cwd: "/work/quota")
         try await eventually("菜单栏资料库就绪") { workspace.isLibraryReady }
+        // leaks --traceTree（2026-11-12，本机输入法是微信输入法时 7/7 不放，云端 runner 上放）：面板成过键盘窗口后，系统输入法的 XPC 连接
+        // （IMKXPCServerProxy）经拖放登记攥着面板窗口，候选窗的远程视图经 `-[NSView _commonAwake]` 的通知块攥着输入框，连带环境里的工作区与库（#187）
+        LibraryLedger.heldByFramework(services.store, "菜单栏面板成过键盘窗口：系统输入法的连接仍攥着面板与它的输入框，连带环境里的服务与库", intermittent: true)
         let panel = MenuBarPanel()
         panel.setContent(MenuBarPad().environment(workspace).environment(services).modifier(PaletteProvider()))
         defer { panel.hide() }

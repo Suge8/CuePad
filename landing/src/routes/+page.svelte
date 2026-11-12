@@ -1,35 +1,49 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
-	import { t } from '$lib/i18n.svelte';
-	import { observeReveals } from '$lib/reveal';
-	import Nav from '$lib/components/Nav.svelte';
-	import Hero from '$lib/components/Hero.svelte';
-	import GhostBand from '$lib/components/GhostBand.svelte';
-	import Drench from '$lib/components/Drench.svelte';
-	import Steps from '$lib/components/Steps.svelte';
-	import Features from '$lib/components/Features.svelte';
-	import DeskBand from '$lib/components/DeskBand.svelte';
-	import Cinema from '$lib/components/Cinema.svelte';
-	import Download from '$lib/components/Download.svelte';
-	import Footer from '$lib/components/Footer.svelte';
-
-	onMount(() => observeReveals());
+	import '../styles/base.css';
 </script>
 
-<a class="skip" href="#main">{t('skip')}</a>
-<div class="grain" aria-hidden="true"></div>
+<svelte:head>
+	<title>CuePad</title>
+	<meta name="description" content="A calm notebook that runs your coding agents. A major update is on the way." />
+</svelte:head>
 
-<Nav />
-
-<main id="main">
-	<Hero />
-	<GhostBand />
-	<Drench />
-	<Steps />
-	<Features />
-	<DeskBand />
-	<Cinema />
-	<Download />
+<main>
+	<img src="/assets/mascot-hello.webp" alt="" width="160" height="142" />
+	<h1>CuePad</h1>
+	<p>A major update is on the way.</p>
+	<p lang="zh-CN">即将大更新。</p>
+	<a href="https://github.com/Suge8/CuePad/releases/latest">Download for Mac</a>
 </main>
 
-<Footer />
+<style>
+	main {
+		display: grid;
+		justify-items: center;
+		gap: 0.5rem;
+		padding: 2rem;
+		text-align: center;
+	}
+	h1 {
+		margin: 0.5rem 0 0.25rem;
+		font-size: 2rem;
+		font-weight: 650;
+		letter-spacing: -0.02em;
+	}
+	p {
+		margin: 0;
+		color: var(--ink2);
+	}
+	a {
+		margin-top: 1.25rem;
+		padding: 0.6rem 1.1rem;
+		border-radius: 999px;
+		background: var(--ink);
+		color: var(--paper);
+		font-weight: 550;
+		text-decoration: none;
+	}
+	a:focus-visible {
+		outline: 2px solid var(--signature);
+		outline-offset: 3px;
+	}
+</style>

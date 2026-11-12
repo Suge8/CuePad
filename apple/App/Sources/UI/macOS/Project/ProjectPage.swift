@@ -41,7 +41,7 @@ struct ProjectPage: View {
                 .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y > Self.collapseOffset } action: { _, isCollapsed in
                     withAnimation(Motion.fade) { collapsed = isCollapsed }
                 }
-                // 下滚后的回到顶部是页里的一块、不放进栏头：栏头内容只随用户操作变，不随滚动位置这种布局读数变（docs/layout.md「页面与布局稳定」第一条：跟着滚动位置变会形成布局循环）。
+                // 下滚后的回到顶部是页里的一块、不放进栏头：栏头内容只随用户操作变，不随滚动位置这种布局读数变（docs/ui.md「页面与布局稳定」第一条：跟着滚动位置变会形成布局循环）。
                 if collapsed, let data, !data.tasks.isEmpty {
                     CompactFocus(data: data) {
                         withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { proxy.scrollTo("top", anchor: .top) }
