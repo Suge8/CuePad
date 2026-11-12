@@ -48,9 +48,10 @@ struct WideMetrics {
 
     static func narrowestMain(split: Bool) -> CGFloat { split ? 2 * session : session }
 
-    static var railThreshold: CGFloat { Chrome.rail + narrowestMain(split: false) }
+    /// 会话条放得下的最窄窗口；Cue 在会话条开着时放得下的最窄窗口（先收 Cue 再藏会话条，所以后一个总比前一个宽）。
+    static func railThreshold(split: Bool) -> CGFloat { Chrome.rail + narrowestMain(split: split) }
 
-    static func cueThreshold(rail: Bool) -> CGFloat { (rail ? Chrome.rail : 0) + narrowestMain(split: false) + cue }
+    static func cueThreshold(split: Bool) -> CGFloat { railThreshold(split: split) + cue }
 }
 
 extension View {

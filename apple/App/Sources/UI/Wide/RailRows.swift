@@ -91,8 +91,8 @@ struct RailTool: View {
 #endif
 
 /// 会话条最上的两格：Cue（选中时它铺满会话条之外，`Workspace.goHome`，同手机以 Cue 为根）与进展。两个最常回的去处并排各占一格，不是两行字，
-/// 格里的东西都居中。Cue 那格只有它的大头像（名字在它铺满时的栏头与读屏里），带新消息的点（同收着时右上那颗钮）；
-/// 进展那格是图标、名字与几件在推进（`CueNow.Tally.moving`，没有时那一行空着、格高不变）。选中的那格是浮起的纸，另一格是淡底。
+/// 格里只有一个居中的图形。Cue 那格是它的大头像（不垫圆底：格本身就是它的底；名字在它铺满时的栏头与读屏里），带新消息的点（同收着时右上那颗钮）；
+/// 进展那格是加粗的图标，右上角一个数是几件在推进（`CueNow.Tally.moving`，没有就不画）。选中的那格是浮起的纸，另一格是淡底。
 /// Cue 那格不写"等你 N"：它数的还有 Cue 自己的提问，紧挨着下面只数会话的"等你"组头，两个数对不上。
 struct RailHome: View {
     @Environment(Workspace.self) private var workspace
@@ -102,18 +102,18 @@ struct RailHome: View {
         let cue = workspace.cue, moving = cue.now.tally.moving
         HStack(spacing: Spacing.item) {
             tile(Text(verbatim: cue.name), selected: workspace.cueHome) { workspace.goHome() } content: {
-                CueAvatar(cue.beat, size: .card).overlay(alignment: .topTrailing) { CueDot().offset(x: 2, y: -2) }
+                CueAvatar(cue.beat, size: .card, plate: false).overlay(alignment: .topTrailing) { CueDot().offset(x: 2, y: -2) }
             }
             tile(Text("进展"), selected: workspace.shownPane == .progress) { workspace.selectPane(.progress) } content: {
-                VStack(spacing: Spacing.tight) {
-                    Image(.task).font(Glyph.large).foregroundStyle(palette.signature)
-                    Text("进展").font(Typography.body.weight(workspace.shownPane == .progress ? .semibold : .regular)).foregroundStyle(palette.ink).lineLimit(1)
-                    HStack(spacing: Spacing.tight) {
-                        BoardLaneMark(column: .advancing, size: 12)
-                        Text(moving, format: .number).font(Typography.caption).foregroundStyle(palette.ink3).monospacedDigit()
+                Image(.task).font(.system(size: Self.glyph, weight: .semibold)).foregroundStyle(palette.signature)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .overlay(alignment: .topTrailing) {
+                        if moving > 0 {
+                            Text(moving, format: .number).font(Typography.caption.weight(.semibold)).monospacedDigit()
+                                .foregroundStyle(TaskBoard.Column.advancing.countInk(palette))
+                                .padding(Spacing.group)
+                        }
                     }
-                    .opacity(moving > 0 ? 1 : 0)
-                }
             }
             .accessibilityValue(moving > 0 ? Text("\(moving) 推进中") : Text(verbatim: ""))
         }
@@ -126,7 +126,7 @@ struct RailHome: View {
                 .frame(maxWidth: .infinity)
                 .frame(height: Self.height)
                 .modifier(TileSurface(selected: selected))
-                .contentShape(.rect(cornerRadius: Radius.card))
+                .contentShape(.rect(cornerRadius: Radius.sheet))
         }
         .buttonStyle(PressStyle(.button))
         .accessibilityLabel(title)
@@ -135,6 +135,7 @@ struct RailHome: View {
 
     /// 放得下 Cue 的大头像（`CueAvatar.Size.card`）上下各留一档。
     private static let height: CGFloat = 88
+    private static let glyph: CGFloat = 30
 }
 
 private struct TileSurface: ViewModifier {
@@ -143,9 +144,9 @@ private struct TileSurface: ViewModifier {
 
     func body(content: Content) -> some View {
         if selected {
-            content.paper(cornerRadius: Radius.card, lifted: true)
+            content.paper(cornerRadius: Radius.sheet, lifted: true)
         } else {
-            content.background(palette.fill, in: .rect(cornerRadius: Radius.card, style: .continuous))
+            content.background(palette.fill, in: .rect(cornerRadius: Radius.sheet, style: .continuous))
         }
     }
 }

@@ -7467,22 +7467,6 @@
         }
       }
     },
-    "全部归档做完的" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Archive All Done Tasks"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "全部归档做完的"
-          }
-        }
-      }
-    },
     "全部项目" : {
       "localizations" : {
         "en" : {
@@ -14751,22 +14735,6 @@
         }
       }
     },
-    "接入 Agent…" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Connect Agents…"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "接入 Agent…"
-          }
-        }
-      }
-    },
     "接入中…" : {
       "localizations" : {
         "en" : {
@@ -16571,22 +16539,6 @@
         }
       }
     },
-        "最低" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Minimal"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "最低"
-          }
-        }
-      }
-    },
     "更早的输出未显示" : {
       "localizations" : {
         "en" : {
@@ -16599,6 +16551,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "更早的输出未显示"
+          }
+        }
+      }
+    },
+    "最低" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Minimal"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最低"
           }
         }
       }
@@ -26399,22 +26367,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "项目范围"
-          }
-        }
-      }
-    },
-    "项目范围、归档做完的、接入 Agent" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Project scope, archive done, connect agents"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "项目范围、归档做完的、接入 Agent"
           }
         }
       }
