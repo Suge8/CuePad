@@ -3,13 +3,13 @@
 # 只经 xc.sh release mac [--dry-run] [--resume <公证 id>] 运行：release-context.py 拿全机发布锁、给这次尝试一个新目录（CUEPAD_RELEASE_OUT，日志第一行打印路径）。
 #   --dry-run  停在尝试目录里的 zip 与 appcast.xml（已用 EdDSA 签名校验），不上传；照样提交公证
 #   --resume   找回 submission.json 记着这个公证 ID 的那次尝试，沿用它的提交与产物，接着等公证并发布
-# 下载位置只有一处：Release $TAG 的三个资产，不新建 Release，每次发布原地替换；替换资产前在归档来源提交上打 mac/<构建号> 标签并推到远端（这一版源码的唯一记号）；三个资产各自的用途与上传顺序的理由见 docs/release.md。
+# 下载位置只有一处：Release $TAG 的三个资产，不新建 Release，每次发布原地替换；替换资产前在归档来源提交上打 mac/<构建号> 标签并推到远端（这一版源码的唯一记号）。
 # 回读按上限轮询 CDN；失败后 --resume 沿用已生成的 appcast 与更新包，线上已一致的资产不重传。
 # 线上的构建号（更新源声明的 sparkle:version 与 Release 里带构建号的包）比这一版新就不发：迟到的恢复不覆盖新版；同号是同一版的重入，标签已指向别的提交时推送被拒。
 # 更新源 SUFeedURL 直接是这里的 appcast.xml（releases/latest/download/appcast.xml），核对与回读都从 App 的 Info.plist 读这个地址。
 # 打包前先核对生产环境的 CloudKit 结构（ck-production.sh），缺字段就不发；待部署清单只拦 iOS（release-ios.sh）。
-# 也核对发版顺序（check_ios_floor）：这一版的同步下界不高于 TestFlight 上处理好的最新 iOS 版（docs/release.md「发版顺序」）。门铃中转打包前、导出后各核对一次（check_relay）。
-# 前提：docs/release.md 里的凭据、Developer ID 证书与 CloudKit 管理令牌；gh 已登录且有仓库写权限。
+# 也核对发版顺序（check_ios_floor）：这一版的同步下界不高于 TestFlight 上处理好的最新 iOS 版。门铃中转打包前、导出后各核对一次（check_relay）。
+# 前提：docs/release.md 里的一次性前置；gh 已登录且有仓库写权限。
 set -euo pipefail
 SCRIPTS="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(cd "$SCRIPTS/../.." && pwd)"
@@ -54,7 +54,7 @@ check_ios_floor() {
     [ "$(schema_floor "$tag")" -ge "$here" ] && return 0
     break
   done
-  echo "这一版的同步下界是 ${here}，TestFlight 上处理好的 iOS 版还没到：先 xc.sh release ios，等 testflight.py builds 显示 VALID 再发 Mac（docs/release.md「发版顺序」）" >&2
+  echo "这一版的同步下界是 ${here}，TestFlight 上处理好的 iOS 版还没到：先 xc.sh release ios，等 testflight.py builds 显示 VALID 再发 Mac" >&2
   exit 1
 }
 # 上传要 gh 能写这个 Release：打包要几分钟，先确认
@@ -136,7 +136,8 @@ declared="$(sed -nE 's/.*<sparkle:version>([0-9]+)<\/sparkle:version>.*/\1/p' <<
 online="$( { echo "$declared"; sed -nE "s/^${ASSET%.zip}-([0-9]+)\.zip$/\1/p" <<<"$names"; } | sort -n | tail -1)"
 [ "${online:-0}" -le "$build_version" ] || { echo "拒绝发布旧版 ${build_version}：线上已是 ${online}" >&2; exit 1; }
 release_tag mac "$build_version" "$source_commit"
-# 顺序的理由见 docs/release.md：带构建号的新包 → appcast → 官网包 → 删上一版带构建号的包
+# 顺序：带构建号的新包 → appcast → 官网包 → 删上一版带构建号的包。GitHub 不能一次换多个资产，appcast 指向带构建号的包，
+# 才没有旧 appcast 配新包、落后的客户端验签失败的窗口
 # 线上摘要（GitHub 算的 sha256）已与本地一致的不重传
 for path in "$update" "$appcast" "$zip"; do
   grep -qxF "${path##*/} sha256:$(shasum -a 256 "$path" | cut -d' ' -f1)" <<<"$assets" || gh release upload "$TAG" "$path" -R "$REPO" --clobber

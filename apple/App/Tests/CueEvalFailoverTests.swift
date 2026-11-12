@@ -8,7 +8,7 @@ import Testing
 @testable import CuePad
 
 /// 自动换大脑之后换上的那家真能接着干：Cue 用假模型的 Pi 值班、这一轮报额度用完，这台 Mac 上另记着一家真的 Agent（`EvalBrain.current`，用 `CUEPAD_CUE_EVAL_RUNTIME` 选，不能是 Pi）。
-/// 只在 `CUEPAD_CUE_EVAL=1` 时跑，跑法见 docs/cue-eval.md「换大脑」。
+/// 只在 `CUEPAD_CUE_EVAL=1` 时跑，跑法见 apple/scripts/cue-eval.sh。
 @Suite(.releasesLibraries, .enabled(if: evalEnvironment["CUEPAD_CUE_EVAL"] == "1", "CUEPAD_CUE_EVAL=1 才跑"), .timeLimit(.minutes(10)))
 struct CueEvalFailoverTests {
     @Test func 额度用完_换到真的另一家接着答() async throws {
