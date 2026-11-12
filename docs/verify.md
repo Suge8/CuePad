@@ -34,7 +34,7 @@
 mkdir -p /tmp/cuepad-copy
 sqlite3 -readonly "<库目录>/cuepad.db" ".backup /tmp/cuepad-copy/cuepad.db"   # 库目录见 LibraryLocation
 mkdir -p /tmp/cuepad-copy/Caches && cp -cR ~/Library/Caches/CuePadAttachments /tmp/cuepad-copy/Caches/   # 要看附件时：本机那份
-cp -cR "<库目录>/Attachments" /tmp/cuepad-copy/   # 还没上传的保底（结构 77 之前的库，附件全在这里）
+cp -cR "<库目录>/Attachments" /tmp/cuepad-copy/   # 还没上传的保底
 CUEPAD_SHOT_LIBRARY=/tmp/cuepad-copy apple/scripts/xc.sh shot mac …
 ```
 
@@ -58,8 +58,8 @@ apple/scripts/xc.sh stop       # 验完就收；忘了 5 分钟后会自己退�
 - 通话（接通、后台、中断、信令断开、交接与朗读）的验收步骤在 [verify-voice.md](verify-voice.md)。
 - iOS：`xc.sh run ios|ipad` 打印 PID 与 UDID；读、点、输入用 `apple/scripts/ui.py <UDID|iphone|ipad> read|tap|paste|key|wait|shot`（AXe 的薄封装，用法在它的头注释），不直接调 `axe tap --label`。
   模拟器默认当作接了电脑键盘（软键盘见 `-CuePadSoftKeyboard`）；键盘变高用表情键。模拟器里的系统开关（设置里的开关、权限弹窗）普通点按点不动，要 `ui.py … tap … --physical`。
-- AXe 的树（iOS 27.0 模拟器、AXe 1.8.0 实测）读得出 SwiftUI 的按钮、输入框、文字，带标签、值与框（Cue 页约 100、看板约 150 个有标签的，读一次 1～3 秒，截图 0.2 秒），三个主画面在 iPhone 与 iPad 上都读得出。四处要知道：
-  树里连着屏外的页与零尺寸的重名分身，`axe tap --label` 遇重名直接拒绝（iPad 上六次全拒），`ui.py tap` 只数屏上的、按框的中心点；
+- AXe 的树（iOS 27.0 模拟器、AXe 1.8.0 实测）读得出 SwiftUI 的按钮、输入框、文字，带标签、值与框（Cue 页约 100、看板约 150 个有标签的，读一次 1～3 秒，截图 0.2 秒）。四处要知道：
+  树里连着屏外的页与零尺寸的重名分身，`axe tap --label` 遇重名直接拒绝，`ui.py tap` 只数屏上的、按框的中心点；
   系统菜单与弹出层（项目页"更多"菜单）不在树里，用快捷键（`ui.py … key cmd+n` 记一条灵感）或按截图的坐标点；
   `ui.py … paste` 不弹粘贴许可，输入框的值读得回来；
   多数元素没有 `AXUniqueId`，按标签找。

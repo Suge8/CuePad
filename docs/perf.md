@@ -47,8 +47,7 @@
 
 ### 真 CloudKit
 
-- CloudKit 的限流按设备与容器算（日志里 `Device throttle: container=…`，HTTP 429）：测量实例与这台的正式版共用一份。2026-10-26 01:20 起几个检出接连测量，
-  正式版每 10 分钟被拒 300–490 次（之前个位数），测量在拖慢用户自己的同步。
+- CloudKit 的限流按设备与容器算（日志里 `Device throttle: container=…`，HTTP 429）：测量实例与这台的正式版共用一份：几个检出接连测量时正式版每 10 分钟被拒 300–490 次（平时个位数），拖慢用户自己的同步。
 - 前提：这台 Mac 按 Provisioning UDID（`system_profiler SPHardwareDataType`，不是 Hardware UUID）登记过，装了「CuePad macOS Development」描述文件：`provision.py device <UDID> <名称> MAC_OS`，再 `provision.py profiles`。
 - 开发区里留着别的调试数据（演示会话、老版本写的卡片），全新的库第一次要拉完它们。
 - 两个实例共用这台的 cloudd、排同一个队，尾部时延比真机大；CloudKit 的字节（`idle`）不含 TLS 与 HTTP 头；nettop 量不了：流量都记在 cloudd 名下，和正式版的混在一起。

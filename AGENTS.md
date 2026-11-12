@@ -1,8 +1,8 @@
 # CuePad
 
-Swift 原生应用（macOS / iOS / iPadOS）。叫法见 [WORDS.md](WORDS.md)。
+Swift 原生应用（macOS / iOS / iPadOS）。术语见 [WORDS.md](WORDS.md)。
 
-注释默认不写，只写三种：调用方从声明看不出、用错会出事的入口约定（边界、不变量、失败、线程）；代码看不出的原因（外部的怪行为、竞态、实测数字、否决的方案），写在相关代码旁；跨处的规则在不好找的地方指向它的归属。不复述实现，类型名已说清的不写头注释。业务规则以实现为准，用户看得见的由端到端测试守住；改行为时在同一改动里改相关说明。
+注释默认不写，除非必要，只写三种：调用方从声明看不出、用错会出事的入口约定（边界、不变量、失败、线程）；代码看不出的原因（外部的怪行为、竞态、实测数字、否决的方案），写在相关代码旁；跨处的规则在不好找的地方指向它的归属。不复述实现，类型名已说清的不写头注释。业务规则以实现为准，用户看得见的由端到端测试守住；改行为时在同一改动里改相关说明。
 
 ## 命令
 
@@ -11,7 +11,7 @@ Swift 原生应用（macOS / iOS / iPadOS）。叫法见 [WORDS.md](WORDS.md)。
 - 调试实例只用 `xc.sh shot|rec|run` 起（隔离、用完自己退出，`run` 起的用 `xc.sh stop` 收）；多张图在一次调用里拍（用 `,` 隔开，见 xc.sh 头注释），不一张一次、不另写批拍脚本。CuePad 与正式版同一个 bundle id：进程只按自己拿到的 PID 结束，不按名字。
 - `xc.sh test` 收尾有一页结论：先看它，别翻日志。
 - 合并前的门是本机的 `xc.sh signoff`：推送后在干净的检出里跑，全过才给这个提交记上 GitHub 状态 `signoff`，主干的规则见到它才让 PR 合并（`gh pr merge` 不带 `--admin`）；改了再推就重签。PR 不在云端跑。
-- 云端 CI（`.github/workflows/swift.yml`）只在合并进主干后跑全量兜底（真 Agent 全量、iOS 同步）。合并后盯到主干上含这次合并的那一遍跑完（`gh run list --branch main`）：红在自己的改动上就当场修，修不了先回退那次合并，让主干回到绿；runner 自己崩的就重跑。发布只认它全绿的提交。lint 要完整的 Git 检出（origin/main、发布标签），`git archive` 导出的副本跑不了。
+- 云端 CI（`.github/workflows/swift.yml`）只在合并进主干后跑全量兜底（真 Agent 全量、iOS 同步）。合并后不用守着它；合并前先看主干最近一遍（`gh run list --branch main`）：红的先处理，改动造成的修或回退那次合并，runner 自己崩的重跑。发布只认它全绿的提交。lint 要完整的 Git 检出（origin/main、发布标签），`git archive` 导出的副本跑不了。
 - `cuepad --help` 是命令行唯一文档。
 - 报"没有这个成员"而代码里明明有，或改了 CuePadKit 公开类型的存储属性后 App 一启动就崩在 Kit 的释放里：检出里还留着旧版 xc.sh 只编 App 时的静态模块（原因见 xc.sh 的 `xcd`），删一次 `apple/.derived/Build/Products/<平台>/Cue*.swiftmodule` 与 `apple/.derived-wmo/Build/Products/<平台>/Cue*.swiftmodule`（`check` 在后者里编）再编。
 
@@ -34,6 +34,6 @@ Swift 原生应用（macOS / iOS / iPadOS）。叫法见 [WORDS.md](WORDS.md)。
 - 改 Cue 通话后的验收（后台、中断、信令断开、交接、朗读）→ [docs/verify-voice.md](docs/verify-voice.md)
 - 真机上的崩溃、卡住、取日志 → [docs/diagnose.md](docs/diagnose.md)
 - 性能测量、交互预算、同步测量 → [docs/perf.md](docs/perf.md)
-- 改 Cue 的提示词、工具说明、信封或记忆的前后评测，记忆基准 → [docs/cue-eval.md](docs/cue-eval.md)
+- 要量一处改动对 Cue 做法的影响（评测、记忆基准）→ [docs/cue-eval.md](docs/cue-eval.md)
 - 签名、发布、Sparkle、CloudKit 结构部署 → [docs/release.md](docs/release.md)
 - Pi 桥扩展的协议约定与边界 → [CueBridge README](apple/CuePadKit/Sources/CueBridge/README.md)

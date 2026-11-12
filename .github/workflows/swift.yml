@@ -18,6 +18,7 @@ concurrency:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   xc:
@@ -51,16 +52,31 @@ jobs:
       - run: |
           sudo xcode-select -s /Applications/Xcode_27.0.app
           xcodebuild -version; xcrun --show-sdk-path; xcrun simctl list runtimes; env | grep -iE 'sdkroot|developer_dir' || true
-      - run: brew install ripgrep
+      # 上一遍全绿之后没动 apple/ 与本文件的（文档、设计稿、落地页）只跑 lint，同本机签核的口径（signoff.sh）。
+      # 比的是上一遍全绿的提交而不是上一次推送：排着的一遍会被后来的合并顶掉，被顶掉的那次改动要算进来
+      - id: scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          base="$(gh run list --workflow swift.yml --branch main --status success --limit 1 --json headSha --jq '.[0].headSha' || true)"
+          if [ -n "$base" ] && git cat-file -e "$base^{commit}" && git diff --quiet "$base" HEAD -- apple .github/workflows/swift.yml; then
+            echo "light=1" >> "$GITHUB_OUTPUT"
+          fi
+      # lint 要 ripgrep；镜像里有就不装（下载失败红过）
+      - if: matrix.name == 'check'
+        run: command -v rg || brew install ripgrep
+      - if: steps.scope.outputs.light == '1' && matrix.name == 'check'
+        run: apple/scripts/lint.sh
       # 测试连的真 Agent：版本只在 apple/CuePadKit/Tests/agents.json，装进专用缓存（agents.py）；缓存随清单变
-      - if: matrix.name == 'test kit' || matrix.name == 'test mac'
+      - if: steps.scope.outputs.light != '1' && (matrix.name == 'test kit' || matrix.name == 'test mac')
         uses: actions/cache@v6
         with:
           path: ~/Library/Caches/cuepad-agents
           key: cuepad-agents-${{ hashFiles('apple/CuePadKit/Tests/agents.json', 'apple/scripts/agents.py') }}
-      - if: matrix.name == 'test kit' || matrix.name == 'test mac'
+      - if: steps.scope.outputs.light != '1' && (matrix.name == 'test kit' || matrix.name == 'test mac')
         run: apple/scripts/xc.sh agents install
-      - run: apple/scripts/xc.sh ${{ matrix.args }}
+      - if: steps.scope.outputs.light != '1'
+        run: apple/scripts/xc.sh ${{ matrix.args }}
         timeout-minutes: 30
       - uses: actions/upload-artifact@v7
         if: always()
