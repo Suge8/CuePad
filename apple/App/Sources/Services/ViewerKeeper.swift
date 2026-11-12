@@ -13,7 +13,7 @@ import Synchronization
 /// 来到这台（`arrive`）：手机点开与每次回到前台（`AppServices.followArrivals` 报来）；Mac 读到他最近来到的是别的设备（`CueStore.leftFor`）就算人不在跟前（`Away.elsewhere`），回到这台的第一下键盘鼠标才回来、记下来到。
 /// 开着的页由界面报来：会话页（`show`）Mac 是人看得到主窗口时内容区的会话页，手机是场景前台活跃时导航最上面的会话页
 /// （都是 `Workspace.shownSessions`；iPad 开几个窗口各报各的，合并各窗口开着的页）；Cue 页（`showCue`）两端都由 `CueViewing` 报（iPad 上它可以在面板里、
-/// 不在导航最上面）。Mac 上人不在跟前（系统将睡眠、屏幕睡了、锁屏、退出、他去了别的设备，或 `SessionPresence.window` 没动过键盘鼠标）时一概算没开着，
+/// 不在导航最上面）。Mac 上人不在跟前（系统将睡眠、屏幕睡了、锁屏、退出、他去了别的设备，或 `idleAfter` 没动过键盘鼠标）时一概算没开着，
 /// 回来再按界面报的算；退出时写完、传完才放行，手机进后台时写完、传完。将睡眠不拖住系统：Mac 的这条只在那台 Mac 在线时算数（`Viewer`），
 /// `MacPresenceKeeper` 在将睡眠时同步写下离线，它在各端就作废了。
 /// 写的那一刻在 Store 的隔离域里读开着哪些页：几路写入谁先谁后，库里留下的都是最后的那个状态。
@@ -141,10 +141,13 @@ nonisolated final class ViewerKeeper: Sendable {
 
 #if os(macOS)
 nonisolated extension ViewerKeeper {
-    /// 键盘鼠标 `SessionPresence.window` 没动（与"在场"同一个口径）就算不在跟前，回来的第一下输入就回来。
+    /// 10 分钟：比读完一段回复、想一想再回的时间长，与常见即时通讯"多久没动静算离开"同一个量级。
+    static let idleAfter: TimeInterval = 10 * 60
+
+    /// 键盘鼠标 `idleAfter` 没动就算不在跟前，回来的第一下输入就回来。
     /// 只认真人的输入（`hidSystemState`，别的程序合成的事件不算）；走开期间等系统的输入事件，不轮询。
     private func followIdle() async {
-        let limit = SessionPresence.window, anyInput = CGEventType(rawValue: ~0)!
+        let limit = Self.idleAfter, anyInput = CGEventType(rawValue: ~0)!
         while !Task.isCancelled {
             let idle = CGEventSource.secondsSinceLastEventType(.hidSystemState, eventType: anyInput)
             guard idle >= limit else {

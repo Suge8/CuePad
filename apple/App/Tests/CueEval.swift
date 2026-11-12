@@ -7,7 +7,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 一件 Cue 开过工、正在做的任务：开工时送进会话的第一句记在发送记录里（会话里那句因此认作 Cue 说的，不是"他说的"），
+/// 一件 Cue 开过工、正在做的任务：开工时送进会话的第一句记在发送记录里（会话里那句因此认作 Cue 说的，这一轮不是他开的），
 /// 会话是本机开着的假扩展（Cue 对它说话、作答都送得到），会话说的写进它的会话文件（`file`）。
 struct Working {
     let task: Card

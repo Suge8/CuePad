@@ -43,13 +43,10 @@ extension CueTools {
 
   /// 信封里变化说到的那几件事的近况（`CueEnvelope.Input.recaps`），就是 peek 给的那一份：Cue 醒来就能核对证据，不用再 peek 一次
   /// （每次工具调用都要把整段前缀再读一遍）。一件一份，按变化的先后放，放不下 `recapBudget` 的那件不带，变化那一行照旧写截短的回复。
-  /// 两种不带（短场景 Pi + sonnet 实测，带与不带各跑几遍）：
-  /// - 他发起的一轮停下（`CueChange.byUser`）：CuePad 已留给他回，Cue 多半只定收不收回，截短的回复够用。带上全文它会就着细节替他拿主意
-  ///   （他那一轮碰上推送，转头问他推不推）：带的 4 遍错 3 遍，不带的 6 遍错 1 遍，改前 2 遍都对。
-  /// - 完成：做完是定了的事，不用再核对证据；叫醒那一刻会话的记录常还没写完，近况只有开工那句。带的 4 遍里 Cue 每遍照样再 peek，省不下调用（整件任务完成已不叫醒 Cue，这条多半只碰上子任务完成）。
+  /// 完成的不带：做完是定了的事，不用再核对证据；叫醒那一刻会话的记录常还没写完，近况只有开工那句。带的 4 遍里 Cue 每遍照样再 peek，省不下调用（整件任务完成已不叫醒 Cue，这条多半只碰上子任务完成）。
   public func recaps(for changes: [CueChange]) async throws -> [CueEnvelope.Subject: String] {
     var recaps: [CueEnvelope.Subject: String] = [:], seen = Set<CueEnvelope.Subject>(), room = Self.recapBudget
-    for change in changes where !change.byUser && change.kind != .done {
+    for change in changes where change.kind != .done {
       guard let subject = CueEnvelope.Subject(change), seen.insert(subject).inserted, let text = try await recap(change), text.count <= room else { continue }
       recaps[subject] = text
       room -= text.count

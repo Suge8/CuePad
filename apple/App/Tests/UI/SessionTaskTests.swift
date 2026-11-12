@@ -106,7 +106,7 @@ struct SessionTaskTests {
         try await store.writeTranscript(SessionTranscript(sessionID: "s1", messages: [], recap: Recap(lastPrompt: "修登录", lastReply: "修好了", answeredAt: .now)))
         try await recorder.update(sessionID: "s1", state: .settled)
         try await workspace.complete(old.id)
-        #expect(try await store.cueChanges(after: CueMarks(mark)).due.filter { $0.kind == .settled }.map(\.task?.id) == [old.id])
+        #expect(try await store.cueChanges(after: CueMarks(mark)).filter { $0.kind == .settled }.map(\.task?.id) == [old.id])
 
         #expect(try await store.cueBoard().sessions.isEmpty, "随完成的事收起")
         // 再有动静：时刻显式排在完成之后（收起按时刻严格先后判定，不靠真实时钟走过一毫秒）

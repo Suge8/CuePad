@@ -82,13 +82,6 @@ extension CueHostTests.Rig {
         try await settle(work, reply: text)
     }
 
-    func settleHisTurn(_ work: Working, said: String, ago: TimeInterval, reply text: String) async throws {
-        try work.file.reply("后端做完了：发重置邮件的接口、令牌校验与限流，14 个测试全过。", at: .now - ago - 60)
-        try work.file.user(said, at: .now - ago)
-        work.session.setState(["kind": "idle"])
-        try await answered(work.id, reply: text)
-    }
-
     func settleCueTurn(_ work: Working, his: String, ago: TimeInterval, cue: String, reply text: String) async throws {
         let delivery = UUID()
         try await store.recordSend(cue, to: SendTarget(kind: .piSession, name: work.task.heading, ref: work.id), card: work.task.id, delivery: delivery, origin: .known(.cue))
@@ -104,14 +97,6 @@ extension CueHostTests.Rig {
         try await spoke(said, in: work.id)
         work.session.sendInfo(["question": ["id": "p1", "kind": "select", "text": question, "options": options]])
         work.session.setState(["kind": "waiting_user", "title": question])
-    }
-
-    /// 他 15 分钟前直接在会话里说了 `his`（不在场），会话照做后说了 `said`、停下来问 `question`：这一轮是他的，提问当场留给他。
-    func askInHisTurn(_ work: Working, his: String, said: String, question: String, options: [String]) async throws {
-        try work.file.reply("收到，在做。", at: .now - 16 * 60)
-        try work.file.user(his, at: .now - 15 * 60)
-        try await read(his, in: work.id)  // 他 15 分钟前说的，早已读进库
-        try await ask(work, said: said, question: question, options: options)
     }
 }
 

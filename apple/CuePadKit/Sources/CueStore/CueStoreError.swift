@@ -152,7 +152,7 @@ extension CueStoreError: LocalizedError {
       "\(agent) 没有 \(model)：" + (choices.count <= Self.choicesListed ? "能选的是 \(choices.joined(separator: "、"))，照抄其一" : "用 setup look agents 看能选的，照抄其一")
     case .cannotChangeModel(let title): "会话「\(title)」换不了模型（它的记录还没到）：用 start 带 fresh:true 和 model 开新会话"
     case .cannotStop(let title): "会话「\(title)」现在停不了：没在跑一轮，或在等回答"
-    case .cannotSpeakNow(let title, let why): "会话「\(title)」\(why)：没说出去。等它歇下（会叫醒你）再说"
+    case .cannotSpeakNow(let title, let why): "会话「\(title)」\(why)：没说出去。这一轮停下也归他，不会叫醒你；要他知道的 tell 他"
     case .macOffline(let title, let mac):
       "会话「\(title)」所在的「\(mac)」此刻不在线（睡着、关机或 CuePad 没开）：这次没有发出，那台开机前对它做什么都送不到。别重试，等它开机；急的用 tell 告诉他"
     case .sessionUnconfirmed(let title):
@@ -160,7 +160,7 @@ extension CueStoreError: LocalizedError {
     case .turnSourceUnconfirmed(let title): "会话「\(title)」正在跑的这一轮查不到是谁开的：现在说会打断它，没说出去。等它歇下（会叫醒你）再说"
     case .sessionEnding: String(localized: "会话正在结束，确认结束结果后才能关联或发送")
     case .sessionInUse(let title): "会话「\(title)」还在用（没做完的事绑着它，或有话正送进去），没结束：那件事做完时 done 那件事"
-    case .notStopped(let title): "会话「\(title)」没停着（在跑、被打断或已结束）：留给他回只用在它歇着、在等回答或出错时"
+    case .notStopped(let title): "会话「\(title)」没停着（在跑或已结束）：留给他回只用在它歇着、在等回答、出错或被打断时"
     case .invalidAnswer(let options): "会话在等提问的回答，答案要是其中之一（原文或从 1 起的序号）：\(options.joined(separator: " / "))"
     case .memoryLineTooLong(let limit): String(localized: "一条记忆最多 \(limit) 字节（UTF-8）")
     case .staleMemoryRange: "记忆区间的输入已变化，请读取新视图后重新整理或展开"

@@ -67,8 +67,6 @@ extension CueKeeper {
         var warmedIdle: Date?
         /// 已为哪一次启用（`CueProfile.enabledAt`）醒来过
         var greeted: Date?
-        /// 他在场、等他离开再报的停下：会话 id → 那次停下的起点（`CueChanges.held`）
-        var held: [String: Date] = [:]
         /// 交给大脑、还没答上的你的话与要退回还没退回成的（`Shift.unanswered` 与 `CueKeeper.owed` 合起来，`save` 时取）：上一次没收好尾（崩溃、强杀）时，
         /// 下次值班一开始退回没送达、重新交（`run`），至少答一次。可选：旧的进度文件没有它
         var unanswered: [UUID]?
@@ -150,8 +148,6 @@ extension CueKeeper {
         var speaking: LiveDraft?
         /// 醒来时读到的写入序号（读变化之前取）：这一轮做完且没出错，会话的动静从它之后算
         var mark: Int?
-        /// 这一轮做完且没出错后，还要等他离开再报的那几次停下（`Progress.held`）：这一轮报了的不再记，没做完下次照样报
-        var held: [String: Date]?
         /// 会话停下叫醒的这一轮报给 Cue 的那几次停下（歇着、等回答、出错）：做完时还没给去处的 CuePad 替它留给他回（`CueKeeper.leaveUnattended`）
         var stops: [CueLeft] = []
         /// 这一轮出错后换了 Agent：交出去的你的话退回、自己醒来的那次马上重来，都交给新的大脑
@@ -195,8 +191,6 @@ extension CueKeeper {
         var active: Bool
         var memory: CueMemoryVersion
         var profile: CueProfile?
-        /// 各设备开着的会话（`Viewer`）：他离开了在场的会话，要再报给 Cue
-        var viewing: [String]
         /// 本机最近一次写入的序号（`CueStore.lastWrite`）：会话状态与收尾，卡片的完成与层级，投送请求的状态一变它就变
         /// （晚到的变化事件时刻也可能更早，只有写入序号一定跟着变）；会话的其余列（说明、上下文、子代理的动作）与会话里的消息怎么变都不叫醒对账
         var written: Int
