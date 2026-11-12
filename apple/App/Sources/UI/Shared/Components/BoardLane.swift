@@ -99,7 +99,10 @@ struct BoardColumnHeader: View {
     }
 
     private var archive: LaneAdd {
-        LaneAdd(title: "全部归档做完的（置顶的留着）", icon: .archive) { workspace.attempt { try await workspace.archiveCompletedTasks() } }
+        let scope = workspace.catalog?.project(workspace.scopedProject)?.shownName
+        return LaneAdd(title: scope.map { "归档「\($0)」做完的（置顶的留着）" } ?? "全部归档做完的（置顶的留着）", icon: .archive) {
+            workspace.attempt { try await workspace.archiveCompletedTasks() }
+        }
     }
 
     private var row: some View {

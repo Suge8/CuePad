@@ -70,6 +70,25 @@ struct ProjectsTests {
         #expect(workspace.navigation.trail == "cue")
     }
 
+    @Test func 进展选了项目_全部归档只归档这个项目做完的_选全部才归档别的() async throws {
+        let near = try await store.createProject(name: "A", color: "#000000"), far = try await store.createProject(name: "B", color: "#000000")
+        let mine = try await store.createTask("这里做完的", in: near.id), theirs = try await store.createTask("别处做完的", in: far.id)
+        for id in [mine.id, theirs.id] { try await store.setStatus(id, .done) }
+        let workspace = Workspace(services: services)
+        let catalog = observing(workspace)
+        defer { await catalog.stop() }
+        workspace.showProgress(of: near.id)
+        try await eventually("范围认到项目 A") { workspace.scopedProject == near.id }
+
+        try await workspace.archiveCompletedTasks()
+        #expect(try await store.card(mine.id)?.archivedAt != nil)
+        #expect(try await store.card(theirs.id)?.archivedAt == nil)
+
+        workspace.projectScope = nil
+        try await workspace.archiveCompletedTasks()
+        #expect(try await store.card(theirs.id)?.archivedAt != nil)
+    }
+
     @Test func 往失效项目存东西_落到默认项目_写入时被删则纠正并提示() async throws {
         let trashed = try await store.createProject(name: "A", color: "#000000")
         try await store.trashProject(trashed.id)

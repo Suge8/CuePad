@@ -18,14 +18,16 @@ extension CueStore {
   }
 
   /// 已完成的顶层任务（及其下级）全部归档，置顶的留着，返回归档了几条。没做完的任务下已完成的子任务算在上级的进度里，不单独归档。
-  public func archiveCompletedTasks() throws -> Int {
+  /// 给了项目就只归档这个项目的（看板选了项目范围时，同 `TaskBoard.only`）。
+  public func archiveCompletedTasks(in project: UUID? = nil) throws -> Int {
     try write {
       let done = try db.query(
         """
         SELECT t.id FROM cards t
         WHERE t.todoAt IS NOT NULL AND t.completedAt IS NOT NULL AND t.deletedAt IS NULL AND t.archivedAt IS NULL AND t.isPinned = 0
           AND (t.parentID IS NULL OR t.parentID NOT IN (SELECT id FROM cards WHERE todoAt IS NOT NULL AND deletedAt IS NULL AND archivedAt IS NULL))
-        """
+          \(project == nil ? "" : "AND t.projectID = ?")
+        """, project.map { [$0] } ?? []
       ) { $0.uuid(0) }
       try setArchived(done, at: Date.stamp)
       return done.count

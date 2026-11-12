@@ -13503,6 +13503,22 @@
         }
       }
     },
+    "归档「%@」做完的（置顶的留着）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Archive Completed in “%@” (Pinned Stay)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "归档「%@」做完的（置顶的留着）"
+          }
+        }
+      }
+    },
     "当前模型不支持加速" : {
       "localizations" : {
         "en" : {

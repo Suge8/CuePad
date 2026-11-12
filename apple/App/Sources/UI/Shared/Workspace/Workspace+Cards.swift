@@ -133,8 +133,9 @@ extension Workspace {
         say(ids.count > 1 ? "已删除 \(ids.count) 条" : "已删除", action: .undo(undo))
     }
 
+    /// 归档的就是看板上此刻看得到的那些已完成：选了项目范围只归档那个项目的。入口都在看板的已完成那一列，范围只在这里读。
     func archiveCompletedTasks() async throws {
-        let count = try await services.store.archiveCompletedTasks()
+        let count = try await services.store.archiveCompletedTasks(in: scopedProject)
         if count > 0 { say("已归档 \(count) 项任务") }
     }
 
