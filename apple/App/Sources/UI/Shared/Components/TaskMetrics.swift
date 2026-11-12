@@ -56,6 +56,8 @@ enum BoardCardMetrics {
     static let footGap = Spacing.glyph
     static let foot: CGFloat = 24
     #endif
+    /// 标题至多几行（列里的卡上层就这么高）。
+    nonisolated static func lines(_ typeSize: DynamicTypeSize) -> Int { typeSize.isAccessibilitySize ? 3 : 2 }
     /// 卡脚里项目名最宽：约七个汉字，再长就截，给线与读数留地方。
     static let tagMax: CGFloat = 104
     /// 手机的行里的卡。

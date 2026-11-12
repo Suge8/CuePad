@@ -24,18 +24,23 @@ struct BoardWaitCard: View {
     }
 
     private var face: some View {
-        BoardCardLayout(advancing: false, pulse: leftPulse, project: project) {
+        BoardCardLayout(advancing: false, pulse: leftPulse, project: project, note: ask, session: held.session) {
             StateGlyph(status: held.deciding ? .asking : .awaitsReply).font(.system(size: TaskMetrics.ring))
                 .frame(width: TaskMetrics.cardLead, height: TaskMetrics.cardLead)
         } title: {
             if held.item?.task.isPinned == true { BoardPin() }
-            BoardCardTitle(held.title).foregroundStyle(palette.ink)
+            BoardCardTitle(held.title, lines: ask == nil ? nil : 1).foregroundStyle(palette.ink)
         } facts: {
             // 拍板与待回复原来靠图标分，现在写成字；等了多久跟着走
             Text(held.deciding ? "拍板" : "待回复").fontWeight(.semibold).foregroundStyle(held.deciding ? palette.waiting : palette.ink2)
             LiveText(style: SessionClock.Elapsed(since: held.session.stateSince)).foregroundStyle(palette.ink3)
         }
         .boardCard(.waiting)
+    }
+
+    /// 等你的是哪一句：拍板是它问的那句，待回复是它最后说的那句的头一句。卡上它比名字要紧，标题让成一行。
+    private var ask: String? {
+        held.deciding ? SessionProgress.firstLine(held.session.question?.displayText ?? held.session.detail) : SessionProgress.firstSentence(held.session.lastReply)
     }
 
     @ViewBuilder private var menu: some View {

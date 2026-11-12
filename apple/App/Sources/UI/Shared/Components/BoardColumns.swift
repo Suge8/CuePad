@@ -29,7 +29,6 @@ struct BoardColumns: View {
             ForEach(TaskBoard.Column.allCases, id: \.self) { item in
                 BoardColumn(column: item, board: board, adding: $adding, newTaskProject: newTaskProject, earlier: $showsEarlier)
                     .frame(width: width)
-                    .environment(\.boardOneLine, width >= BoardWidths.oneLine)
             }
         }
         #if os(macOS)
@@ -46,13 +45,6 @@ enum BoardWidths {
     static let minColumn: CGFloat = 175
     /// 列与列之间：列没有底，相邻两列的卡靠各自离列边的 `BoardCardMetrics.inset` 分开（看着隔 `BoardCardMetrics.columnGap`），不另留缝。
     static let gap = BoardCardMetrics.columnGap - 2 * BoardCardMetrics.inset
-
-    /// 一行写得下二十二个汉字（大库里标题九到二十二个字）的列宽。
-    #if os(macOS)
-    static let oneLine: CGFloat = 348
-    #else
-    static let oneLine: CGFloat = 420
-    #endif
 
     static func column(room: CGFloat) -> CGFloat {
         let count = CGFloat(TaskBoard.Column.allCases.count)

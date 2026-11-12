@@ -17,8 +17,6 @@ extension View {
 
 extension EnvironmentValues {
     @Entry var boardRow = false
-    /// 列宽到一行写得下最长的那类标题（`BoardWidths.oneLine`）：标题只占一行，不在每张卡里空一行。
-    @Entry var boardOneLine = false
 }
 
 private struct BoardCardFrame: ViewModifier {
@@ -78,7 +76,8 @@ struct BoardProjectTag: View {
     var body: some View {
         HStack(spacing: Spacing.hair) {
             ProjectGlyph(project: project, size: TaskMetrics.cardGlyph)
-            if !row { Text(project.shownName).font(TaskMetrics.caption).foregroundStyle(palette.ink3).lineLimit(1) }
+            // 卡脚只给得出图形那么宽时名字排成 0 宽裁掉（`BoardFoot`），不剩一个"…"
+            if !row { Text(project.shownName).font(TaskMetrics.caption).foregroundStyle(palette.ink3).lineLimit(1).fact() }
         }
         .frame(maxWidth: row ? nil : BoardCardMetrics.tagMax, alignment: .leading)
         .help(project.shownName)
@@ -101,26 +100,19 @@ extension Workspace {
 /// 拉丁词按词断——词里的连字符换成不断行的（U+2011），"notes-edit"不拆成"notes- / edit"；
 /// 整个标题只是一个拉丁词（没有空格、没有汉字）时只排一行，放不下先收字距、再截断，不按字母折行。中文照常按字折，至多两行（辅助字号三行）。
 /// 几个拉丁词里有一个比一行还长时系统仍会在词中间折：标题里少见，不为它另排。
-/// 列里的卡不管写了几行都占满这几行的高：四列的卡同高，换列时飞的那张不变大小。手机的行里格子的高是行给的，不另留。
-/// 否决过不预留（一行写得下的卡就一行高）：同一列的卡高高低低，读起来不齐。
+/// `lines` 给 1 是这张卡第二行非写旁注不可（等你的那句提问）。
 struct BoardCardTitle: View {
     let text: String
-    @Environment(\.boardRow) private var row
-    @Environment(\.boardOneLine) private var oneLine
+    var lines: Int?
     @Environment(\.dynamicTypeSize) private var typeSize
 
-    init(_ text: String) { self.text = text }
+    init(_ text: String, lines: Int? = nil) {
+        self.text = text
+        self.lines = lines
+    }
 
     var body: some View {
-        let lines = typeSize.isAccessibilitySize ? 3 : oneLine ? 1 : 2
-        let title = Text(Self.joined(text)).lineLimit(Self.oneWord(text) ? 1 : lines).allowsTightening(true)
-        if row {
-            title
-        } else {
-            Text(verbatim: " ").lineLimit(lines, reservesSpace: true).hidden().readerHidden(true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .overlay(alignment: .topLeading) { title }
-        }
+        Text(Self.joined(text)).lineLimit(Self.oneWord(text) ? 1 : lines ?? BoardCardMetrics.lines(typeSize)).allowsTightening(true)
     }
 
     private static func joined(_ text: String) -> String {
@@ -155,7 +147,7 @@ struct BoardSessionCard: View {
         let resting = pulse.tier == .resting
         let name = agent.name(at: workspace.services.speech)
         BoardLink(to: session) {
-            BoardCardLayout(advancing: true, pulse: pulse, moves: moves, project: project) {
+            BoardCardLayout(advancing: true, pulse: pulse, moves: moves, project: project, note: SessionProgress.line(of: session), session: session) {
                 Group {
                     if let kind = session.agent.known { kind.mark.image } else { Image(.terminal) }
                 }
@@ -173,14 +165,19 @@ struct BoardSessionCard: View {
     }
 }
 
-/// 列里的卡上下两层：标题，卡脚（左端项目，右端这一列要说的那一样——推进中是线与读数，别的列是 `facts`）。
+/// 列里的卡上下两层，四列同高（换列时飞的那张不变大小）：
+/// 上层固定两行高——标题至多两行，只写了一行时第二行是旁注（`note`：这件事此刻最该知道的一句），右上角是哪家 Agent 的标志；
+/// 卡脚左端项目，右端这一列要说的那一样——推进中是线与读数，别的列是 `facts`。
 /// 状态图标不画：卡在哪一列已经说了；状态词不放在标题右端而放在线的右端：窄列里标题会只剩四五个字。
+/// 否决过：不预留（一行写得下的卡就一行高，同一列高高低低）、预留了空着（每张卡里白占一行）。
 /// 手机的行里格子窄而矮，还是一排：图标、项目小图形、标题，线贴在下沿。
 struct BoardCardLayout<Icon: View, Title: View, Facts: View, Trailing: View>: View {
     let advancing: Bool
     var pulse = BoardPulse()
     var moves = true
     let project: Project?
+    var note: String?
+    var session: SessionState?
     let icon: Icon
     let title: Title
     let facts: Facts
@@ -188,14 +185,17 @@ struct BoardCardLayout<Icon: View, Title: View, Facts: View, Trailing: View>: Vi
     @Environment(\.boardRow) private var row
     @Environment(\.boardArrival) private var arrival
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.palette) private var palette
 
-    init(advancing: Bool, pulse: BoardPulse = BoardPulse(), moves: Bool = true, project: Project?,
+    init(advancing: Bool, pulse: BoardPulse = BoardPulse(), moves: Bool = true, project: Project?, note: String? = nil, session: SessionState? = nil,
          @ViewBuilder icon: () -> Icon, @ViewBuilder title: () -> Title,
          @ViewBuilder facts: () -> Facts = { EmptyView() }, @ViewBuilder trailing: () -> Trailing = { EmptyView() }) {
         self.advancing = advancing
         self.pulse = pulse
         self.moves = moves
         self.project = project
+        self.note = note
+        self.session = session
         self.icon = icon()
         self.title = title()
         self.facts = facts()
@@ -206,10 +206,17 @@ struct BoardCardLayout<Icon: View, Title: View, Facts: View, Trailing: View>: Vi
         if !row {
             VStack(alignment: .leading, spacing: BoardCardMetrics.footGap) {
                 HStack(alignment: .top, spacing: Spacing.item) {
-                    HStack(alignment: .firstTextBaseline, spacing: Spacing.tight) { title }.font(TaskMetrics.lineFont)
+                    BoardTitleBlock {
+                        Text(verbatim: Array(repeating: "国", count: BoardCardMetrics.lines(typeSize)).joined(separator: "\n")).hidden().readerHidden(true)
+                        HStack(alignment: .firstTextBaseline, spacing: Spacing.tight) { title }
+                        Text(verbatim: note ?? "").font(TaskMetrics.caption).foregroundStyle(palette.ink3).lineLimit(1).readerHidden(true)
+                    }
+                    .font(TaskMetrics.lineFont)
+                    .clipped()
+                    if let session { AgentMark(session: session, font: TaskMetrics.caption, named: false).frame(height: BoardCardMetrics.titleRow) }
                     trailing
                 }
-                BoardFoot {
+                BoardFoot(glyph: TaskMetrics.cardGlyph + ProjectGlyph.margin) {
                     if let project { BoardProjectTag(project: project) } else { Color.clear.frame(width: 0) }
                     foot
                 }
@@ -259,7 +266,7 @@ struct BoardCardLayout<Icon: View, Title: View, Facts: View, Trailing: View>: Vi
                 if let project { BoardProjectTag(project: project) }
                 title
             }
-            .font(BoardCardMetrics.rowTitle).lineLimit(typeSize.isAccessibilitySize ? 3 : 2)
+            .font(BoardCardMetrics.rowTitle).lineLimit(BoardCardMetrics.lines(typeSize))
             Spacer(minLength: 0)
             trailing
         }
@@ -267,9 +274,29 @@ struct BoardCardLayout<Icon: View, Title: View, Facts: View, Trailing: View>: Vi
     }
 }
 
+/// 三样：两行高的占位（按中文排，中文行比西文行高）、标题、旁注。标题只占了一行时旁注排在第二行；占了两行就排到块外、被裁掉。
+private struct BoardTitleBlock: Layout {
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        CGSize(width: proposal.width ?? 0, height: subviews[0].sizeThatFits(.unspecified).height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let width = ProposedViewSize(width: bounds.width, height: nil)
+        let title = subviews[1], note = subviews[2]
+        let noteHeight = note.sizeThatFits(width).height
+        let fits = title.sizeThatFits(width).height + noteHeight <= bounds.height + 0.5
+        subviews[0].place(at: bounds.origin, proposal: width)
+        title.place(at: bounds.origin, proposal: width)
+        note.place(at: CGPoint(x: bounds.minX, y: fits ? bounds.maxY - noteHeight : bounds.maxY + noteHeight), proposal: width)
+    }
+}
+
 /// 卡脚两样：左端项目、右端这一列的事实。事实先占它非要不可的宽（读数；推进中的线不算，`BoardLineRow`），项目名用剩下的、放不下就截；
-/// 再剩的都归右端（线画在里面）。`HStack` 排不出：线来多少占多少，按优先级排要么项目名被挤没、要么读数被截。
+/// 名字连两三个字都写不下时只留图形。再剩的都归右端（线画在里面）。`HStack` 排不出：线来多少占多少，按优先级排要么项目名被挤没、要么读数被截。
 private struct BoardFoot: Layout {
+    let glyph: CGFloat
+    private static let nameMin: CGFloat = 36
+
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         CGSize(width: proposal.width ?? 0, height: proposal.height ?? 0)
     }
@@ -278,7 +305,8 @@ private struct BoardFoot: Layout {
         let tag = subviews[0], facts = subviews[1]
         let wanted = tag.sizeThatFits(.unspecified).width
         let gap = wanted > 0 ? Spacing.item : 0
-        let width = min(wanted, max(0, bounds.width - gap - facts.sizeThatFits(.unspecified).width))
+        let room = min(wanted, max(0, bounds.width - gap - facts.sizeThatFits(.unspecified).width))
+        let width = room < wanted && room < glyph + Self.nameMin ? min(room, glyph) : room
         tag.place(at: CGPoint(x: bounds.minX, y: bounds.midY), anchor: .leading, proposal: ProposedViewSize(width: width, height: bounds.height))
         let used = width > 0 ? width + gap : 0
         facts.place(at: CGPoint(x: bounds.minX + used, y: bounds.midY), anchor: .leading, proposal: ProposedViewSize(width: bounds.width - used, height: bounds.height))

@@ -23,7 +23,7 @@ struct BoardTaskCard: View {
         let next = workspace.next(for: item, shown: now.shown)
         let pulse = advancing || arrival?.from == .advancing ? now : BoardPulse()
         framed {
-            BoardCardLayout(advancing: advancing, pulse: pulse, moves: moves, project: project) {
+            BoardCardLayout(advancing: advancing, pulse: pulse, moves: moves, project: project, note: note, session: item.agent?.state) {
                 ring(next: next).opacity(column.leadOpacity)
             } title: {
                 if task.isPinned { BoardPin() }
@@ -31,7 +31,7 @@ struct BoardTaskCard: View {
             } facts: {
                 if let steps = item.steps { Text(verbatim: "\(steps.done)/\(steps.total)").monospacedDigit().foregroundStyle(palette.ink3) }
                 if let finished { Text(verbatim: finished).monospacedDigit().foregroundStyle(palette.ink3) }
-                if let next, next.starts { BoardStart(next: next) }
+                if column == .todo { BoardStart(next: next, since: task.todoAt ?? task.createdAt) }
             } trailing: {
                 if let shot = item.shot { BoardShot(shot: shot, group: task.id.uuidString, open: openShot) }
             }
@@ -65,11 +65,12 @@ struct BoardTaskCard: View {
         if row { title } else { title.relaySpot(task: task.id) }
     }
 
-    /// 今天做完的写时刻，更早的写日子。
-    private var finished: String? {
-        guard column == .done, let at = task.completedAt else { return nil }
-        return Calendar.current.isDateInToday(at) ? at.formatted(date: .omitted, time: .shortened) : at.formatted(.dateTime.month().day())
+    /// 第二行那一句：会话此刻在做什么（做完的是它最后说的头一句），没有会话的是任务正文的头一行。
+    private var note: String? {
+        item.agent.flatMap { SessionProgress.line(of: $0.state) } ?? SessionProgress.firstLine(task.rest)
     }
+
+    private var finished: String? { column == .done ? task.completedAt.map { DateLabel.short($0) } : nil }
 
     private var tip: String {
         let agent = item.agent?.state.agentMark
@@ -136,18 +137,28 @@ struct BoardTaskCard: View {
     #endif
 }
 
-/// 卡脚右端的"开始"：Mac 上指针停在卡上才露出（一列十几张，一直写着是一墙"开始"），触屏没有悬停、一直写着。
+/// 待办的卡脚右端：平时写记下多久了；Mac 上指针停在卡上时换成"开始"（一列十几张，一直写着是一墙"开始"），触屏没有悬停、两样都写。
 private struct BoardStart: View {
-    let next: TaskNext
+    let next: TaskNext?
+    let since: Date
+    @Environment(\.palette) private var palette
     #if os(macOS)
     @Environment(\.buttonHovered) private var hovered
     #endif
 
     var body: some View {
+        let start = next.flatMap { $0.starts ? $0 : nil }
         #if os(macOS)
-        if hovered { TaskNextMark(next: next).environment(\.rowHovered, true).transition(.opacity) }
+        if hovered, let start {
+            TaskNextMark(next: start).environment(\.rowHovered, true).transition(.opacity)
+        } else {
+            age.transition(.opacity)
+        }
         #else
-        TaskNextMark(next: next)
+        age
+        if let start { TaskNextMark(next: start) }
         #endif
     }
+
+    private var age: some View { Text(verbatim: DateLabel.short(since)).foregroundStyle(palette.ink3) }
 }
