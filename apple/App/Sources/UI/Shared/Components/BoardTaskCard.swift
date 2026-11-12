@@ -22,8 +22,11 @@ struct BoardTaskCard: View {
         let now = workspace.pulse(of: item.agent)
         let next = workspace.next(for: item, shown: now.shown)
         let pulse = advancing || arrival?.from == .advancing ? now : BoardPulse()
+        let hero = column == .done && !row ? item.shot : nil
         framed {
-            BoardCardLayout(advancing: advancing, pulse: pulse, moves: moves, project: project, note: note, session: item.agent?.state) {
+            VStack(alignment: .leading, spacing: 0) {
+            if let hero { BoardShot(shot: hero, group: task.id.uuidString, hero: true, open: openShot).padding(.top, TaskMetrics.cardPadding) }
+            BoardCardLayout(advancing: advancing, pulse: pulse, moves: moves, project: project, note: note, session: item.agent?.state, compact: column.light) {
                 ring(next: next).opacity(column.leadOpacity)
             } title: {
                 if task.isPinned { BoardPin() }
@@ -33,9 +36,11 @@ struct BoardTaskCard: View {
                 if let finished { Text(verbatim: finished).monospacedDigit().foregroundStyle(palette.ink3) }
                 if column == .todo { BoardStart(next: next, since: task.todoAt ?? task.createdAt) }
             } trailing: {
-                if let shot = item.shot { BoardShot(shot: shot, group: task.id.uuidString, open: openShot) }
+                if hero == nil, let shot = item.shot { BoardShot(shot: shot, group: task.id.uuidString, open: openShot) }
             }
-            .boardCard(column)
+            }
+            .boardCard(column, flat: column.light && hero == nil)
+            .boardRescue(advancing ? item.agent?.state : nil)
         }
         .help(tip)
         .taskSpoken(task, title: title, subtasks: item.steps, next: next, aside: aside(pulse), check: $check, open: open, follow: { follow(next) }) {
@@ -67,7 +72,7 @@ struct BoardTaskCard: View {
 
     /// 第二行那一句：会话此刻在做什么（做完的是它最后说的头一句），没有会话的是任务正文的头一行。
     private var note: String? {
-        item.agent.flatMap { SessionProgress.line(of: $0.state) } ?? SessionProgress.firstLine(task.rest)
+        item.agent.flatMap { SessionProgress.said(of: $0.state) } ?? SessionProgress.firstLine(task.rest)
     }
 
     private var finished: String? { column == .done ? task.completedAt.map { DateLabel.short($0) } : nil }

@@ -3,7 +3,8 @@ import SwiftUI
 
 extension View {
     /// 平放的纸不加模糊阴影：侧栏开合时整面墙每帧重画，靠纸与桌面的明度、色相差把纸托出来。
-    func boardCard(_ column: TaskBoard.Column) -> some View { modifier(BoardCardFrame(column: column)) }
+    /// `flat`：清单里的一行（待办、没有成果图的已完成），不垫纸，指针停上去才有淡底。
+    func boardCard(_ column: TaskBoard.Column, flat: Bool = false) -> some View { modifier(BoardCardFrame(column: column, flat: flat)) }
 
     /// 只这一个小修饰读它：指针换项目时重算的是各卡的透明度，不是整张卡。
     func boardDim(project: UUID?) -> some View {
@@ -21,6 +22,10 @@ extension EnvironmentValues {
 
 private struct BoardCardFrame: ViewModifier {
     let column: TaskBoard.Column
+    let flat: Bool
+    #if os(macOS)
+    @Environment(\.buttonHovered) private var hovered
+    #endif
     @Environment(\.boardRow) private var row
     @Environment(\.boardArrival) private var arrival
     @Environment(\.palette) private var palette
@@ -34,8 +39,31 @@ private struct BoardCardFrame: ViewModifier {
                         .fill(arrival.from.paper(palette) ?? palette.paper).opacity(arrival.landed ? 0 : 1)
                 }
             }
-            .paper(cornerRadius: TaskMetrics.cardRadius, wash: column.paper(palette))
+            .modifier(Surface(column: column, flat: flat && !row, lit: lit))
             .contentShape(.rect(cornerRadius: TaskMetrics.cardRadius))
+    }
+
+    private var lit: Bool {
+        #if os(macOS)
+        hovered
+        #else
+        false
+        #endif
+    }
+
+    private struct Surface: ViewModifier {
+        let column: TaskBoard.Column
+        let flat: Bool
+        let lit: Bool
+        @Environment(\.palette) private var palette
+
+        func body(content: Content) -> some View {
+            if flat {
+                content.background(lit ? palette.fill : .clear, in: RoundedRectangle(cornerRadius: TaskMetrics.cardRadius))
+            } else {
+                content.paper(cornerRadius: TaskMetrics.cardRadius, wash: column.paper(palette))
+            }
+        }
     }
 }
 
@@ -147,7 +175,7 @@ struct BoardSessionCard: View {
         let resting = pulse.tier == .resting
         let name = agent.name(at: workspace.services.speech)
         BoardLink(to: session) {
-            BoardCardLayout(advancing: true, pulse: pulse, moves: moves, project: project, note: SessionProgress.line(of: session), session: session) {
+            BoardCardLayout(advancing: true, pulse: pulse, moves: moves, project: project, note: SessionProgress.said(of: session), session: session) {
                 Group {
                     if let kind = session.agent.known { kind.mark.image } else { Image(.terminal) }
                 }
@@ -158,6 +186,7 @@ struct BoardSessionCard: View {
             }
             .boardCard(.advancing)
         }
+        .boardRescue(session)
         .help(Dotted(project?.shownName, session.agentMark).visible)
         .contextMenu { OpenSessionBeside(session: session); SessionActions(session: session, board: agent) }
         .accessibilityLabel(Dotted(name, pulse.fullContext.map { $0.help.spoken } ?? pulse.shown?.label, pulse.handoff?.waiting).spoken)
@@ -178,6 +207,8 @@ struct BoardCardLayout<Icon: View, Title: View, Facts: View, Trailing: View>: Vi
     let project: Project?
     var note: String?
     var session: SessionState?
+    /// 清单里的一行（待办、已完成）：标题写几行占几行，有旁注才多一行，上下的边也收紧。
+    var compact = false
     let icon: Icon
     let title: Title
     let facts: Facts
@@ -187,7 +218,7 @@ struct BoardCardLayout<Icon: View, Title: View, Facts: View, Trailing: View>: Vi
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.palette) private var palette
 
-    init(advancing: Bool, pulse: BoardPulse = BoardPulse(), moves: Bool = true, project: Project?, note: String? = nil, session: SessionState? = nil,
+    init(advancing: Bool, pulse: BoardPulse = BoardPulse(), moves: Bool = true, project: Project?, note: String? = nil, session: SessionState? = nil, compact: Bool = false,
          @ViewBuilder icon: () -> Icon, @ViewBuilder title: () -> Title,
          @ViewBuilder facts: () -> Facts = { EmptyView() }, @ViewBuilder trailing: () -> Trailing = { EmptyView() }) {
         self.advancing = advancing
@@ -196,6 +227,7 @@ struct BoardCardLayout<Icon: View, Title: View, Facts: View, Trailing: View>: Vi
         self.project = project
         self.note = note
         self.session = session
+        self.compact = compact
         self.icon = icon()
         self.title = title()
         self.facts = facts()
@@ -206,23 +238,36 @@ struct BoardCardLayout<Icon: View, Title: View, Facts: View, Trailing: View>: Vi
         if !row {
             VStack(alignment: .leading, spacing: BoardCardMetrics.footGap) {
                 HStack(alignment: .top, spacing: Spacing.item) {
-                    BoardTitleBlock {
-                        Text(verbatim: Array(repeating: "国", count: BoardCardMetrics.lines(typeSize)).joined(separator: "\n")).hidden().readerHidden(true)
-                        HStack(alignment: .firstTextBaseline, spacing: Spacing.tight) { title }
-                        Text(verbatim: note ?? "").font(TaskMetrics.caption).foregroundStyle(palette.ink3).lineLimit(1).readerHidden(true)
+                    if compact {
+                        VStack(alignment: .leading, spacing: Spacing.hair) {
+                            HStack(alignment: .firstTextBaseline, spacing: Spacing.tight) { title }.font(TaskMetrics.lineFont)
+                            if let note { noteLine(note) }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    } else {
+                        BoardTitleBlock {
+                            Text(verbatim: Array(repeating: "国", count: BoardCardMetrics.lines(typeSize)).joined(separator: "\n")).hidden().readerHidden(true)
+                            HStack(alignment: .firstTextBaseline, spacing: Spacing.tight) { title }
+                            noteLine(note ?? "")
+                        }
+                        .font(TaskMetrics.lineFont)
+                        .clipped()
                     }
-                    .font(TaskMetrics.lineFont)
-                    .clipped()
-                    if let session { AgentMark(session: session, font: TaskMetrics.caption, named: false).frame(height: BoardCardMetrics.titleRow) }
+                    // 有就地处理的钮时它占右上角（真的那颗浮在卡上，`boardRescue`；这里只留出它的宽）
+                    if let session, BoardRescue.kind(of: session) != nil, !compact {
+                        BoardRescue(session: session).hidden()
+                    } else if let session {
+                        AgentMark(session: session, font: TaskMetrics.caption, named: false).frame(height: BoardCardMetrics.titleRow)
+                    }
                     trailing
                 }
-                BoardFoot(glyph: TaskMetrics.cardGlyph + ProjectGlyph.margin) {
+                BoardFoot(glyph: BoardCardMetrics.footGlyph) {
                     if let project { BoardProjectTag(project: project) } else { Color.clear.frame(width: 0) }
                     foot
                 }
                 .frame(height: BoardCardMetrics.foot)
             }
-            .padding(.vertical, BoardCardMetrics.pad)
+            .padding(.vertical, compact ? BoardCardMetrics.compactPad : BoardCardMetrics.pad)
         } else if advancing {
             line
                 .frame(maxHeight: .infinity)
@@ -251,6 +296,10 @@ struct BoardCardLayout<Icon: View, Title: View, Facts: View, Trailing: View>: Vi
             .overlay { if left { BoardLine(pulse: pulse, moves: false).opacity(leftShown) } }
             .animation(Motion.fade, value: arrival?.landed)
         }
+    }
+
+    private func noteLine(_ note: String) -> some View {
+        Text(verbatim: note).font(TaskMetrics.caption).foregroundStyle(palette.ink3).lineLimit(1).readerHidden(true)
     }
 
     private func rowLine(moves: Bool) -> some View {
@@ -293,7 +342,7 @@ private struct BoardTitleBlock: Layout {
 
 /// 卡脚两样：左端项目、右端这一列的事实。事实先占它非要不可的宽（读数；推进中的线不算，`BoardLineRow`），项目名用剩下的、放不下就截；
 /// 名字连两三个字都写不下时只留图形。再剩的都归右端（线画在里面）。`HStack` 排不出：线来多少占多少，按优先级排要么项目名被挤没、要么读数被截。
-private struct BoardFoot: Layout {
+struct BoardFoot: Layout {
     let glyph: CGFloat
     private static let nameMin: CGFloat = 36
 
@@ -313,14 +362,56 @@ private struct BoardFoot: Layout {
     }
 }
 
+/// 卡住的会话就地处理的那一颗：额度用完去管理用量，出错的重试，上下文快满的压缩（规则同会话页的 `FailureDock`、`ContextGauge`）。
+/// 原因卡上一直写着（线右端的状态词），这颗是中性的小钮，不加红框。
+struct BoardRescue: View {
+    let session: SessionState
+    @Environment(Workspace.self) private var workspace
+
+    enum Kind { case usage(URL), retry, compact }
+
+    static func kind(of session: SessionState) -> Kind? {
+        if let url = session.usageURL { return .usage(url) }
+        if session.canRetry { return .retry }
+        if session.context.flatMap(ContextMeter.init)?.level == .critical { return .compact }
+        return nil
+    }
+
+    var body: some View {
+        Group {
+            switch Self.kind(of: session) {
+            case .usage(let url): Link("管理用量", destination: url)
+            case .retry: Button("重试") { workspace.retry(session) }
+            case .compact: Button("现在压缩") { workspace.speak("/compact", to: .session(session, mode: .command)) }
+            case nil: EmptyView()
+            }
+        }
+        .buttonStyle(ControlButtonStyle(kind: .secondary, size: .inline))
+        .fixedSize()
+    }
+}
+
+extension View {
+    /// 浮在卡的右上角、不放进卡里：会话卡整张是一颗按钮（`BoardLink`），钮里不套钮。
+    func boardRescue(_ session: SessionState?) -> some View {
+        overlay(alignment: .topTrailing) {
+            if let session, BoardRescue.kind(of: session) != nil {
+                BoardRescue(session: session).padding(.trailing, TaskMetrics.cardPadding).padding(.top, BoardCardMetrics.pad)
+            }
+        }
+    }
+}
+
 struct BoardShot: View {
     let shot: CueShown
     let group: String
+    /// 成果图做这张卡的主角：铺满卡宽。
+    var hero = false
     let open: (PreviewOpening) -> Void
 
     var body: some View {
         DeliverableTile(
-            preview: shot.preview, label: shot.look, shape: .strip(height: Self.height), captioned: false, zoom: PreviewZoomKey(group: group, preview: shot.id)
+            preview: shot.preview, label: shot.look, shape: hero ? .hero : .strip(height: Self.height), captioned: false, zoom: PreviewZoomKey(group: group, preview: shot.id)
         ) { _ in open(Self.opening(shot, group: group)) }
     }
 

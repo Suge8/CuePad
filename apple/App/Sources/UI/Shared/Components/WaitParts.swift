@@ -21,6 +21,8 @@ nonisolated extension SessionState {
 
 struct ChipFlow: Layout {
     var spacing = Spacing.item
+    /// 每一排靠左（默认靠右：Cue 页的卡上选项贴着卡的右沿）。
+    var leading = false
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let rows = rows(width: proposal.width ?? .infinity, subviews)
@@ -31,7 +33,7 @@ struct ChipFlow: Layout {
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         var y = bounds.minY
         for row in rows(width: bounds.width, subviews) {
-            var x = bounds.maxX - row.width
+            var x = leading ? bounds.minX : bounds.maxX - row.width
             for (index, size) in row.items {
                 subviews[index].place(at: CGPoint(x: x, y: y + (row.height - size.height) / 2), proposal: ProposedViewSize(size))
                 x += size.width + spacing

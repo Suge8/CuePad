@@ -14,9 +14,9 @@ struct BoardColumns: View {
 
     var body: some View {
         GeometryReader { proxy in
-            let width = BoardWidths.column(room: proxy.size.width - margin * 2)
+            let room = proxy.size.width - margin * 2
             // 放得下、放不下都是这一个滚动区（放得下时只是滚不动）：窗口拖过四列最窄时不换结构，列里的滚动位置留着
-            ScrollView(.horizontal) { columns(width) }
+            ScrollView(.horizontal) { columns(room) }
                 .safeAreaPadding(.horizontal, margin)
                 .scrollBounceBehavior(.basedOnSize)
                 .scrollIndicators(.never)
@@ -24,11 +24,11 @@ struct BoardColumns: View {
         }
     }
 
-    private func columns(_ width: CGFloat) -> some View {
+    private func columns(_ room: CGFloat) -> some View {
         HStack(alignment: .top, spacing: BoardWidths.gap) {
             ForEach(TaskBoard.Column.allCases, id: \.self) { item in
                 BoardColumn(column: item, board: board, adding: $adding, newTaskProject: newTaskProject, earlier: $showsEarlier)
-                    .frame(width: width)
+                    .frame(width: BoardWidths.column(item, room: room))
             }
         }
         #if os(macOS)
@@ -46,8 +46,11 @@ enum BoardWidths {
     /// 列与列之间：列没有底，相邻两列的卡靠各自离列边的 `BoardCardMetrics.inset` 分开（看着隔 `BoardCardMetrics.columnGap`），不另留缝。
     static let gap = BoardCardMetrics.columnGap - 2 * BoardCardMetrics.inset
 
-    static func column(room: CGFloat) -> CGFloat {
-        let count = CGFloat(TaskBoard.Column.allCases.count)
-        return max(minColumn, (room - gap * (count - 1)) / count)
+    /// 按份数分（`TaskBoard.Column.share`）；窄到轻的那两列不足最窄时四列均分，再窄横滑。
+    static func column(_ column: TaskBoard.Column, room: CGFloat) -> CGFloat {
+        let all = TaskBoard.Column.allCases
+        let free = room - gap * CGFloat(all.count - 1), shares = all.reduce(0) { $0 + $1.share }
+        guard free * (all.map(\.share).min() ?? 1) / shares >= minColumn else { return max(minColumn, free / CGFloat(all.count)) }
+        return (free * column.share / shares).rounded(.down)
     }
 }

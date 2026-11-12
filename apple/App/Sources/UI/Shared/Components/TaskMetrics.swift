@@ -56,6 +56,10 @@ enum BoardCardMetrics {
     static let footGap = Spacing.glyph
     static let foot: CGFloat = 24
     #endif
+    /// 卡脚里项目图形占的宽（名字放不下时只留它，`BoardFoot`）。
+    static var footGlyph: CGFloat { TaskMetrics.cardGlyph + ProjectGlyph.margin }
+    /// 清单里的一行上下的边。
+    static let compactPad = Spacing.glyph
     /// 标题至多几行（列里的卡上层就这么高）。
     nonisolated static func lines(_ typeSize: DynamicTypeSize) -> Int { typeSize.isAccessibilitySize ? 3 : 2 }
     /// 卡脚里项目名最宽：约七个汉字，再长就截，给线与读数留地方。
