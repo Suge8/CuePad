@@ -15,15 +15,23 @@ extension AppServices {
     }
 
     #if os(macOS)
-    /// 会话所在的 Mac 办别的设备的请求（`DeliveryMode.step`）：取了写在那一步上。会话文件没了、读不了按失败写回原因，不写一份空的。
-    nonisolated static func fillStep(_ content: String, in store: CueStore) async throws {
+    /// 会话所在的 Mac 办别的设备的请求（`DeliveryMode.step`）：取了写在那一步上。会话没了、读不了按失败写回原因，不写一份空的。
+    static func fillStep(_ content: String, in store: CueStore, runtimes: [AgentKind: any AgentRuntime]) async throws {
         guard let step = try await store.stepCalls(content) else { throw SendError.sessionFileMissing }
-        try await store.fillStep(content, with: try await stepDetail(step.calls, of: step.session, in: store))
+        try await store.fillStep(content, with: try await stepDetail(step.calls, of: step.session, in: store, runtimes: runtimes))
     }
 
-    nonisolated static func stepDetail(_ calls: [String], of sessionID: String, in store: CueStore) async throws -> ToolCallDetail {
+    /// 那家没接着（演示库）时照会话文件读。
+    static func stepDetail(
+        _ calls: [String], of sessionID: String, in store: CueStore, runtimes: [AgentKind: any AgentRuntime]
+    ) async throws -> ToolCallDetail {
         guard let indexed = try await store.indexedSession(sessionID) else { throw SendError.sessionFileMissing }
-        do { return try await ToolCallDetail.read(file: URL(filePath: indexed.path), calls: calls) } catch { throw SendError.sessionFileMissing }
+        do {
+            guard let runtime = runtimes[indexed.agent] else { return try await ToolCallDetail.read(file: URL(filePath: indexed.path), calls: calls) }
+            return try await runtime.stepDetail(calls, of: indexed)
+        } catch {
+            throw SendError.sessionFileMissing
+        }
     }
     #endif
 

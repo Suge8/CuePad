@@ -3,12 +3,17 @@ import CueStore
 import Foundation
 
 extension ToolCallDetail {
-    /// 按调用 id 在会话文件里找它的参数与结果。不按各家的行格式解：整行当 JSON 树，认三种形状——
-    /// 带这个 id 与参数的对象、指着这个 id 的结果对象（Pi 的 `toolCall`/`toolCallId`、Claude Code 的 `tool_use`/`tool_use_id`），
-    /// 与 Codex 做完的一项（同一个对象里带着命令与输出，或各文件的改动；改文件的一步 id 后面接着路径，`CodexHistory.changeCall`）。
-    /// 文件读不了抛出；读到了却没有这次调用的命令、改动与文字输出（看了一张图、搜了一下网、别家的格式）是一份空的。
+    /// 会话文件读不了抛出。
     @concurrent public static func read(file: URL, calls: [String]) async throws -> ToolCallDetail {
-        let data = try Data(contentsOf: file, options: .mappedIfSafe)
+        read(try Data(contentsOf: file, options: .mappedIfSafe), calls: calls)
+    }
+
+    /// 按调用 id 在会话的原文里找它的参数与结果。不按各家的行格式解：一行当 JSON 树，认四种形状——
+    /// 带这个 id 与参数的对象、指着这个 id 的结果对象（Pi 的 `toolCall`/`toolCallId`、Claude Code 的 `tool_use`/`tool_use_id`）；
+    /// Codex 做完的一项（同一个对象里带着命令与输出，或各文件的改动；改文件的一步 id 后面接着路径，`CodexHistory.changeCall`）；
+    /// OpenCode 的一次工具调用（参数与结果都在它的 `state` 里；会话在它的库里，原文是接口给的各页消息，`OpenCodeRuntime.stepDetail`）。
+    /// 读到了却没有这次调用的命令、改动与文字输出（看了一张图、搜了一下网）是一份空的。
+    static func read(_ data: Data, calls: [String]) -> ToolCallDetail {
         var commands: [String] = [], diffs: [String] = [], outputs: [String] = []
         // 一步里的几次调用在文件里挨着：从第一次找到的地方往后找，不为每个 id 从头扫一遍（会话文件可以有几百 MB）
         var from = data.startIndex
@@ -27,6 +32,11 @@ extension ToolCallDetail {
                                 called = true
                                 if let command = input["command"] as? String { commands.append(command) }
                                 diffs += changes(input)
+                            } else if let state = object["state"] as? [String: Any], let input = state["input"] as? [String: Any] {
+                                called = true
+                                if let command = input["command"] as? String { commands.append(command) }
+                                diffs += changes(input)
+                                output = state["content"].map(text) ?? ""
                             } else if let command = object["command"] as? [String] {
                                 called = true
                                 commands.append(command.last ?? "")
@@ -56,7 +66,8 @@ extension ToolCallDetail {
 
     private static func changes(_ input: [String: Any]) -> [String] {
         func change(_ object: [String: Any]) -> String? {
-            guard let old = (object["oldText"] ?? object["old_string"]) as? String, let new = (object["newText"] ?? object["new_string"]) as? String else { return nil }
+            guard let old = (object["oldText"] ?? object["old_string"] ?? object["oldString"]) as? String,
+                  let new = (object["newText"] ?? object["new_string"] ?? object["newString"]) as? String else { return nil }
             return diff(old, new)
         }
         let edits = ([input] + (input["edits"] as? [[String: Any]] ?? [])).compactMap(change)

@@ -20,11 +20,6 @@ public struct ToolCallDetail: Codable, Equatable, Sendable {
 
   public var isEmpty: Bool { command == nil && diff == nil && output.isEmpty }
 
-  /// 认得出调用 id 的几家（Pi、Claude Code、Codex 的会话文件）。OpenCode 的会话在它的库里，还没接。
-  public static func reads(_ agent: Open<AgentKind>) -> Bool {
-    [.known(.pi), .known(.claudeCode), .known(.codex)].contains(agent)
-  }
-
   /// 命令与改动留开头、输出留末尾（命令的结论在最后），各至多 40 行、8000 个字符；截掉的地方留一行省略号，输出记在 `clipped` 上。
   public func fitted() -> ToolCallDetail {
     let lines = 40, width = 8_000

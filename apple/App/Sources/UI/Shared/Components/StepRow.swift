@@ -17,7 +17,7 @@ struct StepRow: View {
     enum Opened: Equatable { case loading, ready(ToolCallDetail), missing(String) }
 
     var body: some View {
-        if item.calls != nil, ToolCallDetail.reads(session.agent), services.holdsSteps(of: session) || place != nil {
+        if item.calls != nil, services.holdsSteps(of: session) || place != nil {
             VStack(alignment: .leading, spacing: 0) {
                 Button(action: toggle) { row(open: opened != nil) }
                     .buttonStyle(PressStyle())
@@ -71,7 +71,7 @@ struct StepRow: View {
             do {
                 #if os(macOS)
                 if services.holdsSteps(of: session) {
-                    let detail = try await AppServices.stepDetail(item.calls ?? [], of: session.sessionID, in: services.store)
+                    let detail = try await AppServices.stepDetail(item.calls ?? [], of: session.sessionID, in: services.store, runtimes: services.runtimes)
                     if opened == .loading { opened = .ready(detail) }
                     return
                 }
