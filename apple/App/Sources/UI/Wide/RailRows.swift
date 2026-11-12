@@ -110,7 +110,8 @@ struct RailCue: View {
     }
 }
 
-/// 会话条上的会话：只有等你的常驻在上面（没有就整组不在），其余的收在各自的项目下面——项目一行写它有几个在推进，点开才列出来。
+/// 会话条上的会话：只有等你的常驻在上面（没有就整组不在），其余的收在各自的项目下面——项目一行写它有几个在推进（记号同看板推进中的列头），点开才列出来。
+/// 项目多了只列一部分（`shownProjects`）：有会话在推进的、置顶的、此刻开着的一定在，其余按目录的顺序补到 `projectCap` 个，全部在组头去的总览页。
 /// 否决过：推进中全部列出（十几行、每行一种状态标，读不过来，看板与 Cue 已经有同一份）；下面的空处填最近结束的会话（栏一直是满的，眼睛没处歇）。
 /// 点项目那一行去它的页并展开，再点一次收起；展开着的记在这个窗口里，不存。没归项目的会话算在默认项目下。
 struct RailSessions: View {
@@ -136,10 +137,10 @@ struct RailSessions: View {
                 }
                 VStack(spacing: Spacing.hair) {
                     projectsHeader
-                    ForEach(workspace.catalog?.projects ?? []) { project in
+                    ForEach(shownProjects(running: byProject)) { project in
                         let sessions = byProject[project.id] ?? []
                         projectRow(project, running: sessions.count)
-                        if expanded.contains(project.id) { ForEach(sessions) { cell($0, compact: true) } }
+                        if expanded.contains(project.id) { RailProjectSessions(project: project.id, live: sessions, marked: marked, open: open) }
                     }
                 }
             }
@@ -152,9 +153,24 @@ struct RailSessions: View {
         .dynamicTypeSize(...DynamicTypeSize.xxLarge)
     }
 
-    private func cell(_ item: SessionRailRows.Item, compact: Bool = false) -> some View {
-        SessionRailCell(item: item, form: .wide, moves: false, selected: marked.contains(item.id), compact: compact, open: open)
+    private func cell(_ item: SessionRailRows.Item) -> some View {
+        SessionRailCell(item: item, form: .wide, moves: false, selected: marked.contains(item.id), open: open)
             .transition(.opacity)
+    }
+
+    private static let projectCap = 7
+
+    private func shownProjects(running: [UUID: [SessionRailRows.Item]]) -> [Project] {
+        let all = workspace.catalog?.projects ?? []
+        func kept(_ project: Project) -> Bool {
+            running[project.id] != nil || project.isPinned || expanded.contains(project.id) || workspace.mainRoute == .project(project.id)
+        }
+        var room = Self.projectCap - all.count(where: kept)
+        return all.filter { project in
+            if kept(project) { return true }
+            room -= 1
+            return room >= 0
+        }
     }
 
     private func header(_ title: Text, count: Int?, ink: Color) -> some View {
@@ -191,9 +207,9 @@ struct RailSessions: View {
         let selected = workspace.mainRoute == .project(project.id) && !workspace.cueHome
         let open = expanded.contains(project.id)
         return Button {
-            if selected, running > 0 { expanded.formSymmetricDifference([project.id]) } else {
+            if selected { expanded.formSymmetricDifference([project.id]) } else {
                 workspace.show(.project(project.id))
-                if running > 0 { expanded.insert(project.id) }
+                expanded.insert(project.id)
             }
         } label: {
             RailLine {
@@ -202,16 +218,67 @@ struct RailSessions: View {
                 Text(verbatim: project.shownName).font(Typography.body.weight(selected ? .semibold : .regular)).foregroundStyle(palette.ink).lineLimit(1)
                 Spacer(minLength: Spacing.item)
                 if running > 0 {
-                    Circle().fill(palette.signature).frame(width: 6, height: 6)
-                    Text(running, format: .number).font(Typography.caption).foregroundStyle(palette.ink3).monospacedDigit()
-                    Chevron(.forward).foregroundStyle(palette.ink3).rotationEffect(.degrees(open ? 90 : 0))
+                    BoardLaneMark(column: .advancing, size: 12)
+                    Text(running, format: .number).font(Typography.caption).foregroundStyle(TaskBoard.Column.advancing.countInk(palette)).monospacedDigit()
                 }
+                if open || selected { Chevron(.forward).foregroundStyle(palette.ink3).rotationEffect(.degrees(open ? 90 : 0)) }
             }
         }
         .buttonStyle(RowStyle(selected: selected))
+        .help(running > 0 ? Text("\(running) 推进中") : Text(verbatim: project.shownName))
         .accessibilityLabel(Text(verbatim: project.shownName))
         .accessibilityValue(running > 0 ? Text(running, format: .number) : Text(verbatim: ""))
         .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+}
+
+/// 展开的项目下面列的会话：在推进的全在，再按最近补已结束的到 `cap` 条，多的收在"还有 N 个会话"一行里、点一下多列 `step` 条
+/// （同 Codex、Cindy 一个项目先列 5 条，Buzz 列 7 条、每次多 10 条；三家都不让上限藏起在跑的）。
+private struct RailProjectSessions: View {
+    let project: UUID
+    let live: [SessionRailRows.Item]
+    let marked: Set<String>
+    let open: (SessionState, SessionRail.Opening) -> Void
+    @Environment(Workspace.self) private var workspace
+    @Environment(AppServices.self) private var services
+    @Environment(\.palette) private var palette
+    @State private var page: SessionListPage?
+    @State private var extra = 0
+
+    private static let cap = 5
+    private static let step = 10
+
+    private struct Reading: Equatable {
+        let project: UUID
+        let limit: Int
+        let moment: Speech.Moment
+    }
+
+    var body: some View {
+        let limit = max(0, Self.cap - live.count) + extra
+        let ended = (page?.items ?? []).prefix(limit).map { item in
+            let pulse = workspace.pulse(of: item), session = pulse.session ?? item.state
+            return SessionRailRows.Item(session: session, name: item.task?.title.nonEmpty ?? session.title, pulse: pulse, waiting: nil)
+        }
+        let hidden = (page?.total ?? 0) - ended.count
+        Group {
+            ForEach(live + ended) { item in
+                SessionRailCell(item: item, form: .wide, moves: false, selected: marked.contains(item.id), compact: true, open: open)
+            }
+            if hidden > 0 {
+                Button { extra += Self.step } label: {
+                    RailLine { Color.clear } rest: {
+                        Text("还有 \(hidden) 个会话").font(Typography.caption).foregroundStyle(palette.ink3).lineLimit(1)
+                    }
+                }
+                .buttonStyle(RowStyle())
+            }
+        }
+        .transition(.opacity)
+        .observing(services.store, id: Reading(project: project, limit: limit, moment: services.speech), into: $page, onError: workspace.fail) {
+            [project, limit, moment = services.speech] store in
+            try SessionListData.earlier(SessionQuery(project: project, limit: limit), at: moment, from: store)
+        }
     }
 }
 
