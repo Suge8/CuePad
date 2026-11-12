@@ -74,7 +74,7 @@ nonisolated struct DebugArgs: Decodable {
     let noAsks: Bool
     /// `-CuePadNoIdeas YES`：`-CuePadProject` 那个项目的灵感都移到回收站，看项目页没有灵感时的空态（改的是库本身，之后的画面也没有这些灵感：配一个新的 `CUEPAD_SHOT_LIBRARY`）
     let noIdeas: Bool
-    /// `-CuePadNotifications YES`：隔离库下也要通知权限、发真实的系统通知（两端，规则见 docs/verify.md「通知」）
+    /// `-CuePadNotifications YES`：隔离库下也要通知权限、发真实的系统通知（两端，规则见 `AlertCenter`）
     let notifications: Bool
     /// `-CuePadNotify YES`：走点锁屏通知的那条路进去
     let notify: Bool
