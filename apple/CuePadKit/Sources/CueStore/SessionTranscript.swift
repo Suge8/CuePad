@@ -77,6 +77,7 @@ extension CueStore {
   }
 
   /// 请 `host` 那台 Mac 取那条回答里第 `item` 步的里面（`ToolCallDetail`），写在那一步上同步回来。
+  /// 只认做完的一轮：在跑的一轮每多一步都在变，按位置认不住（同一个文件再读一次就并进前面那一步）。
   public func requestStep(_ item: Int, of message: UUID, in session: SessionState) throws -> DeliveryRequest {
     try requestDelivery(
       StepRequest(message: message, item: item).stored, to: SendTarget(kind: .piSession, name: session.title, ref: session.sessionID),
@@ -90,11 +91,12 @@ extension CueStore {
     return (message.sessionID, calls)
   }
 
-  /// 读会话文件重写这条回答时（读的规则升版）写上的随之没了，再点再取。
-  public func fillStep(_ content: String, with detail: ToolCallDetail) throws {
+  /// `calls` 是取详情时那一步的几次调用：取的那一下这条回答被重读改写、那个位置已不是这几次调用就抛 `notFound`，不把详情写到别的步上。
+  /// 之后再改写时同样几次调用的那一步照旧带着（`Tools.keepingDetails`）。
+  public func fillStep(_ content: String, calls: [String], with detail: ToolCallDetail) throws {
     try write {
       guard let step = StepRequest(stored: content), var tools = try find(ChatMessage.self, step.message)?.tools,
-            tools.items.indices.contains(step.item) else { throw CueStoreError.notFound }
+            tools.items.indices.contains(step.item), tools.items[step.item].calls == calls else { throw CueStoreError.notFound }
       tools.items[step.item].detail = detail
       try db.run("UPDATE piMessages SET tools = ?1, modifiedAt = ?2 WHERE id = ?3", [tools.stored, Date.stamp, step.message])
     }
@@ -136,9 +138,11 @@ extension CueStore {
       for key in message.tools?.images ?? [] { try registerAttachment(key) }
       if try insert(message, ignoringExisting: true) { continue }
       // 已写过的消息只有正文和工具活动会变（读会话文件的规则升级后重读）：同样的内容不改写，免得重复上传
+      let written = try db.first("SELECT tools FROM piMessages WHERE id = ? AND instr(tools, '\"detail\"') > 0", [message.id]) { $0.textOrNil(0) }
+      let tools = message.tools?.keepingDetails(of: written?.flatMap(ChatMessage.Tools.init(stored:)))
       try db.run(
         "UPDATE piMessages SET text = ?1, tools = ?2, modifiedAt = ?3 WHERE id = ?4 AND (text IS NOT ?1 OR tools IS NOT ?2)",
-        [message.text, message.tools?.stored, Date.stamp, message.id])
+        [message.text, tools?.stored, Date.stamp, message.id])
     }
     try reconcileDeliveries(in: messages, session: session)
   }

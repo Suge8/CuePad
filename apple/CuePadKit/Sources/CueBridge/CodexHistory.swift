@@ -59,9 +59,10 @@ enum CodexHistory {
             cp.answered("", History.Entry(id: "complete-\(cp.seq)", seq: cp.seq, at: at), into: &transcript)
         case ("event_msg", "token_count"):
             // 每次模型请求写完它的各项之后一行。只有回答、没调工具的一轮，这一行落在回答之后，那一轮已经结束：照常记进缓存的前后，那一轮上不显示。
-            // 输入里含缓存命中的；Codex 不报保留时长
+            // 输入里含缓存命中的。Codex 不报保留时长，按 30 分钟估：OpenAI 的文档写延长保留「通常约 30 分钟、最长 24 小时」，
+            // 内存里的那档「5–10 分钟、最长 1 小时」；本机 12 个会话里隔 10–60 分钟的 9 次有 7 次还接得上
             if let usage = line.payload.info?.last {
-                cp.requested(id: nil, read: usage.cached, fresh: usage.input - usage.cached, lifetime: nil, at: at)
+                cp.requested(id: nil, read: usage.cached, fresh: usage.input - usage.cached, lifetime: nil, guess: 1_800, at: at)
             }
         case ("event_msg", "item_completed"):
             guard let item = line.payload.item else { return }

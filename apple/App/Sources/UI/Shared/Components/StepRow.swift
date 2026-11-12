@@ -2,12 +2,13 @@ import CueStore
 import SwiftUI
 
 /// 清单里的一步，点开在原位看里面：命令全文或改动，下面是输出的末尾（`ToolCallDetail`）。
-/// 会话所在的 Mac 上当场回会话文件取；别的设备上请那台 Mac 取了写在这一步上（做完的一轮才行：在跑的那一轮还不是一条回答，没处写）。
+/// 会话所在的 Mac 上当场回会话文件取；别的设备上请那台 Mac 取了写在这一步上、随同步回来（做完的一轮才行，`CueStore.requestStep`）。
 struct StepRow: View {
     let item: ChatMessage.Tools.Item
     let session: SessionState
-    /// 做完的一轮里的这一步：哪条回答的第几项；在跑的一轮为 nil。
-    let place: (message: UUID, index: Int)?
+    /// 做完的一轮是哪条回答；在跑的一轮为 nil。
+    let message: UUID?
+    let index: Int
     @Environment(\.palette) private var palette
     @Environment(AppServices.self) private var services
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -17,7 +18,7 @@ struct StepRow: View {
     enum Opened: Equatable { case loading, ready(ToolCallDetail), missing(String) }
 
     var body: some View {
-        if item.calls != nil, services.holdsSteps(of: session) || place != nil {
+        if item.calls != nil, services.holdsSteps(of: session) || message != nil {
             VStack(alignment: .leading, spacing: 0) {
                 Button(action: toggle) { row(open: opened != nil) }
                     .buttonStyle(PressStyle())
@@ -34,7 +35,7 @@ struct StepRow: View {
             .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: opened)
             .task {
                 // 等画面就绪、对话贴到最新处之后再点：和人点的时机一样
-                guard let place, DebugHooks.preset.stepOpen == place.index, (try? await Task.sleep(for: .seconds(2))) != nil else { return }
+                guard message != nil, DebugHooks.preset.stepOpen == index, (try? await Task.sleep(for: .seconds(2))) != nil else { return }
                 toggle()
             }
             .onChange(of: item.detail) { if opened == .loading, let detail = item.detail { opened = .ready(detail) } }
@@ -76,8 +77,8 @@ struct StepRow: View {
                     return
                 }
                 #endif
-                guard let place else { return }
-                try await services.fetchStep(place.index, of: place.message, in: session)
+                guard let message else { return }
+                try await services.fetchStep(index, of: message, in: session)
                 // Mac 办完了，写上的详情随同步稍后到（`onChange`）；这之间那条回答被重读改写的话它就没了，不一直等
                 try await Task.sleep(for: .seconds(10))
                 if opened == .loading { opened = .missing(String(localized: "详情没同步过来，再点一次")) }

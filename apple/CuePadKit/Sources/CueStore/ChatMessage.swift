@@ -183,7 +183,7 @@ extension ChatMessage {
       /// 这一步是会话文件里的哪几次调用（Agent 给调用起的 id；读、改同一个文件并成一步的有几个）：会话所在的 Mac 按它回会话文件取命令全文与输出（`ToolCallDetail.read`）。
       /// 更早写下的经过与 Cue 的一步没有，为 nil
       public var calls: [String]? = nil
-      /// 别的设备点开过这一步：会话所在的 Mac 取了写在这里（`DeliveryMode.step`）。读会话文件写出的经过里没有。
+      /// 别的设备点开过这一步：会话所在的 Mac 取了写在这里（`DeliveryMode.step`）。读会话写出的经过里没有，改写时照旧带着（`keepingDetails`）。
       public var detail: ToolCallDetail? = nil
 
       public init(
@@ -208,13 +208,16 @@ extension ChatMessage {
       public var recached: Int?
       /// 最后一次请求送进去的输入总量：缓存冷了以后，下一句大约要重读这么多
       public var context: Int
-      /// 缓存到这一刻为止还热（最后一次请求的时刻加 Agent 报的保留时长）；Agent 没报保留时长为 nil
+      /// 缓存到这一刻为止还热：最后一次请求的时刻加保留时长
       public var warmUntil: Date?
+      /// 保留时长是估的（Agent 没报）：界面说"可能"。Agent 报了的为 nil
+      public var estimated: Bool?
 
-      public init(recached: Int? = nil, context: Int, warmUntil: Date? = nil) {
+      public init(recached: Int? = nil, context: Int, warmUntil: Date? = nil, estimated: Bool? = nil) {
         self.recached = recached
         self.context = context
         self.warmUntil = warmUntil
+        self.estimated = estimated
       }
     }
 
@@ -235,6 +238,15 @@ extension ChatMessage {
     public static let targetLimit = 120
     /// 一段说的话至多这么多字符：够读出它在想什么。进行中这一轮的清单每做完一步就随会话记录整份上传一次，不让长话把它撑大
     public static let saidLimit = 200
+
+    /// 别的设备点开过的几步写上的详情（`Item.detail`）不在会话里：按新读出的改写时，同样几次调用的那一步照旧带着。
+    func keepingDetails(of old: Tools?) -> Tools {
+      guard let old else { return self }
+      let details = Dictionary(old.items.compactMap { item in item.calls.flatMap { calls in item.detail.map { (calls, $0) } } }, uniquingKeysWith: { first, _ in first })
+      var kept = self
+      for index in kept.items.indices { kept.items[index].detail = kept.items[index].calls.flatMap { details[$0] } }
+      return kept
+    }
 
     public init(steps: Int = 0, items: [Item] = [], cache: Cache? = nil) {
       self.steps = steps
