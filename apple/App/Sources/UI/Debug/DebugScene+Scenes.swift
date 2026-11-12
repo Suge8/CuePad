@@ -36,7 +36,7 @@ extension DebugScene {
     static let entries: [String: DebugSceneEntry] = {
         var all: [DebugSceneEntry] = [
             .shelf, .bins, .earlier, .project, .search, .progress, .sessions, .task, .session, .newSession,
-            .library, .editor, .settings, .cue, .cueRows, .stateIcons, .rail,
+            .library, .editor, .settings, .cue, .cueRows, .stateIcons, .tokens, .rail,
         ]
         #if os(macOS)
         all += [.agentSetup, .connected, .updateWait, .menuBar, .wallGap, .select]

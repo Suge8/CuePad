@@ -10,6 +10,14 @@ extension DebugSceneEntry {
         #endif
     })
 
+    static let tokens = DebugSceneEntry("tokens", overlay: { _ in
+        #if os(macOS)
+        return AnyView(TokenSheet().withPalette())
+        #else
+        return AnyView(TokenSheet())
+        #endif
+    })
+
     static let rail = DebugSceneEntry("rail", overlay: { workspace in
         AnyView(DebugSessionRail(workspace: workspace).modifier(PaletteProvider()))
     })

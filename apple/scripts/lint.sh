@@ -155,6 +155,7 @@ FORBID_U=1 forbid "通知先订再消费：任务外先 let 流，任务里 for 
 # 间距只经 Spacing 的几档（规则在 lint_spacing.py 头注释）
 python3 "$scripts/lint_spacing.py" || status=1
 
+python3 "$scripts/lint_tokens.py" || status=1
 # 环境值的类型里带闭包却比不了（规则与原因在 lint_env.py 头注释）
 python3 "$scripts/lint_env.py" || status=1
 
