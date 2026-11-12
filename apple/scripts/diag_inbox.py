@@ -122,7 +122,7 @@ def stack(tree):
 
 def symbolicate_metrickit(frames, platform, build):
     """帧的 UUID 对上归档里的 dSYM 就是 CuePad 自己的，用 atos 还原。offsetIntoBinaryTextSegment 按文档是二进制内的偏移，
-    但有报告说早期系统在这里放的是二进制的载入地址：大到像地址时当载入地址用，否则载入地址是 address − 偏移。实测样本见 docs/diagnose.md。"""
+    但有报告说早期系统在这里放的是二进制的载入地址：大到像地址时当载入地址用，否则载入地址是 address − 偏移。"""
     found = dsyms(platform, build)
     notes, used = [], set()
     for f in frames:

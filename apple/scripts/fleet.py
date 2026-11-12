@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """一个检出里同时开 Mac、iPhone 模拟器、iPad 模拟器三个隔离实例，共用一朵模拟云（SharedCloud，不连 iCloud）。xc.sh fleet 调它。
   fleet up [--keep] [mac] [iphone] [ipad] [-- 启动参数…]   起实例（缺省三个）：云与各端的库先清空，--keep 沿用上次的；-- 之后的启动参数给这次起的每一端
-                                            （如 -CuePadSampleCrash YES 各端存几份样例诊断，docs/diagnose.md 的送达验收）；每个实例经 xc.sh run 起，
+                                            （如 -CuePadSampleCrash YES 各端存几份样例诊断，验收送达）；每个实例经 xc.sh run 起，
                                             存活 CUEPAD_RUN_SECONDS 秒（缺省 30 分钟）；打印每一端的 PID 或 UDID，写进 .derived/fleet/fleet.json（ui.py 按角色名认）
   fleet status                              各端还在不在
   fleet down                                结束本检出 run 起的全部实例（同 xc.sh stop）

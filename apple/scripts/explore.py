@@ -6,7 +6,7 @@ App 里的看守（MainThreadWatch：主线程一轮事件循环超过 1 秒）�
   一个种子跑 SEED_SECONDS 秒，没卡住换下一个种子（种子 +1），直到总时长。坐标按 iPhone 17（402×874 点）取自截图：axe describe-ui 读不到 SwiftUI 的元素。
   CUEPAD_EXPLORE_WEIGHTS="scroll=40,edge back=0" 按动作名改权重（盯一页时调低离开它的动作，名字见 ACTIONS）。
 产物在 apple/.derived/explore/：每步一行的记录（种子、步、时刻、动作）、卡住时的 hang-<种子>-<步>-<n>.sample 与截图。
-退出码：0 没卡住；1 卡住了（样本已取，实例留给你接着看，xc.sh stop 收）；3 实例自己没了（崩溃报告见 docs/diagnose.md）。
+退出码：0 没卡住；1 卡住了（样本已取，实例留给你接着看，xc.sh stop 收）；3 实例自己没了（崩溃报告见 xc.sh diag）。
 """
 import glob, json, os, random, subprocess, sys, time
 

@@ -7,7 +7,7 @@ import Foundation
 /// - 给了 `-CuePadVoiceToken <文件>`（令牌由 `scripts/voice-token.py` 经本机 Codex app-server 获取，`DebugHooks.voiceToken`）或 `-CuePadVoiceCodex <替身>` 就让 Cue 在这台启用。
 ///   配了 `-CuePadCueBrain apple/scripts/cue-brain-stub.py` 时运行时是 Pi、大脑是替身（回 `CUE_STUB_REPLY` 那句）；没配时是真的 Claude Code，
 ///   `-CuePadVoiceRuntime <pi|codex|claude>`、`-CuePadVoiceModel <模型>` 可指定其他已在隔离目录登录的运行时。
-///   登录照 docs/verify.md「交互验收」在起实例前交给它（`CLAUDE_CODE_OAUTH_TOKEN`）。
+///   登录在起实例前交给它：`CLAUDE_CODE_OAUTH_TOKEN` 设成 `ClaudeLogin.tokenCommand` 的输出、`ANTHROPIC_API_KEY` 置空（只读钥匙串里的令牌，不刷新）。
 /// - `-CuePadVoice mic`：Cue 能听了就开始通话，声音走麦克风与扬声器（人工验收）。
 ///   `-CuePadVoice <音频文件>`：接通后把这个文件当你说的话送进上行（`VoiceFixture`，不碰麦克风）；
 ///   `-CuePadVoice <目录>`：按节点送 first.wav（接通后）、interrupt.wav（Cue 的结果送出、模型开口时）、stop.wav（这一轮落库且说完后），再说完就挂断。
