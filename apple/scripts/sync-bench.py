@@ -41,7 +41,7 @@ LATENCY（中位、p95，秒，对数正态；版本 MODEL）：每种请求在 
 每次跑之前拿全机测量锁（flock，进程退出就放；拿到后把 {pid, start（ps 的启动时刻）, checkout, what, since} 登记在锁文件里，退出不清空）：real 拿 LOCK（与别的连 CloudKit 的探针共用，不同时用 cloudd），
 sim 拿 SIM_LOCK（几个模拟云运行不同时抢 CPU；不碰 cloudd，不必等 real）；构建在锁外。
 结果在 OUT_ROOT/<时刻>-<场景>/：a.log、b.log（实例的全部输出）、result.json（每个指标的样本、负载、构建、云）；对比的汇总在 ab-*.json。
-口径与限制见 docs/perf.md「同步测量」。只结束自己起的进程。
+限制见 docs/perf.md「同步测量」，口径见 _sync_scenes.py。只结束自己起的进程。
 """
 import fcntl, json, os, signal, subprocess, sys, time
 from datetime import datetime
