@@ -11,6 +11,7 @@ enum DebugHooks {
         var searchText = ""
         var editorSelection: NSRange?
         var toolsOpen = false
+        var stepOpen: Int?
         var crashSheet = false
         /// 演示 Mac 在本机库里接手发到 Mac 的话：隔离模式没有同步也送得到。
         var demoMac = false

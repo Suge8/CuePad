@@ -39,9 +39,7 @@ import os
 /// 5. 有会话的事或不归没做完的事的会话有变化（`CueStore.cueChanges`：含会话等回答、Cue 自己发起的请求没能执行；说到的事多半带着近况，同 peek，`CueTools.recaps`）：马上醒。
 ///    一轮在跑时来的变化等这一轮做完就醒，一起看（不另攒窗口：一轮的时长就是合批）。等子代理不是变化（子代理的结果交回、会话为它跑完那一轮歇下才是）；
 ///    等子代理停住（`CueChange.Kind.stalled`）不随写入出现，按下一次停住的时刻（`CueStore.nextCueStall`）排定时器，到点对账时它就在变化里。
-///    他发起的一轮停下不等 Cue：每次对账先当场留给他回（`CueStore.leaveHisStops`，Cue 在跑一轮也照做），Cue 之后看过再定收不收回；
-///    他停下时在场的先不叫醒 Cue，记下（`Progress.held`）等他离开再报（`CueStore.cueChanges`）；还在场就按最早的离开时刻排一次对账，
-///    设备开着会话的记录一变也重对。
+///    谁开的一轮谁接：他发起的一轮停下不叫醒 Cue，每次对账先当场留给他回（`CueStore.leaveHisStops`，Cue 在跑一轮也照做）；要 Cue 接手他对 Cue 说一句。
 /// 6. 空闲巡视：没有在做的事（`CueStore.cueBoardActive`）、你最近一句（`CueStore.cueLastYou`，还没说过从启用算起）之后很久没说话、不在打扰时段（`CueTiming.quietHours`）；
 ///    提示缓存还热时趁热看一眼（热巡视，`CueTiming.warmPatrolAfter`），过了就照空闲时长（冷巡视），两种每段空闲各最多一次、每天合起来最多 3 次；
 ///    手上什么都没有（`handsEmpty`，同刚启用）不巡视。
@@ -193,7 +191,7 @@ final class CueKeeper {
                         Signal(
                             toDeliver: try store.cueMessagesToDeliver().map(\.id), lastYou: try store.cueLastYou()?.said,
                             active: try store.cueBoardActive(), memory: try store.cueMemoryVersion(), profile: try store.cueProfile(),
-                            viewing: try store.viewers().flatMap { $0.sessionIDs.sorted() }, written: try store.lastWrite(), runtime: try store.runtimeDeadlines())
+                            written: try store.lastWrite(), runtime: try store.runtimeDeadlines())
                     }) { input.yield(.kick) }
                 } catch {
                     Self.log.error("Cue 订阅资料库失败：\(error.localizedDescription, privacy: .public)")

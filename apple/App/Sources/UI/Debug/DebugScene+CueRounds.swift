@@ -65,6 +65,20 @@ extension DebugScene {
             try await store.seedAgeCueMessages(by: 480)
             _ = try await store.addCueMessage(.you, text: String(localized: "顺便看看登录回调那个超时", table: "Demo"))
             try await store.seedAgeCueMessages(by: 120)
+        // 一天半没人说话，两个会话反复停下、都留给你，中间空闲时看过两眼
+        case "patrol":
+            try await store.seedAgeCueMessages(by: 30 * 3600)
+            let stops: [(Double, String?)] = [
+                (29, "atlas"), (28.4, "billing"), (28.1, "billing"), (27.6, "atlas"), (25, "atlas"), (21, nil), (17.5, "billing"), (16.9, "billing"),
+                (16.2, "billing"), (14, "billing"), (9.5, "billing"), (9.1, "billing"), (3.2, "billing"), (2.8, "billing"), (0.4, nil),
+            ]
+            for (hours, session) in stops {
+                let tools = session.map { process(step(.leave, String(localized: "「billing」留给你回", table: "Demo"), session: $0)) }
+                    ?? process(step(.read, String(localized: "看板", table: "Demo")))
+                _ = try await store.recordCueRound(
+                    nil, startedAt: Date.now.addingTimeInterval(-hours * 3600), answersYou: false, tools: tools,
+                    wake: session.map { stirred(.settled, $0) } ?? .idle)
+            }
         default: break
         }
     }

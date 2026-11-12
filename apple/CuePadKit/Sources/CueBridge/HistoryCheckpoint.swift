@@ -29,11 +29,22 @@ public struct HistoryCheckpoint: Sendable, Codable, Equatable {
     var excluded = false
     /// 你说的一句、还在等它的投送请求 id：Grok 把发它的请求 id 写在它之后的那几行上（`GrokHistory`），等到下一行再照常 `said`
     var held: Held?
+    var cache = CacheTrack()
 
-    /// 读会话的规则的版本：规则变了、已读过的部分要按新规则重读时（长度截断的回答改记未完成、工具结果里的图、Agent 自己起的会话名、Claude Code 推迟补写的 turn_duration 的归属）加一，
+    /// 提示缓存跨请求的状态：上一次请求从缓存读了多少、Agent 最近报的保留时长、刚压缩过（接下来那次重建是预料中的，不算没接上）。
+    struct CacheTrack: Sendable, Codable, Equatable {
+        var lastRead: Int?
+        var lastAt: Date?
+        var lifetime: TimeInterval?
+        var rebuilt = false
+        /// 已经记过的那条助手消息：Claude Code 把一条消息按内容块拆成几行写，每行带同一份用量
+        var counted: String?
+    }
+
+    /// 读会话的规则的版本：规则变了、已读过的部分要按新规则重读时（长度截断的回答改记未完成、工具结果里的图、Agent 自己起的会话名、Claude Code 推迟补写的 turn_duration 的归属、每一步的调用 id 与缓存读写、Codex 的缓存读写与改文件一步的调用 id）加一，
     /// 旧版本的检查点解不开，各家的会话在窗口内从头重读、对话按新规则改写（`CueStore.applyTranscript` 只改写变了的）。
     struct ReadRules: Codable, Equatable {
-        static let current = 4
+        static let current = 6
         let version: Int
 
         init() { version = Self.current }
@@ -140,6 +151,26 @@ extension HistoryCheckpoint {
         round?.tools.finish(id: id, failed: failed, images: images)
     }
 
+    /// 一次模型请求的用量（`read` 从缓存读的，`fresh` 原价送的：没缓存的输入加写进缓存的）。`id` 相同的只记一次。
+    /// `lifetime` 是 Agent 报的保留时长；没报而 `tiered`（Anthropic 的模型，只有 5 分钟与 1 小时两档）时从这个会话见过的推：
+    /// 隔了 5 分钟以上还接得上，就是 1 小时那一档（Pi 的会话文件不写档位）。
+    /// 没接上缓存的判定照 whycodes：上一次读过至少 `cacheFloor`、这一次读的不到它的四分之一、原价送的至少 `cacheFloor`；
+    /// 比 Claude Code 用量页的口径（少读 5% 且 2000 以上）保守，正常往后追加的不会误报。刚压缩完的那一次是预料中的重建。
+    mutating func requested(id: String?, read: Int, fresh: Int, lifetime: TimeInterval?, tiered: Bool = false, at: Date) {
+        guard read + fresh > 0, id == nil || id != cache.counted else { return }
+        let before = cache.lastRead ?? 0
+        let missed = !cache.rebuilt && before >= Self.cacheFloor && read < before / 4 && fresh >= Self.cacheFloor
+        let outlivedShort = cache.lastAt.map { at.timeIntervalSince($0) > 360 } == true && before >= Self.cacheFloor && read >= before * 3 / 4
+        if let lifetime { cache.lifetime = lifetime } else if tiered, outlivedShort { cache.lifetime = 3_600 }
+        cache.counted = id
+        cache.lastRead = read
+        cache.lastAt = at
+        cache.rebuilt = false
+        round?.tools.requested(context: read + fresh, recached: missed ? fresh : 0, warmUntil: cache.lifetime.map { at + $0 })
+    }
+
+    static let cacheFloor = 2_048
+
     mutating func toolDeclined(id: String) {
         round?.tools.finish(id: id, failed: true)
         round?.declined = true
@@ -179,6 +210,7 @@ extension HistoryCheckpoint {
     }
 
     mutating func compacted(_ entry: History.Entry, into transcript: inout History.Transcript) {
+        cache.rebuilt = true
         transcript.add(self, entry, role: .system, text: ChatNotice.compacted.rawValue)
     }
 

@@ -21,10 +21,38 @@ nonisolated struct CueNoteRound: Identifiable, Equatable, Sendable {
     var outcome: CueActivity.Touch? {
         touches.min { CueActivity.outcomeRank($0.kind) < CueActivity.outcomeRank($1.kind) }
     }
+}
 
-    /// 写在 `date` 的一轮还接在 `last` 这一节所在的那一格里：没隔 `ChatTime.gap`、没跨天（同时间那一行另起一段的规则）。
-    static func continues(_ last: CueNoteRound, at date: Date) -> Bool {
-        date.timeIntervalSince(last.date) < ChatTime.gap && Calendar.current.isDate(date, inSameDayAs: last.date)
+/// 连着的几轮里同一处、同一件事、同一个去处的只占一行：字与时刻按最近那次，醒过几次写在字后面。
+/// 几处一起叫醒的、补上的定时各是各的事，不并。
+nonisolated struct CueNoteFold: Identifiable, Equatable, Sendable {
+    /// 从早到晚。
+    let rounds: [CueNoteRound]
+
+    var id: UUID { rounds[0].id }
+    var last: CueNoteRound { rounds[rounds.count - 1] }
+
+    private enum Key: Hashable {
+        case place(CueWakeHeader.Target, CueChange.Kind?, ChatMessage.Tools.Kind?, String?)
+        case idle
+        case own(UUID)
+
+        init(_ round: CueNoteRound) {
+            let places = round.header?.places ?? []
+            if places.count == 1, places[0].missed == nil {
+                self = .place(places[0].target, places[0].kind, round.outcome?.kind, round.outcome?.name)
+            } else if round.outcome == nil, round.header?.wake == .idle {
+                self = .idle
+            } else {
+                self = .own(round.id)
+            }
+        }
+    }
+
+    static func folds(_ rounds: [CueNoteRound]) -> [CueNoteFold] {
+        var groups: [Key: [CueNoteRound]] = [:]
+        for round in rounds { groups[Key(round), default: []].append(round) }
+        return groups.values.map(CueNoteFold.init).sorted { ($0.last.date, $0.id.uuidString) < ($1.last.date, $1.id.uuidString) }
     }
 }
 
@@ -42,6 +70,8 @@ nonisolated struct CueWakeHeader: Equatable, Sendable {
         var kind: CueChange.Kind?
         let target: Target
         var missed: CueScheduled.Last?
+
+        func titled(_ title: String) -> Place { Place(title: title, kind: kind, target: target, missed: missed) }
 
         /// 会话叫醒的一轮里 Cue 对一件任务做的（经过只记任务，不记它绑的会话）也算落在这一处——它醒来就是为这个会话，
         /// 对别的会话做的（转给另一个会话）才是落在别处。

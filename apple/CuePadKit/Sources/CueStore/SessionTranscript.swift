@@ -61,6 +61,30 @@ extension CueStore {
       mode: .transcript)
   }
 
+  /// 请 `host` 那台 Mac 取那条回答里第 `item` 步的里面（`ToolCallDetail`），写在那一步上同步回来。
+  public func requestStep(_ item: Int, of message: UUID, in session: SessionState) throws -> DeliveryRequest {
+    try requestDelivery(
+      StepRequest(message: message, item: item).stored, to: SendTarget(kind: .piSession, name: session.title, ref: session.sessionID),
+      on: session.hostID, mode: .step)
+  }
+
+  /// 请求（`DeliveryMode.step` 的正文）指的那一步：哪个会话、会话里的哪几次调用。那条回答或那一步已不在为 nil。
+  public func stepCalls(_ content: String) throws -> (session: String, calls: [String])? {
+    guard let step = StepRequest(stored: content), let message = try find(ChatMessage.self, step.message),
+          let items = message.tools?.items, items.indices.contains(step.item), let calls = items[step.item].calls else { return nil }
+    return (message.sessionID, calls)
+  }
+
+  /// 读会话文件重写这条回答时（读的规则升版）写上的随之没了，再点再取。
+  public func fillStep(_ content: String, with detail: ToolCallDetail) throws {
+    try write {
+      guard let step = StepRequest(stored: content), var tools = try find(ChatMessage.self, step.message)?.tools,
+            tools.items.indices.contains(step.item) else { throw CueStoreError.notFound }
+      tools.items[step.item].detail = detail
+      try db.run("UPDATE piMessages SET tools = ?1, modifiedAt = ?2 WHERE id = ?3", [tools.stored, Date.stamp, step.message])
+    }
+  }
+
   /// 写一段对话，并在同一事务里把摘要写到会话记录上：摘要只有这一个写者，界面不必和对话对账。
   public func writeTranscript(_ transcript: SessionTranscript) throws {
     try write { try applyTranscript(transcript) }

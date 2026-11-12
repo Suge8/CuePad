@@ -16,6 +16,23 @@ extension OpenCodeRuntime {
         return try await OpenCodeHistory.read(connection.client, info, from: nil, files: files).transcript
     }
 
+    /// 会话在服务的库里：把各页消息的原文取来找。一页一行，找法与读会话文件同一处（`ToolCallDetail.read`）。
+    public func stepDetail(_ calls: [String], of session: IndexedSession) async throws -> ToolCallDetail {
+        let client = try await ensureService().client
+        var pages = Data(), cursor: String?
+        repeat {
+            let from = cursor.map { "cursor=" + OpenCodeClient.escaped($0) } ?? "order=asc"
+            let page = try await client.call("GET", "/api/session/\(session.id)/message?limit=100&\(from)")
+            pages.append(page)
+            pages.append(0x0A)
+            let read = try JSONDecoder().decode(OpenCodePage<Skipped>.self, from: page)
+            cursor = read.data.isEmpty ? nil : read.cursor?.next
+        } while cursor != nil
+        return ToolCallDetail.read(pages, calls: calls)
+    }
+
+    private struct Skipped: Decodable, Sendable {}
+
     /// `gone`：托管过、服务里已没有的会话，它们的索引删掉。
     func backfill(_ infos: [OpenCodeSessionInfo], gone: Set<String>, _ connection: Connection) async {
         do {

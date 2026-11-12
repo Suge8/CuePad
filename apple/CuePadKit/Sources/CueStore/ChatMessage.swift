@@ -21,7 +21,7 @@ public enum ChatRole: String, Sendable, CaseIterable {
 /// 唯一来源是 Pi 的会话文件：Mac 读会话文件写出（在线会话随文件追加跟上，更早的按需补写），记录 id 由会话 id 与
 /// 文件里那一条的 id 算出，重读不重复。一轮一条 Pi 消息：这一轮最后的回答；中途调工具时说的话、思考与工具输出都不同步，
 /// 只记这一轮的经过（`tools`：工具调用的分类计数、调用与中途说的话按先后的一份紧凑清单，不含工具输出；结果里的图除外，缩小的一份记在那一步上）和从你说话起做了多久
-/// （界面写"跑了 12 步 · 改了 3 个文件 · 2 分钟"）。还在跑的这一轮到目前为止的经过在会话记录上（`Recap.pendingTools`）。
+/// （界面写"改了 3 个文件 · 跑了 4 条命令 · 2 分钟"）。还在跑的这一轮到目前为止的经过在会话记录上（`Recap.pendingTools`）。
 public struct ChatMessage: Identifiable, Equatable, Sendable {
   public let id: UUID
   public var sessionID: String
@@ -139,7 +139,7 @@ extension ChatMessage {
 }
 
 extension ChatMessage {
-  /// 一轮的经过：调了几次工具（失败的也算，读、改同一个文件只算一次；界面上的"跑了 N 步"）和一份按先后的清单——
+  /// 一轮的经过：调了几次工具（失败的也算，读、改同一个文件只算一次）和一份按先后的清单——
   /// 每次调用一条（自己标成败，结果里带的图记在那一条上），中途说的每段话也一条（`said`，不是调用）；最后那段话是回答，不在清单里。
   /// Agent 会话的由 Mac 从会话文件汇出，Cue 的由值班的管理器从这一轮的调用汇出（`CueActivity`）；同步记录里存为 JSON（加密字段）。
   public struct Tools: StoredJSON, Equatable, Sendable {
@@ -180,6 +180,11 @@ extension ChatMessage {
       /// 可控范围由这条因果链与会话当前轮次共同证明，不按工具参数、标题或时间窗口猜归属。
       public var cueRequests: [UUID]? = nil
       public var deliveries: [UUID]? = nil
+      /// 这一步是会话文件里的哪几次调用（Agent 给调用起的 id；读、改同一个文件并成一步的有几个）：会话所在的 Mac 按它回会话文件取命令全文与输出（`ToolCallDetail.read`）。
+      /// 更早写下的经过与 Cue 的一步没有，为 nil
+      public var calls: [String]? = nil
+      /// 别的设备点开过这一步：会话所在的 Mac 取了写在这里（`DeliveryMode.step`）。读会话文件写出的经过里没有。
+      public var detail: ToolCallDetail? = nil
 
       public init(
         kind: Kind, target: String, failed: Bool = false, added: Int? = nil, removed: Int? = nil, task: UUID? = nil, name: String? = nil,
@@ -197,7 +202,24 @@ extension ChatMessage {
       }
     }
 
+    /// 这一轮的提示缓存（Agent 的会话文件里每次模型请求带读写量的才有）。只存结构，界面按读的那台设备的语言与此刻的时刻写
+    public struct Cache: Codable, Equatable, Sendable {
+      /// 这一轮里缓存没接上、原价重新送进去的输入（几次都没接上的合计）；都接上了为 nil
+      public var recached: Int?
+      /// 最后一次请求送进去的输入总量：缓存冷了以后，下一句大约要重读这么多
+      public var context: Int
+      /// 缓存到这一刻为止还热（最后一次请求的时刻加 Agent 报的保留时长）；Agent 没报保留时长为 nil
+      public var warmUntil: Date?
+
+      public init(recached: Int? = nil, context: Int, warmUntil: Date? = nil) {
+        self.recached = recached
+        self.context = context
+        self.warmUntil = warmUntil
+      }
+    }
+
     public var steps: Int
+    public var cache: Cache? = nil
     /// 清单，按发生先后。落了结果的（`Kind.acts`）、结果里带图的与说的话总在里面；其余调用至多列到 `itemLimit` 条，超出的只进计数
     public var items: [Item]
 
@@ -214,9 +236,10 @@ extension ChatMessage {
     /// 一段说的话至多这么多字符：够读出它在想什么。进行中这一轮的清单每做完一步就随会话记录整份上传一次，不让长话把它撑大
     public static let saidLimit = 200
 
-    public init(steps: Int = 0, items: [Item] = []) {
+    public init(steps: Int = 0, items: [Item] = [], cache: Cache? = nil) {
       self.steps = steps
       self.items = items
+      self.cache = cache
     }
 
     /// 记下一条：说的话照列、不算一步；做完的一次调用计一步，清单没满、它落了结果（`Kind.acts`）或结果里带图就列上——

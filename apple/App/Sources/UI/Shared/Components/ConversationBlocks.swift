@@ -46,6 +46,7 @@ struct ReplyBlock: View {
     let tools: ChatMessage.Tools?
     let session: SessionState
     let notes: [ReplyNote]
+    var latest = false
     var fadesIn = true
     #if os(iOS)
     @Environment(\.replyText) private var replyText
@@ -53,7 +54,7 @@ struct ReplyBlock: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.item) {
-            if let took { RoundProcess(tools: tools, ending: .took(took)) }
+            if let took { RoundProcess(tools: tools, ending: .took(took), session: session, message: id, open: latest) }
             MarkdownText(source: text, notes: notes).equatable()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -138,7 +139,7 @@ struct LiveStatus: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.item) {
             if let ending = Self.ending(of: session, speaking: false) {
-                RoundProcess(tools: session.pendingTools, ending: ending)
+                RoundProcess(tools: session.pendingTools, ending: ending, session: session)
             }
             SubagentList(agents: session.runtimeSubagents)
         }
