@@ -56,11 +56,28 @@ struct WidePage {
             NotificationCenter.default.post(name: NSScrollView.didEndLiveScrollNotification, object: scroll)
         }
         // 滚到的那一截要几帧才排成真的（对话离屏的段是空白，`ChatSegments`），排好了才报位置：等到每栏都认得出一条，最多 `settleFrames` 帧
+        func settled() -> Bool { columns.allSatisfy { column in scrollables(in: column).allSatisfy { !items(in: column, shownBy: $0).isEmpty } } }
         for _ in 0..<settleFrames {
-            if columns.allSatisfy({ column in scrollables(in: column).allSatisfy { !items(in: column, shownBy: $0).isEmpty } }) { return }
+            if settled() { return }
             await NextFrame.wait()
         }
+        // 排成真的之后中段那一屏可能整屏是不报位置的内容（对话里一长串步骤）：往上挪半屏再认，到认得出一条或快到顶为止
+        for _ in 0..<nudges {
+            for column in columns {
+                for scroll in scrollables(in: column) where items(in: column, shownBy: scroll).isEmpty {
+                    guard let document = scroll.documentView, let (top, _) = ends(of: scroll) else { continue }
+                    let clip = scroll.contentView, step = min(clip.bounds.height / 2, top - clip.bounds.height / 4)
+                    guard step > 0 else { continue }
+                    clip.scroll(to: NSPoint(x: clip.bounds.minX, y: clip.bounds.minY + (document.isFlipped ? -step : step)))
+                    scroll.reflectScrolledClipView(clip)
+                }
+            }
+            for _ in 0..<20 { await NextFrame.wait() }
+            if settled() { return }
+        }
     }
+
+    private static let nudges = 6
 
     /// 滚到中段后等条目报位置最多等几帧（约 2 秒）：到了还认不出，那一栏记作验不了。
     private static let settleFrames = 120

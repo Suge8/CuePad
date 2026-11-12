@@ -13,12 +13,21 @@ extension Workspace {
 
     func showEditor(_ card: UUID) {
         presses.clearSelection()
+        leaveHome()
         overlay = .card(card)
     }
 
     func openLibrary(_ file: LibraryFile) {
         presses.clearSelection()
+        leaveHome()
         overlay = .library(file)
+    }
+
+    /// 盖在主区上的页（编辑、技能与规则的文件）要主区露着：Cue 铺满时先让到右边。
+    private func leaveHome() {
+        guard case .wide(var state) = navigation, state.home else { return }
+        state.home = false
+        navigation = .wide(state)
     }
 
     func revealSkill(_ directory: String) {

@@ -1,14 +1,16 @@
 import SwiftUI
 
-/// 只由窗口宽与用户的两个开合选择推出（会话条 `AppSettings.railExpanded`、Cue `cueOpen`），不看主区放着什么页：换页时栏不动。
+/// 只由窗口宽、用户的两个开合选择（会话条 `AppSettings.railExpanded`、Cue `cueOpen`）与主区开了几个会话推出，不看主区放着什么页：换页时栏不动。
+/// Cue 铺满时（`home`）没有主区：会话条之外全是它。
 /// 自动收起只改呈现、不改选择：选了开着、窗口放不下时照样藏起，放得下了回到所选（HIG「Sidebars」：窗口变小时自动藏起侧栏，同邮件）。
-/// 窗口变窄时只往收里走：先藏起会话条，再把 Cue 收成钮；收 Cue 时不把会话条放回来——拖窗口的人会看见左边忽然又多出一栏。
+/// 窗口变窄时先把 Cue 收成钮，再藏起会话条：会话条是换去处的地方，点它的一行不该让它自己消失；Cue 收着时一下就回得去（它那一行、右上的钮）。
+/// 主区最窄是一个会话的宽，并排开着时是两个：并排是用户自己开的，栏跟着让位读得出原因。
 /// 否决过：按主区放的页各算一份最窄（看板 776、会话 390），再给看板另记一份会话条开合——同一个窗口宽在不同页上栏宽不同，换页时会话条自己开合、读不出规律。
 struct WideMetrics {
     static let session: CGFloat = 390
     static let cue: CGFloat = 400
-    static let narrowestMain: CGFloat = 2 * session
 
+    let home: Bool
     let rail: CGFloat
     let railFits: Bool
     let main: CGFloat
@@ -23,7 +25,8 @@ struct WideMetrics {
         let cue: CGFloat
     }
 
-    var shape: Shape { Shape(rail: rail, cue: cue) }
+    /// 铺满的 Cue 随窗口变宽，不算换了形：拖窗口时不起滑动。
+    var shape: Shape { Shape(rail: rail, cue: home ? -1 : cue) }
 
     struct Fits: Equatable {
         let rail: Bool
@@ -33,20 +36,22 @@ struct WideMetrics {
     var fits: Fits { Fits(rail: railFits, cue: cueFits) }
 
     init(width: CGFloat, workspace: Workspace) {
-        let open = workspace.services.settings.cueOpen
-        split = workspace.besideSession != nil
-        railFits = width >= Self.railThreshold(cueOpen: open)
+        home = workspace.cueHome
+        split = !home && workspace.besideSession != nil
+        let narrowest = Self.narrowestMain(split: split)
+        railFits = width >= Chrome.rail + narrowest
         rail = workspace.sidebarOpen && railFits ? Chrome.rail : 0
-        cueFits = width >= rail + Self.narrowestMain + Self.cue
-        cue = open && cueFits ? Self.cue : 0
+        cueFits = home || width >= rail + narrowest + Self.cue
+        cue = home ? width - rail : workspace.services.settings.cueOpen && cueFits ? Self.cue : 0
         main = max(0, width - rail - cue)
     }
 
-    static func railThreshold(cueOpen: Bool) -> CGFloat {
-        Chrome.rail + narrowestMain + (cueOpen ? cue : 0)
-    }
+    static func narrowestMain(split: Bool) -> CGFloat { split ? 2 * session : session }
 
-    static var cueThreshold: CGFloat { narrowestMain + cue }
+    /// 会话条放得下的最窄窗口；Cue 在会话条开着时放得下的最窄窗口（先收 Cue 再藏会话条，所以后一个总比前一个宽）。
+    static func railThreshold(split: Bool) -> CGFloat { Chrome.rail + narrowestMain(split: split) }
+
+    static func cueThreshold(split: Bool) -> CGFloat { railThreshold(split: split) + cue }
 }
 
 extension View {

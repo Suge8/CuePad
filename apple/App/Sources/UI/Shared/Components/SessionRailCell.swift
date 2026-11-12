@@ -12,15 +12,20 @@ extension UTType {
     nonisolated static let cuepadSession = UTType(exportedAs: "\(AppIdentity.id).session", conformingTo: .data)
 }
 
-/// Agent 标志不占行首（同一家的都一样），在悬停提示与读屏里。
-/// 等你组第二行一直占着（没有原文时只写状态词），整组行高一律、不随状态跳。
+/// 宽屏有两种样子。等你的是一张卡（`card`）：会话条上唯一要你动手的，长得不同于下面的行。排在项目下面的一行（`compact`）：缩进一格，
+/// 项目已经由上一行说了，只有名字与读数。
+/// 行首不放状态点：只有在推进的画看板推进中那个记号（同项目行尾数的那个），歇着、结束的不画、名字淡一档——没事的不该有记号要人去认。
+/// 否决过：每种状态一个图形（七八种，认不过来）；实心、空心的点分在跑与歇着（两种点摆在一起读不出哪个是哪个）；
+/// 等你的行首放项目的图形（只看图形认不出是哪个项目，写名字才认得）。
 struct SessionRailCell: View {
     let item: SessionRailRows.Item
     let form: SessionRail.Form
     let moves: Bool
     let selected: Bool
+    var compact = false
     let open: (SessionState, SessionRail.Opening) -> Void
     @Environment(\.palette) private var palette
+    @Environment(Workspace.self) private var workspace
 
     var body: some View {
         Group {
@@ -42,19 +47,31 @@ struct SessionRailCell: View {
         .help(help)
     }
 
-    private var help: String { Dotted(item.name, item.shown.label, item.ask, item.session.agentMark).visible }
+    private var besides: Bool {
+        guard let main = workspace.session(in: .main) else { return false }
+        return main.sessionID != item.id && workspace.besideSession?.sessionID != item.id
+    }
+
+    /// 项目下面的会话缩进这么多：行首那一列的中线上画一道引线（`RailProjectSessions`）。
+    static let indent: CGFloat = Spacing.group
+
+    private var help: String { Dotted(item.name, project?.shownName, item.shown.label, item.ask ?? item.doing, item.session.agentMark).visible }
+
+    /// 没归项目的会话算在默认项目下（同会话条的分组与历史的查询）。
+    private var project: Project? { workspace.catalog?.project(item.session.projectID ?? Project.defaultID) }
 
     @ViewBuilder private var control: some View {
         #if os(macOS)
-        Button { open(item.session, (NSApp.currentEvent?.modifierFlags.contains(.command) == true) ? .beside : .primary) } label: { label }
-            .buttonStyle(RowStyle(selected: selected))
+        let button = Button { open(item.session, (NSApp.currentEvent?.modifierFlags.contains(.command) == true) ? .beside : .primary) } label: { label }
+        // 卡自己有面，不要行的悬停底（它比卡宽出一圈）
+        if compact { button.buttonStyle(RowStyle(selected: selected)) } else { button.buttonStyle(PressStyle(.button)) }
         #else
         if form == .phone {
             Button { open(item.session, .primary) } label: { label }
                 .buttonStyle(RowStyle(selected: selected))
         } else {
             label
-                .row(selected: selected)
+                .row(selected: selected && compact)
                 .gesture(SessionTap { open(item.session, $0 ? .beside : .primary) })
                 .focusable(interactions: .activate)
                 .onKeyPress(.space) { open(item.session, .primary); return .handled }
@@ -81,18 +98,27 @@ struct SessionRailCell: View {
                 .padding(.horizontal, Spacing.hair)
                 .padding(.vertical, Spacing.tight)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                RailLine(height: item.waiting == nil ? Chrome.row : Chrome.tallRow) {
-                    StateDot(shown: item.shown, size: Chrome.railMark)
+            } else if compact {
+                RailLine {
+                    if item.waiting == nil, item.pulse.tier == .running { BoardLaneMark(column: .advancing, size: 12) } else { Color.clear }
                 } rest: {
-                    if item.waiting == nil {
-                        name.font(Typography.body)
-                        Spacer(minLength: Spacing.item)
-                        SessionRailReadout(item: item)
-                    } else {
-                        asking
-                    }
+                    name.font(Typography.body)
+                    Spacer(minLength: Spacing.item)
+                    SessionRailReadout(item: item)
                 }
+                .padding(.leading, Self.indent)
+                #if os(macOS)
+                // 并排的看得见的入口（另有 ⌘ 点与右键）：主区开着别的会话时，悬停的行尾露出来
+                .hoverReveal(when: besides) {
+                    Button("在旁边打开", icon: .rightColumn) { open(item.session, .beside) }
+                        .labelStyle(.iconOnly)
+                        .buttonStyle(ControlButtonStyle(kind: .icon, size: .compact))
+                        .help("在旁边打开")
+                        .padding(.horizontal, Spacing.tight)
+                }
+                #endif
+            } else {
+                card
             }
         }
         .contentShape(.rect)
@@ -105,23 +131,33 @@ struct SessionRailCell: View {
             .lineLimit(1)
     }
 
-    private var asking: some View {
-        VStack(alignment: .leading, spacing: Spacing.hair) {
-            HStack(spacing: Spacing.item) {
+    /// 等你的一张卡：纸色同看板等你那一列的卡，浮起一档。两行：名字与等了多久，左边哪个项目（图形带名字）、右边用的模型与哪家 Agent 的标志；它要你做什么在悬停提示里、点开就是。
+    /// 开着的那张描一圈墨边。
+    private var card: some View {
+        VStack(alignment: .leading, spacing: Spacing.tight) {
+            // 等你确认还是待回复只画行首那个图形（同看板等你那一列的卡），字在悬停提示与读屏里：两张卡各多一行状态字，这一组读着像表单
+            HStack(alignment: .firstTextBaseline, spacing: Spacing.item) {
+                if let waiting = item.waiting { StateGlyph(status: waiting).font(Glyph.small).frame(width: 11) }
                 name.font(Typography.body)
                 Spacer(minLength: 0)
                 SessionRailTime(item: item).font(Typography.caption).fixedSize()
             }
             HStack(spacing: Spacing.tight) {
-                Text(item.shown.label).fontWeight(.semibold).foregroundStyle(item.shown.labelTint(palette)).fixedSize()
-                if let ask = item.ask {
-                    Dot().foregroundStyle(palette.ink3)
-                    Text(verbatim: ask).foregroundStyle(palette.ink2)
+                if let project {
+                    ProjectGlyph(project: project, size: 11)
+                    Text(verbatim: project.shownName).foregroundStyle(palette.ink3)
                 }
+                Spacer(minLength: Spacing.item)
+                if let model = item.session.model { Text(verbatim: ModelName.short(model)).foregroundStyle(palette.ink3).layoutPriority(1) }
+                if let agent = item.session.agent.known { agent.mark.image.font(Glyph.row).foregroundStyle(palette.ink2).readerHidden(true) }
             }
             .font(Typography.caption)
             .lineLimit(1)
         }
+        .padding(.horizontal, Spacing.group).padding(.vertical, Spacing.item)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .paper(cornerRadius: Radius.card, lifted: true, wash: TaskBoard.Column.waiting.paper(palette))
+        .overlay { if selected { RoundedRectangle(cornerRadius: Radius.card, style: .continuous).strokeBorder(palette.ink2, lineWidth: 1.5) } }
     }
 
     private var mark: some View {
@@ -184,8 +220,12 @@ extension SessionRailRows.Item {
 
     var resting: Bool { waiting == nil && pulse.tier == .resting }
 
-    var ask: String? {
-        let text = waiting == .asking ? session.question?.displayText ?? session.detail : session.lastReply
+    var ask: String? { Self.firstLine(waiting == .asking ? session.question?.displayText ?? session.detail : session.lastReply) }
+
+    /// 没在等你的会话第二行写的：此刻在做的那一步，没有就是它上一句回答的头一行。
+    var doing: String? { Self.firstLine(session.detail) ?? Self.firstLine(session.lastReply) }
+
+    private static func firstLine(_ text: String?) -> String? {
         let line = text?.split(whereSeparator: \.isNewline).first.map(String.init)
         return line?.isEmpty == false ? line : nil
     }
