@@ -31,7 +31,7 @@ struct SessionList<Top: View>: View {
         .contentMargins(.horizontal, -Self.margin, for: .scrollIndicators)
         .contentMargins(.top, -Bars.contentGap, for: .scrollIndicators)
         .scrollDismissesKeyboard(.immediately)
-        .refreshable { await services.syncNow() }
+        .refreshable { await services.syncing.syncNow() }
         .agentList(model)
     }
 

@@ -134,7 +134,7 @@ struct ReceiptTests {
         try await store.recordMacPresence(host: "mac-b") { false }
         services.startSync()
         defer { services.cancelBackgroundWork() }
-        try await eventually("同步通了") { services.syncState.status == .idle && services.syncState.reconciled }
+        try await eventually("同步通了") { services.syncing.state.status == .idle && services.syncing.state.reconciled }
         let workspace = Workspace(services: services)
         let box = services.settings.replyDraftBinding(for: target.id)
 
@@ -145,8 +145,8 @@ struct ReceiptTests {
         #expect(try await store.deliveryRequests().isEmpty)
 
         await cloud.setDown(true)
-        await services.syncNow()
-        try await eventually("连不上 iCloud") { services.syncState.status == .offline }
+        await services.syncing.syncNow()
+        try await eventually("连不上 iCloud") { services.syncing.state.status == .offline }
         await workspace.speak(to: .session(target, mode: .send), from: box) { $0.stored }.value
         #expect(try await store.deliveryRequests().map(\.content) == ["改完再跑一遍"])
         #expect(box.wrappedValue.text.isEmpty)
@@ -164,7 +164,7 @@ struct ReceiptTests {
         services.startSpeechClock()
         services.startLiveSessions()
         defer { services.cancelBackgroundWork() }
-        try await eventually("同步通了") { services.syncState.status == .idle && services.syncState.reconciled }
+        try await eventually("同步通了") { services.syncing.state.status == .idle && services.syncing.state.reconciled }
         let workspace = Workspace(services: services)
 
         let first = try await sayToSession(workspace, target, "改完再跑一遍")
@@ -183,8 +183,8 @@ struct ReceiptTests {
         #expect(try await store.deliveryRequests(toSession: target.sessionID).map(\.id) == [first.id])
 
         await cloud.setDown(true)
-        await services.syncNow()
-        try await eventually("连不上 iCloud") { services.syncState.status == .offline }
+        await services.syncing.syncNow()
+        try await eventually("连不上 iCloud") { services.syncing.state.status == .offline }
         #expect(try await trip(of: first, services) == .sent)
         #expect(try await trip(of: toCue, services) == .sent)
         #expect(row(services)?.label == "已发出")
@@ -198,10 +198,10 @@ struct ReceiptTests {
         #expect(row(services)?.undelivered == nil && services.liveSessions.undelivered["atlas"] == nil)
 
         await cloud.setDown(false)
-        await services.syncNow()
+        await services.syncing.syncNow()
         try await eventually("恢复后传上去") { try await trip(of: second, services) == .sent }
         try await cloud.macAnswers(first.id)
-        await services.syncNow()
+        await services.syncing.syncNow()
         try await eventually("回执回来") { try await trip(of: first, services) == .delivered }
         try await eventually("会话行回到已发出，不再数没送到") { row(services)?.label == "已发出" && services.liveSessions.undelivered["atlas"] == nil }
 
@@ -214,7 +214,7 @@ struct ReceiptTests {
         #expect(row(services)?.isRunning == false)
         #expect(Speech.undelivered(try await store.deliveryRequests(), at: services.speech) == 0)
         try await cloud.macAnswers(second.id)
-        await services.syncNow()
+        await services.syncing.syncNow()
         try await eventually("迟到的原回执收敛") { try await trip(of: second, services) == .delivered }
     }
 
@@ -226,7 +226,7 @@ struct ReceiptTests {
         defer { services.cancelBackgroundWork() }
         func setSync(_ status: SyncStatus) async throws {
             app.sync.emit(SyncState(status: status, issues: []))
-            try await eventually("同步状态 \(status)") { services.syncState.status == status }
+            try await eventually("同步状态 \(status)") { services.syncing.state.status == status }
         }
         try await enableCue(in: store)
         try await store.recordMacPresence(host: "mac-cue") { false }  // 断网前同步来的：那台已睡（断网时本机说不准，不说它在睡觉）
@@ -235,7 +235,7 @@ struct ReceiptTests {
         services.startSpeechClock()
         services.startLiveSessions()
         try await setSync(.idle)
-        services.startPolling()
+        services.syncing.startPolling()
         let workspace = Workspace(services: services)
 
         try await setSync(.offline)
@@ -297,11 +297,11 @@ struct ReceiptTests {
         let target = try await session(in: services.store)
         services.startSync()
         services.startLiveSessions()
-        try await eventually("同步通了") { services.syncState.status == .idle && services.syncState.reconciled }
+        try await eventually("同步通了") { services.syncing.state.status == .idle && services.syncing.state.reconciled }
         let request = try await sayToSession(workspace, target, "继续一次检查")
         try await eventually("服务器收下请求") { await cloud.holds(request.id) }
         try await cloud.macAnswers(request.id, status: status)
-        await services.syncNow()
+        await services.syncing.syncNow()
         let current = try #require(try await services.store.deliveryRequest(request.id))
         #expect(current.status.rawValue == status)
         let result = Said.request(current).trip(at: services.speech)

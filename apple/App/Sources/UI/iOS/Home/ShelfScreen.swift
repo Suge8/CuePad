@@ -8,10 +8,10 @@ struct ShelfScreen: View {
     var body: some View {
         ProjectShelf(placesAtEnd: sizeClass == .compact) {
             if sizeClass == .compact {
-                ProjectListPlace(title: "设置", icon: .settings, route: .settings, alert: services.macAlert)
+                ProjectListPlace(title: "设置", icon: .settings, route: .settings, alert: services.syncing.macAlert)
             }
         }
-        .refreshable { await services.syncNow() }
+        .refreshable { await services.syncing.syncNow() }
         .floatingHeader("项目") { NewProjectButton() }
     }
 }

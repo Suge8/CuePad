@@ -17,14 +17,14 @@ struct SyncWiringTests {
         let services = app.services!
         guard hasEngine else {
             #expect(services.sync == nil)
-            guard case .unavailable(let reason) = services.syncState.status else {
-                Issue.record("没有引擎却不是 unavailable：\(services.syncState.status)")
+            guard case .unavailable(let reason) = services.syncing.state.status else {
+                Issue.record("没有引擎却不是 unavailable：\(services.syncing.state.status)")
                 return
             }
             #expect(!reason.isEmpty)
             return
         }
-        #expect(services.syncState.status == .starting)
+        #expect(services.syncing.state.status == .starting)
         services.startSync()
         defer { services.cancelBackgroundWork() }
         try await eventually("app.sync.started == 1") { app.sync.started == 1 }
@@ -38,8 +38,8 @@ struct SyncWiringTests {
         services.startSync()
         defer { services.cancelBackgroundWork() }
 
-        try await eventually("提示更新") { services.syncState.status == .outdated }
-        #expect(!services.canSyncNow)
+        try await eventually("提示更新") { services.syncing.state.status == .outdated }
+        #expect(!services.syncing.canSyncNow)
 
         let card = try await Workspace(services: services).createCard(body: "要更新时照记", in: Project.defaultID)
         await services.upload(card.id)
@@ -63,8 +63,8 @@ struct SyncWiringTests {
         #expect(PeerFloor.version(in: await cloud.records([PeerFloor(zoneID: CloudSync.zoneID).id])) == CueStore.peerFloor)
 
         await cloud.put(CKRecord.peerFloor(CueStore.supportedSchemaVersions.upperBound + 1))
-        await services.syncNow()
-        try await eventually("拉到就停下") { services.syncState.status == .outdated }
+        await services.syncing.syncNow()
+        try await eventually("拉到就停下") { services.syncing.state.status == .outdated }
         let after = try await workspace.createCard(body: "停下之后写的", in: Project.defaultID)
         await services.upload(after.id)
         #expect(await cloud.saved == saved)
@@ -86,7 +86,7 @@ struct SyncWiringTests {
 
         await cloud.signIn("另一个账号")
         accountChanges.post(name: .CKAccountChanged, object: nil)
-        try await eventually("要你决定") { services.syncState.status == .needsDecision(.accountSwitched) }
+        try await eventually("要你决定") { services.syncing.state.status == .needsDecision(.accountSwitched) }
         let waiting = try await workspace.createCard(body: "决定之前记的", in: Project.defaultID)
         await services.upload(waiting.id)
         #expect(await !cloud.saved.contains(waiting.id.uuidString.lowercased()))
@@ -110,14 +110,14 @@ struct SyncWiringTests {
         let clock = ManualTiming()
         let app = TestApp(timing: clock.timing)
         app.sync.syncNowHangs.withLock { $0 = true }
-        let refresh = Task { await app.services.syncNow() }
+        let refresh = Task { await app.services.syncing.syncNow() }
         try await clock.waitForSleeper()
-        #expect(app.services.isSyncingNow)
+        #expect(app.services.syncing.isSyncingNow)
 
-        clock.advance(AppServices.syncWaitLimit)
+        clock.advance(SyncDriver.syncWaitLimit)
         await refresh.value
 
-        #expect(!app.services.isSyncingNow)
+        #expect(!app.services.syncing.isSyncingNow)
         #expect(app.sync.syncNows == 1)
     }
 
@@ -129,11 +129,11 @@ struct SyncWiringTests {
         try markConflict(copy: copy.id, of: original.id)
         _ = try await services.store.createCard(body: "触发一次重读")
 
-        try await eventually("services.conflicts.count == 1") { services.conflicts.count == 1 }
-        #expect(services.conflicts.map(\.copy.body) == ["副本"])
+        try await eventually("services.syncing.conflicts.count == 1") { services.syncing.conflicts.count == 1 }
+        #expect(services.syncing.conflicts.map(\.copy.body) == ["副本"])
 
-        try await services.resolveConflict(copy: copy.id, keep: .original)
-        try await eventually("services.conflicts.isEmpty") { services.conflicts.isEmpty }
+        try await services.syncing.resolveConflict(copy: copy.id, keep: .original)
+        try await eventually("services.syncing.conflicts.isEmpty") { services.syncing.conflicts.isEmpty }
     }
     /// 冲突副本只由同步产生、没有公开入口：直接在库文件里把副本指回原卡。
     private func markConflict(copy: UUID, of original: UUID) throws {

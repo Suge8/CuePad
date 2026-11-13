@@ -36,7 +36,7 @@ extension DebugScene {
         Task {
             await Task.wait(for: .seconds(delay))
             for step in 1...20 {
-                services.setFileTransfers([away: FileTransfer(direction: .download, fraction: Double(step) / 20)])
+                transfers.continuation.yield([away: FileTransfer(direction: .download, fraction: Double(step) / 20)])
                 await Task.wait(for: .milliseconds(150))
             }
             let url = FileManager.default.temporaryDirectory.appending(path: "export.zip")
@@ -46,7 +46,7 @@ extension DebugScene {
             } catch {
                 abandon("压缩包没落地", error)
             }
-            services.setFileTransfers([:])
+            transfers.continuation.yield([:])
         }
     }
 }

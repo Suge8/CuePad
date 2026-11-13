@@ -44,9 +44,13 @@ final class AppServices {
     @ObservationIgnored let relay: Relay?
     @ObservationIgnored let sendOrder = SendOrder()
     @ObservationIgnored lazy var voice = VoiceService(services: self, signaling: relay)
-    private(set) var syncState: SyncState
-    /// key 离开就是那一趟结束了；文件在不在本机看附件目录。
-    private(set) var fileTransfers: [String: FileTransfer] = [:]
+    let syncing: SyncDriver
+    /// 发布排在任务里，可能晚于服务本身：服务没了就不再发。
+    @ObservationIgnored lazy var snapshots = SnapshotPublisher(store: store, directory: location.snapshotsDirectory) { [weak self] digest, first, resend in
+        guard let self else { throw CancellationError() }
+        return try await present(digest, first: first, resend: resend)
+    }
+    @ObservationIgnored lazy var captures = CaptureIngest(store: store, directory: location.captureDirectory) { [weak self] in self?.reportIssue($0) }
     #if os(iOS)
     /// 每个窗口自己决定弹不弹。
     private(set) var sessionAlert: SessionAlert?
@@ -58,14 +62,11 @@ final class AppServices {
     let liveSessions: LiveSessions
     let cueFeed: CueFeed
     let accountQuotas = AccountQuotas()
-    private(set) var conflicts: [CardConflict] = []
 
     /// 待打开的页：写入后由工作区取走（`Workspace.openLinks`）。
     var pendingDeepLink: DeepLink?
 
-    @ObservationIgnored let tasks = Followers()
-    /// iOS 整个进后台时取消、回前台再开。
-    @ObservationIgnored var polling: Task<Void, Never>?
+    @ObservationIgnored let tasks: Followers
     var hasOpenDeliveries = false
     var sessionViewers = 0
     /// 只由 `CueViewing` 增减；算不算在看的规则在它那里。
@@ -77,12 +78,6 @@ final class AppServices {
     /// 会话页、Cue 页的在场、读过与提示都只认它。
     var seesMainWindow: Bool { mainWindowExposed && !away }
     #endif
-    /// 还没返回的立即同步有几个（`syncNow`）。
-    var syncNowWaits = 0
-    @ObservationIgnored var syncConnected = false
-    var isSyncingNow: Bool { syncNowWaits > 0 }
-    @ObservationIgnored let flights = Flights()
-    @ObservationIgnored var publishedSnapshots: WidgetSnapshots?
     /// 这台设备开着哪一页的唯一写入口。
     @ObservationIgnored let viewer: ViewerKeeper?
     @ObservationIgnored var backgroundFlushes: [UUID: @MainActor () async -> Void] = [:]
@@ -153,9 +148,12 @@ final class AppServices {
         self.location = location
         diagnostics = Diagnostics(directory: location.directory.appending(path: "Diagnostics", directoryHint: .isDirectory))
         let (engine, status) = Self.makeSync(sync, store: store, location: location)
-        (self.sync, syncState) = (engine, SyncState(status: status, issues: []))
+        self.sync = engine
         relay = Self.makeRelay(sync, engine, device: mac.hostID)
         speechClock = SpeechClock(localHost: mac.hostID, reachable: status.reachesMac, alwaysReachable: DebugHooks.preset.alwaysReachable, timing: mac.timing)
+        let tasks = Followers()
+        self.tasks = tasks
+        syncing = SyncDriver(engine: engine, status: status, store: store, timing: mac.timing, speechClock: speechClock, localHost: mac.hostID, tasks: tasks)
         liveSessions = try LiveSessions(store: store, endedOn: mac.hostID, at: speechClock.moment)
         cueFeed = CueFeed(store: store, widget: false)
         timing = mac.timing
@@ -182,6 +180,7 @@ final class AppServices {
         cue = CueService(
             recorder: stateRecorder, sync: self.sync, library: location.directory,
             piAgentDirectory: mac.paths.pi.agentDirectory, dependencies: mac.cue)
+        hookSync()
     }
     #else
     init(
@@ -193,9 +192,12 @@ final class AppServices {
         self.location = location
         diagnostics = Diagnostics(directory: location.directory.appending(path: "Diagnostics", directoryHint: .isDirectory))
         let (engine, status) = Self.makeSync(sync, store: store, location: location)
-        (self.sync, syncState) = (engine, SyncState(status: status, issues: []))
+        self.sync = engine
         relay = Self.makeRelay(sync, engine, device: UIDevice.current.identifierForVendor?.uuidString)
         speechClock = SpeechClock(localHost: nil, reachable: status.reachesMac, alwaysReachable: DebugHooks.preset.alwaysReachable, timing: timing)
+        let tasks = Followers()
+        self.tasks = tasks
+        syncing = SyncDriver(engine: engine, status: status, store: store, timing: timing, speechClock: speechClock, localHost: nil, tasks: tasks)
         liveSessions = try LiveSessions(store: store, endedOn: nil, at: speechClock.moment)
         cueFeed = CueFeed(store: store, widget: true)
         self.timing = timing
@@ -209,8 +211,16 @@ final class AppServices {
                 try self?.remoteActivityState()
             }
         }
+        hookSync()
     }
     #endif
+
+    private func hookSync() {
+        syncing.hooks = SyncDriver.Hooks(
+            cadence: { [weak self] in self?.pollingCadence },
+            statusChanged: { [weak self] in self?.syncStatusChanged(to: $0) },
+            report: { [weak self] in self?.reportIssue($0) })
+    }
 
     #if os(iOS)
     func post(_ alert: SessionAlert) { sessionAlert = alert }
@@ -231,36 +241,7 @@ final class AppServices {
         #if os(iOS)
         await cueActivity?.invalidate(reason: "resolveSync").value
         #endif
-        syncState.reconciled = false
-        try await sync?.resolve(resolution)
-    }
-
-    /// 同步从不通变通时立即同步一次：断网时没传上去的记录当场传出、在等的回执当场拉回，不等发送者的退避。
-    func setSyncState(_ state: SyncState) {
-        let recovered = state.status.reachesMac && speech.reachableSince == nil
-        #if os(macOS)
-        if state.status == .outdated, syncState.status != .outdated { updates.checkInBackground() }
-        #endif
-        #if os(iOS)
-        if syncState.status != state.status {
-            switch state.status {
-            case .noAccount: cueActivity?.invalidate(reason: "syncNoAccount")
-            case .needsDecision: cueActivity?.invalidate(reason: "syncNeedsDecision")
-            default: break
-            }
-        }
-        #endif
-        syncState = state
-        speechClock.setReachable(state.status.reachesMac)
-        if recovered { Task { await syncNow() } }
-    }
-
-    func setFileTransfers(_ transfers: [String: FileTransfer]) {
-        fileTransfers = transfers
-    }
-
-    func setConflicts(_ conflicts: [CardConflict]) {
-        self.conflicts = conflicts
+        try await syncing.resolve(resolution)
     }
 
     func reportIssue(_ issue: StartupIssue) {

@@ -33,7 +33,7 @@ extension AppServices {
                 for await _ in NotificationCenter.default.notifications(named: UIApplication.didBecomeActiveNotification) {  // 晚订：启动那次激活由启动路径做，早订会收到它、启动时多做一遍
                     active.date = .now
                     // 主线程隔离的函数值作子任务，按加入的先后排上主线程；写成 `{ @MainActor in … }` 闭包时 Swift 6.4 的区域隔离检查报内部错误
-                    let steps: [@MainActor @Sendable () async -> Void] = [self.handleActivation, self.refreshAlerts, self.drainCaptures, self.resendSnapshots]
+                    let steps: [@MainActor @Sendable () async -> Void] = [self.handleActivation, self.refreshAlerts, self.captures.drainCaptures, self.resendSnapshots]
                     for step in steps { group.addTask(operation: step) }
                 }
             }

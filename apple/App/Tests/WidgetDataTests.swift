@@ -18,7 +18,7 @@ struct WidgetDataTests {
         let project = try await services.store.createProject(name: "P", color: "#000000")
         _ = try await services.store.createCard(in: project.id, body: "不在默认项目")
 
-        try await services.writeSnapshots()
+        try await services.snapshots.writeSnapshots()
 
         let home = try #require(Snapshots.read(DefaultProjectSnapshot.self, from: snapshots))
         #expect(home.name == "默认")

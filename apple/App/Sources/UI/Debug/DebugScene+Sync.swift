@@ -35,6 +35,9 @@ extension DebugScene {
                 detail: String(localized: "未能完成操作。（CKErrorDomain错误15。）（<CKError 0x6000: \"Server Rejected Request\" (15/2000); server message = \"Internal server error\">）", table: "Demo")),
             SyncIssue(kind: .request, problem: .local, detail: String(localized: "资料库读写出错：database is locked（SQLite: database is locked [UPDATE syncState SET value = ?]）", table: "Demo")),
         ]
+        if args.sync == nil, args.fileArrives > 0 || args.inspirationOpts.arrival > 0 {
+            return .custom(StandInSync())
+        }
         return switch args.sync {
         case "stalled": .custom(StandInSync(stalls: true))
         case "conflicts": .custom(StandInSync())
@@ -57,6 +60,9 @@ extension DebugScene {
     }
 
     protocol StandInSyncing: SyncControlling {}
+
+    /// 演示画面里在路上的文件（`-CuePadFileArrives`、灵感图片到达）：替身同步从这里报出。
+    nonisolated static let transfers = AsyncStream<[String: FileTransfer]>.makeStream(bufferingPolicy: .bufferingNewest(1))
 
     nonisolated final class OfflineSync: StandInSyncing {
         let seconds: Double
@@ -237,7 +243,7 @@ nonisolated extension DebugScene.StandInSyncing {
     func push() async {}
     func activated() async {}
     func resolve(_ resolution: SyncResolution) async throws {}
-    var fileTransfers: AsyncStream<[String: FileTransfer]> { AsyncStream { $0.yield([:]) } }
+    var fileTransfers: AsyncStream<[String: FileTransfer]> { DebugScene.transfers.stream }
     func fetchFile(_ key: String) async throws -> URL { throw FileFetchFailure.notSyncing }
 }
 #endif

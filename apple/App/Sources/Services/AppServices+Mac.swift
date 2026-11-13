@@ -19,7 +19,7 @@ extension AppServices {
         } catch {
             reportIssue(.bridgeUnavailable("\(error)"))
         }
-        follow { await self.historyStore.keepPruned() }
+        follow { [timing] in await self.historyStore.keepPruned(timing: timing) }
         startStrayFileCleanup()
         // 启动对账在 `init` 里已做完（`launch`）：重新接上的会话沿用对账前的起点（`Bridge.carryOver`）
         startRuntimes()
@@ -78,7 +78,7 @@ extension AppServices {
     func startWakeSync() {
         let wakes = wakeNotifications.notifications(named: NSWorkspace.didWakeNotification)
         follow {
-            for await _ in wakes { await self.syncNow() }
+            for await _ in wakes { await self.syncing.syncNow() }
         }
     }
 

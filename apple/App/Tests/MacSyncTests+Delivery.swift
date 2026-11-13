@@ -114,7 +114,7 @@ extension MacSyncTests {
     func 主动拉取的条件_没有连着的会话时不因旧记录而拉_有本机待执行请求时拉() async throws {
         try await StateRecorder(store: services.store, hostID: TestApp.hostID).update(sessionID: "stale", state: .settled, title: "旧会话")
         services.startSpeechClock()
-        let waiting = Watch(services.pollingCondition())
+        let waiting = Watch(services.syncing.pollingCondition())
         #expect(try await waiting.next("没有可拉的事时给出空节奏") == .some(nil))
 
         _ = try await services.store.requestDelivery(

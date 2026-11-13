@@ -12,7 +12,7 @@ extension AppServices {
     /// 它正在别的 Mac 上运行时，只有 `moving`（你确认了改在这台运行）才改。是这台 Mac 时先重新探测一次本机的 Agent
     /// （刚启动还没探测完也不会按旧的或空的判断）；别的 Mac 按它同步来的那条。
     func enableCue(on host: String, moving: Bool) async throws {
-        guard knowsSyncedFacts else { throw CueEnableError.unsynced }
+        guard syncing.knowsSyncedFacts else { throw CueEnableError.unsynced }
         #if os(macOS)
         if host == hostID { try await macAgents.record() }
         #endif

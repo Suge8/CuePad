@@ -39,8 +39,8 @@ struct DispatchDeadlineTests {
 
         phone.services.startSync()
         await phone.services.upload(request.id)
-        await phone.services.syncNow()
-        await mac.services.syncNow()
+        await phone.services.syncing.syncNow()
+        await mac.services.syncing.syncNow()
         let result = try await mac.services.store.outcome(of: request)
         #expect(result.status == .known(.succeeded))
         #expect(atlas.messages.map(\.text) == ["离线时写下的"])
