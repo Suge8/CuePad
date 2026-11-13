@@ -37,13 +37,15 @@ struct HandOffInput: View {
     }
     private var launching: SessionLaunching { workspace.sessionLaunching(outbox.launchKey) }
     /// 交给新会话时输入框上方那一行：开不了的原因，或发出后的进度与结果。
+    /// 开新会话的请求在路上：整个输入框停用——这时改的字进不了已发出的那一次，换去处再发会把同一件任务交给两个 Agent。
+    private var waiting: Bool { launching.inFlight(at: services.speech) }
     private var launchStatus: LaunchStatus? {
         let noMac = planned?.noMac == true
-        guard chosen == nil || noMac else { return nil }
+        guard chosen == nil || noMac || waiting else { return nil }
         return LaunchStatus(noMac: noMac, phase: launching.phase(at: services.speech), agents: launchHost == nil ? nil : launchAgents)
     }
     private var canSend: Bool {
-        guard planned.map({ !$0.noMac }) == true else { return false }
+        guard !waiting, planned.map({ !$0.noMac }) == true else { return false }
         return chosen != nil || launchTools != nil && launching.canSubmit(at: services.speech)
     }
 
@@ -92,7 +94,7 @@ struct HandOffInput: View {
                 if let tools {
                     SessionConfigControls(session: tools.session, models: tools.models, shown: tools.config)
                 } else if let launchTools {
-                    LaunchControls(mac: launchTools, project: launchSpot?.project).disabled(launching.sending)
+                    LaunchControls(mac: launchTools, project: launchSpot?.project)
                 }
             },
             send: {
@@ -103,6 +105,7 @@ struct HandOffInput: View {
         .composerNotice(launchStatus != nil || config?.failure != nil) {
             if let launchStatus { LaunchStatusLine(status: launchStatus) } else { MacInputNotice(noMac: false, failure: config?.failure) }
         }
+        .disabled(waiting)
         .confirmsLaunchAgain(launching)
         .onAppear { focused = true }
         .observing(services.store, id: outbox.card, into: $planned, onError: workspace.fail) { [card = outbox.card] store in
@@ -147,7 +150,6 @@ struct HandOffInput: View {
                     if let chosen { StateDot(shown: workspace.shown(chosen), size: 7) }
                 }
             }
-            .disabled(launching.sending)
             Spacer(minLength: 0)
         }
     }

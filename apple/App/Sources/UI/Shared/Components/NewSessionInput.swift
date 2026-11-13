@@ -20,7 +20,9 @@ struct NewSessionInput: View {
     private var launching: SessionLaunching { workspace.sessionLaunching(start.launchKey) }
     private var phase: LaunchProgress.Phase { launching.phase(at: services.speech) }
     private var brain: AgentModelChoice? { agents.flatMap { services.settings.launchChoice(on: $0, in: chosen?.project.id) } }
-    private var canStart: Bool { chosen?.host != nil && brain != nil && launching.canSubmit(at: services.speech) }
+    private var canStart: Bool {
+        chosen?.host != nil && brain != nil && launching.canSubmit(at: services.speech) && !launching.inFlight(at: services.speech)
+    }
 
     var body: some View {
         composer.composerNotice(status != nil) { if let status { LaunchStatusLine(status: status) } }
@@ -35,11 +37,13 @@ struct NewSessionInput: View {
             cardsFrom: chosen?.project.id,
             tooled: brain != nil, shortcuts: [.send: launch],
             header: { header.padding(.horizontal, Spacing.group).padding(.top, Spacing.item) },
-            tools: { if let agents { LaunchControls(mac: agents, project: chosen?.project.id).disabled(launching.sending) } },
+            tools: { if let agents { LaunchControls(mac: agents, project: chosen?.project.id) } },
             send: {
                 Button(action: launch) { SendGlyph(canStart ? .ready : .idle) }
                     .buttonStyle(PressStyle(.button)).disabled(!canStart).accessibilityLabel("开始")
             })
+        // 请求在路上时整个停用：这时改的字、换的去处都进不了已发出的那一次，认领到了输入框一收就丢了
+        .disabled(launching.inFlight(at: services.speech))
         .confirmsLaunchAgain(launching)
         .onAppear {
             workspace.resume(start.launchKey, opened: Workspace.entering(start))
@@ -72,7 +76,6 @@ struct NewSessionInput: View {
                     if let project = chosen?.project { ProjectGlyph(project: project, size: 13) }
                 }
             }
-            .disabled(launching.sending)
             Spacer(minLength: 0)
         }
     }

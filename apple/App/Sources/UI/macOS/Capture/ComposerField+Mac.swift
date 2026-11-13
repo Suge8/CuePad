@@ -20,6 +20,8 @@ struct ComposerField: NSViewRepresentable {
     var files: (([IncomingFile]) -> Void)?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.palette) private var palette
+    /// 整个输入框被停用时（开会话的请求在路上）字也不能改：那时改的进不了已发出的请求。
+    @Environment(\.isEnabled) private var enabled
 
     /// Mac 的字号不跟系统的动态字号走。
     static func lineHeight(_: DynamicTypeSize) -> CGFloat { GrowingTextView.lineHeight }
@@ -80,6 +82,7 @@ struct ComposerField: NSViewRepresentable {
             scroll.needsLayout = true
         }
         view.placeholder = prompt
+        if view.isEditable != enabled { view.isEditable = enabled }
         view.placeholderColor = NSColor(palette.ink3)
         // 只在颜色真的变了时设：设一次就给整篇文字重铺颜色。
         if ink != context.coordinator.ink {

@@ -75,10 +75,11 @@ extension Workspace {
         }.value
     }
 
-    /// 认领到新会话：输入框还是为这一次浮着的就收起它、进那个会话；中途关了的留在原处。
+    /// 认领到新会话：这件任务的输入框还浮着就收起它、进那个会话；关了的留在原处。按任务认而不按哪一次浮起：
+    /// 请求还没写进库时关了又开，新浮起的那个还接不上它（库里查不到），认领到时照样该收。
     private static func entering(_ outbox: Outbox) -> LaunchOpened {
-        { workspace, claimed in
-            guard workspace.outbox?.id == outbox.id else { return }
+        { [key = outbox.launchKey] workspace, claimed in
+            guard workspace.outbox?.launchKey == key else { return }
             workspace.outbox = nil
             workspace.openSession(claimed.id)
         }
