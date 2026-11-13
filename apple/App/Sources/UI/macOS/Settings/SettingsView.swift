@@ -86,7 +86,7 @@ private struct GeneralSections: View {
         Section {
             SettingRow(title: "外观", icon: Image(.appearance)) { ThemePicker() }
             LanguageRow()
-            SettingRow(title: "音效", icon: Image(.audio), help: "通知的提示音与操作音") { SoundToggle().labelsHidden().toggleStyle(.switch) }
+            SettingRow(title: "音效", icon: Image(.sounds), help: "通知的提示音与操作音") { SoundToggle().labelsHidden().toggleStyle(.switch) }
             if let cueBar { ShortcutRow(title: "对 Cue 说", icon: .talkToCue, hotkey: cueBar.hotkey) }
             ShortcutRow(title: "显示/隐藏主窗口", icon: .hotkey, hotkey: services.hotkey)
         }

@@ -87,6 +87,9 @@ public enum AlertKind: String, Sendable, CaseIterable {
 /// 待回复和做完了对你是同一件事（那个会话停了），不因 Cue 值不值班换一声。
 public enum AlertTone: String, Sendable {
   case ask, done
+
+  /// "音效"开关在偏好里的键。手机上偏好在共享容器里，通知扩展按它定锁屏通知响不响；没存过算开着。
+  public static let enabledKey = "sounds"
 }
 
 extension AlertKind {

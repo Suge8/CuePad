@@ -40,7 +40,7 @@ final class AppSettings {
         static let currentProject = "currentProject"
         static let railExpanded = "railExpanded"
         static let cueOpen = "cueOpen"
-        static let sounds = "sounds"
+        static let sounds = AlertTone.enabledKey
     }
 
     @ObservationIgnored let defaults: UserDefaults
@@ -57,7 +57,7 @@ final class AppSettings {
     #if os(macOS)
     var alerts: AlertPreferences { didSet { defaults.set(alerts.stored, forKey: Key.alerts) } }
     #endif
-    /// 通知的提示音与界面里的操作音一起开关（`Sound`）。手机锁屏通知的那一声由系统按推送播，这里关不掉，听系统设置里 CuePad 的"声音"。
+    /// 通知的提示音与界面里的操作音一起开关（`Sound`）；手机锁屏通知的那一声由通知扩展照这个键定。
     var sounds: Bool { didSet { defaults.set(sounds, forKey: Key.sounds) } }
 
 
