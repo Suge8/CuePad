@@ -299,14 +299,11 @@ final class Workspace {
     private func reconcileNavigation(projects ids: Set<UUID>) {
         let settings = services.settings
         if let saved = settings.currentProject, !ids.contains(saved) { settings.currentProject = nil }
-        switch navigation {
-        case .narrow(var state):
-            if let index = state.path.firstIndex(where: { if case .project(let id) = $0 { !ids.contains(id) } else { false } }) {
-                state.path = Array(state.path[..<index])
-                navigation = .narrow(state)
-            }
-        case .wide: break
+        let shown: [Route] = switch navigation {
+        case .narrow(let state): state.path
+        case .wide: [mainRoute]
         }
+        for case .project(let id) in shown where !ids.contains(id) { leave(.project(id)) }
         #if os(macOS)
         pages.forget(projectsNotIn: ids)
         #endif

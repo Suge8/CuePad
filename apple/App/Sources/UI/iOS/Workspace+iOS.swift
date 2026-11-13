@@ -94,17 +94,6 @@ extension Workspace {
         if top == .search { back() }
     }
 
-    func pop(_ project: UUID?) {
-        guard let project else { return }
-        if services.settings.currentProject == project { services.settings.currentProject = nil }
-        switch layout {
-        case .narrow:
-            if let index = path.firstIndex(of: .project(project)) { path = Array(path[..<index]) }
-        case .wide:
-            if mainRoute == .project(project) { select(.shelf) }
-        }
-    }
-
     /// 与系统通知同一条规则（`AlertCenter`）。
     func showsAlert(about session: UUID) -> Bool { !shownSessions.contains { $0.id == session } }
 

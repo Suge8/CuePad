@@ -39,9 +39,6 @@ struct ProjectActions<Extra: View>: View {
         if !project.isDefault {
             Divider()
             Button("移到回收站", icon: .trash, role: .destructive) {
-                #if os(macOS)
-                if workspace.currentProject == id { workspace.show(.shelf) }
-                #endif
                 workspace.perform { try await $0.trashProject(id) }
             }
         }

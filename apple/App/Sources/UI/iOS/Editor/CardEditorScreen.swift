@@ -13,7 +13,6 @@ struct CardEditorScreen: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
-    @Environment(\.dismiss) private var dismiss
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var data: EditorData?
     @State private var editing: CardEditing?
@@ -42,7 +41,7 @@ struct CardEditorScreen: View {
                 guard editing == nil, let card = data?.card else { return }
                 editing = CardEditing(card, workspace: workspace)
             }
-            .onChange(of: data?.card.deletedAt) { if data?.card.deletedAt != nil { dismiss() } }
+            .onChange(of: data?.card.deletedAt) { if data?.card.deletedAt != nil { workspace.leave(.card(cardID)) } }
             .onDisappear { editing?.leave() }
     }
 
