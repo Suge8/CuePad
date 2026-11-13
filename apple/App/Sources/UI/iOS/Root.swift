@@ -103,7 +103,7 @@ struct RouteView: View {
         case .earlier: EarlierPage()
         case .library: LibraryScreen()
         case .libraryFile(let file): LibraryFileScreen(file: file)
-        case .session(let route): SessionScreen(id: route.id, seed: route.seed, column: column).countsAsViewer()
+        case .session(let route): SessionPage(route, column: column).countsAsViewer()
         case .card(let id):
             if let zoom {
                 CardEditorScreen(cardID: id).navigationTransition(.zoom(sourceID: id, in: zoom))
