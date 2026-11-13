@@ -85,7 +85,7 @@ struct ProjectScreen: View {
                 if !arrangement.older.isEmpty {
                     let groups = data.olderGroups(arrangement)
                     let titled = OlderGroup.needsTitles(in: groups)
-                    SectionHeader("更早", count: arrangement.older.count).id(ScrollAnchor.older).padding(.bottom, titled ? 0 : Self.headerGap)
+                    SectionHeader("更早", count: arrangement.older.count).id(OlderGroup.anchor).padding(.bottom, titled ? 0 : Self.headerGap)
                     ForEach(groups, id: \.period) { group in
                         if titled { OlderGroupHeader(group: group, expanded: $expanded) }
                         if !group.isMonth || expanded.contains(group.period) {

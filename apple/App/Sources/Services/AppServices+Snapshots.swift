@@ -37,7 +37,7 @@ extension AppServices {
     static func cueNow(_ digest: CueDigest, at moment: Speech.Moment, local: CueNow.Local) -> CueNow {
         var moment = moment
         moment.now = .now
-        return DebugHooks.preset.cueNow ?? CueNow(digest, at: moment, local: local)
+        return DebugHooks.cueNow ?? CueNow(digest, at: moment, local: local)
     }
 
     var cueLocal: CueNow.Local {

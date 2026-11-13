@@ -62,7 +62,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         settingsWindow = SettingsWindowController {
             SettingsView(pane: $0).environment(cueBar).panelHost().modifier(PaletteProvider()).environment(services)
         }
-        DebugHooks.present(window)
+        window.present()
         // 第一帧只有主窗口：工作区与服务的订阅、菜单栏图标与面板、后台服务都不在第一帧里，它们起头那一段同步的活（读库、注册、
         // 起各家的接入）排在第一帧之前就把窗口往后推。首屏要的数据已经当场读好（`Workspace.init`、`LiveSessions`、页面的 `observing`）
         Task {
@@ -209,7 +209,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             window.center()
             failureWindow = window
         }
-        DebugHooks.present(window, activating: true)
+        window.present(activating: true)
     }
 
     private func abortLaunch(_ error: any Error) {

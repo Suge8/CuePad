@@ -36,7 +36,6 @@ enum DebugHooks {
         var hoverSeconds: Double?
         #endif
         var showsDone = false
-        var cueNow: CueNow?
         var quotaOpen = false
         var scheduleOpen = false
         var mergePreview = false
@@ -56,6 +55,15 @@ enum DebugHooks {
         Preset()
         #endif
     }()
+
+    /// 调试画面钉住的 Cue 此刻（`-CuePadCueNow` 起来就钉、`-CuePadCueCycle` 轮流换，`DebugScene.cueNow`）：钉着就不随库变。
+    static var cueNow: CueNow? {
+        #if DEBUG
+        DebugScene.cueNow
+        #else
+        nil
+        #endif
+    }
 
     /// 同步从哪来：Debug 构建的 `-CuePadSync stalled` 换成拉取永不返回的替身，`-CuePadSync <状态>` 换成报这个状态的替身（`DebugScene.StandInSync`），其余照常按 iCloud。
     static var syncSource: AppServices.SyncSource {
@@ -364,15 +372,15 @@ enum DebugHooks {
         #endif
     }
 
-    /// 显示窗口：到最前并接过键盘（`activating` 时连 App 一起到前台）。本机构建（DEBUG 条件，含 perf 的 Release）不管谁起的都在后台：
-    /// 窗口排在所有窗口最后，不抢前台和键盘、不盖住正在用的窗口，按窗口截图照样截得到；非占前台不可的只经 `DebugForeground` 借，人要看的用 `-CuePadOnTop YES`。
-    static func present(_ window: NSWindow, activating: Bool = false) {
+    /// 本机构建（DEBUG 条件，含 perf 的 Release）的窗口不管谁起的都在后台：排在所有窗口最后，不抢前台和键盘、不盖住正在用的窗口，按窗口截图照样截得到；
+    /// 非占前台不可的只经 `DebugForeground` 借，人要看的用 `-CuePadOnTop YES`。摆好了返回 true（`NSWindow.present` 就不再到前台）。
+    static func keepsBehind(_ window: NSWindow) -> Bool {
         #if DEBUG
         if DebugScene.args.layoutOpts.onTop { window.orderFrontRegardless() } else { window.orderBack(nil) }
         LaunchBench.present(window)
+        return true
         #else
-        if activating { NSApp.activate() }
-        window.makeKeyAndOrderFront(nil)
+        false
         #endif
     }
 

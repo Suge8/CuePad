@@ -199,7 +199,7 @@ extension DebugScene {
 
     static func scrollIfNeeded(_ proxy: ScrollViewProxy) {
         guard scene == "older" else { return }
-        later(.milliseconds(300)) { proxy.scrollTo(ScrollAnchor.older, anchor: UnitPoint(x: 0.5, y: 0.35)) }
+        later(.milliseconds(300)) { proxy.scrollTo(OlderGroup.anchor, anchor: UnitPoint(x: 0.5, y: 0.35)) }
     }
 
     static func openTask(_ workspace: Workspace, preferred: (Card) -> Bool) async {

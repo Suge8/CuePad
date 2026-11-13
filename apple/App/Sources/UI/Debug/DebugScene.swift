@@ -1,10 +1,6 @@
 import CueStore
 import SwiftUI
 
-enum ScrollAnchor {
-    static let older = "older"
-}
-
 #if DEBUG
 
 /// 调试画面（只在 Debug 构建里，视觉验收、录屏、测量用）。启动参数的登记表是 `DebugArgs`（`DebugScene+Args*.swift`，字段注释即说明），画面的登记表是 `entries`（`DebugScene+Scenes.swift`）。
@@ -15,6 +11,7 @@ enum DebugScene {
         let parts = args.layoutOpts.windowSize?.split(separator: "x").compactMap { Double($0) } ?? []
         return parts.count == 2 ? CGSize(width: parts[0], height: parts[1]) : nil
     }
+    static var cueNow = args.cueOpts.now.flatMap { CueActivitySamples.named($0) ?? CueNowSamples.all[$0] }
     static var sessionToOpen: String? { scene == "session" ? args.session : nil }
     static var injectsGeometryLoop: Bool { args.layoutOpts.geometryLoop }
     // 只在脚本起的实例里挂（`DebugHooks.scripted`）：全局攥着视图的闭包，连带它环境里的工作区与服务，测试宿主里每条用例的库都放不掉
@@ -57,7 +54,6 @@ extension DebugHooks.Preset {
         readerOn = args.layoutOpts.reader
         if args.layoutOpts.tasksOpen { taskFold = TaskFold(showsAll: true, showsDone: true) }
         showsDone = args.layoutOpts.showsDone
-        cueNow = args.cueOpts.now.flatMap { CueActivitySamples.named($0) ?? CueNowSamples.all[$0] }
         #if os(macOS)
         hovered = DebugScene.hoverPoints
         hoverSeconds = args.driveOpts.hoverSeconds

@@ -85,18 +85,10 @@ final class CueWatch {
         // 推出的时刻每次都不同：内容一样就不写，免得读它的每一行跟着重算
         noteWake(digest.woke, catchingUp: catchingUp)
         let next = AppServices.cueNow(digest, at: moment, local: local).aged(to: .now)
-        if !isPinned, !next.same(as: now) { show(next) }
+        if !next.same(as: now) { show(next) }
         unread = digest.unread
         hostID = digest.hostID
         hostName = digest.hostName
-    }
-
-    /// 调试画面手动换的 Cue 此刻（`-CuePadCueCycle` 轮流走各态，`DebugScene.cueNowTourIfAsked`）：换过就不再随库变。
-    @ObservationIgnored private var isPinned = false
-
-    func pin(_ next: CueNow) {
-        isPinned = true
-        show(next.aged(to: .now))
     }
 
     @ObservationIgnored private var aging: Task<Void, Never>?
@@ -128,7 +120,7 @@ final class CueWatch {
     }
 
     /// 换上这一份，睡到刚做完的那件该收的那一刻（`CueNow.nextChange`；等到那一刻是业务语义，不周期刷新）再收掉。
-    private func show(_ next: CueNow) {
+    func show(_ next: CueNow) {
         now = next
         aging?.cancel()
         guard let at = next.nextChange(after: .now) else { return }

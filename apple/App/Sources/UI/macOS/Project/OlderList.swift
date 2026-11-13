@@ -12,7 +12,7 @@ struct OlderList: View {
     var body: some View {
         let total = groups.reduce(0) { $0 + $1.cards.count }
         VStack(alignment: .leading, spacing: Spacing.page) {
-            SectionHeader("更早", count: total).id(ScrollAnchor.older)
+            SectionHeader("更早", count: total).id(OlderGroup.anchor)
             let titled = OlderGroup.needsTitles(in: groups)
             ForEach(groups, id: \.period) { group in
                 section(group, titled: titled)
