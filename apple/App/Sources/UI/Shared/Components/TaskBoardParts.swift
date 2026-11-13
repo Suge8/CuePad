@@ -299,10 +299,8 @@ struct BoardColumn: View {
                 HStack {
                     Text("更早做完的 \(board.earlier.count)").font(Typography.bodyStrong).monospacedDigit()
                     Spacer(minLength: Spacing.item)
-                    Button("全部归档") {
-                        listsEarlier = false
-                        workspace.attempt { try await workspace.archiveCompletedTasks() }
-                    }
+                    let archive = LaneAdd.archive(in: workspace)
+                    Button(archive.title) { listsEarlier = false; archive.action() }
                     .font(Typography.secondary)
                 }
                 .padding(.vertical, Spacing.item)
