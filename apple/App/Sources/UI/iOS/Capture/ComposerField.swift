@@ -284,7 +284,7 @@ final class GrowingTextView: UITextView {
             case .keyboardUpArrow: keys(.up)
             case .keyboardDownArrow: keys(.down)
             case .keyboardReturnOrEnter: keys(.accept) || sends(key)
-            case .keyboardTab: keys(.accept)
+            case .keyboardTab: keys(.next)
             case .keyboardEscape: keys(.dismiss)
             default: false
             }

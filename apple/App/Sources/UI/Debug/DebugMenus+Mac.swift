@@ -60,7 +60,7 @@ extension DebugScene {
             windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)
     }
 
-    private static let keys: [String: (code: UInt16, character: String)] = ["esc": (53, "\u{1b}"), "return": (36, "\r")]
+    private static let keys: [String: (code: UInt16, character: String)] = ["esc": (53, "\u{1b}"), "return": (36, "\r"), "tab": (48, "\t")]
 
     /// 后台窗口不是 key，菜单的快捷键与校验都找不到接收者，所以不经菜单分派，直接从焦点沿响应链发。
     private static func perform(menuKey key: String, in window: NSWindow) {

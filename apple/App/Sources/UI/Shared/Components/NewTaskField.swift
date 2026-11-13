@@ -4,6 +4,8 @@ import SwiftUI
 struct NewTaskField: View {
     let project: UUID?
     var choosesProject = false
+    /// 看板的列里：输入独占一行、挂到哪个项目另起一行。并排的话窄列里项目胶囊把输入挤得只剩一两个字。
+    var stacked = false
     var autofocus = false
     var dismiss: (() -> Void)?
     @Environment(Workspace.self) private var workspace
@@ -18,42 +20,63 @@ struct NewTaskField: View {
     private let prompt = String(localized: "添加任务")
 
     var body: some View {
-        HStack(spacing: TaskMetrics.columnGap) {
-            if writing || autofocus {
-                glyph
-                TextField(prompt, text: $text, palette: palette).textFieldStyle(.plain).font(Typography.body)
-                    .submitLabel(.done)
-                    .accessibilityLabel(prompt)
-                    .focused($focused)
-                    .onSubmit(add)
-                    .onChange(of: focused) { if !focused, text.trimmingCharacters(in: .whitespaces).isEmpty { collapse() } }
-                    .task {
-                        // 换成输入框的那一帧还没进窗口的响应链：下一帧再接键盘
-                        await NextFrame.wait()
-                        focused = true
-                    }
-            } else {
-                Button {
-                    releaseKeyboard()
-                    writing = true
-                } label: {
-                    HStack(spacing: TaskMetrics.columnGap) {
-                        glyph
-                        Text(prompt).font(Typography.body).foregroundStyle(palette.ink3).frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .contentShape(.rect)
+        Group {
+            if stacked {
+                VStack(alignment: .leading, spacing: Spacing.item) {
+                    // 长标题在 Mac 的窄列里折行写全。iOS 上竖着长的输入框按回车不走 onSubmit，拼音还没上屏时直接丢字（模拟器实测），那边的列也宽，留单行
+                    #if os(macOS)
+                    field(.vertical).font(TaskMetrics.lineFont).lineLimit(1...6)
+                    #else
+                    field(.horizontal).font(TaskMetrics.lineFont)
+                    #endif
+                    destination.lineLimit(1)
                 }
-                .buttonStyle(PressStyle())
-                .accessibilityLabel(prompt)
-            }
-            if choosesProject, let projects = workspace.catalog?.projects {
-                projectMenu(projects)
+                .padding(.vertical, TaskMetrics.cardPadding)
+            } else {
+                HStack(spacing: TaskMetrics.columnGap) {
+                    if writing || autofocus {
+                        glyph
+                        field(.horizontal).font(Typography.body)
+                    } else {
+                        Button {
+                            releaseKeyboard()
+                            writing = true
+                        } label: {
+                            HStack(spacing: TaskMetrics.columnGap) {
+                                glyph
+                                Text(prompt).font(Typography.body).foregroundStyle(palette.ink3).frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                            .contentShape(.rect)
+                        }
+                        .buttonStyle(PressStyle())
+                        .accessibilityLabel(prompt)
+                    }
+                    destination
+                }
+                .frame(minHeight: TaskMetrics.rowHeight)
             }
         }
-        .frame(minHeight: TaskMetrics.rowHeight)
         #if os(macOS)
         .resignsFocusOnOutsideClick()
         #endif
+    }
+
+    private func field(_ axis: Axis) -> some View {
+        TextField(prompt, text: $text, palette: palette, axis: axis).textFieldStyle(.plain)
+            .submitLabel(.done)
+            .accessibilityLabel(prompt)
+            .focused($focused)
+            .onSubmit(add)
+            .onChange(of: focused) { if !focused, text.trimmingCharacters(in: .whitespaces).isEmpty { collapse() } }
+            .task {
+                // 换成输入框的那一帧还没进窗口的响应链：下一帧再接键盘
+                await NextFrame.wait()
+                focused = true
+            }
+    }
+
+    @ViewBuilder private var destination: some View {
+        if choosesProject, let projects = workspace.catalog?.projects { projectMenu(projects) }
     }
 
     private func projectMenu(_ projects: [Project]) -> some View {

@@ -41,7 +41,7 @@ extension TokenSheet {
         ("heading", Typography.heading), ("emptyTitle", Typography.emptyTitle), ("gaugeNumber", Typography.gaugeNumber),
         ("toolbarLabel", Typography.toolbarLabel), ("toolbarTitle", Typography.toolbarTitle),
         ("toolbarTitlePaired", Typography.toolbarTitlePaired), ("toolbarSubtitle", Typography.toolbarSubtitle),
-        ("laneTitle", Typography.laneTitle), ("laneCount", Typography.laneCount),
+        ("laneTitle", Typography.laneTitle),
         ("diff", Typography.diff), ("diffStrong", Typography.diffStrong),
         ("documentTitle", Typography.documentTitle), ("documentHeading", Typography.documentHeading),
     ] + platformFonts

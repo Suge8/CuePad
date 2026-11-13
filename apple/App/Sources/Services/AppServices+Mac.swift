@@ -133,6 +133,7 @@ extension AppServices {
 
     /// 脚本起的实例不注册：全局快捷键全机只有一份，会和用户在用的 CuePad 抢同一个键。
     func register(_ hotkey: GlobalHotkey) {
+        if !hotkeys.contains(where: { $0 === hotkey }) { hotkeys.append(hotkey) }
         guard !DebugHooks.scripted else { return }
         do {
             try hotkey.registerSaved()
@@ -141,6 +142,17 @@ extension AppServices {
         }
     }
 
+
+    /// 设置里录新组合键期间全部让出：系统把注册着的组合直接吃掉，录的那一行收不到按键，按到自己占着的只会触发它。
+    func suspendHotkeys() { hotkeys.forEach { $0.unregister() } }
+
+    func resumeHotkeys() { hotkeys.forEach(register) }
+
+    /// 换键；撞上自己另一个快捷键抛 `taken`（让出期间后端里查不到它），其余同 `GlobalHotkey.set`。
+    func rebind(_ hotkey: GlobalHotkey, to accelerator: String) throws {
+        if let other = hotkeys.first(where: { $0 !== hotkey && $0.accelerator == accelerator }) { throw HotkeyError.taken(other.label) }
+        try hotkey.set(accelerator)
+    }
 
     /// 不经主线程：回填时每个文件都来取一次，主线程同时在画界面。
     nonisolated func loadHistoryStart(for file: URL) async -> HistoryStart? {

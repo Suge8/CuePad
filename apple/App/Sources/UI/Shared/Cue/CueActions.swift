@@ -21,9 +21,9 @@ extension Workspace {
         return speak(to: .cue, from: box) { $0.stored }
     }
 
-    /// 这句不交给 Cue，记成灵感落在默认项目；写不进库时文字与图片放回输入框（期间新打的接在后面）。
+    /// 这句不交给 Cue，记成灵感（`asTask` 时是任务）；写不进库时文字与图片放回输入框（期间新打的接在后面）。
     @discardableResult
-    func note(from box: Binding<ComposerDraft>) -> Task<Void, Never>? {
+    func note(from box: Binding<ComposerDraft>, asTask: Bool = false, in project: UUID = Project.defaultID) -> Task<Void, Never>? {
         let taken = box.wrappedValue
         guard !taken.isEmpty(accepting: .files) else { return nil }
         let claim = claimImports(taken)
@@ -31,10 +31,10 @@ extension Workspace {
         return Task {
             let taken = await claim.settled()
             let note = CaptureDraft(text: taken.text, files: taken.files)
-            // 附件都没存成（已提示导入失败）又没有字：不建空灵感
+            // 附件都没存成（已提示导入失败）又没有字：不建空的
             guard !note.isEmpty else { return }
             do {
-                try await note.save(in: Project.defaultID, workspace: self)
+                try await note.save(in: project, asTask: asTask, workspace: self)
             } catch {
                 box.wrappedValue = taken.followed(by: box.wrappedValue, keeping: ComposerDraft())
                 fail(error)

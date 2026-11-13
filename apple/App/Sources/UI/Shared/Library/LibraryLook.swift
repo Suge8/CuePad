@@ -3,18 +3,46 @@ import SwiftUI
 
 /// 规则（哪些该整理、谁读得到）在 `AgentLibrary`、`LibraryTidy` 与 Mac 端的扫描里，这里只把快照写成字。
 extension Workspace {
-    func fact(of tidy: LibraryTidy, in library: AgentLibrary) -> String {
+    func fact(of tidy: LibraryTidy, in library: AgentLibrary) -> TidyFact {
         switch tidy.kind {
-        case .stray(let moves): return String(localized: "\(moves.count) 个技能在旧目录里")
-        case .unlinked(let agent, let skills): return String(localized: "\(skills.count) 个技能 \(agent.name) 读不到")
-        case .empty(let directories): return String(localized: "\(directories.count) 个空文件夹")
+        case .stray(let moves):
+            return TidyFact(
+                problem: String(localized: "\(moves.count) 个技能不在共用目录里"),
+                plan: String(localized: "搬进共用的 .agents/skills：\(Self.listed(moves.map(\.skill.name)))"))
+        case .unlinked(let agent, let skills):
+            return TidyFact(
+                problem: String(localized: "\(skills.count) 个技能 \(agent.name) 读不到"),
+                plan: String(localized: "在它的技能目录里建链接：\(Self.listed(skills.map(\.name)))"))
+        case .empty(let directories):
+            return TidyFact(
+                problem: String(localized: "\(directories.count) 个空文件夹"),
+                plan: String(localized: "移到废纸篓：\(Self.listed(directories.map(library.shown)))"))
         case .globalInstructions:
-            let unseen = library.instruction(.global).map(library.unseen) ?? []
+            guard let global = library.instruction(.global), global.hash != nil else {
+                return TidyFact(
+                    problem: String(localized: "还没有全局规则"),
+                    plan: String(localized: "拿 \(tidy.writers.map(\.name).formatted(.list(type: .and))) 那份当全局规则，各家都链到它"))
+            }
+            let unseen = library.unseen(global)
             let names = AgentKind.allCases.filter { tidy.writers.contains($0) || unseen.contains($0) }.map(\.name)
-            return String(localized: "\(names.formatted(.list(type: .and))) 没链到全局规则")
-        case .projectClaude(let project, _): return String(localized: "Claude Code 读不到「\(projectName(project))」的项目规则")
-        case .duplicate(let name, _): return name
+            return TidyFact(
+                problem: String(localized: "\(names.formatted(.list(type: .and))) 还没读全局规则"),
+                plan: tidy.writers.isEmpty
+                    ? String(localized: "在它的配置目录里建一个指向全局规则的链接")
+                    : String(localized: "自己那份内容相同，换成指向全局规则的链接"))
+        case .projectClaude(let project, _):
+            return TidyFact(
+                problem: String(localized: "Claude Code 读不到「\(projectName(project))」的项目规则"),
+                plan: String(localized: "在项目里建一个指向 AGENTS.md 的 CLAUDE.md"))
+        case .duplicate(let name, _):
+            return TidyFact(problem: name, plan: "")
         }
+    }
+
+    /// 前三个写出来，其余只写个数。
+    private static func listed(_ names: [String]) -> String {
+        let shown = names.prefix(3).joined(separator: String(localized: "、"))
+        return names.count > 3 ? String(localized: "\(shown) 等 \(names.count) 个") : shown
     }
 
     func fileTitle(_ file: LibraryFile, in library: AgentLibrary?) -> String {
@@ -46,6 +74,12 @@ extension Workspace {
     }
 }
 
+/// 该整理的一件写成两句：哪里不对、一键整理会对它做什么。
+struct TidyFact: Equatable {
+    let problem: String
+    let plan: String
+}
+
 extension LibraryTidy {
     var icon: Icon {
         switch kind {
@@ -54,6 +88,13 @@ extension LibraryTidy {
         case .empty: .unbindFolder
         case .duplicate: .duplicate
         }
+    }
+}
+
+extension AgentLibrary {
+    /// 各家自己管的技能（列不出、整理也不碰）合成一句；没有为 nil。
+    var selfManagedNote: String? {
+        selfManaged.isEmpty ? nil : String(localized: "另有 \(selfManaged.map(\.title).formatted(.list(type: .and)))，由它们自己管")
     }
 }
 

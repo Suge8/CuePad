@@ -19,7 +19,6 @@ struct PageMenuSlot: View {
         case project(UUID)
         case progress
         case trash
-        case none
 
         var help: LocalizedStringResource {
             switch self {
@@ -27,31 +26,35 @@ struct PageMenuSlot: View {
             case .project: "选择灵感、看这个项目的进展、项目操作"
             case .progress: "项目范围"
             case .trash: "清空回收站"
-            case .none: "这一页没有更多操作"
             }
         }
     }
 
-    private var content: Content {
+    /// nil：这一页没有操作，不摆钮。
+    private var content: Content? {
         if let id = workspace.openCard { return .card((opened ?? nil).flatMap { $0.id == id ? $0 : nil }) }
         return switch workspace.mainRoute {
         case .project(let id): .project(id)
         case .progress: .progress
         case .trash: .trash
-        default: .none
+        default: nil
         }
     }
 
     var body: some View {
         let content = content
-        Menu { items(content).labelStyle(.titleAndIcon) } label: { menuLabel(content) }
-        .menuStyle(.button).menuIndicator(.hidden)
-        .buttonStyle(ControlButtonStyle(kind: .circular))
-        .fixedSize()
-        .padding(.leading, Spacing.item)
-        .disabled(content == .none || content == .card(nil))
-        .help(content.help)
-        .accessibilityLabel(content == .progress ? Text("项目范围") : Text("更多"))
+        Group {
+            if let content {
+                Menu { items(content).labelStyle(.titleAndIcon) } label: { menuLabel(content) }
+                    .menuStyle(.button).menuIndicator(.hidden)
+                    .buttonStyle(ControlButtonStyle(kind: .circular))
+                    .fixedSize()
+                    .padding(.leading, Spacing.item)
+                    .disabled(content == .card(nil))
+                    .help(content.help)
+                    .accessibilityLabel(content == .progress ? Text("项目范围") : Text("更多"))
+            }
+        }
         .observing(services.store, id: workspace.openCard, into: $opened, onError: workspace.fail) { [id = workspace.openCard] store in
             try id.flatMap { try store.card($0) }
         }
@@ -77,7 +80,7 @@ struct PageMenuSlot: View {
             ProjectScopeItems()
         case .trash:
             Button("清空回收站…", icon: .trash, role: .destructive) { workspace.confirmsEmptyTrash = true }
-        case .card(nil), .none: EmptyView()
+        case .card(nil): EmptyView()
         }
     }
 }

@@ -1,16 +1,15 @@
 import SwiftUI
 
 /// 轻重只在这里定，各组件只问列要它那一样，不自己判断哪列轻：
-/// 否决过：轻的两列去掉纸只留一层淡底（读成不可用的按钮）、推进中与等你身后垫一块托盘（页面多一块面）。
+/// 否决过：轻的两列去掉纸只留一层淡底（读成不可用的按钮）、轻的两列各带一档淡灰淡绿的纸（和桌面太近，读成一排空心框）、
+/// 列身后垫托盘（只垫两列、四列都垫都试过，`BoardLane`）。
 extension TaskBoard.Column {
     var light: Bool { self == .todo || self == .done }
 
     func paper(_ palette: Palette) -> Color? {
         switch self {
-        case .todo: palette.todoPaper
-        case .advancing: nil
         case .waiting: palette.waitingPaper
-        case .done: palette.donePaper
+        case .todo, .advancing, .done: nil
         }
     }
 
