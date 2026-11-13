@@ -11,41 +11,12 @@ struct TaskNextMark: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        #if os(macOS)
-        if case .start(let leaf) = next {
-            HStack(spacing: 0) {
-                mark
-                chooser(leaf)
-            }
-        } else {
-            mark
-        }
-        #else
-        mark
-        #endif
-    }
-
-    private var mark: some View {
         Button(action: follow) { label }
             .buttonStyle(PressStyle())
             .help(next.starts ? help : String(localized: "\(next.speech)，\(help)"))
             .accessibilityLabel(next.speech)
             .accessibilityHint(help)
     }
-
-    #if os(macOS)
-    /// "开始"是一点就开（用上次选的那家与模型）；要换的点这个箭头，出来的是新会话的输入框、带着这条任务。
-    private func chooser(_ leaf: Card) -> some View {
-        Button { workspace.chooseStart(leaf) } label: {
-            Image(.expand).font(Self.glyph)
-                .foregroundStyle(lit ? palette.signature : palette.ink2)
-                .frame(width: Self.target, height: Self.target).contentShape(.rect)
-        }
-        .buttonStyle(PressStyle())
-        .help("换 Agent 或模型再开始")
-        .accessibilityLabel("选 Agent 与模型再开始")
-    }
-    #endif
 
     private var label: some View {
         HStack(spacing: Spacing.glyph) {
@@ -93,7 +64,7 @@ struct TaskNextMark: View {
         if case .start(let leaf) = next, let choice = workspace.localAgents.flatMap({ workspace.services.settings.launchChoice(on: $0, in: leaf.projectID) }),
            let agent = choice.agent {
             let brain = [agent.name, choice.current?.displayName].compactMap(\.self).joined(separator: " ")
-            return String(localized: "把任务的正文交给 Agent，开始做。开新会话时用 \(brain)，点旁边的箭头可以换")
+            return String(localized: "把任务的正文交给 Agent，开始做。开新会话时用 \(brain)，点开任务可以换")
         }
         #endif
         return String(localized: "把任务的正文交给 Agent，开始做")

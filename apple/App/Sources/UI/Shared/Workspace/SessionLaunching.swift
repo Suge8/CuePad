@@ -70,30 +70,6 @@ extension Workspace {
         return launching
     }
 
-    /// 为一条任务打开新会话的输入框：任务的正文作为带上的卡片，会话名、开在哪个项目与哪台 Mac 按 `plan`。
-    /// `project`：去向不是开新会话时（任务绑着会话、另开一个）开在哪个项目。这个任务上一次开的请求还没收尾时接着它（`SessionStart.launched`）。
-    /// 读不出上一次的结果时不开输入框，返回 false。
-    func showNewSession(_ draft: ComposerDraft, card: UUID?, plan: HandOffPlan?, project fallback: UUID?) -> Bool {
-        let (project, host): (UUID?, String?) =
-            switch plan?.destination {
-            case .launch(let project, let host): (project, host)
-            default: (fallback, nil)
-            }
-        do {
-            let launched = try services.store.snapshot { store -> SessionLaunch? in
-                guard let card = card ?? draft.attachments.first?.card,
-                      let request = try store.unresolvedLaunches(for: card).first,
-                      let token = request.launch?.token else { return nil }
-                return SessionLaunch(request: request.id, token: token)
-            }.value
-            newSession = SessionStart(project: project, launched: launched, draft: draft, card: card, name: plan?.name, host: host)
-            return true
-        } catch {
-            fail(error)
-            return false
-        }
-    }
-
     @discardableResult
     func submitSession(
         _ start: SessionStart = SessionStart(), in place: ProjectFolders.LaunchPlace?, draft: ComposerDraft, choice: AgentModelChoice?,

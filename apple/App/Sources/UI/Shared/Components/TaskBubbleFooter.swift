@@ -7,22 +7,39 @@ struct BubbleFooter: View {
     let editing: CardEditing?
     @Environment(Workspace.self) private var workspace
     @Environment(\.cardAgents) private var agents
+    @Environment(\.palette) private var palette
 
-    /// 开始 → 正在开 → Agent 在做是同一条的三个样子：旧的先淡完、新的再淡入（`handOff`），不叠着换。
-    var body: some View {
+    private enum Stage {
+        case agent(Card)
+        case launching(AgentKind)
+        case start(Card, caption: String?, editing: CardEditing?)
+    }
+
+    private var stage: Stage? {
         if focus.id == data.goal.id, !data.steps.isEmpty {
             switch workspace.lead(of: data.steps, in: agents) {
-            case .agent(_, let session)?:
-                if let step = data.steps.first(where: { $0.piSessionID == session.sessionID }) { AgentStrip(leaf: step).transition(.handOff) }
-            case .start(let leaf)?: StartBar(leaf: leaf, caption: leaf.title, editing: nil).transition(.handOff)
-            case nil: EmptyView()
+            case .agent(_, let session)?: return data.steps.first { $0.piSessionID == session.sessionID }.map(Stage.agent)
+            case .start(let leaf)?: return .start(leaf, caption: leaf.title, editing: nil)
+            case nil: return nil
             }
-        } else if agents.items[focus.id] != nil {
-            AgentStrip(leaf: focus).transition(.handOff)
-        } else if let kind = agents.launching[focus.id], !unsettled(focus.id) {
-            LaunchStrip(kind: kind).transition(.handOff)
-        } else if focus.status != .done {
-            StartBar(leaf: focus, caption: nil, editing: editing).transition(.handOff)
+        }
+        if agents.items[focus.id] != nil { return .agent(focus) }
+        if let kind = agents.launching[focus.id], !unsettled(focus.id) { return .launching(kind) }
+        return focus.status != .done ? .start(focus, caption: nil, editing: editing) : nil
+    }
+
+    /// 开始 → 正在开 → Agent 在做是同一条的三个样子：底那一块一直在，里面的旧的先淡完、新的再淡入（`handOff`），不叠着换、也不整条闪一下。
+    var body: some View {
+        if let stage {
+            ZStack(alignment: .leading) {
+                switch stage {
+                case .agent(let leaf): AgentStrip(leaf: leaf).transition(.handOff)
+                case .launching(let kind): LaunchStrip(kind: kind).transition(.handOff)
+                case .start(let leaf, let caption, let editing): StartBar(leaf: leaf, caption: caption, editing: editing).transition(.handOff)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(palette.fill, in: Radius.nested)
         }
     }
 
@@ -115,7 +132,6 @@ private struct BubbleStrip<Content: View, Trailing: View>: View {
             trailing
         }
         .padding(BubbleMetrics.stripPadding)
-        .background(palette.fill, in: Radius.nested)
         .contentShape(.rect)
     }
 }
@@ -161,6 +177,7 @@ private struct StartBar: View {
                 .accessibilityHint("把任务的正文交给 Agent，开始做")
             }
         }
+        .padding(BubbleMetrics.stripPadding)
         #if os(macOS)
         .confirmsLaunchAgain(launching)
         // 读不出去向时不放那一排，原因在点"开始"时报

@@ -194,7 +194,7 @@ struct NewSessionFlowTests {
     }
 
     #if os(macOS)
-    @Test func 开始用这个项目上次选的那家_没选过的项目用最近一次选的_箭头带着任务打开输入框() async throws {
+    @Test func 开始用这个项目上次选的那家_没选过的项目用最近一次选的() async throws {
         defer { app.services.cancelBackgroundWork() }
         let workspace = Workspace(services: app.services), settings = app.services.settings
         try await store.recordMacAgents(host: host, name: "测试 Mac", [.pi, .codex].map { MacAgent(kind: $0, model: nil, models: []) })
@@ -212,14 +212,6 @@ struct NewSessionFlowTests {
         settings.setLaunchPreference(for: flow.id) { $0.agent = .pi }
         #expect(try await started(in: flow.id) == .pi)
         #expect(try await started(in: table.id) == .codex, "各项目记各自的")
-
-        let task = try await store.createTask("补用例\n三条", in: table.id)
-        let before = try await requests
-        workspace.chooseStart(task)
-        let start = try #require(workspace.newSession)
-        #expect(start.card == task.id && start.project == table.id)
-        #expect(start.draft?.attachments.map(\.card) == [task.id], "输入框里带着这条任务")
-        #expect(try await requests == before, "箭头只打开输入框，不发")
     }
     #endif
 }

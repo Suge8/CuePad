@@ -14351,18 +14351,18 @@
         }
       }
     },
-    "把任务的正文交给 Agent，开始做。开新会话时用 %@，点旁边的箭头可以换" : {
+    "把任务的正文交给 Agent，开始做。开新会话时用 %@，点开任务可以换" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hand the task’s notes to an agent and start. A new session uses %@; click the arrow to change it."
+            "value" : "Hand the task’s notes to an agent and start. A new session uses %@; open the task to change it."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "把任务的正文交给 Agent，开始做。开新会话时用 %@，点旁边的箭头可以换"
+            "value" : "把任务的正文交给 Agent，开始做。开新会话时用 %@，点开任务可以换"
           }
         }
       }
@@ -14555,22 +14555,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "挂断"
-          }
-        }
-      }
-    },
-    "换 Agent 或模型再开始" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Change the agent or model, then start"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "换 Agent 或模型再开始"
           }
         }
       }
@@ -24755,22 +24739,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "送达未确认"
-          }
-        }
-      }
-    },
-    "选 Agent 与模型再开始" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Choose agent and model, then start"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "选 Agent 与模型再开始"
           }
         }
       }

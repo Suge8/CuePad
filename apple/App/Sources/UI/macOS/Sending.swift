@@ -11,18 +11,6 @@ extension Workspace {
         start(leaf.id, fresh: false)
     }
 
-    /// "开始"旁边的箭头：打开新会话的输入框，带着这条任务，换了哪家、哪个模型再发。总是另开一个会话。
-    func chooseStart(_ leaf: Card) {
-        do {
-            let (plan, opening) = try services.store.snapshot { [host = services.hostID] store in
-                let plan = try store.handOffPlan(leaf.id, host: host, fresh: true)
-                return (plan, try store.opening(of: plan.leaf, true))
-            }.value
-            let draft = ComposerDraft(attachments: [Outbox(content: opening, card: plan.leaf, project: leaf.projectID)])
-            _ = showNewSession(draft, card: plan.leaf, plan: plan, project: leaf.projectID)
-        } catch { fail(error) }
-    }
-
     func startFresh(_ leaf: Card) {
         start(leaf.id, fresh: true)
     }
