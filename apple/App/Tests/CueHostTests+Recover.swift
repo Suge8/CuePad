@@ -176,7 +176,7 @@ extension CueHostTests {
         let reminder = try await rig.store.noteCueLine("核对发布结果", source: .you, remindAt: .now)
         let keeper = try #require(rig.services.cue.keeper)
         try await eventually("定时卡住") { keeper.snapshot.state == .stalled }
-        try await rig.say("你好")
+        try await rig.say("帮我核对发布清单")
         try await eventually("你那句也卡住") { keeper.snapshot.state == .stalled && keeper.snapshot.setbacks.contains { $0.wake == .message } }
         #expect(rig.model.errors == 2)
         #expect(try await rig.store.cueLine(reminder.id)?.deletedAt != nil)
@@ -187,11 +187,13 @@ extension CueHostTests {
 
         let fired = "定时到点：\(reminder.id.uuidString.lowercased()) 核对发布结果"
         try await rig.message(.cue, containing: fired)
-        try await rig.message(.cue, containing: "接着做上一轮没做完的")
+        let answer = "接着做上一轮没做完的（接着答「帮我核对发布清单」）"
+        try await rig.message(.cue, containing: answer)
         try await eventually("都做完了") { rig.services.cue.keeper?.snapshot.state == .idle }
         try await rig.reconciled()
         #expect(try await rig.count(fired) == 1)
         #expect(try await rig.count("接着做上一轮没做完的") == 1)
+        #expect(try await rig.count("帮我核对发布清单") == 1, "你那句只答一次")
         #expect(try await rig.count("达到用量限制") == 1)
         #expect(rig.model.errors == 2)
         await rig.stop()
