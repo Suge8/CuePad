@@ -3,25 +3,24 @@ import SwiftUI
 
 /// 改动的写入都在那台 Mac 上：手机上的动作发往 Mac（按钮带纸飞机），快照随它写回同步来。全局规则那张写谁在读（`ReaderMarks`），其余行末只画读不到这一份的那几家（`UnseenMarks`）。
 
-/// 段名只在分段上（Mac 工具栏、手机页顶）。页上只有两种面：纸是那份全局规则本身，着色的那块是要你点一下的整理；其余的行直接排在桌面上，靠小标题与间距分组。
+/// 段名只在分段上（Mac 工具栏、手机页顶）。规则同项目页的灵感墙一个样：分组标题下面一面卡片墙（`LibraryWall`、`LibraryCard`），
+/// 全局规则是墙上面通栏的那一张；技能多，排成清单不套卡；着色的那块是要你点一下的整理。
 enum LibraryLayout {
+    /// 文件页正文那一列（同灵感的编辑页）。
     static let column: CGFloat = 680
-    static let gap = Spacing.part
+    static let gap = Spacing.section
     static let margin = Spacing.page
     static let bottom = Spacing.section
     #if os(macOS)
     static let radius = Radius.block
     static let textInset: CGFloat = 24
-    /// 行尾的前进箭头：Mac 上点行打开的是盖在主区上的文件页（浮层，不是进一页），不画
-    static let chevron = false
     #else
     static let radius = Radius.sheet
     static let textInset: CGFloat = 20
-    static let chevron = true
     #endif
 }
 
-/// 一组行：小标题（可带个数）与它下面直接排在桌面上的行。
+/// 一组：标题（可带个数，同项目页的"最近 13"）与它下面的墙或清单。
 struct LibraryGroup<Label: View, Content: View>: View {
     var count: Int?
     @ViewBuilder var label: Label
@@ -29,16 +28,14 @@ struct LibraryGroup<Label: View, Content: View>: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.tight) {
-            HStack(spacing: Spacing.glyph) {
-                label.foregroundStyle(palette.ink2)
-                if let count { Text(verbatim: "\(count)").monospacedDigit().foregroundStyle(palette.ink3) }
+        VStack(alignment: .leading, spacing: Spacing.group) {
+            HStack(alignment: .firstTextBaseline, spacing: Spacing.glyph) {
+                label.font(Typography.sectionTitle).foregroundStyle(palette.ink)
+                if let count { Text(verbatim: "\(count)").font(Typography.sectionCount).foregroundStyle(palette.ink3) }
             }
-            .font(Typography.label)
-            .padding(.horizontal, Spacing.inset)
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isHeader)
-            VStack(spacing: 0) { content }
+            content
         }
     }
 }
@@ -61,9 +58,9 @@ struct TidyCallout: View {
             }
             TidyFacts(tidies: tidies, library: library)
         }
-        .padding(.leading, Spacing.inset).padding(.trailing, Spacing.group).padding(.vertical, Spacing.group)
+        .padding(.leading, CardFaceMetrics.padding).padding(.trailing, Spacing.group).padding(.vertical, Spacing.group)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(palette.bubble, in: .rect(cornerRadius: LibraryLayout.radius))
+        .background(palette.bubble, in: .rect(cornerRadius: Radius.card))
     }
 
     private func run() {
@@ -158,119 +155,142 @@ struct TidyConsequence: View {
     }
 }
 
+/// 各份正文读同步来的那一条（`LibraryFileText`），对上快照的哈希才画摘要，不另存一份预览。
 struct InstructionSection: View {
     let library: AgentLibrary
     @Environment(Workspace.self) private var workspace
+    @Environment(\.palette) private var palette
+    @State private var texts: [String: String]?
 
     var body: some View {
         let projects = library.instructions.filter { if case .project = $0.kind { true } else { false } }
         let own = library.instructions.filter { if case .agent = $0.kind { true } else { $0.kind == .piSystem } }
         VStack(alignment: .leading, spacing: LibraryLayout.gap) {
             TidySlot(library: library, rules: true)
-            if let global = library.instruction(.global) { GlobalRule(library: library, instruction: global) }
+            if let global = library.instruction(.global) { GlobalRule(library: library, instruction: global, text: text(of: global)) }
             if !own.isEmpty {
-                LibraryGroup { Text("各家自己的") } content: { ForEach(own) { row($0) } }
+                LibraryGroup { Text("各家自己的") } content: { LibraryWall { ForEach(own) { card($0) } } }
             }
             if !projects.isEmpty {
-                LibraryGroup { Text("项目") } content: { ForEach(projects) { row($0) } }
+                LibraryGroup { Text("项目") } content: { LibraryWall { ForEach(projects) { card($0) } } }
+            }
+        }
+        .observingLibraryTexts(library.instructions.map(\.path), in: library, into: $texts)
+    }
+
+    /// 还没到（快照先到了）与还没有这个文件都是 nil。
+    private func text(of instruction: LibraryInstruction) -> String? {
+        AgentLibrary.arrived(instruction.path, hash: instruction.hash, in: texts) ?? nil
+    }
+
+    private func card(_ instruction: LibraryInstruction) -> some View {
+        let summary = text(of: instruction).map(CardText.init)
+        return LibraryCard(
+            title: name(instruction.kind), dim: instruction.hash == nil,
+            preview: instruction.hash == nil ? String(localized: "还没有") : summary.map { $0.preview.isEmpty ? $0.title : $0.preview } ?? ""
+        ) {
+            workspace.openLibrary(.instruction(instruction.kind))
+        } lead: {
+            InstructionIcon(kind: instruction.kind)
+        } meta: {
+            if instruction.hash != nil {
+                HStack(spacing: Spacing.item) {
+                    Text(verbatim: Self.fileName(instruction)).lineLimit(1).truncationMode(.middle)
+                    Spacer(minLength: 0)
+                    if case .project = instruction.kind {
+                        let writers = library.merge(into: instruction.kind)?.writers ?? []
+                        let unseen = library.unseen(instruction)
+                        UnseenMarks(agents: library.agents, unseen: library.agents.filter { unseen.contains($0) || writers.contains($0) })
+                    }
+                }
             }
         }
     }
 
-    private func row(_ instruction: LibraryInstruction) -> some View {
-        Button { workspace.openLibrary(.instruction(instruction.kind)) } label: {
-            LinkRow(title: Text(verbatim: Self.name(instruction.kind, in: workspace)), value: Self.fileName(instruction.kind), chevron: LibraryLayout.chevron) {
-                InstructionIcon(kind: instruction.kind)
-            } trailing: {
-                InstructionTrailing(library: library, instruction: instruction)
-            }
-        }
-        .buttonStyle(.row)
-    }
-
-    /// 各家自己那份的文件名：Mac 写在行尾；手机一行放不下两样，只写名字（文件名在文件页页头）。
-    private static func name(_ kind: LibraryInstruction.Kind, in workspace: Workspace) -> String {
+    /// 各家自己那份的文件名在卡的脚注里，标题不带。
+    private func name(_ kind: LibraryInstruction.Kind) -> String {
         if case .agent(let agent, _) = kind { String(localized: "\(agent.name) 的全局规则") } else { workspace.instructionName(kind) }
     }
 
-    private static func fileName(_ kind: LibraryInstruction.Kind) -> Text? {
-        #if os(macOS)
-        if case .agent(_, let file) = kind { return Text(verbatim: file) }
-        #endif
-        return nil
+    private static func fileName(_ instruction: LibraryInstruction) -> String {
+        if case .agent(_, let file) = instruction.kind { file } else { URL(filePath: instruction.path).lastPathComponent }
     }
 }
 
-/// 这一页的焦点：各家共读的那一份。大标题下写谁在读、放在哪；那张纸就是文件本身的开头，往下渐隐（点开是全文）。
-/// 有哪家另写了一份、内容不一样时，纸底一行说出来（点开就在文件页顶上合并，`MergeBar`）。
-/// 正文读同步来的那一条（`LibraryFileText`），不另存一份预览。
+/// 这一页的焦点：各家共读的那一份，墙上面通栏的一张。标题旁画谁在读，正文开头往下渐隐（点开是全文），脚注写谁在读、放在哪；
+/// 有哪家另写了一份、内容不一样时脚注下多一行（点开就在文件页顶上合并，`MergeBar`）。
 private struct GlobalRule: View {
     let library: AgentLibrary
     let instruction: LibraryInstruction
+    let text: String?
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
-    @State private var texts: [String: String]?
 
     var body: some View {
         let writers = library.merge(into: .global)?.writers ?? []
         let reading = instruction.hash == nil ? [] : library.agents.filter { instruction.readers.contains($0) && !writers.contains($0) }
-        VStack(alignment: .leading, spacing: Spacing.group) {
-            VStack(alignment: .leading, spacing: Spacing.tight) {
+        Button { workspace.openLibrary(.instruction(.global)) } label: {
+            VStack(alignment: .leading, spacing: Spacing.group) {
                 HStack(alignment: .firstTextBaseline, spacing: Spacing.item) {
-                    Text("全局规则").font(Typography.heading).foregroundStyle(palette.ink)
+                    Text("全局规则").font(Typography.title).foregroundStyle(palette.ink)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .accessibilityAddTraits(.isHeader)
                     if instruction.hash != nil { ReaderMarks(agents: library.agents, reading: reading) }
                 }
-                Text(verbatim: Dotted(Self.readers(reading), library.shown(instruction.path)).visible)
-                    .font(Typography.meta).foregroundStyle(palette.ink2).lineLimit(1).truncationMode(.middle)
-            }
-            .padding(.horizontal, Spacing.inset)
-            Button { workspace.openLibrary(.instruction(.global)) } label: {
-                VStack(alignment: .leading, spacing: Spacing.group) {
-                    if instruction.hash == nil {
-                        Text("还没有，点开来写").font(Typography.secondary).foregroundStyle(palette.ink3)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    } else {
-                        Text(opening)
-                            .font(Typography.secondary).foregroundStyle(palette.ink2)
-                            .lineLimit(Self.lines, reservesSpace: true).lineSpacing(Typography.noteLineSpacing)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .mask(LinearGradient(stops: [.init(color: .black, location: 0.6), .init(color: .clear, location: 1)], startPoint: .top, endPoint: .bottom))
-                    }
+                if instruction.hash == nil {
+                    Text("还没有，点开来写").font(Typography.body).foregroundStyle(palette.ink3)
+                } else {
+                    Text(opening)
+                        .font(Typography.body).foregroundStyle(palette.ink2)
+                        .lineLimit(Self.lines, reservesSpace: true).lineSpacing(Typography.noteLineSpacing)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .mask(LinearGradient(stops: [.init(color: .black, location: 0.6), .init(color: .clear, location: 1)], startPoint: .top, endPoint: .bottom))
+                }
+                VStack(alignment: .leading, spacing: Spacing.tight) {
+                    Text(verbatim: Dotted(Self.readers(reading), library.shown(instruction.path)).visible)
+                        .foregroundStyle(palette.ink3).lineLimit(1).truncationMode(.middle)
                     if !writers.isEmpty {
                         HStack(spacing: Spacing.glyph) {
-                            ForEach(writers, id: \.self) { $0.mark.image.foregroundStyle(palette.ink2) }
-                            Text(verbatim: String(localized: "\(writers.map(\.name).formatted(.list(type: .and))) 另写了一份，点开合并"))
-                                .foregroundStyle(palette.ink).lineLimit(2)
+                            ForEach(writers, id: \.self) { $0.mark.image }
+                            Text(verbatim: String(localized: "\(writers.map(\.name).formatted(.list(type: .and))) 另写了一份，点开合并")).lineLimit(2)
                         }
-                        .font(Typography.secondary)
+                        .foregroundStyle(palette.ink)
                     }
                 }
-                .padding(.horizontal, Spacing.inset).padding(.vertical, Spacing.block)
-                .contentShape(.rect)
+                .font(Typography.meta)
             }
-            .buttonStyle(.row)
-            .rowPaper(cornerRadius: LibraryLayout.radius)
+            .multilineTextAlignment(.leading)
+            .padding(Self.padding)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .paper()
+            .contentShape(.rect(cornerRadius: Radius.card))
         }
-        .observingLibraryTexts([instruction.path], in: library, into: $texts)
+        .cardButton()
+        .accessibilityElement(children: .combine)
     }
 
     /// 渐隐只吃掉最后两行：四行以内的短文件看得全。
     private static let lines = 6
+    #if os(macOS)
+    private static let padding = Spacing.panel
+    #else
+    private static let padding = Spacing.block
+    #endif
 
     private static func readers(_ reading: [AgentKind]) -> String? {
         reading.isEmpty ? nil : String(localized: "\(reading.map(\.name).formatted(.list(type: .and))) 在读")
     }
 
     private var opening: AttributedString {
-        guard let arrived = AgentLibrary.arrived(instruction.path, hash: instruction.hash, in: texts), let text = arrived else { return "" }
+        guard let text else { return "" }
         var lines: [AttributedString] = []
         func add(_ line: String, bold: Bool = false) {
             let plain = MarkdownBlock.plainInline(line).trimmingCharacters(in: .whitespaces)
             guard !plain.isEmpty, lines.count < Self.lines else { return }
             var shown = AttributedString(plain)
-            if bold { shown.inlinePresentationIntent = .stronglyEmphasized }
+            if bold {
+                shown.inlinePresentationIntent = .stronglyEmphasized
+                shown.foregroundColor = palette.ink
+            }
             lines.append(shown)
         }
         _ = MarkdownBlock.parse(text) { block in
@@ -305,23 +325,6 @@ private struct InstructionIcon: View {
     #if os(macOS)
     private static let glyph: CGFloat = 13
     #else
-    private static let glyph: CGFloat = 16
+    private static let glyph: CGFloat = 12
     #endif
-}
-
-/// 各家自己那份（`.agent`、Pi 的系统提示）本来就只有它读，不画别家读不到；项目规则画读不到的那几家。
-private struct InstructionTrailing: View {
-    let library: AgentLibrary
-    let instruction: LibraryInstruction
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        if instruction.hash == nil {
-            Text("还没有").font(Typography.meta).foregroundStyle(palette.ink3).fixedSize()
-        } else if case .project = instruction.kind {
-            let writers = library.merge(into: instruction.kind)?.writers ?? []
-            let unseen = library.unseen(instruction)
-            UnseenMarks(agents: library.agents, unseen: library.agents.filter { unseen.contains($0) || writers.contains($0) })
-        }
-    }
 }

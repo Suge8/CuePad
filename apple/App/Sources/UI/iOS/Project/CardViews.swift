@@ -14,28 +14,21 @@ struct CardTileView: View {
     var body: some View {
         let card = entry.card, text = entry.text
         NavigationLink(value: Route.card(card.id)) {
-            VStack(alignment: .leading, spacing: Spacing.tight) {
+            VStack(alignment: .leading, spacing: CardFaceMetrics.spacing) {
                 if let image = text.images.first {
                     Thumbnail(hash: image, height: 96, cornerRadius: Radius.block).padding(.bottom, Spacing.tight)
                 }
                 HStack(alignment: .firstTextBaseline, spacing: Spacing.tight) {
-                    Text(text.label)
-                        .font(Typography.secondary.weight(.semibold))
-                        .foregroundStyle(text.title.isEmpty ? palette.ink3 : palette.ink)
-                        .lineLimit(3)
+                    CardTitle(text: text.label, dim: text.title.isEmpty)
                     Spacer(minLength: 0)
                     AgentDot(card: card.id).padding(.vertical, -AgentDot.overhang).padding(.trailing, -Self.dotTuck)
                 }
-                if !text.preview.isEmpty {
-                    Text(VariableText.styled(text.preview, palette))
-                        .font(Typography.meta).foregroundStyle(palette.ink2)
-                        .lineLimit(text.images.isEmpty ? CardText.previewLines : 2)
-                }
+                if !text.preview.isEmpty { CardPreview(text: text.preview, lines: text.images.isEmpty ? CardText.previewLines : 2) }
                 CardMeta(card: card, text: text, lastTarget: lastTarget, floated: floated)
                     .padding(.top, Spacing.tight)
             }
             .multilineTextAlignment(.leading)
-            .padding(Spacing.group)
+            .padding(CardFaceMetrics.padding)
             .frame(maxWidth: .infinity, alignment: .leading)
             .paper()
             .contentShape(.rect(cornerRadius: Radius.card))

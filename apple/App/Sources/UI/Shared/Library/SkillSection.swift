@@ -24,29 +24,32 @@ struct SkillSection: View {
             }
             ForEach(groups.projects) { group in
                 LibraryGroup(count: group.skills.count) {
-                    ProjectGlyph(project: workspace.catalog?.project(group.project), size: Self.glyph)
-                    Text(verbatim: workspace.projectName(group.project))
+                    HStack(spacing: Spacing.glyph) {
+                        ProjectGlyph(project: workspace.catalog?.project(group.project), size: Self.glyph)
+                        Text(verbatim: workspace.projectName(group.project))
+                    }
                 } content: {
                     rows(group.skills)
                 }
             }
             if let note = library.selfManagedNote {
-                Text(verbatim: note).font(Typography.meta).foregroundStyle(palette.ink3).padding(.horizontal, Spacing.inset)
+                Text(verbatim: note).font(Typography.meta).foregroundStyle(palette.ink3)
             }
         }
     }
 
     #if os(macOS)
-    private static let glyph: CGFloat = 12
-    #else
     private static let glyph: CGFloat = 13
+    #else
+    private static let glyph: CGFloat = 14
     #endif
 
     private func rows(_ skills: [LibrarySkill]) -> some View {
-        ForEach(skills) { SkillRow(skill: $0, library: library) }
+        VStack(spacing: 0) { ForEach(skills) { SkillRow(skill: $0, library: library) } }
     }
 }
 
+/// 几十上百个技能不逐个套卡：名字与一句说明排成清单，直接在桌面上（行底向两边让出，字与分组标题对齐，`RowStyle`）。
 private struct SkillRow: View {
     let skill: LibrarySkill
     let library: AgentLibrary
@@ -81,7 +84,6 @@ private struct SkillRow: View {
             #endif
             UnseenMarks(agents: library.agents, unseen: skill.unseenBy)
         }
-        .padding(.horizontal, Spacing.inset)
         .padding(.vertical, Self.vertical)
         .frame(minHeight: Self.height)
         .contentShape(.rect)
@@ -113,7 +115,7 @@ private struct SkillRow: View {
     private static let descriptionFont = Typography.meta
     #if os(macOS)
     private static let markFont = Glyph.small
-    private static let nameWidth: CGFloat = 188
+    private static let nameWidth: CGFloat = 220
     private static let markWidth: CGFloat = 16
     private static let vertical: CGFloat = 0
     private static let height: CGFloat = 36

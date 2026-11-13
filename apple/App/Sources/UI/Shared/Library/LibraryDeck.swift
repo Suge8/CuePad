@@ -33,7 +33,6 @@ private struct LibraryPaneScroll<Content: View>: View {
     var body: some View {
         ScrollView {
             content
-                .frame(maxWidth: LibraryLayout.column)
                 .padding(.horizontal, LibraryLayout.margin)
                 .padding(.bottom, LibraryLayout.bottom)
                 .frame(maxWidth: .infinity)
