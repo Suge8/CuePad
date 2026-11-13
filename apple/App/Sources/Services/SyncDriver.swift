@@ -2,7 +2,7 @@ import CueStore
 import CueSync
 import Foundation
 
-/// 同步的状态（通不通、文件在路上、冲突）、立即同步与按节奏的拉取。拉不拉、多快由 `AppServices.pollingCadence` 定（`Hooks.cadence`）。
+/// 同步的状态（通不通、文件在路上、冲突）、立即同步与按节奏的拉取。拉不拉、多快由建它时给的 `cadence` 定（`AppServices.pollingCadence`）。
 @Observable
 final class SyncDriver {
     private(set) var state: SyncState
@@ -13,14 +13,6 @@ final class SyncDriver {
     private var syncNowWaits = 0
     var isSyncingNow: Bool { syncNowWaits > 0 }
 
-    /// 组合根建完自己后接上（`AppServices.init`）：节奏、状态变化要做的跨服务的事、出错报告都在它那里。
-    struct Hooks {
-        var cadence: @MainActor () -> SyncPoller.Cadence?
-        var statusChanged: @MainActor (SyncStatus) -> Void
-        var report: @MainActor (AppServices.StartupIssue) -> Void
-    }
-
-    @ObservationIgnored var hooks = Hooks(cadence: { nil }, statusChanged: { _ in }, report: { _ in })
     @ObservationIgnored let engine: (any SyncControlling)?
     @ObservationIgnored private let store: CueStore
     @ObservationIgnored private let timing: Timing
@@ -30,9 +22,20 @@ final class SyncDriver {
     /// iOS 整个进后台时取消、回前台再开。
     @ObservationIgnored private var polling: Task<Void, Never>?
     @ObservationIgnored private var connected = false
+    @ObservationIgnored private let cadence: @MainActor () -> SyncPoller.Cadence?
+    /// 通断变了要跟着做的、不归同步管的事（`AppServices.syncStatusChanged`）。
+    @ObservationIgnored private let statusChanged: @MainActor (SyncStatus) -> Void
+    @ObservationIgnored private let report: @MainActor (AppServices.StartupIssue) -> Void
 
-    init(engine: (any SyncControlling)?, status: SyncStatus, store: CueStore, timing: Timing, speechClock: SpeechClock, localHost: String?, tasks: Followers) {
+    init(
+        engine: (any SyncControlling)?, status: SyncStatus, store: CueStore, timing: Timing, speechClock: SpeechClock, localHost: String?, tasks: Followers,
+        cadence: @escaping @MainActor () -> SyncPoller.Cadence?, statusChanged: @escaping @MainActor (SyncStatus) -> Void,
+        report: @escaping @MainActor (AppServices.StartupIssue) -> Void
+    ) {
         self.engine = engine
+        self.cadence = cadence
+        self.statusChanged = statusChanged
+        self.report = report
         state = SyncState(status: status, issues: [])
         self.store = store
         self.timing = timing
@@ -55,7 +58,7 @@ final class SyncDriver {
             do {
                 for try await conflicts in self.store.observe({ try $0.conflicts() }) { self.conflicts = conflicts }
             } catch where !Task.isCancelled {
-                self.hooks.report(.syncUnavailable(String(localized: "冲突列表读取失败：\(String(describing: error))")))
+                self.report(.syncUnavailable(String(localized: "冲突列表读取失败：\(String(describing: error))")))
             } catch {}
         }
         startPolling()
@@ -73,7 +76,7 @@ final class SyncDriver {
     /// 同步从不通变通时立即同步一次：断网时没传上去的记录当场传出、在等的回执当场拉回，不等发送者的退避。
     private func apply(_ new: SyncState) {
         let recovered = new.status.reachesMac && speechClock.moment.reachableSince == nil
-        if new.status != state.status { hooks.statusChanged(new.status) }
+        if new.status != state.status { statusChanged(new.status) }
         state = new
         speechClock.setReachable(new.status.reachesMac)
         if recovered { Task { await syncNow() } }
@@ -115,7 +118,7 @@ final class SyncDriver {
                 guard let self else { return }
                 // 依赖的状态变了节奏不一定变（如 Cue 在想与空闲之间来回）：同样的节奏不再给，免得拉取循环每次都从头立即拉
                 var last: Polling?
-                for await polling in Observations({ Polling(cadence: self.hooks.cadence(), since: self.speechClock.moment.reachableSince) })
+                for await polling in Observations({ Polling(cadence: self.cadence(), since: self.speechClock.moment.reachableSince) })
                 where last != polling && (last?.cadence != polling.cadence || polling.since != nil) {
                     last = polling
                     continuation.yield(polling.cadence)

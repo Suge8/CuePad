@@ -44,13 +44,18 @@ final class AppServices {
     @ObservationIgnored let relay: Relay?
     @ObservationIgnored let sendOrder = SendOrder()
     @ObservationIgnored lazy var voice = VoiceService(services: self, signaling: relay)
-    let syncing: SyncDriver
-    /// 发布排在任务里，可能晚于服务本身：服务没了就不再发。
-    @ObservationIgnored lazy var snapshots = SnapshotPublisher(store: store, directory: location.snapshotsDirectory) { [weak self] digest, first, resend in
+    /// 跟着同步、快照、收件做的跨服务的事经弱引用回到这里：服务没了就不再做（快照的发布排在任务里，可能晚于服务本身）。
+    @ObservationIgnored private(set) lazy var syncing = SyncDriver(
+        engine: sync, status: syncStart, store: store, timing: timing, speechClock: speechClock, localHost: speechClock.moment.localHost, tasks: tasks,
+        cadence: { [weak self] in self?.pollingCadence },
+        statusChanged: { [weak self] in self?.syncStatusChanged(to: $0) },
+        report: { [weak self] in self?.reportIssue($0) })
+    @ObservationIgnored private let syncStart: SyncStatus
+    @ObservationIgnored private(set) lazy var snapshots = SnapshotPublisher(store: store, directory: location.snapshotsDirectory) { [weak self] digest, first, resend in
         guard let self else { throw CancellationError() }
         return try await present(digest, first: first, resend: resend)
     }
-    @ObservationIgnored lazy var captures = CaptureIngest(store: store, directory: location.captureDirectory) { [weak self] in self?.reportIssue($0) }
+    @ObservationIgnored private(set) lazy var captures = CaptureIngest(store: store, directory: location.captureDirectory) { [weak self] in self?.reportIssue($0) }
     #if os(iOS)
     /// 每个窗口自己决定弹不弹。
     private(set) var sessionAlert: SessionAlert?
@@ -142,7 +147,7 @@ final class AppServices {
         speechClock = SpeechClock(localHost: mac.hostID, reachable: status.reachesMac, alwaysReachable: DebugHooks.preset.alwaysReachable, timing: mac.timing)
         let tasks = Followers()
         self.tasks = tasks
-        syncing = SyncDriver(engine: engine, status: status, store: store, timing: mac.timing, speechClock: speechClock, localHost: mac.hostID, tasks: tasks)
+        syncStart = status
         liveSessions = try LiveSessions(store: store, endedOn: mac.hostID, at: speechClock.moment)
         cueFeed = CueFeed(store: store, widget: false)
         timing = mac.timing
@@ -169,7 +174,6 @@ final class AppServices {
         cue = CueService(
             recorder: stateRecorder, sync: self.sync, library: location.directory,
             piAgentDirectory: mac.paths.pi.agentDirectory, dependencies: mac.cue)
-        hookSync()
     }
     #else
     init(
@@ -186,7 +190,7 @@ final class AppServices {
         speechClock = SpeechClock(localHost: nil, reachable: status.reachesMac, alwaysReachable: DebugHooks.preset.alwaysReachable, timing: timing)
         let tasks = Followers()
         self.tasks = tasks
-        syncing = SyncDriver(engine: engine, status: status, store: store, timing: timing, speechClock: speechClock, localHost: nil, tasks: tasks)
+        syncStart = status
         liveSessions = try LiveSessions(store: store, endedOn: nil, at: speechClock.moment)
         cueFeed = CueFeed(store: store, widget: true)
         self.timing = timing
@@ -198,16 +202,8 @@ final class AppServices {
                 try self?.remoteActivityState()
             }
         }
-        hookSync()
     }
     #endif
-
-    private func hookSync() {
-        syncing.hooks = SyncDriver.Hooks(
-            cadence: { [weak self] in self?.pollingCadence },
-            statusChanged: { [weak self] in self?.syncStatusChanged(to: $0) },
-            report: { [weak self] in self?.reportIssue($0) })
-    }
 
     #if os(iOS)
     func post(_ alert: SessionAlert) { sessionAlert = alert }
