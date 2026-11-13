@@ -28,6 +28,7 @@ extension SyncCoordinator {
     guard canSync else { throw SyncPaused() }
     let pending: PendingSync, generation: Int?, excluded: Set<String>
     do {
+      try await dropSettledIssues()
       switch scope {
       case .pending(let inFlight):
         let since = drained
@@ -84,6 +85,20 @@ extension SyncCoordinator {
     // 构造这批时可能停下了（拉到过高的门槛、要你决定）：停下后不再交出新的一批
     guard canSync else { throw SyncPaused() }
     return batch
+  }
+
+  /// 上传问题只挂在仍待推送的记录上：从没收下过的记录被拒后本机删掉了，就没有要再传的，问题随之收起
+  /// （删除同步表的行会叫醒发送者，见 `CueStore.write`）。
+  private func dropSettledIssues() async throws {
+    let names = Set(facts.issues.compactMap { $0.kind == .upload ? $0.recordName : nil })
+    guard !names.isEmpty else { return }
+    let pending = try await store.pendingSync(among: names)
+    let settled = names.subtracting(pending.saves.map(\.id) + pending.deletes)
+    guard !settled.isEmpty else { return }
+    var next = facts
+    next.issues.removeAll { $0.kind == .upload && $0.recordName.map(settled.contains) == true }
+    if next.status == .failed, !next.issues.contains(where: \.isFailure) { next.status = .idle }
+    facts = next
   }
 
   /// 临交出前核对需要保留发送权的记录，过时版本仍由发送者沿原调度重读，不视为服务器收下。

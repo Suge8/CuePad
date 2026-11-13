@@ -165,10 +165,12 @@ public actor CueStore {
       }
       for table in tables { ChangeNotification.post(notificationNames[table]!) }
     }
-    if !tables.isDisjoint(with: Table.synced) {
-      // 只有让记录变成待推送的提交才算（记账、应用远端版本这类不会）；算不出增量时照算
+    if !tables.isDisjoint(with: Table.synced) || tables.contains(.syncRecords) {
+      // 让记录变成待推送的提交才算（只改同步元数据的也可能：补记服务器收下过一条本机已删的，删除这才待推送）；
+      // 删过同步表的行也算：从没收下过的记录删掉就不再待推送，同步层据此收起它的上传问题。算不出增量时照算
       let delta = try? pendingSync(in: changes)
-      if delta.map({ !$0.saves.isEmpty || !$0.deletes.isEmpty }) ?? true { syncChanged(delta, in: tables) }
+      let deleted = !changes.deletedFrom.isDisjoint(with: Table.synced.map(\.rawValue))
+      if delta.map({ !$0.saves.isEmpty || !$0.deletes.isEmpty || deleted }) ?? true { syncChanged(delta, in: tables) }
     }
     return result
   }
@@ -180,7 +182,7 @@ public actor CueStore {
     for subscriber in syncSubscribers.values { subscriber.yield(tables) }
   }
 
-  /// 同步订阅：本连接的提交让记录变成待推送，或别的进程提交过（范围未知），就给出这次碰过的表；待推送是什么读 `pendingSync()`。
+  /// 同步订阅：本连接的提交让记录变成待推送或删过同步表的行，或别的进程提交过（范围未知），就给出这次碰过的表；待推送是什么读 `pendingSync()`。
   /// 每次提交一个、不合并（合并就丢了哪次碰过哪张表）。订阅在返回前已生效。
   package func syncChanges() -> AsyncStream<Set<Table>> {
     let (stream, continuation) = AsyncStream<Set<Table>>.makeStream()
