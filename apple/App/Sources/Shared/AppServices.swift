@@ -106,6 +106,7 @@ final class AppServices {
     @ObservationIgnored let pasteboard: NSPasteboard
     @ObservationIgnored let historyStore: HistoryPersistence
     @ObservationIgnored let hotkeyBackend: any HotkeyBackend
+    @ObservationIgnored var hotkeys: [GlobalHotkey] = []
     @ObservationIgnored let hostID: String
     @ObservationIgnored let workspaces: Workspaces
     @ObservationIgnored let wakeNotifications: NotificationCenter
@@ -123,7 +124,7 @@ final class AppServices {
         reportIssue: { [weak self] message in self?.reportIssue(.syncUnavailable(message)) })
 
     @ObservationIgnored lazy var hotkey = GlobalHotkey(
-        label: String(localized: "显示或隐藏 CuePad"), key: AppSettings.Key.globalShortcut, defaultAccelerator: "Alt+Space", defaults: settings.defaults,
+        label: String(localized: "显示或隐藏 CuePad"), key: AppSettings.Key.globalShortcut, defaultAccelerator: "Alt+Shift+Space", defaults: settings.defaults,
         backend: hotkeyBackend
     ) { [weak self] in self?.windowShell?.toggleFromHotkey() }
     #endif

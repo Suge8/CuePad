@@ -120,7 +120,9 @@ struct ComposerField: NSViewRepresentable {
                 switch selector {
                 case #selector(NSResponder.moveUp(_:)): .up
                 case #selector(NSResponder.moveDown(_:)): .down
-                case #selector(NSResponder.insertNewline(_:)), #selector(NSResponder.insertTab(_:)): .accept
+                case #selector(NSResponder.insertNewline(_:)): .accept
+                case #selector(NSResponder.insertTab(_:)): .next
+                case #selector(NSResponder.insertBacktab(_:)): .previous
                 case #selector(NSResponder.cancelOperation(_:)): .dismiss
                 default: nil
                 }
