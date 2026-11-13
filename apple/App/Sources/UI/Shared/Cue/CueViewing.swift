@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// 有人在看 Cue 页的规则（算不算在看、读没读）只在这里：这一页在屏上（Mac 页栈里的当前页、人看得到主窗口 `AppServices.seesMainWindow`；手机上没被推进的页盖住、App 在前台）。
-/// 在看的期间算一个在看的（`AppServices.cueViewers`，Cue 的提示据此不发，手机按节奏拉），并读新消息：哪几条算新的只在 Kit 的 `CueStore.cueUnread`，读到哪只记在同步的 `CueRead`，换一台设备接着读。
+/// 有人在看 Cue 页的规则（算不算在看、读没读）只在这里：这一页在屏上（Mac 页栈里的当前页、人在跟前看得到主窗口 `ViewerKeeper.away`；手机上没被推进的页盖住、App 在前台）。
+/// 在看的期间这一处算一个在看的（`ViewerKeeper.showCue`，Cue 的提示据此不发，手机按节奏拉），并读新消息：哪几条算新的只在 Kit 的 `CueStore.cueUnread`，读到哪只记在同步的 `CueRead`，换一台设备接着读。
 struct CueViewing: ViewModifier {
     let thread: CueThread?
     let catchingUp: Bool
@@ -15,10 +15,10 @@ struct CueViewing: ViewModifier {
     private var onScreen: Bool { phase == .active }
     #else
     /// 脚本起的验收实例窗口排在最后，当它露着。
-    private var onScreen: Bool { services.seesMainWindow || DebugHooks.scripted }
+    private var onScreen: Bool { services.viewer.away.isEmpty || DebugHooks.scripted }
     #endif
     @State private var appeared = false
-    @State private var counted = false
+    @State private var token = UUID()
 
     /// 末尾在屏上停这么久才算读到：打开时先停在最新处、跳到第一条新消息之前的那一下，与一路甩过去的都不算。
     static let dwell: Duration = .seconds(1)
@@ -32,10 +32,10 @@ struct CueViewing: ViewModifier {
             // 页拆掉时 onChange 不再来：在这里收回
             .onDisappear {
                 appeared = false
-                count(false)
+                services.viewer.showCue(false, by: token)
             }
             .onChange(of: watching, initial: true) { _, on in
-                count(on)
+                services.viewer.showCue(on, by: token)
                 guard on else { return }
                 follow.oweLanding()
                 land()
@@ -47,13 +47,6 @@ struct CueViewing: ViewModifier {
     private struct Reading: Equatable {
         let seen: Set<UUID>
         let counts: Bool
-    }
-
-    private func count(_ on: Bool) {
-        guard on != counted else { return }
-        counted = on
-        services.cueViewers += on ? 1 : -1
-        services.viewer?.showCue(services.cueViewers > 0)
     }
 
     private func land() {

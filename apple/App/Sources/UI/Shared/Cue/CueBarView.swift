@@ -183,7 +183,7 @@ struct CueStatusLine: View {
         .font(font)
         .transition(.opacity)
         .animation(Motion.fade, value: cue.now)
-        .pending(services.isCatchingUp(on: cue.hostID), shown: $syncing)
+        .pending(services.syncing.isCatchingUp(on: cue.hostID), shown: $syncing)
     }
 
 

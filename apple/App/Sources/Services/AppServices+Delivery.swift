@@ -57,7 +57,7 @@ extension AppServices {
     /// 手里那条"离开"可能已经过时（它回来了，本机刚回前台还没拉到）：说它没开之前先拉一次再看。拉不通就是同步不通，说不准，照常排着。
     func requireAwake(_ host: String) async throws {
         guard try await store.macKnownOff(host, at: speech) != nil else { return }
-        await syncNow()
+        await syncing.syncNow()
         if let mac = try await store.macKnownOff(host, at: speech) { throw SendError.macOff(mac) }
     }
 

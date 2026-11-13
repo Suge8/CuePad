@@ -48,11 +48,11 @@ struct FileSyncTests {
         #if os(macOS)
         try await eventually("Mac 大文件也自动取") { files.fileURL(for: bigKey) != nil }
         #else
-        try await eventually("自动取的都结束了") { services.fileTransfers.isEmpty }
+        try await eventually("自动取的都结束了") { services.syncing.fileTransfers.isEmpty }
         #expect(files.fileURL(for: bigKey) == nil)
         #endif
 
-        let url = try await services.fetchFile(bigKey)
+        let url = try await services.syncing.fetchFile(bigKey)
         #expect(try Data(contentsOf: url) == big)
         #expect(try Data(contentsOf: try #require(files.fileURL(for: smallKey))) == small)
     }

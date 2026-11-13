@@ -32,8 +32,8 @@ extension AgentLibraryTests {
         // 没有门铃：两边按节奏拉取的那一下由这里来
         let pulling = Task {
             while !Task.isCancelled {
-                await macApp.services.syncNow()
-                await phone.services.syncNow()
+                await macApp.services.syncing.syncNow()
+                await phone.services.syncing.syncNow()
                 try? await Task.sleep(for: .milliseconds(20))
             }
         }

@@ -17,7 +17,7 @@ extension AppServices {
             result = .failed
         }
         do {
-            try await writeSnapshots()
+            try await snapshots.writeSnapshots()
         } catch {
             reportIssue(.widgetDataUnavailable("\(error)"))
             return .failed

@@ -29,11 +29,11 @@ extension AppServices {
     /// App 整个进后台时在后台任务里调用（iOS 最后一个窗口退到后台，`BackgroundWork`；只是一个窗口退下、别的还在前台的不调）。
     /// 本地落盘后先刷新快照，不让网络占完后台时间。通话在后台照常进行，中转为它的信令留着，通话结束时再来一遍（`VoiceService.finish`）。
     func prepareForBackground() async {
-        stopPolling()
+        syncing.stopPolling()
         if !voice.isLive { relay?.pause() }
         for flush in backgroundFlushes.values { await flush() }
         await resendSnapshots()
-        await viewer?.settle()
+        await viewer.settle()
         await sync?.push()
         // 收下的那一批的门铃由跟随者在 push 返回前排上（同一个主线程队列，先到先跑），这里等它发完；其间回了前台就不断
         await relay?.settle()
@@ -59,7 +59,7 @@ extension AppServices {
     @discardableResult
     func cancelBackgroundWork() -> Task<Void, Never>? {
         voice.cancel()
-        stopPolling()
+        syncing.stopPolling()
         return tasks.cancelAll()
     }
 }

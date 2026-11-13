@@ -205,7 +205,7 @@ final class TestApp {
     /// （`services.start()` 或 `startSync()`）：替身只有一条状态流，起两遍就是两处在读。
     func syncs(reconciled: Bool = true) async throws {
         sync.emit(SyncState(status: .idle, issues: [], reconciled: reconciled))
-        try await eventually("对过一遍：\(reconciled)") { services.knowsSyncedFacts == reconciled }
+        try await eventually("对过一遍：\(reconciled)") { services.syncing.knowsSyncedFacts == reconciled }
     }
 
     var databaseURL: URL { isolatedLocation.databaseURL }

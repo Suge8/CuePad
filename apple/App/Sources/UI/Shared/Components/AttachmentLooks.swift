@@ -5,21 +5,21 @@ import SwiftUI
 @MainActor
 enum AttachmentLooks {
     static func awayLine(_ key: String, _ services: AppServices) -> String {
-        FileStatus.line(name: "", file: nil, transfer: services.fileTransfers[key]).detail
+        FileStatus.line(name: "", file: nil, transfer: services.syncing.fileTransfers[key]).detail
     }
 
     /// 返回跟着传输重画的任务，编辑器拆掉时由宿主取消。
     static func follow(_ services: AppServices, in view: CueTextView) -> Task<Void, Never> {
         view.fileIcon = { Icon.file(named: $0).platformImage }
-        view.fileStatus = { [services] key, name, file in FileStatus.line(name: name, file: file, transfer: services.fileTransfers[key]) }
+        view.fileStatus = { [services] key, name, file in FileStatus.line(name: name, file: file, transfer: services.syncing.fileTransfers[key]) }
         return Task { [weak view] in
-            for await _ in Observations({ services.fileTransfers }) { view?.refreshAttachments() }
+            for await _ in Observations({ services.syncing.fileTransfers }) { view?.refreshAttachments() }
         }
     }
 }
 
 extension Workspace {
-    func fetchFile(_ key: String) { attempt { _ = try await self.services.fetchFile(key) } }
+    func fetchFile(_ key: String) { attempt { _ = try await self.services.syncing.fetchFile(key) } }
 
     /// 挂着全屏页的页面给 `opener`（底栏对着这一页说）；没挂的小窗（菜单栏、Cue 条）在主窗口里打开（`preview`）。`files` 空的是只有它自己。
     func openAttachment(_ file: DraftFile, among files: [DraftFile] = [], group: String, with opener: PreviewOpener?) {
@@ -71,7 +71,7 @@ private struct Arrival: ViewModifier {
     }
 
     func body(content: Content) -> some View {
-        content.task(id: Run(key: key, moving: services.fileTransfers[key] != nil)) {
+        content.task(id: Run(key: key, moving: services.syncing.fileTransfers[key] != nil)) {
             place = await Self.place(of: key, in: services.store.files)
         }
     }

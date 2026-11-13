@@ -29,7 +29,7 @@ class MainShellWindow: NSWindow, NSWindowDelegate {
     /// 人回来的第一下输入（或解锁）就挂回，那时窗口多半还在锁屏或别的窗口后面。脚本起的实例窗口排在最后，不摘（同 `CueViewing`）。
     func parkWhileUnseen(_ services: AppServices) async {
         guard !DebugHooks.scripted else { return }
-        for await unseen in Observations({ !services.mainWindowExposed && services.away }) where isVisible {
+        for await unseen in Observations({ services.viewer.away.contains(.covered) && services.viewer.away.count > 1 }) where isVisible {
             if unseen { park() } else { unpark() }
         }
     }

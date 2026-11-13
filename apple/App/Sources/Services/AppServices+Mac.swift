@@ -19,7 +19,7 @@ extension AppServices {
         } catch {
             reportIssue(.bridgeUnavailable("\(error)"))
         }
-        follow { await self.historyStore.keepPruned() }
+        follow { [timing] in await self.historyStore.keepPruned(timing: timing) }
         startStrayFileCleanup()
         // 启动对账在 `init` 里已做完（`launch`）：重新接上的会话沿用对账前的起点（`Bridge.carryOver`）
         startRuntimes()
@@ -38,7 +38,7 @@ extension AppServices {
             try await presence.keep(notifications: wakeNotifications)
         }
         follow(reporting: { .syncUnavailable(String(localized: "这台 Mac 开着的页没能写下：\(String(describing: $0))")) }) { [viewer, wakeNotifications] in
-            try await viewer?.keep(notifications: wakeNotifications)
+            try await viewer.keep(notifications: wakeNotifications)
         }
         follow(reporting: { .syncUnavailable(String(localized: "这台 Mac 上能用的 Agent 没能写下：\(String(describing: $0))")) }) { [macAgents, wakeNotifications] in
             try await macAgents.keep(notifications: wakeNotifications)
@@ -78,7 +78,7 @@ extension AppServices {
     func startWakeSync() {
         let wakes = wakeNotifications.notifications(named: NSWorkspace.didWakeNotification)
         follow {
-            for await _ in wakes { await self.syncNow() }
+            for await _ in wakes { await self.syncing.syncNow() }
         }
     }
 
@@ -93,7 +93,7 @@ extension AppServices {
         hotkey.unregister()
         // 离线这一条一开始收尾就写、就传，不排在别的组件停下之后：前面的步骤耗尽上限时它也已写下；停同步前等它传完
         let signingOff = Task.detached { [presence] in try await presence.signOff() }
-        let leaving = Task.detached { [viewer] in try await viewer?.signOff() }
+        let leaving = Task.detached { [viewer] in try await viewer.signOff() }
         let halted = halt {
             _ = await signingOff.result
             _ = await leaving.result

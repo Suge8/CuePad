@@ -27,7 +27,7 @@ struct CaptureTests {
             files: [try shared(png, named: "截图.png"), try shared(pdf, named: "报价 [终版].pdf")])
         try CaptureQueue.enqueue(content, project: project.id, into: queue)
 
-        await services.drainCaptures()
+        await services.captures.drainCaptures()
 
         let cards = try await services.store.cards(in: project.id)
         #expect(cards.count == 1)
@@ -45,7 +45,7 @@ struct CaptureTests {
         try CaptureQueue.enqueue(ShareContent(text: "b"), project: gone.id, into: queue)
         try CaptureQueue.enqueue(ShareContent(text: "c"), project: UUID(), into: queue)
 
-        await services.drainCaptures()
+        await services.captures.drainCaptures()
 
         #expect(Set(try await services.store.cards(in: Project.defaultID).map(\.body)) == ["b", "c"])
     }
@@ -60,7 +60,7 @@ struct CaptureTests {
         defer { try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: unreadable.path) }
         try CaptureQueue.enqueue(ShareContent(text: "好的"), project: Project.defaultID, into: queue)
 
-        await services.drainCaptures()
+        await services.captures.drainCaptures()
 
         #expect(try await services.store.cards(in: Project.defaultID).map(\.body) == ["好的"])
         #expect(CaptureQueue.pending(in: queue).map(\.capture.text) == ["坏图"])
@@ -81,8 +81,8 @@ struct CaptureTests {
 
     @Test func 同一次分享并发入库与删除失败后重试都只出一张卡() async throws {
         try CaptureQueue.enqueue(ShareContent(text: "并发的一条"), project: Project.defaultID, into: queue)
-        async let first: Void = services.drainCaptures()
-        async let second: Void = services.drainCaptures()
+        async let first: Void = services.captures.drainCaptures()
+        async let second: Void = services.captures.drainCaptures()
         _ = await (first, second)
         #expect(try await bodies("并发的一条") == 1)
 
@@ -90,9 +90,9 @@ struct CaptureTests {
         let manifest = try #require(CaptureQueue.pending(in: queue).first).directory.appending(path: "capture.json")
         try FileManager.default.setAttributes([.immutable: true], ofItemAtPath: manifest.path)
         defer { try? FileManager.default.setAttributes([.immutable: false], ofItemAtPath: manifest.path) }
-        await services.drainCaptures()
+        await services.captures.drainCaptures()
         #expect(CaptureQueue.pending(in: queue).count == 1, "前提：条目没删掉")
-        await services.drainCaptures()
+        await services.captures.drainCaptures()
         #expect(try await bodies("删不掉的一条") == 1)
     }
 

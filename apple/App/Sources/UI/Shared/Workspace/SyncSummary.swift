@@ -123,7 +123,7 @@ struct ShownSync: Equatable {
 
     /// `lasting`：这一轮同步中已久过 `Pending.delay`。没久过的照旧说已同步：每传一句都要零点几秒，一闪一下"正在同步…"比稍等更扰人。
     init(_ services: AppServices, lasting: Bool) {
-        let status = services.syncState.status
-        (self.status, busy) = status == .syncing && !lasting ? (.idle, services.isSyncingNow) : (status, services.isSyncBusy)
+        let status = services.syncing.state.status
+        (self.status, busy) = status == .syncing && !lasting ? (.idle, services.syncing.isSyncingNow) : (status, services.syncing.isSyncBusy)
     }
 }

@@ -28,9 +28,9 @@ extension AppServices {
             for await _ in accountChanged { await relay.reconnect() }
         }
         #if os(macOS)
-        follow { await relay.run(connected: true) { await self.pull() } }
+        follow { await relay.run(connected: true) { await self.syncing.pull() } }
         #else
-        follow { await relay.run(connected: UIApplication.shared.applicationState != .background) { await self.pull() } }
+        follow { await relay.run(connected: UIApplication.shared.applicationState != .background) { await self.syncing.pull() } }
         #endif
     }
 

@@ -63,7 +63,7 @@ struct SplitRoot: View {
     /// 板里的页照样让出横条（少掉板自己那一圈），名牌离板的上沿也留一圈。
     private func cue(fits: Bool, home: Bool, bottom: CGFloat) -> some View {
         let inset = fits && !home ? CuePanel.float : 0
-        return CuePage().countsAsViewer()
+        return CuePage()
             .environment(\.headerHost, .panel)
             .modifier(KeyboardHold())
             .safeAreaPadding(.top, inset)

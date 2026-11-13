@@ -44,14 +44,14 @@ struct LaunchAttachmentTests {
         let request = try #require(requests.first)
         try #require(try await phone.services.store.hasAttachment(key))
         await phone.services.upload(request.id)
-        await phone.services.syncNow()
-        await mac.services.syncNow()
+        await phone.services.syncing.syncNow()
+        await mac.services.syncing.syncNow()
         #expect(try await mac.services.store.outcome(of: request).status == .known(.succeeded))
         let sessions = try await eventually(mac.services.store, { try $0.allSessionStates() }) { $0.contains { $0.launchToken != nil } }
         for session in sessions { await mac.services.upload(session.id) }
         await mac.services.upload(request.id)
-        await mac.services.syncNow()
-        await phone.services.syncNow()
+        await mac.services.syncing.syncNow()
+        await phone.services.syncing.syncNow()
         try await eventually("认领到新会话") { claimed != nil }
         let session = try #require(claimed).sessionID
         #expect(try await phone.services.store.hasAttachment(key))

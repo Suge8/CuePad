@@ -27,7 +27,7 @@ final class SyncChoices {
 
     func keep(_ choice: ConflictChoice, of conflict: CardConflict, _ services: AppServices) {
         let copy = conflict.copy.id
-        run { try await services.resolveConflict(copy: copy, keep: choice) }
+        run { try await services.syncing.resolveConflict(copy: copy, keep: choice) }
     }
 
     private func run(_ work: @escaping @MainActor () async throws -> Void) {

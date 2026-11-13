@@ -12,16 +12,16 @@ struct ConflictsScreen: View {
                 if let failure = choices.failure {
                     Label { Text(failure).font(Typography.meta) } icon: { FailureMark() }
                 }
-                if services.conflicts.isEmpty {
+                if services.syncing.conflicts.isEmpty {
                     EmptyState(mascot: .clean, title: "没有待处理的冲突")
                         .padding(.top, Spacing.vacant)
                 }
-                ForEach(services.conflicts, id: \.copy.id) { ConflictPair(conflict: $0, choices: choices) }
+                ForEach(services.syncing.conflicts, id: \.copy.id) { ConflictPair(conflict: $0, choices: choices) }
             }
             .padding(Spacing.block)
-            .animation(Motion.fade, value: services.conflicts.map(\.copy.id))
+            .animation(Motion.fade, value: services.syncing.conflicts.map(\.copy.id))
         }
-        .floatingHeader("两个版本", detail: services.conflicts.isEmpty ? nil : Dotted(String(localized: "\(services.conflicts.count) 处")))
+        .floatingHeader("两个版本", detail: services.syncing.conflicts.isEmpty ? nil : Dotted(String(localized: "\(services.syncing.conflicts.count) 处")))
     }
 }
 

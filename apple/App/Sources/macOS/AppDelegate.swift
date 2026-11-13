@@ -47,7 +47,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         }
         failureWindow?.close()
         failureWindow = nil
-        services.connectSync()  // 第一拉不等建窗口
+        services.syncing.connectSync()  // 第一拉不等建窗口
         let workspace = Workspace(services: services)
         let window = makeMainWindow(services, workspace: workspace)
         services.windowShell = window
@@ -88,7 +88,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             toggleWindow: { window.toggleFromMenu() })
 
         services.start()
-        services.follow { await services.viewer?.follow(workspace) }
+        services.follow { await services.viewer.follow(workspace) }
         services.follow { await window.parkWhileUnseen(services) }
         // Dock 与菜单栏图标的角标是要你管的几件（拍板加待回复）：读名牌的同一份（`CueNow.needsYou`），不另订阅库
         services.follow { [alerts, statusItem] in
