@@ -20,7 +20,15 @@ struct CueNoteLog: View {
             VStack(alignment: .leading, spacing: 0) {
                 if settled, !unfolded, folds.count > 1 {
                     Button { unfolded = true } label: {
-                        CueNoteRow(time: folds.last?.last.date) { Image(.expand) } text: { summary(folds) }
+                        CueNoteRow { Image(.expand) } text: {
+                            HStack(alignment: .firstTextBaseline, spacing: Spacing.tight) {
+                                summary(folds)
+                                if let time = folds.last?.last.date {
+                                    Dot()
+                                    Text(verbatim: [ChatTime.day(time), ChatTime.time(time)].compactMap { $0 }.joined(separator: " ")).monospacedDigit()
+                                }
+                            }
+                        }
                     }
                     .buttonStyle(.row)
                     .accessibilityHint("展开")

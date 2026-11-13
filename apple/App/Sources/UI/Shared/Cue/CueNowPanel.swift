@@ -3,7 +3,8 @@ import SwiftUI
 
 /// 上下文用了几成不写：换新是自动的、多在歇过一小时后，看了也没有可做的。
 /// 在做的会话不在这里：进行中的在会话条上（手机在 Cue 页左边，宽屏在左栏），点进会话只有那一条路，返回落点与行的长相都只有一种。
-/// 面板定高：空、一条、记满都一样高（两条各占两行的位），启用前后大脑那一块按启用了的样子占位（`BrainBlock`）。
+/// 一格一件事的拼格（`CueTile`）：大脑一排，刚记下的两张便签并排，定时与技能各一格，在哪台运行一格。
+/// 面板定高：空、一条、记满都一样高（便签各占三行的位），启用前后大脑那一块按启用了的样子占位（`BrainBlock`）。
 /// 面板里不放滚动区：会被写上页面滚动区的内容边距。Cue 的设置（`CueSettingsModel`）整块读一份：选 Mac 与底行的开关读写同一份，改 Mac 的确认框也只挂这一个。
 struct CueNowPanel: View {
     let brain: AgentModelChoice?
@@ -16,20 +17,20 @@ struct CueNowPanel: View {
 
     var body: some View {
         let enabled = workspace.cue.canHear
-        VStack(spacing: Self.blockGap) {
-            Group {
-                BrainBlock(brain: brain, settings: settings)
-                if enabled { CueRecall { go { workspace.cue.showsMemory = true } } }
+        VStack(spacing: Spacing.item) {
+            BrainBlock(brain: brain, settings: settings).padding(.bottom, Spacing.tight)
+            if enabled { CueRecall { go { workspace.cue.showsMemory = true } } }
+            HStack(spacing: Spacing.item) {
+                if enabled { ScheduleTile { go { workspace.cue.showsSchedules = true } } }
+                LibraryTile { go(openLibrary) }
             }
-            .padding(.horizontal, Spacing.panel)
-            VStack(spacing: 0) {
-                if enabled { ScheduleLine { go { workspace.cue.showsSchedules = true } } }
-                LibraryLine { go(openLibrary) }
-                CueHostLine(model: settings) { go(openSettings) }
-            }
-            .padding(.horizontal, Spacing.panel - Spacing.inset)
+            .fixedSize(horizontal: false, vertical: true)
+            CueHostLine(model: settings) { go(openSettings) }
+                .padding(.vertical, Spacing.tight)
+                .background(CueTile.fill)
+                .rowContainer(CueTile.shape)
         }
-        .padding(.top, Spacing.group).padding(.bottom, Spacing.block)
+        .padding(Spacing.group)
         .dynamicTypeSize(...Self.largestType)
         .cueSettings(settings)
     }
@@ -54,8 +55,25 @@ struct CueNowPanel: View {
         workspace.push(.settings)
         #endif
     }
+}
 
-    private static let blockGap = Spacing.part
+/// 拼格的一格：一块淡底，四周同一道边。
+private enum CueTile {
+    static let shape = RoundedRectangle(cornerRadius: Radius.block)
+
+    @MainActor static var fill: some View { Fill() }
+
+    private struct Fill: View {
+        @Environment(\.palette) private var palette
+        var body: some View { shape.fill(palette.fill) }
+    }
+}
+
+private extension View {
+    func cueTile() -> some View {
+        padding(Spacing.group).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .background(CueTile.fill).contentShape(CueTile.shape)
+    }
 }
 
 /// 高度总由启用了的那一排定（看不见时也排着），换态时面板不变高。
@@ -79,6 +97,7 @@ private struct BrainBlock: View {
     private static let dimmed = 0.4
 }
 
+/// 最近记下的两条各是一张便签，点哪里都去记忆页。
 private struct CueRecall: View {
     let open: () -> Void
     @Environment(Workspace.self) private var workspace
@@ -91,8 +110,9 @@ private struct CueRecall: View {
     var body: some View {
         let lines = recent?.lines ?? []
         Button(action: open) {
-            VStack(alignment: .leading, spacing: Spacing.group) {
+            VStack(alignment: .leading, spacing: Spacing.item) {
                 HStack(spacing: Spacing.glyph) {
+                    Image(.memory).font(Glyph.mark).foregroundStyle(palette.ink3)
                     Text("刚记下").font(Typography.label).foregroundStyle(palette.ink3)
                     Spacer(minLength: Spacing.item)
                     if let count = recent?.count, count > 0 {
@@ -100,18 +120,22 @@ private struct CueRecall: View {
                     }
                     Chevron(.forward).foregroundStyle(palette.ink3)
                 }
-                ForEach(0..<Self.shown, id: \.self) { index in
-                    RecallLine(line: lines.indices.contains(index) ? lines[index] : nil)
+                .padding(.horizontal, Spacing.tight)
+                HStack(spacing: Spacing.item) {
+                    ForEach(0..<Self.shown, id: \.self) { index in
+                        RecallNote(line: lines.indices.contains(index) ? lines[index] : nil)
+                    }
                 }
-            }
-            .overlay {
-                if recent != nil, lines.isEmpty {
-                    Text("还没记住什么").font(Typography.secondary).foregroundStyle(palette.ink3)
+                .overlay {
+                    if recent != nil, lines.isEmpty {
+                        Text("还没记住什么").font(Typography.secondary).foregroundStyle(palette.ink3)
+                    }
                 }
             }
             .contentShape(.rect)
         }
         .buttonStyle(PressStyle())
+        .padding(.top, Spacing.tight)
         .observing(services.store, into: $recent, onError: workspace.fail) { try $0.recentCueMemory(limit: Self.shown) }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Dotted(
@@ -120,44 +144,74 @@ private struct CueRecall: View {
     }
 }
 
-private struct RecallLine: View {
+private struct RecallNote: View {
     let line: CueMemoryLine?
     @Environment(\.palette) private var palette
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: Spacing.item) {
+        VStack(alignment: .leading, spacing: Spacing.item) {
             Text(verbatim: line?.text ?? " ")
-                .font(Typography.body).foregroundStyle(palette.ink).multilineTextAlignment(.leading)
-                .lineLimit(2, reservesSpace: true)
+                .font(Typography.secondary).foregroundStyle(palette.ink).multilineTextAlignment(.leading)
+                .lineLimit(3, reservesSpace: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            if let line {
-                HStack(spacing: Spacing.hair) {
-                    if line.pinned { Image(.pin).font(Glyph.mark) }
+            HStack(spacing: Spacing.hair) {
+                if let line {
+                    if line.pinned { Image(.pin).font(Glyph.mark).foregroundStyle(palette.signature) }
                     Text(line.createdAt, format: .relative(presentation: .named, unitsStyle: .abbreviated))
+                } else {
+                    Text(verbatim: " ")
                 }
-                .font(Typography.meta).monospacedDigit().foregroundStyle(palette.ink3).fixedSize()
             }
+            .font(Typography.meta).monospacedDigit().foregroundStyle(palette.ink3)
         }
+        .padding(Spacing.group)
+        .background(palette.fill, in: CueTile.shape)
     }
 }
 
-private struct ScheduleLine: View {
+/// 一格去处：图标与名字在上，此刻的那个数在下面大一号。
+private struct LinkTile: View {
+    let icon: Icon
+    let title: Text
+    var value: Text?
+    var alert: Color?
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.item) {
+            HStack(spacing: Spacing.glyph) {
+                Image(icon).foregroundStyle(palette.ink2)
+                title.foregroundStyle(palette.ink2)
+                Spacer(minLength: 0)
+                Chevron(.forward).foregroundStyle(palette.ink3)
+            }
+            .font(Typography.secondary)
+            HStack(spacing: Spacing.glyph) {
+                (value ?? Text(verbatim: " ")).font(Typography.bodyStrong).monospacedDigit().foregroundStyle(palette.ink).lineLimit(1).minimumScaleFactor(0.8)
+                if let alert { StatusDot(color: alert) }
+            }
+        }
+        .cueTile()
+        .accessibilityElement(children: .combine)
+    }
+}
+
+private struct ScheduleTile: View {
     let open: () -> Void
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @State private var schedules: [CueMemoryLine]?
 
     var body: some View {
-        let summary = schedules?.first?.remindAt.map { String(localized: "下一次 \(ScheduleText.moment($0))") }
         Button(action: open) {
-            LinkRow(title: Text("定时"), value: summary.map { Text(verbatim: $0) }) { Image(.schedule) }
+            LinkTile(icon: .schedule, title: Text("定时"), value: schedules?.first?.remindAt.map { Text(verbatim: ScheduleText.moment($0)) })
         }
-        .buttonStyle(.row)
+        .buttonStyle(PressStyle())
         .observing(services.store, into: $schedules, onError: workspace.fail) { try $0.cueScheduleLines() }
     }
 }
 
-private struct LibraryLine: View {
+private struct LibraryTile: View {
     let open: () -> Void
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
@@ -166,11 +220,9 @@ private struct LibraryLine: View {
         let library = workspace.library
         let tidy = library?.tidies.isEmpty == false
         Button(action: open) {
-            LinkRow(
-                title: Text("技能与规则"), value: library.map { Text("\($0.skills.count) 个技能") }, alert: tidy ? palette.ink : nil
-            ) { Image(.skill) }
+            LinkTile(icon: .skill, title: Text("技能与规则"), value: library.map { Text("\($0.skills.count) 个技能") }, alert: tidy ? palette.ink : nil)
         }
-        .buttonStyle(.row)
+        .buttonStyle(PressStyle())
         .accessibilityValue(tidy ? String(localized: "有该整理的") : "")
     }
 }

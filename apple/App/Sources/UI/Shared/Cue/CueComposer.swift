@@ -9,7 +9,7 @@ import SwiftUI
 /// 手机上它们在 Cue 面板的第一行（`CueHeader`），输入框里不再放一份：聚焦才露出的胶囊找不到。
 /// 手机与 iPad 的 Cue 页上，右下那一颗空着时是和 Cue 通话、有草稿时是发送（同一颗钮原地换，`SendGlyph`）；通话中这块玻璃原地变成通话条（`PhoneCall`）。
 /// 在不在通话、静没静音只看 `VoiceService`，界面不另存一份。
-/// Mac 的通话入口在工具排末尾（`CueVoiceComposerEntry`），通话条在 Cue 栏顶上（`CueVoicePanel`）。
+/// Mac 的通话入口在工具排末尾（`CueVoiceComposerEntry`），通话中整个输入框让给通话条（`CueVoicePanel`，`CuePage`）。
 struct CueComposer: View {
     enum Style: Equatable {
         case page

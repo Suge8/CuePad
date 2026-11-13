@@ -11,11 +11,11 @@ struct CueColumn: View {
     let lead: CGFloat
 
     var body: some View {
-        VStack(spacing: 0) {
-            CueTitle(fits: fits, home: home, lead: lead)
-            CuePage().fadesUnderHead()
-        }
-        .ignoresSafeArea(.container, edges: .top)
+        // 对话从名牌底下穿过去、一直滚到窗口上缘（同手机）：名牌是浮在上面的一块玻璃，不裁、不盖淡出
+        CuePage()
+            .safeAreaPadding(.top, CueTitle.band)
+            .overlay(alignment: .top) { CueTitle(fits: fits, home: home, lead: lead) }
+            .ignoresSafeArea(.container, edges: .top)
     }
 }
 

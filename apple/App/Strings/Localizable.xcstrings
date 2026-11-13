@@ -5260,22 +5260,6 @@
         }
       }
     },
-    "下一次 %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Next %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "下一次 %@"
-          }
-        }
-      }
-    },
     "下一次：%@" : {
       "localizations" : {
         "en" : {
