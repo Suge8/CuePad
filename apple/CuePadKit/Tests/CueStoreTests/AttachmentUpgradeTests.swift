@@ -13,7 +13,6 @@ import Testing
   private func exists(_ url: URL) -> Bool { FileManager.default.fileExists(atPath: url.path) }
 
   @Test func legacyReferencesRecordsAndFilesMoveToKeys() async throws {
-    _ = try CueStore(location: .isolated(directory))
     let png = pngData(width: 6, height: 6), movie = Data("not really a movie".utf8)
     let unrecorded = pngData(width: 3, height: 3)
     let photo = sha256(png), clip = sha256(movie), gone = String(repeating: "e", count: 64), orphan = sha256(unrecorded)
@@ -21,9 +20,8 @@ import Testing
     try png.write(to: old.appending(path: photo))
     try movie.write(to: old.appending(path: clip))
     try unrecorded.write(to: old.appending(path: orphan))  // 被引用、文件在本机，却没有附件记录
-    try db.restore(version: 77)
     try db.exec(
-      """
+      FrozenSchema.sql(77) + """
       INSERT INTO cards (id, projectID, body, isPinned, variableValues, sortKey, createdAt, modifiedAt)
         VALUES ('00000000-0000-4000-8000-0000000000c1', '\(Project.defaultID.uuidString.lowercased())', '看 ![](cuepad://img/\(photo)) 这张', 0, '{}', 'a', 1, 1000),
                ('00000000-0000-4000-8000-0000000000c2', '\(Project.defaultID.uuidString.lowercased())', '丢了 ![](cuepad://img/\(gone))', 0, '{}', 'b', 1, 2000),
