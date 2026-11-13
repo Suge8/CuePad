@@ -11,7 +11,7 @@ struct GlobalShortcutTests {
         let rig = TestApp()
         let defaults = rig.services.settings.defaults
         defaults.set("Control+Alt+KeyP", forKey: "slot")
-        let hotkey = GlobalHotkey(label: "测试", key: "slot", defaultAccelerator: "Alt+Space", defaults: defaults, backend: rig.hotkeys) {}
+        let hotkey = GlobalHotkey(label: "测试", slot: HotkeySlot(key: "slot", defaultAccelerator: "Alt+Space"), settings: rig.services.settings, backend: rig.hotkeys) {}
         try hotkey.registerSaved()
         #expect(rig.hotkeys.active == [Shortcut(keyCode: 35, modifiers: [.control, .option])])
 
@@ -31,8 +31,8 @@ struct GlobalShortcutTests {
         let services: AppServices = rig.services
         let defaults = services.settings.defaults
         let before = rig.hotkeys.active
-        let say = GlobalHotkey(label: "对 Cue 说", key: "say", defaultAccelerator: "Alt+KeyQ", defaults: defaults, backend: rig.hotkeys) {}
-        let show = GlobalHotkey(label: "显示", key: "show", defaultAccelerator: "Alt+KeyW", defaults: defaults, backend: rig.hotkeys) {}
+        let say = GlobalHotkey(label: "对 Cue 说", slot: HotkeySlot(key: "say", defaultAccelerator: "Alt+KeyQ"), settings: services.settings, backend: rig.hotkeys) {}
+        let show = GlobalHotkey(label: "显示", slot: HotkeySlot(key: "show", defaultAccelerator: "Alt+KeyW"), settings: services.settings, backend: rig.hotkeys) {}
         services.register(say)
         services.register(show)
         let q = Shortcut(keyCode: 12, modifiers: .option), w = Shortcut(keyCode: 13, modifiers: .option)

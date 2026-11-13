@@ -32,28 +32,26 @@ protocol HotkeyBackend: AnyObject {
     func unregister(_ handle: HotkeyHandle)
 }
 
-/// 加速键（W3C code 形式，如 `Alt+Space`）存在设备偏好的 `key` 下，没存过用 `defaultAccelerator`。
-/// `set` 换键时先注册新的，成功才释放旧的、写进偏好；失败时抛出，旧的继续生效、偏好不变。
+/// 加速键存在设置的 `slot` 里。`set` 换键时先注册新的，成功才释放旧的、写进设置；失败时抛出，旧的继续生效、设置不变。
 @Observable
 final class GlobalHotkey {
     let label: String
     private(set) var accelerator: String
-    @ObservationIgnored private let key: String
-    @ObservationIgnored private let defaults: UserDefaults
+    @ObservationIgnored private let slot: HotkeySlot
+    @ObservationIgnored private let settings: AppSettings
     @ObservationIgnored private let backend: any HotkeyBackend
     @ObservationIgnored private let onTrigger: @MainActor () -> Void
     @ObservationIgnored private var current: (shortcut: Shortcut, handle: HotkeyHandle)?
 
     init(
-        label: String, key: String, defaultAccelerator: String, defaults: UserDefaults, backend: any HotkeyBackend,
-        onTrigger: @escaping @MainActor () -> Void
+        label: String, slot: HotkeySlot, settings: AppSettings, backend: any HotkeyBackend, onTrigger: @escaping @MainActor () -> Void
     ) {
         self.label = label
-        self.key = key
-        self.defaults = defaults
+        self.slot = slot
+        self.settings = settings
         self.backend = backend
         self.onTrigger = onTrigger
-        accelerator = defaults.string(forKey: key) ?? defaultAccelerator
+        accelerator = settings.accelerator(slot)
     }
 
     func registerSaved() throws {
@@ -63,7 +61,7 @@ final class GlobalHotkey {
     func set(_ accelerator: String) throws {
         let normalized = try register(accelerator)
         self.accelerator = normalized
-        defaults.set(normalized, forKey: key)
+        settings.setAccelerator(normalized, for: slot)
     }
 
     func unregister() {
