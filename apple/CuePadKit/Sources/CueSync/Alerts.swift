@@ -21,6 +21,14 @@ public enum CloudAlert: Equatable, Sendable {
   case cue(message: UUID)
 
   /// 不是这里订阅的通知为 nil。
+  /// Cue 的消息出通知就是在等你（`AlertRoute.kind` 同一条）。
+  public var kind: AlertKind {
+    switch self {
+    case .session(let tap): tap.kind
+    case .cue: .waitingForUser
+    }
+  }
+
   public init?(userInfo: [AnyHashable: Any]) {
     guard let notification = CKNotification(fromRemoteNotificationDictionary: userInfo) as? CKQueryNotification,
       let name = notification.recordID?.recordName, let id = UUID(uuidString: name)

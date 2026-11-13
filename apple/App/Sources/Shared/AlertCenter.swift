@@ -106,7 +106,7 @@ final class AlertCenter: NSObject, UNUserNotificationCenterDelegate {
         #if os(macOS)
         content.sound = await sound(for: alert.route)
         #else
-        content.sound = .default
+        content.sound = services?.settings.sounds == true ? .default : nil
         #endif
         let trigger = date.map { UNTimeIntervalNotificationTrigger(timeInterval: $0.timeIntervalSinceNow, repeats: false) }
         do {

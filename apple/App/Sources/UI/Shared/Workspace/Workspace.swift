@@ -13,7 +13,7 @@ final class Workspace {
         var status: SessionShown.Status?
         var link: Route?
         var action: NoticeAction?
-        var sound: NoticeSound?
+        var sound: Sound?
 
         var isError: Bool { tone == .failure }
         /// 只是报个结果的（没有钮、没有去处、不是出错）不接点按，点穿到下面。

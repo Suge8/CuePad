@@ -52,7 +52,7 @@ nonisolated enum Icon: Hashable, Sendable {
     case relay, relayStalled
     // Cue 与设置
     case memory, wakeEnabled, wakeMessage, wakeActivity, wakeIdle, schedule, looked, mail
-    case name, voice, hotkey, talkToCue, appearance, language, updates, launchAtLogin
+    case name, voice, sounds, hotkey, talkToCue, appearance, language, updates, launchAtLogin
     // 文件与交付物：没有画面的音频、列表里的文字卡、还在下载、视频的播放标、认不出类型的文件、转动查看 3D 模型
     case audio, document, downloading, play, file, inspect3D
     case project(ProjectIcon)
@@ -189,6 +189,7 @@ nonisolated enum Icon: Hashable, Sendable {
         case .updates: .ink("badge.down")
         case .audio, .call, .voice: .ink("wave")
         case .microphone: .ink("mic")
+        case .sounds: .ink("speaker")
         case .muted: .ink("mic.off")
         case .document: .ink("doc")
         case .downloading: .ink("cloud.down")

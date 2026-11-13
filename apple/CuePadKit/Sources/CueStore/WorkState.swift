@@ -83,6 +83,19 @@ public enum AlertKind: String, Sendable, CaseIterable {
   }
 }
 
+/// 提示配的那一声，名字就是 App 包里的声音文件名（`Sounds/<名字>.caf`）。只分两声：要你拍板，与停下轮到你。
+/// 待回复和做完了对你是同一件事（那个会话停了），不因 Cue 值不值班换一声。
+public enum AlertTone: String, Sendable {
+  case ask, done
+
+  /// "音效"开关在偏好里的键。手机上偏好在共享容器里，通知扩展按它定锁屏通知响不响；没存过算开着。
+  public static let enabledKey = "sounds"
+}
+
+extension AlertKind {
+  public var tone: AlertTone { self == .waitingForUser ? .ask : .done }
+}
+
 extension SessionState {
   /// 相对上一次读到的版本（nil：第一次读到），这个版本是不是一次要提示的转换（到不到你另由 `CueStore.reaches` 定）。手机读到的是同步合并后的版本：状态没变而
   /// 状态起点往后走了，说明中间又经过了一轮工作（没读到），按"刚从工作中来"算。

@@ -10,7 +10,7 @@ NAMES = (
     "arrow.up", "arrow.down", "ring.down", "ring.stop", "ring.play", "ring.plus", "badge.down", "compact",
     "hand", "mac", "photo", "photos", "select", "keyboard.down", "braces", "window", "doc.blank", "wrench",
     "branch", "flame", "eye", "power", "mail", "tag", "keyboard", "sun", "wave", "bubble.text", "bubble.dots",
-    "mic", "mic.off",
+    "mic", "mic.off", "speaker",
 )
 
 
@@ -145,6 +145,10 @@ def centerlines(name):
         opened.append(arcs((0,-2),7.5,0,180))
         line((0,5.5),(0,10)); line((-4,10),(4,10))
         if name == "mic.off": line((-10,-10),(10,10))
+    elif name == "speaker":
+        # 喇叭：柄与喇叭口连成一圈，右边两道由近到远的声波。
+        closed.append(poly([(-11,-3),(-7,-3),(-1,-8),(-1,8),(-7,3),(-11,3)],1.6,True))
+        opened.extend([arcs((0,0),5,-40,80),arcs((0,0),9.5,-40,80)])
     elif name in ("bubble.text","bubble.dots"):
         _,closed = base.centerlines("bubble")
         if name == "bubble.text": line((-4,-3),(4,-3)); line((-4,2),(2,2))

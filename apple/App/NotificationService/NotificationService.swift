@@ -26,7 +26,13 @@ final class NotificationService: UNNotificationServiceExtension, @unchecked Send
               let recordID = notification.recordID
         else { return handler(request.content) }
         let database = CKContainer(identifier: Self.container).privateCloudDatabase
-        switch CloudAlert(userInfo: userInfo) {
+        let alert = CloudAlert(userInfo: userInfo)
+        // 推送带的是系统默认音（订阅里写死，改它要重新部署）：按种类换成 App 包里的那一声，和 Mac 同一套；"音效"关着就不响
+        if let alert {
+            let sounds = UserDefaults(suiteName: AppIdentity.appGroup)?.object(forKey: AlertTone.enabledKey) as? Bool ?? true
+            content.sound = sounds ? UNNotificationSound(named: UNNotificationSoundName(alert.kind.tone.rawValue + ".caf")) : nil
+        }
+        switch alert {
         case .cue:
             pending.withLock { $0 = Pending(content: content, deliver: handler) }
             let profile = CKRecord.ID(recordName: CueProfile.syncRecordName, zoneID: recordID.zoneID)

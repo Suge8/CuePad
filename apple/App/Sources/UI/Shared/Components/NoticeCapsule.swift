@@ -83,7 +83,7 @@ struct NoticeCapsule: View {
             AccessibilityNotification.Announcement(notice.text.spoken).post()
             if workspace.soundedNotice != notice.id {
                 workspace.soundedNotice = notice.id
-                notice.sound?.play()
+                if let sound = notice.sound { workspace.services.settings.play(sound) }
             }
             landed = false
             withAnimation(Motion.fading(Motion.nudge, reduceMotion: reduceMotion).delay(Motion.Fade.settle)) { landed = true }

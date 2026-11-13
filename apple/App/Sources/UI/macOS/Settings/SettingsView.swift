@@ -86,6 +86,7 @@ private struct GeneralSections: View {
         Section {
             SettingRow(title: "外观", icon: Image(.appearance)) { ThemePicker() }
             LanguageRow()
+            SettingRow(title: "音效", icon: Image(.sounds), help: "通知的提示音与操作音") { SoundToggle().labelsHidden().toggleStyle(.switch) }
             if let cueBar { ShortcutRow(title: "对 Cue 说", icon: .talkToCue, hotkey: cueBar.hotkey) }
             ShortcutRow(title: "显示/隐藏主窗口", icon: .hotkey, hotkey: services.hotkey)
         }
@@ -214,20 +215,7 @@ private struct NotificationSection: View {
         @Bindable var settings = services.settings
         // 设置行的图标是墨色线条：形状与提示带的状态图形同一个
         return SettingRow(title: title, icon: Image(SessionShown(status: SessionAlert.status(kind)).icon), help: help) {
-            HStack(spacing: Spacing.group) {
-                Picker("提示音", selection: Binding(get: { settings.alerts[kind].sound }, set: { sound in
-                    settings.alerts[kind].sound = sound
-                    sound?.preview()
-                })) {
-                    Text("无").tag(AlertSound?.none)
-                    Divider()
-                    ForEach(AlertSound.allCases, id: \.self) { Text($0.title).tag(Optional($0)) }
-                }
-                .labelsHidden()
-                .fixedSize()
-                .disabled(!settings.alerts[kind].isOn)
-                Toggle(String(localized: title), isOn: $settings.alerts[kind].isOn).labelsHidden().toggleStyle(.switch)
-            }
+            Toggle(String(localized: title), isOn: $settings.alerts[kind]).labelsHidden().toggleStyle(.switch)
         }
     }
 
