@@ -228,6 +228,7 @@ struct CueComposer: View {
             let event = CueWatch.Send(at: .now, beat: workspace.cue.beat)
             guard workspace.sayToCue(from: draft) != nil else { return }
             workspace.cue.sent(event)
+            workspace.services.settings.play(.send)
             launch.fly(since: event.at, reduceMotion: reduceMotion)
         } else {
             let asTask = aim == .task

@@ -158,6 +158,7 @@ struct ReplyBar: View {
         focused = false
         #endif
         sentCount += 1
+        services.settings.play(.send)
         sent()
     }
 

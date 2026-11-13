@@ -1,89 +1,61 @@
 #if os(macOS)
-import AppKit
+import CryptoKit
 import CueStore
 import UserNotifications
 import os
 
-/// App 包里的几段（`Sounds/<rawValue>.caf`，合成源是 `design/tools/notification-sounds.py`）是唯一来源。
-nonisolated enum AlertSound: String, CaseIterable, Sendable {
-    case chime, tap, bell, drop
-
-    var title: String {
-        switch self {
-        case .chime: String(localized: "叮咚")
-        case .tap: String(localized: "轻响")
-        case .bell: String(localized: "风铃")
-        case .drop: String(localized: "水滴")
-        }
-    }
-
-    var bundled: URL { Bundle.main.url(forResource: rawValue, withExtension: "caf")! }
-
-    /// 装进 ~/Library/Sounds 后的文件名，也是通知用的声音名：带品牌前缀，在系统设置的提示音列表里不撞名。
-    var installedName: String { "CuePad \(rawValue.capitalized).caf" }
-
-    /// 提醒本身的声音只经系统通知（遵守专注模式），不走这里。
-    func preview() { NSSound(contentsOf: bundled, byReference: true)?.play() }
-}
-
-/// 一种提示的偏好。关掉 = 系统横幅与声音都没有；`sound` 为 nil 是不出声。
-nonisolated struct AlertPreference: Equatable, Sendable {
-    var isOn: Bool
-    var sound: AlertSound?
-}
-
-/// 本机、不同步。
+/// 每种提示开没开：关掉 = 系统横幅与声音都没有。本机、不同步。
 nonisolated struct AlertPreferences: Equatable, Sendable {
-    private var kinds: [AlertKind: AlertPreference]
+    private var off: Set<AlertKind>
 
-    subscript(kind: AlertKind) -> AlertPreference {
-        get { kinds[kind] ?? Self.fallback(kind) }
-        set { kinds[kind] = newValue }
+    subscript(kind: AlertKind) -> Bool {
+        get { !off.contains(kind) }
+        set { if newValue { off.remove(kind) } else { off.insert(kind) } }
     }
 
-    private static func fallback(_ kind: AlertKind) -> AlertPreference {
-        switch kind {
-        case .waitingForUser: AlertPreference(isOn: true, sound: .chime)
-        case .awaitsReply: AlertPreference(isOn: true, sound: .tap)
-        case .settled: AlertPreference(isOn: true, sound: .drop)
-        }
-    }
+    private static let on = "on"
 
-    private static let on = "on", sound = "sound"
-
-    /// 存成 `[种类: [on, sound]]`；没存过的种类用缺省，`sound` 为空串是"无"。
+    /// 存成 `[种类: [on: 开没开]]`（里面那层是每种提示还能各挑一段提示音时的形状，留着是为了读得出那时关掉的）；没存过的开着。
     init(stored: [String: Any]? = nil) {
-        kinds = Dictionary(uniqueKeysWithValues: AlertKind.allCases.map { kind in
-            let entry = stored?[kind.rawValue] as? [String: Any], fallback = Self.fallback(kind)
-            return (kind, AlertPreference(
-                isOn: entry?[Self.on] as? Bool ?? fallback.isOn,
-                sound: (entry?[Self.sound] as? String).map(AlertSound.init(rawValue:)) ?? fallback.sound))
-        })
+        off = Set(AlertKind.allCases.filter { (stored?[$0.rawValue] as? [String: Any])?[Self.on] as? Bool == false })
     }
 
     var stored: [String: Any] {
-        Dictionary(uniqueKeysWithValues: AlertKind.allCases.map { kind in
-            (kind.rawValue, [Self.on: self[kind].isOn, Self.sound: self[kind].sound?.rawValue ?? ""] as [String: Any])
-        })
+        Dictionary(uniqueKeysWithValues: AlertKind.allCases.map { ($0.rawValue, [Self.on: self[$0]]) })
     }
 }
 
 /// macOS 的通知中心只在 ~/Library/Sounds 与系统声音目录里找 `UNNotificationSound(named:)`，不看 App 包（包里的声音一律换成系统兜底音）；
-/// 一个声音名找不到过一次，之后装上了也播兜底音。所以发带声音的通知前，先把选中的那段从包里复制过去（内容与包里不一致就覆盖），
+/// 一个声音名找不到过一次，之后装上了也播兜底音。所以发带声音的通知前，先把那一段从包里复制过去（内容与包里不一致就覆盖），
 /// 一次运行每段只核对一次。只在真发通知时用（`AlertCenter.delivers`），隔离库与测试不碰真实的 ~/Library/Sounds。
 actor AlertSounds {
     private let directory = UserHome.directory.appending(path: "Library/Sounds", directoryHint: .isDirectory)
-    private var checked: Set<AlertSound> = []
+    private var checked: Set<Sound> = []
+    /// 能各挑一段提示音时装过的四段（名字与内容的 SHA-256；那四段只发过这一版）：留着会一直挂在系统设置的提示音列表里。
+    /// 内容对不上的是用户自己放的同名文件，不动。
+    private static let retired = [
+        "Chime": "ac3c26072dc04bbf33e6ad3a7bbdd35e82728c7235ced85accad614fea0dd875",
+        "Tap": "5a615e4a9c0bd742b277337c72aac0cbcda76cb5ea33d5e1aa888899d34d011b",
+        "Bell": "4ab84ce920f7c018799e46091abfd394d6a32e6284b0c16c6efb5f85e74e6f3c",
+        "Drop": "23ecfaae70fd240da9923e4c0947249e2b85c627ed13ad99291c6a9611eb650f",
+    ]
 
-    func prepare(_ sound: AlertSound) -> UNNotificationSoundName {
-        let name = UNNotificationSoundName(sound.installedName)
+    /// 装好后的文件名就是通知用的声音名：带品牌前缀，在系统设置的提示音列表里不撞名。
+    func prepare(_ sound: Sound) -> UNNotificationSoundName {
+        let file = "CuePad \(sound.rawValue.capitalized).caf"
+        let name = UNNotificationSoundName(file)
         guard !checked.contains(sound) else { return name }
         do {
             let source = try Data(contentsOf: sound.bundled)
-            let target = directory.appending(path: sound.installedName)
+            let target = directory.appending(path: file)
             if (try? Data(contentsOf: target)) != source {
                 try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
                 try source.write(to: target, options: .atomic)
+            }
+            for (old, digest) in Self.retired {
+                let file = directory.appending(path: "CuePad \(old).caf")
+                guard let data = try? Data(contentsOf: file), SHA256.hash(data: data).map({ String(format: "%02x", $0) }).joined() == digest else { continue }
+                try? FileManager.default.removeItem(at: file)
             }
             checked.insert(sound)
         } catch {

@@ -32,7 +32,7 @@ extension Workspace {
         guard status == .done else { return }
         if let undo { undoable("完成", undo) }
         let archiving = NoticeAction(title: String(localized: "归档")) { try await $0.archive(id) }
-        say("已完成", action: archiving, sound: .complete)
+        say("已完成", action: archiving, sound: .check)
     }
 
     func reopen(_ id: UUID) async throws {

@@ -23,6 +23,7 @@ struct SettingsScreen: View {
                     }
                 }
                 LanguageRow()
+                SoundToggle()
             }
             if !services.startupIssues.isEmpty {
                 Section("启动问题") {
