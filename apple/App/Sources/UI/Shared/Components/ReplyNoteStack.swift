@@ -68,26 +68,26 @@ private struct NoteRow: View {
         HStack(alignment: typeSize.isAccessibilitySize ? .top : .center, spacing: 0) {
             // 不是按钮：行尾还有"×"，整行的悬停底由 `row()` 一处画
             Group {
-                HStack(alignment: typeSize.isAccessibilitySize ? .top : .center, spacing: Spacing.item) {
-                    if note.preview != nil { QuoteThumb(preview: quoted, kind: note.kind) } else { Capsule().fill(palette.ink2).frame(width: 3, height: 14).frame(width: QuoteThumb.side) }
-                    if note.preview != nil, note.note.isEmpty {
-                        Text("预览「\(note.quote)」").font(Typography.secondary).foregroundStyle(palette.ink2)
-                            .lineLimit(typeSize.isAccessibilitySize ? nil : 1).truncationMode(.middle)
-                    } else {
-                        let layout = typeSize.isAccessibilitySize
-                            ? AnyLayout(VStackLayout(alignment: .leading, spacing: Spacing.tight))
-                            : AnyLayout(HStackLayout(spacing: Spacing.item))
-                        layout {
-                            Text(note.note).font(Typography.secondary).foregroundStyle(palette.ink)
-                                .layoutPriority(1)
-                            Text(verbatim: ReplyNote.excerpt(note.quote)).font(Typography.caption).foregroundStyle(palette.ink3)
-                                .truncationMode(.middle)
-                        }
-                        .lineLimit(typeSize.isAccessibilitySize ? nil : 1)
-                        .fixedSize(horizontal: false, vertical: typeSize.isAccessibilitySize)
+                // 每一行同一个读法：你写的话在前（墨色），出处在后（浅色小字）；出处是预览时带着它的缩略图。只引用没写话的那行只有出处。
+                // 行首不放记号：字都从同一条左边起，谁带图谁不带图不改这条边。
+                let layout = typeSize.isAccessibilitySize
+                    ? AnyLayout(VStackLayout(alignment: .leading, spacing: Spacing.tight))
+                    : AnyLayout(HStackLayout(spacing: Spacing.item))
+                layout {
+                    if !note.note.isEmpty {
+                        Text(note.note).font(Typography.secondary).foregroundStyle(palette.ink).layoutPriority(1)
+                    }
+                    HStack(spacing: Spacing.glyph) {
+                        if note.preview != nil { QuoteThumb(preview: quoted, kind: note.kind) }
+                        Text(verbatim: note.preview == nil ? ReplyNote.excerpt(note.quote) : note.quote)
+                            .font(note.note.isEmpty ? Typography.secondary : Typography.caption)
+                            .foregroundStyle(note.note.isEmpty ? palette.ink2 : palette.ink3)
+                            .truncationMode(.middle)
                     }
                     Spacer(minLength: 0)
                 }
+                .lineLimit(typeSize.isAccessibilitySize ? nil : 1)
+                .fixedSize(horizontal: false, vertical: typeSize.isAccessibilitySize)
                 .padding(.leading, Spacing.group)
                 .frame(minHeight: Self.height).contentShape(.rect)
             }
