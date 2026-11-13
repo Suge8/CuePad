@@ -97,11 +97,9 @@ private struct FileDraftLoading: ViewModifier {
     @Environment(Workspace.self) private var workspace
 
     func body(content: Content) -> some View {
-        let gone = library != nil && library?.file(file) == nil
         let draft = workspace.draft(of: file, in: library)
         content
             .observingLibraryTexts(library?.textPaths(for: file) ?? [], in: library, into: $texts)
-            .onChange(of: gone, initial: true) { if gone { workspace.leave(.libraryFile(file)) } }
             .onChange(of: library?.arrived(file, in: texts), initial: true) { _, arrived in
                 guard let library, let arrived else { return }
                 _ = workspace.fileDraft(file, text: arrived, on: library.hostID)

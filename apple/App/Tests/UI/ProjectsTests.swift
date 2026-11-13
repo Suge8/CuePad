@@ -130,6 +130,21 @@ struct ProjectsTests {
         try await eventually("留着的那页换成项目列表") { workspace.mainRoute == .shelf }
         #expect(workspace.cueHome)
     }
+
+    @Test func 别处删掉正编辑的卡_编辑收起_主区留在项目() async throws {
+        let project = try await store.createProject(name: "A", color: "#000000")
+        let card = try await store.createCard(in: project.id, body: "一条")
+        let workspace = Workspace(services: services)
+        let catalog = observing(workspace)
+        defer { await catalog.stop() }
+        try await eventually("目录读到 A") { workspace.catalog?.project(project.id) != nil }
+        workspace.show(.project(project.id))
+        workspace.open(card)
+        #expect(workspace.openCard == card.id)
+        _ = try await store.trashCard(card.id)
+        try await eventually("编辑收起") { workspace.openCard == nil }
+        #expect(workspace.mainRoute == .project(project.id))
+    }
 }
 #endif
 
@@ -155,7 +170,7 @@ struct ProjectsNavigationTests {
         #expect(phone.currentProject == project.id)
     }
 
-    @Test func 手机_别处删掉正看着的项目_退回书架_删掉正编辑的卡_编辑页收起() async throws {
+    @Test func 手机_别处删掉正编辑的卡_编辑页收起_删掉正看着的项目_退回书架() async throws {
         let project = try await store.createProject(name: "圆桌", color: "#000000")
         let card = try await store.createCard(in: project.id, body: "一条")
         let phone = navigation()
@@ -165,15 +180,15 @@ struct ProjectsNavigationTests {
         phone.select(.shelf)
         phone.push(.project(project.id))
         phone.showEditor(card.id)
-        try await phone.trash(card.id)
-        #expect(phone.path == [.project(project.id)])
+        _ = try await store.trashCard(card.id)
+        try await eventually("编辑页收起") { phone.path == [.project(project.id)] }
         phone.push(.session(UUID(), sessionID: "a"))
         try await store.trashProject(project.id)
         try await eventually("退回书架") { phone.path.isEmpty }
         #expect(phone.mainRoute == .shelf)
     }
 
-    @Test func iPad宽屏_别处删掉正看着的项目_回到项目列表_删掉正编辑的卡_编辑收起() async throws {
+    @Test func iPad宽屏_别处删掉正编辑的卡_编辑收起_删掉正看着的项目_回到项目列表() async throws {
         let project = try await store.createProject(name: "圆桌", color: "#000000")
         let card = try await store.createCard(in: project.id, body: "一条")
         let pad = navigation()
@@ -184,8 +199,9 @@ struct ProjectsNavigationTests {
         pad.show(.project(project.id))
         pad.showEditor(card.id)
         #expect(pad.openCard == card.id && pad.mainRoute == .project(project.id))
-        try await pad.trash(card.id)
-        #expect(pad.openCard == nil && pad.mainRoute == .project(project.id))
+        _ = try await store.trashCard(card.id)
+        try await eventually("编辑收起") { pad.openCard == nil }
+        #expect(pad.mainRoute == .project(project.id))
         try await store.trashProject(project.id)
         try await eventually("主区离开项目") { pad.mainRoute == .shelf }
         #expect(!pad.cueHome)

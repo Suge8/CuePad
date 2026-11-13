@@ -33,7 +33,11 @@ struct CardEditorScreen: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .modifier(InspirationSharePresentation(sharing: inspirationSharing, editing: editing))
             .floatingHeader(.verbatim(data?.project?.shownName ?? ""), detail: data.map(detail)) { actions }
-            .observing(services.store, id: cardID, into: $data, onError: workspace.fail) { [cardID] store in
+            // 卡没了（并进了草稿、接进了会话的回复框）由工作区收起，不当成出错
+            .observing(services.store, id: cardID, into: $data, onError: { [workspace] error in
+                if case CueStoreError.notFound = error { return }
+                workspace.fail(error)
+            }) { [cardID] store in
                 guard let card = try store.card(cardID) else { throw CueStoreError.notFound }
                 return EditorData(card: card, project: try store.project(card.projectID))
             }
@@ -41,7 +45,6 @@ struct CardEditorScreen: View {
                 guard editing == nil, let card = data?.card else { return }
                 editing = CardEditing(card, workspace: workspace)
             }
-            .onChange(of: data?.card.deletedAt) { if data?.card.deletedAt != nil { workspace.leave(.card(cardID)) } }
             .onDisappear { editing?.leave() }
     }
 

@@ -227,12 +227,14 @@ final class Workspace {
         async let opens: Void = openLinks()
         async let library: Void = followLibrary()
         async let quota: Void = followFilesQuota()
+        async let cards: Void = followShownCards()
+        async let files: Void = leaveGoneFiles()
         #if os(macOS)
         async let agents: Void = followLocalAgents()
         await followSessionPlacement()
         await agents
         #endif
-        _ = await (catalog, links, cue, opens, library, quota)
+        _ = await (catalog, links, cue, opens, library, quota, cards, files)
     }
 
     private func followFilesQuota() async {
@@ -319,13 +321,55 @@ final class Workspace {
     private func reconcileNavigation(projects ids: Set<UUID>) {
         let settings = services.settings
         if let saved = settings.currentProject, !ids.contains(saved) { settings.currentProject = nil }
-        let shown: [Route] = switch navigation {
-        case .narrow(let state): state.path
-        case .wide: [mainRoute]
-        }
-        for case .project(let id) in shown where !ids.contains(id) { leave(.project(id)) }
+        for case .project(let id) in shownRoutes where !ids.contains(id) { leave(.project(id)) }
         #if os(macOS)
         pages.forget(projectsNotIn: ids)
         #endif
+    }
+
+    /// 看着的东西没了就离开（`leave`），由这里发现，页面不各自盯：项目看目录，卡看它本身，文件看技能与规则的快照。
+    private var shownRoutes: [Route] {
+        let routes: [Route] = switch navigation {
+        case .narrow(let state): state.path
+        case .wide: [mainRoute]
+        }
+        return routes + [overlay?.route].compactMap(\.self)
+    }
+
+    private var shownCards: Set<UUID> {
+        Set(shownRoutes.compactMap { if case .card(let id) = $0 { id } else { nil } })
+    }
+
+    /// 进了回收站、并进了别的卡（行被删）都算没了；看着的卡一换就换一份订阅。
+    private func followShownCards() async {
+        var watching: Task<Void, Never>?
+        defer { watching?.cancel() }
+        for await ids in Observations({ self.shownCards }) {
+            watching?.cancel()
+            watching = ids.isEmpty ? nil : Task { await self.leaveWhenGone(ids) }
+        }
+    }
+
+    private func leaveWhenGone(_ ids: Set<UUID>) async {
+        do {
+            for try await live in services.store.observe({ store in try ids.filter { try store.card($0).map { $0.deletedAt == nil } ?? false } }) {
+                for id in ids.subtracting(live) { leave(.card(id)) }
+            }
+        } catch is CancellationError {
+        } catch {
+            fail(error)
+        }
+    }
+
+    private func leaveGoneFiles() async {
+        for await gone in Observations({ self.goneFiles }) {
+            for file in gone { leave(.libraryFile(file)) }
+        }
+    }
+
+    /// 快照还没读到（nil）时不算没了。
+    private var goneFiles: [LibraryFile] {
+        guard let library else { return [] }
+        return shownRoutes.compactMap { if case .libraryFile(let file) = $0, library.file(file) == nil { file } else { nil } }
     }
 }
