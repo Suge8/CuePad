@@ -205,9 +205,12 @@ public enum AgentLibraryError: Error, Equatable, ShownError {
   }
 }
 
-extension AgentLibrary: Record {
+extension AgentLibrary: Record, SyncedColumns {
   static let table = Table.agentLibraries
-  static let columns = ["id", "hostID", "home", "skills", "instructions", "tidies", "selfManaged", "agents", "modifiedAt"]
+  static let fields: [Field] = [
+    .plain("id"), .plain("hostID"), .encrypted("home"), .encrypted("skills"), .encrypted("instructions"), .encrypted("tidies"),
+    .encrypted("selfManaged"), .encrypted("agents"), .plain("modifiedAt"),
+  ]
   var bindings: [any SQLBindable] {
     [
       Self.recordID(host: hostID), hostID, home, JSONColumn.encodeList(skills), JSONColumn.encodeList(instructions),

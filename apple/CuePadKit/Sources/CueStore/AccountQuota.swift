@@ -208,9 +208,12 @@ public struct QuotaReport: Sendable, Equatable, Decodable {
   }
 }
 
-extension AccountQuota: Record {
+extension AccountQuota: Record, SyncedColumns {
   static let table = Table.accountQuotas
-  static let columns = ["id", "provider", "hostID", "windows", "createdAt", "modifiedAt", "account", "status", "observedAt", "details", "requestedAt"]
+  static let fields: [Field] = [
+    .plain("id"), .plain("provider"), .plain("hostID"), .encrypted("windows"), .plain("createdAt"), .plain("modifiedAt"),
+    .encrypted("account"), .plain("status"), .plain("observedAt"), .encrypted("details"), .plain("requestedAt"),
+  ]
   static var selection: String { (columns + [MacAgents.nameSQL(host: "accountQuotas.hostID")]).joined(separator: ", ") }
   var bindings: [any SQLBindable] { [id, provider, hostID, JSONColumn.encode(windows), createdAt, modifiedAt, account.map(JSONColumn.encode), status.rawValue, observedAt, details.map(JSONColumn.encode), requestedAt] }
   init(row: Row) {

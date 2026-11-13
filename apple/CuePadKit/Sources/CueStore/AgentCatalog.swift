@@ -27,9 +27,9 @@ public struct AgentCatalog: Identifiable, Equatable, Sendable {
   }
 }
 
-extension AgentCatalog: Record {
+extension AgentCatalog: Record, SyncedColumns {
   static let table = Table.agentCatalogs
-  static let columns = ["id", "hostID", "models", "commands", "modifiedAt"]
+  static let fields: [Field] = [.plain("id"), .plain("hostID"), .encrypted("models"), .encrypted("commands"), .plain("modifiedAt")]
   var bindings: [any SQLBindable] { [id, hostID, JSONColumn.encodeList(models), JSONColumn.encodeList(commands), modifiedAt] }
   init(row: Row) {
     self.init(

@@ -20,38 +20,83 @@ extension Table {
   /// 带手机通知标志（明文列 `notify`）的表：标志上传即清、远端带回来的不留（`CueStore.markPushed`、`applyVersion`）。
   package static let notifyFlagged: Set<Table> = [.piSessionStates, .cueMessages]
 
-  /// 每张表的列：同步表（`synced`）是同步的那些（CKRecord 的字段），不含它们的本机列（`Schema` 头注释）；本机表是它自己的列。
+  /// 每张表的列：同步表（`synced`）是同步的那些（CKRecord 的字段，`syncedFields`）；本机表是它自己的列。
   package var columns: [String] {
     switch self {
-    case .projects: Project.columns
-    case .cards: Card.columns
-    case .sendRecords: SendRecord.columns
-    case .attachments: Attachment.columns
     case .piSessions: IndexedSession.columns
     case .projectDirectories: ["projectID", "directory"]
-    case .piSessionStates: SessionState.columns
-    case .agentCatalogs: AgentCatalog.columns
-    case .deliveryRequests: DeliveryRequest.syncedColumns
-    case .directoryBindings: DirectoryBinding.columns
-    case .piMessages: ChatMessage.columns
-    case .previews: PreviewItem.columns
-    case .accountQuotas: AccountQuota.columns
-    case .cueMessages: CueMessage.columns
-    case .cueLines: CueMemoryLine.columns
-    case .cueProfile: CueProfile.columns
-    case .cueState: CueState.columns
-    case .cueRead: CueRead.columns
-    case .macPresence: MacPresence.columns
-    case .macAgents: MacAgents.columns
-    case .agentLibraries: AgentLibrary.columns
-    case .agentLibraryFiles: LibraryFileText.columns
-    case .sessionViewers: Viewer.columns
-    case .activityDestinations: ActivityDestination.columns
     case .cueSummaries: ["lo", "hi", "text", "lineIDs", "createdAt"]
     case .writeCounter: ["seq"]
     case .syncRecords: ["recordName", "recordType", "systemFields", "pushedModifiedAt", "sentModifiedAt"]
+    default: syncedFields.map(\.name)
     }
   }
+
+  package var syncedFields: [Field] { fields.filter { $0.storage != .local } }
+
+  /// 同步表里只留本机的列：记录类型读写的标 `.local`，其余（触发器、单独的 SQL 维护的）列在这里。
+  package var localColumns: [String] {
+    let maintained: [String] =
+      switch self {
+      case .cards, .piSessionStates, .cueMessages: ["writeSeq"]  // 本机写入序号，见 `writeSeq`
+      case .deliveryRequests: ["writeSeq", "cueToldAt"]  // cueToldAt：Cue 已知道没送到
+      case .attachments: ["registeredHere"]  // 这台设备登记的，见 `registerAttachment`
+      case .piMessages: ["arrival"]  // 读进这台的次序，这张表的主键让给了它、id 改由 UNIQUE 守，见 `messageArrivalUpgrade`
+      case .accountQuotas: ["owners"]
+      default: []
+      }
+    return fields.filter { $0.storage == .local }.map(\.name) + maintained
+  }
+
+  /// 同步表的每一列与它的去向；本机表没有。
+  private var fields: [Field] {
+    switch self {
+    case .projects: Project.fields
+    case .cards: Card.fields
+    case .sendRecords: SendRecord.fields
+    case .attachments: Attachment.fields
+    case .piSessionStates: SessionState.fields
+    case .agentCatalogs: AgentCatalog.fields
+    case .deliveryRequests: DeliveryRequest.fields
+    case .directoryBindings: DirectoryBinding.fields
+    case .piMessages: ChatMessage.fields
+    case .previews: PreviewItem.fields
+    case .accountQuotas: AccountQuota.fields
+    case .cueMessages: CueMessage.fields
+    case .cueLines: CueMemoryLine.fields
+    case .cueProfile: CueProfile.fields
+    case .cueState: CueState.fields
+    case .cueRead: CueRead.fields
+    case .macPresence: MacPresence.fields
+    case .macAgents: MacAgents.fields
+    case .agentLibraries: AgentLibrary.fields
+    case .agentLibraryFiles: LibraryFileText.fields
+    case .sessionViewers: Viewer.fields
+    case .activityDestinations: ActivityDestination.fields
+    case .piSessions, .projectDirectories, .cueSummaries, .writeCounter, .syncRecords: []
+    }
+  }
+}
+
+/// 同步表的一列：进 CKRecord 的明文字段（结构性的：排序键、时间、引用、标志）、加密字段（用户内容，服务器看不见、不能查询），或只留本机。
+/// 没有默认值：加列时必须选，选错的内容以明文进 iCloud，生产环境改不回来。
+package struct Field: Sendable {
+  package enum Storage: Sendable { case plain, encrypted, local }
+  package let name: String
+  package let storage: Storage
+
+  static func plain(_ name: String) -> Field { Field(name: name, storage: .plain) }
+  static func encrypted(_ name: String) -> Field { Field(name: name, storage: .encrypted) }
+  static func local(_ name: String) -> Field { Field(name: name, storage: .local) }
+}
+
+/// 同步表的记录类型：列连同去向只在 `fields` 声明一次，SQL 读写的 `columns` 由它推出（顺序即 `bindings`、`init(row:)` 的序号）。
+protocol SyncedColumns {
+  static var fields: [Field] { get }
+}
+
+extension SyncedColumns {
+  static var columns: [String] { fields.map(\.name) }
 }
 
 /// 表行与列的对应。`bindings[0]` 是主键；`columns` 与 `bindings`、`init(row:)` 的读取序号一致。

@@ -64,11 +64,13 @@ public struct CueMessage: Identifiable, Equatable, Sendable {
   public var alerts: Bool { author == .known(.cue) && (choices != nil || urgent) }
 }
 
-extension CueMessage: Record {
+extension CueMessage: Record, SyncedColumns {
   static let table = Table.cueMessages
-  static let columns = [
-    "id", "author", "text", "choices", "urgent", "taskID", "answer", "answeredAt", "deliveredAt", "createdAt", "modifiedAt", "notify", "tools",
-    "ask", "askAction", "askRule", "askShots", "setAsideBy", "wake", "places", "shownText", "answeredRequests",
+  static let fields: [Field] = [
+    .plain("id"), .plain("author"), .encrypted("text"), .encrypted("choices"), .plain("urgent"), .plain("taskID"),
+    .encrypted("answer"), .plain("answeredAt"), .plain("deliveredAt"), .plain("createdAt"), .plain("modifiedAt"), .plain("notify"),
+    .encrypted("tools"), .plain("ask"), .encrypted("askAction"), .encrypted("askRule"), .encrypted("askShots"), .plain("setAsideBy"),
+    .plain("wake"), .encrypted("places"), .encrypted("shownText"), .plain("answeredRequests"),
   ]
   var bindings: [any SQLBindable] {
     [
@@ -109,9 +111,9 @@ public enum CueQuestionEnd: Equatable, Sendable {
 /// 你在 Cue 页读到哪（同步，只有一行，各端都写）：读到的那条 Cue 的话写下的时刻，就记成这一行的修改时间，没有别的列。
 /// 同步时两个版本按修改时间取晚的（`CueStore.applyVersion`），本机也只往后挪（`CueStore.markCueRead`）：两台设备各读各的，
 /// 谁也冲不掉另一台读得更远的；另记一列"读到哪"的话，按修改时间取胜的那一版可能读得更近。新消息的规则在 `CueStore.cueUnread`。
-enum CueRead {
+enum CueRead: SyncedColumns {
   static let recordID = DeterministicID.uuid("cue-read")
-  static let columns = ["id", "modifiedAt"]
+  static let fields: [Field] = [.plain("id"), .plain("modifiedAt")]
 }
 
 public enum CueReport {

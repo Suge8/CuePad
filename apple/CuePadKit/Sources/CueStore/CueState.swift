@@ -125,9 +125,12 @@ public struct CueDuty: Equatable, Sendable {
   public func leftToYou(_ session: SessionState) -> Bool { left.contains { $0.holds(for: session) } }
 }
 
-extension CueState: Record {
+extension CueState: Record, SyncedColumns {
   static let table = Table.cueState
-  static let columns = ["id", "state", "detail", "modifiedAt", "round", "context", "leftToYou", "step", "hostID", "bootID"]
+  static let fields: [Field] = [
+    .plain("id"), .plain("state"), .encrypted("detail"), .plain("modifiedAt"), .plain("round"), .plain("context"),
+    .plain("leftToYou"), .encrypted("step"), .plain("hostID"), .plain("bootID"),
+  ]
   var bindings: [any SQLBindable] {
     [Self.recordID, state.rawValue, detail, modifiedAt, round, context?.stored, left.isEmpty ? nil : JSONColumn.encode(left), step.map(JSONColumn.encode), hostID, bootID]
   }

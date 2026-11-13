@@ -93,9 +93,11 @@ public struct MacAgentProblem: Codable, Equatable, Sendable {
   }
 }
 
-extension MacAgents: Record {
+extension MacAgents: Record, SyncedColumns {
   static let table = Table.macAgents
-  static let columns = ["id", "hostID", "agents", "problems", "modifiedAt", "name"]
+  static let fields: [Field] = [
+    .plain("id"), .plain("hostID"), .encrypted("agents"), .encrypted("problems"), .plain("modifiedAt"), .encrypted("name"),
+  ]
   var bindings: [any SQLBindable] {
     [Self.recordID(host: hostID), hostID, JSONColumn.encodeList(agents), JSONColumn.encodeList(problems), modifiedAt, name]
   }

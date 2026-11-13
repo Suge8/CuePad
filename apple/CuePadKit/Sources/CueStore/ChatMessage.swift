@@ -101,10 +101,12 @@ public struct ChatMessage: Identifiable, Equatable, Sendable {
   }
 }
 
-extension ChatMessage: Record {
+extension ChatMessage: Record, SyncedColumns {
   static let table = Table.piMessages
-  static let columns = [
-    "id", "sessionID", "seq", "role", "text", "at", "tools", "roundStartedAt", "deliveryID", "createdAt", "modifiedAt", "question", "shownText",
+  static let fields: [Field] = [
+    .plain("id"), .plain("sessionID"), .plain("seq"), .plain("role"), .encrypted("text"), .plain("at"), .encrypted("tools"),
+    .plain("roundStartedAt"), .plain("deliveryID"), .plain("createdAt"), .plain("modifiedAt"), .encrypted("question"),
+    .encrypted("shownText"),
   ]
   var bindings: [any SQLBindable] {
     [id, sessionID, seq, role.rawValue, text, at, tools?.stored, roundStartedAt, deliveryID, createdAt, modifiedAt, question, shownText?.stored]

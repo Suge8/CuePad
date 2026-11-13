@@ -58,9 +58,12 @@ public struct ProjectSummary: Equatable, Sendable {
   public var modifiedAt: Date
 }
 
-extension Project: Record {
+extension Project: Record, SyncedColumns {
   static let table = Table.projects
-  static let columns = ["id", "name", "icon", "color", "isPinned", "deletedAt", "createdAt", "modifiedAt", "intro"]
+  static let fields: [Field] = [
+    .plain("id"), .encrypted("name"), .plain("icon"), .plain("color"), .plain("isPinned"), .plain("deletedAt"), .plain("createdAt"),
+    .plain("modifiedAt"), .plain("intro"),
+  ]
   var bindings: [any SQLBindable] { [id, name, icon, color, isPinned, deletedAt, createdAt, modifiedAt, intro] }
   init(row: Row) {
     self.init(

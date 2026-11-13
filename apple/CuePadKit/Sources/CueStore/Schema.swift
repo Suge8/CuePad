@@ -8,9 +8,7 @@
 ///   引用完整性由写入逻辑维护（同一事务内清理），同哈希附件的并发重复可容忍；
 /// - 列只用 TEXT / INTEGER，能直接映射 CKRecord 字段。
 ///
-/// 同步表里的本机列（不进 CKRecord，记录映射的列表里没有它们）：deliveryRequests.resultReceivedAt、serverAt（服务器收下它的时刻）、cueToldAt（Cue 已知道没送到）；
-/// piSessionStates、cards、deliveryRequests、cueMessages 的 writeSeq（本机写入序号，见 `writeSeq`）；attachments.registeredHere（这台设备登记的，见 `registerAttachment`）；
-/// piMessages.arrival（读进这台的次序，这张表的主键让给了它、id 改由 UNIQUE 守，见 `messageArrivalUpgrade`）。
+/// 同步表的列与去向（明文、加密、只留本机）见 `Table.syncedFields`、`Table.localColumns`。
 ///
 /// 本机表（不同步）：`Table.synced` 之外的表，另有 piProcesses、syncRecords、syncState，以及 searchIndex（FTS5，由触发器随同步表维护，可随时重建）；
 /// cueSummaries 是 Cue 记忆的摘要缓存，可随时丢弃重建。

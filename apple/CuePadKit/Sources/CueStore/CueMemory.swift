@@ -56,9 +56,12 @@ public struct CueMemoryVersion: Equatable, Sendable {
   var stamps: Int64
 }
 
-extension CueMemoryLine: Record {
+extension CueMemoryLine: Record, SyncedColumns {
   static let table = Table.cueLines
-  static let columns = ["id", "text", "pinned", "source", "remindAt", "createdAt", "modifiedAt", "deletedAt", "repeats", "taskID"]
+  static let fields: [Field] = [
+    .plain("id"), .encrypted("text"), .plain("pinned"), .plain("source"), .plain("remindAt"), .plain("createdAt"),
+    .plain("modifiedAt"), .plain("deletedAt"), .plain("repeats"), .plain("taskID"),
+  ]
   var bindings: [any SQLBindable] { [id, text, pinned, source.rawValue, remindAt, createdAt, modifiedAt, deletedAt, repeats?.rule, task] }
   init(row: Row) {
     self.init(
