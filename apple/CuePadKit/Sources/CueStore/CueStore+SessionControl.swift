@@ -2,7 +2,7 @@ import CueText
 import Foundation
 
 extension CueStore {
-  /// 界面的回复框与 Cue 的 say 共用这一条。会话在等 CuePad 能代答的提问时，这句就是答案（`answerValue`），答不上抛 `invalidAnswer`，什么都不写；否则发出（规则见 `say`）。带 `config` 时先请会话换上，换不了模型抛 `cannotChangeModel`，什么都不写。会话已结束也照说：执行它的 Mac 先恢复它。说话不改任务的状态：已完成的事收到话仍是完成。`name` 与 `host` 是会话记录还没到时的称呼与执行的 Mac。
+  /// 界面的回复框与 Cue 的 say 共用这一条。会话在等 CuePad 能代答的提问时，这句就是答案（`answerValue`），答不上抛 `invalidAnswer`，什么都不写；否则发出（规则见 `say`）。带 `config` 时先请会话换上，换不了模型抛 `cannotChangeModel`，什么都不写。会话已结束也照说：执行它的 Mac 先恢复它。你的话让绑着这个会话的已完成任务回到进行中，Cue 的话不改任务的状态（`insertDelivery`）。`name` 与 `host` 是会话记录还没到时的称呼与执行的 Mac。
   public func speak(
     _ content: String, to sessionID: String, name: String = "", card: UUID? = nil, config: SessionConfig? = nil,
     host: String, cue: Bool = false

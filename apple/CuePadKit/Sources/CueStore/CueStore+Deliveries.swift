@@ -53,6 +53,12 @@ extension CueStore {
       let on = try questionsOn(session)
       _ = try endQuestions(setAsideBy: request.id, where: on.predicate, on.bindings)
     }
+    // 你对一个会话说话，绑着它的任务就不算做完：回到进行中，这个会话重新有任务在用，不被收尾的复核结束。
+    // Cue 的话不算：他问已完成的事只为问清楚，问完收掉会话；真有问题他先 edit reopen（`CuePrompt`）
+    if !cue, DeliveryMode.toSession.contains(mode), target.kind == .known(.piSession), let session = target.ref {
+      try reopen(try db.query(
+        "SELECT id FROM cards WHERE piSessionID = ? AND completedAt IS NOT NULL AND \(Self.cardVisible)", [session]) { $0.uuid(0) })
+    }
     if let card, mode == .start || DeliveryMode.toSession.contains(mode), let leaf = try leaf(holding: card) {
       try endUnusedSessions(of: leaf, cue: cue)
     }
