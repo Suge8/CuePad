@@ -13,7 +13,7 @@ extension DebugScene {
         if quotaFails {
             // 别的演示 Mac（demo-mini）上也有在线会话：同样按没查到写回，不然手机一直等它（没人领取的请求由投送层收尾）
             for other in services.quotaRefreshKey where other != host {
-                let executor = DeliveryExecutor(store: store, hostID: other, onIssue: { _ in }) { request, _ in
+                let executor = DeliveryExecutor(store: store, hostID: other, onIssue: { abandon("演示 Mac 读写库", $0) }) { request, _ in
                     request.mode == .known(.quota) ? .failed(ShownText("这台 Mac 上没有在线的 Pi 会话")) : .succeeded
                 }
                 await running("演示 Mac 答额度") { try await executor.start() }
@@ -43,24 +43,9 @@ extension DebugScene {
             }) where !pending.isEmpty {
                 await reachable()
                 try await Task.sleep(for: .seconds(1.2))
-                // 与真的 Mac 一样，说出去的话送达后记一条发送记录（任务因此进行中、关联到这个会话）
-                let executor = DeliveryExecutor(store: store, hostID: host, onIssue: { _ in }) { [quotaFails] request, _ in
+                let executor = DeliveryExecutor(store: store, hostID: host, onIssue: { abandon("演示 Mac 读写库", $0) }) { request, _ in
                     await Task.wait(for: .seconds(1))
-                    if let outcome = await DemoAgentLibrary.apply(request, store: store) { return outcome }
-                    #if os(macOS)
-                    if request.mode == .known(.step) {
-                        do { try await AppServices.fillStep(request.content, in: store, runtimes: [:]) } catch { return .failed(ShownText(error)) }
-                    }
-                    #endif
-                    if quotaFails, request.mode == .known(.quota) { return .failed(ShownText("这台 Mac 上没有在线的 Pi 会话")) }
-                    if request.mode == .known(.send) {
-                        do {
-                            _ = try await store.recordSend(request.content, to: request.target, card: request.cardID, delivery: request.id, origin: request.origin)
-                        } catch {
-                            return .failed(ShownText(error))
-                        }
-                    }
-                    return .succeeded
+                    return await demoMacOutcome(request, host: host, store: store)
                 }
                 try await executor.start()
                 for try await open in store.observe({ store in
@@ -70,6 +55,34 @@ extension DebugScene {
                 // 各自演一轮，不挡住下一批话的接手
                 for id in pending { Task { await running("演示 Mac 回一轮") { try await playRound(for: id, store: store, host: host) } } }
             }
+        }
+    }
+
+    /// 演示 Mac 照真的 Mac（`MacExecutor.perform`）逐种办：库里办得了的照办，要真会话的当作办成。
+    /// 不写 default：新加的投送方式在这里编不过，要明说演示怎么办，不默认报成功。
+    private static func demoMacOutcome(_ request: DeliveryRequest, host: String, store: CueStore) async -> DeliveryOutcome {
+        guard let mode = request.mode.known else { return .failed(ShownText(SendError.unsupportedMode(request.mode.rawValue))) }
+        do {
+            switch mode {
+            case .withdraw:
+                return try await store.completeDeliveryWithdrawal(request, on: host, refused: ShownText(SendError.alreadyHanded))
+            case .send:
+                // 与真的 Mac 一样，说出去的话送达后记一条发送记录（任务因此进行中、关联到这个会话）
+                _ = try await store.recordSend(request.content, to: request.target, card: request.cardID, delivery: request.id, origin: request.origin)
+            case .step:
+                #if os(macOS)
+                try await AppServices.fillStep(request.content, in: store, runtimes: [:])
+                #endif
+            case .quota:
+                if quotaFails { return .failed(ShownText("这台 Mac 上没有在线的 Pi 会话")) }
+            case .tidy, .libraryEdit:
+                return await DemoAgentLibrary.apply(request, store: store) ?? .failed(ShownText(SendError.unsupportedMode(request.mode.rawValue)))
+            case .start, .transcript, .bind, .end, .stop, .stopTurn, .retry, .answer, .config, .command:
+                break
+            }
+            return .succeeded
+        } catch {
+            return .failed(ShownText(error))
         }
     }
 

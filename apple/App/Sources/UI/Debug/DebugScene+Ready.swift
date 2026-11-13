@@ -40,7 +40,7 @@ extension DebugScene {
     static let readyFile = ProcessInfo.processInfo.environment["CUEPAD_SHOT_READY"]
 
     /// 摆画面要的数据没写成：报出原因、以 1 退出，不写就绪文件。等它的脚本（`xc.sh shot`、`perf-mac.sh`）照失败处理，不拿半截的库或画面当成果。
-    static func abandon(_ what: String, _ error: any Error) -> Never {
+    nonisolated static func abandon(_ what: String, _ error: any Error) -> Never {
         FileHandle.standardError.write(Data("\(what)：\(error)\n".utf8))
         exit(1)
     }
