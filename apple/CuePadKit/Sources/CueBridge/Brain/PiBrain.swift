@@ -6,7 +6,7 @@ import Foundation
 /// 协议见 Pi 的 docs/rpc.md。
 /// - 不发现扩展（`-ne`，CuePad 的桥扩展也不加载，所以它不在 Agent 会话列表里），
 ///   只加载随包的 cue-tools.ts：它当 CuePad 的 MCP 服务的客户端，把工具照原名登记给模型，不走 Pi 内置 MCP 的
-///   `mcp__cuepad__` 命名（原因见 `cue-tools.ts` 文件开头的注释）；服务的命令行经环境变量 `CUEPAD_CUE_MCP` 交给它；
+///   `mcp__cuepad__` 命名（原因见 `cue-tools.ts` 文件开头的注释）；服务的命令行经环境变量 `CUEPAD_CUE_MCP` 交给它，服务没了时报错带的标记经 `CUEPAD_TOOLS_DOWN`（`CueToolsDown.marker`）；
 ///   不读工作目录里的项目文件（`-na`：项目的 `.pi/` 设置、扩展与 MCP 配置都不信任），也不加载 skill、上下文文件、提示词模板；
 /// - 系统提示整份替换（`--system-prompt` 盖过 `SYSTEM.md`）：Pi 只在没给 `--append-system-prompt` 时才去找 `APPEND_SYSTEM.md`
 ///   追加上去，所以给一个空的追加项挡掉它（空串不追加任何东西）；
@@ -64,6 +64,7 @@ final class PiBrain: HostedSession {
             let process = try await ChildProcess(
                 config.executable, arguments, directory: config.workingDirectory, environment: config.launchEnvironment(adding: [
                     "PI_CACHE_RETENTION": "long", "CUEPAD_CLAUDE": Self.claude(config), "CUEPAD_CUE_MCP": jsonString(config.mcp),
+                    "CUEPAD_TOOLS_DOWN": CueToolsDown.marker,
                 ]),
                 placement: .group, input: .pipe, output: .lines, timing: config.timing)
             self.process = process

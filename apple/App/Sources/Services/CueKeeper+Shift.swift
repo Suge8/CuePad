@@ -201,7 +201,7 @@ extension CueKeeper {
 
     func ended(_ id: String, result: String, failed: Bool) async {
         guard let call = turn?.round.calls.last(where: { $0.id == id && $0.finishedAt == nil }) else { return }
-        if failed, Self.toolsDown(result) {
+        if failed, CueToolsDown.matches(result) {
             Self.log.error("Cue 的工具服务没了：这一轮做完换个班次")
             updateShift { $0.retiring = true }
         }
