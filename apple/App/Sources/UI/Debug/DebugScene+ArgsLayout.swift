@@ -6,7 +6,7 @@ nonisolated struct LayoutArgs: Decodable, DebugArgGroup {
     let beside: String?
     /// `-CuePadCompact <宽>`（iPad）：按这么宽的窄窗口画（分屏、台前调度；紧凑尺寸类）；不给时 iPad 的调试实例起来先铺满屏
     let compact: Double?
-    /// `-CuePadCuePanel YES`（iOS，配 cue 画面）：页头一出现就展开成面板
+    /// `-CuePadCuePanel YES`（配 cue 画面）：页头一出现就展开成面板
     let cuePanel: Bool
     /// `-CuePadDrawerCross rail|cue`（仅 Mac）：拉出那个抽屉后反复跨过临界宽来回拖
     let drawerCross: String?

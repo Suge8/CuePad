@@ -39,6 +39,8 @@ extension DebugScene {
                 ("tests.png", String(localized: "测试", table: "Demo"), String(localized: "重连用例全部通过", table: "Demo"), evidencePNG("✔ 4 tests passed", tint: .green)),
                 ("pressure.png", String(localized: "压测", table: "Demo"), String(localized: "6 人同时重连的压测", table: "Demo"), evidencePNG("p95 9ms", tint: .orange)),
             ]))
+        case "habit":
+            (String(localized: "你在三个会话里都交代过少写测试，要我记成重点吗？", table: "Demo"), try CueAsking(habit: String(localized: "少写测试，只写真正重要的，举证不全就删", table: "Demo")), [])
         default:
             (String(localized: "提问卡我重画了三个方向，都放在下面这条里，你挑一个。我推荐 1：点一下就答完。", table: "Demo"), proposalTaste, try await shots(proposals))
         }

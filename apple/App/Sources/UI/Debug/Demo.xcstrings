@@ -1335,6 +1335,22 @@
         }
       }
     },
+    "你在三个会话里都交代过少写测试，要我记成重点吗？" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You've asked for fewer tests in three sessions. Should I keep that as a key point?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你在三个会话里都交代过少写测试，要我记成重点吗？"
+          }
+        }
+      }
+    },
     "你是 Pi Agent。\n\n# 原则\n\n用当下最新最轻的做法，代码、文档、测试都是负债，每一行都要有理由。\n\n# 工具\n\n互不依赖的调用放在同一轮里并发完成。" : {
       "localizations" : {
         "en" : {
@@ -3507,6 +3523,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "小组件里列出进行中的任务"
+          }
+        }
+      }
+    },
+    "少写测试，只写真正重要的，举证不全就删" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fewer tests, only ones that matter"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "少写测试，只写真正重要的，举证不全就删"
           }
         }
       }

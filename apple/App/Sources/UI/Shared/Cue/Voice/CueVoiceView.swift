@@ -24,7 +24,8 @@ struct CueVoiceDetailButton<Label: View>: View {
 }
 
 #if os(macOS)
-/// Mac 的通话条，常驻在 Cue 栏顶上：真实状态立即更新，只有声纹在图层里连续变形；开始、关闭、失败都不挤动聊天，详情在行尾的"⋯"。
+/// Mac 的通话条，在输入框那里：通话中顶替输入框（`CuePage`，同手机），挂断后还有可看的（失败、问题与朗读记录）时缩成输入框上面的一条，都没有就不在。
+/// 真实状态立即更新，只有声纹在图层里连续变形，详情在行尾的"⋯"。
 /// 手机与 iPad 没有单独的条：通话就在"对 Cue 说"里（`CueComposer`、`PhoneCall`）。
 struct CueVoiceView<Operation: CueVoiceOperation>: View {
     let presentation: CueVoiceState<Operation>?
@@ -46,60 +47,58 @@ struct CueVoiceView<Operation: CueVoiceOperation>: View {
 
     private var showsStatus: Bool { active || hasDetails || presentation?.activity == .failed }
 
-    private var content: some View {
+    @ViewBuilder private var content: some View {
+        if showsStatus { bar.transition(.opacity) }
+    }
+
+    /// 与手机通话中的输入框同一个摆法：左边静音、右边挂断两颗圆钮，中间声纹与状态居中、点它看通话详情。
+    private var bar: some View {
         HStack(spacing: Spacing.item) {
-            CueVoiceSignal(presentation: presentation).voiceSlot(showsStatus)
-            status.lineLimit(1)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .voiceSlot(showsStatus)
             muteButton
-            hangUpButton
             CueVoiceDetailButton(source: $detailsSource) {
-                Image(presentation?.needsAttention == true ? .failure : .more)
-                    .foregroundStyle(presentation?.needsAttention == true ? palette.failure : palette.ink2)
-                    .frame(width: ControlSize.target, height: ControlSize.target)
-                    .contentShape(.circle)
+                HStack(spacing: Spacing.item) {
+                    CueVoiceSignal(presentation: presentation)
+                    status.lineLimit(1)
+                    if presentation?.needsAttention == true { Image(.failure).foregroundStyle(palette.failure) }
+                }
+                .frame(maxWidth: .infinity, minHeight: ComposerMetrics.glyphTarget)
+                .contentShape(.rect)
             }
-            .voiceSlot(hasDetails)
+            .disabled(!hasDetails)
             .accessibilityLabel("通话详情")
             .help(Text("通话详情"))
+            hangUpButton
         }
-        .padding(.horizontal, Spacing.page)
-        .padding(.vertical, Spacing.tight)
+        .padding(Spacing.tight)
+        .glass(in: .capsule)
+        .padding(.bottom, active ? 0 : Spacing.item)
     }
 
     private var status: some View {
         Text(presentation?.title ?? "和 Cue 通话")
-            .font(Typography.meta.weight(.medium))
+            .font(Typography.body)
             .foregroundStyle(presentation?.activity == .failed ? palette.failure : palette.ink2)
     }
 
     private var muteButton: some View {
         Button { action(.toggleMute) } label: {
-            ZStack {
-                Text("取消静音").hidden()
-                Text(muted ? "取消静音" : "静音")
+            CircleGlyph(fill: muted ? palette.ink : palette.fill) {
+                Image(muted ? .muted : .microphone).font(Glyph.large).foregroundStyle(muted ? palette.paper : palette.ink)
             }
-            .transaction { $0.animation = nil }
-            .chip(on: muted, size: .inline)
-            .frame(minWidth: ControlSize.target, minHeight: ControlSize.target)
-            .contentShape(.rect)
         }
-        .buttonStyle(PressStyle())
+        .buttonStyle(PressStyle(.button))
+        .accessibilityLabel(muted ? "取消静音" : "静音")
+        .help(Text(muted ? "取消静音" : "静音"))
         .voiceSlot(presentation?.canMute == true && !closing)
     }
 
     private var hangUpButton: some View {
-        Button { action(.hangUp) } label: {
-            Text("结束")
-                .chip(size: .inline)
-                .frame(minWidth: ControlSize.target, minHeight: ControlSize.target)
-                .contentShape(.rect)
-        }
-        .buttonStyle(PressStyle())
-        .accessibilityLabel("结束通话")
-        .help(Text("结束通话"))
-        .voiceSlot(active && !closing)
+        Button { action(.hangUp) } label: { SendGlyph(closing ? .stopping : .hangUp) }
+            .buttonStyle(PressStyle(.button))
+            .accessibilityLabel("结束通话")
+            .help(Text("结束通话"))
+            .voiceSlot(active)
+            .disabled(closing)
     }
 }
 

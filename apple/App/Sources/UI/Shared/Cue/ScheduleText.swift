@@ -27,7 +27,7 @@ nonisolated enum ScheduleText {
         return within(date, now: now) ? date.formatted(.dateTime.weekday(.abbreviated).hour().minute()) : date.formatted(.dateTime.month().day().hour().minute())
     }
 
-    private static func day(_ date: Date, now: Date = .now) -> String {
+    static func day(_ date: Date, now: Date = .now) -> String {
         let calendar = Calendar.current
         if calendar.isDate(date, inSameDayAs: now) { return String(localized: "今天") }
         if calendar.isDateInTomorrow(date) { return String(localized: "明天") }

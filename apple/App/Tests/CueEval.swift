@@ -25,7 +25,7 @@ final class CueEval {
     private let output: URL
     private var start = Date.distantFuture
     private var begin: Date?
-    /// 场景里的每一轮（含预热）按 id 留着：运行情况只留最近 `CueKeeper.roundsKept` 轮
+    /// 场景里的每一轮（含预热）按 id 留着：管理器只留最近 `CueKeeper.roundsKept` 轮
     private var archive: [Int: CueRound] = [:]
     var report: [String] = []
     /// 场景自己要写进成绩单的（多日单列的轮，score.py 的"单列的轮"表），JSON 能表示的值

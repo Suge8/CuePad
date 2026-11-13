@@ -16,7 +16,6 @@ struct DuplicateBar: View {
                 PaneSegment(items: copies.map { .init(value: $0.path, verbatim: workspace.copyName($0, among: copies)) }, selection: path) {
                     workspace.openLibrary(.skill($0))
                 }
-                .fixedSize()
                 .paneSlot(.compact)
                 .accessibilityElement(children: .contain)
                 .accessibilityLabel("几份同名的")
@@ -24,8 +23,6 @@ struct DuplicateBar: View {
                 Button { keep() } label: { TidyLabel(title: "只留这份", working: working) }
                     .buttonStyle(ControlButtonStyle(kind: .primary, size: .compact))
                     .disabled(working)
-            } consequence: {
-                TidyConsequence(kind: .duplicate)
             }
         }
     }
@@ -39,7 +36,8 @@ struct DuplicateBar: View {
     }
 }
 
-/// 合并照那台 Mac 此刻的文件做，请求带着你看过的那一版（`TidyOrder.base`）：Mac 上先写下没存的字，手机上有没发的改动时不让合并（你的字会变成和它冲突）。两步同一个高：第二行一直占着。
+/// 合并照那台 Mac 此刻的文件做，请求带着你看过的那一版（`TidyOrder.base`）：Mac 上先写下没存的字，手机上有没发的改动时不让合并（你的字会变成和它冲突）。
+/// 标出合并稿时，有替换基础提示的那几份才多出第二行（要不要一并合并）。
 struct MergeBar: View {
     let tidy: LibraryTidy
     let library: AgentLibrary
@@ -65,23 +63,26 @@ struct MergeBar: View {
             Button { merge() } label: { TidyLabel(title: draft.previewing ? "合并" : "合并进来", working: working) }
                 .buttonStyle(ControlButtonStyle(kind: draft.previewing ? .primary : .secondary, size: .compact))
                 .disabled(working || tidy.preview(retiring: draft.retire, texts: texts) == nil || Self.unsent(draft))
-        } consequence: {
-            HStack(alignment: .firstTextBaseline, spacing: Spacing.item) {
-                ForEach(tidy.sources.map(\.origin).filter(\.replacesBasePrompt), id: \.self) { origin in
-                    let on = draft.retire.contains(origin)
-                    Button {
-                        if on { draft.retire.remove(origin) } else { draft.retire.insert(origin) }
-                    } label: {
-                        Text(verbatim: String(localized: "也合并 \(workspace.replacementName(origin))")).chip(on: on)
+        } below: {
+            let replacements = tidy.sources.map(\.origin).filter(\.replacesBasePrompt)
+            if draft.previewing, !replacements.isEmpty {
+                HStack(spacing: Spacing.item) {
+                    ForEach(replacements, id: \.self) { origin in
+                        let on = draft.retire.contains(origin)
+                        Button {
+                            if on { draft.retire.remove(origin) } else { draft.retire.insert(origin) }
+                        } label: {
+                            Text(verbatim: String(localized: "也合并 \(workspace.replacementName(origin))")).chip(on: on)
+                        }
+                        .buttonStyle(PressStyle())
+                        .accessibilityAddTraits(on ? .isSelected : [])
+                        .disabled(working)
                     }
-                    .buttonStyle(PressStyle())
-                    .accessibilityAddTraits(on ? .isSelected : [])
-                    .opacity(draft.previewing ? 1 : 0).disabled(!draft.previewing || working)
                 }
-                Spacer(minLength: 8)
-                TidyConsequence(kind: .merge)
+                .transition(.opacity)
             }
         }
+        .animation(Motion.fade, value: draft.previewing)
     }
 
     private func merge() {
@@ -121,8 +122,6 @@ struct ConflictBar: View {
                 Button("留我的") { Task { await draft.keepMine() } }
                     .buttonStyle(ControlButtonStyle(kind: .secondary, size: .compact))
             }
-        } consequence: {
-            EmptyView()
         }
     }
 
@@ -135,22 +134,22 @@ struct ConflictBar: View {
     #endif
 }
 
-struct LibraryFileBar<Content: View, Consequence: View>: View {
+/// 文件页顶上的一条（同名的几份、另写了一份、改冲突了、起步规则）：一句话与行尾的小钮，直接排在页上，不垫底、不套卡（同列表页的分组标题行）。
+struct LibraryFileBar<Content: View, Below: View>: View {
     @ViewBuilder var content: Content
-    @ViewBuilder var consequence: Consequence
-    @Environment(\.palette) private var palette
+    @ViewBuilder var below: Below
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.item) {
-            HStack(spacing: Spacing.item) { content }
-            consequence
+            HStack(spacing: Spacing.item) { content }.frame(minHeight: ControlSize.compact.height)
+            below
         }
-        .padding(.horizontal, Spacing.group).padding(.vertical, Spacing.item)
-        #if os(macOS)
-        .paper(cornerRadius: Radius.block)
-        #else
-        .background(palette.desk, in: .rect(cornerRadius: Radius.card))
-        #endif
+    }
+}
+
+extension LibraryFileBar where Below == EmptyView {
+    init(@ViewBuilder content: () -> Content) {
+        self.init(content: content, below: { EmptyView() })
     }
 }
 

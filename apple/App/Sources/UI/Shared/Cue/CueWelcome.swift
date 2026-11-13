@@ -2,7 +2,7 @@ import CueStore
 import SwiftUI
 
 /// 空态与启用合成这一处，同一屏不说两遍；输入框上方不另放一块。
-/// 启用前后是同一张纸（同一个 `EmptyState`）：同步对完、Cue 在别处已启用时只换纸里的字与动作，吉祥物的出场不重播、不先空一下。
+/// 启用前后是同一块（同一个 `EmptyState`，不垫纸）：同步对完、Cue 在别处已启用时只换里面的字与动作，吉祥物的出场不重播、不先空一下。
 /// 说过话后停用的那张小纸只在没启用时出现（`CuePage`）。
 struct CueWelcome: View {
     let intro: Bool
@@ -19,7 +19,7 @@ struct CueWelcome: View {
             if intro {
                 let hears = workspace.cue.canHear
                 EmptyState(
-                    mascot: .hello, title: "我是 \(name)", message: hears ? "要做什么，直接跟我说，比如：" : .verbatim(message(settings)), waitsForSync: true
+                    mascot: .hello, title: "我是 \(name)", message: hears ? "要做什么，直接跟我说，比如：" : .verbatim(message(settings)), waitsForSync: true, bare: true
                 ) {
                     if hears { CueStarters() } else { steps(settings, hosts) }
                 }

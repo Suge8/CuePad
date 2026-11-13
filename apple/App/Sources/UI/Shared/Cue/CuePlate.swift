@@ -11,6 +11,8 @@ struct PlateStyle {
     let line: Font
     /// 字号跟着动态字体放大到这一档为止，再大第二行就出了定高的名牌。
     let largestType: DynamicTypeSize
+    /// 收着时头像仍贴左，名字与数字账各自排在名牌正中（Mac：名牌比字宽出一大截，字跟着头像靠左排右半边是空的）；长开时字只往下落、不横挪。
+    var centered = false
 
     #if os(iOS)
     static let fill = PlateStyle(
@@ -21,8 +23,8 @@ struct PlateStyle {
         name: .subheadline.weight(.semibold), line: .caption, largestType: FloatingHeaderLayout.largestType)
     #else
     static let column = PlateStyle(
-        width: nil, height: 44, face: CueAvatar.Size.row.side, inset: 6, nameGap: 10, lineGap: 1,
-        name: Typography.toolbarTitle, line: Typography.toolbarSubtitle, largestType: .large)
+        width: nil, height: 52, face: 44, inset: 4, nameGap: 10, lineGap: 1,
+        name: Typography.cueCardName, line: Typography.secondary, largestType: .large, centered: true)
     #endif
 }
 
@@ -30,6 +32,10 @@ struct PlateStyle {
 struct CuePlate: View {
     let card: Bool
     let style: PlateStyle
+    /// 名牌右端另放了东西（Mac 右栏的收起钮）：字让出这么宽。
+    var reserve: CGFloat = 0
+    /// 名字后面一颗小箭头说它点得开（Mac；手机的名牌自己长成名片，不用）：面板开着时朝上。
+    var opens: Bool?
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -38,13 +44,16 @@ struct CuePlate: View {
         let cue = workspace.cue
         let full = CueAvatar.Size.card.side
         let side = card ? full : style.face
-        PlateLayout(progress: card ? 1 : 0, style: style) {
+        PlateLayout(progress: card ? 1 : 0, style: style, reserve: reserve) {
             // 头像只按名片那一档画一次，收着时整体缩小：开合时连续地长大，点与表情不换档
-            CueAvatar(cue.beat, size: .card)
+            CueAvatar(cue.beat, size: .card, plate: false)
                 .scaleEffect(side / full)
                 .frame(width: side, height: side)
                 .relaySpot(cue: .header)
-            Text(cue.name).font(style.name).foregroundStyle(palette.ink).lineLimit(1)
+            HStack(spacing: Spacing.glyph) {
+                Text(cue.name).font(style.name).foregroundStyle(palette.ink).lineLimit(1)
+                if let opens { DisclosureChevron(open: opens) }
+            }
             CueStatusLine(tally: true, font: style.line).lineLimit(1)
         }
         .dynamicTypeSize(...style.largestType)
@@ -58,6 +67,7 @@ struct CuePlate: View {
 private struct PlateLayout: Layout {
     var progress: CGFloat
     let style: PlateStyle
+    let reserve: CGFloat
 
     var animatableData: CGFloat {
         get { progress }
@@ -82,7 +92,7 @@ private struct PlateLayout: Layout {
     private func collapsed(_ width: CGFloat?) -> CGFloat { style.width ?? width ?? 0 }
 
     private func column(_ width: CGFloat?) -> ProposedViewSize {
-        ProposedViewSize(width: max(collapsed(width) - style.inset - Self.trailing - style.face - style.nameGap, 0), height: nil)
+        ProposedViewSize(width: max(collapsed(width) - style.inset - Self.trailing - reserve - style.face - style.nameGap, 0), height: nil)
     }
 
     private func frame(width: CGFloat?, _ subviews: Subviews) -> Frame {
@@ -101,8 +111,13 @@ private struct PlateLayout: Layout {
         let down = Self.ease(p / Self.turn), across = Self.ease((p - Self.turn) / (1 - Self.turn))
         let beside = center.x + radius + style.nameGap
         let top = Self.lerp(center.y - words / 2, center.y + radius + Self.cardGap, down)
-        let nameAt = CGPoint(x: Self.lerp(beside, center.x - name.width / 2, across), y: top)
-        let lineAt = CGPoint(x: Self.lerp(beside, center.x - line.width / 2, across), y: top + name.height + style.lineGap)
+        // 收着时字在哪：居中的那种排在名牌正中，让开左边的头像与右端留的那一截
+        let clear = style.inset + style.face + style.nameGap
+        func rest(_ width: CGFloat) -> CGFloat {
+            style.centered ? max(clear, min((start - width) / 2, start - reserve - Self.trailing - width)) : beside
+        }
+        let nameAt = CGPoint(x: Self.lerp(rest(name.width), center.x - name.width / 2, across), y: top)
+        let lineAt = CGPoint(x: Self.lerp(rest(line.width), center.x - line.width / 2, across), y: top + name.height + style.lineGap)
         let cardHeight = Self.cardTop + 2 * large + Self.cardGap + words + Self.cardBottom
         let h = max(Self.lerp(style.height, cardHeight, p), lineAt.y + line.height + Self.cardBottom)
         return Frame(size: CGSize(width: w, height: h), avatar: center, radius: radius, name: nameAt, line: lineAt)

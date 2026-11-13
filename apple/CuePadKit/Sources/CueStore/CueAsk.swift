@@ -106,8 +106,9 @@ public struct CueAsking: Equatable, Sendable {
   }
 
   public var question: String {
-    // 常说的做法那一类问的是记不记，不是准不准做：不套“可以…吗”
-    let text = ask == .habit ? String(localized: "\(action)？") : String(localized: "可以\(action)吗？")
+    // 常说的做法那一类问的是记不记，不是准不准做：不套“可以…吗”；那条做法就写在问句里，单看这一句就知道要记的是什么
+    if ask == .habit, let rule { return String(localized: "\(action)「\(rule)」？") }
+    let text = String(localized: "可以\(action)吗？")
     guard let range = text.range(of: action) else { return text }
     // 动作两头的字母或数字与句子里的汉字之间空一格（"可以合并进 main 吗？"），同界面上中英文混排的写法；英文句子本有空格，不加
     func gap(_ a: Character?, _ b: Character?) -> String {
@@ -121,12 +122,12 @@ public struct CueAsking: Equatable, Sendable {
     return String(text[..<range.lowerBound]) + gap(before, action.first) + action + gap(action.last, after) + String(text[range.upperBound...])
   }
 
-  /// 问句下面那一句（拍板卡、全屏预览底栏、对话里答完的那句、通知、实时活动都只读它）：只有引你原话的那两类有——
+  /// 问句下面那一句（拍板卡、全屏预览底栏、对话里答完的那句、通知、实时活动都只读它）：只有规矩那一类有——
   /// 这一问为什么来问他只有这句说得出。别的类不写：问句已经说了是什么事，"按你的口味定""请你允许推送代码"这类泛泛的依据只是复述。
-  /// 常说的做法那一类只放那条做法本身：它就是要记的东西，不是依据，再套“你说过「…」”是多一层壳。
+  /// 常说的做法那一类也不写：那条做法是要记的东西，不是依据，已在问句里。
   public var why: String? {
-    guard let rule else { return nil }
-    return ask == .habit ? rule : String(localized: "你说过「\(rule)」。")
+    guard let rule, ask != .habit else { return nil }
+    return String(localized: "你说过「\(rule)」。")
   }
 }
 

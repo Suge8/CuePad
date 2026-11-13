@@ -42,15 +42,20 @@ struct CueSays: View {
     @ScaledMetric(relativeTo: .body) private var readingSpacing = Typography.readingLineSpacing
     @Environment(\.palette) private var palette
     @State private var selecting = false
-    @State private var reading = false
+    @State private var reading = DebugHooks.preset.toolsOpen
 
     var body: some View {
         BubbleWidth(fraction: CueBubble.cueWidth, edge: .leading) {
             VStack(alignment: .leading, spacing: card ? Spacing.group : Spacing.item) {
                 words
                 if !shots.isEmpty { CueShots(shots: shots, group: message.id.uuidString, open: open) }
-                if let task { CueTaskLine(task: task, message: message) }
+                if asks {
+                    foot
+                } else if let task {
+                    CueTaskLine(task: task, message: message)
+                }
             }
+            .animation(Motion.fade, value: reading)
             .modifier(CueSaysSurface(card: card, joined: joined))
             .contextMenu { MessageActions(text: message.text, kind: .cue, selectText: { selecting = true }) }
         }
@@ -59,23 +64,32 @@ struct CueSays: View {
         #endif
     }
 
+    private var asks: Bool { message.asking != nil && !card }
+
     @ViewBuilder private var words: some View {
-        if message.asking != nil, !card {
-            asked
+        if asks {
+            CueQuestionLine(message: message, tone: .ended)
+            if reading {
+                MarkdownText(source: message.text).equatable().font(Typography.secondary).foregroundStyle(palette.ink2)
+                    .padding(Spacing.group).frame(maxWidth: .infinity, alignment: .leading)
+                    .background(palette.fill, in: .rect(cornerRadius: Radius.block))
+                    .transition(.opacity)
+            }
         } else {
             said
         }
     }
 
-    private var asked: some View {
-        CueQuestionLine(message: message, tone: .ended) {
-            if reading {
-                MarkdownText(source: message.text).equatable().font(Typography.secondary).foregroundStyle(palette.ink2).padding(.top, Spacing.tight)
-                    .transition(.opacity)
+    /// 问句底下只一排小字：没记成的结局、它关于的任务、看原话，不各占一行。
+    private var foot: some View {
+        HStack(spacing: Spacing.group) {
+            if message.asking?.ask == .habit, message.answer == nil, message.setAsideBy == nil {
+                Text("没记").font(Typography.meta).foregroundStyle(palette.ink3)
             }
+            if let task { CueTaskLine(task: task, message: message) }
             OriginalToggle(open: $reading)
         }
-        .animation(Motion.fade, value: reading)
+        .frame(minHeight: CueTaskLine.lineHeight)
     }
 
     @ViewBuilder private var said: some View {

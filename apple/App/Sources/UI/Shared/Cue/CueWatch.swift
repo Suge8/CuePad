@@ -25,15 +25,9 @@ final class CueWatch {
     private(set) var unread = 0
     private(set) var hostID: String?
     private(set) var hostName: String?
-    #if os(macOS)
-    private(set) var context: CueContext?
-    #endif
     var draft = ComposerDraft()
     var showsMemory = false
     var showsSchedules = false
-    #if os(macOS)
-    var showsRun = false
-    #endif
 
     init(_ digest: CueDigest?, at moment: Speech.Moment, local: CueNow.Local) {
         if let digest { apply(digest, at: moment, local: local) }
@@ -95,9 +89,6 @@ final class CueWatch {
         unread = digest.unread
         hostID = digest.hostID
         hostName = digest.hostName
-        #if os(macOS)
-        context = digest.state?.context
-        #endif
     }
 
     /// 调试画面手动换的 Cue 此刻（`-CuePadCueCycle` 轮流走各态，`DebugScene.cueNowTourIfAsked`）：换过就不再随库变。

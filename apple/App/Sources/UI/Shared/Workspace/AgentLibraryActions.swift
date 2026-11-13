@@ -23,7 +23,7 @@ extension Workspace {
         library.flatMap { fileDrafts[FileDraftKey(host: $0.hostID, file: file)] }
     }
 
-    /// 手机发往那台 Mac 的不带撤销：那台照做不留撤销（`TidyConsequence`）。
+    /// 手机发往那台 Mac 的不带撤销：那台照做不留撤销（移走的在那台的废纸篓里）。
     func tidy(_ orders: [TidyOrder], in library: AgentLibrary) async {
         guard !orders.isEmpty else { return }
         do {
