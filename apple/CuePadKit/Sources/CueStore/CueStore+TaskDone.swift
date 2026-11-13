@@ -43,6 +43,17 @@ extension CueStore {
     try write { try reopen([id]) }
   }
 
+  /// 你对会话说了话：绑着它的已完成任务回到进行中（绑着会话就是开始过，不回待办）。写下这句话时（`insertDelivery`）与执行的 Mac 领取它时（`claimDelivery`）各一次：
+  /// 写的那台设备可能还没同步到完成，领取时带 `before`（这句话写下的时刻）只认在那之前做完的；话还在路上时你才点的完成不翻回。必须在写事务内调用。
+  func reopenTasks(spokenToIn session: String, before: Date? = nil) throws {
+    let done = try db.query(
+      "SELECT id FROM cards WHERE piSessionID = ?1 AND completedAt IS NOT NULL AND (?2 IS NULL OR completedAt < ?2) AND \(Self.cardVisible)",
+      [session, before]) { $0.uuid(0) }
+    try reopen(done)
+    let now = Date.stamp
+    for task in done { try beginTask(task, at: now) }
+  }
+
   /// 不再算做完，只在这里写。`tasks` 连同各自已完成的上级清掉完成时间：开始过的回到进行中，没开始过的回到待办；在归档里的，整件连同下级取回。你对它的会话说话也经这里（`insertDelivery`）。必须在写事务内调用。
   func reopen(_ tasks: [UUID]) throws {
     let chains = try tasks.map { [$0] + (try ancestors(of: $0)) }
