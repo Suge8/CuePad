@@ -101,9 +101,15 @@ final class Workspace {
     #else
     var menuOpen = false
     var outbox: Outbox? {
-        didSet { if let outbox, outbox.id != oldValue?.id { handOffDraft = ComposerDraft(attachments: [outbox]) } }
+        didSet {
+            guard outbox?.id != oldValue?.id else { return }
+            if let oldValue { settleLaunch(oldValue.launchKey) }
+            guard let outbox else { return }
+            handOffDraft = ComposerDraft(attachments: [outbox])
+            resumeHandOff(outbox)
+        }
     }
-    /// 放在这里而不在输入框里：发出即收起，写库失败时还能放回、重新浮起。
+    /// 放在这里而不在输入框里：交给已有会话的发出即收起，写库失败时还能放回、重新浮起。
     var handOffDraft = ComposerDraft()
     /// 计数而不是布尔：已在搜索页时再触发也要聚焦。
     var searchFocusRequests = 0

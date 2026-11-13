@@ -23,7 +23,7 @@ struct NewSessionInput: View {
     private var canStart: Bool { chosen?.host != nil && brain != nil && launching.canSubmit(at: services.speech) }
 
     var body: some View {
-        composer.composerNotice(status != nil) { if let status { statusLine(status).font(Typography.caption) } }
+        composer.composerNotice(status != nil) { if let status { LaunchStatusLine(status: status) } }
             #if os(macOS)
             .frame(width: 480)
             #endif
@@ -42,8 +42,7 @@ struct NewSessionInput: View {
             })
         .confirmsLaunchAgain(launching)
         .onAppear {
-            workspace.resume(start, opened: Workspace.entering(start))
-            if let seed = start.draft, draft.isEmpty(accepting: [.files, .cards]) { draft = seed }
+            workspace.resume(start.launchKey, opened: Workspace.entering(start))
             #if os(iOS)
             focused = true
             #endif
@@ -78,33 +77,44 @@ struct NewSessionInput: View {
         }
     }
 
-    private enum Status {
-        case noMac, phase(LaunchProgress.Phase), noAgents(MacAgents)
-    }
-
-    private var status: Status? {
-        if chosen != nil, chosen?.host == nil { return .noMac }
-        if phase != .idle { return .phase(phase) }
-        // 那台一家都不能用：同步通了也开不了，所以要写原因
-        if let agents, agents.agents.isEmpty { return .noAgents(agents) }
-        return nil
-    }
-
-    @ViewBuilder private func statusLine(_ status: Status) -> some View {
-        switch status {
-        case .noMac: MacInputNotice(noMac: true)
-        case .noAgents(let agents): Text("\(agents.shownName)：\(agents.whyNone)").foregroundStyle(palette.ink3)
-        case .phase(.failed(let failure)): Text(failure.text).foregroundStyle(palette.failure)
-        case .phase(.unconfirmed(let reason)): Text(verbatim: reason).foregroundStyle(palette.ink3)
-        case .phase(.missing): Text("上一次开会话的结果已经查不到了").foregroundStyle(palette.ink3)
-        case .phase(.sending(let transit)):
-            HStack(spacing: Spacing.glyph) { Spinner(.mini); Text(transit.label) }.font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink2)
-        case .phase:
-            HStack(spacing: Spacing.glyph) { Spinner(.mini); Text("Mac 正在开 Agent 会话…") }.foregroundStyle(palette.ink3)
-        }
+    private var status: LaunchStatus? {
+        LaunchStatus(noMac: chosen != nil && chosen?.host == nil, phase: phase, agents: agents)
     }
 
     private func launch() {
         workspace.submitSession(start, in: chosen, draft: draft, choice: brain, opened: Workspace.entering(start))
+    }
+}
+
+/// 开新会话的输入框上方那一行：开不了的原因，或发出后的进度与结果。新会话的输入框与手机交给新会话的输入框同一份。
+enum LaunchStatus {
+    case noMac, phase(LaunchProgress.Phase), noAgents(MacAgents)
+
+    init?(noMac: Bool, phase: LaunchProgress.Phase, agents: MacAgents?) {
+        if noMac { self = .noMac } else if phase != .idle { self = .phase(phase) }
+        // 那台一家都不能用：同步通了也开不了，所以要写原因
+        else if let agents, agents.agents.isEmpty { self = .noAgents(agents) } else { return nil }
+    }
+}
+
+struct LaunchStatusLine: View {
+    let status: LaunchStatus
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        Group {
+            switch status {
+            case .noMac: MacInputNotice(noMac: true)
+            case .noAgents(let agents): Text("\(agents.shownName)：\(agents.whyNone)").foregroundStyle(palette.ink3)
+            case .phase(.failed(let failure)): Text(failure.text).foregroundStyle(palette.failure)
+            case .phase(.unconfirmed(let reason)): Text(verbatim: reason).foregroundStyle(palette.ink3)
+            case .phase(.missing): Text("上一次开会话的结果已经查不到了").foregroundStyle(palette.ink3)
+            case .phase(.sending(let transit)):
+                HStack(spacing: Spacing.glyph) { Spinner(.mini); Text(transit.label) }.font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink2)
+            case .phase:
+                HStack(spacing: Spacing.glyph) { Spinner(.mini); Text("Mac 正在开 Agent 会话…") }.foregroundStyle(palette.ink3)
+            }
+        }
+        .font(Typography.caption)
     }
 }
