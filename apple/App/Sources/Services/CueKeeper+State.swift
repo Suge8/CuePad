@@ -76,6 +76,31 @@ extension CueKeeper {
         var heard: Int64?
         /// 出错后要重来的几件（`CueKeeper.setbacks`）：定时、刚启用与你那句话在醒来时已消费，只有这里记着，所以跨重启、换手留着
         var setbacks: [Setback]?
+
+        init() {}
+
+        /// 按字段解：一项解不开（结构改了、写坏了）只丢这一项并记错，没答上的你的话、变化基线等其余照用。
+        init(from decoder: any Decoder) throws {
+            let fields = try decoder.container(keyedBy: CodingKeys.self)
+            func field<T: Decodable>(_ key: CodingKeys) -> T? {
+                do {
+                    return try fields.decodeIfPresent(T.self, forKey: key)
+                } catch {
+                    CueKeeper.log.error("Cue 的对账进度里 \(key.stringValue, privacy: .public) 解不开，这一项丢掉：\(String(describing: error), privacy: .public)")
+                    return nil
+                }
+            }
+            marks = field(.marks)
+            patrolDay = field(.patrolDay)
+            patrols = field(.patrols) ?? 0
+            patrolledIdle = field(.patrolledIdle)
+            warmedIdle = field(.warmedIdle)
+            greeted = field(.greeted)
+            unanswered = field(.unanswered)
+            detour = field(.detour)
+            heard = field(.heard)
+            setbacks = field(.setbacks)
+        }
     }
 
     /// 额度、登录卡住后的绕行：你设定的那家与它的模型、强度、fast（绕行前的设置），与这次卡住的几家。

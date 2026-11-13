@@ -120,7 +120,14 @@ final class CueKeeper {
         self.setup = setup
         heardAt = setup.timing.awake()
         (inputs, input) = AsyncStream.makeStream()
-        progress = (try? JSONDecoder().decode(Progress.self, from: Data(contentsOf: setup.directory.appending(path: "keeper.json")))) ?? Progress()
+        do {
+            progress = try JSONDecoder().decode(Progress.self, from: Data(contentsOf: setup.directory.appending(path: "keeper.json")))
+        } catch CocoaError.fileReadNoSuchFile {
+            progress = Progress()
+        } catch {
+            Self.log.error("Cue 的对账进度读不出，从头算起：\(error.localizedDescription, privacy: .public)")
+            progress = Progress()
+        }
     }
 
     /// 值班对外的样子（只读投影）：测试与评测只读它，内部字段改名、改形状不牵动它们。
