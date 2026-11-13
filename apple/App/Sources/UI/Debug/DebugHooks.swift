@@ -38,10 +38,8 @@ enum DebugHooks {
         var showsDone = false
         var cueNow: CueNow?
         var quotaOpen = false
-        var helpOpen = false
         var scheduleOpen = false
         var mergePreview = false
-        var libraryPane = LibraryPane.rules
         var cuePanelOpen = false
         #if os(iOS)
         /// 设置页通知那一行显示的状态：演示模式没有同步，真实状态出不来。

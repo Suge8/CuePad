@@ -66,9 +66,7 @@ enum DebugScene {
         #endif
         preset.quotaOpen = args.layoutOpts.quotaOpen
         preset.scheduleOpen = args.layoutOpts.scheduleOpen
-        preset.helpOpen = args.layoutOpts.helpOpen
         preset.mergePreview = args.layoutOpts.mergePreview
-        if args.libraryTab == "skills" { preset.libraryPane = .skills }
         preset.cuePanelOpen = args.layoutOpts.cuePanel
         #if os(iOS)
         preset.alertStatus = alertStatus

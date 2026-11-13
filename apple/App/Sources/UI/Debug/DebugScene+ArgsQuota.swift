@@ -8,7 +8,5 @@ nonisolated struct QuotaArgs: Decodable, DebugArgGroup {
     let remindIn: Double
     /// `-CuePadQuotaResetIn <秒>`：Claude 的 5 小时窗口这么多秒后重置，截图等到重置之后再拍（核对明细在那一刻变成已重置）
     let resetIn: Double
-    /// `-CuePadQuotaSample magpie|stress`（配 `-CuePadDemo YES` 与空库）：演示额度换成一处网关报来的账号
-    let sample: String?
 }
 #endif

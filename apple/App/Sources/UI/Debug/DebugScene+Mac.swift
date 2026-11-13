@@ -22,7 +22,6 @@ extension DebugScene {
         }
         if args.demoMac { Task { await runDemoMac(workspace.services) } }
         presetDrawers(workspace)
-        crossWithDrawerIfAsked(workspace)
         if let pace = args.layoutOpts.sidebarCycle { Task { await cycle(#selector(AppDelegate.toggleCueSidebar(_:)), fast: pace == "fast") } }
         if let pace = args.layoutOpts.rightCycle { Task { await cycle(#selector(AppDelegate.toggleCueColumn(_:)), fast: pace == "fast") } }
         await reverseWideIfAsked(workspace)

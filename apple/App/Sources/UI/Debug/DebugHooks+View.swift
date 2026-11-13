@@ -83,7 +83,7 @@ extension View {
     /// `-CuePadHelpOpen YES`：问号的说明一出现就点开，同点一下问号（推入转场里栏在动，等它停下再量钮的框）。
     func debugOpensHelp(_ open: @escaping @MainActor () -> Void) -> some View {
         #if DEBUG
-        onAppear { if DebugHooks.preset.helpOpen { DebugScene.later(.seconds(1.2), open) } }
+        onAppear { if DebugScene.args.layoutOpts.helpOpen { DebugScene.later(.seconds(1.2), open) } }
         #else
         self
         #endif
