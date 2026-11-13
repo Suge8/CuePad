@@ -105,5 +105,27 @@ extension TaskFlowTests {
         #expect(requests.filter { $0.mode == .known(.start) }.count == 1)
         #expect(requests.filter { $0.mode == .known(.send) }.isEmpty)
     }
+
+    @Test func 手机还没同步到完成就对会话说话_Mac领取时任务回到进行中() async throws {
+        let phone = TestApp(host: "phone")
+        defer { phone.services.cancelBackgroundWork() }
+        let task = try await store.createTask("修登录")
+        try await StateRecorder(store: store, hostID: TestApp.hostID).update(sessionID: "s1", state: .settled, title: "修登录")
+        try await store.bindSession("s1", to: task.id)
+        let open = try #require(try await store.syncRow(recordName: task.id.uuidString.lowercased()))
+        #expect(try await phone.services.store.applyRemote([.save(open, systemFields: Data())]).isEmpty)
+        try await Workspace(services: rig.services).complete(task.id)
+        try await Task.sleep(for: .milliseconds(5))
+        let said = try await phone.services.store.requestDelivery(
+            "登录后还是白屏", to: SendTarget(kind: .piSession, name: "修登录", ref: "s1"), on: TestApp.hostID)
+        #expect(try await phone.services.store.card(task.id)?.status != .done)
+        let row = try #require(try await phone.services.store.syncRow(recordName: said.id.uuidString.lowercased()))
+        #expect(try await store.applyRemote([.save(row, systemFields: Data())]).isEmpty)
+        #expect(try await store.card(task.id)?.status == .done)
+        let executor = DeliveryExecutor(store: store, hostID: TestApp.hostID, onIssue: { Issue.record("\($0)") }) { _, _ in .succeeded }
+        try await executor.start()
+        defer { await executor.stop() }
+        try await eventually("Mac 领取这句话") { try await store.card(task.id)?.status == .inProgress }
+    }
 }
 #endif
