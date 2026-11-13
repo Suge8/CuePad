@@ -199,9 +199,9 @@ enum DebugHooks {
     }
 
     /// 稍后做一件摆画面的事（如编辑器载入后选中一段）：Debug 里记作"还在摆"，截图的就绪标记等它做完。
-    static func later(_ delay: Duration = .zero, _ work: @escaping @MainActor () -> Void) {
+    static func later(_ delay: Duration = .zero, fileID: String = #fileID, line: Int = #line, _ work: @escaping @MainActor () -> Void) {
         #if DEBUG
-        DebugScene.later(delay, work)
+        DebugScene.later(delay, fileID: fileID, line: line, work)
         #else
         // 被取消（App 收场）就不做了
         Task {

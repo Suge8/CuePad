@@ -53,7 +53,7 @@ enum DemoLibrary {
     private static func seedQuotas(_ store: CueStore) async throws {
         let now = Date.now
         let resetIn = DebugScene.args.quotaOpts.resetIn
-        if resetIn > 0 { DebugHooks.later(.seconds(resetIn + 5)) {} }
+        if resetIn > 0 { DebugScene.holdingReady("额度重置（-CuePadQuotaResetIn）") { await Task.wait(for: .seconds(resetIn + 5)) } }
         let remindIn = DebugScene.args.quotaOpts.remindIn
         func window(_ seconds: Int, used: Double, left: TimeInterval, model: String? = nil) -> QuotaWindow {
             QuotaWindow(seconds: seconds, used: used, resetsAt: now.addingTimeInterval(left), model: model)

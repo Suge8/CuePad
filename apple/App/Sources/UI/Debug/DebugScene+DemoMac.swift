@@ -18,7 +18,7 @@ extension DebugScene {
                 }
                 await running("演示 Mac 答额度") { try await executor.start() }
             }
-            holdingReady {
+            holdingReady("额度明细里没查到的那一行（-CuePadQuotaFails）") {
                 for await failed in Observations({ if case .failed = services.accountQuotas.phase { true } else { false } }) where failed { return }
             }
         }
