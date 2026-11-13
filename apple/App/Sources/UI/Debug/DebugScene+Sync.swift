@@ -215,8 +215,8 @@ extension DebugScene {
         }
     }
 
-    /// 库里没有创建冲突副本的公开入口（由同步产生）：直接在库文件里把副本指回原卡。演示与测试共用这一处。
-    static func markConflict(copy: UUID, of original: UUID, database: URL) -> Bool {
+    /// 库里没有创建冲突副本的公开入口（由同步产生）：直接在库文件里把副本指回原卡。
+    private static func markConflict(copy: UUID, of original: UUID, database: URL) -> Bool {
         var handle: OpaquePointer?
         defer { sqlite3_close(handle) }
         guard sqlite3_open(database.path, &handle) == SQLITE_OK else { return false }
