@@ -10,7 +10,8 @@ import CueBridge
 import UIKit
 #endif
 
-/// 界面读数据直接 `store.observe(...)`；一切副作用只经这里，发送记录也只在这里写。
+/// 组合根：开库、装配依赖；持有跨窗口的服务（同步、快照、提示、热键、Mac 的执行器）与投送请求的入口（`request(on:)`）。
+/// 每个窗口自己的用例（建卡、完成、交给 Agent）在 `Workspace`，直接写 store；界面读数据直接 `store.observe(...)`。
 @Observable
 final class AppServices {
     static let version: String = {
@@ -124,8 +125,7 @@ final class AppServices {
         reportIssue: { [weak self] message in self?.reportIssue(.syncUnavailable(message)) })
 
     @ObservationIgnored lazy var hotkey = GlobalHotkey(
-        label: String(localized: "显示或隐藏 CuePad"), key: AppSettings.Key.globalShortcut, defaultAccelerator: "Alt+Shift+Space", defaults: settings.defaults,
-        backend: hotkeyBackend
+        label: String(localized: "显示或隐藏 CuePad"), slot: .main, settings: settings, backend: hotkeyBackend
     ) { [weak self] in self?.windowShell?.toggleFromHotkey() }
     #endif
 

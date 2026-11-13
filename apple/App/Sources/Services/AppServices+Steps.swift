@@ -37,16 +37,8 @@ extension AppServices {
 
     /// 别的设备上：请会话所在的 Mac 取了写在那一步上（`ChatMessage.Tools.Item.detail`），等它办完；那台没开、没取到、一分钟没回音都抛出原因。
     func fetchStep(_ item: Int, of message: UUID, in session: SessionState) async throws {
-        let request = try await request(on: session.hostID) { try await store.requestStep(item, of: message, in: session) }
-        let deadline = timing.now().addingTimeInterval(Speech.receiptLimit)
-        let result = try await withThrowingTaskGroup(of: DeliveryRequest.self) { [store, timing] group in
-            group.addTask { try await store.outcome(of: request) }
-            group.addTask {
-                try await timing.sleepUntil(deadline)
-                throw SendError.noReply
-            }
-            defer { group.cancelAll() }
-            return try await group.next()!
+        let result = try await awaitOutcome(onTimeout: SendError.noReply) {
+            try await request(on: session.hostID) { try await store.requestStep(item, of: message, in: session) }
         }
         if let failure = result.failure { throw SendError.notDelivered(failure) }
     }

@@ -38,11 +38,6 @@ final class SendState {
         projects = result
     }
 
-    /// 与手机的发给 Agent 输入框共用同一份规则（`HandOffTargets`）。
-    func onlineTargets(for project: UUID?) -> [SessionListItem] {
-        HandOffTargets.sessions(services.liveSessions.live, project: project, at: services.speech)
-    }
-
     func route(of sessionID: String, host: String? = nil) -> Route {
         if let live = liveSession(sessionID) { return .local(live) }
         if let remote = services.liveSessions.live.first(where: { $0.state.sessionID == sessionID && $0.state.hostID != services.hostID }) {

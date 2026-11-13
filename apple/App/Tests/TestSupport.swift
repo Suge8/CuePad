@@ -191,21 +191,11 @@ final class TestApp {
 
     /// 旧实例自己的工作都停下（同进程被杀）：桥、托管的会话和热键是 `TestApp` 的，留给新实例。不写离线之类的收尾记录，免得晚到的写入盖过新实例的。
     private func retire(_ services: AppServices, app: SourceLocation? = nil) {
-        let followers = services.cancelBackgroundWork(), sync = services.sync
-        #if os(macOS)
-        let executor = services.executor.beginStop(), cue = services.cue.stop()
+        let halted = services.halt()
         LibraryLedger.close(ledger, app: app) {
-            await executor()
-            await cue()
-            await sync?.stop()
-            await followers?.value
+            for step in halted.steps { try? await step.run() }
+            await halted.followers?.value
         }
-        #else
-        LibraryLedger.close(ledger, app: app) {
-            await sync?.stop()
-            await followers?.value
-        }
-        #endif
     }
 
     func runtimeRecorder(on host: String, boot: String = TestBoot.id) async throws -> StateRecorder {

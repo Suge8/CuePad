@@ -22,21 +22,28 @@ extension AppServices {
     }
 
     private func withdrawRemotely(_ id: UUID, on host: String) async throws {
-        let deadline = timing.now().addingTimeInterval(Speech.receiptLimit)
-        let request = try await request(on: host) {
-            guard let withdrawal = try await store.requestDeliveryWithdrawal(id) else { throw SendError.alreadyHanded }
-            return withdrawal
+        let result = try await awaitOutcome(onTimeout: SendError.alreadyHanded) {
+            try await request(on: host) {
+                guard let withdrawal = try await store.requestDeliveryWithdrawal(id) else { throw SendError.alreadyHanded }
+                return withdrawal
+            }
         }
-        let result = try await withThrowingTaskGroup(of: DeliveryRequest.self) { [store, timing] group in
+        guard result.status == .known(.succeeded) else { throw SendError.alreadyHanded }
+    }
+
+    /// 写出请求、等那台办完；从写之前起 `Speech.receiptLimit` 内没结果抛 `onTimeout`。
+    func awaitOutcome(onTimeout: SendError, _ write: () async throws -> DeliveryRequest) async throws -> DeliveryRequest {
+        let deadline = timing.now().addingTimeInterval(Speech.receiptLimit)
+        let request = try await write()
+        return try await withThrowingTaskGroup(of: DeliveryRequest.self) { [store, timing] group in
             group.addTask { try await store.outcome(of: request) }
             group.addTask {
                 try await timing.sleepUntil(deadline)
-                throw SendError.alreadyHanded
+                throw onTimeout
             }
             defer { group.cancelAll() }
             return try await group.next()!
         }
-        guard result.status == .known(.succeeded) else { throw SendError.alreadyHanded }
     }
 
     /// 你要一台 Mac 做的事（说话、停下、结束、开会话、回答、改设置……）都经这里写成请求并立即上传。

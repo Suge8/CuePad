@@ -73,8 +73,7 @@ final class MacExecutor {
             return try await perform(request, access: access)
         } catch {
             AppServices.log.error("投送请求 \(request.id, privacy: .public) \(request.mode.rawValue, privacy: .public) 没成：\(String(describing: error), privacy: .public)")
-            if request.mode == .known(.start), error as? PiHostError == .notConnected { return .unconfirmed(ShownText(error)) }
-            return DeliveryRefusal.definitelyNotHanded(error) ? .failed(ShownText(error)) : .unconfirmed(ShownText(error))
+            return DeliveryRefusal.definitelyNotHanded(request.mode, error) ? .failed(ShownText(error)) : .unconfirmed(ShownText(error))
         }
     }
 
@@ -133,7 +132,7 @@ final class MacExecutor {
         try Task.checkCancellation()
         do { try await bridge.send(outgoing, to: session.id) }
         catch {
-            guard session.agent == .pi, !DeliveryRefusal.definitelyNotHanded(error) else { throw error }
+            guard session.agent == .pi, !DeliveryRefusal.definitelyNotHanded(request.mode, error) else { throw error }
             return DeliveryConfirmation(store: store, bridge: bridge).pending(in: session, reason: ShownText(error))
         }
         do {

@@ -24,7 +24,7 @@ struct BubbleFooter: View {
             }
         }
         if agents.items[focus.id] != nil { return .agent(focus) }
-        if let kind = agents.launching[focus.id], !unsettled(focus.id) { return .launching(kind) }
+        if let kind = agents.launching[focus.id], !workspace.launchUnsettled(focus.id) { return .launching(kind) }
         return focus.status != .done ? .start(focus, caption: nil, editing: editing) : nil
     }
 
@@ -42,17 +42,6 @@ struct BubbleFooter: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.top, Spacing.tight)
         }
-    }
-
-    private func unsettled(_ leaf: UUID) -> Bool {
-        #if os(macOS)
-        switch workspace.sessionLaunching(.card(leaf)).phase(at: workspace.services.speech) {
-        case .unconfirmed, .missing: true
-        default: false
-        }
-        #else
-        false
-        #endif
     }
 }
 
