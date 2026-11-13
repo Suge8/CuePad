@@ -108,6 +108,7 @@ final class CueKeeper {
     @ObservationIgnored var handedOver: Int?
     private var history: [CueRound] = []
     @ObservationIgnored private var roundCount = 0
+    @ObservationIgnored var reconciles = 0
     /// 你的话里的附件正在旁边取的（`ready(_:)`）与取不来、照交的
     @ObservationIgnored var fetchingFiles: [UUID: Task<Void, Never>] = [:]
     @ObservationIgnored var unfetchable: Set<UUID> = []
@@ -119,7 +120,43 @@ final class CueKeeper {
         progress = (try? JSONDecoder().decode(Progress.self, from: Data(contentsOf: setup.directory.appending(path: "keeper.json")))) ?? Progress()
     }
 
-    var rounds: [CueRound] { turn.map { history + [$0.round] } ?? history }
+    /// 值班对外的样子（只读投影）：测试与评测只读它，内部字段改名、改形状不牵动它们。
+    struct Snapshot {
+        /// 头注释状态表里的那一格（不值班时没有值班，读不到它）
+        enum State: Equatable {
+            case starting, idle, turn, retiring, resting, stalled
+            case restarting(at: Date)
+        }
+
+        var state: State
+        /// 要重来的几件
+        var setbacks: [Setback]
+        /// 在跑的那一轮
+        var turn: CueRound?
+        /// 最近的几轮，在跑的那一轮在最后
+        var rounds: [CueRound]
+        /// 这一次启用已招呼过（或手上没事不用招呼）
+        var greeted: Bool
+        /// 一轮在跑时看门狗还剩多久（按醒着的钟）
+        var watchdog: Duration?
+        /// 对完了几次账、此刻有没有排着下一次（`timer`）
+        var reconciles: Int
+        var scheduled: Bool
+    }
+
+    var snapshot: Snapshot {
+        let state: Snapshot.State = switch phase {
+        case .starting: .starting
+        case .restarting(_, _, let at): .restarting(at: at)
+        case .running(let shift) where shift.retiring: .retiring
+        case .running(let shift) where shift.turn != nil: .turn
+        case .running: stuck ? .stalled : setbacks.isEmpty ? .idle : .resting
+        }
+        return Snapshot(
+            state: state, setbacks: setbacks, turn: turn?.round, rounds: turn.map { history + [$0.round] } ?? history,
+            greeted: progress.greeted != nil, watchdog: turn.map { _ in setup.timing.silence - (setup.timing.awake() - heardAt) },
+            reconciles: reconciles, scheduled: timer != nil)
+    }
     /// 在回答你的这一轮正在说的话（只在内存，不进 `cueState`、不入库、不同步）：只有 Cue 页末尾读它，出字时对话列表不重算。
     /// 说完的留着，由 Cue 页在对话里出现它之后换下；下一轮开始、大脑出问题时清掉。
     let speech = LiveDraftFeed()

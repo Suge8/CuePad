@@ -8,7 +8,7 @@ import Testing
 @testable import CuePad
 
 extension CueHostTests.Rig {
-    var rounds: [CueRound] { services.cue.keeper?.rounds ?? [] }
+    var rounds: [CueRound] { services.cue.keeper?.snapshot.rounds ?? [] }
 
     func working(_ title: String, _ rest: String) async throws -> Working {
         let project = try #require(try await store.projects().first { $0.name == "演示" })

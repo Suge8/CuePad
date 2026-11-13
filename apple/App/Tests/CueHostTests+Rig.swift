@@ -115,7 +115,7 @@ extension CueHostTests {
             } else {
                 try await app.services.enableCue(on: TestApp.hostID, moving: false)
             }
-            try await eventually("刚启用对过账") { self.services.cue.keeper?.progress.greeted != nil }
+            try await eventually("刚启用对过账") { self.services.cue.keeper?.snapshot.greeted == true }
         }
 
         static func handOverWork(_ rig: Rig) async throws {
@@ -136,15 +136,15 @@ extension CueHostTests {
 
         func skipBackoff() {
             guard let keeper = services.cue.keeper else { return }
-            var due = keeper.setback?.retryAt
-            if case .restarting(_, _, let at) = keeper.phase { due = [due, at].compactMap(\.self).min() }
+            let snapshot = keeper.snapshot
+            var due = snapshot.setbacks.compactMap(\.retryAt).min()
+            if case .restarting(let at) = snapshot.state { due = [due, at].compactMap(\.self).min() }
             if let due { jump(to: due) }
         }
 
         /// 一轮在跑、大脑一直没动静：跳过看门狗剩下的时长。从最后一次大脑事件算：挂住之后才到的事件会重新算起，所以每次都按剩下的跳。
         func skipSilence() {
-            guard let keeper = services.cue.keeper, keeper.turn != nil else { return }
-            let left = keeper.setup.timing.silence - (clocks.awake() - keeper.heardAt)
+            guard let left = services.cue.keeper?.snapshot.watchdog else { return }
             if left > .zero { jump(by: left) }
         }
 
@@ -154,9 +154,9 @@ extension CueHostTests {
         func reconciled() async throws {
             let keeper = try #require(services.cue.keeper)
             for _ in 0..<2 {
-                let before = keeper.timer
+                let before = keeper.snapshot.reconciles
                 keeper.input.yield(.kick)
-                try await eventually("对过账、重新睡下") { keeper.timer != nil && keeper.timer != before }
+                try await eventually("对过账、重新睡下") { keeper.snapshot.reconciles > before && keeper.snapshot.scheduled }
             }
         }
 

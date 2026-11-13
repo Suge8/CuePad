@@ -3,7 +3,7 @@ import CueAgent
 import CueStore
 import Foundation
 
-/// 只来自大脑的事件，只在值班这台 Mac 的内存里（`CueKeeper.rounds`）：大脑不落会话，这是唯一的事实源。
+/// 只来自大脑的事件，只在值班这台 Mac 的内存里（`CueKeeper.Snapshot.rounds`）：大脑不落会话，这是唯一的事实源。
 /// 给人看的那一份由它推出（`process`），写在对话里这一轮开始的位置那一行上（`row`），随库同步到各端。
 struct CueRound: Identifiable {
     let id: Int

@@ -110,12 +110,12 @@ extension CueHostTests {
         let reminder = try await rig.store.noteCueLine("核对发布结果", source: .you, remindAt: .now)
         try await rig.message(.cue, containing: "达到用量限制")
         let keeper = try #require(rig.services.cue.keeper)
-        try await eventually("一次性定时已触发，正在等慢速重试") { keeper.setback?.retryAt != nil && keeper.turn == nil }
+        try await eventually("一次性定时已触发，正在等慢速重试") { keeper.snapshot.state == .stalled }
         #expect(try await rig.store.cueLine(reminder.id)?.deletedAt != nil)
         try await remote.update(sessionID: "remote-retry", state: .settled)
         try await rig.answered("remote-retry")
         try await rig.reconciled()  // 新变化对过账：不该叫它重来
-        #expect(rig.model.errors == 1 && keeper.turn == nil)
+        #expect(rig.model.errors == 1 && keeper.snapshot.turn == nil)
         #expect(try await rig.count("定时到点") == 0)
         try await rig.say("你好")
         try await rig.message(.cue, containing: "收到：你好")
@@ -123,7 +123,7 @@ extension CueHostTests {
         #expect(done.text.contains("一次"))
         #expect(rig.model.errors == 1)
         try await eventually("承接原定时的一轮完成") {
-            keeper.rounds.contains { round in
+            keeper.snapshot.rounds.contains { round in
                 guard case .schedule(let fires) = round.wake else { return false }
                 return fires.contains { $0.line == reminder.id } && round.finishedAt != nil && round.failure == nil
             }
@@ -137,9 +137,12 @@ extension CueHostTests {
         let first = try await rig.store.noteCueLine("核对发布结果 A", source: .you, remindAt: .now)
         let keeper = try #require(rig.services.cue.keeper)
         func waiting(_ id: UUID) -> Bool {
-            guard keeper.turn == nil, let held = keeper.setback, held.persistent,
-                  case .schedule(let fires) = held.wake else { return false }
-            return fires.contains { $0.line == id }
+            let snapshot = keeper.snapshot
+            guard snapshot.state == .stalled else { return false }
+            return snapshot.setbacks.contains { held in
+                guard case .schedule(let fires) = held.wake else { return false }
+                return fires.contains { $0.line == id }
+            }
         }
         try await eventually("A 失败后等待重试") { waiting(first.id) }
         let second = try await rig.store.noteCueLine("核对发布结果 B", source: .you, remindAt: .now)
@@ -152,7 +155,7 @@ extension CueHostTests {
         try await rig.message(.cue, containing: "定时到点：\(second.id.uuidString.lowercased()) 核对发布结果 B", skippingBackoff: true)
         try await eventually("两个定时各自完成") {
             [first.id, second.id].allSatisfy { id in
-                keeper.rounds.contains { round in
+                keeper.snapshot.rounds.contains { round in
                     guard case .schedule(let fires) = round.wake else { return false }
                     return fires.contains { $0.line == id } && round.finishedAt != nil && round.failure == nil
                 }
