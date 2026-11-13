@@ -114,9 +114,15 @@ extension Workspace {
         }
     }
 
-    func resume(_ start: SessionStart, opened: @escaping LaunchOpened) {
-        let launching = sessionLaunching(start.launchKey)
-        if let launch = launching.launch ?? start.launched { watch(launching, launch, opened: opened) }
+    /// 输入框重新出现：还在等的那一次接着等，认领到时按这一次的 `opened` 收尾。
+    func resume(_ key: SessionLaunching.Key, opened: @escaping LaunchOpened) {
+        let launching = sessionLaunching(key)
+        if let launch = launching.launch { watch(launching, launch, opened: opened) }
+    }
+
+    /// 接上一次已经发出、这里还不知道的（同一件任务在别处或上一次运行时发的，从库里读出来）：接着看进度，再开时照样确认重复风险。
+    func resume(_ key: SessionLaunching.Key, with launch: SessionLaunch, opened: @escaping LaunchOpened) {
+        watch(sessionLaunching(key), launch, opened: opened)
     }
 
     /// 认领到新会话：收起输入框、进那个会话。输入框中途关了的，Mac 照样进（请求是在这台发的，人还在这儿），手机留在原处。
@@ -126,7 +132,9 @@ extension Workspace {
             workspace.newSession = nil
             workspace.show(.session(claimed.sessionID))
             #else
-            if workspace.newSession?.id == start.id { workspace.claimSession(claimed.id) }
+            guard workspace.newSession?.id == start.id else { return }
+            workspace.newSession = nil
+            workspace.openSession(claimed.id)
             #endif
         }
     }

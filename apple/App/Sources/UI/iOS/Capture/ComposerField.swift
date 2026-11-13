@@ -23,6 +23,8 @@ struct ComposerField: UIViewRepresentable {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.palette) private var palette
     @Environment(\.dynamicTypeSize) private var typeSize
+    /// 整个输入框被停用时（开会话的请求在路上）字也不能改：那时改的进不了已发出的请求。
+    @Environment(\.isEnabled) private var enabled
 
     static func lineHeight(_ size: DynamicTypeSize) -> CGFloat {
         let traits = UITraitCollection(preferredContentSizeCategory: UIContentSizeCategory(size))
@@ -64,6 +66,7 @@ struct ComposerField: UIViewRepresentable {
             view.setNeedsLayout()
         }
         view.setPrompt(prompt)
+        if view.isEditable != enabled { view.isEditable = enabled }
         view.placeholder.isHidden = !view.text.isEmpty
         // 只在颜色真的变了时设：设一次就给整篇文字重铺颜色、作废排版（每次更新都设时，几百行的草稿每个字多花好几毫秒）
         if ink != context.coordinator.ink {

@@ -8,6 +8,8 @@ struct Outbox: Identifiable {
     var content: String
     var card: UUID?
     var project: UUID?
+
+    var launchKey: SessionLaunching.Key { card.map { .card($0) } ?? .form }
 }
 
 struct ComposerDraft {

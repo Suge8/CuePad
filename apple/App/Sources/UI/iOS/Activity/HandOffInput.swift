@@ -35,10 +35,21 @@ struct HandOffInput: View {
         if let choice { return all.first { $0.state.id == choice } }
         return planned?.bound.flatMap { bound in all.first { $0.state.sessionID == bound.state.sessionID } }
     }
-    private var canSend: Bool { planned.map { !$0.noMac } == true }
-    private var draft: ComposerDraft { workspace.handOffDraft }
+    private var launching: SessionLaunching { workspace.sessionLaunching(outbox.launchKey) }
+    /// 交给新会话时输入框上方那一行：开不了的原因，或发出后的进度与结果。
+    /// 开新会话的请求在路上：整个输入框停用——这时改的字进不了已发出的那一次，换去处再发会把同一件任务交给两个 Agent。
+    private var waiting: Bool { launching.inFlight(at: services.speech) }
+    private var launchStatus: LaunchStatus? {
+        let noMac = planned?.noMac == true
+        guard chosen == nil || noMac || waiting else { return nil }
+        return LaunchStatus(noMac: noMac, phase: launching.phase(at: services.speech), agents: launchHost == nil ? nil : launchAgents)
+    }
+    private var canSend: Bool {
+        guard !waiting, planned.map({ !$0.noMac }) == true else { return false }
+        return chosen != nil || launchTools != nil && launching.canSubmit(at: services.speech)
+    }
 
-    /// 草稿在 `Workspace.handOffDraft`：发出即收起，写库失败时放回草稿、重新浮起这个输入框。
+    /// 草稿在 `Workspace.handOffDraft`：交给已有会话的发出即收起，写库失败时放回草稿、重新浮起这个输入框；交给新会话的留着看进度（`launchHandOff`）。
     private var box: Binding<ComposerDraft> {
         let workspace = workspace, outbox = outbox
         return Binding(get: { workspace.handOffDraft }) { draft in
@@ -91,9 +102,11 @@ struct HandOffInput: View {
                     .buttonStyle(PressStyle(.button)).disabled(!canSend)
                     .accessibilityLabel(chosen.map { String(localized: "交给 \($0.state.title)") } ?? String(localized: "开新会话交给它"))
             })
-        .composerNotice(planned?.noMac == true || config?.failure != nil) {
-            MacInputNotice(noMac: planned?.noMac == true, failure: config?.failure)
+        .composerNotice(launchStatus != nil || config?.failure != nil) {
+            if let launchStatus { LaunchStatusLine(status: launchStatus) } else { MacInputNotice(noMac: false, failure: config?.failure) }
         }
+        .disabled(waiting)
+        .confirmsLaunchAgain(launching)
         .onAppear { focused = true }
         .observing(services.store, id: outbox.card, into: $planned, onError: workspace.fail) { [card = outbox.card] store in
             guard let card else { return Planned() }
@@ -150,7 +163,8 @@ struct HandOffInput: View {
         guard let session = chosen?.state else {
             // 选过的那个会话已经不在了：同点了"新会话"，另开一个
             let plan = fresh || choice != nil ? planned?.fresh : planned?.plan
-            return workspace.startNewSession(draft, card: outbox.card, opening: planned?.opening, plan: plan)
+            workspace.launchHandOff(outbox, opening: planned?.opening, plan: plan)
+            return
         }
         workspace.reply(
             to: session, commands: commands, from: box, accepting: .reply, card: outbox.card, saying: Dotted(String(localized: "已交给 \(session.title)")))

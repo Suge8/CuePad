@@ -11,14 +11,16 @@ struct IOSWorkflowTests {
 
     private func handOff(in project: UUID) async throws -> (task: Card, request: DeliveryRequest) {
         let task = try await store.createTask("修乱序\n先复现", in: project)
-        let draft = ComposerDraft(attachments: [Outbox(content: Outgoing.text(of: task), card: task.id, project: task.projectID)])
         let plan = try await store.handOffPlan(task.id, host: nil)
         let workspace = Workspace(services: app.services)
 
-        workspace.startNewSession(draft, card: task.id, opening: try await store.opening(of: task.id, true), plan: plan)
+        workspace.handOff(task)
+        let outbox = try #require(workspace.outbox)
+        workspace.launchHandOff(outbox, opening: try await store.opening(of: task.id, true), plan: plan)
 
-        let launching = workspace.sessionLaunching(try #require(workspace.newSession).launchKey)
-        try await eventually("交给新会话，换成新会话的输入框并当场发出") { launching.launch != nil }
+        let launching = workspace.sessionLaunching(outbox.launchKey)
+        try await eventually("交给新会话，就在交给 Agent 的输入框上发出") { launching.launch != nil }
+        #expect(workspace.outbox?.id == outbox.id && workspace.newSession == nil, "输入框留着看进度，不换成另一个")
         return (task, try #require(try await store.deliveryRequests().first))
     }
 
@@ -55,20 +57,17 @@ struct IOSWorkflowTests {
             #expect(try await store.applyRemote([.save(row, systemFields: Data(), serverAt: Date())]).isEmpty)
         }
         let workspace = Workspace(services: app.services)
-        let draft = ComposerDraft(attachments: [Outbox(content: Outgoing.text(of: task), card: task.id, project: task.projectID)])
         let plan = try await store.handOffPlan(task.id, host: nil)
         workspace.handOff(task)
-        workspace.handOffToNewSession(draft, card: task.id, plan: plan)
-        workspace.newSession = nil
+        workspace.outbox = nil
         workspace.handOff(task)
-        workspace.handOffToNewSession(draft, card: task.id, plan: plan)
-        let start = try #require(workspace.newSession)
         await #expect(throws: CueStoreError.deliveryAlreadyHanded) {
             try await app.services.launchSession(in: task.projectID, prompt: first.launch?.prompt, title: task.heading,
                                                 on: "mac-z", card: task.id, agent: .pi)
         }
         #expect(try await store.deliveryRequests().map(\.id) == [first.id])
-        let resumed = try #require(start.launched)
+        let resumed = try #require(workspace.sessionLaunching(.card(task.id)).launch, "输入框一浮起就接上原请求")
+        if state == "sent" { #expect(workspace.launchHandOff(try #require(workspace.outbox), opening: nil, plan: plan) == nil, "还在等结果：不再发") }
         #expect(resumed.request == first.id)
         let progress = try store.snapshot { try resumed.progress(from: $0) }.value
         switch state {

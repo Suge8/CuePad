@@ -24,7 +24,13 @@ extension DebugScene {
         #else
         if scene == "send" {
             if let prefix = args.task {
-                if let task = try await store.tasks(.todo, .inProgress).flatMap(\.tasks).first(where: { $0.title.hasPrefix(prefix) }) { workspace.handOff(task) }
+                if let task = try await store.tasks(.todo, .inProgress).flatMap(\.tasks).first(where: { $0.title.hasPrefix(prefix) }) {
+                    workspace.handOff(task)
+                    // `-CuePadLaunch YES`：已经替你交给新会话（看发出后的进度写在同一个输入框上）
+                    if args.launch, let outbox = workspace.outbox {
+                        workspace.launchHandOff(outbox, opening: nil, plan: try await store.handOffPlan(task.id, host: nil, fresh: true))
+                    }
+                }
                 return
             }
             try await openCard(workspace, project: project)
