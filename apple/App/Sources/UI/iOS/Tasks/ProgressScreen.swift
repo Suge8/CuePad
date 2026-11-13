@@ -8,6 +8,7 @@ struct ProgressScreen: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.underCue) private var under
     @State private var board: TaskBoard?
 
     var body: some View {
@@ -25,7 +26,7 @@ struct ProgressScreen: View {
         let adding = Bindable(workspace).addsTask
         return Group {
             if verticalSizeClass == .compact || sizeClass == .regular {
-                BoardColumns(board: shown, adding: adding, newTaskProject: newTaskProject, margin: 12)
+                BoardColumns(board: shown, adding: adding, newTaskProject: newTaskProject, margin: 12, tail: under)
             } else {
                 PhoneBoard(board: shown, adding: adding, newTaskProject: newTaskProject)
             }

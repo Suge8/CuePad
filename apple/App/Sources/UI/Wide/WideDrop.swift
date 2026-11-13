@@ -109,6 +109,8 @@ struct WideSessionTitle: View {
 
 extension EnvironmentValues {
     @Entry var headInset = EdgeInsets(top: 0, leading: Spacing.page, bottom: 0, trailing: Spacing.page)
+    /// 主区右端压在 Cue 浮板下面多宽（宽屏的根给）。别的页整页让出它；看板只按让出后的宽分列，放不下横滑时列滑到浮板下面。
+    @Entry var underCue: CGFloat = 0
 }
 
 @Observable
