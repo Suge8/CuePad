@@ -35,7 +35,7 @@ private struct LibraryFilePage: View {
         .padding(.top, Spacing.pageTop)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(palette.desk.ignoresSafeArea())
-        .loadingFileDraft(of: file, in: library, texts: $texts) { workspace.close(.library(file)) }
+        .loadingFileDraft(of: file, in: library, texts: $texts)
         .task(id: draft != nil) {
             await NextFrame.wait()
             draft?.handle.focus()

@@ -84,9 +84,9 @@ struct LibraryFileBody: View {
 
 extension View {
     func loadingFileDraft(
-        of file: LibraryFile, in library: AgentLibrary?, texts: Binding<[String: String]?>, onGone: @escaping () -> Void
+        of file: LibraryFile, in library: AgentLibrary?, texts: Binding<[String: String]?>
     ) -> some View {
-        modifier(FileDraftLoading(file: file, library: library, texts: texts, onGone: onGone))
+        modifier(FileDraftLoading(file: file, library: library, texts: texts))
     }
 }
 
@@ -94,15 +94,12 @@ private struct FileDraftLoading: ViewModifier {
     let file: LibraryFile
     let library: AgentLibrary?
     @Binding var texts: [String: String]?
-    let onGone: () -> Void
     @Environment(Workspace.self) private var workspace
 
     func body(content: Content) -> some View {
-        let gone = library != nil && library?.file(file) == nil
         let draft = workspace.draft(of: file, in: library)
         content
             .observingLibraryTexts(library?.textPaths(for: file) ?? [], in: library, into: $texts)
-            .onChange(of: gone, initial: true) { if gone { onGone() } }
             .onChange(of: library?.arrived(file, in: texts), initial: true) { _, arrived in
                 guard let library, let arrived else { return }
                 _ = workspace.fileDraft(file, text: arrived, on: library.hostID)

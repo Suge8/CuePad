@@ -49,9 +49,10 @@ struct CardEditorPage: View {
         .opacity(shown ? 1 : 0)
         .allowsHitTesting(shown)
         .debugSettling(isOpen ? !settled : !gone)
-        // 卡没了（并进了草稿、接进了会话的回复框）就收起，不当成出错
+        // 卡没了（并进了草稿、接进了会话的回复框）由工作区收起，不当成出错
         .observing(services.store, id: cardID, into: $data, onError: { [workspace] error in
-            if case CueStoreError.notFound = error { workspace.close(.card(cardID)) } else { workspace.fail(error) }
+            if case CueStoreError.notFound = error { return }
+            workspace.fail(error)
         }) { [cardID] store in
             guard let card = try store.card(cardID) else { throw CueStoreError.notFound }
             return EditorData(card: card, project: try store.project(card.projectID))
@@ -62,7 +63,6 @@ struct CardEditorPage: View {
             workspace.openCardEditing = editing
             if isOpen, !mounted { prepare() }
         }
-        .onChange(of: data?.card.deletedAt) { if data?.card.deletedAt != nil { workspace.close(.card(cardID)) } }
         .onChange(of: data.map { $0.card.isTask || $0.card.parentID != nil }) { _, moved in
             guard moved == true, let card = data?.card else { return }
             workspace.close(.card(cardID))

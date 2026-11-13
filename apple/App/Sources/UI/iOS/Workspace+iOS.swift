@@ -3,8 +3,9 @@ import CueStore
 import SwiftUI
 
 extension Workspace {
-    func willSelect(_ route: Route, from previous: Route) {}
+    func willSelect(_ route: Route, from previous: Route) { overlay = nil }
 
+    /// 宽屏盖在主区上（`selectWide`）。
     func showEditor(_ card: UUID) { push(.card(card)) }
 
     func openLibrary(_ file: LibraryFile) {
@@ -36,17 +37,6 @@ extension Workspace {
 
     func closeSearch() {
         if top == .search { back() }
-    }
-
-    func pop(_ project: UUID?) {
-        guard let project else { return }
-        if services.settings.currentProject == project { services.settings.currentProject = nil }
-        switch layout {
-        case .narrow:
-            if let index = path.firstIndex(of: .project(project)) { path = Array(path[..<index]) }
-        case .wide:
-            if mainRoute == .project(project) { select(.shelf) }
-        }
     }
 
     /// 与系统通知同一条规则（`AlertCenter`）。

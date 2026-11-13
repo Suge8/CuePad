@@ -63,12 +63,8 @@ struct PageMenuSlot: View {
         .modifier(InspirationSharePresentation(sharing: inspirationSharing, editing: workspace.openCardEditing))
     }
 
-    private func menuLabel(_ content: Content) -> some View {
-        Image(content == .progress ? .filter : .more).overlay(alignment: .topTrailing) {
-            if content == .progress, let project = workspace.catalog?.project(workspace.scopedProject) {
-                ProjectGlyph(project: project, size: 10).offset(x: 12, y: -10)
-            }
-        }
+    @ViewBuilder private func menuLabel(_ content: Content) -> some View {
+        if content == .progress { ProjectScopeLabel() } else { Image(.more) }
     }
 
     @ViewBuilder private func items(_ content: Content) -> some View {
@@ -78,27 +74,10 @@ struct PageMenuSlot: View {
                 InspirationEditorActions(card: card, editing: editing, sharing: inspirationSharing)
             } else { CardActions(card: card, more: true) }
         case .project(let id): ProjectMenuItems(projectID: id)
-        case .progress:
-            ProjectScopeItems()
+        case .progress: ProjectScopePicker().pickerStyle(.inline)
         case .trash:
             Button("清空回收站…", icon: .trash, role: .destructive) { workspace.confirmsEmptyTrash = true }
         case .card(nil): EmptyView()
-        }
-    }
-}
-
-private struct ProjectMenuItems: View {
-    let projectID: UUID
-    @Environment(Workspace.self) private var workspace
-
-    var body: some View {
-        let ready = workspace.isLibraryReady
-        Button("选择灵感", icon: CardMenu.Item.select.icon) { workspace.presses.beginSelecting() }
-            .disabled(!ready || (workspace.catalog?.summaries[projectID]?.cardCount ?? 0) == 0)
-        Button("看这个项目的进展", icon: .task) { workspace.showProgress(of: projectID) }
-        if let project = workspace.catalog?.project(projectID) {
-            Divider()
-            ProjectActions(project: project) { workspace.projectForm = .init(project: project) }
         }
     }
 }

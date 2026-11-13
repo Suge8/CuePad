@@ -84,54 +84,36 @@ private struct DestinationColumn: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.headInset) private var inset
     @Environment(\.underCue) private var under
+    @Environment(\.palette) private var palette
 
     var body: some View {
-        // 看板自己让（列滑到浮板下面，`ProgressScreen`）；别的页整页让出
-        let board = route == .progress
-        VStack(spacing: 0) {
-            if case .session(let session) = route { WideSessionHeading(session: session, column: column) }
-            if case .project = route {
-                WideProjectHeading().frame(maxWidth: .infinity, alignment: .leading).padding(inset).frame(height: Chrome.band)
-            }
+        let overlay = column == .main ? workspace.overlay : nil
+        // 看板自己让（列滑到浮板下面，`ProgressScreen`），列头就是最顶那一排；会话页的栏头在页里（同 Mac）；搜索框占着那一排的中间
+        let board = route == .progress && overlay == nil
+        let headed = overlay != nil || !board && !route.isSession && route != .search
+        ZStack(alignment: .top) {
             NavigationStack(path: Binding<[Route]>(get: { [] }, set: { if let route = $0.last { workspace.show(route) } })) {
-                RouteView(route: route)
-                    .environment(\.headerHost, route.isSession ? .navigationBar : .panel)
+                RouteView(route: route, column: column)
+                    .environment(\.headerHost, route == .search ? .panel : .column)
                     .toolbarVisibility(.hidden, for: .navigationBar)
                     .navigationDestination(for: Route.self) { RouteView(route: $0) }
             }
-            .fadesUnderHead(route.isSession)
+            // 盖在主区上（同 Mac 的 `EditorLayer`）：下面那一页留着，收起回到它
+            if let overlay {
+                RouteView(route: overlay.route)
+                    .environment(\.headerHost, .panel)
+                    .background(palette.desk)
+                    .id(overlay)
+                    .transition(.opacity)
+            }
+            if headed { WideColumnHead().padding(inset).frame(height: Chrome.band) }
         }
+        .animation(Motion.fade, value: overlay)
         .padding(.trailing, board ? 0 : under)
     }
 }
 
 private extension Route {
     var isSession: Bool { if case .session = self { true } else { false } }
-}
-
-private struct WideSessionHeading: View {
-    let session: SessionRoute
-    let column: Workspace.Column
-    @Environment(Workspace.self) private var workspace
-    @Environment(AppServices.self) private var services
-    @State private var item: SessionListItem??
-    @State private var taskLink: SessionTaskLink?
-
-    var body: some View {
-        let listed = item ?? nil
-        let shown = listed?.listed ?? session.seed?.session
-        let delivery = listed?.delivery ?? session.seed?.delivery
-        WideSessionTitle(title: shown?.title ?? "", project: workspace.catalog?.project(shown?.projectID)?.shownName,
-                         ended: shown?.staysEnded(by: delivery, at: services.speech) == true, column: column)
-            .contextMenu {
-                if let shown, let taskLink { SessionTaskBindItems(session: shown, link: taskLink) }
-            }
-            .observing(services.store, id: session.id, into: $item, onError: workspace.fail) { [id = session.id] store in
-                try store.sessionPage(SessionQuery(id: id)).items.first
-            }
-            .observing(services.store, id: SessionTaskLink.Key(session: shown?.sessionID, project: shown?.projectID), into: $taskLink, onError: workspace.fail) { [shown] store in
-                try SessionTaskLink.read(sessionID: shown?.sessionID ?? "", project: shown?.projectID, from: store)
-            }
-    }
 }
 #endif

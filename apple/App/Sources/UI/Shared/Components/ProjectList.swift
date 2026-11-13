@@ -1,6 +1,31 @@
 import CueStore
 import SwiftUI
 
+/// 项目列表页：项目卡，加归档、回收站两个入口；手机多的一格设置由调用方给（`extra`）。
+struct ProjectShelf<Extra: View>: View {
+    var placesAtEnd = false
+    @ViewBuilder var extra: Extra
+    @Environment(Workspace.self) private var workspace
+
+    var body: some View {
+        ScrollView {
+            if let projects = workspace.catalog?.projects {
+                ProjectList(projects: projects, placesAtEnd: placesAtEnd) {
+                    ChipFlow(spacing: Spacing.part) {
+                        ProjectListPlace(title: "归档", icon: .archive, route: .archive)
+                        ProjectListPlace(title: "回收站", icon: .trash, route: .trash)
+                        extra
+                    }
+                }
+            }
+        }
+    }
+}
+
+extension ProjectShelf where Extra == EmptyView {
+    init() { self.init { EmptyView() } }
+}
+
 struct ProjectList<Places: View>: View {
     let projects: [Project]
     var placesAtEnd = false

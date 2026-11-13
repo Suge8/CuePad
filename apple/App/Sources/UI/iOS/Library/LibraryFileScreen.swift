@@ -7,7 +7,6 @@ struct LibraryFileScreen: View {
     let file: LibraryFile
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
-    @Environment(\.dismiss) private var dismiss
     @State private var texts: [String: String]?
 
     var body: some View {
@@ -24,7 +23,7 @@ struct LibraryFileScreen: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(palette.paper.ignoresSafeArea())
         .floatingHeader(.verbatim(workspace.fileTitle(file, in: library)), detail: library?.detail(of: file, draft: draft) ?? Dotted()) { send(draft) }
-        .loadingFileDraft(of: file, in: library, texts: $texts) { dismiss() }
+        .loadingFileDraft(of: file, in: library, texts: $texts)
     }
 
     private func send(_ draft: FileDraft?) -> some View {
