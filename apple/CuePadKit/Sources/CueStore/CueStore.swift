@@ -26,6 +26,8 @@ public actor CueStore {
   /// 订阅的这次读只依赖其中一部分行的表（`narrow`，同一张表可收窄几次）；不在订阅的一次读里为 nil，什么都不记。
   var readScopes: [Table: [RowScope]]?
   private var syncSubscribers: [UUID: AsyncStream<SyncChange>.Continuation] = [:]
+  /// `Urgency.changed` 盯的那一列，这个连接上次见到的样子（本连接提交的、别的进程提交后读到的）：和它比才知道变没变。
+  var watchedSeen: [Table: [String: String?]]?
   /// 可能让记录变成待推送的提交数（本连接让记录变成待推送的提交、别的进程的任何提交），与最近这些提交各自的增量
   /// （nil：范围不明，如别的进程的提交）：发送者确定没有剩下的待推送之后，只复查其后的提交碰过的记录（`pendingSync(since:)`）。
   private(set) var syncGeneration = 0
@@ -144,18 +146,19 @@ public actor CueStore {
 
   /// 一个写事务；提交后通知订阅者，并把改动的同步记录交给同步订阅者。
   func write<T>(_ body: () throws -> T) throws -> T {
-    let ((result, flipped), changes): ((T, Set<String>), Changes)
+    if watchedSeen == nil { watchedSeen = try watchedColumns() }
+    let ((result, watched), changes): ((T, [Table: [String: String?]]?), Changes)
     do {
-      ((result, flipped), changes) = try db.transaction {
-        let before = try watchedColumns()
+      ((result, watched), changes) = try db.transaction {
         let value = try body()
         try reconcileTaskSessionEvents()
-        return (value, try flippedColumns(since: before))
+        return (value, try watchedIfTouched())
       }
     } catch {
       afterCommit = []
       throw error
     }
+    let flipped = watched.map(noteWatched) ?? []
     let actions = afterCommit
     afterCommit = []
     actions.forEach { $0() }

@@ -35,8 +35,8 @@ extension Table {
     case always
     /// 待推送的这一版满足这个 SQL 条件（表别名 `t`）
     case when(String)
-    /// 这次写入改了这一列（写事务里比前后，`CueStore.write`），或同一次写入里 `along` 有要马上传的。
-    /// 每个写事务开头全表读一遍这一列，只给只有几行的表用。别的进程写的比不了前后，只按 `along` 算。
+    /// 这一列和这个连接上次见到的比变了（本连接在写事务结尾比，别的进程写的在同步层收到通知时比，`CueStore.watchedSeen`），
+    /// 或同一次写入里 `along` 有要马上传的（连同这张表里还没传的那一版）。碰了这张表就全表读一遍这一列，只给只有几行的表用。
     case changed(String, along: Table)
   }
 
