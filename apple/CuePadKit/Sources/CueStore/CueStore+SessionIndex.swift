@@ -92,8 +92,10 @@ extension CueStore {
 
   public func indexedSession(_ id: String) throws -> IndexedSession? { try find(IndexedSession.self, id) }
 
-  /// 已结束的记录更新名字、所在与最后活动时间（没变不写，免得检查点作废、从头重读时把几千条历史重新上传）；在线的不动（由状态写入方负责）。必须在写事务内调用。
+  /// 已结束的记录更新名字、所在、最后活动时间与会话文件里最后用的模型、思考强度（没变不写，免得检查点作废、从头重读时把几千条历史重新上传）；
+  /// 在线的不动（由状态写入方负责）。必须在写事务内调用。
   /// 变没变在 SQL 里按库里存的精度比：读会话文件得到的时间带亚毫秒，库里是毫秒，在 Swift 里比几乎总是“变了”。
+  /// 模型只比是不是同一个（提供方与 id）：在线时桥报的那份带名字、档位与账号，文件里只有键，同一个就留着桥报的；文件没记的不清掉已有的。
   private func writeSessionHistory(_ session: IndexedSession, host: String, bound: [BoundDirectory]) throws {
     let id = SessionState.recordID(sessionID: session.id)
     let cwd = URL(filePath: session.cwd, directoryHint: .isDirectory)
@@ -101,19 +103,25 @@ extension CueStore {
     let title = session.title.isEmpty ? (session.cwd.isEmpty ? "" : cwd.lastPathComponent) : session.title
     let projectID = session.cwd.isEmpty ? nil : Self.projectID(containing: cwd, in: bound)
     let now = Date.stamp
+    let model = session.model.map { ModelOption(key: $0, name: "", thinkingLevels: []) }
     guard let existing = try find(SessionState.self, id) else {
       _ = try insert(SessionState(
         id: id, sessionID: session.id, hostID: host, title: title, projectID: projectID, state: .known(.ended), detail: nil,
         folder: folder, lastPrompt: nil, lastReply: nil, question: nil, notify: nil, stateSince: session.lastActivityAt,
-        busySince: nil, createdAt: now, modifiedAt: now, agent: .known(session.agent)))
+        busySince: nil, createdAt: now, modifiedAt: now, model: model, thinking: session.thinking.map(Open.init(rawValue:)),
+        agent: .known(session.agent)))
       return
     }
     guard existing.state == .known(.ended) else { return }
+    let sameModel = "(json_extract(model, '$.provider') IS ?8 AND json_extract(model, '$.id') IS ?9)"
     try db.run(
       """
-      UPDATE piSessionStates SET title = ?1, folder = ?2, projectID = ?3, stateSince = MAX(stateSince, ?4), modifiedAt = ?5
-      WHERE id = ?6 AND (title IS NOT ?1 OR folder IS NOT ?2 OR projectID IS NOT ?3 OR stateSince < ?4)
-      """, [title, folder, projectID, session.lastActivityAt, now, id])
+      UPDATE piSessionStates SET title = ?1, folder = ?2, projectID = ?3, stateSince = MAX(stateSince, ?4), modifiedAt = ?5,
+        model = CASE WHEN ?7 IS NULL OR \(sameModel) THEN model ELSE ?7 END, thinking = COALESCE(?10, thinking)
+      WHERE id = ?6 AND (title IS NOT ?1 OR folder IS NOT ?2 OR projectID IS NOT ?3 OR stateSince < ?4
+        OR (?7 IS NOT NULL AND NOT \(sameModel)) OR (?10 IS NOT NULL AND thinking IS NOT ?10))
+      """,
+      [title, folder, projectID, session.lastActivityAt, now, id, model.map(JSONColumn.encode), session.model?.provider, session.model?.id, session.thinking])
   }
 }
 

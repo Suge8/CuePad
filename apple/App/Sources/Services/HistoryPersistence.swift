@@ -82,7 +82,7 @@ actor HistoryPersistence {
                 cwd: history.cwd ?? "",
                 title: history.displayName,
                 lastActivityAt: history.lastActivity ?? update.checkpoint.modified ?? .distantPast,
-                agent: update.agent)
+                agent: update.agent, model: history.model, thinking: history.thinking)
             return SessionUpsert(session: session, checkpoint: try JSONEncoder().encode(update.checkpoint), transcript: update.transcript)
         }
         try await storage.upsertSessions(batch, host: host)

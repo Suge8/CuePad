@@ -81,6 +81,7 @@ public struct RawDB {
         CREATE INDEX piMessages_sessionID_at ON piMessages(sessionID, at, createdAt);
         CREATE INDEX piMessages_modified ON piMessages(id, modifiedAt);
         """),
+      (98, "ALTER TABLE piSessions DROP COLUMN model; ALTER TABLE piSessions DROP COLUMN thinking;"),
     ]
     try exec((steps.filter { $0.version > version }.reversed().map(\.sql) + ["PRAGMA user_version = \(version);"]).joined(separator: "\n"))
   }

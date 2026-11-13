@@ -130,7 +130,7 @@ struct HandOffInput: View {
             guard let session else { return SessionDigest(session: nil, project: nil, deliveries: []) }
             return SessionDigest(
                 session: session, project: nil, deliveries: try store.deliveryRequests(toSession: session.sessionID),
-                catalog: try session.catalogID.flatMap { try store.agentCatalog($0) })
+                catalog: try store.catalog(of: session))
         }
     }
 

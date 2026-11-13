@@ -56,7 +56,8 @@ struct SessionPage: View {
         let digest = (stored ?? SessionDigest(session: nil, project: nil, deliveries: [])).live(live, hostID: services.hostID, project: project)
         VStack(spacing: 0) {
             if let session = digest.session {
-                WideSessionTitle(title: digest.title(at: services.speech) ?? session.title, project: digest.project?.shownName, column: column)
+                WideSessionTitle(title: digest.title(at: services.speech) ?? session.title, project: digest.project?.shownName,
+                                 ended: session.staysEnded(by: digest.delivery, at: services.speech), column: column)
                     .contextMenu {
                         if let state = headerState(digest, menu: secondary, task: task) { SessionMenuItems(state: state) }
                     }

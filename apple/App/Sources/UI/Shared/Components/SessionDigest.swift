@@ -11,6 +11,8 @@ nonisolated struct SessionDigest: Sendable, Equatable {
     var previews: [PreviewItem] = []
     var cueSent: Set<UUID> = []
     var catalog: AgentCatalog?
+    /// 会话没记下模型时显示的（`CueStore.defaultModel(of:)`）。
+    var defaultModel: ModelOption?
     var task: SessionTask?
 
     func fetchingTranscript(at moment: Speech.Moment) -> Bool {
@@ -27,8 +29,10 @@ nonisolated struct SessionDigest: Sendable, Equatable {
 
     /// 模型与思考强度此刻显示什么：最近一次换的还在路上时显示要换成的值，没换成时显示会话当前的值，是你换的、之后还没对它做别的才带上那一句（到哪了按 `Speech`）。
     /// 思考强度按显示的模型夹取（`ThinkingLevel.clamped`），换了模型不会短暂显示新模型没有的档位。
+    /// 模型按键对回清单里的那一项：会话文件索引写下的只有键（`CueStore.writeSessionHistory`），名字与档位在清单里。
     func config(at moment: Speech.Moment) -> ConfigShown {
-        let current = ConfigShown(model: session?.model, thinking: session?.thinking?.known, fast: session?.fast, context: session?.context, pending: false, failure: nil)
+        let listed = session?.model.map { model in catalog?.models.first { $0.key == model.key } ?? model }
+        let current = ConfigShown(model: listed ?? defaultModel, thinking: session?.thinking?.known, fast: session?.fast, context: session?.context, pending: false, failure: nil)
         // 只看换模型、思考强度的请求：改名同走配置请求，但与这两样无关
         guard let request = deliveries.last(where: { $0.config.map { $0.model != nil || $0.thinking != nil || $0.fast != nil } == true }),
               let wanted = request.config else { return current }
@@ -60,7 +64,8 @@ nonisolated struct SessionDigest: Sendable, Equatable {
             messages: messages,
             previews: try ref.map { try store.previews(of: $0) } ?? [],
             cueSent: try messages.isEmpty ? [] : store.cueSentDeliveries(among: messages.compactMap(\.deliveryID)),
-            catalog: try session?.catalogID.flatMap { try store.agentCatalog($0) },
+            catalog: try session.flatMap { try store.catalog(of: $0) },
+            defaultModel: try session.flatMap { try $0.model == nil ? store.defaultModel(of: $0) : nil },
             task: item?.task)
     }
 }

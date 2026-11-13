@@ -40,6 +40,7 @@ enum ClaudeHistory {
         case "assistant":
             guard let message = line.message, case .blocks(let blocks) = message.content ?? .blocks([]),
                   message.model != syntheticModel || line.isApiErrorMessage == true else { return }
+            if let model = message.model, model != syntheticModel { cp.model = ModelKey(provider: ClaudeCode.provider, id: model) }
             if let usage = message.usage { cp.requested(id: message.id, read: usage.read, fresh: usage.fresh, lifetime: usage.lifetime, at: entry.at) }
             for call in blocks where call.type == "tool_use" {
                 cp.toolStarted(id: call.id ?? "", name: call.name ?? "", arguments: call.input ?? ToolArguments())

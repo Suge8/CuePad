@@ -37,7 +37,7 @@ nonisolated enum Icon: Hashable, Sendable {
     /// 这一页的说明（问号圆钮，点开是气泡）；同名的技能（几份，去重）
     case help, duplicate
     // 输入、发送与会话
-    case send, save, checked, stop, endSession, handOff, delivered, retry, toLatest, fetching, compact, renew
+    case send, save, checked, stop, endSession, wakeSession, handOff, delivered, retry, toLatest, fetching, compact, renew
     /// 提示缓存冷了（回复框工具排里"重读多少"那一句的记号）
     case cold
     case declined, mac, yourAnswer, above, floated, earlier
@@ -177,7 +177,7 @@ nonisolated enum Icon: Hashable, Sendable {
         case .relay: .ink("relay")
         case .relayStalled: .ink("relay.stalled")
         case .memory: .ink("bookmark")
-        case .wakeEnabled, .launchAtLogin: .ink("power")
+        case .wakeEnabled, .launchAtLogin, .wakeSession: .ink("power")
         case .wakeActivity: .ink("bolt")
         case .wakeMessage, .talkToCue: .ink("bubble")
         case .wakeIdle, .looked: .ink("eye")

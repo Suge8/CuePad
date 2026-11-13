@@ -51,6 +51,9 @@ enum CodexHistory {
             cp.cwd = line.payload.cwd
             // 子代理自己的会话文件与主会话同层，它的过程在主会话的子代理里看
             if line.payload.parentThreadID != nil { cp.excluded = true }
+        case ("turn_context", _):
+            if let model = line.payload.model { cp.model = ModelKey(provider: CodexModel.provider, id: model) }
+            if let effort = line.payload.effort { cp.thinking = CodexModel.thinking(effort).rawValue }
         case ("event_msg", "task_started"):
             cp.roundStarted(at: at)
         case ("event_msg", "turn_aborted"):
@@ -220,9 +223,11 @@ enum CodexHistory {
         var parentThreadID: String?
         var item: Item?
         var info: TokenInfo?
+        var model: String?
+        var effort: String?
 
         private enum CodingKeys: String, CodingKey {
-            case type, id, cwd, item, info
+            case type, id, cwd, item, info, model, effort
             case parentThreadID = "parent_thread_id"
         }
     }

@@ -9940,18 +9940,18 @@
         }
       }
     },
-    "唤醒 %@ 接着说" : {
+    "唤醒会话" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Wake %@ and continue"
+            "value" : "Wake session"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "唤醒 %@ 接着说"
+            "value" : "唤醒会话"
           }
         }
       }

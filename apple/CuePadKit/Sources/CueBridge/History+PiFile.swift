@@ -14,6 +14,9 @@ extension History {
         var message: Message?
         var content: Content?
         var display: Bool?
+        var provider: String?
+        var modelId: String?
+        var thinkingLevel: String?
 
         var time: Date? { timestamp.flatMap { try? Date($0, strategy: History.timestampStyle) } }
     }
@@ -111,6 +114,10 @@ extension History {
             cp.cwd = line.cwd
         case "session_info":
             cp.name = line.name
+        case "model_change":
+            if let provider = line.provider, let id = line.modelId { cp.model = ModelKey(provider: provider, id: id) }
+        case "thinking_level_change":
+            cp.thinking = line.thinkingLevel
         case "compaction":
             cp.compacted(entry, into: &transcript)
         case "custom_message":
