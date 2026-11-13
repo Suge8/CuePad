@@ -23,17 +23,31 @@ extension Workspace {
     }
 
     /// 交给新会话：换成新会话的输入框并当场发出（用哪家、哪个模型在交给的那个输入框里已经选好）；进度、没开成的原因与再开确认都在新会话的输入框上。
-    /// 这个任务上一次开的结果还没定时不发，留给你在输入框上看了再定。还在存的附件由发出的那一步等（`submitSession`）。
+    /// 这个任务上一次开的结果还没定、或此刻开不了（没有 Mac、一家 Agent 都不能用）时不发，留给你在输入框上看了再定。
+    /// 还在存的附件：发出了的由发出的那一步等（`submitSession`）；没发出的等它存完，把存好的换进输入框——输入框拿到的是草稿的副本，存完的结果不会自己落进去。
     func startNewSession(_ draft: ComposerDraft, card: UUID?, opening: String?, plan: HandOffPlan?) {
         let draft = draft.retelling(card, as: opening)
-        guard showNewSession(draft, card: card, plan: plan, project: outbox?.project) else { return }
+        let claim = claimImports(draft)
+        guard showNewSession(draft, card: card, plan: plan, project: outbox?.project), let start = newSession else { return }
         outbox = nil
-        guard let start = newSession, start.launched == nil, let place = start.place(among: launchPlaces), let host = place.host else { return }
+        guard submit(start, draft) == nil, !claim.isEmpty else { return }
+        Task {
+            let settled = await claim.settled()
+            guard newSession?.id == start.id else { return }
+            newSession = SessionStart(project: start.project, launched: start.launched, draft: settled, card: start.card, name: start.name, host: start.host)
+        }
+    }
+
+    private func submit(_ start: SessionStart, _ draft: ComposerDraft) -> Task<Void, Never>? {
+        guard start.launched == nil, let place = start.place(among: launchPlaces), let host = place.host else { return nil }
         do {
             let agents = try services.store.snapshot { try $0.macAgents(on: host) }.value
-            submitSession(
+            return submitSession(
                 start, in: place, draft: draft, choice: services.settings.launchChoice(on: agents, in: place.project.id), opened: Self.entering(start))
-        } catch { fail(error) }
+        } catch {
+            fail(error)
+            return nil
+        }
     }
 
     func claimSession(_ session: UUID) {
