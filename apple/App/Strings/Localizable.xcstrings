@@ -10100,22 +10100,6 @@
         }
       }
     },
-    "回复框带上这一份的引用" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Quotes this preview in the reply box"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "回复框带上这一份的引用"
-          }
-        }
-      }
-    },
     "回复等待同步" : {
       "localizations" : {
         "en" : {
@@ -10352,6 +10336,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "图片链接暂时无法访问，请稍后重试"
+          }
+        }
+      }
+    },
+    "图片，另有 %lld 张" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Image, %lld more"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "图片，另有 %lld 张"
           }
         }
       }
@@ -12276,6 +12276,22 @@
         }
       }
     },
+    "已冷" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "cold"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已冷"
+          }
+        }
+      }
+    },
     "已删除" : {
       "localizations" : {
         "en" : {
@@ -14012,6 +14028,38 @@
         }
       }
     },
+    "批注这一份" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Comment on this preview"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "批注这一份"
+          }
+        }
+      }
+    },
+    "批注这一份，随下一句发出" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Comment on this preview; sent with your next message"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "批注这一份，随下一句发出"
+          }
+        }
+      }
+    },
     "批注这段，随下一句发出" : {
       "localizations" : {
         "en" : {
@@ -14040,6 +14088,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "批注：%1$@，原文：%2$@"
+          }
+        }
+      }
+    },
+    "批注：%@，预览：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Comment: %1$@, on preview: %2$@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "批注：%1$@，预览：%2$@"
           }
         }
       }
@@ -20956,6 +21020,22 @@
         }
       }
     },
+    "缓存可能已冷，重读约 %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cache may be cold; rereads about %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "缓存可能已冷，重读约 %@"
+          }
+        }
+      }
+    },
     "缓存失效，重读 %@" : {
       "localizations" : {
         "en" : {
@@ -20984,6 +21064,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "缓存已冷，这一句会重读约 %@"
+          }
+        }
+      }
+    },
+    "缓存已冷，重读约 %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cache cold; rereads about %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "缓存已冷，重读约 %@"
           }
         }
       }

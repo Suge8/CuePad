@@ -46,7 +46,7 @@ struct ReplyBlock: View {
     let tools: ChatMessage.Tools?
     let session: SessionState
     let notes: [ReplyNote]
-    var latest = false
+    var landed: Date?
     var fadesIn = true
     #if os(iOS)
     @Environment(\.replyText) private var replyText
@@ -54,7 +54,7 @@ struct ReplyBlock: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.item) {
-            if let took { RoundProcess(tools: tools, ending: .took(took), session: session, message: id, open: latest) }
+            if let took { RoundProcess(tools: tools, ending: .took(took), session: session, message: id, landed: landed) }
             MarkdownText(source: text, notes: notes).equatable()
         }
         .frame(maxWidth: .infinity, alignment: .leading)

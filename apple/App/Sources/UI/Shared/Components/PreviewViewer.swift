@@ -32,10 +32,12 @@ enum PreviewReply: Equatable {
     case answer(CueMessage)
 }
 
-/// 恒等：给它的全屏页每次更新都新建一个闭包，闭包没法比，不恒等的话读它的每一格缩略图都跟着重算。环境值比出相等时读它的视图留着旧的那一个，所以闭包只能写给它的那一页的状态或绑定（旧的写的也是同一份），不能捕获会变的值。
+/// 按挂它的那一页认（`owner`）：给它的全屏页每次更新都新建一个闭包，闭包没法比，每次都算不等的话读它的每一格缩略图都跟着重算。环境值比出相等时读它的视图留着旧的那一个，所以闭包只能写给它的那一页的状态或绑定（旧的写的也是同一份），不能捕获会变的值。
+/// 不能恒等：页里再挂一层（窗口根上一个、会话里一个）时，里层写的与外层的比出相等，里面的缩略图读到的还是外层那个，图在外层的全屏页打开——飞不出来，也没有回复栏。
 struct PreviewOpener: Equatable {
+    let owner: ObjectIdentifier
     let open: @MainActor (PreviewOpening) -> Void
-    nonisolated static func == (a: Self, b: Self) -> Bool { true }
+    nonisolated static func == (a: Self, b: Self) -> Bool { a.owner == b.owner }
     func callAsFunction(_ opening: PreviewOpening) { open(opening) }
 }
 
@@ -60,6 +62,9 @@ enum PreviewScale {
 struct PreviewContent: View {
     /// 一行不宽过它，居中；Mac 飞出的落点按它算（`PreviewFlight`）。
     static let measure: CGFloat = 680
+    /// Mac 全屏页最大这么大，就是网页缩略图排首屏的大小（`PageSnapshots`：不挂视图的 `WebPage` 固定按 1024×768 排，没有接口改，实测）：
+    /// 窗口放得下整页时，飞来的那张与真网页是同一种排法，落地不跳。
+    static let page = CGSize(width: 1024, height: 768)
 
     let preview: PreviewItem
     let file: URL?
@@ -80,7 +85,8 @@ struct PreviewContent: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(palette.desk)
+        // 自己排的字（Markdown、改动）铺在缩略图那页纸的颜色上：缩略图是这页纸的开头，点开是同一张纸长大
+        .background(DeliverableLooks.drawn(preview.kind) ? palette.paper : palette.desk)
     }
 }
 

@@ -48,5 +48,20 @@ struct PreviewReplyTests {
         #expect(!only.isEmpty(accepting: .reply) && only.stored == "预览「评审结论」")
         app.services.settings.removeReplyNote(only.notes[0].id, in: session.id)
         #expect(app.services.settings.replyDraft(for: session.id).isEmpty(accepting: .reply))
+
+        let settings = app.services.settings
+        settings.annotate(previews[0], "按钮再大一点", in: batch, for: session.id)
+        settings.annotate(previews[1], " 第二处听你的 ", in: batch, for: session.id)
+        settings.annotate(previews[0], "按钮改成通栏", in: batch, for: session.id)
+        var noted = settings.replyDraft(for: session.id)
+        noted.text = "改完发我"
+        #expect(try await workspace.said(noted, to: session, mode: .send).content == """
+            预览「改动：错误提示」：按钮改成通栏
+            预览「评审结论」：第二处听你的
+
+            改完发我
+            """)
+        settings.annotate(previews[0], "", in: batch, for: session.id)
+        #expect(settings.replyDraft(for: session.id).notes.map(\.quote) == ["评审结论"])
     }
 }

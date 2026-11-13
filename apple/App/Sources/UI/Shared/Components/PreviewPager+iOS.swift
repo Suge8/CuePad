@@ -22,7 +22,7 @@ private struct PreviewPresenter: ViewModifier {
         content
             .environment(\.previewZoom, zoom)
             .environment(\.previewSources, sources)
-            .environment(\.openPreview, PreviewOpener { opened = $0 })
+            .environment(\.openPreview, PreviewOpener(owner: ObjectIdentifier(sources)) { opened = $0 })
             .task(id: opened) {
                 if let opened { await sources.prepare(PreviewZoomKey(group: opened.group, preview: opened.preview.id)) }
                 presented = opened
@@ -106,6 +106,10 @@ private struct PreviewPager: View {
         .onGeometryChange(for: EdgeInsets.self) { $0.safeAreaInsets } action: { insets = $0 }
         .background { PreviewDismissGuard() }
         .background(palette.desk)
+        // 写批注时点一下内容就交出键盘（`PreviewNoteField` 失焦即记下、收起），接着看；这一下照常落到内容上
+        .simultaneousGesture(TapGesture().onEnded {
+            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        })
     }
 
     /// 关上：开着的查找条先收（它挂在键盘那一层，不随页面缩回去）。

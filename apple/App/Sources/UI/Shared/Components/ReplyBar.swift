@@ -71,21 +71,9 @@ struct ReplyBar: View {
         case .answerAbove: notice("先在上面作答", icon: .above)
         case .unanswerable: notice(Self.unanswerable, icon: .mac)
         case .message, .answer:
-            composer.composerNotice(commandProgress != nil || expanded && (config?.failure != nil || recache != nil)) {
+            composer.composerNotice(commandProgress != nil || expanded && config?.failure != nil) {
                 if let commandProgress { progressLine(commandProgress) }
-                if expanded {
-                    MacInputNotice(failure: config?.failure)
-                    if let recache {
-                        Group {
-                            if cache?.estimated == true {
-                                Text("缓存可能已冷，这一句可能重读约 \(CueContext.tokens(recache))")
-                            } else {
-                                Text("缓存已冷，这一句会重读约 \(CueContext.tokens(recache))")
-                            }
-                        }
-                        .font(Typography.caption).foregroundStyle(palette.ink3)
-                    }
-                }
+                if expanded { MacInputNotice(failure: config?.failure) }
             }
             .task(id: cache?.warmUntil) {
                 cold = false
@@ -104,6 +92,8 @@ struct ReplyBar: View {
 
     private static let recacheWorthSaying = 20_000
 
+    private var coldCache: ColdCache? { recache.map { ColdCache(context: $0, estimated: cache?.estimated == true) } }
+
     private var expanded: Bool { form == .open || focused || !form.isCapsule && !draft.isEmpty(accepting: accepts.union(.notes)) }
 
     private var composer: some View {
@@ -115,7 +105,7 @@ struct ReplyBar: View {
                     if !draft.notes.isEmpty { ReplyNoteStack(notes: draft.notes, previews: previews, reveal: revealNote, remove: removeNote) }
                 },
                 tools: {
-                    if hasTools, let config { SessionConfigControls(session: session, models: models, shown: config, opening: $opening) }
+                    if hasTools, let config { SessionConfigControls(session: session, models: models, shown: config, cold: coldCache, opening: $opening) }
                 },
                 send: { sendControl }
             )

@@ -13,19 +13,19 @@ struct ReplyNoteStack: View {
     private static let shape = Radius.nested
 
     var body: some View {
-        ReplyNoteLayout(limit: (CGFloat(Self.shown) + 0.5) * NoteRow.height + 2 * Self.pad) {
+        ReplyNoteLayout(limit: (CGFloat(Self.shown) + 0.5) * NoteRow.height) {
             ViewThatFits(in: .vertical) {
                 rows.fixedSize(horizontal: false, vertical: true)
                 ScrollView { rows }
             }
         }
         .background(palette.fill, in: Self.shape)
+        // 行铺到这块底的边：指针停着的那一行连同行尾的"×"亮成一整条，首尾两行的角跟着这块底
+        .clipShape(Self.shape).rowContainer(.rect(cornerRadius: Radius.block), flush: true)
         .padding([.horizontal, .top], ComposerMetrics.inset)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("\(notes.count) 条批注，随下一句发出")
     }
-
-    private static let pad = Spacing.tight
 
     private var rows: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -33,7 +33,6 @@ struct ReplyNoteStack: View {
                 NoteRow(note: note, quoted: note.quoted(in: previews), reveal: { reveal(note) }, remove: { remove(note) }).transition(.opacity)
             }
         }
-        .padding(.vertical, Self.pad)
     }
 }
 
@@ -57,34 +56,31 @@ private struct NoteRow: View {
     let reveal: () -> Void
     let remove: () -> Void
     @Environment(\.palette) private var palette
-    @State private var hovering = false
     @Environment(\.dynamicTypeSize) private var typeSize
 
     #if os(iOS)
     static let height: CGFloat = 40
-    private static let alwaysShowsRemove = true, removeWidth: CGFloat = 44
     #else
     static let height: CGFloat = 30
-    private static let alwaysShowsRemove = false, removeWidth = height
     #endif
 
     var body: some View {
         HStack(alignment: typeSize.isAccessibilitySize ? .top : .center, spacing: 0) {
-            Button(action: reveal) {
+            // 不是按钮：行尾还有"×"，整行的悬停底由 `row()` 一处画
+            Group {
                 HStack(alignment: typeSize.isAccessibilitySize ? .top : .center, spacing: Spacing.item) {
-                    if note.preview != nil {
-                        QuoteThumb(preview: quoted, kind: note.kind)
+                    if note.preview != nil { QuoteThumb(preview: quoted, kind: note.kind) } else { Capsule().fill(palette.ink2).frame(width: 3, height: 14).frame(width: QuoteThumb.side) }
+                    if note.preview != nil, note.note.isEmpty {
                         Text("预览「\(note.quote)」").font(Typography.secondary).foregroundStyle(palette.ink2)
                             .lineLimit(typeSize.isAccessibilitySize ? nil : 1).truncationMode(.middle)
                     } else {
-                        Capsule().fill(palette.ink2).frame(width: 3, height: 14)
                         let layout = typeSize.isAccessibilitySize
                             ? AnyLayout(VStackLayout(alignment: .leading, spacing: Spacing.tight))
                             : AnyLayout(HStackLayout(spacing: Spacing.item))
                         layout {
                             Text(note.note).font(Typography.secondary).foregroundStyle(palette.ink)
                                 .layoutPriority(1)
-                            Text("「\(ReplyNote.excerpt(note.quote))」").font(Typography.caption).foregroundStyle(palette.ink3)
+                            Text(verbatim: ReplyNote.excerpt(note.quote)).font(Typography.caption).foregroundStyle(palette.ink3)
                                 .truncationMode(.middle)
                         }
                         .lineLimit(typeSize.isAccessibilitySize ? nil : 1)
@@ -95,25 +91,46 @@ private struct NoteRow: View {
                 .padding(.leading, Spacing.group)
                 .frame(minHeight: Self.height).contentShape(.rect)
             }
-            .buttonStyle(PressStyle(.wide))
+            .onTapGesture(perform: reveal)
+            .accessibilityElement(children: .ignore).accessibilityAddTraits(.isButton)
             .help(Text(revealHint))
-            .accessibilityLabel(note.preview == nil ? Text("批注：\(note.note)，原文：\(ReplyNote.excerpt(note.quote))") : Text("引用预览：\(note.quote)"))
+            .accessibilityLabel(
+                note.preview == nil ? Text("批注：\(note.note)，原文：\(ReplyNote.excerpt(note.quote))")
+                    : note.note.isEmpty ? Text("引用预览：\(note.quote)") : Text("批注：\(note.note)，预览：\(note.quote)"))
             .accessibilityHint(Text(revealHint))
-            Button(action: remove) {
-                Image(.remove).font(Typography.caption2.weight(.semibold)).foregroundStyle(palette.ink3)
-                    .frame(width: Self.removeWidth, height: Self.height).contentShape(.rect)
-            }
-            .buttonStyle(PressStyle())
-            .opacity(Self.alwaysShowsRemove || hovering ? 1 : 0)
-            .accessibilityLabel(Text(removeLabel))
-            .help(Text(removeLabel))
+            NoteRemove(label: removeLabel, action: remove)
         }
-        .onHover { hovering = $0 }
-        .animation(Motion.fade, value: hovering)
+        .row()
     }
 
     private var revealHint: LocalizedStringResource { note.preview == nil ? "回到原文" : "回到这份预览" }
     private var removeLabel: LocalizedStringResource { note.preview == nil ? "删掉这条批注" : "不引用这份预览" }
+}
+
+/// Mac 上指针停在这一行才露出（手机一直在）。
+private struct NoteRemove: View {
+    let label: LocalizedStringResource
+    let action: () -> Void
+    @Environment(\.palette) private var palette
+    @Environment(\.rowHovered) private var hovered
+
+    #if os(iOS)
+    private static let always = true, width: CGFloat = 44
+    #else
+    private static let always = false, width = NoteRow.height
+    #endif
+
+    var body: some View {
+        Button(action: action) {
+            Image(.remove).font(Typography.caption2.weight(.semibold)).foregroundStyle(palette.ink3)
+                .frame(width: Self.width, height: NoteRow.height).contentShape(.rect)
+        }
+        .buttonStyle(PressStyle())
+        .opacity(Self.always || hovered ? 1 : 0)
+        .animation(Motion.fade, value: hovered)
+        .accessibilityLabel(Text(label))
+        .help(Text(label))
+    }
 }
 
 /// 预览已随对话过期、取不到时照引用时记下的类型（`ReplyNote.kind`）。

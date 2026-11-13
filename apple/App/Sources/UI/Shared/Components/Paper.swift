@@ -146,6 +146,8 @@ struct Thumbnail: View {
                     Image(decorative: image, scale: 1).resizable().aspectRatio(contentMode: fitWidth == nil ? .fill : .fit)
                         // 深色下截图多是亮底，原样放在暗纸上刺眼：压暗一层
                         .overlay { palette.mediaDim }
+                        // 铺满时裁掉的那截还接着指针（裁切只管画）：宽图会盖住旁边的格子，悬停亮错、点了没反应
+                        .allowsHitTesting(false)
                 }
             }
             .frame(width: width, height: height)

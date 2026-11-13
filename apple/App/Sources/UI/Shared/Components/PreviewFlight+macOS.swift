@@ -6,12 +6,11 @@ import WebKit
 
 /// 位置、尺寸与圆角都在渲染端走 `Motion.glide`（定长：飞到了才接着落内容），主线程不逐帧重排；飞完那张画面淡掉（`Motion.fade`）。
 /// 飞的这段内容藏着（`landed`），同一张图不会在两处同时出现：不用盖一层幕布——浮层淡入淡出时 SwiftUI 按层各自改透明度，半透明的幕布盖不住半透明的内容。
-/// 网页落地不交叉淡：飞的是缩略图那张快照（1024 宽排的首屏），真网页按全屏页的宽排，字的位置不同，两层一淡一显就是重影。
-/// 所以同样大小打开过的网页飞真网页上次画好的那一屏（`PreviewPageShots`），落在它那一处；没有时缩略图按 CSS 像素一比一落在内容区左上
-/// （同真网页的起点与字号，块宽随宽度伸缩的差一点；`PreviewPlace.frame`）。落地后快照停着，等真网页载完、画上第一帧（`pagePainted`）
-/// 才在同一刻露出网页、撤掉快照：全程屏上只有一层字。不让网页按快照的宽排：那样全屏页里的网页就不是它真的样子。
-/// Markdown 与改动同理（缩略图是一页 360 宽的首屏，全屏页按栏宽重排）：快照按一比一落在全屏页正文开头的地方，标题与头几行字对得上，
-/// 落地后同一刻换成内容（`swaps`），不交叉淡。
+/// 缩略图与全屏页不是同一张画面的三种（`PreviewThumbnail`）：
+/// - 网页飞的是缩略图那张快照，按 `PreviewContent.page` 排的首屏：全屏页有那么大时与真网页同一种排法；窗口小、全屏页排不到那么大时两种排法对不上，
+///   同样大小打开过的飞真网页上次画好的那一屏（`PreviewPageShots`）。落地后快照停着，等真网页载完、画上第一帧（`pagePainted`）才露出网页、快照淡掉。
+/// - Markdown 与改动（缩略图是一页 360 宽的首屏，全屏页按栏宽重排）：纸长成整个内容区、字照原大小落在正文开头（`PreviewPlace.frame`），飞过半程起淡成真内容。
+/// 关的时候都倒着来：缩略图在全屏页那么大的地方淡出来、缩回去，内容随浮层淡出。
 /// 缩略图（`previewSource`）在这里登记：画面在它的图层里、几十上百张一屏，只登记一个不占地方的平台视图，飞的那一下才取框，不给每张挂几何读数。
 @MainActor final class PreviewFlight {
     struct Source {
@@ -25,7 +24,8 @@ import WebKit
     private var sources: [PreviewZoomKey: Source] = [:]
     private var painted = false
     private var paintWaiter: CheckedContinuation<Void, Never>?
-    private var closing = false
+    /// 第几趟开合：开、关各进一趟。飞到一半被关掉、又开了下一份时，上一趟醒来看见不是自己那一趟就撤走，不落内容、不等别人的那一帧。
+    private var trip = 0
     private var shows: [UUID: WeakShowing] = [:]
     private let pageShots = PreviewPageShots()
     weak var stage: Stage.Mark?
@@ -43,7 +43,8 @@ import WebKit
 
     func depart(to stage: Stage.Mark) {
         painted = false
-        closing = false
+        trip += 1
+        let trip = trip
         guard let window = stage.window, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
               let (source, from) = source(stage.key, in: window)
         else { return stage.landed(true) }
@@ -52,25 +53,30 @@ import WebKit
         Task {
             guard let thumbnail = await source.image(), stage.window === window else { return stage.landed(true) }
             let image: Any = shot?.image ?? thumbnail
-            let to = shot.map { PreviewFrame(rect: $0.rect(in: area)) }
-                ?? stage.place.frame(of: thumbnail, aspect: source.aspect, crop: source.alignment)
+            let to = stage.place.cornered(shot.map { PreviewFrame(rect: $0.rect(in: area)) }
+                ?? stage.place.frame(of: thumbnail, aspect: source.aspect, crop: source.alignment))
             guard let flight = await Flight(image, from: source.frame(from, showing: image), to: to, in: window)
             else { return stage.landed(true) }
-            try? await Task.sleep(for: .seconds(Motion.Glide.duration))
-            guard PreviewPlace.swaps(stage.kind) else {
+            let kind = stage.kind.thumbnail
+            // 那一小页的排法与内容不同：停下来再换，错开的字看得见。飞过半程（纸已长到大半个页）就边飞边淡成内容，两种排法只在动着的那一小段里叠着
+            try? await Task.sleep(for: .seconds(kind == .page ? Motion.Glide.duration / 2 : Motion.Glide.duration))
+            guard trip == self.trip else { return flight.remove() }
+            switch kind {
+            case .picture:
                 // 内容在飞的那张下面露出来，那张再淡掉：两层同时一淡一显，中间会透出底色
                 stage.landed(true)
                 flight.dissolve()
-                return
+            case .page:
+                stage.landed(true)
+                flight.dissolve(over: Motion.Glide.duration / 2)
+            case .screen:
+                if stage.page != nil { await painted() }
+                guard trip == self.trip else { return flight.remove() }
+                // 快照在最上面：网页露出来的这一帧它还盖着，画上屏之后再淡掉
+                stage.landed(true)
+                await NextFrame.drawn()
+                flight.dissolve()
             }
-            if stage.page != nil { await painted() }
-            guard !closing else { return flight.remove() }
-            // 快照在最上面：内容露出来的这一帧它还盖着，画上屏之后再撤，中间没有两层同时露出的一帧。
-            // Markdown、改动按栏宽排、比快照宽，快照下面先垫一块桌面色铺满内容区（同此刻它四周的底），露出的那一帧正文不从快照旁边透出来
-            flight.ground(stage.place.area, stage.ground)
-            stage.landed(true)
-            await NextFrame.drawn()
-            flight.remove()
         }
     }
 
@@ -89,24 +95,26 @@ import WebKit
     }
 
     func land() {
-        closing = true
+        trip += 1
         pagePainted()
         guard let stage, let window = stage.window, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
               let (source, to) = source(stage.key, in: window) else { return }
         let shown = shows[stage.key.preview]?.value?.shown(in: window) ?? .opened
         let place = stage.place
-        let shot = stage.shotKey.flatMap { pageShots.shot($0) }
         Task {
             let start: (Any, Frame)
             switch shown {
             case .picture(let contents, let frame): start = (contents, frame)
             case .opened:
-                if let shot { start = (shot.image, PreviewFrame(rect: shot.rect(in: place.area))); break }
                 guard let image = await source.image() else { return }
                 start = (image, place.frame(of: image, aspect: source.aspect, crop: source.alignment))
             }
-            guard let flight = await Flight(start.0, from: start.1, to: source.frame(to, showing: start.0), in: window) else { return }
-            stage.landed(false)
+            // 另排的那几种飞回去的是缩略图（落到缩略图上是同一张，不跳）：它与页上的内容不是同一张，淡着出来，内容留着随浮层淡出
+            let reflows = stage.kind.thumbnail != .picture
+            guard let flight = await Flight(
+                start.0, from: place.cornered(start.1), to: source.frame(to, showing: start.0), in: window, appearing: reflows ? Motion.Fade.duration : nil)
+            else { return }
+            if !reflows { stage.landed(false) }
             try? await Task.sleep(for: .seconds(Motion.Glide.duration))
             flight.dissolve()
         }
@@ -132,61 +140,59 @@ extension EnvironmentValues {
 /// 加的是图层不是视图，AppKit 不为它重排窗口、重算指针区域，打开那一帧少十几毫秒，实测），画面从 `from` 飞到 `to`（框与圆角），停在那里，`dissolve` 时淡掉、撤走。
 @MainActor private final class Flight {
     private let layer = CALayer()
-    private weak var root: NSView?
-    private var backdrop: CALayer?
+    /// 画面在框里的一层：多数时候铺满框；纸比画面大时（`PreviewFrame.page`）框是纸、它是纸上的那一块。
+    private let picture = CALayer()
 
     /// `contents` 是 CGImage 或 IOSurface；两端各带着那里画面露出的那一截（`contentsRect`），飞着从一截换成另一截。
-    init?(_ contents: Any, from: Frame, to: Frame, in window: NSWindow) {
+    init?(_ contents: Any, from: Frame, to: Frame, in window: NSWindow, appearing: TimeInterval? = nil) {
         guard let root = window.contentView?.superview, let host = root.layer else { return nil }
-        self.root = root
-        layer.contents = contents
-        layer.contentsGravity = .resize
-        layer.contentsScale = window.backingScaleFactor
+        picture.contents = contents
+        picture.contentsGravity = .resize
+        picture.contentsScale = window.backingScaleFactor
+        layer.backgroundColor = to.paper ?? from.paper
         layer.masksToBounds = true
         layer.cornerCurve = .continuous
         layer.zPosition = 1000
+        layer.addSublayer(picture)
         let start = root.convert(from.rect, from: nil), end = root.convert(to.rect, from: nil)
+        // 画面在框里的位置按同一个视图的坐标算差：框的图层没翻，随上面翻不翻一起，差值两种情形都对
+        let inner = { (frame: Frame, box: CGRect) -> CGRect in
+            root.convert(frame.page ?? frame.rect, from: nil).offsetBy(dx: -box.minX, dy: -box.minY)
+        }
+        let pictureStart = inner(from, start), pictureEnd = inner(to, end)
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         layer.frame = end
         layer.cornerRadius = to.radius
-        layer.contentsRect = to.shown
+        picture.frame = pictureEnd
+        picture.contentsRect = to.shown
         host.addSublayer(layer)
         layer.add(Self.move("position", NSValue(point: CGPoint(x: start.midX, y: start.midY))), forKey: "position")
         layer.add(Self.move("bounds.size", NSValue(size: start.size)), forKey: "size")
         layer.add(Self.move("cornerRadius", from.radius), forKey: "radius")
-        layer.add(Self.move("contentsRect", NSValue(rect: from.shown)), forKey: "shown")
+        picture.add(Self.move("position", NSValue(point: CGPoint(x: pictureStart.midX, y: pictureStart.midY))), forKey: "position")
+        picture.add(Self.move("bounds.size", NSValue(size: pictureStart.size)), forKey: "size")
+        picture.add(Self.move("contentsRect", NSValue(rect: from.shown)), forKey: "shown")
+        if let appearing { layer.add(Self.fade(from: 0, over: appearing), forKey: "appear") }
         CATransaction.commit()
     }
 
-    func ground(_ area: CGRect, _ color: CGColor) {
-        guard let root, let host = root.layer else { return }
-        let backdrop = CALayer()
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        backdrop.frame = root.convert(area, from: nil)
-        backdrop.backgroundColor = color
-        backdrop.zPosition = layer.zPosition - 1
-        host.addSublayer(backdrop)
-        CATransaction.commit()
-        self.backdrop = backdrop
-    }
+    func remove() { layer.removeFromSuperlayer() }
 
-    func remove() {
-        layer.removeFromSuperlayer()
-        backdrop?.removeFromSuperlayer()
-    }
-
-    func dissolve() {
+    func dissolve(over duration: TimeInterval = Motion.Fade.duration) {
         CATransaction.begin()
         CATransaction.setCompletionBlock { [layer] in layer.removeFromSuperlayer() }
-        let fade = CABasicAnimation(keyPath: "opacity")
-        fade.fromValue = 1
-        fade.duration = Motion.Fade.duration
-        fade.timingFunction = Motion.Fade.timing
         layer.opacity = 0
-        layer.add(fade, forKey: "fade")
+        layer.add(Self.fade(from: 1, over: duration), forKey: "fade")
         CATransaction.commit()
+    }
+
+    private static func fade(from opacity: Float, over duration: TimeInterval) -> CABasicAnimation {
+        let fade = CABasicAnimation(keyPath: "opacity")
+        fade.fromValue = opacity
+        fade.duration = duration
+        fade.timingFunction = Motion.Fade.timing
+        return fade
     }
 
     private static func move(_ keyPath: String, _ value: Any) -> CABasicAnimation {
@@ -217,6 +223,9 @@ extension PreviewFlight.Source {
 
 struct PreviewFrame {
     var rect: CGRect
+    /// 画面只占框里的这一块（窗口坐标），框的其余铺 `paper`；nil 是铺满框。
+    var page: CGRect?
+    var paper: CGColor?
     var radius: CGFloat = 0
     var shown = CGRect(x: 0, y: 0, width: 1, height: 1)
 

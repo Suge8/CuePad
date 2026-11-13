@@ -18,8 +18,8 @@ nonisolated struct ChatEntry: Identifiable, Equatable, Sendable {
     var previews: [PreviewItem] = []
     var question: String?
     var fromCue = false
-    /// 最新做完的那一轮：它之后你还没说下一句（发出、还在路上的也算说了）。这一轮的经过开着（`RoundProcess`）。
-    var latest = false
+    /// 最新做完的那一轮何时落下的：它之后你还没说下一句（发出、还在路上的也算说了）。刚落下时经过先开着再收起（`RoundProcess`）。
+    var landed: Date?
 }
 
 private nonisolated extension ChatEntry {
@@ -98,7 +98,7 @@ nonisolated enum Chat {
         place(before: nil)
         entries += outgoing[tail...].map(ChatEntry.outgoing)
         let yours = entries.lastIndex { [.user, .answer].contains($0.role) || $0.role.isOutgoing } ?? -1
-        if let last = entries.lastIndex(where: { $0.role == .pi }), last > yours { entries[last].latest = true }
+        if let last = entries.lastIndex(where: { $0.role == .pi }), last > yours { entries[last].landed = messages.last { $0.id == entries[last].id }?.at }
         return entries
     }
 
