@@ -50,3 +50,24 @@ extension ProjectActions where Extra == EmptyView {
         self.init(project: project, edit: edit) { EmptyView() }
     }
 }
+
+/// 项目页"⋯"里的那几项（三端同一份），项目本身的操作在最后（`ProjectActions`）。
+struct ProjectMenuItems: View {
+    let projectID: UUID
+    @Environment(Workspace.self) private var workspace
+
+    var body: some View {
+        #if os(macOS)
+        Button("选择灵感", icon: CardMenu.Item.select.icon) { workspace.presses.beginSelecting() }
+            .disabled(!workspace.isLibraryReady || (workspace.catalog?.summaries[projectID]?.cardCount ?? 0) == 0)
+        #else
+        // Mac 记灵感在页底常驻的那一条（`CaptureBar`）
+        Button("记一条灵感", icon: .write, action: workspace.newCard)
+        #endif
+        Button("看这个项目的进展", icon: .task) { workspace.showProgress(of: projectID) }
+        if let project = workspace.catalog?.project(projectID) {
+            Divider()
+            ProjectActions(project: project) { workspace.projectForm = .init(project: project) }
+        }
+    }
+}

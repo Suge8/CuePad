@@ -81,20 +81,4 @@ struct PageMenuSlot: View {
         }
     }
 }
-
-private struct ProjectMenuItems: View {
-    let projectID: UUID
-    @Environment(Workspace.self) private var workspace
-
-    var body: some View {
-        let ready = workspace.isLibraryReady
-        Button("选择灵感", icon: CardMenu.Item.select.icon) { workspace.presses.beginSelecting() }
-            .disabled(!ready || (workspace.catalog?.summaries[projectID]?.cardCount ?? 0) == 0)
-        Button("看这个项目的进展", icon: .task) { workspace.showProgress(of: projectID) }
-        if let project = workspace.catalog?.project(projectID) {
-            Divider()
-            ProjectActions(project: project) { workspace.projectForm = .init(project: project) }
-        }
-    }
-}
 #endif

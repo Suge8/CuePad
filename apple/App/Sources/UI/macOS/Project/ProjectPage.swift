@@ -26,9 +26,8 @@ struct ProjectPage: View {
 
     private static let collapseOffset: CGFloat = 140
     /// 卡片墙：列不窄于 260；2560 宽的全屏收起侧栏是 9 列，留出余量。
-    private static let minColumnWidth: CGFloat = 260
-    private static let maxColumns = 12
-    private static let wallSpacing: CGFloat = 16
+    private static let metrics = ProjectWallSections<CardTile>.Metrics(
+        minColumnWidth: 260, maxColumns: 12, wallSpacing: 16, sectionGap: Spacing.section, headerGap: Spacing.group, olderGap: Spacing.page)
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -86,43 +85,13 @@ struct ProjectPage: View {
 
     @ViewBuilder
     private func page(_ data: ProjectPageData, _ arrangement: WallArrangement, _ shape: PageShape) -> some View {
-        let byID = shape.byID
-        let lastTarget = data.lastTarget
         if stage >= .focus { FocusBand(data: data, position: $position, anchor: anchor) }
         if stage >= .wall {
-            if data.cards.isEmpty {
-                MasonryLayout(minColumnWidth: Self.minColumnWidth, maxColumns: Self.maxColumns, spacing: Self.wallSpacing) {
-                    EmptyWallTile()
-                }
-            } else {
-                if !arrangement.pinned.isEmpty { pinned(arrangement.pinned.compactMap { byID[$0] }, lastTarget: lastTarget) }
-                if !arrangement.wall.isEmpty {
-                    wallSection(title: "最近", count: arrangement.wall.count, ids: arrangement.wall, byID: byID, lastTarget: lastTarget)
-                }
-                if stage >= .older, !arrangement.older.isEmpty {
-                    OlderList(groups: shape.older, cards: byID, lastTarget: lastTarget)
-                }
-            }
-        }
-    }
-
-    private func pinned(_ cards: [Card], lastTarget: [UUID: String]) -> some View {
-        VStack(spacing: 0) {
-            ForEach(cards) { card in
-                OlderRow(card: card, lastTarget: lastTarget[card.id], pinned: true)
-            }
-        }
-        .rowPaper(cornerRadius: Radius.block)
-    }
-
-    private func wallSection(title: LocalizedStringResource, count: Int, ids: [UUID], byID: [UUID: Card], lastTarget: [UUID: String]) -> some View {
-        VStack(alignment: .leading, spacing: Spacing.group) {
-            SectionHeader(title, count: count)
-            MasonryLayout(minColumnWidth: Self.minColumnWidth, maxColumns: Self.maxColumns, spacing: Self.wallSpacing) {
-                ForEach(ids.compactMap { byID[$0] }) { card in
-                    CardTile(card: card, lastTarget: lastTarget[card.id], floated: board.floated.contains(card.id))
-                        .transition(.opacity)
-                }
+            ProjectWallSections(
+                data: data, arrangement: arrangement, older: shape.older, entry: { shape.byID[$0].map(CardEntry.init) }, metrics: Self.metrics,
+                showsOlder: stage >= .older
+            ) { entry in
+                CardTile(card: entry.card, lastTarget: data.lastTarget[entry.id], floated: board.floated.contains(entry.id))
             }
         }
     }
