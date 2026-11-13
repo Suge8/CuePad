@@ -223,8 +223,7 @@ extension DebugScene {
         for index in 0... {
             var now = samples[index % samples.count]
             now.at = .now
-            cueNow = now
-            workspace.cue.show(now.aged(to: .now))
+            pinned.cueNow = now
             #if os(iOS)
             if live {
                 await workspace.services.cueActivity?.show(

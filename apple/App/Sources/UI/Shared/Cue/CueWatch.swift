@@ -120,7 +120,7 @@ final class CueWatch {
     }
 
     /// 换上这一份，睡到刚做完的那件该收的那一刻（`CueNow.nextChange`；等到那一刻是业务语义，不周期刷新）再收掉。
-    func show(_ next: CueNow) {
+    private func show(_ next: CueNow) {
         now = next
         aging?.cancel()
         guard let at = next.nextChange(after: .now) else { return }
