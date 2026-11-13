@@ -8,7 +8,7 @@ from .shared import box, contours
 NAMES = (
     "waiting", "failure", "undelivered", "unknown", "question", "picked", "asking", "ended", "interrupted",
     "relay", "relay.stalled", "cursor", "agent", "reload", "cloud", "cloud.done", "cloud.sync", "cloud.alert",
-    "cloud.pause", "cloud.up", "cloud.down", "cloud.off", "cloud.lock", "bell", "bell.on", "bell.off",
+    "cloud.pause", "cloud.up", "cloud.down", "cloud.off", "cloud.lock", "bell", "bell.on", "bell.off", "cold",
 )
 
 
@@ -81,6 +81,14 @@ def centerlines(name):
         if name == "bell.on":
             opened.extend([arcs((0,-3),11,190,40),arcs((0,-3),11,-50,40)])
         elif name == "bell.off": line((-10,-10),(10,10))
+    elif name == "cold":
+        # 雪花：三根过心的杆，六个杆头各一对朝外的短枝；枝只画在杆的外半截，缩到小字号时心里不糊成一团。
+        def at(radius,degrees): return (radius*math.cos(math.radians(degrees)),radius*math.sin(math.radians(degrees)))
+        for degrees in (90,30,150): line(at(-10,degrees),at(10,degrees))
+        for degrees in range(30,390,60):
+            x,y = at(5.6,degrees)
+            (a,b),(c,d) = at(3.6,degrees+52),at(3.6,degrees-52)
+            line((x+a,y+b),(x,y),(x+c,y+d))
     else: raise ValueError(name)
     return opened,closed
 

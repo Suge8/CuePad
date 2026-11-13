@@ -9476,6 +9476,22 @@
         }
       }
     },
+    "可能重读 %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "may reread %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "可能重读 %@"
+          }
+        }
+      }
+    },
     "右栏" : {
       "localizations" : {
         "en" : {
@@ -12272,22 +12288,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已关闭，收不到提示"
-          }
-        }
-      }
-    },
-    "已冷" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "cold"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已冷"
           }
         }
       }
@@ -21068,22 +21068,6 @@
         }
       }
     },
-    "缓存可能已冷，重读约 %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cache may be cold; rereads about %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "缓存可能已冷，重读约 %@"
-          }
-        }
-      }
-    },
     "缓存失效，重读 %@" : {
       "localizations" : {
         "en" : {
@@ -21112,22 +21096,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "缓存已冷，这一句会重读约 %@"
-          }
-        }
-      }
-    },
-    "缓存已冷，重读约 %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cache cold; rereads about %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "缓存已冷，重读约 %@"
           }
         }
       }
@@ -25744,6 +25712,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "重试这一轮"
+          }
+        }
+      }
+    },
+    "重读 %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "rereads %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重读 %@"
           }
         }
       }

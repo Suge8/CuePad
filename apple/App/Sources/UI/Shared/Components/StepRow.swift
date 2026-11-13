@@ -21,7 +21,7 @@ struct StepRow: View {
         if item.calls != nil, services.holdsSteps(of: session) || message != nil {
             VStack(alignment: .leading, spacing: 0) {
                 Button(action: toggle) { row(open: opened != nil) }
-                    .buttonStyle(PressStyle())
+                    .buttonStyle(PressStyle(.inline))
                     .accessibilityExpanded(opened != nil)
                 switch opened {
                 // 取到了却是空的：这一步没有命令、改动与文字输出（看了一张图、搜了一下网）

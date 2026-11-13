@@ -114,18 +114,20 @@ private struct NoteRemove: View {
     @Environment(\.palette) private var palette
     @Environment(\.rowHovered) private var hovered
 
+    /// Mac 上钮比行矮一圈：它的悬停底是个圆，和行一样高的话圆顶到行的上下沿，在首尾两行伸出这块底的圆角。
     #if os(iOS)
-    private static let always = true, width: CGFloat = 44
+    private static let always = true, side = CGSize(width: 44, height: NoteRow.height)
     #else
-    private static let always = false, width = NoteRow.height
+    private static let always = false, side = CGSize(width: 22, height: 22)
     #endif
 
     var body: some View {
         Button(action: action) {
             Image(.remove).font(Typography.caption2.weight(.semibold)).foregroundStyle(palette.ink3)
-                .frame(width: Self.width, height: NoteRow.height).contentShape(.rect)
+                .frame(width: Self.side.width, height: Self.side.height).contentShape(.rect)
         }
         .buttonStyle(PressStyle())
+        .frame(width: max(Self.side.width, NoteRow.height), height: NoteRow.height)
         .opacity(Self.always || hovered ? 1 : 0)
         .animation(Motion.fade, value: hovered)
         .accessibilityLabel(Text(label))

@@ -115,6 +115,7 @@ enum InkSymbols {
         "cue.bell",
         "cue.bell.on",
         "cue.bell.off",
+        "cue.cold",
         "cue.sparkle",
         "cue.bubbles",
         "cue.terminal",
