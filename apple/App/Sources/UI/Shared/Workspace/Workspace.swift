@@ -70,17 +70,37 @@ final class Workspace {
     let pages = MacPages()
     let presses = CardPresses()
     let sendState: SendState
+    #endif
+    /// 宽屏盖在主区上的一页（卡片编辑、技能与规则的文件）：主区那一页留着，收起回到它（`Workspace.present`）。窄屏是推入的页。
     var overlay: Overlay? {
-        didSet { if case .card(let id)? = overlay { presses.present(id) } }
+        didSet {
+            #if os(macOS)
+            if case .card(let id)? = overlay { presses.present(id) }
+            #endif
+        }
     }
     enum Overlay: Hashable {
         case card(UUID)
         case library(LibraryFile)
+
+        init?(_ route: Route) {
+            switch route {
+            case .card(let id): self = .card(id)
+            case .libraryFile(let file): self = .library(file)
+            default: return nil
+            }
+        }
+
+        var route: Route {
+            switch self {
+            case .card(let id): .card(id)
+            case .library(let file): .libraryFile(file)
+            }
+        }
     }
     var openCard: UUID? { if case .card(let id)? = overlay { id } else { nil } }
     var openLibraryFile: LibraryFile? { if case .library(let file)? = overlay { file } else { nil } }
     func close(_ page: Overlay) { if overlay == page { overlay = nil } }
-    #endif
     var fileDrafts: [FileDraftKey: FileDraft] = [:]
     var openTask: TaskBubble.Request? {
         didSet { if openTask == nil, let oldValue { closedTask = (oldValue.task, .now) } }

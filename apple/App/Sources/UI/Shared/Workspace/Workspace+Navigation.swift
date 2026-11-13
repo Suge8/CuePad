@@ -54,13 +54,11 @@ extension Workspace {
     /// 看着的东西没了（删了、进了回收站、文件不在了；本机删的和别处删的同一条路）：窄屏把它连同上面的页截出栈，
     /// 宽屏关掉盖着它的那一层，或主区回到浏览落点（Cue 铺满时只换下面留着的那一页，不把人从 Cue 拉走）。
     func leave(_ route: Route) {
-        #if os(macOS)
         switch route {
         case .card(let id): close(.card(id))
         case .libraryFile(let file): close(.library(file))
         default: break
         }
-        #endif
         switch navigation {
         case .narrow(var state):
             guard let index = state.path.firstIndex(of: route) else { return }
@@ -80,7 +78,7 @@ extension Workspace {
     func back() {
         switch layout {
         case .narrow: if !path.isEmpty { path.removeLast() }
-        case .wide: closeColumn(.main)
+        case .wide: if overlay != nil { overlay = nil } else { closeColumn(.main) }
         }
     }
 

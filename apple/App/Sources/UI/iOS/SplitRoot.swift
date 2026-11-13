@@ -84,25 +84,36 @@ private struct DestinationColumn: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.headInset) private var inset
     @Environment(\.underCue) private var under
+    @Environment(\.palette) private var palette
 
     var body: some View {
+        let overlay = column == .main ? workspace.overlay : nil
         // 看板自己让（列滑到浮板下面，`ProgressScreen`），列头就是最顶那一排；会话页的栏头在页里（同 Mac）；搜索框占着那一排的中间
-        let board = route == .progress, headed = !board && !route.isSession && route != .search && !route.isCard && !route.isLibraryFile
+        let board = route == .progress && overlay == nil
+        let headed = overlay != nil || !board && !route.isSession && route != .search
         ZStack(alignment: .top) {
             NavigationStack(path: Binding<[Route]>(get: { [] }, set: { if let route = $0.last { workspace.show(route) } })) {
                 RouteView(route: route, column: column)
-                    .environment(\.headerHost, headed || route.isSession ? .column : .panel)
+                    .environment(\.headerHost, route == .search ? .panel : .column)
                     .toolbarVisibility(.hidden, for: .navigationBar)
                     .navigationDestination(for: Route.self) { RouteView(route: $0) }
             }
+            // 盖在主区上（同 Mac 的 `EditorLayer`）：下面那一页留着，收起回到它
+            if let overlay {
+                RouteView(route: overlay.route)
+                    .environment(\.headerHost, .panel)
+                    .background(palette.desk)
+                    .id(overlay)
+                    .transition(.opacity)
+            }
             if headed { WideColumnHead().padding(inset).frame(height: Chrome.band) }
         }
+        .animation(Motion.fade, value: overlay)
         .padding(.trailing, board ? 0 : under)
     }
 }
 
 private extension Route {
     var isSession: Bool { if case .session = self { true } else { false } }
-    var isLibraryFile: Bool { if case .libraryFile = self { true } else { false } }
 }
 #endif

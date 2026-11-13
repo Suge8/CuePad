@@ -3,8 +3,9 @@ import CueStore
 import SwiftUI
 
 extension Workspace {
-    func willSelect(_ route: Route, from previous: Route) {}
+    func willSelect(_ route: Route, from previous: Route) { overlay = nil }
 
+    /// 宽屏盖在主区上（`selectWide`）。
     func showEditor(_ card: UUID) { push(.card(card)) }
 
     func openLibrary(_ file: LibraryFile) {

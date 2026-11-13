@@ -183,9 +183,9 @@ struct ProjectsNavigationTests {
         try await eventually("目录读到项目") { pad.catalog?.project(project.id) != nil }
         pad.show(.project(project.id))
         pad.showEditor(card.id)
+        #expect(pad.openCard == card.id && pad.mainRoute == .project(project.id))
         try await pad.trash(card.id)
-        #expect(pad.mainRoute != .card(card.id))
-        pad.show(.project(project.id))
+        #expect(pad.openCard == nil && pad.mainRoute == .project(project.id))
         try await store.trashProject(project.id)
         try await eventually("主区离开项目") { pad.mainRoute == .shelf }
         #expect(!pad.cueHome)

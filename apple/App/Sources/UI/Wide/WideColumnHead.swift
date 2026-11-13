@@ -28,7 +28,8 @@ struct WideColumnHead: View {
             }
             if workspace.overlay != nil || workspace.mainRoute != .progress { PageMenuSlot() }
             #else
-            title
+            // 盖着的页（编辑、文件）的标题与操作在它自己那一排（`HeaderHost.panel`），同 Mac 居中的玻璃与右边的"⋯"
+            if workspace.overlay != nil { CloseButton() } else { title }
             Spacer(minLength: Spacing.item)
             #endif
         }
@@ -46,6 +47,21 @@ struct WideColumnHead: View {
         case .earlier: WideHeading(title: String(localized: "历史"))
         default: EmptyView()
         }
+    }
+}
+
+/// 打开、收起卡片只改动三处（收起按钮、编辑页图层、底部输入条的位置），各自读"打开的卡"：主窗口的视图体不读它，开合时不重算整个窗口。
+private struct CloseButton: View {
+    @Environment(Workspace.self) private var workspace
+
+    var body: some View {
+        // 箭头比放大镜、"⋯"细瘦：大一号、粗一档，与它们一样重
+        Button { workspace.overlay = nil } label: { Image(.back).font(Glyph.control.weight(.bold)) }
+            .buttonStyle(ControlButtonStyle(kind: .circular))
+            .keyboardShortcut(.cancelAction)
+            .help("收起（Esc）")
+            .accessibilityLabel("收起")
+            .padding(.trailing, Spacing.item)
     }
 }
 
