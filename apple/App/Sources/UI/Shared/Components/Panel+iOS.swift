@@ -13,7 +13,7 @@ extension View {
             case .bubble(let source, let width):
                 let shown = item.wrappedValue
                 self.modifier(BubbleSlot(key: shown.map { AnyHashable($0.id) }, source: source, width: width, close: close) { if let shown { content(shown) } })
-            case .sheet:
+            case .sheet, .bare:
                 self.sheet(item: item) { content($0).modalPage(close.of($0.id)) }
             }
         }

@@ -2,7 +2,7 @@ import CueStore
 import SwiftUI
 
 /// 开新会话只有这一个输入框（两端同一份）：看板的"＋"、会话列表空着时那一颗、Mac 菜单，以及手机把任务交给新会话时。
-/// 手机浮在键盘上（`FloatingInput`），Mac 在窗口中间的浮层里（`NewSessionPanel`）。
+/// 手机浮在键盘上（`FloatingInput`），Mac 浮在窗口中间的遮罩上（`NewSessionPanel`，不套浮层的纸）。
 struct NewSessionInput: View {
     let start: SessionStart
     @Environment(Workspace.self) private var workspace
@@ -23,23 +23,11 @@ struct NewSessionInput: View {
     private var canStart: Bool { chosen?.host != nil && brain != nil && launching.canSubmit(at: services.speech) }
 
     var body: some View {
-        #if os(macOS)
-        VStack(alignment: .leading, spacing: Spacing.item) {
-            composer
-            // 浮层按内容裁：说明排在输入框下面，不浮在上沿之外
-            if let status { statusLine(status).font(Typography.meta).padding(.horizontal, Spacing.group).transition(.opacity) }
-        }
-        .animation(Motion.fade, value: status != nil)
-        .padding(Spacing.group)
-        .frame(width: Self.width)
-        #else
         composer.composerNotice(status != nil) { if let status { statusLine(status).font(Typography.caption) } }
-        #endif
+            #if os(macOS)
+            .frame(width: 480)
+            #endif
     }
-
-    #if os(macOS)
-    private static let width: CGFloat = 480
-    #endif
 
     private var composer: some View {
         Composer(

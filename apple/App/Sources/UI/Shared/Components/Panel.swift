@@ -27,13 +27,15 @@ extension EnvironmentValues {
 
 enum PanelStyle: Equatable {
     case sheet
+    /// 只铺遮罩，内容自己带底（Mac 新会话的输入框：玻璃外面再套一张浮层的纸是两层框）。iOS 没有用它的地方，同 sheet。
+    case bare
     case fullScreen
     /// 点外面或 Esc 关、那一下照常落到下面；iOS 不是系统 sheet。从控件长出的用 `bubble(isPresented:)`，它替控件量框。
     case bubble(BubbleSource, width: BubblePlacement.Width = .fitting)
 
     var modal: Bool {
         switch self {
-        case .sheet, .fullScreen: true
+        case .sheet, .bare, .fullScreen: true
         case .bubble: false
         }
     }

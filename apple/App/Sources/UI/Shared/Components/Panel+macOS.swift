@@ -161,7 +161,7 @@ private extension PanelStyle {
     var motion: Animation? {
         switch self {
         case .fullScreen: Motion.fade
-        case .sheet: nil
+        case .sheet, .bare: nil
         case .bubble: Motion.nudge
         }
     }
@@ -296,13 +296,19 @@ private struct PanelLayer: View {
             if shown.open {
                 palette.backdrop.ignoresSafeArea().accessibilityHidden(true)
             }
-            shown.content
-                .background(palette.desk)
-                .background { area(shown.id) }
-                .clipShape(.rect(cornerRadius: Radius.card))
-                .rowContainer(.rect(cornerRadius: Radius.card))
-                .overlay { RoundedRectangle(cornerRadius: Radius.card).strokeBorder(palette.hair) }
-                .elevation(.panel)
+            Group {
+                if shown.style == .bare {
+                    shown.content.background { area(shown.id) }
+                } else {
+                    shown.content
+                        .background(palette.desk)
+                        .background { area(shown.id) }
+                        .clipShape(.rect(cornerRadius: Radius.card))
+                        .rowContainer(.rect(cornerRadius: Radius.card))
+                        .overlay { RoundedRectangle(cornerRadius: Radius.card).strokeBorder(palette.hair) }
+                        .elevation(.panel)
+                }
+            }
                 .accessibilityAddTraits(.isModal)
                 .padding(Self.margin)
                 .opacity(shown.open ? 1 : 0)
