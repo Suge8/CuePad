@@ -94,11 +94,21 @@ struct NoticeCapsule: View {
         HStack(spacing: 0) {
             message(inset: inset)
             if let action = notice.action {
-                Button(action.title) { workspace.run(action) }
-                    .buttonStyle(ControlButtonStyle(kind: .quiet, size: .compact))
-                    .focused($focus, equals: .action)
-                    .fixedSize()
-                    .padding(.trailing, Spacing.tight)
+                Group {
+                    // 撤销每条都一样、认图就够：只画图标，折了行的字也多出一截地方。别的动作（归档、查看）各不相同，写字
+                    if action.undoes != nil {
+                        Button(action.title, icon: .undo) { workspace.run(action) }
+                            .labelStyle(.iconOnly)
+                            .buttonStyle(ControlButtonStyle(kind: .icon, size: .compact))
+                            .help(action.title)
+                    } else {
+                        Button(action.title) { workspace.run(action) }
+                            .buttonStyle(ControlButtonStyle(kind: .quiet, size: .compact))
+                    }
+                }
+                .focused($focus, equals: .action)
+                .fixedSize()
+                .padding(.trailing, Spacing.tight)
             }
         }
         .font(font.weight(.medium)).lineLimit(lines)
