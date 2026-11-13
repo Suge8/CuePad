@@ -131,6 +131,7 @@ struct TaskOutline<Line: View>: View {
 
     private func commit(_ id: UUID, _ move: TaskMove) {
         commits += 1
+        workspace.services.settings.play(.drop)
         workspace.move(id, to: move.slot, after: move.after)
     }
 }

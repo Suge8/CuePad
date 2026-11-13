@@ -33,7 +33,7 @@ struct NoticeBanner: View {
             // 前台时会话"等你确认"、"做完了"的提示：开着那个会话时不弹；后台走系统推送
             .onChange(of: workspace.services.sessionAlert) { _, alert in
                 guard !DebugHooks.preset.quietAlerts, let alert, workspace.showsAlert(about: alert.session) else { return }
-                workspace.say(alert.text, status: alert.status, link: .session(alert.session))
+                workspace.say(alert.text, status: alert.status, link: .session(alert.session), sound: Sound(alert.kind.tone))
             }
             // 手机通话异常结束、有话没交给 Cue：不论在哪一页都在这里说
             .background { PhoneVoiceEndings() }

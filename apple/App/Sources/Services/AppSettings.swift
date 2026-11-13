@@ -40,6 +40,7 @@ final class AppSettings {
         static let currentProject = "currentProject"
         static let railExpanded = "railExpanded"
         static let cueOpen = "cueOpen"
+        static let sounds = "sounds"
     }
 
     @ObservationIgnored let defaults: UserDefaults
@@ -56,6 +57,8 @@ final class AppSettings {
     #if os(macOS)
     var alerts: AlertPreferences { didSet { defaults.set(alerts.stored, forKey: Key.alerts) } }
     #endif
+    /// 通知的提示音与界面里的操作音一起开关（`Sound`）。手机锁屏通知的那一声由系统按推送播，这里关不掉，听系统设置里 CuePad 的"声音"。
+    var sounds: Bool { didSet { defaults.set(sounds, forKey: Key.sounds) } }
 
 
     /// 开新会话时上次的选择（`launchChoice`），新会话的输入框与任务的"开始"读同一份：按项目记，这个项目没选过的用最近一次选的。
@@ -212,6 +215,7 @@ final class AppSettings {
         #if os(macOS)
         alerts = AlertPreferences(stored: defaults.dictionary(forKey: Key.alerts))
         #endif
+        sounds = defaults.object(forKey: Key.sounds) as? Bool ?? true
         // `lastAgent` 是只记哪家的旧键：没有新记录时从它起步
         launchDefault = defaults.data(forKey: Key.launchDefault).flatMap { try? JSONDecoder().decode(LaunchPreference.self, from: $0) }
             ?? LaunchPreference(agent: string(Key.lastAgent).flatMap(AgentKind.init(rawValue:)) ?? .pi)

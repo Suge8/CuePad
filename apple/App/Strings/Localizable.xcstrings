@@ -9380,22 +9380,6 @@
         }
       }
     },
-    "叮咚" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Chime"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "叮咚"
-          }
-        }
-      }
-    },
     "可以" : {
       "localizations" : {
         "en" : {
@@ -14812,22 +14796,6 @@
         }
       }
     },
-    "提示音" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sound"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "提示音"
-          }
-        }
-      }
-    },
     "提问" : {
       "localizations" : {
         "en" : {
@@ -15980,22 +15948,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "旗帜"
-          }
-        }
-      }
-    },
-    "无" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "None"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无"
           }
         }
       }
@@ -18180,22 +18132,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "每月几号"
-          }
-        }
-      }
-    },
-    "水滴" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Drop"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "水滴"
           }
         }
       }
@@ -22816,22 +22752,6 @@
         }
       }
     },
-    "轻响" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tap"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "轻响"
-          }
-        }
-      }
-    },
     "输入关键词，或用上面的筛选" : {
       "localizations" : {
         "en" : {
@@ -25028,6 +24948,22 @@
         }
       }
     },
+    "通知的提示音与操作音" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notification and in-app sounds"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通知的提示音与操作音"
+          }
+        }
+      }
+    },
     "通话出错：%@" : {
       "localizations" : {
         "en" : {
@@ -26192,6 +26128,22 @@
         }
       }
     },
+    "音效" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sounds"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "音效"
+          }
+        }
+      }
+    },
     "音符" : {
       "localizations" : {
         "en" : {
@@ -26476,22 +26428,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "额度观测已过期，等待更新"
-          }
-        }
-      }
-    },
-    "风铃" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Bell"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "风铃"
           }
         }
       }

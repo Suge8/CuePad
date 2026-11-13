@@ -12,9 +12,9 @@ extension Workspace {
     var noticeInRail: Bool { layout == .wide && sidebarOpen && wideFits?.rail == true }
     var noticeOnHead: Bool { notice != nil && !noticeInRail }
 
-    /// 收已经拼好的 `Dotted`；界面字面量走下面那个（进目录、按当前语言取字）。不给 `sound` 时出错的、带撤销的各有一声，只报结果的不出声（`NoticeSound`）。
+    /// 收已经拼好的 `Dotted`；界面字面量走下面那个（进目录、按当前语言取字）。不给 `sound` 时出错的、带撤销的各有一声，只报结果的不出声（`Sound`）；声音只跟着看得见的提示响，由显示它的那一颗播（`NoticeCapsule`）。
     func say(
-        _ text: Dotted, tone: Notice.Tone = .done, status: SessionShown.Status? = nil, link: Route? = nil, action: NoticeAction? = nil, sound: NoticeSound? = nil
+        _ text: Dotted, tone: Notice.Tone = .done, status: SessionShown.Status? = nil, link: Route? = nil, action: NoticeAction? = nil, sound: Sound? = nil
     ) {
         let sound = sound ?? (tone == .failure ? .fail : action?.undoes != nil ? .act : nil)
         let notice = Notice(text: text, tone: tone, status: status, link: link, action: action, sound: sound)
@@ -26,7 +26,7 @@ extension Workspace {
 
     func say(
         _ text: LocalizedStringResource, tone: Notice.Tone = .done, status: SessionShown.Status? = nil, link: Route? = nil, action: NoticeAction? = nil,
-        sound: NoticeSound? = nil
+        sound: Sound? = nil
     ) {
         say(Dotted(String(localized: text)), tone: tone, status: status, link: link, action: action, sound: sound)
     }
