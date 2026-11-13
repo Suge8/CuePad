@@ -169,6 +169,34 @@ extension CueHostTests {
         await rig.stop()
     }
 
+    /// 卡着的定时与你那句话醒来时已消费，只记在这台的进度里：App 重启后新的值班一起好就接着做，不等慢速周期，各答一次。
+    @Test func 额度卡住时App重启_卡着的定时与你那句话接着做_各答一次() async throws {
+        let rig = try await Rig(timing: { $0.slowRestarts = [.seconds(3600)] })
+        rig.model.blockQuota(times: 2)
+        let reminder = try await rig.store.noteCueLine("核对发布结果", source: .you, remindAt: .now)
+        let keeper = try #require(rig.services.cue.keeper)
+        try await eventually("定时卡住") { keeper.snapshot.state == .stalled }
+        try await rig.say("你好")
+        try await eventually("你那句也卡住") { keeper.snapshot.state == .stalled && keeper.snapshot.setbacks.contains { $0.wake == .message } }
+        #expect(rig.model.errors == 2)
+        #expect(try await rig.store.cueLine(reminder.id)?.deletedAt != nil)
+
+        await rig.services.cue.stop()()
+        _ = try await rig.services.updateCue { $0.name = "Cue 二号" }
+        try await eventually("新的值班起来") { rig.services.cue.keeper.map { $0 !== keeper } == true }
+
+        let fired = "定时到点：\(reminder.id.uuidString.lowercased()) 核对发布结果"
+        try await rig.message(.cue, containing: fired)
+        try await rig.message(.cue, containing: "接着做上一轮没做完的")
+        try await eventually("都做完了") { rig.services.cue.keeper?.snapshot.state == .idle }
+        try await rig.reconciled()
+        #expect(try await rig.count(fired) == 1)
+        #expect(try await rig.count("接着做上一轮没做完的") == 1)
+        #expect(try await rig.count("达到用量限制") == 1)
+        #expect(rig.model.errors == 2)
+        await rig.stop()
+    }
+
     @Test func 缓存还热时趁热巡视一次() async throws {
         let warm = Duration.seconds(60)
         let rig = try await Rig(
