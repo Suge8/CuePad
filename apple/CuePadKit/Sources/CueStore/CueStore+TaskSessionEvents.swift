@@ -43,15 +43,22 @@ extension CueStore {
     WHEN OLD.targetRef IS NOT NULL AND OLD.mode IN (\(sqlList(DeliveryMode.toSession))) AND OLD.status IN (\(DeliveryStatus.openSQL))
       AND (NEW.status NOT IN (\(DeliveryStatus.openSQL)) OR NEW.mode NOT IN (\(sqlList(DeliveryMode.toSession))) OR OLD.targetRef IS NOT NEW.targetRef)
     BEGIN
-      INSERT OR IGNORE INTO taskSessionEvents SELECT createdForTaskID FROM piSessionStates
-        WHERE sessionID = OLD.targetRef AND createdForTaskID IS NOT NULL;
+      \(releasedHold)
     END;
     CREATE TEMP TRIGGER sessionUseRemoved AFTER DELETE ON main.deliveryRequests
     WHEN OLD.targetRef IS NOT NULL AND OLD.mode IN (\(sqlList(DeliveryMode.toSession))) AND OLD.status IN (\(DeliveryStatus.openSQL))
     BEGIN
-      INSERT OR IGNORE INTO taskSessionEvents SELECT createdForTaskID FROM piSessionStates
-        WHERE sessionID = OLD.targetRef AND createdForTaskID IS NOT NULL;
+      \(releasedHold)
     END;
+    """
+
+  /// 投送释放占用时（`OLD` 是那条投送）补上被它挡下的收尾。只认任务还在看板上时写下的话：用这个会话的任务里有一件还在，或在它写下之后才离开。
+  /// 都离开之后才写的，是你接着用一个收尾过的会话，送完不再结束它：否则恢复起来的会话每句话都在刚开跑时被停下。
+  private static let releasedHold = """
+    INSERT OR IGNORE INTO taskSessionEvents SELECT s.createdForTaskID FROM piSessionStates s
+      WHERE s.sessionID = OLD.targetRef AND s.createdForTaskID IS NOT NULL AND EXISTS (
+        SELECT 1 FROM cards c WHERE (c.id = s.createdForTaskID OR c.piSessionID = s.sessionID)
+          AND MIN(COALESCE(c.completedAt, \(Int64.max)), COALESCE(c.archivedAt, \(Int64.max)), COALESCE(c.deletedAt, \(Int64.max))) >= OLD.createdAt);
     """
 
   func reconcileTaskSessionEvents() throws {
