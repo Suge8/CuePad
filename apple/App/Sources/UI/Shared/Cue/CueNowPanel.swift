@@ -183,8 +183,8 @@ private struct Figure: View {
 
 private extension View {
     /// 面板里不带框的按钮：悬停的淡底比字宽出一圈，不贴着字的边画；`hoverRoomTaken` 在按钮外把这一圈收回，字仍对着面板的边线。
-    func hoverRoom() -> some View { padding(.horizontal, Spacing.item).padding(.vertical, Spacing.glyph).contentShape(.rect) }
-    func hoverRoomTaken() -> some View { padding(.horizontal, -Spacing.item).padding(.vertical, -Spacing.glyph) }
+    func hoverRoom(_ side: CGFloat = Spacing.item) -> some View { padding(.horizontal, side).padding(.vertical, Spacing.glyph).contentShape(.rect) }
+    func hoverRoomTaken(_ side: CGFloat = Spacing.item) -> some View { padding(.horizontal, -side).padding(.vertical, -Spacing.glyph) }
 }
 
 /// 最近记下的两条各一行（字在左、几时记的在右），点哪里都去记忆页。
@@ -196,6 +196,8 @@ private struct CueRecall: View {
     @State private var recent: CueMemoryRecent?
 
     nonisolated private static let shown = 2
+    /// 悬停底的两边与底下运行那一行的对齐（那一行离面板边 `panel - inset - hair`）。
+    private static let room = Spacing.inset + Spacing.hair
 
     var body: some View {
         let lines = recent?.lines ?? []
@@ -211,10 +213,10 @@ private struct CueRecall: View {
                     Text("还没记住什么").font(Typography.body).foregroundStyle(palette.ink3)
                 }
             }
-            .hoverRoom()
+            .hoverRoom(Self.room)
         }
         .buttonStyle(PressStyle())
-        .hoverRoomTaken()
+        .hoverRoomTaken(Self.room)
         .observing(services.store, into: $recent, onError: workspace.fail) { try $0.recentCueMemory(limit: Self.shown) }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Dotted([String(localized: "刚记下")] + lines.map(\.text)).spoken)
