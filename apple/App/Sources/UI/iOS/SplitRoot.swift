@@ -86,7 +86,7 @@ private struct DestinationColumn: View {
     @Environment(\.underCue) private var under
 
     var body: some View {
-        // 看板自己让（列滑到浮板下面，`ProgressScreen`），只把页头让到看得见的那一截里居中；别的页整页让出
+        // 看板自己让（列滑到浮板下面，`ProgressScreen`）；别的页整页让出
         let board = route == .progress
         VStack(spacing: 0) {
             if case .session(let session) = route { WideSessionHeading(session: session, column: column) }
@@ -101,7 +101,6 @@ private struct DestinationColumn: View {
             }
             .fadesUnderHead(route.isSession)
         }
-        .environment(\.headInset, EdgeInsets(top: inset.top, leading: inset.leading, bottom: inset.bottom, trailing: inset.trailing + (board ? under : 0)))
         .padding(.trailing, board ? 0 : under)
     }
 }

@@ -49,27 +49,36 @@ struct WideRail: View {
             RailSessions(data: services.liveSessions.rail, marked: Set(workspace.shownSessions.compactMap(\.sessionID))) { session, opening in
                 workspace.openSession(session.id, sessionID: session.sessionID, in: opening == .beside ? .beside : .main)
             }
-            #if os(macOS)
             tools
-            #endif
         }
     }
 
-    #if os(macOS)
+    /// 两端同一排、同一个位置：搜索、技能与规则、设置，右端是额度。
     private var tools: some View {
         HStack(spacing: Spacing.tight) {
+            #if os(macOS)
             RailTool(icon: .search, help: "搜索（⌘K）") { workspace.searching.toggle() }.disabled(!workspace.isLibraryReady)
             RailTool(icon: .instruction, help: "技能与规则") { workspace.show(.library) }
             RailTool(icon: .settings, help: "设置（⌘,）") { SettingsPane.open() }
             Spacer(minLength: 0)
             SidebarQuota()
+            #else
+            RailIcon(icon: .search, help: "搜索") { workspace.openSearch() }
+            RailIcon(icon: .instruction, help: "技能与规则") { workspace.push(.library) }
+            RailIcon(icon: .settings, help: "设置") { workspace.push(.settings) }
+            Spacer(minLength: 0)
+            RailQuota()
+            #endif
         }
+        #if os(macOS)
         // 两颗钮的圆比行首那一列宽：往左让出多出来的一半，图标正在那一列的中线上；额度的右沿落在行尾读数那条线（行底让出的那一截）
         .padding(.leading, RowMetrics.bleed - (ControlSize.compact.height - Chrome.icon) / 2)
         .padding(.trailing, RowMetrics.bleed)
+        #else
+        .padding(.horizontal, RowMetrics.bleed)
+        #endif
         .frame(height: Chrome.control)
     }
-    #endif
 }
 
 #if os(iOS)
@@ -82,7 +91,6 @@ struct RailTopTools: View {
         HStack(spacing: Spacing.item) {
             tool(.sidebar, "显示或隐藏侧栏（⌃⌘S）") { workspace.toggleRail(sizes) }
                 .railWaitingDot(hidden: !workspace.railShown(sizes))
-            tool(.search, "搜索") { workspace.openSearch() }
             // Cue 铺满时它没有可收可放的（去 Cue 是下面那一格）
             if !sizes.home { CueButton(fits: sizes.cueFits, shown: workspace.cueShown(sizes)).frame(width: Chrome.control, height: Chrome.control) }
         }
@@ -98,6 +106,18 @@ struct RailTopTools: View {
         } else {
             RailIcon(icon: icon, help: help, action: action)
         }
+    }
+}
+
+/// 额度是整个 App 的，不属于哪一页（同 Mac 的 `SidebarQuota`）；手机没有会话条，在侧页顶上那一排（`NarrowSidebarBar`）。
+private struct RailQuota: View {
+    @State private var open = DebugHooks.preset.quotaOpen
+
+    var body: some View {
+        QuotaRings(open: open, height: Chrome.control, cell: true) { open.toggle() }
+            // 定宽：读数随时间变，宽不跟着跳
+            .bubble(isPresented: $open, width: .fixed(BubblePlacement.maxWidth)) { QuotaDetail().padding(Spacing.panel) }
+            .refreshesQuota(open: open)
     }
 }
 #endif
