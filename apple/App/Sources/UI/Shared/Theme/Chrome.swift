@@ -26,8 +26,8 @@ enum Chrome {
     static let band: CGFloat = 44
     /// iPad 没有红绿灯：行首那一列离窗边同字离纸边。
     static let lead: CGFloat = Spacing.inset
-    /// 主区栏头左边让多少：会话条藏起时顶上那一排三颗钮（侧栏钮、搜索、Cue 钮，`RailTopTools`）原地浮在主区那一段上，栏头让到它们右沿再隔一档。
-    static func headLead(rail: CGFloat) -> CGFloat { rail > 0 ? Spacing.page : lead + 3 * (control + Spacing.item) }
+    /// 主区栏头左边让多少：会话条藏起时顶上那一排两颗钮（侧栏钮、Cue 钮，`RailTopTools`）原地浮在主区那一段上，栏头让到它们右沿再隔一档。
+    static func headLead(rail: CGFloat) -> CGFloat { rail > 0 ? Spacing.page : lead + 2 * (control + Spacing.item) }
     #endif
     /// 一排控件的高：圆钮、图标钮、玻璃列头（`ControlSize.regular`：Mac 36 同系统工具栏的玻璃钮，iPad 44）。
     static var control: CGFloat { ControlSize.regular.height }

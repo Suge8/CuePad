@@ -64,16 +64,8 @@ private struct ScopeButton: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        @Bindable var workspace = workspace
         let current = workspace.catalog?.project(workspace.scopedProject)
-        Menu {
-            Picker("项目范围", selection: $workspace.projectScope) {
-                Label("全部项目", icon: .all).tag(UUID?.none)
-                ForEach(workspace.catalog?.projects ?? []) { project in
-                    Label { Text(project.shownName) } icon: { ProjectGlyph(project: project) }.tag(Optional(project.id))
-                }
-            }
-        } label: {
+        Menu { ProjectScopePicker() } label: {
             Label {
                 Text("项目范围")
             } icon: {
