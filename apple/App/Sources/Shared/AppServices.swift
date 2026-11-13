@@ -152,7 +152,7 @@ final class AppServices {
         wakeNotifications = mac.wakeNotifications
         stateRecorder = StateRecorder(store: store, hostID: mac.hostID, timing: mac.timing)
         presence = MacPresenceKeeper(store: store, sync: self.sync, host: mac.hostID)
-        viewer = ViewerKeeper(store: store, sync: self.sync, device: mac.hostID)
+        viewer = ViewerKeeper(store: store, sync: self.sync, device: mac.hostID, idleSeconds: ViewerKeeper.systemIdle)
         bridge = mac.bridge
         pasteboard = mac.pasteboard
         hotkeyBackend = mac.hotkeys

@@ -52,7 +52,11 @@ struct ViewerInterleavingTests {
         var random = SplitMix(seed)
         let device = "probe-\(seed)", store = app.services.store
         let sync = FlakySync(seed: seed)
+        #if os(macOS)
+        let keeper = ViewerKeeper(store: store, sync: sync, device: device, idleSeconds: { 0 })  // 人一直在跟前
+        #else
         let keeper = ViewerKeeper(store: store, sync: sync, device: device)
+        #endif
         let keeping = Task { try await keeper.keep() }
         defer { keeping.cancel() }
         var windows = [Window(app.services)]
@@ -65,8 +69,7 @@ struct ViewerInterleavingTests {
             let stored = try await store.viewer(device)
             return Set(settled.sessions.compactMap(\.sessionID)) == stored?.sessionIDs ?? [] && settled.cue == stored?.cue ?? false
         }
-        // Mac 上真人十分钟没动键鼠时这台算人不在跟前（`ViewerKeeper.idleAfter`），一直没人在看、也就没得传
-        #expect(sync.failures > 0 || !keeper.away.isEmpty, "seed \(seed)：失败注入到了")
+        #expect(sync.failures > 0, "seed \(seed)：失败注入到了")
     }
 
     /// 随机做一件事（开关窗口、切前后台、导航、Cue 页出现消失与切换），各窗口照界面的报法报给 `keeper`；返回此刻应当在看的。
