@@ -28,8 +28,8 @@ struct BubbleFooter: View {
         return focus.status != .done ? .start(focus, caption: nil, editing: editing) : nil
     }
 
-    /// 开始 → 正在开 → Agent 在做是同一条的三个样子：上面一道发丝线隔开，里面的旧的先淡完、新的再淡入（`handOff`），不叠着换。
-    /// 不垫底：气泡是一张纸，里面再垫一块、块里再放胶囊和按钮是卡片套卡片。
+    /// 开始 → 正在开 → Agent 在做是同一条的三个样子，里面的旧的先淡完、新的再淡入（`handOff`），不叠着换。
+    /// 同新会话输入框的工具排：不垫底、不画线，Mac 上铺满气泡的宽（那一排的字才写得全），靠上面留的空隔开。
     var body: some View {
         if let stage {
             ZStack(alignment: .leading) {
@@ -40,8 +40,7 @@ struct BubbleFooter: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.top, Spacing.item)
-            .overlay(alignment: .top) { palette.hair.frame(height: ControlMetrics.stroke) }
+            .padding(.top, Spacing.tight)
         }
     }
 

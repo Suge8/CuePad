@@ -35,7 +35,9 @@ struct TaskBubble: View {
                     ForEach(data.schedules.filter { $0.line.task == focus.id }) { ScheduleStrip(scheduled: $0) }
                         .padding(.leading, BubbleMetrics.textLeading).padding(.trailing, BubbleMetrics.textTrailing)
                     BubbleFooter(data: data, focus: focus, editing: editing)
+                        #if os(iOS)
                         .padding(.leading, BubbleMetrics.textLeading).padding(.trailing, BubbleMetrics.textTrailing)
+                        #endif
                 }
                 .padding(BubbleMetrics.padding)
                 .padding(.bottom, sheet ? BubbleMetrics.sheetBottom : 0)
@@ -82,7 +84,7 @@ struct TaskBubbleSlot: View {
     var body: some View {
         @Bindable var workspace = workspace
         let source = source
-        Color.clear.panel(item: $workspace.openTask, style: .bubble(source, width: .fixed(BubblePlacement.maxWidth))) { TaskBubble(request: $0, sheet: source == .bottom) }
+        Color.clear.panel(item: $workspace.openTask, style: .bubble(source, width: .fixed(BubbleMetrics.width))) { TaskBubble(request: $0, sheet: source == .bottom) }
     }
 
     private var source: BubbleSource {
@@ -132,6 +134,8 @@ enum BubbleMetrics {
     static let markSlot: CGFloat = 26
     static let dot: CGFloat = 8
     static let capsule: CGFloat = 28
+    /// 底下那一排（哪家、模型、思考强度、"开始"）的字都写全的宽。
+    static let width: CGFloat = 440
     static let stripPadding = EdgeInsets(top: Spacing.item, leading: Spacing.item, bottom: Spacing.item, trailing: Spacing.item)
     #else
     static let strong = Typography.secondary.weight(.semibold)
@@ -148,6 +152,7 @@ enum BubbleMetrics {
     static let markSlot: CGFloat = 32
     static let dot: CGFloat = 9
     static let capsule: CGFloat = 36
+    static let width = BubblePlacement.maxWidth
     static let stripPadding = EdgeInsets(top: Spacing.item, leading: Spacing.item, bottom: Spacing.item, trailing: Spacing.item)
     #endif
 }
