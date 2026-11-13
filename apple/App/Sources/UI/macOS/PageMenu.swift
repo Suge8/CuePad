@@ -4,10 +4,12 @@ import SwiftUI
 
 /// 没有可放的页（归档）钮停用、同系统停用的控件那样变淡：与可用时一个样子，点了没反应像是坏了。
 /// 菜单项不按页面数据置灰：菜单拿不到页面读的库，抄一份过来就是第二个事实源；没有可归档、可清空的时候点了什么也不发生。
-/// 钮在每一页都在、只随页面置灰，栏头不随换页增删控件、不重排。进展页它是项目范围（筛选的图形，选了项目时角上是那个项目）：
+/// 钮在每一页都在、只随页面置灰，栏头不随换页增删控件、不重排。进展页它是项目范围（筛选的图形，选了项目时角上是那个项目），
+/// 排在列头那一排的开头（`leads`）：先选范围再看四列，右端留给滑到 Cue 浮板下面的列，压在最后一列的列头上会盖住列名。
 /// 那一页别的操作各在原处——归档做完的在已完成那一列的列头，接入 Agent 在设置。
 /// 会话页的钮跟着页面就在，菜单里的会话项等页面交来的值、并晚于标题两帧（`showsMenu`）。
 struct PageMenuSlot: View {
+    var leads = false
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     /// 编辑页开着的那张卡（外层 nil 是还没读到；不是编辑页时读出的是 nil）。
@@ -49,7 +51,7 @@ struct PageMenuSlot: View {
                     .menuStyle(.button).menuIndicator(.hidden)
                     .buttonStyle(ControlButtonStyle(kind: .circular))
                     .fixedSize()
-                    .padding(.leading, Spacing.item)
+                    .padding(.leading, leads ? 0 : Spacing.item)
                     .disabled(content == .card(nil))
                     .help(content.help)
                     .accessibilityLabel(content == .progress ? Text("项目范围") : Text("更多"))

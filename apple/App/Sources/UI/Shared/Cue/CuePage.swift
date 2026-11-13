@@ -13,6 +13,8 @@ import SwiftUI
 /// Cue 在做的事在任务与 Agent 页里看，这里不另列。
 /// 页面只读写库：写一条你的消息就是对 Cue 说话，Cue 运行在哪台 Mac 都一样。
 struct CuePage: View {
+    /// 页自己铺桌面色；Mac 右边那一栏垫着浮板的玻璃（`CueColumn`），不铺。
+    var grounded = true
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -66,7 +68,7 @@ struct CuePage: View {
                     .transition(.opacity.animation(Motion.fade))
             }
         }
-        .background(palette.desk)
+        .background { if grounded { palette.desk } }
     }
     #else
     /// 名牌保留整页坐标；仅对话与拍板卡给常驻会话条让位。
