@@ -5,7 +5,6 @@ struct TrashScreen: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @State private var data: TrashSummary?
-    @State private var confirmEmpty = false
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -25,12 +24,10 @@ struct TrashScreen: View {
         .scrollContentBackground(.hidden)
         .floatingHeader("回收站", detail: data.map { $0.isEmpty ? nil : Dotted(String(localized: "\($0.count) 项")) } ?? Dotted()) {
             // 圆钮一直在、没东西时置灰：顶栏的控件不随数据出现消失
-            Button("清空", icon: .trash, role: .destructive) { confirmEmpty = true }
+            Button("清空", icon: .trash, role: .destructive) { workspace.confirmsEmptyTrash = true }
                 .disabled(data?.isEmpty ?? true)
         }
-        .dialog("永久删除回收站里的全部内容？", isPresented: $confirmEmpty, message: "此操作无法撤销。", buttons: [
-            DialogButton(title: "清空回收站", role: .destructive) { workspace.perform { try await $0.emptyTrash() } },
-        ])
+        .emptyTrashConfirmation(workspace)
         .observing(services.store, into: $data, onError: workspace.fail) { store in
             try TrashSummary.read(from: store)
         }

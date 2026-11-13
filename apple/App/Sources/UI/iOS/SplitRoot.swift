@@ -88,9 +88,9 @@ private struct DestinationColumn: View {
 
     var body: some View {
         let overlay = column == .main ? workspace.overlay : nil
-        // 看板自己让（列滑到浮板下面，`ProgressScreen`），列头就是最顶那一排；会话页的栏头在页里（同 Mac）；搜索框占着那一排的中间
+        // 看板自己让（列滑到浮板下面，`ProgressScreen`），列头就是最顶那一排、栏头只占它开头的范围钮；会话页的栏头在页里（同 Mac）；搜索框占着那一排的中间
         let board = route == .progress && overlay == nil
-        let headed = overlay != nil || !board && !route.isSession && route != .search
+        let headed = overlay != nil || !route.isSession && route != .search
         ZStack(alignment: .top) {
             NavigationStack(path: Binding<[Route]>(get: { [] }, set: { if let route = $0.last { workspace.show(route) } })) {
                 RouteView(route: route, column: column)

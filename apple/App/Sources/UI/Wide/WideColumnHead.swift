@@ -1,36 +1,43 @@
 import SwiftUI
 
-/// 宽屏主区的栏头（Mac 主窗口与 iPad 宽窗同一个）：左边写这一页是什么，右边是这一页的操作。会话页的栏头在会话页里（`WideSessionTitle`）。
-/// iPad 上页的操作是页自己那一排的右端（`HeaderHost.column`），与这里同一排；Mac 的页没有那一排，操作在这里的"⋯"（`PageMenuSlot`）。
+/// 宽屏主区的栏头（Mac 主窗口与 iPad 宽窗同一个）：左边写这一页是什么，右边是这一页的操作（`PageMenuSlot`）。会话页的栏头在会话页里（`WideSessionTitle`）。
 struct WideColumnHead: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
 
     var body: some View {
+        let overlaid = workspace.overlay != nil
         HStack(spacing: 0) {
-            #if os(macOS)
-            if workspace.overlay != nil {
+            if overlaid {
                 CloseButton()
+                #if os(macOS)
                 OverlayTitle()
+                #endif
             } else if workspace.mainRoute == .progress {
                 PageMenuSlot(leads: true)
             } else {
                 title
             }
             Spacer(minLength: Spacing.item)
+            #if os(macOS)
             // 看板那一排是列头，不给提醒常驻一格（列头少让一截）；要关注时才露
             if workspace.mainRoute != .progress || SyncAlertSlot.needed(services) { SyncAlertSlot() }
-            if workspace.overlay == nil, workspace.mainRoute == .shelf {
+            #endif
+            if !overlaid, workspace.mainRoute == .shelf {
                 NewProjectButton()
                     .labelStyle(.iconOnly)
                     .buttonStyle(ControlButtonStyle(kind: .circular))
                     .padding(.leading, Spacing.item)
             }
-            if workspace.overlay != nil || workspace.mainRoute != .progress { PageMenuSlot() }
+            #if os(macOS)
+            if workspace.openCard != nil {
+                CardMenuSlot()
+            } else if overlaid || workspace.mainRoute != .progress {
+                PageMenuSlot()
+            }
             #else
-            // 盖着的页（编辑、文件）的标题与操作在它自己那一排（`HeaderHost.panel`），同 Mac 居中的玻璃与右边的"⋯"
-            if workspace.overlay != nil { CloseButton() } else { title }
-            Spacer(minLength: Spacing.item)
+            // 盖着的页（编辑、文件）的标题与操作在它自己那一排（`HeaderHost.panel`）
+            if !overlaid, workspace.mainRoute != .progress { PageMenuSlot() }
             #endif
         }
     }

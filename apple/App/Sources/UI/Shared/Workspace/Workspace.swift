@@ -114,6 +114,7 @@ final class Workspace {
     #endif
     var voiceDetails: BubbleSource?
     var addsTask = false
+    var confirmsEmptyTrash = false
     /// 开着的新会话输入框（`NewSessionInput`）。
     var newSession: SessionStart? {
         didSet { if let oldValue, oldValue.id != newSession?.id { settleLaunch(.form) } }
@@ -122,7 +123,6 @@ final class Workspace {
     var searching = false
     var showsSetup = false
     var voice: VoiceCall? { services.voice.call }
-    var confirmsEmptyTrash = false
     var hoveredProject: UUID?
     #else
     var menuOpen = false
