@@ -36,21 +36,40 @@ public struct CueTools: Sendable {
     init(_ message: String) { self.message = message }
   }
 
+  /// 一个工具只在 `catalog` 登记一次：给模型的定义（`definitions`）、调用的分派（`call`）与系统提示里的名单（`CuePrompt`）都从它出。
+  struct Tool {
+    let name: String
+    /// 系统提示的工具名单里那几个字；做梦的工具不进系统提示
+    let gist: String
+    /// 说明、参数与提示（名字由 `name` 补上）
+    let definition: () -> [String: Any]
+    let run: (CueTools, Args) async throws -> Result
+  }
+
+  static func catalog(_ toolset: Toolset) -> [Tool] {
+    switch toolset {
+    case .cue:
+      [
+        Tool(name: "idea", gist: "保存灵感", definition: { ideaDefinition }, run: { try await $0.idea($1) }),
+        Tool(name: "task", gist: "任务与会话", definition: { taskDefinition }, run: { try await $0.task($1) }),
+        Tool(name: "tell", gist: "对他说话", definition: { tellDefinition }, run: { try await $0.tell($1) }),
+        Tool(name: "memory", gist: "记忆与定时", definition: { memoryDefinition }, run: { try await $0.memory($1) }),
+        Tool(name: "setup", gist: "你自己与这台 Mac：设置、额度、Agent、技能与规则、项目", definition: { setupDefinition }, run: { try await $0.setup($1) }),
+      ]
+    case .dream:
+      [
+        Tool(name: "merge", gist: "", definition: { mergeDefinition }, run: { try await $0.merge($1) }),
+        Tool(name: "said", gist: "", definition: { saidDefinition }, run: { try await $0.said($1) }),
+        Tool(name: "ask", gist: "", definition: { askDefinition }, run: { try await $0.ask($1) }),
+      ]
+    }
+  }
+
   /// 调用一个工具；工具名不认识返回 nil（协议层报参数错）。业务上的失败是 `isError` 的结果。
   public func call(_ name: String, _ arguments: [String: Any]) async -> Result? {
-    let args = Args(arguments)
+    guard let tool = Self.catalog(toolset).first(where: { $0.name == name }) else { return nil }
     do {
-      switch (toolset, name) {
-      case (.cue, "idea"): return try await idea(args)
-      case (.cue, "task"): return try await task(args)
-      case (.cue, "tell"): return try await tell(args)
-      case (.cue, "memory"): return try await memory(args)
-      case (.cue, "setup"): return try await setup(args)
-      case (.dream, "merge"): return try await merge(args)
-      case (.dream, "said"): return try await said(args)
-      case (.dream, "ask"): return try await ask(args)
-      default: return nil
-      }
+      return try await tool.run(self, Args(arguments))
     } catch {
       return Result(text: Self.message(error), isError: true)
     }

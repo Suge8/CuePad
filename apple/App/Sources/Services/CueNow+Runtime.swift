@@ -2,6 +2,7 @@ import CueStore
 import Foundation
 
 /// 当前状态与未来各 host 到期后的数字账共用同一份归属汇总；不为每个未来时刻重扫全量。
+/// 这里只管随时间衰减：此刻的推进中、被等你占着哪件（`CueTally.holds`）与 Agent 数（`CueAgents`）都照 Kit 的规则取。
 nonisolated struct RuntimeTimeline {
     struct Work {
         var id: String
@@ -99,10 +100,11 @@ nonisolated struct RuntimeTimeline {
         tally = CueNow.Tally(asks: source.waiting.count, reply: source.replies.count)
         advancing = source.advancing.count
         subagents = 0
-        var owners: [String: Int] = [:], sessionRefs: [String: Int] = [:]
+        agentCount = CueAgents.count(in: source.works)
+        let counted = Dictionary(uniqueKeysWithValues: CueAgents.sessions(in: source.works).map { ($0.sessionID, $0) })
+        var sessionRefs: [String: Int] = [:]
         for work in source.works {
             let index = works.count
-            owners[work.id] = index
             let states = work.sessions
             let name: String, since: Date, handoffs: [DeliveryRequest]
             switch work {
@@ -131,8 +133,8 @@ nonisolated struct RuntimeTimeline {
                 let added = sessionRefs[session.sessionID] == nil
                 if added {
                     sessionRefs[session.sessionID] = sessions.count
-                    sessions.append(Session(agents: agents, total: session.activeAgentCount))
-                    agentCount += session.activeAgentCount
+                    let shared = counted[session.sessionID]
+                    sessions.append(Session(agents: shared?.runtimeSubagents.count(where: \.isRunning) ?? 0, total: shared?.activeAgentCount ?? 0))
                 }
                 let ref = sessionRefs[session.sessionID]!
                 entry.sessionRefs.append(ref)
@@ -160,7 +162,7 @@ nonisolated struct RuntimeTimeline {
             works.append(entry)
         }
         func owner(_ task: UUID?, _ session: SessionState) -> Int? {
-            task.flatMap { owners["task/\($0.uuidString)"] } ?? owners["session/\(session.sessionID)"]
+            source.works.firstIndex { CueTally.holds($0, task: task, session: session.sessionID) }
         }
         for waiting in source.waiting {
             guard case .session(let session, let task) = waiting else { continue }

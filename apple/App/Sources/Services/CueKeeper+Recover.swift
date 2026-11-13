@@ -33,10 +33,6 @@ extension CueKeeper {
         }
     }
 
-    /// 匹配 Pi 接入 `cue-tools.ts` 报的话；这个班次的工具用不了了，做完这一轮就换。
-    static func toolsDown(_ result: String) -> Bool { result.contains(/CuePad 的工具服务.*(退出了|没有回应)/) }
-
-
     /// 返回告诉你的那句；nil 是没换：照常报错，慢速周期到点再换着试（`steer`）。
     func failOver(_ failure: String) async -> ShownText? {
         let summary = ErrorSummary(failure)
@@ -81,7 +77,7 @@ extension CueKeeper {
             let kinds = try await store.macAgents(on: setup.recorder.hostID).kinds
             guard let (to, open) = detour.next(from: current, among: kinds, at: now) else { return false }
             // 卡着的那件不等慢速周期，马上在该能用的那家上重来
-            if open, to != current || lapsed.contains(to), setback?.persistent == true { setback?.retryAt = now }
+            if open, to != current || lapsed.contains(to) { for held in setbacks where held.persistent { retry(held.wake, at: now) } }
             guard to != current, open || attempt else { return false }
             try await switchBrain(to)
             return true

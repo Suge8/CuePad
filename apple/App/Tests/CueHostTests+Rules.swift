@@ -27,8 +27,8 @@ extension CueHostTests {
         let asked = "依赖清单里建议 Node 升到几？"
         try await rig.say(asked)
         let keeper = try #require(rig.services.cue.keeper)
-        try await eventually("插给了在跑的大脑") { keeper.turn?.round.sent.contains { $0.contains(asked) } == true }
-        let interjected = try #require(keeper.turn?.round.sent.last { $0.contains(asked) })
+        try await eventually("插给了在跑的大脑") { keeper.snapshot.turn?.sent.contains { $0.contains(asked) } == true }
+        let interjected = try #require(keeper.snapshot.turn?.sent.last { $0.contains(asked) })
         #expect(interjected.contains("他问的话在会话回复里查到的") && interjected.contains("升到 22"), "\(interjected)")
         rig.model.release()
         await rig.stop()

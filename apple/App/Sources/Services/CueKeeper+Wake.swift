@@ -7,22 +7,17 @@ import Foundation
 
 extension CueKeeper {
     /// `said`、`images`、`delivering` 是随信封交出去的你的消息与回答，`related` 是按其中他自己说的话在会话回复里查到的（`CueTools.related`，交话的那一处查）；
-    /// 发出去就记下送达。发不进去时按大脑出了问题处理，返回 false。
+    /// `answering`：承接回答你的那一轮出错后的重来。发出去之前记下送达（`hand`）。发不进去时按大脑出了问题处理（交出去的退回），返回 false。
     func wakeUp(
-        _ wake: CueWake, as chosen: CueAuthor? = nil, said: String? = nil, related: [String] = [], images: [MessageImage] = [], delivering: [UUID] = []
+        _ wake: CueWake, answering: Bool = false, said: String? = nil, related: [String] = [], images: [MessageImage] = [], delivering: [UUID] = []
     ) async throws -> Bool {
         guard let shift else { return false }
-        let author = chosen ?? Self.author(of: wake)
         let store = self.store, now = self.now
         let mark = try await store.lastWrite()
-        let board = try await store.cueBoard()
         let changes = try await self.changes(at: now)
-        let envelope = CueEnvelope.render(CueEnvelope.Input(
-            now: setup.timing.clock(), projects: try await store.projects(),
-            changes: changes, recaps: try await CueTools(store: store).recaps(for: changes), board: board, waiting: try await store.cueMessagesWaitingForYou(), left: try await store.cueState()?.left ?? [],
-            wake: wake, fired: try await fired(of: wake), schedules: try await store.cueScheduleLines(), language: CueInterface.current.writing(after: said),
-            quotas: try await store.accountQuotas(on: setup.recorder.hostID), retrying: retrying.map(Self.firstLine),
-            related: related))
+        let envelope = CueEnvelope.render(try await CueEnvelope.read(
+            from: store, wake: wake, changes: changes, now: setup.timing.clock(), host: setup.recorder.hostID,
+            language: CueInterface.current.writing(after: said), retrying: retrying.map(Self.firstLine), related: related))
         var parts = [envelope]
         if !shift.primed || renewDue(shift, now: now) {
             if shift.primed {
@@ -43,18 +38,12 @@ extension CueKeeper {
             parts.insert(contentsOf: views.compactMap { $0 }, at: 0)
         }
         if let said { parts.append(said) }
-        Self.log.notice("Cue 醒来：\(String(describing: wake).prefix(60), privacy: .public)，回复写成 \(author.rawValue, privacy: .public)")
         let sent = parts.joined(separator: "\n"), sending = UUID()
-        do {
-            try await shift.brain.send(sent, images: images, id: sending)
-        } catch {
-            await broke(ShownText("发不进去：\(ShownText(error).embedded)"))  // 这一轮还没开，交出去的话也还没记送达
-            return false
-        }
+        guard try await hand(sent, images: images, id: sending, delivering: delivering) else { return false }
         var turn = Turn(
-            author: author, round: beginRound(wake, sent: [sent], at: now), selfStarted: wake == .message ? nil : wake, delivered: shift.taken,
-            mark: mark, stops: Self.stops(in: wake, changes))
-        if !shift.taken.isEmpty { turn.author = .cue }
+            answersYou: wake == .message || answering || !shift.taken.isEmpty, round: beginRound(wake, sent: [sent], at: now),
+            selfStarted: wake == .message ? nil : wake, delivered: shift.taken, mark: mark, stops: Self.stops(in: wake, changes))
+        Self.log.notice("Cue 醒来：\(String(describing: wake).prefix(60), privacy: .public)，回复写成 \(turn.author.rawValue, privacy: .public)")
         // Cue 自己醒来的一轮醒来就写下经过那一行：为什么醒在它上面，各端马上画得出叫醒的那一下
         if !turn.answersYou {
             do {
@@ -67,13 +56,31 @@ extension CueKeeper {
             $0.primed = true
             $0.turn = turn
             $0.taken = []
-            $0.handed[sending] = delivering
         }
         retrying = nil
         heardAt = setup.timing.awake()
-        save()
-        try await markDelivered(delivering)
         return true
+    }
+
+    /// 交给大脑（醒来与插话唯一的发出口）：先记着交出去了、写下送达，再发。记送达在先：发出后才写、写失败时下次对账会把同一句再交一次；
+    /// 写下之后、发出之前崩溃，下次值班按落盘的没答上的退回（`save`）。发不进去按大脑出了问题处理，交出去的随班次退回（`retire`），返回 false。
+    func hand(_ text: String, images: [MessageImage], id sending: UUID, delivering ids: [UUID]) async throws -> Bool {
+        guard let shift else { return false }
+        if !ids.isEmpty {
+            updateShift { $0.handed[sending] = ids }
+            save()
+            try await store.markCueMessagesDelivered(ids)
+            unfetchable.subtract(ids)
+            let upload = setup.upload
+            Task { await upload(ids) }
+        }
+        do {
+            try await shift.brain.send(text, images: images, id: sending)
+            return true
+        } catch {
+            await broke(ShownText("发不进去：\(ShownText(error).embedded)"))
+            return false
+        }
     }
 
     private static func stops(in wake: CueWake, _ due: [CueChange]) -> [CueLeft] {
@@ -82,32 +89,11 @@ extension CueKeeper {
             .compactMap { $0.session.map { CueLeft(sessionID: $0.sessionID, since: $0.stateSince) } }
     }
 
-    private func fired(of wake: CueWake) async throws -> [CueEnvelope.Fired] {
-        guard case .schedule(let fires) = wake else { return [] }
-        let lines = try await store.cueLines(fires.map(\.line))
-        var fired: [CueEnvelope.Fired] = []
-        for fire in fires {
-            guard let line = lines.first(where: { $0.id == fire.line }) else { continue }
-            let task = if let id = line.task { try await store.card(id) } else { Card?.none }
-            fired.append(CueEnvelope.Fired(line: line, due: fire.due, task: task))
-        }
-        return fired
-    }
-
-    /// 这次醒来要先开新会话（换新，唯一规则）：上下文到了换新线，或距上一次模型请求超过提示缓存的时长（缓存已过期，接着用要把整段原价重写；
-    /// 换新只写固定前缀与视图，从不更贵）。还没请求过模型的会话不换。
+    /// 这次醒来要先开新会话（换新，唯一规则；只在一次醒来开始时判断，不在一轮中途换）：上下文到了换新线，或距上一次模型请求超过提示缓存的时长（缓存已过期，接着用要把整段原价重写；
+    /// 换新只写固定前缀与视图，从不更贵）。还没请求过模型的会话不换。不多跑一轮、不先写交接：实测缓存热时先写交接再换没有带来提升，交接还每次写超 600 字。
     func renewDue(_ shift: Shift, now: Date) -> Bool {
         guard let used = shift.context?.used, let last = shift.lastRequest else { return false }
         return used >= setup.timing.renewAt || now.timeIntervalSince(last) > setup.timing.cacheLifetime.seconds
-    }
-
-    /// 先把交出去还没答上的落盘（`save`）：送达写下之后崩溃，下次值班据此退回。
-    func markDelivered(_ ids: [UUID]) async throws {
-        if !ids.isEmpty { save() }
-        try await store.markCueMessagesDelivered(ids)
-        unfetchable.subtract(ids)
-        let upload = setup.upload
-        Task { await upload(ids) }
     }
 
     /// 不在的在旁边取（`fetchAttachments`，从这台开始等起至多 `DeliveryRequest.phaseLimit`），取到了再对一次账：等文件不挡后面的话。
@@ -211,14 +197,6 @@ extension CueKeeper {
             Self.log.error("Cue 没答上的消息没能退回，过一阵再试：\(error.localizedDescription, privacy: .public)")
         }
         save()
-    }
-
-    /// `note` 不写回复，只给醒来后出错重试时判断是不是在回答你（`Turn.answersYou`）。
-    static func author(of wake: CueWake) -> CueAuthor {
-        switch wake {
-        case .message, .enabled: .cue
-        case .sessionActivity, .idle, .schedule: .note
-        }
     }
 
     static func retryable(_ summary: ErrorSummary) -> Bool { summary.failure.retries }
