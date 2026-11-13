@@ -11,12 +11,80 @@ struct CueBarView: View {
             CueStatusRow()
                 .padding(.horizontal, Spacing.group).padding(.vertical, Spacing.item)
                 .glass(in: .rect(cornerRadius: Radius.sheet))
-            CueComposer(style: .bar(opens: bar?.opens ?? 0)) { bar?.hide() }
+            CueComposer(style: .bar(opens: bar?.opens ?? 0), dismiss: { bar?.hide() }) { bar?.hide() }
         }
         .frame(width: Self.width)
     }
 
     private static let width: CGFloat = 560
+}
+
+/// 槽里一块浮起的选中块在几格之间滑；选了灵感、任务时右边露出记到哪个项目。
+struct CueBarTargets: View {
+    let targets: [CueBarTarget]
+    let aim: CueBarTarget
+    let project: UUID
+    let pick: (CueBarTarget) -> Void
+    let choose: (UUID) -> Void
+    @Environment(Workspace.self) private var workspace
+    @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Namespace private var slot
+
+    var body: some View {
+        HStack(spacing: Spacing.item) {
+            HStack(spacing: 0) {
+                ForEach(targets, id: \.self, content: segment)
+            }
+            .padding(Spacing.hair)
+            .background(palette.fill, in: .capsule)
+            .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: aim)
+            Keycap(text: "⇥").help("按 Tab 换去处")
+            Spacer(minLength: 0)
+            if aim != .cue { DestinationMenu(project: project, choose: choose).transition(.opacity) }
+        }
+        .animation(Motion.fade, value: aim == .cue)
+    }
+
+    private func segment(_ target: CueBarTarget) -> some View {
+        let on = target == aim
+        return Button { pick(target) } label: {
+            HStack(spacing: Spacing.tight) {
+                Image(icon(target)).font(Glyph.small).foregroundStyle(on ? palette.signature : palette.ink3)
+                Text(title(target)).lineLimit(1)
+            }
+            .font(Typography.meta.weight(on ? .semibold : .medium))
+            .foregroundStyle(on ? palette.ink : palette.ink2)
+            .padding(.horizontal, Spacing.group)
+            .frame(height: ControlSize.inline.height)
+            .background {
+                if on {
+                    // 深色下纸色与槽底几乎同色，换成选中底
+                    Capsule().fill(palette.dark ? palette.selection : palette.paperLit).overlay(Capsule().strokeBorder(palette.hair))
+                        .matchedGeometryEffect(id: "on", in: slot)
+                }
+            }
+            .contentShape(.capsule)
+        }
+        .buttonStyle(PressStyle())
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
+
+    private func icon(_ target: CueBarTarget) -> Icon {
+        switch target {
+        case .cue: .cue
+        case .idea: .idea
+        case .task: .task
+        }
+    }
+
+    private func title(_ target: CueBarTarget) -> String {
+        switch target {
+        case .cue: workspace.cue.name
+        case .idea: String(localized: "灵感")
+        case .task: String(localized: "任务")
+        }
+    }
 }
 
 #endif
