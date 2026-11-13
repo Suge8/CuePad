@@ -25,23 +25,21 @@ struct LibraryFileTop: View {
                     StarterBar(draft: draft)
                 }
                 if let skill {
-                    SkillFields(draft: draft, problem: library.skill(at: skill)?.problem).padding(.horizontal, Self.fieldsInset)
+                    SkillFields(draft: draft, problem: library.skill(at: skill)?.problem)
                 }
             }
             #if os(macOS)
             .frame(maxWidth: LibraryLayout.column, alignment: .leading).padding(.horizontal, LibraryLayout.textInset)
             #else
-            .padding(.horizontal, Spacing.page).padding(.vertical, Spacing.item)
+            .padding(.horizontal, LibraryLayout.textInset).padding(.vertical, Spacing.item)
             #endif
         }
     }
 
     #if os(macOS)
     private static let gap = Spacing.block
-    private static let fieldsInset: CGFloat = 0
     #else
     private static let gap = Spacing.group
-    private static let fieldsInset = Spacing.tight
     #endif
 }
 

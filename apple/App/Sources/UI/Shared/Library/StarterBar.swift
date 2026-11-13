@@ -14,8 +14,6 @@ struct StarterBar: View {
             Spacer(minLength: 8)
             Button("填进来") { draft.fill(Self.text) }
                 .buttonStyle(ControlButtonStyle(kind: .secondary, size: .compact))
-        } consequence: {
-            EmptyView()
         }
     }
 

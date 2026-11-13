@@ -7695,38 +7695,6 @@
         }
       }
     },
-    "其余几份进废纸篓" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The other copies go to the Trash"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "其余几份进废纸篓"
-          }
-        }
-      }
-    },
-    "其余几份进废纸篓，撤不回" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The other copies go to the Trash. Can't be undone"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "其余几份进废纸篓，撤不回"
-          }
-        }
-      }
-    },
     "内容" : {
       "localizations" : {
         "en" : {
@@ -8791,38 +8759,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "原因：%@"
-          }
-        }
-      }
-    },
-    "原来那份进废纸篓" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The other copy goes to the Trash"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "原来那份进废纸篓"
-          }
-        }
-      }
-    },
-    "原来那份进废纸篓，撤不回" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The other copy goes to the Trash. Can't be undone"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "原来那份进废纸篓，撤不回"
           }
         }
       }
