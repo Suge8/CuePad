@@ -24,44 +24,24 @@ struct BubbleFooter: View {
             }
         }
         if agents.items[focus.id] != nil { return .agent(focus) }
-        if let kind = agents.launching[focus.id], !unsettled(focus.id) { return .launching(kind) }
+        if let kind = agents.launching[focus.id], !workspace.launchUnsettled(focus.id) { return .launching(kind) }
         return focus.status != .done ? .start(focus, caption: nil, editing: editing) : nil
     }
 
     /// 开始 → 正在开 → Agent 在做是同一条的三个样子，里面的旧的先淡完、新的再淡入（`handOff`），不叠着换。
     /// 同新会话输入框的工具排：不垫底、不画线，Mac 上铺满气泡的宽（那一排的字才写得全），靠上面留的空隔开。
     var body: some View {
-        Group {
-            if let stage {
-                ZStack(alignment: .leading) {
-                    switch stage {
-                    case .agent(let leaf): AgentStrip(leaf: leaf).transition(.handOff)
-                    case .launching(let kind): LaunchStrip(kind: kind).transition(.handOff)
-                    case .start(let leaf, let caption, let editing): StartBar(leaf: leaf, caption: caption, editing: editing).transition(.handOff)
-                    }
+        if let stage {
+            ZStack(alignment: .leading) {
+                switch stage {
+                case .agent(let leaf): AgentStrip(leaf: leaf).transition(.handOff)
+                case .launching(let kind): LaunchStrip(kind: kind).transition(.handOff)
+                case .start(let leaf, let caption, let editing): StartBar(leaf: leaf, caption: caption, editing: editing).transition(.handOff)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.top, Spacing.tight)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, Spacing.tight)
         }
-        #if os(macOS)
-        // 重启过、在别的设备上开的：这台还不知道那一次，接上它才分得出"正在开"与"可能已开过、再开先问"（`unsettled`）
-        .onChange(of: agents.launching[focus.id] != nil, initial: true) { _, launching in
-            guard launching else { return }
-            do { try workspace.resumeHandOff(focus.id, opened: nil) } catch { workspace.fail(error) }
-        }
-        #endif
-    }
-
-    private func unsettled(_ leaf: UUID) -> Bool {
-        #if os(macOS)
-        switch workspace.sessionLaunching(.card(leaf)).phase(at: workspace.services.speech) {
-        case .unconfirmed, .missing: true
-        default: false
-        }
-        #else
-        false
-        #endif
     }
 }
 

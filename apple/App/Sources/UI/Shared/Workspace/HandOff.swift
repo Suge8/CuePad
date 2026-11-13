@@ -5,21 +5,24 @@ extension Workspace {
     /// 把任务交给 Agent 只有这一条路（Mac 任务的"开始"、手机交给 Agent 的输入框发往新会话）。去处按 `CueStore.handOffPlan`：
     /// 绑着会话或有能接着的就交给它（`fresh` 另开；手机交给已有会话走回复框，只以 `fresh` 调到这里），否则在它定的那台 Mac 上开新会话，
     /// 用哪家、哪个模型按上次选的（`AppSettings.launchChoice`）。`draft` 为 nil 时开场白是任务正文。
-    /// 这件任务上一次开的请求还没收尾、这里还不知道时不发：先接上它（`resumeHandOff`），由你看了结果再定。
+    /// 这件任务上一次开的请求还没收尾、这里还没接上时（`followUnresolvedLaunches` 还没读到）不发：先接上它，由你看了结果再定。
     /// 没开成的原因留在 `sessionLaunching(.card(task))` 上。返回写请求的那个任务（测试等它）；接上旧请求、在等着或要先确认时为 nil。
     @discardableResult
-    func handOff(_ task: UUID, fresh: Bool, draft: ComposerDraft? = nil, opened: LaunchOpened? = nil) -> Task<Void, Never>? {
+    func handOff(_ task: UUID, fresh: Bool, draft: ComposerDraft? = nil) -> Task<Void, Never>? {
         let key = SessionLaunching.Key.card(task)
         if sessionLaunching(key).launch == nil {
             do {
-                if try resumeHandOff(task, opened: opened) { return nil }
+                if let pending = try services.store.snapshot({ try SessionLaunch.unresolved(of: task, in: $0) }).value {
+                    adopt(task, pending)
+                    return nil
+                }
             } catch {
                 fail(error)
                 return nil
             }
         }
         let claim = draft.map(claimImports)
-        return launch(sessionLaunching(key), opened: opened) { [services] workspace, intent in
+        return launch(sessionLaunching(key), opened: Self.handedOff(task)) { [services] workspace, intent in
             let store = services.store
             let plan = try await store.handOffPlan(task, host: workspace.localHost, fresh: fresh)
             switch plan.destination {
@@ -43,21 +46,58 @@ extension Workspace {
         }
     }
 
-    /// 接着看这件任务开会话的进度（交给 Agent 的输入框浮起、Mac 的任务气泡出现时）：这里已知的那一次照样等，认领到时按这一次的 `opened` 收尾；
-    /// 还不知道的（重启过、关过输入框、在别的设备上发的）从库里接上没收尾的那一次。有一次在等为 true。
-    @discardableResult
-    func resumeHandOff(_ task: UUID, opened: LaunchOpened?) throws -> Bool {
-        let key = SessionLaunching.Key.card(task)
-        if sessionLaunching(key).launch != nil {
-            resume(key, opened: opened)
-            return true
+    /// 库里每件任务没收尾的那次开会话都由这里接上：Mac 启动后、手机窗口建起来后，以及别的设备新发的。
+    /// 任务气泡、步骤行、交给 Agent 的输入框只读 `sessionLaunching`，不各自去接。
+    func followUnresolvedLaunches() async {
+        do {
+            for try await pending in services.store.observe({ try $0.latestUnresolvedLaunches().compactMapValues(SessionLaunch.init) }) {
+                for (task, launch) in pending where sessionLaunching(.card(task)).launch == nil { adopt(task, launch) }
+            }
+        } catch is CancellationError {
+        } catch {
+            fail(error)
         }
-        let pending = try services.store.snapshot { store -> SessionLaunch? in
-            guard let request = try store.unresolvedLaunches(for: task).first, let token = request.launch?.token else { return nil }
-            return SessionLaunch(request: request.id, token: token)
-        }.value
-        guard let pending else { return false }
-        resume(key, with: pending, opened: opened)
-        return true
+    }
+
+    /// 这件任务在开会话，可这里接上的那一次说不出结果（未确认、查不到）：可能已开过，不再显示"正在开"，"开始"换成"重试"、再开先问。
+    func launchUnsettled(_ task: UUID) -> Bool {
+        switch sessionLaunching(.card(task)).phase(at: services.speech) {
+        case .unconfirmed, .missing: true
+        default: false
+        }
+    }
+
+    /// 在开会话、还没到说不出结果的地步：行上画"正在开"的圈，不给"开始"。
+    func isLaunching(_ task: UUID, in agents: AgentLinks) -> Bool {
+        agents.launching[task] != nil && !launchUnsettled(task)
+    }
+
+    private func adopt(_ task: UUID, _ launch: SessionLaunch) {
+        resume(.card(task), with: launch, opened: Self.handedOff(task))
+    }
+
+    /// 认领到新会话时：手机上这件任务交给 Agent 的输入框还浮着就收起它、进那个会话，关了的留在原处；按任务认而不按哪一次浮起
+    /// （请求还没写进库时关了又开，认领到时照样该收）。Mac 不动，任务那一行自己换成会话。
+    private static func handedOff(_ task: UUID) -> LaunchOpened? {
+        #if os(macOS)
+        nil
+        #else
+        { workspace, claimed in
+            guard workspace.outbox?.card == task else { return }
+            workspace.outbox = nil
+            workspace.openSession(claimed.id)
+        }
+        #endif
+    }
+}
+
+nonisolated extension SessionLaunch {
+    static func unresolved(of task: UUID, in store: isolated CueStore) throws -> SessionLaunch? {
+        try store.unresolvedLaunches(for: task).first.flatMap(SessionLaunch.init)
+    }
+
+    init?(_ request: DeliveryRequest) {
+        guard let token = request.launch?.token else { return nil }
+        self.init(request: request.id, token: token)
     }
 }

@@ -112,7 +112,6 @@ final class Workspace {
             if let oldValue { settleLaunch(oldValue.launchKey) }
             guard let outbox else { return }
             handOffDraft = ComposerDraft(attachments: [outbox])
-            resumeHandOff(outbox)
         }
     }
     /// 放在这里而不在输入框里：交给已有会话的发出即收起，写库失败时还能放回、重新浮起。
@@ -203,6 +202,7 @@ final class Workspace {
     func follow() async {
         async let catalog: Void = followCatalog()
         async let links: Void = followAgentLinks()
+        async let launches: Void = followUnresolvedLaunches()
         async let cue: Void = followCue()
         async let opens: Void = openLinks()
         async let library: Void = followLibrary()
@@ -212,7 +212,7 @@ final class Workspace {
         await followSessionPlacement()
         await agents
         #endif
-        _ = await (catalog, links, cue, opens, library, quota)
+        _ = await (catalog, links, launches, cue, opens, library, quota)
     }
 
     private func followFilesQuota() async {

@@ -43,7 +43,7 @@ extension Workspace {
     func next(for task: Card, in agents: AgentLinks, steps: TaskProgress?) -> TaskNext? {
         guard task.status != .done else { return nil }
         let agent = agent(of: task.id, in: agents)
-        let startable = steps == nil && agents.launching[task.id] == nil ? task : nil
+        let startable = steps == nil && !isLaunching(task.id, in: agents) ? task : nil
         return TaskNext(shown: agent?.shown, session: agent?.session, startable: startable)
     }
 

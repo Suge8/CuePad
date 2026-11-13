@@ -37,7 +37,7 @@ struct AgentDot: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        if agents.launching[card] != nil {
+        if workspace.isLaunching(card, in: agents) {
             Circle().strokeBorder(palette.signature, lineWidth: 1.5).frame(width: 8, height: 8)
                 .relaySpot(task: card)
                 .frame(width: 28, height: 28)

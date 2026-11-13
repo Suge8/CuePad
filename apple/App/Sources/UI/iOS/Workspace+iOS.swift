@@ -26,23 +26,7 @@ extension Workspace {
     @discardableResult
     func launchHandOff(_ outbox: Outbox, opening: String?) -> Task<Void, Never>? {
         guard let card = outbox.card else { return nil }
-        return handOff(card, fresh: true, draft: handOffDraft.retelling(card, as: opening), opened: Self.entering(outbox))
-    }
-
-    /// 交给 Agent 的输入框浮起时接着这件任务开会话的进度。
-    func resumeHandOff(_ outbox: Outbox) {
-        guard let card = outbox.card else { return }
-        do { try resumeHandOff(card, opened: Self.entering(outbox)) } catch { fail(error) }
-    }
-
-    /// 认领到新会话：这件任务的输入框还浮着就收起它、进那个会话；关了的留在原处。按任务认而不按哪一次浮起：
-    /// 请求还没写进库时关了又开，新浮起的那个还接不上它（库里查不到），认领到时照样该收。
-    private static func entering(_ outbox: Outbox) -> LaunchOpened {
-        { [key = outbox.launchKey] workspace, claimed in
-            guard workspace.outbox?.launchKey == key else { return }
-            workspace.outbox = nil
-            workspace.openSession(claimed.id)
-        }
+        return handOff(card, fresh: true, draft: handOffDraft.retelling(card, as: opening))
     }
 
     func openSearch() {

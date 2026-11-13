@@ -56,15 +56,18 @@ struct IOSWorkflowTests {
             #expect(try await store.applyRemote([.save(row, systemFields: Data(), serverAt: Date())]).isEmpty)
         }
         let workspace = Workspace(services: app.services)
+        let following = Task { await workspace.follow() }
+        defer { await following.stop() }
         workspace.handOff(task)
         workspace.outbox = nil
         workspace.handOff(task)
+        try await eventually("新窗口一建起来就接上原请求") { workspace.sessionLaunching(.card(task.id)).launch != nil }
         await #expect(throws: CueStoreError.deliveryAlreadyHanded) {
             try await app.services.launchSession(in: task.projectID, prompt: first.launch?.prompt, title: task.heading,
                                                 on: "mac-z", card: task.id, agent: .pi)
         }
         #expect(try await store.deliveryRequests().map(\.id) == [first.id])
-        let resumed = try #require(workspace.sessionLaunching(.card(task.id)).launch, "输入框一浮起就接上原请求")
+        let resumed = try #require(workspace.sessionLaunching(.card(task.id)).launch)
         if state == "sent" { #expect(workspace.launchHandOff(try #require(workspace.outbox), opening: nil) == nil, "还在等结果：不再发") }
         #expect(resumed.request == first.id)
         let progress = try store.snapshot { try resumed.progress(from: $0) }.value

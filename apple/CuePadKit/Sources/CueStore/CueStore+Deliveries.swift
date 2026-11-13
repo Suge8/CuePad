@@ -127,10 +127,17 @@ extension CueStore {
   /// 所有仍可能开出会话的请求：后来的失败或交接不消除旧风险；与只决定任务归属的 latestHandoff 分开。
   /// 原请求明确失败或已看到其会话时才解除未知风险，不另存风险状态。
   public func unresolvedLaunches(for card: UUID) throws -> [DeliveryRequest] {
-    try select(DeliveryRequest.self,
-      where: "cardID = ? AND mode = '\(DeliveryMode.start.rawValue)' AND status != '\(DeliveryStatus.failed.rawValue)' AND \(Self.launchUnclaimed)",
-      [card], orderBy: "createdAt DESC, rowid DESC")
+    try select(DeliveryRequest.self, where: "cardID = ? AND \(Self.unresolvedLaunch)", [card], orderBy: "createdAt DESC, rowid DESC")
   }
+
+  /// 全库每件任务最新的那次没收尾的开会话请求（规则同 `unresolvedLaunches(for:)`）。
+  public func latestUnresolvedLaunches() throws -> [UUID: DeliveryRequest] {
+    let requests = try select(DeliveryRequest.self, where: "cardID IS NOT NULL AND \(Self.unresolvedLaunch)", [], orderBy: "createdAt DESC, rowid DESC")
+    return Dictionary(requests.compactMap { request in request.cardID.map { ($0, request) } }, uniquingKeysWith: { newer, _ in newer })
+  }
+
+  private static let unresolvedLaunch =
+    "mode = '\(DeliveryMode.start.rawValue)' AND status != '\(DeliveryStatus.failed.rawValue)' AND \(launchUnclaimed)"
 
   /// 任务的标题，超长的截断（`CueName.clipped`）；灵感、没有标题的任务为 nil（Pi 的默认名）。
   func sessionName(forCard card: UUID) throws -> String? {
