@@ -15,7 +15,7 @@ private struct PreviewPresenter: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .environment(\.openPreview, PreviewOpener { opened = $0 })
+            .environment(\.openPreview, PreviewOpener(owner: ObjectIdentifier(flight)) { opened = $0 })
             .environment(\.previewFlight, flight)
             // 关法（Esc、点外面、关闭钮、说完）都经这里：先让翻到的那一份飞回去
             .panel(item: Binding { opened } set: { next in
@@ -23,13 +23,9 @@ private struct PreviewPresenter: ViewModifier {
                 opened = next
             }, style: .fullScreen) {
                 PreviewPager(opening: $0, reply: $0.reply ?? reply, flight: flight, current: $0.preview.id)
-                    .frame(maxWidth: PanelStyle.previewSize.width, maxHeight: PanelStyle.previewSize.height)
+                    .frame(maxWidth: PreviewContent.page.width, maxHeight: PreviewContent.page.height)
             }
     }
-}
-
-extension PanelStyle {
-    static let previewSize = CGSize(width: 960, height: 760)
 }
 
 /// 翻页原地交叉淡（同快速查看与"预览"）：Mac 上换一张不滑，滑动要逐帧挪整页。
@@ -49,7 +45,11 @@ private struct PreviewPager: View {
     private var index: Int { opening.index(of: current) }
     private var preview: PreviewItem { batch[index] }
     private var title: String { opening.title(of: preview) }
-    private var chrome: EdgeInsets { EdgeInsets(top: Self.headerHeight, leading: 0, bottom: barHeight, trailing: 0) }
+    /// 图片与网页铺满整页、两条栏的玻璃浮在上面（同"照片"）：让出栏的话，高图的上沿齐着顶栏切一刀，网页顶上多一条桌面色的空带。
+    /// 别的页是从头读的字，让出栏。
+    private var chrome: EdgeInsets {
+        [.image, .web].contains(preview.kind) ? EdgeInsets() : EdgeInsets(top: Self.headerHeight, leading: 0, bottom: barHeight, trailing: 0)
+    }
 
     var body: some View {
         ZStack {
@@ -61,38 +61,49 @@ private struct PreviewPager: View {
         .environment(\.previewInsets, chrome)
         .environment(\.previewFlight, flight)
         .opacity(landed ? 1 : 0)
+        // 飞来的那一小页是淡成内容的，内容也淡着出来；别的在飞的那张底下当场换
+        .animation(preview.kind.thumbnail == .page ? Motion.fade : nil, value: landed)
         .background {
             PreviewFlight.Stage(
                 flight: flight, key: PreviewZoomKey(group: opening.group, preview: preview.id), kind: preview.kind,
                 page: preview.kind == .web && file(of: preview) != nil ? preview.key : nil, chrome: chrome, landed: $landed)
         }
-        // 读屏先读顶栏（标题、第几份、翻页、分享、关闭），再读内容，最后是底栏：顶栏是叠在内容上的，不排的话排在内容后面
-        .overlay(alignment: .top) { header.accessibilitySortPriority(1) }
-        .overlay(alignment: .bottom) {
-            if let reply {
-                PreviewReplyBar(reply: reply, preview: preview, about: title, entry: opening.entry, done: { close() })
-                    .frame(maxWidth: 640).padding([.horizontal, .bottom], Spacing.block)
-                    .onGeometryChange(for: CGFloat.self) { $0.size.height + 16 } action: { barHeight = $0 }
+        // 读屏先读顶栏（标题、第几份、关闭）与翻页钮，再读内容，最后是底栏：它们是叠在内容上的，不排的话排在内容后面
+        // 这几样浮在内容上的钮等画面飞到了才淡出来：飞的那张在最上面，先露出来的话被它盖过去、等它化掉又冒出来
+        .overlay {
+            ZStack {
+                header.frame(maxHeight: .infinity, alignment: .top).accessibilitySortPriority(1)
+                if paged { turns.accessibilitySortPriority(1) }
+                if let reply {
+                    PreviewReplyBar(reply: reply, preview: preview, about: title, entry: opening.entry, done: { close() })
+                        .frame(maxWidth: 640).padding([.horizontal, .bottom], Spacing.block)
+                        .onGeometryChange(for: CGFloat.self) { $0.size.height + 16 } action: { barHeight = $0 }
+                        .frame(maxHeight: .infinity, alignment: .bottom)
+                }
             }
+            .opacity(landed ? 1 : 0)
+            .animation(Motion.fade, value: landed)
         }
         .background(palette.desk)
         .background { PageInput { step($0) } }
     }
 
     private var header: some View {
-        Text(title).font(Typography.toolbarTitle).foregroundStyle(palette.ink).lineLimit(1)
+        HStack(spacing: Spacing.tight) {
+            if let kind = preview.kind {
+                Image(kind == .image ? .photo : DeliverableTile.icon(kind)).font(Typography.caption).foregroundStyle(palette.ink2)
+                    .iconLabel(kind.label).help(Text(verbatim: kind.label))
+            }
+            Text(title).font(Typography.toolbarTitle).foregroundStyle(palette.ink).lineLimit(1)
+        }
             .padding(.horizontal, Spacing.block).frame(height: ControlMetrics.height)
             .glass(in: .capsule)
-            .accessibilityAddTraits(.isHeader)
+            .accessibilityElement(children: .combine).accessibilityAddTraits(.isHeader)
             .padding(.horizontal, Self.titleRoom)
             .frame(maxWidth: .infinity)
             .overlay(alignment: .trailing) {
                 HStack(spacing: Spacing.item) {
-                    stepper
-                    if let file = file(of: preview) {
-                        ShareLink(item: file) { Label("分享", icon: .share).labelStyle(.iconOnly) }
-                            .buttonStyle(ControlButtonStyle(kind: .circular))
-                    }
+                    if paged { stepper }
                     Button("关闭", icon: .close) { close() }
                         .labelStyle(.iconOnly)
                         .buttonStyle(ControlButtonStyle(kind: .circular))
@@ -103,19 +114,24 @@ private struct PreviewPager: View {
     }
 
     private var stepper: some View {
-        HStack(spacing: Spacing.tight) {
-            if paged {
-                Button("上一个", icon: .back) { step(-1) }.labelStyle(.iconOnly).disabled(index == 0).help("上一个（←）")
+        Text(verbatim: "\(index + 1) / \(batch.count)").font(Typography.caption).foregroundStyle(palette.ink2).monospacedDigit()
+            .padding(.horizontal, Spacing.group + Spacing.tight).frame(height: ControlMetrics.height)
+            .glass(in: .capsule)
+    }
+
+    /// 翻页钮在内容的左右两侧、竖直居中（同快速查看与"照片"）：往哪边翻钮就在哪边，不挤在右上角那一排小字旁边。到头的那一侧没有钮。
+    private var turns: some View {
+        HStack {
+            if index > 0 {
+                Button("上一个", icon: .back) { step(-1) }.help("上一个（←）").transition(.opacity)
             }
-            Text(opening.position(at: index)).font(Typography.caption).foregroundStyle(palette.ink2).monospacedDigit()
-                .padding(.horizontal, paged ? 0 : Spacing.tight)
-            if paged {
-                Button("下一个", icon: .forward) { step(1) }.labelStyle(.iconOnly).disabled(index == batch.count - 1).help("下一个（→）")
+            Spacer(minLength: 0)
+            if index < batch.count - 1 {
+                Button("下一个", icon: .forward) { step(1) }.help("下一个（→）").transition(.opacity)
             }
         }
-        .buttonStyle(PressStyle(.inline)).foregroundStyle(palette.ink2)
-        .padding(.horizontal, Spacing.group).frame(height: ControlMetrics.height)
-        .glass(in: .capsule)
+        .labelStyle(.iconOnly).buttonStyle(ControlButtonStyle(kind: .circular))
+        .padding(.horizontal, Self.edge)
     }
 
     private func step(_ offset: Int) {

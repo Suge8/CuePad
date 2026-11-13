@@ -171,6 +171,20 @@ final class AppSettings {
         setReplyNotes(notes + [ReplyNote(quoting: preview, in: entry)], for: session)
     }
 
+    /// 写给这一份预览的话（全屏页里那一行）：一份一条，再写是改；清空就不留。只引用没写话的那条（`quote`）清空时留着。
+    func annotate(_ preview: PreviewItem, _ text: String, in entry: UUID, for session: UUID) {
+        var notes = replyNotes(for: session)
+        let said = text.trimmingCharacters(in: .whitespacesAndNewlines), index = notes.firstIndex { $0.preview == preview.id }
+        if let index {
+            if said.isEmpty, !notes[index].note.isEmpty { notes.remove(at: index) } else { notes[index].note = said }
+        } else if !said.isEmpty {
+            var note = ReplyNote(quoting: preview, in: entry)
+            note.note = said
+            notes.append(note)
+        }
+        setReplyNotes(notes, for: session)
+    }
+
     func removeReplyNote(_ id: UUID, in session: UUID) {
         setReplyNotes(replyNotes(for: session).filter { $0.id != id }, for: session)
     }

@@ -6,8 +6,7 @@ import WebKit
 
 /// 同全屏预览的拦截规则（`PreviewWebGuard`，脚本照跑、不联网）离线载入。一次只渲一张：每张要起一个网页进程，一屏几张同时渲会把内存与 CPU 一起顶上去。
 enum PageSnapshots {
-    /// Mac 全屏页按视口一比一摆快照（`PreviewPlace.frame`），与真网页的字一样大。
-    static let viewport = CGSize(width: 1024, height: 768)
+    private static let viewport = PreviewContent.page
     private static let snapshotWidth: CGFloat = 1200
 
     private static var tail: Task<URL?, Never>?

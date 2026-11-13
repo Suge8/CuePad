@@ -171,6 +171,11 @@ extension DebugScene {
         return renderer.cgImage.map { DemoLibrary.encode($0) }
     }
 
+    static func swatchPNG(width: CGFloat, height: CGFloat, hue: Double) -> Data? {
+        let label = Text(verbatim: "\(Int(width))×\(Int(height))").font(.system(size: min(width, height) / 3, weight: .bold)).foregroundStyle(.white)
+        return ImageRenderer(content: Color(hue: hue, saturation: 0.6, brightness: 0.8).frame(width: width, height: height).overlay { label }).cgImage.map { DemoLibrary.encode($0) }
+    }
+
     static func seedChats(_ store: CueStore) async throws {
         let now = Date.now
         func chat(_ sessionID: String, _ turns: [(you: String, pi: String?, tools: ChatMessage.Tools?, minutes: Double)], startedMinutesAgo: Double) async throws {

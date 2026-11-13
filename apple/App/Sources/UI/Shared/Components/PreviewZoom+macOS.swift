@@ -22,6 +22,7 @@ final class PreviewZoom: NSScrollView, PreviewShowing {
     private var detailing: Task<Void, Never>?
     private var pending: Picture?
     private var moving = false
+    private var wheeling: Task<Void, Never>?
 
     init(file: URL) {
         self.file = file
@@ -35,6 +36,8 @@ final class PreviewZoom: NSScrollView, PreviewShowing {
         horizontalScrollElasticity = .allowed
         verticalScrollElasticity = .allowed
         contentView = Clip()
+        // 裁切视图默认自己铺一层白：飞的那张落下、内容露出的那一帧整页从桌面色跳成白
+        contentView.drawsBackground = false
         documentView = canvas
         canvas.zoom = self
         let center = NotificationCenter.default
@@ -52,7 +55,7 @@ final class PreviewZoom: NSScrollView, PreviewShowing {
     var zoomed: Bool { magnification > 1.001 }
 
     private func load() async {
-        let fitPixels = Int(max(PanelStyle.previewSize.width, PanelStyle.previewSize.height) * (window?.backingScaleFactor ?? 2))
+        let fitPixels = Int(max(PreviewContent.page.width, PreviewContent.page.height) * (window?.backingScaleFactor ?? 2))
         guard let (first, original) = await Self.open(file, longest: fitPixels) else { return }
         self.original = original
         show(first)
@@ -122,6 +125,19 @@ final class PreviewZoom: NSScrollView, PreviewShowing {
         }
     }
 
+    /// 鼠标滚轮（一格一格的，没有触控板那种连续位移）在指针那一点放大、缩小：鼠标没有捏合，滚轮只滚动的话放大只剩双击那一档。
+    /// 触控板双指照旧是滚动看图，捏合放大。
+    override func scrollWheel(with event: NSEvent) {
+        guard !event.hasPreciseScrollingDeltas, event.scrollingDeltaY != 0 else { return super.scrollWheel(with: event) }
+        let target = min(max(magnification * exp(event.scrollingDeltaY * Self.wheel), minMagnification), maxMagnification)
+        setMagnification(target, centeredAt: contentView.convert(event.locationInWindow, from: nil))
+        wheeling?.cancel()
+        wheeling = Task { [weak self] in
+            guard (try? await Task.sleep(for: .milliseconds(200))) != nil else { return }
+            self?.settle()
+        }
+    }
+
     override func smartMagnify(with event: NSEvent) {
         toggle(at: canvas.convert(event.locationInWindow, from: nil))
     }
@@ -180,6 +196,8 @@ final class PreviewZoom: NSScrollView, PreviewShowing {
     }
 
     private static let snap: CGFloat = 0.1
+    /// 滚轮一格（位移约 1～3）放大约一成。
+    private static let wheel: CGFloat = 0.05
 }
 
 private final class Canvas: NSView {

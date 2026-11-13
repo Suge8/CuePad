@@ -58,7 +58,9 @@ extension DebugScene {
         }
         guard let first = created.first, let last = created.last else { return }
         let screenshot = try screenshotMarkup(store), pdf = try demoPDF(store)
-        let looked = try Self.screenshotPNG().map { try store.files.store($0) }
+        // 宽高悬殊的几张：铺满裁切的方格里，裁掉的那截不该接邻格的指针
+        let looked = try [Self.screenshotPNG()].compactMap { $0 }.map { try store.files.store($0) }
+            + [(1600, 240, 0.08), (300, 1400, 0.5), (1800, 200, 0.75), (900, 700, 0.35)].compactMap { try Self.swatchPNG(width: $0.0, height: $0.1, hue: $0.2).map { try store.files.store($0) } }
         let messages = [
             ChatMessage(
                 sessionID: "notes", entryID: "u9", seq: 8, role: .user, text: String(localized: "把登录页的新样子、手机上的截图和评审结论发给我看看，样子参考这张", table: "Demo") + (screenshot.map { "\n" + $0 } ?? "")
@@ -68,7 +70,7 @@ extension DebugScene {
                 sessionID: "notes", entryID: "p9", seq: 9, role: .pi, text: notesPreviewReply,
                 at: last.addingTimeInterval(2), tools: .init(steps: 2, items: [
                     .init(kind: .command, target: "npx playwright screenshot --device 'iPhone 15' login-v2.html login-mobile.png"),
-                    .init(kind: .read, target: "login-mobile.png", images: looked.map { [$0] }),
+                    .init(kind: .read, target: "login-mobile.png", images: looked),
                 // 缓存一小时前就冷了：回复框上方提醒这一句要重读多少
                 ], cache: .init(context: 164_000, warmUntil: .now.addingTimeInterval(-3_600))), roundStartedAt: first.addingTimeInterval(-50)),
         ]

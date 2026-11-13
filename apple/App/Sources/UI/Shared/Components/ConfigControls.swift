@@ -234,6 +234,7 @@ struct SessionConfigControls: View {
     let session: SessionState
     let models: [ModelOption]
     let shown: ConfigShown
+    var cold: ColdCache?
     var opening: Binding<ConfigPick?> = .constant(nil)
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -247,6 +248,7 @@ struct SessionConfigControls: View {
             if let meter = shown.context.flatMap(ContextMeter.init) {
                 ContextGauge(session: session, meter: meter).layoutValue(key: ConfigGive.self, value: [.context, .secondary])
             }
+            if let cold { ColdNote(cold: cold).layoutValue(key: ConfigGive.self, value: [.wording]).transition(.opacity) }
         }
     }
 
@@ -254,6 +256,29 @@ struct SessionConfigControls: View {
 
     private func configure(_ config: SessionConfig) {
         workspace.attempt { _ = try await services.configure(config, for: session) }
+    }
+}
+
+/// 缓存冷了、这一句要重读多少上下文：排在回复框的工具那一排里、挨着上下文的用量，放不下只剩"已冷"，整句在悬停里。
+/// 不另浮一张条在对话上：那是这一句的代价，属于要发出它的回复框。
+struct ColdCache: Equatable {
+    let context: Int
+    let estimated: Bool
+}
+
+private struct ColdNote: View {
+    let cold: ColdCache
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        let tokens = CueContext.tokens(cold.context)
+        ViewThatFits(in: .horizontal) {
+            (cold.estimated ? Text("缓存可能已冷，重读约 \(tokens)") : Text("缓存已冷，重读约 \(tokens)")).fixedSize()
+            Text("已冷").fixedSize()
+        }
+        .font(Typography.caption).monospacedDigit().foregroundStyle(palette.ink3)
+        .padding(.leading, Spacing.tight)
+        .help(cold.estimated ? Text("缓存可能已冷，这一句可能重读约 \(tokens)") : Text("缓存已冷，这一句会重读约 \(tokens)"))
     }
 }
 

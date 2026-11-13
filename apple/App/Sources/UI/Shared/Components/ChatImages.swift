@@ -8,30 +8,36 @@ struct ChatImages: View {
     var trip = BubbleTrip.arrived
     var alignment = HorizontalAlignment.trailing
     var side: CGFloat = 120
+    var perRow = Self.bubbleRow
+    /// 只摆前几排，没摆出的张数写在最后一格上；点它从那一张看起，全屏页里翻得到全部。
+    var rows: Int?
     @Environment(Workspace.self) private var workspace
     @Environment(\.openPreview) private var openPreview
 
     private var singleWidth: CGFloat { side * 2.5 }
     private static var spacing: CGFloat { Spacing.tight }
     #if os(macOS)
-    private static var perRow: Int { 3 }
+    private static var bubbleRow: Int { 3 }
     #else
-    private static var perRow: Int { 2 }
+    private static var bubbleRow: Int { 2 }
     #endif
 
     private var group: String { "chat-" + hashes.joined(separator: ",") }
 
     var body: some View {
+        let shown = rows.map { min(hashes.count, $0 * perRow) } ?? hashes.count
         VStack(alignment: alignment, spacing: Self.spacing) {
-            ForEach(Array(stride(from: 0, to: hashes.count, by: Self.perRow)), id: \.self) { start in
+            ForEach(Array(stride(from: 0, to: shown, by: perRow)), id: \.self) { start in
                 HStack(spacing: Self.spacing) {
-                    ForEach(start..<min(start + Self.perRow, hashes.count), id: \.self) { index in
+                    ForEach(start..<min(start + perRow, shown), id: \.self) { index in
                         ChatImage(
                             hash: hashes[index], side: side, fitWidth: hashes.count == 1 ? singleWidth : nil,
+                            more: index == shown - 1 ? hashes.count - shown : 0,
                             zoom: PreviewZoomKey(group: group, preview: PreviewItem.id(of: hashes[index]))
                         ) { open(hashes[index]) }
                     }
                 }
+                .transition(.opacity)
             }
         }
         .opacity(trip.opacity)
@@ -46,6 +52,7 @@ private struct ChatImage: View {
     let hash: String
     let side: CGFloat
     let fitWidth: CGFloat?
+    let more: Int
     let zoom: PreviewZoomKey
     let open: () -> Void
     @Environment(AppServices.self) private var services
@@ -66,11 +73,15 @@ private struct ChatImage: View {
                         Text(verbatim: AttachmentLooks.awayLine(hash, services))
                             .font(Typography.caption).monospacedDigit().foregroundStyle(palette.ink3)
                             .multilineTextAlignment(.center).padding(Spacing.tight)
+                    } else if more > 0 {
+                        Text(verbatim: "+\(more)").font(Typography.body.weight(.semibold)).monospacedDigit().foregroundStyle(palette.onMedia)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity).background(palette.mediaScrim, in: .rect(cornerRadius: Radius.block))
+                            .transition(.opacity)
                     }
                 }
         }
-        .buttonStyle(PressStyle())
-        .accessibilityLabel("图片")
+        .buttonStyle(PressStyle(.card))
+        .accessibilityLabel(more > 0 ? Text("图片，另有 \(more) 张") : Text("图片"))
         .accessibilityHint(place.isAway ? "从 iCloud 取来" : "查看大图")
         .observingArrival(of: hash, in: services, into: $place)
     }

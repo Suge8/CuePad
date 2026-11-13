@@ -167,7 +167,7 @@ private struct ChatSegment: View, Equatable {
         case .pi:
             ReplyBlock(
                 id: entry.id, text: entry.text, took: entry.took, tools: entry.tools, session: session, notes: notes.filter { $0.entry == entry.id },
-                latest: entry.latest, fadesIn: !swapsInPlace)
+                landed: entry.landed, fadesIn: !swapsInPlace)
         case .notice(let notice) where notice.changesContext:
             ContextBoundary(title: notice.label, highlighted: entry.id == highlight)
         case .notice(let notice):

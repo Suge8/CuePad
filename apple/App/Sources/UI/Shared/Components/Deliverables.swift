@@ -189,6 +189,7 @@ struct DeliverableTile: View {
                     Image(decorative: image, scale: 1).resizable().scaledToFill()
                         // 深色下页面与截图多是亮底，原样放在暗纸上刺眼：压暗一层（同 `Thumbnail`）；要你看清的图不压
                         .overlay { if preview.kind != .video, !isShot, !DeliverableLooks.drawn(preview.kind) { palette.mediaDim } }
+                        .allowsHitTesting(false)
                         .transition(.opacity)
                 } else if waiting {
                     EmptyView()

@@ -3,8 +3,10 @@ import SwiftUI
 
 /// 做完的几步与说过的话来自会话文件（`Recap.pendingTools`），正在跑的来自会话状态（`detail`），两者不重叠。
 /// Mac 上正在说的话出字时（`SessionShown.speaking`）这一块是草稿的标题，说的话就是下面的草稿，不再列一遍。
-/// 工具结果里有图时，标题行下面总挂着这一轮的图（收着、展开都在，`ChatImages`），点开全屏看：用户看得到 Agent 看到的，Agent 不必为了给人看再发一遍。
-/// 在跑的与做完后的同一种排法、同样高（同样的步骤时，清单都开着）：Mac 上正在说的话落库时原位换下，这一块不跳（`SessionDraft`）。
+/// 工具结果里有图时，标题行下面挂着这一轮的图（`ChatImages`），点开全屏看：用户看得到 Agent 看到的，Agent 不必为了给人看再发一遍。
+/// 清单收着时图只留一排（余下几张写在最后一格上），展开时全摆出来：收着的一轮是回答上面的一句交代，不压过回答。
+/// 在跑的清单开着，做完的收着。刚落下的那一轮先照在跑时的样子开着、同样高，随即收起：Mac 上正在说的话落库时原位换下（`SessionDraft`），
+/// 是这一块连续收回，不在换下的那一帧跳一下。
 /// 清单里的一步点开看里面（`StepRow`）；标题行是用时（在跑的是此刻在做的）接每类一个图标配个数，图标与清单那一类的同一个；缓存没接上的一轮在末尾另起一行写重读了多少（`Chat.process`）。
 struct RoundProcess: View {
     let tools: ChatMessage.Tools?
@@ -12,13 +14,14 @@ struct RoundProcess: View {
     let session: SessionState
     /// 做完的一轮是哪条回答（别的设备点开一步时请 Mac 写在它上面，`StepRow`）；在跑的一轮为 nil。
     var message: UUID?
-    /// 在跑的与最新做完的那一轮清单开着（`ChatEntry.latest`），你发出下一句就收起；之后你点开、收起的照你的。
-    var open = true
+    /// 最新做完的那一轮何时落下的（`ChatEntry.landed`）；你点开、收起的照你的。
+    var landed: Date?
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.chatStay) private var stay
     @State private var toggled: Bool?
+    @State private var settled = false
 
     nonisolated enum Ending: Equatable {
         case took(String)
@@ -33,11 +36,12 @@ struct RoundProcess: View {
     var body: some View {
         let process = Chat.process(tools)
         if let process, let tools, tools.steps > 0 {
-            let expanded = !tools.items.isEmpty && (toggled ?? (open || DebugHooks.preset.toolsOpen))
+            let fresh = !settled && landed.map { $0.timeIntervalSinceNow > -Self.landing } ?? false
+            let expanded = !tools.items.isEmpty && (toggled ?? (message == nil || fresh || DebugHooks.preset.toolsOpen))
             VStack(alignment: .leading, spacing: 0) {
                 Button {
                     stay?(!expanded)
-                    toggled = !expanded
+                    withAnimation(motion) { toggled = !expanded }
                 } label: { header(process, open: tools.items.isEmpty ? nil : expanded) }
                     .buttonStyle(PressStyle())
                     .allowsHitTesting(!tools.items.isEmpty)
@@ -46,27 +50,36 @@ struct RoundProcess: View {
                     #if os(macOS)
                     .help(process.spoken.visible)
                     #endif
-                if !tools.images.isEmpty {
-                    NoteThread { ChatImages(hashes: tools.images, alignment: .leading, side: Self.imageSide).padding(.vertical, Spacing.hair) }
-                }
-                if expanded {
-                    NoteThread {
-                        list(tools)
-                        if case .live(_, let doing, let step?) = ending { liveStep(doing, icon: step) }
-                    }
-                } else if case .live(let shown, let doing, let step) = ending {
-                    let said = shown.speaking ? nil : tools.items.last { $0.kind == .said }
-                    if said != nil || step != nil {
+                // 收起时淡出的几行跟着这一块的下沿收回，不叠在下面的回答上
+                VStack(alignment: .leading, spacing: 0) {
+                    if !tools.images.isEmpty {
                         NoteThread {
-                            if let said { SaidRow(text: said.target, lines: 3) }
-                            if let step { liveStep(doing, icon: step) }
+                            ChatImages(hashes: tools.images, alignment: .leading, side: Self.imageSide, perRow: Self.imageRow, rows: expanded ? nil : 1)
+                                .padding(.vertical, Spacing.hair)
+                        }
+                    }
+                    if expanded {
+                        NoteThread {
+                            list(tools)
+                            if case .live(_, let doing, let step?) = ending { liveStep(doing, icon: step) }
+                        }
+                    } else if case .live(let shown, let doing, let step) = ending {
+                        let said = shown.speaking ? nil : tools.items.last { $0.kind == .said }
+                        if said != nil || step != nil {
+                            NoteThread {
+                                if let said { SaidRow(text: said.target, lines: 3) }
+                                if let step { liveStep(doing, icon: step) }
+                            }
                         }
                     }
                 }
+                .clipped()
                 recached(process)
             }
-            .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: expanded)
-            .onChange(of: open) { toggled = nil }
+            .task {
+                guard fresh, (try? await Task.sleep(for: Self.beat)) != nil else { return }
+                withAnimation(motion) { settled = true }
+            }
         } else {
             // 还没调过工具：此刻在做的（在想、只说了话），一行：对话末尾只给它留一行（`ChatLiveSlot`）
             let live: (SessionShown, String)? = if case .live(let shown, let doing, _) = ending, !shown.speaking { (shown, doing) } else { nil }
@@ -88,7 +101,16 @@ struct RoundProcess: View {
         }
     }
 
-    private static let imageSide: CGFloat = 88
+    /// 开合带着下面的回答一起挪：只给这一块挂动画的话回答当帧跳到位，收走的几行还在原地淡出，叠在回答的字上。
+    private var motion: Animation? { Motion.spatial(Motion.nudge, reduceMotion: reduceMotion) }
+
+    private static let imageSide: CGFloat = 64
+    /// 手机最窄的对话列放得下的一排，三端同一个数。
+    private static let imageRow = 4
+    /// 落下多久之内算刚落下：本机会话文件落库到这里画出来不到一秒；别的设备上随同步晚到的直接收着。
+    private static let landing: TimeInterval = 5
+    /// 回答落定后停这一下再收：换下的那一帧不动，收起看得出是接着发生的。
+    private static let beat: Duration = .milliseconds(400)
 
     private func spoken(_ process: Chat.Process) -> String {
         let end: String? = switch ending {

@@ -66,11 +66,13 @@ nonisolated struct ReplyNote: Identifiable, Equatable, Codable, Sendable {
     /// 发给 Agent 的话：对回答的批注一段排在最前；原文已经在 Agent 自己的上下文里，所以不重发原文，只给能认出位置的摘录（`excerpt`）：
     /// 一条批注的定位只占二十来个 token，选得再长也一样。不用 Markdown 引用块（每行一个前缀）、不给行号（Agent 看不到行号）。
     /// 引用的预览写在你那句话前头：`预览「标题」：话`——标题是 Agent 发它时自己写的（`cuepad show --title`），它认得出是哪份。
+    /// 写给某一份的话（`AppSettings.annotate`）各占一行、同一个写法，排在你那句话之前。
     static func message(_ notes: [ReplyNote], said text: String) -> String {
-        let passages = notes.filter { $0.preview == nil }
-        let quoted = notes.filter { $0.preview != nil }.map { String(localized: "预览「\($0.quote)」") }.formatted(.list(type: .and))
+        let passages = notes.filter { $0.preview == nil }, previews = notes.filter { $0.preview != nil }
+        let noted = previews.filter { !$0.note.isEmpty }.map { String(localized: "\(String(localized: "预览「\($0.quote)」"))：\($0.note)") }.joined(separator: "\n")
+        let quoted = previews.filter(\.note.isEmpty).map { String(localized: "预览「\($0.quote)」") }.formatted(.list(type: .and))
         let said = quoted.isEmpty ? text : text.allSatisfy(\.isWhitespace) ? quoted : String(localized: "\(quoted)：\(text)")
-        return [comments(passages), said].filter { !$0.isEmpty }.joined(separator: "\n\n")
+        return [comments(passages), noted, said].filter { !$0.isEmpty }.joined(separator: "\n\n")
     }
 
     private static func comments(_ notes: [ReplyNote]) -> String {
