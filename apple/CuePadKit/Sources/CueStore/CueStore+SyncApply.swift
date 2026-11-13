@@ -11,6 +11,10 @@ extension CueStore {
         do {
           if let key = try apply(change) { removedKeys.append(key) }
           try db.exec("RELEASE remote")
+        } catch let error as SQLiteError where error.isTransient {
+          throw error  // 库写满、读写出错：不是这条坏了，整次落库失败、令牌不动，同步层之后再来
+        } catch CueStoreError.readOnlyLibrary {
+          throw CueStoreError.readOnlyLibrary
         } catch {
           try db.exec("ROLLBACK TO remote")
           try db.exec("RELEASE remote")
