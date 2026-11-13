@@ -1562,34 +1562,6 @@
         }
       }
     },
-    "%lld 件可以整理" : {
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld Thing to Tidy"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld Things to Tidy"
-                }
-              }
-            }
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld 件可以整理"
-          }
-        }
-      }
-    },
     "%lld 件待回复" : {
       "localizations" : {
         "en" : {
@@ -9691,6 +9663,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "可以开始"
+          }
+        }
+      }
+    },
+    "可以整理" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ready to Tidy"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "可以整理"
           }
         }
       }

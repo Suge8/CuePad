@@ -60,51 +60,6 @@ struct MasonryLayout: Layout {
     }
 }
 
-/// 卡面上的字只在这里定：灵感墙的卡与技能与规则页的卡同一套标题、摘要与内边（各自再加自己的记号与脚注）。
-enum CardFaceMetrics {
-    #if os(macOS)
-    static let spacing = Spacing.item
-    static let padding = Spacing.block
-    #else
-    static let spacing = Spacing.tight
-    static let padding = Spacing.group
-    #endif
-}
-
-struct CardTitle: View {
-    let text: String
-    var dim = false
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        Text(text).font(Self.font).foregroundStyle(dim ? palette.ink3 : palette.ink).lineLimit(Self.lines)
-    }
-
-    #if os(macOS)
-    private static let font = Typography.bodyStrong
-    private static let lines = 2
-    #else
-    private static let font = Typography.secondary.weight(.semibold)
-    private static let lines = 3
-    #endif
-}
-
-struct CardPreview: View {
-    let text: String
-    var lines = CardText.previewLines
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        Text(VariableText.styled(text, palette))
-            #if os(macOS)
-            .font(Typography.body).lineSpacing(Typography.lineSpacing)
-            #else
-            .font(Typography.meta)
-            #endif
-            .foregroundStyle(palette.ink2).lineLimit(lines)
-    }
-}
-
 struct CardMeta: View {
     let card: Card
     let text: CardText

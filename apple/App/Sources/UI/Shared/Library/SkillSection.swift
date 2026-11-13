@@ -24,10 +24,8 @@ struct SkillSection: View {
             }
             ForEach(groups.projects) { group in
                 LibraryGroup(count: group.skills.count) {
-                    HStack(spacing: Spacing.glyph) {
-                        ProjectGlyph(project: workspace.catalog?.project(group.project), size: Self.glyph)
-                        Text(verbatim: workspace.projectName(group.project))
-                    }
+                    ProjectGlyph(project: workspace.catalog?.project(group.project), size: Self.glyph)
+                    Text(verbatim: workspace.projectName(group.project))
                 } content: {
                     rows(group.skills)
                 }
@@ -39,9 +37,9 @@ struct SkillSection: View {
     }
 
     #if os(macOS)
-    private static let glyph: CGFloat = 13
+    private static let glyph: CGFloat = 12
     #else
-    private static let glyph: CGFloat = 14
+    private static let glyph: CGFloat = 13
     #endif
 
     private func rows(_ skills: [LibrarySkill]) -> some View {
@@ -49,7 +47,7 @@ struct SkillSection: View {
     }
 }
 
-/// 几十上百个技能不逐个套卡：名字与一句说明排成清单，直接在桌面上（行底向两边让出，字与分组标题对齐，`RowStyle`）。
+/// 几十上百个技能不逐个套卡：名字与一句说明排成清单（行底向两边让出，字与分组标题对齐，`RowStyle`）。
 private struct SkillRow: View {
     let skill: LibrarySkill
     let library: AgentLibrary

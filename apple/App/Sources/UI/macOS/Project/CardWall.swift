@@ -23,23 +23,31 @@ private struct CardFace: View {
     let card: Card
     let lastTarget: String?
     let floated: Bool
+    @Environment(\.palette) private var palette
 
     var body: some View {
         let text = CardText(card.body)
-        VStack(alignment: .leading, spacing: CardFaceMetrics.spacing) {
+        VStack(alignment: .leading, spacing: Spacing.item) {
             if let image = text.images.first {
                 Thumbnail(hash: image, height: 118).padding(-Spacing.item).padding(.bottom, Spacing.item)
             }
             HStack(alignment: .firstTextBaseline, spacing: Spacing.glyph) {
-                CardTitle(text: text.label, dim: text.title.isEmpty)
+                Text(text.label)
+                    .font(Typography.bodyStrong)
+                    .foregroundStyle(text.title.isEmpty ? palette.ink3 : palette.ink)
+                    .lineLimit(2)
                 Spacer(minLength: 0)
                 AgentDot(card: card.id)
             }
-            if !text.preview.isEmpty { CardPreview(text: text.preview, lines: text.images.isEmpty ? CardText.previewLines : 2) }
+            if !text.preview.isEmpty {
+                Text(VariableText.styled(text.preview, palette))
+                    .font(Typography.body).lineSpacing(Typography.lineSpacing).foregroundStyle(palette.ink2)
+                    .lineLimit(text.images.isEmpty ? CardText.previewLines : 2)
+            }
             CardMeta(card: card, text: text, lastTarget: lastTarget, floated: floated, font: Typography.meta)
                 .padding(.top, Spacing.hair)
         }
-        .padding(CardFaceMetrics.padding)
+        .padding(Spacing.block)
     }
 }
 
