@@ -46,7 +46,7 @@ extension AppServices {
             ? .phone(hasOpenDeliveries: hasOpenDeliveries, isWatching: true, doorbell: doorbellFallback)
             : .mac(waiting: hasOpenDeliveries || !bridge.slots.isEmpty || cue.onDuty, doorbell: doorbellFallback)
         #else
-        .phone(hasOpenDeliveries: hasOpenDeliveries, isWatching: sessionViewers > 0 || cueViewers > 0, doorbell: doorbellFallback)
+        .phone(hasOpenDeliveries: hasOpenDeliveries, isWatching: !viewer.viewing.isEmpty, doorbell: doorbellFallback)
         #endif
     }
 

@@ -33,7 +33,7 @@ extension AppServices {
         if !voice.isLive { relay?.pause() }
         for flush in backgroundFlushes.values { await flush() }
         await resendSnapshots()
-        await viewer?.settle()
+        await viewer.settle()
         await sync?.push()
         // 收下的那一批的门铃由跟随者在 push 返回前排上（同一个主线程队列，先到先跑），这里等它发完；其间回了前台就不断
         await relay?.settle()

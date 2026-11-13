@@ -16,10 +16,8 @@ extension AppServices {
         startLiveSessions()
         startAccountQuotas()
         startForeground()
-        if let viewer {
-            follow(reporting: { .syncUnavailable(String(localized: "这台手机开着的页没能写下：\(String(describing: $0))")) }) { try await viewer.keep() }
-            followArrivals(viewer)
-        }
+        follow(reporting: { .syncUnavailable(String(localized: "这台手机开着的页没能写下：\(String(describing: $0))")) }) { [viewer] in try await viewer.keep() }
+        followArrivals(viewer)
         startDiagnostics()
     }
 

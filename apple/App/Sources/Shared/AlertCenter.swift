@@ -146,7 +146,7 @@ final class AlertCenter: NSObject, UNUserNotificationCenterDelegate {
         case .quota: return [.banner, .list, .sound]
         case .cue:
             pushed()
-            return services?.cueViewers == 0 ? [.banner, .list, .sound] : []
+            return services?.viewer.viewing.cue == false ? [.banner, .list, .sound] : []
         case .session:
             pushed()
             return []

@@ -68,18 +68,8 @@ final class AppServices {
 
     @ObservationIgnored let tasks: Followers
     var hasOpenDeliveries = false
-    var sessionViewers = 0
-    /// 只由 `CueViewing` 增减；算不算在看的规则在它那里。
-    var cueViewers = 0
-    #if os(macOS)
-    /// 按窗口是否露在屏上定，有没有焦点都算。
-    var mainWindowExposed = true
-    var away = false
-    /// 会话页、Cue 页的在场、读过与提示都只认它。
-    var seesMainWindow: Bool { mainWindowExposed && !away }
-    #endif
-    /// 这台设备开着哪一页的唯一写入口。
-    @ObservationIgnored let viewer: ViewerKeeper?
+    /// 这台设备有人在看哪些页，读写都只经它。
+    @ObservationIgnored let viewer: ViewerKeeper
     @ObservationIgnored var backgroundFlushes: [UUID: @MainActor () async -> Void] = [:]
 
     /// App 代理持有的那一个，`start()` 前接上；测试没有，不发真实通知。
@@ -203,9 +193,7 @@ final class AppServices {
         self.timing = timing
         self.pasteboard = pasteboard
         let activitySync: (any SyncControlling)? = if case .iCloud = sync, location.touchesRealWorld { self.sync } else { nil }
-        viewer = UIDevice.current.identifierForVendor.map { [sync = self.sync] in
-            ViewerKeeper(store: store, sync: sync, device: $0.uuidString)
-        }
+        viewer = ViewerKeeper(store: store, sync: self.sync, device: UIDevice.current.identifierForVendor?.uuidString)
         if location.touchesRealWorld || DebugHooks.opensLiveActivity {
             cueActivity = CueLiveActivity.make(store: store, sync: activitySync, location: location) { [weak self] in
                 try self?.remoteActivityState()
