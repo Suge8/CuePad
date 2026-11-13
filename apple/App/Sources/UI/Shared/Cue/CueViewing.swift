@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 有人在看 Cue 页的规则（算不算在看、读没读）只在这里：这一页在屏上（Mac 页栈里的当前页、人在跟前看得到主窗口 `ViewerKeeper.away`；手机上没被推进的页盖住、App 在前台）。
+/// 有人在看 Cue 页的规则（算不算在看、读没读）只在这里：这一页在屏上（Mac 页栈里的当前页、人在跟前看得到主窗口 `ViewerKeeper.present`；手机上没被推进的页盖住、App 在前台）。
 /// 在看的期间这一处算一个在看的（`ViewerKeeper.showCue`，Cue 的提示据此不发，手机按节奏拉），并读新消息：哪几条算新的只在 Kit 的 `CueStore.cueUnread`，读到哪只记在同步的 `CueRead`，换一台设备接着读。
 struct CueViewing: ViewModifier {
     let thread: CueThread?
@@ -14,8 +14,7 @@ struct CueViewing: ViewModifier {
     @Environment(\.scenePhase) private var phase
     private var onScreen: Bool { phase == .active }
     #else
-    /// 脚本起的验收实例窗口排在最后，当它露着。
-    private var onScreen: Bool { services.viewer.away.isEmpty || DebugHooks.scripted }
+    private var onScreen: Bool { services.viewer.present }
     #endif
     @State private var appeared = false
     @State private var token = UUID()

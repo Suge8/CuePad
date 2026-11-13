@@ -50,7 +50,7 @@ extension AppServices {
         #endif
     }
 
-    /// 同步通断变了时要跟着做的、不归同步管的事（`SyncDriver.Hooks.statusChanged`）。
+    /// 同步通断变了时要跟着做的、不归同步管的事。
     func syncStatusChanged(to new: SyncStatus) {
         #if os(macOS)
         if new == .outdated { updates.checkInBackground() }

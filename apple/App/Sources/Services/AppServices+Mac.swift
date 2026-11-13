@@ -94,13 +94,15 @@ extension AppServices {
         // 离线这一条一开始收尾就写、就传，不排在别的组件停下之后：前面的步骤耗尽上限时它也已写下；停同步前等它传完
         let signingOff = Task.detached { [presence] in try await presence.signOff() }
         let leaving = Task.detached { [viewer] in try await viewer.signOff() }
-        let halted = halt {
-            _ = await signingOff.result
-            _ = await leaving.result
-        }
+        let halted = halt()
         let log = Logger(subsystem: AppIdentity.id, category: "shutdown")
         return { @concurrent in
             let failure = await ShutdownSteps.run(halted.steps + [
+                ("同步", {
+                    _ = await signingOff.result
+                    _ = await leaving.result
+                    await halted.stopSync()
+                }),
                 ("这台 Mac 离线的记录", {
                     guard try await signingOff.value else { throw ShutdownSteps.UploadUnconfirmed() }
                 }),

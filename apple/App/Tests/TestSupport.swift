@@ -193,7 +193,8 @@ final class TestApp {
     private func retire(_ services: AppServices, app: SourceLocation? = nil) {
         let halted = services.halt()
         LibraryLedger.close(ledger, app: app) {
-            for step in halted.steps { try? await step.run() }
+            for step in halted.steps { try await step.run() }
+            await halted.stopSync()
             await halted.followers?.value
         }
     }

@@ -46,11 +46,19 @@ final class ViewerKeeper {
 
     private var shown: [UUID: Set<Page>] = [:]
     private var cueShown: Set<UUID> = []
-    private(set) var away: Set<Away> = []
+    private var away: Set<Away> = []
+
+    /// 人在跟前、看得到主窗口（手机上总是）：界面判断"这一页在不在屏上"读它。
+    var present: Bool { away.isEmpty }
+
+    #if os(macOS)
+    /// 主窗口被盖住，而且人也不在跟前：只是被盖住、人在用别的 App 时不算（`MainShellWindow.parkWhileUnseen`）。
+    var unseen: Bool { away.contains(.covered) && !away.isDisjoint(with: [.asleep, .screenOff, .locked, .idle, .elsewhere]) }
+    #endif
 
     /// 此刻算开着的页：人不在跟前时一概为空。
     var viewing: Viewing {
-        away.isEmpty ? Viewing(sessions: Set(shown.values.flatMap(\.self)), cue: !cueShown.isEmpty) : Viewing()
+        present ? Viewing(sessions: Set(shown.values.flatMap(\.self)), cue: !cueShown.isEmpty) : Viewing()
     }
 
     @ObservationIgnored private let latest = OSAllocatedUnfairLock(initialState: Latest())
@@ -218,7 +226,7 @@ extension ViewerKeeper {
         return await sync?.send(recordNames: [Viewer.recordID(device: device).uuidString.lowercased()]) ?? true
     }
 
-    /// 报这个窗口导航最上面的会话页，跟着主窗口露没露在屏上；脚本起的实例窗口排在最后，当它露着（同 `CueViewing`）。
+    /// 报这个窗口导航最上面的会话页，跟着主窗口露没露在屏上；脚本起的实例窗口排在最后，当它露着。
     func follow(_ workspace: Workspace) async {
         let window = UUID()
         let exposure = Task { await followExposure(workspace.services.windowShell) }

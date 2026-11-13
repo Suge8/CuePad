@@ -4,7 +4,9 @@ import Foundation
 import WidgetKit
 #endif
 
-/// 小组件的快照（共享容器里的文件）与跟着 Cue 此刻发布的东西（`AppServices.present`）只经这里写，规则见 `AppServices.startSnapshots`。
+/// 小组件的快照（共享容器里的文件；扩展不打开资料库）与跟着 Cue 此刻发布的东西（`AppServices.present`）只经这里写。
+/// 只写内容真正变了的那份；小组件显示默认项目与 Cue，只有这两份变了才刷新它们（刷新次数有系统预算）。
+/// 每次运行的第一份全写、本地活动照发：留在共享容器与系统里的那份可能是旧版本写的，结构变了这版就解不出来（小组件读成空的），不能拿它比。
 final class SnapshotPublisher {
     private let store: CueStore
     private let directory: URL
