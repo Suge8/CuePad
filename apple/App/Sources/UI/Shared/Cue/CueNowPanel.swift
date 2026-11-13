@@ -80,7 +80,7 @@ private struct BrainBlock: View {
     private static let dimmed = 0.4
 }
 
-/// 三个大数等宽一排，每个是去那一页的入口：数是主角，底下一行小字说它是什么。左、中、右各贴一边：两头对上面板的两条边线，中间那个在正中。没启用时只剩技能那一个（记忆与定时要 Cue 在）。
+/// 三个大数一排，每个是去那一页的入口：数是主角，底下一行小字说它是什么。排法见 `Spread`。没启用时只剩技能那一个（记忆与定时要 Cue 在）。
 private struct CueFigures: View {
     let enabled: Bool
     let memory: () -> Void
@@ -95,12 +95,12 @@ private struct CueFigures: View {
     var body: some View {
         let skills = workspace.library
         let tidy = skills?.tidies.isEmpty == false
-        HStack(alignment: .top, spacing: Spacing.item) {
+        Spread(gap: Spacing.item) {
             if enabled {
                 Figure(value: count.map { Text(verbatim: "\($0)") }, caption: Text("记忆"), action: memory)
                 Figure(
                     value: next?.first?.remindAt.map { Text(verbatim: Self.clock($0)) },
-                    caption: Text(Dotted(String(localized: "定时"), next?.first?.remindAt.map { ScheduleText.day($0) })), edge: .center, action: schedules)
+                    caption: Text(Dotted(String(localized: "定时"), next?.first?.remindAt.map(Self.day))), edge: .center, action: schedules)
             }
             Figure(
                 value: skills.map { Text(verbatim: "\($0.skills.count)") }, caption: Text("技能与规则"), alert: tidy ? palette.ink : nil,
@@ -111,9 +111,42 @@ private struct CueFigures: View {
         .observing(services.store, into: $next, onError: workspace.fail) { try $0.cueScheduleLines() }
     }
 
-    /// 24 小时制的几点几分：三个数差不多宽才排得齐，"上午 8:00"比旁边两个数宽出一倍；哪一天在底下那行小字里。
+    /// 只写几点几分、不带上午下午：三个数差不多宽才排得齐，"上午 8:00"比旁边两个数宽出一倍。12 小时制还是 24 小时制跟系统的设置。
     private static func clock(_ date: Date) -> String {
-        date.formatted(.verbatim("\(hour: .twoDigits(clock: .twentyFourHour, hourCycle: .zeroBased)):\(minute: .twoDigits)", timeZone: .current, calendar: .current))
+        date.formatted(.dateTime.hour(.defaultDigits(amPM: .omitted)).minute())
+    }
+
+    /// 哪一天；12 小时制时上午下午接在它后面（大数里省掉的那半句）。
+    private static func day(_ date: Date) -> String {
+        let calendar = Calendar.current, shown = date.formatted(date: .omitted, time: .shortened)
+        let period = [calendar.amSymbol, calendar.pmSymbol].first(where: shown.contains)
+        return [ScheduleText.day(date), period].compactMap(\.self).joined(separator: " ")
+    }
+}
+
+/// 头一个贴左边、末一个贴右边、中间那个压在正中；正中放不下时让开宽的那一头，还放不下就只给它两头剩下的宽（它的小字自己缩）。
+/// 不分三等份：小字长短差得多（英文的"Schedule · Tomorrow AM"），等分时中间那格先被截。只有一个时贴左边。
+private struct Spread: Layout {
+    let gap: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
+        let natural = sizes.reduce(0) { $0 + $1.width } + gap * CGFloat(max(sizes.count - 1, 0))
+        return CGSize(width: proposal.width ?? natural, height: sizes.map(\.height).max() ?? 0)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard let first = subviews.first, let last = subviews.last else { return }
+        let lead = first.sizeThatFits(.unspecified).width
+        first.place(at: bounds.origin, proposal: .unspecified)
+        guard subviews.count > 1 else { return }
+        let trail = last.sizeThatFits(.unspecified).width
+        last.place(at: CGPoint(x: bounds.maxX - trail, y: bounds.minY), proposal: .unspecified)
+        let low = bounds.minX + lead + gap, room = bounds.maxX - trail - gap - low
+        for middle in subviews.dropFirst().dropLast() {
+            let fit = ProposedViewSize(width: room, height: nil), width = middle.sizeThatFits(fit).width
+            middle.place(at: CGPoint(x: max(low, min(bounds.midX - width / 2, low + room - width)), y: bounds.minY), proposal: fit)
+        }
     }
 }
 
@@ -137,7 +170,7 @@ private struct Figure: View {
                 }
                 .font(Typography.meta).foregroundStyle(palette.ink3)
             }
-            .frame(maxWidth: .infinity, alignment: Alignment(horizontal: edge, vertical: .center))
+            .fixedSize(horizontal: false, vertical: true)
             .contentShape(.rect)
         }
         .buttonStyle(PressStyle())

@@ -178,6 +178,10 @@ struct CueNoteRow<Glyph: View, Words: View>: View {
     @ViewBuilder let glyph: Glyph
     @ViewBuilder let text: Words
     @Environment(\.palette) private var palette
+    #if os(macOS)
+    /// Mac 上几点只在指针停在这一行时露出：一列时间常驻着，一块记录就成了两栏字。手机没有悬停，照常写着。
+    @State private var hovered = false
+    #endif
 
     var body: some View {
         let words = text.foregroundStyle(palette.ink3).lineLimit(1)
@@ -190,6 +194,10 @@ struct CueNoteRow<Glyph: View, Words: View>: View {
                     Text(verbatim: [ChatTime.day(time), ChatTime.time(time)].compactMap { $0 }.joined(separator: " "))
                         .monospacedDigit().foregroundStyle(palette.ink3)
                         .frame(minWidth: CueNoteRows.timeWidth, alignment: .trailing)
+                        #if os(macOS)
+                        .opacity(hovered ? 1 : 0)
+                        .animation(Motion.fade, value: hovered)
+                        #endif
                 }
             } else {
                 words.frame(maxWidth: .infinity, alignment: .leading)
@@ -198,6 +206,9 @@ struct CueNoteRow<Glyph: View, Words: View>: View {
         .font(Typography.caption)
         .frame(minHeight: CueNoteRows.height)
         .contentShape(.rect)
+        #if os(macOS)
+        .onHover { hovered = $0 }
+        #endif
         .accessibilityElement(children: .combine)
     }
 }
