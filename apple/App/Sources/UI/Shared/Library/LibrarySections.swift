@@ -161,32 +161,6 @@ struct TidyLabel: View {
     }
 }
 
-/// 去重、合并按钮旁的后果（操作前必须知道的）：有东西进废纸篓；手机上发往 Mac 去做，做完撤不回（那台照做不留撤销，`MacExecutor`）。
-struct TidyConsequence: View {
-    enum Kind { case duplicate, merge }
-
-    let kind: Kind
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        Text(text).font(Typography.meta).foregroundStyle(palette.ink2).fixedSize(horizontal: false, vertical: true)
-    }
-
-    private var text: LocalizedStringResource {
-        #if os(macOS)
-        switch kind {
-        case .duplicate: "其余几份进废纸篓"
-        case .merge: "原来那份进废纸篓"
-        }
-        #else
-        switch kind {
-        case .duplicate: "其余几份进废纸篓，撤不回"
-        case .merge: "原来那份进废纸篓，撤不回"
-        }
-        #endif
-    }
-}
-
 /// 全局规则与各家自己那几份同在"全局"一组，全局规则排第一。
 struct InstructionSection: View {
     let library: AgentLibrary
