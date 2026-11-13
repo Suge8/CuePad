@@ -80,7 +80,7 @@ private struct BrainBlock: View {
     private static let dimmed = 0.4
 }
 
-/// 三个大数等宽一排，每个是去那一页的入口：数是主角，底下一行小字说它是什么。没启用时只剩技能那一个（记忆与定时要 Cue 在）。
+/// 三个大数等宽一排，每个是去那一页的入口：数是主角，底下一行小字说它是什么。左、中、右各贴一边：两头对上面板的两条边线，中间那个在正中。没启用时只剩技能那一个（记忆与定时要 Cue 在）。
 private struct CueFigures: View {
     let enabled: Bool
     let memory: () -> Void
@@ -99,14 +99,21 @@ private struct CueFigures: View {
             if enabled {
                 Figure(value: count.map { Text(verbatim: "\($0)") }, caption: Text("记忆"), action: memory)
                 Figure(
-                    value: next?.first?.remindAt.map { Text(verbatim: $0.formatted(date: .omitted, time: .shortened)) },
-                    caption: Text(Dotted(String(localized: "定时"), next?.first?.remindAt.map { ScheduleText.day($0) })), action: schedules)
+                    value: next?.first?.remindAt.map { Text(verbatim: Self.clock($0)) },
+                    caption: Text(Dotted(String(localized: "定时"), next?.first?.remindAt.map { ScheduleText.day($0) })), edge: .center, action: schedules)
             }
-            Figure(value: skills.map { Text(verbatim: "\($0.skills.count)") }, caption: Text("技能与规则"), alert: tidy ? palette.ink : nil, action: library)
+            Figure(
+                value: skills.map { Text(verbatim: "\($0.skills.count)") }, caption: Text("技能与规则"), alert: tidy ? palette.ink : nil,
+                edge: enabled ? .trailing : .leading, action: library)
                 .accessibilityValue(tidy ? String(localized: "有该整理的") : "")
         }
         .observing(services.store, into: $count, onError: workspace.fail) { try $0.recentCueMemory(limit: 0).count }
         .observing(services.store, into: $next, onError: workspace.fail) { try $0.cueScheduleLines() }
+    }
+
+    /// 24 小时制的几点几分：三个数差不多宽才排得齐，"上午 8:00"比旁边两个数宽出一倍；哪一天在底下那行小字里。
+    private static func clock(_ date: Date) -> String {
+        date.formatted(.verbatim("\(hour: .twoDigits(clock: .twentyFourHour, hourCycle: .zeroBased)):\(minute: .twoDigits)", timeZone: .current, calendar: .current))
     }
 }
 
@@ -114,12 +121,13 @@ private struct Figure: View {
     let value: Text?
     let caption: Text
     var alert: Color?
+    var edge = HorizontalAlignment.leading
     let action: () -> Void
     @Environment(\.palette) private var palette
 
     var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: Spacing.hair) {
+            VStack(alignment: edge, spacing: Spacing.hair) {
                 (value ?? Text(verbatim: "—")).font(Typography.heading).monospacedDigit().foregroundStyle(value == nil ? palette.ink3 : palette.ink)
                     .lineLimit(1).minimumScaleFactor(0.6)
                 HStack(spacing: Spacing.tight) {
@@ -129,7 +137,7 @@ private struct Figure: View {
                 }
                 .font(Typography.meta).foregroundStyle(palette.ink3)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: Alignment(horizontal: edge, vertical: .center))
             .contentShape(.rect)
         }
         .buttonStyle(PressStyle())
