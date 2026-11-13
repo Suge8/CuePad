@@ -141,26 +141,17 @@ struct BoardTaskCard: View {
     #endif
 }
 
-/// 待办的卡脚右端：平时写记下多久了；Mac 上指针停在卡上时换成"开始"（一列十几张，一直写着是一墙"开始"），触屏没有悬停、两样都写。
+/// 待办的卡脚右端：记下多久了。Mac 上不放"开始"：把卡拖到推进中就是开始（用上次选的那家与模型），要换的点开任务；
+/// 悬停才出的"开始"挤在卡脚里，和项目名、时间抢位置。触屏拖起来没那么顺手，照旧写着。
 private struct BoardStart: View {
     let next: TaskNext?
     let since: Date
     @Environment(\.palette) private var palette
-    #if os(macOS)
-    @Environment(\.buttonHovered) private var hovered
-    #endif
 
     var body: some View {
-        let start = next.flatMap { $0.starts ? $0 : nil }
-        #if os(macOS)
-        if hovered, let start {
-            TaskNextMark(next: start).environment(\.rowHovered, true).transition(.opacity)
-        } else {
-            age.transition(.opacity)
-        }
-        #else
         age
-        if let start { TaskNextMark(next: start) }
+        #if os(iOS)
+        if let start = next.flatMap({ $0.starts ? $0 : nil }) { TaskNextMark(next: start) }
         #endif
     }
 

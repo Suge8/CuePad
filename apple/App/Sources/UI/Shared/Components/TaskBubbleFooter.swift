@@ -28,7 +28,8 @@ struct BubbleFooter: View {
         return focus.status != .done ? .start(focus, caption: nil, editing: editing) : nil
     }
 
-    /// 开始 → 正在开 → Agent 在做是同一条的三个样子：底那一块一直在，里面的旧的先淡完、新的再淡入（`handOff`），不叠着换、也不整条闪一下。
+    /// 开始 → 正在开 → Agent 在做是同一条的三个样子：上面一道发丝线隔开，里面的旧的先淡完、新的再淡入（`handOff`），不叠着换。
+    /// 不垫底：气泡是一张纸，里面再垫一块、块里再放胶囊和按钮是卡片套卡片。
     var body: some View {
         if let stage {
             ZStack(alignment: .leading) {
@@ -39,7 +40,8 @@ struct BubbleFooter: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(palette.fill, in: Radius.nested)
+            .padding(.top, Spacing.item)
+            .overlay(alignment: .top) { palette.hair.frame(height: ControlMetrics.stroke) }
         }
     }
 
@@ -131,7 +133,6 @@ private struct BubbleStrip<Content: View, Trailing: View>: View {
             Spacer(minLength: 4)
             trailing
         }
-        .padding(BubbleMetrics.stripPadding)
         .contentShape(.rect)
     }
 }
@@ -177,7 +178,6 @@ private struct StartBar: View {
                 .accessibilityHint("把任务的正文交给 Agent，开始做")
             }
         }
-        .padding(BubbleMetrics.stripPadding)
         #if os(macOS)
         .confirmsLaunchAgain(launching)
         // 读不出去向时不放那一排，原因在点"开始"时报

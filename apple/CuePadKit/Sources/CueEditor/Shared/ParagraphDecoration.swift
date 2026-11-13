@@ -83,8 +83,10 @@ extension EditorCore {
             let spacing = NSMutableParagraphStyle()
             spacing.lineSpacing = style.lineSpacing
             spacing.paragraphSpacing = title.spacing
-            paragraph.addAttributes(
-                [.font: title.font, .foregroundColor: title.color, .paragraphStyle: spacing], range: NSRange(location: 0, length: paragraph.length))
+            paragraph.addAttribute(.paragraphStyle, value: spacing, range: NSRange(location: 0, length: paragraph.length))
+            // 字体不盖到段尾的换行上：标题后面还空着时，末尾那一行空行的高跟着换行符的字体走，盖上标题的大字它就比正文的一行高，
+            // 一写进正文又矮回去，贴着字摆高的宿主（任务气泡）跟着跳
+            paragraph.addAttributes([.font: title.font, .foregroundColor: title.color], range: NSRange(location: 0, length: lineRange.length))
         } else if let blank {
             let spacing = NSMutableParagraphStyle()
             spacing.minimumLineHeight = blank

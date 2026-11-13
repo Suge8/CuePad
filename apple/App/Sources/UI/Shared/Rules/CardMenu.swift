@@ -48,7 +48,8 @@ nonisolated enum CardMenu {
     static func more(for card: Card, bindsSession: Bool = false) -> [[Item]] {
         guard card.isTask else { return [[card.isPinned ? .unpin : .pin, .move, .copy], [.archive], [.trash]] }
         let binds: [Item] = bindsSession && card.status != .done ? [.bindSession] : []
-        return [pin(card) + (card.parentID == nil ? [.move] : []) + [.copy], binds, [.archive], [.trash]].filter { !$0.isEmpty }
+        return [[card.status == .done ? .reopen : .complete] + pin(card) + (card.parentID == nil ? [.move] : []) + [.copy], binds, [.archive], [.trash]]
+            .filter { !$0.isEmpty }
     }
 
     private static func pin(_ task: Card) -> [Item] { task.parentID == nil ? [task.isPinned ? .unpin : .pin] : [] }

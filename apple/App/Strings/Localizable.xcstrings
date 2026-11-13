@@ -7875,6 +7875,22 @@
         }
       }
     },
+    "写下要做的事，开始时交给 Agent" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Describe the work; it goes to the agent when you start"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "写下要做的事，开始时交给 Agent"
+          }
+        }
+      }
+    },
     "写入" : {
       "localizations" : {
         "en" : {
@@ -7983,22 +7999,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "写批注，随下一句发出"
-          }
-        }
-      }
-    },
-    "写正文：要 Agent 做什么" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Notes: what should the agent do?"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "写正文：要 Agent 做什么"
           }
         }
       }
