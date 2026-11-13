@@ -51,7 +51,7 @@ enum DebugHooks {
 
     static let preset: Preset = {
         #if DEBUG
-        DebugScene.preset
+        Preset(DebugScene.args)
         #else
         Preset()
         #endif

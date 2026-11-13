@@ -15,6 +15,54 @@ extension DebugScene {
         if args.cue == "drawer" { workspace.showCue() }
     }
 
+    /// 就绪后跑的驱动（多配录屏）：各自看自己的启动参数，没给的立刻返回。两端的 `debugScene` 修饰符只决定怎么跑。
+    static func drivers(_ workspace: Workspace) -> [@MainActor () async -> Void] {
+        let services = workspace.services
+        var drivers: [@MainActor () async -> Void] = [
+            { await noticeIfAsked(workspace) },
+            { await composerNoticeIfAsked(services) },
+            { await wakeIfAsked(workspace) },
+            { await replyBlinkIfAsked(services.store) },
+            { await relayIfAsked(workspace) },
+            { await cueFlowIfAsked(workspace) },
+            { await cueNowTourIfAsked(workspace) },
+            { await boardTourIfAsked(services.store) },
+            { await cycleIfAsked(services) },
+        ]
+        #if os(macOS)
+        let from = workspace.mainRoute
+        drivers += [
+            { await saysIfAsked(services, visit: { workspace.show(.cue) }, back: { workspace.show(from) }) },
+            { await awayIfAsked(services.store) },
+            { await closeIfAsked(workspace) },
+            { await openMenuIfAsked() },
+        ]
+        #else
+        let from = (workspace.mainRoute, workspace.path)
+        drivers += [
+            {
+                await saysIfAsked(services, visit: { workspace.select(.cue) }, back: {
+                    workspace.select(from.0)
+                    workspace.path = from.1
+                })
+            },
+            { await awayIfAsked(services.store, leave: { workspace.show(.progress) }, back: { workspace.show(.cue) }) },
+        ]
+        #endif
+        return drivers
+    }
+
+    /// `-CuePadSidebarCycle`、`-CuePadRightCycle`：反复开合那一栏，`fast` 在动画中途反向。
+    static func cycleColumn(fast: Bool, _ toggle: @MainActor () -> Void) async {
+        // 两次之间停多久是录屏的节奏，不是在等别的事
+        let gaps: [Double] = fast ? [0.1, 1.5, 0.06, 0.06, 1.5] : [1.5]
+        await Task.wait(for: .seconds(3))
+        for step in 0... {
+            toggle()
+            guard await Task.wait(for: .seconds(gaps[step % gaps.count])) else { return }
+        }
+    }
+
     static func prepareLibrary(_ workspace: Workspace) async -> UUID? {
         var project: UUID?
         await running("摆画面的数据") { project = try await prepare(workspace) }
