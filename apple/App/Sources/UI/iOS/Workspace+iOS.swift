@@ -23,22 +23,16 @@ extension Workspace {
     }
 
     /// 交给新会话：换成新会话的输入框并当场发出（用哪家、哪个模型在交给的那个输入框里已经选好）；进度、没开成的原因与再开确认都在新会话的输入框上。
-    /// 这个任务上一次开的结果还没定时不发，留给你在输入框上看了再定。
-    /// 交给的输入框当场收起：附件还在存时等它存完才换上新会话的输入框，这之间再按一次、换去交另一条任务，晚到的这一次都不会再动到。
+    /// 这个任务上一次开的结果还没定时不发，留给你在输入框上看了再定。还在存的附件由发出的那一步等（`submitSession`）。
     func startNewSession(_ draft: ComposerDraft, card: UUID?, opening: String?, plan: HandOffPlan?) {
-        let project = outbox?.project
+        let draft = draft.retelling(card, as: opening)
+        guard showNewSession(draft, card: card, plan: plan, project: outbox?.project) else { return }
         outbox = nil
-        let claim = claimImports(draft)
-        guard !claim.isEmpty else { return launchNewSession(draft.retelling(card, as: opening), card: card, plan: plan, project: project) }
-        Task { launchNewSession(await claim.settled().retelling(card, as: opening), card: card, plan: plan, project: project) }
-    }
-
-    private func launchNewSession(_ draft: ComposerDraft, card: UUID?, plan: HandOffPlan?, project: UUID?) {
-        guard showNewSession(draft, card: card, plan: plan, project: project),
-              let start = newSession, start.launched == nil, let place = start.place(among: launchPlaces), let host = place.host else { return }
+        guard let start = newSession, start.launched == nil, let place = start.place(among: launchPlaces), let host = place.host else { return }
         do {
             let agents = try services.store.snapshot { try $0.macAgents(on: host) }.value
-            submitSession(start, in: place, draft: draft, choice: services.settings.launchChoice(on: agents), opened: Self.entering(start))
+            submitSession(
+                start, in: place, draft: draft, choice: services.settings.launchChoice(on: agents, in: place.project.id), opened: Self.entering(start))
         } catch { fail(error) }
     }
 
@@ -49,28 +43,6 @@ extension Workspace {
 
     func handOffToNewSession(_ draft: ComposerDraft, card: UUID?, plan: HandOffPlan?) {
         if showNewSession(draft, card: card, plan: plan, project: outbox?.project) { outbox = nil }
-    }
-
-    /// `project`：去向不是开新会话时（任务绑着会话、另开一个）开在哪个项目。读不出上一次开的结果时不换输入框，返回 false。
-    private func showNewSession(_ draft: ComposerDraft, card: UUID?, plan: HandOffPlan?, project fallback: UUID?) -> Bool {
-        let (project, host): (UUID?, String?) =
-            switch plan?.destination {
-            case .launch(let project, let host): (project, host)
-            default: (fallback, nil)
-            }
-        do {
-            let launched = try services.store.snapshot { store -> SessionLaunch? in
-                guard let card = card ?? draft.attachments.first?.card,
-                      let request = try store.unresolvedLaunches(for: card).first,
-                      let token = request.launch?.token else { return nil }
-                return SessionLaunch(request: request.id, token: token)
-            }.value
-            newSession = SessionStart(project: project, launched: launched, draft: draft, card: card, name: plan?.name, host: host)
-            return true
-        } catch {
-            fail(error)
-            return false
-        }
     }
 
     func openSearch() {

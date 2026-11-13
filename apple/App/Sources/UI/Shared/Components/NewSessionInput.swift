@@ -19,7 +19,7 @@ struct NewSessionInput: View {
     }
     private var launching: SessionLaunching { workspace.sessionLaunching(start.launchKey) }
     private var phase: LaunchProgress.Phase { launching.phase(at: services.speech) }
-    private var brain: AgentModelChoice? { agents.flatMap(services.settings.launchChoice) }
+    private var brain: AgentModelChoice? { agents.flatMap { services.settings.launchChoice(on: $0, in: chosen?.project.id) } }
     private var canStart: Bool { chosen?.host != nil && brain != nil && launching.canSubmit(at: services.speech) }
 
     var body: some View {
@@ -35,7 +35,7 @@ struct NewSessionInput: View {
             cardsFrom: chosen?.project.id, submitsEmpty: true,
             tooled: brain != nil, shortcuts: [.send: launch],
             header: { header.padding(.horizontal, Spacing.group).padding(.top, Spacing.item) },
-            tools: { if let agents { LaunchControls(mac: agents).disabled(launching.sending) } },
+            tools: { if let agents { LaunchControls(mac: agents, project: chosen?.project.id).disabled(launching.sending) } },
             send: {
                 Button(action: launch) { SendGlyph(canStart ? .ready : .idle) }
                     .buttonStyle(PressStyle(.button)).disabled(!canStart).accessibilityLabel("开始")

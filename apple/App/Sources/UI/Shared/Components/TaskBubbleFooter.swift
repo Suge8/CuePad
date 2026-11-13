@@ -137,7 +137,7 @@ private struct StartBar: View {
         #if os(macOS)
         let launching = workspace.sessionLaunching(.card(leaf.id))
         let outcome = launching.outcome(at: services.speech)
-        let controls = outcome == nil ? launch.flatMap { services.settings.launchChoice(on: $0) == nil ? nil : $0 } : nil
+        let controls = outcome == nil ? launch.flatMap { services.settings.launchChoice(on: $0, in: leaf.projectID) == nil ? nil : $0 } : nil
         #else
         let outcome: (text: String, failed: Bool)? = nil
         let controls: MacAgents? = nil
@@ -149,7 +149,7 @@ private struct StartBar: View {
                     Text(verbatim: outcome.text).font(BubbleMetrics.meta).foregroundStyle(outcome.failed ? palette.failure : palette.ink2).lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
                 } else if let controls {
-                    LaunchControls(mac: controls)
+                    LaunchControls(mac: controls, project: leaf.projectID)
                 } else if let caption {
                     captioned(caption)
                 }

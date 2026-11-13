@@ -63,12 +63,15 @@ struct HandOffInput: View {
         return (session, models, config)
     }
     private var launchPlan: HandOffPlan? { chosen != nil ? nil : fresh ? planned?.fresh : planned?.plan }
-    private var launchHost: String? {
-        guard case .launch(_, let host) = launchPlan?.destination else { return nil }
-        return host
+    private var launchSpot: (project: UUID, host: String)? {
+        guard case .launch(let project, let host) = launchPlan?.destination else { return nil }
+        return (project, host)
     }
+    private var launchHost: String? { launchSpot?.host }
     /// 交给新会话时的那一排：用哪家、哪个模型在这里就选，发出即开。
-    private var launchTools: MacAgents? { launchAgents.flatMap { services.settings.launchChoice(on: $0) == nil ? nil : $0 } }
+    private var launchTools: MacAgents? {
+        launchAgents.flatMap { services.settings.launchChoice(on: $0, in: launchSpot?.project) == nil ? nil : $0 }
+    }
 
     var body: some View {
         Composer(
@@ -80,7 +83,7 @@ struct HandOffInput: View {
                 if let tools {
                     SessionConfigControls(session: tools.session, models: tools.models, shown: tools.config)
                 } else if let launchTools {
-                    LaunchControls(mac: launchTools)
+                    LaunchControls(mac: launchTools, project: launchSpot?.project)
                 }
             },
             send: {
