@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 
 /// CuePad 的 SQLite 唯一事实源（系统 SQLite3）。App 与命令行各开一个连接写同一个库，提交后经跨进程通知互相唤醒。
 ///
@@ -172,13 +173,23 @@ public actor CueStore {
     if !tables.isDisjoint(with: Table.synced) || tables.contains(.syncRecords) {
       // 让记录变成待推送的提交才算（只改同步元数据的也可能：补记服务器收下过一条本机已删的，删除这才待推送）；
       // 删过同步表的行也算：从没收下过的记录删掉就不再待推送，同步层据此收起它的上传问题。算不出增量时照算
-      let delta = try? pendingSync(in: changes)
+      let delta = Self.logged("算不出待推送增量") { try pendingSync(in: changes) }
       let deleted = !changes.deletedFrom.isDisjoint(with: Table.synced.map(\.rawValue))
       if delta.map({ !$0.saves.isEmpty || !$0.deletes.isEmpty || deleted }) ?? true {
-        syncChanged(delta, in: tables, urgent: delta.flatMap { try? urgent(among: $0, flipped: flipped) })
+        syncChanged(delta, in: tables, urgent: delta.flatMap { delta in Self.logged("算不出要马上传的") { try urgent(among: delta, flipped: flipped) } })
       }
     }
     return result
+  }
+
+  private static let syncLog = Logger(subsystem: AppIdentity.id, category: "sync")
+
+  /// 算不出时退成“范围不明”（nil，同步层从库里重认），只是慢一点，但要留下日志。
+  private static func logged<T>(_ what: String, _ body: () throws -> T) -> T? {
+    do { return try body() } catch {
+      syncLog.error("\(what, privacy: .public)：\(String(describing: error), privacy: .public)")
+      return nil
+    }
   }
 
   func syncChanged(_ delta: PendingSync?, in tables: Set<Table>, urgent: Set<String>?) {
