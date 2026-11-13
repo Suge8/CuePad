@@ -4592,18 +4592,18 @@
         }
       }
     },
-    "一句话介绍（可不填）" : {
+    "一句话介绍" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "One-line description (optional)"
+            "value" : "One-line description"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "一句话介绍（可不填）"
+            "value" : "一句话介绍"
           }
         }
       }
@@ -19816,22 +19816,6 @@
         }
       }
     },
-    "看全部项目" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Show all projects"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "看全部项目"
-          }
-        }
-      }
-    },
     "看图：%@" : {
       "localizations" : {
         "en" : {
@@ -21308,18 +21292,18 @@
         }
       }
     },
-    "补一句（可不填）" : {
+    "补一句" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Add a note (optional)"
+            "value" : "Add a note"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "补一句（可不填）"
+            "value" : "补一句"
           }
         }
       }

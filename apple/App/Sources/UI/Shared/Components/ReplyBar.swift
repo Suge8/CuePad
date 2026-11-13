@@ -215,7 +215,7 @@ struct ReplyBar: View {
 
     private var placeholder: LocalizedStringResource {
         if let answering { return answering.kind == .known(.select) ? "或写你自己的回答" : "回答上面的问题" }
-        if !draft.attachments.isEmpty || !draft.files.isEmpty { return "补一句（可不填）" }
+        if !draft.attachments.isEmpty || !draft.files.isEmpty { return "补一句" }
         return interrupts ? "打断本轮" : replyPrompt
     }
 
