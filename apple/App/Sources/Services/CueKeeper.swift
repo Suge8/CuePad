@@ -221,7 +221,9 @@ final class CueKeeper {
             // 一上班就是歇着：上一次没收好尾（崩溃）留下的"在想"马上清掉，不等大脑起好
             await publish()
             // 上一次值班留下的重来不再等原来的时刻；交出去还没结果的（崩溃时在跑）没有在跑的一轮了，马上再来
-            for held in setbacks where held.stage == .handed || held.retryAt.map({ $0 > now }) == true { edit(held.wake) { $0.due(now) } }
+            for held in setbacks {
+                if case .handed = held.stage { edit(held.wake) { $0.due(now) } } else if held.retryAt.map({ $0 > now }) == true { edit(held.wake) { $0.due(now) } }
+            }
             if progress.marks == nil {
                 do {
                     progress.marks = CueMarks(try await store.lastWrite(), stalls: now)

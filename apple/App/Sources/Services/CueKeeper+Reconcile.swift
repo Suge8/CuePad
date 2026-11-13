@@ -115,7 +115,7 @@ extension CueKeeper {
                 if let held = setback, held.retryAt.map({ now >= $0 }) == true {
                     // 发出去才改成等结果：发不进去时它还到点，大脑重起后接着重来；消费前记下的那件交出去照旧还没出过错
                     if try await wakeUp(held.wake, answering: held.answersYou), held.stage != .held {
-                        edit(held.wake) { $0.stage = held.supersedable ? .awaitingChange : .handed }
+                        edit(held.wake) { $0.stage = held.supersedable ? .awaitingChange : .handed(stalls: held.stalls) }
                     }
                     return nil
                 }

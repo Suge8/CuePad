@@ -198,8 +198,8 @@ extension CueKeeper {
             case again(at: Date)
             /// 醒来已消费的活再错，或额度、登录卡住（`stuck`）：按慢速周期一直重来，这是第 `stalls` 轮（`CueTiming.slowDelay`）
             case slow(at: Date, stalls: Int, stuck: Bool)
-            /// 醒来已消费的活重来已交出去，等这一轮的结果；崩溃重启后没有在跑的一轮了，马上再来（`run`）
-            case handed
+            /// 醒来已消费的活重来已交出去，等这一轮的结果（慢速周期已重来几轮照记着）；崩溃重启后没有在跑的一轮了，马上再来（`run`）
+            case handed(stalls: Int)
             /// 会话动静与巡视再错，或重来已交出去：等新变化取代
             case awaitingChange
         }
@@ -226,7 +226,10 @@ extension CueKeeper {
         }
 
         var stalls: Int {
-            if case .slow(_, let stalls, _) = stage { stalls } else { 0 }
+            switch stage {
+            case .slow(_, let stalls, _), .handed(let stalls): stalls
+            case .held, .again, .awaitingChange: 0
+            }
         }
 
         var supersedable: Bool { Self.supersedable(wake) }
@@ -241,7 +244,8 @@ extension CueKeeper {
         /// 按时刻等的改成 `date` 到点；还没出错的、等新变化的不动。
         mutating func due(_ date: Date) {
             switch stage {
-            case .again, .handed: stage = .again(at: date)
+            case .again, .handed(0): stage = .again(at: date)
+            case .handed(let stalls): stage = .slow(at: date, stalls: stalls, stuck: false)
             case .slow(_, let stalls, let stuck): stage = .slow(at: date, stalls: stalls, stuck: stuck)
             case .held, .awaitingChange: break
             }
