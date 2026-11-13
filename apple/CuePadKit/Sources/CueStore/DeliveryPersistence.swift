@@ -32,7 +32,7 @@ extension CueStore {
         """, [host, deadline, Date.stamp, id, timing.now()])
       guard db.changes > 0, var claimed = try find(DeliveryRequest.self, id) else { return nil }
       guard try permitsTaskSessionEnd(claimed) else {
-        _ = try applyDeliveryOutcome(claimed, .failed(ShownText(CueStoreError.sessionInUse(claimed.target.name))), at: timing.now())
+        try applyDeliveryOutcome(claimed, .failed(ShownText(CueStoreError.sessionInUse(claimed.target.name))), at: timing.now())
         return nil
       }
       if !claimed.isFromCue, let mode = claimed.mode.known, DeliveryMode.toSession.contains(mode),
@@ -92,7 +92,7 @@ extension CueStore {
         current.status == .known(.executing), current.handledBy == host, let original = UUID(uuidString: current.content)
       else { return .unconfirmed(Speech.unconfirmedReason) }
       let outcome: DeliveryOutcome = try (removeUnstartedDelivery(original, locallyOn: host) || removeFailedDelivery(original)) ? .succeeded : .failed(refused)
-      _ = try applyDeliveryOutcome(current, outcome, at: timing.now())
+      try applyDeliveryOutcome(current, outcome, at: timing.now())
       return outcome
     }
   }
@@ -102,10 +102,10 @@ extension CueStore {
   /// 任务的状态与正文都不因说话而变：发出的正文留在任务上，"发过没有"看投送请求。
   /// 你的作答成功了，同一个事务里往那个会话的对话写下你答了什么（`ChatRole.answer`；Cue 替你答的不写，记在它那一轮的经过里）。
   func finishDelivery(_ request: DeliveryRequest, _ outcome: DeliveryOutcome, at completed: Date) throws {
-    _ = try write { try applyDeliveryOutcome(request, outcome, at: completed) }
+    try write { try applyDeliveryOutcome(request, outcome, at: completed) }
   }
 
-  private func applyDeliveryOutcome(_ request: DeliveryRequest, _ outcome: DeliveryOutcome, at completed: Date) throws -> Bool {
+  private func applyDeliveryOutcome(_ request: DeliveryRequest, _ outcome: DeliveryOutcome, at completed: Date) throws {
     let id = request.id
     let (status, reason, deadline) = request.progress(after: outcome, at: completed)
     try db.run(
@@ -113,15 +113,10 @@ extension CueStore {
       UPDATE deliveryRequests SET status = ?, failure = ?, completedAt = ?, deadlineAt = ?, modifiedAt = MAX(modifiedAt + 1, ?)
       WHERE id = ? AND status = ? AND status != ?
       """, [status.rawValue, reason?.stored, status == .confirming ? nil as Date? : completed, deadline, Date.stamp, id, request.status.rawValue, status.rawValue])
-    let changed = db.changes > 0
-    if !changed {
-      let current = try find(DeliveryRequest.self, id)
-      return current?.status == .known(status) && current?.reason == reason
-    }
-    if status == .succeeded { try reconcileDeliveredCards(deliveries: [id]) }
-    guard changed, status == .succeeded, let request = try find(DeliveryRequest.self, id), !request.isFromCue,
-      let answer = request.answer, let session = request.target.ref
-    else { return changed }
+    guard db.changes > 0, status == .succeeded else { return }
+    try reconcileDeliveredCards(deliveries: [id])
+    guard let request = try find(DeliveryRequest.self, id), !request.isFromCue, let answer = request.answer, let session = request.target.ref
+    else { return }
     // 排在会话文件里此刻最后一条之后（作答时 Agent 停着等你，接下来的都在它之后）；对话按 `at` 把它插到答的那一刻：
     // 你写下作答请求的时刻，不是这里执行完的时刻（离线答的、Mac 晚领取的，执行晚于答）
     let seq = try db.first("SELECT MAX(seq) FROM piMessages WHERE sessionID = ?", [session]) { $0.isNull(0) ? 0 : $0.int(0) } ?? 0
@@ -130,7 +125,6 @@ extension CueStore {
         sessionID: session, entryID: "answer/\(id.uuidString.lowercased())", seq: seq, role: .answer, text: answer.value.said, at: request.createdAt,
         deliveryID: id, question: answer.question, shownText: answer.value.shown),
       ignoringExisting: true)
-    return changed
   }
 
   // 本机写入次序不受手机与 Mac 的钟差影响；同步 UPDATE 不改变 rowid。
@@ -173,7 +167,7 @@ extension CueStore {
         """, [reason.stored, Date.stamp, request.id, request.status.rawValue])
       guard db.changes > 0, let current = try find(DeliveryRequest.self, request.id) else { return nil }
       if let due = current.dispatchDeadline, timing.now() >= due {
-        _ = try applyDeliveryOutcome(current, .failed(current.expiry), at: timing.now())
+        try applyDeliveryOutcome(current, .failed(current.expiry), at: timing.now())
       }
       return try find(DeliveryRequest.self, request.id)
     }

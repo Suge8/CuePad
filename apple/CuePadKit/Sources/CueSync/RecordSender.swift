@@ -133,7 +133,11 @@ actor RecordSender {
   /// 提交里要马上传的（`Table.urgent`）就马上传；别的进程写的（命令行里 Cue 的工具）从库里认。
   private func hurry(_ known: Set<String>?, in tables: Set<Table>) async {
     var names = known ?? []
-    if known == nil { names = (try? await coordinator.store.pendingUrgent(in: tables)) ?? [] }
+    if known == nil {
+      do { names = try await coordinator.store.pendingUrgent(in: tables) } catch {
+        SyncCoordinator.syncLog.error("读不出要马上传的，留给后台那一路：\(error.brief, privacy: .public)")
+      }
+    }
     guard !names.isEmpty else { return }
     Task { _ = await send(names) }
   }
