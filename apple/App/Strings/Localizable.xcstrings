@@ -20892,22 +20892,6 @@
         }
       }
     },
-    "结束" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "End"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "结束"
-          }
-        }
-      }
-    },
     "结束会话" : {
       "localizations" : {
         "en" : {

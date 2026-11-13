@@ -32,6 +32,8 @@ struct CuePlate: View {
     let style: PlateStyle
     /// 名牌右端另放了东西（Mac 右栏的收起钮）：字让出这么宽。
     var reserve: CGFloat = 0
+    /// 名字后面一颗小箭头说它点得开（Mac；手机的名牌自己长成名片，不用）：面板开着时朝上。
+    var opens: Bool?
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -46,7 +48,10 @@ struct CuePlate: View {
                 .scaleEffect(side / full)
                 .frame(width: side, height: side)
                 .relaySpot(cue: .header)
-            Text(cue.name).font(style.name).foregroundStyle(palette.ink).lineLimit(1)
+            HStack(spacing: Spacing.glyph) {
+                Text(cue.name).font(style.name).foregroundStyle(palette.ink).lineLimit(1)
+                if let opens { DisclosureChevron(open: opens) }
+            }
             CueStatusLine(tally: true, font: style.line).lineLimit(1)
         }
         .dynamicTypeSize(...style.largestType)

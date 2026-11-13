@@ -3,8 +3,8 @@ import SwiftUI
 
 /// 上下文用了几成不写：换新是自动的、多在歇过一小时后，看了也没有可做的。
 /// 在做的会话不在这里：进行中的在会话条上（手机在 Cue 页左边，宽屏在左栏），点进会话只有那一条路，返回落点与行的长相都只有一种。
-/// 一格一件事的拼格（`CueTile`）：大脑一排，刚记下的两张便签并排，定时与技能各一格，在哪台运行一格。
-/// 面板定高：空、一条、记满都一样高（便签各占三行的位），启用前后大脑那一块按启用了的样子占位（`BrainBlock`）。
+/// 一格一件事的拼格（`CueTile`，每一格都是同一块淡底）：大脑一格，刚记下的两条一格，定时与技能各半格，在哪台运行一格。
+/// 面板定高：空、一条、记满都一样高（两条各占一行的位），启用前后大脑那一块按启用了的样子占位（`BrainBlock`）。
 /// 面板里不放滚动区：会被写上页面滚动区的内容边距。Cue 的设置（`CueSettingsModel`）整块读一份：选 Mac 与底行的开关读写同一份，改 Mac 的确认框也只挂这一个。
 struct CueNowPanel: View {
     let brain: AgentModelChoice?
@@ -18,7 +18,9 @@ struct CueNowPanel: View {
     var body: some View {
         let enabled = workspace.cue.canHear
         VStack(spacing: Spacing.item) {
-            BrainBlock(brain: brain, settings: settings).padding(.bottom, Spacing.tight)
+            BrainBlock(brain: brain, settings: settings)
+                .padding(.vertical, Spacing.item).frame(maxWidth: .infinity)
+                .background(CueTile.fill)
             if enabled { CueRecall { go { workspace.cue.showsMemory = true } } }
             HStack(spacing: Spacing.item) {
                 if enabled { ScheduleTile { go { workspace.cue.showsSchedules = true } } }
@@ -70,8 +72,9 @@ private enum CueTile {
 }
 
 private extension View {
-    func cueTile() -> some View {
-        padding(Spacing.group).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    /// `paired`：并排的两格取齐高（那一排自己收成内容的高）。
+    func cueTile(paired: Bool = false) -> some View {
+        padding(Spacing.group).frame(maxWidth: .infinity, maxHeight: paired ? .infinity : nil, alignment: .topLeading)
             .background(CueTile.fill).contentShape(CueTile.shape)
     }
 }
@@ -97,7 +100,7 @@ private struct BrainBlock: View {
     private static let dimmed = 0.4
 }
 
-/// 最近记下的两条各是一张便签，点哪里都去记忆页。
+/// 记忆那一格：最近记下的两条各一行（字在左、几时记的在右），点哪里都去记忆页。
 private struct CueRecall: View {
     let open: () -> Void
     @Environment(Workspace.self) private var workspace
@@ -111,31 +114,23 @@ private struct CueRecall: View {
         let lines = recent?.lines ?? []
         Button(action: open) {
             VStack(alignment: .leading, spacing: Spacing.item) {
-                HStack(spacing: Spacing.glyph) {
-                    Image(.memory).font(Glyph.mark).foregroundStyle(palette.ink3)
-                    Text("刚记下").font(Typography.label).foregroundStyle(palette.ink3)
-                    Spacer(minLength: Spacing.item)
-                    if let count = recent?.count, count > 0 {
-                        Text("全部 \(count) 条").font(Typography.meta).monospacedDigit().foregroundStyle(palette.ink3)
-                    }
-                    Chevron(.forward).foregroundStyle(palette.ink3)
+                TileHead(icon: .memory, title: Text("刚记下")) {
+                    if let count = recent?.count, count > 0 { Text("全部 \(count) 条").monospacedDigit() }
                 }
-                .padding(.horizontal, Spacing.tight)
-                HStack(spacing: Spacing.item) {
+                VStack(alignment: .leading, spacing: Spacing.glyph) {
                     ForEach(0..<Self.shown, id: \.self) { index in
-                        RecallNote(line: lines.indices.contains(index) ? lines[index] : nil)
+                        RecallLine(line: lines.indices.contains(index) ? lines[index] : nil)
                     }
                 }
-                .overlay {
+                .overlay(alignment: .leading) {
                     if recent != nil, lines.isEmpty {
-                        Text("还没记住什么").font(Typography.secondary).foregroundStyle(palette.ink3)
+                        Text("还没记住什么").font(Typography.body).foregroundStyle(palette.ink3)
                     }
                 }
             }
-            .contentShape(.rect)
+            .cueTile()
         }
         .buttonStyle(PressStyle())
-        .padding(.top, Spacing.tight)
         .observing(services.store, into: $recent, onError: workspace.fail) { try $0.recentCueMemory(limit: Self.shown) }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Dotted(
@@ -144,32 +139,46 @@ private struct CueRecall: View {
     }
 }
 
-private struct RecallNote: View {
+private struct RecallLine: View {
     let line: CueMemoryLine?
     @Environment(\.palette) private var palette
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.item) {
+        HStack(alignment: .firstTextBaseline, spacing: Spacing.item) {
             Text(verbatim: line?.text ?? " ")
-                .font(Typography.secondary).foregroundStyle(palette.ink).multilineTextAlignment(.leading)
-                .lineLimit(3, reservesSpace: true)
+                .font(Typography.body.weight(.medium)).foregroundStyle(palette.ink).lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            HStack(spacing: Spacing.hair) {
-                if let line {
+            if let line {
+                HStack(spacing: Spacing.hair) {
                     if line.pinned { Image(.pin).font(Glyph.mark).foregroundStyle(palette.signature) }
                     Text(line.createdAt, format: .relative(presentation: .named, unitsStyle: .abbreviated))
-                } else {
-                    Text(verbatim: " ")
                 }
+                .font(Typography.meta).monospacedDigit().foregroundStyle(palette.ink3).fixedSize()
             }
-            .font(Typography.meta).monospacedDigit().foregroundStyle(palette.ink3)
         }
-        .padding(Spacing.group)
-        .background(palette.fill, in: CueTile.shape)
     }
 }
 
-/// 一格去处：图标与名字在上，此刻的那个数在下面大一号。
+/// 一格顶上那一行：签名色的图标与名字，右边是去处的小字与箭头。
+private struct TileHead<Trailing: View>: View {
+    let icon: Icon
+    let title: Text
+    @ViewBuilder var trailing: Trailing
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        HStack(spacing: Spacing.glyph) {
+            Image(icon).foregroundStyle(palette.signature)
+            title.foregroundStyle(palette.ink2)
+            Spacer(minLength: Spacing.item)
+            trailing.font(Typography.meta).foregroundStyle(palette.ink3)
+            Chevron(.forward).foregroundStyle(palette.ink3)
+        }
+        .font(Typography.secondary).lineLimit(1)
+    }
+}
+
+/// 一格去处：名字在上，此刻的那个数在下面大一号。
 private struct LinkTile: View {
     let icon: Icon
     let title: Text
@@ -179,19 +188,14 @@ private struct LinkTile: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.item) {
+            TileHead(icon: icon, title: title) { EmptyView() }
             HStack(spacing: Spacing.glyph) {
-                Image(icon).foregroundStyle(palette.ink2)
-                title.foregroundStyle(palette.ink2)
-                Spacer(minLength: 0)
-                Chevron(.forward).foregroundStyle(palette.ink3)
-            }
-            .font(Typography.secondary)
-            HStack(spacing: Spacing.glyph) {
-                (value ?? Text(verbatim: " ")).font(Typography.bodyStrong).monospacedDigit().foregroundStyle(palette.ink).lineLimit(1).minimumScaleFactor(0.8)
+                (value ?? Text(verbatim: "—")).font(Typography.bodyStrong).monospacedDigit().foregroundStyle(value == nil ? palette.ink3 : palette.ink)
+                    .lineLimit(1).minimumScaleFactor(0.8)
                 if let alert { StatusDot(color: alert) }
             }
         }
-        .cueTile()
+        .cueTile(paired: true)
         .accessibilityElement(children: .combine)
     }
 }

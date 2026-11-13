@@ -34,7 +34,7 @@ struct CueTitle: View {
 
     var body: some View {
         Button { panel.toggle() } label: {
-            CuePlate(card: false, style: .column, reserve: home ? 0 : Self.fold).frame(width: Self.width)
+            CuePlate(card: false, style: .column, reserve: home ? 0 : Self.fold, opens: self.panel.open).frame(width: Self.width)
         }
         .buttonStyle(PressStyle(.button))
         // 悬停的淡底随名牌的胶囊（按钮的悬停底按框取圆角，这么宽的一块取的是 `Radius.card`）；玻璃垫在外面，它的边光与影子不被裁
