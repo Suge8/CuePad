@@ -132,7 +132,7 @@ struct SyncWiringTests {
         try await eventually("services.syncing.conflicts.count == 1") { services.syncing.conflicts.count == 1 }
         #expect(services.syncing.conflicts.map(\.copy.body) == ["副本"])
 
-        try await services.syncing.resolveConflict(copy: copy.id, keep: .original)
+        try await services.store.resolveConflict(copy: copy.id, keep: .original)
         try await eventually("services.syncing.conflicts.isEmpty") { services.syncing.conflicts.isEmpty }
     }
     /// 冲突副本只由同步产生、没有公开入口：直接在库文件里把副本指回原卡。

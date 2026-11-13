@@ -12,7 +12,7 @@ extension TaskFlowTests {
         try await rig.offersPi()
         let task = try await workspace.createTask("准备发布", in: Project.defaultID)
         let borrower = try await workspace.createTask("继续语音", in: Project.defaultID)
-        workspace.startFresh(task)
+        workspace.handOff(task.id, fresh: true)
         let launch = try #require(try await eventually(store, { try $0.deliveryRequests().first { $0.mode == .known(.start) } }) { $0 != nil })
         switch action {
         case "archive": try await workspace.archive(task.id)
@@ -47,7 +47,7 @@ extension TaskFlowTests {
         defer { peer.services.cancelBackgroundWork() }
         try await rig.offersPi()
         let task = try await workspace.createTask("准备发布", in: Project.defaultID)
-        workspace.startFresh(task)
+        workspace.handOff(task.id, fresh: true)
         let launch = try #require(try await eventually(store, { try $0.deliveryRequests().first { $0.mode == .known(.start) } }) { $0 != nil })
         for id in [task.id, launch.id] {
             let row = try #require(try await store.syncRow(recordName: id.uuidString.lowercased()))
@@ -74,7 +74,7 @@ extension TaskFlowTests {
         let parent = try await delayedParent ? workspace.createTask("发布", in: Project.defaultID) : nil
         let task = if let parent { try await store.createTask("准备发布", under: parent.id) }
             else { try await workspace.createTask("准备发布", in: Project.defaultID) }
-        workspace.startFresh(task)
+        workspace.handOff(task.id, fresh: true)
         let launch = try #require(try await eventually(store, { try $0.deliveryRequests().first { $0.mode == .known(.start) } }) { $0 != nil })
         for id in [task.id, launch.id] {
             let row = try #require(try await store.syncRow(recordName: id.uuidString.lowercased()))

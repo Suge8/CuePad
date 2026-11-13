@@ -194,6 +194,7 @@ final class TestApp {
         let halted = services.halt()
         LibraryLedger.close(ledger, app: app) {
             for step in halted.steps { try? await step.run() }
+            await halted.stopSync()
             await halted.followers?.value
         }
     }
