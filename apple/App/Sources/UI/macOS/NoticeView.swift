@@ -1,17 +1,18 @@
 #if os(macOS)
 import SwiftUI
 
-/// 原地淡入淡出、不从顶边滑进：开合不逐帧排版。
+/// 会话条不在时（收起了、窗口放不下）的提示：最顶那一排、主区那一段的正中。会话条在时在它底部（`WideRail`）。
 struct NoticeView: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        ZStack {
-            if let notice = workspace.notice {
-                NoticeCapsule(notice: notice).transition(.opacity).id(notice.id)
-            }
+        GeometryReader { geometry in
+            let sizes = WideMetrics(width: geometry.size.width, workspace: workspace)
+            NoticeSlot(place: .head(fills: false))
+                .padding(.horizontal, Spacing.page)
+                .frame(width: sizes.home ? geometry.size.width : sizes.rail + sizes.main, height: Chrome.band)
         }
-        .animation(Motion.fade, value: workspace.notice)
+        .ignoresSafeArea(.container, edges: .top)
     }
 }
 #endif

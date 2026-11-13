@@ -35,14 +35,17 @@ final class Workspace {
     }
 
     struct NoticeAction: Equatable {
-        let id = UUID()
+        /// 身份，也是它在系统撤销里的那一条的主人（`Workspace+Notice` 的 `remember`）。
+        let token = NSObject()
         let title: String
-        /// 同时绑 ⌘Z（`NoticeCapsule`）。
-        var isUndo = false
+        /// 撤的是什么（"归档"）：有它的才记进系统撤销，菜单写"撤销归档"。
+        var undoes: String?
         /// 提示挂在工作区上、可能一直不收（读屏开着时）：工作区作为参数给，闭包里别去攥着它，不然两者互相攥着都放不掉。
         let run: @MainActor (Workspace) async throws -> Void
-        static func undo(_ run: @escaping Undo) -> Self { Self(title: String(localized: "撤销"), isUndo: true) { _ in try await run() } }
-        static func == (lhs: NoticeAction, rhs: NoticeAction) -> Bool { lhs.id == rhs.id }
+        static func undo(_ what: LocalizedStringResource, _ run: @escaping Undo) -> Self {
+            Self(title: String(localized: "撤销"), undoes: String(localized: what)) { _ in try await run() }
+        }
+        static func == (lhs: NoticeAction, rhs: NoticeAction) -> Bool { lhs.token === rhs.token }
     }
 
     let services: AppServices
@@ -158,6 +161,9 @@ final class Workspace {
     let imports = Imports()
 
     @ObservationIgnored var noticeTask: Task<Void, Never>?
+    @ObservationIgnored var noticeDue = ContinuousClock.now
+    /// 窗口的系统撤销，根视图给（`followsUndo`）；没有窗口时（测试、菜单栏面板）为空，撤销只在提示上。
+    @ObservationIgnored weak var undoManager: UndoManager?
 
     /// 目录与资料库当场读，不留“还没读到”这一态：第一帧就是读到的样子。
     init(services: AppServices) {

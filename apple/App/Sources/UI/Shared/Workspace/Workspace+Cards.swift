@@ -44,13 +44,13 @@ extension Workspace {
         let undo = try await store.merging(idea, into: task)
         closeIfOpen(idea)
         let title = try await store.card(task)?.title ?? ""
-        say("已接到「\(title.textGlyphs)」的正文后面", action: .undo(undo))
+        say("已接到「\(title.textGlyphs)」的正文后面", action: .undo("合并", undo))
     }
 
     func newTask(fromIdea idea: UUID) async throws {
         let (task, undo) = try await services.store.spawning(idea)
         closeIfOpen(idea)
-        say("已新建任务「\(task.title.textGlyphs)」", action: .undo(undo))
+        say("已新建任务「\(task.title.textGlyphs)」", action: .undo("新建任务", undo))
     }
 
     /// 还是空白（`Card.isBlank`）的灵感就不留下：记一条是先建一条空的再编辑。
@@ -118,7 +118,7 @@ extension Workspace {
         let store = services.store
         try await store.archive(id)
         closeIfOpen(id)
-        say("已归档", action: .undo { try await store.unarchive(id) })
+        say("已归档", action: .undo("归档") { try await store.unarchive(id) })
     }
 
     func trash(_ id: UUID) async throws { try await trash([id]) }
@@ -130,7 +130,7 @@ extension Workspace {
         // 卡从墙上拿走时收不到鼠标移出：不再算停在它上面（⌘⌫ 删的是鼠标停着的那张）
         ids.forEach { presses.hover($0, inside: false) }
         #endif
-        say(ids.count > 1 ? "已删除 \(ids.count) 条" : "已删除", action: .undo(undo))
+        say(ids.count > 1 ? "已删除 \(ids.count) 条" : "已删除", action: .undo("删除", undo))
     }
 
     /// 归档的就是看板上此刻看得到的那些已完成：选了项目范围只归档那个项目的。入口都在看板的已完成那一列，范围只在这里读。
@@ -147,10 +147,5 @@ extension Workspace {
         } catch {
             fail(error)
         }
-    }
-
-    func run(_ action: NoticeAction) {
-        notice = nil
-        attempt { try await action.run(self) }
     }
 }

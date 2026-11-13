@@ -7,7 +7,7 @@ struct NarrowSidebarBar: View {
     @Namespace private var glass
 
     var body: some View {
-        let givesWay = workspace.notice != nil
+        let givesWay = workspace.noticeOnHead
         GlassEffectContainer(spacing: SidebarRow.gap) {
             SidebarRow {
                 HStack(spacing: SidebarRow.gap) {
@@ -35,7 +35,7 @@ struct NarrowSidebarBar: View {
         .dynamicTypeSize(...FloatingHeaderLayout.largestType)
         .padding(.horizontal, FloatingHeaderLayout.margin)
         .environment(\.headerGivesWay, givesWay)
-        .animation(NoticeBanner.giveWay(workspace.notice), value: givesWay)
+        .animation(NoticeBanner.giveWay(givesWay), value: givesWay)
     }
 
     private func circle(_ title: LocalizedStringResource, icon: Icon, action: @escaping () -> Void) -> some View {

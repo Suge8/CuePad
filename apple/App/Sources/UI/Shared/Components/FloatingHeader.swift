@@ -120,8 +120,8 @@ private struct FloatingHeader<Center: View, Trailing: View>: ViewModifier {
             }
         }
         .navigationTitle(Text(title))
-        .environment(\.headerGivesWay, host != .panel && workspace.notice != nil)
-        .animation(NoticeBanner.giveWay(workspace.notice), value: workspace.notice != nil)
+        .environment(\.headerGivesWay, host != .panel && workspace.noticeOnHead)
+        .animation(NoticeBanner.giveWay(workspace.noticeOnHead), value: workspace.noticeOnHead)
     }
 
     private var middle: some View {

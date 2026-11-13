@@ -176,6 +176,25 @@ struct TaskFlowTests {
         #expect(Set(try await store.trashedCards().map(\.id)) == [note.id, idea.id])
     }
 
+    @Test func 提示收走后_系统撤销照样撤回并说撤了什么_点过提示上的撤销就不再留着() async throws {
+        let workspace = Workspace(services: rig.services)
+        let undoManager = UndoManager()
+        workspace.undoManager = undoManager
+        let idea = try await store.createCard(body: "续费域名")
+        try await workspace.trash(idea.id)
+        workspace.notice = nil
+        #expect(undoManager.undoActionName == "删除")
+        undoManager.undo()
+        try await eventually("说了撤的是什么") { workspace.notice?.text.visible == "已撤销：删除" }
+        #expect(try await store.trashedCards().isEmpty)
+
+        try await workspace.trash(idea.id)
+        workspace.run(try #require(workspace.notice?.action))
+        #expect(!undoManager.canUndo)
+        try await eventually("撤回来了") { workspace.notice == nil }
+        undoManager.removeAllActions()
+    }
+
     @Test func 灵感接进任务_拖成新任务_删除_都能撤销() async throws {
         let workspace = Workspace(services: rig.services)
         let body = "上线前检查\n把 changelog 过一遍"
