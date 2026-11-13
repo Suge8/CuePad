@@ -33,6 +33,38 @@ struct CueButton: View {
     }
 }
 
+extension View {
+    func cuePanel(fits: Bool, home: Bool) -> some View { modifier(CuePanel(fits: fits, home: home)) }
+}
+
+/// 在右边那一栏时 Cue 住在一块写字玻璃上（同看板列头），浮在主区上、内容往里收一圈：看板放不下的列滑到它下面，不在桌面上切断。
+/// 铺满时就是铺满的一页，没有板。玻璃那一层却一直留着，只把它的边推到块外、按块的左右裁掉（`bleed`）：铺满时撤掉玻璃的话，
+/// 系统重建块里的图层，让到右边与铺满之间整块先消失再淡入（`WideSlide.Positions` 把它们当新层）；留着，切换就是板的边连续滑出、滑进窗口。
+/// 抽屉不是玻璃：它有自己的面（`DrawerSurface`）。玻璃画在块里，收起、放回时随块平移（`WideColumnSlide`）。
+/// 板里的对话由调用处按 `corner` 裁：不从板的圆角与上下沿露出去。
+struct CuePanel: ViewModifier {
+    let fits: Bool
+    let home: Bool
+
+    static let float = Spacing.item
+    static let radius = Radius.field
+    /// 铺满时玻璃的边推到块外这么远：比圆角大，角与边光都落在窗口外或裁掉的那一截里。
+    private static let bleed: CGFloat = 48
+
+    static func corner(fits: Bool, home: Bool) -> CGFloat { fits && !home ? radius : 0 }
+
+    func body(content: Content) -> some View {
+        let floats = fits && !home, bleeds = fits && home
+        content
+            .padding(bleeds ? Self.bleed : 0)
+            .glass(in: .rect(cornerRadius: Self.radius), ink: .ground(shown: fits))
+            .padding(bleeds ? -Self.bleed : floats ? Self.float : 0)
+            // 铺满时按块的左右裁（左边是会话条），上下放开：对话照样滚到状态栏与横条后面。浮着时左右也放开：板的影子落在块外。
+            // 同一个修饰符只换形状，图层不重建
+            .clipShape(Rectangle().scale(x: bleeds ? 1 : 1.5, y: 3))
+    }
+}
+
 /// 铺满时（`WideMetrics.home`）占会话条之外的整块；让到右边后，放得下时是右边那一栏，放不下时是右缘的抽屉（`Workspace.cueDrawer`），只是同一块的两种摆法，窗口跨过临界宽不拆不建：对话、滚动位置、输入框里的话都在。
 /// 摆法只有一个数：露出多宽（`shown`：放得下时是右边那一栏的宽，收起是 0；放不下时抽屉开着是整栏、关着是 0），块的左缘在窗口右缘往里这么远；
 /// 露出 0 时排在窗口右缘外，滑出去落定才藏起（看不见、点不到、⌃Tab 跳过），订阅暂停（`pageActive`）。

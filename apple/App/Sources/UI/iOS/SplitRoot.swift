@@ -13,13 +13,16 @@ struct SplitRoot: View {
         let covered = modals?.modal?.inPage == true
         GeometryReader { geometry in
             let sizes = WideMetrics(width: geometry.size.width, workspace: workspace)
+            // 右边那一栏的 Cue 是浮在主区上的一块玻璃（`CuePanel`，同 Mac 的 `MainWindow`）：主区铺到窗口右缘，压在它下面的那一截交给页自己让
+            let under = sizes.split || sizes.home ? 0 : sizes.cue
             HStack(spacing: 0) {
                 if sizes.railFits { WideRail(width: sizes.rail, sizes: sizes) }
-                WideColumnHost(slot: .main, focus: focus, origin: sizes.rail, width: sizes.leading, shape: sizes.shape, hidden: sizes.home) {
+                WideColumnHost(slot: .main, focus: focus, origin: sizes.rail, width: sizes.leading + under, shape: sizes.shape, hidden: sizes.home) {
                     destination(workspace.mainRoute, column: .main)
                         .environment(\.headInset, EdgeInsets(top: 0, leading: Chrome.headLead(rail: sizes.rail), bottom: 0, trailing: Spacing.page))
+                        .environment(\.underCue, under)
                 }
-                .frame(width: sizes.leading)
+                .frame(width: sizes.leading + under)
                 .reachesWindowBottom()
                 if sizes.split, let beside = workspace.besideSession {
                     WideColumnHost(slot: .beside, focus: focus, origin: sizes.rail + sizes.leading, width: sizes.main - sizes.leading, shape: sizes.shape) {
@@ -34,7 +37,7 @@ struct SplitRoot: View {
             .readerHidden(covered)
             // 排在最上：抽屉开着时它与接点按的底盖住浮着的那一排与会话条的抽屉
             .overlay {
-                CueDock(sizes: sizes, width: geometry.size.width, focus: focus, bleed: EdgeInsets(top: geometry.safeAreaInsets.top, leading: 0, bottom: 0, trailing: 0)) { _ in cue }
+                CueDock(sizes: sizes, width: geometry.size.width, focus: focus, bleed: EdgeInsets(top: geometry.safeAreaInsets.top, leading: 0, bottom: 0, trailing: 0)) { cue(fits: $0, home: sizes.home, bottom: geometry.safeAreaInsets.bottom) }
             }
             // Cue 铺满时它那一块伸到窗口左缘（会话条藏起）：浮着的那一排与会话条的抽屉排在它上面，不然点不到（同 Mac 的 `MainWindow`）
             .overlay { if sizes.home { railChrome(sizes).readerHidden(covered) } }
@@ -56,10 +59,18 @@ struct SplitRoot: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
-    private var cue: some View {
-        CuePage().countsAsViewer()
+    /// 浮板伸到横条那一截里、离窗口下缘同样一小圈（`bottom` 是横条让出的高）：停在横条上沿的话，板底下露出一条看板。
+    /// 板里的页照样让出横条（少掉板自己那一圈），名牌离板的上沿也留一圈。
+    private func cue(fits: Bool, home: Bool, bottom: CGFloat) -> some View {
+        let inset = fits && !home ? CuePanel.float : 0
+        return CuePage().countsAsViewer()
             .environment(\.headerHost, .panel)
             .modifier(KeyboardHold())
+            .safeAreaPadding(.top, inset)
+            .safeAreaPadding(.bottom, max(0, bottom - inset))
+            .clipShape(.rect(cornerRadius: CuePanel.corner(fits: fits, home: home)))
+            .cuePanel(fits: fits, home: home)
+            .ignoresSafeArea(.container, edges: .bottom)
     }
 
     @ViewBuilder private func destination(_ route: Route, column: Workspace.Column) -> some View {
@@ -72,8 +83,11 @@ private struct DestinationColumn: View {
     let column: Workspace.Column
     @Environment(Workspace.self) private var workspace
     @Environment(\.headInset) private var inset
+    @Environment(\.underCue) private var under
 
     var body: some View {
+        // 看板自己让（列滑到浮板下面，`ProgressScreen`），只把页头让到看得见的那一截里居中；别的页整页让出
+        let board = route == .progress
         VStack(spacing: 0) {
             if case .session(let session) = route { WideSessionHeading(session: session, column: column) }
             if case .project = route {
@@ -87,6 +101,8 @@ private struct DestinationColumn: View {
             }
             .fadesUnderHead(route.isSession)
         }
+        .environment(\.headInset, EdgeInsets(top: inset.top, leading: inset.leading, bottom: inset.bottom, trailing: inset.trailing + (board ? under : 0)))
+        .padding(.trailing, board ? 0 : under)
     }
 }
 

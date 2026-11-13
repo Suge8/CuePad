@@ -97,7 +97,5 @@ private struct NewProjectSlot: View {
 
 extension EnvironmentValues {
     @Entry var topBand: CGFloat = 0
-    /// 主区右端压在 Cue 浮板下面多宽（`MainWindow`）。别的页整页让出它（`PageStack`）；看板只按让出后的宽分列，放不下横滑时列滑到浮板下面（`TaskBoardPage`）。
-    @Entry var underCue: CGFloat = 0
 }
 #endif

@@ -6,7 +6,7 @@ struct BoardColumns: View {
     @Binding var adding: Bool
     let newTaskProject: UUID?
     let margin: CGFloat
-    /// 滚动区右端压在别的东西下面的那一截（Mac 的 Cue 浮板）：列按让出它之后的宽分，放不下横滑时滑进它下面。
+    /// 滚动区右端压在别的东西下面的那一截（宽屏的 Cue 浮板）：列按让出它之后的宽分，放不下横滑时滑进它下面。
     var tail: CGFloat = 0
     @State private var showsEarlier = DebugHooks.preset.showsDone
 
