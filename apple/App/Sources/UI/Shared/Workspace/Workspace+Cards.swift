@@ -113,11 +113,7 @@ extension Workspace {
 
     func setPinned(_ card: UUID, _ pinned: Bool) {
         let store = services.store
-        attempt {
-            try await store.updateCard(card) { $0.isPinned = pinned }
-            // 其间又改过置顶的不动
-            self.undoable(pinned ? "置顶" : "取消置顶") { try await store.updateCard(card) { if $0.isPinned == pinned { $0.isPinned = !pinned } } }
-        }
+        attempt { self.undoable(pinned ? "置顶" : "取消置顶", try await store.pinning(card, pinned)) }
     }
 
     /// 排序、换项目、缩进、挂成子任务（`CueStore.moveCard`）。

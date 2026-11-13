@@ -14,11 +14,18 @@ extension CueStore {
         return (task, undoing(change))
     }
 
-    /// 读修改时刻与移动在 actor 的同一段里，中间插不进别的写入。
     func moving(_ id: UUID, to slot: CardSlot, after previous: UUID?) async throws -> Undo {
         let change = try moveCard(id, to: slot, after: previous)
-        guard let time = try card(id)?.modifiedAt else { return {} }
-        return { try await self.undo(change, of: id, unchangedSince: time) }
+        return { try await self.undo(change, of: id, stillAt: slot, after: previous) }
+    }
+
+    /// 读与改在 actor 的同一段里。置顶只有开与关，认不出"还是那一次"：此刻不是那次改成的样子就不撤、报"已改过"，不装作撤了。
+    func pinning(_ id: UUID, _ pinned: Bool) async throws -> Undo {
+        try updateCard(id) { $0.isPinned = pinned }
+        return {
+            guard try await self.card(id)?.isPinned == pinned else { throw CueStoreError.changedSinceUndo }
+            try await self.updateCard(id) { $0.isPinned = !pinned }
+        }
     }
 
     /// 本来就做完了的没有可撤的。

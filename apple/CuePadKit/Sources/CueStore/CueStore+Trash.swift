@@ -56,11 +56,11 @@ extension CueStore {
     try write { for change in changes.reversed() { try undoRow(change) } }
   }
 
-  /// 隔了很久才来的撤销（系统撤销）拨回一次移动：`id` 自那以后没再改过（修改时刻还是 `time`）才拨，否则抛 `changedSinceUndo`、什么都不撤——
-  /// 其间又挪过、改过的，照回执放回去会盖掉后来的改动。
-  public func undo(_ change: CardChange, of id: UUID, unchangedSince time: Date) throws {
+  /// 隔了很久才来的撤销（系统撤销）拨回一次移动：`id` 还在那次挪到的地方（同一个上级或项目、同一个前一个同级）才拨，否则抛 `changedSinceUndo`、什么都不撤——
+  /// 其间又挪过的，照回执放回去会盖掉后来那一次。按位置认、不按修改时刻：连着撤两步时，撤后一步本身就改了修改时刻，前一步照样要撤得回。
+  public func undo(_ change: CardChange, of id: UUID, stillAt slot: CardSlot, after previous: UUID?) throws {
     try write {
-      guard try find(Card.self, id)?.modifiedAt == time else { throw CueStoreError.changedSinceUndo }
+      guard let current = try link(of: id), try position(of: id, current) == (slot, previous) else { throw CueStoreError.changedSinceUndo }
       try undoRow(change)
     }
   }

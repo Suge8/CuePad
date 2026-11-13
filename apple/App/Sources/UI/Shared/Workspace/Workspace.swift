@@ -16,6 +16,8 @@ final class Workspace {
         var sound: NoticeSound?
 
         var isError: Bool { tone == .failure }
+        /// 只是报个结果的（没有钮、没有去处、不是出错）不接点按，点穿到下面。
+        var takesHits: Bool { link != nil || action != nil || isError }
 
         enum Tone: Equatable {
             case done
@@ -163,6 +165,8 @@ final class Workspace {
 
     @ObservationIgnored var noticeTask: Task<Void, Never>?
     @ObservationIgnored var noticeDue = ContinuousClock.now
+    /// 响过声的那一条：提示换了地方（会话条收起）是同一条，不再响一遍。
+    @ObservationIgnored var soundedNotice: UUID?
     /// 窗口的系统撤销，根视图给（`followsUndo`）；没有窗口时（测试、菜单栏面板）为空，撤销只在提示上。
     @ObservationIgnored weak var undoManager: UndoManager?
 

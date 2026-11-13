@@ -211,11 +211,24 @@ struct TaskFlowTests {
         #expect(try await store.card(release.id)?.completedAt == nil)
         #expect(try await store.card(notes.id)?.completedAt == nil)
 
+        // 连着挪两步、连着撤两步：撤后一步不该让前一步撤不回
         workspace.move(notes.id, to: .under(site.id), after: nil)
         try await eventually("挪过去了") { try await store.card(notes.id)?.parentID == site.id }
+        workspace.move(notes.id, to: .top(project: Project.defaultID), after: nil)
+        try await eventually("挪到顶层了") { try await store.card(notes.id)?.parentID == nil }
         try await eventually("记下了") { undoManager.undoActionName == "移动" }
         undoManager.undo()
-        try await eventually("挪回来了") { try await store.card(notes.id)?.parentID == release.id }
+        // 两步在测试里可能落进同一次事件、记成一组：一次撤完的就不用再撤
+        try await eventually("后一步撤了") { try await store.card(notes.id)?.parentID != nil }
+        if undoManager.canUndo { undoManager.undo() }
+        try await eventually("前一步也撤了") { try await store.card(notes.id)?.parentID == release.id }
+
+        // 直接做完子任务会带着上级开始；撤了，上级回到待办
+        try await workspace.complete(notes.id)
+        #expect(try await store.card(release.id)?.status == .inProgress)
+        undoManager.undo()
+        try await eventually("上级回到待办") { try await store.card(release.id)?.status == .todo }
+        #expect(try await store.card(notes.id)?.completedAt == nil)
 
         workspace.move(notes.id, to: .under(site.id), after: nil)
         try await eventually("记下了") { undoManager.canUndo }

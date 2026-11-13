@@ -75,13 +75,16 @@ struct NoticeCapsule: View {
         .presetHover($hovering)
         #endif
         .gesture(DragGesture(minimumDistance: Self.fling).onEnded { _ in workspace.notice = nil })
-        .allowsHitTesting(acts || notice.isError)
+        .allowsHitTesting(notice.takesHits)
         .onChange(of: held, initial: true) { was, now in if was != now || now { workspace.holdNotice(now) } }
         .onChange(of: notice.id, initial: true) {
             // 这一颗是留在原地换的字：新的一条来时表已经重开，指针还在上面就再停一次
             if held { workspace.holdNotice(true) }
             AccessibilityNotification.Announcement(notice.text.spoken).post()
-            notice.sound?.play()
+            if workspace.soundedNotice != notice.id {
+                workspace.soundedNotice = notice.id
+                notice.sound?.play()
+            }
             landed = false
             withAnimation(Motion.fading(Motion.nudge, reduceMotion: reduceMotion).delay(Motion.Fade.settle)) { landed = true }
         }

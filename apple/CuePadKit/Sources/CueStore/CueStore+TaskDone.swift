@@ -39,15 +39,21 @@ extension CueStore {
     }
   }
 
-  /// 撤销一次完成：它还是那一次做完的（完成时刻是 `time`）、没归档没删才撤，连同那一次连带做完的下级；否则抛 `changedSinceUndo`。
+  /// 撤销一次完成：它还是那一次做完的（完成时刻是 `time`）、没归档没删才撤，连同那一次连带做完的下级（其间单独归档了的不动）、那一次才带着开始的上级；否则抛 `changedSinceUndo`。
   /// 那一次结束的会话、停掉的定时不恢复（同 `reopen`：再对它说话就在后台恢复）。
   public func uncompleteTask(_ id: UUID, completedAt time: Date) throws {
     try write {
       guard let card = try find(Card.self, id), card.completedAt == time, card.archivedAt == nil, card.deletedAt == nil else {
         throw CueStoreError.changedSinceUndo
       }
+      let now = Date.stamp
       try db.run(
-        "UPDATE cards SET completedAt = NULL, modifiedAt = ?1 WHERE id IN (\(Self.subtree(from: "SELECT ?2"))) AND completedAt = ?3", [Date.stamp, id, time])
+        "UPDATE cards SET completedAt = NULL, modifiedAt = ?1 WHERE id IN (\(Self.subtree(from: "SELECT ?2"))) AND completedAt = ?3 AND archivedAt IS NULL",
+        [now, id, time])
+      // 完成时带着开始的上级（`applyStatus` 用同一个时刻记的）：下面没有别的开始了，就回到待办
+      try db.run(
+        "UPDATE cards SET startedAt = NULL, modifiedAt = ?1 WHERE id IN (SELECT value FROM json_each(?2)) AND startedAt = ?3 AND completedAt IS NULL",
+        [now, Self.idList(try ancestors(of: id)), time])
     }
   }
 
