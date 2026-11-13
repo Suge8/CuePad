@@ -110,7 +110,7 @@ private struct BodyHint: View {
     var body: some View {
         let text = editing.text
         if let newline = text.firstIndex(of: "\n"), text.index(after: newline) == text.endIndex {
-            Text("写下要做的事，开始时交给 Agent")
+            Text("补充细节")
                 .font(Typography.taskBody)
                 .foregroundStyle(palette.ink3)
                 .lineLimit(1)

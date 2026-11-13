@@ -180,10 +180,24 @@ extension CueTextView {
 
     public override func setSelectedRanges(_ ranges: [NSValue], affinity: NSSelectionAffinity, stillSelecting: Bool) {
         super.setSelectedRanges(ranges, affinity: affinity, stillSelecting: stillSelecting)
+        relayoutTrailingLine()
         let selecting = selectedRange().length > 0
         guard selecting != reportedSelection else { return }
         reportedSelection = selecting
         onSelectionChange?(selecting)
+    }
+
+    /// 光标落到末尾的空行（全文以换行结尾）时，TextKit 2 只重排那一行，把它当段首、不留行距，比光标不在时矮一个行距；
+    /// 贴着字摆高的宿主（任务气泡）点进空正文就跟着矮。把最后一段整段重排，它就和平时一样高。
+    private func relayoutTrailingLine() {
+        let text = string as NSString
+        guard text.length > 0, text.character(at: text.length - 1) == 0x0A, selectedRange() == NSRange(location: text.length, length: 0) else { return }
+        let layout = core.layout
+        let paragraph = text.paragraphRange(for: NSRange(location: text.length - 1, length: 0))
+        guard let start = layout.location(layout.documentRange.location, offsetBy: paragraph.location),
+            let range = NSTextRange(location: start, end: layout.documentRange.endLocation)
+        else { return }
+        layout.invalidateLayout(for: range)
     }
 
     @objc private func performSelectionAction(_ item: NSMenuItem) {
