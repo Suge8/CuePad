@@ -217,6 +217,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
             shortcut: shortcut, files: accepts.contains(.files) ? { add($0) } : nil)
             .focused(focus)
             #if os(macOS)
+            .padding(.horizontal, -GrowingTextView.caretRoom)
             .yieldsFocusWhenCovered(focus)
             #endif
             // 收起时原文与"草稿：…"在同一个位置一换即成，不两层叠着交叉淡：同一行字在变形中只有一层
