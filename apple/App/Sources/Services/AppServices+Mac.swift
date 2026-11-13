@@ -87,7 +87,6 @@ extension AppServices {
     /// （在主线程上的任务里调用 terminate，系统在嵌套的事件循环里等回复，主线程上排队的任务轮不到）。
     /// 卡住、失败或缺少云端确认都如实报告，全部成功才返回 nil。
     func beginShutdown(within limit: Duration = .seconds(2)) -> @Sendable () async -> String? {
-        cancelBackgroundWork()
         let hosted = runtimes.values.map { $0.stop() }
         let hostedExit: @Sendable () async -> Void = { for exit in hosted { await exit() } }
         bridge.stop()
@@ -95,22 +94,18 @@ extension AppServices {
         // 离线这一条一开始收尾就写、就传，不排在别的组件停下之后：前面的步骤耗尽上限时它也已写下；停同步前等它传完
         let signingOff = Task.detached { [presence] in try await presence.signOff() }
         let leaving = Task.detached { [viewer] in try await viewer?.signOff() }
-        let stopExecutor = executor.beginStop(), stopCue = cue.stop(), sync = sync
+        let halted = halt {
+            _ = await signingOff.result
+            _ = await leaving.result
+        }
         let log = Logger(subsystem: AppIdentity.id, category: "shutdown")
         return { @concurrent in
-            let failure = await ShutdownSteps.run([
-                ("远程投送执行器", stopExecutor),
-                ("Cue", stopCue),
+            let failure = await ShutdownSteps.run(halted.steps + [
                 ("这台 Mac 离线的记录", {
                     guard try await signingOff.value else { throw ShutdownSteps.UploadUnconfirmed() }
                 }),
                 ("这台 Mac 离开会话的记录", {
                     guard try await leaving.value != false else { throw ShutdownSteps.UploadUnconfirmed() }
-                }),
-                ("同步", {
-                    _ = await signingOff.result
-                    _ = await leaving.result
-                    await sync?.stop()
                 }),
                 ("后台托管的 Agent", hostedExit),
             ], within: limit)
