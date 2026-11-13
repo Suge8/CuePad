@@ -35,6 +35,10 @@ extension CueStore {
         _ = try applyDeliveryOutcome(claimed, .failed(ShownText(CueStoreError.sessionInUse(claimed.target.name))), at: timing.now())
         return nil
       }
+      if !claimed.isFromCue, let mode = claimed.mode.known, DeliveryMode.toSession.contains(mode),
+        claimed.target.kind == .known(.piSession), let session = claimed.target.ref {
+        try reopenTasks(spokenToIn: session, before: claimed.createdAt)
+      }
       if claimed.mode == .known(.end) {
         claimed.coveredEndRequests = [claimed.id]
         if claimed.content == "end", let session = claimed.target.ref {

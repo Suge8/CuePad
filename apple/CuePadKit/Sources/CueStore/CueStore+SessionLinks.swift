@@ -76,7 +76,7 @@ extension CueStore {
     Set(try deliverySources(among: deliveries).compactMap { $0.value == .cue ? $0.key : nil })
   }
 
-  /// 不写发送记录：发给 Agent 的命令带着卡片时用。没开始的任务进行中；完成了的不变：说话不改任务的状态。任务的会话只记在叶子上（`homeLeaf`）；一个叶子最多一个会话，一个会话可以绑好几个叶子。
+  /// 不写发送记录：发给 Agent 的命令带着卡片时用。没开始的任务进行中；完成了的不变。任务的会话只记在叶子上（`homeLeaf`）；一个叶子最多一个会话，一个会话可以绑好几个叶子。
   public func linkCard(_ card: UUID, toSession session: String) throws {
     try write { try linkCardInTransaction(card, toSession: session, at: Date.stamp) }
   }

@@ -49,7 +49,7 @@ struct SessionTaskTests {
         #expect(try await store.cueBoard().sessions.isEmpty)
     }
 
-    @Test func 对已完成任务的会话说话_任务仍是完成_改回或加子任务才变() async throws {
+    @Test func 对已完成任务的会话说话_你的话让它回到进行中_Cue的话不改() async throws {
         try await enableCue()
         let task = try await store.createTask("修登录")
         let recorder = StateRecorder(store: store, hostID: services.hostID)
@@ -66,12 +66,13 @@ struct SessionTaskTests {
         let sent = try #require(try await store.deliveryRequests(toSession: "s1").last)
         #expect(sent.mode == .known(.send))
         #expect(try await store.outcome(of: sent).status == .known(.succeeded))
-        #expect(try await store.card(task.id)?.status == .done)
+        #expect(try await store.card(task.id)?.status == .inProgress)
 
         let question = Question(promptID: "p1", kind: .select, text: "旧数据怎么办？", options: ["覆盖", "跳过"])
         try await recorder.update(sessionID: "s1", state: .waitingForUser, question: question)
         try await reply("2", to: "s1", in: workspace)
         #expect(try await store.deliveryRequests(toSession: "s1").last?.answer == Answer(promptID: "p1", value: .option("跳过")))
+        try await workspace.complete(task.id)
 
         let cue = CueTools(store: store, wait: 0)
         let answered = try #require(await cue.call("task", ["action": "say", "task": task.id.uuidString, "text": "覆盖"]))
