@@ -6,17 +6,28 @@ import Observation
 
 extension DebugScene {
     /// 各台演示 Mac 对额度刷新请求按"没有在线的 Pi 会话"写回（同 Mac 上会话还没连好时），画面等到明细里没查到那一行出来才算就绪。
-    private static let quotaFails = args.quotaOpts.fails
+    private static var quotaFails: Bool {
+        #if os(iOS)
+        args.quotaOpts.fails
+        #else
+        false
+        #endif
+    }
 
     static func runDemoMac(_ services: AppServices) async {
         let store = services.store, host = "demo-mac"
         if quotaFails {
-            // 别的演示 Mac（demo-mini）上也有在线会话：同样按没查到写回，不然手机一直等它（没人领取的请求由投送层收尾）
-            for other in services.quotaRefreshKey where other != host {
-                let executor = DeliveryExecutor(store: store, hostID: other, onIssue: { abandon("演示 Mac 读写库", $0) }) { request, _ in
-                    request.mode == .known(.quota) ? .failed(ShownText("这台 Mac 上没有在线的 Pi 会话")) : .succeeded
+            // 别的演示 Mac 上也有在线会话：同样按没查到写回，不然手机一直等它。问哪几台由手机读到的在线会话定（`quotaRefreshKey`），读到一台接一台
+            Task {
+                var answering: Set<String> = [host]
+                for await hosts in Observations({ services.quotaRefreshKey }) {
+                    for other in hosts where answering.insert(other).inserted {
+                        let executor = DeliveryExecutor(store: store, hostID: other, onIssue: { abandon("演示 Mac 读写库", $0) }) { request, _ in
+                            request.mode == .known(.quota) ? .failed(ShownText("这台 Mac 上没有在线的 Pi 会话")) : .succeeded
+                        }
+                        await running("演示 Mac 答额度") { try await executor.start() }
+                    }
                 }
-                await running("演示 Mac 答额度") { try await executor.start() }
             }
             holdingReady("额度明细里没查到的那一行（-CuePadQuotaFails）") {
                 for await failed in Observations({ if case .failed = services.accountQuotas.phase { true } else { false } }) where failed { return }
