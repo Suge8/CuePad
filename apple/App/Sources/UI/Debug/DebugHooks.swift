@@ -42,11 +42,11 @@ enum DebugHooks {
         var scheduleOpen = false
         var mergePreview = false
         var libraryPane = LibraryPane.rules
+        var cuePanelOpen = false
         #if os(iOS)
         /// 设置页通知那一行显示的状态：演示模式没有同步，真实状态出不来。
         var alertStatus: AlertStatus?
         var searchScope = SearchScope.cards
-        var cuePanelOpen = false
         var quietAlerts = false
         #endif
     }
