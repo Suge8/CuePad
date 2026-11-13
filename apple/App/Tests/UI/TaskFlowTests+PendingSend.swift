@@ -93,6 +93,12 @@ extension TaskFlowTests {
         try await rig.services.executor.start()
         try await eventually("送达") { try await store.deliveryRequest(request.id)?.status == .known(.succeeded) }
         #expect(try await store.deliveryRequests().filter { $0.mode == .known(.end) }.isEmpty)
+        if action == "done" {
+            // 做完的回到进行中，这个会话重新有任务在用：之后挪动它也不收
+            #expect(try await store.card(task.id)?.status == .inProgress)
+            try await store.moveCard(task.id, to: .top(project: Project.defaultID), after: nil)
+            #expect(try await store.deliveryRequests().filter { $0.mode == .known(.end) }.isEmpty)
+        }
         await rig.services.executor.beginStop()()
     }
 }

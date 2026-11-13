@@ -43,7 +43,7 @@ extension CueStore {
     try write { try reopen([id]) }
   }
 
-  /// 不再算做完，只在这里写。`tasks` 连同各自已完成的上级清掉完成时间：开始过的回到进行中，没开始过的回到待办；在归档里的，整件连同下级取回。说话不经这里：任务的状态只由明确的动作改。必须在写事务内调用。
+  /// 不再算做完，只在这里写。`tasks` 连同各自已完成的上级清掉完成时间：开始过的回到进行中，没开始过的回到待办；在归档里的，整件连同下级取回。你对它的会话说话也经这里（`insertDelivery`）。必须在写事务内调用。
   func reopen(_ tasks: [UUID]) throws {
     let chains = try tasks.map { [$0] + (try ancestors(of: $0)) }
     let done = try select(
