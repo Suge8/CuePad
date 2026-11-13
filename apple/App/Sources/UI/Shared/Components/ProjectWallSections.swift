@@ -2,12 +2,11 @@ import CueStore
 import SwiftUI
 
 /// 项目页任务纸下面的几段（两端同一份编排）：已置顶、"最近"墙、"更早"按时间分组（月份的组可折叠，开合放在这里）。
-/// 页只管滚动、栏头与分帧建；卡片墙的格（`tile`）各端自己画。`entry` 按需取：大项目的"更早"可达上千行，只取建出来的那几行。
+/// 页只管滚动、栏头与分帧建；卡片墙的格（`tile`）各端自己画。
 struct ProjectWallSections<Tile: View>: View {
     let data: ProjectPageData
     let arrangement: WallArrangement
     let older: [OlderGroup]
-    let entry: (UUID) -> CardEntry?
     let metrics: Metrics
     /// Mac 首次挂上时"更早"晚一帧建（`ProjectPage.Stage`）。
     var showsOlder = true
@@ -37,7 +36,7 @@ struct ProjectWallSections<Tile: View>: View {
             if !arrangement.wall.isEmpty {
                 SectionHeader("最近", count: arrangement.wall.count).padding(.bottom, metrics.headerGap)
                 wall {
-                    ForEach(arrangement.wall.compactMap(entry)) { tile($0).transition(.opacity) }
+                    ForEach(arrangement.wall.compactMap { data.entries[$0] }) { tile($0).transition(.opacity) }
                 }
                 .padding(.bottom, metrics.sectionGap)
             }
@@ -56,22 +55,30 @@ struct ProjectWallSections<Tile: View>: View {
         MasonryLayout(minColumnWidth: metrics.minColumnWidth, maxColumns: metrics.maxColumns, spacing: metrics.wallSpacing) { tiles() }
     }
 
-    /// 同一组的行在一张纸上：Mac 整组一张纸（悬停、多选的底在纸里），手机每行自带纸的那一截圆角（左滑的按钮要按行裁）。
-    @ViewBuilder private func rows(_ ids: [UUID], lastTarget: [UUID: String], pinned: Bool = false) -> some View {
-        #if os(macOS)
+    /// 同一组的行在一张纸上：Mac 整组一张纸（悬停、多选的底在纸里），手机每行自带纸的那一截圆角（左滑的按钮要按行裁，`OlderRow`）。
+    private func rows(_ ids: [UUID], lastTarget: [UUID: String], pinned: Bool = false) -> some View {
         LazyVStack(spacing: 0) {
             ForEach(ids, id: \.self) { id in
-                if let entry = entry(id) { OlderRow(entry: entry, lastTarget: lastTarget[id], pinned: pinned) }
+                if let entry = data.entries[id] {
+                    OlderRow(entry: entry, lastTarget: lastTarget[id], pinned: pinned, isFirst: id == ids.first, isLast: id == ids.last)
+                }
             }
         }
+        #if os(macOS)
         .rowPaper(cornerRadius: Radius.block)
-        #else
-        ForEach(ids, id: \.self) { id in
-            if let entry = entry(id) {
-                OlderRow(entry: entry, lastTarget: lastTarget[id], pinned: pinned, isFirst: id == ids.first, isLast: id == ids.last)
-            }
-        }
         #endif
+    }
+}
+
+extension WallBoard {
+    /// 读到新数据、换了一天时整理墙（两端同一份）：头一次排不带动画；之后分区真变了才带（卡在墙与"更早"之间挪位）。
+    static func rearrange(_ board: Binding<WallBoard>, with data: ProjectPageData, project: UUID, reduceMotion: Bool) {
+        var next = board.wrappedValue
+        if next.refresh(with: data, project: project) {
+            board.wrappedValue = next
+        } else if next != board.wrappedValue {
+            withAnimation(Motion.spatial(Motion.travel, reduceMotion: reduceMotion)) { board.wrappedValue = next }
+        }
     }
 }
 
@@ -120,114 +127,172 @@ struct OlderGroupHeader: View {
 struct OlderRow: View {
     let entry: CardEntry
     let lastTarget: String?
-    var pinned = false
-    #if os(iOS)
+    let pinned: Bool
     let isFirst: Bool
     let isLast: Bool
-    @Environment(\.zoomNamespace) private var zoom
-    #endif
-    @Environment(Workspace.self) private var workspace
-    @Environment(\.palette) private var palette
 
-    #if os(macOS)
     var body: some View {
         let card = entry.card
-        Button {
-            guard !workspace.presses.takesClick(on: card.id, command: NSEvent.modifierFlags.contains(.command)) else { return }
-            workspace.open(card)
-        } label: {
-            OlderRowLine(entry: entry, lastTarget: lastTarget, pinned: pinned)
-        }
-        .buttonStyle(CardOpenStyle())
-        .cardPresence(card.id, in: workspace)
-        .cardDraggable(.idea(card.id), shape: .rect(cornerRadius: Radius.row))
-        .contextMenu { CardActions(card: card, selectable: true) }
-        .accessibilityElement(children: .combine)
+        let shape = shape
+        OlderRowLine(entry: entry, lastTarget: lastTarget, pinned: pinned)
+            .modifier(OlderRowOpens(card: card, shape: shape))
+            .contextMenu { CardActions(card: card, selectable: Self.selectable) }
+            .cardDraggable(.idea(card.id), shape: shape)
     }
-    #else
+
     private var shape: UnevenRoundedRectangle {
+        #if os(macOS)
+        UnevenRoundedRectangle(cornerRadii: .init(topLeading: Radius.row, bottomLeading: Radius.row, bottomTrailing: Radius.row, topTrailing: Radius.row))
+        #else
         UnevenRoundedRectangle(
             topLeadingRadius: isFirst ? Radius.block : 0, bottomLeadingRadius: isLast ? Radius.block : 0,
             bottomTrailingRadius: isLast ? Radius.block : 0, topTrailingRadius: isFirst ? Radius.block : 0)
+        #endif
     }
 
-    var body: some View {
-        let card = entry.card, text = entry.text
-        NavigationLink(value: Route.card(card.id)) {
-            HStack(alignment: .firstTextBaseline, spacing: Spacing.item) {
-                if pinned { Image(.pin).font(Typography.meta).foregroundStyle(palette.ink2).iconLabel("已置顶") }
-                VStack(alignment: .leading, spacing: Spacing.hair) {
-                    Text(text.label).font(Typography.secondary.weight(.medium)).foregroundStyle(palette.ink).lineLimit(1)
-                    // 只有标题的也占着第二行：同一张纸上的行一样高
-                    Text(text.preview.isEmpty ? " " : text.preview).font(Typography.meta).foregroundStyle(palette.ink3).lineLimit(1)
-                }
-                Spacer(minLength: 8)
-                AgentDot(card: card.id).padding(.vertical, -AgentDot.overhang)
-                if let lastTarget { SentMark(target: lastTarget).font(Typography.caption2).foregroundStyle(palette.ink3) }
-                if !text.attachments.isEmpty { AttachmentMark(count: text.attachments.count).font(Typography.caption2).foregroundStyle(palette.ink3) }
-                Text(DateLabel.short(card.modifiedAt)).font(Typography.caption.monospacedDigit()).foregroundStyle(palette.ink3)
-            }
-            .padding(.horizontal, Spacing.group).padding(.vertical, Spacing.item)
-            .contentShape(.rect)
-        }
-        .buttonStyle(.row)
-        .background(palette.paper, in: .rect)
-        .clipShape(shape)
-        .rowContainer(shape, flush: true)
-        .zoomSource(card.id, in: zoom)
-        .rowSwipes(.card(card, workspace: workspace))
-        .contextMenu { CardActions(card: card) }
-        .cardDraggable(.idea(card.id), shape: shape)
-    }
+    #if os(macOS)
+    private static let selectable = true
+    #else
+    private static let selectable = false
     #endif
 }
 
-#if os(macOS)
-/// 行的内容与底：选中读自卡片的批量选择（`cardSelected`，挂在按钮外面），所以在按钮里面单拆一层。
+/// 点开：Mac 是按钮（⌘ 点、多选中点是选，`CardPresses`），手机是推入编辑页（从这一行放大）、左滑出操作。
+private struct OlderRowOpens: ViewModifier {
+    let card: Card
+    let shape: UnevenRoundedRectangle
+    @Environment(Workspace.self) private var workspace
+    #if os(iOS)
+    @Environment(\.zoomNamespace) private var zoom
+    @Environment(\.palette) private var palette
+    #endif
+
+    func body(content: Content) -> some View {
+        #if os(macOS)
+        Button {
+            guard !workspace.presses.takesClick(on: card.id, command: NSEvent.modifierFlags.contains(.command)) else { return }
+            workspace.open(card)
+        } label: { content }
+            .buttonStyle(CardOpenStyle())
+            .cardPresence(card.id, in: workspace)
+            .accessibilityElement(children: .combine)
+        #else
+        NavigationLink(value: Route.card(card.id)) { content }
+            .buttonStyle(.row)
+            .background(palette.paper, in: .rect)
+            .clipShape(shape)
+            .rowContainer(shape, flush: true)
+            .zoomSource(card.id, in: zoom)
+            .rowSwipes(.card(card, workspace: workspace))
+        #endif
+    }
+}
+
+/// 两端只差在字号、标题与预览横排还是叠成两行、类型图标在行首还是只标附件数（`Look`）与行的底（`OlderRowSurface`）。
 private struct OlderRowLine: View {
     let entry: CardEntry
     let lastTarget: String?
     let pinned: Bool
-    @Environment(\.cardSelected) private var selected
-    @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
     var body: some View {
-        let card = entry.card, text = entry.text
-        HStack(spacing: Spacing.item) {
-            RowGlyph(attached: !text.attachments.isEmpty, pinned: pinned)
-            Text(text.label)
-                .font(Typography.body.weight(.medium)).foregroundStyle(palette.ink).lineLimit(1).layoutPriority(1)
-            Text(text.preview).font(Typography.secondary).foregroundStyle(palette.ink3).lineLimit(1)
-            Spacer(minLength: 12)
-            AgentDot(card: card.id)
-            if let lastTarget { SentMark(target: lastTarget) }
-            Text(DateLabel.short(card.modifiedAt)).monospacedDigit().frame(width: 64, alignment: .trailing)
+        let card = entry.card, text = entry.text, attached = !text.attachments.isEmpty
+        HStack(alignment: Look.alignment, spacing: Spacing.item) {
+            if pinned || Look.typeGlyph { RowGlyph(attached: attached, pinned: pinned) }
+            Look.titles {
+                Text(text.label).font(Look.label).foregroundStyle(palette.ink).lineLimit(1).layoutPriority(1)
+                // 叠成两行时只有标题的也占着第二行：同一张纸上的行一样高
+                Text(text.preview.isEmpty ? " " : text.preview).font(Look.preview).foregroundStyle(palette.ink3).lineLimit(1)
+            }
+            Spacer(minLength: Look.gap)
+            AgentDot(card: card.id).padding(.vertical, Look.dotInset)
+            Group {
+                if let lastTarget { SentMark(target: lastTarget) }
+                if attached, !Look.typeGlyph { AttachmentMark(count: text.attachments.count) }
+            }
+            .font(Look.marks)
+            Text(DateLabel.short(card.modifiedAt)).font(Look.date.monospacedDigit()).frame(minWidth: Look.dateWidth, alignment: .trailing)
         }
-        .font(Typography.meta).foregroundStyle(palette.ink3)
-        .padding(.horizontal, Spacing.inset).frame(height: 38)
-        .contentShape(.rect)
-        .hoverReveal(when: !workspace.presses.isSelecting) { DeleteCardButton(card: card.id).padding(.horizontal, Spacing.item) }
-        .row(selected: selected)
+        .font(Look.base).foregroundStyle(palette.ink3)
+        .modifier(OlderRowSurface(card: card.id))
+    }
+
+    private enum Look {
+        #if os(macOS)
+        static let base: Font? = Typography.meta
+        static let alignment = VerticalAlignment.center
+        static let titles = AnyLayout(HStackLayout(spacing: Spacing.item))
+        static let typeGlyph = true
+        static let label = Typography.body.weight(.medium)
+        static let preview = Typography.secondary
+        static let marks = Typography.meta
+        static let date = Typography.meta
+        static let dateWidth: CGFloat = 64
+        static let gap: CGFloat = 12
+        static let dotInset: CGFloat = 0
+        #else
+        static let base: Font? = nil
+        static let alignment = VerticalAlignment.firstTextBaseline
+        static let titles = AnyLayout(VStackLayout(alignment: .leading, spacing: Spacing.hair))
+        static let typeGlyph = false
+        static let label = Typography.secondary.weight(.medium)
+        static let preview = Typography.meta
+        static let marks = Typography.caption2
+        static let date = Typography.caption
+        static let dateWidth: CGFloat = 0
+        static let gap: CGFloat = 8
+        static let dotInset = -AgentDot.overhang
+        #endif
     }
 }
 
+/// 行的底：Mac 一行定高、悬停出删除、选中读自卡片的批量选择（`cardSelected`，挂在按钮外面，所以在按钮里面这一层读）；手机只留边距。
+private struct OlderRowSurface: ViewModifier {
+    let card: UUID
+    #if os(macOS)
+    @Environment(Workspace.self) private var workspace
+    @Environment(\.cardSelected) private var selected
+    #endif
+
+    func body(content: Content) -> some View {
+        #if os(macOS)
+        content
+            .padding(.horizontal, Spacing.inset).frame(height: 38)
+            .contentShape(.rect)
+            .hoverReveal(when: !workspace.presses.isSelecting) { DeleteCardButton(card: card).padding(.horizontal, Spacing.item) }
+            .row(selected: selected)
+        #else
+        content
+            .padding(.horizontal, Spacing.group).padding(.vertical, Spacing.item)
+            .contentShape(.rect)
+        #endif
+    }
+}
+
+/// Mac 行首是类型（置顶、带附件、灵感，多选时是选中）；手机只在置顶时有。
 private struct RowGlyph: View {
     let attached: Bool
     let pinned: Bool
-    @Environment(\.cardSelected) private var selected
     @Environment(\.palette) private var palette
+    #if os(macOS)
+    @Environment(\.cardSelected) private var selected
+    #else
+    private let selected = false
+    #endif
 
     var body: some View {
         Group {
-            if selected {
-                PickedMark()
-            } else {
-                Image(pinned ? .pin : attached ? .attachment : .document).foregroundStyle(pinned ? palette.ink2 : palette.ink3)
-            }
+            #if os(macOS)
+            if selected { PickedMark() } else { glyph }
+            #else
+            glyph
+            #endif
         }
         .font(Glyph.row).frame(width: 18)
         .accessibilityLabel(selected ? "已选" : pinned ? "置顶的灵感" : attached ? "含附件的灵感" : "灵感")
     }
+
+    private var glyph: some View {
+        Image(pinned ? .pin : attached ? .attachment : .document).foregroundStyle(pinned ? palette.ink2 : palette.ink3)
+    }
 }
-#endif

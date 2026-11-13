@@ -10,8 +10,6 @@ struct ProjectPage: View {
     @Environment(\.pageActive) private var active
     @State private var data: ProjectPageData?
     @State private var board = WallBoard()
-    /// 墙与"更早"要用的、由数据和分区推出的东西：数据或分区变了才重算（任务行里 Agent 的状态一变页面就要重算，每次都从上千张卡里重新分组太贵）。
-    @State private var shape: PageShape?
     @State private var collapsed = false
     @Environment(\.topBand) private var band
     @State private var position = ScrollPosition()
@@ -60,8 +58,8 @@ struct ProjectPage: View {
             try ProjectPageData.read(projectID, from: store)
         }
         .onDayChange { rearrange() }
-        .task(id: shape != nil) {
-            guard shape != nil else { return }
+        .task(id: board.arrangement != nil) {
+            guard board.arrangement != nil else { return }
             for next in Stage.allCases where next > stage {
                 await NextFrame.wait()
                 stage = next
@@ -76,7 +74,7 @@ struct ProjectPage: View {
         VStack(alignment: .leading, spacing: Spacing.group) {
             ProjectIntroLine(project: workspace.catalog?.project(projectID), intro: false)
             VStack(alignment: .leading, spacing: Spacing.section) {
-                if let data, let arrangement = board.arrangement, let shape { page(data, arrangement, shape) }
+                if let data, let arrangement = board.arrangement { page(data, arrangement) }
             }
         }
         .padding(.horizontal, Spacing.page).padding(.top, Spacing.pageTop).padding(.bottom, CaptureBar.clearance)
@@ -84,12 +82,11 @@ struct ProjectPage: View {
     }
 
     @ViewBuilder
-    private func page(_ data: ProjectPageData, _ arrangement: WallArrangement, _ shape: PageShape) -> some View {
+    private func page(_ data: ProjectPageData, _ arrangement: WallArrangement) -> some View {
         if stage >= .focus { FocusBand(data: data, position: $position, anchor: anchor) }
         if stage >= .wall {
             ProjectWallSections(
-                data: data, arrangement: arrangement, older: shape.older, entry: { shape.byID[$0].map(CardEntry.init) }, metrics: Self.metrics,
-                showsOlder: stage >= .older
+                data: data, arrangement: arrangement, older: board.older, metrics: Self.metrics, showsOlder: stage >= .older
             ) { entry in
                 CardTile(card: entry.card, lastTarget: data.lastTarget[entry.id], floated: board.floated.contains(entry.id))
             }
@@ -102,33 +99,13 @@ struct ProjectPage: View {
     }
 
     private func rearrange() {
-        guard let data else { return }
-        var next = board
-        if next.refresh(with: data, project: projectID) {
-            board = next
-        } else if next != board {
-            withAnimation(Motion.spatial(Motion.travel, reduceMotion: reduceMotion)) { board = next }
-        }
-        if let arrangement = next.arrangement {
-            let shape = PageShape(data, arrangement)
-            if shape != self.shape { self.shape = shape }
-        }
+        if let data { WallBoard.rearrange($board, with: data, project: projectID, reduceMotion: reduceMotion) }
     }
 }
 
 private struct SelectableKey: Equatable {
     let active: Bool
     let ids: [UUID]?
-}
-
-private struct PageShape: Equatable {
-    let byID: [UUID: Card]
-    let older: [OlderGroup]
-
-    init(_ data: ProjectPageData, _ arrangement: WallArrangement) {
-        byID = Dictionary(uniqueKeysWithValues: data.cards.map { ($0.id, $0) })
-        older = data.olderGroups(arrangement)
-    }
 }
 
 #endif

@@ -2,17 +2,6 @@
 import CueStore
 import SwiftUI
 
-/// 读取时一并算好每张卡的摘要（在 Store 的执行体上，不占主线程）。
-nonisolated private struct ProjectPage: Sendable, Equatable {
-    var data: ProjectPageData
-    var entries: [UUID: CardEntry]
-
-    init(_ data: ProjectPageData) {
-        self.data = data
-        entries = Dictionary(uniqueKeysWithValues: data.cards.map { ($0.id, CardEntry($0)) })
-    }
-}
-
 struct ProjectScreen: View {
     let projectID: UUID
     @Environment(Workspace.self) private var workspace
@@ -21,7 +10,7 @@ struct ProjectScreen: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.headerHost) private var headerHost
-    @State private var page: ProjectPage?
+    @State private var data: ProjectPageData?
     /// 任务纸的开合放在页面上：收起其余任务时连带页面的滚动（`TaskFoldAnchor`）。
     @State private var fold = DebugHooks.preset.taskFold
     @State private var position = ScrollPosition()
@@ -33,8 +22,8 @@ struct ProjectScreen: View {
     var body: some View {
         ScrollView {
             ScrollViewReader { proxy in
-                if let page, let arrangement = board.arrangement {
-                    content(page, arrangement)
+                if let data, let arrangement = board.arrangement {
+                    content(data, arrangement)
                 }
                 Color.clear.frame(height: 0).debugScrollsToOlder(proxy, ready: board.arrangement != nil)
             }
@@ -42,21 +31,20 @@ struct ProjectScreen: View {
         .scrollPosition($position)
         .taskFoldScroll(anchor)
         .floatingHeader(.verbatim(project?.shownName ?? ""), detail: { ProjectIntroLine(project: project, inHeader: true) }, trailing: { actions })
-        .observing(services.store, id: projectID, into: $page, onError: workspace.fail) {
-            [projectID] store in ProjectPage(try ProjectPageData.read(projectID, from: store))
+        .observing(services.store, id: projectID, into: dataBinding, onError: workspace.fail) {
+            [projectID] store in try ProjectPageData.read(projectID, from: store)
         }
-        .onChange(of: page?.data.stamps) { rearrange() }
         .onDayChange { rearrange() }
     }
 
     @ViewBuilder
-    private func content(_ page: ProjectPage, _ arrangement: WallArrangement) -> some View {
-        let data = page.data, lastTarget = data.lastTarget
+    private func content(_ data: ProjectPageData, _ arrangement: WallArrangement) -> some View {
+        let lastTarget = data.lastTarget
         // 任务纸不进懒加载栈：纸在懒加载栈的一格里时，收起后按 id 滚回纸底那一行会偏出一屏（`TaskFoldAnchor`）
         VStack(alignment: .leading, spacing: 0) {
             if inColumn { ProjectIntroLine(project: project, intro: false).padding(.leading, Spacing.tight).padding(.bottom, Spacing.group) }
             if data.project != nil { FocusCard(data: data, fold: $fold, position: $position, anchor: anchor).padding(.bottom, Self.sectionGap) }
-            ProjectWallSections(data: data, arrangement: arrangement, older: data.olderGroups(arrangement), entry: { page.entries[$0] }, metrics: metrics) { entry in
+            ProjectWallSections(data: data, arrangement: arrangement, older: board.older, metrics: metrics) { entry in
                 CardTileView(entry: entry, lastTarget: lastTarget[entry.id], floated: board.floated.contains(entry.id))
             }
         }
@@ -80,14 +68,13 @@ struct ProjectScreen: View {
         Menu("更多", icon: .more) { ProjectMenuItems(projectID: projectID) }
     }
 
+    /// 读到的数据与由它推出的分区在同一次写入里落下（同 Mac 的 `ProjectPage`）。
+    private var dataBinding: Binding<ProjectPageData?> {
+        Binding(get: { data }, set: { data = $0; rearrange() })
+    }
+
     private func rearrange() {
-        guard let data = page?.data else { return }
-        var next = board
-        if next.refresh(with: data, project: projectID) {
-            board = next
-        } else {
-            withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { board = next }
-        }
+        if let data { WallBoard.rearrange($board, with: data, project: projectID, reduceMotion: reduceMotion) }
     }
 }
 
