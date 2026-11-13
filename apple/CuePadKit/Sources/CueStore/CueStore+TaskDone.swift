@@ -39,6 +39,18 @@ extension CueStore {
     }
   }
 
+  /// 撤销一次完成：它还是那一次做完的（完成时刻是 `time`）、没归档没删才撤，连同那一次连带做完的下级；否则抛 `changedSinceUndo`。
+  /// 那一次结束的会话、停掉的定时不恢复（同 `reopen`：再对它说话就在后台恢复）。
+  public func uncompleteTask(_ id: UUID, completedAt time: Date) throws {
+    try write {
+      guard let card = try find(Card.self, id), card.completedAt == time, card.archivedAt == nil, card.deletedAt == nil else {
+        throw CueStoreError.changedSinceUndo
+      }
+      try db.run(
+        "UPDATE cards SET completedAt = NULL, modifiedAt = ?1 WHERE id IN (\(Self.subtree(from: "SELECT ?2"))) AND completedAt = ?3", [Date.stamp, id, time])
+    }
+  }
+
   public func reopenTask(_ id: UUID) throws {
     try write { try reopen([id]) }
   }

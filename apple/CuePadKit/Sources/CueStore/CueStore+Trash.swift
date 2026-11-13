@@ -56,6 +56,15 @@ extension CueStore {
     try write { for change in changes.reversed() { try undoRow(change) } }
   }
 
+  /// 隔了很久才来的撤销（系统撤销）拨回一次移动：`id` 自那以后没再改过（修改时刻还是 `time`）才拨，否则抛 `changedSinceUndo`、什么都不撤——
+  /// 其间又挪过、改过的，照回执放回去会盖掉后来的改动。
+  public func undo(_ change: CardChange, of id: UUID, unchangedSince time: Date) throws {
+    try write {
+      guard try find(Card.self, id)?.modifiedAt == time else { throw CueStoreError.changedSinceUndo }
+      try undoRow(change)
+    }
+  }
+
   private func undoRow(_ change: CardChange) throws {
     switch change {
     case .trash(let id, let lifted):

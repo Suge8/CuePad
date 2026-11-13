@@ -131,7 +131,7 @@ struct TaskOutline<Line: View>: View {
 
     private func commit(_ id: UUID, _ move: TaskMove) {
         commits += 1
-        workspace.perform { try await $0.moveCard(id, to: move.slot, after: move.after) }
+        workspace.move(id, to: move.slot, after: move.after)
     }
 }
 

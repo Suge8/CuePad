@@ -81,6 +81,7 @@ struct NoticeCapsule: View {
             // 这一颗是留在原地换的字：新的一条来时表已经重开，指针还在上面就再停一次
             if held { workspace.holdNotice(true) }
             AccessibilityNotification.Announcement(notice.text.spoken).post()
+            notice.sound?.play()
             landed = false
             withAnimation(Motion.fading(Motion.nudge, reduceMotion: reduceMotion).delay(Motion.Fade.settle)) { landed = true }
         }

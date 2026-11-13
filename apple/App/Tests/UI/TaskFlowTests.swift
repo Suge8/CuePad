@@ -191,7 +191,43 @@ struct TaskFlowTests {
         try await workspace.trash(idea.id)
         workspace.run(try #require(workspace.notice?.action))
         #expect(!undoManager.canUndo)
-        try await eventually("撤回来了") { workspace.notice == nil }
+        try await eventually("撤回来了") { workspace.notice?.text.visible == "已撤销：删除" }
+        #expect(try await store.trashedCards().isEmpty)
+        undoManager.removeAllActions()
+    }
+
+    @Test func 完成_挪位置_置顶不出撤销钮也撤得回_其间又改过的不撤() async throws {
+        let workspace = Workspace(services: rig.services)
+        let undoManager = UndoManager()
+        workspace.undoManager = undoManager
+        let release = try await store.createTask("发版")
+        let notes = try await store.createTask("写更新说明", under: release.id)
+        let site = try await store.createTask("官网")
+
+        try await workspace.complete(release.id)
+        #expect(undoManager.undoActionName == "完成")
+        undoManager.undo()
+        try await eventually("完成撤回来了") { workspace.notice?.text.visible == "已撤销：完成" }
+        #expect(try await store.card(release.id)?.completedAt == nil)
+        #expect(try await store.card(notes.id)?.completedAt == nil)
+
+        workspace.move(notes.id, to: .under(site.id), after: nil)
+        try await eventually("挪过去了") { try await store.card(notes.id)?.parentID == site.id }
+        try await eventually("记下了") { undoManager.undoActionName == "移动" }
+        undoManager.undo()
+        try await eventually("挪回来了") { try await store.card(notes.id)?.parentID == release.id }
+
+        workspace.move(notes.id, to: .under(site.id), after: nil)
+        try await eventually("记下了") { undoManager.canUndo }
+        _ = try await store.moveCard(notes.id, to: .top(project: Project.defaultID), after: nil)
+        undoManager.undo()
+        try await eventually("其间又挪过：不撤") { workspace.notice?.text.visible == "已改过，无法撤销" }
+        #expect(try await store.card(notes.id)?.parentID == nil)
+
+        workspace.setPinned(site.id, true)
+        try await eventually("记下了") { undoManager.undoActionName == "置顶" }
+        undoManager.undo()
+        try await eventually("取消了置顶") { try await store.card(site.id)?.isPinned == false }
         undoManager.removeAllActions()
     }
 

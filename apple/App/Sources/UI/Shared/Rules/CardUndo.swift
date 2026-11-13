@@ -14,6 +14,21 @@ extension CueStore {
         return (task, undoing(change))
     }
 
+    /// 读修改时刻与移动在 actor 的同一段里，中间插不进别的写入。
+    func moving(_ id: UUID, to slot: CardSlot, after previous: UUID?) async throws -> Undo {
+        let change = try moveCard(id, to: slot, after: previous)
+        guard let time = try card(id)?.modifiedAt else { return {} }
+        return { try await self.undo(change, of: id, unchangedSince: time) }
+    }
+
+    /// 本来就做完了的没有可撤的。
+    func completing(_ id: UUID) async throws -> (status: TaskStatus, ended: [DeliveryRequest], undo: Undo?) {
+        let done = try card(id)?.completedAt != nil
+        let (status, ended) = try completeTask(id)
+        guard !done, status == .done, let time = try card(id)?.completedAt else { return (status, ended, nil) }
+        return (status, ended, { try await self.uncompleteTask(id, completedAt: time) })
+    }
+
     func trashing(_ ids: [UUID]) async throws -> Undo {
         undoing(try trashCards(ids))
     }

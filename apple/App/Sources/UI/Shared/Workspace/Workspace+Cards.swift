@@ -26,12 +26,13 @@ extension Workspace {
     /// 已经完成的不动：界面手里的副本可能已过时（别的设备刚做完），再来一次不能把它翻回去（`CueStore.completeTask`）。
     /// 绑着的会话里绑着的事都做完了的一起结束，结束哪些只由 Store 定（与 Cue 的 done 同一条规则）。
     func complete(_ id: UUID) async throws {
-        let (status, ended) = try await services.store.completeTask(id)
+        let (status, ended, undo) = try await services.store.completing(id)
         for request in ended { _ = services.uploaded(request) }
         // 做完了就给一个归档（不自动归档）
         guard status == .done else { return }
+        if let undo { undoable("完成", undo) }
         let archiving = NoticeAction(title: String(localized: "归档")) { try await $0.archive(id) }
-        say("已完成", action: archiving)
+        say("已完成", action: archiving, sound: .complete)
     }
 
     func reopen(_ id: UUID) async throws {
@@ -111,7 +112,18 @@ extension Workspace {
     }
 
     func setPinned(_ card: UUID, _ pinned: Bool) {
-        perform { try await $0.updateCard(card) { $0.isPinned = pinned } }
+        let store = services.store
+        attempt {
+            try await store.updateCard(card) { $0.isPinned = pinned }
+            // 其间又改过置顶的不动
+            self.undoable(pinned ? "置顶" : "取消置顶") { try await store.updateCard(card) { if $0.isPinned == pinned { $0.isPinned = !pinned } } }
+        }
+    }
+
+    /// 排序、换项目、缩进、挂成子任务（`CueStore.moveCard`）。
+    func move(_ id: UUID, to slot: CardSlot, after previous: UUID?) {
+        let store = services.store
+        attempt { self.undoable("移动", try await store.moving(id, to: slot, after: previous)) }
     }
 
     func archive(_ id: UUID) async throws {

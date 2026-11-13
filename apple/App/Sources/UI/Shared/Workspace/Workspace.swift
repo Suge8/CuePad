@@ -13,6 +13,7 @@ final class Workspace {
         var status: SessionShown.Status?
         var link: Route?
         var action: NoticeAction?
+        var sound: NoticeSound?
 
         var isError: Bool { tone == .failure }
 

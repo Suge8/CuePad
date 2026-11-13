@@ -12,19 +12,23 @@ extension Workspace {
     var noticeInRail: Bool { layout == .wide && sidebarOpen && wideFits?.rail == true }
     var noticeOnHead: Bool { notice != nil && !noticeInRail }
 
-    /// 收已经拼好的 `Dotted`；界面字面量走下面那个（进目录、按当前语言取字）。
-    func say(_ text: Dotted, tone: Notice.Tone = .done, status: SessionShown.Status? = nil, link: Route? = nil, action: NoticeAction? = nil) {
-        let notice = Notice(text: text, tone: tone, status: status, link: link, action: action)
+    /// 收已经拼好的 `Dotted`；界面字面量走下面那个（进目录、按当前语言取字）。不给 `sound` 时出错的、带撤销的各有一声，只报结果的不出声（`NoticeSound`）。
+    func say(
+        _ text: Dotted, tone: Notice.Tone = .done, status: SessionShown.Status? = nil, link: Route? = nil, action: NoticeAction? = nil, sound: NoticeSound? = nil
+    ) {
+        let sound = sound ?? (tone == .failure ? .fail : action?.undoes != nil ? .act : nil)
+        let notice = Notice(text: text, tone: tone, status: status, link: link, action: action, sound: sound)
         self.notice = notice
         noticeDue = .now + (action != nil || notice.isError ? Self.lastingNotice : Self.briefNotice)
-        if let action { remember(action) }
+        if let action, let what = action.undoes { remember(action.token, what) { try await action.run($0) } }
         holdNotice(false)
     }
 
     func say(
-        _ text: LocalizedStringResource, tone: Notice.Tone = .done, status: SessionShown.Status? = nil, link: Route? = nil, action: NoticeAction? = nil
+        _ text: LocalizedStringResource, tone: Notice.Tone = .done, status: SessionShown.Status? = nil, link: Route? = nil, action: NoticeAction? = nil,
+        sound: NoticeSound? = nil
     ) {
-        say(Dotted(String(localized: text)), tone: tone, status: status, link: link, action: action)
+        say(Dotted(String(localized: text)), tone: tone, status: status, link: link, action: action, sound: sound)
     }
 
     func fail(_ error: any Error) {
@@ -46,27 +50,39 @@ extension Workspace {
     /// 点了提示上的钮。撤销的那一条就是系统撤销最上面那条时走系统撤销，撤过的不留在"编辑 › 撤销"里；
     /// 其间又打过字（最上面是打字的那一步）就直接撤、把它那一条的内容拿掉：系统撤销只能从最上面撤，那里会剩一步空的。
     func run(_ action: NoticeAction) {
-        if let what = action.undoes, let undoManager, undoManager.canUndo, undoManager.undoActionName == what { return undoManager.undo() }
-        notice = nil
+        guard let what = action.undoes else {
+            notice = nil
+            return attempt { try await action.run(self) }
+        }
+        if let undoManager, undoManager.canUndo, undoManager.undoActionName == what { return undoManager.undo() }
         undoManager?.removeAllActions(withTarget: action.token)
-        attempt { try await action.run(self) }
+        undo(what) { try await action.run($0) }
+    }
+
+    /// 不出提示、只是能撤的事（挪位置、置顶、完成）：结果就在眼前，不用再说一遍，⌘Z 撤得回。
+    func undoable(_ what: LocalizedStringResource, _ run: @escaping Undo) {
+        remember(NSObject(), String(localized: what)) { _ in try await run() }
     }
 
     /// 撤销记进窗口的系统撤销（"编辑 › 撤销归档"、⌘Z，手机与 iPad 的三指左滑、摇一摇），提示收走后照样撤得回；提示上的"撤销"是它看得见的入口。
-    /// 隔了多久才撤由 Store 把关（`CueStore.undo`：之后又改过的不撤、报"已改过"）。不记重做：撤回去的事再做一遍就是。
-    private func remember(_ action: NoticeAction) {
-        guard let what = action.undoes, let undoManager else { return }
-        undoManager.registerUndo(withTarget: action.token) { [weak self] _ in
-            guard let self else { return }
-            // 提示还在说这件事：撤了它就收，画面上看得到撤回；已经收走的补一句撤了什么
-            let said = notice?.action == action
-            if said { notice = nil }
-            attempt {
-                try await action.run(self)
-                if !said { self.say("已撤销：\(what)") }
-            }
+    /// 隔了多久才撤由 Store 把关：之后又改过的不撤、报"已改过"，或只拨回那一次动过的（`CueStore.undo`、`unarchive(_:archivedAt:)`）。不记重做：撤回去的事再做一遍就是。
+    private func remember(_ token: NSObject, _ what: String, _ run: @escaping @MainActor (Workspace) async throws -> Void) {
+        guard let undoManager else { return }
+        // 系统撤销不攥着主人：这一条在，它就得在，由闭包攥住
+        undoManager.registerUndo(withTarget: token) { [weak self, token] _ in
+            _ = token
+            self?.undo(what, run)
         }
         undoManager.setActionName(what)
+    }
+
+    /// 撤了什么都说一声：撤的那件事可能不在眼前这一页。
+    private func undo(_ what: String, _ run: @escaping @MainActor (Workspace) async throws -> Void) {
+        notice = nil
+        attempt {
+            try await run(self)
+            self.say("已撤销：\(what)", sound: .undo)
+        }
     }
 }
 
