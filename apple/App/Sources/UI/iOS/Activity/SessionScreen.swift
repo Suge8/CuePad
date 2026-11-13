@@ -4,6 +4,7 @@ import SwiftUI
 
 struct SessionScreen: View {
     let id: UUID
+    let column: Workspace.Column
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
@@ -13,8 +14,9 @@ struct SessionScreen: View {
     @State private var follow = ChatFollow()
 
     /// `seed`：推入前读好的这一页，首帧即用，之后以 Store 的观察流为准。
-    init(id: UUID, seed: SessionDigest? = nil) {
+    init(id: UUID, seed: SessionDigest? = nil, column: Workspace.Column) {
         self.id = id
+        self.column = column
         _digest = State(initialValue: seed)
         _lastSeen = State(initialValue: seed?.session)
     }
@@ -24,34 +26,19 @@ struct SessionScreen: View {
     private var shownEnd: Speech.Trip? { DeliveryRequest.shownEnd(in: digest?.deliveries ?? [], at: services.speech) }
 
     var body: some View {
-        // 发出时回复框收回一行，对话不被系统先拉下来再滑上去。
-        FloatingReply {
-            chat
-        } reply: {
-            if let session {
-                SessionDock(session: session, digest: digest, compact: !follow.atNewest, revealNote: { follow.seek($0.entry) }) { follow.sent() }
-                    .padding(.horizontal, Spacing.group)
-                    .frame(maxWidth: Self.readingWidth)
-                    .animation(Motion.fade, value: session.question)
-            }
-        }
-        .scrollDismissesKeyboard(.interactively)
-        .floatingHeader(.verbatim(digest?.title(at: services.speech) ?? session?.title ?? ""), hidden: !follow.showsHeader, reveal: { follow.reveal() }) {
-            if shownEnd?.inTransit == true {
-                Text("正在结束…").font(Typography.caption).foregroundStyle(palette.ink3)
-            } else if let session {
-                SessionSubtitle(session: session, delivery: digest?.delivery, undelivered: Chat.undeliveredNote(digest?.undelivered(at: services.speech) ?? 0))
-            }
-        } trailing: {
-            if let session {
-                Menu {
-                    if let title = SessionPlace.menuTitle(of: session, project: digest?.project) { Section { } header: { Text(title) } }
-                    if let taskLink { SessionTaskBindItems(session: session, link: taskLink) }
-                    SessionActions(session: session, task: digest?.task, ending: shownEnd?.inTransit == true)
-                } label: {
-                    Image(.more)
+        Group {
+            if workspace.layout == .wide {
+                VStack(spacing: 0) {
+                    if let session {
+                        let state = headerState(session)
+                        WideSessionTitle(title: state.title, project: digest?.project?.shownName,
+                                         ended: session.staysEnded(by: digest?.delivery, at: services.speech), column: column)
+                            .contextMenu { SessionMenuItems(state: state) }
+                    }
+                    reply.fadesUnderHead()
                 }
-                .accessibilityLabel("更多")
+            } else {
+                narrow
             }
         }
         .observing(services.store, id: DigestKey(id: id, sessionID: lastSeen?.sessionID),
@@ -69,6 +56,50 @@ struct SessionScreen: View {
         .debugDrivesHeader($follow)
         .task(id: session?.stateSince) { if let session { services.settings.markSeen(session) } }
         .onDisappear { if let session { services.settings.markSeen(session) } }
+    }
+
+    private func headerState(_ session: SessionState) -> SessionHeader.State {
+        SessionHeader.State(
+            session: session, delivery: digest?.delivery, title: digest?.title(at: services.speech) ?? session.title,
+            undelivered: Chat.undeliveredNote(digest?.undelivered(at: services.speech) ?? 0), ending: shownEnd?.inTransit == true,
+            place: SessionPlace.menuTitle(of: session, project: digest?.project), pin: digest?.task, showsHeader: follow.showsHeader, showsMenu: true, task: taskLink)
+    }
+
+    private var narrow: some View {
+        reply
+            .floatingHeader(.verbatim(digest?.title(at: services.speech) ?? session?.title ?? ""), hidden: !follow.showsHeader, reveal: { follow.reveal() }) {
+                if shownEnd?.inTransit == true {
+                    Text("正在结束…").font(Typography.caption).foregroundStyle(palette.ink3)
+                } else if let session {
+                    SessionSubtitle(session: session, delivery: digest?.delivery, undelivered: Chat.undeliveredNote(digest?.undelivered(at: services.speech) ?? 0))
+                }
+            } trailing: {
+                if let session {
+                    Menu {
+                        if let title = SessionPlace.menuTitle(of: session, project: digest?.project) { Section { } header: { Text(title) } }
+                        if let taskLink { SessionTaskBindItems(session: session, link: taskLink) }
+                        SessionActions(session: session, task: digest?.task, ending: shownEnd?.inTransit == true)
+                    } label: {
+                        Image(.more)
+                    }
+                    .accessibilityLabel("更多")
+                }
+            }
+    }
+
+    /// 发出时回复框收回一行，对话不被系统先拉下来再滑上去。
+    private var reply: some View {
+        FloatingReply {
+            chat
+        } reply: {
+            if let session {
+                SessionDock(session: session, digest: digest, compact: !follow.atNewest, revealNote: { follow.seek($0.entry) }) { follow.sent() }
+                    .padding(.horizontal, Spacing.group)
+                    .frame(maxWidth: Self.readingWidth)
+                    .animation(Motion.fade, value: session.question)
+            }
+        }
+        .scrollDismissesKeyboard(.interactively)
     }
 
     private var chat: some View {

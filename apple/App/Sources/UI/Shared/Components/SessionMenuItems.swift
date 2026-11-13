@@ -1,5 +1,3 @@
-#if os(macOS)
-import CueBridge
 import CueStore
 import SwiftUI
 
@@ -19,12 +17,7 @@ enum SessionHeader {
     }
 }
 
-struct PageTitleWidth: ViewModifier {
-    func body(content: Content) -> some View {
-        content.frame(minWidth: 160, idealWidth: 420, maxWidth: 420)
-    }
-}
-
+/// 会话页栏头的菜单：三端同一份（宽屏是栏头的右键菜单，手机是页头的"⋯"）。
 struct SessionMenuItems: View {
     let state: SessionHeader.State
     @Environment(Workspace.self) private var workspace
@@ -45,14 +38,8 @@ struct SessionMenuItems: View {
 }
 
 extension Workspace {
-    func showTask(_ task: Card) {
-        show(.project(task.projectID))
-        open(task)
-    }
-
     /// 完成就是做完了：会话绑着的事都做完了就结束它。
     func completeTask(_ id: UUID) {
         attempt { try await self.complete(id) }
     }
 }
-#endif

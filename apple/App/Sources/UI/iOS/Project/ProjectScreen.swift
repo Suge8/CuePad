@@ -29,7 +29,7 @@ struct ProjectScreen: View {
     @State private var anchor = TaskFoldAnchor()
     @State private var board = WallBoard()
 
-    private var inColumn: Bool { headerHost == .panel }
+    private var inColumn: Bool { headerHost == .column }
 
     var body: some View {
         ScrollView {
@@ -42,7 +42,7 @@ struct ProjectScreen: View {
         }
         .scrollPosition($position)
         .taskFoldScroll(anchor)
-        .floatingHeader(.verbatim(inColumn ? "" : project?.shownName ?? ""), detail: { ProjectIntroLine(project: project, inHeader: true) }, trailing: { actions })
+        .floatingHeader(.verbatim(project?.shownName ?? ""), detail: { ProjectIntroLine(project: project, inHeader: true) }, trailing: { actions })
         .observing(services.store, id: projectID, into: $page, onError: workspace.fail) {
             [projectID] store in ProjectPage(try ProjectPageData.read(projectID, from: store))
         }

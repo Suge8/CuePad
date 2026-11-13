@@ -15,12 +15,4 @@ struct ShelfScreen: View {
         .floatingHeader("项目") { NewProjectButton() }
     }
 }
-
-private struct NewProjectButton: View {
-    @Environment(Workspace.self) private var workspace
-
-    var body: some View {
-        Button("新建项目", icon: .newProject) { workspace.projectForm = .init() }
-    }
-}
 #endif
