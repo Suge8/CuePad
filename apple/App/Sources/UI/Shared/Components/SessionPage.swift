@@ -2,7 +2,8 @@ import CueStore
 import SwiftUI
 
 /// 会话页三端同一份。栏头按布局：宽屏是栏头那一排（`WideSessionTitle`，右键是 `SessionMenuItems`），窄屏是页头（"⋯" 里同一份菜单）。
-/// 平台的差别只有三处：Mac 把本机在线的会话换上桥上的实时状态（同步记录按节流写，会落后几秒）、回复框晚两帧建、回复框的托底。
+/// 平台的差别：Mac 把本机在线的会话换上桥上的实时状态（栏头与对话，同步记录按节流写、会落后几秒）、回复框与菜单晚两帧建、回复框的托底；
+/// 手机翻看历史时回复框收成胶囊，窄屏的页头只在手机。
 struct SessionPage: View {
     let id: UUID
     let sessionID: String?
@@ -36,7 +37,7 @@ struct SessionPage: View {
                     if let session {
                         WideSessionTitle(title: digest?.title(at: services.speech) ?? session.title, project: digest?.project?.shownName,
                                          ended: session.staysEnded(by: digest?.delivery, at: services.speech), column: column)
-                            .contextMenu { if secondary { SessionMenuItems(state: menu(session, digest)) } }
+                            .contextMenu { if secondary { menu(session, digest) } }
                     }
                     reply(session, digest).fadesUnderHead()
                 }
@@ -50,7 +51,7 @@ struct SessionPage: View {
                     }
                 } trailing: {
                     if let session {
-                        Menu { SessionMenuItems(state: menu(session, digest)) } label: { Image(.more) }
+                        Menu { menu(session, digest) } label: { Image(.more) }
                             .accessibilityLabel("更多")
                     }
                 }
@@ -99,12 +100,8 @@ struct SessionPage: View {
         DeliveryRequest.shownEnd(in: digest?.deliveries ?? [], at: services.speech)?.inTransit == true
     }
 
-    private func menu(_ session: SessionState, _ digest: SessionDigest?) -> SessionHeader.State {
-        SessionHeader.State(
-            session: session, delivery: digest?.delivery, title: digest?.title(at: services.speech) ?? session.title,
-            undelivered: Chat.undeliveredNote(digest?.undelivered(at: services.speech) ?? 0), ending: ending(digest),
-            place: SessionPlace.menuTitle(of: session, project: digest?.project), pin: digest?.task, showsHeader: follow.showsHeader,
-            showsMenu: secondary, task: task)
+    private func menu(_ session: SessionState, _ digest: SessionDigest?) -> SessionMenuItems {
+        SessionMenuItems(session: session, place: SessionPlace.menuTitle(of: session, project: digest?.project), task: task, pin: digest?.task, ending: ending(digest))
     }
 
     /// 发出时回复框收回一行，对话不被系统先拉下来再滑上去。

@@ -1,31 +1,18 @@
 import CueStore
 import SwiftUI
 
-enum SessionHeader {
-    struct State: Equatable {
-        var session: SessionState
-        var delivery: DeliveryRequest?
-        var title: String
-        var undelivered: String?
-        var ending: Bool
-        var place: String?
-        var pin: SessionTask?
-        var showsHeader: Bool
-        /// 晚于标题两帧建：建菜单约占点击回合的一半。
-        var showsMenu: Bool
-        var task: SessionTaskLink?
-    }
-}
-
 /// 会话页栏头的菜单：三端同一份（宽屏是栏头的右键菜单，手机是页头的"⋯"）。
 struct SessionMenuItems: View {
-    let state: SessionHeader.State
+    let session: SessionState
+    let place: String?
+    let task: SessionTaskLink?
+    let pin: SessionTask?
+    let ending: Bool
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        let session = state.session
-        if let place = state.place { Section { } header: { Text(place) } }
-        if let link = state.task {
+        if let place { Section { } header: { Text(place) } }
+        if let link = task {
             let open = link.tasks.filter { $0.task.status != .done }
             ForEach(open) { item in
                 Button(open.count > 1 ? "完成「\(item.task.title)」" : "完成任务", icon: .complete) { workspace.completeTask(item.task.id) }
@@ -33,7 +20,7 @@ struct SessionMenuItems: View {
             SessionTaskBindItems(session: session, link: link)
             Divider()
         }
-        SessionActions(session: session, task: state.pin, ending: state.ending)
+        SessionActions(session: session, task: pin, ending: ending)
     }
 }
 

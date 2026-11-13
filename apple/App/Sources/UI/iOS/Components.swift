@@ -50,12 +50,11 @@ private struct ProjectContextMenu: ViewModifier {
         if let project {
             content
                 .contentShape(.contextMenuPreview, .rect(cornerRadius: cornerRadius))
-                .contextMenu { ProjectActions(project: project) { workspace.projectForm = .init(project: project) } }
+                .contextMenu { ProjectActions(project: project) }
         } else {
             content
         }
     }
-    @Environment(Workspace.self) private var workspace
 }
 
 private struct DeskBackground: ViewModifier {

@@ -114,6 +114,7 @@ final class Workspace {
     #endif
     var voiceDetails: BubbleSource?
     var addsTask = false
+    var confirmsEmptyTrash = false
     /// 开着的新会话输入框（`NewSessionInput`）。
     var newSession: SessionStart? {
         didSet { if let oldValue, oldValue.id != newSession?.id { settleLaunch(.form) } }
@@ -122,7 +123,6 @@ final class Workspace {
     var searching = false
     var showsSetup = false
     var voice: VoiceCall? { services.voice.call }
-    var confirmsEmptyTrash = false
     var hoveredProject: UUID?
     #else
     var menuOpen = false
@@ -327,7 +327,7 @@ final class Workspace {
         #endif
     }
 
-    /// 看着的东西没了就离开（`leave`），由这里发现，页面不各自盯：项目看目录，卡看它本身，文件看技能与规则的快照。
+    /// 看着的东西没了就离开（`leave`），由这里发现，页面不各自盯：项目看目录，卡（编辑页与开着的任务气泡）看它本身，文件看技能与规则的快照。
     private var shownRoutes: [Route] {
         let routes: [Route] = switch navigation {
         case .narrow(let state): state.path
@@ -337,14 +337,17 @@ final class Workspace {
     }
 
     private var shownCards: Set<UUID> {
-        Set(shownRoutes.compactMap { if case .card(let id) = $0 { id } else { nil } })
+        Set(shownRoutes.compactMap { if case .card(let id) = $0 { id } else { nil } } + [openTask?.task].compactMap(\.self))
     }
 
     /// 进了回收站、并进了别的卡（行被删）都算没了；看着的卡一换就换一份订阅。
     private func followShownCards() async {
         var watching: Task<Void, Never>?
+        var watched: Set<UUID> = []
         defer { watching?.cancel() }
-        for await ids in Observations({ self.shownCards }) {
+        // 气泡里翻子任务也算一次变化：同一组卡不重订
+        for await ids in Observations({ self.shownCards }) where ids != watched {
+            watched = ids
             watching?.cancel()
             watching = ids.isEmpty ? nil : Task { await self.leaveWhenGone(ids) }
         }

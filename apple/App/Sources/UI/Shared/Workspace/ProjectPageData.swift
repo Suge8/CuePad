@@ -13,6 +13,8 @@ nonisolated struct ProjectPageData: Sendable, Equatable {
     var stamps: [CardStamp]
     /// 由 `lastSends` 推出，读取时算一次。
     var lastTarget: [UUID: String]
+    /// 每张卡的摘要，读取时在 Store 的执行体上算好，不占主线程。
+    var entries: [UUID: CardEntry]
 
     static let doneLimit = 30
 
@@ -31,17 +33,24 @@ nonisolated struct ProjectPageData: Sendable, Equatable {
             stamps: cards.map { CardStamp(id: $0.id, modifiedAt: $0.modifiedAt, lastSentAt: lastSends[$0.id]?.sentAt, isPinned: $0.isPinned) },
             lastTarget: lastSends.compactMapValues { send in
                 send.target.shownName.map { $0 == info?.name ? SendCopy.sameProject : $0 }
-            })
+            },
+            entries: Dictionary(uniqueKeysWithValues: cards.map { ($0.id, CardEntry($0)) }))
     }
 }
 
 nonisolated struct WallBoard: Equatable, Sendable {
     private(set) var arrangement: WallArrangement?
     private(set) var floated: Set<UUID> = []
+    /// "更早"的分组随分区一起算：页面在任务行里 Agent 的状态一变就重算，每次都从上千张卡里重新分组太贵。
+    private(set) var older: [OlderGroup] = []
 
     /// 用最新数据更新分区；返回是否是第一次排墙（调用方据此决定要不要动画）。
     @discardableResult
     mutating func refresh(with data: ProjectPageData, project: UUID, now: Date = .now, calendar: Calendar = .current) -> Bool {
+        defer {
+            let stamps = Dictionary(uniqueKeysWithValues: data.stamps.map { ($0.id, $0) })
+            older = OlderGroup.group(arrangement?.older.compactMap { stamps[$0] } ?? [], now: now, calendar: calendar)
+        }
         guard let previous = arrangement else {
             arrangement = WallArrangement.arrange(data.stamps, project: project, now: now)
             return true
@@ -52,12 +61,5 @@ nonisolated struct WallBoard: Equatable, Sendable {
             : []
         arrangement = next
         return false
-    }
-}
-
-extension ProjectPageData {
-    func olderGroups(_ arrangement: WallArrangement, now: Date = .now, calendar: Calendar = .current) -> [OlderGroup] {
-        let byID = Dictionary(uniqueKeysWithValues: stamps.map { ($0.id, $0) })
-        return OlderGroup.group(arrangement.older.compactMap { byID[$0] }, now: now, calendar: calendar)
     }
 }

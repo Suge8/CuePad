@@ -47,7 +47,7 @@ enum HeaderHost: Equatable {
     case page
     case sidebar
     case panel
-    /// 宽屏主区栏里的页：标题在栏头（`WideColumnHead`）。
+    /// 宽屏主区栏里的页：标题与操作在栏头（`WideColumnHead`）。
     case column
 }
 
@@ -87,11 +87,11 @@ private struct FloatingHeader<Center: View, Trailing: View>: ViewModifier {
             case .sidebar:
                 content.safeAreaPadding(.top, height + Bars.contentGap)
             case .column:
-                // 写这一页是什么的是栏头（`WideColumnHead`，同一排、左边）：这一排只留右边的操作
+                // 这一页是什么、有什么操作都在栏头（`WideColumnHead`，同 Mac）：这里只让出栏头的高、内容在它下沿淡出（同会话页），`trailing` 只给窄屏
                 content
-                    .safeAreaPadding(.top, Bars.contentGap)
+                    .fadesUnderHead()
+                    .safeAreaPadding(.top, height + Bars.contentGap)
                     .readerHidden(covered)
-                    .safeAreaBar(edge: .top, spacing: 0) { PageBar(height: height, trailing: trailing.readerHidden(covered)) { EmptyView() } }
             case .page, .panel:
                 let bar = PageBar(height: height, trailing: trailing.modifier(Yield(hidden: hidden)).readerHidden(covered)) {
                     middle.modifier(Yield(hidden: hidden)).readerHidden(covered && !grown).background { revealer(.capsule) }

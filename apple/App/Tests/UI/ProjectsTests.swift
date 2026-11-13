@@ -145,6 +145,21 @@ struct ProjectsTests {
         try await eventually("编辑收起") { workspace.openCard == nil }
         #expect(workspace.mainRoute == .project(project.id))
     }
+
+    @Test func 别处删掉开着气泡的任务_气泡收起() async throws {
+        let project = try await store.createProject(name: "A", color: "#000000")
+        let task = try await store.createTask("跟进", in: project.id)
+        let workspace = Workspace(services: services)
+        let catalog = observing(workspace)
+        defer { await catalog.stop() }
+        try await eventually("目录读到 A") { workspace.catalog?.project(project.id) != nil }
+        workspace.show(.project(project.id))
+        workspace.openTask(task)
+        #expect(workspace.openTask?.task == task.id)
+        _ = try await store.trashCard(task.id)
+        try await eventually("气泡收起") { workspace.openTask == nil }
+        #expect(workspace.mainRoute == .project(project.id))
+    }
 }
 #endif
 
