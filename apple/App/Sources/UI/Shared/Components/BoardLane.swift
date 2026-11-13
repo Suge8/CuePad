@@ -26,6 +26,14 @@ struct LaneAdd {
         case .waiting, .done: nil
         }
     }
+
+    /// 归档做完的：范围跟着看板（`Workspace.archiveCompletedTasks`），说法也跟着写是哪个项目的。
+    static func archive(in workspace: Workspace) -> LaneAdd {
+        let scope = workspace.catalog?.project(workspace.scopedProject)?.shownName
+        return LaneAdd(title: scope.map { "归档「\($0)」做完的（置顶的留着）" } ?? "全部归档做完的（置顶的留着）", icon: .archive) {
+            workspace.attempt { try await workspace.archiveCompletedTasks() }
+        }
+    }
 }
 
 /// 列头里是一颗垫着淡底的圆钮（`cell` 的宽就是它的直径）：光一个"+"字在列头里认不出是钮。
@@ -91,7 +99,7 @@ extension Workspace {
 struct BoardColumnHeader: View {
     let column: TaskBoard.Column
     let count: Int
-    /// 已完成那一列有做完的任务：列尾那一格（别的列放加号的地方）是全部归档。批量归档只有这一个入口，不随"更早做完的"展没展开。
+    /// 已完成那一列有做完的任务：列尾那一格（别的列放加号的地方）是全部归档，不随"更早做完的"展没展开。手机按行排时列头没有这一格，入口在"更早做完的"那一页。
     var archives = false
     @Environment(\.palette) private var palette
     @Environment(Workspace.self) private var workspace
@@ -104,18 +112,11 @@ struct BoardColumnHeader: View {
             .accessibilityLabel(column.title)
             .accessibilityValue("\(count)")
             .accessibilityAddTraits(.isHeader)
-            if let add = archives ? archive : LaneAdd.of(column, in: workspace) {
+            if let add = archives ? .archive(in: workspace) : LaneAdd.of(column, in: workspace) {
                 LaneAddButton(add, cell: CGSize(width: Self.add, height: Self.height)).font(Self.font)
             }
         }
         .frame(height: Self.height)
-    }
-
-    private var archive: LaneAdd {
-        let scope = workspace.catalog?.project(workspace.scopedProject)?.shownName
-        return LaneAdd(title: scope.map { "归档「\($0)」做完的（置顶的留着）" } ?? "全部归档做完的（置顶的留着）", icon: .archive) {
-            workspace.attempt { try await workspace.archiveCompletedTasks() }
-        }
     }
 
     private var row: some View {

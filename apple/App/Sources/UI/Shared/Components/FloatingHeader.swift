@@ -204,10 +204,12 @@ private struct Yield: ViewModifier {
 
 /// 整排的玻璃（两侧圆钮、中间那几块、长开的面板）在同一个玻璃容器里：彼此取样，名牌长开盖过侧栏钮时两块相融，不是玻璃叠玻璃。
 /// 容器里的玻璃都挂在内容本身上（`glass`、`glassCircle`）：挂在空背景上的会被容器合成到字上面。相融的距离比相邻两块之间的缝小，静止时各是各的。
+/// 两边让到 `headInset`：iPad 会话条藏起时，顶上那排浮着的钮压在主区左上，中间那块在让出后的宽里居中。
 private struct PageBar<Middle: View, Trailing: View>: View {
     let height: CGFloat
     let trailing: Trailing
     @ViewBuilder let middle: Middle
+    @Environment(\.headInset) private var inset
 
     var body: some View {
         GlassEffectContainer(spacing: Spacing.tight) {
@@ -221,7 +223,8 @@ private struct PageBar<Middle: View, Trailing: View>: View {
                 middle
             }
         }
-        .padding(.horizontal, FloatingHeaderLayout.margin)
+        .padding(.leading, inset.leading)
+        .padding(.trailing, inset.trailing)
     }
 }
 

@@ -7435,22 +7435,6 @@
         }
       }
     },
-    "全部归档" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Archive All"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "全部归档"
-          }
-        }
-      }
-    },
     "全部归档做完的（置顶的留着）" : {
       "localizations" : {
         "en" : {
