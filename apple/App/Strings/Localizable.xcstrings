@@ -315,22 +315,6 @@
         }
       }
     },
-    "%@ 另写了一份，点开合并" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ has its own copy. Open to merge"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ 另写了一份，点开合并"
-          }
-        }
-      }
-    },
     "%@ 在等回答" : {
       "localizations" : {
         "en" : {
@@ -9727,22 +9711,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "叶子"
-          }
-        }
-      }
-    },
-    "各家自己的" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Agent-Specific"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "各家自己的"
           }
         }
       }
@@ -23699,22 +23667,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "还没有额度"
-          }
-        }
-      }
-    },
-    "还没有，点开来写" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nothing yet. Open to write one"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "还没有，点开来写"
           }
         }
       }

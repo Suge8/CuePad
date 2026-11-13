@@ -3,23 +3,18 @@ import SwiftUI
 
 /// 改动的写入都在那台 Mac 上：手机上的动作发往 Mac（按钮带纸飞机），快照随它写回同步来。
 
-/// 段名只在分段上（Mac 工具栏、手机页顶）。一段就是一张纸（`LibraryDeck`）：纸上只有分组小标题与行（`LibraryEntry`），不再套卡；
-/// 规则那张纸的头是全局规则本身（大标题、谁在读、正文开头）。
+/// 段名只在分段上（Mac 工具栏、手机页顶）。页上没有纸也没有卡：分组小标题与行（`LibraryEntry`）直接排在桌面上，靠间距分组。
 enum LibraryLayout {
-    /// 文件页正文那一列（同灵感的编辑页）。
+    /// 这一页与文件页正文同一列（同灵感的编辑页）。
     static let column: CGFloat = 680
-    static let gap = Spacing.part
+    static let gap = Spacing.section
     static let margin = Spacing.page
     static let bottom = Spacing.section
-    /// 那张纸最宽：正文一列加两边的纸边。
-    static let sheet: CGFloat = column + 2 * sheetInset
     #if os(macOS)
-    static let sheetInset = Spacing.section
     static let textInset: CGFloat = 24
     /// 行尾的前进箭头：Mac 上点行打开的是盖在主区上的文件页（浮层，不是进一页），不画
     static let chevron = false
     #else
-    static let sheetInset = Spacing.inset
     static let textInset: CGFloat = 20
     static let chevron = true
     #endif
@@ -63,7 +58,7 @@ struct LibraryEntry<Icon: View, Trailing: View>: View {
     let title: String
     var dim = false
     let detail: String
-    /// 灰字那行放不下时折行（整理的那几件要读全），不然截在中间（路径的两头都有用）。
+    /// 灰字那行放不下时一直折下去（整理的那几件要读全），不然最多两行。
     var wraps = false
     @ViewBuilder var icon: Icon
     @ViewBuilder var trailing: Trailing
@@ -75,7 +70,7 @@ struct LibraryEntry<Icon: View, Trailing: View>: View {
             VStack(alignment: .leading, spacing: Spacing.hair) {
                 Text(verbatim: title).font(Typography.body.weight(.medium)).foregroundStyle(dim ? palette.ink3 : palette.ink).lineLimit(1)
                 Text(verbatim: detail).font(Typography.meta).foregroundStyle(dim ? palette.ink3 : palette.ink2)
-                    .lineLimit(wraps ? nil : 1).truncationMode(.middle).fixedSize(horizontal: false, vertical: true)
+                    .lineLimit(wraps ? nil : 2).fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             trailing
@@ -192,7 +187,7 @@ struct TidyConsequence: View {
     }
 }
 
-/// 各份正文读同步来的那一条（`LibraryFileText`），不另存一份预览。
+/// 全局规则与各家自己那几份同在"全局"一组，全局规则排第一。
 struct InstructionSection: View {
     let library: AgentLibrary
     @Environment(Workspace.self) private var workspace
@@ -200,12 +195,11 @@ struct InstructionSection: View {
 
     var body: some View {
         let projects = library.instructions.filter { if case .project = $0.kind { true } else { false } }
-        let own = library.instructions.filter { if case .agent = $0.kind { true } else { $0.kind == .piSystem } }
+        let global = library.instructions.filter { $0.kind == .global } + library.instructions.filter { if case .agent = $0.kind { true } else { $0.kind == .piSystem } }
         VStack(alignment: .leading, spacing: LibraryLayout.gap) {
-            if let global = library.instruction(.global) { GlobalRule(library: library, instruction: global) }
             TidySlot(library: library, rules: true)
-            if !own.isEmpty {
-                LibraryGroup { Text("各家自己的") } content: { ForEach(own) { row($0) } }
+            if !global.isEmpty {
+                LibraryGroup { Text("全局") } content: { ForEach(global) { row($0) } }
             }
             if !projects.isEmpty {
                 LibraryGroup { Text("项目") } content: { ForEach(projects) { row($0) } }
@@ -229,100 +223,25 @@ struct InstructionSection: View {
         if case .agent(let agent, _) = kind { String(localized: "\(agent.name) 的全局规则") } else { workspace.instructionName(kind) }
     }
 
-    /// 文件名，项目规则再写哪几家读不到（用字写，不画记号）。
+    /// 文件名，再用字写谁读（不画记号）：全局规则写谁在读、谁另写了一份（点开在文件页顶上合并，`MergeBar`），项目规则写哪几家读不到。
     private func detail(_ instruction: LibraryInstruction) -> String {
         guard instruction.hash != nil else { return String(localized: "还没有") }
+        let file = URL(filePath: instruction.path).lastPathComponent
+        let writers = library.merge(into: instruction.kind)?.writers ?? []
+        func list(_ agents: [AgentKind]) -> String { agents.map(\.name).formatted(.list(type: .and)) }
         switch instruction.kind {
         case .agent(_, let file): return file
+        case .piSystem: return file
+        case .global:
+            let reading = library.agents.filter { instruction.readers.contains($0) && !writers.contains($0) }
+            return Dotted(
+                file, reading.isEmpty ? nil : String(localized: "\(list(reading)) 在读"),
+                writers.isEmpty ? nil : String(localized: "\(list(writers)) 另写了一份")
+            ).visible
         case .project:
-            let writers = library.merge(into: instruction.kind)?.writers ?? []
             let unseen = library.unseen(instruction)
-            let names = library.agents.filter { unseen.contains($0) || writers.contains($0) }.map(\.name)
-            let file = URL(filePath: instruction.path).lastPathComponent
-            return Dotted(file, names.isEmpty ? nil : String(localized: "\(names.formatted(.list(type: .and))) 读不到")).visible
-        case .global, .piSystem: return URL(filePath: instruction.path).lastPathComponent
-        }
-    }
-}
-
-/// 这张纸的头：各家共读的那一份。大标题旁画谁在读，下面一行写谁在读、放在哪，再是正文开头，往下渐隐（点开是全文）。
-/// 有哪家另写了一份、内容不一样时最后多一行（点开就在文件页顶上合并，`MergeBar`）。
-private struct GlobalRule: View {
-    let library: AgentLibrary
-    let instruction: LibraryInstruction
-    @Environment(Workspace.self) private var workspace
-    @Environment(\.palette) private var palette
-    @State private var texts: [String: String]?
-
-    var body: some View {
-        let writers = library.merge(into: .global)?.writers ?? []
-        let reading = instruction.hash == nil ? [] : library.agents.filter { instruction.readers.contains($0) && !writers.contains($0) }
-        Button { workspace.openLibrary(.instruction(.global)) } label: {
-            VStack(alignment: .leading, spacing: Spacing.group) {
-                VStack(alignment: .leading, spacing: Spacing.tight) {
-                    HStack(alignment: .firstTextBaseline, spacing: Spacing.item) {
-                        Text("全局规则").font(Typography.heading).foregroundStyle(palette.ink)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        if instruction.hash != nil { ReaderMarks(agents: library.agents, reading: reading) }
-                    }
-                    Text(verbatim: Dotted(Self.readers(reading), library.shown(instruction.path)).visible)
-                        .font(Typography.meta).foregroundStyle(palette.ink2).lineLimit(1).truncationMode(.middle)
-                }
-                if instruction.hash == nil {
-                    Text("还没有，点开来写").font(Typography.body).foregroundStyle(palette.ink3)
-                } else {
-                    Text(opening)
-                        .font(Typography.body).foregroundStyle(palette.ink2)
-                        .lineLimit(Self.lines, reservesSpace: true).lineSpacing(Typography.noteLineSpacing)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .mask(LinearGradient(stops: [.init(color: .black, location: 0.6), .init(color: .clear, location: 1)], startPoint: .top, endPoint: .bottom))
-                }
-                if !writers.isEmpty {
-                    HStack(spacing: Spacing.glyph) {
-                        ForEach(writers, id: \.self) { $0.mark.image }
-                        Text(verbatim: String(localized: "\(writers.map(\.name).formatted(.list(type: .and))) 另写了一份，点开合并")).lineLimit(2)
-                    }
-                    .font(Typography.secondary).foregroundStyle(palette.ink)
-                }
-            }
-            .multilineTextAlignment(.leading)
-            .contentShape(.rect)
-        }
-        .buttonStyle(.row)
-        .observingLibraryTexts([instruction.path], in: library, into: $texts)
-    }
-
-    /// 渐隐只吃掉最后两行：四行以内的短文件看得全。
-    private static let lines = 6
-
-    private static func readers(_ reading: [AgentKind]) -> String? {
-        reading.isEmpty ? nil : String(localized: "\(reading.map(\.name).formatted(.list(type: .and))) 在读")
-    }
-
-    private var opening: AttributedString {
-        guard let arrived = AgentLibrary.arrived(instruction.path, hash: instruction.hash, in: texts), let text = arrived else { return "" }
-        var lines: [AttributedString] = []
-        func add(_ line: String, bold: Bool = false) {
-            let plain = MarkdownBlock.plainInline(line).trimmingCharacters(in: .whitespaces)
-            guard !plain.isEmpty, lines.count < Self.lines else { return }
-            var shown = AttributedString(plain)
-            if bold {
-                shown.inlinePresentationIntent = .stronglyEmphasized
-                shown.foregroundColor = palette.ink
-            }
-            lines.append(shown)
-        }
-        _ = MarkdownBlock.parse(text) { block in
-            switch block.content {
-            case .heading(_, let text): add(text, bold: true)
-            case .paragraph(let text), .quote(let text): text.split(separator: "\n").forEach { add(String($0)) }
-            case .code, .table, .rule: break
-            }
-            return lines.count < Self.lines
-        }
-        return lines.reduce(into: AttributedString()) { all, line in
-            if !all.characters.isEmpty { all += "\n" }
-            all += line
+            let missing = library.agents.filter { unseen.contains($0) || writers.contains($0) }
+            return Dotted(file, missing.isEmpty ? nil : String(localized: "\(list(missing)) 读不到")).visible
         }
     }
 }

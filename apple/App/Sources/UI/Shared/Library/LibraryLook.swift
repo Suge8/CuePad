@@ -153,25 +153,3 @@ struct UnseenMarks: View {
         .accessibilityHidden(unseen.isEmpty) // 合并：整行合并成一个元素，直接写就藏得住；readerHidden 的容器会把这句挡在合并外
     }
 }
-
-/// 装着的每一家一格：在读的画标志，读不到的划掉（同 `UnseenMarks`）。读屏念卡里的字。
-struct ReaderMarks: View {
-    let agents: [AgentKind]
-    let reading: [AgentKind]
-    @Environment(\.palette) private var palette
-
-    private static let mark: CGFloat = 13
-
-    var body: some View {
-        HStack(spacing: Spacing.glyph) {
-            ForEach(agents, id: \.self) { kind in
-                if reading.contains(kind) {
-                    kind.mark.image.font(.system(size: Self.mark)).foregroundStyle(palette.ink2).help(String(localized: "\(kind.name) 在读"))
-                } else {
-                    StruckBrandMark(mark: kind.mark, size: Self.mark).foregroundStyle(palette.ink3).help(String(localized: "\(kind.name) 读不到"))
-                }
-            }
-        }
-        .accessibilityHidden(true) // 合并：整张卡合并成一个元素，谁在读、谁另写了一份都在卡里的字上
-    }
-}

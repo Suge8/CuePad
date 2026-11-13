@@ -17,11 +17,7 @@ struct LibraryDeck: View {
 
     private static func pane(_ library: AgentLibrary, @ViewBuilder content: () -> some View) -> some View {
         VStack(spacing: LibraryLayout.gap) {
-            content()
-                .padding(.horizontal, LibraryLayout.sheetInset).padding(.vertical, LibraryLayout.sheetInset)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .paper(cornerRadius: Radius.sheet)
-                .rowContainer(.rect(cornerRadius: Radius.sheet))
+            content().frame(maxWidth: .infinity, alignment: .leading)
             #if os(iOS)
             LibrarySource(library: library)
             #endif
@@ -37,7 +33,7 @@ private struct LibraryPaneScroll<Content: View>: View {
     var body: some View {
         ScrollView {
             content
-                .frame(maxWidth: LibraryLayout.sheet)
+                .frame(maxWidth: LibraryLayout.column)
                 .padding(.horizontal, LibraryLayout.margin)
                 .padding(.bottom, LibraryLayout.bottom)
                 .frame(maxWidth: .infinity)
