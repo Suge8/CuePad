@@ -59,7 +59,7 @@ extension DebugScene {
             box.wrappedValue = ComposerDraft()
             let store = services.store
             let executor = DeliveryExecutor(store: store, hostID: host, onIssue: { error in
-                Task { @MainActor in abandon("准备演示写库失败", error) }
+                abandon("准备演示写库失败", error)
             }, preparation: { request in
                 let id = request.id
                 return .waiting(DeliveryPreparation(reason: DeliveryPreparation.upgrading) {

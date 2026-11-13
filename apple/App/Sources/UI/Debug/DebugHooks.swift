@@ -56,10 +56,10 @@ enum DebugHooks {
         #endif
     }()
 
-    /// 调试画面钉住的 Cue 此刻（`-CuePadCueNow` 起来就钉、`-CuePadCueCycle` 轮流换，`DebugScene.cueNow`）：钉着就不随库变。
+    /// 调试画面钉住的 Cue 此刻（`-CuePadCueNow` 起来就钉、`-CuePadCueCycle` 轮流换，`DebugScene.pinned`）：钉着就不随库变。
     static var cueNow: CueNow? {
         #if DEBUG
-        DebugScene.cueNow
+        DebugScene.pinned.cueNow
         #else
         nil
         #endif

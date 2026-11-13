@@ -11,7 +11,7 @@ enum DebugScene {
         let parts = args.layoutOpts.windowSize?.split(separator: "x").compactMap { Double($0) } ?? []
         return parts.count == 2 ? CGSize(width: parts[0], height: parts[1]) : nil
     }
-    static var cueNow = args.cueOpts.now.flatMap { CueActivitySamples.named($0) ?? CueNowSamples.all[$0] }
+    static let pinned = Pinned()
     static var sessionToOpen: String? { scene == "session" ? args.session : nil }
     static var injectsGeometryLoop: Bool { args.layoutOpts.geometryLoop }
     // 只在脚本起的实例里挂（`DebugHooks.scripted`）：全局攥着视图的闭包，连带它环境里的工作区与服务，测试宿主里每条用例的库都放不掉
@@ -21,6 +21,11 @@ enum DebugScene {
     static var toggleQuota: () -> Void = {}
     static weak var modals: ModalHost?
     #endif
+
+    /// 钉住的 Cue 此刻（`DebugHooks.cueNow`）：可观察，轮播换了值 `CueFeed` 跟着推一份。
+    @Observable final class Pinned {
+        var cueNow = args.cueOpts.now.flatMap { CueActivitySamples.named($0) ?? CueNowSamples.all[$0] }
+    }
 
     /// 第 `attempt` 次订阅项目目录（`Workspace.catalogAttempt`，从 0 起）是否按 `-CuePadCatalogFailure` 注入失败。
     static func injectCatalogFailure(attempt: Int) throws {

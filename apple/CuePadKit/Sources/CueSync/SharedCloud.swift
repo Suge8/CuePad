@@ -3,6 +3,7 @@ import CueStore
 import Foundation
 import SQLite3
 
+#if DEBUG
 /// 同步测量的模拟云（`sync-bench.py` 默认）：同一台机器上几个进程共用一个 SQLite 文件当同步区，不连 iCloud、不吃设备限流。
 /// 每个请求按延迟模型睡一段（`Latency`，脚本写在目录里的 latency.json，数值与出处只在脚本头注释；没有这个文件就不睡）。
 /// 不模拟：改记录冲突（serverRecordChanged）、cloudd 的排队。限流与空间满只在脚本要时注入（`admit`、`quotaFile`）。
@@ -344,3 +345,4 @@ extension CKRecord {
     return (try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? Int
   }
 }
+#endif

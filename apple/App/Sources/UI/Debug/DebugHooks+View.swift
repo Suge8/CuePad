@@ -153,10 +153,11 @@ extension View {
         #if DEBUG
         overlay { DebugScene.entry?.overlay?(workspace) }
         .task {
-            await DebugScene.prepare(workspace)
-            await DebugScene.seedRailIfAsked(workspace.services)
-            await DebugScene.projectFormIfAsked(workspace)
-            await DebugScene.signalReady(workspace.services)
+            guard await DebugScene.signalReady(workspace.services, {
+                await DebugScene.prepare(workspace)
+                await DebugScene.seedRailIfAsked(workspace.services)
+                await DebugScene.projectFormIfAsked(workspace)
+            }) else { return }
             // 驱动不挂在窗口内容上：接力、关窗要跨过关窗，关窗时内容摘下（`MainShellWindow`），内容上的任务跟着停
             for drive in DebugScene.drivers(workspace) { Task { await drive() } }
         }
@@ -175,9 +176,10 @@ extension View {
             if let sheet = DebugScene.entry?.overlay?(workspace) { sheet.withPalette() }
         }
             .task {
-                await DebugScene.prepare(workspace)
-                await DebugScene.seedRailIfAsked(workspace.services)
-                await DebugScene.signalReady(workspace.services)
+                guard await DebugScene.signalReady(workspace.services, {
+                    await DebugScene.prepare(workspace)
+                    await DebugScene.seedRailIfAsked(workspace.services)
+                }) else { return }
                 await withTaskGroup { group in
                     for drive in DebugScene.drivers(workspace) { group.addTask { await drive() } }
                 }

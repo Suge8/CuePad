@@ -8,6 +8,7 @@ extension AppServices {
     /// 这台就是会话所在的 Mac：点开一步当场回会话文件取，在跑的一轮也取得到。
     func holdsSteps(of session: SessionState) -> Bool {
         #if os(macOS)
+        // 演示的会话挂在 demo-mac 下、不挂本机：挂本机会被本机真的执行器接手，发送失败；所以演示 Mac 在这里另认
         session.hostID == speech.localHost || DebugHooks.preset.demoMac
         #else
         false
