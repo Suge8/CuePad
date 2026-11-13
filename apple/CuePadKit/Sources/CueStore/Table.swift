@@ -17,6 +17,29 @@ extension Table {
     .agentLibraryFiles, .activityDestinations,
   ]
 
+  /// 写完要马上传的（同步层自己传，写的人不用叫）：别的设备在等着办、等着看、等着据此让位或推送的；其余由后台那一路攒批。
+  /// 值是这张表里哪些待推送的版本要马上传（`Urgency`）；这些表里的删除都马上传。
+  /// 投送请求被 Mac 领下、正在办的那几版（预留、执行）不急：多数几十毫秒就有结果，只传结果那一版，领取那一版在路上会让结果多等一个来回；
+  /// 执行久了才先传领取（`DeliveryExecutor.claimGrace`）。
+  /// 会话状态只有带手机通知标志的那一版：排在其余待推送后面，等的时候状态前进会把它作废（`StateRecorder`）。
+  /// Cue 的状态只在留给你回的变了时：一轮里一步步的经过、上下文由后台那一路带；Cue 的话连同它此刻的状态一起到，只传话手机上会看到话却还显示上一步。
+  package static let urgent: [Table: Urgency] = [
+    .deliveryRequests: .when("t.handledBy IS NULL OR t.status NOT IN ('preparing', 'executing')"),
+    .piSessionStates: .when("t.notify IS NOT NULL"),
+    .cueState: .changed("leftToYou", along: .cueMessages),
+    .cueMessages: .always, .cueLines: .always, .cueProfile: .always, .macPresence: .always, .sessionViewers: .always,
+    .activityDestinations: .always, .macAgents: .always, .agentLibraries: .always, .agentLibraryFiles: .always,
+  ]
+
+  package enum Urgency: Sendable {
+    case always
+    /// 待推送的这一版满足这个 SQL 条件（表别名 `t`）
+    case when(String)
+    /// 这一列和这个连接上次见到的比变了（本连接在写事务结尾比，别的进程写的在同步层收到通知时比，`CueStore.watchedSeen`），
+    /// 或同一次写入里 `along` 有要马上传的（连同这张表里还没传的那一版）。碰了这张表就全表读一遍这一列，只给只有几行的表用。
+    case changed(String, along: Table)
+  }
+
   /// 带手机通知标志（明文列 `notify`）的表：标志上传即清、远端带回来的不留（`CueStore.markPushed`、`applyVersion`）。
   package static let notifyFlagged: Set<Table> = [.piSessionStates, .cueMessages]
 

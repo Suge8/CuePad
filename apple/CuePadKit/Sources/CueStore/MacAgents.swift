@@ -110,16 +110,14 @@ extension MacAgents: Record, SyncedColumns {
 }
 
 extension CueStore {
-  /// 这台 Mac 写下自己的 Agent 能不能用；和库里的一样就不写。返回写了的记录 id（立即上传用），没写为 nil。
-  @discardableResult
-  public func recordMacAgents(host: String, name: String?, _ agents: [MacAgent], problems: [MacAgentProblem] = []) throws -> UUID? {
+  /// 这台 Mac 写下自己的 Agent 能不能用；和库里的一样就不写。
+  public func recordMacAgents(host: String, name: String?, _ agents: [MacAgent], problems: [MacAgentProblem] = []) throws {
     try write {
       if let stored = try find(MacAgents.self, MacAgents.recordID(host: host)), stored.name == name, stored.agents == agents, stored.problems == problems {
-        return nil
+        return
       }
       let record = MacAgents(hostID: host, name: name, agents: agents, problems: problems, modifiedAt: Date.stamp)
       try upsert(record, updating: ["name", "agents", "problems", "modifiedAt"])
-      return MacAgents.recordID(host: host)
     }
   }
 

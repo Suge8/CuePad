@@ -2,7 +2,7 @@ import CueStore
 import Foundation
 import SwiftUI
 
-/// 都只写库，写完马上传这一条（排在其余待推送前面）。
+/// 都只写库，由同步层马上传（`Table.urgent`）。
 extension Workspace {
     func followCue() async {
         let services = services
@@ -43,8 +43,7 @@ extension Workspace {
     }
 
     func noteCueLine(_ text: String, schedule: ScheduleDraft? = nil) async throws {
-        let line = try await services.store.noteCueLine(text, source: .you, remindAt: schedule?.next(), repeats: schedule?.repeats)
-        await services.upload(line.id)
+        try await services.store.noteCueLine(text, source: .you, remindAt: schedule?.next(), repeats: schedule?.repeats)
     }
 
     func rescheduleCueLine(_ id: UUID, _ draft: ScheduleDraft) {
@@ -57,10 +56,7 @@ extension Workspace {
     func pinCueLine(_ id: UUID, _ pinned: Bool) { writeCueLine(id) { try await $0.pinCueLine(id, pinned) } }
 
     private func writeCueLine(_ id: UUID, _ write: @escaping @Sendable (CueStore) async throws -> Void) {
-        let store = services.store, services = services
-        attempt {
-            try await write(store)
-            await services.upload(id)
-        }
+        let store = services.store
+        attempt { try await write(store) }
     }
 }

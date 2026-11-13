@@ -29,11 +29,11 @@ extension CueStore {
     }
 
     /// 本来就做完了的没有可撤的。
-    func completing(_ id: UUID) async throws -> (status: TaskStatus, ended: [DeliveryRequest], undo: Undo?) {
+    func completing(_ id: UUID) async throws -> (status: TaskStatus, undo: Undo?) {
         let done = try card(id)?.completedAt != nil
-        let (status, ended) = try completeTask(id)
-        guard !done, status == .done, let time = try card(id)?.completedAt else { return (status, ended, nil) }
-        return (status, ended, { try await self.uncompleteTask(id, completedAt: time) })
+        let status = try completeTask(id)
+        guard !done, status == .done, let time = try card(id)?.completedAt else { return (status, nil) }
+        return (status, { try await self.uncompleteTask(id, completedAt: time) })
     }
 
     func trashing(_ ids: [UUID]) async throws -> Undo {

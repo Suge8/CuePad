@@ -1,30 +1,23 @@
 import Foundation
 
 extension CueStore {
-  /// 快照和库里的一样就不写；各份文件的正文只写内容变了的，这台的、不在 `texts` 里的删掉，同一个事务。返回写了与删了的记录 id（立即上传用）。
-  @discardableResult
-  public func recordAgentLibrary(_ library: AgentLibrary, texts: [String: String]) throws -> [UUID] {
+  /// 快照和库里的一样就不写；各份文件的正文只写内容变了的，这台的、不在 `texts` 里的删掉，同一个事务。
+  public func recordAgentLibrary(_ library: AgentLibrary, texts: [String: String]) throws {
     try write {
       let host = library.hostID
-      var changed: [UUID] = []
       if try find(AgentLibrary.self, AgentLibrary.recordID(host: host))?.sameContent(as: library) != true {
         var record = library
         record.modifiedAt = Date.stamp
         try upsert(record)
-        changed.append(AgentLibrary.recordID(host: host))
       }
       let stored = Dictionary(
         uniqueKeysWithValues: try db.query("SELECT path, hash FROM agentLibraryFiles WHERE hostID = ?", [host]) { ($0.text(0), $0.text(1)) })
       for (path, text) in texts where stored[path] != LibraryEdit.base(of: text) {
         try upsert(LibraryFileText(hostID: host, path: path, text: text, modifiedAt: Date.stamp))
-        changed.append(LibraryFileText.recordID(host: host, path: path))
       }
       for path in stored.keys where texts[path] == nil {
-        let id = LibraryFileText.recordID(host: host, path: path)
-        try db.run("DELETE FROM agentLibraryFiles WHERE id = ?", [id])
-        changed.append(id)
+        try db.run("DELETE FROM agentLibraryFiles WHERE id = ?", [LibraryFileText.recordID(host: host, path: path)])
       }
-      return changed
     }
   }
 

@@ -71,8 +71,6 @@ extension CueKeeper {
             save()
             try await store.markCueMessagesDelivered(ids)
             unfetchable.subtract(ids)
-            let upload = setup.upload
-            Task { await upload(ids) }
         }
         do {
             try await shift.brain.send(text, images: images, id: sending)

@@ -1,7 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// 发消息只有这一条路（全 App 所有入口）：按下发送 → 同步取走草稿、清空输入框（在任何 await 之前）→ 写一条记录 → 后台立即上传。
+/// 发消息只有这一条路（全 App 所有入口）：按下发送 → 同步取走草稿、清空输入框（在任何 await 之前）→ 写一条记录（同步层马上传）。
 /// 界面从不等上传或执行结果，到哪了只看记录（`Speech`）。只有写库本身失败时草稿放回输入框（期间新打的字接在后面）并提示。
 /// 落库与全 App 的发送顺序归 AppServices，语音和多个窗口共用。
 extension Workspace {
@@ -105,9 +105,7 @@ extension Workspace {
             }
             return id
         }
-        return Task {
-            if case .success(let id) = await recording.result { await services.upload(id) }
-        }
+        return Task { _ = await recording.result }
     }
 
 }

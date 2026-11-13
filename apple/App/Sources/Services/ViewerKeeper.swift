@@ -136,15 +136,14 @@ final class ViewerKeeper {
     @discardableResult
     private func publish() async throws -> Bool {
         guard let device, let id = try await Self.record(viewing: latest, device: device, in: store) else { return true }
-        return await sync?.upload(id) ?? true
+        return await sync?.send(recordNames: [id.uuidString.lowercased()]) ?? true
     }
 
     /// 他来到了这台（`CueStore.arrive`），当场传出去：别的 Mac 据此让位。
     func arrive() async {
         guard let device else { return }
         do {
-            let id = try await store.arrive(device: device)
-            await sync?.upload(id)
+            try await store.arrive(device: device)
         } catch {
             Self.log.error("没能写下他来到这台：\(error.localizedDescription, privacy: .public)")
         }
@@ -216,7 +215,7 @@ extension ViewerKeeper {
         latest.withLock { $0.quitting = true }
         guard let device else { return true }
         _ = try await Self.record(viewing: latest, device: device, in: store)
-        return await sync?.upload(Viewer.recordID(device: device)) ?? true
+        return await sync?.send(recordNames: [Viewer.recordID(device: device).uuidString.lowercased()]) ?? true
     }
 
     /// 报这个窗口导航最上面的会话页，跟着主窗口露没露在屏上；脚本起的实例窗口排在最后，当它露着（同 `CueViewing`）。

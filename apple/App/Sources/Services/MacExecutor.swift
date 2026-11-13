@@ -12,7 +12,6 @@ final class MacExecutor {
     private let workspaces: Workspaces
     let recorder: StateRecorder
     private let library: AgentLibraryKeeper
-    private let upload: @Sendable (UUID) async -> Void
     private let fetchFile: FileFetching
     private let refreshQuota: AccountQuotas.Query
     private let reportIssue: @MainActor (String) -> Void
@@ -20,7 +19,7 @@ final class MacExecutor {
 
     init(
         store: CueStore, bridge: Bridge, runtimes: [AgentKind: any AgentRuntime], hostID: String, workspaces: Workspaces, recorder: StateRecorder,
-        library: AgentLibraryKeeper, upload: @escaping @Sendable (UUID) async -> Void, fetchFile: @escaping FileFetching,
+        library: AgentLibraryKeeper, fetchFile: @escaping FileFetching,
         refreshQuota: @escaping AccountQuotas.Query,
         reportIssue: @escaping @MainActor (String) -> Void
     ) {
@@ -31,7 +30,6 @@ final class MacExecutor {
         self.workspaces = workspaces
         self.recorder = recorder
         self.library = library
-        self.upload = upload
         self.fetchFile = fetchFile
         self.refreshQuota = refreshQuota
         self.reportIssue = reportIssue
@@ -42,7 +40,7 @@ final class MacExecutor {
         let executor = DeliveryExecutor(store: store, hostID: hostID, timing: store.timing, onIssue: { [reportIssue] error in
             let message = String(localized: "处理投送请求时读写资料库失败：\(error.localizedDescription)")
             Task { @MainActor in reportIssue(message) }
-        }, onWritten: upload, fetchFile: { [fetchFile] key in _ = try await fetchFile(key) }, recover: { [store, bridge, hostID] request in
+        }, fetchFile: { [fetchFile] key in _ = try await fetchFile(key) }, recover: { [store, bridge, hostID] request in
             if request.mode == .known(.withdraw) {
                 do { return try await store.completeDeliveryWithdrawal(request, on: hostID, refused: ShownText(SendError.alreadyHanded)) }
                 catch { return .unconfirmed(ShownText(error)) }

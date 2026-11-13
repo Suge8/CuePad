@@ -63,22 +63,21 @@ extension CueStore {
   }
 
   /// 会话仍停在 `stop` 那次停下、等你里没有问着他的提问，且它与它绑着的任务（含上级）都不在 `given` 里，它的去处就是留给你回：已经留着的（他发起的那一轮停下时当场留了）不再写。不用留为 nil。
-  public func leaveUnattended(_ stop: CueLeft, given: Set<UUID>) throws -> (session: SessionState, record: UUID?)? {
+  public func leaveUnattended(_ stop: CueLeft, given: Set<UUID>) throws -> SessionState? {
     try write {
       guard let session = try sessionState(stop.sessionID), stop.holds(for: session), try question(waitingOn: session.sessionID) == nil else { return nil }
       guard !given.contains(session.id), given.isDisjoint(with: try sessionPlaces(session.sessionID)) else { return nil }
-      if try cueState()?.left.contains(where: { $0.holds(for: session) }) == true { return (session, nil) }
-      try putLeft([session])
-      return (session, CueState.recordID)
+      if try cueState()?.left.contains(where: { $0.holds(for: session) }) != true { try putLeft([session]) }
+      return session
     }
   }
 
-  /// 没留给你的返回 nil，收回了返回记录 id（立即上传用）。
-  public func takeBack(_ sessionID: String) throws -> UUID? {
+  /// 没留给你的返回 false。
+  public func takeBack(_ sessionID: String) throws -> Bool {
     try write {
-      guard let session = try sessionState(sessionID), try cueState()?.left.contains(where: { $0.holds(for: session) }) == true else { return nil }
+      guard let session = try sessionState(sessionID), try cueState()?.left.contains(where: { $0.holds(for: session) }) == true else { return false }
       try putLeft([], removing: sessionID)
-      return CueState.recordID
+      return true
     }
   }
 

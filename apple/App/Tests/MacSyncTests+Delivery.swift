@@ -92,22 +92,17 @@ extension MacSyncTests {
     }
 
     @Test
-    func 请求停止_结束_改配置写给会话所在的Mac并立即上传() async throws {
+    func 请求停止_结束_改配置写给会话所在的Mac() async throws {
         try await StateRecorder(store: services.store, hostID: "mac-other").update(sessionID: "far", state: .thinking, title: "远处")
         let session = try #require(try await services.store.allSessionStates().first)
-        let uploads = Watch(rig.sync.uploads.stream)
-
         let stop = try await services.stop(session)
         #expect(stop.hostID == "mac-other" && stop.mode == .known(.stop) && stop.target.ref == "far")
-        #expect(try await uploads.next("停止请求的上传") == stop.id.uuidString.lowercased())
 
         let end = try await services.end(session)
         #expect(end.hostID == "mac-other" && end.mode == .known(.end) && end.target.ref == "far")
-        #expect(try await uploads.next("结束请求的上传") == end.id.uuidString.lowercased())
 
         let config = try await services.configure(SessionConfig(thinking: .low), for: session)
         #expect(config.hostID == "mac-other" && config.config == SessionConfig(thinking: .low) && config.target.ref == "far")
-        #expect(try await uploads.next("改配置请求的上传") == config.id.uuidString.lowercased())
     }
 
     @Test
@@ -135,20 +130,6 @@ extension MacSyncTests {
         try await eventually("Cue 在这台值班") { services.cue.onDuty }
         #expect(services.bridge.slots.isEmpty && !services.hasOpenDeliveries)
         #expect(services.pollingCadence != nil)
-    }
-
-    /// 交出哪一版（当场执行完的不先传领取）在 `DeliveryTests`。
-    @Test
-    func 执行器写回结果后立即上传这一条() async throws {
-        try await services.executor.start()
-        defer { services.cancelBackgroundWork() }
-
-        let request = try await services.store.requestStop(of: SendTarget(kind: .piSession, name: "不在的会话", ref: "absent"), on: TestApp.hostID)
-        let uploads = Watch(rig.sync.uploads.stream)
-        let name = request.id.uuidString.lowercased()
-
-        #expect(try await uploads.next("执行器写回结果的上传") == name)
-        #expect(try await services.store.deliveryRequest(request.id)?.isOpen == false)
     }
 
     @Test func 旧版本写来的发到应用请求按失败写回() async throws {

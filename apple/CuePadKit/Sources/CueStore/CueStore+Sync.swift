@@ -39,6 +39,12 @@ package enum RemoteChange: Sendable {
   case delete(SyncKey)
 }
 
+/// 一次提交（或到点要传的）告诉同步层的：碰过哪些表，其中哪些记录要马上传（nil：别的进程写的，范围不明，读 `pendingUrgent`）。
+package struct SyncChange: Sendable {
+  package var tables: Set<Table>
+  package var urgent: Set<String>?
+}
+
 package struct PendingSync: Equatable, Sendable {
   package var saves: [SyncKey]
   package var deletes: [String]
@@ -72,11 +78,78 @@ extension CueStore {
     return pending
   }
 
-  /// Cue 的话多半是命令行进程（Cue 的工具）写的，那边传不了；所以由同步层认，不靠写的人叫上传。
-  package func pendingSpeech() throws -> Set<String> {
-    let said = try pendingSaves(.cueMessages, where: "t.author = 'cue'").map(\.id)
-    guard !said.isEmpty else { return [] }
-    return Set(said + (try pendingSaves(.cueState, where: "1").map(\.id)))
+  /// `Urgency.changed` 盯的那一列此刻的样子（记录 id → 值）。
+  func watchedColumns() throws -> [Table: [String: String?]] {
+    var values: [Table: [String: String?]] = [:]
+    for case (let table, .changed(let column, _)) in Table.urgent {
+      values[table] = Dictionary(uniqueKeysWithValues: try db.query("SELECT id, \(column) FROM \(table.rawValue)") { ($0.text(0), $0.textOrNil(1)) })
+    }
+    return values
+  }
+
+  /// 写事务结尾：碰过盯的表才读那一列（提交前读，读到的就是这次提交的）；没碰过为 nil。
+  func watchedIfTouched() throws -> [Table: [String: String?]]? {
+    let touched = db.changesSoFar.tables
+    return Table.urgent.contains { if case .changed = $0.value { touched.contains($0.key.rawValue) } else { false } } ? try watchedColumns() : nil
+  }
+
+  /// 和上次见到的比变了的记录，并记下这一次：别的进程改的也在这里第一次被见到。还没见过（刚打开）不算变。
+  func noteWatched(_ now: [Table: [String: String?]]) -> Set<String> {
+    defer { watchedSeen = now }
+    guard let seen = watchedSeen else { return [] }
+    var flipped = Set<String>()
+    for (table, values) in now {
+      let old = seen[table] ?? [:]
+      for (id, value) in values where old[id] ?? nil != value { flipped.insert(id) }
+    }
+    return flipped
+  }
+
+  /// 这次增量里要马上传的（`Table.urgent`）；`flipped` 是这次写入改了盯的那一列的记录。
+  func urgent(among delta: PendingSync, flipped: Set<String>) throws -> Set<String> {
+    let saves = Dictionary(grouping: delta.saves, by: \.table).mapValues { $0.map(\.id) }
+    return try urgent(flipped: flipped) { table, condition in
+      guard let ids = saves[table] else { return [] }
+      return try pendingSaves(table, where: "(\(condition)) AND t.id IN (SELECT value FROM json_each(?))", [JSONColumn.encode(ids)]).map(\.id)
+    } deleted: { tables in
+      guard !delta.deletes.isEmpty else { return [] }
+      return try db.query(
+        "SELECT recordName FROM syncRecords WHERE recordName IN (SELECT value FROM json_each(?)) AND recordType IN (SELECT value FROM json_each(?))",
+        [JSONColumn.encode(delta.deletes), JSONColumn.encode(tables.map(\.rawValue))]) { $0.text(0) }
+    }
+  }
+
+  /// 别的进程（命令行里 Cue 的工具、`cuepad`）碰过的这几张表里，此刻要马上传的：那边传不了，由同步层认。
+  /// 盯的那一列和这个连接上次见到的比，比过即记下：只由同步层的那一个发送者调用。
+  package func pendingUrgent(in tables: Set<Table>) throws -> Set<String> {
+    try urgent(flipped: noteWatched(try watchedColumns())) { table, condition in
+      tables.contains(table) ? try pendingSaves(table, where: condition).map(\.id) : []
+    } deleted: { urgent in
+      try urgent.filter(tables.contains).flatMap { try pendingDeletes($0) }
+    }
+  }
+
+  /// `saved` 给出这张表里满足条件的待推送（这次写入的增量里的，或别的进程写过时全表的）。
+  private func urgent(
+    flipped: Set<String>, saved: (Table, String) throws -> [String], deleted: ([Table]) throws -> [String]
+  ) throws -> Set<String> {
+    var names = Set<String>()
+    var along: [(Table, Table)] = []
+    for (table, urgency) in Table.urgent {
+      switch urgency {
+      case .always: names.formUnion(try saved(table, "1"))
+      case .when(let condition): names.formUnion(try saved(table, condition))
+      case .changed(_, let companion):
+        along.append((table, companion))
+        names.formUnion(try saved(table, "1").filter(flipped.contains))
+      }
+    }
+    // 跟着的那一版可能是之前的写入留下、还没传的，所以查全表
+    for (table, companion) in along where try !saved(companion, "1").isEmpty {
+      names.formUnion(try pendingSaves(table, where: "1").map(\.id))
+    }
+    names.formUnion(try deleted(Array(Table.urgent.keys)))
+    return names
   }
 
   /// 待推送的附件记录：文件那一路单独传（CueSync 的 `FileSender`），后台那一路不带它们。附件表小，每次全表查。
@@ -190,12 +263,18 @@ extension CueStore {
     return synced
   }
 
-  /// 临交出前在同一事务里核对投送请求的版本并保留发送权，与撤回互斥；其余记录沿用挑批时的记账。
+  /// 临交出前核对：这一版已被服务器收下的作废（挑批之后、交出之前，马上传那一路已把它传完了），不再交一次；
+  /// 投送请求另在同一事务里核对版本并保留发送权，与撤回互斥。其余记录沿用挑批时的记账。
   package func reserveForUpload(_ versions: [(name: String, table: Table, modifiedAt: Int64)]) throws -> Set<String> {
-    let deliveries = versions.filter { $0.table == .deliveryRequests }
-    guard !deliveries.isEmpty else { return [] }
+    let pushed = Dictionary(
+      uniqueKeysWithValues: try db.query(
+        "SELECT recordName, pushedModifiedAt FROM syncRecords WHERE recordName IN (SELECT value FROM json_each(?)) AND pushedModifiedAt IS NOT NULL",
+        [JSONColumn.encode(versions.map(\.name))]) { ($0.text(0), $0.int(1)) })
+    let accepted = Set(versions.filter { version in pushed[version.name].map { version.modifiedAt <= $0 } == true }.map(\.name))
+    let deliveries = versions.filter { $0.table == .deliveryRequests && !accepted.contains($0.name) }
+    guard !deliveries.isEmpty else { return accepted }
     return try write {
-      var obsolete = Set<String>()
+      var obsolete = accepted
       for version in deliveries {
         guard try db.first("SELECT 1 FROM deliveryRequests WHERE id = ? AND modifiedAt = ?", [version.name, version.modifiedAt], { _ in true }) != nil else {
           obsolete.insert(version.name)

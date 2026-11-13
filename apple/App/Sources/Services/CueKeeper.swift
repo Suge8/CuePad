@@ -41,8 +41,6 @@ final class CueKeeper {
         var library: URL
         var piAgentDirectory: URL
         var timing: CueTiming
-        /// 立即上传这几条（记下送达后：手机与别的 Mac 上那句话马上是已送达，排在其余待推送前面，见 `Speech`）
-        var upload: @Sendable ([UUID]) async -> Void
         /// 你的消息里的附件取到这台 Mac 上（`SyncDriver.fetchFile`）
         var fetchFile: FileFetching
 
