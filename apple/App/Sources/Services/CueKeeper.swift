@@ -73,12 +73,15 @@ final class CueKeeper {
     /// 下一件要重来的：到点最早的
     var setback: Setback? { setbacks.min { ($0.retryAt ?? .distantFuture) < ($1.retryAt ?? .distantFuture) } }
     /// 额度、登录卡住：要重来的只按慢速周期重来，新定时等它们做完
-    var stuck: Bool { setbacks.contains(where: \.persistent) }
+    var stuck: Bool { setbacks.contains(where: \.stuck) }
 
-    func retry(_ wake: CueWake, at date: Date?) {
+    /// 这件活出错是第一次（唯一的判定）：先不说、隔 `CueTiming.retryWake` 再来一次都看它。
+    func firstError(_ wake: CueWake) -> Bool { setbacks.first { $0.wake == wake }.map { $0.stage == .held } ?? true }
+
+    func edit(_ wake: CueWake, _ change: (inout Setback) -> Void) {
         setbacks = setbacks.map { held in
             var held = held
-            if held.wake == wake { held.retryAt = date }
+            if held.wake == wake { change(&held) }
             return held
         }
     }
@@ -95,7 +98,8 @@ final class CueKeeper {
         /// 说过起不来、卡住：这次故障里不再说
         case down
     }
-    /// 下一次醒来是上一轮出错后的重来：上一轮的错，随信封交给大脑（`CueEnvelope.Input.retrying`），交出去就清掉
+    /// 断了的那一轮的错：退回重交的你的话、重读变化醒来的那一轮随信封交给大脑（`CueEnvelope.Input.retrying`），交出去就清掉。
+    /// 只在内存：重来的那几件各自带着自己的错（`Setback.failure`）
     @ObservationIgnored var retrying: String?
     /// 最近一次出错与换大脑：写进健康（`health`）
     @ObservationIgnored var trouble: CueHealth.Failure?
@@ -216,8 +220,8 @@ final class CueKeeper {
             await giveBack(progress.unanswered ?? [])
             // 一上班就是歇着：上一次没收好尾（崩溃）留下的"在想"马上清掉，不等大脑起好
             await publish()
-            // 上一次值班留下的重来（重启、换手）不再等原来的时刻
-            for held in setbacks where held.retryAt.map({ $0 > now }) == true { retry(held.wake, at: now) }
+            // 上一次值班留下的重来不再等原来的时刻；交出去还没结果的（崩溃时在跑）没有在跑的一轮了，马上再来
+            for held in setbacks where held.stage == .handed || held.retryAt.map({ $0 > now }) == true { edit(held.wake) { $0.due(now) } }
             if progress.marks == nil {
                 do {
                     progress.marks = CueMarks(try await store.lastWrite(), stalls: now)

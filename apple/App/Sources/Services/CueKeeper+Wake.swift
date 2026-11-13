@@ -15,9 +15,10 @@ extension CueKeeper {
         let store = self.store, now = self.now
         let mark = try await store.lastWrite()
         let changes = try await self.changes(at: now)
+        let failure = setbacks.first { $0.wake == wake }?.failure ?? retrying
         let envelope = CueEnvelope.render(try await CueEnvelope.read(
             from: store, wake: wake, changes: changes, now: setup.timing.clock(), host: setup.recorder.hostID,
-            language: CueInterface.current.writing(after: said), retrying: retrying.map(Self.firstLine), related: related))
+            language: CueInterface.current.writing(after: said), retrying: failure.map(Self.firstLine), related: related))
         var parts = [envelope]
         if !shift.primed || renewDue(shift, now: now) {
             if shift.primed {

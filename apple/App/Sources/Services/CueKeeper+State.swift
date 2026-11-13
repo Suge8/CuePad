@@ -163,20 +163,46 @@ extension CueKeeper {
     }
 
     /// 出错后要重来的一件（每个醒来原因至多一条），承接它的一轮好好做完才放下。会话动静与巡视（`supersedable`）的活从库里的变化重读得出，重试一次后可被新变化取代；
-    /// 定时、刚启用、你那句话醒来时已消费，一直按退避重来。额度、登录卡住（`persistent`）只按慢速周期重来，新变化不替代、不催它。
+    /// 定时、刚启用、你那句话醒来时已消费，一直按退避重来。额度、登录卡住（`stuck`）只按慢速周期重来，新变化不替代、不催它。
     nonisolated struct Setback: Codable, Equatable, Sendable {
-        /// 出错时变化里最新的写入序号（等子代理停住按时刻认，不算）与出错的时刻：之后有更新的才是新变化
-        var latest: Int?
-        var since: Date
-        var retryAt: Date?
-        /// 额度、登录阻塞的工作必须承接原轮次；新变化不能替代它，也不提前它。
-        var persistent: Bool
-        /// 持续重试已按慢速周期重来了几轮（`CueTiming.slowDelay`）
-        var stalls: Int
+        /// 一件重来走到哪了：出没出过错只看这里（`CueKeeper.firstError`）
+        enum Stage: Codable, Equatable, Sendable {
+            /// 醒来就消费的活消费前记下（`CueKeeper.hold`），还没出过错：一直到点，交出去的那一轮在跑时不再交
+            case held
+            /// 第一次出错：到点再来一次（`CueTiming.retryWake`）
+            case again(at: Date)
+            /// 醒来已消费的活再错，或额度、登录卡住（`stuck`）：按慢速周期一直重来，这是第 `stalls` 轮（`CueTiming.slowDelay`）
+            case slow(at: Date, stalls: Int, stuck: Bool)
+            /// 醒来已消费的活重来已交出去，等这一轮的结果；崩溃重启后没有在跑的一轮了，马上再来（`run`）
+            case handed
+            /// 会话动静与巡视再错，或重来已交出去：等新变化取代
+            case awaitingChange
+        }
+
+        var stage: Stage
         var wake: CueWake
         var answersYou: Bool
-        /// 消费前记下、还没出过错（`CueKeeper.hold`）：交出去的那一轮好好做完就放下；崩溃后重启时它已到点，接着做
-        var pending = false
+        /// 出错时变化里最新的写入序号（等子代理停住按时刻认，不算）与出错的时刻：之后有更新的才是新变化。读不到序号为 nil，只按时刻认
+        var latest: Int?
+        var since: Date
+        /// 上一轮的错：重来的那一轮随信封交给大脑（`CueEnvelope.Input.retrying`）；随这一件落盘，重启后重放照样带上
+        var failure: String?
+
+        var retryAt: Date? {
+            switch stage {
+            case .held: since
+            case .again(let at), .slow(let at, _, _): at
+            case .handed, .awaitingChange: nil
+            }
+        }
+
+        var stuck: Bool {
+            if case .slow(_, _, true) = stage { true } else { false }
+        }
+
+        var stalls: Int {
+            if case .slow(_, let stalls, _) = stage { stalls } else { 0 }
+        }
 
         var supersedable: Bool { Self.supersedable(wake) }
 
@@ -184,6 +210,15 @@ extension CueKeeper {
             switch wake {
             case .sessionActivity, .idle: true
             case .enabled, .message, .schedule: false
+            }
+        }
+
+        /// 按时刻等的改成 `date` 到点；还没出错的、等新变化的不动。
+        mutating func due(_ date: Date) {
+            switch stage {
+            case .again, .handed: stage = .again(at: date)
+            case .slow(_, let stalls, let stuck): stage = .slow(at: date, stalls: stalls, stuck: stuck)
+            case .held, .awaitingChange: break
             }
         }
     }
