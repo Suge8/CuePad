@@ -91,6 +91,13 @@ extension LibraryTidy {
     }
 }
 
+extension AgentLibrary {
+    /// 各家自己管的技能（列不出、整理也不碰）合成一句；没有为 nil。
+    var selfManagedNote: String? {
+        selfManaged.isEmpty ? nil : String(localized: "另有 \(selfManaged.map(\.title).formatted(.list(type: .and)))，由它们自己管")
+    }
+}
+
 extension SelfManagedSkills {
     var title: String {
         agent == .claudeCode ? String(localized: "Claude Code 从 claude.ai 同步的 \(count) 个") : String(localized: "\(agent.name) 自带的 \(count) 个")

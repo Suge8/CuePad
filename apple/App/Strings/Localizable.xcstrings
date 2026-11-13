@@ -1562,6 +1562,34 @@
         }
       }
     },
+    "%lld 件可以整理" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Thing to Tidy"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Things to Tidy"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 件可以整理"
+          }
+        }
+      }
+    },
     "%lld 件待回复" : {
       "localizations" : {
         "en" : {
@@ -9463,6 +9491,22 @@
         }
       }
     },
+    "另有 %@，由它们自己管" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Also %@, managed by their own apps"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "另有 %@，由它们自己管"
+          }
+        }
+      }
+    },
     "另有 %lld 步未列出" : {
       "localizations" : {
         "en" : {
@@ -9695,6 +9739,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "叶子"
+          }
+        }
+      }
+    },
+    "各家自己的" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agent-Specific"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "各家自己的"
           }
         }
       }
@@ -10591,22 +10651,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "在 %@ 里输入 /login"
-          }
-        }
-      }
-    },
-    "在 Mac 上做，做完撤不回" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Done on the Mac. Can't be undone"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在 Mac 上做，做完撤不回"
           }
         }
       }
