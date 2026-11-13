@@ -3,10 +3,9 @@ import SwiftUI
 
 extension View {
     /// 平放的纸不加模糊阴影：侧栏开合时整面墙每帧重画，靠纸与桌面的明度、色相差把纸托出来。
-    /// `flat`：清单里的一行（待办、没有成果图的已完成），不垫纸，指针停上去才有淡底。
     /// `running`：卡边有一道光绕着走（推进中在跑的卡，一列至多 `BoardNow.maxMoving` 张）。
-    func boardCard(_ column: TaskBoard.Column, flat: Bool = false, running: Bool = false) -> some View {
-        modifier(BoardCardFrame(column: column, flat: flat, running: running))
+    func boardCard(_ column: TaskBoard.Column, running: Bool = false) -> some View {
+        modifier(BoardCardFrame(column: column, running: running))
     }
 
     /// 只这一个小修饰读它：指针换项目时重算的是各卡的透明度，不是整张卡。
@@ -25,12 +24,8 @@ extension EnvironmentValues {
 
 private struct BoardCardFrame: ViewModifier {
     let column: TaskBoard.Column
-    let flat: Bool
     let running: Bool
     @LoopsPlay private var plays
-    #if os(macOS)
-    @Environment(\.buttonHovered) private var hovered
-    #endif
     @Environment(\.boardRow) private var row
     @Environment(\.boardArrival) private var arrival
     @Environment(\.palette) private var palette
@@ -44,32 +39,9 @@ private struct BoardCardFrame: ViewModifier {
                         .fill(arrival.from.paper(palette) ?? palette.paper).opacity(arrival.landed ? 0 : 1)
                 }
             }
-            .modifier(Surface(column: column, flat: flat && !row, lit: lit))
+            .paper(cornerRadius: TaskMetrics.cardRadius, wash: column.paper(palette))
             .overlay { if running, plays, !row { LoopLayer(kind: .aura(radius: TaskMetrics.cardRadius), color: palette.signature).allowsHitTesting(false) } }
             .contentShape(.rect(cornerRadius: TaskMetrics.cardRadius))
-    }
-
-    private var lit: Bool {
-        #if os(macOS)
-        hovered
-        #else
-        false
-        #endif
-    }
-
-    private struct Surface: ViewModifier {
-        let column: TaskBoard.Column
-        let flat: Bool
-        let lit: Bool
-        @Environment(\.palette) private var palette
-
-        func body(content: Content) -> some View {
-            if flat {
-                content.background(lit ? palette.fill : .clear, in: RoundedRectangle(cornerRadius: TaskMetrics.cardRadius))
-            } else {
-                content.paper(cornerRadius: TaskMetrics.cardRadius, wash: column.paper(palette))
-            }
-        }
     }
 }
 
@@ -211,7 +183,7 @@ struct BoardCardLayout<Icon: View, Title: View, Facts: View, Trailing: View>: Vi
     let project: Project?
     var note: String?
     var session: SessionState?
-    /// 清单里的一行（待办、已完成）：标题写几行占几行，有旁注才多一行，上下的边也收紧。
+    /// 待办、已完成的卡：标题写几行占几行，有旁注才多一行，上下的边也收紧。
     var compact = false
     let icon: Icon
     let title: Title

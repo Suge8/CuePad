@@ -35,7 +35,7 @@ struct CaptureComposer: View {
 
     private var header: some View {
         HStack(spacing: Spacing.item) {
-            destinationMenu
+            DestinationMenu(project: project) { state.project = $0 }
             Spacer(minLength: 8)
             if pinnedOpen, let notice = workspace.notice {
                 Text(notice.text).font(Typography.meta)
@@ -47,16 +47,6 @@ struct CaptureComposer: View {
         }
         .animation(Motion.fade, value: workspace.notice)
         .padding(.horizontal, Spacing.group).padding(.top, Spacing.item)
-    }
-
-    private var destinationMenu: some View {
-        MenuButton(sections: [
-            ChoiceMenu.Section(choices: (workspace.catalog?.projects ?? []).map { item in
-                ChoiceMenu.Choice(title: .verbatim(item.shownName), checked: item.id == project) { state.project = item.id }
-            }),
-        ], accessibilityLabel: "记到 \(destination)") {
-            DestinationChip(project: workspace.catalog?.project(project))
-        }
     }
 
     private var handOffButton: some View {
@@ -104,6 +94,23 @@ struct CaptureComposer: View {
 }
 
 #endif
+
+struct DestinationMenu: View {
+    let project: UUID
+    let choose: (UUID) -> Void
+    @Environment(Workspace.self) private var workspace
+
+    var body: some View {
+        let current = workspace.catalog?.project(project)
+        MenuButton(sections: [
+            ChoiceMenu.Section(choices: (workspace.catalog?.projects ?? []).map { item in
+                ChoiceMenu.Choice(title: .verbatim(item.shownName), checked: item.id == project) { choose(item.id) }
+            }),
+        ], accessibilityLabel: "记到 \(current?.shownName ?? "")") {
+            DestinationChip(project: current)
+        }
+    }
+}
 
 struct DestinationChip<Icon: View>: View {
     var lead: String?

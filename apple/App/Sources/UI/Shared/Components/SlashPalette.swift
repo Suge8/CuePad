@@ -1,7 +1,8 @@
 import CueStore
 import SwiftUI
 
-enum ComposerKey { case up, down, accept, dismiss }
+/// `next`、`previous` 是 Tab 与 ⇧Tab。
+enum ComposerKey { case up, down, accept, dismiss, next, previous }
 
 struct SlashPalette: View {
     let commands: [SlashCommand]

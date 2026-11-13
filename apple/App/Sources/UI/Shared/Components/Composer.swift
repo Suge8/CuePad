@@ -34,6 +34,8 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     /// 这个会话此刻能用的斜杠命令：输入 "/" 时弹出面板（`SlashPalette`）；空表示不弹。
     var commands: [SlashCommand] = []
     var shortcuts: [ReplyShortcut: () -> Void] = [:]
+    /// 斜杠面板没开时文字区交来的按键里，调用方自己接的（浮起的输入条：Tab 换去处、Esc 收起）；没接的照常输入。
+    var keys: [ComposerKey: () -> Void] = [:]
     /// 空着时按 ↑ 放进来的话，存储格式（回复框：你在这个会话里说过的上一句，文字与附件）。
     var recall: String?
     @ViewBuilder let header: () -> Header
@@ -86,6 +88,10 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     private func handle(_ key: ComposerKey) -> Bool {
         let list = paletteCommands
         guard !list.isEmpty else {
+            if let act = keys[key] {
+                act()
+                return true
+            }
             guard key == .up, let recall, draft.isEmpty(accepting: [.files, .cards]) else { return false }
             draft.append(stored: recall)
             return true
@@ -94,8 +100,9 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
         switch key {
         case .up: highlighted = (current + list.count - 1) % list.count
         case .down: highlighted = (current + 1) % list.count
-        case .accept: pick(list[current])
+        case .accept, .next: pick(list[current])
         case .dismiss: dismissedPalette = draft.text
+        case .previous: break
         }
         return true
     }

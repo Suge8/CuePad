@@ -237,13 +237,9 @@ struct BoardColumn: View {
     private func glyph(_ project: Project?) -> Project? { workspace.scopedProject == nil ? project : nil }
 
     private var newTask: some View {
-        NewTaskField(project: newTaskProject, choosesProject: true, autofocus: true) { adding = false }
-            #if os(macOS)
-            .padding(.horizontal, TaskMetrics.cardPadding)
-            #else
-            .padding(.horizontal, Spacing.tight)
-            #endif
-            .paper(cornerRadius: TaskMetrics.cardRadius)
+        NewTaskField(project: newTaskProject, choosesProject: true, stacked: !isRow, autofocus: true) { adding = false }
+            .padding(.horizontal, isRow ? Spacing.tight : TaskMetrics.cardPadding)
+            .paper(cornerRadius: TaskMetrics.cardRadius, lifted: !isRow)
     }
 
     /// 能添东西的列空着时，这一格就是添加的入口（列头那颗"+"的同一个动作）；手机的行里添加在行脊上，这一格只是说明。
@@ -251,7 +247,7 @@ struct BoardColumn: View {
         if !isRow, let add = LaneAdd.of(column, in: workspace) {
             Button(action: add.action) {
                 vacancy(text) { Label(add.title, icon: .add).font(Typography.secondary.weight(.semibold)).foregroundStyle(palette.ink2) }
-                    .padding(.vertical, Spacing.group).contentShape(.rect)
+                    .contentShape(.rect)
             }
             .buttonStyle(PressStyle(.card))
         } else {

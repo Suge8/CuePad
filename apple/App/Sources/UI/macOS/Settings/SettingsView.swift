@@ -86,10 +86,8 @@ private struct GeneralSections: View {
         Section {
             SettingRow(title: "外观", icon: Image(.appearance)) { ThemePicker() }
             LanguageRow()
-            ShortcutRow(title: "显示/隐藏", icon: .hotkey, accelerator: services.hotkey.accelerator, apply: services.hotkey.set)
-            if let cueBar {
-                ShortcutRow(title: "对 Cue 说", icon: .talkToCue, accelerator: cueBar.hotkey.accelerator, apply: cueBar.hotkey.set)
-            }
+            if let cueBar { ShortcutRow(title: "对 Cue 说", icon: .talkToCue, hotkey: cueBar.hotkey) }
+            ShortcutRow(title: "显示/隐藏主窗口", icon: .hotkey, hotkey: services.hotkey)
         }
         Section {
             if let report = services.diagnostics.latest { CrashRow(report: report) }
@@ -118,9 +116,8 @@ private struct ShortcutKey: View {
 private struct ShortcutRow: View {
     let title: LocalizedStringResource
     let icon: Icon
-    let accelerator: String
-    /// 注册新的组合键；失败时抛出，原来的照用。
-    let apply: (String) throws -> Void
+    let hotkey: GlobalHotkey
+    @Environment(AppServices.self) private var services
     @State private var recording = false
     @State private var monitor: Any?
     @State private var error: String?
@@ -128,17 +125,20 @@ private struct ShortcutRow: View {
     var body: some View {
         SettingRow(title: title, icon: Image(icon), tone: error == nil ? .calm : .failure, status: error.map { Dotted($0) }) {
             Button { recording ? stop() : start() } label: {
-                ShortcutKey(text: recording ? String(localized: "请按下组合键…") : ShortcutText.display(accelerator), recording: recording)
+                ShortcutKey(text: recording ? String(localized: "请按下组合键…") : ShortcutText.display(hotkey.accelerator), recording: recording)
             }
             .buttonStyle(PressStyle(.inline))
             .help("点一下，按下新的组合键（Esc 取消）")
         }
         .onDisappear(perform: stop)
+        // 切走了就不录了：录着的时候全局快捷键都让出去了
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) { _ in stop() }
     }
 
     private func start() {
         error = nil
         recording = true
+        services.suspendHotkeys()
         monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             MainActor.assumeIsolated { capture(event) }
             return nil
@@ -146,9 +146,11 @@ private struct ShortcutRow: View {
     }
 
     private func stop() {
+        guard recording else { return }
         if let monitor { NSEvent.removeMonitor(monitor) }
         monitor = nil
         recording = false
+        services.resumeHotkeys()
     }
 
     private static let escape: UInt16 = 53
@@ -167,7 +169,9 @@ private struct ShortcutRow: View {
             return
         }
         do {
-            try apply(accelerator)
+            try services.rebind(hotkey, to: accelerator)
+        } catch HotkeyError.taken(let label) {
+            error = String(localized: "这个组合已用于「\(label)」")
         } catch HotkeyError.occupied {
             error = String(localized: "这个组合已被其他应用占用")
         } catch {

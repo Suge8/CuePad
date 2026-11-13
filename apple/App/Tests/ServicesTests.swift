@@ -25,6 +25,28 @@ struct GlobalShortcutTests {
         #expect(hotkey.accelerator == "Alt+KeyQ" && defaults.string(forKey: "slot") == "Alt+KeyQ")
         #expect(rig.hotkeys.active == [Shortcut(keyCode: 12, modifiers: .option), taken])
     }
+
+    @Test func 录新组合键时全部让出_撞上自己另一个快捷键报它的名字_录完都回来() throws {
+        let rig = TestApp()
+        let services: AppServices = rig.services
+        let defaults = services.settings.defaults
+        let before = rig.hotkeys.active
+        let say = GlobalHotkey(label: "对 Cue 说", key: "say", defaultAccelerator: "Alt+KeyQ", defaults: defaults, backend: rig.hotkeys) {}
+        let show = GlobalHotkey(label: "显示", key: "show", defaultAccelerator: "Alt+KeyW", defaults: defaults, backend: rig.hotkeys) {}
+        services.register(say)
+        services.register(show)
+        let q = Shortcut(keyCode: 12, modifiers: .option), w = Shortcut(keyCode: 13, modifiers: .option)
+        #expect(rig.hotkeys.active == before.union([q, w]))
+
+        services.suspendHotkeys()
+        #expect(rig.hotkeys.active.isDisjoint(with: [q, w]))
+        #expect(throws: HotkeyError.taken("对 Cue 说")) { try services.rebind(show, to: "Alt+KeyQ") }
+        try services.rebind(show, to: "Alt+KeyE")
+        services.resumeHotkeys()
+
+        #expect(rig.hotkeys.active == before.union([q, Shortcut(keyCode: 14, modifiers: .option)]))
+        #expect(show.accelerator == "Alt+KeyE" && defaults.string(forKey: "show") == "Alt+KeyE")
+    }
 }
 
 @Suite(.releasesLibraries)

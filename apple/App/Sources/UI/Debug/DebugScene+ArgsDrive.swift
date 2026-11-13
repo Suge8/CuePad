@@ -14,7 +14,7 @@ nonisolated struct DriveArgs: Decodable, DebugArgGroup {
     let bench: String?
     /// `-CuePadBoardTour YES`：走一遍看板的各种变化
     let boardTour: Bool
-    /// `-CuePadClick x,y[;x,y|esc|return|type:文字|cmd:键…]`（仅 Mac）：就绪后在主窗口里按顺序左键点几下，`esc`、`return` 是按那个键，`cmd:键` 是按主菜单的快捷键（双击、拖、捏合等见 `DebugGestures+Mac.swift`）
+    /// `-CuePadClick x,y[;x,y|esc|return|type:文字|cmd:键…]`（仅 Mac）：就绪后在主窗口里按顺序左键点几下，`esc`、`return`、`tab` 是按那个键，`cmd:键` 是按主菜单的快捷键（双击、拖、捏合等见 `DebugGestures+Mac.swift`）
     let click: String?
     /// `-CuePadClickGap <秒>`（默认 1.5）：`-CuePadClick` 几下之间的间隔
     let clickGap: Double?
