@@ -17,6 +17,8 @@ struct NoticeSlot: View {
         }
         // 走得比来得快：收走的东西不该再占着眼睛
         .animation(notice == nil ? Motion.fade : Motion.fading(Motion.nudge, reduceMotion: reduceMotion), value: notice)
+        // 停着表时换了地方（会话条收起）：原来那颗撤了、新出的一颗没人停着，接着数
+        .onChange(of: workspace.noticeInRail) { workspace.holdNotice(false) }
     }
 }
 
@@ -76,6 +78,8 @@ struct NoticeCapsule: View {
         .allowsHitTesting(acts || notice.isError)
         .onChange(of: held, initial: true) { was, now in if was != now || now { workspace.holdNotice(now) } }
         .onChange(of: notice.id, initial: true) {
+            // 这一颗是留在原地换的字：新的一条来时表已经重开，指针还在上面就再停一次
+            if held { workspace.holdNotice(true) }
             AccessibilityNotification.Announcement(notice.text.spoken).post()
             landed = false
             withAnimation(Motion.fading(Motion.nudge, reduceMotion: reduceMotion).delay(Motion.Fade.settle)) { landed = true }

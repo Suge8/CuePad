@@ -116,9 +116,9 @@ extension Workspace {
 
     func archive(_ id: UUID) async throws {
         let store = services.store
-        try await store.archive(id)
+        let time = try await store.archive(id)
         closeIfOpen(id)
-        say("已归档", action: .undo("归档") { try await store.unarchive(id) })
+        say("已归档", action: .undo("归档") { try await store.unarchive(id, archivedAt: time) })
     }
 
     func trash(_ id: UUID) async throws { try await trash([id]) }

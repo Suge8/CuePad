@@ -195,6 +195,33 @@ struct TaskFlowTests {
         undoManager.removeAllActions()
     }
 
+    @Test func 隔了很久才撤销_其间挪走的子任务与另外归档的子任务不动() async throws {
+        let workspace = Workspace(services: rig.services)
+        let undoManager = UndoManager()
+        workspace.undoManager = undoManager
+        let release = try await store.createTask("发版")
+        let notes = try await store.createTask("写更新说明", under: release.id)
+        let other = try await store.createTask("官网")
+        try await workspace.trash(release.id)
+        _ = try await store.moveCard(notes.id, to: .under(other.id), after: nil)
+        workspace.notice = nil
+        undoManager.undo()
+        try await eventually("删除撤回来了") { workspace.notice?.text.visible == "已撤销：删除" }
+        #expect(try await store.card(release.id)?.deletedAt == nil)
+        #expect(try await store.card(notes.id)?.parentID == other.id)
+
+        try await workspace.archive(other.id)
+        try await store.unarchive(notes.id)
+        try await Task.sleep(for: .milliseconds(5))
+        try await store.archive(notes.id)
+        workspace.notice = nil
+        undoManager.undo()
+        try await eventually("归档撤回来了") { workspace.notice?.text.visible == "已撤销：归档" }
+        #expect(try await store.card(other.id)?.archivedAt == nil)
+        #expect(try await store.card(notes.id)?.archivedAt != nil)
+        undoManager.removeAllActions()
+    }
+
     @Test func 灵感接进任务_拖成新任务_删除_都能撤销() async throws {
         let workspace = Workspace(services: rig.services)
         let body = "上线前检查\n把 changelog 过一遍"
