@@ -26,6 +26,9 @@ final class AppSettings {
         static let sessionSeen = "sessionSeen"
         static let unreadSince = "unreadSince"
         static let lastAgent = "lastAgent"
+        static let lastModels = "lastModels"
+        static let lastThinking = "lastThinking"
+        static let lastFast = "lastFast"
         static let navigationPane = "navigationPane"
         static let currentProject = "currentProject"
         static let railExpanded = "railExpanded"
@@ -48,7 +51,13 @@ final class AppSettings {
     #endif
 
 
+    /// 开新会话时上次的选择（`launchChoice`）：新会话的输入框与任务的"开始"读同一份。模型按家记，没记的是那家的默认；思考强度 nil 是默认。
     var lastAgent: AgentKind { didSet { defaults.set(lastAgent.rawValue, forKey: Key.lastAgent) } }
+    var lastModels: [AgentKind: ModelKey] {
+        didSet { defaults.set(try? JSONEncoder().encode(Dictionary(uniqueKeysWithValues: lastModels.map { ($0.rawValue, $1) })), forKey: Key.lastModels) }
+    }
+    var lastThinking: ThinkingLevel? { didSet { defaults.set(lastThinking?.rawValue, forKey: Key.lastThinking) } }
+    var lastFast: Bool { didSet { defaults.set(lastFast, forKey: Key.lastFast) } }
 
     var navigationPane: NavigationPane { didSet { defaults.set(navigationPane.rawValue, forKey: Key.navigationPane) } }
     /// 宽屏会话条的用户选择（只有这一份，不随主区放着什么页变）；窗口不够宽时只改变呈现，不写这个值。
@@ -176,6 +185,10 @@ final class AppSettings {
         alerts = AlertPreferences(stored: defaults.dictionary(forKey: Key.alerts))
         #endif
         lastAgent = string(Key.lastAgent).flatMap(AgentKind.init(rawValue:)) ?? .pi
+        let models = defaults.data(forKey: Key.lastModels).flatMap { try? JSONDecoder().decode([String: ModelKey].self, from: $0) } ?? [:]
+        lastModels = Dictionary(uniqueKeysWithValues: models.compactMap { raw, model in AgentKind(rawValue: raw).map { ($0, model) } })
+        lastThinking = defaults.string(forKey: Key.lastThinking).flatMap(ThinkingLevel.init(rawValue:))
+        lastFast = defaults.bool(forKey: Key.lastFast)
         navigationPane = string(Key.navigationPane).flatMap(NavigationPane.init(rawValue:)) ?? .projects
         railExpanded = defaults.object(forKey: Key.railExpanded) as? Bool ?? true
         cueOpen = defaults.object(forKey: Key.cueOpen) as? Bool ?? true

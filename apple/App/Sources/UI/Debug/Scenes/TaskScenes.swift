@@ -10,6 +10,7 @@ extension DebugSceneEntry {
 extension DebugScene {
     fileprivate static func openTaskScene(_ workspace: Workspace) async throws {
         #if os(macOS)
+        try await borrowDemoAgents(workspace.services)
         await openTask(workspace) { $0.parentID == nil && $0.projectID == workspace.currentProject }
         #else
         if scene == "more" {

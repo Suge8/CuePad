@@ -10935,22 +10935,6 @@
         }
       }
     },
-    "在后台开，不占终端" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Runs in the background, not in Terminal"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在后台开，不占终端"
-          }
-        }
-      }
-    },
     "在听" : {
       "localizations" : {
         "en" : {
@@ -13311,38 +13295,6 @@
         }
       }
     },
-    "开场的话" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "First message"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "开场的话"
-          }
-        }
-      }
-    },
-    "开场的话（可不填）" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "First message (optional)"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "开场的话（可不填）"
-          }
-        }
-      }
-    },
     "开始" : {
       "localizations" : {
         "en" : {
@@ -14395,6 +14347,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "把任务的正文交给 Agent，开始做"
+          }
+        }
+      }
+    },
+    "把任务的正文交给 Agent，开始做。开新会话时用 %@，在任务里可以换" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hand the task’s notes to an agent and start. A new session uses %@; change it in the task."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "把任务的正文交给 Agent，开始做。开新会话时用 %@，在任务里可以换"
           }
         }
       }
@@ -17867,22 +17835,6 @@
         }
       }
     },
-    "正在开…" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Starting…"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在开…"
-          }
-        }
-      }
-    },
     "正在开会话" : {
       "localizations" : {
         "en" : {
@@ -20559,22 +20511,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "等 %lld 件"
-          }
-        }
-      }
-    },
-    "等 Agent 连上…" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Waiting for agent…"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "等 Agent 连上…"
           }
         }
       }

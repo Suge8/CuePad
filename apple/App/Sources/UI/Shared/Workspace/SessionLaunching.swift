@@ -117,16 +117,17 @@ extension Workspace {
         if let launch = launching.launch ?? start.launched { watch(launching, launch, opened: opened) }
     }
 
-    #if os(macOS)
-    func showLaunched(_ sessionID: String) {
-        showsNewSession = false
-        show(.session(sessionID))
-    }
-    #else
+    /// 认领到新会话：收起输入框、进那个会话。输入框中途关了的，Mac 照样进（请求是在这台发的，人还在这儿），手机留在原处。
     static func entering(_ start: SessionStart) -> LaunchOpened {
-        { workspace, claimed in if workspace.newSession?.id == start.id { workspace.claimSession(claimed.id) } }
+        { workspace, claimed in
+            #if os(macOS)
+            workspace.newSession = nil
+            workspace.show(.session(claimed.sessionID))
+            #else
+            if workspace.newSession?.id == start.id { workspace.claimSession(claimed.id) }
+            #endif
+        }
     }
-    #endif
 
     /// 在途的与可能已开过的（未确认、查不到）不清：认领到时仍要调 `opened`，清掉的话关一次表单就绕过了再开确认。
     func settleLaunch(_ key: SessionLaunching.Key) {

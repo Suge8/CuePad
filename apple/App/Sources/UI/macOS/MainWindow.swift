@@ -134,14 +134,6 @@ private extension Route {
     }
 }
 
-extension Workspace {
-    /// 弹出新会话的表单（表单只有这一个出处，挂在主窗口上）。
-    func newSession(in project: UUID? = nil) {
-        newSessionProject = project
-        showsNewSession = true
-    }
-}
-
 /// ⌘1–9 切项目的唯一处理者；别的快捷键在主菜单，Esc 关浮层在 `PanelHost`。
 private struct WorkspaceShortcuts: View {
     let workspace: Workspace

@@ -88,14 +88,14 @@ final class Workspace {
     #endif
     var voiceDetails: BubbleSource?
     var addsTask = false
+    /// 开着的新会话输入框（`NewSessionInput`）。
+    var newSession: SessionStart? {
+        didSet { if let oldValue, oldValue.id != newSession?.id { settleLaunch(oldValue.launchKey) } }
+    }
     #if os(macOS)
     var searching = false
     var showsSetup = false
-    var showsNewSession = false {
-        didSet { if oldValue, !showsNewSession { settleLaunch(.form) } }
-    }
     var voice: VoiceCall? { services.voice.call }
-    var newSessionProject: UUID?
     var confirmsEmptyTrash = false
     var hoveredProject: UUID?
     #else
@@ -105,9 +105,6 @@ final class Workspace {
     }
     /// 放在这里而不在输入框里：发出即收起，写库失败时还能放回、重新浮起。
     var handOffDraft = ComposerDraft()
-    var newSession: SessionStart? {
-        didSet { if let oldValue, oldValue.id != newSession?.id { settleLaunch(oldValue.launchKey) } }
-    }
     /// 计数而不是布尔：已在搜索页时再触发也要聚焦。
     var searchFocusRequests = 0
     #endif
@@ -127,6 +124,10 @@ final class Workspace {
 
     private(set) var agentLinks = AgentLinks(items: [:], launching: [:])
     private(set) var library: AgentLibrary?
+    #if os(macOS)
+    /// 本机能开哪几家 Agent："开始"的悬停提示写新会话会用哪家、哪个模型。
+    private(set) var localAgents: MacAgents?
+    #endif
     @ObservationIgnored private var libraryStart: Snapshot<AgentLibrary?>?
 
     private func follow<T: Sendable & Equatable>(
@@ -190,7 +191,9 @@ final class Workspace {
         async let library: Void = followLibrary()
         async let quota: Void = followFilesQuota()
         #if os(macOS)
+        async let agents: Void = followLocalAgents()
         await followSessionPlacement()
+        await agents
         #endif
         _ = await (catalog, links, cue, opens, library, quota)
     }
@@ -206,6 +209,10 @@ final class Workspace {
     private func followCatalog() async {
         for await _ in Observations({ self.catalogAttempt }) { await observeCatalog() }
     }
+
+    #if os(macOS)
+    private func followLocalAgents() async { await follow(\.localAgents) { [host = services.hostID] in try $0.macAgents(on: host) } }
+    #endif
 
     private func followAgentLinks() async { await follow(\.agentLinks) { try AgentLinks.read(from: $0) } }
 

@@ -50,7 +50,7 @@ struct TaskLine: View {
         }
         .frame(minHeight: TaskMetrics.rowHeight)
         #if os(macOS)
-        .hoverReveal(when: !done && next.map { !Self.inlines($0) } ?? false) { if let next { TaskNextMark(next: next).padding(.leading, Spacing.tight) } }
+        .hoverReveal(when: !done && next.map { !inlines($0) } ?? false) { if let next { TaskNextMark(next: next).padding(.leading, Spacing.tight) } }
         #endif
         .animation(Motion.fade, value: done)
     }
@@ -72,7 +72,7 @@ struct TaskLine: View {
 
     @ViewBuilder private func notes(next: TaskNext?, done: Bool) -> some View {
         let pulse = workspace.pulse(of: agents.items[task.id])
-        if !done, let next, Self.inlines(next) { TaskNextMark(next: next).yields(first: false, ever: !next.speaks).transition(.opacity) }
+        if !done, let next, inlines(next) { TaskNextMark(next: next).yields(first: false, ever: !next.speaks).transition(.opacity) }
         if !done, !(next?.speaks ?? false), let meter = pulse.fullContext { ContextFact(meter: meter).font(TaskMetrics.caption).fixedSize() }
         if !done, !pulse.speaks, let pace = TaskPace.of(task, steps: subtasks) {
             Group {
@@ -86,11 +86,14 @@ struct TaskLine: View {
         }
     }
 
-    private static func inlines(_ next: TaskNext) -> Bool {
+    /// "开始"不一直写在行上的：Mac 指针停上来才出；手机任务气泡里的子任务不写（气泡底下那一颗主按钮开的就是下一步，每行再写一个是一墙"开始"，别的步点进去开）。
+    private func inlines(_ next: TaskNext) -> Bool {
+        guard case .start = next else { return true }
         #if os(macOS)
-        if case .start = next { return false }
+        return false
+        #else
+        return !step
         #endif
-        return true
     }
 
     private func open() { workspace.enter(task, session: agents.items[task.id]?.state) }

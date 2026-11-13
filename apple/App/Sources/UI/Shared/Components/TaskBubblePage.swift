@@ -35,6 +35,15 @@ struct TaskBubblePage: View {
         }
     }
 
+    /// Mac 上"开始"旁边是用哪家、哪个模型的那一排，绑定已有会话收在"⋯"里；手机在交给 Agent 的输入框里选会话。
+    private var bindsSession: Bool {
+        #if os(macOS)
+        focus.id != data.goal.id || data.steps.isEmpty
+        #else
+        false
+        #endif
+    }
+
     private var lane: some View {
         HStack(spacing: BubbleMetrics.titleGap) {
             BoardLaneMark(column: data.column, size: BubbleMetrics.laneMark).frame(width: TaskMetrics.chipTarget)
@@ -58,7 +67,7 @@ struct TaskBubblePage: View {
     }
 
     private var more: some View {
-        Menu { CardActions(card: focus, more: true) } label: {
+        Menu { CardActions(card: focus, more: true, leaf: bindsSession) } label: {
             Image(.more).font(BubbleMetrics.laneFont).foregroundStyle(palette.ink2)
                 .frame(width: TaskMetrics.chipTarget, height: TaskMetrics.chipTarget).contentShape(.rect)
         }

@@ -22,10 +22,21 @@ extension Workspace {
         outbox = Outbox(content: Outgoing.text(of: leaf), card: leaf.id, project: leaf.projectID)
     }
 
-    func prepareNewSession(_ draft: ComposerDraft, card: UUID?, opening: String?, plan: HandOffPlan?) {
+    /// 交给新会话：换成新会话的输入框并当场发出（用哪家、哪个模型在交给的那个输入框里已经选好）；进度、没开成的原因与再开确认都在新会话的输入框上。
+    /// 这个任务上一次开的结果还没定时不发，留给你在输入框上看了再定。
+    func startNewSession(_ draft: ComposerDraft, card: UUID?, opening: String?, plan: HandOffPlan?) {
         let claim = claimImports(draft)
-        guard !claim.isEmpty else { return handOffToNewSession(draft.retelling(card, as: opening), card: card, plan: plan) }
-        Task { handOffToNewSession(await claim.settled().retelling(card, as: opening), card: card, plan: plan) }
+        guard !claim.isEmpty else { return launchNewSession(draft.retelling(card, as: opening), card: card, plan: plan) }
+        Task { launchNewSession(await claim.settled().retelling(card, as: opening), card: card, plan: plan) }
+    }
+
+    private func launchNewSession(_ draft: ComposerDraft, card: UUID?, plan: HandOffPlan?) {
+        handOffToNewSession(draft, card: card, plan: plan)
+        guard let start = newSession, start.launched == nil, let place = start.place(among: launchPlaces), let host = place.host else { return }
+        do {
+            let agents = try services.store.snapshot { try $0.macAgents(on: host) }.value
+            submitSession(start, in: place, draft: draft, choice: services.settings.launchChoice(on: agents), opened: Self.entering(start))
+        } catch { fail(error) }
     }
 
     func claimSession(_ session: UUID) {

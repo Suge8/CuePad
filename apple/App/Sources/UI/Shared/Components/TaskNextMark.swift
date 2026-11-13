@@ -55,8 +55,18 @@ struct TaskNextMark: View {
     private var help: String {
         switch next {
         case .agent: String(localized: "打开这件事的 Agent 会话")
-        case .start: String(localized: "把任务的正文交给 Agent，开始做")
+        case .start: startHelp
         }
+    }
+
+    private var startHelp: String {
+        #if os(macOS)
+        if let choice = workspace.localAgents.flatMap(workspace.services.settings.launchChoice), let agent = choice.agent {
+            let brain = [agent.name, choice.current?.displayName].compactMap(\.self).joined(separator: " ")
+            return String(localized: "把任务的正文交给 Agent，开始做。开新会话时用 \(brain)，在任务里可以换")
+        }
+        #endif
+        return String(localized: "把任务的正文交给 Agent，开始做")
     }
 
     private func follow() { workspace.follow(next) }
