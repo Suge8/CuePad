@@ -16,7 +16,6 @@ struct DuplicateBar: View {
                 PaneSegment(items: copies.map { .init(value: $0.path, verbatim: workspace.copyName($0, among: copies)) }, selection: path) {
                     workspace.openLibrary(.skill($0))
                 }
-                .fixedSize()
                 .paneSlot(.compact)
                 .accessibilityElement(children: .contain)
                 .accessibilityLabel("几份同名的")

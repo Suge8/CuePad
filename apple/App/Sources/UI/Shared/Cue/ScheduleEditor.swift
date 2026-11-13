@@ -90,7 +90,6 @@ struct ScheduleEditor: View {
                 Text(verbatim: text).font(BubbleMetrics.meta).foregroundStyle(palette.ink2).lineLimit(2)
             }
             PaneSegment(items: ScheduleDraft.Cycle.allCases.map { .init(value: $0, title: $0.title) }, selection: draft.cycle) { draft.cycle = $0 }
-                .fixedSize()
                 .paneSlot(.compact)
                 .accessibilityElement(children: .contain)
                 .accessibilityLabel("重复")
