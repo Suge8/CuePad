@@ -59,7 +59,7 @@ extension CueKeeper {
                 runtime, launch, model: profile.model, effort: .low, systemPrompt: CuePrompt.dream(runtime: runtime), tools: ["--dream"])
             brain = started
             try await started.send(input, images: [], id: UUID())
-            if await !Self.finished(started, within: setup.timing.silence) {
+            if await !finished(started) {
                 Self.log.error("Cue 整理记忆 \(Int(self.setup.timing.silence.seconds / 60)) 分钟没做完，大脑像是卡住了：停掉，等下一次再看")
             }
         } catch is CancellationError {
@@ -70,15 +70,15 @@ extension CueKeeper {
         await brain?.stop()()
     }
 
-    /// 一次性大脑这一轮做完（或退出）返回 true；`limit` 内（按醒着的钟，Mac 睡着不算）没做完返回 false，进程由调用方停掉。
-    /// 整理一次远用不了值班看门狗的时长，所以只限总时长，不按每个事件重算。
-    private static func finished(_ brain: any HostedSession, within limit: Duration) async -> Bool {
-        let events = brain.events
+    /// 一次性大脑这一轮做完（或退出）返回 true；`CueTiming.silence` 内没做完返回 false，进程由调用方停掉。与看门狗同一个钟：
+    /// 照对账的钟睡、按醒着的时长量（`CueTiming.awake`，Mac 睡着不算）。整理一次远用不了这么久，所以只限总时长，不按每个事件重算。
+    private func finished(_ brain: any HostedSession) async -> Bool {
+        let events = brain.events, awake = setup.timing.awake, timing = store.timing, deadline = awake() + setup.timing.silence
         return await withTaskGroup { group in
             group.addTask {
                 for await event in events {
                     switch event {
-                    case .failed(let reason): log.error("Cue 整理记忆出错：\(reason, privacy: .public)")
+                    case .failed(let reason): Self.log.error("Cue 整理记忆出错：\(reason, privacy: .public)")
                     case .turnFinished, .exited: return true
                     default: break
                     }
@@ -86,7 +86,9 @@ extension CueKeeper {
                 return true
             }
             group.addTask {
-                try? await SuspendingClock().sleep(for: limit)
+                while case let left = deadline - awake(), left > .zero {
+                    do { try await timing.sleepUntil(timing.now() + left.seconds) } catch { return true }
+                }
                 return false
             }
             let done = await group.next() ?? true

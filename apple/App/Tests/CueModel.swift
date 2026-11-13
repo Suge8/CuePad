@@ -163,7 +163,18 @@ nonisolated final class CueModel: Sendable {
         if text.contains("醒来：刚启用") {
             return asksOnEnable ? call("tell", ["text": "要交给我跟进吗？"]) : say("我看了一眼")
         }
-        if text.contains("上一轮出错重试"), text.hasSuffix("</cue>") { return say("接着做上一轮没做完的") }
+        if text.contains("上一轮出错重试"), text.hasSuffix("</cue>") {
+            // 上下文里他最近说的那句（对话视图里的「他：」）：重来的一轮接着答的是它
+            let context = (request["messages"] as? [[String: Any]] ?? []).compactMap { message -> String? in
+                switch message["content"] {
+                case let string as String: string
+                case let parts as [[String: Any]]: parts.compactMap { $0["text"] as? String }.joined()
+                default: nil
+                }
+            }.joined(separator: "\n")
+            let his = context.matches(of: /他：([^\n]+)/).last.map { "（接着答「\($0.1)」）" } ?? ""
+            return say("接着做上一轮没做完的" + his)
+        }
         return say("收到：" + (text.split(separator: "\n").last.map(String.init) ?? ""))
     }
 }

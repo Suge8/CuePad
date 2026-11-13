@@ -17,7 +17,6 @@ extension CueKeeper {
         await leaveHisStops()
         let next = await step(at: now)
         schedule([next, alarm(at: now)].compactMap(\.self).min())
-        reconciles += 1
     }
 
     /// 对账里按先后只做一件事；返回歇着时下一次要对账的时刻。
@@ -106,11 +105,18 @@ extension CueKeeper {
             let changes = try await self.changes(at: now)
             if let newest = setbacks.max(by: { $0.since < $1.since }) {
                 // 等子代理停住只按时刻认新旧：它的序号是会话记录的，会话处理交回、又回到等子代理时也会变
-                func fresh(_ held: Setback) -> Bool { changes.contains { $0.kind == .stalled ? $0.at > held.since : $0.seq > held.latest ?? Int.min } }
+                func fresh(_ held: Setback) -> Bool {
+                    changes.contains { change in
+                        guard change.kind != .stalled, let latest = held.latest else { return change.at > held.since }
+                        return change.seq > latest
+                    }
+                }
                 if setbacks.contains(where: { $0.supersedable && fresh($0) }) { setbacks.removeAll { $0.supersedable && fresh($0) } }
                 if let held = setback, held.retryAt.map({ now >= $0 }) == true {
-                    // 发出去才清掉到点的时刻：发不进去时它还在，大脑重起后接着重来
-                    if try await wakeUp(held.wake, answering: held.answersYou) { retry(held.wake, at: nil) }
+                    // 发出去才改成等结果：发不进去时它还到点，大脑重起后接着重来；消费前记下的那件交出去照旧还没出过错
+                    if try await wakeUp(held.wake, answering: held.answersYou), held.stage != .held {
+                        edit(held.wake) { $0.stage = held.supersedable ? .awaitingChange : .handed(stalls: held.stalls) }
+                    }
                     return nil
                 }
                 // 醒来已消费的那几件照各自的时刻重来；比它们都新的变化先看

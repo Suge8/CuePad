@@ -24,7 +24,7 @@ import os
 /// | 不值班 `off` | `run` 返回 | 终态 |
 ///
 /// 做梦（`dreams`）是旁路：值班空闲时另起一次性大脑，`CueTiming.silence` 内做不完就停掉。
-/// 要重来的（`setbacks`，每件一条）落盘：重启、换手后起好大脑就接着重来；醒来就消费的活（定时、刚启用）消费前就先记下（`hold`），崩溃也不丢。
+/// 要重来的（`setbacks`，每件一条）落盘在这台：重启后、换到别的 Mac 又换回这台时，起好大脑就接着重来（那台读不到）；醒来就消费的活（定时、刚启用）消费前就先记下（`hold`），崩溃也不丢。
 /// 你的话只经 `hand` 交出去：先记送达再发，没答上的随班次退回（`giveBack`），至少答一次。
 @Observable
 final class CueKeeper {
@@ -73,12 +73,15 @@ final class CueKeeper {
     /// 下一件要重来的：到点最早的
     var setback: Setback? { setbacks.min { ($0.retryAt ?? .distantFuture) < ($1.retryAt ?? .distantFuture) } }
     /// 额度、登录卡住：要重来的只按慢速周期重来，新定时等它们做完
-    var stuck: Bool { setbacks.contains(where: \.persistent) }
+    var stuck: Bool { setbacks.contains(where: \.stuck) }
 
-    func retry(_ wake: CueWake, at date: Date?) {
+    /// 这件活出错是第一次（唯一的判定）：先不说、隔 `CueTiming.retryWake` 再来一次都看它。
+    func firstError(_ wake: CueWake) -> Bool { setbacks.first { $0.wake == wake }.map { $0.stage == .held } ?? true }
+
+    func edit(_ wake: CueWake, _ change: (inout Setback) -> Void) {
         setbacks = setbacks.map { held in
             var held = held
-            if held.wake == wake { held.retryAt = date }
+            if held.wake == wake { change(&held) }
             return held
         }
     }
@@ -95,7 +98,8 @@ final class CueKeeper {
         /// 说过起不来、卡住：这次故障里不再说
         case down
     }
-    /// 下一次醒来是上一轮出错后的重来：上一轮的错，随信封交给大脑（`CueEnvelope.Input.retrying`），交出去就清掉
+    /// 断了的那一轮的错：退回重交的你的话、重读变化醒来的那一轮随信封交给大脑（`CueEnvelope.Input.retrying`），交出去就清掉。
+    /// 只在内存：重来的那几件各自带着自己的错（`Setback.failure`）
     @ObservationIgnored var retrying: String?
     /// 最近一次出错与换大脑：写进健康（`health`）
     @ObservationIgnored var trouble: CueHealth.Failure?
@@ -107,7 +111,6 @@ final class CueKeeper {
     @ObservationIgnored var handedOver: Int?
     private var history: [CueRound] = []
     @ObservationIgnored private var roundCount = 0
-    @ObservationIgnored var reconciles = 0
     /// 你的话里的附件正在旁边取的（`ready(_:)`）与取不来、照交的
     @ObservationIgnored var fetchingFiles: [UUID: Task<Void, Never>] = [:]
     @ObservationIgnored var unfetchable: Set<UUID> = []
@@ -116,7 +119,14 @@ final class CueKeeper {
         self.setup = setup
         heardAt = setup.timing.awake()
         (inputs, input) = AsyncStream.makeStream()
-        progress = (try? JSONDecoder().decode(Progress.self, from: Data(contentsOf: setup.directory.appending(path: "keeper.json")))) ?? Progress()
+        do {
+            progress = try JSONDecoder().decode(Progress.self, from: Data(contentsOf: setup.directory.appending(path: "keeper.json")))
+        } catch CocoaError.fileReadNoSuchFile {
+            progress = Progress()
+        } catch {
+            Self.log.error("Cue 的对账进度读不出，从头算起：\(error.localizedDescription, privacy: .public)")
+            progress = Progress()
+        }
     }
 
     /// 值班对外的样子（只读投影）：测试与评测只读它，内部字段改名、改形状不牵动它们。
@@ -136,11 +146,6 @@ final class CueKeeper {
         var rounds: [CueRound]
         /// 这一次启用已招呼过（或手上没事不用招呼）
         var greeted: Bool
-        /// 一轮在跑时看门狗还剩多久（按醒着的钟）
-        var watchdog: Duration?
-        /// 对完了几次账、此刻有没有排着下一次（`timer`）
-        var reconciles: Int
-        var scheduled: Bool
     }
 
     var snapshot: Snapshot {
@@ -153,8 +158,7 @@ final class CueKeeper {
         }
         return Snapshot(
             state: state, setbacks: setbacks, turn: turn?.round, rounds: turn.map { history + [$0.round] } ?? history,
-            greeted: progress.greeted != nil, watchdog: turn.map { _ in setup.timing.silence - (setup.timing.awake() - heardAt) },
-            reconciles: reconciles, scheduled: timer != nil)
+            greeted: progress.greeted != nil)
     }
     /// 在回答你的这一轮正在说的话（只在内存，不进 `cueState`、不入库、不同步）：只有 Cue 页末尾读它，出字时对话列表不重算。
     /// 说完的留着，由 Cue 页在对话里出现它之后换下；下一轮开始、大脑出问题时清掉。只显示在回答你的一轮（`Turn.answersYou`）：
@@ -216,8 +220,10 @@ final class CueKeeper {
             await giveBack(progress.unanswered ?? [])
             // 一上班就是歇着：上一次没收好尾（崩溃）留下的"在想"马上清掉，不等大脑起好
             await publish()
-            // 上一次值班留下的重来（重启、换手）不再等原来的时刻
-            for held in setbacks where held.retryAt.map({ $0 > now }) == true { retry(held.wake, at: now) }
+            // 上一次值班留下的重来不再等原来的时刻；交出去还没结果的（崩溃时在跑）没有在跑的一轮了，马上再来
+            for held in setbacks {
+                if case .handed = held.stage { edit(held.wake) { $0.due(now) } } else if held.retryAt.map({ $0 > now }) == true { edit(held.wake) { $0.due(now) } }
+            }
             if progress.marks == nil {
                 do {
                     progress.marks = CueMarks(try await store.lastWrite(), stalls: now)
@@ -231,16 +237,17 @@ final class CueKeeper {
             loop: for await next in inputs {
                 switch next {
                 case .stop: break loop
-                case .kick: break
+                case .kick, .settle: break
                 case .brain(let id, let event): if shift?.id == id { await handle(event) }
                 }
                 await reconcile()
                 await publish()
+                if case .settle(let done) = next { done.resume() }
             }
             group.cancelAll()
         }
         timer?.cancel()
-        // 不再值班（停用、换手、App 退出）：在跑的那一轮没答上的你的话退回、醒来已消费的活记成要重来，下次值班接着
+        // 不再值班（停用、换手、App 退出）：在跑的那一轮没答上的你的话退回、醒来已消费的活记成要重来，下次在这台值班接着
         if let shift {
             if let turn = shift.turn { await holdOver(turn, failure: "值班停了，这一轮没做完") }
             await retire(shift)

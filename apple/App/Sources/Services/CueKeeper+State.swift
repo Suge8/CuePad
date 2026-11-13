@@ -74,8 +74,33 @@ extension CueKeeper {
         var detour: Detour?
         /// 做梦听他在会话里说的话听到哪了：交给它的最后一句的次序（`CueStore.said(after:limit:)` 的 `through`）；nil 是还没听过，从此刻听起（`dreams`）
         var heard: Int64?
-        /// 出错后要重来的几件（`CueKeeper.setbacks`）：定时、刚启用与你那句话在醒来时已消费，只有这里记着，所以跨重启、换手留着
+        /// 出错后要重来的几件（`CueKeeper.setbacks`）：定时、刚启用与你那句话在醒来时已消费，只有这里记着，所以跨重启留着。只在这台：换到别的 Mac 那边没有，换回这台才接着做
         var setbacks: [Setback]?
+
+        init() {}
+
+        /// 按字段解：一项解不开（结构改了、写坏了）只丢这一项并记错，没答上的你的话、变化基线等其余照用。
+        init(from decoder: any Decoder) throws {
+            let fields = try decoder.container(keyedBy: CodingKeys.self)
+            func field<T: Decodable>(_ key: CodingKeys) -> T? {
+                do {
+                    return try fields.decodeIfPresent(T.self, forKey: key)
+                } catch {
+                    CueKeeper.log.error("Cue 的对账进度里 \(key.stringValue, privacy: .public) 解不开，这一项丢掉：\(String(describing: error), privacy: .public)")
+                    return nil
+                }
+            }
+            marks = field(.marks)
+            patrolDay = field(.patrolDay)
+            patrols = field(.patrols) ?? 0
+            patrolledIdle = field(.patrolledIdle)
+            warmedIdle = field(.warmedIdle)
+            greeted = field(.greeted)
+            unanswered = field(.unanswered)
+            detour = field(.detour)
+            heard = field(.heard)
+            setbacks = field(.setbacks)
+        }
     }
 
     /// 额度、登录卡住后的绕行：你设定的那家与它的模型、强度、fast（绕行前的设置），与这次卡住的几家。
@@ -163,20 +188,49 @@ extension CueKeeper {
     }
 
     /// 出错后要重来的一件（每个醒来原因至多一条），承接它的一轮好好做完才放下。会话动静与巡视（`supersedable`）的活从库里的变化重读得出，重试一次后可被新变化取代；
-    /// 定时、刚启用、你那句话醒来时已消费，一直按退避重来。额度、登录卡住（`persistent`）只按慢速周期重来，新变化不替代、不催它。
+    /// 定时、刚启用、你那句话醒来时已消费，一直按退避重来。额度、登录卡住（`stuck`）只按慢速周期重来，新变化不替代、不催它。
     nonisolated struct Setback: Codable, Equatable, Sendable {
-        /// 出错时变化里最新的写入序号（等子代理停住按时刻认，不算）与出错的时刻：之后有更新的才是新变化
-        var latest: Int?
-        var since: Date
-        var retryAt: Date?
-        /// 额度、登录阻塞的工作必须承接原轮次；新变化不能替代它，也不提前它。
-        var persistent: Bool
-        /// 持续重试已按慢速周期重来了几轮（`CueTiming.slowDelay`）
-        var stalls: Int
+        /// 一件重来走到哪了：出没出过错只看这里（`CueKeeper.firstError`）
+        enum Stage: Codable, Equatable, Sendable {
+            /// 醒来就消费的活消费前记下（`CueKeeper.hold`），还没出过错：一直到点，交出去的那一轮在跑时不再交
+            case held
+            /// 第一次出错：到点再来一次（`CueTiming.retryWake`）
+            case again(at: Date)
+            /// 醒来已消费的活再错，或额度、登录卡住（`stuck`）：按慢速周期一直重来，这是第 `stalls` 轮（`CueTiming.slowDelay`）
+            case slow(at: Date, stalls: Int, stuck: Bool)
+            /// 醒来已消费的活重来已交出去，等这一轮的结果（慢速周期已重来几轮照记着）；崩溃重启后没有在跑的一轮了，马上再来（`run`）
+            case handed(stalls: Int)
+            /// 会话动静与巡视再错，或重来已交出去：等新变化取代
+            case awaitingChange
+        }
+
+        var stage: Stage
         var wake: CueWake
         var answersYou: Bool
-        /// 消费前记下、还没出过错（`CueKeeper.hold`）：交出去的那一轮好好做完就放下；崩溃后重启时它已到点，接着做
-        var pending = false
+        /// 出错时变化里最新的写入序号（等子代理停住按时刻认，不算）与出错的时刻：之后有更新的才是新变化。读不到序号为 nil，只按时刻认
+        var latest: Int?
+        var since: Date
+        /// 上一轮的错：重来的那一轮随信封交给大脑（`CueEnvelope.Input.retrying`）；随这一件落盘，重启后重放照样带上
+        var failure: String?
+
+        var retryAt: Date? {
+            switch stage {
+            case .held: since
+            case .again(let at), .slow(let at, _, _): at
+            case .handed, .awaitingChange: nil
+            }
+        }
+
+        var stuck: Bool {
+            if case .slow(_, _, true) = stage { true } else { false }
+        }
+
+        var stalls: Int {
+            switch stage {
+            case .slow(_, let stalls, _), .handed(let stalls): stalls
+            case .held, .again, .awaitingChange: 0
+            }
+        }
 
         var supersedable: Bool { Self.supersedable(wake) }
 
@@ -186,11 +240,23 @@ extension CueKeeper {
             case .enabled, .message, .schedule: false
             }
         }
+
+        /// 按时刻等的改成 `date` 到点；还没出错的、等新变化的不动。
+        mutating func due(_ date: Date) {
+            switch stage {
+            case .again, .handed(0): stage = .again(at: date)
+            case .handed(let stalls): stage = .slow(at: date, stalls: stalls, stuck: false)
+            case .slow(_, let stalls, let stuck): stage = .slow(at: date, stalls: stalls, stuck: stuck)
+            case .held, .awaitingChange: break
+            }
+        }
     }
 
     nonisolated enum Input: Sendable {
         case kick, stop
         case brain(Int, TurnEvent)
+        /// 对一次账，对完接着 `done`：要确定值班看过此刻的库与钟的一方显式交（测试在负向断言前）
+        case settle(CheckedContinuation<Void, Never>)
     }
 
     /// 触发对账的读数：变了就对一次账（内容不用，对账自己读）。对话只取对账用到的：待交给它的你的话与回答、你最近一句的时刻（巡视从它算空闲）；

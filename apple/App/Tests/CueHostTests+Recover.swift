@@ -50,17 +50,19 @@ extension CueHostTests {
     }
 
     @Test func 一轮挂住没动静_看门狗重起_你的话重新交出() async throws {
-        let rig = try await Rig(timing: { $0.silence = .seconds(60) })
+        let silence = Duration.seconds(60)
+        let rig = try await Rig(timing: { $0.silence = silence })
         let first = try #require(rig.brainPIDs.first)
         try await rig.say("请慢慢想")
         try await eventually("请求挂在模型那里") { rig.model.hanging }
-        try await stalled(rig, first)
+        try await stalled(rig, first, silence: silence)
         try await rig.message(.cue, containing: "收到：请慢慢想")
         await rig.stop()
     }
 
     @Test func Mac睡着时一轮在跑_醒来不当成卡住() async throws {
-        let rig = try await Rig(timing: { $0.silence = .seconds(60) })
+        let silence = Duration.seconds(60)
+        let rig = try await Rig(timing: { $0.silence = silence })
         let first = try #require(rig.brainPIDs.first)
         try await rig.say("请慢慢想")
         try await eventually("请求挂在模型那里") { rig.model.hanging }
@@ -68,16 +70,18 @@ extension CueHostTests {
         try await rig.reconciled()
         #expect(rig.brainPIDs == [first])
         #expect(try await rig.count("收到：请慢慢想") == 0)
-        try await stalled(rig, first)
+        try await stalled(rig, first, silence: silence)
         try await rig.message(.cue, containing: "收到：请慢慢想")
         await rig.stop()
     }
 
-    private func stalled(_ rig: Rig, _ brain: pid_t) async throws {
+    /// 跳过看门狗的时长、等它对过账：挂住之后才到的事件会让看门狗重新算起，没停掉就再跳一次。
+    private func stalled(_ rig: Rig, _ brain: pid_t, silence: Duration) async throws {
         try await eventually("看门狗停掉挂住的大脑") {
             guard rig.brainPIDs.contains(brain) else { return true }
-            rig.skipSilence()
-            return false
+            rig.jump(by: silence)
+            try await rig.reconciled()
+            return !rig.brainPIDs.contains(brain)
         }
     }
 
@@ -161,6 +165,36 @@ extension CueHostTests {
                 }
             }
         }
+        #expect(rig.model.errors == 2)
+        await rig.stop()
+    }
+
+    /// 卡着的定时与你那句话醒来时已消费，只记在这台的进度里：App 重启后新的值班一起好就接着做，不等慢速周期，各答一次。
+    @Test func 额度卡住时App重启_卡着的定时与你那句话接着做_各答一次() async throws {
+        let rig = try await Rig(timing: { $0.slowRestarts = [.seconds(3600)] })
+        rig.model.blockQuota(times: 2)
+        let reminder = try await rig.store.noteCueLine("核对发布结果", source: .you, remindAt: .now)
+        let keeper = try #require(rig.services.cue.keeper)
+        try await eventually("定时卡住") { keeper.snapshot.state == .stalled }
+        try await rig.say("帮我核对发布清单")
+        try await eventually("你那句也卡住") { keeper.snapshot.state == .stalled && keeper.snapshot.setbacks.contains { $0.wake == .message } }
+        #expect(rig.model.errors == 2)
+        #expect(try await rig.store.cueLine(reminder.id)?.deletedAt != nil)
+
+        await rig.services.cue.stop()()
+        _ = try await rig.services.updateCue { $0.name = "Cue 二号" }
+        try await eventually("新的值班起来") { rig.services.cue.keeper.map { $0 !== keeper } == true }
+
+        let fired = "定时到点：\(reminder.id.uuidString.lowercased()) 核对发布结果"
+        try await rig.message(.cue, containing: fired)
+        let answer = "接着做上一轮没做完的（接着答「帮我核对发布清单」）"
+        try await rig.message(.cue, containing: answer)
+        try await eventually("都做完了") { rig.services.cue.keeper?.snapshot.state == .idle }
+        try await rig.reconciled()
+        #expect(try await rig.count(fired) == 1)
+        #expect(try await rig.count("接着做上一轮没做完的") == 1)
+        #expect(try await rig.count("帮我核对发布清单") == 1, "你那句只答一次")
+        #expect(try await rig.count("达到用量限制") == 1)
         #expect(rig.model.errors == 2)
         await rig.stop()
     }

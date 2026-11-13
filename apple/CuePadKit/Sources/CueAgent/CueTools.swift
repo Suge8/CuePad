@@ -2,7 +2,7 @@ import CueStore
 import CueText
 import Foundation
 
-/// Cue 的工具与后台整理记忆的工具（merge、said、ask）：定义与实现。都经 `CueStore` 的业务操作，写出的投送请求与消息标明来自 Cue。
+/// Cue 的工具与后台整理记忆的工具（`DreamTool`）：定义与实现。都经 `CueStore` 的业务操作，写出的投送请求与消息标明来自 Cue。
 /// 返回一两句人话加 id，只有正文（各家大脑给模型看的都是这一份）；出错给出路（`isError`）。
 public struct CueTools: Sendable {
   let store: CueStore
@@ -46,6 +46,11 @@ public struct CueTools: Sendable {
     let run: (CueTools, Args) async throws -> Result
   }
 
+  /// 做梦的工具：登记（`catalog(.dream)`）与做梦的提示词（`CuePrompt.dream`）都按它取名
+  enum DreamTool: String {
+    case merge, said, ask
+  }
+
   static func catalog(_ toolset: Toolset) -> [Tool] {
     switch toolset {
     case .cue:
@@ -58,9 +63,9 @@ public struct CueTools: Sendable {
       ]
     case .dream:
       [
-        Tool(name: "merge", gist: "", definition: { mergeDefinition }, run: { try await $0.merge($1) }),
-        Tool(name: "said", gist: "", definition: { saidDefinition }, run: { try await $0.said($1) }),
-        Tool(name: "ask", gist: "", definition: { askDefinition }, run: { try await $0.ask($1) }),
+        Tool(name: DreamTool.merge.rawValue, gist: "", definition: { mergeDefinition }, run: { try await $0.merge($1) }),
+        Tool(name: DreamTool.said.rawValue, gist: "", definition: { saidDefinition }, run: { try await $0.said($1) }),
+        Tool(name: DreamTool.ask.rawValue, gist: "", definition: { askDefinition }, run: { try await $0.ask($1) }),
       ]
     }
   }
