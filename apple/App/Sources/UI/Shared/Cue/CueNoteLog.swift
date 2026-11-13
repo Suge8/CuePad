@@ -6,20 +6,52 @@ import SwiftUI
 /// 连着的几轮（中间没人说话）排成一块，一处一行（`CueNoteFold`）：同一个会话停下十几次是一行带次数，不是十几行。
 /// 字定格在写下那一刻：图标与字只按记录画（`CueWakeHeader`、`CueMessage.tools`），那一处之后改名、再动起来都不变；这一轮此刻在做什么只写在对话末尾那一行（`CueEnding`）。
 /// Cue 这一轮不写话（系统提示「说话」），去处只从动作推出，三处说同一套话。
+/// 后面又有了话的那几块是旧事（`settled`）：几行收成一行（哪几处、最近那次几点），点开才逐行列；对话最末那一块与还没读的照旧逐行，那是此刻的事。
 struct CueNoteLog: View {
     let rounds: [CueNoteRound]
+    let settled: Bool
+    @State private var unfolded = DebugHooks.preset.toolsOpen
+    @Environment(\.palette) private var palette
 
     var body: some View {
         let folds = CueNoteFold.folds(rounds)
         let newest = Self.newest(folds)
         BubbleWidth(fraction: CueBubble.cueWidth, edge: .leading) {
             VStack(alignment: .leading, spacing: 0) {
-                ForEach(folds) { fold in CueNoteLine(fold: fold, newest: newest.contains(fold.id)) }
+                if settled, !unfolded, folds.count > 1 {
+                    Button { unfolded = true } label: {
+                        CueNoteRow { Image(.expand) } text: {
+                            HStack(alignment: .firstTextBaseline, spacing: Spacing.tight) {
+                                summary(folds)
+                                if let time = folds.last?.last.date {
+                                    Dot()
+                                    Text(verbatim: [ChatTime.day(time), ChatTime.time(time)].compactMap { $0 }.joined(separator: " ")).monospacedDigit()
+                                }
+                            }
+                        }
+                    }
+                    .buttonStyle(.row)
+                    .accessibilityHint("展开")
+                } else {
+                    ForEach(folds) { fold in CueNoteLine(fold: fold, newest: newest.contains(fold.id)) }
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .animation(Motion.fade, value: folds)
         }
         .transition(.entry)
+    }
+
+    /// 名字取最近有动静的那一处。
+    private func summary(_ folds: [CueNoteFold]) -> Text {
+        var names: [String] = []
+        for place in folds.reversed().flatMap({ $0.last.header?.places ?? [] }) where !names.contains(place.title) { names.append(place.title) }
+        let name = Text(names.first ?? "").foregroundStyle(palette.ink2)
+        return switch names.count {
+        case 0: Text("\(folds.count) 条动静")
+        case 1: Text("\(name) 有 \(folds.count) 条动静")
+        default: Text("\(name) 等 \(names.count) 处有动静")
+        }
     }
 
     private static func newest(_ folds: [CueNoteFold]) -> Set<CueNoteFold.ID> {
@@ -146,6 +178,10 @@ struct CueNoteRow<Glyph: View, Words: View>: View {
     @ViewBuilder let glyph: Glyph
     @ViewBuilder let text: Words
     @Environment(\.palette) private var palette
+    #if os(macOS)
+    /// Mac 上几点只在指针停在这一行时露出：一列时间常驻着，一块记录就成了两栏字。手机没有悬停，照常写着。
+    @State private var hovered = false
+    #endif
 
     var body: some View {
         let words = text.foregroundStyle(palette.ink3).lineLimit(1)
@@ -158,6 +194,10 @@ struct CueNoteRow<Glyph: View, Words: View>: View {
                     Text(verbatim: [ChatTime.day(time), ChatTime.time(time)].compactMap { $0 }.joined(separator: " "))
                         .monospacedDigit().foregroundStyle(palette.ink3)
                         .frame(minWidth: CueNoteRows.timeWidth, alignment: .trailing)
+                        #if os(macOS)
+                        .opacity(hovered ? 1 : 0)
+                        .animation(Motion.fade, value: hovered)
+                        #endif
                 }
             } else {
                 words.frame(maxWidth: .infinity, alignment: .leading)
@@ -166,6 +206,9 @@ struct CueNoteRow<Glyph: View, Words: View>: View {
         .font(Typography.caption)
         .frame(minHeight: CueNoteRows.height)
         .contentShape(.rect)
+        #if os(macOS)
+        .onHover { hovered = $0 }
+        #endif
         .accessibilityElement(children: .combine)
     }
 }

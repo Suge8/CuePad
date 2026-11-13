@@ -8,32 +8,30 @@ struct SkillSection: View {
 
     var body: some View {
         let groups = SkillGroups(library, order: workspace.catalog?.projects.map(\.id) ?? [])
+        let labeled = groups.global.count > 1 || groups.global.first?.name.isEmpty == false
         VStack(alignment: .leading, spacing: LibraryLayout.gap) {
             TidySlot(library: library, rules: false)
-            if !groups.global.isEmpty {
-                let labeled = groups.global.count > 1 || groups.global.first?.name.isEmpty == false
-                skills(groups.global.flatMap { category in (labeled ? [SkillLine.category(category.name)] : []) + category.skills.map(SkillLine.skill) })
+            ForEach(groups.global, id: \.name) { category in
+                if labeled {
+                    LibraryGroup(count: category.skills.count) {
+                        Text(verbatim: category.name.isEmpty ? String(localized: "不在分类里") : category.name)
+                    } content: {
+                        rows(category.skills)
+                    }
+                } else {
+                    VStack(spacing: 0) { rows(category.skills) }
+                }
             }
             ForEach(groups.projects) { group in
-                VStack(alignment: .leading, spacing: Spacing.tight) {
-                    HStack(spacing: Spacing.glyph) {
-                        ProjectGlyph(project: workspace.catalog?.project(group.project), size: Self.glyph)
-                        Text(verbatim: workspace.projectName(group.project))
-                    }
-                    .font(Typography.label).foregroundStyle(palette.ink2)
-                    .padding(.horizontal, Spacing.inset)
-                    .accessibilityAddTraits(.isHeader)
-                    skills(group.skills.map(SkillLine.skill))
+                LibraryGroup(count: group.skills.count) {
+                    ProjectGlyph(project: workspace.catalog?.project(group.project), size: Self.glyph)
+                    Text(verbatim: workspace.projectName(group.project))
+                } content: {
+                    rows(group.skills)
                 }
-                .padding(.top, Spacing.item)
             }
-            if !library.selfManaged.isEmpty {
-                LibraryPaper {
-                    ForEach(library.selfManaged, id: \.agent) { managed in
-                        LinkRow(title: Text(verbatim: managed.title), chevron: false) { managed.agent.mark.image }
-                    }
-                }
-                .padding(.top, Spacing.item)
+            if let note = library.selfManagedNote {
+                Text(verbatim: note).font(Typography.meta).foregroundStyle(palette.ink3)
             }
         }
     }
@@ -44,38 +42,12 @@ struct SkillSection: View {
     private static let glyph: CGFloat = 13
     #endif
 
-    private func skills(_ lines: [SkillLine]) -> some View {
-        VStack(spacing: 0) {
-            ForEach(lines) { line in
-                switch line {
-                case .category(let name):
-                    Text(verbatim: name.isEmpty ? String(localized: "不在分类里") : name)
-                        .font(Typography.label).foregroundStyle(palette.ink3)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, Spacing.inset).padding(.top, Spacing.item).padding(.bottom, Spacing.hair)
-                        .accessibilityAddTraits(.isHeader)
-                case .skill(let skill): SkillRow(skill: skill, library: library)
-                }
-            }
-        }
-        .padding(.vertical, Spacing.tight)
-        .paper(cornerRadius: LibraryLayout.radius)
-        .rowContainer(.rect(cornerRadius: LibraryLayout.radius))
+    private func rows(_ skills: [LibrarySkill]) -> some View {
+        VStack(spacing: 0) { ForEach(skills) { SkillRow(skill: $0, library: library) } }
     }
 }
 
-private enum SkillLine: Identifiable {
-    case category(String)
-    case skill(LibrarySkill)
-
-    var id: String {
-        switch self {
-        case .category(let name): "category/" + name
-        case .skill(let skill): skill.id
-        }
-    }
-}
-
+/// 几十上百个技能不逐个套卡：名字与一句说明排成清单（行底向两边让出，字与分组标题对齐，`RowStyle`）。
 private struct SkillRow: View {
     let skill: LibrarySkill
     let library: AgentLibrary
@@ -110,7 +82,6 @@ private struct SkillRow: View {
             #endif
             UnseenMarks(agents: library.agents, unseen: skill.unseenBy)
         }
-        .padding(.horizontal, Spacing.inset)
         .padding(.vertical, Self.vertical)
         .frame(minHeight: Self.height)
         .contentShape(.rect)
@@ -142,7 +113,7 @@ private struct SkillRow: View {
     private static let descriptionFont = Typography.meta
     #if os(macOS)
     private static let markFont = Glyph.small
-    private static let nameWidth: CGFloat = 188
+    private static let nameWidth: CGFloat = 220
     private static let markWidth: CGFloat = 16
     private static let vertical: CGFloat = 0
     private static let height: CGFloat = 36

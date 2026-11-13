@@ -60,12 +60,16 @@ extension View {
     func elevation(_ level: Elevation?) -> some View { modifier(ElevationShadow(level: level)) }
 }
 
-enum GlassInk {
+enum GlassInk: Equatable {
     case clear
     /// 写着字的（默认；顶栏标题、输入框、搜索框、提示横幅、状态行）：玻璃里垫一层页面底色（`Palette.inkWell`），边缘仍是玻璃的光。内容一直滚到这些玻璃后面，
     /// 背后什么都有可能（亮的截图、深的代码块）：只着色不垫底的话，深色下一张亮图就把玻璃衬成浅灰、米白的字只剩 1.7:1，
     /// 垫了底才在任何背景上都够 4.5:1。
     case solid
+    /// 一整块面板（Mac 右边那一栏的 Cue 浮板）：玻璃里铺实的桌面色，只留玻璃的边光与影子。面板里的页照旧用桌面色盖住滚过栏头、回复框的内容
+    /// （`fadesUnderHead`），垫九成实的话那几条盖层与面板差一档、看得出一条带子。
+    /// `shown` 为假时什么都不画，视图的身份不变：同一块内容时而是浮板时而不是（窗口拖过临界宽），不能为此重建、丢了滚动位置。
+    case ground(shown: Bool)
 }
 
 private struct PaperSurface: ViewModifier {
@@ -114,6 +118,7 @@ private struct GlassSurface<S: Shape>: ViewModifier {
             switch ink {
             case .clear: content.glassEffect(glass, in: shape)
             case .solid: solid(content)
+            case .ground(let shown): content.background(shown ? palette.desk : .clear, in: shape).glassEffect(shown ? glass : .identity, in: shape)
             }
         }
     }

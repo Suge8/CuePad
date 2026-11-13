@@ -69,7 +69,10 @@ struct AgentLibraryTests {
 
         let found = try await library("扫出五件") { $0.tidies.count == 5 }
         let workspace = Workspace(services: services)
-        #expect(found.automaticTidies.map { workspace.fact(of: $0, in: found) } == ["1 个技能在旧目录里", "1 个技能 Claude Code 读不到", "1 个技能 DeepSeek Harness 读不到", "1 个空文件夹"])
+        #expect(found.automaticTidies.map { workspace.fact(of: $0, in: found).problem } == ["1 个技能不在共用目录里", "1 个技能 Claude Code 读不到", "1 个技能 DeepSeek Harness 读不到", "1 个空文件夹"])
+        let plans = found.automaticTidies.map { workspace.fact(of: $0, in: found).plan }
+        #expect(plans.prefix(3) == ["搬进共用的 .agents/skills：retro", "在它的技能目录里建链接：write-swift", "在它的技能目录里建链接：write-swift"])
+        #expect(plans.last?.hasPrefix("移到废纸篓：") == true && plans.last?.hasSuffix("codex/skills/codex-primary-runtime") == true, "空文件夹写出是哪一个")
         #expect(found.merge(into: .global)?.writers == [.claudeCode, .codex], "内容不同的全局规则不在一键整理里，在全局规则的文件页里合并")
         #expect(found.skills.map(\.name) == ["write-swift"] && found.skills[0].group == "development" && found.skills[0].unseenBy == [.claudeCode, .dsh])
         #expect(found.selfManaged == [SelfManagedSkills(agent: .claudeCode, count: 2), SelfManagedSkills(agent: .codex, count: 1)])

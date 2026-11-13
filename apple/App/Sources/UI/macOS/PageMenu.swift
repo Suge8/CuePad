@@ -4,10 +4,12 @@ import SwiftUI
 
 /// 没有可放的页（归档）钮停用、同系统停用的控件那样变淡：与可用时一个样子，点了没反应像是坏了。
 /// 菜单项不按页面数据置灰：菜单拿不到页面读的库，抄一份过来就是第二个事实源；没有可归档、可清空的时候点了什么也不发生。
-/// 钮在每一页都在、只随页面置灰，栏头不随换页增删控件、不重排。进展页它是项目范围（筛选的图形，选了项目时角上是那个项目）：
+/// 钮在每一页都在、只随页面置灰，栏头不随换页增删控件、不重排。进展页它是项目范围（筛选的图形，选了项目时角上是那个项目），
+/// 排在列头那一排的开头（`leads`）：先选范围再看四列，右端留给滑到 Cue 浮板下面的列，压在最后一列的列头上会盖住列名。
 /// 那一页别的操作各在原处——归档做完的在已完成那一列的列头，接入 Agent 在设置。
 /// 会话页的钮跟着页面就在，菜单里的会话项等页面交来的值、并晚于标题两帧（`showsMenu`）。
 struct PageMenuSlot: View {
+    var leads = false
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     /// 编辑页开着的那张卡（外层 nil 是还没读到；不是编辑页时读出的是 nil）。
@@ -19,7 +21,6 @@ struct PageMenuSlot: View {
         case project(UUID)
         case progress
         case trash
-        case none
 
         var help: LocalizedStringResource {
             switch self {
@@ -27,31 +28,35 @@ struct PageMenuSlot: View {
             case .project: "选择灵感、看这个项目的进展、项目操作"
             case .progress: "项目范围"
             case .trash: "清空回收站"
-            case .none: "这一页没有更多操作"
             }
         }
     }
 
-    private var content: Content {
+    /// nil：这一页没有操作，不摆钮。
+    private var content: Content? {
         if let id = workspace.openCard { return .card((opened ?? nil).flatMap { $0.id == id ? $0 : nil }) }
         return switch workspace.mainRoute {
         case .project(let id): .project(id)
         case .progress: .progress
         case .trash: .trash
-        default: .none
+        default: nil
         }
     }
 
     var body: some View {
         let content = content
-        Menu { items(content).labelStyle(.titleAndIcon) } label: { menuLabel(content) }
-        .menuStyle(.button).menuIndicator(.hidden)
-        .buttonStyle(ControlButtonStyle(kind: .circular))
-        .fixedSize()
-        .padding(.leading, Spacing.item)
-        .disabled(content == .none || content == .card(nil))
-        .help(content.help)
-        .accessibilityLabel(content == .progress ? Text("项目范围") : Text("更多"))
+        Group {
+            if let content {
+                Menu { items(content).labelStyle(.titleAndIcon) } label: { menuLabel(content) }
+                    .menuStyle(.button).menuIndicator(.hidden)
+                    .buttonStyle(ControlButtonStyle(kind: .circular))
+                    .fixedSize()
+                    .padding(.leading, leads ? 0 : Spacing.item)
+                    .disabled(content == .card(nil))
+                    .help(content.help)
+                    .accessibilityLabel(content == .progress ? Text("项目范围") : Text("更多"))
+            }
+        }
         .observing(services.store, id: workspace.openCard, into: $opened, onError: workspace.fail) { [id = workspace.openCard] store in
             try id.flatMap { try store.card($0) }
         }
@@ -77,7 +82,7 @@ struct PageMenuSlot: View {
             ProjectScopeItems()
         case .trash:
             Button("清空回收站…", icon: .trash, role: .destructive) { workspace.confirmsEmptyTrash = true }
-        case .card(nil), .none: EmptyView()
+        case .card(nil): EmptyView()
         }
     }
 }

@@ -170,7 +170,8 @@ final class WideColumnSlide {
         }
         WideSlide.slide(layer, "bounds.size.width", by: edge, key: "wide.edge.\(turn)")
         WideSlide.slide(layer, "position.x", by: layer.anchorPoint.x * edge, key: "wide.edge.anchor.\(turn)")
-        if previous.width != width { pending = (WideSlide.Positions(page), "wide.page.\(turn)", Self.layoutPasses) }
+        // 主区压在 Cue 浮板下面时块的宽不随 Cue 开合变，页照样按让出后的宽重排（`underCue`）
+        if previous.width != width || slot == .main { pending = (WideSlide.Positions(page), "wide.page.\(turn)", Self.layoutPasses) }
     }
 
     /// 页按新宽排完（托管视图排版之后调）：各层从记下的旧处滑到此刻的新处，同一次提交里起步；第二遍只补新挪的（`Positions`）。没排齐就滑完了的作废（`landed`）。

@@ -7,6 +7,8 @@ struct EmptyState<Action: View>: View {
     let title: LocalizedStringResource
     var message: LocalizedStringResource?
     var waitsForSync = false
+    /// 不垫纸，直接排在所在那一面上（Cue 那一栏：整栏只有它，再套一张纸是卡里套卡）。
+    var bare = false
     @ViewBuilder var action: Action
     @Environment(AppServices.self) private var services: AppServices?
     @Environment(\.palette) private var palette
@@ -31,7 +33,7 @@ struct EmptyState<Action: View>: View {
         .frame(maxWidth: 420)
         .padding(Spacing.sheet)
         .frame(maxWidth: .infinity)
-        .paper(cornerRadius: Radius.sheet)
+        .modifier(Sheet(bare: bare))
         .scaleEffect(shown || reduceMotion ? 1 : 0.97)
         .opacity(shown ? 1 : 0)
         .buttonStyle(ControlButtonStyle(kind: .primary))
@@ -66,6 +68,14 @@ struct EmptyState<Action: View>: View {
             }
         }
         .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+private struct Sheet: ViewModifier {
+    let bare: Bool
+
+    func body(content: Content) -> some View {
+        if bare { content } else { content.paper(cornerRadius: Radius.sheet) }
     }
 }
 

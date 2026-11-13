@@ -30,17 +30,19 @@ struct CueRow: View, Equatable {
     /// 页边距（`chatMargin`）放得下时在气泡外隔一条缝；放不下（iPhone、窄窗口的 iPad）点骑在气泡左缘上（`straddlesDot`），离屏缘约 12 点：
     /// 挤在屏边与气泡之间时离屏缘只剩 3 点，像被切掉一半。
     let unread: Bool
+    /// 后面又有了话：醒来那几行收成一行（`CueNoteLog`）。
+    let settled: Bool
     @Binding var opened: PreviewOpening?
     @Binding var seen: [UUID: Date]
     @Environment(Workspace.self) private var workspace
     @Environment(\.chatMargin) private var margin
 
     nonisolated struct Key: Equatable {
-        let row: CueThread.Row, shots: [CueShown], joined: Bool, stamp: Date?, delivered: Bool, unread: Bool
+        let row: CueThread.Row, shots: [CueShown], joined: Bool, stamp: Date?, delivered: Bool, unread: Bool, settled: Bool
     }
 
     nonisolated var key: Key {
-        Key(row: row, shots: shots, joined: joined, stamp: stamp, delivered: delivered, unread: unread)
+        Key(row: row, shots: shots, joined: joined, stamp: stamp, delivered: delivered, unread: unread, settled: settled)
     }
 
     nonisolated static func == (a: Self, b: Self) -> Bool { a.key == b.key }
@@ -91,7 +93,7 @@ struct CueRow: View, Equatable {
         case .result(let message, let task):
             CueSays(message: message, task: task, shots: shots, open: { opened = $0 }, card: true)
         case .notes(let rounds):
-            CueNoteLog(rounds: rounds)
+            CueNoteLog(rounds: rounds, settled: settled && !unread)
         case .process(_, let touches):
             BubbleWidth(fraction: CueBubble.cueWidth, edge: .leading) {
                 CueTrace(touches: touches).frame(maxWidth: .infinity, alignment: .leading)

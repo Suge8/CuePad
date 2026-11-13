@@ -23,6 +23,31 @@ extension View {
     }
 }
 
+extension View {
+    /// 原地长开的一块（Cue 的名牌长成面板）：画在自己那里、随自己的动画长，点它外面或按 Esc 关与别的浮层是同一套（`PanelHost.takes`），
+    /// 它里面再弹的气泡照常叠在上面、先关那一层。挂在长开后的整块上：它的框就是"里面"。
+    func grownInPlace(isPresented: Binding<Bool>, close: @escaping @MainActor () -> Void) -> some View {
+        modifier(InPlacePanel(isPresented: isPresented, close: close))
+    }
+}
+
+private struct InPlacePanel: ViewModifier {
+    @Binding var isPresented: Bool
+    let close: @MainActor () -> Void
+    @Environment(PanelHost.self) private var host
+    @State private var token = UUID()
+
+    func body(content: Content) -> some View {
+        content
+            .background { AreaMark { [host, token] in host.areas[token] = Weak(value: $0) } }
+            // 收起时留着这一条、只记成没开（不 `hide`）：`hide` 连框一起忘掉，而框只在这块视图建出来时报一次，再开就成了"点哪里都算外面"
+            .onChange(of: isPresented, initial: true) { _, open in
+                host.show(token, style: .bubble(.unanchored), content: AnyView(EmptyView()), close: ClosePanel(run: close), open: open, inPlace: true)
+            }
+            .onDisappear { host.hide(token) }
+    }
+}
+
 /// 从控件长出的气泡开没开（`bubble(isPresented:)` 绑 `open`，控件点了 `toggle`）：点气泡外收起时按下的就是开关的话，
 /// 松开时开关又要打开它——刚在这一下收起的不再打开（`PressPoint.reopens`）。
 struct BubbleSwitch {
@@ -48,6 +73,8 @@ final class PanelHost {
         let content: AnyView
         let close: ClosePanel
         var open = true
+        /// 原地长开的（`grownInPlace`）：自己画在原处，浮层那一层不画它，只照同一套关法关。
+        var inPlace = false
         var modal: Bool { style.modal }
     }
 
@@ -58,9 +85,10 @@ final class PanelHost {
     @ObservationIgnored fileprivate var areas: [UUID: Weak<NSView>] = [:]
     @ObservationIgnored private var monitor: Any?
 
-    func show(_ id: UUID, style: PanelStyle, content: AnyView, close: ClosePanel, open: Bool = true) {
+    func show(_ id: UUID, style: PanelStyle, content: AnyView, close: ClosePanel, open: Bool = true, inPlace: Bool = false) {
         var entry = Shown(id: id, style: style, content: content, close: close)
         entry.open = open
+        entry.inPlace = inPlace
         if let index = shown.firstIndex(where: { $0.id == id }) {
             let wasOpen = shown[index].open
             shown[index] = entry
@@ -359,7 +387,7 @@ private struct PanelLayer: View {
         GeometryReader { proxy in
             BubbleStage {
                 ForEach(host.shown) { shown in
-                    if case .bubble(let source, let width) = shown.style {
+                    if !shown.inPlace, case .bubble(let source, let width) = shown.style {
                         let placement = BubblePlacement(source: source, container: proxy.frame(in: .global), insets: Self.bubbleInsets, width: width)
                         BubbleFrame(placement: placement) { shown.content.environment(\.panelCovered, host.covers(shown.id)) } area: { area(shown.id) }
                             .transition(placement.transition(reduceMotion: reduceMotion))

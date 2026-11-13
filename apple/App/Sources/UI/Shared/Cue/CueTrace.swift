@@ -9,7 +9,7 @@ struct CueTrace: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
-    static let rows = 4
+    static let rows = 3
 
     var body: some View {
         let folded = !unfolded && touches.count > Self.rows
