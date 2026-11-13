@@ -42,14 +42,14 @@ extension Workspace {
     func mergeIdea(_ idea: UUID, into task: UUID) async throws {
         let store = services.store
         let undo = try await store.merging(idea, into: task)
-        leave(idea)
+        leave(.card(idea))
         let title = try await store.card(task)?.title ?? ""
         say("已接到「\(title.textGlyphs)」的正文后面", action: .undo("合并", undo))
     }
 
     func newTask(fromIdea idea: UUID) async throws {
         let (task, undo) = try await services.store.spawning(idea)
-        leave(idea)
+        leave(.card(idea))
         say("已新建任务「\(task.title.textGlyphs)」", action: .undo("新建任务", undo))
     }
 
@@ -69,11 +69,6 @@ extension Workspace {
             try await store.dropIfBlank(id)
             if let card = try await store.card(id), card.isTask, card.heading != heading { try await self.pushName(of: id) }
         }
-    }
-
-    private func leave(_ card: UUID) {
-        leave(.card(card))
-        if openTask?.task == card { openTask = nil }
     }
 
     /// 删掉、归档了的不开，说一句它去哪了。
@@ -122,7 +117,7 @@ extension Workspace {
     func archive(_ id: UUID) async throws {
         let store = services.store
         let time = try await store.archive(id)
-        leave(id)
+        leave(.card(id))
         say("已归档", action: .undo("归档") { try await store.unarchive(id, archivedAt: time) })
     }
 
@@ -130,7 +125,7 @@ extension Workspace {
 
     func trash(_ ids: [UUID]) async throws {
         let undo = try await services.store.trashing(ids)
-        ids.forEach(leave)
+        for id in ids { leave(.card(id)) }
         #if os(macOS)
         // 卡从墙上拿走时收不到鼠标移出：不再算停在它上面（⌘⌫ 删的是鼠标停着的那张）
         ids.forEach { presses.hover($0, inside: false) }
