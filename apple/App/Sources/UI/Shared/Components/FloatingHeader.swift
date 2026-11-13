@@ -87,11 +87,11 @@ private struct FloatingHeader<Center: View, Trailing: View>: ViewModifier {
             case .sidebar:
                 content.safeAreaPadding(.top, height + Bars.contentGap)
             case .column:
-                // 这一页是什么、有什么操作都在栏头（`WideColumnHead`，同 Mac）：这一排只空出栏头的高，`trailing` 只给窄屏
+                // 这一页是什么、有什么操作都在栏头（`WideColumnHead`，同 Mac）：这里只让出栏头的高、内容在它下沿淡出（同会话页），`trailing` 只给窄屏
                 content
-                    .safeAreaPadding(.top, Bars.contentGap)
+                    .fadesUnderHead()
+                    .safeAreaPadding(.top, height + Bars.contentGap)
                     .readerHidden(covered)
-                    .safeAreaBar(edge: .top, spacing: 0) { Color.clear.frame(height: height) }
             case .page, .panel:
                 let bar = PageBar(height: height, trailing: trailing.modifier(Yield(hidden: hidden)).readerHidden(covered)) {
                     middle.modifier(Yield(hidden: hidden)).readerHidden(covered && !grown).background { revealer(.capsule) }
