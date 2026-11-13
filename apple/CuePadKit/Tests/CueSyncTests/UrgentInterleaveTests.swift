@@ -1,5 +1,5 @@
 import CloudKit
-import CueStore
+@testable import CueStore
 import Foundation
 import Testing
 
@@ -7,6 +7,7 @@ import Testing
 
 /// 随机交错（不入库）：紧急写入（Cue 的记忆、Cue 的设置）与普通写入（卡片）按种子交错，普通的批在云上慢（`slow`），随机重启。
 /// 承诺：在线时紧急写入的这一版（或更新的）`bound` 内被服务器收下，不等后台那一路；同一版不交两次；
+/// Cue 一轮里一步步更新状态、留给你回的没变时，不算马上传（只有留给你回的变了才算）；
 /// 离线期间写的，恢复连通后（App 收到连通就拉一次）`recover` 内补上。只有种子决定写什么、什么时候重启与断网。
 @Suite(.serialized) struct UrgentInterleaveTests {
   static let seeds: [UInt64] = {
@@ -28,6 +29,12 @@ import Testing
     var lines: [UUID] = []
     var cards: [UUID] = []
     var urgent: [(name: String, modifiedAt: Int64, at: ContinuousClock.Instant)] = []
+    let cueState = CueState.recordID.uuidString.lowercased()
+    let changes = await store.syncChanges()
+    let hurried = Task { var count = 0; for await change in changes where change.urgent?.contains(cueState) == true { count += 1 }; return count }
+    try await StateRecorder(store: store, hostID: "mac").update(sessionID: "s", state: .settled)
+    let session = try #require(try await store.sessionState("s"))
+    var (steps, flips) = (0, 0)
 
     func wrote(_ id: UUID, _ table: Table) async throws {
       let row = try #require(try await store.syncRow(recordName: id.uuidString.lowercased()))
@@ -36,7 +43,7 @@ import Testing
     }
 
     for _ in 0..<(12 + Int(rng.next() % 10)) {
-      switch rng.next() % 8 {
+      switch rng.next() % 10 {
       case 0, 1:
         let text = "记\(rng.next() % 1000)"
         let line = try await store.noteCueLine(text, source: .you)
@@ -62,6 +69,19 @@ import Testing
           sync = CloudSync(store: store) { cloud }
           await sync.start()
         }
+      case 8:
+        for _ in 0..<(1 + rng.next() % 4) {
+          await nextMillisecond()
+          try await store.setCueState(.thinking, detail: "第\(rng.next() % 1000)步")
+          steps += 1
+        }
+      case 9:
+        let before = try await store.cueState()?.left ?? []
+        await nextMillisecond()
+        try await store.toggleLeft(session)
+        try #require(try await store.cueState()?.left != before, "seed \(seed)：留给你回的没变")
+        flips += 1
+        try await wrote(CueState.recordID, .cueState)
       default:
         try await Task.sleep(for: .milliseconds(rng.next() % 200))
       }
@@ -89,9 +109,21 @@ import Testing
       let at = await cloud.accepted(write.name, atLeast: write.modifiedAt)
       #expect(at.map { $0 - back <= Self.recover } == true, "seed \(seed)：离线写的 \(write.name.prefix(8)) 恢复后没补上")
     }
+    hurried.cancel()
+    let hurriedCue = await hurried.value
+    #expect(hurriedCue == flips, "seed \(seed)：Cue 的状态 \(steps) 次经过、\(flips) 次改留给你回，却有 \(hurriedCue) 次算马上传")
     let duplicates = await cloud.duplicates
     #expect(duplicates.isEmpty, "seed \(seed)：同一版交了两次 \(duplicates)")
     await sync.stop()
+  }
+}
+
+extension CueStore {
+  /// 留给你回的有无翻一下：直接写，不经值班 Mac 在不在线的判断（这里没有 Mac）。
+  fileprivate func toggleLeft(_ session: SessionState) throws {
+    try write {
+      if try cueState()?.left.isEmpty == false { try putLeft([], removing: session.sessionID) } else { try putLeft([session]) }
+    }
   }
 }
 

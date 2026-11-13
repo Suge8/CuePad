@@ -144,12 +144,13 @@ public actor CueStore {
 
   /// 一个写事务；提交后通知订阅者，并把改动的同步记录交给同步订阅者。
   func write<T>(_ body: () throws -> T) throws -> T {
-    let (result, changes): (T, Changes)
+    let ((result, flipped), changes): ((T, Set<String>), Changes)
     do {
-      (result, changes) = try db.transaction {
+      ((result, flipped), changes) = try db.transaction {
+        let before = try watchedColumns()
         let value = try body()
         try reconcileTaskSessionEvents()
-        return value
+        return (value, try flippedColumns(since: before))
       }
     } catch {
       afterCommit = []
@@ -171,7 +172,7 @@ public actor CueStore {
       let delta = try? pendingSync(in: changes)
       let deleted = !changes.deletedFrom.isDisjoint(with: Table.synced.map(\.rawValue))
       if delta.map({ !$0.saves.isEmpty || !$0.deletes.isEmpty || deleted }) ?? true {
-        syncChanged(delta, in: tables, urgent: delta.flatMap { try? urgent(among: $0) })
+        syncChanged(delta, in: tables, urgent: delta.flatMap { try? urgent(among: $0, flipped: flipped) })
       }
     }
     return result

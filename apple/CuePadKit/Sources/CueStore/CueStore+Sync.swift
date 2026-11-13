@@ -78,10 +78,29 @@ extension CueStore {
     return pending
   }
 
-  /// 这次增量里要马上传的（`Table.urgent`）。
-  func urgent(among delta: PendingSync) throws -> Set<String> {
+  /// `Urgency.changed` 盯的那一列在事务开头的样子（记录 id → 值）。
+  func watchedColumns() throws -> [Table: [String: String?]] {
+    var values: [Table: [String: String?]] = [:]
+    for case (let table, .changed(let column, _)) in Table.urgent {
+      values[table] = Dictionary(uniqueKeysWithValues: try db.query("SELECT id, \(column) FROM \(table.rawValue)") { ($0.text(0), $0.textOrNil(1)) })
+    }
+    return values
+  }
+
+  /// 同一个事务里，盯的那一列和开头比变了的记录；没碰过的表不再读。
+  func flippedColumns(since before: [Table: [String: String?]]) throws -> Set<String> {
+    let touched = db.changesSoFar.tables
+    var flipped = Set<String>()
+    for (table, old) in before where touched.contains(table.rawValue) {
+      for (id, value) in try watchedColumns()[table] ?? [:] where old[id] ?? nil != value { flipped.insert(id) }
+    }
+    return flipped
+  }
+
+  /// 这次增量里要马上传的（`Table.urgent`）；`flipped` 是这次写入改了盯的那一列的记录。
+  func urgent(among delta: PendingSync, flipped: Set<String>) throws -> Set<String> {
     let saves = Dictionary(grouping: delta.saves, by: \.table).mapValues { $0.map(\.id) }
-    return try urgent { table, condition in
+    return try urgent(flipped: flipped) { table, condition in
       guard let ids = saves[table] else { return [] }
       return try pendingSaves(table, where: "(\(condition)) AND t.id IN (SELECT value FROM json_each(?))", [JSONColumn.encode(ids)]).map(\.id)
     } deleted: { tables in
@@ -94,18 +113,31 @@ extension CueStore {
 
   /// 别的进程（命令行里 Cue 的工具、`cuepad`）碰过的这几张表里，此刻要马上传的：那边传不了，由同步层认。
   package func pendingUrgent(in tables: Set<Table>) throws -> Set<String> {
-    try urgent { table, condition in
+    try urgent(flipped: nil) { table, condition in
       tables.contains(table) ? try pendingSaves(table, where: condition).map(\.id) : []
     } deleted: { urgent in
       try urgent.filter(tables.contains).flatMap { try pendingDeletes($0) }
     }
   }
 
+  /// `saved` 给出这张表里满足条件的待推送；`flipped` 为 nil 是比不了前后（别的进程写的）。
   private func urgent(
-    saved: (Table, String) throws -> [String], deleted: ([Table]) throws -> [String]
+    flipped: Set<String>?, saved: (Table, String) throws -> [String], deleted: ([Table]) throws -> [String]
   ) throws -> Set<String> {
     var names = Set<String>()
-    for (table, condition) in Table.urgent { names.formUnion(try saved(table, condition)) }
+    var along: [(Table, Table)] = []
+    for (table, urgency) in Table.urgent {
+      switch urgency {
+      case .always: names.formUnion(try saved(table, "1"))
+      case .when(let condition): names.formUnion(try saved(table, condition))
+      case .changed(_, let companion):
+        along.append((table, companion))
+        if let flipped { names.formUnion(try saved(table, "1").filter(flipped.contains)) }
+      }
+    }
+    for (table, companion) in along where try !saved(companion, "1").isEmpty {
+      names.formUnion(try saved(table, "1"))
+    }
     names.formUnion(try deleted(Array(Table.urgent.keys)))
     return names
   }

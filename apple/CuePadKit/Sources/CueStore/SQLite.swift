@@ -102,6 +102,8 @@ struct Changes {
 final class SQLite {
   private var handle: OpaquePointer?
   private let changeLog = ChangeLog()
+  /// 这个事务到此为止碰过的。
+  var changesSoFar: Changes { changeLog.changes }
   /// 编译好的语句，按 SQL 文本复用，连同它读到的表。用时取出、用完放回：同一条 SQL 在回调里被重入时，重入的那次临时编译一条，不共用游标。
   private var statements: [String: Compiled] = [:]
   private static let statementLimit = 128
