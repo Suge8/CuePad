@@ -367,10 +367,10 @@ enum DebugHooks {
     }
 
     /// 显示窗口：到最前并接过键盘（`activating` 时连 App 一起到前台）。本机构建（DEBUG 条件，含 perf 的 Release）不管谁起的都在后台：
-    /// 窗口排在所有窗口最后，不抢前台和键盘、不盖住正在用的窗口，按窗口截图照样截得到；非占前台不可的只经 `DebugForeground` 借。
+    /// 窗口排在所有窗口最后，不抢前台和键盘、不盖住正在用的窗口，按窗口截图照样截得到；非占前台不可的只经 `DebugForeground` 借，人要看的用 `-CuePadOnTop YES`。
     static func present(_ window: NSWindow, activating: Bool = false) {
         #if DEBUG
-        window.orderBack(nil)
+        if DebugScene.args.layoutOpts.onTop { window.orderFrontRegardless() } else { window.orderBack(nil) }
         LaunchBench.present(window)
         #else
         if activating { NSApp.activate() }

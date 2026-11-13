@@ -25,6 +25,7 @@
 #   xc.sh run  <mac|ios|ipad> [-- 启动参数…]          起着给 bcu、axe 操作，打印 PID（模拟器另带 UDID）；实例 5 分钟后自己退出（CUEPAD_RUN_SECONDS 改）。
 #                                                   iOS 的模拟器由后台看守租着，别的检出领不到，直到实例退出、到时或 stop
 #   xc.sh stop                                      结束本检出 run 起的实例（Mac 与模拟器）
+#   xc.sh real [copy] [-- 启动参数…]                 发版前拿本检出的代码看真实数据：正式版资料库的副本上起一份 Mac 实例、窗口排在最前，不同步、不连手机；copy 只拷副本、打印路径（real.py 头注释）
 #   xc.sh fleet up|status|down|accept               同一个检出里 Mac、iPhone、iPad 三个隔离实例共用一朵模拟云；accept 验收手机建灵感 → Mac 与 iPad 读到（fleet.py 头注释）
 #   xc.sh explore [种子] [秒] [-- 启动参数…]           找偶发的主线程卡死：起 iPhone 实例，按种子随机点滑三页，App 的看守记下卡住时连取样本（explore.py 头注释）
 #   xc.sh perf <mac|ios> [次数] [启动参数…]            单次交互：点击回合、指令、掉帧（perf-mac.sh、perf-ios.sh）
@@ -36,7 +37,7 @@
 #                                                   真机诊断，只读：读各台设备经 iCloud 送到 Mac 的诊断与日志、拉连着的手机的系统崩溃报告，按发布归档符号化（device_diag.py 头注释）
 # 启动参数原样传给 App（如 -CuePadDemo YES -CuePadScene editor -theme dark；Debug 认的参数见 UI/Debug/DebugScene+Args*.swift 的字段注释，画面见 DebugScene+Scenes.swift）。
 # 实例的隔离、每个检出一份、一定退出见 app.py 头注释；排队、在等谁、等待上限、任务时限、结束时的用时行见 _lock.sh；模拟器槽位见 _lock.sh 与 _sim.sh。
-# CUEPAD_SHOT_LIBRARY 换隔离库目录（默认 apple/.derived/library[-ios|-ipad]，如真实库的只读副本）。
+# CUEPAD_SHOT_LIBRARY 换隔离库目录（默认 apple/.derived/library[-ios|-ipad]，如 xc.sh real copy 拷的真实库副本）。
 # 产物目录是本检出的 apple/.derived（perf 的 Release 构建在 apple/.derived-perf，check 的 Mac 整模块编译在 apple/.derived-wmo，Kit 的测试在 apple/.derived/kit-<平台>，check 的 Kit 构建在 CuePadKit/.build）：每个检出一份增量。
 # 本机构建一律 ad-hoc 签名（工程默认，见 Signing.xcconfig）；CUEPAD_SIGN=development 只给同步测量（sync-bench.py）。
 # 每个测试最多 TEST_TIME_LIMIT 秒（_lock.sh；CUEPAD_TEST_TIME_LIMIT 覆盖，给真模型的评测用，任务时限随它变；Xcode 的测试时限，对 Swift Testing 与主线程死锁也生效）：超时记一条 "Time limit was exceeded"，非零退出。
@@ -67,7 +68,7 @@ export TEST_RUNNER_PI_OFFLINE=1
 # 同时跑的测试最多这么多个（Swift Testing 的并行宽度；不限时它把用例全数同时起）：测试起的是真 Agent 进程，3 核的 CI 机器上同时起几十个，
 # 不少用例等到超时（实测 76 条）。按核数给，CUEPAD_TEST_WIDTH 覆盖
 export TEST_RUNNER_SWT_EXPERIMENTAL_MAXIMUM_PARALLELIZATION_WIDTH="${CUEPAD_TEST_WIDTH:-$(sysctl -n hw.ncpu)}"
-USAGE="用法：$0 <check|signoff|build|strings|test|agents|shot|rec|run|stop|fleet|explore|perf|release|device|provision|activity-log|diag> [mac|ios|ipad|kit] …（xc.sh help 看全部）"
+USAGE="用法：$0 <check|signoff|build|strings|test|agents|shot|rec|run|stop|real|fleet|explore|perf|release|device|provision|activity-log|diag> [mac|ios|ipad|kit] …（xc.sh help 看全部）"
 
 cmd="${1:-}"; platform="${2:-}"
 case "$cmd" in
@@ -80,6 +81,7 @@ case "$cmd" in
   diag) exec python3 "$APPLE_DIR/scripts/device_diag.py" "${@:2}" ;;
   explore) exec python3 "$APPLE_DIR/scripts/explore.py" "$0" "${@:2}" ;;
   fleet) exec python3 "$APPLE_DIR/scripts/fleet.py" "$0" "${@:2}" ;;
+  real) exec python3 "$APPLE_DIR/scripts/real.py" "$0" "${@:2}" ;;
   perf) [ "$platform" != ab ] || exec python3 "$APPLE_DIR/scripts/perf-ab.py" "${@:3}" ;;  # 其余先构建、再测量，两段各自进锁（见下）
   test|shot|rec|run)
     # 本检出上一个 run 的实例租着一台模拟器：先收掉再排队，免得槽位被自己占满

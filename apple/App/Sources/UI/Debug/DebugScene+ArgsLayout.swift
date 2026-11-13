@@ -28,6 +28,8 @@ nonisolated struct LayoutArgs: Decodable, DebugArgGroup {
     let landscape: Bool
     /// `-CuePadModelMenu YES`（Mac）：模型菜单一出现就打开；菜单是独立窗口，截图另拍它
     let modelMenu: Bool
+    /// `-CuePadOnTop YES`（Mac）：主窗口起在所有窗口最前给人看（`xc.sh real`），不接键盘、点一下才激活；不给时排在最后
+    let onTop: Bool
     /// `-CuePadNarrowCycle YES`（配录屏）：就绪后走一圈开侧栏的进展、换到项目、换回进展、再换到项目（中途反向：上一下换段的滑动还没停就点回去）、回 Cue
     let narrowCycle: Bool
     /// `-CuePadNarrowPane projects|progress`（iOS 窄屏）：起在满屏侧栏的哪一栏

@@ -52,7 +52,7 @@ def disclaimed(argv):
 def isolated_env(library, sockets=SOCKETS):
     library = os.path.realpath(library)
     if library == REAL_LIBRARY or library.startswith(REAL_LIBRARY + "/"):
-        die(f"{library} 是真实资料库：本机构建一打开就升级结构、改写并同步出去。用只读副本（apple/scripts/AGENTS.md「真实数据复现」）")
+        die(f"{library} 是真实资料库：本机构建一打开就升级结构、改写并同步出去。用它的副本（xc.sh real）")
     agents = f"{library}/agents"
     # 锁的内部变量不带进实例：实例里的 Agent 再调 xc.sh 要照常进锁
     inherited = {k: v for k, v in os.environ.items() if k not in ("CUEPAD_SIM", "CUEPAD_LEASE", "CUEPAD_FAKE_HOME")}

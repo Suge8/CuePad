@@ -7,14 +7,10 @@
 首帧、滚动、输入类问题在演示库上好了不算修好：条数、正文长短与图片和真实库差得远。在真实库的只读副本上复现：
 
 ```bash
-mkdir -p /tmp/cuepad-copy
-sqlite3 -readonly "<库目录>/cuepad.db" ".backup /tmp/cuepad-copy/cuepad.db"   # 库目录见 LibraryLocation
-mkdir -p /tmp/cuepad-copy/Caches && cp -cR ~/Library/Caches/CuePadAttachments /tmp/cuepad-copy/Caches/   # 要看附件时：本机那份
-cp -cR "<库目录>/Attachments" /tmp/cuepad-copy/   # 还没上传的保底
-CUEPAD_SHOT_LIBRARY=/tmp/cuepad-copy apple/scripts/xc.sh shot mac …
+CUEPAD_SHOT_LIBRARY="$(apple/scripts/xc.sh real copy)" apple/scripts/xc.sh shot mac …
 ```
 
-`.backup` 在正式版开着库时也拷得出一致的一份；直接 `cp` 会漏掉 WAL 里没落盘的写入。副本里是用户的私人内容，验完删掉 `/tmp/cuepad-copy`。
+人要自己点着看就 `xc.sh real`。副本里是用户的私人内容，只留在本检出的 `.derived`，不拷到别处。
 
 ## 占前台
 
