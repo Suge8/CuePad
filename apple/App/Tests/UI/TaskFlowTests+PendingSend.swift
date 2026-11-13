@@ -63,5 +63,37 @@ extension TaskFlowTests {
         #expect(try await store.deliveryRequests().filter { $0.mode == .known(.end) }.count == 1)
         await rig.services.executor.beginStop()()
     }
+
+    @Test(arguments: ["done", "archive", "trash", "project"])
+    func 任务收尾后再对它的会话说话_送达后会话留着(action: String) async throws {
+        let workspace = Workspace(services: rig.services)
+        try await rig.offersPi()
+        let project = try await store.createProject(name: "发布", color: "#000000")
+        let task = try await workspace.createTask("准备发布", in: project.id)
+        workspace.startFresh(task)
+        let launch = try #require(try await eventually(store, { try $0.deliveryRequests().first { $0.mode == .known(.start) } }) { $0 != nil })
+        let ext = try await rig.host.connect("resumed", cwd: rig.directory.path, launchToken: launch.launch?.token)
+        defer { ext.close(bye: "quit"); rig.bridge.stop(); rig.services.cancelBackgroundWork() }
+        let recorder = try await rig.runtimeRecorder(on: TestApp.hostID)
+        try await recorder.update(sessionID: ext.sessionID, state: .settled, launchToken: launch.launch?.token, hosted: true)
+        try await store.deleteDelivery(launch.id)
+        switch action {
+        case "archive": try await workspace.archive(task.id)
+        case "trash": try await workspace.trash(task.id)
+        case "project": try await store.trashProject(project.id)
+        default: try await workspace.complete(task.id)
+        }
+        // 收尾的那次结束当它已执行、请求已清理；会话随后被你的话恢复起来（这里一直连着）
+        let end = try #require(try await store.deliveryRequests().first { $0.mode == .known(.end) })
+        try await store.deleteDelivery(end.id)
+        try await Task.sleep(for: .milliseconds(5))
+        let target = SendTarget(kind: .piSession, name: "发布", ref: ext.sessionID)
+        await workspace.speak("再改一处", to: .session(target, host: TestApp.hostID, mode: .send, card: nil)).value
+        let request = try #require(try await store.deliveryRequests().first { $0.mode == .known(.send) })
+        try await rig.services.executor.start()
+        try await eventually("送达") { try await store.deliveryRequest(request.id)?.status == .known(.succeeded) }
+        #expect(try await store.deliveryRequests().filter { $0.mode == .known(.end) }.isEmpty)
+        await rig.services.executor.beginStop()()
+    }
 }
 #endif
