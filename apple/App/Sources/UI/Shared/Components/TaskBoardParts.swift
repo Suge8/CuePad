@@ -318,7 +318,7 @@ struct BoardColumn: View {
             let move = slot.flatMap { board.move(id, before: board.todo.indices.contains($0) ? board.todo[$0].id : nil) }
             if fromTodo {
                 guard let move else { return }
-                workspace.perform { try await $0.moveCard(id, to: move.slot, after: move.after) }
+                workspace.move(id, to: move.slot, after: move.after)
             } else if board.advancing.contains(where: { $0.item?.id == id }) {
                 // 推进中的任务拖回待办：算没开始（它的会话照旧活着，解开后单独一张留在推进中），落在线画的那个位置；
                 // 没有线时（它那个项目在待办里一张都没有）落在项目排到的地方。

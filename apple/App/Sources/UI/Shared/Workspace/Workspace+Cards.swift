@@ -26,12 +26,13 @@ extension Workspace {
     /// 已经完成的不动：界面手里的副本可能已过时（别的设备刚做完），再来一次不能把它翻回去（`CueStore.completeTask`）。
     /// 绑着的会话里绑着的事都做完了的一起结束，结束哪些只由 Store 定（与 Cue 的 done 同一条规则）。
     func complete(_ id: UUID) async throws {
-        let (status, ended) = try await services.store.completeTask(id)
+        let (status, ended, undo) = try await services.store.completing(id)
         for request in ended { _ = services.uploaded(request) }
         // 做完了就给一个归档（不自动归档）
         guard status == .done else { return }
+        if let undo { undoable("完成", undo) }
         let archiving = NoticeAction(title: String(localized: "归档")) { try await $0.archive(id) }
-        say("已完成", action: archiving)
+        say("已完成", action: archiving, sound: .complete)
     }
 
     func reopen(_ id: UUID) async throws {
@@ -44,13 +45,13 @@ extension Workspace {
         let undo = try await store.merging(idea, into: task)
         closeIfOpen(idea)
         let title = try await store.card(task)?.title ?? ""
-        say("已接到「\(title.textGlyphs)」的正文后面", action: .undo(undo))
+        say("已接到「\(title.textGlyphs)」的正文后面", action: .undo("合并", undo))
     }
 
     func newTask(fromIdea idea: UUID) async throws {
         let (task, undo) = try await services.store.spawning(idea)
         closeIfOpen(idea)
-        say("已新建任务「\(task.title.textGlyphs)」", action: .undo(undo))
+        say("已新建任务「\(task.title.textGlyphs)」", action: .undo("新建任务", undo))
     }
 
     /// 还是空白（`Card.isBlank`）的灵感就不留下：记一条是先建一条空的再编辑。
@@ -111,14 +112,21 @@ extension Workspace {
     }
 
     func setPinned(_ card: UUID, _ pinned: Bool) {
-        perform { try await $0.updateCard(card) { $0.isPinned = pinned } }
+        let store = services.store
+        attempt { self.undoable(pinned ? "置顶" : "取消置顶", try await store.pinning(card, pinned)) }
+    }
+
+    /// 排序、换项目、缩进、挂成子任务（`CueStore.moveCard`）。
+    func move(_ id: UUID, to slot: CardSlot, after previous: UUID?) {
+        let store = services.store
+        attempt { self.undoable("移动", try await store.moving(id, to: slot, after: previous)) }
     }
 
     func archive(_ id: UUID) async throws {
         let store = services.store
-        try await store.archive(id)
+        let time = try await store.archive(id)
         closeIfOpen(id)
-        say("已归档", action: .undo { try await store.unarchive(id) })
+        say("已归档", action: .undo("归档") { try await store.unarchive(id, archivedAt: time) })
     }
 
     func trash(_ id: UUID) async throws { try await trash([id]) }
@@ -130,7 +138,7 @@ extension Workspace {
         // 卡从墙上拿走时收不到鼠标移出：不再算停在它上面（⌘⌫ 删的是鼠标停着的那张）
         ids.forEach { presses.hover($0, inside: false) }
         #endif
-        say(ids.count > 1 ? "已删除 \(ids.count) 条" : "已删除", action: .undo(undo))
+        say(ids.count > 1 ? "已删除 \(ids.count) 条" : "已删除", action: .undo("删除", undo))
     }
 
     /// 归档的就是看板上此刻看得到的那些已完成：选了项目范围只归档那个项目的。入口都在看板的已完成那一列，范围只在这里读。
@@ -147,10 +155,5 @@ extension Workspace {
         } catch {
             fail(error)
         }
-    }
-
-    func run(_ action: NoticeAction) {
-        notice = nil
-        attempt { try await action.run(self) }
     }
 }

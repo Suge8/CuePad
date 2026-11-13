@@ -19,7 +19,8 @@ struct MainWindow: View {
         .background { WorkspaceShortcuts(workspace: workspace) }
         .background { CardPressMonitor(workspace: workspace) }
         .overlay { Prewarm().environment(workspace) }
-        .overlay(alignment: .top) { NoticeView().padding(.top, Spacing.item) }
+        .overlay { NoticeView() }
+        .followsUndo(workspace)
         .toolbar(removing: .title)
         .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
         .panelHost()

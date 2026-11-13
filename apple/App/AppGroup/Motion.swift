@@ -36,6 +36,16 @@ nonisolated enum Motion {
         reduceMotion ? .opacity : .scale(scale: 0.9).combined(with: .opacity)
     }
 
+    /// 浮出来：浮在内容上的小块（提示）从它贴着的那条边出现，短短挪一截、从九七成大长到原大并淡入；减弱动态效果时只淡。
+    /// 不从边外整块滑进来：它不是从屏幕外来的东西，挪一个身位就够说明从哪边来。
+    static func surface(from edge: VerticalEdge, reduceMotion: Bool) -> AnyTransition {
+        reduceMotion ? .opacity : .offset(y: edge == .top ? -Surface.shift : Surface.shift).combined(with: .scale(scale: 0.97)).combined(with: .opacity)
+    }
+
+    nonisolated enum Surface {
+        static let shift: CGFloat = 10
+    }
+
     /// 滑多远、往哪边：够看出从哪边来，不至于像翻过一整页。
     nonisolated enum Turn {
         static let distance: CGFloat = 28

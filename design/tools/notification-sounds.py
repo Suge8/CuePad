@@ -1,6 +1,6 @@
-"""Mac 通知提示音的合成源：生成 apple/App/Sources/Sounds/ 下的 4 段 caf（文件名即通知声音名）。
+"""Mac 通知提示音（4 段，文件名即通知声音名）与提示条的操作音（ui-* 4 段，`NoticeSound`）的合成源：生成 apple/App/Sources/Sounds/ 下的 caf。
 用法：python3 design/tools/notification-sounds.py apple/App/Sources/Sounds（需要 numpy；afconvert 是系统自带的）。
-响度对齐系统提示音（Glass、Tink 约 -25 LUFS），所以峰值只到 -11.5 dBFS。"""
+响度对齐系统提示音（Glass、Tink 约 -25 LUFS），所以峰值只到 -11.5 dBFS；操作音跟在手上的动作后面、一天响很多次，再低 7 dB、不到三分之一秒。"""
 import numpy as np, wave, os, sys, subprocess, tempfile
 SR = 48000
 OUT = sys.argv[1]
@@ -40,8 +40,8 @@ def reverb(y, mix=0.12, length=0.45):
     # 混响只要高一点的部分，低频不糊
     return y + mix*wet
 
-def finish(y, peak_db=-11.5, tail=0.03):
-    y = reverb(y)
+def finish(y, peak_db=-11.5, tail=0.03, wet=0.12):
+    y = reverb(y, mix=wet)
     n = int(tail*SR); y[-n:] *= np.linspace(1,0,n)
     y = y/np.max(np.abs(y))*10**(peak_db/20)
     return y
@@ -87,5 +87,22 @@ def drop():
     tail = np.zeros(n); place(tail, marimba(note('G6'), 0.45)*0.25, 0.03)
     return finish(y+tail)
 
-for name, fn in [('chime',chime),('tap',tap),('bell',bell),('drop',drop)]:
+# 操作音：同一把木琴，短、干（混响只留一点），峰值 -18.5 dBFS
+def ui(notes, dur=0.3, gap=0.065, decay=0.55):
+    y = np.zeros(int(dur*SR))
+    for i, (n, amp) in enumerate(notes):
+        place(y, marimba(note(n), dur*decay + 0.1)*amp, gap*i)
+    return finish(y, peak_db=-18.5, tail=0.05, wet=0.05)
+
+# 做完一件任务：上行纯四度落在主音（G5→C6），比通知的"水滴"轻，像打了个勾
+def ui_complete(): return ui([('G5',0.7),('C6',1.0)], dur=0.32)
+# 做了一件能撤的事（归档、删除、合并）：一声，像纸落进抽屉
+def ui_act(): return ui([('E5',1.0)], dur=0.2)
+# 撤回来了：把"做完"倒过来，下行（C6→G5）
+def ui_undo(): return ui([('C6',0.8),('G5',1.0)], dur=0.3)
+# 没做成：同一个音闷闷地敲两下（E4），不往上走也不刺耳
+def ui_fail(): return ui([('E4',1.0),('E4',0.8)], dur=0.32, gap=0.11, decay=0.3)
+
+for name, fn in [('chime',chime),('tap',tap),('bell',bell),('drop',drop),
+                 ('ui-complete',ui_complete),('ui-act',ui_act),('ui-undo',ui_undo),('ui-fail',ui_fail)]:
     write(name, fn())

@@ -30,7 +30,7 @@ extension Workspace {
             if library.hostID == localHost {
                 #if os(macOS)
                 let done = try await services.library.tidy(orders)
-                say(Self.tidied(orders, count: done.count, in: library), action: .undo(done.undo))
+                say(Self.tidied(orders, count: done.count, in: library), action: .undo("整理", done.undo))
                 #endif
             } else {
                 let request = try await services.requestTidy(orders, on: library.hostID)

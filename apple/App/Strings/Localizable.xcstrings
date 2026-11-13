@@ -12684,6 +12684,22 @@
         }
       }
     },
+    "已撤销：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Undid: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已撤销：%@"
+          }
+        }
+      }
+    },
     "已收起" : {
       "localizations" : {
         "en" : {
@@ -15488,6 +15504,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "整张卡片"
+          }
+        }
+      }
+    },
+    "整理" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tidy Up"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "整理"
           }
         }
       }
@@ -20036,6 +20068,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "移到项目"
+          }
+        }
+      }
+    },
+    "移动" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Move"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "移动"
           }
         }
       }

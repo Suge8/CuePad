@@ -38,7 +38,7 @@ struct CardActions: View {
         let id = card.id, here = card.parentID == nil ? card.projectID : nil
         return Menu(CardMenu.Item.move.title, icon: CardMenu.Item.move.icon) {
             ForEach(workspace.catalog?.projects ?? []) { project in
-                Button(project.shownName) { workspace.perform { try await $0.moveCard(id, to: .top(project: project.id), after: nil) } }
+                Button(project.shownName) { workspace.move(id, to: .top(project: project.id), after: nil) }
                     .disabled(card.parentID == nil && project.id == here)
             }
         }
