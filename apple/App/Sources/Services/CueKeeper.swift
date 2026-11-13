@@ -28,6 +28,7 @@ import os
 /// 你的话只经 `hand` 交出去：先记送达再发，没答上的随班次退回（`giveBack`），至少答一次。
 @Observable
 final class CueKeeper {
+    /// 冷、热巡视每段空闲各至多一次，每天合起来至多这么多次：巡视是 Cue 自己找活，多了只是花钱打扰
     nonisolated static let patrolsPerDay = 3
     nonisolated static let roundsKept = 50
 
@@ -158,7 +159,8 @@ final class CueKeeper {
             reconciles: reconciles, scheduled: timer != nil)
     }
     /// 在回答你的这一轮正在说的话（只在内存，不进 `cueState`、不入库、不同步）：只有 Cue 页末尾读它，出字时对话列表不重算。
-    /// 说完的留着，由 Cue 页在对话里出现它之后换下；下一轮开始、大脑出问题时清掉。
+    /// 说完的留着，由 Cue 页在对话里出现它之后换下；下一轮开始、大脑出问题时清掉。只显示在回答你的一轮（`Turn.answersYou`）：
+    /// Cue 自己醒来的一轮最后的话不写进对话，显示了就落不了库。
     let speech = LiveDraftFeed()
 
     var work: (state: WorkState, detail: String?, step: CueActivity.Touch?, row: UUID?) {

@@ -116,6 +116,7 @@ extension CueKeeper {
                 // 醒来已消费的那几件照各自的时刻重来；比它们都新的变化先看
                 if !fresh(newest) { return [deadlines.min(), setback?.retryAt].compactMap(\.self).min() }
             }
+            // 一轮在跑时来的变化等这一轮做完一起看，不另攒窗口：一轮的时长就是合批
             if !changes.isEmpty {
                 _ = try await wakeUp(.sessionActivity(changes.map(CueStir.init)))
                 return nil
@@ -156,7 +157,7 @@ extension CueKeeper {
         updateShift { $0.turn?.round.sent.append(text) }
     }
 
-    /// 留了就立即上传：手机上马上进等你。
+    /// 谁开的一轮谁接：他发起的一轮停下不叫醒 Cue，当场留给他回（Cue 在跑一轮也照做）；要 Cue 接手，他对 Cue 说一句。留了就立即上传：手机上马上进等你。
     private func leaveHisStops() async {
         guard let from = handedOver ?? progress.marks?.sessions else { return }
         do {
@@ -201,7 +202,7 @@ extension CueKeeper {
         }
     }
 
-    /// 刚启用与空闲巡视手上什么都没有时都不醒：醒来只能说一句没有事，在 Cue 页留下一行什么都没做的记录。
+    /// 刚启用与空闲巡视手上什么都没有时都不醒：醒来只能说一句没有事，在 Cue 页留下一行什么都没做的记录；Cue 页的空态（`CuePage`）直接告诉你能对它说什么。
     private func handsEmpty() async throws -> Bool {
         let board = try await store.cueBoard()
         guard board.tasks.isEmpty, board.sessions.isEmpty else { return false }

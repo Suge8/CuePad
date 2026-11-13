@@ -89,7 +89,7 @@ extension CueKeeper {
             .compactMap { $0.session.map { CueLeft(sessionID: $0.sessionID, since: $0.stateSince) } }
     }
 
-    /// 这次醒来要先开新会话（换新，唯一规则）：上下文到了换新线，或距上一次模型请求超过提示缓存的时长（缓存已过期，接着用要把整段原价重写；
+    /// 这次醒来要先开新会话（换新，唯一规则；只在一次醒来开始时判断，不在一轮中途换）：上下文到了换新线，或距上一次模型请求超过提示缓存的时长（缓存已过期，接着用要把整段原价重写；
     /// 换新只写固定前缀与视图，从不更贵）。还没请求过模型的会话不换。不多跑一轮、不先写交接：实测缓存热时先写交接再换没有带来提升，交接还每次写超 600 字。
     func renewDue(_ shift: Shift, now: Date) -> Bool {
         guard let used = shift.context?.used, let last = shift.lastRequest else { return false }

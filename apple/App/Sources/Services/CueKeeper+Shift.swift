@@ -27,6 +27,7 @@ extension CueKeeper {
                 return await broke(ShownText("这台 Mac 上没有找到 \(profile.runtime.rawValue)"))
             }
             let memory = CueMemoryView(try await store.cueMemory())
+            // 系统提示在班次内不变、只带重点（重点跨班次也很少变）：提示缓存一直命中；记忆的其余部分随第一条输入交（`wakeUp`）
             let brain = try await startBrain(
                 runtime, launch, model: profile.model, effort: profile.effort?.known, fast: profile.fast,
                 systemPrompt: CuePrompt.system(name: profile.name, memory: memory, agents: launch.agents, runtime: runtime, interface: .current),
@@ -233,7 +234,8 @@ extension CueKeeper {
         }
     }
 
-    /// 经过那一行最后一次改（中途插了你的话，这一轮成了回答你的）、写给你的话与歇着，一次写下（`CueStore.finishCueRound`）。
+    /// 经过那一行最后一次改（中途插了你的话，这一轮成了回答你的）、写给你的话与歇着，一次写下（`CueStore.finishCueRound`）：
+    /// 别的设备同步来时三样一起到，"做完了"只看此刻的状态，不会先看到歇着、后看到回复。
     func finish(_ turn: Turn, reply: String?) async throws -> UUID? {
         try await setup.recorder.finishCueRound(
             turn.round.row, startedAt: turn.round.startedAt, answersYou: turn.answersYou, tools: turn.round.calls.isEmpty ? nil : turn.round.process,
@@ -254,11 +256,12 @@ extension CueKeeper {
         }
     }
 
+    /// 按本机写入序号分新旧，不按事件时刻：事件可能晚到（机器忙、从别的设备同步来），时刻早于上次醒来的也照样是新的。
     func changes(at now: Date) async throws -> [CueChange] {
         try await store.cueChanges(after: progress.marks ?? CueMarks(0), at: now)
     }
 
-    /// 一轮做完、没出错：会话的动静从醒来时读到的写入序号之后算（这一轮里才写进库的下次还在，哪怕事件时刻更早），
+    /// 基线只在一轮做完且没出错时前移：出错的一轮里 Cue 没看完的变化下次还在。会话的动静从醒来时读到的写入序号之后算（这一轮里才写进库的下次还在，哪怕事件时刻更早），
     /// 完成从此刻的写入序号之后算（这一轮里多是 Cue 自己做完的），等子代理停住从醒来的时刻（`seen`，信封里的变化读到那一刻为止）之后算。
     func advanceBaseline(from mark: Int?, seen: Date) async {
         do {
