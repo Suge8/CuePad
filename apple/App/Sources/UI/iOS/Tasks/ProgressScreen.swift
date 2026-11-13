@@ -23,7 +23,7 @@ struct ProgressScreen: View {
     @ViewBuilder private var page: some View {
         if workspace.layout == .wide {
             boardView
-                .padding(.leading, inset.leading + Chrome.control + Spacing.item - BoardCardMetrics.inset)
+                .padding(.leading, WideMetrics.boardLead(inset))
                 .padding(.trailing, under > 0 ? 0 : inset.trailing - BoardCardMetrics.inset)
                 .overlay(alignment: .topLeading) {
                     ProjectScopeButton().padding(.leading, inset.leading).padding(.top, BoardCardMetrics.inset)

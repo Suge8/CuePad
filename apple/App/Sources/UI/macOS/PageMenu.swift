@@ -63,12 +63,8 @@ struct PageMenuSlot: View {
         .modifier(InspirationSharePresentation(sharing: inspirationSharing, editing: workspace.openCardEditing))
     }
 
-    private func menuLabel(_ content: Content) -> some View {
-        Image(content == .progress ? .filter : .more).overlay(alignment: .topTrailing) {
-            if content == .progress, let project = workspace.catalog?.project(workspace.scopedProject) {
-                ProjectGlyph(project: project, size: 10).offset(x: 12, y: -10)
-            }
-        }
+    @ViewBuilder private func menuLabel(_ content: Content) -> some View {
+        if content == .progress { ProjectScopeLabel() } else { Image(.more) }
     }
 
     @ViewBuilder private func items(_ content: Content) -> some View {
@@ -78,8 +74,7 @@ struct PageMenuSlot: View {
                 InspirationEditorActions(card: card, editing: editing, sharing: inspirationSharing)
             } else { CardActions(card: card, more: true) }
         case .project(let id): ProjectMenuItems(projectID: id)
-        case .progress:
-            ProjectScopeItems()
+        case .progress: ProjectScopePicker().pickerStyle(.inline)
         case .trash:
             Button("清空回收站…", icon: .trash, role: .destructive) { workspace.confirmsEmptyTrash = true }
         case .card(nil): EmptyView()

@@ -34,7 +34,7 @@ struct PageStack: View {
 
     @ViewBuilder private func pageView(_ page: Route) -> some View {
         switch page {
-        case .shelf: ProjectShelf()
+        case .shelf: ProjectShelf().safeAreaPadding(.top, Bars.contentGap)
         case .project(let id): ProjectPage(projectID: id)
         case .archive: ArchivePage()
         case .trash: TrashPage()

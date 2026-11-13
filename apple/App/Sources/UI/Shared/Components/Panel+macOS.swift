@@ -48,17 +48,6 @@ private struct InPlacePanel: ViewModifier {
     }
 }
 
-/// 从控件长出的气泡开没开（`bubble(isPresented:)` 绑 `open`，控件点了 `toggle`）：点气泡外收起时按下的就是开关的话，
-/// 松开时开关又要打开它——刚在这一下收起的不再打开（`PressPoint.reopens`）。
-struct BubbleSwitch {
-    var open: Bool { didSet { if oldValue, !open { closedAt = .now } } }
-    private var closedAt: ContinuousClock.Instant?
-
-    init(open: Bool = false) { self.open = open }
-
-    mutating func toggle() { open = !open && !PressPoint.reopens(closedAt: closedAt) }
-}
-
 extension View {
     /// 每个窗口的根视图挂一次：本窗口的浮层都画在这里，盖住整窗（含侧栏）。点浮层外面任意处（含工具栏）或按 Esc 关最上面那一层（`PanelHost`）；
     /// 模态的开着时按键不进下面那层界面，读屏只在浮层里（`isModal`）。环境要在它外面注入，浮层内容才拿得到。
