@@ -49,10 +49,6 @@ public struct CueTally: Equatable, Sendable {
   }
   public var waiting: [Wait]
   public var replies: [Reply]
-  public var agents: Int { CueAgents.count(in: works) }
-
-  public var subagents: Int { CueAgents.sessions(in: advancing).reduce(0) { $0 + $1.runtimeSubagents.count(where: \.isRunning) } }
-
   public var held: Set<UUID> {
     Set(waiting.compactMap { if case .session(_, let task) = $0 { task } else { nil } } + replies.compactMap(\.task))
   }
