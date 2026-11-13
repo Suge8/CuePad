@@ -62,10 +62,7 @@ private struct MainHead: View {
             Spacer(minLength: Spacing.item)
             // 看板那一排是列头，不给提醒常驻一格（列头少让一截）；要关注时才露
             if workspace.mainRoute != .progress || SyncAlertSlot.needed(services) { SyncAlertSlot() }
-            if workspace.overlay == nil {
-                if workspace.mainRoute == .library { LibraryHelpSlot() }
-                if workspace.mainRoute == .shelf { NewProjectSlot() }
-            }
+            if workspace.overlay == nil, workspace.mainRoute == .shelf { NewProjectSlot() }
             PageMenuSlot()
         }
     }

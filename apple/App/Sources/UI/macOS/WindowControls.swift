@@ -3,7 +3,7 @@ import CueStore
 import SwiftUI
 
 extension View {
-    /// 只给一出一收会挤动同一排旁边控件的（同步提醒、技能与规则的说明）用，其余按条件写。
+    /// 只给一出一收会挤动同一排旁边控件的（同步提醒）用，其余按条件写。
     func keepsPlace(shown: Bool) -> some View {
         opacity(shown ? 1 : 0).allowsHitTesting(shown).accessibilityHidden(!shown)
     }

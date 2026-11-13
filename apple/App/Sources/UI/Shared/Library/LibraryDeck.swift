@@ -10,8 +10,17 @@ struct LibraryDeck: View {
     var body: some View {
         let shown = workspace.libraryPane
         ZStack(alignment: .top) {
-            LibraryPaneScroll(pane: .rules, shown: shown) { InstructionSection(library: library) }
-            LibraryPaneScroll(pane: .skills, shown: shown) { SkillSection(library: library) }
+            LibraryPaneScroll(pane: .rules, shown: shown) { Self.pane(library) { InstructionSection(library: library) } }
+            LibraryPaneScroll(pane: .skills, shown: shown) { Self.pane(library) { SkillSection(library: library) } }
+        }
+    }
+
+    private static func pane(_ library: AgentLibrary, @ViewBuilder content: () -> some View) -> some View {
+        VStack(spacing: LibraryLayout.gap) {
+            content().frame(maxWidth: .infinity, alignment: .leading)
+            #if os(iOS)
+            LibrarySource(library: library)
+            #endif
         }
     }
 }
