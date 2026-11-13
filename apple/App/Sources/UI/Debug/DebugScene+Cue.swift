@@ -5,19 +5,13 @@ import Foundation
 
 /// `-CuePadCuePresence asleep` 要配 `-CuePadDemoMac YES`：隔离库没有同步，要演示 Mac 才算同步通着、说它在睡觉。
 /// 配 fresh 时 notes-edit 也结束，没有拍板：名牌说几个会话待回复。
-/// `cuerun`（仅 Mac）让 Cue 运行在这台 Mac，"运行情况"才有。
 /// 演示 Mac 不值班，在线记录与此刻在做什么直接写进库（`CueStore.recordMacPresence`、`setCueState`）。
 extension DebugScene {
     static func seedCue(_ services: AppServices) async {
         let store = services.store
         let presence = args.cueOpts.presence
         if presence == "unchosen" { return }
-        // "运行情况"只在 Cue 值班的这台 Mac 上有：cuerun 让它运行在这台（大脑在隔离目录里起不来，几轮是空的或出错）
-        #if os(macOS)
-        let host = scene == "cuerun" ? services.hostID : "demo-mac"
-        #else
         let host = "demo-mac"
-        #endif
         do {
             guard try await store.cueMessages(limit: 1).isEmpty else { return }
             _ = try await store.updateCueProfile { profile in

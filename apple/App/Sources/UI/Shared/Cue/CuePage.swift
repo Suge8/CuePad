@@ -2,7 +2,7 @@ import CueStore
 import SwiftUI
 
 /// Cue 页（窄屏的根，宽屏一直在右边），与会话页同一套消息版式，对话区也是同一个（`ChatColumn`）。
-/// 页头点开都是 Cue 的面板（`CueNowPanel`，三端同一份）：记忆（`CueMemoryPage`）与定时（`CueSchedulePage`）从那里去，Cue 在这台 Mac 值班时 Mac 的面板末尾还有"运行情况"，在右侧开一栏（`CueRunPanel`）。
+/// 页头点开都是 Cue 的面板（`CueNowPanel`，三端同一份）：记忆（`CueMemoryPage`）与定时（`CueSchedulePage`）从那里去。
 /// 你发起的一轮在你的话之后先是这一轮的经过（`CueTrace`：碰到的任务与会话一处一行，做完一步才往下长、出现了就不再动），这一轮说的话与结果按先后在它之后。
 /// Cue 自己醒来的几轮每轮一行旁注（`CueNoteLog`），末尾是它此刻在做什么（`CueEnding`：此刻在做的只写这里）。
 /// 拍板卡（`CueWaitDock`）里是 Cue 的提问与会话在问的，对话里不另挂；通话在输入框里（`CueComposer`），Mac 的通话条在栏顶（`CueVoicePanel`）。
@@ -47,24 +47,14 @@ struct CuePage: View {
 
     #if os(macOS)
     private var page: some View {
-        HStack(spacing: 0) {
-            FloatingReply {
-                VStack(spacing: 0) {
-                    CueVoicePanel()
-                    chat.frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-            } reply: {
-                bottom()
-                    .replyTray()
-                    .padding(.horizontal, Self.inset)
-                    .frame(maxWidth: Self.readingWidth)
-            }
-            // 原地淡入淡出、对话这一下就让到终点的宽：开合不逐帧排版
-            if cue.showsRun, let keeper = services.cue.keeper {
-                CueRunPanel(keeper: keeper)
-                    .padding([.trailing, .bottom], Spacing.group)
-                    .transition(.opacity.animation(Motion.fade))
-            }
+        FloatingReply {
+            chat.frame(maxWidth: .infinity, maxHeight: .infinity)
+                .overlay(alignment: .top) { CueVoicePanel().frame(maxWidth: Self.readingWidth) }
+        } reply: {
+            bottom()
+                .replyTray()
+                .padding(.horizontal, Self.inset)
+                .frame(maxWidth: Self.readingWidth)
         }
         .background(palette.desk)
     }
@@ -121,7 +111,7 @@ struct CuePage: View {
                             row: item, shots: thread.shots[item.id] ?? [],
                             joined: thread.joined.contains(item.id),
                             stamp: thread.stamps[item.id], delivered: item.id == lastYou,
-                            unread: thread.unread.contains(item.id), opened: $opened, seen: $seen)
+                            unread: thread.unread.contains(item.id), settled: item.id != rows.last?.id, opened: $opened, seen: $seen)
                     })
                     .equatable()
                 }

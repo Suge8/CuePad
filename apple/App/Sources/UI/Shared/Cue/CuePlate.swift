@@ -21,8 +21,8 @@ struct PlateStyle {
         name: .subheadline.weight(.semibold), line: .caption, largestType: FloatingHeaderLayout.largestType)
     #else
     static let column = PlateStyle(
-        width: nil, height: 44, face: CueAvatar.Size.row.side, inset: 6, nameGap: 10, lineGap: 1,
-        name: Typography.toolbarTitle, line: Typography.toolbarSubtitle, largestType: .large)
+        width: nil, height: 52, face: 44, inset: 4, nameGap: 10, lineGap: 1,
+        name: Typography.cueCardName, line: Typography.secondary, largestType: .large)
     #endif
 }
 
@@ -30,6 +30,8 @@ struct PlateStyle {
 struct CuePlate: View {
     let card: Bool
     let style: PlateStyle
+    /// 名牌右端另放了东西（Mac 右栏的收起钮）：字让出这么宽。
+    var reserve: CGFloat = 0
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -38,7 +40,7 @@ struct CuePlate: View {
         let cue = workspace.cue
         let full = CueAvatar.Size.card.side
         let side = card ? full : style.face
-        PlateLayout(progress: card ? 1 : 0, style: style) {
+        PlateLayout(progress: card ? 1 : 0, style: style, reserve: reserve) {
             // 头像只按名片那一档画一次，收着时整体缩小：开合时连续地长大，点与表情不换档
             CueAvatar(cue.beat, size: .card)
                 .scaleEffect(side / full)
@@ -58,6 +60,7 @@ struct CuePlate: View {
 private struct PlateLayout: Layout {
     var progress: CGFloat
     let style: PlateStyle
+    let reserve: CGFloat
 
     var animatableData: CGFloat {
         get { progress }
@@ -82,7 +85,7 @@ private struct PlateLayout: Layout {
     private func collapsed(_ width: CGFloat?) -> CGFloat { style.width ?? width ?? 0 }
 
     private func column(_ width: CGFloat?) -> ProposedViewSize {
-        ProposedViewSize(width: max(collapsed(width) - style.inset - Self.trailing - style.face - style.nameGap, 0), height: nil)
+        ProposedViewSize(width: max(collapsed(width) - style.inset - Self.trailing - reserve - style.face - style.nameGap, 0), height: nil)
     }
 
     private func frame(width: CGFloat?, _ subviews: Subviews) -> Frame {

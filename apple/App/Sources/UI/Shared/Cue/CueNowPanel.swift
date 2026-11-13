@@ -1,7 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// 上下文用了几成不在这里：换新是自动的、多在歇过一小时后，看了也没有可做的，只留在 Mac 的"运行情况"（`CueContextLine`，Cue 在这台 Mac 上值班时末尾多一行开它，`RunLine`）。
+/// 上下文用了几成不写：换新是自动的、多在歇过一小时后，看了也没有可做的。
 /// 在做的会话不在这里：进行中的在会话条上（手机在 Cue 页左边，宽屏在左栏），点进会话只有那一条路，返回落点与行的长相都只有一种。
 /// 面板定高：空、一条、记满都一样高（两条各占两行的位），启用前后大脑那一块按启用了的样子占位（`BrainBlock`）。
 /// 面板里不放滚动区：会被写上页面滚动区的内容边距。Cue 的设置（`CueSettingsModel`）整块读一份：选 Mac 与底行的开关读写同一份，改 Mac 的确认框也只挂这一个。
@@ -26,9 +26,6 @@ struct CueNowPanel: View {
                 if enabled { ScheduleLine { go { workspace.cue.showsSchedules = true } } }
                 LibraryLine { go(openLibrary) }
                 CueHostLine(model: settings) { go(openSettings) }
-                #if os(macOS)
-                RunLine { go { workspace.cue.showsRun.toggle() } }
-                #endif
             }
             .padding(.horizontal, Spacing.panel - Spacing.inset)
         }
@@ -278,26 +275,3 @@ private struct CueHostPick: View {
         }
     }
 }
-
-#if os(macOS)
-private struct RunLine: View {
-    let toggle: () -> Void
-    @Environment(Workspace.self) private var workspace
-    @Environment(AppServices.self) private var services
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        if services.cue.keeper != nil {
-            Button(action: toggle) {
-                LinkRow(title: Text("运行情况"), chevron: false) {
-                    Image(.session)
-                } trailing: {
-                    if workspace.cue.showsRun { Image(.checked).foregroundStyle(palette.ink3) }
-                }
-            }
-            .buttonStyle(.row)
-            .accessibilityAddTraits(workspace.cue.showsRun ? .isSelected : [])
-        }
-    }
-}
-#endif

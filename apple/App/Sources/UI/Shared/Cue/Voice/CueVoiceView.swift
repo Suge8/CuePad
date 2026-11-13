@@ -24,7 +24,8 @@ struct CueVoiceDetailButton<Label: View>: View {
 }
 
 #if os(macOS)
-/// Mac 的通话条，常驻在 Cue 栏顶上：真实状态立即更新，只有声纹在图层里连续变形；开始、关闭、失败都不挤动聊天，详情在行尾的"⋯"。
+/// Mac 的通话条，浮在对话顶上、不占对话的位置：真实状态立即更新，只有声纹在图层里连续变形；开始、关闭、失败都不挤动聊天，详情在行尾的"⋯"。
+/// 不通话时整条看不见、点不到（各格自己撤掉入口，`voiceSlot`），对话从栏头下沿起就是它自己的。
 /// 手机与 iPad 没有单独的条：通话就在"对 Cue 说"里（`CueComposer`、`PhoneCall`）。
 struct CueVoiceView<Operation: CueVoiceOperation>: View {
     let presentation: CueVoiceState<Operation>?
@@ -64,8 +65,13 @@ struct CueVoiceView<Operation: CueVoiceOperation>: View {
             .accessibilityLabel("通话详情")
             .help(Text("通话详情"))
         }
-        .padding(.horizontal, Spacing.page)
+        .padding(.leading, Spacing.block).padding(.trailing, Spacing.tight)
         .padding(.vertical, Spacing.tight)
+        .glass(in: .capsule)
+        .opacity(showsStatus ? 1 : 0)
+        .animation(Motion.fade, value: showsStatus)
+        .padding(.horizontal, Spacing.page)
+        .padding(.top, Spacing.tight)
     }
 
     private var status: some View {

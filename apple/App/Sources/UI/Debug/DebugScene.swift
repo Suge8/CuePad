@@ -69,11 +69,11 @@ enum DebugScene {
         preset.helpOpen = args.layoutOpts.helpOpen
         preset.mergePreview = args.layoutOpts.mergePreview
         if args.libraryTab == "skills" { preset.libraryPane = .skills }
+        preset.cuePanelOpen = args.layoutOpts.cuePanel
         #if os(iOS)
         preset.alertStatus = alertStatus
         // sessions、cuerows 画面看会话行：手机的会话列表在搜索页的会话一栏
         if args.searchScope == "sessions" || scene.map(["sessions", "cuerows"].contains) == true { preset.searchScope = .sessions }
-        preset.cuePanelOpen = args.layoutOpts.cuePanel
         preset.quietAlerts = args.layoutOpts.quiet
         #endif
         return preset
