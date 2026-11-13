@@ -11,7 +11,7 @@ struct PlateStyle {
     let line: Font
     /// 字号跟着动态字体放大到这一档为止，再大第二行就出了定高的名牌。
     let largestType: DynamicTypeSize
-    /// 收着时头像连字整组排在名牌正中（Mac：名牌比字宽出一大截，靠左排右半边是空的）；否则头像贴左。
+    /// 收着时头像仍贴左，名字与数字账各自排在名牌正中（Mac：名牌比字宽出一大截，字跟着头像靠左排右半边是空的）；长开时字只往下落、不横挪。
     var centered = false
 
     #if os(iOS)
@@ -105,16 +105,19 @@ private struct PlateLayout: Layout {
         let full = max(width ?? start, start)
         let w = Self.lerp(start, full, p)
         let radius = Self.lerp(small, large, p)
-        let group = style.face + style.nameGap + max(name.width, line.width)
-        let lead = style.centered ? max(style.inset, min((start - group) / 2, start - reserve - Self.trailing - group)) : style.inset
         let center = CGPoint(
-            x: Self.lerp(lead + small, w / 2, p),
+            x: Self.lerp(style.inset + small, w / 2, p),
             y: Self.lerp(style.height / 2, Self.cardTop + large, p))
         let down = Self.ease(p / Self.turn), across = Self.ease((p - Self.turn) / (1 - Self.turn))
         let beside = center.x + radius + style.nameGap
         let top = Self.lerp(center.y - words / 2, center.y + radius + Self.cardGap, down)
-        let nameAt = CGPoint(x: Self.lerp(beside, center.x - name.width / 2, across), y: top)
-        let lineAt = CGPoint(x: Self.lerp(beside, center.x - line.width / 2, across), y: top + name.height + style.lineGap)
+        // 收着时字在哪：居中的那种排在名牌正中，让开左边的头像与右端留的那一截
+        let clear = style.inset + style.face + style.nameGap
+        func rest(_ width: CGFloat) -> CGFloat {
+            style.centered ? max(clear, min((start - width) / 2, start - reserve - Self.trailing - width)) : beside
+        }
+        let nameAt = CGPoint(x: Self.lerp(rest(name.width), center.x - name.width / 2, across), y: top)
+        let lineAt = CGPoint(x: Self.lerp(rest(line.width), center.x - line.width / 2, across), y: top + name.height + style.lineGap)
         let cardHeight = Self.cardTop + 2 * large + Self.cardGap + words + Self.cardBottom
         let h = max(Self.lerp(style.height, cardHeight, p), lineAt.y + line.height + Self.cardBottom)
         return Frame(size: CGSize(width: w, height: h), avatar: center, radius: radius, name: nameAt, line: lineAt)

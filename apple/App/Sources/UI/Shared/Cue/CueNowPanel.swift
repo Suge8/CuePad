@@ -27,6 +27,8 @@ struct CueNowPanel: View {
             }
             .padding(.horizontal, Spacing.panel)
             CueHostLine(model: settings) { go(openSettings) }
+                // 悬停的底就是这一行自己的圆角块（同上面几组）：默认的行底向两边出血，在这里会顶到面板的边、被圆角裁掉
+                .rowContainer(RoundedRectangle(cornerRadius: Radius.row), flush: true)
                 // 行首图标在它那一列里居中，往左收两点，图标的左沿才对上面几组的字
                 .padding(.horizontal, Spacing.panel - Spacing.inset - Spacing.hair)
                 .padding(.top, -Spacing.item)
@@ -171,11 +173,18 @@ private struct Figure: View {
                 .font(Typography.meta).foregroundStyle(palette.ink3)
             }
             .fixedSize(horizontal: false, vertical: true)
-            .contentShape(.rect)
+            .hoverRoom()
         }
         .buttonStyle(PressStyle())
+        .hoverRoomTaken()
         .accessibilityElement(children: .combine)
     }
+}
+
+private extension View {
+    /// 面板里不带框的按钮：悬停的淡底比字宽出一圈，不贴着字的边画；`hoverRoomTaken` 在按钮外把这一圈收回，字仍对着面板的边线。
+    func hoverRoom() -> some View { padding(.horizontal, Spacing.item).padding(.vertical, Spacing.glyph).contentShape(.rect) }
+    func hoverRoomTaken() -> some View { padding(.horizontal, -Spacing.item).padding(.vertical, -Spacing.glyph) }
 }
 
 /// 最近记下的两条各一行（字在左、几时记的在右），点哪里都去记忆页。
@@ -202,9 +211,10 @@ private struct CueRecall: View {
                     Text("还没记住什么").font(Typography.body).foregroundStyle(palette.ink3)
                 }
             }
-            .contentShape(.rect)
+            .hoverRoom()
         }
         .buttonStyle(PressStyle())
+        .hoverRoomTaken()
         .observing(services.store, into: $recent, onError: workspace.fail) { try $0.recentCueMemory(limit: Self.shown) }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Dotted([String(localized: "刚记下")] + lines.map(\.text)).spoken)
