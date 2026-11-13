@@ -281,6 +281,7 @@ private struct PanelLayer: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private static let margin = Spacing.page
+    private static let bareTop: CGFloat = 0.22
 
     var body: some View {
         ZStack {
@@ -298,7 +299,12 @@ private struct PanelLayer: View {
             }
             Group {
                 if shown.style == .bare {
-                    shown.content.background { area(shown.id) }
+                    // 上沿钉在窗口上方约四分之一处、往下长：居中的话每多打一行字它上下各挪半行，偏上也不盖住正看着的那几列的中段
+                    GeometryReader { proxy in
+                        shown.content.background { area(shown.id) }
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, proxy.size.height * Self.bareTop)
+                    }
                 } else {
                     shown.content
                         .background(palette.desk)
