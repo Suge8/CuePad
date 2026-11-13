@@ -10,13 +10,24 @@ struct CueColumn: View {
     let home: Bool
     let lead: CGFloat
 
+    /// Cue 住在一块写字玻璃上（同看板列头），内容往里收一圈：在右边那一栏时浮在主区上，看板放不下的列滑到它下面、不在桌面上切断；
+    /// 铺满时是同一块板向左长开——铺满时撤掉玻璃的话，系统重建块里的图层，让到右边与铺满之间整块先消失再淡入（`WideSlide.Positions` 把它们当新层）。
+    /// 抽屉不是：它有自己的面（`DrawerSurface`）。玻璃画在块里，收起、放回时随块平移（`WideColumnSlide`）。
+    private var floats: Bool { fits }
+
     var body: some View {
-        // 对话从名牌底下穿过去、一直滚到窗口上缘（同手机）：名牌是浮在上面的一块玻璃，不裁、不盖淡出
-        CuePage()
+        // 对话从名牌底下穿过去、一直滚到板的上缘（同手机）：名牌是浮在上面的一块玻璃，不盖淡出；对话按板的圆角裁，不从角上露出去
+        CuePage(grounded: !floats)
             .safeAreaPadding(.top, CueTitle.band)
+            .clipShape(.rect(cornerRadius: floats ? Self.radius : 0))
             .overlay(alignment: .top) { CueTitle(fits: fits, home: home, lead: lead) }
+            .glass(in: .rect(cornerRadius: Self.radius), ink: .ground(shown: floats))
+            .padding(floats ? Self.float : 0)
             .ignoresSafeArea(.container, edges: .top)
     }
+
+    static let float = Spacing.item
+    private static let radius = Radius.field
 }
 
 /// 名牌在这一栏正中，点它原地长成面板（同手机的 `CueHeader`）：头像长大居中、名字落到它下面（`CuePlate` 的 `card`），面板在名牌底下淡入，整块是同一块玻璃。
@@ -86,8 +97,8 @@ struct CueTitle: View {
         withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { open = next }
     }
 
-    /// Mac 的按钮按标签的理想宽排，不把给的宽传下去，所以给定宽：右栏里两边各留一道页边。
-    private static let width = WideMetrics.cue - 2 * Spacing.page
+    /// Mac 的按钮按标签的理想宽排，不把给的宽传下去，所以给定宽：离板的两边与上沿同样一小圈（板里再留整道页边的话，右栏里第四项数字放不下）。
+    private static let width = WideMetrics.cue - 2 * CueColumn.float - 2 * Spacing.item
     /// 名牌里右端那颗收起钮连同它左边一道缝，字不排到它底下。
     private static let fold = ControlMetrics.height
 }

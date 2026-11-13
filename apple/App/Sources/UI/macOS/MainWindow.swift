@@ -30,15 +30,18 @@ struct MainWindow: View {
         GeometryReader { geometry in
             let sizes = WideMetrics(width: geometry.size.width, workspace: workspace)
             let trail = sizes.cue == 0 ? CueButton.reserve : Spacing.page
+            // 右边那一栏的 Cue 是浮在主区上的一块玻璃（`CueColumn`）：主区铺到窗口右缘、压在它下面的那一截交给页自己让（`underCue`）
+            let under = sizes.split || sizes.home ? 0 : sizes.cue
             HStack(spacing: 0) {
                 // 放不下时也挂着（宽 0、不放循环动效、订阅暂停）：窗口拖窄跨过临界宽的那一下主区从它上面滑过去，露出的是它本身
                 WideRail(width: sizes.rail)
                 // Cue 铺满时主区让出去（宽 0）、页留着不拆，订阅暂停
-                WideColumnHost(slot: .main, focus: focus, origin: sizes.rail, width: sizes.leading, shape: sizes.shape, hidden: sizes.home) {
+                WideColumnHost(slot: .main, focus: focus, origin: sizes.rail, width: sizes.leading + under, shape: sizes.shape, hidden: sizes.home) {
                     MainColumn().environment(\.headInset, Self.inset(leading: Chrome.headLead(rail: sizes.rail), trailing: sizes.split ? Spacing.page : trail))
                         .environment(\.pageActive, !sizes.home)
+                        .environment(\.underCue, under)
                 }
-                .frame(width: sizes.leading)
+                .frame(width: sizes.leading + under)
                 if sizes.split {
                     WideColumnHost(slot: .beside, focus: focus, origin: sizes.rail + sizes.leading, width: sizes.main - sizes.leading, shape: sizes.shape) {
                         BesideColumn().environment(\.headInset, Self.inset(trailing: trail))

@@ -5,6 +5,7 @@ import SwiftUI
 /// 读页面的只有这里，主窗口的视图体不读它，切页时不重算整个窗口。会话页不留，只在当前页时挂上。
 struct PageStack: View {
     @Environment(Workspace.self) private var workspace
+    @Environment(\.underCue) private var under
 
     var body: some View {
         let current = workspace.mainRoute
@@ -27,6 +28,7 @@ struct PageStack: View {
     @ViewBuilder private func content(_ page: Route) -> some View {
         pageView(page)
             .safeAreaPadding(.top, page.fillsBand ? 0 : Chrome.band)
+            .padding(.trailing, page == .progress ? 0 : under)
             .modifier(WindowCardAgents(workspace: workspace))
     }
 

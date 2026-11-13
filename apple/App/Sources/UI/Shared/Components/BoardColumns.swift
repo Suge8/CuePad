@@ -6,6 +6,8 @@ struct BoardColumns: View {
     @Binding var adding: Bool
     let newTaskProject: UUID?
     let margin: CGFloat
+    /// 滚动区右端压在别的东西下面的那一截（Mac 的 Cue 浮板）：列按让出它之后的宽分，放不下横滑时滑进它下面。
+    var tail: CGFloat = 0
     @State private var showsEarlier = DebugHooks.preset.showsDone
 
     #if os(macOS)
@@ -14,10 +16,11 @@ struct BoardColumns: View {
 
     var body: some View {
         GeometryReader { proxy in
-            let room = proxy.size.width - margin * 2
+            let room = proxy.size.width - margin * 2 - tail
             // 放得下、放不下都是这一个滚动区（放得下时只是滚不动）：窗口拖过四列最窄时不换结构，列里的滚动位置留着
             ScrollView(.horizontal) { columns(room) }
                 .safeAreaPadding(.horizontal, margin)
+                .safeAreaPadding(.trailing, tail)
                 .scrollBounceBehavior(.basedOnSize)
                 .scrollIndicators(.never)
                 .boardStage()
