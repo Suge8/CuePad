@@ -82,7 +82,7 @@ private struct ProjectListItem: View, Equatable {
         #if os(macOS)
         Button { workspace.show(.project(project.id)) } label: { label }
             .buttonStyle(PressStyle(.card))
-            .contextMenu { ProjectActions(project: project) { workspace.projectForm = .init(project: project) } }
+            .contextMenu { ProjectActions(project: project) }
             .help(project.shownName)
         #else
         NavigationLink(value: Route.project(project.id)) { label }

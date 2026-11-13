@@ -57,7 +57,6 @@ struct WideColumnHead: View {
     }
 }
 
-/// 打开、收起卡片只改动三处（收起按钮、编辑页图层、底部输入条的位置），各自读"打开的卡"：主窗口的视图体不读它，开合时不重算整个窗口。
 private struct CloseButton: View {
     @Environment(Workspace.self) private var workspace
 

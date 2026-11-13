@@ -11,13 +11,13 @@ struct WideHeading: View {
 }
 
 /// 第二行是项目的一句介绍（`Project.intro`；没写也占着这一行，栏头的字不上下跳）。读内存里的项目目录（`Workspace.catalog`），不另订阅；
-/// 文件夹与"规则"留在页里那一行（`ProjectIntroLine` 的 `intro: false`）。Mac 编辑浮层开着时不写（浮层自己写是哪一份，`OverlayTitle`）。
+/// 文件夹与"规则"留在页里那一行（`ProjectIntroLine` 的 `intro: false`）。
 struct WideProjectHeading: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
     var body: some View {
-        if !overlaid, case .project(let id) = workspace.mainRoute, let project = workspace.catalog?.project(id) {
+        if case .project(let id) = workspace.mainRoute, let project = workspace.catalog?.project(id) {
             VStack(alignment: .leading, spacing: Spacing.hair) {
                 HStack(spacing: Spacing.glyph) {
                     Button("项目") { workspace.select(.shelf) }
@@ -34,14 +34,6 @@ struct WideProjectHeading: View {
             }
             .accessibilityElement(children: .contain)
         }
-    }
-
-    private var overlaid: Bool {
-        #if os(macOS)
-        workspace.overlay != nil
-        #else
-        false
-        #endif
     }
 }
 
