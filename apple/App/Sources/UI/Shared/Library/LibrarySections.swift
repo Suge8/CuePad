@@ -1,7 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// 改动的写入都在那台 Mac 上：手机上的动作发往 Mac（按钮带纸飞机），快照随它写回同步来。行末只画读不到这一份的那几家（`UnseenMarks`）。
+/// 改动的写入都在那台 Mac 上：手机上的动作发往 Mac（按钮带纸飞机），快照随它写回同步来。全局规则那张写谁在读（`ReaderMarks`），其余行末只画读不到这一份的那几家（`UnseenMarks`）。
 
 /// 段名只在分段上（Mac 工具栏、手机页顶），段里不再写组名与个数。
 enum LibraryLayout {
@@ -44,8 +44,8 @@ struct TidyPaper: View {
     @State private var working = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.block) {
-            TidyFacts(tidies: tidies, library: library, font: Self.font)
+        Self.layout {
+            TidyFacts(tidies: tidies, library: library).frame(maxWidth: .infinity, alignment: .leading)
             HStack(spacing: Spacing.group) {
                 Button { run() } label: { TidyLabel(title: "一键整理", working: working) }
                     .buttonStyle(ControlButtonStyle(kind: .primary))
@@ -53,8 +53,7 @@ struct TidyPaper: View {
                 TidyConsequence(kind: .automatic)
             }
         }
-        .padding(Spacing.inset)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, Spacing.inset).padding(.vertical, Spacing.block)
         .paper(cornerRadius: LibraryLayout.radius)
     }
 
@@ -67,27 +66,33 @@ struct TidyPaper: View {
     }
 
     #if os(macOS)
-    private static var font: Font { Typography.body }
+    private static var layout: AnyLayout { AnyLayout(HStackLayout(alignment: .center, spacing: Spacing.block)) }
     #else
-    private static var font: Font { Typography.secondary }
+    private static var layout: AnyLayout { AnyLayout(VStackLayout(alignment: .leading, spacing: Spacing.block)) }
     #endif
 }
 
+/// 每件两行：哪里不对、一键整理会对它做什么（`TidyFact`）。点之前就看得到会动哪几个，不另开说明。
 struct TidyFacts: View {
     let tidies: [LibraryTidy]
     let library: AgentLibrary
-    var font: Font?
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @ScaledMetric(relativeTo: .body) private var iconColumn = Chrome.icon
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Spacing.item) {
+        VStack(alignment: .leading, spacing: Spacing.group) {
             ForEach(tidies) { tidy in
+                let fact = workspace.fact(of: tidy, in: library)
                 HStack(alignment: .firstTextBaseline, spacing: Spacing.group) {
                     Image(tidy.icon).foregroundStyle(palette.ink2).frame(width: iconColumn)
-                    Text(verbatim: workspace.fact(of: tidy, in: library)).font(font).foregroundStyle(palette.ink).fixedSize(horizontal: false, vertical: true)
+                    VStack(alignment: .leading, spacing: Spacing.hair) {
+                        Text(verbatim: fact.problem).font(Typography.body).foregroundStyle(palette.ink)
+                        Text(verbatim: fact.plan).font(Typography.meta).foregroundStyle(palette.ink2)
+                    }
+                    .fixedSize(horizontal: false, vertical: true)
                 }
+                .accessibilityElement(children: .combine)
             }
         }
     }
@@ -157,18 +162,17 @@ struct TidyConsequence: View {
 struct InstructionSection: View {
     let library: AgentLibrary
     @Environment(Workspace.self) private var workspace
-    @Environment(\.palette) private var palette
 
     var body: some View {
         let projects = library.instructions.filter { if case .project = $0.kind { true } else { false } }
-        let own = library.instructions.filter { if case .agent = $0.kind { true } else { false } }
+        let own = library.instructions.filter { if case .agent = $0.kind { true } else { $0.kind == .piSystem } }
         VStack(alignment: .leading, spacing: LibraryLayout.gap) {
             TidySlot(library: library, rules: true)
-            LibraryPaper {
-                // 共享那份还没有时列各家真读的那几份，不写"还没有"
-                if let global = library.instruction(.global), global.hash != nil || own.isEmpty { GlobalRuleRow(library: library, instruction: global) }
-                ForEach(own) { GlobalRuleRow(library: library, instruction: $0) }
-                if let pi = library.instruction(.piSystem) { row(pi) }
+            if let global = library.instruction(.global) {
+                LibraryPaper { GlobalRuleCard(library: library, instruction: global) }
+            }
+            if !own.isEmpty {
+                LibraryPaper { ForEach(own) { row($0) } }
             }
             if !projects.isEmpty {
                 LibraryPaper { ForEach(projects) { row($0) } }
@@ -178,7 +182,7 @@ struct InstructionSection: View {
 
     private func row(_ instruction: LibraryInstruction) -> some View {
         Button { workspace.openLibrary(.instruction(instruction.kind)) } label: {
-            LinkRow(title: Text(verbatim: workspace.instructionName(instruction.kind)), chevron: LibraryLayout.chevron) {
+            LinkRow(title: Text(verbatim: Self.name(instruction.kind, in: workspace)), value: Self.fileName(instruction.kind), chevron: LibraryLayout.chevron) {
                 InstructionIcon(kind: instruction.kind)
             } trailing: {
                 InstructionTrailing(library: library, instruction: instruction)
@@ -186,40 +190,62 @@ struct InstructionSection: View {
         }
         .buttonStyle(.row)
     }
+
+    /// 各家自己那份的文件名写在行尾，名字不折行。
+    private static func name(_ kind: LibraryInstruction.Kind, in workspace: Workspace) -> String {
+        if case .agent(let agent, _) = kind { String(localized: "\(agent.name) 的全局规则") } else { workspace.instructionName(kind) }
+    }
+
+    private static func fileName(_ kind: LibraryInstruction.Kind) -> Text? {
+        if case .agent(_, let file) = kind { Text(verbatim: file) } else { nil }
+    }
 }
 
-/// 正文读同步来的那一条（`LibraryFileText`），不另存一份预览。共享那份写谁链着它，各家自己那份写谁读它。
-private struct GlobalRuleRow: View {
+/// 这一页的焦点：各家共读的那一份。写谁在读、放在哪、开头几行；有哪家另写了一份、内容不一样时，最后一行说出来（点开就在文件页顶上合并，`MergeBar`）。
+/// 正文读同步来的那一条（`LibraryFileText`），不另存一份预览。
+private struct GlobalRuleCard: View {
     let library: AgentLibrary
     let instruction: LibraryInstruction
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
-    @ScaledMetric(relativeTo: .body) private var iconColumn = Chrome.icon
     @State private var texts: [String: String]?
 
     var body: some View {
-        Button { workspace.openLibrary(.instruction(instruction.kind)) } label: {
-            VStack(alignment: .leading, spacing: Spacing.tight) {
-                HStack(spacing: Spacing.group) {
-                    InstructionIcon(kind: instruction.kind).frame(width: iconColumn)
-                    Text(verbatim: workspace.instructionName(instruction.kind)).font(Typography.body).foregroundStyle(palette.ink)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    InstructionTrailing(library: library, instruction: instruction)
-                    if LibraryLayout.chevron { Chevron(.forward).foregroundStyle(palette.ink3) }
+        let writers = library.merge(into: .global)?.writers ?? []
+        let reading = instruction.hash == nil ? [] : library.agents.filter { instruction.readers.contains($0) && !writers.contains($0) }
+        Button { workspace.openLibrary(.instruction(.global)) } label: {
+            VStack(alignment: .leading, spacing: Spacing.group) {
+                VStack(alignment: .leading, spacing: Spacing.tight) {
+                    HStack(spacing: Spacing.item) {
+                        Text("全局规则").font(Typography.sectionTitle).foregroundStyle(palette.ink)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        if instruction.hash != nil { ReaderMarks(agents: library.agents, reading: reading) }
+                        if LibraryLayout.chevron { Chevron(.forward).foregroundStyle(palette.ink3) }
+                    }
+                    Text(verbatim: Dotted(Self.readers(reading), library.shown(instruction.path)).visible)
+                        .font(Typography.meta).foregroundStyle(palette.ink2).lineLimit(1).truncationMode(.middle)
                 }
-                if let who {
-                    Text(who).font(Typography.meta).foregroundStyle(palette.ink2)
+                if instruction.hash == nil {
+                    Text("还没有，点开来写").font(Typography.secondary).foregroundStyle(palette.ink3)
+                } else {
+                    Text(opening)
+                        .font(Typography.secondary).foregroundStyle(palette.ink2)
+                        .lineLimit(Self.lines, reservesSpace: true).lineSpacing(Typography.noteLineSpacing)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.leading, iconColumn + Spacing.group)
                 }
-                Text(opening)
-                    .font(Typography.meta).foregroundStyle(instruction.hash == nil ? palette.ink3 : palette.ink2)
-                    .lineLimit(Self.lines, reservesSpace: true).lineSpacing(Typography.noteLineSpacing)
+                if !writers.isEmpty {
+                    HStack(spacing: Spacing.glyph) {
+                        ForEach(writers, id: \.self) { $0.mark.image.foregroundStyle(palette.ink2) }
+                        Text(verbatim: String(localized: "\(writers.map(\.name).formatted(.list(type: .and))) 另写了一份，点开合并"))
+                            .foregroundStyle(palette.ink).lineLimit(2)
+                    }
+                    .font(Typography.secondary)
+                    .padding(.horizontal, Spacing.group).padding(.vertical, Spacing.item)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.leading, iconColumn + Spacing.group)
+                    .background(palette.bubble, in: .rect(cornerRadius: Radius.chip))
+                }
             }
-            .padding(.horizontal, Spacing.inset)
-            .padding(.vertical, Spacing.group)
+            .padding(.horizontal, Spacing.inset).padding(.vertical, Spacing.group)
             .contentShape(.rect)
         }
         .buttonStyle(.row)
@@ -228,15 +254,12 @@ private struct GlobalRuleRow: View {
 
     private static let lines = 4
 
-    private var who: String? {
-        let names = AgentKind.allCases.filter(instruction.readers.contains).map(\.name).formatted(.list(type: .and))
-        guard instruction.hash != nil, !instruction.readers.isEmpty else { return nil }
-        return instruction.kind == .global ? String(localized: "\(names) 链着这份") : String(localized: "\(names) 读这份")
+    private static func readers(_ reading: [AgentKind]) -> String? {
+        reading.isEmpty ? nil : String(localized: "\(reading.map(\.name).formatted(.list(type: .and))) 在读")
     }
 
     private var opening: AttributedString {
-        guard let arrived = AgentLibrary.arrived(instruction.path, hash: instruction.hash, in: texts) else { return "" }
-        guard let text = arrived else { return AttributedString(localized: "还没有") }
+        guard let arrived = AgentLibrary.arrived(instruction.path, hash: instruction.hash, in: texts), let text = arrived else { return "" }
         var lines: [AttributedString] = []
         func add(_ line: String, bold: Bool = false) {
             let plain = MarkdownBlock.plainInline(line).trimmingCharacters(in: .whitespaces)
@@ -281,6 +304,7 @@ private struct InstructionIcon: View {
     #endif
 }
 
+/// 各家自己那份（`.agent`、Pi 的系统提示）本来就只有它读，不画别家读不到；项目规则画读不到的那几家。
 private struct InstructionTrailing: View {
     let library: AgentLibrary
     let instruction: LibraryInstruction
@@ -289,7 +313,7 @@ private struct InstructionTrailing: View {
     var body: some View {
         if instruction.hash == nil {
             Text("还没有").font(Typography.meta).foregroundStyle(palette.ink3).fixedSize()
-        } else {
+        } else if case .project = instruction.kind {
             let writers = library.merge(into: instruction.kind)?.writers ?? []
             let unseen = library.unseen(instruction)
             UnseenMarks(agents: library.agents, unseen: library.agents.filter { unseen.contains($0) || writers.contains($0) })
