@@ -44,9 +44,12 @@ nonisolated enum CardMenu {
     }
 
     /// 子任务跟着上级走，不单独换项目、不单独置顶。
-    static func more(for card: Card) -> [[Item]] {
+    /// `bindsSession`：同 `sections`（Mac 任务气泡的"⋯"）。
+    static func more(for card: Card, bindsSession: Bool = false) -> [[Item]] {
         guard card.isTask else { return [[card.isPinned ? .unpin : .pin, .move, .copy], [.archive], [.trash]] }
-        return [pin(card) + (card.parentID == nil ? [.move] : []) + [.copy], [.archive], [.trash]]
+        let binds: [Item] = bindsSession && card.status != .done ? [.bindSession] : []
+        return [[card.status == .done ? .reopen : .complete] + pin(card) + (card.parentID == nil ? [.move] : []) + [.copy], binds, [.archive], [.trash]]
+            .filter { !$0.isEmpty }
     }
 
     private static func pin(_ task: Card) -> [Item] { task.parentID == nil ? [task.isPinned ? .unpin : .pin] : [] }

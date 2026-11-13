@@ -13,7 +13,7 @@ struct CardActions: View {
 
     var body: some View {
         let ends = session?.canEnd == true
-        let sections = more ? CardMenu.more(for: card) : CardMenu.sections(for: card, selectable: selectable, bindsSession: leaf, opens: opens, endsSession: ends)
+        let sections = more ? CardMenu.more(for: card, bindsSession: leaf) : CardMenu.sections(for: card, selectable: selectable, bindsSession: leaf, opens: opens, endsSession: ends)
         ForEach(sections.indices, id: \.self) { index in
             if index > 0 { Divider() }
             ForEach(sections[index], id: \.self, content: item)

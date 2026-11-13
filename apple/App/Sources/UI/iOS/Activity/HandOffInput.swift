@@ -9,7 +9,10 @@ struct HandOffInput: View {
     @Environment(\.palette) private var palette
     @State private var digest: SessionDigest?
     @State private var choice: UUID?
+    /// 点了"新会话"：任务绑着会话也另开一个。
+    @State private var fresh = false
     @State private var planned: Planned?
+    @State private var launchAgents: MacAgents?
     @FocusState private var focused: Bool
 
     /// 还没有哪台 Mac 写下过自己时没有决定（`noMac`）：新用户的常态、不是出错，原因叠在输入框上方。
@@ -27,6 +30,7 @@ struct HandOffInput: View {
         return [bound] + live
     }
     private var chosen: SessionListItem? {
+        guard !fresh else { return nil }
         let all = sessions
         if let choice { return all.first { $0.state.id == choice } }
         return planned?.bound.flatMap { bound in all.first { $0.state.sessionID == bound.state.sessionID } }
@@ -58,15 +62,29 @@ struct HandOffInput: View {
         guard let session = chosen?.state, let config, let models = catalog?.models, !models.isEmpty else { return nil }
         return (session, models, config)
     }
+    private var launchPlan: HandOffPlan? { chosen != nil ? nil : fresh ? planned?.fresh : planned?.plan }
+    private var launchSpot: (project: UUID, host: String)? {
+        guard case .launch(let project, let host) = launchPlan?.destination else { return nil }
+        return (project, host)
+    }
+    private var launchHost: String? { launchSpot?.host }
+    /// 交给新会话时的那一排：用哪家、哪个模型在这里就选，发出即开。
+    private var launchTools: MacAgents? {
+        launchAgents.flatMap { services.settings.launchChoice(on: $0, in: launchSpot?.project) == nil ? nil : $0 }
+    }
 
     var body: some View {
         Composer(
             draft: box, prompt: "补一句（可不填）", label: "发给 Agent", focus: $focused,
-            accepts: chosen == nil ? [.files, .cards] : .reply, cardsFrom: outbox.project, keeps: outbox.card, tooled: tools != nil,
+            accepts: chosen == nil ? [.files, .cards] : .reply, cardsFrom: outbox.project, keeps: outbox.card, tooled: tools != nil || launchTools != nil,
             commands: commands,
             header: { header.padding(.horizontal, Spacing.group).padding(.top, Spacing.item) },
             tools: {
-                if let tools { SessionConfigControls(session: tools.session, models: tools.models, shown: tools.config) }
+                if let tools {
+                    SessionConfigControls(session: tools.session, models: tools.models, shown: tools.config)
+                } else if let launchTools {
+                    LaunchControls(mac: launchTools, project: launchSpot?.project)
+                }
             },
             send: {
                 Button(action: send) { SendGlyph(canSend ? .ready : .idle) }
@@ -90,6 +108,10 @@ struct HandOffInput: View {
             return Planned(
                 plan: plan, bound: try store.sessionItems(sessionIDs: [id])[id], fresh: try store.handOffPlan(card, host: nil, fresh: true), opening: opening)
         }
+        .observing(services.store, id: launchHost, into: $launchAgents, onError: workspace.fail) { [host = launchHost] store in
+            guard let host else { return MacAgents(hostID: "", agents: [], modifiedAt: .distantPast) }
+            return try store.macAgents(on: host)
+        }
         // 改模型、思考强度的请求与目录记录不在会话列表那一页里：只读选中的那个（会话变了就带着新的会话状态重读）
         .observing(services.store, id: chosenLive, into: $digest, onError: workspace.fail) { [session = chosenLive] store in
             guard let session else { return SessionDigest(session: nil, project: nil, deliveries: []) }
@@ -103,9 +125,12 @@ struct HandOffInput: View {
         HStack(spacing: Spacing.item) {
             // 新会话放最上面：会话多了也不用往下翻
             MenuButton(sections: [
-                ChoiceMenu.Section(choices: [ChoiceMenu.Choice(title: "新会话…", image: .icon(.add), choose: newSession)]),
+                ChoiceMenu.Section(choices: [ChoiceMenu.Choice(title: "新会话", image: .icon(.add), checked: chosen == nil) { fresh = true }]),
                 ChoiceMenu.Section(choices: sessions.map { item in
-                    ChoiceMenu.Choice(title: .verbatim(title(item).visible), checked: item.state.id == chosen?.state.id) { choice = item.state.id }
+                    ChoiceMenu.Choice(title: .verbatim(title(item).visible), checked: item.state.id == chosen?.state.id) {
+                        choice = item.state.id
+                        fresh = false
+                    }
                 }),
             ], accessibilityLabel: chosen.map { "交给 \($0.state.title)，点开换会话" } ?? "交给新会话") {
                 DestinationChip(title: Text(chosen.map { "交给 \($0.state.title)" } ?? "交给 新会话")) {
@@ -123,17 +148,14 @@ struct HandOffInput: View {
     private func send() {
         guard canSend else { return }
         guard let session = chosen?.state else {
-            guard choice == nil else { return newSession() }
-            return workspace.prepareNewSession(draft, card: outbox.card, opening: planned?.opening, plan: planned?.plan)
+            // 选过的那个会话已经不在了：同点了"新会话"，另开一个
+            let plan = fresh || choice != nil ? planned?.fresh : planned?.plan
+            return workspace.startNewSession(draft, card: outbox.card, opening: planned?.opening, plan: plan)
         }
         workspace.reply(
             to: session, commands: commands, from: box, accepting: .reply, card: outbox.card, saying: Dotted(String(localized: "已交给 \(session.title)")))
         focused = false
         workspace.outbox = nil
-    }
-
-    private func newSession() {
-        workspace.prepareNewSession(draft, card: outbox.card, opening: planned?.opening, plan: planned?.fresh)
     }
 }
 #endif

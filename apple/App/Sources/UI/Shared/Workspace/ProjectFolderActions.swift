@@ -11,6 +11,12 @@ extension Workspace {
         #endif
     }
 
+    /// 新会话能开在哪：Mac 只在本机开，手机看各台的绑定、没绑的交给建工作区的那台。
+    var launchPlaces: [ProjectFolders.LaunchPlace] {
+        ProjectFolders.launchPlaces(
+            projects: catalog?.projects ?? [], bindings: catalog?.bindings ?? [], host: localHost, workMac: catalog?.workMac?.hostID)
+    }
+
     func chooseFolder(for project: Project) {
         #if os(macOS)
         ProjectDirectory.choose(for: project.id, workspace: self)

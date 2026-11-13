@@ -15,26 +15,18 @@ struct IOSWorkflowTests {
         let plan = try await store.handOffPlan(task.id, host: nil)
         let workspace = Workspace(services: app.services)
 
-        workspace.prepareNewSession(draft, card: task.id, opening: try await store.opening(of: task.id, true), plan: plan)
+        workspace.startNewSession(draft, card: task.id, opening: try await store.opening(of: task.id, true), plan: plan)
 
-        let start = try #require(workspace.newSession)
-        let places = ProjectFolders.launchPlaces(
-            projects: try await store.projects(), bindings: try await store.directoryBindings(), host: nil, workMac: try await store.workMac())
-        let place = try #require(start.place(among: places))
-        let preparedDraft = try #require(start.draft)
-        let sending = try #require(workspace.submitSession(
-            start, in: place, draft: preparedDraft, choice: AgentModelChoice(agents: [], agent: .pi, model: nil, thinking: nil),
-            opened: Workspace.entering(start)))
-        await sending.value
-        #expect(workspace.sessionLaunching(start.launchKey).launch != nil)
+        let launching = workspace.sessionLaunching(try #require(workspace.newSession).launchKey)
+        try await eventually("交给新会话，换成新会话的输入框并当场发出") { launching.launch != nil }
         return (task, try #require(try await store.deliveryRequests().first))
     }
 
     @Test func 发给Agent默认开新会话_项目Mac会话名都按交到哪的决定() async throws {
         let orphan = try await store.createTask("没处去", in: Project.defaultID)
         await #expect(throws: CueStoreError.noMac) { try await store.handOffPlan(orphan.id, host: nil) }
-        try await store.recordMacAgents(host: "mac-z", name: "Alpha", [])
-        try await store.recordMacAgents(host: "mac-a", name: "Zulu", [])
+        try await store.recordMacAgents(host: "mac-z", name: "Alpha", [MacAgent(kind: .pi, model: nil, models: [])])
+        try await store.recordMacAgents(host: "mac-a", name: "Zulu", [MacAgent(kind: .pi, model: nil, models: [])])
 
         let unbound = try await handOff(in: Project.defaultID).request
         #expect(unbound.launch?.project == Project.defaultID && unbound.hostID == "mac-z")
@@ -51,7 +43,7 @@ struct IOSWorkflowTests {
     @Test(arguments: ["offline", "sent", "unconfirmed"])
     func 同一任务关闭重开_恢复原请求且不能冒充首次提交(state: String) async throws {
         defer { app.services.cancelBackgroundWork() }
-        try await store.recordMacAgents(host: "mac-z", name: "Mac", [])
+        try await store.recordMacAgents(host: "mac-z", name: "Mac", [MacAgent(kind: .pi, model: nil, models: [])])
         let (task, first) = try await handOff(in: Project.defaultID)
         if state != "offline" {
             var row = try #require(try await store.syncRow(recordName: first.id.uuidString.lowercased()))

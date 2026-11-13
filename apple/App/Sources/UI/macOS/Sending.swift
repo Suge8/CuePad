@@ -29,10 +29,14 @@ extension Workspace {
                 // 会话名由任务定（`CueStore.requestLaunch`）；请求上显示的目标名同新会话的其他入口：任务没有标题时写项目名
                 let projectName = try await store.project(project)?.shownName ?? ""
                 let title = plan.name ?? projectName
+                // 用哪家、哪个模型同新会话的输入框：上次选的（任务气泡的"开始"旁边那一排改的也是它）
                 let agents = try await store.macAgents(on: host)
-                guard let agent = agents.preferred(services.settings.lastAgent) else { throw SendError.noAgent(here: host == services.hostID, agents.whyNone) }
+                guard let choice = services.settings.launchChoice(on: agents, in: project), let agent = choice.agent else {
+                    throw SendError.noAgent(here: host == services.hostID, agents.whyNone)
+                }
                 return try await services.launchSession(
-                    in: project, prompt: text.nonEmpty, title: title, on: host, card: leaf, agent: agent, intent: intent)
+                    in: project, prompt: text.nonEmpty, title: title, on: host, card: leaf, agent: agent,
+                    model: choice.model, thinking: choice.shownThinking, fast: choice.launchFast, intent: intent)
             }
         }
     }

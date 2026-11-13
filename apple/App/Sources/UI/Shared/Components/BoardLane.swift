@@ -87,12 +87,8 @@ struct LaneAddButton: View {
 }
 
 extension Workspace {
-    func openNewSession(in project: UUID?) {
-        #if os(macOS)
-        newSession(in: project)
-        #else
-        newSession = .init(project: project)
-        #endif
+    func openNewSession(in project: UUID? = nil) {
+        newSession = SessionStart(project: project ?? currentProject)
     }
 }
 

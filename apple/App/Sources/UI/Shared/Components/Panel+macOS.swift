@@ -190,6 +190,7 @@ private extension PanelStyle {
         switch self {
         case .fullScreen: Motion.fade
         case .sheet: nil
+        case .bare: Motion.fade
         case .bubble: Motion.nudge
         }
     }
@@ -302,6 +303,38 @@ private struct WindowReader: NSViewRepresentable {
     }
 }
 
+/// 不套纸的浮层（`PanelStyle.bare`）怎么摆、怎么出来。
+/// 上沿钉在窗口上方约四分之一处、往下长：居中的话每多打一行字它上下各挪半行，偏上也不盖住正看着的那几列的中段。
+/// 从刚点的那一下长出来（点"＋"、点"开始"旁的箭头；`Workspace.press`）；快捷键打开的没有那一下，从自己上沿长出。减弱动态效果时只淡入。
+private struct BareStage<Content: View>: View {
+    @ViewBuilder let content: Content
+    @Environment(Workspace.self) private var workspace: Workspace?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var grown = false
+    @State private var origin: CGPoint?
+
+    private static var top: CGFloat { 0.22 }
+    private static var seed: CGFloat { 0.6 }
+
+    var body: some View {
+        GeometryReader { proxy in
+            let frame = proxy.frame(in: .global), top = frame.height * Self.top
+            let anchor = origin.map { UnitPoint(x: ($0.x - frame.minX) / max(frame.width, 1), y: ($0.y - frame.minY) / max(frame.height, 1)) }
+                ?? UnitPoint(x: 0.5, y: Self.top)
+            content
+                .frame(maxWidth: .infinity)
+                .padding(.top, top)
+                .frame(width: frame.width, height: frame.height, alignment: .top)
+                .scaleEffect(grown || reduceMotion ? 1 : Self.seed, anchor: anchor)
+                .opacity(grown ? 1 : 0)
+        }
+        .onAppear {
+            if case .press(let point) = workspace?.press.source { origin = point }
+            withAnimation(Motion.nudge) { grown = true }
+        }
+    }
+}
+
 /// 弹层底由容器统一铺桌面色，内容里的行和卡是纸；弹层内容不自己铺底。
 private struct PanelLayer: View {
     @Environment(PanelHost.self) private var host
@@ -324,13 +357,19 @@ private struct PanelLayer: View {
             if shown.open {
                 palette.backdrop.ignoresSafeArea().accessibilityHidden(true)
             }
-            shown.content
-                .background(palette.desk)
-                .background { area(shown.id) }
-                .clipShape(.rect(cornerRadius: Radius.card))
-                .rowContainer(.rect(cornerRadius: Radius.card))
-                .overlay { RoundedRectangle(cornerRadius: Radius.card).strokeBorder(palette.hair) }
-                .elevation(.panel)
+            Group {
+                if shown.style == .bare {
+                    BareStage { shown.content.background { area(shown.id) } }
+                } else {
+                    shown.content
+                        .background(palette.desk)
+                        .background { area(shown.id) }
+                        .clipShape(.rect(cornerRadius: Radius.card))
+                        .rowContainer(.rect(cornerRadius: Radius.card))
+                        .overlay { RoundedRectangle(cornerRadius: Radius.card).strokeBorder(palette.hair) }
+                        .elevation(.panel)
+                }
+            }
                 .accessibilityAddTraits(.isModal)
                 .padding(Self.margin)
                 .opacity(shown.open ? 1 : 0)

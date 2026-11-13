@@ -103,11 +103,7 @@ struct SessionList<Top: View>: View {
             EmptyState.noMatch(model.query).padding(.top, Spacing.vacant)
         } else {
             EmptyState(mascot: .empty, title: .verbatim(AgentListModel.noneTitle), message: "在这里开新会话；Mac 上接入的 Agent，它的会话记录也会出现在这里", waitsForSync: true) {
-                #if os(iOS)
-                Button("新会话", icon: .add) { workspace.newSession = .init() }
-                #else
-                Button("新会话", icon: .add) { workspace.newSession() }
-                #endif
+                Button("新会话", icon: .add) { workspace.openNewSession() }
             }
             .padding(.top, Spacing.vacant)
         }

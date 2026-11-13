@@ -7,6 +7,14 @@ import UIKit
 import AppKit
 #endif
 
+/// 模型按家记，没记的是那家的默认；思考强度 nil 是默认。
+nonisolated struct LaunchPreference: Codable, Equatable, Sendable {
+    var agent: AgentKind
+    var models: [AgentKind: ModelKey] = [:]
+    var thinking: ThinkingLevel?
+    var fast = false
+}
+
 @Observable
 final class AppSettings {
     enum Theme: String, CaseIterable, Sendable {
@@ -26,6 +34,8 @@ final class AppSettings {
         static let sessionSeen = "sessionSeen"
         static let unreadSince = "unreadSince"
         static let lastAgent = "lastAgent"
+        static let launchDefault = "launchDefault"
+        static let projectLaunches = "projectLaunches"
         static let navigationPane = "navigationPane"
         static let currentProject = "currentProject"
         static let railExpanded = "railExpanded"
@@ -48,7 +58,20 @@ final class AppSettings {
     #endif
 
 
-    var lastAgent: AgentKind { didSet { defaults.set(lastAgent.rawValue, forKey: Key.lastAgent) } }
+    /// 开新会话时上次的选择（`launchChoice`），新会话的输入框与任务的"开始"读同一份：按项目记，这个项目没选过的用最近一次选的。
+    private(set) var launchDefault: LaunchPreference { didSet { defaults.set(try? JSONEncoder().encode(launchDefault), forKey: Key.launchDefault) } }
+    private(set) var projectLaunches: [UUID: LaunchPreference] {
+        didSet { defaults.set(try? JSONEncoder().encode(projectLaunches), forKey: Key.projectLaunches) }
+    }
+
+    func launchPreference(for project: UUID?) -> LaunchPreference { project.flatMap { projectLaunches[$0] } ?? launchDefault }
+
+    func setLaunchPreference(for project: UUID?, _ change: (inout LaunchPreference) -> Void) {
+        var preference = launchPreference(for: project)
+        change(&preference)
+        launchDefault = preference
+        if let project { projectLaunches[project] = preference }
+    }
 
     var navigationPane: NavigationPane { didSet { defaults.set(navigationPane.rawValue, forKey: Key.navigationPane) } }
     /// 宽屏会话条的用户选择（只有这一份，不随主区放着什么页变）；窗口不够宽时只改变呈现，不写这个值。
@@ -175,7 +198,10 @@ final class AppSettings {
         #if os(macOS)
         alerts = AlertPreferences(stored: defaults.dictionary(forKey: Key.alerts))
         #endif
-        lastAgent = string(Key.lastAgent).flatMap(AgentKind.init(rawValue:)) ?? .pi
+        // `lastAgent` 是只记哪家的旧键：没有新记录时从它起步
+        launchDefault = defaults.data(forKey: Key.launchDefault).flatMap { try? JSONDecoder().decode(LaunchPreference.self, from: $0) }
+            ?? LaunchPreference(agent: string(Key.lastAgent).flatMap(AgentKind.init(rawValue:)) ?? .pi)
+        projectLaunches = defaults.data(forKey: Key.projectLaunches).flatMap { try? JSONDecoder().decode([UUID: LaunchPreference].self, from: $0) } ?? [:]
         navigationPane = string(Key.navigationPane).flatMap(NavigationPane.init(rawValue:)) ?? .projects
         railExpanded = defaults.object(forKey: Key.railExpanded) as? Bool ?? true
         cueOpen = defaults.object(forKey: Key.cueOpen) as? Bool ?? true

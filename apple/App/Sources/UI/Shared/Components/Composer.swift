@@ -7,7 +7,8 @@ import SwiftUI
 /// 调用方给草稿、占位、接受的种类和提交钮，草稿怎么处理由它们决定；回复框另给键盘快捷键（`ReplyShortcut`）与空着时按 ↑ 调回的那一句（`recall`）。
 struct Composer<Header: View, Tools: View, Send: View>: View {
     @Binding var draft: ComposerDraft
-    let prompt: LocalizedStringResource
+    /// nil 不写占位（新会话的输入框：空着不能开，没有可提示的）。
+    let prompt: LocalizedStringResource?
     let label: LocalizedStringResource
     let focus: FocusState<Bool>.Binding
     var accepts: ComposerKinds = [.files, .cards]
@@ -16,8 +17,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     var form = ComposerForm.open
     /// 这张带上的卡片不能拿掉（发给 Agent 的输入框是为它打开的）。
     var keeps: UUID?
-    /// 空着也能提交：提交钮的位置一直在、快捷键不要求有内容（新会话的第一句话可不填；会话回复框在 Agent 跑一轮时空着的钮是"停止"）。
-    /// 输入框写着"可不填"的，都靠它——空草稿能不能提交只在这里定。
+    /// 空着也能提交：提交钮的位置一直在、快捷键不要求有内容（会话回复框在 Agent 跑一轮时空着的钮是"停止"）。空草稿能不能提交只在这里定。
     var submitsEmpty = false
     /// 空着时钮位也露出钮（只是看的，不能提交）："对 Cue 说"发出后的发送中（话在路上）。
     var showsSendEmpty = false
@@ -213,10 +213,11 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
 
     private var text: some View {
         ComposerField(
-            text: $draft.text, prompt: String(localized: prompt), label: String(localized: label), maxLines: expanded ? 6 : 1, ink: palette.ink, focus: focus, keys: handle,
+            text: $draft.text, prompt: prompt.map { String(localized: $0) } ?? "", label: String(localized: label), maxLines: expanded ? 6 : 1, ink: palette.ink, focus: focus, keys: handle,
             shortcut: shortcut, files: accepts.contains(.files) ? { add($0) } : nil)
             .focused(focus)
             #if os(macOS)
+            .padding(.horizontal, -GrowingTextView.caretRoom)
             .yieldsFocusWhenCovered(focus)
             #endif
             // 收起时原文与"草稿：…"在同一个位置一换即成，不两层叠着交叉淡：同一行字在变形中只有一层

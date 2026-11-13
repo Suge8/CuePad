@@ -8,7 +8,7 @@ struct DebugSceneEntry {
     /// 盖在窗口根上的整页样板（总览、样张）。iOS 之后统一套 `withPalette()`，Mac 自己套。
     var overlay: (@MainActor (Workspace) -> AnyView)?
     #if os(macOS)
-    /// 取代主窗口内容：另一扇窗（菜单栏面板、新会话表单）放进主窗口里拍。
+    /// 取代主窗口内容：另一扇窗（菜单栏面板）放进主窗口里拍。
     var stage: (@MainActor (Workspace) -> AnyView)?
     #endif
 

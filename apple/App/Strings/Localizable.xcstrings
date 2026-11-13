@@ -7824,22 +7824,6 @@
         }
       }
     },
-    "写正文：要 Agent 做什么" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Notes: what should the agent do?"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "写正文：要 Agent 做什么"
-          }
-        }
-      }
-    },
     "冲突列表读取失败：%@" : {
       "localizations" : {
         "en" : {
@@ -10756,22 +10740,6 @@
         }
       }
     },
-    "在后台开，不占终端" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Runs in the background, not in Terminal"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在后台开，不占终端"
-          }
-        }
-      }
-    },
     "在听" : {
       "localizations" : {
         "en" : {
@@ -13164,38 +13132,6 @@
         }
       }
     },
-    "开场的话" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "First message"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "开场的话"
-          }
-        }
-      }
-    },
-    "开场的话（可不填）" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "First message (optional)"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "开场的话（可不填）"
-          }
-        }
-      }
-    },
     "开始" : {
       "localizations" : {
         "en" : {
@@ -14248,6 +14184,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "把任务的正文交给 Agent，开始做"
+          }
+        }
+      }
+    },
+    "把任务的正文交给 Agent，开始做。开新会话时用 %@，点开任务可以换" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hand the task’s notes to an agent and start. A new session uses %@; open the task to change it."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "把任务的正文交给 Agent，开始做。开新会话时用 %@，点开任务可以换"
           }
         }
       }
@@ -17736,22 +17688,6 @@
         }
       }
     },
-    "正在开…" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Starting…"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在开…"
-          }
-        }
-      }
-    },
     "正在开会话" : {
       "localizations" : {
         "en" : {
@@ -20344,22 +20280,6 @@
         }
       }
     },
-    "第一句话（可不填）" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "First message (optional)"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "第一句话（可不填）"
-          }
-        }
-      }
-    },
     "等 %@ 做完" : {
       "localizations" : {
         "en" : {
@@ -20444,22 +20364,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "等 %lld 件"
-          }
-        }
-      }
-    },
-    "等 Agent 连上…" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Waiting for agent…"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "等 Agent 连上…"
           }
         }
       }
@@ -21416,6 +21320,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "补一句（可不填）"
+          }
+        }
+      }
+    },
+    "补充细节" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add details"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "补充细节"
           }
         }
       }

@@ -44,7 +44,7 @@ struct Prewarm: View {
                         session: Self.session, items: Chat.entries(Self.messages), messages: Self.messages, window: ChatWindow(count: Conversation.firstWindow, earlier: 0) {})
                 }
             case .replyBar: ReplyBar(session: Self.session, config: nil, catalog: nil, stopping: false) {}
-            case .newSession: NewSessionForm(agents: nil) { _, _ in }
+            case .newSession: NewSessionInput(start: SessionStart())
             case .taskBubble:
                 if let warmTask {
                     BubbleFrame(placement: BubblePlacement(source: .unanchored, container: CGRect(origin: .zero, size: Self.size), insets: EdgeInsets())) {

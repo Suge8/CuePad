@@ -3,17 +3,29 @@ import CueStore
 import SwiftUI
 
 extension DebugSceneEntry {
-    /// newsession：新会话表单。Mac 把它放进主窗口里拍（平时从 + 弹出；配 `-CuePadDemo YES` 读演示 Mac 的 Agent）。
-    /// iOS 是进展的看板上浮起新会话输入框，`-CuePadProject` 先选中那个项目，`-CuePadLaunch YES` 已经替你在圆桌发出（看送达中）。
+    /// newsession：新会话的输入框（配 `-CuePadDemo YES` 时 Mac 把演示 Mac 的 Agent 抄给本机：隔离实例里这台一家都不能用，看不到选 Agent 与模型的那一排）。
+    /// iOS 是进展的看板上浮起，`-CuePadProject` 先选中那个项目，`-CuePadLaunch YES` 已经替你在圆桌发出（看送达中）。
     /// folderpicker（iOS）：给 `-CuePadProject`（默认闲鱼，演示里没绑文件夹）选文件夹的候选页。
     #if os(macOS)
-    static let newSession = DebugSceneEntry("newsession", stage: { workspace in
-        AnyView(DebugNewSessionForm().environment(workspace).frame(maxWidth: .infinity, maxHeight: .infinity))
-    })
+    static let newSession = DebugSceneEntry("newsession") { workspace, project in
+        try await DebugScene.borrowDemoAgents(workspace.services)
+        workspace.show(.progress)
+        workspace.openNewSession(in: project)
+    }
     #else
     static let newSession = DebugSceneEntry("newsession", "folderpicker", prepare: DebugScene.openNewSession)
     #endif
 }
+
+#if os(macOS)
+extension DebugScene {
+    static func borrowDemoAgents(_ services: AppServices) async throws {
+        guard args.demo else { return }
+        let demo = try await services.store.macAgents(on: "demo-mac")
+        _ = try await services.store.recordMacAgents(host: services.hostID, name: demo.name, demo.agents)
+    }
+}
+#endif
 
 #if os(iOS)
 extension DebugScene {

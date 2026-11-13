@@ -9,7 +9,7 @@ import Synchronization
 import Testing
 @testable import CuePad
 
-/// "手机"是第二个 Mac 进程（同 `AgentLibraryTests` 的经云同步），成功路径走新会话表单的 `Workspace.submitSession`，附件失败与重试走它写请求的 `AppServices.launchSession`。
+/// "手机"是第二个 Mac 进程（同 `AgentLibraryTests` 的经云同步），成功路径走新会话输入框的 `Workspace.submitSession`，附件失败与重试走它写请求的 `AppServices.launchSession`。
 @MainActor
 @Suite(.releasesLibraries)
 struct LaunchAttachmentTests {

@@ -34,11 +34,12 @@ struct NewSessionFlowTests {
         switch entry {
         #if os(macOS)
         case .form:
-            workspace.showsNewSession = true
+            workspace.openNewSession()
+            let start = try #require(workspace.newSession)
             let project = try #require(try await store.project(Project.defaultID))
             let place = ProjectFolders.launchPlaces(projects: [project], bindings: [], host: host, workMac: nil).first
             return (task, workspace.sessionLaunching(.form), {
-                workspace.submitSession(in: place, draft: ComposerDraft(text: "修乱序"), choice: choice) { $0.showLaunched($1.sessionID) }
+                workspace.submitSession(start, in: place, draft: ComposerDraft(text: "修乱序"), choice: choice, opened: Workspace.entering(start))
             })
         case .task:
             try await app.offersPi()
@@ -71,14 +72,9 @@ struct NewSessionFlowTests {
     }
 
     private func close(_ entry: Entry, in workspace: Workspace) -> () -> Void {
-        #if os(macOS)
-        workspace.showsNewSession = false
-        return { workspace.showsNewSession = true }
-        #else
         let start = workspace.newSession
         workspace.newSession = nil
         return { workspace.newSession = start }
-        #endif
     }
 
     private func unconfirmedThenClosed(_ entry: Entry, in workspace: Workspace) async throws -> (SessionLaunching, SessionLaunch, () -> Void, () -> Task<Void, Never>?) {
@@ -114,15 +110,11 @@ struct NewSessionFlowTests {
         let route: SessionRoute? = if case .session(let route) = workspace.mainRoute { route } else { nil }
         switch entry {
         case .form:
-            #if os(macOS)
-            #expect(!workspace.showsNewSession)
-            #endif
-            #expect(route?.sessionID == "s1", "表单收起，进入新会话")
+            #expect(workspace.newSession == nil)
+            #expect(route?.sessionID == "s1", "输入框收起，进入新会话")
         case .task: #expect(route == nil, "任务的开始不换页")
         case .input:
-            #if os(iOS)
             #expect(workspace.newSession == nil)
-            #endif
             #expect(route?.id == SessionState.recordID(sessionID: "s1"), "输入框收起，进入新会话")
         }
     }
@@ -145,7 +137,7 @@ struct NewSessionFlowTests {
         #expect(try await requests == [first.request])
         #expect(launching.launch == first)
         #if os(macOS)
-        if entry == .form { #expect(workspace.showsNewSession) }
+        if entry == .form { #expect(workspace.newSession != nil) }
         #else
         #expect(workspace.newSession?.draft?.stored == draft?.stored, "输入框和草稿都还在")
         #endif
@@ -156,6 +148,21 @@ struct NewSessionFlowTests {
         #expect(try await requests == [first.request, second.request])
         #expect(try await store.deliveryRequest(first.request)?.status == .known(.unconfirmed), "原请求保留")
     }
+
+    #if os(macOS)
+    @Test func 新会话的输入框空着不开会话() async throws {
+        defer { app.services.cancelBackgroundWork() }
+        let workspace = Workspace(services: app.services)
+        workspace.openNewSession()
+        let start = try #require(workspace.newSession)
+        let project = try #require(try await store.project(Project.defaultID))
+        let place = ProjectFolders.launchPlaces(projects: [project], bindings: [], host: host, workMac: nil).first
+        let choice = AgentModelChoice(agents: [], agent: .pi, model: nil, thinking: nil)
+        #expect(workspace.submitSession(start, in: place, draft: ComposerDraft(text: " \n"), choice: choice, opened: Workspace.entering(start)) == nil)
+        #expect(try await requests.isEmpty)
+        #expect(workspace.newSession != nil, "输入框留着")
+    }
+    #endif
 
     @Test(arguments: Entry.forCards)
     func 任务已有没收尾的请求_Store拒绝冒充首次交出(entry: Entry) async throws {
@@ -182,7 +189,7 @@ struct NewSessionFlowTests {
         try await eventually("晚到的认领收尾这一次") { launching.launch == nil }
         let route: SessionRoute? = if case .session(let route) = workspace.mainRoute { route } else { nil }
         #if os(macOS)
-        #expect(route?.sessionID == "s1", "Mac 的表单关了也进入新会话")
+        #expect(route?.sessionID == "s1", "Mac 的输入框关了也进入新会话")
         #else
         #expect(route == nil && workspace.newSession == nil, "手机的输入框关了就留在原处")
         #endif
@@ -200,4 +207,26 @@ struct NewSessionFlowTests {
         await launching.launchAgain()?.value
         #expect(try await requests == [first.request, try #require(launching.launch).request])
     }
+
+    #if os(macOS)
+    @Test func 开始用这个项目上次选的那家_没选过的项目用最近一次选的() async throws {
+        defer { app.services.cancelBackgroundWork() }
+        let workspace = Workspace(services: app.services), settings = app.services.settings
+        try await store.recordMacAgents(host: host, name: "测试 Mac", [.pi, .codex].map { MacAgent(kind: $0, model: nil, models: []) })
+        let table = try await store.createProject(name: "圆桌", color: "#000000")
+        let flow = try await store.createProject(name: "Flow", color: "#000000")
+        func started(in project: UUID) async throws -> AgentKind? {
+            let task = try await store.createTask("修乱序", in: project)
+            await workspace.handOff(task)?.value
+            return try await store.deliveryRequests().first { $0.cardID == task.id }?.launch?.agent
+        }
+
+        settings.setLaunchPreference(for: table.id) { $0.agent = .codex }
+        #expect(try await started(in: table.id) == .codex)
+        #expect(try await started(in: flow.id) == .codex, "没选过的项目用最近一次选的")
+        settings.setLaunchPreference(for: flow.id) { $0.agent = .pi }
+        #expect(try await started(in: flow.id) == .pi)
+        #expect(try await started(in: table.id) == .codex, "各项目记各自的")
+    }
+    #endif
 }

@@ -109,6 +109,9 @@ struct FittedEditorHost: NSViewRepresentable {
         let textView = CueTextView(files: services.store.files, theme: host.theme)
         context.coordinator.watching = AttachmentLooks.follow(services, in: textView)
         textView.storedText = host.initialText
+        // 高只由 `sizeThatFits` 定，文本视图不自己改：光标进了标题后面那一行空行，末尾空行的高跟着输入属性变矮几点，
+        // 它自己缩高时底边不动（上层不是翻转坐标），标题就往下跳，打第一个字又跳回去
+        textView.isVerticallyResizable = false
         host.handle.textView = textView
         return textView
     }

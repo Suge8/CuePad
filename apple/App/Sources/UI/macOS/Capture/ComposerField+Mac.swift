@@ -35,7 +35,9 @@ struct ComposerField: NSViewRepresentable {
         view.drawsBackground = false
         view.isRichText = false
         view.allowsUndo = true
-        view.textContainerInset = .zero
+        // 左右各留一点：系统的光标比一个点宽、以字的起点为中线画，贴着左沿时一半被滚动视图裁掉，空着的输入框里几乎看不出光标。
+        // 这点宽由 `Composer` 往外让回去，字的位置不变
+        view.textContainerInset = NSSize(width: GrowingTextView.caretRoom, height: 0)
         view.textContainer?.lineFragmentPadding = 0
         view.textContainer?.widthTracksTextView = true
         view.isVerticallyResizable = true
@@ -84,7 +86,8 @@ struct ComposerField: NSViewRepresentable {
             context.coordinator.ink = ink
             view.textColor = NSColor(ink)
             view.typingAttributes = GrowingTextView.attributes(ink)
-            view.insertionPointColor = NSColor(ink)
+            // 光标用主色：墨色的细线在浅底上、尤其空着时几乎看不出
+            view.insertionPointColor = NSColor(palette.signatureFill)
         }
         view.setAccessibilityLabel(label)
         view.maxLines = maxLines
@@ -94,7 +97,7 @@ struct ComposerField: NSViewRepresentable {
 
     func sizeThatFits(_ proposal: ProposedViewSize, nsView scroll: ComposerScrollView, context: Context) -> CGSize? {
         guard let width = proposal.width, let view = scroll.documentView as? GrowingTextView else { return nil }
-        let ideal = view.fittingHeight(width: width)
+        let ideal = view.fittingHeight(width: width - 2 * GrowingTextView.caretRoom)
         // 受限视口至少保留一行；让原生文字框负责滚动到光标，外层不裁掉正在编辑的行。
         let height = proposal.height.map { max(GrowingTextView.lineHeight, min(ideal, $0)) } ?? ideal
         return CGSize(width: width, height: height)
@@ -169,6 +172,7 @@ final class GrowingTextView: NSTextView {
     static let paragraph = Typography.readingParagraph
     private static let metrics: [NSAttributedString.Key: Any] = [.font: bodyFont, .paragraphStyle: paragraph]
     static func attributes(_ ink: Color) -> [NSAttributedString.Key: Any] { metrics.merging([.foregroundColor: NSColor(ink)]) { $1 } }
+    static let caretRoom: CGFloat = 2
     var placeholder = ""
     var placeholderColor = NSColor.clear
     var maxLines = 1
@@ -248,7 +252,7 @@ final class GrowingTextView: NSTextView {
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
         guard string.isEmpty, !hasMarkedText() else { return }
-        (placeholder as NSString).draw(at: .zero, withAttributes: [.font: Self.bodyFont, .foregroundColor: placeholderColor])
+        (placeholder as NSString).draw(at: NSPoint(x: Self.caretRoom, y: 0), withAttributes: [.font: Self.bodyFont, .foregroundColor: placeholderColor])
     }
 
     override func didChangeText() {

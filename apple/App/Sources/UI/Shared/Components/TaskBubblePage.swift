@@ -21,7 +21,9 @@ struct TaskBubblePage: View {
             }
             .frame(height: TaskMetrics.rowHeight)
             HStack(alignment: .top, spacing: BubbleMetrics.titleGap) {
+                // 还没开始、也没有子任务的圈是空的，什么都没说：只留它那一格的位置（标题与正文、底下那一条同一列），做完在"⋯"里
                 GoalCheck(task: focus, subtasks: overview ? data.progress : nil).padding(.top, BubbleMetrics.ringTop)
+                    .opacity(ringless ? 0 : 1).allowsHitTesting(!ringless).readerHidden(ringless)
                 TaskEditor(card: focus, editing: editing).padding(.trailing, BubbleMetrics.textTrailing)
             }
             if overview, !data.steps.isEmpty {
@@ -34,6 +36,17 @@ struct TaskBubblePage: View {
             }
         }
     }
+
+    /// Mac 上"开始"旁边是用哪家、哪个模型的那一排，绑定已有会话收在"⋯"里；手机在交给 Agent 的输入框里选会话。
+    private var bindsSession: Bool {
+        #if os(macOS)
+        focus.id != data.goal.id || data.steps.isEmpty
+        #else
+        false
+        #endif
+    }
+
+    private var ringless: Bool { focus.status == .todo && (focus.id != data.goal.id || data.steps.isEmpty) }
 
     private var lane: some View {
         HStack(spacing: BubbleMetrics.titleGap) {
@@ -58,7 +71,7 @@ struct TaskBubblePage: View {
     }
 
     private var more: some View {
-        Menu { CardActions(card: focus, more: true) } label: {
+        Menu { CardActions(card: focus, more: true, leaf: bindsSession) } label: {
             Image(.more).font(BubbleMetrics.laneFont).foregroundStyle(palette.ink2)
                 .frame(width: TaskMetrics.chipTarget, height: TaskMetrics.chipTarget).contentShape(.rect)
         }
@@ -97,7 +110,7 @@ private struct BodyHint: View {
     var body: some View {
         let text = editing.text
         if let newline = text.firstIndex(of: "\n"), text.index(after: newline) == text.endIndex {
-            Text("写正文：要 Agent 做什么")
+            Text("补充细节")
                 .font(Typography.taskBody)
                 .foregroundStyle(palette.ink3)
                 .lineLimit(1)

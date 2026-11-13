@@ -1,7 +1,8 @@
-#if os(iOS)
 import CueStore
 import SwiftUI
 
+/// 开新会话只有这一个输入框（两端同一份）：看板的"＋"、会话列表空着时那一颗、Mac 菜单，以及手机把任务交给新会话时。
+/// 手机浮在键盘上（`FloatingInput`），Mac 浮在窗口中间的遮罩上（`NewSessionPanel`，不套浮层的纸）。
 struct NewSessionInput: View {
     let start: SessionStart
     @Environment(Workspace.self) private var workspace
@@ -10,66 +11,60 @@ struct NewSessionInput: View {
     @State private var choice: ProjectFolders.LaunchPlace.ID?
     @State private var draft = ComposerDraft()
     @State private var agents: MacAgents?
-    @State private var model: ModelKey?
-    @State private var thinking: ThinkingLevel?
-    @State private var fast = false
     @FocusState private var focused: Bool
 
-    private var places: [ProjectFolders.LaunchPlace] {
-        ProjectFolders.launchPlaces(
-            projects: workspace.catalog?.projects ?? [], bindings: workspace.catalog?.bindings ?? [], host: nil, workMac: workspace.catalog?.workMac?.hostID)
-    }
     private var chosen: ProjectFolders.LaunchPlace? {
-        let places = places
+        let places = workspace.launchPlaces
         return places.first { $0.id == choice } ?? start.place(among: places)
     }
     private var launching: SessionLaunching { workspace.sessionLaunching(start.launchKey) }
     private var phase: LaunchProgress.Phase { launching.phase(at: services.speech) }
-    private var agent: AgentKind? { agents?.preferred(services.settings.lastAgent) }
-    private var brain: AgentModelChoice? {
-        guard chosen?.host != nil, let agents, let agent else { return nil }
-        return AgentModelChoice(agents: agents.agents, agent: agent, model: model, thinking: thinking, fast: fast)
-    }
-    private var canStart: Bool { chosen?.host != nil && agent != nil && launching.canSubmit(at: services.speech) }
+    private var brain: AgentModelChoice? { agents.flatMap { services.settings.launchChoice(on: $0, in: chosen?.project.id) } }
+    private var canStart: Bool { chosen?.host != nil && brain != nil && launching.canSubmit(at: services.speech) }
 
     var body: some View {
+        composer.composerNotice(status != nil) { if let status { statusLine(status).font(Typography.caption) } }
+            #if os(macOS)
+            .frame(width: 480)
+            #endif
+    }
+
+    private var composer: some View {
         Composer(
-            draft: $draft, prompt: "第一句话（可不填）", label: "新会话的第一句话", focus: $focused,
-            cardsFrom: chosen?.project.id, submitsEmpty: true,
-            tooled: brain != nil,
+            draft: $draft, prompt: nil, label: "新会话的第一句话", focus: $focused,
+            cardsFrom: chosen?.project.id,
+            tooled: brain != nil, shortcuts: [.send: launch],
             header: { header.padding(.horizontal, Spacing.group).padding(.top, Spacing.item) },
-            tools: {
-                if let brain {
-                    ConfigControls(choice: brain) { agent in
-                        services.settings.lastAgent = agent
-                        model = nil
-                    } chooseModel: { model = $0 } chooseThinking: { thinking = $0 } chooseFast: { fast = $0 }
-                    .disabled(launching.sending)
-                }
-            },
+            tools: { if let agents { LaunchControls(mac: agents, project: chosen?.project.id).disabled(launching.sending) } },
             send: {
                 Button(action: launch) { SendGlyph(canStart ? .ready : .idle) }
                     .buttonStyle(PressStyle(.button)).disabled(!canStart).accessibilityLabel("开始")
             })
-        .composerNotice(status != nil) { if let status { statusLine(status).font(Typography.caption) } }
         .confirmsLaunchAgain(launching)
         .onAppear {
             workspace.resume(start, opened: Workspace.entering(start))
             if let seed = start.draft, draft.isEmpty(accepting: [.files, .cards]) { draft = seed }
+            #if os(iOS)
+            focused = true
+            #endif
+        }
+        #if os(macOS)
+        .task {
+            // 浮层出现的那一帧文字区还没进窗口的响应链：下一帧再接键盘
+            await NextFrame.wait()
             focused = true
         }
+        #endif
         .observing(services.store, id: chosen?.host, into: $agents, onError: workspace.fail) {
             [host = chosen?.host] store in
             guard let host else { return MacAgents(hostID: "", agents: [], modifiedAt: .distantPast) }
             return try store.macAgents(on: host)
         }
-        // 换了 Mac：模型清单是另一份，回到默认
-        .onChange(of: chosen?.host) { model = nil }
     }
 
     private var header: some View {
         HStack(spacing: Spacing.item) {
-            MenuButton(sections: [ChoiceMenu.Section(choices: places.map { place in
+            MenuButton(sections: [ChoiceMenu.Section(choices: workspace.launchPlaces.map { place in
                 ChoiceMenu.Choice(
                     title: .verbatim(Dotted(place.project.shownName, place.detail).visible),
                     checked: place.id == chosen?.id) { choice = place.id }
@@ -104,7 +99,8 @@ struct NewSessionInput: View {
         case .phase(.missing): Text("上一次开会话的结果已经查不到了").foregroundStyle(palette.ink3)
         case .phase(.sending(let transit)):
             HStack(spacing: Spacing.glyph) { Spinner(.mini); Text(transit.label) }.font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink2)
-        case .phase: Text("Mac 正在开 Agent 会话…").foregroundStyle(palette.ink3)
+        case .phase:
+            HStack(spacing: Spacing.glyph) { Spinner(.mini); Text("Mac 正在开 Agent 会话…") }.foregroundStyle(palette.ink3)
         }
     }
 
@@ -112,4 +108,3 @@ struct NewSessionInput: View {
         workspace.submitSession(start, in: chosen, draft: draft, choice: brain, opened: Workspace.entering(start))
     }
 }
-#endif
