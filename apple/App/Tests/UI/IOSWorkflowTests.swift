@@ -11,12 +11,11 @@ struct IOSWorkflowTests {
 
     private func handOff(in project: UUID) async throws -> (task: Card, request: DeliveryRequest) {
         let task = try await store.createTask("修乱序\n先复现", in: project)
-        let plan = try await store.handOffPlan(task.id, host: nil)
         let workspace = Workspace(services: app.services)
 
         workspace.handOff(task)
         let outbox = try #require(workspace.outbox)
-        workspace.launchHandOff(outbox, opening: try await store.opening(of: task.id, true), plan: plan)
+        workspace.launchHandOff(outbox, opening: try await store.opening(of: task.id, true))
 
         let launching = workspace.sessionLaunching(outbox.launchKey)
         try await eventually("交给新会话，就在交给 Agent 的输入框上发出") { launching.launch != nil }
@@ -57,7 +56,6 @@ struct IOSWorkflowTests {
             #expect(try await store.applyRemote([.save(row, systemFields: Data(), serverAt: Date())]).isEmpty)
         }
         let workspace = Workspace(services: app.services)
-        let plan = try await store.handOffPlan(task.id, host: nil)
         workspace.handOff(task)
         workspace.outbox = nil
         workspace.handOff(task)
@@ -67,7 +65,7 @@ struct IOSWorkflowTests {
         }
         #expect(try await store.deliveryRequests().map(\.id) == [first.id])
         let resumed = try #require(workspace.sessionLaunching(.card(task.id)).launch, "输入框一浮起就接上原请求")
-        if state == "sent" { #expect(workspace.launchHandOff(try #require(workspace.outbox), opening: nil, plan: plan) == nil, "还在等结果：不再发") }
+        if state == "sent" { #expect(workspace.launchHandOff(try #require(workspace.outbox), opening: nil) == nil, "还在等结果：不再发") }
         #expect(resumed.request == first.id)
         let progress = try store.snapshot { try resumed.progress(from: $0) }.value
         switch state {

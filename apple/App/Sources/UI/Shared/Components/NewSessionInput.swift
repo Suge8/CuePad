@@ -17,7 +17,7 @@ struct NewSessionInput: View {
         let places = workspace.launchPlaces
         return places.first { $0.id == choice } ?? start.place(among: places)
     }
-    private var launching: SessionLaunching { workspace.sessionLaunching(start.launchKey) }
+    private var launching: SessionLaunching { workspace.sessionLaunching(.form) }
     private var phase: LaunchProgress.Phase { launching.phase(at: services.speech) }
     private var brain: AgentModelChoice? { agents.flatMap { services.settings.launchChoice(on: $0, in: chosen?.project.id) } }
     private var canStart: Bool {
@@ -46,7 +46,7 @@ struct NewSessionInput: View {
         .disabled(launching.inFlight(at: services.speech))
         .confirmsLaunchAgain(launching)
         .onAppear {
-            workspace.resume(start.launchKey, opened: Workspace.entering(start))
+            workspace.resume(.form, opened: Workspace.entering(start))
             #if os(iOS)
             focused = true
             #endif
@@ -85,7 +85,7 @@ struct NewSessionInput: View {
     }
 
     private func launch() {
-        workspace.submitSession(start, in: chosen, draft: draft, choice: brain, opened: Workspace.entering(start))
+        workspace.submitSession(in: chosen, draft: draft, choice: brain, opened: Workspace.entering(start))
     }
 }
 

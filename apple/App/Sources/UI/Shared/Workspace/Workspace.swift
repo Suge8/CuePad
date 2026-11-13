@@ -96,7 +96,7 @@ final class Workspace {
     var addsTask = false
     /// 开着的新会话输入框（`NewSessionInput`）。
     var newSession: SessionStart? {
-        didSet { if let oldValue, oldValue.id != newSession?.id { settleLaunch(oldValue.launchKey) } }
+        didSet { if let oldValue, oldValue.id != newSession?.id { settleLaunch(.form) } }
     }
     #if os(macOS)
     var searching = false

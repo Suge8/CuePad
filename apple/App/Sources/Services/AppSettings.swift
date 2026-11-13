@@ -76,6 +76,14 @@ final class AppSettings {
         if let project { projectLaunches[project] = preference }
     }
 
+    /// 在 `project` 里开新会话用哪家、哪个模型、多强的思考：上次选的，那台 Mac 上没有的回到它的默认。一家都不能用为 nil。
+    func launchChoice(on mac: MacAgents, in project: UUID?) -> AgentModelChoice? {
+        let last = launchPreference(for: project)
+        guard let kind = mac.preferred(last.agent), let agent = mac.agents.first(where: { $0.kind == kind }) else { return nil }
+        let model = last.models[kind].flatMap { key in agent.models.contains { $0.key == key } ? key : nil }
+        return AgentModelChoice(agents: mac.agents, agent: kind, model: model, thinking: last.thinking, fast: last.fast)
+    }
+
     var navigationPane: NavigationPane { didSet { defaults.set(navigationPane.rawValue, forKey: Key.navigationPane) } }
     /// 宽屏会话条的用户选择（只有这一份，不随主区放着什么页变）；窗口不够宽时只改变呈现，不写这个值。
     var railExpanded: Bool { didSet { defaults.set(railExpanded, forKey: Key.railExpanded) } }
