@@ -134,6 +134,16 @@ extension CueStore {
       }
       if changes.deletedFrom.contains(table.rawValue) { pending.deletes += try pendingDeletes(table) }
     }
+    if let rows = changes.rows[Table.syncRecords.rawValue] {
+      let touched = try db.query(
+        "SELECT recordName, recordType FROM syncRecords WHERE rowid IN (SELECT value FROM json_each(?)) AND pushedModifiedAt IS NOT NULL",
+        [JSONColumn.encode(rows.sorted())]
+      ) { ($0.text(0), $0.text(1)) }
+      for (type, names) in Dictionary(grouping: touched, by: \.1) {
+        guard let table = Table(rawValue: type) else { continue }
+        pending.deletes += try pendingDeletes(table, among: names.map(\.0).sorted())
+      }
+    }
     return pending
   }
 
@@ -223,8 +233,8 @@ extension CueStore {
   package func markPushed(_ pushed: [(row: SyncRow, systemFields: Data, serverAt: Date?)]) throws {
     guard !pushed.isEmpty else { return }
     let messages = JSONColumn.encode(pushed.filter { $0.row.table == .piMessages }.map(\.row.id))
-    let deletedMeanwhile = try write {
-      let deleted = try pushed.compactMap { row, systemFields, serverAt -> String? in
+    try write {
+      for (row, systemFields, serverAt) in pushed {
         try setMetadata(row.table, row.id, systemFields, pushed: row.modifiedAt)
         if row.table == .deliveryRequests, let serverAt {
           try db.run("UPDATE deliveryRequests SET serverAt = ? WHERE id = ? AND serverAt IS NULL", [serverAt, row.id])
@@ -233,15 +243,11 @@ extension CueStore {
         if Table.notifyFlagged.contains(row.table), let sent = row.fields["notify"], sent != .null {
           try db.run("UPDATE \(row.table.rawValue) SET notify = NULL WHERE id = ? AND notify = ?", [row.id, sent])
         }
-        return try db.first("SELECT 1 FROM \(row.table.rawValue) WHERE id = ?", [row.id]) { _ in true } == nil ? row.id : nil
       }
       let deliveries = try db.query(
         "SELECT deliveryID FROM piMessages WHERE id IN (SELECT value FROM json_each(?)) AND deliveryID IS NOT NULL", [messages]) { $0.uuid(0) }
       try removeUploadedDeliveries(among: Set(deliveries))
-      return deleted
     }
-    // 上传途中本机删掉了它：删的那次提交时服务器还没收下、算不上待推送的删除，这次记下元数据才是，提交的却只是元数据表，增量里没有它
-    if !deletedMeanwhile.isEmpty { syncChanged(PendingSync(saves: [], deletes: deletedMeanwhile), in: []) }
   }
 
   package func dropSyncMetadata(_ recordNames: [String]) throws {

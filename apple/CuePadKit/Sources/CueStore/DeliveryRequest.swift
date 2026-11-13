@@ -201,13 +201,14 @@ public enum DeliveryOutcome: Sendable {
   case unconfirmed(ShownText)
 }
 
-extension DeliveryRequest: Record {
+extension DeliveryRequest: Record, SyncedColumns {
   static let table = Table.deliveryRequests
-  static let columns = [
-    "id", "content", "targetKind", "targetName", "targetRef", "hostID", "mode", "cardID", "status",
-    "failure", "handledBy", "createdAt", "completedAt", "modifiedAt", "resultReceivedAt", "origin", "serverAt", "deadlineAt", "sessionBindingRevision",
+  static let fields: [Field] = [
+    .plain("id"), .encrypted("content"), .plain("targetKind"), .encrypted("targetName"), .encrypted("targetRef"), .plain("hostID"),
+    .plain("mode"), .plain("cardID"), .plain("status"), .encrypted("failure"), .plain("handledBy"), .plain("createdAt"),
+    .plain("completedAt"), .plain("modifiedAt"), .local("resultReceivedAt"), .plain("origin"), .local("serverAt"),
+    .plain("deadlineAt"), .plain("sessionBindingRevision"),
   ]
-  static let syncedColumns = columns.filter { !["resultReceivedAt", "serverAt"].contains($0) }
   var bindings: [any SQLBindable] {
     [id, content, target.kind.rawValue, target.name, target.ref, hostID, mode.rawValue, cardID, status.rawValue, reason?.stored, handledBy, createdAt, completedAt, modifiedAt, resultReceivedAt, origin?.rawValue, serverAt, deadlineAt, sessionBindingRevision?.stored]
   }

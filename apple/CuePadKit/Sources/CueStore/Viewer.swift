@@ -22,9 +22,9 @@ public struct Viewer: Equatable, Sendable {
   public static func recordID(device: String) -> UUID { DeterministicID.uuid("session-viewer/\(device)") }
 }
 
-extension Viewer: Record {
+extension Viewer: Record, SyncedColumns {
   static let table = Table.sessionViewers
-  static let columns = ["id", "device", "sessionIDs", "modifiedAt", "cue", "arrivedAt"]
+  static let fields: [Field] = [.plain("id"), .plain("device"), .plain("sessionIDs"), .plain("modifiedAt"), .plain("cue"), .plain("arrivedAt")]
   var bindings: [any SQLBindable] { [Self.recordID(device: device), device, JSONColumn.encodeList(sessionIDs.sorted()), modifiedAt, cue, arrivedAt] }
   init(row: Row) {
     self.init(device: row.text(1), sessionIDs: Set(JSONColumn.decodeList(String.self, from: row.textOrNil(2))), cue: row.bool(4), modifiedAt: row.date(3), arrivedAt: row.dateOrNil(5))

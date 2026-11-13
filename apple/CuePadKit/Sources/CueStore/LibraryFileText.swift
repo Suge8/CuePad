@@ -22,9 +22,9 @@ public struct LibraryFileText: Equatable, Sendable {
   public static func recordID(host: String, path: String) -> UUID { DeterministicID.uuid("agent-library-file/\(host)/\(path)") }
 }
 
-extension LibraryFileText: Record {
+extension LibraryFileText: Record, SyncedColumns {
   static let table = Table.agentLibraryFiles
-  static let columns = ["id", "hostID", "path", "hash", "text", "modifiedAt"]
+  static let fields: [Field] = [.plain("id"), .plain("hostID"), .encrypted("path"), .encrypted("hash"), .encrypted("text"), .plain("modifiedAt")]
   var bindings: [any SQLBindable] { [Self.recordID(host: hostID, path: path), hostID, path, hash, text, modifiedAt] }
   init(row: Row) {
     self.init(hostID: row.text(1), path: row.text(2), text: row.text(4), modifiedAt: row.date(5))

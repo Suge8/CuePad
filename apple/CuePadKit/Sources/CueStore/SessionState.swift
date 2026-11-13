@@ -171,14 +171,17 @@ extension SessionState {
   public var shortID: String { String(sessionID.prefix(8)) }
 }
 
-extension SessionState: Record {
+extension SessionState: Record, SyncedColumns {
   static let table = Table.piSessionStates
   /// 只由 `writeTranscript` 写
   static let recapColumns: Set<String> = ["lastPrompt", "lastReply", "pendingPrompt", "pendingTools", "answeredAt"]
-  static let columns = [
-    "id", "sessionID", "hostID", "title", "projectID", "state", "detail", "stateSince", "createdAt", "modifiedAt", "notify", "folder",
-    "lastPrompt", "lastReply", "question", "busySince", "launchToken", "hosted", "subagents", "pendingPrompt",
-    "model", "thinking", "context", "agent", "catalogID", "pendingTools", "turnStartedAt", "answeredAt", "failure", "bootID", "fast", "createdForTaskID",
+  static let fields: [Field] = [
+    .plain("id"), .plain("sessionID"), .plain("hostID"), .encrypted("title"), .plain("projectID"), .plain("state"),
+    .encrypted("detail"), .plain("stateSince"), .plain("createdAt"), .plain("modifiedAt"), .plain("notify"), .encrypted("folder"),
+    .encrypted("lastPrompt"), .encrypted("lastReply"), .encrypted("question"), .plain("busySince"), .encrypted("launchToken"),
+    .plain("hosted"), .encrypted("subagents"), .encrypted("pendingPrompt"), .encrypted("model"), .encrypted("thinking"),
+    .encrypted("context"), .plain("agent"), .plain("catalogID"), .encrypted("pendingTools"), .plain("turnStartedAt"),
+    .plain("answeredAt"), .plain("failure"), .plain("bootID"), .encrypted("fast"), .plain("createdForTaskID"),
   ]
   var bindings: [any SQLBindable] {
     [id, sessionID, hostID, title, projectID, state.rawValue, detail, stateSince, createdAt, modifiedAt, notify?.rawValue, folder,

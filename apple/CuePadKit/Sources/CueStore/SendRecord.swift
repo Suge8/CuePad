@@ -47,9 +47,12 @@ public struct LastSend: Equatable, Sendable {
   }
 }
 
-extension SendRecord: Record {
+extension SendRecord: Record, SyncedColumns {
   static let table = Table.sendRecords
-  static let columns = ["id", "content", "targetKind", "targetName", "targetRef", "cardID", "sentAt", "modifiedAt", "deliveryID", "origin"]
+  static let fields: [Field] = [
+    .plain("id"), .encrypted("content"), .plain("targetKind"), .encrypted("targetName"), .encrypted("targetRef"), .plain("cardID"),
+    .plain("sentAt"), .plain("modifiedAt"), .plain("deliveryID"), .plain("origin"),
+  ]
   var bindings: [any SQLBindable] {
     [id, content, targetKind.rawValue, targetName, targetRef, cardID, sentAt, modifiedAt, deliveryID, origin?.rawValue]
   }
