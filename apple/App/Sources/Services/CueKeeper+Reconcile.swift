@@ -17,7 +17,6 @@ extension CueKeeper {
         await leaveHisStops()
         let next = await step(at: now)
         schedule([next, alarm(at: now)].compactMap(\.self).min())
-        reconciles += 1
     }
 
     /// 对账里按先后只做一件事；返回歇着时下一次要对账的时刻。

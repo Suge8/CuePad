@@ -111,7 +111,6 @@ final class CueKeeper {
     @ObservationIgnored var handedOver: Int?
     private var history: [CueRound] = []
     @ObservationIgnored private var roundCount = 0
-    @ObservationIgnored var reconciles = 0
     /// 你的话里的附件正在旁边取的（`ready(_:)`）与取不来、照交的
     @ObservationIgnored var fetchingFiles: [UUID: Task<Void, Never>] = [:]
     @ObservationIgnored var unfetchable: Set<UUID> = []
@@ -147,11 +146,6 @@ final class CueKeeper {
         var rounds: [CueRound]
         /// 这一次启用已招呼过（或手上没事不用招呼）
         var greeted: Bool
-        /// 一轮在跑时看门狗还剩多久（按醒着的钟）
-        var watchdog: Duration?
-        /// 对完了几次账、此刻有没有排着下一次（`timer`）
-        var reconciles: Int
-        var scheduled: Bool
     }
 
     var snapshot: Snapshot {
@@ -164,8 +158,7 @@ final class CueKeeper {
         }
         return Snapshot(
             state: state, setbacks: setbacks, turn: turn?.round, rounds: turn.map { history + [$0.round] } ?? history,
-            greeted: progress.greeted != nil, watchdog: turn.map { _ in setup.timing.silence - (setup.timing.awake() - heardAt) },
-            reconciles: reconciles, scheduled: timer != nil)
+            greeted: progress.greeted != nil)
     }
     /// 在回答你的这一轮正在说的话（只在内存，不进 `cueState`、不入库、不同步）：只有 Cue 页末尾读它，出字时对话列表不重算。
     /// 说完的留着，由 Cue 页在对话里出现它之后换下；下一轮开始、大脑出问题时清掉。只显示在回答你的一轮（`Turn.answersYou`）：
@@ -242,11 +235,12 @@ final class CueKeeper {
             loop: for await next in inputs {
                 switch next {
                 case .stop: break loop
-                case .kick: break
+                case .kick, .settle: break
                 case .brain(let id, let event): if shift?.id == id { await handle(event) }
                 }
                 await reconcile()
                 await publish()
+                if case .settle(let done) = next { done.resume() }
             }
             group.cancelAll()
         }

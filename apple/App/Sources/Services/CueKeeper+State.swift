@@ -251,6 +251,8 @@ extension CueKeeper {
     nonisolated enum Input: Sendable {
         case kick, stop
         case brain(Int, TurnEvent)
+        /// 对一次账，对完接着 `done`：要确定值班看过此刻的库与钟的一方显式交（测试在负向断言前）
+        case settle(CheckedContinuation<Void, Never>)
     }
 
     /// 触发对账的读数：变了就对一次账（内容不用，对账自己读）。对话只取对账用到的：待交给它的你的话与回答、你最近一句的时刻（巡视从它算空闲）；

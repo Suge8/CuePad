@@ -53,8 +53,7 @@ public enum CueEnvelope {
   /// 一轮信封要的事实从库里一次读齐（信封加一项只改 Kit）；值班只交它自己知道的：醒来原因、这次报给它的变化（`changes`，醒来时读的那一份）、
   /// 信封上的此刻、这台 Mac（`host`，读额度）、要写的语言、上一轮的错与按他的话查到的相关回复。
   public static func read(
-    from store: CueStore, wake: CueWake, changes: [CueChange], now: Date, host: String, language: String? = nil, retrying: String? = nil,
-    related: [String] = []
+    from store: CueStore, wake: CueWake, changes: [CueChange], now: Date, host: String, language: String?, retrying: String?, related: [String]
   ) async throws -> Input {
     Input(
       now: now, projects: try await store.projects(), changes: changes, recaps: try await CueTools(store: store).recaps(for: changes),

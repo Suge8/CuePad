@@ -50,17 +50,19 @@ extension CueHostTests {
     }
 
     @Test func 一轮挂住没动静_看门狗重起_你的话重新交出() async throws {
-        let rig = try await Rig(timing: { $0.silence = .seconds(60) })
+        let silence = Duration.seconds(60)
+        let rig = try await Rig(timing: { $0.silence = silence })
         let first = try #require(rig.brainPIDs.first)
         try await rig.say("请慢慢想")
         try await eventually("请求挂在模型那里") { rig.model.hanging }
-        try await stalled(rig, first)
+        try await stalled(rig, first, silence: silence)
         try await rig.message(.cue, containing: "收到：请慢慢想")
         await rig.stop()
     }
 
     @Test func Mac睡着时一轮在跑_醒来不当成卡住() async throws {
-        let rig = try await Rig(timing: { $0.silence = .seconds(60) })
+        let silence = Duration.seconds(60)
+        let rig = try await Rig(timing: { $0.silence = silence })
         let first = try #require(rig.brainPIDs.first)
         try await rig.say("请慢慢想")
         try await eventually("请求挂在模型那里") { rig.model.hanging }
@@ -68,16 +70,18 @@ extension CueHostTests {
         try await rig.reconciled()
         #expect(rig.brainPIDs == [first])
         #expect(try await rig.count("收到：请慢慢想") == 0)
-        try await stalled(rig, first)
+        try await stalled(rig, first, silence: silence)
         try await rig.message(.cue, containing: "收到：请慢慢想")
         await rig.stop()
     }
 
-    private func stalled(_ rig: Rig, _ brain: pid_t) async throws {
+    /// 跳过看门狗的时长、等它对过账：挂住之后才到的事件会让看门狗重新算起，没停掉就再跳一次。
+    private func stalled(_ rig: Rig, _ brain: pid_t, silence: Duration) async throws {
         try await eventually("看门狗停掉挂住的大脑") {
             guard rig.brainPIDs.contains(brain) else { return true }
-            rig.skipSilence()
-            return false
+            rig.jump(by: silence)
+            try await rig.reconciled()
+            return !rig.brainPIDs.contains(brain)
         }
     }
 
