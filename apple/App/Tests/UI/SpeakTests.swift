@@ -101,6 +101,22 @@ struct SpeakTests {
         #expect(try await youSaid().isEmpty)
     }
 
+    @Test func 记成任务_落在选的项目里_输入框立刻空_不对Cue说() async throws {
+        try await enableCue()
+        let workspace = Workspace(services: app.services)
+        let project = try await store.createProject(name: "发布", color: "#000000")
+        workspace.cue.draft = ComposerDraft(text: "给发布脚本补上回滚步骤")
+
+        let writing = workspace.note(from: Bindable(workspace.cue).draft, asTask: true, in: project.id)
+        #expect(workspace.cue.draft.isEmpty(accepting: .files))
+        await writing?.value
+
+        #expect(try await store.tasks(in: project.id, .todo).map(\.body) == ["给发布脚本补上回滚步骤"])
+        #expect(try await store.cards(in: project.id).isEmpty)
+        #expect(workspace.notice?.text.visible == "任务已加到 发布" && workspace.notice?.link == .project(project.id))
+        #expect(try await youSaid().isEmpty)
+    }
+
     @Test func 对Cue说_超时不假报未送达_明确离线不被未知覆盖() async throws {
         try await enableCue()
         let workspace = Workspace(services: app.services)

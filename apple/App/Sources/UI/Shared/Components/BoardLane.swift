@@ -1,6 +1,7 @@
 import SwiftUI
 
 /// 只铺实色：侧栏开合时整面墙每帧重画，大面积不铺渐变、不描边。
+/// 否决过：四列各垫一块常驻的淡底托盘——暖灰桌面上再叠一层灰，整页发闷。
 struct BoardLane: View {
     let targeted: Bool
     @Environment(\.palette) private var palette
@@ -101,16 +102,22 @@ struct BoardColumnHeader: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        HStack(spacing: 0) {
-            row
-                .lineLimit(1)
-                .accessibilityElement(children: .ignore)
-            .accessibilityLabel(column.title)
-            .accessibilityValue("\(count)")
-            .accessibilityAddTraits(.isHeader)
-            if let add = archives ? .archive(in: workspace) : LaneAdd.of(column, in: workspace) {
-                LaneAddButton(add, cell: CGSize(width: Self.add, height: Self.height)).font(Self.font)
-            }
+        let add = archives ? .archive(in: workspace) : LaneAdd.of(column, in: workspace)
+        let button = add == nil ? 0 : Self.add
+        // 列名在列的正中，两边各让出钮那么宽；窄到放不下时只让右边，列名靠左挪半个钮、不截字。
+        // 两个候选都是整个列名，不会像按宽挑"有名没名"那样先把列名挑没（见上）
+        return ViewThatFits(in: .horizontal) {
+            row.padding(.horizontal, button)
+            row.padding(.trailing, button)
+        }
+        .lineLimit(1)
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(column.title)
+        .accessibilityValue("\(count)")
+        .accessibilityAddTraits(.isHeader)
+        .overlay(alignment: .trailing) {
+            if let add { LaneAddButton(add, cell: CGSize(width: Self.add, height: Self.height)).font(Self.font) }
         }
         .frame(height: Self.height)
     }
@@ -118,20 +125,16 @@ struct BoardColumnHeader: View {
     private var row: some View {
         HStack(spacing: 0) {
             BoardLaneMark(column: column, size: Self.mark)
-            Text(column.title).font(titleFont).foregroundStyle(column == .waiting ? palette.ink : column.light ? palette.ink3 : palette.ink2).truncationMode(.tail)
+            Text(column.title).foregroundStyle(column.light ? palette.ink3 : palette.ink2).truncationMode(.tail)
                 .padding(.leading, Spacing.glyph)
-            // 数紧跟列名：四列同一种排法，右端只留给"+"，有没有它数都在同一处
-            Text("\(count)").font(column == .waiting ? titleFont : column.light ? Self.font : Self.countFont).monospacedDigit().foregroundStyle(column.countInk(palette)).counting(count).fixedSize()
+            // 数紧跟列名：四列同一种排法
+            Text("\(count)").monospacedDigit().foregroundStyle(column.countInk(palette)).counting(count).fixedSize()
                 .padding(.leading, Spacing.glyph)
-            Spacer(minLength: Spacing.tight)
         }
+        .font(Self.font)
     }
 
-    /// 等你的列头比别的大一号：全页的焦点在这一列。
-    private var titleFont: Font { column == .waiting ? Typography.title : Self.font }
-
     private static let font = Typography.laneTitle
-    private static let countFont = Typography.laneCount
     static var height: CGFloat { ControlSize.regular.height }
     #if os(macOS)
     private static let mark: CGFloat = 16

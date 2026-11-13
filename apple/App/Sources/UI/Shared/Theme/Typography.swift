@@ -55,10 +55,9 @@ enum Typography {
     static let toolbarTitle = Font.system(size: 15, weight: .semibold)
     static let toolbarTitlePaired = Font.system(size: 13, weight: .semibold)
     static let toolbarSubtitle = Font.system(size: 12)
-    /// 看板列头：列名与轻的两列的数（同钮上的字），重的两列（推进中、等你）的数大一档、着状态色（`BoardWeight.swift`）——
-    /// 只大一档：再大列头就成了一排读数，压过下面的卡（卡才是这一页要看的）。
+    /// 看板列头：四列的列名与数同一个字号（同钮上的字），轻重只靠墨色分（`BoardWeight.swift`）。
+    /// 否决过：等你的列头大一号、重的两列的数大一档——一排四个列头大小不一，读成没对齐。
     static let laneTitle = Font.system(size: 13, weight: .semibold)
-    static let laneCount = Font.system(size: 15, weight: .semibold)
     static let toolbarPath = Font.system(size: 11)
     static let cueCardName = Font.system(size: 18, weight: .semibold)
     /// 卡片摘要的额外行距；紧凑内容小于长文阅读。
@@ -87,9 +86,8 @@ enum Typography {
     static let toolbarSubtitle = Font.caption
     /// 钮上的字（分段的各段）。手机上半粗：触屏的段比 Mac 宽，中号字重在玻璃上发虚。
     static let toolbarLabel = Font.subheadline.weight(.semibold)
-    /// 看板列头（横屏与 iPad 四列、手机的行头）：列名与数，同 Mac 那两档的角色。
+    /// 看板列头（横屏与 iPad 四列）：列名与数，同 Mac 那一档的角色。
     static let laneTitle = Font.headline
-    static let laneCount = Font.title2.weight(.semibold)
     static let title = Font.title3.weight(.semibold)
     /// 文件页顶上的大标题（技能的名字），同 Mac 那一档的角色。
     static let heading = Font.title2.weight(.bold)

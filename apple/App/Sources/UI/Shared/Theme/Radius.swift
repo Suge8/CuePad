@@ -9,7 +9,7 @@ nonisolated enum Radius {
     static let block: CGFloat = 12
     /// 卡片与浮层：灵感卡、手机的看板卡、面板、搜索框、提示条。
     static let card: CGFloat = 16
-    /// 大块面：气泡、手机上的分组纸、空态、Cue 条。看板列的托盘也是它，卡与托盘留 `BoardCardMetrics.inset` 的边、近似同心。
+    /// 大块面：气泡、手机上的分组纸、空态、Cue 条。看板列拖入时亮的底也是它。
     static let sheet: CGFloat = 22
     /// 输入框与手机的任务气泡：输入框单行高 `ComposerMetrics.slot`，正好是它的两倍。
     static let field: CGFloat = 28

@@ -18,6 +18,8 @@ nonisolated struct Shortcut: Hashable, Sendable {
 
 nonisolated enum HotkeyError: Error, Equatable {
     case occupied(Shortcut)
+    /// 已是 CuePad 自己另一个快捷键（它的 `label`）。
+    case taken(String)
     case unsupportedAccelerator(String)
     case system(Int32)
 }

@@ -38,7 +38,7 @@ struct BoardTaskCard: View {
                 if hero == nil, let shot = item.shot { BoardShot(shot: shot, group: task.id.uuidString, open: openShot) }
             }
             }
-            .boardCard(column, flat: column.light && hero == nil, running: moves && pulse.tier == .running)
+            .boardCard(column, running: moves && pulse.tier == .running)
             .boardRescue(advancing ? item.agent?.state : nil)
         }
         .help(tip)
