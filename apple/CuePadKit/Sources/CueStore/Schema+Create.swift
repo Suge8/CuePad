@@ -113,7 +113,7 @@ extension Schema {
     -- Pi 历史索引：checkpoint 是服务层的不透明字节（读取偏移与解析状态）。
     CREATE TABLE piSessions (
       id TEXT PRIMARY KEY NOT NULL, path TEXT NOT NULL, cwd TEXT NOT NULL, title TEXT NOT NULL,
-      lastActivityAt INTEGER NOT NULL, checkpoint BLOB, agent TEXT
+      lastActivityAt INTEGER NOT NULL, checkpoint BLOB, agent TEXT, model TEXT, thinking TEXT
     ) STRICT;
     CREATE INDEX piSessions_cwd ON piSessions(cwd);
     \(agentIndex)

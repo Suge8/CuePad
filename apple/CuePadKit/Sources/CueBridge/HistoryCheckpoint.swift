@@ -19,6 +19,9 @@ public struct HistoryCheckpoint: Sendable, Codable, Equatable {
     var nameIsYours = false
     var lastActivity: Date?
     var firstMessage: String?
+    /// 会话文件里最后记下的模型与思考强度（各家的原值）：接着这个会话时 Agent 用的就是它。文件没记的为 nil
+    var model: ModelKey?
+    var thinking: String?
     var seq: Int64 = 0
     var round: Round?
     var reply: Reply?
@@ -41,10 +44,10 @@ public struct HistoryCheckpoint: Sendable, Codable, Equatable {
         var counted: String?
     }
 
-    /// 读会话的规则的版本：规则变了、已读过的部分要按新规则重读时（长度截断的回答改记未完成、工具结果里的图、Agent 自己起的会话名、Claude Code 推迟补写的 turn_duration 的归属、每一步的调用 id 与缓存读写、Codex 的缓存读写与改文件一步的调用 id）加一，
+    /// 读会话的规则的版本：规则变了、已读过的部分要按新规则重读时（长度截断的回答改记未完成、工具结果里的图、Agent 自己起的会话名、Claude Code 推迟补写的 turn_duration 的归属、每一步的调用 id 与缓存读写、Codex 的缓存读写与改文件一步的调用 id、会话最后用的模型与思考强度）加一，
     /// 旧版本的检查点解不开，各家的会话在窗口内从头重读、对话按新规则改写（`CueStore.applyTranscript` 只改写变了的）。
     struct ReadRules: Codable, Equatable {
-        static let current = 6
+        static let current = 7
         let version: Int
 
         init() { version = Self.current }

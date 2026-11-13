@@ -140,6 +140,8 @@ enum Schema {
     // 96：Cue 通话的音色（`CueVoice`）；空着的按默认
     "ALTER TABLE cueProfile ADD COLUMN voice TEXT;",
     messageArrivalUpgrade,
+    // 98：会话索引记下会话文件里最后用的模型与思考强度（`IndexedSession`）；已有的等读的规则换版本后重读时补上
+    "ALTER TABLE piSessions ADD COLUMN model TEXT; ALTER TABLE piSessions ADD COLUMN thinking TEXT;",
   ]
 
   static let activityDestinationsTable = """

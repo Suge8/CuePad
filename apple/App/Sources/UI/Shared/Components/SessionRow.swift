@@ -44,7 +44,7 @@ struct SessionRow: View {
         .relayArrival(session: session.sessionID)
     }
 
-    private var ended: Bool { session.state == .known(.ended) && !session.isWaking(by: delivery, at: services.speech) }
+    private var ended: Bool { session.staysEnded(by: delivery, at: services.speech) }
 
     private func card(shown: SessionShown, facts: RowFacts) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: Spacing.item) {

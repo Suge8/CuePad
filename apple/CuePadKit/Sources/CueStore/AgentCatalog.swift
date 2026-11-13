@@ -41,6 +41,20 @@ extension AgentCatalog: Record {
 extension CueStore {
   public func agentCatalog(_ id: UUID) throws -> AgentCatalog? { try find(AgentCatalog.self, id) }
 
+  /// 一个会话能选的模型与能用的命令，读的只此一处：它报过就是它那份；没报过的（只从会话文件索引来、没连过桥的）是它那台 Mac 上这一家
+  /// 此刻的模型（`MacAgents`），没有命令。回复框据此对每个会话都列得出模型，不看它的进程在不在、是谁开的。
+  public func catalog(of session: SessionState) throws -> AgentCatalog? {
+    if let own = try session.catalogID.flatMap(agentCatalog) { return own }
+    let host = try macAgents(on: session.hostID)
+    guard let models = session.agent.known.flatMap({ host.agent($0) })?.models, !models.isEmpty else { return nil }
+    return AgentCatalog(host: session.hostID, models: models, commands: [], at: host.modifiedAt)
+  }
+
+  /// 会话没记下模型（桥没报过、会话文件里也没有）时接着说会用的：它那台 Mac 上这一家的默认。
+  public func defaultModel(of session: SessionState) throws -> ModelOption? {
+    try session.agent.known.flatMap { try macAgents(on: session.hostID).agent($0) }?.defaultModel
+  }
+
   func writeCatalog(_ catalog: AgentCatalog) throws {
     _ = try insert(catalog, ignoringExisting: true)
   }

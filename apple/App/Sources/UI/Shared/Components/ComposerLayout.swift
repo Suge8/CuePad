@@ -91,7 +91,7 @@ enum ComposerForm: Equatable {
     /// 一直是两层、工具排一直在：浮起的输入框（新会话、交给 Agent）、Mac 菜单栏面板、Mac 会话回复框。
     case open
     /// 空着又没聚焦时收成一行；有内容时两层，`opensOnFocus` 时聚焦也展开（Mac 底部输入栏；手机会话回复框：
-    /// 有工具排时聚焦就展开，已结束的会话没有工具，聚焦了也保持一行，打了字再长）。
+    /// 有工具排时聚焦就展开，没有时聚焦了也保持一行，打了字再长）。
     case line(opensOnFocus: Bool)
     /// 没聚焦时收成短胶囊（＋ 与一行提示，有草稿写"草稿：第一行"），点它聚焦后同 `line`（手机会话页在看历史时）。
     case capsule(opensOnFocus: Bool)

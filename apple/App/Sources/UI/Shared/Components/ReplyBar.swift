@@ -98,7 +98,7 @@ struct ReplyBar: View {
 
     private var composer: some View {
             Composer(
-                draft: box, prompt: compact ? replyPrompt : placeholder, label: "回复", focus: $focused, accepts: accepts,
+                draft: box, prompt: prompt, promptIcon: wakes ? .wakeSession : nil, label: "回复", focus: $focused, accepts: accepts,
                 cardsFrom: session.projectID, form: form, submitsEmpty: canStop, showsSendEmpty: shownSending, keepsHeader: !draft.notes.isEmpty, tooled: hasTools,
                 commands: commands, shortcuts: shortcuts, recall: recall,
                 header: {
@@ -210,11 +210,17 @@ struct ReplyBar: View {
         return interrupts ? "打断本轮" : replyPrompt
     }
 
+    private var prompt: LocalizedStringResource { compact ? replyPrompt : placeholder }
+
     /// 回给这个会话的那句占位：已结束的会话也能接着说——发出后它所在的 Mac 先在后台把它唤醒再送达，占位写明这一步，
     /// 不让人以为发给了一个没人接的会话。
     private var replyPrompt: LocalizedStringResource {
-        session.state == .known(.ended) ? "唤醒 \(session.title) 接着说" : "回复 \(session.title)"
+        ended ? "唤醒会话" : "回复 \(session.title)"
     }
+
+    private var ended: Bool { session.state == .known(.ended) }
+    /// 占位写的是"唤醒会话"（带电源图标）：已结束、且没被"补一句"这类更具体的占位换掉。
+    private var wakes: Bool { ended && answering == nil && (compact || draft.attachments.isEmpty && draft.files.isEmpty) }
 
     /// 说出去的这句就是答案（`CueStore.speak`），答完文字清空，其余（别处带进草稿的卡片、附件）留着。
     private func answer() {

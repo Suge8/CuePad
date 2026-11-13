@@ -11,6 +11,8 @@ public struct SessionHistory: Sendable, Equatable {
     public var name: String?
     public var firstMessage: String?
     public var lastActivity: Date?
+    public var model: ModelKey?
+    public var thinking: String?
 
     public var displayName: String {
         SessionName.display(name: name, firstMessage: firstMessage, folder: cwd.map { URL(filePath: $0).lastPathComponent } ?? "")
@@ -103,7 +105,8 @@ public enum History {
         state.modified = modified
         try refreshFingerprint(&state, handle: handle)
         let history = SessionHistory(
-            sessionID: state.sessionID, cwd: state.cwd, name: state.name, firstMessage: state.firstMessage, lastActivity: state.lastActivity)
+            sessionID: state.sessionID, cwd: state.cwd, name: state.name, firstMessage: state.firstMessage, lastActivity: state.lastActivity,
+            model: state.model, thinking: state.thinking)
         return HistoryUpdate(
             file: file, agent: agent, checkpoint: state, history: history, messages: transcript.messages, includesTranscript: wanted,
             renamed: state.name != resumed?.name, bytesRead: Int(consumed - start))

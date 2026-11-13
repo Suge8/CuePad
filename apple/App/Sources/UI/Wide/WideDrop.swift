@@ -66,6 +66,8 @@ extension WideColumnController: UIDropInteractionDelegate {
 struct WideSessionTitle: View {
     let title: String
     let project: String?
+    /// 栏头平时只写名字；已结束是这一页与在跑的会话唯一的不同，名字后面标出来。
+    var ended = false
     let column: Workspace.Column
     @Environment(Workspace.self) private var workspace
     @Environment(\.wideWindowID) private var windowID
@@ -81,13 +83,22 @@ struct WideSessionTitle: View {
             if let windowID, let session = workspace.session(in: column) {
                 #if os(iOS)
                 WideTitleDrag(title: title, item: DraggedColumn(windowID: windowID, recordID: session.id, sessionID: session.sessionID))
-                    .frame(maxWidth: .infinity)
+                    .layoutPriority(1)
                 #else
                 Text(verbatim: title).foregroundStyle(palette.ink).lineLimit(1)
                     .contentShape(.rect)
                     .draggable(DraggedColumn(windowID: windowID, recordID: session.id, sessionID: session.sessionID))
                     .layoutPriority(1)
                 #endif
+            }
+            if ended {
+                HStack(spacing: Spacing.tight) {
+                    Image(.ended).readerHidden(true)
+                    Text(SessionShown(status: .ended).label)
+                }
+                    .font(Typography.caption).foregroundStyle(palette.ink3).lineLimit(1).fixedSize()
+                    .padding(.leading, Spacing.tight)
+                    .transition(.opacity)
             }
             Spacer(minLength: Spacing.item)
             HStack(spacing: Spacing.item) {
@@ -101,6 +112,7 @@ struct WideSessionTitle: View {
             }
         }
         .font(Typography.toolbarTitle)
+        .animation(Motion.fade, value: ended)
         .accessibilityElement(children: .contain)
         .padding(inset).frame(height: Chrome.band)
         .windowDragArea()

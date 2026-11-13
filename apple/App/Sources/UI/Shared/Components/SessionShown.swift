@@ -5,6 +5,11 @@ nonisolated extension SessionState {
     func isWaking(by delivery: DeliveryRequest?, at moment: Speech.Moment) -> Bool {
         DeliveryShown.phase(of: delivery, for: self, at: moment) == .inTransit(.waking)
     }
+
+    /// 已结束、也没有话正在唤醒它：界面上按"已结束"画的那些（淡一档、斜线圈）。
+    func staysEnded(by delivery: DeliveryRequest?, at moment: Speech.Moment) -> Bool {
+        state == .known(.ended) && !isWaking(by: delivery, at: moment)
+    }
 }
 
 nonisolated extension SessionState {

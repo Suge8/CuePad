@@ -14,6 +14,12 @@ struct WideTitleDrag: UIViewRepresentable {
         view.text = title
         view.item = item
     }
+
+    /// 只占名字那么宽（放不下时截断）：名字后面紧跟的「已结束」挨着它，同 Mac。
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView view: WideTitleLabel, context: Context) -> CGSize? {
+        let ideal = view.intrinsicContentSize
+        return CGSize(width: min(ideal.width, proposal.width ?? ideal.width), height: ideal.height)
+    }
 }
 
 final class WideTitleLabel: UILabel, UIDragInteractionDelegate {

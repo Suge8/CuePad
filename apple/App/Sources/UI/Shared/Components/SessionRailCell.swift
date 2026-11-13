@@ -14,7 +14,8 @@ extension UTType {
 
 /// 宽屏有两种样子。等你的是一张卡（`card`）：会话条上唯一要你动手的，长得不同于下面的行。排在项目下面的一行（`compact`）：缩进一格，
 /// 项目已经由上一行说了，只有名字与读数。
-/// 行首不放状态点：只有在推进的画看板推进中那个记号（同项目行尾数的那个），歇着、结束的不画、名字淡一档——没事的不该有记号要人去认。
+/// 行首不放状态点：只有两头画记号——在推进的画看板推进中那个（同项目行尾数的那个），已结束的画斜线圈、名字淡到底；歇着的不画、名字淡一档。
+/// 已结束的原先同歇着的一样不画，在侧栏分不出哪些已经关了（说一句要先唤醒）。
 /// 否决过：每种状态一个图形（七八种，认不过来）；实心、空心的点分在跑与歇着（两种点摆在一起读不出哪个是哪个）；
 /// 等你的行首放项目的图形（只看图形认不出是哪个项目，写名字才认得）。
 struct SessionRailCell: View {
@@ -99,7 +100,13 @@ struct SessionRailCell: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if compact {
                 RailLine {
-                    if item.waiting == nil, item.pulse.tier == .running { BoardLaneMark(column: .advancing, size: 12) } else { Color.clear }
+                    if item.waiting == nil, item.pulse.tier == .running {
+                        BoardLaneMark(column: .advancing, size: 12)
+                    } else if item.ended {
+                        StateGlyph(status: .ended).font(Glyph.small)
+                    } else {
+                        Color.clear
+                    }
                 } rest: {
                     name.font(Typography.body)
                     Spacer(minLength: Spacing.item)
@@ -126,7 +133,7 @@ struct SessionRailCell: View {
     private var name: some View {
         Text(verbatim: item.name)
             .fontWeight(selected ? .semibold : nil)
-            .foregroundStyle(item.resting ? palette.ink2 : palette.ink)
+            .foregroundStyle(item.ended ? palette.ink3 : item.resting ? palette.ink2 : palette.ink)
             .lineLimit(1)
     }
 
@@ -228,6 +235,8 @@ extension SessionRailRows.Item {
     }
 
     var resting: Bool { waiting == nil && pulse.tier == .resting }
+
+    var ended: Bool { waiting == nil && shown.status == .ended }
 
     var ask: String? { Self.firstLine(waiting == .asking ? session.question?.displayText ?? session.detail : session.lastReply) }
 

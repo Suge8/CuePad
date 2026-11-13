@@ -9,6 +9,8 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     @Binding var draft: ComposerDraft
     /// nil 不写占位（新会话的输入框：空着不能开，没有可提示的）。
     let prompt: LocalizedStringResource?
+    /// 占位字前的图标（已结束会话的"唤醒会话"）：两端的文字区只会画字，带图标的占位叠在文字区上画，位置同它自己的占位。
+    var promptIcon: Icon?
     let label: LocalizedStringResource
     let focus: FocusState<Bool>.Binding
     var accepts: ComposerKinds = [.files, .cards]
@@ -213,7 +215,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
 
     private var text: some View {
         ComposerField(
-            text: $draft.text, prompt: prompt.map { String(localized: $0) } ?? "", label: String(localized: label), maxLines: expanded ? 6 : 1, ink: palette.ink, focus: focus, keys: handle,
+            text: $draft.text, prompt: promptIcon == nil ? prompt.map { String(localized: $0) } ?? "" : "", label: String(localized: label), maxLines: expanded ? 6 : 1, ink: palette.ink, focus: focus, keys: handle,
             shortcut: shortcut, files: accepts.contains(.files) ? { add($0) } : nil)
             .focused(focus)
             #if os(macOS)
@@ -227,6 +229,14 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
                     Text("草稿：\(shrunkDraft)").font(Typography.reading).foregroundStyle(palette.ink2).lineLimit(1)
                         .allowsHitTesting(false)
                         .transition(.identity)
+                } else if let promptIcon, let prompt, draft.text.isEmpty {
+                    HStack(spacing: Spacing.glyph) {
+                        Image(promptIcon).readerHidden(true)
+                        Text(prompt)
+                    }
+                    .font(Typography.reading).foregroundStyle(palette.ink3).lineLimit(1)
+                    .allowsHitTesting(false)
+                    .transition(.identity)
                 }
             }
     }
