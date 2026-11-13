@@ -43,7 +43,7 @@ struct RoundProcess: View {
                     stay?(!expanded)
                     withAnimation(motion) { toggled = !expanded }
                 } label: { header(process, open: tools.items.isEmpty ? nil : expanded) }
-                    .buttonStyle(PressStyle())
+                    .buttonStyle(PressStyle(.inline))
                     .allowsHitTesting(!tools.items.isEmpty)
                     .accessibilityLabel(spoken(process))
                     .accessibilityExpanded(tools.items.isEmpty ? nil : expanded)
@@ -73,7 +73,8 @@ struct RoundProcess: View {
                         }
                     }
                 }
-                .clipped()
+                // 只裁上下：行的悬停底比行左右各宽出一圈（`Press.inline`），贴着框裁的话右端被切成直边
+                .padding(.horizontal, Self.hoverRoom).clipped().padding(.horizontal, -Self.hoverRoom)
                 recached(process)
             }
             .task {
@@ -104,6 +105,7 @@ struct RoundProcess: View {
     /// 开合带着下面的回答一起挪：只给这一块挂动画的话回答当帧跳到位，收走的几行还在原地淡出，叠在回答的字上。
     private var motion: Animation? { Motion.spatial(Motion.nudge, reduceMotion: reduceMotion) }
 
+    private static let hoverRoom = Spacing.item
     private static let imageSide: CGFloat = 64
     /// 手机最窄的对话列放得下的一排，三端同一个数。
     private static let imageRow = 4

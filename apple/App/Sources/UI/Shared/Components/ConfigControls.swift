@@ -259,7 +259,7 @@ struct SessionConfigControls: View {
     }
 }
 
-/// 缓存冷了、这一句要重读多少上下文：排在回复框的工具那一排里、挨着上下文的用量，放不下只剩"已冷"，整句在悬停里。
+/// 缓存冷了、这一句要重读多少上下文：排在回复框的工具那一排里、挨着上下文的用量，雪花说"冷了"、字只说重读多少，放不下只剩雪花，整句在悬停里。
 /// 不另浮一张条在对话上：那是这一句的代价，属于要发出它的回复框。
 struct ColdCache: Equatable {
     let context: Int
@@ -272,13 +272,19 @@ private struct ColdNote: View {
 
     var body: some View {
         let tokens = CueContext.tokens(cold.context)
+        let said = cold.estimated ? Text("缓存可能已冷，这一句可能重读约 \(tokens)") : Text("缓存已冷，这一句会重读约 \(tokens)")
         ViewThatFits(in: .horizontal) {
-            (cold.estimated ? Text("缓存可能已冷，重读约 \(tokens)") : Text("缓存已冷，重读约 \(tokens)")).fixedSize()
-            Text("已冷").fixedSize()
+            HStack(spacing: Spacing.tight) {
+                Image(.cold)
+                cold.estimated ? Text("可能重读 \(tokens)") : Text("重读 \(tokens)")
+            }
+            .fixedSize()
+            Image(.cold)
         }
         .font(Typography.caption).monospacedDigit().foregroundStyle(palette.ink3)
         .padding(.leading, Spacing.tight)
-        .help(cold.estimated ? Text("缓存可能已冷，这一句可能重读约 \(tokens)") : Text("缓存已冷，这一句会重读约 \(tokens)"))
+        .help(said)
+        .accessibilityElement(children: .ignore).accessibilityLabel(said)
     }
 }
 
