@@ -10,16 +10,17 @@ struct CueColumn: View {
     let home: Bool
     let lead: CGFloat
 
-    /// 右边那一栏时是浮在主区上的一块写字玻璃（同看板列头）：看板放不下的列滑到它下面，不在桌面上切断；内容往里收一圈。
-    /// 铺满与抽屉不是：铺满时它就是页，抽屉有自己的面（`DrawerSurface`）。玻璃画在块里，收起、放回时随块平移（`WideColumnSlide`）。
-    private var floats: Bool { fits && !home }
+    /// Cue 住在一块写字玻璃上（同看板列头），内容往里收一圈：在右边那一栏时浮在主区上，看板放不下的列滑到它下面、不在桌面上切断；
+    /// 铺满时是同一块板向左长开——铺满时撤掉玻璃的话，系统重建块里的图层，让到右边与铺满之间整块先消失再淡入（`WideSlide.Positions` 把它们当新层）。
+    /// 抽屉不是：它有自己的面（`DrawerSurface`）。玻璃画在块里，收起、放回时随块平移（`WideColumnSlide`）。
+    private var floats: Bool { fits }
 
     var body: some View {
         VStack(spacing: 0) {
             CueTitle(fits: fits, home: home, lead: lead, inset: floats ? Self.float : 0)
             CuePage(grounded: !floats).fadesUnderHead()
         }
-        .glass(in: .rect(cornerRadius: Radius.sheet), ink: .ground(shown: floats))
+        .glass(in: .rect(cornerRadius: Radius.field), ink: .ground(shown: floats))
         .padding(floats ? Self.float : 0)
         .ignoresSafeArea(.container, edges: .top)
     }

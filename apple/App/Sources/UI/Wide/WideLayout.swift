@@ -8,7 +8,12 @@ import SwiftUI
 /// 否决过：按主区放的页各算一份最窄（看板 776、会话 390），再给看板另记一份会话条开合——同一个窗口宽在不同页上栏宽不同，换页时会话条自己开合、读不出规律。
 struct WideMetrics {
     static let session: CGFloat = 390
+    /// Mac 的含浮板四周那一圈（`CueColumn.float`）：板本身 372。再窄名牌那一排数字账放不下第四项（376 时「2 子代理」被挤掉，实测）。
+    #if os(macOS)
+    static let cue: CGFloat = 388
+    #else
     static let cue: CGFloat = 400
+    #endif
 
     let home: Bool
     let rail: CGFloat
