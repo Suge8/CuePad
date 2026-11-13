@@ -173,7 +173,7 @@ private struct StartBar: View {
                 Button(action: start) {
                     Label(outcome != nil ? "重试" : caption == nil ? "开始" : "开始这一步", icon: .start)
                 }
-                .buttonStyle(ControlButtonStyle(kind: .primary, size: .compact))
+                .buttonStyle(ControlButtonStyle(kind: .primary, size: .regular))
                 .accessibilityHint("把任务的正文交给 Agent，开始做")
             }
         }

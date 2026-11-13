@@ -76,6 +76,8 @@ extension Workspace {
         opened: @escaping LaunchOpened
     ) -> Task<Void, Never>? {
         guard let place, let host = place.host, let choice, let agent = choice.agent else { return nil }
+        // 新会话要有东西交给 Agent：一句话、附件或带上的任务，空着不开
+        guard start.card != nil || !draft.isEmpty(accepting: [.files, .cards]) else { return nil }
         let claim = claimImports(draft)
         return launch(sessionLaunching(start.launchKey), opened: opened) { [services] _, intent in
             let draft = await claim.settled()

@@ -31,8 +31,8 @@ struct NewSessionInput: View {
 
     private var composer: some View {
         Composer(
-            draft: $draft, prompt: "第一句话（可不填）", label: "新会话的第一句话", focus: $focused,
-            cardsFrom: chosen?.project.id, submitsEmpty: true,
+            draft: $draft, prompt: nil, label: "新会话的第一句话", focus: $focused,
+            cardsFrom: chosen?.project.id,
             tooled: brain != nil, shortcuts: [.send: launch],
             header: { header.padding(.horizontal, Spacing.group).padding(.top, Spacing.item) },
             tools: { if let agents { LaunchControls(mac: agents, project: chosen?.project.id).disabled(launching.sending) } },

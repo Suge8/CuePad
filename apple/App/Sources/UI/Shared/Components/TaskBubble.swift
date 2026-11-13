@@ -37,6 +37,8 @@ struct TaskBubble: View {
                     BubbleFooter(data: data, focus: focus, editing: editing)
                         #if os(iOS)
                         .padding(.leading, BubbleMetrics.textLeading).padding(.trailing, BubbleMetrics.textTrailing)
+                        #else
+                        .padding(.trailing, Spacing.hair)
                         #endif
                 }
                 .padding(BubbleMetrics.padding)
@@ -134,8 +136,8 @@ enum BubbleMetrics {
     static let markSlot: CGFloat = 26
     static let dot: CGFloat = 8
     static let capsule: CGFloat = 28
-    /// 底下那一排（哪家、模型、思考强度、"开始"）的字都写全的宽。
-    static let width: CGFloat = 440
+    /// 同新会话的输入框一样宽（`NewSessionInput`）：底下那一排（哪家、模型、思考强度、"开始"）的字都写得全。
+    static let width: CGFloat = 480
     static let stripPadding = EdgeInsets(top: Spacing.item, leading: Spacing.item, bottom: Spacing.item, trailing: Spacing.item)
     #else
     static let strong = Typography.secondary.weight(.semibold)

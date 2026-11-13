@@ -20427,22 +20427,6 @@
         }
       }
     },
-    "第一句话（可不填）" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "First message (optional)"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "第一句话（可不填）"
-          }
-        }
-      }
-    },
     "等 %@ 做完" : {
       "localizations" : {
         "en" : {

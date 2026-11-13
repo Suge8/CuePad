@@ -149,6 +149,21 @@ struct NewSessionFlowTests {
         #expect(try await store.deliveryRequest(first.request)?.status == .known(.unconfirmed), "原请求保留")
     }
 
+    #if os(macOS)
+    @Test func 新会话的输入框空着不开会话() async throws {
+        defer { app.services.cancelBackgroundWork() }
+        let workspace = Workspace(services: app.services)
+        workspace.openNewSession()
+        let start = try #require(workspace.newSession)
+        let project = try #require(try await store.project(Project.defaultID))
+        let place = ProjectFolders.launchPlaces(projects: [project], bindings: [], host: host, workMac: nil).first
+        let choice = AgentModelChoice(agents: [], agent: .pi, model: nil, thinking: nil)
+        #expect(workspace.submitSession(start, in: place, draft: ComposerDraft(text: " \n"), choice: choice, opened: Workspace.entering(start)) == nil)
+        #expect(try await requests.isEmpty)
+        #expect(workspace.newSession != nil, "输入框留着")
+    }
+    #endif
+
     @Test(arguments: Entry.forCards)
     func 任务已有没收尾的请求_Store拒绝冒充首次交出(entry: Entry) async throws {
         defer { app.services.cancelBackgroundWork() }

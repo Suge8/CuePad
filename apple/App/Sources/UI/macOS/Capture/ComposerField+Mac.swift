@@ -84,7 +84,8 @@ struct ComposerField: NSViewRepresentable {
             context.coordinator.ink = ink
             view.textColor = NSColor(ink)
             view.typingAttributes = GrowingTextView.attributes(ink)
-            view.insertionPointColor = NSColor(ink)
+            // 光标用主色：墨色的细线在浅底上、尤其空着时几乎看不出
+            view.insertionPointColor = NSColor(palette.signatureFill)
         }
         view.setAccessibilityLabel(label)
         view.maxLines = maxLines
