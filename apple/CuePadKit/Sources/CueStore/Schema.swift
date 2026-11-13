@@ -47,7 +47,7 @@ enum Schema {
   static let peerFloor = 93
 
   /// `upgrades[i]` 把结构版本 `baseVersion + i` 升到 `baseVersion + i + 1`；改结构时在末尾追加一步，同时更新 `create`
-  /// （新库直接建成最新结构、不跑升级步骤：只改数据的一步在空库上无事可做）。
+  /// （新库直接建成最新结构、不跑升级步骤：只改数据的一步在空库上无事可做；两者一致由测试的 `SchemaUpgradeTests` 守住）。
   /// 一步里任何会因数据冲突失败的语句（加唯一索引、NOT NULL、按假定的数据形状改写）都会让启动失败、库打不开：
   /// 要按别的设备已经同步来的、任意形状的数据写。
   static let upgrades: [Upgrade] = [
