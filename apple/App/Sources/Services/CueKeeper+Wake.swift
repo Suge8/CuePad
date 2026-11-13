@@ -14,14 +14,10 @@ extension CueKeeper {
         guard let shift else { return false }
         let store = self.store, now = self.now
         let mark = try await store.lastWrite()
-        let board = try await store.cueBoard()
         let changes = try await self.changes(at: now)
-        let envelope = CueEnvelope.render(CueEnvelope.Input(
-            now: setup.timing.clock(), projects: try await store.projects(),
-            changes: changes, recaps: try await CueTools(store: store).recaps(for: changes), board: board, waiting: try await store.cueMessagesWaitingForYou(), left: try await store.cueState()?.left ?? [],
-            wake: wake, fired: try await fired(of: wake), schedules: try await store.cueScheduleLines(), language: CueInterface.current.writing(after: said),
-            quotas: try await store.accountQuotas(on: setup.recorder.hostID), retrying: retrying.map(Self.firstLine),
-            related: related))
+        let envelope = CueEnvelope.render(try await CueEnvelope.read(
+            from: store, wake: wake, changes: changes, now: setup.timing.clock(), host: setup.recorder.hostID,
+            language: CueInterface.current.writing(after: said), retrying: retrying.map(Self.firstLine), related: related))
         var parts = [envelope]
         if !shift.primed || renewDue(shift, now: now) {
             if shift.primed {
@@ -91,18 +87,6 @@ extension CueKeeper {
         guard case .sessionActivity = wake else { return [] }
         return due.filter { [.settled, .waitingForUser, .failed].contains($0.kind) }
             .compactMap { $0.session.map { CueLeft(sessionID: $0.sessionID, since: $0.stateSince) } }
-    }
-
-    private func fired(of wake: CueWake) async throws -> [CueEnvelope.Fired] {
-        guard case .schedule(let fires) = wake else { return [] }
-        let lines = try await store.cueLines(fires.map(\.line))
-        var fired: [CueEnvelope.Fired] = []
-        for fire in fires {
-            guard let line = lines.first(where: { $0.id == fire.line }) else { continue }
-            let task = if let id = line.task { try await store.card(id) } else { Card?.none }
-            fired.append(CueEnvelope.Fired(line: line, due: fire.due, task: task))
-        }
-        return fired
     }
 
     /// 这次醒来要先开新会话（换新，唯一规则）：上下文到了换新线，或距上一次模型请求超过提示缓存的时长（缓存已过期，接着用要把整段原价重写；

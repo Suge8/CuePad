@@ -96,9 +96,8 @@ extension SessionTaskTests {
         }
         func settle(after mark: Int) async throws -> String? {
             try await recorder.update(sessionID: "s1", state: .settled)
-            let envelope = CueEnvelope.render(CueEnvelope.Input(
-                now: .now, projects: [], changes: try await store.cueChanges(after: CueMarks(mark)), board: try await store.cueBoard(), waiting: [],
-                wake: .sessionActivity([])))
+            let envelope = CueEnvelope.render(try await CueEnvelope.read(
+                from: store, wake: .sessionActivity([]), changes: try await store.cueChanges(after: CueMarks(mark)), now: .now, host: TestApp.hostID))
             return envelope.split(separator: "\n").first { $0.hasPrefix("- [歇下") }.map(String.init)
         }
 
