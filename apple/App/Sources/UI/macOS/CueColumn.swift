@@ -10,24 +10,32 @@ struct CueColumn: View {
     let home: Bool
     let lead: CGFloat
 
-    /// Cue 住在一块写字玻璃上（同看板列头），内容往里收一圈：在右边那一栏时浮在主区上，看板放不下的列滑到它下面、不在桌面上切断；
-    /// 铺满时是同一块板向左长开——铺满时撤掉玻璃的话，系统重建块里的图层，让到右边与铺满之间整块先消失再淡入（`WideSlide.Positions` 把它们当新层）。
-    /// 抽屉不是：它有自己的面（`DrawerSurface`）。玻璃画在块里，收起、放回时随块平移（`WideColumnSlide`）。
-    private var floats: Bool { fits }
+    /// 在右边那一栏时 Cue 住在一块写字玻璃上（同看板列头），浮在主区上、内容往里收一圈：看板放不下的列滑到它下面，不在桌面上切断。
+    /// 铺满时就是铺满的一页，没有板。玻璃那一层却一直留着，只把它的边推到块外、按块的框裁掉（`bleed`）：铺满时撤掉玻璃的话，
+    /// 系统重建块里的图层，让到右边与铺满之间整块先消失再淡入（`WideSlide.Positions` 把它们当新层）；留着，切换就是板的边连续滑出、滑进窗口。
+    /// 抽屉不是玻璃：它有自己的面（`DrawerSurface`）。玻璃画在块里，收起、放回时随块平移（`WideColumnSlide`）。
+    private var floats: Bool { fits && !home }
+    private var bleeds: Bool { fits && home }
 
     var body: some View {
         // 对话从名牌底下穿过去、一直滚到板的上缘（同手机）：名牌是浮在上面的一块玻璃，不盖淡出；对话按板的圆角裁，不从角上露出去
-        CuePage(grounded: !floats)
+        CuePage(grounded: !fits)
             .safeAreaPadding(.top, CueTitle.band)
             .clipShape(.rect(cornerRadius: floats ? Self.radius : 0))
             .overlay(alignment: .top) { CueTitle(fits: fits, home: home, lead: lead) }
-            .glass(in: .rect(cornerRadius: Self.radius), ink: .ground(shown: floats))
-            .padding(floats ? Self.float : 0)
+            .padding(bleeds ? Self.bleed : 0)
+            .glass(in: .rect(cornerRadius: Self.radius), ink: .ground(shown: fits))
+            .padding(bleeds ? -Self.bleed : floats ? Self.float : 0)
+            // 浮着时不裁（往外放一圈：板的影子落在块的框外）；同一个修饰符只换形状，图层不重建
+            .clipShape(Rectangle().inset(by: bleeds ? 0 : -Self.shadowReach))
             .ignoresSafeArea(.container, edges: .top)
     }
 
     static let float = Spacing.item
     private static let radius = Radius.field
+    /// 铺满时玻璃的边推到块外这么远：比圆角大，角与边光都落在裁掉的那一圈里。
+    private static let bleed = Radius.field + Spacing.item
+    private static let shadowReach: CGFloat = 80
 }
 
 /// 名牌在这一栏正中，点它原地长成面板（同手机的 `CueHeader`）：头像长大居中、名字落到它下面（`CuePlate` 的 `card`），面板在名牌底下淡入，整块是同一块玻璃。
