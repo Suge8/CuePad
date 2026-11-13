@@ -50,9 +50,8 @@ extension CueStore {
   }
 
   /// 他来到了这台设备（手机回到前台、Mac 在他去过别的设备之后有了键盘鼠标）：记下来到的时刻，开着哪些页不动。
-  /// 时刻比哪台记下的都晚（至少晚一毫秒）：两台的钟差一点，最后来到的这台也一定是最晚的那台。返回记录 id（立即上传用）。
-  @discardableResult
-  public func arrive(device: String) throws -> UUID {
+  /// 时刻比哪台记下的都晚（至少晚一毫秒）：两台的钟差一点，最后来到的这台也一定是最晚的那台。
+  public func arrive(device: String) throws {
     try write {
       let id = Viewer.recordID(device: device)
       let latest = try db.first("SELECT max(arrivedAt) FROM sessionViewers") { $0.dateOrNil(0) }.flatMap(\.self)
@@ -62,7 +61,6 @@ extension CueStore {
       try upsert(
         Viewer(device: device, sessionIDs: current?.sessionIDs ?? [], cue: current?.cue ?? false, modifiedAt: at, arrivedAt: at),
         updating: ["arrivedAt", "modifiedAt"])
-      return id
     }
   }
 

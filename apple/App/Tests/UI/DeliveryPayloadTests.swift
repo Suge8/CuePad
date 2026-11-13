@@ -39,7 +39,7 @@ struct DeliveryPayloadTests {
             """)
         let workspace = Workspace(services: phone.services)
         await workspace.speak("已经撤回的旧话", to: .session(session, mode: .send)).value
-        #expect(try await phone.services.store.deliveryRequests().allSatisfy { $0.content != "已经撤回的旧话" })
+        try await eventually("旧话在交出前撤回") { try await phone.services.store.deliveryRequests().allSatisfy { $0.content != "已经撤回的旧话" } }
         await workspace.speak("只执行这句新话", to: .session(session, mode: .send)).value
         let next = try #require(try await phone.services.store.deliveryRequests().first { $0.content == "只执行这句新话" })
         await mac.services.syncNow()

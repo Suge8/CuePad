@@ -17,6 +17,19 @@ extension Table {
     .agentLibraryFiles, .activityDestinations,
   ]
 
+  /// 写完要马上传的（同步层自己传，写的人不用叫）：别的设备在等着办、等着看、等着据此让位或推送的；其余由后台那一路攒批。
+  /// 值是这张表里哪些待推送的版本要马上传（SQL 条件，表别名 `t`）；这些表里的删除都马上传。
+  /// 同一条记录同一时刻只一版在路上，连着写的（Cue 一步步的状态）至多一个来回一个请求。
+  /// 投送请求被 Mac 领下、正在办的那几版（预留、执行）不急：多数几十毫秒就有结果，只传结果那一版，领取那一版在路上会让结果多等一个来回；
+  /// 执行久了才先传领取（`DeliveryExecutor.claimGrace`）。
+  /// 会话状态只有带手机通知标志的那一版：排在其余待推送后面，等的时候状态前进会把它作废（`StateRecorder`）。
+  package static let urgent: [Table: String] = [
+    .deliveryRequests: "t.handledBy IS NULL OR t.status NOT IN ('preparing', 'executing')",
+    .piSessionStates: "t.notify IS NOT NULL",
+    .cueMessages: "1", .cueState: "1", .cueLines: "1", .cueProfile: "1",
+    .macPresence: "1", .sessionViewers: "1", .activityDestinations: "1", .macAgents: "1", .agentLibraries: "1", .agentLibraryFiles: "1",
+  ]
+
   /// 带手机通知标志（明文列 `notify`）的表：标志上传即清、远端带回来的不留（`CueStore.markPushed`、`applyVersion`）。
   package static let notifyFlagged: Set<Table> = [.piSessionStates, .cueMessages]
 

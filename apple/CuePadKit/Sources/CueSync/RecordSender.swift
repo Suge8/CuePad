@@ -73,13 +73,14 @@ actor RecordSender {
     tasks = [
       Task { [triggers] in for await _ in triggers { await self.round() } },
       Task { [trigger] in
-        for await tables in changes {
-          if tables.contains(.cueMessages) { await self.speak() }
+        for await change in changes {
+          await self.hurry(change.urgent, in: change.tables)
           trigger.yield()
         }
       },
       Task { for await _ in due { self.resume() } },
     ]
+    await hurry(nil, in: Set(Table.synced))  // 上一次没传完的（退出、换账号前写下的）照样马上传
     kick()
   }
 
@@ -129,9 +130,11 @@ actor RecordSender {
     return (try? await generation.value(of: waiter.answer, cancellable: false)) ?? false
   }
 
-  /// Cue 对你说的话还没传的马上传：多半是命令行进程里 Cue 的工具写的，写的人叫不了上传。
-  private func speak() async {
-    guard let names = try? await coordinator.store.pendingSpeech(), !names.subtracting(urgent).isEmpty else { return }
+  /// 提交里要马上传的（`Table.urgent`）就马上传；别的进程写的（命令行里 Cue 的工具）从库里认。
+  private func hurry(_ known: Set<String>?, in tables: Set<Table>) async {
+    var names = known ?? []
+    if known == nil { names = (try? await coordinator.store.pendingUrgent(in: tables)) ?? [] }
+    guard !names.isEmpty else { return }
     Task { _ = await send(names) }
   }
 

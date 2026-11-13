@@ -3,7 +3,7 @@ import Foundation
 
 extension AppServices {
     /// 撤回一句说出去的话：发给会话的，还没被 Mac 领取才撤得回，明确未交出的失败按库里的当前状态撤回；
-    /// 对 Cue 说的，还没交给它才撤得回。撤了立即把删除传上去，免得 Mac 先拉到它；撤不回时抛出原因。
+    /// 对 Cue 说的，还没交给它才撤得回（删除由同步层马上传，免得 Mac 先拉到它）；撤不回时抛出原因。
     func withdraw(_ said: Said) async throws {
         guard said.trip(at: speech).unconfirmedReason == nil else { throw SendError.alreadyHanded }
         switch said {
@@ -18,7 +18,6 @@ extension AppServices {
         case .cue(let message, _):
             guard try await store.withdrawCueMessage(message.id) else { throw SendError.alreadyHeard }
         }
-        Task { await upload(said.id, deleted: true) }
     }
 
     private func withdrawRemotely(_ id: UUID, on host: String) async throws {
@@ -46,12 +45,12 @@ extension AppServices {
         }
     }
 
-    /// 你要一台 Mac 做的事（说话、停下、结束、开会话、回答、改设置……）都经这里写成请求并立即上传。
+    /// 你要一台 Mac 做的事（说话、停下、结束、开会话、回答、改设置……）都经这里写成请求（同步层马上传，`Table.urgent`）。
     /// 那台说了离开、还没回来（`CueStore.macKnownOff`）时不写、抛 `SendError.macOff`：写了没人领，到派发期限才作废，这之前界面只能说"已发出"。
     /// 任务收尾顺带的结束（`CueStore.endUnusedSessions`）不经这里：那是库里推出来的，界面不显示它在路上，那台回来同步到这件事收尾时自己也会写。
     func request(on host: String, _ write: () async throws -> DeliveryRequest) async throws -> DeliveryRequest {
         try await requireAwake(host)
-        return uploaded(try await write())
+        return try await write()
     }
 
     /// 手里那条"离开"可能已经过时（它回来了，本机刚回前台还没拉到）：说它没开之前先拉一次再看。拉不通就是同步不通，说不准，照常排着。
@@ -59,17 +58,6 @@ extension AppServices {
         guard try await store.macKnownOff(host, at: speech) != nil else { return }
         await syncNow()
         if let mac = try await store.macKnownOff(host, at: speech) { throw SendError.macOff(mac) }
-    }
-
-    /// Mac 本机也走投送通道、由执行器交给扩展；写出后立即上传（不等它完成），结果用 `CueStore.outcome(of:)` 等。
-    func uploaded(_ request: DeliveryRequest) -> DeliveryRequest {
-        Task { await upload(request.id) }
-        return request
-    }
-
-    /// 马上传这几条，同一次写入写出的一起给。
-    func upload(_ records: UUID..., deleted: Bool = false) async {
-        await sync?.upload(records, deleted: deleted)
     }
 
     /// 问题不能从这里作答时抛 `SendError.unanswerable`。
@@ -121,7 +109,6 @@ extension AppServices {
                 LaunchRequest(project: project, prompt: prompt, token: token, agent: agent, model: model, thinking: thinking, fast: fast),
                 title: title, on: host, card: card, intent: intent)
         }
-        if case .replacing(let previous) = intent { Task { await upload(previous, deleted: true) } }
         return SessionLaunch(request: request.id, token: token)
     }
 

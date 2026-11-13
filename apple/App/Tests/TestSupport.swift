@@ -367,3 +367,10 @@ extension CKRecord {
         return record
     }
 }
+
+extension AppServices {
+    /// 测试里把这几条马上传出去（非马上传的表等不到下一轮推送）。
+    func upload(_ records: UUID...) async {
+        _ = await sync?.send(recordNames: Set(records.map { $0.uuidString.lowercased() }))
+    }
+}

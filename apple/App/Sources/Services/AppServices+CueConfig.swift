@@ -4,7 +4,6 @@ extension AppServices {
     /// 启用另走 `enableCue`（要按那台 Mac 判断）。
     func updateCue(_ edit: @escaping @Sendable (inout CueProfile) -> Void) async throws {
         try await store.updateCueProfile(edit)
-        await upload(CueProfile.recordID)
     }
 
     /// 两端所有入口都经这里，界面读的是同一个事实（`CueGate`）。
@@ -17,7 +16,6 @@ extension AppServices {
         if host == hostID { try await macAgents.record() }
         #endif
         try await store.enableCue(on: host, moving: moving)
-        await upload(CueProfile.recordID)
     }
 
     /// 各处的开关同一个，也是唯一的停用入口。开的时候按此刻库里的读，不按界面上一次读到的。`here` 是这台 Mac（手机为 nil）。一台 Mac 都没有时开不了，各处的开关那时停用。

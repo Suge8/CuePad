@@ -25,7 +25,7 @@ public actor CueStore {
   var readExpiry: Date?
   /// 订阅的这次读只依赖其中一部分行的表（`narrow`，同一张表可收窄几次）；不在订阅的一次读里为 nil，什么都不记。
   var readScopes: [Table: [RowScope]]?
-  private var syncSubscribers: [UUID: AsyncStream<Set<Table>>.Continuation] = [:]
+  private var syncSubscribers: [UUID: AsyncStream<SyncChange>.Continuation] = [:]
   /// 可能让记录变成待推送的提交数（本连接让记录变成待推送的提交、别的进程的任何提交），与最近这些提交各自的增量
   /// （nil：范围不明，如别的进程的提交）：发送者确定没有剩下的待推送之后，只复查其后的提交碰过的记录（`pendingSync(since:)`）。
   private(set) var syncGeneration = 0
@@ -130,7 +130,7 @@ public actor CueStore {
     for table in posted { seenVersions[table] = version }
     guard !changed.isEmpty else { return }
     for subscriber in subscriptions.committed(changed) { subscriber.signal.yield() }
-    if !changed.isDisjoint(with: Table.synced) { syncChanged(nil, in: changed) }
+    if !changed.isDisjoint(with: Table.synced) { syncChanged(nil, in: changed, urgent: nil) }
   }
 
   public nonisolated func queueDelay() async -> Duration {
@@ -170,22 +170,29 @@ public actor CueStore {
       // 删过同步表的行也算：从没收下过的记录删掉就不再待推送，同步层据此收起它的上传问题。算不出增量时照算
       let delta = try? pendingSync(in: changes)
       let deleted = !changes.deletedFrom.isDisjoint(with: Table.synced.map(\.rawValue))
-      if delta.map({ !$0.saves.isEmpty || !$0.deletes.isEmpty || deleted }) ?? true { syncChanged(delta, in: tables) }
+      if delta.map({ !$0.saves.isEmpty || !$0.deletes.isEmpty || deleted }) ?? true {
+        syncChanged(delta, in: tables, urgent: delta.flatMap { try? urgent(among: $0) })
+      }
     }
     return result
   }
 
-  func syncChanged(_ delta: PendingSync?, in tables: Set<Table>) {
+  func syncChanged(_ delta: PendingSync?, in tables: Set<Table>, urgent: Set<String>?) {
     syncGeneration += 1
     syncDeltas.append((syncGeneration, delta))
     if syncDeltas.count > Self.syncDeltaLimit { syncDeltas.removeFirst() }
-    for subscriber in syncSubscribers.values { subscriber.yield(tables) }
+    for subscriber in syncSubscribers.values { subscriber.yield(SyncChange(tables: tables, urgent: urgent)) }
   }
 
-  /// 同步订阅：本连接的提交让记录变成待推送或删过同步表的行，或别的进程提交过（范围未知），就给出这次碰过的表；待推送是什么读 `pendingSync()`。
-  /// 每次提交一个、不合并（合并就丢了哪次碰过哪张表）。订阅在返回前已生效。
-  package func syncChanges() -> AsyncStream<Set<Table>> {
-    let (stream, continuation) = AsyncStream<Set<Table>>.makeStream()
+  /// 不随写入、到点才要马上传的（执行久了先传领取，`DeliveryExecutor.claimGrace`）：不推进代数，记录早已在增量里。
+  func syncSoon(_ names: Set<String>) {
+    for subscriber in syncSubscribers.values { subscriber.yield(SyncChange(tables: [], urgent: names)) }
+  }
+
+  /// 同步订阅：本连接的提交让记录变成待推送或删过同步表的行，或别的进程提交过（范围未知），就给出这次碰过的表与其中要马上传的；
+  /// 待推送是什么读 `pendingSync()`。每次提交一个、不合并（合并就丢了哪次碰过哪张表）。订阅在返回前已生效。
+  package func syncChanges() -> AsyncStream<SyncChange> {
+    let (stream, continuation) = AsyncStream<SyncChange>.makeStream()
     let token = UUID()
     syncSubscribers[token] = continuation
     continuation.onTermination = { _ in Task { await self.removeSyncSubscriber(token) } }

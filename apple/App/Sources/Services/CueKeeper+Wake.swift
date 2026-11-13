@@ -106,8 +106,6 @@ extension CueKeeper {
         if !ids.isEmpty { save() }
         try await store.markCueMessagesDelivered(ids)
         unfetchable.subtract(ids)
-        let upload = setup.upload
-        Task { await upload(ids) }
     }
 
     /// 不在的在旁边取（`fetchAttachments`，从这台开始等起至多 `DeliveryRequest.phaseLimit`），取到了再对一次账：等文件不挡后面的话。

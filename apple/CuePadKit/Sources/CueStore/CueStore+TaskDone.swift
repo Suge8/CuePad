@@ -27,15 +27,16 @@ extension CueStore {
     guard remaining == 0 else { throw CueStoreError.stepsRemaining(remaining) }
   }
 
-  /// 已完成的什么都不改，所以界面手里的副本过时（别的设备刚做完）、或延迟提交时它已被做完，都不会把它翻回去。读与改在一个事务里：两次 `await` 之间也可能有同步来的改动插进来。返回新状态与结束请求。
+  /// 已完成的什么都不改，所以界面手里的副本过时（别的设备刚做完）、或延迟提交时它已被做完，都不会把它翻回去。读与改在一个事务里：两次 `await` 之间也可能有同步来的改动插进来。返回新状态。
   @discardableResult
-  public func completeTask(_ id: UUID) throws -> (status: TaskStatus, ended: [DeliveryRequest]) {
+  public func completeTask(_ id: UUID) throws -> TaskStatus {
     try write {
       guard let card = try find(Card.self, id) else { throw CueStoreError.notFound }
       guard let current = card.status else { throw CueStoreError.notATask }
-      guard current != .done else { return (.done, []) }
+      guard current != .done else { return .done }
       let status = try applyStatus(id, .done)
-      return (status, try endUnusedSessions(of: id, cue: false))
+      try endUnusedSessions(of: id, cue: false)
+      return status
     }
   }
 

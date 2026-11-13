@@ -164,13 +164,11 @@ extension CueKeeper {
         return true
     }
 
-    /// 留了就立即上传：手机上马上进等你。
+    /// 留下的带手机通知标志，由同步层马上传：手机上马上进等你。
     private func leaveHisStops() async {
         guard let from = handedOver ?? progress.marks?.sessions else { return }
         do {
-            let (mark, left) = try await store.leaveHisStops(after: from)
-            handedOver = mark
-            if let left { await setup.upload([left]) }
+            handedOver = try await store.leaveHisStops(after: from)
         } catch {
             Self.log.error("他那一轮的停下没能留给他回：\(error.localizedDescription, privacy: .public)")
         }
@@ -190,14 +188,11 @@ extension CueKeeper {
             } catch {
                 // 大脑不认：设置改回在用的（选择器上看到的就是在用的），告诉你一声。
                 // 等回应时你又改了设置就不动：你后来的选择照常生效，下一次对账再去对上
-                var restored = wanted
-                (restored.model, restored.effort) = (current.model, current.effort)
                 do {
-                    let profile = try await store.updateCueProfile { profile in
+                    _ = try await store.updateCueProfile { profile in
                         guard BrainSettings(profile) == wanted else { return }
                         (profile.model, profile.effort) = (current.model, current.effort.map(Open.known))
                     }
-                    if BrainSettings(profile) == restored { await setup.upload([CueProfile.recordID]) }
                 } catch {
                     Self.log.error("Cue 的设置没能改回在用的：\(error.localizedDescription, privacy: .public)")
                 }

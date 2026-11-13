@@ -119,7 +119,6 @@ final class AppServices {
     @ObservationIgnored let library: AgentLibraryKeeper
     @ObservationIgnored lazy var executor = MacExecutor(
         store: store, bridge: bridge, runtimes: runtimes, hostID: hostID, workspaces: workspaces, recorder: stateRecorder, library: library,
-        upload: { [weak self] id in await self?.upload(id) },
         fetchFile: { [sync] key in try await sync.fetchFile(key) },
         refreshQuota: { [weak self] in await self?.refreshQuota(.manual) },
         reportIssue: { [weak self] message in self?.reportIssue(.syncUnavailable(message)) })

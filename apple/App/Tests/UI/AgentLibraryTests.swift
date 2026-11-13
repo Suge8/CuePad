@@ -63,7 +63,6 @@ struct AgentLibraryTests {
         try skill("pdf", in: claude.appending(path: "skills/synced/account-b"))
         try write("# 原则\n\n先读后写\n", claude.appending(path: "CLAUDE.md"))
         try write("# 原则\n\n先读后写\n\n求证：以证据为准\n", codex.appending(path: "AGENTS.md"))
-        let uploads = app.sync.uploads.stream
         let keeping = keep()
         defer { await keeping.stop() }
 
@@ -77,9 +76,6 @@ struct AgentLibraryTests {
         #expect(found.skills.map(\.name) == ["write-swift"] && found.skills[0].group == "development" && found.skills[0].unseenBy == [.claudeCode, .dsh])
         #expect(found.selfManaged == [SelfManagedSkills(agent: .claudeCode, count: 2), SelfManagedSkills(agent: .codex, count: 1)])
         #expect(found.instruction(.global)?.hash == nil)
-        // 快照与各份正文同一批传，批内按记录名排
-        let snapshot = AgentLibrary.recordID(host: TestApp.hostID).uuidString.lowercased()
-        try await awaitNext("快照上传", from: uploads) { $0 == snapshot }
 
         await workspace.tidy(found.automaticOrders, in: found)
 

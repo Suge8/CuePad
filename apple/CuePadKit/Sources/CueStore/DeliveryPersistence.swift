@@ -101,8 +101,8 @@ extension CueStore {
   /// 只改还没有结果的（放弃的是待领取的、执行的是执行中的），不覆盖已经写下的结果。
   /// 任务的状态与正文都不因说话而变：发出的正文留在任务上，"发过没有"看投送请求。
   /// 你的作答成功了，同一个事务里往那个会话的对话写下你答了什么（`ChatRole.answer`；Cue 替你答的不写，记在它那一轮的经过里）。
-  func finishDelivery(_ request: DeliveryRequest, _ outcome: DeliveryOutcome, at completed: Date) throws -> Bool {
-    try write { try applyDeliveryOutcome(request, outcome, at: completed) }
+  func finishDelivery(_ request: DeliveryRequest, _ outcome: DeliveryOutcome, at completed: Date) throws {
+    _ = try write { try applyDeliveryOutcome(request, outcome, at: completed) }
   }
 
   private func applyDeliveryOutcome(_ request: DeliveryRequest, _ outcome: DeliveryOutcome, at completed: Date) throws -> Bool {
@@ -146,17 +146,13 @@ extension CueStore {
   }
 
   /// 只有执行 Mac 可证明整个操作未开始；发送设备的旧准备快照不能自行写失败。
-  func abandonPreparedDeliveries(for host: String) throws -> [UUID] {
+  func abandonPreparedDeliveries(for host: String) throws {
     try write {
       let predicate = "r.hostID = ?1 AND (r.status = 'preparing' OR (r.status = 'pending' AND r.handledBy IS NULL)) AND (\(Self.abandonedDelivery))"
-      let ids = try db.query("SELECT r.id FROM deliveryRequests AS r WHERE \(predicate)", [host]) { $0.uuid(0) }
-      if !ids.isEmpty {
-        try db.run("""
-          UPDATE deliveryRequests AS r SET status = 'not_delivered', failure = ?2, completedAt = ?3,
-            modifiedAt = MAX(modifiedAt + 1, ?3) WHERE \(predicate)
-          """, [host, DeliveryPreparation.abandoned.stored, Date.stamp])
-      }
-      return ids
+      try db.run("""
+        UPDATE deliveryRequests AS r SET status = 'not_delivered', failure = ?2, completedAt = ?3,
+          modifiedAt = MAX(modifiedAt + 1, ?3) WHERE \(predicate)
+        """, [host, DeliveryPreparation.abandoned.stored, Date.stamp])
     }
   }
 

@@ -130,7 +130,7 @@ extension AppServices {
                 group.addTask { [self] in
                     do {
                         var request = try await store.requestQuotaRefresh(on: host)
-                        if await sync?.upload(request.id) != true {
+                        if await sync?.send(recordNames: [request.id.uuidString.lowercased()]) != true {
                             guard let latest = try await store.latest(of: request) else { throw CueStoreError.notFound }
                             request = latest
                             if request.isOpen && request.serverAt == nil { return ShownText("请求尚未确认上传，联网后可重试") }

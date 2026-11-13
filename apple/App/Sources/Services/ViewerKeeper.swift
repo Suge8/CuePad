@@ -117,14 +117,13 @@ nonisolated final class ViewerKeeper: Sendable {
     @discardableResult
     private func publish() async throws -> Bool {
         guard let id = try await record(in: store) else { return true }
-        return await sync?.upload(id) ?? true
+        return await sync?.send(recordNames: [id.uuidString.lowercased()]) ?? true
     }
 
     /// 他来到了这台（`CueStore.arrive`），当场传出去：别的 Mac 据此让位。
     func arrive() async {
         do {
-            let id = try await store.arrive(device: device)
-            await sync?.upload(id)
+            try await store.arrive(device: device)
         } catch {
             Self.log.error("没能写下他来到这台：\(error.localizedDescription, privacy: .public)")
         }
@@ -190,7 +189,7 @@ nonisolated extension ViewerKeeper {
     func signOff() async throws -> Bool {
         state.withLock { _ = $0.away.insert(.quitting) }
         _ = try await record(in: store)
-        return await sync?.upload(Viewer.recordID(device: device)) ?? true
+        return await sync?.send(recordNames: [Viewer.recordID(device: device).uuidString.lowercased()]) ?? true
     }
 
     @MainActor func follow(_ workspace: Workspace) async {

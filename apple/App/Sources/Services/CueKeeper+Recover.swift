@@ -94,7 +94,6 @@ extension CueKeeper {
     private func switchBrain(_ kind: AgentKind) async throws {
         guard let detour = progress.detour else { return }
         _ = try await store.updateCueProfile { detour.apply(kind, to: &$0) }
-        await setup.upload([CueProfile.recordID])
         Self.log.notice("Cue 换大脑到 \(kind.rawValue, privacy: .public)")
     }
 
