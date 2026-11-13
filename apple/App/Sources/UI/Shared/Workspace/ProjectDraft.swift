@@ -10,7 +10,7 @@ struct ProjectDraft {
     var color: String
 
     static let namePrompt = String(localized: "名称")
-    static let introPrompt = String(localized: "一句话介绍（可不填）")
+    static let introPrompt = String(localized: "一句话介绍")
 
     init(_ request: ProjectFormRequest) {
         let project = request.project

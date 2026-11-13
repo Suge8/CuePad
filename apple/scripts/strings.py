@@ -153,6 +153,8 @@ def check():
            for _, d in stringsdata(["Debug-iphonesimulator"]) for t, strings in d["tables"].items() for s in strings
            if s["key"] not in catalogs.get(t, {})]
     bad += [f"「{k}」{why}" for c in catalogs.values() for k, e in c.items() if (why := problems(k, e))]
+    # 能不能空着由提交钮亮不亮说（根目录 AGENTS.md 的界面口味）
+    bad += [f"「{k}」写了可不填：占位字不写这三个字" for k in catalogs["Localizable"] if "可不填" in k]
     if bad:
         sys.exit("\n".join(sorted(set(bad))) + "\n界面文字没对齐：xc.sh strings 收进目录，strings.py set 补英文（见头注释）")
 
