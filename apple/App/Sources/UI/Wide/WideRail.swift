@@ -78,6 +78,7 @@ struct WideRail: View {
         .padding(.horizontal, RowMetrics.bleed)
         #endif
         .frame(height: Chrome.control)
+        .floatingAbove { NoticeSlot(place: .rail) }
     }
 }
 

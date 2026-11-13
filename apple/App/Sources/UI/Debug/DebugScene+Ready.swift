@@ -31,7 +31,7 @@ extension DebugScene {
     static func noticeIfAsked(_ workspace: Workspace) async {
         guard let text = args.driveOpts.notice else { return }
         await Task.wait(for: .seconds(5))
-        workspace.say(Dotted(text), status: .unread, link: .progress, action: .undo {})
+        workspace.say(Dotted(text), status: .unread, link: .progress, action: .undo("归档") {})
     }
 
     /// 就绪文件：脚本起的实例都带（`CUEPAD_SHOT_READY`，见 app.py），App 也据此认出是脚本起的（`DebugHooks.scripted`）。

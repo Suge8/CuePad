@@ -2,11 +2,23 @@ import Foundation
 
 extension CueStore {
   /// 连同下级一起（已归档的保留原时刻）。没做完的任务就此离开看板，没人再用的会话随之结束；做完了的在完成时已经结束过，之后又说话恢复的不动。
-  public func archive(_ id: UUID) throws {
+  /// 返回这次归档记下的时刻：撤销凭它只取回这一次归档的那些（`unarchive(_:archivedAt:)`）。
+  @discardableResult
+  public func archive(_ id: UUID) throws -> Date {
     try write {
       guard let card = try find(Card.self, id) else { throw CueStoreError.notFound }
-      try setArchived([id], at: Date.stamp)
+      let now = Date.stamp
+      try setArchived([id], at: now)
       if card.completedAt == nil { try endUnusedSessions(of: id, cue: false) }
+      return now
+    }
+  }
+
+  /// 撤销一次归档：只取回它和下级里归档时刻是 `time` 的。撤销可能隔了很久才来（系统撤销），其间另外归档的下级、取回后又归档的它自己都不动。
+  public func unarchive(_ id: UUID, archivedAt time: Date) throws {
+    try write {
+      try db.run(
+        "UPDATE cards SET archivedAt = NULL, modifiedAt = ?1 WHERE id IN (\(Self.subtree(from: "SELECT ?2"))) AND archivedAt = ?3", [Date.stamp, id, time])
     }
   }
 

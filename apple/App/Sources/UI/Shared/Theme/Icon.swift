@@ -30,7 +30,7 @@ nonisolated enum Icon: Hashable, Sendable {
     case syncStarting, synced, syncing, syncOff, syncRestricted, syncTrouble, syncPaused, uploadLocal, replaceWithCloud, syncNow
     case alertsPending, alertsOn, alertsOff
     // 任务与卡片操作
-    case complete, reopen, restore, start, add, indent, outdent, link, unlink
+    case complete, reopen, restore, undo, start, add, indent, outdent, link, unlink
     case projects, folder, newProject, unbindFolder, pin, unpin
     case copy, share, saveAsIdea, write, rename, close, remove, clear, more
     case forward, back, expand, collapse, choose, conflict
@@ -113,7 +113,7 @@ nonisolated enum Icon: Hashable, Sendable {
         case .syncNow, .renew: .ink("renew")
         case .alertsOn: .ink("bell.on")
         case .alertsOff: .ink("bell.off")
-        case .reopen: .ink("reopen")
+        case .reopen, .undo: .ink("reopen")
         case .restore: .ink("restore")
         case .start, .play: .ink("play")
         case .indent: .ink("indent")

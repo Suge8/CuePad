@@ -107,13 +107,18 @@ extension CueStore {
     try write { try relocate(id, to: slot, after: previous) }
   }
 
+  /// 它此刻在哪（上级或项目）、前一个同级是谁。
+  func position(of id: UUID, _ current: CardLinks.Link) throws -> (slot: CardSlot, before: UUID?) {
+    let siblings = try db.query(
+      "SELECT id FROM cards WHERE (\(Self.siblingScope(current))) ORDER BY sortKey, id", [current.parent ?? current.project]) { $0.uuid(0) }
+    let before = siblings.firstIndex(of: id).flatMap { $0 > 0 ? siblings[$0 - 1] : nil }
+    return (current.parent.map(CardSlot.under) ?? .top(project: current.project), before)
+  }
+
   @discardableResult
   func relocate(_ id: UUID, to slot: CardSlot, after previous: UUID?) throws -> CardChange {
     guard let current = try link(of: id) else { throw CueStoreError.notFound }
-    let origin = Self.siblingScope(current), originKey = current.parent ?? current.project
-    let siblings = try db.query("SELECT id FROM cards WHERE (\(origin)) ORDER BY sortKey, id", [originKey]) { $0.uuid(0) }
-    let before = siblings.firstIndex(of: id).flatMap { $0 > 0 ? siblings[$0 - 1] : nil }
-    let from: CardSlot = current.parent.map(CardSlot.under) ?? .top(project: current.project)
+    let (from, before) = try position(of: id, current)
     let destination: CardLinks.Link
     switch slot {
     case .top(let project):

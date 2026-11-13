@@ -93,7 +93,7 @@ private struct CardMorePanel: View {
                 Button {
                     close()
                     let id = card.id
-                    workspace.perform { try await $0.moveCard(id, to: .top(project: project.id), after: nil) }
+                    workspace.move(id, to: .top(project: project.id), after: nil)
                 } label: {
                     LinkRow(title: Text(project.shownName), chevron: false) {
                         ProjectGlyph(project: project, size: glyph)

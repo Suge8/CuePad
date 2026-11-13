@@ -48,7 +48,7 @@ extension CueStore {
     if let parent = try find(Card.self, id)?.parentID { try settle(around: [parent]) }
   }
 
-  /// 拨回一次改动的回执，整个拨回是一个事务；合并与新建的回执带着任务当时的修改时刻，之后又改过就抛 `changedSinceUndo`、什么都不撤。其间已经不在了的下级跳过，原来的前一个同级不在了就排到最前。
+  /// 拨回一次改动的回执，整个拨回是一个事务；合并与新建的回执带着任务当时的修改时刻，之后又改过就抛 `changedSinceUndo`、什么都不撤。其间已经不在了、挪去别处的下级跳过，原来的前一个同级不在了就排到最前。
   public func undo(_ change: CardChange) throws { try undo([change]) }
 
   /// 一次拨回多个回执（批量删除的撤销），同一个事务，倒序拨回。
@@ -56,11 +56,22 @@ extension CueStore {
     try write { for change in changes.reversed() { try undoRow(change) } }
   }
 
+  /// 隔了很久才来的撤销（系统撤销）拨回一次移动：`id` 还在那次挪到的地方（同一个上级或项目、同一个前一个同级）才拨，否则抛 `changedSinceUndo`、什么都不撤——
+  /// 其间又挪过的，照回执放回去会盖掉后来那一次。按位置认、不按修改时刻：连着撤两步时，撤后一步本身就改了修改时刻，前一步照样要撤得回。
+  public func undo(_ change: CardChange, of id: UUID, stillAt slot: CardSlot, after previous: UUID?) throws {
+    try write {
+      guard let current = try link(of: id), try position(of: id, current) == (slot, previous) else { throw CueStoreError.changedSinceUndo }
+      try undoRow(change)
+    }
+  }
+
   private func undoRow(_ change: CardChange) throws {
     switch change {
     case .trash(let id, let lifted):
+      // 提上去的下级落在它原来的位置（它的上级下，或它那个项目的顶层）：还在那里的才收回来，其间挪去别处的不动
+      let left = try find(Card.self, id).map { CardLinks.Link(parent: $0.parentID, project: $0.projectID, isTask: $0.isTask) }
       try restoreRow(id)
-      try adopt(lifted, by: id)
+      try adopt(lifted, by: id, from: left)
     case .move(let id, let slot, let after):
       let survivor = try after.flatMap { try find(Card.self, $0)?.id }
       try relocate(id, to: slot, after: survivor)
@@ -77,9 +88,11 @@ extension CueStore {
     }
   }
 
-  private func adopt(_ children: [UUID], by parent: UUID) throws {
+  private func adopt(_ children: [UUID], by parent: UUID, from left: CardLinks.Link?) throws {
+    guard let left else { return }
     var previous: UUID?
-    for child in children where try link(of: child) != nil {
+    for child in children {
+      guard let now = try link(of: child), now.parent == left.parent, now.project == left.project else { continue }
       try relocate(child, to: .under(parent), after: previous)
       previous = child
     }
