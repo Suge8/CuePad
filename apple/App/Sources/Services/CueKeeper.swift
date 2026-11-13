@@ -24,7 +24,7 @@ import os
 /// | 不值班 `off` | `run` 返回 | 终态 |
 ///
 /// 做梦（`dreams`）是旁路：值班空闲时另起一次性大脑，`CueTiming.silence` 内做不完就停掉。
-/// 要重来的（`setbacks`，每件一条）落盘：重启、换手后起好大脑就接着重来；醒来就消费的活（定时、刚启用）消费前就先记下（`hold`），崩溃也不丢。
+/// 要重来的（`setbacks`，每件一条）落盘在这台：重启后、换到别的 Mac 又换回这台时，起好大脑就接着重来（那台读不到）；醒来就消费的活（定时、刚启用）消费前就先记下（`hold`），崩溃也不丢。
 /// 你的话只经 `hand` 交出去：先记送达再发，没答上的随班次退回（`giveBack`），至少答一次。
 @Observable
 final class CueKeeper {
@@ -251,7 +251,7 @@ final class CueKeeper {
             group.cancelAll()
         }
         timer?.cancel()
-        // 不再值班（停用、换手、App 退出）：在跑的那一轮没答上的你的话退回、醒来已消费的活记成要重来，下次值班接着
+        // 不再值班（停用、换手、App 退出）：在跑的那一轮没答上的你的话退回、醒来已消费的活记成要重来，下次在这台值班接着
         if let shift {
             if let turn = shift.turn { await holdOver(turn, failure: "值班停了，这一轮没做完") }
             await retire(shift)

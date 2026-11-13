@@ -74,7 +74,7 @@ extension CueKeeper {
         var detour: Detour?
         /// 做梦听他在会话里说的话听到哪了：交给它的最后一句的次序（`CueStore.said(after:limit:)` 的 `through`）；nil 是还没听过，从此刻听起（`dreams`）
         var heard: Int64?
-        /// 出错后要重来的几件（`CueKeeper.setbacks`）：定时、刚启用与你那句话在醒来时已消费，只有这里记着，所以跨重启、换手留着
+        /// 出错后要重来的几件（`CueKeeper.setbacks`）：定时、刚启用与你那句话在醒来时已消费，只有这里记着，所以跨重启留着。只在这台：换到别的 Mac 那边没有，换回这台才接着做
         var setbacks: [Setback]?
 
         init() {}

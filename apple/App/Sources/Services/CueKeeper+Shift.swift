@@ -308,7 +308,7 @@ extension CueKeeper {
         setbacks.append(Setback(stage: .held, wake: wake, answersYou: false, since: now))
     }
 
-    /// 断在半路的一轮（大脑出问题、不再值班）：醒来时已消费的活（定时、刚启用）只有重来记着，记下它，下次（含重启、换手后）接着做。
+    /// 断在半路的一轮（大脑出问题、不再值班）：醒来时已消费的活（定时、刚启用）只有重来记着，记下它，下次在这台值班（重启后，或换到别的 Mac 又换回这台）接着做。
     func holdOver(_ turn: Turn, failure: String) async {
         guard let woke = turn.selfStarted, !Setback.supersedable(woke) else { return }
         await setBack(failure, retrying: woke, answering: turn.answersYou)
