@@ -58,7 +58,8 @@ extension CueStore {
     INSERT OR IGNORE INTO taskSessionEvents SELECT s.createdForTaskID FROM piSessionStates s
       WHERE s.sessionID = OLD.targetRef AND s.createdForTaskID IS NOT NULL AND EXISTS (
         SELECT 1 FROM cards c WHERE (c.id = s.createdForTaskID OR c.piSessionID = s.sessionID)
-          AND MIN(COALESCE(c.completedAt, \(Int64.max)), COALESCE(c.archivedAt, \(Int64.max)), COALESCE(c.deletedAt, \(Int64.max))) >= OLD.createdAt);
+          AND MIN(COALESCE(c.completedAt, \(Int64.max)), COALESCE(c.archivedAt, \(Int64.max)), COALESCE(c.deletedAt, \(Int64.max)),
+            COALESCE((SELECT deletedAt FROM projects WHERE id = c.projectID), \(Int64.max))) >= OLD.createdAt);
     """
 
   func reconcileTaskSessionEvents() throws {
