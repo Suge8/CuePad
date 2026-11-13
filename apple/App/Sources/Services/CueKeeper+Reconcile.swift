@@ -64,13 +64,16 @@ extension CueKeeper {
                 return nil
             }
 
-            // 招呼发出去才记已招呼：发不出去下次对账再招呼；发出去这一轮出错由重来接着（`setBack`）
+            // 刚启用与定时醒来就消费：先记成要重来（`hold`），再消费、再交给大脑。发不出去、出错、半路崩溃都由那一条接着，好好做完才放下
             if progress.greeted != profile.enabledAt {
                 let woke = try await !handsEmpty()
-                if woke, try await !wakeUp(.enabled) { return nil }
+                if woke { hold(.enabled) }
                 progress.greeted = profile.enabledAt
                 save()
-                if woke { return nil }
+                if woke {
+                    _ = try await wakeUp(.enabled)
+                    return nil
+                }
             }
 
             let due = try await store.dueCueSchedules(at: now)
@@ -79,8 +82,9 @@ extension CueKeeper {
                 let fires = due.compactMap { line in
                     line.remindAt.map { CueFire(line: line.id, due: line.repeats?.latest(from: $0, until: now) ?? $0) }
                 }
-                guard try await wakeUp(.schedule(fires)) else { return nil }
+                hold(.schedule(fires))
                 try await store.fireCueSchedules(due, at: now)
+                _ = try await wakeUp(.schedule(fires))
                 return nil
             }
             var deadlines: [Date] = []

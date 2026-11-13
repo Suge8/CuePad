@@ -175,6 +175,8 @@ extension CueKeeper {
         var stalls: Int
         var wake: CueWake
         var answersYou: Bool
+        /// 消费前记下、还没出过错（`CueKeeper.hold`）：交出去的那一轮好好做完就放下；崩溃后重启时它已到点，接着做
+        var pending = false
 
         var supersedable: Bool { Self.supersedable(wake) }
 

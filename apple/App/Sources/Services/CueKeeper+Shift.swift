@@ -144,7 +144,7 @@ extension CueKeeper {
             }
             let summary = ErrorSummary(raw)
             // Cue 自己醒来的一轮第一次出错（会重试的那种）先不说：多是网络偶发，重试也失败了再告诉你；你在等的一轮立刻说
-            if let turn, turn.selfStarted != nil, !setbacks.contains(where: { $0.wake == turn.round.wake }), Self.retryable(summary) { return }
+            if let turn, turn.selfStarted != nil, !setbacks.contains(where: { $0.wake == turn.round.wake && !$0.pending }), Self.retryable(summary) { return }
             // 同一个错一轮轮重复（如额度）只说一次：按摘要认，原文里常带每次不同的请求 id；卡住后慢速周期里换着家重来的错都不再说
             guard !stuck, summary.line != toldFailure else { return }
             toldFailure = summary.line
@@ -281,12 +281,13 @@ extension CueKeeper {
             latest = try? await store.lastWrite()
         }
         let existing = setbacks.firstIndex { $0.wake == wake }
+        let first = existing.map { setbacks[$0].pending } ?? true
         let persistent = stuck || !Self.retryable(ErrorSummary(failure))
         var held = Setback(
             latest: latest, since: at, persistent: persistent, stalls: existing.map { setbacks[$0].stalls } ?? 0, wake: wake, answersYou: answering)
         let delay: Duration?
         if now { delay = .zero }
-        else if existing == nil && !persistent { delay = setup.timing.retryWake }
+        else if first && !persistent { delay = setup.timing.retryWake }
         else if persistent || !held.supersedable {
             held.stalls += 1
             delay = setup.timing.slowDelay(after: held.stalls)
@@ -294,6 +295,12 @@ extension CueKeeper {
         if delay != nil { retrying = failure }
         held.retryAt = delay.map { at + $0.seconds }
         if let existing { setbacks[existing] = held } else { setbacks.append(held) }
+    }
+
+    /// 醒来就消费的活（定时、刚启用）消费之前先记成要重来、落盘：消费后发不出去、出错、半路崩溃，重启后都还有它；承接它的一轮好好做完才放下。
+    func hold(_ wake: CueWake) {
+        guard !setbacks.contains(where: { $0.wake == wake }) else { return }
+        setbacks.append(Setback(latest: nil, since: now, retryAt: now, persistent: false, stalls: 0, wake: wake, answersYou: false, pending: true))
     }
 
     /// 断在半路的一轮（大脑出问题、不再值班）：醒来时已消费的活（定时、刚启用）只有重来记着，记下它，下次（含重启、换手后）接着做。
