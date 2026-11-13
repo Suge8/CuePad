@@ -42,31 +42,4 @@ extension LoopLayer.Host {
         let clear = color?.copy(alpha: 0)
         light.colors = [clear, clear, color, clear, clear, color, clear].compactMap { $0 }
     }
-
-    // MARK: 压缩上下文（`LoopLayer.Kind.squeeze`）：三条竖杠往中间收拢再松开。整组横向缩，不随边长重挂动画。
-
-    private static let squeezeBar: (width: CGFloat, height: CGFloat, pitch: CGFloat) = (0.14, 0.62, 0.3)
-
-    static func makeSqueeze() -> CALayer {
-        let layer = CALayer()
-        for _ in 0..<3 { layer.addSublayer(CALayer()) }
-        let press = CABasicAnimation(keyPath: "transform.scale.x")
-        press.fromValue = 1
-        press.toValue = 0.45
-        press.duration = 0.8
-        press.autoreverses = true
-        press.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-        return loop(press, on: layer)
-    }
-
-    static func layoutSqueeze(_ layer: CALayer, in bounds: CGRect, color: CGColor?) {
-        layer.frame = bounds
-        let side = min(bounds.width, bounds.height)
-        for (index, bar) in (layer.sublayers ?? []).enumerated() {
-            bar.bounds = CGRect(x: 0, y: 0, width: side * squeezeBar.width, height: side * squeezeBar.height)
-            bar.position = CGPoint(x: bounds.width / 2 + CGFloat(index - 1) * side * squeezeBar.pitch, y: bounds.height / 2)
-            bar.cornerRadius = bar.bounds.width / 2
-            bar.backgroundColor = color
-        }
-    }
 }

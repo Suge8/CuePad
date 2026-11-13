@@ -165,6 +165,35 @@ extension View {
     func shimmering() -> some View { modifier(Shimmer()) }
 }
 
+/// 此刻在做的那一句（在想、读哪个文件、跑哪条命令）：换成下一句时旧的很快让位，新的从下面浮上来、由虚到实，读作"接着做了下一件"；
+/// 字上走着流光（`shimmering`）。字号、行数由外面给。减弱动态效果时先淡完再淡入（`handOff`）。
+struct DoingLine: View {
+    let text: String
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            Text(text).shimmering().id(text).transition(reduceMotion ? .handOff : .rise)
+        }
+        .animation(Motion.nudge, value: text)
+    }
+}
+
+extension AnyTransition {
+    /// 新的一句浮上来：位移、模糊、透明一起落定（只挪半行，不是从别处飞来）；旧的一句只淡、让得比新的来得快，两句不叠成一团。
+    static let rise = AnyTransition.asymmetric(
+        insertion: .modifier(active: Rise(away: true), identity: Rise(away: false)).animation(Motion.nudge.delay(Motion.Fade.yield)),
+        removal: .opacity.animation(Motion.yield))
+}
+
+private struct Rise: ViewModifier {
+    let away: Bool
+
+    func body(content: Content) -> some View {
+        content.offset(y: away ? 6 : 0).blur(radius: away ? 3 : 0).opacity(away ? 0 : 1)
+    }
+}
+
 
 struct Shimmer: ViewModifier {
     @Environment(\.palette) private var palette

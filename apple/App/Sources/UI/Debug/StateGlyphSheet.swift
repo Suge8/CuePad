@@ -9,6 +9,8 @@ struct StateGlyphSheet: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 4) {
+                section("一根线走过各个状态")
+                StateTour()
                 section("会话状态")
                 ForEach(Self.sessions, id: \.0) { name, status in
                     row(name) {
@@ -57,6 +59,7 @@ struct StateGlyphSheet: View {
 
     private static let sessions: [(String, SessionShown.Status)] = [
         ("在跑", .working(.thinking)),
+        ("用工具", .working(.tool)),
         ("压缩上下文", .working(.compacting)),
         ("等子代理", .working(.delegating)),
         ("话在路上", .delivery(.inTransit(.sending))),
@@ -97,5 +100,45 @@ struct StateGlyphSheet: View {
         case .away: "不在"
         }
     }
+}
+
+/// 按一次会话常见的先后把状态挨个换一遍，看换形连不连贯（录屏用）。
+private struct StateTour: View {
+    @State private var step = 0
+
+    var body: some View {
+        let (name, status) = Self.steps[step % Self.steps.count]
+        HStack(spacing: 20) {
+            StateDot(shown: SessionShown(status: status), size: 26)
+            StateDot(shown: SessionShown(status: status), size: 12)
+            StateDot(shown: SessionShown(status: status), size: 7)
+            Text(name).font(.system(size: 13)).frame(width: 90, alignment: .leading)
+        }
+        .frame(height: 64)
+        .task {
+            while (try? await Task.sleep(for: .seconds(1.6))) != nil { step += 1 }
+        }
+    }
+
+    private static let steps: [(String, SessionShown.Status)] = [
+        ("在跑", .working(.thinking)),
+        ("用工具", .working(.tool)),
+        ("在跑", .working(.thinking)),
+        ("等你确认", .asking),
+        ("用工具", .working(.tool)),
+        ("压缩上下文", .working(.compacting)),
+        ("等子代理", .working(.delegating)),
+        ("在跑", .working(.thinking)),
+        ("该你了", .idle),
+        ("已结束", .ended),
+        ("歇着", .resting),
+        ("在跑", .working(.thinking)),
+        ("被打断", .interrupted),
+        ("在跑", .working(.thinking)),
+        ("有新回复", .unread),
+        ("待回复", .awaitsReply),
+        ("出错", .failed(.other)),
+        ("在跑", .working(.thinking)),
+    ]
 }
 #endif

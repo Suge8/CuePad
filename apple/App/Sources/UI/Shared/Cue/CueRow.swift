@@ -149,7 +149,7 @@ private struct CueDoing: View {
 
     var body: some View {
         NoteLine { StateDot(shown: shown, size: 7) } label: {
-            Text(doing).font(Self.font).foregroundStyle(palette.ink2).lineLimit(1).shimmering()
+            DoingLine(text: doing).font(Self.font).foregroundStyle(palette.ink2).lineLimit(1)
         }
         .accessibilityElement(children: .ignore).accessibilityLabel(doing)
     }

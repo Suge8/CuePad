@@ -8,14 +8,11 @@ struct LoopLayer {
     enum Kind: Equatable {
         case orbit
         case voice(VoiceRibbon)
-        case heartbeat
         /// "发出"一族只有纸飞机（与发送钮、"已送达"同一架，`Icon.send`）：发送中、已送达都是它，胖箭头只表示方向。不播时（截图、Mac 不在前台时只画的那一帧）停在正中。
         case flight
         case sheen
         case pulse
         case aura(radius: CGFloat)
-        case squeeze
-        case relay
         case sprite(CueSprite, CueAtlas.Sheet)
     }
 
@@ -110,25 +107,11 @@ struct LoopLayer {
                     fly.animations = Self.flightPath(side: side)
                     plane.add(fly, forKey: "loop")
                 }
-            case .heartbeat:
-                loop.frame = bounds
-                let side = min(bounds.width, bounds.height)
-                let wave = InkStateGeometry.heartbeat(in: CGRect(x: 0, y: 0, width: side, height: side))
-                for (index, shape) in (loop.sublayers ?? []).compactMap({ $0 as? CAShapeLayer }).enumerated() {
-                    shape.frame = CGRect(x: (bounds.width - side) / 2, y: (bounds.height - side) / 2, width: side, height: side)
-                    shape.path = wave
-                    shape.lineWidth = side * InkStateGeometry.heartbeatStrokeRatio
-                    shape.strokeColor = index == 0 ? color?.copy(alpha: (color?.alpha ?? 1) * 0.3) : color
-                }
             case .pulse:
                 loop.frame = bounds
                 loop.backgroundColor = color
             case .aura(let radius):
                 Self.layoutAura(loop, in: bounds, radius: radius, color: color)
-            case .squeeze:
-                Self.layoutSqueeze(loop, in: bounds, color: color)
-            case .relay:
-                Self.layoutRelay(loop, in: bounds, color: color)
             case .sprite:
                 Self.layoutSprite(loop, in: bounds)
             case .sheen:
@@ -161,22 +144,6 @@ struct LoopLayer {
                 spin.byValue = Double.pi * 2
                 spin.duration = 1.1
                 return loop(spin, on: layer)
-            case .heartbeat:
-                let layer = CALayer()
-                let base = stroke(), run = stroke()
-                let head = CAKeyframeAnimation(keyPath: "strokeEnd")
-                head.values = [0, 1, 1]
-                head.keyTimes = [0, 0.78, 1]
-                let tail = CAKeyframeAnimation(keyPath: "strokeStart")
-                tail.values = [0, 0, 1]
-                tail.keyTimes = [0, 0.32, 1]
-                let walk = CAAnimationGroup()
-                walk.animations = [head, tail]
-                walk.duration = 1.4
-                walk.timingFunction = CAMediaTimingFunction(controlPoints: 0.45, 0.05, 0.55, 0.95)
-                for sublayer in [base, run] { layer.addSublayer(sublayer) }
-                _ = loop(walk, on: run)
-                return layer
             case .flight:
                 let layer = CALayer()
                 layer.masksToBounds = true
@@ -195,14 +162,10 @@ struct LoopLayer {
                 fade.autoreverses = true
                 fade.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
                 return loop(fade, on: layer)
-            case .relay:
-                return makeRelay()
             case .sprite(let sprite, let sheet):
                 return makeSprite(sprite, on: sheet, intro: intro)
             case .aura:
                 return makeAura()
-            case .squeeze:
-                return makeSqueeze()
             case .sheen:
                 let layer = CAGradientLayer()
                 layer.startPoint = CGPoint(x: 0, y: 0.5)
@@ -215,14 +178,6 @@ struct LoopLayer {
                 sweep.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
                 return loop(sweep, on: layer)
             }
-        }
-
-        private static func stroke() -> CAShapeLayer {
-            let shape = CAShapeLayer()
-            shape.fillColor = nil
-            shape.lineCap = .round
-            shape.lineJoin = .round
-            return shape
         }
 
         /// 挂一条常驻循环：退到后台再回来时不被系统摘掉；最高 `Motion.Beat.frameRate` 帧；起点按全局时钟对齐到周期的整数倍，

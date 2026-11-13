@@ -56,49 +56,10 @@ extension LoopLayer.Host {
         layer.bounds = CGRect(origin: .zero, size: bounds.size)
         layer.position = CGPoint(x: bounds.midX, y: bounds.maxY)
     }
-
-    /// 不并进去（并进去那几成时间里只剩一颗，读成待回复的墨点），也不绕着转（绕圈读成加载），不是线（线是在跑）。
-    static func makeRelay() -> CALayer {
-        let layer = CALayer()
-        let home = CALayer(), away = CALayer()
-        for dot in [home, away] { layer.addSublayer(dot) }
-        let trip = CAKeyframeAnimation(keyPath: "transform.translation")
-        trip.keyTimes = RelayMark.tripTimes.map(NSNumber.init(value:))
-        trip.timingFunctions = [.init(controlPoints: 0.3, 0, 0.2, 1), .init(name: .linear), .init(controlPoints: 0.5, 0, 0.3, 1), .init(name: .linear)]
-        trip.duration = RelayMark.period
-        _ = loop(trip, on: away)
-        let catchIt = CAKeyframeAnimation(keyPath: "transform.scale")
-        catchIt.values = [1, 1, RelayMark.bulge, 1, 1]
-        catchIt.keyTimes = RelayMark.catchTimes.map(NSNumber.init(value:))
-        catchIt.duration = RelayMark.period
-        _ = loop(catchIt, on: home)
-        return layer
-    }
-
-    /// 两颗点的大小与位置随边长（小点的来回按此刻的边长重挂，边长没变不重挂：每次更新都重挂的话走到一半的那一趟从头再走）。
-    static func layoutRelay(_ layer: CALayer, in bounds: CGRect, color: CGColor?) {
-        layer.frame = bounds
-        guard let home = layer.sublayers?.first, let away = layer.sublayers?.last else { return }
-        let side = min(bounds.width, bounds.height)
-        let big = side * RelayMark.big, small = side * RelayMark.small
-        let resized = home.bounds.width != big
-        for (dot, diameter) in [(home, big), (away, small)] {
-            dot.bounds = CGRect(x: 0, y: 0, width: diameter, height: diameter)
-            dot.cornerRadius = diameter / 2
-            dot.backgroundColor = color
-        }
-        home.position = CGPoint(x: bounds.midX, y: bounds.midY)
-        // 小点的模型位置在外面（右上）；贴住时沿对角线往回挪到两圆相切
-        let out = side * RelayMark.reach, touch = (big + small) / 2 / 2.squareRoot()
-        away.position = CGPoint(x: bounds.midX + out, y: bounds.midY - out)
-        guard resized, let trip = away.animation(forKey: "loop")?.copy() as? CAKeyframeAnimation else { return }
-        let back = touch - out
-        trip.values = [CGSize.zero, .zero, CGSize(width: back, height: -back), CGSize(width: back, height: -back), .zero].map(sizeValue)
-        away.add(trip, forKey: "loop")
-    }
 }
 
-/// 等子代理交回那两颗点的几何与节拍（`LoopLayer` 的 `relay`）：静止时画同比例的符号 `Icon.relay`（design/tools/cue-symbols.py 的 `relay`）。
+/// 等子代理交回那两颗点的节拍（`StateInk` 的 `relay`）：两颗点的大小与位置是符号 `relay` 的（design/tools/ink/rounded/statuses.py），比例写在这里给小点来回算距离。
+/// 不并进去（并进去那几成时间里只剩一颗，读成待回复的墨点），也不绕着转（绕圈读成加载）。
 nonisolated enum RelayMark {
     static let big: CGFloat = 0.44
     static let small: CGFloat = 0.26
@@ -107,14 +68,6 @@ nonisolated enum RelayMark {
     static let tripTimes: [Double] = [0, 0.4, 0.62, 0.86, 1]
     static let bulge = 1.18
     static let catchTimes: [Double] = [0, 0.6, 0.68, 0.8, 1]
-}
-
-private func sizeValue(_ size: CGSize) -> NSValue {
-    #if os(macOS)
-    NSValue(size: size)
-    #else
-    NSValue(cgSize: size)
-    #endif
 }
 
 private func rectValue(_ rect: CGRect) -> NSValue {

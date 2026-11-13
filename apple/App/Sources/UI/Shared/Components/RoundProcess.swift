@@ -87,7 +87,7 @@ struct RoundProcess: View {
             if live != nil || process?.recached != nil {
                 VStack(alignment: .leading, spacing: 0) {
                     if let (shown, doing) = live {
-                        NoteLine { StateDot(shown: shown, size: 6) } label: { Text(doing).lineLimit(1).shimmering() }
+                        NoteLine { StateDot(shown: shown, size: 6) } label: { DoingLine(text: doing).lineLimit(1) }
                             .accessibilityElement(children: .ignore).accessibilityLabel(doing)
                     }
                     recached(process)
@@ -132,7 +132,7 @@ struct RoundProcess: View {
             HStack(alignment: .firstTextBaseline, spacing: Spacing.item) {
                 switch ending {
                 case .took(let took): Text(took).fixedSize()
-                case .live(_, let doing, nil): Text(doing).lineLimit(1).shimmering()
+                case .live(_, let doing, nil): DoingLine(text: doing).lineLimit(1)
                 case .live: EmptyView()
                 }
                 ForEach(process.counts, id: \.kind) { count in
@@ -165,11 +165,14 @@ struct RoundProcess: View {
 
     private func liveStep(_ doing: String, icon: Icon) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: Note.spacing) {
+            // 换了一种工具时图标换过去，同一种接着用也跳一下：每一步都看得出又动了一下
             Image(icon).font(Typography.caption2).foregroundStyle(palette.ink3)
+                .contentTransition(.symbolEffect(.replace))
+                .symbolEffect(.bounce.byLayer, options: .nonRepeating, value: doing)
                 .readerHidden(true).noteGlyph()
-            Text(doing).font(Typography.codeNote)
+            DoingLine(text: doing).font(Typography.codeNote)
                 .lineLimit(typeSize.isAccessibilitySize ? nil : 2).truncationMode(.middle)
-                .fixedSize(horizontal: false, vertical: typeSize.isAccessibilitySize).shimmering()
+                .fixedSize(horizontal: false, vertical: typeSize.isAccessibilitySize)
         }
         .padding(.bottom, Spacing.hair)
         .accessibilityElement(children: .combine)

@@ -35,7 +35,7 @@ extension SessionShown {
         }
     }
 
-    /// 与 `tint` 一起是全 App 状态图形的唯一出处。在跑、话在路上在状态标里是自绘的循环动效，这里是不放循环动效时与菜单里的样子。等你是裸问号，出错与没能送达保留实心圆徽；不靠颜色单独区分。
+    /// 与 `tint` 一起是全 App 状态图形的唯一出处。是线的几种在状态标里由那根线画（`ink`，与这里同一条中线），话在路上是飞着的纸飞机；这里是菜单里与线收起时的样子。等你是裸问号，出错与没能送达保留实心圆徽；不靠颜色单独区分。
     var icon: Icon {
         switch status {
         case .asking: .waiting
@@ -54,7 +54,7 @@ extension SessionShown {
         // 歇着、轮不到你（Cue 值班时）：省略号，等下一句的不是你。不用圈：带圈的已经够多（出错、没能送达、未知、已结束），缩小后分不开
         case .resting: .more
         case .fresh: .fresh
-        // 不用空心圈：待办任务的圆圈就是它
+        // 画上句号。不用单个空心圈：待办任务的圆圈就是它
         case .ended: .ended
         // 断开的线：做到一半停下、说一句就接着做——归停着的灰（多半是你自己停的，标红会稀释出错），不用闪电（与"会话有动静"同轮廓）
         case .interrupted: .interrupted
@@ -63,7 +63,9 @@ extension SessionShown {
     }
 }
 
-/// 会话状态标全 App 只此一份，图标与颜色只取 `SessionShown.icon`、`tint`。已结束不再另淡：灰已在对比度底线上，靠斜线圈的形状分。旁边有状态文字时读屏跳过它；`announces` 时标自己带读屏标签。
+/// 会话状态标全 App 只此一份，图标与颜色只取 `SessionShown.icon`、`tint`。是线的几种（`ink`）由同一根线变过去（`StateInk`），
+/// 其余（铃铛、出错的徽、纸飞机）叠在线上：线收进中心，标从中心弹出来。已结束不再另淡：灰已在对比度底线上，靠句号的形状分。
+/// 旁边有状态文字时读屏跳过它；`announces` 时标自己带读屏标签。
 struct StateDot: View {
     let shown: SessionShown
     var size: CGFloat = 8
@@ -72,6 +74,7 @@ struct StateDot: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @LoopsPlay private var loops
     @ScaledMetric private var scale: CGFloat = 1
+    @State private var calls = 0
     @State private var rings = 0
 
     private var box: CGFloat { size * 1.8 * scale }
@@ -79,18 +82,27 @@ struct StateDot: View {
 
     var body: some View {
         let tint = shown.tint(palette)
+        let pose = shown.ink
         let mark = ZStack {
-            switch shown.mark {
-            case .flight: OnTheWay(size: box, color: tint).transition(Motion.pop(reduceMotion: reduceMotion))
-            case .loop(let kind) where loops: LoopLayer(kind: kind, color: tint).transition(Motion.pop(reduceMotion: reduceMotion))
-            case .loop, .icon: icon(tint)
+            StateInk(pose: pose ?? .hidden, color: tint, loops: loops, morphs: !reduceMotion)
+            if pose == nil {
+                Group {
+                    if shown.flies { OnTheWay(size: box, color: tint) } else { symbol(tint) }
+                }
+                .transition(reduceMotion ? .opacity : .scale(scale: 0.3).combined(with: .opacity))
             }
         }
         .frame(width: box, height: box)
+        .animation(reduceMotion ? Motion.fade : Motion.Ink.pop, value: pose == nil)
         .animation(Motion.fade, value: shown)
-        .onChange(of: shown.isUnread) { _, unread in if unread, !reduceMotion { rings += 1 } }
+        // 铃铛、徽是刚弹出来的新视图：等它落定再晃，晃的值在它出现之前就变了的话它不晃
+        .onChange(of: shown.status) { old, new in if new.callsOut, old != new, !reduceMotion { calls += 1 } }
+        .task(id: calls) {
+            guard calls > 0, (try? await Task.sleep(for: Self.settle)) != nil else { return }
+            rings = calls
+        }
         // 旁边是字时按第一行对齐（`.firstTextBaseline`）：每种标都把自己的中心放在那一行字的中线上。不能用各自的基线——
-        // 符号有基线、自绘的动效没有（落到底边），同一列里就高高低低；标的大小跟着旁边的字走，中线离基线约是字高的四成
+        // 符号有基线、自绘的线没有（落到底边），同一列里就高高低低；标的大小跟着旁边的字走，中线离基线约是字高的四成
         Group {
             // 只给读屏：每行一个悬停提示会让整页每行都挂一块跟踪区，滚动时跟着重算
             if announces { mark.iconLabel(shown.presence) } else { mark.readerHidden(true) }
@@ -98,34 +110,50 @@ struct StateDot: View {
         .alignmentGuide(.firstTextBaseline) { [box] in $0[VerticalAlignment.center] + box * Self.midline }
     }
 
-    private func icon(_ tint: Color) -> some View {
+    private func symbol(_ tint: Color) -> some View {
         Image(shown.icon)
             .font(.system(size: box * 0.86, weight: .semibold))
             .foregroundStyle(tint)
             .contentTransition(.symbolEffect(.replace))
             .symbolEffect(.wiggle, options: .nonRepeating, value: rings)
-            .transition(Motion.pop(reduceMotion: reduceMotion))
     }
 
-}
-
-enum StateMark: Equatable {
-    case loop(LoopLayer.Kind)
-    case flight
-    case icon
+    private static let settle: Duration = .milliseconds(260)
 }
 
 extension SessionShown {
-    var mark: StateMark {
+    /// 是线的几种状态此刻那根线的样子与动作；nil 时叠一个标（`icon`，话在路上是纸飞机）。
+    var ink: InkPose? {
         switch status {
-        case .working(.delegating): .loop(.relay)
-        case .working(.tool): .loop(.orbit)
-        case .working(.compacting): .loop(.squeeze)
-        case .working: .loop(.heartbeat)
-        case .delivery(.preparing), .delivery(.failed), .delivery(.inTransit(.unconfirmed)): .icon
-        case .delivery: .flight
-        case .asking: .icon
-        case .idle, .resting, .fresh, .ended, .interrupted, .unknown, .cueAsking, .awaitsReply, .failed, .unread: .icon
+        case .working(.tool): InkPose(shape: .ring, life: .orbit)
+        case .working(.compacting): InkPose(shape: .heartbeat, life: .squeeze)
+        case .working(.delegating): InkPose(shape: .relay, life: .relay)
+        case .working: InkPose(shape: .heartbeat, life: .pulse)
+        case .asking: InkPose(shape: .question, life: .nod)
+        case .awaitsReply: InkPose(shape: .bigDot, life: .breathe)
+        case .idle: InkPose(shape: .cursor, life: .blink)
+        case .resting: InkPose(shape: .ellipsis, life: .hop)
+        case .interrupted: InkPose(shape: .broken, life: .still)
+        case .ended: InkPose(shape: .period, life: .still)
+        case .delivery, .cueAsking, .failed, .unread, .fresh, .unknown: nil
+        }
+    }
+
+    var flies: Bool {
+        switch status {
+        case .delivery(.preparing), .delivery(.failed), .delivery(.inTransit(.unconfirmed)): false
+        case .delivery: true
+        default: false
+        }
+    }
+}
+
+extension SessionShown.Status {
+    /// 换进来时晃一下叫你看：有新回复、出错、没能送达。
+    var callsOut: Bool {
+        switch self {
+        case .unread, .failed, .delivery(.failed): true
+        default: false
         }
     }
 }

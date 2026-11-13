@@ -177,7 +177,7 @@ struct CueStatusLine: View {
             } else if case .away(let line, let failed) = cue.now.cue {
                 Text(line).foregroundStyle(failed ? palette.failure : palette.ink3).id(line).transition(.handOff)
             } else if let shown {
-                SessionShownLabel(shown: shown).id(shown.label).transition(.handOff)
+                SessionShownLabel(shown: shown).transition(.handOff)
             }
         }
         .font(font)

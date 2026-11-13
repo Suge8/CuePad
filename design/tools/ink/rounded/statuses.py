@@ -49,8 +49,8 @@ def centerlines(name):
         opened.append(poly([(-3,4.6),(1.6,4.6)]) + arcs((1.6,.8),3.8,90,-180) + poly([(1.6,-3),(-1.4,-3)]))
     elif name == "picked": line((-5,0),(-1,4),(6,-4))
     elif name == "ended":
-        opened.extend([arcs((0,0),9,65,140),arcs((0,0),9,245,140)])
-        line((-7,-7),(7,7))
+        # 终点站：会话那根线放平、走到头是一个圈（线路图的终点，也是画上句号）；状态标从在跑的线连续变过来（`StateInk`）
+        line((-10,0),(-2,0)); circle(5.5,0,4)
     elif name == "interrupted": line((-10,2),(-3,2)); line((3,-2),(10,-2))
     elif name == "relay": pass
     elif name == "relay.stalled": circle(7.2,-7.2,3.9)
