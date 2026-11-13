@@ -3,27 +3,29 @@ import CueStore
 import SwiftUI
 
 extension DebugScene {
-    private static var pending = 0
+    /// 还拖着就绪的事，按名字计数：等过了 `readyLimit` 报出来的就是这些名字。
+    private static var holds: [String: Int] = [:]
     private static var unsettled: Set<UUID> = []
+    /// 就绪等这么久还不静就报出名字退出：要早于脚本从起实例算的 60 秒（`app_proc.READY_TIMEOUT`），晚于最长的正当拖延（`-CuePadQuotaResetIn`，会话里用过最大 30 秒，再加 5 秒）。
+    private static let readyLimit: Duration = .seconds(45)
 
     static func settling(_ id: UUID, _ busy: Bool) {
         if busy { unsettled.insert(id) } else { unsettled.remove(id) }
     }
 
-    static func later(_ delay: Duration, _ work: @escaping @MainActor () -> Void) {
-        pending += 1
-        Task {
+    static func later(_ delay: Duration, fileID: String = #fileID, line: Int = #line, _ work: @escaping @MainActor () -> Void) {
+        holdingReady("\(fileID):\(line)") {
             await Task.wait(for: delay)
             work()
-            pending -= 1
         }
     }
 
-    static func holdingReady(_ work: @escaping @MainActor () async -> Void) {
-        pending += 1
+    static func holdingReady(_ name: String, _ work: @escaping @MainActor () async -> Void) {
+        holds[name, default: 0] += 1
         Task {
             await work()
-            pending -= 1
+            holds[name, default: 1] -= 1
+            if holds[name] == 0 { holds[name] = nil }
         }
     }
 
@@ -38,7 +40,7 @@ extension DebugScene {
     static let readyFile = ProcessInfo.processInfo.environment["CUEPAD_SHOT_READY"]
 
     /// 摆画面要的数据没写成：报出原因、以 1 退出，不写就绪文件。等它的脚本（`xc.sh shot`、`perf-mac.sh`）照失败处理，不拿半截的库或画面当成果。
-    static func abandon(_ what: String, _ error: any Error) -> Never {
+    nonisolated static func abandon(_ what: String, _ error: any Error) -> Never {
         FileHandle.standardError.write(Data("\(what)：\(error)\n".utf8))
         exit(1)
     }
@@ -61,18 +63,28 @@ extension DebugScene {
 
     /// 给了就绪文件时，画面摆好（`prepare` 做完）之后等到：读库的结果都回来了、摆画面的事都做完了、
     /// 没有视图报着正在过渡、屏上没有进行中的一次性动画（转圈这类一直循环的不算），连着三帧都这样，再写下这个文件。`xc.sh shot` 等它出现才截图，不靠固定的等待。
+    /// 过了 `readyLimit` 还不静就报出还拖着的名字、以 1 退出。任务被取消（Mac 窗口内容在就绪前被摘下）就不写、直接返回。
     static func signalReady(_ services: AppServices) async {
         guard let path = readyFile else { return }
+        let deadline = ContinuousClock.now + readyLimit
         var still = 0
         while still < 3 {
+            guard !Task.isCancelled else { return }
             // 排在页面已经发出的读库之后：它回来时，那些读取也都回来了
             do {
                 _ = try await services.store.projects()
+            } catch is CancellationError {
+                return
             } catch {
                 abandon("就绪前读库", error)
             }
             await NextFrame.wait()
-            still = pending == 0 && unsettled.isEmpty && !animating ? still + 1 : 0
+            still = holds.isEmpty && unsettled.isEmpty && !animating ? still + 1 : 0
+            if still == 0, ContinuousClock.now > deadline {
+                let waiting = holds.sorted { $0.key < $1.key }.map { $1 > 1 ? "\($0) ×\($1)" : $0 }
+                    + (unsettled.isEmpty ? [] : ["\(unsettled.count) 处视图报着正在过渡"]) + (animating ? ["屏上有一次性动画"] : [])
+                abandon("画面 \(readyLimit.components.seconds) 秒内没有就绪", Unmet("还拖着：\(waiting.joined(separator: "、"))"))
+            }
         }
         FileManager.default.createFile(atPath: path, contents: shotSize.map { Data($0.utf8) })
         freezeIfAsked()

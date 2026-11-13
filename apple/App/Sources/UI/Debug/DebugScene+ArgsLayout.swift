@@ -8,8 +8,6 @@ nonisolated struct LayoutArgs: Decodable, DebugArgGroup {
     let compact: Double?
     /// `-CuePadCuePanel YES`（配 cue 画面）：页头一出现就展开成面板
     let cuePanel: Bool
-    /// `-CuePadDrawerCross rail|cue`（仅 Mac）：拉出那个抽屉后反复跨过临界宽来回拖
-    let drawerCross: String?
     /// `-CuePadGeometryLoop YES`（仅 Mac）：挂一个刻意的几何回写环，给布局压力场景的检测器自检
     let geometryLoop: Bool
     /// `-CuePadHeaderCycle YES`（配录屏）就绪后来回走：滑去看历史（让开）→ 点顶上唤出 → 再滑（让开）→ 回到最新（回来），每步 1.5 秒

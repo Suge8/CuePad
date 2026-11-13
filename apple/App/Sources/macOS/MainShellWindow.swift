@@ -15,7 +15,7 @@ class MainShellWindow: NSWindow, NSWindowDelegate {
     func show() {
         unpark()
         if isMiniaturized { deminiaturize(nil) }
-        DebugHooks.present(self, activating: true)
+        present(activating: true)
     }
 
     /// 连应用一起隐藏，焦点才会回到此前的前台应用。
@@ -61,6 +61,14 @@ class MainShellWindow: NSWindow, NSWindowDelegate {
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         hide()
         return false
+    }
+}
+extension NSWindow {
+    /// 显示窗口：到最前并接过键盘（`activating` 时连 App 一起到前台）；本机构建排在后面（`DebugHooks.keepsBehind`）。
+    func present(activating: Bool = false) {
+        guard !DebugHooks.keepsBehind(self) else { return }
+        if activating { NSApp.activate() }
+        makeKeyAndOrderFront(nil)
     }
 }
 #endif

@@ -2,6 +2,7 @@ import CloudKit
 import CueStore
 @testable import CueSync
 import Foundation
+import SQLite3
 import Testing
 @testable import CuePad
 
@@ -125,7 +126,7 @@ struct SyncWiringTests {
         defer { services.cancelBackgroundWork() }
         let original = try await services.store.createCard(body: "原卡")
         let copy = try await services.store.createCard(body: "副本")
-        #expect(DebugScene.markConflict(copy: copy.id, of: original.id, database: services.location.databaseURL))
+        try markConflict(copy: copy.id, of: original.id)
         _ = try await services.store.createCard(body: "触发一次重读")
 
         try await eventually("services.conflicts.count == 1") { services.conflicts.count == 1 }
@@ -133,5 +134,13 @@ struct SyncWiringTests {
 
         try await services.resolveConflict(copy: copy.id, keep: .original)
         try await eventually("services.conflicts.isEmpty") { services.conflicts.isEmpty }
+    }
+    /// 冲突副本只由同步产生、没有公开入口：直接在库文件里把副本指回原卡。
+    private func markConflict(copy: UUID, of original: UUID) throws {
+        var db: OpaquePointer?
+        defer { sqlite3_close(db) }
+        try #require(sqlite3_open(services.location.databaseURL.path, &db) == SQLITE_OK)
+        let sql = "UPDATE cards SET conflictOf = '\(original.uuidString.lowercased())' WHERE id = '\(copy.uuidString.lowercased())'"
+        try #require(sqlite3_exec(db, sql, nil, nil, nil) == SQLITE_OK)
     }
 }

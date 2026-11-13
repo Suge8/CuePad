@@ -49,20 +49,8 @@ extension DebugScene {
         presetDrawers(workspace)
         await presetSpeech(workspace)
         await prepareNarrow(workspace)
-        if let pace = args.layoutOpts.sidebarCycle { Task { await cycleWide(fast: pace == "fast") { workspace.railExpanded.toggle() } } }
-        if let pace = args.layoutOpts.rightCycle { Task { await cycleWide(fast: pace == "fast") { workspace.services.settings.cueOpen.toggle() } } }
-    }
-
-    private static func cycleWide(fast: Bool, _ toggle: () -> Void) async {
-        // 两次之间停多久是录屏的节奏，不是在等别的事
-        let gaps: [Double] = fast ? [0.1, 1.5, 0.06, 0.06, 1.5] : [1.5]
-        await Task.wait(for: .seconds(3))
-        var step = 0
-        while !Task.isCancelled {
-            toggle()
-            await Task.wait(for: .seconds(gaps[step % gaps.count]))
-            step += 1
-        }
+        if let pace = args.layoutOpts.sidebarCycle { Task { await cycleColumn(fast: pace == "fast") { workspace.railExpanded.toggle() } } }
+        if let pace = args.layoutOpts.rightCycle { Task { await cycleColumn(fast: pace == "fast") { workspace.services.settings.cueOpen.toggle() } } }
     }
 
     static func openCard(_ workspace: Workspace, project: UUID?) async throws {

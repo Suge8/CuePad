@@ -25,6 +25,10 @@ extension DebugScene {
     /// `-CuePadSync newmac`：换新 Mac 的第一遍同步，先报同步中、还没对过，`-CuePadReconcileSeconds`（默认 8）秒后带回 Cue 在「Mac Studio」上运行、
     /// 那台醒着，才报对过（`NewMacSync`）；秒数给得比实例活得久（如 3600）就一直在等。
     static var syncSource: AppServices.SyncSource {
+        #if os(iOS)
+        // 手机刷新额度先等请求确认上传，才等 Mac 写回（`AccountQuotas`）；隔离库没有同步会当场报"尚未确认上传"，轮不到演示 Mac 答
+        if args.quotaOpts.fails && args.sync == nil { return .custom(StandInSync()) }
+        #endif
         let issues = [
             SyncIssue(
                 kind: .upload, recordType: Table.cards.rawValue, recordName: "A1B2", problem: .refused,
@@ -215,8 +219,8 @@ extension DebugScene {
         }
     }
 
-    /// 库里没有创建冲突副本的公开入口（由同步产生）：直接在库文件里把副本指回原卡。演示与测试共用这一处。
-    static func markConflict(copy: UUID, of original: UUID, database: URL) -> Bool {
+    /// 库里没有创建冲突副本的公开入口（由同步产生）：直接在库文件里把副本指回原卡。
+    private static func markConflict(copy: UUID, of original: UUID, database: URL) -> Bool {
         var handle: OpaquePointer?
         defer { sqlite3_close(handle) }
         guard sqlite3_open(database.path, &handle) == SQLITE_OK else { return false }
