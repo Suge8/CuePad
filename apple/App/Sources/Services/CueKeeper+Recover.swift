@@ -81,7 +81,7 @@ extension CueKeeper {
             let kinds = try await store.macAgents(on: setup.recorder.hostID).kinds
             guard let (to, open) = detour.next(from: current, among: kinds, at: now) else { return false }
             // 卡着的那件不等慢速周期，马上在该能用的那家上重来
-            if open, to != current || lapsed.contains(to), setback?.persistent == true { setback?.retryAt = now }
+            if open, to != current || lapsed.contains(to) { for held in setbacks where held.persistent { retry(held.wake, at: now) } }
             guard to != current, open || attempt else { return false }
             try await switchBrain(to)
             return true

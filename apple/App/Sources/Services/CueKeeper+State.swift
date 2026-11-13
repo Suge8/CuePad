@@ -74,6 +74,8 @@ extension CueKeeper {
         var detour: Detour?
         /// 做梦听他在会话里说的话听到哪了：交给它的最后一句的次序（`CueStore.said(after:limit:)` 的 `through`）；nil 是还没听过，从此刻听起（`dreams`）
         var heard: Int64?
+        /// 出错后要重来的几件（`CueKeeper.setbacks`）：定时、刚启用与你那句话在醒来时已消费，只有这里记着，所以跨重启、换手留着
+        var setbacks: [Setback]?
     }
 
     /// 额度、登录卡住后的绕行：你设定的那家与它的模型、强度、fast（绕行前的设置），与这次卡住的几家。
@@ -136,8 +138,8 @@ extension CueKeeper {
     }
 
     struct Turn {
-        /// 回复写成谁的
-        var author: CueAuthor
+        /// 这一轮是在回答你：你发起的、中途插进了你的话，或承接回答你的那一轮出错后的重来。提不提示你、写不写回复都看它
+        var answersYou: Bool
         /// 这一轮的经过：醒来的时刻（Cue 在这之后用 tell 说过话，自己醒来的刚启用那一轮最后就不再写招呼）、在用的工具、报的错都在这里
         var round: CueRound
         /// Cue 自己醒来（不是你发来消息）的这一轮为什么醒（出错要退避、重试同一次醒来）；你发起的为 nil
@@ -153,18 +155,16 @@ extension CueKeeper {
         /// 这一轮出错后换了 Agent：交出去的你的话退回、自己醒来的那次马上重来，都交给新的大脑
         var replay = false
 
-        /// 这一轮是在回答你：你发起的、中途插进了你的话，或写成 cue 的（中途插过你的话、出错后重试的那一轮）
-        var answersYou: Bool {
-            guard let wake = selfStarted else { return true }
-            return !delivered.isEmpty || (wake != .enabled && author == .cue)
-        }
-
         /// 最后的话写不写进对话：回答你的一轮、刚启用的招呼照写；Cue 自己醒来的其余各轮一律不写，Cue 页照它的动作写这一轮（`CueRound.process`）。
         var writesReply: Bool { answersYou || selfStarted == .enabled }
+
+        /// 署名只跟着上面两条走：写进对话的是 Cue 的话，其余是这一轮的经过（`note`，没有正文）
+        var author: CueAuthor { writesReply ? .cue : .note }
     }
 
-    /// 失败轮次的重试进度：普通自发失败只重试一次，可被新变化替代；持续重试保留原工作，直到承接它的一轮成功。
-    struct Setback {
+    /// 出错后要重来的一件（每个醒来原因至多一条），承接它的一轮好好做完才放下。会话动静与巡视（`supersedable`）的活从库里的变化重读得出，重试一次后可被新变化取代；
+    /// 定时、刚启用、你那句话醒来时已消费，一直按退避重来。额度、登录卡住（`persistent`）只按慢速周期重来，新变化不替代、不催它。
+    nonisolated struct Setback: Codable, Equatable, Sendable {
         /// 出错时变化里最新的写入序号（等子代理停住按时刻认，不算）与出错的时刻：之后有更新的才是新变化
         var latest: Int?
         var since: Date
@@ -174,7 +174,16 @@ extension CueKeeper {
         /// 持续重试已按慢速周期重来了几轮（`CueTiming.slowDelay`）
         var stalls: Int
         var wake: CueWake
-        var author: CueAuthor
+        var answersYou: Bool
+
+        var supersedable: Bool { Self.supersedable(wake) }
+
+        static func supersedable(_ wake: CueWake) -> Bool {
+            switch wake {
+            case .sessionActivity, .idle: true
+            case .enabled, .message, .schedule: false
+            }
+        }
     }
 
     nonisolated enum Input: Sendable {

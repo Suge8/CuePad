@@ -64,10 +64,12 @@ extension CueKeeper {
         switch phase {
         case .starting(let before): failures = before + 1
         case .running(let shift):
-            if var round = shift.turn?.round {
+            if let turn = shift.turn {
+                var round = turn.round
                 round.failure = round.failure ?? reason.text
                 archive(round)
                 retrying = round.failure
+                await holdOver(turn, failure: reason.text)
             }
             await retire(shift)
             speech.offer(nil)
@@ -108,7 +110,7 @@ extension CueKeeper {
             if turn == nil {
                 let round = beginRound(.message, sent: [], at: now)
                 updateShift {
-                    $0.turn = Turn(author: .cue, round: round, delivered: $0.taken)
+                    $0.turn = Turn(answersYou: true, round: round, delivered: $0.taken)
                     $0.taken = []
                 }
             }
@@ -116,7 +118,7 @@ extension CueKeeper {
             updateShift { shift in
                 guard let ids = shift.handed.removeValue(forKey: id), !ids.isEmpty else { return }
                 guard shift.turn != nil else { return shift.taken += ids }
-                shift.turn?.author = .cue
+                shift.turn?.answersYou = true
                 shift.turn?.delivered += ids
             }
         case .speaking(let draft):
@@ -142,9 +144,9 @@ extension CueKeeper {
             }
             let summary = ErrorSummary(raw)
             // Cue 自己醒来的一轮第一次出错（会重试的那种）先不说：多是网络偶发，重试也失败了再告诉你；你在等的一轮立刻说
-            if turn?.selfStarted != nil, setback == nil, Self.retryable(summary) { return }
+            if let turn, turn.selfStarted != nil, !setbacks.contains(where: { $0.wake == turn.round.wake }), Self.retryable(summary) { return }
             // 同一个错一轮轮重复（如额度）只说一次：按摘要认，原文里常带每次不同的请求 id；卡住后慢速周期里换着家重来的错都不再说
-            guard setback?.persistent != true, summary.line != toldFailure else { return }
+            guard !stuck, summary.line != toldFailure else { return }
             toldFailure = summary.line
             if !Self.retryable(summary) { outage = .down }
             // 认不出的错，摘要只是原文的首行
@@ -169,13 +171,16 @@ extension CueKeeper {
             save()  // 这一轮接走的答上了（没答上的已在 `owed`），落盘的不再记着
             if let failure = finished.round.failure {
                 if finished.replay { await replay(finished, failure: failure) }
-                else if let woke = finished.selfStarted { await setBack(failure, retrying: woke, as: finished.author) }
-                else if !Self.retryable(ErrorSummary(failure)) { await setBack(failure, retrying: .message, as: .cue) }
+                else if let woke = finished.selfStarted { await setBack(failure, retrying: woke, answering: finished.answersYou) }
+                else if !Self.retryable(ErrorSummary(failure)) { await setBack(failure, retrying: .message, answering: true) }
             } else {
-                let resolved = setback?.persistent != true || setback?.wake == finished.round.wake
-                // 卡着的那家又好好做完了别的一轮：卡住的那件不等慢速周期，马上重来
-                if resolved { setback = nil } else { setback?.retryAt = now }
-                await recovered(resolved)
+                // 大脑又好好做完了一轮：剩下要重来的不等退避，马上重来
+                setbacks = setbacks.filter { $0.wake != finished.round.wake && ($0.persistent || !$0.supersedable) }.map { held in
+                    var held = held
+                    held.retryAt = now
+                    return held
+                }
+                await recovered(!stuck)
                 await markTold(finished.round)
                 await advanceBaseline(from: finished.mark, seen: finished.round.startedAt)
             }
@@ -265,24 +270,41 @@ extension CueKeeper {
         save()
     }
 
-    private func setBack(_ failure: String, retrying wake: CueWake, as author: CueAuthor, now: Bool = false) async {
-        if let held = setback, held.persistent, held.wake != wake { return }
-        let persistent = setback?.persistent == true || !Self.retryable(ErrorSummary(failure))
+    /// 第一次出错隔 `CueTiming.retryWake` 重来；再错时会话动静与巡视等新变化，其余（醒来已消费的、卡住的）按慢速周期一直重来。
+    private func setBack(_ failure: String, retrying wake: CueWake, answering: Bool, now: Bool = false) async {
         let at = self.now
-        let latest = try? await changes(at: at).filter { $0.kind != .stalled }.map(\.seq).max()
-        let stalls = (setback?.stalls ?? 0) + (persistent && !now ? 1 : 0)
+        let latest: Int?
+        do {
+            latest = try await changes(at: at).filter { $0.kind != .stalled }.map(\.seq).max()
+        } catch {
+            // 读不到变化就按此刻的写入序号算：已有的都不是新变化，不让旧变化把重来提前清掉
+            latest = try? await store.lastWrite()
+        }
+        let existing = setbacks.firstIndex { $0.wake == wake }
+        let persistent = stuck || !Self.retryable(ErrorSummary(failure))
+        var held = Setback(
+            latest: latest, since: at, persistent: persistent, stalls: existing.map { setbacks[$0].stalls } ?? 0, wake: wake, answersYou: answering)
         let delay: Duration?
         if now { delay = .zero }
-        else if persistent { delay = setup.timing.slowDelay(after: stalls) }
-        else { delay = setback == nil ? setup.timing.retryWake : nil }
+        else if existing == nil && !persistent { delay = setup.timing.retryWake }
+        else if persistent || !held.supersedable {
+            held.stalls += 1
+            delay = setup.timing.slowDelay(after: held.stalls)
+        } else { delay = nil }
         if delay != nil { retrying = failure }
-        setback = Setback(
-            latest: latest, since: at, retryAt: delay.map { at + $0.seconds }, persistent: persistent, stalls: stalls, wake: wake, author: author)
+        held.retryAt = delay.map { at + $0.seconds }
+        if let existing { setbacks[existing] = held } else { setbacks.append(held) }
+    }
+
+    /// 断在半路的一轮（大脑出问题、不再值班）：醒来时已消费的活（定时、刚启用）只有重来记着，记下它，下次（含重启、换手后）接着做。
+    func holdOver(_ turn: Turn, failure: String) async {
+        guard let woke = turn.selfStarted, !Setback.supersedable(woke) else { return }
+        await setBack(failure, retrying: woke, answering: turn.answersYou)
     }
 
     private func replay(_ turn: Turn, failure: String) async {
         retrying = failure
-        if let woke = turn.selfStarted { await setBack(failure, retrying: woke, as: turn.author, now: true) }
+        if let woke = turn.selfStarted { await setBack(failure, retrying: woke, answering: turn.answersYou, now: true) }
         await giveBack(turn.delivered + (shift?.unanswered ?? []))
     }
 }
