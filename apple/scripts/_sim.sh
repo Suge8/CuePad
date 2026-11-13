@@ -80,8 +80,9 @@ sim_boot() {
   local missing
   missing="$(sim_unslimmed "$1")"
   [ -n "$missing" ] || return 0
-  # 停用 agent 时 launchctl 总在 stderr 提一句改用 user/foreground 域，停用照样生效；是否生效以重开机后再查为准
-  xargs -P 8 -I {} xcrun simctl spawn "$1" launchctl disable system/{} <<<"$missing" 2>/dev/null
+  # 停用 agent 时 launchctl 总在 stderr 提一句改用 user/foreground 域，停用照样生效；是否生效以重开机后再查为准。
+  # 机器很忙时个别 spawn 会失败（云端负载几百时实测），这里不中断：stderr 已丢掉，中断就是一声不响地退出，没生效的由下面那次核对报出来
+  xargs -P 8 -I {} xcrun simctl spawn "$1" launchctl disable system/{} <<<"$missing" 2>/dev/null || true
   xcrun simctl shutdown "$1"
   xcrun simctl bootstatus "$1" -b >/dev/null
   missing="$(sim_unslimmed "$1")"
