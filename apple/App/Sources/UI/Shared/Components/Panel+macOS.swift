@@ -40,12 +40,9 @@ private struct InPlacePanel: ViewModifier {
     func body(content: Content) -> some View {
         content
             .background { AreaMark { [host, token] in host.areas[token] = Weak(value: $0) } }
+            // 收起时留着这一条、只记成没开（不 `hide`）：`hide` 连框一起忘掉，而框只在这块视图建出来时报一次，再开就成了"点哪里都算外面"
             .onChange(of: isPresented, initial: true) { _, open in
-                if open {
-                    host.show(token, style: .bubble(.unanchored), content: AnyView(EmptyView()), close: ClosePanel(run: close), inPlace: true)
-                } else {
-                    host.hide(token)
-                }
+                host.show(token, style: .bubble(.unanchored), content: AnyView(EmptyView()), close: ClosePanel(run: close), open: open, inPlace: true)
             }
             .onDisappear { host.hide(token) }
     }

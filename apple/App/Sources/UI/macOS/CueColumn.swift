@@ -42,6 +42,10 @@ struct CueTitle: View {
                 CuePlate(card: open, style: .column, reserve: home || open ? 0 : Self.fold, opens: open ? nil : false).frame(width: Self.width)
             }
             .buttonStyle(PressStyle(.button))
+            // 长开后上半截不再是一颗悬停会亮的大按钮（亮起的是半张名片）；点它照样收起
+            .allowsHitTesting(!open)
+            .contentShape(.rect)
+            .onTapGesture { toggle(to: false) }
             .help(open ? "" : "换模型，看它刚记下的，去记忆、定时与设置")
             .accessibilityAddTraits(.isHeader)
             .accessibilityHint(open ? "收起" : "换模型，看它刚记下的，去记忆与设置")

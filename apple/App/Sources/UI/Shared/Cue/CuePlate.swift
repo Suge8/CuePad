@@ -11,6 +11,8 @@ struct PlateStyle {
     let line: Font
     /// 字号跟着动态字体放大到这一档为止，再大第二行就出了定高的名牌。
     let largestType: DynamicTypeSize
+    /// 收着时头像连字整组排在名牌正中（Mac：名牌比字宽出一大截，靠左排右半边是空的）；否则头像贴左。
+    var centered = false
 
     #if os(iOS)
     static let fill = PlateStyle(
@@ -22,7 +24,7 @@ struct PlateStyle {
     #else
     static let column = PlateStyle(
         width: nil, height: 52, face: 44, inset: 4, nameGap: 10, lineGap: 1,
-        name: Typography.cueCardName, line: Typography.secondary, largestType: .large)
+        name: Typography.cueCardName, line: Typography.secondary, largestType: .large, centered: true)
     #endif
 }
 
@@ -44,7 +46,7 @@ struct CuePlate: View {
         let side = card ? full : style.face
         PlateLayout(progress: card ? 1 : 0, style: style, reserve: reserve) {
             // 头像只按名片那一档画一次，收着时整体缩小：开合时连续地长大，点与表情不换档
-            CueAvatar(cue.beat, size: .card)
+            CueAvatar(cue.beat, size: .card, plate: false)
                 .scaleEffect(side / full)
                 .frame(width: side, height: side)
                 .relaySpot(cue: .header)
@@ -103,8 +105,10 @@ private struct PlateLayout: Layout {
         let full = max(width ?? start, start)
         let w = Self.lerp(start, full, p)
         let radius = Self.lerp(small, large, p)
+        let group = style.face + style.nameGap + max(name.width, line.width)
+        let lead = style.centered ? max(style.inset, min((start - group) / 2, start - reserve - Self.trailing - group)) : style.inset
         let center = CGPoint(
-            x: Self.lerp(style.inset + small, w / 2, p),
+            x: Self.lerp(lead + small, w / 2, p),
             y: Self.lerp(style.height / 2, Self.cardTop + large, p))
         let down = Self.ease(p / Self.turn), across = Self.ease((p - Self.turn) / (1 - Self.turn))
         let beside = center.x + radius + style.nameGap
