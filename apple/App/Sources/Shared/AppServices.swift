@@ -106,7 +106,7 @@ final class AppServices {
     /// 同步表 `macAgents` 的唯一写入口；Cue 启用前也经它问。
     @ObservationIgnored let macAgents: MacAgentsRecorder
     /// 同步表 `agentLibraries` 的唯一写入口，整理与改规则也经它。
-    @ObservationIgnored let library: AgentLibraryKeeper
+    @ObservationIgnored let library: AgentLibraryFiles
     @ObservationIgnored lazy var executor = MacExecutor(
         store: store, bridge: bridge, runtimes: runtimes, hostID: hostID, workspaces: workspaces, recorder: stateRecorder, library: library,
         fetchFile: { [sync] key in try await sync.fetchFile(key) },
@@ -163,11 +163,10 @@ final class AppServices {
         paths = mac.paths
         runtimes = mac.runtimes(store)
         agents = mac.agents
-        macAgents = MacAgentsRecorder(store: store, sync: self.sync, host: mac.hostID, agents: agents)
+        macAgents = MacAgentsRecorder(store: store, host: mac.hostID, agents: agents)
         // 隔离运行时移走的不进系统废纸篓，放在库里
         let trash = location.touchesRealWorld ? nil : AgentLibraryFiles.trash(into: location.directory.appending(path: "Trash", directoryHint: .isDirectory))
-        library = AgentLibraryKeeper(
-            store: store, sync: self.sync, host: mac.hostID, files: AgentLibraryFiles(access: agents.integration.fileAccess, trash: trash))
+        library = AgentLibraryFiles(store: store, host: mac.hostID, access: agents.integration.fileAccess, trash: trash)
         commandLineTool = mac.commandLineTool
         updates = UpdateService(updater: mac.updater, bridge: mac.bridge, runtimes: runtimes)
         historyStore = HistoryPersistence(storage: store, host: mac.hostID)

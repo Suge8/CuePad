@@ -11,7 +11,7 @@ final class MacExecutor {
     let hostID: String
     private let workspaces: Workspaces
     let recorder: StateRecorder
-    private let library: AgentLibraryKeeper
+    private let library: AgentLibraryFiles
     private let fetchFile: FileFetching
     private let refreshQuota: AccountQuotas.Query
     private let reportIssue: @MainActor (String) -> Void
@@ -19,7 +19,7 @@ final class MacExecutor {
 
     init(
         store: CueStore, bridge: Bridge, runtimes: [AgentKind: any AgentRuntime], hostID: String, workspaces: Workspaces, recorder: StateRecorder,
-        library: AgentLibraryKeeper, fetchFile: @escaping FileFetching,
+        library: AgentLibraryFiles, fetchFile: @escaping FileFetching,
         refreshQuota: @escaping AccountQuotas.Query,
         reportIssue: @escaping @MainActor (String) -> Void
     ) {

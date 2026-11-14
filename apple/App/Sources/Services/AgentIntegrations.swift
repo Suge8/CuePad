@@ -26,10 +26,6 @@ final class AgentIntegrations {
 
     func status(_ kind: AgentKind) -> AgentStatus? { statuses[kind] }
 
-    func isWritable(_ kind: AgentKind) -> Bool { integration.isWritable(kind) }
-
-    func home(_ kind: AgentKind) -> URL { integration.home(of: kind) }
-
     func writtenFiles(_ kind: AgentKind) -> [String] {
         integration.writtenFiles(of: kind).map { UserHome.shown($0.path) }
     }
@@ -57,7 +53,7 @@ final class AgentIntegrations {
     var connectable: [AgentKind] {
         AgentKind.allCases.filter { kind in
             guard let status = statuses[kind] else { return false }
-            return isWritable(kind) && status.isAvailable && status.files == .missing
+            return integration.isWritable(kind) && status.isAvailable && status.files == .missing
         }
     }
 
@@ -117,17 +113,12 @@ final class AgentIntegrations {
             .map { $0.trimmingCharacters(in: .whitespaces) }.last { !$0.isEmpty }
     }
 
-    /// 能开新会话的几家各起一个进程问，慢；只给写同步表 macAgents 的那一处（`MacAgentsRecorder`），界面读库。
-    func probe() async -> (agents: [MacAgent], problems: [MacAgentProblem]) {
-        await integration.probe(statuses)
-    }
-
     /// 升级技能；哪家失败都照做其余的，抛第一个错，状态仍反映磁盘上的旧版。
     func refresh() async throws {
         await redetect()
         var failure: (any Error)?
         for kind in AgentKind.allCases
-        where isWritable(kind) && statuses[kind]?.files == .outdated && statuses[kind]?.isAvailable == true {
+        where integration.isWritable(kind) && statuses[kind]?.files == .outdated && statuses[kind]?.isAvailable == true {
             do { try await install(kind) } catch { failure = failure ?? error }
         }
         if let failure { throw failure }

@@ -4,13 +4,17 @@ import CueStore
 import CueSync
 import Foundation
 import os
+import Security
 
 extension DebugScene {
     /// 签名的 CloudKit 环境必须是 Development：测量只写开发环境，开发构建的 ad-hoc 或生产签名带着它也不连。
     static var syncsIsolatedLibrary: Bool {
         guard args.cloudKit else { return false }
-        guard Entitlements.cloudKitEnvironment == "Development" else {
-            SyncBench.log.error("-CuePadCloudKit 要开发环境签名（CUEPAD_SIGN=development xc.sh build mac），这个构建是 \(Entitlements.cloudKitEnvironment ?? "无", privacy: .public)，不连")
+        let environment = SecTaskCreateFromSelf(nil).flatMap {
+            SecTaskCopyValueForEntitlement($0, "com.apple.developer.icloud-container-environment" as CFString, nil) as? String
+        }
+        guard environment == "Development" else {
+            SyncBench.log.error("-CuePadCloudKit 要开发环境签名（CUEPAD_SIGN=development xc.sh build mac），这个构建是 \(environment ?? "无", privacy: .public)，不连")
             return false
         }
         return true
