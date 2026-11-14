@@ -26,6 +26,7 @@ struct SessionRailCell: View {
     let open: (SessionState, SessionRail.Opening) -> Void
     @Environment(\.palette) private var palette
     @Environment(Workspace.self) private var workspace
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         Group {
@@ -42,7 +43,7 @@ struct SessionRailCell: View {
         .relaySpot(session: item.id, row: .rail)
         .accessibilityAddTraits(selected ? .isSelected : [])
         .accessibilityLabel(item.name)
-        .accessibilityValue(Dotted(item.shown.label, item.session.agentMark, item.pulse.fullContext?.help.spoken).spoken)
+        .accessibilityValue(Dotted(item.shown.label, project?.shownName, item.session.agentMark, item.pulse.fullContext?.help.spoken).spoken)
         .accessibilityIdentifier("session-rail-\(item.id)")
         .help(help)
     }
@@ -90,11 +91,15 @@ struct SessionRailCell: View {
     private var label: some View {
         Group {
             if form == .phone {
+                // 三层，越往下越轻：会动的状态标（唯一着色的）、会话名、哪家 Agent 与哪个项目（小一号、淡一档、单色）。
+                // 空闲的不画标：那一层收起来，名字与项目居中
                 VStack(spacing: Spacing.hair) {
-                    mark.frame(height: 16)
-                    name.font(Typography.caption2)
                     StateDot(shown: item.shown, size: Chrome.railMark)
+                        .frame(height: item.shown.isQuiet ? 0 : nil)
+                    name.font(Typography.caption2.weight(.semibold))
+                    tag
                 }
+                .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion) ?? Motion.fade, value: item.shown.isQuiet)
                 .padding(.horizontal, Spacing.hair)
                 .padding(.vertical, Spacing.tight)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -166,12 +171,14 @@ struct SessionRailCell: View {
         .overlay { if selected { RoundedRectangle(cornerRadius: Radius.card, style: .continuous).strokeBorder(palette.ink2, lineWidth: 1.5) } }
     }
 
-    private var mark: some View {
-        Group {
+    private var tag: some View {
+        HStack(spacing: Spacing.hair) {
             if let agent = item.session.agent.known { agent.mark.image } else { Image(.terminal) }
+            if let project { Text(verbatim: project.shownName) }
         }
-        .font(Glyph.control)
-        .foregroundStyle(palette.ink2)
+        .font(Typography.railTag)
+        .foregroundStyle(palette.ink3)
+        .lineLimit(1)
         .readerHidden(true)
     }
 

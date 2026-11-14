@@ -8,10 +8,14 @@ import os
 nonisolated struct AlertPreferences: Equatable, Sendable {
     private var off: Set<AlertKind>
 
+    /// 做完了与新回复是同一个开关（设置里一行"有新回复"）：都是"有个 Agent 做完了、该你看了"，只差 Cue 值不值班（`CueStore.push`），
+    /// 两种从不同时响。做完了读写新回复那一格。
     subscript(kind: AlertKind) -> Bool {
-        get { !off.contains(kind) }
-        set { if newValue { off.remove(kind) } else { off.insert(kind) } }
+        get { !off.contains(Self.toggle(kind)) }
+        set { if newValue { off.remove(Self.toggle(kind)) } else { off.insert(Self.toggle(kind)) } }
     }
+
+    private static func toggle(_ kind: AlertKind) -> AlertKind { kind == .settled ? .awaitsReply : kind }
 
     private static let on = "on"
 

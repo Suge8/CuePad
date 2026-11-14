@@ -79,6 +79,15 @@ extension Motion {
         }
     }
 
+    /// 会话状态标那根线换形（`StateInk`）：比 `nudge` 慢一截、带一点回弹——线被拉过去再落定，读作活的东西在变，不是图标在切换。
+    /// 这里的回弹不是松手：线是会话本身，换状态是它自己在动；收成一点时线宽不弹（弹过零会翻出来），只有形状弹。
+    nonisolated enum Ink {
+        static let morph: CGFloat = 0.5
+        static let bounce: CGFloat = 0.22
+        /// 不是线的标（铃铛、徽）从中心冒出来的那一下，与线收进去同一拍。
+        static let pop = Animation.spring(duration: 0.42, bounce: 0.3)
+    }
+
     /// `fade`、`yield` 的时长，渲染端的淡出（Mac 预览落地时飞的那张淡掉）与编排里的等候（等旧的淡完再来新的）用它。
     nonisolated enum Fade {
         static let duration: TimeInterval = 0.16

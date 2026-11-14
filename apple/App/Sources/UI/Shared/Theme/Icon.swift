@@ -25,7 +25,9 @@ nonisolated enum Icon: Hashable, Sendable {
     /// 技能与规则（侧栏底下那颗、Cue 面板那一行）；规则（AGENTS.md）一份
     case skill, instruction
     // 状态
-    case waiting, cueAsking, awaitsReply, failure, undelivered, onTheWay, replied, yourTurn, fresh, ended, interrupted, unknown, gone
+    case waiting, failure, undelivered, onTheWay, replied, fresh, ended, interrupted, unknown, gone
+    /// 在压缩上下文（会话状态）：两块板夹着弹簧；"现在压缩"那颗钮是往里收的箭头（`compact`）
+    case compacting
     case done, donePending, picked
     case syncStarting, synced, syncing, syncOff, syncRestricted, syncTrouble, syncPaused, uploadLocal, replaceWithCloud, syncNow
     case alertsPending, alertsOn, alertsOff
@@ -51,7 +53,7 @@ nonisolated enum Icon: Hashable, Sendable {
     case terminal, readFile, editFile, pondering, tool, said, started, added, branch, markUnread, fireCode, thinking
     case relay, relayStalled
     // Cue 与设置
-    case memory, wakeEnabled, wakeMessage, wakeActivity, wakeIdle, schedule, looked, mail
+    case memory, wakeEnabled, wakeMessage, wakeActivity, wakeIdle, schedule, looked
     case name, voice, sounds, hotkey, talkToCue, appearance, language, updates, launchAtLogin
     // 文件与交付物：没有画面的音频、列表里的文字卡、还在下载、视频的播放标、认不出类型的文件、转动查看 3D 模型
     case audio, document, downloading, play, file, inspect3D
@@ -92,14 +94,14 @@ nonisolated enum Icon: Hashable, Sendable {
         case .onTheWay: .ink("plane")
         case .agent: .ink("agent")
         case .waiting: .ink("waiting")
-        case .cueAsking: .ink("asking")
         case .failure: .ink("failure")
         case .undelivered: .ink("undelivered")
-        case .replied, .alertsPending: .ink("bell")
-        case .yourTurn: .ink("cursor")
+        case .replied: .ink("mail")
+        case .alertsPending: .ink("bell")
         case .fresh: .ink("sparkle")
-        // 已结束的会话、点了去的那一处已不在：都是那里已经没有了
-        case .ended, .gone: .ink("ended")
+        case .ended: .ink("ended")
+        case .gone: .ink("gone")
+        case .compacting: .ink("spring")
         case .interrupted: .ink("interrupted")
         case .unknown: .ink("unknown")
         case .picked: .filled("picked")
@@ -171,7 +173,7 @@ nonisolated enum Icon: Hashable, Sendable {
         case .started: .ink("ring.play")
         case .added: .ink("ring.plus")
         case .branch: .ink("branch")
-        case .markUnread, .awaitsReply: .ink("dot")
+        case .markUnread: .ink("dot")
         case .fireCode: .ink("flame")
         case .thinking: .ink("bubble.dots")
         case .relay: .ink("relay")
@@ -182,7 +184,6 @@ nonisolated enum Icon: Hashable, Sendable {
         case .wakeMessage, .talkToCue: .ink("bubble")
         case .wakeIdle, .looked: .ink("eye")
         case .schedule: .ink("alarm")
-        case .mail: .ink("mail")
         case .name: .ink("tag")
         case .hotkey: .ink("keyboard")
         case .appearance: .ink("sun")

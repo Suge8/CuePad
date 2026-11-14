@@ -169,7 +169,7 @@ extension CueTools {
     case .failed: "失败了" + settled
     case .rejected: "审查没通过" + settled
     case .interrupted: "被停下" + settled
-    case .idle: "歇着"
+    case .idle: "空闲"
     case nil: agent.phase.rawValue
     }
   }

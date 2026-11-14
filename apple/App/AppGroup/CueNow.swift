@@ -1,6 +1,6 @@
 import Foundation
 
-/// Cue 此刻（WORDS.md「推进中」「等你」「待回复」）：各端 Cue 那一行、小组件、灵动岛与锁屏、App 图标与菜单栏图标的角标读的唯一一份。
+/// Cue 此刻（WORDS.md「推进中」「等你」）：各端 Cue 那一行、小组件、灵动岛与锁屏、App 图标与菜单栏图标的角标读的唯一一份。
 /// 这里是推出来的这一份怎么画、随时间怎么变，各处只画（`CueNowViews`）。从库推出在 App 的 Services（`CueNow.init(_:at:local:)`，从 Cue 的摘要 `CueDigest`）；
 /// 推进中、被等你占着哪件与 Agent 数的规则只在 Kit（`CueTally`、`CueAgents`），这里与 App 都不另算。
 /// - 头像是哪一拍（`beat`）由 Cue 自己（`cue`）与下面几样推出，各处的头像只读它。
@@ -205,7 +205,7 @@ nonisolated extension CueNow {
         var spoken: String {
             switch kind {
             case .asks: String(localized: "\(count) 件拍板")
-            case .reply: String(localized: "\(count) 件待回复")
+            case .reply: String(localized: "\(count) 件新回复")
             case .advancing: String(localized: "\(count) 件推进中")
             case .subagents: String(localized: "\(count) 个子代理在跑")
             }
@@ -247,7 +247,7 @@ nonisolated extension CueNow {
             } else if let done = justDone {
                 String(localized: "刚做完「\(done.name)」")
             } else if advancing > 0 {
-                String(localized: "推进中 \(advancing) 件，都歇着")
+                String(localized: "推进中 \(advancing) 件，都空闲")
             } else {
                 elsewhere ?? Self.quiet
             }
@@ -303,7 +303,7 @@ nonisolated extension CueNow.Item.Kind {
     var label: String {
         switch self {
         case .asks: String(localized: "等你拍板")
-        case .reply: String(localized: "待回复")
+        case .reply: String(localized: "新回复")
         case .running: String(localized: "在跑")
         case .delegating: String(localized: "等子代理")
         case .resting: String(localized: "歇着")

@@ -48,7 +48,7 @@ struct SessionRow: View {
 
     private func card(shown: SessionShown, facts: RowFacts) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: Spacing.item) {
-            if !ended { StateDot(shown: shown, size: style.dot).relaySpot(session: session.sessionID) }
+            if !ended { StateDot(shown: shown, size: style.dot, announces: shown.isQuiet).relaySpot(session: session.sessionID) }
             VStack(alignment: .leading, spacing: style.spacing) {
                 headline(shown: shown)
                 MetaLine(spacing: Spacing.item, gap: 0) {
@@ -58,7 +58,7 @@ struct SessionRow: View {
                         } else if ended {
                             recap.foregroundStyle(palette.ink3)
                         } else {
-                            StateWord(shown: shown).fixedSize()
+                            if !shown.isQuiet { StateWord(shown: shown).fixedSize() }
                             if let note = facts.note {
                                 NoteWord(note: note)
                             } else if let handoff = workspace.handoff(of: session, shown: shown) {
@@ -90,7 +90,7 @@ struct SessionRow: View {
 
     private func compact(shown: SessionShown, facts: RowFacts) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: style.dot + Spacing.hair) {
-            StateDot(shown: shown, size: style.dot).relaySpot(session: session.sessionID)
+            StateDot(shown: shown, size: style.dot, announces: shown.isQuiet).relaySpot(session: session.sessionID)
             VStack(alignment: .leading, spacing: style.spacing) {
                 headline(shown: shown)
                 MetaLine(alignment: .center, spacing: Spacing.item, gap: 0) {
@@ -115,7 +115,7 @@ struct SessionRow: View {
         MetaLine(spacing: Spacing.item, gap: 0) {
             HStack(alignment: .firstTextBaseline, spacing: Spacing.glyph) {
                 Text(Highlight.matches(task?.nonEmpty ?? SessionRename.title(of: session, request: rename, at: services.speech), highlight))
-                    .font(style.name).fontWeight(shown.isUnread ? .bold : nil)
+                    .font(style.name).fontWeight(shown.isNewReply ? .bold : nil)
                     .foregroundStyle(style.card && ended ? palette.ink2 : palette.ink).lineLimit(1)
                 if session.agentMark != nil { AgentMark(session: session, font: style.meta, named: false).fixedSize() }
             }
@@ -210,7 +210,7 @@ private struct StatusLine: View {
 
     var body: some View {
         FactsLayout {
-            StateWord(shown: shown).fact()
+            if !shown.isQuiet { StateWord(shown: shown).fact() }
             if let note = facts.note { NoteWord(note: note).fact() }
             if let handoff { HandoffLine(handoff: handoff).foregroundStyle(palette.ink2).fact() }
             if let subagents = facts.subagents { SubagentCount(summary: subagents).fact() }

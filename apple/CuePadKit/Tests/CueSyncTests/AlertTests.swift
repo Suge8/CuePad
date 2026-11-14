@@ -158,7 +158,7 @@ import Testing
     #expect(try await rig.store.flagLeftToYou(left, host: "mac") == session)
     let record = try #require(try await rig.coordinator.record(for: rig.recordID(session)))
     #expect(record["notify"] as? String == "awaitsReply")
-    #expect(AlertText.content(for: record, kind: .awaitsReply).map { [$0.title, $0.body] } == ["登录页 待回复", "改好了"])
+    #expect(AlertText.content(for: record, kind: .awaitsReply).map { [$0.title, $0.body] } == ["登录页 新回复", "改好了"])
   }
 
   // MARK: 点通知的路由

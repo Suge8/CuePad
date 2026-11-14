@@ -1,7 +1,47 @@
 """图标与 Swift 动效共用的状态中线导出。"""
-from .geometry import G, Line
-from .rounded import base, statuses
+from .geometry import G, Arc, Line, dist, sample
+from .rounded import actions, base, statuses
 from .rounded.shared import WIDTH
+
+STRAND_POINTS = 48
+DOT = WIDTH["Regular"] * 1.2  # 符号里的小圆点（问号的点）：fills 里半径 w*.6
+
+
+def resample(path):
+    """一条中线按长度取 STRAND_POINTS 个点（格）；每段的端点都取到，折返的拐点（光标的衬线）不被削短。"""
+    lengths = [abs(s.r * s.sweep) if isinstance(s, Arc) else dist(s.a, s.b) for s in path]
+    total, slots = sum(lengths), STRAND_POINTS - 1
+    counts = [max(1, round(slots * l / total)) for l in lengths]
+    while sum(counts) > slots: counts[counts.index(max(counts))] -= 1
+    while sum(counts) < slots: counts[lengths.index(max(lengths))] += 1
+    points = [sample(s, k / n) for s, n in zip(path, counts) for k in range(n)] + [path[-1].end()]
+    return [(x / G, y / G) for x, y in points]
+
+
+def dot(x, y):
+    # 退化成极短的一笔：圆头的一笔就是一颗圆点，和线之间可以逐点变形
+    return [(x + 1e-3 * (k / (STRAND_POINTS - 1) - .5), y) for k in range(STRAND_POINTS)]
+
+
+def strand_shapes():
+    """会话状态标（`StateInk`）的几种样子：每种最多 6 根线，每根同样点数，状态之间逐点变形；第一根是主线（换形时新冒出的线从它上面长出来）。
+    线宽按格，常规字重。几何就是同名符号的中线，菜单里的静态图标与会动的标同一个样子。"""
+    w = WIDTH["Regular"]
+    line = lambda path: (resample(path), w)
+    def symbol(name, module=statuses):
+        opened, closed = module.centerlines(name)
+        return [line(path) for path in closed + opened]
+    return {
+        "heartbeat": [line(base.centerlines("session")[0][0])],
+        "wrench": symbol("wrench", actions),
+        "spring": symbol("spring")[2:] + symbol("spring")[:2],
+        "ask": symbol("waiting") + [(dot(0, 4.6), DOT)],
+        "mail": symbol("mail", actions),
+        "bot": symbol("relay"),
+        "plug": symbol("interrupted"),
+        "moon": symbol("ended"),
+    }
+
 
 def swift_geometry():
     """静动共用同一份中线，生成编译期 CoreGraphics；没有运行时 SVG 解析。"""
@@ -21,9 +61,19 @@ def swift_geometry():
                     result.append(f"        path.addArc(center: CGPoint(x: {fmt(s.c[0]/G)}, y: {fmt(s.c[1]/G)}), radius: {fmt(s.r/G)}, startAngle: {fmt(s.a0)}, endAngle: {fmt(s.a0+s.sweep)}, clockwise: {str(s.sweep<0).lower()})")
         result += ["        let mapped = CGMutablePath()","        mapped.addPath(path, transform: CGAffineTransform(a: rect.width / 24, b: 0, c: 0, d: rect.height / 24, tx: rect.midX, ty: rect.midY))","        return mapped","    }",""]
     # 圆点与符号 fill 使用同一来源，而不是把圆轮廓再描一遍变成空心点。
-    dot = statuses.fills("question",WIDTH["Regular"])[0][0]
-    x,y,r = dot.c[0]/G,dot.c[1]/G,dot.r/G
+    dot_ = statuses.fills("question",WIDTH["Regular"])[0][0]
+    x,y,r = dot_.c[0]/G,dot_.c[1]/G,dot_.r/G
     result += ["    static func questionDot(in rect: CGRect) -> CGRect {",
                f"        CGRect(x: rect.midX + rect.width * {fmt((x-r)/24)}, y: rect.midY + rect.height * {fmt((y-r)/24)}, width: rect.width * {fmt(2*r/24)}, height: rect.height * {fmt(2*r/24)})",
-               "    }","}",""]
+               "    }",""]
+    num = lambda n: f"{round(n, 4):g}"
+    result += [f"    static let strandPoints = {STRAND_POINTS}", ""]
+    for name, strands in strand_shapes().items():
+        result.append(f"    static let {name}: [InkStrand] = [")
+        for points, width in strands:
+            assert len(points) == STRAND_POINTS, name
+            xy = ", ".join(f"{num(x)}, {num(y)}" for x, y in points)
+            result.append(f"        InkStrand(width: {num(width)}, xy: [{xy}]),")
+        result += ["    ]", ""]
+    result[-1:] = ["}", ""]
     return "\n".join(result)

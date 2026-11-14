@@ -110,7 +110,7 @@ struct StyleBoard: View {
                     let shown = SessionShown(status: status)
                     HStack(spacing: 6) {
                         StateDot(shown: shown, size: 8)
-                        Text(shown.label).font(.subheadline.weight(shown.isUnread ? .semibold : .medium)).foregroundStyle(shown.labelTint(palette))
+                        Text(shown.label).font(.subheadline.weight(shown.isNewReply ? .semibold : .medium)).foregroundStyle(shown.labelTint(palette))
                             .lineLimit(1)
                     }
                 }

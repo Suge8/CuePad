@@ -400,18 +400,18 @@
         }
       }
     },
-    "%@ 待回复" : {
+    "%@ 新回复" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ needs your reply"
+            "value" : "%@ has a new reply"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ 待回复"
+            "value" : "%@ 新回复"
           }
         }
       }
@@ -1471,22 +1471,6 @@
         }
       }
     },
-    "%lld 件待回复" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld to reply"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld 件待回复"
-          }
-        }
-      }
-    },
     "%lld 件拍板" : {
       "localizations" : {
         "en" : {
@@ -1527,6 +1511,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld 件推进中"
+          }
+        }
+      }
+    },
+    "%lld 件新回复" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld new reply"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld new replies"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 件新回复"
           }
         }
       }
@@ -1779,22 +1791,6 @@
         }
       }
     },
-    "%lld 待回复" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld to reply"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld 待回复"
-          }
-        }
-      }
-    },
     "%lld 拍板" : {
       "localizations" : {
         "en" : {
@@ -1823,6 +1819,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld 推进中"
+          }
+        }
+      }
+    },
+    "%lld 新回复" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld new reply"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld new replies"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 新回复"
           }
         }
       }
@@ -2404,18 +2428,18 @@
         }
       }
     },
-    "Agent 做完了一轮" : {
+    "Agent 做完了、轮到你看；Cue 值班时只提示它留给你的" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "An agent finished a turn"
+            "value" : "An agent finished and it’s your turn; while Cue is on duty, only the ones it leaves for you"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Agent 做完了一轮"
+            "value" : "Agent 做完了、轮到你看；Cue 值班时只提示它留给你的"
           }
         }
       }
@@ -2500,22 +2524,6 @@
         }
       }
     },
-    "Agent 在等你回复" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Agent is waiting for your reply"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Agent 在等你回复"
-          }
-        }
-      }
-    },
     "Agent 在等你回答" : {
       "localizations" : {
         "en" : {
@@ -2596,22 +2604,6 @@
         }
       }
     },
-    "Agent 在等你说下一句" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Agent is waiting for you"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Agent 在等你说下一句"
-          }
-        }
-      }
-    },
     "Agent 拒绝了：%@" : {
       "localizations" : {
         "en" : {
@@ -2660,18 +2652,18 @@
         }
       }
     },
-    "Agent 歇着" : {
+    "Agent 有新回复，留给你回" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Agent is idle"
+            "value" : "Agent replied, left for you"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Agent 歇着"
+            "value" : "Agent 有新回复，留给你回"
           }
         }
       }
@@ -2816,6 +2808,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Agent 的接入没能更新：%@"
+          }
+        }
+      }
+    },
+    "Agent 空闲" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agent idle"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agent 空闲"
           }
         }
       }
@@ -3234,22 +3242,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Cue 已经收到这句了，撤不回"
-          }
-        }
-      }
-    },
-    "Cue 把会话留给你回" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cue left a session for you to reply to"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cue 把会话留给你回"
           }
         }
       }
@@ -13388,38 +13380,6 @@
         }
       }
     },
-    "待回复" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "To reply"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "待回复"
-          }
-        }
-      }
-    },
-    "待回复的会话" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sessions to Reply"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "待回复的会话"
-          }
-        }
-      }
-    },
     "很高" : {
       "localizations" : {
         "en" : {
@@ -14764,7 +14724,7 @@
         }
       }
     },
-    "推进中 %lld 件，都歇着" : {
+    "推进中 %lld 件，都空闲" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -14775,7 +14735,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "推进中 %lld 件，都歇着"
+            "value" : "推进中 %lld 件，都空闲"
           }
         }
       }
@@ -15824,6 +15784,22 @@
         }
       }
     },
+    "新回复" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New reply"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新回复"
+          }
+        }
+      }
+    },
     "新定时" : {
       "localizations" : {
         "en" : {
@@ -16669,7 +16645,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "New reply"
+            "value" : "New Replies"
           }
         },
         "zh-Hans" : {
@@ -21988,22 +21964,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "试听"
-          }
-        }
-      }
-    },
-    "该你了" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Your turn"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "该你了"
           }
         }
       }

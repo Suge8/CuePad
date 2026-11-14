@@ -5,3 +5,5 @@
 apple/CuePadKit/Tests/CueBridgeTests/Fixtures/opencode/imageToolResult.json
 # String Catalog：由 xcstringstool 与 strings.py 维护
 **/*.xcstrings
+# 状态标的几何：由 design/tools/cue-symbols.py 导出
+apple/App/Sources/UI/Shared/Theme/InkStateGeometry.swift

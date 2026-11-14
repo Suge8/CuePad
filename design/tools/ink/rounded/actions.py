@@ -1,7 +1,8 @@
 """功能图标：动作、文件、设备；中线与基准族共用。"""
+import math
 from ink.geometry import arcs, disc, poly, rpoly
 from . import base
-from .shared import box, moved
+from .shared import box, moved, ring, smooth
 
 NAMES = (
     "settings", "sidebar.right", "clear", "chevron.up", "chevron.right", "chevron.down", "chevron.left",
@@ -12,6 +13,25 @@ NAMES = (
     "branch", "flame", "eye", "power", "mail", "tag", "keyboard", "sun", "wave", "bubble.text", "bubble.dots",
     "mic", "mic.off", "speaker",
 )
+
+
+def wrench():
+    """开口扳手的外轮廓（一笔闭合）：圆头朝右上开一道槽，柄朝左下、末端半圆。槽与柄同宽，槽底略过圆心。"""
+    head, R, half, root = (4, -4), 6, 2.12, 0.7
+    u, v = (1 / math.sqrt(2), -1 / math.sqrt(2)), (1 / math.sqrt(2), 1 / math.sqrt(2))
+    at = lambda a, b: (head[0] + a * u[0] + b * v[0], head[1] + a * u[1] + b * v[1])
+    reach = math.sqrt(R * R - half * half)
+    end = at(-16.8, 0)
+    rim = lambda a0, a1: ring(head, R, a0, a1)
+    tip = math.degrees(math.atan2(half, reach))  # 槽口、柄根在圆上偏离轴线的角度
+    lower, upper = rim(-45 + tip, 135 - tip), rim(135 + tip, 315 - tip)
+    cap = ring(end, half, 45, 225, 30)
+    points = [at(-root, half)] + lower + cap + upper + [at(-root, -half)]
+    fillet = lambda r, step: 0.97 * r * math.cos(math.radians(step / 2))
+    radii = ([0] + [0] + [fillet(R, 20)] * (len(lower) - 2) + [1.6]
+             + [1.6] + [fillet(half, 30)] * (len(cap) - 2) + [1.6]
+             + [1.6] + [fillet(R, 20)] * (len(upper) - 2) + [0] + [0])
+    return smooth(points, radii, True)
 
 
 def centerlines(name):
@@ -117,8 +137,7 @@ def centerlines(name):
     elif name == "doc.blank":
         _,closed = base.centerlines("doc")
     elif name == "wrench":
-        closed.append(poly([(-8,10),(-11,7),(0,-4),(0,-9),(5,-11),(3,-6),(6,-3),(11,-5),(9,0),(4,0)],
-                           [1.8,1.8,1.8,2,0,0,0,0,2,1.8],True))
+        closed.append(wrench())
     elif name == "branch":
         line((-6,-5),(-6,6)); line((-6,2),(6,-4),radius=2)
         circle(-6,-8,2.5); circle(-6,9,2.5); circle(7,-7,2.5)

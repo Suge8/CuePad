@@ -77,7 +77,7 @@ extension CueHostTests {
         let board = try await rig.message(.cue, containing: "看板：")
         let lines = board.text.split(separator: "\n")
         for step in ["托管着在跑", "升级前就在跑"] { #expect(lines.first { $0.contains(step) }?.contains("工作中") == true, "\(step)") }
-        #expect(!board.text.contains("被打断") && !board.text.contains("歇着"))
+        #expect(!board.text.contains("被打断") && !board.text.contains("空闲"))
         await rig.stop()
     }
 

@@ -30,7 +30,7 @@ extension UpgradePreparationTests {
         guard case .preparing(let reason) = trip else { Issue.record("手机应显示准备，而不是发送中或失败"); return }
         #expect(reason.contains("尚未派发") && reason.contains("升级"))
         let shown = SessionShown(target, delivery: received, at: phone.services.speech)
-        #expect(!shown.isRunning && shown.mark == .icon)
+        #expect(!shown.isRunning && shown.ink == nil && !shown.flies)
         #expect(TaskNext(shown: shown, session: target, startable: nil)?.agentBusy == false)
         if action == "end" {
             await workspace.end(target)
