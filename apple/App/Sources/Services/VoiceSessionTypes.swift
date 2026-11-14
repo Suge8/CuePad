@@ -61,7 +61,7 @@ nonisolated struct VoiceCallProjection: Equatable, Codable, Sendable {
     }
 
     struct Request: Equatable, Codable, Sendable {
-        /// 原 VoiceCall.Request.rowID，落库前后不变；不是另一条业务记录。
+        /// 那一通的 VoiceRecord.Request.rowID，落库前后不变；不是另一条业务记录。
         var id = UUID()
         let reference: VoiceRequestReference
         let recording: Bool

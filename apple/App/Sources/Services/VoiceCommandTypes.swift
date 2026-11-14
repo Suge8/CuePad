@@ -1,7 +1,7 @@
 import CueStore
 import Foundation
 
-/// 已落库时只引用原 CueMessage UUID；未落库时引用 Mac 当前保留的 VoiceCall.Request.rowID。
+/// 已落库时只引用原 CueMessage UUID；未落库时引用那一通的 VoiceRecord.Request.rowID。
 /// unrecorded 不产生新业务库，Mac 丢失原对象就拒绝恢复，不能从客户端补造正文或请求。
 nonisolated enum VoiceRequestReference: Hashable, Codable, Sendable {
     case recorded(message: UUID)
