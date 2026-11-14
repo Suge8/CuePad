@@ -31,7 +31,7 @@ nonisolated struct PendingCapture: Codable, Equatable, Sendable {
 
 /// 分享扩展与主 App 之间的数据通路：扩展只往容器里的 `Capture/` 放内容，由主 App 入库，
 /// 资料库始终只有主 App 一个写者，主 App 的界面订阅也照常触发。
-/// 每条是一个目录：先放文件，最后原子写 `capture.json`；没有 json 的目录是尚未写完的，读取时跳过。
+/// 每条是一个目录：先放文件，最后原子写 `capture.json`；没有 json 的目录是尚未写完的，读取时跳过，放了 `abandonedAfter` 还没写完的是扩展半路没了，收拾时删掉。
 /// 目录名（UUID）是条目的稳定标识：入库时与建卡同事务记下（`CueStore.createCard(capture:)`），删失败的条目下次只重试删除。
 nonisolated enum CaptureQueue {
     static let notification = "\(AppIdentity.id).capture-enqueued"
@@ -69,6 +69,39 @@ nonisolated enum CaptureQueue {
             return Entry(directory: directory, capture: capture)
         }.sorted { $0.capture.createdAt < $1.capture.createdAt }
     }
+
+    /// 收拾入不了库、也等不到的条目，返回挪走的那几条读不出的原因（调用方报告）：
+    /// 清单读不出（文件坏了、别的版本的格式）的整条挪进旁边的 `unreadableName` 目录，不再每次重试、也不丢；没写完又放太久的删掉。
+    static func clearUnusable(in queue: URL, now: Date = .now) -> [String] {
+        let fileManager = FileManager.default
+        let directories = (try? fileManager.contentsOfDirectory(at: queue, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
+        var unreadable: [String] = []
+        for directory in directories {
+            let manifest = directory.appending(path: manifestName)
+            guard fileManager.fileExists(atPath: manifest.path) else {
+                let modified = (try? directory.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate ?? now
+                if now.timeIntervalSince(modified) > abandonedAfter { try? fileManager.removeItem(at: directory) }
+                continue
+            }
+            do {
+                _ = try decoder.decode(PendingCapture.self, from: Data(contentsOf: manifest))
+            } catch {
+                let aside = queue.deletingLastPathComponent().appending(path: unreadableName, directoryHint: .isDirectory)
+                do {
+                    try fileManager.createDirectory(at: aside, withIntermediateDirectories: true)
+                    try fileManager.moveItem(at: directory, to: aside.appending(path: directory.lastPathComponent))
+                    unreadable.append("\(directory.lastPathComponent)：\(error)")
+                } catch {
+                    unreadable.append("\(directory.lastPathComponent) 读不出也没能挪开：\(error)")
+                }
+            }
+        }
+        return unreadable
+    }
+
+    static let unreadableName = "CaptureUnreadable"
+    /// 扩展写一条最多几秒；放一天还没写完的不会再有人写。
+    private static let abandonedAfter: TimeInterval = 86_400
 
     static func remove(_ entry: Entry) throws {
         try FileManager.default.removeItem(at: entry.directory)
