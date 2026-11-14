@@ -13,7 +13,7 @@ import QuartzCore
 /// - `long`：从 `main` 起每一圈长任务的 [开始, 结束]。
 /// 每个时刻另记到那一刻主线程执行的指令（`…MainM`，百万）、整个进程的（`…AllM`，含后台线程，随它们那一刻做到哪浮动）与主线程的 CPU 毫秒（`…CPUMs`）：
 /// 指令不随机器忙闲变，前后对比以主线程的为准；CPU 比墙钟短得多时主线程是在等（机器忙时等 CPU，或者等锁、等读盘）。
-/// 主线程与进程的计数从 exec 之前 app.py 那段 python 算起（`entry` 那一截，每次相同，前后对比时抵消）。
+/// 主线程与进程的计数跨 exec 不清零，含 exec 之前那段 python：perf.py 按 app_mac.exec_mac 记下的数扣掉。
 /// 带着 `-CuePadTraceWait YES` 时进 `main` 就等开录（`waitForTracer`），时刻从放行时算。
 enum LaunchBench {
     static let active = DebugScene.args.driveOpts.bench == "launch"

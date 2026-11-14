@@ -101,9 +101,10 @@ def launch(app, derived, runs, extra):
         if line is None or status:
             fail(f"CuePad 没量完（退出码 {status}）：{''.join(lines)[-500:]}")
         # 时刻减去 exec 成 CuePad 的那一刻（rusage.py 同口径）
-        raw, exec_at = json.loads(line[7:]), json.load(open(EXEC_AT))["execAt"]
-        ms = lambda t: round((t - exec_at) / 1e6)
-        row = {k: ms(raw[k]) for k in moments} | {k: raw[k] for k in raw if k.endswith(("MainM", "AllM", "CPUMs"))}
+        raw, exec_at = json.loads(line[7:]), json.load(open(EXEC_AT))
+        ms = lambda t: round((t - exec_at["execAt"]) / 1e6)
+        # 计数减去 exec 之前 python 跑掉的（app_mac.exec_mac）：只算 CuePad 自己的
+        row = {k: ms(raw[k]) for k in moments} | {k: round(raw[k] - exec_at["before"][m]) for k in raw for m in exec_at["before"] if k.endswith(m)}
         row |= {"long": [[ms(a), round((b - a) / 1e6)] for a, b in raw["long"]], "load": round(os.getloadavg()[0])}
         print(json.dumps(row, ensure_ascii=False), flush=True)
         rows.append(row)
