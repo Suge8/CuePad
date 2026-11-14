@@ -2428,18 +2428,18 @@
         }
       }
     },
-    "Agent 做完了一轮" : {
+    "Agent 做完了、轮到你看；Cue 值班时只提示它留给你的" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "An agent finished a turn"
+            "value" : "An agent finished and it’s your turn; while Cue is on duty, only the ones it leaves for you"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Agent 做完了一轮"
+            "value" : "Agent 做完了、轮到你看；Cue 值班时只提示它留给你的"
           }
         }
       }
@@ -3242,22 +3242,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Cue 已经收到这句了，撤不回"
-          }
-        }
-      }
-    },
-    "Cue 把会话留给你回" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cue left a session for you to reply to"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cue 把会话留给你回"
           }
         }
       }
@@ -15832,22 +15816,6 @@
         }
       }
     },
-    "新回复的会话" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "New Replies"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "新回复的会话"
-          }
-        }
-      }
-    },
     "新定时" : {
       "localizations" : {
         "en" : {
@@ -16684,6 +16652,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "有改动没能同步，本机的内容都在；每一条为什么、会不会自动重试，见下面的明细"
+          }
+        }
+      }
+    },
+    "有新回复" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New Replies"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "有新回复"
           }
         }
       }
