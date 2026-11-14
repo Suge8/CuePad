@@ -6,23 +6,19 @@ import Foundation
 extension VoiceService {
     func startLocal(source: VoicePeer.Source) {
         guard call?.isLive != true, remote == nil else { return }
-        let call = obtainCall(source: source)
+        let call = newCall(source: source)
         projectionReaders.removeAll()
-        call.reconnect()
+        call.start()
         observeCall(call)
     }
 
-    private func obtainCall(host: String? = nil, source: VoicePeer.Source = .microphone) -> VoiceCall {
+    /// 每一通新建，上一通（连同它的记录）随之放掉。
+    private func newCall(host: String? = nil, source: VoicePeer.Source = .microphone) -> VoiceCall {
         preview.stop()
         let services = services
         let tell: (String, UUID) async throws -> UUID = { [weak services] text, command in
             guard let services else { throw CancellationError() }
             return try await services.recordVoiceSpeech(text, command: command, host: host)
-        }
-        if let call {
-            call.record.tell = tell
-            call.dependencies.source = source
-            return call
         }
         let value = makeCall(.init(
             access: { [weak services] in
@@ -125,20 +121,28 @@ extension VoiceService {
         remote = media
         do {
             let profile = try await services.store.cueProfile()
-            guard remote === media, media.available else { return }
+            // 读库期间手机已离开（挂断、断开）：这一路就此放掉，不然之后的来电一直被当成占线
+            guard remote === media else { return }
+            guard media.available else { return release(media) }
             guard profile?.activeHost == services.hostID else {
+                release(media)
                 await rejectOffer(header, issue: .cueUnavailable)
-                remote = nil
                 return
             }
-            let call = obtainCall(host: services.hostID)
+            let call = newCall(host: services.hostID)
             projectionReaders = [header.sender.device: header]
-            call.reconnect(session: header.session.rawValue, media: media)
+            call.ended = { [weak self, weak media] in if let media { self?.release(media) } }
+            call.start(session: header.session.rawValue, media: media)
             observeCall(call)
         } catch {
+            release(media)
             await rejectOffer(header, issue: .storageUnavailable)
-            if remote === media { remote = nil }
         }
+    }
+
+    /// 手机那一路的唯一出口：这一通收尾完成、或还没建通话就离开时
+    private func release(_ media: VoiceRemoteMedia) {
+        if remote === media { remote = nil }
     }
 
     private func rejectOffer(_ header: VoiceSignalHeader, issue: VoiceIssue) async {
@@ -153,8 +157,6 @@ extension VoiceService {
         observing = Task { [weak self] in
             for await result in Observations({ [weak self] in self.map { service in Result { try service.fullProjection(call) } } }) {
                 guard let self, let result, !Task.isCancelled else { return }
-                // 先于投影：投影读失败时也要放开手机那通，否则之后的来电一直被当成占线
-                if !call.isLive, self.call === call { self.remote = nil }
                 let value: VoiceCallProjection
                 switch result {
                 case .success(let projection): value = projection
@@ -207,7 +209,6 @@ extension VoiceService {
               local == nil || bound == local, peer == nil || phone == peer else { return }
         if remote.connected, call?.isLive == true, VoiceLink.canRelink(after: reason) { return relink(remote, phone: phone.device, reason: reason) }
         remote.departed(reason)
-        if call?.isLive != true { self.remote = nil }
     }
 
     /// 等手机回来；Mac 自己的中转断了时手机未必察觉，所以这边也每秒向手机的当前租约问一次（resume ask），手机回的任何一帧都算回来了。

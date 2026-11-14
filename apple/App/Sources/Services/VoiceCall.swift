@@ -3,11 +3,14 @@ import CueBridge
 import CueStore
 import Foundation
 import Observation
+import OSLog
 
 /// GPT Live 负责听说与筛选，只有 delegation 派活；派出的请求与 Cue 的结果记在 `VoiceRecord`。
-/// 通话结束仍跟随库里的结果；重连复用那份记录，只发送从未提交的新结果。已提交或半途失败的结果须明确请求再说。
+/// 一通一个，结束后不复用：挂断后仍跟随库里这一通派出请求的结果，直到下一通开始；下一通从空记录开始，上一通的请求留在聊天里。
+/// 已提交或半途失败的结果须明确请求再说。
 @Observable
 final class VoiceCall {
+    static let log = Logger(subsystem: AppIdentity.id, category: "voice")
     enum Phase: Equatable {
         case connecting, listening, speaking, closing, ended
         case failed(Failure)
@@ -54,16 +57,19 @@ final class VoiceCall {
     private(set) var audioMs = 0
     private(set) var usedPercent: Double?
     @ObservationIgnored var mark: (String) -> Void = { _ in }
-    @ObservationIgnored var dependencies: Dependencies
+    /// 收尾完成（声音与连接都已停下）时调一次
+    @ObservationIgnored var ended: () -> Void = {}
+    @ObservationIgnored let dependencies: Dependencies
     @ObservationIgnored private var peer: (any VoiceMedia)?
     @ObservationIgnored private(set) var session = UUID()
-    @ObservationIgnored var inputs = AsyncStream<Input>.makeStream()
+    @ObservationIgnored let inputs = AsyncStream<Input>.makeStream()
     @ObservationIgnored private var connecting: Task<Void, Never>?
     @ObservationIgnored private var muting: Task<Void, Never>?
     @ObservationIgnored private var deadline: Task<Void, Never>?
     @ObservationIgnored private var outgoing: (attempt: UUID, message: UUID, task: Task<Void, Never>)?
     @ObservationIgnored private var delegations: Set<String> = []
     @ObservationIgnored private var inputPeak = 0.0
+    @ObservationIgnored private var started = false
     static let connectionLimit: Duration = .seconds(30)
 
     enum Input {
@@ -103,23 +109,13 @@ final class VoiceCall {
     var canRepeat: Bool { channel != nil }
     func hangUp() { inputs.continuation.yield(.hangUp) }
 
-    /// 重新接通只重建媒体与控制连接；库订阅、请求身份和结果保留，不重新执行业务。
-    func reconnect(session: UUID = UUID(), media: (any VoiceMedia)? = nil) {
-        guard !isLive else { return }
+    /// 只能开始一次；media 给了就用它（手机打进来的那一路），没给按 `Dependencies.source` 建本机的。
+    func start(session: UUID = UUID(), media: (any VoiceMedia)? = nil) {
+        guard !started else { return }
+        started = true
         peer = media
-        inputs = AsyncStream<Input>.makeStream()
         connection = .connecting
         self.session = session
-        assistantTurns.removeAll()
-        waitingForResponse = false
-        delegations.removeAll()
-        audioMs = 0
-        usedPercent = nil
-        isMuted = false
-        inputPeak = 0
-        inputSamples = []
-        outputSamples = []
-        userTurn = nil
         Task { await run() }
     }
 
@@ -133,7 +129,6 @@ final class VoiceCall {
 
     /// 输入从起点就有人消费；连接时限包含凭证、权限、建连和控制连接，挂断不等它们返回。
     private func run() async {
-        guard connecting == nil else { return }
         record.call = self
         do { try record.begin() }
         catch { await finish(.failed(Self.failure(error))); return }
@@ -232,6 +227,8 @@ final class VoiceCall {
     }
 
     private func finish(_ end: Phase) async {
+        // 界面只说归类后的原因（`VoiceService.issue(for:)`），上游原文只进日志
+        if case .failed(let failure) = end { Self.log.error("voice call failed: \(String(describing: failure), privacy: .public)") }
         let previous = connection
         connection = .closing(end)
         inputs.continuation.finish()
@@ -254,6 +251,7 @@ final class VoiceCall {
         outputActive = false
         if case .microphone = dependencies.source { mark(String(format: "input-max %.3f", inputPeak)) }
         mark("end")
+        ended()
     }
 
     /// 库读不了：还通着就以这个原因结束。

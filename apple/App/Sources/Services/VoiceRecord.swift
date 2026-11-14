@@ -78,9 +78,9 @@ import Observation
 
     var isWriting: Bool { !writing.isEmpty }
 
-    /// 第一通开始时定下从哪条消息之后读结果，并订阅请求的执行与停止。
+    /// 通话开始时定下从哪条消息之后读结果，并订阅请求的执行与停止。
     func begin() throws {
-        if cursor == nil { cursor = try store.snapshot { try $0.lastWrite() }.value }
+        cursor = try store.snapshot { try $0.lastWrite() }.value
         watch()
     }
 
@@ -129,6 +129,7 @@ import Observation
                 watch()
             } catch {
                 failure = error
+                VoiceCall.log.error("voice request not recorded: \(error, privacy: .public)")
                 if let index = requests.firstIndex(where: { $0.id == id }) { requests[index].submission = .failed(error.localizedDescription) }
             }
             writing[id] = nil

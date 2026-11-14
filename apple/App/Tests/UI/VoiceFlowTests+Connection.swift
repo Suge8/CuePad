@@ -90,7 +90,7 @@ extension VoiceFlowTests {
         fixture.received?(.success(.usage(audioMs: 9876)))
         try await eventually("新连接已消费旧事件之后的屏障") { fixture.call.audioMs == 9876 || fixture.call.phase.isFailure }
         #expect(fixture.call.phase == .listening)
-        #expect(fixture.voiceRecord.requests.count == requests)
+        #expect(fixture.voiceRecord.requests.isEmpty, "旧连接迟到的请求不进新的一通")
         try await fixture.hangUp()
     }
 }
