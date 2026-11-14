@@ -9,7 +9,10 @@ import Testing
 @MainActor
 @Suite(.releasesLibraries)
 struct DeliveryConfirmationTests {
+    /// 送达只由 App 的 Pi 历史索引写下（`deliveryHistoryFiles`），所以接入 Pi 并起好后台工作。
     func session(_ app: TestApp) async throws -> (SessionState, FakeExtension, URL) {
+        try await app.connect(.pi)
+        app.services.start()
         let id = UUID().uuidString.lowercased()
         let file = app.piPaths.sessionsDirectory.appending(path: "--confirmation--/\(id).jsonl")
         try Self.write([], session: id, cwd: app.directory.path, to: file)

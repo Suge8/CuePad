@@ -19,7 +19,7 @@ extension ClaudeHostedSession {
         try await deliver(hosted(ClaudeStream.content(text: message.text, images: message.images), uuid: message.deliveryID))
         // stream-json 不报首条消息，由这里记
         if !message.text.isEmpty, let id {
-            bridge?.update(id) { if $0.firstMessage == nil { $0.firstMessage = String(message.text.prefix(SessionName.firstMessageLimit)) } }
+            bridge?.update(id) { if $0.firstMessage == nil { $0.firstMessage = message.text } }
         }
     }
 

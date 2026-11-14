@@ -64,7 +64,7 @@ public final class Bridge {
     public init(socketDirectory: URL = PiPaths().socketDirectory, hostedIdle: Duration = AgentTimeouts.hostedIdle, timing: Timing = .system) {
         self.hostedIdle = hostedIdle
         self.timing = timing
-        connections = PiConnections(directory: socketDirectory)
+        connections = PiConnections(directory: socketDirectory, timing: timing)
         connections.bridge = self
     }
 
@@ -190,7 +190,7 @@ extension Bridge {
     /// 请该会话查一次所有 OAuth 订阅的额度：查到的随 `changes()` 的 `.quota` 报出（与回复里带回的同一条路），
     /// 再返回；有一家没查到抛 `rejected("failed: …")`（查到的那几家照常报出）。只有 Pi 有。
     public func refreshQuota(in id: Session.ID) async throws {
-        try await pi(id).refreshQuota()
+        try await control(id, needs: .quota).refreshQuota(in: id)
     }
 
     /// 不在桥上的为 false。
@@ -201,12 +201,6 @@ extension Bridge {
         guard let link = controls[id], let session = session(id: id) else { throw BridgeError.unknownSession(id) }
         guard session.capabilities.isSuperset(of: needs) else { throw BridgeError.unsupported }
         return link
-    }
-
-    private func pi(_ id: Session.ID) throws -> PiConnection {
-        guard let link = controls[id] else { throw BridgeError.unknownSession(id) }
-        guard let pi = link as? PiConnection else { throw BridgeError.unsupported }
-        return pi
     }
 }
 #endif

@@ -1,10 +1,12 @@
 #if os(macOS)
 import CueStore
 import Foundation
+import os
 import Synchronization
 
 /// 写入只在用户动作时（整理、文件页），后台只读。
 public struct AgentLibraryFiles: Sendable {
+    private static let log = Logger(subsystem: AppIdentity.id, category: "library")
     private let access: AgentFileAccess
     private let trash: @Sendable (URL) throws -> URL
     /// 读一遍是逐个目录读、不是快照，整理一次也要动好几个目录（搬技能跨两处）：读夹在一次整理或撤销中间，
@@ -89,7 +91,10 @@ public struct AgentLibraryFiles: Sendable {
                     count += 1
                 }
             } catch {
-                try? LibraryTidying.revert(tidying.undo)
+                // 报给用户的仍是让整理停下的那个错；放回也失败时文件停在半途，只能从日志查哪些没放回
+                do { try LibraryTidying.revert(tidying.undo) } catch let revert {
+                    Self.log.error("整理中途出错后放回失败，文件停在半途：\(String(describing: revert), privacy: .public)")
+                }
                 throw error
             }
             return (count, tidying.undo)

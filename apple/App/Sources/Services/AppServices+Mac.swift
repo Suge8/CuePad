@@ -203,7 +203,8 @@ extension AppServices {
             agent: agent, paths: paths, transcriptWindow: Chat.transcriptWindow, files: store.files,
             start: { [weak self] file in await self?.loadHistoryStart(for: file) }) {
             let scope = connected ? .all : await hostedScope(of: agent)
-            let events = agent == .pi
+            // 从历史确认送达的那一家（`AgentKind.confirmsFromHistory`）还要跟着未收尾投送的文件：确认只靠它写下的送达
+            let events = agent.confirmsFromHistory
                 ? indexer.events(following: deliveryHistoryFiles(), scope: scope)
                 : indexer.events(following: bridge.sessionFiles, scope: scope)
             return await consumeHistory(events, agent: agent)

@@ -122,19 +122,23 @@ extension SessionProcess {
     var startDate: Date { Date(timeIntervalSince1970: TimeInterval(startedAt) / 1_000_000) }
 }
 
-/// 盯一个目录本身的增删改名（kqueue），在主线程回调。不用 FSEvents：fseventsd 转发的事件实测晚到 0.4 到 20 多秒，
-/// 后台起的、唤醒的会话都要等它才上桥。
+/// 盯一个目录里的增删改名（kqueue），在主线程回调；`gone` 为 true 是目录本身被删或挪走了，这个盯着的不会再有事件。
+/// 不用 FSEvents：fseventsd 转发的事件实测晚到 0.4 到 20 多秒，后台起的、唤醒的会话都要等它才上桥。
 @MainActor
 final class DirectoryWatcher {
     private let source: DispatchSourceFileSystemObject
 
-    init(_ directory: URL, onChange: @escaping @MainActor () -> Void) throws {
+    init(_ directory: URL, onChange: @escaping @MainActor (_ gone: Bool) -> Void) throws {
         let descriptor = open(directory.path, O_EVTONLY)
         guard descriptor >= 0 else {
             throw BridgeError.insecureSocketDirectory("cannot watch \(directory.path): \(String(cString: strerror(errno)))")
         }
-        source = DispatchSource.makeFileSystemObjectSource(fileDescriptor: descriptor, eventMask: .write, queue: .main)
-        source.setEventHandler { MainActor.assumeIsolated(onChange) }
+        let source = DispatchSource.makeFileSystemObjectSource(fileDescriptor: descriptor, eventMask: [.write, .delete, .rename], queue: .main)
+        self.source = source
+        source.setEventHandler {
+            let gone = !source.data.isDisjoint(with: [.delete, .rename])
+            MainActor.assumeIsolated { onChange(gone) }
+        }
         source.setCancelHandler { close(descriptor) }
         source.resume()
     }

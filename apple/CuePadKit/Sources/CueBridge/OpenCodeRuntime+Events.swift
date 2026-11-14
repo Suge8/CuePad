@@ -44,7 +44,7 @@ extension OpenCodeRuntime {
             await change(sessionID, connection) { $0.info.model = data.model }
         case "session.inbox.enqueued":
             await change(sessionID, connection, activeAt: event.at) {
-                if $0.firstMessage == nil { $0.firstMessage = data.item?.payload?.text.map { String($0.prefix(SessionName.firstMessageLimit)) } }
+                if $0.firstMessage == nil { $0.firstMessage = data.item?.payload?.text }
             }
         case "session.inbox.delivered":
             enqueueIngest(sessionID, urgent: true)

@@ -11,7 +11,7 @@ extension ACPSession: SessionLink {
         try await interrupt()
         try prompt(ACPContent.prompt(text: message.text, images: message.images), deliveryID: message.deliveryID)
         if !message.text.isEmpty, let id {
-            bridge?.update(id) { if $0.firstMessage == nil { $0.firstMessage = String(message.text.prefix(SessionName.firstMessageLimit)) } }
+            bridge?.update(id) { if $0.firstMessage == nil { $0.firstMessage = message.text } }
         }
     }
 
