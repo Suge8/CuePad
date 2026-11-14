@@ -74,13 +74,13 @@ struct TaskCheckButton: View {
 
 extension View {
     /// 停留后写入的是设为完成，不是翻转：等待时别处已做完也不会被翻回去。
-    func taskCheck(_ task: Card?, subtasks: TaskProgress?, check: Binding<TaskCheck>) -> some View {
+    func taskCheck(_ task: Card, subtasks: TaskProgress?, check: Binding<TaskCheck>) -> some View {
         modifier(TaskCheckFlow(task: task, subtasks: subtasks, check: check))
     }
 }
 
 private struct TaskCheckFlow: ViewModifier {
-    let task: Card?
+    let task: Card
     let subtasks: TaskProgress?
     @Binding var check: TaskCheck
     @Environment(Workspace.self) private var workspace
@@ -97,7 +97,7 @@ private struct TaskCheckFlow: ViewModifier {
         }
         // 停留时就离开了页面（列表收起、换页）：照样写入，不丢这次勾选
         .onDisappear { if check.phase == .pending { commit() } }
-        .onChange(of: task?.completedAt) { check.phase = .idle }
+        .onChange(of: task.completedAt) { check.phase = .idle }
     }
 
     private var busy: SessionState? { if case .agent(let session) = check.ask { session } else { nil } }
@@ -107,9 +107,8 @@ private struct TaskCheckFlow: ViewModifier {
     }
 
     private func commit() {
-        guard let id = task?.id else { return }
         check.phase = .committed
-        let workspace = workspace, check = $check
+        let workspace = workspace, check = $check, id = task.id
         Task {
             do {
                 try await workspace.complete(id)

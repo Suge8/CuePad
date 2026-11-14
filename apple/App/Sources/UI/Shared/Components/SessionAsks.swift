@@ -86,11 +86,20 @@ private struct SessionAsks: ViewModifier {
     func body(content: Content) -> some View {
         content
             .panel(item: renaming) { RenameSheet(target: $0.session, shown: $0.shown, adopts: $0.adopts) }
-            .agentBusyDialog(completing, isPresented: Binding { completing != nil } set: { if !$0, completing != nil { workspace.sessionAsk = nil } }) {
+            .agentBusyDialog(completing?.session, isPresented: Binding { completing != nil } set: { if !$0, completing != nil { workspace.sessionAsk = nil } }) {
                 [workspace, completing] in
                 guard let completing else { return }
-                workspace.attempt { try await workspace.confirmFinish(completing) }
+                if let task = completing.task {
+                    workspace.attempt { try await workspace.complete(task) }
+                } else {
+                    workspace.attempt { try await workspace.confirmFinish(completing.session) }
+                }
             }
+            .dialog(.verbatim(TaskCopy.openSubtasks(steps?.progress)), isPresented: Binding { steps != nil } set: { if !$0, steps != nil { workspace.sessionAsk = nil } },
+                    buttons: [DialogButton(title: "全部完成") { [workspace, steps] in
+                        guard let task = steps?.task else { return }
+                        workspace.attempt { try await workspace.complete(task) }
+                    }])
         #if os(macOS)
             .dialog(Self.title, item: asked { if case .end(let session) = $0 { session } else { nil } }, message: Self.message) { session in
                 [DialogButton(title: "结束会话", role: .destructive) { end(session) }]
@@ -123,7 +132,8 @@ private struct SessionAsks: ViewModifier {
         }
     }
 
-    private var completing: SessionState? { if case .complete(let session) = workspace.sessionAsk { session } else { nil } }
+    private var completing: (session: SessionState, task: UUID?)? { if case .complete(let session, let task) = workspace.sessionAsk { (session, task) } else { nil } }
+    private var steps: (task: UUID, progress: TaskProgress)? { if case .completeSteps(let task, let progress) = workspace.sessionAsk { (task, progress) } else { nil } }
     private var ending: SessionState? { if case .end(let session) = workspace.sessionAsk { session } else { nil } }
 
     private func end(_ session: SessionState) { Task { await workspace.end(session) } }

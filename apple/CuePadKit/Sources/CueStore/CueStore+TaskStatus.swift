@@ -62,6 +62,14 @@ extension CueStore {
     else { try write { _ = try applyStatus(id, status) } }
   }
 
+  /// 推进中的任务拖回待办：改回待办（同 `setStatus(_:.todo)`），给了位置就落在那里，一次写完——中途失败不会只改了一半。
+  public func returnToTodo(_ id: UUID, to slot: CardSlot?, after previous: UUID?) throws {
+    try write {
+      try applyStatus(id, .todo)
+      if let slot { try relocate(id, to: slot, after: previous) }
+    }
+  }
+
   /// 把任务改成 `status`（必须在写事务内）；返回改后库里的状态。已经是它时不动。
   @discardableResult
   func applyStatus(_ id: UUID, _ status: TaskStatus) throws -> TaskStatus {
