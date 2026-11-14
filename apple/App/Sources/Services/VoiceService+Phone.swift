@@ -30,8 +30,32 @@ extension VoiceService {
             issue = reason
             throw reason
         }
-        preview.stop()
         let owner = VoicePhoneSession(id: VoiceSessionID(UUID()), local: local, media: makeMedia())
+        adopt(owner)
+        do {
+            let profile = try await owner.scope.perform { try await self.services.store.cueProfile() }
+            guard let host = profile?.activeHost else { throw VoiceIssue.cueUnavailable }
+            let peer = try await owner.scope.perform { try await signaling.resolveVoicePeer(VoiceDeviceID(host)) }
+            guard signaling.voiceAvailability == .ready(endpoint: local) else { throw VoiceSignalError.leaseChanged }
+            owner.leg.link = .bound(local: local, peer: peer)
+            phoneBinding = (owner.id, local, peer)
+            let offer = try await owner.scope.perform { try await owner.media.offer() }
+            try await owner.scope.perform {
+                try await signaling.sendVoice(.media(signal: .offer(value: VoiceOffer(sdp: offer))), session: owner.id, to: peer)
+            }
+        } catch {
+            guard phone === owner, !owner.scope.ended else { return }
+            AppServices.log.error("Voice start failed: \(String(describing: error), privacy: .public)")
+            let reason = error as? VoiceIssue ?? Self.phoneIssue(error)
+            await end(reason: .mediaFailed)
+            issue = reason
+            throw reason
+        }
+    }
+
+    /// 换上新一通的媒体所有者、清掉上一通的痕迹并起接通期限；`start` 与调试回放（没有信令）共用这一处。
+    func adopt(_ owner: VoicePhoneSession) {
+        preview.stop()
         phone = owner
         phoneBinding = nil
         phoneEnd = nil
@@ -56,25 +80,6 @@ extension VoiceService {
             catch { return }
             guard let self, self.phone === owner else { return }
             await self.end(reason: .timedOut)
-        }
-        do {
-            let profile = try await owner.scope.perform { try await self.services.store.cueProfile() }
-            guard let host = profile?.activeHost else { throw VoiceIssue.cueUnavailable }
-            let peer = try await owner.scope.perform { try await signaling.resolveVoicePeer(VoiceDeviceID(host)) }
-            guard signaling.voiceAvailability == .ready(endpoint: local) else { throw VoiceSignalError.leaseChanged }
-            owner.leg.link = .bound(local: local, peer: peer)
-            phoneBinding = (owner.id, local, peer)
-            let offer = try await owner.scope.perform { try await owner.media.offer() }
-            try await owner.scope.perform {
-                try await signaling.sendVoice(.media(signal: .offer(value: VoiceOffer(sdp: offer))), session: owner.id, to: peer)
-            }
-        } catch {
-            guard phone === owner, !owner.scope.ended else { return }
-            AppServices.log.error("Voice start failed: \(String(describing: error), privacy: .public)")
-            let reason = error as? VoiceIssue ?? Self.phoneIssue(error)
-            await end(reason: .mediaFailed)
-            issue = reason
-            throw reason
         }
     }
 
