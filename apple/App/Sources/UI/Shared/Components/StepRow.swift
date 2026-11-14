@@ -15,6 +15,8 @@ struct StepRow: View {
     @Environment(\.chatStay) private var stay
     @State private var opened: Opened?
     @State private var key = UUID()
+    /// 这一次点开要去取（每点开一次换一个）：取的任务随这一行走，行没了、收起了就不再等。
+    @State private var fetching: UUID?
 
     enum Opened: Equatable { case loading, ready(ToolCallDetail), missing(String) }
 
@@ -41,6 +43,7 @@ struct StepRow: View {
             }
             .onChange(of: item.detail) { if opened == .loading, let detail = item.detail { opened = .ready(detail) } }
             .onDisappear { if opened != nil { stay?(key, false) } }
+            .task(id: fetching) { if fetching != nil { await fetch() } }
         } else {
             row(open: nil)
         }
@@ -65,28 +68,32 @@ struct StepRow: View {
     private func toggle() {
         guard opened == nil else {
             stay?(key, false)
+            fetching = nil
             return opened = nil
         }
         stay?(key, true)
         if let detail = item.detail { return opened = .ready(detail) }
         opened = .loading
-        Task {
-            do {
-                #if os(macOS)
-                if services.holdsSteps(of: session) {
-                    let detail = try await AppServices.stepDetail(item.calls ?? [], of: session.sessionID, in: services.store, runtimes: services.runtimes)
-                    if opened == .loading { opened = .ready(detail) }
-                    return
-                }
-                #endif
-                guard let message else { return }
-                try await services.fetchStep(index, of: message, in: session)
-                // Mac 办完了，写上的详情随同步稍后到（`onChange`）；这之间那条回答被重读改写的话它就没了，不一直等
-                try await Task.sleep(for: .seconds(10))
-                if opened == .loading { opened = .missing(String(localized: "详情没同步过来，再点一次")) }
-            } catch {
-                if opened == .loading { opened = .missing(ShownText(error).text) }
+        fetching = UUID()
+    }
+
+    private func fetch() async {
+        do {
+            #if os(macOS)
+            if services.holdsSteps(of: session) {
+                let detail = try await AppServices.stepDetail(item.calls ?? [], of: session.sessionID, in: services.store, runtimes: services.runtimes)
+                if opened == .loading { opened = .ready(detail) }
+                return
             }
+            #endif
+            guard let message else { return }
+            try await services.fetchStep(index, of: message, in: session)
+            // Mac 办完了，写上的详情随同步稍后到（`onChange`）；这之间那条回答被重读改写的话它就没了，不一直等
+            try await Task.sleep(for: .seconds(10))
+            if opened == .loading { opened = .missing(String(localized: "详情没同步过来，再点一次")) }
+        } catch is CancellationError {
+        } catch {
+            if opened == .loading { opened = .missing(ShownText(error).text) }
         }
     }
 }
