@@ -83,6 +83,7 @@ class Holder:
     def __init__(self, cmd, pid=None, **extra):
         pid = pid or os.getpid()
         self.entry = {"pid": pid, "start": processes([pid])[pid][1], "checkout": CHECKOUT, "cmd": cmd, "held": [], "waiting": None, **extra}
+        self.files = []  # 拿到的锁文件留在这里：文件对象被回收就关掉描述符、放掉锁
 
     @property
     def record(self):
@@ -144,6 +145,7 @@ class Holder:
             free = result[0]
             queued = time.monotonic() - blocked
             self.entry["waiting"] = None
+        self.files.append(options[free][0])
         self.add(options[free][1])
         return free, queued
 
@@ -169,7 +171,7 @@ class Holder:
             "  下一步：等；等满上限会以 75 退出，那时重跑一次。确认某个进程是残留且没人在用，才对它的 PID 发 TERM；拿不准就请用户处理")
 
 
-_me, _held = None, []
+_me = None
 
 
 def me(**extra):
@@ -189,7 +191,6 @@ def hold(path, name, why, wait_limit, report=60, **extra):
     f = open(path, "a+")
     me(**extra).acquire([(f, name)], why, wait_limit, report)
     os.set_inheritable(f.fileno(), True)
-    _held.append(f)  # 文件对象被回收就关掉描述符、放掉锁
 
 
 # ---- xc.sh 的入口锁 ----
