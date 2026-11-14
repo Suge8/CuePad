@@ -65,3 +65,29 @@ struct LaunchControls: View {
         }
     }
 }
+
+extension View {
+    /// 开新会话那一排要的那台 Mac 的 Agent 清单（新会话的输入框、手机交给新会话、Mac 任务气泡的"开始"同一份读法）。
+    /// `host` 读出 nil（没选 Mac、去向不是开新会话）时清单是 nil：不拿一份没有名字的空清单冒充某台 Mac。
+    func observingLaunchAgents(
+        id: some Equatable, into agents: Binding<MacAgents?>, onError: @escaping (any Error) -> Void,
+        host: @escaping @Sendable (isolated CueStore) throws -> String?
+    ) -> some View {
+        modifier(LaunchAgentsReading(id: id, agents: agents, onError: onError, host: host))
+    }
+}
+
+private struct LaunchAgentsReading<ID: Equatable>: ViewModifier {
+    let id: ID
+    @Binding var agents: MacAgents?
+    let onError: (any Error) -> Void
+    let host: @Sendable (isolated CueStore) throws -> String?
+    @Environment(AppServices.self) private var services
+
+    func body(content: Content) -> some View {
+        content.observing(services.store, id: id, into: Binding(get: { agents.map(Optional.some) }, set: { agents = $0 ?? nil }), onError: onError) {
+            [host] store in
+            try host(store).map { try store.macAgents(on: $0) }
+        }
+    }
+}

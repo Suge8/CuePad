@@ -134,8 +134,10 @@ private struct PreviewPager: View {
         .padding(.horizontal, Self.edge)
     }
 
+    /// 还没落地就翻走：飞来的这一页不再等它画好（它的视图随翻页撤掉，等不到了）。
     private func step(_ offset: Int) {
         guard let next = opening.neighbor(of: current, step: offset) else { return }
+        if !landed { flight.pagePainted() }
         withAnimation(Motion.fade) { current = next }
     }
 

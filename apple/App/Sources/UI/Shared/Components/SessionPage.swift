@@ -4,7 +4,22 @@ import SwiftUI
 /// 会话页三端同一份。栏头按布局：宽屏是栏头那一排（`WideSessionTitle`，右键是 `SessionMenuItems`），窄屏是页头（"⋯" 里同一份菜单）。
 /// 平台的差别：Mac 把本机在线的会话换上桥上的实时状态（栏头与对话，同步记录按节流写、会落后几秒）、回复框与菜单晚两帧建、回复框的托底；
 /// 手机翻看历史时回复框收成胶囊，窄屏的页头只在手机。
+/// 按会话重建（`.id`）：读到的那一份、跟随与滚动都属于这一个会话，同一栏里换会话不带过去（iPad 主栏换会话时页的位置不变）。
 struct SessionPage: View {
+    let route: SessionRoute
+    var column = Workspace.Column.main
+
+    init(_ route: SessionRoute, column: Workspace.Column = .main) {
+        self.route = route
+        self.column = column
+    }
+
+    var body: some View {
+        SessionPageBody(route, column: column).id(route.id)
+    }
+}
+
+private struct SessionPageBody: View {
     let id: UUID
     let sessionID: String?
     let column: Workspace.Column
@@ -20,7 +35,7 @@ struct SessionPage: View {
     @State private var secondary = Self.dockAtOnce
 
     /// `seed`：推入前读好的这一页，首帧即用，之后以 Store 的观察流为准。
-    init(_ route: SessionRoute, column: Workspace.Column = .main) {
+    init(_ route: SessionRoute, column: Workspace.Column) {
         id = route.id
         sessionID = route.sessionID
         self.column = column
@@ -170,7 +185,7 @@ struct SessionPage: View {
     }
 }
 
-extension SessionPage {
+extension SessionPageBody {
     #if os(macOS)
     fileprivate static let dockAtOnce = false
     #else

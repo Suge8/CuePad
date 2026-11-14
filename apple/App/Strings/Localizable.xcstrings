@@ -7480,22 +7480,6 @@
         }
       }
     },
-    "关于「%@」对 %@ 说…" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tell %2$@ about “%1$@”…"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "关于「%1$@」对 %2$@ 说…"
-          }
-        }
-      }
-    },
     "关于「%@」：%@" : {
       "localizations" : {
         "en" : {
@@ -16544,6 +16528,34 @@
         }
       }
     },
+    "有 %lld 张图没读出来，没有加上" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld image couldn’t be read and wasn’t added"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld images couldn’t be read and weren’t added"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "有 %lld 张图没读出来，没有加上"
+          }
+        }
+      }
+    },
     "有一件做完了" : {
       "localizations" : {
         "en" : {
@@ -22080,6 +22092,22 @@
         }
       }
     },
+    "说说这一份" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Say something about it"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "说说这一份"
+          }
+        }
+      }
+    },
     "请先在 Mac 上启用并配置 Cue" : {
       "localizations" : {
         "en" : {
@@ -22440,22 +22468,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "读取额度失败，额度不再更新：%@"
-          }
-        }
-      }
-    },
-    "调回上一句" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Recall Last Message"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "调回上一句"
           }
         }
       }
@@ -24184,6 +24196,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "这台设备的资料库读写出错，会自动重试"
+          }
+        }
+      }
+    },
+    "这张照片没存下来，再拍一次" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The photo wasn’t saved. Take it again."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这张照片没存下来，再拍一次"
           }
         }
       }
