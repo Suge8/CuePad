@@ -88,7 +88,7 @@ struct VoiceViewState {
         let activity: CueVoiceActivity = switch phase {
         case nil: .idle
         case .connecting: .connecting
-        case .listening, .processing, .speaking:
+        case .listening, .speaking:
             switch response {
             case .none: .listening
             case .awaitingAssistant: .processing
@@ -275,16 +275,15 @@ extension VoiceIssue {
             if let status { "通话服务出错（\(status)），请稍后重试" }
             else { "通话服务出错，请稍后重试" }
         case .storageUnavailable: "通话记录暂不可用，请检查 Mac 上的资料库"
-        case .originalMissing: "原记录不可用，无法继续此操作"
-        case .alreadyHandled: "原请求已处理，无需再次提交"
-        case .turnChanged: "执行回合已变化，没有停止后来的工作"
         }
     }
 
     var recovery: VoiceAction? {
-        if actions.contains(.microphoneSettings) { return .microphoneSettings }
-        if actions.contains(.reconnect) { return .start }
-        return nil
+        switch self {
+        case .ended(.permissionDenied): .microphoneSettings
+        case .ended, .server, .codexUnresponsive: .start
+        case .codexNotInstalled, .signedOut, .cueUnavailable, .macUnavailable, .relayUnsupported, .busy, .notAllowed, .storageUnavailable: nil
+        }
     }
 }
 

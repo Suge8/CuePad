@@ -81,7 +81,7 @@ final class VoiceFlowFixture {
     /// 按那一行的停止钮停下会话，返回停止请求
     func stop(_ session: String) async throws -> DeliveryRequest {
         let outcome = try await workspace.performVoice(try await stopAction(session))
-        guard case .stopRequested(let id)? = outcome else { throw VoiceIssue.turnChanged }
+        guard case .stopRequested(let id)? = outcome else { Issue.record("停止被拒：\(String(describing: outcome))"); throw CancellationError() }
         return try #require(try await workspace.services.store.deliveryRequest(id))
     }
 
