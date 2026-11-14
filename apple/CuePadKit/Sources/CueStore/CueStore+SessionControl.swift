@@ -111,7 +111,7 @@ extension CueStore {
         }
         guard unresolved else { return nil }
       }
-      guard try db.first(Self.usedElsewhere, [sessionID, nil as UUID?], { _ in true }) == nil else { throw CueStoreError.sessionInUse(state.title) }
+      guard try !sessionInUse(sessionID) else { throw CueStoreError.sessionInUse(state.title) }
       return try requestControl(.end, of: SendTarget(kind: .piSession, name: state.title, ref: sessionID), on: state.hostID, cue: true)
     }
   }
