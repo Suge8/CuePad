@@ -103,7 +103,7 @@ extension DebugScene {
         let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: .now) ?? .now
         try await store.noteCueLine(
             String(localized: "周会前提醒他要讲的三件事", table: "Demo"), source: .cue,
-            remindAt: Calendar.current.date(bySettingHour: 15, minute: 0, second: 0, of: tomorrow))
+            remindAt: args.cueOpts.overdue ? .now.addingTimeInterval(-20 * 60) : Calendar.current.date(bySettingHour: 15, minute: 0, second: 0, of: tomorrow))
         guard let task else { return }
         let monthly = CueRepeat(.monthly(1), hour: 9, minute: 0)!
         let line = try await store.noteCueLine(

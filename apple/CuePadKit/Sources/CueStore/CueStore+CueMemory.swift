@@ -70,11 +70,12 @@ extension CueStore {
     }
   }
 
-  /// `lines` 是到点时读出的：此刻还是那一次的（`remindAt` 没在别处改过）才往下走——重复的按库里此刻的规则推到 `now` 之后的下一次，一次性的忘掉（不留成普通记忆）；叫醒期间别处改过、忘掉的照改过的留着。
-  public func fireCueSchedules(_ lines: [CueMemoryLine], at now: Date = .now) throws {
+  /// 承接到点的那一轮好好做完才调（`fires` 是它醒来时的那几次）：这一行此刻还欠着那一次（没忘掉、下一次不晚于它）才往下走——
+  /// 重复的按库里此刻的规则推到 `now` 之后的下一次，一次性的忘掉（不留成普通记忆）；这期间别处改到以后、忘掉的照改过的留着。
+  public func fireCueSchedules(_ fires: [CueFire], at now: Date = .now) throws {
     try write {
-      for fired in lines {
-        guard let line = try find(CueMemoryLine.self, fired.id), line.deletedAt == nil, line.remindAt != nil, line.remindAt == fired.remindAt else { continue }
+      for fire in fires {
+        guard let line = try find(CueMemoryLine.self, fire.line), line.deletedAt == nil, let at = line.remindAt, at <= fire.due else { continue }
         if let repeats = line.repeats {
           try db.run("UPDATE cueLines SET remindAt = ?, modifiedAt = ? WHERE id = ?", [repeats.next(after: now), Date.stamp, line.id])
         } else {

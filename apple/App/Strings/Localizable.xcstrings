@@ -22760,6 +22760,22 @@
         }
       }
     },
+    "过点未做" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Overdue"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "过点未做"
+          }
+        }
+      }
+    },
     "运行" : {
       "localizations" : {
         "en" : {

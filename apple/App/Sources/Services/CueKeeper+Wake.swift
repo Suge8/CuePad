@@ -7,9 +7,9 @@ import Foundation
 
 extension CueKeeper {
     /// `said`、`images`、`delivering` 是随信封交出去的你的消息与回答，`related` 是按其中他自己说的话在会话回复里查到的（`CueTools.related`，交话的那一处查）；
-    /// `answering`：承接回答你的那一轮出错后的重来。发出去之前记下送达（`hand`）。发不进去时按大脑出了问题处理（交出去的退回），返回 false。
+    /// 发出去之前记下送达（`hand`）。发不进去时按大脑出了问题处理（交出去的退回），返回 false。
     func wakeUp(
-        _ wake: CueWake, answering: Bool = false, said: String? = nil, related: [String] = [], images: [MessageImage] = [], delivering: [UUID] = []
+        _ wake: CueWake, said: String? = nil, related: [String] = [], images: [MessageImage] = [], delivering: [UUID] = []
     ) async throws -> Bool {
         guard let shift else { return false }
         let store = self.store, now = self.now
@@ -42,7 +42,7 @@ extension CueKeeper {
         let sent = parts.joined(separator: "\n"), sending = UUID()
         guard try await hand(sent, images: images, id: sending, delivering: delivering) else { return false }
         var turn = Turn(
-            answersYou: wake == .message || answering || !shift.taken.isEmpty, round: beginRound(wake, sent: [sent], at: now),
+            answersYou: wake == .message || !shift.taken.isEmpty, round: beginRound(wake, sent: [sent], at: now),
             selfStarted: wake == .message ? nil : wake, delivered: shift.taken, mark: mark, stops: Self.stops(in: wake, changes))
         Self.log.notice("Cue 醒来：\(String(describing: wake).prefix(60), privacy: .public)，回复写成 \(turn.author.rawValue, privacy: .public)")
         // Cue 自己醒来的一轮醒来就写下经过那一行：为什么醒在它上面，各端马上画得出叫醒的那一下
@@ -64,18 +64,16 @@ extension CueKeeper {
     }
 
     /// 交给大脑（醒来与插话唯一的发出口）：先记着交出去了、写下送达，再发。记送达在先：发出后才写、写失败时下次对账会把同一句再交一次；
-    /// 写下之后、发出之前崩溃，下次值班按落盘的没答上的退回（`save`）。发不进去按大脑出了问题处理，交出去的随班次退回（`retire`），返回 false。
+    /// 写下之后、发出之前崩溃，下次值班从库里认出没答上的退回（`CueStore.cueMessagesUnanswered`）。发不进去按大脑出了问题处理，交出去的随班次退回（`retire`），返回 false。
     func hand(_ text: String, images: [MessageImage], id sending: UUID, delivering ids: [UUID]) async throws -> Bool {
         guard let shift else { return false }
         if !ids.isEmpty {
             updateShift { $0.handed[sending] = ids }
-            save()
             do {
                 try await store.markCueMessagesDelivered(ids)
             } catch {
                 // 没写成送达就还没交出去：留着这条记录，班次退场时会把这几句清回没送达，下一轮已答过的又答一遍
                 updateShift { $0.handed[sending] = nil }
-                save()
                 throw error
             }
             unfetchable.subtract(ids)
@@ -182,7 +180,6 @@ extension CueKeeper {
     }
 
     func save() {
-        progress.unanswered = Array(owed.union(shift?.unanswered ?? []))
         do {
             try FileManager.default.createDirectory(at: setup.directory, withIntermediateDirectories: true)
             try JSONEncoder().encode(progress).write(to: setup.directory.appending(path: "keeper.json"), options: .atomic)
@@ -192,7 +189,7 @@ extension CueKeeper {
     }
 
     /// 交出去没答上的你的话退回没送达、重新交，连同此前没退回成的（`owed`）；退回你的话只经这里。
-    /// 没写成的留在 `owed`（落盘），对账时再试（`alarm` 排着）：你的话只在答上或退回写进库之后才放下。
+    /// 没写成的留在 `owed`，对账时再试（`alarm` 排着）：你的话只在答上或退回写进库之后才放下。
     func giveBack(_ ids: [UUID]) async {
         owed.formUnion(ids)
         guard !owed.isEmpty else { return }
@@ -202,7 +199,6 @@ extension CueKeeper {
         } catch {
             Self.log.error("Cue 没答上的消息没能退回，过一阵再试：\(error.localizedDescription, privacy: .public)")
         }
-        save()
     }
 
     static func retryable(_ summary: ErrorSummary) -> Bool { summary.failure.retries }

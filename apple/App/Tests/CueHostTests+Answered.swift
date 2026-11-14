@@ -69,19 +69,17 @@ extension CueHostTests {
         await rig.stop()
     }
 
-    /// 崩溃留下的样子用正常停用后改回去摆出来：进度文件换回停用前的那份，那句再记成已送达。
-    @Test func 一轮没答完App就崩溃_那句再值班时答上() async throws {
+    /// 崩溃留下的样子用正常停用后改回去摆出来：那句再记成已送达、没有答它的话；进度文件也删掉（换到另一台 Mac 接手，那台没有这台的本机记录）。
+    @Test func 一轮没答完App就崩溃_换到另一台接手时那句答上() async throws {
         let rig = try await Rig()
         try await rig.say("请等我放行")
         try await eventually("这一轮停在模型那里") { rig.model.holding }
         let said = try #require(try await rig.store.cueMessages().first { $0.text == "请等我放行" })
-        let progress = rig.app.directory.appending(path: "Library/Cue/keeper.json")
-        let crashed = try Data(contentsOf: progress)
         _ = try await rig.store.updateCueProfile { $0.enabledAt = nil }
         try await eventually("停用收尾退回了那句") { try await rig.store.cueMessages().first { $0.id == said.id }?.deliveredAt == nil }
-        try await eventually("停用收尾做完、不再写进度") { rig.health == nil }
+        try await eventually("停用收尾做完") { rig.health == nil }
         rig.model.release()
-        try crashed.write(to: progress)
+        try FileManager.default.removeItem(at: rig.app.directory.appending(path: "Library/Cue/keeper.json"))
         try await rig.store.markCueMessagesDelivered([said.id])
         let host = TestApp.hostID
         _ = try await rig.store.updateCueProfile { $0.hostID = host; $0.enabledAt = .now }

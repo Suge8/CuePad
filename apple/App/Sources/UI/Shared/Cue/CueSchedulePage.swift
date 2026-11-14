@@ -79,7 +79,7 @@ struct CueSchedulePage: View {
             let day = ScheduleText.days(line)
             let task = line.task.flatMap { shown?.tasks[$0] }.map { String(localized: "开工「\($0)」") }
             let late = item.last.flatMap { $0.late ? ScheduleText.missed($0) : nil }
-            let note = Dotted(day, task, late)
+            let note = Dotted(day, ScheduleText.overdue(line), task, late)
             CueListRow(
                 label: line.text, meta: Dotted(ScheduleText.time(line), note.visible),
                 copy: .copy(line.text, workspace),
