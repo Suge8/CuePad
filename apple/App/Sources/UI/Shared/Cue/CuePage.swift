@@ -82,7 +82,8 @@ struct CuePage: View {
     }
     #endif
 
-    private var railInset: CGFloat { workspace.layout == .narrow ? SessionRail.chatInset : 0 }
+    /// 对话自己离左边 `inset`：让到字离竖条一个 `item`。
+    private var railInset: CGFloat { workspace.layout == .narrow ? SessionRail.phoneWidth + Spacing.item - Self.inset : 0 }
 
     /// 读不出来时也排一个真的视图：读库的订阅挂在页上，等视图出现才启动。
     @ViewBuilder private var chat: some View {

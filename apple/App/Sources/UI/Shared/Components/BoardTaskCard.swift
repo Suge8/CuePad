@@ -43,6 +43,8 @@ struct BoardTaskCard: View {
         }
         .help(tip)
         .taskSpoken(task, title: title, subtasks: item.steps, next: next, aside: aside(pulse), check: $check, open: open, follow: { follow(next) }) { menu }
+        // 行里的卡由圈认领（`TaskCheckButton`），列里的卡不画圈、由整张卡认领
+        .completionAsks(claiming: row ? nil : task.id)
     }
 
     private func ring(next: TaskNext?) -> some View {

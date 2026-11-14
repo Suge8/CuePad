@@ -34,6 +34,25 @@ extension Workspace {
         say("已完成", action: archiving, sound: .check)
     }
 
+    /// 完成一件事的入口都先过这里（完成圈、拖到已完成、卡片菜单、看板上完成没绑任务的会话）：要问就交给确认框（`sessionAsk`），答应了才 `proceed`；不用问当场 `proceed`。`proceed` 收到 Workspace 而不自己攥着：问着的时候它挂在 Workspace 上，攥着就是一个环。
+    /// 问句挨着正显示这张卡的那个视图弹出（`completionClaims`）；`anchored` 为 false（拖放：卡已离开原位）或没有视图认领时窗口居中出。
+    func confirmComplete(
+        _ task: UUID?, subtasks: TaskProgress?, busy: SessionState?, anchored: Bool = true, then proceed: @escaping @MainActor (Workspace) async throws -> Void
+    ) async throws {
+        if let ask = CompletionAsk(subtasks: subtasks, busy: busy) {
+            let claimer = anchored ? task.flatMap { completionClaims[$0]?.last } : nil
+            return sessionAsk = .complete(ask, claimer: claimer, then: proceed)
+        }
+        try await proceed(self)
+    }
+
+    /// 卡片菜单的"完成"：菜单手里没有子任务进度与会话状态，现读。
+    func confirmComplete(_ task: Card) async throws {
+        let id = task.id
+        let subtasks = try await services.store.subtaskProgress(of: [id])[id]
+        try await confirmComplete(id, subtasks: subtasks, busy: next(for: task, in: agentLinks, steps: subtasks)?.busySession) { try await $0.complete(id) }
+    }
+
     func reopen(_ id: UUID) async throws {
         try await services.store.reopenTask(id)
     }
@@ -146,6 +165,23 @@ extension Workspace {
             say("已复制")
         } catch {
             fail(error)
+        }
+    }
+}
+
+/// 完成前先问什么：还有没做完的子任务问一起完成；它的 Agent 在做或在等你问一句（`agentBusyDialog`：为这件事开的会话一起结束，别的不结束）。
+enum CompletionAsk: Equatable {
+    case steps(TaskProgress)
+    case agent(SessionState)
+
+    /// `busy`：在做或在等你的会话（`TaskNext.busySession`）。
+    init?(subtasks: TaskProgress?, busy: SessionState?) {
+        if let subtasks, TaskCopy.hasOpen(subtasks) {
+            self = .steps(subtasks)
+        } else if let busy {
+            self = .agent(busy)
+        } else {
+            return nil
         }
     }
 }

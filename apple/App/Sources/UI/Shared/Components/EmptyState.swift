@@ -29,6 +29,7 @@ struct EmptyState<Action: View>: View {
             .id(syncing)
             .transition(.handOff)
         }
+        .animation(Motion.fade, value: syncing)
         .multilineTextAlignment(.center)
         .frame(maxWidth: 420)
         .padding(Spacing.sheet)

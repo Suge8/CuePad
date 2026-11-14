@@ -23,6 +23,7 @@ struct EmptyWallTile: View {
             if syncing { SyncingLabel() } else { Text("这里还没有灵感") }
         }
         .accessibilityElement(children: .combine)
+        .animation(Motion.fade, value: syncing)
         #endif
     }
 

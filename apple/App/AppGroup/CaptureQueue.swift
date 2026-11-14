@@ -60,21 +60,12 @@ nonisolated enum CaptureQueue {
         try encoder.encode(capture).write(to: directory.appending(path: manifestName), options: .atomic)
     }
 
-    static func pending(in queue: URL) -> [Entry] {
-        let directories = (try? FileManager.default.contentsOfDirectory(at: queue, includingPropertiesForKeys: nil)) ?? []
-        return directories.compactMap { directory -> Entry? in
-            guard let data = try? Data(contentsOf: directory.appending(path: manifestName)),
-                  let capture = try? decoder.decode(PendingCapture.self, from: data)
-            else { return nil }
-            return Entry(directory: directory, capture: capture)
-        }.sorted { $0.capture.createdAt < $1.capture.createdAt }
-    }
-
-    /// 收拾入不了库、也等不到的条目，返回挪走的那几条读不出的原因（调用方报告）：
+    /// 一次扫完：读得出的按写下的先后返回；入不了库、也等不到的当场收拾，`unreadable` 是挪走的那几条读不出的原因（调用方报告）。
     /// 清单读不出（文件坏了、别的版本的格式）的整条挪进旁边的 `unreadableName` 目录，不再每次重试、也不丢；没写完又放太久的删掉。
-    static func clearUnusable(in queue: URL, now: Date = .now) -> [String] {
+    static func pending(in queue: URL, now: Date = .now) -> (entries: [Entry], unreadable: [String]) {
         let fileManager = FileManager.default
         let directories = (try? fileManager.contentsOfDirectory(at: queue, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
+        var entries: [Entry] = []
         var unreadable: [String] = []
         for directory in directories {
             let manifest = directory.appending(path: manifestName)
@@ -84,7 +75,7 @@ nonisolated enum CaptureQueue {
                 continue
             }
             do {
-                _ = try decoder.decode(PendingCapture.self, from: Data(contentsOf: manifest))
+                entries.append(Entry(directory: directory, capture: try decoder.decode(PendingCapture.self, from: Data(contentsOf: manifest))))
             } catch {
                 let aside = queue.deletingLastPathComponent().appending(path: unreadableName, directoryHint: .isDirectory)
                 do {
@@ -96,7 +87,7 @@ nonisolated enum CaptureQueue {
                 }
             }
         }
-        return unreadable
+        return (entries.sorted { $0.capture.createdAt < $1.capture.createdAt }, unreadable)
     }
 
     static let unreadableName = "CaptureUnreadable"
