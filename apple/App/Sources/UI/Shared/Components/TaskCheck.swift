@@ -45,7 +45,6 @@ struct TaskCheckButton: View {
         trigger
         .accessibilityLabel(check.phase == .pending ? String(localized: "撤销完成") : TaskSpeech.toggle(done: check.done(task)))
         .sensoryFeedback(.success, trigger: check.phase) { $0 == .idle && $1 == .pending }
-        .taskCheck(task, check: $check)
     }
 
     private var ring: some View {
@@ -65,6 +64,7 @@ struct TaskCheckButton: View {
 }
 
 extension View {
+    /// 挂在持有 `check` 的那一行或卡上（`taskSpoken` 已挂），不挂在圈上：看板列里的卡不画圈，读屏照样勾得了。
     /// 停留后写入的是设为完成，不是翻转：等待时别处已做完也不会被翻回去。
     func taskCheck(_ task: Card, check: Binding<TaskCheck>) -> some View {
         modifier(TaskCheckFlow(task: task, check: check))
@@ -113,5 +113,6 @@ struct GoalCheck: View {
         TaskCheckButton(
             task: task, subtasks: subtasks, size: TaskMetrics.titleRing,
             target: CGSize(width: TaskMetrics.chipTarget, height: TaskMetrics.chipTarget), check: $check)
+        .taskCheck(task, check: $check)
     }
 }
