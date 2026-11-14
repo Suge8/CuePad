@@ -7,24 +7,21 @@ enum ReplyShortcut: Int, CaseIterable {
     case send
     case model
     case thinking
-    case recall
 
     var title: String {
         switch self {
         case .send: String(localized: "发送")
         case .model: String(localized: "选择模型…")
         case .thinking: String(localized: "选择思考强度…")
-        case .recall: String(localized: "调回上一句")
         }
     }
 
-    /// 主键（都带 ⌘，`shift` 时再加 ⇧）："\r" 是回车；`recall` 是不带修饰的 ↑，由文字区自己的按键处理接（见 `Composer`），不进菜单。
+    /// 主键（都带 ⌘，`shift` 时再加 ⇧）："\r" 是回车。空着时按 ↑ 调回上一句不在这里，由文字区自己的按键处理接（`Composer.recall`）。
     var input: String {
         switch self {
         case .send: "\r"
         case .model: "m"
         case .thinking: "e"
-        case .recall: ""
         }
     }
 
@@ -32,11 +29,8 @@ enum ReplyShortcut: Int, CaseIterable {
 
     var symbols: String {
         switch self {
-        case .recall: "↑"
         case .send: "↩"
         case .model, .thinking: "⌘" + (shift ? "⇧" : "") + input.uppercased()
         }
     }
-
-    static var menu: [ReplyShortcut] { allCases.filter { $0 != .recall } }
 }
