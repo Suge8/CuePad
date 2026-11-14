@@ -14,9 +14,7 @@ extension CueStore {
       let now = Date.stamp
       return try ids.compactMap { id in
         guard let card = try find(Card.self, id), card.deletedAt == nil else { return nil }
-        let lifted = try trashRow(card, at: now)
-        if card.completedAt == nil { try endUnusedSessions(of: id, cue: false) }
-        return .trash(id: id, lifted: lifted)
+        return .trash(id: id, lifted: try trashRow(card, at: now))
       }
     }
   }

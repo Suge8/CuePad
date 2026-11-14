@@ -6,10 +6,9 @@ extension CueStore {
   @discardableResult
   public func archive(_ id: UUID) throws -> Date {
     try write {
-      guard let card = try find(Card.self, id) else { throw CueStoreError.notFound }
+      guard try find(Card.self, id) != nil else { throw CueStoreError.notFound }
       let now = Date.stamp
       try setArchived([id], at: now)
-      if card.completedAt == nil { try endUnusedSessions(of: id, cue: false) }
       return now
     }
   }

@@ -38,10 +38,6 @@ extension CueStore {
       let now = Date.stamp
       try db.run("UPDATE projects SET deletedAt = ?1, modifiedAt = ?1 WHERE id = ?2 AND deletedAt IS NULL", [now, id])
       try endCueSchedules(onTasksIn: "SELECT id FROM cards WHERE projectID = ?2", id, at: now)
-      let open = try db.query(
-        "SELECT id FROM cards WHERE projectID = ? AND parentID IS NULL AND todoAt IS NOT NULL AND completedAt IS NULL AND deletedAt IS NULL AND archivedAt IS NULL",
-        [id]) { $0.uuid(0) }
-      for task in open { try endUnusedSessions(of: task, cue: false) }
     }
   }
 
