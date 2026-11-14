@@ -1,15 +1,15 @@
 """iOS、iPadOS 模拟器里的实例：装、起、截图、录屏；run 起的实例由看守租着这台模拟器。"""
-import glob
-import json
 import os
 import re
+import shlex
 import signal
 import subprocess
 import sys
 import time
 
-from app_env import BUNDLE_ID, HOLD, REC_SECONDS, RUN_ROLE, RUN_TTL, RUNTIME, SIM_RUN_GLOB, die, sim_run
-from app_proc import alive, silence, wait_exit, wait_ready
+from _lock import Holder, live
+from app_env import BUNDLE_ID, CHECKOUT, HOLD, REC_SECONDS, RUN_ROLE, RUN_TTL, RUNTIME, die
+from app_proc import silence, wait_exit, wait_ready
 from app_shots import batch
 
 # simctl 偶尔挂住不返回（实测 install 卡过 20 分钟）：每次调用自己有上限，到了就把这台关机再开、重做一次，再卡才失败
@@ -157,7 +157,8 @@ def sim(cmd, device, app, library, shots):
 
 def keep(s, pid):
     """run：起一个脱离 xc.sh 的看守，守到实例退出、RUN_TTL 或 stop；这里等看守就位后打印 PID 与 UDID 就返回。
-    模拟器的槽位锁在 xc.sh 退出时由 _lock.py 交给看守（它读 CUEPAD_LEASE 里的看守 PID），别的检出领不到这台。"""
+    模拟器的槽位锁在 xc.sh 退出时由 _lock.py 交给看守（它读 CUEPAD_LEASE 里的看守 PID），别的检出领不到这台。
+    看守不持锁，只在 _lock 的登记里记一条（角色、实例、模拟器），stop 与 fleet 按它认看守（watchers）。"""
     report_r, report_w = os.pipe()
     if os.fork():
         os.close(report_w)
@@ -168,8 +169,8 @@ def keep(s, pid):
     os.close(report_r)
     os.setsid()
     signal.alarm(RUN_TTL)
-    with open(sim_run(), "w") as f:
-        json.dump({"holder": os.getpid(), "app": pid, "device": s.device}, f)
+    me = Holder(shlex.join(sys.argv), role=RUN_ROLE, app=pid, device=s.device)
+    me.publish()
     with open(os.environ["CUEPAD_LEASE"], "w") as f:
         f.write(str(os.getpid()))
     os.write(report_w, b"1")
@@ -179,21 +180,20 @@ def keep(s, pid):
         wait_exit(pid)
     finally:
         s.terminate()
-        os.remove(sim_run())
+        me.remove()
     os._exit(0)
+
+
+def watchers(role=RUN_ROLE):
+    """本检出 run 留在模拟器里的实例的看守（登记里的那一条）；role 为空是全部角色的。"""
+    return [h for h, _ in live() if h["checkout"] == CHECKOUT and "device" in h and role in ("", h["role"])]
 
 
 def stop():
     """结束本检出 run 起的模拟器实例（给了 CUEPAD_RUN_ROLE 只收这个角色的），等看守收完；返回要报的话，没有就是 None。"""
     done = []
-    for path in [sim_run()] if RUN_ROLE else glob.glob(SIM_RUN_GLOB):
-        try:
-            with open(path) as f:
-                note = json.load(f)
-        except (OSError, ValueError):
-            continue
-        if alive(note):
-            os.kill(note["holder"], signal.SIGTERM)
-            wait_exit(note["holder"])
-            done.append(f"已结束模拟器 {note['device']} 上的实例 {note['app']}")
+    for h in watchers():
+        os.kill(h["pid"], signal.SIGTERM)
+        wait_exit(h["pid"])
+        done.append(f"已结束模拟器 {h['device']} 上的实例 {h['app']}")
     return "\n".join(done) or None
