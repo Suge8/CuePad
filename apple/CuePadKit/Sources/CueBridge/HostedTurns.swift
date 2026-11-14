@@ -102,13 +102,14 @@ final class HostedTurns {
 
     /// 同上，交出之后还要等别的（Claude Code 等确认收下要等这一轮做完）：写出这句的那一刻调 `handed`。
     func send(stop: @escaping @MainActor () async throws -> Void, deliver: (_ handed: () -> Void) async throws -> Void) async throws {
+        let turn = runningTurn
         let token = UUID()
         handovers.append((token, .halting))
         defer {
             if handovers.contains(where: { $0.token == token && $0.step != .awaitingStart }) { handovers.removeAll { $0.token == token } }
             settleIfOrphaned()
         }
-        try await stopPhase.run { [self] in try await halt(stop) }
+        try await stopPhase.run { [self] in try await halt(stop, of: turn) }
         step(token, to: .delivering)
         try await deliver { [self] in
             guard handovers.contains(where: { $0.token == token && $0.step == .delivering }) else { return }
@@ -118,11 +119,15 @@ final class HostedTurns {
     }
 
     func abort(stop: @escaping @MainActor () async throws -> Void) async throws {
+        let turn = runningTurn
         handovers = []
         stopPhase.cancelAll()
         settleIfOrphaned()
-        try await stopPhase.run(cancellable: false) { [self] in try await halt(stop) }
+        try await stopPhase.run(cancellable: false) { [self] in try await halt(stop, of: turn) }
     }
+
+    /// 此刻在跑的那一轮，按已收尾的轮数认（`ends.count`，这一轮收尾才变）；没在跑是 nil
+    private var runningTurn: Int? { phase == .running ? ends.count : nil }
 
     /// 没被开始认领、没被停下清掉的才改
     private func step(_ token: UUID, to step: Handover) {
@@ -133,8 +138,10 @@ final class HostedTurns {
         if !handingOver, phase == .handedOver { settle() }
     }
 
-    private func halt(_ stop: () async throws -> Void) async throws {
-        guard phase == .running else { return }
+    /// `turn` 是停止发出时在跑的那一轮：停止段排队期间它已收尾（Agent 可能紧接着开了下一轮）就过期了，不发给 Agent。
+    /// 已经发出、在路上时换了轮的管不到（ACP 与 Claude Code 的停止不带轮次，落在当前这一轮上）。
+    private func halt(_ stop: () async throws -> Void, of turn: Int?) async throws {
+        guard let turn, runningTurn == turn else { return }
         stopping = true
         stopRequests += 1
         let seen = ends.count
