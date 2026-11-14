@@ -92,6 +92,7 @@ nonisolated struct OlderGroup: Equatable, Sendable {
     var isMonth: Bool { if case .month = period { true } else { false } }
 
     static func group(_ cards: [CardStamp], now: Date, calendar: Calendar) -> [OlderGroup] {
+        let calendar = calendar.mondayFirst
         let sorted = cards.sorted(by: { $0.modifiedAt > $1.modifiedAt })
         if sorted.count <= fewLimit { return sorted.isEmpty ? [] : [OlderGroup(period: .all, cards: sorted.map(\.id))] }
         let weeklySince = calendar.date(byAdding: .month, value: -weeklyMonths, to: now) ?? now

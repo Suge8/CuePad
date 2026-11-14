@@ -1,5 +1,14 @@
 import Foundation
 
+nonisolated extension Calendar {
+    /// 按周分组的地方都用它：一周总从周一算起，不随地区设置（时区仍用这个日历的）。会话历史的"本周"、灵感"更早"的按周分组同一条。
+    var mondayFirst: Calendar {
+        var calendar = self
+        calendar.firstWeekday = 2
+        return calendar
+    }
+}
+
 /// 全 App 唯一的"什么时候"写法。会话的计时会随时间刷新（`SessionElapsed`）；灵感卡、回收站这些不加定时器，写的是打开时的值。
 nonisolated enum DateLabel {
     static func short(_ date: Date, now: Date = .now, calendar: Calendar = .current) -> String {
