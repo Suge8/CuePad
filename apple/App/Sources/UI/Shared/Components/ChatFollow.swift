@@ -21,7 +21,7 @@ nonisolated struct ChatFollow: Equatable {
         didSet {
             if scrolling {
                 jumping = false
-                staying = false
+                opened = []
                 target = nil
                 owesLanding = false
             }
@@ -34,9 +34,14 @@ nonisolated struct ChatFollow: Equatable {
     /// 已请滚动区跳到某一条（`jump(to:)`）、还没离开最新处：跳的那一下顶栏让开、回复框收起，滚动区排好了下一帧才滚过去，
     /// 这期间的读数还报着在最新处，不算回到了最新。离开最新处（跳过去了）、用户自己滚、回到最新时放掉；跳到的就在最新处时，用户一滚就重新贴上。
     private var jumping = false
-    private var staying = false
+    /// 你点开着的块（一轮的经过、其中一步，各用自己的键）：一轮里还开着一步时收起另一块，不算都收了。
+    private var opened: Set<UUID> = []
     private var withinSlack = true
     private var revealed = false
+    /// 贴着最新、可正在和 iCloud 对（`holding`）或拍板卡刚沉下去（`docked`）时长出来的先不跟，欠着一次上滑，对完时滑（`ChatScroll`）。
+    private(set) var deferred = false
+    /// 对的期间你自己回到最新、发出一句：这一回照样跟，不等对完；对的状态一变就作废（只在对的期间有用）。
+    private var unheld = false
     static let slack: CGFloat = 24
 
     var wantsEarlier: Bool { nearOldest && !prepending }
@@ -66,7 +71,7 @@ nonisolated struct ChatFollow: Equatable {
         self.nearOldest = nearOldest
         withinSlack = near
         if !near { jumping = false }
-        if near, !jumping, !staying {
+        if near, !jumping, opened.isEmpty {
             atNewest = true
             revealed = false
         } else if byUser {
@@ -79,12 +84,35 @@ nonisolated struct ChatFollow: Equatable {
     /// 所以点开时和你自己滚走一样解除贴底，它往下长、点的那一行不动；顶栏留着（你没去看历史）。
     /// 开着的期间读数报着在最新处也不贴回去（长出来的可能还没把最新处推远：先长出一行"正在取"、取到了才长出整块）；
     /// 收起、你自己滚、回到最新时放掉，读数报回在最新处就重新贴上。
-    mutating func stay(_ open: Bool) {
-        if open, atNewest {
+    mutating func stay(_ key: UUID, _ open: Bool) {
+        guard open else {
+            opened.remove(key)
+            return
+        }
+        if atNewest {
             atNewest = false
             revealed = true
         }
-        staying = open
+        opened.insert(key)
+    }
+
+    /// 滚动区此刻按贴底排（内容变高矮时底锚）。
+    func pinned(holding: Bool, docked: Bool) -> Bool { atNewest && !scrolling && (!holding || unheld) && !deferred && !docked }
+
+    /// 贴着最新时内容长高了：对的期间、拍板卡刚沉下去时先不跟，记成欠着（返回 true，这一次不滑）。
+    mutating func deferGrowth(holding: Bool, docked: Bool) -> Bool {
+        guard holding && !unheld || docked else { return false }
+        deferred = true
+        return true
+    }
+
+    /// 对的状态变了，返回要不要现在滑上去（对完了、欠着一次）。`sliding`：排好的一次上滑还没开始——又开始对的话它被撤掉，记成欠着。
+    mutating func holdingChanged(_ holding: Bool, sliding: Bool) -> Bool {
+        unheld = false
+        if holding, sliding { deferred = true }
+        guard !holding, deferred else { return false }
+        deferred = false
+        return true
     }
 
     mutating func reveal() {
@@ -103,8 +131,10 @@ nonisolated struct ChatFollow: Equatable {
         atNewest = true
         revealed = false
         jumping = false
-        staying = false
+        opened = []
         target = nil
+        deferred = false
+        unheld = true
         toNewest = ToNewest(sent: sent)
     }
 
@@ -147,12 +177,13 @@ struct ChatJump: Equatable {
     nonisolated static func == (a: Self, b: Self) -> Bool { a.column == b.column }
 }
 
-/// 点开对话里的一块时叫它（`ChatFollow.stay`）；比较的规则同 `ChatJump`。
+/// 点开、收起对话里的一块时叫它（`ChatFollow.stay`），带上那一块自己的键；比较的规则同 `ChatJump`。
+/// 点开着的块从对话里没了（收起了外面那一轮、那一段换成了空白）也要叫一次收起：不然一直算开着，之后不再贴底。
 struct ChatStay: Equatable {
     let column: UUID
-    let stay: (Bool) -> Void
+    let stay: (UUID, Bool) -> Void
 
-    func callAsFunction(_ open: Bool) { stay(open) }
+    func callAsFunction(_ key: UUID, _ open: Bool) { stay(key, open) }
 
     nonisolated static func == (a: Self, b: Self) -> Bool { a.column == b.column }
 }

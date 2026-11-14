@@ -30,9 +30,7 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
     @State var onScreen: Set<UUID> = []
     @State var offset = ScrollOffset()
     @State var held: CGFloat?
-    @State var deferred = false
-    @State var unheld = false
-    /// 还没滑时页面开始 hold（排它的那次读数早于页面开始 hold 的那次更新）就撤掉、记成欠着的一次。
+    /// 还没滑时页面开始 hold（排它的那次读数早于页面开始 hold 的那次更新）就撤掉、记成欠着的一次（`ChatFollow.holdingChanged`）。
     @State var sliding: Task<Void, Never>?
     @State var lift = ContentLift()
     @State var leftAt: Key?
@@ -137,12 +135,9 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                         next.scrolled(
                             atNewest: reading.nearNewest || following, beyondScreen: reading.beyondScreen && !following, nearOldest: reading.nearOldest,
                             byUser: next.scrolling && delivered.moved)
+                        let defers = following && grown > 0 && next.deferGrowth(holding: holding, docked: left)
                         if next != follow.wrappedValue { follow.wrappedValue = next }
-                        guard following else { return }
-                        if (holding && !unheld) || left, grown > 0 {
-                            deferred = true
-                            return
-                        }
+                        guard following, !defers else { return }
                         // 新内容、正在说的话在下面长出来：底锚已在同一次排版里停到新的最新处（`pinned`），不再滑。
                         // 贴着最新却离最新处远了（系统挪的：栏的高度第一次加进内容边距时它把偏移放回顶上）、回复框长高了：直接补滚过去。在读数里补（布局定下来之后）。
                         // 回复框长高不等离远了才补：Mac 打开会话时回复框比占位高，读数已报在底、画面与点按却还停在原处，最后一行压在回复框下、选不中；
@@ -156,22 +151,19 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                             // 可见区从底下变矮、内容没变：键盘升起来了（系统先把它算进内容边距，键盘才开始升）。整段滑上去，
                             // 对话与键盘、回复框一起走；当下补滚的话整段对话先一下跳到终点，键盘与回复框还在半路
                             slide(reader)
-                        } else if (!reading.nearNewest && !deferred) || reading.floating > last.floating || (shrank && offset.read > offset.end) {
+                        } else if (!reading.nearNewest && !next.deferred) || reading.floating > last.floating || (shrank && offset.read > offset.end) {
                             toEnd(reader)
                             settle(reader)
                         }
                     }
                     .onChange(of: follow.wrappedValue.atNewest) { _, atNewest in leftAt = atNewest ? nil : followKey }
                     .onChange(of: holding) {
-                        unheld = false
+                        let slides = follow.wrappedValue.holdingChanged(holding, sliding: sliding != nil)
                         if holding, let sliding {
                             sliding.cancel()
                             self.sliding = nil
-                            deferred = true
                         }
-                        guard !holding, deferred else { return }
-                        deferred = false
-                        slide(reader)
+                        if slides { slide(reader) }
                     }
                     .onChange(of: follow.wrappedValue.toNewest) { _, request in if let request { toNewest(sent: request.sent, reader) } }
                     // 跳到某一条：按条的 id 在整段内容里找（`ScrollViewReader`；滚动位置的按 id 跳只认滚动目标布局的直接子视图，条在段里）。

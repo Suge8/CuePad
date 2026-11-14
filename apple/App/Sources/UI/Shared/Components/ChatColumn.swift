@@ -16,7 +16,6 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
     /// 在同一次更新里就接上：等 `onChange` 改记已晚了一帧，那一帧缩回去又长回来，正在看的先被甩到最早那头再滑回来。
     @State private var shown: ArraySlice<UUID>?
     @State private var highlight = ChatHighlight()
-    @State private var pendingJump: ChatFollow.Target?
     @State private var column = UUID()
 
     init(
@@ -82,19 +81,15 @@ struct ChatColumn<Content: View, Key: Equatable>: View {
         .environment(\.chatHighlight, highlight.id)
         .environment(\.chatTarget, follow.target?.id)
         .environment(\.chatJump, ChatJump(column: column) { follow.seek($0) })
-        .environment(\.chatStay, ChatStay(column: column) { follow.stay($0) })
-        .onChange(of: pendingJump) {
-            guard let target = pendingJump else { return }
-            pendingJump = nil
-            follow.jump(to: target)
-        }
+        .environment(\.chatStay, ChatStay(column: column) { follow.stay($0, $1) })
     }
 
-    /// 先描圈、排开到那一条（离屏远的地方排的是空白，跳去的那条所在的段由内容钉成真的），排好了再跳。
+    /// 先描圈、排开到那一条（离屏远的地方排的是空白，跳去的那条所在的段由内容按 `chatTarget` 钉成真的），同一次更新里记下跳去哪；
+    /// 滚动区等这一帧排好了再滚过去（`ChatScroll`）。
     private func seek(_ target: ChatFollow.Target, size: CGSize) {
         if target.landing == .flash { highlight.flash(target.id) }
         if let index = ids.firstIndex(of: target.id) { show(from: min(index, ids.count - window(size))) }
-        pendingJump = target
+        follow.jump(to: target)
     }
 
     private func showEarlier(_ size: CGSize) {

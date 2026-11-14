@@ -12,7 +12,7 @@ extension ChatScroll {
 
     var unseen: Bool { leftAt.map { $0 != followKey } ?? false }
 
-    var pinned: Bool { follow.wrappedValue.atNewest && !follow.wrappedValue.scrolling && (!holding || unheld) && !deferred && !dockLeft }
+    var pinned: Bool { follow.wrappedValue.pinned(holding: holding, docked: dockLeft) }
 
     /// 答完时同一次更新里对话长出这一问与回答，这时贴底的话整段当帧顶上去一截，再随卡沉回落下来。先不跟，同 `holding` 期间长在下面，卡沉完（`holding` 落下）一次滑上去。
     var dockLeft: Bool { docked == nil && offset.dock != nil }
@@ -101,8 +101,6 @@ extension ChatScroll {
     /// 贴底已由 `ChatFollow` 当场记上，这里只管滚过去。
     func toNewest(sent: Bool, _ reader: ScrollViewProxy) {
         held = sent ? bottomInset : nil
-        if holding { unheld = true }
-        deferred = false
         withAnimation(Motion.spatial(Motion.fade, reduceMotion: reduceMotion)) { toEnd(reader) }
     }
 

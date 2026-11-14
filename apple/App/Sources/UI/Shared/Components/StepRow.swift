@@ -14,6 +14,7 @@ struct StepRow: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.chatStay) private var stay
     @State private var opened: Opened?
+    @State private var key = UUID()
 
     enum Opened: Equatable { case loading, ready(ToolCallDetail), missing(String) }
 
@@ -39,6 +40,7 @@ struct StepRow: View {
                 toggle()
             }
             .onChange(of: item.detail) { if opened == .loading, let detail = item.detail { opened = .ready(detail) } }
+            .onDisappear { if opened != nil { stay?(key, false) } }
         } else {
             row(open: nil)
         }
@@ -62,10 +64,10 @@ struct StepRow: View {
 
     private func toggle() {
         guard opened == nil else {
-            stay?(false)
+            stay?(key, false)
             return opened = nil
         }
-        stay?(true)
+        stay?(key, true)
         if let detail = item.detail { return opened = .ready(detail) }
         opened = .loading
         Task {
