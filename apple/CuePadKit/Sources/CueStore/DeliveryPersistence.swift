@@ -57,10 +57,7 @@ extension CueStore {
   /// 撤回请求一写进库，原请求就领不走了（`abandonedDelivery`），所以排在它前面的领取与它不会交错。
   func settleWithdrawal(_ request: DeliveryRequest, on host: String) throws {
     try write {
-      guard let original = UUID(uuidString: request.content) else {
-        return try applyDeliveryOutcome(request, .failed(ShownText("撤回的请求标识读不出")), at: timing.now())
-      }
-      let removed = try removeUnstartedDelivery(original, locallyOn: host) || removeFailedDelivery(original)
+      let removed = try UUID(uuidString: request.content).map { try removeUnstartedDelivery($0, locallyOn: host) || removeFailedDelivery($0) } ?? false
       try applyDeliveryOutcome(request, removed ? .succeeded : .failed(DeliveryRequest.withdrawRefused), at: timing.now())
     }
   }
