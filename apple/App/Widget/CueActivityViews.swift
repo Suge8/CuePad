@@ -99,7 +99,10 @@ private struct CompactCount: View {
         .accessibilityElement(children: .ignore).accessibilityLabel(count.line)
     }
 
-    private func marker(_ count: ActivityCount) -> Image { (count.waiting ? WidgetIcon.waiting : .agent).image }
+    /// 同会话状态标的图形：有拍板是气泡问号，只剩新回复是信封，没有等你的是 Agent。
+    private func marker(_ count: ActivityCount) -> Image {
+        (now.tally.asks > 0 ? WidgetIcon.waiting : count.waiting ? .mail : .agent).image
+    }
 
     private func number(_ count: ActivityCount) -> some View {
         Text(count.digits(narrow: narrow)).font(IslandType.count).monospacedDigit()

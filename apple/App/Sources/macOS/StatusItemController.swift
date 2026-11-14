@@ -1,5 +1,6 @@
 #if os(macOS)
 import AppKit
+import QuartzCore
 
 final class StatusItemController: NSObject {
     private let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -10,13 +11,8 @@ final class StatusItemController: NSObject {
         self.togglePanel = togglePanel
         self.toggleWindow = toggleWindow
         super.init()
-        // 20pt 的符号实高约 17pt（同系统菜单栏图标），在 22pt 高的菜单栏里上下各留一点；模板图随菜单栏明暗着色
-        guard let image = Icon.cue.platformImage?.withSymbolConfiguration(.init(pointSize: Glyph.largeSize, weight: .regular)) else {
-            preconditionFailure("缺少 Cue 符号 cue.mascot")
-        }
-        image.isTemplate = true
         guard let button = item.button else { preconditionFailure("菜单栏图标没有按钮") }
-        button.image = image
+        button.image = Self.cue
         button.toolTip = "CuePad"
         button.target = self
         button.action = #selector(clicked)
@@ -24,13 +20,37 @@ final class StatusItemController: NSObject {
     }
 
     /// 菜单栏的字随菜单栏明暗着色，不另上色：数字跟在图标右边、与图标同一条中线。
-    func show(badge count: Int) {
+    /// 有要你管的换成会话状态标的图形：有拍板是气泡问号，只剩新回复是信封；没有就是 Cue。换图淡过去，不跳。
+    func show(_ tally: CueNow.Tally) {
         guard let button = item.button else { return }
+        let count = tally.needsYou
+        let shown = tally.asks > 0 ? Self.asks : tally.reply > 0 ? Self.reply : Self.cue
+        if button.image !== shown {
+            let fade = CATransition()
+            fade.type = .fade
+            fade.duration = Motion.Fade.duration
+            fade.timingFunction = Motion.Fade.timing
+            button.layer?.add(fade, forKey: "image")
+            button.image = shown
+        }
         button.imagePosition = count > 0 ? .imageLeading : .imageOnly
         button.attributedTitle = count > 0
             ? NSAttributedString(string: "\(count)", attributes: [.font: Typography.menuBarCount])
             : NSAttributedString()
         button.setAccessibilityValue(count > 0 ? String(localized: "\(count) 件要你管") : nil)
+    }
+
+    private static let cue = image(.cue)
+    private static let asks = image(.waiting)
+    private static let reply = image(.replied)
+
+    /// 20pt 的符号实高约 17pt（同系统菜单栏图标），在 22pt 高的菜单栏里上下各留一点；模板图随菜单栏明暗着色。
+    private static func image(_ icon: Icon) -> NSImage {
+        guard let image = icon.platformImage?.withSymbolConfiguration(.init(pointSize: Glyph.largeSize, weight: .regular)) else {
+            preconditionFailure("缺少符号 \(icon)")
+        }
+        image.isTemplate = true
+        return image
     }
 
     func remove() {

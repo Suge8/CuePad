@@ -50,7 +50,7 @@ struct CuePage: View {
     #if os(macOS)
     private var page: some View {
         FloatingReply {
-            chat.frame(maxWidth: .infinity, maxHeight: .infinity)
+            chat.frame(maxWidth: .infinity, maxHeight: .infinity).background(alignment: .bottom) { glow }
         } reply: {
             bottom()
                 .replyTray()
@@ -63,7 +63,7 @@ struct CuePage: View {
     /// 名牌保留整页坐标；仅对话与拍板卡给常驻会话条让位。
     private var page: some View {
         FloatingReply {
-            chat.padding(.leading, railInset)
+            chat.padding(.leading, railInset).background(alignment: .bottom) { glow.ignoresSafeArea(edges: .bottom) }
         } reply: {
             bottom()
                 .padding(.horizontal, Spacing.group)
@@ -75,6 +75,8 @@ struct CuePage: View {
         .floatingHeader(.verbatim(cue.name), height: CueHeader.height, hasPanel: true, center: { CueHeader() }) { EmptyView() }
     }
     #endif
+
+    private var glow: some View { CueGlow(on: cue.beat.dot == .moving) }
 
     private var railInset: CGFloat { workspace.layout == .narrow ? SessionRail.chatInset : 0 }
 

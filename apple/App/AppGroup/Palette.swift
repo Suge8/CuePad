@@ -101,6 +101,8 @@ struct Palette {
     }
     /// 靛青的次一档：拖放落点还没停上去时的虚线框。
     var signatureSoft: Color { signature.opacity(0.7) }
+    /// Cue 在想时那片光（`CueGlow`）最亮处：深色底上要更亮才看得出来。
+    var glow: Color { signature.opacity(dark ? 0.7 : 0.45) }
     /// 主按钮、发送钮的靛青底：浅色就是签名色；深色压到中等明度——深色的签名色是给字与焦点用的浅靛青，铺成实心钮是一块亮斑。
     /// 钮上的字（`onFill`）8.0，深色 5.4，深色增强对比度 6.0。
     var signatureFill: Color {
