@@ -110,16 +110,19 @@ class Holder:
 
     def acquire(self, options, why, wait_limit, report, since=None):
         """拿到 options（(打开的锁文件, 名字)）里任一把，记进持有；都占着就排队，开头与每 report 秒列一次持有者，
-        从 since（单调钟，缺省现在）起过了 wait_limit 秒还没轮到就列出持有者、删掉自己的登记、以 75 退出。返回拿到第几把与排了几秒。"""
+        从 since（单调钟，缺省现在）起过了 wait_limit 秒还没轮到就列出持有者、删掉自己的登记、以 75 退出（wait_limit 为 0 不排队，当场这样退出）。返回拿到第几把与排了几秒。"""
         since = time.monotonic() if since is None else since
         free = next((n for n, (f, _) in enumerate(options) if take(f)), None)
         queued = 0.0
         if free is None:
+            paths = [lock_path(f) for f, _ in options]
+            if wait_limit == 0:
+                say(f"{why}\n{self.listing(paths)}")
+                self.remove()
+                os._exit(75)
             self.publish(waiting=why)
             blocked = time.monotonic()
-            paths = [lock_path(f) for f, _ in options]
-            if wait_limit > 0:
-                say(f"排队：{why}\n{self.listing(paths)}")
+            say(f"排队：{why}\n{self.listing(paths)}")
             # 每把一个线程阻塞在 flock 上，先拿到的算数，其余拿到后马上放掉
             won, pick, result = threading.Event(), threading.Lock(), []
 
