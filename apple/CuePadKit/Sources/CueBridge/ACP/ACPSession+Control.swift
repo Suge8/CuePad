@@ -2,7 +2,7 @@
 import CueStore
 import Foundation
 
-/// 斜杠命令就是 `/` 开头的一句话（ACP 的约定），只认 Agent 报过的命令名。
+/// 斜杠命令就是 `/` 开头的一句话（ACP 的约定）。
 extension ACPSession: SessionLink {
     func send(_ message: SessionMessage, in _: Session.ID) async throws {
         guard !message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !message.images.isEmpty else {
@@ -15,10 +15,7 @@ extension ACPSession: SessionLink {
         }
     }
 
-    func command(_ line: String, deliveryID _: String?, in id: Session.ID) async throws {
-        guard line.hasPrefix("/") else { throw BridgeError.rejected("bad_request") }
-        let name = line.dropFirst().split(separator: " ", maxSplits: 1).first.map(String.init) ?? ""
-        guard bridge?.session(id: id)?.commands.contains(where: { $0.name == name }) == true else { throw BridgeError.rejected("unknown_command") }
+    func command(_ line: String, deliveryID _: String?, in _: Session.ID) async throws {
         try await interrupt()
         try prompt(ACPContent.prompt(text: line, images: []))
     }
@@ -45,7 +42,6 @@ extension ACPSession: SessionLink {
     }
 
     func configure(_ config: SessionConfig, in _: Session.ID) async throws {
-        guard config.fast == nil else { throw BridgeError.unsupported }
         let model = config.model, thinking = config.thinking, name = config.name
         do {
             try await configure(model: model.map(agent.modelRef), effort: thinking)

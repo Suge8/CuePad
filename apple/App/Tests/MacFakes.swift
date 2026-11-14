@@ -87,11 +87,15 @@ final class RecordingHost: AgentRuntime {
     @discardableResult
     func connect(
         _ sessionID: String, cwd: String, busy: Bool = false,
-        extensionVersion: Int = PiExtensionBundle.version, sessionFile: String? = nil, seesImages: Bool = true, launchToken: String? = nil
+        extensionVersion: Int = PiExtensionBundle.version, sessionFile: String? = nil, seesImages: Bool = true, supportsFast: Bool = false,
+        launchToken: String? = nil
     ) async throws -> FakeExtension {
         var options = FakeExtension.Options(extensionVersion: extensionVersion, cwd: cwd)
         options.launchToken = launchToken
+        // 桥只把清单里有的命令交给扩展（`Bridge.command`）：用例里用到的几条
+        options.commands = ["compact", "greet", "shout"].map { FakeExtension.WireCommand(name: $0, description: nil) }
         if !seesImages { options.model?.images = false }
+        options.model?.supportsFast = supportsFast
         let file = SessionFile(url: sessionFile.map { URL(filePath: $0) } ?? sessions.appending(path: "--demo--/\(sessionID).jsonl"), sessionID: sessionID, cwd: cwd)
         options.sessionFile = file.url.path
         let ext = FakeExtension(directory: socketDirectory, sessionID: sessionID, options: options)
@@ -141,9 +145,10 @@ final class PipedHostedAgent: AgentRuntime, SessionLink {
 
     @discardableResult
     func host(_ sessionID: String, state: WorkState) -> Session.ID {
-        let session = Session(
+        var session = Session(
             id: "\(sessionID).1", sessionID: sessionID, agent: agent, sessionFile: nil, pid: 1, cwd: URL(filePath: "/work/\(sessionID)"),
             state: state, stateSince: Date())
+        session.commands = [SlashCommand(name: "review", summary: nil, source: .known(.builtin))]
         bridge.attach(session, via: self)
         return session.id
     }
@@ -161,9 +166,7 @@ final class PipedHostedAgent: AgentRuntime, SessionLink {
     func end(_ id: Session.ID) async throws {}
     func abort(_ id: Session.ID) async throws {}
     func answer(_ answer: AnswerValue, to promptID: String, in id: Session.ID) async throws {}
-    func configure(_ config: SessionConfig, in id: Session.ID) async throws {
-        guard config.fast == nil else { throw BridgeError.unsupported }
-    }
+    func configure(_ config: SessionConfig, in id: Session.ID) async throws {}
 }
 
 extension FakeExtension {

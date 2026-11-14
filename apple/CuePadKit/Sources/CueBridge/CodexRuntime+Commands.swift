@@ -41,10 +41,8 @@ extension CodexRuntime {
 
     public func command(_ line: String, deliveryID _: String?, in id: Session.ID) async throws {
         guard let session = tracked[id] else { throw BridgeError.unknownSession(id) }
-        guard line.hasPrefix("/") else { throw BridgeError.rejected("bad_request") }
-        let parts = line.dropFirst().split(separator: " ", maxSplits: 1)
-        let name = parts.first.map(String.init) ?? ""
-        let argument = parts.count > 1 ? parts[1].trimmingCharacters(in: .whitespaces) : ""
+        let slash = try SlashLine(line)
+        let name = slash.name, argument = slash.argument
         switch name {
         case "compact":
             try await call(session, "thread/compact/start", ["threadId": .string(session.threadID)])
@@ -60,7 +58,6 @@ extension CodexRuntime {
                 try await deliver(CodexRPC.input(text: argument, images: []), clientID: CodexHistory.clientID(for: nil), to: session)
             }
         case _ where name.hasPrefix("skill:"):
-            guard session.skills.contains(where: { "skill:\($0.name)" == name }) else { throw BridgeError.rejected("unknown_command") }
             try await deliver(Self.input(line, images: [], skills: session.skills), clientID: CodexHistory.clientID(for: nil), to: session)
         default:
             throw BridgeError.rejected("unknown_command")
@@ -105,7 +102,6 @@ extension CodexRuntime {
         let target = model?.id ?? bridge.session(id: id)?.model?.key.id
         let entry = models?.first { $0.id == target }
         if model != nil, entry == nil { throw BridgeError.unknownModel(.codex) }
-        if config.fast == true, entry?.supportsFast != true { throw BridgeError.unsupported }
         var settings: [String: JSONValue] = ["threadId": .string(session.threadID)]
         if let model { settings["model"] = .string(model.id) }
         if let thinking { settings["effort"] = .string(CodexModel.effort(thinking.clamped(to: entry?.efforts ?? []))) }

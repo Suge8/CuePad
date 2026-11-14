@@ -40,6 +40,7 @@ extension CodexRuntime {
         let entry = Tracked(id: session.id, threadID: session.sessionID, driver: driver, pid: session.pid)
         tracked[session.id] = entry
         var session = session
+        session.commands = Self.builtinCommands
         entry.facts.publish(to: &session)
         bridge.attach(session, via: self)
         refresh(session.id, skills: true)
@@ -85,7 +86,7 @@ extension CodexRuntime {
     }
 
     /// 能从 CuePad 执行的内置命令：Codex 的斜杠命令是终端界面自己实现的，只有这几个有对应的接口（`plan`、`default` 切协作模式）。
-    private static let builtinCommands = [
+    static let builtinCommands = [
         SlashCommand(name: "compact", summary: String(localized: "压缩上下文"), source: .known(.builtin)),
         SlashCommand(name: "name", summary: String(localized: "给会话改名"), source: .known(.builtin), hint: String(localized: "<名字>")),
         SlashCommand(name: "model", summary: String(localized: "换模型"), source: .known(.builtin), hint: String(localized: "<模型>")),

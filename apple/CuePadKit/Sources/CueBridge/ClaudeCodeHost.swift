@@ -21,7 +21,6 @@ final class ClaudeHostedSession: SessionLink {
     var facts = SessionFacts()
     var tasks = ClaudeHostedTasks()
     var permission: (request: String, permission: ClaudePermission)?
-    var commands: Set<String> = []
     let deliveries = ClaudeDelivery()
     /// 停下这一轮（停止或发来新的一句）后的 `result` 是被打断的，不算出错
     var stopping = false
@@ -95,7 +94,6 @@ final class ClaudeHostedSession: SessionLink {
             return SlashCommand(
                 name: name, summary: command["description"]?.string.map { $0.clipped(ToolDetail.limit) }, source: .known(.builtin), hint: hint)
         }
-        commands = Set(listed.map(\.name))
         let pid = stream.process.pid
         var session = Session(
             id: Session.claudeID(sessionID: sessionID, pid: pid), sessionID: sessionID, agent: .claudeCode, sessionFile: sessionFile, pid: pid,

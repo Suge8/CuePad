@@ -25,9 +25,6 @@ extension ClaudeHostedSession {
 
     /// 斜杠命令就是以 / 开头的一句话：托管进程会执行它（内置命令、skill、自定义命令）。
     func command(_ line: String, deliveryID: String?, in _: Session.ID) async throws {
-        guard line.hasPrefix("/") else { throw BridgeError.rejected("bad_request") }
-        let name = line.dropFirst().split(separator: " ", maxSplits: 1).first.map(String.init) ?? ""
-        guard commands.contains(name) else { throw BridgeError.rejected("unknown_command") }
         try await deliver(hosted(.string(line), uuid: deliveryID))
     }
 
@@ -49,7 +46,6 @@ extension ClaudeHostedSession {
     }
 
     func configure(_ config: SessionConfig, in _: Session.ID) async throws {
-        guard config.fast == nil else { throw BridgeError.unsupported }
         let model = config.model, thinking = config.thinking, name = config.name
         guard let id else { throw BridgeError.sessionEnded }
         let stream = try live

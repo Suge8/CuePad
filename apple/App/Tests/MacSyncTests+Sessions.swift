@@ -24,7 +24,7 @@ extension MacSyncTests {
             for side in [mac, phone] { side.services.cancelBackgroundWork() }
         }
         try await mac.services.executor.start()
-        let ext = try await mac.host.connect("fast", cwd: mac.directory.path)
+        let ext = try await mac.host.connect("fast", cwd: mac.directory.path, supportsFast: true)
         defer { ext.close(bye: "quit") }
         ext.onCommand = { [weak ext] _, command in
             if command["t"] as? String == "config", let fast = command["fast"] as? Bool {

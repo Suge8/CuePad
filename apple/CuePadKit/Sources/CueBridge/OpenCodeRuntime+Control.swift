@@ -36,18 +36,13 @@ extension OpenCodeRuntime {
 
     /// `/compact` 不开轮，照它的缺省（下一个步骤边界压缩）；其余命令展开成这一轮的提示词，与 `send` 同一规则。
     public func command(_ line: String, deliveryID _: String?, in id: Session.ID) async throws {
-        let (connection, tracked, sessionID) = try await live(id)
-        guard line.hasPrefix("/") else { throw BridgeError.rejected("bad_request") }
-        let parts = line.dropFirst().split(separator: " ", maxSplits: 1, omittingEmptySubsequences: false)
-        let name = parts.first.map(String.init) ?? ""
-        let arguments = parts.count > 1 ? String(parts[1]) : ""
+        let (connection, _, sessionID) = try await live(id)
+        let slash = try SlashLine(line)
+        let name = slash.name, arguments = slash.argument
         if name == Self.compact {
             struct Compact: Encodable {}
             try await connection.client.call("POST", "/api/session/\(sessionID)/compact", body: Compact())
             return
-        }
-        guard try await catalog(tracked.directory, connection.client).commands.contains(where: { $0.name == name }) else {
-            throw BridgeError.rejected("unknown_command")
         }
         struct Command: Encodable { var name: String; var text: String }
         try await interrupt(sessionID, connection)
@@ -112,7 +107,6 @@ extension OpenCodeRuntime {
     }
 
     public func configure(_ config: SessionConfig, in id: Session.ID) async throws {
-        guard config.fast == nil else { throw BridgeError.unsupported }
         let model = config.model, thinking = config.thinking, name = config.name
         let (connection, tracked, sessionID) = try await live(id)
         if let name {
