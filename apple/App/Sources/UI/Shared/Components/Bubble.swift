@@ -131,11 +131,12 @@ nonisolated struct BubblePlacement: Equatable {
     static let radius = Radius.field
     #endif
     static let reach: CGFloat = TaskMetrics.rowHeight / 2
+    // 尾巴根离圆角起弧处再让一点，尾巴不骑在弧上
     static let tailInset: CGFloat = radius + BubbleTail.base / 2 + 4
     static let lead: CGFloat = tailInset + 20
     static let roomy: CGFloat = 360
     static let unanchoredTop: CGFloat = 40
-    static let margin: CGFloat = 12
+    static let margin = Spacing.group
 }
 
 nonisolated struct BubbleTail: Equatable {

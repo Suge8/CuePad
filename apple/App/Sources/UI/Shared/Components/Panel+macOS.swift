@@ -389,7 +389,7 @@ private struct PanelLayer: View {
     }
 
     private static let bubbleInsets = EdgeInsets(
-        top: 52, leading: BubblePlacement.margin, bottom: BubblePlacement.margin, trailing: BubblePlacement.margin)
+        top: Chrome.band, leading: BubblePlacement.margin, bottom: BubblePlacement.margin, trailing: BubblePlacement.margin)
 
     private func area(_ id: UUID) -> some View {
         AreaMark { [host] in host.areas[id] = Weak(value: $0) }

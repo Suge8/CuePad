@@ -8,6 +8,7 @@ struct MarkedBar: View, Animatable {
 
     static let height: CGFloat = 11
     private static let thickness: CGFloat = 5
+    /// 条上刻度两侧切开的缝：条只有 5 粗，按条的比例定，不随间距档。
     private static let gap: CGFloat = 2
     private static let line: CGFloat = 1.5
 

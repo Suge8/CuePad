@@ -14,7 +14,7 @@ enum TaskMetrics {
     static let stepRing: CGFloat = 16
     /// 行没有左右内边距（纸自己留了）。
     static let ringColumn: CGFloat = 44
-    static let columnGap: CGFloat = 2
+    static let columnGap = Spacing.hair
     static let cardPadding = Spacing.group
     static let cardLead: CGFloat = 24
     static let cardGlyph: CGFloat = 13
@@ -42,7 +42,7 @@ enum BoardCardMetrics {
     /// 列与列之间不另留缝（`BoardWidths`）。否决过：列间再留 20——四列三道缝连同卡离列边共白占约 100，1280 宽时待办一行只剩三四个字。
     static var columnGap: CGFloat { 2 * inset }
     static let rowPadding = Spacing.group
-    static let rowGap: CGFloat = 6
+    static let rowGap = Spacing.glyph
     static let rowTitle = Typography.secondary.weight(.medium)
     /// 列里的卡：字离上下边、标题与卡脚之间、卡脚的高（放得下线，也放得下"开始"的点按区）。
     #if os(macOS)

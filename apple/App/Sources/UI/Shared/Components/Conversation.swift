@@ -139,7 +139,7 @@ private struct ChatSegment: View, Equatable {
             && lhs.session.id == rhs.session.id && lhs.session.projectID == rhs.session.projectID
     }
 
-    private static var turnGap: CGFloat { 14 }
+    private static var turnGap: CGFloat { Spacing.block }
 
     var body: some View {
         ChatRows(ids: items.map(\.id), spacing: Conversation.spacing) {

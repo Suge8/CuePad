@@ -41,7 +41,7 @@ struct QuotaDetail: View {
 }
 
 extension QuotaDetail {
-    static let bubblePadding: CGFloat = 16
+    static let bubblePadding = Spacing.block
 
     /// 会话条气泡的宽：两个账号起放得下两栏（`QuotaColumns`），否则一栏、同别的气泡最宽那一档。定宽：读数随时间变，宽不跟着跳。
     static func bubbleWidth(accounts: Int) -> BubblePlacement.Width {
@@ -68,8 +68,8 @@ private struct QuotaEmpty: View {
 /// 位置只由顺序与各块形状定，刷新不挪；账号失败、少了窗口这类形状变了才可能换栏。
 struct QuotaColumns: Layout {
     static let column: CGFloat = 248
-    static let gap: CGFloat = 32
-    private static let lineSpacing: CGFloat = 18
+    static let gap = Spacing.part
+    private static let lineSpacing = Spacing.block
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let width = proposal.width ?? (subviews.count > 1 ? Self.column * 2 + Self.gap : Self.column)
@@ -107,7 +107,7 @@ private struct QuotaAccount: View {
 
     /// 随动态字体放大：图标跟着字放大，定宽的列在大字号下放不下，压到账号名上。
     @ScaledMetric(relativeTo: .subheadline) private var iconColumn: CGFloat = 20
-    private static let iconGap: CGFloat = 8
+    private static let iconGap = Spacing.item
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.item) {

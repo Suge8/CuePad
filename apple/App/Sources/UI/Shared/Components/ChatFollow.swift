@@ -181,7 +181,7 @@ struct JumpToNewest: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     static let size: CGFloat = 44
-    static let inset: CGFloat = 10
+    static let inset = Spacing.item
     static var clearance: CGFloat { size + 2 * inset }
 
     var body: some View {

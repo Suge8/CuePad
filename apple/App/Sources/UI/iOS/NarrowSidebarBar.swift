@@ -123,7 +123,7 @@ private struct GiveWay: ViewModifier {
 }
 
 private struct SidebarRow: Layout {
-    static let gap: CGFloat = 6
+    static let gap = Spacing.glyph
 
     private var row: CGFloat { FloatingHeaderLayout.height }
 

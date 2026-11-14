@@ -1,14 +1,14 @@
 import SwiftUI
 
 enum ComposerMetrics {
-    static let inset: CGFloat = 8
+    static let inset = Spacing.item
     static let slot: CGFloat = 56
     static let textTop: CGFloat = 17
     static let textBottomOpen: CGFloat = 4
     static let glyph: CGFloat = 40
     static let glyphTarget: CGFloat = 44
-    static let noticeSpacing: CGFloat = 4
-    static let noticePadding: CGFloat = 8
+    static let noticeSpacing = Spacing.tight
+    static let noticePadding = Spacing.item
     /// 会话页对话末尾按动态字号缩放它（`Conversation`），外边距不缩放。
     static let noticeTextHeight: CGFloat = 2 * 16 + noticeSpacing
 

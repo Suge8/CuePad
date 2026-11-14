@@ -34,6 +34,7 @@ struct ChatScrubber: View {
     private static let visibleTicks = 30
     private static let maxPitch: CGFloat = 14
     private static let focusPitch: CGFloat = 7
+    /// 刻度最密时的缝：刻度按条数等分整条，缝随条数缩，这是它缩到的底。
     private static let minGap: CGFloat = 3
     private static let reach: CGFloat = 44
     static let width: CGFloat = 28

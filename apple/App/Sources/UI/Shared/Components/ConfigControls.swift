@@ -156,8 +156,8 @@ struct ConfigControls<Trailing: View>: View {
 private struct ConfigRow: Layout {
     enum Give: CaseIterable { case wording, spacing, context, agent, secondary, model }
 
-    private static let spacing: CGFloat = 6
-    private static let tightSpacing: CGFloat = 2
+    private static let spacing = Spacing.glyph
+    private static let tightSpacing = Spacing.hair
 
     private struct Arrangement {
         var widths: [CGFloat]

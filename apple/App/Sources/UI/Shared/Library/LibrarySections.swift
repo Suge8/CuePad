@@ -10,12 +10,12 @@ enum LibraryLayout {
     static let gap = Spacing.section
     static let margin = Spacing.page
     static let bottom = Spacing.section
+    /// 正文离栏边同页边，与灵感的编辑页（`CardEditorScreen`）同一列。
+    static let textInset = Spacing.page
     #if os(macOS)
-    static let textInset: CGFloat = 24
     /// 行尾的前进箭头：Mac 上点行打开的是盖在主区上的文件页（浮层，不是进一页），不画
     static let chevron = false
     #else
-    static let textInset: CGFloat = 20
     static let chevron = true
     #endif
 }

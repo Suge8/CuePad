@@ -101,7 +101,7 @@ struct ProjectGlyph: View {
             .readerHidden(true)
     }
 
-    static let margin: CGFloat = 6
+    static let margin = Spacing.glyph
 
     static func icon(_ project: Project?) -> Icon { .project(ProjectIcon(stored: project?.icon)) }
 }

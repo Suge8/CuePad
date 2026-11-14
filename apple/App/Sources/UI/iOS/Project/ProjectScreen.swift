@@ -53,7 +53,7 @@ struct ProjectScreen: View {
         .cardDragStage()
     }
 
-    private static let sectionGap: CGFloat = 24
+    private static let sectionGap = Spacing.section
 
     /// 卡片墙：辅助字号下只排一列，卡上的字与"记一条灵感"才不被窄列挤成一字一行。
     private var metrics: ProjectWallSections<CardTileView>.Metrics {

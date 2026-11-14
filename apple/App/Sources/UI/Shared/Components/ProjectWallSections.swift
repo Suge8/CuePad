@@ -228,7 +228,7 @@ private struct OlderRowLine: View {
         static let marks = Typography.meta
         static let date = Typography.meta
         static let dateWidth: CGFloat = 64
-        static let gap: CGFloat = 12
+        static let gap = Spacing.group
         static let dotInset: CGFloat = 0
         #else
         static let base: Font? = nil
@@ -240,7 +240,7 @@ private struct OlderRowLine: View {
         static let marks = Typography.caption2
         static let date = Typography.caption
         static let dateWidth: CGFloat = 0
-        static let gap: CGFloat = 8
+        static let gap = Spacing.item
         static let dotInset = -AgentDot.overhang
         #endif
     }

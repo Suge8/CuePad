@@ -127,7 +127,7 @@ private struct PhraseLines: View {
     }
 
     private struct Flow: Layout {
-        private static let lineGap: CGFloat = 2
+        private static let lineGap = Spacing.hair
 
         struct Cache {
             var width: CGFloat?
