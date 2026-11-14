@@ -1,4 +1,5 @@
 /// Cue 角色的着色器源码：App 运行时交给系统编（`FigureGPU.warm`），不进构建——项目不另装 Metal 编译工具链（本机与 CI 都省一份依赖）。
+/// 写错由 `xc.sh check` 拦（scripts/shaders.swift 用本机的 Metal 编这一段），收尾的 `"""#` 顶格写：那个脚本按它切。
 /// 与 `FigureUniforms`、`FigureSprite` 逐字段对齐。
 nonisolated enum FigureShaders {
     static let source = #"""
