@@ -7480,22 +7480,6 @@
         }
       }
     },
-    "关于「%@」对 %@ 说…" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tell %2$@ about “%1$@”…"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "关于「%1$@」对 %2$@ 说…"
-          }
-        }
-      }
-    },
     "关于「%@」：%@" : {
       "localizations" : {
         "en" : {
@@ -22088,6 +22072,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "说话"
+          }
+        }
+      }
+    },
+    "说说这一份" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Say something about it"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "说说这一份"
           }
         }
       }

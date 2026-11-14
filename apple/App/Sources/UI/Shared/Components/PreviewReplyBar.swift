@@ -18,7 +18,7 @@ struct PreviewReplyBar: View {
 
     var body: some View {
         switch reply {
-        case .cue: field(String(localized: "关于「\(about)」对 \(workspace.cue.name) 说…"), to: .cue).glass(in: .rect(cornerRadius: Radius.field))
+        case .cue: field(String(localized: "说说这一份"), to: .cue).glass(in: .rect(cornerRadius: Radius.field))
         case .session(let session): note(in: session)
         case .answer(let message): choices(message).glass(in: .rect(cornerRadius: Radius.field))
         }
