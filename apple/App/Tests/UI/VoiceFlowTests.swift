@@ -24,7 +24,7 @@ struct VoiceFlowTests {
         try await eventually("合批结果进入界面") { fixture.call.replies.count == 1 }
         #expect(fixture.trip(first) != .delivered && fixture.trip(second) != .delivered)
         try await store.markCueMessagesDelivered([first])
-        try await eventually("A 的真实回执到达") { fixture.call.requests.first?.record?.deliveredAt != nil }
+        try await eventually("A 的真实回执到达") { fixture.record()?.deliveredAt != nil }
         #expect(fixture.trip(second) != .delivered)
         try await store.markCueMessagesDelivered([second])
         try await eventually("全部收到回执才显示接走") {
@@ -192,7 +192,7 @@ struct VoiceFlowTests {
         if kind == "failed" {
             let recovery = try #require(recovery)
             try await fixture.workspace.recoverVoice(recovery)
-            try await eventually("重试后有真实记录") { fixture.call.requests.first?.record != nil }
+            try await eventually("重试后有真实记录") { fixture.record() != nil }
             try await eventually("恢复 A 不移除另一件失败") {
                 fixture.workspace.voicePresentation?.issues.map(\.recovery) == [.retryRequest("other-failed")]
             }

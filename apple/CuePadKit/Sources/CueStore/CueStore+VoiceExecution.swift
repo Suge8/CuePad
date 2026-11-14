@@ -39,36 +39,22 @@ extension CueStore {
     return TurnTarget(hostID: state.hostID, bootID: boot, sessionID: sessionID, deliveryID: delivery, turnStartedAtMilliseconds: turn.stored)
   }
 
-  /// 本机界面点击时冻结目标；远端命令必须使用带完整 expected 的入口，不能按手机的 sessionID 重新选当前轮。
-  public func stopVoiceExecution(_ sessionID: String, requests: [UUID], host: String) throws -> DeliveryRequest {
-    try write {
-      let expected = try voiceExecutionTarget(sessionID, requests: requests)
-      guard expected.hostID == host else { throw CueStoreError.cannotStop(sessionID) }
-      return try putVoiceStop(expected, requests: requests, command: nil)
-    }
-  }
-
   /// 入队与来源/回合复核在同一事务；执行器、Agent 接收端还要重验，不能把队列时延当作停止后来工作的许可。
   public func stopVoiceExecution(_ expected: TurnTarget, requests: [UUID], command: UUID? = nil) throws -> DeliveryRequest {
-    try write { try putVoiceStop(expected, requests: requests, command: command) }
-  }
-
-  /// 两个公开入口各自持有一层事务；目标校验与入队共用这个不另开事务的实现。
-  private func putVoiceStop(_ expected: TurnTarget, requests: [UUID], command: UUID?) throws -> DeliveryRequest {
-    if let command, let existing = try deliveryRequest(command) {
-      guard existing.stopTurn == expected else { throw CueStoreError.cannotStop(expected.sessionID) }
-      return existing
+    try write {
+      if let command, let existing = try deliveryRequest(command) {
+        guard existing.stopTurn == expected else { throw CueStoreError.cannotStop(expected.sessionID) }
+        return existing
+      }
+      // 回合时间来自 Mac 活连接，不使用可能仍在节流中的同步记录授权；这里复核原请求、投送、所在 Mac 与启动身份。
+      // 排队期间是否已换回合，由 MacExecutor 和 Agent 各自面对实时状态核对。
+      let origin = try voiceExecutionTarget(expected.sessionID, requests: requests, turnStartedAt: Date(timeIntervalSince1970: Double(expected.turnStartedAtMilliseconds) / 1000))
+      guard origin == expected else { throw CueStoreError.cannotStop(expected.sessionID) }
+      let session = try sessionTarget(expected.sessionID, name: "")
+      if let command {
+        return try insertDelivery(expected.content, to: session.target, on: expected.hostID, mode: .stopTurn, cue: false, id: command)
+      }
+      return try requestControl(.stopTurn, of: session.target, on: expected.hostID, cue: false, content: expected.content)
     }
-    // 回合时间来自 Mac 活连接，不使用可能仍在节流中的同步记录授权；这里复核原请求、投送、所在 Mac 与启动身份。
-    // 排队期间是否已换回合，由 MacExecutor 和 Agent 各自面对实时状态核对。
-    let origin = try voiceExecutionTarget(expected.sessionID, requests: requests, turnStartedAt: Date(timeIntervalSince1970: Double(expected.turnStartedAtMilliseconds) / 1000))
-    guard origin == expected else {
-      throw CueStoreError.cannotStop(expected.sessionID)
-    }
-    let session = try sessionTarget(expected.sessionID, name: "")
-    if let command {
-      return try insertDelivery(expected.content, to: session.target, on: expected.hostID, mode: .stopTurn, cue: false, id: command)
-    }
-    return try requestControl(.stopTurn, of: session.target, on: expected.hostID, cue: false, content: expected.content)
   }
 }

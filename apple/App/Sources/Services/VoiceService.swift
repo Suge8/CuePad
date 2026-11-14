@@ -9,9 +9,7 @@ import os
     @ObservationIgnored unowned let services: AppServices
     @ObservationIgnored let signaling: (any VoiceSignaling)?
     private(set) var projection: VoiceCallProjection?
-    var issue: VoiceIssue?
     var availability: VoiceRelayAvailability
-    var session: VoiceSessionID?
     var commandResults: [VoiceCommand.ID: VoiceCommandResult.Outcome] = [:]
     let preview = VoicePreview()
     @ObservationIgnored var pending: [VoiceCommand.ID: Pending<VoiceCommandResult.Outcome>] = [:]
@@ -24,6 +22,9 @@ import os
     }
     #if os(macOS)
     var call: VoiceCall?
+    /// 测试与调试换掉付费模型与设备的接缝
+    @ObservationIgnored var makeCall: @MainActor (VoiceCall.Dependencies) -> VoiceCall = DebugHooks.makeVoiceCall
+    var session: VoiceSessionID? { call.map { VoiceSessionID($0.session) } }
     /// 只登记当前租约的展示接收者，挂断后仍可收更新；不保留服务端页面、游标或业务副本。
     @ObservationIgnored var projectionReaders: [VoiceDeviceID: VoiceSignalHeader] = [:]
     @ObservationIgnored var remote: VoiceRemoteMedia?
@@ -31,6 +32,8 @@ import os
     @ObservationIgnored var commands: [VoiceCommand.ID: Task<VoiceCommandResult.Outcome, Never>] = [:]
     @ObservationIgnored var projectionRetries: [VoiceDeviceID: Task<Void, Never>] = [:]
     #else
+    var issue: VoiceIssue?
+    var session: VoiceSessionID?
     @ObservationIgnored let makeMedia: () -> any VoiceMedia
     @ObservationIgnored var phone: VoicePhoneSession?
     @ObservationIgnored var phoneBinding: (session: VoiceSessionID, local: VoiceEndpoint, peer: VoiceEndpoint)?
@@ -91,8 +94,8 @@ import os
     }
 
     var phase: VoiceCallProjection.Phase? {
-        if let issue { return .failed(issue) }
         #if os(iOS)
+        if let issue { return .failed(issue) }
         // 先读结束再看在不在关：phone 不在观察里，`finish` 撤下 phone 后只改 phoneEnd，关着时没读过它的视图会一直停在"正在结束"
         let ended = phoneEnd
         if closing { return .closing }
@@ -171,7 +174,7 @@ import os
 
     var canRepeat: Bool {
         #if os(macOS)
-        call?.canRepeat == true && call.map { VoiceSessionID($0.session) } == session
+        call?.canRepeat == true
         #else
         phone?.connected == true && !closing && phone?.id == projection?.session && projection?.canRepeat == true
         #endif

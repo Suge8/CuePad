@@ -4,18 +4,15 @@ import CueStore
 import Foundation
 
 extension VoiceService {
-    func startLocal(source: VoicePeer.Source, makeCall: @MainActor (VoiceCall.Dependencies) -> VoiceCall) {
+    func startLocal(source: VoicePeer.Source) {
         guard call?.isLive != true, remote == nil else { return }
-        let call = obtainCall(source: source, makeCall: makeCall)
-        issue = nil
+        let call = obtainCall(source: source)
         projectionReaders.removeAll()
         call.reconnect()
-        session = VoiceSessionID(call.session)
         observeCall(call)
     }
 
-    private func obtainCall(host: String? = nil, source: VoicePeer.Source = .microphone,
-                            makeCall: @MainActor (VoiceCall.Dependencies) -> VoiceCall = VoiceCall.init) -> VoiceCall {
+    private func obtainCall(host: String? = nil, source: VoicePeer.Source = .microphone) -> VoiceCall {
         preview.stop()
         let services = services
         let tell: (String) async throws -> UUID = { [weak services] text in
@@ -128,8 +125,6 @@ extension VoiceService {
                 return
             }
             let call = obtainCall(host: services.hostID)
-            issue = nil
-            session = header.session
             projectionReaders = [header.sender.device: header]
             call.reconnect(session: header.session.rawValue, media: media)
             observeCall(call)
@@ -143,7 +138,7 @@ extension VoiceService {
         do {
             try await signaling?.sendVoice(.projection(value: .init(session: header.session, phase: .failed(issue), requests: [], replies: [], executions: [])),
                                            session: header.session, to: header.sender)
-        } catch { self.issue = .ended(.networkFailed) }
+        } catch { AppServices.log.error("Voice offer rejection not sent: \(String(describing: error), privacy: .public)") }
     }
 
     private func observeCall(_ call: VoiceCall) {
@@ -157,11 +152,10 @@ extension VoiceService {
                 switch result {
                 case .success(let projection): value = projection
                 case .failure:
-                    self.issue = .storageUnavailable
                     call.inputs.continuation.yield(.failed(.other("Voice projection storage unavailable")))
                     continue
                 }
-                guard self.call === call, self.session == value.session else { return }
+                guard self.call === call else { return }
                 self.setProjection(value)
                 for reader in self.projectionReaders.values where reader.session == value.session {
                     if await self.sendProjection(value, to: reader) { self.projectionRetries.removeValue(forKey: reader.sender.device)?.cancel() }
@@ -221,17 +215,6 @@ extension VoiceService {
             }
             guard !remote.link.isBound, !Task.isCancelled else { return }
             remote.departed(reason)
-        }
-    }
-
-    func end(reason: VoiceEndReason = .hungUp) async {
-        guard let call, call.isLive else { return }
-        if let remote { remote.onEvent(.ended(reason)) } else { call.hangUp() }
-        for await phase in Observations({ call.phase }) {
-            switch phase {
-            case .ended, .failed: return
-            default: break
-            }
         }
     }
 }

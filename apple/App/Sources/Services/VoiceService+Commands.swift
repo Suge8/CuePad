@@ -81,24 +81,24 @@ extension VoiceService {
                 case .unrecorded(let origin, let request):
                     guard let call, let row = call.requests.first(where: { $0.rowID == request && $0.origin == origin }),
                           row.message == nil, row.failure != nil, call.writing[row.id] == nil else { return .rejected(reason: .originalMissing) }
-                    guard let index = call.requestState.firstIndex(where: { $0.rowID == request }) else { return .rejected(reason: .originalMissing) }
-                    call.requestState[index].submission = .recording
+                    guard let index = call.requests.firstIndex(where: { $0.rowID == request }) else { return .rejected(reason: .originalMissing) }
+                    call.requests[index].submission = .recording
                     do {
                         let id = try await services.recordVoiceSpeech(row.text, command: command.id.rawValue)
                         guard let recorded = try await services.store.cueMessages([id]).first else { throw CueStoreError.notFound }
                         message = recorded
                     } catch {
-                        call.requestState[index].submission = row.submission
+                        call.requests[index].submission = row.submission
                         throw error
                     }
-                    if let index = call.requestState.firstIndex(where: { $0.rowID == request }) {
-                        call.requestState[index].submission = .recorded(message.id)
+                    if let index = call.requests.firstIndex(where: { $0.rowID == request }) {
+                        call.requests[index].submission = .recorded(message.id)
                         call.watchRequests()
                     }
                 }
                 if let call, case .recorded(let original) = reference,
-                   let index = call.requestState.firstIndex(where: { $0.message == original }) {
-                    call.requestState[index].submission = .recorded(message.id)
+                   let index = call.requests.firstIndex(where: { $0.message == original }) {
+                    call.requests[index].submission = .recorded(message.id)
                     call.watchRequests()
                 }
                 return .recorded(message: message.id)

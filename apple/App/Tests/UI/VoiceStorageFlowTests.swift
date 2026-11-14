@@ -27,7 +27,7 @@ struct VoiceStorageFlowTests {
         try await eventually("服务器收下，但 Cue 尚未领取") {
             await cloud.holds(request) && voice.trip(request) == .sent
         }
-        #expect(voice.call.requests.first?.record?.deliveredAt == nil)
+        #expect(voice.record()?.deliveredAt == nil)
         try await store.markCueMessagesDelivered([request])
         try await eventually("接走回执才显示送达") { voice.trip(request) == .delivered }
         try await voice.hangUp()

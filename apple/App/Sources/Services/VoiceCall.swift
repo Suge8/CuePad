@@ -9,7 +9,7 @@ import Observation
 @Observable
 final class VoiceCall {
     enum Phase: Equatable {
-        case connecting, listening, handingOff, speaking, closing, ended
+        case connecting, listening, speaking, closing, ended
         case failed(Failure)
     }
 
@@ -51,16 +51,11 @@ final class VoiceCall {
     /// 50ms 一点，保留最近 1.8 秒；静音不呈现输入，远端出声时呈现输出。
     var samples: [Double] { outputActive ? outputSamples : isMuted ? [] : inputSamples }
     private(set) var userTurn: String?
-    var requestState: [Request] = []
-    var replyState: [Reply] = []
-    var executionState: [SessionListItem] = []
+    var requests: [Request] = []
+    var replies: [Reply] = []
+    var executions: [SessionListItem] = []
     /// 控制记录会被库定期清理；通话保留最后观察到的真实事实，不由它授予停止权限。
     var stopRequests: [DeliveryRequest] = []
-    var executions: [SessionListItem] { executionState }
-    var requests: [Request] { requestState }
-    var replies: [Reply] { replyState }
-    private(set) var heard = ""
-    private(set) var said = ""
     private(set) var isMuted = false
     private(set) var audioMs = 0
     private(set) var usedPercent: Double?
@@ -214,7 +209,7 @@ final class VoiceCall {
             guard let sent = outgoing, sent.attempt == attempt else { break }
             if let failure { return .failed(failure) }
             outgoing = nil
-            if let index = replies.firstIndex(where: { $0.id == sent.message }) { replyState[index].delivery = .submitted }
+            if let index = replies.firstIndex(where: { $0.id == sent.message }) { replies[index].delivery = .submitted }
             mark("cue-sent \(sent.message)")
         case .muted(let muted): isMuted = muted; muting = nil
         }
@@ -231,10 +226,8 @@ final class VoiceCall {
             }
         case .delegation(let delegation): submit(delegation)
         case .turn(let id, let assistant, let done, let text):
-            if done {
-                if assistant { said = text } else { heard = text }
-                mark("\(assistant ? "assistant" : "user")-said \(id) \(text)")
-            } else if assistant { mark("assistant-turn \(id)") }
+            if done { mark("\(assistant ? "assistant" : "user")-said \(id) \(text)") }
+            else if assistant { mark("assistant-turn \(id)") }
             if assistant {
                 if done { assistantTurns.remove(id) } else { assistantTurns.insert(id) }
                 waitingForResponse = false
@@ -259,9 +252,9 @@ final class VoiceCall {
         deadline?.cancel()
         outgoing?.task.cancel()
         // 已提交本就不保证播放成功，正常挂断不制造异常；半途取消的发送才需明确请求重说。
-        for index in replyState.indices {
-            switch replyState[index].delivery {
-            case .sending: replyState[index].delivery = .unconfirmed(String(localized: "朗读尚未确认"))
+        for index in replies.indices {
+            switch replies[index].delivery {
+            case .sending: replies[index].delivery = .unconfirmed(String(localized: "朗读尚未确认"))
             default: break
             }
         }

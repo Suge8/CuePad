@@ -10,7 +10,6 @@ extension VoiceCall {
         let delegation: VoiceWire.Delegation
         let origin: VoiceSessionID
         var submission: Submission = .recording
-        var record: CueMessage?
         var id: String { delegation.id }
         var text: String { delegation.text }
         var message: UUID? {

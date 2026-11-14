@@ -9,7 +9,7 @@ extension Workspace {
         // 媒体阶段优先；接通后的等待和回应来自协议回合，写库与句间电平不推进显示状态。
         let activity: CueVoicePresentation.Activity = switch voice.phase {
         case .connecting: .connecting
-        case .listening, .handingOff, .speaking:
+        case .listening, .speaking:
             !voice.assistantTurns.isEmpty ? .speaking : voice.waitingForResponse ? .processing : .listening
         case .closing: .closing
         case .ended: .ended

@@ -166,7 +166,7 @@ extension DebugScene {
                         timers.append(Task {
                             guard await Task.wait(for: .seconds(seconds)) else { return }
                             note("hang-up")
-                            await services.voice.end()
+                            services.voice.call?.hangUp()
                         })
                     }
                 }

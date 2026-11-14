@@ -9,7 +9,6 @@ extension VoiceService {
         let phase: VoiceCallProjection.Phase = switch call.phase {
         case .connecting: .connecting
         case .listening: .listening
-        case .handingOff: .processing
         case .speaking: .speaking
         case .closing: .closing
         case .ended: .ended(reason: .hungUp)
