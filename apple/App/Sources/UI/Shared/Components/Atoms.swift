@@ -14,13 +14,12 @@ extension EnvironmentValues {
 extension View {
     /// 读到的和上一次一样就不写：在 Store 一侧比一次，重新订阅后手里已有的值当作"上一次"，没变的数据不送到主线程、界面也不重算。
     /// 在前台、手里还没有值时当场读（`CueStore.snapshot`，`onAppear` 在第一帧之前做完）再从它接着订阅：本机库里的东西第一帧就排好，页面没有"还没读到"这一态。读失败时留给订阅报告，不报两次。
-    /// `immediately: false`：长列表里每行各自的小读（附件到没到本机，要看文件在不在），行在滚动中一个个出现，不在主线程上读，没读到时按到了画。
     func observing<T: Sendable & Equatable>(
-        _ store: CueStore, id: some Equatable = 0, into value: Binding<T?>, immediately: Bool = true,
+        _ store: CueStore, id: some Equatable = 0, into value: Binding<T?>,
         onError: @escaping (any Error) -> Void = { _ in },
         _ read: @escaping @Sendable (isolated CueStore) throws -> T
     ) -> some View {
-        modifier(Observing(store: store, id: id, value: value, immediately: immediately, onError: onError, read: read))
+        modifier(Observing(store: store, id: id, value: value, onError: onError, read: read))
     }
 }
 
@@ -35,7 +34,6 @@ private struct Observing<T: Sendable & Equatable, ID: Equatable>: ViewModifier {
     let store: CueStore
     let id: ID
     @Binding var value: T?
-    let immediately: Bool
     let onError: (any Error) -> Void
     let read: @Sendable (isolated CueStore) throws -> T
     @Environment(\.pageActive) private var active
@@ -60,7 +58,7 @@ private struct Observing<T: Sendable & Equatable, ID: Equatable>: ViewModifier {
     }
 
     private func readNow() {
-        guard immediately, active, value == nil, let snapshot = try? store.snapshot(read) else { return }
+        guard active, value == nil, let snapshot = try? store.snapshot(read) else { return }
         start = snapshot
         // 当场读到的是这一页本来的样子，不是变化：页面上挂在这些值上的动画（`animation(_:value:)`）不播，
         // 不然从"还没读到"到读到的那一截连同同一次更新里的版面变化（冷启动时内容区从占位尺寸到真实尺寸）一帧帧排过去

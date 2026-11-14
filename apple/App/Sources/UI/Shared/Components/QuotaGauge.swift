@@ -238,7 +238,6 @@ struct QuotaRing: View, Animatable {
 struct QuotaRings: View {
     let open: Bool
     let height: CGFloat
-    var row = false
     var cell = false
     let action: () -> Void
     @Environment(AppServices.self) private var services
@@ -249,7 +248,7 @@ struct QuotaRings: View {
     var body: some View {
         let quotas = Array(services.accountQuotas.items.prefix(Self.limit))
         Group {
-            if row || cell { button(quotas).buttonStyle(RowStyle(selected: open, cell: cell)) } else { button(quotas).buttonStyle(PressStyle()) }
+            if cell { button(quotas).buttonStyle(RowStyle(selected: open, cell: true)) } else { button(quotas).buttonStyle(PressStyle()) }
         }
         .accessibilityExpanded(open)
         .accessibilityHint(open ? "收起" : quotas.isEmpty ? "看怎么才会有额度" : "看每个窗口还剩多少、多久后重置")
@@ -258,7 +257,7 @@ struct QuotaRings: View {
     private func button(_ quotas: [AccountQuota]) -> some View {
         Button(action: action) {
             Moments(next: quotas.nextReset(after:)) { now in rings(quotas, at: now) }
-                .padding(.horizontal, row ? 0 : Spacing.item)
+                .padding(.horizontal, Spacing.item)
                 .frame(height: height)
                 .contentShape(.rect)
         }
@@ -267,10 +266,7 @@ struct QuotaRings: View {
     private func rings(_ quotas: [AccountQuota], at now: Date) -> some View {
         let rings = quotas.compactMap { quota in quota.binding(at: now).map { (id: quota.id, provider: quota.provider, window: QuotaMeter.Window($0, at: now)) } }
         return HStack(spacing: Spacing.glyph) {
-            if row {
-                Text("额度").foregroundStyle(palette.ink3)
-                Spacer(minLength: 0)
-            } else if rings.isEmpty { Text("额度").font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink3).fixedSize() }
+            if rings.isEmpty { Text("额度").font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink3).fixedSize() }
             ForEach(rings, id: \.id) { ModelBadge(mark: Provider(id: $0.provider).mark, binding: $0.window) }
         }
         .foregroundStyle(palette.ink2)

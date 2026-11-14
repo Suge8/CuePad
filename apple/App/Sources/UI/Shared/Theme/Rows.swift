@@ -51,8 +51,8 @@ extension ButtonStyle where Self == RowStyle {
 }
 
 extension View {
-    func row(selected: Bool = false, cell: Bool = false) -> some View {
-        modifier(RowHighlight(selected: selected, pressed: false, cell: cell))
+    func row(selected: Bool = false) -> some View {
+        modifier(RowHighlight(selected: selected, pressed: false, cell: false))
     }
 
     /// 调用处只给怎么画。行里能画的用 `row()`；手机的行挂着轻扫、被裁在自己的框里，伸出行框的底只能这样画在外面。

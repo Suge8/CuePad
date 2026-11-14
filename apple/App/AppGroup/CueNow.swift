@@ -263,15 +263,6 @@ nonisolated extension CueNow {
         }
     }
 
-    var quietWord: String? {
-        switch cue {
-        case .away: String(localized: "不在")
-        case .hearing: String(localized: "在听")
-        case .working: String(localized: "在想")
-        case .idle: justDone == nil ? nil : String(localized: "做完")
-        }
-    }
-
     var keyTone: Tone {
         if tally.asks > 0 { return .asks }
         if tally.reply > 0 { return .reply }
