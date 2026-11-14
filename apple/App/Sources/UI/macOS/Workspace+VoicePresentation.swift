@@ -26,8 +26,8 @@ extension Workspace {
                 }
                 return .init(id: $0.state.sessionID, title: $0.task?.title ?? $0.state.title,
                              status: shown.label, needsAttention: attention)
-            } + voice.stopRequests.map(voiceStopExecution),
-            readings: voice.replies.map { voiceReading($0, call: voice) })
+            } + voice.record.stopRequests.map(voiceStopExecution),
+            readings: voice.record.replies.map { voiceReading($0, call: voice) })
     }
 
     var stoppableVoiceExecutions: [SessionListItem] {
@@ -50,7 +50,7 @@ extension Workspace {
                      status: status, needsAttention: attention)
     }
 
-    private func voiceReading(_ reply: VoiceCall.Reply, call: VoiceCall) -> CueVoicePresentation.Reading {
+    private func voiceReading(_ reply: VoiceRecord.Reply, call: VoiceCall) -> CueVoicePresentation.Reading {
         let status: String = switch reply.delivery {
         case .awaitingOrigin: String(localized: "结果来源尚未确认")
         case .queued: String(localized: "等待提交语音")
@@ -64,12 +64,12 @@ extension Workspace {
     }
 
     private func voiceIssues(_ voice: VoiceCall) -> [CueVoicePresentation.Issue] {
-        var issues: [CueVoicePresentation.Issue] = voice.requests.compactMap { request in
+        var issues: [CueVoicePresentation.Issue] = voice.record.requests.compactMap { request in
             guard request.message == nil, let failure = request.failure else { return nil }
             return .init(id: .request(request.id), summary: "未能交给 Cue", message: "请求「\(request.text)」：\(failure)",
                          recovery: .retryRequest(request.id))
         }
-        if let failure = voice.storeFailure {
+        if let failure = voice.record.storeFailure {
             issues.append(.init(id: .store, summary: "通话记录暂不可用", message: "\(failure)", recovery: .reconnect))
         }
         if case .failed(let failure) = voice.phase {

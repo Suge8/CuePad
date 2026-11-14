@@ -22,7 +22,7 @@ import os
     #if os(macOS)
     var call: VoiceCall?
     /// 测试与调试换掉付费模型与设备的接缝
-    @ObservationIgnored var makeCall: @MainActor (VoiceCall.Dependencies) -> VoiceCall = DebugHooks.makeVoiceCall
+    @ObservationIgnored var makeCall: @MainActor (VoiceCall.Dependencies, VoiceRecord) -> VoiceCall = DebugHooks.makeVoiceCall
     var session: VoiceSessionID? { call.map { VoiceSessionID($0.session) } }
     /// 只登记当前租约的展示接收者，挂断后仍可收更新；不保留业务副本。
     @ObservationIgnored var projectionReaders: [VoiceDeviceID: VoiceSignalHeader] = [:]

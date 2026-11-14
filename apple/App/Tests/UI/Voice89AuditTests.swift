@@ -82,7 +82,7 @@ import Testing
         try await fixture.connect()
         let original = try await store.addCueMessage(.you, text: "original audit request")
         let result = try await store.addCueMessage(.cue, text: "saved result", answeredRequests: nil)
-        try await eventually("saved result visible") { fixture.call.replies.contains { $0.id == result.id } }
+        try await eventually("saved result visible") { fixture.voiceRecord.replies.contains { $0.id == result.id } }
         let command = UUID()
         let recovered = try await app.services.voice.command(.recover(request: .recorded(message: original.id)), id: command)
         #expect(recovered == .recorded(message: original.id))

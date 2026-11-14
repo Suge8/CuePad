@@ -15,12 +15,12 @@ extension VoiceService {
     private func obtainCall(host: String? = nil, source: VoicePeer.Source = .microphone) -> VoiceCall {
         preview.stop()
         let services = services
-        let tell: (String) async throws -> UUID = { [weak services] text in
+        let tell: (String, UUID) async throws -> UUID = { [weak services] text, command in
             guard let services else { throw CancellationError() }
-            return try await services.recordVoiceSpeech(text, host: host)
+            return try await services.recordVoiceSpeech(text, command: command, host: host)
         }
         if let call {
-            call.dependencies.tell = tell
+            call.record.tell = tell
             call.dependencies.source = source
             return call
         }
@@ -36,7 +36,7 @@ extension VoiceService {
                 let codex = if let debug = DebugHooks.voiceCodex { debug } else { await services.agents.executable(.codex) }
                 return try await services.agents.integration.codexAccess(executable: codex)
             },
-            tell: tell, store: services.store, source: source))
+            source: source), VoiceRecord(store: services.store, tell: tell))
         call = value
         return value
     }

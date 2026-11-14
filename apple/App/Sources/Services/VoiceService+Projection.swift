@@ -14,13 +14,13 @@ extension VoiceService {
         case .ended: .ended(reason: .hungUp)
         case .failed(let failure): .failed(Self.issue(for: failure))
         }
-        let requests = call.requests.map { request in
+        let requests = call.record.requests.map { request in
             VoiceCallProjection.Request(id: request.rowID,
                 reference: request.message.map { .recorded(message: $0) } ?? .unrecorded(session: request.origin, request: request.rowID),
                 recording: request.isRecording, issue: request.failure == nil ? nil : .storageUnavailable,
                 preview: request.message == nil ? .init(original: request.text) : nil)
         }
-        let replies = call.replies.map { reply in
+        let replies = call.record.replies.map { reply in
             let state: VoiceCallProjection.Readback = switch reply.delivery {
             case .awaitingOrigin: .awaitingOrigin
             case .queued: .queued
@@ -31,9 +31,9 @@ extension VoiceService {
             return VoiceCallProjection.Reply(message: reply.id, readback: state)
         }
         var targets: [VoiceExecutionTarget] = []
-        for execution in call.executions where execution.state.canStop {
+        for execution in call.record.executions where execution.state.canStop {
             guard let turn = services.bridge.session(sessionID: execution.state.sessionID)?.turnStartedAt else { continue }
-            for request in call.requests.compactMap(\.message) {
+            for request in call.record.requests.compactMap(\.message) {
                 do {
                     let snapshot = try services.store.snapshot {
                         try $0.voiceExecutionTarget(execution.state.sessionID, requests: [request], turnStartedAt: turn)

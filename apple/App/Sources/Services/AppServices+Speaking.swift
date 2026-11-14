@@ -29,7 +29,7 @@ extension AppServices {
     }
 
     #if os(macOS)
-    func recordVoiceSpeech(_ text: String, command: UUID = UUID(), host: String? = nil) async throws -> UUID {
+    func recordVoiceSpeech(_ text: String, command: UUID, host: String?) async throws -> UUID {
         let recording = sendOrder.enqueue(Listener.cue.orderKey) { () async -> Result<UUID, Error> in
             do { return .success(try await self.store.recordVoiceRequest(StoredBody.make(text: text, files: []), command: command, host: host).id) }
             catch { return .failure(error) }

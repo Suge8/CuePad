@@ -62,7 +62,7 @@ extension VoiceFlowTests {
             try await fixture.connect()
             let request = try await fixture.handoff("整理发布清单")
             try await finish(app.services.store, "清单已整理", requests: [request])
-            try await eventually("真实结果可见") { fixture.call.replies.count == 1 }
+            try await eventually("真实结果可见") { fixture.voiceRecord.replies.count == 1 }
         }
         let oldEvent = fixture.received
         fixture.media.closeGate = gate.stream
@@ -73,14 +73,14 @@ extension VoiceFlowTests {
         #expect(fixture.workspace.voicePresentation?.activity != .ended)
         #expect(fixture.workspace.voicePresentation?.activity != .failed)
         #expect(fixture.workspace.voicePresentation?.active == true)
-        let requests = fixture.call.requests.count
+        let requests = fixture.voiceRecord.requests.count
         oldEvent?(.success(.delegation(.init(id: "late", turn: nil, text: "迟到请求"))))
         oldEvent?(.success(.started))
         gate.continuation.finish()
         try await eventually("关闭真正完成") { !fixture.call.isLive }
         #expect(fixture.call.phase.isFailure == (kind == "failure"))
-        #expect(fixture.call.requests.count == requests)
-        if kind != "connecting" { #expect(fixture.call.replies.first?.text == "清单已整理") }
+        #expect(fixture.voiceRecord.requests.count == requests)
+        if kind != "connecting" { #expect(fixture.voiceRecord.replies.first?.text == "清单已整理") }
         fixture.media.closeGate = nil
         fixture.access = access
         accessGate.continuation.finish()
@@ -90,7 +90,7 @@ extension VoiceFlowTests {
         fixture.received?(.success(.usage(audioMs: 9876)))
         try await eventually("新连接已消费旧事件之后的屏障") { fixture.call.audioMs == 9876 || fixture.call.phase.isFailure }
         #expect(fixture.call.phase == .listening)
-        #expect(fixture.call.requests.count == requests)
+        #expect(fixture.voiceRecord.requests.count == requests)
         try await fixture.hangUp()
     }
 }

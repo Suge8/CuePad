@@ -56,22 +56,23 @@ final class VoiceFlowFixture {
         return try #require(CodexAccess(token: "test.\(payload).test"))
     }
     var call: VoiceCall { workspace.voice! }
+    var voiceRecord: VoiceRecord { call.record }
 
     init(_ services: AppServices) { workspace = Workspace(services: services) }
 
     /// 请求在库里的那条记录（送达回执都写在它上面）
-    func record(_ id: UUID? = nil) -> CueMessage? {
-        guard let message = call.requests.first(where: { id == nil || $0.message == id })?.message else { return nil }
+    func stored(_ id: UUID? = nil) -> CueMessage? {
+        guard let message = call.record.requests.first(where: { id == nil || $0.message == id })?.message else { return nil }
         return try? workspace.services.store.snapshot { try $0.cueMessages([message]).first }.value
     }
 
     func trip(_ id: UUID? = nil) -> Speech.Trip? {
-        record(id).map { Said.cue($0, host: workspace.cue.hostID).trip(at: workspace.services.speech) }
+        stored(id).map { Said.cue($0, host: workspace.cue.hostID).trip(at: workspace.services.speech) }
     }
 
     func start() {
         // 通话挂断后仍留在服务里（`VoiceService.call`），连同这些依赖：弱持有替身，不然替身、它的工作区与服务互相攥着放不掉
-        workspace.services.voice.makeCall = { [weak self] dependencies in
+        workspace.services.voice.makeCall = { [weak self] dependencies, record in
             var dependencies = dependencies
             dependencies.access = { [weak self] in
                 guard let self else { throw CancellationError() }
@@ -91,7 +92,7 @@ final class VoiceFlowFixture {
                 received(.success(.started))
                 return control
             }
-            return VoiceCall(dependencies)
+            return VoiceCall(dependencies, record: record)
         }
         workspace.startVoiceCall()
     }
@@ -103,8 +104,8 @@ final class VoiceFlowFixture {
 
     func handoff(_ text: String, id: String = UUID().uuidString) async throws -> UUID {
         received?(.success(.delegation(.init(id: id, turn: nil, text: text))))
-        try await eventually("请求落库") { self.call.requests.first { $0.id == id }?.message != nil }
-        return try #require(call.requests.first { $0.id == id }?.message)
+        try await eventually("请求落库") { self.call.record.requests.first { $0.id == id }?.message != nil }
+        return try #require(call.record.requests.first { $0.id == id }?.message)
     }
 
     func hangUp() async throws {

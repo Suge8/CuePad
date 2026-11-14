@@ -115,7 +115,7 @@ extension DebugScene {
                 heardAfterReply = false
                 finishedAfterReply = false
                 if args.voiceOpts.replay {
-                    for request in call.requests where !request.pending && replayed.insert(request.delegation.id).inserted {
+                    for request in call.record.requests where !request.pending && replayed.insert(request.delegation.id).inserted {
                         let delegation = request.delegation
                         note("replay-after-result \(delegation.id)")
                         if let turn = delegation.turn {

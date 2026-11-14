@@ -17,9 +17,9 @@ struct VoiceExecutionTests {
         defer { fixture.call.hangUp(); rig.services.cancelBackgroundWork(); rig.app.bridge.stop(); rig.model.stop() }
         try await fixture.connect()
         let request = try await fixture.handoff("请问我一个问题")
-        try await eventually("提问与收尾都可见") { fixture.call.replies.count == 2 }
-        #expect(fixture.call.replies.allSatisfy { $0.message.answeredRequests == [request] })
-        #expect(fixture.call.replies.map(\.text) == ["要推送吗？", "办好了"])
+        try await eventually("提问与收尾都可见") { fixture.voiceRecord.replies.count == 2 }
+        #expect(fixture.voiceRecord.replies.allSatisfy { $0.message.answeredRequests == [request] })
+        #expect(fixture.voiceRecord.replies.map(\.text) == ["要推送吗？", "办好了"])
         try await fixture.hangUp()
         await rig.stop()
     }

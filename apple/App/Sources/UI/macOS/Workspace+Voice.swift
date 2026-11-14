@@ -21,16 +21,15 @@ extension Workspace {
     }
 
     /// 真实会话的既有投影；选择范围后只停那个会话的当前回合，不把 Cue 的话当作执行确认。
-    var voiceExecutions: [SessionListItem] { voice?.executions ?? [] }
+    var voiceExecutions: [SessionListItem] { voice?.record.executions ?? [] }
 
     func stopVoiceExecution(_ sessionID: String) async throws -> DeliveryRequest {
         guard let voice else { throw CueStoreError.notFound }
         guard let turn = services.bridge.session(sessionID: sessionID)?.turnStartedAt else { throw CueStoreError.cannotStop(sessionID) }
-        let ids = voice.requests.compactMap(\.message)
+        let ids = voice.record.requests.compactMap(\.message)
         let target = try await services.store.voiceExecutionTarget(sessionID, requests: ids, turnStartedAt: turn)
         let request = try await services.store.stopVoiceExecution(target, requests: ids)
-        if !voice.stopRequests.contains(where: { $0.id == request.id }) { voice.stopRequests.append(request) }
-        voice.watchRequests()
+        voice.record.track(request)
         return request
     }
 
@@ -44,7 +43,7 @@ extension Workspace {
     }
 
     func retryVoiceRequest(_ id: String) async throws {
-        guard let voice, let request = voice.requests.first(where: { $0.id == id }) else { throw CueStoreError.notFound }
+        guard let voice, let request = voice.record.requests.first(where: { $0.id == id }) else { throw CueStoreError.notFound }
         let reference: VoiceRequestReference = request.message.map { .recorded(message: $0) }
             ?? .unrecorded(session: request.origin, request: request.rowID)
         try await services.voice.command(.recover(request: reference)).requireAccepted()

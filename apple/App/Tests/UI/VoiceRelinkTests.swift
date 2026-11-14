@@ -83,7 +83,7 @@ import Testing
         let fixture = VoiceFlowFixture(app.services)
         try await fixture.connect()
         let first = try await store.addCueMessage(.cue, text: "first result", answeredRequests: nil)
-        try await eventually("reply visible") { fixture.call.canRepeat && fixture.call.replies.contains { $0.id == first.id } }
+        try await eventually("reply visible") { fixture.call.canRepeat && fixture.voiceRecord.replies.contains { $0.id == first.id } }
         let session = VoiceSessionID(fixture.call.session), phone = VoiceDeviceID("phone-audit")
         let gone = VoiceEndpoint(device: phone, lease: UUID()), back = VoiceEndpoint(device: phone, lease: UUID())
         let header = VoiceSignalHeader(version: VoiceSignalFormat.version, sender: gone, recipient: signal.local, session: session, sequence: 1,
@@ -120,7 +120,7 @@ import Testing
         let fixture = VoiceFlowFixture(app.services)
         try await fixture.connect()
         let reply = try await store.addCueMessage(.cue, text: "saved result", answeredRequests: nil)
-        try await eventually("reply visible") { fixture.call.canRepeat && fixture.call.replies.contains { $0.id == reply.id } }
+        try await eventually("reply visible") { fixture.call.canRepeat && fixture.voiceRecord.replies.contains { $0.id == reply.id } }
         let session = VoiceSessionID(fixture.call.session), phone = VoiceDeviceID("phone-audit")
         let gone = VoiceEndpoint(device: phone, lease: UUID()), back = VoiceEndpoint(device: phone, lease: UUID())
         let header = VoiceSignalHeader(version: VoiceSignalFormat.version, sender: gone, recipient: signal.local, session: session, sequence: 1,

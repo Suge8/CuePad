@@ -33,9 +33,9 @@ final class DebugVoiceLayoutScenario {
         let store = workspace.services.store
         let text = String(localized: "检查发布事项 \(1)", table: "Demo")
         call.inputs.continuation.yield(.wire(.success(.delegation(.init(id: "layout-request", turn: nil, text: text)))))
-        for await ready in Observations({ call.requests.first.map { !$0.isRecording } == true }) where ready { break }
+        for await ready in Observations({ call.record.requests.first.map { !$0.isRecording } == true }) where ready { break }
         if kind == "recovery" { return }
-        guard let request = call.requests.first?.message else { throw CueStoreError.notFound }
+        guard let request = call.record.requests.first?.message else { throw CueStoreError.notFound }
         try await store.markCueMessagesDelivered([request])
         if kind == "stop" {
             try await seedExecution(store, request: request)
