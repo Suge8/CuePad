@@ -22,6 +22,8 @@ from datetime import datetime
 
 OUT_ROOT = "/tmp/cuepad-perf-ab"
 ROWS = {"idle": "idle.jsonl", "launch": "launch.jsonl", "interact": "interact.jsonl"}
+# 旧检出（perf.py 之前的 perf-launch.sh）写的 launch.jsonl 每行带这个前缀：ab 的旧一侧常是那时的代码
+LAUNCH_PREFIX = "LAUNCH-ROW "
 # 主要看的指标（每轮行与表里先列、interact 只列这些）；idle 与 launch 的表里其余数值指标跟在后面
 PRIMARY = {
     "idle": ["instructionsM", "wakeupsPerSec", "cpuMs", "energyMJ"],
@@ -72,7 +74,7 @@ def fail(checkout, log, status):
 def read_rows(checkout, kind):
     rows = []
     for line in open(f"{checkout}/apple/.derived-perf/Build/{ROWS[kind]}"):
-        line = line.strip()
+        line = line.removeprefix(LAUNCH_PREFIX).strip()
         if line:
             rows.append(json.loads(line))
     return rows
