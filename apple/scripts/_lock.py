@@ -184,7 +184,7 @@ def free_slot_order():
 
 def clear_slots(files, slot):
     """持着槽位 slot 时收拾模拟器：每个槽位同一时刻最多开着一台，全机开机数封在槽位数以内。
-    关掉自己槽位上别的机型的；别的槽位（编号超出槽位数的是旧版每机型一池留下的）只动拿得到锁的空闲槽位：超出的全关，槽位内多开的留一台（优先自己的机型）。
+    关掉自己槽位上别的机型的；别的槽位只动拿得到锁的空闲槽位：多开的留一台（优先自己的机型）。
     持着它的锁关完才放；关不掉就报错退出，不带着多开的模拟器往下跑。整段受准备期限管。"""
     until = time.monotonic() + prep
     by_slot = {}
@@ -194,12 +194,11 @@ def clear_slots(files, slot):
     for n, devices in by_slot.items():
         if n == slot:
             stale += [u for u, m in devices if m != model]
-        elif n >= slots or len(devices) > 1:
-            f = files[n] if n < slots else open(f"{RUNTIME}/sim{n}", "a+")
-            if not take(f, fcntl.LOCK_EX):
+        elif n < slots and len(devices) > 1:
+            if not take(files[n], fcntl.LOCK_EX):
                 continue
-            locked.append(f)
-            keep = None if n >= slots else next((u for u, m in devices if m == model), devices[0][0])
+            locked.append(files[n])
+            keep = next((u for u, m in devices if m == model), devices[0][0])
             stale += [u for u, _ in devices if u != keep]
     shutdowns = [subprocess.Popen(["xcrun", "simctl", "shutdown", udid]) for udid in stale]
     for p in shutdowns:

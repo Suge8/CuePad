@@ -35,7 +35,7 @@ TYPE = re.compile(r"^[A-Z][A-Za-z0-9]*[a-z][A-Za-z0-9]*(?:[.+][A-Za-z_][A-Za-z0-
 FILE = re.compile(r"^[\w+*./-]*[\w*]\.(?:swift|py|sh|ts|mjs|xcconfig|ckdb|entitlements|plist|xcstrings|svelte|css)$")
 ARG = re.compile(r"(?<![\w-])-(CuePad[A-Za-z]+)")
 ENV = re.compile(r"\b(?:TEST_RUNNER_)?(CUEPAD_[A-Z][A-Z_]*[A-Z])\b")
-MD = re.compile(r"(?<![\w/.~-])((?:docs|apple|relay|landing|design)/[\w./+-]*\.md)")
+MD = re.compile(r"(?<![\w/.~-])((?:apple|relay|landing|design)/[\w./+-]*\.md)")
 SECTION = re.compile(r"((?:[\w.-]+/)*[\w.-]+\.md)\)?((?:「[^」\n]+」)+)")
 hits = [f"{p}: 这份 Markdown 不在清单里（lint_docs.py 的 AGENT_DOCS）" for p in tracked if p.endswith(".md") and p not in AGENT_DOCS + OTHER_DOCS]
 
@@ -57,7 +57,7 @@ def has_file(token):
 
 
 def resolve(ref, source):
-    for base in (os.path.dirname(source), "", "docs"):
+    for base in (os.path.dirname(source), ""):
         path = os.path.normpath(os.path.join(base, ref))
         if path in texts:
             return path
@@ -78,7 +78,7 @@ for path, text in sorted(texts.items()):
                 arg in words or hits.append(f"{where}: 没有启动参数 -{arg}")
             for env in ENV.findall(line):
                 env in words or hits.append(f"{where}: 源码里没有环境变量 {env}")
-        if "Pi 的 docs/" not in line and not path.endswith("lint_docs.py"):
+        if not path.endswith("lint_docs.py"):
             for ref in MD.findall(line):
                 ref in texts or hits.append(f"{where}: 没有文档 {ref}")
             for ref, sections in SECTION.findall(line):
