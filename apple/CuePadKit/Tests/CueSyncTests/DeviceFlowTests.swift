@@ -120,7 +120,7 @@ import Testing
 
     let said = ChatMessage(sessionID: "s1", entryID: "u1", seq: 1, role: .user, text: request.content, at: .now, deliveryID: request.id)
     try await mac.store.writeTranscript(SessionTranscript(sessionID: "s1", messages: [said], recap: Recap()))
-    try await cloud.deliver(from: mac, to: phone, only: [mac.id(request.id)])  // 回执马上传
+    try await cloud.deliver(from: mac, to: phone, lanes: [.live])  // 回执走实时通道，消息走后台通道还没到
     #expect(try await phone.store.deliveryRequest(request.id) != nil)
     try await cloud.exchange()  // 消息上了服务器、到了手机
     #expect(try await phone.store.chatMessages(of: "s1").map(\.deliveryID) == [request.id])

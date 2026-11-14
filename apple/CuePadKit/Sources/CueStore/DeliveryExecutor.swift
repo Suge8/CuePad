@@ -7,15 +7,12 @@ import os
 /// - 每次领取只交给 handler 一次；任何执行后未知都留待正证据对账，不在领取内重试；
 /// - 启动时只恢复上次请求的核对，不重派、不续期；
 /// - 读写 Store 失败交给 `onIssue`；
-/// - 写回的结果由同步层马上传（`Table.urgent`），领取那一版不传；执行超过 `claimGrace` 的，领取那一版先传一次：
-///   发起的设备据领取知道 Mac 接手了，但不能据此断言已交给 Agent。多数执行几十毫秒就完，只传结果那一版：
-///   领取那一版在路上时结果得等它回来才能传（同一条记录一次只一版在路上），回执要多等一个来回。
+/// - 写回的结果由同步层马上传，领取那一版等攒批窗口（`Table.live`）：多数执行几十毫秒就完，只传结果那一版；
+///   执行久了领取随窗口先传，发起的设备据领取知道 Mac 接手了，但不能据此断言已交给 Agent。
 public actor DeliveryExecutor {
   let store: CueStore
   let hostID: String
   package static let retention: Duration = .seconds(60)
-  /// 执行多久还没完就先把领取传出去。说给在线会话的话交给桥几十毫秒就有结果，留足机器忙时的余量；远短于 `Speech.receiptLimit`。
-  package static let claimGrace: Duration = .milliseconds(500)
   let timing: Timing
   private let onIssue: @Sendable (any Error) -> Void
   private let recover: @Sendable (DeliveryRequest) async -> DeliveryOutcome
@@ -28,9 +25,8 @@ public actor DeliveryExecutor {
   var fetching = Slots<DeliveryRequest.ID>()
   private static let log = Logger(subsystem: AppIdentity.id, category: "delivery")
   var started = false
-  /// 各只有一个的后台任务：`claimUpload` 是正在执行的那一条到 `claimGrace` 才传领取（结果先写下就不传）。
-  /// `expiry` 是期限监视：到期没领取的按失败写回，不经执行队列——上一条 handler 不响应取消、队列停在等它时（一次一个），后面的话照样到期收尾。
-  enum Role { case starting, watcher, expiry, cleanup, runner, claimUpload }
+  /// 各只有一个的后台任务。`expiry` 是期限监视：到期没领取的按失败写回，不经执行队列——上一条 handler 不响应取消、队列停在等它时（一次一个），后面的话照样到期收尾。
+  enum Role { case starting, watcher, expiry, cleanup, runner }
   var roles = Slots<Role>()
   /// 上一次 `stop` 等本轮任务收尾的那一段：`start` 等它过去才开新一轮，旧一轮的任务不会与新一轮同时在跑。
   private var draining: Task<Void, Never>?
@@ -243,16 +239,10 @@ public actor DeliveryExecutor {
       request = begun
     }
     guard started, !Task.isCancelled else { return }
-    let claimed = request.id.uuidString.lowercased()
-    roles.put(.claimUpload, .spawn { [timing, store] _ in
-      guard (try? await timing.sleep(Self.claimGrace)) != nil else { return }
-      await store.syncSoon([claimed])
-    })
     let began = timing.now()
     // 与取消隔开：handler 不响应取消时 stop 不被它拖住，它留在脱离的任务里自己收尾，结果丢弃（请求已领取，重启时按未知对账）
     let running = request
     let outcome = await perform(until: request.deadlineAt) { [handler] in await handler(running, dispatch.access) }
-    roles.cancel(.claimUpload)
     guard let outcome else { return }
     let took = timing.now().timeIntervalSince(began)
     Self.log.info("执行投送请求 \(request.id.uuidString.prefix(8), privacy: .public) \(request.mode.rawValue, privacy: .public) 用时 \(took, format: .fixed(precision: 2)) 秒")
