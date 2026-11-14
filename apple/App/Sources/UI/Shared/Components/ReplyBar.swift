@@ -94,7 +94,7 @@ struct ReplyBar: View {
 
     private var coldCache: ColdCache? { recache.map { ColdCache(context: $0, estimated: cache?.estimated == true) } }
 
-    private var expanded: Bool { form == .open || focused || !form.isCapsule && !draft.isEmpty(accepting: accepts.union(.notes)) }
+    private var expanded: Bool { form.expanded(focused: focused, draft: draft, accepts: accepts) }
 
     private var composer: some View {
             Composer(

@@ -104,6 +104,13 @@ enum ComposerForm: Equatable {
     }
 
     var isCapsule: Bool { if case .capsule = self { true } else { false } }
+
+    /// 此刻是两层（展开）还是一行、胶囊：输入框自己的形状与挂在它上沿的说明（`composerNotice`）都按这一处。
+    /// 批注排在头部、收着时也露出（`Composer.keepsHeader`），不撑开文字那一块。
+    func expanded(focused: Bool, draft: ComposerDraft, accepts: ComposerKinds) -> Bool {
+        if isCapsule && !focused { return false }
+        return self == .open || focused && opensOnFocus || !draft.isEmpty(accepting: accepts.subtracting(.notes))
+    }
 }
 
 extension View {
