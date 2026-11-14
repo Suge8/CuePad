@@ -44,6 +44,13 @@ nonisolated struct VoiceCallProjection: Equatable, Codable, Sendable {
     /// 发给手机时装不下的较早条目数（`bounded`）；全部在 Mac 的通话详情里，已落库的正文也在聊天里。
     var omitted = Omitted()
     var canRepeat = false
+    /// 只在拒绝来电的投影里带（`VoiceService.rejectOffer`）：信令 1 的手机解码投影要这个键，没它就看不到"请更新"。
+    var pages: LegacyPages?
+
+    struct LegacyPages: Equatable, Codable, Sendable {
+        struct Head: Equatable, Codable, Sendable { var version = Data() }
+        var requests = Head(), replies = Head(), executions = Head()
+    }
 
     struct Omitted: Equatable, Codable, Sendable {
         var requests = 0

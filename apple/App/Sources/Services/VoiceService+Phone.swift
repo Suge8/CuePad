@@ -196,6 +196,12 @@ extension VoiceService {
             }
         case .media(.answer(let answer)):
             guard !owner.answered else { await end(reason: .protocolRejected); return }
+            guard answer.version == VoiceSignalFormat.callVersion else {
+                AppServices.log.notice("Voice answer from signal version \(answer.version ?? 1), this phone speaks \(VoiceSignalFormat.callVersion)")
+                await end(reason: .protocolRejected)
+                issue = .relayUnsupported
+                return
+            }
             owner.answered = true
             do { try await owner.scope.perform { try await owner.media.accept(answer: answer.sdp) } }
             catch {

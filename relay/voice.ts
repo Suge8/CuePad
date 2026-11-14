@@ -1,9 +1,10 @@
 import type { ServerWebSocket } from "bun";
 import { verifySignature } from "./auth";
 
-// 与原生 VoiceSignalFormat 的唯一 v1 契约对应；purpose 是认证路由头的一部分，拒绝原样回显给发送归属。
-// 正文仅两端解密，这里不解释业务命令或保存信令历史。
-export const VOICE_VERSION = 2;
+// VOICE_VERSION 是中转这一层（登记、解析、路由头的形状）的版本，对应原生 VoiceSignalFormat.version；
+// 两端 App 之间的信令版本在密文里互报，这里不认：路由头的 version 与 purpose 是 App 的认证数据，只查形状与大小，拒绝时原样回显。
+// 正文仅两端解密，这里不解释帧种类、业务命令或保存信令历史；App 加帧、升信令版本不需要先部署中转。
+export const VOICE_VERSION = 1;
 export const MAX_VOICE_WIRE_BYTES = 64 * 1024;
 const MAX_DEVICE_BYTES = 128;
 const MAX_SEALED_BYTES = 32 * 1024 + 28; // AES.GCM 的 nonce 与 tag
@@ -12,11 +13,11 @@ const REGISTRATION_TIMEOUT_MS = 10_000;
 const REPLACED = 4409;
 // 约束同一房间的租约观察图；仅数当前连接，不数 iCloud 中曾登记的设备。
 const MAX_VOICE_PEERS = 64;
+const MAX_PURPOSE_BYTES = 256;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type Endpoint = { device: { rawValue: string }; lease: string };
-type RoutedPurpose = "command" | "commandResult";
-type Purpose = { media: Record<string, never> } | { [K in RoutedPurpose]: { [P in K]: { id: { rawValue: string } } } }[RoutedPurpose];
+type Purpose = Record<string, unknown>;
 type Header = {
   version: number; sender: Endpoint; recipient: Endpoint; session: { rawValue: string };
   sequence: number; expiresAtMilliseconds: number; purpose: Purpose;
@@ -50,18 +51,12 @@ function equal(a: Endpoint, b: Endpoint): boolean {
   return a.device.rawValue === b.device.rawValue && a.lease.toUpperCase() === b.lease.toUpperCase();
 }
 function purpose(value: unknown): value is Purpose {
-  if (shape(value, ["media"])) return shape(value.media, []);
-  for (const kind of ["command", "commandResult"]) {
-    if (shape(value, [kind]) && shape(value[kind], ["id"])) {
-      const id = value[kind].id;
-      return shape(id, ["rawValue"]) && uuid(id.rawValue);
-    }
-  }
-  return false;
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    && Buffer.byteLength(JSON.stringify(value)) <= MAX_PURPOSE_BYTES;
 }
 function header(value: unknown): value is Header {
   return shape(value, ["version", "sender", "recipient", "session", "sequence", "expiresAtMilliseconds", "purpose"])
-    && value.version === VOICE_VERSION && purpose(value.purpose) && endpoint(value.sender) && endpoint(value.recipient)
+    && typeof value.version === "number" && Number.isInteger(value.version) && purpose(value.purpose) && endpoint(value.sender) && endpoint(value.recipient)
     && shape(value.session, ["rawValue"]) && uuid(value.session.rawValue)
     && typeof value.sequence === "number" && Number.isInteger(value.sequence) && value.sequence > 0 && value.sequence <= 0xffffffff
     && typeof value.expiresAtMilliseconds === "number" && Number.isSafeInteger(value.expiresAtMilliseconds);
