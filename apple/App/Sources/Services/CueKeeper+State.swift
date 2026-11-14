@@ -71,28 +71,6 @@ extension CueKeeper {
         var greeted: Date?
         /// 做梦听他在会话里说的话听到哪了：交给它的最后一句的次序（`CueStore.said(after:limit:)` 的 `through`）；nil 是还没听过，从此刻听起（`dreams`）
         var heard: Int64?
-
-        init() {}
-
-        /// 按字段解：一项解不开（结构改了、写坏了）只丢这一项并记错，变化基线等其余照用。
-        init(from decoder: any Decoder) throws {
-            let fields = try decoder.container(keyedBy: CodingKeys.self)
-            func field<T: Decodable>(_ key: CodingKeys) -> T? {
-                do {
-                    return try fields.decodeIfPresent(T.self, forKey: key)
-                } catch {
-                    CueKeeper.log.error("Cue 的对账进度里 \(key.stringValue, privacy: .public) 解不开，这一项丢掉：\(String(describing: error), privacy: .public)")
-                    return nil
-                }
-            }
-            marks = field(.marks)
-            patrolDay = field(.patrolDay)
-            patrols = field(.patrols) ?? 0
-            patrolledIdle = field(.patrolledIdle)
-            warmedIdle = field(.warmedIdle)
-            greeted = field(.greeted)
-            heard = field(.heard)
-        }
     }
 
     /// 额度、登录卡住后的绕行：这台此刻改用哪家（`to`）与这次卡住的几家，是这台的本机事实，只在内存（重启后从你设定的那家试起）。
