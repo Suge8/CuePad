@@ -21,6 +21,7 @@ import Foundation
 /// | 跑一轮 | 其间又来了任何触发（`again`） | 跑完接着再跑一轮 |
 ///
 /// 加塞（任何状态下）：实时通道的提交要马上传（`SyncChange.urgent`），或 `send` 在等 → 挑一批发出 → 这条通道攒批（有人在等就跑一轮）。
+/// 加塞要传的旧版还在路上的，那一批回来就再加塞（`urgentBehind`）。加塞读库之前再叫的并进这一次（`expressQueued`），所以一条通道同一时刻至多这一轮的那批与已读过库的几次加塞在路上。
 ///
 /// 越过连不上与被拒的等待（`SyncCoordinator.admits` 的 urgent）只给加塞的那批、`flush`、有 `send` 在等的那批；
 /// 积压（开始时就在的、换账号或首次同步后的全部历史）照常退避。退避上限压到 `Backoff.waitingCap` 只在有 `send` 在等结果时。
@@ -48,12 +49,16 @@ actor RecordSender {
     var urgent = false
     /// 在路上的记录名（这一轮的那批与加塞的那几批，`express`）。
     var inFlight: Set<String> = []
+    /// 加塞时一写下就该传、但旧版还在路上没挑的：那一批回来就再加塞，不等攒批窗口。
+    var urgentBehind: Set<String> = []
     var limit: Int
     var acceptedInARow = 0
   }
   /// 加塞的一批（`express`），停下时一起等。
   private var expresses: [Int: Task<Void, Never>] = [:]
   private var nextExpress = 0
+  /// 已叫、还没读库的加塞：一阵连着的提交（一轮 Cue 的几次写、开始时的一串）并进同一批，读库之后的提交才另起一批。
+  private var expressQueued: Set<Lane> = []
 
   /// 每次 `send` 加一。一批只答读库之前要的（`Waiter.asked <= readAt`）：之后要的，这一批读到的可能早于它要的那一版。
   private var asks = 0
@@ -201,7 +206,7 @@ actor RecordSender {
   /// 要马上传的（这次运行里刚写下的、`send` 在等的）：不等攒批窗口、不等这一轮在路上的那批，另发一批（`express`），
   /// 只挑一写下就该传的版本与在等的，越过连不上与被拒的等待；其余的（领取、会话进展这些不急的版本，装不下的）照常等窗口，有人在等就接着发。
   private func express(_ lane: Lane) {
-    guard !stopped else { return }
+    guard !stopped, expressQueued.insert(lane).inserted else { return }
     let id = nextExpress
     nextExpress += 1
     expresses[id] = Task {
@@ -213,12 +218,21 @@ actor RecordSender {
 
   /// 挑一批、发；返回能不能接着发下一批。
   private func sendBatch(_ lane: Lane, urgent asked: Bool, urgentOnly: Bool = false) async -> Bool {
+    let asked = asked || waiters.contains { $0.remaining.values.contains(lane) }
+    let checkedAt = asks
+    // 发不了（被等待挡下、停下了、读库出错，协调器已记下）：在等的答没传成，下一次触发再来
+    guard !stopped, await coordinator.admits(.upload(urgent: asked)), await coordinator.canSync, await ready() else {
+      if urgentOnly { expressQueued.remove(lane) }
+      answer(lane, readAt: checkedAt) { _ in false }
+      return false
+    }
+    if urgentOnly { expressQueued.remove(lane) }
+    // 在等的在这里才取：其间来的 `send` 叫的加塞并进了这一次
     let wanted = Set(waiters.flatMap { $0.remaining.filter { $0.value == lane }.keys })
     let readAt = asks
-    // 发不了（被等待挡下、停下了、读库出错，协调器已记下）：在等的答没传成，下一次触发再来
-    guard !stopped, await coordinator.admits(.upload(urgent: asked || !wanted.isEmpty)), await coordinator.canSync, await ready(),
-      var batch = try? await coordinator.nextBatch(
-        lane, limit: lanes[lane]?.limit ?? lane.limit, urgentOnly: urgentOnly, wanted: wanted, excluding: lanes[lane]?.inFlight ?? [])
+    let busy = lanes[lane]?.inFlight ?? []
+    guard var batch = try? await coordinator.nextBatch(
+      lane, limit: lanes[lane]?.limit ?? lane.limit, urgentOnly: urgentOnly, wanted: wanted, excluding: busy)
     else {
       answer(lane, readAt: readAt) { _ in false }
       return false
@@ -227,6 +241,7 @@ actor RecordSender {
     let taken = batch.names.intersection(lanes[lane]?.inFlight ?? [])
     batch.drop(taken)
     batch.left.formUnion(taken)
+    if urgentOnly { lanes[lane]?.urgentBehind.formUnion(batch.left.intersection(busy).union(taken)) }
     // 已不是待推送的（别的批已收下、删掉了）答收下，这一版传不上去的答没传成，装不下与在路上的接着等
     answer(lane, readAt: readAt) { batch.names.contains($0) || batch.left.contains($0) ? nil : !batch.stuck.contains($0) }
     guard !batch.isEmpty else { return false }
@@ -244,6 +259,10 @@ actor RecordSender {
     await updateBusy()
     let next = await outcome(lane, prepared, readAt: readAt)
     lanes[lane]?.inFlight.subtract(prepared.names)
+    if lanes[lane]?.urgentBehind.isDisjoint(with: prepared.names) == false {
+      lanes[lane]?.urgentBehind.subtract(prepared.names)
+      express(lane)
+    }
     await updateBusy()
     return next
   }
