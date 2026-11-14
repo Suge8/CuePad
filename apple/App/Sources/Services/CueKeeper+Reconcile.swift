@@ -74,7 +74,7 @@ extension CueKeeper {
             }
 
             // 刚启用与定时都在承接的一轮好好做完才消费（`handle` 里的 `.turnFinished`）：之前发不出去、出错、崩溃、换手，库里都还欠着
-            if progress.greeted != profile.enabledAt, firstError(.enabled) {
+            if progress.greeted != profile.enabledAt, !setbacks.contains(where: { $0.wake == .enabled }) {
                 if try await handsEmpty() {
                     progress.greeted = profile.enabledAt
                     save()
@@ -87,10 +87,11 @@ extension CueKeeper {
 
             let due = try await store.dueCueSchedules(at: now)
             forgetSetbacks(outside: Set(due.map(\.id)))
-            let fresh = due.filter { line in !unfired.contains { $0.line == line.id } && !setbacks.contains { $0.wake.fires.contains { $0.line == line.id } } }
+            // 做完没消费成的、在重来里的不再另起一轮
+            let untried = due.filter { line in !unfired.contains { $0.line == line.id } && !setbacks.contains { $0.wake.fires.contains { $0.line == line.id } } }
             // 持续重试只有一项承接中的工作；新定时留在库里，等它成功后再交付和消费。
-            if !stuck, !fresh.isEmpty {
-                let fires = fresh.compactMap { line in
+            if !stuck, !untried.isEmpty {
+                let fires = untried.compactMap { line in
                     line.remindAt.map { CueFire(line: line.id, due: line.repeats?.latest(from: $0, until: now) ?? $0) }
                 }
                 _ = try await wakeUp(.schedule(fires))
@@ -128,7 +129,7 @@ extension CueKeeper {
                     if try await wakeUp(held.wake), held.supersedable { edit(held.wake) { $0.stage = .awaitingChange } }
                     return nil
                 }
-                // 醒来已消费的那几件照各自的时刻重来；比它们都新的变化先看
+                // 定时、刚启用、你的话照各自的时刻重来；比它们都新的变化先看
                 if !fresh(newest) { return [deadlines.min(), setback?.retryAt].compactMap(\.self).min() }
             }
             // 一轮在跑时来的变化等这一轮做完一起看，不另攒窗口：一轮的时长就是合批
