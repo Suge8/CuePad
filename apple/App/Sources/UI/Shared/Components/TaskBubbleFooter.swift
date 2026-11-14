@@ -169,7 +169,7 @@ private struct StartBar: View {
         #if os(macOS)
         .confirmsLaunchAgain(launching)
         // 读不出去向时不放那一排，原因在点"开始"时报
-        .observing(services.store, id: leaf.id, into: $launch) { [id = leaf.id, here = services.hostID] store in
+        .observing(services.store, id: leaf.id, into: $launch, onError: { _ in }) { [id = leaf.id, here = services.hostID] store in
             guard case .launch(_, let host) = try store.handOffPlan(id, host: here).destination else {
                 return MacAgents(hostID: "", agents: [], modifiedAt: .distantPast)
             }

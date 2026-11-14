@@ -43,14 +43,15 @@ func sqlList<Value: RawRepresentable>(_ values: some Sequence<Value>) -> String 
 }
 
 /// 提示里只给 SQLite 的原因；连同出错的语句记进日志（`SQLite.error`）。
-struct SQLiteError: LocalizedError, CustomStringConvertible {
+package struct SQLiteError: LocalizedError, CustomStringConvertible {
   let message: String
   let sql: String
   var code: Int32 = SQLITE_ERROR
+  package init(message: String, sql: String, code: Int32 = SQLITE_ERROR) { (self.message, self.sql, self.code) = (message, sql, code) }
   /// 库此刻的处境（写满、读写出错、被别的连接占着）出的错，不是写的内容不对：过一会儿再写同样的可能就成。
   var isTransient: Bool { [SQLITE_FULL, SQLITE_IOERR, SQLITE_BUSY, SQLITE_LOCKED, SQLITE_NOMEM, SQLITE_CANTOPEN].contains(code & 0xff) }
-  var description: String { "SQLite: \(message) [\(sql)]" }
-  var errorDescription: String? { String(localized: "资料库读写出错：\(message)") }
+  package var description: String { "SQLite: \(message) [\(sql)]" }
+  package var errorDescription: String? { String(localized: "资料库读写出错：\(message)") }
 }
 
 struct Row {
@@ -102,6 +103,7 @@ struct Changes {
 final class SQLite {
   private var handle: OpaquePointer?
   private let changeLog = ChangeLog()
+  private let compiling = Compiling()
   /// 编译好的语句，按 SQL 文本复用，连同它读到的表。用时取出、用完放回：同一条 SQL 在回调里被重入时，重入的那次临时编译一条，不共用游标。
   private var statements: [String: Compiled] = [:]
   private static let statementLimit = 128
@@ -120,6 +122,25 @@ final class SQLite {
       throw SQLiteError(message: message, sql: "open \(path)")
     }
     sqlite3_busy_timeout(handle, 5000)
+    // 授权回调在编译每条语句时（含 exec）被问：记下 `checkOut` 编译的语句读哪些表；删我们的表的行一律逐行删。
+    // 不带 WHERE 的整表删除本会走截断优化，那样更新钩子不触发，这次提交就记不到这张表，读它的订阅不被叫醒（清掉同步数据时实测）。
+    // 对 DELETE 返回 SQLITE_IGNORE 只关掉截断优化、照删（SQLite 的 DELETE 文档）；但 DROP TABLE、DROP TRIGGER 也会问一次 DELETE，
+    // 那时忽略就把整条 DROP 跳过了（升级结构时实测），所以同一次编译里先问过 DROP 的不忽略。
+    sqlite3_set_authorizer(
+      handle,
+      { context, action, table, _, _, _ in
+        let compiling = Unmanaged<Compiling>.fromOpaque(context!).takeUnretainedValue()
+        switch action {
+        case SQLITE_DROP_TABLE, SQLITE_DROP_TEMP_TABLE, SQLITE_DROP_TRIGGER, SQLITE_DROP_TEMP_TRIGGER, SQLITE_DROP_INDEX, SQLITE_DROP_TEMP_INDEX,
+          SQLITE_DROP_VIEW, SQLITE_DROP_TEMP_VIEW, SQLITE_DROP_VTABLE:
+          compiling.drops = true
+        case SQLITE_DELETE, SQLITE_READ:
+          guard let table, let known = Table(rawValue: String(cString: table)) else { break }
+          if action == SQLITE_READ { compiling.reads?.insert(known) } else if !compiling.drops { return SQLITE_IGNORE }
+        default: break
+        }
+        return SQLITE_OK
+      }, Unmanaged.passUnretained(compiling).toOpaque())
     sqlite3_update_hook(
       handle,
       { context, operation, _, table, rowid in
@@ -133,6 +154,7 @@ final class SQLite {
   }
 
   func exec(_ sql: String) throws {
+    compiling.drops = false
     guard sqlite3_exec(handle, sql, nil, nil, nil) == SQLITE_OK else { throw error(sql) }
   }
 
@@ -191,19 +213,12 @@ final class SQLite {
   /// 取出缓存的语句；没有就编译，同时由授权回调记下它读哪些表（只在编译时回调，缓存命中不再付出）。
   private func checkOut(_ sql: String) throws -> Compiled {
     if let cached = statements.removeValue(forKey: sql) { return cached }
-    let log = ReadLog()
-    sqlite3_set_authorizer(
-      handle,
-      { context, action, table, _, _, _ in
-        if action == SQLITE_READ, let table, let known = Table(rawValue: String(cString: table)) {
-          Unmanaged<ReadLog>.fromOpaque(context!).takeUnretainedValue().tables.insert(known)
-        }
-        return SQLITE_OK
-      }, Unmanaged.passUnretained(log).toOpaque())
-    defer { sqlite3_set_authorizer(handle, nil, nil) }
+    compiling.reads = []
+    compiling.drops = false
+    defer { compiling.reads = nil }
     var statement: OpaquePointer?
     guard sqlite3_prepare_v2(handle, sql, -1, &statement, nil) == SQLITE_OK, let statement else { throw error(sql) }
-    return Compiled(statement: statement, reads: log.tables)
+    return Compiled(statement: statement, reads: compiling.reads ?? [])
   }
 
   private func checkIn(_ compiled: Compiled, _ sql: String) {
@@ -241,8 +256,10 @@ final class SQLite {
 
 private let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 
-private final class ReadLog: @unchecked Sendable {
-  var tables: Set<Table> = []
+/// 授权回调只在持有连接的 actor 上、编译语句期间被调用，无并发访问。`reads` 为 nil 时不在记（exec 编译的语句）。
+private final class Compiling: @unchecked Sendable {
+  var reads: Set<Table>?
+  var drops = false
 }
 
 /// 更新钩子只在持有连接的 actor 上、语句执行期间被调用，无并发访问。

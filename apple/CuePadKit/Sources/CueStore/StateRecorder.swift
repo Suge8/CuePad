@@ -5,7 +5,7 @@ import Foundation
 /// actor 在 await 处可重入：状态只在 await 之前改完，不跨 await 持有副本；会话与 Cue 的落盘按决定的先后串成同一条任务链，
 /// 后决定的写入（含删除）不会被先决定的覆盖。
 public actor StateRecorder {
-  private struct Session {
+  struct Session {
     var pace = Pace<SessionSnapshot>()
     var catalog: AgentCatalog?
   }
@@ -20,7 +20,7 @@ public actor StateRecorder {
   let bootID: String?
   let minInterval: Duration
   let timing: Timing
-  private var sessions: [String: Session] = [:]
+  var sessions: [String: Session] = [:]
   var cue = Pace<CueStateContent>()
   private var tail: Task<Void, Never>?
 
@@ -64,36 +64,6 @@ public actor StateRecorder {
       }
       return alert
     }
-  }
-
-  /// 演示与测试只写关心的几项：在上一次写下的样子上改给了的（nil 沿用），`question`、`detail` 与 `failure` 每次整体替换；
-  /// 第一次写、没给计时的从此刻算。落盘同 `update(_:)`。
-  @discardableResult
-  public func update(
-    sessionID: String, state: WorkState, detail: String? = nil, failure: FailureKind? = nil, title: String? = nil, directory: String? = nil,
-    projectID: UUID? = nil, question: Question? = nil, times: SessionTimes? = nil, turnStartedAt: Date? = nil, launchToken: String? = nil, hosted: Bool? = nil,
-    subagents: [SubagentState]? = nil, modelState: ModelState? = nil, context: ContextUsage? = nil, commands: [SlashCommand]? = nil,
-    agent: AgentKind? = nil, process: SessionProcess? = nil
-  ) async throws -> AlertKind? {
-    var snapshot = sessions[sessionID]?.pace.content ?? SessionSnapshot(sessionID: sessionID, state: state, times: SessionTimes(stateSince: timing.now(), busySince: nil))
-    snapshot.state = state
-    snapshot.detail = detail
-    snapshot.failure = failure
-    snapshot.question = question
-    if let title { snapshot.title = title }
-    if let directory { snapshot.directory = directory }
-    if let projectID { snapshot.projectID = projectID }
-    if let times { snapshot.times = times }
-    if let turnStartedAt { snapshot.turnStartedAt = turnStartedAt }
-    if let launchToken { snapshot.launchToken = launchToken }
-    if let hosted { snapshot.hosted = hosted }
-    if let subagents { snapshot.subagents = subagents }
-    if let modelState { snapshot.modelState = modelState }
-    if let context { snapshot.context = context }
-    if let commands { snapshot.commands = commands }
-    if let agent { snapshot.agent = agent }
-    if let process { snapshot.process = process }
-    return try await update(snapshot)
   }
 
   /// 源端确认实际结束：状态与领取时固定的请求集合一并落盘；没有请求身份的状态更新不确认投送。

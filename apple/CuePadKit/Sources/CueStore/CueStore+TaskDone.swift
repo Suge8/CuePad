@@ -34,9 +34,7 @@ extension CueStore {
       guard let card = try find(Card.self, id) else { throw CueStoreError.notFound }
       guard let current = card.status else { throw CueStoreError.notATask }
       guard current != .done else { return .done }
-      let status = try applyStatus(id, .done)
-      try endUnusedSessions(of: id, cue: false)
-      return status
+      return try applyStatus(id, .done)
     }
   }
 

@@ -329,6 +329,7 @@ extension CueStore {
       try db.run("DELETE FROM projectDirectories")
       try db.run("DELETE FROM syncRecords")
       try db.run("DELETE FROM syncState")
+      try db.exec(Schema.defaultProject)  // 新库建好就有的那一条：清掉之后同样要有，不然新账号里一条灵感都建不了
       try files.removeAll()
     }
   }

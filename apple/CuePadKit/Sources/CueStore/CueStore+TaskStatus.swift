@@ -2,24 +2,20 @@ import Foundation
 
 extension CueStore {
   /// 连同下级一起（已归档的保留原时刻）。没做完的任务就此离开看板，没人再用的会话随之结束；做完了的在完成时已经结束过，之后又说话恢复的不动。
-  /// 返回这次归档记下的时刻：撤销凭它只取回这一次归档的那些（`unarchive(_:archivedAt:)`）。
+  /// 返回回执（`undo`）：撤销凭它只取回这一次归档的那些，随之不再定时的定时照旧定时。
   @discardableResult
-  public func archive(_ id: UUID) throws -> Date {
+  public func archive(_ id: UUID) throws -> CardChange {
     try write {
-      guard let card = try find(Card.self, id) else { throw CueStoreError.notFound }
+      guard try find(Card.self, id) != nil else { throw CueStoreError.notFound }
       let now = Date.stamp
-      try setArchived([id], at: now)
-      if card.completedAt == nil { try endUnusedSessions(of: id, cue: false) }
-      return now
+      return .archive(id: id, at: now, schedules: try setArchived([id], at: now))
     }
   }
 
   /// 撤销一次归档：只取回它和下级里归档时刻是 `time` 的。撤销可能隔了很久才来（系统撤销），其间另外归档的下级、取回后又归档的它自己都不动。
-  public func unarchive(_ id: UUID, archivedAt time: Date) throws {
-    try write {
-      try db.run(
-        "UPDATE cards SET archivedAt = NULL, modifiedAt = ?1 WHERE id IN (\(Self.subtree(from: "SELECT ?2"))) AND archivedAt = ?3", [Date.stamp, id, time])
-    }
+  func unarchiveRow(_ id: UUID, archivedAt time: Date) throws {
+    try db.run(
+      "UPDATE cards SET archivedAt = NULL, modifiedAt = ?1 WHERE id IN (\(Self.subtree(from: "SELECT ?2"))) AND archivedAt = ?3", [Date.stamp, id, time])
   }
 
   public func unarchive(_ id: UUID) throws {
@@ -46,14 +42,17 @@ extension CueStore {
     }
   }
 
-  func setArchived(_ roots: [UUID], at time: Date?) throws {
+  /// 返回随归档不再定时的定时。
+  @discardableResult
+  func setArchived(_ roots: [UUID], at time: Date?) throws -> [UUID] {
     let now = Date.stamp
-    if time != nil { try endCueSchedules(onTasksIn: Self.subtree(from: "SELECT value FROM json_each(?2)"), Self.idList(roots), at: now) }
+    let ended = time == nil ? [] : try endCueSchedules(onTasksIn: Self.subtree(from: "SELECT value FROM json_each(?2)"), Self.idList(roots), at: now)
     try db.run(
       """
       UPDATE cards SET archivedAt = ?1, modifiedAt = ?2
       WHERE id IN (\(Self.subtree(from: "SELECT value FROM json_each(?3)"))) AND (archivedAt IS NULL) = (?1 IS NOT NULL)
       """, [time, now, Self.idList(roots)])
+    return ended
   }
 
   /// 进行中在叶子与祖先上记开始时间（已有的保留）；完成记完成时间并连带没完成的下级、不再定时；回到待办连同没完成的下级清掉开始时间（已完成子任务保留，旧进展不重放）。完成的改成别的先经 `reopen`。只往下连带：子任务全做完，上级也不自动完成，完成一件事由用户说了算。灵感没有状态，抛 `notATask`。

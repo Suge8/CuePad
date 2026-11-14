@@ -65,7 +65,7 @@ extension Workspace {
     }
 
     /// 撤销记进窗口的系统撤销（"编辑 › 撤销归档"、⌘Z，手机与 iPad 的三指左滑、摇一摇），提示收走后照样撤得回；提示上的"撤销"是它看得见的入口。
-    /// 隔了多久才撤由 Store 把关：之后又改过的不撤、报"已改过"，或只拨回那一次动过的（`CueStore.undo`、`unarchive(_:archivedAt:)`）。不记重做：撤回去的事再做一遍就是。
+    /// 隔了多久才撤由 Store 把关：之后又改过的不撤、报"已改过"，或只拨回那一次动过的（`CueStore.undo`）。不记重做：撤回去的事再做一遍就是。
     private func remember(_ token: NSObject, _ what: String, _ run: @escaping @MainActor (Workspace) async throws -> Void) {
         guard let undoManager else { return }
         // 系统撤销不攥着主人：这一条在，它就得在，由闭包攥住

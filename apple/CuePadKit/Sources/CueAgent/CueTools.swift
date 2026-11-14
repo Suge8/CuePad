@@ -80,9 +80,11 @@ public struct CueTools: Sendable {
     }
   }
 
-  /// 出错给 Cue 看的那句：Kit 里只有 Cue 会碰到的错误，文案本来就是写给 Cue 的（见 `CueStoreError`）。
+  /// 出错给 Cue 看的那句：Store 的报错说事实，接上该怎么办（`CueStoreError.cueAdvice`）。
   static func message(_ error: any Error) -> String {
-    (error as? Failure)?.message ?? (error as? LocalizedError)?.errorDescription ?? "\(error)"
+    if let failure = error as? Failure { return failure.message }
+    let text = (error as? LocalizedError)?.errorDescription ?? "\(error)"
+    return (error as? CueStoreError)?.cueAdvice.map { "\(text)：\($0)" } ?? text
   }
 
   func host() async throws -> String {

@@ -1,3 +1,5 @@
+#if os(macOS)
+import CueStore
 import CueText
 import Foundation
 
@@ -20,9 +22,9 @@ public struct ErrorSummary: Sendable, Equatable {
     }
 
     public let kind: Kind
-    public let status: Int?
-    public let providerMessage: String?
-    public let raw: String
+    private let status: Int?
+    private let providerMessage: String?
+    private let raw: String
 
     private static let firstLineLimit = 120
 
@@ -122,3 +124,4 @@ public struct ErrorSummary: Sendable, Equatable {
         return text.clipped(firstLineLimit)
     }
 }
+#endif
