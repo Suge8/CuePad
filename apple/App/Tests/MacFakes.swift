@@ -99,8 +99,9 @@ final class RecordingHost: AgentRuntime {
         let file = SessionFile(url: sessionFile.map { URL(filePath: $0) } ?? sessions.appending(path: "--demo--/\(sessionID).jsonl"), sessionID: sessionID, cwd: cwd)
         options.sessionFile = file.url.path
         let ext = FakeExtension(directory: socketDirectory, sessionID: sessionID, options: options)
+        // 起点按库存的毫秒（`Date.stored`，四舍五入）报：真扩展报的毫秒就是库里那一刻，截断的话亚毫秒的时刻会差出 1 毫秒，被当成起点变了
         if busy || since != nil {
-            ext.setState(["kind": busy ? "thinking" : "idle"].merging(since.map { ["since": Int($0.timeIntervalSince1970 * 1000)] } ?? [:]) { $1 })
+            ext.setState(["kind": busy ? "thinking" : "idle"].merging(since.map { ["since": Int($0.stored)] } ?? [:]) { $1 })
         }
         let writesMessages = self.writesMessages
         ext.onCommand = { [weak ext] _, command in
