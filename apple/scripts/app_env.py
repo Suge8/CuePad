@@ -20,14 +20,9 @@ def mac_slot(checkout=CHECKOUT):
 SLOT, SLOT_NAME = mac_slot()
 # exec 成 CuePad 的那一刻（app_mac.exec_mac 写 {"pid", "execAt"}）：rusage.py 的"启动到就绪"与 perf.py launch 的时刻从这里算
 EXEC_AT = f"{APPLE}/.derived/mac-exec-at"
-# run 留在模拟器里的实例：看守的 PID、实例的 PID、模拟器（app_sim.keep）。每个角色一份：没给 CUEPAD_RUN_ROLE 的是单个 run，
+# run 留在模拟器里的实例按角色分（app_sim.keep 的看守登记带着它）：没给 CUEPAD_RUN_ROLE 的是单个 run，
 # 再 run 先收掉它；xc.sh fleet 给 iphone、ipad 各一个角色，同一个检出里两台模拟器同时留着实例，互不收掉
 RUN_ROLE = os.environ.get("CUEPAD_RUN_ROLE", "")
-SIM_RUN_GLOB = f"{APPLE}/.derived/sim-run*.json"
-
-
-def sim_run(role=RUN_ROLE):
-    return f"{APPLE}/.derived/sim-run{'-' + role if role else ''}.json"
 # 实例借着前台却没到前台时写它（DebugForeground），看守替它拉到前台：别的应用在前台时 App 自己 activate 会被系统忽略
 FRONT = f"{APPLE}/.derived/mac-front"
 FRONT_RETRY = 0.3  # 拉了还没到前台时隔多久再拉

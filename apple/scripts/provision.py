@@ -13,8 +13,8 @@
   unlock                        解锁专用钥匙串并加入搜索列表，打印它的路径（发布脚本用）
   profiles-dir                  打印描述文件目录（建好）：签名锁锁的就是它（_lock.sh 规则 3）
   export-options <ios|mac> <文件>  写 xcodebuild -exportArchive 的导出选项（手动签名，描述文件名同 profiles 建的）
-  resign <CuePad.app> <Development|Production>  本机构建换成团队签名：嵌入 macOS 描述文件（Development / DeveloperID），
-                                带 iCloud 的完整权限、写定 iCloud 环境，用专用钥匙串里的证书签主程序；内嵌的框架与命令行工具仍是 ad-hoc
+  resign <CuePad.app>           本机构建换成团队签名：嵌入 macOS Development 描述文件，
+                                带 iCloud 的完整权限、iCloud 连开发环境，用专用钥匙串里的证书签主程序；内嵌的框架与命令行工具仍是 ad-hoc
   all                           ids → identity distribution → profiles
 凭据见 asc.py；私钥只存在专用钥匙串（~/.appstoreconnect/cuepad-signing.keychain-db），不落盘明文。
 """
@@ -275,16 +275,15 @@ def run_bytes(*args):
     return subprocess.run(args, check=True, capture_output=True).stdout
 
 
-def resign(app, environment):
-    name, certificate = (MAC_DEV_PROFILE, "Apple Development") if environment == "Development" else (MAC_PROFILE, "Developer ID Application")
-    path, profile = installed_profile(name)
-    identity = local_identity(certificate) or sys.exit(f"专用钥匙串里没有 {certificate} 证书（见 apple/App/Config/AGENTS.md）")
+def resign(app):
+    path, profile = installed_profile(MAC_DEV_PROFILE)
+    identity = local_identity("Apple Development") or sys.exit("专用钥匙串里没有 Apple Development 证书（见 apple/App/Config/AGENTS.md）")
     team = profile["TeamIdentifier"][0]
     # 权限以工程的完整权限文件为准（同发布），只补上描述文件里的身份与这次要连的 iCloud 环境
     template = open(os.path.join(os.path.dirname(os.path.dirname(__file__)), "App/Config/CuePad-macOS.entitlements"), "rb").read()
     entitlements = plistlib.loads(template.replace(b"$(CUEPAD_APP_ID)", APP_ID.encode()))
     entitlements |= {"com.apple.application-identifier": f"{team}.{APP_ID}", "com.apple.developer.team-identifier": team,
-                     "com.apple.developer.icloud-container-environment": environment}
+                     "com.apple.developer.icloud-container-environment": "Development"}
     with tempfile.NamedTemporaryFile(suffix=".entitlements") as f:
         plistlib.dump(entitlements, f)
         f.flush()
@@ -330,7 +329,7 @@ if __name__ == "__main__":
     elif command == "export-options":
         export_options(*sys.argv[2:4])
     elif command == "resign":
-        resign(*sys.argv[2:4])
+        resign(sys.argv[2])
     elif command == "all":
         ensure_ids(); ensure_identity("distribution"); ensure_profiles()
     else:

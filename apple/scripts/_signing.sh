@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# 被 xc.sh、perf 与发布脚本 source：App 身份前缀与中转主机；发布与真机构建用 require_asc 读凭据，产出给 xcodebuild 的签名设置 team_signing。
+# 被 xc.sh 与发布脚本 source：App 身份前缀与中转主机；发布与真机构建用 require_asc 读凭据，产出给 xcodebuild 的签名设置 team_signing。
 # 凭据文件（路径见 asc.py）字段：ASC_KEY_ID、ASC_ISSUER_ID、ASC_KEY_PATH、CUEPAD_TEAM_ID。
 # 本机 ad-hoc 构建与测试不读它；绝不回显凭据内容。
 # 工程默认是本机 ad-hoc（Signing.xcconfig）；team_signing 换上团队与带 iCloud 的 macOS 权限文件，证书与描述文件名在工程的各 target 里，

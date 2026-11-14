@@ -10,7 +10,7 @@
   fleet up --real [iphone] [ipad]           真云：两台专用模拟器连 CloudKit 开发环境（-CuePadCloudKit YES），用模拟器里登着的测试账号，两台登同一个账号才互相同步；
                                             库在 .derived/fleet-real（down 不删，免得每次从头拉）。没登账号时 App 照常起、不同步。Mac 的真云在虚拟机里跑，不在这里起
 隔离：每端一份库（.derived/fleet/<角色>/library）与连接目录，共用 .derived/fleet/cloud；本检出的 Mac 实例最多一个（app.py 规则 2），
-iPhone、iPad 各占一个槽位（_lock.sh）、各有角色名（CUEPAD_RUN_ROLE，app.py 的 sim_run），同一个检出里互不收掉。
+iPhone、iPad 各占一个槽位（_lock.sh）、各有角色名（CUEPAD_RUN_ROLE，app_env.py），同一个检出里互不收掉。
 云没有延迟模型（不睡）：时刻反映的是同步代码与界面刷新，不是真网络；门铃照常连正式中转（房间按这朵云自己的密钥）。
 """
 import json
@@ -23,9 +23,9 @@ import threading
 import time
 
 sys.dont_write_bytecode = True
-import app_proc  # noqa: E402
 import ui  # noqa: E402
-from app_env import APPLE, sim_run  # noqa: E402
+from app_env import APPLE  # noqa: E402
+from app_sim import watchers  # noqa: E402
 
 DIR = f"{APPLE}/.derived/fleet"
 STATE = f"{DIR}/fleet.json"
@@ -52,11 +52,7 @@ def load():
 def alive(role, note):
     if note["platform"] == "mac":
         return subprocess.run(["kill", "-0", str(note["pid"])], capture_output=True).returncode == 0
-    try:
-        with open(sim_run(role)) as f:
-            return app_proc.alive(json.load(f))
-    except (OSError, ValueError):
-        return False
+    return bool(watchers(role))
 
 
 def cloud_sims():

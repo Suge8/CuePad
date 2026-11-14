@@ -129,7 +129,7 @@ sign_development() {
   [ "${CUEPAD_SIGN:-}" = development ] || return 0
   [ "$platform" = mac ] || { echo "CUEPAD_SIGN=development 只用于 mac" >&2; exit 2; }
   signing_begin
-  python3 "$APPLE_DIR/scripts/provision.py" resign "$app" Development
+  python3 "$APPLE_DIR/scripts/provision.py" resign "$app"
   signing_end
 }
 

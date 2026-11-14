@@ -78,11 +78,12 @@ def holding(name):
 
 
 class Holder:
-    """一个进程在登记里的那一条。extra 是给读登记的人的字段（Mac 实例位记 what、app、execAt）。"""
+    """一个进程在登记里的那一条。extra 是给读登记的人的字段（Mac 实例位记 what、app；模拟器 run 的看守记 role、app、device）。"""
 
     def __init__(self, cmd, pid=None, **extra):
         pid = pid or os.getpid()
         self.entry = {"pid": pid, "start": processes([pid])[pid][1], "checkout": CHECKOUT, "cmd": cmd, "held": [], "waiting": None, **extra}
+        self.files = []  # 拿到的锁文件留在这里：文件对象被回收就关掉描述符、放掉锁
 
     @property
     def record(self):
@@ -109,16 +110,19 @@ class Holder:
 
     def acquire(self, options, why, wait_limit, report, since=None):
         """拿到 options（(打开的锁文件, 名字)）里任一把，记进持有；都占着就排队，开头与每 report 秒列一次持有者，
-        从 since（单调钟，缺省现在）起过了 wait_limit 秒还没轮到就列出持有者、删掉自己的登记、以 75 退出。返回拿到第几把与排了几秒。"""
+        从 since（单调钟，缺省现在）起过了 wait_limit 秒还没轮到就列出持有者、删掉自己的登记、以 75 退出（wait_limit 为 0 不排队，当场这样退出）。返回拿到第几把与排了几秒。"""
         since = time.monotonic() if since is None else since
         free = next((n for n, (f, _) in enumerate(options) if take(f)), None)
         queued = 0.0
         if free is None:
+            paths = [lock_path(f) for f, _ in options]
+            if wait_limit == 0:
+                say(f"{why}\n{self.listing(paths)}")
+                self.remove()
+                os._exit(75)
             self.publish(waiting=why)
             blocked = time.monotonic()
-            paths = [lock_path(f) for f, _ in options]
-            if wait_limit > 0:
-                say(f"排队：{why}\n{self.listing(paths)}")
+            say(f"排队：{why}\n{self.listing(paths)}")
             # 每把一个线程阻塞在 flock 上，先拿到的算数，其余拿到后马上放掉
             won, pick, result = threading.Event(), threading.Lock(), []
 
@@ -144,6 +148,7 @@ class Holder:
             free = result[0]
             queued = time.monotonic() - blocked
             self.entry["waiting"] = None
+        self.files.append(options[free][0])
         self.add(options[free][1])
         return free, queued
 
@@ -169,7 +174,7 @@ class Holder:
             "  下一步：等；等满上限会以 75 退出，那时重跑一次。确认某个进程是残留且没人在用，才对它的 PID 发 TERM；拿不准就请用户处理")
 
 
-_me, _held = None, []
+_me = None
 
 
 def me(**extra):
@@ -189,7 +194,6 @@ def hold(path, name, why, wait_limit, report=60, **extra):
     f = open(path, "a+")
     me(**extra).acquire([(f, name)], why, wait_limit, report)
     os.set_inheritable(f.fileno(), True)
-    _held.append(f)  # 文件对象被回收就关掉描述符、放掉锁
 
 
 # ---- xc.sh 的入口锁 ----
