@@ -61,10 +61,10 @@ final class Relay {
     static let steady = Duration.seconds(30)
     private nonisolated static let log = Logger(subsystem: AppIdentity.id, category: "relay")
 
-    /// `host` 是中转的主机（可带端口），连 `wss://<host>/v1/<房间号>`。
-    init(host: String, device: String, credentials: @escaping @MainActor () async throws -> RelayCredentials) {
+    /// 连 `<endpoint>/<房间号>`（正式是 `wss://<中转主机>/v1`）。
+    init(endpoint: URL, device: String, credentials: @escaping @MainActor () async throws -> RelayCredentials) {
         voiceDevice = VoiceDeviceID(device)
-        endpoint = URL(string: "wss://\(host)/v1")!
+        self.endpoint = endpoint
         self.credentials = credentials
         session = URLSession(configuration: .ephemeral)
     }

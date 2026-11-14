@@ -36,8 +36,8 @@ final class AppServices {
     enum SyncSource {
         case iCloud
         case custom(any SyncControlling)
-        /// 用本机的库建同步：真实的同步代码连替身 iCloud，给测试与调试画面。
-        case built((CueStore) -> any SyncControlling)
+        /// 用本机的库建同步：真实的同步代码连替身 iCloud，给测试与调试画面。给了 `relay`（测试的中转替身）才连门铃。
+        case built((CueStore) -> any SyncControlling, relay: URL? = nil)
     }
 
     @ObservationIgnored let sync: (any SyncControlling)?
