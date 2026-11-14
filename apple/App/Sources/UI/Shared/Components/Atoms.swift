@@ -14,10 +14,11 @@ extension EnvironmentValues {
 extension View {
     /// 读到的和上一次一样就不写：在 Store 一侧比一次，重新订阅后手里已有的值当作"上一次"，没变的数据不送到主线程、界面也不重算。
     /// 在前台、手里还没有值时当场读（`CueStore.snapshot`，`onAppear` 在第一帧之前做完）再从它接着订阅：本机库里的东西第一帧就排好，页面没有"还没读到"这一态。读失败时留给订阅报告，不报两次。
+    /// `onError` 收到订阅读不下去的错（库此刻的暂时性错误 Store 自己退避重读，不到这里）：页面交给 `Workspace.fail`，有意不报的显式写空。
     /// `immediately: false`：长列表里每行各自的小读（附件到没到本机，要看文件在不在），行在滚动中一个个出现，不在主线程上读，没读到时按到了画。
     func observing<T: Sendable & Equatable>(
         _ store: CueStore, id: some Equatable = 0, into value: Binding<T?>, immediately: Bool = true,
-        onError: @escaping (any Error) -> Void = { _ in },
+        onError: @escaping (any Error) -> Void,
         _ read: @escaping @Sendable (isolated CueStore) throws -> T
     ) -> some View {
         modifier(Observing(store: store, id: id, value: value, immediately: immediately, onError: onError, read: read))

@@ -9,6 +9,7 @@ extension CueStore {
   /// 订阅以表为粒度：别的行改动同一张表也会重读，但结果和上一次一样就不产出——比较只在读取的这一侧做一次，
   /// 不把没变的数据送到主线程、也不让界面白白重算。`initial` 是调用方手里已有的值，当作"上一次"：重新订阅后第一份没变也不产出。
   /// 读里按行收窄过的表（`narrow`）例外：只改动那张表别的行的写入不叫醒它。
+  /// 读到库此刻的暂时性错误（`SQLiteError.isTransient`）退避后重读；别的错误（含 `read` 自己抛的）流带着它结束，调用方要告诉你。
   public nonisolated func observe<T: Sendable & Equatable>(
     after initial: T? = nil, _ read: @escaping @Sendable (isolated CueStore) throws -> T
   ) -> AsyncThrowingStream<T, Error> {
@@ -41,8 +42,10 @@ extension CueStore {
       let task = Task {
         let token = subscriptions.add(signal, reading: tables, scopes: scopes, since: since)
         var timer: Task<Void, Never>?
+        var retry: Task<Void, Never>?
         defer {
           timer?.cancel()
+          retry?.cancel()
           subscriptions.remove(token)
         }
         let timing = self.timing
@@ -56,11 +59,24 @@ extension CueStore {
           }
         }
         schedule(firstExpiry)
+        var backoff = Self.firstRetry
         do {
           var last = initial
           for await _ in signals {
             let before = subscriptions.commits
-            let (next, reads, scopes, expiry) = try await rereader.tracked(read)
+            let (next, reads, scopes, expiry): (T, Set<Table>, [Table: [RowScope]], Date?)
+            do {
+              (next, reads, scopes, expiry) = try await rereader.tracked(read)
+            } catch let error as SQLiteError where error.isTransient {
+              // 库此刻的处境（忙、写满、读写出错）：订阅不就此结束，退避后再读；其间来的提交并进同一次重读
+              retry = Task { [backoff] in
+                guard (try? await timing.sleep(backoff)) != nil else { return }
+                signal.yield()
+              }
+              backoff = min(backoff * 2, Self.lastRetry)
+              continue
+            }
+            backoff = Self.firstRetry
             subscriptions.settle(token, reading: reads, scopes: scopes, since: before)
             schedule(expiry)
             if next == last { continue }
@@ -78,6 +94,10 @@ extension CueStore {
       }
     }
   }
+
+  /// 重读遇到暂时性错误（`SQLiteError.isTransient`）后再读的间隔：从这里起翻倍，到上限为止。
+  static let firstRetry: Duration = .milliseconds(200)
+  static let lastRetry: Duration = .seconds(10)
 
   /// 与结果随时间变的时刻。
   private func tracked<T>(_ read: (isolated CueStore) throws -> T) throws -> (T, Set<Table>, [Table: [RowScope]], Date?) {
