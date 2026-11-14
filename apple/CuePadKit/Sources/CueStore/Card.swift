@@ -101,6 +101,8 @@ public enum CardSlot: Hashable, Sendable {
 public enum CardChange: Sendable, Equatable {
   /// 进回收站的那条、提到它位置的下级，与随之不再定时的那些定时（撤销时放回来）。
   case trash(id: UUID, lifted: [UUID], schedules: [UUID])
+  /// 归档的那条、这次归档记下的时刻（撤销只取回它和下级里归档时刻是这一刻的），与随之不再定时的那些定时（撤销时放回来）。
+  case archive(id: UUID, at: Date, schedules: [UUID])
   case move(id: UUID, from: CardSlot, after: UUID?)
   /// 灵感接进任务：任务原来的正文，与接完那一刻任务的修改时刻（撤销时核对，变了就是之后又改过，不撤）。
   case merge(idea: UUID, task: UUID, body: String, modifiedAt: Date)

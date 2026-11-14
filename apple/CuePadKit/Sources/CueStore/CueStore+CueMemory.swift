@@ -120,7 +120,7 @@ extension CueStore {
   private static let scheduleWake = #"{"schedule":%"#
 
   /// 挂在 `tasks`（选出任务 id 的 SQL，参数是 ?2）上的定时不再定时（在写事务内调用）：任务完成、进回收站、归档就是这件事不用再定时做了；
-  /// 不再定时是忘掉那一条；只有撤销删除凭返回的这些 id 放回来（`restoreCueSchedules`），恢复项目、取回归档、重新打开不复活。
+  /// 不再定时是忘掉那一条；只有撤销删除、撤销归档凭回执里的这些 id 放回来（`restoreCueSchedules`），恢复项目、从归档列表取回、重新打开不复活。
   @discardableResult
   func endCueSchedules(onTasksIn tasks: String, _ argument: any SQLBindable, at now: Date) throws -> [UUID] {
     let condition = "\(Self.scheduled) AND taskID IN (\(tasks))"

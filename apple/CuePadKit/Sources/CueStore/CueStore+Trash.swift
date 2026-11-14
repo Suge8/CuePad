@@ -71,6 +71,9 @@ extension CueStore {
       try restoreRow(id)
       try adopt(lifted, by: id, from: left)
       try restoreCueSchedules(schedules)
+    case .archive(let id, let time, let schedules):
+      try unarchiveRow(id, archivedAt: time)
+      try restoreCueSchedules(schedules)
     case .move(let id, let slot, let after):
       let survivor = try after.flatMap { try find(Card.self, $0)?.id }
       try relocate(id, to: slot, after: survivor)
