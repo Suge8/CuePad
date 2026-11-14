@@ -198,7 +198,8 @@ final class AppServices {
         viewer = ViewerKeeper(store: store, sync: self.sync, device: UIDevice.current.identifierForVendor?.uuidString)
         if location.touchesRealWorld || DebugHooks.opensLiveActivity {
             cueActivity = CueLiveActivity(store: store, sync: activitySync, diagnostics: diagnostics) { [weak self] in
-                try self?.remoteActivityState()
+                guard let self else { return nil }
+                return try self.activityState(try self.store.snapshot { try CueDigest.read(from: $0) }.value)
             }
         }
     }
