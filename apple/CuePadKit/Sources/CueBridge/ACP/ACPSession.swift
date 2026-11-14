@@ -71,31 +71,37 @@ final class ACPSession {
     var agent: AgentKind { dialect.agent }
     var seesImages: Bool { connection.map { dialect.acceptsImages($0.agent) } ?? false }
 
+    @discardableResult
     func launch(
         _ executable: URL, environment: [String: String], directory: URL, timing: Timing = .system, spawned: (ChildProcess) async throws -> Void = { _ in }
-    ) async throws {
+    ) async throws -> ACPConnection {
         let connection = try await ACPConnection.launch(
             executable, dialect.arguments, environment: environment, directory: directory, timing: timing, spawned: spawned)
         connection.onNotification = { [weak self] in self?.notified($0, $1) }
         connection.onRequest = { [weak self] method, params, request in self?.asked(method, params, request: request) ?? false }
         connection.onClose = { [weak self] in self?.ended() }
         self.connection = connection
+        return connection
     }
 
-    func open(in directory: URL, mcpServers: [JSONValue] = [], meta: JSONValue? = nil) async throws {
+    /// 返回 Agent 给的会话 id
+    @discardableResult
+    func open(in directory: URL, mcpServers: [JSONValue] = [], meta: JSONValue? = nil) async throws -> String {
         var params: [String: JSONValue] = ["cwd": .string(directory.path), "mcpServers": .array(mcpServers)]
         if let meta { params["_meta"] = meta }
         mcp = nil
         let result = try await live.call("session/new", .object(params))
         guard let id = result["sessionId"]?.string else { throw ACPError.server(code: 0, message: "session/new 没有回会话 id") }
         adopt(id, in: directory, result)
+        return id
     }
 
-    func load(_ sessionID: String, in directory: URL) async throws {
+    func load(_ sessionID: String, in directory: URL) async throws -> String {
         loading = true
         defer { loading = false }
         let result = try await live.call("session/load", ["sessionId": .string(sessionID), "cwd": .string(directory.path), "mcpServers": []])
         adopt(sessionID, in: directory, result)
+        return sessionID
     }
 
     private func adopt(_ sessionID: String, in directory: URL, _ result: JSONValue) {

@@ -59,22 +59,27 @@ final class ACPHost {
 
     private func host(
         in directory: URL, model: String?, launchToken: String?, sessionID known: String?, admission: HostedProcesses.Admission,
-        open: @escaping @MainActor (ACPSession) async throws -> Void
+        open: @escaping @MainActor (ACPSession) async throws -> String
     ) async throws -> Session.ID {
         let launch = try await launching(model)
         let session = ACPSession(dialect: launch.dialect, bridge: bridge, processes: processes)
+        let connection: ACPConnection, sessionID: String
         do {
-            try await withDeadline(AgentTimeouts.launch, timing: timing, orThrow: AgentRuntimeError.launchTimedOut(agent)) {
-                try await session.launch(launch.executable, environment: launch.environment, directory: directory) { [processes = self.processes] process in
-                    try await processes.admit(process, for: known, admission)
+            (connection, sessionID) = try await withDeadline(AgentTimeouts.launch, timing: timing, orThrow: AgentRuntimeError.launchTimedOut(agent)) {
+                let connection = try await session.launch(launch.executable, environment: launch.environment, directory: directory) {
+                    [processes = self.processes] process in try await processes.admit(process, for: known, admission)
                 }
-                try await open(session)
+                return (connection, try await open(session))
             }
         } catch {
             await session.connection?.shutdown()
             throw error
         }
-        guard let sessionID = session.sessionID, let process = session.connection?.process else { throw AgentRuntimeError.launchFailed(agent, "") }
+        let process = connection.process
+        // 回完开会话就退出了：连接已关、它的收尾已走过，挂上桥就是一个没有进程的会话
+        guard !connection.isClosed else {
+            throw AgentRuntimeError.launchFailed(agent, await process.exited()?.text ?? String(localized: "开好会话就退出了"))
+        }
         var state = Session(
             id: Session.bridgeID(sessionID: sessionID, pid: process.pid), sessionID: sessionID, agent: agent, sessionFile: sessionFile(directory, sessionID), pid: process.pid,
             cwd: directory, state: .settled, stateSince: .now)
