@@ -56,6 +56,11 @@ nonisolated enum ScheduleText {
         return (draft.repeats.map { cycle($0.cycle) } ?? day(draft.date), time)
     }
 
+    /// 到点了、承接它的一轮还没做完：时刻已过就是（做完才推到下一次或忘掉，`CueStore.fireCueSchedules`）。
+    static func overdue(_ line: CueMemoryLine, now: Date = .now) -> String? {
+        line.remindAt.flatMap { $0 <= now ? String(localized: "过点未做") : nil }
+    }
+
     /// 只说事实，不猜原因。
     static func missed(_ last: CueScheduled.Last) -> String {
         String(localized: "\(moment(last.due)) 那次错过，\(last.at.formatted(date: .omitted, time: .shortened)) 补上")
