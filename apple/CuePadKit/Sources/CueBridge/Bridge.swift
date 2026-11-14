@@ -64,7 +64,7 @@ public final class Bridge {
     public init(socketDirectory: URL = PiPaths().socketDirectory, hostedIdle: Duration = AgentTimeouts.hostedIdle, timing: Timing = .system) {
         self.hostedIdle = hostedIdle
         self.timing = timing
-        connections = PiConnections(directory: socketDirectory)
+        connections = PiConnections(directory: socketDirectory, timing: timing)
         connections.bridge = self
     }
 
