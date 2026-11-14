@@ -86,20 +86,9 @@ private struct SessionAsks: ViewModifier {
     func body(content: Content) -> some View {
         content
             .panel(item: renaming) { RenameSheet(target: $0.session, shown: $0.shown, adopts: $0.adopts) }
-            .agentBusyDialog(completing?.session, isPresented: Binding { completing != nil } set: { if !$0, completing != nil { workspace.sessionAsk = nil } }) {
-                [workspace, completing] in
-                guard let completing else { return }
-                if let task = completing.task {
-                    workspace.attempt { try await workspace.complete(task) }
-                } else {
-                    workspace.attempt { try await workspace.confirmFinish(completing.session) }
-                }
-            }
-            .dialog(.verbatim(TaskCopy.openSubtasks(steps?.progress)), isPresented: Binding { steps != nil } set: { if !$0, steps != nil { workspace.sessionAsk = nil } },
-                    buttons: [DialogButton(title: "全部完成") { [workspace, steps] in
-                        guard let task = steps?.task else { return }
-                        workspace.attempt { try await workspace.complete(task) }
-                    }])
+            .agentBusyDialog(busy, isPresented: asking { if case .agent = $0 { true } else { false } }, confirm: confirm)
+            .dialog(.verbatim(TaskCopy.openSubtasks(steps)), isPresented: asking { if case .steps = $0 { true } else { false } },
+                    buttons: [DialogButton(title: "全部完成", action: confirm)])
         #if os(macOS)
             .dialog(Self.title, item: asked { if case .end(let session) = $0 { session } else { nil } }, message: Self.message) { session in
                 [DialogButton(title: "结束会话", role: .destructive) { end(session) }]
@@ -132,8 +121,20 @@ private struct SessionAsks: ViewModifier {
         }
     }
 
-    private var completing: (session: SessionState, task: UUID?)? { if case .complete(let session, let task) = workspace.sessionAsk { (session, task) } else { nil } }
-    private var steps: (task: UUID, progress: TaskProgress)? { if case .completeSteps(let task, let progress) = workspace.sessionAsk { (task, progress) } else { nil } }
+    private var completing: CompletionAsk? { if case .complete(let ask, _) = workspace.sessionAsk { ask } else { nil } }
+    private var busy: SessionState? { if case .agent(let session) = completing { session } else { nil } }
+    private var steps: TaskProgress? { if case .steps(let progress) = completing { progress } else { nil } }
+
+    /// 关掉时只清自己这一种（另一种已经换上来就不动）。
+    private func asking(_ kind: @escaping (CompletionAsk) -> Bool) -> Binding<Bool> {
+        Binding { completing.map(kind) ?? false } set: { if !$0, completing.map(kind) == true { workspace.sessionAsk = nil } }
+    }
+
+    /// 取的是呈现时那一问的：按下时框可能已先收起、`sessionAsk` 已清。
+    private var confirm: @MainActor () -> Void {
+        guard case .complete(_, let proceed) = workspace.sessionAsk else { return {} }
+        return { [workspace] in workspace.attempt { try await proceed(workspace) } }
+    }
     private var ending: SessionState? { if case .end(let session) = workspace.sessionAsk { session } else { nil } }
 
     private func end(_ session: SessionState) { Task { await workspace.end(session) } }

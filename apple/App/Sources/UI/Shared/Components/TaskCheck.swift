@@ -1,14 +1,12 @@
 import CueStore
 import SwiftUI
 
-/// 点了立即显示完成，停留 `linger` 再写入、由列表移走：看得清，也来得及反悔，这段时间里再点一下就撤销。还有没完成的子任务时先问一起完成；它的 Agent 还在做或在等你时先问一句（`agentBusyDialog`：为这件事开的会话一起结束，别的不结束）。
+/// 点了立即显示完成，停留 `linger` 再写入、由列表移走：看得清，也来得及反悔，这段时间里再点一下就撤销。要先问的（`CompletionAsk`）答应了才开始停留。
 /// 状态只是这一行界面上的过渡，完成与否以 Store 为准：写入落地或别处改了，这一行回到 `idle`。
 struct TaskCheck: Equatable {
     enum Phase { case idle, pending, committed }
-    enum Ask: Equatable { case steps, agent(SessionState) }
 
     var phase = Phase.idle
-    var ask: Ask?
 
     static let linger: Duration = .milliseconds(800)
 
@@ -24,13 +22,7 @@ extension Workspace {
         }
         switch check.wrappedValue.phase {
         case .idle:
-            if TaskCopy.hasOpen(subtasks) {
-                check.wrappedValue.ask = .steps
-            } else if let busy {
-                check.wrappedValue.ask = .agent(busy)
-            } else {
-                check.wrappedValue.phase = .pending
-            }
+            attempt { try await self.confirmComplete(subtasks: subtasks, busy: busy) { _ in check.wrappedValue.phase = .pending } }
         case .pending: check.wrappedValue.phase = .idle
         case .committed: break
         }
@@ -53,7 +45,7 @@ struct TaskCheckButton: View {
         trigger
         .accessibilityLabel(check.phase == .pending ? String(localized: "撤销完成") : TaskSpeech.toggle(done: check.done(task)))
         .sensoryFeedback(.success, trigger: check.phase) { $0 == .idle && $1 == .pending }
-        .taskCheck(task, subtasks: subtasks, check: $check)
+        .taskCheck(task, check: $check)
     }
 
     private var ring: some View {
@@ -74,21 +66,18 @@ struct TaskCheckButton: View {
 
 extension View {
     /// 停留后写入的是设为完成，不是翻转：等待时别处已做完也不会被翻回去。
-    func taskCheck(_ task: Card, subtasks: TaskProgress?, check: Binding<TaskCheck>) -> some View {
-        modifier(TaskCheckFlow(task: task, subtasks: subtasks, check: check))
+    func taskCheck(_ task: Card, check: Binding<TaskCheck>) -> some View {
+        modifier(TaskCheckFlow(task: task, check: check))
     }
 }
 
 private struct TaskCheckFlow: ViewModifier {
     let task: Card
-    let subtasks: TaskProgress?
     @Binding var check: TaskCheck
     @Environment(Workspace.self) private var workspace
 
     func body(content: Content) -> some View {
         content
-        .dialog(.verbatim(TaskCopy.openSubtasks(subtasks)), isPresented: asking(.steps), buttons: [DialogButton(title: "全部完成") { check.phase = .pending }])
-        .agentBusyDialog(busy, isPresented: Binding(get: { busy != nil }, set: { if !$0, busy != nil { check.ask = nil } })) { check.phase = .pending }
         .task(id: check.phase) {
             guard check.phase == .pending else { return }
             try? await Task.sleep(for: TaskCheck.linger)
@@ -98,12 +87,6 @@ private struct TaskCheckFlow: ViewModifier {
         // 停留时就离开了页面（列表收起、换页）：照样写入，不丢这次勾选
         .onDisappear { if check.phase == .pending { commit() } }
         .onChange(of: task.completedAt) { check.phase = .idle }
-    }
-
-    private var busy: SessionState? { if case .agent(let session) = check.ask { session } else { nil } }
-
-    private func asking(_ ask: TaskCheck.Ask) -> Binding<Bool> {
-        Binding(get: { check.ask == ask }, set: { if !$0, check.ask == ask { check.ask = nil } })
     }
 
     private func commit() {

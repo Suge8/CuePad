@@ -58,20 +58,9 @@ struct MarkUnreadButton: View {
     }
 }
 
-enum SessionAsk: Identifiable, Equatable {
+enum SessionAsk {
     case rename(SessionState, shown: String, adopts: Bool)
     case end(SessionState)
-    /// 会话在做时完成先问一句；`task` 是看板上拖到已完成的那件（没有时是没绑任务的会话，`Workspace.finish`）。
-    case complete(SessionState, task: UUID? = nil)
-    /// 看板上拖到已完成的那件还有没做完的子任务：一起完成？
-    case completeSteps(UUID, TaskProgress)
-
-    var id: String {
-        switch self {
-        case .rename(let session, _, _): "rename/\(session.id)"
-        case .end(let session): "end/\(session.id)"
-        case .complete(let session, _): "complete/\(session.id)"
-        case .completeSteps(let task, _): "steps/\(task)"
-        }
-    }
+    /// 完成前先问（`Workspace.confirmComplete`），答应了跑 `then`。
+    case complete(CompletionAsk, then: @MainActor (Workspace) async throws -> Void)
 }

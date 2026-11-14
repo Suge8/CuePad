@@ -15,11 +15,9 @@ extension Workspace {
         }
     }
 
-    /// 还有没做完的子任务、它的 Agent 在做或在等你时先问（同完成圈，`TaskCheck`），答应了当场完成：拖放没有圈上那一下停留可撤销。
+    /// 拖放没有圈上那一下停留可撤销：答应了当场完成。
     func finish(_ item: TaskBoard.Item) async throws {
         let id = item.task.id
-        if let steps = item.steps, TaskCopy.hasOpen(steps) { return sessionAsk = .completeSteps(id, steps) }
-        if let busy = next(for: item, shown: pulse(of: item.agent).shown)?.busySession { return sessionAsk = .complete(busy, task: id) }
-        try await complete(id)
+        try await confirmComplete(subtasks: item.steps, busy: next(for: item, shown: pulse(of: item.agent).shown)?.busySession) { try await $0.complete(id) }
     }
 }

@@ -10,17 +10,12 @@ extension Workspace {
         try await services.store.adoptSession(session.sessionID)
     }
 
-    /// 会话在做或在等你时先问一句（`SessionAsk.complete`），答应了才建任务、完成；取消什么都不留。
+    /// 会话在做或在等你时先问一句（`confirmComplete`），答应了才建任务、完成；取消什么都不留。
     func finish(_ agent: SessionListItem) async throws {
-        if pulse(of: agent).shown?.agentBusy == true { return sessionAsk = .complete(agent.state) }
-        try await complete(agent.state)
-    }
-
-    func confirmFinish(_ session: SessionState) async throws { try await complete(session) }
-
-    /// 只经 `finish` 与 `confirmFinish`：界面直接调它就跳过了在做时的那一问。
-    private func complete(_ session: SessionState) async throws {
-        try await complete(try await adopt(session))
+        let session = agent.state
+        try await confirmComplete(subtasks: nil, busy: pulse(of: agent).shown?.agentBusy == true ? session : nil) {
+            try await $0.complete(try await $0.adopt(session))
+        }
     }
 
     func pin(_ session: SessionState) async throws {
