@@ -51,18 +51,18 @@ extension CueStore {
   public func purgeProject(_ id: UUID) throws {
     try removingFiles { try write {
       let orphaned = try purgeCards(where: "projectID = ? AND deletedAt IS NULL", [id])
-      try dropProjects(where: "id = ?", [id])
+      try dropProjects([id])
       return try reclaimAttachments(orphaned)
     } }
   }
 
   /// 项目行从库里删掉（本机永久删除、清空回收站，或别处删了传来）：还留在它名下的卡片归默认项目（内容保留，不悬空隐藏），
-  /// 本机的目录绑定一并删。必须在写事务内调用。
-  func dropProjects(where condition: String, _ arguments: [any SQLBindable] = []) throws {
-    let ids = "SELECT id FROM projects WHERE \(condition)"
-    try db.run("UPDATE cards SET projectID = ?, modifiedAt = ? WHERE projectID IN (\(ids))", [Project.defaultID, Date.stamp] + arguments)
-    try db.run("DELETE FROM projectDirectories WHERE projectID IN (\(ids))", arguments)
-    try db.run("DELETE FROM projects WHERE \(condition)", arguments)
+  /// 本机的目录绑定一并删。按 id 做、不查项目表：别处删掉的项目本机可能从没收到过，名下先到的卡照样归过来。必须在写事务内调用。
+  func dropProjects(_ ids: [UUID]) throws {
+    let list = Self.idList(ids)
+    try db.run("UPDATE cards SET projectID = ?, modifiedAt = ? WHERE projectID IN (SELECT value FROM json_each(?))", [Project.defaultID, Date.stamp, list])
+    try db.run("DELETE FROM projectDirectories WHERE projectID IN (SELECT value FROM json_each(?))", [list])
+    try db.run("DELETE FROM projects WHERE id IN (SELECT value FROM json_each(?))", [list])
   }
 
   /// 目录因设备而异，不同步。会话归哪个项目写在会话记录上，所以绑定变了、同一个事务里把本机已有的会话（含历史）按新的绑定重新归：只改归属变了的，没变的不重写。
