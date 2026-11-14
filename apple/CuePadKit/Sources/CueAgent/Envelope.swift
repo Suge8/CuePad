@@ -217,7 +217,7 @@ public enum CueEnvelope {
     return parts.joined(separator: " · ")
   }
 
-  static let leftNote = "待回复"
+  static let leftNote = "新回复"
 
   /// 会话在 Cue 眼里的称呼：会话名与短 id（Cue 的工具给 session 时写它）。
   static func sessionName(_ session: SessionState) -> String { "会话「\(session.title)」（\(session.shortID)）" }
@@ -244,7 +244,7 @@ public enum CueEnvelope {
     case .thinking, .tool, .compacting: "工作中"
     case .delegating: "等子代理交回"
     case .waitingForUser: "等回答"
-    case .settled: "歇着"
+    case .settled: "空闲"
     case .error: "出错"
     case .ended: "已结束"
     case .interrupted: "做到一半被打断"

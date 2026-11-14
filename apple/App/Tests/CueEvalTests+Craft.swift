@@ -22,7 +22,7 @@ extension CueEvalTests {
                 Check(.result, "没问第三次（没 say）", eval.calls("task", "say").isEmpty),
                 Check(.result, "没有 done", eval.calls("task", "done").isEmpty),
                 Check(.interrupt, "tell 一句缺什么（提到截图）", eval.calls("tell").contains { ($0.args["text"] as? String)?.contains("截图") == true }),
-                Check(.result, "留给他回（待回复）", session.awaitsReply(try await rig.store.cueDuty())),
+                Check(.result, "留给他回（新回复）", session.awaitsReply(try await rig.store.cueDuty())),
             ]
         }
     }

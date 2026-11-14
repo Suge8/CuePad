@@ -30,7 +30,7 @@ struct SessionTaskTests {
         let envelope = CueEnvelope.render(CueEnvelope.Input(
             now: .now, projects: [], changes: [], board: try await store.cueBoard(), waiting: [],
             wake: .idle))
-        #expect(envelope.contains("在做 1 件：\n- 会话「修登录」（s1） · 歇着"))
+        #expect(envelope.contains("在做 1 件：\n- 会话「修登录」（s1） · 空闲"))
 
         let cue = CueTools(store: store, wait: 0)
         let said = try #require(await cue.call("task", ["action": "say", "session": "修登录", "text": "补上登录的测试"]))
@@ -126,9 +126,9 @@ struct SessionTaskTests {
         try await workspace.complete(stepped.id)
         let cue = CueTools(store: store, wait: 0)
         let peek = try #require(await cue.call("task", ["action": "peek"]))
-        #expect(peek.text.contains("- 会话「修登录」（s1） · 歇着"))
-        #expect(peek.text.contains("最近完成的") && peek.text.contains("- 修登录（\(old.id.shortID)） · 会话「修登录」（s1） · 歇着"))
-        #expect(peek.text.contains("- 加语言参数（\(stepped.id.shortID)） · 会话「加 --lang」（s2） · 歇着"))
+        #expect(peek.text.contains("- 会话「修登录」（s1） · 空闲"))
+        #expect(peek.text.contains("最近完成的") && peek.text.contains("- 修登录（\(old.id.shortID)） · 会话「修登录」（s1） · 空闲"))
+        #expect(peek.text.contains("- 加语言参数（\(stepped.id.shortID)） · 会话「加 --lang」（s2） · 空闲"))
 
         let added = try #require(await cue.call("task", ["action": "add", "title": "补注册页", "session": "s1"]))
         #expect(!added.isError)

@@ -13380,22 +13380,6 @@
         }
       }
     },
-    "待回复" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "To reply"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "待回复"
-          }
-        }
-      }
-    },
     "很高" : {
       "localizations" : {
         "en" : {

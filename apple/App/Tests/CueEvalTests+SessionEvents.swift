@@ -136,7 +136,7 @@ extension CueEvalTests {
             let variants = Set(shown.map { name in Self.proposals.map(\.slug).reduce(name.name) { $0.replacingOccurrences(of: $1, with: "") } })
             return [
                 Check(.ask, "请他选（tell 带 ask=taste、关联这件任务）", try await eval.said().contains { $0.choices != nil && $0.taskID == work.task.id } && !asked.isEmpty),
-                Check(.ask, "没留给他（leave 没成，问着就不待回复）", !eval.calls("task", "leave").contains { !$0.call.failed }),
+                Check(.ask, "没留给他（leave 没成，问着就不是新回复）", !eval.calls("task", "leave").contains { !$0.call.failed }),
                 Check(.tool, "doing 写推荐的方案", (asked.last?.args["doing"] as? String)?.contains(/方案|决定单|对话里问|郑重放行/) == true),
                 Check(.tool, "show 每个方案一张（3 张、各是一个方案）", shown.count == 3 && Set(shown.map(\.title)).count == 3 && shown.allSatisfy { $0.title.hasPrefix("提问卡方案") }),
                 Check(.tool, "同一种样子（同一台设备、同一种外观）", !shown.isEmpty && variants.count == 1),
