@@ -5,7 +5,7 @@ from collections import defaultdict
 import hashlib, json, os, random, select, shutil, socket, subprocess, sys, threading, time
 
 sys.dont_write_bytecode = True
-from _pi_extension import ENTRY, extension_version  # noqa: E402
+import _pi_extension as wire  # noqa: E402
 from app_env import disclaimed, isolated_env  # noqa: E402
 
 SESSIONS = int(os.environ.get("SYNC_BENCH_SESSIONS", 3))
@@ -124,7 +124,7 @@ class Load:
 
 def fake_extension(directory, checkout):
     """假扩展（子进程里跑）：SESSIONS 个会话，各自按指数分布的间隔切状态；任何带 id 的命令都回 ack ok。"""
-    version = extension_version(open(f"{checkout}/apple/{ENTRY}", encoding="utf-8").read())
+    version = wire.version_in(f"{checkout}/apple")
     os.makedirs(directory, mode=0o700, exist_ok=True); os.chmod(directory, 0o700)
     now = lambda: time.time() * 1000
     sessions = []
@@ -136,11 +136,8 @@ def fake_extension(directory, checkout):
         sessions.append({"id": sid, "path": path, "server": s, "clients": {}, "state": {"kind": "idle", "since": now()},
                          "next": time.time() + random.expovariate(1 / FLIP)})
     def send(c, msg):
-        try: c.sendall((json.dumps(msg) + "\n").encode())
+        try: c.sendall(wire.line(msg))
         except OSError: pass
-    def hello(s):
-        return {"t": "hello", "extensionVersion": version, "sessionId": s["id"], "sessionFile": None, "pid": os.getpid(),
-                "cwd": "/tmp", "mode": "tui", "tty": None, "term": {}, "state": s["state"], "name": s["id"], "firstMessage": None}
     running, parent = True, os.getppid()
     def stop(*_):
         nonlocal running; running = False
@@ -151,7 +148,7 @@ def fake_extension(directory, checkout):
             ready, _, _ = select.select(readable, [], [], 0.2)
             for s in sessions:
                 if s["server"] in ready:
-                    c, _ = s["server"].accept(); s["clients"][c] = b""; send(c, hello(s))
+                    c, _ = s["server"].accept(); s["clients"][c] = b""; send(c, wire.hello(version, s["id"], "/tmp", s["state"], name=s["id"]))
                 for c in list(s["clients"]):
                     if c not in ready: continue
                     data = c.recv(65536)
@@ -162,16 +159,16 @@ def fake_extension(directory, checkout):
                     for line in lines:
                         try: msg = json.loads(line.decode("utf-8"))
                         except ValueError: continue
-                        if "id" in msg: send(c, {"t": "ack", "id": msg["id"], "ok": True})
+                        if "id" in msg: send(c, wire.ack(msg["id"]))
                 if time.time() >= s["next"]:
                     state = dict(random.choice(STATES)); state["since"] = now()
                     busy = state["kind"] not in ("idle", "done")
                     state["busySince"] = s["state"].get("busySince") or now() if busy else None
                     s["state"] = state; s["next"] = time.time() + random.expovariate(1 / FLIP)
-                    for c in s["clients"]: send(c, {"t": "state", "state": state})
+                    for c in s["clients"]: send(c, wire.state(state))
     finally:
         for s in sessions:  # 会话以"结束"同步出去，下次跑不会被当成在线的会话
-            for c in s["clients"]: send(c, {"t": "bye", "reason": "quit"}); c.close()
+            for c in s["clients"]: send(c, wire.bye("quit")); c.close()
             s["server"].close(); os.remove(s["path"])
 
 

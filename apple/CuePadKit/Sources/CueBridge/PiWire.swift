@@ -42,6 +42,7 @@ enum PiWire {
         var turnSinceDate: Date? { turnSince.map { Date(timeIntervalSince1970: $0 / 1000) } }
     }
 
+    /// 扩展之外还有两处造 hello 的替身：测试的 `FakeExtension`、脚本的 `apple/scripts/_pi_extension.py`；这里加必读的字段，两处一起加。
     struct Hello: Decodable {
         var extensionVersion: Int
         var sessionId: String
