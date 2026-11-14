@@ -32,7 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         let launched = Launch.make { [alerts] location in
             try AppServices(
                 location: location, defaults: location.makeDefaults(), sync: DebugHooks.syncSource,
-                mac: .live(location: location, alerts: alerts))
+                mac: try .live(location: location, alerts: alerts))
         }
         self.launched = launched
         switch launched {

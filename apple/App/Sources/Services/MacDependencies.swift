@@ -27,7 +27,7 @@ struct MacDependencies {
 
     /// 碰不碰真实世界只看 `LibraryLocation.touchesRealWorld`；
     /// 自动更新只看是不是正式版签名：本机构建装不了 Sparkle 发来的正式版，也不去读真实的更新源与偏好。
-    static func live(location: LibraryLocation, alerts: AlertCenter) -> MacDependencies {
+    static func live(location: LibraryLocation, alerts: AlertCenter) throws -> MacDependencies {
         let environment = ProcessInfo.processInfo.environment
         let isolated = !location.touchesRealWorld
         AppServices.log.notice("库：\(String(describing: location.origin), privacy: .public)，碰真实世界：\(!isolated, privacy: .public)")
@@ -61,7 +61,7 @@ struct MacDependencies {
             paths: paths,
             agents: agents,
             hostID: hostID,
-            workspaces: Workspaces.resolve(isolatedLibrary: isolated ? location.directory : nil),
+            workspaces: try Workspaces.resolve(isolatedLibrary: isolated ? location.directory : nil),
             wakeNotifications: NSWorkspace.shared.notificationCenter,
             timing: timing,
             commandLineTool: commandLineTool,

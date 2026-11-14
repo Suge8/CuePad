@@ -100,6 +100,8 @@ final class AppServices {
     @ObservationIgnored var hotkeys: [GlobalHotkey] = []
     @ObservationIgnored let hostID: String
     @ObservationIgnored let workspaces: Workspaces
+    /// 各台设备的诊断落在哪（`LibraryLocation.deviceLogs`）：打开时就解析，环境变量给错了进失败页。
+    @ObservationIgnored let deviceLogs: URL
     @ObservationIgnored let wakeNotifications: NotificationCenter
     @ObservationIgnored let stateRecorder: StateRecorder
     @ObservationIgnored let presence: MacPresenceKeeper
@@ -155,6 +157,7 @@ final class AppServices {
         timing = mac.timing
         hostID = mac.hostID
         workspaces = mac.workspaces
+        deviceLogs = try location.deviceLogs()
         wakeNotifications = mac.wakeNotifications
         stateRecorder = StateRecorder(store: store, hostID: mac.hostID, timing: mac.timing)
         presence = MacPresenceKeeper(store: store, sync: self.sync, host: mac.hostID)
