@@ -86,7 +86,7 @@ extension CueStore {
     try setArchived(chains.filter { !reopened.isDisjoint(with: $0) }.map { $0.last! }, at: nil)
   }
 
-  /// 任务离开看板，或明确开工换会话时（纯关联不收尾），这件事里绑着的、为它开的会话各看一遍，可以结束（`taskSessionCanEnd`）的请它所在的 Mac 结束。
+  /// 任务离开看板，或明确开工换会话时（纯关联不收尾），这件事里此刻绑着的、为它开的会话各看一遍（换下来的不看：它可能已结束后被你恢复起来另用），可以结束（`taskSessionCanEnd`）的请它所在的 Mac 结束。
   /// 不是为任务开的不结束，它随这件事从看板收起（`isLoose`），再有动静才回来；已结束的、记录还没到的不动。取回归档、撤销删除不重开：再对它说话就在后台恢复。
   /// `task` 可以已经归档或删掉（删掉的从它原来的上级往上找这件事）；灵感不管。必须在写事务内调用。
   @discardableResult
@@ -94,7 +94,7 @@ extension CueStore {
     guard let card = try find(Card.self, task), card.isTask else { return [] }
     let sessions = try db.query(
       """
-      \(Self.sessionsUsed(where: "id = ?1 OR id IN (\(Self.subtree(from: "SELECT ?2")))"))
+      SELECT piSessionID FROM cards WHERE piSessionID IS NOT NULL AND (id = ?1 OR id IN (\(Self.subtree(from: "SELECT ?2"))))
       UNION SELECT sessionID FROM piSessionStates WHERE createdForTaskID IN (\(Self.subtree(from: "SELECT ?2", includingDeleted: true)))
       """, [task, try top(of: task)]
     ) { $0.text(0) }
