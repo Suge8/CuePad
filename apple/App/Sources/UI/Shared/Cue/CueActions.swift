@@ -2,7 +2,7 @@ import CueStore
 import Foundation
 import SwiftUI
 
-/// 都只写库，由同步层马上传（`Table.urgent`）。
+/// 都只写库，由同步层马上传（`Table.live`）。
 extension Workspace {
     func followCue() async {
         let services = services

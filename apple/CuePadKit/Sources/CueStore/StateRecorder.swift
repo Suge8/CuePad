@@ -34,7 +34,7 @@ public actor StateRecorder {
 
   /// 写一个会话此刻的样子（桥上的会话产出的 `SessionSnapshot`，`SessionMirror` 交来）：会话记录只经这里写。
   /// 快照上说不上来的几项沿用上一次写下的（`SessionSnapshot.keepingUnknown`）。
-  /// 返回这次写入置位的通知标志（没有置位为 nil）；置位的那一版由同步层马上传（`Table.urgent`）。
+  /// 返回这次写入置位的通知标志（没有置位为 nil）；置位的那一版由同步层马上传（`Table.live`）。
   @discardableResult
   public func update(_ snapshot: SessionSnapshot) async throws -> AlertKind? {
     let sessionID = snapshot.sessionID

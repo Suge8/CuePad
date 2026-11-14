@@ -3,67 +3,82 @@ import CueStore
 import Foundation
 
 /// 这里只决定什么时候发、一批发哪些；附件的文件不在这里传（`FileSender`）。
-/// 同一条记录同一时刻只在一批里（`inFlight`）：不会有两个版本同时上传、互相以 `.ifServerRecordUnchanged` 的版本冲突拒绝。
+/// 记录按表分两条通道（`Lane`，哪张表走哪条只看 `Table.live`），各自一轮一轮地挑批、发，一轮里同一时刻一批，挑全部待推送。
+/// 要马上传的不进轮次：另加塞一批（`express`），只挑一写下就该传的版本，不等攒批窗口、不等这一轮在路上的那批
+/// （Cue 的回话常紧跟在你那句的送达与会话结果之后写下，等它一个来回模拟云实测要多 0.3 秒）；领取、会话进展这些不急的版本照常等窗口。
+/// 实时通道的一批小、新写的排在前面，积压再多，新写的也在下一批里；两条通道的表不相交，后台的大批挡不住实时通道里的哪一版。
+/// 在路上的记录名记在通道里（`LaneState.inFlight`），挑批时跳过：同一条记录同一时刻至多一版在路上，
+/// 不会两版互相以 `.ifServerRecordUnchanged` 的版本冲突拒绝。
+///
+/// 每条通道的轮次（`LaneState`）：
+///
+/// | 状态 | 触发 | 去向 |
+/// |---|---|---|
+/// | 闲着 | 提交碰了这条通道的表、不急 | 攒批 |
+/// | 闲着 | 开始、`kick`、`flush`、等待结束（`retryDue`，先实时、跑完再后台）、加塞发完还有人在等 | 跑一轮 |
+/// | 攒批 | 窗口（`gatherWindow`）到点，或其间来了上面那几种 | 跑一轮 |
+/// | 跑一轮 | 挑一批（`SyncCoordinator.nextBatch`）、发，收下了接着挑 | 挑空、被等待挡下、发不成：闲着 |
+/// | 跑一轮 | 其间又来了任何触发（`again`） | 跑完接着再跑一轮 |
+///
+/// 加塞（任何状态下）：实时通道的提交要马上传（`SyncChange.urgent`），或 `send` 在等 → 挑一批发出 → 这条通道攒批（有人在等就跑一轮）。
+///
+/// 越过连不上与被拒的等待（`SyncCoordinator.admits` 的 urgent）只给加塞的那批、`flush`、有 `send` 在等的那批；
+/// 积压（开始时就在的、换账号或首次同步后的全部历史）照常退避。退避上限压到 `Backoff.waitingCap` 只在有 `send` 在等结果时。
 /// `stop` 取消并等在途的轮次与请求收尾才返回：之后不再挑、不再发，接手的新发送者不会与旧的同时传同一条记录。
 /// 服务器拒收的单条记录不挡别的：协调器记下这一版跳过它（`SyncCoordinator.unsendable`），这一批照常算有进展。
 /// 整批的失败交给同步层唯一的重试调度（协调器的 `hold`，与拉取共用），等待结束时（`retryDue`）接着发。
-/// 马上传与进后台前的那一轮（用户在等，试一次不费什么）越过连不上与被拒的等待，服务器要求的等待照守。
 actor RecordSender {
   static let gatherWindow = Duration.milliseconds(300)
   /// 一轮至多发这么多批，余下的接着下一轮（防止被拒又处理不好的记录让一轮停不下来）。
   static let batchesPerRound = 100
+  /// 一批太大（`limitExceeded`）就减半；之后连着这么多批整批收下再翻倍，回到通道的上限为止：太大的多半是那几条大记录，它们传走了批量该回来。
+  static let regrowAfter = 4
 
   private let uploader: any RecordUploader
   private let coordinator: SyncCoordinator
   private let prepare: @Sendable () async throws -> Void
-  private let step: @Sendable (Step) async -> Void
-  /// 测试控制先后的两处：后台那一路挑完一批、进 `inFlight` 之前；马上传那一路占下之前。
-  enum Step { case picked, reserving }
-  private let triggers: AsyncStream<Void>
-  private let trigger: AsyncStream<Void>.Continuation
   private var tasks: [Task<Void, Never>] = []
+  private var lanes: [Lane: LaneState] = Dictionary(uniqueKeysWithValues: Lane.allCases.map { ($0, LaneState(limit: $0.limit)) })
 
-  private var explicit = false
-  private var urgentRound = false
-  /// 停下时随这一代结束一起答（`SyncGeneration.value`）。
-  private var flushes: [Promise<Void>] = []
-  private var prepared = false
-  private var preparing: Task<Bool, Never>?
-  /// 在路上的（或马上传已占下的）记录名：另一路不再挑它们。测试读它控制先后。
-  private(set) var inFlight: Set<String> = []
-  /// 马上传了、还没收下的（含答过没传成的）：有它们时退避上限小，到点先发它们。
-  private var urgent: Set<String> = []
-  /// 每次要马上传加一。一批只答读库之前要的（`Waiter.asked <= readAt`）：之后要的，这一批读到的可能早于它要的那一版
-  /// （刚领取的投送请求，结果紧跟着写下；后台那一路读库在先、进 `inFlight` 在后）。没答的等这几条离开 `inFlight` 时补发（`release`）。
-  private(set) var asks = 0
-  /// 谁还在等哪几条，只记在这里。停下时随这一代结束一起答。
+  private struct LaneState {
+    var running: Task<Void, Never>?
+    var gathering: Task<Void, Never>?
+    var again = false
+    /// 下一轮越过连不上与被拒的等待（`flush`）。
+    var urgent = false
+    /// 在路上的记录名（这一轮的那批与加塞的那几批，`express`）。
+    var inFlight: Set<String> = []
+    var limit: Int
+    var acceptedInARow = 0
+  }
+  /// 加塞的一批（`express`），停下时一起等。
+  private var expresses: [Int: Task<Void, Never>] = [:]
+  private var nextExpress = 0
+
+  /// 每次 `send` 加一。一批只答读库之前要的（`Waiter.asked <= readAt`）：之后要的，这一批读到的可能早于它要的那一版。
+  private var asks = 0
+  /// 谁还在等哪几条（各在哪条通道），只记在这里。停下时随这一代结束一起答。
   private var waiters: [Waiter] = []
   private struct Waiter {
     let asked: Int
-    var remaining: Set<String>
+    var remaining: [String: Lane]
     var received = true
     let answer = Promise<Bool>()
   }
-  private var urgentRuns: [Int: Task<Void, Never>] = [:]
-  private var nextRun = 0
-  /// 一批太大（`limitExceeded`）就减半；之后连着 `regrowAfter` 批整批收下再翻倍，回到 CloudKit 的上限为止：太大的多半是那几条大记录，它们传走了批量该回来。
-  private var limit = CloudKitLimits.recordsPerRequest
-  private var acceptedInARow = 0
-  static let regrowAfter = 4
+  private var prepared = false
+  private var preparing: Task<Bool, Never>?
   private var busy = false
   private let generation: SyncGeneration
   private var stopped: Bool { generation.isOver }
 
   init(
     uploader: any RecordUploader, coordinator: SyncCoordinator, generation: SyncGeneration = SyncGeneration(),
-    prepare: @escaping @Sendable () async throws -> Void = {}, step: @escaping @Sendable (Step) async -> Void = { _ in }
+    prepare: @escaping @Sendable () async throws -> Void = {}
   ) {
     self.uploader = uploader
     self.coordinator = coordinator
     self.generation = generation
     self.prepare = prepare
-    self.step = step
-    (triggers, trigger) = AsyncStream.makeStream(bufferingPolicy: .bufferingNewest(1))
   }
 
   func start() async {
@@ -71,22 +86,15 @@ actor RecordSender {
     guard !stopped else { return }  // 订阅期间停下了
     let due = coordinator.retryDue.stream()
     tasks = [
-      Task { [triggers] in for await _ in triggers { await self.round() } },
-      Task { [trigger] in
-        for await change in changes {
-          await self.hurry(change.urgent, in: change.tables)
-          trigger.yield()
-        }
-      },
-      Task { for await _ in due { self.resume() } },
+      Task { for await change in changes { self.changed(change) } },
+      Task { for await _ in due { await self.resume() } },
     ]
-    await hurry(nil, in: Set(Table.synced))  // 上一次没传完的（退出、换账号前写下的）照样马上传
-    kick()
+    kick()  // 上一次没传完的照常发：没人在等，照常退避
   }
 
   func stop() async {
     generation.end()
-    let running = tasks + Array(urgentRuns.values)
+    let running = tasks + Array(expresses.values) + lanes.values.flatMap { [$0.running, $0.gathering].compactMap(\.self) }
     let preparation = preparing
     tasks = []
     preparation?.cancel()
@@ -97,145 +105,153 @@ actor RecordSender {
 
   /// 不等；守着重试的时刻。
   func kick() {
-    guard !stopped else { return }
-    explicit = true
-    trigger.yield()
+    for lane in Lane.allCases { trigger(lane) }
   }
 
-  /// 现在发一轮并等它结束，连同在路上的马上传：越过连不上与被拒的等待试一次，服务器要求的等待照守。
+  /// 现在发一轮并等它结束：越过连不上与被拒的等待试一次，服务器要求的等待照守。
   /// 挂住的请求至多到 CloudKit 的超时（`RequestLimits.request`），在系统给的后台时间之内。
   func flush() async {
-    guard !stopped else { return }
-    let sending = Array(urgentRuns.values)
-    let done = Promise<Void>()
-    flushes.append(done)
-    urgentRound = true
-    kick()
-    try? await generation.value(of: done, cancellable: false)
-    for run in sending { await run.value }
+    for lane in Lane.allCases { trigger(lane, urgent: true) }
+    let express = Array(expresses.values)
+    for lane in Lane.allCases { await lanes[lane]?.running?.value }
+    for task in express { await task.value }
   }
 
-  /// 马上传这几条：不进攒批窗口，不等后台那批，等到它们都有了结果（全收下为 true；离线等没传成的为 false，之后照常重试，且优先；空集当场 true）。
+  /// 马上传这几条：不进攒批窗口，等到它们都有了结果（全收下为 true；离线等没传成的为 false，之后照常重试；已不是待推送的当场 true）。
   /// 收下指服务器收下的不早于此刻库里的这一版。
   /// 调用方被取消也不提前返回（`cancellable: false`，等的是多方共用的那次上传），最长到 CloudKit 的请求超时：不要在任务组里拿它跟到点比快，
   /// 输的一方等不了，组返回不了。要设时限就用 `abandonable` 包住它，或照 `DiagnosticOutbox.reconcile(within:)`：事件流加一个定时 Task，谁先 yield 谁赢。
   func send(_ names: Set<String>) async -> Bool {
     guard !names.isEmpty else { return true }
     guard !stopped else { return false }
-    urgent.formUnion(names)
+    var remaining: [String: Lane] = [:]
+    do {
+      for lane in Lane.allCases {
+        let pending = try await coordinator.store.pendingSync(among: names, in: lane.tables)
+        for name in pending.saves.map(\.id) + pending.deletes { remaining[name] = lane }
+      }
+    } catch { return false }
+    guard !remaining.isEmpty else { return true }  // 读在要之后：要的那一版服务器已有
+    guard !stopped else { return false }
     asks += 1
-    let waiter = Waiter(asked: asks, remaining: names)
+    let waiter = Waiter(asked: asks, remaining: remaining)
     waiters.append(waiter)
-    runUrgent()
+    for lane in Set(waiter.remaining.values) { express(lane) }
     return (try? await generation.value(of: waiter.answer, cancellable: false)) ?? false
   }
 
-  /// 提交里要马上传的（`Table.urgent`）就马上传；别的进程写的（命令行里 Cue 的工具）从库里认。
-  private func hurry(_ known: Set<String>?, in tables: Set<Table>) async {
-    var names = known ?? []
-    if known == nil {
-      do { names = try await coordinator.store.pendingUrgent(in: tables) } catch {
-        SyncCoordinator.syncLog.error("读不出要马上传的，留给后台那一路：\(error.brief, privacy: .public)")
+  /// 只改同步元数据的提交（碰了 `syncRecords`）说不清是哪条通道的，两条都叫。
+  private func changed(_ change: SyncChange) {
+    for lane in Lane.allCases where change.tables.contains(.syncRecords) || !change.tables.isDisjoint(with: lane.tables) {
+      if change.urgent, lane == .live { express(lane) } else { trigger(lane, gather: true) }
+    }
+  }
+
+  /// 有话在等先只发实时通道，跑完再发后台：断网时每次重试只一个请求。
+  private func resume() async {
+    trigger(.live)
+    await lanes[.live]?.running?.value
+    trigger(.bulk)
+  }
+
+  /// 叫这条通道跑一轮（`gather`：等攒批窗口），挑全部待推送；`urgent`（`flush`）越过连不上与被拒的等待。
+  private func trigger(_ lane: Lane, gather: Bool = false, urgent: Bool = false) {
+    guard !stopped, var state = lanes[lane] else { return }
+    defer { lanes[lane] = state }
+    if urgent { state.urgent = true }
+    if state.running != nil {
+      state.again = true
+    } else if !gather {
+      state.gathering?.cancel()
+      state.gathering = nil
+      state.running = run(lane)
+    } else if state.gathering == nil {
+      state.gathering = Task {
+        try? await Task.sleep(for: Self.gatherWindow)
+        guard !Task.isCancelled else { return }
+        self.gathered(lane)
       }
     }
-    guard !names.isEmpty else { return }
-    Task { _ = await send(names) }
   }
 
-  @discardableResult
-  private func runUrgent() -> Task<Void, Never> {
-    guard !stopped else { return Task {} }
-    let id = nextRun
-    nextRun += 1
-    let run = Task {
-      await sendUrgent()
-      urgentRuns[id] = nil
-    }
-    urgentRuns[id] = run
-    return run
+  private func gathered(_ lane: Lane) {
+    lanes[lane]?.gathering = nil
+    trigger(lane)
   }
 
-  private func round() async {
-    if !explicit {
-      try? await Task.sleep(for: Self.gatherWindow)  // 提交触发：同一阵子的写入合成一批
+  private func run(_ lane: Lane) -> Task<Void, Never> {
+    Task {
+      repeat {
+        lanes[lane]?.again = false
+        await round(lane)
+      } while lanes[lane]?.again == true && !stopped
+      lanes[lane]?.running = nil
     }
-    guard !stopped else { return }
-    let urgent = urgentRound
-    (explicit, urgentRound) = (false, false)
-    let waiting = flushes
-    flushes = []
-    defer { waiting.forEach { $0.resolve(.success(())) } }
-    guard await coordinator.admits(.upload(urgent: urgent)), await coordinator.canSync, await ready() else { return }
+  }
+
+  private func round(_ lane: Lane) async {
+    let urgent = lanes[lane]?.urgent == true
+    lanes[lane]?.urgent = false
     for _ in 0..<Self.batchesPerRound {
-      guard !stopped, await coordinator.admits(.upload(urgent: urgent)) else { return }  // 另一路这期间被要求等了
-      // 准备不了（停下了、读库出错）由协调器记下状态，下一次触发再来
-      let readAt = asks
-      guard var batch = try? await coordinator.nextBatch(.pending(excluding: inFlight), limit: limit) else { return }
-      await step(.picked)
-      batch.drop(inFlight)  // 挑的时候马上传那一路占下的
-      guard !batch.isEmpty else { return }
-      guard await upload(batch, readAt: readAt) else { return }
+      guard await sendBatch(lane, urgent: urgent) else { return }
     }
-    kick()  // 一轮的批数用完，还有没发完的
+    lanes[lane]?.again = true  // 一轮的批数用完，还有没发完的
   }
 
-  /// 马上传那一路：只发在等的这几条里不在路上的；在路上的等那一批的结果。已不是待推送的答收下了，这一版传不上去的答没传成、不再追；
-  /// 一批装不下的这一批收下后接着发，这一批没成就一起答没传成（仍在 `urgent` 里，重试时先发）。
-  private func sendUrgent() async {
-    let wanted = waited.union(urgent).subtracting(inFlight)
-    guard !stopped, !wanted.isEmpty else { return }
-    guard await coordinator.admits(.upload(urgent: true)), await coordinator.canSync, await ready() else {
-      return answer(wanted, received: [], readAt: asks)
+  /// 要马上传的（这次运行里刚写下的、`send` 在等的）：不等攒批窗口、不等这一轮在路上的那批，另发一批（`express`），
+  /// 只挑一写下就该传的版本与在等的，越过连不上与被拒的等待；其余的（领取、会话进展这些不急的版本，装不下的）照常等窗口，有人在等就接着发。
+  private func express(_ lane: Lane) {
+    guard !stopped else { return }
+    let id = nextExpress
+    nextExpress += 1
+    expresses[id] = Task {
+      _ = await sendBatch(lane, urgent: true, urgentOnly: true)
+      expresses[id] = nil
+      trigger(lane, gather: !waiters.contains { $0.remaining.values.contains(lane) })
     }
-    await step(.reserving)
-    let reserved = wanted.subtracting(inFlight)  // 等的时候后台那一路可能已带走
+  }
+
+  /// 挑一批、发；返回能不能接着发下一批。
+  private func sendBatch(_ lane: Lane, urgent asked: Bool, urgentOnly: Bool = false) async -> Bool {
+    let wanted = Set(waiters.flatMap { $0.remaining.filter { $0.value == lane }.keys })
     let readAt = asks
-    inFlight.formUnion(reserved)
-    guard let batch = try? await coordinator.nextBatch(.only(reserved), limit: limit) else {  // 准备不了：之后照常重试
-      answer(reserved, received: [], readAt: readAt)
-      return release(reserved)
+    // 发不了（被等待挡下、停下了、读库出错，协调器已记下）：在等的答没传成，下一次触发再来
+    guard !stopped, await coordinator.admits(.upload(urgent: asked || !wanted.isEmpty)), await coordinator.canSync, await ready(),
+      var batch = try? await coordinator.nextBatch(
+        lane, limit: lanes[lane]?.limit ?? lane.limit, urgentOnly: urgentOnly, wanted: wanted, excluding: lanes[lane]?.inFlight ?? [])
+    else {
+      answer(lane, readAt: readAt) { _ in false }
+      return false
     }
-    let settled = reserved.subtracting(batch.names).subtracting(batch.stuck).subtracting(batch.left)  // 已不是待推送（别的批已收下、删掉了）
-    answer(settled, received: settled, readAt: readAt)
-    answer(batch.stuck, received: [], readAt: readAt)
-    urgent.subtract(batch.stuck)
-    guard !batch.isEmpty, !stopped else {
-      answer(batch.names, received: [], readAt: readAt)
-      return release(reserved)
+    // 挑的期间另一批占下的留给那一批：同一条记录同一时刻只一版在路上
+    let taken = batch.names.intersection(lanes[lane]?.inFlight ?? [])
+    batch.drop(taken)
+    batch.left.formUnion(taken)
+    // 已不是待推送的（别的批已收下、删掉了）答收下，这一版传不上去的答没传成，装不下与在路上的接着等
+    answer(lane, readAt: readAt) { batch.names.contains($0) || batch.left.contains($0) ? nil : !batch.stuck.contains($0) }
+    guard !batch.isEmpty else { return false }
+    guard await upload(lane, batch, readAt: readAt) else {
+      let inFlight = lanes[lane]?.inFlight ?? []
+      answer(lane, readAt: readAt) { batch.left.contains($0) && !inFlight.contains($0) ? false : nil }
+      return false
     }
-    release(reserved.subtracting(batch.names).subtracting(batch.left))
-    let sent = await upload(batch, readAt: readAt)
-    trigger.yield()  // 在路上时又改过的，后台那一路接着发
-    if !sent { answer(batch.left, received: [], readAt: readAt) }
-    release(batch.left)  // 这一批收下了，装不下的接着发
+    return true
   }
 
   /// 发一批；返回能不能接着发下一批。`readAt`：这一批读库之前的 `asks`。
-  private func upload(_ batch: OutgoingBatch, readAt: Int) async -> Bool {
-    let names = batch.names
-    inFlight.formUnion(names)
+  private func upload(_ lane: Lane, _ prepared: OutgoingBatch, readAt: Int) async -> Bool {
+    lanes[lane]?.inFlight.formUnion(prepared.names)
     await updateBusy()
-    let next = await outcome(of: batch, readAt: readAt)
-    release(names)
+    let next = await outcome(lane, prepared, readAt: readAt)
+    lanes[lane]?.inFlight.subtract(prepared.names)
     await updateBusy()
     return next
   }
 
-  /// 还有人在等的记录名。测试读它控制先后。
-  var waited: Set<String> { waiters.reduce(into: []) { $0.formUnion($1.remaining) } }
-
-  /// 这几条离开 `inFlight`：还有人在等的（读库之后才要的、核对时已作废的、这一批没带上的）补发一趟，读库在那之后，答得了它们。
-  /// 补发的那一趟挑不到在路上的，所以只在离开时补：在路上时补，就没人再发，在等的要等到这条记录下次被改。
-  private func release(_ names: Set<String>) {
-    inFlight.subtract(names)
-    guard waiters.contains(where: { !$0.remaining.isDisjoint(with: names) }) else { return }
-    runUrgent()
-  }
-
-  private func outcome(of prepared: OutgoingBatch, readAt: Int) async -> Bool {
+  private func outcome(_ lane: Lane, _ prepared: OutgoingBatch, readAt: Int) async -> Bool {
     var names = prepared.names
     do {
-      let (batch, _) = try await coordinator.reserveForUpload(prepared)  // 作废的仍有人等就由 `release` 补发
+      let (batch, _) = try await coordinator.reserveForUpload(prepared)  // 作废的仍有人等，下一批读库时答
       names = batch.names
       guard !batch.isEmpty else { return true }
       var sent: SentRecords
@@ -247,8 +263,8 @@ actor RecordSender {
       }
       let outcome = await coordinator.sent(sent, for: batch)
       let received = Set(sent.saved.map(\.recordID.recordName) + sent.deleted.map(\.recordName))
-      answer(names, received: received, readAt: readAt)
-      if received.count == names.count { regrow() } else { acceptedInARow = 0 }
+      answer(lane, readAt: readAt) { names.contains($0) ? received.contains($0) : nil }
+      if received.count == names.count { regrow(lane) } else { lanes[lane]?.acceptedInARow = 0 }
       if outcome.paused { return false }  // 协调器停下了（等你决定、要更新）：结果没记账，也不定重试时刻
       if outcome.zoneMissing { try await uploader.saveZone() }
       if let fault = outcome.fault {
@@ -261,13 +277,13 @@ actor RecordSender {
       }
       await coordinator.progressed()
       return true
-    } catch let error as CKError where error.code == .limitExceeded && limit > 1 {
-      limit /= 2  // 这一批太大：减半再试（马上传那一路的由后台那一路接着发）
-      acceptedInARow = 0
-      answer(names, received: [], readAt: readAt)
+    } catch let error as CKError where error.code == .limitExceeded && (lanes[lane]?.limit ?? 1) > 1 {
+      lanes[lane]?.limit /= 2  // 这一批太大：减半再试
+      lanes[lane]?.acceptedInARow = 0
+      answer(lane, readAt: readAt) { names.contains($0) ? false : nil }
       return true
     } catch {
-      answer(names, received: [], readAt: readAt)
+      answer(lane, readAt: readAt) { names.contains($0) ? false : nil }
       if stopped { return false }  // 停下时被取消的请求不是同步的失败，不记
       if let error = error as? CKError, error.code == .userDeletedZone {
         await coordinator.zoneMissing(deletedByUser: true)
@@ -278,12 +294,14 @@ actor RecordSender {
     }
   }
 
-  private func regrow() {
-    guard limit < CloudKitLimits.recordsPerRequest else { return }
-    acceptedInARow += 1
-    guard acceptedInARow >= Self.regrowAfter else { return }
-    limit = min(limit * 2, CloudKitLimits.recordsPerRequest)
-    acceptedInARow = 0
+  private func regrow(_ lane: Lane) {
+    guard var state = lanes[lane], state.limit < lane.limit else { return }
+    state.acceptedInARow += 1
+    if state.acceptedInARow >= Self.regrowAfter {
+      state.limit = min(state.limit * 2, lane.limit)
+      state.acceptedInARow = 0
+    }
+    lanes[lane] = state
   }
 
   /// 上传前对一次最低对端版本，成功为止（同一时刻只对一次）；停下的不再对。文件那一路（`FileSender`）同样等它。
@@ -309,44 +327,37 @@ actor RecordSender {
   }
 
   private func schedule(_ fault: SyncFault) async {
-    await coordinator.hold(fault, waiting: !urgent.isEmpty)
-  }
-
-  /// 有话在等先只发它们，成了再发后台那一轮：断网时每次重试只一个请求。
-  private func resume() {
-    guard !stopped else { return }
-    guard !urgent.isEmpty else { return kick() }
-    let run = runUrgent()
-    Task {
-      await run.value
-      kick()
-    }
+    await coordinator.hold(fault, waiting: !waiters.isEmpty)
   }
 
   private func updateBusy() async {
-    let now = !inFlight.isEmpty
+    let now = lanes.values.contains { !$0.inFlight.isEmpty }
     guard now != busy else { return }
     busy = now
     await coordinator.setSending(now)
   }
 
-  private func answer(_ names: Set<String>, received: Set<String>, readAt: Int) {
+  /// 读库在 `readAt` 之后才要的不答；`verdict` 对这条通道里在等的每一条给出收下（true）、没传成（false）或接着等（nil）。
+  private func answer(_ lane: Lane, readAt: Int, _ verdict: (String) -> Bool?) {
     var rest: [Waiter] = []
     for var waiter in waiters {
-      let hit = waiter.asked <= readAt ? waiter.remaining.intersection(names) : []
-      waiter.received = waiter.received && hit.isSubset(of: received)
-      waiter.remaining.subtract(hit)
+      if waiter.asked <= readAt {
+        for (name, at) in waiter.remaining where at == lane {
+          guard let received = verdict(name) else { continue }
+          waiter.received = waiter.received && received
+          waiter.remaining[name] = nil
+        }
+      }
       if waiter.remaining.isEmpty { waiter.answer.resolve(.success(waiter.received)) } else { rest.append(waiter) }
     }
     waiters = rest
-    urgent.subtract(names.intersection(received).subtracting(waited))
   }
 }
 
 extension OutgoingBatch {
   var isEmpty: Bool { saves.isEmpty && deletes.isEmpty }
 
-  /// 另一批已带走的去掉后，这批就不再是"全部"。
+  /// 作废的去掉后，这批就不再是"全部"。
   mutating func drop(_ names: Set<String>) {
     guard !names.isDisjoint(with: self.names) else { return }
     saves.removeAll { names.contains($0.recordID.recordName) }
