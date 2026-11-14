@@ -1,15 +1,80 @@
 import Foundation
 
 extension CueStore {
-  /// 消息上云后，窗口内仍保留未决关联的原请求；七天上限沿用完成时间，不因重启或同步续期。
-  /// 到期只清请求，不把缺卡解释成删除，也不伪造关联兑现。
-  func removeUploadedDeliveries(among ids: Set<UUID>) throws {
-    guard !ids.isEmpty else { return }
-    let requests = try select(DeliveryRequest.self, where: """
-      mode = 'send' AND status = 'succeeded' AND id IN (SELECT value FROM json_each(?))
-        AND \(Self.deliveryMessageUploaded)
-      """, [Self.idList(ids)])
-    try removeDeliveries(requests, completedBefore: timing.now().addingTimeInterval(-DeliveryExecutor.keptRetention))
+  /// 要等人或等证据的请求留多久（`removableAt`），与对话的保留期一样是 7 天；其余留 `DeliveryExecutor.retention`。
+  static let keptRetention: TimeInterval = 7 * 86_400
+
+  /// 删掉到了保留期的投送请求（`removableAt`），返回下一条到期的时刻，没有为 nil。
+  /// 哪台设备都可以跑：执行的 Mac 按返回的时刻排下一轮（`DeliveryExecutor`），手机在启动时跑一次，发往再也不上线的 Mac 的请求由它清掉。
+  /// `now` 是调用方的钟（执行器排清理用的那一个），缺省是库的。
+  @discardableResult
+  public func deleteExpiredDeliveries(at now: Date? = nil) throws -> Date? {
+    try write { try removeExpiredDeliveries(among: nil, at: now ?? timing.now()) }
+  }
+
+  /// `among` 只看这几条（发出的话的消息刚上了服务器，`markPushed`）。必须在写事务内调用。
+  @discardableResult
+  func removeExpiredDeliveries(among ids: Set<UUID>?, at now: Date) throws -> Date? {
+    if ids?.isEmpty == true { return nil }
+    let requests = if let ids {
+      try select(DeliveryRequest.self, where: "id IN (SELECT value FROM json_each(?))", [Self.idList(ids)])
+    } else {
+      try select(DeliveryRequest.self)
+    }
+    var removable: [UUID] = [], next: Date?
+    for request in requests {
+      guard let at = try removableAt(request) else { continue }
+      if at <= now { removable.append(request.id) } else { next = min(next ?? at, at) }
+    }
+    if !removable.isEmpty { try db.run("DELETE FROM deliveryRequests WHERE id IN (SELECT value FROM json_each(?))", [Self.idList(removable)]) }
+    return next
+  }
+
+  /// 投送请求什么时候可以删，只此一处；nil 是没有时间上限（不认识的状态）。都从记录上的时刻算，不因重启或同步续期，超窗只删请求、不改关联修订。
+  /// - 没人领的：派发期限再过 7 天（执行的 Mac 那时早已不会领取它，钟差也远小于这段）；领了没收尾的：执行期限再过 7 天（那台 Mac 再没回来）。
+  /// - 发出的话：消息上了服务器、原关联已解决就收走（之前由消息接替气泡），否则留 7 天；撤回、没能送达的话、没开成的会话、未确认的、Cue 的失败请求留 7 天：等重发、正证据对账、Cue 来看（`cueChanges`）。
+  /// - 开成的会话：等认领（`claimLaunchedCards`）与原关联最多一个派发阶段；没在等的一个保留期。其余一个保留期。
+  private func removableAt(_ request: DeliveryRequest) throws -> Date? {
+    guard let status = request.status.known else { return nil }
+    let kept = Self.keptRetention, short = DeliveryExecutor.retention.seconds
+    switch status {
+    case .pending, .preparing: return request.dispatchDeadline?.addingTimeInterval(kept)
+    case .executing, .confirming: return request.deadlineAt?.addingTimeInterval(kept)
+    case .succeeded, .failed, .unconfirmed: break
+    }
+    guard let completed = request.completedAt else { return nil }
+    let mode = request.mode.known, origin = request.origin
+    switch status {
+    case .unconfirmed: return completed.addingTimeInterval(kept)
+    case .failed:
+      let keep = mode == .send || mode == .withdraw || mode == .start || origin == .known(.cue)
+      return completed.addingTimeInterval(keep ? kept : short)
+    default: break
+    }
+    switch mode {
+    case .send:
+      if try messageUploaded(request.id), try sessionBindingDisposition(request) == .settled { return completed }
+      return completed.addingTimeInterval(kept)
+    case .withdraw: return completed.addingTimeInterval(kept)
+    case .start:
+      if try !awaitsClaim(request), try sessionBindingDisposition(request) == .settled { return completed.addingTimeInterval(short) }
+      return completed.addingTimeInterval(DeliveryRequest.phaseLimit)
+    default: return completed.addingTimeInterval(short)
+    }
+  }
+
+  private func messageUploaded(_ id: UUID) throws -> Bool {
+    try db.first("""
+      SELECT 1 FROM piMessages m JOIN syncRecords s ON s.recordName = m.id WHERE m.deliveryID = ? AND s.pushedModifiedAt IS NOT NULL
+      """, [id]) { _ in true } ?? false
+  }
+
+  /// 带着灵感或任务开成的会话，是这件事最新的一次交接、会话记录还没带着它的认领标识到。
+  private func awaitsClaim(_ request: DeliveryRequest) throws -> Bool {
+    guard request.cardID != nil else { return false }
+    return try db.first("""
+      SELECT 1 FROM deliveryRequests WHERE id = ? AND \(Self.latestHandoff("deliveryRequests")) AND \(Self.launchUnclaimed)
+      """, [request.id]) { _ in true } ?? false
   }
 
   /// 永久删除原卡同时解除请求的关联引用；删除事实无需另存，后续回执只记送达。
@@ -19,21 +84,5 @@ extension CueStore {
       UPDATE deliveryRequests SET cardID = NULL, sessionBindingRevision = NULL, modifiedAt = ?
       WHERE cardID IN (SELECT value FROM json_each(?))
       """, [Date.stamp, Self.idList(cards)])
-  }
-
-  static let deliveryMessageUploaded = """
-    EXISTS (SELECT 1 FROM piMessages m JOIN syncRecords s ON s.recordName = m.id
-      WHERE m.deliveryID = deliveryRequests.id AND s.pushedModifiedAt IS NOT NULL)
-    """
-
-  /// 展示条件由调用方筛选；关联资格只在窗口内阻止清理，达到原保留上限无条件释放。
-  func removeDeliveries(_ requests: [DeliveryRequest], completedBefore cutoff: Date) throws {
-    let removable = try requests.filter { request in
-      guard request.status == .known(.succeeded), [.known(.send), .known(.command), .known(.start)].contains(request.mode) else { return true }
-      if let completed = request.completedAt, completed < cutoff { return true }
-      return try sessionBindingDisposition(request) == .settled
-    }
-    guard !removable.isEmpty else { return }
-    try db.run("DELETE FROM deliveryRequests WHERE id IN (SELECT value FROM json_each(?))", [Self.idList(removable.map(\.id))])
   }
 }

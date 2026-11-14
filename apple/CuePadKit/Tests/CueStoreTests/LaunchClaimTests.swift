@@ -49,8 +49,9 @@ import Testing
     try await StateRecorder(store: store, hostID: "mac-a").update(sessionID: "s-late", state: .thinking, title: "圆桌", launchToken: "t-late")
     #expect(try await store.card(idea.id)?.piSessionID == "s-late")
 
-    try await clock.waitForSleeper(until: clock.now.addingTimeInterval(DeliveryExecutor.retention.seconds))
-    clock.advance(DeliveryExecutor.retention + .seconds(1))
+    // 开成的会话等认领最多一个派发阶段，到点照样收走
+    try await clock.waitForSleeper()
+    clock.advance(.seconds(DeliveryRequest.phaseLimit))
     _ = try await eventually(store, { try $0.deliveryRequest(launch.id) }) { $0 == nil }
     await executor.stop()
   }

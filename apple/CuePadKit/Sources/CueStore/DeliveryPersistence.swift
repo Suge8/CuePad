@@ -169,36 +169,4 @@ extension CueStore {
     try select(DeliveryRequest.self, where: "hostID = ? AND status IN (\(DeliveryStatus.claimedSQL))", [host])
   }
 
-  /// 删除完成时间早于 `cutoff` 的请求；返回还剩什么：`transient` 是按保留期清的还有（下一轮一个保留期后），`oldestKept` 是留到 7 天的里最早完成的那条（下一轮等它到期）。
-  /// 认领靠请求留着：带着灵感或任务、已成功的开新会话请求在被认领前留着（`claimLaunchedCards`），有可靠修订的原关联未决同样等到 `claimCutoff`。发出的话不按普通保留期清：消息上云且原关联已解决才提前收走（`markPushed`），否则等到 `keptCutoff`；没能送达、没能开成的留着等用户重发或移除；结果未确认的留着等正证据对账；Cue 发起的失败请求留着给 Cue 看（`cueChanges`）。
-  /// 成功请求的关联等待有界：send 七天、command 六十秒、start 六百秒，均从完成时间算，不续期；超窗只删除请求，不改关联修订。
-  func deleteCompletedDeliveries(before cutoff: Date, claimCutoff: Date, keptCutoff: Date) throws -> (transient: Bool, oldestKept: Date?) {
-    let done = "status IN ('\(DeliveryStatus.succeeded.rawValue)', '\(DeliveryStatus.failed.rawValue)', '\(DeliveryStatus.unconfirmed.rawValue)')"
-    let kept = """
-      completedAt >= ?3 AND (mode IN ('send', 'withdraw') OR (mode = 'start' AND status = '\(DeliveryStatus.failed.rawValue)') OR status = '\(DeliveryStatus.unconfirmed.rawValue)' OR (status = '\(DeliveryStatus.failed.rawValue)' AND origin IS '\(DeliveryOrigin.cue.rawValue)'))
-      """
-    let awaitingClaim = """
-      mode = 'start' AND status = '\(DeliveryStatus.succeeded.rawValue)' AND cardID IS NOT NULL AND completedAt >= ?2
-        AND \(Self.latestHandoff("deliveryRequests")) AND \(Self.launchUnclaimed)
-      """
-    let arguments: [any SQLBindable] = [cutoff, claimCutoff, keptCutoff]
-    return try write {
-      let expired = try select(DeliveryRequest.self,
-        where: """
-          \(done) AND ((completedAt < ?1 AND NOT (\(awaitingClaim)) AND NOT (\(kept)))
-            OR (mode = 'send' AND status = 'succeeded' AND \(Self.deliveryMessageUploaded)))
-          """, arguments)
-      for (mode, requests) in Dictionary(grouping: expired, by: \.mode) {
-        let bindingCutoff = switch mode {
-        case .known(.send): keptCutoff
-        case .known(.start): claimCutoff
-        default: cutoff
-        }
-        try removeDeliveries(requests, completedBefore: bindingCutoff)
-      }
-      let transient = try db.first("SELECT 1 FROM deliveryRequests WHERE \(done) AND NOT (\(kept))", arguments) { _ in true } != nil
-      let oldestKept = try db.first("SELECT MIN(completedAt) FROM deliveryRequests WHERE \(done) AND (\(kept))", arguments) { $0.dateOrNil(0) } ?? nil
-      return (transient, oldestKept)
-    }
-  }
 }

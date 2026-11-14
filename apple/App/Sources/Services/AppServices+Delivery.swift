@@ -39,6 +39,15 @@ extension AppServices {
         guard result.status == .known(.succeeded) else { throw SendError.alreadyHanded }
     }
 
+    /// 发往再也不上线的 Mac 的请求只有别的设备清得掉（`CueStore.deleteExpiredDeliveries`）；Mac 的执行器自己排着清，手机在启动时清一次。
+    func startDeliveryCleanup() {
+        follow { [store] in
+            do { try await store.deleteExpiredDeliveries() } catch {
+                Self.log.error("到期的投送请求没能清掉：\(error.localizedDescription, privacy: .public)")
+            }
+        }
+    }
+
     /// 写出请求、等那台办完；从写之前起 `Speech.receiptLimit` 内没结果抛 `onTimeout`。
     func awaitOutcome(onTimeout: SendError, _ write: () async throws -> DeliveryRequest) async throws -> DeliveryRequest {
         let deadline = timing.now().addingTimeInterval(Speech.receiptLimit)

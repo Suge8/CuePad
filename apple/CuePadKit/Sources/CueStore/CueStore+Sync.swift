@@ -270,7 +270,7 @@ extension CueStore {
     }
   }
 
-  /// 你发出的话的那条消息（带请求标识，`ChatMessage.deliveryID`）上了服务器，同一事务核对关联资格后收走投送请求（`removeUploadedDeliveries`）；窗口内原卡未到时保留。
+  /// 你发出的话的那条消息（带请求标识，`ChatMessage.deliveryID`）上了服务器，同一事务按保留规则收走投送请求（`removeExpiredDeliveries`）；窗口内原卡未到时保留。
   /// 不在写对话时收：请求的删除随回执马上传，消息走后台通道、要等攒批窗口与前面的批次，别的设备会先收到删除、气泡就空着。
   /// 服务器上删除排在消息之后，拉到删除时消息已经在了。
   /// `serverAt` 是服务器收下它的时刻（上传回执里那条记录的 creationDate）：投送请求记进本机列 `DeliveryRequest.serverAt`，同拉到时（`RemoteChange.save`）。
@@ -290,7 +290,7 @@ extension CueStore {
       }
       let deliveries = try db.query(
         "SELECT deliveryID FROM piMessages WHERE id IN (SELECT value FROM json_each(?)) AND deliveryID IS NOT NULL", [messages]) { $0.uuid(0) }
-      try removeUploadedDeliveries(among: Set(deliveries))
+      try removeExpiredDeliveries(among: Set(deliveries), at: timing.now())
     }
   }
 

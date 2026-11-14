@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-/// Mac 端的投送执行器：只领取发给本机的请求，一次一个、按创建顺序，经 `handler` 交给 App 层真正执行，把结果写回请求。完成的请求保留 `retention` 后清理，保留规则见 `deleteCompletedDeliveries`。
+/// Mac 端的投送执行器：只领取发给本机的请求，一次一个、按创建顺序，经 `handler` 交给 App 层真正执行，把结果写回请求。到了保留期的请求按 `CueStore.deleteExpiredDeliveries` 排着清理。
 /// - 派发期限从服务器收下它起算（`DeliveryRequest.dispatchDeadline`）：到期还没领取的按失败写回，Mac 离线太久后不再突然发出旧内容；
 /// - 缺前提时在旁边等，与派发期限赛跑，不占执行队列：引用的附件不在本机就取，现有会话没就绪就转准备（`preparing`）等它；取不来、到期都按失败写回；
 /// - 每次领取只交给 handler 一次；任何执行后未知都留待正证据对账，不在领取内重试；
@@ -83,7 +83,7 @@ public actor DeliveryExecutor {
         await finish(request, outcome, resuming: true)
       }
       guard started, !Task.isCancelled else { return }
-      let next = try await deleteExpired()
+      let next = try await store.deleteExpiredDeliveries(at: timing.now())
       guard started, !Task.isCancelled else { return }
       if let next { scheduleCleanup(at: next) }
       roles.put(.expiry, .spawn { [store, hostID, onIssue] _ in

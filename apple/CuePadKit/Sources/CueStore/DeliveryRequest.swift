@@ -4,7 +4,7 @@ import Foundation
 /// 状态机（只有执行的 Mac 推进阶段；别的设备只写 pending、写撤回请求、删自己没传上去的）：
 /// pending →（领取）executing |（等现有会话）preparing |（到期、放弃、不认识、取不到附件）not_delivered |（撤回）删除；
 /// preparing → pending 同样的出路（就绪后再领取）；executing → succeeded | not_delivered | unconfirmed | confirming；
-/// confirming → succeeded | unconfirmed；unconfirmed →（真实消息）succeeded；收尾的按保留期删（`deleteCompletedDeliveries`）。
+/// confirming → succeeded | unconfirmed；unconfirmed →（真实消息）succeeded；收尾的与派发、执行期限过了 7 天还没收尾的按保留期删（`CueStore.removableAt`）。
 /// 未领取（`waiting`）的 `handledBy` 为空，领取后（`claimed`）是执行的 Mac。
 public enum DeliveryStatus: String, Sendable, CaseIterable {
   case pending, executing
