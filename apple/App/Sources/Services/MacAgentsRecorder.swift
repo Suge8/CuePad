@@ -13,15 +13,13 @@ import SystemConfiguration
 @MainActor
 final class MacAgentsRecorder {
     private let store: CueStore
-    private let sync: (any SyncControlling)?
     private let host: String
     private let agents: AgentIntegrations
     private var latest: Task<MacAgents, any Error>?
     private var probed: [AgentKind: AgentStatus]?
 
-    init(store: CueStore, sync: (any SyncControlling)?, host: String, agents: AgentIntegrations) {
+    init(store: CueStore, host: String, agents: AgentIntegrations) {
         self.store = store
-        self.sync = sync
         self.host = host
         self.agents = agents
     }
@@ -34,7 +32,8 @@ final class MacAgentsRecorder {
             _ = await before?.result
             if redetecting || !agents.detected { await agents.redetect() }
             probed = agents.statuses
-            let found = await agents.probe()
+            // 能开新会话的几家各起一个进程问，慢；只在这里问，界面读库
+            let found = await agents.integration.probe(agents.statuses)
             let name = SCDynamicStoreCopyComputerName(nil, nil) as String?
             try await store.recordMacAgents(host: host, name: name, found.agents, problems: found.problems)
             return try await store.macAgents(on: host)

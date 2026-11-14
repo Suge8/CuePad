@@ -9,12 +9,13 @@ import OSLog
 /// 同一秒内只发最新一份（APNs timestamp 是秒）；网络慢或失败时不排历史队列。
 /// 可作答的提问先确认 iCloud 收下；每次等待后从库核对当前内容，不把已撤回或回答的旧提问补推回去。
 /// 成功只表示 APNs 收下，不表示已上屏。普通进度用低优先级，免得高频推送耗尽系统预算。
+/// 读库、推送出错都只记日志、按退避再来，跟着 App 一直跑到取消：Mac 上没有别处能告诉你，停下就再也不推了。
 final class ActivityPublisher {
     private let endpoint: URL
     private let session: URLSession
     private var sent: [String: Sent] = [:]
     private var lastAttempt = Date.distantPast
-    private static let log = Logger(subsystem: AppIdentity.id, category: "live-activity")
+    private nonisolated static let log = Logger(subsystem: AppIdentity.id, category: "live-activity")
     private static let requestLimit: TimeInterval = 15
     private static let cadence: TimeInterval = 1
 
@@ -31,21 +32,34 @@ final class ActivityPublisher {
         session = URLSession(configuration: configuration)
     }
 
-    func run(_ services: AppServices) async throws {
+    func run(_ services: AppServices) async {
         defer { session.invalidateAndCancel() }
         let (changes, changed) = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
         let source = CueReading(store: services.store, widget: false)
+        let timing = services.timing
         let reading: @isolated(any) @Sendable () async throws -> Void = {
-            defer { changed.finish() }
-            for try await _ in source.updates() { changed.yield() }
+            var retry = Backoff(first: .seconds(1), cap: Backoff.waitingCap)
+            while true {
+                do {
+                    for try await _ in source.updates() {
+                        retry.reset()
+                        changed.yield()
+                    }
+                    return changed.finish()
+                } catch where !Task.isCancelled {
+                    Self.log.error("实时活动读不出库里的 Cue，退避后重读：\(String(describing: error), privacy: .public)")
+                    try await timing.sleep(retry.next())
+                }
+            }
         }
         let availability: @MainActor @Sendable () async throws -> Void = {
-            for await _ in Observations({ (services.syncing.state.status.reachesMac && services.syncing.knowsSyncedFacts, services.speech) }) { changed.yield() }
+            for await _ in Observations({ (services.knowsActivityState, services.speech) }) { changed.yield() }
         }
         let publishing: @MainActor @Sendable () async throws -> Void = {
             try await self.publish(changes, retrying: changed, services: services)
         }
-        try await withThrowingTaskGroup(of: Void.self) { group in
+        // 子任务只因取消抛出
+        try? await withThrowingTaskGroup(of: Void.self) { group in
             group.addTask(operation: reading)
             group.addTask(operation: publishing)
             group.addTask(operation: availability)
@@ -83,11 +97,9 @@ final class ActivityPublisher {
 
     /// 订阅只负责叫醒；网络返回时订阅重读未必已送到，不以它缓存的那一份证明问题仍有效。
     private func current(_ services: AppServices) throws -> Publication? {
-        guard services.syncing.state.status.reachesMac, services.syncing.knowsSyncedFacts else { return nil }
         let read = try services.store.snapshot { try CueReading.Read.read(from: $0, widget: false) }.value
-        guard let activity = read.activity, activity.publisher == services.hostID else { return nil }
-        let now = AppServices.cueNow(read.digest, at: services.speech, local: CueNow.Local(waiting: nil, here: nil))
-        return Publication(destinations: activity.destinations, state: try ActivityPush.fitted(CueActivityState(now: now)))
+        guard let activity = read.activity, activity.publisher == services.hostID, let state = try services.activityState(read.digest) else { return nil }
+        return Publication(destinations: activity.destinations, state: state)
     }
 
     /// 内容在等待期间前进了就交回合并流，只追最新一份，不在这里循环追赶。
@@ -146,7 +158,7 @@ extension AppServices {
     func startActivityPushes() {
         guard relay != nil else { return }
         let publisher = ActivityPublisher(host: Self.relayHost)
-        follow(reporting: { .widgetDataUnavailable("\($0)") }) { try await publisher.run(self) }
+        follow { await publisher.run(self) }
     }
 }
 #endif

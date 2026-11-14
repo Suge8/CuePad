@@ -11,7 +11,7 @@
 #    所以从生成描述文件到最后一个用它的签名步骤，全机一次一个，锁就是这个目录：signing_begin 让脚本打开它、在上面排队拿锁，signing_end 关掉。
 #    这把锁跟着脚本的描述符传给它起的进程：脚本失败退出时放，脚本被 kill 而 xcodebuild 还在归档时等它也结束才放。
 #    它不受 HOLD_LIMIT 管，排队照样有 LOCK_WAIT 与持有者列表。
-#    用它的：发版与真机（release-*.sh）、独立的 xc.sh provision、读描述文件的 CUEPAD_SIGN=development 构建与 activity-log。公证、上传不用描述文件，不在锁里。
+#    用它的：发版与真机（release-*.sh）、独立的 xc.sh provision、读描述文件的 CUEPAD_SIGN=development 构建。公证、上传不用描述文件，不在锁里。
 # 锁都是 flock，规则 1、2 只由这里的入口进程持有（Python 打开的文件不传给子进程），它退出时内核释放，崩了也不留死锁。持有者把 CUEPAD_SIM=<槽位号，没领为空> 传给子进程，
 # 脚本再调脚本不重复进锁。任务最多跑 HOLD_LIMIT 秒，超了连同它起的全部进程结束，防止卡死的任务一直占着；模拟器准备另受 SIM_PREP_LIMIT 管（它在任务开始前，HOLD_LIMIT 管不到）。
 # 谁拿着锁记在运行目录（app_env.py 的 RUNTIME）的 holders/<PID>.json（同一份登记也记 Mac 实例位、同步测量与发布的锁，_lock.py 头注释）（PID、检出、完整命令行、持有的每把锁与真正拿到它的时刻、在等的锁），入口退出时删掉；

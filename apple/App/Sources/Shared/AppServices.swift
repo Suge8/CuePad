@@ -36,8 +36,8 @@ final class AppServices {
     enum SyncSource {
         case iCloud
         case custom(any SyncControlling)
-        /// 用本机的库建同步：真实的同步代码连替身 iCloud，给测试与调试画面。
-        case built((CueStore) -> any SyncControlling)
+        /// 用本机的库建同步：真实的同步代码连替身 iCloud，给测试与调试画面。给了 `relay`（测试的中转替身）才连门铃。
+        case built((CueStore) -> any SyncControlling, relay: URL? = nil)
     }
 
     @ObservationIgnored let sync: (any SyncControlling)?
@@ -106,7 +106,7 @@ final class AppServices {
     /// 同步表 `macAgents` 的唯一写入口；Cue 启用前也经它问。
     @ObservationIgnored let macAgents: MacAgentsRecorder
     /// 同步表 `agentLibraries` 的唯一写入口，整理与改规则也经它。
-    @ObservationIgnored let library: AgentLibraryKeeper
+    @ObservationIgnored let library: AgentLibraryFiles
     @ObservationIgnored lazy var executor = MacExecutor(
         store: store, bridge: bridge, runtimes: runtimes, hostID: hostID, workspaces: workspaces, recorder: stateRecorder, library: library,
         fetchFile: { [sync] key in try await sync.fetchFile(key) },
@@ -165,11 +165,10 @@ final class AppServices {
         paths = mac.paths
         runtimes = mac.runtimes(store)
         agents = mac.agents
-        macAgents = MacAgentsRecorder(store: store, sync: self.sync, host: mac.hostID, agents: agents)
+        macAgents = MacAgentsRecorder(store: store, host: mac.hostID, agents: agents)
         // 隔离运行时移走的不进系统废纸篓，放在库里
         let trash = location.touchesRealWorld ? nil : AgentLibraryFiles.trash(into: location.directory.appending(path: "Trash", directoryHint: .isDirectory))
-        library = AgentLibraryKeeper(
-            store: store, sync: self.sync, host: mac.hostID, files: AgentLibraryFiles(access: agents.integration.fileAccess, trash: trash))
+        library = AgentLibraryFiles(store: store, host: mac.hostID, access: agents.integration.fileAccess, trash: trash)
         commandLineTool = mac.commandLineTool
         updates = UpdateService(updater: mac.updater, bridge: mac.bridge, runtimes: runtimes)
         historyStore = HistoryPersistence(storage: store, host: mac.hostID)
@@ -200,8 +199,9 @@ final class AppServices {
         let activitySync: (any SyncControlling)? = if case .iCloud = sync, location.touchesRealWorld { self.sync } else { nil }
         viewer = ViewerKeeper(store: store, sync: self.sync, device: UIDevice.current.identifierForVendor?.uuidString)
         if location.touchesRealWorld || DebugHooks.opensLiveActivity {
-            cueActivity = CueLiveActivity.make(store: store, sync: activitySync, location: location) { [weak self] in
-                try self?.remoteActivityState()
+            cueActivity = CueLiveActivity(store: store, sync: activitySync, diagnostics: diagnostics) { [weak self] in
+                guard let self else { return nil }
+                return try self.activityState(try self.store.snapshot { try CueDigest.read(from: $0) }.value)
             }
         }
     }

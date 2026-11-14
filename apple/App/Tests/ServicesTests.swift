@@ -90,7 +90,7 @@ struct AgentLineTests {
         for kind in AgentKind.allCases {
             try await rig.connect(kind, version: versions[kind]!)
             let agents = rig.services.agents
-            lines.append(AgentLine.of(kind, agents.status(kind), writable: agents.isWritable(kind)).1?.visible ?? "")
+            lines.append(AgentLine.of(kind, agents.status(kind), writable: agents.integration.isWritable(kind)).1?.visible ?? "")
         }
 
         #expect(lines == [

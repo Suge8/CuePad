@@ -83,7 +83,7 @@ extension DebugScene {
     static func connectAgents(_ services: AppServices) async {
         await running("接入各家 Agent") {
             for kind in AgentKind.allCases {
-                try FileManager.default.createDirectory(at: services.agents.home(kind), withIntermediateDirectories: true)
+                try FileManager.default.createDirectory(at: services.agents.integration.home(of: kind), withIntermediateDirectories: true)
                 await services.agents.detect(kind)
                 do {
                     try await services.agents.install(kind)

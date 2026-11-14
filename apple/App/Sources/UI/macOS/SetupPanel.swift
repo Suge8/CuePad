@@ -140,7 +140,7 @@ struct SetupPanel: View {
         case .connect:
             let (tone, line) = failures.agents[kind].map { (StatusTone.failure, Dotted($0)) }
                 ?? unusable(kind).map { (StatusTone.notice, Dotted($0)) }
-                ?? AgentLine.of(kind, agents.status(kind), writable: agents.isWritable(kind))
+                ?? AgentLine.of(kind, agents.status(kind), writable: agents.integration.isWritable(kind))
             return (tone, line, working && chosen.contains(kind))
         case .checking: return (.calm, Dotted(String(localized: "检查中…")), true)
         case .install(let failure?): return (.failure, Dotted(AgentLine.notInstalled(failure)), false)

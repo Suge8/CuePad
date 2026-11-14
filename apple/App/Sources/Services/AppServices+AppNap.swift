@@ -10,7 +10,8 @@ import os
 /// 没有等待理由时门铃照样连着、不持有活动：中转空闲时自己发 ping、URLSession 自动回，本机心跳晚醒不让中转断开；
 /// 整段拿不到 CPU 久到中转断开的，醒来重连、入房先拉一次。
 ///
-/// 持有期间每秒量一次主线程与资料库队列的排队，超过 `stallLimit` 记一条（类别 stall，notice 级别落盘）：下次停摆从日志就看得出卡在哪，不用旁听推断。
+/// 持有期间每秒量一次进程晚醒与资料库队列的排队，超过 `stallLimit` 记一条（类别 stall，notice 级别落盘）：下次停摆从日志就看得出卡在哪，不用旁听推断。
+/// 主线程卡住不在这里量，由 `MainThreadWatch` 一直看着。
 extension AppServices {
     func holdActivityWhilePolling() {
         follow { [store] in
@@ -41,12 +42,9 @@ extension AppServices {
             let asked = clock.now
             guard (try? await Task.sleep(for: .seconds(1))) != nil else { return }
             let late = clock.now - asked - .seconds(1)
-            async let main = clock.measure { await MainActor.run {} }
-            async let library = store.queueDelay()
-            let (mainDelay, libraryDelay) = await (main, library)
-            guard max(late, mainDelay, libraryDelay) > stallLimit else { continue }
-            Logger.stall.notice(
-                "停摆：进程晚醒 \(late.milliseconds, privacy: .public)ms，主线程排队 \(mainDelay.milliseconds, privacy: .public)ms，资料库队列排队 \(libraryDelay.milliseconds, privacy: .public)ms")
+            let libraryDelay = await store.queueDelay()
+            guard max(late, libraryDelay) > stallLimit else { continue }
+            Logger.stall.notice("停摆：进程晚醒 \(late.milliseconds, privacy: .public)ms，资料库队列排队 \(libraryDelay.milliseconds, privacy: .public)ms")
         }
     }
 }

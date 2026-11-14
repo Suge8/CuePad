@@ -13,6 +13,7 @@ final class Diagnostics {
     private(set) var canSend = false
     #endif
     @ObservationIgnored let archive: DiagnosticArchive
+    @ObservationIgnored private let activity: ActivityDiagnosticRecorder
     @ObservationIgnored private var subscriber: Subscriber?
     @ObservationIgnored private var outbox: DiagnosticOutbox?
     private static let log = Logger(subsystem: AppIdentity.id, category: "diagnostics")
@@ -21,6 +22,7 @@ final class Diagnostics {
 
     init(directory: URL) {
         archive = DiagnosticArchive(directory: directory)
+        activity = ActivityDiagnosticRecorder(archive: archive)
         archive.tidy()
         reports = archive.reports()
     }
@@ -48,6 +50,16 @@ final class Diagnostics {
             do { try archive.store(payload) } catch { AppServices.log.error("诊断存档失败：\(String(describing: error))") }
         }
         reload()
+    }
+
+    /// 记一条实时活动取证（`CueLiveActivity.trace`）：在活动之外异步写，写完照常送去 iCloud。先后由事件里的序号定，不靠到达顺序。
+    func record(activity event: ActivityDiagnosticReport.Event) {
+        Task {
+            do { try await activity.record(event) } catch {
+                Self.log.error("活动取证没存下：\((error as NSError).domain, privacy: .public) \((error as NSError).code)")
+            }
+            push()
+        }
     }
 
     /// 手机、iPad 设置里"把最近日志发到 Mac"（Mac 上的测试拿它演手机）：存一份最近 `RecentLogs.window` 的日志，送进 iCloud。返回时已被 iCloud 收下；

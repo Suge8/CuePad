@@ -18,14 +18,16 @@ extension AppServices {
     #if os(iOS)
     /// 实时活动只能在前台开：启动到变成 active 之前（inactive）也算前台，库读完的第一份就能开，不等下一次变化。
     private static var inForeground: Bool { UIApplication.shared.applicationState != .background }
-
-    /// 远程活动只在身份已确认且资料已对账后开启；不用 CueFeed 在换号、清库前排队的旧快照。
-    func remoteActivityState() throws -> CueActivityState? {
-        guard syncing.state.reconciled, [.idle, .syncing].contains(syncing.state.status) else { return nil }
-        let digest = try store.snapshot { try CueDigest.read(from: $0) }.value
-        return try ActivityPush.fitted(CueActivityState(now: Self.cueNow(digest, at: speech, local: cueLocal)))
-    }
     #endif
+
+    var knowsActivityState: Bool { syncing.state.reconciled && syncing.state.status.reachesMac }
+
+    /// 远程实时活动的内容（手机开活动时的首份、Mac 经 APNs 推的每一份）只按这里算。账号认好、对完账、同步通着才算得出，否则 nil：
+    /// 本地库可能落后于别处，不拿它写，也不用 CueFeed 在换号、清库前排队的旧快照。不带本机的等待原因与"这台"：锁屏上是同一份。
+    func activityState(_ digest: @autoclosure () throws -> CueDigest) throws -> CueActivityState? {
+        guard knowsActivityState else { return nil }
+        return try ActivityPush.fitted(CueActivityState(now: Self.cueNow(try digest(), at: speech, local: CueNow.Local(waiting: nil, here: nil))))
+    }
 
     /// 小组件、实时活动与 Cue 那一行（`CueWatch`）都经这里推。
     /// 按推出的这一刻推：说的话的此刻（`SpeechClock`）只在时限到点、同步通断时走，库变了时它可能停在很久以前，

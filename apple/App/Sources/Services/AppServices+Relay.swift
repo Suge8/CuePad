@@ -7,12 +7,19 @@ import UIKit
 
 /// Mac 不收推送，不在等时别的设备的改动原本要等下一次被叫醒才拉，所以 App 在跑就连着；手机只在前台连着，整个进后台时在本机改动传完、门铃按完后断开（`Relay.pause`、`settle`）。
 /// 门铃随时可能响：`pull` 合并同一时刻的拉取，同步还在启动时先等启动，所以与按节奏的拉取、立即同步、冷启动的第一拉不冲突。
-/// 只在真连着 iCloud（同步来源是 `.iCloud`、`makeSync` 建了 `CloudSync`）时有：测试与调试画面的替身云（`.built`、`.custom`）不连中转。
+/// 只在真连着 iCloud（同步来源是 `.iCloud`、`makeSync` 建了 `CloudSync`）时有：测试与调试画面的替身云（`.built`、`.custom`）不连中转，
+/// 除非测试给了中转替身（`.built(_, relay:)`）。
 /// 同步测量的隔离实例连的是 CloudKit 开发环境，密钥（`CloudSync.relaySecret`）从开发容器取，派生的房间与正式用户的不会重合。
 extension AppServices {
     static func makeRelay(_ source: SyncSource, _ sync: (any SyncControlling)?, device: String?) -> Relay? {
-        guard case .iCloud = source, !DebugHooks.relayOff, let sync = sync as? CloudSync, let device else { return nil }
-        return Relay(host: relayHost, device: device) { try RelayCredentials(secret: try await sync.relaySecret()) }
+        let endpoint: URL
+        switch source {
+        case .iCloud where !DebugHooks.relayOff: endpoint = URL(string: "wss://\(relayHost)/v1")!
+        case .built(_, let relay?): endpoint = relay
+        default: return nil
+        }
+        guard let sync = sync as? CloudSync, let device else { return nil }
+        return Relay(endpoint: endpoint, device: device) { try RelayCredentials(secret: try await sync.relaySecret()) }
     }
 
     func startRelay() {

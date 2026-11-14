@@ -4,7 +4,6 @@ import AppKit
 @main
 enum MacMain {
     static func main() {
-        ActivityDiagnosticReader.runIfRequested()
         DebugHooks.launching()
         LiteralText.install()
         let app = NSApplication.shared
