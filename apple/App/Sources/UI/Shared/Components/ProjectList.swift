@@ -36,12 +36,10 @@ struct ProjectShelf<Extra: View>: View {
     }
 
     private var places: some View {
-        HStack(spacing: Spacing.part) {
-            ChipFlow(spacing: Spacing.part) {
-                ProjectListPlace(title: "归档", icon: .archive, route: .archive)
-                ProjectListPlace(title: "回收站", icon: .trash, route: .trash)
-                extra
-            }
+        ChipFlow(spacing: Spacing.part) {
+            ProjectListPlace(title: "归档", icon: .archive, route: .archive)
+            ProjectListPlace(title: "回收站", icon: .trash, route: .trash)
+            extra
         }
         .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     }
