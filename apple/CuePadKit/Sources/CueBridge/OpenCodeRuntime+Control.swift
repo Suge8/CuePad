@@ -17,14 +17,13 @@ extension OpenCodeRuntime {
     /// `interrupt` 受理即回、清掉这一轮已记下的唤醒，之后收进来的话在被停下的这一轮收尾时开出新一轮（服务的 `SessionRunCoordinator`），所以不会并进被停下的这一轮。
     /// 原生的 `interrupt?resume=true` 是“先收话再打断”：两次请求之间这一轮到了步骤边界就会把话读进将被停下的这一轮，不用。
     public func send(_ message: SessionMessage, in id: Session.ID) async throws {
-        var target: (Connection, String)?
-        // 等重连与停下上一轮是可被停止取消的一段；prompt 交出后不取消（话已收下）
-        try await stopPhase(id).run { [self] in
-            let (connection, _, sessionID) = try await live(id)
-            try await interrupt(sessionID, connection)
-            target = (connection, sessionID)
+        let (connection, tracked, sessionID) = try await live(id)
+        try await tracked.turns.send(stop: { [self] in try await interrupt(sessionID, connection) }) {
+            try await prompt(message, sessionID, connection)
         }
-        guard let (connection, sessionID) = target else { return }
+    }
+
+    private func prompt(_ message: SessionMessage, _ sessionID: String, _ connection: Connection) async throws {
         struct File: Encodable { var uri: String }
         struct Metadata: Encodable { var cuepadDelivery: String }
         struct Prompt: Encodable { var text: String; var files: [File]; var metadata: Metadata? }
@@ -37,40 +36,26 @@ extension OpenCodeRuntime {
     /// `/compact` 不开轮，照它的缺省（下一个步骤边界压缩）；其余命令展开成这一轮的提示词，与 `send` 同一规则。
     public func command(_ line: String, deliveryID _: String?, in id: Session.ID) async throws {
         let (connection, tracked, sessionID) = try await live(id)
-        guard line.hasPrefix("/") else { throw BridgeError.rejected("bad_request") }
-        let parts = line.dropFirst().split(separator: " ", maxSplits: 1, omittingEmptySubsequences: false)
-        let name = parts.first.map(String.init) ?? ""
-        let arguments = parts.count > 1 ? String(parts[1]) : ""
+        let slash = try SlashLine(line)
+        let name = slash.name, arguments = slash.argument
         if name == Self.compact {
             struct Compact: Encodable {}
             try await connection.client.call("POST", "/api/session/\(sessionID)/compact", body: Compact())
             return
         }
-        guard try await catalog(tracked.directory, connection.client).commands.contains(where: { $0.name == name }) else {
-            throw BridgeError.rejected("unknown_command")
-        }
         struct Command: Encodable { var name: String; var text: String }
-        try await interrupt(sessionID, connection)
-        do {
-            try await connection.client.call("POST", "/api/session/\(sessionID)/command", body: Command(name: name, text: arguments))
-        } catch let error as OpenCodeAPIError {
-            throw BridgeError.rejected(error.tag == "CommandNotFoundError" ? "unknown_command" : "failed: \(error.message)")
+        try await tracked.turns.send(stop: { [self] in try await interrupt(sessionID, connection) }) {
+            do {
+                try await connection.client.call("POST", "/api/session/\(sessionID)/command", body: Command(name: name, text: arguments))
+            } catch let error as OpenCodeAPIError {
+                throw BridgeError.rejected(error.tag == "CommandNotFoundError" ? "unknown_command" : "failed: \(error.message)")
+            }
         }
     }
 
     public func abort(_ id: Session.ID) async throws {
-        stopPhase(id).cancelAll()
-        try await stopPhase(id).run(cancellable: false) { [self] in
-            let (connection, _, sessionID) = try await live(id)
-            try await interrupt(sessionID, connection)
-        }
-    }
-
-    private func stopPhase(_ id: Session.ID) -> StopPhase {
-        if let phase = stopPhases[id] { return phase }
-        let phase = StopPhase()
-        stopPhases[id] = phase
-        return phase
+        let (connection, tracked, sessionID) = try await live(id)
+        try await tracked.turns.abort { [self] in try await interrupt(sessionID, connection) }
     }
 
     /// 在不在跑由服务判断（歇着时是空操作），不看事件流推出的忙闲。
@@ -112,7 +97,6 @@ extension OpenCodeRuntime {
     }
 
     public func configure(_ config: SessionConfig, in id: Session.ID) async throws {
-        guard config.fast == nil else { throw BridgeError.unsupported }
         let model = config.model, thinking = config.thinking, name = config.name
         let (connection, tracked, sessionID) = try await live(id)
         if let name {
@@ -178,7 +162,7 @@ extension OpenCodeRuntime {
     /// 开的、接着的会话从此托管：上线，此后它的事件、子代理与对话都收。
     private func host(_ info: OpenCodeSessionInfo, _ connection: Connection, launchToken: String?) async throws -> Session.ID {
         guard self.connection === connection else { throw BridgeError.sessionEnded }
-        var tracked = sessions[info.id] ?? Tracked(info: info)
+        var tracked = track(info)
         tracked.online = true
         ended[info.id] = nil
         if let launchToken { tracked.launchToken = launchToken }

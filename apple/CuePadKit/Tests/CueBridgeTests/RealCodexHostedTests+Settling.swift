@@ -33,7 +33,7 @@ extension RealCodexHostedTests {
     }
 
     private func owner(_ rig: CodexRig, _ id: Session.ID, thread: String) -> CodexRuntime.Owner? {
-        rig.runtime.threads["\(thread).\(rig.runtime.tracked[id]?.pid ?? 0)"]
+        rig.runtime.tracked[id]?.threads[thread]
     }
 
     /// 再问时仍读不到：先歇下，它不算别人的线程。它的下一条推送来时再问、认出：进名册、等子代理；做完补一轮。

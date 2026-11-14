@@ -4,11 +4,6 @@ import CueText
 import Darwin
 import Foundation
 
-
-extension Session {
-    static func claudeID(sessionID: String, pid: Int32) -> String { "\(sessionID).\(pid)" }
-}
-
 enum ClaudeCode {
     /// 模型的提供方写成 Agent 自己：Claude Code 的模型名（`opus`、`sonnet`）在它自己的命名空间里
     static let provider = AgentKind.claudeCode.modelProvider!

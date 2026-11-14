@@ -15,7 +15,7 @@ import Foundation
 /// - 换模型与强度先在 `/api/model` 里认：服务对不存在的模型也回 204。
 @MainActor
 final class OpenCodeBrain: HostedSession {
-    private let session = BrainSession()
+    private let session = BrainSession(agent: .opencode)
     var events: AsyncStream<TurnEvent> { session.events }
     private var process: ChildProcess?
     private var client: OpenCodeClient?

@@ -9,7 +9,7 @@ extension GrokRuntime {
     /// （1.0.70 实测，认字面的 ~/.claude、不看 CLAUDE_CONFIG_DIR；同一份内容只放一次）。
     nonisolated public static let facts = AgentFacts(
         command: "grok", homeVariable: "GROK_HOME", minimumVersion: AgentVersion(1, 0, 52),
-        installScript: "curl -fsSL https://x.ai/cli/install.sh | bash", upgradeCommand: "grok update", loginArguments: ["login"],
+        installScript: "curl -fsSL https://x.ai/cli/install.sh | bash", installDirectory: ".grok/bin", upgradeCommand: "grok update", loginArguments: ["login"],
         sessionFiles: SessionFileFormat(ingest: GrokHistory.ingest, depth: 3, naming: .inDirectory(file: GrokHistory.fileName, cwdInPath: true),
             sidecar: GrokHistory.sidecar) {
             $0.home(of: .grok).appending(path: "sessions", directoryHint: .isDirectory)

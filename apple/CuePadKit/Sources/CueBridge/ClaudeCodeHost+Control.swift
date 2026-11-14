@@ -25,15 +25,16 @@ extension ClaudeHostedSession {
 
     /// 斜杠命令就是以 / 开头的一句话：托管进程会执行它（内置命令、skill、自定义命令）。
     func command(_ line: String, deliveryID: String?, in _: Session.ID) async throws {
-        guard line.hasPrefix("/") else { throw BridgeError.rejected("bad_request") }
-        let name = line.dropFirst().split(separator: " ", maxSplits: 1).first.map(String.init) ?? ""
-        guard commands.contains(name) else { throw BridgeError.rejected("unknown_command") }
         try await deliver(hosted(.string(line), uuid: deliveryID))
     }
 
     private func deliver(_ message: JSONValue) async throws {
-        try await interrupt(restarting: true)
-        try await deliveries.deliver(message["uuid"]?.string ?? "") { try put(message) }
+        try await turns.send(stop: { [self] in try await interrupt() }) { handed in
+            try await deliveries.deliver(message["uuid"]?.string ?? "") {
+                try put(message)
+                handed()
+            }
+        }
     }
 
     /// 托管会话发的话：带上 `uuid`（投送请求的 id 落进会话文件），写明 `next`——不写时缺省可能是 `later`，
@@ -43,13 +44,10 @@ extension ClaudeHostedSession {
     }
 
     func abort(_: Session.ID) async throws {
-        // 卡在"等上一轮停下"的发话以取消结束，不再各等到时限
-        stopPhase.cancelAll()
-        try await interrupt(restarting: false)
+        try await turns.abort { [self] in try await interrupt() }
     }
 
     func configure(_ config: SessionConfig, in _: Session.ID) async throws {
-        guard config.fast == nil else { throw BridgeError.unsupported }
         let model = config.model, thinking = config.thinking, name = config.name
         guard let id else { throw BridgeError.sessionEnded }
         let stream = try live
@@ -82,7 +80,7 @@ extension ClaudeHostedSession {
         let decision = try waiting.permission.decision(answer, to: promptID)
         permission = nil
         try live.write(["type": "control_response", "response": ["subtype": "success", "request_id": .string(waiting.request), "response": decision]])
-        facts.questions = []
+        turns.facts.questions = []
         publish(at: .now)
     }
 

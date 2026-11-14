@@ -19,32 +19,18 @@ extension CodexRuntime {
         return [["type": "skill", "name": .string(skill.name), "path": .string(skill.path)]] + CodexRPC.input(text: rest, images: images)
     }
 
-    /// 以这句开新一轮：在跑就先停下这一轮。停下等这一轮真的中止了才回（`CodexDriver.interrupt`），
+    /// 以这句开新一轮（`HostedTurns.send`）：停下等这一轮真的中止了才回（`CodexDriver.interrupt`），
     /// 所以紧接着的 `turn/start` 开的是新一轮——它碰上还在跑的一轮会变成插话（压缩那一轮则拒收）。
-    /// 被停下的那一轮不报歇下（`restarting`）：这句开出的新一轮从驱动报的开始算（见 `event`），没开成才歇下。
-    /// 中止（`abort`）只取消停下上一轮那一段（`StopPhase`）；`turn/start` 发出后的等待不取消：话已交出，抛取消会误报未确认、引起重发。
     func deliver(_ input: [JSONValue], clientID: String, to session: Tracked) async throws {
-        // 代次：几处并发进来（发话、带话的斜杠命令、回答问题）时，后来的接手 `restarting`，先到的结束时不清、也不据它判断
-        session.restartGeneration += 1
-        let mine = session.restartGeneration
-        session.restarting = .stopping
-        defer { if session.restartGeneration == mine { session.restarting = nil } }
-        do {
-            try await session.stopPhase.run { [self] in try await interrupt(session) }
+        try await session.turns.send(stop: { [self] in try await interrupt(session) }) {
             try await turnStart(session, input, options: ["clientUserMessageId": .string(clientID)])
-        } catch {
-            if session.restartGeneration == mine, session.restarting == .stopped { session.facts.endTurn() }
-            publish(session)
-            throw error
         }
     }
 
     public func command(_ line: String, deliveryID _: String?, in id: Session.ID) async throws {
         guard let session = tracked[id] else { throw BridgeError.unknownSession(id) }
-        guard line.hasPrefix("/") else { throw BridgeError.rejected("bad_request") }
-        let parts = line.dropFirst().split(separator: " ", maxSplits: 1)
-        let name = parts.first.map(String.init) ?? ""
-        let argument = parts.count > 1 ? parts[1].trimmingCharacters(in: .whitespaces) : ""
+        let slash = try SlashLine(line)
+        let name = slash.name, argument = slash.argument
         switch name {
         case "compact":
             try await call(session, "thread/compact/start", ["threadId": .string(session.threadID)])
@@ -60,7 +46,6 @@ extension CodexRuntime {
                 try await deliver(CodexRPC.input(text: argument, images: []), clientID: CodexHistory.clientID(for: nil), to: session)
             }
         case _ where name.hasPrefix("skill:"):
-            guard session.skills.contains(where: { "skill:\($0.name)" == name }) else { throw BridgeError.rejected("unknown_command") }
             try await deliver(Self.input(line, images: [], skills: session.skills), clientID: CodexHistory.clientID(for: nil), to: session)
         default:
             throw BridgeError.rejected("unknown_command")
@@ -80,11 +65,17 @@ extension CodexRuntime {
 
     public func abort(_ id: Session.ID) async throws {
         guard let session = tracked[id] else { throw BridgeError.unknownSession(id) }
-        session.stopPhase.cancelAll()
-        try await interrupt(session)
+        try await session.turns.abort { [self] in try await interrupt(session) }
     }
 
+    /// 这一轮已结束、还在等认出子代理（`ending`）的不再等，就此收尾。
     private func interrupt(_ session: Tracked) async throws {
+        if let ending = session.ending {
+            ending.cancel()
+            session.ending = nil
+            session.turns.apply(.turnFinished)
+            return publish(session)
+        }
         do {
             try await session.driver.interrupt()
         } catch CodexRPCError.server(_, let message) {
@@ -105,7 +96,6 @@ extension CodexRuntime {
         let target = model?.id ?? bridge.session(id: id)?.model?.key.id
         let entry = models?.first { $0.id == target }
         if model != nil, entry == nil { throw BridgeError.unknownModel(.codex) }
-        if config.fast == true, entry?.supportsFast != true { throw BridgeError.unsupported }
         var settings: [String: JSONValue] = ["threadId": .string(session.threadID)]
         if let model { settings["model"] = .string(model.id) }
         if let thinking { settings["effort"] = .string(CodexModel.effort(thinking.clamped(to: entry?.efforts ?? []))) }

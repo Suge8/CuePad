@@ -30,7 +30,7 @@ public struct ExecutableLocator: Sendable, Equatable {
     private init(shellPath: String?) {
         let home = UserHome.directory
         let path = (shellPath ?? "").split(separator: ":").map { URL(filePath: String($0), directoryHint: .isDirectory) }
-        // 先找到的先问版本：`.local/bin` 排在 Homebrew 之前，包管理器与 OpenCode 的在后
+        // 先找到的先问版本：`.local/bin` 排在 Homebrew 之前，包管理器与各家自己的目录在后
         let homes = Self.homeDirectories(home)
         self.init(searchDirectories: path + homes.prefix(1) + [URL(filePath: "/opt/homebrew/bin"), URL(filePath: "/usr/local/bin")] + homes.dropFirst())
     }
@@ -40,10 +40,10 @@ public struct ExecutableLocator: Sendable, Equatable {
         self.init(searchDirectories: Self.homeDirectories(home))
     }
 
-    /// 家目录里各家安装脚本与包管理器的缺省位置：Claude Code、Codex、Pi 的脚本装进 `.local/bin`，OpenCode 的装进 `.opencode/bin`，
-    /// Grok Build 的装进 `.grok/bin`。
+    /// 家目录里各家安装脚本（`AgentFacts.installDirectory`）与包管理器的缺省位置，`.local/bin` 在最前。
     private static func homeDirectories(_ home: URL) -> [URL] {
-        [".local/bin", ".bun/bin", ".npm-global/bin", ".opencode/bin", ".grok/bin"].map { home.appending(path: $0, directoryHint: .isDirectory) }
+        ([".local/bin", ".bun/bin", ".npm-global/bin"] + AgentKind.allCases.compactMap(\.facts.installDirectory))
+            .map { home.appending(path: $0, directoryHint: .isDirectory) }
     }
 
     public func candidates(_ command: String) -> [URL] {

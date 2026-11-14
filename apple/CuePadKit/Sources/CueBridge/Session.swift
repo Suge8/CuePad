@@ -4,7 +4,7 @@ import Foundation
 
 /// 状态与随会话同步的各块值直接用 CueStore 的类型：桥解码出来什么样，记录器就原样写什么样。
 public struct Session: Identifiable, Sendable, Equatable {
-    /// `<sessionId>.<pid>`：同一会话被两个进程同时打开时也唯一；Pi 的等于 socket 文件名去掉 `.sock`
+    /// `<sessionId>.<pid>`（`bridgeID`）：同一会话被两个进程同时打开时也唯一；Pi 的等于 socket 文件名去掉 `.sock`
     public let id: String
     public let sessionID: String
     public let agent: AgentKind
@@ -88,6 +88,10 @@ public struct Session: Identifiable, Sendable, Equatable {
     public var displayName: String {
         SessionName.display(name: name, firstMessage: firstMessage, folder: cwd.lastPathComponent)
     }
+}
+
+extension Session {
+    static func bridgeID(sessionID: String, pid: Int32) -> ID { "\(sessionID).\(pid)" }
 }
 
 /// Pi 会话显示名的唯一规则（活动会话与历史会话共用），与 Pi 自己的会话列表一致。

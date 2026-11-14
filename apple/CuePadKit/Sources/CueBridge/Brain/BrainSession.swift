@@ -1,4 +1,5 @@
 #if os(macOS)
+import CueAgent
 import CueStore
 import Foundation
 
@@ -6,15 +7,22 @@ import Foundation
 final class BrainSession {
     let events: AsyncStream<TurnEvent>
     private let emitter: AsyncStream<TurnEvent>.Continuation
+    private let agent: AgentKind
     private var directory: URL?
     private var ended = false
 
-    init() {
+    init(agent: AgentKind) {
+        self.agent = agent
         (events, emitter) = AsyncStream.makeStream(bufferingPolicy: .unbounded)
     }
 
+    /// 各家报的工具名原样进来（托管会话照原名显示），交给大脑的去掉 CuePad 的 MCP 前缀（`TurnEvent.tool`）。
     func emit(_ event: TurnEvent) {
-        emitter.yield(event)
+        if case .tool(let id, let name, let arguments) = event {
+            emitter.yield(.tool(id: id, name: CueMCPServer.bareName(name, on: agent), arguments: arguments))
+        } else {
+            emitter.yield(event)
+        }
     }
 
     /// 只有自己能读。

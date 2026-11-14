@@ -5,7 +5,7 @@ import Foundation
 extension CodexRuntime {
     /// 全局规则读 `AGENTS.override.md`，没有时读 `AGENTS.md`（官方文档 agents-md，0.167 的 codex-home instructions）。
     nonisolated public static let facts = AgentFacts(
-        command: "codex", homeVariable: "CODEX_HOME", installScript: "curl -fsSL https://chatgpt.com/codex/install.sh | sh",
+        command: "codex", homeVariable: "CODEX_HOME", installScript: "curl -fsSL https://chatgpt.com/codex/install.sh | sh", installDirectory: ".local/bin",
         loginArguments: ["login"],
         sessionFiles: SessionFileFormat(ingest: CodexHistory.ingest, depth: 4, naming: .idSuffix, sidecar: CodexHistory.sidecar) {
             $0.home(of: .codex).appending(path: "sessions", directoryHint: .isDirectory)

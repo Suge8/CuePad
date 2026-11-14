@@ -14,8 +14,8 @@ func grokEnvironment(model: FakeModel, home: URL, grokHome: URL) -> [String: Str
      "GROK_AUTH_PATH": grokHome.appending(path: "no-login.json").path, "GROK_DISABLE_AUTOUPDATER": "1", "NO_PROXY": "127.0.0.1,localhost", "no_proxy": "127.0.0.1,localhost"]
 }
 
-/// 用例的话写成真模型也照做的英文；假模型照这几句演。Grok 把你的话包在 `<user_query>` 里，工具的名字是它自己的（`run_terminal_command`、
-/// `ask_user_question`），MCP 工具只经 `use_tool` 交给模型。
+/// 用例的话写成真模型也照做的英文；假模型照这几句演。Grok 把你的话包在 `<user_query>` 里，工具的名字是它自己的（`run_terminal_command`），
+/// MCP 工具只经 `use_tool` 交给模型。
 extension FakeModel {
     func playGrok() {
         on({ $0.prompt.contains("<user_query>") }) { request in
@@ -30,19 +30,6 @@ extension FakeModel {
             .say(request.said.lazy.compactMap { $0.firstMatch(of: /Remember the word (\w+)/)?.1 }.first.map(String.init) ?? "UNKNOWN")
         }
         on({ Self.query($0.prompt).contains("numbers from 1 to 400") }) { _ in .stream(["1\n", "2\n", "3\n"]) }
-        on({ Self.query($0.prompt).contains("ask_user_question") }) { request in
-            let questions: [[String: any Sendable]] = [
-                ["question": "Which drink?", "header": "Drink", "multiSelect": false,
-                 "options": [["label": "Tea", "description": "hot"], ["label": "Coffee", "description": "strong"]]],
-                ["question": "Which size?", "header": "Size", "multiSelect": false,
-                 "options": [["label": "Small", "description": "small cup"], ["label": "Large", "description": "large cup"]]],
-            ]
-            return request.step == 0 ? .call("ask_user_question", ["questions": questions]) : .say(request.results.last ?? "")
-        }
-        on({ Self.query($0.prompt).contains("run exactly:") }) { request in
-            let command = Self.query(request.prompt).firstMatch(of: /run exactly: (.+?)  Then/)?.1 ?? "true"
-            return request.step == 0 ? .call("run_terminal_command", ["command": String(command), "description": "run it"]) : .say("DONE")
-        }
     }
 
     /// 大脑用例（`playBrain`）在 Grok 上的写法：MCP 的 echo 经 `use_tool`，写文件只有终端命令。
