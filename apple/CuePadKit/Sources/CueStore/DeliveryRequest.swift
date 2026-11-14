@@ -163,18 +163,6 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
 
   public static var unexplainedFailure: String { String(localized: "Mac 没有说明原因") }
 
-  /// `requests` 先发的在前。只显示还在路上的，或没能结束且之后没再发过别的；结束成功、未确认或没请求过是 nil。
-  public static func shownEnd(in requests: [DeliveryRequest], at moment: Speech.Moment) -> Speech.Trip? {
-    guard let end = requests.last(where: { $0.mode == .known(.end) }) else { return nil }
-    switch Speech.trip(end, at: moment) {
-    case .preparing(let reason): return .preparing(reason)
-    case .sending: return .sending
-    case .sent: return .sent
-    case .delivered, .unconfirmed: return nil
-    case .failed(let failure): return end.id == requests.last?.id ? .failed(failure) : nil
-    }
-  }
-
   /// `launch`、`bind`、`tidyOrders`、`libraryEdit`、`answer`、`config` 按 `mode` 取请求的内容；其他方式、读不出的为 nil。
   public var launch: LaunchRequest? { mode == .known(.start) ? LaunchRequest(stored: content) : nil }
 

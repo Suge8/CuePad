@@ -68,7 +68,7 @@ extension TaskFlowTests {
             let ended = try #require(try await store.sessionItems(sessionIDs: ["audit-interrupted"])["audit-interrupted"]?.state)
             #expect(ended.state == .known(.ended) && !ended.canEnd)
             if recovery == "ui" {
-                let issue = MacDelivery.endIssue(try await store.deliveryRequests(toSession: ended.sessionID), at: services.speech)
+                let issue = MacDelivery.endProgress(try await store.deliveryRequests(toSession: ended.sessionID), at: services.speech)
                 #expect(issue?.unconfirmedReason != nil)
                 let action = try #require(SessionActions.end(ended, ending: false, recovering: issue != nil, in: workspace))
                 #expect(action.enabled)
@@ -83,7 +83,7 @@ extension TaskFlowTests {
             }
             let explicit = try #require(try await store.deliveryRequests().first { $0.mode == .known(.end) && $0.content == "end" })
             #expect(try await store.outcome(of: explicit).status == .known(.succeeded))
-            #expect(MacDelivery.endIssue(try await store.deliveryRequests(toSession: ended.sessionID), at: services.speech) == nil)
+            #expect(MacDelivery.endProgress(try await store.deliveryRequests(toSession: ended.sessionID), at: services.speech) == nil)
         }
         #expect(try await store.deliveryRequest(automatic.id)?.status == .known(.succeeded))
         #expect(try await store.sessionItems(sessionIDs: ["audit-interrupted"])["audit-interrupted"]?.state.state == .known(.ended))

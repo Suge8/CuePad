@@ -20868,6 +20868,22 @@
         }
       }
     },
+    "结束未确认" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "End not confirmed"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "结束未确认"
+          }
+        }
+      }
+    },
     "结束结果尚未确认：%@" : {
       "localizations" : {
         "en" : {

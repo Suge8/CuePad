@@ -97,7 +97,7 @@ struct SessionPage: View {
     }
 
     private func ending(_ digest: SessionDigest?) -> Bool {
-        DeliveryRequest.shownEnd(in: digest?.deliveries ?? [], at: services.speech)?.inTransit == true
+        MacDelivery.endProgress(digest?.deliveries ?? [], at: services.speech)?.inTransit == true
     }
 
     private func menu(_ session: SessionState, _ digest: SessionDigest?) -> SessionMenuItems {

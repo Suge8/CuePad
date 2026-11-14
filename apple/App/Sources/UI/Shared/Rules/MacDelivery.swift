@@ -19,10 +19,11 @@ nonisolated enum ReplyButton: Equatable {
 
 /// 能否停止、结束与作答都经 `SessionState` 上同一组规则（Cue 也经它们）。
 nonisolated enum MacDelivery {
-    /// 记录 ended 不确认投送；未知请求逐条保留，不能被别的结束成功掩盖。新的结束在途时先显示它的进度。
-    static func endIssue(_ requests: [DeliveryRequest], at moment: Speech.Moment) -> Speech.Trip? {
+    /// 结束会话进行得怎样，列表行、会话页与回复框上方都只读这里：在途的先显示；没有在途的，结果未确认的逐条保留、不被别的结束成功掩盖（记录 ended 不确认投送）；
+    /// 再不然最后一次结束失败了显示失败。成功了、没请求过是 nil。`requests` 按发出先后。
+    static func endProgress(_ requests: [DeliveryRequest], at moment: Speech.Moment) -> Speech.Trip? {
         let ends = requests.filter { $0.mode == .known(.end) }.map { Speech.trip($0, at: moment) }
-        guard !ends.contains(where: \.awaitingResult) else { return nil }
+        if let going = ends.last(where: \.awaitingResult) { return going }
         if let unknown = ends.last(where: { $0.unconfirmedReason != nil }) { return unknown }
         return ends.last.flatMap { $0.failure != nil ? $0 : nil }
     }
