@@ -72,6 +72,8 @@ extension CueStore {
       try adopt(lifted, by: id, from: left)
       try restoreCueSchedules(schedules)
     case .archive(let id, let time, let schedules):
+      // 其间取回过又归档了的，它已不是这一次归档的样子：卡与定时都不动（定时随它此刻的归档照旧作废）
+      guard try find(Card.self, id)?.archivedAt == time else { return }
       try unarchiveRow(id, archivedAt: time)
       try restoreCueSchedules(schedules)
     case .move(let id, let slot, let after):
