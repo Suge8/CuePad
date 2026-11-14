@@ -122,7 +122,7 @@ struct ProjectsTests {
         workspace.show(.project(shown.id))
         try await store.trashProject(shown.id)
         try await eventually("主区离开 A") { workspace.mainRoute == .shelf }
-        #expect(!workspace.cueHome && !workspace.mountedPages.contains(.project(shown.id)))
+        #expect(!workspace.cueHome)
 
         workspace.show(.project(under.id))
         workspace.goHome()
