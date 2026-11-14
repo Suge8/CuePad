@@ -23,9 +23,24 @@ final class PiConnections {
 
     func start() throws {
         guard watcher == nil else { return }
+        try watch()
+    }
+
+    private func watch() throws {
         try SocketDirectory.prepare(directory)
-        watcher = try DirectoryWatcher(directory) { [weak self] in self?.scan() }
+        watcher = try DirectoryWatcher(directory) { [weak self] gone in self?.directoryChanged(gone: gone) }
         scan()
+    }
+
+    /// 目录在 /tmp 下，系统每天清一次（`/usr/libexec/tmp_cleaner`）：空着超过 3 天的目录会被删，扩展起来时再建的是另一个目录，得改盯它。
+    /// 已连上的会话不受影响（连接不靠目录）。
+    private func directoryChanged(gone: Bool) {
+        guard gone else { return scan() }
+        watcher?.cancel()
+        watcher = nil
+        do { try watch() } catch {
+            Self.log.error("socket directory removed and cannot be recreated, new Pi sessions will not connect: \(String(describing: error), privacy: .public)")
+        }
     }
 
     func stop() {
