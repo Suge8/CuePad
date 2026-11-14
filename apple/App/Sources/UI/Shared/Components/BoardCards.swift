@@ -219,7 +219,7 @@ struct BoardCardLayout<Icon: View, Title: View, Facts: View, Trailing: View>: Vi
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     // 有就地处理的钮时它占右上角（真的那颗浮在卡上，`boardRescue`；这里只留出它的宽）
-                    if let session, BoardRescue.kind(of: session) != nil, !compact {
+                    if let session, SessionRescue.of(session) != nil, !compact {
                         BoardRescue(session: session).hidden()
                     } else if let session {
                         AgentMark(session: session, font: TaskMetrics.caption, named: false)
