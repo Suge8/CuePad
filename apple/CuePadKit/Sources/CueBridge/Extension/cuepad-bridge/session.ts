@@ -4,7 +4,7 @@ import { account } from "./account.ts";
 import { Draft } from "./draft.ts";
 import { phaseOf, StateTracker, type Asking, type Clock, type Phase } from "./events.ts";
 import { commandInfo, contextInfo, firstUserMessage, INTERNAL_COMMAND, modelInfo, reason, type Info, type Subagent } from "./info.ts";
-import { IdleExit, SelfReload } from "./lifecycle.ts";
+import { IdleExit, SelfReload, takeCarried, type Carried } from "./lifecycle.ts";
 import { preflight } from "./preflight.ts";
 import { QuotaFetcher, type Quota, type QuotaWindow } from "./quota.ts";
 
@@ -64,6 +64,12 @@ export class Session {
 		this.firecode = firecode;
 		this.identity = identity;
 		this.fast = this.branchFast();
+		const kept = takeCarried(ctx.sessionManager.getSessionId());
+		if (kept) {
+			this.tracker.settled = kept.settled;
+			this.tracker.outcome = kept.outcome;
+			this.turnSince = kept.turnSince;
+		}
 		const initial = this.state();
 		this.lastKey = JSON.stringify([initial, this.turnSince]);
 		this.phase = phaseOf(initial);
@@ -128,6 +134,12 @@ export class Session {
 		}
 		if (this.clients.size === 0) return;
 		this.broadcast({ t: "state", state: { ...current, since: this.since, busySince: this.busySince, turnSince: this.turnSince } });
+	}
+
+	/** 重新载入时交给下一个实例的（`carryOver`）。 */
+	carried(): Carried {
+		const { settled, outcome } = this.tracker;
+		return { settled, outcome, turnSince: this.turnSince };
 	}
 
 	private canReload() {

@@ -131,7 +131,7 @@ export function follow(session: Session): (() => void)[] {
 
 const DETAIL_LIMIT = 120;
 
-type State =
+export type State =
 	| { kind: "idle" }
 	/** 工作中、没在调工具：正在出字也算（正在说的话另走 `draft`） */
 	| { kind: "thinking" }

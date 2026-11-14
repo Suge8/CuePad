@@ -7,7 +7,7 @@ import { listen } from "./connection.ts";
 import { captureDialogs, follow } from "./events.ts";
 import { INTERNAL_COMMAND, modelInfo, reason, subagentsOf } from "./info.ts";
 import { prioritized } from "./fast.ts";
-import { IS_HOSTED } from "./lifecycle.ts";
+import { carryOver, IS_HOSTED } from "./lifecycle.ts";
 import { watchSession } from "./phone.ts";
 import { Session, type Firecode } from "./session.ts";
 
@@ -110,6 +110,7 @@ export default function (pi: ExtensionAPI) {
 		}
 
 		function close(why: string) {
+			if (why === "reload") carryOver(ctx.sessionManager.getSessionId(), session.carried());
 			session.lifetime.abort();
 			for (const off of unsubscribe) off();
 			session.retrying = null;
