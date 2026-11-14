@@ -22,7 +22,7 @@ extension Workspace {
         }
         switch check.wrappedValue.phase {
         case .idle:
-            attempt { try await self.confirmComplete(subtasks: subtasks, busy: busy) { _ in check.wrappedValue.phase = .pending } }
+            attempt { try await self.confirmComplete(task.id, subtasks: subtasks, busy: busy) { _ in check.wrappedValue.phase = .pending } }
         case .pending: check.wrappedValue.phase = .idle
         case .committed: break
         }
@@ -45,6 +45,7 @@ struct TaskCheckButton: View {
         trigger
         .accessibilityLabel(check.phase == .pending ? String(localized: "撤销完成") : TaskSpeech.toggle(done: check.done(task)))
         .sensoryFeedback(.success, trigger: check.phase) { $0 == .idle && $1 == .pending }
+        .completionAsks(claiming: task.id)
     }
 
     private var ring: some View {

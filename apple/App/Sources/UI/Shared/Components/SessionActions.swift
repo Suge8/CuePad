@@ -61,6 +61,6 @@ struct MarkUnreadButton: View {
 enum SessionAsk {
     case rename(SessionState, shown: String, adopts: Bool)
     case end(SessionState)
-    /// 完成前先问（`Workspace.confirmComplete`），答应了跑 `then`。
-    case complete(CompletionAsk, then: @MainActor (Workspace) async throws -> Void)
+    /// 完成前先问（`Workspace.confirmComplete`），答应了跑 `then`。`claimer` 是挨着它弹出的那个视图，nil 时窗口居中出。
+    case complete(CompletionAsk, claimer: UUID?, then: @MainActor (Workspace) async throws -> Void)
 }

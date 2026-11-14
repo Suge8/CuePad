@@ -15,9 +15,11 @@ extension Workspace {
         }
     }
 
-    /// 拖放没有圈上那一下停留可撤销：答应了当场完成。
+    /// 拖放没有圈上那一下停留可撤销，卡也已离开原位：答应了当场完成，要问时窗口居中问。
     func finish(_ item: TaskBoard.Item) async throws {
         let id = item.task.id
-        try await confirmComplete(subtasks: item.steps, busy: next(for: item, shown: pulse(of: item.agent).shown)?.busySession) { try await $0.complete(id) }
+        try await confirmComplete(
+            id, subtasks: item.steps, busy: next(for: item, shown: pulse(of: item.agent).shown)?.busySession, anchored: false
+        ) { try await $0.complete(id) }
     }
 }

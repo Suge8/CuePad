@@ -13,7 +13,7 @@ extension Workspace {
     /// 会话在做或在等你时先问一句（`confirmComplete`），答应了才建任务、完成；取消什么都不留。
     func finish(_ agent: SessionListItem) async throws {
         let session = agent.state
-        try await confirmComplete(subtasks: nil, busy: pulse(of: agent).shown?.agentBusy == true ? session : nil) {
+        try await confirmComplete(nil, subtasks: nil, busy: pulse(of: agent).shown?.agentBusy == true ? session : nil) {
             try await $0.complete(try await $0.adopt(session))
         }
     }

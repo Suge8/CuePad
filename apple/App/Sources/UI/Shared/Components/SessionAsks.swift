@@ -86,9 +86,7 @@ private struct SessionAsks: ViewModifier {
     func body(content: Content) -> some View {
         content
             .panel(item: renaming) { RenameSheet(target: $0.session, shown: $0.shown, adopts: $0.adopts) }
-            .agentBusyDialog(busy, isPresented: asking { if case .agent = $0 { true } else { false } }, confirm: confirm)
-            .dialog(.verbatim(TaskCopy.openSubtasks(steps)), isPresented: asking { if case .steps = $0 { true } else { false } },
-                    buttons: [DialogButton(title: "全部完成", action: confirm)])
+            .modifier(CompletionAsks(workspace: workspace, spot: .window))
         #if os(macOS)
             .dialog(Self.title, item: asked { if case .end(let session) = $0 { session } else { nil } }, message: Self.message) { session in
                 [DialogButton(title: "结束会话", role: .destructive) { end(session) }]
@@ -121,20 +119,6 @@ private struct SessionAsks: ViewModifier {
         }
     }
 
-    private var completing: CompletionAsk? { if case .complete(let ask, _) = workspace.sessionAsk { ask } else { nil } }
-    private var busy: SessionState? { if case .agent(let session) = completing { session } else { nil } }
-    private var steps: TaskProgress? { if case .steps(let progress) = completing { progress } else { nil } }
-
-    /// 关掉时只清自己这一种（另一种已经换上来就不动）。
-    private func asking(_ kind: @escaping (CompletionAsk) -> Bool) -> Binding<Bool> {
-        Binding { completing.map(kind) ?? false } set: { if !$0, completing.map(kind) == true { workspace.sessionAsk = nil } }
-    }
-
-    /// 取的是呈现时那一问的：按下时框可能已先收起、`sessionAsk` 已清。
-    private var confirm: @MainActor () -> Void {
-        guard case .complete(_, let proceed) = workspace.sessionAsk else { return {} }
-        return { [workspace] in workspace.attempt { try await proceed(workspace) } }
-    }
     private var ending: SessionState? { if case .end(let session) = workspace.sessionAsk { session } else { nil } }
 
     private func end(_ session: SessionState) { Task { await workspace.end(session) } }
@@ -142,5 +126,72 @@ private struct SessionAsks: ViewModifier {
     /// 这一种在问时是它的会话；关掉时只清自己这一种（另一种已经换上来就不动）。
     private func asked(_ pick: @escaping (SessionAsk) -> SessionState?) -> Binding<SessionState?> {
         Binding { workspace.sessionAsk.flatMap(pick) } set: { if $0 == nil, workspace.sessionAsk.flatMap(pick) != nil { workspace.sessionAsk = nil } }
+    }
+}
+
+extension View {
+    /// 正显示这张卡完成圈（或看板卡）的视图挂它，认领这张卡的完成问句（`Workspace.confirmComplete`）：问的是这张卡时挨着这里弹出，
+    /// 同一张卡同时显示在几处时最后出现的那一处认领。`task` 为 nil 时不认领。Mac 不认领：确认框本来就在窗口居中（`dialog`），挂在哪里都一样，省得每个圈都挂一份。
+    func completionAsks(claiming task: UUID?) -> some View {
+        #if os(iOS)
+        modifier(CompletionClaim(task: task))
+        #else
+        self
+        #endif
+    }
+}
+
+private struct CompletionClaim: ViewModifier {
+    let task: UUID?
+    @Environment(Workspace.self) private var workspace
+
+    func body(content: Content) -> some View {
+        if let task { content.modifier(CompletionAsks(workspace: workspace, spot: .claim(task))) } else { content }
+    }
+}
+
+/// 完成前那一问只有这一份：挂在认领者上（`claim`）或窗口上（`window`，出没人认领的）。
+private struct CompletionAsks: ViewModifier {
+    enum Spot: Equatable { case window, claim(UUID) }
+
+    let workspace: Workspace
+    let spot: Spot
+    @State private var token = UUID()
+
+    func body(content: Content) -> some View {
+        content
+            .agentBusyDialog(busy, isPresented: asking { if case .agent = $0 { true } else { false } }, confirm: confirm)
+            .dialog(.verbatim(TaskCopy.openSubtasks(steps)), isPresented: asking { if case .steps = $0 { true } else { false } },
+                    buttons: [DialogButton(title: "全部完成", action: confirm)])
+            .onAppear {
+                guard case .claim(let task) = spot else { return }
+                workspace.completionClaims[task, default: []].append(token)
+            }
+            .onDisappear {
+                guard case .claim(let task) = spot else { return }
+                workspace.completionClaims[task]?.removeAll { $0 == token }
+                if workspace.completionClaims[task]?.isEmpty == true { workspace.completionClaims[task] = nil }
+                // 问着的时候认领它的视图没了（列表收起、换页）：这一问作罢，同取消
+                if mine != nil { workspace.sessionAsk = nil }
+            }
+    }
+
+    private var mine: CompletionAsk? {
+        guard case .complete(let ask, let claimer, _) = workspace.sessionAsk else { return nil }
+        return claimer == (spot == .window ? nil : token) ? ask : nil
+    }
+
+    private var busy: SessionState? { if case .agent(let session) = mine { session } else { nil } }
+    private var steps: TaskProgress? { if case .steps(let progress) = mine { progress } else { nil } }
+
+    /// 关掉时只清自己这一种（另一种已经换上来就不动）。
+    private func asking(_ kind: @escaping (CompletionAsk) -> Bool) -> Binding<Bool> {
+        Binding { mine.map(kind) ?? false } set: { if !$0, mine.map(kind) == true { workspace.sessionAsk = nil } }
+    }
+
+    /// 取的是呈现时那一问的：按下时框可能已先收起、`sessionAsk` 已清。
+    private var confirm: @MainActor () -> Void {
+        guard mine != nil, case .complete(_, _, let proceed) = workspace.sessionAsk else { return {} }
+        return { [workspace] in workspace.attempt { try await proceed(workspace) } }
     }
 }

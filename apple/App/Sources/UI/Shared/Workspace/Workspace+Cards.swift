@@ -35,8 +35,14 @@ extension Workspace {
     }
 
     /// 完成一件事的入口都先过这里（完成圈、拖到已完成、卡片菜单、看板上完成没绑任务的会话）：要问就交给确认框（`sessionAsk`），答应了才 `proceed`；不用问当场 `proceed`。`proceed` 收到 Workspace 而不自己攥着：问着的时候它挂在 Workspace 上，攥着就是一个环。
-    func confirmComplete(subtasks: TaskProgress?, busy: SessionState?, then proceed: @escaping @MainActor (Workspace) async throws -> Void) async throws {
-        if let ask = CompletionAsk(subtasks: subtasks, busy: busy) { return sessionAsk = .complete(ask, then: proceed) }
+    /// 问句挨着正显示这张卡的那个视图弹出（`completionClaims`）；`anchored` 为 false（拖放：卡已离开原位）或没有视图认领时窗口居中出。
+    func confirmComplete(
+        _ task: UUID?, subtasks: TaskProgress?, busy: SessionState?, anchored: Bool = true, then proceed: @escaping @MainActor (Workspace) async throws -> Void
+    ) async throws {
+        if let ask = CompletionAsk(subtasks: subtasks, busy: busy) {
+            let claimer = anchored ? task.flatMap { completionClaims[$0]?.last } : nil
+            return sessionAsk = .complete(ask, claimer: claimer, then: proceed)
+        }
         try await proceed(self)
     }
 
@@ -44,7 +50,7 @@ extension Workspace {
     func confirmComplete(_ task: Card) async throws {
         let id = task.id
         let subtasks = try await services.store.subtaskProgress(of: [id])[id]
-        try await confirmComplete(subtasks: subtasks, busy: next(for: task, in: agentLinks, steps: subtasks)?.busySession) { try await $0.complete(id) }
+        try await confirmComplete(id, subtasks: subtasks, busy: next(for: task, in: agentLinks, steps: subtasks)?.busySession) { try await $0.complete(id) }
     }
 
     func reopen(_ id: UUID) async throws {
