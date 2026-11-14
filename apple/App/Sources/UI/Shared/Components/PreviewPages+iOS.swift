@@ -23,7 +23,7 @@ struct PreviewPage: View {
         case .video, .audio: PreviewPlayer(file: file, active: active, look: look)
         case .text: PreviewTextFile(file: file, parse: { $0 }) { PreviewText(text: $0).ignoresSafeArea() }
         case .document, .spreadsheet, .presentation: PreviewWeb(file: file)
-        case .model, .web, .markdown, .diff, nil: PreviewStill(preview: preview, file: file)
+        default: PreviewStill(preview: preview, file: file)  // 3D 与认不出的；网页、Markdown、改动在 `PreviewContent` 里先分走了
         }
     }
 }
