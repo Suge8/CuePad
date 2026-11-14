@@ -44,7 +44,7 @@ extension CueLiveActivity {
     func watchDiagnosticPhases() {
         for name in [UIApplication.didBecomeActiveNotification, UIApplication.didEnterBackgroundNotification, UIApplication.willResignActiveNotification] {
             let phases = NotificationCenter.default.notifications(named: name)
-            diagnosticTasks.append(Task { [weak self] in
+            phaseTasks.append(Task { [weak self] in
                 for await _ in phases {
                     self?.trace(.appPhase, reason: name.rawValue)
                 }
@@ -55,18 +55,22 @@ extension CueLiveActivity {
     func observeDiagnostics(_ activity: Activity<CueActivityAttributes>) {
         trace(.stateObserved, activityID: activity.id, reason: "\(activity.activityState)")
         trace(.contentObserved, activityID: activity.id, content: activity.content.state)
-        diagnosticTasks.append(Task { [weak self] in
-            for await content in activity.contentUpdates {
-                guard !Task.isCancelled else { return }
-                self?.trace(.contentObserved, activityID: activity.id, content: content.state)
+        guard diagnosticTasks[activity.id] == nil, ![.ended, .dismissed].contains(activity.activityState) else { return }
+        diagnosticTasks[activity.id] = Task { [weak self] in
+            let contents = Task { [weak self] in
+                for await content in activity.contentUpdates {
+                    guard !Task.isCancelled else { return }
+                    self?.trace(.contentObserved, activityID: activity.id, content: content.state)
+                }
             }
-        })
-        diagnosticTasks.append(Task { [weak self] in
+            defer { contents.cancel() }
             for await state in activity.activityStateUpdates {
                 guard !Task.isCancelled else { return }
                 self?.trace(.stateObserved, activityID: activity.id, reason: "\(state)")
+                if state == .ended || state == .dismissed { break }
             }
-        })
+            self?.diagnosticTasks[activity.id] = nil
+        }
     }
 }
 #endif
