@@ -70,7 +70,14 @@ extension CueKeeper {
         if !ids.isEmpty {
             updateShift { $0.handed[sending] = ids }
             save()
-            try await store.markCueMessagesDelivered(ids)
+            do {
+                try await store.markCueMessagesDelivered(ids)
+            } catch {
+                // 没写成送达就还没交出去：留着这条记录，班次退场时会把这几句清回没送达，下一轮已答过的又答一遍
+                updateShift { $0.handed[sending] = nil }
+                save()
+                throw error
+            }
             unfetchable.subtract(ids)
         }
         do {

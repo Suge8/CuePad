@@ -193,9 +193,14 @@ final class TestApp {
     private func retire(_ services: AppServices, app: SourceLocation? = nil) {
         let halted = services.halt()
         LibraryLedger.close(ledger, app: app) {
-            for step in halted.steps { try await step.run() }
+            // 一步出错也接着停后面的：同步与后台任务留着会连累别的用例；错在全部停完后报
+            var failure: (any Error)?
+            for step in halted.steps {
+                do { try await step.run() } catch { failure = failure ?? error }
+            }
             await halted.stopSync()
             await halted.followers?.value
+            if let failure { throw failure }
         }
     }
 

@@ -107,7 +107,8 @@ final class ViewerKeeper {
             for (marks, reason, gone) in events {
                 group.addTask { for await _ in marks { await self.mark(reason, gone) } }
             }
-            group.addTask { await self.followIdle() }
+            // 脚本起的实例没人碰键鼠，同主窗口被盖住一样不算离开（`followExposure`）：不然闲着 10 分钟后拍到的是“没人在看”的画面
+            if !DebugHooks.scripted { group.addTask { await self.followIdle() } }
             group.addTask { try await self.followElsewhere() }
             #endif
         }
