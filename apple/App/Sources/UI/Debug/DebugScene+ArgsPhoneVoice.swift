@@ -10,15 +10,7 @@ nonisolated struct PhoneVoiceArgs: Decodable, DebugArgGroup {
     let details: Bool
     /// `-CuePadPhoneVoiceHistory <条数>`：通话历史条数
     let history: Int
-    /// `-CuePadPhoneVoiceLastPage YES`：通话历史已到最后一页
-    let lastPage: Bool
-    /// `-CuePadPhoneVoicePages YES`：通话历史分页
-    let pages: Bool
-    /// `-CuePadPhoneVoiceRefreshRequired YES`：通话要求刷新
-    let refreshRequired: Bool
     /// `-CuePadPhoneVoiceReplay interactive|normal|rapid|cycle|reverse`：隔离回放通话
     let replay: String?
-    /// `-CuePadPhoneVoiceSessionUnavailable YES`：通话会话不可用
-    let sessionUnavailable: Bool
 }
 #endif

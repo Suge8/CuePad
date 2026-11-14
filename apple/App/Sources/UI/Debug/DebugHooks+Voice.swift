@@ -3,7 +3,7 @@ import CueBridge
 import Foundation
 
 extension DebugHooks {
-    static func makeVoiceCall(_ dependencies: VoiceCall.Dependencies) -> VoiceCall {
+    static func makeVoiceCall(_ dependencies: VoiceCall.Dependencies, record: VoiceRecord) -> VoiceCall {
         #if DEBUG
         if DebugScene.args.voiceOpts.layout != nil {
             var dependencies = dependencies
@@ -13,10 +13,10 @@ extension DebugHooks {
                 return access
             }
             let scenario = DebugVoiceLayoutScenario()
-            let tell = dependencies.tell
-            dependencies.tell = { text in
+            let tell = record.tell
+            record.tell = { text, command in
                 try scenario.beforeRecording()
-                return try await tell(text)
+                return try await tell(text, command)
             }
             dependencies.media = { _ in DebugVoiceLayoutMedia() }
             dependencies.createCall = { _, _, _, _, _ in .init(id: "layout", answer: "answer", usedPercent: nil) }
@@ -24,10 +24,10 @@ extension DebugHooks {
                 received(.success(.started))
                 return DebugVoiceLayoutControl(scenario: scenario)
             }
-            return VoiceCall(dependencies)
+            return VoiceCall(dependencies, record: record)
         }
         #endif
-        return VoiceCall(dependencies)
+        return VoiceCall(dependencies, record: record)
     }
 
     static func voiceWire(_ text: String) {

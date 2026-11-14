@@ -15,7 +15,7 @@ enum DebugVoiceMotion {
             let began = ContinuousClock.now
             @MainActor func mark(_ label: String) {
                 let elapsed = began.duration(to: .now)
-                let state = "activity=\(String(describing: workspace.voicePresentation?.activity)) waiting=\(workspace.voice?.waitingForResponse == true) turns=\(workspace.voice?.assistantTurns.count ?? 0)"
+                let state = "activity=\(String(describing: workspace.voiceViewState.presentation().activity)) waiting=\(workspace.voice?.waitingForResponse == true) turns=\(workspace.voice?.assistantTurns.count ?? 0)"
                 FileHandle.standardError.write(Data("voice-motion \(elapsed) \(label) \(state)\n".utf8))
             }
             try await Task.sleep(for: .seconds(2))
@@ -39,7 +39,7 @@ enum DebugVoiceMotion {
             call.inputs.continuation.yield(.peer(.level(.output, loud: false, peak: 0)))
             try await Task.sleep(for: .milliseconds(350))
             mark("quiet-within-turn")
-            guard workspace.voicePresentation?.activity == .speaking else { throw CocoaError(.coderInvalidValue) }
+            guard workspace.voiceViewState.presentation().activity == .speaking else { throw CocoaError(.coderInvalidValue) }
             call.inputs.continuation.yield(.peer(.level(.output, loud: true, peak: 0.7)))
             try await sound(call, side: .output, count: 20)
             mark("interrupt")
@@ -77,7 +77,7 @@ enum DebugVoiceMotion {
             for await live in Observations({ call.isLive }) where !live { break }
             try await Task.sleep(for: .seconds(1))
             mark("recover")
-            try await workspace.recoverVoice(.reconnect)
+            try await workspace.performVoice(.start)
             for await phase in Observations({ call.phase }) where phase == .listening { break }
             try await sound(call, side: .input, count: 20)
             mark("finished")

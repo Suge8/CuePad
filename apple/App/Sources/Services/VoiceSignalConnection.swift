@@ -80,10 +80,10 @@ final class VoiceSignalConnection {
         guard header.sequence > peer.received else { throw VoiceSignalError.invalid }
         guard packet.sealed.count <= VoiceSignalFormat.maximumPlaintextBytes + Self.gcmOverhead else { throw VoiceSignalError.tooLarge }
         let plaintext = try AES.GCM.open(AES.GCM.SealedBox(combined: packet.sealed), using: key, authenticating: header.authenticationData())
-        let payload = try JSONDecoder().decode(VoiceSignalPayload.self, from: plaintext)
-        guard payload.purpose == header.purpose else { throw VoiceSignalError.invalid }
         peer.received = header.sequence
         peers[header.sender.device] = peer
+        guard let payload = try? JSONDecoder().decode(VoiceSignalPayload.self, from: plaintext) else { throw VoiceSignalError.unreadable }
+        guard payload.purpose == header.purpose else { throw VoiceSignalError.invalid }
         return VoiceReceivedSignal(header: header, payload: payload)
     }
 
