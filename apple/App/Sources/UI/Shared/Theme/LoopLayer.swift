@@ -13,7 +13,6 @@ struct LoopLayer {
         case sheen
         case pulse
         case aura(radius: CGFloat)
-        case glow
         case sprite(CueSprite, CueAtlas.Sheet)
     }
 
@@ -113,8 +112,6 @@ struct LoopLayer {
                 loop.backgroundColor = color
             case .aura(let radius):
                 Self.layoutAura(loop, in: bounds, radius: radius, color: color)
-            case .glow:
-                Self.layoutGlow(loop, in: bounds, color: color)
             case .sprite:
                 Self.layoutSprite(loop, in: bounds)
             case .sheen:
@@ -169,8 +166,6 @@ struct LoopLayer {
                 return makeSprite(sprite, on: sheet, intro: intro)
             case .aura:
                 return makeAura()
-            case .glow:
-                return makeGlow()
             case .sheen:
                 let layer = CAGradientLayer()
                 layer.startPoint = CGPoint(x: 0, y: 0.5)

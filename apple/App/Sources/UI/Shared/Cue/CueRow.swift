@@ -104,7 +104,8 @@ struct CueRow: View, Equatable {
     private var straddlesDot: Bool { margin < CueUnreadDot.room }
 }
 
-/// Cue 此刻在做什么只写在这里，不进对话里的哪一格（经过、醒来那一行都是记录，`CueTrace`），出现、收起与换字都不挪对话。
+/// Cue 此刻在做什么只写在这里，不进对话里的哪一格（经过、醒来那一行都是记录，`CueTrace`）：一轮在跑时是 Cue 本人（`LiveFigure`），
+/// 回复到了它碎开让位、回复从它的位置接上。
 /// 正在说的话（`CueKeeper.speech`）只有这个视图读它，出字时对话列表不重算；它与对话在同一次更新里拿到同一份对话，落库了（`LiveDraft.landed`）就不再显示，换下是同一帧里的一减一加。
 struct CueEnding: View {
     let newestSaid: Date?
@@ -124,33 +125,15 @@ struct CueEnding: View {
                 .padding(.top, CuePage.gap(before: .leading, joined: joined))
                 .transition(.asymmetric(insertion: CueBubble.arrival, removal: .identity))
             }
-            ChatLiveSlot(gap: CuePage.gap(before: nil, joined: false), font: CueDoing.font, floating: 0) { if draft == nil { live } }
+            ChatLiveSlot(gap: CuePage.gap(before: nil, joined: false), font: Typography.secondary, floating: 0) { figure(speaking: draft != nil) }
             #else
-            ChatLiveSlot(gap: CuePage.gap(before: nil, joined: false), font: CueDoing.font, floating: 0) { live }
+            ChatLiveSlot(gap: CuePage.gap(before: nil, joined: false), font: Typography.secondary, floating: 0) { figure(speaking: false) }
             #endif
         }
     }
 
-    @ViewBuilder private var live: some View {
-        let presence = workspace.cue.presence
-        if let shown = presence.shown, let progress = presence.progress {
-            CueDoing(shown: shown, doing: progress)
-                .transition(.asymmetric(insertion: .entry, removal: .identity))
-        }
-    }
-}
-
-private struct CueDoing: View {
-    let shown: SessionShown
-    let doing: String
-    @Environment(\.palette) private var palette
-
-    static let font = Typography.secondary
-
-    var body: some View {
-        NoteLine { StateDot(shown: shown, size: 7) } label: {
-            DoingLine(text: doing).font(Self.font).foregroundStyle(palette.ink2).lineLimit(1)
-        }
-        .accessibilityElement(children: .ignore).accessibilityLabel(doing)
+    /// Mac 上开始出字就是回复到了：角色当场让位给草稿。
+    private func figure(speaking: Bool) -> some View {
+        LiveFigure(live: speaking ? nil : FigureLive(cue: workspace.cue.presence, now: workspace.cue.now), handoff: FigureHandoff(reply: newestSaid, speaking: speaking))
     }
 }

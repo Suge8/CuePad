@@ -75,8 +75,12 @@ struct Conversation: View {
 
     private var floating: CGFloat { ComposerMetrics.noticeClearance(textHeight: noticeText) }
 
-    @ViewBuilder private var liveStatus: some View {
-        if session.runtimeState.isWorking || !session.runtimeSubagents.isEmpty { LiveStatus(session: session).transition(.entry) }
+    /// 做过的几步在上，此刻在做的是末尾的角色（`LiveFigure`）：回复落库时它碎开让位。
+    private var liveStatus: some View {
+        VStack(alignment: .leading, spacing: Spacing.item) {
+            if session.runtimeState.isWorking || !session.runtimeSubagents.isEmpty { LiveStatus(session: session).transition(.entry) }
+            LiveFigure(live: FigureLive(session: session), handoff: FigureHandoff(reply: messages.last { $0.role == .known(.pi) }?.at))
+        }
     }
 }
 
@@ -102,10 +106,14 @@ struct SessionDraft: View {
                 }
             }
             ChatLiveSlot(spacing: Conversation.spacing, floating: floating) {
-                if speaking || landed && session.runtimeState.known?.isTurnRunning == true {
-                    SubagentList(agents: session.runtimeSubagents)
-                } else if session.runtimeState.isWorking || !session.runtimeSubagents.isEmpty {
-                    LiveStatus(session: session).transition(.asymmetric(insertion: .entry, removal: .identity))
+                VStack(alignment: .leading, spacing: Spacing.item) {
+                    if speaking || landed && session.runtimeState.known?.isTurnRunning == true {
+                        SubagentList(agents: session.runtimeSubagents)
+                    } else if session.runtimeState.isWorking || !session.runtimeSubagents.isEmpty {
+                        LiveStatus(session: session).transition(.asymmetric(insertion: .entry, removal: .identity))
+                    }
+                    // 开始出字就是回复到了：角色当场让位给草稿
+                    LiveFigure(live: speaking ? nil : FigureLive(session: session), handoff: FigureHandoff(reply: newestReply?.at, speaking: speaking))
                 }
             }
         }

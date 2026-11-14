@@ -50,7 +50,7 @@ struct CuePage: View {
     #if os(macOS)
     private var page: some View {
         FloatingReply {
-            chat.frame(maxWidth: .infinity, maxHeight: .infinity).background(alignment: .bottom) { glow }
+            chat.frame(maxWidth: .infinity, maxHeight: .infinity)
         } reply: {
             bottom()
                 .replyTray()
@@ -63,7 +63,7 @@ struct CuePage: View {
     /// 名牌保留整页坐标；仅对话与拍板卡给常驻会话条让位。
     private var page: some View {
         FloatingReply {
-            chat.padding(.leading, railInset).background(alignment: .bottom) { glow.ignoresSafeArea(edges: .bottom) }
+            chat.padding(.leading, railInset)
         } reply: {
             bottom()
                 .padding(.horizontal, Spacing.group)
@@ -75,8 +75,6 @@ struct CuePage: View {
         .floatingHeader(.verbatim(cue.name), height: CueHeader.height, hasPanel: true, center: { CueHeader() }) { EmptyView() }
     }
     #endif
-
-    private var glow: some View { CueGlow(on: cue.beat.dot == .moving) }
 
     private var railInset: CGFloat { workspace.layout == .narrow ? SessionRail.chatInset : 0 }
 
@@ -100,7 +98,7 @@ struct CuePage: View {
     private func conversation(_ thread: CueThread) -> some View {
         let rows = thread.rows
         return ChatColumn(
-            followKey: FollowKey(thread, live: cue.presence.progress != nil), readingWidth: Self.readingWidth, inset: Self.inset, follow: $follow,
+            followKey: FollowKey(thread, live: cue.presence.shown != nil), readingWidth: Self.readingWidth, inset: Self.inset, follow: $follow,
             marks: thread.marks, ids: rows.map(\.id), paging: Self.paging(thread),
             holding: catchingUp || docking,
             arrival: rows.last.flatMap { CueRow.arrives($0, swapsInPlace: services.cueOnDutyHere) ? $0.id : nil },
@@ -125,7 +123,6 @@ struct CuePage: View {
             // 手机上对话里的字不开行内选择：长按出的是消息菜单，挑字走菜单里的"选择文本"（同会话页）
             .environment(\.inlineTextSelection, false)
             #endif
-            .animation(Motion.fade, value: cue.presence.progress)
         }
     }
 
