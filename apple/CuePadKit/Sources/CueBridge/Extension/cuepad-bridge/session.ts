@@ -282,11 +282,11 @@ export class Session {
 		for (const said of this.pending.splice(0)) said.ack?.({ ok: false, error: "failed: aborted before it started" });
 	}
 
-	/** 先交的先认，文字要整句相同：带图的 Pi 在文字后附上图片说明，按开头认；模板与 skill 落成的是展开后的文字，认不出原话，
+	/** 先交的先认，文字要整句相同：带图的 Pi 把图缩小或转格式时在原文后空一行附上说明（`原文\n\n[Image: …]`，Pi 的 `_normalizePromptImages`）；模板与 skill 落成的是展开后的文字，认不出原话，
 	 * 取最早的（它们只经 `submit` 在歇着时交出，交出后的第一条你的消息就当是它）。
 	 * 排在它前面的没认到的就是没落成（别的扩展在 input 里接走、交出后被拒收），不再等：回未知，CuePad 不重发。 */
 	landed(text: string): Said | undefined {
-		const at = this.starting.findIndex((said) => said.expand || text === said.text || (typeof said.content !== "string" && text.startsWith(said.text)));
+		const at = this.starting.findIndex((said) => said.expand || text === said.text || (typeof said.content !== "string" && text.startsWith(`${said.text}\n\n`)));
 		if (at < 0) return undefined;
 		const [said, ...lost] = this.starting.splice(0, at + 1).reverse();
 		for (const gone of lost) gone.ack?.({ ok: false, error: "failed: not delivered to the session" });
