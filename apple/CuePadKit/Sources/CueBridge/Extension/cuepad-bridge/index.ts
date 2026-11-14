@@ -6,7 +6,7 @@ import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from "@e
 import { listen } from "./connection.ts";
 import { captureDialogs, follow } from "./events.ts";
 import { INTERNAL_COMMAND, modelInfo, reason, subagentsOf } from "./info.ts";
-import { supportsFast } from "./fast.ts";
+import { prioritized } from "./fast.ts";
 import { IS_HOSTED } from "./lifecycle.ts";
 import { watchSession } from "./phone.ts";
 import { Session, type Firecode } from "./session.ts";
@@ -83,10 +83,7 @@ export default function (pi: ExtensionAPI) {
 		},
 	});
 
-	pi.on("before_provider_request", (event, ctx) => {
-		if (!live?.session.fast || !supportsFast(ctx.model) || !event.payload || typeof event.payload !== "object" || Array.isArray(event.payload)) return;
-		return { ...event.payload, service_tier: "priority" };
-	});
+	pi.on("before_provider_request", (event, ctx) => (live?.session.fast ? prioritized(event.payload, ctx.model) : undefined));
 
 	pi.on("session_start", async (_event, ctx) => {
 		if (ctx.mode !== "rpc") return;
