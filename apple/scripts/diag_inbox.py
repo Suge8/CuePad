@@ -9,6 +9,7 @@ import sys
 from diag_report import ARCHIVES, EXPLAIN, WATCHDOG, WATCHDOG_EVENTS, dsyms, pick, shown, summarize
 
 INBOX = os.environ.get("CUEPAD_DIAG_DIR") or os.path.expanduser("~/Library/Logs/CuePad")
+ACTIVITY = "activity.json"  # 同 DiagnosticArchive.activity：手机实时活动的取证
 KINDS = {"crashDiagnostics": "崩溃", "hangDiagnostics": "卡死", "cpuExceptionDiagnostics": "CPU 异常",
          "diskWriteExceptionDiagnostics": "磁盘写入异常"}  # 同 CrashReport.Kind，按这个顺序
 EXCEPTIONS = {1: "EXC_BAD_ACCESS", 2: "EXC_BAD_INSTRUCTION", 3: "EXC_ARITHMETIC", 5: "EXC_SOFTWARE", 6: "EXC_BREAKPOINT",
@@ -28,7 +29,7 @@ def overview():
     names = folders()
     print(f"{shown(INBOX)}：{len(names)} 台设备" + ("" if names else "（还没收到过）"))
     for name in names:
-        files = sorted(os.listdir(f"{INBOX}/{name}"), reverse=True)
+        files = sorted((f for f in os.listdir(f"{INBOX}/{name}") if f != ACTIVITY), reverse=True)
         logs = [f for f in files if f.endswith(".log")]
         print(f"  {name}：诊断 {len(files) - len(logs)} 份、日志 {len(logs)} 份；最新 {files[0] if files else '无'}")
 
@@ -43,7 +44,7 @@ def device_dir(wanted):
 
 def inbox(wanted, full):
     folder = device_dir(wanted)
-    files = sorted(os.listdir(folder), reverse=True)
+    files = sorted((f for f in os.listdir(folder) if f != ACTIVITY), reverse=True)
     reports = [r for f in files if f.endswith(".json") for r in metrickit(f"{folder}/{f}")]
     print(f"{shown(folder)}：诊断 {len(reports)} 份")
     summarize(reports)
@@ -60,6 +61,12 @@ def inbox(wanted, full):
         print(f"  {shown(folder + '/' + name)}\n    {lines[0] if lines else '（空）'}\n    " + "、".join(f"{k} {v}" for k, v in sorted(levels.items())))
         if full:
             print("\n".join(lines[1:]))
+    if os.path.exists(f"{folder}/{ACTIVITY}"):
+        events = json.load(open(f"{folder}/{ACTIVITY}"))["events"]
+        print(f"\n实时活动取证 {len(events)} 条（最近 7 天、至多 96 条）：{shown(folder + '/' + ACTIVITY)}")
+        keys = ("action", "activity", "reason", "sourceAt", "contentTag", "tokenTag", "foreground", "errorDomain", "errorCode")
+        for event in events if full else events[-10:]:
+            print(f'  {event["at"]} ' + " ".join(f"{k}={event[k]}" for k in keys if event.get(k) is not None))
 
 
 def metrickit(path):

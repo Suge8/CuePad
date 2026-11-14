@@ -5,7 +5,6 @@
 #                                                   自己的 Swift 源文件（App、CuePadKit）有一条编译警告就失败，第三方与生成的代码不算（_build.sh 的 own_warnings）
 #   xc.sh signoff                                   合并前的门：本机跑 check、test kit、test mac，全过才给 HEAD 这个提交记 GitHub 状态，主干规则认它（signoff.sh 头注释）
 #   xc.sh build <mac|ios|ipad>
-#   xc.sh activity-log [输出.json]                  生产 iCloud 活动取证只读导出：签隔离副本、不启动应用服务，不打开真实库、不重启正式版
 #   xc.sh strings                                   编 mac 与 ios，把界面文字收进 String Catalog，列出缺英文的（strings.py 头注释）
 #   xc.sh test <mac|ios|ipad> [xcodebuild 参数…]     如 -only-testing:CuePadTests/SuiteName；ios、ipad 不带参数时连 CuePadKit 也在模拟器上跑
 #   xc.sh test kit [xcodebuild 参数…]               CuePadKit 在 macOS 上的测试，如 -only-testing:CueSyncTests/PendingTests
@@ -68,7 +67,7 @@ export TEST_RUNNER_PI_OFFLINE=1
 # 同时跑的测试最多这么多个（Swift Testing 的并行宽度；不限时它把用例全数同时起）：测试起的是真 Agent 进程，3 核的 CI 机器上同时起几十个，
 # 不少用例等到超时（实测 76 条）。按核数给，CUEPAD_TEST_WIDTH 覆盖
 export TEST_RUNNER_SWT_EXPERIMENTAL_MAXIMUM_PARALLELIZATION_WIDTH="${CUEPAD_TEST_WIDTH:-$(sysctl -n hw.ncpu)}"
-USAGE="用法：$0 <check|signoff|build|strings|test|agents|shot|rec|run|stop|real|fleet|explore|perf|release|device|provision|activity-log|diag> [mac|ios|ipad|kit] …（xc.sh help 看全部）"
+USAGE="用法：$0 <check|signoff|build|strings|test|agents|shot|rec|run|stop|real|fleet|explore|perf|release|device|provision|diag> [mac|ios|ipad|kit] …（xc.sh help 看全部）"
 
 cmd="${1:-}"; platform="${2:-}"
 case "$cmd" in
@@ -87,11 +86,10 @@ case "$cmd" in
     # 本检出上一个 run 的实例租着一台模拟器：先收掉再排队，免得槽位被自己占满
     if [ "$cmd" = run ] && [ "$platform" != mac ]; then python3 "$APPLE_DIR/scripts/app.py" stop sim >/dev/null; fi
     case "$platform" in ios) xc_enter "$IOS_DEVICE" "$0" "$@" ;; ipad) xc_enter "$IPAD_DEVICE" "$0" "$@" ;; *) xc_enter "" "$0" "$@" ;; esac ;;
-  check|build|build-perf|activity-log) xc_enter "" "$0" "$@" ;;  # build-perf：perf 的构建段，内部用
+  check|build|build-perf) xc_enter "" "$0" "$@" ;;  # build-perf：perf 的构建段，内部用
   *) echo "$USAGE" >&2; exit 2 ;;
 esac
 [ "$cmd" != check ] || platform=ios
-[ "$cmd" != activity-log ] || platform=mac
 perf_script=""
 if [ "$cmd" = perf ]; then
   # perf idle|launch <平台> …：平台跟着传给 perf-idle.sh、perf-launch.sh
@@ -165,10 +163,6 @@ case "$cmd" in
     # shellcheck disable=SC2031 # 读外层的 iOS 产物目录：整模块那一段在子 shell 里换了 DERIVED 与 platform
     no_warnings "$DERIVED/warnings-$platform" || status=1
     exit $status ;;
-  activity-log)
-    xcd all
-    signing_begin  # 脚本随它结束，锁一起放
-    python3 "$APPLE_DIR/scripts/activity-log.py" "$app" "${2:-$DERIVED/activity-diagnostics.json}" ;;
   build) xcd all; sign_development ;;
   build-perf) built "$DERIVED/build-key-$platform" "$app" all xcb -quiet build ;;
   test) xc_test "$@" ;;

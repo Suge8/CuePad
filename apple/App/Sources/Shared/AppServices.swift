@@ -197,7 +197,7 @@ final class AppServices {
         let activitySync: (any SyncControlling)? = if case .iCloud = sync, location.touchesRealWorld { self.sync } else { nil }
         viewer = ViewerKeeper(store: store, sync: self.sync, device: UIDevice.current.identifierForVendor?.uuidString)
         if location.touchesRealWorld || DebugHooks.opensLiveActivity {
-            cueActivity = CueLiveActivity.make(store: store, sync: activitySync, location: location) { [weak self] in
+            cueActivity = CueLiveActivity(store: store, sync: activitySync, diagnostics: diagnostics) { [weak self] in
                 try self?.remoteActivityState()
             }
         }
