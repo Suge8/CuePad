@@ -81,7 +81,7 @@ struct PreviewContent: View {
                 default: PreviewPage(preview: preview, file: file, active: active)
                 }
             } else {
-                EmptyState(mascot: .error, title: "读不了这个文件").padding(Spacing.page).frame(maxHeight: .infinity)
+                PreviewUnreadable()
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -92,12 +92,55 @@ struct PreviewContent: View {
 
 private struct PreviewMarkdown: View {
     let file: URL
-    @State private var text: String?
 
     var body: some View {
-        ScrollView {
-            MarkdownText(source: text ?? "", style: .document).padding(Spacing.panel).frame(maxWidth: PreviewContent.measure, alignment: .leading).frame(maxWidth: .infinity)
+        PreviewTextFile(file: file, parse: { $0 }) { text in
+            ScrollView {
+                MarkdownText(source: text, style: .document).padding(Spacing.panel).frame(maxWidth: PreviewContent.measure, alignment: .leading).frame(maxWidth: .infinity)
+            }
         }
-        .task { text = (try? String(contentsOf: file, encoding: .utf8)) ?? "" }
+    }
+}
+
+/// 文件不在本机、读不出来（坏了、不是 UTF-8 的字、WebKit 载不出）时各类页都写这一句，不留一张白页。
+struct PreviewUnreadable: View {
+    var body: some View {
+        EmptyState(mascot: .error, title: "读不了这个文件").padding(Spacing.page).frame(maxHeight: .infinity)
+    }
+}
+
+nonisolated enum PreviewFile {
+    static func text(of file: URL) throws -> String { try String(contentsOf: file, encoding: .utf8) }
+
+    @concurrent static func read<Value: Sendable>(_ file: URL, _ parse: @Sendable (String) -> Value) async throws -> Value { parse(try text(of: file)) }
+}
+
+/// 自己排字的那几类页（Markdown、改动、纯文本）：在后台读整份、交给 `parse`，读不了写 `PreviewUnreadable`。
+struct PreviewTextFile<Value: Sendable, Content: View>: View {
+    let file: URL
+    let parse: @Sendable (String) -> Value
+    @ViewBuilder let content: (Value) -> Content
+    @State private var value: Value?
+    @State private var failed = false
+
+    var body: some View {
+        Group {
+            if let value {
+                content(value)
+            } else if failed {
+                PreviewUnreadable()
+            } else {
+                Color.clear
+            }
+        }
+        .task(id: file) {
+            do {
+                value = try await PreviewFile.read(file, parse)
+                failed = false
+            } catch {
+                value = nil
+                failed = true
+            }
+        }
     }
 }

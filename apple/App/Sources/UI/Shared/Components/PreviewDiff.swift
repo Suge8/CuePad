@@ -3,12 +3,11 @@ import SwiftUI
 /// 行不折、整块横着滚（代码折了行就认不出缩进），行底铺到最长那一行（`UnifiedDiff.widest`），滚到哪颜色都连得上；只排看得见的那些行，几万行的改动也照样打开。
 struct PreviewDiff: View {
     let file: URL
-    @State private var diff: UnifiedDiff?
     @State private var viewport: CGFloat = 0
 
     var body: some View {
-        ScrollView([.horizontal, .vertical]) {
-            if let diff {
+        PreviewTextFile(file: file, parse: UnifiedDiff.init) { diff in
+            ScrollView([.horizontal, .vertical]) {
                 let layout = DiffLayout(diff, viewport: viewport)
                 LazyVStack(alignment: .leading, spacing: 0) {
                     ForEach(diff.lines) { DiffRow(line: $0, layout: layout) }
@@ -17,11 +16,6 @@ struct PreviewDiff: View {
             }
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { viewport = $0 }
-        .task(id: file) { diff = await Self.read(file) }
-    }
-
-    @concurrent private static func read(_ file: URL) async -> UnifiedDiff {
-        UnifiedDiff((try? String(contentsOf: file, encoding: .utf8)) ?? "")
     }
 }
 

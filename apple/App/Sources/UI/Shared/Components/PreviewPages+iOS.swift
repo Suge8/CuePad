@@ -21,7 +21,7 @@ struct PreviewPage: View {
             .accessibilityElement().accessibilityLabel(Text(verbatim: preview.title)).accessibilityAddTraits(.isImage)
         case .pdf: PreviewPDF(file: file).ignoresSafeArea()
         case .video, .audio: PreviewPlayer(file: file, active: active, look: look)
-        case .text: PreviewText(file: file).ignoresSafeArea()
+        case .text: PreviewTextFile(file: file, parse: { $0 }) { PreviewText(text: $0).ignoresSafeArea() }
         case .document, .spreadsheet, .presentation: PreviewWeb(file: file)
         case .model, .web, .markdown, .diff, nil: PreviewStill(preview: preview, file: file)
         }
@@ -182,7 +182,7 @@ struct PreviewStill: View {
 }
 
 struct PreviewText: UIViewRepresentable {
-    let file: URL
+    let text: String
     @Environment(\.previewInsets) private var insets
 
     func makeUIView(context: Context) -> UITextView {
@@ -191,13 +191,11 @@ struct PreviewText: UIViewRepresentable {
         view.backgroundColor = .clear
         view.font = Typography.codeUIFont
         view.textContainerInset = UIEdgeInsets(top: Spacing.block, left: Spacing.group, bottom: Spacing.block, right: Spacing.group)
-        Task { view.text = await Self.read(file) }
+        view.text = text
         return view
     }
 
     func updateUIView(_ view: UITextView, context: Context) { view.previewInsets(insets) }
-
-    @concurrent private static func read(_ file: URL) async -> String { (try? String(contentsOf: file, encoding: .utf8)) ?? "" }
 }
 
 @MainActor final class PreviewFinds {
