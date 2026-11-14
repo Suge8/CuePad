@@ -3,12 +3,12 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 中转断开时通话照常，对端在宽限期内以新租约回来就接着打（`VoiceLink`）；替身见 `Voice89AuditTests`。
+/// 中转断开时通话照常，对端在宽限期内以新租约回来就接着打（`VoiceLink`）；替身见 `PhoneVoiceFixture`。
 @Suite(.releasesLibraries, .serialized) @MainActor struct VoiceRelinkTests {
     #if os(iOS)
     /// 中转断了不挂电话：Mac 以新租约回来的那帧带着最新投影，手机换绑；Mac 问 resume 手机就答，之后的挂断送到新租约。
     @Test func relayDropKeepsTheCallUntilTheMacComesBack() async throws {
-        let (app, voice, signal, media) = try await Voice89AuditTests().phone()
+        let (app, voice, signal, media) = try await connectedPhone()
         defer { app.services.cancelBackgroundWork() }
         let session = try #require(voice.session), old = signal.peer
         await voice.receive(.peerClosed(endpoint: old, reason: .disconnected))
@@ -29,7 +29,7 @@ import Testing
 
     /// Mac 上的 Codex 没给凭证（卡在系统提示上）：手机按 Mac 投来的这个原因结束，提示说去 Mac 上看，可重新接通。
     @Test func codexNotRespondingOnTheMacEndsWithItsOwnReason() async throws {
-        let (app, voice, signal, media) = try await Voice89AuditTests().phone()
+        let (app, voice, signal, media) = try await connectedPhone()
         defer { app.services.cancelBackgroundWork() }
         let session = try #require(voice.session), workspace = Workspace(services: app.services)
         await voice.receive(signal.event(.projection(value: .init(session: session, phase: .failed(.codexUnresponsive), requests: [], replies: [], executions: [])), session: session))
@@ -41,9 +41,9 @@ import Testing
 
     /// 中转连着却一直不回解析：通话仍在宽限期满时按断开的原因结束，不被这次解析拖住。
     @Test func aStuckLookupCannotOutlastTheGrace() async throws {
-        let (app, voice, signal, media) = try await Voice89AuditTests().phone()
+        let (app, voice, signal, media) = try await connectedPhone()
         defer { app.services.cancelBackgroundWork() }
-        signal.resolveGate = AuditGate()
+        signal.resolveGate = VoiceGate()
         let began = ContinuousClock.now
         await voice.receive(.peerClosed(endpoint: signal.peer, reason: .disconnected))
         try await eventually("grace expired") { voice.phase == .ended(reason: .peerLeft) }
@@ -55,7 +55,7 @@ import Testing
 
     /// 断开前发出、还没回结果的命令：等 Mac 回来，换绑后 Mac 补送的结果照原命令认，不报失败、不重发。
     @Test func aCommandWaitsAcrossTheRelinkForItsResult() async throws {
-        let (app, voice, signal, _) = try await Voice89AuditTests().phone()
+        let (app, voice, signal, _) = try await connectedPhone()
         defer { app.services.cancelBackgroundWork() }
         let session = try #require(voice.session), message = UUID(), id = UUID()
         let task = Task { try await voice.command(.recover(request: .recorded(message: message)), id: id) }
@@ -75,7 +75,7 @@ import Testing
 
     /// 手机回来后先到的是一条命令（resume 还在路上，或手机已因命令的结果认为接回、不再问）：换绑后投影照样推给手机的新租约。
     @Test func aCommandBeforeResumeStillBringsProjectionsBack() async throws {
-        let app = TestApp(), store = app.services.store, signal = AuditSignaling(), host = TestApp.hostID
+        let app = TestApp(), store = app.services.store, signal = FakeVoiceSignaling(), host = TestApp.hostID
         defer { app.services.cancelBackgroundWork() }
         try await store.updateCueProfile { $0.enabledAt = .now; $0.hostID = host }
         let voice = VoiceService(services: app.services, signaling: signal)
@@ -112,7 +112,7 @@ import Testing
 
     /// 结果出来时手机正断着：不发往旧租约（中转会拒、结果就丢了），手机回来后按原命令身份补送到新租约，命令不再执行一遍。
     @Test func aResultMadeWhileThePhoneIsAwayFollowsItToTheNewLease() async throws {
-        let app = TestApp(), store = app.services.store, signal = AuditSignaling(), host = TestApp.hostID
+        let app = TestApp(), store = app.services.store, signal = FakeVoiceSignaling(), host = TestApp.hostID
         defer { app.services.cancelBackgroundWork() }
         try await store.updateCueProfile { $0.enabledAt = .now; $0.hostID = host }
         let voice = VoiceService(services: app.services, signaling: signal)

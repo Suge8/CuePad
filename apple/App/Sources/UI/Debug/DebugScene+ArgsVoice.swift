@@ -23,8 +23,6 @@ nonisolated struct VoiceArgs: Decodable, DebugArgGroup {
     let keepOpen: Bool
     /// `-CuePadVoiceLayout <布局>`：语音面板布局样例
     let layout: String?
-    /// `-CuePadVoiceLightProbe YES`：语音面板亮度探针
-    let lightProbe: Bool
     /// `-CuePadVoiceLog <文件>`：`<距起点秒> <节点>`
     let log: String?
     /// `-CuePadVoiceModel <模型>`：指定其他已在隔离目录登录的模型

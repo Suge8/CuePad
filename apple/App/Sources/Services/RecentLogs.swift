@@ -7,7 +7,7 @@ import OSLog
 nonisolated enum RecentLogs {
     /// "把最近日志发到 Mac"取多久：够覆盖一次复现，又不至于在上限里被截掉大半。
     static let window: TimeInterval = 15 * 60
-    /// 超过就丢最早的：一条诊断记录连字段不超过 1MB（`DeviceDiagnostic.maxBytes`）。
+    /// 超过就丢最早的：要放得进一条诊断记录的内容上限（`DeviceDiagnostic.maxBytes`）。
     static let maxBytes = 512 * 1024
 
     /// `title` 写在第一行（哪种日志、哪个版本），其后是时间段与条数。

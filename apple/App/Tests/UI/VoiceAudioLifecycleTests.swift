@@ -7,8 +7,8 @@ import Testing
 @Suite(.releasesLibraries, .serialized) @MainActor struct VoiceAudioLifecycleTests {
     final class Media: VoiceMedia {
         var onEvent: (VoicePeer.Event) -> Void = { _ in }
-        var offerGate: AuditGate?
-        var closeGate: AuditGate?
+        var offerGate: VoiceGate?
+        var closeGate: VoiceGate?
         var failure: (any Error)?
         var offered = false
         var closed = false
@@ -25,7 +25,7 @@ import Testing
 
     final class Fixture {
         let app = TestApp()
-        let signal = AuditSignaling()
+        let signal = FakeVoiceSignaling()
         let workspace: Workspace
         let saved: CueMessage
         var voice: VoiceService { app.services.voice }
@@ -43,7 +43,7 @@ import Testing
 
     @Test(arguments: [false, true])
     func interruptionKeepsItsReasonAndClosingExcludesReconnect(whileStarting: Bool) async throws {
-        let media = Media(), gate = AuditGate(), closeGate = AuditGate()
+        let media = Media(), gate = VoiceGate(), closeGate = VoiceGate()
         var nextMedia: any VoiceMedia = media
         let fixture = try await Fixture(makeMedia: { nextMedia })
         defer { gate.open(); closeGate.open(); fixture.app.services.cancelBackgroundWork() }

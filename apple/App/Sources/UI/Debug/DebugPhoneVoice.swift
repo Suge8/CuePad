@@ -32,9 +32,10 @@ enum DebugPhoneVoice {
             .init(reference: .unrecorded(session: session, request: UUID()), recording: false, issue: .storageUnavailable,
                   preview: .init(original: String(localized: "检查发布事项 \(1)", table: "Demo")))
         ] : []
-        voice.muted = name == "muted"
         voice.availability = .ready(endpoint: VoiceEndpoint(device: VoiceDeviceID("voice-layout-phone"), lease: UUID()))
         DebugPhoneVoiceReplay.attach(voice, workspace: workspace, session: session)
+        // 回放换上通话时会清掉静音
+        voice.muted = name == "muted"
         if let phase {
             voice.setProjection(.init(session: session, phase: phase, requests: requests, replies: [], executions: [], response: response))
         }

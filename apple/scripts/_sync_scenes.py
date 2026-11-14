@@ -220,9 +220,8 @@ def island(checkout, out, args):
     started = subprocess.run([f"{checkout}/apple/scripts/xc.sh", "run", "ios", "--", "-CuePadSyncBench", "island", "-CuePadLiveActivity", "YES",
                               "-CuePadSyncBenchRounds", str(rounds)], env=env, capture_output=True, text=True)
     open(f"{out}/ios-run.log", "w").write(started.stdout + started.stderr)
-    # App 跑完各轮才报就绪，run 返回时打点已写完；最后一行是"PID UDID"，按 PID 收掉这个实例
-    last = started.stdout.strip().splitlines()[-1].split() if started.stdout.strip() else []
-    if started.returncode == 0 and last and last[0].isdigit(): os.kill(int(last[0]), 15)
+    # App 跑完各轮才报就绪，run 返回时打点已写完：经 stop 收掉实例，看守跟着放下模拟器
+    subprocess.run([f"{checkout}/apple/scripts/xc.sh", "stop"], env=env, capture_output=True)
     marks = f"{library}/bench-marks.jsonl"
     events = [json.loads(l) for l in open(marks)] if os.path.exists(marks) else []
     if not any(e["e"] == "done" for e in events): m["手机收消息·没跑完（次）"].append(1)
