@@ -50,9 +50,9 @@ nonisolated struct ActivityDiagnosticReport: Codable, Sendable {
     }
 
     mutating func append(_ event: Event) {
+        events.removeAll { $0.at < event.at.addingTimeInterval(-Self.retention) }  // 先删再算插入处：删后下标会变
         let next = events.firstIndex { $0.run == event.run && $0.sequence > event.sequence }
         let afterRun = events.lastIndex { $0.run == event.run }.map { $0 + 1 }
-        events.removeAll { $0.at < event.at.addingTimeInterval(-Self.retention) }
         events.insert(event, at: next ?? afterRun ?? events.endIndex)
         // 先排顺再合并；不同内容版本、原因或错误不能被后来排到的同类事件抹掉。
         events = events.reduce(into: []) { kept, item in
