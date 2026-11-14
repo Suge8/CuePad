@@ -1,7 +1,6 @@
 import CueStore
 import CueSync
 import Foundation
-import SwiftUI
 
 /// 同步的状态（通不通、文件在路上、冲突）、立即同步与按节奏的拉取。拉不拉、多快由建它时给的 `cadence` 定（`AppServices.pollingCadence`）。
 @Observable
@@ -13,10 +12,12 @@ final class SyncDriver {
     /// 还没返回的立即同步有几个（`syncNow`）。
     private var syncNowWaits = 0 { didSet { followLasting() } }
     var isSyncingNow: Bool { syncNowWaits > 0 }
-    /// 这一轮同步（在对、在传、立即同步没返回）已久过 `Pending.delay`：界面上"正在同步"只在它为真时出（`showsCatchingUp`、`ShownSync`），
-    /// 一闪而过的一轮不出。全 App 一个时钟：各处各自计时的话，同时显示的几处出现、消失的时刻对不上。
-    private(set) var lasting = false
-    @ObservationIgnored private var lastingClock: Task<Void, Never>?
+    /// 界面上"正在同步"只在那件事已久过 `Pending.delay` 时出，一闪而过的不出。一件事一个时钟，读它的各处共用：各自计时的话，同时显示的几处出现、消失的时刻对不上。
+    /// 在对（`isCatchingUp`）：页头、空态（`showsCatchingUp`）。
+    private let catchUp = Lasting()
+    /// 这一轮同步（`SyncStatus.syncing`，含上传）：设置里的同步行（`ShownSync`）。
+    private let round = Lasting()
+    var syncLasting: Bool { round.value }
 
     @ObservationIgnored let engine: (any SyncControlling)?
     @ObservationIgnored private let store: CueStore
@@ -170,22 +171,9 @@ final class SyncDriver {
 
     static let syncWaitLimit = Duration.seconds(5)
 
-    private var busy: Bool { isSyncingNow || state.catchingUp || state.status == .syncing }
-
     private func followLasting() {
-        guard busy else {
-            lastingClock?.cancel()
-            lastingClock = nil
-            // 跟着它换字的几处（页头、空态）一起淡，不各自挂动画
-            if lasting { withAnimation(Motion.fade) { lasting = false } }
-            return
-        }
-        guard !lasting, lastingClock == nil else { return }
-        lastingClock = Task {
-            guard (try? await Task.sleep(for: Pending.delay)) != nil, !Task.isCancelled else { return }
-            lastingClock = nil
-            withAnimation(Motion.fade) { lasting = true }
-        }
+        catchUp.follow(isCatchingUp)
+        round.follow(state.status == .syncing)
     }
 
     /// "同步中"只有这一个来源。上传不算：那是本机的改动在往外走。
@@ -205,9 +193,9 @@ final class SyncDriver {
         isCatchingUp && (localHost == nil || host != localHost)
     }
 
-    /// 写"正在同步"的地方只看这两个：在对、而且这一轮已久过门槛（`lasting`）。
-    var showsCatchingUp: Bool { lasting && isCatchingUp }
-    func showsCatchingUp(on host: String?) -> Bool { lasting && isCatchingUp(on: host) }
+    /// 写"正在同步"的地方只看这两个：在对、而且已久过门槛。
+    var showsCatchingUp: Bool { catchUp.value }
+    func showsCatchingUp(on host: String?) -> Bool { catchUp.value && isCatchingUp(on: host) }
 
     /// 只有要当场生效的请求（停止、改名、补对话）看它。说的话不看：写下就排着，恢复后自动发出。
     var reachesHost: Bool {
@@ -251,6 +239,28 @@ nonisolated extension SyncStatus {
         switch self {
         case .starting, .idle, .syncing: true
         default: false
+        }
+    }
+}
+
+/// 一件事已久过 `Pending.delay`：起来要等满门槛，落下当场。
+@Observable
+private final class Lasting {
+    private(set) var value = false
+    @ObservationIgnored private var clock: Task<Void, Never>?
+
+    func follow(_ active: Bool) {
+        guard active else {
+            clock?.cancel()
+            clock = nil
+            if value { value = false }
+            return
+        }
+        guard !value, clock == nil else { return }
+        clock = Task {
+            guard (try? await Task.sleep(for: Pending.delay)) != nil else { return }
+            clock = nil
+            value = true
         }
     }
 }

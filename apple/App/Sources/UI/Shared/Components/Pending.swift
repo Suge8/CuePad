@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 要等的事多在一秒以内完：这期间什么都不出，免得一闪；过了 `delay` 还没好才淡入，好了就撤下。同步的那一份全 App 只一个时钟（`SyncDriver.lasting`）。
+/// 要等的事多在一秒以内完：这期间什么都不出，免得一闪；过了 `delay` 还没好才淡入，好了就撤下。同步的在 `SyncDriver`（一件事一个时钟）。
 enum Pending {
     /// 比这快的拉取不出指示：一闪而过的转圈比稍等一下更扰人。
     static let delay = Duration.milliseconds(400)

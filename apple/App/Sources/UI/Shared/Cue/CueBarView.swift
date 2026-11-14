@@ -181,6 +181,7 @@ struct CueStatusLine: View {
         .font(font)
         .transition(.opacity)
         .animation(Motion.fade, value: cue.now)
+        .animation(Motion.fade, value: services.syncing.showsCatchingUp(on: cue.hostID))
     }
 
 

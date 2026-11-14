@@ -255,6 +255,7 @@ struct SessionSubtitle: View {
                 .accessibilityElement(children: .combine)
             }
         }
+        .animation(Motion.fade, value: syncing)
     }
 
     @ViewBuilder private func facts(shown: SessionShown, speaks: Bool, mark: String?, compact: Bool) -> some View {

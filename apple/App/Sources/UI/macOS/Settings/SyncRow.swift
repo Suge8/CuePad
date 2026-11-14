@@ -44,6 +44,7 @@ struct SyncRow: View {
             }
         }
         .lineLimit(1)
+        .animation(Motion.fade, value: shown)
         .confirmsErase($confirmErase, choices: choices, services: services)
     }
 
