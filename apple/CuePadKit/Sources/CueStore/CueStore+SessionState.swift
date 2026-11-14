@@ -69,7 +69,7 @@ extension CueStore {
       try db.run("""
         UPDATE deliveryRequests SET status = 'succeeded', failure = NULL, completedAt = ?1, modifiedAt = MAX(modifiedAt + 1, ?1)
         WHERE id IN (SELECT value FROM json_each(?2)) AND mode = 'end' AND targetRef = ?3 AND hostID = ?4 AND handledBy = ?4
-          AND status IN ('executing', 'confirming', 'unconfirmed', 'pending')
+          AND status IN (\(DeliveryStatus.claimedSQL))
         """, [Date.stamp, Self.idList(requests), sessionID, host])
       try dropUnusedCatalogs(host: host)
     }

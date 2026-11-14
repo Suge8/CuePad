@@ -113,9 +113,7 @@ struct LaunchAttachmentTests {
         #expect(mac.host.calls.isEmpty)
 
         clock.advance(.seconds(DeliveryExecutor.retention.seconds + 1))
-        let now = clock.now
-        _ = try await mac.services.store.deleteCompletedDeliveries(
-            before: now, claimCutoff: now, keptCutoff: now.addingTimeInterval(-DeliveryExecutor.keptRetention))
+        try await mac.services.store.deleteExpiredDeliveries(at: clock.now)
         #expect(try await mac.services.store.deliveryRequest(first.request) != nil)
         try await relay(first.request, from: mac, to: phone)
         #expect(try await phase(first) == .failed(.reported("附件到期还没传到这台 Mac，没有发出，可以重发")))

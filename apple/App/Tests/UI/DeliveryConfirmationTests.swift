@@ -34,7 +34,6 @@ struct DeliveryConfirmationTests {
     }
 
     func settledDispatch(_ request: DeliveryRequest, in app: TestApp) async throws -> DeliveryRequest {
-        // 留住目标的那一下也写 preparing（`reserveDeliveryTarget`），之后才转 executing：它不算派发结束
         try await eventually("派发阶段结束") {
             guard let status = try await app.services.store.deliveryRequest(request.id)?.status.known else { return false }
             return status == .confirming || !DeliveryStatus.open.contains(status)

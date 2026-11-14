@@ -100,7 +100,7 @@ extension CueStore {
     for sessionID in sessions {
       guard let state = try sessionState(sessionID), try taskSessionCanEnd(state), let owner = state.createdForTaskID else { continue }
       ended.append(try requestControl(.end, of: SendTarget(kind: .piSession, name: state.title, ref: sessionID), on: state.hostID, cue: cue,
-        content: TaskSessionEnd(createdForTaskID: owner).stored))
+        content: DeliveryRequest.EndKind.task(createdFor: owner).stored))
     }
     return ended
   }

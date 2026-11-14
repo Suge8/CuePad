@@ -21,6 +21,7 @@ extension AppServices {
         }
         follow { [timing] in await self.historyStore.keepPruned(timing: timing) }
         startStrayFileCleanup()
+        startDeliveryCleanup()
         // 启动对账在 `init` 里已做完（`launch`）：重新接上的会话沿用对账前的起点（`Bridge.carryOver`）
         startRuntimes()
         follow(reporting: { .syncUnavailable(String(localized: "Agent 状态没能写入同步记录：\(String(describing: $0))")) }) {

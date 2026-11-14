@@ -20,14 +20,43 @@ extension AppServices {
         }
     }
 
+    /// 等不到结果时撤回请求还没传出去就收回它（那句照常送）；已传出去的那台办到了照样撤，只能说结果还没回来。
     private func withdrawRemotely(_ id: UUID, on host: String) async throws {
-        let result = try await awaitOutcome(onTimeout: SendError.alreadyHanded) {
-            try await request(on: host) {
-                guard let withdrawal = try await store.requestDeliveryWithdrawal(id) else { throw SendError.alreadyHanded }
-                return withdrawal
+        var withdrawal: DeliveryRequest?
+        let result: DeliveryRequest
+        do {
+            result = try await awaitOutcome(onTimeout: SendError.withdrawalPending) {
+                try await request(on: host) {
+                    guard let written = try await store.requestDeliveryWithdrawal(id) else { throw SendError.alreadyHanded }
+                    withdrawal = written
+                    return written
+                }
             }
+        } catch SendError.withdrawalPending {
+            if let withdrawal, try await store.withdrawDelivery(withdrawal.id) { throw SendError.alreadyHanded }
+            throw SendError.withdrawalPending
         }
         guard result.status == .known(.succeeded) else { throw SendError.alreadyHanded }
+    }
+
+    /// 发往再也不上线的 Mac 的请求只有别的设备清得掉，且只凭刚拉完的库（`CueStore.deleteExpiredDeliveries`）：
+    /// 每轮先完整拉一遍，再清那一拉开始前就到期的，睡到下一条到期（最多一天）；没拉成的一小时后再试。
+    func startDeliveryCleanup() {
+        follow { [store, syncing, timing] in
+            while !Task.isCancelled {
+                let started = timing.now()
+                let pulled = (try? await syncing.engine?.syncNow()).map { $0 != .incomplete } ?? false
+                var wake = started.addingTimeInterval(pulled ? 86_400 : 3_600)
+                if pulled {
+                    do {
+                        if let next = try await store.deleteExpiredDeliveries(pulledAt: started) { wake = min(wake, next) }
+                    } catch {
+                        Self.log.error("到期的投送请求没能清掉：\(error.localizedDescription, privacy: .public)")
+                    }
+                }
+                guard (try? await timing.sleepUntil(wake)) != nil else { return }
+            }
+        }
     }
 
     /// 写出请求、等那台办完；从写之前起 `Speech.receiptLimit` 内没结果抛 `onTimeout`。

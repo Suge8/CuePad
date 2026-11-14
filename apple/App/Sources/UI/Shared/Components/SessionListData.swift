@@ -46,7 +46,7 @@ nonisolated struct SessionListData: Sendable, Equatable {
             filter: Filter(text: text, project: project), pinned: pinned, now: now,
             ended: ended.items, endedTotal: ended.total,
             ends: try (pinned.filter { $0.state.state != .known(.ended) } + live).reduce(into: [:]) { ends, item in
-                ends[item.id] = DeliveryRequest.shownEnd(in: try store.deliveryRequests(toSession: item.state.sessionID), at: moment)
+                ends[item.id] = MacDelivery.endProgress(try store.deliveryRequests(toSession: item.state.sessionID), at: moment)
             })
     }
 

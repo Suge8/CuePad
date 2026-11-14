@@ -11,6 +11,7 @@ import SwiftUI
 /// trips（配 `-CuePadSession relay -CuePadSync simulated`，新的隔离库）：再写一句给一台不接手的 Mac（demo-studio），传上替身 iCloud 后是已发出——
 /// 一页里三种状态（已发出、已送达、没能送达）。
 /// preparing（配 `-CuePadScene session -CuePadSession scratch`，不配 `-CuePadDemoMac`）：长原文可展开；原请求等待扩展升级，有原因与准备期限、可撤回，不接真实 Agent。
+/// endUnknown（配 sessions 或 session 画面，不配 `-CuePadDemoMac`）：`-CuePadSession` 那个会话（缺省 homepage）的结束请求结果未确认：列表行与回复框上方都说结束未确认（`MacDelivery.endProgress`）。
 extension DebugScene {
     static func presetSpeech(_ workspace: Workspace) async {
         await running("预设说话") { try await presetSpeechBody(workspace) }
@@ -19,6 +20,7 @@ extension DebugScene {
     private static func presetSpeechBody(_ workspace: Workspace) async throws {
         guard let speech = args.driveOpts.speech else { return }
         let services = workspace.services
+        if speech == "endUnknown" { return try await presetUnknownEnd(services) }
         let box: Binding<ComposerDraft>, listener: Listener
         if scene == "session" {
             let title = args.session ?? "homepage"
@@ -76,6 +78,18 @@ extension DebugScene {
             }
         default: break
         }
+    }
+
+    private static func presetUnknownEnd(_ services: AppServices) async throws {
+        let store = services.store, title = args.session ?? "homepage"
+        guard let session = try await store.sessionPage(SessionQuery(text: title)).items.first(where: { $0.state.title == title })?.state else { return }
+        let end = try await store.requestEnd(of: session.target, on: session.hostID)
+        let executor = DeliveryExecutor(store: store, hostID: session.hostID, onIssue: { abandon("结束未确认演示写库失败", $0) }) { _, _ in
+            .unconfirmed(DeliveryRequest.interruptedReason)
+        }
+        try await executor.start()
+        for try await settled in store.observe({ try $0.deliveryRequest(end.id)?.status == .known(.unconfirmed) }) where settled { break }
+        await executor.stop()
     }
 
     /// `trips` 那一句发去的 Mac：演示库里没有它的执行器，话只到服务器（已发出）。

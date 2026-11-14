@@ -41,7 +41,7 @@ struct UpgradePreparationTests {
         let request = try await Workspace(services: app.services).said(ComposerDraft(text: "升级好后处理这一句"), to: target, mode: .send)
         try await app.services.executor.start()
         let waiting = try await prepared(request, in: app)
-        #expect(waiting.status == .known(.preparing) && waiting.handledBy == nil)
+        #expect(waiting.status == .known(.preparing))
         #expect(waiting.dispatchDeadline != nil && waiting.reason != nil)
         #expect(waiting.failure == nil && !Speech.trip(waiting, at: app.services.speech).inTransit)
         #expect(old.messages.isEmpty)

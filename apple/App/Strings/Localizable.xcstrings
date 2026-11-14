@@ -3738,6 +3738,22 @@
         }
       }
     },
+    "Mac 已经领取，撤不回" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The Mac already picked this up and it can’t be withdrawn"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mac 已经领取，撤不回"
+          }
+        }
+      }
+    },
     "Mac 正在开 Agent 会话…" : {
       "localizations" : {
         "en" : {
@@ -20868,6 +20884,22 @@
         }
       }
     },
+    "结束未确认" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "End not confirmed"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "结束未确认"
+          }
+        }
+      }
+    },
     "结束结果尚未确认：%@" : {
       "localizations" : {
         "en" : {
@@ -25352,6 +25384,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "那台 Mac 没有回音"
+          }
+        }
+      }
+    },
+    "那台 Mac 还没回音：它收到撤回时这句还没发出就会撤掉" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No reply from that Mac yet. If the message hasn’t gone out when it gets the withdrawal, it will be withdrawn."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "那台 Mac 还没回音：它收到撤回时这句还没发出就会撤掉"
           }
         }
       }
