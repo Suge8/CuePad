@@ -63,6 +63,7 @@ extension CodexRuntime {
         guard let session = tracked.removeValue(forKey: id) else { return }
         session.ending?.cancel()
         session.reply = nil
+        session.turns.closed()
         bridge.detach(id, reason: .closed(reason: "quit"))
     }
 

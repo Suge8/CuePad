@@ -101,6 +101,7 @@ final class HostedTurns {
     }
 
     /// 同上，交出之后还要等别的（Claude Code 等确认收下要等这一轮做完）：写出这句的那一刻调 `handed`。
+    /// 停不下在跑的那一轮（停止被拒、等不到收尾）抛 `previousTurnRunning`：这句确定没交出。
     func send(stop: @escaping @MainActor () async throws -> Void, deliver: (_ handed: () -> Void) async throws -> Void) async throws {
         let turn = runningTurn
         let token = UUID()
@@ -109,7 +110,13 @@ final class HostedTurns {
             if handovers.contains(where: { $0.token == token && $0.step != .awaitingStart }) { handovers.removeAll { $0.token == token } }
             settleIfOrphaned()
         }
-        try await stopPhase.run { [self] in try await halt(stop, of: turn) }
+        do {
+            try await stopPhase.run { [self] in try await halt(stop, of: turn) }
+        } catch let error as CancellationError {
+            throw error
+        } catch {
+            throw BridgeError.rejected(RejectReason.previousTurnRunning.rawValue)
+        }
         step(token, to: .delivering)
         try await deliver { [self] in
             guard handovers.contains(where: { $0.token == token && $0.step == .delivering }) else { return }
@@ -138,10 +145,13 @@ final class HostedTurns {
         if !handingOver, phase == .handedOver { settle() }
     }
 
-    /// `turn` 是停止发出时在跑的那一轮：停止段排队期间它已收尾（Agent 可能紧接着开了下一轮）就过期了，不发给 Agent。
+    /// `turn` 是停止发出时抓到的在跑那一轮：停止段排队期间它已收尾（Agent 可能紧接着开了下一轮）就过期了，不发给 Agent。
     /// 已经发出、在路上时换了轮的管不到（ACP 与 Claude Code 的停止不带轮次，落在当前这一轮上）。
+    /// 没抓到（歇着、换轮的话已交出）也照发、不等：开始从事件流晚到的（OpenCode、Codex）这时可能已在跑，在不在跑由各家判断，
+    /// 不发的话停止报成功、这一轮照跑，再说一句也会并进它。
     private func halt(_ stop: () async throws -> Void, of turn: Int?) async throws {
-        guard let turn, runningTurn == turn else { return }
+        guard let turn else { return try await stop() }
+        guard runningTurn == turn else { return }
         stopping = true
         stopRequests += 1
         let seen = ends.count
@@ -171,14 +181,20 @@ final class HostedTurns {
         ends.happened()
     }
 
-    /// 按快照对齐（断线重连后）：`start` 是在跑的那一轮的开始，nil 是歇着。错过的事件不补。
+    /// 按快照对齐（断线重连后）：`start` 是在跑的那一轮的开始，取会话记录里的（不晚于事件报来的同一轮的开始），nil 是歇着。错过的事件不补；
+    /// 在跑的那一轮快照里已歇下、或换成了更晚开始的一轮，就是错过了它的收尾，照收尾处理（等它收尾的换轮放行、接着交出）。
     func reconcile(runningSince start: Date?) {
-        (stopping, stopRequests, failure, tools) = (false, 0, nil, [])
-        handovers.removeAll { $0.step == .awaitingStart }
+        tools = []
+        if phase == .running, let start, start <= facts.turnStartedAt ?? .distantPast {
+            return facts.startTurn(at: start)
+        }
+        if phase == .running { finish() }
         if let start {
-            phase = .running
-            facts.startTurn(at: start)
-        } else {
+            apply(.turnStarted, at: start)
+            return
+        }
+        handovers.removeAll { $0.step == .awaitingStart }
+        if !handingOver {
             phase = .idle
             facts.running = false
         }

@@ -73,8 +73,10 @@ export class Session {
 		const initial = this.state();
 		this.lastKey = JSON.stringify([initial, this.turnSince]);
 		this.phase = phaseOf(initial);
-		this.since = Date.now();
-		this.busySince = this.phase === "working" ? this.since : null;
+		// 热升级前的实例交出的不带 clock：起点从此刻算
+		const clock = kept?.clock?.phase === this.phase ? kept.clock : null;
+		this.since = clock?.since ?? Date.now();
+		this.busySince = clock ? clock.busySince : this.phase === "working" ? this.since : null;
 		this.info = {
 			name: pi.getSessionName() ?? null,
 			firstMessage: firstUserMessage(ctx.sessionManager.getEntries()),
@@ -139,7 +141,7 @@ export class Session {
 	/** 重新载入时交给下一个实例的（`carryOver`）。 */
 	carried(): Carried {
 		const { settled, outcome } = this.tracker;
-		return { settled, outcome, turnSince: this.turnSince };
+		return { settled, outcome, turnSince: this.turnSince, clock: { phase: this.phase, since: this.since, busySince: this.busySince } };
 	}
 
 	private canReload() {

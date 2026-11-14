@@ -51,7 +51,7 @@ public final class Bridge {
     /// App 给的是它自己的那一个（`MacDependencies.timing`）。
     @ObservationIgnored let timing: Timing
     @ObservationIgnored var controls: [Session.ID: any SessionLink] = [:]
-    /// 重开前（`carryOver`）与重新载入扩展前（`detach` 的 `.reload`）各会话的状态与计时：重新上桥时用一次。
+    /// 重开前（`carryOver`）各会话的状态与计时：重新上桥时用一次。重新载入的 Pi 扩展自己带着起点（扩展的 `Carried`），不经这里。
     /// 读不懂的扩展读不到状态，不留也不用：接回时沿用的是它之前读到的
     @ObservationIgnored var carried: [String: (state: WorkState, times: SessionTimes)] = [:]
     @ObservationIgnored var idleTimers: [Session.ID: Task<Void, Never>] = [:]

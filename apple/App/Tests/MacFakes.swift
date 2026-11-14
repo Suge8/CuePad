@@ -82,11 +82,11 @@ final class RecordingHost: AgentRuntime {
         return ext.id
     }
 
-    /// 一个连着桥的会话：假扩展在 socket 目录里监听，桥发现它后返回。`busy` 为 true 时它正在跑一轮；
+    /// 一个连着桥的会话：假扩展在 socket 目录里监听，桥发现它后返回。`busy` 为 true 时它正在跑一轮；`since` 是它报的粗状态起点（缺省此刻）；
     /// `sessionFile` 是它的会话文件（文件在就算说过话，进程没了时记录留着而不是删掉）。
     @discardableResult
     func connect(
-        _ sessionID: String, cwd: String, busy: Bool = false,
+        _ sessionID: String, cwd: String, busy: Bool = false, since: Date? = nil,
         extensionVersion: Int = PiExtensionBundle.version, sessionFile: String? = nil, seesImages: Bool = true, supportsFast: Bool = false,
         launchToken: String? = nil
     ) async throws -> FakeExtension {
@@ -99,7 +99,9 @@ final class RecordingHost: AgentRuntime {
         let file = SessionFile(url: sessionFile.map { URL(filePath: $0) } ?? sessions.appending(path: "--demo--/\(sessionID).jsonl"), sessionID: sessionID, cwd: cwd)
         options.sessionFile = file.url.path
         let ext = FakeExtension(directory: socketDirectory, sessionID: sessionID, options: options)
-        if busy { ext.setState(["kind": "thinking"]) }
+        if busy || since != nil {
+            ext.setState(["kind": busy ? "thinking" : "idle"].merging(since.map { ["since": Int($0.timeIntervalSince1970 * 1000)] } ?? [:]) { $1 })
+        }
         let writesMessages = self.writesMessages
         ext.onCommand = { [weak ext] _, command in
             if command["t"] as? String == "end" { ext?.closeAfterReply(bye: "quit") }

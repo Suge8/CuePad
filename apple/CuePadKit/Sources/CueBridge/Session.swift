@@ -215,6 +215,8 @@ enum RejectReason: String {
     case nothingToRetry = "nothing_to_retry"
     case unconfirmedTurn = "unconfirmed_turn", userTurn = "user_turn", staleTurn = "stale_turn"
     case unsupportedStopTurn = "unsupported_stop_turn", upgradeStopTurn = "upgrade_stop_turn"
+    /// 换轮停不下在跑的那一轮（停止被拒、等不到它收尾）：这句还没交出（`HostedTurns.send`）
+    case previousTurnRunning = "previous_turn_running"
 
     var shown: String.LocalizationValue? {
         switch self {
@@ -224,6 +226,7 @@ enum RejectReason: String {
         case .staleTurn: "原回合已结束或更换，停止请求不再适用，没有停止后来的工作"
         case .userTurn: "会话已进入另一轮，Cue 没有打断"
         case .unconfirmedTurn: "当前轮次的来源尚未确认，Cue 没有打断"
+        case .previousTurnRunning: "在跑的那一轮没能停下，这句没有发出"
         case .noPrompt, .stalePrompt: "这个问题已经答过了，或 Agent 已经不在等这个问题"
         case .badAnswer: "答案和问题对不上（选项不在列表里，或类型不对）"
         case .noAuth: "这个模型的提供方在这台 Mac 上还没有登录或配置密钥"

@@ -10856,6 +10856,22 @@
         }
       }
     },
+    "在跑的那一轮没能停下，这句没有发出" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The running turn couldn’t be stopped, so this wasn’t sent."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在跑的那一轮没能停下，这句没有发出"
+          }
+        }
+      }
+    },
     "在这台 Mac 上启用" : {
       "localizations" : {
         "en" : {
