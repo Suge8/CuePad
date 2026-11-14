@@ -32,7 +32,7 @@ struct ScheduleTests {
         _ = try await eventually(store, { try $0.cueSchedules(task: task.id) }) { $0.isEmpty }
     }
 
-    @Test func 任务完成_归档_删掉就不再定时_取回也不回来() async throws {
+    @Test func 任务完成_归档就不再定时_取回也不回来_删掉撤销则照旧定时() async throws {
         let rig = TestApp()
         let store = rig.services.store
         let workspace = Workspace(services: rig.services)
@@ -54,8 +54,8 @@ struct ScheduleTests {
                 try await #require(workspace.notice?.action).run(workspace)  // 撤销：恢复
             }
         }
-        #expect(try await store.cueSchedules().isEmpty)
-        for line in lines { #expect(try await store.cueLine(line)?.deletedAt != nil) }
+        #expect(try await store.cueSchedules().map(\.line.id) == [lines[2]])
+        for line in lines.prefix(2) { #expect(try await store.cueLine(line)?.deletedAt != nil) }
     }
 
     #if os(macOS)
