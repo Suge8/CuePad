@@ -83,6 +83,8 @@ extension VoiceService {
         muted = value
     }
 
+    func hangUp() async { await end() }
+
     func end(reason: VoiceEndReason = .hungUp, notify: Bool = true) async {
         guard let owner = phone else { return }
         await beginEnd(owner, reason: reason, notify: notify).value

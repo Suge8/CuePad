@@ -19,7 +19,7 @@ import Testing
         let original = String(repeating: "核对\"手机\"与桌面端\n", count: 120) + "末尾约束必须保留"
         fixture.received?(.success(.delegation(.init(id: "original", turn: nil, text: original))))
         try await eventually("原请求保存失败") { fixture.voiceRecord.requests.first?.failure != nil }
-        let projection = try services.voice.macProjection(fixture.call)
+        let projection = try services.voice.fullProjection(fixture.call)
         let request = try #require(projection.requests.first)
         let preview = try #require(request.preview)
         #expect(!preview.text.isEmpty && original.hasPrefix(preview.text))
@@ -27,11 +27,12 @@ import Testing
         #expect(!preview.text.contains("末尾约束必须保留"))
         #expect(try await store.cueMessages().filter { $0.author == .known(.you) }.isEmpty)
         try db.exec("DROP TRIGGER voice_preview_failure")
-        try await fixture.workspace.retryVoiceRequest("original")
+        let outcome = try await fixture.workspace.performVoice(try #require(fixture.recovery(of: "original")))
         let id = try #require(fixture.voiceRecord.requests.first?.message)
+        #expect(outcome == .recorded(message: id))
         let message = try #require(try await store.cueMessages([id]).first)
         #expect(message.text == original)
-        let recorded = try #require(try services.voice.macProjection(fixture.call).requests.first)
+        let recorded = try #require(try services.voice.fullProjection(fixture.call).requests.first)
         #expect(recorded.reference == .recorded(message: id))
         #expect(recorded.preview == nil)
         try await fixture.hangUp()
@@ -46,7 +47,7 @@ import Testing
         try await fixture.connect()
         fixture.media.onEvent(.ended(.audioInterrupted))
         try await eventually("通话按媒体给的原因结束") { !fixture.call.isLive }
-        #expect(try services.voice.macProjection(fixture.call).phase == .failed(.ended(.audioInterrupted)))
+        #expect(try services.voice.fullProjection(fixture.call).phase == .failed(.ended(.audioInterrupted)))
     }
 }
 #endif

@@ -57,7 +57,7 @@ extension DebugScene {
         try await workspace.startVoiceCall()
         watching.append(Task {
             await Task.wait(for: .seconds(args.voiceOpts.seconds ?? 60))
-            await workspace.hangUpVoiceCall()
+            _ = try? await workspace.performVoice(.hangUp)
         })
         var listened = false
         for await phase in Observations({ voice.phase }) {
@@ -71,7 +71,7 @@ extension DebugScene {
                         for await availability in Observations({ voice.availability }) { if case .ready = availability { break } }
                         guard let reply = voice.projection?.replies.last?.message else { return note("repeat-skipped no reply") }
                         note("repeat \(reply)")
-                        do { note("repeat-result \(try await workspace.repeatVoiceReply(reply, command: UUID()))") }
+                        do { note("repeat-result \(String(describing: try await workspace.performVoice(.repeatReply(reply))))") }
                         catch { note("repeat-error \(error)") }
                     })
                 }

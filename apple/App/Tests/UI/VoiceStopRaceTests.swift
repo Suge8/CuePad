@@ -41,11 +41,12 @@ struct VoiceStopRaceTests {
         _ = try await voice.handoff("请对隔离会话说「\(first)」")
         try await eventually("A 工具已运行且停止归属已确认") {
             FileManager.default.fileExists(atPath: rig.folder.appending(path: "A.pid").path)
-                && voice.workspace.voiceExecutions.first?.state.canStop == true
+                && voice.voiceRecord.executions.first?.state.canStop == true
         }
         let a = try pid("A", in: rig)
         await rig.services.executor.beginStop()()
-        let stop = try await voice.workspace.stopVoiceExecution(session.sessionID)
+        let action = try await voice.stopAction(session.sessionID)
+        let stop = try await voice.stop(session.sessionID)
         #expect(try await rig.store.deliveryRequest(stop.id)?.status == .known(.pending))
         var b: pid_t?
         if next != "不换轮" {
@@ -60,7 +61,7 @@ struct VoiceStopRaceTests {
                 try await rig.app.bridge.send(SessionMessage(text: second, deliveryID: request.id.uuidString), to: session.id)
                 try await eventually("B 的工具归属与真实消息已关联") {
                     try await rig.store.outcome(of: request).status == .known(.succeeded)
-                        && voice.workspace.voiceExecutions.contains { $0.state.sessionID == session.sessionID }
+                        && voice.voiceRecord.executions.contains { $0.state.sessionID == session.sessionID }
                 }
             } else {
                 // 另一个客户端发新用户消息，没有 Cue 的投送身份。
@@ -78,23 +79,19 @@ struct VoiceStopRaceTests {
         let result = try #require(try await rig.store.deliveryRequest(stop.id))
         if next == "终端B" {
             try await eventually("停止权限消失后仍看得到动作结果") {
-                voice.workspace.voiceExecutions.isEmpty && voice.workspace.voicePresentation?.executions.contains {
-                    $0.id == stop.id.uuidString && $0.status.contains("不再适用")
-                } == true
+                try voice.voiceRecord.executions.isEmpty && voice.details().executions.contains {
+                    $0.id == session.sessionID && $0.status.contains("不再适用")
+                }
             }
-            #expect(voice.workspace.voicePresentation?.canStopExecution == false)
-            await #expect(throws: CueStoreError.self) { _ = try await voice.workspace.stopVoiceExecution(session.sessionID) }
-            try await rig.store.deleteDelivery(stop.id)
-            try await voice.hangUp()
-            try await voice.connect()
-            #expect(voice.workspace.voicePresentation?.executions.contains { $0.status.contains("不再适用") } == true)
+            #expect(try voice.details().executions.allSatisfy { $0.stop == nil })
+            #expect(try await voice.workspace.performVoice(action) == .rejected(reason: .turnChanged))
         }
         if let b {
             #expect(result.status == .known(.failed))
             #expect(result.failure?.contains("不再适用") == true)
             #expect(kill(b, 0) == 0, "旧停止不得杀掉 B 的实际工作进程")
             if next == "语音B" {
-                let own = try await voice.workspace.stopVoiceExecution(session.sessionID)
+                let own = try await voice.stop(session.sessionID)
                 #expect(own.id != stop.id)
                 try await eventually("明确停止 B 后它才退出") {
                     try await rig.store.outcome(of: own).status == .known(.succeeded) && kill(b, 0) != 0
@@ -103,7 +100,7 @@ struct VoiceStopRaceTests {
         } else {
             #expect(result.status == .known(.succeeded))
             try await eventually("A 的实际工具进程退出") { kill(a, 0) != 0 }
-            try await eventually("真实状态回写停止") { voice.workspace.voiceExecutions.first?.state.canStop == false }
+            try await eventually("真实状态回写停止") { voice.voiceRecord.executions.first?.state.canStop == false }
         }
     }
 

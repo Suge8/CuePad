@@ -58,26 +58,26 @@ import Testing
         }
         let oldCallback = media.onEvent
         oldCallback(.ended(.audioInterrupted))
-        #expect(fixture.workspace.phoneVoice.phase == .closing)
+        #expect(fixture.workspace.voiceViewState.phase == .closing)
         await #expect(throws: VoiceIssue.busy) { try await fixture.workspace.startVoiceCall() }
         gate.open()
         _ = await start.result
         closeGate.open()
         try await eventually("中断清理完成") { fixture.voice.phone == nil }
-        #expect(fixture.workspace.phoneVoice.phase == .ended(reason: .audioInterrupted))
+        #expect(fixture.workspace.voiceViewState.phase == .ended(reason: .audioInterrupted))
         let ended = try #require(fixture.voice.session)
         await fixture.voice.receive(fixture.signal.event(.projection(value: .init(
             session: ended, phase: .failed(.ended(.mediaFailed)), requests: [], replies: [], executions: [])), session: ended))
-        #expect(fixture.workspace.phoneVoice.phase == .ended(reason: .audioInterrupted), "Mac 收到挂断后的回声不改本机先落定的原因")
+        #expect(fixture.workspace.voiceViewState.phase == .ended(reason: .audioInterrupted), "Mac 收到挂断后的回声不改本机先落定的原因")
         #expect(fixture.signal.sent.contains { if case .media(.hangup(reason: .audioInterrupted)) = $0 { true } else { false } })
         let next = Media()
         nextMedia = next
         try await fixture.workspace.startVoiceCall()
         oldCallback(.ended(.audioInterrupted))
-        #expect(fixture.workspace.phoneVoice.phase == .connecting)
+        #expect(fixture.workspace.voiceViewState.phase == .connecting)
         #expect(!next.closed)
-        await fixture.workspace.hangUpVoiceCall()
-        #expect(fixture.workspace.phoneVoice.phase == .ended(reason: .hungUp))
+        try await fixture.workspace.performVoice(.hangUp)
+        #expect(fixture.workspace.voiceViewState.phase == .ended(reason: .hungUp))
         try await fixture.checkLibrary()
     }
 
@@ -91,14 +91,14 @@ import Testing
         defer { fixture.app.services.cancelBackgroundWork() }
         for _ in 0..<2 {
             await #expect(throws: VoiceIssue.ended(.permissionDenied)) { try await fixture.workspace.startVoiceCall() }
-            #expect(fixture.workspace.phoneVoice.phase == .failed(.ended(.permissionDenied)))
+            #expect(fixture.workspace.voiceViewState.phase == .failed(.ended(.permissionDenied)))
             #expect(fixture.voice.canStart)
         }
         #expect(!fixture.signal.sent.contains { if case .media(.offer) = $0 { true } else { false } })
         denied = false
         try await fixture.workspace.startVoiceCall()
-        #expect(fixture.workspace.phoneVoice.phase == .connecting)
-        await fixture.workspace.hangUpVoiceCall()
+        #expect(fixture.workspace.voiceViewState.phase == .connecting)
+        try await fixture.workspace.performVoice(.hangUp)
         try await fixture.checkLibrary()
     }
 }

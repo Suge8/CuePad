@@ -164,7 +164,7 @@ struct CuePage: View {
 
     private var calling: Bool {
         #if os(macOS)
-        workspace.voicePresentation?.active == true
+        workspace.voiceViewState.presentation().active
         #else
         false
         #endif

@@ -39,7 +39,7 @@ final class DebugVoiceLayoutScenario {
         try await store.markCueMessagesDelivered([request])
         if kind == "stop" {
             try await seedExecution(store, request: request)
-            for await ready in Observations({ workspace.voicePresentation?.canStopExecution == true }) where ready { break }
+            for await ready in Observations({ workspace.voiceViewState.projection?.executions.isEmpty == false }) where ready { break }
         } else if kind == "partial" {
             let paragraph = String(localized: "**演示结果 \(1)**\n\n- 核对 Mac 界面\n- 核实手机接入", table: "Demo")
             let result = String(repeating: paragraph + "\n\n", count: Self.partialParagraphs)

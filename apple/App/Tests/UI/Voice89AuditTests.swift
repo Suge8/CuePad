@@ -230,9 +230,9 @@ import Testing
         #expect(!media.closing)
         #expect(voice.isLive)
         #expect(!signal.sent.contains { if case .media(.hangup) = $0 { true } else { false } })
-        await workspace.hangUpVoiceCall()
+        try await workspace.performVoice(.hangUp)
         #expect(media.closed)
-        #expect(workspace.phoneVoice.phase == .ended(reason: .hungUp))
+        #expect(workspace.voiceViewState.phase == .ended(reason: .hungUp))
         #expect(signal.sent.contains { if case .media(.hangup(reason: .hungUp)) = $0 { true } else { false } })
     }
 

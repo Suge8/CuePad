@@ -93,6 +93,13 @@ extension VoiceService {
 
     func waitsForRelink(_ session: VoiceSessionID) -> Bool { false }
 
+    func hangUp() async { call?.hangUp() }
+
+    func setMuted(_ value: Bool) async throws {
+        guard canMute, let call else { throw VoiceIssue.busy }
+        call.setMuted(value)
+    }
+
     /// 手机问"你还在吗"（`VoiceMediaSignal.resume`）：照答。换绑与补发投影已在 `rebind` 做过。
     private func answer(_ header: VoiceSignalHeader) {
         guard let call, VoiceSessionID(call.session) == header.session, let signaling else { return }
@@ -144,7 +151,7 @@ extension VoiceService {
     private func observeCall(_ call: VoiceCall) {
         observing?.cancel()
         observing = Task { [weak self] in
-            for await result in Observations({ [weak self] in self.map { service in Result { try service.macProjection(call) } } }) {
+            for await result in Observations({ [weak self] in self.map { service in Result { try service.fullProjection(call) } } }) {
                 guard let self, let result, !Task.isCancelled else { return }
                 // 先于投影：投影读失败时也要放开手机那通，否则之后的来电一直被当成占线
                 if !call.isLive, self.call === call { self.remote = nil }
@@ -172,7 +179,7 @@ extension VoiceService {
             try await sending.perform(within: .seconds(2)) {
                 guard let signaling = self.signaling else { throw VoiceSignalError.unavailable }
                 try DebugHooks.voiceProjectionSend()
-                try await signaling.sendVoice(.projection(value: value), session: reader.session, to: reader.sender)
+                try await signaling.sendVoice(.projection(value: value.bounded()), session: reader.session, to: reader.sender)
             }
             return true
         } catch {

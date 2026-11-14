@@ -1,8 +1,8 @@
 import SwiftUI
 
 /// 同一组声纹始终在场；音轨只在此叶子读取，不让聊天随采样重算。待机、静音、关闭不伪造声音。
-struct CueVoiceSignal<Operation: CueVoiceOperation>: View {
-    let presentation: CueVoiceState<Operation>?
+struct CueVoiceSignal: View {
+    let presentation: CueVoicePresentation?
     /// 收成正中一点（手机通话还没开始、已经结束时：那一段正淡着，`PhoneCall`），接通时从这一点长开。
     var seed = false
     @Environment(\.palette) private var palette

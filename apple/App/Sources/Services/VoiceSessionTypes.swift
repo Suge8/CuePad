@@ -37,7 +37,7 @@ nonisolated struct VoiceCallProjection: Equatable, Codable, Sendable {
     let phase: Phase
     let requests: [Request]
     let replies: [Reply]
-    let executions: [VoiceExecutionTarget]
+    let executions: [Execution]
     /// 控制协议的回应进度，与收音、请求写库、后台执行分开；不表示 PCM 已播放到某个位置。
     enum Response: String, Codable, Sendable { case none, awaitingAssistant, assistantTurn }
     var response: Response = .none
@@ -59,6 +59,14 @@ nonisolated struct VoiceCallProjection: Equatable, Codable, Sendable {
         let issue: VoiceIssue?
         /// 仅未保存请求携带临时原话摘要；不参与恢复命令，也不写入消息库。
         var preview: RequestPreview? = nil
+    }
+    /// 这次通话派出的工作所在的会话；标题、状态与停止进度各端按身份从库读。
+    struct Execution: Equatable, Codable, Sendable {
+        let session: String
+        /// 此刻能停的那一轮：停止命令原样带回，Mac 执行前按这份记录的请求再核一遍；已歇下、不再归这些请求时为 nil
+        let turn: TurnTarget?
+        /// 对它发出的最后一个停止请求（`DeliveryRequest.id`）
+        let stop: UUID?
     }
     struct RequestPreview: Equatable, Codable, Sendable {
         let text: String

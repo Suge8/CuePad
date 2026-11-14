@@ -3004,22 +3004,6 @@
         }
       }
     },
-    "ChatGPT 拒绝了这次通话（%lld）：套餐不含语音或额度已用完" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ChatGPT declined the call (%lld): your plan doesn't include voice, or you've used up your limit"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ChatGPT 拒绝了这次通话（%lld）：套餐不含语音或额度已用完"
-          }
-        }
-      }
-    },
     "ChatGPT 暂不提供额度数据" : {
       "localizations" : {
         "en" : {
@@ -3140,22 +3124,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Codex 没有模型 %@"
-          }
-        }
-      }
-    },
-    "Codex 的 ChatGPT 登录不可用或已过期：在 Codex 里重新登录后再通话" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Codex's ChatGPT sign-in is unavailable or expired. Sign in again in Codex, then call."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Codex 的 ChatGPT 登录不可用或已过期：在 Codex 里重新登录后再通话"
           }
         }
       }
@@ -3654,22 +3622,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Mac 上改过，已跟上"
-          }
-        }
-      }
-    },
-    "Mac 上的 Codex 没响应：看看有没有系统提示在等你确认" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Codex isn't responding. Check for a system prompt waiting for you."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mac 上的 Codex 没响应：看看有没有系统提示在等你确认"
           }
         }
       }
@@ -6944,38 +6896,6 @@
         }
       }
     },
-    "停止「%@」" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Stop “%@”"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "停止「%@」"
-          }
-        }
-      }
-    },
-    "停止哪个会话？" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Which session should stop?"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "停止哪个会话？"
-          }
-        }
-      }
-    },
     "停止执行" : {
       "localizations" : {
         "en" : {
@@ -7004,22 +6924,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "停止试听"
-          }
-        }
-      }
-    },
-    "停止请求已受理" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Stop request accepted"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "停止请求已受理"
           }
         }
       }
@@ -24824,22 +24728,6 @@
         }
       }
     },
-    "通话出错：%@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Call error: %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "通话出错：%@"
-          }
-        }
-      }
-    },
     "通话协议不兼容，请更新手机和 Mac 上的 CuePad" : {
       "localizations" : {
         "en" : {
@@ -24900,22 +24788,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "通话操作未确认，请检查连接后重试"
-          }
-        }
-      }
-    },
-    "通话断开了：%@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Call dropped: %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "通话断开了：%@"
           }
         }
       }
@@ -25000,38 +24872,6 @@
         }
       }
     },
-    "通话没能建立（%lld）" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Couldn't start the call (%lld)"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "通话没能建立（%lld）"
-          }
-        }
-      }
-    },
-    "通话没能建立：服务器的回应认不出" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Couldn't start the call: unexpected server response"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "通话没能建立：服务器的回应认不出"
-          }
-        }
-      }
-    },
     "通话的声音连接断了" : {
       "localizations" : {
         "en" : {
@@ -25044,38 +24884,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "通话的声音连接断了"
-          }
-        }
-      }
-    },
-    "通话要用 Codex 的 ChatGPT 登录：这台 Mac 没装 Codex" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Calls use Codex's ChatGPT sign-in, and Codex isn't installed on this Mac"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "通话要用 Codex 的 ChatGPT 登录：这台 Mac 没装 Codex"
-          }
-        }
-      }
-    },
-    "通话记录暂不可用" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Call records unavailable"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "通话记录暂不可用"
           }
         }
       }
@@ -25140,22 +24948,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "通话连接已满，请稍后再试"
-          }
-        }
-      }
-    },
-    "通话连接或发送超时，请重新接通；已有请求和回复仍然保留" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The connection or send timed out. Reconnect to continue; your requests and replies are still here."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "通话连接或发送超时，请重新接通；已有请求和回复仍然保留"
           }
         }
       }
@@ -26336,22 +26128,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "麦克风权限未开启"
-          }
-        }
-      }
-    },
-    "麦克风权限未开启：在系统设置中允许 CuePad 使用麦克风后重新接通" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Allow CuePad to use your microphone in System Settings, then reconnect."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "麦克风权限未开启：在系统设置中允许 CuePad 使用麦克风后重新接通"
           }
         }
       }

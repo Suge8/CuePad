@@ -1,18 +1,18 @@
 import SwiftUI
 
-/// 有界详情列执行、停止、未落库问题和朗读记录；活动通话可从标题旁直接结束，停止执行仍属于对应的工作。
+/// 有界详情列执行（每行自己的停止）、未落库问题和朗读记录；活动通话可从标题旁直接结束。Mac 与手机同一份。
 /// 结果只给辨认摘录，正文沿用原聊天的 SpeechBubble。
-struct CueVoiceDetails<Operation: CueVoiceOperation>: View {
+struct CueVoiceDetails: View {
     /// 浮层持有内容视图；在 body 内读取，保证开着详情时也观察接通与提交状态。
-    let presentation: () -> CueVoiceState<Operation>?
-    let action: (CueVoiceIntent<Operation>) -> Void
+    let presentation: () -> CueVoicePresentation?
+    let action: (VoiceAction) -> Void
     @Environment(\.palette) private var palette
 
     var body: some View {
         if let presentation = presentation() { details(presentation) }
     }
 
-    private func details(_ presentation: CueVoiceState<Operation>) -> some View {
+    private func details(_ presentation: CueVoicePresentation) -> some View {
         VStack(alignment: .leading, spacing: Spacing.group) {
             HStack(spacing: Spacing.item) {
                 Text("通话详情").font(Typography.title)
@@ -27,10 +27,6 @@ struct CueVoiceDetails<Operation: CueVoiceOperation>: View {
             if presentation.active {
                 Text(presentation.title).font(Typography.body).foregroundStyle(palette.ink2)
             }
-            if presentation.canStopExecution {
-                Button { action(.stopExecution) } label: { Label("停止执行", icon: .stop) }
-                    .buttonStyle(ControlButtonStyle(size: .compact))
-            }
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: Spacing.block) {
                     ForEach(presentation.executions) { execution in
@@ -39,7 +35,7 @@ struct CueVoiceDetails<Operation: CueVoiceOperation>: View {
                             Text(verbatim: execution.status).font(Typography.body)
                                 .foregroundStyle(execution.needsAttention ? palette.failure : palette.ink2)
                             if let stop = execution.stop {
-                                Button { action(.perform(stop)) } label: { Label("停止执行", icon: .stop) }
+                                Button { action(stop) } label: { Label("停止执行", icon: .stop) }
                                     .buttonStyle(ControlButtonStyle(size: .compact))
                             }
                         }
@@ -49,7 +45,7 @@ struct CueVoiceDetails<Operation: CueVoiceOperation>: View {
                             Text(issue.summary).font(Typography.bodyStrong)
                             Text(issue.message).font(Typography.body)
                             if let recovery = issue.recovery {
-                                Button { action(.perform(recovery)) } label: { Text(recovery.title) }
+                                Button { action(recovery) } label: { Text(recovery.title) }
                                     .buttonStyle(ControlButtonStyle(size: .compact))
                             }
                         }
@@ -62,7 +58,7 @@ struct CueVoiceDetails<Operation: CueVoiceOperation>: View {
                                 Text(verbatim: reading.excerpt).font(Typography.body).lineLimit(1)
                                 Text(verbatim: reading.status).font(Typography.meta).foregroundStyle(palette.ink2)
                                 if let recovery = reading.recovery {
-                                    Button { action(.perform(recovery)) } label: { Text(recovery.title) }
+                                    Button { action(recovery) } label: { Text(recovery.title) }
                                         .buttonStyle(ControlButtonStyle(size: .compact))
                                 }
                             }

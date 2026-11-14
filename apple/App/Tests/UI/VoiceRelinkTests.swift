@@ -22,7 +22,7 @@ import Testing
         try await eventually("answer to the new lease") {
             signal.sent.last == .media(signal: .resume(ask: false)) && signal.recipients.last == signal.peer
         }
-        await Workspace(services: app.services).hangUpVoiceCall()
+        try await Workspace(services: app.services).performVoice(.hangUp)
         #expect(voice.phase == .ended(reason: .hungUp))
         #expect(signal.sent.last == .media(signal: .hangup(reason: .hungUp)) && signal.recipients.last == signal.peer)
     }
@@ -35,8 +35,8 @@ import Testing
         await voice.receive(signal.event(.projection(value: .init(session: session, phase: .failed(.codexUnresponsive), requests: [], replies: [], executions: [])), session: session))
         #expect(media.closed)
         #expect(workspace.phoneVoiceEnding == .failed(.codexUnresponsive))
-        #expect(String(localized: VoiceIssue.codexUnresponsive.phoneMessage) == "Codex 没响应，看看 Mac 上的提示")
-        guard case .start? = VoiceIssue.codexUnresponsive.phoneRecovery else { Issue.record("没有重新接通"); return }
+        #expect(String(localized: VoiceIssue.codexUnresponsive.message) == "Codex 没响应，看看 Mac 上的提示")
+        guard case .start? = VoiceIssue.codexUnresponsive.recovery else { Issue.record("没有重新接通"); return }
     }
 
     /// 中转连着却一直不回解析：通话仍在宽限期满时按断开的原因结束，不被这次解析拖住。
