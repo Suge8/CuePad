@@ -101,5 +101,19 @@ import Testing
         try await fixture.workspace.performVoice(.hangUp)
         try await fixture.checkLibrary()
     }
+
+    /// 跨版本合同：拨给信令 1 的旧 Mac，它照常接听但不报版本，手机挂断并显示"请更新"。
+    @Test func 旧Mac接听_挂断并说请更新() async throws {
+        let media = Media(), fixture = try await Fixture(makeMedia: { media })
+        defer { fixture.app.services.cancelBackgroundWork() }
+        try await fixture.workspace.startVoiceCall()
+        let session = try #require(fixture.voice.session)
+        await fixture.voice.receive(fixture.signal.event(.media(signal: .answer(value: .init(sdp: "answer", version: nil))), session: session))
+        try await eventually("挂断") { fixture.voice.phone == nil }
+        #expect(fixture.workspace.voiceViewState.phase == .failed(.relayUnsupported))
+        #expect(fixture.workspace.voiceViewState.presentation().issues.contains { String(localized: $0.message).contains("请更新") })
+        #expect(fixture.signal.sent.contains { if case .media(.hangup(reason: .protocolRejected)) = $0 { true } else { false } })
+        try await fixture.checkLibrary()
+    }
 }
 #endif
