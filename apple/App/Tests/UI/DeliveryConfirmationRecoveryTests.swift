@@ -63,6 +63,7 @@ extension DeliveryConfirmationTests {
         let stopped = try #require(try await app.services.store.deliveryRequest(request.id))
         #expect(stopped.status == .known(.confirming) && stopped.deadlineAt == due)
         let services = app.relaunch()
+        services.start()
         clock.advance(.seconds(20))
         try await services.executor.start()
         // 新发给别处的话先完成，作为重开的执行通道已恢复的屏障。
@@ -163,8 +164,6 @@ extension DeliveryConfirmationTests {
         let app = TestApp(timing: clock.timing)
         let (target, ext, file) = try await session(app)
         defer { ext.close(bye: "quit"); app.bridge.stop(); app.services.cancelBackgroundWork() }
-        try await app.connect(.pi)
-        app.services.start()
         let store = app.services.store
         let task = try await store.createTask("修复发布")
         try await store.bindSession(target.sessionID, to: task.id)

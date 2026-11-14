@@ -3,7 +3,7 @@ import CueStore
 import Foundation
 
 extension AppServices {
-    /// 确认窗口结束后由常规历史索引继续跟随未收尾的文件；路径来自既有索引与请求，不另存一份确认状态。
+    /// 在线会话的文件加上未收尾投送的文件：确认窗口内外都由常规历史索引跟随、写下送达；路径来自既有索引与请求，不另存一份确认状态。
     func deliveryHistoryFiles() -> AsyncStream<Set<URL>> {
         AsyncStream { continuation in
             let task = Task {
