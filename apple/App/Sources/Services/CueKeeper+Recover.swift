@@ -14,7 +14,7 @@ extension CueKeeper {
         case .running(let shift) where shift.turn != nil: now + (setup.timing.silence - quiet).seconds
         case .starting, .running: nil
         }
-        let retry = owed.isEmpty ? nil : now + setup.timing.returnRetry.seconds
+        let retry = owed.isEmpty && unfired.isEmpty ? nil : now + setup.timing.returnRetry.seconds
         return [brain, retry, progress.detour?.nextReset(after: now)].compactMap(\.self).min()
     }
 

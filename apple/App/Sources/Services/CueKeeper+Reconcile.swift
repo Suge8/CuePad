@@ -14,6 +14,7 @@ extension CueKeeper {
         let now = self.now
         await revive(at: now)
         await giveBack([])  // 上次没退回成的再退一次
+        await recordFires()
         await leaveHisStops()
         let next = await step(at: now)
         schedule([next, alarm(at: now)].compactMap(\.self).min())
@@ -37,9 +38,18 @@ extension CueKeeper {
                 input.yield(.kick)
                 return nil
             }
-            let pending = ready(try await store.cueMessagesToDeliver())
-            if !pending.isEmpty {
+            let waiting = try await store.cueMessagesToDeliver()
+            // 退回的话已不在（撤回、别处答了）就不用再等它重来
+            if waiting.isEmpty { setbacks.removeAll { $0.wake == .message } }
+            let gate = setbacks.first { $0.wake == .message }
+            let pending = ready(waiting)
+            // 退回、等重来的话到点再交；你又说了新的就一起交（你发话就马上再试）
+            if !pending.isEmpty, gate.map({ gate in gate.retryAt.map { now >= $0 } != false || pending.contains { !gate.held.contains($0.id) } }) ?? true {
                 if case .restarting(let failures, _, _) = phase { await startShift(failures: failures) }
+                if gate?.stuck == true, shift?.turn == nil, await steer(attempt: true, at: now) {
+                    input.yield(.kick)
+                    return nil
+                }
                 guard let shift else { return nil }
                 let ids = pending.map(\.id)
                 let said = CueEnvelope.delivered(pending, setAside: try await store.cueQuestionsSetAside(), files: store.files, imagesAsFiles: !shift.brain.seesImages)
@@ -63,26 +73,26 @@ extension CueKeeper {
                 return nil
             }
 
-            // 刚启用与定时醒来就消费：先记成要重来（`hold`），再消费、再交给大脑。发不出去、出错、半路崩溃都由那一条接着，好好做完才放下
-            if progress.greeted != profile.enabledAt {
-                let woke = try await !handsEmpty()
-                if woke { hold(.enabled) }
-                progress.greeted = profile.enabledAt
-                save()
-                if woke {
+            // 刚启用与定时都在承接的一轮好好做完才消费（`handle` 里的 `.turnFinished`）：之前发不出去、出错、崩溃、换手，库里都还欠着
+            if progress.greeted != profile.enabledAt, firstError(.enabled) {
+                if try await handsEmpty() {
+                    progress.greeted = profile.enabledAt
+                    save()
+                } else {
+                    greeting = profile.enabledAt
                     _ = try await wakeUp(.enabled)
                     return nil
                 }
             }
 
             let due = try await store.dueCueSchedules(at: now)
+            forgetSetbacks(outside: Set(due.map(\.id)))
+            let fresh = due.filter { line in !unfired.contains { $0.line == line.id } && !setbacks.contains { $0.wake.fires.contains { $0.line == line.id } } }
             // 持续重试只有一项承接中的工作；新定时留在库里，等它成功后再交付和消费。
-            if !stuck, !due.isEmpty {
-                let fires = due.compactMap { line in
+            if !stuck, !fresh.isEmpty {
+                let fires = fresh.compactMap { line in
                     line.remindAt.map { CueFire(line: line.id, due: line.repeats?.latest(from: $0, until: now) ?? $0) }
                 }
-                hold(.schedule(fires))
-                try await store.fireCueSchedules(due, at: now)
                 _ = try await wakeUp(.schedule(fires))
                 return nil
             }
@@ -94,12 +104,13 @@ extension CueKeeper {
             // 额度、登录卡住的持续重试只按慢速周期重交原来的醒来原因（新变化不替代它、不催它：卡着时重来只会再失败），变化随信封一起看；
             // 到点时先按绕行的规则换到这一周期要试的那家（`steer`），新大脑起好再来。重来的那一轮半路断了（`broke`）也还在：到点的时刻留着，起好就再来
             if stuck, let held = setback {
-                guard let at = held.retryAt, now >= at else { return held.retryAt }
+                // 你的话到点由上面交；还没到或附件还在取，就等着
+                guard let at = held.retryAt, now >= at, held.wake != .message else { return held.retryAt.flatMap { $0 > now ? $0 : nil } }
                 if await steer(attempt: true, at: now) {
                     input.yield(.kick)
                     return nil
                 }
-                _ = try await wakeUp(held.wake, answering: held.answersYou)
+                _ = try await wakeUp(held.wake)
                 return nil
             }
             let changes = try await self.changes(at: now)
@@ -112,11 +123,9 @@ extension CueKeeper {
                     }
                 }
                 if setbacks.contains(where: { $0.supersedable && fresh($0) }) { setbacks.removeAll { $0.supersedable && fresh($0) } }
-                if let held = setback, held.retryAt.map({ now >= $0 }) == true {
-                    // 发出去才改成等结果：发不进去时它还到点，大脑重起后接着重来；消费前记下的那件交出去照旧还没出过错
-                    if try await wakeUp(held.wake, answering: held.answersYou), held.stage != .held {
-                        edit(held.wake) { $0.stage = held.supersedable ? .awaitingChange : .handed(stalls: held.stalls) }
-                    }
+                if let held = setback, held.wake != .message, held.retryAt.map({ now >= $0 }) == true {
+                    // 发出去才改成等新变化：发不进去时它还到点，大脑重起后接着重来。其余的这一轮在跑时不再交，做完时放下或按结果重排
+                    if try await wakeUp(held.wake), held.supersedable { edit(held.wake) { $0.stage = .awaitingChange } }
                     return nil
                 }
                 // 醒来已消费的那几件照各自的时刻重来；比它们都新的变化先看
@@ -146,6 +155,30 @@ extension CueKeeper {
             Self.log.error("Cue 对账失败，过一阵再对：\(error.localizedDescription, privacy: .public)")
             return now + setup.timing.retryWake.seconds
         }
+    }
+
+    /// 好好做完、上次没消费成的定时再写一次（`unfired`）。
+    func recordFires() async {
+        guard !unfired.isEmpty else { return }
+        do {
+            try await store.fireCueSchedules(unfired, at: now)
+            unfired = []
+        } catch {
+            Self.log.error("Cue 做完的定时没能消费，过一阵再写：\(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// 定时的重来只承接库里还过点的那几行：你忘掉、改到以后的，不再重来。
+    private func forgetSetbacks(outside due: Set<UUID>) {
+        let kept: [Setback] = setbacks.compactMap { held in
+            guard case .schedule(let fires) = held.wake else { return held }
+            let owed = fires.filter { due.contains($0.line) }
+            guard !owed.isEmpty else { return nil }
+            var held = held
+            held.wake = .schedule(owed)
+            return held
+        }
+        if kept != setbacks { setbacks = kept }
     }
 
     /// 规矩一变下一轮就换，不等换新：照旧的系统提示接着跑，他刚立的规矩要到缓存过期才生效，这之间 Cue 会照旧规矩动手；重点很少变，换一次的开销可以不计。

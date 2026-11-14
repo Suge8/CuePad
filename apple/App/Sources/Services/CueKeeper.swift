@@ -19,12 +19,13 @@ import os
 /// | 一轮在跑 `turn` | 有 `turn` | 做完 → 值班空闲；出错 → 歇着等重来或卡住；换了家、工具服务没了 → 做完就换班；发不进、进程退出、看门狗（`CueTiming.silence`）→ 等重起 |
 /// | 做完就换班 `retiring` | `Shift.retiring` | 这一轮做完 → 起大脑中 |
 /// | 等重起 `restarting` | `Phase.restarting` | 到点、你发话、改设置 → 起大脑中；没有终态，快的用完转慢的一直试 |
-/// | 歇着等重来 `resting` | 空闲且有要重来的、没卡住 | 到点 → 一轮在跑；会话动静与巡视的被新变化取代 → 值班空闲 |
+/// | 歇着等重来 `resting` | 空闲且有要重来的、没卡住 | 到点（你的话：到点或你又说了新的）→ 一轮在跑；会话动静与巡视的被新变化取代、定时被你忘掉或改到以后 → 值班空闲 |
 /// | 卡住 `stalled` | 空闲且有要重来的卡住了（额度、登录，`stuck`） | 慢速周期到点（先按绕行换家，`Detour`）→ 一轮在跑 |
 /// | 不值班 `off` | `run` 返回 | 终态 |
 ///
 /// 做梦（`dreams`）是旁路：值班空闲时另起一次性大脑，`CueTiming.silence` 内做不完就停掉。
-/// 要重来的（`setbacks`，每件一条）落盘在这台：重启后、换到别的 Mac 又换回这台时，起好大脑就接着重来（那台读不到）；醒来就消费的活（定时、刚启用）消费前就先记下（`hold`），崩溃也不丢。
+/// 醒来的活做完才消费：定时、刚启用、你的话在承接它的一轮好好做完之前，库里一直还欠着（过点的定时、没招呼过的启用、没送达的话），
+/// 崩溃、重启、换到别的 Mac 都从库里接着做（至少一次）；要重来的（`setbacks`）只在内存里记退避。
 /// 你的话只经 `hand` 交出去：先记送达再发，没答上的随班次退回（`giveBack`），至少答一次。
 @Observable
 final class CueKeeper {
@@ -62,21 +63,14 @@ final class CueKeeper {
     var shifts = 0
     /// 最近告诉过你的那个错（`ErrorSummary.line`）：同一个错一轮轮重复（如额度）只说一次
     var toldFailure: String?
-    /// 落盘在进度里，改一次存一次
-    var setbacks: [Setback] {
-        get { progress.setbacks ?? [] }
-        set {
-            progress.setbacks = newValue.isEmpty ? nil : newValue
-            save()
-        }
-    }
+    var setbacks: [Setback] = []
     /// 下一件要重来的：到点最早的
     var setback: Setback? { setbacks.min { ($0.retryAt ?? .distantFuture) < ($1.retryAt ?? .distantFuture) } }
     /// 额度、登录卡住：要重来的只按慢速周期重来，新定时等它们做完
     var stuck: Bool { setbacks.contains(where: \.stuck) }
 
     /// 这件活出错是第一次（唯一的判定）：先不说、隔 `CueTiming.retryWake` 再来一次都看它。
-    func firstError(_ wake: CueWake) -> Bool { setbacks.first { $0.wake == wake }.map { $0.stage == .held } ?? true }
+    func firstError(_ wake: CueWake) -> Bool { !setbacks.contains { $0.wake == wake } }
 
     func edit(_ wake: CueWake, _ change: (inout Setback) -> Void) {
         setbacks = setbacks.map { held in
@@ -107,6 +101,10 @@ final class CueKeeper {
     @ObservationIgnored var writtenHealth: CueHealth?
     /// 要退回没送达、还没退回成的你的话（`giveBack`）：退回时库没写成就留在这里，落盘（`save`），退回写成才删
     @ObservationIgnored var owed: Set<UUID> = []
+    /// 好好做完、还没消费成的定时（`fireCueSchedules` 没写成）：对账时再写；在这里的不再叫醒（`step`）。崩溃丢了它，那一行还过点，再做一次
+    @ObservationIgnored var unfired: [CueFire] = []
+    /// 正在招呼的那一次启用（`CueProfile.enabledAt`）：招呼的一轮好好做完记进 `Progress.greeted`
+    @ObservationIgnored var greeting: Date?
     /// 他发起的一轮停下已对到的写入序号（`CueStore.leaveHisStops`）；nil 是这次上班还没对过，从变化的基线算起
     @ObservationIgnored var handedOver: Int?
     private var history: [CueRound] = []
@@ -220,10 +218,6 @@ final class CueKeeper {
             await giveBack(progress.unanswered ?? [])
             // 一上班就是歇着：上一次没收好尾（崩溃）留下的"在想"马上清掉，不等大脑起好
             await publish()
-            // 上一次值班留下的重来不再等原来的时刻；交出去还没结果的（崩溃时在跑）没有在跑的一轮了，马上再来
-            for held in setbacks {
-                if case .handed = held.stage { edit(held.wake) { $0.due(now) } } else if held.retryAt.map({ $0 > now }) == true { edit(held.wake) { $0.due(now) } }
-            }
             if progress.marks == nil {
                 do {
                     progress.marks = CueMarks(try await store.lastWrite(), stalls: now)
@@ -247,11 +241,8 @@ final class CueKeeper {
             group.cancelAll()
         }
         timer?.cancel()
-        // 不再值班（停用、换手、App 退出）：在跑的那一轮没答上的你的话退回、醒来已消费的活记成要重来，下次在这台值班接着
-        if let shift {
-            if let turn = shift.turn { await holdOver(turn, failure: "值班停了，这一轮没做完") }
-            await retire(shift)
-        }
+        // 不再值班（停用、换手、App 退出）：在跑的那一轮没答上的你的话退回；它承接的定时、启用在库里还欠着，下次值班（哪台都行）接着做
+        if let shift { await retire(shift) }
         clearHealth()
     }
 

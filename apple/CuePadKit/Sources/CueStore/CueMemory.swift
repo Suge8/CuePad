@@ -8,7 +8,7 @@ public enum CueLineSource: String, Sendable, CaseIterable {
 /// Cue 的一条记忆。UUID 是身份；按 (`createdAt`, `id`) 排列只用于视图分块（含忘掉的）。
 /// 只有 `pinned`、定时（`remindAt`、`repeats`）、`deletedAt` 会变；忘掉是软删，UUID 不变；追加与迟到同步都可能改变排序位置。
 /// 有下一次（`remindAt`）的是定时：界面上在定时页（`CueSchedulePage`），不进记忆页（`recentCueMemory`）。
-/// 到点后值班的 Cue 把重复的推到下一次、一次性的忘掉（`CueStore.fireCueSchedules`，不留成普通记忆）；不再定时也是忘掉这一条，任务完成、归档、进回收站时连带（`endCueSchedules`），恢复不复活。
+/// 到点后承接它的一轮好好做完，值班的 Cue 才把重复的推到下一次、一次性的忘掉（`CueStore.fireCueSchedules`，不留成普通记忆）：做完之前这一行一直过点，它就是还欠着的那一次；不再定时也是忘掉这一条，任务完成、归档、进回收站时连带（`endCueSchedules`），恢复不复活。
 public struct CueMemoryLine: Identifiable, Equatable, Sendable {
   public let id: UUID
   public var text: String

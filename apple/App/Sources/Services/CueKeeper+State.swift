@@ -56,7 +56,7 @@ extension CueKeeper {
         var unanswered: [UUID] { (turn?.delivered ?? []) + handed.values.flatMap(\.self) + taken }
     }
 
-    /// 跨班次、跨 App 重启的对账进度（本机，只给这台 Mac 的管理器用）。
+    /// 跨班次、跨 App 重启的对账进度：只放这台的本机事实（本机库的写入序号与次序、这台巡视与招呼过的）；还欠着的活都在库里（`Setback`）。
     nonisolated struct Progress: Codable {
         /// 基线：变化从这些写入序号之后算（`advanceBaseline`）；nil 是这台 Mac 还没值过班，从上班时库里的最新写入算起
         var marks: CueMarks?
@@ -65,17 +65,15 @@ extension CueKeeper {
         /// 巡视过的那段空闲（从你上次说话起）：冷巡视、热巡视各记各的，每段空闲各至多一次
         var patrolledIdle: Date?
         var warmedIdle: Date?
-        /// 已为哪一次启用（`CueProfile.enabledAt`）醒来过
+        /// 已为哪一次启用（`CueProfile.enabledAt`）招呼过：招呼的那一轮好好做完（或手上没事不用招呼）才记
         var greeted: Date?
+        /// 做梦听他在会话里说的话听到哪了：交给它的最后一句的次序（`CueStore.said(after:limit:)` 的 `through`）；nil 是还没听过，从此刻听起（`dreams`）
+        var heard: Int64?
+        /// 额度、登录卡住后的绕行（`Detour`）；没在绕行为 nil
+        var detour: Detour?
         /// 交给大脑、还没答上的你的话与要退回还没退回成的（`Shift.unanswered` 与 `CueKeeper.owed` 合起来，`save` 时取）：上一次没收好尾（崩溃、强杀）时，
         /// 下次值班一开始退回没送达、重新交（`run`），至少答一次。可选：旧的进度文件没有它
         var unanswered: [UUID]?
-        /// 额度、登录卡住后的绕行（`Detour`）；没在绕行为 nil
-        var detour: Detour?
-        /// 做梦听他在会话里说的话听到哪了：交给它的最后一句的次序（`CueStore.said(after:limit:)` 的 `through`）；nil 是还没听过，从此刻听起（`dreams`）
-        var heard: Int64?
-        /// 出错后要重来的几件（`CueKeeper.setbacks`）：定时、刚启用与你那句话在醒来时已消费，只有这里记着，所以跨重启留着。只在这台：换到别的 Mac 那边没有，换回这台才接着做
-        var setbacks: [Setback]?
 
         init() {}
 
@@ -99,7 +97,6 @@ extension CueKeeper {
             unanswered = field(.unanswered)
             detour = field(.detour)
             heard = field(.heard)
-            setbacks = field(.setbacks)
         }
     }
 
@@ -163,7 +160,7 @@ extension CueKeeper {
     }
 
     struct Turn {
-        /// 这一轮是在回答你：你发起的、中途插进了你的话，或承接回答你的那一轮出错后的重来。提不提示你、写不写回复都看它
+        /// 这一轮是在回答你：你发起的，或中途插进了你的话。提不提示你、写不写回复都看它
         var answersYou: Bool
         /// 这一轮的经过：醒来的时刻（Cue 在这之后用 tell 说过话，自己醒来的刚启用那一轮最后就不再写招呼）、在用的工具、报的错都在这里
         var round: CueRound
@@ -187,37 +184,34 @@ extension CueKeeper {
         var author: CueAuthor { writesReply ? .cue : .note }
     }
 
-    /// 出错后要重来的一件（每个醒来原因至多一条），承接它的一轮好好做完才放下。会话动静与巡视（`supersedable`）的活从库里的变化重读得出，重试一次后可被新变化取代；
-    /// 定时、刚启用、你那句话醒来时已消费，一直按退避重来。额度、登录卡住（`stuck`）只按慢速周期重来，新变化不替代、不催它。
-    nonisolated struct Setback: Codable, Equatable, Sendable {
-        /// 一件重来走到哪了：出没出过错只看这里（`CueKeeper.firstError`）
-        enum Stage: Codable, Equatable, Sendable {
-            /// 醒来就消费的活消费前记下（`CueKeeper.hold`），还没出过错：一直到点，交出去的那一轮在跑时不再交
-            case held
+    /// 出错后要重来的一件（每个醒来原因至多一条，只在内存），承接它的一轮好好做完才放下。还欠着什么只看库：定时是过点的那一行、刚启用是没招呼过的那一次启用、
+    /// 你的话是退回没送达的那几句；这里只记什么时候再试。会话动静与巡视（`supersedable`）的活从库里的变化重读得出，重试一次后可被新变化取代；
+    /// 其余按退避重来。额度、登录卡住（`stuck`）只按慢速周期重来，新变化不替代、不催它。重启、换手后从头算：库里还欠着的马上再来。
+    nonisolated struct Setback: Equatable, Sendable {
+        /// 一件重来走到哪了：有它就是出过错（`CueKeeper.firstError`）
+        enum Stage: Equatable, Sendable {
             /// 第一次出错：到点再来一次（`CueTiming.retryWake`）
             case again(at: Date)
-            /// 醒来已消费的活再错，或额度、登录卡住（`stuck`）：按慢速周期一直重来，这是第 `stalls` 轮（`CueTiming.slowDelay`）
+            /// 再错，或额度、登录卡住（`stuck`）：按慢速周期一直重来，这是第 `stalls` 轮（`CueTiming.slowDelay`）
             case slow(at: Date, stalls: Int, stuck: Bool)
-            /// 醒来已消费的活重来已交出去，等这一轮的结果（慢速周期已重来几轮照记着）；崩溃重启后没有在跑的一轮了，马上再来（`run`）
-            case handed(stalls: Int)
             /// 会话动静与巡视再错，或重来已交出去：等新变化取代
             case awaitingChange
         }
 
         var stage: Stage
         var wake: CueWake
-        var answersYou: Bool
         /// 出错时变化里最新的写入序号（等子代理停住按时刻认，不算）与出错的时刻：之后有更新的才是新变化。读不到序号为 nil，只按时刻认
         var latest: Int?
         var since: Date
-        /// 上一轮的错：重来的那一轮随信封交给大脑（`CueEnvelope.Input.retrying`）；随这一件落盘，重启后重放照样带上
+        /// 上一轮的错：重来的那一轮随信封交给大脑（`CueEnvelope.Input.retrying`）
         var failure: String?
+        /// 你的话（`.message`）：这次退回、等它到点再交的几句；之后新来的话不等，一起交
+        var held: Set<UUID> = []
 
         var retryAt: Date? {
             switch stage {
-            case .held: since
             case .again(let at), .slow(let at, _, _): at
-            case .handed, .awaitingChange: nil
+            case .awaitingChange: nil
             }
         }
 
@@ -226,10 +220,7 @@ extension CueKeeper {
         }
 
         var stalls: Int {
-            switch stage {
-            case .slow(_, let stalls, _), .handed(let stalls): stalls
-            case .held, .again, .awaitingChange: 0
-            }
+            if case .slow(_, let stalls, _) = stage { stalls } else { 0 }
         }
 
         var supersedable: Bool { Self.supersedable(wake) }
@@ -241,13 +232,12 @@ extension CueKeeper {
             }
         }
 
-        /// 按时刻等的改成 `date` 到点；还没出错的、等新变化的不动。
+        /// 按时刻等的改成 `date` 到点；等新变化的不动。
         mutating func due(_ date: Date) {
             switch stage {
-            case .again, .handed(0): stage = .again(at: date)
-            case .handed(let stalls): stage = .slow(at: date, stalls: stalls, stuck: false)
+            case .again: stage = .again(at: date)
             case .slow(_, let stalls, let stuck): stage = .slow(at: date, stalls: stalls, stuck: stuck)
-            case .held, .awaitingChange: break
+            case .awaitingChange: break
             }
         }
     }
@@ -273,5 +263,10 @@ extension CueKeeper {
         var written: Int
         var runtime: [Date]
     }
+}
+
+extension CueWake {
+    /// 定时醒来的那几次；别的醒来原因没有
+    var fires: [CueFire] { if case .schedule(let fires) = self { fires } else { [] } }
 }
 #endif

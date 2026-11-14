@@ -7,9 +7,9 @@ import Foundation
 
 extension CueKeeper {
     /// `said`、`images`、`delivering` 是随信封交出去的你的消息与回答，`related` 是按其中他自己说的话在会话回复里查到的（`CueTools.related`，交话的那一处查）；
-    /// `answering`：承接回答你的那一轮出错后的重来。发出去之前记下送达（`hand`）。发不进去时按大脑出了问题处理（交出去的退回），返回 false。
+    /// 发出去之前记下送达（`hand`）。发不进去时按大脑出了问题处理（交出去的退回），返回 false。
     func wakeUp(
-        _ wake: CueWake, answering: Bool = false, said: String? = nil, related: [String] = [], images: [MessageImage] = [], delivering: [UUID] = []
+        _ wake: CueWake, said: String? = nil, related: [String] = [], images: [MessageImage] = [], delivering: [UUID] = []
     ) async throws -> Bool {
         guard let shift else { return false }
         let store = self.store, now = self.now
@@ -42,7 +42,7 @@ extension CueKeeper {
         let sent = parts.joined(separator: "\n"), sending = UUID()
         guard try await hand(sent, images: images, id: sending, delivering: delivering) else { return false }
         var turn = Turn(
-            answersYou: wake == .message || answering || !shift.taken.isEmpty, round: beginRound(wake, sent: [sent], at: now),
+            answersYou: wake == .message || !shift.taken.isEmpty, round: beginRound(wake, sent: [sent], at: now),
             selfStarted: wake == .message ? nil : wake, delivered: shift.taken, mark: mark, stops: Self.stops(in: wake, changes))
         Self.log.notice("Cue 醒来：\(String(describing: wake).prefix(60), privacy: .public)，回复写成 \(turn.author.rawValue, privacy: .public)")
         // Cue 自己醒来的一轮醒来就写下经过那一行：为什么醒在它上面，各端马上画得出叫醒的那一下
