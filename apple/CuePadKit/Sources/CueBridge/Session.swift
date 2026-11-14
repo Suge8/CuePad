@@ -31,7 +31,10 @@ public struct Session: Identifiable, Sendable, Equatable {
     public func isCurrentTurn(_ startedAt: Int64) -> Bool { turnStartedAt?.stored == startedAt }
     /// `/name` 设的会话名
     public internal(set) var name: String? = nil
-    public internal(set) var firstMessage: String? = nil
+    /// 只留开头 `SessionName.firstMessageLimit` 个字：各家接入给原文即可，截在这里。
+    public internal(set) var firstMessage: String? = nil {
+        didSet { if let firstMessage, firstMessage.count > SessionName.firstMessageLimit { self.firstMessage = SessionName.clipped(firstMessage) } }
+    }
     public internal(set) var question: Question? = nil
     /// 经环境变量 `CUEPAD_LAUNCH_TOKEN` 交给扩展（`LaunchRequest.token`）；其余会话为 nil
     public internal(set) var launchToken: String? = nil
@@ -89,8 +92,11 @@ public struct Session: Identifiable, Sendable, Equatable {
 
 /// Pi 会话显示名的唯一规则（活动会话与历史会话共用），与 Pi 自己的会话列表一致。
 public enum SessionName {
-    /// 首条用户消息只用来当单行显示名：只取开头这么多字符（扩展的 `FIRST_MESSAGE_LIMIT` 与之相同）。
+    /// 首条用户消息只用来当单行显示名：只取开头这么多字符。Pi 扩展另截一次（`info.ts` 的 `FIRST_MESSAGE_LIMIT`，同一个数）：
+    /// 截在那边是为了不把几 MB 的首条消息每次连接都传过来。
     public static let firstMessageLimit = 200
+
+    static func clipped(_ text: String) -> String { String(text.prefix(firstMessageLimit)) }
 
     public static func display(name: String?, firstMessage: String?, folder: String) -> String {
         [name, firstMessage.map { SkillCall.shown(withoutImageNotes($0)) }].lazy
@@ -100,7 +106,7 @@ public enum SessionName {
     /// 没有文字为 nil（接着看下一条）。与 Pi 自己的会话列表一致，扩展投进来的机器消息也算。
     public static func firstMessage(_ text: String) -> String? {
         let trimmed = SkillCall.shown(text).trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? nil : String(trimmed.prefix(firstMessageLimit))
+        return trimmed.isEmpty ? nil : clipped(trimmed)
     }
 
 

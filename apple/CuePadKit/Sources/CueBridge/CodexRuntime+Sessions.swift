@@ -19,7 +19,7 @@ extension CodexRuntime {
     /// `thread/settings/updated` 与 Codex 接受了的改动（`configure`）——`thread/settings/update` 只回“已排队”，紧接着读线程可能读到改之前的。
     func apply(_ thread: JSONValue, to session: inout Session, settings: Bool = true) {
         session.name = thread["name"]?.string
-        if let preview = thread["preview"]?.string, !preview.isEmpty { session.firstMessage = String(preview.prefix(SessionName.firstMessageLimit)) }
+        if let preview = thread["preview"]?.string, !preview.isEmpty { session.firstMessage = preview }
         guard settings else {
             if let model = session.model?.key.id { session.model = option(model) }
             session.availableModels = (models ?? []).map(\.option)

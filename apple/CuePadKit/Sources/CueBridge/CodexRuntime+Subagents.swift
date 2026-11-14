@@ -49,7 +49,7 @@ extension CodexRuntime {
             guard !text.isEmpty else { return }
             session.facts.standingQuestion = nil
             bridge.update(session.id) { s in
-                if s.firstMessage == nil { s.firstMessage = String(text.prefix(SessionName.firstMessageLimit)) }
+                if s.firstMessage == nil { s.firstMessage = text }
             }
         case ("agentMessage", false) where item["delivery"]?.string == "async":
             session.facts.standingQuestion = Self.asyncQuestion(item["questions"])
