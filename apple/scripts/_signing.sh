@@ -1,41 +1,14 @@
 # shellcheck shell=bash
-# 被 xc.sh、perf 与发布脚本 source：读取 App 身份前缀、App Store Connect 凭据与团队，产出发布与真机构建给 xcodebuild 的签名设置 team_signing。
-# 凭据文件（默认 ~/.appstoreconnect/cuepad.env，可用 CUEPAD_ASC_ENV 指定）字段：ASC_KEY_ID、ASC_ISSUER_ID、ASC_KEY_PATH、CUEPAD_TEAM_ID。
-# 文件缺失时 team_signing 为空：本机 ad-hoc 构建与测试照常，只有发布命令会报错（require_asc）。绝不回显凭据内容。
-# 工程默认是本机 ad-hoc（Signing.xcconfig）；team_signing 换上团队与带 iCloud 的 macOS 权限文件，证书与描述文件名在工程的各 target 里。
+# 被 xc.sh、perf 与发布脚本 source：App 身份前缀与中转主机；发布与真机构建用 require_asc 读凭据，产出给 xcodebuild 的签名设置 team_signing。
+# 凭据文件（路径见 asc.py）字段：ASC_KEY_ID、ASC_ISSUER_ID、ASC_KEY_PATH、CUEPAD_TEAM_ID。
+# 本机 ad-hoc 构建与测试不读它；绝不回显凭据内容。
+# 工程默认是本机 ad-hoc（Signing.xcconfig）；team_signing 换上团队与带 iCloud 的 macOS 权限文件，证书与描述文件名在工程的各 target 里，
+# 导出选项与描述文件的名字在 provision.py（export-options）。
 # App 身份前缀（bundle id 与由它派生的 App Group、iCloud 容器）：唯一定义在 Signing.xcconfig 的 CUEPAD_APP_ID
 CUEPAD_APP_ID="$(sed -n 's/^CUEPAD_APP_ID *= *//p' "$APPLE_DIR/App/Config/Signing.xcconfig")"
 # 门铃中转的主机：唯一定义在 Signing.xcconfig 的 CUEPAD_RELAY_HOST
 CUEPAD_RELAY_HOST="$(sed -n 's/^CUEPAD_RELAY_HOST *= *//p' "$APPLE_DIR/App/Config/Signing.xcconfig")"
-ASC_ENV="${CUEPAD_ASC_ENV:-$HOME/.appstoreconnect/cuepad.env}"
 team_signing=()
-if [ -f "$ASC_ENV" ]; then
-  set -a
-  # shellcheck source=/dev/null
-  . "$ASC_ENV"
-  set +a
-  team_signing=(DEVELOPMENT_TEAM="$CUEPAD_TEAM_ID" CUEPAD_MAC_ENTITLEMENTS=App/Config/CuePad-macOS.entitlements)
-fi
-
-# 导出选项 plist：export_options <文件> <method> <证书> [bundleID=描述文件名…]；手动签名
-export_options() {
-  local file=$1 method=$2 cert=$3; shift 3
-  local profiles="" pair
-  for pair in "$@"; do profiles+="<key>${pair%%=*}</key><string>${pair#*=}</string>"$'\n'; done
-  cat > "$file" <<PLIST
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict>
-<key>method</key><string>$method</string>
-<key>teamID</key><string>$CUEPAD_TEAM_ID</string>
-<key>signingStyle</key><string>manual</string>
-<key>signingCertificate</key><string>$cert</string>
-<key>provisioningProfiles</key><dict>
-$profiles</dict>
-$([ "$method" = app-store-connect ] && echo '<key>destination</key><string>export</string>')
-</dict></plist>
-PLIST
-}
 
 # TestFlight 与 Sparkle 按构建号比较新旧；同分钟的尝试可能同号，不能依靠归档或公证耗时保证递增。
 release_versions() {
@@ -72,6 +45,13 @@ check_relay() {
 }
 
 require_asc() {
-  [ "${#team_signing[@]}" -gt 0 ] || { echo "缺少 App Store Connect 凭据文件：${ASC_ENV}（字段见 apple/scripts/_signing.sh 头注释）" >&2; exit 1; }
+  local env
+  env="$(python3 "$APPLE_DIR/scripts/asc.py" env)"
+  [ -f "$env" ] || { echo "缺少 App Store Connect 凭据文件：${env}（字段见 apple/scripts/_signing.sh 头注释）" >&2; exit 1; }
+  set -a
+  # shellcheck source=/dev/null
+  . "$env"
+  set +a
   [ -f "$ASC_KEY_PATH" ] || { echo "ASC_KEY_PATH 指向的密钥文件不存在" >&2; exit 1; }
+  team_signing=(DEVELOPMENT_TEAM="$CUEPAD_TEAM_ID" CUEPAD_MAC_ENTITLEMENTS=App/Config/CuePad-macOS.entitlements)
 }

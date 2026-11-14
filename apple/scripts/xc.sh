@@ -125,24 +125,13 @@ esac
 # （程序坞里成堆的 CuePad 图标另有来源：挂在正式版底下的 Agent 跑的工具，见 CuePadKit 的 ChildProcess 头注释）
 # 人用 Xcode ⌘R 起的不经这里，照常进程序坞；正式版由 release-mac.sh 构建
 if [ "$platform" = mac ]; then build_settings+=(INFOPLIST_KEY_LSUIElement=YES); fi
-# CUEPAD_SIGN=development：ad-hoc 构建完只给主程序换签名（嵌入描述文件、带 iCloud 权限并写定开发环境）。不在 xcodebuild 里换：
+# CUEPAD_SIGN=development：ad-hoc 构建完只给主程序换签名（provision.py resign）。不在 xcodebuild 里换：
 # 签名设置覆盖到每个 target，框架与命令行工具会要团队、bundle id；内嵌的仍是 ad-hoc，没开 Hardened Runtime 就照常加载。
 sign_development() {
   [ "${CUEPAD_SIGN:-}" = development ] || return 0
   [ "$platform" = mac ] || { echo "CUEPAD_SIGN=development 只用于 mac" >&2; exit 2; }
   signing_begin
-  python3 "$APPLE_DIR/scripts/provision.py" unlock
-  local profile entitlements="$DERIVED/CuePad-macOS-development.entitlements" decoded="$DERIVED/profile.plist"
-  # if 而不是 &&：最后一个描述文件不是它时循环以非零结束，pipefail 下整个赋值失败、set -e 一声不吭地退出
-  profile="$(for f in "$PROFILES_DIR"/*.provisionprofile; do
-    if security cms -D -i "$f" > "$decoded" 2>/dev/null && [ "$(plutil -extract Name raw "$decoded")" = "CuePad macOS Development" ]; then echo "$f"; fi; done | head -1)"
-  [ -n "$profile" ] || { echo "没有「CuePad macOS Development」描述文件：先 provision.py profiles" >&2; exit 1; }
-  cp "$profile" "$app/Contents/embedded.provisionprofile"
-  sed "s/\$(CUEPAD_APP_ID)/$CUEPAD_APP_ID/g" "$APPLE_DIR/App/Config/CuePad-macOS.entitlements" > "$entitlements"
-  /usr/libexec/PlistBuddy -c "Add :com.apple.developer.icloud-container-environment string Development" \
-    -c "Add :com.apple.application-identifier string $CUEPAD_TEAM_ID.$CUEPAD_APP_ID" -c "Add :com.apple.developer.team-identifier string $CUEPAD_TEAM_ID" "$entitlements"
-  # 证书只认专用钥匙串里那份（描述文件按它建）；登录钥匙串里可能有同名的另一张
-  codesign --force --keychain "$HOME/.appstoreconnect/cuepad-signing.keychain-db" --sign "Apple Development" --entitlements "$entitlements" "$app"
+  python3 "$APPLE_DIR/scripts/provision.py" resign "$app" Development
   signing_end
 }
 

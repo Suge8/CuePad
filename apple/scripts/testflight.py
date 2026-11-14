@@ -5,10 +5,9 @@
       testflight.py builds          列出构建：版本、处理状态、是否过期
 凭据见 asc.py。
 """
-import json, os, sys
+import json, sys
 
 sys.dont_write_bytecode = True
-sys.path.insert(0, os.path.dirname(__file__))
 import asc
 
 from app_env import BUNDLE_ID as APP_BUNDLE_ID  # noqa: E402
