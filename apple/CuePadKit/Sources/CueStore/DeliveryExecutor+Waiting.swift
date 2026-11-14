@@ -62,7 +62,7 @@ extension DeliveryExecutor {
             for try await needed in store.observe({ store in
               let current = try store.deliveryRequest(stored.id)
               let abandoned = try store.isDeliveryAbandoned(stored.id)
-              return current?.status == .known(.preparing) && current?.handledBy == nil && !abandoned
+              return current?.status == .known(.preparing) && !abandoned
             }) {
               if !needed { return false }
             }

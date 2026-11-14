@@ -107,7 +107,7 @@ extension CueStore {
       guard let state = try sessionState(sessionID) else { throw CueStoreError.notFound }
       if state.state == .known(.ended) {
         let unresolved = try deliveryRequests(toSession: sessionID).contains {
-          $0.mode == .known(.end) && $0.handledBy != nil && ($0.isOpen || $0.status == .known(.unconfirmed))
+          $0.mode == .known(.end) && $0.status.known.map(DeliveryStatus.claimed.contains) == true
         }
         guard unresolved else { return nil }
       }

@@ -104,7 +104,7 @@ public enum Speech {
   }
 
   private static func awaitsDispatch(_ request: DeliveryRequest) -> Bool {
-    request.status == .known(.preparing) || (request.status == .known(.pending) && request.handledBy == nil)
+    request.status.known.map(DeliveryStatus.waiting.contains) == true
   }
 
   /// 等派发快照从什么时候起按未确认显示：派发期限再过一个回执窗口——执行的 Mac 到期就写回失败，这一段等它的结果传回来；

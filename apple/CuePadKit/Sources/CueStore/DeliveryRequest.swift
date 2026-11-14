@@ -1,9 +1,14 @@
 import CueText
 import Foundation
 
+/// 状态机（只有执行的 Mac 推进阶段；别的设备只写 pending、写撤回请求、删自己没传上去的）：
+/// pending →（领取）executing |（等现有会话）preparing |（到期、放弃、不认识、取不到附件）not_delivered |（撤回）删除；
+/// preparing → pending 同样的出路（就绪后再领取）；executing → succeeded | not_delivered | unconfirmed | confirming；
+/// confirming → succeeded | unconfirmed；unconfirmed →（真实消息）succeeded；收尾的按保留期删（`deleteCompletedDeliveries`）。
+/// 未领取（`waiting`）的 `handledBy` 为空，领取后（`claimed`）是执行的 Mac。
 public enum DeliveryStatus: String, Sendable, CaseIterable {
   case pending, executing
-  /// 整个操作尚未开始；不能据此恢复目标进程。
+  /// 整个操作尚未开始，在等现有会话就绪；不能据此恢复目标进程。
   case preparing
   /// 派发已结束，正在从真实历史核对；不是执行成功的证据。
   case confirming
@@ -19,6 +24,9 @@ extension DeliveryStatus {
   /// 是否仍在等进度由 Speech 连同期限推出；`DeliveryRequest.isOpen` 与 SQL 的 `openSQL` 都从这里来。
   static let open: Set<DeliveryStatus> = waiting.union([.executing, .confirming])
   static let openSQL = sqlList(open.sorted { $0.rawValue < $1.rawValue })
+  /// 已交给执行的 Mac、结果还可能变（未确认可被真实消息改成送达）：重启只核对它们，不重派。
+  static let claimed: Set<DeliveryStatus> = [.executing, .confirming, .unconfirmed]
+  static let claimedSQL = sqlList(claimed.sorted { $0.rawValue < $1.rawValue })
 }
 
 /// 读到本版本不认识的值（`Open.unknown`）时 Mac 端不执行它。
@@ -123,7 +131,7 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   public var isOpen: Bool { status.known.map(DeliveryStatus.open.contains) ?? false }
 
   /// 尚未领取只是撤回的必要条件；能否撤回还要由库事务核对已发送事实。
-  public var isWithdrawable: Bool { status.known.map(DeliveryStatus.waiting.contains) == true && handledBy == nil }
+  public var isWithdrawable: Bool { status.known.map(DeliveryStatus.waiting.contains) == true }
 
   /// 明确未交出的原因；未知状态不是未送达。缺少原因的明确失败只在这里兜底。
   public var failure: String? {

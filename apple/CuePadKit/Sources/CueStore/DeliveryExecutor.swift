@@ -76,7 +76,6 @@ public actor DeliveryExecutor {
 
   private func boot() async {
     do {
-      try await store.releaseDeliveryReservations(for: hostID)
       try await store.abandonPreparedDeliveries(for: hostID)
       for request in try await store.unsettledDeliveries(for: hostID) {
         guard started, !Task.isCancelled else { return }
@@ -191,13 +190,10 @@ public actor DeliveryExecutor {
       case .ready(let allowed): access = allowed
       }
       guard started, !Task.isCancelled else { return nil }
-      let reserved = await reporting {
-        switch access {
-        case .existingOnly: return try await store.reserveDeliveryTarget(request.id, host: hostID)
-        case .resumable: return try await store.claimDelivery(request.id, host: hostID, until: timing.now().addingTimeInterval(DeliveryRequest.phaseLimit))
-        }
+      let claimed = await reporting {
+        try await store.claimDelivery(request.id, host: hostID, until: timing.now().addingTimeInterval(DeliveryRequest.phaseLimit))
       }
-      if let claimed = reserved, let claimed {
+      if let claimed, let claimed {
         let age = timing.now().timeIntervalSince(request.createdAt)
         Self.log.info("领取投送请求 \(request.id.uuidString.prefix(8), privacy: .public) \(request.mode.rawValue, privacy: .public)，创建后 \(age, format: .fixed(precision: 1)) 秒")
         return Dispatch(request: claimed, access: access)
@@ -224,21 +220,7 @@ public actor DeliveryExecutor {
 
   private func run(_ dispatch: Dispatch) async {
     guard started, !Task.isCancelled else { return }
-    var request = dispatch.request
-    if request.status == .known(.preparing) {
-      if case .waiting(let pending) = await preparation(request) {
-        await prepare(request, pending)
-        return
-      }
-      guard started, !Task.isCancelled else { return }
-      guard let begun = await reporting({ try await store.beginDelivery(request.id, on: hostID, until: timing.now().addingTimeInterval(DeliveryRequest.phaseLimit)) }),
-            let begun else {
-        await reporting { try await store.releaseDeliveryReservations(for: hostID, only: request.id) }
-        return
-      }
-      request = begun
-    }
-    guard started, !Task.isCancelled else { return }
+    let request = dispatch.request
     let began = timing.now()
     // 与取消隔开：handler 不响应取消时 stop 不被它拖住，它留在脱离的任务里自己收尾，结果丢弃（请求已领取，重启时按未知对账）
     let running = request
@@ -251,9 +233,10 @@ public actor DeliveryExecutor {
 
   func finish(_ request: DeliveryRequest, _ outcome: DeliveryOutcome, resuming: Bool = false) async {
     guard started, !Task.isCancelled else { return }
-    let continuing: Bool = if case .confirming = outcome { resuming } else { false }
+    // 重开时接着核对：执行中的落成核对、期限不续；已在核对或未确认的照旧，不退回
+    let continuing: Bool = if case .confirming = outcome { resuming && request.status != .known(.executing) } else { false }
     if !continuing {
-      await reporting { try await store.finishDelivery(request, outcome, at: timing.now()) }
+      await reporting { try await store.finishDelivery(request, outcome, at: timing.now(), resuming: resuming) }
     }
     if case .confirming(let verify) = outcome,
       let stored = await reporting({ try await store.deliveryRequest(request.id) }), let stored,

@@ -184,7 +184,8 @@ final class MacExecutor {
     private func connect(_ target: SendTarget, access: DeliveryAdmission.Access) async throws -> (sessionID: String, id: CueBridge.Session.ID, resumed: Bool) {
         let ref = try sessionID(of: target)
         if let live = bridge.session(sessionID: ref) { return (ref, live.id, false) }
-        if case .existingOnly = access { throw BridgeError.sessionEnded }
+        // 派发前看见的会话这一刻没了：什么都还没交出，明确没送达
+        if case .existingOnly = access { throw SendError.sessionNotOnThisMac(target.name) }
         guard let indexed = try await store.indexedSession(ref) else { throw SendError.sessionNotOnThisMac(target.name) }
         try requireDirectory(URL(filePath: indexed.cwd, directoryHint: .isDirectory))
         try Task.checkCancellation()

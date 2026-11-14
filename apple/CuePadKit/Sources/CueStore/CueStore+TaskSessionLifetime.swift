@@ -26,7 +26,7 @@ extension CueStore {
   func requireSessionAvailable(_ sessionID: String) throws {
     let ending = try db.first("""
       SELECT 1 FROM deliveryRequests WHERE targetRef = ? AND mode = 'end' AND content != 'end'
-        AND (status IN ('executing', 'confirming', 'unconfirmed') OR (status = 'pending' AND handledBy IS NOT NULL))
+        AND status IN (\(DeliveryStatus.claimedSQL))
       """, [sessionID]) { _ in true } ?? false
     if ending { throw CueStoreError.sessionEnding }
   }
