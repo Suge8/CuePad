@@ -86,11 +86,11 @@ extension DebugScene {
             }
             Task {
                 await Task.wait(for: .seconds(delay))
-                services.setFileTransfers([key: FileTransfer(direction: .download, fraction: 0.5)])
+                transfers.continuation.yield([key: FileTransfer(direction: .download, fraction: 0.5)])
                 await Task.wait(for: .milliseconds(500))
                 do { _ = try store.files.store(picture) }
                 catch { abandon("图片没落地", error) }
-                services.setFileTransfers([:])
+                transfers.continuation.yield([:])
             }
         } catch { abandon("图片到达样张没写下", error) }
     }

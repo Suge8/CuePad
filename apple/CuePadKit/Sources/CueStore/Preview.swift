@@ -98,9 +98,12 @@ public struct PreviewItem: Identifiable, Equatable, Sendable {
   }
 }
 
-extension PreviewItem: Record {
+extension PreviewItem: Record, SyncedColumns {
   static let table = Table.previews
-  static let columns = ["id", "sessionID", "hash", "name", "title", "byteCount", "createdAt", "modifiedAt"]
+  static let fields: [Field] = [
+    .plain("id"), .plain("sessionID"), .plain("hash"), .encrypted("name"), .encrypted("title"), .plain("byteCount"),
+    .plain("createdAt"), .plain("modifiedAt"),
+  ]
   var bindings: [any SQLBindable] { [id, sessionID, hash, name, title, byteCount, createdAt, modifiedAt] }
   init(row: Row) {
     id = row.uuid(0)

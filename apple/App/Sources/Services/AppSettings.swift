@@ -26,8 +26,6 @@ final class AppSettings {
     enum Key {
         static let theme = "theme"
         #if os(macOS)
-        static let globalShortcut = "globalShortcut"
-        static let cueShortcut = "cueShortcut"
         static let alerts = "alerts"
         #endif
         static let replyDrafts = "replyDrafts"
@@ -74,6 +72,14 @@ final class AppSettings {
         change(&preference)
         launchDefault = preference
         if let project { projectLaunches[project] = preference }
+    }
+
+    /// 在 `project` 里开新会话用哪家、哪个模型、多强的思考：上次选的，那台 Mac 上没有的回到它的默认。一家都不能用为 nil。
+    func launchChoice(on mac: MacAgents, in project: UUID?) -> AgentModelChoice? {
+        let last = launchPreference(for: project)
+        guard let kind = mac.preferred(last.agent), let agent = mac.agents.first(where: { $0.kind == kind }) else { return nil }
+        let model = last.models[kind].flatMap { key in agent.models.contains { $0.key == key } ? key : nil }
+        return AgentModelChoice(agents: mac.agents, agent: kind, model: model, thinking: last.thinking, fast: last.fast)
     }
 
     var navigationPane: NavigationPane { didSet { defaults.set(navigationPane.rawValue, forKey: Key.navigationPane) } }
@@ -205,6 +211,19 @@ final class AppSettings {
 
     func draftPreview(for session: UUID) -> String? { replyDraft(for: session).preview }
 
+    /// 解不出来的（存的格式变了）记一条错，原样挪到 `<键>.undecodable` 留着，之后的写入盖不到它；这一项从起点值开始。
+    private static func decoded<T: Decodable>(_ type: T.Type, _ key: String, in defaults: UserDefaults) -> T? {
+        guard let data = defaults.data(forKey: key) else { return nil }
+        do {
+            return try JSONDecoder().decode(type, from: data)
+        } catch {
+            AppServices.log.error("设置 \(key, privacy: .public) 解不出来，原样留在 \(key, privacy: .public).undecodable：\(String(describing: error), privacy: .public)")
+            defaults.set(data, forKey: key + ".undecodable")
+            defaults.removeObject(forKey: key)
+            return nil
+        }
+    }
+
     /// 覆盖已存设置的启动参数，只在 Debug 构建有。
     init(defaults: UserDefaults, launchArguments: [String: Any] = DebugHooks.launchArgumentOverrides) {
         DebugHooks.dropLaunchArguments(from: defaults)
@@ -217,15 +236,14 @@ final class AppSettings {
         #endif
         sounds = defaults.object(forKey: Key.sounds) as? Bool ?? true
         // `lastAgent` 是只记哪家的旧键：没有新记录时从它起步
-        launchDefault = defaults.data(forKey: Key.launchDefault).flatMap { try? JSONDecoder().decode(LaunchPreference.self, from: $0) }
+        launchDefault = Self.decoded(LaunchPreference.self, Key.launchDefault, in: defaults)
             ?? LaunchPreference(agent: string(Key.lastAgent).flatMap(AgentKind.init(rawValue:)) ?? .pi)
-        projectLaunches = defaults.data(forKey: Key.projectLaunches).flatMap { try? JSONDecoder().decode([UUID: LaunchPreference].self, from: $0) } ?? [:]
+        projectLaunches = Self.decoded([UUID: LaunchPreference].self, Key.projectLaunches, in: defaults) ?? [:]
         navigationPane = string(Key.navigationPane).flatMap(NavigationPane.init(rawValue:)) ?? .projects
         railExpanded = defaults.object(forKey: Key.railExpanded) as? Bool ?? true
         cueOpen = defaults.object(forKey: Key.cueOpen) as? Bool ?? true
         sessionSeen = defaults.dictionary(forKey: Key.sessionSeen) as? [String: Date] ?? [:]
-        replyDrafts = (defaults.data(forKey: Key.replyDrafts).flatMap { try? JSONDecoder().decode([UUID: SavedDraft].self, from: $0) } ?? [:])
-            .mapValues(ReplyDraftSlot.init)
+        replyDrafts = (Self.decoded([UUID: SavedDraft].self, Key.replyDrafts, in: defaults) ?? [:]).mapValues(ReplyDraftSlot.init)
         // 启动参数（演示截图）可以把起点挪到很早，让演示库里停下的会话都算有新回复
         if let seconds = launchArguments[Key.unreadSince].flatMap({ Double(String(describing: $0)) }) {
             unreadSince = Date(timeIntervalSince1970: seconds)

@@ -69,7 +69,7 @@ final class CueWatch {
 
     func follow(_ services: AppServices) async throws {
         for try await seen in services.cueUpdates() {
-            apply(seen.read.digest, at: seen.moment, local: seen.local, catchingUp: services.isCatchingUp(on: seen.read.digest.hostID))
+            apply(seen.read.digest, at: seen.moment, local: seen.local, catchingUp: services.syncing.isCatchingUp(on: seen.read.digest.hostID))
         }
     }
 
@@ -85,18 +85,10 @@ final class CueWatch {
         // 推出的时刻每次都不同：内容一样就不写，免得读它的每一行跟着重算
         noteWake(digest.woke, catchingUp: catchingUp)
         let next = AppServices.cueNow(digest, at: moment, local: local).aged(to: .now)
-        if !isPinned, !next.same(as: now) { show(next) }
+        if !next.same(as: now) { show(next) }
         unread = digest.unread
         hostID = digest.hostID
         hostName = digest.hostName
-    }
-
-    /// 调试画面手动换的 Cue 此刻（`-CuePadCueCycle` 轮流走各态，`DebugScene.cueNowTourIfAsked`）：换过就不再随库变。
-    @ObservationIgnored private var isPinned = false
-
-    func pin(_ next: CueNow) {
-        isPinned = true
-        show(next.aged(to: .now))
     }
 
     @ObservationIgnored private var aging: Task<Void, Never>?

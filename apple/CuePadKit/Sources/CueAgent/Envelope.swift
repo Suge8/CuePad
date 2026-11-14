@@ -50,6 +50,30 @@ public enum CueEnvelope {
     }
   }
 
+  /// 一轮信封要的事实从库里一次读齐（信封加一项只改 Kit）；值班只交它自己知道的：醒来原因、这次报给它的变化（`changes`，醒来时读的那一份）、
+  /// 信封上的此刻、这台 Mac（`host`，读额度）、要写的语言、上一轮的错与按他的话查到的相关回复。
+  public static func read(
+    from store: CueStore, wake: CueWake, changes: [CueChange], now: Date, host: String, language: String?, retrying: String?, related: [String]
+  ) async throws -> Input {
+    Input(
+      now: now, projects: try await store.projects(), changes: changes, recaps: try await CueTools(store: store).recaps(for: changes),
+      board: try await store.cueBoard(), waiting: try await store.cueMessagesWaitingForYou(), left: try await store.cueState()?.left ?? [],
+      wake: wake, fired: try await fired(of: wake, in: store), schedules: try await store.cueScheduleLines(), language: language,
+      quotas: try await store.accountQuotas(on: host), retrying: retrying, related: related)
+  }
+
+  private static func fired(of wake: CueWake, in store: CueStore) async throws -> [Fired] {
+    guard case .schedule(let fires) = wake else { return [] }
+    let lines = try await store.cueLines(fires.map(\.line))
+    var fired: [Fired] = []
+    for fire in fires {
+      guard let line = lines.first(where: { $0.id == fire.line }) else { continue }
+      let task = if let id = line.task { try await store.card(id) } else { Card?.none }
+      fired.append(Fired(line: line, due: fire.due, task: task))
+    }
+    return fired
+  }
+
   public static func render(_ input: Input) -> String {
     var lines = ["<cue>", input.now.formatted(stamp) + "（\(zone(input.now))）"]
 

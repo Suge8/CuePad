@@ -60,23 +60,17 @@ struct WideRail: View {
             RailTool(icon: .search, help: "搜索（⌘K）") { workspace.searching.toggle() }.disabled(!workspace.isLibraryReady)
             RailTool(icon: .instruction, help: "技能与规则") { workspace.show(.library) }
             RailTool(icon: .settings, help: "设置（⌘,）") { SettingsPane.open() }
-            Spacer(minLength: 0)
-            SidebarQuota()
             #else
-            RailIcon(icon: .search, help: "搜索") { workspace.openSearch() }
-            RailIcon(icon: .instruction, help: "技能与规则") { workspace.push(.library) }
-            RailIcon(icon: .settings, help: "设置") { workspace.push(.settings) }
+            RailTool(icon: .search, help: "搜索") { workspace.openSearch() }
+            RailTool(icon: .instruction, help: "技能与规则") { workspace.push(.library) }
+            RailTool(icon: .settings, help: "设置") { workspace.push(.settings) }
+            #endif
             Spacer(minLength: 0)
             RailQuota()
-            #endif
         }
-        #if os(macOS)
-        // 两颗钮的圆比行首那一列宽：往左让出多出来的一半，图标正在那一列的中线上；额度的右沿落在行尾读数那条线（行底让出的那一截）
-        .padding(.leading, RowMetrics.bleed - (ControlSize.compact.height - Chrome.icon) / 2)
+        // 额度的右沿落在行尾读数那条线（行底让出的那一截）
+        .padding(.leading, RailTool.lead)
         .padding(.trailing, RowMetrics.bleed)
-        #else
-        .padding(.horizontal, RowMetrics.bleed)
-        #endif
         .frame(height: Chrome.control)
         .floatingAbove { NoticeSlot(place: .rail) }
     }
@@ -96,7 +90,7 @@ struct RailTopTools: View {
             if !sizes.home { CueButton(fits: sizes.cueFits, shown: workspace.cueShown(sizes)).frame(width: Chrome.control, height: Chrome.control) }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.leading, floating ? Chrome.lead : RowMetrics.bleed)
+        .padding(.leading, floating ? Chrome.lead : RailTool.lead)
     }
 
     @ViewBuilder private func tool(_ icon: Icon, _ help: LocalizedStringResource, action: @escaping () -> Void) -> some View {
@@ -105,20 +99,25 @@ struct RailTopTools: View {
                 .labelStyle(.iconOnly)
                 .buttonStyle(ControlButtonStyle(kind: .circular))
         } else {
-            RailIcon(icon: icon, help: help, action: action)
+            RailTool(icon: icon, help: help, action: action)
         }
     }
 }
 
-/// 额度是整个 App 的，不属于哪一页（同 Mac 的 `SidebarQuota`）；手机没有会话条，在侧页顶上那一排（`NarrowSidebarBar`）。
+#endif
+
+/// 宽屏窗口里额度只在这一处：额度是整个 App 的（`AppServices.accountQuotas`），不属于哪一页；会话条藏起时窗口里没有额度
+/// （Mac 看菜单栏面板里那一份 `MenuBarPad`，栏头不另留一份；手机没有会话条，在侧页顶上那一排 `NarrowSidebarBar`）。
+/// 高同那一行的钮（`Chrome.control`），环最多三颗、往右长：有没有额度、几家都不挪别的钮，256 宽的会话条里连同两颗钮也放得下。
+/// 不定时查询：环出现、可问的来源变了与明细打开时才读取账号清单（`refreshesQuota`）。
+/// 否决过：放进底栏设置钮左边（四颗圆钮加两三颗环超出侧栏最小宽）、放进 Cue 名片（名片说的是 Cue，环比名字那一行高，名片跟着变高）。
 private struct RailQuota: View {
-    @State private var open = DebugHooks.preset.quotaOpen
+    @Environment(AppServices.self) private var services
+    @State private var detail = BubbleSwitch(open: DebugHooks.preset.quotaOpen)
 
     var body: some View {
-        QuotaRings(open: open, height: Chrome.control, cell: true) { open.toggle() }
-            // 定宽：读数随时间变，宽不跟着跳
-            .bubble(isPresented: $open, width: .fixed(BubblePlacement.maxWidth)) { QuotaDetail().padding(Spacing.panel) }
-            .refreshesQuota(open: open)
+        QuotaRings(open: detail.open, height: Chrome.control, cell: true) { detail.toggle() }
+            .bubble(isPresented: $detail.open, width: QuotaDetail.bubbleWidth(accounts: services.accountQuotas.items.count)) { QuotaDetail().padding(QuotaDetail.bubblePadding) }
+            .refreshesQuota(open: detail.open)
     }
 }
-#endif

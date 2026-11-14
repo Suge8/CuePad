@@ -22,7 +22,9 @@ extension DebugHooks {
 
     /// 连 iCloud 的同步：给了 `-CuePadSharedCloud` 的实例换成 `CloudOutage` 里连模拟云的那份，测量实例没给时连 CloudKit 开发环境，其余就是 `CloudSync(store:)`。
     static func cloudSync(_ store: CueStore) -> CloudSync {
+        #if DEBUG
         if let sharedCloud { return CloudOutage.cloudSync(store: store, shared: sharedCloud, budget: nil) }
+        #endif
         #if DEBUG && os(macOS)
         if SyncBench.role != nil { return CloudOutage.cloudSync(store: store, shared: nil, budget: SyncBench.budget) }
         #endif

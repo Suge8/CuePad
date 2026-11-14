@@ -10,10 +10,8 @@ final class CueBar {
     private(set) var opens = 0
     @ObservationIgnored private let panel = MenuBarPanel()
     @ObservationIgnored private let services: AppServices
-    /// 两个全局快捷键里它用得勤，默认给两键的 ⌥Space（各家的快速输入也是它）；"显示或隐藏 CuePad"错开一个 ⇧。
     @ObservationIgnored private(set) lazy var hotkey = GlobalHotkey(
-        label: String(localized: "对 Cue 说"), key: AppSettings.Key.cueShortcut, defaultAccelerator: "Alt+Space", defaults: services.settings.defaults,
-        backend: services.hotkeyBackend
+        label: String(localized: "对 Cue 说"), slot: .cue, settings: services.settings, backend: services.hotkeyBackend
     ) { [weak self] in self?.toggle() }
 
     init(services: AppServices, workspace: Workspace) {

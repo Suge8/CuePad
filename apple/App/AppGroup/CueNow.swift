@@ -1,11 +1,12 @@
 import Foundation
 
 /// Cue 此刻（WORDS.md「推进中」「等你」「待回复」）：各端 Cue 那一行、小组件、灵动岛与锁屏、App 图标与菜单栏图标的角标读的唯一一份。
-/// App 由库推出（`CueNow.init(_:at:local:)`，从 Cue 的摘要 `CueDigest`），这里只有规则，各处只画（`CueNowViews`）。
+/// 这里是推出来的这一份怎么画、随时间怎么变，各处只画（`CueNowViews`）。从库推出在 App 的 Services（`CueNow.init(_:at:local:)`，从 Cue 的摘要 `CueDigest`）；
+/// 推进中、被等你占着哪件与 Agent 数的规则只在 Kit（`CueTally`、`CueAgents`），这里与 App 都不另算。
 /// - 头像是哪一拍（`beat`）由 Cue 自己（`cue`）与下面几样推出，各处的头像只读它。
 /// - 数字账（`ledger`）：推进中那项只在有件在跑或等子代理交回时写（`Tally.moving`），都歇着时写那一句（`quietLine`）；每件此刻的样子不进数字账。
 ///   按件分"3 在跑 1 等子代理"看不出规模，加起来又不数歇着的、对不上推进中，所以数字账仍数任务。
-/// - 灵动岛常驻只取一个数：有等你就取 `needsYou`，否则取活跃 Agent 总数 `agentCount`；它不等于推进中任务数，计数规则只在 `CueAgents`。
+/// - 灵动岛常驻只取一个数：有等你就取 `needsYou`，否则取活跃 Agent 总数 `agentCount`；它不等于推进中任务数。
 /// - 角标（`needsYou`）：App 图标、菜单栏图标与灵动岛最小态同一个数。
 /// - 快的事实（Cue 在想、话在路上）几分钟就变，后台的岛不一定等得到下一份：过了 `staleAt` 只信慢的（`settled`）。
 /// 刚做完的那件只留 `doneWindow`：到点由读的一方按时刻收掉（`aged(to:)`、`nextChange(after:)`），不另计时；

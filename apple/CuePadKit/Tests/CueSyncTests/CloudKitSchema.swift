@@ -56,11 +56,10 @@ enum CloudKitSchema {
     for table in Table.synced {
       let sqlTypes = try await store.columnTypes(of: table)
       var fields: [(name: String, declaration: String)] = [("\"___recordID\"", "REFERENCE QUERYABLE")]
-      for column in table.columns where column != "id" {
-        let encrypted = RecordMapper.encryptedColumns[table]?.contains(column) == true
-        let queryable = AlertSubscriptions.queriedColumns[table]?.contains(column) == true
-        let type = sqlTypes[column] == "INTEGER" ? "INT64" : "STRING"
-        fields.append((column, [encrypted ? "ENCRYPTED" : nil, type, queryable ? "QUERYABLE" : nil].compactMap { $0 }.joined(separator: " ")))
+      for field in table.syncedFields where field.name != "id" {
+        let queryable = AlertSubscriptions.queriedColumns[table]?.contains(field.name) == true
+        let type = sqlTypes[field.name] == "INTEGER" ? "INT64" : "STRING"
+        fields.append((field.name, [field.storage == .encrypted ? "ENCRYPTED" : nil, type, queryable ? "QUERYABLE" : nil].compactMap { $0 }.joined(separator: " ")))
       }
       if table == .attachments { fields.append((RecordMapper.fileKey, "ASSET")) }
       fields += retiredFields[table.rawValue] ?? []

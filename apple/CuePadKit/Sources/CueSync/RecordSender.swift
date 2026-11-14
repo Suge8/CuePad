@@ -46,7 +46,10 @@ actor RecordSender {
   }
   private var urgentRuns: [Int: Task<Void, Never>] = [:]
   private var nextRun = 0
+  /// 一批太大（`limitExceeded`）就减半；之后连着 `regrowAfter` 批整批收下再翻倍，回到 CloudKit 的上限为止：太大的多半是那几条大记录，它们传走了批量该回来。
   private var limit = CloudKitLimits.recordsPerRequest
+  private var acceptedInARow = 0
+  static let regrowAfter = 4
   private var busy = false
   private let generation: SyncGeneration
   private var stopped: Bool { generation.isOver }
@@ -70,13 +73,14 @@ actor RecordSender {
     tasks = [
       Task { [triggers] in for await _ in triggers { await self.round() } },
       Task { [trigger] in
-        for await tables in changes {
-          if tables.contains(.cueMessages) { await self.speak() }
+        for await change in changes {
+          await self.hurry(change.urgent, in: change.tables)
           trigger.yield()
         }
       },
       Task { for await _ in due { self.resume() } },
     ]
+    await hurry(nil, in: Set(Table.synced))  // 上一次没传完的（退出、换账号前写下的）照样马上传
     kick()
   }
 
@@ -126,9 +130,15 @@ actor RecordSender {
     return (try? await generation.value(of: waiter.answer, cancellable: false)) ?? false
   }
 
-  /// Cue 对你说的话还没传的马上传：多半是命令行进程里 Cue 的工具写的，写的人叫不了上传。
-  private func speak() async {
-    guard let names = try? await coordinator.store.pendingSpeech(), !names.subtracting(urgent).isEmpty else { return }
+  /// 提交里要马上传的（`Table.urgent`）就马上传；别的进程写的（命令行里 Cue 的工具）从库里认。
+  private func hurry(_ known: Set<String>?, in tables: Set<Table>) async {
+    var names = known ?? []
+    if known == nil {
+      do { names = try await coordinator.store.pendingUrgent(in: tables) } catch {
+        SyncCoordinator.syncLog.error("读不出要马上传的，留给后台那一路：\(error.brief, privacy: .public)")
+      }
+    }
+    guard !names.isEmpty else { return }
     Task { _ = await send(names) }
   }
 
@@ -236,7 +246,9 @@ actor RecordSender {
         sent = try await uploader.upload(saving: batch.saves, deleting: batch.deletes)
       }
       let outcome = await coordinator.sent(sent, for: batch)
-      answer(names, received: Set(sent.saved.map(\.recordID.recordName) + sent.deleted.map(\.recordName)), readAt: readAt)
+      let received = Set(sent.saved.map(\.recordID.recordName) + sent.deleted.map(\.recordName))
+      answer(names, received: received, readAt: readAt)
+      if received.count == names.count { regrow() } else { acceptedInARow = 0 }
       if outcome.paused { return false }  // 协调器停下了（等你决定、要更新）：结果没记账，也不定重试时刻
       if outcome.zoneMissing { try await uploader.saveZone() }
       if let fault = outcome.fault {
@@ -251,6 +263,7 @@ actor RecordSender {
       return true
     } catch let error as CKError where error.code == .limitExceeded && limit > 1 {
       limit /= 2  // 这一批太大：减半再试（马上传那一路的由后台那一路接着发）
+      acceptedInARow = 0
       answer(names, received: [], readAt: readAt)
       return true
     } catch {
@@ -263,6 +276,14 @@ actor RecordSender {
       await schedule(await coordinator.failed(error))
       return false
     }
+  }
+
+  private func regrow() {
+    guard limit < CloudKitLimits.recordsPerRequest else { return }
+    acceptedInARow += 1
+    guard acceptedInARow >= Self.regrowAfter else { return }
+    limit = min(limit * 2, CloudKitLimits.recordsPerRequest)
+    acceptedInARow = 0
   }
 
   /// 上传前对一次最低对端版本，成功为止（同一时刻只对一次）；停下的不再对。文件那一路（`FileSender`）同样等它。

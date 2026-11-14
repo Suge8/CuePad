@@ -7,7 +7,7 @@ import os
 /// - 每次领取只交给 handler 一次；任何执行后未知都留待正证据对账，不在领取内重试；
 /// - 启动时只恢复上次请求的核对，不重派、不续期；
 /// - 读写 Store 失败交给 `onIssue`；
-/// - 写回结果后调用一次 `onWritten`（App 用它立即上传这一条，排在其余待推送前面）；执行超过 `claimGrace` 的，领取那一版先传一次：
+/// - 写回的结果由同步层马上传（`Table.urgent`），领取那一版不传；执行超过 `claimGrace` 的，领取那一版先传一次：
 ///   发起的设备据领取知道 Mac 接手了，但不能据此断言已交给 Agent。多数执行几十毫秒就完，只传结果那一版：
 ///   领取那一版在路上时结果得等它回来才能传（同一条记录一次只一版在路上），回执要多等一个来回。
 public actor DeliveryExecutor {
@@ -18,14 +18,12 @@ public actor DeliveryExecutor {
   package static let claimGrace: Duration = .milliseconds(500)
   let timing: Timing
   private let onIssue: @Sendable (any Error) -> Void
-  private let onWritten: @Sendable (DeliveryRequest.ID) async -> Void
   private let recover: @Sendable (DeliveryRequest) async -> DeliveryOutcome
   private let preparation: @Sendable (DeliveryRequest) async -> DeliveryAdmission
   var waiting = Slots<DeliveryRequest.ID>()
   private let handler: @Sendable (DeliveryRequest, DeliveryAdmission.Access) async -> DeliveryOutcome
   /// 把一个附件取到本机（App 给的 `AppServices.fetchFile`）：执行器等附件文件只在这里；缺省是这台取不来
   let fetchFile: @Sendable (String) async throws -> Void
-  private var uploads = Slots<UUID>()
   private var confirmations = Slots<DeliveryRequest.ID>()
   var fetching = Slots<DeliveryRequest.ID>()
   private static let log = Logger(subsystem: AppIdentity.id, category: "delivery")
@@ -44,7 +42,6 @@ public actor DeliveryExecutor {
   public init(
     store: CueStore, hostID: String,
     timing: Timing = .system, onIssue: @escaping @Sendable (any Error) -> Void,
-    onWritten: @escaping @Sendable (DeliveryRequest.ID) async -> Void = { _ in },
     fetchFile: @escaping @Sendable (String) async throws -> Void = { _ in throw CueStoreError.notFound },
     recover: @escaping @Sendable (DeliveryRequest) async -> DeliveryOutcome = { _ in .unconfirmed(DeliveryRequest.interruptedReason) },
     preparation: @escaping @Sendable (DeliveryRequest) async -> DeliveryAdmission = { _ in .ready(.resumable) },
@@ -54,7 +51,6 @@ public actor DeliveryExecutor {
     self.hostID = hostID
     self.timing = timing
     self.onIssue = onIssue
-    self.onWritten = onWritten
     self.preparation = preparation
     self.handler = handler
     self.recover = recover
@@ -85,7 +81,7 @@ public actor DeliveryExecutor {
   private func boot() async {
     do {
       try await store.releaseDeliveryReservations(for: hostID)
-      for id in try await store.abandonPreparedDeliveries(for: hostID) { notifyWritten(id) }
+      try await store.abandonPreparedDeliveries(for: hostID)
       for request in try await store.unsettledDeliveries(for: hostID) {
         guard started, !Task.isCancelled else { return }
         guard let outcome = await perform({ [recover] in await recover(request) }) else { return }
@@ -120,7 +116,7 @@ public actor DeliveryExecutor {
 
   public func stop() async {
     started = false
-    let tasks = roles.cancelAll() + fetching.cancelAll() + waiting.cancelAll() + confirmations.cancelAll() + uploads.cancelAll()
+    let tasks = roles.cancelAll() + fetching.cancelAll() + waiting.cancelAll() + confirmations.cancelAll()
     handling = nil
     let previous = draining
     let drain = Task {
@@ -174,9 +170,7 @@ public actor DeliveryExecutor {
   }
 
   private func nextActionable() async -> Dispatch? {
-    if let abandoned = await reporting({ try await store.abandonPreparedDeliveries(for: hostID) }) {
-      for id in abandoned { notifyWritten(id) }
-    }
+    await reporting { try await store.abandonPreparedDeliveries(for: hostID) }
     guard let candidates = await reporting({ try await store.actionableDeliveries(for: hostID) }) else { return nil }
     for request in candidates {
       if waiting.has(request.id) || fetching.has(request.id) { continue }
@@ -249,9 +243,10 @@ public actor DeliveryExecutor {
       request = begun
     }
     guard started, !Task.isCancelled else { return }
-    roles.put(.claimUpload, .spawn { [timing] _ in
+    let claimed = request.id.uuidString.lowercased()
+    roles.put(.claimUpload, .spawn { [timing, store] _ in
       guard (try? await timing.sleep(Self.claimGrace)) != nil else { return }
-      self.notifyWritten(request.id)
+      await store.syncSoon([claimed])
     })
     let began = timing.now()
     // 与取消隔开：handler 不响应取消时 stop 不被它拖住，它留在脱离的任务里自己收尾，结果丢弃（请求已领取，重启时按未知对账）
@@ -268,10 +263,7 @@ public actor DeliveryExecutor {
     guard started, !Task.isCancelled else { return }
     let continuing: Bool = if case .confirming = outcome { resuming } else { false }
     if !continuing {
-      if let changed = await reporting({ try await store.finishDelivery(request, outcome, at: timing.now()) }) {
-        let confirmed: Bool = if case .succeeded = outcome { true } else { false }
-        if changed || confirmed { notifyWritten(request.id) }
-      }
+      await reporting { try await store.finishDelivery(request, outcome, at: timing.now()) }
     }
     if case .confirming(let verify) = outcome,
       let stored = await reporting({ try await store.deliveryRequest(request.id) }), let stored,
@@ -283,17 +275,6 @@ public actor DeliveryExecutor {
       })
     }
     if started, !Task.isCancelled { scheduleCleanup() }
-  }
-
-  /// 上传回执也不占执行通道；同一条的版本顺序由同步发送器负责，这里只持有可取消任务。
-  func notifyWritten(_ id: UUID) {
-    guard started, !Task.isCancelled else { return }
-    let token = UUID()
-    uploads.put(token, .spawn { [onWritten] owner in
-      guard !Task.isCancelled else { return }
-      guard (try? await abandonable({ await onWritten(id) })) != nil else { return }
-      self.uploads.release(token, owner)
-    })
   }
 
   /// 执行 Store 读写；失败交给 `onIssue` 并返回 nil。`stop()` 之后（所在任务已取消）的失败不再上报。

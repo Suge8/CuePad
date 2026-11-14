@@ -25,9 +25,7 @@ final class AgentLibraryKeeper {
     }
 
     private func record(_ scan: AgentLibraryFiles.Scan) async throws {
-        // 先写再传：写在 `sync?.upload(…)` 的参数里，没有同步（隔离运行）时连写也跳过
-        let written = try await store.recordAgentLibrary(scan.library, texts: scan.texts)
-        await sync?.upload(written)
+        try await store.recordAgentLibrary(scan.library, texts: scan.texts)
     }
 
     /// 整理这几件：返回做了几件与撤销（恢复这一次的全部改动）。

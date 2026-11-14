@@ -72,18 +72,18 @@ extension Workspace {
 
     @discardableResult
     func submitSession(
-        _ start: SessionStart = SessionStart(), in place: ProjectFolders.LaunchPlace?, draft: ComposerDraft, choice: AgentModelChoice?,
+        in place: ProjectFolders.LaunchPlace?, draft: ComposerDraft, choice: AgentModelChoice?,
         opened: @escaping LaunchOpened
     ) -> Task<Void, Never>? {
         guard let place, let host = place.host, let choice, let agent = choice.agent else { return nil }
         // 新会话要有东西交给 Agent：一句话、附件或带上的任务，空着不开
-        guard start.card != nil || !draft.isEmpty(accepting: [.files, .cards]) else { return nil }
+        guard !draft.isEmpty(accepting: [.files, .cards]) else { return nil }
         let claim = claimImports(draft)
-        return launch(sessionLaunching(start.launchKey), opened: opened) { [services] _, intent in
+        return launch(sessionLaunching(.form), opened: opened) { [services] _, intent in
             let draft = await claim.settled()
             return try await services.launchSession(
-                in: place.project.id, prompt: draft.stored.nonEmpty, title: start.name ?? place.project.shownName, on: host,
-                card: start.card ?? draft.attachments.first?.card, agent: agent,
+                in: place.project.id, prompt: draft.stored.nonEmpty, title: place.project.shownName, on: host,
+                card: draft.attachments.first?.card, agent: agent,
                 model: choice.model, thinking: choice.shownThinking, fast: choice.launchFast, intent: intent)
         }
     }
@@ -115,13 +115,13 @@ extension Workspace {
     }
 
     /// 输入框重新出现：还在等的那一次接着等，认领到时按这一次的 `opened` 收尾。
-    func resume(_ key: SessionLaunching.Key, opened: @escaping LaunchOpened) {
+    func resume(_ key: SessionLaunching.Key, opened: LaunchOpened?) {
         let launching = sessionLaunching(key)
         if let launch = launching.launch { watch(launching, launch, opened: opened) }
     }
 
     /// 接上一次已经发出、这里还不知道的（同一件任务在别处或上一次运行时发的，从库里读出来）：接着看进度，再开时照样确认重复风险。
-    func resume(_ key: SessionLaunching.Key, with launch: SessionLaunch, opened: @escaping LaunchOpened) {
+    func resume(_ key: SessionLaunching.Key, with launch: SessionLaunch, opened: LaunchOpened?) {
         watch(sessionLaunching(key), launch, opened: opened)
     }
 

@@ -25,6 +25,9 @@ struct WideMetrics {
 
     var leading: CGFloat { split ? (main / 2).rounded() : main }
 
+    /// 宽屏看板"列头就是最顶那一排、范围钮在开头"：列让出栏头左边与那颗钮，卡片自带的那一圈不算。
+    static func boardLead(_ inset: EdgeInsets) -> CGFloat { inset.leading + Spacing.item + Chrome.control - BoardCardMetrics.inset }
+
     struct Shape: Equatable {
         let rail: CGFloat
         let cue: CGFloat

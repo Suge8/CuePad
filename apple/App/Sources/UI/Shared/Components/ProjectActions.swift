@@ -1,11 +1,8 @@
 import CueStore
 import SwiftUI
 
-/// 编辑表单由调用方弹出（菜单收起后它所在的视图就没了）；平台专有的操作放进 `extra`，排在移到回收站之前。
-struct ProjectActions<Extra: View>: View {
+struct ProjectActions: View {
     let project: Project
-    let edit: () -> Void
-    @ViewBuilder var extra: Extra
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
@@ -13,7 +10,7 @@ struct ProjectActions<Extra: View>: View {
         Button(project.isPinned ? "取消置顶" : "置顶", icon: project.isPinned ? .unpin : .pin) {
             workspace.perform { try await $0.updateProject(id) { $0.isPinned = pinned } }
         }
-        Button("编辑名称与图标…", icon: .rename, action: edit)
+        Button("编辑名称与图标…", icon: .rename) { workspace.projectForm = .init(project: project) }
         Section {
             #if os(macOS)
             if let directory = workspace.catalog?.directories[id] {
@@ -34,22 +31,33 @@ struct ProjectActions<Extra: View>: View {
         } header: {
             if let place = workspace.place(of: project) { Text(place.text) }
         }
-        extra
         // 默认项目不能删（`CueStore.trashProject` 也拒绝）
         if !project.isDefault {
             Divider()
             Button("移到回收站", icon: .trash, role: .destructive) {
-                #if os(macOS)
-                if workspace.currentProject == id { workspace.show(.shelf) }
-                #endif
                 workspace.perform { try await $0.trashProject(id) }
             }
         }
     }
 }
 
-extension ProjectActions where Extra == EmptyView {
-    init(project: Project, edit: @escaping () -> Void) {
-        self.init(project: project, edit: edit) { EmptyView() }
+/// 项目页"⋯"里的那几项（三端同一份），项目本身的操作在最后（`ProjectActions`）。
+struct ProjectMenuItems: View {
+    let projectID: UUID
+    @Environment(Workspace.self) private var workspace
+
+    var body: some View {
+        #if os(macOS)
+        Button("选择灵感", icon: CardMenu.Item.select.icon) { workspace.presses.beginSelecting() }
+            .disabled(!workspace.isLibraryReady || (workspace.catalog?.summaries[projectID]?.cardCount ?? 0) == 0)
+        #else
+        // Mac 记灵感在页底常驻的那一条（`CaptureBar`）
+        Button("记一条灵感", icon: .write, action: workspace.newCard)
+        #endif
+        Button("看这个项目的进展", icon: .task) { workspace.showProgress(of: projectID) }
+        if let project = workspace.catalog?.project(projectID) {
+            Divider()
+            ProjectActions(project: project)
+        }
     }
 }

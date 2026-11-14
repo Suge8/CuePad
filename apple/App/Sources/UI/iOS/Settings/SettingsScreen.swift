@@ -98,7 +98,7 @@ private struct AlertSection: View {
 
     var body: some View {
         let live = AlertStatus(
-            authorization: alerts.authorization, registration: alerts.registration, subscription: services.syncState.alerts)
+            authorization: alerts.authorization, registration: alerts.registration, subscription: services.syncing.state.alerts)
         let status = DebugHooks.preset.alertStatus ?? live
         Section {
             Label {
@@ -116,7 +116,7 @@ private struct AlertSection: View {
             case .retry:
                 Button("重试", icon: .retry) {
                     alerts.retryRegistration()
-                    Task { await services.syncNow() }
+                    Task { await services.syncing.syncNow() }
                 }
             case .openSettings:
                 Button("打开系统通知设置", icon: .settings) {
@@ -142,45 +142,45 @@ private struct SyncSection: View {
 
     var body: some View {
         Section {
-            let summary = SyncSummary(services.syncState.status)
+            let summary = SyncSummary(services.syncing.state.status)
             Label {
                 StatusText(title: summary.title, detail: summary.detail, reserve: SyncSummary(.offline).detail)
             } icon: {
-                if services.isSyncBusy {
+                if services.syncing.isSyncBusy {
                     Spinner(.small)
                 } else {
                     Image(summary.icon).foregroundStyle(palette.color(summary.tone))
                 }
             }
-            if case .needsDecision = services.syncState.status {
+            if case .needsDecision = services.syncing.state.status {
                 Group {
                     Button(SyncChoices.upload.title, icon: .uploadLocal) { choices.resolve(.uploadLocal, services) }
                     Button(SyncChoices.erase.title, icon: .replaceWithCloud, role: .destructive) { confirmErase = true }
                 }
                 .disabled(choices.working)
-            } else if services.syncState.status == .noAccount {
+            } else if services.syncing.state.status == .noAccount {
                 Button(SyncSummary.settingsTitle, icon: .settings) { openURL(SyncSummary.settings) }
-            } else if services.syncState.status == .outdated {
+            } else if services.syncing.state.status == .outdated {
                 Button(SyncSummary.updateTitle, icon: .updates) { openURL(SyncSummary.update) }
-            } else if services.canSyncNow {
-                Button("立即同步", icon: .syncNow) { Task { await services.syncNow() } }
-                    .disabled(services.isSyncingNow)
+            } else if services.syncing.canSyncNow {
+                Button("立即同步", icon: .syncNow) { Task { await services.syncing.syncNow() } }
+                    .disabled(services.syncing.isSyncingNow)
             }
             if let failure = choices.failure {
                 Label { Text(failure).font(Typography.meta) } icon: { FailureMark() }
             }
-            if services.syncState.filesOverQuota {
+            if services.syncing.state.filesOverQuota {
                 Label { Text(FileStatus.overQuota).font(Typography.meta) } icon: { Image(.syncPaused).foregroundStyle(palette.color(.notice)) }
             }
-            if !services.conflicts.isEmpty {
+            if !services.syncing.conflicts.isEmpty {
                 NavigationLink(value: Route.conflicts) {
-                    Label("\(services.conflicts.count) 条灵感或任务有两个版本", icon: .conflict)
+                    Label("\(services.syncing.conflicts.count) 条灵感或任务有两个版本", icon: .conflict)
                         .foregroundStyle(palette.ink)
                 }
             }
-            if !services.syncState.issues.isEmpty {
-                DisclosureGroup("\(services.syncState.issues.count) 条记录没能同步") {
-                    ForEach(Array(services.syncState.issues.enumerated()), id: \.offset) { _, issue in
+            if !services.syncing.state.issues.isEmpty {
+                DisclosureGroup("\(services.syncing.state.issues.count) 条记录没能同步") {
+                    ForEach(Array(services.syncing.state.issues.enumerated()), id: \.offset) { _, issue in
                         Text(issue.text).font(Typography.meta)
                         if let detail = issue.detail {
                             DisclosureGroup("详情") {
@@ -194,7 +194,7 @@ private struct SyncSection: View {
         } header: {
             Text("iCloud 同步")
         } footer: {
-            if case .needsDecision = services.syncState.status {
+            if case .needsDecision = services.syncing.state.status {
                 Text("上传：\(SyncChoices.upload.consequence)。替换：\(SyncChoices.erase.consequence)。")
             }
         }

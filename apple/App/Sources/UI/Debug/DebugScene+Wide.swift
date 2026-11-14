@@ -19,25 +19,6 @@ extension DebugScene {
         Task { await cycleWideReverse(workspace) }
     }
 
-    /// 抽屉跨过那一下就关了，拖回窄时不再自己出来（`Workspace.fit`）。只拉出一次。
-    static func crossWithDrawerIfAsked(_ workspace: Workspace) {
-        guard let which = args.layoutOpts.drawerCross else { return }
-        Task {
-            // 两次之间停多久是录屏的节奏，不是在等别的事
-            await Task.wait(for: .seconds(1))
-            guard let window = mainWindow else { return }
-            let size = window.contentLayoutRect.size
-            if which == "cue" { workspace.showCue() } else { workspace.railDrawer = true }
-            await Task.wait(for: .seconds(1.2))
-            while !Task.isCancelled {
-                window.setContentSize(NSSize(width: size.width + 1, height: size.height))
-                await Task.wait(for: .seconds(1.5))
-                window.setContentSize(size)
-                await Task.wait(for: .seconds(1.5))
-            }
-        }
-    }
-
     private static func cycleWideReverse(_ workspace: Workspace) async {
         // 两次之间停多久是录屏的节奏，不是在等别的事
         await Task.wait(for: .seconds(1.5))

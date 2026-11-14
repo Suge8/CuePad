@@ -47,45 +47,6 @@ public enum TestLibraries {
 
 
 public struct RawDB {
-  /// 升级验收从旧布局起步：新库按版本倒序撤掉目标版本之后各版加的列、索引与触发器，不能只把版本号拨低。
-  /// 撤法只在这一张表里：`Schema` 加了改结构的一版，就在这里补一步（没补的话，从旧库升上来会在那一版报重复列）。
-  public func restore(version: Int) throws {
-    let steps: [(version: Int, sql: String)] = [
-      (92, """
-        DROP TRIGGER cueMessages_writeSeq_insert;
-        DROP TRIGGER cueMessages_writeSeq_update;
-        DROP INDEX cueMessages_writeSeq;
-        ALTER TABLE cueMessages DROP COLUMN answeredRequests;
-        ALTER TABLE cueMessages DROP COLUMN writeSeq;
-        """),
-      (93, """
-        UPDATE deliveryRequests SET content = json_remove(content, '$.createdForTaskID') WHERE mode = 'start';
-        ALTER TABLE cards DROP COLUMN sessionBindingRevision;
-        ALTER TABLE deliveryRequests DROP COLUMN sessionBindingRevision;
-        DROP INDEX piSessionStates_createdForTaskID;
-        ALTER TABLE piSessionStates DROP COLUMN createdForTaskID;
-        """),
-      (95, "ALTER TABLE attachments DROP COLUMN registeredHere;"),
-      (96, "ALTER TABLE cueProfile DROP COLUMN voice;"),
-      (97, """
-        CREATE TABLE piMessages_rowid (
-          id TEXT PRIMARY KEY NOT NULL, sessionID TEXT NOT NULL, seq INTEGER NOT NULL, role TEXT NOT NULL, text TEXT NOT NULL,
-          at INTEGER NOT NULL, tools TEXT, roundStartedAt INTEGER, deliveryID TEXT,
-          createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL, question TEXT, shownText TEXT
-        ) STRICT;
-        INSERT INTO piMessages_rowid (rowid, id, sessionID, seq, role, text, at, tools, roundStartedAt, deliveryID, createdAt, modifiedAt, question, shownText)
-          SELECT arrival, id, sessionID, seq, role, text, at, tools, roundStartedAt, deliveryID, createdAt, modifiedAt, question, shownText FROM piMessages;
-        DROP TABLE piMessages;
-        ALTER TABLE piMessages_rowid RENAME TO piMessages;
-        CREATE INDEX piMessages_sessionID_seq ON piMessages(sessionID, seq);
-        CREATE INDEX piMessages_sessionID_at ON piMessages(sessionID, at, createdAt);
-        CREATE INDEX piMessages_modified ON piMessages(id, modifiedAt);
-        """),
-      (98, "ALTER TABLE piSessions DROP COLUMN model; ALTER TABLE piSessions DROP COLUMN thinking;"),
-    ]
-    try exec((steps.filter { $0.version > version }.reversed().map(\.sql) + ["PRAGMA user_version = \(version);"]).joined(separator: "\n"))
-  }
-
   public let path: String
 
   public init(_ url: URL) { path = url.path }

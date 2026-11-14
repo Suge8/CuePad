@@ -247,3 +247,13 @@ nonisolated private struct BubbleSpot: LayoutValueKey {
     static let defaultValue: BubblePlacement? = nil
 }
 
+/// 从控件长出的气泡开没开（`bubble(isPresented:)` 绑 `open`，控件点了 `toggle`）：点气泡外收起时按下的就是开关的话，
+/// 松开时开关又要打开它——刚在这一下收起的不再打开（`PressPoint.reopens`）。
+struct BubbleSwitch {
+    var open: Bool { didSet { if oldValue, !open { closedAt = .now } } }
+    private var closedAt: ContinuousClock.Instant?
+
+    init(open: Bool = false) { self.open = open }
+
+    mutating func toggle() { open = !open && !PressPoint.reopens(closedAt: closedAt) }
+}

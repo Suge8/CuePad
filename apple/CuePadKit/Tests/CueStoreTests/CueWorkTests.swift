@@ -23,7 +23,8 @@ import Testing
     let ends = try await store.finishTask(task.id, evidence: ["检查都过了"]).ended
     #expect(try await store.card(task.id)?.status == .done)
     #expect(ends.compactMap(\.target.ref) == ["s2"] && ends.allSatisfy { $0.mode == .known(.end) })
-    #expect(try await store.completeTask(other.id).ended.compactMap(\.target.ref) == ["s1"])
+    try await store.completeTask(other.id)
+    #expect(try await store.deliveryRequests().filter { $0.mode == .known(.end) }.compactMap(\.target.ref).sorted() == ["s1", "s2"])
   }
 
   @Test func aSessionBelongsToItsOpenTaskBeforeADoneOne() async throws {

@@ -55,10 +55,9 @@ struct SubmissionFlowTests {
         let project = try #require(try await store.project(Project.defaultID))
         let place = try #require(ProjectFolders.launchPlaces(projects: [project], bindings: [], host: nil, workMac: "mac-a").first)
         let choice = AgentModelChoice(agents: [], agent: .pi, model: nil, thinking: nil)
-        let start = SessionStart(project: project.id)
-        let launching = workspace.sessionLaunching(start.launchKey)
+        let launching = workspace.sessionLaunching(.form)
         func submit(_ draft: ComposerDraft) -> Task<Void, Never>? {
-            workspace.submitSession(start, in: place, draft: draft, choice: choice, opened: { _, _ in })
+            workspace.submitSession(in: place, draft: draft, choice: choice, opened: { _, _ in })
         }
         let url = app.directory.appending(path: "截图.png")
         try pngData().write(to: url)

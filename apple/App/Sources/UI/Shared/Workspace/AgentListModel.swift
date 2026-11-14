@@ -1,6 +1,8 @@
 import CueStore
 import SwiftUI
 
+#if os(iOS)
+
 @Observable
 final class AgentListModel {
     let endedOnly: Bool
@@ -23,6 +25,8 @@ final class AgentListModel {
     static var noneTitle: String { String(localized: "还没有 Agent 会话") }
 }
 
+#endif
+
 extension SessionListData {
     /// 正在唤醒的读的时候就排掉了（`SessionListData.earlier`）。
     var historyRuns: [TimeSection.Run<SessionListItem>] {
@@ -30,6 +34,7 @@ extension SessionListData {
     }
 }
 
+#if os(iOS)
 extension View {
     func agentList(_ model: AgentListModel) -> some View { modifier(AgentListReader(model: model)) }
 }
@@ -50,3 +55,4 @@ private struct AgentListReader: ViewModifier {
             }
     }
 }
+#endif

@@ -28,7 +28,7 @@ extension DebugScene {
                     workspace.handOff(task)
                     // `-CuePadLaunch YES`：已经替你交给新会话（看发出后的进度写在同一个输入框上）
                     if args.launch, let outbox = workspace.outbox {
-                        workspace.launchHandOff(outbox, opening: nil, plan: try await store.handOffPlan(task.id, host: nil, fresh: true))
+                        workspace.launchHandOff(outbox, opening: nil)
                     }
                 }
                 return

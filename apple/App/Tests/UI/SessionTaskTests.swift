@@ -27,9 +27,8 @@ struct SessionTaskTests {
 
         let empty = try await TaskBoard.read(from: store)
         #expect(empty.todo.isEmpty && empty.advancing.map(\.id) == ["session/s1"])
-        let envelope = CueEnvelope.render(CueEnvelope.Input(
-            now: .now, projects: [], changes: [], board: try await store.cueBoard(), waiting: [],
-            wake: .idle))
+        let envelope = CueEnvelope.render(try await CueEnvelope.read(
+            from: store, wake: .idle, changes: [], now: .now, host: TestApp.hostID, language: nil, retrying: nil, related: []))
         #expect(envelope.contains("在做 1 件：\n- 会话「修登录」（s1） · 歇着"))
 
         let cue = CueTools(store: store, wait: 0)
@@ -150,7 +149,7 @@ struct SessionTaskTests {
         }
         let workspace = Workspace(services: services)
         try await rig.offersPi()
-        workspace.startFresh(task)
+        workspace.handOff(task.id, fresh: true)
         let launch = try #require(try await eventually(store, { try $0.deliveryRequests().first { $0.mode == .known(.start) } }) { $0 != nil })
         try await recorder.update(sessionID: "s1", state: .settled, launchToken: launch.launch?.token)
         let executor = DeliveryExecutor(store: store, hostID: services.hostID, onIssue: { Issue.record("\($0)") }) { request, _ in
@@ -204,7 +203,7 @@ struct SessionTaskTests {
 
         var used: Set<String> = []
         for session in ["s1", "s2"] {
-            workspace.startFresh(leaf)
+            workspace.handOff(leaf.id, fresh: true)
             let launch = try await eventually(store, { [used] in
                 try $0.deliveryRequests().compactMap(\.launch).first { !used.contains($0.token) }
             }) { $0 != nil }

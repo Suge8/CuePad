@@ -39,6 +39,19 @@ public struct CueBrainConfig: Sendable {
 
 /// 一轮进行中再 `send` 的话多半并进这一轮，赶上这一轮收尾就另起一轮：哪一轮接走了它只看 `received`。
 /// 子代理与嵌套的工具调用、子代理说的话不报。
+/// Cue 的工具服务在班次中途没了：之后调它的工具时各家在工具结果里报的（实测 Pi 1.5.0、Codex 0.167.0、OpenCode 2.2.6、Claude Code 2.1.318）。
+/// Pi 是随包的 cue-tools.ts 带上 `marker` 的那两句（标记经环境变量交给它，只此一份）；Codex 报这个 MCP 服务的传输断了；
+/// OpenCode 把这个服务的工具整个撤掉，报没有这个工具；Claude Code 自己重起服务、照常调到，不会走到这里。
+public enum CueToolsDown {
+    public static let marker = "[cuepad-tools-down]"
+
+    public static func matches(_ result: String) -> Bool {
+        result.hasPrefix(marker)
+            || result.contains("tool call failed for `\(CueMCPServer.name)/") && result.contains("Transport closed")
+            || result.hasPrefix("No tool named \"\(CueMCPServer.toolPrefix(on: .opencode))")
+    }
+}
+
 public enum TurnEvent: Sendable, Equatable {
     case turnStarted
     /// 交给 `send` 的那一句（参数是发送时给的标识）进了这一轮：各家按运行时报的那一刻报，报在接走它的那一轮里（插进去时在跑的那一轮

@@ -47,7 +47,7 @@ struct ShareTests {
         let saved = await model.save()
 
         #expect(saved)
-        await app.services.drainCaptures()
+        await app.services.captures.drainCaptures()
         #expect(try await app.services.store.cards(in: target.id).map(\.body) == ["记一下"])
     }
 

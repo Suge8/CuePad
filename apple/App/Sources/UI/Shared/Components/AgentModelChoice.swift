@@ -44,16 +44,6 @@ nonisolated struct AgentModelChoice: Equatable, Sendable {
     }
 }
 
-extension AppSettings {
-    /// 在 `project` 里开新会话用哪家、哪个模型、多强的思考：上次选的，那台 Mac 上没有的回到它的默认。一家都不能用为 nil。
-    func launchChoice(on mac: MacAgents, in project: UUID?) -> AgentModelChoice? {
-        let last = launchPreference(for: project)
-        guard let kind = mac.preferred(last.agent), let agent = mac.agents.first(where: { $0.kind == kind }) else { return nil }
-        let model = last.models[kind].flatMap { key in agent.models.contains { $0.key == key } ? key : nil }
-        return AgentModelChoice(agents: mac.agents, agent: kind, model: model, thinking: last.thinking, fast: last.fast)
-    }
-}
-
 /// 开新会话的那一排（新会话的输入框、手机交给 Agent 的输入框、Mac 任务气泡的"开始"）：选了就记在本机，下次默认是它。
 struct LaunchControls: View {
     let mac: MacAgents

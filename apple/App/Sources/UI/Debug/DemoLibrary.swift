@@ -51,10 +51,9 @@ enum DemoLibrary {
 
     /// `-CuePadQuotaRemindIn`：Claude 的本周到点该响；5 小时（不是周窗口）、按模型的本周与 Codex 的本周（还远）不该响。到点 20 秒后再观测到同一个本周窗口（多用了一些），不该再响。
     private static func seedQuotas(_ store: CueStore) async throws {
-        if let sample = DebugScene.args.quotaOpts.sample { return try await seedQuotaSample(sample, store) }
         let now = Date.now
         let resetIn = DebugScene.args.quotaOpts.resetIn
-        if resetIn > 0 { DebugHooks.later(.seconds(resetIn + 5)) {} }
+        if resetIn > 0 { DebugScene.holdingReady("额度重置（-CuePadQuotaResetIn）") { await Task.wait(for: .seconds(resetIn + 5)) } }
         let remindIn = DebugScene.args.quotaOpts.remindIn
         func window(_ seconds: Int, used: Double, left: TimeInterval, model: String? = nil) -> QuotaWindow {
             QuotaWindow(seconds: seconds, used: used, resetsAt: now.addingTimeInterval(left), model: model)

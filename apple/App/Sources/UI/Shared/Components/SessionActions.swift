@@ -32,7 +32,7 @@ struct SessionActions: View {
         #if os(macOS)
         return RowAction("重命名…", icon: .rename) { workspace.sessionAsk = ask }
         #else
-        return RowAction("重命名", icon: .rename, tone: .quiet, enabled: workspace.services.reachesHost) { workspace.sessionAsk = ask }
+        return RowAction("重命名", icon: .rename, tone: .quiet, enabled: workspace.services.syncing.reachesHost) { workspace.sessionAsk = ask }
         #endif
     }
 

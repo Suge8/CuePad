@@ -3,28 +3,36 @@ import CueStore
 import SwiftUI
 
 extension DebugScene {
-    private static var pending = 0
+    /// 还拖着就绪的事，按名字计数：等过了 `readyLimit` 报出来的就是这些名字。
+    private static var holds: [String: Int] = [:]
+    /// 正在跑的 `running`，按名字计数：摆画面卡住时报出来的是这些名字（摆画面时另起的常驻任务也在里面，它们不拖就绪）。
+    private static var steps: [String: Int] = [:]
     private static var unsettled: Set<UUID> = []
+    /// 从摆画面起这么久还没就绪就报出名字退出：要早于脚本从起实例算的 60 秒（`app_proc.READY_TIMEOUT`），晚于最长的正当拖延（`-CuePadQuotaResetIn`，会话里用过最大 30 秒，再加 5 秒）。
+    private static let readyLimit: Duration = .seconds(45)
 
     static func settling(_ id: UUID, _ busy: Bool) {
         if busy { unsettled.insert(id) } else { unsettled.remove(id) }
     }
 
-    static func later(_ delay: Duration, _ work: @escaping @MainActor () -> Void) {
-        pending += 1
-        Task {
+    static func later(_ delay: Duration, fileID: String = #fileID, line: Int = #line, _ work: @escaping @MainActor () -> Void) {
+        holdingReady("\(fileID):\(line)") {
             await Task.wait(for: delay)
             work()
-            pending -= 1
         }
     }
 
-    static func holdingReady(_ work: @escaping @MainActor () async -> Void) {
-        pending += 1
+    static func holdingReady(_ name: String, _ work: @escaping @MainActor () async -> Void) {
+        count(name, in: &holds, 1)
         Task {
             await work()
-            pending -= 1
+            count(name, in: &holds, -1)
         }
+    }
+
+    private static func count(_ name: String, in names: inout [String: Int], _ change: Int) {
+        names[name, default: 0] += change
+        if names[name] == 0 { names[name] = nil }
     }
 
     /// 录屏都在就绪后才开录（Mac 实测晚 3 秒多），等这么久才录得到进场、停留与收起；`CUEPAD_REC_SECONDS` 给到 18。
@@ -38,13 +46,15 @@ extension DebugScene {
     static let readyFile = ProcessInfo.processInfo.environment["CUEPAD_SHOT_READY"]
 
     /// 摆画面要的数据没写成：报出原因、以 1 退出，不写就绪文件。等它的脚本（`xc.sh shot`、`perf-mac.sh`）照失败处理，不拿半截的库或画面当成果。
-    static func abandon(_ what: String, _ error: any Error) -> Never {
+    nonisolated static func abandon(_ what: String, _ error: any Error) -> Never {
         FileHandle.standardError.write(Data("\(what)：\(error)\n".utf8))
         exit(1)
     }
 
     /// 跑一段调试代码（演示数据、驱动）：任何一步抛错都以失败退出（`abandon`），不吞错；被取消（视图走了、任务收场）是正常结束。
     static func running(_ what: String, _ body: () async throws -> Void) async {
+        count(what, in: &steps, 1)
+        defer { count(what, in: &steps, -1) }
         do {
             try await body()
         } catch is CancellationError {
@@ -59,23 +69,40 @@ extension DebugScene {
         init(_ description: String) { self.description = description }
     }
 
-    /// 给了就绪文件时，画面摆好（`prepare` 做完）之后等到：读库的结果都回来了、摆画面的事都做完了、
+    /// 摆画面（`prepare`），给了就绪文件时再等到：读库的结果都回来了、摆画面的事都做完了、
     /// 没有视图报着正在过渡、屏上没有进行中的一次性动画（转圈这类一直循环的不算），连着三帧都这样，再写下这个文件。`xc.sh shot` 等它出现才截图，不靠固定的等待。
-    static func signalReady(_ services: AppServices) async {
-        guard let path = readyFile else { return }
+    /// 从摆画面起过了 `readyLimit` 还没写下就报出还在跑、还拖着的名字，以 1 退出。返回 false：任务被取消了（Mac 窗口内容在就绪前被摘下），没写文件，驱动不该再起。
+    static func signalReady(_ services: AppServices, _ prepare: () async -> Void) async -> Bool {
+        guard let path = readyFile else {
+            await prepare()
+            return !Task.isCancelled
+        }
+        let watch = Task {
+            guard await Task.wait(for: readyLimit) else { return }
+            func named(_ names: [String: Int]) -> [String] { names.sorted { $0.key < $1.key }.map { $1 > 1 ? "\($0) ×\($1)" : $0 } }
+            let waiting = named(steps) + named(holds)
+                + (unsettled.isEmpty ? [] : ["\(unsettled.count) 处视图报着正在过渡"]) + (animating ? ["屏上有一次性动画"] : [])
+            abandon("画面 \(readyLimit.components.seconds) 秒内没有就绪", Unmet("还拖着：\(waiting.isEmpty ? "（没有登记名字的等待）" : waiting.joined(separator: "、"))"))
+        }
+        defer { watch.cancel() }
+        await prepare()
         var still = 0
         while still < 3 {
+            guard !Task.isCancelled else { return false }
             // 排在页面已经发出的读库之后：它回来时，那些读取也都回来了
             do {
                 _ = try await services.store.projects()
+            } catch is CancellationError {
+                return false
             } catch {
                 abandon("就绪前读库", error)
             }
             await NextFrame.wait()
-            still = pending == 0 && unsettled.isEmpty && !animating ? still + 1 : 0
+            still = holds.isEmpty && unsettled.isEmpty && !animating ? still + 1 : 0
         }
         FileManager.default.createFile(atPath: path, contents: shotSize.map { Data($0.utf8) })
         freezeIfAsked()
+        return true
     }
 
     /// `-CuePadFreeze <秒>`：就绪后 1 秒把主线程堵住这么久，核对 `MainThreadWatch` 记下的卡住（存档里的 freeze 那份、设置里的"上次卡住"）。

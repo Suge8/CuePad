@@ -115,7 +115,7 @@ extension CueHostTests {
             } else {
                 try await app.services.enableCue(on: TestApp.hostID, moving: false)
             }
-            try await eventually("刚启用对过账") { self.services.cue.keeper?.progress.greeted != nil }
+            try await eventually("刚启用对过账") { self.services.cue.keeper?.snapshot.greeted == true }
         }
 
         static func handOverWork(_ rig: Rig) async throws {
@@ -136,28 +136,17 @@ extension CueHostTests {
 
         func skipBackoff() {
             guard let keeper = services.cue.keeper else { return }
-            var due = keeper.setback?.retryAt
-            if case .restarting(_, _, let at) = keeper.phase { due = [due, at].compactMap(\.self).min() }
+            let snapshot = keeper.snapshot
+            var due = snapshot.setbacks.compactMap(\.retryAt).min()
+            if case .restarting(let at) = snapshot.state { due = [due, at].compactMap(\.self).min() }
             if let due { jump(to: due) }
         }
 
-        /// 一轮在跑、大脑一直没动静：跳过看门狗剩下的时长。从最后一次大脑事件算：挂住之后才到的事件会重新算起，所以每次都按剩下的跳。
-        func skipSilence() {
-            guard let keeper = services.cue.keeper, keeper.turn != nil else { return }
-            let left = keeper.setup.timing.silence - (clocks.awake() - keeper.heardAt)
-            if left > .zero { jump(by: left) }
-        }
-
-        /// 叫值班的管理器对账，等它对完、重新睡下（对账的定时器换了一个）：负向断言前让它看过此刻的库与钟。
-        /// 叫两次：第一次等到的可能是叫它时已经在对的那一次，第二次等到的一定是那之后开始的。
-        /// 要有排着的时刻（定时、巡视、重来、看门狗……）：什么都没排时它不睡，这里等不到。
+        /// 叫值班的管理器对账，等它对完：负向断言前让它看过此刻的库与钟。
+        /// 叫两次：对账途中自己又叫了一次（换了大脑、设置要对上）的，那一次也等它对完。
         func reconciled() async throws {
             let keeper = try #require(services.cue.keeper)
-            for _ in 0..<2 {
-                let before = keeper.timer
-                keeper.input.yield(.kick)
-                try await eventually("对过账、重新睡下") { keeper.timer != nil && keeper.timer != before }
-            }
+            for _ in 0..<2 { await withCheckedContinuation { keeper.input.yield(.settle($0)) } }
         }
 
         func chose(model: String, effort: ThinkingLevel) async throws {

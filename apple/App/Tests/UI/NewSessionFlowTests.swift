@@ -44,7 +44,7 @@ struct NewSessionFlowTests {
             let project = try #require(try await store.project(Project.defaultID))
             let place = ProjectFolders.launchPlaces(projects: [project], bindings: [], host: host, workMac: nil).first
             return (task, workspace.sessionLaunching(.form), {
-                workspace.submitSession(start, in: place, draft: ComposerDraft(text: "修乱序"), choice: choice, opened: Workspace.entering(start))
+                workspace.submitSession(in: place, draft: ComposerDraft(text: "修乱序"), choice: choice, opened: Workspace.entering(start))
             })
         case .task:
             try await app.offersPi()
@@ -52,9 +52,8 @@ struct NewSessionFlowTests {
         #else
         case .input:
             workspace.handOff(task)
-            let plan = try await store.handOffPlan(task.id, host: nil)
             return (task, workspace.sessionLaunching(.card(task.id)), {
-                workspace.outbox.flatMap { workspace.launchHandOff($0, opening: nil, plan: plan) }
+                workspace.outbox.flatMap { workspace.launchHandOff($0, opening: nil) }
             })
         #endif
         default:
@@ -165,26 +164,20 @@ struct NewSessionFlowTests {
         let project = try #require(try await store.project(Project.defaultID))
         let place = ProjectFolders.launchPlaces(projects: [project], bindings: [], host: host, workMac: nil).first
         let choice = AgentModelChoice(agents: [], agent: .pi, model: nil, thinking: nil)
-        #expect(workspace.submitSession(start, in: place, draft: ComposerDraft(text: " \n"), choice: choice, opened: Workspace.entering(start)) == nil)
+        #expect(workspace.submitSession(in: place, draft: ComposerDraft(text: " \n"), choice: choice, opened: Workspace.entering(start)) == nil)
         #expect(try await requests.isEmpty)
         #expect(workspace.newSession != nil, "输入框留着")
     }
     #endif
 
     @Test(arguments: Entry.forCards)
-    func 任务已有没收尾的请求_Store拒绝冒充首次交出(entry: Entry) async throws {
+    func 任务已有没收尾的请求_接上它不另开(entry: Entry) async throws {
         defer { app.services.cancelBackgroundWork() }
         let workspace = Workspace(services: app.services)
         let (task, launching, submit) = try await open(entry, in: workspace)
         let other = try await store.requestLaunch(LaunchRequest(project: Project.defaultID, prompt: nil, token: "elsewhere"), title: "修乱序", on: host, card: task.id)
-        await submit()?.value
-        #if os(macOS)
-        #expect(launching.launch == nil)
-        #expect(launching.error == CueStoreError.deliveryAlreadyHanded.localizedDescription)
-        #expect(workspace.notice?.isError == true)
-        #else
-        #expect(launching.launch?.request == other.id, "手机先查这件任务有没有没收尾的请求：接上它，不另开")
-        #endif
+        #expect(submit() == nil)
+        #expect(launching.launch?.request == other.id, "先查这件任务有没有没收尾的请求（重启过、在别的设备上发的）：接上它，不另开")
         #expect(try await requests == [other.id])
     }
 

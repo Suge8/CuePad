@@ -57,7 +57,7 @@ struct ReplyBar: View {
 
     private var accepts: ComposerKinds { answering == nil ? .reply : [] }
     private var commands: [SlashCommand] { answering == nil ? session.usableCommands(in: catalog) : [] }
-    private var reachable: Bool { services.reachesHost }
+    private var reachable: Bool { services.syncing.reachesHost }
     private var hasDraft: Bool { !draft.isEmpty(accepting: accepts) }
     private var canSend: Bool { hasDraft }
     private var canStop: Bool { session.canStop }

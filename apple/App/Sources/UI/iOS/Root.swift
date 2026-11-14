@@ -66,6 +66,7 @@ struct IOSRoot: View {
 /// 各页的内容要等读库（异步）才有，铺在滚动区上时数据没到的几帧整页透明、露出系统的黑。
 struct RouteView: View {
     let route: Route
+    var column = Workspace.Column.main
     @Environment(\.zoomNamespace) private var zoom
     @Environment(\.palette) private var palette
     @Environment(\.horizontalSizeClass) private var sizeClass
@@ -97,12 +98,12 @@ struct RouteView: View {
         case .settings: SettingsScreen()
         case .conflicts: ConflictsScreen()
         case .progress: ProgressScreen()
-        case .cue: CuePage().countsAsViewer()
+        case .cue: CuePage()
         case .search: SearchScreen()
         case .earlier: EarlierPage()
         case .library: LibraryScreen()
         case .libraryFile(let file): LibraryFileScreen(file: file)
-        case .session(let route): SessionScreen(id: route.id, seed: route.seed).countsAsViewer()
+        case .session(let route): SessionPage(route, column: column)
         case .card(let id):
             if let zoom {
                 CardEditorScreen(cardID: id).navigationTransition(.zoom(sourceID: id, in: zoom))

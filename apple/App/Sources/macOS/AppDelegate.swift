@@ -47,7 +47,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         }
         failureWindow?.close()
         failureWindow = nil
-        services.connectSync()  // 第一拉不等建窗口
+        services.syncing.connectSync()  // 第一拉不等建窗口
         let workspace = Workspace(services: services)
         let window = makeMainWindow(services, workspace: workspace)
         services.windowShell = window
@@ -62,7 +62,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         settingsWindow = SettingsWindowController {
             SettingsView(pane: $0).environment(cueBar).panelHost().modifier(PaletteProvider()).environment(services)
         }
-        DebugHooks.present(window)
+        window.present()
         // 第一帧只有主窗口：工作区与服务的订阅、菜单栏图标与面板、后台服务都不在第一帧里，它们起头那一段同步的活（读库、注册、
         // 起各家的接入）排在第一帧之前就把窗口往后推。首屏要的数据已经当场读好（`Workspace.init`、`LiveSessions`、页面的 `observing`）
         Task {
@@ -88,7 +88,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             toggleWindow: { window.toggleFromMenu() })
 
         services.start()
-        services.follow { await services.viewer?.follow(workspace) }
+        services.follow { await services.viewer.follow(workspace) }
         services.follow { await window.parkWhileUnseen(services) }
         // Dock 与菜单栏图标的角标是要你管的几件（拍板加待回复）：读名牌的同一份（`CueNow.needsYou`），不另订阅库
         services.follow { [alerts, statusItem] in
@@ -209,7 +209,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             window.center()
             failureWindow = window
         }
-        DebugHooks.present(window, activating: true)
+        window.present(activating: true)
     }
 
     private func abortLaunch(_ error: any Error) {

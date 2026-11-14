@@ -23,7 +23,7 @@ struct VoiceStorageFlowTests {
         let request = try await voice.handoff("离线先保存，接通后交给另一台 Mac")
         #expect(voice.trip(request) == .sending)
         await cloud.setDown(false)
-        await services.syncNow()
+        await services.syncing.syncNow()
         try await eventually("服务器收下，但 Cue 尚未领取") {
             await cloud.holds(request) && voice.trip(request) == .sent
         }

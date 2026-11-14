@@ -93,7 +93,7 @@ actor HistoryPersistence {
         }
     }
 
-    func keepPruned(timing: Timing = .system) async {
+    func keepPruned(timing: Timing) async {
         repeat {
             do {
                 try await storage.pruneMessages(olderThan: Chat.transcriptWindow, now: timing.now())

@@ -96,7 +96,6 @@ extension VoiceService {
                         call.watchRequests()
                     }
                 }
-                Task { await services.upload(message.id) }
                 if let call, case .recorded(let original) = reference,
                    let index = call.requestState.firstIndex(where: { $0.message == original }) {
                     call.requestState[index].submission = .recorded(message.id)
@@ -115,7 +114,6 @@ extension VoiceService {
                     call.stopRequests.append(stop)
                     call.watchRequests()
                 }
-                _ = services.uploaded(stop)
                 return .stopRequested(delivery: stop.id)
             }
         } catch CueStoreError.notFound { return .rejected(reason: .originalMissing) }

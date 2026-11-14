@@ -46,6 +46,9 @@ func sqlList<Value: RawRepresentable>(_ values: some Sequence<Value>) -> String 
 struct SQLiteError: LocalizedError, CustomStringConvertible {
   let message: String
   let sql: String
+  var code: Int32 = SQLITE_ERROR
+  /// 库此刻的处境（写满、读写出错、被别的连接占着）出的错，不是写的内容不对：过一会儿再写同样的可能就成。
+  var isTransient: Bool { [SQLITE_FULL, SQLITE_IOERR, SQLITE_BUSY, SQLITE_LOCKED, SQLITE_NOMEM, SQLITE_CANTOPEN].contains(code & 0xff) }
   var description: String { "SQLite: \(message) [\(sql)]" }
   var errorDescription: String? { String(localized: "资料库读写出错：\(message)") }
 }
@@ -99,6 +102,8 @@ struct Changes {
 final class SQLite {
   private var handle: OpaquePointer?
   private let changeLog = ChangeLog()
+  /// 这个事务到此为止碰过的。
+  var changesSoFar: Changes { changeLog.changes }
   /// 编译好的语句，按 SQL 文本复用，连同它读到的表。用时取出、用完放回：同一条 SQL 在回调里被重入时，重入的那次临时编译一条，不共用游标。
   private var statements: [String: Compiled] = [:]
   private static let statementLimit = 128
@@ -230,7 +235,7 @@ final class SQLite {
 
   private func error(_ sql: String) -> any Error {
     if sqlite3_errcode(handle) & 0xff == SQLITE_READONLY { return CueStoreError.readOnlyLibrary }
-    let error = SQLiteError(message: String(cString: sqlite3_errmsg(handle)), sql: sql)
+    let error = SQLiteError(message: String(cString: sqlite3_errmsg(handle)), sql: sql, code: sqlite3_extended_errcode(handle))
     Self.log.error("\(error.description, privacy: .public)")
     return error
   }

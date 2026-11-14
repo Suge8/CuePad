@@ -51,10 +51,36 @@ extension Workspace {
         }
     }
 
+    /// 看着的东西没了（删了、进了回收站、文件不在了；本机删的和别处删的同一条路）：窄屏把它连同上面的页截出栈，
+    /// 宽屏关掉盖着它的那一层，或主区回到浏览落点（Cue 铺满时只换下面留着的那一页，不把人从 Cue 拉走）；开着的是这件任务的气泡就收起。
+    func leave(_ route: Route) {
+        switch route {
+        case .card(let id):
+            close(.card(id))
+            if openTask?.task == id { openTask = nil }
+        case .libraryFile(let file): close(.library(file))
+        default: break
+        }
+        switch navigation {
+        case .narrow(var state):
+            guard let index = state.path.firstIndex(of: route) else { return }
+            state.path = Array(state.path[..<index])
+            navigation = .narrow(state)
+        case .wide(var state):
+            guard case .page(route) = state.main else { return }
+            if state.home {
+                state.main = .browse
+                navigation = .wide(state)
+            } else {
+                selectWide(browseRoute)
+            }
+        }
+    }
+
     func back() {
         switch layout {
         case .narrow: if !path.isEmpty { path.removeLast() }
-        case .wide: closeColumn(.main)
+        case .wide: if overlay != nil { overlay = nil } else { closeColumn(.main) }
         }
     }
 
@@ -123,7 +149,8 @@ extension Workspace {
     func open(_ link: DeepLink) {
         switch link {
         case .speak: speakToCue()
-        case .project(let id): show(.project(id))
+        // 链接里的项目可能已经不在了：落到项目列表，不停在一页空的上
+        case .project(let id): if let catalog, catalog.project(id) == nil { show(.shelf) } else { show(.project(id)) }
         case .cue: show(.cue)
         case .session(let id): openSession(id)
         case .remoteBound(let device, let error, let nonce): Task { await remoteBound(device: device, error: error, nonce: nonce) }

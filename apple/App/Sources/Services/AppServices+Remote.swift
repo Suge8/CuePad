@@ -14,11 +14,7 @@ extension AppServices {
         var mirror = SessionMirror(recorder: stateRecorder)
         let namer = SessionNamer(bridge: bridge, store: store)
         for await change in changes {
-            if let alerted = try await mirror.apply(change) {
-                // 带通知标志的写入立即上传（不阻塞后面的会话变化）：排在其余待推送后面要多等，期间状态还可能前进而把它作废
-                let record = SessionState.recordID(sessionID: alerted)
-                Task { await upload(record) }
-            }
+            try await mirror.apply(change)
             switch change {
             case .appeared(let session), .stateChanged(let session, _), .infoChanged(let session): namer.consider(session)
             default: break

@@ -1,7 +1,6 @@
 #if os(macOS)
 import SwiftUI
 
-/// 清空回收站在主栏栏头的"⋯"里：它自己看回收站有没有东西，页面的数据不进栏头。
 struct TrashPage: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -16,11 +15,7 @@ struct TrashPage: View {
             .padding(.horizontal, Spacing.page).padding(.bottom, Spacing.section)
         }
         .safeAreaPadding(.top, Bars.contentGap)
-        .dialog(
-            "永久删除回收站里的全部内容？", isPresented: Bindable(workspace).confirmsEmptyTrash,
-            message: "此操作无法撤销。发送记录会保留当时的内容快照。", buttons: [
-            DialogButton(title: "清空", role: .destructive) { workspace.perform { try await $0.emptyTrash() } }
-        ])
+        .emptyTrashConfirmation(workspace)
         .observing(services.store, into: $data, onError: workspace.fail) { store in
             try TrashSummary.read(from: store)
         }

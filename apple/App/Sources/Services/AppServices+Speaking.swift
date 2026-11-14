@@ -5,36 +5,36 @@ import Foundation
 final class SendOrder {
     private var tails: [SendingTarget: Task<Void, Never>] = [:]
 
-    func enqueue(_ key: SendingTarget, work: @escaping () async throws -> UUID) -> Task<UUID, Error> {
+    func enqueue<T: Sendable>(_ key: SendingTarget, work: @escaping () async -> T) -> Task<T, Never> {
         let before = tails[key]
-        let next = Task { _ = await before?.value; return try await work() }
-        tails[key] = Task { _ = await next.result }
+        let next = Task { _ = await before?.value; return await work() }
+        tails[key] = Task { _ = await next.value }
         return next
     }
 }
 
 extension AppServices {
-    func recordSpeech(_ stored: String, to listener: Listener) async throws -> UUID {
+    func recordSpeech(_ stored: String, to listener: Listener) async throws {
         switch listener {
         case .cue:
-            return try await store.addCueMessage(.you, text: stored).id
+            try await store.addCueMessage(.you, text: stored)
         case .session(let target, let host, let mode, let card):
             try await requireAwake(host)
             if let session = target.ref, mode == .send {
-                return try await store.speak(stored, to: session, name: target.name, card: card, host: host).id
+                _ = try await store.speak(stored, to: session, name: target.name, card: card, host: host)
+            } else {
+                try await store.requestDelivery(stored, to: target, on: host, mode: mode, card: card)
             }
-            return try await store.requestDelivery(stored, to: target, on: host, mode: mode, card: card).id
         }
     }
 
     #if os(macOS)
     func recordVoiceSpeech(_ text: String, command: UUID = UUID(), host: String? = nil) async throws -> UUID {
-        let recording = sendOrder.enqueue(Listener.cue.orderKey) {
-            try await self.store.recordVoiceRequest(StoredBody.make(text: text, files: []), command: command, host: host).id
+        let recording = sendOrder.enqueue(Listener.cue.orderKey) { () async -> Result<UUID, Error> in
+            do { return .success(try await self.store.recordVoiceRequest(StoredBody.make(text: text, files: []), command: command, host: host).id) }
+            catch { return .failure(error) }
         }
-        let id = try await recording.value
-        Task { await upload(id) }
-        return id
+        return try await recording.value.get()
     }
     #endif
 }

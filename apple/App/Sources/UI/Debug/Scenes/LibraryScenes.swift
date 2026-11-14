@@ -10,7 +10,7 @@ extension DebugSceneEntry {
         if DebugScene.args.demo { await DebugScene.seedCue(workspace.services) }
         workspace.select(.library)
         #endif
-        workspace.libraryPane = DebugHooks.preset.libraryPane
+        if DebugScene.args.libraryTab == "skills" { workspace.libraryPane = .skills }
         #if os(macOS)
         if DebugScene.args.tidy { await DebugScene.tidyLibrary(workspace) }
         #endif

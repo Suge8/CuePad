@@ -16,7 +16,7 @@ extension TaskFlowTests {
         try await rig.offersPi()
         let task = try await workspace.createTask("旧任务", in: Project.defaultID)
         let borrower = try await workspace.createTask("新任务", in: Project.defaultID)
-        workspace.startFresh(task)
+        workspace.handOff(task.id, fresh: true)
         let launch = try #require(try await eventually(store, { try $0.deliveryRequests().first { $0.mode == .known(.start) } }) { $0 != nil })
         let recorder = StateRecorder(store: store, hostID: TestApp.hostID, timing: clock.timing)
         try await recorder.update(sessionID: "audit-clock", state: .thinking, projectID: Project.defaultID, launchToken: launch.launch?.token, hosted: true)

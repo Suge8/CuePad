@@ -1,9 +1,10 @@
 /**
- * Cue 的工具（task、tell、memory、setup）在 Pi 里就叫服务给的名字。Pi 内置的 MCP 支持把工具一律命名成 mcp__<服务>__<工具>，
+ * Cue 的工具在 Pi 里就叫服务给的名字。Pi 内置的 MCP 支持把工具一律命名成 mcp__<服务>__<工具>，
  * 而系统提示、工具说明与模型自己的习惯都写 memory recall、task start，模型常照着调不带前缀的名字，被 Pi 以
  * "Tool memory not found" 拒掉；所以不走内置的，由这个扩展当 MCP 客户端：加载时起 CuePad 的 MCP 服务（命令行是环境变量
  * CUEPAD_CUE_MCP 里的 JSON 数组，由 PiBrain 给，服务的其余环境随 Pi 进程继承），照原名逐个登记。
  * 服务退出或出错后之后的调用立刻按工具出错返回；每个请求到 `TIMEOUT_MS` 没回就拒掉，服务卡住时这一轮不挂着。
+ * 这两种报错开头带环境变量 CUEPAD_TOOLS_DOWN 给的标记（`CueToolsDown.marker`）：CuePad 认它换个班次。
  * 服务随运行时收（session_shutdown；开新会话时 Pi 重建运行时，会再加载一次、另起一个）。
  * 只说 CuePad 自己的 MCP 服务（`CueMCPServer`）用到的那点协议：一行一条 JSON-RPC。
  */
@@ -12,6 +13,7 @@ import { createInterface } from "node:readline";
 
 /** 与 Pi 内置 MCP 客户端的默认一致（packages/mcp/src/client.ts）；Cue 的工具只读写本机的库，正常远不到这么久。 */
 const TIMEOUT_MS = 30_000;
+const DOWN = process.env.CUEPAD_TOOLS_DOWN ?? "";
 
 interface Pending {
 	resolve: (result: any) => void;
@@ -30,7 +32,7 @@ export default async function (pi: any) {
 		pending.clear();
 	};
 	server.on("error", fail);
-	server.on("exit", (code, signal) => fail(new Error(`CuePad 的工具服务退出了（${signal ?? code}）`)));
+	server.on("exit", (code, signal) => fail(new Error(`${DOWN} CuePad 的工具服务退出了（${signal ?? code}）`)));
 	server.stdin.on("error", () => {});
 	createInterface({ input: server.stdout }).on("line", (line) => {
 		let message: any;
@@ -52,7 +54,7 @@ export default async function (pi: any) {
 			const id = ++nextID;
 			const timer = setTimeout(() => {
 				pending.delete(id);
-				reject(new Error(`CuePad 的工具服务 ${TIMEOUT_MS / 1000} 秒没有回应（${method}）`));
+				reject(new Error(`${DOWN} CuePad 的工具服务 ${TIMEOUT_MS / 1000} 秒没有回应（${method}）`));
 			}, TIMEOUT_MS);
 			const done = () => clearTimeout(timer);
 			pending.set(id, { resolve: (result) => (done(), resolve(result)), reject: (error) => (done(), reject(error)) });

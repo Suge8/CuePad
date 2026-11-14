@@ -39,9 +39,9 @@ struct SubagentWakeTests {
         try await say("你好", in: workspace, rig)
         try await rig.message(.cue, containing: "收到：你好")
         let keeper = try #require(rig.services.cue.keeper)
-        let hello = try #require(keeper.rounds.last { $0.wake == .message })
+        let hello = try #require(keeper.snapshot.rounds.last { $0.wake == .message })
         #expect(hello.sent.first?.contains("变化（上次醒来之后）：无") == true, "\(hello.sent)")
-        #expect(!keeper.rounds.contains { $0.wake.isSessionActivity })
+        #expect(!keeper.snapshot.rounds.contains { $0.wake.isSessionActivity })
 
         try await store.recordViewing(device: "phone", sessionIDs: [session.sessionID], cue: false)
         session.sendInfo(["subagents": [Self.ui("done", action: "测试全过")]])
@@ -52,7 +52,7 @@ struct SubagentWakeTests {
         try file.reply("子代理做完：测试全过")
         try await rig.message(.cue, containing: "登录页那边歇下了")
         try await eventually("这一轮做完") { try await store.cueState()?.state == .known(.settled) }
-        let woke = keeper.rounds.filter { $0.wake.isSessionActivity }
+        let woke = keeper.snapshot.rounds.filter { $0.wake.isSessionActivity }
         #expect(woke.count == 1)
         #expect(woke.first?.sent.first?.contains("（最新的回答）：\n      子代理做完：测试全过") == true, "\(woke.map(\.sent))")
         await rig.stop()
@@ -84,7 +84,7 @@ struct SubagentWakeTests {
 
         try await rig.message(.cue, containing: "子代理那边停住了")
         let keeper = try #require(rig.services.cue.keeper)
-        let woke = keeper.rounds.filter { $0.wake.isSessionActivity }
+        let woke = keeper.snapshot.rounds.filter { $0.wake.isSessionActivity }
         #expect(woke.count == 1)
         let stalled = try #require(woke.first)
         #expect(stalled.startedAt >= due)
@@ -94,9 +94,9 @@ struct SubagentWakeTests {
 
         try await say("你好", in: Workspace(services: rig.services), rig)
         try await rig.message(.cue, containing: "收到：你好")
-        let hello = try #require(keeper.rounds.last { $0.wake == .message })
+        let hello = try #require(keeper.snapshot.rounds.last { $0.wake == .message })
         #expect(hello.sent.first?.contains("变化（上次醒来之后）：无") == true, "\(hello.sent)")
-        #expect(keeper.rounds.filter { $0.wake.isSessionActivity }.count == 1)
+        #expect(keeper.snapshot.rounds.filter { $0.wake.isSessionActivity }.count == 1)
         await rig.stop()
     }
 
@@ -123,7 +123,7 @@ struct SubagentWakeTests {
         rig.jump(to: try #require(line.remindAt))
         try await rig.message(.cue, containing: "定时到点：\(line.id.uuidString.lowercased()) 核对发布结果")
         let keeper = try #require(rig.services.cue.keeper)
-        #expect(keeper.rounds.filter { $0.wake.isSessionActivity }.count == 2)
+        #expect(keeper.snapshot.rounds.filter { $0.wake.isSessionActivity }.count == 2)
         #expect(try await rig.count("子代理那边停住了") == 0)
         await rig.stop()
     }

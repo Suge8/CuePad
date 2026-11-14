@@ -25,9 +25,9 @@ public struct MacPresence: Equatable, Sendable {
   public static func recordID(host: String) -> UUID { DeterministicID.uuid("mac-presence/\(host)") }
 }
 
-extension MacPresence: Record {
+extension MacPresence: Record, SyncedColumns {
   static let table = Table.macPresence
-  static let columns = ["id", "hostID", "onlineUntil", "modifiedAt", "bootID"]
+  static let fields: [Field] = [.plain("id"), .plain("hostID"), .plain("onlineUntil"), .plain("modifiedAt"), .plain("bootID")]
   var bindings: [any SQLBindable] { [Self.recordID(host: hostID), hostID, onlineUntil, modifiedAt, bootID] }
   init(row: Row) { self.init(hostID: row.text(1), onlineUntil: row.date(2), bootID: row.textOrNil(4), modifiedAt: row.date(3)) }
 }

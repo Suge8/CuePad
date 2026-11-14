@@ -7,69 +7,28 @@ import Foundation
 import Observation
 import os
 
-/// 一个"在这台 Mac 上值班"的时段：Cue 运行在这台 Mac 且已启用时由 `CueService` 起一个，不再运行在这里时停掉。
-/// 一个班次是一个大脑进程（`HostedSession`），系统提示在班次内不变（只带重点，跨班次也不变，提示缓存一直命中）；对话、看板、"等你"与记忆都在库里，换班次、App 重启都不丢。
-/// 设置（`CueProfile`，唯一的事实源）每次对账从库里读，与大脑在用的（`BrainSettings`）不同就去对上：
-/// - 只换了模型或思考强度：空闲时就地交给在跑的大脑（`HostedSession.configure`），下一轮起生效，不换班次、上下文不丢；
-///   大脑不认就把设置改回它在用的，并告诉你。
-/// - 换了名字（在系统提示里）、Agent，或模型、强度回到运行时默认（就地取不回默认）：要换大脑。正在跑的一轮先做完、你的话先交，再按新设置起新班次。
-///   大脑没在跑（等着重起）就直接按新设置起。
-/// 换新（开新会话）只在一次醒来开始时判断，规则只在 `renewDue`：上下文到了换新线（`CueTiming.renewAt`），或距上一次模型请求超过提示缓存的时长
-/// （`CueTiming.cacheLifetime`：缓存过期后接着用要把整段原价重写，换新只写固定前缀与视图，从不更贵）。满足就让大脑开新会话（`HostedSession.newSession`），
-/// 不多跑一轮、不先写交接（实测缓存热时先写交接再换没有带来提升，交接还每次写超 600 字）。
-/// 重点在这个班次起来后变过（钉上、取消、忘掉，谁改的都算）：不等换新，一轮做完、下一轮开始前就换个班次，让系统提示跟上（`outworn`）；
-/// 变的时候正在跑的这一轮照旧的系统提示做完，不在中途插规矩（模型会回应那句插话，盖掉给你的回复）。
-/// 新会话从哪接上只有一条规则：不论怎么来的（换新、换大脑、App 重启、意外退出后重起、起不来再试），第一条输入是记忆视图（`CueMemoryView`，重点除外）、
-/// 平铺的对话视图（`CueView`，最近的对话与每一轮的经过）加信封；之后同一个会话里只往后加信封。
-/// 合并记忆、从他在各会话里说的话里找反复交代的做法都不进 Cue 的轮：后台另起一次性的大脑做（`dreams`），不碰 Cue 的上下文与缓存，回你的那一轮不等它。
-/// 生命周期只有一个 `Phase`：起大脑中 → 值班（可能在跑一轮）→ 出问题后等着重起（没有终态，一直试下去）；Cue 此刻在做什么（`work`）由它直接得出，
-/// 每次对完账写进库（`StateRecorder.updateCue`；值班结束时由 `CueService` 写回歇着），大脑好不好写进本机的健康文件（`CueHealth`，`writeHealth`）。
+/// 一个"在这台 Mac 上值班"的时段：Cue 运行在这台 Mac 且已启用时由 `CueService` 起一个，不再运行在这里时停掉。一个班次是一个大脑进程（`HostedSession`）；
+/// 对话、看板、"等你"与记忆在库里，跨班次、跨重启的对账进度在 `Progress`（`keeper.json`）。库一变（订阅）、大脑有事件、唯一的定时器（`timer`）到点都对一次账（`reconcile`）。
 ///
-/// 对账：库一变（订阅，不轮询）、大脑有事件、定时器到点，都重新对一次账。定时器只有一个（`timer`），每次对账重排成最早的那个：
-/// 歇着时下一个定时、巡视或停住，等着重起时重起的时刻，一轮在跑时看门狗，你的话退回没写成时的再试与绕行里的重置时刻（`alarm`）。
-/// 先接上大脑（到点重起、挂住的停掉，`revive`）、退回上次没退回成的你的话（`giveBack`），绕行时让设置跟上（`steer`），再按先后只做一件事：
-/// 1. 你的消息（连同它收起的卡，`CueEnvelope.delivered`）与"等你"的回答（选的那一项）：大脑空闲就发信封醒来，正忙就插进当前这一轮；写 `deliveredAt`（回答也记在那条"等你"上）。
-///    回答你的是大脑报接走它的那一轮（`TurnEvent.received`）：插进去时那一轮可能正好收尾，由下一轮接走。
-/// 2. 这一轮还没完就等。
-/// 3. 要换大脑（见上）就停掉在跑的、按新设置起新班次。
-///    刚启用（这一次启用还没醒过，含另一台 Mac 接管过来）：醒来看看你手上有哪些事。手上什么都没有（`handsEmpty`）就不醒：
-///    它只能说一句"没有在做的事"，Cue 页的空态（`CuePage`）直接告诉你能对它说什么。
-/// 4. 定时到点（`CueMemoryLine`）：醒来，之后重复的推到下一次、一次性的忘掉（`CueStore.fireCueSchedules`）。定时器是睡眠也走的时钟（`schedule`）：
-///    Mac 醒着、App 开着时准点；睡着或 App 没开，醒来、启动后第一次对账就到点，中间错过的几次只补一次（迟到的那句事实在叫醒原因上，`CueFire`）。
-/// 5. 有会话的事或不归没做完的事的会话有变化（`CueStore.cueChanges`：含会话等回答、Cue 自己发起的请求没能执行；说到的事多半带着近况，同 peek，`CueTools.recaps`）：马上醒。
-///    一轮在跑时来的变化等这一轮做完就醒，一起看（不另攒窗口：一轮的时长就是合批）。等子代理不是变化（子代理的结果交回、会话为它跑完那一轮歇下才是）；
-///    等子代理停住（`CueChange.Kind.stalled`）不随写入出现，按下一次停住的时刻（`CueStore.nextCueStall`）排定时器，到点对账时它就在变化里。
-///    谁开的一轮谁接：他发起的一轮停下不叫醒 Cue，每次对账先当场留给他回（`CueStore.leaveHisStops`，Cue 在跑一轮也照做）；要 Cue 接手他对 Cue 说一句。
-/// 6. 空闲巡视：没有在做的事（`CueStore.cueBoardActive`）、你最近一句（`CueStore.cueLastYou`，还没说过从启用算起）之后很久没说话、不在打扰时段（`CueTiming.quietHours`）；
-///    提示缓存还热时趁热看一眼（热巡视，`CueTiming.warmPatrolAfter`），过了就照空闲时长（冷巡视），两种每段空闲各最多一次、每天合起来最多 3 次；
-///    手上什么都没有（`handsEmpty`，同刚启用）不巡视。
+/// 状态与转换（`Snapshot.State`）：
 ///
-/// 回复是这一轮做完时大脑还留着的正在说的话（`TurnEvent.speaking`），一轮结束时才写进对话（`cueMessages` 是 Cue 对话唯一的事实源）。
-/// 说的过程只在这台 Mac 的内存里给 Cue 页逐字显示（`speech`），只显示在回答你的一轮（`Turn.answersYou`）：
-/// Cue 自己醒来的一轮最后的话不写，显示了就落不了库。
-/// 回复写成什么看这一轮为什么醒（`author(of:)`）：你发起的（含插进来的话）与刚启用的写成 `cue`（回答你的那一轮的推送提示你）；Cue 自己醒来的其余各轮最后的话一律不写，
-/// Cue 页照它的动作写这一轮，要你知道就 tell。刚启用那一轮里已经用 tell 对你说过话的，招呼不再写（几乎是同一句）；你发起的一轮最后的回复就是答复，照写
-/// （`CueStore.replyCueRound`）。
-/// 会话停下叫醒的一轮正常做完时，没给去处的停下（对它说话、留给你回、收掉、做完它的事、就它问你都没做）CuePad 替它留给你回（`leaveUnattended`）：
-/// 会话停下后一定有去处，不会歇在看板上没人管。
-/// 你发来的图按发给会话的同一个转换交给大脑（文字里的图片引用照留，Cue 能原样转给会话）；模型看不了图就同文件一样把路径写进信封。
-/// 基线（变化从哪算起）只在一轮做完且没出错时前移：出错的一轮里 Cue 没看完的变化下次还在。变化按本机写入序号分新旧
-/// （`CueStore.lastWrite`），不按事件时刻：事件可能晚到（机器忙、从别的设备同步来），时刻早于上次醒来也照样是新的。
-/// Cue 自己醒来（刚启用、定时与 5–6）的一轮出错后，隔 `CueTiming.retryWake` 再醒一次（信封带上这次的错，先核对做到了哪），再错就等下一个新变化。
-/// 额度、登录卡住（这一轮或起大脑时）按绕行的规则换家（`Detour.next`）：有该能用的另一家就换过去（只说从哪换到哪，这一轮交给新的大脑重来），
-/// 你设定的那家重置时刻一到换回它。都卡着：这一轮（你发起的也算）只按慢速周期一直重来、每个周期换一家试（新变化不催它，卡着时重来只会再失败；
-/// 别的一轮好好做完了才马上重来），直到它好好做完（`setBack`），那个错只说一次，好好做完时说一句恢复了。
-/// 出错写一条 Cue 消息告诉你：你发起的一轮、额度与登录类的错立刻说；会重试的那次先不说，重试也错了才说。回答你的一轮的回复与出错（一轮只响一次）、起不来都提示你（`CueMessage.urgent`）。
-/// 大脑意外退出、起不来、一轮里醒着太久没有事件（看门狗，`CueTiming.silence`；Mac 睡着的那段不算）都按 `CueTiming.restartDelay` 退避重试，
-/// 那一轮里交出去的你的话清掉送达、重起后重新交（退回没写进库的过一阵再退，`giveBack`）；快的几次用完写一条 Cue 消息说起不来（这次故障只说一次），转慢的一直试，你发消息就马上再试，
-/// 之后第一轮好好做完时说一句又能干活了。工具服务没了（`toolsDown`）的班次做完这一轮就换。
-/// 每一轮的经过（`rounds`）只在这里，在跑的一轮就是 `Turn.round`，做完收进最近的几轮（测试与评测读它）；上下文随状态写进库，各端读 `CueState.context`。
-/// 给人看的经过由它推出（`CueRound.process`），写在对话里这一轮开始的位置那一行上（`recordRound`）：Cue 自己醒来的一轮醒来时就写下、带着为什么醒
-/// （`CueMessage.wake`：Cue 页那一行，各端画"叫醒"的那一下也读它），你发起的第一次调工具时写下；每做完一步改一次，
-/// 此刻的状态记着在跑的是哪一行；各端 Cue 页读库。一轮做完时最后一次改这一行、写回复与歇着在同一次写入里（`finish`）：别的设备同步来时一起到，
-/// "做完了"只看此刻的状态。只看了看、没动手的一轮也留着这一行：Cue 页照样一行，写叫醒它的那一处与当时出了什么事（`CueNoteLog`）。
+/// | 状态 | 怎么认 | 出路 |
+/// |---|---|---|
+/// | 起大脑中 `starting` | `Phase.starting` | 起好 → 值班空闲；起不来 → 等重起 |
+/// | 值班空闲 `idle` | 在班、没有 `turn`、没有要重来的（`setbacks`） | 醒来或你插话 → 一轮在跑；规矩、设置或大脑要换 → 起大脑中；停用 → 不值班 |
+/// | 一轮在跑 `turn` | 有 `turn` | 做完 → 值班空闲；出错 → 歇着等重来或卡住；换了家、工具服务没了 → 做完就换班；发不进、进程退出、看门狗（`CueTiming.silence`）→ 等重起 |
+/// | 做完就换班 `retiring` | `Shift.retiring` | 这一轮做完 → 起大脑中 |
+/// | 等重起 `restarting` | `Phase.restarting` | 到点、你发话、改设置 → 起大脑中；没有终态，快的用完转慢的一直试 |
+/// | 歇着等重来 `resting` | 空闲且有要重来的、没卡住 | 到点 → 一轮在跑；会话动静与巡视的被新变化取代 → 值班空闲 |
+/// | 卡住 `stalled` | 空闲且有要重来的卡住了（额度、登录，`stuck`） | 慢速周期到点（先按绕行换家，`Detour`）→ 一轮在跑 |
+/// | 不值班 `off` | `run` 返回 | 终态 |
+///
+/// 做梦（`dreams`）是旁路：值班空闲时另起一次性大脑，`CueTiming.silence` 内做不完就停掉。
+/// 要重来的（`setbacks`，每件一条）落盘在这台：重启后、换到别的 Mac 又换回这台时，起好大脑就接着重来（那台读不到）；醒来就消费的活（定时、刚启用）消费前就先记下（`hold`），崩溃也不丢。
+/// 你的话只经 `hand` 交出去：先记送达再发，没答上的随班次退回（`giveBack`），至少答一次。
 @Observable
 final class CueKeeper {
+    /// 冷、热巡视每段空闲各至多一次，每天合起来至多这么多次：巡视是 Cue 自己找活，多了只是花钱打扰
     nonisolated static let patrolsPerDay = 3
     nonisolated static let roundsKept = 50
 
@@ -82,9 +41,7 @@ final class CueKeeper {
         var library: URL
         var piAgentDirectory: URL
         var timing: CueTiming
-        /// 立即上传这几条（记下送达后：手机与别的 Mac 上那句话马上是已送达，排在其余待推送前面，见 `Speech`）
-        var upload: @Sendable ([UUID]) async -> Void
-        /// 你的消息里的附件取到这台 Mac 上（`AppServices.fetchFile`）
+        /// 你的消息里的附件取到这台 Mac 上（`SyncDriver.fetchFile`）
         var fetchFile: FileFetching
 
         /// Cue 自己的目录（在资料库目录里）：`work` 是大脑的工作目录（空的），`keeper.json` 是跨班次的对账进度
@@ -105,7 +62,29 @@ final class CueKeeper {
     var shifts = 0
     /// 最近告诉过你的那个错（`ErrorSummary.line`）：同一个错一轮轮重复（如额度）只说一次
     var toldFailure: String?
-    var setback: Setback?
+    /// 落盘在进度里，改一次存一次
+    var setbacks: [Setback] {
+        get { progress.setbacks ?? [] }
+        set {
+            progress.setbacks = newValue.isEmpty ? nil : newValue
+            save()
+        }
+    }
+    /// 下一件要重来的：到点最早的
+    var setback: Setback? { setbacks.min { ($0.retryAt ?? .distantFuture) < ($1.retryAt ?? .distantFuture) } }
+    /// 额度、登录卡住：要重来的只按慢速周期重来，新定时等它们做完
+    var stuck: Bool { setbacks.contains(where: \.stuck) }
+
+    /// 这件活出错是第一次（唯一的判定）：先不说、隔 `CueTiming.retryWake` 再来一次都看它。
+    func firstError(_ wake: CueWake) -> Bool { setbacks.first { $0.wake == wake }.map { $0.stage == .held } ?? true }
+
+    func edit(_ wake: CueWake, _ change: (inout Setback) -> Void) {
+        setbacks = setbacks.map { held in
+            var held = held
+            if held.wake == wake { change(&held) }
+            return held
+        }
+    }
     /// 对账的唯一定时器（`schedule`），每次对账重排成最早的那个（`alarm`）
     var timer: Task<Void, Never>?
     /// 最近一次大脑事件（或一轮开始）在看门狗的钟上的时刻（`CueTiming.awake`）：看门狗从它算（`alarm`）
@@ -119,7 +98,8 @@ final class CueKeeper {
         /// 说过起不来、卡住：这次故障里不再说
         case down
     }
-    /// 下一次醒来是上一轮出错后的重来：上一轮的错，随信封交给大脑（`CueEnvelope.Input.retrying`），交出去就清掉
+    /// 断了的那一轮的错：退回重交的你的话、重读变化醒来的那一轮随信封交给大脑（`CueEnvelope.Input.retrying`），交出去就清掉。
+    /// 只在内存：重来的那几件各自带着自己的错（`Setback.failure`）
     @ObservationIgnored var retrying: String?
     /// 最近一次出错与换大脑：写进健康（`health`）
     @ObservationIgnored var trouble: CueHealth.Failure?
@@ -139,12 +119,50 @@ final class CueKeeper {
         self.setup = setup
         heardAt = setup.timing.awake()
         (inputs, input) = AsyncStream.makeStream()
-        progress = (try? JSONDecoder().decode(Progress.self, from: Data(contentsOf: setup.directory.appending(path: "keeper.json")))) ?? Progress()
+        do {
+            progress = try JSONDecoder().decode(Progress.self, from: Data(contentsOf: setup.directory.appending(path: "keeper.json")))
+        } catch CocoaError.fileReadNoSuchFile {
+            progress = Progress()
+        } catch {
+            Self.log.error("Cue 的对账进度读不出，从头算起：\(error.localizedDescription, privacy: .public)")
+            progress = Progress()
+        }
     }
 
-    var rounds: [CueRound] { turn.map { history + [$0.round] } ?? history }
+    /// 值班对外的样子（只读投影）：测试与评测只读它，内部字段改名、改形状不牵动它们。
+    struct Snapshot {
+        /// 头注释状态表里的那一格（不值班时没有值班，读不到它）
+        enum State: Equatable {
+            case starting, idle, turn, retiring, resting, stalled
+            case restarting(at: Date)
+        }
+
+        var state: State
+        /// 要重来的几件
+        var setbacks: [Setback]
+        /// 在跑的那一轮
+        var turn: CueRound?
+        /// 最近的几轮，在跑的那一轮在最后
+        var rounds: [CueRound]
+        /// 这一次启用已招呼过（或手上没事不用招呼）
+        var greeted: Bool
+    }
+
+    var snapshot: Snapshot {
+        let state: Snapshot.State = switch phase {
+        case .starting: .starting
+        case .restarting(_, _, let at): .restarting(at: at)
+        case .running(let shift) where shift.retiring: .retiring
+        case .running(let shift) where shift.turn != nil: .turn
+        case .running: stuck ? .stalled : setbacks.isEmpty ? .idle : .resting
+        }
+        return Snapshot(
+            state: state, setbacks: setbacks, turn: turn?.round, rounds: turn.map { history + [$0.round] } ?? history,
+            greeted: progress.greeted != nil)
+    }
     /// 在回答你的这一轮正在说的话（只在内存，不进 `cueState`、不入库、不同步）：只有 Cue 页末尾读它，出字时对话列表不重算。
-    /// 说完的留着，由 Cue 页在对话里出现它之后换下；下一轮开始、大脑出问题时清掉。
+    /// 说完的留着，由 Cue 页在对话里出现它之后换下；下一轮开始、大脑出问题时清掉。只显示在回答你的一轮（`Turn.answersYou`）：
+    /// Cue 自己醒来的一轮最后的话不写进对话，显示了就落不了库。
     let speech = LiveDraftFeed()
 
     var work: (state: WorkState, detail: String?, step: CueActivity.Touch?, row: UUID?) {
@@ -202,6 +220,10 @@ final class CueKeeper {
             await giveBack(progress.unanswered ?? [])
             // 一上班就是歇着：上一次没收好尾（崩溃）留下的"在想"马上清掉，不等大脑起好
             await publish()
+            // 上一次值班留下的重来不再等原来的时刻；交出去还没结果的（崩溃时在跑）没有在跑的一轮了，马上再来
+            for held in setbacks {
+                if case .handed = held.stage { edit(held.wake) { $0.due(now) } } else if held.retryAt.map({ $0 > now }) == true { edit(held.wake) { $0.due(now) } }
+            }
             if progress.marks == nil {
                 do {
                     progress.marks = CueMarks(try await store.lastWrite(), stalls: now)
@@ -215,17 +237,21 @@ final class CueKeeper {
             loop: for await next in inputs {
                 switch next {
                 case .stop: break loop
-                case .kick: break
+                case .kick, .settle: break
                 case .brain(let id, let event): if shift?.id == id { await handle(event) }
                 }
                 await reconcile()
                 await publish()
+                if case .settle(let done) = next { done.resume() }
             }
             group.cancelAll()
         }
         timer?.cancel()
-        // 不再值班（停用、App 退出）：在跑的那一轮没答上的你的话退回，下次值班重新交
-        if let shift { await retire(shift) }
+        // 不再值班（停用、换手、App 退出）：在跑的那一轮没答上的你的话退回、醒来已消费的活记成要重来，下次在这台值班接着
+        if let shift {
+            if let turn = shift.turn { await holdOver(turn, failure: "值班停了，这一轮没做完") }
+            await retire(shift)
+        }
         clearHealth()
     }
 

@@ -59,7 +59,7 @@ extension TaskFlowTests {
         try await rig.services.executor.start()
         let workspace = Workspace(services: rig.services)
         let task = try await workspace.createTask("准备发布", in: Project.defaultID)
-        workspace.startFresh(task)
+        workspace.handOff(task.id, fresh: true)
         let started = try await eventually(store, { try $0.card(task.id) }) { $0?.piSessionID != nil }
         let sessionID = try #require(started?.piSessionID)
         let launch = try #require(try await store.deliveryRequests().first { $0.mode == .known(.start) })

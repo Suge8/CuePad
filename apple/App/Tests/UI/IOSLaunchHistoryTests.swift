@@ -36,7 +36,10 @@ struct IOSLaunchHistoryTests {
         #expect(inPlace.submission(at: app.services.speech) == .confirm)
         await #expect(throws: CueStoreError.deliveryAlreadyHanded) { try await launch(retryWithoutClosing ? .replacing(second.request) : .new) }
         #expect(Set(try await store.deliveryRequests().map(\.id)) == [first.request, second.request])
+        let following = Task { await workspace.follow() }
+        defer { await following.stop() }
         workspace.handOff(task)
+        try await eventually("接上旧的未知请求") { workspace.sessionLaunching(.card(task.id)).launch != nil }
         let restored = try #require(workspace.sessionLaunching(.card(task.id)).launch)
         #expect(restored.request == first.request)
         let progress = try store.snapshot { try restored.progress(from: $0) }.value

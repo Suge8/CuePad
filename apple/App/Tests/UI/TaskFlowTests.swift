@@ -68,7 +68,7 @@ struct TaskFlowTests {
         try await rig.offersPi()
         let first = try await store.createTask("复现乱序\n先复现，别改代码", in: project.id)
         let second = try await store.createTask("补重连用例", in: project.id)
-        workspace.startFresh(first)
+        workspace.handOff(first.id, fresh: true)
         let launch = try #require(try await eventually(store, { try $0.deliveryRequests().first { $0.mode == .known(.start) } }) { $0 != nil })
         try await StateRecorder(store: store, hostID: "mac-other").update(
             sessionID: "s1", state: .thinking, title: "atlas", projectID: project.id, launchToken: launch.launch?.token, hosted: true)
@@ -97,7 +97,7 @@ struct TaskFlowTests {
         let first = try await store.createTask("加 --lang", under: task.id)
         let second = try await store.createTask("写 README", under: task.id)
         let third = try await store.createTask("发版\n打 tag 再发", under: task.id)
-        workspace.startFresh(first)
+        workspace.handOff(first.id, fresh: true)
         let opening = try #require(try await eventually(store, { try $0.deliveryRequests().first { $0.mode == .known(.start) } }) { $0 != nil })
         try await StateRecorder(store: store, hostID: "mac-other").update(
             sessionID: "s1", state: .settled, title: "atlas", projectID: project.id, launchToken: opening.launch?.token, hosted: true)
@@ -111,7 +111,7 @@ struct TaskFlowTests {
 
         try await store.bindSession("s1", to: second.id)
 
-        workspace.startFresh(third)
+        workspace.handOff(third.id, fresh: true)
         let launch = try await eventually(store, { try $0.deliveryRequests().first { $0.mode == .known(.start) } }) { $0 != nil }
         #expect(launch?.cardID == third.id && launch?.launch?.project == project.id)
         #expect(launch?.launch?.prompt == "加语言参数\n命令行要能切中英文\n\n发版\n打 tag 再发")

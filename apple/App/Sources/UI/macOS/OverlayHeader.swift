@@ -33,6 +33,12 @@ extension View {
     }
 }
 
+struct PageTitleWidth: ViewModifier {
+    func body(content: Content) -> some View {
+        content.frame(minWidth: 160, idealWidth: 420, maxWidth: 420)
+    }
+}
+
 struct OverlayTitle: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette

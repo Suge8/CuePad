@@ -27,9 +27,9 @@ public struct DirectoryBinding: Identifiable, Equatable, Sendable {
   static func recordID(project: UUID, host: String) -> UUID { DeterministicID.uuid("directory-binding/\(project.uuidString.lowercased())/\(host)") }
 }
 
-extension DirectoryBinding: Record {
+extension DirectoryBinding: Record, SyncedColumns {
   static let table = Table.directoryBindings
-  static let columns = ["id", "projectID", "hostID", "folder", "createdAt", "modifiedAt"]
+  static let fields: [Field] = [.plain("id"), .plain("projectID"), .plain("hostID"), .encrypted("folder"), .plain("createdAt"), .plain("modifiedAt")]
   static let macNameSQL = MacAgents.nameSQL(host: "directoryBindings.hostID")
   static var selection: String { (columns + [macNameSQL]).joined(separator: ", ") }
   var bindings: [any SQLBindable] { [id, projectID, hostID, folder, createdAt, modifiedAt] }
