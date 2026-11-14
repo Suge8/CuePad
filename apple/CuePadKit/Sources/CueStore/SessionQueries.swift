@@ -95,11 +95,9 @@ extension CueStore {
     }
   }
 
-  /// 置顶分组里的会话：它的主人（`sessionOwnerRows`）所在那件事置顶了。会话没有自己的置顶，行上的置顶菜单（`SessionListItem.task`）读的是同一件事。
+  /// 置顶分组里的会话：它所归的那件事（`sessionOwnerTops`）置顶了。会话没有自己的置顶，行上的置顶菜单（`SessionListItem.task`）读的是同一件事。
   private static let pinnedSessions = """
-    WITH owner(sessionID, leaf) AS (\(sessionOwnerRows(where: "1")))
-    SELECT o.sessionID FROM owner o JOIN (\(tops(of: "SELECT leaf FROM owner"))) up ON up.start = o.leaf
-    JOIN cards t ON t.id = up.top WHERE t.isPinned = 1
+    SELECT o.sessionID FROM (\(sessionOwnerTops(where: "1"))) o JOIN cards t ON t.id = o.top WHERE t.isPinned = 1
     """
 
   /// 在问你的会话："等你"里会话那一半（规则在 `SessionState.asksYou`，汇总在 `cueTally`）。只读在等回答的那几条，订阅也只依赖它们（`narrow`）：
