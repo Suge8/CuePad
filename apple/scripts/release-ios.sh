@@ -41,9 +41,7 @@ case "$mode" in
     xcodebuild archive -project "$APPLE_DIR/CuePad.xcodeproj" -scheme CuePad -destination 'generic/platform=iOS' \
       -archivePath "$archive" -derivedDataPath "$DERIVED" "${versions[@]}" "${team_signing[@]}"
     check_relay "$archive/Products/Applications/CuePad.app/Info.plist"
-    export_options "$OUT/export.plist" app-store-connect "Apple Distribution" \
-      "$CUEPAD_APP_ID=CuePad iOS AppStore" "$CUEPAD_APP_ID.share=CuePad Share iOS AppStore" \
-      "$CUEPAD_APP_ID.widget=CuePad Widget iOS AppStore" "$CUEPAD_APP_ID.notify=CuePad Notify iOS AppStore"
+    python3 "$provision" export-options ios "$OUT/export.plist"
     xcodebuild -exportArchive -archivePath "$archive" -exportOptionsPlist "$OUT/export.plist" \
       -exportPath "$OUT/export"
     signing_end

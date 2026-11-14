@@ -28,9 +28,9 @@
 #   xc.sh real [copy] [-- 启动参数…]                 发版前拿本检出的代码看真实数据：正式版资料库的副本上起一份 Mac 实例、窗口排在最前，不同步、不连手机；copy 只拷副本、打印路径（real.py 头注释）
 #   xc.sh fleet up|status|down|accept               同一个检出里 Mac、iPhone、iPad 三个隔离实例共用一朵模拟云；accept 验收手机建灵感 → Mac 与 iPad 读到（fleet.py 头注释）
 #   xc.sh explore [种子] [秒] [-- 启动参数…]           找偶发的主线程卡死：起 iPhone 实例，按种子随机点滑三页，App 的看守记下卡住时连取样本（explore.py 头注释）
-#   xc.sh perf <mac|ios> [次数] [启动参数…]            单次交互：点击回合、指令、掉帧（perf-mac.sh、perf-ios.sh）
-#   xc.sh perf idle <mac|ios> [次数] [秒] [启动参数…]   静置时的 CPU、指令、唤醒、能耗、内存与启动到就绪（perf-idle.sh）
-#   xc.sh perf launch mac [次数] [启动参数…]            冷启动：到主窗口上屏、首屏内容出来、能交互（perf-launch.sh）
+#   xc.sh perf <mac|ios> [次数] [启动参数…]            单次交互：点击回合、指令、掉帧（perf.py 头注释，下两条同）
+#   xc.sh perf idle <mac|ios> [次数] [秒] [启动参数…]   静置时的 CPU、指令、唤醒、能耗、内存与启动到就绪
+#   xc.sh perf launch mac [次数] [启动参数…]            冷启动：到主窗口上屏、首屏内容出来、能交互
 #   xc.sh perf ab <旧检出> <新检出> <轮数> <perf 的参数…>   新旧交替跑同一条 perf（含 idle、launch），每轮一行、最后对比表，前台阻塞到结束（perf-ab.py）
 #   xc.sh release <mac|ios> | device | provision    发布与签名（apple/App/Config/AGENTS.md）；用到描述文件的那一段全机排队（_lock.sh 规则 3）
 #   xc.sh diag [<设备> [all]] | ios crashes [all] | ips <文件…>
@@ -59,8 +59,8 @@ APPLE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 . "$APPLE_DIR/scripts/_build.sh"
 # shellcheck source=_test.sh source-path=SCRIPTDIR
 . "$APPLE_DIR/scripts/_test.sh"
-IOS_DEVICE="${CUEPAD_IOS_DEVICE:-iPhone 17}"
-IPAD_DEVICE="${CUEPAD_IPAD_DEVICE:-iPad Pro 11-inch (M5)}"
+# 模拟器机型的缺省只在这里：起的脚本（fleet.py 的专用模拟器）读这两个环境变量
+export CUEPAD_IOS_DEVICE="${CUEPAD_IOS_DEVICE:-iPhone 17}" CUEPAD_IPAD_DEVICE="${CUEPAD_IPAD_DEVICE:-iPad Pro 11-inch (M5)}"
 # 测试里条件等待的上限从这个时限推出（CueTestSupport 的 conditionBudget）：测试不另写短的墙钟上限
 export TEST_RUNNER_CUEPAD_TEST_TIME_LIMIT=$TEST_TIME_LIMIT
 # 测试里起的 Pi（连同 CuePad 托管起的，它们继承测试进程的环境）不联网查更新：Pi 只认这个环境变量，没有设置项
@@ -83,20 +83,19 @@ case "$cmd" in
   fleet) exec python3 "$APPLE_DIR/scripts/fleet.py" "$0" "${@:2}" ;;
   real) exec python3 "$APPLE_DIR/scripts/real.py" "$0" "${@:2}" ;;
   perf) [ "$platform" != ab ] || exec python3 "$APPLE_DIR/scripts/perf-ab.py" "${@:3}" ;;  # 其余先构建、再测量，两段各自进锁（见下）
+  perf-measure) cmd=perf; measuring=1 ;;  # perf 的测量段，在锁里，内部用
   test|shot|rec|run)
     # 本检出上一个 run 的实例租着一台模拟器：先收掉再排队，免得槽位被自己占满
     if [ "$cmd" = run ] && [ "$platform" != mac ]; then python3 "$APPLE_DIR/scripts/app.py" stop sim >/dev/null; fi
-    case "$platform" in ios) xc_enter "$IOS_DEVICE" "$0" "$@" ;; ipad) xc_enter "$IPAD_DEVICE" "$0" "$@" ;; *) xc_enter "" "$0" "$@" ;; esac ;;
+    case "$platform" in ios) xc_enter "$CUEPAD_IOS_DEVICE" "$0" "$@" ;; ipad) xc_enter "$CUEPAD_IPAD_DEVICE" "$0" "$@" ;; *) xc_enter "" "$0" "$@" ;; esac ;;
   check|build|build-perf|activity-log) xc_enter "" "$0" "$@" ;;  # build-perf：perf 的构建段，内部用
   *) echo "$USAGE" >&2; exit 2 ;;
 esac
 [ "$cmd" != check ] || platform=ios
 [ "$cmd" != activity-log ] || platform=mac
-perf_script=""
 if [ "$cmd" = perf ]; then
-  # perf idle|launch <平台> …：平台跟着传给 perf-idle.sh、perf-launch.sh
-  perf_script="perf-$platform.sh"
-  case "$platform" in idle|launch) platform="${3:-}" ;; esac
+  perf_kind=interact perf_args=("${@:3}")
+  case "$platform" in idle|launch) perf_kind=$platform platform="${3:-}" perf_args=("${@:4}") ;; esac
   case "$platform" in mac|ios) ;; *) echo "用法：$0 perf [idle|launch] <mac|ios> [参数…]" >&2; exit 2 ;; esac
 fi
 
@@ -114,7 +113,7 @@ case "$platform" in
   mac) destination='platform=macOS,arch=arm64'; app="$DERIVED/Build/Products/$configuration/CuePad.app" ;;
   kit) [ "$cmd" = test ] || { echo "$USAGE" >&2; exit 2; }; destination='platform=macOS,arch=arm64' ;;
   ios|ipad)
-    if [ "$platform" = ios ]; then model="$IOS_DEVICE"; else model="$IPAD_DEVICE"; fi
+    if [ "$platform" = ios ]; then model="$CUEPAD_IOS_DEVICE"; else model="$CUEPAD_IPAD_DEVICE"; fi
     device="$(sim_udid "$model")"
     destination="platform=iOS Simulator,id=$device"; app="$DERIVED/Build/Products/$configuration-iphonesimulator/CuePad.app" ;;
   *) echo "$USAGE" >&2; exit 2 ;;
@@ -125,24 +124,13 @@ esac
 # （程序坞里成堆的 CuePad 图标另有来源：挂在正式版底下的 Agent 跑的工具，见 CuePadKit 的 ChildProcess 头注释）
 # 人用 Xcode ⌘R 起的不经这里，照常进程序坞；正式版由 release-mac.sh 构建
 if [ "$platform" = mac ]; then build_settings+=(INFOPLIST_KEY_LSUIElement=YES); fi
-# CUEPAD_SIGN=development：ad-hoc 构建完只给主程序换签名（嵌入描述文件、带 iCloud 权限并写定开发环境）。不在 xcodebuild 里换：
+# CUEPAD_SIGN=development：ad-hoc 构建完只给主程序换签名（provision.py resign）。不在 xcodebuild 里换：
 # 签名设置覆盖到每个 target，框架与命令行工具会要团队、bundle id；内嵌的仍是 ad-hoc，没开 Hardened Runtime 就照常加载。
 sign_development() {
   [ "${CUEPAD_SIGN:-}" = development ] || return 0
   [ "$platform" = mac ] || { echo "CUEPAD_SIGN=development 只用于 mac" >&2; exit 2; }
   signing_begin
-  python3 "$APPLE_DIR/scripts/provision.py" unlock
-  local profile entitlements="$DERIVED/CuePad-macOS-development.entitlements" decoded="$DERIVED/profile.plist"
-  # if 而不是 &&：最后一个描述文件不是它时循环以非零结束，pipefail 下整个赋值失败、set -e 一声不吭地退出
-  profile="$(for f in "$PROFILES_DIR"/*.provisionprofile; do
-    if security cms -D -i "$f" > "$decoded" 2>/dev/null && [ "$(plutil -extract Name raw "$decoded")" = "CuePad macOS Development" ]; then echo "$f"; fi; done | head -1)"
-  [ -n "$profile" ] || { echo "没有「CuePad macOS Development」描述文件：先 provision.py profiles" >&2; exit 1; }
-  cp "$profile" "$app/Contents/embedded.provisionprofile"
-  sed "s/\$(CUEPAD_APP_ID)/$CUEPAD_APP_ID/g" "$APPLE_DIR/App/Config/CuePad-macOS.entitlements" > "$entitlements"
-  /usr/libexec/PlistBuddy -c "Add :com.apple.developer.icloud-container-environment string Development" \
-    -c "Add :com.apple.application-identifier string $CUEPAD_TEAM_ID.$CUEPAD_APP_ID" -c "Add :com.apple.developer.team-identifier string $CUEPAD_TEAM_ID" "$entitlements"
-  # 证书只认专用钥匙串里那份（描述文件按它建）；登录钥匙串里可能有同名的另一张
-  codesign --force --keychain "$HOME/.appstoreconnect/cuepad-signing.keychain-db" --sign "Apple Development" --entitlements "$entitlements" "$app"
+  python3 "$APPLE_DIR/scripts/provision.py" resign "$app" Development
   signing_end
 }
 
@@ -183,16 +171,20 @@ case "$cmd" in
   perf)
     # 构建与测量各自按普通任务进锁；帧与回合时长随机器忙闲变，看结束时的负载，前后对比以指令数为准
     # xcodebuild 的标准输出与错误已在 xcb 里并成一路写进 build.log；排队、用时、入口的报错走终端的标准错误，不进日志
-    status=0
-    "$0" build-perf "$platform" >"$DERIVED/build.log" || status=$?
-    if [ "$status" != 0 ]; then
-      {
-        echo "perf 的构建失败（退出码 ${status}；75 是排队超时，124 是任务超时，其余多半是 xcodebuild 的）。完整输出在 $DERIVED/build.log；排队与入口的报错在上面的终端输出里，不在日志里。"
-        echo "日志里的 error 行（最多 10 条，早先的错误常在末尾之前）："; grep -a 'error:' "$DERIVED/build.log" | head -10 || true
-        echo "日志末尾 30 行（只是末尾，不是全部）："; tail -30 "$DERIVED/build.log"
-      } >&2
-      exit "$status"
+    if [ -z "${measuring:-}" ]; then
+      status=0
+      "$0" build-perf "$platform" >"$DERIVED/build.log" || status=$?
+      if [ "$status" != 0 ]; then
+        {
+          echo "perf 的构建失败（退出码 ${status}；75 是排队超时，124 是任务超时，其余多半是 xcodebuild 的）。完整输出在 $DERIVED/build.log；排队与入口的报错在上面的终端输出里，不在日志里。"
+          echo "日志里的 error 行（最多 10 条，早先的错误常在末尾之前）："; grep -a 'error:' "$DERIVED/build.log" | head -10 || true
+          echo "日志末尾 30 行（只是末尾，不是全部）："; tail -30 "$DERIVED/build.log"
+        } >&2
+        exit "$status"
+      fi
+      xc_enter "$([ "$platform" = ios ] && echo "$CUEPAD_IOS_DEVICE")" "$0" perf-measure "${@:2}"  # 已在锁里（脚本调脚本）时直接返回，往下量
     fi
-    xc_enter "$([ "$platform" = ios ] && echo "$IOS_DEVICE")" "$APPLE_DIR/scripts/$perf_script" "$app" "${@:3}"
-    exec "$APPLE_DIR/scripts/$perf_script" "$app" "${@:3}" ;;  # 已在锁里（脚本调脚本）时 xc_enter 直接返回
+    # iOS 每次从刚开机的模拟器量（perf.py 头注释），量完开着留给别的任务
+    if [ "$platform" = ios ]; then xcrun simctl shutdown "$device" 2>/dev/null || true; phase 开机 sim_boot "$device"; fi
+    CUEPAD_PERF_DEVICE="${device:-}" exec python3 "$APPLE_DIR/scripts/perf.py" "$perf_kind" "$platform" "$app" ${perf_args[@]+"${perf_args[@]}"} ;;
 esac

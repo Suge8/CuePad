@@ -8,11 +8,11 @@ import UIKit
 /// iOS 的 `-CuePadBench interact`（配 `-CuePadDemo YES`，iPhone 窄屏：以 Cue 为根的单栈加根上的侧栏）：单次交互那一下的主线程耗时，口径同 Mac 的 `InteractionBench`，
 /// 每项一行 `INTERACT {json}` 写进隔离库目录下的 `interact.jsonl`（模拟器里的标准输出不好取），量完退出。
 /// 动作是点击最终调用的同一条路（导航路径、会话条的 `openSession`、侧栏钮与头像的 `select`、浮窗与面板的状态），不经触摸投递。
-/// 长按菜单与手势（滑动开合侧栏、右滑返回，以及会话行、看板上横滑的误触核对）由 `perf-ios.sh` 在模拟器上真按、真滑（`AWAIT` 行，`InteractionBench+iOSTouch`），
+/// 长按菜单与手势（滑动开合侧栏、右滑返回，以及会话行、看板上横滑的误触核对）由 `perf.py` 在模拟器上真按、真滑（`AWAIT` 行，`InteractionBench+iOSTouch`），
 /// 从手指按下起量；每行的 `landed` 是量完时的根与推入的页。每项至少做两遍：第一遍是首次（要现建视图），之后是再次。
 /// 演示库缺了要量的东西时写 `FAIL 原因` 并以 1 退出；全部量完写 `DONE`。`-CuePadInteractOnly 项,项` 只量列出的几项（同 Mac）。
 /// - 冷启动·Cue 页：App 一打开就在 Cue 页上；`launchMs` 是进程启动到对话排出来（`PerfProbe` 的 `cue`）的墙钟毫秒，
-///   主线程与帧从画面摆起来（`beginCold`）量到对话出来后一秒，指令数从进程启动算起。量真实大小的对话配 `CUEPAD_PERF_SEED`（`perf-ios.sh`）。
+///   主线程与帧从画面摆起来（`beginCold`）量到对话出来后一秒，指令数从进程启动算起。量真实大小的对话配 `CUEPAD_PERF_SEED`（`perf.py`）。
 /// - 开设置、关设置：见 `SettingsBench`。
 /// - 长文粘贴、长文打字：输入框（回复框、对 Cue 说）经剪贴板粘贴进一大段（诊断 JSON 那样，`pasted`），之后再敲一个字，
 ///   走键盘输入同一条路（`paste`、`UITextInput.insertText`），每个字一项；编辑页是正文已有那一大段时打字。`-CuePadPasteFile <路径>` 换成那个文件的内容。
@@ -145,7 +145,7 @@ enum IOSInteractionBench {
             await step(name, window: window, finger: finger, action)
         }
         try await typeLong(workspace, session: sessions[0], card: idea.id, wants: wants, fail: fail, step: { name, action in await step(name, action) })
-        // 最后量长按书架上的项目卡（放在最后：万一菜单没收起，不影响前面各项）：系统的长按菜单在进程内没有入口，由 perf-ios.sh 在模拟器上真按（`AWAIT 名 x y` 是要它按的点，屏幕坐标）。
+        // 最后量长按书架上的项目卡（放在最后：万一菜单没收起，不影响前面各项）：系统的长按菜单在进程内没有入口，由 perf.py 在模拟器上真按（`AWAIT 名 x y` 是要它按的点，屏幕坐标）。
         // 从手指按下起量 1.5 秒（菜单在按住约半秒后才弹出）；松手后菜单留着，请脚本点一下空白处收起
         workspace.select(.shelf)
         await Task.wait(for: .seconds(1))

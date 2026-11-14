@@ -8,7 +8,7 @@ import os
 /// `-CuePadBench interact`：单次交互那一下的主线程耗时，逐项与预算比较，
 /// 每项结果作为一行 `INTERACT {json}` 打到标准输出，量完退出。配 `-CuePadDemo YES`（演示库）或 `-CuePadSeed perf`（大库）。
 /// 动作就是点击、快捷键最终调用的工作区方法（`show`、`overlay`、`toggle`；侧栏发主菜单的动作），不经事件投递（那一段只有 1～5ms）。
-/// 例外是前台量的"任务气泡开"：真实地点那条任务行（写 `AWAIT click x y`，`perf-mac.sh` 经 HID 点，同人点），从松开的那一下起量。
+/// 例外是前台量的"任务气泡开"：真实地点那条任务行（写 `AWAIT click x y`，`perf.py` 经 HID 点，同人点），从松开的那一下起量。
 /// 直接调方法时空闲一两秒后的第一下常落在没升频的性能核上（同样的指令点击回合差到一倍）；真实输入进来时系统照人点调度，量的才是用户点的那一下。
 /// - **点击回合**：动作发出到画面第一次变（含这次变化的第一帧提交）为止，主线程的全部 CPU 毫秒，跨多圈 run loop 求和：挪到下一帧的活照样算进去，
 ///   直到画面第一次变（画面的变化看窗口图层树里看得见的层，见 `TurnLog`）；CPU 时间不随机器忙闲变，墙钟会。
@@ -249,7 +249,7 @@ enum InteractionBench {
         return await finish(name, instructions: instructions, recorder: recorder)
     }
 
-    /// 真实地点 `point`（全局坐标，主屏左上为原点）：指针先放到那里（退出时还回原位），写 `AWAIT click` 等 `perf-mac.sh` 经 HID 点下去，
+    /// 真实地点 `point`（全局坐标，主屏左上为原点）：指针先放到那里（退出时还回原位），写 `AWAIT click` 等 `perf.py` 经 HID 点下去，
     /// 从松开的那一下起量（手势在松开时认出点按）。10 秒内没点到是 nil。
     private static func measureClick(_ name: String, at point: CGPoint, in view: NSView) async -> [String: Any]? {
         await Task.wait(for: .milliseconds(900))

@@ -8,7 +8,7 @@ forbid "空态与出错页用 EmptyState，不用系统 ContentUnavailableView�
 forbid "Mac 上的确认框用 dialog、浮层用 panel、选文件用 FilePicker（非模态 begin）：runModal 与 NSAlert 把主线程关在嵌套事件循环里，sheet 开关各约 300ms" \
   '\b(runModal|NSAlert)\b' 'App/Sources/macOS/AppDelegate.swift'
 forbid "常驻循环动效只用 LoopLayer（Core Animation）：SwiftUI 的 repeatForever 与符号动效每帧在 App 进程里重算，静止的 Agent 页也占约 9% CPU（随值触发一次的 .nonRepeating 不常驻，不算）" \
-  '(\brepeatForever\b|(?<!\()\.symbolEffect\((?![^)]*\.nonRepeating\b))' '**/LoopLayer.swift'
+  '(\brepeatForever\b|(?<!\()\.symbolEffect\((?![^)]*\.nonRepeating\b))'
 forbid "动画曲线只用 Motion 的几种（AppGroup/Motion.swift；UIKit 视图上经 Motion.Fade.animate）：另写的是又一套手感，减弱动态效果也各管各的。软糖换拍子（Jelly）是按进度走的编排" \
   '(?:(?:(?<![\w.])|\bAnimation)\.(?:spring|easeOut|easeIn|easeInOut|timingCurve|smooth|snappy|bouncy|interactiveSpring|interpolatingSpring|linear)|\bUIView\.animate)\(' \
   'App/AppGroup/Motion.swift' '**/Theme/Jelly.swift'
@@ -21,7 +21,7 @@ forbid "不用 DispatchQueue.main.asyncAfter：它取消不了。等事件用通
 forbid "不访问 NSTextView/UITextView 的 layoutManager：访问一次就把视图永久降级到 TextKit 1，用 textLayoutManager" \
   '\.layoutManager\b'
 forbid "iOS 上不进读屏用 readerHidden（ReaderHidden.swift），按条件的与一直藏的都是：accessibilityHidden 只在显式无障碍容器里生效，直接挂在栈里或自己收成元素再挂，旁白照样念到（模拟器旁白实测：拍板卡图下的说明、回复框后面接点按的空层都念了，#67）；Mac 的无障碍树藏得住，Mac 独有文件不限；已合并成一个元素里的那句（按钮的标签、children: .combine）直接写，行尾注释以「合并」开头说明（容器会把它挡在合并外）" \
-  '\.accessibilityHidden\((?!false\))(?!.*//\s*合并)' '**/ReaderHidden.swift' '**/macOS/**' '**/*+macOS.swift' '**/*+Mac.swift'
+  '\.accessibilityHidden\((?!false\))(?!.*//\s*合并)' '**/macOS/**' '**/*+macOS.swift' '**/*+Mac.swift'
 forbid "按名字取图用 Image(decorative:)，或经 Icon、BrandMark：Image(\"名字\") 拿资源名当读屏标签，旁白念出 cue.plus、cue.waiting（#67）；意思由所在控件的标签说" \
   '\bImage\(\s*"'
 forbid "自绘玻璃只经 glass(in:)（Surfaces.swift）：材质统一 .regular，降低透明度、增强对比度时退回实底" \
@@ -32,24 +32,24 @@ forbid "产品代码不写 #if DEBUG，经 DebugHooks 碰调试画面：两种�
   '^\s*#(?:if|elseif)\b.*\bDEBUG\b' 'App/Sources/UI/Debug/**' '**/CueStore/Seed.swift' '**/CueSync/CloudOutage.swift' '**/CueSync/SharedCloud.swift'
 forbid "圆角只用 Radius 的几档（Theme/Radius.swift，按东西的种类分：chip、block、card、sheet、field）：各处自写的数是又一套手感，新东西先问它是哪一类；嵌在容器里的块用 Radius.nested 同心；胶囊与圆写 .capsule、.circle，不写半高" \
   '(?:\b[A-Za-z]*[cC]ornerRadius:\s*[\d.]|\b(?:topLeading|bottomLeading|bottomTrailing|topTrailing|top|bottom|leading|trailing)Radius:\s*[\d.]|\b(?:xRadius|yRadius|cornerWidth|cornerHeight):\s*[\d.]|\b\w*[rR]adius(?::\s*CGFloat)?\s*=\s*[1-9.])' \
-  '**/Theme/**' 'CuePadKit/Tests/**'
+  'CuePadKit/Tests/**'
 # 例外：Debug 里演示用的别家界面（预发页、登录页、手机截图）有它们自己的字号；灵动岛的字号在扩展里（扩展没有 Typography）
 forbid "字号只经 Typography（文字，Theme/Typography.swift）与 Glyph（图标，Theme/Glyph.swift）的几档，Theme 以外不写 .system(size: 数) 与 ofSize:、pointSize: 的数：各处自写的字号是又一套层级，新东西先问它是正文、说明还是哪一档图标；确要新档就在那两处按用途加一个" \
   '(?:\.system\(size:\s*[\d.]|\b(?:ofSize|pointSize):\s*[\d.])' \
   '**/Theme/**' 'App/Sources/UI/Debug/**' '**/Tests/**' 'App/Widget/IslandType.swift'
 forbid "字体名称只在 Typography 选择：界面与编辑器复用同一角色，让系统按文字选择中英文字形，不在单个组件强制中文字体" \
   '(?:\b(?:CueFont|NSFont|UIFont)\(name:|\bFont\.custom\(|\.font\(\s*\.custom\()' \
-  '**/Theme/Typography.swift' 'App/Sources/UI/Debug/**' '**/Tests/**'
+  'App/Sources/UI/Debug/**' '**/Tests/**'
 forbid "额外行距只在 Typography 定义：输入、发送后的气泡、正文与测高复用同一阅读角色；紧凑文字按角色取值，不在组件里另写一套" \
   '(?:(?:\.lineSpacing\(\s*|\blineSpacing:\s*|\.lineSpacing\s*=\s*)(?:[1-9]|0\.\d*[1-9]))' \
-  '**/Theme/Typography.swift' 'App/Sources/UI/Debug/**' '**/Tests/**'
+  'App/Sources/UI/Debug/**' '**/Tests/**'
 forbid "投影只经 elevation 的几档（Theme/Surfaces.swift 的 Elevation，按浮多高分：hover、lifted、panel）：各处自写的半径与偏移是又一套手感，颜色随外观由色板给" \
   '\.shadow\(' '**/Theme/**' 'App/Sources/UI/Debug/**' '**/Tests/**'
 forbid "字号只经 Typography 的角色与 Glyph，不写系统文字样式（.caption、.footnote、Font.subheadline…）：它们编进 Mac 是系统的小号（.caption、.footnote 10 点），低于 Mac 的 12 点下限；iOS 缺的角色在 Typography 里按用途加。扩展（Widget）里没有 Typography，例外" \
   '(?:\.font\(\s*\.(?:body|headline|subheadline|caption2?|footnote|callout|title[23]?|largeTitle)\b|\bFont\.(?:body|headline|subheadline|caption2?|footnote|callout|title[23]?|largeTitle)\b|\.system\(\.(?:body|headline|subheadline|caption2?|footnote|callout|title[23]?|largeTitle)\b)' \
   '**/Theme/**' 'App/Sources/UI/Debug/**' '**/Tests/**' 'App/Widget/**'
 forbid "小东西冒出来、收回去用 Motion.pop（AppGroup/Motion.swift）：从 0.9 长到原大并淡入，减弱动态效果时只淡；各处写的 .scale 起点不一（0、0.6），从 0 长读作跳出来" \
-  '(?:\.transition\(\s*|\bAnyTransition)\.scale\b' 'App/AppGroup/Motion.swift'
+  '(?:\.transition\(\s*|\bAnyTransition)\.scale\b'
 forbid "Mac 主窗口里从控件弹出的说明与小表单用 bubble(isPresented:) 或 HelpButton，不用系统 popover：它另起一扇窗，第一次弹 85～113ms，开着时主窗口的快捷键不响应；设置窗口与只编进 iOS 的文件例外" \
   '\.popover\(' 'App/Sources/UI/iOS/**' '**/*+iOS.swift' 'App/Sources/UI/macOS/Settings/**' 'App/Sources/UI/Debug/**'
 forbid "色值只在色板（AppGroup/Palette.swift）：界面取 palette 的令牌，新颜色先进色板、定语义名与浅深两档，一样东西只有一份颜色" \
@@ -62,15 +62,14 @@ forbid "不在界面里给颜色叠透明度：每处各写一个透明度就多
   '(?:palette\.\w+|Color\.\w+|\.black|\.white)(?:\([^()]*\))?\.opacity\((?!0\))' \
   'App/AppGroup/Palette.swift' 'App/Sources/UI/Debug/**'
 forbid "图标只经 Icon（Theme/Icon.swift）按意思取自家墨块符号（design/tools/cue-symbols.py 生成），不用系统符号：哪个意思画成哪个符号只在那里写一处，缺哪个就在生成器里画、在 Icon 里加一个意思。用 Image(.名)、Label(_:icon:)、Button(_:icon:)、Menu(_:icon:)、Icon.platformImage；出错是 .failure、等你是 .waiting。扩展里没有 Icon，经 WidgetIcon" \
-  '\b(?:systemName|systemImage|systemSymbolName)\b|\b(?:Image|UIImage|NSImage)\((?:named:\s*|symbolName:\s*)?"cue\.' \
-  'App/Widget/WidgetIcon.swift'
+  '\b(?:systemName|systemImage|systemSymbolName)\b|\b(?:Image|UIImage|NSImage)\((?:named:\s*|symbolName:\s*)?"cue\.'
 forbid "输入框经 Workspace.speak 同步取走草稿；消息落库经 AppServices.recordSpeech，语音身份原子复核只在 CueStore+VoiceRecovery；同一去处共用发送顺序，界面不等上传与执行结果" \
-  '(\baddCueMessage\(\s*\.you\b|\bstore\.(requestDelivery|speak)\()' 'App/Sources/Services/AppServices+Speaking.swift' 'CuePadKit/Sources/CueStore/CueStore+VoiceRecovery.swift' '**/CueAgent/CueTools+Say.swift' '**/Tests/**' 'App/Sources/UI/Debug/**'
+  '(\baddCueMessage\(\s*\.you\b|\bstore\.(requestDelivery|speak)\()' 'App/Sources/Services/AppServices+Speaking.swift' '**/CueAgent/CueTools+Say.swift' '**/Tests/**' 'App/Sources/UI/Debug/**'
 forbid "界面上请求到哪了只读 Speech.trip（发送中、已送达、没能送达，含超时与本机同步不通）：直接看请求的原始状态会长出第二套状态机，超时与断网时说法对不上" \
   '\.isOpen\b|\.status\s*[!=]=\s*\.known\(\.(?:pending|executing|succeeded|failed)\)|\.status\.known\b' \
-  'App/Sources/[!U]*/**' 'App/Sources/*.swift' 'App/Sources/UI/Debug/**' 'App/Tests/**' 'CuePadKit/**'
+  'App/Sources/[!U]*/**' 'App/Sources/UI/Debug/**' 'App/Tests/**' 'CuePadKit/**'
 forbid "一行里用“·”隔开几段的字只经 Dotted 或 Dot（Atoms.swift）：屏幕写“·”、读屏读逗号；直接拼的分隔点读屏会念出来" \
-  '(?: · |Text\("·"\))' 'App/AppGroup/Dotted.swift' '**/Components/Atoms.swift' '**/SessionProgress.swift' 'App/Sources/UI/Debug/**' 'App/Tests/**' 'CuePadKit/**'
+  '(?: · |Text\("·"\))' 'App/AppGroup/Dotted.swift' '**/Components/Atoms.swift' 'App/Sources/UI/Debug/**' 'App/Tests/**' 'CuePadKit/**'
 forbid "你说出去的话用 SpeechBubble 画（状态只从记录推出，见 Speech）；UserBubble 只给已进对话的话（会话对话与近况）" \
   '\bUserBubble\s*\(' '**/Components/Bubbles.swift' '**/Components/SpeechBubble.swift' '**/Components/Conversation.swift' '**/Components/ConversationBlocks.swift'
 # 例外：小组件与实时活动（扩展里没有 PressStyle）；设置里的网页链接（下划线、手形，同系统链接）；输入框里图片角上的移除（压在图片的暗底上，不铺悬停底）

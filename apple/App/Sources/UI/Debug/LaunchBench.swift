@@ -3,7 +3,7 @@ import AppKit
 import Darwin
 import QuartzCore
 
-/// `-CuePadBench launch`（`xc.sh perf launch mac`，perf-launch.sh）：冷启动的几个时刻，打一行 `LAUNCH {json}` 后退出。
+/// `-CuePadBench launch`（`xc.sh perf launch mac`，perf.py）：冷启动的几个时刻，打一行 `LAUNCH {json}` 后退出。
 /// 时刻都是 `CLOCK_UPTIME_RAW` 的纳秒（同 python 的 `time.monotonic_ns`），脚本减去 exec 成 CuePad 的那一刻（app.py 记的 `execAt`）：
 /// - `entry`：进到 `main`（之前是 dyld 加载与静态初始化）。
 /// - `window`：主窗口上屏后第一次提交做完（那一圈 run loop 的 BeforeWaiting 末尾，提交在它之前）。

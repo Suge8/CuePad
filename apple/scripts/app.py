@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CuePad 的调试实例：起一份隔离实例，做一件事，一定退出。xc.sh 构建完调它，perf-mac.sh 用 exec。
+"""CuePad 的调试实例：起一份隔离实例，做一件事，一定退出。xc.sh 构建完调它，perf.py 用 exec。
 用法：app.py <shot|rec|run> <mac|ios|ipad> <CuePad.app> <库目录> [--device <UDID>] [图.png] [-- 启动参数…] [, [图.png] [-- 启动参数…]]…
         一次调用拍一批：每张 `[图.png] [-- 启动参数…]`，多张用单独的 , 隔开，逐张起实例拍，一张失败记下继续，最后列出失败的并以 1 退出。
         没写图路径的放 <产物目录>/<shot|rec>-<平台>/<各启动参数的值连起来>.<png|mov>。run 只起一个。
