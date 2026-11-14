@@ -14,8 +14,6 @@ struct OpenCodeTurn {
     private var toolNames: [String: String] = [:]
     private var inbox: [String: UUID] = [:]
 
-    /// 还有工具在跑（并行调用时一个做完了别的还在）
-    var runningTools: Bool { !toolNames.isEmpty }
     var speaking: Bool { draft?.draft != nil }
 
     mutating func apply(_ event: OpenCodeEvent, models: [OpenCodeModel]) -> [TurnEvent] {
