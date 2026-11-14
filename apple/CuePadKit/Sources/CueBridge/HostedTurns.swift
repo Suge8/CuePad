@@ -21,6 +21,8 @@ final class HostedTurns {
     private(set) var phase: Phase = .idle
     /// 这一轮被要求停下：它的收尾不算出错
     private(set) var stopping = false
+    /// 这一轮发出、没被拒的停止请求有几个：都被拒了才不算被要求停下
+    private var stopRequests = 0
     private enum Handover { case halting, delivering, awaitingStart }
     /// 换轮中的话：期间收尾的一轮不歇下。开始说不出是哪句开的，只认领已交出、等开始的（几句可能并进同一轮，一次全认领）；
     /// 交出中的到交出那一刻才看：在跑就是并进了或已开了
@@ -50,7 +52,7 @@ final class HostedTurns {
         case .turnStarted:
             guard phase != .running else { return false }
             phase = .running
-            stopping = false
+            (stopping, stopRequests) = (false, 0)
             failure = nil
             tools = []
             handovers.removeAll { $0.step == .awaitingStart }
@@ -77,7 +79,7 @@ final class HostedTurns {
 
     private func finish() {
         let failure = stopping ? nil : failure
-        (stopping, self.failure, tools) = (false, nil, [])
+        (stopping, stopRequests, self.failure, tools) = (false, 0, nil, [])
         if handingOver {
             phase = .handedOver
             facts.questions = []
@@ -134,8 +136,18 @@ final class HostedTurns {
     private func halt(_ stop: () async throws -> Void) async throws {
         guard phase == .running else { return }
         stopping = true
+        stopRequests += 1
         let seen = ends.count
-        try await stop()
+        do {
+            try await stop()
+        } catch {
+            // 停止请求没被收下：这一轮照旧，之后它自己出错要报（同一轮另有请求在途的除外）。收下了却等不到收尾（下面的等待超时）的照旧算被停下
+            if ends.count == seen {
+                stopRequests -= 1
+                if stopRequests == 0 { stopping = false }
+            }
+            throw error
+        }
         try await ends.wait(after: seen)
     }
 
@@ -154,7 +166,7 @@ final class HostedTurns {
 
     /// 按快照对齐（断线重连后）：`start` 是在跑的那一轮的开始，nil 是歇着。错过的事件不补。
     func reconcile(runningSince start: Date?) {
-        (stopping, failure, tools) = (false, nil, [])
+        (stopping, stopRequests, failure, tools) = (false, 0, nil, [])
         handovers.removeAll { $0.step == .awaitingStart }
         if let start {
             phase = .running
