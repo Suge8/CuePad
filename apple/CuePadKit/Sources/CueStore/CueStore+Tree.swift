@@ -30,6 +30,12 @@ extension CueStore {
       """, [id]) { $0.uuid(0) }
   }
 
+  /// 所在那件事的顶层：从上级起沿在库里的上级往上走到头；它自己已删也从原来的上级找（删掉的任务的会话仍归那件事）。上级不在的自己就是顶层。
+  func top(of id: UUID) throws -> UUID {
+    guard let parent = try find(Card.self, id)?.parentID, try link(of: parent) != nil else { return id }
+    return try ancestors(of: parent).last ?? parent
+  }
+
   /// 任务连自己在内往下有几级任务（挂在下面的灵感不算一级）。只数到 `Card.maxTaskDepth`：判断超限够了，也让环里的数据数得完。
   func taskHeight(of id: UUID) throws -> Int {
     try db.first(

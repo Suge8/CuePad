@@ -86,53 +86,26 @@ extension CueStore {
     try setArchived(chains.filter { !reopened.isDisjoint(with: $0) }.map { $0.last! }, at: nil)
   }
 
-  /// 任务离开看板，或明确开工换会话时（纯关联不收尾），对这件事里绑着的会话各看一遍，没人再用就请它所在的 Mac 结束。资格统一由 `taskSessionCanEnd` 判断；事务事件入口也复用这里。
-  /// 留着的：还有在看板上、没在开新会话的叶子绑着它（别的事的叶子也算），或有话正送进去；这件事的下一步还没开工、也没在往别处交，照 `handOffPlan` 默认接着用它。不是为这件事开的（`endsWithTask`）不结束，它随这件事从看板收起（`isLoose`），再有动静才回来；已结束的、记录还没到的不动。取回归档、撤销删除不重开：再对它说话就在后台恢复。
+  /// 任务离开看板，或明确开工换会话时（纯关联不收尾），这件事里绑着的、为它开的会话各看一遍，可以结束（`taskSessionCanEnd`）的请它所在的 Mac 结束。
+  /// 不是为任务开的不结束，它随这件事从看板收起（`isLoose`），再有动静才回来；已结束的、记录还没到的不动。取回归档、撤销删除不重开：再对它说话就在后台恢复。
   /// `task` 可以已经归档或删掉（删掉的从它原来的上级往上找这件事）；灵感不管。必须在写事务内调用。
   @discardableResult
   func endUnusedSessions(of task: UUID, cue: Bool) throws -> [DeliveryRequest] {
     guard let card = try find(Card.self, task), card.isTask else { return [] }
-    let topID = try card.parentID.map { try ancestors(of: $0).last ?? $0 } ?? task
-    guard let top = try find(Card.self, topID) else { return [] }
     let sessions = try db.query(
       """
       SELECT piSessionID FROM cards WHERE piSessionID IS NOT NULL AND (id = ?1 OR id IN (\(Self.subtree(from: "SELECT ?2"))))
       UNION SELECT sessionID FROM piSessionStates WHERE createdForTaskID IN (\(Self.subtree(from: "SELECT ?2", includingDeleted: true)))
-      """, [task, topID]
+      """, [task, try top(of: task)]
     ) { $0.text(0) }
-    guard !sessions.isEmpty else { return [] }
-    let open = try select(
-      Card.self, where: "id IN (SELECT value FROM json_each(?)) AND \(Self.taskOpen)", [Self.idList(try leaves(of: top).map(\.id))], orderBy: "sortKey, id")
-    let launching = try launchingLeaves(open.map(\.id))
-    var used = Set(open.filter { !launching.contains($0.id) }.compactMap(\.piSessionID))
-    if let next = open.first, next.id != top.id, next.piSessionID == nil, !launching.contains(next.id), try sendingLeaves([next.id]).isEmpty,
-      let continued = try continuableSession(for: next.id, agent: nil)
-    {
-      used.insert(continued.sessionID)
-    }
-    return try endUnused(sessions.filter { !used.contains($0) }, outside: top.id, cue: cue)
-  }
-
-  /// 这些会话里在 `root` 这件事之外也没人再用（`usedElsewhere`）、可随任务结束的（`taskSessionCanEnd`），请它所在的 Mac 结束。必须在写事务内调用。
-  func endUnused(_ sessions: [String], outside root: UUID?, cue: Bool) throws -> [DeliveryRequest] {
     var ended: [DeliveryRequest] = []
     for sessionID in sessions {
-      guard try db.first(Self.usedElsewhere, [sessionID, root], { _ in true }) == nil, let state = try sessionState(sessionID) else { continue }
-      if try taskSessionCanEnd(state), let owner = state.createdForTaskID {
-        ended.append(try requestControl(.end, of: SendTarget(kind: .piSession, name: state.title, ref: sessionID), on: state.hostID, cue: cue,
-          content: TaskSessionEnd(createdForTaskID: owner).stored))
-      }
+      guard let state = try sessionState(sessionID), try taskSessionCanEnd(state), let owner = state.createdForTaskID else { continue }
+      ended.append(try requestControl(.end, of: SendTarget(kind: .piSession, name: state.title, ref: sessionID), on: state.hostID, cue: cue,
+        content: TaskSessionEnd(createdForTaskID: owner).stored))
     }
     return ended
   }
-
-  static let usedElsewhere = """
-    SELECT 1 WHERE EXISTS (
-        SELECT 1 FROM cards WHERE piSessionID = ?1 AND \(taskOpen)
-          AND (?2 IS NULL OR id NOT IN (\(subtree(from: "SELECT ?2")))))
-      OR EXISTS (
-        SELECT 1 FROM deliveryRequests WHERE targetRef = ?1 AND mode IN (\(sqlList(DeliveryMode.toSession))) AND status IN (\(DeliveryStatus.openSQL)))
-    """
 
   public func workingLeaf(of task: UUID) throws -> Card {
     try requireTask(task)
