@@ -95,6 +95,21 @@ final class VoiceFlowFixture {
     }
 
     func start() {
+        prepare()
+        workspace.startVoiceCall()
+    }
+
+    /// 手机打进来、媒体接通到"在听"：Mac 上手机那一路的通话。手机之后的帧由测试按 `signal.peer` 的租约注入。
+    func answer(_ signal: FakeVoiceSignaling) async throws {
+        prepare()
+        let voice = workspace.services.voice, session = VoiceSessionID(UUID())
+        await voice.receive(signal.event(.media(signal: .offer(value: .init(sdp: "offer"))), session: session))
+        try await eventually("Mac 回了应答") { signal.sent.contains { if case .media(.answer) = $0 { true } else { false } } }
+        await voice.receive(signal.event(.media(signal: .event(value: .connected)), session: session))
+        try await eventually("通话可听") { self.call.phase == .listening }
+    }
+
+    private func prepare() {
         // 通话挂断后仍留在服务里（`VoiceService.call`），连同这些依赖：弱持有替身，不然替身、它的工作区与服务互相攥着放不掉
         workspace.services.voice.makeCall = { [weak self] dependencies, record in
             var dependencies = dependencies
@@ -118,7 +133,6 @@ final class VoiceFlowFixture {
             }
             return VoiceCall(dependencies, record: record)
         }
-        workspace.startVoiceCall()
     }
 
     func connect() async throws {
