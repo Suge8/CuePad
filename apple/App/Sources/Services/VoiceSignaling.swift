@@ -66,10 +66,12 @@ nonisolated enum VoiceRelayEvent: Equatable, Sendable {
     case peerClosed(endpoint: VoiceEndpoint, reason: VoicePeerDeparture)
     case received(VoiceReceivedSignal)
     case rejected(header: VoiceSignalHeader, reason: VoiceSignalRejection)
+    /// 认证通过、正文解不开：对端是另一版信令的 App。只丢这一帧，不断中转连接。
+    case unreadable(header: VoiceSignalHeader)
 }
 
 nonisolated enum VoiceSignalError: Error {
-    case unavailable, unsupported, peerUnavailable, leaseChanged, expired, tooLarge, invalid
+    case unavailable, unsupported, peerUnavailable, leaseChanged, expired, tooLarge, invalid, unreadable
     case rejected(VoiceSignalRejection)
 }
 

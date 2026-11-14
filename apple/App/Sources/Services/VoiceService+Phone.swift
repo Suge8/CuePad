@@ -179,7 +179,7 @@ extension VoiceService {
                   binding.local == received.header.recipient, binding.peer == received.header.sender else { return }
         }
         // 本机已结束：Mac 的投影只更新业务，结束原因以本机先落定的为准（Mac 那时的投影是它收到挂断后的回声）
-        if phone == nil, case .projection(let value) = received.payload, value.session == session {
+        if phone == nil, case .projection(let value) = received.payload, value.session == session, value.version == VoiceSignalFormat.callVersion {
             setProjection(value)
             return
         }
@@ -188,6 +188,7 @@ extension VoiceService {
         switch received.payload {
         case .projection(let value):
             guard value.session == owner.id else { return }
+            guard value.version == VoiceSignalFormat.callVersion else { return await otherVersion(owner.id) }
             setProjection(value)
             switch value.phase {
             case .failed(let reason): await end(reason: .controlFailed, notify: false); issue = reason
@@ -196,12 +197,7 @@ extension VoiceService {
             }
         case .media(.answer(let answer)):
             guard !owner.answered else { await end(reason: .protocolRejected); return }
-            guard answer.version == VoiceSignalFormat.callVersion else {
-                AppServices.log.notice("Voice answer from signal version \(answer.version ?? 1), this phone speaks \(VoiceSignalFormat.callVersion)")
-                await end(reason: .protocolRejected)
-                issue = .relayUnsupported
-                return
-            }
+            guard answer.version == VoiceSignalFormat.callVersion else { return await otherVersion(owner.id) }
             owner.answered = true
             do { try await owner.scope.perform { try await owner.media.accept(answer: answer.sdp) } }
             catch {
@@ -218,6 +214,15 @@ extension VoiceService {
             }
         default: await end(reason: .protocolRejected)
         }
+    }
+
+    /// 这一通的 Mac 说的是另一版信令（接听不报或报别的版本、投影版本不同或解不开）：挂断这一通，说"请更新"。
+    /// 版本只在接听前后见分晓，所以在它之前收到的投影一律以版本为准，不显示旧 Mac 给的占线等原因。
+    func otherVersion(_ session: VoiceSessionID) async {
+        guard let owner = phone, owner.id == session else { return }
+        AppServices.log.notice("Voice call \(session.rawValue, privacy: .public): the Mac speaks another signal version")
+        await end(reason: .protocolRejected)
+        issue = .relayUnsupported
     }
 
     private func mediaEvent(_ event: VoicePeer.Event, owner: VoicePhoneSession) {

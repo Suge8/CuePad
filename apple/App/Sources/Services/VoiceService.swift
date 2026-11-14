@@ -218,6 +218,11 @@ import os
             case .commandResult:
                 AppServices.log.error("Voice result rejected by Relay: \(reason.rawValue)")
             }
+        case .unreadable(let header):
+            AppServices.log.notice("Voice frame from another signal version (\(String(describing: header.purpose), privacy: .public))")
+            #if os(iOS)
+            await otherVersion(header.session)
+            #endif
         case .availability(let value):
             availability = value
             #if os(iOS)
