@@ -1,15 +1,14 @@
 import CueStore
 import SwiftUI
 
-/// 不归没做完的事的会话卡只接拖到已完成：它本来就在推进中，拖到待办按列的投影会弹回来，所以不接。
-/// 已完成列末尾的"更早做完的 N"原地展开：它们没进归档，跳去归档页看到的是别的。
+/// 已完成列末尾的"更早做完的 N"：它们没进归档，跳去归档页看到的是别的，所以就在看板上看——四列并排时原地展开，手机的行里另出一页竖着列。
 struct BoardColumn: View {
     let column: TaskBoard.Column
     let board: TaskBoard
     @Binding var adding: Bool
     let newTaskProject: UUID?
-    /// 已完成列末尾"更早做完的"展开着：四列并排时由 `BoardColumns` 持有（它展开了已完成就不是空列，列宽跟着变）；不给时这一列自己记（手机的一行）。
-    var earlier: Binding<Bool>?
+    /// 已完成列末尾"更早做完的"原地展开着：由 `BoardColumns` 持有（它展开了已完成就不是空列，列宽跟着变）；手机的行不原地展开（`listsEarlier`）。
+    var earlier: Binding<Bool> = .constant(false)
     #if os(iOS)
     var row = false
     #endif
@@ -18,7 +17,6 @@ struct BoardColumn: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.boardMoves) private var moves
     @Environment(\.cardDrags) private var drags
-    @State private var ownEarlier = DebugHooks.preset.showsDone
     @State private var targeted = false
     /// 待办里拖着的卡会落在第几张之前（`TaskBoard.slots` 里离指针最近的一处）；各卡的位置只在拖着时有。
     @State private var slot: Int?
@@ -102,8 +100,6 @@ struct BoardColumn: View {
 
     /// 打开添加任务时待办回到开头（行滑到首格，列滚回顶）：添加那一行在待办最前，滚过的列要把它带进视野。
     private var rewind: UUID? { adding && column == .todo ? board.todo.first?.id : nil }
-
-    private var showsEarlier: Binding<Bool> { earlier ?? $ownEarlier }
 
     /// 接得住的卡拖到这一列上就亮；待办另画一条线说落在哪（`slot`）。
     private var lit: Bool { targeted && drags?.current.map(accepts) == true }
@@ -223,7 +219,7 @@ struct BoardColumn: View {
             // 列头的数只数今天的：今天没有时先说没有，再接更早的，数与字对得上
             if board.done.isEmpty { empty("今天还没做完的") }
             if !board.earlier.isEmpty { earlierToggle }
-            if showsEarlier.wrappedValue { ForEach(board.earlier) { card($0) } }
+            if earlier.wrappedValue { ForEach(board.earlier) { card($0) } }
         }
     }
 
@@ -271,16 +267,16 @@ struct BoardColumn: View {
                 #if os(iOS)
                 if row { listsEarlier = true; return }
                 #endif
-                withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { showsEarlier.wrappedValue.toggle() }
+                withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { earlier.wrappedValue.toggle() }
             } label: {
                 HStack(spacing: Spacing.tight) {
                     Text("更早做完的 \(board.earlier.count)").monospacedDigit()
-                    Chevron(.forward).rotationEffect(.degrees(showsEarlier.wrappedValue ? 90 : 0))
+                    Chevron(.forward).rotationEffect(.degrees(earlier.wrappedValue ? 90 : 0))
                 }
                 .frame(minHeight: TaskMetrics.chipTarget).contentShape(.rect)
             }
             .buttonStyle(PressStyle())
-            .accessibilityValue(showsEarlier.wrappedValue ? "已展开" : "已折叠")
+            .accessibilityValue(earlier.wrappedValue ? "已展开" : "已折叠")
             Spacer(minLength: 0)
         }
         .font(Typography.meta).foregroundStyle(palette.ink3)
