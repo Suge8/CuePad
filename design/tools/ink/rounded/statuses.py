@@ -1,4 +1,4 @@
-"""状态图标：等你用独立裸问号，失败保留实心标，交付与同步保持不同语义。"""
+"""状态图标：全是等宽线，没有实心徽；在问的都是一个圆气泡（`bubble`），里面写问的是什么。"""
 import math
 from ink.geometry import G, Layer, arcs, disc, poly, rev
 from .shared import arrow
@@ -6,14 +6,23 @@ from . import base
 from .shared import box, contours, ring, smooth
 
 NAMES = (
-    "waiting", "failure", "undelivered", "unknown", "question", "picked", "asking", "ended", "gone", "interrupted", "turn", "spring",
+    "waiting", "failure", "undelivered", "unknown", "question", "picked", "ended", "gone", "interrupted", "spring",
     "relay", "relay.stalled", "cursor", "agent", "reload", "cloud", "cloud.done", "cloud.sync", "cloud.alert",
     "cloud.pause", "cloud.up", "cloud.down", "cloud.off", "cloud.lock", "bell", "bell.on", "bell.off", "cold",
 )
 
 
-def question():
-    return arcs((.5,-3),4.2,180,270) + arcs((.5,3.6),2.4,-90,-90)
+def question(dx=0, dy=0, s=1.0, stem=3.6):
+    """问号：上半是正圆，钩落在正中，再直直往下一截。拆成折线倒圆角（同 `smooth`），点在 `fills`。"""
+    arc = ring((0, -3.6), 4.6, 180, 405)
+    points = [(dx + x * s, dy + y * s) for x, y in arc + [(0, 2.0), (0, stem)]]
+    return smooth(points, [0] + [fillet(4.6 * s)] * (len(arc) - 2) + [2.4 * s, 2.4 * s, 0])
+
+
+def bubble():
+    """圆气泡（在问的、没送到的）：一圈，左下角拖出尖尾。"""
+    rim = ring((0, 0), 9.4, 154, 474.9)
+    return smooth(rim + [(-9.6, 9.6)], [1.6] + [fillet(9.4)] * (len(rim) - 2) + [1.6, 1.6], True)
 
 
 def cloud():
@@ -50,14 +59,19 @@ def centerlines(name):
     opened,closed = [],[]
     def line(*points,radius=0): opened.append(poly(points,radius))
     def circle(x,y,r): closed.append(arcs((x,y),r,-90,360))
-    if name in ("waiting","unknown","question","asking"):
-        opened.append(question() if name in ("waiting","question") else arcs((.9,-3),2.8,180,270) + arcs((.9,1.6),1.8,-90,-90))
-        if name == "unknown": circle(0,0,10)
-        elif name == "asking":
-            closed.append(poly([(-11,-10),(11,-10),(11,8),(-3,8),(-11,12)],[3.5,3.5,3.5,1.8,2],True))
-    elif name == "failure": line((0,-6),(0,1))
+    if name == "question": opened.append(question())
+    elif name == "waiting":
+        # 在问：气泡里一个问号（等你确认是赭黄，等 Cue 回答是墨色，同一个形状）
+        closed.append(bubble()); opened.append(question(0, -1.2, .58, 2.2))
+    elif name == "unknown":
+        # 说不准：一圈虚线
+        opened.extend(arcs((0,0),9,a,26) for a in range(-103,257,45))
+    elif name == "failure":
+        # 出错：圆角三角里一个叹号
+        closed.append(smooth([(0,-10.2),(10.6,8.8),(-10.6,8.8)],[3,3,3],True)); line((0,-3),(0,2.4))
     elif name == "undelivered":
-        opened.append(poly([(-3,4.6),(1.6,4.6)]) + arcs((1.6,.8),3.8,90,-180) + poly([(1.6,-3),(-1.4,-3)]))
+        # 没能送达：气泡里一个叉
+        closed.append(bubble()); line((-3.2,-3.2),(3.2,3.2)); line((3.2,-3.2),(-3.2,3.2))
     elif name == "picked": line((-5,0),(-1,4),(6,-4))
     elif name == "ended":
         # 收工了：一弯月牙。外圆与内圆（偏右上）各拆成折线倒圆角，两个尖收成小圆头
@@ -73,11 +87,6 @@ def centerlines(name):
         closed.append(smooth([(0,-6),(6,0),(10,-4),(4,-10)],[0,0,2.4,2.4],True))
         line((-4.5,1.5),(-2,-1)); line((-1.5,4.5),(1,2))
         line((-10,10),(-7,7)); line((7,-7),(10,-10))
-    elif name == "turn":
-        # 该你了：圆气泡里一支往回拐的箭头（回复）
-        rim = ring((0,0),9.4,154,474.9)
-        closed.append(smooth(rim + [(-9.6,9.6)], [1.6] + [fillet(9.4)] * (len(rim) - 2) + [1.6, 1.6], True))
-        line((-2,-3),(-5,0),(-2,3)); line((-5,0),(5,0),(5,3.4),radius=2)
     elif name == "spring":
         # 压缩上下文：两块板夹着一段弹簧
         line((-10.6,-7),(-10.6,7)); line((10.6,-7),(10.6,7))
@@ -134,9 +143,9 @@ def centerlines(name):
 
 
 def fills(name,w):
-    if name in ("waiting","question"): return [disc((-1.9,7.6),w*.6)]
-    if name in ("unknown","asking"): return [disc((-.9,5.7),w*.6)]
-    if name == "failure": return [disc((0,5.5),w*.6)]
+    if name == "question": return [disc((0,7.9),w*.6)]
+    if name == "waiting": return [disc((0,4.6),w*.6)]
+    if name == "failure": return [disc((0,6.2),w*.6)]
     if name == "cloud.alert": return [disc((0,3),w*.5)]
     if name == "agent":
         star = base.fills("skill",w)
@@ -145,13 +154,10 @@ def fills(name,w):
 
 
 def layers(name,w,ink):
-    if name in ("undelivered","reload","cloud.sync"):
+    if name in ("reload","cloud.sync"):
         path = centerlines(name)[0][0]
-        length,half = (3.1,2.8) if name == "undelivered" else (2.7,2.2)
         # 箭头是一条连通轮廓，不把相交的杆/弧/箭镞分别反转后挖孔。
-        ink = [arrow(path,w*G,(length*G,half*G))] + ink[1:]
-    if name in ("failure","undelivered"):
-        return [Layer("badge",[disc((0,0),11.8)]+[rev(c) for c in ink])]
+        ink = [arrow(path,w*G,(2.7*G,2.2*G))] + ink[1:]
     if name == "picked":
         opened,closed = centerlines(name)
         slot = contours(opened,closed,w+2.8)

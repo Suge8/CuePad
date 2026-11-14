@@ -2,10 +2,10 @@ import QuartzCore
 import SwiftUI
 
 /// 会话状态标里的那几根线：在想时是走着心跳的线，用工具时拧成扳手，压缩时是两块板夹着的弹簧，等子代理时是飘着的小机器人，
-/// 等你确认时弯成问号，该你了时是回复气泡，歇着时断成省略号，被打断时是拔开的插头，已结束时是月牙。
+/// 在问时是气泡里一个问号，新回复是一封信，被打断时是拔开的插头，已结束时是月牙；空闲时收进中心、什么都不画。
 /// 换状态是同一组线逐点变形过去（几何由 design/tools/ink/state_geometry.py 从符号的中线导出，每根同样点数），不换掉重画；
 /// 不是线的状态（铃铛、出错的徽、纸飞机，`StateDot` 叠在上面）这组线收进中心。
-/// 变形与常驻的动作都是 Core Animation、交给渲染服务（理由同 `LoopLayer`）；常驻动作只在 `loops` 时放，长时间挂着的几种每十几秒才动一下（`InkBeat`）。
+/// 变形与常驻的动作都是 Core Animation、交给渲染服务（理由同 `LoopLayer`）；常驻动作只在 `loops` 时放，长时间挂着的几种隔几秒到十几秒才动一下（`InkBeat`）。
 struct StateInk {
     let pose: InkPose
     let color: Color
@@ -179,7 +179,10 @@ struct StateInk {
                 }
                 strands[1].pivot(at: CGPoint(x: 0, y: -4))
                 _ = LoopLayer.Host.loop(Self.frames("transform.rotation.z", Self.degrees([(0, 0), (2.95, 0), (3.1, -14), (3.3, 8), (3.5, 0), (3.6, 0)])), on: strands[1].box, key: "blink")
-            case .nod, .breathe, .nudge, .hop, .jitter, .rock:
+            case .flap:
+                strands[1].pivot(at: CGPoint(x: 0, y: -6))
+                InkBeat.shared.join(self, life)
+            case .nod, .jitter, .rock:
                 InkBeat.shared.join(self, life)
             case .still:
                 break
@@ -199,18 +202,9 @@ struct StateInk {
             case .nod:
                 // 歪一下头再回正，像在问
                 play(Self.frames("transform.rotation.z", [(0, 0), (0.16, -0.2), (0.3, 0.12), (0.42, -0.04), (0.52, 0)]), on: ink)
-            case .breathe:
-                play(Self.frames("transform.scale", [(0, 1), (0.5, 1.14), (1.3, 1)]), on: strands[0].box)
-            case .nudge:
-                // 气泡里的箭头往回一拨：话头回到你这儿
-                for strand in strands[1...2] {
-                    play(Self.frames("transform.translation.x", [(0, 0), (0.22, -1.8), (0.42, 0.4), (0.6, 0)]), on: strand.box)
-                }
-            case .hop:
-                // 三颗点挨个跳一下，像对方在打字
-                for (index, strand) in strands.prefix(3).enumerated() {
-                    play(Self.frames("transform.translation.y", [(0, 0), (0.18, -2.6), (0.42, 0.3), (0.56, 0)]), on: strand.box, lag: Double(index) * 0.12)
-                }
+            case .flap:
+                // 信封盖往上掀开一下再合上：有一封给你的
+                play(Self.frames("transform.scale.y", [(0, 1), (0.25, -0.55), (0.5, -0.55), (0.72, 1.08), (0.86, 1)]), on: strands[1].box)
             case .jitter:
                 // 拔开的两半各往外一弹，像刚断开时那一下
                 for (index, strand) in strands.enumerated() {

@@ -34,7 +34,7 @@ extension TokenSheet {
 
     private static let fonts: [(String, Font)] = [
         ("body", Typography.body), ("bodyStrong", Typography.bodyStrong), ("secondary", Typography.secondary), ("meta", Typography.meta),
-        ("label", Typography.label), ("caption", Typography.caption), ("caption2", Typography.caption2),
+        ("label", Typography.label), ("caption", Typography.caption), ("caption2", Typography.caption2), ("railTag", Typography.railTag),
         ("reading", Typography.reading), ("readingHeading", Typography.readingHeading),
         ("code", Typography.code), ("codeNote", Typography.codeNote), ("inlineCode", Typography.inlineCode),
         ("title", Typography.title), ("sectionTitle", Typography.sectionTitle), ("sectionCount", Typography.sectionCount),

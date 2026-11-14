@@ -4,7 +4,7 @@ from .rounded import actions, base, statuses
 from .rounded.shared import WIDTH
 
 STRAND_POINTS = 48
-DOT = WIDTH["Regular"] * 1.2  # 符号里的小圆点（问号的点、省略号）：fills 里半径 w*.6
+DOT = WIDTH["Regular"] * 1.2  # 符号里的小圆点（问号的点）：fills 里半径 w*.6
 
 
 def resample(path):
@@ -35,11 +35,9 @@ def strand_shapes():
         "heartbeat": [line(base.centerlines("session")[0][0])],
         "wrench": symbol("wrench", actions),
         "spring": symbol("spring")[2:] + symbol("spring")[:2],
-        "question": [line(statuses.question()), (dot(-1.9, 7.6), DOT)],
-        "bigDot": [(dot(0, 0), 13.2)],
+        "ask": symbol("waiting") + [(dot(0, 4.6), DOT)],
+        "mail": symbol("mail", actions),
         "bot": symbol("relay"),
-        "turn": symbol("turn"),
-        "ellipsis": [(dot(x, 0), DOT) for x in (-7, 0, 7)],
         "plug": symbol("interrupted"),
         "moon": symbol("ended"),
     }

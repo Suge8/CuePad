@@ -61,7 +61,7 @@ public enum AlertText {
       let first = [question, reply].lazy.compactMap { $0.flatMap(\.firstLine) }.first
       return (String(localized: "\(title) 等你拍板"), first ?? String(localized: "去看看它在问什么"))
     case .awaitsReply:
-      return (String(localized: "\(title) 待回复"), (failure ?? reply).flatMap(\.firstLine) ?? String(localized: "去看看它说了什么"))
+      return (String(localized: "\(title) 新回复"), (failure ?? reply).flatMap(\.firstLine) ?? String(localized: "去看看它说了什么"))
     case .settled:
       return (title, String(localized: "完成了"))
     }

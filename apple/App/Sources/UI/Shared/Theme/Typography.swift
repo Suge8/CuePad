@@ -64,6 +64,8 @@ enum Typography {
     static let lineSpacing: CGFloat = 4
     static let gaugeNumber = Font.system(size: 15, weight: .semibold, design: .rounded).monospacedDigit()
     static let menuBarCount = NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .semibold)
+    /// 手机会话条格里最轻的那一行（哪家 Agent、哪个项目）：60 点宽的格放得下四五个字。Mac 上不出现，同 iOS 那一档。
+    static let railTag = Font.system(size: 9, weight: .medium)
     #else
     static let body = Font.body
     static let bodyStrong = Font.headline
@@ -95,6 +97,8 @@ enum Typography {
     static let gaugeNumber = Font.system(.body, design: .rounded, weight: .semibold).monospacedDigit()
     /// 底栏上的字：栏高固定，不随动态字体。
     static let dockLabel = Font.system(size: 12, weight: .medium)
+    /// 手机会话条格里最轻的那一行（哪家 Agent、哪个项目）：60 点宽的格放得下四五个字；格高随字号（`SessionRail`），这一行不随。
+    static let railTag = Font.system(size: 9, weight: .medium)
     /// 预览页里整份文件的等宽字（UIKit 文本视图）。
     static let codeUIFont = UIFont.monospacedSystemFont(ofSize: UIFont.preferredFont(forTextStyle: .footnote).pointSize, weight: .regular)
     #endif

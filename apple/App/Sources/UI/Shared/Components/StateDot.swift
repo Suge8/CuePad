@@ -5,11 +5,11 @@ extension SessionShown {
     func tint(_ palette: Palette) -> Color {
         switch status {
         case .asking: palette.waiting
-        case .cueAsking, .awaitsReply: palette.ink
+        case .cueAsking: palette.ink
         case .delivery(.preparing), .delivery(.inTransit(.unconfirmed)): palette.ink3
         case .failed, .delivery(.failed): palette.failure
         case .working, .delivery: palette.signature
-        case .unread: palette.replied
+        case .unread, .awaitsReply: palette.replied
         case .idle, .resting, .fresh, .interrupted, .unknown, .ended: palette.ink3
         }
     }
@@ -26,48 +26,47 @@ extension SessionShown {
         isColored || status == .cueAsking ? tint(palette) : status == .ended ? palette.ink3 : palette.ink2
     }
 
-    /// 等你确认与待回复不铺：大块的底色压眼，图标与状态字的赭黄已经够醒目；在跑的也不铺：会动的心电线与靛青字已经够醒目。
+    /// 等你确认不铺：大块的底色压眼，图标与状态字的赭黄已经够醒目；在跑的也不铺：会动的心电线与靛青字已经够醒目。
     func wash(_ palette: Palette) -> Color? {
         switch status {
         case .failed, .delivery(.failed): palette.failureWash
-        case .unread: palette.repliedWash
+        case .unread, .awaitsReply: palette.repliedWash
         default: nil
         }
     }
 
-    /// 与 `tint` 一起是全 App 状态图形的唯一出处。是线的几种在状态标里由那根线画（`ink`，与这里同一条中线），话在路上是飞着的纸飞机；这里是菜单里与线收起时的样子。等你是裸问号，出错与没能送达保留实心圆徽；不靠颜色单独区分。
+    /// 与 `tint` 一起是全 App 状态图形的唯一出处。是线的几种在状态标里由那根线画（`ink`，与这里同一条中线），话在路上是飞着的纸飞机；这里是菜单里与线收起时的样子。
+    /// 按要你做什么分档：在问的是气泡问号，有给你的回复是信封，空闲的不画（这里借在跑的心电线静止形，给菜单与经过用）；全是等宽线，不靠颜色单独区分。
     var icon: Icon {
         switch status {
-        case .asking: .waiting
-        case .awaitsReply: .awaitsReply
-        case .cueAsking: .cueAsking
-        // 胭脂圆叹号（`Icon.failure`，与操作出错同一个）：与等你确认的裸问号靠轮廓与颜色分开
+        // 在问：气泡里一个问号。问你的赭黄，问 Cue 的墨色
+        case .asking, .cueAsking: .waiting
+        // 圆角三角叹号（`Icon.failure`，与操作出错同一个）
         case .failed: .failure
         case .delivery(.preparing): .more
+        // 气泡里一个叉：这句没发出去
         case .delivery(.failed): .undelivered
         case .delivery: .onTheWay
         case .working(.delegating): .relay
         case .working(.tool): .tool
         case .working(.compacting): .compacting
         case .working: .session
-        // 铃铛：它回你了，像来了一条通知。不用对勾——对勾只表示完成与记下，任务行旁挨着会话状态时会读成任务做完了
-        case .unread: .replied
-        // 回复气泡：轮到你回话
-        case .idle: .yourTurn
-        // 歇着、轮不到你（Cue 值班时）：省略号，等下一句的不是你。不用圈：带圈的已经够多（出错、没能送达、未知），缩小后分不开
-        case .resting: .more
+        // 信封：有一封给你的回复（你还没看的，或 Cue 留给你回的）。不用对勾——对勾只表示完成与记下，任务行旁挨着会话状态时会读成任务做完了
+        case .unread, .awaitsReply: .replied
+        case .idle, .resting: .session
         case .fresh: .fresh
         // 收工了：月牙。不用单个空心圈：待办任务的圆圈就是它
         case .ended: .ended
         // 拔掉的插头：做到一半进程没了、说一句就插回去接着做——归停着的灰（多半是你自己停的，标红会稀释出错），不用闪电（与"会话有动静"同轮廓）
         case .interrupted: .interrupted
+        // 一圈虚线：说不准
         case .unknown: .unknown
         }
     }
 }
 
-/// 会话状态标全 App 只此一份，图标与颜色只取 `SessionShown.icon`、`tint`。是线的几种（`ink`）由同一根线变过去（`StateInk`），
-/// 其余（铃铛、出错的徽、纸飞机）叠在线上：线收进中心，标从中心弹出来。已结束不再另淡：灰已在对比度底线上，靠月牙的形状分。
+/// 会话状态标全 App 只此一份，图标与颜色只取 `SessionShown.icon`、`tint`。是线的几种（`ink`）由同一组线变过去（`StateInk`），
+/// 其余（出错、没能送达、纸飞机）叠在线上：线收进中心，标从中心弹出来。空闲的线收进中心、什么都不画。已结束不再另淡：灰已在对比度底线上，靠月牙的形状分。
 /// 旁边有状态文字时读屏跳过它；`announces` 时标自己带读屏标签。
 struct StateDot: View {
     let shown: SessionShown
@@ -132,13 +131,14 @@ extension SessionShown {
         case .working(.compacting): InkPose(shape: .spring, life: .press)
         case .working(.delegating): InkPose(shape: .bot, life: .bot)
         case .working: InkPose(shape: .heartbeat, life: .pulse)
-        case .asking: InkPose(shape: .question, life: .nod)
-        case .awaitsReply: InkPose(shape: .bigDot, life: .breathe)
-        case .idle: InkPose(shape: .turn, life: .nudge)
-        case .resting: InkPose(shape: .ellipsis, life: .hop)
+        case .asking: InkPose(shape: .ask, life: .nod)
+        case .cueAsking: InkPose(shape: .ask, life: .still)
+        case .awaitsReply, .unread: InkPose(shape: .mail, life: .flap)
+        // 空闲：不画。同类做法（T3 Code 等）做完又看过的会话只写多久以前；要你看的、在干活的才有标
+        case .idle, .resting: .hidden
         case .interrupted: InkPose(shape: .plug, life: .jitter)
         case .ended: InkPose(shape: .moon, life: .rock)
-        case .delivery, .cueAsking, .failed, .unread, .fresh, .unknown: nil
+        case .delivery, .failed, .fresh, .unknown: nil
         }
     }
 
@@ -152,10 +152,10 @@ extension SessionShown {
 }
 
 extension SessionShown.Status {
-    /// 换进来时晃一下叫你看：有新回复、出错、没能送达。
+    /// 换进来时晃一下叫你看：出错、没能送达（新回复的信封换进来时自己掀一下盖）。
     var callsOut: Bool {
         switch self {
-        case .unread, .failed, .delivery(.failed): true
+        case .failed, .delivery(.failed): true
         default: false
         }
     }

@@ -13,16 +13,14 @@ nonisolated extension SessionShown {
         case .working(.compacting): String(localized: "正在压缩上下文")
         case .working: speaking ? String(localized: "输出中") : CueNow.thinking
         case .asking: asksForWords ? String(localized: "等你回答") : String(localized: "等你确认")
-        case .awaitsReply: String(localized: "待回复")
+        case .awaitsReply, .unread: String(localized: "新回复")
         case .cueAsking: String(localized: "等 \(cue ?? "") 回答")
         case .failed(.network): String(localized: "连不上")
         case .failed(.quota): String(localized: "达到用量限制")
         case .failed(.login): String(localized: "登录失效")
         case .failed(.other): String(localized: "出错")
         case .failed(.truncated): String(localized: "回答未完成")
-        case .unread: String(localized: "有新回复")
-        case .idle: String(localized: "该你了")
-        case .resting: String(localized: "歇着")
+        case .idle, .resting: String(localized: "空闲")
         case .fresh: String(localized: "新开的会话")
         case .ended: String(localized: "已结束")
         case .interrupted: String(localized: "被打断")
@@ -41,12 +39,11 @@ nonisolated extension SessionShown {
         case .working(.compacting): String(localized: "Agent 正在压缩上下文")
         case .working: String(localized: "Agent 正在工作")
         case .asking: asksForWords ? String(localized: "Agent 等你回答") : String(localized: "Agent 等你确认")
-        case .awaitsReply: String(localized: "Agent 在等你回复")
+        case .awaitsReply: String(localized: "Agent 有新回复，留给你回")
         case .cueAsking: String(localized: "Agent 在等 \(cue ?? "") 回答")
         case .failed: String(localized: "Agent 出错")
         case .unread: String(localized: "Agent 有新回复")
-        case .idle: String(localized: "Agent 在等你说下一句")
-        case .resting: String(localized: "Agent 歇着")
+        case .idle, .resting: String(localized: "Agent 空闲")
         case .fresh: String(localized: "Agent 新会话")
         case .ended: String(localized: "Agent 会话已结束")
         case .interrupted: String(localized: "Agent 被打断")
@@ -55,7 +52,11 @@ nonisolated extension SessionShown {
         }
     }
 
-    var isUnread: Bool { status == .unread }
+    /// 新回复（没看的与 Cue 留给你回的同一个样子）：名字加粗、整行着回复的淡绿。
+    var isNewReply: Bool { status == .unread || status == .awaitsReply }
+
+    /// 空闲：做完了、没有要你看的。不画状态标、不写状态字，只留多久以前。
+    var isQuiet: Bool { status == .idle || status == .resting }
 
     var undelivered: Speech.Failure? { if case .delivery(.failed(let failure)) = status { failure } else { nil } }
 

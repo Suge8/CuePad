@@ -2,7 +2,8 @@ import CueStore
 import SwiftUI
 
 /// 分组格会话条：等你在上面、推进中在下面独立滚。尺寸只影响排版，三端共用数据、注意顺序与动画预算。
-/// 手机（`phone`，60 点竖条）：每组一张纸（列的纸色），格铺满纸，在默认字号、650 点高内完整放下十个会话。
+/// 手机（`phone`，60 点竖条）：每组一张纸（列的纸色），格铺满纸，在默认字号、650 点高内完整放下十个会话。手机不放组头：组靠纸色分，
+/// 两组的数名牌上有；组头的记号（问号、心电线）同格里的状态标一个样子，一组只剩一格时读成那一格上下各一个状态。
 /// 宽屏（`wide`）：不铺纸，组就是会话条那一块上的一段行，靠组头与间距分开；每个会话一行（`RailLine`），行首那一列是会话的状态标（`StateDot`），名字在它右边。
 /// 组头是小号淡字组名加着色计数，左沿同行首那一列、字贴着下沿，离它那一组近、离上一组远。
 /// 等你组每行两行高（`Chrome.tallRow`），推进中一行一种高（`Chrome.row`），长相在 `SessionRailCell`。
@@ -42,12 +43,13 @@ private struct SessionRailContent: View {
     let marked: Set<String>
     let open: (SessionState, SessionRail.Opening) -> Void
     @Environment(\.palette) private var palette
-    @ScaledMetric(relativeTo: .caption2) private var tileHeight: CGFloat = 52
+    @ScaledMetric(relativeTo: .caption2) private var tileHeight: CGFloat = 58
 
     @Environment(\.relayStage) private var stage
     @Environment(\.pageActive) private var active
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var reveal = SessionRailReveal()
+    @Namespace private var moves
 
     private var phone: Bool { form == .phone }
 
@@ -70,6 +72,8 @@ private struct SessionRailContent: View {
                 Spacer(minLength: 0)
             }
             .frame(maxWidth: .infinity)
+            // 一个会话换组（推进中的停下来等你、等你的被你答了）：那一格从原处滑到另一组里它的位置（`matchedGeometryEffect`），不在这边消失、那边冒出来
+            .animation(Motion.spatial(Motion.travel, reduceMotion: reduceMotion) ?? Motion.fade, value: [rows.waiting.map(\.id), rows.advancing.map(\.id)])
         }
         .onChange(of: [rows.waiting.map(\.id), rows.advancing.map(\.id)], initial: true) { _, groups in reveal.update(groups) }
         .onChange(of: active, initial: true) { _, active in reveal.active = active }
@@ -87,21 +91,24 @@ private struct SessionRailContent: View {
     }
 
     private func idealHeight(_ items: [SessionRailRows.Item]) -> CGFloat {
-        Chrome.groupHeader + items.map(rowHeight).reduce(0, +) + CGFloat(max(0, items.count - 1)) * cellGap + Chrome.pad
+        (phone ? Chrome.pad : Chrome.groupHeader) + items.map(rowHeight).reduce(0, +) + CGFloat(max(0, items.count - 1)) * cellGap + Chrome.pad
     }
 
     /// `overflows`：这一组放不下、要滚（宽屏下沿淡出一截，滚到底时最后一行在淡出的上面）。
     private func group(_ items: [SessionRailRows.Item], column: TaskBoard.Column, overflows: Bool) -> some View {
         let fades = overflows && !phone
         return VStack(spacing: 0) {
-            SessionRailHeader(column: column, count: items.count, form: form)
-                .frame(height: Chrome.groupHeader)
+            if !phone {
+                SessionRailHeader(column: column, count: items.count)
+                    .frame(height: Chrome.groupHeader)
+            }
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: cellGap) {
                         ForEach(items) { item in
                             SessionRailCell(item: item, form: form, selected: marked.contains(item.id), open: open)
                                 .frame(height: rowHeight(item))
+                                .matchedGeometryEffect(id: item.id, in: moves)
                                 .id(item.id)
                                 .transition(.opacity)
                         }
@@ -109,6 +116,7 @@ private struct SessionRailContent: View {
                     // 行底伸出行框：滚动内容自己留出伸出的那一截（滚动区按自己的边裁）；手机的格铺满纸
                     .padding(.horizontal, phone ? 0 : RowMetrics.bleed)
                     .scrollTargetLayout()
+                    .safeAreaPadding(.top, phone ? Chrome.pad : 0)
                     .safeAreaPadding(.bottom, fades ? Chrome.scrollFade : Chrome.pad)
                 }
                 .scrollIndicators(.hidden)
@@ -150,33 +158,21 @@ private struct GroupSurface: ViewModifier {
     }
 }
 
-/// 组头：手机竖条上记号与个数居中；宽屏是淡字组名加着色计数，左沿同行首那一列，字贴着下沿。
+/// 宽屏的组头：淡字组名加着色计数，左沿同行首那一列，字贴着下沿。
 private struct SessionRailHeader: View {
     let column: TaskBoard.Column
     let count: Int
-    let form: SessionRail.Form
     @Environment(\.palette) private var palette
 
     var body: some View {
-        Group {
-            if form == .phone {
-                HStack(spacing: Spacing.tight) {
-                    BoardLaneMark(column: column, size: Self.mark)
-                    tally
-                }
-                .font(Typography.caption.weight(.semibold))
-                .padding(.horizontal, Spacing.hair)
-            } else {
-                HStack(spacing: Spacing.glyph) {
-                    Text(column.title).foregroundStyle(palette.ink3).lineLimit(1)
-                    tally
-                }
-                .font(Typography.label)
-                .padding(.horizontal, RowMetrics.bleed)
-                .padding(.bottom, Spacing.tight)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
-            }
+        HStack(spacing: Spacing.glyph) {
+            Text(column.title).foregroundStyle(palette.ink3).lineLimit(1)
+            tally
         }
+        .font(Typography.label)
+        .padding(.horizontal, RowMetrics.bleed)
+        .padding(.bottom, Spacing.tight)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(column.title)
         .accessibilityValue(Text(count, format: .number))
@@ -186,8 +182,6 @@ private struct SessionRailHeader: View {
     private var tally: some View {
         Text(count, format: .number).foregroundStyle(column.countInk(palette)).monospacedDigit()
     }
-
-    private static let mark: CGFloat = 14
 }
 
 /// 要滚的一组下沿淡出一截：遮罩只在要滚时挂（挂着的遮罩每一帧都要离屏合成一遍，放得下的组不付这笔）。

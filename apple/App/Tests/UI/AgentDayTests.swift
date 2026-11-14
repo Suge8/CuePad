@@ -55,13 +55,13 @@ struct AgentDayTests {
     @Test func 一个会话一天里_新会话_有新回复_看过_草稿_发话() async throws {
         let recorder = try await app.runtimeRecorder(on: "mac-a")
         try await recorder.update(sessionID: "atlas", state: .settled, title: "atlas")
-        #expect(try await label("atlas") == "新开的会话")  // 终端里刚开、还没有任何一轮：不是"该你了"
+        #expect(try await label("atlas") == "新开的会话")  // 终端里刚开、还没有任何一轮：不是"空闲"
 
         try await store.writeTranscript(SessionTranscript(sessionID: "atlas", messages: [], recap: Recap(lastPrompt: "跑一下测试", lastReply: "全部通过。共 214 个。")))
         let done = try await item("atlas")
-        #expect(workspace.shown(done).label == "有新回复")
+        #expect(workspace.shown(done).label == "新回复")
         settings.markSeen(done.state, at: .now.addingTimeInterval(1))
-        #expect(try await label("atlas") == "该你了")
+        #expect(try await label("atlas") == "空闲")
         #expect(!app.relaunch().settings.isUnread(done.state))  // 看过记在本机偏好，退出再回来还算看过
 
         settings.setReplyDraft(ComposerDraft(text: "改完再跑一遍\n顺便看看覆盖率"), for: done.state.id)

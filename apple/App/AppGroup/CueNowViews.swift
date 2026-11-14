@@ -73,14 +73,14 @@ struct CueLedger: View {
 
 extension CueNow.Entry {
     /// 数接词（"4 推进中"）：每种一个整句的键，英文的语序在目录里（"4 active"、"1 for you"）；数加粗、着 `number` 色，词随外面。
-    /// 数以整数进键（"%lld 待回复"），不以 `Text` 插进去：后者的键是"%@ 待回复"，与"会话名 待回复"撞成一条、只能有一种英文。
+    /// 数以整数进键（"%lld 新回复"），不以 `Text` 插进去：后者的键是"%@ 新回复"，与"会话名 新回复"撞成一条、只能有一种英文。
     /// 按纯文字取译文再给数上色：`AttributedString(localized:)` 每次要走一遍带格式的拼装与 Markdown 解析，数字账每排都要几个、侧栏名片冷启动就要排。
     func text(number: Color) -> Text { Text(line(number: number)) }
 
     func line(number: Color) -> AttributedString {
         let words = switch kind {
         case .asks: String(localized: "\(count) 拍板")
-        case .reply: String(localized: "\(count) 待回复")
+        case .reply: String(localized: "\(count) 新回复")
         case .advancing: String(localized: "\(count) 推进中")
         case .subagents: String(localized: "\(count) 子代理")
         }
