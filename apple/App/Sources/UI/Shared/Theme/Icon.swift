@@ -26,6 +26,8 @@ nonisolated enum Icon: Hashable, Sendable {
     case skill, instruction
     // 状态
     case waiting, cueAsking, awaitsReply, failure, undelivered, onTheWay, replied, yourTurn, fresh, ended, interrupted, unknown, gone
+    /// 在压缩上下文（会话状态）：两块板夹着弹簧；"现在压缩"那颗钮是往里收的箭头（`compact`）
+    case compacting
     case done, donePending, picked
     case syncStarting, synced, syncing, syncOff, syncRestricted, syncTrouble, syncPaused, uploadLocal, replaceWithCloud, syncNow
     case alertsPending, alertsOn, alertsOff
@@ -96,10 +98,11 @@ nonisolated enum Icon: Hashable, Sendable {
         case .failure: .ink("failure")
         case .undelivered: .ink("undelivered")
         case .replied, .alertsPending: .ink("bell")
-        case .yourTurn: .ink("cursor")
+        case .yourTurn: .ink("turn")
         case .fresh: .ink("sparkle")
-        // 已结束的会话、点了去的那一处已不在：都是那里已经没有了
-        case .ended, .gone: .ink("ended")
+        case .ended: .ink("ended")
+        case .gone: .ink("gone")
+        case .compacting: .ink("spring")
         case .interrupted: .ink("interrupted")
         case .unknown: .ink("unknown")
         case .picked: .filled("picked")

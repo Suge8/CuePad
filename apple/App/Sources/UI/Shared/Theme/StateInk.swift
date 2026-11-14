@@ -1,8 +1,8 @@
 import QuartzCore
 import SwiftUI
 
-/// 会话状态标里的那根线：会话的每种状态都是这根线在做的事——在想时线上走着心跳，用工具时卷成圈转，压缩时挤成手风琴，
-/// 等子代理时缩成一颗点抛出一颗小点，等你确认时弯成问号，该你了时末端是光标，歇着时断成省略号，被打断时折断，已结束时放平、尾巴落成句号。
+/// 会话状态标里的那几根线：在想时是走着心跳的线，用工具时拧成扳手，压缩时是两块板夹着的弹簧，等子代理时是飘着的小机器人，
+/// 等你确认时弯成问号，该你了时是回复气泡，歇着时断成省略号，被打断时是拔开的插头，已结束时是月牙。
 /// 换状态是同一组线逐点变形过去（几何由 design/tools/ink/state_geometry.py 从符号的中线导出，每根同样点数），不换掉重画；
 /// 不是线的状态（铃铛、出错的徽、纸飞机，`StateDot` 叠在上面）这组线收进中心。
 /// 变形与常驻的动作都是 Core Animation、交给渲染服务（理由同 `LoopLayer`）；常驻动作只在 `loops` 时放，长时间挂着的几种每十几秒才动一下（`InkBeat`）。
@@ -104,7 +104,11 @@ struct StateInk {
                 if old != nil, !morphs { ink.add(Self.crossfade(), forKey: "fade") }
                 reshape(pose.shape, animated: old != nil && morphs)
             }
-            if old?.life != pose.life || looped != loops { live(pose.life) }
+            if old?.life != pose.life || looped != loops {
+                live(pose.life)
+                // 换进一个不一直动的状态：变形落定时先动一下，不等下一次敲
+                if old != nil, loops { beat(pose.life, delay: Motion.Ink.morph * 0.6) }
+            }
             paint(animated: old != nil)
             CATransaction.commit()
         }
@@ -129,16 +133,16 @@ struct StateInk {
             }
         }
 
-        /// 常驻的动作与各层的静止值（亮度、跑的那一截）。
+        /// 常驻的动作与各层的静止值（亮度、跑的那一截）。在干活的几种一直动（`LoopLayer.Host.loop`）；其余由 `InkBeat` 隔几秒敲一下。
         private func live(_ life: InkPose.Life) {
             for layer in [ink] + strands.flatMap({ [$0.box, $0.runner] }) {
-                for key in layer.animationKeys() ?? [] where key == "life" || key == "beat" { layer.removeAnimation(forKey: key) }
+                for key in layer.animationKeys() ?? [] where ["life", "blink", "beat"].contains(key) { layer.removeAnimation(forKey: key) }
             }
+            strands.forEach { $0.pivot(at: .zero) }
             let main = strands[0]
-            main.runner.isHidden = !(life == .orbit || life == .pulse && loops)
+            main.runner.isHidden = !(life == .pulse && loops)
             main.runner.strokeStart = 0
-            main.runner.strokeEnd = life == .orbit ? Self.orbitArc : 0
-            strands.forEach { $0.box.opacity = 1 }
+            main.runner.strokeEnd = 0
             InkBeat.shared.leave(self)
             guard loops else { return }
             switch life {
@@ -154,79 +158,80 @@ struct StateInk {
                 walk.duration = 1.4
                 walk.timingFunction = CAMediaTimingFunction(controlPoints: 0.45, 0.05, 0.55, 0.95)
                 _ = LoopLayer.Host.loop(walk, on: main.runner, key: "life")
-            case .orbit:
-                let spin = CABasicAnimation(keyPath: "transform.rotation.z")
-                spin.byValue = Double.pi * 2
-                spin.duration = 1.1
-                _ = LoopLayer.Host.loop(spin, on: main.runner, key: "life")
-            case .squeeze:
-                let press = CABasicAnimation(keyPath: "transform.scale.x")
-                press.fromValue = 1
-                press.toValue = 0.5
-                press.duration = 0.8
-                press.autoreverses = true
-                press.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-                _ = LoopLayer.Host.loop(press, on: main.box, key: "life")
-            case .relay:
-                let trip = CAKeyframeAnimation(keyPath: "transform.translation")
-                let back = Self.relayBack
-                trip.values = [CGSize.zero, .zero, CGSize(width: back, height: -back), CGSize(width: back, height: -back), .zero].map(sizeValue)
-                trip.keyTimes = RelayMark.tripTimes.map(NSNumber.init(value:))
-                trip.timingFunctions = [.init(controlPoints: 0.3, 0, 0.2, 1), .init(name: .linear), .init(controlPoints: 0.5, 0, 0.3, 1), .init(name: .linear)]
-                trip.duration = RelayMark.period
-                _ = LoopLayer.Host.loop(trip, on: strands[1].box, key: "life")
-                let catchIt = CAKeyframeAnimation(keyPath: "transform.scale")
-                catchIt.values = [1, 1, RelayMark.bulge, 1, 1]
-                catchIt.keyTimes = RelayMark.catchTimes.map(NSNumber.init(value:))
-                catchIt.duration = RelayMark.period
-                _ = LoopLayer.Host.loop(catchIt, on: main.box, key: "life")
-            case .nod, .blink, .hop, .breathe:
+            case .twist:
+                // 绕扳手头拧过去、带一点回弹，停一拍再拧
+                main.pivot(at: CGPoint(x: 4, y: -4))
+                _ = LoopLayer.Host.loop(Self.frames("transform.rotation.z", Self.degrees([(0, 0), (0.45, -24), (0.75, 5), (1, 0), (1.5, 0)])), on: main.box, key: "life")
+            case .press:
+                // 两块板往里一压、弹簧挤紧，松开时弹过一点再落定
+                let push: [(Double, CGFloat)] = [(0, 0), (0.45, 2.6), (0.65, 2.6), (0.95, -0.5), (1.15, 0), (1.4, 0)]
+                _ = LoopLayer.Host.loop(Self.frames("transform.scale.x", push.map { ($0.0, 1 - $0.1 * 0.145) }), on: main.box, key: "life")
+                _ = LoopLayer.Host.loop(Self.frames("transform.translation.x", push.map { ($0.0, $0.1) }), on: strands[1].box, key: "life")
+                _ = LoopLayer.Host.loop(Self.frames("transform.translation.x", push.map { ($0.0, -$0.1) }), on: strands[2].box, key: "life")
+            case .bot:
+                // 浮着上下飘，飘两下眨一次眼、天线跟着一抖
+                for strand in strands {
+                    _ = LoopLayer.Host.loop(Self.frames("transform.translation.y", [(0, 0), (0.9, -0.9), (1.8, 0), (2.7, -0.9), (3.6, 0)]), on: strand.box, key: "life")
+                }
+                for (eye, x) in zip(strands[4...5], [-3.0, 3.0]) {
+                    eye.pivot(at: CGPoint(x: x, y: 2))
+                    _ = LoopLayer.Host.loop(Self.frames("transform.scale.y", [(0, 1), (3, 1), (3.08, 0.12), (3.18, 1), (3.6, 1)]), on: eye.box, key: "blink")
+                }
+                strands[1].pivot(at: CGPoint(x: 0, y: -4))
+                _ = LoopLayer.Host.loop(Self.frames("transform.rotation.z", Self.degrees([(0, 0), (2.95, 0), (3.1, -14), (3.3, 8), (3.5, 0), (3.6, 0)])), on: strands[1].box, key: "blink")
+            case .nod, .breathe, .nudge, .hop, .jitter, .rock:
                 InkBeat.shared.join(self, life)
-                return
             case .still:
                 break
             }
         }
 
-        /// 长时间挂着的几种动的那一下（`InkBeat` 隔十几秒敲一次）：只放动的这一秒，放完就摘，其余时间渲染服务不画。
-        func beat(_ life: InkPose.Life) {
+        /// 不一直动的几种动的那一下（`InkBeat` 隔几秒敲一次，换进来时 `delay` 后也放一次）：只放动的这一秒，放完就摘，其余时间渲染服务不画。
+        func beat(_ life: InkPose.Life, delay: Double = 0) {
             guard pose?.life == life else { return }
+            let start = CACurrentMediaTime() + delay
+            func play(_ move: CAKeyframeAnimation, on layer: CALayer, lag: Double = 0) {
+                move.beginTime = start + lag
+                move.fillMode = .backwards
+                layer.add(move, forKey: "beat")
+            }
             switch life {
             case .nod:
                 // 歪一下头再回正，像在问
-                ink.add(Self.once("transform.rotation.z", [(0, 0), (0.16, -0.2), (0.3, 0.12), (0.42, -0.04), (0.52, 0)]), forKey: "beat")
-            case .blink:
-                // 光标眨两下，和文本框里的光标同一个节拍
-                let blink = CAKeyframeAnimation(keyPath: "opacity")
-                blink.calculationMode = .discrete
-                blink.values = [0, 1, 0]
-                blink.keyTimes = [0, 1.0 / 3, 2.0 / 3, 1].map(NSNumber.init(value:))
-                blink.duration = 0.75
-                strands[1].box.add(blink, forKey: "beat")
+                play(Self.frames("transform.rotation.z", [(0, 0), (0.16, -0.2), (0.3, 0.12), (0.42, -0.04), (0.52, 0)]), on: ink)
+            case .breathe:
+                play(Self.frames("transform.scale", [(0, 1), (0.5, 1.14), (1.3, 1)]), on: strands[0].box)
+            case .nudge:
+                // 气泡里的箭头往回一拨：话头回到你这儿
+                for strand in strands[1...2] {
+                    play(Self.frames("transform.translation.x", [(0, 0), (0.22, -1.8), (0.42, 0.4), (0.6, 0)]), on: strand.box)
+                }
             case .hop:
                 // 三颗点挨个跳一下，像对方在打字
-                for (index, strand) in strands.enumerated() {
-                    let hop = Self.once("transform.translation.y", [(0, 0), (0.18, -2.6), (0.42, 0.3), (0.56, 0)])
-                    hop.beginTime = CACurrentMediaTime() + Double(index) * 0.12
-                    hop.fillMode = .backwards
-                    strand.box.add(hop, forKey: "beat")
+                for (index, strand) in strands.prefix(3).enumerated() {
+                    play(Self.frames("transform.translation.y", [(0, 0), (0.18, -2.6), (0.42, 0.3), (0.56, 0)]), on: strand.box, lag: Double(index) * 0.12)
                 }
-            case .breathe:
-                strands[0].box.add(Self.once("transform.scale", [(0, 1), (0.5, 1.14), (1.3, 1)]), forKey: "beat")
+            case .jitter:
+                // 拔开的两半各往外一弹，像刚断开时那一下
+                for (index, strand) in strands.enumerated() {
+                    let away: CGFloat = [0, 2, 3, 4].contains(index) ? -1 : 1
+                    play(Self.frames("transform.translation", [0, 1, -0.3, 0].enumerated().map { step, push in
+                        ([0, 0.18, 0.36, 0.55][step], sizeValue(CGSize(width: away * push, height: -away * push)))
+                    }), on: strand.box)
+                }
+            case .rock:
+                // 月牙轻轻晃一下
+                play(Self.frames("transform.rotation.z", [(0, 0), (0.35, -0.21), (0.7, 0.08), (1, 0)]), on: ink)
             default:
                 break
             }
         }
 
-        /// 颜色与亮度：在跑的心跳、转圈底下那条轨是淡的，其余整根是实的。
+        /// 颜色与亮度：在想的心跳底下那条轨是淡的，其余整根是实的。
         private func paint(animated: Bool) {
             guard let pose else { return }
             let alpha = color?.alpha ?? 1
-            let track: CGFloat = switch pose.life {
-            case .pulse where loops: 0.3
-            case .orbit: 0.22
-            default: 1
-            }
+            let track: CGFloat = pose.life == .pulse && loops ? 0.3 : 1
             for strand in strands {
                 strand.tint(base: color?.copy(alpha: alpha * track), runner: color, animated: animated)
             }
@@ -242,16 +247,20 @@ struct StateInk {
             CGPoint(x: points.map(\.x).reduce(0, +) / CGFloat(points.count), y: points.map(\.y).reduce(0, +) / CGFloat(points.count))
         }
 
-        /// 放一次就摘的一下（时刻按秒）。
-        private static func once(_ keyPath: String, _ keys: [(time: Double, value: Double)]) -> CAKeyframeAnimation {
+        /// 一段关键帧（时刻按秒、最后一个时刻就是时长），段与段缓入缓出；常驻的交给 `LoopLayer.Host.loop` 循环，敲一下的放完就摘。
+        private static func frames(_ keyPath: String, _ keys: [(time: Double, value: Any)]) -> CAKeyframeAnimation {
             let move = CAKeyframeAnimation(keyPath: keyPath)
             let duration = keys.last!.time
-            move.values = keys.map { NSNumber(value: $0.value) }
+            move.values = keys.map(\.value)
             move.keyTimes = keys.map { NSNumber(value: $0.time / duration) }
             move.timingFunctions = Array(repeating: CAMediaTimingFunction(name: .easeInEaseOut), count: keys.count - 1)
             move.duration = duration
             move.preferredFrameRateRange = CAFrameRateRange(minimum: 10, maximum: Motion.Beat.frameRate, preferred: Motion.Beat.frameRate)
             return move
+        }
+
+        private static func degrees(_ keys: [(time: Double, angle: Double)]) -> [(time: Double, value: Any)] {
+            keys.map { ($0.time, $0.angle * .pi / 180) }
         }
 
         private static func crossfade() -> CATransition {
@@ -262,12 +271,6 @@ struct StateInk {
         }
 
         private static let grid = CGRect(x: -12, y: -12, width: 24, height: 24)
-        private static let orbitArc: CGFloat = 0.3
-        /// 小点贴住大点时沿对角线往回挪多少格（同 `RelayMark` 的比例）。
-        private static let relayBack: CGFloat = {
-            let side = grid.width
-            return (RelayMark.big + RelayMark.small) * side / 2 / 2.squareRoot() - RelayMark.reach * side
-        }()
     }
 
     /// 一根线：`box` 管这根整体的动作（挤、跳、眨），`base` 是线本身，`runner` 是它上面走的那一截（只有主线用）。
@@ -277,6 +280,12 @@ struct StateInk {
         let runner = CAShapeLayer()
         private(set) var points: [CGPoint] = Array(repeating: .zero, count: InkStateGeometry.strandPoints)
         private(set) var width: CGFloat = 0
+
+        /// 这根线整体动作（转、压）绕的点（格）。动作只动 `transform` 的分量（转角、缩放、位移）：同一层上几段（飘、眨）各管一个分量才叠得起来，整块的 `transform` 关键帧会互相盖掉。
+        func pivot(at point: CGPoint) {
+            box.anchorPoint = CGPoint(x: (point.x + 12) / 24, y: (point.y + 12) / 24)
+            box.position = point
+        }
 
         func set(_ points: [CGPoint], width: CGFloat) {
             self.points = points

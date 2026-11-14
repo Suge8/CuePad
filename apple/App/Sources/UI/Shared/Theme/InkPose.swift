@@ -1,7 +1,7 @@
 import QuartzCore
 
-/// 长时间挂着的几种状态（等你确认、该你了、歇着、待回复，可能挂几小时）隔十几秒才动一下：由这里按全局时钟敲，同屏同一种一起动，
-/// 每次只给各个标挂一段放完就摘的动画。否决过：在层上挂一条长周期、大半时间停着的循环——动画挂着时渲染服务照样逐帧求值（推断，没实测），同屏几十个长挂的标会让它一直合成。
+/// 不在干活的几种状态（等你确认、待回复、该你了、歇着、被打断、已结束，可能挂几小时、一列几十行）隔几秒到十几秒动一下：由这里按全局时钟敲，
+/// 同屏同一种一起动，每次只给各个标挂一段放完就摘的动画。否决过：在层上挂一条长周期、大半时间停着的循环——动画挂着时渲染服务照样逐帧求值（推断，没实测），同屏几十个长挂的标会让它一直合成。
 @MainActor final class InkBeat {
     static let shared = InkBeat()
     private var hosts: [InkPose.Life: [ObjectIdentifier: Weak]] = [:]
@@ -34,13 +34,16 @@ import QuartzCore
         for life in hosts.keys { hosts[life]?[ObjectIdentifier(host)] = nil }
     }
 
-    /// 周期各不相同、互不成倍：同屏几种状态不一起动。
+    /// 等你的（确认、待回复）几秒一下；该你了是大多数会话平时的样子，一列里几十行一起拨会晃眼，稀一些；停下的更稀。
+    /// 周期互不成倍：同屏几种状态不一起动。
     private static func period(_ life: InkPose.Life) -> Double? {
         switch life {
-        case .breathe: 9
-        case .blink: 11
-        case .nod: 13
-        case .hop: 15
+        case .nod: 4.2
+        case .breathe: 5
+        case .nudge: 9
+        case .hop: 13
+        case .jitter: 17
+        case .rock: 19
         default: nil
         }
     }
@@ -52,45 +55,51 @@ nonisolated struct InkPose: Hashable, Sendable {
     var life: Life
 
     enum Shape: Hashable, Sendable {
-        case heartbeat, ring, question, bigDot, relay, cursor, ellipsis, broken, period
+        case heartbeat, wrench, spring, question, bigDot, bot, turn, ellipsis, plug, moon
         /// 线收进中心：上面叠着别的标（铃铛、徽、纸飞机）。
         case hidden
 
-        static let most = 3
+        static let most = 6
 
         var strands: [InkStrand] {
             switch self {
             case .heartbeat: InkStateGeometry.heartbeat
-            case .ring: InkStateGeometry.ring
+            case .wrench: InkStateGeometry.wrench
+            case .spring: InkStateGeometry.spring
             case .question: InkStateGeometry.question
             case .bigDot: InkStateGeometry.bigDot
-            case .relay: InkStateGeometry.relay
-            case .cursor: InkStateGeometry.cursor
+            case .bot: InkStateGeometry.bot
+            case .turn: InkStateGeometry.turn
             case .ellipsis: InkStateGeometry.ellipsis
-            case .broken: InkStateGeometry.broken
-            case .period: InkStateGeometry.period
+            case .plug: InkStateGeometry.plug
+            case .moon: InkStateGeometry.moon
             case .hidden: []
             }
         }
     }
 
+    /// 在干活的四种一直动；其余由 `InkBeat` 隔几秒敲一下。
     enum Life: Hashable, Sendable {
         /// 心跳沿线走（在想、在说）
         case pulse
-        /// 一截弧绕圈（用工具）
-        case orbit
-        /// 整根横着挤（压缩上下文）
-        case squeeze
-        /// 小点来回、大点接住（等子代理）
-        case relay
-        /// 隔十几秒歪一下头（等你确认）
+        /// 扳手来回拧（用工具）
+        case twist
+        /// 两块板压弹簧（压缩上下文）
+        case press
+        /// 小机器人飘着、隔一会儿眨眼（等子代理）
+        case bot
+        /// 歪一下头（等你确认）
         case nod
-        /// 隔十几秒光标眨两下（该你了）
-        case blink
-        /// 隔十几秒三颗点挨个跳（歇着）
-        case hop
-        /// 隔几秒鼓一下（待回复）
+        /// 鼓一下（待回复）
         case breathe
+        /// 气泡里的箭头往回一拨（该你了）
+        case nudge
+        /// 三颗点挨个跳（歇着）
+        case hop
+        /// 拔开的插头两半往外一弹（被打断）
+        case jitter
+        /// 月牙晃一下（已结束）
+        case rock
         case still
     }
 

@@ -1,6 +1,6 @@
 """图标与 Swift 动效共用的状态中线导出。"""
-from .geometry import G, Arc, Line, arcs, dist, sample
-from .rounded import base, statuses
+from .geometry import G, Arc, Line, dist, sample
+from .rounded import actions, base, statuses
 from .rounded.shared import WIDTH
 
 STRAND_POINTS = 48
@@ -24,28 +24,24 @@ def dot(x, y):
 
 
 def strand_shapes():
-    """会话状态标（`StateInk`）的几种样子：每种最多三根线，每根同样点数，状态之间逐点变形。线宽按格，常规字重。"""
+    """会话状态标（`StateInk`）的几种样子：每种最多 6 根线，每根同样点数，状态之间逐点变形；第一根是主线（换形时新冒出的线从它上面长出来）。
+    线宽按格，常规字重。几何就是同名符号的中线，菜单里的静态图标与会动的标同一个样子。"""
     w = WIDTH["Regular"]
     line = lambda path: (resample(path), w)
-    opened = lambda name: statuses.centerlines(name)[0]
-    dash, top, stem, bottom = opened("cursor")
-    beam = top + [Line(top[-1].end(), stem[0].start())] + stem + [Line(stem[-1].end(), bottom[0].start())] + bottom
-    ended_line, = opened("ended")
-    ring, = statuses.centerlines("ended")[1]
-    # 同一个圆，起点换到挨着线的左边：变形时从线尾卷出去
-    period = arcs((ring[0].c[0] / G, ring[0].c[1] / G), ring[0].r / G, 180, 360)
-    relay = statuses.fills("relay", w)
+    def symbol(name, module=statuses):
+        opened, closed = module.centerlines(name)
+        return [line(path) for path in closed + opened]
     return {
         "heartbeat": [line(base.centerlines("session")[0][0])],
-        "ring": [line(arcs((0, 0), 9, 180, 360))],
+        "wrench": symbol("wrench", actions),
+        "spring": symbol("spring")[2:] + symbol("spring")[:2],
         "question": [line(statuses.question()), (dot(-1.9, 7.6), DOT)],
         "bigDot": [(dot(0, 0), 13.2)],
-        "relay": [(dot(relay[0][0].c[0] / G, relay[0][0].c[1] / G), 2 * relay[0][0].r / G),
-                  (dot(relay[1][0].c[0] / G, relay[1][0].c[1] / G), 2 * relay[1][0].r / G)],
-        "cursor": [line(dash), line(beam)],
+        "bot": symbol("relay"),
+        "turn": symbol("turn"),
         "ellipsis": [(dot(x, 0), DOT) for x in (-7, 0, 7)],
-        "broken": [line(path) for path in opened("interrupted")],
-        "period": [line(ended_line), line(period)],
+        "plug": symbol("interrupted"),
+        "moon": symbol("ended"),
     }
 
 

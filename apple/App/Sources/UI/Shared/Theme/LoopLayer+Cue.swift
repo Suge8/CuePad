@@ -58,18 +58,6 @@ extension LoopLayer.Host {
     }
 }
 
-/// 等子代理交回那两颗点的节拍（`StateInk` 的 `relay`）：两颗点的大小与位置是符号 `relay` 的（design/tools/ink/rounded/statuses.py），比例写在这里给小点来回算距离。
-/// 不并进去（并进去那几成时间里只剩一颗，读成待回复的墨点），也不绕着转（绕圈读成加载）。
-nonisolated enum RelayMark {
-    static let big: CGFloat = 0.44
-    static let small: CGFloat = 0.26
-    static let reach: CGFloat = 0.34
-    static let period = 2.4
-    static let tripTimes: [Double] = [0, 0.4, 0.62, 0.86, 1]
-    static let bulge = 1.18
-    static let catchTimes: [Double] = [0, 0.6, 0.68, 0.8, 1]
-}
-
 private func rectValue(_ rect: CGRect) -> NSValue {
     #if os(macOS)
     NSValue(rect: rect)

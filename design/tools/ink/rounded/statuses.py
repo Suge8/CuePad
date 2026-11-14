@@ -3,10 +3,10 @@ import math
 from ink.geometry import G, Layer, arcs, disc, poly, rev
 from .shared import arrow
 from . import base
-from .shared import box, contours
+from .shared import box, contours, ring, smooth
 
 NAMES = (
-    "waiting", "failure", "undelivered", "unknown", "question", "picked", "asking", "ended", "interrupted",
+    "waiting", "failure", "undelivered", "unknown", "question", "picked", "asking", "ended", "gone", "interrupted", "turn", "spring",
     "relay", "relay.stalled", "cursor", "agent", "reload", "cloud", "cloud.done", "cloud.sync", "cloud.alert",
     "cloud.pause", "cloud.up", "cloud.down", "cloud.off", "cloud.lock", "bell", "bell.on", "bell.off", "cold",
 )
@@ -35,6 +35,17 @@ def cloud():
             + poly([(8,8),(-8,8)]))
 
 
+def fillet(r, step=20):
+    """拆成折线的圆弧，每个拐角的圆角：接近折线的内切圆，倒完仍是一段圆弧（`smooth`）。"""
+    return 0.97 * r * math.cos(math.radians(step / 2))
+
+
+def bot(eyes):
+    """方脑袋小机器人（等子代理）：头、天线、两只耳朵、两只眼睛。"""
+    lines = [box(-8,-4,8,8,3)], [poly([(0,-4),(0,-8),(-4,-8)],1.6), poly([(-10.4,2),(-8,2)]), poly([(8,2),(10.4,2)])]
+    return lines[1] + eyes, lines[0]
+
+
 def centerlines(name):
     opened,closed = [],[]
     def line(*points,radius=0): opened.append(poly(points,radius))
@@ -49,11 +60,40 @@ def centerlines(name):
         opened.append(poly([(-3,4.6),(1.6,4.6)]) + arcs((1.6,.8),3.8,90,-180) + poly([(1.6,-3),(-1.4,-3)]))
     elif name == "picked": line((-5,0),(-1,4),(6,-4))
     elif name == "ended":
-        # 终点站：会话那根线放平、走到头是一个圈（线路图的终点，也是画上句号）；状态标从在跑的线连续变过来（`StateInk`）
-        line((-10,0),(-2,0)); circle(5.5,0,4)
-    elif name == "interrupted": line((-10,2),(-3,2)); line((3,-2),(10,-2))
-    elif name == "relay": pass
-    elif name == "relay.stalled": circle(7.2,-7.2,3.9)
+        # 收工了：一弯月牙。外圆与内圆（偏右上）各拆成折线倒圆角，两个尖收成小圆头
+        outer, inner = ring((0,0),9,3.1,266.9), ring((5.4,-5),6,212,58,19)
+        closed.append(smooth(outer + inner, [0] + [fillet(9)] * (len(outer) - 2) + [0, 0] + [fillet(6,19)] * (len(inner) - 2) + [0], True))
+    elif name == "gone":
+        # 那一处已经没有了：断开的圈加一道斜线
+        opened.extend([arcs((0,0),9,65,140),arcs((0,0),9,245,140)])
+        line((-7,-7),(7,7))
+    elif name == "interrupted":
+        # 拔掉的插头：做到一半进程没了，说一句就插回去接着做。两半各一根线，插头那半带两根插脚
+        closed.append(smooth([(0,6),(-6,0),(-10,4),(-4,10)],[0,0,2.4,2.4],True))
+        closed.append(smooth([(0,-6),(6,0),(10,-4),(4,-10)],[0,0,2.4,2.4],True))
+        line((-4.5,1.5),(-2,-1)); line((-1.5,4.5),(1,2))
+        line((-10,10),(-7,7)); line((7,-7),(10,-10))
+    elif name == "turn":
+        # 该你了：圆气泡里一支往回拐的箭头（回复）
+        rim = ring((0,0),9.4,154,474.9)
+        closed.append(smooth(rim + [(-9.6,9.6)], [1.6] + [fillet(9.4)] * (len(rim) - 2) + [1.6, 1.6], True))
+        line((-2,-3),(-5,0),(-2,3)); line((-5,0),(5,0),(5,3.4),radius=2)
+    elif name == "spring":
+        # 压缩上下文：两块板夹着一段弹簧
+        line((-10.6,-7),(-10.6,7)); line((10.6,-7),(10.6,7))
+        # 四段一上一下的圆弧首尾相切，每段比半圆多鼓出一点（像弹簧圈）。不用折线倒角：峰一尖，圆角就放不下最粗母版的线宽
+        r, bulge = 2.0, 120
+        span = 2 * r * math.sin(math.radians(bulge))
+        coil = []
+        for k in range(4):
+            up = -1 if k % 2 == 0 else 1
+            centre = (-2 * span + (k + 0.5) * span, up * -r * math.cos(math.radians(bulge)))
+            coil += arcs(centre, r, -90 - bulge, 2 * bulge) if up < 0 else arcs(centre, r, 90 + bulge, -2 * bulge)
+        opened.append(coil)
+    elif name in ("relay", "relay.stalled"):
+        # 等子代理：一个方脑袋小机器人；卡住了的那只眼睛是两道横线
+        eyes = [poly([(-3,1),(-3,3)]), poly([(3,1),(3,3)])] if name == "relay" else [poly([(-4.2,2),(-1.8,2)]), poly([(1.8,2),(4.2,2)])]
+        o, c = bot(eyes); opened.extend(o); closed.extend(c)
     elif name == "cursor":
         line((-10,0),(-4,0)); line((1,-9),(9,-9)); line((5,-9),(5,9)); line((1,9),(9,9))
     elif name == "agent": pass
@@ -98,8 +138,6 @@ def fills(name,w):
     if name in ("unknown","asking"): return [disc((-.9,5.7),w*.6)]
     if name == "failure": return [disc((0,5.5),w*.6)]
     if name == "cloud.alert": return [disc((0,3),w*.5)]
-    if name == "relay": return [disc((0,0),5.28),disc((8.16,-8.16),3.12)]
-    if name == "relay.stalled": return [disc((-2.2,2.2),4.7)]
     if name == "agent":
         star = base.fills("skill",w)
         return star + [disc((7,-7),w*.65),disc((-6,7),w*.65)]

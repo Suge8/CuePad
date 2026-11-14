@@ -47,16 +47,19 @@ extension SessionShown {
         case .delivery(.failed): .undelivered
         case .delivery: .onTheWay
         case .working(.delegating): .relay
+        case .working(.tool): .tool
+        case .working(.compacting): .compacting
         case .working: .session
         // 铃铛：它回你了，像来了一条通知。不用对勾——对勾只表示完成与记下，任务行旁挨着会话状态时会读成任务做完了
         case .unread: .replied
+        // 回复气泡：轮到你回话
         case .idle: .yourTurn
-        // 歇着、轮不到你（Cue 值班时）：省略号，等下一句的不是你。不用圈：带圈的已经够多（出错、没能送达、未知、已结束），缩小后分不开
+        // 歇着、轮不到你（Cue 值班时）：省略号，等下一句的不是你。不用圈：带圈的已经够多（出错、没能送达、未知），缩小后分不开
         case .resting: .more
         case .fresh: .fresh
-        // 画上句号。不用单个空心圈：待办任务的圆圈就是它
+        // 收工了：月牙。不用单个空心圈：待办任务的圆圈就是它
         case .ended: .ended
-        // 断开的线：做到一半停下、说一句就接着做——归停着的灰（多半是你自己停的，标红会稀释出错），不用闪电（与"会话有动静"同轮廓）
+        // 拔掉的插头：做到一半进程没了、说一句就插回去接着做——归停着的灰（多半是你自己停的，标红会稀释出错），不用闪电（与"会话有动静"同轮廓）
         case .interrupted: .interrupted
         case .unknown: .unknown
         }
@@ -64,7 +67,7 @@ extension SessionShown {
 }
 
 /// 会话状态标全 App 只此一份，图标与颜色只取 `SessionShown.icon`、`tint`。是线的几种（`ink`）由同一根线变过去（`StateInk`），
-/// 其余（铃铛、出错的徽、纸飞机）叠在线上：线收进中心，标从中心弹出来。已结束不再另淡：灰已在对比度底线上，靠句号的形状分。
+/// 其余（铃铛、出错的徽、纸飞机）叠在线上：线收进中心，标从中心弹出来。已结束不再另淡：灰已在对比度底线上，靠月牙的形状分。
 /// 旁边有状态文字时读屏跳过它；`announces` 时标自己带读屏标签。
 struct StateDot: View {
     let shown: SessionShown
@@ -125,16 +128,16 @@ extension SessionShown {
     /// 是线的几种状态此刻那根线的样子与动作；nil 时叠一个标（`icon`，话在路上是纸飞机）。
     var ink: InkPose? {
         switch status {
-        case .working(.tool): InkPose(shape: .ring, life: .orbit)
-        case .working(.compacting): InkPose(shape: .heartbeat, life: .squeeze)
-        case .working(.delegating): InkPose(shape: .relay, life: .relay)
+        case .working(.tool): InkPose(shape: .wrench, life: .twist)
+        case .working(.compacting): InkPose(shape: .spring, life: .press)
+        case .working(.delegating): InkPose(shape: .bot, life: .bot)
         case .working: InkPose(shape: .heartbeat, life: .pulse)
         case .asking: InkPose(shape: .question, life: .nod)
         case .awaitsReply: InkPose(shape: .bigDot, life: .breathe)
-        case .idle: InkPose(shape: .cursor, life: .blink)
+        case .idle: InkPose(shape: .turn, life: .nudge)
         case .resting: InkPose(shape: .ellipsis, life: .hop)
-        case .interrupted: InkPose(shape: .broken, life: .still)
-        case .ended: InkPose(shape: .period, life: .still)
+        case .interrupted: InkPose(shape: .plug, life: .jitter)
+        case .ended: InkPose(shape: .moon, life: .rock)
         case .delivery, .cueAsking, .failed, .unread, .fresh, .unknown: nil
         }
     }
