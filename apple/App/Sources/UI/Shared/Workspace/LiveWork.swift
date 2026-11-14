@@ -12,8 +12,9 @@ extension Workspace {
         #else
         let live: [SessionState] = []
         #endif
-        return SessionState.liveRows(
-            live: live, recorded: sessions.current.map(\.listed), deliveries: sessions.deliveries, cue: sessions.cue, at: services.speech)
+        let shown = Set(live.map(\.sessionID))
+        let recorded = sessions.current.map(\.listed).filter { !shown.contains($0.sessionID) }
+        return SessionState.inListOrder(live + recorded, state: \.self, deliveries: sessions.deliveries, cue: sessions.cue, at: services.speech)
     }
 }
 
@@ -22,16 +23,5 @@ nonisolated extension SessionListItem {
         var session = state
         if project == nil { session.projectID = nil }
         return session
-    }
-}
-
-extension SessionState {
-    static func liveRows(
-        live: [SessionState], recorded: [SessionState], deliveries: [String: DeliveryRequest] = [:], cue: CueDuty? = nil,
-        at moment: Speech.Moment
-    ) -> [SessionState] {
-        let shown = Set(live.map(\.sessionID))
-        let others = recorded.filter { !shown.contains($0.sessionID) }
-        return inListOrder(live + others, state: \.self, deliveries: deliveries, cue: cue, at: moment)
     }
 }

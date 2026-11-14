@@ -25,11 +25,12 @@ struct FailureDock: View {
     @ViewBuilder private func callout(_ failed: Failed) -> some View {
         let session = failed.session, status = failed.status
         let text = session.detail ?? String(localized: "Mac 没有说明原因")
-        if let url = session.usageURL {
+        let rescue = SessionRescue.of(session)
+        if case .usage(let url) = rescue {
             Callout(status, text: text, docked: true) {
                 Link("管理用量", destination: url).buttonStyle(ControlButtonStyle(kind: .primary))
             }
-        } else if session.canRetry {
+        } else if rescue == .retry {
             Callout(status, text: text, docked: true) {
                 Button { workspace.retry(session) } label: { Label("重试", icon: .retry) }
                     .buttonStyle(ControlButtonStyle(kind: .secondary))

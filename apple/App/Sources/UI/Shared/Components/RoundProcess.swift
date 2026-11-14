@@ -180,14 +180,7 @@ struct RoundProcess: View {
     }
 
     static func icon(tool: String?) -> Icon {
-        switch tool?.lowercased() {
-        case nil: .pondering
-        case "edit", "write": icon(.edit)
-        case "bash": icon(.command)
-        case "read": icon(.read)
-        case "grep", "find", "glob", "ls": icon(.search)
-        default: icon(.other)
-        }
+        tool.map { icon(ChatMessage.Tools.Kind(tool: $0)) } ?? .pondering
     }
 
     /// 会话里的几类；Cue 的动作只在 Cue 页的经过里（`CueTrace.icon`），会话里没有。

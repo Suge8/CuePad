@@ -1,16 +1,10 @@
 import SwiftUI
 
-nonisolated enum ProjectCoverStyle {
-    case whale, shark, jellyfish, turtle, fox, cat, penguin, owl
-    case monstera, cactus, mushroom, flower
-}
-
 /// 项目卡的静态像素插画；只复用主题已采样的颜料路径，不在绘制时计算图层或抖色。
 struct ProjectPixelCover: View {
-    let style: ProjectCoverStyle
+    let pattern: ProjectPixelPattern
 
     var body: some View {
-        let pattern = ProjectPixelPattern.pattern(for: style)
         Canvas(rendersAsynchronously: true) { context, size in
             context.scaleBy(x: size.width / CGFloat(ProjectPixelPattern.columns),
                             y: size.height / CGFloat(ProjectPixelPattern.rows))
