@@ -143,25 +143,13 @@ public actor CueStore {
 
   private func waited(since posted: ContinuousClock.Instant) -> Duration { .now - posted }
 
-  /// 事务里登记、提交成功后才做的事（删文件这类回滚不了的）；事务回滚就丢掉。`write` 的 body 里用 `afterCommit.append`。
-  var afterCommit: [@Sendable () -> Void] = []
-
   /// 一个写事务；提交后通知订阅者，并把改动的同步记录交给同步订阅者。
   func write<T>(_ body: () throws -> T) throws -> T {
-    let (result, changes): (T, Changes)
-    do {
-      (result, changes) = try db.transaction {
-        let value = try body()
-        try reconcileTaskSessionEvents()
-        return value
-      }
-    } catch {
-      afterCommit = []
-      throw error
+    let (result, changes) = try db.transaction {
+      let value = try body()
+      try reconcileTaskSessionEvents()
+      return value
     }
-    let actions = afterCommit
-    afterCommit = []
-    actions.forEach { $0() }
     let tables = Set(changes.tables.compactMap(Table.init(rawValue:)))
     if !tables.isEmpty {
       for subscriber in subscriptions.committed(tables) where touches(tables, changes, reading: subscriber.tables, scopes: subscriber.scopes) {
