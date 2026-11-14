@@ -138,10 +138,13 @@ final class HostedTurns {
         if !handingOver, phase == .handedOver { settle() }
     }
 
-    /// `turn` 是停止发出时在跑的那一轮：停止段排队期间它已收尾（Agent 可能紧接着开了下一轮）就过期了，不发给 Agent。
+    /// `turn` 是停止发出时抓到的在跑那一轮：停止段排队期间它已收尾（Agent 可能紧接着开了下一轮）就过期了，不发给 Agent。
     /// 已经发出、在路上时换了轮的管不到（ACP 与 Claude Code 的停止不带轮次，落在当前这一轮上）。
+    /// 没抓到（歇着、换轮的话已交出）也照发、不等：开始从事件流晚到的（OpenCode、Codex）这时可能已在跑，在不在跑由各家判断，
+    /// 不发的话停止报成功、这一轮照跑，再说一句也会并进它。
     private func halt(_ stop: () async throws -> Void, of turn: Int?) async throws {
-        guard let turn, runningTurn == turn else { return }
+        guard let turn else { return try await stop() }
+        guard runningTurn == turn else { return }
         stopping = true
         stopRequests += 1
         let seen = ends.count

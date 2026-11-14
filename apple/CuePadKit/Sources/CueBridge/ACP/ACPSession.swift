@@ -163,8 +163,9 @@ final class ACPSession {
     }
 
     /// 请 Agent 停下这一轮（`session/cancel`，标准里没有回执）：收尾由 `HostedTurns` 等它的回应。
+    /// 没在跑就不发：交出即开轮（`begin`），没有开始晚到的窗口。
     func cancel() throws {
-        guard let sessionID else { return }
+        guard turns.running, let sessionID else { return }
         decline()
         try live.notify("session/cancel", ["sessionId": .string(sessionID)])
     }
