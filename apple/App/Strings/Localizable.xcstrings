@@ -16544,6 +16544,34 @@
         }
       }
     },
+    "有 %lld 张图没读出来，没有加上" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld image couldn’t be read and wasn’t added"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld images couldn’t be read and weren’t added"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "有 %lld 张图没读出来，没有加上"
+          }
+        }
+      }
+    },
     "有一件做完了" : {
       "localizations" : {
         "en" : {
@@ -22428,22 +22456,6 @@
         }
       }
     },
-    "调回上一句" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Recall Last Message"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "调回上一句"
-          }
-        }
-      }
-    },
     "调研三款笔记 App 的优缺点，写一页总结" : {
       "localizations" : {
         "en" : {
@@ -24168,6 +24180,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "这台设备的资料库读写出错，会自动重试"
+          }
+        }
+      }
+    },
+    "这张照片没存下来，再拍一次" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The photo wasn’t saved. Take it again."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这张照片没存下来，再拍一次"
           }
         }
       }
