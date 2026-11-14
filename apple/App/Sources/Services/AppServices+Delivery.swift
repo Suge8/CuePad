@@ -39,11 +39,22 @@ extension AppServices {
         guard result.status == .known(.succeeded) else { throw SendError.alreadyHanded }
     }
 
-    /// 发往再也不上线的 Mac 的请求只有别的设备清得掉（`CueStore.deleteExpiredDeliveries`）；Mac 的执行器自己排着清，手机在启动时清一次。
+    /// 发往再也不上线的 Mac 的请求只有别的设备清得掉，且只凭刚拉完的库（`CueStore.deleteExpiredDeliveries`）：
+    /// 每轮先完整拉一遍，再清那一拉开始前就到期的，睡到下一条到期（最多一天）；没拉成的一小时后再试。
     func startDeliveryCleanup() {
-        follow { [store] in
-            do { try await store.deleteExpiredDeliveries() } catch {
-                Self.log.error("到期的投送请求没能清掉：\(error.localizedDescription, privacy: .public)")
+        follow { [store, syncing, timing] in
+            while !Task.isCancelled {
+                let started = timing.now()
+                let pulled = (try? await syncing.engine?.syncNow()).map { $0 != .incomplete } ?? false
+                var wake = started.addingTimeInterval(pulled ? 86_400 : 3_600)
+                if pulled {
+                    do {
+                        if let next = try await store.deleteExpiredDeliveries(pulledAt: started) { wake = min(wake, next) }
+                    } catch {
+                        Self.log.error("到期的投送请求没能清掉：\(error.localizedDescription, privacy: .public)")
+                    }
+                }
+                guard (try? await timing.sleepUntil(wake)) != nil else { return }
             }
         }
     }

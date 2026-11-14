@@ -55,8 +55,10 @@ extension CueStore {
 
   /// 撤回在库里一个事务办完，不交给 handler、没有执行中这一步：原请求还没领取就删掉它（不经过失败），已领取的撤不回。
   /// 撤回请求一写进库，原请求就领不走了（`abandonedDelivery`），所以排在它前面的领取与它不会交错。
+  /// `request` 是执行器读到时的版本；进事务前它可能已被到期写成失败，那就不再动原请求。
   func settleWithdrawal(_ request: DeliveryRequest, on host: String) throws {
     try write {
+      guard try find(DeliveryRequest.self, request.id)?.status == request.status else { return }
       let removed = try UUID(uuidString: request.content).map { try removeUnstartedDelivery($0, locallyOn: host) || removeFailedDelivery($0) } ?? false
       try applyDeliveryOutcome(request, removed ? .succeeded : .failed(DeliveryRequest.withdrawRefused), at: timing.now())
     }

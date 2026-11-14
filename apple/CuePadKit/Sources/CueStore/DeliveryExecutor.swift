@@ -83,7 +83,7 @@ public actor DeliveryExecutor {
         await finish(request, outcome, resuming: true)
       }
       guard started, !Task.isCancelled else { return }
-      let next = try await store.deleteExpiredDeliveries(at: timing.now())
+      let next = try await store.deleteExpiredDeliveries(at: timing.now(), host: hostID)
       guard started, !Task.isCancelled else { return }
       if let next { scheduleCleanup(at: next) }
       roles.put(.expiry, .spawn { [store, hostID, onIssue] _ in

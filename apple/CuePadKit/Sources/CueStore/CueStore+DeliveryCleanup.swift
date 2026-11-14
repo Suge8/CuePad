@@ -4,17 +4,18 @@ extension CueStore {
   /// 要等人或等证据的请求留多久（`removableAt`），与对话的保留期一样是 7 天；其余留 `DeliveryExecutor.retention`。
   static let keptRetention: TimeInterval = 7 * 86_400
 
-  /// 删掉到了保留期的投送请求（`removableAt`），返回下一条到期的时刻，没有为 nil。
-  /// 哪台设备都可以跑：执行的 Mac 按返回的时刻排下一轮（`DeliveryExecutor`），手机在启动时跑一次，发往再也不上线的 Mac 的请求由它清掉。
-  /// `now` 是调用方的钟（执行器排清理用的那一个），缺省是库的。
+  /// 删掉到了保留期的投送请求（`removableAt`），返回下一条到期的时刻，没有为 nil。`now` 是调用方的钟，缺省是库的。
+  /// 没收尾的请求（没领的、领了没结果的）只有执行的那台的库说了算：别的设备的库可能是旧的（离线一阵，那台其间领过、办完了），
+  /// 删了会连那台写下的结局一起删掉（本机删除压过后到的远端版本）。所以它们只在是 `host` 的（执行器自己的），
+  /// 或本机刚完整拉过一遍服务器时删，且只删 `pulledAt`（那一拉开始的时刻）之前就到期的；发往再也不上线的 Mac 的由别的设备这样清掉（`AppServices.startDeliveryCleanup`）。
   @discardableResult
-  public func deleteExpiredDeliveries(at now: Date? = nil) throws -> Date? {
-    try write { try removeExpiredDeliveries(among: nil, at: now ?? timing.now()) }
+  public func deleteExpiredDeliveries(at now: Date? = nil, host: String? = nil, pulledAt: Date? = nil) throws -> Date? {
+    try write { try removeExpiredDeliveries(among: nil, at: now ?? timing.now(), host: host, pulledAt: pulledAt) }
   }
 
   /// `among` 只看这几条（发出的话的消息刚上了服务器，`markPushed`）。必须在写事务内调用。
   @discardableResult
-  func removeExpiredDeliveries(among ids: Set<UUID>?, at now: Date) throws -> Date? {
+  func removeExpiredDeliveries(among ids: Set<UUID>?, at now: Date, host: String? = nil, pulledAt: Date? = nil) throws -> Date? {
     if ids?.isEmpty == true { return nil }
     let requests = if let ids {
       try select(DeliveryRequest.self, where: "id IN (SELECT value FROM json_each(?))", [Self.idList(ids)])
@@ -24,7 +25,12 @@ extension CueStore {
     var removable: [UUID] = [], next: Date?
     for request in requests {
       guard let at = try removableAt(request) else { continue }
-      if at <= now { removable.append(request.id) } else { next = min(next ?? at, at) }
+      var until = now
+      if request.hostID != host, request.status.known.map(DeliveryStatus.open.contains) != false {
+        guard let pulledAt else { continue }
+        until = min(now, pulledAt)
+      }
+      if at <= until { removable.append(request.id) } else { next = min(next ?? at, at) }
     }
     if !removable.isEmpty { try db.run("DELETE FROM deliveryRequests WHERE id IN (SELECT value FROM json_each(?))", [Self.idList(removable)]) }
     return next
