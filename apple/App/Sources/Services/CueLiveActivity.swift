@@ -3,7 +3,6 @@ import ActivityKit
 import CueStore
 import Foundation
 import OSLog
-import UIKit
 
 /// iPhone 上只开一个实时活动。有真实同步时请求推送令牌，内容与结束由 Mac 经 APNs 独占写入；
 /// 本地库可能落后于系统刚收到的推送，不能在回前台、后台拉取或回答后拿本地快照覆盖它。
@@ -25,10 +24,10 @@ final class CueLiveActivity {
     /// 每个还在的活动一份取证订阅，活动结束（或被划掉）时自己收掉。
     var diagnosticTasks: [String: Task<Void, Never>] = [:]
 
-    init(store: CueStore, sync: (any SyncControlling)?, diagnostics: Diagnostics, remoteState: @escaping () throws -> CueActivityState?) {
+    init(store: CueStore, sync: (any SyncControlling)?, device: String?, diagnostics: Diagnostics, remoteState: @escaping () throws -> CueActivityState?) {
         self.store = store
         self.sync = sync
-        device = UIDevice.current.identifierForVendor?.uuidString
+        self.device = device
         self.remoteState = remoteState
         self.diagnostics = diagnostics
         trace(.processStarted)

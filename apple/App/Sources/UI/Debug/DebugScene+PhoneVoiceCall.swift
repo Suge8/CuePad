@@ -35,7 +35,7 @@ extension DebugScene {
         let voice = workspace.services.voice
         let log = DebugVoiceLog()
         let note = log.note
-        for await ready in Observations({ workspace.cue.canHear && voice.startUnavailableReason == nil }) where ready { break }
+        for await ready in Observations({ workspace.voiceStartBlock == nil }) where ready { break }
         var inputPeak = 0.0
         var audioChanges = 0
         let background = NotificationCenter.default.notifications(named: UIApplication.didEnterBackgroundNotification)

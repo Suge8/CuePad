@@ -29,7 +29,7 @@ nonisolated enum VoiceEndReason: String, Codable, Sendable {
 /// 正文和持久化业务状态仍从 CueMessage/SessionState 读取，信令不复制聊天历史。
 nonisolated struct VoiceCallProjection: Equatable, Codable, Sendable {
     enum Phase: Equatable, Codable, Sendable {
-        case connecting, listening, processing, speaking, closing
+        case connecting, listening, speaking, closing
         case failed(VoiceIssue)
         case ended(reason: VoiceEndReason)
     }
@@ -61,7 +61,7 @@ nonisolated struct VoiceCallProjection: Equatable, Codable, Sendable {
     }
 
     struct Request: Equatable, Codable, Sendable {
-        /// 原 VoiceCall.Request.rowID，落库前后不变；不是另一条业务记录。
+        /// 那一通的 VoiceRecord.Request.rowID，落库前后不变；不是另一条业务记录。
         var id = UUID()
         let reference: VoiceRequestReference
         let recording: Bool
@@ -96,18 +96,5 @@ nonisolated enum VoiceIssue: Error, Equatable, Codable, Sendable {
     case codexNotInstalled, signedOut, codexUnresponsive, cueUnavailable, macUnavailable, relayUnsupported, busy
     case notAllowed(status: Int)
     case server(status: Int?)
-    case storageUnavailable, originalMissing, alreadyHandled, turnChanged
-
-    enum Action: String, Codable, Sendable { case reconnect, microphoneSettings, configureOnMac, signInOnMac, installCodexOnMac, retryLater }
-    var actions: [Action] {
-        switch self {
-        case .ended(.permissionDenied): [.microphoneSettings, .reconnect]
-        case .codexNotInstalled: [.installCodexOnMac]
-        case .signedOut: [.signInOnMac]
-        case .cueUnavailable: [.configureOnMac]
-        case .notAllowed, .relayUnsupported, .busy, .storageUnavailable, .macUnavailable: [.retryLater]
-        case .originalMissing, .alreadyHandled, .turnChanged: []
-        case .ended, .server, .codexUnresponsive: [.reconnect]
-        }
-    }
+    case storageUnavailable
 }

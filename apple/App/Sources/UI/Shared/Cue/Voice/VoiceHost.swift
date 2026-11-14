@@ -88,7 +88,7 @@ struct VoiceViewState {
         let activity: CueVoiceActivity = switch phase {
         case nil: .idle
         case .connecting: .connecting
-        case .listening, .processing, .speaking:
+        case .listening, .speaking:
             switch response {
             case .none: .listening
             case .awaitingAssistant: .processing
@@ -180,10 +180,13 @@ extension Workspace {
     var voiceViewState: VoiceViewState {
         let voice = services.voice
         return .init(phase: voice.phase, response: voice.response, muted: voice.isMuted, canMute: voice.canMute, canRepeat: voice.canRepeat,
-                     startUnavailableReason: cue.canHear ? voice.startUnavailableReason : .cueUnavailable,
+                     startUnavailableReason: voiceStartBlock,
                      samples: { voice.samples }, projection: voice.projection, speech: services.speech,
                      shown: { [unowned self] in shownInHeader($0.state, delivery: nil) })
     }
+
+    /// 此刻起不了通话的原因（Cue 没启用、正忙、连不上 Mac）：通话条、Mac 的发起、输入框的通话钮与"重新接通"都只读这一个。
+    var voiceStartBlock: VoiceIssue? { cue.canHear ? services.voice.startUnavailableReason : .cueUnavailable }
 
     /// 命令结果原样返回，包括拒绝原因；调用方展示结果或传输失败，不自动重发。每次调用一个新的命令身份。
     @discardableResult
@@ -266,7 +269,12 @@ extension VoiceIssue {
         case .codexNotInstalled: "请先在 Mac 上安装 Codex"
         case .signedOut: "请先在 Mac 上登录 Codex"
         case .codexUnresponsive: "Codex 没响应，看看 Mac 上的提示"
-        case .cueUnavailable: "请先在 Mac 上启用并配置 Cue"
+        case .cueUnavailable:
+            #if os(macOS)
+            "Cue 还没启用，启用后才能通话"
+            #else
+            "请先在 Mac 上启用并配置 Cue"
+            #endif
         case .macUnavailable: "无法连接 Mac，请确认 Mac 已开机并联网"
         case .relayUnsupported: "当前连接不支持通话，请更新手机和 Mac 上的 CuePad"
         case .busy: "通话正忙，请稍后再试"
@@ -275,16 +283,15 @@ extension VoiceIssue {
             if let status { "通话服务出错（\(status)），请稍后重试" }
             else { "通话服务出错，请稍后重试" }
         case .storageUnavailable: "通话记录暂不可用，请检查 Mac 上的资料库"
-        case .originalMissing: "原记录不可用，无法继续此操作"
-        case .alreadyHandled: "原请求已处理，无需再次提交"
-        case .turnChanged: "执行回合已变化，没有停止后来的工作"
         }
     }
 
     var recovery: VoiceAction? {
-        if actions.contains(.microphoneSettings) { return .microphoneSettings }
-        if actions.contains(.reconnect) { return .start }
-        return nil
+        switch self {
+        case .ended(.permissionDenied): .microphoneSettings
+        case .ended, .server, .codexUnresponsive: .start
+        case .codexNotInstalled, .signedOut, .cueUnavailable, .macUnavailable, .relayUnsupported, .busy, .notAllowed, .storageUnavailable: nil
+        }
     }
 }
 

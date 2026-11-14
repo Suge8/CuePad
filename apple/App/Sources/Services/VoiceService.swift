@@ -29,7 +29,7 @@ import os
     @ObservationIgnored var remote: VoiceRemoteMedia?
     @ObservationIgnored var observing: Task<Void, Never>?
     @ObservationIgnored var commands: [VoiceCommand.ID: Task<VoiceCommandResult.Outcome, Never>] = [:]
-    @ObservationIgnored var projectionRetries: [VoiceDeviceID: Task<Void, Never>] = [:]
+    @ObservationIgnored var projectionSenders: [VoiceDeviceID: Task<Void, Never>] = [:]
     #else
     var issue: VoiceIssue?
     var session: VoiceSessionID?
@@ -65,7 +65,7 @@ import os
     isolated deinit {
         #if os(macOS)
         observing?.cancel()
-        projectionRetries.values.forEach { $0.cancel() }
+        projectionSenders.values.forEach { $0.cancel() }
         #else
         phone?.scope.end()
         #endif
@@ -74,7 +74,7 @@ import os
     func cancel() {
         #if os(macOS)
         observing?.cancel()
-        projectionRetries.values.forEach { $0.cancel() }
+        projectionSenders.values.forEach { $0.cancel() }
         observing = nil
         call?.hangUp()
         #else

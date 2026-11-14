@@ -96,7 +96,6 @@ final class VoiceCall {
         case .ready: break
         }
         // 助手回合是协议事实，不是播放游标；电平只驱动本机波形，句间静音不能结束回合。
-        // 等待回应与写库另行投影，仍可收音时不把它们冒充媒体 processing。
         return assistantTurns.isEmpty ? .listening : .speaking
     }
 

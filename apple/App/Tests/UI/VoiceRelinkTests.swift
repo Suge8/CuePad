@@ -72,77 +72,59 @@ import Testing
     #endif
 
     #if os(macOS)
-
-    /// 手机回来后先到的是一条命令（resume 还在路上，或手机已因命令的结果认为接回、不再问）：换绑后投影照样推给手机的新租约。
+    /// 手机回来后先到的是一条命令（resume 还在路上，或手机已因命令的结果认为接回、不再问）：结果与之后的投影都送到手机的新租约。
     @Test func aCommandBeforeResumeStillBringsProjectionsBack() async throws {
-        let app = TestApp(), store = app.services.store, signal = FakeVoiceSignaling(), host = TestApp.hostID
+        let (app, signal, fixture) = try await answeredPhone()
         defer { app.services.cancelBackgroundWork() }
-        try await store.updateCueProfile { $0.enabledAt = .now; $0.hostID = host }
-        let voice = VoiceService(services: app.services, signaling: signal)
-        app.services.voice = voice
-        let fixture = VoiceFlowFixture(app.services)
-        try await fixture.connect()
+        let store = app.services.store, voice = app.services.voice
         let first = try await store.addCueMessage(.cue, text: "first result", answeredRequests: nil)
-        try await eventually("reply visible") { fixture.call.canRepeat && fixture.voiceRecord.replies.contains { $0.id == first.id } }
-        let session = VoiceSessionID(fixture.call.session), phone = VoiceDeviceID("phone-audit")
-        let gone = VoiceEndpoint(device: phone, lease: UUID()), back = VoiceEndpoint(device: phone, lease: UUID())
-        let header = VoiceSignalHeader(version: VoiceSignalFormat.version, sender: gone, recipient: signal.local, session: session, sequence: 1,
-                                       expiresAtMilliseconds: .max, purpose: .media)
-        let remote = VoiceRemoteMedia(header: header, offer: .init(sdp: "offer"), signaling: signal)
-        remote.leg.connected = true
-        voice.remote = remote
-        voice.projectionReaders[phone] = header
-        signal.peer = back
+        try await eventually("reply visible") { fixture.voiceRecord.replies.contains { $0.id == first.id } }
+        let session = VoiceSessionID(fixture.call.session), gone = signal.peer
         await voice.receive(.peerClosed(endpoint: gone, reason: .disconnected))
-        #expect(remote.leg.link?.isBound == false)
-        let id = VoiceCommand.ID(UUID())
-        await voice.receive(.received(.init(header: .init(version: VoiceSignalFormat.version, sender: back, recipient: signal.local, session: session, sequence: 1,
-                                                          expiresAtMilliseconds: .max, purpose: .command(id: id)),
-                                            payload: .command(command: .init(id: id, action: .repeatReply(message: first.id))))))
-        #expect(remote.leg.link == .bound(local: signal.local, peer: back))
+        signal.peer = VoiceEndpoint(device: gone.device, lease: UUID())
+        let back = signal.peer, id = VoiceCommand.ID(UUID())
+        await voice.receive(signal.event(.command(command: .init(id: id, action: .repeatReply(message: first.id))), session: session))
+        let result = VoiceSignalPayload.commandResult(result: .init(command: id, outcome: .readbackQueued(message: first.id)))
+        try await eventually("the result reaches the new lease") { zip(signal.sent, signal.recipients).contains { $0 == result && $1 == back } }
         let later = try await store.addCueMessage(.cue, text: "later result", answeredRequests: nil)
         try await eventually("the later projection reaches the new lease") {
             zip(signal.sent, signal.recipients).contains {
                 if case .projection(let value) = $0, value.replies.contains(where: { $0.message == later.id }) { $1 == back } else { false }
             }
         }
-        voice.remote = nil
         try await fixture.hangUp()
     }
 
     /// 结果出来时手机正断着：不发往旧租约（中转会拒、结果就丢了），手机回来后按原命令身份补送到新租约，命令不再执行一遍。
     @Test func aResultMadeWhileThePhoneIsAwayFollowsItToTheNewLease() async throws {
-        let app = TestApp(), store = app.services.store, signal = FakeVoiceSignaling(), host = TestApp.hostID
+        let (app, signal, fixture) = try await answeredPhone()
         defer { app.services.cancelBackgroundWork() }
-        try await store.updateCueProfile { $0.enabledAt = .now; $0.hostID = host }
-        let voice = VoiceService(services: app.services, signaling: signal)
-        app.services.voice = voice
-        let fixture = VoiceFlowFixture(app.services)
-        try await fixture.connect()
+        let store = app.services.store, voice = app.services.voice
         let reply = try await store.addCueMessage(.cue, text: "saved result", answeredRequests: nil)
-        try await eventually("reply visible") { fixture.call.canRepeat && fixture.voiceRecord.replies.contains { $0.id == reply.id } }
-        let session = VoiceSessionID(fixture.call.session), phone = VoiceDeviceID("phone-audit")
-        let gone = VoiceEndpoint(device: phone, lease: UUID()), back = VoiceEndpoint(device: phone, lease: UUID())
-        let header = VoiceSignalHeader(version: VoiceSignalFormat.version, sender: gone, recipient: signal.local, session: session, sequence: 1,
-                                       expiresAtMilliseconds: .max, purpose: .media)
-        let remote = VoiceRemoteMedia(header: header, offer: .init(sdp: "offer"), signaling: signal)
-        remote.leg.connected = true
-        voice.remote = remote
-        let id = VoiceCommand.ID(UUID())
-        let command = VoiceCommand(id: id, action: .repeatReply(message: reply.id))
-        await voice.receive(.received(.init(header: .init(version: VoiceSignalFormat.version, sender: gone, recipient: signal.local, session: session, sequence: 2,
-                                                          expiresAtMilliseconds: .max, purpose: .command(id: id)),
-                                            payload: .command(command: command))))
-        remote.leg.link = .relinking(peer: phone, until: .now + VoiceTiming.relinkGrace, reason: .peerLeft)
-        try await eventually("executed") { remote.results[id] != nil }
-        #expect(!zip(signal.sent, signal.recipients).contains { if case .commandResult = $0 { $1 == gone } else { false } })
-        await voice.receive(.received(.init(header: .init(version: VoiceSignalFormat.version, sender: back, recipient: signal.local, session: session, sequence: 1,
-                                                          expiresAtMilliseconds: .max, purpose: .media), payload: .media(signal: .resume(ask: true)))))
+        try await eventually("reply visible") { fixture.voiceRecord.replies.contains { $0.id == reply.id } }
+        let session = VoiceSessionID(fixture.call.session), gone = signal.peer, id = VoiceCommand.ID(UUID())
+        await voice.receive(signal.event(.command(command: .init(id: id, action: .repeatReply(message: reply.id))), session: session))
+        // 命令收下了、还没执行完，链路就断了
+        await voice.receive(.peerClosed(endpoint: gone, reason: .disconnected))
+        try await eventually("executed") { fixture.controls[0].sends.count == 1 }
         let result = VoiceSignalPayload.commandResult(result: .init(command: id, outcome: .readbackQueued(message: reply.id)))
+        #expect(!signal.sent.contains(result))
+        signal.peer = VoiceEndpoint(device: gone.device, lease: UUID())
+        let back = signal.peer
+        await voice.receive(signal.event(.media(signal: .resume(ask: true)), session: session))
         try await eventually("result followed the phone") { zip(signal.sent, signal.recipients).contains { $0 == result && $1 == back } }
         #expect(signal.sent.filter { $0 == result }.count == 1)
-        voice.remote = nil
+        #expect(fixture.controls[0].sends.count == 1)
         try await fixture.hangUp()
+    }
+
+    private func answeredPhone() async throws -> (TestApp, FakeVoiceSignaling, VoiceFlowFixture) {
+        let app = TestApp(), signal = FakeVoiceSignaling(), host = TestApp.hostID
+        try await app.services.store.updateCueProfile { $0.enabledAt = .now; $0.hostID = host }
+        app.services.voice = VoiceService(services: app.services, signaling: signal)
+        let fixture = VoiceFlowFixture(app.services)
+        try await fixture.answer(signal)
+        return (app, signal, fixture)
     }
     #endif
 }

@@ -13,7 +13,7 @@ extension Workspace {
     func startVoiceCall(source: VoicePeer.Source = .microphone) {
         showCue()
         guard voice?.isLive != true else { return }
-        guard cue.canHear else { return say("Cue 还没启用，启用后才能通话", tone: .failure) }
+        if let block = voiceStartBlock { return say(block.message, tone: .failure) }
         // 常驻通话栏呈现连接、回应和失败；浮动提示会遮住声纹与挂断入口。
         services.voice.startLocal(source: source)
     }

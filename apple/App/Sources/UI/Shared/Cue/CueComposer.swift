@@ -174,7 +174,7 @@ struct CueComposer: View {
     }
     private var calls: Bool { phonePage && workspace.cue.canHear && !hasDraft && !sending }
     private var inCall: Bool { phonePage && !workspace.services.voice.canStart }
-    private var callReady: Bool { workspace.services.voice.startUnavailableReason == nil }
+    private var callReady: Bool { workspace.voiceStartBlock == nil }
 
     private var lead: ComposerLead? {
         #if os(iOS)

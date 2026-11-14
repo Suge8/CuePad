@@ -101,7 +101,7 @@ extension Workspace {
     /// 发起手机通话（输入框里的通话钮、提示条上的"重新接通"）。此刻就起不了的（没连上 Mac、正忙）当场说原因，不碰通话；
     /// `start` 抛出的 `VoiceIssue` 都已写进通话的阶段，由 `PhoneVoiceEndings` 带着恢复的动作说，这里不再说一遍。
     func callCue() {
-        if let reason = services.voice.startUnavailableReason {
+        if let reason = voiceStartBlock {
             say(reason.message, tone: .failure)
             return
         }

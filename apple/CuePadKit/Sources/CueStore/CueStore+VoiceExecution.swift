@@ -30,31 +30,28 @@ extension CueStore {
   }
 
   /// 从真实请求归属与最新消息派生可停止目标；缺少回合或本次启动证明时不授予权限。
-  public func voiceExecutionTarget(_ sessionID: String, requests: [UUID], turnStartedAt: Date? = nil) throws -> TurnTarget {
+  public func voiceExecutionTarget(_ sessionID: String, requests: [UUID], turnStartedAtMilliseconds turn: Int64) throws -> TurnTarget {
     guard let state = try voiceExecutions(requests: requests).first(where: { $0.state.sessionID == sessionID })?.state,
-      state.canStop, let boot = state.bootID, let turn = turnStartedAt ?? state.turnStartedAt,
+      state.canStop, let boot = state.bootID,
       let delivery = try select(ChatMessage.self, where: "sessionID = ? AND role IN ('user', 'answer')", [sessionID],
                                 orderBy: "seq DESC, id DESC", limit: 1).first?.deliveryID
     else { throw CueStoreError.cannotStop(sessionID) }
-    return TurnTarget(hostID: state.hostID, bootID: boot, sessionID: sessionID, deliveryID: delivery, turnStartedAtMilliseconds: turn.stored)
+    return TurnTarget(hostID: state.hostID, bootID: boot, sessionID: sessionID, deliveryID: delivery, turnStartedAtMilliseconds: turn)
   }
 
   /// 入队与来源/回合复核在同一事务；执行器、Agent 接收端还要重验，不能把队列时延当作停止后来工作的许可。
-  public func stopVoiceExecution(_ expected: TurnTarget, requests: [UUID], command: UUID? = nil) throws -> DeliveryRequest {
+  public func stopVoiceExecution(_ expected: TurnTarget, requests: [UUID], command: UUID) throws -> DeliveryRequest {
     try write {
-      if let command, let existing = try deliveryRequest(command) {
+      if let existing = try deliveryRequest(command) {
         guard existing.stopTurn == expected else { throw CueStoreError.cannotStop(expected.sessionID) }
         return existing
       }
       // 回合时间来自 Mac 活连接，不使用可能仍在节流中的同步记录授权；这里复核原请求、投送、所在 Mac 与启动身份。
       // 排队期间是否已换回合，由 MacExecutor 和 Agent 各自面对实时状态核对。
-      let origin = try voiceExecutionTarget(expected.sessionID, requests: requests, turnStartedAt: Date(timeIntervalSince1970: Double(expected.turnStartedAtMilliseconds) / 1000))
+      let origin = try voiceExecutionTarget(expected.sessionID, requests: requests, turnStartedAtMilliseconds: expected.turnStartedAtMilliseconds)
       guard origin == expected else { throw CueStoreError.cannotStop(expected.sessionID) }
       let session = try sessionTarget(expected.sessionID, name: "")
-      if let command {
-        return try insertDelivery(expected.content, to: session.target, on: expected.hostID, mode: .stopTurn, cue: false, id: command)
-      }
-      return try requestControl(.stopTurn, of: session.target, on: expected.hostID, cue: false, content: expected.content)
+      return try insertDelivery(expected.content, to: session.target, on: expected.hostID, mode: .stopTurn, cue: false, id: command)
     }
   }
 }

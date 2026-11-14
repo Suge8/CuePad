@@ -82,8 +82,8 @@ extension VoiceService {
             projectionReaders[device] = header
             changed = true
         }
-        guard changed, let value = projection, value.session == header.session, let reader = projectionReaders[device] else { return }
-        Task { if await !sendProjection(value, to: reader) { retryProjection(to: reader) } }
+        guard changed, projection?.session == header.session else { return }
+        pushProjection(to: device)
     }
 
     func waitsForRelink(_ session: VoiceSessionID) -> Bool { false }
@@ -170,10 +170,7 @@ extension VoiceService {
                 }
                 guard self.call === call else { return }
                 self.setProjection(value)
-                for reader in self.projectionReaders.values where reader.session == value.session {
-                    if await self.sendProjection(value, to: reader) { self.projectionRetries.removeValue(forKey: reader.sender.device)?.cancel() }
-                    else { self.retryProjection(to: reader) }
-                }
+                for (device, reader) in self.projectionReaders where reader.session == value.session { self.pushProjection(to: device) }
             }
         }
     }
@@ -194,17 +191,22 @@ extension VoiceService {
         }
     }
 
-    /// 一次没发出去不等于链路断（断没断只认中转的关闭、离开与拒收）：每秒补发最新的那份，直到发出、有更新的发出去了，或这个接收者没了；
+    /// 每个接收者一个发送任务，只发此刻最新的那份：投影先在本机赋值，Mac 自己的通话条不等手机那一路的中转。
+    /// 一次没发出去不等于链路断（断没断只认中转的关闭、离开与拒收）：每秒补发，直到发出最新的、或这个接收者没了；
     /// 不补的话，之后没有新变化时手机一直停在旧状态。
-    private func retryProjection(to reader: VoiceSignalHeader) {
-        let device = reader.sender.device
-        guard projectionRetries[device] == nil else { return }
-        projectionRetries[device] = Task { [weak self] in
-            while (try? await Task.sleep(for: .seconds(1))) != nil {
-                guard let self, self.projectionReaders[device] == reader, let value = self.projection, value.session == reader.session else { break }
-                if await self.sendProjection(value, to: reader) { break }
+    private func pushProjection(to device: VoiceDeviceID) {
+        guard projectionSenders[device] == nil else { return }
+        projectionSenders[device] = Task { [weak self] in
+            var sent: (VoiceCallProjection, VoiceSignalHeader)?
+            while let self, !Task.isCancelled {
+                guard let reader = self.projectionReaders[device], let value = self.projection, value.session == reader.session,
+                      sent.map({ $0.0 != value || $0.1 != reader }) ?? true else {
+                    self.projectionSenders[device] = nil
+                    return
+                }
+                if await self.sendProjection(value, to: reader) { sent = (value, reader) }
+                else if (try? await Task.sleep(for: .seconds(1))) == nil { return }
             }
-            if let self, !Task.isCancelled { self.projectionRetries[device] = nil }
         }
     }
 
