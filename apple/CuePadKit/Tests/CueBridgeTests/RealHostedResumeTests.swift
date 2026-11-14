@@ -32,10 +32,13 @@ struct RealHostedResumeTests {
     }
 
     /// 结束后另起一个进程接着这个会话（能另起接入的几家连接入一起重开，同 App 重开）：会话还是它、进程是新的钉住的那份，
-    /// 模型收到的对话里紧接着先前那句的是这句。
+    /// 模型收到的对话里紧接着先前那句的是这句，答得出只在先前那句里的词。
     @Test(.tags(.smoke), arguments: Hosting.allCases)
     func anEndedSessionIsResumedByANewProcessWithItsConversation(_ hosting: Hosting) async throws {
         try await EndRig.run(hosting, timing: noDeadline) { rig in
+            rig.model.on("Which word?") { request in
+                .say(request.said.lazy.compactMap { $0.firstMatch(of: /Remember the word (\w+)/)?.1 }.first.map(String.init) ?? "UNKNOWN")
+            }
             let id = try await rig.open()
             let first = try await rig.converse("Remember the word PAPAYA.", in: id)
             try await eventually("第一轮答完") { rig.bridge.session(id: id)?.state == .settled }
@@ -51,7 +54,8 @@ struct RealHostedResumeTests {
             case .dsh: #expect(commandLine(of: back.pid).contains("/\(PinnedAgent.dsh.name)/\(PinnedAgent.dsh.version)/"), "\(commandLine(of: back.pid))")
             case .claude, .codex: break
             }
-            _ = try await rig.converse("Which word?", in: resumed)
+            try await rig.bridge.send(SessionMessage(text: "Which word?"), to: resumed)
+            try await eventually("答出先前记下的词") { rig.lastReply(first) == "PAPAYA" }
             let request = try #require(rig.model.requests.last { !$0.tools.isEmpty && $0.prompt.contains("Which word?") })
             let said = request.said
             if hosting == .codex {
