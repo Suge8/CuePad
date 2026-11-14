@@ -2,7 +2,7 @@ import SwiftUI
 
 nonisolated enum BubbleSource: Equatable {
     case control(CGRect)
-    /// 从一行里点的那一下（任务行）：行成百上千，不给每行挂几何读数，只知道点不知道行，按半行高（`BubblePlacement.reach`）让开整行；
+    /// 从一行里点的那一下（任务行这类）：行成百上千，不给每行挂几何读数，只知道点不知道行，按半个列表行高（`BubblePlacement.reach`）让开整行；
     /// 尾巴靠左角对着那一下，气泡往右铺（顺着读的方向，不往回盖住侧栏）。
     case press(CGPoint)
     case unanchored
@@ -130,7 +130,7 @@ nonisolated struct BubblePlacement: Equatable {
     #else
     static let radius = Radius.field
     #endif
-    static let reach: CGFloat = TaskMetrics.rowHeight / 2
+    static let reach: CGFloat = RowMetrics.height / 2
     // 尾巴根离圆角起弧处再让一点，尾巴不骑在弧上
     static let tailInset: CGFloat = radius + BubbleTail.base / 2 + 4
     static let lead: CGFloat = tailInset + 20

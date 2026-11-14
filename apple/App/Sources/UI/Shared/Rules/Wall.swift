@@ -145,3 +145,19 @@ nonisolated struct OlderGroup: Equatable, Sendable {
         return .month(start: month)
     }
 }
+
+extension OlderGroup.Period {
+    /// "更早"那一段每组的标题。
+    func title(now: Date = .now, calendar: Calendar = .current) -> String {
+        switch self {
+        case .all:
+            return String(localized: "更早")
+        case .week(let start):
+            let end = calendar.date(byAdding: .day, value: 6, to: start) ?? start
+            return "\(start.formatted(DateLabel.monthDay)) – \(end.formatted(DateLabel.monthDay))"
+        case .sparseMonth(let start), .month(let start):
+            let sameYear = calendar.isDate(start, equalTo: now, toGranularity: .year)
+            return start.formatted(sameYear ? Date.FormatStyle.dateTime.month(.abbreviated) : Date.FormatStyle.dateTime.year().month(.abbreviated))
+        }
+    }
+}

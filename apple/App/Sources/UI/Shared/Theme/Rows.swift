@@ -24,7 +24,7 @@ import SwiftUI
 ///
 /// 被否决的：各处自己画圆角矩形再配负边距（圆角对不上容器，曾有直角、7、8、9、10、12 六种）；容器 `clipShape` 裁角——浮着的行裁不出与容器的缝，
 /// 只能管铺满的行；系统 `List` 的选中——Mac 上是灰胶囊、压不过墨色体系（见 `Sidebar`），手机上要整页换成 `List`。
-enum RowMetrics {
+nonisolated enum RowMetrics {
     #if os(iOS)
     /// 触控：手指点得准的最小高（HIG 44）；
     /// 接了触控板的 iPad 也是这一档——手指随时会点，iPadOS 自己的侧栏也不因指针改行高。
