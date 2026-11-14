@@ -155,29 +155,6 @@ struct RealCodexHostedTests {
         }
     }
 
-    // MARK: 结束后恢复
-
-    @Test(.tags(.smoke)) func anEndedSessionIsResumedWithItsConversation() async throws {
-        try await withCodexRig { rig in
-            let id = try await open(rig, "token-resume")
-            try await rig.bridge.send(SessionMessage(text: "Remember the word PAPAYA."), to: id)
-            let session = try #require(rig.bridge.session(id: id))
-            try await eventually("第一轮答完") { rig.bridge.session(id: id)?.state == .settled && rig.replies(session).count == 1 }
-
-            try await rig.bridge.end(id)
-            try await eventually("下线") { rig.bridge.session(id: id) == nil }
-
-            let file = try #require(session.sessionFile)
-            let resumed = try await rig.runtime.resume(
-                IndexedSession(id: session.sessionID, path: file.path, cwd: rig.codex.work.path, lastActivityAt: .now, agent: .codex))
-            #expect(rig.bridge.session(id: resumed)?.sessionID == session.sessionID)
-            try await rig.bridge.send(SessionMessage(text: "Which word?"), to: resumed)
-            try await eventually("接着回答了") { rig.replies(session).count == 2 }
-            let request = try #require(rig.model.requests.last)
-            #expect(request.said.suffix(2) == ["Remember the word PAPAYA.", "Which word?"], "恢复后模型看到先前的对话：\(request.said)")
-        }
-    }
-
     // MARK: 停止
 
     @Test func stoppingATurnLeavesTheSessionReadyForTheNextMessage() async throws {

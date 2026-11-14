@@ -45,17 +45,20 @@ final class EndRig {
     private static let idleLimit: Duration = .seconds(60)
     let model: FakeModel
     let bridge: Bridge
-    let runtime: any AgentRuntime
+    private(set) var runtime: any AgentRuntime
+    /// 另起一个接入（同 App 重开），Claude Code 没有（它的接入在 `ClaudeTestbed` 里）
+    private var makeRuntime: (() throws -> any AgentRuntime)?
     let work: URL
     let wrapper: URL
     private let root: URL
     private let modelKey: ModelKey?
     private let claude: ClaudeTestbed?
 
+    /// `settings` 是 Claude Code 用户自己的 settings.json，别家不用。
     static func run(
-        _ hosting: Hosting, timing: Timing, _ body: (EndRig) async throws -> Void
+        _ hosting: Hosting, timing: Timing, settings: String? = nil, _ body: (EndRig) async throws -> Void
     ) async throws {
-        let rig = try await EndRig(hosting, timing: timing)
+        let rig = try await EndRig(hosting, timing: timing, settings: settings)
         do { try await body(rig) } catch {
             await rig.stop()
             throw error
@@ -63,7 +66,7 @@ final class EndRig {
         await rig.stop()
     }
 
-    private init(_ hosting: Hosting, timing: Timing) async throws {
+    private init(_ hosting: Hosting, timing: Timing, settings: String?) async throws {
         self.hosting = hosting
         let idle = ManualTiming()
         self.idle = idle
@@ -79,7 +82,8 @@ final class EndRig {
             exec "$REAL" "$@"
             """
         if hosting == .claude {
-            let testbed = try await ClaudeTestbed(idleLimit: Self.idleLimit, wrapper: script, timing: timing, bridgeTiming: idle.timing)
+            let testbed = try await ClaudeTestbed(
+                settings: settings, idleLimit: Self.idleLimit, wrapper: script, timing: timing, bridgeTiming: idle.timing)
             try testbed.startConnected()
             (claude, root, model, bridge, runtime, work, wrapper, modelKey) =
                 (testbed, testbed.root, testbed.model, testbed.bridge, testbed.runtime, testbed.work, testbed.wrapperDirectory, nil)
@@ -100,7 +104,8 @@ final class EndRig {
         let pi = PiPaths(agentDirectory: root.appending(path: "pi"), socketDirectory: sockets)
         let executable = wrapper.appending(path: hosting.pinned.command)
         let locator = ExecutableLocator(searchDirectories: [wrapper, hosting.pinned.bin])
-        bridge = Bridge(socketDirectory: sockets, hostedIdle: Self.idleLimit, timing: idle.timing)
+        let bridge = Bridge(socketDirectory: sockets, hostedIdle: Self.idleLimit, timing: idle.timing)
+        self.bridge = bridge
         try bridge.start()
         switch hosting {
         case .codex:
@@ -110,10 +115,12 @@ final class EndRig {
                 "CODEX_HOME": home.path, "CUEPAD_PI_SOCKET_DIR": sockets.path, "CUEPAD_FAKE_MODEL_KEY": "fake",
                 "XDG_CONFIG_HOME": root.appending(path: "xdg/config").path, "XDG_STATE_HOME": root.appending(path: "xdg/state").path,
             ])
-            let codex = CodexRuntime(
-                bridge: bridge, paths: AgentPaths(pi: pi, environment: environment), codex: { executable }, locate: { locator }, timing: timing)
-            try codex.start()
-            runtime = codex
+            makeRuntime = { [bridge] in
+                let codex = CodexRuntime(
+                    bridge: bridge, paths: AgentPaths(pi: pi, environment: environment), codex: { executable }, locate: { locator }, timing: timing)
+                try codex.start()
+                return codex
+            }
             modelKey = nil
         case .grok:
             let home = root.appending(path: "grok", directoryHint: .isDirectory)
@@ -123,20 +130,40 @@ final class EndRig {
                 "XAI_API_KEY": "fake-xai-key", "GROK_AUTH_PATH": home.appending(path: "no-login.json").path, "GROK_DISABLE_AUTOUPDATER": "1",
                 "NO_PROXY": "127.0.0.1,localhost", "no_proxy": "127.0.0.1,localhost", "CUEPAD_PI_SOCKET_DIR": sockets.path,
             ]
-            let grok = GrokRuntime(
-                bridge: bridge, paths: AgentPaths(pi: pi, environment: environment), grok: { executable }, locate: { locator },
-                timing: timing)
-            try grok.start()
-            runtime = grok
+            makeRuntime = { [bridge] in
+                let grok = GrokRuntime(
+                    bridge: bridge, paths: AgentPaths(pi: pi, environment: environment), grok: { executable }, locate: { locator },
+                    timing: timing)
+                try grok.start()
+                return grok
+            }
             modelKey = nil
         default:
             let environment = hosting.pinned.environment(home: root.appending(path: "home"), [
                 "DSH_HOME": root.appending(path: "dsh").path, "DEEPSEEK_API_KEY": "fake-key", "DEEPSEEK_BASE_URL": model.baseURL,
                 "DEEPSEEK_SEARCH_BASE_URL": model.baseURL, "DSH_TELEMETRY_DISABLED": "1",
             ])
-            runtime = DshRuntime(bridge: bridge, paths: AgentPaths(pi: pi, environment: environment), dsh: { executable }, locate: { locator }, timing: timing)
+            makeRuntime = { [bridge] in
+                DshRuntime(bridge: bridge, paths: AgentPaths(pi: pi, environment: environment), dsh: { executable }, locate: { locator }, timing: timing)
+            }
             modelKey = ModelKey(provider: "deepseek-official", id: "deepseek-flash")
         }
+        runtime = try makeRuntime!()
+    }
+
+    /// 停掉这个接入、另起一个（同 App 重开）；返回 false 是这家不支持（Claude Code）。
+    func restartRuntime() async throws -> Bool {
+        guard let makeRuntime else { return false }
+        await runtime.stop()()
+        runtime = try makeRuntime()
+        return true
+    }
+
+    /// 会话的进程就是钉住的那份可执行文件（Grok 是原生程序，别家起的可能是解释器）
+    func runsPinned(_ pid: Int32) -> Bool {
+        var path = [CChar](repeating: 0, count: 4096)
+        guard proc_pidpath(pid, &path, UInt32(path.count)) > 0 else { return false }
+        return URL(filePath: String(cString: path)).resolvingSymlinksInPath().path == hosting.pinned.executable.resolvingSymlinksInPath().path
     }
 
     /// 假模型当提供方（Codex 只认配置目录里的），关掉联网的插件、应用、更新与遥测，信任工作目录。
@@ -218,6 +245,11 @@ final class EndRig {
         try await eventually("\(token) 的回答落进会话记录") {
             (try? self.record(session))?.messages.contains { $0.role == .known(.pi) && $0.text.contains(token) } == true
         }
+    }
+
+    /// 会话记录里最后一条回答（去掉首尾空白）
+    func lastReply(_ session: Session) -> String? {
+        (try? record(session))?.messages.last { $0.role == .known(.pi) }?.text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     func record(_ session: Session) throws -> HistoryUpdate {
