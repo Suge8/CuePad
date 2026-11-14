@@ -79,8 +79,7 @@ struct DiagnosticDeliveryTests {
         services.startDiagnostics()
 
         services.diagnostics.record([crash(day: 5)])
-        let retry = clock.now.addingTimeInterval(DiagnosticOutbox.firstRetry.seconds)
-        try await clock.waitForSleeper(until: retry)
+        try await clock.waitForSleeper()
         try await inbox.check()
         #expect(try FileManager.default.contentsOfDirectory(atPath: inbox.directory.path).filter { !$0.hasPrefix(".") }.isEmpty)
 
