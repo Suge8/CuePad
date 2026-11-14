@@ -35,8 +35,9 @@ final class CaptureIngest {
     }
 
     private func importPendingCaptures() async {
-        for reason in CaptureQueue.clearUnusable(in: directory) { report(.captureUnreadable(reason)) }
-        for entry in CaptureQueue.pending(in: directory) {
+        let (entries, unreadable) = CaptureQueue.pending(in: directory)
+        for reason in unreadable { report(.captureUnreadable(reason)) }
+        for entry in entries {
             do {
                 try await importCapture(entry)
                 try CaptureQueue.remove(entry)

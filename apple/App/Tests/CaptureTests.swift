@@ -36,7 +36,7 @@ struct CaptureTests {
         #expect(pdfKey.hasSuffix(".pdf"))
         let expected = "读一下这个\n\nhttps://a.example/x\nhttps://b.example\n\n![](cuepad://file/\(try hash(of: png)))\n[报价 (终版).pdf](cuepad://file/\(pdfKey))"
         #expect(cards.first?.body == expected)
-        #expect(CaptureQueue.pending(in: queue).isEmpty, "入库后条目应删除")
+        #expect(CaptureQueue.pending(in: queue).entries.isEmpty, "入库后条目应删除")
     }
 
     @Test func 所选项目已删除时进默认项目() async throws {
@@ -55,7 +55,7 @@ struct CaptureTests {
         try FileManager.default.createDirectory(at: unfinished, withIntermediateDirectories: true)
         try png.write(to: unfinished.appending(path: "image-1.png"))
         try CaptureQueue.enqueue(ShareContent(text: "坏图", files: [try shared(png, named: "坏图.png")]), project: Project.defaultID, into: queue)
-        let unreadable = try #require(CaptureQueue.pending(in: queue).first?.files().first?.url)
+        let unreadable = try #require(CaptureQueue.pending(in: queue).entries.first?.files().first?.url)
         try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: unreadable.path)
         defer { try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: unreadable.path) }
         try CaptureQueue.enqueue(ShareContent(text: "好的"), project: Project.defaultID, into: queue)
@@ -63,7 +63,7 @@ struct CaptureTests {
         await services.captures.drainCaptures()
 
         #expect(try await services.store.cards(in: Project.defaultID).map(\.body) == ["好的"])
-        #expect(CaptureQueue.pending(in: queue).map(\.capture.text) == ["坏图"])
+        #expect(CaptureQueue.pending(in: queue).entries.map(\.capture.text) == ["坏图"])
         #expect(FileManager.default.fileExists(atPath: unfinished.path))
         #expect(services.startupIssues.count == 1)
     }
@@ -87,11 +87,11 @@ struct CaptureTests {
         #expect(try await bodies("并发的一条") == 1)
 
         try CaptureQueue.enqueue(ShareContent(text: "删不掉的一条"), project: Project.defaultID, into: queue)
-        let manifest = try #require(CaptureQueue.pending(in: queue).first).directory.appending(path: "capture.json")
+        let manifest = try #require(CaptureQueue.pending(in: queue).entries.first).directory.appending(path: "capture.json")
         try FileManager.default.setAttributes([.immutable: true], ofItemAtPath: manifest.path)
         defer { try? FileManager.default.setAttributes([.immutable: false], ofItemAtPath: manifest.path) }
         await services.captures.drainCaptures()
-        #expect(CaptureQueue.pending(in: queue).count == 1, "前提：条目没删掉")
+        #expect(CaptureQueue.pending(in: queue).entries.count == 1, "前提：条目没删掉")
         await services.captures.drainCaptures()
         #expect(try await bodies("删不掉的一条") == 1)
     }
