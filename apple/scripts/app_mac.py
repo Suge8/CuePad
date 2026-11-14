@@ -1,4 +1,5 @@
 """Mac 实例：每个检出一份（app.py 的规则 2），截图、录屏、run、exec、stop 与前台看守。"""
+import ctypes
 import fcntl
 import json
 import os
@@ -187,8 +188,14 @@ def exec_mac(app, library, args):
     slot = take_slot("bench", app=os.getpid())
     # 不算 python 启动与等本检出旧实例退出（进程的启动时刻是 fork 那一刻，exec 不重置）。
     # time.monotonic_ns 在 macOS 上就是 mach_absolute_time 换成纳秒，与内核记账同一个钟
+    # 线程与进程的指令、线程的 CPU 跨 exec 不清零：这里记下 python 到此刻跑掉的（主要是锁的登记），perf.py launch 从 CuePad 报的数里扣掉，
+    # 测量脚本自己的改动不算成 App 启动的回退
+    libc, counts, usage = ctypes.CDLL(None), (ctypes.c_uint64 * 2)(), (ctypes.c_uint64 * 64)()
+    libc.thread_selfcounts(1, counts, ctypes.sizeof(counts))
+    libc.proc_pid_rusage(os.getpid(), 6, usage)  # rusage_info_v6：uuid 之后第 29 个 uint64 是指令（rusage.py 的 FIELDS）
     with open(EXEC_AT, "w") as f:
-        json.dump({"pid": os.getpid(), "execAt": time.monotonic_ns()}, f)
+        json.dump({"pid": os.getpid(), "execAt": time.monotonic_ns(),
+                   "before": {"MainM": counts[0] / 1e6, "AllM": usage[2 + 29] / 1e6, "CPUMs": time.thread_time_ns() / 1e6}}, f)
     os.set_inheritable(slot.fileno(), True)
     os.makedirs(SOCKETS, mode=0o700, exist_ok=True)
     exe = f"{app}/Contents/MacOS/CuePad"

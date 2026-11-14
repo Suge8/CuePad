@@ -45,7 +45,11 @@ struct CueVoiceView: View {
             }
     }
 
-    private var showsStatus: Bool { active || hasDetails || presentation?.activity == .failed }
+    /// 没起过通话（`idle`）时不在：起不了的原因在入口的提示里（`CueVoiceEntry`），不另占一条。
+    private var showsStatus: Bool {
+        guard let presentation, presentation.activity != .idle else { return false }
+        return active || hasDetails || presentation.activity == .failed
+    }
 
     @ViewBuilder private var content: some View {
         if showsStatus { bar.transition(.opacity) }
