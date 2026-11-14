@@ -34,7 +34,7 @@ extension View {
 }
 
 /// App、小组件、灵动岛与锁屏同一份：数字账（`CueLedger`）与头像的那一层（`cueDisc`、`cueMarks`，扩展里的头像 `CueNowFace`；App 里会动的头像 `CueAvatar` 套同一层）。
-/// 排得下哪排画哪排（`CueNow.ledger` 由细到粗），最粗那排还放不下先收紧间距，再不够去掉推进中那组；要你管的那组（拍板、待回复）永远写全、不截。
+/// 排得下哪排画哪排（`CueNow.ledger` 由细到粗），最粗那排还放不下先收紧间距，再不够去掉推进中那组；要你管的那组（拍板、新回复）永远写全、不截。
 /// `LedgerFit` 在一次布局里选排并直接画字，首帧不等回填。
 /// 否决过：一件一颗珠子接一句——实心空心要背，一句只挑一种说，几件在推进反而看不出；`ViewThatFits` 每排一份候选——挑剩的几排也要建出来，真实库冷启动首屏主线程多约 90M 指令。
 struct CueLedger: View {
@@ -95,7 +95,7 @@ extension CueNow.Entry {
 
 /// 头像那一层（App 的 `CueAvatar` 与扩展的 `CueNowFace` 同一个样子），点与变淡只读这一拍（`CueBeat.dot`、`faded`）：
 /// 淡底的圆（`cueDisc`）托着吉祥物，没有环；右下一颗点——在动靛青、起不来胭脂——圆心正落在头像那块圆的边上（右下 45° 处），
-/// 不越出头像的框；不在时整只变淡；给了 `badge` 时右上角是要你管的几件（拍板加待回复，赭黄，同 App 图标的角标）。
+/// 不越出头像的框；不在时整只变淡；给了 `badge` 时右上角是要你管的几件（拍板加新回复，赭黄，同 App 图标的角标）。
 /// `rim` 是点与角标外那一圈的颜色，与头像后面的底同色，把它们从脸上剪开（灵动岛里是黑）。
 /// App 里点与变淡挂在会形变的脸上（`cueMarks`，在软糖压得最扁时与姿势同一刻换），淡底的圆不跟着形变。
 /// 否决过：头像外一圈状态环、在想时一颗彗星绕着转——看着就是一条加载进度，平时那圈淡墨也把脸压小了一圈。
@@ -183,7 +183,7 @@ extension CueNow.Tone {
         switch self {
         case .moving: palette.signature
         case .asks: palette.waiting
-        case .reply: palette.ink
+        case .reply: palette.replied
         case .done: palette.replied
         case .quiet: palette.ink3
         }

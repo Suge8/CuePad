@@ -24,7 +24,7 @@ ICON_MONO = ROOT / "apple/App/Sources/AppIcon.icon/Assets/cue-mono.svg"
 STATE_SWIFT = ROOT / "apple/App/Sources/UI/Shared/Theme/InkStateGeometry.swift"
 LANDING_MARK = ROOT / "landing/static/assets/mark.svg"
 ICON_GRID_PX = 36  # 剪影在 1024 画布上一格多少像素：全身约 810 × 780，四周留足图标蒙版的边
-WIDGET_SYMBOLS = ("waiting", "done", "agent")  # 小组件与实时活动用到的（`WidgetIcon`）
+WIDGET_SYMBOLS = ("waiting", "mail", "done", "agent")  # 小组件与实时活动用到的（`WidgetIcon`）
 PREFIX = "cue"
 
 

@@ -12,7 +12,7 @@ nonisolated struct CueArgs: Decodable, DebugArgGroup {
     let draft: String?
     /// `-CuePadCueFocus YES`（配 cue 画面）：Cue 页的输入框一出现就聚焦
     let focus: Bool
-    /// `-CuePadCueNow <hearing|failed|woke|delegating|asks|done|doneExpiring|afterDone|crowded|quiet|away|four|fourAsks|fourWorking|awayBusy|busy>`：Cue 此刻钉成这份样例，页头、侧栏、小组件与实时活动都按它画
+    /// `-CuePadCueNow <hearing|failed|woke|delegating|asks|done|doneExpiring|afterDone|crowded|quiet|away|four|fourAsks|fourWorking|awayBusy|busy|reply>`：Cue 此刻钉成这份样例，页头、侧栏、小组件与实时活动都按它画
     let now: String?
     /// `-CuePadCueOverdue YES`（配演示库）：演示的定时里周会那条摆成到点还没做完（过点未做）
     let overdue: Bool

@@ -88,6 +88,12 @@ extension Motion {
         static let pop = Animation.spring(duration: 0.42, bounce: 0.3)
     }
 
+    /// Cue 在想时那片光（`CueGlow`）的来去：光不是控件，`fade` 那么快读作开灯关灯；慢慢亮起、退得比亮起快一点——停了就该看回内容。
+    nonisolated enum Glow {
+        static let rise = Animation.easeInOut(duration: 0.9)
+        static let fall = Animation.easeOut(duration: 0.6)
+    }
+
     /// `fade`、`yield` 的时长，渲染端的淡出（Mac 预览落地时飞的那张淡掉）与编排里的等候（等旧的淡完再来新的）用它。
     nonisolated enum Fade {
         static let duration: TimeInterval = 0.16
