@@ -70,7 +70,6 @@ final class VoiceCall {
     @ObservationIgnored private var delegations: Set<String> = []
     @ObservationIgnored private var inputPeak = 0.0
     @ObservationIgnored private var started = false
-    static let connectionLimit: Duration = .seconds(30)
 
     enum Input {
         case prepared(VoiceWire.Call, CodexAccess)
@@ -136,7 +135,7 @@ final class VoiceCall {
         self.peer = peer
         peer.onEvent = { [inputs] in inputs.continuation.yield(.peer($0)) }
         deadline = Task { [inputs] in
-            do { try await Task.sleep(for: Self.connectionLimit); inputs.continuation.yield(.deadline) }
+            do { try await Task.sleep(for: VoiceTiming.connection); inputs.continuation.yield(.deadline) }
             catch { }
         }
         connecting = Task { [inputs, dependencies, session, store = record.store] in

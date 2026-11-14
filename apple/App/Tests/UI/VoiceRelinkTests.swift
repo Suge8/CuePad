@@ -17,7 +17,7 @@ import Testing
         signal.peer = VoiceEndpoint(device: old.device, lease: UUID())
         await voice.receive(signal.event(.projection(value: .init(session: session, phase: .speaking, requests: [], replies: [], executions: [])), session: session))
         #expect(voice.phase == .speaking)
-        #expect(voice.phone?.link == .bound(local: signal.local, peer: signal.peer))
+        #expect(voice.phone?.leg.link == .bound(local: signal.local, peer: signal.peer))
         await voice.receive(signal.event(.media(signal: .resume(ask: true)), session: session))
         try await eventually("answer to the new lease") {
             signal.sent.last == .media(signal: .resume(ask: false)) && signal.recipients.last == signal.peer
@@ -48,7 +48,7 @@ import Testing
         await voice.receive(.peerClosed(endpoint: signal.peer, reason: .disconnected))
         try await eventually("grace expired") { voice.phase == .ended(reason: .peerLeft) }
         let waited = ContinuousClock.now - began
-        #expect(waited >= VoiceSignalFormat.relinkGrace && waited < VoiceSignalFormat.relinkGrace + .seconds(2), "ended after \(waited)")
+        #expect(waited >= VoiceTiming.relinkGrace && waited < VoiceTiming.relinkGrace + .seconds(2), "ended after \(waited)")
         #expect(media.closed)
         signal.resolveGate?.open()
     }
@@ -89,17 +89,17 @@ import Testing
         let header = VoiceSignalHeader(version: VoiceSignalFormat.version, sender: gone, recipient: signal.local, session: session, sequence: 1,
                                        expiresAtMilliseconds: .max, purpose: .media)
         let remote = VoiceRemoteMedia(header: header, offer: .init(sdp: "offer"), signaling: signal)
-        remote.connected = true
+        remote.leg.connected = true
         voice.remote = remote
         voice.projectionReaders[phone] = header
         signal.peer = back
         await voice.receive(.peerClosed(endpoint: gone, reason: .disconnected))
-        #expect(!remote.link.isBound)
+        #expect(remote.leg.link?.isBound == false)
         let id = VoiceCommand.ID(UUID())
         await voice.receive(.received(.init(header: .init(version: VoiceSignalFormat.version, sender: back, recipient: signal.local, session: session, sequence: 1,
                                                           expiresAtMilliseconds: .max, purpose: .command(id: id)),
                                             payload: .command(command: .init(id: id, action: .repeatReply(message: first.id))))))
-        #expect(remote.link == .bound(local: signal.local, peer: back))
+        #expect(remote.leg.link == .bound(local: signal.local, peer: back))
         let later = try await store.addCueMessage(.cue, text: "later result", answeredRequests: nil)
         try await eventually("the later projection reaches the new lease") {
             zip(signal.sent, signal.recipients).contains {
@@ -126,14 +126,14 @@ import Testing
         let header = VoiceSignalHeader(version: VoiceSignalFormat.version, sender: gone, recipient: signal.local, session: session, sequence: 1,
                                        expiresAtMilliseconds: .max, purpose: .media)
         let remote = VoiceRemoteMedia(header: header, offer: .init(sdp: "offer"), signaling: signal)
-        remote.connected = true
+        remote.leg.connected = true
         voice.remote = remote
         let id = VoiceCommand.ID(UUID())
         let command = VoiceCommand(id: id, action: .repeatReply(message: reply.id))
         await voice.receive(.received(.init(header: .init(version: VoiceSignalFormat.version, sender: gone, recipient: signal.local, session: session, sequence: 2,
                                                           expiresAtMilliseconds: .max, purpose: .command(id: id)),
                                             payload: .command(command: command))))
-        remote.link = .relinking(peer: phone, until: .now + VoiceSignalFormat.relinkGrace, reason: .peerLeft)
+        remote.leg.link = .relinking(peer: phone, until: .now + VoiceTiming.relinkGrace, reason: .peerLeft)
         try await eventually("executed") { remote.results[id] != nil }
         #expect(!zip(signal.sent, signal.recipients).contains { if case .commandResult = $0 { $1 == gone } else { false } })
         await voice.receive(.received(.init(header: .init(version: VoiceSignalFormat.version, sender: back, recipient: signal.local, session: session, sequence: 1,

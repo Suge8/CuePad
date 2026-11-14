@@ -46,7 +46,7 @@ extension DebugScene {
             Task { for await loud in Observations({ voice.outputActive }) { note(loud ? "output-loud" : "output-quiet") } },
             Task { for await samples in Observations({ voice.inputSamples }) { inputPeak = max(inputPeak, samples.max() ?? 0) } },
             Task { for await _ in audioChanged { audioChanges += 1; if audioChanges > 2 { note("audio-changes \(audioChanges)"); abandon("手机通话", Unmet("音频引擎重开超过 2 次")) } } },
-            Task { for await link in Observations({ voice.phone?.link }) { note("link \(link.map { "\($0)" } ?? "none")") } },
+            Task { for await link in Observations({ voice.phone?.leg.link }) { note("link \(link.map { "\($0)" } ?? "none")") } },
             Task { for await value in Observations({ voice.projection.map { "\($0.requests.count) \($0.phase)" } }) { note("projection \(value ?? "none")") } },
             Task { for await _ in background { note("app-background") } },
             Task { for await _ in foreground { note("app-foreground") } },

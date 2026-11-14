@@ -19,7 +19,7 @@ enum DebugPhoneVoiceReplay {
         }
         let local = VoiceEndpoint(device: VoiceDeviceID("voice-ui-replay"), lease: UUID())
         let owner = VoicePhoneSession(id: session, local: local, media: Media())
-        owner.connected = true
+        owner.leg.connected = true
         voice.phone = owner
         voice.session = session
         guard mode != "interactive" else { return }
@@ -38,10 +38,10 @@ enum DebugPhoneVoiceReplay {
                                       omitted: initial.omitted, canRepeat: false))
         }
         try await Task.sleep(for: .seconds(2))
-        owner.connected = false
+        owner.leg.connected = false
         show(.connecting)
         try await Task.sleep(for: .milliseconds(700))
-        owner.connected = true
+        owner.leg.connected = true
         show(.listening)
         try await samples(voice, count: 30)
         show(.listening, response: .awaitingAssistant)
@@ -76,7 +76,7 @@ enum DebugPhoneVoiceReplay {
 
     /// 接通：媒体连上、投影到"在听"。
     static func answer(_ voice: VoiceService) {
-        voice.phone?.connected = true
+        voice.phone?.leg.connected = true
         show(voice, .listening)
     }
 
