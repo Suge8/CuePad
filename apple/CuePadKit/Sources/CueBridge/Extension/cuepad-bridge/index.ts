@@ -11,7 +11,7 @@ import { IS_HOSTED } from "./lifecycle.ts";
 import { watchSession } from "./phone.ts";
 import { Session, type Firecode } from "./session.ts";
 
-const EXTENSION_VERSION = 66;
+const EXTENSION_VERSION = 67;
 
 /** FireCode 的"在飞子代理数"（`{ inFlight }`）：在跑、在审，或已落定但结果事件还没交给指挥官的都算，与它判断"会话进行中"用同一个事实 */
 const FIRECODE_WORKERS_CHANNEL = "firecode:workers";
@@ -35,7 +35,8 @@ export default function (pi: ExtensionAPI) {
 		return;
 	}
 	if (!IS_HOSTED) return;
-	const socketDirectory = process.env.CUEPAD_PI_SOCKET_DIR ?? `/tmp/cuepad-${process.getuid!()}`;
+	/** 托管它的 CuePad 总会给（`PiPaths.launchEnvironment`）；没给时 `listen` 报错，桥停用并在 Pi 里提示 */
+	const socketDirectory = process.env.CUEPAD_PI_SOCKET_DIR!;
 	let launchToken: string | null = process.env[LAUNCH_TOKEN_ENV] || null;
 	delete process.env[LAUNCH_TOKEN_ENV];
 	/** FireCode 在本扩展实例的事件总线上发布的最新事实：它的发布与本扩展的 session_start 先后不定，所以记在实例上，由服务中的会话读取 */
