@@ -4,6 +4,7 @@ import json
 import os
 import re
 import select
+import shutil
 import signal
 import subprocess
 import sys
@@ -11,11 +12,13 @@ import threading
 import time
 
 from _lock import holding, me, take
-from app_env import APPLE, BUILD, EXEC_AT, FRONT, FRONT_RETRY, HOLD, READY, REC_SECONDS, RUN_TTL, SLOT, SLOT_NAME, SOCKETS, WINDOW, die, disclaimed, isolated_env
+from app_env import APPLE, BUILD, BUNDLE_ID, EXEC_AT, FRONT, FRONT_RETRY, HOLD, READY, REC_SECONDS, RUN_TTL, SLOT, SLOT_NAME, SOCKETS, WINDOW, die, disclaimed, isolated_env
 from app_proc import quit_mac, silence, wait_ready
 from app_shots import batch
 
 SLOT_WAIT = 15  # 通知占着的看守退出后，等它放锁的上限秒数
+# CUEPAD_NOTIFY=1 的 run 起这份副本：别的名字，绝不覆盖用户装的 CuePad.app
+NOTIFY_APP = os.path.expanduser("~/Applications/CuePad Notify.app")
 
 
 def who(h):
@@ -65,9 +68,12 @@ class Mac:
             die(f"只起 apple/.derived* 里的构建，不起 {app}")
         self.app, self.library, self.what, self.proc = app, os.path.abspath(library), what, None
         self.ready, self.log = READY, re.sub(r"/Build/Products/.*", "/app-mac.log", app)
+        self.notify = what == "run" and os.environ.get("CUEPAD_NOTIFY") == "1"
 
     def __enter__(self):
         self.slot = take_slot(self.what)
+        if self.notify:
+            self.app = notify_copy(self.app)
         # 显示器睡着时窗口不上屏、截不到画面：-u 叫醒它，-d 到看守退出前不让它再睡（只 -u 的断言几秒就过期）
         subprocess.Popen(["caffeinate", "-d", "-u", "-w", str(os.getpid())], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return self
@@ -95,8 +101,20 @@ class Mac:
 
     def __exit__(self, *_):
         self.quit()
+        if self.notify:
+            shutil.rmtree(NOTIFY_APP, ignore_errors=True)
         me().drop(SLOT_NAME)
         self.slot.close()
+
+
+def notify_copy(app):
+    """产物目录里的构建拿不到通知权限（日志 `Failed to find or validate client`）：复制到 ~/Applications、换掉 bundle id
+    （不和正式版共用通知设置，点通知也不激活正式版）再 ad-hoc 重签名，起这份；看守收掉实例时删副本，系统设置的通知列表里会留下这个 bundle id。"""
+    shutil.rmtree(NOTIFY_APP, ignore_errors=True)
+    subprocess.run(["ditto", app, NOTIFY_APP], check=True)
+    subprocess.run(["plutil", "-replace", "CFBundleIdentifier", "-string", f"{BUNDLE_ID}.notify-check", f"{NOTIFY_APP}/Contents/Info.plist"], check=True)
+    subprocess.run(["codesign", "--force", "--sign", "-", "--preserve-metadata=entitlements", NOTIFY_APP], check=True, capture_output=True)
+    return NOTIFY_APP
 
 
 def wincap():

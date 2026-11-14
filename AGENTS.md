@@ -46,7 +46,7 @@ Swift 原生应用（macOS / iOS / iPadOS）。术语见 [WORDS.md](WORDS.md)。
 
 改哪里，先读最近那一层的 `AGENTS.md`：
 
-- 看真实数据、通知验收、查日志 → [apple/scripts/AGENTS.md](apple/scripts/AGENTS.md)
+- 看真实数据、查日志 → [apple/scripts/AGENTS.md](apple/scripts/AGENTS.md)
 - 签名、换成自己的身份 → [apple/App/Config/AGENTS.md](apple/App/Config/AGENTS.md)
 - CloudKit 结构导入与生产部署 → [apple/CloudKit/AGENTS.md](apple/CloudKit/AGENTS.md)
 - 给界面加字、补英文 → [apple/App/AGENTS.md](apple/App/AGENTS.md)
