@@ -36,8 +36,8 @@ extension CueStore {
       let done = try db.query(
         """
         SELECT t.id FROM cards t
-        WHERE t.todoAt IS NOT NULL AND t.completedAt IS NOT NULL AND t.deletedAt IS NULL AND t.archivedAt IS NULL AND t.isPinned = 0
-          AND (t.parentID IS NULL OR t.parentID NOT IN (SELECT id FROM cards WHERE todoAt IS NOT NULL AND deletedAt IS NULL AND archivedAt IS NULL))
+        WHERE \(Self.taskOnBoard("t")) AND t.completedAt IS NOT NULL AND t.isPinned = 0
+          AND (t.parentID IS NULL OR t.parentID NOT IN (SELECT id FROM cards WHERE \(Self.taskOnBoard())))
           \(project == nil ? "" : "AND t.projectID = ?")
         """, project.map { [$0] } ?? []
       ) { $0.uuid(0) }

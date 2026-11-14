@@ -94,7 +94,7 @@ extension CueStore {
     guard let card = try find(Card.self, task), card.isTask else { return [] }
     let sessions = try db.query(
       """
-      SELECT piSessionID FROM cards WHERE piSessionID IS NOT NULL AND (id = ?1 OR id IN (\(Self.subtree(from: "SELECT ?2"))))
+      \(Self.sessionsUsed(where: "id = ?1 OR id IN (\(Self.subtree(from: "SELECT ?2")))"))
       UNION SELECT sessionID FROM piSessionStates WHERE createdForTaskID IN (\(Self.subtree(from: "SELECT ?2", includingDeleted: true)))
       """, [task, try top(of: task)]
     ) { $0.text(0) }
@@ -115,7 +115,7 @@ extension CueStore {
 
   public func topTask(of task: UUID) throws -> UUID {
     try requireTask(task)
-    return try ancestors(of: task).last ?? task
+    return try top(of: task)
   }
 
   func requireLeaf(_ leaf: UUID) throws -> Card {

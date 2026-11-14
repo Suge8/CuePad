@@ -30,12 +30,9 @@ extension CueStore {
   static func isLoose(_ alias: String) -> String {
     """
     \(WorkState.outsideSQL([.ended], column: "\(alias).state"))
-      AND NOT EXISTS (SELECT 1 FROM cards c WHERE c.piSessionID = \(alias).sessionID AND \(taskOpen))
+      AND NOT EXISTS (SELECT 1 FROM cards c WHERE \(usedSession("c", "\(alias).sessionID")) AND \(taskOpen))
       AND NOT EXISTS (
         SELECT 1 FROM cards c WHERE c.piSessionID = \(alias).sessionID AND \(taskDoneOnBoard) AND c.completedAt >= \(alias).stateSince)
-      AND NOT EXISTS (
-        SELECT 1 FROM cards c, json_each(c.formerSessionIDs) f
-        WHERE c.formerSessionIDs IS NOT NULL AND \(taskOpen) AND f.value = \(alias).sessionID)
     """
   }
 
@@ -128,11 +125,7 @@ extension CueStore {
   public func deliverables(of task: UUID) throws -> [PreviewItem] {
     try db.query(
       """
-      WITH used(session) AS (
-        SELECT piSessionID FROM cards
-        WHERE (id = ?1 OR parentID = ?1) AND todoAt IS NOT NULL AND deletedAt IS NULL AND piSessionID IS NOT NULL
-        UNION SELECT f.value FROM cards c, json_each(c.formerSessionIDs) f
-        WHERE (c.id = ?1 OR c.parentID = ?1) AND c.todoAt IS NOT NULL AND c.deletedAt IS NULL AND c.formerSessionIDs IS NOT NULL)
+      WITH used(session) AS (\(Self.sessionsUsed(where: "todoAt IS NOT NULL AND id IN (\(Self.subtree(from: "SELECT ?1")))")))
       SELECT DISTINCT \(PreviewItem.columns.map { "p.\($0)" }.joined(separator: ", "))
       FROM previews p JOIN used u ON u.session = p.sessionID JOIN cards t ON t.id = ?1
       WHERE p.createdAt >= COALESCE(t.startedAt, t.todoAt)
