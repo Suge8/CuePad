@@ -99,7 +99,7 @@ extension StateRecorder {
     subagents: [SubagentState]? = nil, modelState: ModelState? = nil, context: ContextUsage? = nil, commands: [SlashCommand]? = nil,
     agent: AgentKind? = nil, process: SessionProcess? = nil
   ) async throws -> AlertKind? {
-    var snapshot = sessions[sessionID]?.pace.content ?? SessionSnapshot(sessionID: sessionID, state: state, times: SessionTimes(stateSince: timing.now(), busySince: nil))
+    var snapshot = latest(sessionID) ?? SessionSnapshot(sessionID: sessionID, state: state, times: SessionTimes(stateSince: timing.now(), busySince: nil))
     snapshot.state = state
     snapshot.detail = detail
     snapshot.failure = failure
