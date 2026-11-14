@@ -213,6 +213,35 @@ struct VoiceFlowTests {
         try await fixture.hangUp()
     }
 
+    /// 同一命令身份的重发在媒体关闭中照回原结果、不再写一条；关闭中不接再说；原请求被接走后恢复被拒。
+    @Test func 同一命令重发回原结果_关闭中不接再说_接走后不能恢复() async throws {
+        let app = TestApp(), store = app.services.store, host = TestApp.hostID
+        defer { app.services.cancelBackgroundWork() }
+        try await store.updateCueProfile { $0.enabledAt = .now; $0.hostID = host }
+        let fixture = VoiceFlowFixture(app.services)
+        try await fixture.connect()
+        let original = try await store.addCueMessage(.you, text: "original audit request")
+        let result = try await store.addCueMessage(.cue, text: "saved result", answeredRequests: nil)
+        try await eventually("saved result visible") { fixture.voiceRecord.replies.contains { $0.id == result.id } }
+        let command = UUID()
+        let recovered = try await app.services.voice.command(.recover(request: .recorded(message: original.id)), id: command)
+        #expect(recovered == .recorded(message: original.id))
+        let gate = AsyncStream<Void>.makeStream()
+        fixture.media.closeGate = gate.stream
+        fixture.call.hangUp()
+        try await eventually("closing") { fixture.call.phase == .closing }
+        let outcome = try await app.services.voice.command(.repeatReply(message: result.id))
+        if case .readbackQueued = outcome { Issue.record("Closing media must not accept readback") }
+        let duringClose = try await app.services.voice.command(.recover(request: .recorded(message: original.id)), id: command)
+        #expect(duringClose == recovered)
+        gate.continuation.finish()
+        try await eventually("closed") { !fixture.call.isLive }
+        try await store.markCueMessagesDelivered([original.id])
+        #expect(try await app.services.voice.command(.recover(request: .recorded(message: original.id))) == .rejected(reason: .alreadyHandled))
+        #expect(try await store.cueMessages().filter { $0.author == .known(.you) }.map(\.id) == [original.id])
+        #expect(fixture.controls[0].sends.isEmpty)
+    }
+
     func finish(_ store: CueStore, _ text: String, requests: [UUID]) async throws {
         _ = try await store.finishCueRound(nil, startedAt: .now, answersYou: true, tools: nil, reply: text, as: .cue,
                                            context: nil, answeredRequests: requests)
