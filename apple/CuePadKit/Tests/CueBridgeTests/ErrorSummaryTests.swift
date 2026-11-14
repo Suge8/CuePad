@@ -1,5 +1,5 @@
 #if os(macOS)
-import CueStore
+import CueBridge
 import Testing
 
 /// 样本取自各提供方 SDK 经 Pi 格式化后的真实报错。
@@ -49,10 +49,8 @@ struct ErrorSummaryTests {
     func summarizesRealProviderErrors(raw: String, kind: ErrorSummary.Kind, status: Int?, title: String, message: String?) {
         let summary = ErrorSummary(raw)
         #expect(summary.kind == kind)
-        #expect(summary.status == status)
-        #expect(summary.title == title)
-        #expect(summary.providerMessage == message)
-        #expect(summary.raw == raw)  // 原文保留，供悬停显示
+        // 手机与菜单栏上看到的那一行：摘要（带状态码）加提供方的原句；用量限制有原句时只写原句
+        #expect(summary.line == (kind == .quota ? message ?? title : [title, message].compactMap { $0 }.joined(separator: "：")))
     }
 }
 #endif

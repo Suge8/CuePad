@@ -52,7 +52,7 @@ extension DebugScene {
                 question: Question(promptID: "demo-confirm", kind: .confirm, text: String(localized: "部署到生产吗？\n会替换当前线上的 1.4.2", table: "Demo")))),
             ("review", .delegating, nil, nil, DemoRecap(lastPrompt: String(localized: "让子代理分头审查这两个分支", table: "Demo"))),
             ("migrate", .compacting, nil, "Flow", DemoRecap(lastPrompt: String(localized: "把迁移脚本拆成三步", table: "Demo"), lastReply: String(localized: "拆好了，三步各自能回滚。", table: "Demo"))),
-            ("billing", .error, #"429 {"error":{"type":"billing_error","message":"Monthly usage limit reached. Your limit resets Thursday 9:00."}}"#, String(localized: "闲鱼", table: "Demo"), DemoRecap(lastPrompt: String(localized: "把整个 billing 目录读一遍，总结计费规则", table: "Demo"))),
+            ("billing", .error, "Monthly usage limit reached. Your limit resets Thursday 9:00.", String(localized: "闲鱼", table: "Demo"), DemoRecap(lastPrompt: String(localized: "把整个 billing 目录读一遍，总结计费规则", table: "Demo"))),
             ("gateway", .tool, "bash · pnpm test -- auth", String(localized: "圆桌", table: "Demo"), DemoRecap(lastPrompt: String(localized: "把登录回调改走统一网关，改完跑一遍集成测试", table: "Demo"))),
             ("keychain", .thinking, nil, "CuePad", DemoRecap(lastPrompt: String(localized: "查一下钥匙串读不到令牌的原因", table: "Demo"))),
             ("notes", .settled, nil, "Career", DemoRecap(
@@ -90,9 +90,9 @@ extension DebugScene {
             let messages = (said[id] ?? []).enumerated().map { index, minutes in
                 ChatMessage(sessionID: id, entryID: "said-\(index)", seq: Int64(index), role: .user, text: recap.pendingPrompt ?? recap.lastPrompt ?? "", at: .now.addingTimeInterval(-minutes * 60))
             }
-            let failure = state == .error ? ErrorSummary(detail ?? "") : nil
+            // 出错的那条是 Mac 的桥归好类的样子（`ErrorSummary` 在 CueBridge，手机的演示编不了它）：用量限制只写提供方的原句
             _ = try await recorder.update(
-                sessionID: id, state: state, detail: failure?.line ?? detail, failure: failure?.failure, title: id, directory: id,
+                sessionID: id, state: state, detail: detail, failure: state == .error ? .quota : nil, title: id, directory: id,
                 projectID: name.flatMap(project), question: recap.question,
                 times: since[id].map { minutes in
                     let start = Date.now.addingTimeInterval(-minutes * 60)
