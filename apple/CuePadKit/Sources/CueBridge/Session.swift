@@ -139,8 +139,6 @@ public enum SessionChange: Sendable, Equatable {
     case stateChanged(Session, from: WorkState)
     case infoChanged(Session)
     case ended(Session, reason: SessionEndReason)
-    /// 消息损坏；连接已关闭，不会出现在 `sessions` 里。读不懂的扩展不在此列（`Session.upgrading`）
-    case incompatible(id: String, detail: String)
     /// 属于账号，记到 `AccountQuota` 上
     case quota(QuotaReport)
 }

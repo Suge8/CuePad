@@ -2,10 +2,12 @@
 import CueStore
 import Darwin
 import Foundation
+import os
 
 /// 会话快照只经桥的 attach/update/detach 发布。多个桥可连接同一扩展；ack 只回发送方，命令按扩展收到的顺序执行。
 @MainActor
 final class PiConnections {
+    private static let log = Logger(subsystem: AppIdentity.id, category: "bridge")
     private let directory: URL
     weak var bridge: Bridge?
     private var links: [String: PiConnection] = [:]
@@ -62,7 +64,7 @@ final class PiConnections {
             // 扫描与文件删除之间的竞态
         } catch {
             incompatible[name] = file
-            bridge.emit(.incompatible(id: name, detail: "cannot connect: \(error)"))
+            Self.log.error("\(name, privacy: .public) cannot connect: \(String(describing: error), privacy: .public)")
         }
     }
 
@@ -164,7 +166,7 @@ final class PiConnections {
     private func reject(_ link: PiConnection, name: String, detail: String) {
         link.rejected = true
         incompatible[name] = link.file
-        bridge?.emit(.incompatible(id: name, detail: detail))
+        Self.log.error("\(name, privacy: .public) incompatible: \(detail, privacy: .public)")
         link.connection.close()
     }
 
