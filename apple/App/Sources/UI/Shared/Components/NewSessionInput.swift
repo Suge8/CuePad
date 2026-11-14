@@ -58,11 +58,7 @@ struct NewSessionInput: View {
             focused = true
         }
         #endif
-        .observing(services.store, id: chosen?.host, into: $agents, onError: workspace.fail) {
-            [host = chosen?.host] store in
-            guard let host else { return MacAgents(hostID: "", agents: [], modifiedAt: .distantPast) }
-            return try store.macAgents(on: host)
-        }
+        .observingLaunchAgents(id: chosen?.host, into: $agents, onError: workspace.fail) { [host = chosen?.host] _ in host }
     }
 
     private var header: some View {
