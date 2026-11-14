@@ -82,6 +82,8 @@ final class AppServices {
 
     #if os(iOS)
     @ObservationIgnored let pasteboard: UIPasteboard
+    /// 这台手机在同步表与中转里认自己的 ID（同 Mac 的 `hostID`）：viewer、中转、实时活动的地址记录、诊断都用它，读不到时为 nil。
+    @ObservationIgnored let device: String?
     /// 隔离实例默认不开，避免遗留活动唤醒测试宿主；验收用 `-CuePadLiveActivity YES`。
     @ObservationIgnored private(set) var cueActivity: CueLiveActivity?
     #endif
@@ -187,7 +189,9 @@ final class AppServices {
         diagnostics = Diagnostics(directory: location.directory.appending(path: "Diagnostics", directoryHint: .isDirectory))
         let (engine, status) = Self.makeSync(sync, store: store, location: location)
         self.sync = engine
-        relay = Self.makeRelay(sync, engine, device: UIDevice.current.identifierForVendor?.uuidString)
+        let device = UIDevice.current.identifierForVendor?.uuidString
+        self.device = device
+        relay = Self.makeRelay(sync, engine, device: device)
         speechClock = SpeechClock(localHost: nil, reachable: status.reachesMac, alwaysReachable: DebugHooks.preset.alwaysReachable, timing: timing)
         let tasks = Followers()
         self.tasks = tasks
@@ -197,9 +201,9 @@ final class AppServices {
         self.timing = timing
         self.pasteboard = pasteboard
         let activitySync: (any SyncControlling)? = if case .iCloud = sync, location.touchesRealWorld { self.sync } else { nil }
-        viewer = ViewerKeeper(store: store, sync: self.sync, device: UIDevice.current.identifierForVendor?.uuidString)
+        viewer = ViewerKeeper(store: store, sync: self.sync, device: device)
         if location.touchesRealWorld || DebugHooks.opensLiveActivity {
-            cueActivity = CueLiveActivity(store: store, sync: activitySync, diagnostics: diagnostics) { [weak self] in
+            cueActivity = CueLiveActivity(store: store, sync: activitySync, device: device, diagnostics: diagnostics) { [weak self] in
                 guard let self else { return nil }
                 return try self.activityState(try self.store.snapshot { try CueDigest.read(from: $0) }.value)
             }
