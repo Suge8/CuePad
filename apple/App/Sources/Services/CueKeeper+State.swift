@@ -71,13 +71,10 @@ extension CueKeeper {
         var heard: Int64?
         /// 额度、登录卡住后的绕行（`Detour`）；没在绕行为 nil
         var detour: Detour?
-        /// 交给大脑、还没答上的你的话与要退回还没退回成的（`Shift.unanswered` 与 `CueKeeper.owed` 合起来，`save` 时取）：上一次没收好尾（崩溃、强杀）时，
-        /// 下次值班一开始退回没送达、重新交（`run`），至少答一次。可选：旧的进度文件没有它
-        var unanswered: [UUID]?
 
         init() {}
 
-        /// 按字段解：一项解不开（结构改了、写坏了）只丢这一项并记错，没答上的你的话、变化基线等其余照用。
+        /// 按字段解：一项解不开（结构改了、写坏了）只丢这一项并记错，变化基线等其余照用。
         init(from decoder: any Decoder) throws {
             let fields = try decoder.container(keyedBy: CodingKeys.self)
             func field<T: Decodable>(_ key: CodingKeys) -> T? {
@@ -94,7 +91,6 @@ extension CueKeeper {
             patrolledIdle = field(.patrolledIdle)
             warmedIdle = field(.warmedIdle)
             greeted = field(.greeted)
-            unanswered = field(.unanswered)
             detour = field(.detour)
             heard = field(.heard)
         }

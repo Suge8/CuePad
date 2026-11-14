@@ -99,7 +99,7 @@ final class CueKeeper {
     @ObservationIgnored var trouble: CueHealth.Failure?
     @ObservationIgnored var failover: CueHealth.Failover?
     @ObservationIgnored var writtenHealth: CueHealth?
-    /// 要退回没送达、还没退回成的你的话（`giveBack`）：退回时库没写成就留在这里，落盘（`save`），退回写成才删
+    /// 要退回没送达、还没退回成的你的话（`giveBack`）：退回时库没写成就留在这里，退回写成才删；崩溃丢了它，下次值班从库里认出来再退
     @ObservationIgnored var owed: Set<UUID> = []
     /// 好好做完、还没消费成的定时（`fireCueSchedules` 没写成）：对账时再写；在这里的不再叫醒（`step`）。崩溃丢了它，那一行还过点，再做一次
     @ObservationIgnored var unfired: [CueFire] = []
@@ -214,8 +214,12 @@ final class CueKeeper {
                 }
             }
             group.addTask { await self.dreams() }
-            // 上一次没收好尾（崩溃、强杀，没走到 `retire`）时交出去没答上的你的话：退回没送达，这次重新交
-            await giveBack(progress.unanswered ?? [])
+            // 上一次值班（这台或别的 Mac）没收好尾（崩溃、强杀，没走到 `retire`）时交出去没答上的你的话：退回没送达，这次重新交
+            do {
+                await giveBack(try await store.cueMessagesUnanswered())
+            } catch {
+                Self.log.error("Cue 读没答上的话失败：\(error.localizedDescription, privacy: .public)")
+            }
             // 一上班就是歇着：上一次没收好尾（崩溃）留下的"在想"马上清掉，不等大脑起好
             await publish()
             if progress.marks == nil {

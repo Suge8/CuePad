@@ -172,7 +172,6 @@ extension CueKeeper {
                 $0.turn = nil
                 $0.failures = 0
             }
-            save()  // 这一轮接走的答上了（没答上的已在 `owed`），落盘的不再记着
             if let failure = finished.round.failure {
                 if finished.replay {
                     await replay(finished, failure: failure)
