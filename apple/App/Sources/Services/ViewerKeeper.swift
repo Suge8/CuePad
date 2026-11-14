@@ -69,25 +69,12 @@ final class ViewerKeeper {
     @ObservationIgnored private let changed: AsyncStream<Void>.Continuation
     private static let log = Logger(subsystem: AppIdentity.id, category: "services")
 
-    #if os(macOS)
-    /// 离上一下键盘鼠标过了多久（秒）：生产是系统的（`systemIdle`），测试给自己的。
-    @ObservationIgnored private let idleSeconds: @MainActor () -> TimeInterval
-
-    init(store: CueStore, sync: (any SyncControlling)?, device: String?, idleSeconds: @escaping @MainActor () -> TimeInterval) {
-        self.idleSeconds = idleSeconds
-        self.store = store
-        self.sync = sync
-        self.device = device
-        (changes, changed) = AsyncStream.makeStream(bufferingPolicy: .bufferingNewest(1))
-    }
-    #else
     init(store: CueStore, sync: (any SyncControlling)?, device: String?) {
         self.store = store
         self.sync = sync
         self.device = device
         (changes, changed) = AsyncStream.makeStream(bufferingPolicy: .bufferingNewest(1))
     }
-    #endif
 
     /// 一个窗口开着的会话页（空数组：没开着，或窗口不在前台）。开着哪个变了就由 `keep` 当场写。
     func show(_ pages: [Page], in window: UUID) {
@@ -171,16 +158,12 @@ extension ViewerKeeper {
     /// 10 分钟：比读完一段回复、想一想再回的时间长，与常见即时通讯"多久没动静算离开"同一个量级。
     static let idleAfter: TimeInterval = 10 * 60
 
-    /// 只认真人的输入（`hidSystemState`，别的程序合成的事件不算）。
-    static func systemIdle() -> TimeInterval {
-        CGEventSource.secondsSinceLastEventType(.hidSystemState, eventType: CGEventType(rawValue: ~0)!)
-    }
-
-    /// 键盘鼠标 `idleAfter` 没动就算不在跟前，回来的第一下输入就回来；走开期间等系统的输入事件，不轮询。
+    /// 键盘鼠标 `idleAfter` 没动就算不在跟前，回来的第一下输入就回来。
+    /// 只认真人的输入（`hidSystemState`，别的程序合成的事件不算）；走开期间等系统的输入事件，不轮询。
     private func followIdle() async {
-        let limit = Self.idleAfter
+        let limit = Self.idleAfter, anyInput = CGEventType(rawValue: ~0)!
         while !Task.isCancelled {
-            let idle = idleSeconds()
+            let idle = CGEventSource.secondsSinceLastEventType(.hidSystemState, eventType: anyInput)
             guard idle >= limit else {
                 do { try await Task.sleep(for: .seconds(limit - idle)) } catch { return }
                 continue
