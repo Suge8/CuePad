@@ -94,12 +94,12 @@ extension CueStore {
       ignoringExisting: true)
   }
 
-  /// 之后对同一会话写了结束：话不再派发，没领取的写成放弃（`abandonPreparedDeliveries`），领取了还没交出的不交（`mayBeginDelivery`）。
+  /// 之后对同一会话写了结束（没失败的：成了或还在办）：话不再派发，没领取的写成放弃（`abandonPreparedDeliveries`），领取了还没交出的不交（`mayBeginDelivery`）。
   /// 本机写入次序不受手机与 Mac 的钟差影响；同步 UPDATE 不改变 rowid。
   private static let endedLater = """
     r.mode IN (\(sqlList(DeliveryMode.requiresReadySession.sorted { $0.rawValue < $1.rawValue }))) AND
       EXISTS (SELECT 1 FROM deliveryRequests AS e WHERE e.hostID = r.hostID AND e.targetKind = r.targetKind
-        AND e.targetRef = r.targetRef AND e.mode = 'end' AND e.rowid > r.rowid)
+        AND e.targetRef = r.targetRef AND e.mode = 'end' AND e.status <> '\(DeliveryStatus.failed.rawValue)' AND e.rowid > r.rowid)
     """
 
   /// 领不走的：之后写了结束，或有撤回在等着办（撤回自己删它，不先写失败）。
