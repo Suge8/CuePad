@@ -64,15 +64,10 @@ extension CueStore {
         attachment = try db.first("SELECT hash, format FROM attachments WHERE id = ?", [key.id]) { AttachmentKey.make(hash: $0.text(0), format: $0.text(1)) }
       }
       if key.table == .cards, let id = UUID(uuidString: key.id) { try releaseDeliveryBindings(of: [id]) }
+      // 项目已在别处永久删除，不会再"稍后到达"：本机遗留在它名下的卡片（多半是离线期间新写的）归默认项目
+      if key.table == .projects { try dropProjects(where: "id = ?", [key.id]) }
       try db.run("DELETE FROM \(key.table.rawValue) WHERE id = ?", [key.id])
       try db.run("DELETE FROM syncRecords WHERE recordName = ?", [key.id])
-      if key.table == .projects {
-        // 项目已在别处永久删除，不会再"稍后到达"：本机遗留在它名下的卡片（多半是离线期间新写的），
-        // 与本地 purgeProject 一致地释放到默认项目，内容保留，不悬空隐藏。
-        let now = Date.stamp
-        try db.run("UPDATE cards SET projectID = ?, modifiedAt = ? WHERE projectID = ?", [Project.defaultID, now, key.id])
-        try db.run("DELETE FROM projectDirectories WHERE projectID = ?", [key.id])
-      }
       return attachment
     case .save(let remote, let systemFields, let serverAt):
       try applySave(remote, systemFields, serverAt: serverAt)

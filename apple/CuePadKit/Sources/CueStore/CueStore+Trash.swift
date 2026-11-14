@@ -114,7 +114,7 @@ extension CueStore {
     try removingFiles { try write {
       let orphaned = try purgeCards(
         where: "deletedAt IS NOT NULL OR projectID IN (SELECT id FROM projects WHERE deletedAt IS NOT NULL)")
-      try db.run("DELETE FROM projects WHERE deletedAt IS NOT NULL")
+      try dropProjects(where: "deletedAt IS NOT NULL")
       return try reclaimAttachments(orphaned)
     } }
   }
