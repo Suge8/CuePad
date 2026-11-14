@@ -140,8 +140,7 @@ extension CueStore {
     try select(
       Card.self,
       where: """
-        (piSessionID = ?1 OR EXISTS (SELECT 1 FROM json_each(cards.formerSessionIDs) WHERE value = ?1))
-          AND todoAt IS NOT NULL AND deletedAt IS NULL AND archivedAt IS NULL AND \(Self.isLeaf("cards"))
+        \(Self.usedSession("cards", "?1")) AND \(Self.taskOnBoard()) AND \(Self.isLeaf("cards"))
         """,
       [sessionID], orderBy: "startedAt, id"
     ).map { LeafTask(task: $0, parent: try $0.parentID.flatMap { try find(Card.self, $0) }) }
@@ -164,6 +163,22 @@ extension CueStore {
       result.append(LeafTask(task: task, parent: parent))
     }
     return result
+  }
+
+  /// 卡 `alias` 用过会话 `session`（SQL 表达式）：正在用的（`piSessionID`）或换下来的（`formerSessionIDs`，`Card.formerSessionIDs`）。“哪些卡用过这个会话”只按它与 `sessionsUsed`。
+  static func usedSession(_ alias: String, _ session: String) -> String {
+    """
+    (\(alias).piSessionID = \(session) OR (\(alias).formerSessionIDs IS NOT NULL
+      AND EXISTS (SELECT 1 FROM json_each(\(alias).formerSessionIDs) WHERE value = \(session))))
+    """
+  }
+
+  /// 满足 `condition`（对卡片表的条件，不带别名）的卡用过的会话（同 `usedSession`），作子查询用。
+  static func sessionsUsed(where condition: String) -> String {
+    """
+    SELECT piSessionID FROM cards WHERE piSessionID IS NOT NULL AND (\(condition))
+    UNION SELECT f.value FROM (SELECT formerSessionIDs FROM cards WHERE formerSessionIDs IS NOT NULL AND (\(condition))) c, json_each(c.formerSessionIDs) f
+    """
   }
 
   static func isLeaf(_ alias: String) -> String {

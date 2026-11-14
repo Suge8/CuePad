@@ -96,10 +96,10 @@ struct SessionBoardTests {
 
         let workspace = Workspace(services: services)
         try await workspace.finish(SessionListItem(state: held.session))
-        #expect(workspace.sessionAsk == .complete(held.session))
+        guard case .complete(.agent(held.session), nil, let confirm) = workspace.sessionAsk else { Issue.record("在做的会话完成前要先问"); return }
         #expect(try await tasks().isEmpty, "问过之前什么都不留")
 
-        try await workspace.confirmFinish(held.session)
+        try await confirm(workspace)
         let task = try #require(try await tasks().first)
         #expect(task.status == .done && task.piSessionID == "q1")
     }

@@ -4,7 +4,7 @@ import Foundation
 extension Schema {
   /// 默认项目（`Project.defaultID`）的那一条：新库建好就有。修改时间是 0：各台设备离线各自建出的是同一版，
   /// 合并时用户改过的（名字、颜色、图标）总比它新，不会被一台新装的设备盖回"默认"。
-  private static let defaultProject = """
+  static let defaultProject = """
     INSERT INTO projects (id, name, icon, color, isPinned, deletedAt, createdAt, modifiedAt, intro)
     VALUES ('\(Project.defaultID.uuidString.lowercased())', '\(Project.defaultName)', 'house', '#8A8A84', 0, NULL, 0, 0, NULL)
     ON CONFLICT(id) DO NOTHING;

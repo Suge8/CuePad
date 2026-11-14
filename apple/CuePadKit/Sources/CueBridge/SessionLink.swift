@@ -2,7 +2,7 @@
 import CueStore
 import Foundation
 
-/// 一个会话一条的（Pi、Claude Code）不看 `id`；一个接入承载多个会话的（Codex、OpenCode）由接入自己遵守、按 `id` 找会话。
+/// 每个会话各一个链接的（Pi、Claude Code、ACP 接入的家）不看 `id`；这家的运行时自己当链接、管着它所有会话的（Codex、OpenCode）按 `id` 找会话。
 /// 桥（`Bridge`）按会话找到它转交命令；这家或这个模型做不到的（`AgentCapabilities`）桥先拒绝，到不了这里。
 @MainActor
 public protocol SessionLink: AnyObject {
@@ -27,6 +27,8 @@ public protocol SessionLink: AnyObject {
     func canNameItself(_ id: Session.ID) -> Bool
     /// 按第一句话（`firstMessage`）起一个短名，返回整理好的名字（`SessionNameSuggestion.cleaned`）；不写回，写不写由 App 复核后走改名。
     func suggestName(from firstMessage: String, in id: Session.ID) async throws -> String
+    /// 查一次订阅额度，结果经桥的 `.quota` 报出（`Bridge.refreshQuota`）。
+    func refreshQuota(in id: Session.ID) async throws
 }
 
 /// 这家没实现的操作缺省拒绝。
@@ -41,5 +43,6 @@ extension SessionLink {
     public func configure(_ config: SessionConfig, in id: Session.ID) async throws { throw BridgeError.unsupported }
     public func canNameItself(_ id: Session.ID) -> Bool { false }
     public func suggestName(from firstMessage: String, in id: Session.ID) async throws -> String { throw BridgeError.unsupported }
+    public func refreshQuota(in id: Session.ID) async throws { throw BridgeError.unsupported }
 }
 #endif

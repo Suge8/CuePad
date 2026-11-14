@@ -10,7 +10,11 @@
   device <UDID> <名称> [MAC_OS] 登记一台真机（Mac 用 Provisioning UDID，不是 Hardware UUID）
   devid-csr                     为 Developer ID Application 证书生成私钥与 CSR（证书只有账号持有人能创建，见 apple/App/Config/AGENTS.md）
   devid-import <.cer 路径>      把网页上下载的 Developer ID 证书连同私钥导入专用钥匙串
-  unlock                        解锁专用钥匙串并加入搜索列表（发布脚本用）
+  unlock                        解锁专用钥匙串并加入搜索列表，打印它的路径（发布脚本用）
+  profiles-dir                  打印描述文件目录（建好）：签名锁锁的就是它（_lock.sh 规则 3）
+  export-options <ios|mac> <文件>  写 xcodebuild -exportArchive 的导出选项（手动签名，描述文件名同 profiles 建的）
+  resign <CuePad.app>           本机构建换成团队签名：嵌入 macOS Development 描述文件，
+                                带 iCloud 的完整权限、iCloud 连开发环境，用专用钥匙串里的证书签主程序；内嵌的框架与命令行工具仍是 ad-hoc
   all                           ids → identity distribution → profiles
 凭据见 asc.py；私钥只存在专用钥匙串（~/.appstoreconnect/cuepad-signing.keychain-db），不落盘明文。
 """
@@ -18,7 +22,6 @@ import base64, json, os, plistlib, secrets, subprocess, sys, tempfile
 
 sys.dont_write_bytecode = True
 
-sys.path.insert(0, os.path.dirname(__file__))
 import asc
 
 HOME = os.path.expanduser("~/.appstoreconnect")
@@ -40,6 +43,8 @@ CERTIFICATES = {  # 种类 → (证书类型, 钥匙串里的身份名前缀, �
     "development": ("DEVELOPMENT", "Apple Development", "IOS_APP_DEVELOPMENT"),
 }
 PROFILE_SUFFIX = {"distribution": "iOS AppStore", "development": "iOS Development"}
+MAC_PROFILE = "CuePad macOS DeveloperID"
+MAC_DEV_PROFILE = "CuePad macOS Development"
 
 
 def api(method, path, body=None):
@@ -213,12 +218,6 @@ def devid_import(cer_path):
     print("已导入：" + (local_identity("Developer ID Application") or "（没有识别到 Developer ID Application 身份，检查证书类型）"))
 
 
-MAC_PROFILE = "CuePad macOS DeveloperID"
-
-
-MAC_DEV_PROFILE = "CuePad macOS Development"
-
-
 def ensure_mac_profile(ids):
     certs = local_cert_ids("Developer ID Application", "DEVELOPER_ID_APPLICATION,DEVELOPER_ID_APPLICATION_G2")
     if certs:
@@ -242,6 +241,55 @@ def create_mac_profile(ids, name, profile_type, certs, devices=()):
         relationships["devices"] = {"data": [{"type": "devices", "id": d} for d in devices]}
     body = {"data": {"type": "profiles", "attributes": {"name": name, "profileType": profile_type}, "relationships": relationships}}
     install_profile(api("POST", "/v1/profiles", body)["data"]["attributes"], ".provisionprofile")
+
+
+def team_id():
+    return asc.load_env()["CUEPAD_TEAM_ID"]
+
+
+def export_options(platform, path):
+    if platform == "ios":
+        method, certificate = "app-store-connect", "Apple Distribution"
+        profiles = {identifier: f"{base} {PROFILE_SUFFIX['distribution']}" for identifier, _, _, base, _ in BUNDLES}
+    else:
+        method, certificate, profiles = "developer-id", "Developer ID Application", {APP_ID: MAC_PROFILE}
+    options = {"method": method, "teamID": team_id(), "signingStyle": "manual", "signingCertificate": certificate, "provisioningProfiles": profiles}
+    if platform == "ios":
+        options["destination"] = "export"
+    with open(path, "wb") as f:
+        plistlib.dump(options, f)
+
+
+def installed_profile(name):
+    """本机装着的同名 macOS 描述文件：(路径, 解出的内容)。"""
+    for entry in os.listdir(PROFILES_DIR):
+        path = os.path.join(PROFILES_DIR, entry)
+        if entry.endswith(".provisionprofile"):
+            decoded = plistlib.loads(run_bytes("security", "cms", "-D", "-i", path))
+            if decoded.get("Name") == name:
+                return path, decoded
+    raise SystemExit(f"没有「{name}」描述文件：先 provision.py profiles")
+
+
+def run_bytes(*args):
+    return subprocess.run(args, check=True, capture_output=True).stdout
+
+
+def resign(app):
+    path, profile = installed_profile(MAC_DEV_PROFILE)
+    identity = local_identity("Apple Development") or sys.exit("专用钥匙串里没有 Apple Development 证书（见 apple/App/Config/AGENTS.md）")
+    team = profile["TeamIdentifier"][0]
+    # 权限以工程的完整权限文件为准（同发布），只补上描述文件里的身份与这次要连的 iCloud 环境
+    template = open(os.path.join(os.path.dirname(os.path.dirname(__file__)), "App/Config/CuePad-macOS.entitlements"), "rb").read()
+    entitlements = plistlib.loads(template.replace(b"$(CUEPAD_APP_ID)", APP_ID.encode()))
+    entitlements |= {"com.apple.application-identifier": f"{team}.{APP_ID}", "com.apple.developer.team-identifier": team,
+                     "com.apple.developer.icloud-container-environment": "Development"}
+    with tempfile.NamedTemporaryFile(suffix=".entitlements") as f:
+        plistlib.dump(entitlements, f)
+        f.flush()
+        subprocess.run(["cp", path, os.path.join(app, "Contents/embedded.provisionprofile")], check=True)
+        # 证书只认专用钥匙串里那份（描述文件按它建）；登录钥匙串里可能有同名的另一张
+        subprocess.run(["codesign", "--force", "--keychain", KEYCHAIN, "--sign", identity, "--entitlements", f.name, app], check=True)
 
 
 def register_device(udid, name, platform="IOS"):
@@ -274,6 +322,14 @@ if __name__ == "__main__":
         devid_import(sys.argv[2])
     elif command == "unlock":
         unlock_keychain()
+        print(KEYCHAIN)
+    elif command == "profiles-dir":
+        os.makedirs(PROFILES_DIR, exist_ok=True)
+        print(PROFILES_DIR)
+    elif command == "export-options":
+        export_options(*sys.argv[2:4])
+    elif command == "resign":
+        resign(sys.argv[2])
     elif command == "all":
         ensure_ids(); ensure_identity("distribution"); ensure_profiles()
     else:

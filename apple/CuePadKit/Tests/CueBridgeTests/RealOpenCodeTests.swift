@@ -126,7 +126,7 @@ struct RealOpenCodeTests {
         }
     }
 
-    /// 停止的另一条路：这一轮还在跑时又说一句，停下在跑的、开新的一轮回答新的这句。
+    /// 停止的另一条路：这一轮还在跑时又说一句，停下在跑的、开新的一轮回答新的这句，两轮之间不报歇下（同 `RealHostedTurnTests`）。
     @Test func aMessageWhileBusyStopsTheRoundAndStartsANewOne() async throws {
         try await withOpenCode { sandbox, store, bridge, runtime in
             sandbox.model.on("Run the slow command", .call("shell", ["command": "sleep 60", "description": "Run the requested command"]), .say("SLEPT"))
@@ -135,13 +135,15 @@ struct RealOpenCodeTests {
             try await bridge.send(SessionMessage(text: "Run the slow command"), to: id)
             try await eventually("在跑命令") { session(bridge)?.state.isWorking == true }
             let delivery = UUID()
+            let log = ChangeLog(bridge)
             try await bridge.send(SessionMessage(text: "Now: what is 6+6", deliveryID: delivery.uuidString), to: id)
 
             try await eventually("这句开的一轮答完") {
                 let messages = try await store.chatMessages(of: sessionID)
-                return session(bridge)?.state == .settled && messages.last?.role == .known(.pi)
+                return session(bridge)?.state == .settled && log.settles > 0 && messages.last?.role == .known(.pi)
                     && messages.contains { $0.deliveryID == delivery }
             }
+            #expect(log.settles == 1, "\(log.states)")
             let messages = try await store.chatMessages(of: sessionID)
             #expect(messages.filter { $0.role == .known(.user) }.map(\.text).last?.contains("Now") == true)
             let now = try #require(messages.firstIndex { $0.deliveryID == delivery })

@@ -19,34 +19,4 @@ struct CuePadApp: App {
         }
     }
 }
-
-/// 进程只创建一个 `AppServices`，所有窗口共用。资料库打不开时不终止进程：失败页给原因、重试与诊断。
-enum Launch {
-    case ready(AppServices)
-    case failed(LibraryFailure)
-    case testHost
-
-    static func make() -> Launch {
-        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil { return .testHost }
-        let launch: Launch
-        do {
-            launch = open(try LibraryLocation.resolve())
-        } catch {
-            // 位置本身解析不出来（比如没有 App Group 权限）：没有库文件可读，失败里的版本为空
-            launch = .failed(LibraryFailure(error, location: nil))
-        }
-        if case .failed(let failure) = launch { DebugHooks.libraryFailed(failure) }
-        return launch
-    }
-
-    static func open(_ location: LibraryLocation) -> Launch {
-        do {
-            let services = try AppServices(location: location, defaults: location.makeDefaults(), sync: DebugHooks.syncSource)
-            services.start()
-            return .ready(services)
-        } catch {
-            return .failed(LibraryFailure(error, location: location))
-        }
-    }
-}
 #endif

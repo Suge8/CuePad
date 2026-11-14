@@ -31,7 +31,7 @@ struct HandOffInput: View {
     private var launchStatus: LaunchStatus? {
         let noMac = planned?.noMac == true
         guard chosen == nil || noMac || waiting else { return nil }
-        return LaunchStatus(noMac: noMac, phase: launching.phase(at: services.speech), agents: launchHost == nil ? nil : launchAgents)
+        return LaunchStatus(noMac: noMac, phase: launching.phase(at: services.speech), agents: launchAgents)
     }
     private var canSend: Bool {
         guard !waiting, planned.map({ !$0.noMac }) == true else { return false }
@@ -56,7 +56,7 @@ struct HandOffInput: View {
     }
     private var config: ConfigShown? { chosenDigest?.config(at: services.speech) }
     private var catalog: AgentCatalog? { chosenDigest?.catalog }
-    private var commands: [SlashCommand] { chosen?.state.usableCommands(in: catalog) ?? [] }
+    private var commands: [SlashCommand] { chosen == nil ? [] : catalog?.commands ?? [] }
 
     private var tools: (session: SessionState, models: [ModelOption], config: ConfigShown)? {
         guard let session = chosen?.state, let config, let models = catalog?.models, !models.isEmpty else { return nil }
@@ -100,10 +100,7 @@ struct HandOffInput: View {
         .observing(services.store, id: outbox.card, into: $planned, onError: workspace.fail) { [card = outbox.card] store in
             try HandOffTargets.Options(card, in: store)
         }
-        .observing(services.store, id: launchHost, into: $launchAgents, onError: workspace.fail) { [host = launchHost] store in
-            guard let host else { return MacAgents(hostID: "", agents: [], modifiedAt: .distantPast) }
-            return try store.macAgents(on: host)
-        }
+        .observingLaunchAgents(id: launchHost, into: $launchAgents, onError: workspace.fail) { [host = launchHost] _ in host }
         // 改模型、思考强度的请求与目录记录不在会话列表那一页里：只读选中的那个（会话变了就带着新的会话状态重读）
         .observing(services.store, id: chosenLive, into: $digest, onError: workspace.fail) { [session = chosenLive] store in
             guard let session else { return SessionDigest(session: nil, project: nil, deliveries: []) }

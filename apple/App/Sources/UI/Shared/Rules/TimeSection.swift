@@ -14,12 +14,11 @@ nonisolated enum TimeSection: Sendable {
         }
     }
 
-    /// 昨天先于本周、本月判断：周一的昨天、月初的昨天都算昨天。一周总从周一算起，不随地区设置（时区仍用传入的日历）。
+    /// 昨天先于本周、本月判断：周一的昨天、月初的昨天都算昨天。一周从周一算起（`Calendar.mondayFirst`）。
     /// 其他设备的时钟可能快于本机：未来时间按今天分组，不改原始时间或顺序。
     static func of(_ date: Date, now: Date, calendar: Calendar = .current) -> TimeSection {
         let date = min(date, now)
-        var calendar = calendar
-        calendar.firstWeekday = 2
+        let calendar = calendar.mondayFirst
         if calendar.isDate(date, inSameDayAs: now) { return .today }
         if let yesterday = calendar.date(byAdding: .day, value: -1, to: now), calendar.isDate(date, inSameDayAs: yesterday) { return .yesterday }
         if calendar.isDate(date, equalTo: now, toGranularity: .weekOfYear) { return .thisWeek }

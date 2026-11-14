@@ -43,7 +43,7 @@ extension DebugScene {
                 for index in 1...2 {
                     _ = try await store.addCueMessage(.cue, text: String(localized: "**演示结果 \(index)**\n\n- 核对 Mac 界面\n- 核实手机接入", table: "Demo"), answeredRequests: [])
                 }
-                for await submitted in Observations({ call.replies.count == 2 && call.replies.allSatisfy { $0.delivery == .submitted } }) where submitted { break }
+                for await submitted in Observations({ call.record.replies.count == 2 && call.record.replies.allSatisfy { $0.delivery == .submitted } }) where submitted { break }
             }
             if state == "ended" { call.hangUp() }
             if state == "failed" { call.inputs.continuation.yield(.failed(.media(.mediaFailed))) }

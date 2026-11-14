@@ -3,7 +3,7 @@ import Foundation
 
 extension CueStore {
   /// 进回收站；它的下级按原顺序提到它的位置（不连带进回收站）。
-  /// 返回回执（`undo` 恢复它、让提上去的下级回到它下面）；不存在或已在回收站时什么都不做、返回 nil。
+  /// 返回回执（`undo` 恢复它、让提上去的下级回到它下面、它上面的定时照旧定时）；不存在或已在回收站时什么都不做、返回 nil。
   @discardableResult
   public func trashCard(_ id: UUID) throws -> CardChange? { try trashCards([id]).first }
 
@@ -14,21 +14,19 @@ extension CueStore {
       let now = Date.stamp
       return try ids.compactMap { id in
         guard let card = try find(Card.self, id), card.deletedAt == nil else { return nil }
-        let lifted = try trashRow(card, at: now)
-        if card.completedAt == nil { try endUnusedSessions(of: id, cue: false) }
-        return .trash(id: id, lifted: lifted)
+        return try trashRow(card, at: now)
       }
     }
   }
 
-  /// 一条进回收站（在调用方的事务里），返回提到它位置的下级；它上面的定时不再定时（下级提上去、照旧，`endCueSchedules`）。
+  /// 一条进回收站（在调用方的事务里），返回它的回执；它上面的定时不再定时（下级提上去、照旧，`endCueSchedules`），撤销时放回来。
   @discardableResult
-  func trashRow(_ card: Card, at now: Date) throws -> [UUID] {
+  func trashRow(_ card: Card, at now: Date) throws -> CardChange {
     let lifted = try liftChildren(of: card, at: now)
     try db.run("UPDATE cards SET deletedAt = ?1, modifiedAt = ?1 WHERE id = ?2", [now, card.id])
-    try endCueSchedules(onTasksIn: "SELECT ?2", card.id, at: now)
+    let schedules = try endCueSchedules(onTasksIn: "SELECT ?2", card.id, at: now)
     if let parent = card.parentID { try settle(around: [parent]) }
-    return lifted
+    return .trash(id: card.id, lifted: lifted, schedules: schedules)
   }
 
   /// 恢复；如果所属项目仍在回收站，卡片回到默认项目，否则会不可见。
@@ -67,11 +65,17 @@ extension CueStore {
 
   private func undoRow(_ change: CardChange) throws {
     switch change {
-    case .trash(let id, let lifted):
+    case .trash(let id, let lifted, let schedules):
       // 提上去的下级落在它原来的位置（它的上级下，或它那个项目的顶层）：还在那里的才收回来，其间挪去别处的不动
       let left = try find(Card.self, id).map { CardLinks.Link(parent: $0.parentID, project: $0.projectID, isTask: $0.isTask) }
       try restoreRow(id)
       try adopt(lifted, by: id, from: left)
+      try restoreCueSchedules(schedules)
+    case .archive(let id, let time, let schedules):
+      // 其间取回过又归档了的，它已不是这一次归档的样子：卡与定时都不动（定时随它此刻的归档照旧作废）
+      guard try find(Card.self, id)?.archivedAt == time else { return }
+      try unarchiveRow(id, archivedAt: time)
+      try restoreCueSchedules(schedules)
     case .move(let id, let slot, let after):
       let survivor = try after.flatMap { try find(Card.self, $0)?.id }
       try relocate(id, to: slot, after: survivor)
@@ -116,7 +120,7 @@ extension CueStore {
     try removingFiles { try write {
       let orphaned = try purgeCards(
         where: "deletedAt IS NOT NULL OR projectID IN (SELECT id FROM projects WHERE deletedAt IS NOT NULL)")
-      try db.run("DELETE FROM projects WHERE deletedAt IS NOT NULL")
+      try dropProjects(db.query("SELECT id FROM projects WHERE deletedAt IS NOT NULL") { $0.uuid(0) })
       return try reclaimAttachments(orphaned)
     } }
   }

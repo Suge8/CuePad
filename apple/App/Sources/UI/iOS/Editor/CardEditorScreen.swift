@@ -19,7 +19,6 @@ struct CardEditorScreen: View {
     @State private var inspirationSharing = InspirationSharing()
 
     private static let pageWidth: CGFloat = 760
-    private static let paperInset: CGFloat = 44
 
     var body: some View {
         editor
@@ -53,7 +52,7 @@ struct CardEditorScreen: View {
     @ViewBuilder private var editor: some View {
         VStack(alignment: .leading, spacing: 0) {
             if let data, let editing {
-                CardTextField(card: data.card, editing: editing, theme: .inspiration(palette, horizontalInset: wide ? Self.paperInset : 20))
+                CardTextField(card: data.card, editing: editing, theme: .inspiration(palette, horizontalInset: wide ? Spacing.sheet : LibraryLayout.textInset))
             }
         }
     }

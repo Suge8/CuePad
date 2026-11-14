@@ -3,7 +3,7 @@ import CueAgent
 import CueStore
 import Foundation
 
-/// 各家与标准不同的地方只经 `ACPDialect`。一轮的状态在这里判一次，同一处交给两边——事件（`emit`，大脑的事件流）与桥上的事实（`facts`、草稿、上下文）。
+/// 各家与标准不同的地方只经 `ACPDialect`。一轮的事件在这里判一次，同一处交给三边——一轮的状态（`HostedTurns`）、大脑的事件流与桥上的草稿、上下文（`emit`）。
 /// 各家报 CuePad 开的那一轮结束时只记下出错的原文，等回应再结束：回应之前各家还会报这一轮之后的事（Grok 把搁浅的插话转成它自己开的一轮，
 /// 1.0.70 实测先于回应到），要排在这一轮结束之后。回应只结束它自己开的那一轮；被停下（`session/cancel`）照常结束、不算出错；回错误的是出错（各家报的原文，没有就是 `ACPError` 的原话）。
 /// 正在说的话：`agent_message_chunk` 逐字累积（ACP 不分条：工具调用前后各是一条）。
@@ -18,7 +18,7 @@ final class ACPSession {
     private(set) var sessionID: String?
     private(set) var cwd: URL?
     private(set) var id: Session.ID?
-    var facts = SessionFacts()
+    let turns: HostedTurns
     private(set) var opened: JSONValue = [:]
     var options: [JSONValue] = []
     var pending: (request: JSONValue, ask: ACPAsk)?
@@ -34,13 +34,8 @@ final class ACPSession {
     private var agentTurnNext = false
     var steers = ACPSteers()
     private var draft: DraftParts?
-    /// 停下这一轮后它的结束不算出错
-    private var stopping = false
     /// 等这一轮变化的（排着的那一句跑起来、这一轮结束）；进程退出时也放行。大脑等一轮自然做完，不限时
     private let changes = Occurrences(timeout: nil, timeoutError: BridgeError.ackTimeout)
-    /// 停下这一轮后等它结束的：取消的回应不来（Agent 收下取消却不回也不断线）时到 `AgentTimeouts.stop` 放弃
-    private let stops: Occurrences
-    let stopPhase = StopPhase()
     private var loading = false
     /// CuePad 的 MCP 服务连上没有（`ACPDialect.connectsMCPLater`）：nil 是这个会话还没报
     private var mcp: Result<Void, HostedSessionError>?
@@ -55,13 +50,14 @@ final class ACPSession {
         self.bridge = bridge
         self.processes = processes
         brain = nil
-        stops = Occurrences(timeout: AgentTimeouts.stop, timing: timing, timeoutError: BridgeError.ackTimeout)
+        turns = HostedTurns(timing: timing)
+        turns.onSettle = { [weak self] in self?.publish() }
     }
 
     init(dialect: any ACPDialect) {
         self.dialect = dialect
-        brain = BrainSession()
-        stops = Occurrences(timeout: AgentTimeouts.stop, timeoutError: BridgeError.ackTimeout)
+        brain = BrainSession(agent: dialect.agent)
+        turns = HostedTurns()
     }
 
     /// 起好的连接；没起或进程已退出时抛错（托管会话 `sessionEnded`，大脑 `notRunning`）
@@ -75,31 +71,37 @@ final class ACPSession {
     var agent: AgentKind { dialect.agent }
     var seesImages: Bool { connection.map { dialect.acceptsImages($0.agent) } ?? false }
 
+    @discardableResult
     func launch(
         _ executable: URL, environment: [String: String], directory: URL, timing: Timing = .system, spawned: (ChildProcess) async throws -> Void = { _ in }
-    ) async throws {
+    ) async throws -> ACPConnection {
         let connection = try await ACPConnection.launch(
             executable, dialect.arguments, environment: environment, directory: directory, timing: timing, spawned: spawned)
         connection.onNotification = { [weak self] in self?.notified($0, $1) }
         connection.onRequest = { [weak self] method, params, request in self?.asked(method, params, request: request) ?? false }
         connection.onClose = { [weak self] in self?.ended() }
         self.connection = connection
+        return connection
     }
 
-    func open(in directory: URL, mcpServers: [JSONValue] = [], meta: JSONValue? = nil) async throws {
+    /// 返回 Agent 给的会话 id
+    @discardableResult
+    func open(in directory: URL, mcpServers: [JSONValue] = [], meta: JSONValue? = nil) async throws -> String {
         var params: [String: JSONValue] = ["cwd": .string(directory.path), "mcpServers": .array(mcpServers)]
         if let meta { params["_meta"] = meta }
         mcp = nil
         let result = try await live.call("session/new", .object(params))
         guard let id = result["sessionId"]?.string else { throw ACPError.server(code: 0, message: "session/new 没有回会话 id") }
         adopt(id, in: directory, result)
+        return id
     }
 
-    func load(_ sessionID: String, in directory: URL) async throws {
+    func load(_ sessionID: String, in directory: URL) async throws -> String {
         loading = true
         defer { loading = false }
         let result = try await live.call("session/load", ["sessionId": .string(sessionID), "cwd": .string(directory.path), "mcpServers": []])
         adopt(sessionID, in: directory, result)
+        return sessionID
     }
 
     private func adopt(_ sessionID: String, in directory: URL, _ result: JSONValue) {
@@ -160,34 +162,25 @@ final class ACPSession {
         }
     }
 
-    func interrupt(cancellable: Bool = true) async throws {
-        try await stopPhase.run(cancellable: cancellable) { [self] in
-            guard facts.running, let sessionID else { return }
-            stopping = true
-            decline()
-            try live.notify("session/cancel", ["sessionId": .string(sessionID)])
-            try await untilFinished()
-        }
+    /// 请 Agent 停下这一轮（`session/cancel`，标准里没有回执）：收尾由 `HostedTurns` 等它的回应。
+    /// 没在跑就不发：交出即开轮（`begin`），没有开始晚到的窗口。
+    func cancel() throws {
+        guard turns.running, let sessionID else { return }
+        decline()
+        try live.notify("session/cancel", ["sessionId": .string(sessionID)])
     }
 
     /// 在跑的是 CuePad 开的那一轮：插话只并进它（Agent 自己开的一轮各家不保证收下，等它做完再开）
-    var steerable: Bool { facts.running && prompted == turn && promptRunning }
-
-    /// 等这一轮结束（没在跑立即返回，进程退出时也返回）；取消的回应不来时到 `AgentTimeouts.stop` 抛 `ackTimeout`。
-    func untilFinished() async throws {
-        let current = turn
-        while turn == current, facts.running, connection?.isClosed == false { try await stops.next() }
-    }
+    var steerable: Bool { turns.running && prompted == turn && promptRunning }
 
     /// 等这一轮变一次：排着的那一句跑起来、这一轮结束，或进程退出；没在跑或进程已退出时立即返回。不限时（大脑等一轮自然做完）。
     func nextChange() async throws {
-        guard facts.running, connection?.isClosed == false else { return }
+        guard turns.running, connection?.isClosed == false else { return }
         try await changes.next()
     }
 
     private func begin() -> Int {
         turn += 1
-        facts.startTurn(at: .now)
         speak(nil)
         emit(.turnStarted)
         publish()
@@ -197,19 +190,16 @@ final class ACPSession {
     /// 这一轮结束；`which` 是 `session/prompt` 开的那一轮的编号（别的轮的回应不算），nil 是各家报的结束（Agent 自己开的那一轮）。
     /// 插进来、还没认出被收下的话是这一轮收下的（`ACPSteers`）；回应之前各家报了它接着开的一轮，这就开。
     private func finish(_ which: Int?, failure: String?) {
-        guard facts.running, which.map({ $0 == turn }) ?? true else { return }
-        let stopped = stopping
-        stopping = false
-        let failure = stopped ? nil : reported ?? failure
+        guard turns.running, which.map({ $0 == turn }) ?? true else { return }
+        let failure = turns.stopping ? nil : reported ?? failure
         prompted = nil
         reported = nil
-        if stopped || failure != nil { speak(nil) }
+        if turns.stopping || failure != nil { speak(nil) }
         decline()
-        facts.endTurn(failure: failure)
         for id in steers.ended() { emit(.received(id)) }
         if let failure { emit(.failed(failure)) }
         emit(.turnFinished)
-        release()
+        changes.happened()
         publish()
         if agentTurnNext {
             agentTurnNext = false
@@ -222,15 +212,10 @@ final class ACPSession {
         for id in steers.takeStranded() { emit(.received(id)) }
     }
 
-    private func release() {
-        changes.happened()
-        stops.happened()
-    }
-
     private func decline() {
         guard let pending else { return }
         self.pending = nil
-        facts.questions = []
+        turns.facts.questions = []
         connection?.respond(to: pending.request, result: pending.ask.withdrawn)
     }
 
@@ -238,18 +223,20 @@ final class ACPSession {
         var ask = ask
         ask.question.promptID = UUID().uuidString
         pending = (request, ask)
-        facts.questions = [ask.question]
+        turns.facts.questions = [ask.question]
         publish()
     }
 
+    /// `HostedTurns` 不认的（已在跑时的开始、没在跑时的工具与收尾）不往外报。
     func emit(_ event: TurnEvent) {
+        guard turns.apply(event) else { return }
         brain?.emit(event)
         if let id { bridge?.show(event, in: id) }
     }
 
     func publish() {
         guard let id else { return }
-        bridge?.update(id) { facts.publish(to: &$0) }
+        bridge?.update(id) { turns.facts.publish(to: &$0) }
     }
 
     private func speak(_ next: DraftParts?) {
@@ -283,14 +270,14 @@ final class ACPSession {
     private func apply(_ signal: ACPSignal) {
         switch signal {
         case .turnStarted:
-            if !facts.running {
+            if !turns.running {
                 _ = begin()
             } else if prompted == turn, !promptRunning {
                 promptRunning = true
-                release()
+                changes.happened()
             }
         case .turnFinished(let failure):
-            guard facts.running, prompted == turn else { return finish(nil, failure: failure) }
+            guard turns.running, prompted == turn else { return finish(nil, failure: failure) }
             // 它已不再收插话：之后的话等回应结束这一轮再开新的一轮
             reported = failure
             promptRunning = false
@@ -298,7 +285,7 @@ final class ACPSession {
         case .claimed(let claim): if let id = steers.claimed(claim) { emit(.received(id)) }
         case .stranded(let text):
             steers.strand(text)
-            if facts.running { agentTurnNext = true } else { beginStranded() }
+            if turns.running { agentTurnNext = true } else { beginStranded() }
         case .mcp: break
         }
     }
@@ -306,19 +293,18 @@ final class ACPSession {
     private func updated(_ update: JSONValue) {
         switch update["sessionUpdate"]?.string {
         case "agent_message_chunk":
-            guard facts.running, let text = update["content"]?["text"]?.string else { return }
+            guard turns.running, let text = update["content"]?["text"]?.string else { return }
             var parts = draft ?? DraftParts()
             parts.append(text, to: 0)
             speak(parts)
-            facts.work(.thinking)
+            turns.facts.work(.thinking)
         case "agent_thought_chunk":
-            if facts.running { facts.work(.thinking) }
+            if turns.running { turns.facts.work(.thinking) }
         case "tool_call":
-            guard facts.running else { return }
+            guard turns.running else { return }
             speak(nil)
             let (name, input) = dialect.tool(update)
-            facts.work(.tool, detail: ToolDetail.line(name, input))
-            emit(.tool(id: update["toolCallId"]?.string ?? "", name: CueMCPServer.bareName(name, on: agent), arguments: String(decoding: input.data, as: UTF8.self)))
+            emit(.tool(id: update["toolCallId"]?.string ?? "", name: name, arguments: String(decoding: input.data, as: UTF8.self)))
             toolSettled(update)
         case "tool_call_update":
             toolSettled(update)
@@ -342,8 +328,7 @@ final class ACPSession {
     }
 
     private func toolSettled(_ update: JSONValue) {
-        guard facts.running, let status = update["status"]?.string, status == "completed" || status == "failed" else { return }
-        facts.work(.thinking)
+        guard let status = update["status"]?.string, status == "completed" || status == "failed" else { return }
         emit(.toolDone(id: update["toolCallId"]?.string ?? "", result: dialect.toolResult(update), failed: status == "failed"))
     }
 
@@ -361,7 +346,8 @@ final class ACPSession {
     }
 
     private func ended() {
-        release()
+        changes.happened()
+        turns.closed()
         if mcp == nil { settleMCP(.failure(.notRunning)) }
         if let id { bridge?.detach(id, reason: .closed(reason: "quit")) }
         if let brain, let process = connection?.process {

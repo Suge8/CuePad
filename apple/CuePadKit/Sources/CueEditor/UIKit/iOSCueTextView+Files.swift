@@ -69,25 +69,20 @@ extension CueTextView {
         }
     }
 
-    func attachment(at point: CGPoint) -> (key: String, name: String, file: URL?, rect: CGRect)? {
+    /// 点中的要交给宿主的附件（`EditorCore.openableAttachment`）；本机的图片照常定光标。
+    func attachment(at point: CGPoint) -> (key: String, name: String, rect: CGRect)? {
         guard let position = closestPosition(to: point) else { return nil }
         let offset = self.offset(from: beginningOfDocument, to: position)
         for index in [offset, offset - 1] {
-            guard let hit = core.attachment(at: index),
+            guard let hit = core.openableAttachment(at: index),
                   let start = self.position(from: beginningOfDocument, offset: index),
                   let end = self.position(from: start, offset: 1),
                   let range = textRange(from: start, to: end)
             else { continue }
             let rect = firstRect(for: range)
-            if rect.contains(point) { return (hit.key, hit.name, hit.file, rect) }
+            if rect.contains(point) { return (hit.key, hit.name, rect) }
         }
         return nil
-    }
-
-    /// 点中的是文件牌或还没到的图片（本机的图片照常定光标）。
-    func opensAttachment(at point: CGPoint) -> Bool {
-        guard let hit = attachment(at: point) else { return false }
-        return hit.file == nil || !hit.name.isEmpty
     }
 
     @objc func tappedAttachment(_ tap: UITapGestureRecognizer) {

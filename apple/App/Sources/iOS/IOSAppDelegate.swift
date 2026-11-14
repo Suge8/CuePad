@@ -13,7 +13,7 @@ final class IOSAppDelegate: NSObject, UIApplicationDelegate {
     private(set) var launch: Launch
 
     override init() {
-        launch = Launch.make()
+        launch = Self.open()
         super.init()
         connect()
         // 实时活动的"允许一次"在 App 进程里执行，可能是被叫到后台、没有窗口的时候：由这里答（`AllowOnceIntent`）
@@ -21,8 +21,17 @@ final class IOSAppDelegate: NSObject, UIApplicationDelegate {
     }
 
     func relaunch() {
-        launch = Launch.make()
+        launch = Self.open()
         connect()
+    }
+
+    private static func open() -> Launch {
+        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil { return .testHost }
+        return Launch.make { location in
+            let services = try AppServices(location: location, defaults: location.makeDefaults(), sync: DebugHooks.syncSource)
+            services.start()
+            return services
+        }
     }
 
     private func connect() {

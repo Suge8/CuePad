@@ -26,6 +26,9 @@ struct CuePage: View {
     @State private var opened: PreviewOpening?
     /// 拍板卡正在来去（`CueWaitDock.moving`）：对话先不往上滑。
     @State private var docking = false
+    /// 上一次更新时在等的那张卡：答完的那一次更新里卡已不在数据里，对话同时长出这一问与回答，`docking` 却要等卡收到才起（晚一次更新），
+    /// 这一下按它补上（`sinking`），不让对话当帧顶上去一截再随卡沉回落下来。
+    @State private var dockedCard: String?
     /// 末尾在屏上的新消息（`CueViewing`）。
     @State private var seen: [UUID: Date] = [:]
 
@@ -33,6 +36,8 @@ struct CuePage: View {
     static let inset = Spacing.page
 
     private var cue: CueWatch { workspace.cue }
+    private func card(_ thread: CueThread) -> String? { CueWaitDock.current(in: thread.waiting, asking: workspace.cueAsking)?.id }
+    private func sinking(_ thread: CueThread) -> Bool { dockedCard != nil && card(thread) == nil }
     private var catchingUp: Bool { services.syncing.isCatchingUp(on: cue.hostID) }
     var body: some View {
         page
@@ -41,6 +46,7 @@ struct CuePage: View {
             .panel(isPresented: Bindable(cue).showsMemory) { CueMemoryPage() }
             .panel(isPresented: Bindable(cue).showsSchedules) { CueSchedulePage() }
             .modifier(CueViewing(thread: thread, catchingUp: catchingUp, seen: $seen, follow: $follow))
+            .onChange(of: thread.flatMap(card), initial: true) { dockedCard = $1 }
             .onChange(of: thread != nil, initial: true) { _, loaded in
                 guard loaded else { return }
                 DebugHooks.mark("cue")
@@ -76,7 +82,8 @@ struct CuePage: View {
     }
     #endif
 
-    private var railInset: CGFloat { workspace.layout == .narrow ? SessionRail.chatInset : 0 }
+    /// 对话自己离左边 `inset`：让到字离竖条一个 `item`。
+    private var railInset: CGFloat { workspace.layout == .narrow ? SessionRail.phoneWidth + Spacing.item - Self.inset : 0 }
 
     /// 读不出来时也排一个真的视图：读库的订阅挂在页上，等视图出现才启动。
     @ViewBuilder private var chat: some View {
@@ -100,9 +107,8 @@ struct CuePage: View {
         return ChatColumn(
             followKey: FollowKey(thread, live: cue.presence.shown != nil), readingWidth: Self.readingWidth, inset: Self.inset, follow: $follow,
             marks: thread.marks, ids: rows.map(\.id), paging: Self.paging(thread),
-            holding: catchingUp || docking,
-            arrival: rows.last.flatMap { CueRow.arrives($0, swapsInPlace: services.cueOnDutyHere) ? $0.id : nil },
-            docked: CueWaitDock.current(in: thread.waiting, asking: workspace.cueAsking)?.id
+            holding: catchingUp || docking || sinking(thread),
+            arrival: rows.last.flatMap { CueRow.arrives($0, swapsInPlace: services.cueOnDutyHere) ? $0.id : nil }
         ) { window in
             let lastYou = thread.messages.last { $0.author == .known(.you) }?.id
             ChatStack(spacing: 0) {
@@ -163,7 +169,7 @@ struct CuePage: View {
 
     private var calling: Bool {
         #if os(macOS)
-        workspace.voicePresentation?.active == true
+        workspace.voiceViewState.presentation().active
         #else
         false
         #endif

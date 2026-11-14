@@ -2,7 +2,7 @@ import SwiftUI
 
 /// 首行距栏的留白只有 `contentGap`：系统导航页由 `RouteView` 给，自绘页头由 `FloatingHeader` 给。
 enum Bars {
-    static let contentGap: CGFloat = 12
+    static let contentGap = Spacing.group
     static let fade: CGFloat = 16
 }
 

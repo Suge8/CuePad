@@ -85,7 +85,8 @@ final class RelayVoiceConnection {
         case .signal(let packet):
             guard packet.header.recipient == crypto.claim.endpoint else { throw VoiceSignalError.leaseChanged }
             try crypto.bind(packet.header.sender)
-            emit(.received(try crypto.open(packet, now: Self.now)))
+            do { emit(.received(try crypto.open(packet, now: Self.now))) }
+            catch VoiceSignalError.unreadable { emit(.unreadable(header: packet.header)) }
         case .rejected(let header, let reason):
             guard header.sender == crypto.claim.endpoint else { throw VoiceSignalError.leaseChanged }
             emit(.rejected(header: header, reason: reason))

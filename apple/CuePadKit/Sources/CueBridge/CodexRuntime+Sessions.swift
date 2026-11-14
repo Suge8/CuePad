@@ -8,7 +8,7 @@ extension CodexRuntime {
     func makeSession(_ thread: JSONValue, pid: Int32) -> Session {
         let threadID = thread["id"]?.string ?? ""
         var session = Session(
-            id: "\(threadID).\(pid)", sessionID: threadID, agent: .codex, sessionFile: thread["path"]?.string.map { URL(filePath: $0) },
+            id: Session.bridgeID(sessionID: threadID, pid: pid), sessionID: threadID, agent: .codex, sessionFile: thread["path"]?.string.map { URL(filePath: $0) },
             pid: pid, cwd: URL(filePath: thread["cwd"]?.string ?? "/", directoryHint: .isDirectory), 
             state: .settled, stateSince: .now)
         apply(thread, to: &session)
@@ -19,7 +19,7 @@ extension CodexRuntime {
     /// `thread/settings/updated` 与 Codex 接受了的改动（`configure`）——`thread/settings/update` 只回“已排队”，紧接着读线程可能读到改之前的。
     func apply(_ thread: JSONValue, to session: inout Session, settings: Bool = true) {
         session.name = thread["name"]?.string
-        if let preview = thread["preview"]?.string, !preview.isEmpty { session.firstMessage = String(preview.prefix(SessionName.firstMessageLimit)) }
+        if let preview = thread["preview"]?.string, !preview.isEmpty { session.firstMessage = preview }
         guard settings else {
             if let model = session.model?.key.id { session.model = option(model) }
             session.availableModels = (models ?? []).map(\.option)
@@ -37,25 +37,33 @@ extension CodexRuntime {
     }
 
     func attach(_ session: Session, driver: CodexDriver) {
-        let entry = Tracked(id: session.id, threadID: session.sessionID, driver: driver, pid: session.pid)
+        let entry = Tracked(id: session.id, threadID: session.sessionID, driver: driver, timing: timing)
+        entry.turns.onSettle = { [weak self, weak entry] in
+            if let self, let entry { publish(entry) }
+        }
+        driver.onNotification = { [weak self, weak entry] method, params in
+            if let self, let entry { notification(method, params, in: entry) }
+        }
+        driver.onEvent = { [weak self, weak entry] event in
+            if let self, let entry { self.event(event, in: entry) }
+        }
+        driver.rpc?.onRequest = { [weak self, weak entry, weak rpc = driver.rpc] method, id, params in
+            guard let self, let entry, let rpc else { return false }
+            return request(method, params, id: id, on: rpc, in: entry)
+        }
         tracked[session.id] = entry
         var session = session
-        entry.facts.publish(to: &session)
+        session.commands = Self.builtinCommands
+        entry.turns.facts.publish(to: &session)
         bridge.attach(session, via: self)
         refresh(session.id, skills: true)
-    }
-
-    func processGone(_ pid: Int32) {
-        hosted[pid] = nil
-        threads = threads.filter { !$0.key.hasSuffix(".\(pid)") }
-        for session in tracked.values where session.pid == pid { detach(session.id) }
     }
 
     func detach(_ id: Session.ID) {
         guard let session = tracked.removeValue(forKey: id) else { return }
         session.ending?.cancel()
-        threads = threads.filter { if case .session(id, _, _) = $0.value { false } else { true } }
         session.reply = nil
+        session.turns.closed()
         bridge.detach(id, reason: .closed(reason: "quit"))
     }
 
@@ -85,7 +93,7 @@ extension CodexRuntime {
     }
 
     /// 能从 CuePad 执行的内置命令：Codex 的斜杠命令是终端界面自己实现的，只有这几个有对应的接口（`plan`、`default` 切协作模式）。
-    private static let builtinCommands = [
+    static let builtinCommands = [
         SlashCommand(name: "compact", summary: String(localized: "压缩上下文"), source: .known(.builtin)),
         SlashCommand(name: "name", summary: String(localized: "给会话改名"), source: .known(.builtin), hint: String(localized: "<名字>")),
         SlashCommand(name: "model", summary: String(localized: "换模型"), source: .known(.builtin), hint: String(localized: "<模型>")),
@@ -99,7 +107,7 @@ extension CodexRuntime {
     }
 
     func publish(_ session: Tracked) {
-        bridge.update(session.id) { session.facts.publish(to: &$0) }
+        bridge.update(session.id) { session.turns.facts.publish(to: &$0) }
     }
 }
 #endif

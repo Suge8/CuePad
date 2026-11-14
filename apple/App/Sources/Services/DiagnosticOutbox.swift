@@ -6,7 +6,7 @@ import os
 /// 让云上这台设备的诊断（`DeviceDiagnostic`）与本机存档（`DiagnosticArchive`）一致：存档里新有的传上去，存档整理掉的云上也删。
 /// 传过哪些（连同传时的修改时刻：卡住记录恢复后原地改写，要再传）记在存档目录的 `sent.json`，按资料所属账号记：换了账号就当一份都没传过（旧账号那边的不去删）。
 /// 一次只对一遍；对的途中又有变化（`reconcile` 再被调），这一遍完了接着再对一遍。没对成的（断网、被限流）自己隔一阵再对，
-/// 从 `firstRetry` 起每次加倍、至多 `lastRetry`，对成为止：恢复连接后不必等存档再变。不看同步的状态：诊断没传成时同步可能一直是好的。
+/// 从 `firstRetry` 起按退避加长、至多 `lastRetry`，对成为止：恢复连接后不必等存档再变。不看同步的状态：诊断没传成时同步可能一直是好的。
 actor DiagnosticOutbox {
     struct Sent: Codable, Equatable {
         var account: String
@@ -67,14 +67,13 @@ actor DiagnosticOutbox {
     private func retryLater() {
         guard retry == nil else { return }
         retry = Task {
-            var delay = Self.firstRetry
-            while (try? await timing.sleep(delay)) != nil {
+            var backoff = Backoff(first: Self.firstRetry, cap: Self.lastRetry)
+            while (try? await timing.sleep(backoff.next())) != nil {
                 do {
                     try await pass()
                     break
                 } catch {
-                    Self.log.notice("诊断仍没送进 iCloud，\(delay * 2 > Self.lastRetry ? Self.lastRetry : delay * 2) 后再送：\(String(describing: error), privacy: .public)")
-                    delay = min(delay * 2, Self.lastRetry)
+                    Self.log.notice("诊断仍没送进 iCloud，退避后再送：\(String(describing: error), privacy: .public)")
                 }
             }
             retry = nil
@@ -87,14 +86,15 @@ actor DiagnosticOutbox {
             try await running.value
             return
         }
+        // 收尾（清 running）与最后一次看 again 在同一段里：其间来的 reconcile 要么并进这一遍，要么另起一遍，不会等一个已经完了的
         let task = Task<Void, any Error> {
+            defer { running = nil }
             repeat {
                 again = false
                 try await once(account: try await sync.diagnosticsAccount())
             } while again
         }
         running = task
-        defer { running = nil }
         try await task.value
     }
 

@@ -1,12 +1,12 @@
 import Foundation
 
 public enum LibraryLocationError: Error, Equatable, LocalizedError {
-  case relativePath(String)
+  case relativePath(key: String, value: String)
   case appGroupUnavailable(String)
 
   public var errorDescription: String? {
     switch self {
-    case .relativePath(let value): String(localized: "CUEPAD_LIBRARY_DIR 必须是绝对路径，收到「\(value)」")
+    case .relativePath(let key, let value): String(localized: "\(key) 必须是绝对路径，收到「\(value)」")
     case .appGroupUnavailable(let id): String(localized: "无法访问共享容器 \(id)：App 没有该 App Group 的权限（真机需要开发者签名）")
     }
   }
@@ -63,30 +63,35 @@ public struct LibraryLocation: Equatable, Sendable {
   /// 各台设备经 iCloud 送到这台 Mac 的诊断落在哪（App 的 `DiagnosticInbox`）：正式版在 macOS 放应用日志的地方（~/Library/Logs/CuePad），
   /// 不进资料库目录，agent 读它不碰资料库。环境变量 `CUEPAD_DEVICE_LOGS_DIR`（绝对路径）换掉它（`xc.sh` 的隔离实例给库里的 `Logs/`，`app_env.py` 的 `isolated_env`）；
   /// 没给时隔离库也放自己目录的 `Logs/`，不往正式版那里写。
-  public func deviceLogs(environment: [String: String] = ProcessInfo.processInfo.environment) -> URL {
-    if let override = environment[Self.deviceLogsKey], override.hasPrefix("/") { return URL(filePath: override, directoryHint: .isDirectory) }
+  public func deviceLogs(environment: [String: String] = ProcessInfo.processInfo.environment) throws -> URL {
+    if let override = try Self.overrideDirectory(Self.deviceLogsKey, in: environment) { return override }
     return isIsolated
       ? directory.appending(path: "Logs", directoryHint: .isDirectory) : UserHome.directory.appending(path: "Library/Logs/CuePad", directoryHint: .isDirectory)
+  }
+
+  /// 换位置的环境变量（库、工作区、设备日志）的唯一读法：没给为 nil；给了相对路径就报错、打不开，不悄悄回到默认位置（那可能是真实的家目录）。
+  public static func overrideDirectory(_ key: String, in environment: [String: String]) throws -> URL? {
+    guard let value = environment[key], !value.isEmpty else { return nil }
+    guard value.hasPrefix("/") else { throw LibraryLocationError.relativePath(key: key, value: value) }
+    return URL(filePath: value, directoryHint: .isDirectory)
   }
 
   public static func isolated(_ directory: URL) -> LibraryLocation {
     LibraryLocation(directory: directory, origin: .override)
   }
 
+  /// `isRelease`：这个进程是不是正式版（nil 取 `AppIdentity.isRelease`）；Mac 上不是的打开开发库。
   public static func resolve(
-    environment: [String: String] = ProcessInfo.processInfo.environment, base: Base = .platform
+    environment: [String: String] = ProcessInfo.processInfo.environment, base: Base = .platform, isRelease: Bool? = nil
   ) throws -> LibraryLocation {
-    if let override = environment[environmentKey], !override.isEmpty {
-      guard override.hasPrefix("/") else { throw LibraryLocationError.relativePath(override) }
-      return .isolated(URL(filePath: override, directoryHint: .isDirectory))
-    }
+    if let override = try overrideDirectory(environmentKey, in: environment) { return .isolated(override) }
     switch base {
     case .appGroup(let container):
       guard let container else { throw LibraryLocationError.appGroupUnavailable(AppIdentity.appGroup) }
       return LibraryLocation(directory: container.appending(path: "Library", directoryHint: .isDirectory), origin: .release)
     case .applicationSupport(let support):
       #if os(macOS)
-      if support == URL.applicationSupportDirectory, !AppIdentity.isRelease {
+      if !(isRelease ?? AppIdentity.isRelease) {
         return LibraryLocation(directory: support.appending(path: "CuePad Dev/Library", directoryHint: .isDirectory), origin: .development)
       }
       #endif

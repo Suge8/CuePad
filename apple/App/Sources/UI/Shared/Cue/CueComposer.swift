@@ -174,14 +174,14 @@ struct CueComposer: View {
     }
     private var calls: Bool { phonePage && workspace.cue.canHear && !hasDraft && !sending }
     private var inCall: Bool { phonePage && !workspace.services.voice.canStart }
-    private var callReady: Bool { workspace.services.voice.startUnavailableReason == nil }
+    private var callReady: Bool { workspace.voiceStartBlock == nil }
 
     private var lead: ComposerLead? {
         #if os(iOS)
         guard inCall else { return nil }
         let voice = workspace.services.voice
         return ComposerLead(icon: voice.isMuted ? .muted : .microphone, label: voice.isMuted ? "取消静音" : "静音",
-                            on: voice.isMuted, enabled: voice.canMute) { workspace.runPhoneVoice(.setMuted(!voice.isMuted)) }
+                            on: voice.isMuted, enabled: voice.canMute) { workspace.runVoice(.setMuted(!voice.isMuted)) }
         #else
         nil
         #endif
@@ -195,7 +195,7 @@ struct CueComposer: View {
 
     private func hangUp() {
         #if os(iOS)
-        workspace.runPhoneVoice(.hangUp)
+        workspace.runVoice(.hangUp)
         #endif
     }
     /// 空着时的发送中：你最近一句还在路上（与气泡、头像同一个事实，`CueWatch.sending`）。

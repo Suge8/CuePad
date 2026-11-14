@@ -2,33 +2,72 @@
 import CueStore
 import Darwin
 import Foundation
+import os
 
 /// 会话快照只经桥的 attach/update/detach 发布。多个桥可连接同一扩展；ack 只回发送方，命令按扩展收到的顺序执行。
 @MainActor
 final class PiConnections {
+    private static let log = Logger(subsystem: AppIdentity.id, category: "bridge")
     private let directory: URL
     weak var bridge: Bridge?
     private var links: [String: PiConnection] = [:]
     private var watcher: DirectoryWatcher?
+    /// 目录没了、还没盯上新的那一段在重试（`directoryChanged`）
+    private var rewatching: Task<Void, Never>?
+    private let timing: Timing
     // 没告别就断线可能早于进程退出，等退出后再清残留 socket。
     private var orphanExitWatchers: [String: ProcessExitWatcher] = [:]
     // 同名 socket 重建后必须重连，所以按文件身份记不兼容，而非名字。
     private var incompatible: [String: SocketDirectory.FileIdentity] = [:]
 
-    init(directory: URL) {
+    init(directory: URL, timing: Timing) {
         self.directory = directory
+        self.timing = timing
     }
 
     func start() throws {
-        guard watcher == nil else { return }
+        guard watcher == nil, rewatching == nil else { return }
+        try watch()
+    }
+
+    private func watch() throws {
         try SocketDirectory.prepare(directory)
-        watcher = try DirectoryWatcher(directory) { [weak self] in self?.scan() }
+        watcher = try DirectoryWatcher(directory) { [weak self] gone in self?.directoryChanged(gone: gone) }
         scan()
     }
+
+    /// 目录在 /tmp 下，系统每天清一次（`/usr/libexec/tmp_cleaner`）：空着超过 3 天的目录会被删，扩展起来时再建的是另一个目录，得改盯它。
+    /// 已连上的会话不受影响（连接不靠目录）。重建一时不成（路径被别的东西占着、权限不对）就退避重试到盯上为止，同 OpenCode 事件流的重连。
+    private func directoryChanged(gone: Bool) {
+        guard gone else { return scan() }
+        watcher?.cancel()
+        watcher = nil
+        rewatching?.cancel()
+        let timing = timing
+        rewatching = Task { [weak self] in
+            var delay = Self.retryFloor
+            while !Task.isCancelled, let self {
+                do {
+                    try self.watch()
+                    self.rewatching = nil
+                    return
+                } catch {
+                    Self.log.error("socket directory removed and not recreated yet, new Pi sessions cannot connect; retrying in \(delay, privacy: .public): \(String(describing: error), privacy: .public)")
+                }
+                guard (try? await timing.sleep(delay)) != nil else { return }
+                delay = min(delay * 2, Self.retryCeiling)
+            }
+        }
+    }
+
+    private static let retryFloor: Duration = .seconds(1)
+    private static let retryCeiling: Duration = .seconds(30)
 
     func stop() {
         watcher?.cancel()
         watcher = nil
+        rewatching?.cancel()
+        rewatching = nil
         for link in links.values {
             link.connection.close()
             link.exitWatcher?.cancel()
@@ -62,7 +101,7 @@ final class PiConnections {
             // 扫描与文件删除之间的竞态
         } catch {
             incompatible[name] = file
-            bridge.emit(.incompatible(id: name, detail: "cannot connect: \(error)"))
+            Self.log.error("\(name, privacy: .public) cannot connect: \(String(describing: error), privacy: .public)")
         }
     }
 
@@ -125,11 +164,11 @@ final class PiConnections {
             guard let id = link.id else { throw HandlingError.messageBeforeHello }
             guard let work = wire.work else { throw HandlingError.unknownState(wire.kind) }
             bridge.update(id) { session in
+                session.stateSince = wire.sinceDate
+                session.busySince = wire.busySinceDate
                 session.state = work.state
                 session.detail = work.detail
                 session.errorMessage = wire.errorMessage
-                session.stateSince = wire.sinceDate
-                session.busySince = wire.busySinceDate
                 session.turnStartedAt = wire.turnSinceDate
             }
         case .info(let info):
@@ -164,7 +203,7 @@ final class PiConnections {
     private func reject(_ link: PiConnection, name: String, detail: String) {
         link.rejected = true
         incompatible[name] = link.file
-        bridge?.emit(.incompatible(id: name, detail: detail))
+        Self.log.error("\(name, privacy: .public) incompatible: \(detail, privacy: .public)")
         link.connection.close()
     }
 

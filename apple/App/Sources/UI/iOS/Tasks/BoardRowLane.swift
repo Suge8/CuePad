@@ -95,12 +95,12 @@ enum BoardRowMetrics {
     static let wideCardWidth: CGFloat = 0.88
     static let spine: CGFloat = 32
     static let spineHeight: CGFloat = 92
-    static let spineInset: CGFloat = 10
+    static let spineInset = Spacing.item
     static let addHeight: CGFloat = 30
     static let lead: CGFloat = spine + gap
-    static let margin: CGFloat = 12
-    static let gap: CGFloat = 8
-    static let inset: CGFloat = 4
+    static let margin = Spacing.group
+    static let gap = Spacing.item
+    static let inset = Spacing.tight
 }
 
 private struct BoardRowSpine: View {

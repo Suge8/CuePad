@@ -61,6 +61,7 @@ struct BoardWaitCard: View {
         }
         .accessibilityLabel(spoken)
         .accessibilityActions { menu }
+        .completionAsks(claiming: held.item?.task.id)
     }
 
     private var rowFace: some View {

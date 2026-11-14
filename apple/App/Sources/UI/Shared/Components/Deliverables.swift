@@ -44,8 +44,8 @@ struct PreviewBatch: View {
         .contextMenu { Button("回复", icon: .reply) { reply(preview) } }
     }
 
-    nonisolated static let gap: CGFloat = 8
-    private static let inset: CGFloat = 12
+    nonisolated static let gap = Spacing.item
+    private static let inset = Spacing.group
 
     #if os(macOS)
     private static let stripHeight: CGFloat = 176
@@ -74,7 +74,7 @@ struct DeliverableTile: View {
         case shot(side: CGFloat, chosen: Bool)
     }
 
-    static let captionGap: CGFloat = 5
+    static let captionGap = Spacing.tight
 
     let preview: PreviewItem
     let label: String
@@ -113,7 +113,11 @@ struct DeliverableTile: View {
             let loaded = await DeliverableLooks.load(preview, file: file, box: box, scale: scale, caches: services.store.files.caches)
             withAnimation(waited ? Motion.fade : nil) { look = loaded }
         }
-        .pending(loading, shown: $slow)
+        .task(id: loading) {
+            if loading { try? await Task.sleep(for: Pending.delay) }
+            guard !Task.isCancelled, slow != loading else { return }
+            withAnimation(Motion.fade) { slow = loading }
+        }
         // 截图等画面读到再拍：读的头 `Pending.delay` 里格子只有边，拍下来就是一张空白占位
         .debugSettling(loading)
         .layoutValue(key: PreviewAspect.self, value: aspect)

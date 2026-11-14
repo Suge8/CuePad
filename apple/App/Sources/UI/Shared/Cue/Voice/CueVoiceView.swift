@@ -27,10 +27,10 @@ struct CueVoiceDetailButton<Label: View>: View {
 /// Mac 的通话条，在输入框那里：通话中顶替输入框（`CuePage`，同手机），挂断后还有可看的（失败、问题与朗读记录）时缩成输入框上面的一条，都没有就不在。
 /// 真实状态立即更新，只有声纹在图层里连续变形，详情在行尾的"⋯"。
 /// 手机与 iPad 没有单独的条：通话就在"对 Cue 说"里（`CueComposer`、`PhoneCall`）。
-struct CueVoiceView<Operation: CueVoiceOperation>: View {
-    let presentation: CueVoiceState<Operation>?
+struct CueVoiceView: View {
+    let presentation: CueVoicePresentation?
     @Binding var detailsSource: BubbleSource?
-    let action: (CueVoiceIntent<Operation>) -> Void
+    let action: (VoiceAction) -> Void
     @Environment(\.palette) private var palette
 
     private var active: Bool { presentation?.active == true }
@@ -45,7 +45,11 @@ struct CueVoiceView<Operation: CueVoiceOperation>: View {
             }
     }
 
-    private var showsStatus: Bool { active || hasDetails || presentation?.activity == .failed }
+    /// 没起过通话（`idle`）时不在：起不了的原因在入口的提示里（`CueVoiceEntry`），不另占一条。
+    private var showsStatus: Bool {
+        guard let presentation, presentation.activity != .idle else { return false }
+        return active || hasDetails || presentation.activity == .failed
+    }
 
     @ViewBuilder private var content: some View {
         if showsStatus { bar.transition(.opacity) }
@@ -81,7 +85,7 @@ struct CueVoiceView<Operation: CueVoiceOperation>: View {
     }
 
     private var muteButton: some View {
-        Button { action(.toggleMute) } label: {
+        Button { action(.setMuted(!muted)) } label: {
             CircleGlyph(fill: muted ? palette.ink : palette.fill) {
                 Image(muted ? .muted : .microphone).font(Glyph.large).foregroundStyle(muted ? palette.paper : palette.ink)
             }
@@ -104,8 +108,8 @@ struct CueVoiceView<Operation: CueVoiceOperation>: View {
 
 /// 配置排只占一个固定入口；问题与朗读记录统一从常驻通话栏的详情进入，结束时不再增高回复框。
 /// 平台宿主提供同一份投影与 BubbleSource；开始动作不捕获、重造请求或媒体身份。
-struct CueVoiceEntry<Operation: CueVoiceOperation>: View {
-    let presentation: CueVoiceState<Operation>?
+struct CueVoiceEntry: View {
+    let presentation: CueVoicePresentation?
     @Binding var detailsSource: BubbleSource?
     let start: () -> Void
 

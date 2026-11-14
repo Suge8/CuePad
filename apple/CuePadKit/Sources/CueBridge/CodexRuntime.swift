@@ -21,26 +21,25 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
     let codex: @Sendable () async -> URL?
     private let locate: @Sendable () async -> ExecutableLocator
     var tracked: [Session.ID: Tracked] = [:]
-    var hosted: [Int32: CodexDriver] = [:]
     /// 托管会话的进程按会话（线程 id）登记，请退出与接着都经它（`HostedProcesses`）
     let processes: HostedProcesses
-    var threads: [String: Owner] = [:]
+    /// 同一进程上别的线程是谁的（每个会话一个进程，所以只在这个会话里认）
     enum Owner {
         case asking([(method: String, params: JSONValue)])
         /// 刚起的线程，推送先到、`thread/read` 还读不到它（实测偶发，负载高时更常见），或这次读被取消、没及时回：留着已收下的推送，下一条推送来时再问
         case unreadable([(method: String, params: JSONValue)])
-        case session(Session.ID, name: String, role: String)
-        /// 沿父线程到顶也不是跟踪着的会话，或报出来的顶层线程：之后的推送不再问
+        /// 这个会话的子代理
+        case child(name: String, role: String)
+        /// 沿父线程到顶也不是这个会话，或报出来的顶层线程：之后的推送不再问
         case foreign
 
         var pending: [(method: String, params: JSONValue)]? {
             switch self {
             case .asking(let queued), .unreadable(let queued): queued
-            case .session, .foreign: nil
+            case .child, .foreign: nil
             }
         }
     }
-    var naming: [String: CodexNamingTurn] = [:]
     /// `model/list` 的结果（账号可用的模型对所有会话一样），第一次要时取
     var models: [CodexModel]?
     var stopped = true
@@ -58,40 +57,36 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
         self.locate = locate
     }
 
-    enum Restart { case stopping, stopped }
-
-    final class Tracked {
+    /// 一个托管会话与承载它的那个 app-server 进程
+    @MainActor final class Tracked {
         let id: Session.ID
         let threadID: String
         let driver: CodexDriver
-        let pid: Int32
-        var facts = SessionFacts()
-        /// 要你回答的那一个怎么回给 Codex（与 `facts.questions` 一一对应，只有一个）
+        let turns: HostedTurns
+        /// 进程上除这个会话之外的线程（线程 id）
+        var threads: [String: Owner] = [:]
+        /// 起名的临时线程（线程 id，`suggestName`）：推送只到它
+        var naming: [String: CodexNamingTurn] = [:]
+        /// 要你回答的那一个怎么回给 Codex（与 `turns.facts.questions` 一一对应，只有一个）
         var reply: Reply?
         /// 父线程歇着时落定、结果还没交给一轮的子代理（线程 id）：有没有交回结果（做完、出错交回；被停下的不交）
         var unread: [String: Bool] = [:]
         var lastWords: [String: String] = [:]
-        /// 这一轮驱动报的失败原文（`failed`），出错歇下时用
-        var lastError: String?
         /// CuePad 发出 `turn/start` 前的时刻：它开出的一轮从这里算起。收到开始通知的时刻在负载高时可能晚于这一轮在会话文件里的回答（实测）
         var sentAt: Date?
-        /// 这一轮已结束、先认清同一进程上认不出主人的线程再歇下（`endTurn`）；期间 `facts` 仍是在跑
+        /// 这一轮已结束、先认清同一进程上认不出主人的线程再歇下（`endTurn`）；期间 `turns` 仍是在跑
         var ending: Task<Void, Never>?
         /// 这一轮派出、还没认出的子代理（任务名，父线程的 `subAgentActivity` 报的）：子线程的推送与父线程的一轮结束不分先后，
         /// 推送晚到时一轮结束还不知道有它（`endTurn` 等它认出，`recognized` 报每次认出）
         var spawned: Set<String> = []
         var recognized: Occurrences?
-        /// CuePad 正以一句话开新一轮（`deliver`）：期间一轮结束不算歇下，接着就是这句开的那一轮
-        var restarting: Restart?
-        var restartGeneration = 0
-        let stopPhase = StopPhase()
         var skills: [(name: String, path: String)] = []
 
-        init(id: Session.ID, threadID: String, driver: CodexDriver, pid: Int32) {
+        init(id: Session.ID, threadID: String, driver: CodexDriver, timing: Timing) {
             self.id = id
             self.threadID = threadID
             self.driver = driver
-            self.pid = pid
+            turns = HostedTurns(timing: timing)
         }
 
         /// 服务端请求（`id` 是它的请求 id）
@@ -121,7 +116,7 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
             session.reply = nil
             session.ending?.cancel()
         }
-        let waits = hosted.values.compactMap(\.rpc).map { rpc in Task { await rpc.shutdown() } }
+        let waits = tracked.values.compactMap(\.driver.rpc).map { rpc in Task { await rpc.shutdown() } }
         let launching = processes.stop()
         return {
             await launching()
@@ -169,7 +164,7 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
         return (codex, locator.environment(launching: codex, overrides: paths.launchEnvironment(of: .codex)))
     }
 
-    /// 连同握手至多 `AgentTimeouts.launch`，超时或出错时停掉进程。
+    /// 连同握手至多 `AgentTimeouts.launch`，超时或出错时停掉进程。接上会话（`attach`）之前它的推送与请求没人接：那时还没有子线程与要问的。
     private func launch(
         sessionID: String?, admission: HostedProcesses.Admission, _ body: @escaping @MainActor (CodexDriver, CodexRPC) async throws -> Session.ID
     ) async throws -> Session.ID {
@@ -178,23 +173,11 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
         let rpc = try await driver.launch(codex.url, environment: codex.environment) { [processes] process in
             try await processes.admit(process, for: sessionID, admission)
         }
-        host(driver, rpc)
         do {
             return try await withDeadline(AgentTimeouts.launch, timing: timing, orThrow: AgentRuntimeError.launchTimedOut(.codex)) { try await body(driver, rpc) }
         } catch {
             await rpc.shutdown()
             throw error as? CodexRPCError == .timedOut ? AgentRuntimeError.launchTimedOut(.codex) : error
-        }
-    }
-
-    private func host(_ driver: CodexDriver, _ rpc: CodexRPC) {
-        let pid = rpc.pid
-        hosted[pid] = driver
-        driver.onNotification = { [weak self] method, params in self?.notification(method, params, from: pid) }
-        driver.onEvent = { [weak self] event in self?.event(event, from: pid) }
-        rpc.onRequest = { [weak self, weak rpc] method, id, params in
-            guard let self, let rpc else { return false }
-            return self.request(method, params, id: id, on: rpc)
         }
     }
 

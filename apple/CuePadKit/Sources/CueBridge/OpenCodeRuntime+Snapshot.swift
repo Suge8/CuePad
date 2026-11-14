@@ -19,14 +19,14 @@ extension OpenCodeRuntime {
 
         let topLevel = all.filter { $0.parentID == nil }
         for info in topLevel {
-            var tracked = sessions[info.id] ?? Tracked(info: info)
+            var tracked = track(info)
             tracked.info = info
             // 断线期间错过的事件不补：执行与压缩的进展只认此刻的快照（在线会话的压缩中与出错原文由 refreshLive 补上）
             // 快照里在跑的一轮：开始取快照之后读到的对话里的（可能是断线期间开始的另一轮，`SessionFacts.startTurn(at:)`）
-            if let start = started[info.id] { tracked.facts.startTurn(at: start) } else { tracked.facts.running = false }
+            tracked.turns.reconcile(runningSince: started[info.id])
             tracked.facts.work(.thinking)
-            if tracked.turn.speaking { bridge.setDraft(bridgeID(info.id, connection), nil) }
-            tracked.turn = OpenCodeTurn()
+            if tracked.parser.speaking { bridge.setDraft(bridgeID(info.id, connection), nil) }
+            tracked.parser = OpenCodeTurn()
             tracked.facts.compacting = false
             tracked.facts.failure = !tracked.facts.running && info.outcome == "failed" ? OpenCodeTurn.unknownFailure : nil
             if tracked.facts.running || info.updatedAt >= connection.startedAt, revives(info.id, at: info.updatedAt) {
@@ -36,6 +36,7 @@ extension OpenCodeRuntime {
         }
         let present = Set(topLevel.map(\.id))
         for (id, tracked) in sessions where !present.contains(id) {
+            tracked.turns.closed()
             if tracked.online { bridge.detach(bridgeID(id, connection), reason: .closed(reason: "deleted")) }
             sessions[id] = nil
         }
@@ -110,10 +111,10 @@ extension OpenCodeRuntime {
         ended[sessionID].map { time > $0 } ?? true
     }
 
-    func bridgeID(_ sessionID: String, _ connection: Connection) -> Session.ID { "\(sessionID).\(connection.pid)" }
+    func bridgeID(_ sessionID: String, _ connection: Connection) -> Session.ID { Session.bridgeID(sessionID: sessionID, pid: connection.pid) }
 
     func publish(_ sessionID: String) {
-        guard let connection, connection.ready, var tracked = sessions[sessionID], tracked.online else { return }
+        guard let connection, connection.ready, let tracked = sessions[sessionID], tracked.online else { return }
         let id = bridgeID(sessionID, connection)
         let catalog = catalogs[tracked.directory]
         let model = tracked.info.model.map { ref in
@@ -141,7 +142,6 @@ extension OpenCodeRuntime {
         } else {
             bridge.update(id, fill)
         }
-        sessions[sessionID] = tracked
     }
 
     /// 强度是模型的 `variant`；没设（`default`）时，没有强度可选的模型是 `off`，有的不知道是哪一档。

@@ -101,18 +101,16 @@ extension CueStore {
     return try requestControl(.stop, of: session.target, on: session.host(or: host), cue: cue)
   }
 
-  /// 在用的抛 `sessionInUse`：Cue 点名要收，得知道为什么没收。已结束且无待核对结束请求才返回 nil；否则明确投送，不用 ended 快照代替执行结果。
+  /// 在用的抛 `sessionInUse`：Cue 点名要收，得知道为什么没收。已结束且没有进行中的结束（`isEnding`）才返回 nil；否则明确投送（进行中的那条原样返回），不用 ended 快照代替执行结果。
   public func endIdleSession(_ sessionID: String) throws -> DeliveryRequest? {
     try write {
       guard let state = try sessionState(sessionID) else { throw CueStoreError.notFound }
       if state.state == .known(.ended) {
-        let unresolved = try deliveryRequests(toSession: sessionID).contains {
-          $0.mode == .known(.end) && $0.handledBy != nil && ($0.isOpen || $0.status == .known(.unconfirmed))
-        }
-        guard unresolved else { return nil }
+        guard try deliveryRequests(toSession: sessionID).contains(where: \.isEnding) else { return nil }
       }
-      guard try db.first(Self.usedElsewhere, [sessionID, nil as UUID?], { _ in true }) == nil else { throw CueStoreError.sessionInUse(state.title) }
-      return try requestControl(.end, of: SendTarget(kind: .piSession, name: state.title, ref: sessionID), on: state.hostID, cue: true)
+      guard try !sessionInUse(sessionID) else { throw CueStoreError.sessionInUse(state.title) }
+      return try requestControl(
+        .end, of: SendTarget(kind: .piSession, name: state.title, ref: sessionID), on: state.hostID, cue: true, content: DeliveryRequest.EndKind.explicit.stored)
     }
   }
 

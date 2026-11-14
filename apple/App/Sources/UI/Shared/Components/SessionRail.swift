@@ -15,12 +15,13 @@ struct SessionRail: View {
     enum Form {
         case phone, wide
         /// 手机竖条定宽；宽屏跟着会话条那一块的宽。
-        var width: CGFloat? { self == .phone ? 60 : nil }
+        var width: CGFloat? { self == .phone ? SessionRail.phoneWidth : nil }
     }
 
-    static let chatInset: CGFloat = 52
+    /// 窄屏的竖条也浮在 Cue 页的对话左边，对话照它让开（`CuePage`）。
+    static let phoneWidth: CGFloat = 60
     /// 手机竖条的纸离屏边（格铺满纸）。
-    static let phoneInset: CGFloat = 2
+    static let phoneInset = Spacing.hair
 
     enum Opening { case primary, beside }
 

@@ -149,7 +149,7 @@ private struct ChatSegment: View, Equatable {
             && lhs.session.id == rhs.session.id && lhs.session.projectID == rhs.session.projectID
     }
 
-    private static var turnGap: CGFloat { 14 }
+    private static var turnGap: CGFloat { Spacing.block }
 
     var body: some View {
         ChatRows(ids: items.map(\.id), spacing: Conversation.spacing) {
@@ -244,8 +244,9 @@ struct SessionSubtitle: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
-    /// 会话在别的 Mac 上、本机正在和 iCloud 对（久过 `Pending.delay`）：写下的状态可能已经过时，先写"正在同步"（同 Cue 页头）。
-    @State private var syncing = false
+
+    /// 会话在别的 Mac 上、本机正在和 iCloud 对：写下的状态可能已经过时，先写"正在同步"（同 Cue 页头）。
+    private var syncing: Bool { services.syncing.showsCatchingUp(on: session.hostID) }
 
     var body: some View {
         let shown = workspace.shownInHeader(session, delivery: delivery)
@@ -264,7 +265,7 @@ struct SessionSubtitle: View {
                 .accessibilityElement(children: .combine)
             }
         }
-        .pending(services.syncing.isCatchingUp(on: session.hostID), shown: $syncing)
+        .animation(Motion.fade, value: syncing)
     }
 
     @ViewBuilder private func facts(shown: SessionShown, speaks: Bool, mark: String?, compact: Bool) -> some View {

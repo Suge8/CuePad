@@ -3,8 +3,6 @@ import CueSync
 import Foundation
 #if os(macOS)
 import SystemConfiguration
-#else
-import UIKit
 #endif
 
 /// 诊断怎么从各台设备到 Mac：存档一变就经 iCloud 送出（`DiagnosticOutbox`），Mac 隔一阵收一次、落成文件（`DiagnosticInbox`）。
@@ -19,7 +17,7 @@ extension AppServices {
             })
         #if os(macOS)
         if let cloud {
-            let inbox = DiagnosticInbox(directory: location.deviceLogs(), sync: cloud)
+            let inbox = DiagnosticInbox(directory: deviceLogs, sync: cloud)
             follow { await inbox.watch(every: DebugHooks.diagnosticsEvery ?? DiagnosticInbox.interval) }
         }
         #endif
@@ -31,7 +29,7 @@ extension AppServices {
         #if os(macOS)
         (hostID, SCDynamicStoreCopyComputerName(nil, nil) as String? ?? MainThreadWatch.device)
         #else
-        UIDevice.current.identifierForVendor.map { ($0.uuidString, MainThreadWatch.device) }
+        device.map { ($0, MainThreadWatch.device) }
         #endif
     }
 }

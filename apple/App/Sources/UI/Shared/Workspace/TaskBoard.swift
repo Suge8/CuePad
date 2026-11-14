@@ -172,6 +172,48 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         return TaskMove(slot: .top(project: dragged.projectID), after: after)
     }
 
+    /// 拖一张卡放到一列上会发生什么；nil 是不接（拖过来不亮、放下不动）。`slot` 是待办里落在第几张之前（`slots`），别的列不看。
+    /// 等你的不接：那一列按会话在不在问你分，改了状态也还在那儿。没绑任务的会话没有"待办"：拖过去是要它停下（结束会话那一问）。
+    enum Drop {
+        /// 待办里换位置；nil 是放回原处。
+        case place(UUID, TaskMove?)
+        /// 推进中的任务拖回待办：算没开始（它的会话照旧活着，解开后单独一张留在推进中），落在线画的那个位置；
+        /// 没有线时（它那个项目在待办里一张都没有）为 nil，落在项目排到的地方。
+        case backToTodo(UUID, TaskMove?)
+        case start(Card)
+        case finish(Item)
+        case finishSession(SessionListItem)
+        case endSession(SessionState)
+    }
+
+    func drop(_ card: DraggedCard, into column: Column, at slot: Int?) -> Drop? {
+        switch (column, card) {
+        case (.waiting, _), (_, .idea), (.advancing, .session): return nil
+        case (.todo, .task(let id)):
+            let move = slot.flatMap { move(id, before: todo.indices.contains($0) ? todo[$0].id : nil) }
+            if advancing.contains(where: { $0.item?.id == id }) { return .backToTodo(id, move) }
+            return slots(for: id).isEmpty ? nil : .place(id, move)
+        case (.advancing, .task(let id)):
+            return todo.first { $0.id == id }.map { .start($0.task) }
+        case (.done, .task(let id)):
+            return item(id).flatMap { $0.task.status == .done ? nil : .finish($0) }
+        case (.todo, .session(let id)):
+            return loose(id).flatMap { $0.state.canEnd ? .endSession($0.state) : nil }
+        case (.done, .session(let id)):
+            return loose(id).map(Drop.finishSession)
+        }
+    }
+
+    func item(_ id: UUID) -> Item? {
+        todo.first { $0.id == id } ?? advancing.lazy.compactMap(\.item).first { $0.id == id } ?? held.lazy.compactMap(\.item).first { $0.id == id }
+            ?? done.first { $0.id == id } ?? earlier.first { $0.id == id }
+    }
+
+    /// 没绑任务的会话（推进中的，与等你里没有任务的）。
+    private func loose(_ session: String) -> SessionListItem? {
+        (advancing.compactMap(\.loose) + held.filter { $0.item == nil }.map { SessionListItem(state: $0.session) }).first { $0.state.sessionID == session }
+    }
+
     static func read(from store: isolated CueStore, now: Date = .now) throws -> TaskBoard {
         let projects = Dictionary(uniqueKeysWithValues: try store.projects().map { ($0.id, $0) })
         let steps = try store.subtaskProgress()

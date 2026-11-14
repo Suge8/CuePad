@@ -6,10 +6,6 @@ nonisolated struct DriveArgs: Decodable, DebugArgGroup {
     let axDump: Bool
     /// `-CuePadAXFocus YES`：旁白每落到一个元素就往资料库目录的 `ax-focus.txt` 追加一行（同上的格式，再带它在屏上的框）
     let axFocus: Bool
-    /// `-CuePadActivityDiagnostics YES`：隔离库里也留活动取证
-    let activityDiagnostics: Bool
-    /// `-CuePadActivityDiagnosticsRead <输出.json>`：`xc.sh activity-log` 用，只读导出活动取证；由 `ActivityDiagnosticReader` 直接读命令行，这里登记以便不被当成拼错的参数
-    let activityDiagnosticsRead: String?
     /// `-CuePadBench interact|chatscroll|churn`（量完退出）：interact 单次交互的点击回合与掉帧，chatscroll（仅 Mac）长对话滚动，churn（仅 Mac）边加卡边拉宽窗口查布局反馈环
     let bench: String?
     /// `-CuePadBoardTour YES`：走一遍看板的各种变化
@@ -64,7 +60,7 @@ nonisolated struct DriveArgs: Decodable, DebugArgGroup {
     let speech: String?
     /// `-CuePadStream YES`（配 session 画面）：打开会话后像真的 Agent 那样一轮一轮追加：看新内容到达时跟随最新
     let stream: Bool
-    /// `-CuePadTraceWait YES`（perf 脚本带着 CUEPAD_TRACE 时，_trace.sh）：写 `AWAIT trace <PID>` 停着，等脚本按 PID 开录了发来 SIGUSR1
+    /// `-CuePadTraceWait YES`（perf.py 带着 CUEPAD_TRACE 时）：写 `AWAIT trace <PID>` 停着，等脚本按 PID 开录了发来 SIGUSR1
     let traceWait: Bool
     /// `-CuePadVisitCue <秒>`：说完这么久去 Cue 页，停够读到它再回原来那页，录"别处时有提示、读过就没了"
     let visitCue: Double

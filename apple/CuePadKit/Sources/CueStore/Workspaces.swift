@@ -14,10 +14,8 @@ public struct Workspaces: Equatable, Sendable {
   public init(root: URL) { self.root = root }
 
   /// `isolatedLibrary` 是隔离库的目录（不碰真实世界时），碰真实世界为 nil。
-  public static func resolve(environment: [String: String] = ProcessInfo.processInfo.environment, isolatedLibrary: URL?) -> Workspaces {
-    if let override = environment[environmentKey], override.hasPrefix("/") {
-      return Workspaces(root: URL(filePath: override, directoryHint: .isDirectory))
-    }
+  public static func resolve(environment: [String: String] = ProcessInfo.processInfo.environment, isolatedLibrary: URL?) throws -> Workspaces {
+    if let override = try LibraryLocation.overrideDirectory(environmentKey, in: environment) { return Workspaces(root: override) }
     return Workspaces(root: (isolatedLibrary ?? UserHome.directory).appending(path: rootName, directoryHint: .isDirectory))
   }
 

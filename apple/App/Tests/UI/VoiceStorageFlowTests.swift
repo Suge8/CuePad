@@ -27,7 +27,7 @@ struct VoiceStorageFlowTests {
         try await eventually("服务器收下，但 Cue 尚未领取") {
             await cloud.holds(request) && voice.trip(request) == .sent
         }
-        #expect(voice.call.requests.first?.record?.deliveredAt == nil)
+        #expect(voice.stored()?.deliveredAt == nil)
         try await store.markCueMessagesDelivered([request])
         try await eventually("接走回执才显示送达") { voice.trip(request) == .delivered }
         try await voice.hangUp()
@@ -49,15 +49,15 @@ struct VoiceStorageFlowTests {
         try await voice.connect()
         let request = try await voice.handoff("升级后询问进展")
         let reply = try await store.addCueMessage(.cue, text: "真实结果先到，来源随后到", answeredRequests: nil)
-        try await eventually("先显示没有来源的真实结果") { voice.call.replies.contains { $0.id == reply.id } }
+        try await eventually("先显示没有来源的真实结果") { voice.voiceRecord.replies.contains { $0.id == reply.id } }
         #expect(voice.controls[0].sends.isEmpty)
         let cursor = try await store.cueMessagePage(after: 0).through
         try await store.associateCueReply(reply.id, answering: [request])
         let updates = try await store.cueMessagePage(after: cursor).entries
         try #require(updates.contains { $0.message.id == reply.id }, "升级后晚到关联必须通知正在看通话的消费者")
         try await eventually("来源补齐后交给语音一次") { voice.controls[0].sends.count == 1 }
-        #expect(voice.call.replies.first?.message.answeredRequests == [request])
-        #expect(voice.call.replies.last?.text == "真实结果先到，来源随后到")
+        #expect(voice.voiceRecord.replies.first?.message.answeredRequests == [request])
+        #expect(voice.voiceRecord.replies.last?.text == "真实结果先到，来源随后到")
         try await voice.hangUp()
     }
 }

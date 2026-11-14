@@ -95,15 +95,10 @@ extension CueStore {
     }
   }
 
-  /// 会话绑着的顶层任务，一行一处绑定（会话 id、顶层任务、它置顶没有）：会话列表的置顶分组按它（绑着的任务里有置顶的就算）。从绑着它、还在列表里的任务往上一级就是顶层
-  /// （任务至多两级，`Card.maxTaskDepth`）。
-  private static let sessionTaskRows = """
-    SELECT piSessionID AS sessionID, COALESCE(parentID, id) AS task,
-      COALESCE((SELECT p.isPinned FROM cards p WHERE p.id = cards.parentID), isPinned) AS pinned
-    FROM cards WHERE piSessionID IS NOT NULL AND todoAt IS NOT NULL AND \(cardActive)
+  /// 置顶分组里的会话：它所归的那件事（`sessionOwnerTops`）置顶了。会话没有自己的置顶，行上的置顶菜单（`SessionListItem.task`）读的是同一件事。
+  private static let pinnedSessions = """
+    SELECT o.sessionID FROM (\(sessionOwnerTops(where: "1"))) o JOIN cards t ON t.id = o.top WHERE t.isPinned = 1
     """
-
-  private static let pinnedSessions = "SELECT sessionID FROM (\(sessionTaskRows)) WHERE pinned = 1"
 
   /// 在问你的会话："等你"里会话那一半（规则在 `SessionState.asksYou`，汇总在 `cueTally`）。只读在等回答的那几条，订阅也只依赖它们（`narrow`）：
   /// 别的会话变状态时"等你"不重读。

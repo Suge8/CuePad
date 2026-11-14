@@ -64,30 +64,6 @@ struct RealClaudeHostTests {
         }
     }
 
-    /// 允许与拒绝都从桥上答：模型下一次请求带回的工具结果和磁盘上的文件两边对得上。
-    @Test(arguments: [true, false]) func cuePadAnswersAPermission(allow: Bool) async throws {
-        try await ClaudeTestbed.run(settings: #"{"permissions": {"ask": ["Bash(touch *)"]}}"#) { testbed in
-            try testbed.startConnected()
-            let id = try await testbed.runtime.open(in: testbed.work, launchToken: "t", name: nil, model: nil, thinking: nil)
-            let touched = testbed.work.appending(path: "hosted.txt")
-            testbed.on("TOUCH") { $0.step == 0 ? .call("Bash", ["command": "touch \(touched.path)", "description": "touch"]) : .say("DONE") }
-
-            let asked = Date()
-            try await testbed.bridge.send(SessionMessage(text: "TOUCH it"), to: id)
-            let permission = try await testbed.waitForQuestion(id)
-            #expect(permission.kind == .known(.confirm) && permission.text.hasPrefix("允许 Claude Code 使用 Bash？"), "\(permission.text)")
-            #expect(!FileManager.default.fileExists(atPath: touched.path), "没答之前不跑")
-            try await testbed.bridge.answer(.confirmed(allow), to: try #require(permission.promptID), in: id)
-            try await testbed.waitForTurn(id, since: asked)
-            try await testbed.waitForDraftLanded(id)
-
-            #expect(FileManager.default.fileExists(atPath: touched.path) == allow)
-            let result = try #require(testbed.model.requests.last { $0.prompt.contains("TOUCH") && $0.step == 1 }?.results.last)
-            #expect(result.contains("拒绝了") == !allow, "工具结果：\(result)")
-            #expect(try testbed.transcript(testbed.bridge.session(id: id)?.sessionFile).recap.lastReply == "DONE")
-        }
-    }
-
     @Test func anIdleHostedSessionExits() async throws {
         try await ClaudeTestbed.run(idleLimit: .seconds(2)) { testbed in
             try testbed.startConnected()

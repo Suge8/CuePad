@@ -80,27 +80,40 @@ extension CueStore {
     let messages = try cueMessagesWaitingForYou()
     let sessions = try sessionsAskingYou()
     let owners = try sessionOwners(sessions.map(\.sessionID))
-    return try messages.map { CueTally.Wait.message($0, task: try $0.taskID.flatMap(topLevelTask)) }
-      + sessions.map { CueTally.Wait.session($0, task: owners[$0.sessionID]?.task.id) }
+    return try messages.map { message in
+      CueTally.Wait.message(message, task: try message.taskID.flatMap { try card($0) == nil ? nil : top(of: $0) })
+    } + sessions.map { CueTally.Wait.session($0, task: owners[$0.sessionID]?.task.id) }
   }
 
-  private func topLevelTask(_ id: UUID) throws -> UUID? {
-    guard var card = try card(id) else { return nil }
-    while let parent = card.parentID, let above = try self.card(parent), above.deletedAt == nil { card = above }
-    return card.id
-  }
-
-  /// 唯一的规则。等你的计数、报给 Cue 的变化、会话行与会话条写的名字、App 的改名都读它：没删除、没归档的任务，做完了的也算（它的问题没答就还是在等你）；绑着几件时归没做完的，再归最近开始的——做完的旧任务不抢正在用它的那件。
+  /// 会话的主人（`sessionOwnerRows`）与它那件事的顶层任务。等你的计数、报给 Cue 的变化、会话行与会话条写的名字、App 的改名都读它。
   public func sessionOwners(_ sessionIDs: [String]) throws -> [String: (task: Card, leaf: Card)] {
     guard !sessionIDs.isEmpty else { return [:] }
-    let leaves = try select(
-      Card.self, where: "piSessionID IN (SELECT value FROM json_each(?)) AND todoAt IS NOT NULL AND \(Self.cardActive)",
-      [JSONColumn.encode(sessionIDs)], orderBy: "completedAt IS NULL DESC, startedAt DESC, id")
-    var owners: [String: (task: Card, leaf: Card)] = [:]
-    for leaf in leaves where owners[leaf.piSessionID!] == nil {
-      guard let task = try find(Card.self, try topTask(of: leaf.id)) else { continue }
-      owners[leaf.piSessionID!] = (task, leaf)
-    }
-    return owners
+    let rows = try db.query(Self.sessionOwnerTops(where: "piSessionID IN (SELECT value FROM json_each(?1))"), [JSONColumn.encode(sessionIDs)]) { (session: $0.text(0), leaf: $0.uuid(1), task: $0.uuid(2)) }
+    let cards = Dictionary(uniqueKeysWithValues: try select(
+      Card.self, where: "id IN (SELECT value FROM json_each(?))", [Self.idList(rows.flatMap { [$0.leaf, $0.task] })]).map { ($0.id, $0) })
+    return Dictionary(uniqueKeysWithValues: rows.compactMap { row in
+      guard let task = cards[row.task], let leaf = cards[row.leaf] else { return nil }
+      return (row.session, (task: task, leaf: leaf))
+    })
+  }
+
+  /// 会话的主人只有这一条规则，一行（会话, 叶子），作子查询用：看板上绑着它的任务里（`taskOnBoard`，做完的也算：它的问题没答就还是在等你），
+  /// 没做完的在前，再按最近开始的——做完的旧任务不抢正在用它的那件。`condition` 是对卡片表的条件。
+  static func sessionOwnerRows(where condition: String) -> String {
+    """
+    SELECT sessionID, leaf FROM (
+      SELECT piSessionID AS sessionID, id AS leaf,
+        ROW_NUMBER() OVER (PARTITION BY piSessionID ORDER BY completedAt IS NULL DESC, startedAt DESC, id) AS rank
+      FROM cards WHERE piSessionID IS NOT NULL AND \(taskOnBoard()) AND (\(condition)))
+    WHERE rank = 1
+    """
+  }
+
+  /// 会话、它的主人（`sessionOwnerRows`）与主人那件事的顶层（`tops`），一行（sessionID, leaf, top），作子查询用：会话归哪件事只在这里拼。
+  static func sessionOwnerTops(where condition: String) -> String {
+    """
+    WITH owner(sessionID, leaf) AS (\(sessionOwnerRows(where: condition)))
+    SELECT o.sessionID, o.leaf, up.top FROM owner o JOIN (\(tops(of: "SELECT leaf FROM owner"))) up ON up.start = o.leaf
+    """
   }
 }

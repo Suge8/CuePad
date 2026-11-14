@@ -237,7 +237,7 @@ private struct RecallLine: View {
             if let line {
                 HStack(spacing: Spacing.hair) {
                     if line.pinned { Image(.pin).font(Glyph.mark).foregroundStyle(palette.signature) }
-                    Text(line.createdAt, format: .relative(presentation: .named, unitsStyle: .abbreviated))
+                    Text(DateLabel.short(line.createdAt))
                 }
                 .font(Typography.meta).monospacedDigit().foregroundStyle(palette.ink3).fixedSize()
             }

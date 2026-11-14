@@ -82,20 +82,27 @@ final class RecordingHost: AgentRuntime {
         return ext.id
     }
 
-    /// 一个连着桥的会话：假扩展在 socket 目录里监听，桥发现它后返回。`busy` 为 true 时它正在跑一轮；
+    /// 一个连着桥的会话：假扩展在 socket 目录里监听，桥发现它后返回。`busy` 为 true 时它正在跑一轮；`since` 是它报的粗状态起点（缺省此刻）；
     /// `sessionFile` 是它的会话文件（文件在就算说过话，进程没了时记录留着而不是删掉）。
     @discardableResult
     func connect(
-        _ sessionID: String, cwd: String, busy: Bool = false,
-        extensionVersion: Int = PiExtensionBundle.version, sessionFile: String? = nil, seesImages: Bool = true, launchToken: String? = nil
+        _ sessionID: String, cwd: String, busy: Bool = false, since: Date? = nil,
+        extensionVersion: Int = PiExtensionBundle.version, sessionFile: String? = nil, seesImages: Bool = true, supportsFast: Bool = false,
+        launchToken: String? = nil
     ) async throws -> FakeExtension {
         var options = FakeExtension.Options(extensionVersion: extensionVersion, cwd: cwd)
         options.launchToken = launchToken
+        // 桥只把清单里有的命令交给扩展（`Bridge.command`）：用例里用到的几条
+        options.commands = ["compact", "greet", "shout"].map { FakeExtension.WireCommand(name: $0, description: nil) }
         if !seesImages { options.model?.images = false }
+        options.model?.supportsFast = supportsFast
         let file = SessionFile(url: sessionFile.map { URL(filePath: $0) } ?? sessions.appending(path: "--demo--/\(sessionID).jsonl"), sessionID: sessionID, cwd: cwd)
         options.sessionFile = file.url.path
         let ext = FakeExtension(directory: socketDirectory, sessionID: sessionID, options: options)
-        if busy { ext.setState(["kind": "thinking"]) }
+        // 起点按库存的毫秒（`Date.stored`，四舍五入）报：真扩展报的毫秒就是库里那一刻，截断的话亚毫秒的时刻会差出 1 毫秒，被当成起点变了
+        if busy || since != nil {
+            ext.setState(["kind": busy ? "thinking" : "idle"].merging(since.map { ["since": Int($0.stored)] } ?? [:]) { $1 })
+        }
         let writesMessages = self.writesMessages
         ext.onCommand = { [weak ext] _, command in
             if command["t"] as? String == "end" { ext?.closeAfterReply(bye: "quit") }
@@ -141,9 +148,10 @@ final class PipedHostedAgent: AgentRuntime, SessionLink {
 
     @discardableResult
     func host(_ sessionID: String, state: WorkState) -> Session.ID {
-        let session = Session(
+        var session = Session(
             id: "\(sessionID).1", sessionID: sessionID, agent: agent, sessionFile: nil, pid: 1, cwd: URL(filePath: "/work/\(sessionID)"),
             state: state, stateSince: Date())
+        session.commands = [SlashCommand(name: "review", summary: nil, source: .known(.builtin))]
         bridge.attach(session, via: self)
         return session.id
     }
@@ -161,9 +169,7 @@ final class PipedHostedAgent: AgentRuntime, SessionLink {
     func end(_ id: Session.ID) async throws {}
     func abort(_ id: Session.ID) async throws {}
     func answer(_ answer: AnswerValue, to promptID: String, in id: Session.ID) async throws {}
-    func configure(_ config: SessionConfig, in id: Session.ID) async throws {
-        guard config.fast == nil else { throw BridgeError.unsupported }
-    }
+    func configure(_ config: SessionConfig, in id: Session.ID) async throws {}
 }
 
 extension FakeExtension {

@@ -79,7 +79,7 @@ extension CueStore {
 
   /// 已有一条还在路上的结束请求时返回它，不再写第二条（连点、两个界面同时点都只发一次）。
   public func requestEnd(of target: SendTarget, on host: String, cue: Bool = false) throws -> DeliveryRequest {
-    try write { try requestControl(.end, of: target, on: host, cue: cue) }
+    try write { try requestControl(.end, of: target, on: host, cue: cue, content: DeliveryRequest.EndKind.explicit.stored) }
   }
 
   public func requestStop(of target: SendTarget, on host: String, cue: Bool = false) throws -> DeliveryRequest {

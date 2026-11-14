@@ -19,15 +19,17 @@ final class CueLiveActivity {
     private(set) var revision = UUID()
     var observers: [String: [Task<Void, Never>]] = [:]
     var destinationWork: Task<Void, Never>?
-    let diagnostic: ActivityDiagnosticRecorder?
-    var diagnosticTasks: [Task<Void, Never>] = []
+    let diagnostics: Diagnostics
+    var phaseTasks: [Task<Void, Never>] = []
+    /// 每个还在的活动一份取证订阅，活动结束（或被划掉）时自己收掉。
+    var diagnosticTasks: [String: Task<Void, Never>] = [:]
 
-    init(store: CueStore, sync: (any SyncControlling)?, device: String?, diagnostic: ActivityDiagnosticRecorder? = nil, remoteState: @escaping () throws -> CueActivityState?) {
+    init(store: CueStore, sync: (any SyncControlling)?, device: String?, diagnostics: Diagnostics, remoteState: @escaping () throws -> CueActivityState?) {
         self.store = store
         self.sync = sync
         self.device = device
         self.remoteState = remoteState
-        self.diagnostic = diagnostic
+        self.diagnostics = diagnostics
         trace(.processStarted)
         watchDiagnosticPhases()
         restoration = Task { [revision] in await restore(revision) }
@@ -35,7 +37,7 @@ final class CueLiveActivity {
 
     isolated deinit {
         restoration?.cancel()
-        for task in diagnosticTasks { task.cancel() }
+        for task in phaseTasks + diagnosticTasks.values { task.cancel() }
         for tasks in observers.values { for task in tasks { task.cancel() } }
     }
 

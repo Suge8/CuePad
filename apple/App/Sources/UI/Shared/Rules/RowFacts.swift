@@ -7,13 +7,14 @@ nonisolated struct RowFacts: Equatable {
     var context: ContextMeter?
 
     enum Note: Equatable {
-        case ending, endFailed, renameFailed, renaming, draft
+        case ending, endFailed, endUnconfirmed, renameFailed, renaming, draft
         case transit(String)
 
         var text: String {
             switch self {
             case .ending: String(localized: "正在结束…")
             case .endFailed: String(localized: "没能结束")
+            case .endUnconfirmed: String(localized: "结束未确认")
             case .renameFailed: String(localized: "没能改名")
             case .renaming: String(localized: "正在改名")
             case .draft: String(localized: "有草稿")
@@ -27,6 +28,7 @@ nonisolated struct RowFacts: Equatable {
     init(_ session: SessionState, shown: SessionShown, end: Speech.Trip?, renaming: Bool, renameFailed: Bool, hasDraft: Bool) {
         note = if end?.inTransit == true { .ending }
             else if end?.failure != nil { .endFailed }
+            else if end?.unconfirmedReason != nil { .endUnconfirmed }
             else if renameFailed { .renameFailed }
             else if let transit = shown.note { .transit(transit) }
             else if renaming { .renaming }

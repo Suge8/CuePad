@@ -37,13 +37,13 @@ LATENCY（中位、p95，秒，对数正态；版本 MODEL）：每种请求在 
   filesquota [轮数=2] [MB=50] 空间满（只在模拟云）：同上，文件被拒；量只有字的与对 Cue 说的照常到、手机状态不变、文件停着
   island [轮数=10]           M4 收消息到灵动岛（iPhone 模拟器，App 这一侧：入库→实时活动换内容）；不连云、不拿测量锁，xc.sh run ios 自己构建
 环境：SYNC_BENCH_CLOUD=sim|real；SYNC_BENCH_RELAY=0 两端都不连门铃（门铃不通，只靠按节奏拉）；SYNC_BENCH_SKIP_BUILD=1 不构建；
-  SYNC_BENCH_SESSIONS 会话数（默认 3）、SYNC_BENCH_FLIP 会话平均几秒切一次状态（默认 8）；SYNC_BENCH_WARM 预热上限秒（默认 300）；SYNC_BENCH_LOCK_WAIT 等锁上限秒（默认 1200，到点列出持有者、以 75 退出）。
-每次跑之前拿全机测量锁（flock，进程退出就放；拿到后把 {pid, start（ps 的启动时刻）, checkout, what, since} 登记在锁文件里，退出不清空）：real 拿 LOCK（与别的连 CloudKit 的探针共用，不同时用 cloudd），
-sim 拿 SIM_LOCK（几个模拟云运行不同时抢 CPU；不碰 cloudd，不必等 real）；构建在锁外。
+  SYNC_BENCH_SESSIONS 会话数（默认 3）、SYNC_BENCH_FLIP 会话平均几秒切一次状态（默认 8）；SYNC_BENCH_WARM 预热上限秒（默认 300）；SYNC_BENCH_LOCK_WAIT 等每把锁的上限秒（默认 1200，到点列出持有者、以 75 退出）。
+每次跑之前拿锁（构建在锁外）：real 拿 LOCK（与别的连 CloudKit 的探针共用，不同时用 cloudd），sim 拿 SIM_LOCK（几个模拟云运行不同时抢 CPU；不碰 cloudd，不必等 real），
+再拿用到的检出的入口锁与 Mac 实例位（hold_all）。
 结果在 OUT_ROOT/<时刻>-<场景>/：a.log、b.log（实例的全部输出）、result.json（每个指标的样本、负载、构建、云）；对比的汇总在 ab-*.json。
 口径见 _sync_scenes.py。只结束自己起的进程。
 """
-import fcntl, json, os, signal, subprocess, sys, time
+import json, os, subprocess, sys, time
 from datetime import datetime
 
 sys.dont_write_bytecode = True
@@ -51,7 +51,8 @@ from _sync_run import OUT_ROOT, Aborted, Load, Run, exe_of, fake_extension  # no
 from _sync_edges import EDGES  # noqa: E402
 from _sync_files import SCENES as FILES  # noqa: E402
 from _sync_scenes import SCENES as BASIC, island  # noqa: E402
-from app_env import BUNDLE_ID, CHECKOUT  # noqa: E402
+from _lock import hold  # noqa: E402
+from app_env import BUNDLE_ID, CHECKOUT, mac_slot  # noqa: E402
 
 LOCK = "/tmp/cuepad-sync-measure.lock"  # real 与别的连 CloudKit 的探针共用
 SIM_LOCK = "/tmp/cuepad-sync-measure-sim.lock"  # 模拟云的运行之间互斥（不碰 cloudd，不必等 real）
@@ -65,48 +66,16 @@ REAL_LAST = "/tmp/cuepad-sync-measure.last-real"  # 上一次 real 运行结束�
 SCENES = BASIC | EDGES | FILES
 
 
-LOCK_EXIT = 75  # 等锁超时的退出码，同 xc.sh 的入口锁（_lock.sh）
-
-
-def process_start(pid):
-    """ps 的启动时刻（认 PID 有没有被复用）；进程不在返回 None。"""
-    return subprocess.run(["ps", "-o", "lstart=", "-p", str(pid)], capture_output=True, text=True).stdout.strip() or None
-
-
-def hold_lock(what):
-    """拿测量锁（flock 阻塞等，排队先后由内核定），返回打开的锁文件：进程活着就一直持有。等的时候每分钟列一次持有者；
-    等满 SYNC_BENCH_LOCK_WAIT 秒（默认 1200）还没轮到，列出持有者、以 LOCK_EXIT 退出，不一直挂着。等待按单调钟算，调系统时间不改期限。
-    锁文件里是"最后一次登记"，不是"当前持有者"：新持有者拿到锁到写下登记之间、或不登记的探针占锁时，里面还是上一个。
-    所以只在登记的进程还活着且启动时刻对得上时才说它多半是持有者（持有者是进程本身，活着就持有，死了就放），否则说明登记是旧的。"""
-    f = open(LOCK if CLOUD == "real" else SIM_LOCK, "a+")
-    limit = float(os.environ.get("SYNC_BENCH_LOCK_WAIT", 1200))
-    began = time.monotonic()
-    def holder():
-        f.seek(0)
-        try: h = json.loads(f.read())
-        except ValueError: return f"锁被占着，锁文件里没有登记（刚拿到锁还没写，或不登记的探针占着）。只读排查：lsof {f.name}"
-        ago = time.time() - datetime.fromisoformat(h["since"]).timestamp()
-        last = f"锁文件最后登记的是 PID {h['pid']}（{h['checkout']}）{h['what']}，登记于 {h['since']}（{int(ago) // 60} 分 {int(ago) % 60:02d} 秒前）"
-        if h.get("start") and process_start(h["pid"]) == h["start"]: return f"{last}；该进程还在，多半就是持有者"
-        return f"锁被占着，但{last}；该进程已不在或不是同一个，这是旧登记，真正的持有者没登记。只读排查：lsof {f.name}；不要删锁文件"
-    def tick(*_):
-        waited = time.monotonic() - began
-        if waited >= limit:
-            print(f"等测量锁 {int(waited)} 秒没轮到，以 {LOCK_EXIT} 退出。持有者：{holder()}\n下一步：别人的测量跑完后重跑；要等更久给 SYNC_BENCH_LOCK_WAIT=<秒>。不要结束不是自己起的进程", file=sys.stderr, flush=True)
-            os._exit(LOCK_EXIT)
-        print(f"排队等测量锁（已等 {int(waited) // 60} 分 {int(waited) % 60:02d} 秒），持有者：{holder()}", flush=True)
-        signal.setitimer(signal.ITIMER_REAL, min(60, limit - waited))
-    try:
-        fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except BlockingIOError:
-        signal.signal(signal.SIGALRM, tick)
-        tick()
-        try: fcntl.flock(f, fcntl.LOCK_EX)
-        finally: signal.setitimer(signal.ITIMER_REAL, 0)
-    f.seek(0); f.truncate()
-    f.write(json.dumps({"pid": os.getpid(), "start": process_start(os.getpid()), "checkout": CHECKOUT, "what": what, "since": datetime.now().isoformat(timespec="seconds")}, ensure_ascii=False))
-    f.flush()
-    return f
+def hold_all(checkouts):
+    """拿测量锁（real 拿 LOCK，sim 拿 SIM_LOCK），再拿用到的每个检出的入口锁与 Mac 实例位，持有到进程退出：
+    实例从检出的产物目录直接起，跑着时那个检出不能再构建、截图，xc.sh stop 也看得到是谁占着。排队与持有者登记同 xc.sh（_lock.py）；
+    每把等满 SYNC_BENCH_LOCK_WAIT 秒（默认 1200）还没轮到，列出持有者、以 75 退出。"""
+    wait = float(os.environ.get("SYNC_BENCH_LOCK_WAIT", 1200))
+    real = CLOUD == "real"
+    hold(LOCK if real else SIM_LOCK, f"同步测量（{'真 CloudKit' if real else '模拟云'}）", "别的同步测量在跑", wait, what="sync-bench")
+    for checkout in dict.fromkeys(checkouts):
+        hold(f"{checkout}/apple/.derived/xc.lock", f"检出 {checkout}", f"检出 {checkout} 的上一个任务还在跑", wait)
+        hold(*mac_slot(checkout), f"检出 {checkout} 的 Mac 实例在用", wait)
 
 
 def throttled(minutes=2, pids=None):
@@ -227,7 +196,7 @@ def main(argv):
         x, y, rounds, scene, args = os.path.abspath(argv[1]), os.path.abspath(argv[2]), int(argv[3]), argv[4], argv[5:]
         if scene not in SCENES and scene != "island": raise SystemExit(__doc__)
         if scene != "island": build(x); build(y)
-        lock = hold_lock(f"ab {scene} {x} {y}") if scene != "island" else None  # noqa: F841 持有到进程结束
+        if scene != "island": hold_all([x, y])
         sides, results = {"X": x, "Y": y}, {"X": [], "Y": []}
         for i in range(rounds):
             for label in ("X", "Y") if i % 2 == 0 else ("Y", "X"):
@@ -239,7 +208,7 @@ def main(argv):
         return
     if not argv or argv[0] not in [*SCENES, "island"]: raise SystemExit(__doc__)
     if argv[0] != "island": build(CHECKOUT)
-    lock = hold_lock(" ".join(argv)) if argv[0] != "island" else None  # noqa: F841
+    if argv[0] != "island": hold_all([CHECKOUT])
     report([(os.path.basename(CHECKOUT), [run_once(CHECKOUT, argv[0], argv[1:])])])
 
 

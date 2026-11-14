@@ -1,9 +1,14 @@
 import CueText
 import Foundation
 
+/// 状态机（只有执行的 Mac 推进阶段；别的设备只写 pending、写撤回请求、删自己没传上去的）：
+/// pending →（领取）executing |（等现有会话）preparing |（到期、放弃、不认识、取不到附件）not_delivered |（撤回）删除；
+/// preparing → pending 同样的出路（就绪后再领取）；executing → succeeded | not_delivered | unconfirmed | confirming；
+/// confirming → succeeded | unconfirmed；unconfirmed →（真实消息）succeeded；收尾的与派发、执行期限过了 7 天还没收尾的按保留期删（`CueStore.removableAt`）。
+/// 未领取（`waiting`）的 `handledBy` 为空，领取后（`claimed`）是执行的 Mac。
 public enum DeliveryStatus: String, Sendable, CaseIterable {
   case pending, executing
-  /// 整个操作尚未开始；不能据此恢复目标进程。
+  /// 整个操作尚未开始，在等现有会话就绪；不能据此恢复目标进程。
   case preparing
   /// 派发已结束，正在从真实历史核对；不是执行成功的证据。
   case confirming
@@ -19,6 +24,12 @@ extension DeliveryStatus {
   /// 是否仍在等进度由 Speech 连同期限推出；`DeliveryRequest.isOpen` 与 SQL 的 `openSQL` 都从这里来。
   static let open: Set<DeliveryStatus> = waiting.union([.executing, .confirming])
   static let openSQL = sqlList(open.sorted { $0.rawValue < $1.rawValue })
+  /// 已交给执行的 Mac、结果还可能变（未确认可被真实消息改成送达）：重启只核对它们，不重派。
+  static let claimed: Set<DeliveryStatus> = [.executing, .confirming, .unconfirmed]
+  static let claimedSQL = sqlList(claimed.sorted { $0.rawValue < $1.rawValue })
+  /// 结束请求还在进行（`DeliveryRequest.isEnding`）：没结果的与结果未确认的。
+  static let ending: Set<DeliveryStatus> = open.union([.unconfirmed])
+  static let endingSQL = sqlList(ending.sorted { $0.rawValue < $1.rawValue })
 }
 
 /// 读到本版本不认识的值（`Open.unknown`）时 Mac 端不执行它。
@@ -26,7 +37,7 @@ public enum DeliveryMode: String, Sendable, CaseIterable {
   /// 你说的话（唯一一种）：会话歇着就以它开新一轮，在跑就先打断这一轮再开（忙不忙以 Mac 执行时的会话为准，写请求时看到的状态可能已经过时）。没有排队；未确认不自动重发。
   /// 用提示词模板或技能说的（`/名字 …`，回复框按 `Slash.speaks` 认）也是它：由 Agent 展开，展开后的那条消息带着请求 id
   case send
-  /// 撤回另一条尚未派发的投送；正文为原请求 id，由执行 Mac 原子核对后处理。
+  /// 撤回另一条尚未派发的投送；正文为原请求 id，执行的 Mac 在库里一个事务核对并删掉原请求（`settleWithdrawal`），不交给 handler。
   case withdraw
   case answer
   /// 在 Mac 上开一个新会话（后台托管）
@@ -123,7 +134,7 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   public var isOpen: Bool { status.known.map(DeliveryStatus.open.contains) ?? false }
 
   /// 尚未领取只是撤回的必要条件；能否撤回还要由库事务核对已发送事实。
-  public var isWithdrawable: Bool { status.known.map(DeliveryStatus.waiting.contains) == true && handledBy == nil }
+  public var isWithdrawable: Bool { status.known.map(DeliveryStatus.waiting.contains) == true }
 
   /// 明确未交出的原因；未知状态不是未送达。缺少原因的明确失败只在这里兜底。
   public var failure: String? {
@@ -149,21 +160,11 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
     return ShownText("到期仍未派发（\(waiting.embedded)），没有发出，可以重发")
   }
 
+  static let withdrawRefused = ShownText("Mac 已经领取，撤不回")
+
   public static var interruptedReason: ShownText { ShownText("Mac 上的 CuePad 在执行过程中退出，送达尚未确认，不会自动重发") }
 
   public static var unexplainedFailure: String { String(localized: "Mac 没有说明原因") }
-
-  /// `requests` 先发的在前。只显示还在路上的，或没能结束且之后没再发过别的；结束成功、未确认或没请求过是 nil。
-  public static func shownEnd(in requests: [DeliveryRequest], at moment: Speech.Moment) -> Speech.Trip? {
-    guard let end = requests.last(where: { $0.mode == .known(.end) }) else { return nil }
-    switch Speech.trip(end, at: moment) {
-    case .preparing(let reason): return .preparing(reason)
-    case .sending: return .sending
-    case .sent: return .sent
-    case .delivered, .unconfirmed: return nil
-    case .failed(let failure): return end.id == requests.last?.id ? .failed(failure) : nil
-    }
-  }
 
   /// `launch`、`bind`、`tidyOrders`、`libraryEdit`、`answer`、`config` 按 `mode` 取请求的内容；其他方式、读不出的为 nil。
   public var launch: LaunchRequest? { mode == .known(.start) ? LaunchRequest(stored: content) : nil }
@@ -182,6 +183,45 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   public var config: SessionConfig? { mode == .known(.config) ? SessionConfig(stored: content) : nil }
 
   public var isRename: Bool { config?.name != nil }
+
+  /// 结束会话的两种，只认这里（SQL 里是 `explicitEndSQL`）：你或 Cue 点名结束，与任务收尾带出的自动结束（带着会话为哪件事开的，执行时复核还有没有人在用，`permitsTaskSessionEnd`）。
+  public enum EndKind: Equatable, Sendable {
+    case explicit
+    case task(createdFor: UUID)
+
+    static let explicitContent = "end"
+
+    private struct TaskContent: StoredJSON {
+      let createdForTaskID: UUID
+    }
+
+    var stored: String {
+      switch self {
+      case .explicit: Self.explicitContent
+      case .task(let owner): TaskContent(createdForTaskID: owner).stored
+      }
+    }
+
+    init?(stored: String) {
+      if stored == Self.explicitContent { self = .explicit; return }
+      guard let reason = TaskContent(stored: stored) else { return nil }
+      self = .task(createdFor: reason.createdForTaskID)
+    }
+  }
+
+  /// 结束请求是哪一种；不是结束、读不出的为 nil。
+  public var end: EndKind? { mode == .known(.end) ? EndKind(stored: content) : nil }
+
+  /// 这条结束还在进行：还没结果，或结果未确认（会话等确认了才接着用、才再结束一次）。SQL 里是 `endingSQL`。
+  public var isEnding: Bool { mode == .known(.end) && status.known.map(DeliveryStatus.ending.contains) == true }
+
+  static func endingSQL(_ alias: String) -> String {
+    "(\(alias).mode = '\(DeliveryMode.end.rawValue)' AND \(alias).status IN (\(DeliveryStatus.endingSQL)))"
+  }
+
+  static func explicitEndSQL(_ alias: String) -> String {
+    "(\(alias).mode = '\(DeliveryMode.end.rawValue)' AND \(alias).content = '\(EndKind.explicitContent)')"
+  }
 
   /// `requests` 按发出先后（`deliveryRequests(toSession:)` 的顺序）。会话行与会话页顶栏都按它显示名字，取法只此一处。
   public static func latestRename(in requests: [DeliveryRequest]) -> DeliveryRequest? { requests.last(where: \.isRename) }

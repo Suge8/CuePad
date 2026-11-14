@@ -66,7 +66,7 @@ enum MainMenu {
     /// 会话回复框的快捷键：动作经响应链交给回复框的文字区（`GrowingTextView.performReplyShortcut`），回复框没聚焦时停用。
     private static func replyMenu() -> NSMenuItem {
         let menu = NSMenu(title: String(localized: "回复"))
-        for key in ReplyShortcut.menu {
+        for key in ReplyShortcut.allCases {
             let item = menu.addItem(withTitle: key.title, action: #selector(GrowingTextView.performReplyShortcut(_:)), keyEquivalent: key.input)
             item.keyEquivalentModifierMask = key.shift ? [.command, .shift] : .command
             item.tag = key.rawValue

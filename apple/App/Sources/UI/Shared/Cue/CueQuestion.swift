@@ -93,8 +93,8 @@ struct CueChoices: View {
     #else
     static let onceWidth: CGFloat = 88
     #endif
-    /// `ControlSurface` 按钮左右内边距之和：最小宽要扣掉它才是里面那颗对勾占的宽。
-    private static let inset: CGFloat = 32
+    /// 按钮左右内边距之和：最小宽要扣掉它才是里面那颗对勾占的宽。
+    private static let inset = 2 * ControlSize.regular.padding
 
     var body: some View {
         // 停用着只留停用的"可以"：别的选项此刻同样选不了
@@ -136,7 +136,7 @@ struct CueChoices: View {
         .disabled(disabled)
     }
 
-    private static let linkInset: CGFloat = 6
+    private static let linkInset = Spacing.glyph
 
     private func note(_ text: String) -> some View {
         Text(text).font(Typography.meta).foregroundStyle(palette.ink2)

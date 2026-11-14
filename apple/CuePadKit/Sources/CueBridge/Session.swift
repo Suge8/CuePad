@@ -4,7 +4,7 @@ import Foundation
 
 /// 状态与随会话同步的各块值直接用 CueStore 的类型：桥解码出来什么样，记录器就原样写什么样。
 public struct Session: Identifiable, Sendable, Equatable {
-    /// `<sessionId>.<pid>`：同一会话被两个进程同时打开时也唯一；Pi 的等于 socket 文件名去掉 `.sock`
+    /// `<sessionId>.<pid>`（`bridgeID`）：同一会话被两个进程同时打开时也唯一；Pi 的等于 socket 文件名去掉 `.sock`
     public let id: String
     public let sessionID: String
     public let agent: AgentKind
@@ -31,7 +31,10 @@ public struct Session: Identifiable, Sendable, Equatable {
     public func isCurrentTurn(_ startedAt: Int64) -> Bool { turnStartedAt?.stored == startedAt }
     /// `/name` 设的会话名
     public internal(set) var name: String? = nil
-    public internal(set) var firstMessage: String? = nil
+    /// 只留开头 `SessionName.firstMessageLimit` 个字：各家接入给原文即可，截在这里。
+    public internal(set) var firstMessage: String? = nil {
+        didSet { if let firstMessage, firstMessage.count > SessionName.firstMessageLimit { self.firstMessage = SessionName.clipped(firstMessage) } }
+    }
     public internal(set) var question: Question? = nil
     /// 经环境变量 `CUEPAD_LAUNCH_TOKEN` 交给扩展（`LaunchRequest.token`）；其余会话为 nil
     public internal(set) var launchToken: String? = nil
@@ -87,10 +90,17 @@ public struct Session: Identifiable, Sendable, Equatable {
     }
 }
 
+extension Session {
+    static func bridgeID(sessionID: String, pid: Int32) -> ID { "\(sessionID).\(pid)" }
+}
+
 /// Pi 会话显示名的唯一规则（活动会话与历史会话共用），与 Pi 自己的会话列表一致。
 public enum SessionName {
-    /// 首条用户消息只用来当单行显示名：只取开头这么多字符（扩展的 `FIRST_MESSAGE_LIMIT` 与之相同）。
+    /// 首条用户消息只用来当单行显示名：只取开头这么多字符。Pi 扩展另截一次（`info.ts` 的 `FIRST_MESSAGE_LIMIT`，同一个数）：
+    /// 截在那边是为了不把几 MB 的首条消息每次连接都传过来。
     public static let firstMessageLimit = 200
+
+    static func clipped(_ text: String) -> String { String(text.prefix(firstMessageLimit)) }
 
     public static func display(name: String?, firstMessage: String?, folder: String) -> String {
         [name, firstMessage.map { SkillCall.shown(withoutImageNotes($0)) }].lazy
@@ -100,7 +110,7 @@ public enum SessionName {
     /// 没有文字为 nil（接着看下一条）。与 Pi 自己的会话列表一致，扩展投进来的机器消息也算。
     public static func firstMessage(_ text: String) -> String? {
         let trimmed = SkillCall.shown(text).trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? nil : String(trimmed.prefix(firstMessageLimit))
+        return trimmed.isEmpty ? nil : clipped(trimmed)
     }
 
 
@@ -139,8 +149,6 @@ public enum SessionChange: Sendable, Equatable {
     case stateChanged(Session, from: WorkState)
     case infoChanged(Session)
     case ended(Session, reason: SessionEndReason)
-    /// 消息损坏；连接已关闭，不会出现在 `sessions` 里。读不懂的扩展不在此列（`Session.upgrading`）
-    case incompatible(id: String, detail: String)
     /// 属于账号，记到 `AccountQuota` 上
     case quota(QuotaReport)
 }
@@ -163,7 +171,7 @@ public enum SendPolicy: Sendable, Equatable {
 public struct SessionMessage: Sendable, Equatable {
     public var text: String
     public var images: [MessageImage]
-    /// CuePad 投送请求的 id：扩展把它写进会话文件里这条消息（`cuepadDelivery`），对话据此认出是哪条请求送进来的（扩展 v12 起）
+    /// CuePad 投送请求的 id：扩展把它写进会话文件里这条消息（`cuepadDelivery`），对话据此认出是哪条请求送进来的
     public var deliveryID: String?
     public var policy: SendPolicy
     public init(text: String, images: [MessageImage] = [], deliveryID: String? = nil, policy: SendPolicy = .user) {
@@ -197,6 +205,49 @@ public enum BridgeError: Error, Equatable {
     case notEnded
 }
 
+/// 接入在交出之前就拒掉的原因（`BridgeError.rejected` 的原文；Pi 扩展回的 `ack.error` 同一套，在 `connection.ts`）：都确定没执行，可以重发。
+/// 不在其中的（`failed: …` 是执行时出错，旧扩展不认新命令回的 `bad_request`……）按可能已执行处理。
+enum RejectReason: String {
+    case empty
+    case unknownCommand = "unknown_command", missingArgument = "missing_argument"
+    case noPrompt = "no_prompt", stalePrompt = "stale_prompt", badAnswer = "bad_answer"
+    case noAuth = "no_auth"
+    case nothingToRetry = "nothing_to_retry"
+    case unconfirmedTurn = "unconfirmed_turn", userTurn = "user_turn", staleTurn = "stale_turn"
+    case unsupportedStopTurn = "unsupported_stop_turn", upgradeStopTurn = "upgrade_stop_turn"
+    /// 换轮停不下在跑的那一轮（停止被拒、等不到它收尾）：这句还没交出（`HostedTurns.send`）
+    case previousTurnRunning = "previous_turn_running"
+
+    var shown: String.LocalizationValue? {
+        switch self {
+        case .empty: nil
+        case .unsupportedStopTurn: "这个接入不支持按原回合停止，没有停止会话"
+        case .upgradeStopTurn: "会话扩展需升级后才能按原回合停止，没有停止会话"
+        case .staleTurn: "原回合已结束或更换，停止请求不再适用，没有停止后来的工作"
+        case .userTurn: "会话已进入另一轮，Cue 没有打断"
+        case .unconfirmedTurn: "当前轮次的来源尚未确认，Cue 没有打断"
+        case .previousTurnRunning: "在跑的那一轮没能停下，这句没有发出"
+        case .noPrompt, .stalePrompt: "这个问题已经答过了，或 Agent 已经不在等这个问题"
+        case .badAnswer: "答案和问题对不上（选项不在列表里，或类型不对）"
+        case .noAuth: "这个模型的提供方在这台 Mac 上还没有登录或配置密钥"
+        case .unknownCommand: "这个 Agent 会话里没有这个命令（可能已经被移除，或是只能在终端里用）"
+        case .missingArgument: "这个命令需要带上参数"
+        case .nothingToRetry: "这个会话现在没有出错的一轮可重跑（它在跑，或最后一轮不是出错结束的）"
+        }
+    }
+}
+
+extension BridgeError {
+    /// 确定没交给 Agent（可以重发）；其余的可能已经执行。
+    public var definitelyNotHanded: Bool {
+        switch self {
+        case .unknownSession, .unsupported, .unknownModel, .refused: true
+        case .rejected(let reason): RejectReason(rawValue: reason) != nil
+        default: false
+        }
+    }
+}
+
 extension BridgeError: ShownError {
     private static let failedPrefix = "failed: "
 
@@ -211,23 +262,13 @@ extension BridgeError: ShownError {
         case .notEnded: "尚未确认会话已结束"
         case .sessionEnded: "与 Agent 的连接已断开，操作结果尚未确认"
         case .ackTimeout: "尚未收到 Agent 的确认；操作可能已经执行，不会自动重试"
-        case .rejected("unsupported_stop_turn"): "这个接入不支持按原回合停止，没有停止会话"
-        case .rejected("upgrade_stop_turn"): "会话扩展需升级后才能按原回合停止，没有停止会话"
-        case .rejected("stale_turn"): "原回合已结束或更换，停止请求不再适用，没有停止后来的工作"
-        case .rejected("user_turn"): "会话已进入另一轮，Cue 没有打断"
-        case .rejected("unconfirmed_turn"): "当前轮次的来源尚未确认，Cue 没有打断"
-        case .rejected("no_prompt"), .rejected("stale_prompt"): "这个问题已经答过了，或 Agent 已经不在等这个问题"
-        case .rejected("not_ready"): "会话还没起好，没有发出，可以重发"
-        case .rejected("bad_answer"): "答案和问题对不上（选项不在列表里，或类型不对）"
         case .unknownModel(let agent): "\(agent.name) 里没有这个模型"
         case .refused(let reason): ShownText.verbatim(reason).value
-        case .rejected("no_auth"): "这个模型的提供方在这台 Mac 上还没有登录或配置密钥"
-        case .rejected("unknown_command"): "这个 Agent 会话里没有这个命令（可能已经被移除，或是只能在终端里用）"
-        case .rejected("missing_argument"): "这个命令需要带上参数"
-        case .rejected("nothing_to_retry"): "这个会话现在没有出错的一轮可重跑（它在跑，或最后一轮不是出错结束的）"
-        // 扩展执行时出错（`failed: <原因>`）：原因就是要说的话
-        case .rejected(let reason) where reason.hasPrefix(Self.failedPrefix): ShownText.verbatim(String(reason.dropFirst(Self.failedPrefix.count))).value
-        case .rejected(let reason): "Agent 没有接受：\(reason)"
+        case .rejected(let reason):
+            if let shown = RejectReason(rawValue: reason)?.shown { shown }
+            // 扩展执行时出错（`failed: <原因>`）：原因就是要说的话
+            else if reason.hasPrefix(Self.failedPrefix) { ShownText.verbatim(String(reason.dropFirst(Self.failedPrefix.count))).value }
+            else { "Agent 没有接受：\(reason)" }
         }
     }
 }

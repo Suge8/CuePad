@@ -88,4 +88,36 @@ extension CueStore {
     }
   }
 }
+
+extension StateRecorder {
+  /// 演示与测试只写关心的几项：在上一次写下的样子上改给了的（nil 沿用），`question`、`detail` 与 `failure` 每次整体替换；
+  /// 第一次写、没给计时的从此刻算。落盘同 `update(_:)`。
+  @discardableResult
+  public func update(
+    sessionID: String, state: WorkState, detail: String? = nil, failure: FailureKind? = nil, title: String? = nil, directory: String? = nil,
+    projectID: UUID? = nil, question: Question? = nil, times: SessionTimes? = nil, turnStartedAt: Date? = nil, launchToken: String? = nil, hosted: Bool? = nil,
+    subagents: [SubagentState]? = nil, modelState: ModelState? = nil, context: ContextUsage? = nil, commands: [SlashCommand]? = nil,
+    agent: AgentKind? = nil, process: SessionProcess? = nil
+  ) async throws -> AlertKind? {
+    var snapshot = latest(sessionID) ?? SessionSnapshot(sessionID: sessionID, state: state, times: SessionTimes(stateSince: timing.now(), busySince: nil))
+    snapshot.state = state
+    snapshot.detail = detail
+    snapshot.failure = failure
+    snapshot.question = question
+    if let title { snapshot.title = title }
+    if let directory { snapshot.directory = directory }
+    if let projectID { snapshot.projectID = projectID }
+    if let times { snapshot.times = times }
+    if let turnStartedAt { snapshot.turnStartedAt = turnStartedAt }
+    if let launchToken { snapshot.launchToken = launchToken }
+    if let hosted { snapshot.hosted = hosted }
+    if let subagents { snapshot.subagents = subagents }
+    if let modelState { snapshot.modelState = modelState }
+    if let context { snapshot.context = context }
+    if let commands { snapshot.commands = commands }
+    if let agent { snapshot.agent = agent }
+    if let process { snapshot.process = process }
+    return try await update(snapshot)
+  }
+}
 #endif

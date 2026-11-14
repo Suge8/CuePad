@@ -18,10 +18,12 @@ extension VoiceFlowTests {
         let validAccess = VoiceFlowFixture(app.services).access
         fixture.start()
         try await eventually("显示连接失败") { !fixture.call.isLive && fixture.call.phase.isFailure }
-        let said = fixture.workspace.voicePresentation?.issues.map { String(localized: $0.message) } ?? []
-        #expect(!said.isEmpty)
-        if kind == "codex" { #expect(said.contains("Mac 上的 Codex 没响应：看看有没有系统提示在等你确认")) }
-        #expect(fixture.workspace.voicePresentation?.canStopExecution == false)
+        try await eventually("详情说出原因") { try fixture.details().issues.contains { $0.id == .connection } }
+        let recovers = try fixture.details().issues.contains { $0.id == .connection && $0.recovery != nil }
+        #expect(recovers == ["permission", "codex"].contains(kind), "登录与额度要先在 Mac 上处理，详情不给重连钮")
+        let said = try fixture.details().issues.map { String(localized: $0.message) }
+        if kind == "codex" { #expect(said.contains("Codex 没响应，看看 Mac 上的提示")) }
+        #expect(try fixture.details().executions.isEmpty)
         fixture.media.denied = false
         fixture.connectError = nil
         fixture.access = validAccess
@@ -41,8 +43,8 @@ extension VoiceFlowTests {
         try await fixture.hangUp()
         gate.continuation.finish()
         #expect(fixture.controls.isEmpty)
-        #expect(fixture.workspace.voicePresentation?.activity == .ended)
-        #expect(fixture.workspace.voicePresentation?.issues.isEmpty == true)
+        try await eventually("界面已挂断") { try fixture.details().activity == .ended }
+        #expect(try fixture.details().issues.isEmpty)
     }
 
     @Test(arguments: ["ready", "connecting", "failure"])
@@ -62,7 +64,7 @@ extension VoiceFlowTests {
             try await fixture.connect()
             let request = try await fixture.handoff("整理发布清单")
             try await finish(app.services.store, "清单已整理", requests: [request])
-            try await eventually("真实结果可见") { fixture.call.replies.count == 1 }
+            try await eventually("真实结果可见") { fixture.voiceRecord.replies.count == 1 }
         }
         let oldEvent = fixture.received
         fixture.media.closeGate = gate.stream
@@ -70,17 +72,15 @@ extension VoiceFlowTests {
         else { fixture.call.hangUp() }
         try await eventually("关闭停在设备边界") { fixture.media.closing }
         #expect(fixture.call.isLive)
-        #expect(fixture.workspace.voicePresentation?.activity != .ended)
-        #expect(fixture.workspace.voicePresentation?.activity != .failed)
-        #expect(fixture.workspace.voicePresentation?.active == true)
-        let requests = fixture.call.requests.count
+        #expect(try fixture.details().active)
+        let requests = fixture.voiceRecord.requests.count
         oldEvent?(.success(.delegation(.init(id: "late", turn: nil, text: "迟到请求"))))
         oldEvent?(.success(.started))
         gate.continuation.finish()
         try await eventually("关闭真正完成") { !fixture.call.isLive }
         #expect(fixture.call.phase.isFailure == (kind == "failure"))
-        #expect(fixture.call.requests.count == requests)
-        if kind != "connecting" { #expect(fixture.call.replies.first?.text == "清单已整理") }
+        #expect(fixture.voiceRecord.requests.count == requests)
+        if kind != "connecting" { #expect(fixture.voiceRecord.replies.first?.text == "清单已整理") }
         fixture.media.closeGate = nil
         fixture.access = access
         accessGate.continuation.finish()
@@ -90,7 +90,7 @@ extension VoiceFlowTests {
         fixture.received?(.success(.usage(audioMs: 9876)))
         try await eventually("新连接已消费旧事件之后的屏障") { fixture.call.audioMs == 9876 || fixture.call.phase.isFailure }
         #expect(fixture.call.phase == .listening)
-        #expect(fixture.call.requests.count == requests)
+        #expect(fixture.voiceRecord.requests.isEmpty, "旧连接迟到的请求不进新的一通")
         try await fixture.hangUp()
     }
 }

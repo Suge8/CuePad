@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// 那句下一步按全角标点断成几截排（`PhraseLines`，标点黏在前一截末尾）：居中的中文按字折行，行尾常剩一两个孤字。
-/// "这里还没有"类的空态（`waitsForSync`）在本机正在和 iCloud 对时（`SyncDriver.isCatchingUp`）不先说空：对得快就等对完再出，久过 `Pending.delay` 换成"正在从 iCloud 同步"——新装的设备上东西一页页地到，说"还没有"是错的。
+/// "这里还没有"类的空态（`waitsForSync`）在本机正在和 iCloud 对时（`SyncDriver.isCatchingUp`）不先说空：对得快就等对完再出，这一轮已久（`SyncDriver.showsCatchingUp`）换成"正在从 iCloud 同步"——新装的设备上东西一页页地到，说"还没有"是错的。
 struct EmptyState<Action: View>: View {
     let mascot: Mascot
     let title: LocalizedStringResource
@@ -14,9 +14,9 @@ struct EmptyState<Action: View>: View {
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var shown = false
-    @State private var syncing = false
 
     private var catchingUp: Bool { waitsForSync && services?.syncing.isCatchingUp == true }
+    private var syncing: Bool { waitsForSync && services?.syncing.showsCatchingUp == true }
 
     var body: some View {
         // 等同步那一句换成这里的空态：整块换身份，先淡掉再淡入（`handOff`），两块叠在同一张纸上、不同时交叉淡
@@ -29,6 +29,7 @@ struct EmptyState<Action: View>: View {
             .id(syncing)
             .transition(.handOff)
         }
+        .animation(Motion.fade, value: syncing)
         .multilineTextAlignment(.center)
         .frame(maxWidth: 420)
         .padding(Spacing.sheet)
@@ -39,7 +40,6 @@ struct EmptyState<Action: View>: View {
         .buttonStyle(ControlButtonStyle(kind: .primary))
         .onAppear { if !catchingUp { appear() } }
         .onChange(of: catchingUp) { if !catchingUp { appear() } }
-        .pending(catchingUp, shown: $syncing)
         .onChange(of: syncing) { if syncing { appear() } }
     }
 
@@ -127,7 +127,7 @@ private struct PhraseLines: View {
     }
 
     private struct Flow: Layout {
-        private static let lineGap: CGFloat = 2
+        private static let lineGap = Spacing.hair
 
         struct Cache {
             var width: CGFloat?

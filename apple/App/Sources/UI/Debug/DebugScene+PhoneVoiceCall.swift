@@ -35,7 +35,7 @@ extension DebugScene {
         let voice = workspace.services.voice
         let log = DebugVoiceLog()
         let note = log.note
-        for await ready in Observations({ workspace.cue.canHear && voice.startUnavailableReason == nil }) where ready { break }
+        for await ready in Observations({ workspace.voiceStartBlock == nil }) where ready { break }
         var inputPeak = 0.0
         var audioChanges = 0
         let background = NotificationCenter.default.notifications(named: UIApplication.didEnterBackgroundNotification)
@@ -46,7 +46,7 @@ extension DebugScene {
             Task { for await loud in Observations({ voice.outputActive }) { note(loud ? "output-loud" : "output-quiet") } },
             Task { for await samples in Observations({ voice.inputSamples }) { inputPeak = max(inputPeak, samples.max() ?? 0) } },
             Task { for await _ in audioChanged { audioChanges += 1; if audioChanges > 2 { note("audio-changes \(audioChanges)"); abandon("手机通话", Unmet("音频引擎重开超过 2 次")) } } },
-            Task { for await link in Observations({ voice.phone?.link }) { note("link \(link.map { "\($0)" } ?? "none")") } },
+            Task { for await link in Observations({ voice.phone?.leg.link }) { note("link \(link.map { "\($0)" } ?? "none")") } },
             Task { for await value in Observations({ voice.projection.map { "\($0.requests.count) \($0.phase)" } }) { note("projection \(value ?? "none")") } },
             Task { for await _ in background { note("app-background") } },
             Task { for await _ in foreground { note("app-foreground") } },
@@ -57,7 +57,7 @@ extension DebugScene {
         try await workspace.startVoiceCall()
         watching.append(Task {
             await Task.wait(for: .seconds(args.voiceOpts.seconds ?? 60))
-            await workspace.hangUpVoiceCall()
+            _ = try? await workspace.performVoice(.hangUp)
         })
         var listened = false
         for await phase in Observations({ voice.phase }) {
@@ -71,7 +71,7 @@ extension DebugScene {
                         for await availability in Observations({ voice.availability }) { if case .ready = availability { break } }
                         guard let reply = voice.projection?.replies.last?.message else { return note("repeat-skipped no reply") }
                         note("repeat \(reply)")
-                        do { note("repeat-result \(try await workspace.repeatVoiceReply(reply, command: UUID()))") }
+                        do { note("repeat-result \(String(describing: try await workspace.performVoice(.repeatReply(reply))))") }
                         catch { note("repeat-error \(error)") }
                     })
                 }

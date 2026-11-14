@@ -60,12 +60,12 @@ struct CueActivityTests {
         }
         let cueRecorder = try await rig.runtimeRecorder(on: "mac-cue")
         cue = try await now()
-        #expect(cue.ledger.isEmpty && cue.quietLine == "刚做完「发布 v1.4」" && cue.quietWord == "做完")
+        #expect(cue.ledger.isEmpty && cue.quietLine == "刚做完「发布 v1.4」")
         #expect(cue.aged(to: cue.at.addingTimeInterval(CueNow.doneWindow + 1)).quietLine == CueNow.quiet)
 
         try await cueRecorder.updateCue(.thinking)
         cue = try await now()
-        #expect(cue.isLive && cue.isBusy && cue.quietWord == "在想" && cue.staleAfter == CueNow.fastStale)
+        #expect(cue.isLive && cue.isBusy && cue.staleAfter == CueNow.fastStale)
         #expect(cue.settled.unconfirmed && cue.settled.isLive && !cue.settled.hasConfirmedActivity)
 
         let ship = try await store.createTask("推送并发新版", in: project.id)

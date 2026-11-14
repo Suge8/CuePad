@@ -52,7 +52,7 @@ extension TokenSheet {
         ("toolbarPath", Typography.toolbarPath), ("cueCardName", Typography.cueCardName), ("menuBarCount", Font(Typography.menuBarCount)),
     ]
     #else
-    private static let platformFonts: [(String, Font)] = [("dockLabel", Typography.dockLabel), ("codeUIFont", Font(Typography.codeUIFont))]
+    private static let platformFonts: [(String, Font)] = [("codeUIFont", Font(Typography.codeUIFont))]
     #endif
 }
 #endif

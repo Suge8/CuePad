@@ -71,7 +71,7 @@ struct DeliveryControlTests {
             #expect(workspace.shownInHeader(session, delivery: uncertain).status == .failed(.network))
             await workspace.retry(session).value
         } else {
-            #expect(DeliveryRequest.shownEnd(in: [uncertain], at: .always())?.inTransit != true)
+            #expect(MacDelivery.endProgress([uncertain], at: .always())?.inTransit != true)
             await workspace.end(session)
         }
         let second = try #require(try await store.deliveryRequests().first { $0.id != first.id })

@@ -5,7 +5,7 @@ import Foundation
 /// 配合 -CuePadPhoneVoice listening 和隔离库；没有信令或真实音频，不用于发起、跨设备与音画同步验收。
 /// cycle（配 -CuePadPhoneVoice idle）：录输入框与通话条的来回——空着→接通→听、回应、静音→正常挂断→再接通→音频中断→打字让通话换成发送、删掉换回来。
 /// reverse（配 -CuePadPhoneVoice idle）：快速反向——接通动画走到一半就挂断、挂断动画走到一半又接通、打一个字马上删掉，看过渡从当前样子接着走、不闪。
-/// 接通照 `VoiceService.start` 摆出的样子换上新的媒体所有者与投影（没有信令），挂断与中断走正式的 `end`。
+/// 接通走正式的 `VoiceService.adopt` 换上回放媒体（没有信令），接上由回放媒体报"已连上"；挂断与中断走正式的 `end`。
 enum DebugPhoneVoiceReplay {
     /// 在写投影之前换上媒体所有者（同正式的 start）：所有者不在观察里，先写投影的话读能否静音的视图不会按它重算。
     static func attach(_ voice: VoiceService, workspace: Workspace, session: VoiceSessionID) {
@@ -17,11 +17,8 @@ enum DebugPhoneVoiceReplay {
             }
             return
         }
-        let local = VoiceEndpoint(device: VoiceDeviceID("voice-ui-replay"), lease: UUID())
-        let owner = VoicePhoneSession(id: session, local: local, media: Media())
-        owner.connected = true
-        voice.phone = owner
-        voice.session = session
+        let owner = dial(voice, session: session)
+        owner.media.onEvent(.connected)
         guard mode != "interactive" else { return }
         owner.scope.spawn {
             do { try await run(mode, voice: voice, owner: owner) }
@@ -35,13 +32,13 @@ enum DebugPhoneVoiceReplay {
         @MainActor func show(_ phase: VoiceCallProjection.Phase, response: VoiceCallProjection.Response = .none) {
             voice.setProjection(.init(session: initial.session, phase: phase, requests: initial.requests,
                                       replies: initial.replies, executions: initial.executions, response: response,
-                                      omitted: initial.omitted, pages: initial.pages, canRepeat: false))
+                                      omitted: initial.omitted, canRepeat: false))
         }
         try await Task.sleep(for: .seconds(2))
-        owner.connected = false
+        owner.leg.connected = false
         show(.connecting)
         try await Task.sleep(for: .milliseconds(700))
-        owner.connected = true
+        owner.leg.connected = true
         show(.listening)
         try await samples(voice, count: 30)
         show(.listening, response: .awaitingAssistant)
@@ -63,20 +60,17 @@ enum DebugPhoneVoiceReplay {
         FileHandle.standardError.write(Data("phone-voice-replay ready-for-interaction\n".utf8))
     }
 
-    /// 拨出：同 `start` 摆出的"正在连接"（换上媒体所有者与会话，投影清空）。
+    /// 拨出：同 `start` 摆出的"正在连接"。
     @discardableResult
-    static func dial(_ voice: VoiceService) -> VoicePhoneSession {
-        let owner = VoicePhoneSession(id: VoiceSessionID(UUID()), local: VoiceEndpoint(device: VoiceDeviceID("voice-ui-replay"), lease: UUID()), media: Media())
-        voice.phone = owner
-        voice.phoneEnd = nil
-        voice.session = owner.id
-        voice.setProjection(nil)
+    static func dial(_ voice: VoiceService, session: VoiceSessionID = VoiceSessionID(UUID())) -> VoicePhoneSession {
+        let owner = VoicePhoneSession(id: session, local: VoiceEndpoint(device: VoiceDeviceID("voice-ui-replay"), lease: UUID()), media: Media())
+        voice.adopt(owner)
         return owner
     }
 
-    /// 接通：媒体连上、投影到"在听"。
+    /// 接通：回放媒体报"已连上"（同真的媒体），投影到"在听"。
     static func answer(_ voice: VoiceService) {
-        voice.phone?.connected = true
+        voice.phone?.media.onEvent(.connected)
         show(voice, .listening)
     }
 

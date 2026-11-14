@@ -70,7 +70,7 @@ import WebKit
                 stage.landed(true)
                 flight.dissolve(over: Motion.Glide.duration / 2)
             case .screen:
-                if stage.page != nil { await painted() }
+                if stage.page != nil { await painted(within: Self.paintLimit) }
                 guard trip == self.trip else { return flight.remove() }
                 // 快照在最上面：网页露出来的这一帧它还盖着，画上屏之后再淡掉
                 stage.landed(true)
@@ -89,10 +89,18 @@ import WebKit
         Task { await pageShots.keep(view, area: area, as: key) }
     }
 
-    private func painted() async {
+    /// 等不到就不等了：网页一直不画（载入卡住、翻页翻走了它的视图）时快照照样淡掉，全屏页不一直透明着。
+    private func painted(within limit: Duration) async {
         guard !painted else { return }
+        let giveUp = Task {
+            guard (try? await Task.sleep(for: limit)) != nil else { return }
+            pagePainted()
+        }
         await withCheckedContinuation { paintWaiter = $0 }
+        giveUp.cancel()
     }
+
+    private static let paintLimit = Duration.seconds(1.5)
 
     func land() {
         trip += 1

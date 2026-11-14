@@ -58,16 +58,9 @@ struct MarkUnreadButton: View {
     }
 }
 
-enum SessionAsk: Identifiable, Equatable {
+enum SessionAsk {
     case rename(SessionState, shown: String, adopts: Bool)
     case end(SessionState)
-    case complete(SessionState)
-
-    var id: String {
-        switch self {
-        case .rename(let session, _, _): "rename/\(session.id)"
-        case .end(let session): "end/\(session.id)"
-        case .complete(let session): "complete/\(session.id)"
-        }
-    }
+    /// 完成前先问（`Workspace.confirmComplete`），答应了跑 `then`。`claimer` 是挨着它弹出的那个视图，nil 时窗口居中出。
+    case complete(CompletionAsk, claimer: UUID?, then: @MainActor (Workspace) async throws -> Void)
 }

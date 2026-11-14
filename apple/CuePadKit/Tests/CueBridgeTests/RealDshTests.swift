@@ -6,7 +6,7 @@ import Testing
 @testable import CueBridge
 
 /// 托管会话的开工、说话、歇下在 `RealCueStartTests`，这里是 dsh 才有的。真 dsh（钉住的版本）连本用例的假模型。
-/// dsh 的 ACP 实测不发 `session/request_permission`（0.2.1-rc.5：bash 在工作目录里、write 写到工作目录外，都直接执行），所以“权限”一条在这里是它的提问（`ask_user_question`）。
+/// dsh 的 ACP 实测不发 `session/request_permission`（0.2.1-rc.5：bash 在工作目录里、write 写到工作目录外，都直接执行）；它的提问与接着会话同各家（`RealHostedTurnTests`、`RealHostedResumeTests`）。
 @MainActor
 @Suite(RealAgents.needs(.dsh), RealAgents.tiered, .timeLimit(.minutes(3)))
 struct RealDshTests {
@@ -20,36 +20,6 @@ struct RealDshTests {
             try await rig.settled(id, replying: "PONG")
             let request = try #require(rig.fake.requests.first { $0.prompt.contains("PONG") }, "假模型没收到")
             #expect(request.api == .messages && request.model == rig.model.id && !request.tools.isEmpty, "\(request.api) \(request.model)")
-        }
-    }
-
-    /// 提问（dsh 里与权限同位的那一条）：一问一问地答，选一项、自己填一个，答案回到模型的工具结果里。
-    @Test func aQuestionIsAnsweredFromCuePadOneByOne() async throws {
-        try await withDshRig { rig in
-            rig.fake.on("Ask the drink and the size") { request in
-                let questions: [[String: any Sendable]] = [
-                    ["id": "drink", "question": "Which drink?", "options": [["label": "Tea"], ["label": "Coffee"]]],
-                    ["id": "size", "question": "Which size?", "options": [["label": "Small"], ["label": "Large"]]],
-                ]
-                return request.step == 0 ? .call("ask_user_question", ["questions": questions]) : .say(request.results.last ?? "NO RESULT")
-            }
-            let id = try await rig.runtime.open(in: rig.work, launchToken: "token-ask", name: nil, model: rig.model, thinking: nil)
-            try await rig.bridge.send(SessionMessage(text: "Ask the drink and the size"), to: id)
-
-            try await eventually("问第一问") { rig.bridge.session(id: id)?.question?.text.contains("Which drink?") == true }
-            let drink = try #require(rig.bridge.session(id: id)?.question)
-            #expect(rig.bridge.session(id: id)?.state == .waitingForUser)
-            #expect(drink.kind == .known(.select) && drink.options == ["Tea", "Coffee"] && drink.allowsOther)
-            try await rig.bridge.answer(.option("Coffee"), to: try #require(drink.promptID), in: id)
-
-            let size = try #require(rig.bridge.session(id: id)?.question)
-            #expect(size.text.contains("Which size?") && size.options == ["Small", "Large"] && size.promptID != drink.promptID)
-            try await rig.bridge.answer(.text("Medium"), to: try #require(size.promptID), in: id)
-
-            try await rig.settled(id, replying: "Coffee")
-            let reply = try #require(rig.bridge.session(id: id).flatMap { rig.replies($0).last })
-            #expect(reply.contains("Medium"), "答案没回到模型的工具结果里：\(reply)")
-            #expect(rig.bridge.session(id: id)?.question == nil)
         }
     }
 
@@ -74,27 +44,6 @@ struct RealDshTests {
         }
     }
 
-    /// 恢复：结束的会话在 dsh 重新起来后接着说，模型收到的对话里带着之前说过的。
-    @Test(.tags(.smoke)) func anEndedSessionResumesInANewProcessWithItsConversation() async throws {
-        try await withDshRig { rig in
-            let id = try await rig.runtime.open(in: rig.work, launchToken: "token-resume", name: nil, model: rig.model, thinking: nil)
-            let session = try #require(rig.bridge.session(id: id))
-            try await rig.bridge.send(SessionMessage(text: "Reply with exactly the word FIRST."), to: id)
-            try await rig.settled(id, replying: "FIRST")
-            let file = try #require(rig.bridge.session(id: id)?.sessionFile)
-            try await rig.bridge.end(id)
-            await rig.runtime.stop()()
-
-            let restarted = rig.newRuntime()
-            let resumed = try await restarted.resume(IndexedSession(id: session.sessionID, path: file.path, cwd: rig.work.path, lastActivityAt: .now, agent: .dsh))
-            #expect(rig.bridge.session(id: resumed)?.sessionID == session.sessionID)
-            try await rig.bridge.send(SessionMessage(text: "Reply with exactly the word SECOND."), to: resumed)
-            try await rig.settled(resumed, replying: "SECOND")
-            let request = try #require(rig.fake.requests.first { $0.prompt.contains("SECOND") })
-            #expect(request.said.contains { $0.contains("FIRST") }, "模型收到的对话里没有之前说过的：\(request.said)")
-            await restarted.stop()()
-        }
-    }
 }
 
 func commandLine(of pid: Int32) -> String {
@@ -117,7 +66,7 @@ final class DshRig {
     let bridge: Bridge
     let fake: FakeModel
     let paths: AgentPaths
-    private(set) var runtime: DshRuntime!
+    let runtime: DshRuntime
     let model = ModelKey(provider: "deepseek-official", id: "deepseek-flash")
     var work: URL { root.appending(path: "work", directoryHint: .isDirectory) }
 
@@ -139,12 +88,8 @@ final class DshRig {
         self.fake = model
         paths = AgentPaths(environment: try Self.environment(model, in: root))
         bridge = Bridge(socketDirectory: root.appending(path: "s", directoryHint: .isDirectory))
-        runtime = newRuntime()
+        runtime = DshRuntime(bridge: bridge, paths: paths, dsh: { PinnedAgent.dsh.executable }, locate: { PinnedAgent.dsh.locator }, timing: noDeadline)
         try bridge.start()
-    }
-
-    func newRuntime() -> DshRuntime {
-        DshRuntime(bridge: bridge, paths: paths, dsh: { PinnedAgent.dsh.executable }, locate: { PinnedAgent.dsh.locator }, timing: noDeadline)
     }
 
     func stop() async {

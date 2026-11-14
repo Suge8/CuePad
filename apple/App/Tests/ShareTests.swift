@@ -60,7 +60,7 @@ struct ShareTests {
 
         #expect(!saved)
         guard case .failed = model.state else { Issue.record("状态应为失败：\(model.state)"); return }
-        #expect(CaptureQueue.pending(in: app.services.location.captureDirectory).isEmpty)
+        #expect(CaptureQueue.pending(in: app.services.location.captureDirectory).entries.isEmpty)
     }
     @Test func 分享与粘贴临时副本_保留原名并只补缺少的扩展名() async throws {
         let app = TestApp()

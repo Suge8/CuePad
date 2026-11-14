@@ -12,13 +12,23 @@ import Synchronization
 /// 密钥要认过账号才取得到（`CloudSync.relaySecret`）：没登录 iCloud 时连接停在取密钥上，不重试。取到就记着（`known`），之后的连接不再先去 iCloud 取一趟；
 /// 用记着的那份入了房再去取一次核对，变了（这个账号的 iCloud 数据被清掉、密钥重新生成过）就按新的重连。
 /// 每次入房先拉一次：没连着的那段时间（包括启动到第一次连上）的门铃听不到。
-/// 同一时刻至多一条连接任务：旧的还在收尾（`closing`）时 `resume`、`ring` 不另起新的，收尾完了再按那时想不想连来决定，
-/// 所以旧任务的收尾（`isLive`、`socket`、`connection`）碰不到新连接的状态。几处同时断开（换账号重连时 `run` 被取消）都等同一个收尾；
+/// 连接的状态只在 `phase`：同一时刻至多一条连接任务，旧的还在收尾（`.closing`）时 `resume`、`ring` 不另起新的，收尾完了再按那时想不想连来决定，
+/// 所以旧任务的收尾碰不到新连接。几处同时断开（换账号重连时 `run` 被取消）都等同一个收尾；
 /// `run` 结束后不再连（`rang` 清掉），收尾完的重连也不起：没人能再取消的连接不会留下。
 /// 用 URLSessionWebSocketTask：带系统代理设置、协议层 ping、自动回中转的 ping。
 @Observable
 final class Relay {
-    private(set) var isLive = false
+    private enum Phase {
+        case off
+        /// 连接任务在跑：取密钥、握手，或断了在退避
+        case connecting(Task<Void, Never>)
+        case live(Task<Void, Never>, URLSessionWebSocketTask)
+        /// 断开后等这个任务收尾
+        case closing(Task<Void, Never>)
+    }
+
+    private var phase = Phase.off
+    var isLive: Bool { if case .live = phase { true } else { false } }
     private(set) var voiceAvailability: VoiceRelayAvailability = .unavailable
     @ObservationIgnored var voiceConnection: RelayVoiceConnection?
     @ObservationIgnored private let voiceDevice: VoiceDeviceID
@@ -32,14 +42,10 @@ final class Relay {
 
     @ObservationIgnored private let endpoint: URL
     @ObservationIgnored private let credentials: @MainActor () async throws -> RelayCredentials
-    @ObservationIgnored private var socket: URLSessionWebSocketTask?
     @ObservationIgnored private let session: URLSession
     @ObservationIgnored private var rang: (@MainActor () async -> Void)?
     /// 这个账号的房间与签名（密钥派生的）：取到一次就记着，换账号（`reconnect`）时清掉。
     @ObservationIgnored private var known: RelayCredentials?
-    @ObservationIgnored private var connection: Task<Void, Never>?
-    /// 正在收尾的旧连接任务（`disconnect` 都等它）：这期间不起新的。
-    @ObservationIgnored private var closing: Task<Void, Never>?
     /// 最后一个按出去的门铃（之前的都已发完或失败）：`settle` 与短连等它。
     @ObservationIgnored private var sending: Task<Void, Never>?
     /// 有改动被收下时门铃没通（或没按出去），入房后先补按一次。
@@ -61,10 +67,10 @@ final class Relay {
     static let steady = Duration.seconds(30)
     private nonisolated static let log = Logger(subsystem: AppIdentity.id, category: "relay")
 
-    /// `host` 是中转的主机（可带端口），连 `wss://<host>/v1/<房间号>`。
-    init(host: String, device: String, credentials: @escaping @MainActor () async throws -> RelayCredentials) {
+    /// 连 `<endpoint>/<房间号>`（正式是 `wss://<中转主机>/v1`）。
+    init(endpoint: URL, device: String, credentials: @escaping @MainActor () async throws -> RelayCredentials) {
         voiceDevice = VoiceDeviceID(device)
-        endpoint = URL(string: "wss://\(host)/v1")!
+        self.endpoint = endpoint
         self.credentials = credentials
         session = URLSession(configuration: .ephemeral)
     }
@@ -72,7 +78,7 @@ final class Relay {
     /// 本机的一批改动已被 iCloud 收下：通着就按一下门铃（排在前一个后面发）；不通（正在重连、手机在后台）或没按出去的记下欠一次，
     /// 下次入房先补按：对方的拉取降为兜底后，丢一下就要等到兜底那一拉。不想连着的这时短连一次去补按。
     func ring() {
-        guard isLive, let socket else {
+        guard case .live(_, let socket) = phase else {
             owesRing = true
             connect()
             return
@@ -122,34 +128,34 @@ final class Relay {
     func reconnect() async {
         voiceConnection?.close(.accountChanged)
         known = nil
-        guard connection != nil else { return }
-        await disconnect(thenConnect: true)
+        guard case .off = phase else { return await disconnect(thenConnect: true) }
     }
 
     private func connect() {
-        guard connection == nil, closing == nil, let rang, wanted || owesRing else { return }
+        guard case .off = phase, let rang, wanted || owesRing else { return }
         let done: @MainActor @Sendable () -> Void
         #if os(iOS)
         if wanted { done = {} } else { done = BackgroundWork.begin() }
         #else
         done = {}
         #endif
-        connection = Task {
+        phase = .connecting(Task {
             await stayConnected(rang)
             done()
-        }
+        })
     }
 
     /// 断开并等旧任务收尾。`thenConnect`：收尾期间 `resume`、`ring` 来过的（这时才不被挡）按此刻想不想连决定要不要连。
     private func disconnect(thenConnect: Bool) async {
-        if let connection {
-            self.connection = nil
-            connection.cancel()
-            closing = connection
+        switch phase {
+        case .connecting(let task), .live(let task, _):
+            task.cancel()
+            phase = .closing(task)
+        case .off, .closing: break
         }
-        guard let closing else { return }
-        await closing.value
-        if self.closing == closing { self.closing = nil }
+        guard case .closing(let task) = phase else { return }
+        await task.value
+        if case .closing(task) = phase { phase = .off }
         if thenConnect { connect() }
     }
 
@@ -166,12 +172,14 @@ final class Relay {
                     Self.log.notice("门铃断了，按退避重连：\(error.brief, privacy: .public)")
                 }
             } catch {}
-            if isLive, ContinuousClock.now - began >= Self.steady { retry.reset() }
-            isLive = false
+            if case .live(let task, _) = phase {
+                if ContinuousClock.now - began >= Self.steady { retry.reset() }
+                phase = .connecting(task)
+            }
             guard !Task.isCancelled, wanted || owesRing else { break }
             await Self.wait(upTo: retry.next())
         }
-        if !Task.isCancelled { connection = nil }
+        if case .connecting = phase { phase = .off }  // 收尾中（.closing）的由 disconnect 清
     }
 
     private nonisolated static func wait(upTo delay: Duration) async {
@@ -194,7 +202,6 @@ final class Relay {
         known = credentials
         let socket = session.webSocketTask(with: endpoint.appending(path: credentials.room))
         socket.maximumMessageSize = VoiceSignalFormat.maximumWireBytes
-        self.socket = socket
         DebugHooks.relaySocket(socket)
         defer {
             let reason: VoiceEndReason = switch socket.closeCode.rawValue {
@@ -207,14 +214,14 @@ final class Relay {
             voiceConnection = nil
             voiceAvailability(.unavailable)
             socket.cancel(with: .goingAway, reason: nil)
-            if self.socket === socket { self.socket = nil }
         }
         try await withTaskCancellationHandler {
             socket.resume()
             let voice = try await Self.handshake(socket, credentials, device: voiceDevice, emit: { [voiceFeed] in voiceFeed.continuation.yield($0) })
             voiceConnection = voice
             voiceAvailability(voice.map { .ready(endpoint: $0.crypto.claim.endpoint) } ?? .unsupported)
-            isLive = true
+            guard case .connecting(let task) = phase else { return }  // 收尾中：不再算通
+            phase = .live(task, socket)
             if let downSince {
                 Self.log.notice("门铃通了，断了 \((ContinuousClock.now - downSince).seconds, format: .fixed(precision: 1), privacy: .public) 秒")
                 self.downSince = nil

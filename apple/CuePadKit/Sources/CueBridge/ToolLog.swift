@@ -139,13 +139,12 @@ struct ToolArguments: Decodable {
 private extension ToolLog.Call {
     init(name: String, arguments: ToolArguments, cwd: String?) {
         let file = arguments.path.map { Self.relative($0, to: cwd) }
-        let (kind, target): (Tools.Kind, String) = switch name.lowercased() {
-        case "edit", "write", "strreplace", "str_replace", "multiedit": (.edit, file ?? name)
-        case "read": (.read, file ?? name)
-        case "bash", "shell":
-            (.command, arguments.command?.split(whereSeparator: \.isNewline).lazy.map { $0.trimmingCharacters(in: .whitespaces) }.first { !$0.isEmpty } ?? name)
-        case "grep", "find", "ls", "glob": (.search, arguments.pattern ?? file ?? name)
-        default: (.other, name)
+        let kind = Tools.Kind(tool: name)
+        let target: String = switch kind {
+        case .edit, .read: file ?? name
+        case .command: arguments.command?.split(whereSeparator: \.isNewline).lazy.map { $0.trimmingCharacters(in: .whitespaces) }.first { !$0.isEmpty } ?? name
+        case .search: arguments.pattern ?? file ?? name
+        default: name
         }
         // 改文件带从参数算出的增删行数（整文件写入只有新增）
         let change = kind == .edit ? arguments.lineChange : nil

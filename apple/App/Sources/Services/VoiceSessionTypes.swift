@@ -29,7 +29,7 @@ nonisolated enum VoiceEndReason: String, Codable, Sendable {
 /// 正文和持久化业务状态仍从 CueMessage/SessionState 读取，信令不复制聊天历史。
 nonisolated struct VoiceCallProjection: Equatable, Codable, Sendable {
     enum Phase: Equatable, Codable, Sendable {
-        case connecting, listening, processing, speaking, closing
+        case connecting, listening, speaking, closing
         case failed(VoiceIssue)
         case ended(reason: VoiceEndReason)
     }
@@ -37,14 +37,22 @@ nonisolated struct VoiceCallProjection: Equatable, Codable, Sendable {
     let phase: Phase
     let requests: [Request]
     let replies: [Reply]
-    let executions: [VoiceExecutionTarget]
+    let executions: [Execution]
     /// 控制协议的回应进度，与收音、请求写库、后台执行分开；不表示 PCM 已播放到某个位置。
     enum Response: String, Codable, Sendable { case none, awaitingAssistant, assistantTurn }
     var response: Response = .none
-    /// 快照装不下的旧条目数量；正文仍在原聊天，不能把省略当作不存在或已经完成。
+    /// 发给手机时装不下的较早条目数（`bounded`）；全部在 Mac 的通话详情里，已落库的正文也在聊天里。
     var omitted = Omitted()
-    var pages = VoicePageHeads()
     var canRepeat = false
+    /// Mac 的信令版本（`VoiceSignalFormat.callVersion`）。解码时必须有：旧 Mac 的投影没有它，解不开就当对端版本不同（`VoiceRelayEvent.unreadable`）。
+    var version = VoiceSignalFormat.callVersion
+    /// 只在拒绝来电的投影里带（`VoiceService.rejectOffer`）：信令 1 的手机解码投影要这个键，没它就看不到"请更新"。
+    var pages: LegacyPages?
+
+    struct LegacyPages: Equatable, Codable, Sendable {
+        struct Head: Equatable, Codable, Sendable { var version = Data() }
+        var requests = Head(), replies = Head(), executions = Head()
+    }
 
     struct Omitted: Equatable, Codable, Sendable {
         var requests = 0
@@ -53,13 +61,21 @@ nonisolated struct VoiceCallProjection: Equatable, Codable, Sendable {
     }
 
     struct Request: Equatable, Codable, Sendable {
-        /// 原 VoiceCall.Request.rowID，落库前后不变；不是另一条业务记录。
+        /// 那一通的 VoiceRecord.Request.rowID，落库前后不变；不是另一条业务记录。
         var id = UUID()
         let reference: VoiceRequestReference
         let recording: Bool
         let issue: VoiceIssue?
         /// 仅未保存请求携带临时原话摘要；不参与恢复命令，也不写入消息库。
         var preview: RequestPreview? = nil
+    }
+    /// 这次通话派出的工作所在的会话；标题、状态与停止进度各端按身份从库读。
+    struct Execution: Equatable, Codable, Sendable {
+        let session: String
+        /// 此刻能停的那一轮：停止命令原样带回，Mac 执行前按这份记录的请求再核一遍；已歇下、不再归这些请求时为 nil
+        let turn: TurnTarget?
+        /// 对它发出的最后一个停止请求（`DeliveryRequest.id`）
+        let stop: UUID?
     }
     struct RequestPreview: Equatable, Codable, Sendable {
         let text: String
@@ -80,18 +96,5 @@ nonisolated enum VoiceIssue: Error, Equatable, Codable, Sendable {
     case codexNotInstalled, signedOut, codexUnresponsive, cueUnavailable, macUnavailable, relayUnsupported, busy
     case notAllowed(status: Int)
     case server(status: Int?)
-    case storageUnavailable, originalMissing, alreadyHandled, turnChanged
-
-    enum Action: String, Codable, Sendable { case reconnect, microphoneSettings, configureOnMac, signInOnMac, installCodexOnMac, retryLater }
-    var actions: [Action] {
-        switch self {
-        case .ended(.permissionDenied): [.microphoneSettings, .reconnect]
-        case .codexNotInstalled: [.installCodexOnMac]
-        case .signedOut: [.signInOnMac]
-        case .cueUnavailable: [.configureOnMac]
-        case .notAllowed, .relayUnsupported, .busy, .storageUnavailable, .macUnavailable: [.retryLater]
-        case .originalMissing, .alreadyHandled, .turnChanged: []
-        case .ended, .server, .codexUnresponsive: [.reconnect]
-        }
-    }
+    case storageUnavailable
 }

@@ -62,7 +62,7 @@ extension ClaudeHostedSession: HostedSession {
     func send(_ text: String, images: [MessageImage], id: UUID) async throws {
         let text = text.hasPrefix("/") ? " " + text : text
         let uuid: JSONValue = .string(id.uuidString.lowercased())
-        try await say(Self.userMessage(ClaudeStream.content(text: text, images: images), extra: ["uuid": uuid]), interrupting: false)
+        try put(Self.userMessage(ClaudeStream.content(text: text, images: images), extra: ["uuid": uuid]))
     }
 
     func newSession() async throws {

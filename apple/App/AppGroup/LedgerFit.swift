@@ -23,6 +23,7 @@ struct LedgerFit: Layout {
         yours = urgent.count
     }
 
+    /// 量字宽时的折算：组间那道缝按字宽的分数算（扩展里没有 Spacing），不是界面的间距档。
     static let groupGap: CGFloat = 1.75
 
     func makeCache(subviews: Subviews) -> [CGSize] { subviews.map { $0.sizeThatFits(.unspecified) } }

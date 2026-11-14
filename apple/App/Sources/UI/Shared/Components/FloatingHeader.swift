@@ -39,7 +39,7 @@ extension View {
         floatingHeader(title, detail: detail) { EmptyView() }
     }
 
-    func headerPiece(interactive: Bool = false) -> some View { modifier(HeaderPiece(interactive: interactive)) }
+    func headerPiece() -> some View { modifier(HeaderPiece()) }
 }
 
 enum HeaderHost: Equatable {
@@ -237,7 +237,6 @@ private struct PageBar<Middle: View, Trailing: View>: View {
 }
 
 private struct HeaderPiece: ViewModifier {
-    let interactive: Bool
     @Environment(\.headerGivesWay) private var givesWay
     @Environment(\.headerGrown) private var grown
 
@@ -245,7 +244,7 @@ private struct HeaderPiece: ViewModifier {
         // 先定高再上玻璃：玻璃随内容高时，没有第二行的标题（项目没写介绍）只剩一条细缝
         let piece = content.dynamicTypeSize(...FloatingHeaderLayout.largestType).frame(height: FloatingHeaderLayout.height)
         Group {
-            if grown { piece } else { piece.glass(in: .capsule, interactive: interactive) }
+            if grown { piece } else { piece.glass(in: .capsule) }
         }
         .contentShape(.capsule)
         .opacity(givesWay && !grown ? 0 : 1)

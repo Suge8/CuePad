@@ -139,9 +139,6 @@ struct Palette {
         case (true, true): Color(hex: 0x8FDCB2)
         }
     }
-    /// 石绿的实底（看板已完成列头那颗圆）：浅色就是石绿，深色压到中等明度，上面的白字形 4.6。
-    var repliedFill: Color { dark ? Color(hex: 0x2B7A55) : replied }
-
 
     // 是这种状态色相的浅调，不是字色叠透明：状态色为了写成字压得很深（赭黄近棕），薄薄叠一层出来的是灰米、灰粉、灰绿，认不出是哪种。
     // 卡上的字（状态词、次要墨色）照纸上的对比度核过，下面写的是状态词的对比度；与纸、桌面靠色相分开。
@@ -195,8 +192,6 @@ struct Palette {
         let entry = Self.projectColors.first { $0.stored.caseInsensitiveCompare(stored) == .orderedSame } ?? Self.fallbackProjectColor
         return Color(hex: dark ? entry.dark : entry.light)
     }
-
-    func projectWash(_ stored: String) -> Color { project(stored).opacity(dark ? 0.16 : 0.1) }
 }
 
 private extension Color {

@@ -92,6 +92,7 @@ nonisolated struct OlderGroup: Equatable, Sendable {
     var isMonth: Bool { if case .month = period { true } else { false } }
 
     static func group(_ cards: [CardStamp], now: Date, calendar: Calendar) -> [OlderGroup] {
+        let calendar = calendar.mondayFirst
         let sorted = cards.sorted(by: { $0.modifiedAt > $1.modifiedAt })
         if sorted.count <= fewLimit { return sorted.isEmpty ? [] : [OlderGroup(period: .all, cards: sorted.map(\.id))] }
         let weeklySince = calendar.date(byAdding: .month, value: -weeklyMonths, to: now) ?? now
@@ -143,5 +144,21 @@ nonisolated struct OlderGroup: Equatable, Sendable {
         }
         let month = calendar.dateInterval(of: .month, for: date)?.start ?? date
         return .month(start: month)
+    }
+}
+
+extension OlderGroup.Period {
+    /// "更早"那一段每组的标题。
+    func title(now: Date = .now, calendar: Calendar = .current) -> String {
+        switch self {
+        case .all:
+            return String(localized: "更早")
+        case .week(let start):
+            let end = calendar.date(byAdding: .day, value: 6, to: start) ?? start
+            return "\(start.formatted(DateLabel.monthDay)) – \(end.formatted(DateLabel.monthDay))"
+        case .sparseMonth(let start), .month(let start):
+            let sameYear = calendar.isDate(start, equalTo: now, toGranularity: .year)
+            return start.formatted(sameYear ? Date.FormatStyle.dateTime.month(.abbreviated) : Date.FormatStyle.dateTime.year().month(.abbreviated))
+        }
     }
 }

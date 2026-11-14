@@ -78,7 +78,7 @@ archive="$(release_archive mac "${OUT##*/}" "${versions[@]}")"
 xcodebuild archive -project "$APPLE_DIR/CuePad.xcodeproj" -scheme CuePad -destination 'generic/platform=macOS' \
   -archivePath "$archive" -derivedDataPath "$DERIVED" "${versions[@]}" "${team_signing[@]}" CUEPAD_RELEASE=YES
 
-export_options "$OUT/export.plist" developer-id "Developer ID Application" "$CUEPAD_APP_ID"="CuePad macOS DeveloperID"
+python3 "$APPLE_DIR/scripts/provision.py" export-options mac "$OUT/export.plist"
 xcodebuild -exportArchive -archivePath "$archive" -exportOptionsPlist "$OUT/export.plist" -exportPath "$OUT/export"
 signing_end
 context seal "$OUT" "$archive" "${versions[@]}" >/dev/null
@@ -151,16 +151,15 @@ done
 gh release edit "$TAG" -R "$REPO" --title "$TITLE" --notes "$NOTES"
 
 # 回读校验：从 App 实际使用的更新源取 appcast，再按它的 enclosure 与官网地址取包，都与本地一致且签名通过。
-# GitHub 的 CDN 在上传后 1–2 分钟内仍可能返回旧内容（#124），所以轮询到一致，超过 READBACK_TIMEOUT 秒才失败
+# GitHub 的 CDN 在上传后 1–2 分钟内仍可能返回旧内容（#124），所以每 10 秒轮询到一致，超过 READBACK_TIMEOUT 秒才失败
 check="$OUT/check"; mkdir -p "$check"
-READBACK_TIMEOUT="${READBACK_TIMEOUT:-300}"
-READBACK_INTERVAL="${READBACK_INTERVAL:-10}"
+READBACK_TIMEOUT=300
 wait_match() {
   local url="$1" want="$2" got deadline=$((SECONDS + READBACK_TIMEOUT))
   got="$check/${want##*/}"
   until curl -fsSL -o "$got" "$url" 2>/dev/null && cmp -s "$got" "$want"; do
     [ "$SECONDS" -lt "$deadline" ] || { echo "回读超时（${READBACK_TIMEOUT} 秒）：$url 一直读不到或不是本次上传的 ${want##*/}，多半是 CDN 缓存还没刷新；资产已上传，稍后用 --resume $notary_id 只回读" >&2; exit 1; }
-    sleep "$READBACK_INTERVAL"
+    sleep 10
   done
 }
 wait_match "$(plist SUFeedURL)" "$appcast"

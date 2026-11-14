@@ -14,7 +14,7 @@ struct SessionDock: View {
 
     var body: some View {
         let deliveries = digest?.deliveries ?? [], messages = digest?.messages ?? [], speech = services.speech
-        let endIssue = MacDelivery.endIssue(deliveries, at: speech)
+        let endIssue = MacDelivery.endProgress(deliveries, at: speech)
         // 卡与回复框之间的缝在卡里（`DockedCard`）：卡升起、沉回时缝跟着长、跟着收
         VStack(spacing: 0) {
             QuestionDock(session: session)

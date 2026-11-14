@@ -66,21 +66,6 @@ import Testing
     #expect(try await store.tasks(boundTo: "s3").map { [$0.task.id, $0.parent?.id] } == [[step.id, second.id]])
   }
 
-  @Test func 开新会话后又改绑_不被新会话抢回() async throws {
-    let project = try await store.createProject(name: "圆桌", color: "#111")
-    let task = try await store.createTask("修乱序", in: project.id)
-    let recorder = StateRecorder(store: store, hostID: "mac-a")
-    _ = try await store.requestLaunch(LaunchRequest(project: project.id, prompt: "修乱序", token: "t-new"), title: "修乱序", on: "mac-a", card: task.id)
-    try await recorder.update(sessionID: "s-new", state: .thinking, title: "修乱序", launchToken: "t-new")
-    #expect(try await store.card(task.id)?.piSessionID == "s-new")
-
-    try await recorder.update(sessionID: "s-old", state: .settled, projectID: project.id)
-    try await store.bindSession("s-old", to: task.id)
-    try await recorder.update(sessionID: "s-new", state: .settled, title: "修乱序", launchToken: "t-new")
-
-    #expect(try await store.card(task.id)?.piSessionID == "s-old")
-  }
-
   @Test func 能绑的叶子_没完成_没绑会话_子任务带上级() async throws {
     let project = try await store.createProject(name: "圆桌", color: "#111")
     let top = try await store.createTask("上线", in: project.id)

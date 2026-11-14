@@ -4,28 +4,21 @@ import CueStore
 import Foundation
 
 extension VoiceService {
-    func startLocal(source: VoicePeer.Source, makeCall: @MainActor (VoiceCall.Dependencies) -> VoiceCall) {
+    func startLocal(source: VoicePeer.Source) {
         guard call?.isLive != true, remote == nil else { return }
-        let call = obtainCall(source: source, makeCall: makeCall)
-        issue = nil
+        let call = newCall(source: source)
         projectionReaders.removeAll()
-        call.reconnect()
-        session = VoiceSessionID(call.session)
+        call.start()
         observeCall(call)
     }
 
-    private func obtainCall(host: String? = nil, source: VoicePeer.Source = .microphone,
-                            makeCall: @MainActor (VoiceCall.Dependencies) -> VoiceCall = VoiceCall.init) -> VoiceCall {
+    /// 每一通新建，上一通（连同它的记录）随之放掉。
+    private func newCall(host: String? = nil, source: VoicePeer.Source = .microphone) -> VoiceCall {
         preview.stop()
         let services = services
-        let tell: (String) async throws -> UUID = { [weak services] text in
+        let tell: (String, UUID) async throws -> UUID = { [weak services] text, command in
             guard let services else { throw CancellationError() }
-            return try await services.recordVoiceSpeech(text, host: host)
-        }
-        if let call {
-            call.dependencies.tell = tell
-            call.dependencies.source = source
-            return call
+            return try await services.recordVoiceSpeech(text, command: command, host: host)
         }
         let value = makeCall(.init(
             access: { [weak services] in
@@ -39,7 +32,7 @@ extension VoiceService {
                 let codex = if let debug = DebugHooks.voiceCodex { debug } else { await services.agents.executable(.codex) }
                 return try await services.agents.integration.codexAccess(executable: codex)
             },
-            tell: tell, store: services.store, source: source))
+            source: source), VoiceRecord(store: services.store, tell: tell))
         call = value
         return value
     }
@@ -58,10 +51,10 @@ extension VoiceService {
             if ask { answer(header) }
             return
         }
-        guard let remote, remote.session == header.session, remote.link == .bound(local: header.recipient, peer: header.sender) else { return }
+        guard let remote, remote.leg.session == header.session, remote.leg.link == .bound(local: header.recipient, peer: header.sender) else { return }
         switch received.payload {
         case .media(.event(.connected)):
-            remote.connected = true
+            remote.leg.connected = true
             remote.onEvent(.connected)
         case .media(.event(.ended(let reason))), .media(.hangup(let reason)): remote.departed(reason)
         default: remote.departed(.protocolRejected)
@@ -73,16 +66,15 @@ extension VoiceService {
     /// 投影推送重新登记到这里并补发当前投影：宽限期里错过的更新由这份整份状态补齐，Mac 先结束的由此把真实结束原因带给手机。
     func rebind(_ header: VoiceSignalHeader) {
         guard let call, VoiceSessionID(call.session) == header.session else { return }
-        let device = header.sender.device, pair = VoiceLink.bound(local: header.recipient, peer: header.sender)
+        let device = header.sender.device
         var changed = false
-        if let remote, remote.session == header.session {
-            guard remote.link.peerDevice == device else { return }
-            if remote.link != pair {
-                remote.link = pair
+        if let remote, remote.leg.session == header.session {
+            guard remote.leg.link?.peerDevice == device else { return }
+            if remote.leg.rebind(header) {
                 changed = true
                 call.mark("relinked by \(header.purpose)")
                 for (id, outcome) in remote.results {
-                    Task { await sendResult(.init(command: id, outcome: outcome), session: remote.session, to: header.sender) }
+                    Task { await sendResult(.init(command: id, outcome: outcome), session: header.session, to: header.sender) }
                 }
             }
         }
@@ -90,11 +82,18 @@ extension VoiceService {
             projectionReaders[device] = header
             changed = true
         }
-        guard changed, let value = projection, value.session == header.session, let reader = projectionReaders[device] else { return }
-        Task { if await !sendProjection(value, to: reader) { retryProjection(to: reader) } }
+        guard changed, projection?.session == header.session else { return }
+        pushProjection(to: device)
     }
 
     func waitsForRelink(_ session: VoiceSessionID) -> Bool { false }
+
+    func hangUp() async { call?.hangUp() }
+
+    func setMuted(_ value: Bool) async throws {
+        guard canMute, let call else { throw VoiceIssue.busy }
+        call.setMuted(value)
+    }
 
     /// 手机问"你还在吗"（`VoiceMediaSignal.resume`）：照答。换绑与补发投影已在 `rebind` 做过。
     private func answer(_ header: VoiceSignalHeader) {
@@ -103,7 +102,7 @@ extension VoiceService {
             let scope = VoiceOperationScope()
             defer { scope.end() }
             do {
-                try await scope.perform(within: .seconds(2)) {
+                try await scope.perform(within: VoiceTiming.send) {
                     try await signaling.sendVoice(.media(signal: .resume(ask: false)), session: header.session, to: header.sender)
                 }
             } catch { AppServices.log.error("Voice resume answer not sent: \(String(describing: error))") }
@@ -112,6 +111,10 @@ extension VoiceService {
 
     private func acceptOffer(_ offer: VoiceOffer, header: VoiceSignalHeader) async {
         guard let signaling else { return }
+        guard offer.version == VoiceSignalFormat.callVersion else {
+            AppServices.log.notice("Voice offer from signal version \(offer.version ?? 1), this Mac speaks \(VoiceSignalFormat.callVersion)")
+            return await rejectOffer(header, issue: .relayUnsupported)
+        }
         guard call?.isLive != true, remote == nil else {
             await rejectOffer(header, issue: .busy)
             return
@@ -121,52 +124,53 @@ extension VoiceService {
         remote = media
         do {
             let profile = try await services.store.cueProfile()
-            guard remote === media, media.available else { return }
+            // 读库期间手机已离开（挂断、断开）：这一路就此放掉，不然之后的来电一直被当成占线
+            guard remote === media else { return }
+            guard media.available else { return release(media) }
             guard profile?.activeHost == services.hostID else {
+                release(media)
                 await rejectOffer(header, issue: .cueUnavailable)
-                remote = nil
                 return
             }
-            let call = obtainCall(host: services.hostID)
-            issue = nil
-            session = header.session
+            let call = newCall(host: services.hostID)
             projectionReaders = [header.sender.device: header]
-            call.reconnect(session: header.session.rawValue, media: media)
+            call.ended = { [weak self, weak media] in if let media { self?.release(media) } }
+            call.start(session: header.session.rawValue, media: media)
             observeCall(call)
         } catch {
+            release(media)
             await rejectOffer(header, issue: .storageUnavailable)
-            if remote === media { remote = nil }
         }
+    }
+
+    /// 手机那一路的唯一出口：这一通收尾完成、或还没建通话就离开时
+    private func release(_ media: VoiceRemoteMedia) {
+        if remote === media { remote = nil }
     }
 
     private func rejectOffer(_ header: VoiceSignalHeader, issue: VoiceIssue) async {
         do {
-            try await signaling?.sendVoice(.projection(value: .init(session: header.session, phase: .failed(issue), requests: [], replies: [], executions: [])),
-                                           session: header.session, to: header.sender)
-        } catch { self.issue = .ended(.networkFailed) }
+            var value = VoiceCallProjection(session: header.session, phase: .failed(issue), requests: [], replies: [], executions: [])
+            value.pages = .init()
+            try await signaling?.sendVoice(.projection(value: value), session: header.session, to: header.sender)
+        } catch { AppServices.log.error("Voice offer rejection not sent: \(String(describing: error), privacy: .public)") }
     }
 
     private func observeCall(_ call: VoiceCall) {
         observing?.cancel()
         observing = Task { [weak self] in
-            for await result in Observations({ [weak self] in self.map { service in Result { try service.macProjection(call) } } }) {
+            for await result in Observations({ [weak self] in self.map { service in Result { try service.fullProjection(call) } } }) {
                 guard let self, let result, !Task.isCancelled else { return }
-                // 先于投影：投影读失败时也要放开手机那通，否则之后的来电一直被当成占线
-                if !call.isLive, self.call === call { self.remote = nil }
                 let value: VoiceCallProjection
                 switch result {
                 case .success(let projection): value = projection
                 case .failure:
-                    self.issue = .storageUnavailable
                     call.inputs.continuation.yield(.failed(.other("Voice projection storage unavailable")))
                     continue
                 }
-                guard self.call === call, self.session == value.session else { return }
+                guard self.call === call else { return }
                 self.setProjection(value)
-                for reader in self.projectionReaders.values where reader.session == value.session {
-                    if await self.sendProjection(value, to: reader) { self.projectionRetries.removeValue(forKey: reader.sender.device)?.cancel() }
-                    else { self.retryProjection(to: reader) }
-                }
+                for (device, reader) in self.projectionReaders where reader.session == value.session { self.pushProjection(to: device) }
             }
         }
     }
@@ -175,10 +179,10 @@ extension VoiceService {
         let sending = VoiceOperationScope()
         defer { sending.end() }
         do {
-            try await sending.perform(within: .seconds(2)) {
-                guard let signaling = self.signaling else { throw VoicePageError.unavailable }
+            try await sending.perform(within: VoiceTiming.send) {
+                guard let signaling = self.signaling else { throw VoiceSignalError.unavailable }
                 try DebugHooks.voiceProjectionSend()
-                try await signaling.sendVoice(.projection(value: value), session: reader.session, to: reader.sender)
+                try await signaling.sendVoice(.projection(value: value.bounded()), session: reader.session, to: reader.sender)
             }
             return true
         } catch {
@@ -187,52 +191,28 @@ extension VoiceService {
         }
     }
 
-    /// 一次没发出去不等于链路断（断没断只认中转的关闭、离开与拒收）：每秒补发最新的那份，直到发出、有更新的发出去了，或这个接收者没了；
+    /// 每个接收者一个发送任务，只发此刻最新的那份：投影先在本机赋值，Mac 自己的通话条不等手机那一路的中转。
+    /// 一次没发出去不等于链路断（断没断只认中转的关闭、离开与拒收）：每秒补发，直到发出最新的、或这个接收者没了；
     /// 不补的话，之后没有新变化时手机一直停在旧状态。
-    private func retryProjection(to reader: VoiceSignalHeader) {
-        let device = reader.sender.device
-        guard projectionRetries[device] == nil else { return }
-        projectionRetries[device] = Task { [weak self] in
-            while (try? await Task.sleep(for: .seconds(1))) != nil {
-                guard let self, self.projectionReaders[device] == reader, let value = self.projection, value.session == reader.session else { break }
-                if await self.sendProjection(value, to: reader) { break }
+    private func pushProjection(to device: VoiceDeviceID) {
+        guard projectionSenders[device] == nil else { return }
+        projectionSenders[device] = Task { [weak self] in
+            var sent: (VoiceCallProjection, VoiceSignalHeader)?
+            while let self, !Task.isCancelled {
+                guard let reader = self.projectionReaders[device], let value = self.projection, value.session == reader.session,
+                      sent.map({ $0.0 != value || $0.1 != reader }) ?? true else {
+                    self.projectionSenders[device] = nil
+                    return
+                }
+                if await self.sendProjection(value, to: reader) { sent = (value, reader) }
+                else if (try? await Task.sleep(for: .seconds(1))) == nil { return }
             }
-            if let self, !Task.isCancelled { self.projectionRetries[device] = nil }
         }
     }
 
     func connectionClosed(local: VoiceEndpoint?, peer: VoiceEndpoint?, reason: VoiceEndReason) async {
-        guard let remote, case .bound(let bound, let phone) = remote.link,
-              local == nil || bound == local, peer == nil || phone == peer else { return }
-        if remote.connected, call?.isLive == true, VoiceLink.canRelink(after: reason) { return relink(remote, phone: phone.device, reason: reason) }
-        remote.departed(reason)
-        if call?.isLive != true { self.remote = nil }
-    }
-
-    /// 等手机回来；Mac 自己的中转断了时手机未必察觉，所以这边也每秒向手机的当前租约问一次（resume ask），手机回的任何一帧都算回来了。
-    /// 宽限期满还没回来按断开时的原因结束；媒体或用户先结束时 `departed`/`close` 结束 remote.scope，这里的等待随之停下。
-    private func relink(_ remote: VoiceRemoteMedia, phone: VoiceDeviceID, reason: VoiceEndReason) {
-        let until = ContinuousClock.now + VoiceSignalFormat.relinkGrace
-        remote.link = .relinking(peer: phone, until: until, reason: reason)
-        call?.mark("relinking \(reason.rawValue)")
-        remote.scope.spawn { [weak self] in
-            await self?.reach(phone, until: until, done: { remote.link.isBound }) { signaling, peer in
-                try await signaling.sendVoice(.media(signal: .resume(ask: true)), session: remote.session, to: peer)
-            }
-            guard !remote.link.isBound, !Task.isCancelled else { return }
-            remote.departed(reason)
-        }
-    }
-
-    func end(reason: VoiceEndReason = .hungUp) async {
-        guard let call, call.isLive else { return }
-        if let remote { remote.onEvent(.ended(reason)) } else { call.hangUp() }
-        for await phase in Observations({ call.phase }) {
-            switch phase {
-            case .ended, .failed: return
-            default: break
-            }
-        }
+        guard let remote, remote.leg.carries(local: local, peer: peer) else { return }
+        await remote.leg.closed(reason, signaling: signaling, canWait: call?.isLive == true)
     }
 }
 #endif

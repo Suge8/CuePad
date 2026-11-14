@@ -51,7 +51,7 @@ public final class Bridge {
     /// App 给的是它自己的那一个（`MacDependencies.timing`）。
     @ObservationIgnored let timing: Timing
     @ObservationIgnored var controls: [Session.ID: any SessionLink] = [:]
-    /// 重开前（`carryOver`）与重新载入扩展前（`detach` 的 `.reload`）各会话的状态与计时：重新上桥时用一次。
+    /// 重开前（`carryOver`）各会话的状态与计时：重新上桥时用一次。重新载入的 Pi 扩展自己带着起点（扩展的 `Carried`），不经这里。
     /// 读不懂的扩展读不到状态，不留也不用：接回时沿用的是它之前读到的
     @ObservationIgnored var carried: [String: (state: WorkState, times: SessionTimes)] = [:]
     @ObservationIgnored var idleTimers: [Session.ID: Task<Void, Never>] = [:]
@@ -64,7 +64,7 @@ public final class Bridge {
     public init(socketDirectory: URL = PiPaths().socketDirectory, hostedIdle: Duration = AgentTimeouts.hostedIdle, timing: Timing = .system) {
         self.hostedIdle = hostedIdle
         self.timing = timing
-        connections = PiConnections(directory: socketDirectory)
+        connections = PiConnections(directory: socketDirectory, timing: timing)
         connections.bridge = self
     }
 
@@ -121,10 +121,13 @@ extension Bridge {
         }
     }
 
-    /// 整行以 / 开头。Pi 执行了它就确认（处理函数的结果没有公开回执）；模板与 skill 是说的话，经 `send` 交出。
-    /// 模板与 skill 是说的话，经 `send` 交出。清单里没有的命令抛 `rejected("unknown_command")`，必填参数没给抛 `rejected("missing_argument")`。
+    /// 整行以 / 开头（不是抛 `rejected("bad_request")`）。Pi 执行了它就确认（处理函数的结果没有公开回执）；模板与 skill 是说的话，经 `send` 交出。
+    /// 会话报的命令清单（`Session.commands`）里没有的抛 `rejected("unknown_command")`，必填参数没给抛 `rejected("missing_argument")`。
     public func command(_ line: String, deliveryID: String? = nil, in id: Session.ID) async throws {
-        try await control(id).command(line, deliveryID: deliveryID, in: id)
+        let link = try control(id)
+        let name = try SlashLine(line).name
+        guard session(id: id)?.commands.contains(where: { $0.name == name }) == true else { throw BridgeError.rejected("unknown_command") }
+        try await link.command(line, deliveryID: deliveryID, in: id)
     }
 
     /// `AgentTimeouts.end` 内没下线抛 `notEnded`。
@@ -178,19 +181,25 @@ extension Bridge {
         try await control(id).answer(answer, to: promptID, in: id)
     }
 
-    /// 换该会话的模型、思考强度或会话名（至少给一项，会话名不能是空白）：先换模型再设强度，强度按新模型支持的范围夹取。
+    /// 换该会话的模型、思考强度、加速或会话名（至少给一项，会话名不能是空白）：先换模型再设强度，强度按新模型支持的范围夹取；
+    /// 要加速而换完之后的模型不支持（`ModelOption.supportsFast`）抛 `unsupported`。
     /// 模型不在 Agent 的模型表里抛 `unknownModel`，提供方没配好密钥抛 `rejected("no_auth")`；成功后会话的上报（`model`、`thinking`）随 `infoChanged` 更新。
     public func configure(_ config: SessionConfig, in id: Session.ID) async throws {
         var config = config
         config.name = config.name?.trimmingCharacters(in: .whitespacesAndNewlines)
         guard config.model != nil || config.thinking != nil || config.fast != nil || config.name != nil, config.name?.isEmpty != true else { throw BridgeError.rejected("bad_request") }
-        try await control(id).configure(config, in: id)
+        let link = try control(id)
+        if config.fast == true, let session = session(id: id) {
+            let target = if let model = config.model { session.availableModels.first { $0.key == model } } else { session.model }
+            guard target?.supportsFast == true else { throw BridgeError.unsupported }
+        }
+        try await link.configure(config, in: id)
     }
 
     /// 请该会话查一次所有 OAuth 订阅的额度：查到的随 `changes()` 的 `.quota` 报出（与回复里带回的同一条路），
     /// 再返回；有一家没查到抛 `rejected("failed: …")`（查到的那几家照常报出）。只有 Pi 有。
     public func refreshQuota(in id: Session.ID) async throws {
-        try await pi(id).refreshQuota()
+        try await control(id, needs: .quota).refreshQuota(in: id)
     }
 
     /// 不在桥上的为 false。
@@ -201,12 +210,6 @@ extension Bridge {
         guard let link = controls[id], let session = session(id: id) else { throw BridgeError.unknownSession(id) }
         guard session.capabilities.isSuperset(of: needs) else { throw BridgeError.unsupported }
         return link
-    }
-
-    private func pi(_ id: Session.ID) throws -> PiConnection {
-        guard let link = controls[id] else { throw BridgeError.unknownSession(id) }
-        guard let pi = link as? PiConnection else { throw BridgeError.unsupported }
-        return pi
     }
 }
 #endif

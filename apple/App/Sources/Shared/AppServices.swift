@@ -36,8 +36,8 @@ final class AppServices {
     enum SyncSource {
         case iCloud
         case custom(any SyncControlling)
-        /// 用本机的库建同步：真实的同步代码连替身 iCloud，给测试与调试画面。
-        case built((CueStore) -> any SyncControlling)
+        /// 用本机的库建同步：真实的同步代码连替身 iCloud，给测试与调试画面。给了 `relay`（测试的中转替身）才连门铃。
+        case built((CueStore) -> any SyncControlling, relay: URL? = nil)
     }
 
     @ObservationIgnored let sync: (any SyncControlling)?
@@ -82,6 +82,8 @@ final class AppServices {
 
     #if os(iOS)
     @ObservationIgnored let pasteboard: UIPasteboard
+    /// 这台手机在同步表与中转里认自己的 ID（同 Mac 的 `hostID`）：viewer、中转、实时活动的地址记录、诊断都用它，读不到时为 nil。
+    @ObservationIgnored let device: String?
     /// 隔离实例默认不开，避免遗留活动唤醒测试宿主；验收用 `-CuePadLiveActivity YES`。
     @ObservationIgnored private(set) var cueActivity: CueLiveActivity?
     #endif
@@ -100,13 +102,15 @@ final class AppServices {
     @ObservationIgnored var hotkeys: [GlobalHotkey] = []
     @ObservationIgnored let hostID: String
     @ObservationIgnored let workspaces: Workspaces
+    /// 各台设备的诊断落在哪（`LibraryLocation.deviceLogs`）：打开时就解析，环境变量给错了进失败页。
+    @ObservationIgnored let deviceLogs: URL
     @ObservationIgnored let wakeNotifications: NotificationCenter
     @ObservationIgnored let stateRecorder: StateRecorder
     @ObservationIgnored let presence: MacPresenceKeeper
     /// 同步表 `macAgents` 的唯一写入口；Cue 启用前也经它问。
     @ObservationIgnored let macAgents: MacAgentsRecorder
     /// 同步表 `agentLibraries` 的唯一写入口，整理与改规则也经它。
-    @ObservationIgnored let library: AgentLibraryKeeper
+    @ObservationIgnored let library: AgentLibraryFiles
     @ObservationIgnored lazy var executor = MacExecutor(
         store: store, bridge: bridge, runtimes: runtimes, hostID: hostID, workspaces: workspaces, recorder: stateRecorder, library: library,
         fetchFile: { [sync] key in try await sync.fetchFile(key) },
@@ -122,6 +126,8 @@ final class AppServices {
         case globalShortcutUnavailable(String)
         /// 分享扩展留下的内容没能入库（保留在共享容器里，下次再试）。
         case captureImportFailed(String)
+        /// 分享扩展留下的一条读不出来（挪到资料库旁的 `CaptureQueue.unreadableName`，不再重试）。
+        case captureUnreadable(String)
         /// 跟着库常驻的本机功能没能启动或停了：是哪一项写在原因里。
         case syncUnavailable(String)
         case widgetDataUnavailable(String)
@@ -153,6 +159,7 @@ final class AppServices {
         timing = mac.timing
         hostID = mac.hostID
         workspaces = mac.workspaces
+        deviceLogs = try location.deviceLogs()
         wakeNotifications = mac.wakeNotifications
         stateRecorder = StateRecorder(store: store, hostID: mac.hostID, timing: mac.timing)
         presence = MacPresenceKeeper(store: store, sync: self.sync, host: mac.hostID)
@@ -163,11 +170,10 @@ final class AppServices {
         paths = mac.paths
         runtimes = mac.runtimes(store)
         agents = mac.agents
-        macAgents = MacAgentsRecorder(store: store, sync: self.sync, host: mac.hostID, agents: agents)
+        macAgents = MacAgentsRecorder(store: store, host: mac.hostID, agents: agents)
         // 隔离运行时移走的不进系统废纸篓，放在库里
         let trash = location.touchesRealWorld ? nil : AgentLibraryFiles.trash(into: location.directory.appending(path: "Trash", directoryHint: .isDirectory))
-        library = AgentLibraryKeeper(
-            store: store, sync: self.sync, host: mac.hostID, files: AgentLibraryFiles(access: agents.integration.fileAccess, trash: trash))
+        library = AgentLibraryFiles(store: store, host: mac.hostID, access: agents.integration.fileAccess, trash: trash)
         commandLineTool = mac.commandLineTool
         updates = UpdateService(updater: mac.updater, bridge: mac.bridge, runtimes: runtimes)
         historyStore = HistoryPersistence(storage: store, host: mac.hostID)
@@ -186,7 +192,9 @@ final class AppServices {
         diagnostics = Diagnostics(directory: location.directory.appending(path: "Diagnostics", directoryHint: .isDirectory))
         let (engine, status) = Self.makeSync(sync, store: store, location: location)
         self.sync = engine
-        relay = Self.makeRelay(sync, engine, device: UIDevice.current.identifierForVendor?.uuidString)
+        let device = UIDevice.current.identifierForVendor?.uuidString
+        self.device = device
+        relay = Self.makeRelay(sync, engine, device: device)
         speechClock = SpeechClock(localHost: nil, reachable: status.reachesMac, alwaysReachable: DebugHooks.preset.alwaysReachable, timing: timing)
         let tasks = Followers()
         self.tasks = tasks
@@ -196,10 +204,11 @@ final class AppServices {
         self.timing = timing
         self.pasteboard = pasteboard
         let activitySync: (any SyncControlling)? = if case .iCloud = sync, location.touchesRealWorld { self.sync } else { nil }
-        viewer = ViewerKeeper(store: store, sync: self.sync, device: UIDevice.current.identifierForVendor?.uuidString)
+        viewer = ViewerKeeper(store: store, sync: self.sync, device: device)
         if location.touchesRealWorld || DebugHooks.opensLiveActivity {
-            cueActivity = CueLiveActivity.make(store: store, sync: activitySync, location: location) { [weak self] in
-                try self?.remoteActivityState()
+            cueActivity = CueLiveActivity(store: store, sync: activitySync, device: device, diagnostics: diagnostics) { [weak self] in
+                guard let self else { return nil }
+                return try self.activityState(try self.store.snapshot { try CueDigest.read(from: $0) }.value)
             }
         }
     }

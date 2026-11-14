@@ -21,7 +21,7 @@ extension CueStore {
   }
 
   /// 也不是哪个没做完的任务以前用过的（`Card.formerSessionIDs`）。只有已完成的事绑着的算在内：它还活着，Cue 管它——
-  /// 但那件事完成之后它还没动过的不算：完成时它随那件事收起（不是为它开的会话 CuePad 不结束，`endUnused`），再有动静才回来。
+  /// 但那件事完成之后它还没动过的不算：完成时它随那件事收起（不是为它开的会话 CuePad 不结束，`taskSessionCanEnd`），再有动静才回来。
   /// 活着就在看板上，一件事只出现一处：收起的会话在看板上是它绑着的那张已完成的任务卡；完成之后它有了新状态，才作为无主会话回到推进中。
   /// 那张卡离开了看板（`taskDoneOnBoard` 不成立：归档、删除、项目进了回收站）就没有东西代表它，照常作为无主会话在推进中。
   /// 先后比记录自带的时刻（会话的 `stateSince` 与任务的 `completedAt`），不比本机写入的先后：同步乱序到达时，收到的先后与发生的先后相反，
@@ -30,12 +30,9 @@ extension CueStore {
   static func isLoose(_ alias: String) -> String {
     """
     \(WorkState.outsideSQL([.ended], column: "\(alias).state"))
-      AND NOT EXISTS (SELECT 1 FROM cards c WHERE c.piSessionID = \(alias).sessionID AND \(taskOpen))
+      AND NOT EXISTS (SELECT 1 FROM cards c WHERE \(usedSession("c", "\(alias).sessionID")) AND \(taskOpen))
       AND NOT EXISTS (
         SELECT 1 FROM cards c WHERE c.piSessionID = \(alias).sessionID AND \(taskDoneOnBoard) AND c.completedAt >= \(alias).stateSince)
-      AND NOT EXISTS (
-        SELECT 1 FROM cards c, json_each(c.formerSessionIDs) f
-        WHERE c.formerSessionIDs IS NOT NULL AND \(taskOpen) AND f.value = \(alias).sessionID)
     """
   }
 
@@ -128,11 +125,7 @@ extension CueStore {
   public func deliverables(of task: UUID) throws -> [PreviewItem] {
     try db.query(
       """
-      WITH used(session) AS (
-        SELECT piSessionID FROM cards
-        WHERE (id = ?1 OR parentID = ?1) AND todoAt IS NOT NULL AND deletedAt IS NULL AND piSessionID IS NOT NULL
-        UNION SELECT f.value FROM cards c, json_each(c.formerSessionIDs) f
-        WHERE (c.id = ?1 OR c.parentID = ?1) AND c.todoAt IS NOT NULL AND c.deletedAt IS NULL AND c.formerSessionIDs IS NOT NULL)
+      WITH used(session) AS (\(Self.sessionsUsed(where: "todoAt IS NOT NULL AND id IN (\(Self.subtree(from: "SELECT ?1")))")))
       SELECT DISTINCT \(PreviewItem.columns.map { "p.\($0)" }.joined(separator: ", "))
       FROM previews p JOIN used u ON u.session = p.sessionID JOIN cards t ON t.id = ?1
       WHERE p.createdAt >= COALESCE(t.startedAt, t.todoAt)

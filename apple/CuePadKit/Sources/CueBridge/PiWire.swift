@@ -24,6 +24,7 @@ enum PiWire {
 
         var work: (state: WorkState, detail: String?)? {
             switch kind {
+            // "done" 只有扩展 67 之前发（和 idle 同义）；`oldestExtension` 过了 66 就删
             case "idle", "done": (.settled, nil)
             case "thinking": (.thinking, nil)
             case "tool": (.tool, detail.map { "\(tool ?? "?")\(SessionState.detailSeparator)\($0)" } ?? tool ?? "?")

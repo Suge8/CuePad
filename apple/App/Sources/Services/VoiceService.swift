@@ -9,35 +9,34 @@ import os
     @ObservationIgnored unowned let services: AppServices
     @ObservationIgnored let signaling: (any VoiceSignaling)?
     private(set) var projection: VoiceCallProjection?
-    var issue: VoiceIssue?
     var availability: VoiceRelayAvailability
-    var session: VoiceSessionID?
     var commandResults: [VoiceCommand.ID: VoiceCommandResult.Outcome] = [:]
     let preview = VoicePreview()
-    @ObservationIgnored var pending: [VoiceCommand.ID: Pending<VoiceCommandResult.Outcome>] = [:]
-    @ObservationIgnored var pageReads: [VoiceCommand.ID: Pending<VoicePageResult>] = [:]
-    struct Pending<Value: Sendable> {
+    @ObservationIgnored var pending: [VoiceCommand.ID: Pending] = [:]
+    struct Pending {
         let session: VoiceSessionID
         let peer: VoiceEndpoint
         let local: VoiceEndpoint
-        let finish: @MainActor @Sendable (Result<Value, Error>) -> Void
+        let finish: @MainActor @Sendable (Result<VoiceCommandResult.Outcome, Error>) -> Void
     }
     #if os(macOS)
     var call: VoiceCall?
-    /// 只登记当前租约的展示接收者，挂断后仍可收更新；不保留服务端页面、游标或业务副本。
+    /// 测试与调试换掉付费模型与设备的接缝
+    @ObservationIgnored var makeCall: @MainActor (VoiceCall.Dependencies, VoiceRecord) -> VoiceCall = DebugHooks.makeVoiceCall
+    var session: VoiceSessionID? { call.map { VoiceSessionID($0.session) } }
+    /// 只登记当前租约的展示接收者，挂断后仍可收更新；不保留业务副本。
     @ObservationIgnored var projectionReaders: [VoiceDeviceID: VoiceSignalHeader] = [:]
     @ObservationIgnored var remote: VoiceRemoteMedia?
     @ObservationIgnored var observing: Task<Void, Never>?
     @ObservationIgnored var commands: [VoiceCommand.ID: Task<VoiceCommandResult.Outcome, Never>] = [:]
-    @ObservationIgnored var projectionRetries: [VoiceDeviceID: Task<Void, Never>] = [:]
+    @ObservationIgnored var projectionSenders: [VoiceDeviceID: Task<Void, Never>] = [:]
     #else
+    var issue: VoiceIssue?
+    var session: VoiceSessionID?
     @ObservationIgnored let makeMedia: () -> any VoiceMedia
     @ObservationIgnored var phone: VoicePhoneSession?
     @ObservationIgnored var phoneBinding: (session: VoiceSessionID, local: VoiceEndpoint, peer: VoiceEndpoint)?
-    let requestPages = VoicePageView<VoiceCallProjection.Request>()
-    let replyPages = VoicePageView<VoiceCallProjection.Reply>()
-    let executionPages = VoicePageView<VoiceExecutionTarget>(clearStale: true)
-    /// 本机媒体终态不改写 Mac 的业务投影，也不能触发旧首页重新入页。
+    /// 本机媒体终态不改写 Mac 的业务投影。
     var phoneEnd: VoiceCallProjection.Phase?
     var muted = false
     var muting = false
@@ -66,7 +65,7 @@ import os
     isolated deinit {
         #if os(macOS)
         observing?.cancel()
-        projectionRetries.values.forEach { $0.cancel() }
+        projectionSenders.values.forEach { $0.cancel() }
         #else
         phone?.scope.end()
         #endif
@@ -75,24 +74,21 @@ import os
     func cancel() {
         #if os(macOS)
         observing?.cancel()
-        projectionRetries.values.forEach { $0.cancel() }
+        projectionSenders.values.forEach { $0.cancel() }
         observing = nil
         call?.hangUp()
         #else
         Task { await end() }
         #endif
         failPending { _ in true }
-        failPageReads()
         #if os(iOS)
-        requestPages.disconnected()
-        replyPages.disconnected()
         revokeProjection()
         #endif
     }
 
     var phase: VoiceCallProjection.Phase? {
-        if let issue { return .failed(issue) }
         #if os(iOS)
+        if let issue { return .failed(issue) }
         // 先读结束再看在不在关：phone 不在观察里，`finish` 撤下 phone 后只改 phoneEnd，关着时没读过它的视图会一直停在"正在结束"
         let ended = phoneEnd
         if closing { return .closing }
@@ -150,7 +146,7 @@ import os
         #if os(macOS)
         remote == nil && call?.canMute == true
         #else
-        phone?.connected == true && !closing && !muting
+        phone?.leg.connected == true && !closing && !muting
         #endif
     }
 
@@ -171,34 +167,19 @@ import os
 
     var canRepeat: Bool {
         #if os(macOS)
-        call?.canRepeat == true && call.map { VoiceSessionID($0.session) } == session
+        call?.canRepeat == true
         #else
-        phone?.connected == true && !closing && phone?.id == projection?.session && projection?.canRepeat == true
+        phone?.leg.connected == true && !closing && phone?.id == projection?.session && projection?.canRepeat == true
         #endif
     }
 
-    func setProjection(_ value: VoiceCallProjection?) {
-        projection = value
-        #if os(iOS)
-        updatePages(value)
-        #endif
-    }
+    func setProjection(_ value: VoiceCallProjection?) { projection = value }
 
     func receive(_ event: VoiceRelayEvent) async {
         switch event {
         case .received(let received):
-            // 换绑只认这一处：同一设备、同一通话从新租约来的任何一帧（命令、页、结果、媒体）都说明对端回来了
+            // 换绑只认这一处：同一设备、同一通话从新租约来的任何一帧（命令、结果、媒体）都说明对端回来了
             rebind(received.header)
-            if case .pageResult(let result) = received.payload {
-                receivePageResult(result, header: received.header)
-                return
-            }
-            if case .pageQuery(let query) = received.payload {
-                #if os(macOS)
-                receivePageQuery(query, header: received.header)
-                #endif
-                return
-            }
             if case .commandResult(let result) = received.payload {
                 if let wait = pending[result.command], wait.session == received.header.session,
                    wait.peer == received.header.sender, wait.local == received.header.recipient {
@@ -209,7 +190,6 @@ import os
             }
             await receiveSignal(received)
         case .localClosed(let endpoint, let reason):
-            failPageReads(local: endpoint)
             #if os(macOS)
             projectionReaders = projectionReaders.filter { $0.value.recipient != endpoint }
             #else
@@ -218,7 +198,6 @@ import os
             await connectionClosed(local: endpoint, peer: nil, reason: reason)
             failPending { $0.local == endpoint && !waitsForRelink($0.session) }
         case .peerClosed(let endpoint, let departure):
-            failPageReads(peer: endpoint)
             #if os(macOS)
             projectionReaders = projectionReaders.filter { $0.value.sender != endpoint }
             #else
@@ -236,39 +215,23 @@ import os
                 guard let wait = pending[id], wait.session == header.session, wait.local == header.sender, wait.peer == header.recipient else { return }
                 pending[id] = nil
                 wait.finish(.failure(VoiceSignalError.rejected(reason)))
-            case .pageQuery(let id):
-                guard let wait = pageReads[id], wait.session == header.session, wait.local == header.sender, wait.peer == header.recipient else { return }
-                pageReads[id] = nil
-                wait.finish(.failure(VoiceSignalError.rejected(reason)))
-            case .commandResult, .pageResult:
+            case .commandResult:
                 AppServices.log.error("Voice result rejected by Relay: \(reason.rawValue)")
             }
+        case .unreadable(let header):
+            AppServices.log.notice("Voice frame from another signal version (\(String(describing: header.purpose), privacy: .public))")
+            #if os(iOS)
+            await otherVersion(header.session)
+            #endif
         case .availability(let value):
             availability = value
             #if os(iOS)
-            if case .ready = value {} else { failPageReads(); revokeProjection() }
+            if case .ready = value {} else { revokeProjection() }
             #endif
         }
     }
 
-    /// `VoiceLink.relinking` 期间每秒试一次，直到 `done()` 或 until：本机中转在线就解析对端设备的当前租约，把这一帧发过去。
-    /// 对端还没连回来时解析、发送都会失败，这是等待的常态；结果只看对端有没有以新租约回帧（`done`）和期满。
-    /// 每次尝试至多用到 until：中转连着却迟迟不回解析（它自己的时限也是 15 秒）时，不能把通话拖过截止点。
-    func reach(_ device: VoiceDeviceID, until: ContinuousClock.Instant, done: () -> Bool,
-               send: @escaping (any VoiceSignaling, VoiceEndpoint) async throws -> Void) async {
-        while !done(), !Task.isCancelled, ContinuousClock.now < until {
-            if let signaling, case .ready = signaling.voiceAvailability {
-                let attempt = VoiceOperationScope()
-                do { try await attempt.perform(within: until - .now) { try await send(signaling, try await signaling.resolveVoicePeer(device)) } }
-                catch { AppServices.log.info("Voice relink attempt: \(String(describing: error), privacy: .public)") }
-                attempt.end()
-            }
-            guard !done() else { return }
-            try? await Task.sleep(until: min(.now + .seconds(1), until), clock: .continuous)
-        }
-    }
-
-    func failPending(_ matches: (Pending<VoiceCommandResult.Outcome>) -> Bool) {
+    func failPending(_ matches: (Pending) -> Bool) {
         for (id, wait) in pending where matches(wait) {
             pending[id] = nil
             wait.finish(.failure(VoiceSignalError.leaseChanged))

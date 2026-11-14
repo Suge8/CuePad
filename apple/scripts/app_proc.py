@@ -34,13 +34,6 @@ def wait_exit(pid):
         queue.close()
 
 
-def alive(note):
-    """note["holder"] 是不是还在跑的 app.py（run 留下的看守）。"""
-    pid = note.get("holder")
-    command = subprocess.run(["ps", "-o", "command=", "-p", str(pid)], capture_output=True, text=True).stdout if pid else ""
-    return "app.py" in command
-
-
 def descendants(pid):
     children = {}
     for line in subprocess.run(["ps", "-axo", "pid=,ppid="], capture_output=True, text=True).stdout.splitlines():

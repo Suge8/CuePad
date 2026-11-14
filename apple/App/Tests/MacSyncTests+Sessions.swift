@@ -24,7 +24,7 @@ extension MacSyncTests {
             for side in [mac, phone] { side.services.cancelBackgroundWork() }
         }
         try await mac.services.executor.start()
-        let ext = try await mac.host.connect("fast", cwd: mac.directory.path)
+        let ext = try await mac.host.connect("fast", cwd: mac.directory.path, supportsFast: true)
         defer { ext.close(bye: "quit") }
         ext.onCommand = { [weak ext] _, command in
             if command["t"] as? String == "config", let fast = command["fast"] as? Bool {
@@ -170,14 +170,19 @@ extension MacSyncTests {
         let consuming = Task { try await services.consumeSessionChanges(changes) }
         defer { await consuming.stop() }
 
+        let settled = turn.addingTimeInterval(60)
         let old = try await rig.host.connect(
-            "s1", cwd: "/work/app", busy: running, extensionVersion: upgrading ? PiWire.oldestExtension - 1 : PiExtensionBundle.version, sessionFile: file.path)
+            "s1", cwd: "/work/app", busy: running, since: running ? turn : settled,
+            extensionVersion: upgrading ? PiWire.oldestExtension - 1 : PiExtensionBundle.version, sessionFile: file.path)
         if running {
             try await store.writeTranscript(SessionTranscript(
                 sessionID: "s1", messages: [said], recap: Recap(lastPrompt: "发版", lastReply: "发好了", answeredAt: .now)))
         }
         old.close(bye: "reload")
-        try await rig.host.connect("s1", cwd: "/work/app", sessionFile: file.path)
+        // 新旧实例同一个 id，歇着的那一例旧实例也满足下面的等待：先等它下桥，下面看到的才是新扩展
+        try await eventually("旧扩展下桥") { services.bridge.session(sessionID: "s1") == nil }
+        // 重新载入的扩展带着原来的起点（扩展的 `Carried`）；这期间做完了一轮的、从读不懂的旧扩展升上来的报此刻
+        try await rig.host.connect("s1", cwd: "/work/app", since: running || upgrading ? nil : settled, sessionFile: file.path)
 
         // 接回的那一次写入落了盘（记录的状态与起点跟上桥上的）才看 Cue 的变化，不然歇着的那一例还没写就判过了
         try await eventually("桥上以新扩展接回") { services.bridge.session(sessionID: "s1").map { $0.state == .settled && !$0.upgrading } == true }
@@ -203,7 +208,7 @@ extension MacSyncTests {
         let catalogID = try #require(stored.catalogID)
         let catalog = try await services.store.agentCatalog(catalogID)
         #expect(catalog?.models.isEmpty ?? true)  // 可选模型不留
-        #expect(Slash.line(of: ComposerDraft(text: "/default"), in: stored.usableCommands(in: catalog), for: stored) == "/default")
+        #expect(Slash.line(of: ComposerDraft(text: "/default"), in: catalog?.commands ?? [], for: stored) == "/default")
     }
 }
 #endif

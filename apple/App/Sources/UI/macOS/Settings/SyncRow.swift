@@ -10,12 +10,11 @@ struct SyncRow: View {
     @State private var showsDecision = false
     @State private var showsIssues = false
     @State private var confirmErase = false
-    @State private var syncLasts = false
 
     private enum Fix { case decide, openSettings, update, issues }
 
     var body: some View {
-        let shown = ShownSync(services, lasting: syncLasts), summary = shown.summary
+        let shown = ShownSync(services), summary = shown.summary
         let fix = fix
         SettingRow(
             title: "iCloud 同步", icon: Image(summary.icon), tone: tone(summary), busy: shown.busy, status: status(summary),
@@ -45,8 +44,8 @@ struct SyncRow: View {
             }
         }
         .lineLimit(1)
+        .animation(Motion.fade, value: shown)
         .confirmsErase($confirmErase, choices: choices, services: services)
-        .pending(services.syncing.state.status == .syncing, shown: $syncLasts)
     }
 
     private var fix: Fix? {

@@ -6,6 +6,7 @@
    启动参数（-CuePadScene）、环境变量（CUEPAD_…，TEST_RUNNER_ 前缀不算）在源码里找得到；后两样连代码块里的也查。
 2. 源码与文档里写的文档路径（apple/…、relay/… 等开头的 .md）存在。
 3. 「<文档>.md「节名」」指的那一节存在（WORDS.md 认加粗的词条）。
+4. 工程的同步文件夹里没有 Markdown（会被打进 App）。
 系统与第三方的名字（源码里没出现的）列在 FOREIGN；新加一个之前先确认它不是自家改了名的类型。"""
 import fnmatch, os, re, subprocess, sys
 
@@ -13,7 +14,7 @@ sys.dont_write_bytecode = True
 ROOT = os.path.abspath("..")
 # 仓库里的 Markdown 只有这些：新加一份先想它是不是该写成报错、lint 或代码旁的注释（AGENTS.md「文档」），确要加再登记
 AGENT_DOCS = """AGENTS.md WORDS.md landing/AGENTS.md design/tools/AGENTS.md relay/README.md apple/scripts/AGENTS.md
-apple/App/Strings/AGENTS.md apple/CloudKit/AGENTS.md apple/App/Config/AGENTS.md apple/CuePadKit/Sources/CueBridge/README.md""".split()
+apple/App/AGENTS.md apple/CloudKit/AGENTS.md apple/App/Config/AGENTS.md apple/CuePadKit/Sources/CueBridge/README.md""".split()
 OTHER_DOCS = "README.md README.zh-CN.md THIRD-PARTY-NOTICES.md .github/CONTRIBUTING.md .github/SECURITY.md".split()
 DOCS = re.compile("^(?:" + "|".join(map(re.escape, AGENT_DOCS)) + ")$")
 SOURCE = (".swift", ".ts", ".mjs", ".py", ".sh", ".xcconfig", ".plist", ".entitlements", ".svelte", ".css", ".yml", ".pbxproj")
@@ -35,9 +36,12 @@ TYPE = re.compile(r"^[A-Z][A-Za-z0-9]*[a-z][A-Za-z0-9]*(?:[.+][A-Za-z_][A-Za-z0-
 FILE = re.compile(r"^[\w+*./-]*[\w*]\.(?:swift|py|sh|ts|mjs|xcconfig|ckdb|entitlements|plist|xcstrings|svelte|css)$")
 ARG = re.compile(r"(?<![\w-])-(CuePad[A-Za-z]+)")
 ENV = re.compile(r"\b(?:TEST_RUNNER_)?(CUEPAD_[A-Z][A-Z_]*[A-Z])\b")
-MD = re.compile(r"(?<![\w/.~-])((?:docs|apple|relay|landing|design)/[\w./+-]*\.md)")
+MD = re.compile(r"(?<![\w/.~-])((?:apple|relay|landing|design)/[\w./+-]*\.md)")
 SECTION = re.compile(r"((?:[\w.-]+/)*[\w.-]+\.md)\)?((?:「[^」\n]+」)+)")
 hits = [f"{p}: 这份 Markdown 不在清单里（lint_docs.py 的 AGENT_DOCS）" for p in tracked if p.endswith(".md") and p not in AGENT_DOCS + OTHER_DOCS]
+# 工程里的同步文件夹整个进目标：放在里面的 Markdown 会被当资源打进 App 与扩展、随正式版发出去
+synced = re.findall(r"isa = PBXFileSystemSynchronizedRootGroup;.*?path = ([^;]+);", texts["apple/CuePad.xcodeproj/project.pbxproj"])
+hits += [f"{p}: 在工程的同步文件夹 apple/{d} 里，会被打进 App；挪到外面" for p in tracked if p.endswith(".md") for d in synced if p.startswith(f"apple/{d}/")]
 
 
 def known(token):
@@ -57,7 +61,7 @@ def has_file(token):
 
 
 def resolve(ref, source):
-    for base in (os.path.dirname(source), "", "docs"):
+    for base in (os.path.dirname(source), ""):
         path = os.path.normpath(os.path.join(base, ref))
         if path in texts:
             return path
@@ -78,7 +82,7 @@ for path, text in sorted(texts.items()):
                 arg in words or hits.append(f"{where}: 没有启动参数 -{arg}")
             for env in ENV.findall(line):
                 env in words or hits.append(f"{where}: 源码里没有环境变量 {env}")
-        if "Pi 的 docs/" not in line and not path.endswith("lint_docs.py"):
+        if not path.endswith("lint_docs.py"):
             for ref in MD.findall(line):
                 ref in texts or hits.append(f"{where}: 没有文档 {ref}")
             for ref, sections in SECTION.findall(line):

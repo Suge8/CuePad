@@ -20,6 +20,7 @@ struct RoundProcess: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.chatStay) private var stay
     @State private var toggled: Bool?
+    @State private var key = UUID()
     @State private var settled = false
 
     nonisolated enum Ending: Equatable {
@@ -39,7 +40,7 @@ struct RoundProcess: View {
             let expanded = !tools.items.isEmpty && (toggled ?? (message == nil || fresh || DebugHooks.preset.toolsOpen))
             VStack(alignment: .leading, spacing: 0) {
                 Button {
-                    stay?(!expanded)
+                    stay?(key, !expanded)
                     withAnimation(motion) { toggled = !expanded }
                 } label: { header(process, open: tools.items.isEmpty ? nil : expanded) }
                     .buttonStyle(PressStyle(.inline))
@@ -71,6 +72,7 @@ struct RoundProcess: View {
                 guard fresh, (try? await Task.sleep(for: Self.beat)) != nil else { return }
                 withAnimation(motion) { settled = true }
             }
+            .onDisappear { if toggled == true { stay?(key, false) } }
         } else {
             recached(process)
         }

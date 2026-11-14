@@ -4,7 +4,7 @@ import { account } from "./account.ts";
 import { Draft } from "./draft.ts";
 import { phaseOf, StateTracker, type Asking, type Clock, type Phase } from "./events.ts";
 import { commandInfo, contextInfo, firstUserMessage, INTERNAL_COMMAND, modelInfo, reason, type Info, type Subagent } from "./info.ts";
-import { IdleExit, SelfReload } from "./lifecycle.ts";
+import { IdleExit, SelfReload, takeCarried, type Carried } from "./lifecycle.ts";
 import { preflight } from "./preflight.ts";
 import { QuotaFetcher, type Quota, type QuotaWindow } from "./quota.ts";
 
@@ -64,11 +64,19 @@ export class Session {
 		this.firecode = firecode;
 		this.identity = identity;
 		this.fast = this.branchFast();
+		const kept = takeCarried(ctx.sessionManager.getSessionId());
+		if (kept) {
+			this.tracker.settled = kept.settled;
+			this.tracker.outcome = kept.outcome;
+			this.turnSince = kept.turnSince;
+		}
 		const initial = this.state();
 		this.lastKey = JSON.stringify([initial, this.turnSince]);
 		this.phase = phaseOf(initial);
-		this.since = Date.now();
-		this.busySince = this.phase === "working" ? this.since : null;
+		// 热升级前的实例交出的不带 clock：起点从此刻算
+		const clock = kept?.clock?.phase === this.phase ? kept.clock : null;
+		this.since = clock?.since ?? Date.now();
+		this.busySince = clock ? clock.busySince : this.phase === "working" ? this.since : null;
 		this.info = {
 			name: pi.getSessionName() ?? null,
 			firstMessage: firstUserMessage(ctx.sessionManager.getEntries()),
@@ -128,6 +136,12 @@ export class Session {
 		}
 		if (this.clients.size === 0) return;
 		this.broadcast({ t: "state", state: { ...current, since: this.since, busySince: this.busySince, turnSince: this.turnSince } });
+	}
+
+	/** 重新载入时交给下一个实例的（`carryOver`）。 */
+	carried(): Carried {
+		const { settled, outcome } = this.tracker;
+		return { settled, outcome, turnSince: this.turnSince, clock: { phase: this.phase, since: this.since, busySince: this.busySince } };
 	}
 
 	private canReload() {
@@ -270,11 +284,15 @@ export class Session {
 		for (const said of this.pending.splice(0)) said.ack?.({ ok: false, error: "failed: aborted before it started" });
 	}
 
-	/** 先交的先认。模板与 skill 落成的是展开后的文字，认不出原话，取最早的：它们只经 `submit` 在歇着时交出，交出后的第一条你的消息就当是它。
-	 * 排在它前面的没认到的就是没落成，不再等。 */
+	/** 先交的先认，文字要整句相同：带图的 Pi 把图缩小或转格式时在原文后空一行附上说明（`原文\n\n[Image: …]`，Pi 的 `_normalizePromptImages`）；模板与 skill 落成的是展开后的文字，认不出原话，
+	 * 取最早的（它们只经 `submit` 在歇着时交出，交出后的第一条你的消息就当是它）。
+	 * 排在它前面的没认到的就是没落成（别的扩展在 input 里接走、交出后被拒收），不再等：回未知，CuePad 不重发。 */
 	landed(text: string): Said | undefined {
-		const at = this.starting.findIndex((said) => said.expand || text.startsWith(said.text));
-		return at < 0 ? undefined : this.starting.splice(0, at + 1)[at];
+		const at = this.starting.findIndex((said) => said.expand || text === said.text || (typeof said.content !== "string" && text.startsWith(`${said.text}\n\n`)));
+		if (at < 0) return undefined;
+		const [said, ...lost] = this.starting.splice(0, at + 1).reverse();
+		for (const gone of lost) gone.ack?.({ ok: false, error: "failed: not delivered to the session" });
+		return said;
 	}
 
 	private rejectSend(said: Said) {

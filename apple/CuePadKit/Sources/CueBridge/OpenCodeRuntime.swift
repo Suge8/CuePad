@@ -25,7 +25,6 @@ public final class OpenCodeRuntime: AgentRuntime, SessionLink {
     private var watcher: FileFollower?
     private var watching: Task<Void, Never>?
     var connection: Connection?
-    var stopPhases: [Session.ID: StopPhase] = [:]
     var waiters: [UUID: CheckedContinuation<Connection, any Error>] = [:]
 
     /// 托管的顶层会话：只有它们（与它们的子代理）上桥、进索引、收事件
@@ -60,16 +59,28 @@ public final class OpenCodeRuntime: AgentRuntime, SessionLink {
         var commands: [SlashCommand]
     }
 
-    struct Tracked {
+    @MainActor struct Tracked {
         var info: OpenCodeSessionInfo
         var online = false
         var launchToken: String?
-        var facts = SessionFacts()
-        var turn = OpenCodeTurn()
+        /// 引用：几份 `Tracked` 的拷贝同一份一轮的状态
+        let turns: HostedTurns
+        var parser = OpenCodeTurn()
         var context: ContextUsage?
         var firstMessage: String?
 
         var directory: String { info.location.directory }
+        var facts: SessionFacts {
+            get { turns.facts }
+            nonmutating set { turns.facts = newValue }
+        }
+    }
+
+    func track(_ info: OpenCodeSessionInfo) -> Tracked {
+        if let tracked = sessions[info.id] { return tracked }
+        let turns = HostedTurns(timing: timing)
+        turns.onSettle = { [weak self] in self?.publish(info.id) }
+        return Tracked(info: info, turns: turns)
     }
 
     public init(
@@ -147,7 +158,10 @@ public final class OpenCodeRuntime: AgentRuntime, SessionLink {
         guard let connection else { return }
         close(connection)
         self.connection = nil
-        for (id, tracked) in sessions where tracked.online { bridge.detach(bridgeID(id, connection), reason: .disconnected) }
+        for (id, tracked) in sessions {
+            tracked.turns.closed()
+            if tracked.online { bridge.detach(bridgeID(id, connection), reason: .disconnected) }
+        }
         sessions = [:]
         parents = [:]
         childTurns = [:]

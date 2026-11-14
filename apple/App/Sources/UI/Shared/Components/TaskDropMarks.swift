@@ -13,7 +13,7 @@ struct OutlineTargets: View {
     @Environment(\.rowSurface) private var surface
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private static let gap: CGFloat = 2
+    private static let gap = Spacing.hair
 
     var body: some View {
         let dragged = drags?.current

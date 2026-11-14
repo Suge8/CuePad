@@ -20,8 +20,7 @@ nonisolated enum DiagnosticSummary {
 
     private static func block(_ group: [CrashReport]) -> String {
         let report = group[0]
-        let title = Dotted(report.kind.name, report.exception.map { $0 + (report.signal.map { "（\($0)）" } ?? "") }).visible
-        var lines = [group.count > 1 ? "\(title) × \(group.count)" : title]
+        var lines = [group.count > 1 ? "\(report.title) × \(group.count)" : report.title]
         let times = group.prefix(shownTimes).map(\.shownDate).formatted(.list(type: .and)) + (group.count > shownTimes ? "…" : "")
         lines.append(String(localized: "时间：\(times)"))
         let versions = Set(group.compactMap(\.app?.visible)).sorted()
@@ -33,7 +32,7 @@ nonisolated enum DiagnosticSummary {
         if reasons.count > shownReasons { lines.append("…") }
         lines += report.trail.map { "  \($0)" }
         if !report.frames.isEmpty {
-            lines.append(report.kind == .crash ? String(localized: "崩溃线程：") : String(localized: "主线程："))
+            lines.append(report.framesTitle)
             lines += report.frames.map { "  \($0.text)" }
         }
         return lines.joined(separator: "\n")
@@ -47,10 +46,11 @@ nonisolated enum LoadedImages {
 
     private static let byUUID: [String: Image] = load()
 
-    static func frame(name: String?, uuid: String?, offset: Int?) -> CrashReport.Frame {
-        let image = uuid.flatMap { byUUID[$0.uppercased()] }
+    static func frame(name: String?, uuid: String?, offset: Int?, address: Int?) -> CrashReport.Frame {
+        let uuid = uuid?.uppercased()
+        let image = uuid.flatMap { byUUID[$0] }
         let binary = name ?? image?.name ?? uuid.map { String($0.prefix(8)) } ?? "?"
-        return CrashReport.Frame(binary: binary, offset: offset, own: image?.own ?? (binary == executable))
+        return CrashReport.Frame(binary: binary, offset: offset, own: image?.own ?? (binary == executable), uuid: uuid, address: address)
     }
 
     private static let executable = Bundle.main.object(forInfoDictionaryKey: "CFBundleExecutable") as? String

@@ -21,7 +21,7 @@ struct PreviewWeb: View {
             if let rules {
                 // 读不了时盖在藏起的页面上，不换掉页面：在全屏页的分页里换掉，WebKit 的视图不会被撤走，它铺的报错还露在下面（模拟器实测）
                 OfflineWebView(file: file, rules: rules, unreadable: $unreadable).ignoresSafeArea(.container, edges: OfflineWebView.edges)
-                    .overlay { if unreadable { EmptyState(mascot: .error, title: "读不了这个文件").padding(Spacing.page) } }
+                    .overlay { if unreadable { PreviewUnreadable() } }
             } else if let failure {
                 EmptyState(mascot: .error, title: "没法安全地打开这个页面", message: .verbatim(failure)).padding(Spacing.page).frame(maxHeight: .infinity)
             } else {
@@ -121,9 +121,13 @@ private struct OfflineWebView {
         #endif
         if PreviewWebGuard.loadsByContent(file) {
             let file = file
-            coordinator.loading = Task { [weak view] in
-                guard let data = try? await PreviewWebGuard.read(file) else { return }
-                view?.load(data, mimeType: PreviewWebGuard.mimeType(of: file), characterEncodingName: "utf-8", baseURL: PreviewWebGuard.blank)
+            coordinator.loading = Task { [weak view, weak coordinator] in
+                do {
+                    let data = try await PreviewWebGuard.read(file)
+                    view?.load(data, mimeType: PreviewWebGuard.mimeType(of: file), characterEncodingName: "utf-8", baseURL: PreviewWebGuard.blank)
+                } catch {
+                    if let view { coordinator?.fail(view) }
+                }
             }
         } else {
             view.loadFileURL(file, allowingReadAccessTo: file)
@@ -163,8 +167,8 @@ private struct OfflineWebView {
         func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: any Error) { fail(webView) }
         func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: any Error) { fail(webView) }
 
-        /// 自己装载的那一次没载出来：WebKit 会在页上铺一行它的报错（如"OfficeImportErrorDomain 错误 912"），藏起页面、换成读不了
-        private func fail(_ webView: WKWebView) {
+        /// 文件读不出来，或自己装载的那一次没载出来（WebKit 会在页上铺一行它的报错，如"OfficeImportErrorDomain 错误 912"）：藏起页面、换成读不了
+        func fail(_ webView: WKWebView) {
             painted()
             guard !finished else { return }
             webView.isHidden = true

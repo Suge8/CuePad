@@ -157,20 +157,18 @@ struct UnreadCount: View {
     }
 }
 
-/// Cue 运行在别的设备上、本机正在和 iCloud 对时（`AppServices.isCatchingUp(on:)`，久过 `Pending.delay` 才出）写"正在同步"：那时写下的状态与数可能已经过时。
+/// Cue 运行在别的设备上、本机正在和 iCloud 对时（`SyncDriver.showsCatchingUp(on:)`）写"正在同步"：那时写下的状态与数可能已经过时。
 struct CueStatusLine: View {
     var tally = false
     var font = Typography.meta
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
-    @State private var syncing = false
-
     var body: some View {
         let cue = workspace.cue
         // 什么都不写时也要有一个真的视图：等同步的那个任务挂在它上面
         ZStack(alignment: .leading) {
-            if syncing {
+            if services.syncing.showsCatchingUp(on: cue.hostID) {
                 SyncingLabel().transition(.handOff)
             } else if tally {
                 CueLedger(now: cue.now).transition(.handOff)
@@ -183,7 +181,7 @@ struct CueStatusLine: View {
         .font(font)
         .transition(.opacity)
         .animation(Motion.fade, value: cue.now)
-        .pending(services.syncing.isCatchingUp(on: cue.hostID), shown: $syncing)
+        .animation(Motion.fade, value: services.syncing.showsCatchingUp(on: cue.hostID))
     }
 
 

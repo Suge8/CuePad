@@ -1,7 +1,14 @@
 import Foundation
 
-nonisolated struct VoiceOffer: Equatable, Codable, Sendable { let sdp: String }
-nonisolated struct VoiceAnswer: Equatable, Codable, Sendable { let sdp: String }
+/// version 是 `VoiceSignalFormat.callVersion`；旧端不带（nil），也不认新端加的这个键。
+nonisolated struct VoiceOffer: Equatable, Codable, Sendable {
+    let sdp: String
+    var version: UInt8? = VoiceSignalFormat.callVersion
+}
+nonisolated struct VoiceAnswer: Equatable, Codable, Sendable {
+    let sdp: String
+    var version: UInt8? = VoiceSignalFormat.callVersion
+}
 
 /// 信令只携带低频生命周期；本地声音电平不进入这个类型。
 nonisolated enum VoiceMediaEvent: Equatable, Codable, Sendable {

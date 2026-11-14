@@ -42,13 +42,15 @@ nonisolated enum SessionProgress {
     static func parts(_ detail: String) -> (verb: String, target: String?)? {
         let parts = detail.split(separator: SessionState.detailSeparator, maxSplits: 1).map(String.init)
         guard let tool = parts.first, !tool.isEmpty else { return nil }
-        return (verbs[tool.lowercased()] ?? tool, parts.count > 1 ? parts[1] : nil)
+        let verb = switch ChatMessage.Tools.Kind(tool: tool) {
+        case .command: String(localized: "运行")
+        case .read: String(localized: "读取")
+        case .edit: String(localized: "修改")
+        case .search: String(localized: "查找")
+        default: tool
+        }
+        return (verb, parts.count > 1 ? parts[1] : nil)
     }
-
-    private static let verbs = [
-        "bash": String(localized: "运行"), "read": String(localized: "读取"), "edit": String(localized: "修改"), "write": String(localized: "写入"),
-        "grep": String(localized: "查找"), "find": String(localized: "查找"), "ls": String(localized: "查看"),
-    ]
 
     static func firstLine(_ text: String?) -> String? {
         text.flatMap(MarkdownBlock.firstPlainLine)
