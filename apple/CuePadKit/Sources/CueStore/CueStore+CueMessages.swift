@@ -135,17 +135,17 @@ extension CueStore {
 
   /// 交给 Cue 之后还没有一条 Cue 的话答它的（你的话、交过的回答）：值班一上班就退回重新交（`CueKeeper.run`），上一次值班崩溃、换到别的 Mac 都不丢。
   /// 答它的那条（`answeredRequests` 列着它）要写在最近这次送达之后：退回重交过的，之前那条（出错、换家时说的）不算答上。
-  /// 从最早一句被答上的话送达起算：更早的是还不记答了谁时（结构 92 之前）交的，答没答上认不出。
+  /// 送达之后 Cue 说过不记答了谁的话（结构 92 之前的各条，或工具当场说的、还没认出来源的）就当答过：认不出，宁可不重答。
   public func cueMessagesUnanswered() throws -> [UUID] {
     try db.query(
       """
       WITH answered AS (
         SELECT lower(j.value) AS id, max(r.modifiedAt) AS at FROM cueMessages r, json_each(r.answeredRequests) j
-        WHERE r.author = 'cue' AND r.answeredRequests IS NOT NULL GROUP BY lower(j.value)),
-      since AS (SELECT COALESCE(min(m.deliveredAt), 0) AS at FROM cueMessages m JOIN answered a ON a.id = m.id)
-      SELECT m.id FROM cueMessages m LEFT JOIN answered a ON a.id = m.id, since
-      WHERE m.deliveredAt IS NOT NULL AND m.deliveredAt >= since.at AND (a.at IS NULL OR a.at < m.deliveredAt)
+        WHERE r.author = 'cue' AND r.answeredRequests IS NOT NULL GROUP BY lower(j.value))
+      SELECT m.id FROM cueMessages m LEFT JOIN answered a ON a.id = m.id
+      WHERE m.deliveredAt IS NOT NULL AND (a.at IS NULL OR a.at < m.deliveredAt)
         AND (m.author = 'you' OR (m.author = 'cue' AND m.answer IS NOT NULL AND m.deliveredAt >= m.answeredAt))
+        AND NOT EXISTS (SELECT 1 FROM cueMessages r WHERE r.author = 'cue' AND r.answeredRequests IS NULL AND r.createdAt >= m.deliveredAt)
       """
     ) { $0.uuid(0) }
   }

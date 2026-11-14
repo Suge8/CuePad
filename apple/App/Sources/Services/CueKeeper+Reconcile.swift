@@ -13,6 +13,7 @@ extension CueKeeper {
         timer = nil
         let now = self.now
         await revive(at: now)
+        await claimUnanswered()
         await giveBack([])  // 上次没退回成的再退一次
         await recordFires()
         await leaveHisStops()
@@ -155,6 +156,19 @@ extension CueKeeper {
         } catch {
             Self.log.error("Cue 对账失败，过一阵再对：\(error.localizedDescription, privacy: .public)")
             return now + setup.timing.retryWake.seconds
+        }
+    }
+
+    /// 上一次值班没收好尾（崩溃、强杀，没走到 `retire`）时交出去没答上的话：上班后第一次对账认出来，并进要退回的（`owed`），这次重新交。
+    /// 在交任何话之前做；读不出就留着，下次对账再认（`alarm` 排着）。
+    private func claimUnanswered() async {
+        guard !claimed else { return }
+        do {
+            // 这次班次里已交出去的（没认成那几次对账里交的）还在答，不退
+            owed.formUnion(Set(try await store.cueMessagesUnanswered()).subtracting(shift?.unanswered ?? []))
+            claimed = true
+        } catch {
+            Self.log.error("Cue 读没答上的话失败，过一阵再读：\(error.localizedDescription, privacy: .public)")
         }
     }
 
