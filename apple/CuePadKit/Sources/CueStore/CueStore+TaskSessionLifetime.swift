@@ -1,10 +1,5 @@
 import Foundation
 
-/// 自动结束请求的正文（`DeliveryRequest.EndKind.task`）。
-struct TaskSessionEnd: StoredJSON {
-  let createdForTaskID: UUID
-}
-
 extension CueStore {
   /// 创建时转存来源，之后不再依赖投送或发送历史；恢复、摘要与纯关联不能改写它。
   func recordSessionCreationInTransaction(_ sessionID: String, from request: DeliveryRequest) throws {

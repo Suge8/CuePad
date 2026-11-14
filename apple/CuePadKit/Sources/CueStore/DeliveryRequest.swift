@@ -191,16 +191,20 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
 
     static let explicitContent = "end"
 
+    private struct TaskContent: StoredJSON {
+      let createdForTaskID: UUID
+    }
+
     var stored: String {
       switch self {
       case .explicit: Self.explicitContent
-      case .task(let owner): TaskSessionEnd(createdForTaskID: owner).stored
+      case .task(let owner): TaskContent(createdForTaskID: owner).stored
       }
     }
 
     init?(stored: String) {
       if stored == Self.explicitContent { self = .explicit; return }
-      guard let reason = TaskSessionEnd(stored: stored) else { return nil }
+      guard let reason = TaskContent(stored: stored) else { return nil }
       self = .task(createdFor: reason.createdForTaskID)
     }
   }

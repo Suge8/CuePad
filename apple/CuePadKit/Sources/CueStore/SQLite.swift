@@ -43,15 +43,14 @@ func sqlList<Value: RawRepresentable>(_ values: some Sequence<Value>) -> String 
 }
 
 /// 提示里只给 SQLite 的原因；连同出错的语句记进日志（`SQLite.error`）。
-package struct SQLiteError: LocalizedError, CustomStringConvertible {
+struct SQLiteError: LocalizedError, CustomStringConvertible {
   let message: String
   let sql: String
   var code: Int32 = SQLITE_ERROR
-  package init(message: String, sql: String, code: Int32 = SQLITE_ERROR) { (self.message, self.sql, self.code) = (message, sql, code) }
   /// 库此刻的处境（写满、读写出错、被别的连接占着）出的错，不是写的内容不对：过一会儿再写同样的可能就成。
   var isTransient: Bool { [SQLITE_FULL, SQLITE_IOERR, SQLITE_BUSY, SQLITE_LOCKED, SQLITE_NOMEM, SQLITE_CANTOPEN].contains(code & 0xff) }
-  package var description: String { "SQLite: \(message) [\(sql)]" }
-  package var errorDescription: String? { String(localized: "资料库读写出错：\(message)") }
+  var description: String { "SQLite: \(message) [\(sql)]" }
+  var errorDescription: String? { String(localized: "资料库读写出错：\(message)") }
 }
 
 struct Row {

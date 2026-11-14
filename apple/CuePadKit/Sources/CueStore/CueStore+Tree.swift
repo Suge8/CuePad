@@ -19,27 +19,29 @@ extension CueStore {
     }
   }
 
-  /// 在库里的上级，自下而上；任务在第几级是 `count + 1`（任务的上级都是任务）。
-  func ancestors(of id: UUID) throws -> [UUID] {
-    try db.query(
-      """
-      WITH RECURSIVE up(id, parentID) AS (
-        SELECT id, parentID FROM cards WHERE id = ?1 AND deletedAt IS NULL
-        UNION SELECT c.id, c.parentID FROM cards c JOIN up ON c.id = up.parentID WHERE c.deletedAt IS NULL)
-      SELECT id FROM up WHERE id != ?1
-      """, [id]) { $0.uuid(0) }
-  }
-
-  /// 一件事的顶层只有这一条规则，一行（起点, 顶层），作子查询用（`seeds` 是给出起点 id 的查询）：从起点沿在库里的上级往上走到头，上级不在（没到、在回收站）就停在那里。
-  /// 起点自己已删也照走：删掉的任务仍归原来那件事。远端并发留下的环里没有顶层，不出行。
-  static func tops(of seeds: String) -> String {
+  /// 往上走的规则只有这一条，表 `up(start, id, parentID)`（`WITH` 子句，后面接自己的 `SELECT`）：从每个起点（`seeds` 给出 id，起点删没删由它定）
+  /// 沿在库里、没删的上级往上走，上级不在（没到、在回收站）就停在那里；行按自下而上的顺序出。
+  static func upChain(of seeds: String) -> String {
     """
     WITH RECURSIVE up(start, id, parentID) AS (
       SELECT c.id, c.id, c.parentID FROM cards c WHERE c.id IN (\(seeds))
       UNION SELECT up.start, p.id, p.parentID FROM cards p JOIN up ON p.id = up.parentID WHERE p.deletedAt IS NULL)
-    SELECT start, id AS top FROM up
-    WHERE parentID IS NULL OR NOT EXISTS (SELECT 1 FROM cards p WHERE p.id = up.parentID AND p.deletedAt IS NULL)
     """
+  }
+
+  /// 在库里的上级，自下而上（`upChain`）；起点不在库里为空。任务在第几级是 `count + 1`（任务的上级都是任务）。
+  func ancestors(of id: UUID) throws -> [UUID] {
+    try db.query(
+      Self.upChain(of: "SELECT id FROM cards WHERE id = ?1 AND deletedAt IS NULL") + " SELECT id FROM up WHERE id != ?1", [id]) { $0.uuid(0) }
+  }
+
+  /// 一件事的顶层，一行（起点, 顶层），作子查询用：`upChain` 走到头的那一个。
+  /// 起点自己已删也照走：删掉的任务仍归原来那件事。远端并发留下的环里没有顶层，不出行。
+  static func tops(of seeds: String) -> String {
+    upChain(of: seeds) + """
+       SELECT start, id AS top FROM up
+      WHERE parentID IS NULL OR NOT EXISTS (SELECT 1 FROM cards p WHERE p.id = up.parentID AND p.deletedAt IS NULL)
+      """
   }
 
   /// 所在那件事的顶层（`tops`）；不在库里的、在环里的是它自己。

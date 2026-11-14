@@ -42,10 +42,8 @@ extension CueStore {
       let task = Task {
         let token = subscriptions.add(signal, reading: tables, scopes: scopes, since: since)
         var timer: Task<Void, Never>?
-        var retry: Task<Void, Never>?
         defer {
           timer?.cancel()
-          retry?.cancel()
           subscriptions.remove(token)
         }
         let timing = self.timing
@@ -68,11 +66,9 @@ extension CueStore {
             do {
               (next, reads, scopes, expiry) = try await rereader.tracked(read)
             } catch let error as SQLiteError where error.isTransient {
-              // 库此刻的处境（忙、写满、读写出错）：订阅不就此结束，退避后再读；其间来的提交并进同一次重读
-              retry = Task { [backoff] in
-                guard (try? await timing.sleep(backoff)) != nil else { return }
-                signal.yield()
-              }
+              // 库此刻的处境（忙、写满、读写出错）：订阅不就此结束，退避后再读；其间来的提交在 signals 里合成一条，并进同一次重读
+              try? await timing.sleep(backoff)
+              signal.yield()
               backoff = min(backoff * 2, Self.lastRetry)
               continue
             }

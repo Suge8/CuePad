@@ -39,7 +39,7 @@ extension VoiceService {
             var turn: TurnTarget?
             if item.state.canStop, let started = services.bridge.session(sessionID: session)?.turnStartedAt {
                 do { turn = try services.store.snapshot { try $0.voiceExecutionTarget(session, requests: ids, turnStartedAtMilliseconds: started.stored) }.value }
-                catch CueStoreError.cannotStop {}
+                catch CueStoreError.turnChanged {}
             }
             executions.append(.init(session: session, turn: turn, stop: stop(session)))
         }

@@ -5,7 +5,7 @@ import Foundation
 /// actor 在 await 处可重入：状态只在 await 之前改完，不跨 await 持有副本；会话与 Cue 的落盘按决定的先后串成同一条任务链，
 /// 后决定的写入（含删除）不会被先决定的覆盖。
 public actor StateRecorder {
-  struct Session {
+  private struct Session {
     var pace = Pace<SessionSnapshot>()
     var catalog: AgentCatalog?
   }
@@ -20,7 +20,7 @@ public actor StateRecorder {
   let bootID: String?
   let minInterval: Duration
   let timing: Timing
-  var sessions: [String: Session] = [:]
+  private var sessions: [String: Session] = [:]
   var cue = Pace<CueStateContent>()
   private var tail: Task<Void, Never>?
 
@@ -97,6 +97,9 @@ public actor StateRecorder {
       try await persist { [store, hostID] in try await store.deleteSessionState(host: hostID, sessionID: id) }
     }
   }
+
+  /// 这个会话最近一次交来的样子（演示与测试的便捷写法在它上面改，`Seed.swift`）。
+  func latest(_ sessionID: String) -> SessionSnapshot? { sessions[sessionID]?.pace.content }
 
   private func flush(_ sessionID: String, timer: UUID) async {
     guard var session = sessions[sessionID], let content = session.pace.due(timer) else { return }

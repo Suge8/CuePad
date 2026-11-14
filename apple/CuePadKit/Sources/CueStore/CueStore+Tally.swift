@@ -88,12 +88,7 @@ extension CueStore {
   /// 会话的主人（`sessionOwnerRows`）与它那件事的顶层任务。等你的计数、报给 Cue 的变化、会话行与会话条写的名字、App 的改名都读它。
   public func sessionOwners(_ sessionIDs: [String]) throws -> [String: (task: Card, leaf: Card)] {
     guard !sessionIDs.isEmpty else { return [:] }
-    let rows = try db.query(
-      """
-      WITH owner(sessionID, leaf) AS (\(Self.sessionOwnerRows(where: "piSessionID IN (SELECT value FROM json_each(?1))")))
-      SELECT o.sessionID, o.leaf, up.top FROM owner o JOIN (\(Self.tops(of: "SELECT leaf FROM owner"))) up ON up.start = o.leaf
-      """, [JSONColumn.encode(sessionIDs)]
-    ) { (session: $0.text(0), leaf: $0.uuid(1), task: $0.uuid(2)) }
+    let rows = try db.query(Self.sessionOwnerTops(where: "piSessionID IN (SELECT value FROM json_each(?1))"), [JSONColumn.encode(sessionIDs)]) { (session: $0.text(0), leaf: $0.uuid(1), task: $0.uuid(2)) }
     let cards = Dictionary(uniqueKeysWithValues: try select(
       Card.self, where: "id IN (SELECT value FROM json_each(?))", [Self.idList(rows.flatMap { [$0.leaf, $0.task] })]).map { ($0.id, $0) })
     return Dictionary(uniqueKeysWithValues: rows.compactMap { row in
@@ -111,6 +106,14 @@ extension CueStore {
         ROW_NUMBER() OVER (PARTITION BY piSessionID ORDER BY completedAt IS NULL DESC, startedAt DESC, id) AS rank
       FROM cards WHERE piSessionID IS NOT NULL AND \(taskOnBoard()) AND (\(condition)))
     WHERE rank = 1
+    """
+  }
+
+  /// 会话、它的主人（`sessionOwnerRows`）与主人那件事的顶层（`tops`），一行（sessionID, leaf, top），作子查询用：会话归哪件事只在这里拼。
+  static func sessionOwnerTops(where condition: String) -> String {
+    """
+    WITH owner(sessionID, leaf) AS (\(sessionOwnerRows(where: condition)))
+    SELECT o.sessionID, o.leaf, up.top FROM owner o JOIN (\(tops(of: "SELECT leaf FROM owner"))) up ON up.start = o.leaf
     """
   }
 }
