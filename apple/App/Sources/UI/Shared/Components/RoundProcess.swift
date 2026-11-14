@@ -1,13 +1,13 @@
 import CueStore
 import SwiftUI
 
-/// 做完的几步与说过的话来自会话文件（`Recap.pendingTools`），正在跑的来自会话状态（`detail`），两者不重叠。
+/// 做完的几步与说过的话来自会话文件（`Recap.pendingTools`）；此刻在做的那一步来自会话状态（`detail`），由对话末尾的角色说（`LiveFigure`），这里不列。
 /// Mac 上正在说的话出字时（`SessionShown.speaking`）这一块是草稿的标题，说的话就是下面的草稿，不再列一遍。
 /// 工具结果里有图时，标题行下面挂着这一轮的图（`ChatImages`），点开全屏看：用户看得到 Agent 看到的，Agent 不必为了给人看再发一遍。
 /// 清单收着时图只留一排（余下几张写在最后一格上），展开时全摆出来：收着的一轮是回答上面的一句交代，不压过回答。
 /// 在跑的清单开着，做完的收着。刚落下的那一轮先照在跑时的样子开着、同样高，随即收起：Mac 上正在说的话落库时原位换下（`SessionDraft`），
 /// 是这一块连续收回，不在换下的那一帧跳一下。
-/// 清单里的一步点开看里面（`StepRow`）；标题行是用时（在跑的是此刻在做的）接每类一个图标配个数，图标与清单那一类的同一个；缓存没接上的一轮在末尾另起一行写重读了多少（`Chat.process`）。
+/// 清单里的一步点开看里面（`StepRow`）；标题行是用时（在跑的只有图标）接每类一个图标配个数，图标与清单那一类的同一个；缓存没接上的一轮在末尾另起一行写重读了多少（`Chat.process`）。
 struct RoundProcess: View {
     let tools: ChatMessage.Tools?
     let ending: Ending
@@ -18,7 +18,6 @@ struct RoundProcess: View {
     var landed: Date?
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.chatStay) private var stay
     @State private var toggled: Bool?
     @State private var key = UUID()
@@ -26,12 +25,12 @@ struct RoundProcess: View {
 
     nonisolated enum Ending: Equatable {
         case took(String)
-        case live(SessionShown, doing: String, step: Icon?)
+        /// Mac 上正在出字：这一块是草稿的标题。
+        case speaking
+        /// 在跑，此刻在做的由对话末尾的角色说（`LiveFigure`）：这里只列做过的几步，不再写一遍。
+        case running
 
-        static var speaking: Ending {
-            let shown = SessionShown(state: .known(.thinking)).speaking(true)
-            return .live(shown, doing: shown.label, step: nil)
-        }
+        static let speakingShown = SessionShown(state: .known(.thinking)).speaking(true)
     }
 
     var body: some View {
@@ -60,18 +59,9 @@ struct RoundProcess: View {
                         }
                     }
                     if expanded {
-                        NoteThread {
-                            list(tools)
-                            if case .live(_, let doing, let step?) = ending { liveStep(doing, icon: step) }
-                        }
-                    } else if case .live(let shown, let doing, let step) = ending {
-                        let said = shown.speaking ? nil : tools.items.last { $0.kind == .said }
-                        if said != nil || step != nil {
-                            NoteThread {
-                                if let said { SaidRow(text: said.target, lines: 3) }
-                                if let step { liveStep(doing, icon: step) }
-                            }
-                        }
+                        NoteThread { list(tools) }
+                    } else if ending == .running, let said = tools.items.last(where: { $0.kind == .said }) {
+                        NoteThread { SaidRow(text: said.target, lines: 3) }
                     }
                 }
                 // 只裁上下：行的悬停底比行左右各宽出一圈（`Press.inline`），贴着框裁的话右端被切成直边
@@ -84,17 +74,7 @@ struct RoundProcess: View {
             }
             .onDisappear { if toggled == true { stay?(key, false) } }
         } else {
-            // 还没调过工具：此刻在做的（在想、只说了话），一行：对话末尾只给它留一行（`ChatLiveSlot`）
-            let live: (SessionShown, String)? = if case .live(let shown, let doing, _) = ending, !shown.speaking { (shown, doing) } else { nil }
-            if live != nil || process?.recached != nil {
-                VStack(alignment: .leading, spacing: 0) {
-                    if let (shown, doing) = live {
-                        NoteLine { StateDot(shown: shown, size: 6) } label: { DoingLine(text: doing).lineLimit(1) }
-                            .accessibilityElement(children: .ignore).accessibilityLabel(doing)
-                    }
-                    recached(process)
-                }
-            }
+            recached(process)
         }
     }
 
@@ -119,7 +99,8 @@ struct RoundProcess: View {
     private func spoken(_ process: Chat.Process) -> String {
         let end: String? = switch ending {
         case .took(let took): took
-        case .live(_, let doing, _): doing
+        case .speaking: Ending.speakingShown.label
+        case .running: nil
         }
         return [process.spoken.spoken, end].compactMap { $0 }.joined(separator: "，")
     }
@@ -127,15 +108,15 @@ struct RoundProcess: View {
     private func header(_ process: Chat.Process, open: Bool?) -> some View {
         NoteLine(open: open) {
             switch ending {
-            case .took: Image(.tool).imageScale(.small)
-            case .live(let shown, _, _): StateDot(shown: shown, size: 6)
+            case .took, .running: Image(.tool).imageScale(.small)
+            case .speaking: StateDot(shown: Ending.speakingShown, size: 6)
             }
         } label: {
             HStack(alignment: .firstTextBaseline, spacing: Spacing.item) {
                 switch ending {
                 case .took(let took): Text(took).fixedSize()
-                case .live(_, let doing, nil): DoingLine(text: doing).lineLimit(1)
-                case .live: EmptyView()
+                case .speaking: DoingLine(text: Ending.speakingShown.label).lineLimit(1)
+                case .running: EmptyView()
                 }
                 ForEach(process.counts, id: \.kind) { count in
                     HStack(alignment: .firstTextBaseline, spacing: Spacing.hair) {
@@ -163,26 +144,6 @@ struct RoundProcess: View {
         } else {
             StepRow(item: item, session: session, message: message, index: index)
         }
-    }
-
-    private func liveStep(_ doing: String, icon: Icon) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: Note.spacing) {
-            // 换了一种工具时图标换过去，同一种接着用也跳一下：每一步都看得出又动了一下
-            Image(icon).font(Typography.caption2).foregroundStyle(palette.ink3)
-                .contentTransition(.symbolEffect(.replace))
-                .symbolEffect(.bounce.byLayer, options: .nonRepeating, value: doing)
-                .readerHidden(true).noteGlyph()
-            DoingLine(text: doing).font(Typography.codeNote)
-                .lineLimit(typeSize.isAccessibilitySize ? nil : 2).truncationMode(.middle)
-                .fixedSize(horizontal: false, vertical: typeSize.isAccessibilitySize)
-        }
-        .padding(.bottom, Spacing.hair)
-        .accessibilityElement(children: .combine)
-        .transition(.opacity)
-    }
-
-    static func icon(tool: String?) -> Icon {
-        tool.map { icon(ChatMessage.Tools.Kind(tool: $0)) } ?? .pondering
     }
 
     /// 会话里的几类；Cue 的动作只在 Cue 页的经过里（`CueTrace.icon`），会话里没有。

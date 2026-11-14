@@ -105,7 +105,7 @@ struct CuePage: View {
     private func conversation(_ thread: CueThread) -> some View {
         let rows = thread.rows
         return ChatColumn(
-            followKey: FollowKey(thread, live: cue.presence.progress != nil), readingWidth: Self.readingWidth, inset: Self.inset, follow: $follow,
+            followKey: FollowKey(thread, live: cue.presence.shown != nil), readingWidth: Self.readingWidth, inset: Self.inset, follow: $follow,
             marks: thread.marks, ids: rows.map(\.id), paging: Self.paging(thread),
             holding: catchingUp || docking || sinking(thread),
             arrival: rows.last.flatMap { CueRow.arrives($0, swapsInPlace: services.cueOnDutyHere) ? $0.id : nil }
@@ -129,7 +129,6 @@ struct CuePage: View {
             // 手机上对话里的字不开行内选择：长按出的是消息菜单，挑字走菜单里的"选择文本"（同会话页）
             .environment(\.inlineTextSelection, false)
             #endif
-            .animation(Motion.fade, value: cue.presence.progress)
         }
     }
 

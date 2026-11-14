@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # CuePad 的构建、测试、截图、测量、发布只走这里（Agent 绕开它直接调 xcodebuild、swift build/test、simctl 开关机，
 # 或自己起停 CuePad，会被 .pi/extensions/xc-guard.ts 拦下）。
-#   xc.sh check                                     提交前的门：lint.sh、CuePadKit 的 swift build、iOS 编译（连测试目标）、Mac App 连测试目标的整模块编译（只在 Mac 编的测试，如 #if os(macOS) 的，警告也在这里拦）；
+#   xc.sh check                                     提交前的门：lint.sh、运行时编的着色器（shaders.swift）、CuePadKit 的 swift build、iOS 编译（连测试目标）、Mac App 连测试目标的整模块编译（只在 Mac 编的测试，如 #if os(macOS) 的，警告也在这里拦）；
 #                                                   自己的 Swift 源文件（App、CuePadKit）有一条编译警告就失败，第三方与生成的代码不算（_build.sh 的 own_warnings）
 #   xc.sh signoff                                   合并前的门：本机跑 check、test kit、test mac，全过才给 HEAD 这个提交记 GitHub 状态，主干规则认它（signoff.sh 头注释）
 #   xc.sh build <mac|ios|ipad>
@@ -136,6 +136,10 @@ sign_development() {
 case "$cmd" in
   check)
     "$APPLE_DIR/scripts/lint.sh"
+    shaders="$APPLE_DIR/.derived/shaders" shader_sources=()
+    if [ ! -x "$shaders" ] || [ "$APPLE_DIR/scripts/shaders.swift" -nt "$shaders" ]; then mkdir -p "$APPLE_DIR/.derived"; xcrun swiftc -O "$APPLE_DIR/scripts/shaders.swift" -o "$shaders"; fi
+    while IFS= read -r source; do shader_sources+=("$source"); done < <(rg -l --type swift metal_stdlib "$APPLE_DIR/App")
+    "$shaders" "${shader_sources[@]}"
     # Kit 的 macOS 构建（CueBridge、命令行工具只在这里编到）与 iOS 编译产物目录不同，并行跑
     kit_build & kit=$!
     # 归档（Release）是整模块编译，Debug 是按文件分批的增量编译：同一份源码，有些诊断（如 nonisolated 类型里静态存非 Sendable 值）只有整模块才报，

@@ -35,6 +35,11 @@ nonisolated enum SessionProgress {
 
     /// Mac 同步来的工具详情是"工具名 · 目标"。
     static func action(_ detail: String) -> String? {
+        parts(detail).map { [$0.verb, $0.target].compactMap(\.self).joined(separator: " ") }
+    }
+
+    /// 同一句拆成动作与对象：角色旁边分两行写（`FigureLive`）。
+    static func parts(_ detail: String) -> (verb: String, target: String?)? {
         let parts = detail.split(separator: SessionState.detailSeparator, maxSplits: 1).map(String.init)
         guard let tool = parts.first, !tool.isEmpty else { return nil }
         let verb = switch ChatMessage.Tools.Kind(tool: tool) {
@@ -44,7 +49,7 @@ nonisolated enum SessionProgress {
         case .search: String(localized: "查找")
         default: tool
         }
-        return parts.count > 1 ? "\(verb) \(parts[1])" : verb
+        return (verb, parts.count > 1 ? parts[1] : nil)
     }
 
     static func firstLine(_ text: String?) -> String? {
