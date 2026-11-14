@@ -174,14 +174,20 @@ final class HostedTurns {
         ends.happened()
     }
 
-    /// 按快照对齐（断线重连后）：`start` 是在跑的那一轮的开始，nil 是歇着。错过的事件不补。
+    /// 按快照对齐（断线重连后）：`start` 是在跑的那一轮的开始，取会话记录里的（不晚于事件报来的同一轮的开始），nil 是歇着。错过的事件不补；
+    /// 在跑的那一轮快照里已歇下、或换成了更晚开始的一轮，就是错过了它的收尾，照收尾处理（等它收尾的换轮放行、接着交出）。
     func reconcile(runningSince start: Date?) {
-        (stopping, stopRequests, failure, tools) = (false, 0, nil, [])
-        handovers.removeAll { $0.step == .awaitingStart }
+        tools = []
+        if phase == .running, let start, start <= facts.turnStartedAt ?? .distantPast {
+            return facts.startTurn(at: start)
+        }
+        if phase == .running { finish() }
         if let start {
-            phase = .running
-            facts.startTurn(at: start)
-        } else {
+            apply(.turnStarted, at: start)
+            return
+        }
+        handovers.removeAll { $0.step == .awaitingStart }
+        if !handingOver {
             phase = .idle
             facts.running = false
         }

@@ -36,6 +36,7 @@ extension OpenCodeRuntime {
         }
         let present = Set(topLevel.map(\.id))
         for (id, tracked) in sessions where !present.contains(id) {
+            tracked.turns.closed()
             if tracked.online { bridge.detach(bridgeID(id, connection), reason: .closed(reason: "deleted")) }
             sessions[id] = nil
         }

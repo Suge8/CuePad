@@ -158,7 +158,10 @@ public final class OpenCodeRuntime: AgentRuntime, SessionLink {
         guard let connection else { return }
         close(connection)
         self.connection = nil
-        for (id, tracked) in sessions where tracked.online { bridge.detach(bridgeID(id, connection), reason: .disconnected) }
+        for (id, tracked) in sessions {
+            tracked.turns.closed()
+            if tracked.online { bridge.detach(bridgeID(id, connection), reason: .disconnected) }
+        }
         sessions = [:]
         parents = [:]
         childTurns = [:]
