@@ -90,11 +90,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         services.start()
         services.follow { await services.viewer.follow(workspace) }
         services.follow { await window.parkWhileUnseen(services) }
-        // Dock 与菜单栏图标的角标是要你管的几件（拍板加待回复）：读名牌的同一份（`CueNow.needsYou`），不另订阅库
+        // Dock 与菜单栏图标的角标是要你管的几件（拍板加新回复）、菜单栏图标换成哪个图形：读名牌的同一份（`CueNow.tally`），不另订阅库
         services.follow { [alerts, statusItem] in
-            for await count in Observations({ workspace.cue.now.needsYou }) {
-                statusItem?.show(badge: count)
-                await alerts.showBadge(count)
+            for await tally in Observations({ workspace.cue.now.tally }) {
+                statusItem?.show(tally)
+                await alerts.showBadge(tally.needsYou)
             }
         }
         // 首次打开：接入检测到的 Agent 并启用 Cue（主窗口里的浮层）。从 Xcode 编出来直接打开的也弹（克隆仓库自己编的人，开发库就是他的库）；

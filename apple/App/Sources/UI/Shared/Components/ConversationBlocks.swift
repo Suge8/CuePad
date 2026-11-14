@@ -148,14 +148,12 @@ struct LiveStatus: View {
     }
 
     /// 正在说话时总有（占着说完后那条回答上方的位置，状态可能先于草稿落库变成歇着）；在等子代理时子代理那一行汇总就是进展，没做过步骤就不另写一块"子代理工作中"。
+    /// 不在说话时此刻在做的由对话末尾的角色说（`LiveFigure`），这一块只列做过的几步。
     static func ending(of session: SessionState, speaking: Bool) -> RoundProcess.Ending? {
         if speaking { return .speaking }
-        let shown = SessionShown(session)
         let delegating = session.state == .known(.delegating) && !session.runtimeSubagents.isEmpty
         guard session.runtimeState.isWorking, !delegating || session.pendingTools != nil else { return nil }
-        guard !delegating else { return .live(shown, doing: shown.label, step: nil) }
-        let tool = session.state == .known(.tool) ? session.detail?.components(separatedBy: SessionState.detailSeparator).first : nil
-        return .live(shown, doing: session.detail.flatMap(SessionProgress.action) ?? shown.label, step: RoundProcess.icon(tool: tool))
+        return .running
     }
 }
 

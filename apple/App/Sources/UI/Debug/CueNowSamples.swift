@@ -97,6 +97,12 @@ enum CueNowSamples {
     ], advancing: 4)
 
     /// 真实规模：一件拍板、一个会话待回复；推进中 4 件，一共 12 个子代理在跑。
+    /// 只剩新回复：灵动岛与菜单栏是信封。
+    static let reply = now(.idle, [
+        item("reply/glass", .reply, String(localized: "玻璃按钮重做", table: "Demo"), 9),
+        item("canvas", .running, String(localized: "画布缩放", table: "Demo"), 4.2),
+    ], advancing: 1, agents: 3)
+
     static let busy = now(.idle, [
         item("ask", .asks, String(localized: "推送 v1.4 到 TestFlight", table: "Demo"), 3),
         item("reply/glass", .reply, String(localized: "玻璃按钮重做", table: "Demo"), 9),
@@ -134,7 +140,7 @@ enum CueNowSamples {
 
     static let all: [String: CueNow] = [
         "hearing": hearing, "failed": failed, "woke": woke, "delegating": delegating, "asks": asks, "done": done, "doneExpiring": doneExpiring, "afterDone": afterDone, "crowded": crowded,
-        "quiet": quiet, "away": away, "four": four, "fourAsks": fourAsks, "fourWorking": fourWorking, "awayBusy": awayBusy, "busy": busy,
+        "quiet": quiet, "away": away, "four": four, "fourAsks": fourAsks, "fourWorking": fourWorking, "awayBusy": awayBusy, "busy": busy, "reply": reply,
     ]
     static let tour = [quiet, hearing, woke, delegating, asks, done, failed, away]
 
