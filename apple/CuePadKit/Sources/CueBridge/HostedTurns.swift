@@ -101,6 +101,7 @@ final class HostedTurns {
     }
 
     /// 同上，交出之后还要等别的（Claude Code 等确认收下要等这一轮做完）：写出这句的那一刻调 `handed`。
+    /// 停不下在跑的那一轮（停止被拒、等不到收尾）抛 `previousTurnRunning`：这句确定没交出。
     func send(stop: @escaping @MainActor () async throws -> Void, deliver: (_ handed: () -> Void) async throws -> Void) async throws {
         let turn = runningTurn
         let token = UUID()
@@ -109,7 +110,13 @@ final class HostedTurns {
             if handovers.contains(where: { $0.token == token && $0.step != .awaitingStart }) { handovers.removeAll { $0.token == token } }
             settleIfOrphaned()
         }
-        try await stopPhase.run { [self] in try await halt(stop, of: turn) }
+        do {
+            try await stopPhase.run { [self] in try await halt(stop, of: turn) }
+        } catch let error as CancellationError {
+            throw error
+        } catch {
+            throw BridgeError.rejected(RejectReason.previousTurnRunning.rawValue)
+        }
         step(token, to: .delivering)
         try await deliver { [self] in
             guard handovers.contains(where: { $0.token == token && $0.step == .delivering }) else { return }
