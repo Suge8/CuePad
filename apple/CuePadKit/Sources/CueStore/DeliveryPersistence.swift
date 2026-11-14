@@ -52,14 +52,15 @@ extension CueStore {
     }
   }
 
-  public func completeDeliveryWithdrawal(_ request: DeliveryRequest, on host: String, refused: ShownText) throws -> DeliveryOutcome {
+  /// 撤回在库里一个事务办完，不交给 handler、没有执行中这一步：原请求还没领取就删掉它（不经过失败），已领取的撤不回。
+  /// 撤回请求一写进库，原请求就领不走了（`abandonedDelivery`），所以排在它前面的领取与它不会交错。
+  func settleWithdrawal(_ request: DeliveryRequest, on host: String) throws {
     try write {
-      guard request.mode == .known(.withdraw), let current = try find(DeliveryRequest.self, request.id),
-        current.status == .known(.executing), current.handledBy == host, let original = UUID(uuidString: current.content)
-      else { return .unconfirmed(Speech.unconfirmedReason) }
-      let outcome: DeliveryOutcome = try (removeUnstartedDelivery(original, locallyOn: host) || removeFailedDelivery(original)) ? .succeeded : .failed(refused)
-      try applyDeliveryOutcome(current, outcome, at: timing.now())
-      return outcome
+      guard let original = UUID(uuidString: request.content) else {
+        return try applyDeliveryOutcome(request, .failed(ShownText("撤回的请求标识读不出")), at: timing.now())
+      }
+      let removed = try removeUnstartedDelivery(original, locallyOn: host) || removeFailedDelivery(original)
+      try applyDeliveryOutcome(request, removed ? .succeeded : .failed(DeliveryRequest.withdrawRefused), at: timing.now())
     }
   }
 
@@ -93,12 +94,17 @@ extension CueStore {
       ignoringExisting: true)
   }
 
-  // 本机写入次序不受手机与 Mac 的钟差影响；同步 UPDATE 不改变 rowid。
-  private static let abandonedDelivery = """
-    r.mode IN (\(sqlList(DeliveryMode.requiresReadySession.sorted { $0.rawValue < $1.rawValue }))) AND (
+  /// 之后对同一会话写了结束：话不再派发，没领取的写成放弃（`abandonPreparedDeliveries`），领取了还没交出的不交（`mayBeginDelivery`）。
+  /// 本机写入次序不受手机与 Mac 的钟差影响；同步 UPDATE 不改变 rowid。
+  private static let endedLater = """
+    r.mode IN (\(sqlList(DeliveryMode.requiresReadySession.sorted { $0.rawValue < $1.rawValue }))) AND
       EXISTS (SELECT 1 FROM deliveryRequests AS e WHERE e.hostID = r.hostID AND e.targetKind = r.targetKind
         AND e.targetRef = r.targetRef AND e.mode = 'end' AND e.rowid > r.rowid)
-      OR EXISTS (SELECT 1 FROM deliveryRequests AS c WHERE c.mode = 'withdraw' AND c.content = r.id))
+    """
+
+  /// 领不走的：之后写了结束，或有撤回在等着办（撤回自己删它，不先写失败）。
+  private static let abandonedDelivery = """
+    (\(endedLater)) OR EXISTS (SELECT 1 FROM deliveryRequests AS c WHERE c.mode = 'withdraw' AND c.content = r.id)
     """
 
   func isDeliveryAbandoned(_ id: UUID) throws -> Bool {
@@ -108,7 +114,7 @@ extension CueStore {
   /// 只有执行 Mac 可证明整个操作未开始；发送设备的旧准备快照不能自行写失败。
   func abandonPreparedDeliveries(for host: String) throws {
     try write {
-      let predicate = "r.hostID = ?1 AND r.status IN (\(DeliveryStatus.waitingSQL)) AND (\(Self.abandonedDelivery))"
+      let predicate = "r.hostID = ?1 AND r.status IN (\(DeliveryStatus.waitingSQL)) AND (\(Self.endedLater))"
       try db.run("""
         UPDATE deliveryRequests AS r SET status = 'not_delivered', failure = ?2, completedAt = ?3,
           modifiedAt = MAX(modifiedAt + 1, ?3) WHERE \(predicate)
@@ -119,7 +125,7 @@ extension CueStore {
   public func mayBeginDelivery(_ id: UUID) throws -> Bool {
     try db.first("""
       SELECT 1 FROM deliveryRequests AS r WHERE r.id = ? AND r.status = 'executing' AND r.deadlineAt > ?
-        AND NOT (\(Self.abandonedDelivery))
+        AND NOT (\(Self.endedLater))
       """, [id, timing.now()]) { _ in true } ?? false
   }
 

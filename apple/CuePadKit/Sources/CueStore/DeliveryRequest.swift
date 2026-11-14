@@ -34,7 +34,7 @@ public enum DeliveryMode: String, Sendable, CaseIterable {
   /// 你说的话（唯一一种）：会话歇着就以它开新一轮，在跑就先打断这一轮再开（忙不忙以 Mac 执行时的会话为准，写请求时看到的状态可能已经过时）。没有排队；未确认不自动重发。
   /// 用提示词模板或技能说的（`/名字 …`，回复框按 `Slash.speaks` 认）也是它：由 Agent 展开，展开后的那条消息带着请求 id
   case send
-  /// 撤回另一条尚未派发的投送；正文为原请求 id，由执行 Mac 原子核对后处理。
+  /// 撤回另一条尚未派发的投送；正文为原请求 id，执行的 Mac 在库里一个事务核对并删掉原请求（`settleWithdrawal`），不交给 handler。
   case withdraw
   case answer
   /// 在 Mac 上开一个新会话（后台托管）
@@ -156,6 +156,8 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
     guard status == .known(.preparing), let waiting = reason, waiting != DeliveryPreparation.ready else { return ShownText("到期仍未派发，没有发出，可以重发") }
     return ShownText("到期仍未派发（\(waiting.embedded)），没有发出，可以重发")
   }
+
+  static let withdrawRefused = ShownText("Mac 已经领取，撤不回")
 
   public static var interruptedReason: ShownText { ShownText("Mac 上的 CuePad 在执行过程中退出，送达尚未确认，不会自动重发") }
 

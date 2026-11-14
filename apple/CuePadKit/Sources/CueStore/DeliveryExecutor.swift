@@ -177,6 +177,11 @@ public actor DeliveryExecutor {
         await finish(request, .failed(ShownText("这个版本的 CuePad 不认识发送方式「\(raw)」，没有执行（可能来自更新版本，请升级 Mac 上的 CuePad）")))
         continue
       }
+      if request.mode == .known(.withdraw) {
+        await reporting { try await store.settleWithdrawal(request, on: hostID) }
+        scheduleCleanup()
+        continue
+      }
       let missing = request.attachmentKeys.filter { store.files.fileURL(for: $0) == nil }
       if !missing.isEmpty {
         fetch(missing, for: request)

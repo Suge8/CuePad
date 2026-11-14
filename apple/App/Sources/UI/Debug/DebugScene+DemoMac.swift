@@ -75,8 +75,6 @@ extension DebugScene {
         guard let mode = request.mode.known else { return .failed(ShownText(SendError.unsupportedMode(request.mode.rawValue))) }
         do {
             switch mode {
-            case .withdraw:
-                return try await store.completeDeliveryWithdrawal(request, on: host, refused: ShownText(SendError.alreadyHanded))
             case .send:
                 // 与真的 Mac 一样，说出去的话送达后记一条发送记录（任务因此进行中、关联到这个会话）
                 _ = try await store.recordSend(request.content, to: request.target, card: request.cardID, delivery: request.id, origin: request.origin)
@@ -88,7 +86,7 @@ extension DebugScene {
                 if quotaFails { return .failed(ShownText("这台 Mac 上没有在线的 Pi 会话")) }
             case .tidy, .libraryEdit:
                 return await DemoAgentLibrary.apply(request, store: store) ?? .failed(ShownText(SendError.unsupportedMode(request.mode.rawValue)))
-            case .start, .transcript, .bind, .end, .stop, .stopTurn, .retry, .answer, .config, .command:
+            case .withdraw, .start, .transcript, .bind, .end, .stop, .stopTurn, .retry, .answer, .config, .command:
                 break
             }
             return .succeeded

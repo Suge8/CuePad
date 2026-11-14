@@ -40,12 +40,8 @@ final class MacExecutor {
         let executor = DeliveryExecutor(store: store, hostID: hostID, timing: store.timing, onIssue: { [reportIssue] error in
             let message = String(localized: "处理投送请求时读写资料库失败：\(error.localizedDescription)")
             Task { @MainActor in reportIssue(message) }
-        }, fetchFile: { [fetchFile] key in _ = try await fetchFile(key) }, recover: { [store, bridge, hostID] request in
-            if request.mode == .known(.withdraw) {
-                do { return try await store.completeDeliveryWithdrawal(request, on: hostID, refused: ShownText(SendError.alreadyHanded)) }
-                catch { return .unconfirmed(ShownText(error)) }
-            }
-            return await DeliveryConfirmation(store: store, bridge: bridge).recover(request)
+        }, fetchFile: { [fetchFile] key in _ = try await fetchFile(key) }, recover: { [store, bridge] request in
+            await DeliveryConfirmation(store: store, bridge: bridge).recover(request)
         }, preparation: { [bridge] request in
             await MacDeliveryPreparation(bridge: bridge).current(request)
         }) { [weak self] request, access in
@@ -79,8 +75,7 @@ final class MacExecutor {
     private func perform(_ request: DeliveryRequest, access: DeliveryAdmission.Access) async throws -> DeliveryOutcome {
         guard let mode = request.mode.known else { throw SendError.unsupportedMode(request.mode.rawValue) }
         switch mode {
-        case .withdraw:
-            return try await store.completeDeliveryWithdrawal(request, on: hostID, refused: ShownText(SendError.alreadyHanded))
+        case .withdraw: preconditionFailure("撤回由 DeliveryExecutor 在库里办，不交给这里")
         case .start: return try await startSession(request)
         case .transcript: try await writeTranscript(of: request.content)
         case .step: try await AppServices.fillStep(request.content, in: store, runtimes: runtimes)

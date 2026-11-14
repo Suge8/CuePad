@@ -20,12 +20,21 @@ extension AppServices {
         }
     }
 
+    /// 等不到结果时撤回请求还没传出去就收回它（那句照常送）；已传出去的那台办到了照样撤，只能说结果还没回来。
     private func withdrawRemotely(_ id: UUID, on host: String) async throws {
-        let result = try await awaitOutcome(onTimeout: SendError.alreadyHanded) {
-            try await request(on: host) {
-                guard let withdrawal = try await store.requestDeliveryWithdrawal(id) else { throw SendError.alreadyHanded }
-                return withdrawal
+        var withdrawal: DeliveryRequest?
+        let result: DeliveryRequest
+        do {
+            result = try await awaitOutcome(onTimeout: SendError.withdrawalPending) {
+                try await request(on: host) {
+                    guard let written = try await store.requestDeliveryWithdrawal(id) else { throw SendError.alreadyHanded }
+                    withdrawal = written
+                    return written
+                }
             }
+        } catch SendError.withdrawalPending {
+            if let withdrawal, try await store.withdrawDelivery(withdrawal.id) { throw SendError.alreadyHanded }
+            throw SendError.withdrawalPending
         }
         guard result.status == .known(.succeeded) else { throw SendError.alreadyHanded }
     }
