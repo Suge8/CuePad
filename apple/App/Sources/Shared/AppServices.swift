@@ -10,7 +10,8 @@ import CueBridge
 import UIKit
 #endif
 
-/// 界面读数据直接 `store.observe(...)`；一切副作用只经这里，发送记录也只在这里写。
+/// 组合根：开库、装配依赖；持有跨窗口的服务（同步、快照、提示、热键、Mac 的执行器）与投送请求的入口（`request(on:)`）。
+/// 每个窗口自己的用例（建卡、完成、交给 Agent）在 `Workspace`，直接写 store；界面读数据直接 `store.observe(...)`。
 @Observable
 final class AppServices {
     static let version: String = {
@@ -43,9 +44,18 @@ final class AppServices {
     @ObservationIgnored let relay: Relay?
     @ObservationIgnored let sendOrder = SendOrder()
     @ObservationIgnored lazy var voice = VoiceService(services: self, signaling: relay)
-    private(set) var syncState: SyncState
-    /// key 离开就是那一趟结束了；文件在不在本机看附件目录。
-    private(set) var fileTransfers: [String: FileTransfer] = [:]
+    /// 跟着同步、快照、收件做的跨服务的事经弱引用回到这里：服务没了就不再做（快照的发布排在任务里，可能晚于服务本身）。
+    @ObservationIgnored private(set) lazy var syncing = SyncDriver(
+        engine: sync, status: syncStart, store: store, timing: timing, speechClock: speechClock, localHost: speechClock.moment.localHost, tasks: tasks,
+        cadence: { [weak self] in self?.pollingCadence },
+        statusChanged: { [weak self] in self?.syncStatusChanged(to: $0) },
+        report: { [weak self] in self?.reportIssue($0) })
+    @ObservationIgnored private let syncStart: SyncStatus
+    @ObservationIgnored private(set) lazy var snapshots = SnapshotPublisher(store: store, directory: location.snapshotsDirectory) { [weak self] digest, first, resend in
+        guard let self else { throw CancellationError() }
+        return try await present(digest, first: first, resend: resend)
+    }
+    @ObservationIgnored private(set) lazy var captures = CaptureIngest(store: store, directory: location.captureDirectory) { [weak self] in self?.reportIssue($0) }
     #if os(iOS)
     /// 每个窗口自己决定弹不弹。
     private(set) var sessionAlert: SessionAlert?
@@ -57,33 +67,14 @@ final class AppServices {
     let liveSessions: LiveSessions
     let cueFeed: CueFeed
     let accountQuotas = AccountQuotas()
-    private(set) var conflicts: [CardConflict] = []
 
     /// 待打开的页：写入后由工作区取走（`Workspace.openLinks`）。
     var pendingDeepLink: DeepLink?
 
-    @ObservationIgnored let tasks = Followers()
-    /// iOS 整个进后台时取消、回前台再开。
-    @ObservationIgnored var polling: Task<Void, Never>?
+    @ObservationIgnored let tasks: Followers
     var hasOpenDeliveries = false
-    var sessionViewers = 0
-    /// 只由 `CueViewing` 增减；算不算在看的规则在它那里。
-    var cueViewers = 0
-    #if os(macOS)
-    /// 按窗口是否露在屏上定，有没有焦点都算。
-    var mainWindowExposed = true
-    var away = false
-    /// 会话页、Cue 页的在场、读过与提示都只认它。
-    var seesMainWindow: Bool { mainWindowExposed && !away }
-    #endif
-    /// 还没返回的立即同步有几个（`syncNow`）。
-    var syncNowWaits = 0
-    @ObservationIgnored var syncConnected = false
-    var isSyncingNow: Bool { syncNowWaits > 0 }
-    @ObservationIgnored let flights = Flights()
-    @ObservationIgnored var publishedSnapshots: WidgetSnapshots?
-    /// 这台设备开着哪一页的唯一写入口。
-    @ObservationIgnored let viewer: ViewerKeeper?
+    /// 这台设备有人在看哪些页，读写都只经它。
+    @ObservationIgnored let viewer: ViewerKeeper
     @ObservationIgnored var backgroundFlushes: [UUID: @MainActor () async -> Void] = [:]
 
     /// App 代理持有的那一个，`start()` 前接上；测试没有，不发真实通知。
@@ -118,14 +109,12 @@ final class AppServices {
     @ObservationIgnored let library: AgentLibraryKeeper
     @ObservationIgnored lazy var executor = MacExecutor(
         store: store, bridge: bridge, runtimes: runtimes, hostID: hostID, workspaces: workspaces, recorder: stateRecorder, library: library,
-        upload: { [weak self] id in await self?.upload(id) },
         fetchFile: { [sync] key in try await sync.fetchFile(key) },
         refreshQuota: { [weak self] in await self?.refreshQuota(.manual) },
         reportIssue: { [weak self] message in self?.reportIssue(.syncUnavailable(message)) })
 
     @ObservationIgnored lazy var hotkey = GlobalHotkey(
-        label: String(localized: "显示或隐藏 CuePad"), key: AppSettings.Key.globalShortcut, defaultAccelerator: "Alt+Shift+Space", defaults: settings.defaults,
-        backend: hotkeyBackend
+        label: String(localized: "显示或隐藏 CuePad"), slot: .main, settings: settings, backend: hotkeyBackend
     ) { [weak self] in self?.windowShell?.toggleFromHotkey() }
     #endif
 
@@ -153,9 +142,12 @@ final class AppServices {
         self.location = location
         diagnostics = Diagnostics(directory: location.directory.appending(path: "Diagnostics", directoryHint: .isDirectory))
         let (engine, status) = Self.makeSync(sync, store: store, location: location)
-        (self.sync, syncState) = (engine, SyncState(status: status, issues: []))
+        self.sync = engine
         relay = Self.makeRelay(sync, engine, device: mac.hostID)
         speechClock = SpeechClock(localHost: mac.hostID, reachable: status.reachesMac, alwaysReachable: DebugHooks.preset.alwaysReachable, timing: mac.timing)
+        let tasks = Followers()
+        self.tasks = tasks
+        syncStart = status
         liveSessions = try LiveSessions(store: store, endedOn: mac.hostID, at: speechClock.moment)
         cueFeed = CueFeed(store: store, widget: false)
         timing = mac.timing
@@ -193,17 +185,18 @@ final class AppServices {
         self.location = location
         diagnostics = Diagnostics(directory: location.directory.appending(path: "Diagnostics", directoryHint: .isDirectory))
         let (engine, status) = Self.makeSync(sync, store: store, location: location)
-        (self.sync, syncState) = (engine, SyncState(status: status, issues: []))
+        self.sync = engine
         relay = Self.makeRelay(sync, engine, device: UIDevice.current.identifierForVendor?.uuidString)
         speechClock = SpeechClock(localHost: nil, reachable: status.reachesMac, alwaysReachable: DebugHooks.preset.alwaysReachable, timing: timing)
+        let tasks = Followers()
+        self.tasks = tasks
+        syncStart = status
         liveSessions = try LiveSessions(store: store, endedOn: nil, at: speechClock.moment)
         cueFeed = CueFeed(store: store, widget: true)
         self.timing = timing
         self.pasteboard = pasteboard
         let activitySync: (any SyncControlling)? = if case .iCloud = sync, location.touchesRealWorld { self.sync } else { nil }
-        viewer = UIDevice.current.identifierForVendor.map { [sync = self.sync] in
-            ViewerKeeper(store: store, sync: sync, device: $0.uuidString)
-        }
+        viewer = ViewerKeeper(store: store, sync: self.sync, device: UIDevice.current.identifierForVendor?.uuidString)
         if location.touchesRealWorld || DebugHooks.opensLiveActivity {
             cueActivity = CueLiveActivity.make(store: store, sync: activitySync, location: location) { [weak self] in
                 try self?.remoteActivityState()
@@ -231,36 +224,7 @@ final class AppServices {
         #if os(iOS)
         await cueActivity?.invalidate(reason: "resolveSync").value
         #endif
-        syncState.reconciled = false
-        try await sync?.resolve(resolution)
-    }
-
-    /// 同步从不通变通时立即同步一次：断网时没传上去的记录当场传出、在等的回执当场拉回，不等发送者的退避。
-    func setSyncState(_ state: SyncState) {
-        let recovered = state.status.reachesMac && speech.reachableSince == nil
-        #if os(macOS)
-        if state.status == .outdated, syncState.status != .outdated { updates.checkInBackground() }
-        #endif
-        #if os(iOS)
-        if syncState.status != state.status {
-            switch state.status {
-            case .noAccount: cueActivity?.invalidate(reason: "syncNoAccount")
-            case .needsDecision: cueActivity?.invalidate(reason: "syncNeedsDecision")
-            default: break
-            }
-        }
-        #endif
-        syncState = state
-        speechClock.setReachable(state.status.reachesMac)
-        if recovered { Task { await syncNow() } }
-    }
-
-    func setFileTransfers(_ transfers: [String: FileTransfer]) {
-        fileTransfers = transfers
-    }
-
-    func setConflicts(_ conflicts: [CardConflict]) {
-        self.conflicts = conflicts
+        try await syncing.resolve(resolution)
     }
 
     func reportIssue(_ issue: StartupIssue) {

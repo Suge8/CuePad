@@ -90,8 +90,7 @@ public enum CuePrompt {
 
   /// 工具名带前缀的那几家另说一句：下文的 task peek 这类简称让模型第一下常照简称调（Claude Code 2.1.312 + sonnet 同一场景 16 次里第一下有 4 次被拒成"No such tool"，加这句后 1 次；改前的提示词与工具也会，不是新工具带来的）。
   private static func tools(_ runtime: AgentKind) -> String {
-    let named = [("idea", "保存灵感"), ("task", "任务与会话"), ("tell", "对他说话"), ("memory", "记忆与定时"), ("setup", "你自己与这台 Mac：设置、额度、Agent、技能与规则、项目")].map { "\(CueMCPServer.toolName($0.0, on: runtime))（\($0.1)）" }
-      .joined(separator: "、")
+    let named = CueTools.catalog(.cue).map { "\(CueMCPServer.toolName($0.name, on: runtime))（\($0.gist)）" }.joined(separator: "、")
     return CueMCPServer.toolPrefix(on: runtime).isEmpty ? named : named + "；调用时工具名照这里写全，下文的 task peek、memory note 这类是「工具 动作」的简称"
   }
 

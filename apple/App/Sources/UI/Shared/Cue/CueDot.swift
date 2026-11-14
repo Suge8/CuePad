@@ -33,7 +33,7 @@ struct CueArrival: View {
         ZStack {
             if arrivals > 0 { Ripple(color: color, reach: reach).id(arrivals) }
         }
-        .onChange(of: workspace.cue.unread) { old, new in if new > old, !reduceMotion, services.cueViewers == 0 { arrivals += 1 } }
+        .onChange(of: workspace.cue.unread) { old, new in if new > old, !reduceMotion, !services.viewer.viewing.cue { arrivals += 1 } }
         .allowsHitTesting(false)
         .readerHidden(true)
     }

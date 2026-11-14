@@ -184,9 +184,9 @@ public struct Attachment: Identifiable, Equatable, Sendable {
   public var key: String { AttachmentKey.make(hash: hash, format: format) }
 }
 
-extension Attachment: Record {
+extension Attachment: Record, SyncedColumns {
   static let table = Table.attachments
-  static let columns = ["id", "hash", "byteCount", "format", "createdAt", "modifiedAt"]
+  static let fields: [Field] = [.plain("id"), .plain("hash"), .plain("byteCount"), .plain("format"), .plain("createdAt"), .plain("modifiedAt")]
   var bindings: [any SQLBindable] { [id, hash, byteCount, format, createdAt, modifiedAt] }
   init(row: Row) {
     self.init(id: row.uuid(0), hash: row.text(1), byteCount: Int(row.int(2)), format: row.text(3), createdAt: row.date(4), modifiedAt: row.date(5))

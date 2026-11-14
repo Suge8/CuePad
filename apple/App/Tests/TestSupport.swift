@@ -191,21 +191,17 @@ final class TestApp {
 
     /// 旧实例自己的工作都停下（同进程被杀）：桥、托管的会话和热键是 `TestApp` 的，留给新实例。不写离线之类的收尾记录，免得晚到的写入盖过新实例的。
     private func retire(_ services: AppServices, app: SourceLocation? = nil) {
-        let followers = services.cancelBackgroundWork(), sync = services.sync
-        #if os(macOS)
-        let executor = services.executor.beginStop(), cue = services.cue.stop()
+        let halted = services.halt()
         LibraryLedger.close(ledger, app: app) {
-            await executor()
-            await cue()
-            await sync?.stop()
-            await followers?.value
+            // 一步出错也接着停后面的：同步与后台任务留着会连累别的用例；错在全部停完后报
+            var failure: (any Error)?
+            for step in halted.steps {
+                do { try await step.run() } catch { failure = failure ?? error }
+            }
+            await halted.stopSync()
+            await halted.followers?.value
+            if let failure { throw failure }
         }
-        #else
-        LibraryLedger.close(ledger, app: app) {
-            await sync?.stop()
-            await followers?.value
-        }
-        #endif
     }
 
     func runtimeRecorder(on host: String, boot: String = TestBoot.id) async throws -> StateRecorder {
@@ -215,7 +211,7 @@ final class TestApp {
     /// （`services.start()` 或 `startSync()`）：替身只有一条状态流，起两遍就是两处在读。
     func syncs(reconciled: Bool = true) async throws {
         sync.emit(SyncState(status: .idle, issues: [], reconciled: reconciled))
-        try await eventually("对过一遍：\(reconciled)") { services.knowsSyncedFacts == reconciled }
+        try await eventually("对过一遍：\(reconciled)") { services.syncing.knowsSyncedFacts == reconciled }
     }
 
     var databaseURL: URL { isolatedLocation.databaseURL }
@@ -375,5 +371,12 @@ extension CKRecord {
         let record = CKRecord(recordType: PeerFloor.recordType, recordID: PeerFloor(zoneID: CloudSync.zoneID).id)
         record[PeerFloor.field] = version as NSNumber
         return record
+    }
+}
+
+extension AppServices {
+    /// 测试里把这几条马上传出去（非马上传的表等不到下一轮推送）。
+    func upload(_ records: UUID...) async {
+        _ = await sync?.send(recordNames: Set(records.map { $0.uuidString.lowercased() }))
     }
 }

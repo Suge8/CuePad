@@ -33,7 +33,7 @@ struct CuePage: View {
     static let inset = Spacing.page
 
     private var cue: CueWatch { workspace.cue }
-    private var catchingUp: Bool { services.isCatchingUp(on: cue.hostID) }
+    private var catchingUp: Bool { services.syncing.isCatchingUp(on: cue.hostID) }
     var body: some View {
         page
             .observing(services.store, into: $thread, onError: workspace.fail) { try CueThread.read(from: $0) }

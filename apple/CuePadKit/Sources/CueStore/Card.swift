@@ -123,11 +123,13 @@ extension UUID {
   public var shortID: String { String(uuidString.lowercased().prefix(8)) }
 }
 
-extension Card: Record {
+extension Card: Record, SyncedColumns {
   static let table = Table.cards
-  static let columns = [
-    "id", "projectID", "body", "isPinned", "variableValues", "sortKey", "deletedAt", "createdAt", "modifiedAt", "conflictOf",
-    "parentID", "todoAt", "startedAt", "completedAt", "piSessionID", "archivedAt", "formerSessionIDs", "sessionBindingRevision",
+  static let fields: [Field] = [
+    .plain("id"), .plain("projectID"), .encrypted("body"), .plain("isPinned"), .encrypted("variableValues"), .plain("sortKey"),
+    .plain("deletedAt"), .plain("createdAt"), .plain("modifiedAt"), .plain("conflictOf"), .plain("parentID"), .plain("todoAt"),
+    .plain("startedAt"), .plain("completedAt"), .plain("piSessionID"), .plain("archivedAt"), .plain("formerSessionIDs"),
+    .plain("sessionBindingRevision"),
   ]
   static var selection: String { selection(as: "cards") }
 

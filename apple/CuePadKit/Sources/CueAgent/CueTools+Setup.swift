@@ -5,7 +5,6 @@ import Foundation
 extension CueTools {
   static var setupDefinition: [String: Any] {
     [
-      "name": "setup",
       "description": """
         你自己与你运行的这台 Mac。look{part?} 只读：不带 part 是总览（大脑与它好不好、各家 Agent 能不能用与边界、订阅额度、记忆与定时、技能与规则、项目）；part=brain|agents|quota|skills|projects 看那一块的全部（agents 带每家能选的模型、各花哪个账号的额度）；
         set{agent?,model?,effort?,fast?,name?} 改你自己的大脑：agent 要在这台 Mac 上能用，换 agent 不写 model 用那家的默认；model 照这家的写法（look agents 里有），写 default 回到默认；fast 只有支持的模型能开。model、effort 下一轮换上；换 agent、name、fast 或 model 回到默认，这一轮做完后换新大脑（记忆照旧，结果里会说是哪种）；

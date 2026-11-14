@@ -41,9 +41,12 @@ public struct CueProfile: Equatable, Sendable {
   }
 }
 
-extension CueProfile: Record {
+extension CueProfile: Record, SyncedColumns {
   static let table = Table.cueProfile
-  static let columns = ["id", "name", "hostID", "runtime", "model", "effort", "enabledAt", "modifiedAt", "fast", "voice"]
+  static let fields: [Field] = [
+    .plain("id"), .encrypted("name"), .plain("hostID"), .plain("runtime"), .encrypted("model"), .encrypted("effort"),
+    .plain("enabledAt"), .plain("modifiedAt"), .encrypted("fast"), .encrypted("voice"),
+  ]
   var bindings: [any SQLBindable] {
     [Self.recordID, name, hostID, runtime.rawValue, model, effort?.rawValue, enabledAt, modifiedAt, fast ? Int64(1) : Int64(0), voice.rawValue]
   }

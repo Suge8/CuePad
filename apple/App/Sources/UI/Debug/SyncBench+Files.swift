@@ -14,7 +14,7 @@ extension SyncBench {
             let store = services.store
             Task {
                 var last: [String: FileTransfer] = [:]
-                for await transfers in Observations({ services.fileTransfers }) {
+                for await transfers in Observations({ services.syncing.fileTransfers }) {
                     for (key, transfer) in transfers where last[key] != transfer {
                         mark("transfer", ["key": key, "dir": transfer.direction == .upload ? "up" : "down", "f": transfer.fraction])
                     }
@@ -25,7 +25,7 @@ extension SyncBench {
                 }
             }
             Task {
-                for await over in Observations({ services.syncState.filesOverQuota }) { mark("files-over-quota", ["v": over]) }
+                for await over in Observations({ services.syncing.state.filesOverQuota }) { mark("files-over-quota", ["v": over]) }
             }
             Task {
                 var known: Set<UUID>?

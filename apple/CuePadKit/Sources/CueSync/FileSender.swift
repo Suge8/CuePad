@@ -47,7 +47,7 @@ actor FileSender {
     guard !stopped else { return }  // 订阅期间停下了
     let due = coordinator.retryDue.stream()
     tasks = [
-      Task { for await tables in changes where tables.contains(.attachments) { await self.fill() } },
+      Task { for await change in changes where change.tables.contains(.attachments) { await self.fill() } },
       Task { for await _ in due { await self.fill() } },
     ]
     await resume()

@@ -11,24 +11,9 @@ extension Workspace {
         pages.visit(from: previous, to: route)
     }
 
-    func showEditor(_ card: UUID) {
-        presses.clearSelection()
-        leaveHome()
-        overlay = .card(card)
-    }
+    func showEditor(_ card: UUID) { present(.card(card)) }
 
-    func openLibrary(_ file: LibraryFile) {
-        presses.clearSelection()
-        leaveHome()
-        overlay = .library(file)
-    }
-
-    /// 盖在主区上的页（编辑、技能与规则的文件）要主区露着：Cue 铺满时先让到右边。
-    private func leaveHome() {
-        guard case .wide(var state) = navigation, state.home else { return }
-        state.home = false
-        navigation = .wide(state)
-    }
+    func openLibrary(_ file: LibraryFile) { present(.library(file)) }
 
     func revealSkill(_ directory: String) {
         NSWorkspace.shared.activateFileViewerSelecting([URL(filePath: directory, directoryHint: .isDirectory)])

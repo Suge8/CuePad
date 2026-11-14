@@ -11,23 +11,12 @@ struct HandOffInput: View {
     @State private var choice: UUID?
     /// 点了"新会话"：任务绑着会话也另开一个。
     @State private var fresh = false
-    @State private var planned: Planned?
+    @State private var planned: HandOffTargets.Options?
     @State private var launchAgents: MacAgents?
     @FocusState private var focused: Bool
 
-    /// 还没有哪台 Mac 写下过自己时没有决定（`noMac`）：新用户的常态、不是出错，原因叠在输入框上方。
-    nonisolated private struct Planned: Equatable, Sendable {
-        var plan: HandOffPlan?
-        var bound: SessionListItem?
-        var fresh: HandOffPlan?
-        var opening: String?
-        var noMac = false
-    }
-
     private var sessions: [SessionListItem] {
-        let live = HandOffTargets.sessions(services.liveSessions.live, project: outbox.project, at: services.speech)
-        guard let bound = planned?.bound, !live.contains(where: { $0.state.sessionID == bound.state.sessionID }) else { return live }
-        return [bound] + live
+        HandOffTargets.sessions(services.liveSessions.live, project: outbox.project, bound: planned?.bound, at: services.speech)
     }
     private var chosen: SessionListItem? {
         guard !fresh else { return nil }
@@ -109,17 +98,7 @@ struct HandOffInput: View {
         .confirmsLaunchAgain(launching)
         .onAppear { focused = true }
         .observing(services.store, id: outbox.card, into: $planned, onError: workspace.fail) { [card = outbox.card] store in
-            guard let card else { return Planned() }
-            let plan: HandOffPlan
-            do {
-                plan = try store.handOffPlan(card, host: nil)
-            } catch CueStoreError.noMac {
-                return Planned(noMac: true)
-            }
-            let opening = try store.opening(of: plan.leaf, true)
-            guard case .session(let id, _, _) = plan.destination else { return Planned(plan: plan, fresh: plan, opening: opening) }
-            return Planned(
-                plan: plan, bound: try store.sessionItems(sessionIDs: [id])[id], fresh: try store.handOffPlan(card, host: nil, fresh: true), opening: opening)
+            try HandOffTargets.Options(card, in: store)
         }
         .observing(services.store, id: launchHost, into: $launchAgents, onError: workspace.fail) { [host = launchHost] store in
             guard let host else { return MacAgents(hostID: "", agents: [], modifiedAt: .distantPast) }
@@ -162,8 +141,7 @@ struct HandOffInput: View {
         guard canSend else { return }
         guard let session = chosen?.state else {
             // 选过的那个会话已经不在了：同点了"新会话"，另开一个
-            let plan = fresh || choice != nil ? planned?.fresh : planned?.plan
-            workspace.launchHandOff(outbox, opening: planned?.opening, plan: plan)
+            workspace.launchHandOff(outbox, opening: planned?.opening)
             return
         }
         workspace.reply(

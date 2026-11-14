@@ -77,10 +77,10 @@ private struct GeneralSections: View {
         Section {
             SyncRow()
             // 空间满只停附件，不进同步那一行的状态
-            if services.syncState.filesOverQuota {
+            if services.syncing.state.filesOverQuota {
                 SettingRow(title: "附件", icon: Image(.syncPaused), tone: .notice, status: Dotted(FileStatus.overQuota)) { EmptyView() } fix: { EmptyView() }
             }
-            if !services.conflicts.isEmpty { ConflictsRow() }
+            if !services.syncing.conflicts.isEmpty { ConflictsRow() }
         }
         if let alerts = services.alerts { NotificationSection(alerts: alerts) }
         Section {
@@ -263,7 +263,7 @@ private struct ConflictsRow: View {
     var body: some View {
         SettingRow(
             title: "同步冲突", icon: Image(.conflict), tone: .notice,
-            status: Dotted(String(localized: "\(services.conflicts.count) 条灵感或任务有两个版本"))
+            status: Dotted(String(localized: "\(services.syncing.conflicts.count) 条灵感或任务有两个版本"))
         ) {
             EmptyView()
         } fix: {
@@ -271,14 +271,14 @@ private struct ConflictsRow: View {
                 .settingFix()
                 .popover(isPresented: $showing, arrowEdge: .bottom) { versions }
         }
-        .onChange(of: services.conflicts.isEmpty) { _, empty in if empty { showing = false } }
+        .onChange(of: services.syncing.conflicts.isEmpty) { _, empty in if empty { showing = false } }
     }
 
     private var versions: some View {
         SettingPopover(title: "选一份保留", width: 420) {
             ScrollView {
                 VStack(alignment: .leading, spacing: Spacing.block) {
-                    ForEach(services.conflicts, id: \.copy.id) { conflict in
+                    ForEach(services.syncing.conflicts, id: \.copy.id) { conflict in
                         VStack(alignment: .leading, spacing: Spacing.item) {
                             Text(conflict.original.title).font(Typography.bodyStrong)
                             ForEach(conflict.versions) { version($0, of: conflict) }

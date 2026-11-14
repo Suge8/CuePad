@@ -21,8 +21,8 @@ extension AgentLibraryTests {
         defer { await keeping.stop() }
         let pulling = Task {
             while !Task.isCancelled {
-                await macApp.services.syncNow()
-                await phone.services.syncNow()
+                await macApp.services.syncing.syncNow()
+                await phone.services.syncing.syncNow()
                 try? await Task.sleep(for: .milliseconds(20))
             }
         }

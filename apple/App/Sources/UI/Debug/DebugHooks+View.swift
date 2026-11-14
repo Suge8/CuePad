@@ -83,7 +83,7 @@ extension View {
     /// `-CuePadHelpOpen YES`：问号的说明一出现就点开，同点一下问号（推入转场里栏在动，等它停下再量钮的框）。
     func debugOpensHelp(_ open: @escaping @MainActor () -> Void) -> some View {
         #if DEBUG
-        onAppear { if DebugHooks.preset.helpOpen { DebugScene.later(.seconds(1.2), open) } }
+        onAppear { if DebugScene.args.layoutOpts.helpOpen { DebugScene.later(.seconds(1.2), open) } }
         #else
         self
         #endif
@@ -153,26 +153,13 @@ extension View {
         #if DEBUG
         overlay { DebugScene.entry?.overlay?(workspace) }
         .task {
-            await DebugScene.prepare(workspace)
-            await DebugScene.seedRailIfAsked(workspace.services)
-            await DebugScene.projectFormIfAsked(workspace)
-            await DebugScene.signalReady(workspace.services)
-            // 接力与关窗不挂在窗口内容上：关窗时内容摘下（`MainShellWindow`），内容上的任务跟着停
-            Task { await DebugScene.wakeIfAsked(workspace) }
-            Task { await DebugScene.noticeIfAsked(workspace) }
-            Task { await DebugScene.composerNoticeIfAsked(workspace.services) }
-            Task { await DebugScene.replyBlinkIfAsked(workspace.services.store) }
-            Task {
-                let from = workspace.mainRoute
-                await DebugScene.saysIfAsked(workspace.services, visit: { workspace.show(.cue) }, back: { workspace.show(from) })
-            }
-            Task { await DebugScene.awayIfAsked(workspace.services.store) }
-            Task { await DebugScene.relayIfAsked(workspace) }
-            Task { await DebugScene.closeIfAsked(workspace) }
-            Task { await DebugScene.openMenuIfAsked() }
-            Task { await DebugScene.cueFlowIfAsked(workspace) }
-            Task { await DebugScene.boardTourIfAsked(workspace.services.store) }
-            await DebugScene.cycleIfAsked(workspace.services)
+            guard await DebugScene.signalReady(workspace.services, {
+                await DebugScene.prepare(workspace)
+                await DebugScene.seedRailIfAsked(workspace.services)
+                await DebugScene.projectFormIfAsked(workspace)
+            }) else { return }
+            // 驱动不挂在窗口内容上：接力、关窗要跨过关窗，关窗时内容摘下（`MainShellWindow`），内容上的任务跟着停
+            for drive in DebugScene.drivers(workspace) { Task { await drive() } }
         }
         .background { if DebugScene.injectsGeometryLoop { GeometryLoopProbe() } }
         #else
@@ -189,27 +176,13 @@ extension View {
             if let sheet = DebugScene.entry?.overlay?(workspace) { sheet.withPalette() }
         }
             .task {
-                await DebugScene.prepare(workspace)
-                await DebugScene.seedRailIfAsked(workspace.services)
-                await DebugScene.signalReady(workspace.services)
-                async let notice: Void = DebugScene.noticeIfAsked(workspace)
-                async let notices: Void = DebugScene.composerNoticeIfAsked(workspace.services)
-                async let wakes: Void = DebugScene.wakeIfAsked(workspace)
-                async let blinks: Void = DebugScene.replyBlinkIfAsked(workspace.services.store)
-                let from = (workspace.mainRoute, workspace.path)
-                async let says: Void = DebugScene.saysIfAsked(
-                    workspace.services, visit: { workspace.select(.cue) }, back: {
-                        workspace.select(from.0)
-                        workspace.path = from.1
-                    })
-                async let relays: Void = DebugScene.relayIfAsked(workspace)
-                async let flow: Void = DebugScene.cueFlowIfAsked(workspace)
-                async let away: Void = DebugScene.awayIfAsked(
-                    workspace.services.store, leave: { workspace.show(.progress) }, back: { workspace.show(.cue) })
-                async let cueNow: Void = DebugScene.cueNowTourIfAsked(workspace)
-                async let board: Void = DebugScene.boardTourIfAsked(workspace.services.store)
-                await DebugScene.cycleIfAsked(workspace.services)
-                _ = await (notice, notices, wakes, blinks, says, relays, flow, away, cueNow, board)
+                guard await DebugScene.signalReady(workspace.services, {
+                    await DebugScene.prepare(workspace)
+                    await DebugScene.seedRailIfAsked(workspace.services)
+                }) else { return }
+                await withTaskGroup { group in
+                    for drive in DebugScene.drivers(workspace) { group.addTask { await drive() } }
+                }
             }
         #else
         self

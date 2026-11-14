@@ -64,7 +64,7 @@ private struct TranscriptRequest: ViewModifier {
 
     func body(content: Content) -> some View {
         content.onChange(of: digest, initial: true) {
-            guard !asked, let digest, let session = digest.session, services.reachesHost,
+            guard !asked, let digest, let session = digest.session, services.syncing.reachesHost,
                   Chat.needsTranscript(session, messages: digest.messages) else { return }
             asked = true
             workspace.attempt { _ = try await services.requestTranscript(of: session) }

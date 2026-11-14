@@ -25,12 +25,19 @@ extension DebugScene {
     /// `-CuePadSync newmac`：换新 Mac 的第一遍同步，先报同步中、还没对过，`-CuePadReconcileSeconds`（默认 8）秒后带回 Cue 在「Mac Studio」上运行、
     /// 那台醒着，才报对过（`NewMacSync`）；秒数给得比实例活得久（如 3600）就一直在等。
     static var syncSource: AppServices.SyncSource {
+        #if os(iOS)
+        // 手机刷新额度先等请求确认上传，才等 Mac 写回（`AccountQuotas`）；隔离库没有同步会当场报"尚未确认上传"，轮不到演示 Mac 答
+        if args.quotaOpts.fails && args.sync == nil { return .custom(StandInSync()) }
+        #endif
         let issues = [
             SyncIssue(
                 kind: .upload, recordType: Table.cards.rawValue, recordName: "A1B2", problem: .refused,
                 detail: String(localized: "未能完成操作。（CKErrorDomain错误15。）（<CKError 0x6000: \"Server Rejected Request\" (15/2000); server message = \"Internal server error\">）", table: "Demo")),
             SyncIssue(kind: .request, problem: .local, detail: String(localized: "资料库读写出错：database is locked（SQLite: database is locked [UPDATE syncState SET value = ?]）", table: "Demo")),
         ]
+        if args.sync == nil, args.fileArrives > 0 || args.inspirationOpts.arrival > 0 {
+            return .custom(StandInSync())
+        }
         return switch args.sync {
         case "stalled": .custom(StandInSync(stalls: true))
         case "conflicts": .custom(StandInSync())
@@ -53,6 +60,9 @@ extension DebugScene {
     }
 
     protocol StandInSyncing: SyncControlling {}
+
+    /// 演示画面里在路上的文件（`-CuePadFileArrives`、灵感图片到达）：替身同步从这里报出。
+    nonisolated static let transfers = AsyncStream<[String: FileTransfer]>.makeStream(bufferingPolicy: .bufferingNewest(1))
 
     nonisolated final class OfflineSync: StandInSyncing {
         let seconds: Double
@@ -215,8 +225,8 @@ extension DebugScene {
         }
     }
 
-    /// 库里没有创建冲突副本的公开入口（由同步产生）：直接在库文件里把副本指回原卡。演示与测试共用这一处。
-    static func markConflict(copy: UUID, of original: UUID, database: URL) -> Bool {
+    /// 库里没有创建冲突副本的公开入口（由同步产生）：直接在库文件里把副本指回原卡。
+    private static func markConflict(copy: UUID, of original: UUID, database: URL) -> Bool {
         var handle: OpaquePointer?
         defer { sqlite3_close(handle) }
         guard sqlite3_open(database.path, &handle) == SQLITE_OK else { return false }
@@ -233,7 +243,7 @@ nonisolated extension DebugScene.StandInSyncing {
     func push() async {}
     func activated() async {}
     func resolve(_ resolution: SyncResolution) async throws {}
-    var fileTransfers: AsyncStream<[String: FileTransfer]> { AsyncStream { $0.yield([:]) } }
+    var fileTransfers: AsyncStream<[String: FileTransfer]> { DebugScene.transfers.stream }
     func fetchFile(_ key: String) async throws -> URL { throw FileFetchFailure.notSyncing }
 }
 #endif

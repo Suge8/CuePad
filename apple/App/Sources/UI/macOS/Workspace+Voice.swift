@@ -31,7 +31,7 @@ extension Workspace {
         let request = try await services.store.stopVoiceExecution(target, requests: ids)
         if !voice.stopRequests.contains(where: { $0.id == request.id }) { voice.stopRequests.append(request) }
         voice.watchRequests()
-        return services.uploaded(request)
+        return request
     }
 
     /// 恢复携带原对象身份；界面投影之后状态可能变化，仍由原重试入口核验，不改选别的请求。

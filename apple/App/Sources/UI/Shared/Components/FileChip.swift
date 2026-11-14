@@ -21,7 +21,7 @@ struct FileChip: View {
     private var thumbSide: CGFloat { height - 16 }
 
     var body: some View {
-        let status = FileStatus.line(name: name, file: file, transfer: services.fileTransfers[key])
+        let status = FileStatus.line(name: name, file: file, transfer: services.syncing.fileTransfers[key])
         Button(action: tap) {
             HStack(spacing: Spacing.item) {
                 picture

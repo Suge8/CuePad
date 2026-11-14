@@ -41,7 +41,7 @@ extension DebugScene {
            let table = try await workspace.services.store.projects().first(where: { $0.name == String(localized: "圆桌", table: "Demo") })?.id {
             let launched = try await workspace.services.launchSession(
                 in: table, prompt: String(localized: "看看 scheduler 的重连问题", table: "Demo"), title: String(localized: "圆桌", table: "Demo"), on: "demo-mac", card: nil, agent: .pi)
-            workspace.resume(sheet.launchKey, with: launched, opened: Workspace.entering(sheet))
+            workspace.resume(.form, with: launched, opened: Workspace.entering(sheet))
         }
         workspace.newSession = sheet
     }

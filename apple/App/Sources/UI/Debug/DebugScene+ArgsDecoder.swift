@@ -21,7 +21,7 @@ extension DebugArgs {
         do { args = try DebugArgs(from: ArgDecoder(values: values, prefix: "", asked: asked)) } catch { fatalError("启动参数解不出来：\(error)") }
         // 拼错的参数不能被静默忽略：拍出来是错画面却没人发现
         let unknown = spelled.filter { !asked.names.contains($0.key) }.map { "-" + $0.value }.sorted()
-        if !unknown.isEmpty { fatalError("不认识的启动参数：\(unknown.joined(separator: "、"))（登记表在 DebugScene+Args*.swift）") }
+        if !unknown.isEmpty { fatalError("不认识的启动参数：\(unknown.joined(separator: "、"))（拼错了，或只在另一端认；登记表在 DebugScene+Args*.swift）") }
         return args
     }()
 

@@ -70,17 +70,37 @@ final class Workspace {
     let pages = MacPages()
     let presses = CardPresses()
     let sendState: SendState
+    #endif
+    /// 宽屏盖在主区上的一页（卡片编辑、技能与规则的文件）：主区那一页留着，收起回到它（`Workspace.present`）。窄屏是推入的页。
     var overlay: Overlay? {
-        didSet { if case .card(let id)? = overlay { presses.present(id) } }
+        didSet {
+            #if os(macOS)
+            if case .card(let id)? = overlay { presses.present(id) }
+            #endif
+        }
     }
     enum Overlay: Hashable {
         case card(UUID)
         case library(LibraryFile)
+
+        init?(_ route: Route) {
+            switch route {
+            case .card(let id): self = .card(id)
+            case .libraryFile(let file): self = .library(file)
+            default: return nil
+            }
+        }
+
+        var route: Route {
+            switch self {
+            case .card(let id): .card(id)
+            case .library(let file): .libraryFile(file)
+            }
+        }
     }
     var openCard: UUID? { if case .card(let id)? = overlay { id } else { nil } }
     var openLibraryFile: LibraryFile? { if case .library(let file)? = overlay { file } else { nil } }
     func close(_ page: Overlay) { if overlay == page { overlay = nil } }
-    #endif
     var fileDrafts: [FileDraftKey: FileDraft] = [:]
     var openTask: TaskBubble.Request? {
         didSet { if openTask == nil, let oldValue { closedTask = (oldValue.task, .now) } }
@@ -94,15 +114,15 @@ final class Workspace {
     #endif
     var voiceDetails: BubbleSource?
     var addsTask = false
+    var confirmsEmptyTrash = false
     /// 开着的新会话输入框（`NewSessionInput`）。
     var newSession: SessionStart? {
-        didSet { if let oldValue, oldValue.id != newSession?.id { settleLaunch(oldValue.launchKey) } }
+        didSet { if let oldValue, oldValue.id != newSession?.id { settleLaunch(.form) } }
     }
     #if os(macOS)
     var searching = false
     var showsSetup = false
     var voice: VoiceCall? { services.voice.call }
-    var confirmsEmptyTrash = false
     var hoveredProject: UUID?
     #else
     var menuOpen = false
@@ -112,7 +132,6 @@ final class Workspace {
             if let oldValue { settleLaunch(oldValue.launchKey) }
             guard let outbox else { return }
             handOffDraft = ComposerDraft(attachments: [outbox])
-            resumeHandOff(outbox)
         }
     }
     /// 放在这里而不在输入框里：交给已有会话的发出即收起，写库失败时还能放回、重新浮起。
@@ -203,21 +222,24 @@ final class Workspace {
     func follow() async {
         async let catalog: Void = followCatalog()
         async let links: Void = followAgentLinks()
+        async let launches: Void = followUnresolvedLaunches()
         async let cue: Void = followCue()
         async let opens: Void = openLinks()
         async let library: Void = followLibrary()
         async let quota: Void = followFilesQuota()
+        async let cards: Void = followShownCards()
+        async let files: Void = leaveGoneFiles()
         #if os(macOS)
         async let agents: Void = followLocalAgents()
         await followSessionPlacement()
         await agents
         #endif
-        _ = await (catalog, links, cue, opens, library, quota)
+        _ = await (catalog, links, launches, cue, opens, library, quota, cards, files)
     }
 
     private func followFilesQuota() async {
         var was = false
-        for await over in Observations({ self.services.syncState.filesOverQuota }) {
+        for await over in Observations({ self.services.syncing.state.filesOverQuota }) {
             if over, !was { say(Dotted(FileStatus.overQuota), tone: .paused) }
             was = over
         }
@@ -299,16 +321,58 @@ final class Workspace {
     private func reconcileNavigation(projects ids: Set<UUID>) {
         let settings = services.settings
         if let saved = settings.currentProject, !ids.contains(saved) { settings.currentProject = nil }
-        switch navigation {
-        case .narrow(var state):
-            if let index = state.path.firstIndex(where: { if case .project(let id) = $0 { !ids.contains(id) } else { false } }) {
-                state.path = Array(state.path[..<index])
-                navigation = .narrow(state)
-            }
-        case .wide: break
-        }
+        for case .project(let id) in shownRoutes where !ids.contains(id) { leave(.project(id)) }
         #if os(macOS)
         pages.forget(projectsNotIn: ids)
         #endif
+    }
+
+    /// 看着的东西没了就离开（`leave`），由这里发现，页面不各自盯：项目看目录，卡（编辑页与开着的任务气泡）看它本身，文件看技能与规则的快照。
+    private var shownRoutes: [Route] {
+        let routes: [Route] = switch navigation {
+        case .narrow(let state): state.path
+        case .wide: [mainRoute]
+        }
+        return routes + [overlay?.route].compactMap(\.self)
+    }
+
+    private var shownCards: Set<UUID> {
+        Set(shownRoutes.compactMap { if case .card(let id) = $0 { id } else { nil } } + [openTask?.task].compactMap(\.self))
+    }
+
+    /// 进了回收站、并进了别的卡（行被删）都算没了；看着的卡一换就换一份订阅。
+    private func followShownCards() async {
+        var watching: Task<Void, Never>?
+        var watched: Set<UUID> = []
+        defer { watching?.cancel() }
+        // 气泡里翻子任务也算一次变化：同一组卡不重订
+        for await ids in Observations({ self.shownCards }) where ids != watched {
+            watched = ids
+            watching?.cancel()
+            watching = ids.isEmpty ? nil : Task { await self.leaveWhenGone(ids) }
+        }
+    }
+
+    private func leaveWhenGone(_ ids: Set<UUID>) async {
+        do {
+            for try await live in services.store.observe({ store in try ids.filter { try store.card($0).map { $0.deletedAt == nil } ?? false } }) {
+                for id in ids.subtracting(live) { leave(.card(id)) }
+            }
+        } catch is CancellationError {
+        } catch {
+            fail(error)
+        }
+    }
+
+    private func leaveGoneFiles() async {
+        for await gone in Observations({ self.goneFiles }) {
+            for file in gone { leave(.libraryFile(file)) }
+        }
+    }
+
+    /// 快照还没读到（nil）时不算没了。
+    private var goneFiles: [LibraryFile] {
+        guard let library else { return [] }
+        return shownRoutes.compactMap { if case .libraryFile(let file) = $0, library.file(file) == nil { file } else { nil } }
     }
 }

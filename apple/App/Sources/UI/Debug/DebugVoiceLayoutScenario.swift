@@ -65,7 +65,7 @@ final class DebugVoiceLayoutScenario {
             ChatMessage(sessionID: session, entryID: "owned", seq: 1, role: .user, text: title, at: .now, deliveryID: delivery.id)
         ], recap: Recap(lastPrompt: title)))
         let executor = DeliveryExecutor(store: store, hostID: host, onIssue: { error in
-            Task { @MainActor in DebugScene.abandon("语音停止验收", error) }
+            DebugScene.abandon("语音停止验收", error)
         }) { item, _ in
             if item.mode == .known(.stopTurn) {
                 guard item.content == delivery.id.uuidString, item.target == target.target else {

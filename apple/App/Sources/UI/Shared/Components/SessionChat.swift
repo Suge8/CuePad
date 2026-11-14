@@ -25,7 +25,7 @@ struct SessionChat: View {
                 session: session, messages: digest.messages, previews: digest.previews, deliveries: digest.deliveries, at: services.speech),
             readingWidth: readingWidth, inset: inset, follow: $follow, marks: derived.marks, ids: items.map(\.id),
             paging: Conversation.paging,
-            holding: services.isCatchingUp(on: session.hostID)
+            holding: services.syncing.isCatchingUp(on: session.hostID)
         ) { window in
             conversation(window: window)
         }

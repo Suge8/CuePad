@@ -128,7 +128,7 @@ extension CueSettings {
     #if os(iOS)
     /// 只写标题：面板里这一块定高放不下说明，设置里说明与出路就在紧下面的同步那一组。同步到不了 Mac 时写同步那一行的标题：手机只经 iCloud 和 Mac 连上，那时去 Mac 上打开也连不上。
     @MainActor static func noHost(_ services: AppServices) -> String {
-        services.macAlert?.title ?? String(localized: "先在 Mac 上打开 CuePad")
+        services.syncing.macAlert?.title ?? String(localized: "先在 Mac 上打开 CuePad")
     }
     #endif
     static let macDownload = URL(string: "https://github.com/Suge8/CuePad/releases/latest")!

@@ -59,7 +59,7 @@ struct SpeakTests {
 
     // MARK: 对 Cue 说
 
-    @Test func 对Cue说_按发送输入框立刻空_只多一条你的话并立即上传_交给它之后是已送达() async throws {
+    @Test func 对Cue说_按发送输入框立刻空_只多一条你的话_交给它之后是已送达() async throws {
         try await enableCue()
         let workspace = Workspace(services: app.services)
         workspace.cue.draft = ComposerDraft(text: "看看发布")
@@ -71,7 +71,6 @@ struct SpeakTests {
         let said = try await youSaid()
         #expect(said.map(\.text) == ["看看发布"])
         let message = try #require(said.first)
-        try await awaitNext("这句话上传", from: app.sync.uploads.stream) { $0 == message.id.uuidString.lowercased() }
         #expect(Said.cue(message, host: "mac-cue").trip(at: .always(at: .now)) == .sending)
         #expect(try await presence() == .sending(.sending))  // Cue 页头与气泡同一个"在路上"
 

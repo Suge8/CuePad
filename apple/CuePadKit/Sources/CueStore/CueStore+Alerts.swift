@@ -45,7 +45,7 @@ extension CueStore {
     return try watchedOnMac { $0.sessionIDs.contains(state.sessionID) } ? .wake : .alert(alert)
   }
 
-  /// 这次停下刚留给你（`CueLeft`，会话状态没变，状态转换的标志轮不到它）：会话在这台 Mac 上（会话记录只有它写）、这次停下还在，就置手机推送标志。返回记录 id（立即上传用）。
+  /// 这次停下刚留给你（`CueLeft`，会话状态没变，状态转换的标志轮不到它）：会话在这台 Mac 上（会话记录只有它写）、这次停下还在，就置手机推送标志，返回置上的那条会话记录的 id。
   @discardableResult
   public func flagLeftToYou(_ left: CueLeft, host: String) throws -> UUID? {
     try write {

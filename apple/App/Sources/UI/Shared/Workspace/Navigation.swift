@@ -144,8 +144,8 @@ extension Workspace {
         }
     }
 
-    /// 宽→窄：浏览入口在侧栏，主区详情先入栈，并排的第二个会话在最上。
-    /// 窄→宽：栈顶或浏览落点进主区（会话独占主区，其下的页回到浏览落点）。
+    /// 宽→窄：浏览入口在侧栏，主区详情先入栈，并排的第二个会话、盖在主区上的页依次在上面。
+    /// 窄→宽：栈顶的编辑页、文件页盖到主区上（`overlay`），其下的栈顶或浏览落点进主区（会话独占主区，其下的页回到浏览落点）。
     /// 只转换此刻的导航，不缓存旧布局。
     func setLayout(_ next: Layout) {
         guard next != layout else { return }
@@ -159,11 +159,16 @@ extension Workspace {
             default: narrow = NarrowNavigation(path: [mainRoute])
             }
             if !state.home, let session = state.beside { narrow.path.append(.session(session)) }
+            if let overlay { narrow.path.append(overlay.route) }
+            overlay = nil
             navigation = .narrow(narrow)
-        case .narrow(let state):
-            var wide = WideNavigation(home: state.path.isEmpty && !state.sidebarOpen)
+        case .narrow(var state):
+            let covering = state.path.last.flatMap(Overlay.init)
+            if covering != nil { state.path.removeLast() }
+            var wide = WideNavigation(home: state.path.isEmpty && !state.sidebarOpen && covering == nil)
             if let page = state.path.last { wide.main = WideNavigation.Main(page) }
             navigation = .wide(wide)
+            overlay = covering
         }
     }
 }

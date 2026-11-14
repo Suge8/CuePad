@@ -5,6 +5,7 @@ extension Workspace {
         switch route {
         case .cue: return showCue()
         case .session(let session): return openWideSession(session, in: .main)
+        case .card, .libraryFile: return present(Overlay(route)!)
         default:
             remember(route)
             state.main = WideNavigation.Main(route)
@@ -14,6 +15,18 @@ extension Workspace {
         railDrawer = false
         navigation = .wide(state)
         willSelect(mainRoute, from: previous)
+    }
+
+    /// 盖一页在主区上（`overlay`）：主区要露着，Cue 铺满时先让到右边。
+    func present(_ page: Overlay) {
+        #if os(macOS)
+        presses.clearSelection()
+        #endif
+        if case .wide(var state) = navigation, state.home {
+            state.home = false
+            navigation = .wide(state)
+        }
+        overlay = page
     }
 
     /// 回到 Cue 铺满（会话条最上那一行）：主区的页留着，再点它那一行就回去。

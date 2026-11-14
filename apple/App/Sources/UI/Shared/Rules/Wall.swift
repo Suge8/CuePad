@@ -78,6 +78,8 @@ nonisolated struct OlderGroup: Equatable, Sendable {
     var period: Period
     var cards: [UUID]
 
+    /// 两端项目页"更早"那一段标题的滚动 id：调试的 older 画面滚到这里（`DebugScene.scrollIfNeeded`）。
+    static let anchor = "older"
     static let weeklyMonths = 3
     static let fewLimit = 4
 

@@ -1,7 +1,7 @@
 #if os(macOS) && DEBUG
 import AppKit
 
-/// 占前台的唯一入口：本机构建一律在后台（`DebugHooks.present`），只有启动参数给了 `-CuePadForeground YES` 且用户不在才借得到
+/// 占前台的唯一入口：本机构建一律在后台（`DebugHooks.keepsBehind`），只有启动参数给了 `-CuePadForeground YES` 且用户不在才借得到
 /// （启动时查，`requireUserAway`：不够空闲就报读数、退出码 2，调用方的命令随之失败；别的借法与重试都绕不开它）。
 /// 借时记下当时的前台应用，动过指针就记下原位，`giveBack` 时都还回去；量完、被结束都经应用终止流程还（`DebugHooks.willTerminate`），被 KILL 时系统把前台交给下一个应用，指针不还。
 /// 系统的激活是协商式的：别的应用在前台时 `NSApp.activate()` 会被忽略，窗口照旧在后面、点一下只是激活。所以借着而没在前台时

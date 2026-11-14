@@ -16,9 +16,12 @@ public struct ActivityDestination: Equatable, Sendable {
   public static func recordID(device: String) -> UUID { DeterministicID.uuid("activity-destination/\(device)") }
 }
 
-extension ActivityDestination: Record {
+extension ActivityDestination: Record, SyncedColumns {
   static let table = Table.activityDestinations
-  static let columns = ["id", "device", "activityID", "token", "environment", "startedAt", "modifiedAt"]
+  static let fields: [Field] = [
+    .plain("id"), .plain("device"), .plain("activityID"), .encrypted("token"), .plain("environment"), .plain("startedAt"),
+    .plain("modifiedAt"),
+  ]
   var bindings: [any SQLBindable] { [Self.recordID(device: device), device, activityID, token, environment, startedAt, modifiedAt] }
   init(row: Row) {
     self.init(device: row.text(1), activityID: row.text(2), token: row.text(3), environment: row.text(4), startedAt: row.date(5), modifiedAt: row.date(6))

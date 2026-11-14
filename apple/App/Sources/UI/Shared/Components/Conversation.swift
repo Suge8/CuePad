@@ -254,7 +254,7 @@ struct SessionSubtitle: View {
                 .accessibilityElement(children: .combine)
             }
         }
-        .pending(services.isCatchingUp(on: session.hostID), shown: $syncing)
+        .pending(services.syncing.isCatchingUp(on: session.hostID), shown: $syncing)
     }
 
     @ViewBuilder private func facts(shown: SessionShown, speaks: Bool, mark: String?, compact: Bool) -> some View {

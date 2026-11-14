@@ -17,10 +17,9 @@ extension AppServices {
     func declineCueQuestion(_ message: UUID) async throws { try await endCueQuestion(message, .withdrawn) }
 
     private func endCueQuestion(_ message: UUID, _ end: CueQuestionEnd) async throws {
-        let noted = try await store.endCueQuestion(message, end)
+        try await store.endCueQuestion(message, end)
         #if os(iOS)
         await resendSnapshots()
         #endif
-        await sync?.upload([message] + [noted].compactMap { $0 })
     }
 }

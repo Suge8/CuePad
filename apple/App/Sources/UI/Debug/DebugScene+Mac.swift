@@ -14,7 +14,6 @@ extension DebugScene {
         if sampleCue > 0 { Task { await askSample(after: .seconds(sampleCue), services: workspace.services) } }
         Task { await SyncBench.run(workspace) }
         Task { await voiceCallIfAsked(workspace) }
-        Task { await cueNowTourIfAsked(workspace) }
         presetColumns(workspace.services.settings)
         if let prepare = entry?.prepare { await running("摆画面") { try await prepare(workspace, opened) } }
         if let beside = args.layoutOpts.beside {
@@ -22,9 +21,8 @@ extension DebugScene {
         }
         if args.demoMac { Task { await runDemoMac(workspace.services) } }
         presetDrawers(workspace)
-        crossWithDrawerIfAsked(workspace)
-        if let pace = args.layoutOpts.sidebarCycle { Task { await cycle(#selector(AppDelegate.toggleCueSidebar(_:)), fast: pace == "fast") } }
-        if let pace = args.layoutOpts.rightCycle { Task { await cycle(#selector(AppDelegate.toggleCueColumn(_:)), fast: pace == "fast") } }
+        if let pace = args.layoutOpts.sidebarCycle { Task { await cycleColumn(fast: pace == "fast") { send(#selector(AppDelegate.toggleCueSidebar(_:))) } } }
+        if let pace = args.layoutOpts.rightCycle { Task { await cycleColumn(fast: pace == "fast") { send(#selector(AppDelegate.toggleCueColumn(_:))) } } }
         await reverseWideIfAsked(workspace)
         await presetSpeech(workspace)
         await voiceLayoutIfAsked(workspace)
@@ -42,16 +40,8 @@ extension DebugScene {
         await seedCue(services)
     }
 
-    private static func cycle(_ action: Selector, fast: Bool) async {
-        // 两次之间停多久是录屏的节奏，不是在等别的事
-        let gaps: [Double] = fast ? [0.1, 1.5, 0.06, 0.06, 1.5] : [1.5]
-        await Task.wait(for: .seconds(1.5))
-        var step = 0
-        while !Task.isCancelled {
-            NSApp.sendAction(action, to: nil, from: nil)
-            await Task.wait(for: .seconds(gaps[step % gaps.count]))
-            step += 1
-        }
+    private static func send(_ action: Selector) {
+        NSApp.sendAction(action, to: nil, from: nil)
     }
 
     /// 隔离库里 Cue 不值班，替 `CueService.followNotifications` 交给同一个出口。

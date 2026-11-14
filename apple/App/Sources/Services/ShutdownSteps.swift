@@ -20,7 +20,7 @@ nonisolated enum ShutdownSteps {
 
     /// 退出不能等待忽略取消的组件，因此到总预算后取消任务但不 join。
     @concurrent
-    static func run(_ steps: [(name: String, run: @Sendable () async throws -> Void)], within limit: Duration) async -> Failure? {
+    static func run(_ steps: [AppServices.HaltStep], within limit: Duration) async -> Failure? {
         guard !steps.isEmpty else { return nil }
         let (events, event) = AsyncStream<Event>.makeStream()
         let jobs: [Task<Void, Never>] = steps.map { step in

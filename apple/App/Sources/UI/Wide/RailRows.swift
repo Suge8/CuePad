@@ -49,33 +49,15 @@ struct RailRow: View {
     }
 }
 
-#if os(iOS)
-struct RailIcon: View {
-    let icon: Icon
-    let help: LocalizedStringResource
-    let action: () -> Void
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        Button(action: action) {
-            Image(icon).font(Glyph.control).foregroundStyle(palette.ink2)
-                .frame(width: Chrome.control, height: Chrome.control)
-                .contentShape(.rect)
-        }
-        .buttonStyle(RowStyle(cell: true))
-        .help(Text(help))
-        .accessibilityLabel(Text(help))
-    }
-}
-#endif
-
-#if os(macOS)
 /// 放在会话条里的都是会话条的一员，不比行首图标重。
 struct RailTool: View {
     let icon: Icon
     let help: LocalizedStringResource
     let action: () -> Void
     @Environment(\.palette) private var palette
+
+    /// 钮的圆比行首那一列宽：一排钮往左让出多出来的一半，图标正在那一列的中线上。
+    static var lead: CGFloat { RowMetrics.bleed - (ControlSize.compact.height - Chrome.icon) / 2 }
 
     var body: some View {
         Button(action: action) {
@@ -88,7 +70,6 @@ struct RailTool: View {
         .accessibilityLabel(Text(help))
     }
 }
-#endif
 
 /// 会话条最上的两格：Cue（选中时它铺满会话条之外，`Workspace.goHome`，同手机以 Cue 为根）与进展。两个最常回的去处并排各占一格，不是两行字，
 /// 格里只有一个居中的图形。Cue 那格是它的大头像（不垫圆底：格本身就是它的底；名字在它铺满时的栏头与读屏里），带新消息的点（同收着时右上那颗钮）；

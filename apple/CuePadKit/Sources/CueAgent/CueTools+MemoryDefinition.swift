@@ -4,7 +4,6 @@ import Foundation
 extension CueTools {
   static var memoryDefinition: [String: Any] {
     [
-        "name": "memory",
         "description": """
           你的长期记忆，一行一条（≤\(CueMemoryLine.maxBytes) 字节），UUID 是身份。text 只写事情本身，不写日期时刻与"他说""他问"这类前缀（日期与是不是他的原话另存，记忆里看得到）。
           note{text,pin?,his?,replaces?}：记一条；pin 标为重点（不 pin 的旧行会被并成摘要），his 是照他的原话记的；replaces 写被它取代的几条的 UUID，同时忘掉它们（不给 pin 时有一条是重点就是重点；不能替换定时）。重点每个班次都在系统提示里、合计限 \(CueMemoryLine.pinnedHard / 1024)KB：改规矩用 replaces 换掉旧的，不追加；超了合并或取消钉不再要的；

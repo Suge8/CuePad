@@ -37,22 +37,23 @@ public struct CueTally: Equatable, Sendable {
 
   /// 全部未完成工作；拍板与待回复是否占着它只从当前 waiting/replies 推出。
   public var works: [CueWork]
-  public var advancing: [CueWork] {
-    let held = held
-    let yours = Set(waiting.compactMap { if case .session(let state, _) = $0 { state.sessionID } else { nil } } + replies.map(\.session.sessionID))
-    return works.filter {
-      switch $0 {
-      case .task(let item): !held.contains(item.id)
-      case .session(let state): !yours.contains(state.sessionID)
-      }
+  public var advancing: [CueWork] { works.filter { held(of: $0) == 0 } }
+
+  /// 占着这件的等你有几件（会话在问你的拍板、待回复）。
+  public func held(of work: CueWork) -> Int {
+    waiting.count { if case .session(let state, let task) = $0 { Self.holds(work, task: task, session: state.sessionID) } else { false } }
+      + replies.count { Self.holds(work, task: $0.task, session: $0.session.sessionID) }
+  }
+
+  /// 一件等你（落在 `task` 上、由会话 `session` 发出）占着哪件事，唯一的规则：落在任务上的占那件顶层任务，会话本身是一件事的占那个会话。
+  public static func holds(_ work: CueWork, task: UUID?, session: String) -> Bool {
+    switch work {
+    case .task(let item): item.id == task
+    case .session(let state): state.sessionID == session
     }
   }
   public var waiting: [Wait]
   public var replies: [Reply]
-  public var agents: Int { CueAgents.count(in: works) }
-
-  public var subagents: Int { CueAgents.sessions(in: advancing).reduce(0) { $0 + $1.runtimeSubagents.count(where: \.isRunning) } }
-
   public var held: Set<UUID> {
     Set(waiting.compactMap { if case .session(_, let task) = $0 { task } else { nil } } + replies.compactMap(\.task))
   }

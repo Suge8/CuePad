@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// 那句下一步按全角标点断成几截排（`PhraseLines`，标点黏在前一截末尾）：居中的中文按字折行，行尾常剩一两个孤字。
-/// "这里还没有"类的空态（`waitsForSync`）在本机正在和 iCloud 对时（`AppServices.isCatchingUp`）不先说空：对得快就等对完再出，久过 `Pending.delay` 换成"正在从 iCloud 同步"——新装的设备上东西一页页地到，说"还没有"是错的。
+/// "这里还没有"类的空态（`waitsForSync`）在本机正在和 iCloud 对时（`SyncDriver.isCatchingUp`）不先说空：对得快就等对完再出，久过 `Pending.delay` 换成"正在从 iCloud 同步"——新装的设备上东西一页页地到，说"还没有"是错的。
 struct EmptyState<Action: View>: View {
     let mascot: Mascot
     let title: LocalizedStringResource
@@ -16,7 +16,7 @@ struct EmptyState<Action: View>: View {
     @State private var shown = false
     @State private var syncing = false
 
-    private var catchingUp: Bool { waitsForSync && services?.isCatchingUp == true }
+    private var catchingUp: Bool { waitsForSync && services?.syncing.isCatchingUp == true }
 
     var body: some View {
         // 等同步那一句换成这里的空态：整块换身份，先淡掉再淡入（`handOff`），两块叠在同一张纸上、不同时交叉淡

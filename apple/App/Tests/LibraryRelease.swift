@@ -45,7 +45,7 @@ nonisolated final class LibraryLedger: Sendable {
     private struct State {
         var stores: [Entry] = []
         var apps: [SourceLocation] = []
-        var closings: [Task<Void, Never>] = []
+        var closings: [Task<Void, any Error>] = []
         var excused: Excused?
     }
 
@@ -89,8 +89,8 @@ nonisolated final class LibraryLedger: Sendable {
     }
 
     /// `TestApp` 的收尾（deinit、relaunch 换下的旧实例）：当场开始，用例结束时等它做完。`app` 是 deinit 时给的，记下这个实例收尾了。
-    static func close(_ ledger: LibraryLedger?, app: SourceLocation? = nil, _ work: @escaping @Sendable () async -> Void) {
-        let closing = Task.detached { await work() }
+    static func close(_ ledger: LibraryLedger?, app: SourceLocation? = nil, _ work: @escaping @Sendable () async throws -> Void) {
+        let closing = Task.detached { try await work() }
         ledger?.state.withLock { state in
             state.closings.append(closing)
             if let app, let index = state.apps.firstIndex(of: app) { state.apps.remove(at: index) }
@@ -106,7 +106,9 @@ nonisolated final class LibraryLedger: Sendable {
         for location in apps {
             Issue.record("这条用例的 TestApp 本身没释放：用例里还有任务或对象攥着它", sourceLocation: location)
         }
-        for closing in closings { await closing.value }
+        for closing in closings {
+            do { try await closing.value } catch { Issue.record("旧实例没停干净：\(error)") }
+        }
         // 订阅的重读任务在读的一方停下后才收尾，用例与服务都等不到它：这里等完，再让它放掉的主线程对象释放
         for store in stores { await store.stoppedSubscriptions() }
         await MainActor.run {}

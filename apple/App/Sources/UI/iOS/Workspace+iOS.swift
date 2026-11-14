@@ -3,8 +3,9 @@ import CueStore
 import SwiftUI
 
 extension Workspace {
-    func willSelect(_ route: Route, from previous: Route) {}
+    func willSelect(_ route: Route, from previous: Route) { overlay = nil }
 
+    /// 宽屏盖在主区上（`selectWide`）。
     func showEditor(_ card: UUID) { push(.card(card)) }
 
     func openLibrary(_ file: LibraryFile) {
@@ -23,66 +24,10 @@ extension Workspace {
     }
 
     /// 交给新会话：就在交给 Agent 的输入框上发出（用哪家、哪个模型在那里已经选好），进度、没开成的原因与再开确认都在它上面；认领到了收起它、进那个会话。
-    /// 这件任务上一次开的请求还没收尾、这里还不知道时（`resumeHandOff` 没读到，或读的那一下出了错）不发：先接上它，由你看了结果再定。
-    /// 此刻开不了（没有 Mac、一家 Agent 都不能用）也不发，原因写在输入框上。
     @discardableResult
-    func launchHandOff(_ outbox: Outbox, opening: String?, plan: HandOffPlan?) -> Task<Void, Never>? {
-        if sessionLaunching(outbox.launchKey).launch == nil {
-            do {
-                if let pending = try unresolvedLaunch(of: outbox) {
-                    resume(outbox.launchKey, with: pending, opened: Self.entering(outbox))
-                    return nil
-                }
-            } catch {
-                fail(error)
-                return nil
-            }
-        }
-        let (project, planned): (UUID?, String?) =
-            switch plan?.destination {
-            case .launch(let project, let host): (project, host)
-            default: (outbox.project, nil)
-            }
-        let start = SessionStart(project: project, card: outbox.card, name: plan?.name, host: planned)
-        guard let place = start.place(among: launchPlaces), let host = place.host else { return nil }
-        do {
-            let agents = try services.store.snapshot { try $0.macAgents(on: host) }.value
-            return submitSession(
-                start, in: place, draft: handOffDraft.retelling(outbox.card, as: opening),
-                choice: services.settings.launchChoice(on: agents, in: place.project.id), opened: Self.entering(outbox))
-        } catch {
-            fail(error)
-            return nil
-        }
-    }
-
-    /// 交给 Agent 的输入框浮起时：这件任务有一次开会话的请求还没收尾（关过输入框、在别的设备上发的）就接着它。
-    func resumeHandOff(_ outbox: Outbox) {
-        let key = outbox.launchKey, opened = Self.entering(outbox)
-        guard sessionLaunching(key).launch == nil else { return resume(key, opened: opened) }
-        do {
-            if let pending = try unresolvedLaunch(of: outbox) { resume(key, with: pending, opened: opened) }
-        } catch {
-            fail(error)
-        }
-    }
-
-    private func unresolvedLaunch(of outbox: Outbox) throws -> SessionLaunch? {
+    func launchHandOff(_ outbox: Outbox, opening: String?) -> Task<Void, Never>? {
         guard let card = outbox.card else { return nil }
-        return try services.store.snapshot { store -> SessionLaunch? in
-            guard let request = try store.unresolvedLaunches(for: card).first, let token = request.launch?.token else { return nil }
-            return SessionLaunch(request: request.id, token: token)
-        }.value
-    }
-
-    /// 认领到新会话：这件任务的输入框还浮着就收起它、进那个会话；关了的留在原处。按任务认而不按哪一次浮起：
-    /// 请求还没写进库时关了又开，新浮起的那个还接不上它（库里查不到），认领到时照样该收。
-    private static func entering(_ outbox: Outbox) -> LaunchOpened {
-        { [key = outbox.launchKey] workspace, claimed in
-            guard workspace.outbox?.launchKey == key else { return }
-            workspace.outbox = nil
-            workspace.openSession(claimed.id)
-        }
+        return handOff(card, fresh: true, draft: handOffDraft.retelling(card, as: opening))
     }
 
     func openSearch() {
@@ -92,17 +37,6 @@ extension Workspace {
 
     func closeSearch() {
         if top == .search { back() }
-    }
-
-    func pop(_ project: UUID?) {
-        guard let project else { return }
-        if services.settings.currentProject == project { services.settings.currentProject = nil }
-        switch layout {
-        case .narrow:
-            if let index = path.firstIndex(of: .project(project)) { path = Array(path[..<index]) }
-        case .wide:
-            if mainRoute == .project(project) { select(.shelf) }
-        }
     }
 
     /// 与系统通知同一条规则（`AlertCenter`）。

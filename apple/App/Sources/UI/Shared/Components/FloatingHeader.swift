@@ -47,6 +47,8 @@ enum HeaderHost: Equatable {
     case page
     case sidebar
     case panel
+    /// 宽屏主区栏里的页：标题与操作在栏头（`WideColumnHead`）。
+    case column
 }
 
 extension EnvironmentValues {
@@ -84,6 +86,12 @@ private struct FloatingHeader<Center: View, Trailing: View>: ViewModifier {
             switch host {
             case .sidebar:
                 content.safeAreaPadding(.top, height + Bars.contentGap)
+            case .column:
+                // 这一页是什么、有什么操作都在栏头（`WideColumnHead`，同 Mac）：这里只让出栏头的高、内容在它下沿淡出（同会话页），`trailing` 只给窄屏
+                content
+                    .fadesUnderHead()
+                    .safeAreaPadding(.top, height + Bars.contentGap)
+                    .readerHidden(covered)
             case .page, .panel:
                 let bar = PageBar(height: height, trailing: trailing.modifier(Yield(hidden: hidden)).readerHidden(covered)) {
                     middle.modifier(Yield(hidden: hidden)).readerHidden(covered && !grown).background { revealer(.capsule) }
@@ -120,7 +128,7 @@ private struct FloatingHeader<Center: View, Trailing: View>: ViewModifier {
             }
         }
         .navigationTitle(Text(title))
-        .environment(\.headerGivesWay, host != .panel && workspace.noticeOnHead)
+        .environment(\.headerGivesWay, host != .panel && host != .column && workspace.noticeOnHead)
         .animation(NoticeBanner.giveWay(workspace.noticeOnHead), value: workspace.noticeOnHead)
     }
 

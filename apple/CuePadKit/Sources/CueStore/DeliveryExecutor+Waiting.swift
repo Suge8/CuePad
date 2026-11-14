@@ -52,7 +52,6 @@ extension DeliveryExecutor {
     guard started, !Task.isCancelled, !waiting.has(request.id),
       let stored = await reporting({ try await store.awaitDeliveryTarget(request, reason: preparation.reason) }),
       let stored, started, !Task.isCancelled else { return }
-    notifyWritten(stored.id)
     guard stored.status == .known(.preparing) else { scheduleCleanup(); return }
     waiting.put(stored.id, .spawn { [store] id in
       do {
@@ -73,12 +72,11 @@ extension DeliveryExecutor {
           return try await group.next() ?? false
         }
         guard !Task.isCancelled else { return }
-        for id in try await store.abandonPreparedDeliveries(for: self.hostID) { self.notifyWritten(id) }
+        try await store.abandonPreparedDeliveries(for: self.hostID)
         if try await self.isDue(stored.id) {
           await self.finish(stored, .failed(stored.expiry))
         } else if ready {
           try await store.deliveryTargetReady(stored.id)
-          self.notifyWritten(stored.id)
         }
       } catch {
         if !Task.isCancelled { await self.finish(stored, .failed(ShownText(error))) }

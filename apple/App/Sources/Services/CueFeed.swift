@@ -51,7 +51,8 @@ final class CueFeed {
     fileprivate func updates(_ services: AppServices) -> AsyncThrowingStream<Seen, any Error> {
         AsyncThrowingStream { continuation in
             let task = Task {
-                for await (read, moment, local, failure) in Observations({ (self.read, services.speech, services.cueLocal, self.failure) }) {
+                // 调试钉住的此刻（`DebugHooks.cueNow`，正式版恒为 nil）换了也推一份：轮播只改它
+                for await (read, moment, local, failure, _) in Observations({ (self.read, services.speech, services.cueLocal, self.failure, DebugHooks.cueNow) }) {
                     if let failure { return continuation.finish(throwing: failure) }
                     if let read { continuation.yield(Seen(read: read, moment: moment, local: local)) }
                 }

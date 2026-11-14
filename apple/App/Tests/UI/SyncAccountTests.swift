@@ -17,13 +17,13 @@ struct SyncAccountTests {
         let app = start()
         let (services, workspace) = (app.services!, Workspace(services: app.services))
         defer { services.cancelBackgroundWork() }
-        try await eventually("提示登录") { services.syncState.status == .noAccount }
+        try await eventually("提示登录") { services.syncing.state.status == .noAccount }
 
         let card = try await workspace.createCard(body: "没登录时记的", in: Project.defaultID)
         await services.upload(card.id)
-        await services.syncNow()
+        await services.syncing.syncNow()
         #expect(await !cloud.saved.contains(name(card)))
-        #expect(services.syncState.status == .noAccount)
+        #expect(services.syncing.state.status == .noAccount)
 
         await cloud.setAccount(.available)
         accountChanges.post(name: .CKAccountChanged, object: nil)
@@ -36,7 +36,7 @@ struct SyncAccountTests {
         let app = start()
         let (services, workspace) = (app.services!, Workspace(services: app.services))
         defer { services.cancelBackgroundWork() }
-        try await eventually("提示暂不可用") { services.syncState.status == .accountUnavailable }
+        try await eventually("提示暂不可用") { services.syncing.state.status == .accountUnavailable }
 
         let card = try await workspace.createCard(body: "认不了时记的", in: Project.defaultID)
         await services.upload(card.id)
@@ -44,7 +44,7 @@ struct SyncAccountTests {
 
         await cloud.setAccount(.available)
         try await eventually("认好后传出") { await cloud.saved.contains(name(card)) }
-        try await eventually("不再提示") { services.syncState.status == .idle }
+        try await eventually("不再提示") { services.syncing.state.status == .idle }
     }
 
     @Test
@@ -57,17 +57,17 @@ struct SyncAccountTests {
 
         await cloud.setAccount(.couldNotDetermine)
         accountChanges.post(name: .CKAccountChanged, object: nil)
-        try await eventually("提示暂不可用") { services.syncState.status == .accountUnavailable }
+        try await eventually("提示暂不可用") { services.syncing.state.status == .accountUnavailable }
         let waiting = try await workspace.createCard(body: "认不清时记的", in: Project.defaultID)
         await services.upload(waiting.id)
         #expect(await !cloud.saved.contains(name(waiting)))
 
         await cloud.setAccount(.available)
         try await eventually("认清后传出") {
-            await services.syncNow()
+            await services.syncing.syncNow()
             return await cloud.saved.contains(name(waiting))
         }
-        try await eventually("回到已同步") { services.syncState.status == .idle }  // 界面的状态由跟随者异步抄过来
+        try await eventually("回到已同步") { services.syncing.state.status == .idle }  // 界面的状态由跟随者异步抄过来
     }
 
     @Test
@@ -81,10 +81,10 @@ struct SyncAccountTests {
         let services = app.relaunch()
         services.startSync()
         defer { services.cancelBackgroundWork() }
-        try await eventually("要你决定") { services.syncState.status == .needsDecision(.accountSwitched) }
+        try await eventually("要你决定") { services.syncing.state.status == .needsDecision(.accountSwitched) }
         let waiting = try await Workspace(services: services).createCard(body: "决定之前记的", in: Project.defaultID)
         await services.upload(waiting.id)
-        await services.syncNow()
+        await services.syncing.syncNow()
         #expect(await !cloud.saved.contains(name(waiting)))
 
         try await services.resolveSync(.uploadLocal)
@@ -107,7 +107,7 @@ struct SyncAccountTests {
         await cloud.setUploadsFail(false)
 
         await services.handleActivation()
-        try await eventually("认出新账号、要你决定") { services.syncState.status == .needsDecision(.accountSwitched) }
+        try await eventually("认出新账号、要你决定") { services.syncing.state.status == .needsDecision(.accountSwitched) }
         await services.upload(pending.id)
         #expect(await !cloud.saved.contains(name(pending)))
     }
@@ -130,7 +130,7 @@ struct SyncAccountTests {
         let began = ContinuousClock.now
         await services.handleActivation()
         #expect(ContinuousClock.now - began < .seconds(5))  // 沿用挂起前那次的，要等它到请求时限（15 秒）
-        try await eventually("要你决定") { services.syncState.status == .needsDecision(.accountSwitched) }
+        try await eventually("要你决定") { services.syncing.state.status == .needsDecision(.accountSwitched) }
         await services.upload(pending.id)
         #expect(await !cloud.saved.contains(name(pending)))
     }

@@ -1,10 +1,6 @@
 import CueStore
 import SwiftUI
 
-enum ScrollAnchor {
-    static let older = "older"
-}
-
 #if DEBUG
 
 /// 调试画面（只在 Debug 构建里，视觉验收、录屏、测量用）。启动参数的登记表是 `DebugArgs`（`DebugScene+Args*.swift`，字段注释即说明），画面的登记表是 `entries`（`DebugScene+Scenes.swift`）。
@@ -15,12 +11,8 @@ enum DebugScene {
         let parts = args.layoutOpts.windowSize?.split(separator: "x").compactMap { Double($0) } ?? []
         return parts.count == 2 ? CGSize(width: parts[0], height: parts[1]) : nil
     }
-    static var searchText: String { args.search ?? "" }
+    static let pinned = Pinned()
     static var sessionToOpen: String? { scene == "session" ? args.session : nil }
-    static var editorSelection: NSRange? {
-        guard let parts = args.select?.split(separator: ":").compactMap({ Int($0) }), parts.count == 2 else { return nil }
-        return NSRange(location: parts[0], length: parts[1])
-    }
     static var injectsGeometryLoop: Bool { args.layoutOpts.geometryLoop }
     // 只在脚本起的实例里挂（`DebugHooks.scripted`）：全局攥着视图的闭包，连带它环境里的工作区与服务，测试宿主里每条用例的库都放不掉
     static var toggleTaskFold: () -> Void = {}
@@ -29,6 +21,11 @@ enum DebugScene {
     static var toggleQuota: () -> Void = {}
     static weak var modals: ModalHost?
     #endif
+
+    /// 钉住的 Cue 此刻（`DebugHooks.cueNow`）：可观察，轮播换了值 `CueFeed` 跟着推一份。
+    @Observable final class Pinned {
+        var cueNow = args.cueOpts.now.flatMap { CueActivitySamples.named($0) ?? CueNowSamples.all[$0] }
+    }
 
     /// 第 `attempt` 次订阅项目目录（`Workspace.catalogAttempt`，从 0 起）是否按 `-CuePadCatalogFailure` 注入失败。
     static func injectCatalogFailure(attempt: Int) throws {
@@ -39,44 +36,43 @@ enum DebugScene {
     struct InjectedFailure: LocalizedError {
         var errorDescription: String? { String(localized: "调试注入的读取失败（-CuePadCatalogFailure）", table: "Demo") }
     }
+}
 
-    static var preset: DebugHooks.Preset {
-        var preset = DebugHooks.Preset()
-        preset.searchText = searchText
-        preset.editorSelection = editorSelection
-        preset.toolsOpen = args.layoutOpts.toolsOpen
-        preset.stepOpen = args.layoutOpts.stepOpen
-        preset.crashSheet = args.crashSheet
-        preset.demoMac = args.demoMac
+extension DebugHooks.Preset {
+    init(_ args: DebugArgs) {
+        searchText = args.search ?? ""
+        if let parts = args.select?.split(separator: ":").compactMap({ Int($0) }), parts.count == 2 {
+            editorSelection = NSRange(location: parts[0], length: parts[1])
+        }
+        toolsOpen = args.layoutOpts.toolsOpen
+        stepOpen = args.layoutOpts.stepOpen
+        crashSheet = args.crashSheet
+        demoMac = args.demoMac
         // 流程演示与 Cue 的 sending 自己摆送达，不要演示 Mac 来接手，但话在路上要算同步通着（隔离库没有同步，不然是"没有在同步"）
-        let inTransit = cueFlows || args.cueOpts.presence == "sending"
-        preset.alwaysReachable = (preset.demoMac || inTransit) && args.sync == nil
-        preset.modelMenu = args.layoutOpts.modelMenu
-        preset.cueFocus = args.cueOpts.focus
-        preset.reducesMotion = args.layoutOpts.reduceMotion
-        preset.largestType = args.layoutOpts.largestType
-        preset.highContrast = args.layoutOpts.highContrast
-        preset.readerOn = args.layoutOpts.reader
-        if args.layoutOpts.tasksOpen { preset.taskFold = TaskFold(showsAll: true, showsDone: true) }
-        preset.showsDone = args.layoutOpts.showsDone
-        preset.cueNow = args.cueOpts.now.flatMap { CueActivitySamples.named($0) ?? CueNowSamples.all[$0] }
+        let inTransit = DebugScene.cueFlows || args.cueOpts.presence == "sending"
+        alwaysReachable = (demoMac || inTransit) && args.sync == nil
+        modelMenu = args.layoutOpts.modelMenu
+        cueFocus = args.cueOpts.focus
+        reducesMotion = args.layoutOpts.reduceMotion
+        largestType = args.layoutOpts.largestType
+        highContrast = args.layoutOpts.highContrast
+        readerOn = args.layoutOpts.reader
+        if args.layoutOpts.tasksOpen { taskFold = TaskFold(showsAll: true, showsDone: true) }
+        showsDone = args.layoutOpts.showsDone
         #if os(macOS)
-        preset.hovered = hoverPoints
-        preset.hoverSeconds = args.driveOpts.hoverSeconds
+        hovered = DebugScene.hoverPoints
+        hoverSeconds = args.driveOpts.hoverSeconds
         #endif
-        preset.quotaOpen = args.layoutOpts.quotaOpen
-        preset.scheduleOpen = args.layoutOpts.scheduleOpen
-        preset.helpOpen = args.layoutOpts.helpOpen
-        preset.mergePreview = args.layoutOpts.mergePreview
-        if args.libraryTab == "skills" { preset.libraryPane = .skills }
-        preset.cuePanelOpen = args.layoutOpts.cuePanel
+        quotaOpen = args.layoutOpts.quotaOpen
+        scheduleOpen = args.layoutOpts.scheduleOpen
+        mergePreview = args.layoutOpts.mergePreview
+        cuePanelOpen = args.layoutOpts.cuePanel
         #if os(iOS)
-        preset.alertStatus = alertStatus
+        alertStatus = DebugScene.alertStatus
         // sessions、cuerows 画面看会话行：手机的会话列表在搜索页的会话一栏
-        if args.searchScope == "sessions" || scene.map(["sessions", "cuerows"].contains) == true { preset.searchScope = .sessions }
-        preset.quietAlerts = args.layoutOpts.quiet
+        if args.searchScope == "sessions" || args.scene.map(["sessions", "cuerows"].contains) == true { searchScope = .sessions }
+        quietAlerts = args.layoutOpts.quiet
         #endif
-        return preset
     }
 }
 #endif

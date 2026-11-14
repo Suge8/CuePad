@@ -4,8 +4,8 @@ import CueText
 extension CuePrompt {
   /// 输入是 `dreamInput`。找反复交代的做法不放在 Cue 的轮里：那里只看得到手头这一个会话，查别的会话要占它的一轮与常驻提示。他答了由 Cue 记：重点只归 Cue 写。
   public static func dream(runtime: AgentKind) -> String {
-    let merge = CueMCPServer.toolName("merge", on: runtime), said = CueMCPServer.toolName("said", on: runtime)
-    let ask = CueMCPServer.toolName("ask", on: runtime)
+    func name(_ tool: CueTools.DreamTool) -> String { CueMCPServer.toolName(tool.rawValue, on: runtime) }
+    let (merge, said, ask) = (name(.merge), name(.said), name(.ask))
     return """
       你整理 CuePad 里 Cue 的长期记忆。一行记忆写作 UUID 日期 [他] 正文，[他] 是他的原话。
 

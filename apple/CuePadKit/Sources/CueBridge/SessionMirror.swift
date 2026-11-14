@@ -16,28 +16,24 @@ public struct SessionMirror {
         self.recorder = recorder
     }
 
-    /// 返回这次写入置位了通知标志的会话（`SessionState.sessionID`）：调用方立即上传那一条，通知不排在其余待推送后面。
-    public mutating func apply(_ change: SessionChange) async throws -> String? {
+    public mutating func apply(_ change: SessionChange) async throws {
         switch change {
         case .appeared(let session), .stateChanged(let session, _), .infoChanged(let session):
             let previous = live.updateValue(session, forKey: session.id)
-            let alerted = owner(of: session.sessionID)?.id == session.id ? try await record(session) : nil
+            if owner(of: session.sessionID)?.id == session.id { try await record(session) }
             if previous?.model != session.model || previous?.availableModels != session.availableModels || previous?.proofs != session.proofs {
                 try await store.retainQuotaSources(on: recorder.hostID, live: live.values.map {
                     QuotaWitness(sessionID: $0.sessionID, models: $0.availableModels + [$0.model].compactMap { $0 }, proofs: $0.proofs)
                 })
             }
-            return alerted
         case .ended(let session, let reason):
             live[session.id] = nil
             if let other = owner(of: session.sessionID) { return try await record(other) }
             if reason != .reload { try await recorder.exited(sessionID: session.sessionID, spoke: session.spoke) }
-            return nil
         case .quota(let report):
             try await store.recordQuota(report, host: recorder.hostID, proofs: live.values.flatMap(\.proofs))
-            return nil
         case .incompatible:
-            return nil
+            break
         }
     }
 
@@ -45,12 +41,12 @@ public struct SessionMirror {
         live.values.first { $0.sessionID == sessionID }
     }
 
-    private func record(_ session: Session) async throws -> String? {
-        guard !session.upgrading else { return nil }
+    private func record(_ session: Session) async throws {
+        guard !session.upgrading else { return }
         let title = session.name != nil || session.firstMessage != nil
             ? session.displayName : try await store.indexedSession(session.sessionID)?.title ?? session.displayName
         let snapshot = session.snapshot(title: title, projectID: try await store.project(containing: session.cwd)?.id)
-        return try await recorder.update(snapshot) == nil ? nil : session.sessionID
+        _ = try await recorder.update(snapshot)
     }
 }
 #endif

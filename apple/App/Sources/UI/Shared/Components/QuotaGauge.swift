@@ -40,14 +40,14 @@ struct QuotaDetail: View {
     }
 }
 
-#if os(macOS)
 extension QuotaDetail {
-    /// Mac 侧栏气泡的宽：两个账号起放得下两栏（`QuotaColumns`），否则一栏、同别的气泡最宽那一档。定宽：读数随时间变，宽不跟着跳。
+    static let bubblePadding: CGFloat = 16
+
+    /// 会话条气泡的宽：两个账号起放得下两栏（`QuotaColumns`），否则一栏、同别的气泡最宽那一档。定宽：读数随时间变，宽不跟着跳。
     static func bubbleWidth(accounts: Int) -> BubblePlacement.Width {
-        .fixed(accounts > 1 ? QuotaColumns.column * 2 + QuotaColumns.gap + SidebarQuota.padding * 2 : BubblePlacement.maxWidth)
+        .fixed(accounts > 1 ? QuotaColumns.column * 2 + QuotaColumns.gap + bubblePadding * 2 : BubblePlacement.maxWidth)
     }
 }
-#endif
 
 private struct QuotaEmpty: View {
     @Environment(\.palette) private var palette

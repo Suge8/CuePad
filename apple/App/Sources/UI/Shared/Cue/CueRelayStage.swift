@@ -5,7 +5,7 @@ import SwiftUI
 /// 叫醒（会话 → Cue）：光头到点的那一刻那颗点亮起来，头像这时才醒（光在路上时各处的头像停在起飞那一刻的样子，`CueWatch.beat`），先醒后到读成因果反了。
 /// 这次叫醒的时间线归 `CueWatch.wake`，这里照它画、不回报。不在头像外画环：头像外的环是否决过的"加载进度"。
 /// 开新会话（start）不在写下请求时飞，等开出的会话有了记录（`CueFlight.Handed`）才飞；新行先占好位置、透明着，光落下的那一刻（落点那圈环的动画真的开始时，Core Animation 回调）才淡出来（`relayArrival`、`Stage.arriving`）。
-/// 降级（两个方向同一条规则）：没有一个看得见的东西就不凭空画，也不往屏外飞；两头都不在就什么都不画。同步追赶中（`AppServices.isCatchingUp`）带回来的不播：那是不在眼前时发生过的事。
+/// 降级（两个方向同一条规则）：没有一个看得见的东西就不凭空画，也不往屏外飞；两头都不在就什么都不画。同步追赶中（`SyncDriver.isCatchingUp`）带回来的不播：那是不在眼前时发生过的事。
 /// 接力只来自库里的事实，只在变了时才写（打开资料库时已有的不算）；它与在做那一列同一份读到，重排那一列的写入与这次接力在同一次更新里到达，等一帧排好就量（`NextFrame`），不猜时长。页面换来换去也不播（挂在窗口根上，不随页面出现）。
 /// 性能：飞行整个交给 Core Animation（渲染服务插值，App 进程不逐帧参与）。不在每一行挂几何读数：只有此刻在接力的会话状态标与任务行挂一个空的锚视图；
 /// 空锚不做插入转场：继承到父级动画时，默认淡入会让新锚的宿主层首帧透明，把本来可见的落点误判成不在屏上。
@@ -31,7 +31,7 @@ struct CueRelayStage: ViewModifier {
             let live = workspace.services.liveSessions
             Probe(stage: stage, color: palette.signature)
                 .onChange(of: live.flight?.at) {
-                    guard let flight = live.flight, !workspace.services.isCatchingUp(on: workspace.cue.hostID) else { return }
+                    guard let flight = live.flight, !workspace.services.syncing.isCatchingUp(on: workspace.cue.hostID) else { return }
                     stage.play(flight, reduceMotion: reduceMotion)
                 }
                 .onChange(of: workspace.cue.wake) { _, wake in

@@ -58,7 +58,7 @@ extension CueTools {
     case .take:
       _ = try await host()
       let target = try await speaker(args)
-      guard try await store.takeBack(target.session) != nil else { throw Failure("\(target.label)没留给他回（或已作废），不用收回") }
+      guard try await store.takeBack(target.session) else { throw Failure("\(target.label)没留给他回（或已作废），不用收回") }
       return .ok("已收回\(target.label)：不再是新回复、出了等你。（\(target.short)）")
     case .done: return try await done(args)
     }

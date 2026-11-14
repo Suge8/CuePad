@@ -1,3 +1,4 @@
+#if os(iOS)
 import CueStore
 import SwiftUI
 
@@ -29,10 +30,8 @@ struct SessionList<Top: View>: View {
         .safeAreaPadding(.top, Bars.contentGap)
         .contentMargins(.horizontal, -Self.margin, for: .scrollIndicators)
         .contentMargins(.top, -Bars.contentGap, for: .scrollIndicators)
-        #if os(iOS)
         .scrollDismissesKeyboard(.immediately)
-        .refreshable { await services.syncNow() }
-        #endif
+        .refreshable { await services.syncing.syncNow() }
         .agentList(model)
     }
 
@@ -83,14 +82,9 @@ struct SessionList<Top: View>: View {
     /// 会话记录没有删除（会话文件在 Mac 上，归 Pi 管）。
     private func row(_ item: SessionListItem, in list: SessionListData, end: Speech.Trip?) -> some View {
         let ending = end?.inTransit == true
-        let row = SessionListRow(item: item, showsPlace: list.showsPlace, end: end)
         // 行的边距挂在最外层：挂在自绘轻扫里面传不到列表上
-        #if os(iOS)
-        let card = row.rowSwipes(SessionActions.swipes(item.state, task: item.task, ending: ending, in: workspace), clipped: false)
-        #else
-        let card = row
-        #endif
-        return card
+        return SessionListRow(item: item, showsPlace: list.showsPlace, end: end)
+            .rowSwipes(SessionActions.swipes(item.state, task: item.task, ending: ending, in: workspace), clipped: false)
             .contextMenu {
                 OpenSessionBeside(session: item.state)
                 SessionActions(session: item.state, task: item.task, ending: ending)
@@ -143,10 +137,7 @@ struct EarlierPage: View {
     @State private var model = AgentListModel(endedOnly: true)
 
     var body: some View {
-        #if os(iOS)
         SessionList(model: model).floatingHeader("历史")
-        #else
-        SessionList(model: model)
-        #endif
     }
 }
+#endif

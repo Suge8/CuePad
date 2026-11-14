@@ -36,12 +36,9 @@ enum DebugHooks {
         var hoverSeconds: Double?
         #endif
         var showsDone = false
-        var cueNow: CueNow?
         var quotaOpen = false
-        var helpOpen = false
         var scheduleOpen = false
         var mergePreview = false
-        var libraryPane = LibraryPane.rules
         var cuePanelOpen = false
         #if os(iOS)
         /// 设置页通知那一行显示的状态：演示模式没有同步，真实状态出不来。
@@ -53,11 +50,20 @@ enum DebugHooks {
 
     static let preset: Preset = {
         #if DEBUG
-        DebugScene.preset
+        Preset(DebugScene.args)
         #else
         Preset()
         #endif
     }()
+
+    /// 调试画面钉住的 Cue 此刻（`-CuePadCueNow` 起来就钉、`-CuePadCueCycle` 轮流换，`DebugScene.pinned`）：钉着就不随库变。
+    static var cueNow: CueNow? {
+        #if DEBUG
+        DebugScene.pinned.cueNow
+        #else
+        nil
+        #endif
+    }
 
     /// 同步从哪来：Debug 构建的 `-CuePadSync stalled` 换成拉取永不返回的替身，`-CuePadSync <状态>` 换成报这个状态的替身（`DebugScene.StandInSync`），其余照常按 iCloud。
     static var syncSource: AppServices.SyncSource {
@@ -174,7 +180,7 @@ enum DebugHooks {
         #endif
     }
 
-    /// 脚本起的实例（带就绪文件 `DebugScene.readyFile`：截图、录屏、交互验收、测量）；测试宿主不算。Mac 上当作有人在看（`CueViewing`）；不建菜单栏图标（`AppDelegate`）、不注册全局快捷键（`AppServices.register`）：那是用户的菜单栏与按键，一天上百次的起停不该碰。
+    /// 脚本起的实例（带就绪文件 `DebugScene.readyFile`：截图、录屏、交互验收、测量）；测试宿主不算。Mac 上主窗口当它露着（`ViewerKeeper.followExposure`）；不建菜单栏图标（`AppDelegate`）、不注册全局快捷键（`AppServices.register`）：那是用户的菜单栏与按键，一天上百次的起停不该碰。
     static var scripted: Bool {
         #if DEBUG
         DebugScene.readyFile != nil
@@ -201,9 +207,9 @@ enum DebugHooks {
     }
 
     /// 稍后做一件摆画面的事（如编辑器载入后选中一段）：Debug 里记作"还在摆"，截图的就绪标记等它做完。
-    static func later(_ delay: Duration = .zero, _ work: @escaping @MainActor () -> Void) {
+    static func later(_ delay: Duration = .zero, fileID: String = #fileID, line: Int = #line, _ work: @escaping @MainActor () -> Void) {
         #if DEBUG
-        DebugScene.later(delay, work)
+        DebugScene.later(delay, fileID: fileID, line: line, work)
         #else
         // 被取消（App 收场）就不做了
         Task {
@@ -366,15 +372,15 @@ enum DebugHooks {
         #endif
     }
 
-    /// 显示窗口：到最前并接过键盘（`activating` 时连 App 一起到前台）。本机构建（DEBUG 条件，含 perf 的 Release）不管谁起的都在后台：
-    /// 窗口排在所有窗口最后，不抢前台和键盘、不盖住正在用的窗口，按窗口截图照样截得到；非占前台不可的只经 `DebugForeground` 借，人要看的用 `-CuePadOnTop YES`。
-    static func present(_ window: NSWindow, activating: Bool = false) {
+    /// 本机构建（DEBUG 条件，含 perf 的 Release）的窗口不管谁起的都在后台：排在所有窗口最后，不抢前台和键盘、不盖住正在用的窗口，按窗口截图照样截得到；
+    /// 非占前台不可的只经 `DebugForeground` 借，人要看的用 `-CuePadOnTop YES`。摆好了返回 true（`NSWindow.present` 就不再到前台）。
+    static func keepsBehind(_ window: NSWindow) -> Bool {
         #if DEBUG
         if DebugScene.args.layoutOpts.onTop { window.orderFrontRegardless() } else { window.orderBack(nil) }
         LaunchBench.present(window)
+        return true
         #else
-        if activating { NSApp.activate() }
-        window.makeKeyAndOrderFront(nil)
+        false
         #endif
     }
 
