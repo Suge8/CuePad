@@ -8,7 +8,7 @@ extension CodexRuntime {
     func makeSession(_ thread: JSONValue, pid: Int32) -> Session {
         let threadID = thread["id"]?.string ?? ""
         var session = Session(
-            id: "\(threadID).\(pid)", sessionID: threadID, agent: .codex, sessionFile: thread["path"]?.string.map { URL(filePath: $0) },
+            id: Session.bridgeID(sessionID: threadID, pid: pid), sessionID: threadID, agent: .codex, sessionFile: thread["path"]?.string.map { URL(filePath: $0) },
             pid: pid, cwd: URL(filePath: thread["cwd"]?.string ?? "/", directoryHint: .isDirectory), 
             state: .settled, stateSince: .now)
         apply(thread, to: &session)

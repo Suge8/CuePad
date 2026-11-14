@@ -110,7 +110,7 @@ extension OpenCodeRuntime {
         ended[sessionID].map { time > $0 } ?? true
     }
 
-    func bridgeID(_ sessionID: String, _ connection: Connection) -> Session.ID { "\(sessionID).\(connection.pid)" }
+    func bridgeID(_ sessionID: String, _ connection: Connection) -> Session.ID { Session.bridgeID(sessionID: sessionID, pid: connection.pid) }
 
     func publish(_ sessionID: String) {
         guard let connection, connection.ready, let tracked = sessions[sessionID], tracked.online else { return }
