@@ -26,11 +26,11 @@ actor SyncCoordinator {
   /// 这一版传不上去的记录与它的修改时间（删除记 `.min`）：附件文件不在本机、服务器拒收（`SyncFault.rejected`）。
   /// 同一版不再每批重试、重复报告，也不挡别的记录；改过再试，重启 App 也再试一次。
   var unsendable: [String: Int64] = [:]
-  /// 库里没有可传的待推送，截至推导时的同步变更代数（`CueStore.pendingSync(since:)`）：之后只复查其后的提交碰过的记录，不再全量推导，
-  /// 代数没变（按节奏的拉取每次顺带的那一轮）就什么都不查。只有后台那一路（`BatchScope.pending`）读写它，同一时刻至多一批：
-  /// 交出带走了全部的一批时记在批上（`OutgoingBatch.drains`），整批收下才记回这里（`processSent`）。
-  var drained: Int?
-  /// 文件那一路在传的附件记录（`takeFile`）：后台那一路不删它们，文件那一路不再交出（停下又开始同步时，上一轮的还在系统里传）。
+  /// 每条通道（`Lane`）库里没有可传的待推送，截至推导时的同步变更代数（`CueStore.pendingSync(since:in:newestFirst:)`）：之后只复查其后的提交碰过的记录，
+  /// 不再全量推导；代数没变（按节奏的拉取每次顺带的那一轮）就什么都不查。挑批时清掉，交出带走了全部的一批时记在批上
+  /// （`OutgoingBatch.drains`），整批收下才记回这里（`processSent`）。
+  var drained: [Lane: Int] = [:]
+  /// 文件那一路在传的附件记录（`takeFile`）：后台通道不删它们，文件那一路不再交出（停下又开始同步时，上一轮的还在系统里传）。
   var fileUploads: Set<String> = []
   var quotaTimer: Task<Void, Never>?
 
@@ -116,7 +116,7 @@ actor SyncCoordinator {
     case .eraseLocal: try await store.eraseSyncedData()
     }
     unsendable = [:]
-    drained = nil
+    drained = [:]
     clearHolds()  // 上一个账号（或处理前）的退避、等待与空间不足不带进新的开始
     facts.reconciled = false  // 两种处理都清掉了令牌
     facts.status = .starting

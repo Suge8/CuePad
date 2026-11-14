@@ -27,8 +27,6 @@ public actor CueStore {
   /// 订阅的这次读只依赖其中一部分行的表（`narrow`，同一张表可收窄几次）；不在订阅的一次读里为 nil，什么都不记。
   var readScopes: [Table: [RowScope]]?
   private var syncSubscribers: [UUID: AsyncStream<SyncChange>.Continuation] = [:]
-  /// `Urgency.changed` 盯的那一列，这个连接上次见到的样子（本连接提交的、别的进程提交后读到的）：和它比才知道变没变。
-  var watchedSeen: [Table: [String: String?]]?
   /// 可能让记录变成待推送的提交数（本连接让记录变成待推送的提交、别的进程的任何提交），与最近这些提交各自的增量
   /// （nil：范围不明，如别的进程的提交）：发送者确定没有剩下的待推送之后，只复查其后的提交碰过的记录（`pendingSync(since:)`）。
   private(set) var syncGeneration = 0
@@ -125,7 +123,8 @@ public actor CueStore {
   /// 收到按表的通知：只叫醒读这些表的订阅者。通知里也有本进程自己的（本连接的提交已当场叫醒过）：一张表上次收到通知以来
   /// 本连接的 `data_version` 没变（别的连接都没提交过）就是自己的，略过。别的进程提交之后才 post，所以它的通知第一次被处理时，
   /// 这张表记着的版本一定早于那次提交、和此刻的不同，不会漏；那期间别的进程只改了别的表时会多叫醒一次。
-  /// 碰了同步表的另告诉同步订阅者（范围不明，发送者全量推导一次）。
+  /// 碰了同步表的另告诉同步订阅者（范围不明，发送者全量推导一次）；碰了实时通道里会马上传的表（`Urgency` 不是 `.gathered`）就当作要马上传：
+  /// 那边（命令行里 Cue 的工具、`cuepad`）传不了，这边看不到写了哪一版。
   private func externalChangeNotified() {
     guard let posted = changeListener?.drain(), !posted.isEmpty else { return }
     let version = try? db.first("PRAGMA data_version") { $0.int(0) }
@@ -133,7 +132,9 @@ public actor CueStore {
     for table in posted { seenVersions[table] = version }
     guard !changed.isEmpty else { return }
     for subscriber in subscriptions.committed(changed) { subscriber.signal.yield() }
-    if !changed.isDisjoint(with: Table.synced) { syncChanged(nil, in: changed, urgent: nil) }
+    if !changed.isDisjoint(with: Table.synced) {
+      syncChanged(nil, in: changed, urgent: changed.contains { if case .gathered = Table.live[$0] { false } else { Table.live[$0] != nil } })
+    }
   }
 
   public nonisolated func queueDelay() async -> Duration {
@@ -147,19 +148,17 @@ public actor CueStore {
 
   /// 一个写事务；提交后通知订阅者，并把改动的同步记录交给同步订阅者。
   func write<T>(_ body: () throws -> T) throws -> T {
-    if watchedSeen == nil { watchedSeen = try watchedColumns() }
-    let ((result, watched), changes): ((T, [Table: [String: String?]]?), Changes)
+    let (result, changes): (T, Changes)
     do {
-      ((result, watched), changes) = try db.transaction {
+      (result, changes) = try db.transaction {
         let value = try body()
         try reconcileTaskSessionEvents()
-        return (value, try watchedIfTouched())
+        return value
       }
     } catch {
       afterCommit = []
       throw error
     }
-    let flipped = watched.map(noteWatched) ?? []
     let actions = afterCommit
     afterCommit = []
     actions.forEach { $0() }
@@ -176,7 +175,8 @@ public actor CueStore {
       let delta = Self.logged("算不出待推送增量") { try pendingSync(in: changes) }
       let deleted = !changes.deletedFrom.isDisjoint(with: Table.synced.map(\.rawValue))
       if delta.map({ !$0.saves.isEmpty || !$0.deletes.isEmpty || deleted }) ?? true {
-        syncChanged(delta, in: tables, urgent: delta.flatMap { delta in Self.logged("算不出要马上传的") { try urgent(among: delta, flipped: flipped) } })
+        // 算不出的当作要马上传：多发一小批，不让在等的那台干等
+        syncChanged(delta, in: tables, urgent: delta.flatMap { delta in Self.logged("算不出要不要马上传") { try urgent(among: delta) } } ?? true)
       }
     }
     return result
@@ -192,19 +192,14 @@ public actor CueStore {
     }
   }
 
-  func syncChanged(_ delta: PendingSync?, in tables: Set<Table>, urgent: Set<String>?) {
+  func syncChanged(_ delta: PendingSync?, in tables: Set<Table>, urgent: Bool) {
     syncGeneration += 1
     syncDeltas.append((syncGeneration, delta))
     if syncDeltas.count > Self.syncDeltaLimit { syncDeltas.removeFirst() }
     for subscriber in syncSubscribers.values { subscriber.yield(SyncChange(tables: tables, urgent: urgent)) }
   }
 
-  /// 不随写入、到点才要马上传的（执行久了先传领取，`DeliveryExecutor.claimGrace`）：不推进代数，记录早已在增量里。
-  func syncSoon(_ names: Set<String>) {
-    for subscriber in syncSubscribers.values { subscriber.yield(SyncChange(tables: [], urgent: names)) }
-  }
-
-  /// 同步订阅：本连接的提交让记录变成待推送或删过同步表的行，或别的进程提交过（范围未知），就给出这次碰过的表与其中要马上传的；
+  /// 同步订阅：本连接的提交让记录变成待推送或删过同步表的行，或别的进程提交过（范围未知），就给出这次碰过的表与要不要马上传；
   /// 待推送是什么读 `pendingSync()`。每次提交一个、不合并（合并就丢了哪次碰过哪张表）。订阅在返回前已生效。
   package func syncChanges() -> AsyncStream<SyncChange> {
     let (stream, continuation) = AsyncStream<SyncChange>.makeStream()

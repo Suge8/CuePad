@@ -3,52 +3,61 @@ import CueStore
 import CueText
 import Foundation
 
+/// 上传记录的通道（`RecordSender`）：实时通道是 `Table.live` 的表，其余同步表走后台通道（附件的文件另走 `FileSender`）。
+enum Lane: CaseIterable, Sendable {
+  case live, bulk
+
+  init(_ table: Table) { self = Table.live[table] == nil ? .bulk : .live }
+
+  var tables: [Table] { Table.synced.filter { Lane($0) == self } }
+
+  /// 一批至多几条：实时通道的一批小，积压再多，新写的也在下一批里。
+  var limit: Int { self == .live ? 50 : CloudKitLimits.recordsPerRequest }
+}
+
 struct OutgoingBatch: Sendable {
   var saves: [CKRecord]
   var deletes: [CKRecord.ID]
-  /// 交出时库里可传的全在这批里，截至这个同步变更代数：整批收下就记作没有了（`SyncCoordinator.drained`）。
-  var drains: Int?
-  /// 挑到了、但这一版传不上去的（`SyncCoordinator.unsendable`）：不在批里，马上传那一路据此答没传成。
+  /// 交出时这条通道里可传的全在这批里，截至这个同步变更代数：整批收下就记作没有了（`SyncCoordinator.drained`）。
+  var drains: (lane: Lane, generation: Int)?
+  /// 挑到了、但这一版传不上去的（`SyncCoordinator.unsendable`）：不在批里，在等的据此答没传成。
   var stuck: Set<String> = []
-  /// 挑到了、仍待推送但这批装不下的（超过 `limit`）：马上传那一路接着发，不当成已收下。
+  /// 挑到了、仍待推送但这批装不下（超过 `limit`）或在路上的：在等的接着等下一批。
   var left: Set<String> = []
   var names: Set<String> { Set(saves.map(\.recordID.recordName) + deletes.map(\.recordName)) }
 }
 
-enum BatchScope: Sendable {
-  case pending(excluding: Set<String>)
-  case only(Set<String>)
-}
-
 extension SyncCoordinator {
-  /// 下一批要上传的：至多 `limit` 条，没有可传的是空批。此刻不能同步（停下了、没有账号）或读库出错时抛出：
-  /// 调用方分得清"没有可传的"与"这次准备不了"。后台那一路在上次确定没有可传的之后只看其后的提交碰过的记录（`drained`）；
-  /// 马上传那一路只按主键查要的几条：后台那批在路上时 `drained` 是空的，照它就要全量推导。
-  func nextBatch(_ scope: BatchScope, limit: Int) async throws -> OutgoingBatch {
+  /// 这条通道的下一批：至多 `limit` 条，没有可传的是空批。此刻不能同步（停下了、没有账号）或读库出错时抛出：
+  /// 调用方分得清"没有可传的"与"这次准备不了"。上次确定这条通道没有可传的之后，只看其后的提交碰过的记录（`drained`）；
+  /// `wanted`（有人在等的）另按主键查、排在最前：这一版传不上去的不算剩下，`drained` 之后不再出现在增量里。
+  /// `excluding`（这条通道在路上的）不挑，算作装不下的（`left`）。`urgentOnly`：只挑一写下就该传的版本（`CueStore.pendingSync`），
+  /// 不算这条通道挑完了，不动 `drained`。
+  func nextBatch(
+    _ lane: Lane, limit: Int, urgentOnly: Bool = false, wanted: Set<String> = [], excluding inFlight: Set<String> = []
+  ) async throws -> OutgoingBatch {
     guard canSync else { throw SyncPaused() }
-    let pending: PendingSync, generation: Int?, excluded: Set<String>
+    var pending: PendingSync, generation: Int
     do {
       try await dropSettledIssues()
-      switch scope {
-      case .pending(let inFlight):
-        let since = drained
-        drained = nil
-        (pending, generation) = try await store.pendingSync(since: since)
-        excluded = inFlight
-      case .only(let wanted):
-        (pending, generation, excluded) = (try await store.pendingSync(among: wanted), nil, [])
+      let since = drained[lane]
+      if !urgentOnly { drained[lane] = nil }
+      (pending, generation) = try await store.pendingSync(since: since, in: lane.tables, urgentOnly: urgentOnly, newestFirst: lane == .live)
+      if !wanted.isEmpty {
+        let asked = try await store.pendingSync(among: wanted, in: lane.tables)
+        pending.saves = (asked.saves + pending.saves).uniqued()
+        pending.deletes = (asked.deletes + pending.deletes).uniqued()
       }
     } catch {
       failed(error)
       throw error
     }
     // 附件记录带着文件，走文件那一路（`FileSender`）；那一路在传的，删除也等它传完
-    var names = pending.saves.filter { $0.table != .attachments }.map(\.id)
-    var deletes = pending.deletes
-    names.removeAll(where: excluded.contains)
-    deletes.removeAll { excluded.contains($0) || fileUploads.contains($0) }
+    let names = pending.saves.filter { $0.table != .attachments }.map(\.id)
+    var deletes = pending.deletes.filter { !fileUploads.contains($0) && !inFlight.contains($0) }
     var batch = OutgoingBatch(saves: [], deletes: [])
-    for name in names {
+    batch.left = inFlight.intersection(names + pending.deletes)
+    for name in names where !inFlight.contains(name) {
       guard batch.saves.count < limit else {
         batch.left.insert(name)
         continue
@@ -66,13 +75,14 @@ extension SyncCoordinator {
     let fits = max(limit - batch.saves.count, 0)
     batch.deletes = deletes.prefix(fits).map(recordID)
     batch.left.formUnion(deletes.dropFirst(fits))
-    let all = pending.saves.count(where: { $0.table != .attachments }) + pending.deletes.count
     guard !batch.isEmpty else {
-      if case .pending = scope, excluded.union(fileUploads).isDisjoint(with: pending.saves.map(\.id) + pending.deletes) { drained = generation }
+      if !urgentOnly, inFlight.union(fileUploads).isDisjoint(with: pending.saves.map(\.id) + pending.deletes) { drained[lane] = generation }
       return batch
     }
     // 这一版传不上去的同不可传的一样不算剩下：改过才再出现在提交的增量里
-    if case .pending = scope, batch.saves.count + batch.deletes.count + batch.stuck.count == all { batch.drains = generation }
+    if !urgentOnly, batch.saves.count + batch.deletes.count + batch.stuck.count == names.count + pending.deletes.count {
+      batch.drains = (lane, generation)
+    }
     do {
       try await store.noteSent(batch.saves.compactMap { record in
         guard let table = RecordMapper.table(named: record.recordType), let stamp = record.modifiedAt else { return nil }
@@ -128,7 +138,7 @@ extension SyncCoordinator {
     return record
   }
 
-  /// 文件那一路要传这条附件记录：带上文件、记下交出的版本，在传完（`fileDone`）之前后台那一路不删它、这一路不再交出。
+  /// 文件那一路要传这条附件记录：带上文件、记下交出的版本，在传完（`fileDone`）之前后台通道不删它、这一路不再交出。
   /// 已在传、传不上去（文件不在本机、这一版被拒过）为 nil。读库出错抛出。
   func takeFile(_ name: String) async throws -> CKRecord? {
     guard canSync else { throw SyncPaused() }
@@ -166,7 +176,7 @@ extension SyncCoordinator {
 
   private func processSent(_ sent: SentRecords, for batch: OutgoingBatch) async throws -> SendOutcome {
     let received = Set(sent.saved.map(\.recordID.recordName) + sent.deleted.map(\.recordName))
-    if let generation = batch.drains, received.count == batch.saves.count + batch.deletes.count { drained = generation }
+    if let drains = batch.drains, received.count == batch.saves.count + batch.deletes.count { drained[drains.lane] = drains.generation }
     var outcome = SendOutcome(progressed: !received.isEmpty)
     try await store.markPushed(sent.saved.compactMap { record in
       RecordMapper.row(from: record).map { ($0, RecordMapper.encodeSystemFields(record), record.creationDate) }
@@ -230,5 +240,12 @@ extension SyncRow {
     guard table == .attachments, case .text(let hash)? = fields["hash"] else { return nil }
     let format = if case .text(let format)? = fields["format"] { format } else { "" }
     return AttachmentKey.make(hash: hash, format: format)
+  }
+}
+
+extension Array where Element: Hashable {
+  fileprivate func uniqued() -> [Element] {
+    var seen = Set<Element>()
+    return filter { seen.insert($0).inserted }
   }
 }
