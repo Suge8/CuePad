@@ -14,6 +14,9 @@ struct StepRow: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.chatStay) private var stay
     @State private var opened: Opened?
+    @State private var key = UUID()
+    /// 这一次点开要去取（每点开一次换一个）：取的任务随这一行走，行没了、收起了就不再等。
+    @State private var fetching: UUID?
 
     enum Opened: Equatable { case loading, ready(ToolCallDetail), missing(String) }
 
@@ -39,6 +42,8 @@ struct StepRow: View {
                 toggle()
             }
             .onChange(of: item.detail) { if opened == .loading, let detail = item.detail { opened = .ready(detail) } }
+            .onDisappear { if opened != nil { stay?(key, false) } }
+            .task(id: fetching) { if fetching != nil { await fetch() } }
         } else {
             row(open: nil)
         }
@@ -62,29 +67,33 @@ struct StepRow: View {
 
     private func toggle() {
         guard opened == nil else {
-            stay?(false)
+            stay?(key, false)
+            fetching = nil
             return opened = nil
         }
-        stay?(true)
+        stay?(key, true)
         if let detail = item.detail { return opened = .ready(detail) }
         opened = .loading
-        Task {
-            do {
-                #if os(macOS)
-                if services.holdsSteps(of: session) {
-                    let detail = try await AppServices.stepDetail(item.calls ?? [], of: session.sessionID, in: services.store, runtimes: services.runtimes)
-                    if opened == .loading { opened = .ready(detail) }
-                    return
-                }
-                #endif
-                guard let message else { return }
-                try await services.fetchStep(index, of: message, in: session)
-                // Mac 办完了，写上的详情随同步稍后到（`onChange`）；这之间那条回答被重读改写的话它就没了，不一直等
-                try await Task.sleep(for: .seconds(10))
-                if opened == .loading { opened = .missing(String(localized: "详情没同步过来，再点一次")) }
-            } catch {
-                if opened == .loading { opened = .missing(ShownText(error).text) }
+        fetching = UUID()
+    }
+
+    private func fetch() async {
+        do {
+            #if os(macOS)
+            if services.holdsSteps(of: session) {
+                let detail = try await AppServices.stepDetail(item.calls ?? [], of: session.sessionID, in: services.store, runtimes: services.runtimes)
+                if opened == .loading { opened = .ready(detail) }
+                return
             }
+            #endif
+            guard let message else { return }
+            try await services.fetchStep(index, of: message, in: session)
+            // Mac 办完了，写上的详情随同步稍后到（`onChange`）；这之间那条回答被重读改写的话它就没了，不一直等
+            try await Task.sleep(for: .seconds(10))
+            if opened == .loading { opened = .missing(String(localized: "详情没同步过来，再点一次")) }
+        } catch is CancellationError {
+        } catch {
+            if opened == .loading { opened = .missing(ShownText(error).text) }
         }
     }
 }
@@ -101,10 +110,10 @@ private struct StepWell: View {
             if let diff = detail.diff {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(Array(Self.runs(diff).enumerated()), id: \.offset) { _, run in
-                        Text(run.text).foregroundStyle(run.sign == " " ? palette.ink2 : palette.ink).selectable()
+                        Text(run.text).foregroundStyle(run.kind.changed ? palette.ink : palette.ink2).selectable()
                             .padding(.horizontal, Spacing.item).padding(.vertical, Spacing.tight)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(run.sign == "-" ? palette.diffRemoved : run.sign == "+" ? palette.diffAdded : .clear)
+                            .background(run.kind.wash(palette))
                     }
                 }
                 .clipShape(.rect(cornerRadius: Radius.chip))
@@ -127,15 +136,23 @@ private struct StepWell: View {
         .transition(.opacity)
     }
 
-    /// 连着的同一种行并成一块，一块一个底色；段与段之间（`@@`）空一行。
-    private static func runs(_ diff: String) -> [(sign: Character, text: String)] {
-        var runs: [(sign: Character, rows: [String])] = []
-        for row in diff.split(separator: "\n", omittingEmptySubsequences: false) {
-            let hunk = row.hasPrefix("@@")
-            let sign: Character = hunk ? " " : row.first.flatMap { "+-".contains($0) ? $0 : nil } ?? " "
-            let shown = hunk ? "" : (sign == "-" ? "− " : sign == "+" ? "+ " : "  ") + (row.first == sign ? row.dropFirst() : row[...])
-            if runs.last?.sign == sign { runs[runs.count - 1].rows.append(shown) } else { runs.append((sign, [shown])) }
+    /// 连着的同一种行并成一块，一块一个底色；段与段之间（`@@`）空一行。Mac 只交来一串 `+`/`-` 行、几段用 `@@` 隔开（没有文件抬头），按一段来读。
+    private static func runs(_ diff: String) -> [(kind: UnifiedDiff.Line.Kind, text: String)] {
+        let source = diff.hasPrefix("@@") || diff.hasPrefix("diff ") || diff.hasPrefix("--- ") ? diff : "@@\n" + diff
+        var runs: [(kind: UnifiedDiff.Line.Kind, rows: [String])] = []
+        for line in UnifiedDiff(source).lines {
+            let row: String
+            switch line.kind {
+            case .file: continue
+            case .hunk where runs.isEmpty: continue
+            case .hunk: row = ""
+            case .note: row = line.text
+            case .context: row = "  " + line.text
+            case .added, .removed: row = line.kind.sign + " " + line.text
+            }
+            let kind: UnifiedDiff.Line.Kind = line.kind.changed ? line.kind : .context
+            if let last = runs.last, last.kind.sign == kind.sign { runs[runs.count - 1].rows.append(row) } else { runs.append((kind, [row])) }
         }
-        return runs.map { ($0.sign, $0.rows.joined(separator: "\n")) }
+        return runs.map { ($0.kind, $0.rows.joined(separator: "\n")) }
     }
 }

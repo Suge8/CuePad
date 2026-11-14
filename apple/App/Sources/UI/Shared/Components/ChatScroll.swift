@@ -1,7 +1,5 @@
 import SwiftUI
 
-nonisolated enum ChatJumpPlacement { case floating, separate }
-
 /// 按离开那一刻的它推出来，不在它每变一次时写状态——内容一帧里连着到几条（同步带回积压、Cue 连说几句）时，每变一次都写的话一帧里更新好几遍。
 /// 本机正在和 iCloud 对（`holding`，回到前台、刚打开时拉到的积压一页页地到）时，贴着最新也先不跟：新的长在可见区下面、看着的不动，
 /// 对完再一次滑上来——一页一滑的话整段对话一路往下闪。自己发出一句、点"回到最新"照常立刻去。
@@ -23,9 +21,7 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
     let inset: CGFloat
     let follow: Binding<ChatFollow>
     let holding: Bool
-    let jumpPlacement: ChatJumpPlacement
     let arrival: UUID?
-    let docked: String?
     private let content: Content
     @Environment(\.accessibilityReduceMotion) var reduceMotion
     @Environment(\.chatBottomInset) var bottomInset
@@ -33,47 +29,25 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
     @State var onScreen: Set<UUID> = []
     @State var offset = ScrollOffset()
     @State var held: CGFloat?
-    @State var deferred = false
-    @State var unheld = false
-    /// 还没滑时页面开始 hold（排它的那次读数早于页面开始 hold 的那次更新）就撤掉、记成欠着的一次。
+    /// 还没滑时页面开始 hold（排它的那次读数早于页面开始 hold 的那次更新）就撤掉、记成欠着的一次（`ChatFollow.holdingChanged`）。
     @State var sliding: Task<Void, Never>?
     @State var lift = ContentLift()
     @State var leftAt: Key?
 
     init(
-        followKey: Key, readingWidth: CGFloat, inset: CGFloat, follow: Binding<ChatFollow>, holding: Bool = false, jumpPlacement: ChatJumpPlacement = .floating, arrival: UUID? = nil,
-        docked: String? = nil, @ViewBuilder content: () -> Content
+        followKey: Key, readingWidth: CGFloat, inset: CGFloat, follow: Binding<ChatFollow>, holding: Bool = false, arrival: UUID? = nil,
+        @ViewBuilder content: () -> Content
     ) {
         self.followKey = followKey
         self.readingWidth = readingWidth
         self.inset = inset
         self.holding = holding
-        self.jumpPlacement = jumpPlacement
         self.arrival = arrival
-        self.docked = docked
         self.follow = follow
         self.content = content()
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            viewport
-            if jumpPlacement == .separate {
-                Button { follow.wrappedValue.jumpToNewest() } label: {
-                    Text(unseen ? "回到最新，有新内容" : "回到最新")
-                }
-                .buttonStyle(ControlButtonStyle(kind: .quiet, size: .compact))
-                .opacity(follow.wrappedValue.showsJump ? 1 : 0)
-                .allowsHitTesting(follow.wrappedValue.showsJump)
-                .readerHidden(!follow.wrappedValue.showsJump)
-                .frame(maxWidth: .infinity, alignment: .trailing)
-                .padding(.horizontal, inset)
-                .frame(height: ControlSize.compact.height + Spacing.item)
-            }
-        }
-    }
-
-    private var viewport: some View {
         // 边距按滚动区的宽在同一次排版里定（GeometryReader 先拿到自己的尺寸再排里面），不写回状态：
         // 宽屏（iPad、Mac 宽窗口）首帧就是居中的栏，不会先按窄边距排一帧再挪
         GeometryReader { proxy in
@@ -123,8 +97,6 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                             height: (geometry.contentSize.height - padding).rounded(), floating: padding, anchor: tracked)
                     } action: { previous, reading in
                         let delivered = offset.deliver(reading)
-                        let left = dockLeft
-                        offset.dock = docked
                         let last = delivered.reading ?? previous
                         let grown = reading.height - last.height
                         let rising = offset.arrived(arrival) && grown > 0
@@ -159,12 +131,9 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                         next.scrolled(
                             atNewest: reading.nearNewest || following, beyondScreen: reading.beyondScreen && !following, nearOldest: reading.nearOldest,
                             byUser: next.scrolling && delivered.moved)
+                        let defers = following && grown > 0 && next.deferGrowth(holding: holding)
                         if next != follow.wrappedValue { follow.wrappedValue = next }
-                        guard following else { return }
-                        if (holding && !unheld) || left, grown > 0 {
-                            deferred = true
-                            return
-                        }
+                        guard following, !defers else { return }
                         // 新内容、正在说的话在下面长出来：底锚已在同一次排版里停到新的最新处（`pinned`），不再滑。
                         // 贴着最新却离最新处远了（系统挪的：栏的高度第一次加进内容边距时它把偏移放回顶上）、回复框长高了：直接补滚过去。在读数里补（布局定下来之后）。
                         // 回复框长高不等离远了才补：Mac 打开会话时回复框比占位高，读数已报在底、画面与点按却还停在原处，最后一行压在回复框下、选不中；
@@ -178,22 +147,19 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                             // 可见区从底下变矮、内容没变：键盘升起来了（系统先把它算进内容边距，键盘才开始升）。整段滑上去，
                             // 对话与键盘、回复框一起走；当下补滚的话整段对话先一下跳到终点，键盘与回复框还在半路
                             slide(reader)
-                        } else if (!reading.nearNewest && !deferred) || reading.floating > last.floating || (shrank && offset.read > offset.end) {
+                        } else if (!reading.nearNewest && !next.deferred) || reading.floating > last.floating || (shrank && offset.read > offset.end) {
                             toEnd(reader)
                             settle(reader)
                         }
                     }
                     .onChange(of: follow.wrappedValue.atNewest) { _, atNewest in leftAt = atNewest ? nil : followKey }
                     .onChange(of: holding) {
-                        unheld = false
+                        let slides = follow.wrappedValue.holdingChanged(holding, sliding: sliding != nil)
                         if holding, let sliding {
                             sliding.cancel()
                             self.sliding = nil
-                            deferred = true
                         }
-                        guard !holding, deferred else { return }
-                        deferred = false
-                        slide(reader)
+                        if slides { slide(reader) }
                     }
                     .onChange(of: follow.wrappedValue.toNewest) { _, request in if let request { toNewest(sent: request.sent, reader) } }
                     // 跳到某一条：按条的 id 在整段内容里找（`ScrollViewReader`；滚动位置的按 id 跳只认滚动目标布局的直接子视图，条在段里）。
@@ -208,7 +174,7 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
             }
         }
         .overlay(alignment: .bottomTrailing) {
-            if jumpPlacement == .floating, follow.wrappedValue.showsJump {
+            if follow.wrappedValue.showsJump {
                 JumpToNewest(unseen: unseen) { follow.wrappedValue.jumpToNewest() }
                     .padding(.trailing, JumpToNewest.inset).padding(.bottom, JumpToNewest.inset + bottomInset)
                     .transition(Motion.pop(reduceMotion: reduceMotion))

@@ -32,8 +32,6 @@ public struct SessionMirror {
             if reason != .reload { try await recorder.exited(sessionID: session.sessionID, spoke: session.spoke) }
         case .quota(let report):
             try await store.recordQuota(report, host: recorder.hostID, proofs: live.values.flatMap(\.proofs))
-        case .incompatible:
-            break
         }
     }
 

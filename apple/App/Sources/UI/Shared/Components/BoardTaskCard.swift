@@ -42,14 +42,7 @@ struct BoardTaskCard: View {
             .boardRescue(advancing ? item.agent?.state : nil)
         }
         .help(tip)
-        .taskSpoken(task, title: title, subtasks: item.steps, next: next, aside: aside(pulse), check: $check, open: open, follow: { follow(next) }) {
-            if let shot = item.shot { Button("看成果") { openShot(BoardShot.opening(shot, group: task.id.uuidString)) } }
-            if let session = pulse.session {
-                OpenSessionBeside(session: session)
-                HandoffButton(session: session)
-                if let end = SessionActions.end(session, ending: false, in: workspace) { RowActionButtons(actions: [end]) }
-            }
-        }
+        .taskSpoken(task, title: title, subtasks: item.steps, next: next, aside: aside(pulse), check: $check, open: open, follow: { follow(next) }) { menu }
     }
 
     private func ring(next: TaskNext?) -> some View {
@@ -111,8 +104,10 @@ struct BoardTaskCard: View {
         if let next { workspace.follow(next) }
     }
 
+    /// 长按菜单与读屏动作同一份。
     @ViewBuilder private var menu: some View {
         let session = item.agent?.state
+        if let shot = item.shot { Button("看成果") { openShot(BoardShot.opening(shot, group: task.id.uuidString)) } }
         if let session { OpenSessionBeside(session: session); HandoffButton(session: session) }
         CardActions(card: task, leaf: item.steps == nil, opens: session != nil, session: session)
     }

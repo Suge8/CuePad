@@ -24,6 +24,8 @@ nonisolated enum SendError: Error, Equatable {
     case directoryMissing(String)
     /// 已领取、已进入同步发送，或本机快照不足以证明尚未交出，不能安全撤回。
     case alreadyHanded
+    /// 撤回请求已传给那台 Mac，等回执的时限内没有结果：它办到了照样撤。
+    case withdrawalPending
     case alreadyHeard
     /// 要它做事的那台 Mac 已知不在线（参数是它的名字），请求没有写下。
     case macOff(String)
@@ -47,6 +49,7 @@ extension SendError: ShownError {
         case .projectNotHere: "这个项目还没同步到这台 Mac，稍后再开"
         case .directoryMissing(let folder): "目录不存在：\(folder)"
         case .alreadyHanded: "这句可能已经交出，不能安全撤回"
+        case .withdrawalPending: "那台 Mac 还没回音：它收到撤回时这句还没发出就会撤掉"
         case .alreadyHeard: "Cue 已经收到这句了，撤不回"
         case .macOff(let mac): "「\(mac)」没开，没有发出"
         case .noReply: "那台 Mac 没有回音"

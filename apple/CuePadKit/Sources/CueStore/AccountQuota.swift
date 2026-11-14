@@ -66,6 +66,8 @@ public struct QuotaWindow: Sendable, Equatable, Codable, Identifiable {
 
 /// 每台 Mac 的每个授权分区一条，不跨账号、来源合并。
 /// 观测来自 Pi 会话里的扩展；读取网关清单只发现账号，不保证提供方的原观测已更新。
+/// 网关是 magpie（按 v0.1.2190 的公开结构与网关接口核对）：GET `/v1/magpie/quotas` 不更新 Claude 的观测，Claude Code 回答或 `/usage` 才更新；
+/// 官方的 POST `/v1/magpie/quotas/refresh` 可能在账号目录里跑 CLI，CuePad 不调它，也不靠反复 GET 冒充实时刷新。
 /// “更新于”读 `observedAt`；`modifiedAt` 表示能力、结果或当前授权发生变化。
 public struct AccountQuota: Identifiable, Equatable, Sendable {
   public let id: UUID
@@ -161,7 +163,7 @@ public struct QuotaReport: Sendable, Equatable, Decodable {
   public var complete: Bool
   /// 网关的原始 readAt（Unix 秒）；不以取缓存的时刻替换。
   public var observedAt: Date?
-  /// 同一网关成功返回的账号清单；仅用于移除该来源已撤销的账号。
+  /// 同一网关成功返回的账号清单；仅用于移除该来源已撤销的账号。与 `accounts` 同一事务写，损坏的清单整份不写。
   public var activeScopes: [String]?
   /// 几个提供方指向同一网关时查询只做一次。
   public var owners: [String: Date]?

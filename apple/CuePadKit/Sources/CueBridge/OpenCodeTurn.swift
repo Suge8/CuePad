@@ -1,5 +1,4 @@
 #if os(macOS)
-import CueAgent
 import CueStore
 import Foundation
 
@@ -57,7 +56,7 @@ struct OpenCodeTurn {
         case "session.tool.called":
             guard let id = data.id else { return [] }
             let name = toolNames[id] ?? "tool"
-            return [.tool(id: id, name: CueMCPServer.bareName(name, on: .opencode), arguments: String(decoding: (data.input?.json ?? [:]).data, as: UTF8.self))]
+            return [.tool(id: id, name: name, arguments: String(decoding: (data.input?.json ?? [:]).data, as: UTF8.self))]
         case "session.tool.success", "session.tool.failed":
             guard let id = data.id else { return [] }
             toolNames[id] = nil

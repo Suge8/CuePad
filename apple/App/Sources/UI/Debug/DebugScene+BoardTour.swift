@@ -46,9 +46,7 @@ extension DebugScene {
             await pause()
             try await store.archive(task.id)
             await pause()
-            try await store.setStatus(task.id, .todo)
-            await pause()
-            _ = try await store.moveCard(task.id, to: .top(project: task.projectID), after: nil)
+            try await store.returnToTodo(task.id, to: .top(project: task.projectID), after: nil)
         }
     }
 }

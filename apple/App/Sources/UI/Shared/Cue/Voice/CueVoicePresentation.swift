@@ -1,9 +1,5 @@
+import CueStore
 import SwiftUI
-
-/// 共享视图只需要动作的显示名；操作值由平台携带原始带类型引用，不编码正文或重建目标。
-protocol CueVoiceOperation {
-    var title: LocalizedStringResource { get }
-}
 
 enum CueVoiceActivity {
     case idle, connecting, listening, processing, speaking, closing, failed, ended
@@ -22,30 +18,38 @@ enum CueVoiceActivity {
     }
 }
 
-enum CueVoiceRecovery: Equatable, CueVoiceOperation {
-    case retryRequest(String), repeatReply(UUID), reconnect
+/// 通话界面发出的一个动作，Mac 与手机同一份（`Workspace.performVoice`）。命令带原记录的身份，结果原样返回，不自动重发。
+enum VoiceAction: Equatable {
+    case start, hangUp, microphoneSettings
+    case setMuted(Bool)
+    case recover(VoiceRequestReference)
+    case repeatReply(UUID)
+    case stop(TurnTarget)
 
     var title: LocalizedStringResource {
         switch self {
-        case .retryRequest: "重新交给 Cue"
+        case .start: "重新接通"
+        case .hangUp: "挂断"
+        case .setMuted: "静音"
+        case .recover: "重新交给 Cue"
         case .repeatReply: "再说一遍"
-        case .reconnect: "重新接通"
+        case .stop: "停止执行"
+        case .microphoneSettings: "设置"
         }
     }
 }
 
-/// 通话的只读渲染输入：平台直接投影一次，不推进状态、不计时、不推断送达。
-/// Operation 保留宿主的带类型动作；高频音量只在声音叶子读取，空样本不伪造声音。
-struct CueVoiceState<Operation: CueVoiceOperation> {
+/// 通话的只读渲染输入：由投影推一次（`VoiceViewState.presentation`），不推进状态、不计时、不推断送达。
+/// 高频音量只在声音叶子读取，空样本不伪造声音。
+struct CueVoicePresentation {
     typealias Activity = CueVoiceActivity
-    typealias Recovery = Operation
 
     struct Issue: Identifiable {
-        enum ID: Hashable { case request(AnyHashable), store, connection }
+        enum ID: Hashable { case request(VoiceRequestReference), store, connection }
         let id: ID
         let summary: LocalizedStringResource
         let message: LocalizedStringResource
-        let recovery: Recovery?
+        let recovery: VoiceAction?
     }
 
     let activity: Activity
@@ -54,20 +58,10 @@ struct CueVoiceState<Operation: CueVoiceOperation> {
     let samples: () -> [CGFloat]
     let canMute: Bool
     let issues: [Issue]
-    let canStopExecution: Bool
     var executions: [Execution] = []
     var readings: [Reading] = []
-    /// 各列表只显示宿主当前页；导航原样回传操作，不累计记录或保存游标。
-    struct Page {
-        let first: Operation?
-        let next: Operation?
-        let loading: Bool
-        let error: LocalizedStringResource?
-    }
-
-    var requestPage: Page? = nil
-    var replyPage: Page? = nil
-    var executionPage: Page? = nil
+    /// 手机只收到最近的条目时，其余在哪（`VoiceCallProjection.bounded`）
+    var earlier: LocalizedStringResource?
     /// nil 表示允许发起；宿主提供权限、账号或运行设备的实际阻塞原因，视图不推断可用性。
     var startUnavailableReason: LocalizedStringResource?
 
@@ -76,7 +70,7 @@ struct CueVoiceState<Operation: CueVoiceOperation> {
         let id: UUID
         let excerpt: String
         let status: String
-        let recovery: Recovery?
+        let recovery: VoiceAction?
 
         /// 正文第一行的纯文字：朗读记录里不露 Markdown 标记。
         static func excerpt(of text: String) -> String { String((MarkdownBlock.firstPlainLine(text) ?? text).prefix(80)) }
@@ -87,28 +81,24 @@ struct CueVoiceState<Operation: CueVoiceOperation> {
         let title: String
         let status: String
         /// 只表示提示强度；执行与停止的生命周期仍由来源记录决定。
-        var needsAttention: Bool = false
-        /// 平台已冻结的精确停止目标；不把“当前会话”重新解释成按钮原来指的那一轮。
-        var stop: Operation?
+        var needsAttention = false
+        /// 投影给的那一轮；不把“当前会话”重新解释成按钮原来指的那一轮。
+        var stop: VoiceAction?
     }
 
     var active: Bool { activity != .idle && activity != .ended && activity != .failed }
     var needsAttention: Bool { !issues.isEmpty || executions.contains(where: \.needsAttention) }
-    /// 通话详情里有东西可看：通话中，或留着问题、记录与可停的执行。
-    var hasDetails: Bool {
-        active || !issues.isEmpty || !readings.isEmpty || !executions.isEmpty || canStopExecution
-            || requestPage != nil || replyPage != nil || executionPage != nil
-    }
+    /// 通话详情里有东西可看：通话中，或留着问题、记录与执行。
+    var hasDetails: Bool { active || !issues.isEmpty || !readings.isEmpty || !executions.isEmpty }
 
     var title: LocalizedStringResource {
         muted && activity == .listening ? "麦克风已静音" : activity.title
     }
 }
 
-/// 动作只向宿主发意图；按钮是否可用、静音是否成功、停止执行是否完成均等下一份真实投影。
-typealias CueVoicePresentation = CueVoiceState<CueVoiceRecovery>
-typealias CueVoiceAction = CueVoiceIntent<CueVoiceRecovery>
-
-enum CueVoiceIntent<Operation: CueVoiceOperation> {
-    case toggleMute, hangUp, stopExecution, perform(Operation)
+extension VoiceCallProjection.Omitted {
+    var shown: LocalizedStringResource? {
+        let count = requests + replies + executions
+        return count == 0 ? nil : "另有 \(count) 条较早的记录在 Mac 的通话详情里"
+    }
 }

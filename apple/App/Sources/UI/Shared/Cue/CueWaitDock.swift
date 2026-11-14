@@ -55,7 +55,7 @@ struct CueWaitDock: View {
         waiting.firstIndex { $0.id == pick.id }.map { CueWaitPick(waits: waiting, index: $0) } ?? CueWaitPick(waits: [pick.wait], index: 0)
     }
 
-    /// 来了从输入框后面升起、都答完沉回去（`RiseBehind`，同会话页的整卡）：对话跟着让出的高每帧挪。答完时同一次更新里对话长出这一问与回答，那一下先不跟（`ChatScroll.dockLeft`），沉的这一段压着（`moving`），沉完再一次滑上去。
+    /// 来了从输入框后面升起、都答完沉回去（`RiseBehind`，同会话页的整卡）：对话跟着让出的高每帧挪。答完时同一次更新里对话长出这一问与回答，那一下先不跟（`CuePage` 的 `sinking`），沉的这一段压着（`moving`），沉完再一次滑上去。
     /// 否决过浮在原处淡掉、让出的高一下收掉：长出的与让出的不一样高时对话当帧挪那一截差（卡上带图时上百点）。
     /// 卡上有字、有回答框，进场不缩放（理由同 `BubblePlacement.transition`；Mac 上缩放还让回答框的 AppKit 文本框每帧按缩放重报尺寸，SwiftUI 报 min <= max 不成立）。
     var body: some View {

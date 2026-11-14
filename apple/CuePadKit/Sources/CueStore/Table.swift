@@ -19,11 +19,11 @@ extension Table {
 
   /// 走实时通道的表（CueSync 的 `RecordSender`）：别的设备在等着办、等着看、等着据此让位或推送的；其余同步表走后台通道。通道只按这里分。
   /// 值是这张表里哪些版本一写下就叫实时通道开传（`Urgency`），其余版本等攒批窗口；这些表里的删除都一写下就传。
-  /// 投送请求被 Mac 领下、正在办的那几版（预留、执行）等窗口：多数几十毫秒就有结果，窗口里写下了结果就只传结果；领取那一版在路上，结果要等它回来。
+  /// 投送请求被 Mac 领下、正在办的那一版（执行）等窗口：多数几十毫秒就有结果，窗口里写下了结果就只传结果；领取那一版在路上，结果要等它回来。
   /// 会话状态只有带手机通知标志的那一版：排在其余待推送后面，等的时候状态前进会把它作废（`StateRecorder`）。
   /// Cue 的状态一轮里一步步地变，自己不叫开传，跟着要马上传的那批走：Cue 的话连同它此刻的状态一起到。
   package static let live: [Table: Urgency] = [
-    .deliveryRequests: .when("t.handledBy IS NULL OR t.status NOT IN ('preparing', 'executing')"),
+    .deliveryRequests: .when("t.status != 'executing'"),
     .piSessionStates: .when("t.notify IS NOT NULL"),
     .cueState: .gathered,
     .cueMessages: .always, .cueLines: .always, .cueProfile: .always, .macPresence: .always, .sessionViewers: .always,

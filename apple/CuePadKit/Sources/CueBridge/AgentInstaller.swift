@@ -17,6 +17,9 @@ public struct InstallPrerequisite: Sendable, Equatable {
     public let command: String
     public let minimum: AgentVersion
     public let site: URL
+
+    /// 下限取要它的几家里最高的（Pi 的安装脚本、dsh 依赖的 `engines`）
+    static let node = InstallPrerequisite(name: "Node.js", command: "node", minimum: AgentVersion(22, 19, 0), site: URL(string: "https://nodejs.org")!)
 }
 
 /// 官方脚本装进家目录（`~/.local/bin`、OpenCode 的 `~/.opencode/bin`，检测本来就查那里）。

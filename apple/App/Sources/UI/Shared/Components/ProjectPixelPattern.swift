@@ -12,6 +12,24 @@ nonisolated struct ProjectPixelPattern: Sendable {
         let path: Path
     }
 
+    /// 封面由图标固定映射（两个图标一幅），改名、计数或时间变化都不换图。
+    static func cover(_ icon: ProjectIcon) -> Self {
+        switch icon {
+        case .chat, .music: whale
+        case .rocket, .hammer: shark
+        case .layers, .cube: jellyfish
+        case .globe, .flag: turtle
+        case .target, .bolt: fox
+        case .house, .heart: cat
+        case .camera, .megaphone: penguin
+        case .book, .lightbulb: owl
+        case .leaf, .paintbrush: monstera
+        case .cart, .terminal: cactus
+        case .folder, .briefcase: mushroom
+        case .sparkles, .star: flower
+        }
+    }
+
     private static let whale = Self(WhaleIllustration.artwork())
     private static let shark = Self(SharkIllustration.artwork())
     private static let jellyfish = Self(JellyfishIllustration.artwork())
@@ -24,23 +42,6 @@ nonisolated struct ProjectPixelPattern: Sendable {
     private static let cactus = Self(CactusIllustration.artwork())
     private static let mushroom = Self(MushroomIllustration.artwork())
     private static let flower = Self(FlowerIllustration.artwork())
-
-    static func pattern(for style: ProjectCoverStyle) -> Self {
-        switch style {
-        case .whale: whale
-        case .shark: shark
-        case .jellyfish: jellyfish
-        case .turtle: turtle
-        case .fox: fox
-        case .cat: cat
-        case .penguin: penguin
-        case .owl: owl
-        case .monstera: monstera
-        case .cactus: cactus
-        case .mushroom: mushroom
-        case .flower: flower
-        }
-    }
 
     private init(_ artwork: ProjectIllustration) {
         let inks = Self.sample(artwork.layers)

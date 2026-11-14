@@ -44,7 +44,7 @@ extension OpenCodeRuntime {
             await change(sessionID, connection) { $0.info.model = data.model }
         case "session.inbox.enqueued":
             await change(sessionID, connection, activeAt: event.at) {
-                if $0.firstMessage == nil { $0.firstMessage = data.item?.payload?.text.map { String($0.prefix(SessionName.firstMessageLimit)) } }
+                if $0.firstMessage == nil { $0.firstMessage = data.item?.payload?.text }
             }
         case "session.inbox.delivered":
             enqueueIngest(sessionID, urgent: true)
@@ -77,32 +77,26 @@ extension OpenCodeRuntime {
         if event.type == "session.execution.started" { await change(sessionID, connection, activeAt: event.at, publishing: false) { _ in } }
         guard var tracked = sessions[sessionID] else { return }
         let id = bridgeID(sessionID, connection)
-        let turns = tracked.turn.apply(event, models: catalogs[tracked.directory]?.models ?? [])
-        var failure: String?
-        for turn in turns {
+        let events = tracked.parser.apply(event, models: catalogs[tracked.directory]?.models ?? [])
+        var changed = false
+        for turn in events {
             switch turn {
             case .speaking(let draft):
                 if tracked.online { bridge.setDraft(id, draft) }
-            case .turnStarted:
-                tracked.facts.startTurn(at: .now)
             case .context(let used, let window):
                 tracked.context = window.map { ContextUsage(tokens: used, window: $0) }
-            case .tool(_, let name, let arguments):
-                tracked.facts.work(.tool, detail: ToolDetail.line(name, JSONValue.parse(Data(arguments.utf8))))
-            case .toolDone:
-                if !tracked.turn.runningTools { tracked.facts.work(.thinking) }
-            case .failed(let text):
-                failure = text
+                changed = true
             case .turnFinished:
                 let questions = tracked.facts.questions
-                tracked.facts.endTurn(failure: failure)
+                changed = tracked.turns.apply(turn) || changed
                 tracked.facts.questions = questions  // 权限与表单随它们自己的事件收起
-            case .exited, .received:
-                break
+            default:
+                // 开始取服务记下的时刻：与对话里回答的时刻（`OpenCodeMessage.at`）同一个钟
+                changed = tracked.turns.apply(turn, at: event.at) || changed
             }
         }
         sessions[sessionID] = tracked
-        if turns.contains(where: \.changesFacts) { publish(sessionID) }
+        if changed { publish(sessionID) }
     }
 
     /// 改一个托管的顶层会话并发布，别的会话不理。`activeAt`：这是服务在这一刻记下的一次活动，会话不在线就上线（在 CuePad 里结束之后的才算，`revives`）。
@@ -158,12 +152,11 @@ extension OpenCodeRuntime {
     }
 
     func subagent(_ id: String, of parent: String, _ body: (inout SubagentState) -> Void) {
-        guard var tracked = sessions[parent] else { return }
+        guard let tracked = sessions[parent] else { return }
         let now = Date()
         if !tracked.facts.subagents.contains(where: { $0.id == id }) { tracked.facts.startSubagent(id, name: "", role: "", at: now) }
         tracked.facts.updateSubagent(id, at: now, body)
         tracked.facts.inFlight = Set(tracked.facts.subagents.filter { $0.state.phase == .known(.running) }.map(\.id))
-        sessions[parent] = tracked
     }
 
     func topLevel(_ sessionID: String) -> String { parents[sessionID] ?? sessionID }

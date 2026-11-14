@@ -6,7 +6,7 @@ import Foundation
 /// Pi 与 CuePad 桥用到的全部目录，唯一权威来源。
 public struct PiPaths: Sendable, Equatable {
     public var agentDirectory: URL
-    /// 桥 socket 目录。`sun_path` 上限 104 字节，所以不用 `$TMPDIR`；扩展端用同一缺省值。
+    /// 桥 socket 目录。`sun_path` 上限 104 字节，所以不用 `$TMPDIR`。
     public var socketDirectory: URL
 
     public var sessionsDirectory: URL { agentDirectory.appending(path: "sessions", directoryHint: .isDirectory) }
@@ -40,7 +40,7 @@ public struct PiPaths: Sendable, Equatable {
         return environment
     }
 
-    /// `CUEPAD_PI_SOCKET_DIR`，缺省 `/tmp/cuepad-<uid>`（扩展端用同一缺省值）。不碰真实世界的进程（`isolatedLibrary` 是它的资料库目录）
+    /// `CUEPAD_PI_SOCKET_DIR`，缺省 `/tmp/cuepad-<uid>`（扩展只认 CuePad 经 `launchEnvironment` 给的这个变量）。不碰真实世界的进程（`isolatedLibrary` 是它的资料库目录）
     /// 没给时按资料库目录另起一个：缺省目录是正式版的，用它桥会连上正式版托管的会话。
     public static func socketDirectory(environment: [String: String], isolatedLibrary: URL? = nil) -> URL {
         if let given = environment["CUEPAD_PI_SOCKET_DIR"], !given.isEmpty { return URL(filePath: given, directoryHint: .isDirectory) }

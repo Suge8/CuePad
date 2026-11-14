@@ -12,10 +12,7 @@ extension ChatScroll {
 
     var unseen: Bool { leftAt.map { $0 != followKey } ?? false }
 
-    var pinned: Bool { follow.wrappedValue.atNewest && !follow.wrappedValue.scrolling && (!holding || unheld) && !deferred && !dockLeft }
-
-    /// 答完时同一次更新里对话长出这一问与回答，这时贴底的话整段当帧顶上去一截，再随卡沉回落下来。先不跟，同 `holding` 期间长在下面，卡沉完（`holding` 落下）一次滑上去。
-    var dockLeft: Bool { docked == nil && offset.dock != nil }
+    var pinned: Bool { follow.wrappedValue.pinned(holding: holding) }
 
     /// 发出时回复框当下收起，发出的话要等写进库才到：那之前留白不跟着变矮，
     /// 那句到了（内容真的长高）再收，与它出现在同一帧；跟着变矮的话贴着最新的整段对话先被拉下来一两帧，再一下顶上去。
@@ -33,7 +30,6 @@ extension ChatScroll {
         /// 不用 action 给的旧值：那是上一次求值，中间几次变化（打开时排开更早的一段）可能求了值却没调 action，拿它比内容变没变高会漏掉。
         private var delivered: (reading: Reading, container: CGFloat, read: CGFloat)?
         private var arrival: UUID?
-        var dock: String?
 
         struct Delivered {
             let reading: Reading?
@@ -101,8 +97,6 @@ extension ChatScroll {
     /// 贴底已由 `ChatFollow` 当场记上，这里只管滚过去。
     func toNewest(sent: Bool, _ reader: ScrollViewProxy) {
         held = sent ? bottomInset : nil
-        if holding { unheld = true }
-        deferred = false
         withAnimation(Motion.spatial(Motion.fade, reduceMotion: reduceMotion)) { toEnd(reader) }
     }
 

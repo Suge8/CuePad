@@ -160,7 +160,7 @@ export function findModel(ctx: ExtensionContext, reference: string): Model | und
 }
 
 /** 上报首条用户消息的字符数上限：它只用来当单行显示名，界面与 Pi 自己的会话列表都只显示一行，
- * 不必把可能几 MB 的首条消息（贴入的日志、代码）在每次连接与同步时传来传去。与 CueBridge 的 `SessionName.firstMessageLimit` 相同。 */
+ * 不必把可能几 MB 的首条消息（贴入的日志、代码）在每次连接与同步时传来传去。截断以 CueBridge 的 `SessionName.firstMessageLimit` 为准（同一个数），这里只为少传。 */
 const FIRST_MESSAGE_LIMIT = 200;
 
 export function reason(error: unknown): string {

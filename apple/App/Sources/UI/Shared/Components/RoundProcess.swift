@@ -21,6 +21,7 @@ struct RoundProcess: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.chatStay) private var stay
     @State private var toggled: Bool?
+    @State private var key = UUID()
     @State private var settled = false
 
     nonisolated enum Ending: Equatable {
@@ -40,7 +41,7 @@ struct RoundProcess: View {
             let expanded = !tools.items.isEmpty && (toggled ?? (message == nil || fresh || DebugHooks.preset.toolsOpen))
             VStack(alignment: .leading, spacing: 0) {
                 Button {
-                    stay?(!expanded)
+                    stay?(key, !expanded)
                     withAnimation(motion) { toggled = !expanded }
                 } label: { header(process, open: tools.items.isEmpty ? nil : expanded) }
                     .buttonStyle(PressStyle(.inline))
@@ -81,6 +82,7 @@ struct RoundProcess: View {
                 guard fresh, (try? await Task.sleep(for: Self.beat)) != nil else { return }
                 withAnimation(motion) { settled = true }
             }
+            .onDisappear { if toggled == true { stay?(key, false) } }
         } else {
             // 还没调过工具：此刻在做的（在想、只说了话），一行：对话末尾只给它留一行（`ChatLiveSlot`）
             let live: (SessionShown, String)? = if case .live(let shown, let doing, _) = ending, !shown.speaking { (shown, doing) } else { nil }
@@ -180,14 +182,7 @@ struct RoundProcess: View {
     }
 
     static func icon(tool: String?) -> Icon {
-        switch tool?.lowercased() {
-        case nil: .pondering
-        case "edit", "write": icon(.edit)
-        case "bash": icon(.command)
-        case "read": icon(.read)
-        case "grep", "find", "glob", "ls": icon(.search)
-        default: icon(.other)
-        }
+        tool.map { icon(ChatMessage.Tools.Kind(tool: $0)) } ?? .pondering
     }
 
     /// 会话里的几类；Cue 的动作只在 Cue 页的经过里（`CueTrace.icon`），会话里没有。

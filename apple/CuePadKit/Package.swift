@@ -18,19 +18,15 @@ let package = Package(
         .library(name: "CueTestSupport", targets: ["CueTestSupport"]),
     ],
     targets: [
-        // 仅依赖 Foundation。
         .target(name: "CueText"),
-        // 直接用系统 SQLite3，零第三方依赖。
         .target(name: "CueStore", dependencies: ["CueText"]),
         .target(name: "CueEditor", dependencies: ["CueText"]),
         // 仅 macOS，iOS 目标不依赖。
-        .target(name: "CueBridge", dependencies: ["CueStore", "CueText", "CueAgent"], exclude: ["README.md"], resources: [.copy("Extension"), .copy("Brain/claude-subscription.ts"), .copy("Brain/cue-tools.ts"), .copy("Brain/cue-fast.ts"), .copy("Dsh/dsh-cuepad.mjs")]),
+        .target(name: "CueBridge", dependencies: ["CueStore", "CueText", "CueAgent"], exclude: ["README.md"], resources: [.copy("Extension"), .copy("Brain/claude-subscription.ts"), .copy("Brain/cue-tools.ts"), .copy("Dsh/dsh-cuepad.mjs")]),
         .target(name: "CueSync", dependencies: ["CueStore", "CueText"]),
         .target(name: "CueAgent", dependencies: ["CueStore", "CueText"]),
-        // 只给测试目标依赖。
         .target(name: "CueTestSupport", dependencies: ["CueStore"], path: "Tests/CueTestSupport"),
         .testTarget(name: "CueSyncTests", dependencies: ["CueSync", "CueTestSupport"]),
-        // 零第三方依赖。
         .executableTarget(name: "CueCLI", dependencies: ["CueStore", "CueText", "CueAgent"]),
         .testTarget(name: "CueCLITests", dependencies: ["CueCLI", "CueTestSupport"]),
         .testTarget(name: "CueTextTests", dependencies: ["CueText"]),

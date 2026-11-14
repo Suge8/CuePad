@@ -47,7 +47,7 @@ import Testing
         recipients.append(recipient)
     }
     func event(_ payload: VoiceSignalPayload, session: VoiceSessionID) -> VoiceRelayEvent {
-        .received(.init(header: .init(version: 1, sender: peer, recipient: local, session: session, sequence: 1, expiresAtMilliseconds: Int64(Date.now.timeIntervalSince1970 * 1000) + 30000, purpose: payload.purpose), payload: payload))
+        .received(.init(header: .init(version: VoiceSignalFormat.version, sender: peer, recipient: local, session: session, sequence: 1, expiresAtMilliseconds: Int64(Date.now.timeIntervalSince1970 * 1000) + 30000, purpose: payload.purpose), payload: payload))
     }
 }
 
@@ -82,7 +82,7 @@ import Testing
         try await fixture.connect()
         let original = try await store.addCueMessage(.you, text: "original audit request")
         let result = try await store.addCueMessage(.cue, text: "saved result", answeredRequests: nil)
-        try await eventually("saved result visible") { fixture.call.replies.contains { $0.id == result.id } }
+        try await eventually("saved result visible") { fixture.voiceRecord.replies.contains { $0.id == result.id } }
         let command = UUID()
         let recovered = try await app.services.voice.command(.recover(request: .recorded(message: original.id)), id: command)
         #expect(recovered == .recorded(message: original.id))
@@ -142,7 +142,7 @@ import Testing
         let first = Task { try await voice.command(.recover(request: .recorded(message: UUID())), id: firstID) }
         let second = Task { try await voice.command(.recover(request: .recorded(message: UUID())), id: secondID) }
         try await eventually("both commands sent") { signal.sent.filter { if case .command = $0 { true } else { false } }.count == 2 }
-        let header = VoiceSignalHeader(version: 1, sender: signal.local, recipient: signal.peer, session: session,
+        let header = VoiceSignalHeader(version: VoiceSignalFormat.version, sender: signal.local, recipient: signal.peer, session: session,
                                        sequence: 1, expiresAtMilliseconds: 1, purpose: .command(id: .init(firstID)))
         await voice.receive(.rejected(header: header, reason: .unavailable))
         #expect(voice.pending[.init(firstID)] == nil)
@@ -178,7 +178,7 @@ import Testing
         let (app, voice, signal, _) = try await phone(makeMedia: { nextMedia })
         defer { app.services.cancelBackgroundWork() }
         let old = try #require(voice.session)
-        let header = VoiceSignalHeader(version: 1, sender: signal.local, recipient: signal.peer, session: old, sequence: 1, expiresAtMilliseconds: 1, purpose: .media)
+        let header = VoiceSignalHeader(version: VoiceSignalFormat.version, sender: signal.local, recipient: signal.peer, session: old, sequence: 1, expiresAtMilliseconds: 1, purpose: .media)
         await voice.end(notify: false)
         let next = AuditMedia()
         nextMedia = next
@@ -230,9 +230,9 @@ import Testing
         #expect(!media.closing)
         #expect(voice.isLive)
         #expect(!signal.sent.contains { if case .media(.hangup) = $0 { true } else { false } })
-        await workspace.hangUpVoiceCall()
+        try await workspace.performVoice(.hangUp)
         #expect(media.closed)
-        #expect(workspace.phoneVoice.phase == .ended(reason: .hungUp))
+        #expect(workspace.voiceViewState.phase == .ended(reason: .hungUp))
         #expect(signal.sent.contains { if case .media(.hangup(reason: .hungUp)) = $0 { true } else { false } })
     }
 

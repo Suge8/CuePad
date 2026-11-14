@@ -64,7 +64,7 @@ extension CueStore {
     let tasks = try db.query(
       """
       SELECT \(Card.selection(as: "t")) FROM cards t LEFT JOIN projects p ON p.id = t.projectID
-      WHERE \(Self.visibleTask) \(doneOnly ? " AND t.completedAt IS NOT NULL" : "") \(project == nil ? "" : " AND t.projectID = ?")
+      WHERE \(Self.taskOnBoard("t")) \(doneOnly ? " AND t.completedAt IS NOT NULL" : "") \(project == nil ? "" : " AND t.projectID = ?")
       ORDER BY \(Self.taskProjectOrder), \(doneOnly ? Self.recentlyDone : "t.sortKey, t.id")
       """, project.map { [$0] } ?? []
     ) { Card(row: $0) }
@@ -95,10 +95,8 @@ extension CueStore {
     return ordered
   }
 
-  private static let liveTask = "u.deletedAt IS NULL AND u.archivedAt IS NULL AND u.todoAt IS NOT NULL"
-
   private static let taskWithParent =
-    "FROM cards t LEFT JOIN projects p ON p.id = t.projectID LEFT JOIN cards u ON u.id = t.parentID AND \(liveTask)"
+    "FROM cards t LEFT JOIN cards u ON u.id = t.parentID AND \(taskOnBoard("u"))"
   private static let topLevel = "(u.id IS NULL OR (t.completedAt IS NULL AND u.completedAt IS NOT NULL))"
 
   /// 给用户看的任务数与完成数只有这一处定义。顶层是显示在顶层的任务：没有上级、上级不在（没到、在回收站、归档了），或自己没完成而上级已完成（看板上它在顶层）。
@@ -114,7 +112,7 @@ extension CueStore {
       """
       SELECT t.projectID, SUM(t.completedAt IS NULL AND began), SUM(t.completedAt IS NULL AND NOT began), SUM(t.completedAt IS NOT NULL)
       FROM (SELECT t.projectID, t.completedAt, t.startedAt IS NOT NULL AS began \(Self.taskWithParent)
-      WHERE \(Self.visibleTask) AND \(Self.topLevel) \(scope)) t
+      WHERE \(Self.taskOnBoard("t")) AND \(Self.topLevel) \(scope)) t
       GROUP BY +t.projectID
       """, arguments
     ) { (project: $0.uuid(0), counts: TaskCounts(inProgress: Int($0.int(1)), todo: Int($0.int(2)), done: Int($0.int(3)))) }
@@ -135,7 +133,7 @@ extension CueStore {
     return try db.query(
       """
       SELECT \(Card.selection(as: "t")) \(Self.taskWithParent)
-      WHERE \(Self.visibleTask) AND t.completedAt IS NOT NULL AND \(Self.topLevel)\(scope)
+      WHERE \(Self.taskOnBoard("t")) AND t.completedAt IS NOT NULL AND \(Self.topLevel)\(scope)
       ORDER BY \(Self.recentlyDone) LIMIT ?
       """, arguments + [limit ?? -1]
     ) { Card(row: $0) }
@@ -158,7 +156,7 @@ extension CueStore {
       """
       SELECT parentID, COUNT(*), COUNT(completedAt),
         CAST(AVG(CASE WHEN completedAt > startedAt THEN completedAt - startedAt END) AS INTEGER) FROM cards
-      WHERE parentID IS NOT NULL AND todoAt IS NOT NULL AND deletedAt IS NULL AND archivedAt IS NULL \(scope)
+      WHERE parentID IS NOT NULL AND \(taskOnBoard()) \(scope)
       GROUP BY parentID
       """, arguments
     ) { (parent: $0.uuid(0), progress: TaskProgress(done: Int($0.int(2)), total: Int($0.int(1)), stepTime: $0.intOrNil(3).map { Double($0) / 1000 })) }

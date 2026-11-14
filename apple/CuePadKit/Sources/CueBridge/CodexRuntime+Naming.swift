@@ -4,7 +4,7 @@ import Foundation
 
 /// app-server 没有起名的接口，照 Codex 终端界面自动起名（0.166 起的 `thread_title.rs`）：在承载这个会话的进程里开一个用完不留的临时线程（`ephemeral`，只读、不审批，钩子、工具、MCP 都关），
 /// 用输出格式跑一轮拿到 `{title}`，再退订它；只回不写（写回由 App 复核后走改名，即 `thread/name/set`）。模型用终端界面起名的那个（账号的模型清单里有时，低强度），没有就用会话当前的模型。
-/// 临时线程报出 `thread/started` 时已记为不是子代理（`notification`），它的推送只到这里（`naming`），不进会话。
+/// 临时线程报出 `thread/started` 时已记为不是子代理（`notification`），它的推送只到这里（`Tracked.naming`），不进会话。
 extension CodexRuntime {
     static let namingModel = "gpt-5.6-luna"
 
@@ -41,11 +41,10 @@ extension CodexRuntime {
             guard let thread = try await rpc.call("thread/start", .object(start))["thread"]?["id"]?.string else {
                 throw BridgeError.rejected("failed: no thread")
             }
-            let key = "\(thread).\(rpc.pid)"
             let turn = CodexNamingTurn()
-            self.naming[key] = turn
+            session.naming[thread] = turn
             defer {
-                self.naming[key] = nil
+                session.naming[thread] = nil
                 Task { _ = try? await rpc.call("thread/unsubscribe", ["threadId": .string(thread)]) }
             }
             let prompt = "\(SessionNameSuggestion.instructions)\n\nUser prompt:\n\(firstMessage)"

@@ -31,6 +31,43 @@ struct RealHostedResumeTests {
         }
     }
 
+    /// 结束后另起一个进程接着这个会话（能另起接入的几家连接入一起重开，同 App 重开）：会话还是它、进程是新的钉住的那份，
+    /// 模型收到的对话里紧接着先前那句的是这句，答得出只在先前那句里的词。
+    @Test(.tags(.smoke), arguments: Hosting.allCases)
+    func anEndedSessionIsResumedByANewProcessWithItsConversation(_ hosting: Hosting) async throws {
+        try await EndRig.run(hosting, timing: noDeadline) { rig in
+            rig.model.on("Which word?") { request in
+                .say(request.said.lazy.compactMap { $0.firstMatch(of: /Remember the word (\w+)/)?.1 }.first.map(String.init) ?? "UNKNOWN")
+            }
+            let id = try await rig.open()
+            let first = try await rig.converse("Remember the word PAPAYA.", in: id)
+            try await eventually("第一轮答完") { rig.bridge.session(id: id)?.state == .settled }
+            try await rig.bridge.end(id)
+            try await eventually("下线") { rig.bridge.session(id: id) == nil }
+            _ = try await rig.restartRuntime()
+
+            let resumed = try await rig.runtime.resume(rig.indexed(first))
+            let back = try #require(rig.bridge.session(id: resumed))
+            #expect(back.sessionID == first.sessionID && back.pid != first.pid)
+            switch hosting {
+            case .grok: #expect(rig.runsPinned(back.pid))
+            case .dsh: #expect(commandLine(of: back.pid).contains("/\(PinnedAgent.dsh.name)/\(PinnedAgent.dsh.version)/"), "\(commandLine(of: back.pid))")
+            case .claude, .codex: break
+            }
+            try await rig.bridge.send(SessionMessage(text: "Which word?"), to: resumed)
+            try await eventually("答出先前记下的词") { rig.lastReply(first) == "PAPAYA" }
+            let request = try #require(rig.model.requests.last { !$0.tools.isEmpty && $0.prompt.contains("Which word?") })
+            let said = request.said
+            if hosting == .codex {
+                #expect(said.suffix(2) == ["Remember the word PAPAYA.", "Which word?"], "恢复后模型看到先前的对话：\(said)")
+            } else {
+                // 各家给你的话包了一层（Grok 的 `<user_query>`、dsh 的运行环境、Claude Code 插进的提醒）
+                let earlier = said.lastIndex { $0.contains("Remember the word PAPAYA.") }
+                #expect(said.last?.contains("Which word?") == true && earlier.map { $0 < said.count - 1 } == true, "恢复后模型看到先前的对话：\(said)")
+            }
+        }
+    }
+
     /// 第一个恢复已经起了进程、还没连上，第二个到了：等它，不收它的进程。
     @Test func aResumeArrivingWhileAnotherIsLaunchingJoinsIt() async throws {
         try await EndRig.run(.codex, timing: noDeadline) { rig in

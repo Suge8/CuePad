@@ -12,7 +12,7 @@ struct MenuBarLive: View {
     @State private var showsAll = false
 
     private static let limit = 4
-    private static let spacing: CGFloat = 9
+    private static let spacing = Spacing.item
     private static let style = SessionRow.Style.compact
 
     var body: some View {

@@ -44,7 +44,7 @@ func energyMillijoules() -> Double {
 }
 
 #if os(macOS)
-/// `-CuePadTraceWait YES`（perf 脚本带着 CUEPAD_TRACE 时，_trace.sh）：写 `AWAIT trace <PID>` 停着，等脚本按 PID 开录了发来 SIGUSR1。
+/// `-CuePadTraceWait YES`（perf.py 带着 CUEPAD_TRACE 时）：写 `AWAIT trace <PID>` 停着，等脚本按 PID 开录了发来 SIGUSR1。
 /// 按 PID 开录要好几秒，不等的话短的测量还没开录就量完了。在主线程上同步等（冷启动在进 run loop 之前就等）：开录之前什么都不做。
 /// 信号先忽略、经 kqueue 收：进程里哪个线程接到都不会被它结束；先登记再写这一行，信号不会在没人接的时候到。
 func waitForTracer() {

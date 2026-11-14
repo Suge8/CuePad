@@ -2,7 +2,7 @@
 """性能的新旧前后对比：两个检出各构建一次，旧新交替跑同一条 perf 命令，每轮跑完立刻打一行，最后列两边中位数的对比表。前台阻塞到结束，不用另外轮询。
 
 用法：xc.sh perf ab <旧检出> <新检出> <轮数> [idle|launch] <mac|ios> [次数] [参数…]
-  后面就是 `xc.sh perf` 自己的参数（perf-mac.sh、perf-ios.sh、perf-idle.sh、perf-launch.sh 的头注释），如：
+  后面就是 `xc.sh perf` 自己的参数（perf.py 头注释），如：
     xc.sh perf ab ../CuePad ./ 3 mac 1 -CuePadInteractOnly 会话页       单次交互
     xc.sh perf ab ../CuePad ./ 4 idle mac 1 30                           静置（每次 1 个进程、量 30 秒）
     xc.sh perf ab ../CuePad ./ 5 launch mac 1                            冷启动
@@ -22,7 +22,6 @@ from datetime import datetime
 
 OUT_ROOT = "/tmp/cuepad-perf-ab"
 ROWS = {"idle": "idle.jsonl", "launch": "launch.jsonl", "interact": "interact.jsonl"}
-LAUNCH_PREFIX = "LAUNCH-ROW "
 # 主要看的指标（每轮行与表里先列、interact 只列这些）；idle 与 launch 的表里其余数值指标跟在后面
 PRIMARY = {
     "idle": ["instructionsM", "wakeupsPerSec", "cpuMs", "energyMJ"],
@@ -73,7 +72,7 @@ def fail(checkout, log, status):
 def read_rows(checkout, kind):
     rows = []
     for line in open(f"{checkout}/apple/.derived-perf/Build/{ROWS[kind]}"):
-        line = line.removeprefix(LAUNCH_PREFIX).strip()
+        line = line.strip()
         if line:
             rows.append(json.loads(line))
     return rows

@@ -1,17 +1,18 @@
 import Foundation
 
 extension DeliveryRequest {
-  func progress(after outcome: DeliveryOutcome, at completed: Date) -> (DeliveryStatus, ShownText?, Date?) {
+  /// `resuming`：重开后接着核对，沿用领取时的期限（旧记录没有期限也不补造），由核对自己收尾。
+  func progress(after outcome: DeliveryOutcome, at completed: Date, resuming: Bool = false) -> (DeliveryStatus, ShownText?, Date?) {
     let (status, reason): (DeliveryStatus, ShownText?) =
       switch outcome {
       case .succeeded: (.succeeded, nil)
-      case .confirming where deadlineAt.map({ completed < $0 }) != true:
+      case .confirming where !resuming && deadlineAt.map({ completed < $0 }) != true:
         (.unconfirmed, Speech.unconfirmedReason)
       case .confirming: (.confirming, nil)
       case .failed(let reason): (.failed, reason)
       case .unconfirmed(let reason): (.unconfirmed, reason)
       }
-    let deadline = status == .confirming ? completed.addingTimeInterval(Speech.receiptLimit) : deadlineAt
+    let deadline = status == .confirming && !resuming ? completed.addingTimeInterval(Speech.receiptLimit) : deadlineAt
     return (status, reason, deadline)
   }
 
@@ -25,7 +26,7 @@ extension DeliveryRequest {
       case .confirming: 3
       case .executing: 2
       case .preparing: 1
-      case .pending: row.text("handledBy") == nil ? 0 : 2
+      case .pending: 0
       case nil: 5
       }
     }
@@ -65,12 +66,6 @@ extension CueStore {
     let awaitingResult = try isAwaitingResult(remote.id)
     try applyVersion(remote, systemFields)
     if let serverAt { try db.run("UPDATE deliveryRequests SET serverAt = ? WHERE id = ? AND serverAt IS NULL", [serverAt, remote.id]) }
-    // 旧同步快照仍带着领取事实，却把状态退回 pending：入库时就收口为未知，不只在执行器里跳过。
-    try db.run(
-      """
-      UPDATE deliveryRequests SET status = '\(DeliveryStatus.unconfirmed.rawValue)', failure = ?2, completedAt = COALESCE(completedAt, ?3), modifiedAt = MAX(modifiedAt + 1, ?3)
-      WHERE id = ?1 AND status = '\(DeliveryStatus.pending.rawValue)' AND handledBy IS NOT NULL
-      """, [remote.id, DeliveryRequest.interruptedReason.stored, Date.stamp])
     if awaitingResult {
       try db.run(
         "UPDATE deliveryRequests SET resultReceivedAt = ? WHERE id = ? AND status IN ('\(DeliveryStatus.succeeded.rawValue)', '\(DeliveryStatus.failed.rawValue)')",

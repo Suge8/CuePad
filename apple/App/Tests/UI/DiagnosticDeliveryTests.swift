@@ -24,10 +24,11 @@ struct DiagnosticDeliveryTests {
         services.startDiagnostics()
         defer { for side in [phone, mac] { side.services.cancelBackgroundWork() } }
         let inbox = DiagnosticInbox(directory: mac.directory.appending(path: "DeviceLogs"), sync: try #require(mac.services.sync as? CloudSync))
-        let arrived = {
+        let landed = {
             let folders = try FileManager.default.contentsOfDirectory(at: inbox.directory, includingPropertiesForKeys: nil).filter { !$0.lastPathComponent.hasPrefix(".") }
             return Set(try folders.flatMap { try FileManager.default.contentsOfDirectory(atPath: $0.path) })
         }
+        let arrived = { try landed().filter { !$0.hasSuffix(".summary.json") } }
 
         services.diagnostics.record((1...12).map(crash))
         try await services.diagnostics.sendRecentLogs()
@@ -38,6 +39,12 @@ struct DiagnosticDeliveryTests {
         #expect(!kept.contains { $0.hasPrefix("2026-01-03") })
         try await inbox.check()
         #expect(try arrived() == Set(kept))
+        // xc.sh diag 读的要点：每份崩溃旁边一份，带着解出的标题
+        let summaries = try landed().filter { $0.hasSuffix(".summary.json") }
+        #expect(summaries.count == kept.count - 1)
+        let folder = try #require(FileManager.default.contentsOfDirectory(at: inbox.directory, includingPropertiesForKeys: nil).first { !$0.lastPathComponent.hasPrefix(".") })
+        let summary = try JSONSerialization.jsonObject(with: Data(contentsOf: folder.appending(path: try #require(summaries.first)))) as? [[String: Any]]
+        #expect(summary?.first?["title"] as? String == "崩溃 · EXC_BAD_ACCESS（SIGSEGV）")
         let log = try String(contentsOf: services.diagnostics.archive.url(try #require(kept.first)), encoding: .utf8)
         #expect(log.hasPrefix("# 最近日志 | CuePad "))
 
@@ -48,6 +55,7 @@ struct DiagnosticDeliveryTests {
             return files.contains { $0.hasPrefix("2026-01-20") } && !files.contains { $0.hasPrefix("2026-01-04") }
         }
         #expect(try arrived() == Set(services.diagnostics.archive.names()))
+        #expect(try landed().count(where: { $0.hasSuffix(".summary.json") }) == services.diagnostics.archive.names().count - 1)
 
         // 主线程卡住先记一份、恢复后原地改写带上时长：Mac 上的跟着换成恢复后的
         var note = FreezeNote(start: .now, seconds: nil, page: "cue", actions: [], version: "1", device: "iPhone18,1", os: "iOS 27")
@@ -79,8 +87,7 @@ struct DiagnosticDeliveryTests {
         services.startDiagnostics()
 
         services.diagnostics.record([crash(day: 5)])
-        let retry = clock.now.addingTimeInterval(DiagnosticOutbox.firstRetry.seconds)
-        try await clock.waitForSleeper(until: retry)
+        try await clock.waitForSleeper()
         try await inbox.check()
         #expect(try FileManager.default.contentsOfDirectory(atPath: inbox.directory.path).filter { !$0.hasPrefix(".") }.isEmpty)
 

@@ -10,25 +10,21 @@ import sys
 import threading
 import time
 
-from app_env import APPLE, BUILD, FRONT, FRONT_RETRY, HOLD, READY, REC_SECONDS, RUN_TTL, SLOT, SOCKETS, WINDOW, die, disclaimed, isolated_env
-from app_proc import alive, quit_mac, silence, wait_ready
+from _lock import holding, me, take
+from app_env import APPLE, BUILD, EXEC_AT, FRONT, FRONT_RETRY, HOLD, READY, REC_SECONDS, RUN_TTL, SLOT, SLOT_NAME, SOCKETS, WINDOW, die, disclaimed, isolated_env
+from app_proc import quit_mac, silence, wait_ready
 from app_shots import batch
-
-
-def read_note(slot):
-    slot.seek(0)
-    try:
-        return json.loads(slot.read() or "{}")
-    except ValueError:
-        return {}
-
 
 SLOT_WAIT = 15  # 通知占着的看守退出后，等它放锁的上限秒数
 
 
-def wait_release(slot, note):
-    """通知过占着的看守（note 里登记的 app.py）之后等它放锁：放了就返回（flock 阻塞在线程里，事件驱动，不轮询）。
-    SLOT_WAIT 秒还不放（看守被暂停、忽略了 TERM，或登记不对应任何人）就报出它的身份退出，不凭旧 PID 去杀。"""
+def who(h):
+    return f"pid {h['pid']}（{h['what']}）：{h['cmd']}"
+
+
+def wait_release(slot, h):
+    """等占着的人（h：登记里的那一条，没有为 None）放锁：放了就返回（flock 阻塞在线程里，事件驱动，不轮询）。
+    SLOT_WAIT 秒还不放（看守被暂停、忽略了 TERM，别的测量还在跑，或没有登记）就报出它的身份退出，不凭旧 PID 去杀。"""
     got = threading.Event()
 
     def block():
@@ -38,35 +34,27 @@ def wait_release(slot, note):
     threading.Thread(target=block, daemon=True).start()
     if got.wait(SLOT_WAIT):
         return
-    pid = note.get("holder")
-    who = subprocess.run(["ps", "-o", "pid=,stat=,lstart=,command=", "-p", str(pid)], capture_output=True, text=True).stdout.strip() if pid else ""
-    if alive(note):
-        die(f"本检出上一个 run 的看守 {SLOT_WAIT} 秒没放下 Mac 实例位（已发 TERM）：{who}\n"
-            "下一步：xc.sh stop 再试一次；上面状态是 T（被暂停）的先 kill -CONT <PID> 让它处理 TERM；仍不退出，请用户确认后只对这个 PID 发 KILL，不按名字找")
-    die(f"本检出的 Mac 实例位被占着 {SLOT_WAIT} 秒，登记里的看守不在（登记：{json.dumps(note, ensure_ascii=False)}）：多半是别的进程在用，或登记是旧的。\n"
+    if h and h["what"] == "run":
+        die(f"本检出上一个 run 的看守 {SLOT_WAIT} 秒没放下 Mac 实例位（已发 TERM）：{who(h)}\n"
+            "下一步：xc.sh stop 再试一次；ps -o stat= -p <PID> 是 T（被暂停）的先 kill -CONT <PID> 让它处理 TERM；仍不退出，请用户确认后只对这个 PID 发 KILL，不按名字找")
+    if h:
+        die(f"本检出的 Mac 实例位被占着 {SLOT_WAIT} 秒：{who(h)}\n下一步：等它结束再试")
+    die(f"本检出的 Mac 实例位被占着 {SLOT_WAIT} 秒，没有登记的持有者。\n"
         f"下一步：等它用完再试；lsof {SLOT} 看谁开着它（开着不等于正持有）；不要删这个文件")
 
 
-def take_slot():
-    """占住本检出那一份。占着的只会是 run 留下的看守（本检出的命令由 _lock.sh 排队），换掉它。"""
+def take_slot(what, **extra):
+    """占住本检出那一份并登记（what：run、shot、rec、bench；sync-bench.py 另经 _lock.hold 占）。占着的是 run 留下的看守就换掉它，
+    别的（本检出的命令由 _lock.sh 排队，只剩刚收尾的测量）等它放。"""
     os.makedirs(os.path.dirname(SLOT), exist_ok=True)
     slot = open(SLOT, "a+")
-    try:
-        fcntl.flock(slot, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        return slot
-    except BlockingIOError:
-        pass
-    note = read_note(slot)  # 锁被占着，记录就是占着的那个写的
-    if alive(note):
-        os.kill(note["holder"], signal.SIGTERM)
-    wait_release(slot, note)
+    if not take(slot):
+        h = holding(SLOT_NAME)
+        if h and h["what"] == "run":
+            os.kill(h["pid"], signal.SIGTERM)
+        wait_release(slot, h)
+    me(what=what, **extra).add(SLOT_NAME)
     return slot
-
-
-def write_note(slot, **note):
-    slot.truncate(0)
-    slot.write(json.dumps(note))
-    slot.flush()
 
 
 class Mac:
@@ -79,7 +67,7 @@ class Mac:
         self.ready, self.log = READY, re.sub(r"/Build/Products/.*", "/app-mac.log", app)
 
     def __enter__(self):
-        self.slot = take_slot()
+        self.slot = take_slot(self.what)
         # 显示器睡着时窗口不上屏、截不到画面：-u 叫醒它，-d 到看守退出前不让它再睡（只 -u 的断言几秒就过期）
         subprocess.Popen(["caffeinate", "-d", "-u", "-w", str(os.getpid())], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return self
@@ -95,7 +83,7 @@ class Mac:
         self.proc = subprocess.Popen(disclaimed([f"{self.app}/Contents/MacOS/CuePad", *args]), env=dict(isolated_env(self.library), CUEPAD_SHOT_READY=self.ready, **front_env(args)),
                                      stdin=subprocess.DEVNULL, stdout=open(self.log, "w"), stderr=subprocess.STDOUT)
         front_keeper(self.proc.pid, args)
-        write_note(self.slot, holder=os.getpid(), app=self.proc.pid, what=self.what)
+        me().publish(app=self.proc.pid)
         if launched:
             launched(self.proc.pid)
         return wait_ready(self.ready, self.proc.pid, self.log)
@@ -107,7 +95,7 @@ class Mac:
 
     def __exit__(self, *_):
         self.quit()
-        self.slot.truncate(0)
+        me().drop(SLOT_NAME)
         self.slot.close()
 
 
@@ -174,14 +162,15 @@ def run_mac(app, library, args):
 
 
 def exec_mac(app, library, args):
-    """量完自己退出的 bench（perf-mac.sh、perf-idle.sh）：占住本检出那一份后 exec 成 CuePad。锁的文件描述符传给 CuePad，
+    """量完自己退出的 bench（perf.py）：占住本检出那一份后 exec 成 CuePad。锁的文件描述符传给 CuePad，
     随它退出释放；PID 不变，调用方的 $! 就是 CuePad，由调用方按它结束；不留看守进程（借前台的另有前台看守，随它退出）。"""
     if not BUILD.fullmatch(app):
         die(f"只起 apple/.derived* 里的构建，不起 {app}")
-    slot = take_slot()
-    # execAt：rusage.py 的"启动到就绪"从这里算，不算 python 启动与等本检出旧实例退出（进程的启动时刻是 fork 那一刻，exec 不重置）。
+    slot = take_slot("bench", app=os.getpid())
+    # 不算 python 启动与等本检出旧实例退出（进程的启动时刻是 fork 那一刻，exec 不重置）。
     # time.monotonic_ns 在 macOS 上就是 mach_absolute_time 换成纳秒，与内核记账同一个钟
-    write_note(slot, holder=os.getpid(), app=os.getpid(), what="bench", execAt=time.monotonic_ns())
+    with open(EXEC_AT, "w") as f:
+        json.dump({"pid": os.getpid(), "execAt": time.monotonic_ns()}, f)
     os.set_inheritable(slot.fileno(), True)
     os.makedirs(SOCKETS, mode=0o700, exist_ok=True)
     exe = f"{app}/Contents/MacOS/CuePad"
@@ -237,17 +226,14 @@ def stop():
     """结束 run 起的 Mac 实例；返回要报的话，没有就是 None。"""
     os.makedirs(os.path.dirname(SLOT), exist_ok=True)
     with open(SLOT, "a+") as slot:
-        try:
-            fcntl.flock(slot, fcntl.LOCK_EX | fcntl.LOCK_NB)  # 拿得到就是没有实例，留下的记录是旧的
+        if take(slot):  # 拿得到就是没有实例
             return None
-        except BlockingIOError:
-            pass
-        note = read_note(slot)
-        if not alive(note):
-            return "本检出的 Mac 实例是 perf 在量，不是 run 起的，等它量完"
-        os.kill(note["holder"], signal.SIGTERM)
-        wait_release(slot, note)  # 看守收完实例才放锁
-    return f"已结束 Mac 实例 {note['app']}"
+        h = holding(SLOT_NAME)
+        if not h or h["what"] != "run":
+            return f"本检出的 Mac 实例不是 run 起的，不收：{who(h) if h else f'没有登记的持有者（lsof {SLOT}）'}"
+        os.kill(h["pid"], signal.SIGTERM)
+        wait_release(slot, h)  # 看守收完实例才放锁
+    return f"已结束 Mac 实例 {h['app']}"
 
 
 def preflight():

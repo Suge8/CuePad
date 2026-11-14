@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-/// Mac 端的投送执行器：只领取发给本机的请求，一次一个、按创建顺序，经 `handler` 交给 App 层真正执行，把结果写回请求。完成的请求保留 `retention` 后清理，保留规则见 `deleteCompletedDeliveries`。
+/// Mac 端的投送执行器：只领取发给本机的请求，一次一个、按创建顺序，经 `handler` 交给 App 层真正执行，把结果写回请求。到了保留期的请求按 `CueStore.deleteExpiredDeliveries` 排着清理。
 /// - 派发期限从服务器收下它起算（`DeliveryRequest.dispatchDeadline`）：到期还没领取的按失败写回，Mac 离线太久后不再突然发出旧内容；
 /// - 缺前提时在旁边等，与派发期限赛跑，不占执行队列：引用的附件不在本机就取，现有会话没就绪就转准备（`preparing`）等它；取不来、到期都按失败写回；
 /// - 每次领取只交给 handler 一次；任何执行后未知都留待正证据对账，不在领取内重试；
@@ -76,7 +76,6 @@ public actor DeliveryExecutor {
 
   private func boot() async {
     do {
-      try await store.releaseDeliveryReservations(for: hostID)
       try await store.abandonPreparedDeliveries(for: hostID)
       for request in try await store.unsettledDeliveries(for: hostID) {
         guard started, !Task.isCancelled else { return }
@@ -84,7 +83,7 @@ public actor DeliveryExecutor {
         await finish(request, outcome, resuming: true)
       }
       guard started, !Task.isCancelled else { return }
-      let next = try await deleteExpired()
+      let next = try await store.deleteExpiredDeliveries(at: timing.now(), host: hostID)
       guard started, !Task.isCancelled else { return }
       if let next { scheduleCleanup(at: next) }
       roles.put(.expiry, .spawn { [store, hostID, onIssue] _ in
@@ -178,6 +177,11 @@ public actor DeliveryExecutor {
         await finish(request, .failed(ShownText("这个版本的 CuePad 不认识发送方式「\(raw)」，没有执行（可能来自更新版本，请升级 Mac 上的 CuePad）")))
         continue
       }
+      if request.mode == .known(.withdraw) {
+        await reporting { try await store.settleWithdrawal(request, on: hostID) }
+        scheduleCleanup()
+        continue
+      }
       let missing = request.attachmentKeys.filter { store.files.fileURL(for: $0) == nil }
       if !missing.isEmpty {
         fetch(missing, for: request)
@@ -191,13 +195,10 @@ public actor DeliveryExecutor {
       case .ready(let allowed): access = allowed
       }
       guard started, !Task.isCancelled else { return nil }
-      let reserved = await reporting {
-        switch access {
-        case .existingOnly: return try await store.reserveDeliveryTarget(request.id, host: hostID)
-        case .resumable: return try await store.claimDelivery(request.id, host: hostID, until: timing.now().addingTimeInterval(DeliveryRequest.phaseLimit))
-        }
+      let claimed = await reporting {
+        try await store.claimDelivery(request.id, host: hostID, until: timing.now().addingTimeInterval(DeliveryRequest.phaseLimit))
       }
-      if let claimed = reserved, let claimed {
+      if let claimed, let claimed {
         let age = timing.now().timeIntervalSince(request.createdAt)
         Self.log.info("领取投送请求 \(request.id.uuidString.prefix(8), privacy: .public) \(request.mode.rawValue, privacy: .public)，创建后 \(age, format: .fixed(precision: 1)) 秒")
         return Dispatch(request: claimed, access: access)
@@ -224,21 +225,7 @@ public actor DeliveryExecutor {
 
   private func run(_ dispatch: Dispatch) async {
     guard started, !Task.isCancelled else { return }
-    var request = dispatch.request
-    if request.status == .known(.preparing) {
-      if case .waiting(let pending) = await preparation(request) {
-        await prepare(request, pending)
-        return
-      }
-      guard started, !Task.isCancelled else { return }
-      guard let begun = await reporting({ try await store.beginDelivery(request.id, on: hostID, until: timing.now().addingTimeInterval(DeliveryRequest.phaseLimit)) }),
-            let begun else {
-        await reporting { try await store.releaseDeliveryReservations(for: hostID, only: request.id) }
-        return
-      }
-      request = begun
-    }
-    guard started, !Task.isCancelled else { return }
+    let request = dispatch.request
     let began = timing.now()
     // 与取消隔开：handler 不响应取消时 stop 不被它拖住，它留在脱离的任务里自己收尾，结果丢弃（请求已领取，重启时按未知对账）
     let running = request
@@ -251,9 +238,10 @@ public actor DeliveryExecutor {
 
   func finish(_ request: DeliveryRequest, _ outcome: DeliveryOutcome, resuming: Bool = false) async {
     guard started, !Task.isCancelled else { return }
-    let continuing: Bool = if case .confirming = outcome { resuming } else { false }
+    // 重开时接着核对：执行中的落成核对、期限不续；已在核对或未确认的照旧，不退回
+    let continuing: Bool = if case .confirming = outcome { resuming && request.status != .known(.executing) } else { false }
     if !continuing {
-      await reporting { try await store.finishDelivery(request, outcome, at: timing.now()) }
+      await reporting { try await store.finishDelivery(request, outcome, at: timing.now(), resuming: resuming) }
     }
     if case .confirming(let verify) = outcome,
       let stored = await reporting({ try await store.deliveryRequest(request.id) }), let stored,

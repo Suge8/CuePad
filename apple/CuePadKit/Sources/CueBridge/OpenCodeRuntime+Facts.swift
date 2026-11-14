@@ -7,7 +7,8 @@ extension OpenCodeRuntime {
     /// 旧技能目录还认单数的 `skill`。
     nonisolated public static let facts = AgentFacts(
         command: "opencode", homeVariable: "OPENCODE_CONFIG_DIR",
-        home: home, minimumVersion: AgentVersion(2, 0, 0), installScript: "curl -fsSL https://opencode.ai/v2/install | bash", probe: ask,
+        home: home, minimumVersion: AgentVersion(2, 0, 0), installScript: "curl -fsSL https://opencode.ai/v2/install | bash",
+        installDirectory: ".opencode/bin", probe: ask,
         brain: { OpenCodeBrain() },
         skillFolders: ["skills", "skill"], projectFolder: ".opencode")
 

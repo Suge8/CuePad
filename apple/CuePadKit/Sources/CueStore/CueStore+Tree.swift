@@ -30,6 +30,23 @@ extension CueStore {
       """, [id]) { $0.uuid(0) }
   }
 
+  /// 一件事的顶层只有这一条规则，一行（起点, 顶层），作子查询用（`seeds` 是给出起点 id 的查询）：从起点沿在库里的上级往上走到头，上级不在（没到、在回收站）就停在那里。
+  /// 起点自己已删也照走：删掉的任务仍归原来那件事。远端并发留下的环里没有顶层，不出行。
+  static func tops(of seeds: String) -> String {
+    """
+    WITH RECURSIVE up(start, id, parentID) AS (
+      SELECT c.id, c.id, c.parentID FROM cards c WHERE c.id IN (\(seeds))
+      UNION SELECT up.start, p.id, p.parentID FROM cards p JOIN up ON p.id = up.parentID WHERE p.deletedAt IS NULL)
+    SELECT start, id AS top FROM up
+    WHERE parentID IS NULL OR NOT EXISTS (SELECT 1 FROM cards p WHERE p.id = up.parentID AND p.deletedAt IS NULL)
+    """
+  }
+
+  /// 所在那件事的顶层（`tops`）；不在库里的、在环里的是它自己。
+  func top(of id: UUID) throws -> UUID {
+    try db.first(Self.tops(of: "SELECT ?"), [id]) { $0.uuid(1) } ?? id
+  }
+
   /// 任务连自己在内往下有几级任务（挂在下面的灵感不算一级）。只数到 `Card.maxTaskDepth`：判断超限够了，也让环里的数据数得完。
   func taskHeight(of id: UUID) throws -> Int {
     try db.first(

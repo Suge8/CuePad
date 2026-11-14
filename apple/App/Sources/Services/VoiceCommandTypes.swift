@@ -8,13 +8,6 @@ nonisolated enum VoiceRequestReference: Hashable, Codable, Sendable {
     case unrecorded(session: VoiceSessionID, request: UUID)
 }
 
-/// Mac 从已核实的 Cue 请求 → 投送 → 实际会话回合派生给手机；只是操作前提，不是客户端授予的停止权限。
-/// 执行前同事务重验全部字段，Agent 接收端仍核对原 delivery；任何一项已变就拒绝，不能按 sessionID 改停后来的工作。
-nonisolated struct VoiceExecutionTarget: Hashable, Codable, Sendable {
-    let request: UUID
-    let turn: TurnTarget
-}
-
 /// 用户的每次新动作各有 command ID；同一动作的重复包不能重复执行。断线不自动重发命令。
 /// 恢复可以发生在媒体已结束之后：认证仍须当前双方租约，业务授权按原请求重读 Store，不能套用“当前媒体 call”过滤器。
 nonisolated struct VoiceCommand: Equatable, Codable, Sendable {
@@ -26,7 +19,9 @@ nonisolated struct VoiceCommand: Equatable, Codable, Sendable {
     enum Action: Equatable, Codable, Sendable {
         case recover(request: VoiceRequestReference)
         case repeatReply(message: UUID)
-        case stop(target: VoiceExecutionTarget)
+        /// Mac 从已核实的 Cue 请求 → 投送 → 实际会话回合派生的那一轮；执行前同事务重验，Agent 接收端仍核对原 delivery，
+        /// 任何一项已变就拒绝，不能按 sessionID 改停后来的工作。
+        case stop(target: TurnTarget)
     }
 
     let id: ID
@@ -51,19 +46,4 @@ nonisolated struct VoiceCommandResult: Equatable, Codable, Sendable {
 
     let command: VoiceCommand.ID
     let outcome: Outcome
-}
-
-extension VoiceCommandResult.Outcome {
-    func requireAccepted() throws {
-        guard case .rejected(let reason) = self else { return }
-        let issue: VoiceIssue = switch reason {
-        case .originalMissing, .sourceMismatch: .originalMissing
-        case .alreadyHandled: throw SendError.alreadyHeard
-        case .unconfirmed: throw SendError.alreadyHanded
-        case .turnChanged: .turnChanged
-        case .unavailable: .busy
-        case .failed: .storageUnavailable
-        }
-        throw issue
-    }
 }

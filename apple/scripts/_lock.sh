@@ -7,17 +7,17 @@
 # 2. iOS 的测试、截图、录屏、测量从全机共 SIM_SLOTS 个槽位里领一个（每个槽位一把锁，见 _sim.sh），全占着就等空出一个。
 #    每个槽位同一时刻最多开着一台"CuePad <机型> #<槽位号>"：换机型时先关掉这个槽位上别的机型的；领槽位时先挑已开着这一机型的，少重开机。
 #    机型再多，全机开着的 CuePad 模拟器也不超过 SIM_SLOTS 台（按机型各开一池、不关时，实测同时开了 16 台、交换区满）。
-# 3. 描述文件全机一份（PROFILES_DIR）：provision 重建时先删同名的旧文件，别的检出正在归档、导出或给构建嵌描述文件就读不到（#63）。
+# 3. 描述文件全机一份（provision.py 的 PROFILES_DIR）：provision 重建时先删同名的旧文件，别的检出正在归档、导出或给构建嵌描述文件就读不到（#63）。
 #    所以从生成描述文件到最后一个用它的签名步骤，全机一次一个，锁就是这个目录：signing_begin 让脚本打开它、在上面排队拿锁，signing_end 关掉。
 #    这把锁跟着脚本的描述符传给它起的进程：脚本失败退出时放，脚本被 kill 而 xcodebuild 还在归档时等它也结束才放。
 #    它不受 HOLD_LIMIT 管，排队照样有 LOCK_WAIT 与持有者列表。
-#    用它的：发版与真机（release-*.sh）、独立的 xc.sh provision、读描述文件的 CUEPAD_SIGN=development 构建与 activity-log。公证、上传不用描述文件，不在锁里。
+#    用它的：发版与真机（release-*.sh）、独立的 xc.sh provision、读描述文件的 CUEPAD_SIGN=development 构建。公证、上传不用描述文件，不在锁里。
 # 锁都是 flock，规则 1、2 只由这里的入口进程持有（Python 打开的文件不传给子进程），它退出时内核释放，崩了也不留死锁。持有者把 CUEPAD_SIM=<槽位号，没领为空> 传给子进程，
 # 脚本再调脚本不重复进锁。任务最多跑 HOLD_LIMIT 秒，超了连同它起的全部进程结束，防止卡死的任务一直占着；模拟器准备另受 SIM_PREP_LIMIT 管（它在任务开始前，HOLD_LIMIT 管不到）。
-# 谁拿着锁记在运行目录（app_env.py 的 RUNTIME）的 holders/<PID>.json（PID、检出、完整命令行、持有的每把锁与真正拿到它的时刻、在等的锁），入口退出时删掉；
+# 谁拿着锁记在运行目录（app_env.py 的 RUNTIME）的 holders/<PID>.json（同一份登记也记 Mac 实例位、同步测量与发布的锁，_lock.py 头注释）（PID、检出、完整命令行、持有的每把锁与真正拿到它的时刻、在等的锁），入口退出时删掉；
 # 被 KILL 留下的、PID 已不是那个进程的，读的人当场清掉。排队时开头与每 LOCK_REPORT 秒列一次持有者：每把锁持有了多久（不含排队），命令截成一行，
 # 停住的进程标出来（它不受时限管）；命令太长被截断时给出登记文件（完整命令在那里）；
-# 没有登记的持有者不等于锁空着（刚拿到还没登记、旧版入口、被结束的发版留下的子进程仍开着锁文件）：这时报告改列锁文件路径、只读排查（lsof）与下一步，不说"马上空出"；
+# 没有登记的持有者不等于锁空着（刚拿到还没登记、被结束的发版留下的子进程仍开着锁文件）：这时报告改列锁文件路径、只读排查（lsof）与下一步，不说"马上空出"；
 # 等满 LOCK_WAIT 秒还没轮到就列出持有者、以 75 退出，不静默挂着；等待与用时都按单调钟算，调系统时间不改期限。
 # 任务结束时入口往 stderr 打一行用时：排队、命令自己量的段、其余（测试、实例、没单列的开机），加 1 分钟负载。命令量段用 phase <名> <命令…>：
 # 跑命令、把用时记给入口（环境变量 CUEPAD_PHASES 指的文件），退出码照传。
@@ -51,12 +51,10 @@ xc_enter() {
   exec python3 "$APPLE_DIR/scripts/_lock.py" task "$HOLD_LIMIT" "$LOCK_WAIT" "$LOCK_REPORT" "$SIM_PREP_LIMIT" "$SIM_SLOTS" "$model" "$@"
 }
 
-PROFILES_DIR="$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"
 # 规则 3。描述符固定 9（macOS 自带的 bash 3.2 没有 {变量} 分配）；登记挂在本脚本（$$）名下。
 # 不嵌套：持着锁的脚本再 begin（含调 xc.sh provision）会等自己
 signing_begin() {
-  mkdir -p "$PROFILES_DIR"
-  exec 9<"$PROFILES_DIR"
+  exec 9<"$(python3 "$APPLE_DIR/scripts/provision.py" profiles-dir)"
   SIGNING_RECORD="$(python3 "$APPLE_DIR/scripts/_lock.py" signing "$LOCK_WAIT" "$LOCK_REPORT" $$ 9)"
 }
 

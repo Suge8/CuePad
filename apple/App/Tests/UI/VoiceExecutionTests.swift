@@ -17,9 +17,9 @@ struct VoiceExecutionTests {
         defer { fixture.call.hangUp(); rig.services.cancelBackgroundWork(); rig.app.bridge.stop(); rig.model.stop() }
         try await fixture.connect()
         let request = try await fixture.handoff("请问我一个问题")
-        try await eventually("提问与收尾都可见") { fixture.call.replies.count == 2 }
-        #expect(fixture.call.replies.allSatisfy { $0.message.answeredRequests == [request] })
-        #expect(fixture.call.replies.map(\.text) == ["要推送吗？", "办好了"])
+        try await eventually("提问与收尾都可见") { fixture.voiceRecord.replies.count == 2 }
+        #expect(fixture.voiceRecord.replies.allSatisfy { $0.message.answeredRequests == [request] })
+        #expect(fixture.voiceRecord.replies.map(\.text) == ["要推送吗？", "办好了"])
         try await fixture.hangUp()
         await rig.stop()
     }
@@ -33,11 +33,11 @@ struct VoiceExecutionTests {
         _ = try await fixture.handoff("请建个任务并开工")
         try await eventually("语音确实经 Cue 建卡开会话") { !rig.app.host.extensions.isEmpty }
         let session = try #require(rig.app.host.extensions.values.first)
-        try await eventually("开场请求和工具归属均已落库") { fixture.workspace.voiceExecutions.count == 1 }
+        try await eventually("开场请求和工具归属均已落库") { fixture.voiceRecord.executions.count == 1 }
         session.setState(["kind": "thinking"])
         let other = try await rig.app.host.connect("unrelated", cwd: rig.folder.path, busy: true)
-        try await eventually("只有自己的会话可停止") { fixture.workspace.voiceExecutions.filter { $0.state.canStop }.count == 1 }
-        #expect(fixture.workspace.voiceExecutions.map { $0.state.sessionID } == [session.sessionID])
+        try await eventually("只有自己的会话可停止") { fixture.voiceRecord.executions.filter { $0.state.canStop }.count == 1 }
+        #expect(fixture.voiceRecord.executions.map { $0.state.sessionID } == [session.sessionID])
         let prior = session.onCommand
         session.onCommand = { connection, command in
             if command["t"] as? String == "abortTurn" { session.setState(["kind": "idle"]) }
@@ -49,17 +49,16 @@ struct VoiceExecutionTests {
             fixture.media.closeGate = gate.stream
             fixture.call.hangUp()
             try await eventually("关闭尚未释放，执行仍可停止") {
-                fixture.workspace.voicePresentation?.activity == .closing
-                    && fixture.workspace.voicePresentation?.canStopExecution == true
+                try fixture.details().activity == .closing && fixture.details().executions.contains { $0.stop != nil }
             }
         } else { try await fixture.hangUp() }
-        let stop = try await fixture.workspace.stopVoiceExecution(session.sessionID)
+        let stop = try await fixture.stop(session.sessionID)
         try await eventually("Agent 收到停止且真实库记下歇下") {
-            session.received.contains("abortTurn") && fixture.workspace.voiceExecutions.first?.state.canStop == false
+            session.received.contains("abortTurn") && fixture.voiceRecord.executions.first?.state.canStop == false
         }
         #expect(try await rig.store.outcome(of: stop).status == .known(.succeeded))
         #expect(!other.received.contains("abortTurn"))
-        #expect(fixture.workspace.voicePresentation?.canStopExecution == false)
+        try await eventually("停下后不再给停止钮") { try fixture.details().executions.allSatisfy { $0.stop == nil } }
         gate.continuation.finish()
         try await eventually("关闭释放后才到终态") { !fixture.call.isLive }
         await rig.stop()
@@ -73,15 +72,16 @@ struct VoiceExecutionTests {
         _ = try await fixture.handoff("请建个任务并开工")
         try await eventually("开出实际会话") { !rig.app.host.extensions.isEmpty }
         let session = try #require(rig.app.host.extensions.values.first)
-        try await eventually("开场请求和工具归属均已落库") { fixture.workspace.voiceExecutions.count == 1 }
+        try await eventually("开场请求和工具归属均已落库") { fixture.voiceRecord.executions.count == 1 }
         session.setState(["kind": "thinking"])
-        try await eventually("本回合归属已确认") { fixture.workspace.voiceExecutions.first?.state.canStop == true }
+        try await eventually("本回合归属已确认") { fixture.voiceRecord.executions.first?.state.canStop == true }
+        let earlier = try await fixture.stopAction(session.sessionID)
         let file = try #require(rig.app.host.sessionFiles[session.sessionID])
         try file.user("我在终端另开的工作")
-        try await eventually("新回合不再属于语音") { fixture.workspace.voiceExecutions.isEmpty }
-        await #expect(throws: CueStoreError.self) { _ = try await fixture.workspace.stopVoiceExecution(session.sessionID) }
+        try await eventually("新回合不再属于语音") { fixture.voiceRecord.executions.isEmpty }
+        try await eventually("详情不再给停止钮") { try fixture.details().executions.allSatisfy { $0.stop == nil } }
+        #expect(try await fixture.workspace.performVoice(earlier) == .rejected(reason: .turnChanged))
         #expect(!session.received.contains("abortTurn"))
-        #expect(fixture.workspace.voicePresentation?.canStopExecution == false)
         try await fixture.hangUp()
         await rig.stop()
     }

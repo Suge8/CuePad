@@ -56,7 +56,7 @@ struct ReplyBar: View {
     }
 
     private var accepts: ComposerKinds { answering == nil ? .reply : [] }
-    private var commands: [SlashCommand] { answering == nil ? session.usableCommands(in: catalog) : [] }
+    private var commands: [SlashCommand] { answering == nil ? catalog?.commands ?? [] : [] }
     private var reachable: Bool { services.syncing.reachesHost }
     private var hasDraft: Bool { !draft.isEmpty(accepting: accepts) }
     private var canSend: Bool { hasDraft }
@@ -94,7 +94,7 @@ struct ReplyBar: View {
 
     private var coldCache: ColdCache? { recache.map { ColdCache(context: $0, estimated: cache?.estimated == true) } }
 
-    private var expanded: Bool { form == .open || focused || !form.isCapsule && !draft.isEmpty(accepting: accepts.union(.notes)) }
+    private var expanded: Bool { form.expanded(focused: focused, draft: draft, accepts: accepts) }
 
     private var composer: some View {
             Composer(

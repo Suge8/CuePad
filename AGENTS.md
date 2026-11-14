@@ -49,6 +49,6 @@ Swift 原生应用（macOS / iOS / iPadOS）。术语见 [WORDS.md](WORDS.md)。
 - 看真实数据、通知验收、查日志 → [apple/scripts/AGENTS.md](apple/scripts/AGENTS.md)
 - 签名、换成自己的身份 → [apple/App/Config/AGENTS.md](apple/App/Config/AGENTS.md)
 - CloudKit 结构导入与生产部署 → [apple/CloudKit/AGENTS.md](apple/CloudKit/AGENTS.md)
-- 给界面加字、补英文 → [apple/App/Strings/AGENTS.md](apple/App/Strings/AGENTS.md)
+- 给界面加字、补英文 → [apple/App/AGENTS.md](apple/App/AGENTS.md)
 - Pi 桥扩展的协议约定 → [CueBridge README](apple/CuePadKit/Sources/CueBridge/README.md)
 - 中转的部署 → [relay/README.md](relay/README.md)

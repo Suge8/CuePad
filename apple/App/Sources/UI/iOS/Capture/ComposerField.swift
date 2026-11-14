@@ -264,7 +264,7 @@ final class GrowingTextView: UITextView {
     }
 
     override var keyCommands: [UIKeyCommand]? {
-        ReplyShortcut.menu.compactMap { key in
+        ReplyShortcut.allCases.compactMap { key in
             guard shortcut(key) != nil else { return nil }
             let command = UIKeyCommand(
                 title: key.title, action: #selector(performReplyShortcut(_:)), input: key.input,

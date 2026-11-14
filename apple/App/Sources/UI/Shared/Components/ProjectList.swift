@@ -6,31 +6,6 @@ struct ProjectShelf<Extra: View>: View {
     var placesAtEnd = false
     @ViewBuilder var extra: Extra
     @Environment(Workspace.self) private var workspace
-
-    var body: some View {
-        ScrollView {
-            if let projects = workspace.catalog?.projects {
-                ProjectList(projects: projects, placesAtEnd: placesAtEnd) {
-                    ChipFlow(spacing: Spacing.part) {
-                        ProjectListPlace(title: "归档", icon: .archive, route: .archive)
-                        ProjectListPlace(title: "回收站", icon: .trash, route: .trash)
-                        extra
-                    }
-                }
-            }
-        }
-    }
-}
-
-extension ProjectShelf where Extra == EmptyView {
-    init() { self.init { EmptyView() } }
-}
-
-struct ProjectList<Places: View>: View {
-    let projects: [Project]
-    var placesAtEnd = false
-    @ViewBuilder var places: Places
-    @Environment(Workspace.self) private var workspace
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -38,27 +13,37 @@ struct ProjectList<Places: View>: View {
     private static var columnWidth: CGFloat { 220 }
 
     var body: some View {
-        LazyVStack(alignment: .leading, spacing: Spacing.item) {
-            if !placesAtEnd { auxiliary }
-            LazyVGrid(columns: columns, alignment: .leading, spacing: Spacing.group) {
-                ForEach(projects) { project in
-                    ProjectListItem(project: project, summary: workspace.catalog?.summaries[project.id],
-                                    openTasks: workspace.catalog?.taskCounts[project.id]?.open ?? 0)
-                        .equatable()
+        ScrollView {
+            if let projects = workspace.catalog?.projects {
+                LazyVStack(alignment: .leading, spacing: Spacing.item) {
+                    if !placesAtEnd { places }
+                    LazyVGrid(columns: columns, alignment: .leading, spacing: Spacing.group) {
+                        ForEach(projects) { project in
+                            ProjectListItem(project: project, summary: workspace.catalog?.summaries[project.id],
+                                            openTasks: workspace.catalog?.taskCounts[project.id]?.open ?? 0)
+                                .equatable()
+                        }
+                    }
+                    if placesAtEnd { places }
                 }
+                .frame(maxWidth: Self.maximumWidth, alignment: .leading)
+                .frame(maxWidth: .infinity)
+                .safeAreaPadding(.horizontal, Spacing.page)
+                .safeAreaPadding(.bottom, Spacing.section)
+                .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: projects.map(\.id))
             }
-            if placesAtEnd { auxiliary }
         }
-        .frame(maxWidth: Self.maximumWidth, alignment: .leading)
-        .frame(maxWidth: .infinity)
-        .safeAreaPadding(.horizontal, Spacing.page)
-        .safeAreaPadding(.bottom, Spacing.section)
-        .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: projects.map(\.id))
     }
 
-    private var auxiliary: some View {
-        HStack(spacing: Spacing.part) { places }
-            .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+    private var places: some View {
+        HStack(spacing: Spacing.part) {
+            ChipFlow(spacing: Spacing.part) {
+                ProjectListPlace(title: "归档", icon: .archive, route: .archive)
+                ProjectListPlace(title: "回收站", icon: .trash, route: .trash)
+                extra
+            }
+        }
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     }
 
     private var columns: [GridItem] {
@@ -66,7 +51,10 @@ struct ProjectList<Places: View>: View {
         if placesAtEnd { return Array(repeating: GridItem(.flexible(), spacing: Spacing.group, alignment: .topLeading), count: 2) }
         return [GridItem(.adaptive(minimum: Self.columnWidth), spacing: Spacing.group, alignment: .topLeading)]
     }
+}
 
+extension ProjectShelf where Extra == EmptyView {
+    init() { self.init { EmptyView() } }
 }
 
 private struct ProjectListItem: View, Equatable {

@@ -71,6 +71,8 @@ public struct AgentFacts: Sendable {
     var home: (@Sendable (AgentPaths) -> URL)?
     public var minimumVersion: AgentVersion?
     let installScript: String
+    /// 官方脚本装进家目录里的哪一层（检测与给子进程的 PATH 都查它，`ExecutableLocator`）；只经包管理器装的没有
+    var installDirectory: String?
     var upgradeCommand: String?
     public var installPrerequisite: InstallPrerequisite?
     /// 命令行登录的参数：打开浏览器，在网页上登录完它自己退出（不要终端）；没有的只能在它的终端界面里登录。

@@ -6,7 +6,6 @@
 # 只发完整包，不做增量：安装包放在一个固定的 GitHub Release 里，每次发布替换，那里不留历史版本。
 set -euo pipefail
 APPLE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-KEYCHAIN="$HOME/.appstoreconnect/cuepad-signing.keychain-db"
 KEY_SERVICE=cuepad-sparkle-ed25519
 TOOLS="$HOME/.appstoreconnect/sparkle"
 
@@ -26,7 +25,7 @@ tools() {
   echo "$dir/bin"
 }
 
-unlock() { python3 "$APPLE_DIR/scripts/provision.py" unlock; }
+unlock() { KEYCHAIN="$(python3 "$APPLE_DIR/scripts/provision.py" unlock)"; }
 
 private_key() { security find-generic-password -s "$KEY_SERVICE" -a sparkle -w "$KEYCHAIN" 2>/dev/null; }
 

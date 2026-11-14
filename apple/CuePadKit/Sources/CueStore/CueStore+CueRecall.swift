@@ -26,8 +26,7 @@ public struct CueSaid: Equatable, Sendable {
 
 extension CueStore {
   static let cueSessions = """
-    SELECT piSessionID FROM cards WHERE piSessionID IS NOT NULL
-    UNION SELECT f.value FROM cards c, json_each(c.formerSessionIDs) f
+    \(sessionsUsed(where: "1"))
     UNION SELECT targetRef FROM sendRecords WHERE origin = '\(DeliveryOrigin.cue.rawValue)' AND targetKind = '\(SendTargetKind.piSession.rawValue)'
     """
 

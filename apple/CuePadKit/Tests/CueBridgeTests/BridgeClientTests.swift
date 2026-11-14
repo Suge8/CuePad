@@ -108,12 +108,9 @@ struct BridgeClientTests {
         let ext = FakeExtension(directory: dir)
         try ext.start()
         try bridge.start()
-        let log = ChangeLog(bridge)
         try await eventually("appeared") { session(ext.id) != nil }
         ext.sendRaw(#"{"t":"state","state":{"kind":"warp-drive"}}"#)
-        try await eventually("被判为不兼容并断开") {
-            log.changes.contains { if case .incompatible = $0 { true } else { false } } && bridge.sessions.isEmpty
-        }
+        try await eventually("被判为不兼容并断开") { bridge.sessions.isEmpty }
 
         ext.crash()
         let reloaded = FakeExtension(directory: dir, sessionID: ext.sessionID)

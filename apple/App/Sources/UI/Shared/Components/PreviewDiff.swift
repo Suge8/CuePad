@@ -3,12 +3,11 @@ import SwiftUI
 /// 行不折、整块横着滚（代码折了行就认不出缩进），行底铺到最长那一行（`UnifiedDiff.widest`），滚到哪颜色都连得上；只排看得见的那些行，几万行的改动也照样打开。
 struct PreviewDiff: View {
     let file: URL
-    @State private var diff: UnifiedDiff?
     @State private var viewport: CGFloat = 0
 
     var body: some View {
-        ScrollView([.horizontal, .vertical]) {
-            if let diff {
+        PreviewTextFile(file: file, parse: UnifiedDiff.init) { diff in
+            ScrollView([.horizontal, .vertical]) {
                 let layout = DiffLayout(diff, viewport: viewport)
                 LazyVStack(alignment: .leading, spacing: 0) {
                     ForEach(diff.lines) { DiffRow(line: $0, layout: layout) }
@@ -17,11 +16,6 @@ struct PreviewDiff: View {
             }
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { viewport = $0 }
-        .task(id: file) { diff = await Self.read(file) }
-    }
-
-    @concurrent private static func read(_ file: URL) async -> UnifiedDiff {
-        UnifiedDiff((try? String(contentsOf: file, encoding: .utf8)) ?? "")
     }
 }
 
@@ -67,12 +61,12 @@ struct DiffRow: View {
             HStack(spacing: 0) {
                 number(line.old)
                 number(line.new)
-                Text(verbatim: sign).foregroundStyle(signColor).frame(width: Spacing.group)
+                Text(verbatim: line.kind.sign).foregroundStyle(signColor).frame(width: Spacing.group)
                 Text(verbatim: line.text).foregroundStyle(palette.ink).fixedSize()
             }
             .font(Typography.diff)
             .frame(width: layout.width, alignment: .leading)
-            .background(wash)
+            .background(line.kind.wash(palette))
         }
     }
 
@@ -83,18 +77,28 @@ struct DiffRow: View {
             .readerHidden(true)
     }
 
-    private var sign: String {
-        switch line.kind {
+    private var signColor: Color { if case .added = line.kind { palette.replied } else { palette.failure } }
+}
+
+/// 改动的符号与底色只在这里：全屏的改动与一步的详情共用。
+extension UnifiedDiff.Line.Kind {
+    var changed: Bool {
+        switch self {
+        case .added, .removed: true
+        default: false
+        }
+    }
+
+    var sign: String {
+        switch self {
         case .added: "+"
         case .removed: "−"
         default: ""
         }
     }
 
-    private var signColor: Color { if case .added = line.kind { palette.replied } else { palette.failure } }
-
-    private var wash: Color {
-        switch line.kind {
+    func wash(_ palette: Palette) -> Color {
+        switch self {
         case .added: palette.diffAdded
         case .removed: palette.diffRemoved
         default: .clear

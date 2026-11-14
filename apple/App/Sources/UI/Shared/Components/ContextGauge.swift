@@ -74,6 +74,6 @@ struct ContextGauge: View {
 
     private func compact() {
         showsDetail = false
-        workspace.speak("/compact", to: .session(session, mode: .command))
+        workspace.compact(session)
     }
 }

@@ -21,6 +21,7 @@ extension AppServices {
         }
         follow { [timing] in await self.historyStore.keepPruned(timing: timing) }
         startStrayFileCleanup()
+        startDeliveryCleanup()
         // 启动对账在 `init` 里已做完（`launch`）：重新接上的会话沿用对账前的起点（`Bridge.carryOver`）
         startRuntimes()
         follow(reporting: { .syncUnavailable(String(localized: "Agent 状态没能写入同步记录：\(String(describing: $0))")) }) {
@@ -202,7 +203,8 @@ extension AppServices {
             agent: agent, paths: paths, transcriptWindow: Chat.transcriptWindow, files: store.files,
             start: { [weak self] file in await self?.loadHistoryStart(for: file) }) {
             let scope = connected ? .all : await hostedScope(of: agent)
-            let events = agent == .pi
+            // 从历史确认送达的那一家（`AgentKind.confirmsFromHistory`）还要跟着未收尾投送的文件：确认只靠它写下的送达
+            let events = agent.confirmsFromHistory
                 ? indexer.events(following: deliveryHistoryFiles(), scope: scope)
                 : indexer.events(following: bridge.sessionFiles, scope: scope)
             return await consumeHistory(events, agent: agent)

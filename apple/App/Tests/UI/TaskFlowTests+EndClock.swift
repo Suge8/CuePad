@@ -63,7 +63,7 @@ extension TaskFlowTests {
         rig.bridge.attach(session, via: live)
         if automatic { try await workspace.complete(borrower.id) }
         else { await workspace.end(try #require(try await store.sessionItems(sessionIDs: ["audit-clock"])["audit-clock"]?.state)) }
-        let newEnd = try #require(try await store.deliveryRequests().first { $0.mode == .known(.end) && $0.id != old.id && ($0.content != "end") == automatic })
+        let newEnd = try #require(try await store.deliveryRequests().first { $0.mode == .known(.end) && $0.id != old.id && ($0.end != .explicit) == automatic })
         try await services.executor.start()
         let outcome = try await store.outcome(of: newEnd)
         #expect(outcome.status == .known(.succeeded))
@@ -72,7 +72,7 @@ extension TaskFlowTests {
         #expect(try await store.deliveryRequest(late.id)?.status == .known(.unconfirmed))
         #expect(try await store.applyRemote([.save(success, systemFields: Data()), .save(endedRow, systemFields: Data())]).isEmpty)
         #expect(try await store.deliveryRequest(late.id)?.status == .known(.unconfirmed))
-        #expect(MacDelivery.endIssue(try await store.deliveryRequests(toSession: "audit-clock"), at: services.speech)?.unconfirmedReason != nil)
+        #expect(MacDelivery.endProgress(try await store.deliveryRequests(toSession: "audit-clock"), at: services.speech)?.unconfirmedReason != nil)
         let prior = Set(try await store.deliveryRequests().map(\.id))
         await workspace.end(try #require(try await store.sessionItems(sessionIDs: ["audit-clock"])["audit-clock"]?.state))
         let followup = try #require(try await store.deliveryRequests().last { $0.mode == .known(.end) && !prior.contains($0.id) })

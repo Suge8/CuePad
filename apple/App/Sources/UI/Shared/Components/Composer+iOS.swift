@@ -21,7 +21,10 @@ struct FileSources: ViewModifier {
         content
             .photosPicker(isPresented: $source.isOn(.photos), selection: $picked, maxSelectionCount: Self.photoLimit, matching: .images)
             .fullScreenCover(isPresented: $source.isOn(.camera)) {
-                CameraPicker { data in add([.data(data)]) }.ignoresSafeArea()
+                CameraPicker { data in
+                    if let data { add([.data(data)]) } else { workspace.say("这张照片没存下来，再拍一次", tone: .failure) }
+                }
+                .ignoresSafeArea()
             }
             .fileImporter(isPresented: $source.isOn(.files), allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
                 switch result {
@@ -33,13 +36,15 @@ struct FileSources: ViewModifier {
                 let items = picked
                 picked = []
                 Task {
+                    var unread = 0
                     for item in items {
                         do {
-                            if let data = try await item.loadTransferable(type: Data.self) { add([.data(PhotoData.outgoing(data))]) }
+                            if let data = try await item.loadTransferable(type: Data.self) { add([.data(PhotoData.outgoing(data))]) } else { unread += 1 }
                         } catch {
                             workspace.fail(error)
                         }
                     }
+                    if unread > 0 { workspace.say("有 \(unread) 张图没读出来，没有加上", tone: .failure) }
                 }
             }
     }
@@ -56,7 +61,8 @@ nonisolated enum PhotoData {
 }
 
 struct CameraPicker: UIViewControllerRepresentable {
-    let onPick: (Data) -> Void
+    /// 拍了却转不成 JPEG 时交 nil：调用方要说出来，不能当没拍。
+    let onPick: (Data?) -> Void
     @Environment(\.dismiss) private var dismiss
 
     static var isAvailable: Bool { UIImagePickerController.isSourceTypeAvailable(.camera) }
@@ -77,7 +83,7 @@ struct CameraPicker: UIViewControllerRepresentable {
         init(_ parent: CameraPicker) { self.parent = parent }
 
         func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
-            if let data = (info[.originalImage] as? UIImage)?.jpegData(compressionQuality: PhotoData.quality) { parent.onPick(data) }
+            parent.onPick((info[.originalImage] as? UIImage)?.jpegData(compressionQuality: PhotoData.quality))
             parent.dismiss()
         }
 

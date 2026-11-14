@@ -67,9 +67,8 @@ enum CloudKitSchema {
     }
     types.append(recordType(PeerFloor.recordType, [("\"___recordID\"", "REFERENCE QUERYABLE"), (PeerFloor.field, "INT64")]))
     types.append(recordType(RelaySecret.recordType, [("\"___recordID\"", "REFERENCE QUERYABLE"), (RelaySecret.field, "ENCRYPTED BYTES")]))
-    types.append(recordType(
-      ActivityDiagnosticCloud.recordType,
-      [("\"___recordID\"", "REFERENCE QUERYABLE"), (ActivityDiagnosticCloud.field, "ENCRYPTED BYTES")]))
+    // 实时活动取证并进了诊断区（deviceDiagnostics）；生产结构删不掉，留着这一型
+    types.append(recordType("activityDiagnostics", [("\"___recordID\"", "REFERENCE QUERYABLE"), ("report", "ENCRYPTED BYTES")]))
     types.append(recordType(
       DiagnosticZone.recordType,
       [("\"___recordID\"", "REFERENCE QUERYABLE"), (DiagnosticZone.contentField, "ENCRYPTED BYTES"), (DiagnosticZone.nameField, "ENCRYPTED STRING")]))

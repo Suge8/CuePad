@@ -9,6 +9,7 @@ extension AppServices {
         guard !tasks.isRunning else { return }
         startCaptureIngest()
         startStrayFileCleanup()
+        startDeliveryCleanup()
         startSnapshots()
         startSync()
         startRelay()

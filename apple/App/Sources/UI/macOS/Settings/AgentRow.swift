@@ -44,7 +44,7 @@ struct AgentRow: View {
 
     /// 开发构建不写真实配置目录；没装的 Agent 不接，但它卸掉后留下的 CuePad 技能能关掉删除。
     private func canToggle(_ status: AgentStatus) -> Bool {
-        guard services.agents.isWritable(kind) else { return false }
+        guard services.agents.integration.isWritable(kind) else { return false }
         if case .foreign = status.files { return false }
         return status.isAvailable || status.files != .missing
     }
@@ -67,7 +67,7 @@ struct AgentRow: View {
             if case .failed(let why) = services.agents.jobs[kind] { return (.failure, Dotted(AgentLine.notInstalled(why))) }
             if let prerequisite = status.lacking { return (.notice, Dotted(AgentLine.needs(prerequisite))) }
         }
-        return AgentLine.of(kind, status, writable: services.agents.isWritable(kind))
+        return AgentLine.of(kind, status, writable: services.agents.integration.isWritable(kind))
     }
 
     /// 一句一行：中文句间不留空格、英文要，换行两边都对

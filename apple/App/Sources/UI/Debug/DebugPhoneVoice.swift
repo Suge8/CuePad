@@ -6,10 +6,6 @@ import Foundation
 /// -CuePadPhoneVoice idle|connecting|listening|muted|processing|speaking|closing|failed|failedRequest|ended|endedUnsent|interrupted
 /// （idle 没有通话；failed 是麦克风没授权，interrupted 是音频被打断，endedUnsent 是正常挂断但有一句没交给 Cue）。都当作中转已连上，输入框里的通话钮是能点的样子。
 /// -CuePadPhoneVoiceHistory 0|1|200：写入隔离聊天；-CuePadPhoneVoiceEnabled YES：启用隔离 Cue；-CuePadCueDraft 保留输入框草稿。
-/// -CuePadPhoneVoicePages YES：注入带续页的隔离投影，分页仍走正式服务，隔离环境无中转时应显示失败。
-/// -CuePadPhoneVoiceSessionUnavailable YES：模拟原通话已不存在，点击分页走服务的不可用分支。
-/// -CuePadPhoneVoiceRefreshRequired YES：在隔离分页视图注入失效锚点，首页按钮仍调用正式服务。
-/// -CuePadPhoneVoiceLastPage YES：注入无续页的末页，核对返回首页入口。
 /// -CuePadPhoneVoiceDetails YES：摆好后打开通话详情（没有落点、居中）。
 enum DebugPhoneVoice {
     static func prepare(_ workspace: Workspace) async {
@@ -55,34 +51,6 @@ enum DebugPhoneVoice {
                 }
             }
             if let draft = DebugScene.args.cueOpts.draft { workspace.cue.draft.text = draft }
-            if DebugScene.args.phoneVoiceOpts.pages {
-                let reply = try await store.addCueMessage(.cue, text: String(localized: "检查发布事项 \(1)", table: "Demo"))
-                let request = VoiceCallProjection.Request(reference: .unrecorded(session: session, request: UUID()), recording: false,
-                                                          issue: .storageUnavailable,
-                                                          preview: .init(original: String(localized: "检查发布事项 \(1)", table: "Demo")))
-                let target = VoiceExecutionTarget(request: UUID(), turn: .init(hostID: "voice-layout-demo", bootID: "demo", sessionID: "demo",
-                                                                               deliveryID: UUID(), turnStartedAtMilliseconds: 1))
-                var heads = VoicePageHeads()
-                heads.requests = .init(version: Data([1]), nextCursor: .init(session: session, list: .requests, after: nil))
-                heads.replies = .init(version: Data([1]), nextCursor: .init(session: session, list: .replies, after: nil))
-                heads.executions = .init(version: Data([1]), nextCursor: .init(session: session, list: .executions, after: nil))
-                voice.session = session
-                voice.setProjection(.init(session: session, phase: phase ?? .listening, requests: [request],
-                                          replies: [.init(message: reply.id, readback: .submitted)], executions: [target], response: response, pages: heads))
-                if DebugScene.args.phoneVoiceOpts.sessionUnavailable { voice.session = nil }
-                if DebugScene.args.phoneVoiceOpts.lastPage {
-                    let cursor = VoicePageCursor(session: session, list: .requests, after: .request(UUID()))
-                    _ = try await voice.requestPages.load(after: cursor) { _ in
-                        .init(page: .init(items: [request], nextCursor: nil), version: Data([1]))
-                    }
-                }
-                if DebugScene.args.phoneVoiceOpts.refreshRequired {
-                    do {
-                        _ = try await voice.requestPages.load(after: heads.requests.nextCursor) { _ in throw VoicePageError.refreshRequired }
-                    } catch VoicePageError.refreshRequired {
-                    } catch { workspace.fail(error) }
-                }
-            }
             if DebugScene.args.phoneVoiceOpts.details { workspace.voiceDetails = .unanchored }
         } catch { workspace.fail(error) }
     }

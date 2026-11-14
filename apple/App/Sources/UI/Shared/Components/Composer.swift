@@ -56,8 +56,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     @State private var highlighted = 0
     @State private var dismissedPalette: String?
 
-
-    private var expanded: Bool { !shrunk && (form == .open || (focused && form.opensOnFocus) || !draft.isEmpty(accepting: [.files, .cards])) }
+    private var expanded: Bool { form.expanded(focused: focused, draft: draft, accepts: accepts) }
     /// 收成短胶囊：一行的形态再变窄、居中，点它照常聚焦展开。有草稿也收（胶囊里写"草稿：第一行"）：翻历史时整宽的两层太占地方。
     private var shrunk: Bool { form.isCapsule && !focused }
     private var showsTools: Bool { form == .open || focused }
@@ -94,7 +93,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
                 act()
                 return true
             }
-            guard key == .up, let recall, draft.isEmpty(accepting: [.files, .cards]) else { return false }
+            guard key == .up, let recall, draft.isEmpty(accepting: accepts.subtracting(.notes)) else { return false }
             draft.append(stored: recall)
             return true
         }

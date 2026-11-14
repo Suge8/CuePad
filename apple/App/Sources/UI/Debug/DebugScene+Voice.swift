@@ -115,7 +115,7 @@ extension DebugScene {
                 heardAfterReply = false
                 finishedAfterReply = false
                 if args.voiceOpts.replay {
-                    for request in call.requests where !request.pending && replayed.insert(request.delegation.id).inserted {
+                    for request in call.record.requests where !request.pending && replayed.insert(request.delegation.id).inserted {
                         let delegation = request.delegation
                         note("replay-after-result \(delegation.id)")
                         if let turn = delegation.turn {
@@ -166,7 +166,7 @@ extension DebugScene {
                         timers.append(Task {
                             guard await Task.wait(for: .seconds(seconds)) else { return }
                             note("hang-up")
-                            await services.voice.end()
+                            services.voice.call?.hangUp()
                         })
                     }
                 }

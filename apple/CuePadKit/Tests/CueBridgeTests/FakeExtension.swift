@@ -13,8 +13,9 @@ nonisolated final class FakeExtension: @unchecked Sendable {
         var name = "Test"
         var thinking: [String] = ["off"]
         var images: Bool?
+        var supportsFast = false
         var json: [String: Any] {
-            var json: [String: Any] = ["provider": provider, "id": id, "name": name, "thinking": thinking]
+            var json: [String: Any] = ["provider": provider, "id": id, "name": name, "thinking": thinking, "supportsFast": supportsFast]
             if let images { json["images"] = images }
             return json
         }

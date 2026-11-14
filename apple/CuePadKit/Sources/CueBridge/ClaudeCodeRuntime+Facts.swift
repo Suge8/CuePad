@@ -10,7 +10,7 @@ extension ClaudeCodeRuntime {
     /// 所以这份对所有项目生效，页面当全局规则列、整理时并进共享那份（`AgentLibraryPlaces.globalFiles`）。
     nonisolated public static let facts = AgentFacts(
         command: "claude", homeVariable: "CLAUDE_CONFIG_DIR", minimumVersion: AgentVersion(2, 1, 169),
-        installScript: "curl -fsSL https://claude.ai/install.sh | bash",
+        installScript: "curl -fsSL https://claude.ai/install.sh | bash", installDirectory: ".local/bin",
         loginArguments: ["auth", "login"],
         sessionFiles: SessionFileFormat(ingest: ClaudeHistory.ingest, depth: 2, naming: .id) {
             $0.home(of: .claudeCode).appending(path: "projects", directoryHint: .isDirectory)

@@ -213,7 +213,7 @@ enum DeliverableLooks {
     static let markdownPage = CGSize(width: 360, height: 270)
 
     @concurrent private static func head(of file: URL) async -> String? {
-        (try? String(contentsOf: file, encoding: .utf8)).map { String($0.prefix(3000)) }
+        (try? PreviewFile.text(of: file)).map { String($0.prefix(3000)) }
     }
 
     @concurrent private static func decode(_ file: URL, box: LookBox) async -> CGImage? {

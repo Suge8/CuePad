@@ -14,7 +14,7 @@ extension DshRuntime {
     nonisolated public static let facts = AgentFacts(
         command: "dsh", homeVariable: "DSH_HOME", minimumVersion: AgentVersion(0, 2, 1, prerelease: "rc.2"),
         installScript: "npm install -g @deepseek-ai/dsh",
-        installPrerequisite: InstallPrerequisite(name: "Node.js", command: "node", minimum: AgentVersion(22, 19, 0), site: URL(string: "https://nodejs.org")!),
+        installPrerequisite: .node,
         loginArguments: ["web"],
         sessionFiles: SessionFileFormat(ingest: DshHistory.ingest, depth: 3, naming: .inDirectory(file: DshHistory.fileName)) {
             $0.home(of: .dsh).appending(path: sessions, directoryHint: .isDirectory)

@@ -43,7 +43,7 @@ struct BesideColumn: View {
 
     var body: some View {
         Group {
-            if let route = workspace.besideSession, let id = route.sessionID { SessionPage(route, column: .beside).id(id) }
+            if let route = workspace.besideSession, route.sessionID != nil { SessionPage(route, column: .beside) }
         }
         .ignoresSafeArea(.container, edges: .top)
     }

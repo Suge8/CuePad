@@ -67,7 +67,7 @@ final class PiConnection: SessionLink {
         return title
     }
 
-    func refreshQuota() async throws { _ = try await request { try PiWire.bare("quota", id: $0) } }
+    func refreshQuota(in _: Session.ID) async throws { _ = try await request { try PiWire.bare("quota", id: $0) } }
 
     private func request(encode: (String) throws -> Data) async throws -> PiWire.Ack {
         guard let session else { throw BridgeError.sessionEnded }

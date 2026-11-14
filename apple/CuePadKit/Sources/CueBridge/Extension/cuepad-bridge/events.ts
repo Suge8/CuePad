@@ -64,7 +64,7 @@ export function follow(session: Session): (() => void)[] {
 		pi.on("agent_start", () => {
 			tracker.active = true;
 			tracker.settled = null;
-			tracker.outcome = { kind: "done" };
+			tracker.outcome = { kind: "idle" };
 			tracker.stopped = false;
 			session.commit();
 			draft.clear();
@@ -131,7 +131,7 @@ export function follow(session: Session): (() => void)[] {
 
 const DETAIL_LIMIT = 120;
 
-type State =
+export type State =
 	| { kind: "idle" }
 	/** 工作中、没在调工具：正在出字也算（正在说的话另走 `draft`） */
 	| { kind: "thinking" }
@@ -139,7 +139,6 @@ type State =
 	| { kind: "delegating" }
 	| { kind: "compacting" }
 	| { kind: "waiting_user"; title?: string }
-	| { kind: "done" }
 	| { kind: "error"; error: string };
 
 /** 事件只更新变量，对外状态只由 derive() 推导。 */
@@ -148,7 +147,7 @@ export class StateTracker {
 	tools = new Map<string, { name: string; detail?: string }>();
 	prompt: { title?: string } | null = null;
 	/** 完成的助手消息记录结果（部分失败没有 agent_end），agent_settled 才生效。 */
-	outcome: State = { kind: "done" };
+	outcome: State = { kind: "idle" };
 	stopped = false;
 	settled: State | null = null;
 	compacting = false;
@@ -156,7 +155,7 @@ export class StateTracker {
 	finish(message: { stopReason: string; errorMessage?: string }, aborted = false) {
 		if (message.stopReason === "error" && !this.stopped && !aborted) this.outcome = { kind: "error", error: message.errorMessage ?? "unknown" };
 		else if (message.stopReason === "length") this.outcome = { kind: "error", error: "max_output_tokens" };
-		else this.outcome = { kind: "done" };
+		else this.outcome = { kind: "idle" };
 	}
 
 	derive(inFlight: number): State {

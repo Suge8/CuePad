@@ -33,13 +33,13 @@ final class DebugVoiceLayoutScenario {
         let store = workspace.services.store
         let text = String(localized: "检查发布事项 \(1)", table: "Demo")
         call.inputs.continuation.yield(.wire(.success(.delegation(.init(id: "layout-request", turn: nil, text: text)))))
-        for await ready in Observations({ call.requests.first.map { !$0.isRecording } == true }) where ready { break }
+        for await ready in Observations({ call.record.requests.first.map { !$0.isRecording } == true }) where ready { break }
         if kind == "recovery" { return }
-        guard let request = call.requests.first?.message else { throw CueStoreError.notFound }
+        guard let request = call.record.requests.first?.message else { throw CueStoreError.notFound }
         try await store.markCueMessagesDelivered([request])
         if kind == "stop" {
             try await seedExecution(store, request: request)
-            for await ready in Observations({ workspace.voicePresentation?.canStopExecution == true }) where ready { break }
+            for await ready in Observations({ workspace.voiceViewState.projection?.executions.isEmpty == false }) where ready { break }
         } else if kind == "partial" {
             let paragraph = String(localized: "**演示结果 \(1)**\n\n- 核对 Mac 界面\n- 核实手机接入", table: "Demo")
             let result = String(repeating: paragraph + "\n\n", count: Self.partialParagraphs)
