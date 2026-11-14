@@ -14,6 +14,8 @@ nonisolated struct CueArgs: Decodable, DebugArgGroup {
     let focus: Bool
     /// `-CuePadCueNow <hearing|failed|woke|delegating|asks|done|doneExpiring|afterDone|crowded|quiet|away|four|fourAsks|fourWorking|awayBusy|busy>`：Cue 此刻钉成这份样例，页头、侧栏、小组件与实时活动都按它画
     let now: String?
+    /// `-CuePadCueOverdue YES`（配演示库）：演示的定时里周会那条摆成到点还没做完（过点未做）
+    let overdue: Bool
     /// `-CuePadCuePresence <名>`：Cue 页摆成哪种在场状态，取值见 `seedPresence` 与 `seedCue`；unchosen 是还没选过在哪台 Mac 上运行（演示的几台 Mac 都在，手机 Cue 面板就地选）
     let presence: String?
     /// `-CuePadCueStale YES`：Cue 页摆成对话停滞的样子

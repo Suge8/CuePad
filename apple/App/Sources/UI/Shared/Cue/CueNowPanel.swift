@@ -102,7 +102,8 @@ private struct CueFigures: View {
                 Figure(value: count.map { Text(verbatim: "\($0)") }, caption: Text("记忆"), action: memory)
                 Figure(
                     value: next?.first?.remindAt.map { Text(verbatim: Self.clock($0)) },
-                    caption: Text(Dotted(String(localized: "定时"), next?.first?.remindAt.map(Self.day))), edge: .center, action: schedules)
+                    caption: Text(Dotted(String(localized: "定时"), next?.first.flatMap { ScheduleText.overdue($0) ?? $0.remindAt.map(Self.day) })),
+                    edge: .center, action: schedules)
             }
             Figure(
                 value: skills.map { Text(verbatim: "\($0.skills.count)") }, caption: Text("技能与规则"), alert: tidy ? palette.ink : nil,

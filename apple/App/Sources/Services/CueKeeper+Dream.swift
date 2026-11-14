@@ -49,14 +49,15 @@ extension CueKeeper {
             guard merging || listening else { return }
             let asked = listening ? try await store.cueHabitQuestions() : []
             guard let input = CuePrompt.dreamInput(CueMemoryView(try await store.cueMemory()), said: listening ? new.said : [], asked: asked),
-                  let profile = try await store.cueProfile(), let runtime = profile.runtime.known, let launch = try await setup.launch(runtime)
+                  let profile = try await store.cueProfile(), case let settings = BrainSettings(profile, detour), let runtime = settings.runtime.known,
+                  let launch = try await setup.launch(runtime)
             else { return }
             if listening {
                 progress.heard = new.through
                 save()
             }
             let started = try await startBrain(
-                runtime, launch, model: profile.model, effort: .low, systemPrompt: CuePrompt.dream(runtime: runtime), tools: ["--dream"])
+                runtime, launch, model: settings.model, effort: .low, systemPrompt: CuePrompt.dream(runtime: runtime), tools: ["--dream"])
             brain = started
             try await started.send(input, images: [], id: UUID())
             if await !finished(started) {

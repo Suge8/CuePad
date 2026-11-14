@@ -204,6 +204,7 @@ struct ScheduleStrip: View {
 
     private var next: Dotted {
         let host = String(localized: "在 \(workspace.cue.hostName ?? MacAgents.unnamed)")
+        if let overdue = ScheduleText.overdue(scheduled.line) { return Dotted(overdue, host) }
         guard scheduled.line.repeats != nil, let at = scheduled.line.remindAt else { return Dotted(String(localized: "只这一次"), host) }
         return Dotted(String(localized: "下一次：\(ScheduleText.moment(at))"), host)
     }
