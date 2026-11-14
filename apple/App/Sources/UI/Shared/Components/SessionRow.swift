@@ -48,7 +48,7 @@ struct SessionRow: View {
 
     private func card(shown: SessionShown, facts: RowFacts) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: Spacing.item) {
-            if !ended { StateDot(shown: shown, size: style.dot).relaySpot(session: session.sessionID) }
+            if !ended { StateDot(shown: shown, size: style.dot, announces: shown.isQuiet).relaySpot(session: session.sessionID) }
             VStack(alignment: .leading, spacing: style.spacing) {
                 headline(shown: shown)
                 MetaLine(spacing: Spacing.item, gap: 0) {
@@ -90,7 +90,7 @@ struct SessionRow: View {
 
     private func compact(shown: SessionShown, facts: RowFacts) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: style.dot + Spacing.hair) {
-            StateDot(shown: shown, size: style.dot).relaySpot(session: session.sessionID)
+            StateDot(shown: shown, size: style.dot, announces: shown.isQuiet).relaySpot(session: session.sessionID)
             VStack(alignment: .leading, spacing: style.spacing) {
                 headline(shown: shown)
                 MetaLine(alignment: .center, spacing: Spacing.item, gap: 0) {
