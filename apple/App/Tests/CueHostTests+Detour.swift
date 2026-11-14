@@ -18,12 +18,12 @@ extension CueHostTests {
         let switched = try await rig.message(.cue, containing: "我换到 Claude Code 接着干")
         #expect(switched.text.contains("重置"))
         let away = try #require(try await rig.store.cueProfile())
-        #expect(away.runtime == .known(.claudeCode) && away.model == nil && !away.fast)
+        #expect(away.runtime == .known(.pi) && away.model == "fake/fake-model-2" && away.effort == .known(.high), "绕行不改你设定的那家")
         try await eventually("健康里记着换大脑") { rig.health?.failover?.from == .pi && rig.health?.failover?.to == .claudeCode }
         try await rig.message(.cue, containing: "我起不来了")
         #expect(try await rig.store.cueMessages().first { $0.text == "你好" }?.deliveredAt == nil)
         try await untilReset(rig, resets)
-        #expect(try await rig.store.cueProfile()?.runtime == .known(.claudeCode))
+        #expect(rig.health?.runtime == .claudeCode)
 
         rig.launches.whenTryingElsewhere { [clocks = rig.clocks] in clocks.jump(to: resets) }
         try #require(rig.services.cue.keeper).input.yield(.kick)  // 你的话等着交：对账时再试一次 Claude Code
@@ -57,7 +57,7 @@ extension CueHostTests {
         _ = try await rig.store.noteCueLine("下周的事", source: .you, remindAt: rig.clock.now.addingTimeInterval(7 * 86_400))
         rig.jump(by: .seconds(120))  // 再过两个慢速周期：好了就留下，不再换
         try await rig.reconciled()
-        #expect(try await rig.store.cueProfile()?.runtime == .known(.pi))
+        #expect(rig.health?.runtime == .pi)
         #expect(try await rig.count("收到：你好") == 1)
         #expect(try await rig.count("又能干活了") == 1)
         #expect(try await rig.count("我起不来了") == 1)
@@ -76,7 +76,7 @@ extension CueHostTests {
         #expect(try await rig.count("定时到点") == 0)
         rig.jump(to: resets)
         try await rig.message(.cue, containing: "定时到点：\(reminder.id.uuidString.lowercased()) 核对发布结果")
-        #expect(try await rig.store.cueProfile()?.runtime == .known(.pi))
+        #expect(rig.health?.runtime == .pi)
         try await rig.message(.cue, containing: "又能干活了，用的是 Pi")
         #expect(rig.model.errors == 1)
         #expect(try await rig.count("又能干活了") == 1)

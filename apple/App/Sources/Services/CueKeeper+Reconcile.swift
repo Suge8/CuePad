@@ -29,7 +29,7 @@ extension CueKeeper {
         do {
             let store = self.store
             let profile = try await store.cueProfile() ?? CueProfile()
-            await follow(BrainSettings(profile))
+            await follow(BrainSettings(profile, detour))
             // 在交你的话之前：退回的话（含插进刚收尾那一轮、还没被接走的，`retire`）要交给新的大脑，你改过规矩之后的话按新规矩答
             if let shift, shift.turn == nil, try await outworn(shift) {
                 Self.log.notice("Cue 换个班次（\(shift.retiring ? "这个大脑不能接着用" : "重点变了", privacy: .public)）")
@@ -66,7 +66,7 @@ extension CueKeeper {
             }
             guard let shift, shift.turn == nil else { return nil }
 
-            if brainSettings?.needsNewBrain(for: BrainSettings(profile)) == true {
+            if brainSettings?.needsNewBrain(for: BrainSettings(profile, detour)) == true {
                 await retire(shift)
                 await startShift()
                 input.yield(.kick)
@@ -218,12 +218,13 @@ extension CueKeeper {
                 Self.log.notice("Cue 就地换了模型或强度：\(Dotted(wanted.model ?? "默认", wanted.effort?.rawValue ?? "默认").visible, privacy: .public)")
                 input.yield(.kick)  // 等回应时你又改了设置：下一次对账重读、再对上
             } catch {
-                // 大脑不认：设置改回在用的（选择器上看到的就是在用的），告诉你一声。
+                // 大脑不认：设置改回在用的（选择器上看到的就是在用的），告诉你一声；绕行在别家时模型是那家的默认，你设定的那家的模型不动。
                 // 等回应时你又改了设置就不动：你后来的选择照常生效，下一次对账再去对上
                 do {
-                    _ = try await store.updateCueProfile { profile in
-                        guard BrainSettings(profile) == wanted else { return }
-                        (profile.model, profile.effort) = (current.model, current.effort.map(Open.known))
+                    _ = try await store.updateCueProfile { [detour] profile in
+                        guard BrainSettings(profile, detour) == wanted else { return }
+                        if current.runtime == profile.runtime { profile.model = current.model }
+                        profile.effort = current.effort.map(Open.known)
                     }
                 } catch {
                     Self.log.error("Cue 的设置没能改回在用的：\(error.localizedDescription, privacy: .public)")

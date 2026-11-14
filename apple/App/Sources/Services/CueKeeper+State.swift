@@ -13,7 +13,7 @@ extension CueKeeper {
         case restarting(failures: Int, reason: ShownText, at: Date)
     }
 
-    /// 大脑用的那几项设置：起大脑时取自设置，就地换了模型、强度跟着改；与库里的设置不同就去对上。
+    /// 大脑用的那几项设置：起大脑时取自设置（绕行时换成改用的那家），就地换了模型、强度跟着改；与此刻该用的不同就去对上。
     nonisolated struct BrainSettings: Equatable, Sendable {
         var name: String
         var runtime: Open<AgentKind>
@@ -21,8 +21,10 @@ extension CueKeeper {
         var effort: ThinkingLevel?
         var fast: Bool
 
-        init(_ profile: CueProfile) {
+        /// 绕行到别家时那家用它自己的默认模型（模型名各家不通用）、fast 关，强度照你设定的。
+        init(_ profile: CueProfile, _ detour: Detour? = nil) {
             (name, runtime, model, effort, fast) = (profile.name, profile.runtime, profile.model, profile.effort?.known, profile.fast)
+            if let to = detour?.to, profile.runtime.known != to { (runtime, model, fast) = (.known(to), nil, false) }
         }
 
         /// 换成 `wanted` 要换大脑（规则在 `CueProfile.needsNewBrain`）。
@@ -69,8 +71,6 @@ extension CueKeeper {
         var greeted: Date?
         /// 做梦听他在会话里说的话听到哪了：交给它的最后一句的次序（`CueStore.said(after:limit:)` 的 `through`）；nil 是还没听过，从此刻听起（`dreams`）
         var heard: Int64?
-        /// 额度、登录卡住后的绕行（`Detour`）；没在绕行为 nil
-        var detour: Detour?
 
         init() {}
 
@@ -91,29 +91,22 @@ extension CueKeeper {
             patrolledIdle = field(.patrolledIdle)
             warmedIdle = field(.warmedIdle)
             greeted = field(.greeted)
-            detour = field(.detour)
             heard = field(.heard)
         }
     }
 
-    /// 额度、登录卡住后的绕行：你设定的那家与它的模型、强度、fast（绕行前的设置），与这次卡住的几家。
-    nonisolated struct Detour: Codable, Equatable, Sendable {
-        struct Stuck: Codable, Equatable, Sendable {
+    /// 额度、登录卡住后的绕行：这台此刻改用哪家（`to`）与这次卡住的几家，是这台的本机事实，只在内存（重启后从你设定的那家试起）。
+    /// 你设定的那家只在同步的设置里（`CueProfile.runtime`），绕行不改它；改用的那家怎么起在 `BrainSettings.init`。
+    nonisolated struct Detour: Equatable, Sendable {
+        struct Stuck: Equatable, Sendable {
             /// 卡住的时刻：轮流从最近卡住的那家后面数
             var at: Date
             /// 卡住时读到的重置时刻；读不到（登录、额度读不出、起不来）为 nil
             var resets: Date?
         }
 
-        var runtime: AgentKind
-        var model: String?
-        var effort: ThinkingLevel?
-        var fast: Bool
+        var to: AgentKind
         var stuck: [AgentKind: Stuck] = [:]
-
-        init(_ settings: BrainSettings, from runtime: AgentKind) {
-            (self.runtime, model, effort, fast) = (runtime, settings.model, settings.effort, settings.fast)
-        }
 
         /// 这家此刻该能用：这次没卡住，或读到的重置时刻已过。
         func open(_ kind: AgentKind, at now: Date) -> Bool {
@@ -121,11 +114,11 @@ extension CueKeeper {
             return stuck.resets.map { $0 <= now } ?? false
         }
 
-        /// 此刻该用哪家（唯一规则）：你设定的那家该能用就是它；此刻用的那家没卡住就留它；否则没卡过的那家，再否则重置已过的里最早的
+        /// 此刻该用哪家（唯一规则）：你设定的那家（`home`）该能用就是它；此刻用的那家没卡住就留它；否则没卡过的那家，再否则重置已过的里最早的
         /// （这几种 `open`：该能用，马上换）；都不是就轮到最近卡住的那家后面的一家（碰运气，只在慢速周期到点时换）。
         /// 轮流与没卡过的按 Agent 的顺序从最近卡住的那家后面数。这台一家都没有为 nil。
-        func next(from current: AgentKind, among kinds: [AgentKind], at now: Date) -> (kind: AgentKind, open: Bool)? {
-            if kinds.contains(runtime), open(runtime, at: now) { return (runtime, true) }
+        func next(from current: AgentKind, home: AgentKind?, among kinds: [AgentKind], at now: Date) -> (kind: AgentKind, open: Bool)? {
+            if let home, kinds.contains(home), open(home, at: now) { return (home, true) }
             if stuck[current] == nil, kinds.contains(current) { return (current, true) }
             let last = stuck.max { $0.value.at < $1.value.at }?.key ?? current
             let split = kinds.firstIndex(of: last).map { $0 + 1 } ?? 0
@@ -134,21 +127,6 @@ extension CueKeeper {
             let passed = order.compactMap { kind in stuck[kind]?.resets.flatMap { $0 <= now ? (kind, $0) : nil } }
             if let earliest = passed.min(by: { $0.1 < $1.1 }) { return (earliest.0, true) }
             return order.first.map { ($0, false) }
-        }
-
-        /// 换到这家时设置写成什么：你设定的那家照原样；别的那家用它自己的默认模型（模型名各家不通用）、fast 关，强度照你设定的。
-        func apply(_ kind: AgentKind, to profile: inout CueProfile) {
-            let home = kind == runtime
-            profile.runtime = .known(kind)
-            (profile.model, profile.effort, profile.fast) = (home ? model : nil, effort.map(Open.known), home && fast)
-        }
-
-        /// 设置还是绕行写下的样子；不是就是你或 Cue 后来改了（后来的选择就是你设定的，不再绕行）。
-        func wrote(_ profile: CueProfile) -> Bool {
-            guard let kind = profile.runtime.known else { return false }
-            var written = profile
-            apply(kind, to: &written)
-            return written == profile
         }
 
         /// 下一个还没到的重置时刻：到点时对一次账，该能用的那家马上换过去（`CueKeeper.alarm`）。

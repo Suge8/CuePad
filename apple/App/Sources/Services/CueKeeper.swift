@@ -61,6 +61,8 @@ final class CueKeeper {
     var phase = Phase.starting(failures: 0)
     var brainSettings: BrainSettings?
     var shifts = 0
+    /// 额度、登录卡住后的绕行；没在绕行为 nil
+    @ObservationIgnored var detour: Detour?
     /// 最近告诉过你的那个错（`ErrorSummary.line`）：同一个错一轮轮重复（如额度）只说一次
     var toldFailure: String?
     var setbacks: [Setback] = []

@@ -40,8 +40,7 @@ struct CueEvalFailoverTests {
             let switched = try await rig.count("我换到 \(to.runtime.name) 接着干"), errors = try await rig.count("这一轮出错了")
             let delivered = try await rig.store.cueMessages().first { $0.text == said }?.deliveredAt != nil
             return [
-                Check(.result, "设置换到 \(to.runtime.name)（模型清空、fast 关）",
-                      profile?.runtime == .known(to.runtime) && profile?.model == nil && profile?.fast == false),
+                Check(.result, "你设定的那家不动（设置还是 Pi）", profile?.runtime == .known(.pi)),
                 Check(.result, "第一轮报的是额度用完", failed?.kind == .quota, note: rounds.first?.failure.map { "：\($0)" } ?? ""),
                 Check(.result, "健康：值班中、用着 \(to.runtime.name)、记着因额度用完从 Pi 换过来",
                       health?.phase == .running && health?.runtime == to.runtime && health?.failover?.from == .pi && health?.failover?.to == to.runtime

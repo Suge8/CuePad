@@ -22,14 +22,15 @@ extension CueKeeper {
         phase = .starting(failures: failures)
         do {
             let profile = try await store.cueProfile() ?? CueProfile()
-            brainSettings = BrainSettings(profile)
-            guard let runtime = profile.runtime.known, let launch = try await setup.launch(runtime) else {
-                return await broke(ShownText("这台 Mac 上没有找到 \(profile.runtime.rawValue)"))
+            let settings = BrainSettings(profile, detour)
+            brainSettings = settings
+            guard let runtime = settings.runtime.known, let launch = try await setup.launch(runtime) else {
+                return await broke(ShownText("这台 Mac 上没有找到 \(settings.runtime.rawValue)"))
             }
             let memory = CueMemoryView(try await store.cueMemory())
             // 系统提示在班次内不变、只带重点（重点跨班次也很少变）：提示缓存一直命中；记忆的其余部分随第一条输入交（`wakeUp`）
             let brain = try await startBrain(
-                runtime, launch, model: profile.model, effort: profile.effort?.known, fast: profile.fast,
+                runtime, launch, model: settings.model, effort: settings.effort, fast: settings.fast,
                 systemPrompt: CuePrompt.system(name: profile.name, memory: memory, agents: launch.agents, runtime: runtime, interface: .current),
                 tools: ["--wait", "\(setup.timing.sayWait)"])
             shifts += 1
