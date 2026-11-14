@@ -40,7 +40,7 @@ import sys
 sys.dont_write_bytecode = True
 import rusage  # noqa: E402
 from _perf import SEED, TRACE, fail, fresh, mac, medians, relay, rows_file, seeded, stop, trace_path  # noqa: E402
-from app_env import SLOT  # noqa: E402
+from app_env import EXEC_AT  # noqa: E402
 from app_sim import Sim  # noqa: E402
 from perf_interact import interact_ios, interact_mac  # noqa: E402
 
@@ -100,8 +100,8 @@ def launch(app, derived, runs, extra):
         line = next((l for l in lines if l.startswith("LAUNCH ")), None)
         if line is None or status:
             fail(f"CuePad 没量完（退出码 {status}）：{''.join(lines)[-500:]}")
-        # 时刻减去 exec 成 CuePad 的那一刻（app.py exec 记在本检出的锁记录里，rusage.py 同口径）
-        raw, exec_at = json.loads(line[7:]), json.load(open(SLOT))["execAt"]
+        # 时刻减去 exec 成 CuePad 的那一刻（rusage.py 同口径）
+        raw, exec_at = json.loads(line[7:]), json.load(open(EXEC_AT))["execAt"]
         ms = lambda t: round((t - exec_at) / 1e6)
         row = {k: ms(raw[k]) for k in moments} | {k: raw[k] for k in raw if k.endswith(("MainM", "AllM", "CPUMs"))}
         row |= {"long": [[ms(a), round((b - a) / 1e6)] for a, b in raw["long"]], "load": round(os.getloadavg()[0])}

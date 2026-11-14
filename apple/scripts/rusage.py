@@ -6,7 +6,7 @@ perf.py idle 调 measure(pid, 就绪标记, 静置秒, 量的秒数, 渲染服�
 QUIET_LIMIT 秒内等不到安静就失败（SystemExit，不出结果）：那时量到的是启动收尾或别的负载，不是静置基线。CUEPAD_IDLE_ALLOW_NOISY=1 才照量，结果行 quiet 为 false，数不可当静置基线：
   quiet          窗口开始前等到了安静（false 只在 CUEPAD_IDLE_ALLOW_NOISY=1 放行时出现）
   readyMs        启动到就绪标记出现（标记的含义见 DebugScene.signalReady：画面摆好、读库回来、动画停下）。
-                 Mac 从 app.py exec 成 CuePad 那一刻算（锁记录里的 execAt），iOS 从进程启动算
+                 Mac 从 app.py exec 成 CuePad 那一刻算（app_env.EXEC_AT），iOS 从进程启动算
   readyInstructionsM  进程从启动到就绪执行的指令（百万），启动那段的前后对比看它；
                  Mac 上含 exec 之前 app.py 那段 python（每次相同的一截，前后对比时抵消）
   tailInstructionsM  就绪到开窗之间的指令（百万）：启动后的收尾，与 readyInstructionsM 相加是整个启动；两者的分界随机器忙闲挪，比和不比单看
@@ -24,7 +24,7 @@ QUIET_LIMIT 秒内等不到安静就失败（SystemExit，不出结果）：那�
 import ctypes, json, os, signal, subprocess, sys, time
 
 sys.dont_write_bytecode = True
-from app_env import SLOT  # noqa: E402
+from app_env import EXEC_AT  # noqa: E402
 from app_proc import wait_ready  # noqa: E402
 
 libc = ctypes.CDLL(None)
@@ -74,13 +74,13 @@ def render_usage(pid):
 
 
 def started_ns(pid):
-    """进程启动时刻；Mac 上 PID 先是 app.py，exec 成 CuePad 的时刻记在锁记录里。"""
+    """进程启动时刻；Mac 上 PID 先是 app.py，exec 成 CuePad 的时刻另记（app_env.EXEC_AT）。"""
     start = usage(pid)["start"] * NS
     try:
-        note = json.load(open(SLOT))
-    except (OSError, ValueError):
+        exec_at = json.load(open(EXEC_AT))
+    except OSError:
         return start
-    return max(start, note.get("execAt", 0)) if note.get("app") == pid else start
+    return max(start, exec_at["execAt"]) if exec_at["pid"] == pid else start
 
 
 def wait_quiet(pid):

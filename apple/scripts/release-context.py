@@ -6,10 +6,11 @@
 会上传的发布（新发的与 --resume 找回的，不含 --dry-run）只认主干那一遍云端检查全绿的提交（verified）。
 发布凭据只在这台 Mac，锁不跨机器。恢复只认 submission.json 的公证 ID 唯一匹配：响应缺失或不完整就是结果未知，不猜、不重投。
 """
-import fcntl, json, os, plistlib, re, subprocess, sys, tarfile, tempfile, time, zipfile
+import json, os, plistlib, re, subprocess, sys, tarfile, tempfile, time, zipfile
 from pathlib import Path
 
 sys.dont_write_bytecode = True
+import _lock as lock  # noqa: E402
 from app_env import APPLE, CHECKOUT, RUNTIME  # noqa: E402
 
 RELEASES = Path(APPLE) / ".derived/release"
@@ -29,16 +30,8 @@ def notary_id(attempt):
 
 
 def hold(platform):
-    os.makedirs(RUNTIME, exist_ok=True)
-    path = Path(RUNTIME) / f"release-{platform}.lock"
-    lock = os.open(path, os.O_RDWR | os.O_CREAT)
-    try:
-        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except BlockingIOError:
-        fail(f"这台 Mac 已有 {platform} 发布在运行（{path.read_text().strip()}），等它结束再发")
-    os.ftruncate(lock, 0)
-    os.write(lock, f"{CHECKOUT}，PID {os.getpid()}\n".encode())
-    os.set_inheritable(lock, True)  # exec 后由发布脚本和它起的进程持有，全部结束才放
+    """全机每个平台一把，持有到发布结束（exec 后由发布脚本和它起的进程持有，全部结束才放）；占着就列出持有者、以 75 退出，不排队。"""
+    lock.hold(f"{RUNTIME}/release-{platform}.lock", f"{platform} 发布（全机）", f"这台 Mac 已有 {platform} 发布在运行，等它结束再发", 0)
 
 
 def verified(commit):
