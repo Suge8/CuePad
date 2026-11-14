@@ -75,7 +75,7 @@ private struct PlateLayout: Layout {
     }
 
     private static let trailing: CGFloat = 16
-    private static let cardGap: CGFloat = 8
+    private static let cardGap = Spacing.item
     private static let cardTop: CGFloat = 18
     private static let cardBottom: CGFloat = 2
     private static let turn: CGFloat = 0.5

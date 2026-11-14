@@ -195,7 +195,7 @@ struct MergePreview: View {
 
     private static let mark: CGFloat = 4
     private static let bar: CGFloat = 3
-    private static let gap: CGFloat = 8
+    private static let gap = Spacing.item
 
     private func text(_ block: String) -> Text {
         let marks = block.prefix { $0 == "#" }

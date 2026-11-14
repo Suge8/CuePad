@@ -205,7 +205,7 @@ private struct BubbleLayer: View {
 
     private static var dismissDrag: CGFloat { 140 }
 
-    private static var insets: EdgeInsets { EdgeInsets(top: 8, leading: BubblePlacement.margin, bottom: 8, trailing: BubblePlacement.margin) }
+    private static var insets: EdgeInsets { EdgeInsets(top: Spacing.item, leading: BubblePlacement.margin, bottom: Spacing.item, trailing: BubblePlacement.margin) }
 }
 
 struct SheetGrabber: View {

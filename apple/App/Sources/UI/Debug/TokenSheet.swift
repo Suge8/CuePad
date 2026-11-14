@@ -121,7 +121,7 @@ struct TokenSheet: View {
             ("selection", palette.selection), ("searchMatch", Palette.searchMatch), ("onFill", palette.onFill),
             ("waiting", palette.waiting), ("waitingFill", palette.waitingFill), ("failure", palette.failure),
             ("failureFill", palette.failureFill), ("failureTrack", palette.failureTrack), ("replied", palette.replied),
-            ("repliedFill", palette.repliedFill), ("failureWash", palette.failureWash), ("repliedWash", palette.repliedWash),
+            ("failureWash", palette.failureWash), ("repliedWash", palette.repliedWash),
             ("diffAdded", palette.diffAdded), ("diffRemoved", palette.diffRemoved),
             ("waitingPaper", palette.waitingPaper), ("neutralFill", palette.neutralFill),
             ("quietFill", palette.quietFill),

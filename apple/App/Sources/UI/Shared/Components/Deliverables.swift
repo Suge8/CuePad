@@ -44,8 +44,8 @@ struct PreviewBatch: View {
         .contextMenu { Button("回复", icon: .reply) { reply(preview) } }
     }
 
-    nonisolated static let gap: CGFloat = 8
-    private static let inset: CGFloat = 12
+    nonisolated static let gap = Spacing.item
+    private static let inset = Spacing.group
 
     #if os(macOS)
     private static let stripHeight: CGFloat = 176
@@ -74,7 +74,7 @@ struct DeliverableTile: View {
         case shot(side: CGFloat, chosen: Bool)
     }
 
-    static let captionGap: CGFloat = 5
+    static let captionGap = Spacing.tight
 
     let preview: PreviewItem
     let label: String

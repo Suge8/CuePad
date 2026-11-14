@@ -76,7 +76,7 @@ struct SelectableText: UIViewRepresentable {
     }
 
     static let runGap = "\n\n"
-    private static let inset = UIEdgeInsets(top: 16, left: 20, bottom: 32, right: 20)
+    private static let inset = UIEdgeInsets(top: Spacing.block, left: Spacing.page, bottom: Spacing.section, right: Spacing.page)
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 

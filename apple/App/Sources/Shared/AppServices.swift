@@ -122,6 +122,8 @@ final class AppServices {
         case globalShortcutUnavailable(String)
         /// 分享扩展留下的内容没能入库（保留在共享容器里，下次再试）。
         case captureImportFailed(String)
+        /// 分享扩展留下的一条读不出来（挪到资料库旁的 `CaptureQueue.unreadableName`，不再重试）。
+        case captureUnreadable(String)
         /// 跟着库常驻的本机功能没能启动或停了：是哪一项写在原因里。
         case syncUnavailable(String)
         case widgetDataUnavailable(String)

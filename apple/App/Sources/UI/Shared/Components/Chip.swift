@@ -15,7 +15,7 @@ private struct Chip: ViewModifier {
     let level: ControlSurface.Level?
     @Environment(\.palette) private var palette
 
-    private static let gap: CGFloat = 4
+    private static let gap = Spacing.tight
 
     func body(content: Content) -> some View {
         HStack(spacing: Self.gap) {

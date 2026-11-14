@@ -170,7 +170,7 @@ private struct Anchored: Layout {
     let spot: Spot
 
     let gap: CGFloat
-    private static let margin: CGFloat = 8
+    private static let margin = Spacing.item
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         proposal.replacingUnspecifiedDimensions()

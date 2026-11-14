@@ -3,10 +3,10 @@ import CueStore
 import AppKit
 import SwiftUI
 import UserNotifications
-import os
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
-    private var services: AppServices?
+    private var launched: Launch?
+    private var services: AppServices? { launched?.services }
     private var statusItem: StatusItemController?
     private var menuBarPanel: MenuBarPanel?
     private var cueBar: CueBar?
@@ -27,24 +27,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         launch()
     }
 
-    /// 位置有误时说明原因后退出（不能带着错误的位置去读写）；资料库打不开时不终止：显示失败页，"重试"重新走这里。
+    /// 资料库打不开（连位置都解析不出来也一样）时不终止：显示失败页，"重试"重新走这里。
     private func launch() {
-        let location: LibraryLocation
-        do {
-            location = try LibraryLocation.resolve()
-        } catch {
-            abortLaunch(error)
-            return
-        }
-        let services: AppServices
-        do {
-            services = try AppServices(
+        let launched = Launch.make { [alerts] location in
+            try AppServices(
                 location: location, defaults: location.makeDefaults(), sync: DebugHooks.syncSource,
                 mac: .live(location: location, alerts: alerts))
-        } catch {
-            showLibraryFailure(LibraryFailure(error, location: location))
-            return
         }
+        self.launched = launched
+        switch launched {
+        case .ready(let services): start(services)
+        case .failed(let failure): showLibraryFailure(failure)
+        }
+    }
+
+    private func start(_ services: AppServices) {
         failureWindow?.close()
         failureWindow = nil
         services.syncing.connectSync()  // 第一拉不等建窗口
@@ -54,7 +51,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         services.alerts = alerts
         alerts.services = services
         alerts.workspace = workspace
-        self.services = services
         self.workspace = workspace
         // 设置与"对 Cue 说"在这里接好入口（窗口与内容第一次打开才建、才排，这里几乎不花时间）：设置随时可能被打开，不等第一帧之后
         let cueBar = CueBar(services: services, workspace: workspace)
@@ -195,8 +191,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     private func showLibraryFailure(_ failure: LibraryFailure) {
-        Logger(subsystem: AppIdentity.id, category: "launch").error("资料库没能打开：\(failure.reason, privacy: .public)")
-        DebugHooks.libraryFailed(failure)
         let content = UnreadableLibraryView(failure: failure) { [weak self] in self?.launch() }
             .frame(width: 520, height: 420)
             .modifier(PaletteProvider())
@@ -210,16 +204,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             failureWindow = window
         }
         window.present(activating: true)
-    }
-
-    private func abortLaunch(_ error: any Error) {
-        Logger(subsystem: AppIdentity.id, category: "launch").error("\(error.localizedDescription, privacy: .public)")
-        FileHandle.standardError.write(Data("CuePad 无法启动：\(error.localizedDescription)\n".utf8))
-        DebugHooks.libraryFailed(LibraryFailure(error, location: nil))
-        let alert = NSAlert(error: error)
-        alert.messageText = String(localized: "CuePad 无法启动")
-        alert.runModal()
-        NSApp.terminate(nil)
     }
 
     private func makeMainWindow(_ services: AppServices, workspace: Workspace) -> MainShellWindow {

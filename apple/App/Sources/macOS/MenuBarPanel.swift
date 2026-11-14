@@ -7,8 +7,8 @@ import SwiftUI
 /// 托管视图本身留着，内容的状态（草稿、展开、焦点）不丢。打开时先挂回去、量尺寸时按此刻的状态排好再上屏，第一帧就是现在的样子
 /// （实测收起期间 Cue 变了状态，打开的头几帧与半秒后一致，不从旧样子过渡）。否决了只隐藏托管视图：隐藏的视图照样更新。
 final class MenuBarPanel: NSObject, NSWindowDelegate {
-    private static let edgeMargin: CGFloat = 8
-    private static let anchorGap: CGFloat = 4
+    private static let edgeMargin = Spacing.item
+    private static let anchorGap = Spacing.tight
     /// 点击图标会先让面板失焦收起，紧随其后的点击动作据此不再把它弹回来。
     private static let reopenGuard: Duration = .milliseconds(250)
 

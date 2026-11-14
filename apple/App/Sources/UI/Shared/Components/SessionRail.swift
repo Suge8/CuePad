@@ -18,9 +18,10 @@ struct SessionRail: View {
         var width: CGFloat? { self == .phone ? 60 : nil }
     }
 
+    /// 窄屏的竖条浮在对话左边时对话让出的宽（`CuePage`）：按竖条的宽定，不是间距档。
     static let chatInset: CGFloat = 52
     /// 手机竖条的纸离屏边（格铺满纸）。
-    static let phoneInset: CGFloat = 2
+    static let phoneInset = Spacing.hair
 
     enum Opening { case primary, beside }
 

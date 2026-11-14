@@ -95,8 +95,6 @@ enum Typography {
     static let heading = Font.title2.weight(.bold)
     static let emptyTitle = Font.title3.weight(.semibold)
     static let gaugeNumber = Font.system(.body, design: .rounded, weight: .semibold).monospacedDigit()
-    /// 底栏上的字：栏高固定，不随动态字体。
-    static let dockLabel = Font.system(size: 12, weight: .medium)
     /// 手机会话条格里最轻的那一行（哪家 Agent、哪个项目）：60 点宽的格放得下四五个字；格高随字号（`SessionRail`），这一行不随。
     static let railTag = Font.system(size: 9, weight: .medium)
     /// 预览页里整份文件的等宽字（UIKit 文本视图）。
@@ -119,8 +117,6 @@ enum Typography {
     static let documentHeading = Font.title2.weight(.semibold)
     #endif
 
-    /// 紧凑的多行旁注（规则摘要、运行日志），不沿用长文阅读的疏行距。
-    static let noteLineSpacing: CGFloat = 2
     static let taskLineSpacing: CGFloat = 5
     static let editorHeadingSpacing: CGFloat = 10
 

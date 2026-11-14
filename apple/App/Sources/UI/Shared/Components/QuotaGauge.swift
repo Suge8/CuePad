@@ -41,7 +41,7 @@ struct QuotaDetail: View {
 }
 
 extension QuotaDetail {
-    static let bubblePadding: CGFloat = 16
+    static let bubblePadding = Spacing.block
 
     /// 会话条气泡的宽：两个账号起放得下两栏（`QuotaColumns`），否则一栏、同别的气泡最宽那一档。定宽：读数随时间变，宽不跟着跳。
     static func bubbleWidth(accounts: Int) -> BubblePlacement.Width {
@@ -68,8 +68,8 @@ private struct QuotaEmpty: View {
 /// 位置只由顺序与各块形状定，刷新不挪；账号失败、少了窗口这类形状变了才可能换栏。
 struct QuotaColumns: Layout {
     static let column: CGFloat = 248
-    static let gap: CGFloat = 32
-    private static let lineSpacing: CGFloat = 18
+    static let gap = Spacing.part
+    private static let lineSpacing = Spacing.block
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let width = proposal.width ?? (subviews.count > 1 ? Self.column * 2 + Self.gap : Self.column)
@@ -107,7 +107,7 @@ private struct QuotaAccount: View {
 
     /// 随动态字体放大：图标跟着字放大，定宽的列在大字号下放不下，压到账号名上。
     @ScaledMetric(relativeTo: .subheadline) private var iconColumn: CGFloat = 20
-    private static let iconGap: CGFloat = 8
+    private static let iconGap = Spacing.item
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.item) {
@@ -238,7 +238,6 @@ struct QuotaRing: View, Animatable {
 struct QuotaRings: View {
     let open: Bool
     let height: CGFloat
-    var row = false
     var cell = false
     let action: () -> Void
     @Environment(AppServices.self) private var services
@@ -249,7 +248,7 @@ struct QuotaRings: View {
     var body: some View {
         let quotas = Array(services.accountQuotas.items.prefix(Self.limit))
         Group {
-            if row || cell { button(quotas).buttonStyle(RowStyle(selected: open, cell: cell)) } else { button(quotas).buttonStyle(PressStyle()) }
+            if cell { button(quotas).buttonStyle(RowStyle(selected: open, cell: true)) } else { button(quotas).buttonStyle(PressStyle()) }
         }
         .accessibilityExpanded(open)
         .accessibilityHint(open ? "收起" : quotas.isEmpty ? "看怎么才会有额度" : "看每个窗口还剩多少、多久后重置")
@@ -258,7 +257,7 @@ struct QuotaRings: View {
     private func button(_ quotas: [AccountQuota]) -> some View {
         Button(action: action) {
             Moments(next: quotas.nextReset(after:)) { now in rings(quotas, at: now) }
-                .padding(.horizontal, row ? 0 : Spacing.item)
+                .padding(.horizontal, Spacing.item)
                 .frame(height: height)
                 .contentShape(.rect)
         }
@@ -267,10 +266,7 @@ struct QuotaRings: View {
     private func rings(_ quotas: [AccountQuota], at now: Date) -> some View {
         let rings = quotas.compactMap { quota in quota.binding(at: now).map { (id: quota.id, provider: quota.provider, window: QuotaMeter.Window($0, at: now)) } }
         return HStack(spacing: Spacing.glyph) {
-            if row {
-                Text("额度").foregroundStyle(palette.ink3)
-                Spacer(minLength: 0)
-            } else if rings.isEmpty { Text("额度").font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink3).fixedSize() }
+            if rings.isEmpty { Text("额度").font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink3).fixedSize() }
             ForEach(rings, id: \.id) { ModelBadge(mark: Provider(id: $0.provider).mark, binding: $0.window) }
         }
         .foregroundStyle(palette.ink2)

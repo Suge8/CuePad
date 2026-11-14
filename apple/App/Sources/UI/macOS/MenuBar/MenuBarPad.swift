@@ -12,7 +12,7 @@ struct MenuBarPad: View {
     @State private var capture = CaptureState()
     @State private var quotaOpen = false
 
-    private static let blockPadding: CGFloat = 14
+    private static let blockPadding = Spacing.block
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.item) {

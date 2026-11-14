@@ -7976,6 +7976,22 @@
         }
       }
     },
+    "分享进来的一条读不出来，已挪到资料库的 CaptureUnreadable 文件夹：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A shared item couldn’t be read and was moved to the CaptureUnreadable folder in the library: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "分享进来的一条读不出来，已挪到资料库的 CaptureUnreadable 文件夹：%@"
+          }
+        }
+      }
+    },
     "分享进来的内容没能存成灵感，下次会重试：%@" : {
       "localizations" : {
         "en" : {

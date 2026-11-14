@@ -7,7 +7,7 @@ struct ProjectStylePicker: View {
     var cell: CGFloat
     @Environment(\.palette) private var palette
 
-    private static let spacing: CGFloat = 6
+    private static let spacing = Spacing.glyph
     private static let glyph: CGFloat = 0.56
 
     private var columns: [GridItem] {

@@ -294,10 +294,10 @@ private struct WindowReader: NSViewRepresentable {
 
 /// 不套纸的浮层（`PanelStyle.bare`）怎么摆、怎么出来。
 /// 上沿钉在窗口上方约四分之一处、往下长：居中的话每多打一行字它上下各挪半行，偏上也不盖住正看着的那几列的中段。
-/// 从刚点的那一下长出来（点"＋"、点"开始"旁的箭头；`Workspace.press`）；快捷键打开的没有那一下，从自己上沿长出。减弱动态效果时只淡入。
+/// 从刚点的那一下长出来（`from`）；快捷键打开的没有那一下，从自己上沿长出。减弱动态效果时只淡入。
 private struct BareStage<Content: View>: View {
+    let from: CGPoint?
     @ViewBuilder let content: Content
-    @Environment(Workspace.self) private var workspace: Workspace?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var grown = false
     @State private var origin: CGPoint?
@@ -318,7 +318,7 @@ private struct BareStage<Content: View>: View {
                 .opacity(grown ? 1 : 0)
         }
         .onAppear {
-            if case .press(let point) = workspace?.press.source { origin = point }
+            origin = from
             withAnimation(Motion.nudge) { grown = true }
         }
     }
@@ -347,8 +347,8 @@ private struct PanelLayer: View {
                 palette.backdrop.ignoresSafeArea().accessibilityHidden(true)
             }
             Group {
-                if shown.style == .bare {
-                    BareStage { shown.content.background { area(shown.id) } }
+                if case .bare(let from) = shown.style {
+                    BareStage(from: from) { shown.content.background { area(shown.id) } }
                 } else {
                     shown.content
                         .background(palette.desk)
@@ -389,7 +389,7 @@ private struct PanelLayer: View {
     }
 
     private static let bubbleInsets = EdgeInsets(
-        top: 52, leading: BubblePlacement.margin, bottom: BubblePlacement.margin, trailing: BubblePlacement.margin)
+        top: Chrome.band, leading: BubblePlacement.margin, bottom: BubblePlacement.margin, trailing: BubblePlacement.margin)
 
     private func area(_ id: UUID) -> some View {
         AreaMark { [host] in host.areas[id] = Weak(value: $0) }

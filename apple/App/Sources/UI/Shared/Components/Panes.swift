@@ -82,18 +82,19 @@ private struct EqualSegments: Layout {
 }
 
 enum PaneMetrics {
+    /// 选中块离槽边：贴着槽画一道细边，比任何一档间距都紧（同系统分段控件）。
     static let inset: CGFloat = 3
     static let font = Typography.toolbarLabel
     static let square = ControlSize.regular.height - inset * 2
     #if os(macOS)
     static let iconFont = Glyph.small
-    static let iconGap: CGFloat = 5
-    static let padding: CGFloat = 12
+    static let iconGap = Spacing.glyph
+    static let padding = Spacing.group
     static let minWidth: CGFloat = 64
     #else
     static let iconFont = Typography.toolbarLabel
-    static let iconGap: CGFloat = 6
-    static let padding: CGFloat = 12
+    static let iconGap = Spacing.glyph
+    static let padding = Spacing.group
     static let minWidth: CGFloat = 76
     #endif
 }
