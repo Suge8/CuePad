@@ -196,14 +196,16 @@ final class EditorCore {
 
     func missingImageLabel(_ key: String) -> String { fileStatus(key, "", nil).detail }
 
-    /// 这个字符位置上的附件，连同它的键与本机有没有（点按据此打开或去取）；不是附件为 nil。
-    func attachment(at index: Int) -> (key: String, name: String, file: URL?)? {
+    /// 这个字符位置上点了要交给宿主（`onOpenAttachment`）的附件：文件牌，或还没到这台的图片；本机的图片与别处为 nil，照常定光标。
+    func openableAttachment(at index: Int) -> (key: String, name: String)? {
         guard index >= 0, index < storage.length else { return nil }
+        let hit: (key: String, name: String, file: URL?)
         switch storage.attribute(.attachment, at: index, effectiveRange: nil) {
-        case let file as CueFileAttachment: return (file.key, file.name, files.fileURL(for: file.key))
-        case let image as CueImageAttachment: return (image.key, "", image.fileURL)
+        case let file as CueFileAttachment: hit = (file.key, file.name, files.fileURL(for: file.key))
+        case let image as CueImageAttachment: hit = (image.key, "", image.fileURL)
         default: return nil
         }
+        return hit.file == nil || !hit.name.isEmpty ? (hit.key, hit.name) : nil
     }
 
     /// 整体替换正文；撤销栈、选区、`onChange` 由宿主处理。

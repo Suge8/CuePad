@@ -168,7 +168,7 @@ public final class CueTextView: UITextView, CueEditorHost {
 private final class MenuDelegate: NSObject, UITextViewDelegate, UIGestureRecognizerDelegate {
     func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
         guard let view = gestureRecognizer.view as? CueTextView else { return false }
-        return view.opensAttachment(at: gestureRecognizer.location(in: view))
+        return view.attachment(at: gestureRecognizer.location(in: view)) != nil
     }
 
     /// 系统的手势（定光标、成为第一响应者弹键盘）等点附件的手势不成立才动：点在附件上光标不动、键盘不弹。

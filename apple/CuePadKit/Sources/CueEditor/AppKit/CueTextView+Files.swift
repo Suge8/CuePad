@@ -52,18 +52,18 @@ extension CueTextView {
         }
     }
 
-    /// 点在文件牌或还没到这台的图片上（不移光标）：交给宿主（`onOpenAttachment`）；本机的图片与别处照常。
+    /// 点在要交给宿主的附件上不移光标（`EditorCore.openableAttachment`）。
     public override func mouseDown(with event: NSEvent) {
-        guard event.clickCount == 1, let (hit, rect) = attachment(at: event), hit.file == nil || !hit.name.isEmpty else { return super.mouseDown(with: event) }
+        guard event.clickCount == 1, let (hit, rect) = attachment(at: event) else { return super.mouseDown(with: event) }
         onOpenAttachment?(hit.key, hit.name, FileChip.picture(in: rect, named: hit.name))
     }
 
-    private func attachment(at event: NSEvent) -> ((key: String, name: String, file: URL?), CGRect)? {
+    private func attachment(at event: NSEvent) -> ((key: String, name: String), CGRect)? {
         guard let window else { return nil }
         let index = characterIndexForInsertion(at: convert(event.locationInWindow, from: nil))
         let screen = window.convertPoint(toScreen: event.locationInWindow)
         for candidate in [index, index - 1] {
-            guard let hit = core.attachment(at: candidate) else { continue }
+            guard let hit = core.openableAttachment(at: candidate) else { continue }
             let rect = firstRect(forCharacterRange: NSRange(location: candidate, length: 1), actualRange: nil)
             if rect.contains(screen) { return (hit, convert(window.convertFromScreen(rect), from: nil)) }
         }
