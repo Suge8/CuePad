@@ -38,7 +38,7 @@ nonisolated struct ChatFollow: Equatable {
     private var opened: Set<UUID> = []
     private var withinSlack = true
     private var revealed = false
-    /// 贴着最新、可正在和 iCloud 对（`holding`）或拍板卡刚沉下去（`docked`）时长出来的先不跟，欠着一次上滑，对完时滑（`ChatScroll`）。
+    /// 贴着最新、可页面压着（`holding`：正在和 iCloud 对、拍板卡在沉）时长出来的先不跟，欠着一次上滑，对完时滑（`ChatScroll`）。
     private(set) var deferred = false
     /// 对的期间你自己回到最新、发出一句：这一回照样跟，不等对完；对的状态一变就作废（只在对的期间有用）。
     private var unheld = false
@@ -97,11 +97,11 @@ nonisolated struct ChatFollow: Equatable {
     }
 
     /// 滚动区此刻按贴底排（内容变高矮时底锚）。
-    func pinned(holding: Bool, docked: Bool) -> Bool { atNewest && !scrolling && (!holding || unheld) && !deferred && !docked }
+    func pinned(holding: Bool) -> Bool { atNewest && !scrolling && (!holding || unheld) && !deferred }
 
     /// 贴着最新时内容长高了：对的期间、拍板卡刚沉下去时先不跟，记成欠着（返回 true，这一次不滑）。
-    mutating func deferGrowth(holding: Bool, docked: Bool) -> Bool {
-        guard holding && !unheld || docked else { return false }
+    mutating func deferGrowth(holding: Bool) -> Bool {
+        guard holding, !unheld else { return false }
         deferred = true
         return true
     }

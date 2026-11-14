@@ -22,7 +22,6 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
     let follow: Binding<ChatFollow>
     let holding: Bool
     let arrival: UUID?
-    let docked: String?
     private let content: Content
     @Environment(\.accessibilityReduceMotion) var reduceMotion
     @Environment(\.chatBottomInset) var bottomInset
@@ -37,14 +36,13 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
 
     init(
         followKey: Key, readingWidth: CGFloat, inset: CGFloat, follow: Binding<ChatFollow>, holding: Bool = false, arrival: UUID? = nil,
-        docked: String? = nil, @ViewBuilder content: () -> Content
+        @ViewBuilder content: () -> Content
     ) {
         self.followKey = followKey
         self.readingWidth = readingWidth
         self.inset = inset
         self.holding = holding
         self.arrival = arrival
-        self.docked = docked
         self.follow = follow
         self.content = content()
     }
@@ -99,8 +97,6 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                             height: (geometry.contentSize.height - padding).rounded(), floating: padding, anchor: tracked)
                     } action: { previous, reading in
                         let delivered = offset.deliver(reading)
-                        let left = dockLeft
-                        offset.dock = docked
                         let last = delivered.reading ?? previous
                         let grown = reading.height - last.height
                         let rising = offset.arrived(arrival) && grown > 0
@@ -135,7 +131,7 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                         next.scrolled(
                             atNewest: reading.nearNewest || following, beyondScreen: reading.beyondScreen && !following, nearOldest: reading.nearOldest,
                             byUser: next.scrolling && delivered.moved)
-                        let defers = following && grown > 0 && next.deferGrowth(holding: holding, docked: left)
+                        let defers = following && grown > 0 && next.deferGrowth(holding: holding)
                         if next != follow.wrappedValue { follow.wrappedValue = next }
                         guard following, !defers else { return }
                         // 新内容、正在说的话在下面长出来：底锚已在同一次排版里停到新的最新处（`pinned`），不再滑。
