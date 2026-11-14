@@ -37,11 +37,14 @@ extension CodexRuntime {
     }
 
     func attach(_ session: Session, driver: CodexDriver) {
-        let entry = Tracked(id: session.id, threadID: session.sessionID, driver: driver, pid: session.pid)
+        let entry = Tracked(id: session.id, threadID: session.sessionID, driver: driver, pid: session.pid, timing: timing)
+        entry.turns.onSettle = { [weak self, weak entry] in
+            if let self, let entry { publish(entry) }
+        }
         tracked[session.id] = entry
         var session = session
         session.commands = Self.builtinCommands
-        entry.facts.publish(to: &session)
+        entry.turns.facts.publish(to: &session)
         bridge.attach(session, via: self)
         refresh(session.id, skills: true)
     }
@@ -100,7 +103,7 @@ extension CodexRuntime {
     }
 
     func publish(_ session: Tracked) {
-        bridge.update(session.id) { session.facts.publish(to: &$0) }
+        bridge.update(session.id) { session.turns.facts.publish(to: &$0) }
     }
 }
 #endif

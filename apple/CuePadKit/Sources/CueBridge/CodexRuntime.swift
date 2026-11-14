@@ -58,40 +58,33 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
         self.locate = locate
     }
 
-    enum Restart { case stopping, stopped }
-
-    final class Tracked {
+    @MainActor final class Tracked {
         let id: Session.ID
         let threadID: String
         let driver: CodexDriver
         let pid: Int32
-        var facts = SessionFacts()
-        /// 要你回答的那一个怎么回给 Codex（与 `facts.questions` 一一对应，只有一个）
+        let turns: HostedTurns
+        /// 要你回答的那一个怎么回给 Codex（与 `turns.facts.questions` 一一对应，只有一个）
         var reply: Reply?
         /// 父线程歇着时落定、结果还没交给一轮的子代理（线程 id）：有没有交回结果（做完、出错交回；被停下的不交）
         var unread: [String: Bool] = [:]
         var lastWords: [String: String] = [:]
-        /// 这一轮驱动报的失败原文（`failed`），出错歇下时用
-        var lastError: String?
         /// CuePad 发出 `turn/start` 前的时刻：它开出的一轮从这里算起。收到开始通知的时刻在负载高时可能晚于这一轮在会话文件里的回答（实测）
         var sentAt: Date?
-        /// 这一轮已结束、先认清同一进程上认不出主人的线程再歇下（`endTurn`）；期间 `facts` 仍是在跑
+        /// 这一轮已结束、先认清同一进程上认不出主人的线程再歇下（`endTurn`）；期间 `turns` 仍是在跑
         var ending: Task<Void, Never>?
         /// 这一轮派出、还没认出的子代理（任务名，父线程的 `subAgentActivity` 报的）：子线程的推送与父线程的一轮结束不分先后，
         /// 推送晚到时一轮结束还不知道有它（`endTurn` 等它认出，`recognized` 报每次认出）
         var spawned: Set<String> = []
         var recognized: Occurrences?
-        /// CuePad 正以一句话开新一轮（`deliver`）：期间一轮结束不算歇下，接着就是这句开的那一轮
-        var restarting: Restart?
-        var restartGeneration = 0
-        let stopPhase = StopPhase()
         var skills: [(name: String, path: String)] = []
 
-        init(id: Session.ID, threadID: String, driver: CodexDriver, pid: Int32) {
+        init(id: Session.ID, threadID: String, driver: CodexDriver, pid: Int32, timing: Timing) {
             self.id = id
             self.threadID = threadID
             self.driver = driver
             self.pid = pid
+            turns = HostedTurns(timing: timing)
         }
 
         /// 服务端请求（`id` 是它的请求 id）

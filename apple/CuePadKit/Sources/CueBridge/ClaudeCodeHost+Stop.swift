@@ -3,25 +3,15 @@ import CueStore
 import Foundation
 
 extension ClaudeHostedSession {
-    /// `interrupting` 时在跑就先停下这一轮、等它收尾，否则并进这一轮。
-    func say(_ message: JSONValue, interrupting: Bool) async throws {
-        if interrupting { try await interrupt(restarting: true) }
-        try put(message)
-    }
-
+    /// 发出的话（斜杠命令也是）一定开始一轮：从发出那一刻算（早于这一轮的回答），不等它的 `system/init`（中间隔着钩子）。
     func put(_ message: JSONValue) throws {
         try live.write(message)
-        began()
+        emit(.turnStarted)
+        publish(at: .now)
     }
 
     static func userMessage(_ content: JSONValue, extra: [String: JSONValue] = [:]) -> JSONValue {
         .object(["type": "user", "message": ["role": "user", "content": content], "parent_tool_use_id": .null].merging(extra) { $1 })
-    }
-
-    /// 发出的话（斜杠命令也是）一定开始一轮：从发出那一刻算，不等它的 `system/init`（中间隔着钩子）；为它停下的那一轮收尾时已经开了。
-    func began() {
-        beginTurn()
-        publish(at: .now)
     }
 
     func closeClears() {
@@ -35,27 +25,12 @@ extension ClaudeHostedSession {
         clearWaits.resolve(clearing.removeFirst(), with: outcome)
     }
 
-    func interrupt(restarting: Bool) async throws {
-        try await stopPhase.run(cancellable: restarting) { [self] in
-            // 还没见它的 `system/init` 也照停，不等 init（#81：起得慢就等满 `AgentTimeouts.stop`）：话已交出、中断排在它后面，
-            // Claude Code 照样停下这一轮、回 `result`（2.1.318 实测：冻住进程时话与中断一起读到，这一轮不问模型就收尾）
-            guard facts.running else { return }
-            tasks.forgetOwed()
-            stopping = true
-            restart = restarting
-            let seen = closing.count
-            do {
-                _ = try await live.request(["subtype": "interrupt"])
-                try await closing.wait(after: seen)
-            } catch {
-                restart = false
-                throw error
-            }
-        }
-    }
-
-    func release() {
-        closing.happened()
+    /// 请它停下这一轮，收尾（`result`）由 `HostedTurns` 等。还没见它的 `system/init` 也照停（#81）：话已交出、中断排在它后面，
+    /// Claude Code 照样停下这一轮、回 `result`（2.1.318 实测：冻住进程时话与中断一起读到，这一轮不问模型就收尾）。
+    /// 停下时 Claude Code 可能连排着的任务通知一起取消，所以不再等为它跑的那一轮（`ClaudeHostedTasks.forgetOwed`）。
+    func interrupt() async throws {
+        tasks.forgetOwed()
+        _ = try await live.request(["subtype": "interrupt"])
     }
 }
 #endif

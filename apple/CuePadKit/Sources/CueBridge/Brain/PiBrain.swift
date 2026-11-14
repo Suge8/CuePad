@@ -25,7 +25,7 @@ import Foundation
 /// - 正在说的话：RPC 只发增量（见 Pi 的 docs/json.md「Reconstruct streaming messages」），`text_end` 与 `message_end` 给定稿。
 @MainActor
 final class PiBrain: HostedSession {
-    private let session = BrainSession()
+    private let session = BrainSession(agent: .pi)
     var events: AsyncStream<TurnEvent> { session.events }
     private var process: ChildProcess?
     private let replies = PendingReplies<String, JSONValue>(timeout: AgentTimeouts.reply, timeoutError: HostedSessionError.rejected(String(localized: "没有及时回应")))

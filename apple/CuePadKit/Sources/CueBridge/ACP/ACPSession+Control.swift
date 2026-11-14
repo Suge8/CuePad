@@ -8,26 +8,27 @@ extension ACPSession: SessionLink {
         guard !message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !message.images.isEmpty else {
             throw BridgeError.rejected("empty")
         }
-        try await interrupt()
-        try prompt(ACPContent.prompt(text: message.text, images: message.images), deliveryID: message.deliveryID)
+        try await turns.send(stop: { [self] in try cancel() }) {
+            try prompt(ACPContent.prompt(text: message.text, images: message.images), deliveryID: message.deliveryID)
+        }
         if !message.text.isEmpty, let id {
             bridge?.update(id) { if $0.firstMessage == nil { $0.firstMessage = String(message.text.prefix(SessionName.firstMessageLimit)) } }
         }
     }
 
     func command(_ line: String, deliveryID _: String?, in _: Session.ID) async throws {
-        try await interrupt()
-        try prompt(ACPContent.prompt(text: line, images: []))
+        try await turns.send(stop: { [self] in try cancel() }) {
+            try prompt(ACPContent.prompt(text: line, images: []))
+        }
     }
 
     func abort(_: Session.ID) async throws {
-        stopPhase.cancelAll()
-        try await interrupt(cancellable: false)
+        try await turns.abort { [self] in try cancel() }
     }
 
     func answer(_ answer: AnswerValue, to promptID: String, in _: Session.ID) async throws {
         guard let pending else { throw BridgeError.rejected("no_prompt") }
-        guard facts.question?.promptID == promptID else { throw BridgeError.rejected("stale_prompt") }
+        guard turns.facts.question?.promptID == promptID else { throw BridgeError.rejected("stale_prompt") }
         switch pending.ask.answer(answer) {
         case nil:
             throw BridgeError.rejected("bad_answer")
@@ -35,7 +36,7 @@ extension ACPSession: SessionLink {
             present(ask, request: pending.request)
         case .result(let result):
             self.pending = nil
-            facts.questions = []
+            turns.facts.questions = []
             try live.respond(to: pending.request, result: result)
             publish()
         }

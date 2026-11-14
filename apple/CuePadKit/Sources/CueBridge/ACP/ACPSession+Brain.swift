@@ -40,7 +40,7 @@ extension ACPSession: HostedSession {
     /// （Grok 的搁浅插话），那就等它也做完。
     func send(_ text: String, images: [MessageImage], id: UUID) async throws {
         let text = text.hasPrefix("/") ? " " + text : text
-        while facts.running {
+        while turns.running {
             let connection = try live
             guard let sessionID else { throw HostedSessionError.notRunning }
             if steerable, let steer = try await dialect.steer(text, images: images, session: sessionID, on: connection) {

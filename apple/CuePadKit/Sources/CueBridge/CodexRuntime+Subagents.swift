@@ -31,7 +31,7 @@ extension CodexRuntime {
         case "serverRequest/resolved":
             guard session.reply?.request == params["requestId"] else { return }
             session.reply = nil
-            session.facts.questions = []
+            session.turns.facts.questions = []
         case "thread/closed":
             return detach(session.id)
         default:
@@ -47,14 +47,14 @@ extension CodexRuntime {
         case ("userMessage", true):
             let text = (item["content"]?.array ?? []).compactMap { $0["type"]?.string == "text" ? $0["text"]?.string : nil }.joined(separator: "\n")
             guard !text.isEmpty else { return }
-            session.facts.standingQuestion = nil
+            session.turns.facts.standingQuestion = nil
             bridge.update(session.id) { s in
                 if s.firstMessage == nil { s.firstMessage = String(text.prefix(SessionName.firstMessageLimit)) }
             }
         case ("agentMessage", false) where item["delivery"]?.string == "async":
-            session.facts.standingQuestion = Self.asyncQuestion(item["questions"])
+            session.turns.facts.standingQuestion = Self.asyncQuestion(item["questions"])
         case ("contextCompaction", _):
-            session.facts.compacting = started
+            session.turns.facts.compacting = started
         case ("subAgentActivity", true) where item["kind"]?.string == "started":
             guard let name = item["agentPath"]?.string?.split(separator: "/").last.map(String.init) else { return }
             let known = threads.values.contains { if case .session(session.id, name, _) = $0 { true } else { false } }
@@ -70,17 +70,11 @@ extension CodexRuntime {
         guard let thread = hosted[pid]?.thread, let session = tracked["\(thread).\(pid)"] else { return }
         switch event {
         case .turnStarted:
-            session.restarting = nil
             startTurn(session, at: session.sentAt ?? .now)
-        case .failed(let text):
-            session.lastError = text
-            return
         case .turnFinished:
-            endTurn(session, failure: session.lastError)
-        case .tool(_, let name, let arguments):
-            session.facts.work(.tool, detail: ToolDetail.line(name, JSONValue.parse(Data(arguments.utf8))))
-        case .toolDone:
-            session.facts.work(.thinking)
+            endTurn(session)
+        case .failed, .tool, .toolDone:
+            session.turns.apply(event)
         case .speaking, .context:
             return bridge.show(event, in: session.id)
         case .exited, .received:
@@ -92,15 +86,14 @@ extension CodexRuntime {
     /// 同一进程上还有认不出主人的线程（推送先到、还在问或第一次没读到），或这一轮派出的子代理还没露面（推送还没到，`spawned`）时先不歇下：
     /// 不等就会先报歇下、认出后再进“等子代理”。由这次结束触发一起再问一遍、等派出的认出，至多 `AgentTimeouts.settleAsk`：认出的进名册，
     /// 仍读不到、没及时回的等它下一条推送再问（`resolve`）；问完歇下。
-    /// 这一轮出错的原因只记在 `facts.failure`，只有新一轮开始（`startTurn`）清空。
-    func endTurn(_ session: Tracked, failure: String?) {
+    /// 换轮中（`HostedTurns.handingOver`）被停下的那一轮不等，直接交给下一轮。
+    func endTurn(_ session: Tracked) {
         session.reply = nil
         session.sentAt = nil
-        guard session.restarting == nil else { session.restarting = .stopped; return }
-        if let failure { session.facts.failure = failure }
+        guard !session.turns.handingOver else { session.turns.apply(.turnFinished); return }
         guard session.ending == nil else { return }
         let unknown = unresolvedThreads(on: session.pid)
-        guard !unknown.isEmpty || !session.spawned.isEmpty else { return session.facts.endTurn(failure: session.facts.failure) }
+        guard !unknown.isEmpty || !session.spawned.isEmpty else { session.turns.apply(.turnFinished); return }
         let pid = session.pid
         let recognized = Occurrences(timeout: nil, timing: timing, timeoutError: CancellationError())
         session.recognized = recognized
@@ -114,8 +107,7 @@ extension CodexRuntime {
             }
             guard !Task.isCancelled, tracked[session.id] === session else { return }
             session.ending = nil
-            guard session.restarting == nil else { session.restarting = .stopped; return }
-            session.facts.endTurn(failure: session.facts.failure)
+            session.turns.apply(.turnFinished)
             if !session.unread.isEmpty { wake(session) }
             publish(session)
         }
@@ -143,9 +135,8 @@ extension CodexRuntime {
         session.ending?.cancel()
         session.ending = nil
         session.spawned = []
-        session.lastError = nil
-        session.facts.startTurn(at: start)
-        session.facts.inFlight.subtract(session.unread.keys)
+        session.turns.apply(.turnStarted, at: start)
+        session.turns.facts.inFlight.subtract(session.unread.keys)
         session.unread = [:]
     }
 
@@ -209,14 +200,14 @@ extension CodexRuntime {
         threads[key] = owner
         if case .session(let id, let name, _) = owner, let session = tracked[id], session.spawned.remove(name) != nil { session.recognized?.happened() }
         if case .session(let id, let name, let role) = owner, let session = tracked[id],
-           !session.facts.subagents.contains(where: { $0.id == child }), running || last != nil {
+           !session.turns.facts.subagents.contains(where: { $0.id == child }), running || last != nil {
             let date = { (field: String) in thread[field]?.number.map { Date(timeIntervalSince1970: $0) } ?? .now }
-            session.facts.startSubagent(child, name: name, role: role, at: date("createdAt"))
+            session.turns.facts.startSubagent(child, name: name, role: role, at: date("createdAt"))
             if running {
-                session.facts.updateSubagent(child, at: date("updatedAt")) { $0.progressAt = date("updatedAt") }
-                session.facts.inFlight.insert(child)
+                session.turns.facts.updateSubagent(child, at: date("updatedAt")) { $0.progressAt = date("updatedAt") }
+                session.turns.facts.inFlight.insert(child)
             } else {
-                session.facts.settleSubagent(child, Self.phase(of: last), summary: nil, at: date("updatedAt"))
+                session.turns.facts.settleSubagent(child, Self.phase(of: last), summary: nil, at: date("updatedAt"))
             }
             publish(session)
         }
@@ -245,9 +236,9 @@ extension CodexRuntime {
         switch method {
         case "turn/started":
             // 再跑一轮（v2 的 followup_task、v1 的 send_input）也是在跑
-            session.facts.runSubagent(child, name: name, role: role, at: now)
+            session.turns.facts.runSubagent(child, name: name, role: role, at: now)
             session.unread[child] = nil
-            session.facts.inFlight.insert(child)
+            session.turns.facts.inFlight.insert(child)
         case "turn/completed":
             let turn = params["turn"]
             let phase = Self.phase(of: turn)
@@ -264,7 +255,7 @@ extension CodexRuntime {
                 session.lastWords[child] = text
             }
             let tool = method == "item/started" ? item.flatMap(CodexDriver.tool) : nil
-            session.facts.updateSubagent(child, at: now) { agent in
+            session.turns.facts.updateSubagent(child, at: now) { agent in
                 if let tool { agent.action = ToolDetail.line(tool.name, tool.arguments) }
                 agent.progressAt = now
             }
@@ -287,11 +278,11 @@ extension CodexRuntime {
     }
 
     private func settle(_ child: String, _ phase: SubagentPhase, summary: String?, in session: Tracked) {
-        guard session.facts.inFlight.contains(child), session.unread[child] == nil else { return }
-        session.facts.settleSubagent(child, phase, summary: summary, at: .now)
+        guard session.turns.facts.inFlight.contains(child), session.unread[child] == nil else { return }
+        session.turns.facts.settleSubagent(child, phase, summary: summary, at: .now)
         session.lastWords[child] = nil
-        if session.facts.running, session.ending == nil {
-            session.facts.inFlight.remove(child)
+        if session.turns.facts.running, session.ending == nil {
+            session.turns.facts.inFlight.remove(child)
         } else {
             session.unread[child] = phase != .interrupted
             wake(session)
@@ -302,27 +293,27 @@ extension CodexRuntime {
     /// 同 Codex 的 `wake_on_agent_messages`（openai/codex#54961，未发布、默认关、不管 v1，发布并默认开启后改用它），边界也照它：
     /// 父线程上一轮被停下、在 Plan 模式、这一批没有交回结果（都被停下）的不补，直接歇下。
     private func wake(_ session: Tracked) {
-        let batch = session.facts.inFlight
-        guard !session.facts.running, batch == Set(session.unread.keys) else { return }
+        let batch = session.turns.facts.inFlight
+        guard !session.turns.facts.running, batch == Set(session.unread.keys) else { return }
         let delivered = session.unread.values.contains(true)
         let file = bridge.session(id: session.id)?.sessionFile
         Task {
             var last: CodexHistory.LastTurn?
             if delivered, let file { last = await CodexHistory.lastTurn(in: file) }
-            guard tracked[session.id] === session, !session.facts.running, session.facts.inFlight == batch else { return }
+            guard tracked[session.id] === session, !session.turns.facts.running, session.turns.facts.inFlight == batch else { return }
             guard delivered, last?.plan != true, last?.interrupted != true else {
                 session.unread = [:]
-                session.facts.inFlight = []
+                session.turns.facts.inFlight = []
                 return publish(session)
             }
             do {
                 try await turnStart(session, [])
             } catch {
                 // 没开成：这一批不再等，带着原因歇下
-                guard tracked[session.id] === session, !session.facts.running else { return }
+                guard tracked[session.id] === session, !session.turns.facts.running else { return }
                 session.unread = [:]
-                session.facts.inFlight = []
-                session.facts.endTurn(failure: error.localizedDescription)
+                session.turns.facts.inFlight = []
+                session.turns.facts.endTurn(failure: error.localizedDescription)
                 publish(session)
             }
         }

@@ -20,7 +20,7 @@ final class CodexBrain: HostedSession {
         "include_collaboration_mode_instructions=false", "include_permissions_instructions=false",
     ]
 
-    private let outlet = BrainSession()
+    private let outlet = BrainSession(agent: .codex)
     private let driver = CodexDriver()
     private var threadParams: JSONValue = [:]
     /// `model/list` 里的模型（连隐藏的）：就地换模型时认模型、取它支持的强度

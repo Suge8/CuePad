@@ -29,7 +29,7 @@ extension CodexRuntime {
 
     private func ask(_ session: Tracked, _ action: String, _ details: [String?], _ reply: Tracked.Reply) {
         session.reply = reply
-        session.facts.questions = [Question(promptID: UUID().uuidString, kind: .confirm, text: PermissionWording.question(.codex, action, details))]
+        session.turns.facts.questions = [Question(promptID: UUID().uuidString, kind: .confirm, text: PermissionWording.question(.codex, action, details))]
         publish(session)
     }
 
@@ -39,7 +39,7 @@ extension CodexRuntime {
         let question = Self.userInput(params, promptID: answerable ? UUID().uuidString : nil)
         session.reply = nil
         if answerable, let first = questions.first?["id"]?.string { session.reply = .question(rpc, id: id, question: first) }
-        session.facts.questions = [question]
+        session.turns.facts.questions = [question]
         publish(session)
         return answerable
     }
@@ -70,7 +70,7 @@ extension CodexRuntime {
     }
 
     public func answer(_ answer: AnswerValue, to promptID: String, in id: Session.ID) async throws {
-        guard let session = tracked[id], let question = session.facts.question else { throw BridgeError.rejected("no_prompt") }
+        guard let session = tracked[id], let question = session.turns.facts.question else { throw BridgeError.rejected("no_prompt") }
         guard question.promptID == promptID else { throw BridgeError.rejected("stale_prompt") }
         guard let reply = session.reply else {
             let text: String
@@ -80,7 +80,7 @@ extension CodexRuntime {
             default: throw BridgeError.rejected("bad_answer")
             }
             try await deliver(CodexRPC.input(text: text, images: []), clientID: CodexHistory.clientID(for: nil), to: session)
-            session.facts.standingQuestion = nil
+            session.turns.facts.standingQuestion = nil
             return publish(session)
         }
         switch (reply, answer) {
@@ -93,7 +93,7 @@ extension CodexRuntime {
             throw BridgeError.rejected("bad_answer")
         }
         session.reply = nil
-        session.facts.questions = []
+        session.turns.facts.questions = []
         publish(session)
     }
 }
