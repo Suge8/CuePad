@@ -1,20 +1,15 @@
 """xc.sh diag 读各台设备经 iCloud 送到这台 Mac 的诊断（DiagnosticInbox.swift 落的文件），用法与目录约定见 device_diag.py 头注释。"""
-import datetime
 import json
 import os
 import re
 import subprocess
 import sys
 
-from diag_report import ARCHIVES, EXPLAIN, WATCHDOG, WATCHDOG_EVENTS, dsyms, pick, shown, summarize
+from diag_report import ARCHIVES, dsyms, shown, summarize
 
 INBOX = os.environ.get("CUEPAD_DIAG_DIR") or os.path.expanduser("~/Library/Logs/CuePad")
 ACTIVITY = "activity.json"  # 同 DiagnosticArchive.activity：手机实时活动的取证
-KINDS = {"crashDiagnostics": "崩溃", "hangDiagnostics": "卡死", "cpuExceptionDiagnostics": "CPU 异常",
-         "diskWriteExceptionDiagnostics": "磁盘写入异常"}  # 同 CrashReport.Kind，按这个顺序
-EXCEPTIONS = {1: "EXC_BAD_ACCESS", 2: "EXC_BAD_INSTRUCTION", 3: "EXC_ARITHMETIC", 5: "EXC_SOFTWARE", 6: "EXC_BREAKPOINT",
-              10: "EXC_CRASH", 11: "EXC_RESOURCE", 12: "EXC_GUARD"}
-SIGNALS = {4: "SIGILL", 5: "SIGTRAP", 6: "SIGABRT", 8: "SIGFPE", 9: "SIGKILL", 10: "SIGBUS", 11: "SIGSEGV", 13: "SIGPIPE", 15: "SIGTERM"}
+SUMMARY = ".summary.json"  # 同 DiagnosticInbox.summary(of:)
 
 
 def folders():
@@ -29,7 +24,7 @@ def overview():
     names = folders()
     print(f"{shown(INBOX)}：{len(names)} 台设备" + ("" if names else "（还没收到过）"))
     for name in names:
-        files = sorted((f for f in os.listdir(f"{INBOX}/{name}") if f != ACTIVITY), reverse=True)
+        files = sorted((f for f in os.listdir(f"{INBOX}/{name}") if f != ACTIVITY and not f.endswith(SUMMARY)), reverse=True)
         logs = [f for f in files if f.endswith(".log")]
         print(f"  {name}：诊断 {len(files) - len(logs)} 份、日志 {len(logs)} 份；最新 {files[0] if files else '无'}")
 
@@ -44,7 +39,7 @@ def device_dir(wanted):
 
 def inbox(wanted, full):
     folder = device_dir(wanted)
-    files = sorted((f for f in os.listdir(folder) if f != ACTIVITY), reverse=True)
+    files = sorted((f for f in os.listdir(folder) if f != ACTIVITY and not f.endswith(SUMMARY)), reverse=True)
     reports = [r for f in files if f.endswith(".json") for r in metrickit(f"{folder}/{f}")]
     print(f"{shown(folder)}：诊断 {len(reports)} 份")
     summarize(reports)
@@ -70,61 +65,19 @@ def inbox(wanted, full):
 
 
 def metrickit(path):
-    """一份 MetricKit 包（或本机记下的主线程卡住）解成要点：同 CrashReport.reports(file:json:)。"""
-    body = json.load(open(path))
-    name = os.path.basename(path)
-    if "cuepadFreeze" in body:
-        note = body["cuepadFreeze"]
-        seconds = note.get("seconds")
-        reason = f"主线程 {round(seconds)} 秒没回到事件循环，之后恢复了" if seconds is not None else "主线程卡住，没等到恢复 App 就被结束了"
-        return [{"file": path, "date": f'{datetime.datetime.fromisoformat(note["start"]).astimezone():%Y-%m-%d %H:%M:%S}', "who": "CuePad",
-                 "app": " · ".join((note["version"], note["device"], note["os"])), "title": "主线程卡住", "reasons": [reason],
-                 "explanation": None, "frames": [], "frames_title": "", "symbols": [],
-                 "trail": [f'所在页：{note["page"]}', *note["actions"]], "id": name}]
+    """App 收下时在旁边落的要点（DiagnosticInbox.swift 的 <文件>.summary.json，同 CrashReport.Summary），这里只符号化。"""
+    summary = path + SUMMARY
+    if not os.path.exists(summary):
+        print(f"  {shown(path)} 没有要点（更新 Mac 上的 CuePad 前收的；删掉收件目录里的 .inbox.json 让它从头收一遍）")
+        return []
     found = []
-    for key, kind in KINDS.items():
-        for item in body.get(key, []):
-            meta = item.get("diagnosticMetaData", {})
-            exception = EXCEPTIONS.get(meta.get("exceptionType"), f'EXC_{meta["exceptionType"]}' if "exceptionType" in meta else None)
-            signal = SIGNALS.get(meta.get("signal"), f'SIG{meta["signal"]}' if "signal" in meta else None)
-            objc = meta.get("objectiveCexceptionReason") or {}
-            thrown = ": ".join(p for p in (objc.get("exceptionName"), objc.get("composedMessage")) if p)
-            termination = meta.get("terminationReason", "")
-            version = f'{meta["appVersion"]}（{meta.get("appBuildVersion", "?")}）' if meta.get("appVersion") else None
-            platform = "mac" if meta.get("osVersion", "").startswith("macOS") else "ios"
-            frames = stack(item.get("callStackTree"))
-            found.append({"file": path, "date": body.get("timeStampEnd", ""), "who": "CuePad",
-                          "app": " · ".join(p for p in (version, meta.get("deviceType"), meta.get("osVersion")) if p),
-                          "title": kind + (f" · {exception}" + (f"（{signal}）" if signal else "") if exception else ""),
-                          "reasons": [r for r in (thrown, termination) if r], "explanation": explain(termination),
-                          "frames": frames, "frames_title": "崩溃线程：" if key == "crashDiagnostics" else "主线程：",
-                          "symbols": symbolicate_metrickit(frames, platform, meta.get("appBuildVersion", "")), "trail": []})
+    for r in json.load(open(summary)):
+        frames = [{"offset": None, "address": None, "uuid": "", **f, "symbol": None, "base": None} for f in r["frames"]]  # Swift 不写空值
+        platform = "mac" if (r.get("os") or "").startswith("macOS") else "ios"
+        found.append({"file": path, "date": r["date"], "who": "CuePad", "app": r.get("app") or "", "title": r["title"],
+                      "reasons": r["reasons"], "explanation": r.get("explanation"), "frames": frames, "frames_title": r["framesTitle"],
+                      "symbols": symbolicate_metrickit(frames, platform, r.get("build") or ""), "trail": r["trail"], "id": os.path.basename(path)})
     return found
-
-
-def explain(termination):
-    code = re.search(r"code:(0x[0-9A-Fa-f]+)", termination)
-    if not code:
-        return None
-    code = int(code[1], 16)
-    if code == 0x8BADF00D:
-        event = re.search(r"WatchdogEvent: ([\w-]+)", termination)
-        return WATCHDOG + (WATCHDOG_EVENTS.get(event[1], f"（{event[1]}）") if event else "")
-    return EXPLAIN.get(code)
-
-
-def stack(tree):
-    """同 CrashReport.frames(of:)：被标记的线程（没有就第一条），从崩溃处顺着调用者往下。"""
-    stacks = (tree or {}).get("callStacks", [])
-    chosen = next((s for s in stacks if s.get("threadAttributed")), stacks[0] if stacks else {})
-    frames, node = [], (chosen.get("callStackRootFrames") or [None])[0]
-    while node:
-        uuid = node.get("binaryUUID", "").upper()
-        frames.append({"binary": node.get("binaryName") or uuid[:8] or "?", "offset": node.get("offsetIntoBinaryTextSegment"),
-                       "address": node.get("address"), "uuid": uuid, "own": (node.get("binaryName") or "").startswith("CuePad"),
-                       "symbol": None, "base": None})
-        node = (node.get("subFrames") or [None])[0]
-    return pick(frames)
 
 
 def symbolicate_metrickit(frames, platform, build):

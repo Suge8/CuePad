@@ -3,7 +3,8 @@ import CueSync
 import Foundation
 import os
 
-/// Mac 上把各台设备经 iCloud 送来的诊断（`DeviceDiagnostic`）落成文件：`<directory>/<设备名>/<文件名>`，云上删了的这里也删，
+/// Mac 上把各台设备经 iCloud 送来的诊断（`DeviceDiagnostic`）落成文件：`<directory>/<设备名>/<文件名>`，解析得出的旁边另落一份要点
+/// （`<文件名>.summary.json`，`CrashReport.Summary`），云上删了的这里也删，
 /// 与各台的存档一样只留最近几份。`directory` 是 `LibraryLocation.deviceLogs()`（正式版在 ~/Library/Logs/CuePad，不在资料库里：
 /// agent 读它不碰真实资料库；隔离库在自己目录里），`xc.sh diag` 读它、符号化。
 /// 进度（拉到哪的令牌、设备 ID 对应哪个目录）记在 `directory/.inbox.json`；令牌失效或文件丢了就从头读一遍、照云上的全部重写。
@@ -38,7 +39,10 @@ actor DiagnosticInbox {
         var removed = 0
         if changes.complete {
             // 从头读的：本地有、云上没有的都删
-            let keep = Set(changes.saved.map { folder(for: $0, in: &state).appending(path: $0.file).path })
+            let keep = Set(changes.saved.flatMap { saved in
+                let file = folder(for: saved, in: &state).appending(path: saved.file)
+                return [file.path, Self.summary(of: file).path]
+            })
             for (device, name) in state.folders {
                 let folder = directory.appending(path: name, directoryHint: .isDirectory)
                 for file in (try? files.contentsOfDirectory(atPath: folder.path)) ?? [] where !keep.contains(folder.appending(path: file).path) {
@@ -53,12 +57,16 @@ actor DiagnosticInbox {
             let file = directory.appending(path: name).appending(path: gone.file)
             guard files.fileExists(atPath: file.path) else { continue }
             try files.removeItem(at: file)
+            try? files.removeItem(at: Self.summary(of: file))  // 日志与取证没有要点
             removed += 1
         }
         for diagnostic in changes.saved {
             let folder = folder(for: diagnostic, in: &state)
             try files.createDirectory(at: folder, withIntermediateDirectories: true)
-            try diagnostic.content.write(to: folder.appending(path: diagnostic.file), options: .atomic)
+            let file = folder.appending(path: diagnostic.file)
+            try diagnostic.content.write(to: file, options: .atomic)
+            let reports = CrashReport.reports(file: diagnostic.file, json: diagnostic.content)
+            if !reports.isEmpty { try JSONEncoder.diagnostics.encode(reports.map(CrashReport.Summary.init)).write(to: Self.summary(of: file), options: .atomic) }
         }
         state.token = changes.token.isEmpty ? nil : changes.token
         try JSONEncoder().encode(state).write(to: stateFile, options: .atomic)
@@ -67,6 +75,8 @@ actor DiagnosticInbox {
         }
         return (changes.saved.count, removed)
     }
+
+    private static func summary(of file: URL) -> URL { file.appendingPathExtension("summary.json") }
 
     /// 按设备名分目录；两台同名的，后来的加上设备 ID 的头几位。
     private func folder(for diagnostic: DeviceDiagnostic, in state: inout State) -> URL {
