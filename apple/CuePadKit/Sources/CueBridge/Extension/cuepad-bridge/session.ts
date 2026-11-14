@@ -73,7 +73,8 @@ export class Session {
 		const initial = this.state();
 		this.lastKey = JSON.stringify([initial, this.turnSince]);
 		this.phase = phaseOf(initial);
-		const clock = kept?.clock.phase === this.phase ? kept.clock : null;
+		// 热升级前的实例交出的不带 clock：起点从此刻算
+		const clock = kept?.clock?.phase === this.phase ? kept.clock : null;
 		this.since = clock?.since ?? Date.now();
 		this.busySince = clock ? clock.busySince : this.phase === "working" ? this.since : null;
 		this.info = {
