@@ -57,17 +57,8 @@ struct CueVoiceState<Operation: CueVoiceOperation> {
     let canStopExecution: Bool
     var executions: [Execution] = []
     var readings: [Reading] = []
-    /// 各列表只显示宿主当前页；导航原样回传操作，不累计记录或保存游标。
-    struct Page {
-        let first: Operation?
-        let next: Operation?
-        let loading: Bool
-        let error: LocalizedStringResource?
-    }
-
-    var requestPage: Page? = nil
-    var replyPage: Page? = nil
-    var executionPage: Page? = nil
+    /// 手机只收到最近的条目时，其余在哪（`VoiceCallProjection.bounded`）
+    var earlier: LocalizedStringResource?
     /// nil 表示允许发起；宿主提供权限、账号或运行设备的实际阻塞原因，视图不推断可用性。
     var startUnavailableReason: LocalizedStringResource?
 
@@ -97,7 +88,6 @@ struct CueVoiceState<Operation: CueVoiceOperation> {
     /// 通话详情里有东西可看：通话中，或留着问题、记录与可停的执行。
     var hasDetails: Bool {
         active || !issues.isEmpty || !readings.isEmpty || !executions.isEmpty || canStopExecution
-            || requestPage != nil || replyPage != nil || executionPage != nil
     }
 
     var title: LocalizedStringResource {
@@ -111,4 +101,11 @@ typealias CueVoiceAction = CueVoiceIntent<CueVoiceRecovery>
 
 enum CueVoiceIntent<Operation: CueVoiceOperation> {
     case toggleMute, hangUp, stopExecution, perform(Operation)
+}
+
+extension VoiceCallProjection.Omitted {
+    var shown: LocalizedStringResource? {
+        let count = requests + replies + executions
+        return count == 0 ? nil : "另有 \(count) 条较早的记录在 Mac 的通话详情里"
+    }
 }

@@ -5236,22 +5236,6 @@
         }
       }
     },
-    "下一页" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Next page"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "下一页"
-          }
-        }
-      }
-    },
     "下载中 %@" : {
       "localizations" : {
         "en" : {
@@ -8708,22 +8692,6 @@
         }
       }
     },
-    "原通话已被替换或不可用，请在 Mac 的通话详情查看或恢复原请求" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The original call was replaced or is unavailable. View or recover the original request in call details on your Mac"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "原通话已被替换或不可用，请在 Mac 的通话详情查看或恢复原请求"
-          }
-        }
-      }
-    },
     "原项目已不存在或在回收站，已放到默认项目" : {
       "localizations" : {
         "en" : {
@@ -9244,6 +9212,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "另有 %@，由它们自己管"
+          }
+        }
+      }
+    },
+    "另有 %lld 条较早的记录在 Mac 的通话详情里" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld earlier item is in the call details on your Mac"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld earlier items are in the call details on your Mac"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "另有 %lld 条较早的记录在 Mac 的通话详情里"
           }
         }
       }
@@ -10040,22 +10036,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "回到顶部"
-          }
-        }
-      }
-    },
-    "回到首页" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Back to first page"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "回到首页"
           }
         }
       }
@@ -13940,22 +13920,6 @@
         }
       }
     },
-    "执行记录" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Execution history"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "执行记录"
-          }
-        }
-      }
-    },
     "扩展" : {
       "localizations" : {
         "en" : {
@@ -15960,22 +15924,6 @@
         }
       }
     },
-    "无法读取通话记录，请检查连接后重试" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cannot read call history. Check your connection and try again"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无法读取通话记录，请检查连接后重试"
-          }
-        }
-      }
-    },
     "无法连接 Mac，请确认 Mac 已开机并联网" : {
       "localizations" : {
         "en" : {
@@ -17836,22 +17784,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在结束…"
-          }
-        }
-      }
-    },
-    "正在读取…" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Loading…"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在读取…"
           }
         }
       }
@@ -21840,22 +21772,6 @@
         }
       }
     },
-    "记录已变化，请回到首页" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Records changed. Return to the first page"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "记录已变化，请回到首页"
-          }
-        }
-      }
-    },
     "记忆" : {
       "localizations" : {
         "en" : {
@@ -22220,22 +22136,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "请求摘要「%1$@…」：%2$@"
-          }
-        }
-      }
-    },
-    "请求记录" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Request history"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "请求记录"
           }
         }
       }
@@ -24248,22 +24148,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "这条灵感没有可分享的图片"
-          }
-        }
-      }
-    },
-    "这条通话记录太大，无法读取" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This call record is too large to load"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这条通话记录太大，无法读取"
           }
         }
       }

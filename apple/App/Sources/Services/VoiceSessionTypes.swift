@@ -41,9 +41,8 @@ nonisolated struct VoiceCallProjection: Equatable, Codable, Sendable {
     /// 控制协议的回应进度，与收音、请求写库、后台执行分开；不表示 PCM 已播放到某个位置。
     enum Response: String, Codable, Sendable { case none, awaitingAssistant, assistantTurn }
     var response: Response = .none
-    /// 快照装不下的旧条目数量；正文仍在原聊天，不能把省略当作不存在或已经完成。
+    /// 发给手机时装不下的较早条目数（`bounded`）；全部在 Mac 的通话详情里，已落库的正文也在聊天里。
     var omitted = Omitted()
-    var pages = VoicePageHeads()
     var canRepeat = false
 
     struct Omitted: Equatable, Codable, Sendable {

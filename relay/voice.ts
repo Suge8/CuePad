@@ -3,7 +3,7 @@ import { verifySignature } from "./auth";
 
 // 与原生 VoiceSignalFormat 的唯一 v1 契约对应；purpose 是认证路由头的一部分，拒绝原样回显给发送归属。
 // 正文仅两端解密，这里不解释业务命令或保存信令历史。
-export const VOICE_VERSION = 1;
+export const VOICE_VERSION = 2;
 export const MAX_VOICE_WIRE_BYTES = 64 * 1024;
 const MAX_DEVICE_BYTES = 128;
 const MAX_SEALED_BYTES = 32 * 1024 + 28; // AES.GCM 的 nonce 与 tag
@@ -15,7 +15,7 @@ const MAX_VOICE_PEERS = 64;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type Endpoint = { device: { rawValue: string }; lease: string };
-type RoutedPurpose = "command" | "commandResult" | "pageQuery" | "pageResult";
+type RoutedPurpose = "command" | "commandResult";
 type Purpose = { media: Record<string, never> } | { [K in RoutedPurpose]: { [P in K]: { id: { rawValue: string } } } }[RoutedPurpose];
 type Header = {
   version: number; sender: Endpoint; recipient: Endpoint; session: { rawValue: string };
@@ -51,7 +51,7 @@ function equal(a: Endpoint, b: Endpoint): boolean {
 }
 function purpose(value: unknown): value is Purpose {
   if (shape(value, ["media"])) return shape(value.media, []);
-  for (const kind of ["command", "commandResult", "pageQuery", "pageResult"]) {
+  for (const kind of ["command", "commandResult"]) {
     if (shape(value, [kind]) && shape(value[kind], ["id"])) {
       const id = value[kind].id;
       return shape(id, ["rawValue"]) && uuid(id.rawValue);

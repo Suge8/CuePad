@@ -181,6 +181,12 @@ extension VoiceService {
         return true
     }
 
+    /// 撤下这条中转连接上的投影来源：之后同一租约迟到的投影不再认。
+    func revokeProjection(local: VoiceEndpoint? = nil, peer: VoiceEndpoint? = nil) {
+        guard local == nil || phoneBinding?.local == local, peer == nil || phoneBinding?.peer == peer else { return }
+        phoneBinding = nil
+    }
+
     func receiveSignal(_ received: VoiceReceivedSignal) async {
         if case .projection = received.payload {
             guard let binding = phoneBinding, binding.session == session, binding.session == received.header.session,

@@ -170,7 +170,7 @@ extension VoiceService {
         defer { sending.end() }
         do {
             try await sending.perform(within: .seconds(2)) {
-                guard let signaling = self.signaling else { throw VoicePageError.unavailable }
+                guard let signaling = self.signaling else { throw VoiceSignalError.unavailable }
                 try DebugHooks.voiceProjectionSend()
                 try await signaling.sendVoice(.projection(value: value), session: reader.session, to: reader.sender)
             }

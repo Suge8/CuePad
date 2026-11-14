@@ -86,7 +86,7 @@ import Testing
         try await eventually("reply visible") { fixture.call.canRepeat && fixture.call.replies.contains { $0.id == first.id } }
         let session = VoiceSessionID(fixture.call.session), phone = VoiceDeviceID("phone-audit")
         let gone = VoiceEndpoint(device: phone, lease: UUID()), back = VoiceEndpoint(device: phone, lease: UUID())
-        let header = VoiceSignalHeader(version: 1, sender: gone, recipient: signal.local, session: session, sequence: 1,
+        let header = VoiceSignalHeader(version: VoiceSignalFormat.version, sender: gone, recipient: signal.local, session: session, sequence: 1,
                                        expiresAtMilliseconds: .max, purpose: .media)
         let remote = VoiceRemoteMedia(header: header, offer: .init(sdp: "offer"), signaling: signal)
         remote.connected = true
@@ -96,7 +96,7 @@ import Testing
         await voice.receive(.peerClosed(endpoint: gone, reason: .disconnected))
         #expect(!remote.link.isBound)
         let id = VoiceCommand.ID(UUID())
-        await voice.receive(.received(.init(header: .init(version: 1, sender: back, recipient: signal.local, session: session, sequence: 1,
+        await voice.receive(.received(.init(header: .init(version: VoiceSignalFormat.version, sender: back, recipient: signal.local, session: session, sequence: 1,
                                                           expiresAtMilliseconds: .max, purpose: .command(id: id)),
                                             payload: .command(command: .init(id: id, action: .repeatReply(message: first.id))))))
         #expect(remote.link == .bound(local: signal.local, peer: back))
@@ -123,20 +123,20 @@ import Testing
         try await eventually("reply visible") { fixture.call.canRepeat && fixture.call.replies.contains { $0.id == reply.id } }
         let session = VoiceSessionID(fixture.call.session), phone = VoiceDeviceID("phone-audit")
         let gone = VoiceEndpoint(device: phone, lease: UUID()), back = VoiceEndpoint(device: phone, lease: UUID())
-        let header = VoiceSignalHeader(version: 1, sender: gone, recipient: signal.local, session: session, sequence: 1,
+        let header = VoiceSignalHeader(version: VoiceSignalFormat.version, sender: gone, recipient: signal.local, session: session, sequence: 1,
                                        expiresAtMilliseconds: .max, purpose: .media)
         let remote = VoiceRemoteMedia(header: header, offer: .init(sdp: "offer"), signaling: signal)
         remote.connected = true
         voice.remote = remote
         let id = VoiceCommand.ID(UUID())
         let command = VoiceCommand(id: id, action: .repeatReply(message: reply.id))
-        await voice.receive(.received(.init(header: .init(version: 1, sender: gone, recipient: signal.local, session: session, sequence: 2,
+        await voice.receive(.received(.init(header: .init(version: VoiceSignalFormat.version, sender: gone, recipient: signal.local, session: session, sequence: 2,
                                                           expiresAtMilliseconds: .max, purpose: .command(id: id)),
                                             payload: .command(command: command))))
         remote.link = .relinking(peer: phone, until: .now + VoiceSignalFormat.relinkGrace, reason: .peerLeft)
         try await eventually("executed") { remote.results[id] != nil }
         #expect(!zip(signal.sent, signal.recipients).contains { if case .commandResult = $0 { $1 == gone } else { false } })
-        await voice.receive(.received(.init(header: .init(version: 1, sender: back, recipient: signal.local, session: session, sequence: 1,
+        await voice.receive(.received(.init(header: .init(version: VoiceSignalFormat.version, sender: back, recipient: signal.local, session: session, sequence: 1,
                                                           expiresAtMilliseconds: .max, purpose: .media), payload: .media(signal: .resume(ask: true)))))
         let result = VoiceSignalPayload.commandResult(result: .init(command: id, outcome: .readbackQueued(message: reply.id)))
         try await eventually("result followed the phone") { zip(signal.sent, signal.recipients).contains { $0 == result && $1 == back } }

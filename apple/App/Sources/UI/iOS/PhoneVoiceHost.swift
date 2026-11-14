@@ -39,12 +39,6 @@ extension Workspace {
             return try await repeatVoiceReply(message, command: UUID())
         case .stop(let target):
             return try await stopVoiceExecution(target, command: UUID())
-        case .requests(let cursor):
-            try await loadVoiceRequests(after: cursor)
-        case .replies(let cursor):
-            try await loadVoiceReplies(after: cursor)
-        case .executions(let cursor):
-            try await loadVoiceExecutions(after: cursor)
         case .microphoneSettings:
             guard await UIApplication.shared.open(URL(string: UIApplication.openSettingsURLString)!) else { throw VoiceIssue.ended(.permissionDenied) }
         }
@@ -59,9 +53,6 @@ enum PhoneVoiceAction {
     case recover(VoiceRequestReference)
     case repeatReply(UUID)
     case stop(VoiceExecutionTarget)
-    case requests(VoicePageCursor?)
-    case replies(VoicePageCursor?)
-    case executions(VoicePageCursor?)
 }
 
 struct PhoneVoiceViewState {
@@ -88,13 +79,6 @@ struct PhoneVoiceViewState {
         var id: VoiceExecutionTarget { target }
     }
 
-    struct Page {
-        let next: VoicePageCursor?
-        let canReturnToHead: Bool
-        let error: VoicePageError?
-        let loading: Bool
-    }
-
     let phase: VoiceCallProjection.Phase?
     let response: VoiceCallProjection.Response
     let muted: Bool
@@ -105,9 +89,7 @@ struct PhoneVoiceViewState {
     let requests: [Request]
     let replies: [Reply]
     let executions: [Execution]
-    let requestPage: Page
-    let replyPage: Page
-    let executionPage: Page
+    let omitted: VoiceCallProjection.Omitted
 
     fileprivate init(phone: VoicePhonePresentation, records: PhoneVoiceRecords?, shown: (SessionListItem) -> SessionShown) {
         let byID = Dictionary(uniqueKeysWithValues: (records?.messages ?? []).map { ($0.id, $0) })
@@ -117,12 +99,7 @@ struct PhoneVoiceViewState {
         canMute = phone.canMute
         canRepeat = phone.canRepeat
         startUnavailableReason = phone.startUnavailableReason
-        requestPage = Page(next: phone.requestPage.nextCursor, canReturnToHead: phone.canReturnToRequestsHead,
-                           error: phone.requestPageError, loading: phone.loadingRequests)
-        replyPage = Page(next: phone.replyPage.nextCursor, canReturnToHead: phone.canReturnToRepliesHead,
-                         error: phone.replyPageError, loading: phone.loadingReplies)
-        executionPage = Page(next: phone.executionPage.nextCursor, canReturnToHead: phone.canReturnToExecutionsHead,
-                             error: phone.executionPageError, loading: phone.loadingExecutions)
+        omitted = phone.omitted
         samples = phone.samples
         requests = phone.requests.map { request in
             let message: CueMessage?

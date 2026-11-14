@@ -35,7 +35,7 @@ enum DebugPhoneVoiceReplay {
         @MainActor func show(_ phase: VoiceCallProjection.Phase, response: VoiceCallProjection.Response = .none) {
             voice.setProjection(.init(session: initial.session, phase: phase, requests: initial.requests,
                                       replies: initial.replies, executions: initial.executions, response: response,
-                                      omitted: initial.omitted, pages: initial.pages, canRepeat: false))
+                                      omitted: initial.omitted, canRepeat: false))
         }
         try await Task.sleep(for: .seconds(2))
         owner.connected = false

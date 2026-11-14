@@ -33,7 +33,6 @@ struct CueVoiceDetails<Operation: CueVoiceOperation>: View {
             }
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: Spacing.block) {
-                    if presentation.executionPage != nil { Text("执行记录").font(Typography.bodyStrong) }
                     ForEach(presentation.executions) { execution in
                         VStack(alignment: .leading, spacing: Spacing.tight) {
                             Text(verbatim: execution.title).font(Typography.bodyStrong)
@@ -45,8 +44,6 @@ struct CueVoiceDetails<Operation: CueVoiceOperation>: View {
                             }
                         }
                     }
-                    navigation(presentation.executionPage)
-                    if presentation.requestPage != nil { Text("请求记录").font(Typography.bodyStrong) }
                     ForEach(presentation.issues) { issue in
                         VStack(alignment: .leading, spacing: Spacing.tight) {
                             Text(issue.summary).font(Typography.bodyStrong)
@@ -58,8 +55,7 @@ struct CueVoiceDetails<Operation: CueVoiceOperation>: View {
                         }
                         .foregroundStyle(palette.failure)
                     }
-                    navigation(presentation.requestPage)
-                    if !presentation.readings.isEmpty || presentation.replyPage != nil {
+                    if !presentation.readings.isEmpty {
                         Text("朗读记录").font(Typography.bodyStrong)
                         ForEach(presentation.readings) { reading in
                             VStack(alignment: .leading, spacing: Spacing.tight) {
@@ -72,7 +68,9 @@ struct CueVoiceDetails<Operation: CueVoiceOperation>: View {
                             }
                         }
                     }
-                    navigation(presentation.replyPage)
+                    if let earlier = presentation.earlier {
+                        Text(earlier).font(Typography.meta).foregroundStyle(palette.ink2)
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .textSelection(.enabled)
@@ -81,26 +79,4 @@ struct CueVoiceDetails<Operation: CueVoiceOperation>: View {
         }
         .padding(Spacing.panel)
     }
-
-    @ViewBuilder private func navigation(_ page: CueVoiceState<Operation>.Page?) -> some View {
-        if let page {
-            VStack(alignment: .leading, spacing: Spacing.tight) {
-                if let error = page.error {
-                    Text(error).font(Typography.meta).foregroundStyle(palette.failure)
-                }
-                if page.loading { Text("正在读取…").font(Typography.meta).foregroundStyle(palette.ink2) }
-                HStack(spacing: Spacing.item) {
-                    if let first = page.first {
-                        Button { action(.perform(first)) } label: { Text("回到首页") }
-                    }
-                    if let next = page.next {
-                        Button { action(.perform(next)) } label: { Text("下一页") }
-                    }
-                }
-                .buttonStyle(ControlButtonStyle(size: .compact))
-                .disabled(page.loading)
-            }
-        }
-    }
-
 }

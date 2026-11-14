@@ -7,7 +7,7 @@
 //   连 wss://<主机>/v1/<房间号：公钥 32 字节的 base64url，不补等号>
 //   中转 → {"t":"challenge","n":<随机数 base64url>}
 //   设备 → {"t":"auth","s":<对 "cuepad-relay-v1\n<房间号>\n<随机数>" 的签名 base64url>}，AUTH_TIMEOUT 内不签或签错即断
-//   中转 → {"t":"ready","voiceVersion":1}；旧门铃客户端可忽略扩展能力
+//   中转 → {"t":"ready","voiceVersion":2}；旧门铃客户端可忽略扩展能力，版本不同的语音客户端只用门铃
 //   设备 → {"t":"ring"}，中转转给同房间其它连接 {"t":"ring"}
 //   通话设备在 ready 后用 {"t":"voice","body":…} 登记、解析目标租约或发信令；v1 形状与原生 VoiceSignaling.swift 对应。
 //   登记还须签名绑定 room/challenge/device/本机新 lease；同设备新连接替换旧租约，观察者收到 departed，旧连接以 4409 关闭。

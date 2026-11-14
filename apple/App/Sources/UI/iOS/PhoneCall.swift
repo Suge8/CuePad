@@ -11,9 +11,6 @@ extension PhoneVoiceAction: CueVoiceOperation {
         case .recover: "重新交给 Cue"
         case .repeatReply: "再说一遍"
         case .stop: "停止执行"
-        case .requests: "请求记录"
-        case .replies: "朗读记录"
-        case .executions: "执行记录"
         case .microphoneSettings: "设置"
         }
     }
@@ -78,7 +75,6 @@ extension PhoneVoiceViewState {
         case .failed: .failed
         case .ended: .ended
         }
-        let sessionUnavailable = [requestPage.error, replyPage.error, executionPage.error].contains(.sessionUnavailable)
         var issues: [CueVoiceState<PhoneVoiceAction>.Issue] = requests.compactMap { request in
             guard let issue = request.issue else { return nil }
             let excerpt = request.message?.text ?? request.preview?.text
@@ -91,7 +87,7 @@ extension PhoneVoiceViewState {
                 message = issue.phoneMessage
             }
             return .init(id: .request(AnyHashable(request.reference)), summary: "未能交给 Cue", message: message,
-                         recovery: !sessionUnavailable && excerpt?.isEmpty == false ? .recover(request.reference) : nil)
+                         recovery: excerpt?.isEmpty == false ? .recover(request.reference) : nil)
         }
         if case .failed(let issue) = phase {
             issues.append(.init(id: .connection, summary: "通话未连接", message: issue.phoneMessage, recovery: issue.phoneRecovery))
@@ -110,36 +106,14 @@ extension PhoneVoiceViewState {
                          .init(id: "\(execution.target.request)-\(execution.target.turn.deliveryID)-\(execution.target.turn.turnStartedAtMilliseconds)",
                                title: execution.title ?? String(localized: "会话等待同步"),
                                status: execution.status?.label ?? String(localized: "状态等待同步"),
-                               stop: sessionUnavailable || execution.title == nil ? nil : .stop(execution.target))
+                               stop: execution.title == nil ? nil : .stop(execution.target))
                      }, readings: replies.map { reply in
                          .init(id: reply.id, excerpt: reply.message.map { CueVoiceState<PhoneVoiceAction>.Reading.excerpt(of: $0.text) } ?? String(localized: "回复等待同步"),
                                status: reply.readback.phoneStatus,
-                               recovery: !sessionUnavailable && canRepeat && reply.message != nil && reply.readback != .sending && reply.readback != .queued
+                               recovery: canRepeat && reply.message != nil && reply.readback != .sending && reply.readback != .queued
                                    ? .repeatReply(reply.id) : nil)
-                     }, requestPage: phase == nil ? nil : page(requestPage, sessionUnavailable: sessionUnavailable, action: PhoneVoiceAction.requests),
-                     replyPage: phase == nil ? nil : page(replyPage, sessionUnavailable: sessionUnavailable, action: PhoneVoiceAction.replies),
-                     executionPage: phase == nil ? nil : page(executionPage, sessionUnavailable: sessionUnavailable, action: PhoneVoiceAction.executions),
+                     }, earlier: omitted.shown,
                      startUnavailableReason: startUnavailableReason?.phoneMessage)
-    }
-
-    private func page(_ page: Page, sessionUnavailable: Bool, action: (VoicePageCursor?) -> PhoneVoiceAction) -> CueVoiceState<PhoneVoiceAction>.Page? {
-        let first = !sessionUnavailable && (page.canReturnToHead || page.error != nil) ? action(nil) : nil
-        let next = sessionUnavailable ? nil : page.next.map { action($0) }
-        let error = page.error?.phoneMessage
-        guard first != nil || next != nil || page.loading || error != nil else { return nil }
-        return .init(first: first, next: next, loading: page.loading, error: error)
-    }
-}
-
-private extension VoicePageError {
-    var phoneMessage: LocalizedStringResource {
-        switch self {
-        case .refreshRequired: "记录已变化，请回到首页"
-        case .sessionUnavailable: "原通话已被替换或不可用，请在 Mac 的通话详情查看或恢复原请求"
-        case .unavailable: "无法读取通话记录，请检查连接后重试"
-        case .tooLarge: "这条通话记录太大，无法读取"
-        case .storageUnavailable: "通话记录暂不可用，请检查 Mac 上的资料库"
-        }
     }
 }
 
@@ -273,7 +247,7 @@ extension Workspace {
         return switch voice.phase {
         case .failed(let issue): .failed(issue)
         case .ended(let reason) where reason != .hungUp: .failed(.ended(reason))
-        case .ended: voice.requestPages.page.items.contains { $0.issue != nil } ? .unsent : nil
+        case .ended: voice.projection?.requests.contains { $0.issue != nil } == true ? .unsent : nil
         default: nil
         }
     }
@@ -339,8 +313,6 @@ extension Workspace {
                 }
             } catch let issue as VoiceIssue {
                 say(issue.phoneMessage, tone: .failure)
-            } catch let error as VoicePageError {
-                say(error.phoneMessage, tone: .failure)
             } catch is VoiceSignalError {
                 say("通话操作未确认，请检查连接后重试", tone: .failure)
             } catch {
