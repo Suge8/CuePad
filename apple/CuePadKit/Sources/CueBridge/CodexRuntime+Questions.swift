@@ -5,8 +5,8 @@ import Foundation
 
 extension CodexRuntime {
     /// 服务端请求：权限确认（命令、改文件、MCP 工具）与挡着这一轮的提问；别的（MCP 的表单等）不接，回错误。
-    func request(_ method: String, _ params: JSONValue, id: JSONValue, on rpc: CodexRPC) -> Bool {
-        guard let threadID = params["threadId"]?.string, let session = tracked["\(threadID).\(rpc.pid)"] else { return false }
+    func request(_ method: String, _ params: JSONValue, id: JSONValue, on rpc: CodexRPC, in session: Tracked) -> Bool {
+        guard params["threadId"]?.string == session.threadID else { return false }
         let accept: JSONValue = ["decision": "accept"], decline: JSONValue = ["decision": "decline"]
         switch method {
         case "item/tool/requestUserInput":

@@ -4,14 +4,14 @@ import CueText
 import Foundation
 
 extension CodexRuntime {
-    func notification(_ method: String, _ params: JSONValue, from pid: Int32) {
+    func notification(_ method: String, _ params: JSONValue, in session: Tracked) {
         // 子代理的线程没有 `thread/started`：报出来的顶层线程不是子代理（Codex 起的临时线程等），之后它的推送不必去问
         if method == "thread/started", let thread = params["thread"], let id = thread["id"]?.string, thread["parentThreadId"]?.string == nil {
-            threads["\(id).\(pid)"] = threads["\(id).\(pid)"] ?? .foreign
+            session.threads[id] = session.threads[id] ?? .foreign
         }
         guard let threadID = params["threadId"]?.string else { return }
-        if let turn = naming["\(threadID).\(pid)"] { return turn.receive(method, params) }
-        guard let session = tracked["\(threadID).\(pid)"] else { return child(method, params, thread: threadID, pid: pid) }
+        if let turn = session.naming[threadID] { return turn.receive(method, params) }
+        guard threadID == session.threadID else { return child(method, params, thread: threadID, in: session) }
         switch method {
         case "thread/settings/updated":
             if let settings = params["threadSettings"] {
@@ -57,7 +57,7 @@ extension CodexRuntime {
             session.turns.facts.compacting = started
         case ("subAgentActivity", true) where item["kind"]?.string == "started":
             guard let name = item["agentPath"]?.string?.split(separator: "/").last.map(String.init) else { return }
-            let known = threads.values.contains { if case .session(session.id, name, _) = $0 { true } else { false } }
+            let known = session.threads.values.contains { if case .child(name, _) = $0 { true } else { false } }
             if !known { session.spawned.insert(name) }
         default:
             break
@@ -65,9 +65,9 @@ extension CodexRuntime {
     }
 
     /// 托管会话的一轮（它的驱动报的）接到桥上。以一句话开新一轮时（`deliver`），这一轮开始就是那句开出的，之后的结束照常歇下。
-    func event(_ event: TurnEvent, from pid: Int32) {
-        if case .exited = event { return processGone(pid) }
-        guard let thread = hosted[pid]?.thread, let session = tracked["\(thread).\(pid)"] else { return }
+    func event(_ event: TurnEvent, in session: Tracked) {
+        guard tracked[session.id] === session else { return }
+        if case .exited = event { return detach(session.id) }
         switch event {
         case .turnStarted:
             startTurn(session, at: session.sentAt ?? .now)
@@ -92,40 +92,25 @@ extension CodexRuntime {
         session.sentAt = nil
         guard !session.turns.handingOver else { session.turns.apply(.turnFinished); return }
         guard session.ending == nil else { return }
-        let unknown = unresolvedThreads(on: session.pid)
+        let unknown = session.threads.compactMap { thread, owner in owner.pending == nil ? nil : thread }
         guard !unknown.isEmpty || !session.spawned.isEmpty else { session.turns.apply(.turnFinished); return }
-        let pid = session.pid
         let recognized = Occurrences(timeout: nil, timing: timing, timeoutError: CancellationError())
         session.recognized = recognized
         session.ending = Task {
             try? await withDeadline(AgentTimeouts.settleAsk, timing: timing, orThrow: CancellationError()) { @MainActor in
                 await withTaskGroup { group in
-                    for thread in unknown { group.addTask { await self.resolve(thread, pid: pid) } }
+                    for thread in unknown { group.addTask { await self.resolve(thread, in: session) } }
                 }
                 // 读不到的线程认不出名字：派出的算在其中，照上面的规则先歇下；还在问的等它问完
-                while session.spawned.count > self.unreadableThreads(on: pid) { try await recognized.next() }
+                while session.spawned.count > session.threads.values.count(where: { if case .unreadable = $0 { true } else { false } }) {
+                    try await recognized.next()
+                }
             }
             guard !Task.isCancelled, tracked[session.id] === session else { return }
             session.ending = nil
             session.turns.apply(.turnFinished)
             if !session.unread.isEmpty { wake(session) }
             publish(session)
-        }
-    }
-
-    private func unreadableThreads(on pid: Int32) -> Int {
-        threads.count { key, owner in
-            if case .unreadable = owner { key.hasSuffix(".\(pid)") } else { false }
-        }
-    }
-
-    private func unresolvedThreads(on pid: Int32) -> [String] {
-        let suffix = ".\(pid)"
-        return threads.compactMap { key, owner in
-            switch owner {
-            case .asking, .unreadable: key.hasSuffix(suffix) ? String(key.dropLast(suffix.count)) : nil
-            case .session, .foreign: nil
-            }
         }
     }
 
@@ -142,65 +127,60 @@ extension CodexRuntime {
 
     private static let childMethods: Set = ["turn/started", "turn/completed", "thread/status/changed", "item/started", "item/completed"]
 
-    func child(_ method: String, _ params: JSONValue, thread: String, pid: Int32) {
+    func child(_ method: String, _ params: JSONValue, thread: String, in session: Tracked) {
         guard Self.childMethods.contains(method) else { return }
-        let key = "\(thread).\(pid)"
-        switch threads[key] {
-        case .session(let id, let name, let role):
-            guard let session = tracked[id] else { return }
+        switch session.threads[thread] {
+        case .child(let name, let role):
             childEvent(method, params, child: thread, name: name, role: role, in: session)
         case .foreign:
             return
         case .asking(let queued):
-            threads[key] = .asking(queued + [(method, params)])
+            session.threads[thread] = .asking(queued + [(method, params)])
         case .unreadable(let queued):
-            threads[key] = .asking(queued + [(method, params)])
-            Task { await resolve(thread, pid: pid) }
+            session.threads[thread] = .asking(queued + [(method, params)])
+            Task { await resolve(thread, in: session) }
         case nil:
-            threads[key] = .asking([(method, params)])
-            Task { await resolve(thread, pid: pid) }
+            session.threads[thread] = .asking([(method, params)])
+            Task { await resolve(thread, in: session) }
         }
     }
 
     /// 读不到、被取消（新一轮开始、再问到点）都留作暂时读不到，等它下一条推送再问；连接没了（进程退出）就不再记它。
     /// 读的时候到的推送也算“下一条”：刚起的子线程会话文件还是空的（读到 `rollout … is empty`），子代理答得快时它的推送在这次读回来之前就发完了，
     /// 之后再没有推送（`turn/completed` 先于会话文件写盘发出，0.167 的 `tasks/mod.rs`），不接着问它就一直认不出。
-    private func resolve(_ thread: String, pid: Int32) async {
-        let key = "\(thread).\(pid)"
-        if case .unreadable(let queued) = threads[key] { threads[key] = .asking(queued) }
+    private func resolve(_ thread: String, in session: Tracked) async {
+        if case .unreadable(let queued) = session.threads[thread] { session.threads[thread] = .asking(queued) }
         while true {
-            guard let rpc = hosted[pid]?.rpc else {
-                threads[key] = nil
+            guard tracked[session.id] === session, let rpc = session.driver.rpc else {
+                session.threads[thread] = nil
                 return
             }
-            let seen = threads[key]?.pending?.count ?? 0
-            if let info = try? await rpc.call("thread/read", ["threadId": .string(thread)])["thread"] { return await register(info, on: rpc) }
-            guard !Task.isCancelled, let now = threads[key]?.pending?.count, now > seen else { return unresolved(key, pid: pid) }
+            let seen = session.threads[thread]?.pending?.count ?? 0
+            if let info = try? await rpc.call("thread/read", ["threadId": .string(thread)])["thread"] { return await register(info, on: rpc, in: session) }
+            guard !Task.isCancelled, let now = session.threads[thread]?.pending?.count, now > seen else { return unresolved(thread, in: session) }
         }
     }
 
-    private func unresolved(_ key: String, pid: Int32) {
-        if case .asking(let queued) = threads[key] { threads[key] = .unreadable(queued) }
-        for session in tracked.values where session.pid == pid { session.recognized?.happened() }
+    private func unresolved(_ thread: String, in session: Tracked) {
+        if case .asking(let queued) = session.threads[thread] { session.threads[thread] = .unreadable(queued) }
+        session.recognized?.happened()
     }
 
-    func register(_ thread: JSONValue, on rpc: CodexRPC) async {
+    private func register(_ thread: JSONValue, on rpc: CodexRPC, in session: Tracked) async {
         guard let child = thread["id"]?.string else { return }
-        let key = "\(child).\(rpc.pid)"
         let owner: Owner, last: JSONValue?
         do {
-            owner = try await self.owner(of: thread, on: rpc)
-            if case .session = owner { last = try await Self.lastTurn(child, on: rpc) } else { last = nil }
+            owner = try await self.owner(of: thread, on: rpc, in: session)
+            if case .child = owner { last = try await Self.lastTurn(child, on: rpc) } else { last = nil }
         } catch {
-            return unresolved(key, pid: rpc.pid)
+            return unresolved(child, in: session)
         }
         let running = last?["status"]?.string == "inProgress"
         // 同一线程同时在问的另一次（推送触发的与歇下前的再问）先没读到时，这次读到的照样算
-        guard let queued = threads[key]?.pending else { return }
-        threads[key] = owner
-        if case .session(let id, let name, _) = owner, let session = tracked[id], session.spawned.remove(name) != nil { session.recognized?.happened() }
-        if case .session(let id, let name, let role) = owner, let session = tracked[id],
-           !session.turns.facts.subagents.contains(where: { $0.id == child }), running || last != nil {
+        guard let queued = session.threads[child]?.pending else { return }
+        session.threads[child] = owner
+        if case .child(let name, _) = owner, session.spawned.remove(name) != nil { session.recognized?.happened() }
+        if case .child(let name, let role) = owner, !session.turns.facts.subagents.contains(where: { $0.id == child }), running || last != nil {
             let date = { (field: String) in thread[field]?.number.map { Date(timeIntervalSince1970: $0) } ?? .now }
             session.turns.facts.startSubagent(child, name: name, role: role, at: date("createdAt"))
             if running {
@@ -211,20 +191,19 @@ extension CodexRuntime {
             }
             publish(session)
         }
-        for (method, params) in queued { self.child(method, params, thread: child, pid: rpc.pid) }
+        for (method, params) in queued { self.child(method, params, thread: child, in: session) }
     }
 
-    /// 名字是派它时给的任务名（v2 的 `agent_path` 末段），没有就用 Codex 起的昵称。沿父线程到顶也不是跟踪着的会话才是别人的；中途读不到抛出（认不清）。
-    private func owner(of thread: JSONValue, on rpc: CodexRPC) async throws -> Owner {
+    /// 名字是派它时给的任务名（v2 的 `agent_path` 末段），没有就用 Codex 起的昵称。沿父线程到顶也不是这个会话才是别人的；中途读不到抛出（认不清）。
+    private func owner(of thread: JSONValue, on rpc: CodexRPC, in session: Tracked) async throws -> Owner {
         let spawn = thread["source"]?["subAgent"]?["thread_spawn"]
         let role = thread["agentRole"]?.string ?? spawn?["agent_role"]?.string ?? "default"
         let path = spawn?["agent_path"]?.string.flatMap { $0.split(separator: "/").last.map(String.init) }
         let name = path ?? thread["agentNickname"]?.string ?? role
         var current = thread
         while let parent = current["parentThreadId"]?.string {
-            let key = "\(parent).\(rpc.pid)"
-            if let session = tracked[key] { return .session(session.id, name: name, role: role) }
-            if case .session(let id, _, _) = threads[key] { return .session(id, name: name, role: role) }
+            if parent == session.threadID { return .child(name: name, role: role) }
+            if case .child = session.threads[parent] { return .child(name: name, role: role) }
             guard let up = try await rpc.call("thread/read", ["threadId": .string(parent)])["thread"] else { break }
             current = up
         }

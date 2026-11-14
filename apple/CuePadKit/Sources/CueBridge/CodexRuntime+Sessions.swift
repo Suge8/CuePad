@@ -37,9 +37,19 @@ extension CodexRuntime {
     }
 
     func attach(_ session: Session, driver: CodexDriver) {
-        let entry = Tracked(id: session.id, threadID: session.sessionID, driver: driver, pid: session.pid, timing: timing)
+        let entry = Tracked(id: session.id, threadID: session.sessionID, driver: driver, timing: timing)
         entry.turns.onSettle = { [weak self, weak entry] in
             if let self, let entry { publish(entry) }
+        }
+        driver.onNotification = { [weak self, weak entry] method, params in
+            if let self, let entry { notification(method, params, in: entry) }
+        }
+        driver.onEvent = { [weak self, weak entry] event in
+            if let self, let entry { self.event(event, in: entry) }
+        }
+        driver.rpc?.onRequest = { [weak self, weak entry, weak rpc = driver.rpc] method, id, params in
+            guard let self, let entry, let rpc else { return false }
+            return request(method, params, id: id, on: rpc, in: entry)
         }
         tracked[session.id] = entry
         var session = session
@@ -49,16 +59,9 @@ extension CodexRuntime {
         refresh(session.id, skills: true)
     }
 
-    func processGone(_ pid: Int32) {
-        hosted[pid] = nil
-        threads = threads.filter { !$0.key.hasSuffix(".\(pid)") }
-        for session in tracked.values where session.pid == pid { detach(session.id) }
-    }
-
     func detach(_ id: Session.ID) {
         guard let session = tracked.removeValue(forKey: id) else { return }
         session.ending?.cancel()
-        threads = threads.filter { if case .session(id, _, _) = $0.value { false } else { true } }
         session.reply = nil
         bridge.detach(id, reason: .closed(reason: "quit"))
     }
