@@ -63,7 +63,7 @@ extension TaskFlowTests {
         rig.bridge.attach(session, via: live)
         if automatic { try await workspace.complete(borrower.id) }
         else { await workspace.end(try #require(try await store.sessionItems(sessionIDs: ["audit-clock"])["audit-clock"]?.state)) }
-        let newEnd = try #require(try await store.deliveryRequests().first { $0.mode == .known(.end) && $0.id != old.id && ($0.content != "end") == automatic })
+        let newEnd = try #require(try await store.deliveryRequests().first { $0.mode == .known(.end) && $0.id != old.id && ($0.end != .explicit) == automatic })
         try await services.executor.start()
         let outcome = try await store.outcome(of: newEnd)
         #expect(outcome.status == .known(.succeeded))

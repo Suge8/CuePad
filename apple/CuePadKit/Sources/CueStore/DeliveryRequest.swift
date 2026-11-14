@@ -27,6 +27,9 @@ extension DeliveryStatus {
   /// 已交给执行的 Mac、结果还可能变（未确认可被真实消息改成送达）：重启只核对它们，不重派。
   static let claimed: Set<DeliveryStatus> = [.executing, .confirming, .unconfirmed]
   static let claimedSQL = sqlList(claimed.sorted { $0.rawValue < $1.rawValue })
+  /// 结束请求还在进行（`DeliveryRequest.isEnding`）：没结果的与结果未确认的。
+  static let ending: Set<DeliveryStatus> = open.union([.unconfirmed])
+  static let endingSQL = sqlList(ending.sorted { $0.rawValue < $1.rawValue })
 }
 
 /// 读到本版本不认识的值（`Open.unknown`）时 Mac 端不执行它。
@@ -180,6 +183,41 @@ public struct DeliveryRequest: Identifiable, Equatable, Sendable {
   public var config: SessionConfig? { mode == .known(.config) ? SessionConfig(stored: content) : nil }
 
   public var isRename: Bool { config?.name != nil }
+
+  /// 结束会话的两种，只认这里（SQL 里是 `explicitEndSQL`）：你或 Cue 点名结束，与任务收尾带出的自动结束（带着会话为哪件事开的，执行时复核还有没有人在用，`permitsTaskSessionEnd`）。
+  public enum EndKind: Equatable, Sendable {
+    case explicit
+    case task(createdFor: UUID)
+
+    static let explicitContent = "end"
+
+    var stored: String {
+      switch self {
+      case .explicit: Self.explicitContent
+      case .task(let owner): TaskSessionEnd(createdForTaskID: owner).stored
+      }
+    }
+
+    init?(stored: String) {
+      if stored == Self.explicitContent { self = .explicit; return }
+      guard let reason = TaskSessionEnd(stored: stored) else { return nil }
+      self = .task(createdFor: reason.createdForTaskID)
+    }
+  }
+
+  /// 结束请求是哪一种；不是结束、读不出的为 nil。
+  public var end: EndKind? { mode == .known(.end) ? EndKind(stored: content) : nil }
+
+  /// 这条结束还在进行：还没结果，或结果未确认（会话等确认了才接着用、才再结束一次）。SQL 里是 `endingSQL`。
+  public var isEnding: Bool { mode == .known(.end) && status.known.map(DeliveryStatus.ending.contains) == true }
+
+  static func endingSQL(_ alias: String) -> String {
+    "(\(alias).mode = '\(DeliveryMode.end.rawValue)' AND \(alias).status IN (\(DeliveryStatus.endingSQL)))"
+  }
+
+  static func explicitEndSQL(_ alias: String) -> String {
+    "(\(alias).mode = '\(DeliveryMode.end.rawValue)' AND \(alias).content = '\(EndKind.explicitContent)')"
+  }
 
   /// `requests` 按发出先后（`deliveryRequests(toSession:)` 的顺序）。会话行与会话页顶栏都按它显示名字，取法只此一处。
   public static func latestRename(in requests: [DeliveryRequest]) -> DeliveryRequest? { requests.last(where: \.isRename) }

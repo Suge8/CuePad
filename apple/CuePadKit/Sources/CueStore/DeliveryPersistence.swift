@@ -41,10 +41,11 @@ extension CueStore {
       }
       if claimed.mode == .known(.end) {
         claimed.coveredEndRequests = [claimed.id]
-        if claimed.content == "end", let session = claimed.target.ref {
+        // 点名的结束也了结这台已领取、结果还没定的旧结束
+        if claimed.end == .explicit, let session = claimed.target.ref {
           claimed.coveredEndRequests.formUnion(try db.query("""
-            SELECT id FROM deliveryRequests WHERE mode = 'end' AND targetRef = ? AND hostID = ? AND handledBy = ?
-              AND status IN (\(DeliveryStatus.claimedSQL))
+            SELECT id FROM deliveryRequests AS r WHERE \(DeliveryRequest.endingSQL("r")) AND r.targetRef = ? AND r.hostID = ? AND r.handledBy = ?
+              AND r.status IN (\(DeliveryStatus.claimedSQL))
             """, [session, host, host]) { $0.uuid(0) })
         }
       }

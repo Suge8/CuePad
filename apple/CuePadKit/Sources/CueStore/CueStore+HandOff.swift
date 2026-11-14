@@ -68,20 +68,17 @@ extension CueStore {
       .joined(separator: "\n\n")
   }
 
-  /// 已结束的也算：执行的 Mac 连上目标会话时先恢复它（`MacExecutor`）。
+  /// 已结束的也算：执行的 Mac 连上目标会话时先恢复它（`MacExecutor`）。结束还在进行的（含结果未确认的）不接着用，`ignoringEndOf` 那个除外。
   func continuableSession(for leaf: UUID, agent: AgentKind?, ignoringEndOf: String? = nil) throws -> SessionState? {
     let top = try topTask(of: leaf)
     guard top != leaf, let task = try find(Card.self, top) else { return nil }
-    let ending = Set(try db.query(
-      "SELECT targetRef FROM deliveryRequests WHERE mode = '\(DeliveryMode.end.rawValue)' AND status IN (\(DeliveryStatus.openSQL)) AND targetRef IS NOT NULL"
-    ) { $0.text(0) })
+    let ending = Set(try db.query("SELECT targetRef FROM deliveryRequests AS r WHERE \(DeliveryRequest.endingSQL("r")) AND targetRef IS NOT NULL") { $0.text(0) })
     let sessions = try sessionStates(try leaves(of: task).compactMap(\.piSessionID))
     return sessions.values
       .filter { session in (session.sessionID == ignoringEndOf || !ending.contains(session.sessionID)) && agent.map { session.agent == .known($0) } != false }
       .max { $0.stateSince < $1.stateSince }
   }
 
-  /// 未确认与不认识的结果仍占位；只有明确未交出才允许自动另开或再发。
   /// 未确认与不认识的结果仍占位；只有明确未交出才允许自动另开或再发。
   public func handoffRequests(for leaves: [UUID]) throws -> [UUID: [DeliveryRequest]] {
     guard !leaves.isEmpty else { return [:] }

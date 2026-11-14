@@ -1,6 +1,6 @@
 import Foundation
 
-/// 自动收尾请求携带创建来源，执行时重新核对；用户明确 end 的正文仍为 end，不受自动收尾规则限制。
+/// 自动结束请求的正文（`DeliveryRequest.EndKind.task`）。
 struct TaskSessionEnd: StoredJSON {
   let createdForTaskID: UUID
 }
@@ -16,17 +16,18 @@ extension CueStore {
 
   /// 与投送转入 executing 同事务复核；受理后新借用与发送由同一投送状态拒绝。明确 end 不受此规则限制。
   func permitsTaskSessionEnd(_ request: DeliveryRequest) throws -> Bool {
-    guard request.mode == .known(.end), request.content != "end" else { return true }
-    guard let reason = TaskSessionEnd(stored: request.content), let sessionID = request.target.ref,
-      let session = try sessionState(sessionID), session.createdForTaskID == reason.createdForTaskID else { return false }
+    guard request.mode == .known(.end), request.end != .explicit else { return true }
+    guard case .task(let owner) = request.end, let sessionID = request.target.ref,
+      let session = try sessionState(sessionID), session.createdForTaskID == owner else { return false }
     return try taskSessionCanEnd(session)
   }
 
-  /// executing 是自动结束的不可逆受理点；未知结果也不能假定尚未交出。只读既有投送状态，不另存结束标志。
+  /// 自动结束一经领取就不可逆（领取那一刻复核过没人在用），未知结果也不能假定尚未交出：这之后不再借用、不再发话。
+  /// 还没领取的自动结束不挡：这时说话正是"还有人在用"，领取时的复核会作废它。点名的结束不挡：之后说话会恢复会话。
   func requireSessionAvailable(_ sessionID: String) throws {
     let ending = try db.first("""
-      SELECT 1 FROM deliveryRequests WHERE targetRef = ? AND mode = 'end' AND content != 'end'
-        AND status IN (\(DeliveryStatus.claimedSQL))
+      SELECT 1 FROM deliveryRequests AS r WHERE r.targetRef = ? AND \(DeliveryRequest.endingSQL("r")) AND NOT \(DeliveryRequest.explicitEndSQL("r"))
+        AND r.status IN (\(DeliveryStatus.claimedSQL))
       """, [sessionID]) { _ in true } ?? false
     if ending { throw CueStoreError.sessionEnding }
   }

@@ -81,7 +81,7 @@ extension TaskFlowTests {
                 let result = try #require(await CueTools(store: store, wait: 0).call("task", ["action": "done", "session": ended.sessionID]))
                 #expect(!result.isError, "\(result.text)")
             }
-            let explicit = try #require(try await store.deliveryRequests().first { $0.mode == .known(.end) && $0.content == "end" })
+            let explicit = try #require(try await store.deliveryRequests().first { $0.end == .explicit })
             #expect(try await store.outcome(of: explicit).status == .known(.succeeded))
             #expect(MacDelivery.endProgress(try await store.deliveryRequests(toSession: ended.sessionID), at: services.speech) == nil)
         }
