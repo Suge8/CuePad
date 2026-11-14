@@ -78,7 +78,7 @@ def holding(name):
 
 
 class Holder:
-    """一个进程在登记里的那一条。extra 是给读登记的人的字段（Mac 实例位记 what、app、execAt）。"""
+    """一个进程在登记里的那一条。extra 是给读登记的人的字段（Mac 实例位记 what、app；模拟器 run 的看守记 role、app、device）。"""
 
     def __init__(self, cmd, pid=None, **extra):
         pid = pid or os.getpid()
