@@ -56,7 +56,7 @@ struct HandOffInput: View {
     }
     private var config: ConfigShown? { chosenDigest?.config(at: services.speech) }
     private var catalog: AgentCatalog? { chosenDigest?.catalog }
-    private var commands: [SlashCommand] { chosen?.state.usableCommands(in: catalog) ?? [] }
+    private var commands: [SlashCommand] { chosen == nil ? [] : catalog?.commands ?? [] }
 
     private var tools: (session: SessionState, models: [ModelOption], config: ConfigShown)? {
         guard let session = chosen?.state, let config, let models = catalog?.models, !models.isEmpty else { return nil }

@@ -3,7 +3,7 @@ import Foundation
 /// 投送请求与发送记录的目标种类。发出去的只有一种：发给 Agent 会话；发送记录只会是它。
 public enum SendTargetKind: String, Sendable, CaseIterable {
   case piSession
-  /// 那台 Mac 上的 CuePad 本身：绑定文件夹、连接测试这类不发给会话的请求（执行器不看目标）。存储与同步的字面值沿用 "app"。
+  /// 那台 Mac 上的 CuePad 本身：绑定文件夹、刷新额度、整理技能这类不发给会话的请求（执行器不看目标）。存储与同步的字面值沿用 "app"。
   case mac = "app"
 }
 

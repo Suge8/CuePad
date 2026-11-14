@@ -93,11 +93,6 @@ nonisolated enum MacDelivery {
     }
 }
 
-nonisolated extension SessionState {
-    /// 做不到时没有：输入 "/" 不弹面板，按普通文字发。
-    func usableCommands(in catalog: AgentCatalog?) -> [SlashCommand] { catalog?.commands ?? [] }
-}
-
 nonisolated extension DeliveryMode {
     var label: String {
         switch self {

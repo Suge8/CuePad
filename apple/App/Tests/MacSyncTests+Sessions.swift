@@ -203,7 +203,7 @@ extension MacSyncTests {
         let catalogID = try #require(stored.catalogID)
         let catalog = try await services.store.agentCatalog(catalogID)
         #expect(catalog?.models.isEmpty ?? true)  // 可选模型不留
-        #expect(Slash.line(of: ComposerDraft(text: "/default"), in: stored.usableCommands(in: catalog), for: stored) == "/default")
+        #expect(Slash.line(of: ComposerDraft(text: "/default"), in: catalog?.commands ?? [], for: stored) == "/default")
     }
 }
 #endif
