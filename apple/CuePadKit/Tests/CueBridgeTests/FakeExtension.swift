@@ -240,10 +240,10 @@ nonisolated final class FakeExtension: @unchecked Sendable {
                    "status": status, "windows": windows, "complete": complete])
     }
 
-    /// 发状态切换（`kind` 等字段按协议；`since` 自动补）。从不在跑进入思考或调工具是开始新的一轮：`turnSince` 记成此刻（同扩展在回合开始时记）。
+    /// 发状态切换（`kind` 等字段按协议；没给 `since` 补此刻）。从不在跑进入思考或调工具是开始新的一轮：`turnSince` 记成此刻（同扩展在回合开始时记）。
     func setState(_ state: [String: Any]) {
         var s = state
-        s["since"] = Self.nowMillis
+        if s["since"] == nil { s["since"] = Self.nowMillis }
         let turnSince = shared.withLock { shared -> Int? in
             let running = ["thinking", "tool"]
             let was = Self.object(shared.state)["kind"] as? String ?? ""

@@ -8,7 +8,7 @@ extension Bridge {
     public func carryOver(_ before: [String: (state: WorkState, times: SessionTimes)]) { carried = before }
 
     /// 同一 id 已在线时只换通道与快照，不重报出现。
-    /// 状态的起点只有这一处定：重新上桥（同一 id 换了快照、重新载入扩展、CuePad 重开后接回）时粗状态（`WorkState.phase`）没变就沿用原来的起点，
+    /// 重新上桥（同一 id 换了快照、CuePad 重开后接回）时粗状态（`WorkState.phase`）没变就沿用原来的起点，
     /// 各家接入上桥时给的"现在"不算——界面的"多久前""有新回复"与同步记录都读它。
     public func attach(_ session: Session, via link: any SessionLink) {
         controls[session.id] = link
@@ -70,7 +70,6 @@ extension Bridge {
         releasing.remove(id)
         guard let index = slots.firstIndex(where: { $0.id == id }) else { return }
         let session = slots.remove(at: index).session
-        if reason == .reload, !session.upgrading { carried[session.sessionID] = session.carried }
         emit(.ended(session, reason: reason))
     }
 

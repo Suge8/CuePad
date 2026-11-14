@@ -170,14 +170,17 @@ extension MacSyncTests {
         let consuming = Task { try await services.consumeSessionChanges(changes) }
         defer { await consuming.stop() }
 
+        let settled = turn.addingTimeInterval(60)
         let old = try await rig.host.connect(
-            "s1", cwd: "/work/app", busy: running, extensionVersion: upgrading ? PiWire.oldestExtension - 1 : PiExtensionBundle.version, sessionFile: file.path)
+            "s1", cwd: "/work/app", busy: running, since: running ? turn : settled,
+            extensionVersion: upgrading ? PiWire.oldestExtension - 1 : PiExtensionBundle.version, sessionFile: file.path)
         if running {
             try await store.writeTranscript(SessionTranscript(
                 sessionID: "s1", messages: [said], recap: Recap(lastPrompt: "发版", lastReply: "发好了", answeredAt: .now)))
         }
         old.close(bye: "reload")
-        try await rig.host.connect("s1", cwd: "/work/app", sessionFile: file.path)
+        // 重新载入的扩展带着原来的起点（扩展的 `Carried`）；这期间做完了一轮的、从读不懂的旧扩展升上来的报此刻
+        try await rig.host.connect("s1", cwd: "/work/app", since: running || upgrading ? nil : settled, sessionFile: file.path)
 
         // 接回的那一次写入落了盘（记录的状态与起点跟上桥上的）才看 Cue 的变化，不然歇着的那一例还没写就判过了
         try await eventually("桥上以新扩展接回") { services.bridge.session(sessionID: "s1").map { $0.state == .settled && !$0.upgrading } == true }

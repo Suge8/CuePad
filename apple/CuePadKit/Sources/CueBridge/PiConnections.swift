@@ -164,12 +164,8 @@ final class PiConnections {
             guard let id = link.id else { throw HandlingError.messageBeforeHello }
             guard let work = wire.work else { throw HandlingError.unknownState(wire.kind) }
             bridge.update(id) { session in
-                // 起点由桥定（`Bridge.attach`）：重新载入、CuePad 重开后接回时桥沿用了原来的，扩展只在自己的粗状态变了才换起点，
-                // 粗状态没变时它报的是它自己上桥那一刻，照收就把桥定下的冲掉
-                if work.state.phase != session.state.phase {
-                    session.stateSince = wire.sinceDate
-                    session.busySince = wire.busySinceDate
-                }
+                session.stateSince = wire.sinceDate
+                session.busySince = wire.busySinceDate
                 session.state = work.state
                 session.detail = work.detail
                 session.errorMessage = wire.errorMessage
