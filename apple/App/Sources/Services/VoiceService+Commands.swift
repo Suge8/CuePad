@@ -96,7 +96,7 @@ extension VoiceService {
             }
         } catch CueStoreError.notFound { return .rejected(reason: .originalMissing) }
         catch CueStoreError.deliveryAlreadyHanded { return .rejected(reason: .alreadyHandled) }
-        catch CueStoreError.cannotStop { return .rejected(reason: .turnChanged) }
+        catch CueStoreError.turnChanged { return .rejected(reason: .turnChanged) }
         catch { return .rejected(reason: .failed) }
     }
     #endif

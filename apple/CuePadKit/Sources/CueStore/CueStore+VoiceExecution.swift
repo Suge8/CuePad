@@ -35,7 +35,7 @@ extension CueStore {
       state.canStop, let boot = state.bootID, let turn = turnStartedAt ?? state.turnStartedAt,
       let delivery = try select(ChatMessage.self, where: "sessionID = ? AND role IN ('user', 'answer')", [sessionID],
                                 orderBy: "seq DESC, id DESC", limit: 1).first?.deliveryID
-    else { throw CueStoreError.cannotStop(sessionID) }
+    else { throw CueStoreError.turnChanged }
     return TurnTarget(hostID: state.hostID, bootID: boot, sessionID: sessionID, deliveryID: delivery, turnStartedAtMilliseconds: turn.stored)
   }
 
@@ -43,13 +43,13 @@ extension CueStore {
   public func stopVoiceExecution(_ expected: TurnTarget, requests: [UUID], command: UUID? = nil) throws -> DeliveryRequest {
     try write {
       if let command, let existing = try deliveryRequest(command) {
-        guard existing.stopTurn == expected else { throw CueStoreError.cannotStop(expected.sessionID) }
+        guard existing.stopTurn == expected else { throw CueStoreError.turnChanged }
         return existing
       }
       // 回合时间来自 Mac 活连接，不使用可能仍在节流中的同步记录授权；这里复核原请求、投送、所在 Mac 与启动身份。
       // 排队期间是否已换回合，由 MacExecutor 和 Agent 各自面对实时状态核对。
       let origin = try voiceExecutionTarget(expected.sessionID, requests: requests, turnStartedAt: Date(timeIntervalSince1970: Double(expected.turnStartedAtMilliseconds) / 1000))
-      guard origin == expected else { throw CueStoreError.cannotStop(expected.sessionID) }
+      guard origin == expected else { throw CueStoreError.turnChanged }
       let session = try sessionTarget(expected.sessionID, name: "")
       if let command {
         return try insertDelivery(expected.content, to: session.target, on: expected.hostID, mode: .stopTurn, cue: false, id: command)

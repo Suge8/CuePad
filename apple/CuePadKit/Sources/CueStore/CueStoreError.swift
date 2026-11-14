@@ -71,6 +71,8 @@ public enum CueStoreError: Error, Equatable {
   case invalidModel(String)
   /// 会话此刻停不了这一轮（参数是会话名）。
   case cannotStop(String)
+  /// 语音要停的那一轮已经不是会话此刻在跑的那一轮（或它停不了）：不停后来的工作。
+  case turnChanged
   /// 会话还在用：没做完的事绑着它，或有话正送进去（参数是会话名）。
   case sessionInUse(String)
   /// 会话在跑，Cue 这会儿说不了（参数是会话名与原因）：会打断他发起的那一轮。
@@ -148,6 +150,7 @@ extension CueStoreError: LocalizedError {
     case .unknownModel(let agent, let model, _): "\(agent) 没有 \(model)"
     case .cannotChangeModel(let title): "会话「\(title)」换不了模型（它的记录还没到）"
     case .cannotStop(let title): "会话「\(title)」现在停不了：没在跑一轮，或在等回答"
+    case .turnChanged: "执行回合已变化，没有停止后来的工作"
     case .cannotSpeakNow(let title, let why): "会话「\(title)」\(why)：没说出去"
     case .macOffline(let title, let mac):
       "会话「\(title)」所在的「\(mac)」此刻不在线（睡着、关机或 CuePad 没开）：这次没有发出，那台开机前对它做什么都送不到"
