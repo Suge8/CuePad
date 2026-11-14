@@ -25,7 +25,7 @@ struct WidePage {
         let visible: CGRect
     }
 
-    /// 验不了不是通过：`perf-mac.sh` 在大库上把它判失败（大库的列与对话都长到能滚，就是为验这一条）。
+    /// 验不了不是通过：`perf.py` 在大库上把它判失败（大库的列与对话都长到能滚，就是为验这一条）。
     enum Verdict: String { case ok, untested, broken }
 
     /// 动作之后每一条读数为什么是那个判定，按先后只取第一条：

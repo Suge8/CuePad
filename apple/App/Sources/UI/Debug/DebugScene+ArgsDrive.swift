@@ -64,7 +64,7 @@ nonisolated struct DriveArgs: Decodable, DebugArgGroup {
     let speech: String?
     /// `-CuePadStream YES`（配 session 画面）：打开会话后像真的 Agent 那样一轮一轮追加：看新内容到达时跟随最新
     let stream: Bool
-    /// `-CuePadTraceWait YES`（perf 脚本带着 CUEPAD_TRACE 时，_trace.sh）：写 `AWAIT trace <PID>` 停着，等脚本按 PID 开录了发来 SIGUSR1
+    /// `-CuePadTraceWait YES`（perf.py 带着 CUEPAD_TRACE 时）：写 `AWAIT trace <PID>` 停着，等脚本按 PID 开录了发来 SIGUSR1
     let traceWait: Bool
     /// `-CuePadVisitCue <秒>`：说完这么久去 Cue 页，停够读到它再回原来那页，录"别处时有提示、读过就没了"
     let visitCue: Double

@@ -3,7 +3,7 @@ import UIKit
 import UIKit.UIGestureRecognizerSubclass
 
 /// `IOSInteractionBench` 里要真手指的项：进程内没有入口（系统长按菜单）或要量的就是手势本身（滑动开合侧栏、右滑返回）。
-/// App 写 `AWAIT 名 x y`（按）或 `AWAIT 名 x y x2 y2 swipe|drag 秒`（从前一点快滑或慢拖到后一点），屏幕坐标、名字里不带空格；`perf-ios.sh` 用 axe 在模拟器上真按、真滑，
+/// App 写 `AWAIT 名 x y`（按）或 `AWAIT 名 x y x2 y2 swipe|drag 秒`（从前一点快滑或慢拖到后一点），屏幕坐标、名字里不带空格；`perf.py` 用 axe 在模拟器上真按、真滑，
 /// 量从手指按下（`TouchProbe`）起算。每行的 `landed` 是量完时停在哪（`landed(_:)`），核对手势做了该做的事、没误触。
 extension IOSInteractionBench {
     enum Finger {

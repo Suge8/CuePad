@@ -174,12 +174,12 @@ def run_mac(app, library, args):
 
 
 def exec_mac(app, library, args):
-    """量完自己退出的 bench（perf-mac.sh、perf-idle.sh）：占住本检出那一份后 exec 成 CuePad。锁的文件描述符传给 CuePad，
+    """量完自己退出的 bench（perf.py）：占住本检出那一份后 exec 成 CuePad。锁的文件描述符传给 CuePad，
     随它退出释放；PID 不变，调用方的 $! 就是 CuePad，由调用方按它结束；不留看守进程（借前台的另有前台看守，随它退出）。"""
     if not BUILD.fullmatch(app):
         die(f"只起 apple/.derived* 里的构建，不起 {app}")
     slot = take_slot()
-    # execAt：rusage.py 的"启动到就绪"从这里算，不算 python 启动与等本检出旧实例退出（进程的启动时刻是 fork 那一刻，exec 不重置）。
+    # execAt：rusage.py 的"启动到就绪"与 perf.py launch 的时刻从这里算，不算 python 启动与等本检出旧实例退出（进程的启动时刻是 fork 那一刻，exec 不重置）。
     # time.monotonic_ns 在 macOS 上就是 mach_absolute_time 换成纳秒，与内核记账同一个钟
     write_note(slot, holder=os.getpid(), app=os.getpid(), what="bench", execAt=time.monotonic_ns())
     os.set_inheritable(slot.fileno(), True)
