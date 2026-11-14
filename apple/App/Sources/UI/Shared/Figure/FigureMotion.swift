@@ -59,6 +59,7 @@ final class FigureMotion {
         boing = 0
         boingVelocity = 0
         if life == .arriving { life = .here }
+        accent = nil
         particles = []
     }
 

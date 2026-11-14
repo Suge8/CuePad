@@ -104,7 +104,9 @@ struct LiveFigure: View {
         }
         .onChange(of: live) { reconcile() }
         .onChange(of: stage) { if stage == .absent { reconcile() } }
+        // 只认相对出场时那份变了：草稿清掉转回干活时 live 与 handoff 同一次更新里变，角色先按新的那份出场，这里不能再把它当回复送走
         .onChange(of: handoff) {
+            guard handoff != arrivedWith else { return }
             switch stage {
             case .here(let last), .lingering(let last): leave(last, handed: true)
             case .absent, .leaving, .resting: break

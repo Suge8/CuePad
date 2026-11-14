@@ -106,14 +106,16 @@ struct SessionDraft: View {
                 }
             }
             ChatLiveSlot(spacing: Conversation.spacing, floating: floating) {
+                // 正文已经说完、这一轮还没停（状态晚于草稿落库）：不冒出进展，角色也不回来
+                let said = speaking || landed && session.runtimeState.known?.isTurnRunning == true
                 VStack(alignment: .leading, spacing: Spacing.item) {
-                    if speaking || landed && session.runtimeState.known?.isTurnRunning == true {
+                    if said {
                         SubagentList(agents: session.runtimeSubagents)
                     } else if session.runtimeState.isWorking || !session.runtimeSubagents.isEmpty {
                         LiveStatus(session: session).transition(.asymmetric(insertion: .entry, removal: .identity))
                     }
                     // 开始出字就是回复到了：角色当场让位给草稿
-                    LiveFigure(live: speaking ? nil : FigureLive(session: session), handoff: FigureHandoff(reply: newestReply?.at, speaking: speaking))
+                    LiveFigure(live: said ? nil : FigureLive(session: session), handoff: FigureHandoff(reply: newestReply?.at, speaking: speaking))
                 }
             }
         }
