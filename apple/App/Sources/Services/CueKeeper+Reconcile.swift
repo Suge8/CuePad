@@ -30,7 +30,7 @@ extension CueKeeper {
         do {
             let store = self.store
             // 设置与要交的话一次读出：先改设置后说的话，交出去时一定已按改后的设置（`follow` 要等大脑回话，其间又来的改动与话由下一次对账一起接）
-            let (profile, waiting) = try await Self.settingsAndWaiting(store)
+            let (profile, waiting) = try store.snapshot { (try $0.cueProfile() ?? CueProfile(), try $0.cueMessagesToDeliver()) }.value
             await follow(BrainSettings(profile, detour))
             // 在交你的话之前：退回的话（含插进刚收尾那一轮、还没被接走的，`retire`）要交给新的大脑，你改过规矩、设置之后的话按新的答
             if let shift, shift.turn == nil, try await outworn(shift) || brainSettings?.needsNewBrain(for: BrainSettings(profile, detour)) == true {
@@ -150,10 +150,6 @@ extension CueKeeper {
             Self.log.error("Cue 对账失败，过一阵再对：\(error.localizedDescription, privacy: .public)")
             return now + setup.timing.retryWake.seconds
         }
-    }
-
-    private static func settingsAndWaiting(_ store: isolated CueStore) throws -> (CueProfile, [CueMessage]) {
-        (try store.cueProfile() ?? CueProfile(), try store.cueMessagesToDeliver())
     }
 
     /// 上一次值班没收好尾（崩溃、强杀，没走到 `retire`）时交出去没答上的话：上班后第一次对账认出来，并进要退回的（`owed`），这次重新交。
