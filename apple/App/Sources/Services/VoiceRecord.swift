@@ -4,7 +4,7 @@ import CueText
 import Foundation
 import Observation
 
-/// 语音交出的请求、Cue 的结果与停止请求：通话只往里加、按它朗读，挂断不改它；库记录是业务的依据，转写和音轨不是。
+/// 语音交出的请求与 Cue 的结果：通话只往里加、按它朗读，挂断不改它；库记录是业务的依据，转写和音轨不是。
 /// 写库不归通话所有：挂断不能撤销可能已落库的业务，也不能丢掉晚回来的请求 ID。
 @Observable final class VoiceRecord {
     struct Request: Identifiable {
