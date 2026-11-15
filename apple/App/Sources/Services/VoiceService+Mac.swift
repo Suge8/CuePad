@@ -112,7 +112,7 @@ extension VoiceService {
     private func acceptOffer(_ offer: VoiceOffer, header: VoiceSignalHeader) async {
         guard let signaling else { return }
         guard offer.version == VoiceSignalFormat.callVersion else {
-            AppServices.log.notice("Voice offer from signal version \(offer.version ?? 1), this Mac speaks \(VoiceSignalFormat.callVersion)")
+            AppServices.log.notice("Voice offer from signal version \(offer.version), this Mac speaks \(VoiceSignalFormat.callVersion)")
             return await rejectOffer(header, issue: .relayUnsupported)
         }
         guard call?.isLive != true, remote == nil else {
@@ -150,8 +150,7 @@ extension VoiceService {
 
     private func rejectOffer(_ header: VoiceSignalHeader, issue: VoiceIssue) async {
         do {
-            var value = VoiceCallProjection(session: header.session, phase: .failed(issue), requests: [], replies: [])
-            (value.pages, value.executions, value.omitted.executions) = (.init(), [], 0)
+            let value = VoiceCallProjection(session: header.session, phase: .failed(issue), requests: [], replies: [])
             try await signaling?.sendVoice(.projection(value: value), session: header.session, to: header.sender)
         } catch { AppServices.log.error("Voice offer rejection not sent: \(String(describing: error), privacy: .public)") }
     }
