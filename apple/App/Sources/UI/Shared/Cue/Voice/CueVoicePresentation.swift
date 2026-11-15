@@ -24,7 +24,6 @@ enum VoiceAction: Equatable {
     case setMuted(Bool)
     case recover(VoiceRequestReference)
     case repeatReply(UUID)
-    case stop(TurnTarget)
 
     var title: LocalizedStringResource {
         switch self {
@@ -33,7 +32,6 @@ enum VoiceAction: Equatable {
         case .setMuted: "静音"
         case .recover: "重新交给 Cue"
         case .repeatReply: "再说一遍"
-        case .stop: "停止执行"
         case .microphoneSettings: "设置"
         }
     }
@@ -58,7 +56,6 @@ struct CueVoicePresentation {
     let samples: () -> [CGFloat]
     let canMute: Bool
     let issues: [Issue]
-    var executions: [Execution] = []
     var readings: [Reading] = []
     /// 手机只收到最近的条目时，其余在哪（`VoiceCallProjection.bounded`）
     var earlier: LocalizedStringResource?
@@ -76,20 +73,10 @@ struct CueVoicePresentation {
         static func excerpt(of text: String) -> String { String((MarkdownBlock.firstPlainLine(text) ?? text).prefix(80)) }
     }
 
-    struct Execution: Identifiable {
-        let id: String
-        let title: String
-        let status: String
-        /// 只表示提示强度；执行与停止的生命周期仍由来源记录决定。
-        var needsAttention = false
-        /// 投影给的那一轮；不把“当前会话”重新解释成按钮原来指的那一轮。
-        var stop: VoiceAction?
-    }
-
     var active: Bool { activity != .idle && activity != .ended && activity != .failed }
-    var needsAttention: Bool { !issues.isEmpty || executions.contains(where: \.needsAttention) }
-    /// 通话详情里有东西可看：通话中，或留着问题、记录与执行。
-    var hasDetails: Bool { active || !issues.isEmpty || !readings.isEmpty || !executions.isEmpty }
+    var needsAttention: Bool { !issues.isEmpty }
+    /// 通话详情里有东西可看：通话中，或留着问题与记录。
+    var hasDetails: Bool { active || !issues.isEmpty || !readings.isEmpty }
 
     var title: LocalizedStringResource {
         muted && activity == .listening ? "麦克风已静音" : activity.title
@@ -98,7 +85,7 @@ struct CueVoicePresentation {
 
 extension VoiceCallProjection.Omitted {
     var shown: LocalizedStringResource? {
-        let count = requests + replies + executions
+        let count = requests + replies
         return count == 0 ? nil : "另有 \(count) 条较早的记录在 Mac 的通话详情里"
     }
 }

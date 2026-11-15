@@ -158,13 +158,6 @@ extension Bridge {
 
     /// 停止该会话正在跑的这一轮（相当于在 Agent 里按 Esc）：受理即返回，会话随后歇下（`.settled`），能接着说。
     /// 已经空闲时什么也不发生（也成功）；只停它自己这一轮，它派出的子代理照常跑。
-    /// 有目标的停止不取消本桥排着的新消息；真实回合身份交给接收端同步核对。
-    public func abort(_ id: Session.ID, deliveryID: String, turnStartedAt: Int64) async throws {
-        guard let peer = session(id: id), peer.isCurrentTurn(turnStartedAt), peer.turnOpener?.delivery == UUID(uuidString: deliveryID)
-        else { throw BridgeError.rejected("stale_turn") }
-        try await control(id).abort(id, deliveryID: deliveryID, turnStartedAt: turnStartedAt)
-    }
-
     public func abort(_ id: Session.ID) async throws {
         let link = try control(id)
         turns.abort(id)

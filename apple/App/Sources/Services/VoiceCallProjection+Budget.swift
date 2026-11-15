@@ -23,18 +23,13 @@ extension VoiceCallProjection {
     func bounded() throws -> Self {
         var requests = Array(self.requests.suffix(Self.shownLimit))
         var replies = Array(self.replies.suffix(Self.shownLimit))
-        var executions = Array(self.executions.suffix(Self.shownLimit))
         func value() -> Self {
-            Self(session: session, phase: phase, requests: requests, replies: replies, executions: executions, response: response,
-                 omitted: .init(requests: self.requests.count - requests.count, replies: self.replies.count - replies.count,
-                                executions: self.executions.count - executions.count), canRepeat: canRepeat)
+            Self(session: session, phase: phase, requests: requests, replies: replies, response: response,
+                 omitted: .init(requests: self.requests.count - requests.count, replies: self.replies.count - replies.count), canRepeat: canRepeat)
         }
         while try VoiceSignalFormat.canonicalJSON(VoiceSignalPayload.projection(value: value())).count > VoiceSignalFormat.maximumPlaintextBytes {
-            let longest = max(requests.count, replies.count, executions.count)
-            guard longest > 0 else { throw VoiceSignalError.tooLarge }
-            if requests.count == longest { requests.removeFirst() }
-            else if replies.count == longest { replies.removeFirst() }
-            else { executions.removeFirst() }
+            guard !requests.isEmpty || !replies.isEmpty else { throw VoiceSignalError.tooLarge }
+            if requests.count >= replies.count { requests.removeFirst() } else { replies.removeFirst() }
         }
         return value()
     }

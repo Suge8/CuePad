@@ -15,7 +15,7 @@ import Testing
         #expect(!media.closing)
         #expect(voice.isLive)
         signal.peer = VoiceEndpoint(device: old.device, lease: UUID())
-        await voice.receive(signal.event(.projection(value: .init(session: session, phase: .speaking, requests: [], replies: [], executions: [])), session: session))
+        await voice.receive(signal.event(.projection(value: .init(session: session, phase: .speaking, requests: [], replies: [])), session: session))
         #expect(voice.phase == .speaking)
         #expect(voice.phone?.leg.link == .bound(local: signal.local, peer: signal.peer))
         await voice.receive(signal.event(.media(signal: .resume(ask: true)), session: session))
@@ -32,7 +32,7 @@ import Testing
         let (app, voice, signal, media) = try await connectedPhone()
         defer { app.services.cancelBackgroundWork() }
         let session = try #require(voice.session), workspace = Workspace(services: app.services)
-        await voice.receive(signal.event(.projection(value: .init(session: session, phase: .failed(.codexUnresponsive), requests: [], replies: [], executions: [])), session: session))
+        await voice.receive(signal.event(.projection(value: .init(session: session, phase: .failed(.codexUnresponsive), requests: [], replies: [])), session: session))
         #expect(media.closed)
         #expect(workspace.phoneVoiceEnding == .failed(.codexUnresponsive))
         #expect(String(localized: VoiceIssue.codexUnresponsive.message) == "Codex 没响应，看看 Mac 上的提示")

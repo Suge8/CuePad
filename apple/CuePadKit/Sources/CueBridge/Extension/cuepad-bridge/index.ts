@@ -11,7 +11,7 @@ import { carryOver, IS_HOSTED } from "./lifecycle.ts";
 import { watchSession } from "./phone.ts";
 import { Session, type Firecode } from "./session.ts";
 
-const EXTENSION_VERSION = 68;
+const EXTENSION_VERSION = 69;
 
 /** FireCode 的"在飞子代理数"（`{ inFlight }`）：在跑、在审，或已落定但结果事件还没交给指挥官的都算，与它判断"会话进行中"用同一个事实 */
 const FIRECODE_WORKERS_CHANNEL = "firecode:workers";

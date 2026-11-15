@@ -32,7 +32,7 @@ nonisolated enum MacDelivery {
     static func stopping(_ session: SessionState, deliveries: [DeliveryRequest], at moment: Speech.Moment) -> Bool {
         guard session.canStop, let turnStart = session.busySince else { return false }
         return deliveries.contains { request in
-            guard [.known(.stop), .known(.stopTurn)].contains(request.mode), request.createdAt >= turnStart else { return false }
+            guard request.mode == .known(.stop), request.createdAt >= turnStart else { return false }
             let trip = Speech.trip(request, at: moment)
             return trip.inTransit || trip == .delivered
         }
@@ -105,7 +105,7 @@ nonisolated extension DeliveryMode {
         case .step: String(localized: "取一步的详情")
         case .config: String(localized: "模型与思考强度")
         case .end: String(localized: "结束会话")
-        case .stop, .stopTurn: String(localized: "停止这一轮")
+        case .stop: String(localized: "停止这一轮")
         case .retry: String(localized: "重试这一轮")
         case .bind: String(localized: "绑定文件夹")
         case .quota: String(localized: "刷新额度")

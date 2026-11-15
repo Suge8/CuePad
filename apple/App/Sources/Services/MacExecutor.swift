@@ -83,7 +83,6 @@ final class MacExecutor {
         case .quota: if let failure = await refreshQuota() { return .failed(failure) }
         case .end: try await end(request)
         case .stop: try await stop(request.target)
-        case .stopTurn: try await stopTurn(request)
         case .retry: try await retry(request.target)
         case .answer: try await answer(request, access: access)
         case .config: try await configure(request, access: access)

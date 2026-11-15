@@ -70,7 +70,7 @@ import Testing
         try await workspace.startVoiceCall()
         await voice.receive(.rejected(header: header, reason: .unavailable))
         callback(.ended(.mediaFailed))
-        await voice.receive(signal.event(.projection(value: .init(session: old, phase: .failed(.storageUnavailable), requests: [], replies: [], executions: [])), session: old))
+        await voice.receive(signal.event(.projection(value: .init(session: old, phase: .failed(.storageUnavailable), requests: [], replies: [])), session: old))
         #expect(!next.closed, "Signals for the ended call must not terminate the new one")
         #expect(workspace.voiceViewState.phase == .connecting)
         try await workspace.performVoice(.hangUp)

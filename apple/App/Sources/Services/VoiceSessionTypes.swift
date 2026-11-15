@@ -37,7 +37,6 @@ nonisolated struct VoiceCallProjection: Equatable, Codable, Sendable {
     let phase: Phase
     let requests: [Request]
     let replies: [Reply]
-    let executions: [Execution]
     /// 控制协议的回应进度，与收音、请求写库、后台执行分开；不表示 PCM 已播放到某个位置。
     enum Response: String, Codable, Sendable { case none, awaitingAssistant, assistantTurn }
     var response: Response = .none
@@ -46,8 +45,10 @@ nonisolated struct VoiceCallProjection: Equatable, Codable, Sendable {
     var canRepeat = false
     /// Mac 的信令版本（`VoiceSignalFormat.callVersion`）。解码时必须有：旧 Mac 的投影没有它，解不开就当对端版本不同（`VoiceRelayEvent.unreadable`）。
     var version = VoiceSignalFormat.callVersion
-    /// 只在拒绝来电的投影里带（`VoiceService.rejectOffer`）：信令 1 的手机解码投影要这个键，没它就看不到"请更新"。
+    /// 这两个与 `omitted.executions` 只在拒绝来电的投影里带（`VoiceService.rejectOffer`）：旧手机解码投影要这些键
+    /// （`pages` 信令 1 要，执行列表 3 起删了），没它们就看不到"请更新"。
     var pages: LegacyPages?
+    var executions: [Never]?
 
     struct LegacyPages: Equatable, Codable, Sendable {
         struct Head: Equatable, Codable, Sendable { var version = Data() }
@@ -57,7 +58,7 @@ nonisolated struct VoiceCallProjection: Equatable, Codable, Sendable {
     struct Omitted: Equatable, Codable, Sendable {
         var requests = 0
         var replies = 0
-        var executions = 0
+        var executions: Int?
     }
 
     struct Request: Equatable, Codable, Sendable {
@@ -68,14 +69,6 @@ nonisolated struct VoiceCallProjection: Equatable, Codable, Sendable {
         let issue: VoiceIssue?
         /// 仅未保存请求携带临时原话摘要；不参与恢复命令，也不写入消息库。
         var preview: RequestPreview? = nil
-    }
-    /// 这次通话派出的工作所在的会话；标题、状态与停止进度各端按身份从库读。
-    struct Execution: Equatable, Codable, Sendable {
-        let session: String
-        /// 此刻能停的那一轮：停止命令原样带回，Mac 执行前按这份记录的请求再核一遍；已歇下、不再归这些请求时为 nil
-        let turn: TurnTarget?
-        /// 对它发出的最后一个停止请求（`DeliveryRequest.id`）
-        let stop: UUID?
     }
     struct RequestPreview: Equatable, Codable, Sendable {
         let text: String

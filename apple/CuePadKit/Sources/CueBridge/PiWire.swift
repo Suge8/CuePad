@@ -269,7 +269,6 @@ enum PiWire {
         var deliveryId: String?
         /// Cue 的话：扩展只在此刻这一轮是 Cue 开的（或歇着）时交出
         var cue: Bool?
-        var turnStartedAt: Int64?
     }
 
     static func sendCommand(id: String, _ message: SessionMessage) throws -> Data {
@@ -277,10 +276,6 @@ enum PiWire {
             t: "send", id: id, text: message.text,
             images: message.images.isEmpty ? nil : message.images.map { .init(mimeType: $0.mimeType, data: $0.data.base64EncodedString()) },
             deliveryId: message.deliveryID, cue: message.policy == .cue ? true : nil))
-    }
-
-    static func abortTurnCommand(id: String, deliveryID: String, turnStartedAt: Int64) throws -> Data {
-        try encodeLine(Command(t: "abortTurn", id: id, text: "", deliveryId: deliveryID, turnStartedAt: turnStartedAt))
     }
 
     static func slashCommand(id: String, line: String) throws -> Data {
@@ -307,9 +302,8 @@ enum PiWire {
         try encodeLine(ConfigCommand(id: id, model: model, thinking: thinking?.rawValue, fast: fast, name: name))
     }
 
-    /// 带回合身份的停止（`abortTurnSince`）与起名（`titleSince`）认得的最早扩展版本：更早的会话换上新扩展前，前者拒绝（`upgrade_stop_turn`），后者不起名（`PiConnection.canNameItself`）。
-    /// 起名从 63 起：之前的扩展要命令带 `limit`，不带就回 `bad_request`。
-    static let abortTurnSince = 60
+    /// 起名（`titleSince`）认得的最早扩展版本：更早的会话换上新扩展前不起名（`PiConnection.canNameItself`）。
+    /// 63 之前的扩展要命令带 `limit`，不带就回 `bad_request`。
     static let titleSince = 63
 
     private struct TitleCommand: Encodable {

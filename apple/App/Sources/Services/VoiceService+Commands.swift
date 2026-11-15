@@ -85,18 +85,9 @@ extension VoiceService {
             case .repeatReply(let id):
                 guard let call, let mediaSession else { return .rejected(reason: .originalMissing) }
                 return try call.repeatReply(id, mediaSession: mediaSession)
-            case .stop(let turn):
-                guard let record = call?.record else { return .rejected(reason: .originalMissing) }
-                guard services.bridge.session(sessionID: turn.sessionID)?.isCurrentTurn(turn.turnStartedAtMilliseconds) == true else {
-                    return .rejected(reason: .turnChanged)
-                }
-                let stop = try await services.store.stopVoiceExecution(turn, requests: record.requests.compactMap(\.message), command: command.id.rawValue)
-                record.track(stop)
-                return .stopRequested(delivery: stop.id)
             }
         } catch CueStoreError.notFound { return .rejected(reason: .originalMissing) }
         catch CueStoreError.deliveryAlreadyHanded { return .rejected(reason: .alreadyHandled) }
-        catch CueStoreError.turnChanged { return .rejected(reason: .turnChanged) }
         catch { return .rejected(reason: .failed) }
     }
     #endif

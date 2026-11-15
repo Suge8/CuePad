@@ -23,7 +23,6 @@ extension VoiceFlowTests {
         #expect(recovers == ["permission", "codex"].contains(kind), "登录与额度要先在 Mac 上处理，详情不给重连钮")
         let said = try fixture.details().issues.map { String(localized: $0.message) }
         if kind == "codex" { #expect(said.contains("Codex 没响应，看看 Mac 上的提示")) }
-        #expect(try fixture.details().executions.isEmpty)
         fixture.media.denied = false
         fixture.connectError = nil
         fixture.access = validAccess

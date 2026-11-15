@@ -6176,22 +6176,6 @@
         }
       }
     },
-    "会话扩展需升级后才能按原回合停止，没有停止会话" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Update the session extension to stop a specific turn. The session was not stopped."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "会话扩展需升级后才能按原回合停止，没有停止会话"
-          }
-        }
-      }
-    },
     "会话操作已经开始，结果尚未确认：%@" : {
       "localizations" : {
         "en" : {
@@ -6284,22 +6268,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "会话移到左边"
-          }
-        }
-      }
-    },
-    "会话等待同步" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Waiting for session to sync"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "会话等待同步"
           }
         }
       }
@@ -6896,22 +6864,6 @@
         }
       }
     },
-    "停止执行" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Stop work"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "停止执行"
-          }
-        }
-      }
-    },
     "停止试听" : {
       "localizations" : {
         "en" : {
@@ -6924,22 +6876,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "停止试听"
-          }
-        }
-      }
-    },
-    "停止请求已提交" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Stop request submitted"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "停止请求已提交"
           }
         }
       }
@@ -8432,22 +8368,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "压缩上下文"
-          }
-        }
-      }
-    },
-    "原回合已结束或更换，停止请求不再适用，没有停止后来的工作" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The original turn has ended or changed. This stop request no longer applies; later work was not stopped."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "原回合已结束或更换，停止请求不再适用，没有停止后来的工作"
           }
         }
       }
@@ -13808,22 +13728,6 @@
         }
       }
     },
-    "执行回合已变化，没有停止后来的工作" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The execution turn changed. Later work was not stopped"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "执行回合已变化，没有停止后来的工作"
-          }
-        }
-      }
-    },
     "扩展" : {
       "localizations" : {
         "en" : {
@@ -17384,22 +17288,6 @@
         }
       }
     },
-    "正在停止…" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Stopping…"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在停止…"
-          }
-        }
-      }
-    },
     "正在准备图片…" : {
       "localizations" : {
         "en" : {
@@ -19188,22 +19076,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "状态未确认"
-          }
-        }
-      }
-    },
-    "状态等待同步" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Waiting for status to sync"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "状态等待同步"
           }
         }
       }
@@ -23424,22 +23296,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "这个命令需要带上参数"
-          }
-        }
-      }
-    },
-    "这个接入不支持按原回合停止，没有停止会话" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This agent cannot stop a specific turn. The session was not stopped."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这个接入不支持按原回合停止，没有停止会话"
           }
         }
       }

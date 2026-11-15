@@ -37,7 +37,7 @@ enum DebugPhoneVoice {
         // 回放换上通话时会清掉静音
         voice.muted = name == "muted"
         if let phase {
-            voice.setProjection(.init(session: session, phase: phase, requests: requests, replies: [], executions: [], response: response))
+            voice.setProjection(.init(session: session, phase: phase, requests: requests, replies: [], response: response))
         }
         do {
             let store = workspace.services.store

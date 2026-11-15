@@ -13,7 +13,7 @@ export type Ack = (fields: object) => void;
 /** 一句要开新一轮的话。`text` 是认它的文字：会话里落成的那条用户消息据此认出（`landed`）。 */
 type Said = { content: UserContent; expand: boolean; text: string; id?: string; ack?: Ack; cue: boolean };
 /** 开这一轮的那句：CuePad 交的话落成消息时记下（`landed`），之后不经 CuePad 开的轮（FireCode 交回、重试）沿用。
- * Cue 的话只插进 Cue 开的轮（`rejectSend`），有目标的停止只停这句开的轮（`stopDelivery`）。 */
+ * Cue 的话只插进 Cue 开的轮（`rejectSend`）。 */
 export type Opener = { delivery: string; cue: boolean };
 export type Firecode = { inFlight: number; subagents: Subagent[] };
 type Identity = { extensionVersion: number; launchToken: string | null };
@@ -313,17 +313,6 @@ export class Session {
 		}
 		if (this.ctx.isIdle() || this.opener?.cue) return false;
 		said.ack?.({ ok: false, error: this.opener ? "user_turn" : "unconfirmed_turn" });
-		return true;
-	}
-
-	/** 核对投送身份与停止之间没有 await；不清空别人的 pending。
-	 * starting / SDK 待处理消息尚未有可证实的当前身份，拒绝而不冒险停止新工作。 */
-	stopDelivery(deliveryId: string, turnStartedAt: number): boolean {
-		if (this.turnSince !== turnStartedAt) return false;
-		if (this.starting.length || this.ctx.hasPendingMessages()) return false;
-		if (this.opener?.delivery !== deliveryId) return false;
-		if (this.ctx.isIdle()) return false;
-		this.stopRound();
 		return true;
 	}
 

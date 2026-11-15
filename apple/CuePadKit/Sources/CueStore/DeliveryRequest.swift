@@ -51,8 +51,6 @@ public enum DeliveryMode: String, Sendable, CaseIterable {
   case end
   /// 停止会话正在跑的这一轮（相当于在 Pi 里按 Esc：只停指挥官自己这一轮，子代理不动），会话回到等你下一句
   case stop
-  /// 只停止正文指定的投送所开启的回合；Agent 接收端核对身份后同步停止。旧 Mac 不认识此方式，明确拒绝，不退化为 stop。
-  case stopTurn
   /// 接着会话出错的那一轮重试（`SessionState.canRetry`）：不补发用户消息，也不发“继续”。
   /// 会话在跑或最后一轮不是出错结束的，扩展拒绝（`nothing_to_retry`）
   case retry
@@ -78,7 +76,7 @@ public enum DeliveryMode: String, Sendable, CaseIterable {
   public var landsAsMessage: Bool {
     switch self {
     case .send, .start: true
-    case .withdraw, .answer, .transcript, .step, .config, .end, .stop, .stopTurn, .retry, .bind, .command, .quota, .tidy, .libraryEdit: false
+    case .withdraw, .answer, .transcript, .step, .config, .end, .stop, .retry, .bind, .command, .quota, .tidy, .libraryEdit: false
     }
   }
 
