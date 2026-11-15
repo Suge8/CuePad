@@ -88,6 +88,8 @@ extension CueStore {
     var remote = remote
     // 通知标志只由置位的那台 Mac 上传、上传即清：远端带回来的（含自己上传的回声）不能再让本机的下一次改动带上它
     if Table.notifyFlagged.contains(remote.table) { remote.fields["notify"] = .null }
+    // 早于多家接入的会话记录不带来源，是 Pi：本机库升级时补过却没传上去（不改 modifiedAt），云端那份可能仍缺，空着读会话记录时崩溃
+    if remote.table == .piSessionStates, (remote.fields["agent"] ?? .null) == .null { remote.fields["agent"] = .text(AgentKind.pi.rawValue) }
     let table = remote.table
     let (pushed, sent) = try db.first("SELECT pushedModifiedAt, sentModifiedAt FROM syncRecords WHERE recordName = ?", [remote.id]) {
       ($0.intOrNil(0), $0.intOrNil(1))
