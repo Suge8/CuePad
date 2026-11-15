@@ -144,6 +144,20 @@ final class HostedTurns {
         onChange()
     }
 
+    /// 不是一句话开的一轮（没人等着回话，如 Codex 补开一轮取子代理的结果），歇着时才开：交不出就带着原因歇下，返回 false，主人随后发布；
+    /// 交的工夫里已有一轮开始过（在跑或已收尾）、连接关了的，这次交不出不算数，照开成了返回。
+    func open(_ deliver: () async throws -> Void) async -> Bool {
+        let seen = ends.count
+        do {
+            try await deliver()
+        } catch {
+            guard phase == .idle, ends.count == seen else { return true }
+            facts.endTurn(failure: error.localizedDescription)
+            return false
+        }
+        return true
+    }
+
     func abort(stop: @escaping @MainActor () async throws -> Void) async throws {
         let turn = runningTurn
         handovers = []
