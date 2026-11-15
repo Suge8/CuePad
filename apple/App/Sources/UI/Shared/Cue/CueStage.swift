@@ -120,7 +120,7 @@ struct CueStage: View {
 extension CueStage {
     /// 天空图怎么铺：图是生成的，云的高度量自图本身（竖图 30%、横图 35.5%，白天与夜里两张对齐过）。
     /// 竖图的高在可见高的八成与宽的 1.62～1.75 倍之间：手机上云落在三成高处，高瘦的屏不把云推到太下面；
-    /// 横图铺满宽与高、再上移到云落在可见高的 30%（至少 230 点：Mac 栏头浮在内容上、不进安全区，Cue 的头要低过它）。两种都以 Cue 所在那块的中线为中线，宽要盖住离中线远的那一边。
+    /// 横图铺满宽与高、再上移到云落在可见高的 30%（至少 230 点：Mac 栏头浮在内容上、不进安全区，Cue 的头要低过它）；矮的栏里图本身的云低不到那里，就放大到够。两种都以 Cue 所在那块的中线为中线，宽要盖住离中线远的那一边。
     /// 云不高过安全区（状态栏、页头）往下 Cue 身高的六成：Cue 的头低于状态栏，页头两侧的圆钮在它左右（名牌这时让开，`CueHeader`）。
     struct Sky {
         static let approach: CGFloat = 1.12
@@ -146,11 +146,11 @@ extension CueStage {
             let lowest = inset + Pose.size.height * figureScale * 0.6
             if size.width > size.height {
                 asset = "cue-stage-sky-wide"
-                let scale = max(span / 1672, size.height / 941)
+                let line: CGFloat = 0.355
+                perch = max(size.height * 0.3, 230, lowest)
+                let scale = max(span / 1672, size.height / 941, perch / (941 * line))
                 (width, height) = (1672 * scale, 941 * scale)
-                let line = height * 0.355
-                top = min(0, max(size.height * 0.3, 230, lowest) - line)
-                perch = top + line
+                top = perch - height * line
             } else {
                 asset = "cue-stage-sky-tall"
                 height = max(min(max(size.height * 0.8, size.width * 1.62), size.width * 1.75), span * 1.5, lowest / 0.3)

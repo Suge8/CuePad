@@ -50,7 +50,7 @@ struct CuePage: View {
             .previewPresenter($opened, reply: .cue)
             .panel(isPresented: Bindable(cue).showsMemory) { CueMemoryPage() }
             .panel(isPresented: Bindable(cue).showsSchedules) { CueSchedulePage() }
-            .modifier(CueViewing(thread: thread, catchingUp: catchingUp, seen: $seen, follow: $follow) { stage = true })
+            .modifier(CueViewing(thread: thread, catchingUp: catchingUp, seen: $seen, follow: $follow, staged: staged) { if DebugHooks.preset.cueStage == nil { stage = true } })
             .onAppear { if stage == nil { stage = DebugHooks.preset.cueStage ?? CueStage.opens(left: services.settings.cueLeft, at: .now) } }
             .onChange(of: thread.flatMap(card), initial: true) { dockedCard = $1 }
             .onChange(of: thread != nil, initial: true) { _, loaded in
