@@ -29,6 +29,8 @@ struct CueComposer: View {
     var takesFocusRequests = false
     /// 浮起的输入条按 Esc。
     var dismiss: () -> Void = {}
+    /// 拿到焦点的那一下（Cue 页收起舞台）。
+    var focusing: () -> Void = {}
     var sent: () -> Void = {}
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
@@ -84,6 +86,7 @@ struct CueComposer: View {
                 if style == .page, takesFocusRequests, top != .cue { focused = false }
             }
             #endif
+            .onChange(of: focused) { _, now in if now { focusing() } }
             .task { if style == .page { await DebugHooks.pressSendIfAsked(session: false, send) } }
     }
 

@@ -88,6 +88,16 @@ extension Motion {
         static let pop = Animation.spring(duration: 0.42, bounce: 0.3)
     }
 
+    /// Cue 页舞台的一幕（`CueStage`）是编排，不是控件的反馈：新来访时天空从近处拉远、慢慢落定（`unveil`，大块画面比面板开合慢一档，缓出到停），
+    /// Cue 与字随后浮上来（`rise`，无回弹）；收起回对话走 `travel`。减弱动态效果时只淡（`fading`）。
+    nonisolated enum Stage {
+        static let unveil = Animation.timingCurve(0.22, 1, 0.36, 1, duration: 1.6)
+        static let rise = Animation.spring(duration: 0.6)
+        /// 天空落定到一半时 Cue 出来，再过一拍字出来：先看到地方，再看到它，再看到它说什么。
+        static let figureDelay: TimeInterval = 0.3
+        static let wordsDelay: TimeInterval = 0.6
+    }
+
     /// `fade`、`yield` 的时长，渲染端的淡出（Mac 预览落地时飞的那张淡掉）与编排里的等候（等旧的淡完再来新的）用它。
     nonisolated enum Fade {
         static let duration: TimeInterval = 0.16

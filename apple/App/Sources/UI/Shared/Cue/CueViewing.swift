@@ -7,6 +7,10 @@ struct CueViewing: ViewModifier {
     let catchingUp: Bool
     @Binding var seen: [UUID: Date]
     @Binding var follow: ChatFollow
+    /// 舞台开着（`CueStage`）：对话没排，不算在读——落点（第一条新消息）留到收起、对话排出来那一刻按那时的新消息定。
+    let staged: Bool
+    /// 离开够久（`CueStage.opens`）又回来看：页把舞台重开。离开的时刻记在本机（`AppSettings.cueLeft`），各台设备各算各的来访。
+    let revisit: () -> Void
     @Environment(AppServices.self) private var services
     @Environment(Workspace.self) private var workspace
     @Environment(\.pageActive) private var active
@@ -23,21 +27,27 @@ struct CueViewing: ViewModifier {
     static let dwell: Duration = .seconds(1)
 
     private var watching: Bool { active && onScreen && appeared }
-    private var reading: Bool { watching && !catchingUp }
+    private var reading: Bool { watching && !catchingUp && !staged }
 
     func body(content: Content) -> some View {
         content
             .onAppear { appeared = true }
             // 页拆掉时 onChange 不再来：在这里收回
             .onDisappear {
+                // 已经不在看时拆掉（后台里关了那扇窗）：离开的时刻是当初不看的那一刻，不改写成现在
+                if watching { services.settings.cueLeft = .now }
                 appeared = false
                 services.viewer.showCue(false, by: token)
             }
-            .onChange(of: watching, initial: true) { _, on in
+            .onChange(of: watching, initial: true) { was, on in
                 services.viewer.showCue(on, by: token)
-                guard on else { return }
+                guard on else {
+                    if was { services.settings.cueLeft = .now }
+                    return
+                }
                 follow.oweLanding()
-                land()
+                // 重开舞台的这一下 `staged` 还是旧值：不当场落，留到收起
+                if !was, CueStage.opens(left: services.settings.cueLeft, at: .now) { revisit() } else { land() }
             }
             .onChange(of: reading && thread != nil) { _, start in if start { land() } }
             .task(id: Reading(seen: Set(seen.keys), counts: reading)) { await mark() }

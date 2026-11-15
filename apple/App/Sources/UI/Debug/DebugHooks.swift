@@ -40,6 +40,8 @@ enum DebugHooks {
         var scheduleOpen = false
         var mergePreview = false
         var cuePanelOpen = false
+        /// Cue 页打开时舞台开着（true）或收着（false），nil 照上次离开的时刻定（`-CuePadCueStage`）。
+        var cueStage: Bool?
         #if os(iOS)
         /// 设置页通知那一行显示的状态：演示模式没有同步，真实状态出不来。
         var alertStatus: AlertStatus?
