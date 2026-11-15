@@ -32,33 +32,5 @@ struct VoiceStorageFlowTests {
         try await eventually("接走回执才显示送达") { voice.trip(request) == .delivered }
         try await voice.hangUp()
     }
-
-    @Test(arguments: [90, 91])
-    func 正式已发布库升级后_晚到回复关联仍送到通话(version: Int) async throws {
-        let app = TestApp(), oldStore = app.services.store, host = TestApp.hostID
-        try await oldStore.updateCueProfile { $0.hostID = host; $0.enabledAt = .now }
-        let db = RawDB(app.databaseURL)
-        let previous = try await oldStore.addCueMessage(.you, text: "升级前的问题")
-        try db.restore(version: 90)
-        // 91 只清理派生摘要；这里没有缓存，表结构与 90 相同。
-        try db.exec("PRAGMA user_version = \(version)")
-        let services = app.relaunch(), store = services.store
-        #expect(try await store.cueMessages([previous.id]).first?.text == "升级前的问题")
-        let voice = VoiceFlowFixture(services)
-        defer { voice.call.hangUp(); services.cancelBackgroundWork() }
-        try await voice.connect()
-        let request = try await voice.handoff("升级后询问进展")
-        let reply = try await store.addCueMessage(.cue, text: "真实结果先到，来源随后到", answeredRequests: nil)
-        try await eventually("先显示没有来源的真实结果") { voice.voiceRecord.replies.contains { $0.id == reply.id } }
-        #expect(voice.controls[0].sends.isEmpty)
-        let cursor = try await store.cueMessagePage(after: 0).through
-        try await store.associateCueReply(reply.id, answering: [request])
-        let updates = try await store.cueMessagePage(after: cursor).entries
-        try #require(updates.contains { $0.message.id == reply.id }, "升级后晚到关联必须通知正在看通话的消费者")
-        try await eventually("来源补齐后交给语音一次") { voice.controls[0].sends.count == 1 }
-        #expect(voice.voiceRecord.replies.first?.message.answeredRequests == [request])
-        #expect(voice.voiceRecord.replies.last?.text == "真实结果先到，来源随后到")
-        try await voice.hangUp()
-    }
 }
 #endif

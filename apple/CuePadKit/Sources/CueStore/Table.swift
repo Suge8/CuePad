@@ -62,7 +62,7 @@ extension Table {
       case .cards, .piSessionStates, .cueMessages: ["writeSeq"]  // 本机写入序号，见 `writeSeq`
       case .deliveryRequests: ["writeSeq", "cueToldAt"]  // cueToldAt：Cue 已知道没送到
       case .attachments: ["registeredHere"]  // 这台设备登记的，见 `registerAttachment`
-      case .piMessages: ["arrival"]  // 读进这台的次序，这张表的主键让给了它、id 改由 UNIQUE 守，见 `messageArrivalUpgrade`
+      case .piMessages: ["arrival"]  // 读进这台的次序，这张表的主键让给了它、id 改由 UNIQUE 守，见 `Schema.create`
       case .accountQuotas: ["owners"]
       default: []
       }

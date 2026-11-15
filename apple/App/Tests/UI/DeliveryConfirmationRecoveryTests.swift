@@ -126,39 +126,6 @@ extension DeliveryConfirmationTests {
     }
 
     @Test(arguments: [false, true])
-    func 旧83已领取记录不补造期限_先查真实历史_无证据保守收敛且不重派(hasMessage: Bool) async throws {
-        let app = TestApp()
-        let (target, ext, file) = try await session(app)
-        defer { ext.close(bye: "quit"); app.bridge.stop(); app.services.cancelBackgroundWork() }
-        let request = try await say("升级之前可能已经交出", to: target, in: app)
-        if hasMessage {
-            try Self.write([SessionMessage(text: request.content, deliveryID: request.id.uuidString)], session: target.sessionID, cwd: app.directory.path, to: file)
-        }
-        try RawDB(app.databaseURL).restore(version: 90)
-        try RawDB(app.databaseURL).exec("""
-            UPDATE deliveryRequests SET status = 'executing', handledBy = '\(TestApp.hostID)';
-            ALTER TABLE deliveryRequests DROP COLUMN deadlineAt;
-            DROP TABLE activityDestinations;
-            ALTER TABLE sessionViewers DROP COLUMN sessionIDs;
-            ALTER TABLE sessionViewers ADD COLUMN sessionID TEXT;
-            PRAGMA user_version = 83;
-            """)
-        let services = app.relaunch()
-        let migrated = try #require(try await services.store.deliveryRequest(request.id))
-        #expect(migrated.deadlineAt == nil)
-        try await services.executor.start()
-        try await eventually("旧领取事实完成一次真实核对") {
-            let status = try await services.store.deliveryRequest(request.id)?.status
-            return status == .known(.succeeded) || status == .known(.unconfirmed)
-        }
-        let result = try #require(try await services.store.deliveryRequest(request.id))
-        #expect(result.status == (hasMessage ? .known(.succeeded) : .known(.unconfirmed)))
-        #expect(result.deadlineAt == nil)
-        #expect(ext.messages.isEmpty)
-        await services.executor.beginStop()()
-    }
-
-    @Test(arguments: [false, true])
     func 确认超时静态结束_晚到历史自动纠正_不抢后来绑定且保留Cue来源(disconnected: Bool) async throws {
         let clock = ManualTiming()
         let app = TestApp(timing: clock.timing)

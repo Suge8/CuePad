@@ -10,7 +10,7 @@ extension Schema {
     ON CONFLICT(id) DO NOTHING;
     """
 
-  /// 新库的结构（`version` 那一版），与从 `baseVersion` 升上来的库表、列、索引、触发器一致；列的先后不同（早年的库加列都在表尾），
+  /// 新库的结构（`version` 那一版），与从 `baseVersion` 升上来的库表、列、索引、触发器一致；列的先后不同（升级加的列在表尾），
   /// 读写都按列名，不受影响。
   static let create = """
     CREATE TABLE projects (
@@ -88,6 +88,8 @@ extension Schema {
       owners TEXT
     ) STRICT;
 
+    -- arrival：读进这台的次序，删了也不复用（AUTOINCREMENT）：做梦听到哪了的书签记的是它（`CueStore.said(after:limit:)`），
+    -- 隐含的 rowid 在最新的那批被删掉（清理过期对话、重置同步）后会从头再用，新说的话就落在书签之前、听不到。
     CREATE TABLE piMessages (
       arrival INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE, sessionID TEXT NOT NULL, seq INTEGER NOT NULL, role TEXT NOT NULL, text TEXT NOT NULL,
       at INTEGER NOT NULL, tools TEXT, roundStartedAt INTEGER, deliveryID TEXT,
@@ -166,9 +168,18 @@ extension Schema {
     -- 每台 Mac 自己写、各端读：在线记录（Mac 在不在、Cue 在不在值班的唯一信号），能用的 Agent 与各家的模型。
     CREATE TABLE macPresence (id TEXT PRIMARY KEY NOT NULL, hostID TEXT NOT NULL, onlineUntil INTEGER NOT NULL, modifiedAt INTEGER NOT NULL, bootID TEXT) STRICT;
     CREATE TABLE macAgents (id TEXT PRIMARY KEY NOT NULL, hostID TEXT NOT NULL, agents TEXT, problems TEXT, modifiedAt INTEGER NOT NULL, name TEXT) STRICT;
-    \(agentLibrariesTable)
-    \(agentLibraryFilesTable)
-    \(activityDestinationsTable)
+    CREATE TABLE agentLibraries (
+      id TEXT PRIMARY KEY NOT NULL, hostID TEXT NOT NULL, home TEXT NOT NULL, skills TEXT, instructions TEXT, tidies TEXT, selfManaged TEXT,
+      agents TEXT, modifiedAt INTEGER NOT NULL
+    ) STRICT;
+    CREATE TABLE agentLibraryFiles (
+      id TEXT PRIMARY KEY NOT NULL, hostID TEXT NOT NULL, path TEXT NOT NULL, hash TEXT NOT NULL, text TEXT NOT NULL, modifiedAt INTEGER NOT NULL
+    ) STRICT;
+    CREATE INDEX agentLibraryFiles_host ON agentLibraryFiles(hostID);
+    CREATE TABLE activityDestinations (
+      id TEXT PRIMARY KEY NOT NULL, device TEXT NOT NULL, activityID TEXT NOT NULL, token TEXT NOT NULL,
+      environment TEXT NOT NULL, startedAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL
+    ) STRICT;
     -- 每台设备自己写：此刻开着哪些会话、开没开着 Cue 页、他最近一次来到这台的时刻（提示到不到他）。
     CREATE TABLE sessionViewers (
       id TEXT PRIMARY KEY NOT NULL, device TEXT NOT NULL, sessionIDs TEXT, modifiedAt INTEGER NOT NULL, cue INTEGER, arrivedAt INTEGER

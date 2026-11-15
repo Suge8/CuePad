@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""lint.sh 的一条规则（在 apple/ 下跑，只查工作区）：`Schema.baseVersion`（能打开的最老结构版本）不得高于各 mac/、ios/ 发布标签那时的结构版本中的最小值，
-否则已发出去的构建建的库升级后打不开（`schemaTooOld`）。标签那时的结构版本 = 那时 Schema.swift 的 `baseVersion` 加 `upgrades` 数组的元素个数（同 `Schema.version`）。
+"""lint.sh 的一条规则（在 apple/ 下跑，只查工作区）：`Schema.baseVersion`（能打开的最老结构版本）不得高于 mac/、ios/ 各自最新一个发布标签那时的结构版本中的较小值，
+否则装着那一版的设备的库升级后打不开（`schemaTooOld`）。更早的标签不算：只有作者自己的设备在用，都装着各平台最新的那一版。标签那时的结构版本 = 那时 Schema.swift 的 `baseVersion` 加 `upgrades` 数组的元素个数（同 `Schema.version`）。
 没有任何发布标签（浅克隆、没拉标签）时不能放过：算不出就退出 1，提示 git fetch --tags。"""
 import re, subprocess, sys
 
@@ -59,8 +59,9 @@ except subprocess.CalledProcessError as error:
     fail("lint_schema.py 要发布标签（mac/、ios/）来认 baseVersion 够不够老", error)
 if not tags:
     sys.exit("lint_schema.py 要发布标签（mac/、ios/）来认 baseVersion 够不够老：先 git fetch --tags")
+latest = [max(t for t in tags if t.startswith(p)) for p in ("mac/", "ios/") if any(t.startswith(p) for t in tags)]
 versions = {}
-for tag in tags:
+for tag in latest:
     try: versions[tag] = version(git("show", f"{tag}:{SCHEMA}"))
     except (subprocess.CalledProcessError, ValueError) as error:
         sys.exit(f"lint_schema.py 读不出 {tag} 那时的结构版本：{error}")
@@ -69,5 +70,5 @@ base = int(BASE.search(open("CuePadKit/Sources/CueStore/Schema.swift", encoding=
 if base > versions[lowest]:
     print(f"{SCHEMA}: baseVersion = {base}")
     print(f"  → baseVersion 高过标签 {lowest} 那时的结构版本 {versions[lowest]}：用那个构建建的库升级后会因 schemaTooOld 打不开。"
-          f"起点要不高于所有已发布标签的最小结构版本（算法与怎么挪起点见 Schema.baseVersion 的注释）\n")
+          f"起点要不高于各平台最新发布标签的结构版本（算法与怎么挪起点见 Schema.baseVersion 的注释）\n")
     sys.exit(1)
