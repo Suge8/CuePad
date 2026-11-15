@@ -116,11 +116,7 @@ final class MacExecutor {
     }
 
     private func send(_ content: String, of request: DeliveryRequest, to session: CueBridge.Session) async throws -> DeliveryOutcome {
-        var outgoing = try DeliveryMessage.make(content, request: request, session: session, files: store.files)
-        if request.isFromCue {
-            let context = try await store.cueSendContext(in: session.sessionID)
-            outgoing.policy = .cue(deliveryID: context.deliveryID?.uuidString, turnStartedAt: context.turnStartedAt)
-        }
+        let outgoing = try DeliveryMessage.make(content, request: request, session: session, files: store.files)
         guard try await store.mayBeginDelivery(request.id) else { return .failed(DeliveryPreparation.abandoned) }
         try Task.checkCancellation()
         do { try await bridge.send(outgoing, to: session.id) }
@@ -170,7 +166,7 @@ final class MacExecutor {
         let content = SendContent(stored: request.content)
         let (ref, id, _) = try await connect(request.target, access: access)
         let line = try content.agentText(from: store.files, imagesAsFiles: true).trimmingCharacters(in: .whitespacesAndNewlines)
-        try await bridge.command(line, deliveryID: request.id.uuidString, in: id)
+        try await bridge.command(line, opener: TurnOpener(delivery: request.id, cue: request.isFromCue), in: id)
         do { try await store.linkDeliveredCard(request, toSession: ref) } catch {
             reportIssue(String(localized: "处理投送请求时读写资料库失败：\(error.localizedDescription)"))
         }

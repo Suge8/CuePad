@@ -19,6 +19,7 @@ struct SessionFacts {
     /// 做完了的在主会话为它开始新的一轮（Agent 自己开，或接入补开）之前仍在飞：歇下只在那一轮做完之后，一件事只歇下一次。
     var inFlight: Set<String> = []
     private(set) var turnStartedAt: Date?
+    var turnOpener: TurnOpener?
     private(set) var subagents: [(id: String, state: SubagentState)] = []
     private var beforeCompaction: (since: Date, busySince: Date?)?
 
@@ -100,6 +101,7 @@ struct SessionFacts {
         }
         if state == .error { session.errorMessage = failure }
         session.turnStartedAt = turnStartedAt
+        session.turnOpener = turnOpener
         session.question = question
         let roster = subagents.map(\.state)
         if session.subagents != roster { session.subagents = roster }

@@ -55,7 +55,7 @@ struct AgentDayTests {
     @Test func 一个会话一天里_新会话_有新回复_看过_草稿_发话() async throws {
         let recorder = try await app.runtimeRecorder(on: "mac-a")
         try await recorder.update(sessionID: "atlas", state: .settled, title: "atlas")
-        #expect(try await label("atlas") == "新开的会话")  // 终端里刚开、还没有任何一轮：不是"空闲"
+        #expect(try await label("atlas") == "新开的会话")  // 刚开、还没有任何一轮：不是"空闲"
 
         try await store.writeTranscript(SessionTranscript(sessionID: "atlas", messages: [], recap: Recap(lastPrompt: "跑一下测试", lastReply: "全部通过。共 214 个。")))
         let done = try await item("atlas")
@@ -141,7 +141,7 @@ struct AgentDayTests {
         await nextMillisecond()
         try await recorder.update(sessionID: "delta", state: .settled, title: "排队调度")
         #expect(try await title() == "排队调度")
-        try await recorder.update(sessionID: "delta", state: .settled, title: "调度")  // 之后在终端里又改了名：以 Pi 为准
+        try await recorder.update(sessionID: "delta", state: .settled, title: "调度")  // 之后又改了名：以 Pi 报的为准
         #expect(try await title() == "调度")
     }
 
@@ -179,8 +179,8 @@ struct AgentDayTests {
         #expect(ends.count == 1)
         #expect(try await list().ends[session.id] == .sending)
 
-        try await macAnswers(ends[0], host: "mac-a", .failed(.verbatim("会话没有按时结束，可能还在等你在终端里处理")))
-        #expect(try await list().ends[session.id]?.failure == .reported("会话没有按时结束，可能还在等你在终端里处理"))
+        try await macAnswers(ends[0], host: "mac-a", .failed(.verbatim("会话没有按时结束，可能还在等你确认")))
+        #expect(try await list().ends[session.id]?.failure == .reported("会话没有按时结束，可能还在等你确认"))
 
         await workspace.end(session)
         let retry = try #require(try await store.deliveryRequests(toSession: "deploy").last { $0.mode == .known(.end) })

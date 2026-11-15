@@ -28,10 +28,10 @@ struct LibraryFailureTests {
 
     @Test func 更早或更新版本建的库_打不开但不终止_失败带原文与库版本_说明各自怎么办() throws {
         let older = try failure(of: library(version: 13, setup: "CREATE TABLE cards (id TEXT)"))
-        let newer = try failure(of: library(version: 99, setup: "CREATE TABLE cards (id TEXT)"))
+        let newer = try failure(of: library(version: 999, setup: "CREATE TABLE cards (id TEXT)"))
 
         #expect(older.version == 13 && older.olderLibrary && !older.newerLibrary)
-        #expect(newer.version == 99 && newer.newerLibrary && !newer.olderLibrary)
+        #expect(newer.version == 999 && newer.newerLibrary && !newer.olderLibrary)
         // 更新版本的库要说更新 App，而不是"不再升级"
         #expect(newer.summary != older.summary)
         #expect(older.diagnostics.contains(older.reason) && older.diagnostics.contains("13"))

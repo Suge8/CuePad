@@ -79,7 +79,7 @@ public final class OpenCodeRuntime: AgentRuntime, SessionLink {
     func track(_ info: OpenCodeSessionInfo) -> Tracked {
         if let tracked = sessions[info.id] { return tracked }
         let turns = HostedTurns(timing: timing)
-        turns.onSettle = { [weak self] in self?.publish(info.id) }
+        turns.onChange = { [weak self] in self?.publish(info.id) }
         return Tracked(info: info, turns: turns)
     }
 

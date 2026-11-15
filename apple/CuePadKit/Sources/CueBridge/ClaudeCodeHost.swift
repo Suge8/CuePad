@@ -40,7 +40,7 @@ final class ClaudeHostedSession: SessionLink {
         brain = nil
         turns = HostedTurns(timing: timing)
         clearWaits = Self.clearWaits(timing)
-        turns.onSettle = { [weak self] in self?.publish(at: .now) }
+        turns.onChange = { [weak self] in self?.publish(at: .now) }
     }
 
     init(timing: Timing) {

@@ -38,7 +38,7 @@ extension CodexRuntime {
 
     func attach(_ session: Session, driver: CodexDriver) {
         let entry = Tracked(id: session.id, threadID: session.sessionID, driver: driver, timing: timing)
-        entry.turns.onSettle = { [weak self, weak entry] in
+        entry.turns.onChange = { [weak self, weak entry] in
             if let self, let entry { publish(entry) }
         }
         driver.onNotification = { [weak self, weak entry] method, params in

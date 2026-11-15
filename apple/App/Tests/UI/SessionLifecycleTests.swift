@@ -61,37 +61,29 @@ struct SessionLifecycleTests {
     }
 }
 
+/// 桥是 Cue 插话的最后一道关：库里的开轮者可能还没同步到，交出前按桥上此刻的开轮者再核一次。
 @Suite(.releasesLibraries)
-struct SendPrecisionTests {
+struct CueSendGuardTests {
     private final class Peer: SessionLink {
         var messages: [SessionMessage] = []
         func send(_ message: SessionMessage, in _: Session.ID) async throws { messages.append(message) }
     }
 
-    @Test func 非Pi当前轮经Store往返后允许Cue发话_换轮仍保护() async throws {
+    @Test func Cue的话只插进Cue开的那一轮() async throws {
         let app = TestApp()
-        let started = Date(timeIntervalSince1970: 1_793_290_000.123456)
-        var facts = SessionFacts()
-        facts.startTurn(at: started)
-        var live = Session(
-            id: "claude-peer", sessionID: "claude-session", agent: .claudeCode, sessionFile: nil, pid: 0,
-            cwd: app.directory, state: .settled, stateSince: started)
-        facts.publish(to: &live, at: started)
+        let live = Session(
+            id: "claude-peer", sessionID: "claude-session", agent: .claudeCode, sessionFile: nil, pid: 0, cwd: app.directory, state: .thinking, stateSince: .now)
         let peer = Peer()
         app.bridge.attach(live, via: peer)
-        try await StateRecorder(store: app.services.store, hostID: TestApp.hostID).update(
-            sessionID: live.sessionID, state: live.state, title: "Claude", turnStartedAt: live.turnStartedAt, agent: .claudeCode)
-        let stored = try #require(try await app.services.store.allSessionStates().first?.turnStartedAt)
-        #expect(stored != started, "Store 确实把接入的亚毫秒时间按存储合同规范成毫秒")
-        let message = SessionMessage(text: "继续自己的任务", policy: .cue(deliveryID: "cue-confirmed", turnStartedAt: stored))
+        let cue = SessionMessage(text: "顺便跑一遍 lint", deliveryID: UUID().uuidString, policy: .cue)
+        func opened(cue: Bool) { app.bridge.update(live.id) { $0.turnOpener = TurnOpener(delivery: UUID(), cue: cue) } }
 
-        try await app.bridge.send(message, to: live.id)
-        #expect(peer.messages.map(\.text) == ["继续自己的任务"])
-
-        facts.startTurn(at: started.addingTimeInterval(0.001))
-        app.bridge.update(live.id) { facts.publish(to: &$0) }
-        await #expect(throws: BridgeError.rejected("user_turn")) { try await app.bridge.send(message, to: live.id) }
-        #expect(peer.messages.count == 1, "旧许可不能打断新轮")
+        await #expect(throws: BridgeError.rejected("unconfirmed_turn")) { try await app.bridge.send(cue, to: live.id) }
+        opened(cue: false)
+        await #expect(throws: BridgeError.rejected("user_turn")) { try await app.bridge.send(cue, to: live.id) }
+        opened(cue: true)
+        try await app.bridge.send(cue, to: live.id)
+        #expect(peer.messages.map(\.text) == ["顺便跑一遍 lint"])
     }
 }
 

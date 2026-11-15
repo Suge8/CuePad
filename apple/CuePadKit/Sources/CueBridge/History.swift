@@ -54,8 +54,8 @@ public enum HistoryEvent: Sendable {
     case backfillFinished(sessionFiles: [URL]?)
 }
 
-/// 一家 Agent 的哪些会话归 CuePad 管：接入了的是全部（会话目录整个回填）；没接入的只有 CuePad 托管过的
-/// （`CueStore.hostedSessionIDs`），终端里开的不回填。接入的含义只在这里：索引按它。
+/// 一家 Agent 的哪些会话文件读进对话记录：接入了的是全部（会话目录整个回填，终端里开的也在，只是历史）；没接入的只有 CuePad 托管过的
+/// （`CueStore.hostedSessionIDs`）。实时状态只有托管的有，与这里无关。接入的含义只在这里：索引按它。
 public enum HistoryScope: Sendable, Equatable {
     case all
     case sessions(Set<String>)

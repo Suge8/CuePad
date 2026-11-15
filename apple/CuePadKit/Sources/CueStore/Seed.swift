@@ -95,7 +95,7 @@ extension StateRecorder {
   @discardableResult
   public func update(
     sessionID: String, state: WorkState, detail: String? = nil, failure: FailureKind? = nil, title: String? = nil, directory: String? = nil,
-    projectID: UUID? = nil, question: Question? = nil, times: SessionTimes? = nil, turnStartedAt: Date? = nil, launchToken: String? = nil, hosted: Bool? = nil,
+    projectID: UUID? = nil, question: Question? = nil, times: SessionTimes? = nil, turnStartedAt: Date? = nil, turnOpener: TurnOpener? = nil, launchToken: String? = nil, hosted: Bool? = nil,
     subagents: [SubagentState]? = nil, modelState: ModelState? = nil, context: ContextUsage? = nil, commands: [SlashCommand]? = nil,
     agent: AgentKind? = nil, process: SessionProcess? = nil
   ) async throws -> AlertKind? {
@@ -109,6 +109,7 @@ extension StateRecorder {
     if let projectID { snapshot.projectID = projectID }
     if let times { snapshot.times = times }
     if let turnStartedAt { snapshot.turnStartedAt = turnStartedAt }
+    if let turnOpener { snapshot.turnOpener = turnOpener }
     if let launchToken { snapshot.launchToken = launchToken }
     if let hosted { snapshot.hosted = hosted }
     if let subagents { snapshot.subagents = subagents }

@@ -13,7 +13,7 @@ extension CueStore {
         lastReply: nil, question: content.question, notify: nil, stateSince: content.times.stateSince,
         busySince: content.times.busySince, createdAt: now, modifiedAt: now, launchToken: content.launchToken, hosted: content.hosted,
         subagents: content.subagents, model: content.modelState.model, thinking: content.modelState.thinking, fast: content.modelState.fast,
-        context: content.context, agent: .known(content.agent), catalogID: catalog?.id, turnStartedAt: content.turnStartedAt,
+        context: content.context, agent: .known(content.agent), catalogID: catalog?.id, turnStartedAt: content.turnStartedAt, turnOpener: content.turnOpener,
         failure: content.state == .error ? content.failure.map(Open.known) : nil, bootID: bootID)
       if writesCatalog, let catalog { try writeCatalog(catalog) }
       if let notify {
@@ -23,10 +23,10 @@ extension CueStore {
         record.notify = try push(notify, event)
       }
       // 摘要不归这里写：它是对话的投影，只由 `writeTranscript` 写（新记录插入时先空着）
-      // 最后一轮的开始不知道（CuePad 在一轮中途重启，各家的事实从头记起）时留着库里的：这一轮的回答照样不早于它
+      // 最后一轮的开始与开轮的那句不知道（CuePad 在一轮中途重启，各家的事实从头记起）时留着库里的：这一轮的回答照样不早于它，开它的还是那句
       let assignments = SessionState.columns.dropFirst()
         .filter { $0 != "createdAt" && $0 != "createdForTaskID" && $0 != "notify" && !SessionState.recapColumns.contains($0) }
-        .map { $0 == "turnStartedAt" ? "turnStartedAt = COALESCE(excluded.turnStartedAt, piSessionStates.turnStartedAt)" : "\($0) = excluded.\($0)" }
+        .map { ["turnStartedAt", "turnDelivery", "turnByCue"].contains($0) ? "\($0) = COALESCE(excluded.\($0), piSessionStates.\($0))" : "\($0) = excluded.\($0)" }
         .joined(separator: ", ")
       let placeholders = SessionState.columns.map { _ in "?" }.joined(separator: ", ")
       try db.run(
@@ -186,6 +186,7 @@ public struct SessionSnapshot: Paced {
   public var failure: FailureKind?
   public var times: SessionTimes
   public var turnStartedAt: Date?
+  public var turnOpener: TurnOpener?
   public var launchToken: String?
   public var hosted = false
   public var subagents: [SubagentState] = []
@@ -201,10 +202,11 @@ public struct SessionSnapshot: Paced {
     self.times = times
   }
 
-  /// 这一刻说不上来、不等于没有的几项（为 nil 时沿用上一次写下的）：一轮的开始（中途重连的进程从头记起）、认领标识
+  /// 这一刻说不上来、不等于没有的几项（为 nil 时沿用上一次写下的）：一轮的开始与开它的那句（中途重连的进程从头记起）、认领标识
   /// （接着的进程不带）、上下文余量（换模型的间隙）、项目（工作目录此刻不在哪个项目里）。
   mutating func keepingUnknown(from previous: SessionSnapshot) {
     turnStartedAt = turnStartedAt ?? previous.turnStartedAt
+    turnOpener = turnOpener ?? previous.turnOpener
     launchToken = launchToken ?? previous.launchToken
     context = context ?? previous.context
     projectID = projectID ?? previous.projectID

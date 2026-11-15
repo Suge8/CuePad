@@ -55,6 +55,9 @@ nonisolated final class FakeExtension: @unchecked Sendable {
         var commands: [(connection: Int, line: Data)] = []
         var state = Data(#"{"kind":"idle"}"#.utf8)
         var turnSince: Int?
+        /// 同真扩展：交来的话（带投送 id 的 send）一收下就当落成了消息，它成了开轮的那句
+        var opener: [String: Any]? { openerData.map(FakeExtension.object) }
+        var openerData: Data?
     }
     private let shared = Mutex(Shared())
     private var source: DispatchSourceRead?
@@ -187,6 +190,14 @@ nonisolated final class FakeExtension: @unchecked Sendable {
     private func handle(line: Data, from index: Int) {
         guard let json = try? JSONSerialization.jsonObject(with: line) as? [String: Any] else { return }
         shared.withLock { $0.commands.append((index, line)) }
+        if json["t"] as? String == "send", let delivery = json["deliveryId"] as? String {
+            let opener = try! JSONSerialization.data(withJSONObject: ["delivery": delivery, "cue": json["cue"] as? Bool ?? false])
+            let state = shared.withLock { shared in
+                shared.openerData = opener
+                return Self.object(shared.state)
+            }
+            setState(state)
+        }
         guard let id = json["id"] as? String, var ack = onCommand(index, json) else { return }
         ack["t"] = "ack"
         ack["id"] = id
@@ -197,7 +208,9 @@ nonisolated final class FakeExtension: @unchecked Sendable {
         var msg: [String: Any] = [
             "t": "hello", "extensionVersion": options.extensionVersion,
             "sessionId": sessionID, "pid": Int(pid), "cwd": options.cwd, "hosted": true,
-            "state": Self.object(shared.withLock { $0.state }).merging(["since": Self.nowMillis, "turnSince": shared.withLock { $0.turnSince } ?? NSNull()]) { a, _ in a },
+            "state": Self.object(shared.withLock { $0.state }).merging([
+                "since": Self.nowMillis, "turnSince": shared.withLock { $0.turnSince } ?? NSNull(), "opener": shared.withLock { $0.opener } ?? NSNull(),
+            ]) { a, _ in a },
         ]
         msg["sessionFile"] = options.sessionFile ?? NSNull()
         msg["model"] = options.model?.json ?? NSNull()
@@ -216,7 +229,7 @@ nonisolated final class FakeExtension: @unchecked Sendable {
 
     static var nowMillis: Int { Int(Date().timeIntervalSince1970 * 1000) }
 
-    private static func object(_ data: Data) -> [String: Any] {
+    fileprivate static func object(_ data: Data) -> [String: Any] {
         (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
     }
 
@@ -251,6 +264,7 @@ nonisolated final class FakeExtension: @unchecked Sendable {
             return shared.turnSince
         }
         s["turnSince"] = turnSince ?? NSNull()
+        s["opener"] = shared.withLock { $0.opener } ?? NSNull()
         let data = try! JSONSerialization.data(withJSONObject: s)
         shared.withLock { $0.state = data }
         broadcast(["t": "state", "state": s])

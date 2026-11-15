@@ -11,8 +11,8 @@ public protocol SessionLink: AnyObject {
     /// 以这家的提示词模板或技能开头的由它展开（Pi 的桥扩展、Codex 的 `skill:`），投送请求 id 随展开后的那条消息进会话。
     func send(_ message: SessionMessage, in id: Session.ID) async throws
     /// 斜杠命令：不开轮的照原样执行，返回即这家执行了它；会开一轮的（带话的模式切换、OpenCode 的模板）与 `send` 同一规则。
-    /// `deliveryID` 是投送请求 id，收得下的（托管的 Claude Code）随命令交出、据它认这条命令的结果。
-    func command(_ line: String, deliveryID: String?, in id: Session.ID) async throws
+    /// `opener` 的投送 id 收得下的（托管的 Claude Code）随命令交出、据它认这条命令的结果；开了轮的，它就是开轮者。
+    func command(_ line: String, opener: TurnOpener?, in id: Session.ID) async throws
     /// 请会话退出：这一刻下桥，在跑的这一轮先停下再收进程（CuePad 起的进程见 `HostedProcesses`；Pi、OpenCode 由扩展、服务自己先停这一轮）。
     /// 受理即返回，下线经 `Bridge.detach` 报告。
     func end(_ id: Session.ID) async throws
@@ -34,7 +34,7 @@ public protocol SessionLink: AnyObject {
 /// 这家没实现的操作缺省拒绝。
 extension SessionLink {
     public func send(_ message: SessionMessage, in id: Session.ID) async throws { throw BridgeError.unsupported }
-    public func command(_ line: String, deliveryID: String?, in id: Session.ID) async throws { throw BridgeError.unsupported }
+    public func command(_ line: String, opener: TurnOpener?, in id: Session.ID) async throws { throw BridgeError.unsupported }
     public func end(_ id: Session.ID) async throws { throw BridgeError.unsupported }
     public func abort(_ id: Session.ID) async throws { throw BridgeError.unsupported }
     public func abort(_ id: Session.ID, deliveryID: String, turnStartedAt: Int64) async throws { throw BridgeError.rejected("unsupported_stop_turn") }

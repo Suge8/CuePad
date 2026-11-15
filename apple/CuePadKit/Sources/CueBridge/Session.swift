@@ -29,6 +29,9 @@ public struct Session: Identifiable, Sendable, Equatable {
     public internal(set) var turnStartedAt: Date? = nil
     /// Cue 与语音拿来接管、停下这一轮的凭据（同步记录里的毫秒）还是不是这一轮：核对只在这里。接入记的开始有亚毫秒，按存的毫秒比，不按任意容差放宽。
     public func isCurrentTurn(_ startedAt: Int64) -> Bool { turnStartedAt?.stored == startedAt }
+    /// 开这一轮的那句（`SessionState.turnOpener`）：Pi 由扩展在那句落成消息时报，其余由接入在交出那一刻记（`HostedTurns.send`）。
+    /// 进程或 CuePad 重启后从头记起，交出下一句前为 nil，记录上留着之前的。
+    public internal(set) var turnOpener: TurnOpener? = nil
     /// `/name` 设的会话名
     public internal(set) var name: String? = nil
     /// 只留开头 `SessionName.firstMessageLimit` 个字：各家接入给原文即可，截在这里。
@@ -74,6 +77,7 @@ public struct Session: Identifiable, Sendable, Equatable {
         snapshot.projectID = projectID
         snapshot.question = question
         snapshot.turnStartedAt = turnStartedAt
+        snapshot.turnOpener = turnOpener
         snapshot.launchToken = launchToken
         snapshot.hosted = true
         snapshot.subagents = subagents
@@ -162,10 +166,10 @@ public struct MessageImage: Sendable, Equatable {
     }
 }
 
-/// Cue 的发送只获准接管已确认属于它的那一轮；实际派发时重新核对，不把旧快照当打断许可。
+/// Cue 的话只能插进它自己开的那一轮（`Session.turnOpener`）：桥交出前、Pi 扩展交给 Pi 前各按此刻的开轮者核对一次。
 public enum SendPolicy: Sendable, Equatable {
     case user
-    case cue(deliveryID: String?, turnStartedAt: Date?)
+    case cue
 }
 
 public struct SessionMessage: Sendable, Equatable {
@@ -180,6 +184,9 @@ public struct SessionMessage: Sendable, Equatable {
         self.deliveryID = deliveryID
         self.policy = policy
     }
+
+    /// 这句开轮时记下的开轮者；不带投送 id 的（测试、演示直接发的）不改记录上的。
+    var opener: TurnOpener? { deliveryID.flatMap(UUID.init(uuidString:)).map { TurnOpener(delivery: $0, cue: policy == .cue) } }
 }
 
 public enum BridgeError: Error, Equatable {

@@ -18,7 +18,7 @@ extension OpenCodeRuntime {
     /// 原生的 `interrupt?resume=true` 是“先收话再打断”：两次请求之间这一轮到了步骤边界就会把话读进将被停下的这一轮，不用。
     public func send(_ message: SessionMessage, in id: Session.ID) async throws {
         let (connection, tracked, sessionID) = try await live(id)
-        try await tracked.turns.send(stop: { [self] in try await interrupt(sessionID, connection) }) {
+        try await tracked.turns.send(opener: message.opener, stop: { [self] in try await interrupt(sessionID, connection) }) {
             try await prompt(message, sessionID, connection)
         }
     }
@@ -34,7 +34,7 @@ extension OpenCodeRuntime {
     }
 
     /// `/compact` 不开轮，照它的缺省（下一个步骤边界压缩）；其余命令展开成这一轮的提示词，与 `send` 同一规则。
-    public func command(_ line: String, deliveryID _: String?, in id: Session.ID) async throws {
+    public func command(_ line: String, opener: TurnOpener?, in id: Session.ID) async throws {
         let (connection, tracked, sessionID) = try await live(id)
         let slash = try SlashLine(line)
         let name = slash.name, arguments = slash.argument
@@ -44,7 +44,7 @@ extension OpenCodeRuntime {
             return
         }
         struct Command: Encodable { var name: String; var text: String }
-        try await tracked.turns.send(stop: { [self] in try await interrupt(sessionID, connection) }) {
+        try await tracked.turns.send(opener: opener, stop: { [self] in try await interrupt(sessionID, connection) }) {
             do {
                 try await connection.client.call("POST", "/api/session/\(sessionID)/command", body: Command(name: name, text: arguments))
             } catch let error as OpenCodeAPIError {

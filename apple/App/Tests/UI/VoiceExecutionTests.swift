@@ -76,8 +76,7 @@ struct VoiceExecutionTests {
         session.setState(["kind": "thinking"])
         try await eventually("本回合归属已确认") { fixture.voiceRecord.executions.first?.state.canStop == true }
         let earlier = try await fixture.stopAction(session.sessionID)
-        let file = try #require(rig.app.host.sessionFiles[session.sessionID])
-        try file.user("我在终端另开的工作")
+        _ = try await rig.store.speak("我另开的工作", to: session.sessionID, host: TestApp.hostID)  // 他从回复框开了新的一轮
         try await eventually("新回合不再属于语音") { fixture.voiceRecord.executions.isEmpty }
         try await eventually("详情不再给停止钮") { try fixture.details().executions.allSatisfy { $0.stop == nil } }
         #expect(try await fixture.workspace.performVoice(earlier) == .rejected(reason: .turnChanged))

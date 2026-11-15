@@ -143,6 +143,7 @@ final class PiConnections {
                 cwd: URL(filePath: hello.cwd, directoryHint: .isDirectory), state: work.state, detail: work.detail,
                 errorMessage: hello.state.errorMessage, stateSince: hello.state.sinceDate, busySince: hello.state.busySinceDate)
             session.turnStartedAt = hello.state.turnSinceDate
+            session.turnOpener = hello.state.turnOpener
             hello.info.apply(to: &session)
             session.launchToken = hello.launchToken
             link.extensionVersion = hello.extensionVersion
@@ -170,6 +171,7 @@ final class PiConnections {
                 session.detail = work.detail
                 session.errorMessage = wire.errorMessage
                 session.turnStartedAt = wire.turnSinceDate
+                session.turnOpener = wire.turnOpener
             }
         case .info(let info):
             guard let id = link.id else { throw HandlingError.messageBeforeHello }

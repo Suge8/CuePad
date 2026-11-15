@@ -8,7 +8,7 @@ extension ACPSession: SessionLink {
         guard !message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !message.images.isEmpty else {
             throw BridgeError.rejected("empty")
         }
-        try await turns.send(stop: { [self] in try cancel() }) {
+        try await turns.send(opener: message.opener, stop: { [self] in try cancel() }) {
             try prompt(ACPContent.prompt(text: message.text, images: message.images), deliveryID: message.deliveryID)
         }
         if !message.text.isEmpty, let id {
@@ -16,8 +16,8 @@ extension ACPSession: SessionLink {
         }
     }
 
-    func command(_ line: String, deliveryID _: String?, in _: Session.ID) async throws {
-        try await turns.send(stop: { [self] in try cancel() }) {
+    func command(_ line: String, opener: TurnOpener?, in _: Session.ID) async throws {
+        try await turns.send(opener: opener, stop: { [self] in try cancel() }) {
             try prompt(ACPContent.prompt(text: line, images: []))
         }
     }

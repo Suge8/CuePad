@@ -6,7 +6,7 @@ import Foundation
 extension CodexRuntime {
     public func send(_ message: SessionMessage, in id: Session.ID) async throws {
         guard let session = tracked[id] else { throw BridgeError.unknownSession(id) }
-        try await deliver(Self.input(message.text, images: message.images, skills: session.skills), clientID: CodexHistory.clientID(for: message.deliveryID), to: session)
+        try await deliver(Self.input(message.text, images: message.images, skills: session.skills), clientID: CodexHistory.clientID(for: message.deliveryID), opener: message.opener, to: session)
     }
 
     /// 以这个会话的 `/skill:名字` 开头的是用这个技能说的——技能条目在前、其余的话在后（同在 Codex 里选了技能再打字），投送请求 id 照样随这条消息进会话文件；名字不是它的技能的照原文。
@@ -21,13 +21,13 @@ extension CodexRuntime {
 
     /// 以这句开新一轮（`HostedTurns.send`）：停下等这一轮真的中止了才回（`CodexDriver.interrupt`），
     /// 所以紧接着的 `turn/start` 开的是新一轮——它碰上还在跑的一轮会变成插话（压缩那一轮则拒收）。
-    func deliver(_ input: [JSONValue], clientID: String, to session: Tracked) async throws {
-        try await session.turns.send(stop: { [self] in try await interrupt(session) }) {
+    func deliver(_ input: [JSONValue], clientID: String, opener: TurnOpener?, to session: Tracked) async throws {
+        try await session.turns.send(opener: opener, stop: { [self] in try await interrupt(session) }) {
             try await turnStart(session, input, options: ["clientUserMessageId": .string(clientID)])
         }
     }
 
-    public func command(_ line: String, deliveryID _: String?, in id: Session.ID) async throws {
+    public func command(_ line: String, opener: TurnOpener?, in id: Session.ID) async throws {
         guard let session = tracked[id] else { throw BridgeError.unknownSession(id) }
         let slash = try SlashLine(line)
         let name = slash.name, argument = slash.argument
@@ -43,10 +43,10 @@ extension CodexRuntime {
         case "plan", "default":
             try await collaborate(name == "plan" ? "plan" : "default", in: session)
             if !argument.isEmpty {
-                try await deliver(CodexRPC.input(text: argument, images: []), clientID: CodexHistory.clientID(for: nil), to: session)
+                try await deliver(CodexRPC.input(text: argument, images: []), clientID: CodexHistory.clientID(for: nil), opener: opener, to: session)
             }
         case _ where name.hasPrefix("skill:"):
-            try await deliver(Self.input(line, images: [], skills: session.skills), clientID: CodexHistory.clientID(for: nil), to: session)
+            try await deliver(Self.input(line, images: [], skills: session.skills), clientID: CodexHistory.clientID(for: nil), opener: opener, to: session)
         default:
             throw BridgeError.rejected("unknown_command")
         }

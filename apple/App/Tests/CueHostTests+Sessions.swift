@@ -69,11 +69,12 @@ extension CueHostTests {
         func woke() -> Int { rig.rounds.filter(\.wake.isSessionActivity).count }
         try await eventually("Cue 开的那一轮停下叫醒它，它做完") { woke() == 1 && rig.rounds.allSatisfy { $0.finishedAt != nil } }
         let session = try #require(rig.app.host.extensions.values.first)
-        let file = try #require(rig.app.host.sessionFiles[session.sessionID])
         // 远处排一个定时：对账后睡下，`reconciled` 才等得到
         _ = try await rig.store.noteCueLine("下周的事", source: .you, remindAt: rig.clock.now.addingTimeInterval(7 * 86_400))
 
-        try file.user("顺便看下注册页", at: .now - 15 * 60)  // 早过了"刚说过话"：停下时他不在场也不叫醒
+        // 他从回复框说的这句开了这一轮：停下的状态比这句读进对话先到库里，也认得出是他的
+        let his = try await rig.store.speak("顺便看下注册页", to: session.sessionID, host: TestApp.hostID)
+        try await eventually("他那句交给了会话") { session.messages.contains { $0.deliveryID == his.id.uuidString } }
         session.setState(["kind": "thinking"])
         try await eventually("在干活写进库") { try await rig.store.sessions(matching: session.sessionID).first?.state.isWorking == true }
         switch stop {

@@ -31,6 +31,8 @@ public struct CueChange: Equatable, Sendable {
 extension SessionState {
   /// 停下等人接手（`WorkState.isStopped`），歇着的要读到这一轮的回答（`answered`）。等子代理停住时会话还在做，不算。
   var atStop: Bool { runtimeState.known?.isStopped == true && (runtimeState != .known(.settled) || answered) }
+  /// 他从回复框说的那句开的这一轮：停下当场留给他回、不叫醒 Cue，Cue 也不插嘴（`checkCueCanSpeak`）。
+  var hisTurn: Bool { turnOpener?.cue == false }
 }
 
 /// 一轮做完时，会话的动静从醒来时读到的序号算起（这一轮里写进来的下次还在），完成从这一轮结束时算起（这一轮里多是 Cue 自己做完的）。
