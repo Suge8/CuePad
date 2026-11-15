@@ -7,7 +7,9 @@
     xc.sh perf ab ../CuePad ./ 4 idle mac 1 30                           静置（每次 1 个进程、量 30 秒）
     xc.sh perf ab ../CuePad ./ 5 launch mac 1                            冷启动
   <次数> 是每轮里每个检出自己跑几遍；轮与轮交替先后（旧新、新旧……），先后顺序的系统偏差互相抵消。
-  每个检出用自己的 xc.sh 跑（排队、锁、构建照它的规则），结果行读它留在 apple/.derived-perf/Build 的 idle.jsonl、launch.jsonl、interact.jsonl。
+  每个检出用自己的 xc.sh 构建（build-perf），两边都用新检出的测量脚本量（CUEPAD_PERF_APP）：测量脚本自己的开销与口径一变，
+  各量各的就会把它算成 App 的变化。代价是新脚本要读得懂旧 App 的测量输出，读不懂就当场失败、不出表。
+  结果行在各检出的 apple/.derived-perf/Build 的 idle.jsonl、launch.jsonl、interact.jsonl。
   以指令数与唤醒为准（机器忙时墙钟、CPU 时间、能耗会被别的进程拖歪），每轮行里带当时的 1 分钟负载；表里每格是中位数与各次的范围，两边范围重叠的标「≈」，别当成改善或退步。
   带 -CuePadForeground YES 的前台测量，交互超预算时 perf mac 以 1 退出，这里照样往下跑（预算判断看各轮自己的表，对比只看数）。
 每轮的完整输出与全部原始行在 /tmp/cuepad-perf-ab/<时刻>/。
@@ -22,8 +24,6 @@ from datetime import datetime
 
 OUT_ROOT = "/tmp/cuepad-perf-ab"
 ROWS = {"idle": "idle.jsonl", "launch": "launch.jsonl", "interact": "interact.jsonl"}
-# 旧检出（perf.py 之前的 perf-launch.sh）写的 launch.jsonl 每行带这个前缀：ab 的旧一侧常是那时的代码
-LAUNCH_PREFIX = "LAUNCH-ROW "
 # 主要看的指标（每轮行与表里先列、interact 只列这些）；idle 与 launch 的表里其余数值指标跟在后面
 PRIMARY = {
     "idle": ["instructionsM", "wakeupsPerSec", "cpuMs", "energyMJ"],
@@ -58,10 +58,11 @@ def commit(checkout):
     return head[:60] + ("（有未提交改动）" if dirty else "")
 
 
-def xc(checkout, args, log):
+def xc(checkout, args, log, env=None):
     started = time.monotonic()
     with open(log, "w") as out:
-        status = subprocess.run([f"{checkout}/apple/scripts/xc.sh", *args], stdout=out, stderr=subprocess.STDOUT).returncode
+        status = subprocess.run([f"{checkout}/apple/scripts/xc.sh", *args], stdout=out, stderr=subprocess.STDOUT,
+                                env=os.environ | (env or {})).returncode
     return status, time.monotonic() - started
 
 
@@ -74,7 +75,7 @@ def fail(checkout, log, status):
 def read_rows(checkout, kind):
     rows = []
     for line in open(f"{checkout}/apple/.derived-perf/Build/{ROWS[kind]}"):
-        line = line.removeprefix(LAUNCH_PREFIX).strip()
+        line = line.strip()
         if line:
             rows.append(json.loads(line))
     return rows
@@ -142,7 +143,8 @@ def main(argv):
     for i in range(rounds):
         for name in ("旧", "新") if i % 2 == 0 else ("新", "旧"):
             log = f"{out}/round{i + 1}-{name}.log"
-            status, seconds = xc(sides[name], ["perf", *args], log)
+            built = f"{sides[name]}/apple/.derived-perf/Build/Products/Release{'' if platform == 'mac' else '-iphonesimulator'}/CuePad.app"
+            status, seconds = xc(new, ["perf", *args], log, {"CUEPAD_PERF_APP": built})
             # 前台的单次交互超预算时 perf mac 以 1 退出，但表（含「超预算」）是量完才打的、行是全的；退出码 1 也可能是中途失败，要看到表
             overBudget = status == 1 and kind == "interact" and "超预算" in open(log).read()
             rows = read_rows(sides[name], kind) if status == 0 or overBudget else []
