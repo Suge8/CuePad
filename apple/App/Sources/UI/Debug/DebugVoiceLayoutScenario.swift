@@ -48,7 +48,7 @@ final class DebugVoiceLayoutScenario {
         }
     }
 
-    /// 执行器替代远端 Agent；种子包含真实的请求→工具→投送→当前用户消息归属链。
+    /// 执行器替代远端 Agent；种子包含真实的请求→工具→投送→开轮的那句归属链。
     private static func seedExecution(_ store: CueStore, request: UUID) async throws {
         let host = "demo-mac", session = "voice-layout-owned"
         try await DebugScene.keepDemoPresence(store)
@@ -56,7 +56,8 @@ final class DebugVoiceLayoutScenario {
         let title = String(localized: "检查发布事项 \(1)", table: "Demo")
         try await recorder.update(sessionID: session, state: .thinking, title: title, directory: "demo", projectID: Project.defaultID)
         guard let target = try await store.sessionItems(sessionIDs: [session])[session]?.state else { throw CueStoreError.notFound }
-        let delivery = try await store.requestDelivery(title, to: target.target, on: host)
+        let delivery = try await store.requestDelivery(title, to: target.target, on: host, cue: true)
+        try await recorder.update(sessionID: session, state: .thinking, turnOpener: TurnOpener(delivery: delivery.id, cue: true))
         var tool = ChatMessage.Tools.Item(kind: .command, target: title)
         tool.cueRequests = [request]
         tool.deliveries = [delivery.id]
