@@ -280,21 +280,11 @@ extension CodexRuntime {
             var last: CodexHistory.LastTurn?
             if delivered, let file { last = await CodexHistory.lastTurn(in: file) }
             guard tracked[session.id] === session, !session.turns.facts.running, session.turns.facts.inFlight == batch else { return }
-            guard delivered, last?.plan != true, last?.interrupted != true else {
-                session.unread = [:]
-                session.turns.facts.inFlight = []
-                return publish(session)
-            }
-            do {
-                try await turnStart(session, [])
-            } catch {
-                // 没开成：这一批不再等，带着原因歇下
-                guard tracked[session.id] === session, !session.turns.facts.running else { return }
-                session.unread = [:]
-                session.turns.facts.inFlight = []
-                session.turns.facts.endTurn(failure: error.localizedDescription)
-                publish(session)
-            }
+            if delivered, last?.plan != true, last?.interrupted != true, await session.turns.open({ try await turnStart(session, []) }) { return }
+            // 不补，或没开成（已带着原因歇下）：这一批不再等
+            session.unread = [:]
+            session.turns.facts.inFlight = []
+            publish(session)
         }
     }
 }
