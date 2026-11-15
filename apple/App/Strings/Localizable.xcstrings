@@ -16300,6 +16300,34 @@
         }
       }
     },
+    "有 %lld 件等你" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld thing needs you"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld things need you"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "有 %lld 件等你"
+          }
+        }
+      }
+    },
     "有 %lld 张图没读出来，没有加上" : {
       "localizations" : {
         "en" : {
@@ -19572,6 +19600,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "看图：%@"
+          }
+        }
+      }
+    },
+    "看对话" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show Chat"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "看对话"
           }
         }
       }

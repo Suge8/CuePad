@@ -7,6 +7,7 @@ import SwiftUI
 /// Cue 自己醒来的几轮每轮一行旁注（`CueNoteLog`），末尾是它此刻在做什么（`CueEnding`：此刻在做的只写这里）。
 /// 拍板卡（`CueWaitDock`）里是 Cue 的提问与会话在问的，对话里不另挂；通话在输入框里（`CueComposer`），Mac 通话中通话条顶替输入框（`CueVoicePanel`）。
 /// 首次见面与启用只有一处（`CueWelcome`）：还没说过话时在正中，说过话后停用了在输入框正上方。
+/// 说过话、启用着时，新来访先是舞台（`CueStage`）占着对话区，收起才排对话：舞台开着时对话不排，新消息就不会被当成读过（`CueEndProbe`）。
 /// 对话第一帧就排好（`observing` 当场读），停在最新处；有新消息时从第一条读起，还没读的气泡旁一颗小点（`CueViewing`）。
 /// Cue 运行在别的设备上、本机正在和 iCloud 对时（`AppServices.isCatchingUp(on:)`）页头写"正在同步"，这期间到的话先不滑上来，
 /// 对完一次滑上来（`ChatColumn` 的 `holding`）：对完才算开始看，有新消息就到第一条新消息、从它读起，没有才到最新处（`CueViewing`）。
@@ -31,6 +32,10 @@ struct CuePage: View {
     @State private var dockedCard: String?
     /// 末尾在屏上的新消息（`CueViewing`）。
     @State private var seen: [UUID: Date] = [:]
+    /// 舞台开着（`CueStage`）：页出现时与新来访时（`CueViewing`）按上次离开的时刻定，输入框聚焦、发出、往下拉、点"看对话"收。
+    /// 还没定（nil）时对话区空这一帧：先排一帧对话再换成舞台是一闪。
+    @State private var stage: Bool?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     static let readingWidth = Spacing.reading
     static let inset = Spacing.page
@@ -45,7 +50,8 @@ struct CuePage: View {
             .previewPresenter($opened, reply: .cue)
             .panel(isPresented: Bindable(cue).showsMemory) { CueMemoryPage() }
             .panel(isPresented: Bindable(cue).showsSchedules) { CueSchedulePage() }
-            .modifier(CueViewing(thread: thread, catchingUp: catchingUp, seen: $seen, follow: $follow))
+            .modifier(CueViewing(thread: thread, catchingUp: catchingUp, seen: $seen, follow: $follow) { stage = true })
+            .onAppear { if stage == nil { stage = DebugHooks.preset.cueStage ?? CueStage.opens(left: services.settings.cueLeft, at: .now) } }
             .onChange(of: thread.flatMap(card), initial: true) { dockedCard = $1 }
             .onChange(of: thread != nil, initial: true) { _, loaded in
                 guard loaded else { return }
@@ -66,10 +72,10 @@ struct CuePage: View {
         .background { if grounded { palette.desk } }
     }
     #else
-    /// 名牌保留整页坐标；仅对话与拍板卡给常驻会话条让位。
+    /// 名牌保留整页坐标；仅对话与拍板卡给常驻会话条让位，舞台的天空铺到会话条底下（`CueStage.leading`）。
     private var page: some View {
         FloatingReply {
-            chat.padding(.leading, railInset)
+            chat
         } reply: {
             bottom()
                 .padding(.horizontal, Spacing.group)
@@ -77,21 +83,32 @@ struct CuePage: View {
         }
         .scrollDismissesKeyboard(.interactively)
         // iPad 右边那一栏：名牌比栏窄，对话到名牌下沿淡出，不从名牌两侧露出来（`Bars`）；手机的名牌铺满整行，照沉浸式
-        .fadesUnderHead(headerHost == .panel)
-        .floatingHeader(.verbatim(cue.name), height: CueHeader.height, hasPanel: true, center: { CueHeader() }) { EmptyView() }
+        .fadesUnderHead(headerHost == .panel && !staged)
+        .floatingHeader(.verbatim(cue.name), height: CueHeader.height, hasPanel: true, center: { CueHeader(staged: staged) }) { EmptyView() }
     }
     #endif
 
     /// 对话自己离左边 `inset`：让到字离竖条一个 `item`。
     private var railInset: CGFloat { workspace.layout == .narrow ? SessionRail.phoneWidth + Spacing.item - Self.inset : 0 }
 
+    private var staged: Bool { stage == true && cue.canHear && thread?.rows.isEmpty == false }
+
     /// 读不出来时也排一个真的视图：读库的订阅挂在页上，等视图出现才启动。
     @ViewBuilder private var chat: some View {
         Group {
-            if let thread, !thread.rows.isEmpty {
-                conversation(thread)
+            if staged {
+                CueStage(beat: cue.beat, now: cue.now, leading: railInset > 0 ? railInset + Self.inset : 0, close: closeStage)
+                    .transition(.asymmetric(insertion: .opacity, removal: .opacity.combined(with: .offset(y: -Spacing.vacant))))
+            } else if let thread, !thread.rows.isEmpty {
+                if stage != nil {
+                    conversation(thread)
+                        .padding(.leading, railInset)
+                        .transition(.opacity.combined(with: .offset(y: Motion.Turn.distance)))
+                } else {
+                    Color.clear
+                }
             } else if thread != nil {
-                CueWelcomeChat()
+                CueWelcomeChat().padding(.leading, railInset)
             } else {
                 Color.clear
             }
@@ -159,12 +176,20 @@ struct CuePage: View {
             // 宽屏没启用时不放输入框：主区底部已有记下灵感的那一条（`CaptureSlot`），一屏只留一个；这一栏只剩启用那一张（`CueWelcome`）
             // Mac 通话中通话条原地顶替输入框（同手机，`CueVoiceView`），挂断了输入框回来、草稿还在
             if !calling, cue.canHear || workspace.layout == .narrow {
-                CueComposer(style: .page, takesFocusRequests: true) { follow.sent() }
+                CueComposer(style: .page, takesFocusRequests: true, focusing: closeStage) {
+                    follow.sent()
+                    closeStage()
+                }
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
         .animation(Motion.fade, value: cue.canHear)
         .animation(Motion.fade, value: calling)
+    }
+
+    private func closeStage() {
+        guard stage == true else { return }
+        withAnimation(Motion.fading(Motion.travel, reduceMotion: reduceMotion)) { stage = false }
     }
 
     private var calling: Bool {

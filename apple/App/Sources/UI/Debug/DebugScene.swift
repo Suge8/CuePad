@@ -67,6 +67,7 @@ extension DebugHooks.Preset {
         scheduleOpen = args.layoutOpts.scheduleOpen
         mergePreview = args.layoutOpts.mergePreview
         cuePanelOpen = args.layoutOpts.cuePanel
+        cueStage = args.cueOpts.stage.map { $0 == "open" }
         #if os(iOS)
         alertStatus = DebugScene.alertStatus
         // sessions、cuerows 画面看会话行：手机的会话列表在搜索页的会话一栏

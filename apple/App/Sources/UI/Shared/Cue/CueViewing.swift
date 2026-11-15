@@ -7,6 +7,8 @@ struct CueViewing: ViewModifier {
     let catchingUp: Bool
     @Binding var seen: [UUID: Date]
     @Binding var follow: ChatFollow
+    /// 离开够久（`CueStage.opens`）又回来看：页把舞台重开。离开的时刻记在本机（`AppSettings.cueLeft`），各台设备各算各的来访。
+    let revisit: () -> Void
     @Environment(AppServices.self) private var services
     @Environment(Workspace.self) private var workspace
     @Environment(\.pageActive) private var active
@@ -32,9 +34,17 @@ struct CueViewing: ViewModifier {
             .onDisappear {
                 appeared = false
                 services.viewer.showCue(false, by: token)
+                services.settings.cueLeft = .now
             }
-            .onChange(of: watching, initial: true) { _, on in
+            .onChange(of: watching, initial: true) { was, on in
                 services.viewer.showCue(on, by: token)
+                if was != on {
+                    if !on {
+                        services.settings.cueLeft = .now
+                    } else if CueStage.opens(left: services.settings.cueLeft, at: .now) {
+                        revisit()
+                    }
+                }
                 guard on else { return }
                 follow.oweLanding()
                 land()

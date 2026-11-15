@@ -37,6 +37,7 @@ final class AppSettings {
         static let currentProject = "currentProject"
         static let railExpanded = "railExpanded"
         static let cueOpen = "cueOpen"
+        static let cueLeft = "cueLeft"
         static let sounds = AlertTone.enabledKey
     }
 
@@ -86,6 +87,8 @@ final class AppSettings {
     var railExpanded: Bool { didSet { defaults.set(railExpanded, forKey: Key.railExpanded) } }
     /// 窗口放不下时只改呈现，不写这个值。
     var cueOpen: Bool { didSet { defaults.set(cueOpen, forKey: Key.cueOpen) } }
+    /// 上次离开 Cue 页的时刻（本机）：回来时离开够久就重开舞台（`CueStage.opens`）。没有界面读它，不进观察。
+    @ObservationIgnored var cueLeft: Date? { didSet { defaults.set(cueLeft, forKey: Key.cueLeft) } }
 
     /// 按 sessionID；只留最近看的 `seenLimit` 个。
     private(set) var sessionSeen: [String: Date] { didSet { defaults.set(sessionSeen, forKey: Key.sessionSeen) } }
@@ -239,6 +242,7 @@ final class AppSettings {
         navigationPane = string(Key.navigationPane).flatMap(NavigationPane.init(rawValue:)) ?? .projects
         railExpanded = defaults.object(forKey: Key.railExpanded) as? Bool ?? true
         cueOpen = defaults.object(forKey: Key.cueOpen) as? Bool ?? true
+        cueLeft = defaults.object(forKey: Key.cueLeft) as? Date
         sessionSeen = defaults.dictionary(forKey: Key.sessionSeen) as? [String: Date] ?? [:]
         replyDrafts = (Self.decoded([UUID: SavedDraft].self, Key.replyDrafts, in: defaults) ?? [:]).mapValues(ReplyDraftSlot.init)
         // 启动参数（演示截图）可以把起点挪到很早，让演示库里停下的会话都算有新回复
