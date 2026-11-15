@@ -71,9 +71,9 @@ nonisolated struct VoiceReceivedSignal: Equatable, Sendable {
 nonisolated enum VoiceSignalFormat {
     /// 中转认的那一层：登记、解析与信令外层（路由头）。中转据它决定登记不登记，升它要先部署中转，所以帧里装什么与它无关。
     static let version: UInt8 = 1
-    /// 两端 App 之间的信令版本，只在拨号（`VoiceOffer`）与接听（`VoiceAnswer`）里互报，中转不看。
-    /// Mac 的投影也带着它。不同就各自说"请更新"（`VoiceIssue.relayUnsupported`）：Mac 回失败投影；手机挂断（`otherVersion`），
-    /// 包括接听前就收到的投影版本不同或解不开（`VoiceRelayEvent.unreadable`）。没报的是 1（分页帧还在的那一版）；3 起投影不带执行列表、没有停止命令。
+    /// 两端 App 之间的信令版本，只在拨号（`VoiceOffer`）与接听（`VoiceAnswer`）里互报，中转不看。手机与 Mac 不是同一时刻更新的（TestFlight 与 Sparkle 各自装），
+    /// 版本不同就各自说"请更新"（`VoiceIssue.relayUnsupported`）：Mac 回失败投影；手机挂断（`otherVersion`），帧解不开（`VoiceRelayEvent.unreadable`）同样处理。
+    /// 帧的形状或含义改了就升。
     static let callVersion: UInt8 = 3
     static let maximumWireBytes = 64 * 1024
     static let maximumPlaintextBytes = 32 * 1024
