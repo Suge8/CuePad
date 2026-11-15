@@ -2,7 +2,7 @@ import Foundation
 
 /// Relay 扩展的 wire body，统一封装在 {"t":"voice","body":<本枚举的 Codable JSON>}。
 /// 带关联值的 enum 使用 Swift Codable 的带名字形状，例如 {"resolve":{"request":"UUID","device":{"rawValue":"..."}}}。
-/// 原 auth/ring/ping 仍走旧协议：服务器在 ready 附加的 voiceVersion 与 `VoiceSignalFormat.version` 相同才 register；不同或没有则只保留门铃。
+/// auth/ring/ping 走门铃协议：服务器在 ready 附加的 voiceVersion 与 `VoiceSignalFormat.version` 相同才 register；不同或没有则只保留门铃。
 /// register 仍用现有房间签名密钥：签 UTF-8 registrationContext + LF，再接 VoiceRegistrationClaim 的 sortedKeys/withoutEscapingSlashes JSON。
 /// 服务器验证当前 socket 的 room/challenge 及客户端新 lease 的签名后原样登记；同设备替换必须先使旧租约失效并通知观察者。
 /// registered 必须回显 claim 的 device/lease，客户端不得采用服务器给出的其他值；本机每次连接都生成新 UUID，即使 challenge 被重放。

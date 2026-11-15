@@ -207,7 +207,7 @@ nonisolated final class FakeExtension: @unchecked Sendable {
     private func hello() -> [String: Any] {
         var msg: [String: Any] = [
             "t": "hello", "extensionVersion": options.extensionVersion,
-            "sessionId": sessionID, "pid": Int(pid), "cwd": options.cwd, "hosted": true,
+            "sessionId": sessionID, "pid": Int(pid), "cwd": options.cwd,
             "state": Self.object(shared.withLock { $0.state }).merging([
                 "since": Self.nowMillis, "turnSince": shared.withLock { $0.turnSince } ?? NSNull(), "opener": shared.withLock { $0.opener } ?? NSNull(),
             ]) { a, _ in a },

@@ -18,7 +18,7 @@ export const IS_HOSTED = Number.isFinite(HOSTED_IDLE_SECONDS) && HOSTED_IDLE_SEC
 
 /** 重新载入扩展时交给下一个实例的：重新载入只换扩展实例，会话与进程都不变，歇下的结果（做完、出错）、这一轮的开始与粗状态的起点照旧
  * （CuePad 照收扩展报的起点；不带起点的话，载入后歇着时压缩完会退回载入那一刻）。同 `HOSTED_KEY` 存在进程里，新载入的模块也读得到。 */
-export type Carried = { settled: State | null; outcome: State; turnSince: number | null; opener?: Opener | null; clock: Clock };
+export type Carried = { settled: State | null; outcome: State; turnSince: number | null; opener: Opener | null; clock: Clock };
 const CARRIED_KEY = Symbol.for("cuepad.reloadedSessions");
 const carriedScope = globalThis as { [CARRIED_KEY]?: Map<string, Carried> };
 const carried = (carriedScope[CARRIED_KEY] ??= new Map());

@@ -136,7 +136,6 @@ final class PiConnections {
         case .hello(let hello):
             guard link.id == nil else { throw HandlingError.duplicateHello }
             guard "\(hello.sessionId).\(hello.pid)" == name else { throw HandlingError.nameMismatch }
-            guard hello.hosted else { throw HandlingError.notHosted }
             guard let work = hello.state.work else { throw HandlingError.unknownState(hello.state.kind) }
             var session = Session(
                 id: name, sessionID: hello.sessionId, agent: .pi, sessionFile: hello.sessionFile.map { URL(filePath: $0) }, pid: hello.pid,
@@ -146,21 +145,18 @@ final class PiConnections {
             session.turnOpener = hello.state.turnOpener
             hello.info.apply(to: &session)
             session.launchToken = hello.launchToken
-            link.extensionVersion = hello.extensionVersion
             appear(session, on: link)
-            link.offerUpgrade()
+            link.offerUpgrade(from: hello.extensionVersion)
         case .upgrading(let hello):
             guard link.id == nil else { throw HandlingError.duplicateHello }
             guard "\(hello.sessionId).\(hello.pid)" == name else { throw HandlingError.nameMismatch }
-            guard hello.hosted else { throw HandlingError.notHosted }
             var session = Session(
                 id: name, sessionID: hello.sessionId, agent: .pi, sessionFile: hello.sessionFile.map { URL(filePath: $0) }, pid: hello.pid, cwd: URL(filePath: hello.cwd, directoryHint: .isDirectory),
                 state: .settled, upgrading: true, stateSince: Date())
             session.name = hello.name
             session.firstMessage = hello.firstMessage
-            link.extensionVersion = hello.extensionVersion
             appear(session, on: link)
-            link.offerUpgrade()
+            link.offerUpgrade(from: hello.extensionVersion)
         case .state(let wire):
             guard let id = link.id else { throw HandlingError.messageBeforeHello }
             guard let work = wire.work else { throw HandlingError.unknownState(wire.kind) }
@@ -191,8 +187,6 @@ final class PiConnections {
 
     private enum HandlingError: Error {
         case duplicateHello, nameMismatch, unknownState(String), messageBeforeHello
-        /// 旧版装进 Pi 扩展目录的那份在终端里开的 pi 里也加载、也来连：CuePad 只管它托管的会话
-        case notHosted
     }
 
     private func appear(_ session: Session, on link: PiConnection) {

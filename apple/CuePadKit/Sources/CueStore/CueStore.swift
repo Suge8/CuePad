@@ -45,7 +45,7 @@ public actor CueStore {
       at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
     let connection = try SQLite(path: url.path)
     try connection.exec("PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL")
-    if try Self.userVersion(connection) != Schema.version { try Self.migrate(connection, location) }
+    if try Self.userVersion(connection) != Schema.version { try Self.migrate(connection) }
     try connection.exec(Self.guards)
     try connection.exec(Self.taskSessionEvents)
     let queue = DispatchSerialQueue(label: "CueStore", qos: .userInitiated)
@@ -74,24 +74,19 @@ public actor CueStore {
 
   /// 新建或升级到当前结构。版本在写锁里重读：别的进程（App 与命令行同时打开旧库）可能在这一进程等锁时已经升完，
   /// 按等锁前读到的旧版本重跑会在"加列、建表"上报重复而打不开。
-  private static func migrate(_ connection: SQLite, _ location: LibraryLocation) throws {
-    let (upgraded, afterCommit) = try connection.transaction { () -> (Bool, [Schema.Upgrade.AfterCommit]) in
+  private static func migrate(_ connection: SQLite) throws {
+    _ = try connection.transaction {
       let version = try userVersion(connection)
-      if version == Schema.version { return (false, []) }
+      if version == Schema.version { return }
       if version == 0 {
         try connection.exec(Schema.create)
-        try connection.exec("PRAGMA user_version = \(Schema.version)")
-        return (false, [])
+      } else {
+        if version < Schema.baseVersion { throw CueStoreError.schemaTooOld(version) }
+        if version > Schema.version { throw CueStoreError.unsupportedSchemaVersion(version) }
+        for step in Schema.upgrades[(version - Schema.baseVersion)...] { try connection.exec(step) }
       }
-      if version < Schema.baseVersion { throw CueStoreError.schemaTooOld(version) }
-      if version > Schema.version { throw CueStoreError.unsupportedSchemaVersion(version) }
-      let files = Self.files(of: location)
-      let cleanups = try Schema.upgrades[(version - Schema.baseVersion)...].compactMap { try $0.run(connection, files) }
       try connection.exec("PRAGMA user_version = \(Schema.version)")
-      return (true, cleanups)
-    }.result
-    afterCommit.forEach { $0() }
-    if upgraded { try Schema.reclaim(connection) }
+    }
   }
 
   /// 只读连接：跑在 `queue` 上，nil 是主线程；不收跨进程通知（订阅都在本体上）。

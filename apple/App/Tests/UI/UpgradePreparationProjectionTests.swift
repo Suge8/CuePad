@@ -183,29 +183,5 @@ extension UpgradePreparationTests {
         #expect(ready.messages.map(\.deliveryID) == [request.id.uuidString])
         await app.services.executor.beginStop()()
     }
-
-    @Test func 现场旧失败请求在86升级和就绪后保持原样_不补发() async throws {
-        let app = TestApp(), (target, old) = try await oldSession(app)
-        defer { old.crash(); app.bridge.stop(); app.services.cancelBackgroundWork() }
-        let request = try await Workspace(services: app.services).said(ComposerDraft(text: "过去已经报失败的那句"), to: target, mode: .send)
-        var historical = try #require(try await app.services.store.syncRow(recordName: request.id.uuidString.lowercased()))
-        let reason = ShownText.verbatim("旧版扩展升级拒绝的原始原因")
-        historical.fields["status"] = .text("not_delivered")
-        historical.fields["handledBy"] = .text(TestApp.hostID)
-        historical.fields["failure"] = .text(reason.stored)
-        #expect(try await app.services.store.applyRemote([.save(historical, systemFields: Data())]).isEmpty)
-        try RawDB(app.databaseURL).restore(version: 90)
-        try RawDB(app.databaseURL).exec("ALTER TABLE sessionViewers DROP COLUMN sessionIDs; ALTER TABLE sessionViewers ADD COLUMN sessionID TEXT; PRAGMA user_version = 85")
-        app.relaunch()
-        #expect(CueStore.schemaVersion(of: app.databaseURL) == CueStore.supportedSchemaVersions.upperBound)
-        try await app.services.executor.start()
-        old.close(bye: "reload")
-        let ready = try await app.host.connect(target.sessionID, cwd: app.directory.path)
-        try await sendOther(in: app)
-        let unchanged = try #require(try await app.services.store.deliveryRequest(request.id))
-        #expect(unchanged.status == .known(.failed) && unchanged.reason == reason)
-        #expect(ready.messages.isEmpty && app.host.calls.isEmpty)
-        await app.services.executor.beginStop()()
-    }
 }
 #endif

@@ -8,7 +8,6 @@ final class PiConnection: SessionLink {
     let file: SocketDirectory.FileIdentity
     weak var bridge: Bridge?
     var id: Session.ID?
-    var extensionVersion: Int?
     let replies: PendingReplies<String, PiWire.Ack>
     var nextCommand = 0
     var bye: PiWire.Bye?
@@ -46,13 +45,13 @@ final class PiConnection: SessionLink {
         _ = try await request { try PiWire.configCommand(id: $0, model: config.model, thinking: thinking, fast: config.fast, name: config.name) }
     }
 
-    /// 报的扩展版本不是随包版本（没报的也算）：请它核对随包目录（`PiWire.upgrade`）。那里还是旧的它就不动，所以可以多说。
-    func offerUpgrade() {
-        guard extensionVersion != PiExtensionBundle.version else { return }
+    /// hello 报的扩展版本不是随包版本：请它核对随包目录（`PiWire.upgrade`）。那里还是旧的它就不动，所以可以多说。
+    func offerUpgrade(from version: Int) {
+        guard version != PiExtensionBundle.version else { return }
         connection.write(PiWire.upgrade)
     }
 
-    func canNameItself(_: Session.ID) -> Bool { extensionVersion.map { $0 >= PiWire.titleSince } ?? false }
+    func canNameItself(_: Session.ID) -> Bool { true }
 
     func suggestName(from firstMessage: String, in _: Session.ID) async throws -> String {
         let ack = try await request { try PiWire.titleCommand(id: $0, text: firstMessage) }

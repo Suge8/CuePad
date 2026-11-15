@@ -2,13 +2,12 @@ import CueStore
 import Foundation
 import Testing
 
-/// 只有老用户的库走升级：建新库的 SQL 与升级步骤漏了一列、一个索引，新装的库测不出来。从每一份冻结的旧结构升上来，表、列、索引、触发器都与新库一样。
+/// 只有老用户的库走升级：建新库的 SQL 与升级步骤漏了一列、一个索引，新装的库测不出来。从冻结的已发布结构升上来，表、列、索引、触发器都与新库一样。
 @Suite struct SchemaUpgradeTests {
-  @Test(arguments: FrozenSchema.versions)
-  func aLibraryUpgradedFromAnOldVersionIsLaidOutLikeANewOne(version: Int) throws {
+  @Test func aLibraryUpgradedFromTheReleasedVersionIsLaidOutLikeANewOne() throws {
     let fresh = TestLibraries.makeDirectory(), upgraded = TestLibraries.makeDirectory()
     _ = try CueStore(location: .isolated(fresh))
-    try RawDB(upgraded.appending(path: "cuepad.db")).exec(FrozenSchema.sql(version))
+    try RawDB(upgraded.appending(path: "cuepad.db")).exec(FrozenSchema.v98)
     _ = try CueStore(location: .isolated(upgraded))
     #expect(try layout(of: upgraded) == layout(of: fresh))
   }

@@ -9,10 +9,14 @@ extension OpenCodeRuntime {
         let all = try await client.sessions().filter { hosted.contains($0.parentID ?? $0.id) }
         let asked = Date.now  // 对话里读不到一轮时的开始：快照里在跑的那一轮此刻之后才收尾
         let active = Set(try await client.get(OpenCodeData<[String: JSONValue]>.self, "/api/session/active").data.keys)
-        var started: [String: Date] = [:]
-        for info in all where info.parentID == nil && active.contains(info.id) {
-            let read = try await OpenCodeHistory.read(client, info, from: try await checkpoint(of: info.id), files: store.files)
-            started[info.id] = read.checkpoint.history.lastTurnStart ?? asked
+        var started: [String: Date] = [:], failures: [String: String] = [:]
+        for info in all where info.parentID == nil {
+            if active.contains(info.id) {
+                let read = try await OpenCodeHistory.read(client, info, from: try await checkpoint(of: info.id), files: store.files)
+                started[info.id] = read.checkpoint.history.lastTurnStart ?? asked
+            } else if info.outcome == "failed" {
+                failures[info.id] = try await lastReply(info.id, client)?.error?.message ?? OpenCodeTurn.unknownFailure
+            }
         }
         guard self.connection === connection else { return }
         childTurns = [:]
@@ -21,14 +25,12 @@ extension OpenCodeRuntime {
         for info in topLevel {
             var tracked = track(info)
             tracked.info = info
-            // 断线期间错过的事件不补：执行与压缩的进展只认此刻的快照（在线会话的压缩中与出错原文由 refreshLive 补上）
+            // 断线期间错过的事件不补：执行与压缩的进展只认此刻的快照（在线会话的压缩中由 refreshLive 补上）
             // 快照里在跑的一轮：开始取快照之后读到的对话里的（可能是断线期间开始的另一轮，`SessionFacts.startTurn(at:)`）
-            tracked.turns.reconcile(runningSince: started[info.id])
-            tracked.facts.work(.thinking)
+            tracked.turns.reconcile(runningSince: started[info.id], failure: failures[info.id])
             if tracked.parser.speaking { bridge.setDraft(bridgeID(info.id, connection), nil) }
             tracked.parser = OpenCodeTurn()
             tracked.facts.compacting = false
-            tracked.facts.failure = !tracked.facts.running && info.outcome == "failed" ? OpenCodeTurn.unknownFailure : nil
             if tracked.facts.running || info.updatedAt >= connection.startedAt, revives(info.id, at: info.updatedAt) {
                 tracked.online = true
             }
@@ -78,7 +80,7 @@ extension OpenCodeRuntime {
             permissions += try await client.get(OpenCodeData<[OpenCodePermission]>.self, "/api/session/\(asker)/permission").data
             forms += try await client.get(OpenCodeData<[OpenCodeForm]>.self, "/api/session/\(asker)/form").data
         }
-        let last = try await client.get(OpenCodePage<OpenCodeMessage>.self, "/api/session/\(id)/message?type=assistant&limit=1").data.first
+        let last = try await lastReply(id, client)
         // 压缩开始与结束之间，最近一条压缩消息是 running：断线时错过了开始事件，从它恢复"压缩中"
         let compaction = try await client.get(OpenCodePage<OpenCodeMessage>.self, "/api/session/\(id)/message?type=compaction&limit=1").data.first
         try await catalog(tracked.directory, client)
@@ -87,7 +89,10 @@ extension OpenCodeRuntime {
         sessions[id]?.context = window.map { ContextUsage(tokens: last?.tokens?.prompt, window: $0) }
         sessions[id]?.facts.compacting = compaction?.status == "running"
         if tracked.info.model == nil { sessions[id]?.info.model = last?.model }
-        if tracked.facts.failure != nil, let error = last?.error?.message { sessions[id]?.facts.failure = error }
+    }
+
+    private func lastReply(_ id: String, _ client: OpenCodeClient) async throws -> OpenCodeMessage? {
+        try await client.get(OpenCodePage<OpenCodeMessage>.self, "/api/session/\(id)/message?type=assistant&limit=1").data.first
     }
 
     @discardableResult

@@ -11,10 +11,9 @@ extension Schema {
   }
 
   /// 项目按最近的进展排（`CueStore.projectOrder`，侧栏、看板每次重读都排）：按项目取卡片、会话最晚的进展时刻走这两份索引的末端，不逐张翻。
-  /// 带 IF NOT EXISTS：升级测试把建好的新库拨回旧版本号重跑后面的步骤（`AttachmentUpgradeTests`）。
   static let progressIndexes = """
-    CREATE INDEX IF NOT EXISTS cards_projectID_progress ON cards(projectID, \(CueStore.cardProgress));
-    CREATE INDEX IF NOT EXISTS piSessionStates_projectID_turn ON piSessionStates(projectID, \(CueStore.turnProgress));
+    CREATE INDEX cards_projectID_progress ON cards(projectID, \(CueStore.cardProgress));
+    CREATE INDEX piSessionStates_projectID_turn ON piSessionStates(projectID, \(CueStore.turnProgress));
     """
 
   static func modifiedIndex(_ table: Table) -> String {
@@ -28,23 +27,8 @@ extension Schema {
     """
   /// 清理过期对话（`CueStore.pruneMessages`，启动时一次）按会话取最后的时刻：只读索引，不逐条读消息正文（冷读约 190ms → 15ms）。
   static let transcriptAgeIndex = "CREATE INDEX piMessages_sessionID_at ON piMessages(sessionID, at, createdAt);"
-  /// 97：会话对话读进这台的次序（`arrival`，本机列）删了也不复用（AUTOINCREMENT）：做梦听到哪了的书签记的是它（`CueStore.said(after:limit:)`），
-  /// 隐含的 rowid 在最新的那批被删掉（清理过期对话、重置同步）后会从头再用，新说的话就落在书签之前、听不到。
-  /// 主键换不了，只能整表重建；原来的次序照搬，id 的唯一改由 UNIQUE 守（写入照旧按它判重）。
-  static let messageArrivalUpgrade: Upgrade = """
-    CREATE TABLE piMessages_arrival (
-      arrival INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE, sessionID TEXT NOT NULL, seq INTEGER NOT NULL, role TEXT NOT NULL, text TEXT NOT NULL,
-      at INTEGER NOT NULL, tools TEXT, roundStartedAt INTEGER, deliveryID TEXT,
-      createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL, question TEXT, shownText TEXT
-    ) STRICT;
-    INSERT INTO piMessages_arrival
-      SELECT rowid, id, sessionID, seq, role, text, at, tools, roundStartedAt, deliveryID, createdAt, modifiedAt, question, shownText FROM piMessages;
-    DROP TABLE piMessages;
-    ALTER TABLE piMessages_arrival RENAME TO piMessages;
-    CREATE INDEX piMessages_sessionID_seq ON piMessages(sessionID, seq);
-    \(transcriptAgeIndex)
-    \(modifiedIndex(.piMessages))
-    """
+  /// 自动收尾按创建任务找会话，来源未知的历史会话不占这个索引。
+  static let taskOriginIndex = "CREATE INDEX piSessionStates_createdForTaskID ON piSessionStates(createdForTaskID) WHERE createdForTaskID IS NOT NULL;"
   /// 本机会话索引按 Agent 取、删（启动时对每家接入各一次）：表里存着检查点，整表扫一次约 35ms。
   static let agentIndex = "CREATE INDEX piSessions_agent ON piSessions(agent);"
   /// Cue 还开着的提问（首屏读、每次 Cue 的对话变化重读）：部分索引只收这几条，条件与查询同出 `CueStore.openQuestion`（不一样就用不上）。
@@ -77,21 +61,8 @@ extension Schema {
     \(cueMessageWrites)
     """
 
-  /// 90：为升级前已上传、仍待派发的请求补齐期限锚点。
-  static let deliveryServerAnchor = """
-    UPDATE deliveryRequests AS r SET serverAt = createdAt
-      WHERE serverAt IS NULL AND (status = 'preparing' OR (status = 'pending' AND handledBy IS NULL)) AND \(Speech.reachedServerSQL("r"));
-    """
-
-  /// 92：轮结束的请求集合随对话同步；到达顺序复用本机计数器，不受对端时钟影响。
-  static let cueMessageUpgrade: Upgrade = """
-    ALTER TABLE cueMessages ADD COLUMN answeredRequests TEXT;
-    ALTER TABLE cueMessages ADD COLUMN writeSeq INTEGER NOT NULL DEFAULT 0;
-    \(cueMessageWrites)
-    """
-
   /// 对话正文写下就不再变；轮结束的请求集合可能后补到经过行。送达、推送与工具进度不产生第二次播报。
-  static let cueMessageWrites = """
+  private static let cueMessageWrites = """
     \(stamped("cueMessages", when: ["answeredRequests"]))
     CREATE INDEX cueMessages_writeSeq ON cueMessages(writeSeq);
     """
@@ -99,19 +70,14 @@ extension Schema {
   private static func stamped(_ table: String, when columns: [String]) -> String {
     """
       CREATE TRIGGER \(table)_writeSeq_insert AFTER INSERT ON \(table) BEGIN \(stamp(table)) END;
-      \(updateStamp(table, when: columns))
-      """
-  }
-
-  static func updateStamp(_ table: String, when columns: [String]) -> String {
-    let changed = columns.map { "old.\($0) IS NOT new.\($0)" }.joined(separator: " OR ")
-    return """
-      CREATE TRIGGER \(table)_writeSeq_update AFTER UPDATE OF \(columns.joined(separator: ", ")) ON \(table) WHEN \(changed) BEGIN \(stamp(table)) END;
+      CREATE TRIGGER \(table)_writeSeq_update AFTER UPDATE OF \(columns.joined(separator: ", ")) ON \(table) WHEN \(changed(columns)) BEGIN \(stamp(table)) END;
       """
   }
 
   /// 会话记录上构成 Cue 的变化的列：进入的状态与时刻，与最后一轮在会话文件里收尾的时刻（读到这一轮的回答时它变，变化随之就绪）。
   static let sessionChanges = ["state", "stateSince", "answeredAt", "bootID"]
+
+  private static func changed(_ columns: [String]) -> String { columns.map { "old.\($0) IS NOT new.\($0)" }.joined(separator: " OR ") }
 
   private static func stamp(_ table: String) -> String {
     "UPDATE writeCounter SET seq = seq + 1; UPDATE \(table) SET writeSeq = (SELECT seq FROM writeCounter) WHERE rowid = new.rowid;"
