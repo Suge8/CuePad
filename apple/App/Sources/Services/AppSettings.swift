@@ -31,7 +31,6 @@ final class AppSettings {
         static let replyDrafts = "replyDrafts"
         static let sessionSeen = "sessionSeen"
         static let unreadSince = "unreadSince"
-        static let lastAgent = "lastAgent"
         static let launchDefault = "launchDefault"
         static let projectLaunches = "projectLaunches"
         static let navigationPane = "navigationPane"
@@ -235,9 +234,7 @@ final class AppSettings {
         alerts = AlertPreferences(stored: defaults.dictionary(forKey: Key.alerts))
         #endif
         sounds = defaults.object(forKey: Key.sounds) as? Bool ?? true
-        // `lastAgent` 是只记哪家的旧键：没有新记录时从它起步
-        launchDefault = Self.decoded(LaunchPreference.self, Key.launchDefault, in: defaults)
-            ?? LaunchPreference(agent: string(Key.lastAgent).flatMap(AgentKind.init(rawValue:)) ?? .pi)
+        launchDefault = Self.decoded(LaunchPreference.self, Key.launchDefault, in: defaults) ?? LaunchPreference(agent: .pi)
         projectLaunches = Self.decoded([UUID: LaunchPreference].self, Key.projectLaunches, in: defaults) ?? [:]
         navigationPane = string(Key.navigationPane).flatMap(NavigationPane.init(rawValue:)) ?? .projects
         railExpanded = defaults.object(forKey: Key.railExpanded) as? Bool ?? true
