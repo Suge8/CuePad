@@ -1,6 +1,6 @@
 import Foundation
 
-/// 同步字段：其他版本写的不认识的值读作 `Open.unknown`；旧版本写的没有这一列，是 Pi。
+/// 同步字段：其他版本写的不认识的值读作 `Open.unknown`。
 public enum AgentKind: String, CaseIterable, Sendable, Identifiable, Codable {
   case pi
   case claudeCode = "claude"

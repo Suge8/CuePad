@@ -89,7 +89,7 @@ import Testing
       "sessionID": .text("s-new"), "hostID": .text("mac-a"), "title": .text("圆桌"), "projectID": .null,
       "state": .text("thinking"), "detail": .null, "stateSince": .int(1_000), "createdAt": .int(1_000),
       "modifiedAt": .int(1_000), "notify": .null, "folder": .null, "lastPrompt": .null, "lastReply": .null,
-      "question": .null, "busySince": .null, "launchToken": .text("t-phone"),
+      "question": .null, "busySince": .null, "launchToken": .text("t-phone"), "agent": .text("pi"),
     ])
     try await rig.coordinator.pulled([state], [])
 

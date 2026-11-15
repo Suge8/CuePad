@@ -88,10 +88,6 @@ extension CueStore {
     var remote = remote
     // 通知标志只由置位的那台 Mac 上传、上传即清：远端带回来的（含自己上传的回声）不能再让本机的下一次改动带上它
     if Table.notifyFlagged.contains(remote.table) { remote.fields["notify"] = .null }
-    // 默认项目之前的版本写的未分类卡片不带项目：就是默认项目里的（同 `Schema` 升级的那一步）；不补上，读卡片层级时当场崩溃
-    if remote.table == .cards, (remote.fields["projectID"] ?? .null) == .null { remote.fields["projectID"] = .text(Project.defaultID.uuidString.lowercased()) }
-    // 早于多家接入的会话记录不带来源：是 Pi（同 `Schema` 升级的 94）
-    if remote.table == .piSessionStates, (remote.fields["agent"] ?? .null) == .null { remote.fields["agent"] = .text(AgentKind.pi.rawValue) }
     let table = remote.table
     let (pushed, sent) = try db.first("SELECT pushedModifiedAt, sentModifiedAt FROM syncRecords WHERE recordName = ?", [remote.id]) {
       ($0.intOrNil(0), $0.intOrNil(1))

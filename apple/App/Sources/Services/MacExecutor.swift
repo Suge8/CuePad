@@ -198,7 +198,7 @@ final class MacExecutor {
         let directory = try await workspace(of: launch.project)
         try requireDirectory(directory)
         let clock = ContinuousClock(), began = clock.now
-        let id = try await runtime(launch.opening).open(
+        let id = try await runtime(launch.agent).open(
             in: directory, launchToken: launch.token, name: launch.name, model: launch.model, thinking: launch.thinking)
         if launch.fast || bridge.session(id: id)?.fast == true {
             do { try await bridge.configure(SessionConfig(fast: launch.fast), in: id) }
@@ -208,7 +208,7 @@ final class MacExecutor {
         // 开工到会话连上分两段记下：起进程上桥，与第一句落成会话里的消息（`AgentTimeouts`）；慢在哪一段、超时在哪一段从这里看
         defer {
             AppServices.log.notice(
-                "开新会话（\(launch.opening.rawValue, privacy: .public)）：起进程上桥 \(began.duration(to: opened), privacy: .public)，送开场 \(opened.duration(to: clock.now), privacy: .public)")
+                "开新会话（\(launch.agent.rawValue, privacy: .public)）：起进程上桥 \(began.duration(to: opened), privacy: .public)，送开场 \(opened.duration(to: clock.now), privacy: .public)")
         }
         if let opening = launch.prompt?.trimmingCharacters(in: .whitespacesAndNewlines), !opening.isEmpty {
             guard let session = bridge.session(id: id) else {
