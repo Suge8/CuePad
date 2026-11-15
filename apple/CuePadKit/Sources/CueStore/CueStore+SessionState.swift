@@ -25,7 +25,7 @@ extension CueStore {
       // 摘要不归这里写：它是对话的投影，只由 `writeTranscript` 写（新记录插入时先空着）
       // 最后一轮的开始与开轮的那句不知道（CuePad 在一轮中途重启，各家的事实从头记起）时留着库里的：这一轮的回答照样不早于它，开它的还是那句
       let assignments = SessionState.columns.dropFirst()
-        .filter { $0 != "createdAt" && $0 != "createdForTaskID" && $0 != "notify" && !SessionState.recapColumns.contains($0) }
+        .filter { $0 != "createdAt" && $0 != "createdForTaskID" && $0 != "restoredAt" && $0 != "notify" && !SessionState.recapColumns.contains($0) }
         .map { ["turnStartedAt", "turnDelivery", "turnByCue"].contains($0) ? "\($0) = COALESCE(excluded.\($0), piSessionStates.\($0))" : "\($0) = excluded.\($0)" }
         .joined(separator: ", ")
       let placeholders = SessionState.columns.map { _ in "?" }.joined(separator: ", ")

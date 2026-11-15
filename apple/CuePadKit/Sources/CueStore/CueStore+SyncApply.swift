@@ -129,10 +129,12 @@ extension CueStore {
     }
     if table == .piSessionStates {
       let winner = remote.modifiedAt >= local.modifiedAt || pushed.map({ local.modifiedAt <= $0 }) == true ? remote : local
-      let owner = local.text("createdForTaskID") ?? remote.text("createdForTaskID")
-      if let owner, winner.text("createdForTaskID") != owner {
-        var merged = winner
-        merged.fields["createdForTaskID"] = .text(owner)
+      var merged = winner
+      // 一经记下不撤：别处后写的那一版可能还没有它（状态报告不写这两列，见 `writeSessionState`）
+      for column in ["createdForTaskID", "restoredAt"] {
+        if let kept = [local, remote].lazy.compactMap({ $0.fields[column] }).first(where: { $0 != .null }) { merged.fields[column] = kept }
+      }
+      if merged != winner {
         merged.fields["modifiedAt"] = .int(max(local.modifiedAt, remote.modifiedAt) + 1)
         try overwrite(merged)
         try setMetadata(table, remote.id, systemFields, pushed: remote.modifiedAt)

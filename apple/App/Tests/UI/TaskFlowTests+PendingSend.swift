@@ -101,5 +101,42 @@ extension TaskFlowTests {
         }
         await rig.services.executor.beginStop()()
     }
+
+    /// 为一步开的会话随它做完结束、这一步改用了别的会话；你又对它说话把它恢复起来，它就是你自己接着用的：
+    /// 之后上级被删（这一步提成顶层），或把它借给另一件事、那件做完，都不再结束它。
+    @Test(arguments: ["promote", "borrow"])
+    func 你恢复使用的会话_别的任务删除或完成时不结束(path: String) async throws {
+        let workspace = Workspace(services: rig.services)
+        try await rig.offersPi()
+        let parent = try await workspace.createTask("准备发布", in: Project.defaultID)
+        let step = try await store.createTask("改版本号", under: parent.id)
+        let other = try await workspace.createTask("写更新说明", in: Project.defaultID)
+        workspace.handOff(step.id, fresh: true)
+        let launch = try #require(try await eventually(store, { try $0.deliveryRequests().first { $0.mode == .known(.start) } }) { $0 != nil })
+        let ext = try await rig.host.connect("restored", cwd: rig.directory.path, launchToken: launch.launch?.token)
+        defer { ext.close(bye: "quit"); rig.bridge.stop(); rig.services.cancelBackgroundWork() }
+        let recorder = try await rig.runtimeRecorder(on: TestApp.hostID)
+        try await recorder.update(sessionID: ext.sessionID, state: .settled, launchToken: launch.launch?.token, hosted: true)
+        try await store.deleteDelivery(launch.id)
+        try await workspace.complete(step.id)
+        // 收尾的那次结束当它已执行、请求已清理
+        try await store.deleteDelivery(try #require(try await store.deliveryRequests().first { $0.mode == .known(.end) }).id)
+        try await recorder.update(sessionID: "s2", state: .settled, hosted: true)
+        try await store.bindSession("s2", to: step.id)
+        await workspace.speak("再改一处", to: .session(SendTarget(kind: .piSession, name: "发布", ref: ext.sessionID), host: TestApp.hostID, mode: .send, card: nil)).value
+        let request = try #require(try await store.deliveryRequests().first { $0.mode == .known(.send) })
+        try await rig.services.executor.start()
+        try await eventually("送达") { try await store.deliveryRequest(request.id)?.status == .known(.succeeded) }
+        #expect(try await store.card(step.id)?.status == .done)
+        if path == "promote" {
+            try await workspace.trash(parent.id)
+            #expect(try await store.card(step.id)?.parentID == nil)
+        } else {
+            try await store.bindSession(ext.sessionID, to: other.id)
+            try await workspace.complete(other.id)
+        }
+        #expect(try await store.deliveryRequests().filter { $0.mode == .known(.end) && $0.target.ref == ext.sessionID }.isEmpty)
+        await rig.services.executor.beginStop()()
+    }
 }
 #endif
