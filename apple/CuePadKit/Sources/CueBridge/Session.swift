@@ -67,7 +67,7 @@ public struct Session: Identifiable, Sendable, Equatable {
     }
 
     /// 标题与项目要查库，由 `SessionMirror` 定好交进来。
-    func snapshot(title: String, projectID: UUID?) -> SessionSnapshot {
+    public func snapshot(title: String, projectID: UUID?) -> SessionSnapshot {
         var snapshot = SessionSnapshot(sessionID: sessionID, state: state, times: SessionTimes(stateSince: stateSince, busySince: busySince))
         snapshot.detail = detail
         snapshot.failure = failure

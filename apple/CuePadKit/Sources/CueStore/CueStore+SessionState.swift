@@ -7,14 +7,8 @@ extension CueStore {
   ) throws {
     try write {
       let now = Date.stamp
-      var record = SessionState(
-        id: SessionState.recordID(sessionID: sessionID), sessionID: sessionID, hostID: hostID, title: content.title,
-        projectID: content.projectID, state: .known(content.state), detail: content.detail, folder: content.folder, lastPrompt: nil,
-        lastReply: nil, question: content.question, notify: nil, stateSince: content.times.stateSince,
-        busySince: content.times.busySince, createdAt: now, modifiedAt: now, launchToken: content.launchToken, hosted: content.hosted,
-        subagents: content.subagents, model: content.modelState.model, thinking: content.modelState.thinking, fast: content.modelState.fast,
-        context: content.context, agent: .known(content.agent), catalogID: catalog?.id, turnStartedAt: content.turnStartedAt, turnOpener: content.turnOpener,
-        failure: content.state == .error ? content.failure.map(Open.known) : nil, bootID: bootID)
+      var record = SessionState(content, over: nil, hostID: hostID, bootID: bootID, at: now)
+      record.catalogID = catalog?.id
       if writesCatalog, let catalog { try writeCatalog(catalog) }
       if let notify {
         // 这是刚收到的真实报告事件；presence 可能尚未写到，不能据此吞掉这次一次性通知。读取当前状态仍严格按 lease 派生。
@@ -173,7 +167,46 @@ public struct SessionProcess: Equatable, Sendable {
   }
 }
 
-/// 加一个会话字段：这里加一个属性，桥上产出时填上，再在 `writeSessionState` 写进记录。
+extension SessionState {
+  /// 一份进程报告落在已记下的这一条（`stored`）上：报告管的换成报告的，报告不管的（为哪件任务开、恢复于、摘要、创建时刻、目录清单）照旧。
+  /// 落库（`writeSessionState`，那里 `stored` 为 nil，不管的列由 upsert 留着）与 Mac 界面读桥上的实时状态都只经这里；`now` 只给还没记下的当创建时刻。
+  public init(_ content: SessionSnapshot, over stored: SessionState?, hostID: String, bootID: String?, at now: Date) {
+    self = stored ?? SessionState(
+      id: SessionState.recordID(sessionID: content.sessionID), sessionID: content.sessionID, hostID: hostID, title: "", projectID: nil,
+      state: .known(content.state), detail: nil, folder: nil, lastPrompt: nil, lastReply: nil, question: nil, notify: nil,
+      stateSince: now, busySince: nil, createdAt: now, modifiedAt: now)
+    self.hostID = hostID
+    title = content.title
+    projectID = content.projectID
+    state = .known(content.state)
+    detail = content.detail
+    folder = content.folder
+    question = content.question
+    stateSince = content.times.stateSince
+    busySince = content.times.busySince
+    launchToken = content.launchToken
+    hosted = content.hosted
+    subagents = content.subagents
+    model = content.modelState.model
+    thinking = content.modelState.thinking
+    fast = content.modelState.fast
+    context = content.context
+    agent = .known(content.agent)
+    turnStartedAt = content.turnStartedAt ?? stored?.turnStartedAt
+    turnOpener = content.turnOpener ?? stored?.turnOpener
+    failure = content.state == .error ? content.failure.map(Open.known) : nil
+    self.bootID = bootID
+  }
+
+  /// 桥上正连着的这一刻（Mac 界面）：连着就是证明，不设期限。
+  public func connected() -> SessionState {
+    var state = self
+    state.runtimeUntil = .distantFuture
+    return state
+  }
+}
+
+/// 加一个会话字段：这里加一个属性，桥上产出时填上，再在 `SessionState.init(_:over:hostID:bootID:at:)` 落到记录上。
 public struct SessionSnapshot: Paced {
   public let sessionID: String
   public var state: WorkState

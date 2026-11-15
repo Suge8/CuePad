@@ -138,5 +138,41 @@ extension TaskFlowTests {
         #expect(try await store.deliveryRequests().filter { $0.mode == .known(.end) && $0.target.ref == ext.sessionID }.isEmpty)
         await rig.services.executor.beginStop()()
     }
+
+    /// Mac 上"在做"读桥上的实时状态，为哪件事开、恢复过没有照库里的记录：确认框据此说完成会不会一起结束会话。
+    @Test func 完成前确认_为这件事开的会话说一起结束_你恢复使用过的说不会() async throws {
+        let workspace = Workspace(services: rig.services)
+        let following = Task { await workspace.follow() }
+        defer { following.cancel() }
+        try await rig.offersPi()
+        let task = try await workspace.createTask("准备发布", in: Project.defaultID)
+        let other = try await workspace.createTask("写更新说明", in: Project.defaultID)
+        workspace.handOff(task.id, fresh: true)
+        let launch = try #require(try await eventually(store, { try $0.deliveryRequests().first { $0.mode == .known(.start) } }) { $0 != nil })
+        let ext = try await rig.host.connect("asked", cwd: rig.directory.path, launchToken: launch.launch?.token)
+        defer { ext.close(bye: "quit"); rig.bridge.stop(); rig.services.cancelBackgroundWork() }
+        let recorder = try await rig.runtimeRecorder(on: TestApp.hostID)
+        try await recorder.update(sessionID: ext.sessionID, state: .settled, launchToken: launch.launch?.token, hosted: true)
+        try await store.deleteDelivery(launch.id)
+        ext.setState(["kind": "thinking"])
+        func asked(_ id: UUID) async throws -> SessionState? {
+            let card = try #require(try await store.card(id))
+            try await eventually("在做") { workspace.next(for: card, in: workspace.agentLinks, steps: nil)?.busySession != nil }
+            try await workspace.confirmComplete(card)
+            defer { workspace.sessionAsk = nil }
+            guard case .complete(.agent(let busy), _, _) = workspace.sessionAsk else { return nil }
+            return busy
+        }
+        #expect(try await asked(task.id)?.endsWithTask == true)
+
+        try await workspace.complete(task.id)
+        try await store.deleteDelivery(try #require(try await store.deliveryRequests().first { $0.mode == .known(.end) }).id)
+        try await recorder.update(sessionID: "s2", state: .settled, hosted: true)
+        try await store.bindSession("s2", to: task.id)
+        await workspace.speak("再改一处", to: .session(SendTarget(kind: .piSession, name: "发布", ref: ext.sessionID), host: TestApp.hostID, mode: .send, card: nil)).value
+        try await store.bindSession(ext.sessionID, to: other.id)
+        let borrowed = try #require(try await asked(other.id))
+        #expect(borrowed.sessionID == ext.sessionID && !borrowed.endsWithTask)
+    }
 }
 #endif
