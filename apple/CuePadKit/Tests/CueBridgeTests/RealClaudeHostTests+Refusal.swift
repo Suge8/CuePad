@@ -17,10 +17,12 @@ extension RealClaudeHostTests {
             #expect(testbed.bridge.session(id: id)?.commands.contains { $0.name == "hello" } == true)
             let notLoggedIn = BridgeError.refused("Not logged in · Please run /login")
 
-            try await testbed.bridge.command("/rename 未登录也能改名", opener: TurnOpener(delivery: UUID(), cue: false), in: id)
+            let renamed = TurnOpener(delivery: UUID(), cue: false)
+            try await testbed.bridge.command("/rename 未登录也能改名", opener: renamed, in: id)
             #expect(testbed.bridge.session(id: id)?.displayName == "未登录也能改名")
-            await #expect(throws: notLoggedIn) { try await testbed.bridge.command("/hello", opener: TurnOpener(delivery: UUID(), cue: false), in: id) }
-            await #expect(throws: notLoggedIn) { try await testbed.bridge.send(SessionMessage(text: "只回复 OK", deliveryID: UUID().uuidString), to: id) }
+            await #expect(throws: notLoggedIn) { try await testbed.bridge.command("/hello", opener: TurnOpener(delivery: UUID(), cue: true), in: id) }
+            await #expect(throws: notLoggedIn) { try await testbed.bridge.send(SessionMessage(text: "只回复 OK", deliveryID: UUID().uuidString, policy: .cue), to: id) }
+            #expect(testbed.bridge.session(id: id)?.turnOpener == renamed, "拒收的话不算开轮")
         }
     }
 }

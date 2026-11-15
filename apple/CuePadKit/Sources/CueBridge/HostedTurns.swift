@@ -92,7 +92,8 @@ final class HostedTurns {
     }
 
     /// 以一句话开新一轮：在跑就先停下（`stop` 发出停止），再 `deliver` 交出这句，它返回就算已交出；各家在交出时（或随后的事件）报这一轮开始。
-    /// 交出的那一刻 `opener` 成了开轮者（并进在跑的那一轮也是：这一轮从此算它的），随这一轮的状态一起报出。
+    /// 开始交出前 `opener` 就成了开轮者（并进在跑的那一轮也是：这一轮从此算它的）：开始与停下可能早于交出返回就报来（Codex 的
+    /// `turn/start`），得已经带着它。没交出、或交出后明确被拒收（`BridgeError.refused`，托管的 Claude Code）就换回原来的。
     /// 停上一轮那一段可被 `abort` 取消；交出之后不取消：话已交出，取消会把收下的话误报成未确认。
     func send(opener: TurnOpener?, stop: @escaping @MainActor () async throws -> Void, deliver: () async throws -> Void) async throws {
         try await send(opener: opener, stop: stop) { handed in
@@ -121,15 +122,26 @@ final class HostedTurns {
             throw BridgeError.rejected(RejectReason.previousTurnRunning.rawValue)
         }
         step(token, to: .delivering)
-        try await deliver { [self] in
-            if let opener, facts.turnOpener != opener {
-                facts.turnOpener = opener
-                onChange()
+        let previous = facts.turnOpener
+        if let opener { open(by: opener) }
+        var handedOut = false
+        do {
+            try await deliver { [self] in
+                handedOut = true
+                guard handovers.contains(where: { $0.token == token && $0.step == .delivering }) else { return }
+                if phase == .handedOver { step(token, to: .awaitingStart) } else { handovers.removeAll { $0.token == token } }
+                settleIfOrphaned()
             }
-            guard handovers.contains(where: { $0.token == token && $0.step == .delivering }) else { return }
-            if phase == .handedOver { step(token, to: .awaitingStart) } else { handovers.removeAll { $0.token == token } }
-            settleIfOrphaned()
+        } catch {
+            if !handedOut { open(by: previous) } else if case .refused? = error as? BridgeError { open(by: previous) }
+            throw error
         }
+    }
+
+    private func open(by opener: TurnOpener?) {
+        guard facts.turnOpener != opener else { return }
+        facts.turnOpener = opener
+        onChange()
     }
 
     func abort(stop: @escaping @MainActor () async throws -> Void) async throws {
