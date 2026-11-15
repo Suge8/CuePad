@@ -17,8 +17,6 @@ public protocol SessionLink: AnyObject {
     /// 受理即返回，下线经 `Bridge.detach` 报告。
     func end(_ id: Session.ID) async throws
     func abort(_ id: Session.ID) async throws
-    /// 核对真实投送身份和停止必须在接收端的同一同步段；不支持的接入明确拒绝，不能降级为无条件停止。
-    func abort(_ id: Session.ID, deliveryID: String, turnStartedAt: Int64) async throws
     /// 对话里不多一句话。受理即返回，不等模型。
     func retry(_ id: Session.ID) async throws
     func answer(_ answer: AnswerValue, to promptID: String, in id: Session.ID) async throws
@@ -37,7 +35,6 @@ extension SessionLink {
     public func command(_ line: String, opener: TurnOpener?, in id: Session.ID) async throws { throw BridgeError.unsupported }
     public func end(_ id: Session.ID) async throws { throw BridgeError.unsupported }
     public func abort(_ id: Session.ID) async throws { throw BridgeError.unsupported }
-    public func abort(_ id: Session.ID, deliveryID: String, turnStartedAt: Int64) async throws { throw BridgeError.rejected("unsupported_stop_turn") }
     public func retry(_ id: Session.ID) async throws { throw BridgeError.unsupported }
     public func answer(_ answer: AnswerValue, to promptID: String, in id: Session.ID) async throws { throw BridgeError.unsupported }
     public func configure(_ config: SessionConfig, in id: Session.ID) async throws { throw BridgeError.unsupported }

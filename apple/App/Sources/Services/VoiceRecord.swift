@@ -51,9 +51,6 @@ import Observation
 
     private(set) var requests: [Request] = []
     private(set) var replies: [Reply] = []
-    private(set) var executions: [SessionListItem] = []
-    /// 控制记录会被库定期清理；这里保留最后观察到的真实事实，不由它授予停止权限。
-    private(set) var stopRequests: [DeliveryRequest] = []
     private(set) var storeFailure: String?
     @ObservationIgnored let store: CueStore
     /// 写一条请求进库；第二个参数是这次写入的身份，同一身份再写不重复（`CueStore.recordVoiceRequest`）。
@@ -78,7 +75,7 @@ import Observation
 
     var isWriting: Bool { !writing.isEmpty }
 
-    /// 通话开始时定下从哪条消息之后读结果，并订阅请求的执行与停止。
+    /// 通话开始时定下从哪条消息之后读结果，并订阅库的写入。
     func begin() throws {
         cursor = try store.snapshot { try $0.lastWrite() }.value
         watch()
@@ -107,13 +104,6 @@ import Observation
     func recovered(_ message: UUID) {
         guard let index = requests.firstIndex(where: { $0.message == message }) else { return }
         requests[index].submission = .recorded(message)
-        watch()
-    }
-
-    func track(_ stop: DeliveryRequest) {
-        guard !stopRequests.contains(where: { $0.id == stop.id }) else { return }
-        stopRequests.append(stop)
-        watch()
     }
 
     @discardableResult
@@ -126,7 +116,6 @@ import Observation
             do {
                 let message = try await tell(text, command)
                 if let index = requests.firstIndex(where: { $0.id == id }) { requests[index].submission = .recorded(message) }
-                watch()
             } catch {
                 failure = error
                 VoiceCall.log.error("voice request not recorded: \(error, privacy: .public)")
@@ -141,20 +130,11 @@ import Observation
         return task
     }
 
-    nonisolated struct Read: Equatable, Sendable {
-        let end: Int
-        let executions: [SessionListItem]
-        let stops: [DeliveryRequest]
-    }
-
     /// 写入序号只负责读完整份结果，不为了界面更新而触发重复播报。
     private func watch() {
         observing?.cancel()
-        let ids = requests.compactMap(\.message), stops = stopRequests.map(\.id), store = store
-        let read: @Sendable (isolated CueStore) throws -> Read = { store in
-            try Read(end: store.lastWrite(), executions: store.voiceExecutions(requests: ids),
-                     stops: stops.compactMap { try store.deliveryRequest($0) })
-        }
+        let store = store
+        let read: @Sendable (isolated CueStore) throws -> Int = { try $0.lastWrite() }
         do {
             let start = try store.snapshot(read)
             update(start.value)
@@ -169,13 +149,9 @@ import Observation
         } catch { storeFailed(error) }
     }
 
-    private func update(_ read: Read) {
+    private func update(_ end: Int) {
         storeFailure = nil
-        executions = read.executions
-        for stop in read.stops {
-            if let index = stopRequests.firstIndex(where: { $0.id == stop.id }) { stopRequests[index] = stop }
-        }
-        latest = max(latest, read.end)
+        latest = max(latest, end)
         readMessages()
     }
 

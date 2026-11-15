@@ -32,13 +32,6 @@ final class PiConnection: SessionLink {
 
     func abort(_: Session.ID) async throws { _ = try await request { try PiWire.bare("abort", id: $0) } }
 
-    func abort(_: Session.ID, deliveryID: String, turnStartedAt: Int64) async throws {
-        guard extensionVersion.map({ $0 >= PiWire.abortTurnSince }) == true else {
-            throw BridgeError.rejected("upgrade_stop_turn")
-        }
-        _ = try await request { try PiWire.abortTurnCommand(id: $0, deliveryID: deliveryID, turnStartedAt: turnStartedAt) }
-    }
-
     func retry(_: Session.ID) async throws { _ = try await request { try PiWire.bare("retry", id: $0) } }
 
     func answer(_ answer: AnswerValue, to promptID: String, in _: Session.ID) async throws {

@@ -150,8 +150,8 @@ extension VoiceService {
 
     private func rejectOffer(_ header: VoiceSignalHeader, issue: VoiceIssue) async {
         do {
-            var value = VoiceCallProjection(session: header.session, phase: .failed(issue), requests: [], replies: [], executions: [])
-            value.pages = .init()
+            var value = VoiceCallProjection(session: header.session, phase: .failed(issue), requests: [], replies: [])
+            (value.pages, value.executions, value.omitted.executions) = (.init(), [], 0)
             try await signaling?.sendVoice(.projection(value: value), session: header.session, to: header.sender)
         } catch { AppServices.log.error("Voice offer rejection not sent: \(String(describing: error), privacy: .public)") }
     }

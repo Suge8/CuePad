@@ -31,23 +31,7 @@ extension VoiceService {
             }
             return VoiceCallProjection.Reply(message: reply.id, readback: state)
         }
-        let ids = record.requests.compactMap(\.message)
-        var executions: [VoiceCallProjection.Execution] = []
-        func stop(_ session: String) -> UUID? { record.stopRequests.last { $0.stopTurn?.sessionID == session }?.id }
-        for item in record.executions {
-            let session = item.state.sessionID
-            var turn: TurnTarget?
-            if item.state.canStop, let started = services.bridge.session(sessionID: session)?.turnStartedAt {
-                do { turn = try services.store.snapshot { try $0.voiceExecutionTarget(session, requests: ids, turnStartedAtMilliseconds: started.stored) }.value }
-                catch CueStoreError.turnChanged {}
-            }
-            executions.append(.init(session: session, turn: turn, stop: stop(session)))
-        }
-        for request in record.stopRequests {
-            guard let session = request.stopTurn?.sessionID, !executions.contains(where: { $0.session == session }) else { continue }
-            executions.append(.init(session: session, turn: nil, stop: stop(session)))
-        }
-        return VoiceCallProjection(session: VoiceSessionID(call.session), phase: phase, requests: requests, replies: replies, executions: executions,
+        return VoiceCallProjection(session: VoiceSessionID(call.session), phase: phase, requests: requests, replies: replies,
                      response: !call.assistantTurns.isEmpty ? .assistantTurn : call.waitingForResponse ? .awaitingAssistant : .none, canRepeat: call.canRepeat)
     }
 

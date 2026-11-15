@@ -31,7 +31,7 @@ enum DebugPhoneVoiceReplay {
         guard let initial = voice.projection else { return }
         @MainActor func show(_ phase: VoiceCallProjection.Phase, response: VoiceCallProjection.Response = .none) {
             voice.setProjection(.init(session: initial.session, phase: phase, requests: initial.requests,
-                                      replies: initial.replies, executions: initial.executions, response: response,
+                                      replies: initial.replies, response: response,
                                       omitted: initial.omitted, canRepeat: false))
         }
         try await Task.sleep(for: .seconds(2))
@@ -76,7 +76,7 @@ enum DebugPhoneVoiceReplay {
 
     static func show(_ voice: VoiceService, _ phase: VoiceCallProjection.Phase, response: VoiceCallProjection.Response = .none) {
         guard let session = voice.session else { return }
-        voice.setProjection(.init(session: session, phase: phase, requests: [], replies: [], executions: [], response: response))
+        voice.setProjection(.init(session: session, phase: phase, requests: [], replies: [], response: response))
     }
 
     private static func cycle(_ voice: VoiceService, workspace: Workspace) async throws {

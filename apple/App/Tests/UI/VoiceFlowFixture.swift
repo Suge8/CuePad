@@ -69,20 +69,7 @@ final class VoiceFlowFixture {
     /// 通话详情此刻的样子：与 `VoiceHost` 同一份投影与库记录。
     func details() throws -> CueVoicePresentation {
         let state = workspace.voiceViewState, ids = state.recordIDs
-        return state.reading(try workspace.services.store.snapshot { try VoiceRecords.read(ids, from: $0) }.value).presentation()
-    }
-
-    /// 详情里这个会话那一行的停止动作（Mac 投影给的那一轮）
-    func stopAction(_ session: String) async throws -> VoiceAction {
-        try await eventually("\(session) 这一行能停") { try self.details().executions.first { $0.id == session }?.stop != nil }
-        return try #require(try details().executions.first { $0.id == session }?.stop)
-    }
-
-    /// 按那一行的停止钮停下会话，返回停止请求
-    func stop(_ session: String) async throws -> DeliveryRequest {
-        let outcome = try await workspace.performVoice(try await stopAction(session))
-        guard case .stopRequested(let id)? = outcome else { Issue.record("停止被拒：\(String(describing: outcome))"); throw CancellationError() }
-        return try #require(try await workspace.services.store.deliveryRequest(id))
+        return state.reading(try workspace.services.store.snapshot { try $0.cueMessages(ids) }.value).presentation()
     }
 
     /// 那条没落库的请求在详情里的恢复动作

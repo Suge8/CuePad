@@ -73,8 +73,8 @@ nonisolated enum VoiceSignalFormat {
     static let version: UInt8 = 1
     /// 两端 App 之间的信令版本，只在拨号（`VoiceOffer`）与接听（`VoiceAnswer`）里互报，中转不看。
     /// Mac 的投影也带着它。不同就各自说"请更新"（`VoiceIssue.relayUnsupported`）：Mac 回失败投影；手机挂断（`otherVersion`），
-    /// 包括接听前就收到的投影版本不同或解不开（`VoiceRelayEvent.unreadable`）。没报的是 1（分页帧还在的那一版）。
-    static let callVersion: UInt8 = 2
+    /// 包括接听前就收到的投影版本不同或解不开（`VoiceRelayEvent.unreadable`）。没报的是 1（分页帧还在的那一版）；3 起投影不带执行列表、没有停止命令。
+    static let callVersion: UInt8 = 3
     static let maximumWireBytes = 64 * 1024
     static let maximumPlaintextBytes = 32 * 1024
     static let maximumDeviceIDBytes = 128

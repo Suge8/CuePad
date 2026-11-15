@@ -86,7 +86,7 @@ extension DebugScene {
                 if quotaFails { return .failed(ShownText("这台 Mac 上没有在线的 Pi 会话")) }
             case .tidy, .libraryEdit:
                 return await DemoAgentLibrary.apply(request, store: store) ?? .failed(ShownText(SendError.unsupportedMode(request.mode.rawValue)))
-            case .withdraw, .start, .transcript, .bind, .end, .stop, .stopTurn, .retry, .answer, .config, .command:
+            case .withdraw, .start, .transcript, .bind, .end, .stop, .retry, .answer, .config, .command:
                 break
             }
             return .succeeded

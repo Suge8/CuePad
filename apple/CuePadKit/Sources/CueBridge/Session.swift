@@ -28,7 +28,6 @@ public struct Session: Identifiable, Sendable, Equatable {
     /// Pi 由扩展报（每次模型回合开始），其余由接入记（`SessionFacts.startTurn(at:)`）
     public internal(set) var turnStartedAt: Date? = nil
     /// Cue 与语音拿来接管、停下这一轮的凭据（同步记录里的毫秒）还是不是这一轮：核对只在这里。接入记的开始有亚毫秒，按存的毫秒比，不按任意容差放宽。
-    public func isCurrentTurn(_ startedAt: Int64) -> Bool { turnStartedAt?.stored == startedAt }
     /// 开这一轮的那句（`SessionState.turnOpener`）：Pi 由扩展在那句落成消息时报，其余由接入在交出那一刻记（`HostedTurns.send`）。
     /// 进程或 CuePad 重启后从头记起，交出下一句前为 nil，记录上留着之前的。
     public internal(set) var turnOpener: TurnOpener? = nil
@@ -220,17 +219,13 @@ enum RejectReason: String {
     case noPrompt = "no_prompt", stalePrompt = "stale_prompt", badAnswer = "bad_answer"
     case noAuth = "no_auth"
     case nothingToRetry = "nothing_to_retry"
-    case unconfirmedTurn = "unconfirmed_turn", userTurn = "user_turn", staleTurn = "stale_turn"
-    case unsupportedStopTurn = "unsupported_stop_turn", upgradeStopTurn = "upgrade_stop_turn"
+    case unconfirmedTurn = "unconfirmed_turn", userTurn = "user_turn"
     /// 换轮停不下在跑的那一轮（停止被拒、等不到它收尾）：这句还没交出（`HostedTurns.send`）
     case previousTurnRunning = "previous_turn_running"
 
     var shown: String.LocalizationValue? {
         switch self {
         case .empty: nil
-        case .unsupportedStopTurn: "这个接入不支持按原回合停止，没有停止会话"
-        case .upgradeStopTurn: "会话扩展需升级后才能按原回合停止，没有停止会话"
-        case .staleTurn: "原回合已结束或更换，停止请求不再适用，没有停止后来的工作"
         case .userTurn: "会话已进入另一轮，Cue 没有打断"
         case .unconfirmedTurn: "当前轮次的来源尚未确认，Cue 没有打断"
         case .previousTurnRunning: "在跑的那一轮没能停下，这句没有发出"

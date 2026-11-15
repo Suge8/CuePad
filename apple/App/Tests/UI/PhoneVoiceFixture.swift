@@ -62,7 +62,7 @@ import Testing
     try await Workspace(services: app.services).startVoiceCall()
     let id = try #require(voice.session)
     await voice.receive(signal.event(.media(signal: .answer(value: .init(sdp: "isolated-answer"))), session: id))
-    await voice.receive(signal.event(.projection(value: .init(session: id, phase: .listening, requests: [], replies: [], executions: [])), session: id))
+    await voice.receive(signal.event(.projection(value: .init(session: id, phase: .listening, requests: [], replies: [])), session: id))
     return (app, voice, signal, try #require(media))
 }
 #endif

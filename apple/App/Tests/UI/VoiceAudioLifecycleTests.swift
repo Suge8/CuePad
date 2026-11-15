@@ -67,7 +67,7 @@ import Testing
         #expect(fixture.workspace.voiceViewState.phase == .ended(reason: .audioInterrupted))
         let ended = try #require(fixture.voice.session)
         await fixture.voice.receive(fixture.signal.event(.projection(value: .init(
-            session: ended, phase: .failed(.ended(.mediaFailed)), requests: [], replies: [], executions: [])), session: ended))
+            session: ended, phase: .failed(.ended(.mediaFailed)), requests: [], replies: [])), session: ended))
         #expect(fixture.workspace.voiceViewState.phase == .ended(reason: .audioInterrupted), "Mac 收到挂断后的回声不改本机先落定的原因")
         #expect(fixture.signal.sent.contains { if case .media(.hangup(reason: .audioInterrupted)) = $0 { true } else { false } })
         let next = Media()

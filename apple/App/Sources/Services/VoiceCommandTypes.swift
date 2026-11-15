@@ -19,9 +19,6 @@ nonisolated struct VoiceCommand: Equatable, Codable, Sendable {
     enum Action: Equatable, Codable, Sendable {
         case recover(request: VoiceRequestReference)
         case repeatReply(message: UUID)
-        /// Mac 从已核实的 Cue 请求 → 投送 → 实际会话回合派生的那一轮；执行前同事务重验，Agent 接收端仍核对原 delivery，
-        /// 任何一项已变就拒绝，不能按 sessionID 改停后来的工作。
-        case stop(target: TurnTarget)
     }
 
     let id: ID
@@ -33,15 +30,13 @@ nonisolated struct VoiceCommandResult: Equatable, Codable, Sendable {
     enum Outcome: Equatable, Codable, Sendable {
         /// 现有发送/恢复入口实际写下的 CueMessage，不表示 Cue 已完成工作。
         case recorded(message: UUID)
-        /// 现有 stopTurn 投送已入库，不表示执行回合已停止。
-        case stopRequested(delivery: UUID)
         /// 只表示进入朗读队列；没有播放成功的承诺。
         case readbackQueued(message: UUID)
         case rejected(reason: Rejection)
     }
 
     enum Rejection: String, Codable, Sendable {
-        case originalMissing, alreadyHandled, unconfirmed, sourceMismatch, turnChanged, unavailable, failed
+        case originalMissing, alreadyHandled, unconfirmed, sourceMismatch, unavailable, failed
     }
 
     let command: VoiceCommand.ID
