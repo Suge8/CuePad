@@ -52,8 +52,10 @@ public struct SessionState: Identifiable, Equatable, Sendable {
   /// 这台 Mac（`hostID`）托管过它：CuePad 在后台开的或接着的，结束后也留着（`CueStore.hostedSessionIDs` 靠它认）；在不在线只看 `state`。
   /// 没托管过的只是会话文件回填的历史。托管的进程闲置退出后是歇着：仍在“现在”，发话时 Mac 把它唤醒。
   public var hosted: Bool
-  /// 创建此会话的任务；唯一生命周期来源，纯关联与后来的发送不改变它。未知来源不授权自动结束。
+  /// 创建此会话的任务；纯关联与后来的发送不改变它。未知来源不授权自动结束。
   public internal(set) var createdForTaskID: UUID?
+  /// 你在它的任务都收尾之后又对它说话的那一刻（`CueStore.noteRestored`）：从此是你接着用的会话，不再随任务结束。一经记下不撤（同步合并时保留）。
+  public internal(set) var restoredAt: Date?
   /// FireCode 等在同一进程里开的子会话。
   public var subagents: [SubagentState]
   /// 已结束的会话留着最后的值。旧版本写的记录没有。
@@ -74,7 +76,7 @@ public struct SessionState: Identifiable, Equatable, Sendable {
     subagents: [SubagentState] = [], pendingPrompt: String? = nil, pendingTools: ChatMessage.Tools? = nil, model: ModelOption? = nil,
     thinking: Open<ThinkingLevel>? = nil, fast: Bool? = nil, context: ContextUsage? = nil, agent: Open<AgentKind> = .known(.pi), catalogID: UUID? = nil,
     turnStartedAt: Date? = nil, turnOpener: TurnOpener? = nil, answeredAt: Date? = nil, failure: Open<FailureKind>? = nil, bootID: String? = nil,
-    runtimeUntil: Date? = nil, createdForTaskID: UUID? = nil
+    runtimeUntil: Date? = nil, createdForTaskID: UUID? = nil, restoredAt: Date? = nil
   ) {
     self.id = id
     self.sessionID = sessionID
@@ -97,6 +99,7 @@ public struct SessionState: Identifiable, Equatable, Sendable {
     self.launchToken = launchToken
     self.hosted = hosted
     self.createdForTaskID = createdForTaskID
+    self.restoredAt = restoredAt
     self.subagents = subagents
     self.pendingPrompt = pendingPrompt
     self.pendingTools = pendingTools
@@ -118,7 +121,7 @@ public struct SessionState: Identifiable, Equatable, Sendable {
   // 下面几条是界面与 Cue 共用的唯一一份：做不到的操作界面上不露出，Cue 要做时报错。
 
   /// 只结束为任务创建的；完成前的确认照这个说（App 的 `agentBusyDialog`）。
-  public var endsWithTask: Bool { createdForTaskID != nil && canEnd }
+  public var endsWithTask: Bool { createdForTaskID != nil && restoredAt == nil && canEnd }
 
   public var canEnd: Bool { state != .known(.ended) }
 
@@ -187,14 +190,14 @@ extension SessionState: Record, SyncedColumns {
     .plain("hosted"), .encrypted("subagents"), .encrypted("pendingPrompt"), .encrypted("model"), .encrypted("thinking"),
     .encrypted("context"), .plain("agent"), .plain("catalogID"), .encrypted("pendingTools"), .plain("turnStartedAt"),
     .plain("answeredAt"), .plain("failure"), .plain("bootID"), .encrypted("fast"), .plain("createdForTaskID"),
-    .plain("turnDelivery"), .plain("turnByCue"),
+    .plain("turnDelivery"), .plain("turnByCue"), .plain("restoredAt"),
   ]
   var bindings: [any SQLBindable] {
     [id, sessionID, hostID, title, projectID, state.rawValue, detail, stateSince, createdAt, modifiedAt, notify?.rawValue, folder,
      lastPrompt, lastReply, question?.stored, busySince, launchToken, hosted ? Int64(1) : nil, JSONColumn.encodeList(subagents), pendingPrompt,
      model.map(JSONColumn.encode), thinking?.rawValue, context.map(JSONColumn.encode), agent.rawValue, catalogID, pendingTools?.stored,
      turnStartedAt, answeredAt, failure?.rawValue, bootID, fast.map { $0 ? Int64(1) : Int64(0) }, createdForTaskID,
-     turnOpener?.delivery, turnOpener.map { $0.cue ? Int64(1) : Int64(0) }]
+     turnOpener?.delivery, turnOpener.map { $0.cue ? Int64(1) : Int64(0) }, restoredAt]
   }
   init(row: Row) {
     self.init(
@@ -212,7 +215,8 @@ extension SessionState: Record, SyncedColumns {
       context: JSONColumn.decode(ContextUsage.self, from: row.textOrNil(22)),
       agent: Open(rawValue: row.text(23)), catalogID: row.uuidOrNil(24), turnStartedAt: row.dateOrNil(26),
       turnOpener: row.uuidOrNil(32).map { TurnOpener(delivery: $0, cue: row.intOrNil(33) == 1) },
-      answeredAt: row.dateOrNil(27), failure: row.textOrNil(28).map(Open.init(rawValue:)), bootID: row.textOrNil(29), createdForTaskID: row.uuidOrNil(31))
+      answeredAt: row.dateOrNil(27), failure: row.textOrNil(28).map(Open.init(rawValue:)), bootID: row.textOrNil(29), createdForTaskID: row.uuidOrNil(31),
+      restoredAt: row.dateOrNil(34))
   }
 }
 

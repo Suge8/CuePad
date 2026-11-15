@@ -12,8 +12,8 @@ final class LiveSessions {
     private(set) var total = 0
     private(set) var live: [SessionListItem] = []
     private(set) var current: [SessionListItem] = []
-    /// 以下四项都按 Pi 的会话 id。
-    private(set) var recaps: [String: Recap] = [:]
+    /// 以下几项都按 Pi 的会话 id；`recorded` 只有在线的（`live`）。
+    private(set) var recorded: [String: SessionState] = [:]
     private(set) var deliveries: [String: DeliveryRequest] = [:]
     private(set) var renames: [String: DeliveryRequest] = [:]
     private(set) var answers: [String: DeliveryRequest] = [:]
@@ -91,7 +91,7 @@ final class LiveSessions {
         set(\.recentlyEnded, page.ended)
         set(\.live, page.items.filter { $0.state.state != .known(.ended) })
         set(\.current, page.items.filter { $0.isCurrent(at: moment) })
-        set(\.recaps, Dictionary(live.map { ($0.state.sessionID, $0.state.recap) }) { first, _ in first })
+        set(\.recorded, Dictionary(live.map { ($0.state.sessionID, $0.state) }) { first, _ in first })
         set(\.deliveries, Dictionary(current.compactMap { item in item.delivery.map { (item.state.sessionID, $0) } }) { first, _ in first })
         set(\.renames, Dictionary(current.compactMap { item in item.rename.map { (item.state.sessionID, $0) } }) { first, _ in first })
         set(\.answers, Dictionary(current.compactMap { item in item.answer.map { (item.state.sessionID, $0) } }) { first, _ in first })

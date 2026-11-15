@@ -142,6 +142,8 @@ enum Schema {
     "ALTER TABLE piSessions ADD COLUMN model TEXT; ALTER TABLE piSessions ADD COLUMN thinking TEXT;",
     // 99：会话记录记下开这一轮的那句话（`SessionState.turnOpener`）；已有的空着，下一句交出时补上
     "ALTER TABLE piSessionStates ADD COLUMN turnDelivery TEXT; ALTER TABLE piSessionStates ADD COLUMN turnByCue INTEGER;",
+    // 100：你恢复使用的会话不再随任务结束（`SessionState.restoredAt`）；升级前恢复过的没有记录，照旧按任务收尾
+    "ALTER TABLE piSessionStates ADD COLUMN restoredAt INTEGER;",
   ]
 
   static let activityDestinationsTable = """

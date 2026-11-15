@@ -106,6 +106,7 @@ DEFINE SCHEMA
         createdForTaskID STRING,
         turnDelivery     STRING,
         turnByCue        INT64,
+        restoredAt       INT64,
         models           ENCRYPTED STRING,
         commands         ENCRYPTED STRING,
         GRANT WRITE TO "_creator",
