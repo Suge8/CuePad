@@ -108,11 +108,11 @@ extension Bridge {
         try Task.checkCancellation()
         let link = try control(id, needs: message.images.isEmpty ? [] : .images)
         guard let peer = session(id: id) else { throw BridgeError.sessionEnded }
-        if case .cue(let deliveryID, let turnStartedAt) = message.policy {
+        if message.policy == .cue {
             guard !peer.upgrading, peer.state != .ended, peer.state != .interrupted else { throw BridgeError.rejected("unconfirmed_turn") }
             if peer.state.hasPendingWork {
-                guard let deliveryID, !deliveryID.isEmpty, let turnStartedAt, peer.turnStartedAt != nil else { throw BridgeError.rejected("unconfirmed_turn") }
-                guard peer.isCurrentTurn(turnStartedAt.stored) else { throw BridgeError.rejected("user_turn") }
+                guard let opener = peer.turnOpener else { throw BridgeError.rejected("unconfirmed_turn") }
+                guard opener.cue else { throw BridgeError.rejected("user_turn") }
             }
         }
         do { try await link.send(message, in: id) }
@@ -123,11 +123,11 @@ extension Bridge {
 
     /// 整行以 / 开头（不是抛 `rejected("bad_request")`）。Pi 执行了它就确认（处理函数的结果没有公开回执）；模板与 skill 是说的话，经 `send` 交出。
     /// 会话报的命令清单（`Session.commands`）里没有的抛 `rejected("unknown_command")`，必填参数没给抛 `rejected("missing_argument")`。
-    public func command(_ line: String, deliveryID: String? = nil, in id: Session.ID) async throws {
+    public func command(_ line: String, opener: TurnOpener? = nil, in id: Session.ID) async throws {
         let link = try control(id)
         let name = try SlashLine(line).name
         guard session(id: id)?.commands.contains(where: { $0.name == name }) == true else { throw BridgeError.rejected("unknown_command") }
-        try await link.command(line, deliveryID: deliveryID, in: id)
+        try await link.command(line, opener: opener, in: id)
     }
 
     /// `AgentTimeouts.end` 内没下线抛 `notEnded`。
@@ -160,7 +160,8 @@ extension Bridge {
     /// 已经空闲时什么也不发生（也成功）；只停它自己这一轮，它派出的子代理照常跑。
     /// 有目标的停止不取消本桥排着的新消息；真实回合身份交给接收端同步核对。
     public func abort(_ id: Session.ID, deliveryID: String, turnStartedAt: Int64) async throws {
-        guard session(id: id)?.isCurrentTurn(turnStartedAt) == true else { throw BridgeError.rejected("stale_turn") }
+        guard let peer = session(id: id), peer.isCurrentTurn(turnStartedAt), peer.turnOpener?.delivery == UUID(uuidString: deliveryID)
+        else { throw BridgeError.rejected("stale_turn") }
         try await control(id).abort(id, deliveryID: deliveryID, turnStartedAt: turnStartedAt)
     }
 

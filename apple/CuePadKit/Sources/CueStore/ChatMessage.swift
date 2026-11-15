@@ -133,11 +133,6 @@ extension ChatMessage: Record, SyncedColumns {
 extension ChatMessage {
   /// 这里只判断有正证据的 Cue 来源；不在集合里的投送仍可能来源未确认。
   public func saidByCue(_ cueSent: Set<UUID>) -> Bool { role == .known(.user) && deliveryID.map(cueSent.contains) == true }
-
-  public func source(in sources: [UUID: MessageSource]) -> MessageSource {
-    guard let deliveryID else { return .user }
-    return sources[deliveryID] ?? .unconfirmed
-  }
 }
 
 extension ChatMessage {

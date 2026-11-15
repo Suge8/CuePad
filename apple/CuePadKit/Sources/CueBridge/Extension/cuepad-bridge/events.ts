@@ -50,7 +50,11 @@ export function follow(session: Session): (() => void)[] {
 			// 扩展先收到 message_end、Pi 再把同一个消息对象写进会话文件，所以 id 随消息落盘，对话（读会话文件）据此认出它
 			const said = session.landed(messageText(event.message));
 			if (!said) return;
-			if (said.id) Object.assign(event.message, { cuepadDelivery: said.id });
+			if (said.id) {
+				Object.assign(event.message, { cuepadDelivery: said.id });
+				session.opener = { delivery: said.id, cue: said.cue };
+				session.commit();
+			}
 			said.ack?.({ ok: true });
 		}),
 

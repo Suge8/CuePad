@@ -69,7 +69,7 @@ export type Info = {
 	commands: CommandInfo[];
 };
 type CommandInfo = { name: string; description: string | null; source: "builtin" | "extension" | "prompt" | "skill"; hint: string | null };
-/** `id` 为 null 的弹窗不能从 CuePad 作答，只能在 Pi 里答 */
+/** `id` 为 null 的弹窗（多行编辑、自定义界面）CuePad 答不了：托管的 Pi 没有界面，只能结束这个会话 */
 export type Question = { id: string | null; kind: string; text: string; options: string[] };
 
 /** 会话里第一条用户消息（按文件顺序，与 Pi 会话列表一致）。 */

@@ -140,12 +140,10 @@ async function handleSend(session: Session, command: Command, ack: Ack, reject: 
 		? text
 		: [{ type: "text" as const, text }, ...images.map((i) => ({ type: "image" as const, data: i.data, mimeType: i.mimeType }))];
 	const id = typeof command.deliveryId === "string" ? command.deliveryId : undefined;
-	const cueTurn = command.cueTurn;
-	if (cueTurn !== undefined && (typeof cueTurn !== "object" || cueTurn === null || Array.isArray(cueTurn)
-		|| ("deliveryId" in cueTurn && cueTurn.deliveryId !== null && typeof cueTurn.deliveryId !== "string"))) return reject("bad_request");
+	if (command.cue !== undefined && typeof command.cue !== "boolean") return reject("bad_request");
 	const found = slashCommand(session, text);
 	const expand = found !== undefined && "source" in found && (found.source === "prompt" || found.source === "skill");
-	await session.startRound({ content, expand, text, id, ack, cueTurn: cueTurn as { deliveryId?: string | null } | undefined });
+	await session.startRound({ content, expand, text, id, ack, cue: command.cue === true });
 }
 
 /** 一行以哪条斜杠命令开头，与 Pi 派发同一先后：本扩展执行的内置命令先于 Pi 清单里的扩展命令、提示词模板与 skill，同名时扩展命令在前（Pi 也先执行它）。 */
@@ -173,7 +171,7 @@ async function handleSlash(session: Session, command: Command, ack: Ack, reject:
 		const error = await runBuiltin(session, found, space < 0 ? "" : text.slice(space + 1).trim());
 		return error ? reject(error) : ack({ ok: true });
 	}
-	if (found.source !== "extension") return session.startRound({ content: text, expand: true, text, ack });
+	if (found.source !== "extension") return session.startRound({ content: text, expand: true, text, ack, cue: false });
 	session.pi.sendUserMessage(text, { expandPromptTemplates: true });
 	ack({ ok: true });
 }

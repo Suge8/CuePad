@@ -8,7 +8,7 @@ enum PiWire {
     /// （`SelfReload`），可能等几个小时，这期间会话照常收话。只加命令、加 CuePad 可以没有的字段不提它（旧扩展不认的命令回 `bad_request`）；
     /// 改了 CuePad 读的格式、已有命令的含义，或 CuePad 要靠某个新字段才对时，提到那一版。区间外的 hello 只读身份（`IdentityHello`），
     /// 命令除 `upgrade` 外一条不发，会话等它换上新扩展（`Session.upgrading`）
-    static let oldestExtension = 56
+    static let oldestExtension = 68
 
     static func reads(extensionVersion version: Int?) -> Bool { version.map { (oldestExtension...PiExtensionBundle.version).contains($0) } == true }
 
@@ -21,11 +21,17 @@ enum PiWire {
         var since: Double
         var busySince: Double?
         var turnSince: Double?
+        /// 开这一轮的那句（68 起）：CuePad 交的话落成消息时记下；扩展重载、换进程前没交过话为空
+        var opener: Opener?
+
+        struct Opener: Decodable {
+            var delivery: String
+            var cue: Bool
+        }
 
         var work: (state: WorkState, detail: String?)? {
             switch kind {
-            // "done" 只有扩展 67 之前发（和 idle 同义）；`oldestExtension` 过了 66 就删
-            case "idle", "done": (.settled, nil)
+            case "idle": (.settled, nil)
             case "thinking": (.thinking, nil)
             case "tool": (.tool, detail.map { "\(tool ?? "?")\(SessionState.detailSeparator)\($0)" } ?? tool ?? "?")
             case "delegating": (.delegating, nil)
@@ -41,6 +47,7 @@ enum PiWire {
         var sinceDate: Date { Date(timeIntervalSince1970: since / 1000) }
         var busySinceDate: Date? { busySince.map { Date(timeIntervalSince1970: $0 / 1000) } }
         var turnSinceDate: Date? { turnSince.map { Date(timeIntervalSince1970: $0 / 1000) } }
+        var turnOpener: TurnOpener? { opener.flatMap { o in UUID(uuidString: o.delivery).map { TurnOpener(delivery: $0, cue: o.cue) } } }
     }
 
     /// 扩展之外还有两处造 hello 的替身：测试的 `FakeExtension`、脚本的 `apple/scripts/_pi_extension.py`；这里加必读的字段，两处一起加。
@@ -254,23 +261,22 @@ enum PiWire {
     }
 
     private struct Command: Encodable {
-        struct CueTurn: Encodable { var deliveryId: String? }
         struct Image: Encodable { var mimeType: String; var data: String }
         var t: String
         var id: String
         var text: String
         var images: [Image]?
         var deliveryId: String?
-        var cueTurn: CueTurn?
+        /// Cue 的话：扩展只在此刻这一轮是 Cue 开的（或歇着）时交出
+        var cue: Bool?
         var turnStartedAt: Int64?
     }
 
     static func sendCommand(id: String, _ message: SessionMessage) throws -> Data {
-        let cueTurn: Command.CueTurn? = if case .cue(let deliveryID, _) = message.policy { .init(deliveryId: deliveryID) } else { nil }
-        return try encodeLine(Command(
+        try encodeLine(Command(
             t: "send", id: id, text: message.text,
             images: message.images.isEmpty ? nil : message.images.map { .init(mimeType: $0.mimeType, data: $0.data.base64EncodedString()) },
-            deliveryId: message.deliveryID, cueTurn: cueTurn))
+            deliveryId: message.deliveryID, cue: message.policy == .cue ? true : nil))
     }
 
     static func abortTurnCommand(id: String, deliveryID: String, turnStartedAt: Int64) throws -> Data {

@@ -55,7 +55,7 @@ struct CommandProgressTests {
         if laterMessage {
             let later = try #require(result.completedAt).addingTimeInterval(0.001)
             try await store.writeTranscript(SessionTranscript(sessionID: "atlas", messages: [
-                ChatMessage(sessionID: "atlas", entryID: "later", seq: 1, role: .user, text: "终端里说的下一句", at: later),
+                ChatMessage(sessionID: "atlas", entryID: "later", seq: 1, role: .user, text: "另一台设备上说的下一句", at: later),
             ], recap: Recap()))
         } else {
             await Workspace(services: app.services).speak("下一句", to: .session(

@@ -56,15 +56,14 @@ extension SessionTaskTests {
         }
         let reply = ChatMessage(sessionID: "s1", entryID: "a2", seq: 2, role: .pi, text: "测试全过", at: .now)
         try await store.writeTranscript(SessionTranscript(
-            sessionID: "s1", messages: [said(1, "先跑测试", byCue), reply, said(3, "别动登录页样式", byPad), said(4, "顺便看下注册页", nil)],
-            recap: Recap()))
-        try await recorder.update(sessionID: "s1", state: .thinking)  // 终端里那句开的这一轮在跑
+            sessionID: "s1", messages: [said(1, "先跑测试", byCue), reply, said(3, "别动登录页样式", byPad)], recap: Recap()))
+        try await recorder.update(sessionID: "s1", state: .thinking, turnOpener: TurnOpener(delivery: byPad, cue: false))  // 他从回复框那句开的这一轮在跑
 
         let digest = try await SessionDigest.read(SessionState.recordID(sessionID: "s1"), sessionID: "s1", from: store)
-        #expect(Chat.entries(digest.messages, cueSent: digest.cueSent).filter { $0.role == .user }.map(\.fromCue) == [true, false, false])
+        #expect(Chat.entries(digest.messages, cueSent: digest.cueSent).filter { $0.role == .user }.map(\.fromCue) == [true, false])
         let cue = CueTools(store: store, wait: 0)
         let peek = try #require(await cue.call("task", ["action": "peek", "task": task.id.uuidString]))
-        #expect(peek.text.contains("你：先跑测试") && peek.text.contains("他：别动登录页样式") && peek.text.contains("他：顺便看下注册页"))
+        #expect(peek.text.contains("你：先跑测试") && peek.text.contains("他：别动登录页样式"))
 
         let refused = try #require(await cue.call("task", ["action": "say", "task": task.id.uuidString, "text": "注册页先别动"]))
         #expect(refused.isError && refused.text.contains("他发起的一轮"))
@@ -72,6 +71,7 @@ extension SessionTaskTests {
 
         try await store.recordSend("再跑一遍", to: target, delivery: byCueLater, origin: .known(.cue))
         try await store.writeTranscript(SessionTranscript(sessionID: "s1", messages: [said(5, "再跑一遍", byCueLater)], recap: Recap()))
+        try await recorder.update(sessionID: "s1", state: .thinking, turnOpener: TurnOpener(delivery: byCueLater, cue: true))
         let interrupted = try #require(await cue.call("task", ["action": "say", "task": task.id.uuidString, "text": "只跑登录的"]))
         #expect(!interrupted.isError && interrupted.text.contains("对「修登录」的会话说"))
     }
@@ -84,12 +84,13 @@ extension SessionTaskTests {
         try await recorder.update(sessionID: "s1", state: .settled, title: "修登录")
         let target = SendTarget(kind: .piSession, name: "修登录", ref: "s1")
         var seq: Int64 = 0
-        func open(_ role: ChatRole, _ text: String, delivery: UUID? = nil) async throws -> Int {
+        /// `opener` 为 nil 是不经 CuePad 开的一轮（子代理交回）：记录上的开轮者不变
+        func open(_ role: ChatRole, _ text: String, opener: TurnOpener? = nil) async throws -> Int {
             let mark = try await store.lastWrite()
             seq += 2
-            try await recorder.update(sessionID: "s1", state: .thinking, turnStartedAt: .now)
+            try await recorder.update(sessionID: "s1", state: .thinking, turnStartedAt: .now, turnOpener: opener)
             try await store.writeTranscript(SessionTranscript(sessionID: "s1", messages: [
-                ChatMessage(sessionID: "s1", entryID: "o\(seq)", seq: seq - 1, role: role, text: text, at: .now, deliveryID: delivery),
+                ChatMessage(sessionID: "s1", entryID: "o\(seq)", seq: seq - 1, role: role, text: text, at: .now, deliveryID: opener?.delivery),
                 ChatMessage(sessionID: "s1", entryID: "a\(seq)", seq: seq, role: .pi, text: "好", at: .now),
             ], recap: Recap(lastPrompt: text, lastReply: "好", answeredAt: .now)))
             return mark
@@ -102,11 +103,9 @@ extension SessionTaskTests {
             return envelope.split(separator: "\n").first { $0.hasPrefix("- [歇下") }.map(String.init)
         }
 
-        #expect(try await settle(after: try await open(.user, "先跑测试")) == nil)
-
         let byPad = UUID()
         try await store.recordSend("别动登录页样式", to: target, delivery: byPad)
-        #expect(try await settle(after: try await open(.user, "别动登录页样式", delivery: byPad)) == nil)
+        #expect(try await settle(after: try await open(.user, "别动登录页样式", opener: TurnOpener(delivery: byPad, cue: false))) == nil)
 
         let returned = "<firecode_master_event>\n子代理交回：测试全过\n</firecode_master_event>"
         var machine = try await open(.machine, returned)
@@ -116,7 +115,7 @@ extension SessionTaskTests {
 
         let byCue = UUID()
         try await store.recordSend("再跑一遍", to: target, delivery: byCue, origin: .known(.cue))
-        #expect(try await settle(after: try await open(.user, "再跑一遍", delivery: byCue))?.hasPrefix("- [歇下] 修登录") == true)
+        #expect(try await settle(after: try await open(.user, "再跑一遍", opener: TurnOpener(delivery: byCue, cue: true)))?.hasPrefix("- [歇下] 修登录") == true)
 
         machine = try await open(.machine, returned)
         #expect(try await settle(after: machine)?.hasPrefix("- [歇下] 修登录") == true)
@@ -133,7 +132,7 @@ extension SessionTaskTests {
         }
         try await store.recordMacPresence(host: "mac-b") { true }  // mac-b 醒着：它的在线记录同步到这里
         let recorder = try await app.runtimeRecorder(on: services.hostID)
-        let questions = [("s1", Question(promptID: "p", kind: .confirm, text: "继续？")), ("s2", Question(promptID: nil, kind: .confirm, text: "在终端里确认"))]
+        let questions = [("s1", Question(promptID: "p", kind: .confirm, text: "继续？")), ("s2", Question(promptID: nil, kind: .confirm, text: "允许打开浏览器吗？"))]
         for (session, question) in questions {
             try await recorder.update(sessionID: session, state: .thinking, title: session)
             try await recorder.update(sessionID: session, state: .waitingForUser, question: question)

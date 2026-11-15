@@ -49,20 +49,6 @@ extension CueStore {
     return try insertDelivery(content, to: session.target, on: session.host(or: host), mode: .send, card: card, cue: cue)
   }
 
-  /// 唯一的一处：“他说的”标记、他那一轮里 Cue 不插嘴、停下归谁接手都只认它。扩展投进来的机器消息（FireCode 交回子代理结果、审查结论）开的轮不另算：它是那句话派出去的活交回来了，从那句起到真正歇下是一件事。会话里还没有你一方的话为 nil。
-  func turnOpener(_ sessionID: String) throws -> TurnOpener? {
-    guard let last = try select(
-      ChatMessage.self, where: "sessionID = ? AND role = '\(ChatRole.user.rawValue)'", [sessionID], orderBy: "seq DESC, id DESC", limit: 1
-    ).first else { return nil }
-    switch last.source(in: try deliverySources(among: [last.deliveryID].compactMap(\.self))) {
-    case .cue: return .cue
-    case .user: return .user
-    case .unconfirmed: return .unconfirmed
-    }
-  }
-
-  enum TurnOpener { case user, cue, unconfirmed }
-
   /// 收自己写的回答的以外，Cue 说的（`leading`）开头正好是一个选项、后面紧跟标点或空白就按那个选项答，后面的说明不送，工具结果会告诉它；你在回复框里写的不这样截，免得说明悄悄丢掉。只认开头：说明里才提到选项（“不换，仍按 A”）猜不准。
   private static func answerValue(_ value: String, kind: QuestionKind, options: [String], allowsOther: Bool, leading: Bool) throws -> AnswerValue {
     switch kind {

@@ -42,6 +42,9 @@ public struct SessionState: Identifiable, Equatable, Sendable {
   /// 主会话最后一轮开始的时刻（你开的，或 Agent 自己为子代理的结果开的；等子代理到跟进轮之间 `busySince` 不变，这个要变）：
   /// 早于这一轮可能在会话文件里收尾的任何时刻（取法见 `SessionFacts.startTurn(at:)` 与 Pi 扩展的 `turnSince`）。还没开过一轮为 nil。
   public var turnStartedAt: Date?
+  /// 开这一轮的那句话（Mac 交给 Agent 的那一刻记下，与状态同一次写入）；后来不经 CuePad 开的轮（子代理交回、自动重试、后台任务回来）沿用。
+  /// 一句都没交过、或旧版本写的为 nil。停下归谁、Cue 能不能插话、语音停哪一轮都只认它。
+  public var turnOpener: TurnOpener?
   public var createdAt: Date
   public var modifiedAt: Date
   /// 发起方生成的标识（`LaunchRequest` 的 `token`），发起方据此等到并打开“自己开的那个”会话；其余会话为 nil。
@@ -70,7 +73,8 @@ public struct SessionState: Identifiable, Equatable, Sendable {
     busySince: Date?, createdAt: Date, modifiedAt: Date, launchToken: String? = nil, hosted: Bool = false,
     subagents: [SubagentState] = [], pendingPrompt: String? = nil, pendingTools: ChatMessage.Tools? = nil, model: ModelOption? = nil,
     thinking: Open<ThinkingLevel>? = nil, fast: Bool? = nil, context: ContextUsage? = nil, agent: Open<AgentKind> = .known(.pi), catalogID: UUID? = nil,
-    turnStartedAt: Date? = nil, answeredAt: Date? = nil, failure: Open<FailureKind>? = nil, bootID: String? = nil, runtimeUntil: Date? = nil, createdForTaskID: UUID? = nil
+    turnStartedAt: Date? = nil, turnOpener: TurnOpener? = nil, answeredAt: Date? = nil, failure: Open<FailureKind>? = nil, bootID: String? = nil,
+    runtimeUntil: Date? = nil, createdForTaskID: UUID? = nil
   ) {
     self.id = id
     self.sessionID = sessionID
@@ -103,6 +107,7 @@ public struct SessionState: Identifiable, Equatable, Sendable {
     self.agent = agent
     self.catalogID = catalogID
     self.turnStartedAt = turnStartedAt
+    self.turnOpener = turnOpener
     self.answeredAt = answeredAt
     self.failure = failure
   }
@@ -182,12 +187,14 @@ extension SessionState: Record, SyncedColumns {
     .plain("hosted"), .encrypted("subagents"), .encrypted("pendingPrompt"), .encrypted("model"), .encrypted("thinking"),
     .encrypted("context"), .plain("agent"), .plain("catalogID"), .encrypted("pendingTools"), .plain("turnStartedAt"),
     .plain("answeredAt"), .plain("failure"), .plain("bootID"), .encrypted("fast"), .plain("createdForTaskID"),
+    .plain("turnDelivery"), .plain("turnByCue"),
   ]
   var bindings: [any SQLBindable] {
     [id, sessionID, hostID, title, projectID, state.rawValue, detail, stateSince, createdAt, modifiedAt, notify?.rawValue, folder,
      lastPrompt, lastReply, question?.stored, busySince, launchToken, hosted ? Int64(1) : nil, JSONColumn.encodeList(subagents), pendingPrompt,
      model.map(JSONColumn.encode), thinking?.rawValue, context.map(JSONColumn.encode), agent.rawValue, catalogID, pendingTools?.stored,
-     turnStartedAt, answeredAt, failure?.rawValue, bootID, fast.map { $0 ? Int64(1) : Int64(0) }, createdForTaskID]
+     turnStartedAt, answeredAt, failure?.rawValue, bootID, fast.map { $0 ? Int64(1) : Int64(0) }, createdForTaskID,
+     turnOpener?.delivery, turnOpener.map { $0.cue ? Int64(1) : Int64(0) }]
   }
   init(row: Row) {
     self.init(
@@ -204,7 +211,19 @@ extension SessionState: Record, SyncedColumns {
       model: JSONColumn.decode(ModelOption.self, from: row.textOrNil(20)), thinking: row.textOrNil(21).map(Open.init(rawValue:)), fast: row.intOrNil(30).map { $0 == 1 },
       context: JSONColumn.decode(ContextUsage.self, from: row.textOrNil(22)),
       agent: Open(rawValue: row.text(23)), catalogID: row.uuidOrNil(24), turnStartedAt: row.dateOrNil(26),
+      turnOpener: row.uuidOrNil(32).map { TurnOpener(delivery: $0, cue: row.intOrNil(33) == 1) },
       answeredAt: row.dateOrNil(27), failure: row.textOrNil(28).map(Open.init(rawValue:)), bootID: row.textOrNil(29), createdForTaskID: row.uuidOrNil(31))
+  }
+}
+
+/// 开一轮的那句话：哪条投送、是不是 Cue 说的（来源在交出时就定了，`DeliveryRequest.isFromCue`）。
+public struct TurnOpener: Equatable, Hashable, Sendable {
+  public let delivery: UUID
+  public let cue: Bool
+
+  public init(delivery: UUID, cue: Bool) {
+    self.delivery = delivery
+    self.cue = cue
   }
 }
 

@@ -140,6 +140,8 @@ enum Schema {
     messageArrivalUpgrade,
     // 98：会话索引记下会话文件里最后用的模型与思考强度（`IndexedSession`）；已有的等读的规则换版本后重读时补上
     "ALTER TABLE piSessions ADD COLUMN model TEXT; ALTER TABLE piSessions ADD COLUMN thinking TEXT;",
+    // 99：会话记录记下开这一轮的那句话（`SessionState.turnOpener`）；已有的空着，下一句交出时补上
+    "ALTER TABLE piSessionStates ADD COLUMN turnDelivery TEXT; ALTER TABLE piSessionStates ADD COLUMN turnByCue INTEGER;",
   ]
 
   static let activityDestinationsTable = """

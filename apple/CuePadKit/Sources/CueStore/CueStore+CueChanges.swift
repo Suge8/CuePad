@@ -23,7 +23,7 @@ extension CueStore {
     func stall(_ session: SessionState, seq: Int, task: Card?, leaf: Card?) throws {
       guard let at = session.stallsAt, at <= now, marks.stalls.map({ at > $0 }) ?? true else { return }
       // 他发起的那一轮不报：Cue 这会儿说不进去（`checkCueCanSpeak`），叫醒它只能干看
-      guard try !hisTurn(session.sessionID) else { return }
+      guard !session.hisTurn else { return }
       let running = session.subagents.filter(\.isRunning).map { $0.action.isEmpty ? $0.name : "\($0.name)：\($0.action)" }
       changes.append(CueChange(
         kind: .stalled, task: task, leaf: leaf, session: session, at: at, seq: seq, detail: running.joined(separator: "；"), recap: session.recap))
@@ -80,7 +80,7 @@ extension CueStore {
       case .error: (.failed, session.detail)
       default: (nil, nil)
       }
-    guard let kind, try !hisTurn(session.sessionID) else { return nil }
+    guard let kind, !session.hisTurn else { return nil }
     return CueChange(
       kind: kind, task: task, leaf: leaf, session: session, at: session.stateSince, seq: seq,
       detail: detail, recap: session.recap, interrupted: session.state == .known(.interrupted))
@@ -92,14 +92,11 @@ extension CueStore {
       let latest = try lastWrite()
       guard latest > mark else { return latest }
       let stopped = try select(SessionState.self, where: "state IN (\(sqlList(WorkState.allCases.filter(\.isStopped)))) AND writeSeq > ?", [mark])
-      let his = try stopped.filter { try $0.atStop && hisTurn($0.sessionID) }
+      let his = stopped.filter { $0.atStop && $0.hisTurn }
       try putLeft(his)
       return latest
     }
   }
-
-  /// 会话最近这一轮有他开轮的正证据（`turnOpener`，机器消息开的跟着它之前那句）。停下归谁只认这一处。
-  private func hisTurn(_ sessionID: String) throws -> Bool { try turnOpener(sessionID) == .user }
 
   private func failedLeaf(_ card: UUID) throws -> [(task: Card?, leaf: Card?)] {
     guard let leaf = try find(Card.self, card), leaf.deletedAt == nil, leaf.isTask,

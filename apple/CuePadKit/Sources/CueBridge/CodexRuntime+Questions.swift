@@ -79,7 +79,7 @@ extension CodexRuntime {
             case .text(let written) where question.acceptsText: text = written
             default: throw BridgeError.rejected("bad_answer")
             }
-            try await deliver(CodexRPC.input(text: text, images: []), clientID: CodexHistory.clientID(for: nil), to: session)
+            try await deliver(CodexRPC.input(text: text, images: []), clientID: CodexHistory.clientID(for: nil), opener: nil, to: session)
             session.turns.facts.standingQuestion = nil
             return publish(session)
         }

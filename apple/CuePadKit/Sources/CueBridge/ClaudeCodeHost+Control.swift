@@ -16,7 +16,7 @@ extension ClaudeHostedSession {
         guard !message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !message.images.isEmpty else {
             throw BridgeError.rejected("empty")
         }
-        try await deliver(hosted(ClaudeStream.content(text: message.text, images: message.images), uuid: message.deliveryID))
+        try await deliver(hosted(ClaudeStream.content(text: message.text, images: message.images), uuid: message.deliveryID), opener: message.opener)
         // stream-json 不报首条消息，由这里记
         if !message.text.isEmpty, let id {
             bridge?.update(id) { if $0.firstMessage == nil { $0.firstMessage = message.text } }
@@ -24,12 +24,12 @@ extension ClaudeHostedSession {
     }
 
     /// 斜杠命令就是以 / 开头的一句话：托管进程会执行它（内置命令、skill、自定义命令）。
-    func command(_ line: String, deliveryID: String?, in _: Session.ID) async throws {
-        try await deliver(hosted(.string(line), uuid: deliveryID))
+    func command(_ line: String, opener: TurnOpener?, in _: Session.ID) async throws {
+        try await deliver(hosted(.string(line), uuid: opener?.delivery.uuidString), opener: opener)
     }
 
-    private func deliver(_ message: JSONValue) async throws {
-        try await turns.send(stop: { [self] in try await interrupt() }) { handed in
+    private func deliver(_ message: JSONValue, opener: TurnOpener?) async throws {
+        try await turns.send(opener: opener, stop: { [self] in try await interrupt() }) { handed in
             try await deliveries.deliver(message["uuid"]?.string ?? "") {
                 try put(message)
                 handed()

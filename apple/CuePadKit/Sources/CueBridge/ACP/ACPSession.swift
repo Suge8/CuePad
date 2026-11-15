@@ -51,7 +51,7 @@ final class ACPSession {
         self.processes = processes
         brain = nil
         turns = HostedTurns(timing: timing)
-        turns.onSettle = { [weak self] in self?.publish() }
+        turns.onChange = { [weak self] in self?.publish() }
     }
 
     init(dialect: any ACPDialect) {

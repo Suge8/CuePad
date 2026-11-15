@@ -25,7 +25,7 @@ final class PiConnection: SessionLink {
 
     func send(_ message: SessionMessage, in _: Session.ID) async throws { _ = try await request { try PiWire.sendCommand(id: $0, message) } }
 
-    func command(_ line: String, deliveryID _: String?, in _: Session.ID) async throws { _ = try await request { try PiWire.slashCommand(id: $0, line: line) } }
+    func command(_ line: String, opener _: TurnOpener?, in _: Session.ID) async throws { _ = try await request { try PiWire.slashCommand(id: $0, line: line) } }
 
     /// 退出方式由扩展按真实 mode 选择，不按 hosted 猜模式，也不对外部 PID 发信号。
     func end(_: Session.ID) async throws { _ = try await request { try PiWire.bare("end", id: $0) } }

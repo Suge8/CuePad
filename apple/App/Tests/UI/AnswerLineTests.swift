@@ -55,7 +55,7 @@ struct AnswerLineTests {
 
         let request = try await app.services.answer(.option("另存为 feed-full.xml"), to: session)
         _ = try await store.requestAnswer(Answer(promptID: "p-1", value: .option("覆盖"), question: question.text), to: session.target, on: "mac", cue: true)
-        // Mac 晚了一阵才领到（离线答的、Mac 睡着）：这期间你在终端里又说了一句；回答仍排在答的那一刻，在这句之前
+        // Mac 晚了一阵才领到（离线答的、Mac 睡着）：这期间你在另一台设备上又说了一句；回答仍排在答的那一刻，在这句之前
         try await store.writeTranscript(SessionTranscript(
             sessionID: "s", messages: [ChatMessage(sessionID: "s", entryID: "u2", seq: 2, role: .user, text: "顺便把 Atom 也输出", at: .now.addingTimeInterval(30))],
             recap: Recap(lastPrompt: "顺便把 Atom 也输出")))

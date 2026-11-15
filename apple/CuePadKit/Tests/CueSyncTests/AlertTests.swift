@@ -125,10 +125,12 @@ import Testing
     let rig = try Rig()
     let recorder = StateRecorder(store: rig.store, hostID: "mac", timing: ManualTiming().timing, bootID: TestBoot.id)
     let session = SessionState.recordID(sessionID: "s1")
-    func round(_ said: String? = nil) async throws {
-      try await recorder.update(sessionID: "s1", state: .thinking, title: "登录页", turnStartedAt: .now)
+    /// `his` 是他从回复框说的那句：开轮的是他
+    func round(his said: String? = nil) async throws {
+      let opener = said.map { _ in TurnOpener(delivery: UUID(), cue: false) }
+      try await recorder.update(sessionID: "s1", state: .thinking, title: "登录页", turnStartedAt: .now, turnOpener: opener)
       if let said {
-        let message = ChatMessage(sessionID: "s1", entryID: UUID().uuidString, seq: 1, role: .user, text: said, at: .now, deliveryID: nil)
+        let message = ChatMessage(sessionID: "s1", entryID: UUID().uuidString, seq: 1, role: .user, text: said, at: .now, deliveryID: opener?.delivery)
         let recap = Recap(lastPrompt: said, lastReply: "改好了\n细节见下", answeredAt: .now)
         try await rig.store.writeTranscript(SessionTranscript(sessionID: "s1", messages: [message], recap: recap))
       }
@@ -151,7 +153,7 @@ import Testing
     }
     try await round()
     #expect(try await flag(rig, session) == nil)  // 归 Cue 接手
-    try await round("顺便把限流加上")
+    try await round(his: "顺便把限流加上")
     #expect(try await flag(rig, session) == nil)  // 做完这一下不推：他发起的这一轮按待回复推
     _ = try await rig.store.leaveHisStops(after: 0)  // 值班的管理器对账时当场留给他回
     let left = try #require(try await rig.store.cueDuty()?.left.first)

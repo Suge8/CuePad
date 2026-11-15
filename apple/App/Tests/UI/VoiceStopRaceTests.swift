@@ -8,11 +8,11 @@ import Testing
 @testable import CueBridge
 
 /// 用户验收：真实 Pi 与桥扩展执行隔离 Python 工具；只替换语音媒体与付费模型。
-/// A 停止排队后，终端或同一通话开 B；旧停止必须明确结束而 B 的真实进程继续活着。
+/// A 停止排队后，回复框或同一通话开 B；旧停止必须明确结束而 B 的真实进程继续活着。
 @Suite(.releasesLibraries, .pinnedPi, .serialized)
 @MainActor
 struct VoiceStopRaceTests {
-    @Test(arguments: ["不换轮", "终端B", "语音B"])
+    @Test(arguments: ["不换轮", "回复框B", "语音B"])
     func 排队的停止只作用于原回合(next: String) async throws {
         let rig = try await CueHostTests.Rig(timing: { $0.sayWait = 0.1 })
         let voice = VoiceFlowFixture(rig.services)
@@ -64,8 +64,8 @@ struct VoiceStopRaceTests {
                         && voice.voiceRecord.executions.contains { $0.state.sessionID == session.sessionID }
                 }
             } else {
-                // 另一个客户端发新用户消息，没有 Cue 的投送身份。
-                try await rig.app.bridge.send(SessionMessage(text: second), to: session.id)
+                // 他从回复框发的 B：开轮的换成他的这句
+                try await rig.app.bridge.send(SessionMessage(text: second, deliveryID: UUID().uuidString), to: session.id)
             }
             try await eventually("B 的真实工具开始工作") { FileManager.default.fileExists(atPath: rig.folder.appending(path: "B.pid").path) }
             b = try pid("B", in: rig)
@@ -77,7 +77,7 @@ struct VoiceStopRaceTests {
             return [.known(.succeeded), .known(.failed)].contains(request.status)
         }
         let result = try #require(try await rig.store.deliveryRequest(stop.id))
-        if next == "终端B" {
+        if next == "回复框B" {
             try await eventually("停止权限消失后仍看得到动作结果") {
                 try voice.voiceRecord.executions.isEmpty && voice.details().executions.contains {
                     $0.id == session.sessionID && $0.status.contains("不再适用")

@@ -21,7 +21,7 @@ final class InMemoryHotkeys: HotkeyBackend {
     func unregister(_ handle: HotkeyHandle) { handles[handle] = nil }
 }
 
-/// Pi 的接入替身：记下被要求接着、开哪个会话，不真启动 Pi：被托管的会话由一个假扩展连上真桥（与终端里的 Pi 一样经 socket），
+/// Pi 的接入替身：记下被要求接着、开哪个会话，不真启动 Pi：被托管的会话由一个假扩展连上真桥（与托管的 Pi 一样经 socket），
 /// 收到结束命令就像 Pi 那样告别退出。
 final class RecordingHost: AgentRuntime {
     enum Call: Equatable {
@@ -161,8 +161,9 @@ final class PipedHostedAgent: AgentRuntime, SessionLink {
     func send(_ message: SessionMessage, in id: Session.ID) async throws {
         if let refusal { throw BridgeError.refused(refusal) }
         messages.append(message)
+        if let opener = message.opener { bridge.update(id) { $0.turnOpener = opener } }
     }
-    func command(_ line: String, deliveryID: String?, in id: Session.ID) async throws {
+    func command(_ line: String, opener: TurnOpener?, in id: Session.ID) async throws {
         if let refusal { throw BridgeError.refused(refusal) }
         commands.append(line)
     }

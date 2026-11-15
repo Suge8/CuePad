@@ -11,7 +11,10 @@ import { QuotaFetcher, type Quota, type QuotaWindow } from "./quota.ts";
 type UserContent = Parameters<ExtensionAPI["sendUserMessage"]>[0];
 export type Ack = (fields: object) => void;
 /** 一句要开新一轮的话。`text` 是认它的文字：会话里落成的那条用户消息据此认出（`landed`）。 */
-type Said = { content: UserContent; expand: boolean; text: string; id?: string; ack?: Ack; cueTurn?: { deliveryId?: string | null } };
+type Said = { content: UserContent; expand: boolean; text: string; id?: string; ack?: Ack; cue: boolean };
+/** 开这一轮的那句：CuePad 交的话落成消息时记下（`landed`），之后不经 CuePad 开的轮（FireCode 交回、重试）沿用。
+ * Cue 的话只插进 Cue 开的轮（`rejectSend`），有目标的停止只停这句开的轮（`stopDelivery`）。 */
+export type Opener = { delivery: string; cue: boolean };
 export type Firecode = { inFlight: number; subagents: Subagent[] };
 type Identity = { extensionVersion: number; launchToken: string | null };
 
@@ -23,6 +26,7 @@ export class Session {
 	/** 主会话最后一次模型回合开始的时间（`turn_start` 的时刻）：CuePad 据此认出歇下时这一轮的回答读到没有。
 	 * 取每个回合而不取 agent_start：一次运行里接着处理排队的话，最后的回答出自最后一个回合 */
 	turnSince: number | null = null;
+	opener: Opener | null = null;
 	private lastKey: string;
 	phase: Phase;
 	since: number;
@@ -69,9 +73,10 @@ export class Session {
 			this.tracker.settled = kept.settled;
 			this.tracker.outcome = kept.outcome;
 			this.turnSince = kept.turnSince;
+			this.opener = kept.opener ?? null;
 		}
 		const initial = this.state();
-		this.lastKey = JSON.stringify([initial, this.turnSince]);
+		this.lastKey = JSON.stringify([initial, this.turnSince, this.opener]);
 		this.phase = phaseOf(initial);
 		// 热升级前的实例交出的不带 clock：起点从此刻算
 		const clock = kept?.clock?.phase === this.phase ? kept.clock : null;
@@ -122,7 +127,7 @@ export class Session {
 	/** 没有客户端时只维护状态与计时，不做任何 I/O。 */
 	commit(resume?: Clock) {
 		const current = this.state();
-		const key = JSON.stringify([current, this.turnSince]);
+		const key = JSON.stringify([current, this.turnSince, this.opener]);
 		if (key === this.lastKey) return;
 		this.lastKey = key;
 		const next = phaseOf(current);
@@ -135,13 +140,17 @@ export class Session {
 			this.reload.whenIdle();
 		}
 		if (this.clients.size === 0) return;
-		this.broadcast({ t: "state", state: { ...current, since: this.since, busySince: this.busySince, turnSince: this.turnSince } });
+		this.broadcast({ t: "state", state: this.wireState(current) });
+	}
+
+	private wireState(current = this.state()) {
+		return { ...current, since: this.since, busySince: this.busySince, turnSince: this.turnSince, opener: this.opener };
 	}
 
 	/** 重新载入时交给下一个实例的（`carryOver`）。 */
 	carried(): Carried {
 		const { settled, outcome } = this.tracker;
-		return { settled, outcome, turnSince: this.turnSince, clock: { phase: this.phase, since: this.since, busySince: this.busySince } };
+		return { settled, outcome, turnSince: this.turnSince, opener: this.opener, clock: { phase: this.phase, since: this.since, busySince: this.busySince } };
 	}
 
 	private canReload() {
@@ -201,7 +210,7 @@ export class Session {
 			sessionFile: this.ctx.sessionManager.getSessionFile() ?? null,
 			pid: process.pid,
 			cwd: this.ctx.cwd,
-			state: { ...this.state(), since: this.since, busySince: this.busySince, turnSince: this.turnSince },
+			state: this.wireState(),
 			launchToken: this.identity.launchToken,
 			hosted: true,
 			...this.info,
@@ -296,18 +305,14 @@ export class Session {
 	}
 
 	private rejectSend(said: Said) {
-		if (!said.cueTurn) return false;
-		// isIdle 不含 SDK 队列；公开接口没有队列来源证据，不能用当前轮的许可抢到排队用户消息之前。
-		if (this.ctx.hasPendingMessages()) {
+		if (!said.cue) return false;
+		// isIdle 不含 SDK 队列；交出了还没落成的（starting）与 SDK 排着的都还说不出开轮的是谁，不能抢到它们前面停下这一轮。
+		if (this.starting.length || this.ctx.hasPendingMessages()) {
 			said.ack?.({ ok: false, error: "unconfirmed_turn" });
 			return true;
 		}
-		if (this.ctx.isIdle()) return false;
-		const last = this.ctx.sessionManager.buildSessionProjection().messages.findLast((message) => message.role === "user");
-		const current = (last as { cuepadDelivery?: unknown } | undefined)?.cuepadDelivery;
-		const allowed = said.cueTurn.deliveryId;
-		if (typeof current === "string" && allowed && current === allowed) return false;
-		said.ack?.({ ok: false, error: typeof current !== "string" || !allowed ? "unconfirmed_turn" : "user_turn" });
+		if (this.ctx.isIdle() || this.opener?.cue) return false;
+		said.ack?.({ ok: false, error: this.opener ? "user_turn" : "unconfirmed_turn" });
 		return true;
 	}
 
@@ -316,8 +321,7 @@ export class Session {
 	stopDelivery(deliveryId: string, turnStartedAt: number): boolean {
 		if (this.turnSince !== turnStartedAt) return false;
 		if (this.starting.length || this.ctx.hasPendingMessages()) return false;
-		const last = this.ctx.sessionManager.buildSessionProjection().messages.findLast((message) => message.role === "user");
-		if ((last as { cuepadDelivery?: unknown } | undefined)?.cuepadDelivery !== deliveryId) return false;
+		if (this.opener?.delivery !== deliveryId) return false;
 		if (this.ctx.isIdle()) return false;
 		this.stopRound();
 		return true;

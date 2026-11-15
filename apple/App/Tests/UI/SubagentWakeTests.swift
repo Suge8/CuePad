@@ -74,10 +74,12 @@ struct SubagentWakeTests {
         // 会话在跑只认宿主在线时报的（`runtimeUntil`）：mac-b 像醒着的 Mac 那样先报在线
         try await store.recordMacPresence(host: "mac-b") { true }
         let remote = StateRecorder(store: store, hostID: "mac-b")
+        let byHim = TurnOpener(delivery: UUID(), cue: false)  // 他从回复框说的"做到底"开的这一轮
         try await store.writeTranscript(SessionTranscript(
-            sessionID: "remote-his", messages: [ChatMessage(sessionID: "remote-his", entryID: "u1", seq: 1, role: .user, text: "做到底", at: due - 3600)],
+            sessionID: "remote-his",
+            messages: [ChatMessage(sessionID: "remote-his", entryID: "u1", seq: 1, role: .user, text: "做到底", at: due - 3600, deliveryID: byHim.delivery)],
             recap: Recap(lastPrompt: "做到底")))
-        try await remote.update(sessionID: "remote-his", state: .delegating, title: "修好注册页", subagents: [ui])
+        try await remote.update(sessionID: "remote-his", state: .delegating, title: "修好注册页", turnOpener: byHim, subagents: [ui])
         try await remote.update(sessionID: "remote-1", state: .delegating, title: "修好登录页", subagents: [ui, reviewer])
         try await rig.reconciled()  // 还没停住：排好到点的那一下
         rig.jump(to: due)

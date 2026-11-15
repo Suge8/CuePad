@@ -1,7 +1,7 @@
 import Foundation
 
 extension CueStore {
-  /// 语音可控范围：Cue 实际接走的本次请求 → 该工具生成的投送 → 会话当前最后一条用户消息。
+  /// 语音可控范围：Cue 实际接走的本次请求 → 该工具生成的投送 → 开了会话这一轮的那句（`SessionState.turnOpener`）。
   /// 混入别的来源的一轮、读过／提到某任务、旧回合和没有真实消息回执的执行都不能授权停止。
   /// 返回仍归属这次请求的实际会话记录，含已歇下的，供界面显示停止后的真实状态。
   public func voiceExecutions(requests: [UUID]) throws -> [SessionListItem] {
@@ -19,22 +19,17 @@ extension CueStore {
       }
     })
     guard !deliveries.isEmpty else { return [] }
-    let sessions = try db.query("""
-      SELECT DISTINCT p.sessionID FROM piMessages p
-      WHERE p.deliveryID IN (SELECT lower(value) FROM json_each(?)) AND p.role IN ('user', 'answer')
-        AND NOT EXISTS (SELECT 1 FROM piMessages n WHERE n.sessionID = p.sessionID AND n.role IN ('user', 'answer')
-          AND (n.seq > p.seq OR (n.seq = p.seq AND n.id > p.id)))
-      """, [JSONColumn.encode(deliveries.sorted { $0.uuidString < $1.uuidString })]) { $0.text(0) }
+    let sessions = try db.query(
+      "SELECT sessionID FROM piSessionStates WHERE turnDelivery IN (SELECT lower(value) FROM json_each(?))",
+      [JSONColumn.encode(deliveries.sorted { $0.uuidString < $1.uuidString })]) { $0.text(0) }
     let items = try sessionItems(sessionIDs: sessions)
     return sessions.sorted().compactMap { items[$0] }
   }
 
-  /// 从真实请求归属与最新消息派生可停止目标；缺少回合或本次启动证明时不授予权限。
+  /// 从真实请求归属与开轮的那句派生可停止目标；缺少回合或本次启动证明时不授予权限。
   public func voiceExecutionTarget(_ sessionID: String, requests: [UUID], turnStartedAtMilliseconds turn: Int64) throws -> TurnTarget {
     guard let state = try voiceExecutions(requests: requests).first(where: { $0.state.sessionID == sessionID })?.state,
-      state.canStop, let boot = state.bootID,
-      let delivery = try select(ChatMessage.self, where: "sessionID = ? AND role IN ('user', 'answer')", [sessionID],
-                                orderBy: "seq DESC, id DESC", limit: 1).first?.deliveryID
+      state.canStop, let boot = state.bootID, let delivery = state.turnOpener?.delivery
     else { throw CueStoreError.turnChanged }
     return TurnTarget(hostID: state.hostID, bootID: boot, sessionID: sessionID, deliveryID: delivery, turnStartedAtMilliseconds: turn)
   }

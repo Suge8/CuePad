@@ -104,6 +104,8 @@ DEFINE SCHEMA
         bootID           STRING,
         fast             ENCRYPTED INT64,
         createdForTaskID STRING,
+        turnDelivery     STRING,
+        turnByCue        INT64,
         models           ENCRYPTED STRING,
         commands         ENCRYPTED STRING,
         GRANT WRITE TO "_creator",

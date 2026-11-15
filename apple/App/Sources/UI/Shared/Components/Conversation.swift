@@ -315,7 +315,7 @@ struct SessionShownLabel: View {
 }
 
 
-/// 只能在 Agent 那边答的（问题本身答不了，或这个会话做不到，`SessionState.answerableQuestion`）写明原文与去处。
+/// CuePad 答不了的（问题本身答不了，或这个会话做不到，`SessionState.answerableQuestion`）只放原文，怎么办写在回复框的位置上。
 struct QuestionDock: View {
     let session: SessionState
 
@@ -324,7 +324,6 @@ struct QuestionDock: View {
             if let question = asked.answerableQuestion {
                 QuestionCard(session: asked, question: question).id(question.promptID)
             } else {
-                // 去哪答写在回复框的位置上（各平台不同），这里只放问题
                 Callout(.asking, text: asked.question?.displayText ?? asked.detail ?? "", docked: true)
             }
         }

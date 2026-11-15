@@ -11,7 +11,7 @@ public enum QuestionKind: String, Sendable, CaseIterable, Codable {
 
 /// 等你回答的弹窗。存在同步记录的 `question` 字段里（加密，JSON）。
 public struct Question: Sendable, Equatable, StoredJSON {
-  /// 这次弹窗的标识，作答时带上；nil 表示只能在 Pi 里答（多行编辑、自定义界面）。
+  /// 这次弹窗的标识，作答时带上；nil 表示 CuePad 答不了（多行编辑、自定义界面）。
   public var promptID: String?
   /// 不认识的种类（多行编辑、自定义界面、更新版本的新种类）不能从这里作答。
   public var kind: Open<QuestionKind>

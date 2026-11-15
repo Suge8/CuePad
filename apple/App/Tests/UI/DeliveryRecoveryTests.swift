@@ -184,14 +184,14 @@ struct DeliveryRecoveryTests {
         try await eventually("宿主开始 Cue 的一轮") { app.bridge.session(id: ext.id)?.turnStartedAt != nil }
         let began = try #require(app.bridge.session(id: ext.id)?.turnStartedAt)
         let recorder = try await app.runtimeRecorder(on: host)
-        try await recorder.update(sessionID: target.sessionID, state: .thinking, turnStartedAt: began)
+        try await recorder.update(sessionID: target.sessionID, state: .thinking, turnStartedAt: began, turnOpener: TurnOpener(delivery: first.id, cue: true))
         let queued = try #require(await cue.call("task", ["action": "say", "task": task.id.uuidString, "text": "接着检查上传"]))
         #expect(!queued.isError)
         let second = try #require(try await store.deliveryRequests().first { $0.id != first.id })
 
-        // 库还是 Cue 的旧报告，宿主已进入另一轮：不能拿旧报告授权打断。
+        // 库还是 Cue 的旧报告，宿主已进入他开的另一轮：不能拿旧报告授权打断。
         let newTurn = Int64(began.addingTimeInterval(1).timeIntervalSince1970 * 1000)
-        ext.sendRaw("{\"t\":\"state\",\"state\":{\"kind\":\"thinking\",\"since\":\(newTurn),\"turnSince\":\(newTurn)}}")
+        ext.sendRaw(#"{"t":"state","state":{"kind":"thinking","since":\#(newTurn),"turnSince":\#(newTurn),"opener":{"delivery":"\#(UUID().uuidString)","cue":false}}}"#)
         try await eventually("桥看到后来的一轮") { app.bridge.session(id: ext.id)?.turnStartedAt != began }
         try await app.services.executor.start()
         let rejected = try await outcome(second, in: store)
