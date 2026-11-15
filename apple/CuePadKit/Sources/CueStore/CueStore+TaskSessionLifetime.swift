@@ -9,6 +9,18 @@ extension CueStore {
       [owner, Date.stamp, sessionID, launch.token])
   }
 
+  /// 你对它说话、翻回绑着它的已完成任务之后，为之开它的与绑着它的都不在看板上没做完：你在恢复使用一个收尾过的会话，从此不随任务结束（`restoredAt`）。
+  /// 为之开它的那件还没同步到时不记：看不出它收没收尾。必须在写事务内调用。
+  func noteRestored(_ sessionID: String) throws {
+    let now = Date.stamp
+    try db.run(
+      """
+      UPDATE piSessionStates SET restoredAt = ?1, modifiedAt = ?1
+      WHERE sessionID = ?2 AND restoredAt IS NULL AND createdForTaskID IN (SELECT id FROM cards)
+        AND NOT EXISTS (SELECT 1 FROM cards c WHERE (c.id = piSessionStates.createdForTaskID OR c.piSessionID = ?2) AND \(Self.taskOpen))
+      """, [now, sessionID])
+  }
+
   /// 与投送转入 executing 同事务复核；受理后新借用与发送由同一投送状态拒绝。明确 end 不受此规则限制。
   func permitsTaskSessionEnd(_ request: DeliveryRequest) throws -> Bool {
     guard request.mode == .known(.end), request.end != .explicit else { return true }

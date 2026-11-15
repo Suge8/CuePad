@@ -170,7 +170,9 @@ case "$cmd" in
   perf)
     # 构建与测量各自按普通任务进锁；帧与回合时长随机器忙闲变，看结束时的负载，前后对比以指令数为准
     # xcodebuild 的标准输出与错误已在 xcb 里并成一路写进 build.log；排队、用时、入口的报错走终端的标准错误，不进日志
-    if [ -z "${measuring:-}" ]; then
+    # CUEPAD_PERF_APP：不构建，用本检出的测量脚本量别的检出构建好的 App（perf-ab.py：两边同一份测量口径）
+    app="${CUEPAD_PERF_APP:-$app}"
+    if [ -z "${measuring:-}" ] && [ -z "${CUEPAD_PERF_APP:-}" ]; then
       status=0
       "$0" build-perf "$platform" >"$DERIVED/build.log" || status=$?
       if [ "$status" != 0 ]; then
@@ -181,6 +183,8 @@ case "$cmd" in
         } >&2
         exit "$status"
       fi
+    fi
+    if [ -z "${measuring:-}" ]; then
       xc_enter "$([ "$platform" = ios ] && echo "$CUEPAD_IOS_DEVICE")" "$0" perf-measure "${@:2}"  # 已在锁里（脚本调脚本）时直接返回，往下量
     fi
     # iOS 每次从刚开机的模拟器量（perf.py 头注释），量完开着留给别的任务
