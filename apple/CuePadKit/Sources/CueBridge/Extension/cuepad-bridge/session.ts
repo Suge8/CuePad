@@ -73,13 +73,12 @@ export class Session {
 			this.tracker.settled = kept.settled;
 			this.tracker.outcome = kept.outcome;
 			this.turnSince = kept.turnSince;
-			this.opener = kept.opener ?? null;
+			this.opener = kept.opener;
 		}
 		const initial = this.state();
 		this.lastKey = JSON.stringify([initial, this.turnSince, this.opener]);
 		this.phase = phaseOf(initial);
-		// 热升级前的实例交出的不带 clock：起点从此刻算
-		const clock = kept?.clock?.phase === this.phase ? kept.clock : null;
+		const clock = kept?.clock.phase === this.phase ? kept.clock : null;
 		this.since = clock?.since ?? Date.now();
 		this.busySince = clock ? clock.busySince : this.phase === "working" ? this.since : null;
 		this.info = {
@@ -212,7 +211,6 @@ export class Session {
 			cwd: this.ctx.cwd,
 			state: this.wireState(),
 			launchToken: this.identity.launchToken,
-			hosted: true,
 			...this.info,
 		};
 	}

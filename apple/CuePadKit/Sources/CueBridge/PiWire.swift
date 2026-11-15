@@ -8,9 +8,9 @@ enum PiWire {
     /// （`SelfReload`），可能等几个小时，这期间会话照常收话。只加命令、加 CuePad 可以没有的字段不提它（旧扩展不认的命令回 `bad_request`）；
     /// 改了 CuePad 读的格式、已有命令的含义，或 CuePad 要靠某个新字段才对时，提到那一版。区间外的 hello 只读身份（`IdentityHello`），
     /// 命令除 `upgrade` 外一条不发，会话等它换上新扩展（`Session.upgrading`）
-    static let oldestExtension = 68
+    static let oldestExtension = 70
 
-    static func reads(extensionVersion version: Int?) -> Bool { version.map { (oldestExtension...PiExtensionBundle.version).contains($0) } == true }
+    static func reads(extensionVersion version: Int) -> Bool { (oldestExtension...PiExtensionBundle.version).contains(version) }
 
     struct State: Decodable {
         var kind: String
@@ -21,7 +21,7 @@ enum PiWire {
         var since: Double
         var busySince: Double?
         var turnSince: Double?
-        /// 开这一轮的那句（68 起）：CuePad 交的话落成消息时记下；扩展重载、换进程前没交过话为空
+        /// 开这一轮的那句：CuePad 交的话落成消息时记下；扩展重载、换进程前没交过话为空
         var opener: Opener?
 
         struct Opener: Decodable {
@@ -59,11 +59,10 @@ enum PiWire {
         var cwd: String
         var state: State
         var launchToken: String?
-        var hosted: Bool
         var info: Info
 
         enum CodingKeys: String, CodingKey {
-            case extensionVersion, sessionId, sessionFile, pid, cwd, state, launchToken, hosted
+            case extensionVersion, sessionId, sessionFile, pid, cwd, state, launchToken
         }
 
         init(from decoder: any Decoder) throws {
@@ -75,38 +74,34 @@ enum PiWire {
             cwd = try c.decode(String.self, forKey: .cwd)
             state = try c.decode(State.self, forKey: .state)
             launchToken = try c.decodeIfPresent(String.self, forKey: .launchToken)
-            hosted = try c.decode(Bool.self, forKey: .hosted)
             info = try Info(from: decoder)
         }
     }
 
     /// 每个 hello 先按它读：读得懂这一版扩展（`reads`）才往下读完整的 `Hello`，读不懂的只留认得出会话的几项（其余字段读不出就当没有），
-    /// 这几项的键与含义永远不变。`hosted` 也读：只有托管的会话上桥，旧版装进 Pi 扩展目录的那份在终端里的 pi 里也会来连。
-    /// `sessionFile` 也读：进程退出时说没说过话（`Session.spoke`）看它，读不到就会把说过话的会话当成没说话、删掉记录与摘要。
+    /// 这几项的键与含义永远不变。`sessionFile` 也读：进程退出时说没说过话（`Session.spoke`）看它，读不到就会把说过话的会话当成没说话、删掉记录与摘要。
     struct IdentityHello: Decodable {
-        var extensionVersion: Int?
+        var extensionVersion: Int
         var sessionId: String
         var sessionFile: String?
         var pid: Int32
         var cwd: String
         var name: String?
         var firstMessage: String?
-        var hosted: Bool
 
         enum CodingKeys: String, CodingKey {
-            case extensionVersion, sessionId, sessionFile, pid, cwd, name, firstMessage, hosted
+            case extensionVersion, sessionId, sessionFile, pid, cwd, name, firstMessage
         }
 
         init(from decoder: any Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
-            extensionVersion = try? c.decode(Int.self, forKey: .extensionVersion)
+            extensionVersion = try c.decode(Int.self, forKey: .extensionVersion)
             sessionId = try c.decode(String.self, forKey: .sessionId)
             sessionFile = try? c.decode(String.self, forKey: .sessionFile)
             pid = try c.decode(Int32.self, forKey: .pid)
             cwd = try c.decode(String.self, forKey: .cwd)
             name = try? c.decode(String.self, forKey: .name)
             firstMessage = try? c.decode(String.self, forKey: .firstMessage)
-            hosted = (try? c.decode(Bool.self, forKey: .hosted)) ?? false
         }
     }
 
@@ -301,10 +296,6 @@ enum PiWire {
     static func configCommand(id: String, model: ModelKey?, thinking: ThinkingLevel?, fast: Bool? = nil, name: String?) throws -> Data {
         try encodeLine(ConfigCommand(id: id, model: model, thinking: thinking?.rawValue, fast: fast, name: name))
     }
-
-    /// 起名（`titleSince`）认得的最早扩展版本：更早的会话换上新扩展前不起名（`PiConnection.canNameItself`）。
-    /// 63 之前的扩展要命令带 `limit`，不带就回 `bad_request`。
-    static let titleSince = 63
 
     private struct TitleCommand: Encodable {
         var t = "title"

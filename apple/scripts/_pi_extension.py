@@ -20,10 +20,9 @@ def version_in(apple):
 
 
 def hello(version, session_id, cwd, state, **info):
-    """socket 文件名得是 `<session_id>.<本进程 pid>.sock`（CuePad 核对）。info 是可选的会话信息（name、firstMessage…，格式见 PiWire.Info）。
-    hosted：CuePad 只收由它托管的会话。"""
+    """socket 文件名得是 `<session_id>.<本进程 pid>.sock`（CuePad 核对）。info 是可选的会话信息（name、firstMessage…，格式见 PiWire.Info）。"""
     return {"t": "hello", "extensionVersion": version, "sessionId": session_id, "sessionFile": None, "pid": os.getpid(),
-            "cwd": cwd, "hosted": True, "state": state, **info}
+            "cwd": cwd, "state": state, **info}
 
 
 def state(value): return {"t": "state", "state": value}
