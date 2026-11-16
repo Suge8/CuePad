@@ -138,7 +138,7 @@ struct AgentIndexingTests {
         try await indexed([hosted, terminal])
         #expect(try await store.allSessionStates().contains { $0.sessionID == terminal })
 
-        await services.disconnectAgent(.claudeCode)
+        services.disconnectAgent(.claudeCode)
         try await indexed([hosted])
         #expect(try await store.allSessionStates().contains { $0.sessionID == terminal }, "同步出去的会话记录不动")
 

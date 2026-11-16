@@ -13,7 +13,6 @@ struct AgentRows: View {
 struct AgentRow: View {
     let kind: AgentKind
     @Environment(AppServices.self) private var services
-    @State private var working = false
     @State private var outcome: Outcome?
 
     private enum Outcome: Equatable {
@@ -24,12 +23,12 @@ struct AgentRow: View {
         let status = services.agents.status(kind)
         let (tone, line) = describe(status)
 
-        SettingRow(title: .verbatim(kind.name), icon: kind.mark.image, tone: tone, busy: working || installing, status: line, help: help) {
+        SettingRow(title: .verbatim(kind.name), icon: kind.mark.image, tone: tone, busy: installing, status: line, help: help) {
             // 开关常驻，检测完只换状态那一行字。
             Toggle(kind.name, isOn: Binding(get: { services.isConnected(kind) }, set: apply))
                 .labelsHidden()
                 .toggleStyle(.switch)
-                .disabled(working || !(status.map(canToggle) ?? false))
+                .disabled(!(status.map(canToggle) ?? false))
         } fix: {
             if let status, Self.needsSetup(status), !installing {
                 if let prerequisite = status.lacking {
@@ -85,13 +84,7 @@ struct AgentRow: View {
 
     private func apply(_ on: Bool) {
         outcome = nil
-        guard !on else { return services.connectAgents([kind]) }
-        working = true
-        let services = services, kind = kind
-        Task {
-            await services.disconnectAgent(kind)
-            working = false
-        }
+        if on { services.connectAgents([kind]) } else { services.disconnectAgent(kind) }
     }
 
     /// 没装上的原因在 `jobs` 里；这里接住的是装完重新检测、写进库时抛的错。

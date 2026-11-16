@@ -46,7 +46,8 @@ public struct AgentIntegration: Sendable {
         return AgentSkill.kinds(in: text)
     }
 
-    /// 只在 `legacySkillKinds` 认出来之后调。先删各家目录里指向它的链接，最后删它和因此变空的目录：中途失败时文件还在，下次启动重来。
+    /// 只在 `legacySkillKinds` 认出来之后调。先删各家目录里指向它的链接，最后删它：中途失败时文件还在，下次启动重来。
+    /// 因此变空的目录顺手删，删不掉不算失败：文件已删、下次认不出它，空目录也不碍事。
     public func removeLegacySkill() throws {
         let files = FileManager.default
         var emptied = [legacySkillDirectory, legacySkillDirectory.deletingLastPathComponent(), paths.agentsDirectory]
@@ -56,7 +57,7 @@ public struct AgentIntegration: Sendable {
         }
         try files.removeItem(at: legacySkillFile)
         for directory in emptied where (try? files.contentsOfDirectory(atPath: directory.path))?.isEmpty == true {
-            try files.removeItem(at: directory)
+            try? files.removeItem(at: directory)
         }
     }
 

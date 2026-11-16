@@ -30,7 +30,7 @@ struct SessionBriefTests {
     @Test(.enabled(if: PinnedAgent.claude.uncovered == nil, Comment(rawValue: PinnedAgent.claude.uncovered ?? "")))
     func ClaudeCode托管会话没接入也带着指引() async throws {
         try await ClaudeRig.run { rig in
-            await rig.services.disconnectAgent(.claudeCode)
+            rig.services.disconnectAgent(.claudeCode)
             let id = try await rig.runtime.open(in: rig.work, launchToken: "brief", name: nil, model: nil, thinking: nil)
             let sessionID = try #require(rig.bridge.session(id: id)).sessionID
 

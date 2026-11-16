@@ -132,7 +132,7 @@ public final class OpenCodeRuntime: AgentRuntime, SessionLink {
     }
 
     /// 停掉 CuePad 拉起的服务（`opencode service stop`，它删掉登记文件，会话随之下线）；本来就在跑的不动。
-    public func stopStartedService() -> @concurrent @Sendable () async -> Void {
+    private func stopStartedService() -> @concurrent @Sendable () async -> Void {
         guard let service = startedService else { return {} }
         startedService = nil
         let timing = timing

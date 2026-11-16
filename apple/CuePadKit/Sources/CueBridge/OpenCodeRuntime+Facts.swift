@@ -29,7 +29,5 @@ extension OpenCodeRuntime {
             return models.isEmpty ? nil : MacAgent(kind: .opencode, model: model?.key, models: models.map(\.option))
         }
     }
-
-    public func integrationRemoved() async { await stopStartedService()() }
 }
 #endif

@@ -122,7 +122,6 @@ public protocol AgentRuntime: AnyObject {
     func transcript(of session: IndexedSession, files: AttachmentFiles) async throws -> SessionTranscript
     /// 清单里一步的里面（`ToolCallDetail`）：回会话里按调用 id 现取。缺省读会话文件。
     func stepDetail(_ calls: [String], of session: IndexedSession) async throws -> ToolCallDetail
-    func integrationRemoved() async
 }
 
 extension AgentRuntime {
@@ -142,8 +141,6 @@ extension AgentRuntime {
         }
         return id
     }
-
-    public func integrationRemoved() async {}
 
     public func transcript(of session: IndexedSession, files: AttachmentFiles) async throws -> SessionTranscript {
         try History.index(file: URL(filePath: session.path), agent: session.agent, from: nil, files: files).transcript

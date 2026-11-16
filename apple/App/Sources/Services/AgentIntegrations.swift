@@ -103,10 +103,7 @@ extension AppServices {
     /// 只记下来，读它的会话记录由 `indexAgents` 跟着做。
     func connectAgents(_ kinds: some Sequence<AgentKind>) { settings.connectedAgents.formUnion(kinds) }
 
-    func disconnectAgent(_ kind: AgentKind) async {
-        settings.connectedAgents.remove(kind)
-        await runtimes[kind]?.integrationRemoved()
-    }
+    func disconnectAgent(_ kind: AgentKind) { settings.connectedAgents.remove(kind) }
 
     /// 接入面板里勾得上的：检测过、能用、还没接入；不碰真实世界时只有配置目录经环境变量换走了的那几家（`AgentIntegration.touches`）。
     var connectableAgents: [AgentKind] {
