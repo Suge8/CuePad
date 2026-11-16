@@ -50,10 +50,11 @@ struct SessionActions: View {
 struct MarkUnreadButton: View {
     let session: SessionState
     @Environment(AppServices.self) private var services
+    @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        if services.settings.canMarkUnread(session) {
-            Button("标为未读", icon: .markUnread) { services.settings.markUnread(session) }
+        if session.canMarkUnread(services.liveSessions.marks[session.sessionID], at: .now) {
+            Button("标为未读", icon: .markUnread) { [store = services.store, id = session.sessionID] in workspace.attempt { try await store.mark(.sessionUnread(id)) } }
         }
     }
 }

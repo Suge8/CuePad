@@ -29,8 +29,6 @@ final class AppSettings {
         static let alerts = "alerts"
         #endif
         static let replyDrafts = "replyDrafts"
-        static let sessionSeen = "sessionSeen"
-        static let unreadSince = "unreadSince"
         static let launchDefault = "launchDefault"
         static let projectLaunches = "projectLaunches"
         static let navigationPane = "navigationPane"
@@ -89,32 +87,6 @@ final class AppSettings {
     var cueOpen: Bool { didSet { defaults.set(cueOpen, forKey: Key.cueOpen) } }
     /// 上次离开 Cue 页的时刻（本机）：回来时离开够久就重开舞台（`CueStage.opens`）。没有界面读它，不进观察。
     @ObservationIgnored var cueLeft: Date? { didSet { defaults.set(cueLeft, forKey: Key.cueLeft) } }
-
-    /// 按 sessionID；只留最近看的 `seenLimit` 个。
-    private(set) var sessionSeen: [String: Date] { didSet { defaults.set(sessionSeen, forKey: Key.sessionSeen) } }
-    /// "有新回复"从什么时候起算：第一次启动这个版本时记下，之前就停下的会话不算。
-    let unreadSince: Date
-
-    private static let seenLimit = 500
-
-    func isUnread(_ session: SessionState) -> Bool {
-        Unread.isUnread(session, seen: sessionSeen[session.sessionID], since: unreadSince)
-    }
-
-    func canMarkUnread(_ session: SessionState) -> Bool {
-        Unread.canMarkUnread(session, seen: sessionSeen[session.sessionID], since: unreadSince)
-    }
-
-    func markUnread(_ session: SessionState) { markSeen(session, at: Unread.markedUnread(session)) }
-
-    func markSeen(_ session: SessionState, at date: Date = .now) {
-        var seen = sessionSeen
-        seen[session.sessionID] = date
-        if seen.count > Self.seenLimit {
-            for (key, _) in seen.sorted(by: { $0.value < $1.value }).prefix(seen.count - Self.seenLimit) { seen[key] = nil }
-        }
-        sessionSeen = seen
-    }
 
     /// 按会话记录 id；文字与批注存进本机偏好、跨退出保留，带上的卡片与图片只留在这次运行。
     func replyDraft(for session: UUID) -> ComposerDraft {
@@ -243,17 +215,7 @@ final class AppSettings {
         railExpanded = defaults.object(forKey: Key.railExpanded) as? Bool ?? true
         cueOpen = defaults.object(forKey: Key.cueOpen) as? Bool ?? true
         cueLeft = defaults.object(forKey: Key.cueLeft) as? Date
-        sessionSeen = defaults.dictionary(forKey: Key.sessionSeen) as? [String: Date] ?? [:]
         replyDrafts = (Self.decoded([UUID: SavedDraft].self, Key.replyDrafts, in: defaults) ?? [:]).mapValues(ReplyDraftSlot.init)
-        // 启动参数（演示截图）可以把起点挪到很早，让演示库里停下的会话都算有新回复
-        if let seconds = launchArguments[Key.unreadSince].flatMap({ Double(String(describing: $0)) }) {
-            unreadSince = Date(timeIntervalSince1970: seconds)
-        } else if let since = defaults.object(forKey: Key.unreadSince) as? Date {
-            unreadSince = since
-        } else {
-            unreadSince = .now
-            defaults.set(unreadSince, forKey: Key.unreadSince)
-        }
         for name in [Self.leavingForeground, Self.terminating] {
             NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
                 MainActor.assumeIsolated { self?.flush() }

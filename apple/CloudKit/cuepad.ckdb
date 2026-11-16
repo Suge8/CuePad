@@ -35,11 +35,11 @@ DEFINE SCHEMA
         archivedAt             INT64,
         formerSessionIDs       STRING,
         sessionBindingRevision STRING,
-        shelvedUntil           INT64,
-        seenAt                 INT64,
         cueFollows             INT64,
         isFavorite             INT64,
         numbering              STRING,
+        seenAt                 INT64,
+        shelvedUntil           INT64,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
     );
@@ -285,8 +285,10 @@ DEFINE SCHEMA
         GRANT CREATE TO "_icloud"
     );
 
-    RECORD TYPE cueRead (
+    RECORD TYPE marks (
         "___recordID" REFERENCE QUERYABLE,
+        kind          STRING,
+        subject       STRING,
         modifiedAt    INT64,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
@@ -387,6 +389,13 @@ DEFINE SCHEMA
         "___recordID" REFERENCE QUERYABLE,
         content       ENCRYPTED BYTES,
         deviceName    ENCRYPTED STRING,
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud"
+    );
+
+    RECORD TYPE cueRead (
+        "___recordID" REFERENCE QUERYABLE,
+        modifiedAt    INT64,
         GRANT WRITE TO "_creator",
         GRANT CREATE TO "_icloud"
     );

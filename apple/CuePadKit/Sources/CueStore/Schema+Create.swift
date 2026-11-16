@@ -26,7 +26,7 @@ extension Schema {
       isPinned INTEGER NOT NULL, variableValues TEXT NOT NULL, sortKey TEXT NOT NULL, conflictOf TEXT,
       deletedAt INTEGER, createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL,
       parentID TEXT, todoAt INTEGER, startedAt INTEGER, completedAt INTEGER, piSessionID TEXT, archivedAt INTEGER,
-      formerSessionIDs TEXT, sessionBindingRevision TEXT, shelvedUntil INTEGER, seenAt INTEGER, writeSeq INTEGER NOT NULL DEFAULT 0
+      formerSessionIDs TEXT, sessionBindingRevision TEXT, writeSeq INTEGER NOT NULL DEFAULT 0
     ) STRICT;
     CREATE INDEX cards_projectID_sortKey ON cards(projectID, sortKey);
     CREATE INDEX cards_parentID ON cards(parentID);
@@ -161,7 +161,8 @@ extension Schema {
     CREATE TABLE cueState (
       id TEXT PRIMARY KEY NOT NULL, state TEXT NOT NULL, detail TEXT, modifiedAt INTEGER NOT NULL, round TEXT, context TEXT, leftToYou TEXT, step TEXT, hostID TEXT, bootID TEXT
     ) STRICT;
-    CREATE TABLE cueRead (id TEXT PRIMARY KEY NOT NULL, modifiedAt INTEGER NOT NULL) STRICT;
+    CREATE TABLE marks (id TEXT PRIMARY KEY NOT NULL, kind TEXT NOT NULL, subject TEXT NOT NULL, modifiedAt INTEGER NOT NULL) STRICT;
+    CREATE INDEX marks_kind ON marks(kind, subject, modifiedAt);
 
     \(writeSeq)
 

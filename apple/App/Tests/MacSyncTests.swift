@@ -158,7 +158,7 @@ struct MacSyncTests {
         try await before.update(sessionID: "s1", state: .settled, times: SessionTimes(stateSince: past, busySince: nil))
         try await before.update(sessionID: "s2", state: .thinking, times: SessionTimes(stateSince: past, busySince: past))
         let seen = try #require(try await services.store.allSessionStates().first { $0.sessionID == "s1" })
-        services.settings.markSeen(seen, at: past.addingTimeInterval(1))
+        try await services.store.mark(.sessionSeen("s1"), at: past.addingTimeInterval(1))
 
         try services.reconcileLaunch()
         let kept = try await rig.host.connect("s1", cwd: "/work/s1")
@@ -169,7 +169,7 @@ struct MacSyncTests {
         var stored = seen
         stored.lastReply = "做完了"
         let row = try #require(SessionState.live(live, over: stored, hostID: TestApp.hostID, projectID: nil))
-        #expect(!services.settings.isUnread(row))
+        #expect(!row.isUnread(try await services.store.sessionMarks()["s1"], at: .now))
         #expect(try #require(services.bridge.session(id: changed.id)).stateSince > past)
     }
 

@@ -71,7 +71,7 @@ extension DebugScene {
         let delay = args.driveOpts.cueSays
         guard delay > 0 else { return }
         await running("Cue 自己说一句") {
-            try await services.store.markCueRead(through: .now)
+            try await services.store.mark(.cueRead)
             await Task.wait(for: .seconds(delay))
             _ = try await services.store.addCueMessage(.cue, text: String(localized: "圆桌的预发部署好了，5 人以上的房间发言顺序都对了。", table: "Demo"))
             let visitAfter = args.driveOpts.visitCue

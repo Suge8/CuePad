@@ -113,10 +113,6 @@ extension Workspace {
     /// 不是刚点的（键盘、⌘K 里按 ↩、链接）就没有落点，气泡在窗口上方居中。子任务是它上级的气泡、翻到这一项；
     /// 这件事的气泡已经开着时（气泡里点子任务、返回）原地翻页，不重新长一次。
     func openTask(_ card: Card) {
-        if card.completedAt != nil {
-            let store = services.store
-            attempt { try await store.markSeen(card.id) }
-        }
         let task = card.parentID ?? card.id, step = card.parentID == nil ? nil : card.id
         if openTask?.task == task {
             openTask?.step = step

@@ -66,7 +66,7 @@ struct CueViewing: ViewModifier {
     private func mark() async {
         guard reading, let thread, let latest = seen.filter({ thread.unread.contains($0.key) }).values.max() else { return }
         do { try await Task.sleep(for: Self.dwell) } catch { return }
-        do { try await services.store.markCueRead(through: latest) } catch { workspace.fail(error) }
+        do { try await services.store.mark(.cueRead, at: latest) } catch { workspace.fail(error) }
     }
 }
 

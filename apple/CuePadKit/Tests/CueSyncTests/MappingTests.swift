@@ -41,7 +41,7 @@ import Testing
     try await store.noteCueLine("发布前先跑检查", source: .you, pinned: true, remindAt: .now.addingTimeInterval(60))
     try await store.updateCueProfile { $0.hostID = "mac" }
     try await store.setCueState(.tool, detail: "建任务 · 修好登录页")
-    try await store.markCueRead(through: .now)
+    try await store.mark(.cueRead)
     try await store.recordMacPresence(host: "mac") { true }
     try await store.recordViewing(device: "phone", sessionIDs: ["s1", "s2"], cue: false)
     try await store.recordActivityDestination(device: "phone", activityID: "activity", token: "private-push-token", environment: "production", startedAt: .now)

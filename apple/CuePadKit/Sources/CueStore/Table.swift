@@ -1,7 +1,7 @@
 public enum Table: String, Codable, Sendable, CaseIterable {
   case projects, cards, sendRecords, attachments, piSessions, projectDirectories
   case piSessionStates, agentCatalogs, deliveryRequests, directoryBindings, piMessages, previews, accountQuotas
-  case cueMessages, cueLines, cueProfile, cueState, cueRead, cueSummaries, macPresence, macAgents, sessionViewers, agentLibraries, agentLibraryFiles
+  case cueMessages, cueLines, cueProfile, cueState, marks, cueSummaries, macPresence, macAgents, sessionViewers, agentLibraries, agentLibraryFiles
   case activityDestinations
   /// 本机写入序号（`CueStore.lastWrite`，由触发器随 Cue 关心的那几列变化而加）：订阅读它，就只在这些变化时被叫醒。
   case writeCounter
@@ -13,7 +13,7 @@ extension Table {
   package static let synced: [Table] = [
     .projects, .cards, .sendRecords, .attachments, .piSessionStates, .agentCatalogs, .deliveryRequests, .directoryBindings, .piMessages,
     .previews, .accountQuotas,
-    .cueMessages, .cueLines, .cueProfile, .cueState, .cueRead, .macPresence, .macAgents, .sessionViewers, .agentLibraries,
+    .cueMessages, .cueLines, .cueProfile, .cueState, .marks, .macPresence, .macAgents, .sessionViewers, .agentLibraries,
     .agentLibraryFiles, .activityDestinations,
   ]
 
@@ -87,7 +87,7 @@ extension Table {
     case .cueLines: CueMemoryLine.fields
     case .cueProfile: CueProfile.fields
     case .cueState: CueState.fields
-    case .cueRead: CueRead.fields
+    case .marks: Mark.fields
     case .macPresence: MacPresence.fields
     case .macAgents: MacAgents.fields
     case .agentLibraries: AgentLibrary.fields
