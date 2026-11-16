@@ -13,13 +13,21 @@ extension Workspace {
     /// 完成一个会话。归着任务的就是完成那件任务（会话结不结束照任务的规则，`CueStore.taskSessionCanEnd`）。
     /// 没归着的：完成的就是这个会话本身，建任务、完成、点名结束它——只建卡不结束的话，卡进了已完成、会话还开着，看着像没完成。
     /// 会话在做或在等你时先问一句（`confirmComplete`），答应了才动；取消什么都不留。
+    /// 归没归着只问库里此刻的（`openTask`），不信界面手里的那份：它可能只归着做完的旧任务，问着的时候也可能被别的任务接走——那时照任务的规则，不点名结束。
     func finish(_ agent: SessionListItem) async throws {
         let session = agent.state
-        if let task = agent.task, let card = try await services.store.card(task.id) { return try await confirmComplete(card) }
+        if let task = try await openTask(of: session) { return try await confirmComplete(task) }
         try await confirmComplete(nil, subtasks: nil, busy: pulse(of: agent).shown?.agentBusy == true ? session : nil, endsSession: true) {
+            let taken = try await $0.openTask(of: session) != nil
             try await $0.complete(try await $0.adopt(session))
-            if session.canEnd { _ = try await $0.services.end(session) }
+            if !taken, session.canEnd { _ = try await $0.services.end(session) }
         }
+    }
+
+    /// 它归着的那件没做完的事的顶层任务。
+    private func openTask(of session: SessionState) async throws -> Card? {
+        let owner = try await services.store.sessionOwners([session.sessionID])[session.sessionID]
+        return owner?.leaf.completedAt == nil ? owner?.task : nil
     }
 
     func pin(_ session: SessionState) async throws {

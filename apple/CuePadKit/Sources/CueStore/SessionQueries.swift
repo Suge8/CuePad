@@ -87,7 +87,7 @@ extension CueStore {
     let renames = try latestRenames(to: ids)
     let answers = try latestDeliveries(to: ids, modes: [.answer])
     let unsettled = try unsettledTalk(to: ids)
-    let tasks = try sessionOwners(ids).mapValues { SessionTask(id: $0.task.id, isPinned: $0.task.isPinned, title: CueSummary.title(of: $0.leaf.body)) }
+    let tasks = try sessionOwners(ids).mapValues { SessionTask(id: $0.task.id, isPinned: $0.task.isPinned, title: CueSummary.title(of: $0.leaf.body), isDone: $0.leaf.completedAt != nil) }
     return states.map {
       SessionListItem(
         state: $0, project: $0.projectID.flatMap { projects[$0] }, delivery: deliveries[$0.sessionID], rename: renames[$0.sessionID],

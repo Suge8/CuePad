@@ -3,12 +3,13 @@ import SwiftUI
 
 /// 会话的菜单，出现的每一处（会话条、看板、会话列表、会话页栏头）都是这一份，有哪几项、什么顺序只在这里。三组：去哪看（在旁边打开、它在等的那件）、
 /// 整理（完成、置顶、重命名、标为未读）、结束会话。完成、置顶、重命名与任务是同一组操作：归着任务的落在那件任务上，没归着的活会话当场给它建一件（`Workspace+Adopt`）。
+/// 只归着做完的旧任务的活会话，完成与重命名照没归着的走（同看板上它那张会话卡）。
 /// 重命名与结束要再确认，交给窗口上那一格（`Workspace.sessionAsk`）。
 struct SessionActions: View {
     let session: SessionState
     var task: SessionTask?
     var ending = false
-    /// 会话页栏头的完成按任务列在它自己那一组（`SessionMenuItems`），这里不再给。
+    /// 会话页栏头：有没做完的任务时，完成按任务列在它自己那一组（`SessionMenuItems`），这里不再给。
     var completes = true
     @Environment(Workspace.self) private var workspace
 
@@ -31,7 +32,7 @@ struct SessionActions: View {
 
     private var arrange: some View {
         Section {
-            if completes, task != nil || session.canEnd {
+            if completes, session.canEnd || task?.isDone == false {
                 let agent = SessionListItem(state: session, task: task)
                 Button(CardMenu.Item.complete.title, icon: CardMenu.Item.complete.icon) { workspace.attempt { try await workspace.finish(agent) } }
             }
@@ -48,7 +49,7 @@ struct SessionActions: View {
     }
 
     static func rename(_ session: SessionState, task: SessionTask? = nil, in workspace: Workspace) -> RowAction {
-        let ask = SessionAsk.rename(session, shown: task?.title.nonEmpty ?? session.title, adopts: task == nil && session.canEnd)
+        let ask = SessionAsk.rename(session, shown: task?.title.nonEmpty ?? session.title, adopts: task?.isDone != false && session.canEnd)
         #if os(macOS)
         return RowAction("重命名…", icon: .rename) { workspace.sessionAsk = ask }
         #else
