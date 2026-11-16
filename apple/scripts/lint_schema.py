@@ -18,9 +18,9 @@ def version(source):
 
 
 def upgrades(source):
-    """`baseVersion` 与 `upgrades` 数组字面量的各顶层元素（原文，按它升到的版本排）：跳过注释与字符串（含多行、原始字符串与插值），按顶层逗号分。"""
+    """`baseVersion` 与 `upgrades` 数组字面量的各顶层元素（去掉注释后的原文，按它升到的版本排）：跳过注释与字符串（含多行、原始字符串与插值），按顶层逗号分。"""
     i = source.index("= [", source.index("static let upgrades")) + 3
-    depth, steps, start = 0, [], None
+    depth, steps, item = 0, [], []
     while True:
         if source.startswith("//", i):
             i = source.index("\n", i)
@@ -30,25 +30,24 @@ def upgrades(source):
             continue
         quote = re.match(r'(#*)("""|")', source[i:])
         if quote:
-            start = i if start is None else start
-            i = skip_string(source, i, *quote.groups())
-            end = i
+            j = skip_string(source, i, *quote.groups())
+            item.append(source[i:j])
+            i = j
             continue
         c = source[i]
         if c in "([{":
             depth += 1
         elif c in ")]}":
             if depth == 0:
-                if start is not None: steps.append(source[start:end])
+                if "".join(item).strip(): steps.append(" ".join("".join(item).split()))
                 return int(BASE.search(source).group(1)), steps
             depth -= 1
         elif c == "," and depth == 0:
-            if start is not None: steps.append(source[start:end])
-            start = None
+            if "".join(item).strip(): steps.append(" ".join("".join(item).split()))
+            item = []
             i += 1
             continue
-        if not c.isspace():
-            start, end = (i if start is None else start), i + 1
+        item.append(c)
         i += 1
 
 

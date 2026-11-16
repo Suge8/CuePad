@@ -83,28 +83,21 @@ extension CueStore {
     }
   }
 
-  /// 各会话的两下，按会话 id。
+  /// 各会话还用得上的两下，按会话 id：新回复的窗口（`SessionState.unreadWindow`）之前的不读——那之后停下的不论看没看过都算新，更早停下的已不算新；
+  /// 会话还有没办成的话（投送请求不是成功的）时照读：没送到、改名没成看过才不再提（`DeliveryShown`、`SessionRename.failed`）。
+  /// 不读的不删：删除按记录 id 同步，会抹掉别的设备同时新记的那一下。读的结果不随它们出窗口而变，不登记到点重读。
   public func sessionMarks() throws -> [String: SessionMarks] {
     var marks: [String: SessionMarks] = [:]
-    try db.query("SELECT kind, subject, modifiedAt FROM marks WHERE kind IN ('sessionSeen', 'sessionUnread')") { ($0.text(0), $0.text(1), $0.date(2)) }
+    try db.query(
+      """
+      SELECT kind, subject, modifiedAt FROM marks WHERE kind IN ('sessionSeen', 'sessionUnread')
+        AND (modifiedAt >= ? OR subject IN (SELECT targetRef FROM deliveryRequests WHERE status <> ? AND targetRef IS NOT NULL))
+      """, [timing.now().addingTimeInterval(-SessionState.unreadWindow), DeliveryStatus.succeeded.rawValue]
+    ) { ($0.text(0), $0.text(1), $0.date(2)) }
       .forEach { kind, session, at in
         if kind == "sessionSeen" { marks[session, default: SessionMarks()].seen = at } else { marks[session, default: SessionMarks()].unread = at }
       }
     return marks
-  }
-
-  /// 删掉再也用不上的（删除照常同步）：划掉的灵感过了当天；会话的两下出了新回复的窗口（`SessionState.unreadWindow`：那之后停下的不论看没看过都算新）。
-  /// 会话还有没办成的话（投送请求不是成功的）时看过留着：没送到、改名没成看过才不再提（`DeliveryShown`、`SessionRename.failed`）。Cue 页读到哪只有一行，一直留着。
-  public func pruneMarks(now: Date) throws {
-    let today = Calendar.current.startOfDay(for: now), window = now.addingTimeInterval(-SessionState.unreadWindow)
-    try write {
-      try db.run(
-        """
-        DELETE FROM marks WHERE (kind = 'ideaSkipped' AND modifiedAt < ?1) OR (kind = 'sessionUnread' AND modifiedAt < ?2)
-          OR (kind = 'sessionSeen' AND modifiedAt < ?2
-            AND subject NOT IN (SELECT targetRef FROM deliveryRequests WHERE status <> ?3 AND targetRef IS NOT NULL))
-        """, [today, window, DeliveryStatus.succeeded.rawValue])
-    }
   }
 
   func sessionMarks(_ session: String) throws -> SessionMarks {
