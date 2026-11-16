@@ -6608,16 +6608,6 @@
         }
       }
     },
-    "你问：%@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "You asked: %@"
-          }
-        }
-      }
-    },
     "使用 %@" : {
       "localizations" : {
         "en" : {
@@ -19716,6 +19706,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "看每个窗口还剩多少、多久后重置"
+          }
+        }
+      }
+    },
+    "看结果" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "See Result"
           }
         }
       }
