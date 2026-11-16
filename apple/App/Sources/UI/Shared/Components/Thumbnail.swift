@@ -8,6 +8,8 @@ struct Thumbnail: View {
     var height: CGFloat
     var cornerRadius: CGFloat = Radius.block
     var fitWidth: CGFloat?
+    /// 铺在卡顶、由卡自己裁圆角时是直角、不描边。
+    var framed = true
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
     @Environment(\.displayScale) private var scale
@@ -35,8 +37,8 @@ struct Thumbnail: View {
             }
             .frame(width: width, height: height)
             .frame(maxWidth: fitWidth == nil ? .infinity : nil)
-            .clipShape(.rect(cornerRadius: cornerRadius))
-            .overlay(RoundedRectangle(cornerRadius: cornerRadius).strokeBorder(palette.hair))
+            .clipShape(framed ? AnyShape(.rect(cornerRadius: cornerRadius)) : AnyShape(.rect))
+            .overlay { if framed { RoundedRectangle(cornerRadius: cornerRadius).strokeBorder(palette.hair) } }
             .observingArrival(of: hash, in: services, into: $place)
             .task(id: Request(hash: hash, height: height, scale: scale, place: place)) {
                 guard place != .unchecked else { return }

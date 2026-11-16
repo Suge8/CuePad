@@ -27,10 +27,9 @@ private struct CardFace: View {
 
     var body: some View {
         let text = CardText(card.body), image = text.images.first
+        VStack(alignment: .leading, spacing: 0) {
+        if let image { Thumbnail(hash: image, height: NoteTile.thumbnail, framed: false) }
         VStack(alignment: .leading, spacing: Spacing.item) {
-            if let image {
-                Thumbnail(hash: image, height: NoteTile.thumbnail).padding(-Spacing.item).padding(.bottom, Spacing.item)
-            }
             HStack(alignment: .firstTextBaseline, spacing: Spacing.glyph) {
                 Text(text.label)
                     .font(Typography.bodyStrong)
@@ -51,7 +50,9 @@ private struct CardFace: View {
             CardMeta(card: card, text: text, lastTarget: lastTarget, floated: floated, font: Typography.meta)
         }
         .padding(Spacing.block)
+        }
         .frame(height: NoteTile.height)
+        .clipShape(.rect(cornerRadius: Radius.card))
     }
 }
 

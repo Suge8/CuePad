@@ -17,10 +17,9 @@ struct CardTileView: View {
         let card = entry.card, text = entry.text
         NavigationLink(value: Route.card(card.id)) {
             let image = text.images.first
+            VStack(alignment: .leading, spacing: 0) {
+            if let image { Thumbnail(hash: image, height: NoteTile.thumbnail, framed: false) }
             VStack(alignment: .leading, spacing: Spacing.tight) {
-                if let image {
-                    Thumbnail(hash: image, height: NoteTile.thumbnail, cornerRadius: Radius.block).padding(.bottom, Spacing.tight)
-                }
                 HStack(alignment: .firstTextBaseline, spacing: Spacing.tight) {
                     Text(text.label)
                         .font(Typography.secondary.weight(.semibold))
@@ -42,7 +41,9 @@ struct CardTileView: View {
             }
             .multilineTextAlignment(.leading)
             .padding(Spacing.group)
+            }
             .frame(maxWidth: .infinity, alignment: .leading).frame(height: height)
+            .clipShape(.rect(cornerRadius: Radius.card))
             .note(color)
             .contentShape(.rect(cornerRadius: Radius.card))
         }

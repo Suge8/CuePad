@@ -12,8 +12,12 @@ struct ProjectWallSections<Tile: View>: View {
     var showsOlder = true
     @ViewBuilder let tile: (CardEntry) -> Tile
     @State private var expanded: Set<OlderGroup.Period> = []
-    /// 刚点"添加灵感"建出来、还没打开的那一条：等它落到墙上（读库的那一圈回来）再打开。
-    @State private var born: Card?
+    @State private var adding = false
+    #if os(iOS)
+    /// 刚点"添加灵感"建出来的那一条：它落到墙上之前，编辑页的放大从虚线那一格出发、空着返回也收回这一格（空白的不留，`dropIfBlank`）。
+    @State private var born: UUID?
+    @Environment(\.zoomNamespace) private var zoom
+    #endif
     @Environment(Workspace.self) private var workspace
     #if os(macOS)
     @Environment(AppServices.self) private var services
@@ -28,14 +32,15 @@ struct ProjectWallSections<Tile: View>: View {
         let olderGap: CGFloat
     }
 
-    /// 新卡迟迟没落到这面墙上（项目刚被删、它落进了默认项目）时等这么久就照常打开。
-    private static var landingWait: Duration { .milliseconds(400) }
-
     var body: some View {
         let lastTarget = data.lastTarget
         LazyVStack(alignment: .leading, spacing: 0) {
             MasonryLayout(minColumnWidth: metrics.minColumnWidth, maxColumns: metrics.maxColumns, spacing: metrics.wallSpacing) {
                 AddIdeaTile(action: add)
+                    #if os(iOS)
+                    // 平时登记在一个不会有卡用的 id 上：这一格的身份不随登记换
+                    .zoomSource(born.flatMap { data.entries[$0] == nil ? $0 : nil } ?? Project.defaultID, in: zoom)
+                    #endif
                 ForEach((arrangement.pinned + arrangement.wall).compactMap { data.entries[$0] }) { tile($0).transition(.opacity) }
             }
             .environment(\.noteColor, data.project?.color ?? Palette.neutralProject)
@@ -55,31 +60,23 @@ struct ProjectWallSections<Tile: View>: View {
                 }
             }
         }
-        .onChange(of: born.map { data.entries[$0.id] != nil } ?? false) { _, landed in
-            guard landed, let card = born else { return }
-            // 新卡那一格排好位置再打开：编辑页从它长出来
-            Task {
-                await NextFrame.wait()
-                open(card)
-            }
-        }
     }
 
+    /// 建好就开，不等新卡落到墙上：等读库那一圈回来要停一拍。
     private func add() {
-        guard born == nil else { return }
+        guard !adding else { return }
+        adding = true
         let project = data.project?.id ?? Project.defaultID
         workspace.attempt {
+            defer { adding = false }
             let card = try await workspace.createCard(in: project)
-            born = card
-            try await Task.sleep(for: Self.landingWait)
-            open(card)
+            #if os(iOS)
+            born = card.id
+            // 虚线那一格先登记成这张卡的放大起点
+            await NextFrame.wait()
+            #endif
+            workspace.open(card)
         }
-    }
-
-    private func open(_ card: Card) {
-        guard born?.id == card.id else { return }
-        born = nil
-        workspace.open(card)
     }
 
     /// 行直接落在桌面上，不装在纸里。手机的行自己留了左右的边（按下的底、左滑的按钮按行裁），整组向两边让出这一截，字与页边对齐。

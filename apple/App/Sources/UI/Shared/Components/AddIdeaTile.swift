@@ -41,15 +41,15 @@ struct AddIdeaTile: View {
     }
 }
 
-/// 灵感墙是等高的规整网格（同 Craft、Notion 的画廊）：每格一样高，标题至多两行、摘要填满剩下的高、日期那一行贴底；带图的格图在上、不写摘要。
+/// 灵感墙是等高的规整网格（同 Craft、Notion 的画廊）：每格一样高，标题至多两行、摘要填满剩下的高、日期那一行贴底；带图的格图铺满上半（贴着卡边、由卡裁圆角）、不写摘要。
 /// 高矮不一的瀑布流只适合图片比例差别很大的内容，文字卡排出来参差、扫读时眼睛要上下找。手机上这个高随字号放大。
 enum NoteTile {
     #if os(macOS)
     static let height: CGFloat = 156
-    static let thumbnail: CGFloat = 68
+    static let thumbnail: CGFloat = 84
     #else
     static let height: CGFloat = 164
-    static let thumbnail: CGFloat = 64
+    static let thumbnail: CGFloat = 84
     #endif
     static let titleLines = 2
 }

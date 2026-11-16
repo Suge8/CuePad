@@ -124,8 +124,10 @@ private struct TaskMeter: View {
         Button(action: action) {
             HStack(spacing: TaskMetrics.columnGap) {
                 pie.frame(width: TaskMetrics.ringColumn)
-                Text(open > 0 ? "还剩 \(open) 件" : "都做完了").font(Typography.secondary).monospacedDigit().contentTransition(.numericText(value: Double(open)))
-                Chevron(.forward)
+                HStack(spacing: Spacing.glyph) {
+                    Text(open > 0 ? "还剩 \(open) 件" : "都做完了").font(Typography.secondary).monospacedDigit().contentTransition(.numericText(value: Double(open)))
+                    Chevron(.forward)
+                }
                 Spacer(minLength: 0)
             }
             .foregroundStyle(palette.ink2)
