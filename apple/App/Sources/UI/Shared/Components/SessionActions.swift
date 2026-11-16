@@ -1,34 +1,54 @@
 import CueStore
 import SwiftUI
 
-/// 会话出现的每一处共用这一份，有哪几项、什么顺序只在这里。看板上不归没做完的事的会话卡（`board`）与任务同一组操作：多一项完成（在做或在等你时先问，`Workspace.finish`），置顶与重命名都落在当场给它建的那件任务上（`Workspace+Adopt`）。重命名与结束要再确认，交给窗口上那一格（`Workspace.sessionAsk`）。
+/// 会话的菜单，出现的每一处（会话条、看板、会话列表、会话页栏头）都是这一份，有哪几项、什么顺序只在这里。三组：去哪看（在旁边打开、它在等的那件）、
+/// 整理（完成、置顶、重命名、标为未读）、结束会话。完成、置顶、重命名与任务是同一组操作：归着任务的落在那件任务上，没归着的活会话当场给它建一件（`Workspace+Adopt`）。
+/// 重命名与结束要再确认，交给窗口上那一格（`Workspace.sessionAsk`）。
 struct SessionActions: View {
     let session: SessionState
     var task: SessionTask?
-    var board: SessionListItem?
     var ending = false
+    /// 会话页栏头的完成按任务列在它自己那一组（`SessionMenuItems`），这里不再给。
+    var completes = true
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        MarkUnreadButton(session: session)
-        HandoffButton(session: session)
-        if let board {
-            let session = session
-            Button(CardMenu.Item.complete.title, icon: CardMenu.Item.complete.icon) { workspace.attempt { try await workspace.finish(board) } }
-            Button(CardMenu.Item.pin.title, icon: CardMenu.Item.pin.icon) { workspace.attempt { try await workspace.pin(session) } }
-        } else if let task {
-            let item: CardMenu.Item = task.isPinned ? .unpin : .pin
-            Button(item.title, icon: item.icon) { workspace.setPinned(task.id, !task.isPinned) }
+        Group {
+            Section {
+                OpenSessionBeside(session: session)
+                HandoffButton(session: session)
+            }
+            arrange
+            Section {
+                if let end = Self.end(session, ending: ending, in: workspace) { RowActionButtons(actions: [end]) }
+            }
+            #if os(iOS)
+            Section { RemoteMacActions(host: session.hostID) }
+            #endif
         }
-        RowActionButtons(actions: [Self.rename(session, task: task, adopts: board != nil, in: workspace)])
-        if let end = Self.end(session, ending: ending, in: workspace) { RowActionButtons(actions: [end]) }
-        #if os(iOS)
-        Section { RemoteMacActions(host: session.hostID) }
-        #endif
+        .menuIcons()
     }
 
-    static func rename(_ session: SessionState, task: SessionTask? = nil, adopts: Bool = false, in workspace: Workspace) -> RowAction {
-        let ask = SessionAsk.rename(session, shown: task?.title.nonEmpty ?? session.title, adopts: adopts)
+    private var arrange: some View {
+        Section {
+            if completes, task != nil || session.canEnd {
+                let agent = SessionListItem(state: session, task: task)
+                Button(CardMenu.Item.complete.title, icon: CardMenu.Item.complete.icon) { workspace.attempt { try await workspace.finish(agent) } }
+            }
+            if let task {
+                let item: CardMenu.Item = task.isPinned ? .unpin : .pin
+                Button(item.title, icon: item.icon) { workspace.setPinned(task.id, !task.isPinned) }
+            } else if session.canEnd {
+                let session = session
+                Button(CardMenu.Item.pin.title, icon: CardMenu.Item.pin.icon) { workspace.attempt { try await workspace.pin(session) } }
+            }
+            RowActionButtons(actions: [Self.rename(session, task: task, in: workspace)])
+            MarkUnreadButton(session: session)
+        }
+    }
+
+    static func rename(_ session: SessionState, task: SessionTask? = nil, in workspace: Workspace) -> RowAction {
+        let ask = SessionAsk.rename(session, shown: task?.title.nonEmpty ?? session.title, adopts: task == nil && session.canEnd)
         #if os(macOS)
         return RowAction("重命名…", icon: .rename) { workspace.sessionAsk = ask }
         #else

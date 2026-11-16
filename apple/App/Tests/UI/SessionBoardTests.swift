@@ -36,7 +36,7 @@ struct SessionBoardTests {
         return [item.task.title(session: item.agent?.shownTitle(at: services.speech)), row.name(at: services.speech)]
     }
 
-    @Test func 无主会话拖到已完成_当场建卡绑上_任务完成_会话不结束只收起() async throws {
+    @Test func 无主会话拖到已完成_当场建卡绑上_任务完成_会话点名结束() async throws {
         let first = try await session("s1", title: "修登录")
         let second = try await session("s2", title: "补测试")
         let workspace = Workspace(services: services)
@@ -58,7 +58,8 @@ struct SessionBoardTests {
             let name = card.piSessionID == "s1" ? "修登录" : "补测试"
             #expect(try await names(card.id, card.piSessionID!) == [name, name], "标题为空的写会话名")
         }
-        #expect(try await store.deliveryRequests().isEmpty, "把既有会话变成任务不取得结束权限")
+        let ends = try await store.deliveryRequests().filter { $0.mode == .known(.end) }
+        #expect(Set(ends.compactMap(\.target.ref)) == ["s1", "s2"] && ends.allSatisfy { $0.end == .explicit }, "完成的是会话本身：点名结束它，不靠任务的结束权限")
 
         let s1 = try #require(made.first { $0.piSessionID == "s1" }).id
         try await moves("s1", after: s1, by: 0)
@@ -96,12 +97,13 @@ struct SessionBoardTests {
 
         let workspace = Workspace(services: services)
         try await workspace.finish(SessionListItem(state: held.session))
-        guard case .complete(.agent(held.session), nil, let confirm) = workspace.sessionAsk else { Issue.record("在做的会话完成前要先问"); return }
+        guard case .complete(.agent(held.session, ends: true), nil, let confirm) = workspace.sessionAsk else { Issue.record("在做的会话完成前要先问"); return }
         #expect(try await tasks().isEmpty, "问过之前什么都不留")
 
         try await confirm(workspace)
         let task = try #require(try await tasks().first)
         #expect(task.status == .done && task.piSessionID == "q1")
+        #expect(try await store.deliveryRequests(toSession: "q1").contains { $0.mode == .known(.end) }, "答应的是完成并结束会话")
     }
 
     @Test func 置顶无主会话_建一件进行中的置顶任务_再点不再多建() async throws {

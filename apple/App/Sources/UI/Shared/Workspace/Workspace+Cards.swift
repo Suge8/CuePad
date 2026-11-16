@@ -37,9 +37,10 @@ extension Workspace {
     /// 完成一件事的入口都先过这里（完成圈、拖到已完成、卡片菜单、看板上完成没绑任务的会话）：要问就交给确认框（`sessionAsk`），答应了才 `proceed`；不用问当场 `proceed`。`proceed` 收到 Workspace 而不自己攥着：问着的时候它挂在 Workspace 上，攥着就是一个环。
     /// 问句挨着正显示这张卡的那个视图弹出（`completionClaims`）；`anchored` 为 false（拖放：卡已离开原位）或没有视图认领时窗口居中出。
     func confirmComplete(
-        _ task: UUID?, subtasks: TaskProgress?, busy: SessionState?, anchored: Bool = true, then proceed: @escaping @MainActor (Workspace) async throws -> Void
+        _ task: UUID?, subtasks: TaskProgress?, busy: SessionState?, endsSession: Bool = false, anchored: Bool = true,
+        then proceed: @escaping @MainActor (Workspace) async throws -> Void
     ) async throws {
-        if let ask = CompletionAsk(subtasks: subtasks, busy: busy) {
+        if let ask = CompletionAsk(subtasks: subtasks, busy: busy, endsSession: endsSession) {
             let claimer = anchored ? task.flatMap { completionClaims[$0]?.last } : nil
             return sessionAsk = .complete(ask, claimer: claimer, then: proceed)
         }
@@ -169,17 +170,18 @@ extension Workspace {
     }
 }
 
-/// 完成前先问什么：还有没做完的子任务问一起完成；它的 Agent 在做或在等你问一句（`agentBusyDialog`：为这件事开的会话一起结束，别的不结束）。
+/// 完成前先问什么：还有没做完的子任务问一起完成；它的 Agent 在做或在等你问一句（`agentBusyDialog`），`ends` 是完成会不会把这个会话一起结束
+/// （为这件事开的、完成的就是会话本身的结束，别的不结束）。
 enum CompletionAsk: Equatable {
     case steps(TaskProgress)
-    case agent(SessionState)
+    case agent(SessionState, ends: Bool)
 
-    /// `busy`：在做或在等你的会话（`TaskNext.busySession`）。
-    init?(subtasks: TaskProgress?, busy: SessionState?) {
+    /// `busy`：在做或在等你的会话（`TaskNext.busySession`）。`endsSession`：完成的是会话本身（`Workspace.finish`），一定结束它。
+    init?(subtasks: TaskProgress?, busy: SessionState?, endsSession: Bool = false) {
         if let subtasks, TaskCopy.hasOpen(subtasks) {
             self = .steps(subtasks)
         } else if let busy {
-            self = .agent(busy)
+            self = .agent(busy, ends: endsSession || busy.endsWithTask)
         } else {
             return nil
         }

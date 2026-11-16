@@ -65,7 +65,11 @@ struct ProjectScreen: View {
     private var project: Project? { workspace.catalog?.project(projectID) }
 
     private var actions: some View {
-        Menu("更多", icon: .more) { ProjectMenuItems(projectID: projectID) }
+        // Mac 记灵感在页底常驻的那一条（`CaptureBar`）
+        Menu("更多", icon: .more) {
+            Section { Button("记一条灵感", icon: .write, action: workspace.newCard) }
+            if let project { ProjectActions(project: project) }
+        }
     }
 
     /// 读到的数据与由它推出的分区在同一次写入里落下（同 Mac 的 `ProjectPage`）。

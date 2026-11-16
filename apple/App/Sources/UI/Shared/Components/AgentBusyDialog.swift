@@ -2,9 +2,8 @@ import CueStore
 import SwiftUI
 
 extension View {
-    /// `session` 为 nil 时不弹。
-    func agentBusyDialog(_ session: SessionState?, isPresented: Binding<Bool>, confirm: @escaping @MainActor () -> Void) -> some View {
-        let ends = session?.endsWithTask ?? true
+    /// `session` 为 nil 时不弹。`ends`：完成会不会把它一起结束（`CompletionAsk`）。
+    func agentBusyDialog(_ session: SessionState?, ends: Bool, isPresented: Binding<Bool>, confirm: @escaping @MainActor () -> Void) -> some View {
         let endsMessage: LocalizedStringResource = "完成会把它的会话一起结束。"
         let staysMessage: LocalizedStringResource = "这个会话不是为这件事开的，完成不会结束它。"
         let endsTitle: LocalizedStringResource = "完成并结束会话"

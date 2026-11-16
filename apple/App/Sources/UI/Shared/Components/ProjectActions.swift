@@ -1,12 +1,18 @@
 import CueStore
 import SwiftUI
 
+/// 项目的菜单，出现的每一处（会话条的项目行、项目总览页的行与格、手机项目页的"⋯"）都是这一份。
 struct ProjectActions: View {
     let project: Project
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
+        Group { items }.menuIcons()
+    }
+
+    @ViewBuilder private var items: some View {
         let id = project.id, pinned = !project.isPinned
+        Section { Button("看进展", icon: .task) { workspace.showProgress(of: id) } }
         Button(project.isPinned ? "取消置顶" : "置顶", icon: project.isPinned ? .unpin : .pin) {
             workspace.perform { try await $0.updateProject(id) { $0.isPinned = pinned } }
         }
@@ -37,27 +43,6 @@ struct ProjectActions: View {
             Button("移到回收站", icon: .trash, role: .destructive) {
                 workspace.perform { try await $0.trashProject(id) }
             }
-        }
-    }
-}
-
-/// 项目页"⋯"里的那几项（三端同一份），项目本身的操作在最后（`ProjectActions`）。
-struct ProjectMenuItems: View {
-    let projectID: UUID
-    @Environment(Workspace.self) private var workspace
-
-    var body: some View {
-        #if os(macOS)
-        Button("选择灵感", icon: CardMenu.Item.select.icon) { workspace.presses.beginSelecting() }
-            .disabled(!workspace.isLibraryReady || (workspace.catalog?.summaries[projectID]?.cardCount ?? 0) == 0)
-        #else
-        // Mac 记灵感在页底常驻的那一条（`CaptureBar`）
-        Button("记一条灵感", icon: .write, action: workspace.newCard)
-        #endif
-        Button("看这个项目的进展", icon: .task) { workspace.showProgress(of: projectID) }
-        if let project = workspace.catalog?.project(projectID) {
-            Divider()
-            ProjectActions(project: project)
         }
     }
 }

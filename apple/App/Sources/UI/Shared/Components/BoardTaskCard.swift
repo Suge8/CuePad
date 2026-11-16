@@ -109,8 +109,11 @@ struct BoardTaskCard: View {
     /// 长按菜单与读屏动作同一份。
     @ViewBuilder private var menu: some View {
         let session = item.agent?.state
-        if let shot = item.shot { Button("看成果") { openShot(BoardShot.opening(shot, group: task.id.uuidString)) } }
-        if let session { OpenSessionBeside(session: session); HandoffButton(session: session) }
+        Section {
+            if let shot = item.shot { Button("看成果", icon: .looked) { openShot(BoardShot.opening(shot, group: task.id.uuidString)) } }
+            if let session { OpenSessionBeside(session: session); HandoffButton(session: session) }
+        }
+        .menuIcons()
         CardActions(card: task, leaf: item.steps == nil, opens: session != nil, session: session)
     }
 

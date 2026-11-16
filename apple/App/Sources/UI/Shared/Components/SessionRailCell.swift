@@ -40,6 +40,7 @@ struct SessionRailCell: View {
                     .draggable(DraggedSession(sessionID: item.id))
             }
         }
+        .padding(.leading, compact ? Self.indent : 0)
         .relaySpot(session: item.id, row: .rail)
         .accessibilityAddTraits(selected ? .isSelected : [])
         .accessibilityLabel(item.name)
@@ -53,8 +54,10 @@ struct SessionRailCell: View {
         return main.sessionID != item.id && workspace.besideSession?.sessionID != item.id
     }
 
-    /// 项目下面的会话缩进这么多：行首那一列的中线上画一道引线（`RailProjectSessions`）。
-    static let indent: CGFloat = Spacing.group
+    /// 项目下面的会话缩进这么多：项目图形那一列的中线上画一道引线（`RailProjectSessions`），行的悬停底从引线右边一档起，不盖住它。
+    static let indent: CGFloat = Chrome.icon / 2 + Spacing.tight + RowMetrics.bleed
+    /// 缩进后行首那一列只放得下记号这么宽，名字不再往右让。
+    static let mark: CGFloat = 12
 
     private var help: String { Dotted(item.name, project?.shownName, item.shown.label, item.ask ?? item.doing, item.session.agentMark).visible }
 
@@ -84,8 +87,7 @@ struct SessionRailCell: View {
     }
 
     @ViewBuilder private var menu: some View {
-        OpenSessionBeside(session: item.session)
-        SessionActions(session: item.session)
+        SessionActions(session: item.session, task: item.task)
     }
 
     private var label: some View {
@@ -104,9 +106,9 @@ struct SessionRailCell: View {
                 .padding(.vertical, Spacing.tight)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if compact {
-                RailLine {
+                RailLine(leadWidth: Self.mark) {
                     if item.waiting == nil, item.pulse.tier == .running {
-                        BoardLaneMark(column: .advancing, size: 12)
+                        BoardLaneMark(column: .advancing, size: Self.mark)
                     } else if item.ended {
                         StateGlyph(status: .ended).font(Glyph.small)
                     } else {
@@ -117,7 +119,6 @@ struct SessionRailCell: View {
                     Spacer(minLength: Spacing.item)
                     SessionRailReadout(item: item)
                 }
-                .padding(.leading, Self.indent)
                 #if os(macOS)
                 // 并排的看得见的入口（另有 ⌘ 点与右键）：主区开着别的会话时，悬停的行尾露出来
                 .hoverReveal(when: besides) {

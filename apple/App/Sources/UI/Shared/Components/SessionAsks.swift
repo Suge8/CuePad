@@ -160,7 +160,7 @@ private struct CompletionAsks: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .agentBusyDialog(busy, isPresented: asking { if case .agent = $0 { true } else { false } }, confirm: confirm)
+            .agentBusyDialog(busy?.session, ends: busy?.ends ?? true, isPresented: asking { if case .agent = $0 { true } else { false } }, confirm: confirm)
             .dialog(.verbatim(TaskCopy.openSubtasks(steps)), isPresented: asking { if case .steps = $0 { true } else { false } },
                     buttons: [DialogButton(title: "全部完成", action: confirm)])
             .onAppear {
@@ -181,7 +181,7 @@ private struct CompletionAsks: ViewModifier {
         return claimer == (spot == .window ? nil : token) ? ask : nil
     }
 
-    private var busy: SessionState? { if case .agent(let session) = mine { session } else { nil } }
+    private var busy: (session: SessionState, ends: Bool)? { if case .agent(let session, let ends) = mine { (session, ends) } else { nil } }
     private var steps: TaskProgress? { if case .steps(let progress) = mine { progress } else { nil } }
 
     /// 关掉时只清自己这一种（另一种已经换上来就不动）。

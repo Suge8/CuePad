@@ -18,6 +18,7 @@ struct CardActions: View {
             if index > 0 { Divider() }
             ForEach(sections[index], id: \.self, content: item)
         }
+        .menuIcons()
     }
 
     @ViewBuilder private func item(_ item: CardMenu.Item) -> some View {

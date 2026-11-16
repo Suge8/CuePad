@@ -14,12 +14,13 @@ struct RailGroup<Content: View>: View {
 
 struct RailLine<Lead: View, Rest: View>: View {
     var height = Chrome.row
+    var leadWidth = Chrome.icon
     @ViewBuilder let lead: Lead
     @ViewBuilder let rest: Rest
 
     var body: some View {
         HStack(spacing: Spacing.item) {
-            lead.frame(width: Chrome.icon)
+            lead.frame(width: leadWidth)
             HStack(spacing: Spacing.glyph) { rest }
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -135,7 +136,8 @@ private struct TileSurface: ViewModifier {
 /// 会话条上的会话：只有等你的常驻在上面（没有就整组不在），其余的收在各自的项目下面——项目一行写它有几个在推进（记号同看板推进中的列头），点开才列出来。
 /// 项目多了只列一部分（`shownProjects`）：有会话在推进的、置顶的、此刻开着的一定在，其余按目录的顺序补到 `projectCap` 个，全部在组头去的总览页。
 /// 否决过：推进中全部列出（十几行、每行一种状态标，读不过来，看板与 Cue 已经有同一份）；下面的空处填最近结束的会话（栏一直是满的，眼睛没处歇）。
-/// 点项目那一行去它的页并展开，再点一次收起；展开着的记在这个窗口里，不存。没归项目的会话算在默认项目下。
+/// 点项目那一行去它的页并展开；开合只在行尾那个箭头（`RailFold`），点它不换页。展开着的记在这个窗口里，不存。没归项目的会话算在默认项目下。
+/// 否决过：再点一次选中的行收起（同一行两个意思，箭头看着能点却和点行一样）。
 struct RailSessions: View {
     let data: SessionRailData
     let marked: Set<String>
@@ -226,14 +228,29 @@ struct RailSessions: View {
     }
 
     private func projectRow(_ project: Project, running: Int) -> some View {
-        let selected = workspace.mainRoute == .project(project.id) && !workspace.cueHome
-        let open = expanded.contains(project.id)
-        return Button {
-            if selected { expanded.formSymmetricDifference([project.id]) } else {
-                workspace.show(.project(project.id))
-                expanded.insert(project.id)
-            }
-        } label: {
+        RailProjectRow(project: project, running: running, selected: workspace.mainRoute == .project(project.id) && !workspace.cueHome, open: expanded.contains(project.id)) {
+            workspace.show(.project(project.id))
+            expanded.insert(project.id)
+        } toggle: {
+            expanded.formSymmetricDifference([project.id])
+        }
+    }
+}
+
+/// 项目那一行与行尾的开合箭头：两颗并排的钮，箭头叠在行尾留出的那一格上（钮里不套钮），只管开合。
+/// 箭头展开着、选中或指针停在这一行时才画，位置一直留着（露出来时行尾的数不挪）。
+private struct RailProjectRow: View {
+    let project: Project
+    let running: Int
+    let selected: Bool
+    let open: Bool
+    let show: () -> Void
+    let toggle: () -> Void
+    @State private var hovering = false
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        Button(action: show) {
             RailLine {
                 ProjectGlyph(project: project)
             } rest: {
@@ -243,19 +260,42 @@ struct RailSessions: View {
                     BoardLaneMark(column: .advancing, size: 12)
                     Text(running, format: .number).font(Typography.caption).foregroundStyle(palette.ink3).monospacedDigit()
                 }
-                if open || selected { Chevron(.forward).foregroundStyle(palette.ink3).rotationEffect(.degrees(open ? 90 : 0)) }
+                Color.clear.frame(width: Chrome.icon)
             }
         }
         .buttonStyle(RowStyle(selected: selected))
+        .contextMenu { ProjectActions(project: project) }
         .help(running > 0 ? Text("\(running) 推进中") : Text(verbatim: project.shownName))
         .accessibilityLabel(Text(verbatim: project.shownName))
         .accessibilityValue(running > 0 ? Text(running, format: .number) : Text(verbatim: ""))
         .accessibilityAddTraits(selected ? .isSelected : [])
+        .overlay(alignment: .trailing) { fold }
+        .onHover { hovering = $0 }
+    }
+
+    private var fold: some View {
+        // 触屏没有悬停：一直画着
+        #if os(iOS)
+        let shown = true
+        #else
+        let shown = open || selected || hovering
+        #endif
+        return Button(action: toggle) {
+            Chevron(.forward).foregroundStyle(palette.ink3).rotationEffect(.degrees(open ? 90 : 0))
+        }
+        .buttonStyle(ControlButtonStyle(kind: .icon, size: .inline))
+        // 钮的圆比留出的那一格宽：往右让出多的一半，箭头正在那一格的中线上
+        .offset(x: (ControlSize.inline.height - Chrome.icon) / 2)
+        .opacity(shown ? 1 : 0)
+        .help(open ? Text("收起") : Text("展开"))
+        .accessibilityLabel(open ? Text("收起") : Text("展开"))
+        .accessibilityValue(Text(verbatim: project.shownName))
     }
 }
 
 /// 展开的项目下面列的会话，同手机会话列表按项目筛出来的那一份（`SessionListData.read`）：没结束的与置顶的全在（等你的常驻在上面，这里不再列），
-/// 再按最近补已结束的到 `cap` 条，多的收在"还有 N 个会话"一行里、点一下多列 `step` 条
+/// 再按最近补已结束的到 `cap` 条，多的收在"更早的会话"一行里（行尾写还有几个）、点一下多列 `step` 条；列多了下面多一行"收起"，回到 `cap` 条。
+/// 多列的只记在这一次展开里：项目收起再打开回到 `cap` 条
 /// （同 Codex、Cindy 一个项目先列 5 条，Buzz 列 7 条、每次多 10 条；三家都不让上限藏起在跑的）。
 /// 不从会话条那份（`SessionRailData`，Cue 管着的）取：绑在待办或已做完的任务上、还没结束的会话不在那一份里，这里再不列就只剩搜索找得到。
 private struct RailProjectSessions: View {
@@ -266,6 +306,7 @@ private struct RailProjectSessions: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var list: SessionListData?
     @State private var extra = 0
 
@@ -284,31 +325,43 @@ private struct RailProjectSessions: View {
         let hidden = (list?.endedTotal ?? 0) - ended.count
         let items = (live + ended).map { item in
             let pulse = workspace.pulse(of: item), session = pulse.session ?? item.state
-            return SessionRailRows.Item(session: session, name: item.task?.title.nonEmpty ?? session.title, pulse: pulse, waiting: nil)
+            return SessionRailRows.Item(session: session, name: item.task?.title.nonEmpty ?? session.title, task: item.task, pulse: pulse, waiting: nil)
         }
+        let motion = Motion.spatial(Motion.nudge, reduceMotion: reduceMotion) ?? Motion.fade
         VStack(spacing: Spacing.hair) {
             ForEach(items) { item in
                 SessionRailCell(item: item, form: .wide, selected: marked.contains(item.id), compact: true, open: open)
+                    .transition(.opacity)
             }
-            if hidden > 0 {
-                Button { extra += Self.step } label: {
-                    RailLine { Color.clear } rest: {
-                        Text("还有 \(hidden) 个会话").font(Typography.caption).foregroundStyle(palette.ink3).lineLimit(1)
-                    }
-                    .padding(.leading, SessionRailCell.indent)
-                }
-                .buttonStyle(RowStyle())
-            }
+            if hidden > 0 { fold(.expand, Text("更早的会话"), count: hidden) { extra += Self.step } }
+            if extra > 0 { fold(.collapse, Text("收起")) { withAnimation(motion) { extra = 0 } } }
         }
         // 引线在项目图形那一列的中线上，从项目那一行往下贯到最后一个会话：看得出这几行归上面那个项目
         .overlay(alignment: .leading) {
             Rectangle().fill(palette.hair).frame(width: 1).padding(.leading, Chrome.icon / 2).padding(.vertical, Spacing.tight)
         }
         .transition(.opacity.combined(with: .offset(y: -Spacing.tight)))
-        .observing(services.store, id: Reading(project: project, limit: Self.cap + extra, moment: services.speech), into: $list, onError: workspace.fail) {
+        // 读到的带着动画落下：这一组是空着插进来的，不带的话行在展开那一下之后一帧蹦出来（收起时内容已在，是顺的）
+        .observing(services.store, id: Reading(project: project, limit: Self.cap + extra, moment: services.speech), into: $list, animation: motion, onError: workspace.fail) {
             [project, limit = Self.cap + extra, moment = services.speech] store in
             try SessionListData.read(text: "", project: project, historyLimit: limit, at: moment, from: store)
         }
+    }
+
+    private func fold(_ icon: Icon, _ title: Text, count: Int? = nil, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            RailLine(leadWidth: SessionRailCell.mark) {
+                Image(icon).font(Glyph.small)
+            } rest: {
+                title.lineLimit(1)
+                Spacer(minLength: Spacing.item)
+                if let count { Text(count, format: .number).monospacedDigit() }
+            }
+            .font(Typography.caption).foregroundStyle(palette.ink3)
+        }
+        .buttonStyle(RowStyle())
+        .padding(.leading, SessionRailCell.indent)
+        .transition(.opacity)
     }
 }
 

@@ -39,8 +39,8 @@ struct OpenSessionBeside: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        if workspace.layout == .wide {
-            Button("在旁边打开") { workspace.openSession(session.id, sessionID: session.sessionID, in: .beside) }
+        if workspace.layout == .wide, !workspace.shownSessions.contains(where: { $0.sessionID == session.sessionID }) {
+            Button("在旁边打开", icon: .rightColumn) { workspace.openSession(session.id, sessionID: session.sessionID, in: .beside) }
         }
     }
 }

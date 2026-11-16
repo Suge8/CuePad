@@ -1,6 +1,7 @@
 import SwiftUI
 
 /// 宽屏这一页的操作只在栏头这颗钮（Mac 与 iPad 同一个，`WideColumnHead`）：栏里的页不在自己那一排另给（`HeaderHost.column` 不画页的右端）。
+/// 项目页没有这颗钮：项目的操作在会话条那一行的右键里（`ProjectActions`），选灵感在卡的右键里；收在"⋯"里的没人点开。
 /// 菜单项不按页面数据置灰：菜单拿不到页面读的库，抄一份过来就是第二个事实源；没有可清空的时候点了什么也不发生。
 /// 进展页它是项目范围（筛选的图形，选了项目时角上是那个项目），排在列头那一排的开头（`leads`）：先选范围再看四列，
 /// 右端留给滑到 Cue 浮板下面的列，压在最后一列的列头上会盖住列名。那一页别的操作各在原处——归档做完的在已完成那一列的列头，接入 Agent 在设置。
@@ -9,13 +10,11 @@ struct PageMenuSlot: View {
     @Environment(Workspace.self) private var workspace
 
     private enum Content: Equatable {
-        case project(UUID)
         case progress
         case trash
 
         var help: LocalizedStringResource {
             switch self {
-            case .project: "选择灵感、看这个项目的进展、项目操作"
             case .progress: "项目范围"
             case .trash: "清空回收站"
             }
@@ -25,7 +24,6 @@ struct PageMenuSlot: View {
     /// nil：这一页没有操作，不摆钮。
     private var content: Content? {
         switch workspace.mainRoute {
-        case .project(let id): .project(id)
         case .progress: .progress
         case .trash: .trash
         default: nil
@@ -55,7 +53,6 @@ struct PageMenuSlot: View {
 
     @ViewBuilder private func items(_ content: Content) -> some View {
         switch content {
-        case .project(let id): ProjectMenuItems(projectID: id)
         case .progress: ProjectScopePicker().pickerStyle(.inline)
         case .trash:
             Button("清空回收站…", icon: .trash, role: .destructive) { workspace.confirmsEmptyTrash = true }

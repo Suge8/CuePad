@@ -160,7 +160,7 @@ extension TaskFlowTests {
             try await eventually("在做") { workspace.next(for: card, in: workspace.agentLinks, steps: nil)?.busySession != nil }
             try await workspace.confirmComplete(card)
             defer { workspace.sessionAsk = nil }
-            guard case .complete(.agent(let busy), _, _) = workspace.sessionAsk else { return nil }
+            guard case .complete(.agent(let busy, _), _, _) = workspace.sessionAsk else { return nil }
             return busy
         }
         #expect(try await asked(task.id)?.endsWithTask == true)

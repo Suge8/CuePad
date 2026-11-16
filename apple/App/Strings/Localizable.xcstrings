@@ -16202,6 +16202,22 @@
         }
       }
     },
+    "更早的会话" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Earlier Sessions"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "更早的会话"
+          }
+        }
+      }
+    },
     "更早的输出未显示" : {
       "localizations" : {
         "en" : {
@@ -19760,18 +19776,18 @@
         }
       }
     },
-    "看这个项目的进展" : {
+    "看进展" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "See This Project’s Progress"
+            "value" : "See Progress"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "看这个项目的进展"
+            "value" : "看进展"
           }
         }
       }
@@ -24594,38 +24610,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "选择模型…"
-          }
-        }
-      }
-    },
-    "选择灵感" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Select Ideas"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "选择灵感"
-          }
-        }
-      }
-    },
-    "选择灵感、看这个项目的进展、项目操作" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Select ideas, see this project’s progress, project actions"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "选择灵感、看这个项目的进展、项目操作"
           }
         }
       }

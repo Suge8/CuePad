@@ -15,12 +15,12 @@ struct SessionMenuItems: View {
         if let link = task {
             let open = link.tasks.filter { $0.task.status != .done }
             ForEach(open) { item in
-                Button(open.count > 1 ? "完成「\(item.task.title)」" : "完成任务", icon: .complete) { workspace.completeTask(item.task.id) }
+                Button(open.count > 1 ? "完成「\(item.task.title)」" : "完成任务", icon: .complete) { workspace.completeTask(item.task.id) }.menuIcons()
             }
-            SessionTaskBindItems(session: session, link: link)
+            SessionTaskBindItems(session: session, link: link).menuIcons()
             Divider()
         }
-        SessionActions(session: session, task: pin, ending: ending)
+        SessionActions(session: session, task: pin, ending: ending, completes: false)
     }
 }
 
