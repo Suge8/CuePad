@@ -24,7 +24,7 @@ extension Workspace {
     }
 
     /// 已经完成的不动：界面手里的副本可能已过时（别的设备刚做完），再来一次不能把它翻回去（`CueStore.completeTask`）。
-    /// 你点的完成就是这件事用完了：它的会话跟着休眠，哪些只由 Store 定（`sessionsFreed`：这件事还有没做完的步骤、别的事还在用的留着）。
+    /// 你点的完成就是这件事用完了：它的会话跟着休眠，哪些只由 Store 定（`CueStore.sessionsFreed`：这件事还有没做完的步骤、别的事还在用的留着）。
     /// 留着时提示照实说，不让人猜这次关没关。完成与休眠一次写下（`CueStore.completeTask(_:sleepingAt:)`）；休眠没发出去（那台 Mac 够不着）照常报错，完成不撤。
     func complete(_ id: UUID) async throws {
         let store = services.store
@@ -33,8 +33,9 @@ extension Workspace {
         guard status == .done else { return }
         if let undo { undoable("完成", undo) }
         let archiving = NoticeAction(title: String(localized: "归档")) { try await $0.archive(id) }
-        let stays = try await store.completedTaskKeepsSession(id)
-        say(stays ? "已完成，会话还在给后面的步骤用" : "已完成", action: archiving, sound: .check)
+        let away = Set(unreached.map(\.sessionID))
+        let stays = try await store.sessionsKept(afterCompleting: id).contains { !away.contains($0.sessionID) }
+        say(stays ? "已完成，会话还有别的事在用" : "已完成", action: archiving, sound: .check)
         // 手里那条"离开"可能已经过时：这几个照点名结束的路再试（先拉一次同步）。一个没发出去不耽误后面的，都试过再报头一个错
         var failure: (any Error)?
         for session in unreached {
@@ -51,7 +52,7 @@ extension Workspace {
     ) async throws {
         // 没有任务的（完成的是会话本身，`finish`）一定休眠它
         var sleeps = true
-        if let task, let busy { sleeps = try await services.store.sessionsFreed(byCompleting: task).contains { $0.sessionID == busy.sessionID } }
+        if let task, let busy { sleeps = try await services.store.sessionsEnding(byCompleting: task, at: services.speech).contains(busy.sessionID) }
         if let ask = CompletionAsk(subtasks: subtasks, busy: busy, sleeps: sleeps) {
             let claimer = anchored ? task.flatMap { completionClaims[$0]?.last } : nil
             return sessionAsk = .complete(ask, claimer: claimer, then: proceed)

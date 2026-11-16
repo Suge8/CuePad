@@ -67,7 +67,7 @@ extension CueStore {
   /// 你完成 `task`（连同它下面的）之后该歇下的会话，完成前问是预告（确认框照它说）、完成后问是照做（App 逐个点名结束）。
   /// 一条规则：这件事（顶层）再没有没做完的步骤，它里面绑着的会话就歇下——不问是不是为它开的；别的没做完的事还绑着的、有话正送进去的、已有结束在路上的不动。
   /// 与自动结束（`taskSessionCanEnd`，Cue 的 done 与同步来的收尾）是两条路：那条只结束为任务开的，不替你做没点过的事；这条是你亲手点了完成。
-  public func sessionsFreed(byCompleting task: UUID) throws -> [SessionState] {
+  func sessionsFreed(byCompleting task: UUID) throws -> [SessionState] {
     guard let card = try find(Card.self, task), card.isTask, let top = try find(Card.self, try self.top(of: task)) else { return [] }
     let done = Set(try db.query("SELECT id FROM cards WHERE id IN (\(Self.subtree(from: "SELECT ?")))", [task]) { $0.uuid(0) })
     guard try leaves(of: top).allSatisfy({ $0.completedAt != nil || done.contains($0.id) }) else { return [] }
@@ -82,14 +82,15 @@ extension CueStore {
     return try sessionStates(sessions).values.filter(\.canEnd).sorted { $0.sessionID < $1.sessionID }
   }
 
-  /// 做完的这一步绑着会话、它那件事还有没做完的步骤，会话也真的留着：完成的提示照此说。完成之后问——
-  /// 后面的步骤各有各的会话时，为这一步开的那个已经随完成自动结束了（`taskSessionCanEnd`，结束请求与完成同一个事务写下），不能再说它留着。
-  public func completedTaskKeepsSession(_ task: UUID) throws -> Bool {
-    guard let card = try find(Card.self, task), let session = card.piSessionID, let top = try find(Card.self, try self.top(of: task)) else { return false }
-    guard try leaves(of: top).contains(where: { $0.completedAt == nil }) else { return false }
-    let ending = try db.first(
-      "SELECT 1 FROM deliveryRequests AS r WHERE r.targetRef = ? AND \(DeliveryRequest.endingSQL("r"))", [session]) { _ in true } ?? false
-    return !ending
+  /// 做完的 `task`（连同它下面的）绑着的会话里完成之后还醒着、也没有结束在路上的：完成的提示照此说"没休眠"。完成之后问，不预告——
+  /// 后面的步骤、别的事还在用，有话正送进去，问着的时候被别的事接走，哪一种留下的都在这里。
+  public func sessionsKept(afterCompleting task: UUID) throws -> [SessionState] {
+    let sessions = try db.query(
+      """
+      SELECT DISTINCT piSessionID FROM cards WHERE piSessionID IS NOT NULL AND id IN (\(Self.subtree(from: "SELECT ?")))
+        AND NOT EXISTS (SELECT 1 FROM deliveryRequests r WHERE r.targetRef = cards.piSessionID AND \(DeliveryRequest.endingSQL("r")))
+      """, [task]) { $0.text(0) }
+    return try sessionStates(sessions).values.filter(\.canEnd)
   }
 
   /// 有人在用这个会话：在看板上、没在开新会话的叶子绑着它（哪件事的都算），或有话正送进去。Cue 点名收会话（`endIdleSession`）也只认它。
