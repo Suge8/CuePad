@@ -26,7 +26,7 @@ extension Schema {
       isPinned INTEGER NOT NULL, variableValues TEXT NOT NULL, sortKey TEXT NOT NULL, conflictOf TEXT,
       deletedAt INTEGER, createdAt INTEGER NOT NULL, modifiedAt INTEGER NOT NULL,
       parentID TEXT, todoAt INTEGER, startedAt INTEGER, completedAt INTEGER, piSessionID TEXT, archivedAt INTEGER,
-      formerSessionIDs TEXT, sessionBindingRevision TEXT, writeSeq INTEGER NOT NULL DEFAULT 0
+      formerSessionIDs TEXT, sessionBindingRevision TEXT, shelvedUntil INTEGER, seenAt INTEGER, writeSeq INTEGER NOT NULL DEFAULT 0
     ) STRICT;
     CREATE INDEX cards_projectID_sortKey ON cards(projectID, sortKey);
     CREATE INDEX cards_parentID ON cards(parentID);

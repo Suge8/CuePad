@@ -35,6 +35,8 @@ DEFINE SCHEMA
         archivedAt             INT64,
         formerSessionIDs       STRING,
         sessionBindingRevision STRING,
+        shelvedUntil           INT64,
+        seenAt                 INT64,
         cueFollows             INT64,
         isFavorite             INT64,
         numbering              STRING,

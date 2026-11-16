@@ -174,10 +174,11 @@ extension CueStage {
         case reply(CueNow.Item)
         case said(Said)
         case done(CueNow.Item)
+        case invite([CueInvite])
         case delegating(CueNow.Item)
         case quiet(String)
 
-        init(now: CueNow, said: Said?) {
+        init(now: CueNow, said: Said?, invites: [CueInvite]) {
             let item = { (kind: CueNow.Item.Kind) in now.items.first { $0.kind == kind } }
             if case .away(let reason, let failed) = now.cue {
                 self = .away(reason, failed: failed)
@@ -189,6 +190,8 @@ extension CueStage {
                 self = .said(said)
             } else if now.beat == .done, let done = now.justDone {
                 self = .done(done)
+            } else if !invites.isEmpty, !now.isBusy {
+                self = .invite(invites)
             } else if now.beat == .delegating, let waiting = item(.delegating) {
                 self = .delegating(waiting)
             } else {

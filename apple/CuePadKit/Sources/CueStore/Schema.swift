@@ -36,6 +36,8 @@ enum Schema {
     "ALTER TABLE piSessionStates ADD COLUMN turnDelivery TEXT; ALTER TABLE piSessionStates ADD COLUMN turnByCue INTEGER;",
     // 100：你恢复使用的会话不再随任务结束（`SessionState.restoredAt`）；升级前恢复过的没有记录，照旧按任务收尾
     "ALTER TABLE piSessionStates ADD COLUMN restoredAt INTEGER;",
+    // 101：邀请卡的"今天先不做"与"看过结果"（`Card.shelvedUntil`、`Card.seenAt`）
+    "ALTER TABLE cards ADD COLUMN shelvedUntil INTEGER; ALTER TABLE cards ADD COLUMN seenAt INTEGER;",
   ]
 
   /// 同步元数据：每条记录服务器端的系统字段（压缩存，见 `SystemFields`）与服务器收下的修改时间（从没收下过为 NULL），以及本机交出去的那一版的修改时间
