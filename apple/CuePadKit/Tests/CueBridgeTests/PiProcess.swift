@@ -71,8 +71,6 @@ final class PiProcess: @unchecked Sendable {
             try Self.writeModels(self.model, into: paths.agentDirectory)
             try Self.writeSettings(settings ?? [:], discoverSkills: discoverSkills, into: paths.agentDirectory)
             self.model.onTitle { .say("\($0.model)：\($0.prompt)") }
-            let agents = AgentIntegration(paths: AgentPaths(pi: paths, environment: ["CUEPAD_AGENTS_DIR": home.appending(path: ".agents").path]), locate: { pinnedPi.locator }, cuepad: Self.cuepad, timing: noDeadline)
-            try await agents.install(.pi)
         }
         if firecode { try Self.installFirecode(into: paths.agentDirectory) }
 

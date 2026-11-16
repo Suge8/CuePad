@@ -2,125 +2,66 @@
 import CueStore
 import Foundation
 
-/// `status` 没有任何副作用；写入只发生在 `install`，调用方要先征得用户同意。
-/// 写入不做事务：哪一样没写上，状态就是 `outdated`，下次启动的静默升级补上。
-/// CuePad 起的 OpenCode 服务不读 `.claude/skills`（`OpenCodeRuntime.serviceEnvironment`），同一个技能不会经两条路读到。
+/// 检测这台 Mac 上的各家 Agent 与它们的配置目录，`status` 没有任何副作用。
 public struct AgentIntegration: Sendable {
     public let fileAccess: AgentFileAccess
     var paths: AgentPaths { fileAccess.paths }
     private var pi: PiPaths { paths.pi }
     let locate: @Sendable () async -> ExecutableLocator
-    private let cuepad: URL
     let installCommand: @Sendable (AgentKind, AgentStatus.Presence) -> String
     /// 起一个进程要多久取决于系统此刻多忙，测试给手动推进的钟
     private let timing: Timing
 
     public init(
-        paths: AgentPaths = AgentPaths(), locate: @escaping @Sendable () async -> ExecutableLocator = { await .system }, cuepad: URL,
+        paths: AgentPaths = AgentPaths(), locate: @escaping @Sendable () async -> ExecutableLocator = { await .system },
         isolated: Bool = false, installCommand: @escaping @Sendable (AgentKind, AgentStatus.Presence) -> String = { $0.facts.installCommand($1) },
         timing: Timing = .system
     ) {
         self.timing = timing
         fileAccess = AgentFileAccess(paths: paths, isolated: isolated)
         self.locate = locate
-        self.cuepad = cuepad
         self.installCommand = installCommand
     }
 
     public func home(of kind: AgentKind) -> URL { paths.home(of: kind) }
 
-    public func isWritable(_ kind: AgentKind) -> Bool { touches(kind) && touchesShared }
-
     public func touches(_ kind: AgentKind) -> Bool { fileAccess.touches(kind) }
-
-    public var touchesShared: Bool { fileAccess.touchesShared }
-
-    private static func linksSkill(_ kind: AgentKind) -> Bool { !kind.facts.sharedSkills.reaches(group: "") }
-
-    var skillDirectory: URL { paths.agentsDirectory.appending(path: "skills/\(AgentSkill.name)", directoryHint: .isDirectory) }
-    var skillFile: URL { skillDirectory.appending(path: AgentSkill.fileName) }
-    func agentSkillDirectory(_ kind: AgentKind) -> URL { home(of: kind).appending(path: "skills/\(AgentSkill.name)", directoryHint: .isDirectory) }
-
-    public func writtenFiles(of kind: AgentKind) -> [URL] {
-        [skillFile] + (Self.linksSkill(kind) ? [agentSkillDirectory(kind)] : [])
-    }
 
     @concurrent public func status(of kind: AgentKind) async -> AgentStatus {
         let found = await detect(kind)
         let lacking = found.presence == .notFound ? await lacking(kind.facts.installPrerequisite) : nil
-        return AgentStatus(presence: found.presence, files: skillState(of: kind), executable: found.executable, lacking: lacking)
+        return AgentStatus(presence: found.presence, executable: found.executable, lacking: lacking)
     }
 
-    /// 隔离运行写不了、Agent 不在或太旧、或同名文件不是 CuePad 写的时拒绝，且什么都不写。
-    @concurrent public func install(_ kind: AgentKind) async throws {
-        guard isWritable(kind) else { throw AgentInstallError.isolated(kind) }
-        let found = await detect(kind)
-        switch found.presence {
-        case .notFound: throw AgentInstallError.notFound(kind)
-        case .unresponsive: throw AgentInstallError.unresponsive(kind)
-        case .tooOld(let version): throw AgentInstallError.tooOld(kind, found: version)
-        case .found: break
-        }
-        if case .foreign(let path) = skillState(of: kind) { throw AgentInstallError.foreign(path) }
-        try writeSkill(for: connectedKinds.union([kind]))
+    private var legacySkillDirectory: URL { paths.agentsDirectory.appending(path: "skills/\(AgentSkill.legacyName)", directoryHint: .isDirectory) }
+    private var legacySkillFile: URL { legacySkillDirectory.appending(path: AgentSkill.fileName) }
+    private func legacyLink(_ kind: AgentKind) -> URL { home(of: kind).appending(path: "skills/\(AgentSkill.legacyName)", directoryHint: .isDirectory) }
+
+    /// 旧版 CuePad 写进共享技能目录的 `cuepad` 技能（`AgentSkill.ownershipMarker` 认）标记为接入的几家；没有、读不出、不是普通文件或不是 CuePad 写的为 nil。
+    /// 隔离运行碰不到真实的共享目录（`AgentFileAccess.touchesShared`）时不看。
+    public func legacySkillKinds() -> Set<AgentKind>? {
+        guard fileAccess.touchesShared,
+              (try? FileManager.default.attributesOfItem(atPath: legacySkillFile.path)[.type] as? FileAttributeType) == .typeRegular,
+              let text = (try? Data(contentsOf: legacySkillFile)).flatMap({ String(data: $0, encoding: .utf8) }) else { return nil }
+        return AgentSkill.kinds(in: text)
     }
 
-    /// Agent 已经卸掉了也能删；隔离运行写不了、有别人的同名文件时什么都不删。
-    @concurrent public func uninstall(_ kind: AgentKind) async throws {
-        guard isWritable(kind) else { throw AgentInstallError.isolated(kind) }
-        if case .foreign(let path) = skillState(of: kind) { throw AgentInstallError.foreign(path) }
-        let left = connectedKinds.subtracting([kind])
-        if Self.linksSkill(kind), RelativeLink.isLink(agentSkillDirectory(kind)) { try FileManager.default.removeItem(at: agentSkillDirectory(kind)) }
-        if left.isEmpty {
-            if FileManager.default.fileExists(atPath: skillFile.path) { try FileManager.default.removeItem(at: skillFile) }
-        } else {
-            try writeSkill(for: left)
-        }
-        let directories = [skillDirectory, skillDirectory.deletingLastPathComponent(), paths.agentsDirectory, agentSkillDirectory(kind).deletingLastPathComponent()]
-        for directory in directories where (try? FileManager.default.contentsOfDirectory(atPath: directory.path))?.isEmpty == true {
-            try FileManager.default.removeItem(at: directory)
-        }
-    }
-
-    private var connectedKinds: Set<AgentKind> { read(skillFile).flatMap(AgentSkill.kinds(in:)) ?? [] }
-
-    private func writeSkill(for kinds: Set<AgentKind>) throws {
+    /// 只在 `legacySkillKinds` 认出来之后调。先删各家目录里指向它的链接，最后删它和因此变空的目录：中途失败时文件还在，下次启动重来。
+    public func removeLegacySkill() throws {
         let files = FileManager.default
-        try files.createDirectory(at: skillDirectory, withIntermediateDirectories: true)
-        try Data(AgentSkill.text(cuepad: cuepad, for: kinds).utf8).write(to: skillFile, options: .atomic)
-        for kind in kinds where Self.linksSkill(kind) {
-            let link = agentSkillDirectory(kind)
-            guard !RelativeLink.points(link, to: skillDirectory) else { continue }
-            if RelativeLink.isLink(link) { try files.removeItem(at: link) }
-            try RelativeLink.make(at: link, to: skillDirectory)
+        var emptied = [legacySkillDirectory, legacySkillDirectory.deletingLastPathComponent(), paths.agentsDirectory]
+        for kind in AgentKind.allCases where touches(kind) && RelativeLink.points(legacyLink(kind), to: legacySkillDirectory) {
+            try files.removeItem(at: legacyLink(kind))
+            emptied.append(legacyLink(kind).deletingLastPathComponent())
+        }
+        try files.removeItem(at: legacySkillFile)
+        for directory in emptied where (try? files.contentsOfDirectory(atPath: directory.path))?.isEmpty == true {
+            try files.removeItem(at: directory)
         }
     }
 
     @concurrent public func probe(_ statuses: [AgentKind: AgentStatus]) async -> (agents: [MacAgent], problems: [MacAgentProblem]) {
         await AgentProbe(paths: paths, locator: await locate(), timing: timing).run(statuses)
-    }
-
-    private func skillState(of kind: AgentKind) -> AgentStatus.Files {
-        let skill = read(skillFile)
-        if skill.map({ AgentSkill.kinds(in: $0) == nil }) ?? unreadable(skillFile) { return .foreign(abbreviated(skillFile)) }
-        let own = agentSkillDirectory(kind)
-        if !RelativeLink.isLink(own), FileManager.default.fileExists(atPath: own.path) { return .foreign(abbreviated(own)) }
-        let linked = !Self.linksSkill(kind) || RelativeLink.points(own, to: skillDirectory)
-        if RelativeLink.isLink(own), !linked { return .foreign(abbreviated(own)) }
-        let kinds = skill.flatMap(AgentSkill.kinds(in:)) ?? []
-        guard kinds.contains(kind) else { return .missing }
-        return skill == AgentSkill.text(cuepad: cuepad, for: kinds) && linked ? .current : .outdated
-    }
-
-    private func abbreviated(_ file: URL) -> String { UserHome.shown(file.path) }
-
-    private func read(_ file: URL) -> String? {
-        (try? Data(contentsOf: file)).flatMap { String(data: $0, encoding: .utf8) }
-    }
-
-    /// 不是 CuePad 写的，不当成缺失去覆盖；不跟随符号链接，失效的链接也算在。
-    private func unreadable(_ file: URL) -> Bool {
-        (try? FileManager.default.attributesOfItem(atPath: file.path)) != nil && read(file) == nil
     }
 
     private func detect(_ kind: AgentKind) async -> (presence: AgentStatus.Presence, executable: URL?) {

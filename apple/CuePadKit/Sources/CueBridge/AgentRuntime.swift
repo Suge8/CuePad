@@ -66,7 +66,7 @@ extension AgentKind {
 /// 跨平台的名字、会话变量、模型提供方、能力在 CueStore 的 `AgentKind`。没写的项取多数家的值。
 public struct AgentFacts: Sendable {
     public let command: String
-    /// OpenCode 另认 `XDG_CONFIG_HOME`；不碰真实世界时没给它就不接入这家（`AgentInstallError.isolated`）。
+    /// OpenCode 另认 `XDG_CONFIG_HOME`；不碰真实世界时没给它就不读这家（`AgentFileAccess.touches`）。
     public let homeVariable: String
     var home: (@Sendable (AgentPaths) -> URL)?
     public var minimumVersion: AgentVersion?

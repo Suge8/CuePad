@@ -9,6 +9,8 @@ final class ACPHost {
         var executable: URL
         var environment: [String: String]
         var dialect: any ACPDialect
+        /// 开新会话时 `session/new` 的 `_meta`
+        var meta: JSONValue?
     }
 
     private let agent: AgentKind
@@ -33,7 +35,7 @@ final class ACPHost {
 
     func open(in directory: URL, launchToken: String, model: String? = nil) async throws -> Session.ID {
         try await host(in: directory, model: model, launchToken: launchToken, sessionID: nil, admission: try processes.admission()) {
-            try await $0.open(in: directory)
+            try await $0.open(in: directory, meta: $1.meta)
         }
     }
 
@@ -43,8 +45,8 @@ final class ACPHost {
         let directory = URL(filePath: session.cwd, directoryHint: .isDirectory)
         return try await processes.resume(session.id) { [self] admission in
             try admit()
-            return try await host(in: directory, model: nil, launchToken: nil, sessionID: session.id, admission: admission) {
-                try await $0.load(session.id, in: directory)
+            return try await host(in: directory, model: nil, launchToken: nil, sessionID: session.id, admission: admission) { acp, _ in
+                try await acp.load(session.id, in: directory)
             }
         }
     }
@@ -59,7 +61,7 @@ final class ACPHost {
 
     private func host(
         in directory: URL, model: String?, launchToken: String?, sessionID known: String?, admission: HostedProcesses.Admission,
-        open: @escaping @MainActor (ACPSession) async throws -> String
+        open: @escaping @MainActor (ACPSession, Launching) async throws -> String
     ) async throws -> Session.ID {
         let launch = try await launching(model)
         let session = ACPSession(dialect: launch.dialect, bridge: bridge, processes: processes)
@@ -69,7 +71,7 @@ final class ACPHost {
                 let connection = try await session.launch(launch.executable, environment: launch.environment, directory: directory) {
                     [processes = self.processes] process in try await processes.admit(process, for: known, admission)
                 }
-                return (connection, try await open(session))
+                return (connection, try await open(session, launch))
             }
         } catch {
             await session.connection?.shutdown()

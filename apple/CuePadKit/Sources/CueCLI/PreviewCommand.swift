@@ -22,6 +22,12 @@ extension Command {
     path: ["show"], summary: "把文件发到用户手机上的 CuePad：当前 Agent 会话的对话里出现一张卡片", arguments: "<文件…> --title <标题>…",
     options: [Opt("title", "按文件的先后每个一句，\(PreviewItem.titleRule)", value: "标题")],
     notes: """
+      用户多在手机上的 CuePad 里看这个对话：除了你回答的文字，他只看得到你发的预览和工具结果里的图，本机路径他打不开。要他看的东西发过去，回答里说一句发了什么。
+      什么时候发：只在要他看一眼或拍板时——做出的页面、文档、方案、界面效果。纯代码改动不发，在回答里说改了什么；不为证明做完了而截图。
+      发什么：发真东西，不发它的截图。文档发 .md，要他过目的代码改动发 git diff 存成的 .diff，页面发 .html，还有 PDF、图片、录屏；截图只在要他看界面本身长什么样时发。
+      他回复里的 `预览「标题」：……` 说的就是你发的那一份。
+      做 HTML 页给手机看：手机顶栏已显示标题，页面里不写标题、页眉、导语和说明页脚，内容直接开始；按手机宽度排版，跟随深浅色（prefers-color-scheme）；能用原生控件（button、input、select、details）就不自绘；单个文件、不联网，样式与脚本写进同一个 HTML，图片用 data: 地址内联。
+      其余命令（灵感、任务、搜索）与在沙箱里怎么运行：cuepad --help。
       会话取 Agent 给每条命令带的环境变量里第一个有值的：\(sessionVariables.joined(separator: "、"))。\(AgentKind.watchedSessionVariable) 是 CuePad 的 Pi 扩展给的、用户在看的会话，子代理发的也落在它的对话里。都没有就报错，不猜。
       一次给几个文件是同一张卡，点开后左右切换；用户看到的是标题，不是文件名。
       可发：\(PreviewKind.supportedList)；单个不超过 \(PreviewItem.maxBytes / 1_000_000) MB。Markdown 排成文稿，diff、patch 是增删对照。

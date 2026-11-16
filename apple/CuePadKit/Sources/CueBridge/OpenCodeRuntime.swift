@@ -17,6 +17,7 @@ public final class OpenCodeRuntime: AgentRuntime, SessionLink {
     let paths: AgentPaths
     let store: CueStore
     let hostID: String
+    let brief: String
     let opencode: @Sendable () async -> URL?
     let locate: @Sendable () async -> ExecutableLocator
     let transcriptWindow: TimeInterval
@@ -83,8 +84,9 @@ public final class OpenCodeRuntime: AgentRuntime, SessionLink {
         return Tracked(info: info, turns: turns)
     }
 
+    /// - Parameter brief: 开的、接着的会话都挂上这条指令（`SessionBrief`，`attachBrief`）。
     public init(
-        bridge: Bridge, paths: AgentPaths, store: CueStore, hostID: String, opencode: @escaping @Sendable () async -> URL?,
+        bridge: Bridge, paths: AgentPaths, store: CueStore, hostID: String, brief: String, opencode: @escaping @Sendable () async -> URL?,
         locate: @escaping @Sendable () async -> ExecutableLocator = { await .system },
         transcriptWindow: TimeInterval = .infinity, timing: Timing = .system
     ) {
@@ -93,6 +95,7 @@ public final class OpenCodeRuntime: AgentRuntime, SessionLink {
         self.paths = paths
         self.store = store
         self.hostID = hostID
+        self.brief = brief
         self.opencode = opencode
         self.locate = locate
         self.transcriptWindow = transcriptWindow

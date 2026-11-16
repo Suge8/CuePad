@@ -82,14 +82,11 @@ extension DebugScene {
     /// 把几家 Agent 接进截图用的隔离目录（`xc.sh shot` 把各家的配置目录指到产物目录下）。配置目录建出来就算装着（没有命令时按目录认）。
     static func connectAgents(_ services: AppServices) async {
         await running("接入各家 Agent") {
-            for kind in AgentKind.allCases {
+            // 隔离环境没给指配置目录的那几家不接入：本机构建不读真实配置
+            for kind in AgentKind.allCases where services.agents.integration.touches(kind) {
                 try FileManager.default.createDirectory(at: services.agents.integration.home(of: kind), withIntermediateDirectories: true)
                 await services.agents.detect(kind)
-                do {
-                    try await services.agents.install(kind)
-                } catch AgentInstallError.isolated {
-                    continue  // 隔离环境没给这家指配置目录：本机构建不改真实配置，这家不接入
-                }
+                services.connectAgents([kind])
             }
         }
     }

@@ -11,6 +11,7 @@ import Foundation
 public final class PiRuntime: AgentRuntime {
     private let bridge: Bridge
     private let paths: PiPaths
+    private let brief: String
     private let pi: @Sendable () async -> URL?
     private let locate: @Sendable () async -> ExecutableLocator
     private let idleLimit: Duration
@@ -18,13 +19,15 @@ public final class PiRuntime: AgentRuntime {
     private let resumptions = Resumptions()
 
     /// - Parameter pi: 这台 Mac 上够新的 `pi`（检测时挑中的那个，`AgentStatus.executable`；没有为 nil）。
+    /// - Parameter brief: 每次起它都追加进系统提示（`SessionBrief`）。
     public init(
-        bridge: Bridge, paths: PiPaths, pi: @escaping @Sendable () async -> URL?,
+        bridge: Bridge, paths: PiPaths, brief: String, pi: @escaping @Sendable () async -> URL?,
         locate: @escaping @Sendable () async -> ExecutableLocator = { await .system },
         idleLimit: Duration = AgentTimeouts.hostedIdle, timing: Timing = .system
     ) {
         self.bridge = bridge
         self.paths = paths
+        self.brief = brief
         self.pi = pi
         self.locate = locate
         self.idleLimit = idleLimit
@@ -68,7 +71,7 @@ public final class PiRuntime: AgentRuntime {
         // 脱离 App：新会话、标准输入是它自己握着两端的管道（RPC 模式读到 EOF 就收尾，这样永远读不到）；认领前 App 只握着看守的那根；
         // RPC 输出接空设备，只消费桥扩展的公开事件；标准错误只读到认领为止，留给起来就退出时的原因（`ChildProcess.release()`）。
         let process = try await ChildProcess(
-            executable, ["--mode", "rpc", "--extension", PiExtensionBundle.url.path] + arguments, directory: directory, environment: environment,
+            executable, ["--mode", "rpc", "--extension", PiExtensionBundle.url.path, "--append-system-prompt", brief] + arguments, directory: directory, environment: environment,
             placement: .detached, input: .lifeline)
         let pid = process.pid
         let session: Session

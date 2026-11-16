@@ -90,26 +90,13 @@ struct AgentLineTests {
         for kind in AgentKind.allCases {
             try await rig.connect(kind, version: versions[kind]!)
             let agents = rig.services.agents
-            lines.append(AgentLine.of(kind, agents.status(kind), writable: agents.integration.isWritable(kind)).1?.visible ?? "")
+            lines.append(AgentLine.of(kind, agents.status(kind), connected: rig.services.isConnected(kind), touches: agents.integration.touches(kind)).1?.visible ?? "")
         }
 
         #expect(lines == [
             "已接入 · Pi \(pi)", "已接入 · Claude Code 2.1.299", "已接入 · Codex 0.162.1", "已接入 · OpenCode 2.0.29", "已接入 · Grok Build 1.0.52",
             "已接入 · DeepSeek Harness 0.2.1-rc.4",
         ])
-    }
-}
-
-@Suite(.releasesLibraries)
-struct AgentUpgradeTests {
-    @Test func 没接入过的Agent启动检查不写任何文件() async throws {
-        let rig = TestApp()
-        try FileManager.default.createDirectory(at: rig.directory.appending(path: "claude"), withIntermediateDirectories: true)
-
-        try await rig.services.agents.refresh()
-
-        #expect(rig.services.agents.status(.claudeCode) == AgentStatus(presence: .found(nil), files: .missing))
-        #expect(FileManager.default.subpaths(atPath: rig.directory.appending(path: "claude").path) == [])
     }
 }
 
@@ -144,18 +131,18 @@ struct AgentIndexingTests {
 
         let said = try await eventually(store, { try $0.chatMessages(of: hosted).map(\.text) }) { !$0.isEmpty }
         #expect(said == ["修一下登录", "修好了"])
-        #expect(services.agents.status(.claudeCode)?.isConnected == false)
+        #expect(!services.isConnected(.claudeCode))
         #expect(try await Set(store.indexedSessions().filter { $0.agent == .claudeCode }.map(\.id)) == [hosted])
 
         try await rig.connect(.claudeCode)
         try await indexed([hosted, terminal])
         #expect(try await store.allSessionStates().contains { $0.sessionID == terminal })
 
-        try await services.agents.uninstall(.claudeCode)
+        await services.disconnectAgent(.claudeCode)
         try await indexed([hosted])
         #expect(try await store.allSessionStates().contains { $0.sessionID == terminal }, "同步出去的会话记录不动")
 
-        try await services.agents.install(.claudeCode)
+        services.connectAgents([.claudeCode])
         try await indexed([hosted, terminal])
     }
 }

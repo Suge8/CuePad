@@ -38,16 +38,15 @@ struct SetupTests {
 
         let first = try await launch()
         #expect(first.showsSetup)
-        let agents = services.agents
-        #expect(agents.connectable == [.pi, .claudeCode])
+        #expect(services.connectableAgents == [.pi, .claudeCode])
         #expect(try await panel(first).cue == .enable)
 
-        #expect(await first.setUp(connecting: agents.connectable, enablingCue: true).isEmpty)
-        #expect(agents.status(.pi)?.isConnected == true && agents.status(.claudeCode)?.isConnected == true)
+        #expect(await first.setUp(connecting: services.connectableAgents, enablingCue: true).isEmpty)
         #expect(try await services.store.cueProfile()?.hostID == TestApp.hostID)
         #expect(first.mainRoute == .shelf && first.besideSession == nil)
 
         app.relaunch()
+        #expect(services.isConnected(.pi) && services.isConnected(.claudeCode), "接入记在设置里，重开还在")
         let next = await reopen()
         #expect(!next.showsSetup)
         next.cue.draft = ComposerDraft(text: "整理发布说明")

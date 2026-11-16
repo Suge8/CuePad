@@ -26,7 +26,7 @@ struct AgentRow: View {
 
         SettingRow(title: .verbatim(kind.name), icon: kind.mark.image, tone: tone, busy: working || installing, status: line, help: help) {
             // 开关常驻，检测完只换状态那一行字。
-            Toggle(kind.name, isOn: Binding(get: { status?.isConnected ?? false }, set: apply))
+            Toggle(kind.name, isOn: Binding(get: { services.isConnected(kind) }, set: apply))
                 .labelsHidden()
                 .toggleStyle(.switch)
                 .disabled(working || !(status.map(canToggle) ?? false))
@@ -42,19 +42,15 @@ struct AgentRow: View {
         .task { await services.agents.detect(kind) }
     }
 
-    /// 开发构建不写真实配置目录；没装的 Agent 不接，但它卸掉后留下的 CuePad 技能能关掉删除。
+    /// 开发构建不读真实配置目录里的会话；没装的 Agent 不接，接过的卸掉后还能关掉。
     private func canToggle(_ status: AgentStatus) -> Bool {
-        guard services.agents.integration.isWritable(kind) else { return false }
-        if case .foreign = status.files { return false }
-        return status.isAvailable || status.files != .missing
+        services.agents.integration.touches(kind) && (status.isAvailable || services.isConnected(kind))
     }
 
     private static func needsSetup(_ status: AgentStatus) -> Bool {
         switch status.presence {
-        case .found: false
-        case .tooOld: true
-        case .unresponsive: false
-        case .notFound: status.files == .missing
+        case .found, .unresponsive: false
+        case .tooOld, .notFound: true
         }
     }
 
@@ -67,12 +63,11 @@ struct AgentRow: View {
             if case .failed(let why) = services.agents.jobs[kind] { return (.failure, Dotted(AgentLine.notInstalled(why))) }
             if let prerequisite = status.lacking { return (.notice, Dotted(AgentLine.needs(prerequisite))) }
         }
-        return AgentLine.of(kind, status, writable: services.agents.integration.isWritable(kind))
+        return AgentLine.of(kind, status, connected: services.isConnected(kind), touches: services.agents.integration.touches(kind))
     }
 
     /// 一句一行：中文句间不留空格、英文要，换行两边都对
     private var help: LocalizedStringResource {
-        let files = services.agents.writtenFiles(kind).joined(separator: String(localized: "、"))
         let name = kind.name
         let lines = [
             kind.readsAllSessions
@@ -80,31 +75,22 @@ struct AgentRow: View {
                 : kind == .dsh ? String(localized: "CuePad 里只有它在后台开过的 \(name) 会话，网页与桌面版里开的不会出现。")
                 : String(localized: "CuePad 里只有它在后台开过的 \(name) 会话，终端里开的不会出现。"),
             String(localized: "不接入也能让 CuePad 在后台开 \(name) 会话。"),
-            String(localized: "它也学会用 cuepad 记灵感、看和改任务，把页面和截图发到手机上看。"),
+            String(localized: "CuePad 开的会话都知道用 cuepad 把页面、文档和截图发到你手机上看。"),
             kind == .codex ? String(localized: "Codex 在沙箱里跑命令，写入 CuePad 时会请你批准。") : nil,
             kind == .opencode ? String(localized: "会话直连 OpenCode 的后台服务，不用另装。") : nil,
-            String(localized: "会写入 \(files)；关掉即删除。"),
-            String(localized: "技能在新开的会话里生效。"),
             services.agents.status(kind).map { String(localized: "安装、升级在后台运行官方命令：\(kind.facts.installCommand($0.presence))") },
         ]
         return "\(lines.compactMap { $0 }.joined(separator: "\n"))"
     }
 
     private func apply(_ on: Bool) {
-        working = true
         outcome = nil
-        let agents = services.agents, kind = kind
+        guard !on else { return services.connectAgents([kind]) }
+        working = true
+        let services = services, kind = kind
         Task {
-            defer { working = false }
-            do {
-                if on {
-                    try await agents.install(kind)
-                } else {
-                    try await agents.uninstall(kind)
-                }
-            } catch {
-                outcome = .failed(error.localizedDescription)
-            }
+            await services.disconnectAgent(kind)
+            working = false
         }
     }
 
@@ -128,19 +114,17 @@ enum AgentLine {
         return String(localized: "需要 \(prerequisite.name) \(version) 以上")
     }
 
-    static func of(_ kind: AgentKind, _ status: AgentStatus?, writable: Bool) -> (StatusTone, Dotted?) {
+    /// `touches`：这家的配置目录碰得到（`AgentIntegration.touches`）。
+    static func of(_ kind: AgentKind, _ status: AgentStatus?, connected: Bool, touches: Bool) -> (StatusTone, Dotted?) {
         guard let status else { return (.calm, Dotted(String(localized: "检测中…"))) }
-        guard writable else { return (.calm, Dotted(String(localized: "正式版在用，先用 \(kind.facts.homeVariable) 指定目录"))) }
-        switch (status.presence, status.files) {
-        case (_, .foreign(let path)): return (.failure, Dotted(String(localized: "\(path) 是别人的同名文件，没有改动")))
-        case (.tooOld(let version), _) where kind == .opencode: return (.notice, Dotted(String(localized: "需要 OpenCode 2，现在是 \(version.description)")))
-        case (.tooOld(let version), _): return (.notice, Dotted(String(localized: "\(version.description) 太旧，需要 \(kind.facts.minimumVersion.map(\.description) ?? "") 或更新")))
-        case (.unresponsive, _): return (.notice, Dotted(String(localized: "找到了，但问版本没有回应，稍后再看")))
-        case (.notFound, .missing): return (.calm, Dotted(String(localized: "没有检测到")))
-        case (.notFound, _): return (.calm, Dotted(String(localized: "已卸载，CuePad 的技能还留着")))
-        case (.found, .missing): return (.calm, Dotted(kind.readsAllSessions ? String(localized: "写入技能，读进它的会话记录") : String(localized: "写入技能")))
-        case (.found, .outdated): return (.notice, Dotted(String(localized: "需要升级")))
-        case (.found(let version), .current): return (.calm, Dotted(String(localized: "已接入"), version.map { "\(kind.name) \($0)" }))
+        guard touches else { return (.calm, Dotted(String(localized: "正式版在用，先用 \(kind.facts.homeVariable) 指定目录"))) }
+        switch status.presence {
+        case .tooOld(let version) where kind == .opencode: return (.notice, Dotted(String(localized: "需要 OpenCode 2，现在是 \(version.description)")))
+        case .tooOld(let version): return (.notice, Dotted(String(localized: "\(version.description) 太旧，需要 \(kind.facts.minimumVersion.map(\.description) ?? "") 或更新")))
+        case .unresponsive: return (.notice, Dotted(String(localized: "找到了，但问版本没有回应，稍后再看")))
+        case .notFound: return (.calm, Dotted(String(localized: "没有检测到")))
+        case .found(let version) where connected: return (.calm, Dotted(String(localized: "已接入"), version.map { "\(kind.name) \($0)" }))
+        case .found: return (.calm, kind.readsAllSessions ? Dotted(String(localized: "读进它的会话记录")) : nil)
         }
     }
 }

@@ -58,22 +58,6 @@
       },
       "shouldTranslate" : false
     },
-    "%@ %@ 太旧，需要 %@ 或更新" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ %@ is too old; requires %@ or later"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@ %2$@ 太旧，需要 %3$@ 或更新"
-          }
-        }
-      }
-    },
     "%@ %@%@" : {
       "localizations" : {
         "zh-Hans" : {
@@ -428,22 +412,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ 新回复"
-          }
-        }
-      }
-    },
-    "%@ 是别人的同名文件，没有改动" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ belongs to something else; left unchanged"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ 是别人的同名文件，没有改动"
           }
         }
       }
@@ -860,22 +828,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ 里没有这个模型"
-          }
-        }
-      }
-    },
-    "%@ 问版本没有回应，稍后再试" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ didn't respond to the version check. Try again later."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ 问版本没有回应，稍后再试"
           }
         }
       }
@@ -2812,22 +2764,6 @@
         }
       }
     },
-    "Agent 的接入没能更新：%@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Couldn’t update agent connections: %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Agent 的接入没能更新：%@"
-          }
-        }
-      }
-    },
     "Agent 空闲" : {
       "localizations" : {
         "en" : {
@@ -3386,18 +3322,18 @@
         }
       }
     },
-    "CuePad 无法启动" : {
+    "CuePad 开的会话都知道用 cuepad 把页面、文档和截图发到你手机上看。" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "CuePad Can't Start"
+            "value" : "Sessions CuePad starts know to use cuepad to send pages, documents, and screenshots to your phone."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "CuePad 无法启动"
+            "value" : "CuePad 开的会话都知道用 cuepad 把页面、文档和截图发到你手机上看。"
           }
         }
       }
@@ -5252,22 +5188,6 @@
         }
       }
     },
-    "不在" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Away"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "不在"
-          }
-        }
-      }
-    },
     "不在分类里" : {
       "localizations" : {
         "en" : {
@@ -5787,6 +5707,12 @@
             "state" : "translated",
             "value" : "Not Today"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "今天先不做"
+          }
         }
       }
     },
@@ -6022,22 +5948,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "任意"
-          }
-        }
-      }
-    },
-    "会写入 %@；关掉即删除。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Writes %@; turning it off removes them."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "会写入 %@；关掉即删除。"
           }
         }
       }
@@ -7538,38 +7448,6 @@
         }
       }
     },
-    "写入技能" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Adds a skill"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "写入技能"
-          }
-        }
-      }
-    },
-    "写入技能，读进它的会话记录" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Adds a skill and reads its sessions"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "写入技能，读进它的会话记录"
-          }
-        }
-      }
-    },
     "写批注，↩ 挂到下一句" : {
       "localizations" : {
         "en" : {
@@ -8548,6 +8426,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Open Session"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "去会话里看"
           }
         }
       }
@@ -10524,22 +10408,6 @@
         }
       }
     },
-    "在听" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Listening"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在听"
-          }
-        }
-      }
-    },
     "在哪台 Mac 上操作" : {
       "localizations" : {
         "en" : {
@@ -10648,22 +10516,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "在它的配置目录里建一个指向全局规则的链接"
-          }
-        }
-      }
-    },
-    "在想" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Thinking"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在想"
           }
         }
       }
@@ -11224,22 +11076,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "存在这台设备上，连着 iCloud 时经你自己的 iCloud 送到你的 Mac，不经别人。要发给别人时，导出诊断复制每次出事的要点；要完整原文时，再分享原始文件。"
-          }
-        }
-      }
-    },
-    "它也学会用 cuepad 记灵感、看和改任务，把页面和截图发到手机上看。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "It also learns to use cuepad to save ideas, view and edit tasks, and send pages and screenshots to your phone."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "它也学会用 cuepad 记灵感、看和改任务，把页面和截图发到手机上看。"
           }
         }
       }
@@ -12136,22 +11972,6 @@
         }
       }
     },
-    "已卸载，CuePad 的技能还留着" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Uninstalled; CuePad's skill is still there"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已卸载，CuePad 的技能还留着"
-          }
-        }
-      }
-    },
     "已压缩上下文" : {
       "localizations" : {
         "en" : {
@@ -12944,6 +12764,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "开启通知"
+          }
+        }
+      }
+    },
+    "开好会话就退出了" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exited right after opening the session"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "开好会话就退出了"
           }
         }
       }
@@ -13956,22 +13792,6 @@
         }
       }
     },
-    "技能在新开的会话里生效。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The skill takes effect in new sessions."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "技能在新开的会话里生效。"
-          }
-        }
-      }
-    },
     "把任务的正文交给 Agent，开始做" : {
       "localizations" : {
         "en" : {
@@ -14090,6 +13910,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Make Tasks"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "拆成任务"
           }
         }
       }
@@ -15774,6 +15600,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "日期"
+          }
+        }
+      }
+    },
+    "旧版 CuePad 写的技能没能删掉：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't remove the skill an earlier CuePad wrote: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "旧版 CuePad 写的技能没能删掉：%@"
           }
         }
       }
@@ -18258,22 +18100,6 @@
         }
       }
     },
-    "没有找到 %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ not found"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "没有找到 %@"
-          }
-        }
-      }
-    },
     "没有找到“%@”" : {
       "localizations" : {
         "en" : {
@@ -19721,6 +19547,12 @@
             "state" : "translated",
             "value" : "Look"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "看看"
+          }
         }
       }
     },
@@ -19731,6 +19563,12 @@
             "state" : "translated",
             "value" : "See Result"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "看结果"
+          }
         }
       }
     },
@@ -19740,6 +19578,12 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "What you've seen and read"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "看过与读到的位置"
           }
         }
       }
@@ -22252,6 +22096,22 @@
         }
       }
     },
+    "读进它的会话记录" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Brings in its sessions"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "读进它的会话记录"
+          }
+        }
+      }
+    },
     "调研三款笔记 App 的优缺点，写一页总结" : {
       "localizations" : {
         "en" : {
@@ -23667,6 +23527,12 @@
             "state" : "translated",
             "value" : "Want to knock these out?"
           }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这几件，要不要顺手做了？"
+          }
         }
       }
     },
@@ -23890,22 +23756,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "这台 Mac 的技能与规则没能写下：%@"
-          }
-        }
-      }
-    },
-    "这台 Mac 装着正式版，本机构建不改它在用的配置：先用 %@ 指定 %@ 的目录再接入" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This Mac has the release version installed, so this local build won't touch its config. Set %@ to a folder for %@ first, then connect."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这台 Mac 装着正式版，本机构建不改它在用的配置：先用 %1$@ 指定 %2$@ 的目录再接入"
           }
         }
       }
@@ -25726,22 +25576,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "需要 OpenCode 2，现在是 %@"
-          }
-        }
-      }
-    },
-    "需要升级" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Needs upgrade"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "需要升级"
           }
         }
       }
