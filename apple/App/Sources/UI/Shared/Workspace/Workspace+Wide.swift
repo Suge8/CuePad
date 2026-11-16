@@ -100,9 +100,6 @@ extension Workspace {
         }
         state.home = false
         presentWide(state)
-        #if os(macOS)
-        if let alerts = services.alerts { Task { await alerts.dismiss(session: session.id) } }
-        #endif
     }
 
     /// 栏头拖放或键盘挪：并排的两个会话换边；只开一个时没有可换的。

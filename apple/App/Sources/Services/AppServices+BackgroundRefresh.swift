@@ -16,6 +16,8 @@ extension AppServices {
         } catch {
             result = .failed
         }
+        // 系统交还后可能当场挂起，等不到观察：别处看过的通知在这里收（`AlertCenter.dismissSeen`）
+        if let marks = try? await store.sessionMarks() { await alerts?.dismissSeen(marks) }
         do {
             try await snapshots.writeSnapshots()
         } catch {

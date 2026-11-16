@@ -95,7 +95,8 @@ private struct SessionPageBody: View {
         #if os(iOS)
         .debugDrivesHeader($follow)
         #endif
-        // 干着活时不记：每换一步都记一下就是每步一次同步；停下、离开时记的那一下已盖住干活的那段
+        // 打开就记一下（通知随即收掉，`AlertCenter.dismissSeen`）；之后干着活时不记：每换一步都记一下就是每步一次同步，停下、离开时记的那一下已盖住干活的那段
+        .task(id: session?.sessionID) { if let session { markSeen(session) } }
         .task(id: session?.stateSince) { if let session, !session.runtimeState.isWorking { markSeen(session) } }
         .onDisappear { if let session { markSeen(session) } }
     }

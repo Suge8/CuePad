@@ -51,9 +51,10 @@ extension AppServices {
         }
     }
 
-    /// 用户可能在系统设置里改过通知权限。
+    /// 用户可能在系统设置里改过通知权限；不在前台时别处看过的通知回来收（通知中心接上晚于看过的观察，`startLiveSessions`）。
     private func refreshAlerts() async {
         await alerts?.refresh()
+        await alerts?.dismissSeen(liveSessions.marks)
     }
 
     /// 不依赖推送是否到达；App 不在前台时不发（后台由系统推送提示，前台系统不再重复展示，见 `AlertCenter`）。
