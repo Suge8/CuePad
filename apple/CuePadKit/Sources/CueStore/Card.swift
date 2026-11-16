@@ -138,6 +138,8 @@ extension Card: Record, SyncedColumns {
     .plain("startedAt"), .plain("completedAt"), .plain("piSessionID"), .plain("archivedAt"), .plain("formerSessionIDs"),
     .plain("sessionBindingRevision"), .plain("shelvedUntil"), .plain("seenAt"),
   ]
+  /// 邀请卡的两列：只往后走，同步合并各取较晚的（`CueStore.applyVersion`）。
+  static let inviteColumns = ["shelvedUntil", "seenAt"]
   static var selection: String { selection(as: "cards") }
 
   static func selection(as alias: String) -> String {
