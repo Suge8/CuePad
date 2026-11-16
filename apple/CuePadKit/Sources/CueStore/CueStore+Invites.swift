@@ -31,8 +31,9 @@ extension CueStore {
     for task in done {
       guard let completed = task.completedAt, let session = task.piSessionID, let state = try sessionState(session) else { continue }
       expire(at: completed.addingTimeInterval(window))
-      if state.isUnread(try sessionMarks(session), at: now) {
-        expire(at: state.stateSince.addingTimeInterval(SessionState.unreadWindow))
+      let marks = try sessionMarks(session)
+      if state.isUnread(marks, at: now) {
+        expire(at: state.unreadUntil(marks))
         return task
       }
     }

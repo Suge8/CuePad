@@ -52,10 +52,14 @@ public struct SessionMarks: Equatable, Sendable {
 extension SessionState {
   /// 新回复里没看过的那一种（唯一的规则）：停下了、这次停下或你标未读之后还没看过。只算 `unreadWindow` 内的：更早的不再是"新"回复。
   public func isUnread(_ marks: SessionMarks?, at now: Date) -> Bool {
-    guard isSettledReply else { return false }
-    let since = max(stateSince, marks?.unread ?? .distantPast)
-    return since > (marks?.seen ?? .distantPast) && since > now.addingTimeInterval(-Self.unreadWindow)
+    isSettledReply && unreadSince(marks) > (marks?.seen ?? .distantPast) && now < unreadUntil(marks)
   }
+
+  /// 不再算新回复的时刻（读的一方按它登记到点重读）。
+  public func unreadUntil(_ marks: SessionMarks?) -> Date { unreadSince(marks).addingTimeInterval(Self.unreadWindow) }
+
+  /// 新回复从哪一刻算：这次停下，或之后你标未读的那一下。
+  private func unreadSince(_ marks: SessionMarks?) -> Date { max(stateSince, marks?.unread ?? .distantPast) }
 
   public func canMarkUnread(_ marks: SessionMarks?, at now: Date) -> Bool { isSettledReply && !isUnread(marks, at: now) }
 
