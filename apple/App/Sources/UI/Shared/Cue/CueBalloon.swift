@@ -23,8 +23,47 @@ struct CueBalloon: View {
 
     var body: some View {
         let speech = speech
-        Button(action: act) {
-            VStack(alignment: .leading, spacing: Spacing.item) {
+        Group {
+            if case .invite(let invites) = focus {
+                // 建议各是一颗钮（点了做那件、× 是今天先不做），整块不再是一颗钮：钮里不套钮
+                VStack(alignment: .leading, spacing: Spacing.item) {
+                    face(speech)
+                    VStack(spacing: 0) {
+                        ForEach(invites) { CueInviteRow(invite: $0, close: close).transition(.opacity) }
+                    }
+                    .padding(.horizontal, -Spacing.item)
+                    .animation(Motion.fade, value: invites)
+                    Button(action: close) { go(speech) }.buttonStyle(PressStyle()).frame(maxWidth: .infinity, alignment: .trailing)
+                }
+                .modifier(Paper())
+            } else {
+                Button(action: act) {
+                    VStack(alignment: .leading, spacing: Spacing.item) {
+                        face(speech)
+                        if let shot = look?.shot {
+                            // 只给人认出是哪一张：点它与点气泡一样打开那件任务，成果在那里看全
+                            DeliverableTile(preview: shot.preview, label: shot.look, shape: .strip(height: Self.shot), captioned: false,
+                                            zoom: PreviewZoomKey(group: "stage", preview: shot.id)) { _ in }
+                                .allowsHitTesting(false)
+                                .padding(.top, Spacing.tight)
+                        }
+                        go(speech).frame(maxWidth: .infinity, alignment: .trailing)
+                    }
+                    .modifier(Paper())
+                }
+                .buttonStyle(PressStyle(.card))
+            }
+        }
+        .observing(services.store, id: key, into: $look, onError: workspace.fail) { [focus] in try Look.read(focus, from: $0) }
+        .id(key)
+    }
+
+    /// 气泡的身份：换了一件是另一个气泡；建议划掉一件还是同一个，行原地淡出。
+    private var key: CueStage.Focus {
+        if case .invite = focus { .invite([]) } else { focus }
+    }
+
+    @ViewBuilder private func face(_ speech: Speech) -> some View {
                 if let lead = speech.lead {
                     HStack(spacing: Spacing.glyph) {
                         Image(lead.icon).foregroundStyle(lead.tint)
@@ -36,29 +75,26 @@ struct CueBalloon: View {
                 if !speech.body.isEmpty {
                     Text(verbatim: speech.body).font(Typography.body).foregroundStyle(palette.ink2).lineLimit(Self.lines)
                 }
-                if let shot = look?.shot {
-                    // 只给人认出是哪一张：点它与点气泡一样打开那件任务，成果在那里看全
-                    DeliverableTile(preview: shot.preview, label: shot.look, shape: .strip(height: Self.shot), captioned: false,
-                                    zoom: PreviewZoomKey(group: "stage", preview: shot.id)) { _ in }
-                        .allowsHitTesting(false)
-                        .padding(.top, Spacing.tight)
-                }
-                HStack(spacing: Spacing.tight) {
-                    Text(speech.go)
-                    Chevron(.forward)
-                }
-                .font(Typography.secondary.weight(.medium)).foregroundStyle(palette.ink2)
-                .frame(maxWidth: .infinity, alignment: .trailing)
-            }
-            .multilineTextAlignment(.leading)
-            .padding(.horizontal, Spacing.block)
-            .padding(.top, Spacing.block + Self.tail).padding(.bottom, Spacing.group)
-            .glass(in: SpeechShape(tail: Self.tail), interactive: true)
-            .contentShape(SpeechShape(tail: Self.tail))
+    }
+
+    private func go(_ speech: Speech) -> some View {
+        HStack(spacing: Spacing.tight) {
+            Text(speech.go)
+            Chevron(.forward)
         }
-        .buttonStyle(PressStyle(.card))
-        .observing(services.store, id: focus, into: $look, onError: workspace.fail) { [focus] in try Look.read(focus, from: $0) }
-        .id(focus)
+        .font(Typography.secondary.weight(.medium)).foregroundStyle(palette.ink2)
+    }
+
+    /// 气泡的那块玻璃：尾巴的高算在框里，字从尾巴下面排起。
+    private struct Paper: ViewModifier {
+        func body(content: Content) -> some View {
+            content
+                .multilineTextAlignment(.leading)
+                .padding(.horizontal, Spacing.block)
+                .padding(.top, Spacing.block + CueBalloon.tail).padding(.bottom, Spacing.group)
+                .glass(in: SpeechShape(tail: CueBalloon.tail), interactive: true)
+                .contentShape(SpeechShape(tail: CueBalloon.tail))
+        }
     }
 
     /// 气泡要另读的：新回复是会话最后说的那段，刚做完是那件的成果图（同看板已完成列取的那张）。
@@ -104,6 +140,8 @@ struct CueBalloon: View {
             return Speech(lead: (.done, item.kind.tone.color(palette), item.kind.label), head: item.name, go: "看结果")
         case .delegating(let item):
             return Speech(lead: (.relay, item.kind.tone.color(palette), item.kind.label), head: item.name)
+        case .invite:
+            return Speech(head: String(localized: "这几件，要不要顺手做了？"))
         case .quiet(let line):
             return Speech(head: line)
         }

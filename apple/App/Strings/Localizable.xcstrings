@@ -5796,6 +5796,16 @@
         }
       }
     },
+    "今天先不做" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not Today"
+          }
+        }
+      }
+    },
     "今天还没做完的" : {
       "localizations" : {
         "en" : {
@@ -6860,6 +6870,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "做完能撤销；原来的那些进废纸篓"
+          }
+        }
+      }
+    },
+    "做完，还没看结果" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Done, not reviewed"
           }
         }
       }
@@ -14090,6 +14110,16 @@
         }
       }
     },
+    "拆成任务" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Make Tasks"
+          }
+        }
+      }
+    },
     "拍板" : {
       "localizations" : {
         "en" : {
@@ -19710,6 +19740,16 @@
         }
       }
     },
+    "看看" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Look"
+          }
+        }
+      }
+    },
     "看结果" : {
       "localizations" : {
         "en" : {
@@ -23632,6 +23672,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "这份资料库是更早版本的 CuePad 建的，这个版本不再升级它。你的内容没有被改动，请导出诊断，发给开发者。"
+          }
+        }
+      }
+    },
+    "这几件，要不要顺手做了？" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Want to knock these out?"
           }
         }
       }

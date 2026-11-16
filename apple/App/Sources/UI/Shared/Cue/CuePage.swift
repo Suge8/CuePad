@@ -35,6 +35,8 @@ struct CuePage: View {
     /// 舞台开着（`CueStage`）：页出现时与新来访时（`CueViewing`）按上次离开的时刻定，输入框聚焦、发出、往下拉、点"看对话"收。
     /// 还没定（nil）时对话区空这一帧：先排一帧对话再换成舞台是一闪。
     @State private var stage: Bool?
+    /// 舞台上的建议（`CueInvite`），舞台开着时才读。
+    @State private var invites: [CueInvite]?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     static let readingWidth = Spacing.reading
@@ -97,7 +99,11 @@ struct CuePage: View {
     @ViewBuilder private var chat: some View {
         Group {
             if staged {
-                CueStage(beat: cue.beat, focus: CueStage.Focus(now: cue.now, said: thread.flatMap { CueStage.Said($0) }), leading: railInset > 0 ? railInset + Self.inset : 0, close: closeStage)
+                CueStage(
+                    beat: cue.beat, focus: CueStage.Focus(now: cue.now, said: thread.flatMap { CueStage.Said($0) }, invites: invites ?? []),
+                    leading: railInset > 0 ? railInset + Self.inset : 0, close: closeStage)
+                    // 只在舞台开着时读：建议只上舞台
+                    .observing(services.store, into: $invites, onError: workspace.fail) { try CueInvite.read(from: $0) }
                     .transition(.asymmetric(insertion: .opacity, removal: .opacity.combined(with: .offset(y: -Spacing.vacant))))
             } else if let thread, !thread.rows.isEmpty {
                 if stage != nil {
