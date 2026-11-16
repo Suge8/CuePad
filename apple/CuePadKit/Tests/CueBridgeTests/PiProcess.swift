@@ -47,12 +47,11 @@ final class PiProcess: @unchecked Sendable {
     /// - Parameter oneShotPrompt: 非 nil 时以 print 模式跑这条 prompt 然后退出（否则 RPC 常驻）。
     /// - Parameter firecode: 把 FireCode 与测试配置装进临时 agent 目录（它的子代理是进程内子会话，只加载 agent 目录里的扩展、只认 `models.json` 里的模型）。
     /// - Parameter alongside: 与它共用同一个临时 agent 目录、连接目录、工作目录与假模型（同一会话的第二个进程）。
-    /// - Parameter discoverSkills: 让 Pi 去它的 skills 目录发现 skill（默认的安静参数里是 `--no-skills`）。
     /// - Parameter settings: 另外写进临时 agent 目录 Pi 设置（`settings.json`）的项，如压缩阈值（隔离的那几项见 `writeSettings`）。
     /// - Parameter model: 剧本要在 Pi 起来之前写好时（一起来就发请求的 print 模式）先建好交进来。
     init(bridgeExtension: URL = PiExtensionBundle.url, socketDirectory: URL? = nil, extraExtensions: [String] = ["ui-confirm.ts"],
          oneShotPrompt: String? = nil, firecode: Bool = false,
-         alongside other: PiProcess? = nil, sessionFile: URL? = nil, env: [String: String] = [:], extraArguments: [String] = [], discoverSkills: Bool = false, settings: [String: Any]? = nil,
+         alongside other: PiProcess? = nil, sessionFile: URL? = nil, env: [String: String] = [:], extraArguments: [String] = [], settings: [String: Any]? = nil,
          model: FakeModel? = nil) async throws {
         try pinnedPi.require()
         let (exit, ended) = AsyncStream<Void>.makeStream()
@@ -69,7 +68,7 @@ final class PiProcess: @unchecked Sendable {
         } else {
             if let model { self.model = model } else { self.model = try await FakeModel() }
             try Self.writeModels(self.model, into: paths.agentDirectory)
-            try Self.writeSettings(settings ?? [:], discoverSkills: discoverSkills, into: paths.agentDirectory)
+            try Self.writeSettings(settings ?? [:], into: paths.agentDirectory)
             self.model.onTitle { .say("\($0.model)：\($0.prompt)") }
         }
         if firecode { try Self.installFirecode(into: paths.agentDirectory) }
@@ -117,10 +116,10 @@ final class PiProcess: @unchecked Sendable {
     }
 
     /// 临时 agent 目录里的 Pi 设置（同真实用户一样，托管的进程也读它）：默认用假模型、不思考；
-    /// 不加载自动发现的 skill，`discoverSkills` 时照常发现。上下文文件、提示词模板、主题只从 agent 目录与（受信任的）工作目录找，两处都是临时目录。
-    private static func writeSettings(_ extra: [String: Any], discoverSkills: Bool, into agent: URL) throws {
+    /// 不加载自动发现的 skill。上下文文件、提示词模板、主题只从 agent 目录与（受信任的）工作目录找，两处都是临时目录。
+    private static func writeSettings(_ extra: [String: Any], into agent: URL) throws {
         var settings: [String: Any] = ["defaultProvider": "fake", "defaultModel": "echo", "defaultThinkingLevel": "off"]
-        if !discoverSkills { settings["skills"] = ["!**"] }
+        settings["skills"] = ["!**"]
         settings.merge(extra) { $1 }
         try FileManager.default.createDirectory(at: agent, withIntermediateDirectories: true)
         try JSONSerialization.data(withJSONObject: settings, options: [.sortedKeys]).write(to: agent.appending(path: "settings.json"))
