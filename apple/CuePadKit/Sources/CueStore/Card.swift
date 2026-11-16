@@ -30,6 +30,10 @@ public struct Card: Identifiable, Equatable, Sendable {
   /// 叶子以前用过的会话（Pi 自己的会话 id，先换下的在前）：开新会话、改绑、Cue 换新会话时换下来的那个记在这里，
   /// 它仍属于这个叶子（`CueStore.isLoose`）。正在用的只在 `piSessionID`，不在这里。
   public internal(set) var formerSessionIDs: [String] = []
+  /// 今天先不做：到这一刻前邀请不再提它（`CueStore.shelve`）。
+  public internal(set) var shelvedUntil: Date?
+  /// 你最后一次看这件任务结果的时刻（`CueStore.markSeen`）；早于 `completedAt` 就是做完后还没看过。
+  public internal(set) var seenAt: Date?
 
   /// 任务下的灵感不算一级。
   public static let maxTaskDepth = 2
@@ -132,7 +136,7 @@ extension Card: Record, SyncedColumns {
     .plain("id"), .plain("projectID"), .encrypted("body"), .plain("isPinned"), .encrypted("variableValues"), .plain("sortKey"),
     .plain("deletedAt"), .plain("createdAt"), .plain("modifiedAt"), .plain("conflictOf"), .plain("parentID"), .plain("todoAt"),
     .plain("startedAt"), .plain("completedAt"), .plain("piSessionID"), .plain("archivedAt"), .plain("formerSessionIDs"),
-    .plain("sessionBindingRevision"),
+    .plain("sessionBindingRevision"), .plain("shelvedUntil"), .plain("seenAt"),
   ]
   static var selection: String { selection(as: "cards") }
 
@@ -144,6 +148,7 @@ extension Card: Record, SyncedColumns {
     [
       id, projectID, body, isPinned, JSONColumn.encode(variableValues), sortKey, deletedAt, createdAt, modifiedAt, conflictOf,
       parentID, todoAt, startedAt, completedAt, piSessionID, archivedAt, JSONColumn.encodeList(formerSessionIDs), sessionBindingRevision?.stored,
+      shelvedUntil, seenAt,
     ]
   }
   init(row: Row) {
@@ -153,7 +158,7 @@ extension Card: Record, SyncedColumns {
       conflictOf: row.uuidOrNil(9), sortKey: row.text(5), deletedAt: row.dateOrNil(6), createdAt: row.date(7), modifiedAt: row.date(8),
       parentID: row.uuidOrNil(10), todoAt: row.dateOrNil(11), startedAt: row.dateOrNil(12),
       completedAt: row.dateOrNil(13), piSessionID: row.textOrNil(14), sessionBindingRevision: row.textOrNil(17).flatMap(SessionBindingRevision.init(stored:)), archivedAt: row.dateOrNil(15),
-      formerSessionIDs: JSONColumn.decodeList(String.self, from: row.textOrNil(16)))
+      formerSessionIDs: JSONColumn.decodeList(String.self, from: row.textOrNil(16)), shelvedUntil: row.dateOrNil(18), seenAt: row.dateOrNil(19))
   }
 
   /// 几乎所有卡片没有变量取值（存成 "{}"），不为它们创建解码器。

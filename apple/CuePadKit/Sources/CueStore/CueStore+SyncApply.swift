@@ -115,6 +115,11 @@ extension CueStore {
     if table == .cards {
       let winner = remote.modifiedAt >= local.modifiedAt || pushed.map({ local.modifiedAt <= $0 }) == true ? remote : local
       var merged = Self.mergingSessionBinding(local: local, remote: remote, into: winner)
+      // 只往后走，各取较晚的：写它们只把修改时刻挪 1 毫秒（`CueStore.nudged`），并发的真改动整条胜出时不带走它们
+      for column in ["shelvedUntil", "seenAt"] {
+        let later = [local, remote].compactMap { if case .int(let at)? = $0.fields[column] { at } else { nil } }.max()
+        merged.fields[column] = later.map(SQLValue.int) ?? .null
+      }
       if merged != winner {
         if let localBody = local.text("body"), let remoteBody = remote.text("body"), localBody != remoteBody {
           try insertConflictCopy(of: winner == remote ? local : remote, keeping: winner)
@@ -202,7 +207,9 @@ extension CueStore {
     fields["sortKey"] = .text(SortKey.before(first))
     fields["deletedAt"] = .null
     fields["isPinned"] = .int(0)
-    for column in ["parentID", "todoAt", "startedAt", "completedAt", "piSessionID", "formerSessionIDs", "sessionBindingRevision"] { fields[column] = .null }
+    for column in ["parentID", "todoAt", "startedAt", "completedAt", "piSessionID", "formerSessionIDs", "sessionBindingRevision", "shelvedUntil", "seenAt"] {
+      fields[column] = .null
+    }
     fields["createdAt"] = now.sqlValue
     fields["modifiedAt"] = now.sqlValue
     try overwrite(SyncRow(table: .cards, fields: fields))
