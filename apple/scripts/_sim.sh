@@ -61,9 +61,16 @@ SIM_SLIM=(
 # CUEPAD_PIN_SIM=<UDID> 钉死这一台（xc.sh fleet up --real：模拟器里登着测试账号，换一台就没了；这台不在槽位池里，别的检出不会碰）。
 sim_udid() {
   [ -z "${CUEPAD_PIN_SIM:-}" ] || { echo "$CUEPAD_PIN_SIM"; return; }
-  local name="CuePad $1 #${CUEPAD_SIM:-0}" udid
-  udid="$(xcrun simctl list devices -j | jq -r --arg n "$name" 'first(.devices[][] | select(.name == $n and .isAvailable) | .udid) // empty')"
-  [ -n "$udid" ] || udid="$(xcrun simctl create "$name" "$1")"
+  local name="CuePad $1 #${CUEPAD_SIM:-0}" udid runtime=()
+  # 云端是一次性 runner：系统版本必须跟选中的 SDK 一致，不能随镜像里最新的 runtime 漂移。
+  if [ "${GITHUB_ACTIONS:-}" = true ]; then
+    local version
+    version="$(xcrun --sdk iphonesimulator --show-sdk-version)" || return
+    runtime=("com.apple.CoreSimulator.SimRuntime.iOS-${version//./-}")
+  fi
+  udid="$(xcrun simctl list devices -j | jq -r --arg n "$name" --arg r "${runtime[*]:-}" \
+    'first(.devices | to_entries[] | select($r == "" or .key == $r) | .value[] | select(.name == $n and .isAvailable) | .udid) // empty')" || return
+  if [ -z "$udid" ]; then udid="$(xcrun simctl create "$name" "$1" ${runtime[@]+"${runtime[@]}"})" || return; fi
   echo "$udid"
 }
 
@@ -77,6 +84,8 @@ sim_unslimmed() {
 # 新设备与改了清单后的第一次多花一次重开机（约 20 秒），之后每次只多一次 print-disabled。
 sim_boot() {
   xcrun simctl bootstatus "$1" -b >/dev/null
+  # 云端只用一次：不为后续复用瘦身、重开机；测试也更接近未改系统服务的设备。
+  [ "${GITHUB_ACTIONS:-}" != true ] || return 0
   local missing
   missing="$(sim_unslimmed "$1")"
   [ -n "$missing" ] || return 0

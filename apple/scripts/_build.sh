@@ -14,7 +14,7 @@ build_key() {
     git -C "$APPLE_DIR" diff HEAD --binary -- . ':(exclude)scripts'
     (cd "$APPLE_DIR" && git ls-files -o --exclude-standard -z -- . ':(exclude)scripts' | xargs -0 shasum -a 1)
     plutil -extract ProductBuildVersion raw "${DEVELOPER_DIR:-$(xcode-select -p)}/../version.plist"
-    printf '%s\n' "$platform" "$configuration" "${CUEPAD_SIGN:-}" ${build_settings[@]+"${build_settings[@]}"}
+    printf '%s\n' "$platform" "$configuration" "${CUEPAD_SIGN:-}" "${xc_settings[@]}" ${build_settings[@]+"${build_settings[@]}"}
   } | shasum -a 1
 }
 # built <指纹文件> <产物> <范围：app|all|收窄参数> <构建命令…>：这份源码编过所要的范围且产物在就跳过，否则构建并记下
@@ -35,11 +35,20 @@ built() {
 # 系统 SDK 的预编译模块（约 166 个，冷编前 10 秒都在生成它们）所有检出共用一份：Xcode 默认就放在各工程共用的 DerivedData 根下，
 # 这里的产物目录按检出分开，不指定就每个新检出从头编一遍。实测换检出路径照样命中，冷编约快 17%。删 .derived 不会清掉它
 shared_cache="$HOME/Library/Caches/cuepad-xc"
-shared_modules=(SDK_EXPLICIT_MODULES_OUTPUT_PATH="$shared_cache/SDKExplicitPrecompiledModules" MODULE_CACHE_DIR="$shared_cache/ModuleCache.noindex" SDK_STAT_CACHE_DIR="$shared_cache")
+# CAS 由 Xcode 按输入内容校验；CI 只保存这个缓存目录，不保存产物、构建指纹或测试通过状态。
+# CUEPAD_CACHE_REMARKS=YES 诊断缓存命中，正常运行不打印逐文件的 remark。
+xc_settings=(
+  SDK_EXPLICIT_MODULES_OUTPUT_PATH="$shared_cache/SDKExplicitPrecompiledModules"
+  MODULE_CACHE_DIR="$shared_cache/ModuleCache.noindex"
+  SDK_STAT_CACHE_DIR="$shared_cache"
+  COMPILATION_CACHE_ENABLE_CACHING=YES
+  COMPILATION_CACHE_CAS_PATH="$shared_cache/CompilationCache.noindex"
+  COMPILATION_CACHE_ENABLE_DIAGNOSTIC_REMARKS="${CUEPAD_CACHE_REMARKS:-NO}"
+)
 # 包产品被 App 与测试目标共用而改编成动态框架时（见 xcd 的注释），Xcode 按改编前的静态目标对账依赖，
 # 每次都报 "'CueStore' is missing a dependency on 'CueText'"：动态的 CueStore 实际链着 CueText.framework，是误报。
 # 目标之间的依赖都写在工程与包的声明里，真缺依赖会在编译时报"找不到模块"，所以整个关掉这项诊断。
-quiet_diagnostics=(DIAGNOSE_MISSING_TARGET_DEPENDENCIES=NO)
+xc_settings+=(DIAGNOSE_MISSING_TARGET_DEPENDENCIES=NO)
 
 # own_warnings <记录文件> < 编译输出：从中挑出本检出自己的 Swift 源文件（App 与 CuePadKit 下；Kit 的 .build、第三方包与生成的代码都不在这两处）的警告，
 # 写进记录文件（xc.sh check 见到非空就失败），并碰一下这些文件：增量编译不重编没改的文件，没改的文件上的警告就不再打出来，
@@ -62,11 +71,11 @@ kit_build() {
   return $status
 }
 
-# no_warnings <iOS 那份记录>：check 的最后一道，Kit、Mac 整模块与 iOS 三处构建记下的自己源文件的警告，有一条就列出来、失败。
+# no_warnings <记录文件…>：只判断本次检查负责的构建；不读取别的平台遗留的诊断。
 # 跳过了编译的那一处读的是上一次的记录：有警告的构建不记编过（`built`），跳得过的一定是没警告的那次
 no_warnings() {
   local warnings
-  warnings="$(cat "$APPLE_DIR/CuePadKit/.build/warnings" "$APPLE_DIR/.derived-wmo/warnings-mac" "$1" 2>/dev/null | sort -u || true)"
+  warnings="$(cat "$@" | sort -u)" || return
   [ -n "$warnings" ] || return 0
   printf '%s\n' "$warnings"
   echo "check 不过：上面 $(grep -c . <<<"$warnings") 条编译警告在本检出自己的源文件里，修掉再提交" >&2
@@ -82,7 +91,7 @@ xcb() {
   echo "原始输出：$log" >&2
   xcodebuild -project "$APPLE_DIR/CuePad.xcodeproj" -scheme CuePad -configuration "$configuration" \
     -destination "$destination" -derivedDataPath "$DERIVED" "$@" \
-    "${shared_modules[@]}" "${quiet_diagnostics[@]}" ${build_settings[@]+"${build_settings[@]}"} 2>&1 \
+    "${xc_settings[@]}" ${build_settings[@]+"${build_settings[@]}"} 2>&1 \
     | tee "$log" | { grep --line-buffered -v 'failed with exit code 0 but produced no further output' || true; } || status=$?
   own_warnings "$DERIVED/warnings-$platform" <"$log" || warned=1
   [ "$status" != 0 ] || rm -f "$log"
@@ -94,3 +103,14 @@ xcb() {
 # 改了存储属性后一启动就崩在 Kit 的释放里），每次切换还要重新链接、签名。测量用的 Release（build-perf）不编测试，不受影响
 # 第一个参数是范围（见 _build.sh 的 built），其余收窄参数原样给 xcodebuild
 xcd() { local need="$1"; shift; built "$DERIVED/build-key-$platform" "$app" "$need" xcb -quiet build-for-testing "$@"; }
+
+check_sources() {
+  "$APPLE_DIR/scripts/lint.sh"
+  local shaders="$APPLE_DIR/.derived/shaders" source shader_sources=()
+  if [ ! -x "$shaders" ] || [ "$APPLE_DIR/scripts/shaders.swift" -nt "$shaders" ]; then
+    mkdir -p "$APPLE_DIR/.derived"
+    xcrun swiftc -O "$APPLE_DIR/scripts/shaders.swift" -o "$shaders"
+  fi
+  while IFS= read -r source; do shader_sources+=("$source"); done < <(rg -l --type swift metal_stdlib "$APPLE_DIR/App")
+  "$shaders" "${shader_sources[@]}"
+}
