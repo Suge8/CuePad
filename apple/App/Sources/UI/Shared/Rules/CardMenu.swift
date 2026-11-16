@@ -11,7 +11,6 @@ nonisolated enum CardMenu {
         case select
         case bindSession
         case indent, outdent
-        case endSession
     }
 
     /// 一行两边轻扫露出的动作，排在前面的在最外侧、一滑到底执行它。
@@ -29,22 +28,21 @@ nonisolated enum CardMenu {
         (opens ? [.open] : []) + [card.status == .done ? .reopen : .complete] + pin(card) + [.copy, .archive]
     }
 
+    /// 右键菜单至多三组（去哪看、整理、删除），项少：系统的指引是右键只放这个对象常用的，约三组以内。
+    /// 没做完的任务不给归档（做完的提示上有，气泡的"⋯"里也有），绑定会话在任务气泡的"⋯"里（`more`），会话的休眠在会话自己的菜单里。
     /// `selectable`：这张卡在能批量选择的地方（Mac 项目页的墙与列表），删除前多一项"选择"。
-    /// `bindsSession`：这是叶子任务（没有子任务），没做完时多一项"绑定会话"。
     /// `opens`：点它进的是会话（`Workspace.enter`），最前面单独一组"打开任务"；点一下就是打开任务的不重复这一项。
-    /// `endsSession`：它此刻在用的会话还能结束，没做完时多一项"结束会话"。
-    static func sections(for card: Card, selectable: Bool = false, bindsSession: Bool = false, opens: Bool = false, endsSession: Bool = false) -> [[Item]] {
+    static func sections(for card: Card, selectable: Bool = false, opens: Bool = false) -> [[Item]] {
         let head: [[Item]] = opens ? [[.open]] : []
         return switch card.status {
         case nil: [[.move, .archive], (selectable ? [.select] : []) + [.trash]]
-        case .done: head + [[.reopen] + pin(card) + [.archive], [.trash]]
-        case .todo, .inProgress:
-            head + [[.complete] + pin(card) + [.archive], (endsSession ? [.endSession] : []) + (bindsSession ? [.bindSession] : []), [.trash]].filter { !$0.isEmpty }
+        case .done: head + [pin(card) + [.reopen, .archive], [.trash]]
+        case .todo, .inProgress: head + [pin(card) + [.complete], [.trash]]
         }
     }
 
     /// 子任务跟着上级走，不单独换项目、不单独置顶。
-    /// `bindsSession`：同 `sections`（Mac 任务气泡的"⋯"）。
+    /// `bindsSession`：这是叶子任务（没有子任务），没做完时多一项"绑定会话"（任务气泡的"⋯"）。
     static func more(for card: Card, bindsSession: Bool = false) -> [[Item]] {
         guard card.isTask else { return [[card.isPinned ? .unpin : .pin, .move, .copy], [.archive], [.trash]] }
         let binds: [Item] = bindsSession && card.status != .done ? [.bindSession] : []

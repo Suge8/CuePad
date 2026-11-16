@@ -64,6 +64,30 @@ extension CueStore {
     return true
   }
 
+  /// 你完成 `task`（连同它下面的）之后该歇下的会话，完成前问是预告（确认框照它说）、完成后问是照做（App 逐个点名结束）。
+  /// 一条规则：这件事（顶层）再没有没做完的步骤，它里面绑着的会话就歇下——不问是不是为它开的；别的没做完的事还绑着的、有话正送进去的、已有结束在路上的不动。
+  /// 与自动结束（`taskSessionCanEnd`，Cue 的 done 与同步来的收尾）是两条路：那条只结束为任务开的，不替你做没点过的事；这条是你亲手点了完成。
+  public func sessionsFreed(byCompleting task: UUID) throws -> [SessionState] {
+    guard let card = try find(Card.self, task), card.isTask, let top = try find(Card.self, try self.top(of: task)) else { return [] }
+    let done = Set(try db.query("SELECT id FROM cards WHERE id IN (\(Self.subtree(from: "SELECT ?")))", [task]) { $0.uuid(0) })
+    guard try leaves(of: top).allSatisfy({ $0.completedAt != nil || done.contains($0.id) }) else { return [] }
+    let sessions = try db.query(
+      """
+      SELECT DISTINCT piSessionID FROM cards WHERE piSessionID IS NOT NULL AND id IN (\(Self.subtree(from: "SELECT ?1")))
+        AND NOT EXISTS (SELECT 1 FROM cards c WHERE c.piSessionID = cards.piSessionID AND \(Self.taskOpen) AND c.id NOT IN (\(Self.subtree(from: "SELECT ?1"))))
+        AND NOT EXISTS (
+          SELECT 1 FROM deliveryRequests r WHERE r.targetRef = cards.piSessionID
+            AND (\(DeliveryRequest.endingSQL("r")) OR (r.mode IN (\(sqlList(DeliveryMode.toSession))) AND r.status IN (\(DeliveryStatus.openSQL)))))
+      """, [top.id]) { $0.text(0) }
+    return try sessionStates(sessions).values.filter(\.canEnd).sorted { $0.sessionID < $1.sessionID }
+  }
+
+  /// 做完的这一步绑着会话、而它那件事还有没做完的步骤：会话留给后面的步骤，完成的提示照此说。
+  public func completedTaskKeepsSession(_ task: UUID) throws -> Bool {
+    guard let card = try find(Card.self, task), card.piSessionID != nil, let top = try find(Card.self, try self.top(of: task)) else { return false }
+    return try leaves(of: top).contains { $0.completedAt == nil }
+  }
+
   /// 有人在用这个会话：在看板上、没在开新会话的叶子绑着它（哪件事的都算），或有话正送进去。Cue 点名收会话（`endIdleSession`）也只认它。
   func sessionInUse(_ sessionID: String) throws -> Bool {
     let open = try db.query("SELECT id FROM cards WHERE piSessionID = ? AND \(Self.taskOpen)", [sessionID]) { $0.uuid(0) }

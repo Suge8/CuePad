@@ -40,7 +40,7 @@ struct OpenSessionBeside: View {
 
     var body: some View {
         if workspace.layout == .wide, !workspace.shownSessions.contains(where: { $0.sessionID == session.sessionID }) {
-            Button("在旁边打开", icon: .rightColumn) { workspace.openSession(session.id, sessionID: session.sessionID, in: .beside) }
+            Button("并排打开", icon: .rightColumn) { workspace.openSession(session.id, sessionID: session.sessionID, in: .beside) }
         }
     }
 }

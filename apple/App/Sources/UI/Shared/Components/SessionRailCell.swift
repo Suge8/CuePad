@@ -122,10 +122,10 @@ struct SessionRailCell: View {
                 #if os(macOS)
                 // 并排的看得见的入口（另有 ⌘ 点与右键）：主区开着别的会话时，悬停的行尾露出来
                 .hoverReveal(when: besides) {
-                    Button("在旁边打开", icon: .rightColumn) { open(item.session, .beside) }
+                    Button("并排打开", icon: .rightColumn) { open(item.session, .beside) }
                         .labelStyle(.iconOnly)
                         .buttonStyle(ControlButtonStyle(kind: .icon, size: .compact))
-                        .help("在旁边打开")
+                        .help("并排打开")
                         .padding(.horizontal, Spacing.tight)
                 }
                 #endif

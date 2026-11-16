@@ -105,7 +105,7 @@ extension TaskFlowTests {
     /// 为一步开的会话随它做完结束、这一步改用了别的会话；你又对它说话把它恢复起来，它就是你自己接着用的：
     /// 之后上级被删（这一步提成顶层），或把它借给另一件事、那件做完，都不再结束它。
     @Test(arguments: ["promote", "borrow"])
-    func 你恢复使用的会话_别的任务删除或完成时不结束(path: String) async throws {
+    func 你恢复使用的会话_别的任务删除时不结束_借给的那件你点完成才休眠(path: String) async throws {
         let workspace = Workspace(services: rig.services)
         try await rig.offersPi()
         let parent = try await workspace.createTask("准备发布", in: Project.defaultID)
@@ -135,12 +135,17 @@ extension TaskFlowTests {
             try await store.bindSession(ext.sessionID, to: other.id)
             try await workspace.complete(other.id)
         }
-        #expect(try await store.deliveryRequests().filter { $0.mode == .known(.end) && $0.target.ref == ext.sessionID }.isEmpty)
+        let ends = try await store.deliveryRequests().filter { $0.mode == .known(.end) && $0.target.ref == ext.sessionID }
+        if path == "promote" {
+            #expect(ends.isEmpty)
+        } else {
+            #expect(ends.map(\.end) == [.explicit], "你亲手点的完成：会话休眠，是点名的，不靠任务的结束权限")
+        }
         await rig.services.executor.beginStop()()
     }
 
-    /// Mac 上"在做"读桥上的实时状态，为哪件事开、恢复过没有照库里的记录：确认框据此说完成会不会一起结束会话。
-    @Test func 完成前确认_为这件事开的会话说一起结束_你恢复使用过的说不会() async throws {
+    /// Mac 上"在做"读桥上的实时状态：确认框说完成会让会话休眠，不问它是不是为这件事开的；还有话正送进去的说不会。
+    @Test func 完成前确认_说会话会休眠_还有话正送进去的说不会() async throws {
         let workspace = Workspace(services: rig.services)
         let following = Task { await workspace.follow() }
         defer { following.cancel() }
@@ -155,15 +160,15 @@ extension TaskFlowTests {
         try await recorder.update(sessionID: ext.sessionID, state: .settled, launchToken: launch.launch?.token, hosted: true)
         try await store.deleteDelivery(launch.id)
         ext.setState(["kind": "thinking"])
-        func asked(_ id: UUID) async throws -> SessionState? {
+        func asked(_ id: UUID) async throws -> (session: SessionState, sleeps: Bool)? {
             let card = try #require(try await store.card(id))
             try await eventually("在做") { workspace.next(for: card, in: workspace.agentLinks, steps: nil)?.busySession != nil }
             try await workspace.confirmComplete(card)
             defer { workspace.sessionAsk = nil }
-            guard case .complete(.agent(let busy, _), _, _) = workspace.sessionAsk else { return nil }
-            return busy
+            guard case .complete(.agent(let busy, let sleeps), _, _) = workspace.sessionAsk else { return nil }
+            return (busy, sleeps)
         }
-        #expect(try await asked(task.id)?.endsWithTask == true)
+        #expect(try await asked(task.id)?.sleeps == true)
 
         try await workspace.complete(task.id)
         try await store.deleteDelivery(try #require(try await store.deliveryRequests().first { $0.mode == .known(.end) }).id)
@@ -172,7 +177,7 @@ extension TaskFlowTests {
         await workspace.speak("再改一处", to: .session(SendTarget(kind: .piSession, name: "发布", ref: ext.sessionID), host: TestApp.hostID, mode: .send, card: nil)).value
         try await store.bindSession(ext.sessionID, to: other.id)
         let borrowed = try #require(try await asked(other.id))
-        #expect(borrowed.sessionID == ext.sessionID && !borrowed.endsWithTask)
+        #expect(borrowed.session.sessionID == ext.sessionID && !borrowed.sleeps, "刚说的那句还没送到")
     }
 }
 #endif

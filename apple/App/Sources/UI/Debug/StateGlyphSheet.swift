@@ -72,7 +72,7 @@ struct StateGlyphSheet: View {
         ("被打断", .interrupted),
         ("空闲", .idle),
         ("新会话", .fresh),
-        ("已结束", .ended),
+        ("已休眠", .ended),
         ("未知", .unknown()),
     ]
 
@@ -130,7 +130,7 @@ private struct StateTour: View {
         ("在跑", .working(.thinking)),
         ("新回复", .unread),
         ("空闲", .idle),
-        ("已结束", .ended),
+        ("已休眠", .ended),
         ("在跑", .working(.thinking)),
         ("被打断", .interrupted),
         ("在跑", .working(.thinking)),

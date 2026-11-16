@@ -133,7 +133,7 @@ struct ReplyBar: View {
         .font(Typography.meta).foregroundStyle(progress.failed ? palette.failure : palette.ink3)
     }
 
-    private static let unanswerable: LocalizedStringResource = "CuePad 答不了这类提问，只能结束这个会话"
+    private static let unanswerable: LocalizedStringResource = "CuePad 答不了这类提问，只能让这个会话休眠"
 
     private var shortcuts: [ReplyShortcut: () -> Void] {
         var map: [ReplyShortcut: () -> Void] = [:]

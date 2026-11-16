@@ -81,8 +81,7 @@ struct BoardWaitCard: View {
 
     @ViewBuilder private var menu: some View {
         if let item = held.item {
-            Section { OpenSessionBeside(session: held.session) }.menuIcons()
-            CardActions(card: item.task, leaf: item.steps == nil, opens: true, session: held.session)
+            CardActions(card: item.task, opens: true, session: held.session)
         } else {
             SessionActions(session: held.session)
         }

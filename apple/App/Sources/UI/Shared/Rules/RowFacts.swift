@@ -12,9 +12,9 @@ nonisolated struct RowFacts: Equatable {
 
         var text: String {
             switch self {
-            case .ending: String(localized: "正在结束…")
-            case .endFailed: String(localized: "没能结束")
-            case .endUnconfirmed: String(localized: "结束未确认")
+            case .ending: String(localized: "正在休眠…")
+            case .endFailed: String(localized: "没能休眠")
+            case .endUnconfirmed: String(localized: "休眠未确认")
             case .renameFailed: String(localized: "没能改名")
             case .renaming: String(localized: "正在改名")
             case .draft: String(localized: "有草稿")
