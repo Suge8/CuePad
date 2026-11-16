@@ -98,7 +98,10 @@ struct BoardColumnHeader: View {
     let count: Int
     /// 已完成那一列有做完的任务：列尾那一格（别的列放加号的地方）是全部归档，不随"更早做完的"展没展开。手机按行排时列头没有这一格，入口在"更早做完的"那一页。
     var archives = false
+    @State private var wins = 0
+    @State private var drawn: CGFloat = 1
     @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
@@ -120,11 +123,19 @@ struct BoardColumnHeader: View {
             if let add { LaneAddButton(add, cell: CGSize(width: Self.add, height: Self.height)).font(Self.font) }
         }
         .frame(height: Self.height)
+        // 又做完一件（正好多一件：读到一批、同步来一串不算）：对勾擦掉，等卡飞到时重写一遍
+        .onChange(of: count) { old, new in if column == .done, new == old + 1, !reduceMotion { wins += 1 } }
+        .task(id: wins) {
+            guard wins > 0 else { return }
+            drawn = 0
+            try? await Task.sleep(for: Motion.Write.delay)
+            withAnimation(Motion.Write.stroke) { drawn = 1 }
+        }
     }
 
     private var row: some View {
         HStack(spacing: 0) {
-            BoardLaneMark(column: column, size: Self.mark)
+            BoardLaneMark(column: column, size: Self.mark, drawn: drawn)
             Text(column.title).foregroundStyle(column.light ? palette.ink3 : palette.ink2).truncationMode(.tail)
                 .padding(.leading, Spacing.glyph)
             // 数紧跟列名：四列同一种排法
@@ -148,10 +159,13 @@ struct BoardColumnHeader: View {
 struct BoardLaneMark: View {
     let column: TaskBoard.Column
     var size: CGFloat = 16
+    /// 这一笔写到哪了（0…1）。
+    var drawn: CGFloat = 1
     @Environment(\.palette) private var palette
 
     var body: some View {
         LaneGlyph(column: column)
+            .trim(from: 0, to: drawn)
             .stroke(column.mark(palette), style: StrokeStyle(lineWidth: size * InkStateGeometry.heartbeatStrokeRatio, lineCap: .round, lineJoin: .round))
             .overlay {
                 if column == .waiting {

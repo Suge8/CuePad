@@ -181,7 +181,7 @@ struct RailSessions: View {
             .padding(.horizontal, RowMetrics.bleed)
             .safeAreaPadding(.bottom, Chrome.pad)
             .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion) ?? Motion.fade, value: expanded)
-            .animation(Motion.fade, value: rows.waiting.map(\.id))
+            .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion) ?? Motion.fade, value: rows.waiting.map(\.id))
         }
         .scrollIndicators(.hidden)
         .dynamicTypeSize(...DynamicTypeSize.xxLarge)
@@ -191,9 +191,10 @@ struct RailSessions: View {
         }
     }
 
+    /// 等你的卡是会话条上唯一要你动手的：来的时候从上面浮出来（余光看得到有东西来了），走的时候先淡完，不压住正往上让的那几行。
     private func cell(_ item: SessionRailRows.Item) -> some View {
         SessionRailCell(item: item, form: .wide, selected: marked.contains(item.id), open: open)
-            .transition(.opacity)
+            .transition(.asymmetric(insertion: Motion.surface(from: .top, reduceMotion: reduceMotion), removal: .opacity.animation(Motion.yield)))
     }
 
     private static let projectCap = 7

@@ -38,6 +38,30 @@ extension CueStore {
     }
   }
 
+  /// 你亲手点的完成：做完与它带出来的休眠（`sessionsFreed`）写在同一个事务里——分两次写，中间那一拍会话还算等你，它在看板上的卡先跳回等你再飞走。
+  /// 自动结束先结（`reconcileTaskSessionEvents`，提交前本来也要跑）：它已经请结束的，这里不再点名一遍。
+  /// 那台 Mac 说了离开的不在这里写（写了没人领），交回调用方照点名结束的路走（先拉一次同步再定，`AppServices.end`）。
+  public func completeTask(_ id: UUID, sleepingAt moment: Speech.Moment) throws -> (status: TaskStatus, unreached: [SessionState]) {
+    try write {
+      guard let card = try find(Card.self, id) else { throw CueStoreError.notFound }
+      guard let current = card.status else { throw CueStoreError.notATask }
+      let status = current == .done ? .done : try applyStatus(id, .done)
+      guard status == .done else { return (status, []) }
+      try reconcileTaskSessionEvents()
+      var unreached: [SessionState] = []
+      for session in try sessionsFreed(byCompleting: id) {
+        if try macKnownOff(session.hostID, at: moment) != nil {
+          unreached.append(session)
+        } else {
+          _ = try requestControl(
+            .end, of: SendTarget(kind: .piSession, name: session.title, ref: session.sessionID), on: session.hostID, cue: false,
+            content: DeliveryRequest.EndKind.explicit.stored)
+        }
+      }
+      return (status, unreached)
+    }
+  }
+
   /// 撤销一次完成：它还是那一次做完的（完成时刻是 `time`）、没归档没删才撤，连同那一次连带做完的下级（其间单独归档了的不动）、那一次才带着开始的上级；否则抛 `changedSinceUndo`。
   /// 那一次结束的会话、停掉的定时不恢复（同 `reopen`：再对它说话就在后台恢复）。
   public func uncompleteTask(_ id: UUID, completedAt time: Date) throws {

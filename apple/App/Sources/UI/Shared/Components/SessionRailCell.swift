@@ -61,6 +61,8 @@ struct SessionRailCell: View {
         .help(help)
     }
 
+    private var running: Bool { item.waiting == nil && item.pulse.tier == .running }
+
     private var besides: Bool {
         guard let main = workspace.session(in: .main) else { return false }
         return main.sessionID != item.id && workspace.besideSession?.sessionID != item.id
@@ -119,13 +121,16 @@ struct SessionRailCell: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if compact {
                 RailLine(leadWidth: Self.mark) {
-                    if item.waiting == nil, item.pulse.tier == .running {
-                        BoardLaneMark(column: .advancing, size: Self.mark)
-                    } else if item.ended {
-                        StateGlyph(status: .ended).font(Glyph.small)
-                    } else {
-                        Color.clear
+                    // 开始跑、歇下、休眠：记号冒出来、淡掉，不是当场换一个图
+                    ZStack {
+                        if running {
+                            BoardLaneMark(column: .advancing, size: Self.mark).transition(Motion.pop(reduceMotion: reduceMotion))
+                        } else if item.ended {
+                            StateGlyph(status: .ended).font(Glyph.small).transition(Motion.pop(reduceMotion: reduceMotion))
+                        }
                     }
+                    .animation(Motion.fade, value: running)
+                    .animation(Motion.fade, value: item.ended)
                 } rest: {
                     name.font(Typography.body)
                     Spacer(minLength: Spacing.item)

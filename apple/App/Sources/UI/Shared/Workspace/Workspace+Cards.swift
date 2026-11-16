@@ -25,19 +25,19 @@ extension Workspace {
 
     /// 已经完成的不动：界面手里的副本可能已过时（别的设备刚做完），再来一次不能把它翻回去（`CueStore.completeTask`）。
     /// 你点的完成就是这件事用完了：它的会话跟着休眠，哪些只由 Store 定（`sessionsFreed`：这件事还有没做完的步骤、别的事还在用的留着）。
-    /// 留着时提示照实说，不让人猜这次关没关。休眠没发出去（那台 Mac 够不着）照常报错，完成不撤。
+    /// 留着时提示照实说，不让人猜这次关没关。完成与休眠一次写下（`CueStore.completeTask(_:sleepingAt:)`）；休眠没发出去（那台 Mac 够不着）照常报错，完成不撤。
     func complete(_ id: UUID) async throws {
         let store = services.store
-        let (status, undo) = try await store.completing(id)
+        let (status, undo, unreached) = try await store.completing(id, at: services.speech)
         // 做完了就给一个归档（不自动归档）
         guard status == .done else { return }
         if let undo { undoable("完成", undo) }
         let archiving = NoticeAction(title: String(localized: "归档")) { try await $0.archive(id) }
         let stays = try await store.completedTaskKeepsSession(id)
         say(stays ? "已完成，会话还在给后面的步骤用" : "已完成", action: archiving, sound: .check)
-        // 一个没发出去（那台 Mac 够不着）不耽误后面的：都试过再报头一个错
+        // 手里那条"离开"可能已经过时：这几个照点名结束的路再试（先拉一次同步）。一个没发出去不耽误后面的，都试过再报头一个错
         var failure: (any Error)?
-        for session in try await store.sessionsFreed(byCompleting: id) {
+        for session in unreached {
             do { _ = try await services.end(session) } catch { failure = failure ?? error }
         }
         if let failure { throw failure }
