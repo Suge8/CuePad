@@ -72,7 +72,7 @@ struct ProjectPage: View {
     }
 
     @ViewBuilder private var content: some View {
-        VStack(alignment: .leading, spacing: Spacing.section) {
+        ProjectSplit(gap: Spacing.section) {
             if let data, let arrangement = board.arrangement { page(data, arrangement) }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

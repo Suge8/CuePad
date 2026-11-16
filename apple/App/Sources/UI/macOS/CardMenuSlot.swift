@@ -12,7 +12,8 @@ struct CardMenuSlot: View {
 
     var body: some View {
         let card = (opened ?? nil).flatMap { $0.id == workspace.openCard ? $0 : nil }
-        HStack(spacing: Spacing.tight) {
+        // 三颗在同一块玻璃里：各一颗玻璃圆钮排开，像三件不相干的事
+        HStack(spacing: 0) {
             if let card { CardQuickButtons(card: card).labelStyle(.iconOnly) }
             Menu { if let card { items(card).labelStyle(.titleAndIcon) } } label: { Image(.more) }
                 .menuStyle(.button).menuIndicator(.hidden)
@@ -20,7 +21,10 @@ struct CardMenuSlot: View {
                 .help("分享、移到项目、复制、归档")
                 .accessibilityLabel("更多")
         }
-            .buttonStyle(ControlButtonStyle(kind: .circular))
+            .buttonStyle(ControlButtonStyle(kind: .icon, size: .compact))
+            .padding(.horizontal, Spacing.tight)
+            .frame(height: ControlMetrics.height)
+            .glass(in: .capsule)
             .fixedSize()
             .padding(.leading, Spacing.item)
             .observing(services.store, id: workspace.openCard, into: $opened, onError: workspace.fail) { [id = workspace.openCard] store in

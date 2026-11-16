@@ -33,38 +33,29 @@ extension View {
     }
 }
 
-struct PageTitleWidth: ViewModifier {
-    func body(content: Content) -> some View {
-        content.frame(minWidth: 160, idealWidth: 420, maxWidth: 420)
-    }
-}
-
+/// 在主区栏头的正中（`MainColumn` 把它叠在那一排上）：下面的正文栏也是居中的。一行：项目名、接着改于何时与存没存上。
 struct OverlayTitle: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
     var body: some View {
         let content = workspace.overlayHeader.content.flatMap { $0.page == workspace.overlay ? $0 : nil }
-        HStack(spacing: 0) {
-            Spacer(minLength: 0)
-            VStack(spacing: Spacing.hair) {
-                Text(verbatim: content?.title ?? "").font(Typography.toolbarTitlePaired).foregroundStyle(palette.ink)
-                    .accessibilityAddTraits(.isHeader)
-                ZStack {
-                    Text(content?.widest ?? Dotted()).hidden().accessibilityHidden(true)
-                    Text(content?.detail ?? Dotted()).foregroundStyle(content?.failed == true ? palette.failure : palette.ink3)
-                }
-                .font(Typography.toolbarPath)
+        HStack(spacing: Spacing.item) {
+            Text(verbatim: content?.title ?? "").font(Typography.toolbarTitle).foregroundStyle(palette.ink)
+                .accessibilityAddTraits(.isHeader)
+            ZStack(alignment: .leading) {
+                Text(content?.widest ?? Dotted()).hidden().accessibilityHidden(true)
+                Text(content?.detail ?? Dotted()).foregroundStyle(content?.failed == true ? palette.failure : palette.ink3)
             }
-            .lineLimit(1)
-            .padding(.horizontal, Spacing.block)
-            .frame(height: ControlMetrics.height)
-            .glass(in: .capsule)
-            .help(content?.help ?? "")
-            .accessibilityElement(children: .combine)
-            Spacer(minLength: 0)
+            .font(Typography.toolbarPath)
         }
-        .modifier(PageTitleWidth())
+        .lineLimit(1)
+        .padding(.horizontal, Spacing.group)
+        .frame(height: ControlMetrics.height)
+        .glass(in: .capsule)
+        .help(content?.help ?? "")
+        .accessibilityElement(children: .combine)
+        .opacity(content == nil ? 0 : 1)
     }
 }
 #endif

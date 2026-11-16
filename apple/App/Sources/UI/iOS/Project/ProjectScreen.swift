@@ -41,8 +41,8 @@ struct ProjectScreen: View {
     private func content(_ data: ProjectPageData, _ arrangement: WallArrangement) -> some View {
         let lastTarget = data.lastTarget
         // 任务区不进懒加载栈：在懒加载栈的一格里时，收起后按 id 滚回"收起"那一行会偏出一屏（`TaskFoldAnchor`）
-        VStack(alignment: .leading, spacing: 0) {
-            if data.project != nil { ProjectTasks(data: data, position: $position, anchor: anchor).padding(.bottom, Self.sectionGap) }
+        ProjectSplit(gap: Self.sectionGap) {
+            if data.project != nil { ProjectTasks(data: data, position: $position, anchor: anchor) }
             ProjectWallSections(data: data, arrangement: arrangement, older: board.older, metrics: metrics) { entry in
                 CardTileView(entry: entry, lastTarget: lastTarget[entry.id], floated: board.floated.contains(entry.id))
             }

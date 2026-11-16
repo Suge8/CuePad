@@ -33,7 +33,10 @@ struct MainColumn: View {
         if workspace.mainRoute == .progress, workspace.overlay == nil {
             WideColumnHead().padding(inset).frame(height: Chrome.band)
         } else {
-            WideColumnHead().padding(inset).frame(height: Chrome.band).windowDragArea()
+            // 编辑页的标题叠在让出两边之后的整栏正中：下面的正文栏也是按整栏居中的，放进那一排里会被两头的钮挤偏
+            WideColumnHead().padding(inset).frame(height: Chrome.band)
+                .overlay { if workspace.overlay != nil { OverlayTitle() } }
+                .windowDragArea()
         }
     }
 }

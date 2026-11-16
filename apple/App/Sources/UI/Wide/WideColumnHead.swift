@@ -10,9 +10,6 @@ struct WideColumnHead: View {
         HStack(spacing: 0) {
             if overlaid {
                 CloseButton()
-                #if os(macOS)
-                OverlayTitle()
-                #endif
             } else if workspace.mainRoute == .progress {
                 ProjectScopeSlot()
             } else {
