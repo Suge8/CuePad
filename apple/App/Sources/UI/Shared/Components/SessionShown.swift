@@ -50,7 +50,6 @@ nonisolated extension SessionState {
             .map(\.item)
     }
 
-    var hasStarted: Bool { lastPrompt != nil || lastReply != nil || pendingPrompt != nil }
 }
 
 /// 会话状态只来自 Mac 同步回来的记录，发出后要等 Mac 执行、写回、再同步过来才变；话是本机当场写出的，所以显示状态把它算进去：发出即"发送中"，会话进入处理中后让位给会话状态。
@@ -116,23 +115,6 @@ nonisolated enum DeliveryShown: Hashable, Sendable {
     }
 }
 
-/// 没看过的从 `since`（启用这条规则的时刻）起算，之前就停下的不算。看的时刻记在本机偏好（`AppSettings.markSeen`）。"标为未读"把看的时刻回拨到停下之前（`markedUnread`），规则启用前就停下的也行。
-nonisolated enum Unread {
-    static func isUnread(_ session: SessionState, seen: Date?, since: Date) -> Bool {
-        isSettledReply(session) && session.stateSince > (seen ?? since)
-    }
-
-    static func canMarkUnread(_ session: SessionState, seen: Date?, since: Date) -> Bool {
-        isSettledReply(session) && !isUnread(session, seen: seen, since: since)
-    }
-
-    static func markedUnread(_ session: SessionState) -> Date { session.stateSince.addingTimeInterval(-0.001) }
-
-    private static func isSettledReply(_ session: SessionState) -> Bool {
-        session.runtimeState == .known(.settled) && session.hasStarted
-    }
-}
-
 /// 界面上一个会话（或一个项目）显示的状态，全 App 只在这里判定；说法、颜色、状态标、动效、排序也都只按 `status` 分。赭黄只留给在等你的（与"等你 N"同一条规则，`SessionState.asksYou`、`CueStore.cueTally`）。
 nonisolated struct SessionShown: Hashable, Sendable {
     var agentBusy: Bool {
@@ -177,7 +159,7 @@ nonisolated struct SessionShown: Hashable, Sendable {
 
 nonisolated extension SessionShown {
     init(
-        _ session: SessionState, delivery: DeliveryRequest? = nil, unread: Bool = false, seen: Date? = nil, cue duty: CueDuty? = nil,
+        _ session: SessionState, delivery: DeliveryRequest? = nil, marks: SessionMarks? = nil, cue duty: CueDuty? = nil,
         at moment: Speech.Moment
     ) {
         let cue = duty?.name
@@ -186,7 +168,7 @@ nonisolated extension SessionShown {
         var reported = Self.status(of: session.runtimeState, failure: session.failure?.known)
         if let mac = session.macOff(at: moment) { reported = .unknown(macOff: mac) }
         let asked = session.waitsForCue(duty) ? Status.cueAsking : reported
-        switch DeliveryShown.phase(of: delivery, for: session, seen: seen, at: moment) {
+        switch DeliveryShown.phase(of: delivery, for: session, seen: marks?.seen, at: moment) {
         case .failed(let failure):
             self.init(status: .delivery(.failed(failure)), clock: own, cue: cue)
         case let phase? where busy:
@@ -196,7 +178,7 @@ nonisolated extension SessionShown {
             let clock = delivery.map { phase == .inTransit(.unconfirmed) ? SessionClock.ago($0.createdAt) : .sent(since: $0.createdAt) }
             self.init(status: .delivery(phase), clock: clock, cue: cue)
         case nil where session.runtimeState == .known(.settled):
-            let rest: Status = session.awaitsReply(duty) ? .awaitsReply : duty != nil ? .resting : unread ? .unread : .idle
+            let rest: Status = session.awaitsReply(duty) ? .awaitsReply : duty != nil ? .resting : session.isUnread(marks, at: moment.now) ? .unread : .idle
             self.init(status: session.hasStarted ? rest : .fresh, clock: own, cue: cue)
         case nil:
             self.init(status: asked, clock: own, cue: cue)
@@ -225,16 +207,13 @@ nonisolated extension SessionShown {
 
 extension Workspace {
     func shown(_ session: SessionState, delivery: DeliveryRequest?) -> SessionShown {
-        let settings = services.settings
-        return SessionShown(
-            session, delivery: delivery, unread: settings.isUnread(session), seen: settings.sessionSeen[session.sessionID], cue: cueDuty,
-            at: services.speech
-        ).speaking(speaking(session))
+        SessionShown(session, delivery: delivery, marks: services.liveSessions.marks[session.sessionID], cue: cueDuty, at: services.speech)
+            .speaking(speaking(session))
     }
 
     /// 正在看的会话没有"有新回复"，没送到的话另写"N 句没送到"（`Chat.undeliveredNote`），这里不再说一遍。
     func shownInHeader(_ session: SessionState, delivery: DeliveryRequest?) -> SessionShown {
-        SessionShown(session, delivery: delivery, seen: .distantFuture, cue: cueDuty, at: services.speech).speaking(speaking(session))
+        SessionShown(session, delivery: delivery, marks: SessionMarks(seen: .distantFuture), cue: cueDuty, at: services.speech).speaking(speaking(session))
     }
 
     /// 只随出字开始、结束通知，不随每个增量（`Bridge.Slot.speaking`）。

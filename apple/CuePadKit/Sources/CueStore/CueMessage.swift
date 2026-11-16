@@ -108,14 +108,6 @@ public enum CueQuestionEnd: Equatable, Sendable {
   case withdrawn
 }
 
-/// 你在 Cue 页读到哪（同步，只有一行，各端都写）：读到的那条 Cue 的话写下的时刻，就记成这一行的修改时间，没有别的列。
-/// 同步时两个版本按修改时间取晚的（`CueStore.applyVersion`），本机也只往后挪（`CueStore.markCueRead`）：两台设备各读各的，
-/// 谁也冲不掉另一台读得更远的；另记一列"读到哪"的话，按修改时间取胜的那一版可能读得更近。新消息的规则在 `CueStore.cueUnread`。
-enum CueRead: SyncedColumns {
-  static let recordID = DeterministicID.uuid("cue-read")
-  static let fields: [Field] = [.plain("id"), .plain("modifiedAt")]
-}
-
 public enum CueReport {
   public static func text(task: String, evidence: [String]) -> ShownText {
     ShownText("「\(task)」做完了\n\n\(evidence.map { "- \($0)" }.joined(separator: "\n"))")

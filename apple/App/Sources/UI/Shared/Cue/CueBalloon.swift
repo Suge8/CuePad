@@ -3,7 +3,7 @@ import SwiftUI
 
 /// Cue 说的那一件：一块玻璃气泡，尾巴朝上指着云上的 Cue（浮在天空上的表面用系统玻璃，字压在花的云上时玻璃垫着底才读得清）。
 /// 从上到下：来由一行（图标着状态色：出错玫红、新回复与做完绿、等子代理靛蓝；回你的是哪句时写那句），它说的那一句（大字），正文（至多四行），去处。
-/// 整块是一颗钮，只去一处：新回复去会话，做完打开那件任务，其余回到对话（停在第一条新消息）。去处写在最后一行，字说去哪，箭头说点得动。
+/// 整块是一颗钮，只去一处：新回复与做完没看的去那个会话（看过它就下台），建议各行自己是钮，其余回到对话（停在第一条新消息）。去处写在最后一行，字说去哪，箭头说点得动。
 /// 否决过：去处做成气泡下面另一排玻璃胶囊（两种表面叠在天空上，散；"接着聊"与"看对话"是同一件事），小字眉题加大字直接压在云上（来由像链接，字被云吃掉）。
 /// 换了一件是另一份（按 `focus` 给身份），读会话的订阅跟着换。
 struct CueBalloon: View {
@@ -97,7 +97,7 @@ struct CueBalloon: View {
         }
     }
 
-    /// 气泡要另读的：新回复是会话最后说的那段，刚做完是那件的成果图（同看板已完成列取的那张）。
+    /// 气泡要另读的：会话最后说的那段（新回复、做完没看的），做完的那件的成果图（同看板已完成列取的那张）。
     nonisolated private struct Look: Equatable, Sendable {
         var reply = ""
         var shot: CueShown?
@@ -105,12 +105,13 @@ struct CueBalloon: View {
         static func read(_ focus: CueStage.Focus, from store: isolated CueStore) throws -> Look {
             switch focus {
             case .reply(let item):
-                return Look(reply: try store.sessionState(CueBalloon.subject(item, "reply/"))?.lastReply ?? "")
-            case .done(let item):
-                guard let id = UUID(uuidString: CueBalloon.subject(item, "done/")), let task = try store.card(id),
-                      let shot = try store.cueResultShots(of: [task])[id]?.first, let preview = try store.previews([shot.preview])[shot.preview]
-                else { return Look() }
-                return Look(shot: CueShown(preview: preview, look: shot.look))
+                return Look(reply: try store.sessionState(CueBalloon.session(of: item))?.lastReply ?? "")
+            case .done(let done):
+                let reply = try store.sessionState(done.session)?.lastReply ?? ""
+                guard let task = try store.card(done.task), let shot = try store.cueResultShots(of: [task])[done.task]?.first,
+                      let preview = try store.previews([shot.preview])[shot.preview]
+                else { return Look(reply: reply) }
+                return Look(reply: reply, shot: CueShown(preview: preview, look: shot.look))
             default:
                 return Look()
             }
@@ -136,8 +137,11 @@ struct CueBalloon: View {
             return Speech(lead: (.replied, item.kind.tone.color(palette), item.name), head: head.isEmpty ? item.kind.label : head, body: body, go: "去会话里看")
         case .said(let said):
             return Speech(lead: said.asked.map { (.reply, palette.ink3, $0) }, head: said.head, body: said.rest)
-        case .done(let item):
-            return Speech(lead: (.done, item.kind.tone.color(palette), item.kind.label), head: item.name, go: "看结果")
+        case .done(let done):
+            let (head, rest) = CueStage.Said.split(look?.reply ?? "")
+            return Speech(
+                lead: (.done, CueNow.Tone.done.color(palette), CueNow.Item.Kind.done.label), head: done.title,
+                body: [head, rest].filter { !$0.isEmpty }.joined(separator: "\n"), go: "看结果")
         case .delegating(let item):
             return Speech(lead: (.relay, item.kind.tone.color(palette), item.kind.label), head: item.name)
         case .invite:
@@ -147,17 +151,17 @@ struct CueBalloon: View {
         }
     }
 
-    /// 待回复的 id 是 "reply/会话 id"（`CueTally.Reply.id`），刚做完的是 "done/任务 id"（`CueNow.items`）。
-    nonisolated static func subject(_ item: CueNow.Item, _ prefix: String) -> String { String(item.id.dropFirst(prefix.count)) }
+    /// 待回复的 id 是 "reply/会话 id"（`CueTally.Reply.id`）。
+    nonisolated static func session(of item: CueNow.Item) -> String { String(item.id.dropFirst("reply/".count)) }
 
     private func act() {
         close()
         switch focus {
         case .reply(let item):
-            let session = Self.subject(item, "reply/")
+            let session = Self.session(of: item)
             workspace.openSession(SessionState.recordID(sessionID: session), sessionID: session)
-        case .done(let item):
-            if let task = UUID(uuidString: Self.subject(item, "done/")) { workspace.openTask(id: task) }
+        case .done(let done):
+            workspace.openSession(SessionState.recordID(sessionID: done.session), sessionID: done.session)
         default: break
         }
     }

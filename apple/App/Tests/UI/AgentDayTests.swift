@@ -22,7 +22,7 @@ struct AgentDayTests {
     private func label(_ sessionID: String) async throws -> String { workspace.shown(try await item(sessionID)).label }
 
     private func note(_ item: SessionListItem) -> RowFacts.Note? {
-        settings.facts(item.state, shown: workspace.shown(item), end: nil, rename: item.rename, at: .always()).note
+        workspace.facts(item.state, shown: workspace.shown(item), end: nil, rename: item.rename, at: .always()).note
     }
 
     @discardableResult
@@ -60,9 +60,9 @@ struct AgentDayTests {
         try await store.writeTranscript(SessionTranscript(sessionID: "atlas", messages: [], recap: Recap(lastPrompt: "跑一下测试", lastReply: "全部通过。共 214 个。")))
         let done = try await item("atlas")
         #expect(workspace.shown(done).label == "新回复")
-        settings.markSeen(done.state, at: .now.addingTimeInterval(1))
+        try await app.see(done.state)
         #expect(try await label("atlas") == "空闲")
-        #expect(!app.relaunch().settings.isUnread(done.state))  // 看过记在本机偏好，退出再回来还算看过
+        #expect(!done.state.isUnread(try await app.relaunch().store.sessionMarks()["atlas"], at: .now))  // 看过记在库里（同步到各台），退出再回来还算看过
 
         settings.setReplyDraft(ComposerDraft(text: "改完再跑一遍\n顺便看看覆盖率"), for: done.state.id)
         #expect(note(done) == .draft)
@@ -104,7 +104,7 @@ struct AgentDayTests {
         try await beta.update(sessionID: "beta", state: .thinking, title: "beta")
         try await beta.update(sessionID: "beta", state: .settled, title: "beta")
         #expect(try await label("beta") == "没能送达")  // 会话之后动过也不消失
-        settings.markSeen(try await item("beta").state, at: .now.addingTimeInterval(1))
+        try await app.see(try await item("beta").state)
         #expect(try await label("beta") != "没能送达")
 
         try await (app.runtimeRecorder(on: "mac-c")).update(sessionID: "gone", state: .ended, title: "gone")
@@ -133,7 +133,7 @@ struct AgentDayTests {
         let failed = try await item("delta")
         #expect(SessionRename.title(of: failed.state, request: failed.rename, at: .always()) == "delta")
         #expect(note(failed) == .renameFailed)
-        settings.markSeen(failed.state, at: .now.addingTimeInterval(1))
+        try await app.see(failed.state)
         #expect(note(failed) == nil)  // 看过就不再写
 
         let again = try await app.services.rename(failed.state, to: "排队调度")

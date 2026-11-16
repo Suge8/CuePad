@@ -11,7 +11,7 @@ extension DebugScene {
         func task(_ prefix: String) -> Card? { tasks.first { $0.parentID == nil && $0.body.hasPrefix(prefix) } }
         guard let importing = task(String(localized: "导入旧数据时保留回收站", table: "Demo")), let panel = task(String(localized: "README 截图换成 Swift 版", table: "Demo")) else { return }
         _ = try await store.addCueMessage(.cue, text: String(localized: "导入旧数据那边我让它先拆成几段读，读完再接着导。", table: "Demo"), task: importing.id)
-        try await store.markCueRead(through: .now)
+        try await store.mark(.cueRead)
         guard mode == "changed" else { return }
         for task in [importing, panel] {
             try await store.updateCard(task.id) { $0.body = $0.heading + String(localized: "（改过）", table: "Demo") }

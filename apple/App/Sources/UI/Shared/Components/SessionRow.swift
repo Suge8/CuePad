@@ -33,7 +33,7 @@ struct SessionRow: View {
 
     var body: some View {
         let shown = workspace.shown(session, delivery: delivery)
-        let facts = services.settings.facts(session, shown: shown, end: end, rename: rename, at: services.speech)
+        let facts = workspace.facts(session, shown: shown, end: end, rename: rename, at: services.speech)
         Group {
             if style.card {
                 card(shown: shown, facts: facts)

@@ -36,8 +36,19 @@ enum Schema {
     "ALTER TABLE piSessionStates ADD COLUMN turnDelivery TEXT; ALTER TABLE piSessionStates ADD COLUMN turnByCue INTEGER;",
     // 100：你恢复使用的会话不再随任务结束（`SessionState.restoredAt`）；升级前恢复过的没有记录，照旧按任务收尾
     "ALTER TABLE piSessionStates ADD COLUMN restoredAt INTEGER;",
-    // 101：邀请卡的"今天先不做"与"看过结果"（`Card.shelvedUntil`、`Card.seenAt`）
+    // 101：卡片记下看过与今天先不做（102 改记进 `Mark`，删掉）
     "ALTER TABLE cards ADD COLUMN shelvedUntil INTEGER; ALTER TABLE cards ADD COLUMN seenAt INTEGER;",
+    // 102：你的注意（`Mark`）各记一行：Cue 页读到哪并进来（读到的位置不搬：只差你最后一句之后的几条再算一次新）；
+    // 会话看到哪改记在这里同步，各台本机偏好里的不搬（7 天内看过的会再亮一次新回复）
+    """
+    ALTER TABLE cards DROP COLUMN shelvedUntil;
+    ALTER TABLE cards DROP COLUMN seenAt;
+    DROP TABLE cueRead;
+    DELETE FROM syncRecords WHERE recordType = 'cueRead';
+    CREATE TABLE marks (id TEXT PRIMARY KEY NOT NULL, kind TEXT NOT NULL, subject TEXT NOT NULL, modifiedAt INTEGER NOT NULL) STRICT;
+    CREATE INDEX marks_kind ON marks(kind, subject, modifiedAt);
+    \(Schema.modifiedIndex(.marks))
+    """,
   ]
 
   /// 同步元数据：每条记录服务器端的系统字段（压缩存，见 `SystemFields`）与服务器收下的修改时间（从没收下过为 NULL），以及本机交出去的那一版的修改时间

@@ -95,8 +95,14 @@ private struct SessionPageBody: View {
         #if os(iOS)
         .debugDrivesHeader($follow)
         #endif
-        .task(id: session?.stateSince) { if let session { services.settings.markSeen(session) } }
-        .onDisappear { if let session { services.settings.markSeen(session) } }
+        // 干着活时不记：每换一步都记一下就是每步一次同步；停下、离开时记的那一下已盖住干活的那段
+        .task(id: session?.stateSince) { if let session, !session.runtimeState.isWorking { markSeen(session) } }
+        .onDisappear { if let session { markSeen(session) } }
+    }
+
+    private func markSeen(_ session: SessionState) {
+        let store = services.store, id = session.sessionID
+        workspace.attempt { try await store.mark(.sessionSeen(id)) }
     }
 
     private var shown: SessionDigest? {

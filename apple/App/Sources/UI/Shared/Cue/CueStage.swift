@@ -167,18 +167,18 @@ extension CueStage {
     }
 
     /// 舞台上那一件，按先后只挑一件（规则只在这里）：不在、出错最先（别的动作这时都做不成），然后要你动手的（拍板、新回复），
-    /// 再是给你看一眼的（新消息、刚做完），都没有时是不用你管的（等子代理、在想、歇着）。姿势照旧跟拍子（`Pose`），这里只定说哪件、点什么。
+    /// 再是给你看一眼的（新消息、做完没看的），都没有时是不用你管的（等子代理、在想、歇着）。姿势照旧跟拍子（`Pose`），这里只定说哪件、点什么。
     enum Focus: Hashable, Sendable {
         case away(String, failed: Bool)
         case asks(Int)
         case reply(CueNow.Item)
         case said(Said)
-        case done(CueNow.Item)
+        case done(Done)
         case invite([CueInvite])
         case delegating(CueNow.Item)
         case quiet(String)
 
-        init(now: CueNow, said: Said?, invites: [CueInvite]) {
+        init(now: CueNow, said: Said?, read: CueStageRead) {
             let item = { (kind: CueNow.Item.Kind) in now.items.first { $0.kind == kind } }
             if case .away(let reason, let failed) = now.cue {
                 self = .away(reason, failed: failed)
@@ -188,10 +188,10 @@ extension CueStage {
                 self = .reply(reply)
             } else if let said {
                 self = .said(said)
-            } else if now.beat == .done, let done = now.justDone {
+            } else if let done = read.done {
                 self = .done(done)
-            } else if !invites.isEmpty, !now.isBusy {
-                self = .invite(invites)
+            } else if !read.invites.isEmpty, !now.isBusy {
+                self = .invite(read.invites)
             } else if now.beat == .delegating, let waiting = item(.delegating) {
                 self = .delegating(waiting)
             } else {
@@ -199,6 +199,13 @@ extension CueStage {
             }
         }
 
+    }
+
+    /// 做完了、结果你还没看的那件（`CueStore.unseenDone`）：看结果就是看交给的那个会话，在那里看过它就下台。
+    nonisolated struct Done: Hashable, Sendable {
+        let task: UUID
+        let title: String
+        let session: String
     }
 
     /// 还没读的头一条 Cue 的话（`CueThread.unread`）：第一句是气泡的大字，其余是正文；它回的是你哪一句（它之前你说的最后一句）写在来由那一行。

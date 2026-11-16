@@ -3358,22 +3358,6 @@
         }
       }
     },
-    "Cue 页读到的位置" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Your read position in Cue"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cue 页读到的位置"
-          }
-        }
-      }
-    },
     "CuePad" : {
       "localizations" : {
 
@@ -6870,16 +6854,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "做完能撤销；原来的那些进废纸篓"
-          }
-        }
-      }
-    },
-    "做完，还没看结果" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Done, not reviewed"
           }
         }
       }
@@ -19756,6 +19730,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "See Result"
+          }
+        }
+      }
+    },
+    "看过与读到的位置" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "What you've seen and read"
           }
         }
       }

@@ -95,14 +95,11 @@ extension CueStore {
       ($0.intOrNil(0), $0.intOrNil(1))
     } ?? (nil, nil)
     // 交出去而结果没回到本机的那一版回来了（崩溃、回包丢失）：服务器收下了它，记账；本机的行不动
-    let local = try readSyncRow(table, remote.id)
-    // 两台从同一版各把修改时刻挪 1 毫秒（`CueStore.nudged`）会撞上同一个时刻：本机交出后没再改、邀请列却不同的，是别处那一版，往下合并
-    let collided = table == .cards && local.map { row in row.modifiedAt == sent && Card.inviteColumns.contains { row.fields[$0] != remote.fields[$0] } } == true
-    if remote.modifiedAt == sent, !collided {
+    if remote.modifiedAt == sent {
       if remote.modifiedAt > (pushed ?? .min) { try setMetadata(table, remote.id, systemFields, pushed: remote.modifiedAt) }
       return
     }
-    guard let local else {
+    guard let local = try readSyncRow(table, remote.id) else {
       if pushed != nil { return }
       try overwrite(remote)
       try setMetadata(table, remote.id, systemFields, pushed: remote.modifiedAt)
@@ -118,11 +115,6 @@ extension CueStore {
     if table == .cards {
       let winner = remote.modifiedAt >= local.modifiedAt || pushed.map({ local.modifiedAt <= $0 }) == true ? remote : local
       var merged = Self.mergingSessionBinding(local: local, remote: remote, into: winner)
-      // 只往后走，各取较晚的：写它们只把修改时刻挪 1 毫秒（`CueStore.nudged`），并发的真改动整条胜出时不带走它们
-      for column in Card.inviteColumns {
-        let later = [local, remote].compactMap { if case .int(let at)? = $0.fields[column] { at } else { nil } }.max()
-        merged.fields[column] = later.map(SQLValue.int) ?? .null
-      }
       if merged != winner {
         if let localBody = local.text("body"), let remoteBody = remote.text("body"), localBody != remoteBody {
           try insertConflictCopy(of: winner == remote ? local : remote, keeping: winner)
@@ -210,7 +202,7 @@ extension CueStore {
     fields["sortKey"] = .text(SortKey.before(first))
     fields["deletedAt"] = .null
     fields["isPinned"] = .int(0)
-    for column in ["parentID", "todoAt", "startedAt", "completedAt", "piSessionID", "formerSessionIDs", "sessionBindingRevision"] + Card.inviteColumns { fields[column] = .null }
+    for column in ["parentID", "todoAt", "startedAt", "completedAt", "piSessionID", "formerSessionIDs", "sessionBindingRevision"] { fields[column] = .null }
     fields["createdAt"] = now.sqlValue
     fields["modifiedAt"] = now.sqlValue
     try overwrite(SyncRow(table: .cards, fields: fields))

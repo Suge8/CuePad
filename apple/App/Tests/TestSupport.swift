@@ -182,6 +182,12 @@ final class TestApp {
         #endif
     }
 
+    /// 看过这个会话（会话页记的那一下），会话行随即读到。
+    func see(_ session: SessionState, at moment: Date = .now.addingTimeInterval(1)) async throws {
+        try await services.store.mark(.sessionSeen(session.sessionID), at: moment)
+        services.liveSessions.apply(try await LiveSessions.Page.read(from: services.store), at: .always())
+    }
+
     @discardableResult
     func relaunch() -> AppServices {
         retire(services)

@@ -30,6 +30,8 @@ final class LiveSessions {
     private(set) var flight: CueFlight?
     /// 与接力事实同一次读到，界面不另起订阅等待目标进入会话条。
     private(set) var rail = SessionRailData(waiting: [], advancing: [])
+    /// 各会话的看过与标未读（`Mark`，按会话 id）：与会话同一次读到，状态与新回复不会一前一后地变。
+    private(set) var marks: [String: SessionMarks] = [:]
     @ObservationIgnored private var seen: Date?
     private let launchedAt = Date()
     /// 结束会话的那台 Mac（本机，见 `Page`）；iOS 为 nil。
@@ -64,13 +66,15 @@ final class LiveSessions {
         var handoffs: [String: CueHandoff]
         var relays: CueFlight.Facts
         var rail: SessionRailData
+        var marks: [String: SessionMarks]
 
         static func read(from store: isolated CueStore, endedOn host: String? = nil, since: Date = .now) throws -> Page {
             let items = try store.sessionPage(.current).items
             return Page(
                 items: items, total: try store.sessionCount(),
                 ended: try host.map { try store.endedSessions(on: $0, since: since, limit: LiveSessions.endedWindow) } ?? [],
-                cue: try store.cueDuty(), handoffs: try store.handoffs(items.map(\.state)), relays: try CueFlight.Facts.read(from: store), rail: try SessionRailData.read(from: store))
+                cue: try store.cueDuty(), handoffs: try store.handoffs(items.map(\.state)), relays: try CueFlight.Facts.read(from: store), rail: try SessionRailData.read(from: store),
+                marks: try store.sessionMarks())
         }
     }
 
@@ -99,6 +103,7 @@ final class LiveSessions {
         set(\.handoffs, page.handoffs)
         set(\.cue, page.cue)
         set(\.rail, page.rail)
+        set(\.marks, page.marks)
         if let next = page.relays.flight(after: seen) {
             seen = page.relays.latest
             flight = next

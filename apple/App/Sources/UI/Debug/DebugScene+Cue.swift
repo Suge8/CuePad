@@ -138,7 +138,7 @@ extension DebugScene {
                 if let done = try await store.tasks(.done).flatMap(\.tasks).first(where: { $0.parentID == nil }) {
                     _ = try await store.addCueMessage(.cue, text: String(localized: "做完了，预发上是这个样子。", table: "Demo"), shots: try await deployShots(store), task: done.id)
                 }
-                try await store.markCueRead(through: .now)
+                try await store.mark(.cueRead)
             }
             try await seedReplies(args.replies, store: store)
             try await atlasIfAsked(store)

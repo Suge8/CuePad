@@ -24,7 +24,7 @@ struct ChatTests {
         #expect(failed.undelivered(at: .always()) == 1 && Chat.undeliveredNote(failed.undelivered(at: .always())) == "1 句没送到")
         #expect(try await SessionDigest.read(failed.id, sessionID: "relay", from: store).undelivered(at: .always()) == 1)
 
-        app.services.settings.markSeen(failed.state, at: .now.addingTimeInterval(1))
+        try await app.see(failed.state)
         #expect(Workspace(services: app.services).shown(try await item()).undelivered == nil)
         #expect(try await item().undelivered(at: .always()) == 1)
     }

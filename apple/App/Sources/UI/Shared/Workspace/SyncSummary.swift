@@ -103,7 +103,7 @@ extension SyncIssue {
         case .cueLines: String(localized: "Cue 记忆里的一条")
         case .cueProfile: String(localized: "Cue 的设置")
         case .cueState: String(localized: "Cue 此刻的状态")
-        case .cueRead: String(localized: "Cue 页读到的位置")
+        case .marks: String(localized: "看过与读到的位置")
         case .macPresence: String(localized: "一台 Mac 在不在线")
         case .macAgents: String(localized: "一台 Mac 上能用的 Agent 清单")
         case .sessionViewers: String(localized: "一台设备开着哪一页")
