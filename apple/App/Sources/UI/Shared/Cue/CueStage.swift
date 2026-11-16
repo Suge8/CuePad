@@ -67,14 +67,6 @@ struct CueStage: View {
         }
     }
 
-    /// 对话在舞台"上面"（更早的话），往下拉、点它都是把对话拉下来。挨着那一句放：底下是拍板卡与输入框，高低随卡变，放那里会被卡压住。
-    private var more: some View {
-        Button(action: close) {
-            Label("看对话", icon: .collapse).font(Typography.secondary).foregroundStyle(palette.ink2)
-        }
-        .buttonStyle(PressStyle(.inline))
-    }
-
     /// 脚下那团光随拍子换色（等你是赭黄、做完是绿、在动是靛蓝），不在的时候灭了。叠加着画：天亮的地方亮一点，天暗的地方像云被照着。
     private func glow(_ sky: Sky) -> some View {
         let color = beat == .failed ? palette.failure : beat.tone.color(palette)
@@ -108,7 +100,6 @@ struct CueStage: View {
                 .multilineTextAlignment(.center).lineLimit(3)
                 .contentTransition(.opacity)
             Details(focus: focus, close: close).id(focus)
-            more.padding(.top, Spacing.item)
         }
         .frame(maxWidth: CuePage.readingWidth)
         .padding(.horizontal, CuePage.inset)
@@ -280,8 +271,10 @@ private extension CueBeat {
     }
 }
 
-/// 云下那一句之后的正文与动作：新回复是会话最后说的那段与"去会话里看"，新消息是 Cue 那段话第一句之后的部分与"接着聊"（第一句已在上面）。
-/// 点了舞台就收起：接着聊、去会话再回来，都是回到对话。换了一件是另一份（调用方按 `focus` 给身份），读会话的订阅跟着换。
+/// 云下那一句之后的正文与动作：新回复是会话最后说的那段与"去会话里看"，新消息是 Cue 那段话第一句之后的部分（第一句已在上面）。
+/// 动作一排玻璃胶囊（浮在天空上的表面用系统玻璃），"看对话"每种都有，挨着那一句放：底下是拍板卡与输入框，高低随卡变，放那里会被卡压住。
+/// 新消息不另给"接着聊"：它与"看对话"都是回到对话（停在第一条新消息），差的只是输入框聚焦，而点输入框本身就收起舞台，一件事只留一个入口。
+/// 点了舞台就收起：去会话再回来也是回到对话。换了一件是另一份（调用方按 `focus` 给身份），读会话的订阅跟着换。
 private struct Details: View {
     let focus: CueStage.Focus
     let close: () -> Void
@@ -297,9 +290,17 @@ private struct Details: View {
             if let text, !text.isEmpty {
                 Text(verbatim: text).font(Typography.body).foregroundStyle(palette.ink2).multilineTextAlignment(.center).lineLimit(Self.lines)
             }
-            if let label {
-                Button(action: act) { Text(label) }.buttonStyle(ControlButtonStyle(kind: .primary))
+            HStack(spacing: Spacing.item) {
+                Button("看对话", action: close)
+                if let sessionID {
+                    Button("去会话里看") {
+                        close()
+                        workspace.openSession(SessionState.recordID(sessionID: sessionID), sessionID: sessionID)
+                    }
+                }
             }
+            .buttonStyle(ControlButtonStyle(kind: .glass))
+            .padding(.top, Spacing.item)
         }
         .padding(.top, Spacing.item)
         .observing(services.store, into: $reply, onError: workspace.fail) { store in try session.flatMap { try store.sessionState($0)?.lastReply } ?? "" }
@@ -317,23 +318,6 @@ private struct Details: View {
         case .reply: reply.map { MarkdownBlock.plainText($0).trimmingCharacters(in: .whitespacesAndNewlines) }
         case .said(let said): said.rest
         default: nil
-        }
-    }
-
-    private var label: LocalizedStringKey? {
-        switch focus {
-        case .reply: "去会话里看"
-        case .said: "接着聊"
-        default: nil
-        }
-    }
-
-    private func act() {
-        close()
-        if let sessionID {
-            workspace.openSession(SessionState.recordID(sessionID: sessionID), sessionID: sessionID)
-        } else {
-            workspace.cueFocusPending = true
         }
     }
 }

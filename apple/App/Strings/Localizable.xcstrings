@@ -14484,16 +14484,6 @@
         }
       }
     },
-    "接着聊" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Keep Talking"
-          }
-        }
-      }
-    },
     "推荐" : {
       "localizations" : {
         "en" : {
