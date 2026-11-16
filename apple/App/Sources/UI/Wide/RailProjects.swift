@@ -128,12 +128,14 @@ struct RailProjectSessions: View {
                         insertion: .opacity.combined(with: .offset(y: reduceMotion ? 0 : -Spacing.item)).animation(motion.delay(Double(min(index, Self.cap)) * Self.stagger)),
                         removal: .opacity))
             }
+            // 这个项目下一个会话都没有：展开不留一片空，给开头的那一步
+            if list != nil, items.isEmpty, hidden == 0 { fold(.add, Text("新会话")) { workspace.openNewSession(in: project) } }
             if hidden > 0 { fold(.expand, Text("更早的会话"), count: hidden) { extra += Self.step } }
             if extra > 0 { fold(.collapse, Text("收起")) { withAnimation(motion) { extra = 0 } } }
         }
         // 引线在项目图形那一列的中线上，从项目那一行往下贯到最后一个会话：看得出这几行归上面那个项目
         .overlay(alignment: .leading) {
-            Rectangle().fill(palette.hair).frame(width: 1).padding(.leading, Chrome.icon / 2).padding(.vertical, Spacing.tight)
+            Capsule().fill(palette.hair).frame(width: 1).padding(.leading, Chrome.icon / 2).padding(.vertical, Spacing.tight)
         }
         .transition(.opacity.combined(with: .offset(y: -Spacing.tight)))
         // 读到的带着动画落下：这一组是空着插进来的，不带的话行在展开那一下之后一帧蹦出来（收起时内容已在，是顺的）

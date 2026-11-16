@@ -93,7 +93,7 @@ struct CueListRow<Content: View>: View {
 
     private var actions: [RowAction] { [leading, trailing] }
     private var menu: some View {
-        Section(meta.visible) { RowActionButtons(actions: [copy] + actions) }
+        Section(meta.visible) { RowActionButtons(actions: [copy] + actions) }.menuIcons()
     }
 
     var body: some View {

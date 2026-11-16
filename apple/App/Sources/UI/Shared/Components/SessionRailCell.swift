@@ -120,13 +120,13 @@ struct SessionRailCell: View {
                     SessionRailReadout(item: item)
                 }
                 #if os(macOS)
-                // 并排的看得见的入口（另有 ⌘ 点与右键）：主区开着别的会话时，悬停的行尾露出来
-                .hoverReveal(when: besides) {
-                    Button("并排打开", icon: .rightColumn) { open(item.session, .beside) }
-                        .labelStyle(.iconOnly)
-                        .buttonStyle(ControlButtonStyle(kind: .icon, size: .compact))
-                        .help("并排打开")
-                        .padding(.horizontal, Spacing.tight)
+                // 最常做的两件不必右键，悬停的行尾露出来：并排打开（主区开着别的会话时；另有 ⌘ 点）与完成（同菜单那一项，在忙时照样先问）
+                .hoverReveal(when: besides || complete != nil) {
+                    HStack(spacing: 0) {
+                        if besides { quick("并排打开", .rightColumn) { open(item.session, .beside) } }
+                        if let complete { quick(complete.title, complete.icon, action: complete.run) }
+                    }
+                    .padding(.horizontal, Spacing.tight)
                 }
                 #endif
             } else {
@@ -135,6 +135,17 @@ struct SessionRailCell: View {
         }
         .contentShape(.rect)
     }
+
+    private var complete: RowAction? { SessionActions.complete(item.session, task: item.task, in: workspace) }
+
+    #if os(macOS)
+    private func quick(_ title: LocalizedStringResource, _ icon: Icon, action: @escaping () -> Void) -> some View {
+        Button(title, icon: icon, action: action)
+            .labelStyle(.iconOnly)
+            .buttonStyle(ControlButtonStyle(kind: .icon, size: .compact))
+            .help(Text(title))
+    }
+    #endif
 
     private var name: some View {
         Text(verbatim: item.name)

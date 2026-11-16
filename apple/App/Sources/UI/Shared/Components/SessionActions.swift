@@ -62,7 +62,7 @@ struct SessionActions: View {
     /// 休眠不是删除（对话留着，再说话就醒），用墨色，确认框里再说清后果。归着没做完的任务才给；`recovering`：上一次休眠没成或没确认，会话页就地再来一次。
     static func sleep(_ session: SessionState, task: SessionTask? = nil, ending: Bool, recovering: Bool = false, in workspace: Workspace) -> RowAction? {
         guard recovering || session.canEnd && owned(task) else { return nil }
-        return RowAction("休眠", icon: .endSession, enabled: !ending) { workspace.sessionAsk = .end(session) }
+        return RowAction("休眠", icon: .ended, enabled: !ending) { workspace.sessionAsk = .end(session) }
     }
 
     /// 轻扫与菜单同一个收尾：没归着任务的是完成，归着的是休眠。
