@@ -47,6 +47,9 @@ struct RailProjectRow: View {
             .offset(x: (ControlSize.inline.height - Chrome.icon) / 2)
         }
         .onHover { hovering = $0 }
+        #if os(macOS)
+        .presetHover($hovering)
+        #endif
         .animation(Motion.fade, value: hovering)
     }
 
@@ -103,7 +106,6 @@ struct RailProjectSessions: View {
 
     private static let cap = 5
     private static let step = 10
-    private static let stagger = 0.03
 
     private struct Reading: Equatable {
         let project: UUID
@@ -121,27 +123,38 @@ struct RailProjectSessions: View {
         }
         let motion = Motion.spatial(Motion.nudge, reduceMotion: reduceMotion) ?? Motion.fade
         VStack(spacing: Spacing.hair) {
-            // 依次落下，一行比上一行晚一拍：一整块同时出现读不出是从项目里展开来的。只管入场；收起是整组一起走
-            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                SessionRailCell(item: item, form: .wide, selected: marked.contains(item.id), compact: true, open: open)
-                    .transition(.asymmetric(
-                        insertion: .opacity.combined(with: .offset(y: reduceMotion ? 0 : -Spacing.item)).animation(motion.delay(Double(min(index, Self.cap)) * Self.stagger)),
-                        removal: .opacity))
+            // 行数变了（刚读到、多列一批、收起）这一块连续地长开收回：行在各自的位置上淡入，被下沿一行行露出来，
+            // 不让下面往下让的行从还没淡完的字上压过去。只裁上下，左右留给行的悬停底
+            VStack(spacing: Spacing.hair) {
+                ForEach(items) { item in
+                    SessionRailCell(item: item, form: .wide, selected: marked.contains(item.id), compact: true, open: open)
+                        .transition(.opacity)
+                }
             }
+            .mask { Rectangle().padding(.horizontal, -RowMetrics.bleed) }
             // 这个项目下一个会话都没有：展开不留一片空，给开头的那一步
             if list != nil, items.isEmpty, hidden == 0 { fold(.add, Text("新会话")) { workspace.openNewSession(in: project) } }
-            if hidden > 0 { fold(.expand, Text("更早的会话"), count: hidden) { extra += Self.step } }
+            if hidden > 0 { fold(.expand, Text("更早的会话"), count: hidden) { withAnimation(motion) { extra += Self.step } } }
             if extra > 0 { fold(.collapse, Text("收起")) { withAnimation(motion) { extra = 0 } } }
         }
         // 引线在项目图形那一列的中线上，从项目那一行往下贯到最后一个会话：看得出这几行归上面那个项目
         .overlay(alignment: .leading) {
             Capsule().fill(palette.hair).frame(width: 1).padding(.leading, Chrome.icon / 2).padding(.vertical, Spacing.tight)
         }
-        .transition(.opacity.combined(with: .offset(y: -Spacing.tight)))
-        // 读到的带着动画落下：这一组是空着插进来的，不带的话行在展开那一下之后一帧蹦出来（收起时内容已在，是顺的）
+        // 收起：下沿跟着下面的行一起往上收（同一条曲线），不是整块原地淡掉、下面的行从它身上滑过去
+        .transition(.modifier(active: Curtain(open: false), identity: Curtain(open: true)).combined(with: .opacity))
+        // 读到的带着动画落下：这一组是空着插进来的，不带的话行在展开那一下之后一帧蹦出来
         .observing(services.store, id: Reading(project: project, limit: Self.cap + extra, moment: services.speech), into: $list, animation: motion, onError: workspace.fail) {
             [project, limit = Self.cap + extra, moment = services.speech] store in
             try SessionListData.read(text: "", project: project, historyLimit: limit, at: moment, from: store)
+        }
+    }
+
+    private struct Curtain: ViewModifier {
+        let open: Bool
+
+        func body(content: Content) -> some View {
+            content.mask { Rectangle().padding(.horizontal, -RowMetrics.bleed).scaleEffect(y: open ? 1 : 0, anchor: .top) }
         }
     }
 
@@ -158,6 +171,7 @@ struct RailProjectSessions: View {
         }
         .buttonStyle(RowStyle())
         .padding(.leading, SessionRailCell.indent)
-        .transition(.opacity)
+        // 走的时候当场没：多列出来的行就落在它原来那一格，两行字叠着淡一下是花的
+        .transition(.asymmetric(insertion: .opacity, removal: .identity))
     }
 }

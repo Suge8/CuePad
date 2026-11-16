@@ -50,6 +50,7 @@ struct SessionRailCell: View {
             if let finishing { quick(finishing.title, finishing.icon, action: finishing.run).padding(Spacing.tight).transition(.opacity) }
         }
         .onHover { hovering = $0 }
+        .presetHover($hovering)
         .animation(Motion.fade, value: hovering)
         #endif
         .relaySpot(session: item.id, row: .rail)

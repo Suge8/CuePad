@@ -101,8 +101,8 @@ private struct SessionAsks: ViewModifier {
         #endif
     }
 
-    private static let title: LocalizedStringResource = "让这个会话休眠？"
-    private static let message: LocalizedStringResource = "对话会保留，再对它说话就醒"
+    private static let title: LocalizedStringResource = "Agent 还在做事，让它休眠？"
+    private static let message: LocalizedStringResource = "手上这一步会被打断。对话会保留，再对它说话就醒"
 
     private struct Renaming: Identifiable {
         let session: SessionState

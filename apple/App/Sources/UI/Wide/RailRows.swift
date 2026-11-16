@@ -145,7 +145,17 @@ struct RailSessions: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var expanded: Set<UUID> = []
+    @Environment(AppServices.self) private var services
+
+    private var expanded: Set<UUID> { services.settings.railOpenProjects }
+
+    /// 回收站里的项目不留在记着的那一份里。
+    private func expand(_ change: (inout Set<UUID>) -> Void) {
+        var open = expanded
+        change(&open)
+        if let live = workspace.catalog?.projects.map(\.id) { open.formIntersection(live) }
+        services.settings.railOpenProjects = open
+    }
 
     var body: some View {
         let rows = SessionRailRows(data, pulse: workspace.pulse)
@@ -175,6 +185,10 @@ struct RailSessions: View {
         }
         .scrollIndicators(.hidden)
         .dynamicTypeSize(...DynamicTypeSize.xxLarge)
+        // 从别处（搜索、看板、Cue 的链接）进了一个项目，它在会话条里也跟着展开：选中的那一行下面就是它的会话。之后收不收由你，不再替你开
+        .onChange(of: workspace.mainRoute) { _, route in
+            if case .project(let id) = route, !expanded.contains(id) { expand { $0.insert(id) } }
+        }
     }
 
     private func cell(_ item: SessionRailRows.Item) -> some View {
@@ -230,9 +244,9 @@ struct RailSessions: View {
     private func projectRow(_ project: Project, running: Int) -> some View {
         RailProjectRow(project: project, running: running, selected: workspace.mainRoute == .project(project.id) && !workspace.cueHome, open: expanded.contains(project.id)) {
             workspace.show(.project(project.id))
-            expanded.insert(project.id)
+            expand { $0.insert(project.id) }
         } toggle: {
-            expanded.formSymmetricDifference([project.id])
+            expand { $0.formSymmetricDifference([project.id]) }
         } start: {
             workspace.openNewSession(in: project.id)
         }

@@ -14,6 +14,12 @@ extension Workspace {
         do { _ = try await services.end(session) } catch { fail(error) }
     }
 
+    /// 让会话休眠的入口（菜单、轻扫、看板上拖回待办）。休眠不丢东西（对话留着，再说话就醒），歇着的当场做、不问；
+    /// 只有它手上正做着事才先问一句（`sessionAsk`）：那一步会被打断。
+    func sleep(_ session: SessionState) {
+        if pulse(of: SessionListItem(state: session)).shown?.agentBusy == true { sessionAsk = .end(session) } else { Task { await end(session) } }
+    }
+
     /// 执行一个异步操作，失败时提示。
     func attempt(_ work: @escaping @MainActor () async throws -> Void) {
         Task {

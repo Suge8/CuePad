@@ -5,7 +5,7 @@ import SwiftUI
 /// 整理（置顶、重命名、标为未读）、收尾。收尾只有一个词：完成——这件事用完了，会话跟着休眠（`Workspace.complete`）。
 /// 休眠只在它归着没做完的任务时另给一项：事还没完，先让 Agent 歇着。没归着任务的不给，完成就是它。
 /// 置顶、重命名、完成与任务是同一组操作：归着任务的落在那件任务上，没归着的活会话当场给它建一件（`Workspace+Adopt`）；
-/// 只归着做完的旧任务的活会话，完成与重命名照没归着的走（同看板上它那张会话卡）。重命名与休眠要再确认，交给窗口上那一格（`Workspace.sessionAsk`）。
+/// 只归着做完的旧任务的活会话，完成与重命名照没归着的走（同看板上它那张会话卡）。重命名要填名字、在忙的休眠要再确认，交给窗口上那一格（`Workspace.sessionAsk`）。
 struct SessionActions: View {
     let session: SessionState
     var task: SessionTask?
@@ -59,10 +59,10 @@ struct SessionActions: View {
         return RowAction(CardMenu.Item.complete.title, icon: CardMenu.Item.complete.icon) { workspace.attempt { try await workspace.finish(agent) } }
     }
 
-    /// 休眠不是删除（对话留着，再说话就醒），用墨色，确认框里再说清后果。归着没做完的任务才给；`recovering`：上一次休眠没成或没确认，会话页就地再来一次。
+    /// 休眠不是删除（对话留着，再说话就醒），用墨色；在忙才问（`Workspace.sleep`）。归着没做完的任务才给；`recovering`：上一次休眠没成或没确认，会话页就地再来一次。
     static func sleep(_ session: SessionState, task: SessionTask? = nil, ending: Bool, recovering: Bool = false, in workspace: Workspace) -> RowAction? {
         guard recovering || session.canEnd && owned(task) else { return nil }
-        return RowAction("休眠", icon: .ended, enabled: !ending) { workspace.sessionAsk = .end(session) }
+        return RowAction("休眠", icon: .ended, enabled: !ending) { workspace.sleep(session) }
     }
 
     /// 轻扫与菜单同一个收尾：没归着任务的是完成，归着的是休眠。
