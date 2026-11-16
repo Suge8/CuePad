@@ -76,7 +76,7 @@ struct CardTile: View {
         .buttonStyle(CardOpenStyle())
         .overlay(alignment: .bottomTrailing) {
             if hovering, !workspace.presses.isSelecting {
-                DeleteCardButton(card: card.id).padding(Spacing.item).transition(.opacity)
+                DeleteCardButton(card: card.id, onNote: true).padding(Spacing.glyph).transition(.opacity)
             }
         }
         .cardPresence(card.id, in: workspace)
@@ -96,6 +96,8 @@ struct CardTile: View {
 
 struct DeleteCardButton: View {
     let card: UUID
+    /// 在灵感卡上：垫一块卡自己的底色，盖住行尾的置顶记号。
+    var onNote = false
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
@@ -103,7 +105,7 @@ struct DeleteCardButton: View {
             let id = card
             workspace.attempt { try await workspace.trash(id) }
         } label: {
-            DeleteGlyph()
+            DeleteGlyph(onNote: onNote)
         }
         .buttonStyle(PressStyle(.button))
         .help("删除（⌘⌫），可撤销")
@@ -114,16 +116,16 @@ struct DeleteCardButton: View {
 private struct DeleteGlyph: View {
     @Environment(\.buttonHovered) private var lit
     @Environment(\.palette) private var palette
+    let onNote: Bool
+    @Environment(\.noteColor) private var color
 
+    /// 与那一行的日期同一种字、坐在行尾：不是浮在上面的一颗白钮。
     var body: some View {
         Image(.trash)
-            .font(Typography.meta.weight(.medium))
-            .foregroundStyle(lit ? palette.failure : palette.ink2)
-            .frame(width: ControlSize.inline.height, height: ControlSize.inline.height)
-            .background(palette.paperLit, in: .circle)
-            .overlay(Circle().strokeBorder(palette.hair))
-            .elevation(.hover)
+            .font(Typography.meta)
+            .foregroundStyle(lit ? palette.failure : palette.ink3)
             .frame(width: ControlSize.target, height: ControlSize.target)
+            .background(onNote ? palette.note(color) : .clear, in: .circle)
             .contentShape(.circle)
     }
 }

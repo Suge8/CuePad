@@ -1,9 +1,9 @@
 import CueStore
 import SwiftUI
 
-/// 项目页的任务区（三端同一份）：不装在纸里，行直接落在桌面上。最上面一行进度（点它去只看这个项目的进展），
-/// 下面依次是没做完的任务、"还有 N 条"、"添加任务"、"已完成 N"，各占一行，与任务行同高、同一种底；整块不宽过阅读栏（`Spacing.reading`）。
-/// 不写"任务"的段标题：行首都是任务圈，不用标题也认得出（读屏念"任务"）。
+/// 项目页的任务区（三端同一份）：不装在纸里，行直接落在桌面上。从上到下是没做完的任务、"还有 N 条"、"添加任务"、"已完成 N"，各占一行，与任务行同高、同一种底；整块不宽过阅读栏（`Spacing.reading`）。
+/// 不写"任务"的段标题、也不写"还剩几件"：下面那几行自己就是，看这个项目的进展在栏头点项目名出的那几项里（`ProjectActions`）。
+/// 行首都是任务圈，不用标题也认得出（读屏念"任务"）。
 /// 收起其余任务一步到位，"收起"那一行留在原来的屏幕位置（`TaskFoldAnchor`：没有能跟着弹簧走的位移），换上来的那几行淡入。
 /// Mac 展开也一步到位、不逐帧排版；手机展开跟着弹簧长开。
 struct ProjectTasks: View {
@@ -34,9 +34,6 @@ struct ProjectTasks: View {
         let counts = data.taskCounts
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 0) {
-                if counts.total > 0, let project = data.project?.id {
-                    TaskMeter(counts: counts) { workspace.showProgress(of: project) }
-                }
                 if !roots.isEmpty {
                     TaskOutline(
                         tree: data.tasks, roots: fold.showsAll ? nil : kept,
@@ -108,65 +105,5 @@ private struct FoldRow: View {
         .buttonStyle(.row)
         .padding(.vertical, TaskMetrics.rowGap)
         .accessibilityValue(open ? "已展开" : "已折叠")
-    }
-}
-
-/// 这个项目的任务做到哪：一颗进度饼（做完的占多少，同 Things 的项目饼）接一句还剩几件。不写"213/217"这种分数：没有单位看不懂，
-/// 长期在用的项目做完的越积越多，比例也一直接近满格；要动手的是剩下那几件。完整的数在悬停提示与读屏里。
-/// 点它去进展页只看这个项目：项目页不另摆"看进展"的钮。
-private struct TaskMeter: View {
-    let counts: TaskCounts
-    let action: () -> Void
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        let open = counts.inProgress + counts.todo
-        Button(action: action) {
-            HStack(spacing: TaskMetrics.columnGap) {
-                pie.frame(width: TaskMetrics.ringColumn)
-                HStack(spacing: Spacing.glyph) {
-                    Text(open > 0 ? "还剩 \(open) 件" : "都做完了").font(Typography.secondary).monospacedDigit().contentTransition(.numericText(value: Double(open)))
-                    Chevron(.forward)
-                }
-                Spacer(minLength: 0)
-            }
-            .foregroundStyle(palette.ink2)
-            .frame(minHeight: TaskMetrics.rowHeight)
-            .contentShape(.rect)
-        }
-        .buttonStyle(.row)
-        .padding(.vertical, TaskMetrics.rowGap)
-        .animation(Motion.nudge, value: counts)
-        .help("已完成 \(counts.done)，共 \(counts.total)。点开看这个项目的进展")
-        .accessibilityLabel("看这个项目的进展")
-        .accessibilityValue("已完成 \(counts.done)，共 \(counts.total)")
-    }
-
-    private var pie: some View {
-        // 比任务圈小一圈：一件没做完时饼是空的，同大就像又一条任务
-        let size = TaskMetrics.ring * 0.7, line = max(1.2, size * 0.1)
-        return Circle().strokeBorder(palette.ink2, lineWidth: line)
-            .overlay { Sector(fraction: Double(counts.done) / Double(counts.total)).fill(palette.ink2).padding(line * 2) }
-            .frame(width: size, height: size)
-            .readerHidden(true)
-    }
-}
-
-/// 从十二点起顺时针的一块扇形。
-nonisolated private struct Sector: Shape {
-    var fraction: Double
-
-    var animatableData: Double {
-        get { fraction }
-        set { fraction = newValue }
-    }
-
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let center = CGPoint(x: rect.midX, y: rect.midY)
-        path.move(to: center)
-        path.addArc(center: center, radius: min(rect.width, rect.height) / 2, startAngle: .degrees(-90), endAngle: .degrees(-90 + 360 * fraction), clockwise: false)
-        path.closeSubpath()
-        return path
     }
 }

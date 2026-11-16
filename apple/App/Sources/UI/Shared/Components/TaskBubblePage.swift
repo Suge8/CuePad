@@ -14,21 +14,23 @@ struct TaskBubblePage: View {
     var body: some View {
         let overview = focus.id == data.goal.id
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 0) {
-                if overview { lane } else { back }
-                Spacer(minLength: 8)
-                CardQuickButtons(card: focus).labelStyle(.iconOnly).font(BubbleMetrics.laneFont).foregroundStyle(palette.ink2)
-                    .frame(width: TaskMetrics.chipTarget, height: TaskMetrics.chipTarget).contentShape(.rect)
-                    .buttonStyle(PressStyle(.button))
-                more
+            // 气泡从标题开始：它在哪一列由圈与底下那一条说，不在标题上面再写一行；只有看子任务时上面多一行回上级
+            if !overview {
+                HStack(spacing: 0) {
+                    back
+                    Spacer(minLength: 8)
+                    actions
+                }
+                .frame(height: TaskMetrics.rowHeight)
             }
-            .frame(height: TaskMetrics.rowHeight)
             HStack(alignment: .top, spacing: BubbleMetrics.titleGap) {
                 // 还没开始、也没有子任务的圈是空的，什么都没说：只留它那一格的位置（标题与正文、底下那一条同一列），做完在"⋯"里
                 GoalCheck(task: focus, subtasks: overview ? data.progress : nil).padding(.top, BubbleMetrics.ringTop)
                     .opacity(ringless ? 0 : 1).allowsHitTesting(!ringless).readerHidden(ringless)
-                TaskEditor(card: focus, editing: editing).padding(.trailing, BubbleMetrics.textTrailing)
+                TaskEditor(card: focus, editing: editing).padding(.trailing, overview ? 0 : BubbleMetrics.textTrailing)
+                if overview { actions }
             }
+            .padding(.top, overview ? Spacing.tight : 0)
             if overview, !data.steps.isEmpty {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(data.steps) { TaskLine(task: $0, step: true) }
@@ -51,13 +53,13 @@ struct TaskBubblePage: View {
 
     private var ringless: Bool { focus.status == .todo && (focus.id != data.goal.id || data.steps.isEmpty) }
 
-    private var lane: some View {
-        HStack(spacing: BubbleMetrics.titleGap) {
-            BoardLaneMark(column: data.column, size: BubbleMetrics.laneMark).frame(width: TaskMetrics.chipTarget)
-            Text(data.column.title).font(BubbleMetrics.laneFont).foregroundStyle(palette.ink2).lineLimit(1)
+    private var actions: some View {
+        HStack(spacing: 0) {
+            CardQuickButtons(card: focus).labelStyle(.iconOnly).font(BubbleMetrics.laneFont).foregroundStyle(palette.ink2)
+                .frame(width: TaskMetrics.chipTarget, height: TaskMetrics.chipTarget).contentShape(.rect)
+                .buttonStyle(PressStyle(.button))
+            more
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityValue(data.progress.map(TaskCopy.progress) ?? "")
     }
 
     private var back: some View {

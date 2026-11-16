@@ -198,9 +198,10 @@ struct Palette {
     }
 
     /// 项目页的灵感卡：纸里调进一点项目色的淡彩纸，与桌面靠色相分开、不靠一块白。三档墨在八种项目色上最差 4.7（浅）、4.6（深）。
-    /// 灰色的项目调不出色相（调出来与桌面同色、卡看不出来），用便签的米黄：牛皮纸（`bubble`）与桌面只差一级明度，一墙都是它显得闷。
+    /// 灰色的项目调不出色相（调出来与桌面同色、卡看不出来），按同样的浓度调进一点沙色：与别的项目的卡一样淡，不单它一个是黄的。
     func note(_ stored: String) -> Color {
-        stored.caseInsensitiveCompare(Self.neutralProject) == .orderedSame ? Color(hex: dark ? 0x38332A : 0xF3EBD6) : paper.mix(with: project(stored), by: dark ? 0.12 : 0.14, in: .device)
+        let hue = stored.caseInsensitiveCompare(Self.neutralProject) == .orderedSame ? Color(hex: dark ? 0xB8A27A : 0x9A8257) : project(stored)
+        return paper.mix(with: hue, by: dark ? 0.12 : 0.14, in: .device)
     }
     /// "添加灵感"那一格的虚线框与它悬停时的淡底。
     func noteEdge(_ stored: String) -> Color { project(stored).opacity(0.55) }

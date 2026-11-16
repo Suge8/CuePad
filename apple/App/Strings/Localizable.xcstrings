@@ -5156,6 +5156,22 @@
         }
       }
     },
+    "下一步 %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Next: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下一步 %@"
+          }
+        }
+      }
+    },
     "下载中 %@" : {
       "localizations" : {
         "en" : {
@@ -12256,38 +12272,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已完成 %lld"
-          }
-        }
-      }
-    },
-    "已完成 %lld，共 %lld" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld of %lld done"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已完成 %1$lld，共 %2$lld"
-          }
-        }
-      }
-    },
-    "已完成 %lld，共 %lld。点开看这个项目的进展" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld of %lld done. Click to see this project's progress"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已完成 %1$lld，共 %2$lld。点开看这个项目的进展"
           }
         }
       }
@@ -19812,18 +19796,18 @@
         }
       }
     },
-    "看这个项目的进展" : {
+    "看进展" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "See This Project’s Progress"
+            "value" : "View Progress"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "看这个项目的进展"
+            "value" : "看进展"
           }
         }
       }
@@ -22764,34 +22748,6 @@
         }
       }
     },
-    "还剩 %lld 件" : {
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld left"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld left"
-                }
-              }
-            }
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "还剩 %lld 件"
-          }
-        }
-      }
-    },
     "还有 %lld 个" : {
       "localizations" : {
         "en" : {
@@ -25048,22 +25004,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "都不是？在下面的回复框里写你的回答"
-          }
-        }
-      }
-    },
-    "都做完了" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "All done"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "都做完了"
           }
         }
       }

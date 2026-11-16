@@ -125,7 +125,6 @@ enum BubbleMetrics {
     static let strong = Typography.secondary.weight(.semibold)
     static let meta = Typography.meta
     static let padding = EdgeInsets(top: Spacing.glyph, leading: Spacing.item, bottom: Spacing.group, trailing: Spacing.glyph)
-    static let laneMark: CGFloat = 16
     static let laneFont = Typography.secondary.weight(.semibold)
     static let editorInset = Spacing.glyph
     static let ringTop: CGFloat = 2
@@ -143,7 +142,6 @@ enum BubbleMetrics {
     static let strong = Typography.secondary.weight(.semibold)
     static let meta = Typography.meta
     static let padding = EdgeInsets(top: Spacing.glyph, leading: Spacing.item, bottom: Spacing.group, trailing: Spacing.item)
-    static let laneMark: CGFloat = 20
     static let laneFont = Typography.secondary.weight(.semibold)
     static let editorInset = Spacing.item
     static let ringTop: CGFloat = 3

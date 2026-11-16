@@ -1,7 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// 项目自己的操作（侧栏与项目列表里的右键、长按，项目页栏头点项目名）。`folders` 为假时不带文件夹那一组：项目页栏头里文件夹另有一颗钮（`ProjectHeadTools`）。
+/// 项目自己的操作（侧栏与项目列表里的右键、长按，项目页栏头点项目名）。`folders` 为假是项目页栏头那一份：不带文件夹那一组（另有一颗钮，`ProjectHeadTools`），多一项去看板只看这个项目——在别处人还没进这个项目。
 struct ProjectActions: View {
     let project: Project
     var folders = true
@@ -13,7 +13,7 @@ struct ProjectActions: View {
             workspace.perform { try await $0.updateProject(id) { $0.isPinned = pinned } }
         }
         Button("编辑名称与图标…", icon: .rename) { workspace.projectForm = .init(project: project) }
-        if folders { ProjectFolderItems(project: project) }
+        if folders { ProjectFolderItems(project: project) } else { Button("看进展", icon: .task) { workspace.showProgress(of: id) } }
         // 默认项目不能删（`CueStore.trashProject` 也拒绝）
         if !project.isDefault {
             Divider()
