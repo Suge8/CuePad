@@ -45,17 +45,21 @@ private let floatingReplyPage = "FloatingReply.page"
 extension View {
     /// 挂在页给这一叠加左右边距之前：铺整宽就又是一刀平切。卡升起时这一叠的高跟着卡的顶边长（`RiseBehind`），托底的上沿也就是卡的上沿。
     /// 否决了把卡坐进输入框、共用一块纸：卡是纸、框是玻璃，合成一块要改设计系统的层，卡的叠边、升起与会话页几张问题卡也都得跟着改。
-    func replyTray() -> some View { modifier(ReplyTray()) }
+    /// 后面没有会滚过来的对话时（Cue 的舞台，后面是天空）不垫：托底只是挡字的，垫在天空上是一整块色块。
+    func replyTray(_ shown: Bool = true) -> some View { modifier(ReplyTray(shown: shown)) }
 }
 
 private struct ReplyTray: ViewModifier {
+    let shown: Bool
     @Environment(\.palette) private var palette
 
     func body(content: Content) -> some View {
         content.background {
-            UnevenRoundedRectangle(topLeadingRadius: Radius.field, topTrailingRadius: Radius.field)
-                .fill(palette.desk)
-                .padding(.bottom, -Spacing.replyBottom)
+            if shown {
+                UnevenRoundedRectangle(topLeadingRadius: Radius.field, topTrailingRadius: Radius.field)
+                    .fill(palette.desk)
+                    .padding(.bottom, -Spacing.replyBottom)
+            }
         }
     }
 }
