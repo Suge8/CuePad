@@ -82,10 +82,14 @@ extension CueStore {
     return try sessionStates(sessions).values.filter(\.canEnd).sorted { $0.sessionID < $1.sessionID }
   }
 
-  /// 做完的这一步绑着会话、而它那件事还有没做完的步骤：会话留给后面的步骤，完成的提示照此说。
+  /// 做完的这一步绑着会话、它那件事还有没做完的步骤，会话也真的留着：完成的提示照此说。完成之后问——
+  /// 后面的步骤各有各的会话时，为这一步开的那个已经随完成自动结束了（`taskSessionCanEnd`，结束请求与完成同一个事务写下），不能再说它留着。
   public func completedTaskKeepsSession(_ task: UUID) throws -> Bool {
-    guard let card = try find(Card.self, task), card.piSessionID != nil, let top = try find(Card.self, try self.top(of: task)) else { return false }
-    return try leaves(of: top).contains { $0.completedAt == nil }
+    guard let card = try find(Card.self, task), let session = card.piSessionID, let top = try find(Card.self, try self.top(of: task)) else { return false }
+    guard try leaves(of: top).contains(where: { $0.completedAt == nil }) else { return false }
+    let ending = try db.first(
+      "SELECT 1 FROM deliveryRequests AS r WHERE r.targetRef = ? AND \(DeliveryRequest.endingSQL("r"))", [session]) { _ in true } ?? false
+    return !ending
   }
 
   /// 有人在用这个会话：在看板上、没在开新会话的叶子绑着它（哪件事的都算），或有话正送进去。Cue 点名收会话（`endIdleSession`）也只认它。

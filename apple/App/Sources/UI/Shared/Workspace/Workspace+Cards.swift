@@ -35,7 +35,12 @@ extension Workspace {
         let archiving = NoticeAction(title: String(localized: "归档")) { try await $0.archive(id) }
         let stays = try await store.completedTaskKeepsSession(id)
         say(stays ? "已完成，会话还在给后面的步骤用" : "已完成", action: archiving, sound: .check)
-        for session in try await store.sessionsFreed(byCompleting: id) { _ = try await services.end(session) }
+        // 一个没发出去（那台 Mac 够不着）不耽误后面的：都试过再报头一个错
+        var failure: (any Error)?
+        for session in try await store.sessionsFreed(byCompleting: id) {
+            do { _ = try await services.end(session) } catch { failure = failure ?? error }
+        }
+        if let failure { throw failure }
     }
 
     /// 完成一件事的入口都先过这里（完成圈、拖到已完成、卡片菜单、看板上完成没绑任务的会话）：要问就交给确认框（`sessionAsk`），答应了才 `proceed`；不用问当场 `proceed`。`proceed` 收到 Workspace 而不自己攥着：问着的时候它挂在 Workspace 上，攥着就是一个环。
