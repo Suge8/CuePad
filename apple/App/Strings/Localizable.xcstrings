@@ -7672,6 +7672,22 @@
         }
       }
     },
+    "分享、移到项目、复制、归档" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Share, move to project, copy, archive"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "分享、移到项目、复制、归档"
+          }
+        }
+      }
+    },
     "分享原图" : {
       "localizations" : {
         "en" : {
@@ -12256,6 +12272,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已完成 %1$lld，共 %2$lld"
+          }
+        }
+      }
+    },
+    "已完成 %lld，共 %lld。点开看这个项目的进展" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld of %lld done. Click to see this project's progress"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已完成 %1$lld，共 %2$lld。点开看这个项目的进展"
           }
         }
       }
@@ -21048,22 +21080,6 @@
         }
       }
     },
-    "置顶、移到项目、复制、归档、删除" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Pin, Move to Project, Copy, Archive, Delete"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "置顶、移到项目、复制、归档、删除"
-          }
-        }
-      }
-    },
     "置顶、编辑名称与图标" : {
       "localizations" : {
         "en" : {
@@ -22744,6 +22760,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "返回编辑"
+          }
+        }
+      }
+    },
+    "还剩 %lld 件" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld left"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld left"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "还剩 %lld 件"
           }
         }
       }
@@ -25004,6 +25048,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "都不是？在下面的回复框里写你的回答"
+          }
+        }
+      }
+    },
+    "都做完了" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All done"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "都做完了"
           }
         }
       }

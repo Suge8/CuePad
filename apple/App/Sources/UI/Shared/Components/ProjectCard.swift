@@ -28,10 +28,11 @@ struct ProjectCard: View {
             .padding(.horizontal, Spacing.group)
             .padding(.vertical, Spacing.item)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(palette.paper)
+            .background(palette.note(project.color))
         }
         .clipShape(.rect(cornerRadius: Radius.card))
-        .paper(wash: palette.paper)
+        // 与点进去之后项目页的灵感卡同一种淡彩纸：在列表里就认得出是哪个项目
+        .paper(wash: palette.note(project.color))
         .contentShape(.rect(cornerRadius: Radius.card))
         .accessibilityElement(children: .combine)
     }

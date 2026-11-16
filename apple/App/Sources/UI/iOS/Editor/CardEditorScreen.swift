@@ -62,7 +62,8 @@ struct CardEditorScreen: View {
     }
 
     /// 从第一帧就在（卡片还没读到时禁用），随放大过渡一起出现，不在过渡结束后才弹出来。
-    private var actions: some View {
+    @ViewBuilder private var actions: some View {
+        if let card = data?.card { CardQuickButtons(card: card) }
         Menu("更多", icon: .more) {
             if let card = data?.card, let editing {
                 InspirationEditorActions(card: card, editing: editing, sharing: inspirationSharing)

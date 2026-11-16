@@ -131,7 +131,8 @@ private struct FloatingHeader<Center: View, Trailing: View>: ViewModifier {
                             // 玻璃自己画，不再套一层系统的玻璃底（玻璃不叠玻璃）
                             .sharedBackgroundVisibility(.hidden)
                         if Trailing.self != EmptyView.self {
-                            ToolbarItem(placement: .primaryAction) { trailing }
+                            // 成组：单个 ToolbarItem 里放几颗钮，系统只留第一颗
+                            ToolbarItemGroup(placement: .primaryAction) { trailing }
                         }
                     }
                     // 让开是整条导航栏一起淡（返回钮、中间、右边连同系统给的玻璃）；它淡到透明就不接点按，点让开的那一条唤出由内容顶上这一条接

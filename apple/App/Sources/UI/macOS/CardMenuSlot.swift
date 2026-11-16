@@ -2,7 +2,7 @@
 import CueStore
 import SwiftUI
 
-/// 编辑浮层开着时栏头右端的"⋯"：那张卡的操作（iPad 的编辑页自己那一排有，`HeaderHost.panel`）。卡还没读到时钮在、置灰。
+/// 编辑浮层开着时栏头右端的置顶、删除与"⋯"：那张卡的操作（iPad 的编辑页自己那一排有，`HeaderHost.panel`）。卡还没读到时钮在、置灰。
 struct CardMenuSlot: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -12,14 +12,17 @@ struct CardMenuSlot: View {
 
     var body: some View {
         let card = (opened ?? nil).flatMap { $0.id == workspace.openCard ? $0 : nil }
-        Menu { if let card { items(card).labelStyle(.titleAndIcon) } } label: { Image(.more) }
-            .menuStyle(.button).menuIndicator(.hidden)
+        HStack(spacing: Spacing.tight) {
+            if let card { CardQuickButtons(card: card).labelStyle(.iconOnly) }
+            Menu { if let card { items(card).labelStyle(.titleAndIcon) } } label: { Image(.more) }
+                .menuStyle(.button).menuIndicator(.hidden)
+                .disabled(card == nil)
+                .help("分享、移到项目、复制、归档")
+                .accessibilityLabel("更多")
+        }
             .buttonStyle(ControlButtonStyle(kind: .circular))
             .fixedSize()
             .padding(.leading, Spacing.item)
-            .disabled(card == nil)
-            .help("置顶、移到项目、复制、归档、删除")
-            .accessibilityLabel("更多")
             .observing(services.store, id: workspace.openCard, into: $opened, onError: workspace.fail) { [id = workspace.openCard] store in
                 try id.flatMap { try store.card($0) }
             }

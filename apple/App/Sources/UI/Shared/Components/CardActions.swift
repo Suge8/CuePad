@@ -45,6 +45,20 @@ struct CardActions: View {
     }
 }
 
+/// `CardMenu.quick` 的那几颗图标钮，长什么样由所在的那一排定。
+struct CardQuickButtons: View {
+    let card: Card
+    @Environment(Workspace.self) private var workspace
+
+    var body: some View {
+        ForEach(CardMenu.quick(for: card), id: \.self) { item in
+            if let run = item.run(on: card, in: workspace) {
+                Button(item.title, icon: item.icon, action: run).help(Text(item.title))
+            }
+        }
+    }
+}
+
 extension CardMenu.Item {
     var title: LocalizedStringResource {
         switch self {

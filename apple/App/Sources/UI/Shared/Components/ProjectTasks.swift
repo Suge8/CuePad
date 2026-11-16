@@ -1,8 +1,8 @@
 import CueStore
 import SwiftUI
 
-/// 项目页的任务区（三端同一份）：不装在纸里，行直接落在桌面上。最上面一条进度（点它去只看这个项目的进展），
-/// 下面依次是没做完的任务、"还有 N 条"、"添加任务"、"已完成 N"，各占一行，与任务行同高、同一种底。
+/// 项目页的任务区（三端同一份）：不装在纸里，行直接落在桌面上。最上面一行进度（点它去只看这个项目的进展），
+/// 下面依次是没做完的任务、"还有 N 条"、"添加任务"、"已完成 N"，各占一行，与任务行同高、同一种底；整块不宽过阅读栏（`Spacing.reading`）。
 /// 不写"任务"的段标题：行首都是任务圈，不用标题也认得出（读屏念"任务"）。
 /// 收起其余任务一步到位，"收起"那一行留在原来的屏幕位置（`TaskFoldAnchor`：没有能跟着弹簧走的位移），换上来的那几行淡入。
 /// Mac 展开也一步到位、不逐帧排版；手机展开跟着弹簧长开。
@@ -33,10 +33,10 @@ struct ProjectTasks: View {
         let hidden = roots.count - kept.count
         let counts = data.taskCounts
         VStack(alignment: .leading, spacing: 0) {
-            if counts.total > 0, let project = data.project?.id {
-                TaskMeter(counts: counts) { workspace.showProgress(of: project) }.padding(.bottom, Spacing.tight)
-            }
             VStack(alignment: .leading, spacing: 0) {
+                if counts.total > 0, let project = data.project?.id {
+                    TaskMeter(counts: counts) { workspace.showProgress(of: project) }
+                }
                 if !roots.isEmpty {
                     TaskOutline(
                         tree: data.tasks, roots: fold.showsAll ? nil : kept,
@@ -61,6 +61,8 @@ struct ProjectTasks: View {
             }
             .padding(.leading, -TaskMetrics.ringInset)
         }
+        // 宽窗口里不横着铺满：标题与行尾的时间、"开始"要在一眼之内
+        .frame(maxWidth: Spacing.reading, alignment: .topLeading)
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("任务")
@@ -109,43 +111,59 @@ private struct FoldRow: View {
     }
 }
 
-/// 这个项目的任务做到哪：做完的一截是墨、在做的一截是靛青（正在发生的事）、其余是轨道；数写做完的与总数。
+/// 这个项目的任务做到哪：一颗进度饼（做完的占多少，同 Things 的项目饼）接一句还剩几件。不写"213/217"这种分数：没有单位看不懂，
+/// 长期在用的项目做完的越积越多，比例也一直接近满格；要动手的是剩下那几件。完整的数在悬停提示与读屏里。
 /// 点它去进展页只看这个项目：项目页不另摆"看进展"的钮。
 private struct TaskMeter: View {
     let counts: TaskCounts
     let action: () -> Void
     @Environment(\.palette) private var palette
 
-    private static let height: CGFloat = 6
-    /// 条不随页宽拉长：宽屏上一整行的墨条比下面的任务都重。
-    private static let width: CGFloat = 240
-
     var body: some View {
-        let total = CGFloat(counts.total), done = CGFloat(counts.done), moving = CGFloat(counts.done + counts.inProgress)
+        let open = counts.inProgress + counts.todo
         Button(action: action) {
-            HStack(spacing: Spacing.group) {
-                Capsule().fill(palette.track).frame(maxWidth: Self.width).frame(height: Self.height)
-                    .overlay(alignment: .leading) {
-                        GeometryReader { geometry in
-                            let width = geometry.size.width
-                            ZStack(alignment: .leading) {
-                                if moving > done { Capsule().fill(palette.signature).frame(width: max(width * moving / total, Self.height)) }
-                                if done > 0 { Capsule().fill(palette.ink).frame(width: max(width * done / total, Self.height)) }
-                            }
-                        }
-                    }
-                    .animation(Motion.nudge, value: counts)
-                Text(verbatim: "\(counts.done)/\(counts.total)").font(TaskMetrics.caption).monospacedDigit()
+            HStack(spacing: TaskMetrics.columnGap) {
+                pie.frame(width: TaskMetrics.ringColumn)
+                Text(open > 0 ? "还剩 \(open) 件" : "都做完了").font(Typography.body).monospacedDigit().contentTransition(.numericText(value: Double(open)))
                 Chevron(.forward)
                 Spacer(minLength: 0)
             }
-            .foregroundStyle(palette.ink3)
+            .foregroundStyle(palette.ink2)
             .frame(minHeight: TaskMetrics.rowHeight)
             .contentShape(.rect)
         }
         .buttonStyle(.row)
-        .help("看这个项目的进展")
+        .padding(.vertical, TaskMetrics.rowGap)
+        .animation(Motion.nudge, value: counts)
+        .help("已完成 \(counts.done)，共 \(counts.total)。点开看这个项目的进展")
         .accessibilityLabel("看这个项目的进展")
         .accessibilityValue("已完成 \(counts.done)，共 \(counts.total)")
+    }
+
+    private var pie: some View {
+        let size = TaskMetrics.ring, line = max(1.4, size * 0.095)
+        return Circle().stroke(palette.ink2, lineWidth: line)
+            .overlay { Sector(fraction: Double(counts.done) / Double(counts.total)).fill(palette.ink2).padding(line * 2) }
+            .frame(width: size * 0.88, height: size * 0.88)
+            .readerHidden(true)
+    }
+}
+
+/// 从十二点起顺时针的一块扇形。
+nonisolated private struct Sector: Shape {
+    var fraction: Double
+
+    var animatableData: Double {
+        get { fraction }
+        set { fraction = newValue }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        path.move(to: center)
+        path.addArc(center: center, radius: min(rect.width, rect.height) / 2, startAngle: .degrees(-90), endAngle: .degrees(-90 + 360 * fraction), clockwise: false)
+        path.closeSubpath()
+        return path
     }
 }

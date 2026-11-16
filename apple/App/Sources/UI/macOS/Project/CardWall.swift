@@ -26,28 +26,32 @@ private struct CardFace: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        let text = CardText(card.body)
+        let text = CardText(card.body), image = text.images.first
         VStack(alignment: .leading, spacing: Spacing.item) {
-            if let image = text.images.first {
-                Thumbnail(hash: image, height: 118).padding(-Spacing.item).padding(.bottom, Spacing.item)
+            if let image {
+                Thumbnail(hash: image, height: NoteTile.thumbnail).padding(-Spacing.item).padding(.bottom, Spacing.item)
             }
             HStack(alignment: .firstTextBaseline, spacing: Spacing.glyph) {
                 Text(text.label)
                     .font(Typography.bodyStrong)
                     .foregroundStyle(text.title.isEmpty ? palette.ink3 : palette.ink)
-                    .lineLimit(2)
+                    .lineLimit(image == nil ? NoteTile.titleLines : 1)
                 Spacer(minLength: 0)
                 AgentDot(card: card.id)
             }
-            if !text.preview.isEmpty {
+            // 摘要拿剩下的高，放不下的行截掉；日期那一行贴底
+            if image == nil, !text.preview.isEmpty {
                 Text(VariableText.styled(text.preview, palette))
                     .font(Typography.body).lineSpacing(Typography.lineSpacing).foregroundStyle(palette.ink2)
-                    .lineLimit(text.images.isEmpty ? CardText.previewLines : 2)
+                    .lineLimit(CardText.previewLines)
+                    .frame(maxHeight: .infinity, alignment: .top)
+            } else {
+                Spacer(minLength: 0)
             }
             CardMeta(card: card, text: text, lastTarget: lastTarget, floated: floated, font: Typography.meta)
-                .padding(.top, Spacing.hair)
         }
         .padding(Spacing.block)
+        .frame(height: NoteTile.height)
     }
 }
 

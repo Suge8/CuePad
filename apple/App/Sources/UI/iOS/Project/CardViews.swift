@@ -11,33 +11,38 @@ struct CardTileView: View {
     @Environment(\.palette) private var palette
     @Environment(\.zoomNamespace) private var zoom
     @Environment(\.noteColor) private var color
+    @ScaledMetric(relativeTo: .body) private var height = NoteTile.height
 
     var body: some View {
         let card = entry.card, text = entry.text
         NavigationLink(value: Route.card(card.id)) {
+            let image = text.images.first
             VStack(alignment: .leading, spacing: Spacing.tight) {
-                if let image = text.images.first {
-                    Thumbnail(hash: image, height: 96, cornerRadius: Radius.block).padding(.bottom, Spacing.tight)
+                if let image {
+                    Thumbnail(hash: image, height: NoteTile.thumbnail, cornerRadius: Radius.block).padding(.bottom, Spacing.tight)
                 }
                 HStack(alignment: .firstTextBaseline, spacing: Spacing.tight) {
                     Text(text.label)
                         .font(Typography.secondary.weight(.semibold))
                         .foregroundStyle(text.title.isEmpty ? palette.ink3 : palette.ink)
-                        .lineLimit(3)
+                        .lineLimit(image == nil ? NoteTile.titleLines : 1)
                     Spacer(minLength: 0)
                     AgentDot(card: card.id).padding(.vertical, -AgentDot.overhang).padding(.trailing, -Self.dotTuck)
                 }
-                if !text.preview.isEmpty {
+                // 摘要拿剩下的高，放不下的行截掉；日期那一行贴底
+                if image == nil, !text.preview.isEmpty {
                     Text(VariableText.styled(text.preview, palette))
                         .font(Typography.meta).foregroundStyle(palette.ink2)
-                        .lineLimit(text.images.isEmpty ? CardText.previewLines : 2)
+                        .lineLimit(CardText.previewLines)
+                        .frame(maxHeight: .infinity, alignment: .top)
+                } else {
+                    Spacer(minLength: 0)
                 }
                 CardMeta(card: card, text: text, lastTarget: lastTarget, floated: floated)
-                    .padding(.top, Spacing.tight)
             }
             .multilineTextAlignment(.leading)
             .padding(Spacing.group)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .leading).frame(height: height)
             .note(color)
             .contentShape(.rect(cornerRadius: Radius.card))
         }

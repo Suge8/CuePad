@@ -17,6 +17,9 @@ struct TaskBubblePage: View {
             HStack(spacing: 0) {
                 if overview { lane } else { back }
                 Spacer(minLength: 8)
+                CardQuickButtons(card: focus).labelStyle(.iconOnly).font(BubbleMetrics.laneFont).foregroundStyle(palette.ink2)
+                    .frame(width: TaskMetrics.chipTarget, height: TaskMetrics.chipTarget).contentShape(.rect)
+                    .buttonStyle(PressStyle(.button))
                 more
             }
             .frame(height: TaskMetrics.rowHeight)

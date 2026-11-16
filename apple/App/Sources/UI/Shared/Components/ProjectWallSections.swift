@@ -92,6 +92,7 @@ struct ProjectWallSections<Tile: View>: View {
         #if os(iOS)
         .padding(.horizontal, -OlderRow.inset)
         #endif
+        .frame(maxWidth: Spacing.reading, alignment: .leading)
     }
 }
 
@@ -142,6 +143,7 @@ struct OlderGroupHeader: View {
             .contentShape(.rect)
         }
         .buttonStyle(PressStyle())
+        .frame(maxWidth: Spacing.reading, alignment: .leading)
         .disabled(!collapsible)
         .accessibilityAddTraits(collapsible ? [] : .isHeader)
         .accessibilityValue(collapsible ? (open ? "已展开" : "已折叠") : "")

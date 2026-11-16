@@ -10,9 +10,8 @@ struct AddIdeaTile: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hovering = false
 
+    @ScaledMetric(relativeTo: .body) private var height = NoteTile.height
     private static let mascot: CGFloat = 56
-    /// 与一张两三行字的灵感卡差不多高：墙上只有它时不是一条扁的。
-    private static let minHeight: CGFloat = 132
     private static let hop: CGFloat = 4
     private static let dash = StrokeStyle(lineWidth: 1.5, lineCap: .round, dash: [5, 6])
 
@@ -27,7 +26,7 @@ struct AddIdeaTile: View {
                 Text("添加灵感").font(Typography.bodyStrong).foregroundStyle(palette.ink2)
             }
             .padding(Spacing.block)
-            .frame(maxWidth: .infinity, minHeight: Self.minHeight)
+            .frame(maxWidth: .infinity).frame(height: height)
             .background { if hovering { shape.fill(palette.noteHint(color)).transition(.opacity) } }
             .overlay { shape.strokeBorder(palette.noteEdge(color), style: Self.dash) }
             .contentShape(shape)
@@ -40,6 +39,19 @@ struct AddIdeaTile: View {
         #endif
         .animation(Motion.nudge, value: hovering)
     }
+}
+
+/// 灵感墙是等高的规整网格（同 Craft、Notion 的画廊）：每格一样高，标题至多两行、摘要填满剩下的高、日期那一行贴底；带图的格图在上、不写摘要。
+/// 高矮不一的瀑布流只适合图片比例差别很大的内容，文字卡排出来参差、扫读时眼睛要上下找。手机上这个高随字号放大。
+enum NoteTile {
+    #if os(macOS)
+    static let height: CGFloat = 156
+    static let thumbnail: CGFloat = 68
+    #else
+    static let height: CGFloat = 164
+    static let thumbnail: CGFloat = 64
+    #endif
+    static let titleLines = 2
 }
 
 extension EnvironmentValues {
