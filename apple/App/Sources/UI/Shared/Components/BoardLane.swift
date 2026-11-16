@@ -128,7 +128,8 @@ struct BoardColumnHeader: View {
         .task(id: wins) {
             guard wins > 0 else { return }
             drawn = 0
-            try? await Task.sleep(for: Motion.Write.delay)
+            // 又来一件时这一次被取消：不写回，留给新的那一次从头写
+            guard (try? await Task.sleep(for: Motion.Write.delay)) != nil else { return }
             withAnimation(Motion.Write.stroke) { drawn = 1 }
         }
     }

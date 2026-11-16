@@ -112,8 +112,8 @@ extension CueStore {
   }
 
   /// 你已经叫它歇了（结束在路上：点了休眠，或完成带出来的）的会话不再算等你，不等那台 Mac 做完——不然点了完成它还挂在等你里，
-  /// 像没点上。没结束成（失败）的回到等你。
-  private func notEnding(_ sessions: [SessionState]) throws -> [SessionState] {
+  /// 像没点上。没结束成（失败）的回到等你。等你的通知也问它（`push`）：列表里没有的不该还来叫你。
+  func notEnding(_ sessions: [SessionState]) throws -> [SessionState] {
     guard !sessions.isEmpty else { return sessions }
     let ending = Set(try db.query(
       "SELECT r.targetRef FROM deliveryRequests AS r WHERE r.targetRef IN (SELECT value FROM json_each(?)) AND \(DeliveryRequest.endingSQL("r"))",

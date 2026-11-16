@@ -12376,18 +12376,18 @@
         }
       }
     },
-    "已完成，会话还有别的事在用" : {
+    "已完成，会话还在用，没有休眠" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Completed. The session is still in use and stays awake."
+            "value" : "Completed. The session is still in use and wasn't put to sleep."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "已完成，会话还有别的事在用"
+            "value" : "已完成，会话还在用，没有休眠"
           }
         }
       }

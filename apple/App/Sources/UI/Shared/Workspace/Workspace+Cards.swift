@@ -35,7 +35,7 @@ extension Workspace {
         let archiving = NoticeAction(title: String(localized: "归档")) { try await $0.archive(id) }
         let away = Set(unreached.map(\.sessionID))
         let stays = try await store.sessionsKept(afterCompleting: id).contains { !away.contains($0.sessionID) }
-        say(stays ? "已完成，会话还有别的事在用" : "已完成", action: archiving, sound: .check)
+        say(stays ? "已完成，会话还在用，没有休眠" : "已完成", action: archiving, sound: .check)
         // 手里那条"离开"可能已经过时：这几个照点名结束的路再试（先拉一次同步）。一个没发出去不耽误后面的，都试过再报头一个错
         var failure: (any Error)?
         for session in unreached {
