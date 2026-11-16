@@ -13,6 +13,7 @@ struct ProjectWallSections<Tile: View>: View {
     @ViewBuilder let tile: (CardEntry) -> Tile
     @State private var expanded: Set<OlderGroup.Period> = []
     @State private var adding = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     #if os(iOS)
     /// 刚点"添加灵感"建出来的那一条：它落到墙上之前，编辑页的放大从虚线那一格出发、空着返回也收回这一格（空白的不留，`dropIfBlank`）。
     @State private var born: UUID?
@@ -33,7 +34,7 @@ struct ProjectWallSections<Tile: View>: View {
     }
 
     var body: some View {
-        let lastTarget = data.lastTarget
+        let lastTarget = data.lastTarget, shown = (arrangement.pinned + arrangement.wall).filter { data.entries[$0] != nil }
         LazyVStack(alignment: .leading, spacing: 0) {
             MasonryLayout(minColumnWidth: metrics.minColumnWidth, maxColumns: metrics.maxColumns, spacing: metrics.wallSpacing) {
                 AddIdeaTile(action: add)
@@ -41,8 +42,10 @@ struct ProjectWallSections<Tile: View>: View {
                     // 平时登记在一个不会有卡用的 id 上：这一格的身份不随登记换
                     .zoomSource(born.flatMap { data.entries[$0] == nil ? $0 : nil } ?? Project.defaultID, in: zoom)
                     #endif
-                ForEach((arrangement.pinned + arrangement.wall).compactMap { data.entries[$0] }) { tile($0).transition(.opacity) }
+                ForEach(shown.compactMap { data.entries[$0] }) { tile($0).transition(.opacity) }
             }
+            // 加一张、删一张，其余的卡滑到新位置，不是整面墙闪一下换好
+            .animation(Motion.spatial(Motion.travel, reduceMotion: reduceMotion), value: shown)
             .environment(\.noteColor, data.project?.color ?? Palette.neutralProject)
             .padding(.bottom, metrics.sectionGap)
             #if os(macOS)
@@ -336,7 +339,8 @@ struct ProjectColumns: Layout {
 
     private func frames(_ subviews: Subviews, width: CGFloat) -> [CGRect] {
         if subviews.count == 2, side ?? (width >= Self.sideBySide) {
-            let lead = min(480, max(380, width * 0.36)), rest = width - lead - Self.gutter
+            // 任务栏只占三成：标题多是一行短字，再宽中间就空出一条沟，两块像不相干
+            let lead = min(400, max(320, width * 0.3)), rest = width - lead - Self.gutter
             return [
                 CGRect(x: 0, y: 0, width: lead, height: subviews[0].sizeThatFits(ProposedViewSize(width: lead, height: nil)).height),
                 CGRect(x: lead + Self.gutter, y: 0, width: rest, height: subviews[1].sizeThatFits(ProposedViewSize(width: rest, height: nil)).height),
