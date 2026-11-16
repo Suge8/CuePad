@@ -27,6 +27,9 @@ struct SessionRailCell: View {
     @Environment(\.palette) private var palette
     @Environment(Workspace.self) private var workspace
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    #if os(macOS)
+    @State private var hovering = false
+    #endif
 
     var body: some View {
         Group {
@@ -41,6 +44,14 @@ struct SessionRailCell: View {
             }
         }
         .padding(.leading, compact ? Self.indent : 0)
+        #if os(macOS)
+        // 叠在卡上、不放进卡里：卡整张是一颗钮，钮里不套钮
+        .overlay(alignment: .topTrailing) {
+            if let finishing { quick(finishing.title, finishing.icon, action: finishing.run).padding(Spacing.tight).transition(.opacity) }
+        }
+        .onHover { hovering = $0 }
+        .animation(Motion.fade, value: hovering)
+        #endif
         .relaySpot(session: item.id, row: .rail)
         .accessibilityAddTraits(selected ? .isSelected : [])
         .accessibilityLabel(item.name)
@@ -120,13 +131,10 @@ struct SessionRailCell: View {
                     SessionRailReadout(item: item)
                 }
                 #if os(macOS)
-                // 最常做的两件不必右键，悬停的行尾露出来：并排打开（主区开着别的会话时；另有 ⌘ 点）与完成（同菜单那一项，在忙时照样先问）
-                .hoverReveal(when: besides || complete != nil) {
-                    HStack(spacing: 0) {
-                        if besides { quick("并排打开", .rightColumn) { open(item.session, .beside) } }
-                        if let complete { quick(complete.title, complete.icon, action: complete.run) }
-                    }
-                    .padding(.horizontal, Spacing.tight)
+                // 并排的看得见的入口（另有 ⌘ 点与右键）：主区开着别的会话时，悬停的行尾露出来。
+                // 完成不放在这里：项目下面列的多半还在做，对勾摆在行尾是请人误点；它在等你回话的那张卡上（`card`）
+                .hoverReveal(when: besides) {
+                    quick("并排打开", .rightColumn) { open(item.session, .beside) }.padding(.horizontal, Spacing.tight)
                 }
                 #endif
             } else {
@@ -136,7 +144,16 @@ struct SessionRailCell: View {
         .contentShape(.rect)
     }
 
-    private var complete: RowAction? { SessionActions.complete(item.session, task: item.task, in: workspace) }
+    /// 新回复的卡上指针停着时，右上角等了多久那一格换成对勾：它说完了、在等你，这时才是定"用完了"的时候（同看板那张卡回复框旁的完成，`WaitAnswer`）。
+    /// 拍板的不给：它问的那句还没答。触屏没有悬停，完成在长按菜单里。
+    private var finishing: RowAction? {
+        #if os(macOS)
+        guard hovering, !compact, form == .wide, item.waiting == .awaitsReply else { return nil }
+        return SessionActions.complete(item.session, task: item.task, in: workspace)
+        #else
+        return nil
+        #endif
+    }
 
     #if os(macOS)
     private func quick(_ title: LocalizedStringResource, _ icon: Icon, action: @escaping () -> Void) -> some View {
@@ -163,7 +180,7 @@ struct SessionRailCell: View {
                 if let waiting = item.waiting { StateGlyph(status: waiting).font(Glyph.small).frame(width: 11) }
                 name.font(Typography.body)
                 Spacer(minLength: 0)
-                SessionRailTime(item: item).font(Typography.caption).fixedSize()
+                SessionRailTime(item: item).font(Typography.caption).fixedSize().opacity(finishing == nil ? 1 : 0)
             }
             HStack(spacing: Spacing.tight) {
                 if let project {

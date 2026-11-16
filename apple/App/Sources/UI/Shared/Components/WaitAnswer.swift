@@ -83,7 +83,14 @@ private struct SessionAnswer: View {
         case nil:
             // 看板上待回复的卡（它没在问，只是说完了等你回话）当场回一句；问了应用里答不了的题才只给打开会话
             if leading, session.question == nil {
-                WaitReply(session: session, prompt: String(localized: "回复"))
+                // 它说完了等你：要么再回一句，要么这件事用完了。两条路摆在一起，不用去别处找完成
+                VStack(alignment: .leading, spacing: Spacing.glyph) {
+                    WaitReply(session: session, prompt: String(localized: "回复"))
+                    // 回复框下面单独一行：并排会把窄卡里的回复框挤成一字一行
+                    Button(CardMenu.Item.complete.title, icon: CardMenu.Item.complete.icon, action: finish)
+                        .labelStyle(.titleAndIcon)
+                        .buttonStyle(ControlButtonStyle(kind: .secondary, size: .compact))
+                }
             } else if leading {
                 // 卡上只这一件能做的事：铺满卡宽、字居中，同选项那一行的样子
                 Button { workspace.openSession(session.id, sessionID: session.sessionID) } label: {
@@ -95,11 +102,20 @@ private struct SessionAnswer: View {
                 .buttonStyle(PressStyle(.card))
             } else if !replyElsewhere {
                 chips {
+                    if session.question == nil {
+                        Button(CardMenu.Item.complete.title, icon: CardMenu.Item.complete.icon, action: finish).buttonStyle(ControlButtonStyle(kind: .secondary))
+                    }
                     Button("打开会话") { workspace.openSession(session.id, sessionID: session.sessionID) }
                         .buttonStyle(ControlButtonStyle(kind: .secondary))
                 }
             }
         }
+    }
+
+    /// 同会话菜单的完成（`Workspace.finish`）：归着任务的完成那件，没归着的当场建一件，会话跟着休眠。
+    private func finish() {
+        let agent = SessionListItem(state: session)
+        workspace.attempt { try await workspace.finish(agent) }
     }
 
     private func chips(@ViewBuilder _ content: () -> some View) -> some View {
