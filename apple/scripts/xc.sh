@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # CuePad 的构建、测试、截图、测量、发布只走这里（Agent 绕开它直接调 xcodebuild、swift build/test、simctl 开关机，
 # 或自己起停 CuePad，会被 .pi/extensions/xc-guard.ts 拦下）。
-#   xc.sh check                                     提交前的门：lint.sh、运行时编的着色器（shaders.swift）、CuePadKit 的 swift build、iOS 编译（连测试目标）、Mac App 连测试目标的整模块编译（只在 Mac 编的测试，如 #if os(macOS) 的，警告也在这里拦）；
+#   xc.sh check [sources|kit|mac|ios]                 提交前的门：默认全跑；sources 查 lint 与运行时着色器，kit 查 SwiftPM 构建，mac 查整模块编译，ios 查测试构建与字符串。CI 按职责分开，iOS 检查后复用产物跑测试；
 #                                                   自己的 Swift 源文件（App、CuePadKit）有一条编译警告就失败，第三方与生成的代码不算（_build.sh 的 own_warnings）
 #   xc.sh signoff                                   合并前的门：本机跑 check、test kit、test mac，全过才给 HEAD 这个提交记 GitHub 状态，主干规则认它（signoff.sh 头注释）
 #   xc.sh build <mac|ios|ipad>
@@ -88,10 +88,25 @@ case "$cmd" in
     # 本检出上一个 run 的实例租着一台模拟器：先收掉再排队，免得槽位被自己占满
     if [ "$cmd" = run ] && [ "$platform" != mac ]; then python3 "$APPLE_DIR/scripts/app.py" stop sim >/dev/null; fi
     case "$platform" in ios) xc_enter "$CUEPAD_IOS_DEVICE" "$0" "$@" ;; ipad) xc_enter "$CUEPAD_IPAD_DEVICE" "$0" "$@" ;; *) xc_enter "" "$0" "$@" ;; esac ;;
-  check|build|build-perf) xc_enter "" "$0" "$@" ;;  # build-perf：perf 的构建段，内部用
+  check)
+    case "$platform" in ""|sources|kit|mac|ios) ;; *) echo "用法：$0 check [sources|kit|mac|ios]" >&2; exit 2 ;; esac
+    xc_enter "" "$0" "$@"
+    case "$platform" in
+      "")
+        "$0" check sources
+        "$0" check kit & kit=$!
+        "$0" check mac & mac=$!
+        status=0
+        "$0" check ios || status=$?
+        wait "$kit" || status=$?
+        wait "$mac" || status=$?
+        exit "$status" ;;
+      sources) check_sources; exit ;;
+      kit) kit_build; no_warnings "$APPLE_DIR/CuePadKit/.build/warnings"; exit ;;
+    esac ;;
+  build|build-perf) xc_enter "" "$0" "$@" ;;  # build-perf：perf 的构建段，内部用
   *) echo "$USAGE" >&2; exit 2 ;;
 esac
-[ "$cmd" != check ] || platform=ios
 if [ "$cmd" = perf ]; then
   perf_kind=interact perf_args=("${@:3}")
   case "$platform" in idle|launch) perf_kind=$platform platform="${3:-}" perf_args=("${@:4}") ;; esac
@@ -104,6 +119,10 @@ if [ "$cmd" = perf ] || [ "$cmd" = build-perf ]; then
   # Release 配置在工程里指定了发布证书，换回 ad-hoc；关掉 hardened runtime：ad-hoc 签名的进程加载不了别家团队签名的 Sparkle
   # shellcheck disable=SC2016 # $(inherited) 由 xcodebuild 展开
   build_settings=('SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) DEBUG' CODE_SIGN_IDENTITY=- ENABLE_HARDENED_RUNTIME=NO)
+elif [ "$cmd" = check ] && [ "$platform" = mac ]; then
+  # 部分并发诊断只在整模块编译报；产物独立于增量测试构建，不能为了去重删掉这一遍。
+  DERIVED="$APPLE_DIR/.derived-wmo"; configuration=Debug
+  build_settings=(SWIFT_COMPILATION_MODE=wholemodule CODE_SIGNING_ALLOWED=NO)
 else
   DERIVED="$APPLE_DIR/.derived"; configuration=Debug; build_settings=()
 fi
@@ -122,7 +141,7 @@ esac
 # 写在包里而不按启动时的环境切换：脚本直接起的实例不带那些环境变量，进了程序坞的图标退出后又可能撤不掉。
 # （程序坞里成堆的 CuePad 图标另有来源：挂在正式版底下的 Agent 跑的工具，见 CuePadKit 的 ChildProcess 头注释）
 # 人用 Xcode ⌘R 起的不经这里，照常进程序坞；正式版由 release-mac.sh 构建
-if [ "$platform" = mac ]; then build_settings+=(INFOPLIST_KEY_LSUIElement=YES); fi
+if [ "$platform" = mac ] && [ "$cmd" != check ]; then build_settings+=(INFOPLIST_KEY_LSUIElement=YES); fi
 # CUEPAD_SIGN=development：ad-hoc 构建完只给主程序换签名（provision.py resign）。不在 xcodebuild 里换：
 # 签名设置覆盖到每个 target，框架与命令行工具会要团队、bundle id；内嵌的仍是 ad-hoc，没开 Hardened Runtime 就照常加载。
 sign_development() {
@@ -135,27 +154,9 @@ sign_development() {
 
 case "$cmd" in
   check)
-    "$APPLE_DIR/scripts/lint.sh"
-    shaders="$APPLE_DIR/.derived/shaders" shader_sources=()
-    if [ ! -x "$shaders" ] || [ "$APPLE_DIR/scripts/shaders.swift" -nt "$shaders" ]; then mkdir -p "$APPLE_DIR/.derived"; xcrun swiftc -O "$APPLE_DIR/scripts/shaders.swift" -o "$shaders"; fi
-    while IFS= read -r source; do shader_sources+=("$source"); done < <(rg -l --type swift metal_stdlib "$APPLE_DIR/App")
-    "$shaders" "${shader_sources[@]}"
-    # Kit 的 macOS 构建（CueBridge、命令行工具只在这里编到）与 iOS 编译产物目录不同，并行跑
-    kit_build & kit=$!
-    # 归档（Release）是整模块编译，Debug 是按文件分批的增量编译：同一份源码，有些诊断（如 nonisolated 类型里静态存非 Sendable 值）只有整模块才报，
-    # 整模块编译与优化档位无关（-Onone 同样报），所以 Mac App 用 Debug 加整模块编一遍（不签名）。Mac 独有的代码也只在这里编到，连测试目标（iOS 那份编不到 #if os(macOS) 的测试，它们的警告只在这里报）。产物与 Debug 增量构建分开，免得交替时互相作废
-    (
-      platform=mac; DERIVED="$APPLE_DIR/.derived-wmo"; destination='platform=macOS,arch=arm64'; app="$DERIVED/Build/Products/Debug/CuePad.app"
-      build_settings=(SWIFT_COMPILATION_MODE=wholemodule CODE_SIGNING_ALLOWED=NO)
-      mkdir -p "$DERIVED"; built "$DERIVED/build-key" "$app" all xcb -quiet build-for-testing
-    ) & wmo=$!
-    status=0
-    if xcd all; then python3 "$APPLE_DIR/scripts/strings.py" check || status=$?; else status=$?; fi
-    wait "$kit" || status=$?
-    wait "$wmo" || status=$?
-    # shellcheck disable=SC2031 # 读外层的 iOS 产物目录：整模块那一段在子 shell 里换了 DERIVED 与 platform
-    no_warnings "$DERIVED/warnings-$platform" || status=1
-    exit $status ;;
+    xcd all
+    no_warnings "$DERIVED/warnings-$platform"
+    [ "$platform" != ios ] || python3 "$APPLE_DIR/scripts/strings.py" check ;;
   build) xcd all; sign_development ;;
   build-perf) built "$DERIVED/build-key-$platform" "$app" all xcb -quiet build ;;
   test) xc_test "$@" ;;

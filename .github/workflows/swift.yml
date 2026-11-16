@@ -1,6 +1,6 @@
 name: Swift
 
-# 合并进主干后的兜底：与本机同一个入口 apple/scripts/xc.sh，各段各占一台干净的 runner 冷编译，真 Agent 用例跑全量。
+# 合并进主干后的兜底：与本机同一个入口 apple/scripts/xc.sh，各段独立 runner、复用原生编译缓存，真 Agent 用例跑全量。
 # PR 不在这里跑：合并前的门是本机的 xc.sh signoff（signoff.sh 头注释）。发布只认这里全绿的提交（release-context.py 的 verified）。
 # runner 标签 xcode-27：actions/runner-images 的 macOS 27 镜像（Xcode 27.0 与 iOS 27.0 模拟器 iPhone 17 都在）。
 # CloudKit 真同步、推送、后台与签名只能在设备上验，这里只跑替身。
@@ -29,11 +29,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { name: check, args: check }
-          - { name: test kit, args: test kit }
-          - { name: test mac, args: test mac }
-          # 一次约 20 分钟里模拟器开机约 7 分钟、编译约 12 分钟，13 条用例只跑几秒；模拟器在高负载的 runner 上还会开不起来，红的多半不是代码
-          - { name: test ios sync, args: test ios -only-testing:CuePadTests/SyncAccountTests -only-testing:CuePadTests/FileSyncTests -only-testing:CuePadTests/NewSessionFlowTests }
+          - { name: check, cache: check-mac, check: mac, args: "" }
+          - { name: test kit, cache: test-kit, check: kit, args: test kit }
+          - { name: test mac, cache: test-mac, check: "", args: test mac }
+          # 全部 iOS 测试目标只编一遍，警告与字符串检查通过后复用产物跑原来的同步测试。
+          - { name: test ios sync, cache: test-ios, check: ios, args: test ios -only-testing:CuePadTests/SyncAccountTests -only-testing:CuePadTests/FileSyncTests -only-testing:CuePadTests/NewSessionFlowTests }
     env:
       # xcodebuild 只把 TEST_RUNNER_ 开头的变量交给测试进程：测试自己起的 node 脚本（MCP 替身等）要找得到 /opt/homebrew/bin 里的 node。
       # 真 Agent 不走这个 PATH：它们装在专用缓存里、旁边带着 node（PinnedAgent）
@@ -48,10 +48,6 @@ jobs:
         with:
           fetch-depth: 0
           fetch-tags: true
-      # 镜像默认 27.1；本项目按 27.0（27A266a）开发。选中靠 xcode-select 而不是 DEVELOPER_DIR：测试里起的 cc、python3 走系统的选择，不认环境变量
-      - run: |
-          sudo xcode-select -s /Applications/Xcode_27.0.app
-          xcodebuild -version; xcrun --show-sdk-path; xcrun simctl list runtimes; env | grep -iE 'sdkroot|developer_dir' || true
       # 上一遍全绿之后没动 apple/ 与本文件的（文档、设计稿、落地页）只跑 lint，同本机签核的口径（signoff.sh）。
       # 比的是上一遍全绿的提交而不是上一次推送：排着的一遍会被后来的合并顶掉，被顶掉的那次改动要算进来
       - id: scope
@@ -67,6 +63,23 @@ jobs:
         run: command -v rg || brew install ripgrep
       - if: steps.scope.outputs.light == '1' && matrix.name == 'check'
         run: apple/scripts/lint.sh
+      # 本项目按 27.0（27A266a）开发。选中靠 xcode-select 而不是 DEVELOPER_DIR：测试里起的 cc、python3 走系统的选择，不认环境变量
+      - id: xcode
+        if: steps.scope.outputs.light != '1'
+        run: |
+          sudo xcode-select -s /Applications/Xcode_27.0.app
+          xcodebuild -version
+          echo "build=$(xcodebuild -version | awk '/Build version/{print $3}')" >> "$GITHUB_OUTPUT"
+          echo "os=$(sw_vers -buildVersion)" >> "$GITHUB_OUTPUT"
+      # 快照不可变，每个提交存新的一份；只在相同系统、工具链、架构与任务内取最近的缓存。
+      # 不缓存 .derived/.build：测试产物与通过记录永远来自当前提交。
+      - if: steps.scope.outputs.light != '1'
+        uses: actions/cache@v6
+        with:
+          path: ~/Library/Caches/cuepad-xc/CompilationCache.noindex
+          key: cuepad-xc-v1-${{ runner.arch }}-${{ steps.xcode.outputs.os }}-${{ steps.xcode.outputs.build }}-${{ matrix.cache }}-${{ github.sha }}
+          restore-keys: |
+            cuepad-xc-v1-${{ runner.arch }}-${{ steps.xcode.outputs.os }}-${{ steps.xcode.outputs.build }}-${{ matrix.cache }}-
       # 测试连的真 Agent：版本只在 apple/CuePadKit/Tests/agents.json，装进专用缓存（agents.py）；缓存随清单变
       - if: steps.scope.outputs.light != '1' && (matrix.name == 'test kit' || matrix.name == 'test mac')
         uses: actions/cache@v6
@@ -75,7 +88,12 @@ jobs:
           key: cuepad-agents-${{ hashFiles('apple/CuePadKit/Tests/agents.json', 'apple/scripts/agents.py') }}
       - if: steps.scope.outputs.light != '1' && (matrix.name == 'test kit' || matrix.name == 'test mac')
         run: apple/scripts/xc.sh agents install
-      - if: steps.scope.outputs.light != '1'
+      - if: steps.scope.outputs.light != '1' && matrix.name == 'check'
+        run: apple/scripts/xc.sh check sources
+      - if: steps.scope.outputs.light != '1' && matrix.check != ''
+        run: apple/scripts/xc.sh check ${{ matrix.check }}
+        timeout-minutes: 30
+      - if: steps.scope.outputs.light != '1' && matrix.args != ''
         run: apple/scripts/xc.sh ${{ matrix.args }}
         timeout-minutes: 30
       - uses: actions/upload-artifact@v7
