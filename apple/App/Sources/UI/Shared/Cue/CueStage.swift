@@ -1,13 +1,15 @@
+import CueStore
 import SwiftUI
 
-/// Cue 页的舞台：新来访时（`CueStage.opens`）对话先让给这一幕：云上的 Cue 摆着此刻那一拍的姿势（`Pose`），云下一句它此刻最该让你知道的事（`Line`）。
+/// Cue 页的舞台：新来访时（`CueStage.opens`）对话先让给这一幕：云上的 Cue 摆着此刻那一拍的姿势（`Pose`），云下一句它此刻最该让你知道的那一件（`Focus`）。
+/// 那一件有要看的正文、要你点的动作时接着排在那一句下面（`Details`），不另起一张卡：拍板时底下已有拍板卡，一屏只一张卡；没有正文时一张只放一颗钮的卡是空的。
 /// 天空是一张图，浅色画白天、深色画夜里（按外观，不按钟点）；窄的用竖图、宽的用横图。Cue 站的那朵云在图里的高度是图高的一个比例（`Sky.perch`），
 /// 图只等比铺开，人与字都从那一线往下排；图下沿以下铺图底的颜色（`palette.sky`），输入框与拍板卡浮在上面。
 /// 进场只放一次（天空从近处拉远落定，Cue 与字随后浮上来），之后整幕静止：Cue 页在静置测量的范围里，不放常驻动效。换拍子是 Cue 跳一下换姿势（`Jelly`，同头像）。
-/// 自己收起（回到对话）只有两处：往下拉过头、点"看对话"；输入框聚焦与发出由页收（`CuePage`）。
+/// 自己收起（回到对话）在往下拉过头、点"看对话"、点那一件的动作（`Details`）时；输入框聚焦与发出由页收（`CuePage`）。
 struct CueStage: View {
     let beat: CueBeat
-    let now: CueNow
+    let focus: Focus
     /// 左边让给常驻会话条的宽（手机）：天空照样铺满整页，Cue 与字在让出之后的那块里居中。
     var leading: CGFloat = 0
     let close: () -> Void
@@ -97,14 +99,15 @@ struct CueStage: View {
     }
 
     private func words(_ sky: Sky) -> some View {
-        let line = Line(beat: beat, now: now)
+        let line = focus.line
         return VStack(spacing: Spacing.item) {
             if let brow = line.brow {
-                Text(brow.text).font(Typography.label).foregroundStyle(brow.tone.color(palette))
+                Text(brow.text).font(Typography.label).foregroundStyle(brow.mark.color(palette)).lineLimit(1)
             }
             Text(line.head).font(Typography.heading).foregroundStyle(palette.ink)
                 .multilineTextAlignment(.center).lineLimit(3)
                 .contentTransition(.opacity)
+            Details(focus: focus, close: close).id(focus)
             more.padding(.top, Spacing.item)
         }
         .frame(maxWidth: CuePage.readingWidth)
@@ -181,27 +184,87 @@ extension CueStage {
         }
     }
 
-    /// 云下那一句：等你时说有几件（是哪一件由下面的拍板卡说，`CueWaitDock`，这里不另挑一件），做完是做完的那件，等子代理是在等的那件，
-    /// 其余是此刻那一句（`CueNow.quietLine`）。上面一行小字只在有一件具体的事时写它是哪种（做完、等子代理），颜色同各处的数字账。
-    struct Line: Equatable {
-        struct Brow: Equatable {
-            let text: String
-            let tone: CueNow.Tone
+    /// 舞台上那一件，按先后只挑一件（规则只在这里）：不在、出错最先（别的动作这时都做不成），然后要你动手的（拍板、新回复），
+    /// 再是给你看一眼的（新消息、刚做完），都没有时是不用你管的（等子代理、在想、歇着）。姿势照旧跟拍子（`Pose`），这里只定说哪件、点什么。
+    enum Focus: Hashable {
+        case away(String, failed: Bool)
+        case asks(Int)
+        case reply(CueNow.Item)
+        case said(Said)
+        case done(CueNow.Item)
+        case delegating(CueNow.Item)
+        case quiet(String)
+
+        init(now: CueNow, said: Said?) {
+            let item = { (kind: CueNow.Item.Kind) in now.items.first { $0.kind == kind } }
+            if case .away(let reason, let failed) = now.cue {
+                self = .away(reason, failed: failed)
+            } else if now.tally.asks > 0 {
+                self = .asks(now.tally.asks)
+            } else if let reply = item(.reply) {
+                self = .reply(reply)
+            } else if let said {
+                self = .said(said)
+            } else if now.beat == .done, let done = now.justDone {
+                self = .done(done)
+            } else if now.beat == .delegating, let waiting = item(.delegating) {
+                self = .delegating(waiting)
+            } else {
+                self = .quiet(now.quietLine)
+            }
         }
 
+        /// 云下的字：上面一行小字说是哪种（颜色同各处的数字账，出错是玫红、新消息是你那句话的靛青），下面一句大字说是哪件。
+        /// 拍板不写小字：哪件、问什么在拍板卡上，这里只说有几件。
+        var line: Line {
+            switch self {
+            case .away(let reason, let failed): Line(brow: failed ? Brow(text: String(localized: "出错了"), mark: .failed) : nil, head: reason)
+            case .asks(let count): Line(brow: nil, head: String(localized: "有 \(count) 件等你拍板"))
+            case .reply(let item), .done(let item), .delegating(let item): Line(brow: Brow(text: item.kind.label, mark: .tone(item.kind.tone)), head: item.name)
+            case .said(let said):
+                Line(brow: Brow(text: said.asked.map { String(localized: "你问：\($0)") } ?? String(localized: "新消息"), mark: .said), head: said.head)
+            case .quiet(let line): Line(brow: nil, head: line)
+            }
+        }
+    }
+
+    struct Line: Equatable {
         let brow: Brow?
         let head: String
+    }
 
-        init(beat: CueBeat, now: CueNow) {
-            let item = now.items.first { item in
-                switch beat {
-                case .done: item.kind == .done
-                case .delegating: item.kind == .delegating
-                default: false
-                }
+    struct Brow: Equatable {
+        let text: String
+        let mark: Mark
+    }
+
+    enum Mark: Equatable {
+        case tone(CueNow.Tone)
+        case failed
+        case said
+
+        func color(_ palette: Palette) -> Color {
+            switch self {
+            case .tone(let tone): tone.color(palette)
+            case .failed: palette.failure
+            case .said: palette.signature
             }
-            brow = item.map { Brow(text: $0.kind.label, tone: $0.kind.tone) }
-            head = beat == .waiting ? String(localized: "有 \(now.tally.needsYou) 件等你") : item?.name ?? now.quietLine
+        }
+    }
+
+    /// 还没读的头一条 Cue 的话（`CueThread.unread`）：第一句上舞台，其余在卡上；它回的是你哪一句（它之前你说的最后一句）写在小字里。
+    struct Said: Hashable {
+        let asked: String?
+        let head: String
+        let rest: String
+
+        init?(_ thread: CueThread) {
+            guard let index = thread.messages.firstIndex(where: { thread.unread.contains($0.id) }) else { return nil }
+            asked = thread.messages[..<index].last { $0.author == .known(.you) }.flatMap { SessionProgress.firstLine($0.text) }
+            let plain = MarkdownBlock.plainText(thread.messages[index].text).trimmingCharacters(in: .whitespacesAndNewlines)
+            let end = plain.firstIndex { "。！？!?\n".contains($0) }
+            head = end.map { String(plain[...$0]) }?.trimmingCharacters(in: .whitespacesAndNewlines) ?? plain
+            rest = end.map { plain[plain.index(after: $0)...].trimmingCharacters(in: .whitespacesAndNewlines) } ?? ""
         }
     }
 }
@@ -213,6 +276,64 @@ private extension CueBeat {
         case .done: .done
         case .thinking, .hearing, .delegating: .moving
         case .resting, .away, .failed: .quiet
+        }
+    }
+}
+
+/// 云下那一句之后的正文与动作：新回复是会话最后说的那段与"去会话里看"，新消息是 Cue 那段话第一句之后的部分与"接着聊"（第一句已在上面）。
+/// 点了舞台就收起：接着聊、去会话再回来，都是回到对话。换了一件是另一份（调用方按 `focus` 给身份），读会话的订阅跟着换。
+private struct Details: View {
+    let focus: CueStage.Focus
+    let close: () -> Void
+    @Environment(Workspace.self) private var workspace
+    @Environment(AppServices.self) private var services
+    @Environment(\.palette) private var palette
+    /// 会话最后说的那段（新回复）；不是新回复时读成空。
+    @State private var reply: String?
+
+    var body: some View {
+        let session = sessionID
+        VStack(spacing: Spacing.group) {
+            if let text, !text.isEmpty {
+                Text(verbatim: text).font(Typography.body).foregroundStyle(palette.ink2).multilineTextAlignment(.center).lineLimit(Self.lines)
+            }
+            if let label {
+                Button(action: act) { Text(label) }.buttonStyle(ControlButtonStyle(kind: .primary))
+            }
+        }
+        .padding(.top, Spacing.item)
+        .observing(services.store, into: $reply, onError: workspace.fail) { store in try session.flatMap { try store.sessionState($0)?.lastReply } ?? "" }
+    }
+
+    private static let lines = 4
+
+    /// 待回复的 id 是 "reply/会话 id"（`CueTally.Reply.id`）。
+    private var sessionID: String? {
+        if case .reply(let item) = focus { String(item.id.dropFirst("reply/".count)) } else { nil }
+    }
+
+    private var text: String? {
+        switch focus {
+        case .reply: reply.map { MarkdownBlock.plainText($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+        case .said(let said): said.rest
+        default: nil
+        }
+    }
+
+    private var label: LocalizedStringKey? {
+        switch focus {
+        case .reply: "去会话里看"
+        case .said: "接着聊"
+        default: nil
+        }
+    }
+
+    private func act() {
+        close()
+        if let sessionID {
+            workspace.openSession(SessionState.recordID(sessionID: sessionID), sessionID: sessionID)
+        } else {
+            workspace.cueFocusPending = true
         }
     }
 }

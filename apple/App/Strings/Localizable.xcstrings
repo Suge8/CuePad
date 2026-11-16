@@ -6608,6 +6608,16 @@
         }
       }
     },
+    "你问：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You asked: %@"
+          }
+        }
+      }
+    },
     "使用 %@" : {
       "localizations" : {
         "en" : {
@@ -8544,6 +8554,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "去会话"
+          }
+        }
+      }
+    },
+    "去会话里看" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Session"
           }
         }
       }
@@ -14464,6 +14484,16 @@
         }
       }
     },
+    "接着聊" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keep Talking"
+          }
+        }
+      }
+    },
     "推荐" : {
       "localizations" : {
         "en" : {
@@ -16300,7 +16330,7 @@
         }
       }
     },
-    "有 %lld 件等你" : {
+    "有 %lld 件等你拍板" : {
       "localizations" : {
         "en" : {
           "variations" : {
@@ -16308,13 +16338,13 @@
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%lld thing needs you"
+                  "value" : "%lld thing needs your call"
                 }
               },
               "other" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%lld things need you"
+                  "value" : "%lld things need your call"
                 }
               }
             }
@@ -16323,7 +16353,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "有 %lld 件等你"
+            "value" : "有 %lld 件等你拍板"
           }
         }
       }

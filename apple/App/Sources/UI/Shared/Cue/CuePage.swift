@@ -97,7 +97,7 @@ struct CuePage: View {
     @ViewBuilder private var chat: some View {
         Group {
             if staged {
-                CueStage(beat: cue.beat, now: cue.now, leading: railInset > 0 ? railInset + Self.inset : 0, close: closeStage)
+                CueStage(beat: cue.beat, focus: CueStage.Focus(now: cue.now, said: thread.flatMap { CueStage.Said($0) }), leading: railInset > 0 ? railInset + Self.inset : 0, close: closeStage)
                     .transition(.asymmetric(insertion: .opacity, removal: .opacity.combined(with: .offset(y: -Spacing.vacant))))
             } else if let thread, !thread.rows.isEmpty {
                 if stage != nil {
