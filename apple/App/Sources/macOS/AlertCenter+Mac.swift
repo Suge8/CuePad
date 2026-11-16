@@ -29,15 +29,5 @@ extension AlertCenter: CueNotifying {
         guard let services = workspace?.services, services.settings.alerts[kind] else { return false }
         return await services.reaches(subject)
     }
-
-    /// 每条标识不同，按路由认。
-    func dismiss(session: UUID) async {
-        guard delivers else { return }
-        let center = UNUserNotificationCenter.current()
-        let shown = await center.deliveredNotifications()
-            .filter { AlertRoute(userInfo: $0.request.content.userInfo)?.session == session }
-            .map(\.request.identifier)
-        if !shown.isEmpty { center.removeDeliveredNotifications(withIdentifiers: shown) }
-    }
 }
 #endif

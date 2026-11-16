@@ -116,6 +116,17 @@ final class AlertCenter: NSObject, UNUserNotificationCenterDelegate {
         }
     }
 
+    /// 你看过的会话，它在你看之前发来的通知从通知中心收掉：看过从哪台记来都算（`Mark.sessionSeen` 同步），手机上锁屏那条也一样。Cue 的与额度的不动。
+    func dismissSeen(_ marks: [String: SessionMarks]) async {
+        guard delivers else { return }
+        let seen = Dictionary(marks.compactMap { id, marks in marks.seen.map { (SessionState.recordID(sessionID: id), $0) } }) { first, _ in first }
+        let center = UNUserNotificationCenter.current()
+        let stale = await center.deliveredNotifications()
+            .filter { note in AlertRoute(userInfo: note.request.content.userInfo)?.session.flatMap { seen[$0] }.map { $0 >= note.date } == true }
+            .map(\.request.identifier)
+        if !stale.isEmpty { center.removeDeliveredNotifications(withIdentifiers: stale) }
+    }
+
     func remind(_ quotas: [AccountQuota]) async {
         guard delivers else { return }
         let center = UNUserNotificationCenter.current()

@@ -120,5 +120,7 @@ extension AppServices {
         follow(reporting: { .syncUnavailable(String(localized: "读取在线会话失败，会话状态不再更新：\(String(describing: $0))")) }) {
             try await self.liveSessions.follow(self)
         }
+        // 通知中心由 App 代理接上（`alerts`，手机上晚于这里）：之前的那几次看过等下一次变化再收
+        follow { for await marks in Observations({ self.liveSessions.marks }) { await self.alerts?.dismissSeen(marks) } }
     }
 }

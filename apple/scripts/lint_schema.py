@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
-"""lint.sh 的一条规则（在 apple/ 下跑，只查工作区）：`Schema.baseVersion`（能打开的最老结构版本）不得高于 mac/、ios/ 各自最新一个发布标签那时的结构版本中的较小值，
-否则装着那一版的设备的库升级后打不开（`schemaTooOld`）。更早的标签不算：只有作者自己的设备在用，都装着各平台最新的那一版。标签那时的结构版本 = 那时 Schema.swift 的 `baseVersion` 加 `upgrades` 数组的元素个数（同 `Schema.version`）。
+"""lint.sh 的一条规则（在 apple/ 下跑，只查工作区），两件：
+- `Schema.baseVersion`（能打开的最老结构版本）不得高于 mac/、ios/ 各自最新一个发布标签那时的结构版本中的较小值，
+  否则装着那一版的设备的库升级后打不开（`schemaTooOld`）。更早的标签不算：只有作者自己的设备在用，都装着各平台最新的那一版。标签那时的结构版本 = 那时 Schema.swift 的 `baseVersion` 加 `upgrades` 数组的元素个数（同 `Schema.version`）。
+- origin/main 上已有的升级步骤（同一个结构版本的那一步）不得改写：开过它的库版本号已经过了这一步，改了的不会再跑，库与代码对不上；要改就在末尾追加一步。
 没有任何发布标签（浅克隆、没拉标签）时不能放过：算不出就退出 1，提示 git fetch --tags。"""
 import re, subprocess, sys
 
@@ -11,9 +13,14 @@ BASE = re.compile(r"static let baseVersion = (\d+)")
 
 
 def version(source):
-    """数 `upgrades` 数组字面量的顶层元素：跳过注释与字符串（含多行、原始字符串与插值），按顶层逗号分。"""
+    base, steps = upgrades(source)
+    return base + len(steps)
+
+
+def upgrades(source):
+    """`baseVersion` 与 `upgrades` 数组字面量的各顶层元素（原文，按它升到的版本排）：跳过注释与字符串（含多行、原始字符串与插值），按顶层逗号分。"""
     i = source.index("= [", source.index("static let upgrades")) + 3
-    depth, count, item = 0, 0, False
+    depth, steps, start = 0, [], None
     while True:
         if source.startswith("//", i):
             i = source.index("\n", i)
@@ -23,20 +30,25 @@ def version(source):
             continue
         quote = re.match(r'(#*)("""|")', source[i:])
         if quote:
-            i, item = skip_string(source, i, *quote.groups()), True
+            start = i if start is None else start
+            i = skip_string(source, i, *quote.groups())
+            end = i
             continue
         c = source[i]
         if c in "([{":
             depth += 1
         elif c in ")]}":
             if depth == 0:
-                return int(BASE.search(source).group(1)) + count + item
+                if start is not None: steps.append(source[start:end])
+                return int(BASE.search(source).group(1)), steps
             depth -= 1
         elif c == "," and depth == 0:
-            count, item = count + item, False
+            if start is not None: steps.append(source[start:end])
+            start = None
             i += 1
             continue
-        item = item or not c.isspace()
+        if not c.isspace():
+            start, end = (i if start is None else start), i + 1
         i += 1
 
 
@@ -66,7 +78,18 @@ for tag in latest:
     except (subprocess.CalledProcessError, ValueError) as error:
         sys.exit(f"lint_schema.py 读不出 {tag} 那时的结构版本：{error}")
 lowest = min(versions, key=versions.get)
-base = int(BASE.search(open("CuePadKit/Sources/CueStore/Schema.swift", encoding="utf-8").read()).group(1))
+here = open("CuePadKit/Sources/CueStore/Schema.swift", encoding="utf-8").read()
+base = int(BASE.search(here).group(1))
+try: main_base, main_steps = upgrades(git("show", f"origin/main:{SCHEMA}"))
+except subprocess.CalledProcessError as error:
+    fail("lint_schema.py 要 origin/main 来认哪些升级步骤已经在主干上", error)
+_, steps = upgrades(here)
+for i, step in enumerate(main_steps):
+    target = main_base + i + 1
+    if target > base and steps[target - base - 1:target - base] != [step]:
+        print(f"{SCHEMA}: 升到 {target} 的那一步与 origin/main 上的不一样（或被删了）")
+        print("  → 主干上开过的库已过了这一步，改写的不会再跑：恢复原样，要改结构就在 upgrades 末尾追加一步（规则在本文件头注释）\n")
+        sys.exit(1)
 if base > versions[lowest]:
     print(f"{SCHEMA}: baseVersion = {base}")
     print(f"  → baseVersion 高过标签 {lowest} 那时的结构版本 {versions[lowest]}：用那个构建建的库升级后会因 schemaTooOld 打不开。"

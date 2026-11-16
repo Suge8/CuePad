@@ -40,7 +40,7 @@ extension AppServices {
     }
 
     /// 发往再也不上线的 Mac 的请求只有别的设备清得掉，且只凭刚拉完的库（`CueStore.deleteExpiredDeliveries`）：
-    /// 每轮先完整拉一遍，再清那一拉开始前就到期的，睡到下一条到期（最多一天）；没拉成的一小时后再试。
+    /// 每轮先完整拉一遍，再清那一拉开始前就到期的，睡到下一条到期（最多一天）；没拉成的一小时后再试。用不上的旧标记（`CueStore.pruneMarks`）同一轮清。
     func startDeliveryCleanup() {
         follow { [store, syncing, timing] in
             while !Task.isCancelled {
@@ -50,8 +50,9 @@ extension AppServices {
                 if pulled {
                     do {
                         if let next = try await store.deleteExpiredDeliveries(pulledAt: started) { wake = min(wake, next) }
+                        try await store.pruneMarks(now: started)
                     } catch {
-                        Self.log.error("到期的投送请求没能清掉：\(error.localizedDescription, privacy: .public)")
+                        Self.log.error("到期的投送请求或旧标记没能清掉：\(error.localizedDescription, privacy: .public)")
                     }
                 }
                 guard (try? await timing.sleepUntil(wake)) != nil else { return }
