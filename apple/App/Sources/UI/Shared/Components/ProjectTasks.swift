@@ -124,7 +124,7 @@ private struct TaskMeter: View {
         Button(action: action) {
             HStack(spacing: TaskMetrics.columnGap) {
                 pie.frame(width: TaskMetrics.ringColumn)
-                Text(open > 0 ? "还剩 \(open) 件" : "都做完了").font(Typography.body).monospacedDigit().contentTransition(.numericText(value: Double(open)))
+                Text(open > 0 ? "还剩 \(open) 件" : "都做完了").font(Typography.secondary).monospacedDigit().contentTransition(.numericText(value: Double(open)))
                 Chevron(.forward)
                 Spacer(minLength: 0)
             }
@@ -141,10 +141,11 @@ private struct TaskMeter: View {
     }
 
     private var pie: some View {
-        let size = TaskMetrics.ring, line = max(1.4, size * 0.095)
-        return Circle().stroke(palette.ink2, lineWidth: line)
+        // 比任务圈小一圈：一件没做完时饼是空的，同大就像又一条任务
+        let size = TaskMetrics.ring * 0.7, line = max(1.2, size * 0.1)
+        return Circle().strokeBorder(palette.ink2, lineWidth: line)
             .overlay { Sector(fraction: Double(counts.done) / Double(counts.total)).fill(palette.ink2).padding(line * 2) }
-            .frame(width: size * 0.88, height: size * 0.88)
+            .frame(width: size, height: size)
             .readerHidden(true)
     }
 }

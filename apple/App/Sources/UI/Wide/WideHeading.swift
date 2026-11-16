@@ -18,9 +18,8 @@ struct WideProjectHeading: View {
 
     var body: some View {
         if case .project(let id) = workspace.mainRoute, let project = workspace.catalog?.project(id) {
-            HStack(spacing: Spacing.glyph) {
-                Button("项目") { workspace.select(.shelf) }
-                    .buttonStyle(PressStyle(.inline))
+            HStack(spacing: 0) {
+                Button { workspace.select(.shelf) } label: { Text("项目").modifier(HeadingPiece()) }
                     .foregroundStyle(palette.ink3)
                 Text(verbatim: "/").foregroundStyle(palette.ink3).readerHidden(true)
                 Menu { ProjectActions(project: project, folders: false).labelStyle(.titleAndIcon) } label: {
@@ -28,12 +27,11 @@ struct WideProjectHeading: View {
                         Text(verbatim: project.shownName).foregroundStyle(palette.ink).lineLimit(1)
                         Chevron(.expand).foregroundStyle(palette.ink3)
                     }
-                    .contentShape(.rect)
+                    .modifier(HeadingPiece())
                 }
                 #if os(macOS)
                 .menuStyle(.button).menuIndicator(.hidden)
                 #endif
-                .buttonStyle(PressStyle(.inline))
                 .accessibilityLabel(project.shownName)
                 .accessibilityHint("置顶、编辑名称与图标")
                 .accessibilityAddTraits(.isHeader)
@@ -41,11 +39,22 @@ struct WideProjectHeading: View {
                     .labelStyle(.iconOnly)
                     .imageScale(.large)
                     .buttonStyle(ControlButtonStyle(kind: .icon))
-                    .padding(.leading, Spacing.item)
             }
+            .buttonStyle(PressStyle(.button))
+            // 第一块的字仍与下面的内容左对齐：悬停的底向左宽出去
+            .padding(.leading, -HeadingPiece.inset)
             .font(Typography.toolbarTitle)
             .accessibilityElement(children: .contain)
         }
+    }
+}
+
+/// 栏头里能点的字：悬停的底与旁边的图标钮（`ControlButtonStyle(kind: .icon)`）同高，一排里停到哪颗都是一样大的一块。
+private struct HeadingPiece: ViewModifier {
+    static let inset = Spacing.item
+
+    func body(content: Content) -> some View {
+        content.padding(.horizontal, Self.inset).frame(height: ControlSize.regular.height).contentShape(.capsule)
     }
 }
 

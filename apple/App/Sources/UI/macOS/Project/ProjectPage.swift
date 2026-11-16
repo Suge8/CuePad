@@ -25,7 +25,7 @@ struct ProjectPage: View {
     private static let collapseOffset: CGFloat = 140
     /// 卡片墙：列不窄于 260；2560 宽的全屏收起侧栏是 9 列，留出余量。
     private static let metrics = ProjectWallSections<CardTile>.Metrics(
-        minColumnWidth: 260, maxColumns: 12, wallSpacing: 16, sectionGap: Spacing.section, olderGap: Spacing.group)
+        minColumnWidth: 208, maxColumns: 12, wallSpacing: 16, sectionGap: Spacing.section, olderGap: Spacing.group)
     /// 页底留的一截：多选时浮在页底的那一条（`SelectionBar`）连同它离窗口底，最后一行能滚到它上面。
     private static let bottomClearance: CGFloat = 88
 
