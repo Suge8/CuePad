@@ -33,6 +33,7 @@ struct ProjectTasks: View {
         let hidden = roots.count - kept.count
         let counts = data.taskCounts
         VStack(alignment: .leading, spacing: 0) {
+            if let project = data.project { ProjectBanner(project: project).padding(.bottom, Spacing.group) }
             VStack(alignment: .leading, spacing: 0) {
                 if !roots.isEmpty {
                     TaskOutline(
@@ -105,5 +106,28 @@ private struct FoldRow: View {
         .buttonStyle(.row)
         .padding(.vertical, TaskMetrics.rowGap)
         .accessibilityValue(open ? "已展开" : "已折叠")
+    }
+}
+
+
+/// 项目页最上面那一条：这个项目的像素画（同项目列表里它那张卡的封面）。每个项目进来是它自己的地方，不是同一页换了几行字。
+/// 是内容的第一块、跟着滚走，不钉在顶上：栏头不随滚动位置变（会形成布局循环，见 `ProjectPage`）。
+private struct ProjectBanner: View {
+    let project: Project
+    #if os(macOS)
+    private static let height: CGFloat = 148
+    private static let stretch: CGFloat = 1.05
+    #else
+    private static let height: CGFloat = 132
+    /// 手机上铺满页宽，上下各裁一点。
+    private static let stretch: CGFloat = 4
+    #endif
+
+    var body: some View {
+        Color.clear.frame(height: Self.height)
+            // Mac 上不宽过原画的比例：任务栏宽时铺满要裁掉一半的高，画的主体（花盘、鲸尾）就没了
+            .frame(maxWidth: Self.height * CGFloat(ProjectPixelPattern.columns) / CGFloat(ProjectPixelPattern.rows) * Self.stretch)
+            .overlay { ProjectPixelCover(pattern: .cover(ProjectIcon(stored: project.icon)), fills: true) }
+            .clipShape(.rect(cornerRadius: Radius.card))
     }
 }

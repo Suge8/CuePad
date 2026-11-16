@@ -3,6 +3,8 @@ import SwiftUI
 /// 项目卡的静态像素插画；只复用主题已采样的颜料路径，不在绘制时计算图层或抖色。
 struct ProjectPixelCover: View {
     let pattern: ProjectPixelPattern
+    /// 铺满给的那一块、多出来的上下裁掉（项目页顶上那一条）；缺省按原比例放进去（项目卡）。
+    var fills = false
 
     var body: some View {
         Canvas(rendersAsynchronously: true) { context, size in
@@ -13,7 +15,7 @@ struct ProjectPixelCover: View {
             }
         }
         .background(pattern.ground)
-        .aspectRatio(CGFloat(ProjectPixelPattern.columns) / CGFloat(ProjectPixelPattern.rows), contentMode: .fit)
+        .aspectRatio(CGFloat(ProjectPixelPattern.columns) / CGFloat(ProjectPixelPattern.rows), contentMode: fills ? .fill : .fit)
         .accessibilityHidden(true) // 合并项目卡内排除装饰，另包容器会把封面挡在合并之外。
         .allowsHitTesting(false)
     }

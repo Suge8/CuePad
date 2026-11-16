@@ -4,6 +4,12 @@ import SwiftUI
 /// 点了新建一条，等它落到墙上再从那一格打开（`ProjectWallSections`），编辑页是从新卡长出来的，返回也收回它。
 /// 它说的是下一步，不是空态：没有灵感时也是这一格，不等 iCloud 对完。
 struct AddIdeaTile: View {
+    /// 格里那只 Cue 跟着这个项目此刻的样子换：有会话等你是举着信的，任务都做完了是举手庆祝的，平时举着一颗星。
+    enum Mood: String {
+        case idea = "mascot-welcome", waiting = "mascot-cue-waiting", done = "mascot-cue-done"
+    }
+
+    var mood = Mood.idea
     let action: () -> Void
     @Environment(\.noteColor) private var color
     @Environment(\.palette) private var palette
@@ -19,8 +25,9 @@ struct AddIdeaTile: View {
         let shape = RoundedRectangle(cornerRadius: Radius.card)
         Button(action: action) {
             VStack(spacing: Spacing.item) {
-                Image(decorative: Mascot.welcome.rawValue).resizable().scaledToFit()
+                Image(decorative: mood.rawValue).resizable().scaledToFit()
                     .frame(width: Self.mascot, height: Self.mascot)
+                    .id(mood).transition(Motion.pop(reduceMotion: reduceMotion))
                     .offset(y: hovering && !reduceMotion ? -Self.hop : 0)
                     .readerHidden(true)
                 Text("添加灵感").font(Typography.bodyStrong).foregroundStyle(palette.ink2)
@@ -38,6 +45,7 @@ struct AddIdeaTile: View {
         .help("添加灵感（⌘N）")
         #endif
         .animation(Motion.nudge, value: hovering)
+        .animation(Motion.nudge, value: mood)
     }
 }
 
