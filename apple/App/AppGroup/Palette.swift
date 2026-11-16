@@ -187,13 +187,21 @@ struct Palette {
         ProjectColor(stored: "#8A8A84", name: String(localized: "灰色"), light: 0x7D7A73, dark: 0xA39F96),
     ]
 
-    private static let fallbackProjectColor = projectColors.first { $0.stored == "#8A8A84" }!
+    /// 灰：认不出的颜色与没有项目的地方用它。
+    static let neutralProject = "#8A8A84"
+    private static let fallbackProjectColor = projectColors.first { $0.stored == neutralProject }!
 
-    /// 项目的颜色：只上图形（项目图标、任务行末的项目小图标），不写成字、不做成圆点。
+    /// 项目的颜色：只上图形（项目图标、任务行末的项目小图标），不写成字、不做成圆点；项目页的灵感卡调进一点（`note`）。
     func project(_ stored: String) -> Color {
         let entry = Self.projectColors.first { $0.stored.caseInsensitiveCompare(stored) == .orderedSame } ?? Self.fallbackProjectColor
         return Color(hex: dark ? entry.dark : entry.light)
     }
+
+    /// 项目页的灵感卡：纸里调进一点项目色的淡彩纸，与桌面靠色相分开、不靠一块白。三档墨在八种项目色上最差 4.7（浅）、4.6（深）。
+    func note(_ stored: String) -> Color { paper.mix(with: project(stored), by: dark ? 0.12 : 0.14, in: .device) }
+    /// "添加灵感"那一格的虚线框与它悬停时的淡底。
+    func noteEdge(_ stored: String) -> Color { project(stored).opacity(0.55) }
+    func noteHint(_ stored: String) -> Color { project(stored).opacity(dark ? 0.1 : 0.07) }
 }
 
 private extension Color {

@@ -5,18 +5,15 @@ import Foundation
 struct ProjectDraft {
     let project: Project?
     var name: String
-    var intro: String
     var icon: ProjectIcon
     var color: String
 
     static let namePrompt = String(localized: "名称")
-    static let introPrompt = String(localized: "一句话介绍")
 
     init(_ request: ProjectFormRequest) {
         let project = request.project
         self.project = project
         name = project?.shownName ?? ""
-        intro = project?.intro ?? ""
         icon = ProjectIcon(stored: project?.icon)
         color = project?.color ?? Palette.projectColors[0].stored
     }
@@ -33,10 +30,9 @@ struct ProjectDraft {
         // 名字没改就留存的那份：默认项目显示的是这台设备语言的名字，原样存回去就成了改名
         let name = trimmedName == project?.shownName ? project?.name ?? trimmedName : trimmedName
         let store = workspace.services.store, existing = project?.id, icon = icon.rawValue, color = color
-        let intro = intro.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
         workspace.attempt {
             let id = if let existing { existing } else { try await store.createProject(name: name, color: color, icon: icon).id }
-            try await store.updateProject(id) { $0.name = name; $0.intro = intro; $0.icon = icon; $0.color = color }
+            try await store.updateProject(id) { $0.name = name; $0.icon = icon; $0.color = color }
             if existing == nil { try await created(id) }
         }
         return true

@@ -57,15 +57,16 @@ struct CardTile: View {
     let lastTarget: String?
     let floated: Bool
     @Environment(Workspace.self) private var workspace
+    @Environment(\.noteColor) private var color
     @State private var hovering = false
 
     var body: some View {
         Button(action: open) {
-        CardFace(card: card, lastTarget: lastTarget, floated: floated)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .modifier(SelectedCard())
-        .paper()
-        .contentShape(.rect(cornerRadius: Radius.card))
+            CardFace(card: card, lastTarget: lastTarget, floated: floated)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .modifier(SelectedCard())
+                .note(color, lifted: hovering)
+                .contentShape(.rect(cornerRadius: Radius.card))
         }
         .buttonStyle(CardOpenStyle())
         .overlay(alignment: .bottomTrailing) {

@@ -18,6 +18,9 @@ enum TaskMetrics {
     static let cardPadding = Spacing.group
     static let cardLead: CGFloat = 24
     static let cardGlyph: CGFloat = 13
+    static let rowGap: CGFloat = 0
+    /// 圈在它那一列里居中，圈的左缘离列边这么远：行直接落在页上时（项目页）整列向左让出这一截，圈与页边对齐。
+    static let ringInset = (ringColumn - ring) / 2
     #else
     nonisolated static let rowHeight: CGFloat = 30
     static let caption = Typography.meta
@@ -33,6 +36,9 @@ enum TaskMetrics {
     static let cardPadding = Spacing.group
     static let cardLead: CGFloat = 16
     static let cardGlyph: CGFloat = 12
+    /// 行与行之间那道缝：行高 `rowHeight` 加上下这一截，一行正好占一行的高（`RowMetrics.height`），悬停的底相邻两行不粘在一起。
+    static let rowGap = (RowMetrics.height - rowHeight) / 2
+    static let ringInset: CGFloat = 0
     #endif
 }
 

@@ -9,15 +9,10 @@ struct ProjectScreen: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var typeSize
-    @Environment(\.headerHost) private var headerHost
     @State private var data: ProjectPageData?
-    /// 任务纸的开合放在页面上：收起其余任务时连带页面的滚动（`TaskFoldAnchor`）。
-    @State private var fold = DebugHooks.preset.taskFold
     @State private var position = ScrollPosition()
     @State private var anchor = TaskFoldAnchor()
     @State private var board = WallBoard()
-
-    private var inColumn: Bool { headerHost == .column }
 
     var body: some View {
         ScrollView {
@@ -30,7 +25,12 @@ struct ProjectScreen: View {
         }
         .scrollPosition($position)
         .taskFoldScroll(anchor)
-        .floatingHeader(.verbatim(project?.shownName ?? ""), detail: { ProjectIntroLine(project: project, inHeader: true) }, trailing: { actions })
+        .floatingHeader(.verbatim(project?.shownName ?? "")) {
+            if let project { ProjectActions(project: project, folders: false) }
+        } detail: {
+        } trailing: {
+            if let project { ProjectHeadTools(project: project) }
+        }
         .observing(services.store, id: projectID, into: dataBinding, onError: workspace.fail) {
             [projectID] store in try ProjectPageData.read(projectID, from: store)
         }
@@ -40,10 +40,9 @@ struct ProjectScreen: View {
     @ViewBuilder
     private func content(_ data: ProjectPageData, _ arrangement: WallArrangement) -> some View {
         let lastTarget = data.lastTarget
-        // 任务纸不进懒加载栈：纸在懒加载栈的一格里时，收起后按 id 滚回纸底那一行会偏出一屏（`TaskFoldAnchor`）
+        // 任务区不进懒加载栈：在懒加载栈的一格里时，收起后按 id 滚回"收起"那一行会偏出一屏（`TaskFoldAnchor`）
         VStack(alignment: .leading, spacing: 0) {
-            if inColumn { ProjectIntroLine(project: project, intro: false).padding(.leading, Spacing.tight).padding(.bottom, Spacing.group) }
-            if data.project != nil { FocusCard(data: data, fold: $fold, position: $position, anchor: anchor).padding(.bottom, Self.sectionGap) }
+            if data.project != nil { ProjectTasks(data: data, position: $position, anchor: anchor).padding(.bottom, Self.sectionGap) }
             ProjectWallSections(data: data, arrangement: arrangement, older: board.older, metrics: metrics) { entry in
                 CardTileView(entry: entry, lastTarget: lastTarget[entry.id], floated: board.floated.contains(entry.id))
             }
@@ -55,18 +54,14 @@ struct ProjectScreen: View {
 
     private static let sectionGap = Spacing.section
 
-    /// 卡片墙：辅助字号下只排一列，卡上的字与"记一条灵感"才不被窄列挤成一字一行。
+    /// 卡片墙：辅助字号下只排一列，卡上的字与"添加灵感"才不被窄列挤成一字一行。
     private var metrics: ProjectWallSections<CardTileView>.Metrics {
         .init(minColumnWidth: sizeClass == .regular ? 220 : 150, maxColumns: typeSize.isAccessibilitySize ? 1 : 4, wallSpacing: 12,
-              sectionGap: Self.sectionGap, headerGap: 8, olderGap: 8)
+              sectionGap: Self.sectionGap, olderGap: 8)
     }
 
     /// 名称、目录与计数取自项目目录，推入的第一帧就是最终值：导航栏标题在推入时定下，之后再换会让整页跳一下。
     private var project: Project? { workspace.catalog?.project(projectID) }
-
-    private var actions: some View {
-        Menu("更多", icon: .more) { ProjectMenuItems(projectID: projectID) }
-    }
 
     /// 读到的数据与由它推出的分区在同一次写入里落下（同 Mac 的 `ProjectPage`）。
     private var dataBinding: Binding<ProjectPageData?> {
@@ -75,84 +70,6 @@ struct ProjectScreen: View {
 
     private func rearrange() {
         if let data { WallBoard.rearrange($board, with: data, project: projectID, reduceMotion: reduceMotion) }
-    }
-}
-
-private struct FocusCard: View {
-    let data: ProjectPageData
-    @Binding var fold: TaskFold
-    @Binding var position: ScrollPosition
-    let anchor: TaskFoldAnchor
-    @State private var collapses = 0
-    @Environment(\.palette) private var palette
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.dynamicTypeSize) private var typeSize
-
-    private static let visibleTasks = 3
-    /// 没做完的任务（含子任务）有这么多时，折起时列出的那几行之后的行按需建：全展开时普通栈要在点开的那一圈把每行都建出、量一遍（150 条约 150ms，模拟器 Release）。
-    /// 按总数定、不按开合定：换栈会让一直在的那几行也跟着重建、淡出再淡入。
-    private static let lazyFrom = 20
-    private static let revealDuration = 0.16
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            let roots = data.tasks.roots
-            let hidden = TaskFold.hidden(roots.count, limit: Self.visibleTasks)
-            let done = data.taskCounts.done
-            if !roots.isEmpty {
-                TaskOutline(
-                    tree: data.tasks, roots: fold.shown(roots, limit: Self.visibleTasks),
-                    lazyAfter: data.tasks.ordered.count >= Self.lazyFrom ? TaskFold.foldedRows(data.tasks, limit: Self.visibleTasks) : nil
-                ) { row in
-                    TaskLine(task: row.task, subtasks: data.subtasks[row.id], step: row.depth > 0)
-                }
-                .keyframeAnimator(initialValue: 1.0, trigger: collapses) { $0.opacity($1) } keyframes: { _ in
-                    MoveKeyframe(0.0)
-                    LinearKeyframe(1.0, duration: Self.revealDuration)
-                }
-            }
-            if fold.showsDone {
-                ForEach(data.done) { TaskLine(task: $0) }
-            }
-            // 辅助字号下开合挪到"添加任务"下面一行：并排时输入框会被挤没
-            let bar = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .trailing, spacing: 0)) : AnyLayout(HStackLayout(spacing: Spacing.item))
-            bar {
-                NewTaskField(project: data.project?.id)
-                Group {
-                    if hidden > 0 { toggleButton(TaskCopy.more(hidden: hidden, expanded: fold.showsAll), open: fold.showsAll, \.showsAll) }
-                    if hidden > 0, done > 0 { Dot() }
-                    if done > 0 { toggleButton(TaskCopy.done(done), open: fold.showsDone, \.showsDone) }
-                }
-                .font(Typography.secondary).foregroundStyle(palette.ink3).fixedSize()
-            }
-            .taskFoldBar(anchor)
-            .newTaskDrop()
-        }
-        .padding(Spacing.block)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .paper()
-        .debugExposesTaskFold { toggle(\.showsAll) }
-    }
-
-    private func toggle(_ key: WritableKeyPath<TaskFold, Bool>) {
-        if key == \.showsAll, fold.showsAll {
-            // 收起是一步到位的（`TaskFoldAnchor`：纸底那一行留在原处，没有能跟着弹簧走的位移），换上来的那几行淡入；减弱动态效果时同样
-            collapses += 1
-            return anchor.collapse($fold, scrolling: $position)
-        }
-        withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { fold[keyPath: key].toggle() }
-    }
-
-    private func toggleButton(_ title: String, open: Bool, _ key: WritableKeyPath<TaskFold, Bool>) -> some View {
-        Button { toggle(key) } label: {
-            HStack(spacing: Spacing.tight) {
-                Text(title)
-                Chevron(.expand).rotationEffect(.degrees(open ? 180 : 0))
-            }
-            .frame(minHeight: 44).contentShape(.rect)
-        }
-        .buttonStyle(.plain)
-        .accessibilityValue(open ? "已展开" : "已折叠")
     }
 }
 #endif

@@ -27,6 +27,14 @@ struct TokenSheet: View {
                             }
                             label("projectColors")
                         }
+                        HStack(spacing: Spacing.tight) {
+                            ForEach(Palette.projectColors.map(\.stored) + [Palette.neutralProject], id: \.self) { color in
+                                RoundedRectangle(cornerRadius: Radius.chip).fill(palette.note(color))
+                                    .overlay(RoundedRectangle(cornerRadius: Radius.chip).strokeBorder(palette.noteEdge(color)))
+                                    .frame(width: Self.swatch, height: Self.swatch)
+                            }
+                            label("note · noteEdge")
+                        }
                     }
                     group("Elevation") {
                         HStack(spacing: Spacing.block) {

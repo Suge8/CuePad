@@ -21,7 +21,7 @@ struct MainColumn: View {
                 .padding(.trailing, under)
                 .zIndex(1)
             }
-            .overlay(alignment: .bottom) { CaptureSlot().padding(.trailing, under) }
+            .overlay(alignment: .bottom) { SelectionSlot().padding(.trailing, under) }
             if !session { head.padding(.trailing, under) }
         }
         .environment(\.topBand, Chrome.band)

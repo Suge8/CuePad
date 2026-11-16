@@ -12,7 +12,7 @@ struct TaskNextMark: View {
 
     var body: some View {
         Button(action: follow) { label }
-            .buttonStyle(PressStyle())
+            .buttonStyle(PressStyle(.mark))
             .help(next.starts ? help : String(localized: "\(next.speech)，\(help)"))
             .accessibilityLabel(next.speech)
             .accessibilityHint(help)

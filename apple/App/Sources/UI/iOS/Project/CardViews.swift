@@ -10,6 +10,7 @@ struct CardTileView: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @Environment(\.zoomNamespace) private var zoom
+    @Environment(\.noteColor) private var color
 
     var body: some View {
         let card = entry.card, text = entry.text
@@ -37,7 +38,7 @@ struct CardTileView: View {
             .multilineTextAlignment(.leading)
             .padding(Spacing.group)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .paper()
+            .note(color)
             .contentShape(.rect(cornerRadius: Radius.card))
         }
         .buttonStyle(PressStyle(.card))

@@ -15,7 +15,7 @@ struct ProjectScopePicker: View {
     }
 }
 
-/// 宽屏进展页列头那一排开头的范围钮（`PageMenuSlot`）的图形：筛选，选了项目时角上是那个项目。
+/// 宽屏进展页列头那一排开头的范围钮（`ProjectScopeSlot`）的图形：筛选，选了项目时角上是那个项目。
 struct ProjectScopeLabel: View {
     @Environment(Workspace.self) private var workspace
 

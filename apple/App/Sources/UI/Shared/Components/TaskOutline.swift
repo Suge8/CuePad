@@ -24,6 +24,8 @@ struct TaskStructure: Equatable {
 
 extension EnvironmentValues {
     @Entry var taskStructure: TaskStructure?
+    /// Mac 的缩进由行自己留（`TaskLine`）：悬停的底要盖住缩进那一截。
+    @Entry var taskIndent: CGFloat = 0
 }
 
 /// 落点规则全在 `TaskTree`，这里只管手势。
@@ -85,7 +87,11 @@ struct TaskOutline<Line: View>: View {
     private func item(_ row: TaskTree.Row) -> some View {
         let structure = TaskStructure(row: row.id, indentMove: tree.indent(row.id), outdentMove: tree.outdent(row.id)) { commit(row.id, $0) }
         return line(row)
+        #if os(macOS)
+        .environment(\.taskIndent, CGFloat(row.depth) * Self.indentWidth)
+        #else
         .padding(.leading, CGFloat(row.depth) * Self.indentWidth)
+        #endif
         .contentShape(.rect)
         .environment(\.taskStructure, structure)
         .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(outlineSpace)) } action: { drag.frames[row.id] = $0 }

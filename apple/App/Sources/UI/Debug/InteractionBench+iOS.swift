@@ -100,7 +100,7 @@ enum IOSInteractionBench {
             await step("书架点项目") { workspace.push(.project(id)) }
             await step("返回书架") { workspace.path.removeAll() }
         }
-        // 项目页任务纸点"还有 N 条"展开、再收起：在没做完的任务最多的项目上（配 `-CuePadManyTasks` 量任务多时）
+        // 项目页任务区点"还有 N 条"展开、再收起：在没做完的任务最多的项目上（配 `-CuePadManyTasks` 量任务多时）
         guard let busiest = workspace.catalog?.openTasks.max(by: { $0.value < $1.value })?.key else { fail("演示库里没有带任务的项目") }
         workspace.push(.project(busiest))
         await Task.wait(for: .seconds(2))

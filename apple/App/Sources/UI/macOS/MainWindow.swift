@@ -109,31 +109,13 @@ struct EditorLayer: View {
     }
 }
 
-/// 只在项目页与归档放：回收站、进展页与会话页不是记灵感的地方（进展页的主操作是新任务、新会话，会话页有回复框），它只会压住列表最后几行。
-struct CaptureSlot: View {
+/// 多选灵感时浮在主区底部的那一条。
+struct SelectionSlot: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        let bare = workspace.isLibraryReady && workspace.overlay == nil && workspace.presses.presented == nil
-        if bare, workspace.presses.isSelecting {
+        if workspace.isLibraryReady, workspace.overlay == nil, workspace.presses.presented == nil, workspace.presses.isSelecting {
             SelectionBar().padding(.bottom, Spacing.block).transition(.opacity)
-        } else if bare, workspace.mainRoute.takesCapture {
-            let searching = workspace.searching
-            CaptureBar(project: workspace.currentProject).padding(.bottom, Spacing.block)
-                .opacity(searching ? 0 : 1)
-                .allowsHitTesting(!searching)
-                .accessibilityHidden(searching)
-                .animation(nil, value: searching)
-                .transition(.opacity.animation(Motion.yield))
-        }
-    }
-}
-
-private extension Route {
-    var takesCapture: Bool {
-        switch self {
-        case .project, .archive: true
-        default: false
         }
     }
 }

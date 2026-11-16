@@ -10,28 +10,40 @@ struct WideHeading: View {
     }
 }
 
-/// 第二行是项目的一句介绍（`Project.intro`；没写也占着这一行，栏头的字不上下跳）。读内存里的项目目录（`Workspace.catalog`），不另订阅；
-/// 文件夹与"规则"留在页里那一行（`ProjectIntroLine` 的 `intro: false`）。
+/// 项目页的栏头：回项目列表的"项目"、项目名（点开是项目自己的操作，`ProjectActions`），紧跟着文件夹与规则两颗图标钮（`ProjectHeadTools`）。
+/// 读内存里的项目目录（`Workspace.catalog`），不另订阅。
 struct WideProjectHeading: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
     var body: some View {
         if case .project(let id) = workspace.mainRoute, let project = workspace.catalog?.project(id) {
-            VStack(alignment: .leading, spacing: Spacing.hair) {
-                HStack(spacing: Spacing.glyph) {
-                    Button("项目") { workspace.select(.shelf) }
-                        .buttonStyle(PressStyle(.inline))
-                        .foregroundStyle(palette.ink3)
-                    Text(verbatim: "/").foregroundStyle(palette.ink3).readerHidden(true)
-                    Text(verbatim: project.shownName).foregroundStyle(palette.ink).lineLimit(1)
-                        .accessibilityAddTraits(.isHeader)
+            HStack(spacing: Spacing.glyph) {
+                Button("项目") { workspace.select(.shelf) }
+                    .buttonStyle(PressStyle(.inline))
+                    .foregroundStyle(palette.ink3)
+                Text(verbatim: "/").foregroundStyle(palette.ink3).readerHidden(true)
+                Menu { ProjectActions(project: project, folders: false).labelStyle(.titleAndIcon) } label: {
+                    HStack(spacing: Spacing.tight) {
+                        Text(verbatim: project.shownName).foregroundStyle(palette.ink).lineLimit(1)
+                        Chevron(.expand).foregroundStyle(palette.ink3)
+                    }
+                    .contentShape(.rect)
                 }
-                .font(Typography.toolbarTitle)
-                Text(verbatim: project.intro?.nonEmpty ?? " ").font(Typography.toolbarSubtitle).foregroundStyle(palette.ink3).lineLimit(1)
-                    .help(project.intro ?? "")
-                    .readerHidden(project.intro?.nonEmpty == nil)
+                #if os(macOS)
+                .menuStyle(.button).menuIndicator(.hidden)
+                #endif
+                .buttonStyle(PressStyle(.inline))
+                .accessibilityLabel(project.shownName)
+                .accessibilityHint("置顶、编辑名称与图标")
+                .accessibilityAddTraits(.isHeader)
+                HStack(spacing: 0) { ProjectHeadTools(project: project) }
+                    .labelStyle(.iconOnly)
+                    .imageScale(.large)
+                    .buttonStyle(ControlButtonStyle(kind: .icon))
+                    .padding(.leading, Spacing.item)
             }
+            .font(Typography.toolbarTitle)
             .accessibilityElement(children: .contain)
         }
     }

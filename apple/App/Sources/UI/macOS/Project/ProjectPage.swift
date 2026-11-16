@@ -25,7 +25,9 @@ struct ProjectPage: View {
     private static let collapseOffset: CGFloat = 140
     /// 卡片墙：列不窄于 260；2560 宽的全屏收起侧栏是 9 列，留出余量。
     private static let metrics = ProjectWallSections<CardTile>.Metrics(
-        minColumnWidth: 260, maxColumns: 12, wallSpacing: 16, sectionGap: Spacing.section, headerGap: Spacing.group, olderGap: Spacing.page)
+        minColumnWidth: 260, maxColumns: 12, wallSpacing: 16, sectionGap: Spacing.section, olderGap: Spacing.group)
+    /// 页底留的一截：多选时浮在页底的那一条（`SelectionBar`）连同它离窗口底，最后一行能滚到它上面。
+    private static let bottomClearance: CGFloat = 88
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -69,21 +71,18 @@ struct ProjectPage: View {
         }
     }
 
-    /// 最上面那行取自项目目录，切换项目的第一帧就是新项目；卡片与任务读到后在其下出现。
     @ViewBuilder private var content: some View {
-        VStack(alignment: .leading, spacing: Spacing.group) {
-            ProjectIntroLine(project: workspace.catalog?.project(projectID), intro: false)
-            VStack(alignment: .leading, spacing: Spacing.section) {
-                if let data, let arrangement = board.arrangement { page(data, arrangement) }
-            }
+        VStack(alignment: .leading, spacing: Spacing.section) {
+            if let data, let arrangement = board.arrangement { page(data, arrangement) }
         }
-        .padding(.horizontal, Spacing.page).padding(.top, Spacing.pageTop).padding(.bottom, CaptureBar.clearance)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, Spacing.page).padding(.top, Spacing.pageTop).padding(.bottom, Self.bottomClearance)
         .cardDragStage()
     }
 
     @ViewBuilder
     private func page(_ data: ProjectPageData, _ arrangement: WallArrangement) -> some View {
-        if stage >= .focus { FocusBand(data: data, position: $position, anchor: anchor) }
+        if stage >= .focus { ProjectTasks(data: data, position: $position, anchor: anchor) }
         if stage >= .wall {
             ProjectWallSections(
                 data: data, arrangement: arrangement, older: board.older, metrics: Self.metrics, showsOlder: stage >= .older

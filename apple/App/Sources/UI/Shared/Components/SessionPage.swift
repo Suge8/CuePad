@@ -58,16 +58,19 @@ private struct SessionPageBody: View {
                 }
             } else {
                 #if os(iOS)
+                // 只绑着一件没做完的事时，完成是右边那颗钮；别的操作点标题
+                let finishing = task?.open.count == 1 ? task?.open.first : nil
                 reply(session, digest).floatingHeader(.verbatim(digest?.title(at: services.speech) ?? session?.title ?? ""), hidden: !follow.showsHeader, reveal: { follow.reveal() }) {
+                    if let session { menu(session, digest, completes: finishing == nil) }
+                } detail: {
                     if ending(digest) {
                         Text("正在结束…").font(Typography.caption).foregroundStyle(palette.ink3)
                     } else if let session {
                         SessionSubtitle(session: session, delivery: digest?.delivery, undelivered: Chat.undeliveredNote(digest?.undelivered(at: services.speech) ?? 0))
                     }
                 } trailing: {
-                    if let session {
-                        Menu { menu(session, digest) } label: { Image(.more) }
-                            .accessibilityLabel("更多")
+                    if let finishing {
+                        Button("完成任务", icon: .complete) { workspace.completeTask(finishing.task.id) }
                     }
                 }
                 #endif
@@ -122,8 +125,8 @@ private struct SessionPageBody: View {
         MacDelivery.endProgress(digest?.deliveries ?? [], at: services.speech)?.inTransit == true
     }
 
-    private func menu(_ session: SessionState, _ digest: SessionDigest?) -> SessionMenuItems {
-        SessionMenuItems(session: session, place: SessionPlace.menuTitle(of: session, project: digest?.project), task: task, pin: digest?.task, ending: ending(digest))
+    private func menu(_ session: SessionState, _ digest: SessionDigest?, completes: Bool = true) -> SessionMenuItems {
+        SessionMenuItems(session: session, place: SessionPlace.menuTitle(of: session, project: digest?.project), task: task, pin: digest?.task, ending: ending(digest), completes: completes)
     }
 
     /// 发出时回复框收回一行，对话不被系统先拉下来再滑上去。

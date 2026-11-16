@@ -125,7 +125,7 @@ struct RootShortcuts: View {
             if workspace.top == .search {
                 Button("退出搜索") { workspace.closeSearch() }.keyboardShortcut(.escape, modifiers: [])
             }
-            Button("记一条灵感") { workspace.newCard() }.keyboardShortcut("n")
+            Button("添加灵感") { workspace.newCard() }.keyboardShortcut("n")
             Button("对 Cue 说") { workspace.speakToCue() }.keyboardShortcut("n", modifiers: [.command, .shift])
             Button("设置") { workspace.select(.settings) }.keyboardShortcut(",")
             Button("进展") { workspace.show(.progress) }.keyboardShortcut("t", modifiers: [.command, .shift])

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 宽屏主区的栏头（Mac 主窗口与 iPad 宽窗同一个）：左边写这一页是什么，右边是这一页的操作（`PageMenuSlot`）。会话页的栏头在会话页里（`WideSessionTitle`）。
+/// 宽屏主区的栏头（Mac 主窗口与 iPad 宽窗同一个）：左边写这一页是什么，这一页自己的钮挨着它或在右端（`PageMenu.swift`）。会话页的栏头在会话页里（`WideSessionTitle`）。
 struct WideColumnHead: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -14,7 +14,7 @@ struct WideColumnHead: View {
                 OverlayTitle()
                 #endif
             } else if workspace.mainRoute == .progress {
-                PageMenuSlot(leads: true)
+                ProjectScopeSlot()
             } else {
                 title
             }
@@ -32,12 +32,12 @@ struct WideColumnHead: View {
             #if os(macOS)
             if workspace.openCard != nil {
                 CardMenuSlot()
-            } else if overlaid || workspace.mainRoute != .progress {
-                PageMenuSlot()
+            } else if workspace.mainRoute == .trash {
+                EmptyTrashSlot()
             }
             #else
             // 盖着的页（编辑、文件）的标题与操作在它自己那一排（`HeaderHost.panel`）
-            if !overlaid, workspace.mainRoute != .progress { PageMenuSlot() }
+            if !overlaid, workspace.mainRoute == .trash { EmptyTrashSlot() }
             #endif
         }
     }

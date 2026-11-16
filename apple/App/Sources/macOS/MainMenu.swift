@@ -1,7 +1,7 @@
 #if os(macOS)
 import AppKit
 
-/// 无 nib 的标准主菜单。⌘N 已是记一条灵感，新会话用 ⌥⌘N（Mac 上"另一种新建"的惯例）。
+/// 无 nib 的标准主菜单。⌘N 已是添加灵感，新会话用 ⌥⌘N（Mac 上"另一种新建"的惯例）。
 enum MainMenu {
     static func install() {
         let main = build()
@@ -24,7 +24,7 @@ enum MainMenu {
             .item("退出 CuePad", #selector(NSApplication.terminate(_:)), "q"),
         ]))
         main.addItem(submenu(title: "文件", items: [
-            .item("记一条灵感", #selector(AppDelegate.newCard(_:)), "n"),
+            .item("添加灵感", #selector(AppDelegate.newCard(_:)), "n"),
             .item("新会话…", #selector(AppDelegate.newSession(_:)), "n", [.option, .command]),
             .separator,
             .item("和 Cue 通话", #selector(AppDelegate.toggleVoiceCall(_:)), ""),

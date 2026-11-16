@@ -121,11 +121,12 @@ struct TaskLine: View {
     private var titleLines: Int { 1 }
     private static let titlePadding: CGFloat = 0
     private static let ringTarget: CGFloat = TaskMetrics.ring
-    /// 行与行之间那道缝：行高 `TaskMetrics.rowHeight` 加上下这一截，一行正好占一行的高（`RowMetrics.height`），悬停的底相邻两行不粘在一起。
-    private static let rowGap = (RowMetrics.height - TaskMetrics.rowHeight) / 2
+    /// 大纲里这一行缩进多少（`TaskOutline`）：缩在行的底里面，各级悬停的底同宽、左右齐。
+    @Environment(\.taskIndent) private var indent
 
     private func framed(_ content: some View) -> some View {
         content
+            .padding(.leading, indent)
             .contentShape(.rect)
             .row()
             .benchSpot(task.id)
@@ -134,7 +135,7 @@ struct TaskLine: View {
                 let session = agents.items[task.id]?.state
                 CardActions(card: task, leaf: subtasks == nil, opens: session != nil, session: session)
             }
-            .padding(.vertical, Self.rowGap)
+            .padding(.vertical, TaskMetrics.rowGap)
     }
     #endif
 }

@@ -10,7 +10,9 @@ nonisolated struct SessionTaskLink: Sendable, Equatable {
     var tasks: [LeafTask]
     var bindable: [LeafTask]
 
-    var primary: LeafTask? { tasks.first { $0.task.status != .done } ?? tasks.first }
+    /// 会话绑着的事里没做完的。
+    var open: [LeafTask] { tasks.filter { $0.task.status != .done } }
+    var primary: LeafTask? { open.first ?? tasks.first }
 
     /// 与会话名相同的一段不再写（从任务开的会话以叶子的标题命名），什么都不剩时没有这一行。
     func path(below title: String) -> Dotted? {
