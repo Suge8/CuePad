@@ -104,6 +104,7 @@ struct SessionBoardTests {
         let task = try #require(try await tasks().first)
         #expect(task.status == .done && task.piSessionID == "q1")
         #expect(try await store.deliveryRequests(toSession: "q1").contains { $0.mode == .known(.end) }, "答应的是完成并休眠")
+        #expect(try await TaskBoard.read(from: store).held.isEmpty, "点了完成就不再等你，不等那台 Mac 真歇下")
     }
 
     @Test func 置顶无主会话_建一件进行中的置顶任务_再点不再多建() async throws {
