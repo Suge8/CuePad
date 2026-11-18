@@ -43,8 +43,8 @@ extension AgentIntegration {
     public func piLoginScript(executable: URL) async -> String {
         let launching = await locate().environment(launching: executable, overrides: paths.environment)
         let environment = paths.pi.launchEnvironment.merging(["HOME": launching["HOME"] ?? paths.userHome.path, "PATH": launching["PATH"] ?? ""]) { $1 }
-        let exports = environment.sorted { $0.key < $1.key }.map { "export \($0.key)=\(AgentSkill.shellQuoted($0.value))" }
-        return (["#!/bin/sh", "clear"] + exports + ["cd \"$HOME\"", "exec \(AgentSkill.shellQuoted(executable.path))"]).joined(separator: "\n") + "\n"
+        let exports = environment.sorted { $0.key < $1.key }.map { "export \($0.key)=\(SessionBrief.shellQuoted($0.value))" }
+        return (["#!/bin/sh", "clear"] + exports + ["cd \"$HOME\"", "exec \(SessionBrief.shellQuoted(executable.path))"]).joined(separator: "\n") + "\n"
     }
 
     /// 实测（2026-10）Claude Code 下载约 260 MB，慢的网络要七八分钟

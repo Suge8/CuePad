@@ -8,17 +8,18 @@ enum Help {
       ("cuepad task add 写发布说明", "加任务"),
       ("cuepad task list", "看未完成任务"),
       ("cuepad task done <id>", "完成任务"),
-      ("cuepad show a.png --title 改后首页", "把文件发到用户手机上看（在 Agent 的命令里运行）"),
+      ("cuepad show a.png --title 改后首页", "把文件发到用户的 CuePad 上看（在 Agent 的命令里运行）"),
     ]
     let width = examples.map(\.0.displayWidth).max() ?? 0
     return """
-      cuepad — 读写本机 CuePad 资料库（项目、灵感、任务），把文件发到用户手机上
+      cuepad — 读写本机 CuePad 资料库（项目、灵感、任务），把文件发到用户的 CuePad
 
       常用：
       \(examples.map { "  \($0.padded(to: width))  \($1)" }.joined(separator: "\n"))
 
       全部命令：\(Command.nouns.joined(separator: "、"))；选项与输出字段看 cuepad <命令> --help（如 cuepad card add --help）。
       默认范围：在绑定了目录的项目里运行时读写限定该项目；--project 指定，--all-projects 不限；别处新建的进默认项目。
+      在沙箱里运行时资料库在沙箱外：写入的命令（show、add、done、move 等）申请在沙箱外运行。
       --json 输出 JSON（失败时 stderr 为 {"error":{"code","message"}}）；退出码 0 成功、1 运行错误、2 用法错误。
       隔离库：CUEPAD_LIBRARY_DIR=<绝对路径>；默认是 CuePad.app 的库（需先打开过一次），从源码编的用 ~/Library/Application Support/CuePad Dev。
       """

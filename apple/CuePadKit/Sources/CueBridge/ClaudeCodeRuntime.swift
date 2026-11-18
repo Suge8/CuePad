@@ -8,14 +8,16 @@ import Foundation
 public final class ClaudeCodeRuntime: AgentRuntime {
     private let bridge: Bridge
     private let paths: AgentPaths
+    private let brief: String
     private let claude: @Sendable () async -> URL?
     private let locate: @Sendable () async -> ExecutableLocator
     private let store: CueStore
     private let hosted: HostedProcesses
     private let timing: Timing
 
+    /// - Parameter brief: 每次起它都追加进系统提示（`SessionBrief`）。
     public init(
-        bridge: Bridge, paths: AgentPaths, store: CueStore, claude: @escaping @Sendable () async -> URL?,
+        bridge: Bridge, paths: AgentPaths, store: CueStore, brief: String, claude: @escaping @Sendable () async -> URL?,
         locate: @escaping @Sendable () async -> ExecutableLocator = { await .system }, timing: Timing = .system
     ) {
         self.timing = timing
@@ -23,6 +25,7 @@ public final class ClaudeCodeRuntime: AgentRuntime {
         self.bridge = bridge
         hosted = HostedProcesses(bridge: bridge, timing: timing)
         self.paths = paths
+        self.brief = brief
         self.locate = locate
         self.store = store
     }
@@ -82,7 +85,7 @@ public final class ClaudeCodeRuntime: AgentRuntime {
         let session = ClaudeHostedSession(bridge: bridge, processes: hosted, timing: timing)
         // 交给会话的附件在工作目录外（`AttachmentFiles.directory`）：读它不用再问
         let process = try await session.host(
-            executable: claude.url, arguments: arguments + ["--add-dir", store.files.directory.path(percentEncoded: false)], directory: directory,
+            executable: claude.url, arguments: arguments + ["--add-dir", store.files.directory.path(percentEncoded: false), "--append-system-prompt", brief], directory: directory,
             environment: claude.environment)
         try await hosted.admit(process, for: sessionID, admission)
         let cwd = URL(filePath: ClaudeCode.realPath(directory), directoryHint: .isDirectory)

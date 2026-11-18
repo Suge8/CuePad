@@ -5,9 +5,7 @@ import CueStore
 import Foundation
 import Observation
 
-/// `AgentIntegration` 之上唯一的一份。接入一家只写技能（它的会话记录全量读成历史在 `AppServices.indexAgents`）；装只在用户点了之后，
-/// 装过的在 `refresh()` 发现与这个版本的 App 要写的不同时（App 更新了，或 App 被移动后技能里的 cuepad 路径变了）静默升级，不再询问。
-/// 不碰真实世界时（`LibraryLocation.touchesRealWorld`）只写配置目录经环境变量换走了的那几家（`AgentIntegration.isWritable`），其余只检测。
+/// `AgentIntegration` 之上唯一的一份：各家的检测、安装与登录。接入与否记在 `AppSettings.connectedAgents`（`AppServices.connectAgents`）。
 @Observable
 final class AgentIntegrations {
     private(set) var statuses: [AgentKind: AgentStatus] = [:]
@@ -18,17 +16,12 @@ final class AgentIntegrations {
 
     var detected: Bool { statuses.count == AgentKind.allCases.count }
     @ObservationIgnored let integration: AgentIntegration
-    @ObservationIgnored var uninstalled: (AgentKind) async -> Void = { _ in }
 
     init(_ integration: AgentIntegration) {
         self.integration = integration
     }
 
     func status(_ kind: AgentKind) -> AgentStatus? { statuses[kind] }
-
-    func writtenFiles(_ kind: AgentKind) -> [String] {
-        integration.writtenFiles(of: kind).map { UserHome.shown($0.path) }
-    }
 
     func detect(_ kind: AgentKind) async {
         statuses[kind] = await integration.status(of: kind)
@@ -48,22 +41,6 @@ final class AgentIntegrations {
             for await (kind, status) in group { found[kind] = status }
             return found
         }
-    }
-
-    var connectable: [AgentKind] {
-        AgentKind.allCases.filter { kind in
-            guard let status = statuses[kind] else { return false }
-            return integration.isWritable(kind) && status.isAvailable && status.files == .missing
-        }
-    }
-
-    /// 返回没装上的与原因。
-    func install(_ kinds: [AgentKind]) async -> [AgentKind: String] {
-        var failures: [AgentKind: String] = [:]
-        for kind in kinds {
-            do { try await install(kind) } catch { failures[kind] = error.localizedDescription }
-        }
-        return failures
     }
 
     /// 没装上的原因记在 `jobs`（脚本输出的最后一句）。
@@ -112,37 +89,6 @@ final class AgentIntegrations {
         output.replacing(/\u{1B}\[[0-9;?]*[A-Za-z]/, with: "").split(whereSeparator: \.isNewline)
             .map { $0.trimmingCharacters(in: .whitespaces) }.last { !$0.isEmpty }
     }
-
-    /// 升级技能；哪家失败都照做其余的，抛第一个错，状态仍反映磁盘上的旧版。
-    func refresh() async throws {
-        await redetect()
-        var failure: (any Error)?
-        for kind in AgentKind.allCases
-        where integration.isWritable(kind) && statuses[kind]?.files == .outdated && statuses[kind]?.isAvailable == true {
-            do { try await install(kind) } catch { failure = failure ?? error }
-        }
-        if let failure { throw failure }
-    }
-
-    /// 新装或升级。
-    func install(_ kind: AgentKind) async throws {
-        try await change(kind) { try await $0.install(kind) }
-    }
-
-    func uninstall(_ kind: AgentKind) async throws {
-        try await change(kind) { try await $0.uninstall(kind) }
-        await uninstalled(kind)
-    }
-
-    private func change(_ kind: AgentKind, _ body: (AgentIntegration) async throws -> Void) async throws {
-        do {
-            try await body(integration)
-        } catch {
-            await detect(kind)
-            throw error
-        }
-        await detect(kind)
-    }
 }
 
 extension AppServices {
@@ -150,6 +96,31 @@ extension AppServices {
     func installAgent(_ kind: AgentKind) async throws {
         await agents.installAgent(kind)
         try await macAgents.record(redetecting: true)
+    }
+
+    func isConnected(_ kind: AgentKind) -> Bool { settings.connectedAgents.contains(kind) }
+
+    /// 只记下来，读它的会话记录由 `indexAgents` 跟着做。
+    func connectAgents(_ kinds: some Sequence<AgentKind>) { settings.connectedAgents.formUnion(kinds) }
+
+    func disconnectAgent(_ kind: AgentKind) { settings.connectedAgents.remove(kind) }
+
+    /// 接入面板里勾得上的：检测过、能用、还没接入；不碰真实世界时只有配置目录经环境变量换走了的那几家（`AgentIntegration.touches`）。
+    var connectableAgents: [AgentKind] {
+        AgentKind.allCases.filter { agents.integration.touches($0) && agents.status($0)?.isAvailable == true && !isConnected($0) }
+    }
+
+    /// 旧版写进用户目录的 cuepad 技能（`AgentIntegration.legacySkillKinds`）：先把它记着的几家记成接入，再删掉它。
+    /// 删不掉的照报，文件还在，下次启动再来一遍。
+    func retireLegacySkill() {
+        let integration = agents.integration
+        guard let kinds = integration.legacySkillKinds() else { return }
+        connectAgents(kinds)
+        do {
+            try integration.removeLegacySkill()
+        } catch {
+            reportIssue(.bridgeUnavailable(String(localized: "旧版 CuePad 写的技能没能删掉：\(error.localizedDescription)")))
+        }
     }
 }
 

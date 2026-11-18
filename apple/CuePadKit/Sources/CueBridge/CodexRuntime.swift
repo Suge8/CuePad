@@ -18,6 +18,7 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
     static let log = Logger(subsystem: AppIdentity.id, category: "codex")
     let bridge: Bridge
     private let paths: AgentPaths
+    private let brief: String
     let codex: @Sendable () async -> URL?
     private let locate: @Sendable () async -> ExecutableLocator
     var tracked: [Session.ID: Tracked] = [:]
@@ -45,8 +46,9 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
     var stopped = true
     let timing: Timing
 
+    /// - Parameter brief: 开线程与接着线程时都并进开发者指令（`SessionBrief`）。
     public init(
-        bridge: Bridge, paths: AgentPaths, codex: @escaping @Sendable () async -> URL?,
+        bridge: Bridge, paths: AgentPaths, brief: String, codex: @escaping @Sendable () async -> URL?,
         locate: @escaping @Sendable () async -> ExecutableLocator = { await .system }, timing: Timing = .system
     ) {
         self.timing = timing
@@ -54,6 +56,7 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
         self.bridge = bridge
         processes = HostedProcesses(bridge: bridge, timing: timing)
         self.paths = paths
+        self.brief = brief
         self.locate = locate
     }
 
@@ -128,7 +131,7 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
         in directory: URL, launchToken: String, name: String?, model: ModelKey?, thinking: ThinkingLevel?
     ) async throws -> Session.ID {
         let id = try await launch(sessionID: nil, admission: try processes.admission()) { driver, rpc in
-            let started = try await driver.open("thread/start", .object(try await self.sandbox(in: directory.path, on: rpc).merging(["cwd": .string(directory.path)]) { $1 }))
+            let started = try await driver.open("thread/start", .object(try await self.threadSettings(in: directory.path, on: rpc).merging(["cwd": .string(directory.path)]) { $1 }))
             return self.attachHosted(started, driver: driver, rpc: rpc, launchToken: launchToken)
         }
         return try await configure(opened: id, name: name, model: model, thinking: thinking, on: bridge)
@@ -141,7 +144,7 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
             do {
                 return try await launch(sessionID: session.id, admission: admission) { driver, rpc in
                     let params: [String: JSONValue] = ["threadId": .string(session.id), "path": .string(session.path), "excludeTurns": true]
-                    let resumed = try await driver.open("thread/resume", .object(try await self.sandbox(in: session.cwd, on: rpc).merging(params) { $1 }))
+                    let resumed = try await driver.open("thread/resume", .object(try await self.threadSettings(in: session.cwd, on: rpc).merging(params) { $1 }))
                     return self.attachHosted(resumed, driver: driver, rpc: rpc, launchToken: nil)
                 }
             } catch CodexRPCError.server(_, let message) where message.contains("active writer") {
@@ -153,9 +156,13 @@ public final class CodexRuntime: AgentRuntime, SessionLink {
     /// 托管会话的沙箱：用户、项目或管理配置定过（`sandbox_mode`，或权限档 `default_permissions`，含比工作区更宽的）就照它，不传；
     /// 都没定时 Codex 对没被信任过的目录用只读——终端里第一次进目录会问信不信任，托管的会话没人回答，写工作区的每一步都要申请。
     /// CuePad 开的会话就是叫它在这个目录里干活：这时给工作区写权限（同信任过的目录的缺省）。`thread/resume` 不留开线程时的沙箱，接着时也要给。
-    private func sandbox(in directory: String, on rpc: CodexRPC) async throws -> [String: JSONValue] {
-        let origins = try await rpc.call("config/read", ["cwd": .string(directory)])["origins"]?.object ?? [:]
-        return origins.keys.contains("sandbox_mode") || origins.keys.contains("default_permissions") ? [:] : ["sandbox": "workspace-write"]
+    /// 开发者指令（`developerInstructions`）顶替配置里的 `developer_instructions`：用户配了的接在前面，后面是 `brief`。
+    private func threadSettings(in directory: String, on rpc: CodexRPC) async throws -> [String: JSONValue] {
+        let read = try await rpc.call("config/read", ["cwd": .string(directory)])
+        let origins = read["origins"]?.object ?? [:]
+        let instructions = [read["config"]?["developer_instructions"]?.string, brief].compactMap(\.self).joined(separator: "\n\n")
+        let sandbox: [String: JSONValue] = origins.keys.contains("sandbox_mode") || origins.keys.contains("default_permissions") ? [:] : ["sandbox": "workspace-write"]
+        return sandbox.merging(["developerInstructions": .string(instructions)]) { $1 }
     }
 
     func executable() async throws -> (url: URL, environment: [String: String]) {

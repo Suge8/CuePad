@@ -43,10 +43,6 @@ final class ClaudeTestbed {
 
     func startConnected() throws { try runtime.start() }
 
-    var integration: AgentIntegration {
-        AgentIntegration(paths: paths, locate: { pinnedClaude.locator }, cuepad: PiProcess.cuepad, timing: noDeadline)
-    }
-
     /// - Parameter settings: 用户自己的 settings.json（nil 是没有这个文件）。
     /// - Parameter wrapper: CuePad 起的 `claude` 换成这段 shell 脚本的外壳，真 claude 在 `$REAL`（`passThrough`：托管进程是它的子进程）。
     ///   脚本经 `TestScript` 放，内容里不写本次运行的路径：
@@ -89,7 +85,7 @@ final class ClaudeTestbed {
             try TestScript.install("#!/bin/sh\n. \"$0.env\"\n\(wrapper)\n", at: bin.appending(path: "claude"), variables: ["REAL": real.path])
         }
         runtime = ClaudeCodeRuntime(
-            bridge: bridge, paths: paths, store: store, claude: { [bin] in bin.appending(path: "claude") },
+            bridge: bridge, paths: paths, store: store, brief: SessionBrief.text(cuepad: PiProcess.cuepad), claude: { [bin] in bin.appending(path: "claude") },
             locate: { [bin] in ExecutableLocator(searchDirectories: [bin]) }, timing: timing)
     }
 

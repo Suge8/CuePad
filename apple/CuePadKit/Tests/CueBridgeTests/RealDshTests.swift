@@ -88,7 +88,7 @@ final class DshRig {
         self.fake = model
         paths = AgentPaths(environment: try Self.environment(model, in: root))
         bridge = Bridge(socketDirectory: root.appending(path: "s", directoryHint: .isDirectory))
-        runtime = DshRuntime(bridge: bridge, paths: paths, dsh: { PinnedAgent.dsh.executable }, locate: { PinnedAgent.dsh.locator }, timing: noDeadline)
+        runtime = DshRuntime(bridge: bridge, paths: paths, brief: SessionBrief.text(cuepad: PiProcess.cuepad), dsh: { PinnedAgent.dsh.executable }, locate: { PinnedAgent.dsh.locator }, timing: noDeadline)
         try bridge.start()
     }
 

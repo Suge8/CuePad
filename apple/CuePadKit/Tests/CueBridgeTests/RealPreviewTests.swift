@@ -15,16 +15,14 @@ struct RealPreviewTests {
         return (event["isError"] as? Bool == true, blocks.compactMap { $0["text"] as? String }.joined())
     }
 
-    @Test func theSkillIsDiscoveredAndShowFromBashAttachesThePreviewToTheSession() async throws {
+    @Test func showFromBashAttachesThePreviewToTheSession() async throws {
         let library = try makeTempDirectory()
-        let pi = try await PiProcess(env: ["CUEPAD_LIBRARY_DIR": library.path], discoverSkills: true)
+        let pi = try await PiProcess(env: ["CUEPAD_LIBRARY_DIR": library.path])
         let bridge = Bridge(socketDirectory: pi.paths.socketDirectory)
         defer { bridge.stop(); pi.stop() }
         try bridge.start()
         try await eventually("桥发现真实 Pi 会话") { !bridge.sessions.isEmpty }
         let session = bridge.sessions[0]
-        let skill = try #require(session.commands.first { $0.name == "skill:cuepad" })
-        #expect(skill.source == .known(.skill) && skill.summary?.contains("CuePad") == true)
         try "<h1>登录页</h1>".write(to: pi.cwd.appending(path: "demo.html"), atomically: true, encoding: .utf8)
         try Data("m4a".utf8).write(to: pi.cwd.appending(path: "beep.m4a"))
 

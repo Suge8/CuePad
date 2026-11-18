@@ -34,10 +34,8 @@ struct HistoryRulesTests {
                 "XDG_STATE_HOME": directory.appending(path: "state").path, "CUEPAD_AGENTS_DIR": directory.appending(path: "agents").path,
                 "DSH_HOME": directory.appending(path: "dsh").path,
             ])
-            let agents = AgentIntegration(
-                paths: agentPaths, locate: { ExecutableLocator(searchDirectories: [realPi.deletingLastPathComponent()]) },
-                cuepad: directory.appending(path: "CuePad.app/Contents/Helpers/cuepad"))
-            try await agents.install(.pi)
+            let agents = AgentIntegration(paths: agentPaths, locate: { ExecutableLocator(searchDirectories: [realPi.deletingLastPathComponent()]) })
+            let helper = directory.appending(path: "CuePad.app/Contents/Helpers/cuepad")
             let extensions = paths.agentDirectory.appending(path: "extensions")
             try FileManager.default.createDirectory(at: extensions, withIntermediateDirectories: true)
             if let providerFixture {
@@ -66,19 +64,20 @@ struct HistoryRulesTests {
             }
 
             bridge = Bridge(socketDirectory: paths.socketDirectory)
-            host = PiRuntime(bridge: bridge, paths: paths, pi: { realPi })
+            host = PiRuntime(bridge: bridge, paths: paths, brief: SessionBrief.text(cuepad: helper), pi: { realPi })
             let mac = MacDependencies(
                 bridge: bridge, hotkeys: InMemoryHotkeys(), paths: agentPaths, agents: AgentIntegrations(agents),
                 hostID: TestApp.hostID, workspaces: Workspaces(root: directory.appending(path: "CuePad", directoryHint: .isDirectory)),
                 wakeNotifications: NotificationCenter(),
                 commandLineTool: CommandLineToolInstaller(
-                    helper: directory.appending(path: "CuePad.app/Contents/Helpers/cuepad"),
+                    helper: helper,
                     linkDirectory: directory.appending(path: "home/.local/bin"), shellPath: { nil }),
                 updater: nil,
                 runtimes: { [host] _ in [.pi: host] }, pasteboard: NSPasteboard(name: .init("hr-\(UUID().uuidString)")),
                 cue: CueDependencies(launch: { _, _ in nil }, helper: realPi, notifier: RecordingCueNotifier()))
             let location = try LibraryLocation.resolve(environment: [LibraryLocation.environmentKey: directory.appending(path: "Library").path])
             services = try AppServices(location: location, defaults: TempDefaults().defaults, sync: .custom(FakeSync()), mac: mac)
+            services.connectAgents([.pi])
             LibraryLedger.tracking(services.store, createdAt: #_sourceLocation)
             services.start()
         }

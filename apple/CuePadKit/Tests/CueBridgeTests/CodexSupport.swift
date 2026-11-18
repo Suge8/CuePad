@@ -177,7 +177,7 @@ final class CodexRig {
         let fault = try readFault.map { try CodexReadFault(around: pinnedCodex.executable, in: codex.root, mode: $0) }
         let launch = fault?.executable
         let runtime = CodexRuntime(
-            bridge: bridge, paths: codex.paths, codex: { [locator] in launch ?? locator.candidates("codex").first }, locate: { [locator] in locator },
+            bridge: bridge, paths: codex.paths, brief: SessionBrief.text(cuepad: PiProcess.cuepad), codex: { [locator] in launch ?? locator.candidates("codex").first }, locate: { [locator] in locator },
             timing: timing)
         do {
             try codex.signIn(approvals: approvals)
