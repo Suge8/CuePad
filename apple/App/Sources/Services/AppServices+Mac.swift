@@ -13,7 +13,7 @@ extension AppServices {
         register(hotkey)
         startDiagnostics()
         let sessionChanges = bridge.changes() // 先订阅再启动桥与各家的接入：启动时发现的会话不能漏
-        agents.uninstalled = { [weak self] kind in await self?.runtimes[kind]?.integrationRemoved() }
+        retireLegacySkill()  // 在建会话索引之前：它记着的接入先进设置，索引不先当没接入删掉
         do {
             try bridge.start()
         } catch {
@@ -27,11 +27,7 @@ extension AppServices {
         follow(reporting: { .syncUnavailable(String(localized: "Agent 状态没能写入同步记录：\(String(describing: $0))")) }) {
             try await self.consumeSessionChanges(sessionChanges)
         }
-        // 执行器在接入刷新之后才启动：技能里写着 cuepad 的绝对路径与这一版的用法，App 更新或移动后先改写，它开的会话才读到对的。
-        // 刷新失败也照样启动：技能旧了只是 cuepad 用不对，不挡远程投送。
         follow(reporting: { .syncUnavailable(String(localized: "远程投送执行器没能启动：\(String(describing: $0))")) }) {
-            // 刷新不因取消抛错；退出收尾取消了这个任务时，迟到的 start 当场抛取消、不再起执行器（`DeliveryExecutor.start`）
-            await self.refreshAgentIntegrations()
             try await self.executor.start()
         }
         follow(reporting: { .syncUnavailable(String(localized: "目录绑定没能同步给手机：\(String(describing: $0))")) }) { try await self.startDirectoryBindings() }
@@ -64,14 +60,6 @@ extension AppServices {
             reportIssue(.bridgeUnavailable("\(error)"))
         }
         follow { await self.indexAgents() }
-    }
-
-    private func refreshAgentIntegrations() async {
-        do {
-            try await agents.refresh()
-        } catch where !Task.isCancelled {
-            reportIssue(.bridgeUnavailable(String(localized: "Agent 的接入没能更新：\(error.localizedDescription)")))
-        } catch {}
     }
 
     /// 睡眠期间的推送可能没收到。
@@ -163,14 +151,14 @@ extension AppServices {
     }
 
     /// 没接入的只有这台 Mac 托管过的会话（托管的会话没接入也开得出，`AgentProbe`）；
-    /// 检测出没接入（关掉开关，或 CuePad 的文件被删了）时先删掉范围外会话的本机索引，会话的同步记录与对话不动。
+    /// 没接入（关掉开关）时先删掉范围外会话的本机索引，会话的同步记录与对话不动。
     private func indexAgents() async {
         var indexing: [AgentKind: (connected: Bool, task: Task<Void, Never>)] = [:]
         defer { for entry in indexing.values { entry.task.cancel() } }
-        let statuses = Observations { [agents] in AgentKind.allCases.map { agents.status($0)?.isConnected } }
+        let statuses = Observations { [settings] in AgentKind.allCases.map { settings.connectedAgents.contains($0) } }
         for await connected in statuses {
             for (agent, isConnected) in zip(AgentKind.allCases, connected) {
-                guard let isConnected, indexing[agent]?.connected != isConnected else { continue }
+                guard indexing[agent]?.connected != isConnected else { continue }
                 if let previous = indexing.removeValue(forKey: agent) {
                     previous.task.cancel()
                     await previous.task.value

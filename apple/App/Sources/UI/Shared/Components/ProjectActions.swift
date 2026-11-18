@@ -8,12 +8,21 @@ struct ProjectActions: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
+        Group { items }.menuIcons()
+    }
+
+    @ViewBuilder private var items: some View {
         let id = project.id, pinned = !project.isPinned
         Button(project.isPinned ? "取消置顶" : "置顶", icon: project.isPinned ? .unpin : .pin) {
             workspace.perform { try await $0.updateProject(id) { $0.isPinned = pinned } }
         }
         Button("编辑名称与图标…", icon: .rename) { workspace.projectForm = .init(project: project) }
-        if folders { ProjectFolderItems(project: project) } else { Button("看进展", icon: .task) { workspace.showProgress(of: id) } }
+        if folders {
+            // 文件夹的几项收进一层子菜单：菜单至多三组，这几项不是每天用的
+            Menu("文件夹", icon: .folder) { ProjectFolderItems(project: project) }
+        } else {
+            Button("看进展", icon: .task) { workspace.showProgress(of: id) }
+        }
         // 默认项目不能删（`CueStore.trashProject` 也拒绝）
         if !project.isDefault {
             Divider()

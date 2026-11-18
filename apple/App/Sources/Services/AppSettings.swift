@@ -27,6 +27,7 @@ final class AppSettings {
         static let theme = "theme"
         #if os(macOS)
         static let alerts = "alerts"
+        static let connectedAgents = "connectedAgents"
         #endif
         static let replyDrafts = "replyDrafts"
         static let launchDefault = "launchDefault"
@@ -34,6 +35,7 @@ final class AppSettings {
         static let navigationPane = "navigationPane"
         static let currentProject = "currentProject"
         static let railExpanded = "railExpanded"
+        static let railOpenProjects = "railOpenProjects"
         static let cueOpen = "cueOpen"
         static let cueLeft = "cueLeft"
         static let sounds = AlertTone.enabledKey
@@ -52,6 +54,8 @@ final class AppSettings {
     }
     #if os(macOS)
     var alerts: AlertPreferences { didSet { defaults.set(alerts.stored, forKey: Key.alerts) } }
+    /// 接入了的几家：它在这台 Mac 上的会话记录全量读成历史（`AppServices.indexAgents`）。只经 `AppServices.connectAgents`、`disconnectAgent` 改。
+    var connectedAgents: Set<AgentKind> { didSet { defaults.set(connectedAgents.map(\.rawValue).sorted(), forKey: Key.connectedAgents) } }
     #endif
     /// 通知的提示音与界面里的操作音一起开关（`Sound`）；手机锁屏通知的那一声由通知扩展照这个键定。
     var sounds: Bool { didSet { defaults.set(sounds, forKey: Key.sounds) } }
@@ -83,6 +87,8 @@ final class AppSettings {
     var navigationPane: NavigationPane { didSet { defaults.set(navigationPane.rawValue, forKey: Key.navigationPane) } }
     /// 宽屏会话条的用户选择（只有这一份，不随主区放着什么页变）；窗口不够宽时只改变呈现，不写这个值。
     var railExpanded: Bool { didSet { defaults.set(railExpanded, forKey: Key.railExpanded) } }
+    /// 会话条里展开着的项目（本机）：重开、收起再拉出会话条都还是上次那样。
+    var railOpenProjects: Set<UUID> { didSet { defaults.set(railOpenProjects.map(\.uuidString), forKey: Key.railOpenProjects) } }
     /// 窗口放不下时只改呈现，不写这个值。
     var cueOpen: Bool { didSet { defaults.set(cueOpen, forKey: Key.cueOpen) } }
     /// 上次离开 Cue 页的时刻（本机）：回来时离开够久就重开舞台（`CueStage.opens`）。没有界面读它，不进观察。
@@ -207,12 +213,14 @@ final class AppSettings {
         currentProject = string(Key.currentProject).flatMap(UUID.init(uuidString:))
         #if os(macOS)
         alerts = AlertPreferences(stored: defaults.dictionary(forKey: Key.alerts))
+        connectedAgents = Set((defaults.stringArray(forKey: Key.connectedAgents) ?? []).compactMap(AgentKind.init(rawValue:)))
         #endif
         sounds = defaults.object(forKey: Key.sounds) as? Bool ?? true
         launchDefault = Self.decoded(LaunchPreference.self, Key.launchDefault, in: defaults) ?? LaunchPreference(agent: .pi)
         projectLaunches = Self.decoded([UUID: LaunchPreference].self, Key.projectLaunches, in: defaults) ?? [:]
         navigationPane = string(Key.navigationPane).flatMap(NavigationPane.init(rawValue:)) ?? .projects
         railExpanded = defaults.object(forKey: Key.railExpanded) as? Bool ?? true
+        railOpenProjects = Set((defaults.stringArray(forKey: Key.railOpenProjects) ?? []).compactMap(UUID.init(uuidString:)))
         cueOpen = defaults.object(forKey: Key.cueOpen) as? Bool ?? true
         cueLeft = defaults.object(forKey: Key.cueLeft) as? Date
         replyDrafts = (Self.decoded([UUID: SavedDraft].self, Key.replyDrafts, in: defaults) ?? [:]).mapValues(ReplyDraftSlot.init)

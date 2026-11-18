@@ -27,7 +27,7 @@ extension TaskFlowTests {
     }
 
     @Test(arguments: ["complete", "archive", "trash"])
-    func 纯绑定借用托管会话_重复关联不写入_离开看板不结束(action: String) async throws {
+    func 纯绑定借用托管会话_重复关联不写入_归档删除不结束_你点完成才休眠(action: String) async throws {
         let workspace = Workspace(services: rig.services)
         let task = try await workspace.createTask("跟进语音", in: Project.defaultID)
         let recorder = try await rig.runtimeRecorder(on: "remote-mac")
@@ -45,7 +45,12 @@ extension TaskFlowTests {
         case "trash": try await workspace.trash(id)
         default: try await workspace.complete(id)
         }
-        #expect(try await store.deliveryRequests().isEmpty)
+        let ends = try await store.deliveryRequests()
+        if action == "complete" {
+            #expect(ends.map(\.end) == [.explicit] && ends.first?.target.ref == "voice", "你亲手点的完成：会话休眠，是点名的")
+        } else {
+            #expect(ends.isEmpty)
+        }
         #expect(try await store.sessionItems(sessionIDs: ["voice"])["voice"]?.state.state == .known(.thinking))
     }
 

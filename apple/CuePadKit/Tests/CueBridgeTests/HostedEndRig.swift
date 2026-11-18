@@ -117,7 +117,7 @@ final class EndRig {
             ])
             makeRuntime = { [bridge] in
                 let codex = CodexRuntime(
-                    bridge: bridge, paths: AgentPaths(pi: pi, environment: environment), codex: { executable }, locate: { locator }, timing: timing)
+                    bridge: bridge, paths: AgentPaths(pi: pi, environment: environment), brief: SessionBrief.text(cuepad: PiProcess.cuepad), codex: { executable }, locate: { locator }, timing: timing)
                 try codex.start()
                 return codex
             }
@@ -132,7 +132,7 @@ final class EndRig {
             ]
             makeRuntime = { [bridge] in
                 let grok = GrokRuntime(
-                    bridge: bridge, paths: AgentPaths(pi: pi, environment: environment), grok: { executable }, locate: { locator },
+                    bridge: bridge, paths: AgentPaths(pi: pi, environment: environment), brief: SessionBrief.text(cuepad: PiProcess.cuepad), grok: { executable }, locate: { locator },
                     timing: timing)
                 try grok.start()
                 return grok
@@ -144,7 +144,7 @@ final class EndRig {
                 "DEEPSEEK_SEARCH_BASE_URL": model.baseURL, "DSH_TELEMETRY_DISABLED": "1",
             ])
             makeRuntime = { [bridge] in
-                DshRuntime(bridge: bridge, paths: AgentPaths(pi: pi, environment: environment), dsh: { executable }, locate: { locator }, timing: timing)
+                DshRuntime(bridge: bridge, paths: AgentPaths(pi: pi, environment: environment), brief: SessionBrief.text(cuepad: PiProcess.cuepad), dsh: { executable }, locate: { locator }, timing: timing)
             }
             modelKey = ModelKey(provider: "deepseek-official", id: "deepseek-flash")
         }

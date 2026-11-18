@@ -8,16 +8,17 @@ struct CardActions: View {
     var selectable = false
     var leaf = false
     var opens = false
+    /// 点它进的那个会话：打开任务旁边多一项并排打开。
     var session: SessionState?
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        let ends = session?.canEnd == true
-        let sections = more ? CardMenu.more(for: card, bindsSession: leaf) : CardMenu.sections(for: card, selectable: selectable, bindsSession: leaf, opens: opens, endsSession: ends)
+        let sections = more ? CardMenu.more(for: card, bindsSession: leaf) : CardMenu.sections(for: card, selectable: selectable, opens: opens)
         ForEach(sections.indices, id: \.self) { index in
             if index > 0 { Divider() }
             ForEach(sections[index], id: \.self, content: item)
         }
+        .menuIcons()
     }
 
     @ViewBuilder private func item(_ item: CardMenu.Item) -> some View {
@@ -25,8 +26,9 @@ struct CardActions: View {
         case .move: moveMenu
         case .bindSession:
             Menu(item.title, icon: item.icon) { SessionBindItems(leaf: card) }
-        case .endSession:
-            if let session, let end = SessionActions.end(session, ending: false, in: workspace) { RowActionButtons(actions: [end]) }
+        case .open:
+            Button(item.title, icon: item.icon) { workspace.openTask(card) }
+            if let session { OpenSessionBeside(session: session); HandoffButton(session: session) }
         default:
             if let run = item.run(on: card, in: workspace) {
                 Button(item.title, icon: item.icon, role: item.tone == .destructive ? .destructive : nil, action: run)
@@ -62,7 +64,6 @@ extension CardMenu.Item {
         case .outdent: "反缩进"
         case .more: "更多"
         case .open: "打开任务"
-        case .endSession: "结束会话"
         }
     }
 
@@ -82,7 +83,6 @@ extension CardMenu.Item {
         case .outdent: .outdent
         case .more: .more
         case .open: .task
-        case .endSession: .endSession
         }
     }
 
@@ -126,7 +126,7 @@ extension CardMenu.Item {
             #else
             return nil
             #endif
-        case .move, .bindSession, .endSession: return nil
+        case .move, .bindSession: return nil
         }
     }
 

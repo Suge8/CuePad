@@ -70,11 +70,12 @@ extension TaskFlowTests {
             if recovery == "ui" {
                 let issue = MacDelivery.endProgress(try await store.deliveryRequests(toSession: ended.sessionID), at: services.speech)
                 #expect(issue?.unconfirmedReason != nil)
-                let action = try #require(SessionActions.end(ended, ending: false, recovering: issue != nil, in: workspace))
+                let action = try #require(SessionActions.sleep(ended, ending: false, recovering: issue != nil, in: workspace))
                 #expect(action.enabled)
+                // 歇着的会话再来一次不问，当场发
                 action.run()
-                guard case .end(let asked) = workspace.sessionAsk else { Issue.record("恢复按钮必须打开结束确认框"); return }
-                await workspace.end(asked)
+                #expect(workspace.sessionAsk == nil)
+                try await eventually("休眠已发出") { try await store.deliveryRequests().contains { $0.end == .explicit } }
             } else {
                 let host = services.hostID
                 try await store.updateCueProfile { $0.hostID = host; $0.enabledAt = .now }

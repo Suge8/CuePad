@@ -24,8 +24,6 @@ final class CardPresses {
         return presence
     }
 
-    func beginSelecting() { isSelecting = true }
-
     /// 在选择中或按着 ⌘ 时这一下是选上或取消（返回 true，不打开）。
     func takesClick(on card: UUID, command: Bool) -> Bool {
         guard isSelecting || command else { return false }

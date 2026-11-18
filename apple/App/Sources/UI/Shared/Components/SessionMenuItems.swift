@@ -13,16 +13,17 @@ struct SessionMenuItems: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
+        let open = task?.tasks.filter { $0.task.status != .done } ?? []
         if let place { Section { } header: { Text(place) } }
         if let link = task {
-            let open = completes ? link.open : []
+            let open = completes ? open : []
             ForEach(open) { item in
-                Button(open.count > 1 ? "完成「\(item.task.title)」" : "完成任务", icon: .complete) { workspace.completeTask(item.task.id) }
+                Button(open.count > 1 ? "完成「\(item.task.title)」" : "完成任务", icon: .complete) { workspace.completeTask(item.task.id) }.menuIcons()
             }
-            SessionTaskBindItems(session: session, link: link)
+            SessionTaskBindItems(session: session, link: link).menuIcons()
             Divider()
         }
-        SessionActions(session: session, task: pin, ending: ending)
+        SessionActions(session: session, task: pin, ending: ending, completes: open.isEmpty)
     }
 }
 

@@ -133,7 +133,7 @@ struct TaskLine: View {
             .onTapGesture(perform: open)
             .contextMenu {
                 let session = agents.items[task.id]?.state
-                CardActions(card: task, leaf: subtasks == nil, opens: session != nil, session: session)
+                CardActions(card: task, opens: session != nil, session: session)
             }
             .padding(.vertical, TaskMetrics.rowGap)
     }

@@ -28,12 +28,12 @@ extension CueStore {
         }
     }
 
-    /// 本来就做完了的没有可撤的。
-    func completing(_ id: UUID) async throws -> (status: TaskStatus, undo: Undo?) {
+    /// 本来就做完了的没有可撤的。`unreached`：该跟着休眠、那台 Mac 却说了离开的会话（`completeTask(_:sleepingAt:)`）。
+    func completing(_ id: UUID, at moment: Speech.Moment) async throws -> (status: TaskStatus, undo: Undo?, unreached: [SessionState]) {
         let done = try card(id)?.completedAt != nil
-        let status = try completeTask(id)
-        guard !done, status == .done, let time = try card(id)?.completedAt else { return (status, nil) }
-        return (status, { try await self.uncompleteTask(id, completedAt: time) })
+        let (status, unreached) = try completeTask(id, sleepingAt: moment)
+        guard !done, status == .done, let time = try card(id)?.completedAt else { return (status, nil, unreached) }
+        return (status, { try await self.uncompleteTask(id, completedAt: time) }, unreached)
     }
 
     func trashing(_ ids: [UUID]) async throws -> Undo {

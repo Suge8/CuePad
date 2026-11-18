@@ -41,7 +41,7 @@ struct PreviewBatch: View {
     private func tile(_ preview: PreviewItem, _ shape: DeliverableTile.Shape) -> some View {
         DeliverableTile(
             preview: preview, label: preview.title, shape: shape, captioned: true, zoom: PreviewZoomKey(group: group, preview: preview.id), open: open)
-        .contextMenu { Button("回复", icon: .reply) { reply(preview) } }
+        .contextMenu { Button("回复", icon: .reply) { reply(preview) }.menuIcons() }
     }
 
     nonisolated static let gap = Spacing.item

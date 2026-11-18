@@ -138,7 +138,7 @@ private extension Character {
     var isLetterOrDigit: Bool { isLetter || isNumber }
 }
 
-/// 拖到已完成、完成、置顶、改名与任务是同一组操作（`Workspace+Adopt`）：第一次这样用时当场给它建任务绑上。
+/// 拖到已完成、完成、置顶、改名与任务是同一组操作（`Workspace+Adopt`）：第一次这样用时当场给它建任务绑上；完成连同结束这个会话。
 struct BoardSessionCard: View {
     let agent: SessionListItem
     let project: Project?
@@ -166,9 +166,9 @@ struct BoardSessionCard: View {
         }
         .boardRescue(session)
         .help(Dotted(project?.shownName, session.agentMark).visible)
-        .contextMenu { OpenSessionBeside(session: session); SessionActions(session: session, board: agent) }
+        .contextMenu { SessionActions(session: session) }
         .accessibilityLabel(Dotted(name, pulse.fullContext.map { $0.help.spoken } ?? pulse.shown?.label, pulse.handoff?.waiting).spoken)
-        .accessibilityActions { OpenSessionBeside(session: session); SessionActions(session: session, board: agent) }
+        .accessibilityActions { SessionActions(session: session) }
     }
 }
 

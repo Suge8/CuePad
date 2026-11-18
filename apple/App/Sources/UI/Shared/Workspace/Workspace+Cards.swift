@@ -24,22 +24,36 @@ extension Workspace {
     }
 
     /// 已经完成的不动：界面手里的副本可能已过时（别的设备刚做完），再来一次不能把它翻回去（`CueStore.completeTask`）。
-    /// 绑着的会话里绑着的事都做完了的一起结束，结束哪些只由 Store 定（与 Cue 的 done 同一条规则）。
+    /// 你点的完成就是这件事用完了：它的会话跟着休眠，哪些只由 Store 定（`CueStore.sessionsFreed`：这件事还有没做完的步骤、别的事还在用的留着）。
+    /// 留着时提示照实说，不让人猜这次关没关。完成与休眠一次写下（`CueStore.completeTask(_:sleepingAt:)`）；休眠没发出去（那台 Mac 够不着）照常报错，完成不撤。
     func complete(_ id: UUID) async throws {
-        let (status, undo) = try await services.store.completing(id)
+        let store = services.store
+        let (status, undo, unreached) = try await store.completing(id, at: services.speech)
         // 做完了就给一个归档（不自动归档）
         guard status == .done else { return }
         if let undo { undoable("完成", undo) }
         let archiving = NoticeAction(title: String(localized: "归档")) { try await $0.archive(id) }
-        say("已完成", action: archiving, sound: .check)
+        let away = Set(unreached.map(\.sessionID))
+        let stays = try await store.sessionsKept(afterCompleting: id).contains { !away.contains($0.sessionID) }
+        say(stays ? "已完成，会话还在用，没有休眠" : "已完成", action: archiving, sound: .check)
+        // 手里那条"离开"可能已经过时：这几个照点名结束的路再试（先拉一次同步）。一个没发出去不耽误后面的，都试过再报头一个错
+        var failure: (any Error)?
+        for session in unreached {
+            do { _ = try await services.end(session) } catch { failure = failure ?? error }
+        }
+        if let failure { throw failure }
     }
 
     /// 完成一件事的入口都先过这里（完成圈、拖到已完成、卡片菜单、看板上完成没绑任务的会话）：要问就交给确认框（`sessionAsk`），答应了才 `proceed`；不用问当场 `proceed`。`proceed` 收到 Workspace 而不自己攥着：问着的时候它挂在 Workspace 上，攥着就是一个环。
     /// 问句挨着正显示这张卡的那个视图弹出（`completionClaims`）；`anchored` 为 false（拖放：卡已离开原位）或没有视图认领时窗口居中出。
     func confirmComplete(
-        _ task: UUID?, subtasks: TaskProgress?, busy: SessionState?, anchored: Bool = true, then proceed: @escaping @MainActor (Workspace) async throws -> Void
+        _ task: UUID?, subtasks: TaskProgress?, busy: SessionState?, anchored: Bool = true,
+        then proceed: @escaping @MainActor (Workspace) async throws -> Void
     ) async throws {
-        if let ask = CompletionAsk(subtasks: subtasks, busy: busy) {
+        // 没有任务的（完成的是会话本身，`finish`）一定休眠它
+        var sleeps = true
+        if let task, let busy { sleeps = try await services.store.sessionsEnding(byCompleting: task, at: services.speech).contains(busy.sessionID) }
+        if let ask = CompletionAsk(subtasks: subtasks, busy: busy, sleeps: sleeps) {
             let claimer = anchored ? task.flatMap { completionClaims[$0]?.last } : nil
             return sessionAsk = .complete(ask, claimer: claimer, then: proceed)
         }
@@ -169,17 +183,17 @@ extension Workspace {
     }
 }
 
-/// 完成前先问什么：还有没做完的子任务问一起完成；它的 Agent 在做或在等你问一句（`agentBusyDialog`：为这件事开的会话一起结束，别的不结束）。
+/// 完成前先问什么：还有没做完的子任务问一起完成；它的 Agent 在做或在等你问一句（`agentBusyDialog`），`sleeps` 是完成会不会让这个会话休眠（`CueStore.sessionsFreed`）。
 enum CompletionAsk: Equatable {
     case steps(TaskProgress)
-    case agent(SessionState)
+    case agent(SessionState, sleeps: Bool)
 
     /// `busy`：在做或在等你的会话（`TaskNext.busySession`）。
-    init?(subtasks: TaskProgress?, busy: SessionState?) {
+    init?(subtasks: TaskProgress?, busy: SessionState?, sleeps: Bool) {
         if let subtasks, TaskCopy.hasOpen(subtasks) {
             self = .steps(subtasks)
         } else if let busy {
-            self = .agent(busy)
+            self = .agent(busy, sleeps: sleeps)
         } else {
             return nil
         }

@@ -34,6 +34,11 @@ struct RowAction {
     }
 }
 
+extension View {
+    /// 挂在菜单的内容上。Mac 的右键菜单默认只画字，图标要点名才画；手机的长按菜单本来就画。
+    func menuIcons() -> some View { labelStyle(.titleAndIcon) }
+}
+
 /// 排在前面的在最外侧，一滑到底执行它。
 struct RowSwipes {
     var leading: [RowAction] = []

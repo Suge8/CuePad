@@ -104,7 +104,7 @@ nonisolated extension DeliveryMode {
         case .transcript: String(localized: "补写对话")
         case .step: String(localized: "取一步的详情")
         case .config: String(localized: "模型与思考强度")
-        case .end: String(localized: "结束会话")
+        case .end: String(localized: "休眠")
         case .stop: String(localized: "停止这一轮")
         case .retry: String(localized: "重试这一轮")
         case .bind: String(localized: "绑定文件夹")

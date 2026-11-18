@@ -30,7 +30,7 @@ extension DshRuntime {
     nonisolated private static func askDsh(_ executable: URL, _ probe: AgentProbe) async throws -> MacAgent? {
         try DshLaunch.prepare(.hosted)
         let environment = probe.locator.environment(
-            launching: executable, overrides: DshLaunch.environment(probe.paths, model: nil).merging(["CUEPAD_PROBE": "1"]) { $1 })
+            launching: executable, overrides: DshLaunch.environment(probe.paths, model: nil, brief: nil).merging(["CUEPAD_PROBE": "1"]) { $1 })
         let process = try await ChildProcess(
             executable, DshLaunch.arguments(.hosted), directory: FileManager.default.temporaryDirectory, environment: environment, placement: .group,
             input: .lifeline, output: .lines)
@@ -69,8 +69,8 @@ enum DshLaunch {
         try Data(text.utf8).write(to: file(patch), options: .atomic)
     }
 
-    static func environment(_ paths: AgentPaths, model: String?) -> [String: String] {
-        paths.launchEnvironment(of: .dsh).merging(["CUEPAD_MODEL": model].compactMapValues(\.self)) { $1 }
+    static func environment(_ paths: AgentPaths, model: String?, brief: String?) -> [String: String] {
+        paths.launchEnvironment(of: .dsh).merging(["CUEPAD_MODEL": model, "CUEPAD_BRIEF": brief].compactMapValues(\.self)) { $1 }
     }
 
     static func brainEnvironment(in run: URL, prompt: String, model: String?) throws -> [String: String] {
@@ -83,7 +83,7 @@ enum DshLaunch {
 
     /// 托管会话另插上提问工具（acp profile 里没有它）：它问的经插件转给 CuePad（`DshDialect+Ask`）。
     private static var hosted: String {
-        common(prompt: false, storage: "dshHomePath('\(DshRuntime.storage)')", insert: "    - id: tool-ask-user\n      name: '@deepseek-ai/dsh-tool-ask-user'\n")
+        common(prompt: false, brief: true, storage: "dshHomePath('\(DshRuntime.storage)')", insert: "    - id: tool-ask-user\n      name: '@deepseek-ai/dsh-tool-ask-user'\n")
     }
 
     private static var brain: String {
@@ -93,7 +93,7 @@ enum DshLaunch {
             "tool-subagent-fork", "tool-subagent-control", "tool-subagent-list-agents", "tool-working-directory", "tool-plugin-manager",
             "repeat-tool-reminder", "mcp-resources", "session-title",
         ]
-        return common(prompt: true, storage: "process.env.CUEPAD_BRAIN_DIR", insert: "") + """
+        return common(prompt: true, brief: false, storage: "process.env.CUEPAD_BRAIN_DIR", insert: "") + """
             - id: system-prompt
               config: { includeHarnessIdentity: false, includeRuntimeContext: false }
             - id: tool-fs
@@ -104,12 +104,12 @@ enum DshLaunch {
             """ + off.map { "- { id: \($0), disabled: true }\n" }.joined()
     }
 
-    private static func common(prompt: Bool, storage: String, insert: String) -> String {
+    private static func common(prompt: Bool, brief: Bool, storage: String, insert: String) -> String {
         """
         - insert:
             - id: cuepad
               name: \(quoted(plugin.path))
-        \(prompt ? "      config: { prompt: !!js process.env.CUEPAD_PROMPT }\n" : "")\(insert)- id: acp
+        \(prompt ? "      config: { prompt: !!js process.env.CUEPAD_PROMPT }\n" : "")\(brief ? "      config: { brief: !!js process.env.CUEPAD_BRIEF }\n" : "")\(insert)- id: acp
           inject: [acpAppStartup, cuepadAcp]
           config:
             stream: !!js ctx.get('cuepadAcp').stream

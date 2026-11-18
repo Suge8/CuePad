@@ -14,7 +14,7 @@ struct MacDependencies {
     var wakeNotifications: NotificationCenter
     /// `bridge` 必须用同一个钟建（`Bridge.timing`）；测试换成手动推进的。
     var timing: Timing = .system
-    /// Agent 的技能写的是 App 里那份的绝对路径，不依赖这个链接。
+    /// 托管会话的指引写的是 App 里那份的绝对路径（`SessionBrief`），不依赖这个链接。
     var commandLineTool: CommandLineToolInstaller
     var updater: (any AppUpdater)?
     /// OpenCode 的会话索引由它的接入直接写进资料库，所以等资料库打开后再建（参数就是它）。
@@ -50,7 +50,8 @@ struct MacDependencies {
                 if let agentHome { return ExecutableLocator(home: agentHome) }
                 return await .system
             },
-            cuepad: commandLineTool.helper, isolated: isolated))
+            isolated: isolated))
+        let brief = SessionBrief.text(cuepad: commandLineTool.helper)
         let hostID = isolated ? DebugHooks.hostID ?? Self.isolatedHostID : HostIdentity.current()
         // 隔离实例用真实库的副本时，副本里记给这台的请求、会话索引（真实 ~/.pi 下的会话文件）、项目文件夹与 Cue 值班都按本机 id 认，
         // 冒充了这台就会在真实目录里恢复、开会话（#34）
@@ -67,14 +68,14 @@ struct MacDependencies {
             commandLineTool: commandLineTool,
             updater: AppIdentity.isRelease ? SparkleUpdater() : DebugHooks.updater,
             runtimes: { store in [
-                .pi: PiRuntime(bridge: bridge, paths: paths.pi, pi: { await agents.executable(.pi) }),
-                .claudeCode: ClaudeCodeRuntime(bridge: bridge, paths: paths, store: store, claude: { await agents.executable(.claudeCode) }),
-                .codex: CodexRuntime(bridge: bridge, paths: paths, codex: { await agents.executable(.codex) }),
+                .pi: PiRuntime(bridge: bridge, paths: paths.pi, brief: brief, pi: { await agents.executable(.pi) }),
+                .claudeCode: ClaudeCodeRuntime(bridge: bridge, paths: paths, store: store, brief: brief, claude: { await agents.executable(.claudeCode) }),
+                .codex: CodexRuntime(bridge: bridge, paths: paths, brief: brief, codex: { await agents.executable(.codex) }),
                 .opencode: OpenCodeRuntime(
-                    bridge: bridge, paths: paths, store: store, hostID: hostID, opencode: { await agents.executable(.opencode) },
+                    bridge: bridge, paths: paths, store: store, hostID: hostID, brief: brief, opencode: { await agents.executable(.opencode) },
                     transcriptWindow: Chat.transcriptWindow),
-                .grok: GrokRuntime(bridge: bridge, paths: paths, grok: { await agents.executable(.grok) }),
-                .dsh: DshRuntime(bridge: bridge, paths: paths, dsh: { await agents.executable(.dsh) }),
+                .grok: GrokRuntime(bridge: bridge, paths: paths, brief: brief, grok: { await agents.executable(.grok) }),
+                .dsh: DshRuntime(bridge: bridge, paths: paths, brief: brief, dsh: { await agents.executable(.dsh) }),
             ] },
             pasteboard: .general,
             cue: CueDependencies(
