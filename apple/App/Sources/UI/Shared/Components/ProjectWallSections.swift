@@ -42,7 +42,8 @@ struct ProjectWallSections<Tile: View>: View {
                     // 平时登记在一个不会有卡用的 id 上：这一格的身份不随登记换
                     .zoomSource(born.flatMap { data.entries[$0] == nil ? $0 : nil } ?? Project.defaultID, in: zoom)
                     #endif
-                ForEach(shown.compactMap { data.entries[$0] }) { tile($0).transition(.opacity) }
+                // 一张卡是一整块挪过去的（`geometryGroup`）：不然卡的底在滑，里面的字已经按新的宽排好、先到了，看着像字从卡上掉下来
+                ForEach(shown.compactMap { data.entries[$0] }) { tile($0).geometryGroup().transition(.opacity) }
             }
             // 加一张、删一张，其余的卡滑到新位置，不是整面墙闪一下换好
             .animation(Motion.spatial(Motion.travel, reduceMotion: reduceMotion), value: shown)

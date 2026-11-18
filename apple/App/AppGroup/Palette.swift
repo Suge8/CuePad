@@ -214,13 +214,6 @@ private extension Color {
     }
 }
 
-extension Color {
-    /// 插画色盘是主题的源数据，不是界面语义色；这里只解码，不保存或复制颜料。
-    nonisolated static func illustrationColors(_ pigments: [UInt32]) -> [Color] {
-        pigments.map { Color(hex: $0) }
-    }
-}
-
 extension EnvironmentValues {
     /// 环境里的配色：只由外观与对比度算出，不另存一份、不靠谁注入。系统把这两样带进每一层（sheet、全屏、窗口那一层的气泡与浮出、
     /// 导航栏与菜单的预览、另起的托管视图、小组件与扩展），哪一层都拿到对的配色；要按某种外观画就改外观（`colorScheme`），不改配色。

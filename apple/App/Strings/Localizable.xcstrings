@@ -7688,38 +7688,6 @@
         }
       }
     },
-    "分享、移到项目、复制、归档" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Share, move to project, copy, archive"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "分享、移到项目、复制、归档"
-          }
-        }
-      }
-    },
-    "分享原图" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Share Original Images"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "分享原图"
-          }
-        }
-      }
-    },
     "分享原始文件…" : {
       "localizations" : {
         "en" : {
@@ -7732,22 +7700,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "分享原始文件…"
-          }
-        }
-      }
-    },
-    "分享文字" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Share Text"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "分享文字"
           }
         }
       }
@@ -8384,6 +8336,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "原因：%@"
+          }
+        }
+      }
+    },
+    "原图" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Original Images"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "原图"
           }
         }
       }
@@ -14352,18 +14320,18 @@
         }
       }
     },
-    "排成图片分享" : {
+    "排成图片" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Share as Image"
+            "value" : "As an Image"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "排成图片分享"
+            "value" : "排成图片"
           }
         }
       }
@@ -15456,6 +15424,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "文件超过 %lld MB，存不进来"
+          }
+        }
+      }
+    },
+    "文字" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Text"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文字"
           }
         }
       }

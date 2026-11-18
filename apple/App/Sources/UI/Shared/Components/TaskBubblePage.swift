@@ -19,7 +19,7 @@ struct TaskBubblePage: View {
                 HStack(spacing: 0) {
                     back
                     Spacer(minLength: 8)
-                    actions
+                    more
                 }
                 .frame(height: TaskMetrics.rowHeight)
             }
@@ -28,7 +28,7 @@ struct TaskBubblePage: View {
                 GoalCheck(task: focus, subtasks: overview ? data.progress : nil).padding(.top, BubbleMetrics.ringTop)
                     .opacity(ringless ? 0 : 1).allowsHitTesting(!ringless).readerHidden(ringless)
                 TaskEditor(card: focus, editing: editing).padding(.trailing, overview ? 0 : BubbleMetrics.textTrailing)
-                if overview { actions }
+                if overview { more }
             }
             .padding(.top, overview ? Spacing.tight : 0)
             if overview, !data.steps.isEmpty {
@@ -52,15 +52,6 @@ struct TaskBubblePage: View {
     }
 
     private var ringless: Bool { focus.status == .todo && (focus.id != data.goal.id || data.steps.isEmpty) }
-
-    private var actions: some View {
-        HStack(spacing: 0) {
-            CardQuickButtons(card: focus).labelStyle(.iconOnly).font(BubbleMetrics.laneFont).foregroundStyle(palette.ink2)
-                .frame(width: TaskMetrics.chipTarget, height: TaskMetrics.chipTarget).contentShape(.rect)
-                .buttonStyle(PressStyle(.button))
-            more
-        }
-    }
 
     private var back: some View {
         Button { workspace.openTask(data.goal) } label: {

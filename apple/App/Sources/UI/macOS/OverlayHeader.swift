@@ -33,29 +33,41 @@ extension View {
     }
 }
 
-/// 在主区栏头的正中（`MainColumn` 把它叠在那一排上）：下面的正文栏也是居中的。一行：项目名、接着改于何时与存没存上。
+/// 在主区栏头的正中（`MainColumn` 把它叠在那一排上）：下面的正文栏也是居中的。两行都居中：上面是项目名，下面一支笔带着改于何时与存没存上。
+/// 排成一行过：状态词给最长的那个留着宽，短的时候右边空一截，整块看着偏左。
 struct OverlayTitle: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
     var body: some View {
         let content = workspace.overlayHeader.content.flatMap { $0.page == workspace.overlay ? $0 : nil }
-        HStack(spacing: Spacing.item) {
-            Text(verbatim: content?.title ?? "").font(Typography.toolbarTitle).foregroundStyle(palette.ink)
+        VStack(spacing: 0) {
+            Text(verbatim: content?.title ?? "").font(Typography.toolbarTitlePaired).foregroundStyle(palette.ink)
                 .accessibilityAddTraits(.isHeader)
-            ZStack(alignment: .leading) {
-                Text(content?.widest ?? Dotted()).hidden().accessibilityHidden(true)
-                Text(content?.detail ?? Dotted()).foregroundStyle(content?.failed == true ? palette.failure : palette.ink3)
+            // 按最长的那个状态词留宽（状态换字时玻璃不伸缩），笔跟着字一起居中在里面
+            ZStack {
+                line(content?.widest ?? Dotted()).hidden()
+                line(content?.detail ?? Dotted())
             }
             .font(Typography.toolbarPath)
+            .foregroundStyle(content?.failed == true ? palette.failure : palette.ink3)
         }
         .lineLimit(1)
-        .padding(.horizontal, Spacing.group)
-        .frame(height: ControlMetrics.height)
+        .padding(.horizontal, Spacing.part)
+        .frame(height: Self.height)
         .glass(in: .capsule)
         .help(content?.help ?? "")
         .accessibilityElement(children: .combine)
         .opacity(content == nil ? 0 : 1)
     }
+
+    private func line(_ text: Dotted) -> some View {
+        HStack(spacing: Spacing.tight) {
+            Image(.write).accessibilityHidden(true)
+            Text(text)
+        }
+    }
+
+    private static let height: CGFloat = 44
 }
 #endif

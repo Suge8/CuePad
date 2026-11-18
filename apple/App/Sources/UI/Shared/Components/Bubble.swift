@@ -4,7 +4,8 @@ nonisolated enum BubbleSource: Equatable {
     case control(CGRect)
     /// 从一行里点的那一下（任务行这类）：行成百上千，不给每行挂几何读数，只知道点不知道行，按半个列表行高（`BubblePlacement.reach`）让开整行；
     /// 尾巴靠左角对着那一下，气泡往右铺（顺着读的方向，不往回盖住侧栏）。
-    case press(CGPoint)
+    /// `left`：按在一栏清单里时气泡的左沿（`PressPoint.lane`）——同一栏里点哪一条、点在标题的哪个字上，气泡都落在同一条竖线上。
+    case press(CGPoint, left: CGFloat? = nil)
     case unanchored
     case bottom
 }
@@ -33,6 +34,7 @@ nonisolated struct BubblePlacement: Equatable {
     var width: BubblePlacement.Width
     var anchor: CGFloat?
     var leads = false
+    var left: CGFloat?
 
     /// `container`：气泡那一层在窗口里的框（与来源同一套坐标）；`insets`：容器四周不放气泡的那一圈（安全区、工具栏与页边）。
     /// 横向摆法要等量出内容的宽（`frame(ideal:)`，`BubbleStage` 排的时候算），竖向这里就定。
@@ -57,9 +59,10 @@ nonisolated struct BubblePlacement: Equatable {
             return
         case .control(let frame):
             target = frame.offsetBy(dx: -container.minX, dy: -container.minY)
-        case .press(let point):
+        case .press(let point, let lane):
             target = CGRect(x: point.x - container.minX, y: point.y - container.minY - Self.reach, width: 0, height: Self.reach * 2)
             leads = true
+            left = lane.map { $0 - container.minX }
         }
         anchor = target.midX
         let gap = BubbleTail.length
@@ -102,7 +105,7 @@ nonisolated struct BubblePlacement: Equatable {
         }
         let width = min(wanted, room)
         guard let anchor else { return ((minX + maxX - width) / 2, width) }
-        let left = leads ? anchor - Self.lead : anchor - width / 2
+        let left = left ?? (leads ? anchor - Self.lead : anchor - width / 2)
         return (min(max(left, minX), maxX - width), width)
     }
 

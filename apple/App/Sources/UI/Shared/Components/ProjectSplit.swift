@@ -1,8 +1,10 @@
+import CueStore
 import SwiftUI
 
 /// 项目页的两块怎么摆（三端同一份）：窄时任务在上、灵感墙在下；宽到 `sideBySide` 时任务在左、墙在右——宽窗口里一条任务栏靠左、右边整片空着，像页没排完。
 /// 是排版不是两套视图：Cue 那一栏开合让宽度跨过这条线时，两块是挪过去的（`ProjectSplit` 带动画），任务区的开合也留着。
 struct ProjectSplit<Content: View>: View {
+    var project: Project?
     let gap: CGFloat
     @ViewBuilder let content: Content
     /// 上一帧量到的宽够不够并排；nil 是还没量到，头一帧由排版自己按宽度定，不从上下排滑过来。
@@ -10,7 +12,10 @@ struct ProjectSplit<Content: View>: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        ProjectColumns(gap: gap, side: side) { content }
+        VStack(alignment: .leading, spacing: Spacing.part) {
+            if let project { ProjectBanner(project: project) }
+            ProjectColumns(gap: gap, side: side) { content }
+        }
             .onGeometryChange(for: Bool.self) { $0.size.width >= ProjectColumns.sideBySide } action: { side = $0 }
             .animation(Motion.spatial(Motion.travel, reduceMotion: reduceMotion), value: side)
     }
