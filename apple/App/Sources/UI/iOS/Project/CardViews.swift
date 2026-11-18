@@ -10,7 +10,6 @@ struct CardTileView: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @Environment(\.zoomNamespace) private var zoom
-    @Environment(\.noteColor) private var color
     @ScaledMetric(relativeTo: .body) private var height = NoteTile.height
 
     var body: some View {
@@ -44,7 +43,7 @@ struct CardTileView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading).frame(height: height)
             .clipShape(.rect(cornerRadius: Radius.card))
-            .note(color)
+            .note()
             .contentShape(.rect(cornerRadius: Radius.card))
         }
         .buttonStyle(PressStyle(.card))

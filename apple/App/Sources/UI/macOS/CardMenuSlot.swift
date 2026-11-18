@@ -12,7 +12,7 @@ struct CardMenuSlot: View {
 
     var body: some View {
         let card = (opened ?? nil).flatMap { $0.id == workspace.openCard ? $0 : nil }
-        Menu { if let card { items(card).labelStyle(.titleAndIcon) } } label: { Image(.more) }
+        Menu { if let card { items(card).labelStyle(.titleAndIcon) } } label: { Image(.more).imageScale(.large) }
             .menuStyle(.button).menuIndicator(.hidden)
             .buttonStyle(ControlButtonStyle(kind: .circular))
             .fixedSize()

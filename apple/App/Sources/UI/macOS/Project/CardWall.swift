@@ -62,7 +62,6 @@ struct CardTile: View {
     let lastTarget: String?
     let floated: Bool
     @Environment(Workspace.self) private var workspace
-    @Environment(\.noteColor) private var color
     @State private var hovering = false
 
     var body: some View {
@@ -70,7 +69,7 @@ struct CardTile: View {
             CardFace(card: card, lastTarget: lastTarget, floated: floated)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .modifier(SelectedCard())
-                .note(color, lifted: hovering)
+                .note(lifted: hovering)
                 .contentShape(.rect(cornerRadius: Radius.card))
         }
         .buttonStyle(CardOpenStyle())
@@ -117,7 +116,6 @@ private struct DeleteGlyph: View {
     @Environment(\.buttonHovered) private var lit
     @Environment(\.palette) private var palette
     let onNote: Bool
-    @Environment(\.noteColor) private var color
 
     /// 与那一行的日期同一种字、坐在行尾：不是浮在上面的一颗白钮。
     var body: some View {
@@ -125,7 +123,7 @@ private struct DeleteGlyph: View {
             .font(Typography.meta)
             .foregroundStyle(lit ? palette.failure : palette.ink3)
             .frame(width: ControlSize.target, height: ControlSize.target)
-            .background(onNote ? palette.note(color) : .clear, in: .circle)
+            .background(onNote ? palette.note : .clear, in: .circle)
             .contentShape(.circle)
     }
 }

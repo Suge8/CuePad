@@ -1,4 +1,4 @@
 {
-  "images" : [ { "filename" : "cover-penguin.jpg", "idiom" : "universal" } ],
+  "images" : [ { "filename" : "cover-penguin.png", "idiom" : "universal" } ],
   "info" : { "author" : "xcode", "version" : 1 }
 }

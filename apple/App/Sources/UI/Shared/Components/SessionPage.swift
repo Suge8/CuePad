@@ -50,7 +50,7 @@ private struct SessionPageBody: View {
             if workspace.layout == .wide {
                 VStack(spacing: 0) {
                     if let session {
-                        WideSessionTitle(title: digest?.title(at: services.speech) ?? session.title, project: digest?.project?.shownName,
+                        WideSessionTitle(title: digest?.title(at: services.speech) ?? session.title, project: digest?.project,
                                          ended: session.staysEnded(by: digest?.delivery, at: services.speech), column: column)
                             .contextMenu { if secondary { menu(session, digest) } }
                     }

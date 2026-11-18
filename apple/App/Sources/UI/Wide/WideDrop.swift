@@ -65,7 +65,8 @@ extension WideColumnController: UIDropInteractionDelegate {
 /// 排在窗口最顶那一排（`Chrome.band`），左右让出多少由主区给（`headInset`：收起的 Cue 钮压在最右那一块的栏头上）。
 struct WideSessionTitle: View {
     let title: String
-    let project: String?
+    /// 会话所在的项目，写在名字前面，点它去那个项目的页（同项目页栏头里的"项目"回列表）。
+    let project: Project?
     /// 栏头平时只写名字；已结束是这一页与在跑的会话唯一的不同，名字后面标出来。
     var ended = false
     let column: Workspace.Column
@@ -77,7 +78,9 @@ struct WideSessionTitle: View {
     var body: some View {
         HStack(spacing: Spacing.glyph) {
             if let project {
-                Text(verbatim: project).foregroundStyle(palette.ink3).lineLimit(1)
+                Button { workspace.select(.project(project.id)) } label: { Text(verbatim: project.shownName).lineLimit(1) }
+                    .buttonStyle(PressStyle(.inline))
+                    .foregroundStyle(palette.ink3)
                 Text(verbatim: "/").foregroundStyle(palette.ink3).readerHidden(true)
             }
             if let windowID, let session = workspace.session(in: column) {

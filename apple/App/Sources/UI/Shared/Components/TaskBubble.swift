@@ -18,6 +18,7 @@ struct TaskBubble: View {
     @Environment(AppServices.self) private var services
     @Environment(\.closePanel) private var close
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.palette) private var palette
     @State private var data: BubbleData?
     /// 这一页的编辑：页一出现就开着（编辑器从第一帧就在，点哪写哪），翻页、关气泡先写下没保存的字再换。"开始"先等它落盘再交出去。
     @State private var editing: CardEditing?
@@ -27,22 +28,30 @@ struct TaskBubble: View {
         TurnStack {
             if let data, let editing, editing.cardID == data.focus(step).id {
                 let focus = data.focus(step)
-                VStack(alignment: .leading, spacing: BubbleMetrics.footerGap) {
-                    #if os(iOS)
-                    if sheet { SheetGrabber().padding(.bottom, -BubbleMetrics.footerGap) }
-                    #endif
-                    TaskBubblePage(data: data, focus: focus, editing: editing)
-                    ForEach(data.schedules.filter { $0.line.task == focus.id }) { ScheduleStrip(scheduled: $0) }
-                        .padding(.leading, BubbleMetrics.textLeading).padding(.trailing, BubbleMetrics.textTrailing)
-                    BubbleFooter(data: data, focus: focus, editing: editing)
-                        #if os(iOS)
-                        .padding(.leading, BubbleMetrics.textLeading).padding(.trailing, BubbleMetrics.textTrailing)
-                        #else
-                        .padding(.trailing, Spacing.hair)
-                        #endif
+                // 底下那一条（用哪家、哪个模型、"开始"，或 Agent 在做什么）钉在气泡底：正文写长了、子任务多了，气泡里往下滚时它一直在手边，不用滚到底才开得了工
+                LazyVStack(alignment: .leading, spacing: 0, pinnedViews: .sectionFooters) {
+                    Section {
+                        VStack(alignment: .leading, spacing: BubbleMetrics.footerGap) {
+                            #if os(iOS)
+                            if sheet { SheetGrabber().padding(.bottom, -BubbleMetrics.footerGap) }
+                            #endif
+                            TaskBubblePage(data: data, focus: focus, editing: editing)
+                            ForEach(data.schedules.filter { $0.line.task == focus.id }) { ScheduleStrip(scheduled: $0) }
+                                .padding(.leading, BubbleMetrics.textLeading).padding(.trailing, BubbleMetrics.textTrailing)
+                        }
+                        .padding(.top, BubbleMetrics.padding.top).padding(.leading, BubbleMetrics.padding.leading).padding(.trailing, BubbleMetrics.padding.trailing)
+                    } footer: {
+                        BubbleFooter(data: data, focus: focus, editing: editing)
+                            #if os(iOS)
+                            .padding(.leading, BubbleMetrics.textLeading).padding(.trailing, BubbleMetrics.textTrailing)
+                            #else
+                            .padding(.trailing, Spacing.hair)
+                            #endif
+                            .padding(.top, BubbleMetrics.footerGap).padding(.leading, BubbleMetrics.padding.leading).padding(.trailing, BubbleMetrics.padding.trailing)
+                            .padding(.bottom, BubbleMetrics.padding.bottom + (sheet ? BubbleMetrics.sheetBottom : 0))
+                            .background(palette.paper)
+                    }
                 }
-                .padding(BubbleMetrics.padding)
-                .padding(.bottom, sheet ? BubbleMetrics.sheetBottom : 0)
                 .id(focus.id)
                 .transition(Motion.turn(from: step == nil ? .leading : .trailing, reduceMotion: reduceMotion))
             }

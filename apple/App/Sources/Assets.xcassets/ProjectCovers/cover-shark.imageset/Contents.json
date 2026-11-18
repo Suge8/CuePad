@@ -1,4 +1,4 @@
 {
-  "images" : [ { "filename" : "cover-shark.jpg", "idiom" : "universal" } ],
+  "images" : [ { "filename" : "cover-shark.png", "idiom" : "universal" } ],
   "info" : { "author" : "xcode", "version" : 1 }
 }

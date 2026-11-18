@@ -6,7 +6,7 @@ extension View {
     }
 
     /// 项目页的灵感卡：调进项目色的淡彩纸（`Palette.note`），平放、只描一道边；`lifted` 时抬起一档（Mac 指针停着的那一张）。
-    func note(_ color: String, lifted: Bool = false) -> some View { modifier(NoteSurface(color: color, lifted: lifted)) }
+    func note(lifted: Bool = false) -> some View { modifier(NoteSurface(lifted: lifted)) }
 
     /// 不用玻璃：拍板卡后面垫着叠边，玻璃不叠玻璃；卡浮在对话上，对话从它后面滚过，半透的面透出后面的字。
     func dockedPaper() -> some View { paper(cornerRadius: Radius.field, lifted: true) }
@@ -100,12 +100,11 @@ private struct PaperSurface: ViewModifier {
 }
 
 private struct NoteSurface: ViewModifier {
-    let color: String
     let lifted: Bool
     @Environment(\.palette) private var palette
 
     func body(content: Content) -> some View {
-        let shape = RoundedRectangle(cornerRadius: Radius.card), fill = palette.note(color)
+        let shape = RoundedRectangle(cornerRadius: Radius.card), fill = palette.note
         content
             .environment(\.rowSurface, fill)
             // 影子只挂在底那块形状上，且只有抬起的那一张有（同 `PaperSurface`）

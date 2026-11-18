@@ -47,7 +47,6 @@ struct ProjectWallSections<Tile: View>: View {
             }
             // 加一张、删一张，其余的卡滑到新位置，不是整面墙闪一下换好
             .animation(Motion.spatial(Motion.travel, reduceMotion: reduceMotion), value: shown)
-            .environment(\.noteColor, data.project?.color ?? Palette.neutralProject)
             .padding(.bottom, metrics.sectionGap)
             #if os(macOS)
             // 新装的 Mac 上灵感一条条地到：这一轮同步已久时说一声，空着的墙不读作"没有"

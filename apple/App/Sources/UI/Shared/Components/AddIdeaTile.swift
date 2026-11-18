@@ -11,7 +11,6 @@ struct AddIdeaTile: View {
 
     var mood = Mood.idea
     let action: () -> Void
-    @Environment(\.noteColor) private var color
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hovering = false
@@ -34,8 +33,8 @@ struct AddIdeaTile: View {
             }
             .padding(Spacing.block)
             .frame(maxWidth: .infinity).frame(height: height)
-            .background { if hovering { shape.fill(palette.noteHint(color)).transition(.opacity) } }
-            .overlay { shape.strokeBorder(palette.noteEdge(color), style: Self.dash) }
+            .background { if hovering { shape.fill(palette.fill).transition(.opacity) } }
+            .overlay { shape.strokeBorder(palette.track, style: Self.dash) }
             .contentShape(shape)
         }
         .buttonStyle(PressStyle(.card))
@@ -60,9 +59,4 @@ enum NoteTile {
     static let thumbnail: CGFloat = 84
     #endif
     static let titleLines = 2
-}
-
-extension EnvironmentValues {
-    /// 这面墙所在项目的颜色（库里存的值）：灵感卡的淡彩纸与"添加灵感"的虚线按它调（`Palette.note`）。
-    @Entry var noteColor = Palette.neutralProject
 }

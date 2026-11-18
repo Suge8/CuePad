@@ -1,7 +1,8 @@
 import CueStore
 import SwiftUI
 
-/// 项目的封面：Cue 去的十二个地方（`Assets.xcassets/ProjectCovers`，3:1 的横幅）。项目列表里它那张卡与项目页顶上是同一张。
+/// 项目的封面：Cue 去的十二个地方（`Assets.xcassets/ProjectCovers`，3:1 的横幅），像素画。项目列表里它那张卡与项目页顶上是同一张。
+/// 画成像素的、不画成同 Cue 本体一样的软陶：Cue 那一栏已经是一幅立体的画，主区再来一幅，两幅并排着抢。
 /// 由图标固定映射（两个图标一幅），改名、计数或时间变化都不换图。
 nonisolated enum ProjectCover: String, Sendable {
     case whale, shark, jellyfish, turtle, fox, cat, penguin, owl, monstera, cactus, mushroom, flower

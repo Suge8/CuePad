@@ -67,13 +67,14 @@ struct TaskBubblePage: View {
     }
 
     private var more: some View {
+        // 同栏头里的图标钮（`ProjectHeadTools`）一种悬停底：原先是贴着三个小点的一小块
         Menu { CardActions(card: focus, more: true, leaf: bindsSession) } label: {
-            Image(.more).font(BubbleMetrics.laneFont).foregroundStyle(palette.ink2)
-                .frame(width: TaskMetrics.chipTarget, height: TaskMetrics.chipTarget).contentShape(.rect)
+            Image(.more).imageScale(.large).foregroundStyle(palette.ink2)
         }
         #if os(macOS)
-        .menuStyle(.button).buttonStyle(PressStyle(.button)).menuIndicator(.hidden).fixedSize()
+        .menuStyle(.button).menuIndicator(.hidden).fixedSize()
         #endif
+        .buttonStyle(ControlButtonStyle(kind: .icon, size: .compact))
         .accessibilityLabel("更多")
     }
 }

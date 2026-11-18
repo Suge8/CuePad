@@ -50,17 +50,17 @@ struct ProjectTasks: View {
                     }
                 }
                 if hidden > 0 {
-                    FoldRow(title: TaskCopy.more(hidden: hidden, expanded: fold.showsAll), open: fold.showsAll, closed: .expand, turn: 180) { toggle(\.showsAll) }
+                    FoldRow(title: TaskCopy.more(hidden: hidden, expanded: fold.showsAll), open: fold.showsAll) { toggle(\.showsAll) }
                         .taskFoldBar(anchor)
                 }
                 NewTaskField(project: data.project?.id).padding(.vertical, TaskMetrics.rowGap).newTaskDrop()
                 if counts.done > 0 {
-                    FoldRow(title: TaskCopy.done(counts.done), open: fold.showsDone, closed: .forward, turn: 90) { toggle(\.showsDone) }
+                    FoldRow(title: TaskCopy.done(counts.done), open: fold.showsDone) { toggle(\.showsDone) }
                     if fold.showsDone {
                         ForEach(data.done.prefix(doneShown)) { TaskLine(task: $0) }
                         // 做完的会越攒越多：一次只列一小段，要看更早的再往下要，不一点开就把页拉长几屏
                         if data.done.count > doneShown {
-                            FoldRow(title: TaskCopy.more(hidden: data.done.count - doneShown, expanded: false), open: false, closed: .expand, turn: 0) {
+                            FoldRow(title: TaskCopy.more(hidden: data.done.count - doneShown, expanded: false), open: nil) {
                                 doneShown += Self.donePage
                             }
                         }
@@ -97,23 +97,18 @@ struct ProjectTasks: View {
     }
 }
 
-private extension TaskCounts {
-    var total: Int { inProgress + todo + done }
-}
-
-/// 开合其余任务、已完成的那一行：记号在任务圈那一列，字与任务标题对齐。
+/// 开合其余任务、已完成的那一行：记号在任务圈那一列，字与任务标题对齐。开合的记号同会话条的项目行：朝右的箭头，开着转朝下。
+/// `open` 为 nil 是"再列几条"：不是开合，箭头一直朝下。
 private struct FoldRow: View {
     let title: String
-    let open: Bool
-    let closed: Chevron.Direction
-    let turn: Double
+    let open: Bool?
     let action: () -> Void
     @Environment(\.palette) private var palette
 
     var body: some View {
         Button(action: action) {
             HStack(spacing: TaskMetrics.columnGap) {
-                Chevron(closed).rotationEffect(.degrees(open ? turn : 0)).frame(width: TaskMetrics.ringColumn)
+                Chevron(open == nil ? .expand : .forward).rotationEffect(.degrees(open == true ? 90 : 0)).frame(width: TaskMetrics.ringColumn)
                 Text(title).font(Typography.body).frame(maxWidth: .infinity, alignment: .leading)
             }
             .foregroundStyle(palette.ink3)
@@ -122,7 +117,7 @@ private struct FoldRow: View {
         }
         .buttonStyle(.row)
         .padding(.vertical, TaskMetrics.rowGap)
-        .accessibilityValue(open ? "已展开" : "已折叠")
+        .accessibilityValue(open.map { $0 ? "已展开" : "已折叠" } ?? "")
     }
 }
 
