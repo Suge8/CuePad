@@ -15,7 +15,6 @@ struct LivePreviewPane: View {
             ZStack(alignment: .top) {
                 if preview.address == nil {
                     LiveAddressEntry(preview: preview).frame(maxWidth: .infinity, maxHeight: .infinity)
-                    LiveCloseButton().frame(maxWidth: .infinity, alignment: .trailing).padding(inset).frame(height: Chrome.band)
                 } else {
                     screen(in: geometry.size)
                     if preview.phase == .waiting {
@@ -125,18 +124,8 @@ private struct LiveAddressEntry: View {
     }
 }
 
-private struct LiveCloseButton: View {
-    @Environment(Workspace.self) private var workspace
-
-    var body: some View {
-        Button("收起活预览", icon: .close) { workspace.toggleLivePreview() }
-            .labelStyle(.iconOnly)
-            .buttonStyle(ControlButtonStyle(kind: .circular))
-            .help("收起活预览")
-    }
-}
-
-/// 浮在网页上的玻璃栏：重新载入（载入中是停止）、地址、点选、手机宽、在浏览器里打开、收起；载入进度是贴着下沿的一条细线。
+/// 浮在网页上的玻璃栏：重新载入（载入中是停止）、地址、点选、手机宽、在浏览器里打开；载入进度是贴着下沿的一条细线。
+/// 没有收起：收起只经左边会话栏头上打开它的那颗钮（`WideSessionTitle`），一件事一个入口。
 private struct LiveBar: View {
     let preview: LivePreview
     @Environment(Workspace.self) private var workspace
@@ -163,7 +152,6 @@ private struct LiveBar: View {
             }
             tool("在浏览器里打开", icon: .openInBrowser) { if let url = preview.shownAddress { NSWorkspace.shared.open(url) } }
                 .disabled(preview.shownAddress == nil)
-            tool("收起活预览", icon: .close) { workspace.toggleLivePreview() }
         }
         .padding(.horizontal, Spacing.tight)
         .frame(height: Chrome.control)

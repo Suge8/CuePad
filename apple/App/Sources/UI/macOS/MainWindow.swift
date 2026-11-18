@@ -46,7 +46,7 @@ struct MainWindow: View {
                 Spacer(minLength: 0)
             }
             .overlay(alignment: .topLeading) { beside(sizes, window: geometry.size.width, trail: trail) }
-            .overlay { if sizes.preview { LiveDivider(sizes: sizes) } }
+            .overlay { if sizes.split { BesideDivider(sizes: sizes) } }
             .overlay { if !sizes.home { railChrome(sizes) } }
             .reportsWideFits(sizes, to: workspace)
             .overlay(alignment: .topTrailing) {

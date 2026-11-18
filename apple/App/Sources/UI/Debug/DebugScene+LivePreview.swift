@@ -6,7 +6,6 @@ extension DebugScene {
     /// 网页载完（或认定连不上）、点选摆好才算就绪：页面里的东西不在就绪的判断里，不拖着就会拍到半截。
     static func openLivePreviewIfAsked(_ workspace: Workspace) {
         guard let address = args.layoutOpts.livePreview else { return }
-        if let share = args.layoutOpts.liveShare { workspace.previewShare = share }
         workspace.toggleLivePreview()
         guard let session = workspace.session(in: .main), let preview = workspace.livePreviews[session.id] else { return }
         if args.layoutOpts.liveViewport == "phone" { preview.viewport = .phone }

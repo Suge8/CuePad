@@ -12572,22 +12572,6 @@
         }
       }
     },
-    "已结束" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ended"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已结束"
-          }
-        }
-      }
-    },
     "已置顶" : {
       "localizations" : {
         "en" : {
@@ -15032,6 +15016,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "收起右栏（⌃⌘I）"
+          }
+        }
+      }
+    },
+    "收起并排" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Close Side by Side"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "收起并排"
           }
         }
       }
@@ -20804,22 +20804,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "绑定文件夹"
-          }
-        }
-      }
-    },
-    "结束未确认" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "End not confirmed"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "结束未确认"
           }
         }
       }

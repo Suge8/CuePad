@@ -5,8 +5,9 @@ import SwiftUI
 /// 自动收起只改呈现、不改选择：选了开着、窗口放不下时照样藏起，放得下了回到所选（HIG「Sidebars」：窗口变小时自动藏起侧栏，同邮件）。
 /// 窗口变窄时先把 Cue 收成钮，再藏起会话条：会话条是换去处的地方，点它的一行不该让它自己消失；Cue 收着时一下就回得去（它那一行、右上的钮）。
 /// 主区最窄是一个会话的宽，并排开着时是两个：并排是用户自己开的，栏跟着让位读得出原因。
-/// Mac 上右半开着活预览时 Cue 收成钮（同样只改呈现，`cueOpen` 不动，收起预览就回到所选）：预览要的是宽，Cue 在钮里一下就回得去；
-/// 收起与预览滑出是同一次换形（`shape`），同一段滑动。两半的分界可拖（`previewShare`），两边各不窄于自己的最窄。
+/// Mac 上右半开着（第二个会话或活预览）时 Cue 收成钮（`cueYields`；同样只改呈现，`cueOpen` 不动，收起右半就回到所选）：主区是正在干的活、先拿宽，
+/// Cue 是总控、有余地才占一栏，在钮里一下就回得去；收起与右半滑出是同一次换形（`shape`），同一段滑动。
+/// 两半的分界可拖（`BesideShare`），右半是会话、是预览各记一份比例；两边各不窄于自己的最窄（`trailingMin`）。
 /// 否决过：按主区放的页各算一份最窄（看板 776、会话 390），再给看板另记一份会话条开合——同一个窗口宽在不同页上栏宽不同，换页时会话条自己开合、读不出规律。
 struct WideMetrics {
     static let session: CGFloat = 390
@@ -33,16 +34,44 @@ struct WideMetrics {
     #else
     static let previewWidth: CGFloat = 0
     #endif
-    /// 活预览默认占主区的这几成：看网页要比看对话宽。
-    static let previewShare: CGFloat = 0.6
 
-    var leading: CGFloat { split ? preview ? Self.leading(main: main, share: share) : (main / 2).rounded() : main }
+    /// 右半占主区的几成（每个窗口一份，`Workspace.besideShare`）：两个会话各半；看网页要比看对话宽，预览默认约六成。
+    struct BesideShare: Equatable {
+        var session: CGFloat = 0.5
+        var preview: CGFloat = 0.6
+
+        subscript(preview preview: Bool) -> CGFloat {
+            get { preview ? self.preview : session }
+            set { if preview { self.preview = newValue } else { session = newValue } }
+        }
+    }
+
+    /// 右半开着时 Cue 收不收成钮：只有 Mac 收（iPad 的并排照旧按窗口宽）。
+    static func cueYields(split: Bool) -> Bool {
+        #if os(macOS)
+        split
+        #else
+        false
+        #endif
+    }
+
+    var leading: CGFloat {
+        guard split else { return main }
+        #if os(macOS)
+        return Self.leading(main: main, share: share, preview: preview)
+        #else
+        return (main / 2).rounded()
+        #endif
+    }
+
     /// 并排时右半的宽；不并排时是此刻开出右半会有的宽（Mac 的右半一直挂着，`MainWindow.beside`）。
     var trailing: CGFloat { main - (split ? leading : (main / 2).rounded()) }
 
-    /// 预览占 `share` 时左边会话的宽：两边各不窄于自己的最窄（主区放不下两者时先保会话）。
-    static func leading(main: CGFloat, share: CGFloat) -> CGFloat {
-        max(session, min(main - previewWidth, (main * (1 - share)).rounded()))
+    static func trailingMin(preview: Bool) -> CGFloat { preview ? previewWidth : session }
+
+    /// 右半占 `share` 时左边会话的宽：两边各不窄于自己的最窄（主区放不下两者时先保左边）。
+    static func leading(main: CGFloat, share: CGFloat, preview: Bool) -> CGFloat {
+        max(session, min(main - trailingMin(preview: preview), (main * (1 - share)).rounded()))
     }
 
     /// 宽屏看板"列头就是最顶那一排、范围钮在开头"：列让出栏头左边与那颗钮，卡片自带的那一圈不算。
@@ -73,16 +102,16 @@ struct WideMetrics {
         home = workspace.cueHome
         split = workspace.beside != nil
         preview = workspace.beside == .preview
-        let narrowest = preview ? Self.session + Self.previewWidth : Self.narrowestMain(split: split)
+        let narrowest = split ? Self.session + Self.trailingMin(preview: preview) : Self.session
         railFits = width >= Chrome.rail + narrowest
         rail = workspace.sidebarOpen && railFits ? Chrome.rail : 0
-        cueFits = home || !preview && width >= rail + narrowest + Self.cue
+        cueFits = home || !Self.cueYields(split: split) && width >= rail + narrowest + Self.cue
         cue = home ? width - rail : workspace.services.settings.cueOpen && cueFits ? Self.cue : 0
         main = max(0, width - rail - cue)
         #if os(macOS)
-        share = workspace.previewShare
+        share = workspace.besideShare[preview: preview]
         #else
-        share = Self.previewShare
+        share = BesideShare()[preview: preview]
         #endif
     }
 

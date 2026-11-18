@@ -16,6 +16,7 @@ extension DebugScene {
         Task { await voiceCallIfAsked(workspace) }
         presetColumns(workspace.services.settings)
         if let prepare = entry?.prepare { await running("摆画面") { try await prepare(workspace, opened) } }
+        if let share = args.layoutOpts.besideShare { workspace.besideShare = .init(session: share, preview: share) }
         if let beside = args.layoutOpts.beside {
             workspace.openSession(SessionState.recordID(sessionID: beside), sessionID: beside, in: .beside)
         }

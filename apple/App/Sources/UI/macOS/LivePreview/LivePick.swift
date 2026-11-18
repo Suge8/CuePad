@@ -95,7 +95,7 @@ enum LivePick {
         cursor.textContent = "*, *::before, *::after { cursor: crosshair !important; }";
         document.head.append(cursor);
 
-        const pad = 3;
+        const pad = 3, gap = 4, reach = 24;
         let current = null;
         const show = element => {
             current = element;
@@ -115,9 +115,19 @@ enum LivePick {
             const { component } = origin(element);
             const name = element.tagName.toLowerCase() + (element.id ? "#" + element.id : element.classList[0] ? "." + element.classList[0] : "");
             label.textContent = (component ? component + " › " : "") + name;
-            const above = rect.top - pad - 24;
-            label.style.top = (above < 4 ? rect.bottom + pad + 4 : above) + "px";
-            label.style.left = Math.max(4, Math.min(rect.left - pad, innerWidth - label.offsetWidth - 4)) + "px";
+            // 标签在框外、不压着元素：元素占的那一截连伸出它的子元素（头像的角标）一起算，只算贴着它的那一圈（滚出去的远处不算，大容器只看前几百个）；
+            // 上方放不下就放到下方，下方也出了可视范围就贴着可视范围的下沿
+            let top = rect.top - pad, bottom = rect.bottom + pad, seen = 0;
+            for (const child of element.querySelectorAll("*")) {
+                if (++seen > 400) break;
+                const area = child.getBoundingClientRect();
+                if (!area.width || !area.height || area.bottom < rect.top - reach || area.top > rect.bottom + reach) continue;
+                top = Math.max(rect.top - reach, Math.min(top, area.top));
+                bottom = Math.min(rect.bottom + reach, Math.max(bottom, area.bottom));
+            }
+            const height = label.offsetHeight, above = top - gap - height;
+            label.style.top = (above >= gap ? above : Math.min(bottom + gap, innerHeight - height - gap)) + "px";
+            label.style.left = Math.max(gap, Math.min(rect.left - pad, innerWidth - label.offsetWidth - gap)) + "px";
             label.style.opacity = 1;
         };
 
