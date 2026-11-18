@@ -85,7 +85,7 @@ enum LivePick {
         layer.style.cssText = "position:fixed;inset:0;pointer-events:none;z-index:2147483647";
         const box = document.createElement("div");
         const ease = "cubic-bezier(.16,1,.3,1)";
-        const glide = `left .12s ${ease},top .12s ${ease},width .12s ${ease},height .12s ${ease}`;
+        const glide = ["left", "top", "width", "height", "border-radius"].map(property => `${property} .12s ${ease}`).join(",");
         box.style.cssText = `position:fixed;box-sizing:border-box;border:2px solid ${tint};border-radius:6px;background:color-mix(in srgb, ${tint} 14%, transparent);opacity:0`;
         const label = document.createElement("div");
         label.style.cssText = `position:fixed;padding:2px 8px;border-radius:6px;background:${tint};color:${ink};font:600 12px/18px -apple-system,system-ui,sans-serif;white-space:nowrap;opacity:0`;
@@ -95,6 +95,7 @@ enum LivePick {
         cursor.textContent = "*, *::before, *::after { cursor: crosshair !important; }";
         document.head.append(cursor);
 
+        const pad = 3;
         let current = null;
         const show = element => {
             current = element;
@@ -102,15 +103,21 @@ enum LivePick {
                 box.style.opacity = label.style.opacity = 0;
                 return;
             }
-            const rect = element.getBoundingClientRect();
+            // 框比元素大一圈、圆角随元素（圆头像就是圆框）：贴着画的话描边压在字上
+            const rect = element.getBoundingClientRect(), radius = getComputedStyle(element).borderTopLeftRadius;
+            const round = radius.endsWith("%") ? Math.min(rect.width, rect.height) * parseFloat(radius) / 100 : parseFloat(radius) || 0;
             // 悬停的反馈立刻到位，只在元素之间换的时候滑过去；也不能靠淡入：窗口被挡住时 WebKit 停掉页面动画，淡入会停在透明
             box.style.transition = box.style.opacity === "1" ? glide : "none";
-            Object.assign(box.style, { left: rect.left + "px", top: rect.top + "px", width: rect.width + "px", height: rect.height + "px", opacity: 1 });
+            Object.assign(box.style, {
+                left: rect.left - pad + "px", top: rect.top - pad + "px", width: rect.width + 2 * pad + "px", height: rect.height + 2 * pad + "px",
+                borderRadius: round + pad + "px", opacity: 1,
+            });
             const { component } = origin(element);
-            label.textContent = (component ? component + " › " : "") + selector(element).split(" > ").pop();
-            const above = rect.top - 24;
-            label.style.top = (above < 4 ? rect.bottom + 4 : above) + "px";
-            label.style.left = Math.max(4, Math.min(rect.left, innerWidth - label.offsetWidth - 4)) + "px";
+            const name = element.tagName.toLowerCase() + (element.id ? "#" + element.id : element.classList[0] ? "." + element.classList[0] : "");
+            label.textContent = (component ? component + " › " : "") + name;
+            const above = rect.top - pad - 24;
+            label.style.top = (above < 4 ? rect.bottom + pad + 4 : above) + "px";
+            label.style.left = Math.max(4, Math.min(rect.left - pad, innerWidth - label.offsetWidth - 4)) + "px";
             label.style.opacity = 1;
         };
 

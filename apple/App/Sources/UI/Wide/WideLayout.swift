@@ -5,6 +5,8 @@ import SwiftUI
 /// 自动收起只改呈现、不改选择：选了开着、窗口放不下时照样藏起，放得下了回到所选（HIG「Sidebars」：窗口变小时自动藏起侧栏，同邮件）。
 /// 窗口变窄时先把 Cue 收成钮，再藏起会话条：会话条是换去处的地方，点它的一行不该让它自己消失；Cue 收着时一下就回得去（它那一行、右上的钮）。
 /// 主区最窄是一个会话的宽，并排开着时是两个：并排是用户自己开的，栏跟着让位读得出原因。
+/// Mac 上右半开着活预览时 Cue 收成钮（同样只改呈现，`cueOpen` 不动，收起预览就回到所选）：预览要的是宽，Cue 在钮里一下就回得去；
+/// 收起与预览滑出是同一次换形（`shape`），同一段滑动。两半的分界可拖（`previewShare`），两边各不窄于自己的最窄。
 /// 否决过：按主区放的页各算一份最窄（看板 776、会话 390），再给看板另记一份会话条开合——同一个窗口宽在不同页上栏宽不同，换页时会话条自己开合、读不出规律。
 struct WideMetrics {
     static let session: CGFloat = 390
@@ -21,11 +23,27 @@ struct WideMetrics {
     let main: CGFloat
     let cue: CGFloat
     let split: Bool
+    let preview: Bool
     let cueFits: Bool
+    private let share: CGFloat
 
-    var leading: CGFloat { split ? (main / 2).rounded() : main }
+    #if os(macOS)
+    /// 活预览最窄：手机宽那一档连两侧留白放得下。
+    static let previewWidth = LivePreview.phoneWidth + 2 * Spacing.page
+    #else
+    static let previewWidth: CGFloat = 0
+    #endif
+    /// 活预览默认占主区的这几成：看网页要比看对话宽。
+    static let previewShare: CGFloat = 0.6
+
+    var leading: CGFloat { split ? preview ? Self.leading(main: main, share: share) : (main / 2).rounded() : main }
     /// 并排时右半的宽；不并排时是此刻开出右半会有的宽（Mac 的右半一直挂着，`MainWindow.beside`）。
-    var trailing: CGFloat { main - (main / 2).rounded() }
+    var trailing: CGFloat { main - (split ? leading : (main / 2).rounded()) }
+
+    /// 预览占 `share` 时左边会话的宽：两边各不窄于自己的最窄（主区放不下两者时先保会话）。
+    static func leading(main: CGFloat, share: CGFloat) -> CGFloat {
+        max(session, min(main - previewWidth, (main * (1 - share)).rounded()))
+    }
 
     /// 宽屏看板"列头就是最顶那一排、范围钮在开头"：列让出栏头左边与那颗钮，卡片自带的那一圈不算。
     static func boardLead(_ inset: EdgeInsets) -> CGFloat { inset.leading + Spacing.item + Chrome.control - BoardCardMetrics.inset }
@@ -54,12 +72,18 @@ struct WideMetrics {
     init(width: CGFloat, workspace: Workspace) {
         home = workspace.cueHome
         split = workspace.beside != nil
-        let narrowest = Self.narrowestMain(split: split)
+        preview = workspace.beside == .preview
+        let narrowest = preview ? Self.session + Self.previewWidth : Self.narrowestMain(split: split)
         railFits = width >= Chrome.rail + narrowest
         rail = workspace.sidebarOpen && railFits ? Chrome.rail : 0
-        cueFits = home || width >= rail + narrowest + Self.cue
+        cueFits = home || !preview && width >= rail + narrowest + Self.cue
         cue = home ? width - rail : workspace.services.settings.cueOpen && cueFits ? Self.cue : 0
         main = max(0, width - rail - cue)
+        #if os(macOS)
+        share = workspace.previewShare
+        #else
+        share = Self.previewShare
+        #endif
     }
 
     static func narrowestMain(split: Bool) -> CGFloat { split ? 2 * session : session }

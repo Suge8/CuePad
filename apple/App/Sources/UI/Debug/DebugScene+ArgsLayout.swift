@@ -28,6 +28,8 @@ nonisolated struct LayoutArgs: Decodable, DebugArgGroup {
     let livePick: String?
     /// `-CuePadLivePickCommit YES`（配 `-CuePadLivePick`）：接着点下去，元素挂进回复框
     let livePickCommit: Bool
+    /// `-CuePadLiveShare <0–1>`（配 `-CuePadLivePreview`）：预览占主区的这几成（`Workspace.previewShare`），超出两边最窄的照样卡住；0 是会话最宽，1 是预览最宽
+    let liveShare: Double?
     /// `-CuePadMergePreview YES`（配 instruction 画面）：已点过一下"合并进来"、标出会并进来的段
     let mergePreview: Bool
     /// `-CuePadLandscape YES`（iOS、iPad）：由 `xc.sh` 在起实例前把模拟器横过来，App 自己不读；登记在这里是为了不被当成拼错的参数

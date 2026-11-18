@@ -19,7 +19,7 @@ struct LivePreviewPane: View {
                 } else {
                     screen(in: geometry.size)
                     if preview.phase == .waiting {
-                        EmptyState(mascot: .search, title: "等开发服务起来")
+                        EmptyState(mascot: .search, title: "等开发服务起来", bare: true) { EmptyView() }
                             .padding(.horizontal, Spacing.page)
                             .frame(maxHeight: .infinity)
                             .transition(.opacity)
@@ -34,7 +34,8 @@ struct LivePreviewPane: View {
         .onDisappear { if preview.picking { preview.cancelPick() } }
     }
 
-    /// 铺满时网页从窗口顶铺到底，内容从栏下面起、滚上去滑到玻璃栏后面（`ObscuredTop`）；手机宽时是栏下面居中的一块屏。
+    /// 铺满时网页从玻璃栏下沿铺到窗口下缘，栏那一排铺页面的底、下沿同色渐隐：滚上去的内容淡进栏下，不在一条线上切断；
+    /// 手机宽时是栏下面居中的一块屏。两档之间网页只换位置与宽，不换内边距：内容不跳。
     private func screen(in size: CGSize) -> some View {
         let phone = preview.viewport == .phone
         // 手机屏离玻璃栏下沿与离窗口下缘一样远
@@ -43,55 +44,36 @@ struct LivePreviewPane: View {
         let width = phone ? min(LivePreview.phoneWidth, size.width - 2 * Spacing.page) : size.width
         let top = phone ? Chrome.band + Spacing.item + max(0, room - height) / 2 : 0
         let shape = RoundedRectangle(cornerRadius: phone ? Radius.screen : 0, style: .continuous)
-        let shown = preview.phase == .live || preview.phase == .stopped
-        return WebView(preview.page)
-            .webViewBackForwardNavigationGestures(.enabled)
-            .webViewContentBackground(.hidden)
-            .background { ObscuredTop(inset: phone ? 0 : Chrome.band) }
-            .scrollEdgeEffectStyle(.soft, for: .top)
-            .background(preview.ground ?? palette.paper)
+        let ground = preview.ground ?? palette.paper
+        let shown = preview.phase == .live && preview.revealed || preview.phase == .stopped
+        return LiveWebView(preview: preview)
+            .overlay(alignment: .top) {
+                LinearGradient(colors: [ground, ground.opacity(0)], startPoint: .top, endPoint: .bottom)
+                    .frame(height: Self.fade)
+                    .opacity(phone ? 0 : 1)
+                    .allowsHitTesting(false)
+            }
+            .padding(.top, phone ? 0 : Chrome.band)
             .overlay { if preview.phase == .stopped { LiveStopped() } }
             .frame(width: width, height: height)
+            .background(ground)
             .clipShape(shape)
             .overlay { shape.strokeBorder(palette.hair).opacity(phone ? 1 : 0) }
-            .background { shape.fill(preview.ground ?? palette.paper).elevation(phone ? .lifted : nil) }
+            .background { shape.fill(ground).elevation(phone ? .lifted : nil) }
             .opacity(shown ? 1 : 0)
             .position(x: size.width / 2, y: top + height / 2)
             .animation(Motion.spatial(Motion.travel, reduceMotion: reduceMotion), value: phone)
     }
+
+    private static let fade: CGFloat = 20
 }
 
-/// 网页上缘被玻璃栏盖住的那一截（WebKit 的 `obscuredContentInsets`：内容从它下面起，滚上去照样画在栏后面，粘顶的元素也让开它）。
-/// SwiftUI 的 `WebView` 在 Mac 上不把安全区换成这个：给安全区它整个往下挪、栏后面露出一条桌面，忽略安全区内容又压在栏下面。
-/// 它不交出里面的 `WKWebView`，只能挨着它挂一个空视图、从这一块里找到它设上。让出的那一截 WebKit 不画页面的底（铺它自己的白、深灰），
-/// 所以网页的底不画（`webViewContentBackground`），由下面垫的页面底色（`LivePreview.ground`）接上。
-private struct ObscuredTop: NSViewRepresentable {
-    let inset: CGFloat
+private struct LiveWebView: NSViewRepresentable {
+    let preview: LivePreview
 
-    func makeNSView(context: Context) -> NSView { NSView() }
+    func makeNSView(context: Context) -> WKWebView { preview.web }
 
-    func updateNSView(_ view: NSView, context: Context) {
-        let inset = inset
-        Task { @MainActor [weak view] in
-            // 和网页同一次更新里挂上：它的 WKWebView 要过一两帧才进视图树
-            for _ in 0..<10 {
-                if let web = view.flatMap(Self.web(near:)) {
-                    web.obscuredContentInsets = NSEdgeInsets(top: inset, left: 0, bottom: 0, right: 0)
-                    return
-                }
-                await NextFrame.wait()
-            }
-        }
-    }
-
-    private static func web(near view: NSView) -> WKWebView? {
-        sequence(first: view, next: \.superview).lazy.prefix { !($0 is WideColumnView) }.compactMap { find(in: $0) }.first
-    }
-
-    private static func find(in view: NSView) -> WKWebView? {
-        if let web = view as? WKWebView { return web }
-        return view.subviews.lazy.compactMap(find(in:)).first
-    }
+    func updateNSView(_ web: WKWebView, context: Context) {}
 }
 
 /// 服务停了：最后的画面压暗一层留着，上面浮一句；服务回来时自动重新载入（`LivePreview.watch`），这一层随之撤掉。
@@ -162,7 +144,7 @@ private struct LiveBar: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        let loading = preview.page.isLoading && preview.phase == .live
+        let loading = preview.isLoading && preview.phase == .live
         HStack(spacing: Spacing.hair) {
             Group {
                 if loading {
@@ -185,7 +167,7 @@ private struct LiveBar: View {
         }
         .padding(.horizontal, Spacing.tight)
         .frame(height: Chrome.control)
-        .overlay { LiveProgress(value: preview.page.estimatedProgress, shown: loading) }
+        .overlay { LiveProgress(value: preview.progress, shown: loading) }
         .glass(in: .capsule)
     }
 

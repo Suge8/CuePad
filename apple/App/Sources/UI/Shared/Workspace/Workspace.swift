@@ -179,6 +179,8 @@ final class Workspace {
     weak var openCardEditing: CardEditing?
     /// 每个会话的活预览（按会话记录 id）：只在内存里，不进资料库、不同步。
     var livePreviews: [UUID: LivePreview] = [:]
+    /// 会话与活预览之间的分界拖到了哪（预览占主区的几成，`WideMetrics.previewShare`）：每个窗口一份，只在内存里。
+    var previewShare = WideMetrics.previewShare
     #endif
 
     let launching = Launching()

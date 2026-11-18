@@ -6,13 +6,14 @@ extension DebugScene {
     /// 网页载完（或认定连不上）、点选摆好才算就绪：页面里的东西不在就绪的判断里，不拖着就会拍到半截。
     static func openLivePreviewIfAsked(_ workspace: Workspace) {
         guard let address = args.layoutOpts.livePreview else { return }
+        if let share = args.layoutOpts.liveShare { workspace.previewShare = share }
         workspace.toggleLivePreview()
         guard let session = workspace.session(in: .main), let preview = workspace.livePreviews[session.id] else { return }
         if args.layoutOpts.liveViewport == "phone" { preview.viewport = .phone }
         guard address != "blank", let url = LivePreview.url(from: address) else { return }
         preview.open(url)
         holdingReady("活预览载入") {
-            while preview.phase == .live && preview.page.isLoading { await Task.wait(for: .milliseconds(100)) }
+            while preview.phase == .live && !preview.revealed { await Task.wait(for: .milliseconds(100)) }
             await Task.wait(for: .milliseconds(400))
             if let query = args.layoutOpts.livePick, preview.phase == .live { await pick(query, in: preview, workspace: workspace) }
         }
@@ -24,7 +25,7 @@ extension DebugScene {
         let commit = args.layoutOpts.livePickCommit
         let action = commit ? "pick" : "hover"
         let call = "const handle = window[Symbol.for('cuepad.pick')]; if (!handle) return false; handle.\(action)(query); return true"
-        while (try? await preview.page.callJavaScript(call, arguments: ["query": query])) as? Bool != true {
+        while (try? await preview.run(call, arguments: ["query": query])) as? Bool != true {
             await Task.wait(for: .milliseconds(50))
         }
         while commit && preview.picking { await Task.wait(for: .milliseconds(50)) }

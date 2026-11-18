@@ -4,10 +4,11 @@ import SwiftUI
 import WebKit
 
 /// 一个会话的活预览：这个会话正在开发的网页本身（`Workspace.livePreviews`，只在内存里）。
-/// 每个会话一个 `WebPage`、各用一份非持久的数据存储：两个会话开着同一个地址，登录状态也不串。
-/// 同一时刻只能有一个视图持有它：SwiftUI 的 `WebView` 不许两个视图共用一个 `WebPage`（`PreviewWeb` 头注释）。
+/// 每个会话一个 `WKWebView`、各用一份非持久的数据存储：两个会话开着同一个地址，登录状态也不串。
+/// 网页不伸到玻璃栏后面（`LivePreviewPane.screen`）：SwiftUI 的 `WebView` 公开接口里没有遮挡区（macOS 26 SDK 的 `_WebKit_SwiftUI`），
+/// `WKWebView` 的 `obscuredContentInsets` 让出的那一截 WebKit 自己画一道硬边的带（浅色白、深色灰，公开接口改不了），两档视口切换时内边距还要跳。
 @Observable
-final class LivePreview {
+final class LivePreview: NSObject, WKNavigationDelegate {
     enum Phase: Equatable {
         /// 还没有地址。
         case blank
@@ -24,29 +25,44 @@ final class LivePreview {
     static let phoneWidth: CGFloat = 390
     static let phoneHeight: CGFloat = 844
 
-    let page: WebPage
+    /// 同一时刻只挂在一处（`LiveWebView`）。
+    @ObservationIgnored let web: WKWebView
     private(set) var address: URL?
     private(set) var phase = Phase.blank
+    private(set) var url: URL?
+    private(set) var isLoading = false
+    private(set) var progress = 0.0
     var viewport = Viewport.fill
+    /// 这个地址第一次载完：之前网页还是 WebKit 的默认底（深色下也是一块白），先不露出来。
+    private(set) var revealed = false
     /// 页面的底色（`<html>`，没有就 `<body>`，都透明就是浏览器默认的画布色）：玻璃栏后面让出的那一截与手机屏的底接上它。
     private(set) var ground: Color?
     /// 这个地址载出过画面（提交过一次）：之后连不上是"停了"，不是"还没起来"。
     @ObservationIgnored private var painted = false
-    @ObservationIgnored private var loading: Task<Void, Never>?
+    @ObservationIgnored private var observations: [NSKeyValueObservation] = []
 
-    init() {
-        var configuration = WebPage.Configuration()
+    override init() {
+        let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .nonPersistent()
-        page = WebPage(configuration: configuration)
-        page.isInspectable = true
+        web = WKWebView(frame: .zero, configuration: configuration)
+        web.isInspectable = true
+        web.allowsBackForwardNavigationGestures = true
+        super.init()
+        web.navigationDelegate = self
+        observations = [
+            web.observe(\.url) { [weak self] web, _ in MainActor.assumeIsolated { self?.url = web.url } },
+            web.observe(\.isLoading) { [weak self] web, _ in MainActor.assumeIsolated { self?.isLoading = web.isLoading } },
+            web.observe(\.estimatedProgress) { [weak self] web, _ in MainActor.assumeIsolated { self?.progress = web.estimatedProgress } },
+        ]
     }
 
     /// 地址栏里显示的：此刻页面所在（页内跳转跟着变），还没载过就是输入的地址。
-    var shownAddress: URL? { page.url ?? address }
+    var shownAddress: URL? { url ?? address }
 
     func open(_ url: URL) {
         address = url
         painted = false
+        revealed = false
         load(url)
     }
 
@@ -55,7 +71,12 @@ final class LivePreview {
         load(url)
     }
 
-    func stopLoading() { page.stopLoading() }
+    func stopLoading() { web.stopLoading() }
+
+    /// 在页面自己的内容世界里跑一段函数体（`callAsyncJavaScript`：可以 `await`、`return`，参数按名字成了局部变量）。
+    func run(_ script: String, arguments: [String: Any] = [:]) async throws -> Any? {
+        try await web.callAsyncJavaScript(script, arguments: arguments, contentWorld: .page)
+    }
 
     /// 点选开着：指着的元素有一层高亮框，点一下就是它（这一下不交给页面）。
     private(set) var picking = false
@@ -64,29 +85,31 @@ final class LivePreview {
     func pick() async -> ReplyNote.Element? {
         picking = true
         defer { picking = false }
-        let found = try? await page.callJavaScript(LivePick.script, arguments: LivePick.colors)
+        let found = try? await run(LivePick.script, arguments: LivePick.colors)
         return (found as? [String: Any]).flatMap(LivePick.element)
     }
 
     func cancelPick() {
-        Task { _ = try? await page.callJavaScript(LivePick.cancel) }
+        Task { _ = try? await run(LivePick.cancel) }
     }
 
     private func load(_ url: URL) {
         phase = .live
-        let events = page.load(URLRequest(url: url))
-        loading?.cancel()
-        loading = Task { [weak self] in
-            do {
-                for try await event in events {
-                    if event == .committed { self?.painted = true }
-                    if event == .finished { await self?.sampleGround() }
-                }
-            } catch {
-                guard let self, !Task.isCancelled, Self.unreachable(error) else { return }
-                phase = painted ? .stopped : .waiting
-            }
+        web.load(URLRequest(url: url))
+    }
+
+    func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) { painted = true }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        Task {
+            await sampleGround()
+            revealed = true
         }
+    }
+
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: any Error) {
+        guard Self.unreachable(error) else { return }
+        phase = painted ? .stopped : .waiting
     }
 
     /// 面板开着时在后台每秒探一次（`LivePreviewPane` 的 task 里跑，收起就停）：等着的起来了就载入，载出过的停了就标出来、回来了重新载入。
@@ -111,7 +134,7 @@ final class LivePreview {
 
     /// 页面跟着深浅色换了底、热更新换了样式都要跟上：载完读一次，之后随探活每秒读一次。
     private func sampleGround() async {
-        guard let css = try? await page.callJavaScript(Self.groundScript) as? String, let color = Color.webPage(css), color != ground else { return }
+        guard let css = try? await run(Self.groundScript) as? String, let color = Color.webPage(css), color != ground else { return }
         ground = color
     }
 
@@ -147,8 +170,7 @@ final class LivePreview {
 
     /// 连不上主机那一类；按停止、换地址打断的那一次（取消）不算。
     private static func unreachable(_ error: any Error) -> Bool {
-        guard case WebPage.NavigationError.failedProvisionalNavigation(let underlying) = error else { return false }
-        return (underlying as? URLError)?.code != .cancelled && (underlying as NSError).code != NSURLErrorCancelled
+        (error as NSError).domain == NSURLErrorDomain && (error as NSError).code != NSURLErrorCancelled
     }
 
     /// 地址栏里写的：不写 http://、https://，路径只有 "/" 时也不写。
