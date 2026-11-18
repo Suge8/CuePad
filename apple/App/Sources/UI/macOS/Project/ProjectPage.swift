@@ -72,7 +72,7 @@ struct ProjectPage: View {
     /// 最上面那行取自项目目录，切换项目的第一帧就是新项目；卡片与任务读到后在其下出现。
     @ViewBuilder private var content: some View {
         VStack(alignment: .leading, spacing: Spacing.group) {
-            ProjectIntroLine(project: workspace.catalog?.project(projectID), intro: false)
+            ProjectIntroLine(project: workspace.catalog?.project(projectID))
             VStack(alignment: .leading, spacing: Spacing.section) {
                 if let data, let arrangement = board.arrangement { page(data, arrangement) }
             }

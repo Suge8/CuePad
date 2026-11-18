@@ -11,7 +11,7 @@ extension Workspace {
         case .start(let task): handOff(task)
         case .finish(let item): attempt { try await self.finish(item) }
         case .finishSession(let agent): attempt { try await self.finish(agent) }
-        case .endSession(let session): sessionAsk = .end(session)
+        case .endSession(let session): sleep(session)
         }
     }
 

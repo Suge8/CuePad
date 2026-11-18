@@ -99,11 +99,14 @@ public struct SessionTask: Sendable, Equatable {
   public var isPinned: Bool
   /// 绑着它的那个叶子的标题（`Card.heading`）：会话行、会话条写的名字以它为准，空的写会话自己的名字（任务标题是名字的唯一事实源）。
   public var title: String
+  /// 绑着它的那个叶子已经做完（主人里没做完的在前，`sessionOwnerRows`：它做完了就是没有没做完的任务在用这个会话）。
+  public var isDone: Bool
 
-  public init(id: UUID, isPinned: Bool, title: String) {
+  public init(id: UUID, isPinned: Bool, title: String, isDone: Bool = false) {
     self.id = id
     self.isPinned = isPinned
     self.title = title
+    self.isDone = isDone
   }
 }
 

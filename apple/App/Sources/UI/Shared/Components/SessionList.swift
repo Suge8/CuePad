@@ -86,7 +86,6 @@ struct SessionList<Top: View>: View {
         return SessionListRow(item: item, showsPlace: list.showsPlace, end: end)
             .rowSwipes(SessionActions.swipes(item.state, task: item.task, ending: ending, in: workspace), clipped: false)
             .contextMenu {
-                OpenSessionBeside(session: item.state)
                 SessionActions(session: item.state, task: item.task, ending: ending)
             }
             .cardRow()

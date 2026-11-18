@@ -27,6 +27,9 @@ struct SessionRailCell: View {
     @Environment(\.palette) private var palette
     @Environment(Workspace.self) private var workspace
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    #if os(macOS)
+    @State private var hovering = false
+    #endif
 
     var body: some View {
         Group {
@@ -40,6 +43,21 @@ struct SessionRailCell: View {
                     .draggable(DraggedSession(sessionID: item.id))
             }
         }
+        .padding(.leading, compact ? Self.indent : 0)
+        #if os(macOS)
+        // 叠在卡上、不放进卡里：卡整张是一颗钮，钮里不套钮
+        .overlay(alignment: .topTrailing) {
+            // 对勾的右沿、中线都对着它换下的那一格（等了多久）
+            if let finishing {
+                RailHoverTool(finishing.title, finishing.icon, action: finishing.run)
+                    .padding(.trailing, Spacing.group - RailHoverTool.overhang).padding(.top, Spacing.item - RailHoverTool.overhang / 2)
+                    .transition(.opacity)
+            }
+        }
+        .onHover { hovering = $0 }
+        .presetHover($hovering)
+        .animation(Motion.fade, value: hovering)
+        #endif
         .relaySpot(session: item.id, row: .rail)
         .accessibilityAddTraits(selected ? .isSelected : [])
         .accessibilityLabel(item.name)
@@ -48,13 +66,17 @@ struct SessionRailCell: View {
         .help(help)
     }
 
+    private var running: Bool { item.waiting == nil && item.pulse.tier == .running }
+
     private var besides: Bool {
         guard let main = workspace.session(in: .main) else { return false }
         return main.sessionID != item.id && workspace.besideSession?.sessionID != item.id
     }
 
-    /// 项目下面的会话缩进这么多：行首那一列的中线上画一道引线（`RailProjectSessions`）。
-    static let indent: CGFloat = Spacing.group
+    /// 项目下面的会话缩进这么多：项目图形那一列的中线上画一道引线（`RailProjectSessions`），行的悬停底从引线右边一档起，不盖住它。
+    static let indent: CGFloat = Chrome.icon / 2 + Spacing.tight + RowMetrics.bleed
+    /// 缩进后行首那一列只放得下记号这么宽，名字不再往右让。
+    static let mark: CGFloat = 12
 
     private var help: String { Dotted(item.name, project?.shownName, item.shown.label, item.ask ?? item.doing, item.session.agentMark).visible }
 
@@ -84,8 +106,7 @@ struct SessionRailCell: View {
     }
 
     @ViewBuilder private var menu: some View {
-        OpenSessionBeside(session: item.session)
-        SessionActions(session: item.session)
+        SessionActions(session: item.session, task: item.task)
     }
 
     private var label: some View {
@@ -104,28 +125,27 @@ struct SessionRailCell: View {
                 .padding(.vertical, Spacing.tight)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if compact {
-                RailLine {
-                    if item.waiting == nil, item.pulse.tier == .running {
-                        BoardLaneMark(column: .advancing, size: 12)
-                    } else if item.ended {
-                        StateGlyph(status: .ended).font(Glyph.small)
-                    } else {
-                        Color.clear
+                RailLine(leadWidth: Self.mark) {
+                    // 开始跑、歇下、休眠：记号冒出来、淡掉，不是当场换一个图
+                    ZStack {
+                        if running {
+                            BoardLaneMark(column: .advancing, size: Self.mark).transition(Motion.pop(reduceMotion: reduceMotion))
+                        } else if item.ended {
+                            StateGlyph(status: .ended).font(Glyph.small).transition(Motion.pop(reduceMotion: reduceMotion))
+                        }
                     }
+                    .animation(Motion.fade, value: running)
+                    .animation(Motion.fade, value: item.ended)
                 } rest: {
                     name.font(Typography.body)
                     Spacer(minLength: Spacing.item)
-                    SessionRailReadout(item: item)
+                    SessionRailReadout(item: item).modifier(YieldsToTool(yields: besides))
                 }
-                .padding(.leading, Self.indent)
                 #if os(macOS)
-                // 并排的看得见的入口（另有 ⌘ 点与右键）：主区开着别的会话时，悬停的行尾露出来
+                // 并排的看得见的入口（另有 ⌘ 点与右键）：主区开着别的会话时，悬停的行尾露出来。
+                // 完成不放在这里：项目下面列的多半还在做，对勾摆在行尾是请人误点；它在等你回话的那张卡上（`card`）
                 .hoverReveal(when: besides) {
-                    Button("在旁边打开", icon: .rightColumn) { open(item.session, .beside) }
-                        .labelStyle(.iconOnly)
-                        .buttonStyle(ControlButtonStyle(kind: .icon, size: .compact))
-                        .help("在旁边打开")
-                        .padding(.horizontal, Spacing.tight)
+                    RailHoverTool("并排打开", .rightColumn) { open(item.session, .beside) }.padding(.trailing, -RailHoverTool.overhang)
                 }
                 #endif
             } else {
@@ -133,6 +153,17 @@ struct SessionRailCell: View {
             }
         }
         .contentShape(.rect)
+    }
+
+    /// 新回复的卡上指针停着时，右上角等了多久那一格换成对勾：它说完了、在等你，这时才是定"用完了"的时候（同看板那张卡回复框旁的完成，`WaitAnswer`）。
+    /// 拍板的不给：它问的那句还没答。触屏没有悬停，完成在长按菜单里。
+    private var finishing: RowAction? {
+        #if os(macOS)
+        guard hovering, !compact, form == .wide, item.waiting == .awaitsReply else { return nil }
+        return SessionActions.complete(item.session, task: item.task, in: workspace)
+        #else
+        return nil
+        #endif
     }
 
     private var name: some View {
@@ -151,7 +182,7 @@ struct SessionRailCell: View {
                 if let waiting = item.waiting { StateGlyph(status: waiting).font(Glyph.small).frame(width: 11) }
                 name.font(Typography.body)
                 Spacer(minLength: 0)
-                SessionRailTime(item: item).font(Typography.caption).fixedSize()
+                SessionRailTime(item: item).font(Typography.caption).fixedSize().opacity(finishing == nil ? 1 : 0)
             }
             HStack(spacing: Spacing.tight) {
                 if let project {
@@ -182,6 +213,16 @@ struct SessionRailCell: View {
         .readerHidden(true)
     }
 
+}
+
+/// 行尾的读数在指针停着、那里要露出小钮时让开：读数比钮宽，不让开会从钮的左边露出半截。
+private struct YieldsToTool: ViewModifier {
+    let yields: Bool
+    @Environment(\.rowHovered) private var hovered
+
+    func body(content: Content) -> some View {
+        content.opacity(yields && hovered ? 0 : 1)
+    }
 }
 
 private struct SessionRailReadout: View {

@@ -42,7 +42,7 @@ struct ProjectScreen: View {
         let lastTarget = data.lastTarget
         // 任务纸不进懒加载栈：纸在懒加载栈的一格里时，收起后按 id 滚回纸底那一行会偏出一屏（`TaskFoldAnchor`）
         VStack(alignment: .leading, spacing: 0) {
-            if inColumn { ProjectIntroLine(project: project, intro: false).padding(.leading, Spacing.tight).padding(.bottom, Spacing.group) }
+            if inColumn { ProjectIntroLine(project: project).padding(.leading, Spacing.tight).padding(.bottom, Spacing.group) }
             if data.project != nil { FocusCard(data: data, fold: $fold, position: $position, anchor: anchor).padding(.bottom, Self.sectionGap) }
             ProjectWallSections(data: data, arrangement: arrangement, older: board.older, metrics: metrics) { entry in
                 CardTileView(entry: entry, lastTarget: lastTarget[entry.id], floated: board.floated.contains(entry.id))
@@ -65,7 +65,11 @@ struct ProjectScreen: View {
     private var project: Project? { workspace.catalog?.project(projectID) }
 
     private var actions: some View {
-        Menu("更多", icon: .more) { ProjectMenuItems(projectID: projectID) }
+        // Mac 记灵感在页底常驻的那一条（`CaptureBar`）
+        Menu("更多", icon: .more) {
+            Section { Button("记一条灵感", icon: .write, action: workspace.newCard) }
+            if let project { ProjectActions(project: project) }
+        }
     }
 
     /// 读到的数据与由它推出的分区在同一次写入里落下（同 Mac 的 `ProjectPage`）。

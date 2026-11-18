@@ -154,7 +154,7 @@ extension CueStoreError: LocalizedError {
     case .sessionUnconfirmed(let title):
       "会话「\(title)」此刻在做什么还没确认（它所在的 Mac 这次开机后还没报过它，或报的状态这个版本不认识）：这次没有发出"
     case .turnSourceUnconfirmed(let title): "会话「\(title)」正在跑的这一轮查不到是谁开的：现在说会打断它，没说出去"
-    case .sessionEnding: String(localized: "会话正在结束，确认结束结果后才能关联或发送")
+    case .sessionEnding: String(localized: "会话正在休眠，确认结果后才能关联或发送")
     case .sessionInUse(let title): "会话「\(title)」还在用（没做完的事绑着它，或有话正送进去），没结束"
     case .notStopped(let title): "会话「\(title)」没停着（在跑或已结束）"
     case .invalidAnswer(let options): "会话在等提问的回答，答案要是其中之一（原文或从 1 起的序号）：\(options.joined(separator: " / "))"

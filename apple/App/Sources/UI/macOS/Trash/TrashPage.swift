@@ -82,8 +82,9 @@ private struct TrashRow<Icon: View>: View {
         }
         .row()
         .contextMenu {
-            Button("恢复", action: restore)
-            Button("永久删除…", role: .destructive) { confirming = true }
+            Button("恢复", icon: .restore, action: restore).menuIcons()
+            Divider()
+            Button("永久删除…", icon: .trash, role: .destructive) { confirming = true }.menuIcons()
         }
         .dialog("永久删除「\(item.title)」？", isPresented: $confirming, message: "此操作无法撤销。", buttons: [
             DialogButton(title: "永久删除", role: .destructive) { purge() }

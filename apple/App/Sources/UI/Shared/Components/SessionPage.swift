@@ -60,7 +60,7 @@ private struct SessionPageBody: View {
                 #if os(iOS)
                 reply(session, digest).floatingHeader(.verbatim(digest?.title(at: services.speech) ?? session?.title ?? ""), hidden: !follow.showsHeader, reveal: { follow.reveal() }) {
                     if ending(digest) {
-                        Text("正在结束…").font(Typography.caption).foregroundStyle(palette.ink3)
+                        Text("正在休眠…").font(Typography.caption).foregroundStyle(palette.ink3)
                     } else if let session {
                         SessionSubtitle(session: session, delivery: digest?.delivery, undelivered: Chat.undeliveredNote(digest?.undelivered(at: services.speech) ?? 0))
                     }

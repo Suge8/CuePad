@@ -10,28 +10,22 @@ struct WideHeading: View {
     }
 }
 
-/// 第二行是项目的一句介绍（`Project.intro`；没写也占着这一行，栏头的字不上下跳）。读内存里的项目目录（`Workspace.catalog`），不另订阅；
-/// 文件夹与"规则"留在页里那一行（`ProjectIntroLine` 的 `intro: false`）。
+/// 只一行，同会话页的栏头（`WideSessionTitle`）：换页时名字不上下挪。项目的一句介绍在页里那一行（`ProjectIntroLine`）。
 struct WideProjectHeading: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
     var body: some View {
         if case .project(let id) = workspace.mainRoute, let project = workspace.catalog?.project(id) {
-            VStack(alignment: .leading, spacing: Spacing.hair) {
-                HStack(spacing: Spacing.glyph) {
-                    Button("项目") { workspace.select(.shelf) }
-                        .buttonStyle(PressStyle(.inline))
-                        .foregroundStyle(palette.ink3)
-                    Text(verbatim: "/").foregroundStyle(palette.ink3).readerHidden(true)
-                    Text(verbatim: project.shownName).foregroundStyle(palette.ink).lineLimit(1)
-                        .accessibilityAddTraits(.isHeader)
-                }
-                .font(Typography.toolbarTitle)
-                Text(verbatim: project.intro?.nonEmpty ?? " ").font(Typography.toolbarSubtitle).foregroundStyle(palette.ink3).lineLimit(1)
-                    .help(project.intro ?? "")
-                    .readerHidden(project.intro?.nonEmpty == nil)
+            HStack(spacing: Spacing.glyph) {
+                Button("项目") { workspace.select(.shelf) }
+                    .buttonStyle(PressStyle(.inline))
+                    .foregroundStyle(palette.ink3)
+                Text(verbatim: "/").foregroundStyle(palette.ink3).readerHidden(true)
+                Text(verbatim: project.shownName).foregroundStyle(palette.ink).lineLimit(1)
+                    .accessibilityAddTraits(.isHeader)
             }
+            .font(Typography.toolbarTitle)
             .accessibilityElement(children: .contain)
         }
     }

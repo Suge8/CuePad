@@ -89,11 +89,11 @@ private struct SessionAsks: ViewModifier {
             .modifier(CompletionAsks(workspace: workspace, spot: .window))
         #if os(macOS)
             .dialog(Self.title, item: asked { if case .end(let session) = $0 { session } else { nil } }, message: Self.message) { session in
-                [DialogButton(title: "结束会话", role: .destructive) { end(session) }]
+                [DialogButton(title: "休眠") { end(session) }]
             }
         #else
             .alert(Text(Self.title), isPresented: Binding { ending != nil } set: { if !$0 { workspace.sessionAsk = nil } }, presenting: ending) { session in
-                Button("结束会话", role: .destructive) { end(session) }
+                Button("休眠") { end(session) }
                 Button("取消", role: .cancel) {}
             } message: { _ in
                 Text(Self.message)
@@ -101,8 +101,8 @@ private struct SessionAsks: ViewModifier {
         #endif
     }
 
-    private static let title: LocalizedStringResource = "结束这个会话？"
-    private static let message: LocalizedStringResource = "对话会保留，再给它发消息会在后台恢复"
+    private static let title: LocalizedStringResource = "Agent 还在做事，让它休眠？"
+    private static let message: LocalizedStringResource = "手上这一步会被打断。对话会保留，再对它说话就醒"
 
     private struct Renaming: Identifiable {
         let session: SessionState
@@ -160,7 +160,7 @@ private struct CompletionAsks: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .agentBusyDialog(busy, isPresented: asking { if case .agent = $0 { true } else { false } }, confirm: confirm)
+            .agentBusyDialog(busy?.session, sleeps: busy?.sleeps ?? true, isPresented: asking { if case .agent = $0 { true } else { false } }, confirm: confirm)
             .dialog(.verbatim(TaskCopy.openSubtasks(steps)), isPresented: asking { if case .steps = $0 { true } else { false } },
                     buttons: [DialogButton(title: "全部完成", action: confirm)])
             .onAppear {
@@ -181,7 +181,7 @@ private struct CompletionAsks: ViewModifier {
         return claimer == (spot == .window ? nil : token) ? ask : nil
     }
 
-    private var busy: SessionState? { if case .agent(let session) = mine { session } else { nil } }
+    private var busy: (session: SessionState, sleeps: Bool)? { if case .agent(let session, let sleeps) = mine { (session, sleeps) } else { nil } }
     private var steps: TaskProgress? { if case .steps(let progress) = mine { progress } else { nil } }
 
     /// 关掉时只清自己这一种（另一种已经换上来就不动）。
