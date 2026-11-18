@@ -42,7 +42,7 @@ struct ProjectScreen: View {
         let lastTarget = data.lastTarget
         // 任务纸不进懒加载栈：纸在懒加载栈的一格里时，收起后按 id 滚回纸底那一行会偏出一屏（`TaskFoldAnchor`）
         VStack(alignment: .leading, spacing: 0) {
-            if inColumn { ProjectIntroLine(project: project, intro: false).padding(.leading, Spacing.tight).padding(.bottom, Spacing.group) }
+            if inColumn { ProjectIntroLine(project: project).padding(.leading, Spacing.tight).padding(.bottom, Spacing.group) }
             if data.project != nil { FocusCard(data: data, fold: $fold, position: $position, anchor: anchor).padding(.bottom, Self.sectionGap) }
             ProjectWallSections(data: data, arrangement: arrangement, older: board.older, metrics: metrics) { entry in
                 CardTileView(entry: entry, lastTarget: lastTarget[entry.id], floated: board.floated.contains(entry.id))

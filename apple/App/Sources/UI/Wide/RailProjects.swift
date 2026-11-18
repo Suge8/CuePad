@@ -1,9 +1,35 @@
 import CueStore
 import SwiftUI
 
-/// 项目那一行与行尾的两颗小钮：加号在这个项目下开新会话，箭头只管开合；都叠在行尾留出的格上（钮里不套钮）。
-/// 箭头展开着、选中或指针停在这一行时才画，加号只在指针停着时画（触屏没有悬停，一直画着）；位置一直留着，露出来时行尾的数不挪。
-/// Mac 上在推进的数与加号共用一格：指针停着时数让给加号（数在悬停提示里），不为加号多留一格把名字挤短。
+/// 会话条里悬停才露的小钮（项目行的开合与新会话、会话行的并排、等你卡上的完成）只这一种：同一个大小、墨色与悬停底，
+/// 靠行尾的把图形的右沿对到行尾的字上（`overhang`）。原先三处各用各的档，大小、墨色、右沿都不一样。
+struct RailHoverTool: View {
+    let title: LocalizedStringResource
+    let icon: Icon
+    let action: () -> Void
+    @Environment(\.palette) private var palette
+
+    init(_ title: LocalizedStringResource, _ icon: Icon, action: @escaping () -> Void) {
+        self.title = title
+        self.icon = icon
+        self.action = action
+    }
+
+    var body: some View {
+        Button(action: action) { Image(icon).font(Glyph.small).foregroundStyle(palette.ink2) }
+            .buttonStyle(ControlButtonStyle(kind: .icon, size: .inline))
+            .help(Text(title))
+            .accessibilityLabel(Text(title))
+    }
+
+    /// 钮的框比里面的图形每边宽出这么多：靠行尾的往外让出它，图形的右沿正对着行尾的字。
+    static var overhang: CGFloat { (ControlSize.inline.height - Glyph.rowSize) / 2 }
+}
+
+/// 项目那一行。Mac 上指针停着才露两颗小钮，都叠在行上（钮里不套钮）：行首项目的图形换成开合的箭头（同 Notion、Codex 的侧栏：
+/// 箭头就在引线那一列的头上），行尾在推进的数让给加号（在这个项目下开新会话；数在悬停提示里）。平时这一行只有图形、名字与数。
+/// 触屏没有悬停：加号与箭头一直画在行尾、各占一格，数排在它们左边。
+/// 否决过：箭头与加号都排在行尾（两颗钮挤在一起，数还要让位；箭头展开着、选中时常驻，行与行长得不一样）。
 struct RailProjectRow: View {
     let project: Project
     let running: Int
@@ -18,7 +44,7 @@ struct RailProjectRow: View {
     var body: some View {
         Button(action: show) {
             RailLine {
-                ProjectGlyph(project: project)
+                ProjectGlyph(project: project).opacity(Self.touch || !hovering ? 1 : 0)
             } rest: {
                 Text(verbatim: project.shownName).font(Typography.body.weight(selected ? .semibold : .regular)).foregroundStyle(palette.ink).lineLimit(1)
                 Spacer(minLength: Spacing.item)
@@ -27,9 +53,9 @@ struct RailProjectRow: View {
                         BoardLaneMark(column: .advancing, size: 12)
                         Text(running, format: .number).font(Typography.caption).foregroundStyle(palette.ink3).monospacedDigit()
                     }
-                    .opacity(hovering ? 0 : 1)
+                    .opacity(Self.touch || !hovering ? 1 : 0)
                 }
-                Color.clear.frame(width: Self.slots)
+                if Self.touch { Color.clear.frame(width: ControlSize.inline.height * 2 - RailHoverTool.overhang) }
             }
         }
         .buttonStyle(RowStyle(selected: selected))
@@ -38,13 +64,17 @@ struct RailProjectRow: View {
         .accessibilityLabel(Text(verbatim: project.shownName))
         .accessibilityValue(running > 0 ? Text(running, format: .number) : Text(verbatim: ""))
         .accessibilityAddTraits(selected ? .isSelected : [])
+        .overlay(alignment: .leading) {
+            // 箭头的框比图形那一列宽：往左让出多的一半，箭头正在那一列的中线上
+            if !Self.touch { fold.opacity(hovering ? 1 : 0).offset(x: (Chrome.icon - ControlSize.inline.height) / 2) }
+        }
         .overlay(alignment: .trailing) {
-            HStack(spacing: Spacing.hair) {
-                if adds { tool(.add, "新会话", action: start).transition(.opacity) }
-                fold
+            HStack(spacing: 0) {
+                RailHoverTool("新会话", .add, action: start)
+                if Self.touch { fold }
             }
-            // 钮的圆比留出的那一格宽：往右让出多的一半，箭头正在那一格的中线上
-            .offset(x: (ControlSize.inline.height - Chrome.icon) / 2)
+            .opacity(Self.touch || hovering ? 1 : 0)
+            .offset(x: RailHoverTool.overhang)
         }
         .onHover { hovering = $0 }
         #if os(macOS)
@@ -53,34 +83,17 @@ struct RailProjectRow: View {
         .animation(Motion.fade, value: hovering)
     }
 
-    /// 触屏没有悬停：加号一直画着、自己占一格，在推进的数排在它左边不让位。
     #if os(iOS)
-    private var adds: Bool { true }
-    private static let slots = Chrome.icon + Spacing.hair + ControlSize.inline.height
+    private static let touch = true
     #else
-    private var adds: Bool { hovering }
-    private static let slots = Chrome.icon
+    private static let touch = false
     #endif
 
-    private func tool(_ icon: Icon, _ title: LocalizedStringResource, action: @escaping () -> Void) -> some View {
-        Button(action: action) { Image(icon).font(Glyph.small).foregroundStyle(palette.ink2) }
-            .buttonStyle(ControlButtonStyle(kind: .icon, size: .inline))
-            .help(Text(title))
-            .accessibilityLabel(Text(title))
-    }
-
     private var fold: some View {
-        // 触屏没有悬停：一直画着
-        #if os(iOS)
-        let shown = true
-        #else
-        let shown = open || selected || hovering
-        #endif
-        return Button(action: toggle) {
-            Chevron(.forward).foregroundStyle(palette.ink3).rotationEffect(.degrees(open ? 90 : 0))
+        Button(action: toggle) {
+            Chevron(.forward).foregroundStyle(palette.ink2).rotationEffect(.degrees(open ? 90 : 0))
         }
         .buttonStyle(ControlButtonStyle(kind: .icon, size: .inline))
-        .opacity(shown ? 1 : 0)
         .help(open ? Text("收起") : Text("展开"))
         .accessibilityLabel(open ? Text("收起") : Text("展开"))
         .accessibilityValue(Text(verbatim: project.shownName))

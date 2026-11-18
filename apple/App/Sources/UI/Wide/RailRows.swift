@@ -224,7 +224,8 @@ struct RailSessions: View {
         .accessibilityAddTraits(.isHeader)
     }
 
-    /// 组头就是去项目总览页的那一行：行尾的个数与箭头说它点得进去，悬停、选中同别的行。
+    /// 组头就是去项目总览页的那一行，悬停、选中同别的行。行尾只写个数，不画向右的箭头：下面每个项目的开合也是箭头，
+    /// 同一个图形在相邻两行一个是"进去"、一个是"展开"，看着像这一组能折起来。
     private var projectsHeader: some View {
         let selected = workspace.mainRoute == .shelf && !workspace.cueHome
         return Button { workspace.selectPane(.projects) } label: {
@@ -232,7 +233,6 @@ struct RailSessions: View {
                 Text("项目").fontWeight(selected ? .semibold : nil).foregroundStyle(selected ? palette.ink : palette.ink3).lineLimit(1)
                 Spacer(minLength: 0)
                 Text(workspace.catalog?.projects.count ?? 0, format: .number).monospacedDigit().foregroundStyle(palette.ink3)
-                Chevron(.forward).foregroundStyle(palette.ink3)
             }
             .font(Typography.label)
             .frame(height: Chrome.row)

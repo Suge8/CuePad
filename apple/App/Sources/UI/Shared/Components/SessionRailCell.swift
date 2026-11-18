@@ -47,7 +47,12 @@ struct SessionRailCell: View {
         #if os(macOS)
         // 叠在卡上、不放进卡里：卡整张是一颗钮，钮里不套钮
         .overlay(alignment: .topTrailing) {
-            if let finishing { quick(finishing.title, finishing.icon, action: finishing.run).padding(Spacing.tight).transition(.opacity) }
+            // 对勾的右沿、中线都对着它换下的那一格（等了多久）
+            if let finishing {
+                RailHoverTool(finishing.title, finishing.icon, action: finishing.run)
+                    .padding(.trailing, Spacing.group - RailHoverTool.overhang).padding(.top, Spacing.item - RailHoverTool.overhang / 2)
+                    .transition(.opacity)
+            }
         }
         .onHover { hovering = $0 }
         .presetHover($hovering)
@@ -134,13 +139,13 @@ struct SessionRailCell: View {
                 } rest: {
                     name.font(Typography.body)
                     Spacer(minLength: Spacing.item)
-                    SessionRailReadout(item: item)
+                    SessionRailReadout(item: item).modifier(YieldsToTool(yields: besides))
                 }
                 #if os(macOS)
                 // 并排的看得见的入口（另有 ⌘ 点与右键）：主区开着别的会话时，悬停的行尾露出来。
                 // 完成不放在这里：项目下面列的多半还在做，对勾摆在行尾是请人误点；它在等你回话的那张卡上（`card`）
                 .hoverReveal(when: besides) {
-                    quick("并排打开", .rightColumn) { open(item.session, .beside) }.padding(.horizontal, Spacing.tight)
+                    RailHoverTool("并排打开", .rightColumn) { open(item.session, .beside) }.padding(.trailing, -RailHoverTool.overhang)
                 }
                 #endif
             } else {
@@ -160,15 +165,6 @@ struct SessionRailCell: View {
         return nil
         #endif
     }
-
-    #if os(macOS)
-    private func quick(_ title: LocalizedStringResource, _ icon: Icon, action: @escaping () -> Void) -> some View {
-        Button(title, icon: icon, action: action)
-            .labelStyle(.iconOnly)
-            .buttonStyle(ControlButtonStyle(kind: .icon, size: .compact))
-            .help(Text(title))
-    }
-    #endif
 
     private var name: some View {
         Text(verbatim: item.name)
@@ -217,6 +213,16 @@ struct SessionRailCell: View {
         .readerHidden(true)
     }
 
+}
+
+/// 行尾的读数在指针停着、那里要露出小钮时让开：读数比钮宽，不让开会从钮的左边露出半截。
+private struct YieldsToTool: ViewModifier {
+    let yields: Bool
+    @Environment(\.rowHovered) private var hovered
+
+    func body(content: Content) -> some View {
+        content.opacity(yields && hovered ? 0 : 1)
+    }
 }
 
 private struct SessionRailReadout: View {
