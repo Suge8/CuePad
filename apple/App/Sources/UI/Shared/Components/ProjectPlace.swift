@@ -81,12 +81,11 @@ struct ProjectPlaceLabel: View {
 struct ProjectIntroLine: View {
     let project: Project?
     var inHeader = false
-    var intro = true
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
     var body: some View {
-        let intro = self.intro ? project?.intro : nil, place = project.flatMap(workspace.place(of:))
+        let intro = project?.intro?.nonEmpty, place = project.flatMap(workspace.place(of:))
         HStack(spacing: 0) {
             if let intro {
                 Text(intro).foregroundStyle(inHeader ? palette.ink3 : palette.ink2)

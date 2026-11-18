@@ -87,7 +87,7 @@ extension CueStore {
     let renames = try latestRenames(to: ids)
     let answers = try latestDeliveries(to: ids, modes: [.answer])
     let unsettled = try unsettledTalk(to: ids)
-    let tasks = try sessionOwners(ids).mapValues { SessionTask(id: $0.task.id, isPinned: $0.task.isPinned, title: CueSummary.title(of: $0.leaf.body)) }
+    let tasks = try sessionOwners(ids).mapValues { SessionTask(id: $0.task.id, isPinned: $0.task.isPinned, title: CueSummary.title(of: $0.leaf.body), isDone: $0.leaf.completedAt != nil) }
     return states.map {
       SessionListItem(
         state: $0, project: $0.projectID.flatMap { projects[$0] }, delivery: deliveries[$0.sessionID], rename: renames[$0.sessionID],
@@ -105,9 +105,20 @@ extension CueStore {
   func sessionsAskingYou() throws -> [SessionState] {
     let cue = try cueDuty()
     let waiting = WorkState.waitingForUser.rawValue
-    return try narrow(.piSessionStates, column: "state", candidates: "state = '\(waiting)'", to: { $0 == waiting }) { rows in
+    let asking = try narrow(.piSessionStates, column: "state", candidates: "state = '\(waiting)'", to: { $0 == waiting }) { rows in
       try sessions(rows).filter { $0.asksYou(cue) }
     }
+    return try notEnding(asking)
+  }
+
+  /// 你已经叫它歇了（结束在路上：点了休眠，或完成带出来的）的会话不再算等你，不等那台 Mac 做完——不然点了完成它还挂在等你里，
+  /// 像没点上。没结束成（失败）的回到等你。等你的通知也问它（`push`）：列表里没有的不该还来叫你。
+  func notEnding(_ sessions: [SessionState]) throws -> [SessionState] {
+    guard !sessions.isEmpty else { return sessions }
+    let ending = Set(try db.query(
+      "SELECT r.targetRef FROM deliveryRequests AS r WHERE r.targetRef IN (SELECT value FROM json_each(?)) AND \(DeliveryRequest.endingSQL("r"))",
+      [JSONColumn.encode(sessions.map(\.sessionID))]) { $0.text(0) })
+    return sessions.filter { !ending.contains($0.sessionID) }
   }
 
   /// 待回复的会话（规则在 `SessionState.awaitsReply`），等得最久的在前：会话条与等你里的待回复（`CueTally.replies`）只读它。
@@ -123,7 +134,7 @@ extension CueStore {
       to: { WorkState(rawValue: $0).map(resting.contains) == true }
     ) { rows in try sessions(rows).filter { $0.awaitsReply(cue) } }
     let said = try latestDeliveries(to: left.map(\.sessionID))
-    return left.filter { session in
+    return try notEnding(left).filter { session in
       guard let request = said[session.sessionID] else { return true }
       return request.createdAt <= session.stateSince || request.status == .known(.failed)
     }

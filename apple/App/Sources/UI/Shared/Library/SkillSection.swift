@@ -59,7 +59,7 @@ private struct SkillRow: View {
             .buttonStyle(.row)
             #if os(macOS)
             .contextMenu {
-                Button("在访达中显示", icon: .folder) { workspace.revealSkill(skill.path) }
+                Button("在访达中显示", icon: .folder) { workspace.revealSkill(skill.path) }.menuIcons()
             }
             #endif
     }

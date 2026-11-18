@@ -39,6 +39,8 @@ struct SessionRailRows {
     struct Item: Identifiable {
         let session: SessionState
         let name: String
+        /// 它归的那件任务（`SessionListItem.task`）：菜单里的完成、置顶落在它上面。
+        let task: SessionTask?
         let pulse: BoardPulse
         let waiting: SessionShown.Status?
         var cache: ChatMessage.Tools.Cache?
@@ -52,7 +54,7 @@ struct SessionRailRows {
         func item(_ value: SessionListItem, waiting: SessionShown.Status?, cache: ChatMessage.Tools.Cache? = nil) -> Item {
             let pulse = pulse(value)
             let session = pulse.session ?? value.state
-            return Item(session: session, name: value.task?.title.nonEmpty ?? session.title, pulse: pulse, waiting: waiting, cache: cache)
+            return Item(session: session, name: value.task?.title.nonEmpty ?? session.title, task: value.task, pulse: pulse, waiting: waiting, cache: cache)
         }
         waiting = data.waiting.map { item($0.agent, waiting: $0.deciding ? .asking : .awaitsReply, cache: $0.cache) }
         advancing = data.advancing.map { item($0, waiting: nil) }.enumerated().sorted {

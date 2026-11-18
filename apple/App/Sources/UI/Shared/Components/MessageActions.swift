@@ -20,6 +20,7 @@ struct MessageActions: View {
             if index > 0 { Divider() }
             ForEach(sections[index], id: \.self, content: item)
         }
+        .menuIcons()
     }
 
     @ViewBuilder private func item(_ item: MessageMenu.Item) -> some View {

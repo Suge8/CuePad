@@ -37,8 +37,8 @@ extension CueStore {
   func push(_ alert: AlertKind, _ state: SessionState) throws -> AlertPush? {
     let cue = try cueDuty()
     let yours = switch alert {
-    case .waitingForUser: state.asksYou(cue)
-    case .awaitsReply: state.awaitsReply(cue)
+    case .waitingForUser: try state.asksYou(cue) && !notEnding([state]).isEmpty
+    case .awaitsReply: try state.awaitsReply(cue) && !notEnding([state]).isEmpty
     case .settled: cue == nil
     }
     guard yours else { return nil }

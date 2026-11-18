@@ -20,10 +20,10 @@ struct SessionDock: View {
             QuestionDock(session: session)
             FailureDock(session: session, delivery: digest?.delivery, catalog: digest?.catalog, config: digest?.config(at: speech))
             DockedCard(endIssue?.unconfirmedReason) { reason in
-                Callout(.unknown(), text: String(localized: "结束结果尚未确认：\(reason)"), docked: true) { recoverEnd }
+                Callout(.unknown(), text: String(localized: "休眠结果尚未确认：\(reason)"), docked: true) { recoverEnd }
             }
             DockedCard(endIssue?.failure?.text) { failure in
-                Callout(.failed(.other), text: String(localized: "没能结束：\(failure)"), docked: true) { recoverEnd }
+                Callout(.failed(.other), text: String(localized: "没能休眠：\(failure)"), docked: true) { recoverEnd }
             }
             if let digest, digest.session == nil {
                 Text("这个会话已经不在了，发不到它").font(Typography.meta).foregroundStyle(palette.ink3)
@@ -43,7 +43,7 @@ struct SessionDock: View {
     }
     private var recoverEnd: some View {
         Group {
-            if let action = SessionActions.end(session, ending: false, recovering: true, in: workspace) {
+            if let action = SessionActions.sleep(session, ending: false, recovering: true, in: workspace) {
                 Button(action.title, icon: action.icon, action: action.run)
                     .buttonStyle(ControlButtonStyle(kind: .secondary))
             }

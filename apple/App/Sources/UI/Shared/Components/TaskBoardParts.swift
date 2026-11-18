@@ -22,8 +22,6 @@ struct BoardColumn: View {
     @State private var slot: Int?
     @State private var frames: [UUID: CGRect] = [:]
     @State private var opened: PreviewOpening?
-    /// 等你列摊开的是哪张；没点过、或点的那张答完走了，就是最前一张（等得最久的）。
-    @State private var focal: String?
     #if os(iOS)
     /// 手机那一行是横着滑的，更早做完的几百条排不进去：点了另出一页竖着列。
     @State private var listsEarlier = false
@@ -186,12 +184,9 @@ struct BoardColumn: View {
             }
             if board.advancing.isEmpty { empty("拖一件待办到这里开始") }
         case .waiting:
-            let open = board.held.contains { $0.id == focal } ? focal : board.held.first?.id
             ForEach(board.held) { held in
-                let card = BoardWaitCard(held: held, project: glyph(workspace.catalog?.project(held.project)), focal: held.id == open) {
-                    withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { focal = held.id }
-                } openShot: { opened = $0 }
-                .boardFlight(held.id).benchSpot(held.id)
+                let card = BoardWaitCard(held: held, project: glyph(workspace.catalog?.project(held.project)))
+                    .boardFlight(held.id).benchSpot(held.id)
                 if let item = held.item { card.boardDraggable(item.id, session: held.session.sessionID) } else { card.boardDraggable(session: held.session.sessionID) }
             }
             if board.count(.waiting) == 0 { empty("没有等你的事") }
@@ -317,7 +312,7 @@ private struct ShotPresenter: ViewModifier {
     @Binding var opened: PreviewOpening?
 
     func body(content: Content) -> some View {
-        if column == .done || column == .waiting { content.previewPresenter($opened, reply: .cue) } else { content }
+        if column == .done { content.previewPresenter($opened, reply: .cue) } else { content }
     }
 }
 

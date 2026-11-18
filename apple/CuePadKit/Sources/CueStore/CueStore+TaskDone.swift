@@ -38,6 +38,48 @@ extension CueStore {
     }
   }
 
+  /// 你亲手点的完成：做完与它带出来的休眠（`sessionsFreed`）写在同一个事务里——分两次写，中间那一拍会话还算等你，它在看板上的卡先跳回等你再飞走。
+  /// 自动结束先结（`reconcileTaskSessionEvents`，提交前本来也要跑）：它已经请结束的，这里不再点名一遍。
+  /// 那台 Mac 说了离开的不在这里写（写了没人领），交回调用方照点名结束的路走（先拉一次同步再定，`AppServices.end`）。
+  public func completeTask(_ id: UUID, sleepingAt moment: Speech.Moment) throws -> (status: TaskStatus, unreached: [SessionState]) {
+    try write { try completeSleeping(id, at: moment) }
+  }
+
+  private func completeSleeping(_ id: UUID, at moment: Speech.Moment) throws -> (status: TaskStatus, unreached: [SessionState]) {
+    guard let card = try find(Card.self, id) else { throw CueStoreError.notFound }
+    guard let current = card.status else { throw CueStoreError.notATask }
+    let status = current == .done ? .done : try applyStatus(id, .done)
+    guard status == .done else { return (status, []) }
+    try reconcileTaskSessionEvents()
+    var unreached: [SessionState] = []
+    for session in try sessionsFreed(byCompleting: id) {
+      if try macKnownOff(session.hostID, at: moment) != nil {
+        unreached.append(session)
+      } else {
+        _ = try requestControl(
+          .end, of: SendTarget(kind: .piSession, name: session.title, ref: session.sessionID), on: session.hostID, cue: false,
+          content: DeliveryRequest.EndKind.explicit.stored)
+      }
+    }
+    return (status, unreached)
+  }
+
+  /// 此刻完成 `task` 会让哪些会话歇下（确认框的预告）：照 `completeTask(_:sleepingAt:)` 做一遍、看哪些会话有结束在路上，再整个回滚。
+  /// 不另写一份规则去猜：休眠有两条路（你点的 `sessionsFreed` 与自动的 `taskSessionCanEnd`），另写的那份和照做的对不上过（自动结束的那条漏算）。
+  public func sessionsEnding(byCompleting task: UUID, at moment: Speech.Moment) throws -> Set<String> {
+    struct Rehearsed: Error { let sessions: Set<String> }
+    do {
+      _ = try db.transaction {
+        let unreached = try completeSleeping(task, at: moment).unreached
+        let ending = try db.query("SELECT DISTINCT r.targetRef FROM deliveryRequests AS r WHERE \(DeliveryRequest.endingSQL("r"))") { $0.text(0) }
+        throw Rehearsed(sessions: Set(ending).union(unreached.map(\.sessionID)))
+      }
+    } catch let rehearsed as Rehearsed {
+      return rehearsed.sessions
+    }
+    return []
+  }
+
   /// 撤销一次完成：它还是那一次做完的（完成时刻是 `time`）、没归档没删才撤，连同那一次连带做完的下级（其间单独归档了的不动）、那一次才带着开始的上级；否则抛 `changedSinceUndo`。
   /// 那一次结束的会话、停掉的定时不恢复（同 `reopen`：再对它说话就在后台恢复）。
   public func uncompleteTask(_ id: UUID, completedAt time: Date) throws {

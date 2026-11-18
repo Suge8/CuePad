@@ -62,7 +62,7 @@ struct ArchiveList: View {
         #endif
         .contextMenu {
             let swipes = swipes(card)
-            RowActionButtons(actions: swipes.leading + swipes.trailing)
+            RowActionButtons(actions: swipes.leading + swipes.trailing).menuIcons()
         }
     }
 

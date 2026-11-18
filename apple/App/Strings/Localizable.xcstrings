@@ -2364,18 +2364,18 @@
         }
       }
     },
-    "Agent 会话已结束" : {
+    "Agent 会话已休眠" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Agent session ended"
+            "value" : "Agent session asleep"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Agent 会话已结束"
+            "value" : "Agent 会话已休眠"
           }
         }
       }
@@ -2840,6 +2840,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Agent 被打断了"
+          }
+        }
+      }
+    },
+    "Agent 还在做事，让它休眠？" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The Agent Is Still Working. Put It to Sleep?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agent 还在做事，让它休眠？"
           }
         }
       }
@@ -3418,18 +3434,18 @@
         }
       }
     },
-    "CuePad 答不了这类提问，只能结束这个会话" : {
+    "CuePad 答不了这类提问，只能让这个会话休眠" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "CuePad can't answer this kind of question. You can only end the session."
+            "value" : "CuePad can't answer this kind of question. You can only put the session to sleep."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "CuePad 答不了这类提问，只能结束这个会话"
+            "value" : "CuePad 答不了这类提问，只能让这个会话休眠"
           }
         }
       }
@@ -5968,6 +5984,54 @@
         }
       }
     },
+    "休眠" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sleep"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "休眠"
+          }
+        }
+      }
+    },
+    "休眠未确认" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sleep not confirmed"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "休眠未确认"
+          }
+        }
+      }
+    },
+    "休眠结果尚未确认：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sleep is unconfirmed: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "休眠结果尚未确认：%@"
+          }
+        }
+      }
+    },
     "会并进来" : {
       "localizations" : {
         "en" : {
@@ -6012,6 +6076,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "会话"
+          }
+        }
+      }
+    },
+    "会话休眠了" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Session asleep"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "会话休眠了"
           }
         }
       }
@@ -6128,18 +6208,18 @@
         }
       }
     },
-    "会话正在结束，确认结束结果后才能关联或发送" : {
+    "会话正在休眠，确认结果后才能关联或发送" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This session is ending. Wait until the outcome is confirmed before linking a task or sending a message."
+            "value" : "This session is going to sleep. Wait until the outcome is confirmed before linking a task or sending a message."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "会话正在结束，确认结束结果后才能关联或发送"
+            "value" : "会话正在休眠，确认结果后才能关联或发送"
           }
         }
       }
@@ -6188,22 +6268,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "会话移到左边"
-          }
-        }
-      }
-    },
-    "会话结束了" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Session ended"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "会话结束了"
           }
         }
       }
@@ -10568,22 +10632,6 @@
         }
       }
     },
-    "在旁边打开" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Open Beside"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在旁边打开"
-          }
-        }
-      }
-    },
     "在浏览器里打开" : {
       "localizations" : {
         "en" : {
@@ -11160,6 +11208,22 @@
         }
       }
     },
+    "它的会话还有别的事在用，完成后接着跑。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Its session is still in use elsewhere and keeps running after you complete this."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "它的会话还有别的事在用，完成后接着跑。"
+          }
+        }
+      }
+    },
     "安装" : {
       "localizations" : {
         "en" : {
@@ -11304,34 +11368,34 @@
         }
       }
     },
-    "完成会把它的会话一起结束。" : {
+    "完成后它的会话会休眠，再对它说话就醒。" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Completing it also ends its session."
+            "value" : "Its session goes to sleep when you complete this. Message it to wake it."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "完成会把它的会话一起结束。"
+            "value" : "完成后它的会话会休眠，再对它说话就醒。"
           }
         }
       }
     },
-    "完成并结束会话" : {
+    "完成并休眠" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Complete and End Session"
+            "value" : "Complete and Sleep"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "完成并结束会话"
+            "value" : "完成并休眠"
           }
         }
       }
@@ -11544,22 +11608,6 @@
         }
       }
     },
-    "对话会保留，再给它发消息会在后台恢复" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The conversation is kept. Messaging it again resumes it in the background."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "对话会保留，再给它发消息会在后台恢复"
-          }
-        }
-      }
-    },
     "对话刻度" : {
       "localizations" : {
         "en" : {
@@ -11752,22 +11800,6 @@
         }
       }
     },
-    "展开作答" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Expands to answer"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "展开作答"
-          }
-        }
-      }
-    },
     "展开编辑" : {
       "localizations" : {
         "en" : {
@@ -11908,6 +11940,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已交给 Agent 会话「%@」，唤醒后送达"
+          }
+        }
+      }
+    },
+    "已休眠" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Asleep"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已休眠"
           }
         }
       }
@@ -12192,6 +12240,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已完成 %lld"
+          }
+        }
+      }
+    },
+    "已完成，会话还在用，没有休眠" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Completed. The session is still in use and wasn't put to sleep."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已完成，会话还在用，没有休眠"
           }
         }
       }
@@ -12716,6 +12780,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "带了 %@"
+          }
+        }
+      }
+    },
+    "并排打开" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Side by Side"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "并排打开"
           }
         }
       }
@@ -13372,6 +13452,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "手上没有事"
+          }
+        }
+      }
+    },
+    "手上这一步会被打断。对话会保留，再对它说话就醒" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The current step will be interrupted. The conversation is kept — message it to wake it."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "手上这一步会被打断。对话会保留，再对它说话就醒"
           }
         }
       }
@@ -16172,6 +16268,22 @@
         }
       }
     },
+    "更早的会话" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Earlier Sessions"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "更早的会话"
+          }
+        }
+      }
+    },
     "更早的输出未显示" : {
       "localizations" : {
         "en" : {
@@ -17296,6 +17408,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在从 iCloud 同步…"
+          }
+        }
+      }
+    },
+    "正在休眠…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Going to sleep…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在休眠…"
           }
         }
       }
@@ -18452,6 +18580,38 @@
         }
       }
     },
+    "没能休眠" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't sleep"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没能休眠"
+          }
+        }
+      }
+    },
+    "没能休眠：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't sleep: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没能休眠：%@"
+          }
+        }
+      }
+    },
     "没能保存" : {
       "localizations" : {
         "en" : {
@@ -18544,38 +18704,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "没能生成图片，请检查灵感内容后再分享"
-          }
-        }
-      }
-    },
-    "没能结束" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Couldn't end"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "没能结束"
-          }
-        }
-      }
-    },
-    "没能结束：%@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Couldn't end: %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "没能结束：%@"
           }
         }
       }
@@ -19780,22 +19908,6 @@
         }
       }
     },
-    "看这个项目的进展" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "See This Project’s Progress"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "看这个项目的进展"
-          }
-        }
-      }
-    },
     "看门狗：主线程太久没响应，被系统结束" : {
       "localizations" : {
         "en" : {
@@ -20696,22 +20808,6 @@
         }
       }
     },
-    "结束会话" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "End Session"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "结束会话"
-          }
-        }
-      }
-    },
     "结束未确认" : {
       "localizations" : {
         "en" : {
@@ -20724,38 +20820,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "结束未确认"
-          }
-        }
-      }
-    },
-    "结束结果尚未确认：%@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Session exit is unconfirmed: %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "结束结果尚未确认：%@"
-          }
-        }
-      }
-    },
-    "结束这个会话？" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "End This Session?"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "结束这个会话？"
           }
         }
       }
@@ -23376,22 +23440,6 @@
         }
       }
     },
-    "这个会话不是为这件事开的，完成不会结束它。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This session wasn't started for this task. Completing won't end it."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这个会话不是为这件事开的，完成不会结束它。"
-          }
-        }
-      }
-    },
     "这个会话已经不在了，发不到它" : {
       "localizations" : {
         "en" : {
@@ -24668,38 +24716,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "选择模型…"
-          }
-        }
-      }
-    },
-    "选择灵感" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Select Ideas"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "选择灵感"
-          }
-        }
-      }
-    },
-    "选择灵感、看这个项目的进展、项目操作" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Select ideas, see this project’s progress, project actions"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "选择灵感、看这个项目的进展、项目操作"
           }
         }
       }

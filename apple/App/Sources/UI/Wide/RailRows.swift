@@ -14,12 +14,13 @@ struct RailGroup<Content: View>: View {
 
 struct RailLine<Lead: View, Rest: View>: View {
     var height = Chrome.row
+    var leadWidth = Chrome.icon
     @ViewBuilder let lead: Lead
     @ViewBuilder let rest: Rest
 
     var body: some View {
         HStack(spacing: Spacing.item) {
-            lead.frame(width: Chrome.icon)
+            lead.frame(width: leadWidth)
             HStack(spacing: Spacing.glyph) { rest }
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -135,7 +136,8 @@ private struct TileSurface: ViewModifier {
 /// 会话条上的会话：只有等你的常驻在上面（没有就整组不在），其余的收在各自的项目下面——项目一行写它有几个在推进（记号同看板推进中的列头），点开才列出来。
 /// 项目多了只列一部分（`shownProjects`）：有会话在推进的、置顶的、此刻开着的一定在，其余按目录的顺序补到 `projectCap` 个，全部在组头去的总览页。
 /// 否决过：推进中全部列出（十几行、每行一种状态标，读不过来，看板与 Cue 已经有同一份）；下面的空处填最近结束的会话（栏一直是满的，眼睛没处歇）。
-/// 点项目那一行去它的页并展开，再点一次收起；展开着的记在这个窗口里，不存。没归项目的会话算在默认项目下。
+/// 点项目那一行去它的页并展开；开合只在行尾那个箭头（`RailFold`），点它不换页。展开着的记在这个窗口里，不存。没归项目的会话算在默认项目下。
+/// 否决过：再点一次选中的行收起（同一行两个意思，箭头看着能点却和点行一样）。
 struct RailSessions: View {
     let data: SessionRailData
     let marked: Set<String>
@@ -143,7 +145,17 @@ struct RailSessions: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var expanded: Set<UUID> = []
+    @Environment(AppServices.self) private var services
+
+    private var expanded: Set<UUID> { services.settings.railOpenProjects }
+
+    /// 回收站里的项目不留在记着的那一份里。
+    private func expand(_ change: (inout Set<UUID>) -> Void) {
+        var open = expanded
+        change(&open)
+        if let live = workspace.catalog?.projects.map(\.id) { open.formIntersection(live) }
+        services.settings.railOpenProjects = open
+    }
 
     var body: some View {
         let rows = SessionRailRows(data, pulse: workspace.pulse)
@@ -169,15 +181,32 @@ struct RailSessions: View {
             .padding(.horizontal, RowMetrics.bleed)
             .safeAreaPadding(.bottom, Chrome.pad)
             .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion) ?? Motion.fade, value: expanded)
-            .animation(Motion.fade, value: rows.waiting.map(\.id))
+            .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion) ?? Motion.fade, value: rows.waiting.map(\.id))
         }
         .scrollIndicators(.hidden)
         .dynamicTypeSize(...DynamicTypeSize.xxLarge)
+        // 从别处（搜索、看板、Cue 的链接）进了一个项目，它在会话条里也跟着展开：选中的那一行下面就是它的会话。之后收不收由你，不再替你开
+        .onChange(of: workspace.mainRoute) { _, route in
+            if case .project(let id) = route, !expanded.contains(id) { expand { $0.insert(id) } }
+        }
+        // 从别处开了一个会话也一样：它的项目收着，会话条上就没有一行是选中的，看不出人在哪。等你的那几张常驻在上面，不用开
+        .onChange(of: marked) { old, new in
+            let opened = new.subtracting(old).subtracting(SessionRailRows(data, pulse: workspace.pulse).waiting.map(\.id))
+            guard !opened.isEmpty else { return }
+            let store = services.store
+            workspace.attempt {
+                for session in opened {
+                    let project = try await store.sessionState(session)?.projectID ?? Project.defaultID
+                    if !expanded.contains(project) { expand { $0.insert(project) } }
+                }
+            }
+        }
     }
 
+    /// 等你的卡是会话条上唯一要你动手的：来的时候从上面浮出来（余光看得到有东西来了），走的时候先淡完，不压住正往上让的那几行。
     private func cell(_ item: SessionRailRows.Item) -> some View {
         SessionRailCell(item: item, form: .wide, selected: marked.contains(item.id), open: open)
-            .transition(.opacity)
+            .transition(.asymmetric(insertion: Motion.surface(from: .top, reduceMotion: reduceMotion), removal: .opacity.animation(Motion.yield)))
     }
 
     private static let projectCap = 7
@@ -207,7 +236,8 @@ struct RailSessions: View {
         .accessibilityAddTraits(.isHeader)
     }
 
-    /// 组头就是去项目总览页的那一行：行尾的个数与箭头说它点得进去，悬停、选中同别的行。
+    /// 组头就是去项目总览页的那一行，悬停、选中同别的行。行尾只写个数，不画向右的箭头：下面每个项目的开合也是箭头，
+    /// 同一个图形在相邻两行一个是"进去"、一个是"展开"，看着像这一组能折起来。
     private var projectsHeader: some View {
         let selected = workspace.mainRoute == .shelf && !workspace.cueHome
         return Button { workspace.selectPane(.projects) } label: {
@@ -215,7 +245,6 @@ struct RailSessions: View {
                 Text("项目").fontWeight(selected ? .semibold : nil).foregroundStyle(selected ? palette.ink : palette.ink3).lineLimit(1)
                 Spacer(minLength: 0)
                 Text(workspace.catalog?.projects.count ?? 0, format: .number).monospacedDigit().foregroundStyle(palette.ink3)
-                Chevron(.forward).foregroundStyle(palette.ink3)
             }
             .font(Typography.label)
             .frame(height: Chrome.row)
@@ -226,88 +255,13 @@ struct RailSessions: View {
     }
 
     private func projectRow(_ project: Project, running: Int) -> some View {
-        let selected = workspace.mainRoute == .project(project.id) && !workspace.cueHome
-        let open = expanded.contains(project.id)
-        return Button {
-            if selected { expanded.formSymmetricDifference([project.id]) } else {
-                workspace.show(.project(project.id))
-                expanded.insert(project.id)
-            }
-        } label: {
-            RailLine {
-                ProjectGlyph(project: project)
-            } rest: {
-                Text(verbatim: project.shownName).font(Typography.body.weight(selected ? .semibold : .regular)).foregroundStyle(palette.ink).lineLimit(1)
-                Spacer(minLength: Spacing.item)
-                if running > 0 {
-                    BoardLaneMark(column: .advancing, size: 12)
-                    Text(running, format: .number).font(Typography.caption).foregroundStyle(palette.ink3).monospacedDigit()
-                }
-                if open || selected { Chevron(.forward).foregroundStyle(palette.ink3).rotationEffect(.degrees(open ? 90 : 0)) }
-            }
-        }
-        .buttonStyle(RowStyle(selected: selected))
-        .help(running > 0 ? Text("\(running) 推进中") : Text(verbatim: project.shownName))
-        .accessibilityLabel(Text(verbatim: project.shownName))
-        .accessibilityValue(running > 0 ? Text(running, format: .number) : Text(verbatim: ""))
-        .accessibilityAddTraits(selected ? .isSelected : [])
-    }
-}
-
-/// 展开的项目下面列的会话，同手机会话列表按项目筛出来的那一份（`SessionListData.read`）：没结束的与置顶的全在（等你的常驻在上面，这里不再列），
-/// 再按最近补已结束的到 `cap` 条，多的收在"还有 N 个会话"一行里、点一下多列 `step` 条
-/// （同 Codex、Cindy 一个项目先列 5 条，Buzz 列 7 条、每次多 10 条；三家都不让上限藏起在跑的）。
-/// 不从会话条那份（`SessionRailData`，Cue 管着的）取：绑在待办或已做完的任务上、还没结束的会话不在那一份里，这里再不列就只剩搜索找得到。
-private struct RailProjectSessions: View {
-    let project: UUID
-    let waiting: Set<String>
-    let marked: Set<String>
-    let open: (SessionState, SessionRail.Opening) -> Void
-    @Environment(Workspace.self) private var workspace
-    @Environment(AppServices.self) private var services
-    @Environment(\.palette) private var palette
-    @State private var list: SessionListData?
-    @State private var extra = 0
-
-    private static let cap = 5
-    private static let step = 10
-
-    private struct Reading: Equatable {
-        let project: UUID
-        let limit: Int
-        let moment: Speech.Moment
-    }
-
-    var body: some View {
-        let live = ((list?.pinned ?? []) + (list?.now ?? [])).filter { !waiting.contains($0.state.sessionID) }
-        let ended = (list?.ended ?? []).prefix(max(0, Self.cap - live.count) + extra)
-        let hidden = (list?.endedTotal ?? 0) - ended.count
-        let items = (live + ended).map { item in
-            let pulse = workspace.pulse(of: item), session = pulse.session ?? item.state
-            return SessionRailRows.Item(session: session, name: item.task?.title.nonEmpty ?? session.title, pulse: pulse, waiting: nil)
-        }
-        VStack(spacing: Spacing.hair) {
-            ForEach(items) { item in
-                SessionRailCell(item: item, form: .wide, selected: marked.contains(item.id), compact: true, open: open)
-            }
-            if hidden > 0 {
-                Button { extra += Self.step } label: {
-                    RailLine { Color.clear } rest: {
-                        Text("还有 \(hidden) 个会话").font(Typography.caption).foregroundStyle(palette.ink3).lineLimit(1)
-                    }
-                    .padding(.leading, SessionRailCell.indent)
-                }
-                .buttonStyle(RowStyle())
-            }
-        }
-        // 引线在项目图形那一列的中线上，从项目那一行往下贯到最后一个会话：看得出这几行归上面那个项目
-        .overlay(alignment: .leading) {
-            Rectangle().fill(palette.hair).frame(width: 1).padding(.leading, Chrome.icon / 2).padding(.vertical, Spacing.tight)
-        }
-        .transition(.opacity.combined(with: .offset(y: -Spacing.tight)))
-        .observing(services.store, id: Reading(project: project, limit: Self.cap + extra, moment: services.speech), into: $list, onError: workspace.fail) {
-            [project, limit = Self.cap + extra, moment = services.speech] store in
-            try SessionListData.read(text: "", project: project, historyLimit: limit, at: moment, from: store)
+        RailProjectRow(project: project, running: running, selected: workspace.mainRoute == .project(project.id) && !workspace.cueHome, open: expanded.contains(project.id)) {
+            workspace.show(.project(project.id))
+            expand { $0.insert(project.id) }
+        } toggle: {
+            expand { $0.formSymmetricDifference([project.id]) }
+        } start: {
+            workspace.openNewSession(in: project.id)
         }
     }
 }

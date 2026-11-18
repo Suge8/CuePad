@@ -88,6 +88,13 @@ extension Motion {
         static let pop = Animation.spring(duration: 0.42, bounce: 0.3)
     }
 
+    /// 一笔写出来：又做完一件时看板已完成列头的对勾重写一遍（`BoardColumnHeader`）。低频、是那一下的落款，比控件的反馈慢；
+    /// 等卡飞到（`travel` 的大半程）才起笔，卡落下时正写完。
+    nonisolated enum Write {
+        static let delay: Duration = .milliseconds(300)
+        static let stroke = Animation.easeOut(duration: 0.45)
+    }
+
     /// Cue 页舞台的一幕（`CueStage`）是编排，不是控件的反馈：新来访时天空从近处拉远、慢慢落定（`unveil`，大块画面比面板开合慢一档，缓出到停），
     /// Cue 与字随后浮上来（`rise`，无回弹）；收起回对话走 `travel`。减弱动态效果时只淡（`fading`）。
     nonisolated enum Stage {
