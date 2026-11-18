@@ -19,6 +19,7 @@ extension DebugScene {
         if let beside = args.layoutOpts.beside {
             workspace.openSession(SessionState.recordID(sessionID: beside), sessionID: beside, in: .beside)
         }
+        openLivePreviewIfAsked(workspace)
         if args.demoMac { Task { await runDemoMac(workspace.services) } }
         presetDrawers(workspace)
         if let pace = args.layoutOpts.sidebarCycle { Task { await cycleColumn(fast: pace == "fast") { send(#selector(AppDelegate.toggleCueSidebar(_:))) } } }

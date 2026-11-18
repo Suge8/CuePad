@@ -79,7 +79,8 @@ private struct NoteRow: View {
                     }
                     HStack(spacing: Spacing.glyph) {
                         if note.preview != nil { QuoteThumb(preview: quoted, kind: note.kind) }
-                        Text(verbatim: note.preview == nil ? ReplyNote.excerpt(note.quote) : note.quote)
+                        if note.element != nil { QuoteThumb.mark(.pickElement, palette).frame(width: QuoteThumb.side, height: QuoteThumb.side).clipShape(.rect(cornerRadius: Radius.chip)) }
+                        Text(verbatim: note.marksPassage ? ReplyNote.excerpt(note.quote) : note.quote)
                             .font(note.note.isEmpty ? Typography.secondary : Typography.caption)
                             .foregroundStyle(note.note.isEmpty ? palette.ink2 : palette.ink3)
                             .truncationMode(.middle)
@@ -93,18 +94,27 @@ private struct NoteRow: View {
             }
             .onTapGesture(perform: reveal)
             .accessibilityElement(children: .ignore).accessibilityAddTraits(.isButton)
-            .help(Text(revealHint))
+            .help(revealHint)
             .accessibilityLabel(
-                note.preview == nil ? Text("批注：\(note.note)，原文：\(ReplyNote.excerpt(note.quote))")
+                note.element != nil ? Text("点选的页面元素：\(note.quote)")
+                    : note.preview == nil ? Text("批注：\(note.note)，原文：\(ReplyNote.excerpt(note.quote))")
                     : note.note.isEmpty ? Text("引用预览：\(note.quote)") : Text("批注：\(note.note)，预览：\(note.quote)"))
-            .accessibilityHint(Text(revealHint))
+            .accessibilityHint(revealHint)
             NoteRemove(label: removeLabel, action: remove)
         }
         .row()
     }
 
-    private var revealHint: LocalizedStringResource { note.preview == nil ? "回到原文" : "回到这份预览" }
-    private var removeLabel: LocalizedStringResource { note.preview == nil ? "删掉这条批注" : "不引用这份预览" }
+    /// 点选的元素不在对话里、点了没有去处：提示里写它的选择器。
+    private var revealHint: Text {
+        if let element = note.element { return Text(verbatim: element.selector) }
+        return note.preview == nil ? Text("回到原文") : Text("回到这份预览")
+    }
+
+    private var removeLabel: LocalizedStringResource {
+        if note.element != nil { return "不带这个元素" }
+        return note.preview == nil ? "删掉这条批注" : "不引用这份预览"
+    }
 }
 
 /// Mac 上指针停在这一行才露出（手机一直在）。

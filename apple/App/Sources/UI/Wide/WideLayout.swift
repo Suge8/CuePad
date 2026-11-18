@@ -24,6 +24,8 @@ struct WideMetrics {
     let cueFits: Bool
 
     var leading: CGFloat { split ? (main / 2).rounded() : main }
+    /// 并排时右半的宽；不并排时是此刻开出右半会有的宽（Mac 的右半一直挂着，`MainWindow.beside`）。
+    var trailing: CGFloat { main - (main / 2).rounded() }
 
     /// 宽屏看板"列头就是最顶那一排、范围钮在开头"：列让出栏头左边与那颗钮，卡片自带的那一圈不算。
     static func boardLead(_ inset: EdgeInsets) -> CGFloat { inset.leading + Spacing.item + Chrome.control - BoardCardMetrics.inset }
@@ -31,10 +33,16 @@ struct WideMetrics {
     struct Shape: Equatable {
         let rail: CGFloat
         let cue: CGFloat
+        var split = false
     }
 
     /// 铺满的 Cue 随窗口变宽，不算换了形：拖窗口时不起滑动。
+    /// Mac 上并排开合也算换形：右半那一块从主区右缘长出来、收回去（`MainWindow` 一直挂着它）；iPad 的右半只在并排时挂，开合照旧直接到位。
+    #if os(macOS)
+    var shape: Shape { Shape(rail: rail, cue: home ? -1 : cue, split: split) }
+    #else
     var shape: Shape { Shape(rail: rail, cue: home ? -1 : cue) }
+    #endif
 
     struct Fits: Equatable {
         let rail: Bool
@@ -45,7 +53,7 @@ struct WideMetrics {
 
     init(width: CGFloat, workspace: Workspace) {
         home = workspace.cueHome
-        split = !home && workspace.besideSession != nil
+        split = workspace.beside != nil
         let narrowest = Self.narrowestMain(split: split)
         railFits = width >= Chrome.rail + narrowest
         rail = workspace.sidebarOpen && railFits ? Chrome.rail : 0

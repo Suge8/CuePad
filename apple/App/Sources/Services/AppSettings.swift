@@ -157,6 +157,13 @@ final class AppSettings {
         setReplyNotes(notes + [ReplyNote(quoting: preview, in: entry)], for: session)
     }
 
+    /// 活预览里点选的元素：同一个元素（同一页、同一个选择器）不挂两次。
+    func quote(_ element: ReplyNote.Element, for session: UUID) {
+        let notes = replyNotes(for: session)
+        guard !notes.contains(where: { $0.element?.page == element.page && $0.element?.selector == element.selector }) else { return }
+        setReplyNotes(notes + [ReplyNote(picking: element)], for: session)
+    }
+
     /// 写给这一份预览的话（全屏页里那一行）：一份一条，再写是改；清空就不留。只引用没写话的那条（`quote`）清空时留着。
     func annotate(_ preview: PreviewItem, _ text: String, in entry: UUID, for session: UUID) {
         var notes = replyNotes(for: session)

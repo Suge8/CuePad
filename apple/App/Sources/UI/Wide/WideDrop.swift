@@ -102,6 +102,15 @@ struct WideSessionTitle: View {
             }
             Spacer(minLength: Spacing.item)
             HStack(spacing: Spacing.item) {
+                #if os(macOS)
+                if column == .main {
+                    let open = workspace.livePreviewOpen
+                    Button(open ? "收起活预览" : "打开活预览", icon: .livePreview) { workspace.toggleLivePreview() }
+                        .labelStyle(.iconOnly)
+                        .buttonStyle(ControlButtonStyle(kind: .circular))
+                        .help(open ? "收起活预览" : "打开活预览")
+                }
+                #endif
                 // 只开一个会话时没有 ×：会话是去处，换去处靠会话条；并排的两半才各有一颗
                 if workspace.besideSession != nil {
                     Button("关闭", icon: .close) { workspace.closeColumn(column) }

@@ -67,6 +67,8 @@ struct Palette {
     var track: Color { ink.opacity(highContrast ? 0.3 : (dark ? 0.16 : 0.14)) }
     /// 模态浮层下面压暗整窗的底（Mac 的 ⌘K、窗口内浮层）。
     var backdrop: Color { Color.black.opacity(dark ? 0.35 : 0.18) }
+    /// 活预览的服务停了：压在最后那一屏网页上的一层桌面色，画面还认得出、读作"这是停下来的那一刻"。
+    var stale: Color { desk.opacity(dark ? 0.62 : 0.55) }
     /// 浮起的东西的投影：悬停的卡片、提示横幅、抬起的纸。
     var shadow: Color { Color.black.opacity(dark ? 0.3 : 0.08) }
     /// 窗口内浮层的投影：比 `shadow` 重，浮层要从整窗里浮出来。
@@ -203,6 +205,13 @@ private extension Color {
 }
 
 extension Color {
+    /// 网页自己的底色（活预览在玻璃栏后面接上页面的底）：从页面读来的 CSS 计算值（`rgb(r, g, b)`、`rgba(…)`），不是色板的令牌。
+    nonisolated static func webPage(_ css: String) -> Color? {
+        let parts = css.drop { $0 != "(" }.dropFirst().prefix { $0 != ")" }.split(separator: ",").compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
+        guard parts.count >= 3 else { return nil }
+        return Color(red: parts[0] / 255, green: parts[1] / 255, blue: parts[2] / 255)
+    }
+
     /// 插画色盘是主题的源数据，不是界面语义色；这里只解码，不保存或复制颜料。
     nonisolated static func illustrationColors(_ pigments: [UInt32]) -> [Color] {
         pigments.map { Color(hex: $0) }

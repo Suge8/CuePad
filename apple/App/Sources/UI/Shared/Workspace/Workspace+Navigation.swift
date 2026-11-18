@@ -20,7 +20,7 @@ extension Workspace {
             if case .session(let route)? = state.path.last { sessions = [route] } else { sessions = [] }
         case .wide(let state):
             let main: SessionRoute? = if case .session(let route) = state.main, !state.home { route } else { nil }
-            sessions = [main, state.home ? nil : state.beside].compactMap(\.self)
+            sessions = [main, state.home ? nil : state.besideSession].compactMap(\.self)
         }
         return sessions.map { ViewerKeeper.Page(id: $0.id, sessionID: $0.sessionID) }
     }

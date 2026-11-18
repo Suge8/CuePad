@@ -177,6 +177,8 @@ final class Workspace {
     #if os(macOS)
     let overlayHeader = OverlayHeader()
     weak var openCardEditing: CardEditing?
+    /// 每个会话的活预览（按会话记录 id）：只在内存里，不进资料库、不同步。
+    var livePreviews: [UUID: LivePreview] = [:]
     #endif
 
     let launching = Launching()

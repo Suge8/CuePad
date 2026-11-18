@@ -93,9 +93,9 @@ extension Workspace {
         let main: SessionRoute? = if case .session(let route) = state.main { route } else { nil }
         switch column {
         case .beside where main != nil:
-            if main?.id != session.id { state.beside = session }
+            if main?.id != session.id { state.beside = .session(session) }
         case .beside, .main:
-            if state.beside?.id == session.id { state.beside = nil }
+            if state.besideSession?.id == session.id { state.beside = nil }
             state.main = .session(session)
         }
         state.home = false
@@ -105,15 +105,15 @@ extension Workspace {
     /// 栏头拖放或键盘挪：并排的两个会话换边；只开一个时没有可换的。
     /// focus 不存到导航；调用方把实际有键盘焦点的那一边传进来。
     func moveSession(from source: Column, to target: Column) {
-        guard source != target, case .wide(var state) = navigation, case .session(let main) = state.main, let beside = state.beside else { return }
+        guard source != target, case .wide(var state) = navigation, case .session(let main) = state.main, let beside = state.besideSession else { return }
         state.main = .session(beside)
-        state.beside = main
+        state.beside = .session(main)
         presentWide(state)
     }
 
     func session(in column: Column) -> SessionRoute? {
         guard case .wide(let state) = navigation else { return nil }
-        if column == .beside { return state.beside }
+        if column == .beside { return state.besideSession }
         if case .session(let session) = state.main { return session }
         return nil
     }
@@ -140,7 +140,7 @@ extension Workspace {
         guard case .wide(var state) = navigation else { return }
         switch column {
         case .main:
-            let beside = state.beside
+            let beside = state.besideSession
             state.beside = nil
             if let beside { state.main = .session(beside) } else { state.main = .browse; state.home = true }
         case .beside: state.beside = nil

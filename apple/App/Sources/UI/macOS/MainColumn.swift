@@ -38,14 +38,32 @@ struct MainColumn: View {
     }
 }
 
+/// 收起时这一块还要滑出去：里面的东西留到滑完再拆（`shown`），不先变成一块空底。
 struct BesideColumn: View {
     @Environment(Workspace.self) private var workspace
+    @State private var shown: Shown?
+
+    private struct Shown: Equatable {
+        let beside: WideNavigation.Beside
+        let owner: SessionRoute?
+    }
 
     var body: some View {
+        let now = workspace.beside.map { Shown(beside: $0, owner: workspace.session(in: .main)) }
         Group {
-            if let route = workspace.besideSession, route.sessionID != nil { SessionPage(route, column: .beside) }
+            switch (now ?? shown)?.beside {
+            case .session(let route) where route.sessionID != nil: SessionPage(route, column: .beside)
+            case .preview:
+                if let owner = (now ?? shown)?.owner, let preview = workspace.livePreviews[owner.id] { LivePreviewPane(preview: preview) }
+            default: EmptyView()
+            }
         }
         .ignoresSafeArea(.container, edges: .top)
+        .task(id: now) {
+            guard now == nil else { return shown = now }
+            guard (try? await Task.sleep(for: WideSlide.duration)) != nil else { return }
+            shown = nil
+        }
     }
 }
 

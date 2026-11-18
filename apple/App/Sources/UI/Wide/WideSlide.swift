@@ -22,6 +22,9 @@ import UIKit
 /// 主区按新宽排一次大库仍要 8.5～11ms、放不进一帧；
 /// 页内一个 SwiftUI 布局动画——每帧照样重摆懒加载列表、按插值的尺寸重画文字，开头几帧被终点那一次排版堵住，SwiftUI 画的部分一帧跳完。
 enum WideSlide {
+    /// 一次滑动多久滑完（`SlideCurve`）：滑出去的那一块等到这时才拆掉里面的页。
+    static var duration: Duration { .seconds(SlideCurve.duration) }
+
     static func translate(_ layer: CALayer, by distance: CGFloat, key: String) {
         slide(layer, "transform.translation.x", by: distance, key: key)
     }
@@ -209,7 +212,7 @@ private struct SlideCurve {
     static let rest: CGFloat = 0.5
     /// 一次换宽里最远的一段（会话条与 Cue 一起变）离终点不到半点要多久：到这时就算滑完。
     /// 弹簧按比例收敛到 `settlingDuration` 要多等 0.1 秒左右，那时早已看不出在动。
-    private static let duration = settles(over: Chrome.rail + WideMetrics.cue)
+    fileprivate static let duration = settles(over: Chrome.rail + WideMetrics.cue)
 
     private static let omega = 2 * Double.pi / Motion.Spring.nudge.duration
     /// 关键帧每秒取样多少次：比 144Hz 密，帧之间按直线插值看不出折线。

@@ -20,6 +20,14 @@ nonisolated struct LayoutArgs: Decodable, DebugArgGroup {
     let highContrast: Bool
     /// `-CuePadLargestType YES`：整个窗口按最大的辅助字号画
     let largestType: Bool
+    /// `-CuePadLivePreview <地址>|blank`（仅 Mac，配 session 画面）：左边会话的活预览开在右半、载入这个地址；blank 是刚点开、还没有地址的样子
+    let livePreview: String?
+    /// `-CuePadLiveViewport phone`（配 `-CuePadLivePreview`）：活预览起在手机宽那一档
+    let liveViewport: String?
+    /// `-CuePadLivePick <CSS 选择器>`（配 `-CuePadLivePreview <地址>`）：页面载完后开着点选、高亮停在这个元素上（后台截图里指针进不来）
+    let livePick: String?
+    /// `-CuePadLivePickCommit YES`（配 `-CuePadLivePick`）：接着点下去，元素挂进回复框
+    let livePickCommit: Bool
     /// `-CuePadMergePreview YES`（配 instruction 画面）：已点过一下"合并进来"、标出会并进来的段
     let mergePreview: Bool
     /// `-CuePadLandscape YES`（iOS、iPad）：由 `xc.sh` 在起实例前把模拟器横过来，App 自己不读；登记在这里是为了不被当成拼错的参数

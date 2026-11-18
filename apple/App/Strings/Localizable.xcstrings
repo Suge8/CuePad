@@ -5220,6 +5220,22 @@
         }
       }
     },
+    "不带这个元素" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remove Element"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不带这个元素"
+          }
+        }
+      }
+    },
     "不引用这份预览" : {
       "localizations" : {
         "en" : {
@@ -6780,6 +6796,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "停止试听"
+          }
+        }
+      }
+    },
+    "停止载入" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stop Loading"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "停止载入"
           }
         }
       }
@@ -10552,6 +10584,22 @@
         }
       }
     },
+    "在浏览器里打开" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open in Browser"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在浏览器里打开"
+          }
+        }
+      }
+    },
     "在浏览器里登录" : {
       "localizations" : {
         "en" : {
@@ -10708,6 +10756,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "在项目里建一个指向 AGENTS.md 的 CLAUDE.md"
+          }
+        }
+      }
+    },
+    "地址" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Address"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "地址"
           }
         }
       }
@@ -13328,6 +13392,22 @@
         }
       }
     },
+    "手机宽度" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Phone Width"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "手机宽度"
+          }
+        }
+      }
+    },
     "手机没联网，联网后再试" : {
       "localizations" : {
         "en" : {
@@ -13452,6 +13532,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "打开会话"
+          }
+        }
+      }
+    },
+    "打开活预览" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show Live Preview"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开活预览"
           }
         }
       }
@@ -14844,6 +14940,22 @@
         }
       }
     },
+    "收起活预览" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hide Live Preview"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "收起活预览"
+          }
+        }
+      }
+    },
     "收起键盘" : {
       "localizations" : {
         "en" : {
@@ -15012,6 +15124,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "改在这台运行"
+          }
+        }
+      }
+    },
+    "改地址" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit Address"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "改地址"
           }
         }
       }
@@ -16368,6 +16496,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "有问题"
+          }
+        }
+      }
+    },
+    "服务停了，等它回来" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Server stopped. Waiting for it to come back"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "服务停了，等它回来"
           }
         }
       }
@@ -18868,6 +19012,38 @@
         }
       }
     },
+    "点选的页面元素：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Picked element: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "点选的页面元素：%@"
+          }
+        }
+      }
+    },
+    "点选页面元素" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pick Element"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "点选页面元素"
+          }
+        }
+      }
+    },
     "照这速度%@后用完" : {
       "localizations" : {
         "en" : {
@@ -20244,6 +20420,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "等子代理"
+          }
+        }
+      }
+    },
+    "等开发服务起来" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Waiting for the Dev Server"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "等开发服务起来"
           }
         }
       }
@@ -22396,6 +22588,22 @@
         }
       }
     },
+    "输入地址" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter address"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "输入地址"
+          }
+        }
+      }
+    },
     "输出中" : {
       "localizations" : {
         "en" : {
@@ -24144,6 +24352,22 @@
         }
       }
     },
+    "退出点选" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stop Picking"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "退出点选"
+          }
+        }
+      }
+    },
     "退出码 %d" : {
       "localizations" : {
         "en" : {
@@ -25120,6 +25344,22 @@
         }
       }
     },
+    "重新载入" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reload"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重新载入"
+          }
+        }
+      }
+    },
     "重新选择 Mac" : {
       "localizations" : {
         "en" : {
@@ -25196,6 +25436,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "重读 %@"
+          }
+        }
+      }
+    },
+    "铺满" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fill Width"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "铺满"
           }
         }
       }
