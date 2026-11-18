@@ -50,7 +50,7 @@ extension Workspace {
         guard status.isAvailable else { return status.lacking.map(SetupStep.needs) ?? .install(failure) }
         let problem = here.problem(kind)
         if problem == .notLoggedIn { return .logIn(failure) }
-        if agents.connectable.contains(kind) { return .connect }
+        if services.connectableAgents.contains(kind) { return .connect }
         switch problem {
         case nil, .notInstalled?: return failure.map(SetupStep.problem) ?? (here.kinds.contains(kind) ? nil : .checking)
         case let reason?: return .problem(reason.description)
@@ -75,9 +75,9 @@ extension Workspace {
         do { try await services.macAgents.record(redetecting: true) } catch { fail(error) }
     }
 
-    /// 接入有一家没装上不拦着启用：Cue 能用别家。
     func setUp(connecting kinds: [AgentKind], enablingCue: Bool) async -> SetupFailures {
-        var failures = SetupFailures(agents: await services.agents.install(kinds))
+        services.connectAgents(kinds)
+        var failures = SetupFailures()
         guard enablingCue else { return failures }
         do {
             try await services.enableCue(on: services.hostID, moving: false)
@@ -116,9 +116,8 @@ enum SetupStep: Equatable {
 }
 
 struct SetupFailures: Equatable {
-    var agents: [AgentKind: String] = [:]
     var cue: String?
 
-    var isEmpty: Bool { agents.isEmpty && cue == nil }
+    var isEmpty: Bool { cue == nil }
 }
 #endif

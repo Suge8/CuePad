@@ -27,6 +27,7 @@ final class AppSettings {
         static let theme = "theme"
         #if os(macOS)
         static let alerts = "alerts"
+        static let connectedAgents = "connectedAgents"
         #endif
         static let replyDrafts = "replyDrafts"
         static let launchDefault = "launchDefault"
@@ -52,6 +53,8 @@ final class AppSettings {
     }
     #if os(macOS)
     var alerts: AlertPreferences { didSet { defaults.set(alerts.stored, forKey: Key.alerts) } }
+    /// 接入了的几家：它在这台 Mac 上的会话记录全量读成历史（`AppServices.indexAgents`）。只经 `AppServices.connectAgents`、`disconnectAgent` 改。
+    var connectedAgents: Set<AgentKind> { didSet { defaults.set(connectedAgents.map(\.rawValue).sorted(), forKey: Key.connectedAgents) } }
     #endif
     /// 通知的提示音与界面里的操作音一起开关（`Sound`）；手机锁屏通知的那一声由通知扩展照这个键定。
     var sounds: Bool { didSet { defaults.set(sounds, forKey: Key.sounds) } }
@@ -207,6 +210,7 @@ final class AppSettings {
         currentProject = string(Key.currentProject).flatMap(UUID.init(uuidString:))
         #if os(macOS)
         alerts = AlertPreferences(stored: defaults.dictionary(forKey: Key.alerts))
+        connectedAgents = Set((defaults.stringArray(forKey: Key.connectedAgents) ?? []).compactMap(AgentKind.init(rawValue:)))
         #endif
         sounds = defaults.object(forKey: Key.sounds) as? Bool ?? true
         launchDefault = Self.decoded(LaunchPreference.self, Key.launchDefault, in: defaults) ?? LaunchPreference(agent: .pi)

@@ -137,12 +137,13 @@ extension OpenCodeRuntime {
         let data = try await connection.client.call(
             "POST", "/api/session", body: Create(location: OpenCodeLocation(directory: directory.path(percentEncoded: false))))
         let info = try JSONDecoder().decode(OpenCodeData<OpenCodeSessionInfo>.self, from: data).data
-        let id = try await host(info, connection, launchToken: launchToken)
         let sessionID = info.id
         do {
+            try await attachBrief(to: sessionID, connection)
+            let id = try await host(info, connection, launchToken: launchToken)
             return try await configure(opened: id, name: name, model: model, thinking: thinking, on: bridge)
         } catch {
-            // 配不上时结束只让它下线，会话还在服务里：开会话失败的不留，从服务里删掉
+            // 挂不上指令、配不上时结束只让它下线，会话还在服务里：开会话失败的不留，从服务里删掉
             _ = try? await connection.client.call("DELETE", "/api/session/\(sessionID)")
             throw error
         }
@@ -156,7 +157,14 @@ extension OpenCodeRuntime {
         } catch let error as OpenCodeAPIError where error.status == 404 {
             throw BridgeError.unknownSession(session.id)
         }
+        try await attachBrief(to: info.id, connection)
         return try await host(info, connection, launchToken: nil)
+    }
+
+    /// 会话自己的指令条目（实验接口，2.2.7 实测）：存在会话里，下一步起交给模型；同一个键再放是替换，接着别处开的会话时也挂上。
+    private func attachBrief(to sessionID: String, _ connection: Connection) async throws {
+        struct Entry: Encodable { var value: String }
+        try await connection.client.call("PUT", "/api/experimental/session/\(sessionID)/instructions/entries/cuepad", body: Entry(value: brief))
     }
 
     /// 开的、接着的会话从此托管：上线，此后它的事件、子代理与对话都收。

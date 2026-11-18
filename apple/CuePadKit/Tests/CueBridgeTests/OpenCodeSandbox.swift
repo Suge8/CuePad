@@ -61,7 +61,7 @@ final class OpenCodeSandbox: Sendable {
     }
 
     @MainActor func runtime(_ bridge: Bridge, _ store: CueStore) -> OpenCodeRuntime {
-        OpenCodeRuntime(bridge: bridge, paths: paths, store: store, hostID: "mac", opencode: { Self.pinned.executable }, locate: { Self.pinned.locator })
+        OpenCodeRuntime(bridge: bridge, paths: paths, store: store, hostID: "mac", brief: SessionBrief.text(cuepad: PiProcess.cuepad), opencode: { Self.pinned.executable }, locate: { Self.pinned.locator })
     }
 
     @discardableResult

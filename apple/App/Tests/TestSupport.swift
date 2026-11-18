@@ -230,7 +230,7 @@ final class TestApp {
     var piPaths: PiPaths {
         PiPaths(agentDirectory: directory.appending(path: "pi-agent"), socketDirectory: socketDirectory, binDirectory: directory.appending(path: "home/.local/bin"))
     }
-    /// App 里的命令行工具在哪（技能与命令行链接指向它）；改了之后 `relaunch()` 就是"App 移动到这里再启动"。
+    /// App 里的命令行工具在哪（托管会话的指引与命令行链接指向它）；改了之后 `relaunch()` 就是"App 移动到这里再启动"。
     lazy var helper = directory.appending(path: "CuePad.app/Contents/Helpers/cuepad")
     var workspaces: Workspaces { Workspaces(root: directory.appending(path: "CuePad", directoryHint: .isDirectory)) }
 
@@ -239,13 +239,13 @@ final class TestApp {
         try await services.store.recordMacAgents(host: Self.hostID, name: "测试 Mac", [MacAgent(kind: .pi, model: nil, models: [])])
     }
 
-    /// 接入一家 Agent（会话索引只为接入了的建）：放一个只报版本的假可执行文件，再装上 CuePad 的文件，状态按磁盘上的文件检测。
+    /// 接入一家 Agent（会话索引只为接入了的建）：放一个只报版本的假可执行文件，检测到它再打开接入。
     /// 假的 Pi 还像桥扩展的探测模式那样报出模型（登录了），所以这台 Mac 上能用它（同步表 macAgents）；其余几家问不出模型。
     func connect(_ kind: AgentKind, version: String = "2.1.299") async throws {
         try install(kind, version: version)
-        try await services.agents.install(kind)
         await services.agents.detect(kind)
-        #expect(services.agents.status(kind)?.files == .current)
+        #expect(services.agents.status(kind)?.isAvailable == true)
+        services.connectAgents([kind])
     }
 
     func install(_ kind: AgentKind, version: String = "2.1.299", signedIn: Bool = true) throws {
@@ -274,7 +274,7 @@ final class TestApp {
         let bin = bin, installers = installers.path
         return AgentIntegration(
             paths: AgentPaths(pi: piPaths, environment: agentHomes), locate: { ExecutableLocator(searchDirectories: [bin]) },
-            cuepad: helper, installCommand: { kind, _ in "mkdir -p '\(bin.path)' && cp '\(installers)/\(kind.facts.command)' '\(bin.path)/'" })
+            installCommand: { kind, _ in "mkdir -p '\(bin.path)' && cp '\(installers)/\(kind.facts.command)' '\(bin.path)/'" })
     }
 
     private var installers: URL { directory.appending(path: "installers") }

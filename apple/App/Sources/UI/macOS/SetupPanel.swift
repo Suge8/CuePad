@@ -5,7 +5,7 @@ import CueStore
 import SwiftUI
 
 /// 打开时与回到 App 时重新检测这台的 Agent（用户可能刚在终端里登录了 Pi、装了 Node.js）；打开后第一次问完之前只写检测中：不先给勾选再在启用时报错。
-/// 每行写它会写什么或做什么，点按钮就是同意。
+/// 每行写它会做什么，点按钮就是同意。
 struct SetupPanel: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -138,9 +138,8 @@ struct SetupPanel: View {
         let kind = row.kind
         switch row.step {
         case .connect:
-            let (tone, line) = failures.agents[kind].map { (StatusTone.failure, Dotted($0)) }
-                ?? unusable(kind).map { (StatusTone.notice, Dotted($0)) }
-                ?? AgentLine.of(kind, agents.status(kind), writable: agents.integration.isWritable(kind))
+            let (tone, line) = unusable(kind).map { (StatusTone.notice, Dotted($0)) }
+                ?? AgentLine.of(kind, agents.status(kind), connected: services.isConnected(kind), touches: agents.integration.touches(kind))
             return (tone, line, working && chosen.contains(kind))
         case .checking: return (.calm, Dotted(String(localized: "检查中…")), true)
         case .install(let failure?): return (.failure, Dotted(AgentLine.notInstalled(failure)), false)
@@ -156,7 +155,7 @@ struct SetupPanel: View {
         }
     }
 
-    /// 勾得上、却问不出能不能用的原因：接入照样写文件，但不写出来就像接上就能用。
+    /// 勾得上、却问不出能不能用的原因：照样接得上，但不写出来就像接上就能用。
     private func unusable(_ kind: AgentKind) -> String? { mac.problem(kind)?.description }
 
     private func action(_ title: LocalizedStringResource, _ kind: AgentKind, _ run: @escaping () async -> Void) -> some View {

@@ -44,8 +44,7 @@ final class ClaudeRig {
             "DSH_HOME": root.appending(path: "dsh").path,
         ]) { $1 })
         let helper = root.appending(path: "CuePad.app/Contents/Helpers/cuepad")
-        let agents = AgentIntegration(paths: agentPaths, locate: { [bin] in ExecutableLocator(searchDirectories: [bin]) }, cuepad: helper)
-        try await agents.install(.claudeCode)
+        let agents = AgentIntegration(paths: agentPaths, locate: { [bin] in ExecutableLocator(searchDirectories: [bin]) })
         let location = try LibraryLocation.resolve(environment: [LibraryLocation.environmentKey: root.appending(path: "Library").path])
         let bridge = Bridge(socketDirectory: sockets, hostedIdle: hostedIdle)
         let mac = MacDependencies(
@@ -55,11 +54,12 @@ final class ClaudeRig {
             commandLineTool: CommandLineToolInstaller(helper: helper, linkDirectory: root.appending(path: "home/.local/bin"), shellPath: { nil }),
             updater: nil,
             runtimes: { store in [.claudeCode: ClaudeCodeRuntime(
-                bridge: bridge, paths: agentPaths, store: store, claude: { bin.appending(path: "claude") },
+                bridge: bridge, paths: agentPaths, store: store, brief: SessionBrief.text(cuepad: helper), claude: { bin.appending(path: "claude") },
                 locate: { ExecutableLocator(searchDirectories: [bin]) })] },
             pasteboard: NSPasteboard(name: .init("crig-\(UUID().uuidString)")),
             cue: CueDependencies(launch: { _, _ in nil }, helper: realPi, notifier: RecordingCueNotifier()))
         services = try AppServices(location: location, defaults: TempDefaults().defaults, sync: .custom(FakeSync()), mac: mac)
+        services.connectAgents([.claudeCode])
         LibraryLedger.tracking(services.store, createdAt: #_sourceLocation)
         self.bridge = bridge
     }

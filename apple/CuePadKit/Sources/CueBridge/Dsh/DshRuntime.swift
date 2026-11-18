@@ -10,20 +10,21 @@ import Foundation
 /// - 不跟读用户在 web、桌面版里的会话：zstd 要另加解压依赖，旧会话还停在 v0–v3 各代的格式（每代各一份解码），读出来也只能看不能控
 ///   （那些会话的进程不是 CuePad 起的，没有通道）。为只读的历史不值。
 /// - 开会话时要的模型在起进程时就给（插件的 `CUEPAD_MODEL`）：dsh-acp 握手时按它判定收不收图，之后换到能看图的模型也一样。
+/// - 指引（`SessionBrief`）也在起进程时给（插件的 `CUEPAD_BRIEF`），开的、接着的会话都追加进系统提示。
 @MainActor
 public final class DshRuntime: AgentRuntime {
     private let bridge: Bridge
     private let host: ACPHost
 
     public init(
-        bridge: Bridge, paths: AgentPaths, dsh: @escaping @Sendable () async -> URL?,
+        bridge: Bridge, paths: AgentPaths, brief: String, dsh: @escaping @Sendable () async -> URL?,
         locate: @escaping @Sendable () async -> ExecutableLocator = { await .system }, timing: Timing = .system
     ) {
         host = ACPHost(.dsh, bridge: bridge, timing: timing, launching: { model in
             guard let executable = await dsh() else { throw AgentRuntimeError.notInstalled(.dsh) }
             try DshLaunch.prepare(.hosted)
             let environment = await locate().environment(
-                launching: executable, overrides: DshLaunch.environment(paths, model: model))
+                launching: executable, overrides: DshLaunch.environment(paths, model: model, brief: brief))
             return ACPHost.Launching(executable: executable, environment: environment, dialect: DshDialect(patch: .hosted))
         }, sessionFile: { cwd, id in Self.sessionFile(home: paths.home(of: .dsh), cwd: cwd, id: id) })
         self.bridge = bridge

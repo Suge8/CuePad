@@ -3,6 +3,8 @@ import CueStore
 import Foundation
 
 /// 托管会话用用户的配置目录（会话落在 `<GROK_HOME>/sessions`，`grok --resume` 里也有）。
+/// 指引（`SessionBrief`）经 `session/new` 的 `_meta.rules` 追加进系统提示：它随会话存下（会话目录的 `system_prompt.txt`），`session/load` 不收 `_meta`、沿用存下的（1.0.77 实测）。
+/// 所以在 Grok 里开、再在 CuePad 里接着的会话没有它。
 @MainActor
 public final class GrokRuntime: AgentRuntime {
     private let bridge: Bridge
@@ -10,7 +12,7 @@ public final class GrokRuntime: AgentRuntime {
     private let home: URL
 
     public init(
-        bridge: Bridge, paths: AgentPaths, grok: @escaping @Sendable () async -> URL?,
+        bridge: Bridge, paths: AgentPaths, brief: String, grok: @escaping @Sendable () async -> URL?,
         locate: @escaping @Sendable () async -> ExecutableLocator = { await .system }, timing: Timing = .system
     ) {
         self.bridge = bridge
@@ -19,7 +21,7 @@ public final class GrokRuntime: AgentRuntime {
         host = ACPHost(.grok, bridge: bridge, timing: timing, launching: { _ in
             guard let grok = await grok() else { throw AgentRuntimeError.notInstalled(.grok) }
             let environment = await locate().environment(launching: grok, overrides: paths.launchEnvironment(of: .grok))
-            return ACPHost.Launching(executable: grok, environment: environment, dialect: GrokDialect())
+            return ACPHost.Launching(executable: grok, environment: environment, dialect: GrokDialect(), meta: ["rules": .string(brief)])
         }, sessionFile: { cwd, id in Self.sessionFile(in: home, cwd: cwd.path, id: id) })
     }
 

@@ -18,6 +18,7 @@
 // CuePad 送进去的话带投送请求 id（`session/prompt` 的 `_meta.cuepadDelivery`）：这句话进收件箱时往会话记录里先记一条
 // `plugin:cuepad/delivery` {message, delivery}，随后的 `user/message` 按 message id 认（`DshHistory`）。
 // config.prompt：给了就是 Cue 的大脑，整份替换系统提示（文件路径，原样不插值）。
+// config.brief：托管会话的指引（`SessionBrief`），原样接在系统提示末尾（排在 dsh 自己的各段之后，它们止于 10200）。
 // 环境 CUEPAD_MODEL（`提供方/模型`）：新会话用它；没给用 acp profile 的缺省模型（`agent-default-model`，dsh-acp 自己写死的那个不用）。
 // dsh-acp 只在握手时按这个模型判定收不收图（`promptCapabilities.image`），之后换到能看图的模型也不改。
 // 环境 CUEPAD_PROBE=1：不答 ACP，等模型清单就绪后写一行 {"cuepadProbe": {model, models}} 并退出（`DshRuntime.facts.probe`）。
@@ -36,6 +37,9 @@ export async function apply(ctx, config = {}) {
   if (config.prompt) {
     const text = readFileSync(config.prompt, "utf8");
     ctx.effect(() => ctx.systemPrompt.section({ name: "cuepad:cue", order: 0, text, interpolate: false, complete: true }));
+  }
+  if (config.brief) {
+    ctx.effect(() => ctx.systemPrompt.section({ name: "cuepad:brief", order: 10300, text: config.brief, interpolate: false }));
   }
   const send = (message) => process.stdout.write(JSON.stringify(message) + "\n");
   const update = (sessionId, update) => send({ jsonrpc: "2.0", method: "session/update", params: { sessionId, update } });
