@@ -6,7 +6,7 @@ import Foundation
 public enum SessionBrief {
     public static func text(cuepad: URL) -> String {
         let command = shellQuoted(cuepad.path)
-        return "用户在 CuePad 里看这个对话，多半在手机上，本机路径他打不开。要他看的文件用 `\(command) show <文件…> --title <标题>…` 发过去；第一次用前先看 `\(command) show --help`。"
+        return "用户在 CuePad 里看这个对话，可能在手机上、也可能在电脑上，本机路径在手机上打不开。要他看的文件用 `\(command) show <文件…> --title <标题>…` 发到 CuePad，两边都能看；第一次用前先看 `\(command) show --help`。"
     }
 
     /// 路径里有空格等字符时 Agent 的 shell 会拆开它。
