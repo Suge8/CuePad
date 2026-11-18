@@ -189,6 +189,18 @@ struct RailSessions: View {
         .onChange(of: workspace.mainRoute) { _, route in
             if case .project(let id) = route, !expanded.contains(id) { expand { $0.insert(id) } }
         }
+        // 从别处开了一个会话也一样：它的项目收着，会话条上就没有一行是选中的，看不出人在哪。等你的那几张常驻在上面，不用开
+        .onChange(of: marked) { old, new in
+            let opened = new.subtracting(old).subtracting(SessionRailRows(data, pulse: workspace.pulse).waiting.map(\.id))
+            guard !opened.isEmpty else { return }
+            let store = services.store
+            workspace.attempt {
+                for session in opened {
+                    let project = try await store.sessionState(session)?.projectID ?? Project.defaultID
+                    if !expanded.contains(project) { expand { $0.insert(project) } }
+                }
+            }
+        }
     }
 
     /// 等你的卡是会话条上唯一要你动手的：来的时候从上面浮出来（余光看得到有东西来了），走的时候先淡完，不压住正往上让的那几行。
