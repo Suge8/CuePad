@@ -26,7 +26,12 @@ extension LivePreview: WKUIDelegate {
     }
 
     func webView(_ webView: WKWebView, runOpenPanelWith parameters: WKOpenPanelParameters, initiatedByFrame frame: WKFrameInfo) async -> [URL]? {
-        await FilePicker.web(multiple: parameters.allowsMultipleSelection, folders: parameters.allowsDirectories)
+        // Agent 交的文件（`cuepad live upload`）：这一下是它点的，不弹面板
+        if let files = agent.upload {
+            agent.upload = nil
+            return files
+        }
+        return await FilePicker.web(multiple: parameters.allowsMultipleSelection, folders: parameters.allowsDirectories)
     }
 
     func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo) async {
@@ -46,19 +51,21 @@ extension LivePreview: WKUIDelegate {
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction,
                  windowFeatures: WKWindowFeatures) -> WKWebView? {
         guard let url = navigationAction.request.url else { return nil }
-        if Self.local(url, beside: webView.url) { webView.load(navigationAction.request) } else { NSWorkspace.shared.open(url) }
+        if LiveAddress.isLocal(url) { webView.load(navigationAction.request) } else { NSWorkspace.shared.open(url) }
         return nil
     }
 
-    /// 本机：回环地址，或与此刻页面同一台主机（局域网地址、`.local` 起的开发服务）。
-    private static func local(_ url: URL, beside page: URL?) -> Bool {
-        guard let host = url.host(percentEncoded: false)?.lowercased() else { return false }
-        return host == "localhost" || host.hasSuffix(".localhost") || host == "::1" || host.hasPrefix("127.") || host == page?.host(percentEncoded: false)?.lowercased()
-    }
-
+    /// Agent 的动作弹出来的、又没人看着这一页（没开在面板里）：当场答掉——alert 点确定，confirm、prompt 当取消，不让页面停在那一句上。
+    /// 都记进控制台（`cuepad live console` 与动作回执里看得到）。
     private func ask(_ kind: PageAsk.Kind, _ message: String, from frame: WKFrameInfo, text: String = "") async -> String? {
         let origin = frame.securityOrigin
         let shown = origin.host.isEmpty ? web.url.map(LiveAddress.shown) ?? "" : origin.host + (origin.port == 0 ? "" : ":\(origin.port)")
+        let said = "\(kind.shown)「\(message)」"
+        if agent.acting, panes == 0 {
+            record.note("dialog", said + (kind == .alert ? "：没人看着这一页，点了确定" : "：没人看着这一页，答了取消"))
+            return nil
+        }
+        record.note("dialog", said + "：在等用户在预览里回答，答完之前这一页读不了也点不了")
         return await withCheckedContinuation { reply in
             asks.append(PageAsk(kind: kind, origin: shown, message: message, text: text) { reply.resume(returning: $0) })
         }

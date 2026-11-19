@@ -1,6 +1,7 @@
 #if os(macOS)
 import CueStore
 import Foundation
+import Synchronization
 import Testing
 
 @testable import CueCLI
@@ -57,6 +58,108 @@ import Testing
     let result = await sb.run("live", "5173", environment: ["PI_SESSION_ID": "s1"])
     #expect(result.code == 1 && result.err.contains("CuePad 没开") && result.out.isEmpty)
     #expect(try await sb.store.liveAddresses().isEmpty)
+  }
+
+  @Test(arguments: ["https://example.com", "http://8.8.8.8:3000", "github.com/login"])
+  func liveRefusesAnAddressOffThisMac(address: String) async throws {
+    let sb = try Fixture()
+    let result = await sb.run("live", address, environment: ["PI_SESSION_ID": "s1"])
+    #expect(result.code == 2 && result.err.contains("不是本机地址"))
+    #expect(try await sb.store.liveAddresses().isEmpty)
+  }
+
+  /// 本机的几种写法过了地址这一关，停在下一关（CuePad 没开）。
+  @Test(arguments: ["localhost:3000", "192.168.1.20:5173", "myapp.local:8080", "http://[::1]:3000", "devbox:8000"])
+  func liveTakesTheLocalAddressesOfThisMac(address: String) async throws {
+    let sb = try Fixture()
+    let result = await sb.run("live", address, environment: ["PI_SESSION_ID": "s1"])
+    #expect(result.code == 1 && result.err.contains("CuePad 没开"))
+  }
+
+  @Test func liveActionsWithoutCuePadOpenFailAndAskForIt() async throws {
+    let sb = try Fixture()
+    let result = await sb.run("live", "snapshot", environment: ["PI_SESSION_ID": "s1"])
+    #expect(result.code == 1 && result.err.contains("CuePad 没开") && result.out.isEmpty)
+  }
+
+  private final class Received: Sendable {
+    private let box = Mutex<[LiveChannel.Request]>([])
+    func add(_ request: LiveChannel.Request) { box.withLock { $0.append(request) } }
+    var all: [LiveChannel.Request] { box.withLock { $0 } }
+  }
+
+  /// 替 App 听这份库：App 用的同一个服务端（会话核对在它里面），交到手上的请求记下来、答一句。
+  private func listen(_ sb: Fixture, answer: LiveChannel.Reply = .done("点了 button \"登录\"")) throws -> (server: LiveChannel.Server, received: Received) {
+    let received = Received()
+    let server = try LiveChannel.Server(path: LiveChannel.socketPath(databasePath: sb.store.databasePath), store: sb.store) { request in
+      received.add(request)
+      return answer
+    }
+    return (server, received)
+  }
+
+  @Test func liveActionGoesToTheAppAsTheSessionInTheEnvironment() async throws {
+    let sb = try Fixture()
+    let (server, received) = try listen(sb)
+    defer { withExtendedLifetime(server) {} }
+
+    let result = await sb.run("live", "click", "a5", environment: ["CUEPAD_SESSION_ID": "s1"])
+    #expect(result.code == 0 && result.out == "点了 button \"登录\"\n")
+    #expect(received.all == [LiveChannel.Request(session: "s1", op: "click", args: .init(ref: "a5"))])
+
+    let nobody = await sb.run("live", "click", "a5")
+    #expect(nobody.code != 0 && nobody.err.contains("CUEPAD_SESSION_ID"))
+    #expect(received.all.count == 1)
+  }
+
+  /// 文件只在命令行的进程里读写：截图 App 把 PNG 交回来、命令行写盘，要交的文件命令行读出内容交过去，请求里没有路径
+  /// （沙箱里的 Agent 借不到 App 的权限往沙箱外写、从沙箱外读）。
+  @Test func liveFilesAreReadAndWrittenByTheCommandItselfNotByPath() async throws {
+    let sb = try Fixture()
+    let png = Data([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 7])
+    let (server, received) = try listen(sb, answer: .done("710×848，166 KB", .init(width: 710, height: 848, bytes: png.count), file: png))
+    defer { withExtendedLifetime(server) {} }
+    let work = sb.directory.appending(path: "work", directoryHint: .isDirectory)
+    try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
+    try Data("头像".utf8).write(to: work.appending(path: "avatar.png"))
+
+    let shot = await sb.run("live", "screenshot", "--out", "page.png", cwd: work.path, environment: ["CUEPAD_SESSION_ID": "s1"])
+    #expect(shot.code == 0 && shot.out.hasSuffix("/work/page.png（710×848，166 KB）\n"), "\(shot.out)\(shot.err)")
+    #expect(try Data(contentsOf: work.appending(path: "page.png")) == png)
+
+    let sent = await sb.run("live", "upload", "a3", "avatar.png", cwd: work.path, environment: ["CUEPAD_SESSION_ID": "s1"])
+    #expect(sent.code == 0, "\(sent.err)")
+    let missing = await sb.run("live", "upload", "a3", "nope.png", cwd: work.path, environment: ["CUEPAD_SESSION_ID": "s1"])
+    #expect(missing.code != 0 && missing.err.contains("读不到 ") && missing.err.contains("/work/nope.png"))
+    #expect(received.all == [
+      LiveChannel.Request(session: "s1", op: "screenshot"),
+      LiveChannel.Request(session: "s1", op: "upload", args: .init(ref: "a3", files: [.init(name: "avatar.png", data: Data("头像".utf8))])),
+    ])
+  }
+
+  /// 会话记着在跑的 Agent 进程时，只有它的后代能以这个会话操作预览。这里发命令的是测试进程：它是自己父进程的后代，不是一个旁的 sleep 的后代。
+  @Test func liveActionFromOutsideTheSessionsAgentIsRefused() async throws {
+    let sb = try Fixture()
+    let (server, received) = try listen(sb)
+    defer { withExtendedLifetime(server) {} }
+    let stranger = Process()
+    stranger.executableURL = URL(filePath: "/bin/sleep")
+    stranger.arguments = ["60"]
+    try stranger.run()
+    defer { stranger.terminate() }
+    let other = try #require(SessionProcess.running(pid: stranger.processIdentifier))
+    let parent = try #require(SessionProcess.running(pid: getppid()))
+    for (session, process) in [("theirs", other), ("mine", parent)] {
+      try RawDB(sb.url).exec("INSERT INTO piProcesses (sessionID, pid, startedAt) VALUES ('\(session)', \(process.pid), \(process.startedAt))")
+    }
+
+    let refused = await sb.run("live", "snapshot", environment: ["CUEPAD_SESSION_ID": "theirs"])
+    #expect(refused.code == 1 && refused.err.contains("只能操作自己会话的活预览"))
+    #expect(received.all.isEmpty)
+
+    let allowed = await sb.run("live", "snapshot", environment: ["CUEPAD_SESSION_ID": "mine"])
+    #expect(allowed.code == 0)
+    #expect(received.all.map(\.session) == ["mine"])
   }
 
   @Test(arguments: ["ftp://localhost:5173", "localhost:99999", "0"])

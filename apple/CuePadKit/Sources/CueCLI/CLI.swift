@@ -71,6 +71,10 @@ enum CLI {
 
   private static func route(_ tokens: [String]) throws -> Route {
     guard let first = tokens.first, !["--help", "-h", "help"].contains(first) else { return .help(Help.root) }
+    // 单词命令也可以有动词（`live` 与 `live snapshot`）：两个词对得上动词的先当动词
+    if tokens.count > 1, let verb = Command.all.first(where: { $0.path == [first, tokens[1]] }) {
+      return .command(verb, Array(tokens.dropFirst(2)))
+    }
     if let single = Command.all.first(where: { $0.path == [first] }) {
       return .command(single, Array(tokens.dropFirst()))
     }

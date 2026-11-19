@@ -36,6 +36,7 @@ struct LivePreviewPane: View {
     @Environment(\.palette) private var palette
     @Environment(\.headInset) private var inset
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(Workspace.self) private var workspace
 
     var body: some View {
         GeometryReader { geometry in
@@ -58,17 +59,26 @@ struct LivePreviewPane: View {
         .background(palette.desk)
         .modifier(LivePageAsks(preview: preview))
         .task(id: preview.address) { await preview.watch() }
-        .onDisappear { if preview.picking { preview.cancelPick() } }
+        .onGeometryChange(for: CGSize.self) { $0.size } action: { size in
+            // 收起时滑出去的那一程按不并排的宽排着：不记它，后台预览（`LiveHost`）按开着时的大小排版
+            guard case .preview = workspace.beside else { return }
+            LivePreview.paneSize = size
+        }
+        .onDisappear {
+            if preview.picking { preview.cancelPick() }
+            // 收起才开始算闲置（`Workspace.releaseLivePreviews`）
+            preview.agent.used = .now
+        }
     }
 
     /// 铺满时网页从玻璃栏下沿铺到窗口下缘，栏那一排铺页面的底、下沿同色渐隐：滚上去的内容淡进栏下，不在一条线上切断；
     /// 手机宽时是栏下面居中的一块屏。两档之间网页只换位置与宽，不换内边距：内容不跳。
     private func screen(in size: CGSize) -> some View {
         let phone = preview.viewport == .phone
-        // 手机屏离玻璃栏下沿与离窗口下缘一样远
-        let room = size.height - Chrome.band - Spacing.item - Spacing.block
-        let height = phone ? min(room, LivePreview.phoneHeight) : size.height
-        let width = phone ? min(LivePreview.phoneWidth, size.width - 2 * Spacing.page) : size.width
+        let page = Self.page(in: size, phone: phone)
+        let room = Self.room(in: size)
+        let height = phone ? page.height : size.height
+        let width = page.width
         let top = phone ? Chrome.band + Spacing.item + max(0, room - height) / 2 : 0
         let shape = RoundedRectangle(cornerRadius: phone ? Radius.screen : 0, style: .continuous)
         let ground = preview.ground ?? palette.paper
@@ -93,6 +103,15 @@ struct LivePreviewPane: View {
     }
 
     private static let fade: CGFloat = 20
+
+    /// 网页视图在这么大的面板里的大小：后台预览（`LiveHost`）也照它排版，用户点开时页面不换一套排版。
+    static func page(in size: CGSize, phone: Bool) -> CGSize {
+        guard phone else { return CGSize(width: size.width, height: size.height - Chrome.band) }
+        return CGSize(width: min(LivePreview.phoneWidth, size.width - 2 * Spacing.page), height: min(room(in: size), LivePreview.phoneHeight))
+    }
+
+    /// 手机屏离玻璃栏下沿与离窗口下缘一样远
+    private static func room(in size: CGSize) -> CGFloat { size.height - Chrome.band - Spacing.item - Spacing.block }
 }
 
 /// 网页弹的 alert、confirm、prompt（`LivePreview.asks`）：项目的确认卡（`dialog`），标题写哪个网站在说话。面板收着时等它开了再给你看，网页在那一句上等着。
@@ -113,9 +132,16 @@ private struct LivePageAsks: ViewModifier {
 private struct LiveWebView: NSViewRepresentable {
     let preview: LivePreview
 
-    func makeNSView(context: Context) -> WKWebView { preview.web }
+    func makeCoordinator() -> LivePreview { preview }
+
+    func makeNSView(context: Context) -> WKWebView {
+        preview.enteredPane()
+        return preview.web
+    }
 
     func updateNSView(_ web: WKWebView, context: Context) {}
+
+    static func dismantleNSView(_ web: WKWebView, coordinator: LivePreview) { coordinator.leftPane() }
 }
 
 /// 服务停了：最后的画面压暗一层留着，上面浮一句；服务回来时自动重新载入（`LivePreview.watch`），这一层随之撤掉。
@@ -252,7 +278,8 @@ private struct LiveAddressField: View {
                     editing = true
                 } label: {
                     Text(verbatim: shown).lineLimit(1).truncationMode(.middle)
-                        .padding(.horizontal, Spacing.group)
+                        // 两边让出状态标的位置：它来去时地址不挪
+                        .padding(.horizontal, Spacing.group + LiveDriven.width)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .contentShape(.capsule)
                 }
@@ -266,9 +293,26 @@ private struct LiveAddressField: View {
         .foregroundStyle(palette.ink)
         .frame(height: ControlSize.compact.height)
         .frame(maxWidth: .infinity)
+        .overlay(alignment: .leading) {
+            if preview.driven, !editing { LiveDriven().padding(.leading, Spacing.group).transition(.opacity) }
+        }
+        .animation(Motion.fade, value: preview.driven)
     }
 
     private func go(_ url: URL) { preview.retarget(.init(url: url, source: .typed)) }
+}
+
+/// Agent 这几秒在看、在点这一页（`LivePreview.driven`）：地址前面那个会话在跑时的状态标，压在地址框的边上，不占栏里的位置。
+private struct LiveDriven: View {
+    static let size: CGFloat = 7
+    static var width: CGFloat { size * 1.8 }
+
+    var body: some View {
+        StateDot(shown: SessionShown(status: .working(.thinking)), size: Self.size)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Text("Agent 正在操作这个页面"))
+            .help(Text("Agent 正在操作这个页面"))
+    }
 }
 
 /// 认出的其余服务：一行一个地址，不加说明。

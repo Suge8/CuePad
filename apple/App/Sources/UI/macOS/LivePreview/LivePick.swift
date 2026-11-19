@@ -18,6 +18,12 @@ enum LivePick {
         return ["tint": css(palette.signatureFill), "ink": css(palette.onFill)]
     }
 
+    /// 高亮的画法，点选与 Agent 的动作（`LiveAgentScript` 的 `mark`）共用：一圈比元素大 `pad` 的框，框外 `gap` 处一个标签。
+    /// 是脚本里的 cssText，`tint`、`ink` 是脚本里的变量。
+    static let pad = 3, gap = 4
+    static let ring = "position:fixed;box-sizing:border-box;border:2px solid ${tint};border-radius:6px;background:color-mix(in srgb, ${tint} 14%, transparent)"
+    static let tag = "position:fixed;padding:2px 8px;border-radius:6px;background:${tint};color:${ink};font:600 12px/18px -apple-system,system-ui,sans-serif;white-space:nowrap"
+
     static func element(_ found: [String: Any]) -> ReplyNote.Element? {
         guard let page = found["page"] as? String, let selector = found["selector"] as? String, let tag = found["tag"] as? String else { return nil }
         return ReplyNote.Element(page: page, selector: selector, tag: tag, text: found["text"] as? String ?? "",
@@ -89,16 +95,16 @@ enum LivePick {
         const box = document.createElement("div");
         const ease = "cubic-bezier(.16,1,.3,1)";
         const glide = ["left", "top", "width", "height", "border-radius"].map(property => `${property} .12s ${ease}`).join(",");
-        box.style.cssText = `position:fixed;box-sizing:border-box;border:2px solid ${tint};border-radius:6px;background:color-mix(in srgb, ${tint} 14%, transparent);opacity:0`;
+        box.style.cssText = `\(ring);opacity:0`;
         const label = document.createElement("div");
-        label.style.cssText = `position:fixed;padding:2px 8px;border-radius:6px;background:${tint};color:${ink};font:600 12px/18px -apple-system,system-ui,sans-serif;white-space:nowrap;opacity:0`;
+        label.style.cssText = `\(tag);opacity:0`;
         layer.append(box, label);
         document.documentElement.append(layer);
         const cursor = document.createElement("style");
         cursor.textContent = "*, *::before, *::after { cursor: crosshair !important; }";
         document.head.append(cursor);
 
-        const pad = 3, gap = 4, reach = 24;
+        const pad = \(pad), gap = \(gap), reach = 24;
         let current = null;
         const show = element => {
             current = element;

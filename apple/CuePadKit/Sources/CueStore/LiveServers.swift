@@ -209,6 +209,18 @@ public struct LiveServers: Sendable {
     return withUnsafeBytes(of: info.pvi_cdir.vip_path) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) }
   }
 
+  /// `pid` 是不是 `ancestor` 的后代（顺着父进程往上找；中途有进程退了、被 launchd 收养的不算）。
+  static func descends(_ pid: pid_t, from ancestor: SessionProcess) -> Bool {
+    guard ancestor.isRunning else { return false }
+    var current = pid
+    while current > 1, let info = bsd(current) {
+      let parent = pid_t(info.pbi_ppid)
+      if parent == ancestor.pid { return true }
+      current = parent
+    }
+    return false
+  }
+
   /// 这个进程起来的时刻（`CueStore.liveAddresses` 之后的命令以 App 进程起来为界，不以订阅开始为界）。
   public static func launched(_ pid: pid_t = getpid()) -> Date? {
     bsd(pid).map { Date(timeIntervalSince1970: Double(started($0)) / 1_000_000) }
@@ -265,94 +277,6 @@ public struct LiveServers: Sendable {
     var buffer = [UInt8](repeating: 0, count: Int(MAXPATHLEN) * 4)
     let length = proc_pidpath(pid, &buffer, UInt32(buffer.count))
     return length > 0 ? String(decoding: buffer.prefix(Int(length)), as: UTF8.self) : nil
-  }
-}
-
-/// 一个会话请用户看的本机网页（`cuepad live`）：只记在本机表 `liveAddresses`，不同步——地址是这台 Mac 上的服务。每个会话留最后一条。
-public struct LiveAddress: Equatable, Sendable {
-  public var sessionID: String
-  public var url: URL
-  /// 由 `LiveServers` 认出的（Agent 没给地址）：服务换了端口跟过去；Agent 明说的不跟。
-  public var found: Bool
-  public var sentAt: Date
-
-  public init(sessionID: String, url: URL, found: Bool, sentAt: Date) {
-    self.sessionID = sessionID
-    self.url = url
-    self.found = found
-    self.sentAt = sentAt
-  }
-
-  /// 输入的地址：只写端口（5173）当作本机；不写协议时本机、局域网与不带点的主机名用 http，其余用 https。
-  public static func url(from text: String) -> URL? {
-    let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
-    if let port = Int(text) { return (1...65_535).contains(port) ? LiveServers.url(port: port) : nil }
-    let full: String
-    if text.contains("://") {
-      full = text
-    } else {
-      let host = text.prefix { !":/?#".contains($0) }
-      let local = !host.contains(".") || host.hasSuffix(".local") || host.allSatisfy { $0.isNumber || $0 == "." }
-      full = (local ? "http://" : "https://") + text
-    }
-    guard let url = URL(string: full), url.host?.isEmpty == false, ["http", "https"].contains(url.scheme?.lowercased()),
-      url.port.map({ (1...65_535).contains($0) }) ?? true
-    else { return nil }
-    return url
-  }
-
-  /// 给人看的：不写 http://、https://，路径只有 "/" 时也不写。
-  public static func shown(_ url: URL) -> String {
-    guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false), let host = components.host else { return url.absoluteString }
-    let port = components.port.map { ":\($0)" } ?? ""
-    let path = components.path == "/" ? "" : components.path
-    return host + port + path + (components.query.map { "?\($0)" } ?? "")
-  }
-}
-
-extension CueStore {
-  /// 本机有没有开着这份资料库的 CuePad.app（`cuepad live` 交接前问）：看进程开着的文件，调试实例与正式版各开各的库，不会认错。
-  /// 不用在线记录（`MacPresence`）：App 崩溃后它要到期限（10 分钟）才过期，这期间会说成开着。
-  public nonisolated var appIsOpen: Bool { LiveServers.appHolding(databasePath) }
-
-  /// 记下一条，顺手清掉一天前的（过了这么久的地址多半已经不在了）。
-  public func sendLive(_ url: URL, to sessionID: String, found: Bool) throws {
-    try write {
-      let now = Date.stamp
-      try db.run("DELETE FROM liveAddresses WHERE sentAt < ?", [now.addingTimeInterval(-86_400)])
-      try db.run("INSERT OR REPLACE INTO liveAddresses (sessionID, url, found, sentAt) VALUES (?, ?, ?, ?)", [sessionID, url.absoluteString, found ? 1 : 0, now])
-    }
-  }
-
-  public func liveAddresses() throws -> [LiveAddress] {
-    try db.query("SELECT sessionID, url, found, sentAt FROM liveAddresses ORDER BY sessionID") { row in
-      URL(string: row.text(1)).map { LiveAddress(sessionID: row.text(0), url: $0, found: row.int(2) == 1, sentAt: row.date(3)) }
-    }.compactMap(\.self)
-  }
-
-  /// 认会话的服务要的：承载它的进程（本机表 `piProcesses`）与它的工作目录（会话索引）。
-  public func liveOwner(_ sessionID: String) throws -> LiveServers.Owner {
-    let process = try db.first("SELECT pid, startedAt FROM piProcesses WHERE sessionID = ?", [sessionID]) {
-      SessionProcess(pid: Int32($0.int(0)), startedAt: $0.int(1))
-    }
-    return LiveServers.Owner(process: process, directory: try indexedSession(sessionID)?.cwd)
-  }
-
-  /// 这几台（本机）上没结束的会话，各自的进程与工作目录，键是会话 id：已结束的不认服务。
-  public func liveOwners(hosts: [String]) throws -> [String: LiveServers.Owner] {
-    guard !hosts.isEmpty else { return [:] }
-    let marks = Array(repeating: "?", count: hosts.count).joined(separator: ", ")
-    let rows = try db.query(
-      """
-      SELECT s.sessionID, p.pid, p.startedAt, i.cwd FROM piSessionStates s
-      LEFT JOIN piProcesses p ON p.sessionID = s.sessionID LEFT JOIN piSessions i ON i.id = s.sessionID
-      WHERE s.hostID IN (\(marks)) AND \(WorkState.outsideSQL(WorkState.closed, column: "s.state"))
-      """, hosts
-    ) { row in
-      (row.text(0), LiveServers.Owner(
-        process: row.intOrNil(1).map { SessionProcess(pid: Int32($0), startedAt: row.int(2)) }, directory: row.textOrNil(3)))
-    }
-    return Dictionary(rows, uniquingKeysWith: { first, _ in first })
   }
 }
 #endif

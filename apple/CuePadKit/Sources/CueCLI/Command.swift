@@ -5,11 +5,14 @@ struct Opt {
   let name: String
   let value: String?
   let help: String
+  /// 单字母的写法（`-i`），只给开关。
+  var short: Character?
 
-  init(_ name: String, _ help: String, value: String? = nil) {
+  init(_ name: String, _ help: String, value: String? = nil, short: Character? = nil) {
     self.name = name
     self.value = value
     self.help = help
+    self.short = short
   }
 
   static func project(_ help: String) -> Opt { Opt("project", "\(help)（名称不分大小写，或 id）", value: "项目") }
@@ -30,7 +33,7 @@ struct Command: Sendable {
 
   // `live` 认的是本机在监听的开发服务（`LiveServers`，只有 Mac 有）；这个目标在 iOS 上也要编得过（`xc.sh test ios` 连它一起编）
   #if os(macOS)
-  static let all: [Command] = project + card + task + [search, show, live] + conflicts
+  static let all: [Command] = project + card + task + [search, show, live] + liveActions + conflicts
   #else
   static let all: [Command] = project + card + task + [search, show] + conflicts
   #endif
