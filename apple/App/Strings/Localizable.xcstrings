@@ -368,22 +368,6 @@
         }
       }
     },
-    "%@ 归档" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Archived %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ 归档"
-          }
-        }
-      }
-    },
     "%@ 必须是绝对路径，收到「%@」" : {
       "localizations" : {
         "en" : {
@@ -7844,22 +7828,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "创建"
-          }
-        }
-      }
-    },
-    "删于 %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Deleted %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "删于 %@"
           }
         }
       }

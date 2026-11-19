@@ -60,7 +60,7 @@ struct ArchiveList: View {
                     }
                 } meta: {
                     if let archivedAt = card.archivedAt {
-                        Text("\(DateLabel.short(archivedAt)) 归档").font(Typography.meta.monospacedDigit()).foregroundStyle(palette.ink3)
+                        Text(DateLabel.short(archivedAt)).font(Typography.meta.monospacedDigit()).foregroundStyle(palette.ink3)
                     }
                 }
             }
