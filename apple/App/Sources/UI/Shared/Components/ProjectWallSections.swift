@@ -191,7 +191,7 @@ struct OlderRow: View {
         OlderRowLine(entry: entry)
             .modifier(OlderRowOpens(card: card, shape: shape))
             .contextMenu { CardActions(card: card, selectable: Self.selectable) }
-            .cardDraggable(.idea(card.id), shape: shape)
+            .cardDraggable(.idea(card.id), chip: entry.text.label, shape: shape)
     }
 
     #if os(macOS)
@@ -218,7 +218,7 @@ private struct OlderRowOpens: ViewModifier {
             guard !workspace.presses.takesClick(on: card.id, command: NSEvent.modifierFlags.contains(.command)) else { return }
             workspace.open(card)
         } label: { content }
-            .buttonStyle(CardOpenStyle())
+            .buttonStyle(RowOpenStyle())
             .cardPresence(card.id, in: workspace)
             .accessibilityElement(children: .combine)
         #else
@@ -236,6 +236,9 @@ private struct OlderRowOpens: ViewModifier {
 private struct OlderRowLine: View {
     let entry: CardEntry
     @Environment(\.palette) private var palette
+    #if os(macOS)
+    @Environment(Workspace.self) private var workspace
+    #endif
 
     var body: some View {
         let card = entry.card, text = entry.text, attached = !text.attachments.isEmpty
@@ -257,6 +260,9 @@ private struct OlderRowLine: View {
             }
             .font(Look.marks)
             Text(DateLabel.short(card.modifiedAt)).font(Look.date.monospacedDigit()).frame(minWidth: Look.dateWidth, alignment: .trailing)
+                #if os(macOS)
+                .yieldsToReveal(when: !workspace.presses.isSelecting)
+                #endif
         }
         .font(Look.base).foregroundStyle(palette.ink3)
         .modifier(OlderRowSurface(card: card.id))

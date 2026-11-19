@@ -41,6 +41,7 @@ enum InkSymbols {
         "cue.done.pre",
         "cue.reopen",
         "cue.restore",
+        "cue.clock",
         "cue.indent",
         "cue.outdent",
         "cue.link",

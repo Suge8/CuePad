@@ -59,7 +59,7 @@ struct ArchiveList: View {
                 Button("取回", icon: .restore) { workspace.perform { try await $0.unarchive(card.id) } }.help("取回")
             }
         }
-        .buttonStyle(CardOpenStyle())
+        .buttonStyle(RowOpenStyle())
         .contextMenu {
             let swipes = swipes(card)
             RowActionButtons(actions: swipes.leading + swipes.trailing).menuIcons()

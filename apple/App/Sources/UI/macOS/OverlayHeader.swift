@@ -7,11 +7,13 @@ final class OverlayHeader {
     struct Content: Equatable {
         var page: Workspace.Overlay
         var title: String
-        var detail: Dotted
+        var detail = Dotted()
+        /// 灵感编辑页：次要一行画成图形（`EditedLine`），不用 `detail` 与 `widest`。
+        var marks: EditedLine.Marks?
         var failed = false
         var help: String?
         /// 次要一行最宽的样子（换上最长的那个状态词）：玻璃按它留宽，状态换字时不伸缩
-        var widest: Dotted
+        var widest = Dotted()
     }
 
     private(set) var content: Content?
@@ -33,7 +35,7 @@ extension View {
     }
 }
 
-/// 在主区栏头的正中（`MainColumn` 把它叠在那一排上）：下面的正文栏也是居中的。两行都居中：上面是项目名，下面一支笔带着改于何时与存没存上。
+/// 在主区栏头的正中（`MainColumn` 把它叠在那一排上）：下面的正文栏也是居中的。两行都居中：上面是名字，下面一支笔带着改于何时与存没存上（灵感的见 `EditedLine`）。
 /// 排成一行过：状态词给最长的那个留着宽，短的时候右边空一截，整块看着偏左。
 struct OverlayTitle: View {
     @Environment(Workspace.self) private var workspace
@@ -46,8 +48,13 @@ struct OverlayTitle: View {
                 .accessibilityAddTraits(.isHeader)
             // 按最长的那个状态词留宽（状态换字时玻璃不伸缩），笔跟着字一起居中在里面
             ZStack {
-                line(content?.widest ?? Dotted()).hidden()
-                line(content?.detail ?? Dotted())
+                if let marks = content?.marks {
+                    EditedLine(marks: EditedLine.Marks(edited: marks.edited, pinned: marks.pinned, save: .failed)).hidden()
+                    EditedLine(marks: marks)
+                } else {
+                    line(content?.widest ?? Dotted()).hidden()
+                    line(content?.detail ?? Dotted())
+                }
             }
             .font(Typography.toolbarPath)
             .foregroundStyle(content?.failed == true ? palette.failure : palette.ink3)

@@ -17,7 +17,7 @@ struct StoredRow<Mark: View, Actions: View>: View {
             Text(title).font(Typography.body.weight(.medium)).foregroundStyle(palette.ink).lineLimit(1).layoutPriority(1)
             Text(detail).font(Typography.secondary).lineLimit(1)
             Spacer(minLength: Spacing.group)
-            if let stamp { Text(DateLabel.short(stamp)).font(Typography.meta.monospacedDigit()).fixedSize() }
+            if let stamp { Text(DateLabel.short(stamp)).font(Typography.meta.monospacedDigit()).fixedSize().yieldsToReveal() }
         }
         .foregroundStyle(palette.ink3)
         .frame(height: Self.height)

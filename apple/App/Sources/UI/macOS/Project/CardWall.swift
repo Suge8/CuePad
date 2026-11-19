@@ -18,6 +18,23 @@ struct CardOpenStyle: ButtonStyle {
     }
 }
 
+/// 整行点开一张卡、底由行自己画（`row()`）的按钮：按下与开着（`cardHeld`）交给那块底，不再给整行调亮度（`CardOpenStyle`）——
+/// 亮度滤镜对半透明的行底和悬停操作垫的实底（`hoverReveal`）调出两个颜色，行尾显出一块方的。
+struct RowOpenStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        Pressed(configuration: configuration)
+    }
+
+    private struct Pressed: View {
+        let configuration: Configuration
+        @Environment(\.cardHeld) private var held
+
+        var body: some View {
+            configuration.label.environment(\.rowPressed, configuration.isPressed || held)
+        }
+    }
+}
+
 /// 单独一个视图：悬停只改卡的外框，卡面不随之重算。
 private struct CardFace: View {
     let card: Card

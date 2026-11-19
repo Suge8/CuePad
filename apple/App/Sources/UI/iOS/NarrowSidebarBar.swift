@@ -60,7 +60,6 @@ struct NarrowSidebarBar: View {
 private struct PlacesMenu: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
-    @Environment(\.palette) private var palette
 
     var body: some View {
         Menu {
@@ -69,14 +68,13 @@ private struct PlacesMenu: View {
             Button("归档", icon: .archive) { workspace.push(.archive) }
             Button("回收站", icon: .trash) { workspace.push(.trash) }
             Divider()
-            Button("设置", icon: .settings) { workspace.push(.settings) }
-        } label: {
-            Label { Text("更多") } icon: {
-                // 设置里有要处理的事（Mac 没连上）时右上角一个点：原先点在"设置"那一项旁边
-                Image(.more).imageScale(.large).frame(width: Chrome.icon, height: Chrome.icon).overlay(alignment: .topTrailing) {
-                    if let alert = services.syncing.macAlert { StatusDot(color: palette.color(alert.tone)) }
-                }
+            // 设置里有要处理的事（Mac 没连上）写在这一项下面：钮上不挂点，角上一个点挤着那三个点
+            Button { workspace.push(.settings) } label: {
+                Label("设置", icon: .settings)
+                if let alert = services.syncing.macAlert { Text(alert.title) }
             }
+        } label: {
+            Label { Text("更多") } icon: { Image(.more).imageScale(.large).frame(width: Chrome.icon, height: Chrome.icon) }
         }
         .menuStyle(.button)
         .help(Text("更多"))

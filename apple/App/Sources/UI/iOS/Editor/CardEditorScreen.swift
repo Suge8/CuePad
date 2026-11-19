@@ -31,7 +31,7 @@ struct CardEditorScreen: View {
             .padding(wide ? EdgeInsets(top: Spacing.item, leading: Spacing.sheet, bottom: 0, trailing: Spacing.sheet) : EdgeInsets())
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .modifier(InspirationSharePresentation(sharing: inspirationSharing, editing: editing))
-            .floatingHeader(.verbatim(data?.project?.shownName ?? ""), detail: data.map(detail)) { actions }
+            .floatingHeader(.verbatim(data?.project?.shownName ?? ""), detail: { detail }, trailing: { actions })
             // 卡没了（并进了草稿、接进了会话的回复框）由工作区收起，不当成出错
             .observing(services.store, id: cardID, into: $data, onError: { [workspace] error in
                 if case CueStoreError.notFound = error { return }
@@ -57,8 +57,16 @@ struct CardEditorScreen: View {
         }
     }
 
-    private func detail(_ data: EditorData) -> Dotted {
-        Dotted(String(localized: "改于 \(DateLabel.short(data.card.modifiedAt))"), data.card.isPinned ? String(localized: "已置顶") : nil)
+    /// 卡片还没读到时这一行先占着位置，读到后标题不上移。
+    @ViewBuilder private var detail: some View {
+        Group {
+            if let card = data?.card {
+                EditedLine(marks: EditedLine.Marks(edited: card.modifiedAt, pinned: card.isPinned))
+            } else {
+                Text(verbatim: " ")
+            }
+        }
+        .font(Typography.toolbarSubtitle).foregroundStyle(palette.ink3)
     }
 
     /// 从第一帧就在（卡片还没读到时禁用），随放大过渡一起出现，不在过渡结束后才弹出来。

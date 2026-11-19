@@ -95,7 +95,7 @@ struct TaskOutline<Line: View>: View {
         .contentShape(.rect)
         .environment(\.taskStructure, structure)
         .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(outlineSpace)) } action: { drag.frames[row.id] = $0 }
-        .cardDraggable(.task(row.id), shape: .rect(cornerRadius: Radius.row))
+        .cardDraggable(.task(row.id), chip: row.task.title, shape: .rect(cornerRadius: Radius.row))
         #if os(iOS)
         .rowSwipes(.card(row.task, workspace: workspace, structure: structure))
         #endif

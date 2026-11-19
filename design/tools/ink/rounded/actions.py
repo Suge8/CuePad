@@ -6,7 +6,7 @@ from .shared import box, moved, ring, smooth
 
 NAMES = (
     "settings", "sidebar.right", "clear", "sweep", "chevron.up", "chevron.right", "chevron.down", "chevron.left",
-    "done.pre", "reopen", "restore", "indent", "outdent", "link", "unlink", "folder.remove", "pin", "unpin",
+    "done.pre", "reopen", "restore", "clock", "indent", "outdent", "link", "unlink", "folder.remove", "pin", "unpin",
     "conflict", "deck", "share", "save", "pencil", "write", "choose", "puzzle", "tick", "plane.done",
     "arrow.up", "arrow.down", "ring.down", "ring.stop", "ring.play", "ring.plus", "badge.down", "compact",
     "hand", "mac", "photo", "photos", "select", "keyboard.down", "braces", "window.play", "doc.blank", "wrench",
@@ -67,6 +67,9 @@ def centerlines(name):
         opened.append(arcs((0,1),8,-150,285))
         line((-8,-7),(-8,-2),(-3,-2))
         if name == "restore": line((0,-3),(0,1),(4,1))
+    elif name == "clock":
+        circle(0,0,10)
+        line((0,-5.5),(0,0),(4,2.5))
     elif name in ("indent","outdent"):
         for y in (-8,0,8): line((1,y),(10,y))
         direction = 1 if name == "indent" else -1

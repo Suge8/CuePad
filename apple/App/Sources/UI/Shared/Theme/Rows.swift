@@ -68,6 +68,9 @@ extension View {
         overlay(alignment: alignment) { HoverReveal(shows: shows, fills: alignment.vertical == .center, actions: actions()) }
     }
 
+    /// 行尾那格字（日期）在操作露出时让出位置：操作垫的底只有操作那么宽，比它宽的字会从底下露出半截。`when` 同 `hoverReveal` 的。
+    func yieldsToReveal(when shows: Bool = true) -> some View { modifier(RevealYield(shows: shows)) }
+
     func rowContainer(_ shape: some RoundedRectangularShape, flush: Bool = false) -> some View {
         containerShape(shape).environment(\.rowFit, RowFit(flush: flush))
     }
@@ -82,9 +85,18 @@ extension View {
 
 extension EnvironmentValues {
     @Entry var rowHovered = false
+    /// 整行是一颗按钮、底由里面的 `row()` 画时，按下经它交给那块底（`RowOpenStyle`）。
+    @Entry var rowPressed = false
     /// 行所在那一层的底色（悬停露出的操作垫的实底照它调，`hoverReveal`）：纸面（`paper()`）里是纸，别处是页面底。
     @Entry var rowSurface: Color?
     @Entry fileprivate var rowFit = RowFit()
+}
+
+private struct RevealYield: ViewModifier {
+    let shows: Bool
+    @Environment(\.rowHovered) private var hovered
+
+    func body(content: Content) -> some View { content.opacity(shows && hovered ? 0 : 1) }
 }
 
 private struct HoverReveal<Actions: View>: View {
@@ -145,6 +157,7 @@ private struct RowHighlight: ViewModifier {
     let pressed: Bool
     let cell: Bool
     @State private var hovering = false
+    @Environment(\.rowPressed) private var held
     @Environment(\.rowFit) private var fit
     @Environment(\.palette) private var palette
     @Environment(\.isEnabled) private var isEnabled
@@ -169,7 +182,7 @@ private struct RowHighlight: ViewModifier {
 
     private var tint: Color? {
         if selected { return palette.selection }
-        return isEnabled && (pressed || hovering) ? palette.fill : nil
+        return isEnabled && (pressed || held || hovering) ? palette.fill : nil
     }
 
     #if os(iOS)

@@ -15172,18 +15172,18 @@
         }
       }
     },
-    "改于 %@" : {
+    "改于" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Edited %@"
+            "value" : "Edited"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "改于 %@"
+            "value" : "改于"
           }
         }
       }
@@ -19084,22 +19084,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "灵感"
-          }
-        }
-      }
-    },
-    "灵感与任务" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ideas & Tasks"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "灵感与任务"
           }
         }
       }
