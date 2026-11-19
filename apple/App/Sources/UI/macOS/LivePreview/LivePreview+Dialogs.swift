@@ -55,13 +55,13 @@ extension LivePreview: WKUIDelegate {
         return nil
     }
 
-    /// Agent 的动作弹出来的、又没人看着这一页（预览不在窗口里）：当场答掉——alert 点确定，confirm、prompt 当取消，不让页面停在那一句上。
+    /// Agent 的动作弹出来的、又没人看着这一页（没开在面板里）：当场答掉——alert 点确定，confirm、prompt 当取消，不让页面停在那一句上。
     /// 都记进控制台（`cuepad live console` 与动作回执里看得到）。
     private func ask(_ kind: PageAsk.Kind, _ message: String, from frame: WKFrameInfo, text: String = "") async -> String? {
         let origin = frame.securityOrigin
         let shown = origin.host.isEmpty ? web.url.map(LiveAddress.shown) ?? "" : origin.host + (origin.port == 0 ? "" : ":\(origin.port)")
         let said = "\(kind.shown)「\(message)」"
-        if agent.acting, web.window == nil {
+        if agent.acting, panes == 0 {
             record.note("dialog", said + (kind == .alert ? "：没人看着这一页，点了确定" : "：没人看着这一页，答了取消"))
             return nil
         }

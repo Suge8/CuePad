@@ -53,7 +53,7 @@ extension LivePreview {
             }
             nativeClick(at: point)
             do {
-                let landed = try await call("return await cue.disarm()", in: target.document, stopsOnAsk: true)
+                let landed = try await call("return await cue.disarm()", in: target.document, stopsOnAsk: true, stopsOnLeave: true)
                 if landed["seen"] as? Bool != true {
                     // 原生事件没进这份文档：什么也没点到，退回合成的
                     _ = try await call("return cue.click({ n })", ["n": target.n], in: target.document, stopsOnAsk: true)
@@ -61,7 +61,8 @@ extension LivePreview {
                 } else if landed["got"] as? Bool != true {
                     how = "（按下去了，但页面没在它身上收到点击，落在 <\(landed["where"] as? String ?? "?")> 上：页面可能在按下时换掉了它，snapshot 看一眼）"
                 }
-            } catch is AskPending {}
+            } catch is AskPending {
+            } catch is PageLeft {}
         } else {
             do {
                 let done = try await call("return cue.click({ n })", ["n": target.n], in: target.document, stopsOnAsk: true)
@@ -100,9 +101,9 @@ extension LivePreview {
 
     static let keys = ["Enter", "Tab", "Escape", "Backspace", "Delete", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown", "Space"]
 
-    func upload(_ ref: String, _ paths: [String], mark: (tint: String, ink: String)) async throws -> String {
+    func upload(_ ref: String, _ uploads: [LiveChannel.Upload], mark: (tint: String, ink: String)) async throws -> String {
         let target = try target(ref)
-        let files = paths.map { URL(filePath: $0) }
+        let files = try keep(uploads)
         agent.upload = files
         defer { agent.upload = nil }
         // 脚本里点文件框照样弹得出选文件（WebKit 把原生调的脚本当作用户手势）：要文件的那一下由 UI 代理交出 `agent.upload`
@@ -113,6 +114,19 @@ extension LivePreview {
         guard agent.upload == nil else { throw LiveRefusal("点了文件框，页面没要文件") }
         await flash(target, String(localized: "Agent 交文件"), mark)
         return "\(done["did"] as? String ?? "") 交了 \(files.count) 个文件：\(files.map(\.lastPathComponent).joined(separator: "、"))"
+    }
+
+    /// 命令行交来的内容写进这个预览自己的临时目录，页面拿到的是这里的文件：页面读文件（提交、FileReader）在交过之后，留到预览释放。
+    private func keep(_ uploads: [LiveChannel.Upload]) throws -> [URL] {
+        let folder = uploadFolder.appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        return try uploads.map { upload in
+            let name = URL(filePath: upload.name).lastPathComponent
+            guard !name.isEmpty, name != "..", name != "." else { throw LiveRefusal("文件名不对：\(upload.name)") }
+            let url = folder.appending(path: name)
+            try upload.data.write(to: url)
+            return url
+        }
     }
 
     /// 没写 return 的当一个表达式算（`document.title`），写了的是函数体；当表达式语法不通时再当函数体（语法错在执行之前报，前一次什么也没跑），

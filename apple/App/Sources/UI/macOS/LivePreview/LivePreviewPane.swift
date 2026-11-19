@@ -36,6 +36,7 @@ struct LivePreviewPane: View {
     @Environment(\.palette) private var palette
     @Environment(\.headInset) private var inset
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(Workspace.self) private var workspace
 
     var body: some View {
         GeometryReader { geometry in
@@ -58,7 +59,11 @@ struct LivePreviewPane: View {
         .background(palette.desk)
         .modifier(LivePageAsks(preview: preview))
         .task(id: preview.address) { await preview.watch() }
-        .onGeometryChange(for: CGSize.self) { $0.size } action: { LivePreview.paneSize = CGSize(width: $0.width, height: $0.height - Chrome.band) }
+        .onGeometryChange(for: CGSize.self) { $0.size } action: { size in
+            // 收起时滑出去的那一程按不并排的宽排着：不记它，后台预览（`LiveHost`）按开着时的大小排版
+            guard case .preview = workspace.beside else { return }
+            LivePreview.paneSize = size
+        }
         .onDisappear {
             if preview.picking { preview.cancelPick() }
             // 收起才开始算闲置（`Workspace.releaseLivePreviews`）
@@ -70,10 +75,10 @@ struct LivePreviewPane: View {
     /// 手机宽时是栏下面居中的一块屏。两档之间网页只换位置与宽，不换内边距：内容不跳。
     private func screen(in size: CGSize) -> some View {
         let phone = preview.viewport == .phone
-        // 手机屏离玻璃栏下沿与离窗口下缘一样远
-        let room = size.height - Chrome.band - Spacing.item - Spacing.block
-        let height = phone ? min(room, LivePreview.phoneHeight) : size.height
-        let width = phone ? min(LivePreview.phoneWidth, size.width - 2 * Spacing.page) : size.width
+        let page = Self.page(in: size, phone: phone)
+        let room = Self.room(in: size)
+        let height = phone ? page.height : size.height
+        let width = page.width
         let top = phone ? Chrome.band + Spacing.item + max(0, room - height) / 2 : 0
         let shape = RoundedRectangle(cornerRadius: phone ? Radius.screen : 0, style: .continuous)
         let ground = preview.ground ?? palette.paper
@@ -98,6 +103,15 @@ struct LivePreviewPane: View {
     }
 
     private static let fade: CGFloat = 20
+
+    /// 网页视图在这么大的面板里的大小：后台预览（`LiveHost`）也照它排版，用户点开时页面不换一套排版。
+    static func page(in size: CGSize, phone: Bool) -> CGSize {
+        guard phone else { return CGSize(width: size.width, height: size.height - Chrome.band) }
+        return CGSize(width: min(LivePreview.phoneWidth, size.width - 2 * Spacing.page), height: min(room(in: size), LivePreview.phoneHeight))
+    }
+
+    /// 手机屏离玻璃栏下沿与离窗口下缘一样远
+    private static func room(in size: CGSize) -> CGFloat { size.height - Chrome.band - Spacing.item - Spacing.block }
 }
 
 /// 网页弹的 alert、confirm、prompt（`LivePreview.asks`）：项目的确认卡（`dialog`），标题写哪个网站在说话。面板收着时等它开了再给你看，网页在那一句上等着。
@@ -118,9 +132,16 @@ private struct LivePageAsks: ViewModifier {
 private struct LiveWebView: NSViewRepresentable {
     let preview: LivePreview
 
-    func makeNSView(context: Context) -> WKWebView { preview.web }
+    func makeCoordinator() -> LivePreview { preview }
+
+    func makeNSView(context: Context) -> WKWebView {
+        preview.enteredPane()
+        return preview.web
+    }
 
     func updateNSView(_ web: WKWebView, context: Context) {}
+
+    static func dismantleNSView(_ web: WKWebView, coordinator: LivePreview) { coordinator.leftPane() }
 }
 
 /// 服务停了：最后的画面压暗一层留着，上面浮一句；服务回来时自动重新载入（`LivePreview.watch`），这一层随之撤掉。

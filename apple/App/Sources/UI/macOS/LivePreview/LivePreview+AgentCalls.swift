@@ -94,16 +94,23 @@ extension LivePreview {
 
     /// 在那份文档的 Agent 脚本里跑一段（`LiveAgentScript.agent`）；页面自己的脚本卡住（死循环、弹着对话框）时到点报错，不陪它一直等。
     /// `stopsOnAsk`：这一下可能让页面弹对话框（点击）：弹了就不再等它（脚本停在那一句上要等用户回答），抛 `AskPending`。
+    /// `stopsOnLeave`：等的时候页面开始换文档就不再等（旧文档里的 Promise 不会再回来），抛 `PageLeft`。
     func call(
-        _ body: String, _ arguments: [String: Any] = [:], in document: LivePageRecord.Document, within limit: Duration = .seconds(10), stopsOnAsk: Bool = false
+        _ body: String, _ arguments: [String: Any] = [:], in document: LivePageRecord.Document, within limit: Duration = .seconds(10), stopsOnAsk: Bool = false,
+        stopsOnLeave: Bool = false
     ) async throws -> [String: Any] {
         let info = document.info
+        let main = record.main
         let value: Any?
         do {
-            value = try await bounded(limit, stopsOnAsk: stopsOnAsk) { try await self.web.callAsyncJavaScript(body, arguments: arguments, in: info, contentWorld: LiveAgentScript.world) }
+            value = try await bounded(limit, stopsOnAsk: stopsOnAsk, leaves: stopsOnLeave ? { self.web.isLoading || self.record.main != main } : nil) {
+                try await self.web.callAsyncJavaScript(body, arguments: arguments, in: info, contentWorld: LiveAgentScript.world)
+            }
         } catch let error as LiveRefusal {
             throw error
         } catch let error as AskPending {
+            throw error
+        } catch let error as PageLeft {
             throw error
         } catch {
             let message = Self.message(error)
@@ -115,7 +122,7 @@ extension LivePreview {
     }
 
     /// 页面的脚本卡住时 `callAsyncJavaScript` 不回来、也不理取消：到点就不等它（它回来时没人收）。
-    func bounded(_ limit: Duration, stopsOnAsk: Bool = false, _ work: @escaping () async throws -> Any?) async throws -> Any? {
+    func bounded(_ limit: Duration, stopsOnAsk: Bool = false, leaves: (() -> Bool)? = nil, _ work: @escaping () async throws -> Any?) async throws -> Any? {
         let race = Race()
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
@@ -125,6 +132,7 @@ extension LivePreview {
                     let deadline = ContinuousClock.now + limit
                     while race.continuation != nil, ContinuousClock.now < deadline {
                         if stopsOnAsk, !asks.isEmpty { return race.finish(.failure(AskPending())) }
+                        if let leaves, leaves() { return race.finish(.failure(PageLeft())) }
                         try? await Task.sleep(for: .milliseconds(50))
                     }
                     race.finish(.failure(LiveRefusal("页面 \(limit.components.seconds) 秒没答：页面的脚本可能卡住了（死循环、或弹着对话框）。cuepad live screenshot 看一眼")))
@@ -159,8 +167,67 @@ extension LivePreview {
         return String(format: "%.1f 秒", Double(seconds) + Double(atto) / 1e18)
     }
 
+    /// Agent 用上这一页（发来地址、做一件事）：窗口被盖住时网页照常画，没开在面板里就挂到看不见的窗口里（`LiveHost`）。
+    /// 只在 Agent 用着时这样：没人看、Agent 也不用的页面照系统的规矩停下渲染，不白耗电。
+    /// 这一下才切过来的回 true。
+    @discardableResult
+    func engage() -> Bool {
+        agent.acted = .now
+        guard !agentActive else { return false }
+        agentActive = true
+        watchesOcclusion(false)
+        if panes == 0 { LiveHost.park(web, size: pageSize) }
+        return true
+    }
+
+    /// 切成看得见后，新状态要过一拍才到网页进程：页面自己说看得见了再做事，不然这一件还按藏着的跑（最多等半秒）。
+    private func untilVisible() async {
+        for _ in 0..<30 {
+            let state = try? await bounded(.milliseconds(500)) { try await self.web.evaluateJavaScript("document.visibilityState", contentWorld: .defaultClient) }
+            if state as? String != "hidden" { return }
+            try? await Task.sleep(for: .milliseconds(16))
+        }
+    }
+
+    func disengage() {
+        guard agentActive else { return }
+        agentActive = false
+        watchesOcclusion(true)
+        LiveHost.unpark(web)
+    }
+
+    /// 窗口被盖住时网页还画不画：不画时 requestAnimationFrame 一次不跑、定时器拖到每秒一个（实测），靠它出内容的页面 Agent 等不到。
+    /// 私有开关（WKWebViewPrivate），哪版没了就照旧。建好后切换要等 WebKit 下次重算可见性才生效（被盖着时切了照样不画，实测），
+    /// 拨一下 `isHidden` 让它当场重算；同一拍里拨回，屏上不闪。
+    private func watchesOcclusion(_ on: Bool) {
+        guard web.responds(to: NSSelectorFromString("_setWindowOcclusionDetectionEnabled:")) else { return }
+        web.setValue(on, forKey: "windowOcclusionDetectionEnabled")
+        web.isHidden = true
+        web.isHidden = false
+    }
+
+    func enteredPane() {
+        panes += 1
+        Task { LiveHost.tidy() }
+    }
+
+    func leftPane() {
+        panes -= 1
+        parkIfLeft()
+    }
+
+    /// 面板拆下网页视图（`leftPane`）与它真的离开窗口（`PageView` 报）谁先谁后不一定：两头都来这里，后到的那一下挂回看不见的窗口。
+    /// 挪到下一拍：AppKit 还在把它从窗口里拿下来时不改它的父视图。
+    func parkIfLeft() {
+        Task {
+            guard panes == 0, agentActive, web.window == nil else { return }
+            LiveHost.park(web, size: pageSize)
+        }
+    }
+
     /// Agent 刚做了一件：预览栏上的状态标亮着，3 秒没有下一件就灭。
-    func touchedByAgent() {
+    func touchedByAgent() async {
+        if engage() { await untilVisible() }
         agent.used = .now
         agent.drivenUntil = .now + Self.drivenFor
         guard !driven else { return }

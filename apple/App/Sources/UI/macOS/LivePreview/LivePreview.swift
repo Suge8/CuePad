@@ -37,13 +37,19 @@ final class LivePreview: NSObject, WKNavigationDelegate {
     static let phoneHeight: CGFloat = 844
 
     /// 同一时刻只挂在一处（`LiveWebView`）。
-    @ObservationIgnored let web: WKWebView
+    @ObservationIgnored let web: PageView
     /// 页面自己报的控制台、请求与文档（`LiveAgentScript`）。
     @ObservationIgnored let record = LivePageRecord()
     /// Agent 操作这一页用的状态（`LivePreview+Agent`）。
     @ObservationIgnored var agent = AgentState()
     /// Agent 这几秒里在看、在点这一页：预览栏上亮着那个状态标。
     var driven = false
+    /// 挂在几处预览面板里（`LiveWebView` 挂上加一、拆下减一）：0 是用户没开着这一页。
+    @ObservationIgnored var panes = 0
+    /// `cuepad live upload` 交来的文件放这里（`LivePreview.keep`），预览没了一起删。
+    @ObservationIgnored let uploadFolder = URL.temporaryDirectory.appending(path: "cuepad-live-uploads/\(UUID().uuidString)", directoryHint: .isDirectory)
+    /// Agent 在用这一页（`engage`，`Workspace.liveIdle` 里没再用就 `disengage`）：被盖住、没开在面板里也按看得见的跑。
+    @ObservationIgnored var agentActive = false
     /// 这个预览是哪个会话的（会话结束时释放它，`Workspace.keepLivePreviews`）。
     @ObservationIgnored var sessionID: String?
     private(set) var address: URL?
@@ -70,34 +76,27 @@ final class LivePreview: NSObject, WKNavigationDelegate {
         configuration.websiteDataStore = .nonPersistent()
         // macOS 上默认开着：不经点击（定时器里）的 window.open 也会开，外部地址就一个个塞进默认浏览器（`LivePreview+Dialogs`）
         configuration.preferences.javaScriptCanOpenWindowsAutomatically = false
-        // Agent 多在 CuePad 被盖住、或预览没开时操作这一页：网页当它藏着，定时器从第十来个起拖到每个 1 秒（实测 50 ms 的成了 1000 ms），
-        // `inactiveSchedulingPolicy = .none` 管不到这一条。私有开关（WKPreferencesPrivate），哪版没了就照旧节流
-        if configuration.preferences.responds(to: NSSelectorFromString("_setHiddenPageDOMTimerThrottlingEnabled:")) {
-            configuration.preferences.setValue(false, forKey: "hiddenPageDOMTimerThrottlingEnabled")
-        }
         let content = configuration.userContentController
         content.addUserScript(WKUserScript(source: LiveAgentScript.hooks, injectionTime: .atDocumentStart, forMainFrameOnly: false, in: .page))
         content.addUserScript(WKUserScript(source: LiveAgentScript.agent, injectionTime: .atDocumentStart, forMainFrameOnly: false, in: LiveAgentScript.world))
         content.add(record, contentWorld: .page, name: LivePageRecord.logChannel)
         content.add(record, contentWorld: LiveAgentScript.world, name: LivePageRecord.agentChannel)
-        // 没开过面板就被 Agent 用上的（后台载入）也要有个视口：页面按它排版，取面板上次的大小
-        web = WKWebView(frame: CGRect(origin: .zero, size: Self.paneSize), configuration: configuration)
+        // 没开过面板就被 Agent 用上的（后台载入）也要有个视口：页面按它排版，取面板上次的大小（`LiveHost.park` 再按宽度档定）
+        web = PageView(frame: CGRect(origin: .zero, size: LivePreviewPane.page(in: Self.paneSize, phone: false)), configuration: configuration)
         web.isInspectable = true
-        // 窗口被盖住时网页照常画：不然 requestAnimationFrame 一次不跑（实测），靠它出内容的页面 Agent 等不到。
-        // 私有开关（WKWebViewPrivate）；没开的后台预览不在窗口里，这条帮不到它
-        if web.responds(to: NSSelectorFromString("_setWindowOcclusionDetectionEnabled:")) {
-            web.setValue(false, forKey: "windowOcclusionDetectionEnabled")
-        }
         web.allowsBackForwardNavigationGestures = true
         super.init()
         web.navigationDelegate = self
         web.uiDelegate = self
+        web.leftWindow = { [weak self] in self?.parkIfLeft() }
         observations = [
             web.observe(\.url) { [weak self] web, _ in MainActor.assumeIsolated { self?.url = web.url } },
             web.observe(\.isLoading) { [weak self] web, _ in MainActor.assumeIsolated { self?.isLoading = web.isLoading } },
             web.observe(\.estimatedProgress) { [weak self] web, _ in MainActor.assumeIsolated { self?.progress = web.estimatedProgress } },
         ]
     }
+
+    deinit { try? FileManager.default.removeItem(at: uploadFolder) }
 
     /// 地址栏里显示的：此刻页面所在（页内跳转跟着变），还没载过就是输入的地址。
     var shownAddress: URL? { url ?? address }
@@ -130,8 +129,10 @@ final class LivePreview: NSObject, WKNavigationDelegate {
         if phase == .idle, let address { load(address) }
     }
 
-    /// 面板上次的大小（`LivePreviewPane` 报）：后台建的预览按它开视口，用户点开时页面不用换一套排版。
+    /// 面板上次开着时的大小（`LivePreviewPane` 报）：后台的预览按它与这一页的宽度档开视口（`pageSize`）。
     static var paneSize = CGSize(width: 800, height: 900)
+
+    var pageSize: CGSize { LivePreviewPane.page(in: Self.paneSize, phone: viewport == .phone) }
 
     /// 在页面自己的内容世界里跑一段函数体（`callAsyncJavaScript`：可以 `await`、`return`，参数按名字成了局部变量）。
     func run(_ script: String, arguments: [String: Any] = [:]) async throws -> Any? {
@@ -186,6 +187,8 @@ final class LivePreview: NSObject, WKNavigationDelegate {
         while !Task.isCancelled {
             if let address, phase != .blank {
                 let up = if source == .found, let serving { serving.contains(address) } else { await Self.reachable(address) }
+                // 面板收起时取消的那一下探不到，不是服务停了：当成停了，下次打开或 Agent 再操作时页面会被重新载入
+                guard !Task.isCancelled else { return }
                 // 探的这一会儿换了地址：这一次的结果说的是旧地址
                 if address == self.address {
                     switch phase {

@@ -102,6 +102,7 @@ extension Workspace {
         liveSent[id] = nil
         preview.retarget(target)
         preview.start()
+        preview.engage()
         if here, beside == nil { toggleLivePreview() }
     }
 

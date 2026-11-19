@@ -54,7 +54,7 @@ struct LivePreviewFlowTests {
     var services: AppServices { rig.services }
     var store: CueStore { services.store }
 
-    private func wide() -> Workspace {
+    func wide() -> Workspace {
         let workspace = Workspace(services: services)
         workspace.setLayout(.wide)
         return workspace
@@ -64,7 +64,7 @@ struct LivePreviewFlowTests {
         workspace.openSession(SessionState.recordID(sessionID: sessionID), sessionID: sessionID, in: column)
     }
 
-    private func id(_ sessionID: String) -> UUID { SessionState.recordID(sessionID: sessionID) }
+    func id(_ sessionID: String) -> UUID { SessionState.recordID(sessionID: sessionID) }
 
     /// 同 `cuepad live`：命令行只往资料库写这一条，App 读到了再处理。
     private func live(_ address: String, for sessionID: String) async throws -> URL {
@@ -195,18 +195,18 @@ struct LivePreviewFlowTests {
     }
 
     /// 同 `cuepad live <动词>`：命令行把这一条经套接字交给 App，App 从这里接手。
-    private func agent(_ workspace: Workspace, _ op: String, _ args: LiveChannel.Args = .init(), as sessionID: String = "a") async -> LiveChannel.Reply {
+    func agent(_ workspace: Workspace, _ op: String, _ args: LiveChannel.Args = .init(), as sessionID: String = "a") async -> LiveChannel.Reply {
         await workspace.answerLive(.init(session: sessionID, op: op, args: args))
     }
 
     /// 快照里这一行的引用（`- button "登录" [ref=a3]`）。
-    private func ref(_ line: String, in snapshot: String) throws -> String {
+    func ref(_ line: String, in snapshot: String) throws -> String {
         let row = try #require(snapshot.split(separator: "\n").first { $0.contains(line) }, "快照里没有 \(line)：\n\(snapshot)")
         return try #require(row.firstMatch(of: /\[ref=(\w+)\]/)).1.description
     }
 
     /// Agent 用 `cuepad live` 给了地址、会话 a 不在主区：预览在后台建好并载入。
-    private func backgroundPage(_ workspace: Workspace) async throws -> (Process, URL) {
+    func backgroundPage(_ workspace: Workspace) async throws -> (Process, URL) {
         let (server, url) = try await serve(in: try site())
         open("b", workspace)
         _ = try await live(url.absoluteString, for: "a")

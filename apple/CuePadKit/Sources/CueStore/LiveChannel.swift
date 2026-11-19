@@ -40,8 +40,7 @@ public enum LiveChannel {
     public var selector: String?
     public var url: String?
     public var timeout: Double?
-    public var out: String?
-    public var files: [String]?
+    public var files: [Upload]?
     public var all: Bool?
     public var interactive: Bool?
     public var find: String?
@@ -49,12 +48,24 @@ public enum LiveChannel {
 
     public init(
       ref: String? = nil, text: String? = nil, key: String? = nil, selector: String? = nil, url: String? = nil, timeout: Double? = nil,
-      out: String? = nil, files: [String]? = nil, all: Bool? = nil, interactive: Bool? = nil, find: String? = nil, code: String? = nil
+      files: [Upload]? = nil, all: Bool? = nil, interactive: Bool? = nil, find: String? = nil, code: String? = nil
     ) {
       (self.ref, self.text, self.key, self.selector, self.url, self.timeout) = (ref, text, key, selector, url, timeout)
-      (self.out, self.files, self.all, self.interactive, self.find, self.code) = (out, files, all, interactive, find, code)
+      (self.files, self.all, self.interactive, self.find, self.code) = (files, all, interactive, find, code)
     }
   }
+
+  /// `upload` 的一个文件：命令行在自己的进程里读出内容交过来，App 不按路径替它读（沙箱里读不到的，借 App 的权限也拿不到）。
+  public struct Upload: Codable, Sendable, Equatable {
+    public var name: String
+    public var data: Data
+
+    public init(name: String, data: Data) { (self.name, self.data) = (name, data) }
+  }
+
+  /// 一次 `upload` 交的文件合计上限：内容随请求走（base64 后约 4/3），请求读到 `requestLimit` 为止。
+  public static let uploadLimit = 32_000_000
+  static let requestLimit = 48_000_000
 
   public struct Reply: Codable, Sendable, Equatable {
     /// 给 Agent 读的全文；失败时是那句报错。
@@ -62,27 +73,30 @@ public enum LiveChannel {
     public var failed: Bool
     /// `--json` 时与 `text` 一起给出的字段（只有几个动词有）。
     public var info: Info?
+    /// 截图的 PNG：由命令行在自己的进程里写盘（沙箱里的 Agent 不借 App 的权限往沙箱外写文件）。
+    public var file: Data?
 
-    public static func done(_ text: String, _ info: Info? = nil) -> Reply { Reply(text: text, failed: false, info: info) }
-    public static func refused(_ text: String) -> Reply { Reply(text: text, failed: true, info: nil) }
+    public static func done(_ text: String, _ info: Info? = nil, file: Data? = nil) -> Reply { Reply(text: text, failed: false, info: info, file: file) }
+    public static func refused(_ text: String) -> Reply { Reply(text: text, failed: true, info: nil, file: nil) }
   }
 
   public struct Info: Codable, Sendable, Equatable {
     public var url: String?
     public var title: String?
-    public var path: String?
     public var width: Int?
     public var height: Int?
     public var bytes: Int?
 
-    public init(url: String? = nil, title: String? = nil, path: String? = nil, width: Int? = nil, height: Int? = nil, bytes: Int? = nil) {
-      (self.url, self.title, self.path, self.width, self.height, self.bytes) = (url, title, path, width, height, bytes)
+    public init(url: String? = nil, title: String? = nil, width: Int? = nil, height: Int? = nil, bytes: Int? = nil) {
+      (self.url, self.title, self.width, self.height, self.bytes) = (url, title, width, height, bytes)
     }
   }
 
   public enum Failure: Error, Equatable {
     /// 没人在听这个套接字（文件不在、或留下的是崩溃前的）。
     case notListening
+    /// 不让连：命令跑在沙箱里（Codex 的 workspace-write 实测 connect 回 EPERM）。
+    case sandboxed
     /// `timeout` 内没读到应答。
     case timedOut
     case broken(String)
@@ -97,7 +111,7 @@ public enum LiveChannel {
     let connected = withUnsafePointer(to: &address) {
       $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { connect(fd, $0, socklen_t(MemoryLayout<sockaddr_un>.size)) }
     }
-    guard connected == 0 else { throw .notListening }
+    guard connected == 0 else { throw errno == EPERM || errno == EACCES ? .sandboxed : .notListening }
     var on: Int32 = 1
     setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &on, socklen_t(MemoryLayout<Int32>.size))
     limit(fd, SO_RCVTIMEO, timeout)
@@ -207,12 +221,13 @@ public enum LiveChannel {
   @concurrent private static func readRequest(_ fd: Int32) async -> Read {
     limit(fd, SO_RCVTIMEO, .seconds(5))
     var data = Data()
-    var buffer = [UInt8](repeating: 0, count: 16_384)
-    while !data.contains(UInt8(ascii: "\n")) {
+    var buffer = [UInt8](repeating: 0, count: 65_536)
+    while true {
       let got = read(fd, &buffer, buffer.count)
       guard got > 0 else { return .failure("请求没读完") }
       data.append(buffer, count: got)
-      guard data.count < 4_000_000 else { return .failure("请求太大") }
+      if buffer[..<got].contains(UInt8(ascii: "\n")) { break }
+      guard data.count < requestLimit else { return .failure("请求太大") }
     }
     let line = data.prefix { $0 != UInt8(ascii: "\n") }
     guard let request = try? JSONDecoder().decode(Request.self, from: line) else { return .failure("请求读不懂：命令行与 App 不是同一版") }

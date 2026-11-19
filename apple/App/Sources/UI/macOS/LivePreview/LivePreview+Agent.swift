@@ -6,6 +6,9 @@ import WebKit
 /// 动作让页面弹了对话框、正等用户回答：动作本身做了，回执照常写（对话框那一行在控制台记录里）。
 struct AskPending: Error {}
 
+/// 等页面答话时它换了文档（点了链接、提交了表单）：旧文档里那一句不会再回来，动作本身做了。
+struct PageLeft: Error {}
+
 /// Agent 这一下做不了：`text` 原样回给它（`cuepad live` 的动词把它当报错打出来）。
 struct LiveRefusal: Error {
     let text: String
@@ -27,6 +30,8 @@ extension LivePreview {
         var userInput: ContinuousClock.Instant?
         /// Agent 最近一次操作，或面板最近一次收起（闲置释放从它算起，`Workspace.keepLivePreviews`）。
         var used = ContinuousClock.now
+        /// Agent 最近一次发来地址或操作（`engage`）。
+        var acted = ContinuousClock.now
         /// 正在做 Agent 的动作：这时网页弹的对话框没人看着就当场答掉（`LivePreview+Dialogs`）。
         var acting = false
         var drivenUntil = ContinuousClock.now
@@ -52,7 +57,7 @@ extension LivePreview {
 
     /// 动作的回执里对话框、新报错之外的那一行做了什么。
     enum Act {
-        case click(String), fill(String, String), press(String, String?), upload(String, [String]), eval(String)
+        case click(String), fill(String, String), press(String, String?), upload(String, [LiveChannel.Upload]), eval(String)
     }
 
     static let snapshotLimit = 20_000
@@ -164,7 +169,6 @@ extension LivePreview {
     }
 
     func agentScreenshot(_ args: LiveChannel.Args) async throws -> LiveChannel.Reply {
-        guard let out = args.out else { throw LiveRefusal("没给存到哪") }
         try await agentReady(allowsAsk: true)
         for document in record.documents.values { _ = try? await call("cue.clearMarks(); return true", in: document, within: .seconds(1)) }
         let configuration = WKSnapshotConfiguration()
@@ -179,9 +183,8 @@ extension LivePreview {
         guard let tiff = image.tiffRepresentation, let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) else {
             throw LiveRefusal("截图转不成 PNG")
         }
-        do { try png.write(to: URL(filePath: out)) } catch { throw LiveRefusal("存不进 \(out)：\(error.localizedDescription)") }
         let (width, height) = (Int(image.size.width), Int(image.size.height))
-        return .done("存到 \(out)（\(width)×\(height)，\(png.count / 1024) KB）", LiveChannel.Info(url: web.url?.absoluteString, path: out, width: width, height: height, bytes: png.count))
+        return .done("\(width)×\(height)，\(png.count / 1024) KB", LiveChannel.Info(url: web.url?.absoluteString, width: width, height: height, bytes: png.count), file: png)
     }
 
     func agentConsole(_ args: LiveChannel.Args) -> LiveChannel.Reply {

@@ -41,7 +41,7 @@ extension Workspace {
         guard !Task.isCancelled else { return .refused("取消了") }
         do {
             let (preview, rebuilt) = try await livePreview(forAgent: request.session, id)
-            preview.touchedByAgent()
+            await preview.touchedByAgent()
             defer { preview.agent.used = .now }
             let args = request.args
             let colors = LivePick.colors
@@ -89,6 +89,7 @@ extension Workspace {
         preview.sessionID = sessionID
         preview.retarget(sent)
         preview.start()
+        preview.engage()
         livePreviews[id] = preview
         return (preview, liveReleased.remove(id) != nil)
     }
@@ -97,6 +98,7 @@ extension Workspace {
     /// 地址记回 `liveSent`，栏头的钮照旧，Agent 再操作时按它重建（回执里说明重新载入过）。开着的那个不动。
     func releaseLivePreviews(at now: ContinuousClock.Instant) async {
         let open = Set(((try? await services.store.liveOwners(hosts: Self.liveHosts(services))) ?? [:]).keys)
+        for preview in livePreviews.values where now - preview.agent.acted > Self.liveIdle { preview.disengage() }
         for (id, preview) in livePreviews where !showsLivePreview(id) {
             var ended = false
             if let sessionID = preview.sessionID, !open.contains(sessionID), let state = try? await services.store.sessionState(sessionID) {
@@ -105,6 +107,7 @@ extension Workspace {
             guard ended || now - preview.agent.used > Self.liveIdle, livePreviews[id] === preview, !showsLivePreview(id) else { continue }
             // 弹着的对话框先答掉：网页的脚本停在那一句上等着
             for ask in preview.asks { preview.answer(ask.id, nil) }
+            preview.disengage()
             livePreviews[id] = nil
             if ended {
                 liveSent[id] = nil

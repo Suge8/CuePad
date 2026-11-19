@@ -66,13 +66,14 @@ extension Command {
     action(
       "screenshot", "把页面此刻的画面存成 PNG（给了 ref 只截那个元素）", arguments: "[ref]",
       options: [Opt("out", "存到这个路径（相对当前目录），默认临时目录", value: "路径")],
-      notes: "回执给路径与尺寸，用你读图的工具打开它。CuePad 画的高亮不入画。"
+      notes: "回执给路径与尺寸，用你读图的工具打开它。CuePad 画的高亮不入画。文件由这条命令自己写：在沙箱里，--out 要在你能写的地方。",
+      saves: { call in
+        call.args.value("out").map { URL(filePath: $0, relativeTo: URL(filePath: call.directory, directoryHint: .isDirectory)).standardizedFileURL }
+          ?? URL.temporaryDirectory.appending(path: "cuepad-live-\(Int(Date().timeIntervalSince1970 * 1000)).png")
+      }
     ) { call in
       guard call.args.positionals.count <= 1 else { throw CLIError.usage("最多一个 ref") }
-      let directory = URL(filePath: call.directory, directoryHint: .isDirectory)
-      let out = call.args.value("out").map { URL(filePath: $0, relativeTo: directory).standardizedFileURL.path }
-        ?? URL.temporaryDirectory.appending(path: "cuepad-live-\(Int(Date().timeIntervalSince1970 * 1000)).png").path
-      return LiveChannel.Args(ref: call.args.positionals.first, out: out)
+      return LiveChannel.Args(ref: call.args.positionals.first)
     },
     action(
       "console", "页面的控制台报错与警告、未捕获的异常、失败的请求、网页弹的对话框：默认只给上次读之后新的",
@@ -83,15 +84,19 @@ extension Command {
     },
     action(
       "upload", "给文件框（input type=file，快照里带 [file] 的那个）交文件", arguments: "<ref> <文件…>",
-      notes: "文件路径相对当前目录。"
+      notes: "文件路径相对当前目录；由这条命令读出内容交给页面，合计最多 \(LiveChannel.uploadLimit / 1_000_000) MB。"
     ) { call in
       guard call.args.positionals.count >= 2 else { throw CLIError.usage("需要 <ref> <文件…>") }
       let directory = URL(filePath: call.directory, directoryHint: .isDirectory)
-      let files = call.args.positionals.dropFirst().map { URL(filePath: $0, relativeTo: directory).standardizedFileURL }
-      if let missing = files.first(where: { !FileManager.default.isReadableFile(atPath: $0.path) }) {
-        throw CLIError.invalid("读不到 \(missing.path)")
+      let files = try call.args.positionals.dropFirst().map { path in
+        let url = URL(filePath: path, relativeTo: directory).standardizedFileURL
+        guard let data = try? Data(contentsOf: url) else { throw CLIError.invalid("读不到 \(url.path)") }
+        return LiveChannel.Upload(name: url.lastPathComponent, data: data)
       }
-      return LiveChannel.Args(ref: call.args.positionals[0], files: files.map(\.path))
+      guard files.reduce(0, { $0 + $1.data.count }) <= LiveChannel.uploadLimit else {
+        throw CLIError.invalid("文件合计超过 \(LiveChannel.uploadLimit / 1_000_000) MB，交不过去")
+      }
+      return LiveChannel.Args(ref: call.args.positionals[0], files: files)
     },
     action(
       "eval", "在页面里跑一段 JavaScript 函数体：可 await，return 的值按 JSON 回来（截到 8 KB）；不给代码就读 stdin", arguments: "[代码]",
@@ -105,9 +110,10 @@ extension Command {
     },
   ]
 
+  /// `saves`：应答带回文件（截图）的动词，文件存到哪。
   private static func action(
     _ name: String, _ summary: String, arguments: String = "", options: [Opt] = [], notes: String = "",
-    _ build: @escaping @Sendable (Call) throws -> LiveChannel.Args
+    saves: (@Sendable (Call) -> URL)? = nil, _ build: @escaping @Sendable (Call) throws -> LiveChannel.Args
   ) -> Command {
     Command(path: ["live", name], summary: summary, arguments: arguments, options: options, notes: notes) { call in
       let session = try agentSession(call, "live \(name) 只能在 Agent 执行的命令里运行，操作的是那个会话的活预览")
@@ -121,20 +127,29 @@ extension Command {
       } catch .notListening {
         guard call.store.appIsOpen else { throw notOpen(call, "请用户打开 CuePad 后再运行") }
         throw CLIError.invalid("开着资料库 \(UserHome.shown(call.store.databasePath)) 的 CuePad 不认 cuepad live \(name)：它比这个命令行旧，请用户更新 CuePad")
+      } catch .sandboxed {
+        throw CLIError.invalid("沙箱不让这条命令连 CuePad（connect: Operation not permitted）：申请在沙箱外运行这条命令再试")
       } catch .timedOut {
         throw CLIError.invalid("CuePad \(timeout.components.seconds) 秒内没答：页面可能卡住了。cuepad live screenshot 看一眼")
       } catch .broken(let reason) {
         throw CLIError.invalid("与 CuePad 的连接出错：\(reason)")
       }
       if reply.failed { throw CLIError.invalid(reply.text) }
-      var json: JSONObject = ["text": reply.text]
+      var text = reply.text, saved: String?
+      if let file = reply.file, let saves {
+        let url = saves(call)
+        do { try file.write(to: url) } catch { throw CLIError.invalid("存不进 \(url.path)：\(error.localizedDescription)") }
+        saved = url.path
+        text = "存到 \(url.path)（\(reply.text)）"
+      }
+      var json: JSONObject = ["text": text]
       if let info = reply.info {
         let fields: [(String, (any Sendable)?)] = [
-          ("url", info.url), ("title", info.title), ("path", info.path), ("width", info.width), ("height", info.height), ("bytes", info.bytes),
+          ("url", info.url), ("title", info.title), ("path", saved), ("width", info.width), ("height", info.height), ("bytes", info.bytes),
         ]
         for case let (key, value?) in fields { json[key] = value }
       }
-      return Reply(text: reply.text.hasSuffix("\n") ? reply.text : reply.text + "\n", json: json)
+      return Reply(text: text.hasSuffix("\n") ? text : text + "\n", json: json)
     }
   }
 }
