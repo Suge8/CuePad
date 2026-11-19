@@ -145,6 +145,28 @@ struct LivePhoneFlowTests {
         }
     }
 
+    @Test func 点选页面上的元素_预览收回_元素挂进回复框() async throws {
+        try await phone { workspace, _, _, route in
+            try await eventually("页头出现预览钮") { workspace.liveButton(route.id) != nil }
+            workspace.toggleLivePreview()
+            let preview = try #require(workspace.livePreviews[route.id])
+            let open = shown(preview, in: workspace)
+            try await eventually("页面载出") { preview.phase == .live && preview.revealed }
+
+            workspace.pickElement()
+            try await eventually("点选开着") { preview.picking }
+            // 触屏点一下就是选中：经点选脚本的句柄点在标题上（同调试场景）
+            try await eventually("点上了") {
+                try await preview.run("const handle = window[Symbol.for('cuepad.pick')]; if (!handle) return false; handle.pick('body'); return true") as? Bool == true
+            }
+            try await eventually("元素挂进回复框、预览收回、回复框接过焦点") {
+                app.services.settings.replyNotes(for: route.id).contains { $0.element?.selector == "body" } && !workspace.showsLivePreview(route.id)
+                    && workspace.replyFocus == route.id
+            }
+            await open.stop()
+        }
+    }
+
     @Test func 连不上Mac的口说可能是Wi_Fi不让设备互连_Mac走了说不在线() async throws {
         try await phone { workspace, mac, _, route in
             try await eventually("页头出现预览钮") { workspace.liveButton(route.id) != nil }
