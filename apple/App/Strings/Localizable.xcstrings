@@ -4281,13 +4281,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "A session is awaiting your reply"
+            "value" : "A session has a new reply"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "有会话待回复"
+            "value" : "有会话新回复"
           }
         }
       }
@@ -4299,13 +4299,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "An agent finished"
+            "value" : "A session has a new reply"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Agent 完成了"
+            "value" : "有会话新回复"
           }
         }
       }
@@ -4317,13 +4317,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "An agent needs you"
+            "value" : "A session needs your call"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Agent 在等你确认"
+            "value" : "有会话等你拍板"
           }
         }
       }

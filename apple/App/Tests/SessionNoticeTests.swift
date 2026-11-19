@@ -17,23 +17,39 @@ struct SessionNoticeTests {
         return app.services.liveSessions.live
     }
 
-    @Test func 第一次读到只记基线_之后的转换才提示一次_等你确认带问题首行() async throws {
+    @Test func 第一次读到只记基线_做完了等这一轮的回答读到才提示一次_提示里是这一轮说的话() async throws {
         let recorder = recorder()
         var tracker = SessionAlertTracker()
-        try await recorder.update(sessionID: "s1", state: .thinking, title: "homepage")
+        try await recorder.update(sessionID: "s1", state: .thinking, title: "homepage", turnStartedAt: .now)
         #expect(tracker.alerts(for: try await live(), cue: nil, since: .distantPast).isEmpty)
 
         try await recorder.update(sessionID: "s1", state: .settled)
+        #expect(tracker.alerts(for: try await live(), cue: nil, since: .distantPast).isEmpty)
+        let recap = Recap(lastPrompt: "修首页", lastReply: "## 结论\n**修好了**，`feed.xml` 没动。\n\n```\nswift test\n```\n- 测试全过", answeredAt: .now)
+        try await store.writeTranscript(SessionTranscript(sessionID: "s1", messages: [], recap: recap))
         let settled = try await live()
         let done = tracker.alerts(for: settled, cue: nil, since: .distantPast)
-        #expect(done.map(\.kind) == [.settled] && done.first?.text.visible == "homepage：完成了")
+        #expect(done.map(\.kind) == [.settled] && done.first?.text.visible == "homepage 新回复：结论 修好了，feed.xml 没动。 测试全过")
         #expect(done.first?.session == settled.first?.id)
         #expect(tracker.alerts(for: settled, cue: nil, since: .distantPast).isEmpty)
 
         let question = Question(promptID: "p", kind: .select, text: "要覆盖 feed.xml 吗？\n会丢掉手写的条目", options: ["覆盖", "取消"])
         try await recorder.update(sessionID: "s1", state: .waitingForUser, question: question)
         let waiting = try #require(tracker.alerts(for: try await live(), cue: nil, since: .distantPast).first)
-        #expect(waiting.kind == .waitingForUser && waiting.text.visible == "homepage 等你拍板：要覆盖 feed.xml 吗？")
+        #expect(waiting.kind == .waitingForUser && waiting.text.visible == "homepage 等你拍板：要覆盖 feed.xml 吗？ 会丢掉手写的条目")
+    }
+
+    @Test func 歇下后回答还没读到就又动起来_不提示() async throws {
+        let recorder = recorder()
+        var tracker = SessionAlertTracker()
+        try await recorder.update(sessionID: "s1", state: .thinking, title: "homepage", turnStartedAt: .now)
+        _ = tracker.alerts(for: try await live(), cue: nil, since: .distantPast)
+        try await recorder.update(sessionID: "s1", state: .settled)
+        _ = tracker.alerts(for: try await live(), cue: nil, since: .distantPast)
+
+        try await recorder.update(sessionID: "s1", state: .thinking, turnStartedAt: .now)
+        try await store.writeTranscript(SessionTranscript(sessionID: "s1", messages: [], recap: Recap(lastPrompt: "修首页", lastReply: "修好了", answeredAt: .now)))
+        #expect(tracker.alerts(for: try await live(), cue: nil, since: .distantPast).isEmpty)
     }
 
     /// 不在前台时的转换那一下系统推送已经提示过了，所以不补报。
@@ -48,8 +64,10 @@ struct SessionNoticeTests {
         try await recorder.update(sessionID: "s1", state: .settled, times: SessionTimes(stateSince: away, busySince: nil))
         #expect(tracker.alerts(for: try await live(), cue: nil, since: active).isEmpty)
 
-        try await recorder.update(sessionID: "s1", state: .thinking, times: SessionTimes(stateSince: active.addingTimeInterval(10), busySince: active.addingTimeInterval(10)))
+        let again = active.addingTimeInterval(10)
+        try await recorder.update(sessionID: "s1", state: .thinking, times: SessionTimes(stateSince: again, busySince: again), turnStartedAt: again)
         _ = tracker.alerts(for: try await live(), cue: nil, since: active)
+        try await store.writeTranscript(SessionTranscript(sessionID: "s1", messages: [], recap: Recap(lastPrompt: "记一下", lastReply: "记好了", answeredAt: again.addingTimeInterval(5))))
         try await recorder.update(sessionID: "s1", state: .settled, times: SessionTimes(stateSince: active.addingTimeInterval(20), busySince: nil))
         #expect(tracker.alerts(for: try await live(), cue: nil, since: active).map(\.kind) == [.settled])
     }
@@ -74,7 +92,7 @@ struct SessionNoticeTests {
     @Test func 进了提示说的那个会话_横幅撤下_别的提示留着() {
         let session = UUID()
         let workspace = Workspace(services: app.services)
-        let banner = Workspace.Notice(text: Dotted("notes", "完成了"), tone: .done, link: .session(session))
+        let banner = Workspace.Notice(text: Dotted("notes 新回复", "记好了"), tone: .done, link: .session(session))
         let other = Workspace.Notice(text: Dotted("已复制"), tone: .done)
         #expect(workspace.keeps(banner) && workspace.keeps(other))
 

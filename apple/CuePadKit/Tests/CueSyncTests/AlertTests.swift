@@ -58,15 +58,24 @@ import Testing
     let rig = try Rig()
     let recorder = StateRecorder(store: rig.store, hostID: "mac", timing: ManualTiming().timing)
     let question = Question(promptID: "p1", kind: .select, text: "要覆盖 public/feed.xml 吗？\n会丢掉手写的条目", options: ["覆盖", "取消"])
-    try await recorder.update(sessionID: "s1", state: .waitingForUser, title: "homepage", question: question)
+    try await recorder.update(sessionID: "s1", state: .thinking, title: "homepage", turnStartedAt: .now)
+    try await recorder.update(sessionID: "s1", state: .waitingForUser, question: question)
+    let name = try #require(try await rig.store.allSessionStates().first).id.uuidString.lowercased()
+    func record() async throws -> CKRecord { RecordMapper.record(from: try #require(try await rig.store.syncRow(recordName: name)), zoneID: zone) }
 
-    let state = try #require(try await rig.store.allSessionStates().first)
-    let record = RecordMapper.record(from: try #require(try await rig.store.syncRow(recordName: state.id.uuidString.lowercased())), zoneID: zone)
+    let waiting = try #require(AlertText.content(for: try await record(), kind: .waitingForUser))
+    #expect(waiting.title == "homepage 等你拍板" && waiting.body == "要覆盖 public/feed.xml 吗？ 会丢掉手写的条目")
 
-    let waiting = try #require(AlertText.content(for: record, kind: .waitingForUser))
-    #expect(waiting.title == "homepage 等你拍板" && waiting.body == "要覆盖 public/feed.xml 吗？")
-    let settled = try #require(AlertText.content(for: record, kind: .settled))
-    #expect(settled.title == "homepage" && settled.body == "完成了")
+    // 这一轮的回答还没读进记录：不拿上一轮的充数
+    let earlier = Recap(lastPrompt: "看看首页", lastReply: "上一轮说的话", answeredAt: .now.addingTimeInterval(-600))
+    try await rig.store.writeTranscript(SessionTranscript(sessionID: "s1", messages: [], recap: earlier))
+    let unread = try #require(AlertText.content(for: try await record(), kind: .settled))
+    #expect(unread.title == "homepage 新回复" && unread.body == "去看看它说了什么")
+
+    let recap = Recap(lastPrompt: "改首页", lastReply: "## 结论\n**改好了**，`feed.xml` 没动。\n\n```\nswift test\n```\n- 测试全过", answeredAt: .now.addingTimeInterval(1))
+    try await rig.store.writeTranscript(SessionTranscript(sessionID: "s1", messages: [], recap: recap))
+    let settled = try #require(AlertText.content(for: try await record(), kind: .settled))
+    #expect(settled.title == "homepage 新回复" && settled.body == "结论 改好了，feed.xml 没动。 测试全过")
   }
 
   @Test func aCueMessageFlaggedForPushGoesUpOnceAndIsRewrittenFromTheDecryptedRecord() async throws {
@@ -160,7 +169,7 @@ import Testing
     #expect(try await rig.store.flagLeftToYou(left, host: "mac") == session)
     let record = try #require(try await rig.coordinator.record(for: rig.recordID(session)))
     #expect(record["notify"] as? String == "awaitsReply")
-    #expect(AlertText.content(for: record, kind: .awaitsReply).map { [$0.title, $0.body] } == ["登录页 新回复", "改好了"])
+    #expect(AlertText.content(for: record, kind: .awaitsReply).map { [$0.title, $0.body] } == ["登录页 新回复", "改好了 细节见下"])
   }
 
   // MARK: 点通知的路由
