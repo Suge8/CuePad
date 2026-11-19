@@ -1,7 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// 项目列表页：项目卡，加归档、回收站两个入口；手机多的一格设置由调用方给（`extra`）。
+/// 项目列表页：项目卡。手机在卡片后面多一行去处（归档、回收站，与调用方给的设置 `extra`）：页头那块玻璃已经排满；宽屏的在栏头里（`WideShelfHeading`）。
 struct ProjectShelf<Extra: View>: View {
     var placesAtEnd = false
     @ViewBuilder var extra: Extra
@@ -16,7 +16,6 @@ struct ProjectShelf<Extra: View>: View {
         ScrollView {
             if let projects = workspace.catalog?.projects {
                 LazyVStack(alignment: .leading, spacing: Spacing.item) {
-                    if !placesAtEnd { places }
                     LazyVGrid(columns: columns, alignment: .leading, spacing: Spacing.group) {
                         ForEach(projects) { project in
                             ProjectListItem(project: project, summary: workspace.catalog?.summaries[project.id],

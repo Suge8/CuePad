@@ -20,12 +20,6 @@ struct WideColumnHead: View {
             // 看板那一排是列头，不给提醒常驻一格（列头少让一截）；要关注时才露
             if workspace.mainRoute != .progress || SyncAlertSlot.needed(services) { SyncAlertSlot() }
             #endif
-            if !overlaid, workspace.mainRoute == .shelf {
-                NewProjectButton()
-                    .labelStyle(.iconOnly)
-                    .buttonStyle(ControlButtonStyle(kind: .circular))
-                    .padding(.leading, Spacing.item)
-            }
             #if os(macOS)
             if workspace.openCard != nil {
                 CardMenuSlot()
@@ -42,7 +36,7 @@ struct WideColumnHead: View {
     @ViewBuilder private var title: some View {
         switch workspace.mainRoute {
         case .project: WideProjectHeading()
-        case .shelf: WideHeading(title: String(localized: "项目"))
+        case .shelf: WideShelfHeading()
         case .archive: WideHeading(title: String(localized: "归档"))
         case .trash: WideHeading(title: String(localized: "回收站"))
         case .library: LibraryPanesSlot()
@@ -65,6 +59,26 @@ private struct CloseButton: View {
             .help("收起（Esc）")
             .accessibilityLabel("收起")
             .padding(.trailing, Spacing.item)
+    }
+}
+
+/// 项目列表页的栏头：标题后面紧跟着这一页的三颗图标钮（新建、归档、回收站），同项目页栏头里项目名后面那两颗（`WideProjectHeading`）一个样子、一个位置。
+/// 归档与回收站原先是卡片上面单独一行带字的入口，新建在栏头最右端：三样分在两处，那一行又把卡片往下顶。
+private struct WideShelfHeading: View {
+    @Environment(Workspace.self) private var workspace
+
+    var body: some View {
+        HStack(spacing: Spacing.item) {
+            WideHeading(title: String(localized: "项目"))
+            HStack(spacing: 0) {
+                NewProjectButton()
+                Button("归档", icon: .archive) { workspace.show(.archive) }.help("归档")
+                Button("回收站", icon: .trash) { workspace.show(.trash) }.help("回收站")
+            }
+            .labelStyle(.iconOnly)
+            .imageScale(.large)
+            .buttonStyle(ControlButtonStyle(kind: .icon))
+        }
     }
 }
 
