@@ -38,10 +38,10 @@ struct ArchiveList: View {
         let project = workspace.catalog?.project(card.projectID)
         #if os(macOS)
         return Button { open(card) } label: {
-            StoredRow(title: card.title, detail: project?.shownName ?? "", stamp: card.archivedAt.map { Text("\(DateLabel.short($0)) 归档") }) {
+            StoredRow(title: card.title, detail: project?.shownName ?? "", stamp: card.archivedAt) {
                 mark(card)
             } actions: {
-                Button("取回") { workspace.perform { try await $0.unarchive(card.id) } }
+                Button("取回", icon: .restore) { workspace.perform { try await $0.unarchive(card.id) } }.help("取回")
             }
         }
         .buttonStyle(CardOpenStyle())

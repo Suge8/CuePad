@@ -21,14 +21,8 @@ struct WideColumnHead: View {
             if workspace.mainRoute != .progress || SyncAlertSlot.needed(services) { SyncAlertSlot() }
             #endif
             #if os(macOS)
-            if workspace.openCard != nil {
-                CardMenuSlot()
-            } else if workspace.mainRoute == .trash {
-                EmptyTrashSlot()
-            }
-            #else
-            // 盖着的页（编辑、文件）的标题与操作在它自己那一排（`HeaderHost.panel`）
-            if !overlaid, workspace.mainRoute == .trash { EmptyTrashSlot() }
+            // iPad 上盖着的页（编辑、文件）的标题与操作在它自己那一排（`HeaderHost.panel`）
+            if workspace.openCard != nil { CardMenuSlot() }
             #endif
         }
     }
@@ -37,8 +31,8 @@ struct WideColumnHead: View {
         switch workspace.mainRoute {
         case .project: WideProjectHeading()
         case .shelf: WideShelfHeading()
-        case .archive: WidePlaceHeading(title: String(localized: "归档"))
-        case .trash: WidePlaceHeading(title: String(localized: "回收站"))
+        case .archive: WidePlaceHeading(title: String(localized: "归档")) {}
+        case .trash: WidePlaceHeading(title: String(localized: "回收站")) { EmptyTrashButton() }
         case .library: LibraryPanesSlot()
         case .settings: WideHeading(title: String(localized: "设置"))
         case .conflicts: WideHeading(title: String(localized: "两个版本"))

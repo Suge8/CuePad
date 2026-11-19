@@ -21,15 +21,13 @@ struct ProjectScopeSlot: View {
     }
 }
 
-/// 回收站页的清空。不按页面数据置灰：栏头拿不到页面读的库，抄一份过来就是第二个事实源；没有可清空的时候点了什么也不发生。
-struct EmptyTrashSlot: View {
+/// 回收站页的清空（一把扫帚：垃圾桶是"回收站"与"删除"的图形，再用它分不出是清空）。长什么样由所在的那一排定。
+/// 不按页面数据置灰：栏头拿不到页面读的库，抄一份过来就是第二个事实源；没有可清空的时候点了什么也不发生。
+struct EmptyTrashButton: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        Button("清空回收站…", icon: .trash, role: .destructive) { workspace.confirmsEmptyTrash = true }
-            .labelStyle(.iconOnly)
-            .buttonStyle(ControlButtonStyle(kind: .circular))
-            .padding(.leading, Spacing.item)
+        Button("清空回收站…", icon: .emptyTrash) { workspace.confirmsEmptyTrash = true }
             .help("清空回收站")
     }
 }

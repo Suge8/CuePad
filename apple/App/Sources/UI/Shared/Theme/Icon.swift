@@ -33,7 +33,7 @@ nonisolated enum Icon: Hashable, Sendable {
     case alertsPending, alertsOn, alertsOff
     // 任务与卡片操作
     case complete, reopen, restore, undo, start, add, indent, outdent, link, unlink
-    case projects, folder, unbindFolder, pin, unpin
+    case projects, folder, unbindFolder, pin, unpin, emptyTrash
     case copy, share, saveAsIdea, write, rename, close, remove, clear, more
     case forward, back, expand, collapse, choose, conflict
     /// 这一页的说明（问号圆钮，点开是气泡）；同名的技能（几份，去重）
@@ -82,6 +82,7 @@ nonisolated enum Icon: Hashable, Sendable {
         case .add: .ink("plus")
         case .close, .remove: .ink("close")
         case .clear: .ink("clear")
+        case .emptyTrash: .ink("sweep")
         case .more: .ink("more")
         case .forward: .ink("chevron.right")
         case .back: .ink("chevron.left")

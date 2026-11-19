@@ -59,15 +59,14 @@ private struct TrashRow<Mark: View>: View {
     let restore: () -> Void
     let purge: () -> Void
     @ViewBuilder let mark: Mark
-    @Environment(\.palette) private var palette
     @State private var confirming = false
 
     var body: some View {
-        StoredRow(title: item.title, detail: item.detail, stamp: item.deletedAt.map { Text("删于 \(DateLabel.short($0))") }) {
+        StoredRow(title: item.title, detail: item.detail, stamp: item.deletedAt) {
             mark
         } actions: {
-            Button("恢复", action: restore)
-            Button("永久删除…") { confirming = true }.foregroundStyle(palette.failure)
+            Button("恢复", icon: .restore, action: restore).help("恢复")
+            Button("永久删除…", icon: .trash, role: .destructive) { confirming = true }.help("永久删除")
         }
         .contextMenu {
             Button("恢复", icon: .restore, action: restore).menuIcons()

@@ -49,8 +49,10 @@ struct WideProjectHeading: View {
 
 /// 栏头里能点的字：悬停的底与旁边的图标钮（`ControlButtonStyle(kind: .icon)`）同高，一排里停到哪颗都是一样大的一块。
 /// 归档、回收站的栏头：同项目页一样写成"项目 / 归档"，点"项目"回列表——这两页是从项目列表进来的，栏头上看得出、也回得去。
-struct WidePlaceHeading: View {
+/// 这一页自己的钮（回收站的清空）紧跟在标题后面，同项目页栏头里项目名后面那两颗。
+struct WidePlaceHeading<Tools: View>: View {
     let title: String
+    @ViewBuilder var tools: Tools
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -58,6 +60,10 @@ struct WidePlaceHeading: View {
             ShelfCrumb()
             Text(verbatim: title).foregroundStyle(palette.ink).lineLimit(1).modifier(HeadingPiece())
                 .accessibilityAddTraits(.isHeader)
+            HStack(spacing: 0) { tools }
+                .labelStyle(.iconOnly)
+                .imageScale(.large)
+                .buttonStyle(ControlButtonStyle(kind: .icon))
         }
         .buttonStyle(PressStyle(.button))
         .padding(.leading, -HeadingPiece.inset)

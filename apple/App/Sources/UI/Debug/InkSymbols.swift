@@ -33,6 +33,7 @@ enum InkSymbols {
         "cue.settings",
         "cue.sidebar.right",
         "cue.clear",
+        "cue.sweep",
         "cue.chevron.up",
         "cue.chevron.right",
         "cue.chevron.down",
