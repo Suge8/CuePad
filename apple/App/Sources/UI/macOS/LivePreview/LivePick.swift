@@ -76,7 +76,9 @@ enum LivePick {
         };
 
         const describe = element => {
-            const text = (element.innerText || element.value || element.placeholder || element.getAttribute("aria-label") || element.alt || element.title || "")
+            // 密码框的值在页面上是圆点，不进批注
+            const value = element.type === "password" ? "" : element.value;
+            const text = (element.innerText || value || element.placeholder || element.getAttribute("aria-label") || element.alt || element.title || "")
                 .replace(/\\s+/g, " ").trim().slice(0, 120);
             return { page: location.href, selector: selector(element), tag: element.tagName.toLowerCase(), text, ...origin(element) };
         };
@@ -104,7 +106,7 @@ enum LivePick {
                 return;
             }
             // 框与标签都按元素连伸出它的子元素（头像的角标）一起算：圈线不从伸出的那一块上划过，标签不压着它。只算看得见的（元素裁掉溢出的不算）、
-            // 贴着它的那一圈（滚出去的远处不算，大容器只看前几百个）。框比这一块大一圈；圆角取元素与伸出的子元素里最小的那个：
+            // 碰得到它那一圈的（整块落在那一圈外的远处不算；碰到的整块都圈进来，不截断，不然圈线会从它身上划过；大容器只看前几百个）。框比这一块大一圈；圆角取元素与伸出的子元素里最小的那个：
             // 大圆角会从伸出的那一角上切过去，小的只是把角让得更开
             const rect = element.getBoundingClientRect(), style = getComputedStyle(element);
             const roundOf = (node, area) => {
@@ -119,10 +121,10 @@ enum LivePick {
                 const inside = area.left >= rect.left && area.right <= rect.right && area.top >= rect.top && area.bottom <= rect.bottom;
                 const far = area.right < rect.left - reach || area.left > rect.right + reach || area.bottom < rect.top - reach || area.top > rect.bottom + reach;
                 if (!area.width || !area.height || inside || far || getComputedStyle(child).visibility === "hidden") continue;
-                left = Math.max(rect.left - reach, Math.min(left, area.left));
-                top = Math.max(rect.top - reach, Math.min(top, area.top));
-                right = Math.min(rect.right + reach, Math.max(right, area.right));
-                bottom = Math.min(rect.bottom + reach, Math.max(bottom, area.bottom));
+                left = Math.min(left, area.left);
+                top = Math.min(top, area.top);
+                right = Math.max(right, area.right);
+                bottom = Math.max(bottom, area.bottom);
                 round = Math.min(round, roundOf(child, area));
             }
             // 悬停的反馈立刻到位，只在元素之间换的时候滑过去；也不能靠淡入：窗口被挡住时 WebKit 停掉页面动画，淡入会停在透明

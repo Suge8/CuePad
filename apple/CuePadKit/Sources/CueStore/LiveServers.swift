@@ -20,21 +20,27 @@ public struct LiveServers: Sendable {
   struct Listener: Hashable {
     let pid: pid_t
     let started: Int64
-    let port: Int
+    /// 只绑在一个具体地址上的（局域网卡）就问那个地址：同一端口号可能另有别的进程绑在 127.0.0.1 上，问 localhost 答的是它。
+    let url: URL
   }
 
-  /// 问过的监听口答不答网页：同一个进程的同一个口只问一次。
-  private var pages: [Listener: Bool] = [:]
+  /// 问过的监听口答不答网页：答了的同一个进程的同一个口不再问；没答的过一会儿再问（服务先开口、页面后就绪）。
+  private var pages: [Listener: (page: Bool, at: ContinuousClock.Instant)] = [:]
+  private static let retry = Duration.seconds(5)
 
   public init() {}
 
   /// 最近起来的在前。
   public mutating func find(for owner: Owner) async -> [URL] {
     let listeners = await Self.listening(for: owner)
-    for listener in listeners where pages[listener] == nil { pages[listener] = await Self.answersPage(listener.port) }
+    let now = ContinuousClock.now
+    for listener in listeners {
+      if let known = pages[listener], known.page || now - known.at < Self.retry { continue }
+      pages[listener] = (await Self.answersPage(listener.url), now)
+    }
     pages = pages.filter { listeners.contains($0.key) }
-    var seen = Set<Int>()
-    return listeners.filter { pages[$0] == true && seen.insert($0.port).inserted }.map { Self.url(port: $0.port) }
+    var seen = Set<URL>()
+    return listeners.filter { pages[$0]?.page == true && seen.insert($0.url).inserted }.map(\.url)
   }
 
   public static func url(port: Int) -> URL { URL(string: "http://localhost:\(port)")! }
@@ -58,13 +64,13 @@ public struct LiveServers: Sendable {
       }
     }
     mine.remove(me)
-    return mine.flatMap { pid in ports(pid).map { Listener(pid: pid, started: started(info[pid]!), port: $0) } }
-      .sorted { ($0.started, -$0.port) > ($1.started, -$1.port) }
+    return mine.flatMap { pid in ports(pid).map { Listener(pid: pid, started: started(info[pid]!), url: $0) } }
+      .sorted { ($0.started, -($0.url.port ?? 0)) > ($1.started, -($1.url.port ?? 0)) }
   }
 
   /// 数据库、调试端口、语言服务筛掉：只留回 HTML 的。只等到响应头。
-  @concurrent static func answersPage(_ port: Int) async -> Bool {
-    var request = URLRequest(url: url(port: port))
+  @concurrent static func answersPage(_ url: URL) async -> Bool {
+    var request = URLRequest(url: url)
     request.setValue("text/html", forHTTPHeaderField: "Accept")
     guard let (bytes, response) = try? await probe.bytes(for: request) else { return false }
     bytes.task.cancel()
@@ -113,12 +119,18 @@ public struct LiveServers: Sendable {
     return withUnsafeBytes(of: info.pvi_cdir.vip_path) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) }
   }
 
-  private static func ports(_ pid: pid_t) -> [Int] {
+  /// 这个进程起来的时刻（`CueStore.liveAddresses` 之后的命令以 App 进程起来为界，不以订阅开始为界）。
+  public static func launched(_ pid: pid_t = getpid()) -> Date? {
+    bsd(pid).map { Date(timeIntervalSince1970: Double(started($0)) / 1_000_000) }
+  }
+
+  /// 监听的口，按绑的地址给出要问的网址：通配与回环写 localhost，具体地址照写。
+  private static func ports(_ pid: pid_t) -> [URL] {
     let needed = proc_pidinfo(pid, PROC_PIDLISTFDS, 0, nil, 0)
     guard needed > 0 else { return [] }
     var fds = [proc_fdinfo](repeating: proc_fdinfo(), count: Int(needed) / MemoryLayout<proc_fdinfo>.size + 16)
     let got = proc_pidinfo(pid, PROC_PIDLISTFDS, 0, &fds, Int32(fds.count * MemoryLayout<proc_fdinfo>.size))
-    var ports: [Int] = []
+    var ports: [URL] = []
     for fd in fds.prefix(Int(max(0, got)) / MemoryLayout<proc_fdinfo>.size) where fd.proc_fdtype == PROX_FDTYPE_SOCKET {
       var socket = socket_fdinfo()
       let size = Int32(MemoryLayout<socket_fdinfo>.size)
@@ -126,9 +138,29 @@ public struct LiveServers: Sendable {
       let tcp = socket.psi.soi_proto.pri_tcp
       guard tcp.tcpsi_state == TSI_S_LISTEN else { continue }
       let port = Int(UInt16(bigEndian: UInt16(truncatingIfNeeded: tcp.tcpsi_ini.insi_lport)))
-      if !ports.contains(port) { ports.append(port) }
+      let url = URL(string: "http://\(host(tcp.tcpsi_ini)):\(port)")!
+      if !ports.contains(url) { ports.append(url) }
     }
     return ports
+  }
+
+  private static func host(_ socket: in_sockinfo) -> String {
+    var address = socket.insi_laddr
+    if socket.insi_vflag & UInt8(INI_IPV4) != 0 {
+      let ip = address.ina_46.i46a_addr4
+      if ip.s_addr == INADDR_ANY || UInt32(bigEndian: ip.s_addr) >> 24 == 127 { return "localhost" }
+      var raw = ip
+      return text(AF_INET, &raw, INET_ADDRSTRLEN)
+    }
+    let six = withUnsafeBytes(of: &address.ina_6) { Array($0) }
+    if six.allSatisfy({ $0 == 0 }) || six == Array(repeating: 0, count: 15) + [1] { return "localhost" }
+    return "[\(text(AF_INET6, &address.ina_6, INET6_ADDRSTRLEN))]"
+  }
+
+  private static func text(_ family: Int32, _ address: UnsafeRawPointer, _ size: Int32) -> String {
+    var buffer = [CChar](repeating: 0, count: Int(size))
+    _ = inet_ntop(family, address, &buffer, socklen_t(size))
+    return String(decoding: buffer.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self)
   }
 }
 
@@ -159,7 +191,9 @@ public struct LiveAddress: Equatable, Sendable {
       let local = !host.contains(".") || host.hasSuffix(".local") || host.allSatisfy { $0.isNumber || $0 == "." }
       full = (local ? "http://" : "https://") + text
     }
-    guard let url = URL(string: full), url.host?.isEmpty == false else { return nil }
+    guard let url = URL(string: full), url.host?.isEmpty == false, ["http", "https"].contains(url.scheme?.lowercased()),
+      url.port.map({ (1...65_535).contains($0) }) ?? true
+    else { return nil }
     return url
   }
 

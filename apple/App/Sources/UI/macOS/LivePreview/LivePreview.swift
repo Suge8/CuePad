@@ -87,6 +87,13 @@ final class LivePreview: NSObject, WKNavigationDelegate {
         load(url)
     }
 
+    /// 停了的服务回来时接回的页：页面跳到了别的主机或端口就回会话的地址，那个口此刻是谁的不知道，探活认过的只有会话的地址。
+    private func resume(_ address: URL) {
+        let here = url.flatMap { URLComponents(url: $0, resolvingAgainstBaseURL: false) }
+        let home = URLComponents(url: address, resolvingAgainstBaseURL: false)
+        if let here, let url, here.scheme == home?.scheme, here.host == home?.host, here.port == home?.port { load(url) } else { load(address) }
+    }
+
     func stopLoading() { web.stopLoading() }
 
     /// 在页面自己的内容世界里跑一段函数体（`callAsyncJavaScript`：可以 `await`、`return`，参数按名字成了局部变量）。
@@ -138,7 +145,7 @@ final class LivePreview: NSObject, WKNavigationDelegate {
                 if address == self.address {
                     switch phase {
                     case .waiting where up: load(address)
-                    case .stopped where up: reload()
+                    case .stopped where up: resume(address)
                     case .live where !up && painted: phase = .stopped
                     case .live: await sampleGround()
                     default: break
@@ -230,8 +237,8 @@ extension Workspace {
 
     /// Agent 发来的地址（`cuepad live`）记到会话上；会话此刻在主区、右半空着就直接滑开，否则只让栏头那颗钮亮起，不动排布。
     func followLiveAddresses() async {
-        // 起来之前发的不算：那时的服务多半已经不在了
-        let start = Date.now
+        // App 起来之前发的不算（那时的服务多半已经不在了）；起来之后、订阅开始之前发的照收
+        let start = LiveServers.launched() ?? .now
         var seen: [String: Date]?
         do {
             for try await addresses in services.store.observe({ try $0.liveAddresses() }) {
@@ -249,7 +256,8 @@ extension Workspace {
         let id = SessionState.recordID(sessionID: address.sessionID)
         let target = LivePreview.Target(url: address.url, source: address.found ? .found : .sent)
         let here = session(in: .main)?.id == id
-        if here, beside == .preview, let preview = livePreviews[id] { return preview.retarget(target) }
+        // 开着的预览只在显示的也是 Agent 给或认出的地址时换；你输入的不被顶掉，这一条留到下次打开
+        if here, beside == .preview, let preview = livePreviews[id], preview.source != .typed { return preview.retarget(target) }
         liveSent[id] = target
         if here, beside == nil { toggleLivePreview() }
     }

@@ -13,7 +13,7 @@ extension Command {
     path: ["live"], summary: "在用户 Mac 上的 CuePad 里打开活预览：你在本机起的网页服务，开在这个会话旁边", arguments: "[地址或端口]",
     notes: """
       什么时候用：你在本机起了网页的开发服务（vite、next dev 之类）、要用户看这个页面时。预览是活的，热更新照常，改完不用再发；要他看的是一份文件就用 show。
-      不给参数：用 CuePad 认出的这个会话的服务——本机在监听、回 HTML，进程是这个会话 Agent 的后代（nohup 甩到后台的也算），或工作目录在会话的工作目录里；认出几个取最近起来的，之后服务换了端口预览跟过去。认不出就报错，这时给端口。
+      不给参数：用 CuePad 认出的这个会话的服务——本机在监听、回 HTML，进程是这个会话 Agent 的后代，或工作目录在会话的工作目录里（nohup 甩到后台、进程树断了的靠这一条）；认出几个取最近起来的，之后服务换了端口预览跟过去。认不出就报错，这时给端口。
       给参数：5173 是 http://localhost:5173；也可写地址，如 localhost:3000/admin、http://127.0.0.1:8080。给了的不跟着换端口。
       开在哪：这个会话此刻开在 CuePad 主区、右半空着时，预览直接滑开；否则不动他的排布，会话栏头的预览钮亮起，他点了才开。只开在 Mac 上，手机上看不到活预览：别在回答里说发到了手机，要手机上也能看就用 show 发 HTML 文件。
       会话同 show：取 Agent 给每条命令带的环境变量里第一个有值的（\(sessionVariables.joined(separator: "、"))），都没有就报错。CuePad.app 需要在运行。
@@ -25,7 +25,7 @@ extension Command {
     guard given.count <= 1 else { throw CLIError.usage("最多一个地址或端口（给了 \(given.count) 个）") }
     let url: URL
     if let text = given.first {
-      guard let parsed = LiveAddress.url(from: text) else { throw CLIError.usage("「\(text)」不是地址：给端口（5173）或地址（localhost:3000/admin）") }
+      guard let parsed = LiveAddress.url(from: text) else { throw CLIError.usage("「\(text)」不是能打开的网页地址：给端口（1–65535，如 5173）或 http(s) 地址（localhost:3000/admin）") }
       url = parsed
     } else {
       var servers = LiveServers()
