@@ -112,13 +112,12 @@ struct SessionRailCell: View {
     private var label: some View {
         Group {
             if form == .phone {
-                // 三层，越往下越轻：会动的状态标（唯一着色的）、会话名、哪家 Agent 与哪个项目（小一号、淡一档、单色）。
-                // 空闲的不画标：那一层收起来，名字与项目居中
+                // 两层：会动的状态标（唯一着色的）与会话名。哪家 Agent、哪个项目不写：60 点宽里第三行只放得下四五个 9 号字，一列看下来是乱的，点进会话就有。
+                // 空闲的不画标：那一层收起来，名字居中
                 VStack(spacing: Spacing.hair) {
                     StateDot(shown: item.shown, size: Chrome.railMark)
                         .frame(height: item.shown.isQuiet ? 0 : nil)
                     name.font(Typography.caption2.weight(.semibold))
-                    tag
                 }
                 .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion) ?? Motion.fade, value: item.shown.isQuiet)
                 .padding(.horizontal, Spacing.hair)
@@ -201,18 +200,6 @@ struct SessionRailCell: View {
         .paper(cornerRadius: Radius.card, lifted: true, wash: TaskBoard.Column.waiting.paper(palette))
         .overlay { if selected { RoundedRectangle(cornerRadius: Radius.card, style: .continuous).strokeBorder(palette.ink2, lineWidth: 1.5) } }
     }
-
-    private var tag: some View {
-        HStack(spacing: Spacing.hair) {
-            if let agent = item.session.agent.known { agent.mark.image } else { Image(.terminal) }
-            if let project { Text(verbatim: project.shownName) }
-        }
-        .font(Typography.railTag)
-        .foregroundStyle(palette.ink3)
-        .lineLimit(1)
-        .readerHidden(true)
-    }
-
 }
 
 /// 行尾的读数在指针停着、那里要露出小钮时让开：读数比钮宽，不让开会从钮的左边露出半截。

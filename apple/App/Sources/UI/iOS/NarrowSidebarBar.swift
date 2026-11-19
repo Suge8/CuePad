@@ -11,7 +11,7 @@ struct NarrowSidebarBar: View {
         GlassEffectContainer(spacing: SidebarRow.gap) {
             SidebarRow {
                 HStack(spacing: SidebarRow.gap) {
-                    circle("搜索", icon: .search) { workspace.openSearch() }
+                    PlacesMenu()
                     Group {
                         switch workspace.navigationPane {
                         case .projects: circle("新建项目", icon: .add) { workspace.projectForm = .init() }
@@ -57,6 +57,34 @@ struct NarrowSidebarBar: View {
             Label { Text(verbatim: workspace.cue.name) } icon: { CueAvatar(workspace.cue.beat, size: .row).relaySpot(cue: .entry) }
         }
         .accessibilityIdentifier("narrow-cue")
+    }
+}
+
+/// 不常去的几处收在一颗钮里：搜索，与原先排在项目列表最底下、要滚到头才见得着的归档、回收站、设置。
+private struct PlacesMenu: View {
+    @Environment(Workspace.self) private var workspace
+    @Environment(AppServices.self) private var services
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        Menu {
+            Button("搜索", icon: .search) { workspace.openSearch() }
+            Divider()
+            Button("归档", icon: .archive) { workspace.push(.archive) }
+            Button("回收站", icon: .trash) { workspace.push(.trash) }
+            Divider()
+            Button("设置", icon: .settings) { workspace.push(.settings) }
+        } label: {
+            Label { Text("更多") } icon: {
+                // 设置里有要处理的事（Mac 没连上）时右上角一个点：原先点在"设置"那一项旁边
+                Image(.more).imageScale(.large).frame(width: Chrome.icon, height: Chrome.icon).overlay(alignment: .topTrailing) {
+                    if let alert = services.syncing.macAlert { StatusDot(color: palette.color(alert.tone)) }
+                }
+            }
+        }
+        .menuStyle(.button)
+        .help(Text("更多"))
+        .accessibilityValue(services.syncing.macAlert?.title ?? "")
     }
 }
 

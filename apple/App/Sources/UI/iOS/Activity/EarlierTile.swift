@@ -6,25 +6,15 @@ import SwiftUI
 struct EarlierTile: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
-    @Environment(\.palette) private var palette
     @State private var total: Int?
 
     var body: some View {
         Group {
             if let total, total > 0 {
-                Button { workspace.push(.earlier) } label: {
-                    VStack(spacing: Spacing.hair) {
-                        Text("历史").foregroundStyle(palette.ink2)
-                        Text(total, format: .number).foregroundStyle(palette.ink3).monospacedDigit()
-                    }
-                    .font(Typography.caption2.weight(.semibold))
-                    .frame(maxWidth: .infinity, minHeight: Self.height)
-                    .contentShape(.rect)
-                }
-                .buttonStyle(PressStyle(.card))
-                .paper(cornerRadius: Radius.block)
-                .accessibilityLabel(Text("历史"))
-                .accessibilityValue(Text(total, format: .number))
+                // 一颗玻璃圆钮，同右边回复框那一排的圆钮：写着"历史 10"的一张小纸像又一个会话格
+                Button("历史", icon: .history) { workspace.push(.earlier) }
+                    .glassCircle()
+                    .accessibilityValue(Text(total, format: .number))
             } else {
                 // 读库的订阅要挂在一个真的视图上：订阅等视图出现才启动，什么都不排它就不启动，页面永远空白
                 Color.clear.frame(height: 0)
@@ -37,7 +27,5 @@ struct EarlierTile: View {
             try SessionListData.earlier(SessionQuery(limit: 1), at: moment, from: store).total
         }
     }
-
-    private static let height: CGFloat = 44
 }
 #endif

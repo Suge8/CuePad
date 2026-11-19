@@ -44,7 +44,7 @@ private struct SessionRailContent: View {
     let marked: Set<String>
     let open: (SessionState, SessionRail.Opening) -> Void
     @Environment(\.palette) private var palette
-    @ScaledMetric(relativeTo: .caption2) private var tileHeight: CGFloat = 58
+    @ScaledMetric(relativeTo: .caption2) private var tileHeight: CGFloat = 46
 
     @Environment(\.relayStage) private var stage
     @Environment(\.pageActive) private var active

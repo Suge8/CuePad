@@ -1,7 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// 项目页的任务区（三端同一份）：不装在纸里，行直接落在桌面上。从上到下是没做完的任务、"还有 N 条"、"添加任务"、"已完成 N"，各占一行，与任务行同高、同一种底；整块不宽过阅读栏（`Spacing.reading`）。
+/// 项目页的任务区（三端同一份）：不装在纸里，行直接落在桌面上。从上到下是没做完的任务、"还有 N 条"、"添加任务"（行尾是"已完成 N"），各占一行，与任务行同高、同一种底；整块不宽过阅读栏（`Spacing.reading`）。
 /// 不写"任务"的段标题、也不写"还剩几件"：下面那几行自己就是，看这个项目的进展在栏头点项目名出的那几项里（`ProjectActions`）。
 /// 行首都是任务圈，不用标题也认得出（读屏念"任务"）。
 /// 收起其余任务一步到位，"收起"那一行留在原来的屏幕位置（`TaskFoldAnchor`：没有能跟着弹簧走的位移），换上来的那几行淡入。
@@ -53,9 +53,13 @@ struct ProjectTasks: View {
                     FoldRow(title: TaskCopy.more(hidden: hidden, expanded: fold.showsAll), open: fold.showsAll) { toggle(\.showsAll) }
                         .taskFoldBar(anchor)
                 }
-                NewTaskField(project: data.project?.id).padding(.vertical, TaskMetrics.rowGap).newTaskDrop()
+                // 添加与"已完成"同在一行：两行都常年在、各只有几个字，叠着占两行的高
+                HStack(spacing: Spacing.item) {
+                    NewTaskField(project: data.project?.id).newTaskDrop()
+                    if counts.done > 0 { DoneFold(title: TaskCopy.done(counts.done), open: fold.showsDone) { toggle(\.showsDone) } }
+                }
+                .padding(.vertical, TaskMetrics.rowGap)
                 if counts.done > 0 {
-                    FoldRow(title: TaskCopy.done(counts.done), open: fold.showsDone) { toggle(\.showsDone) }
                     if fold.showsDone {
                         ForEach(data.done.prefix(doneShown)) { TaskLine(task: $0) }
                         // 做完的会越攒越多：一次只列一小段，要看更早的再往下要，不一点开就把页拉长几屏
@@ -97,7 +101,30 @@ struct ProjectTasks: View {
     }
 }
 
-/// 开合其余任务、已完成的那一行：记号在任务圈那一列，字与任务标题对齐。开合的记号同会话条的项目行：朝右的箭头，开着转朝下。
+/// "添加任务"那一行行尾的"已完成 N"：字在前、开合的记号在后，开着转朝下。
+private struct DoneFold: View {
+    let title: String
+    let open: Bool
+    let action: () -> Void
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: Spacing.tight) {
+                Text(title).font(Typography.body).fixedSize()
+                Chevron(.forward).rotationEffect(.degrees(open ? 90 : 0))
+            }
+            .foregroundStyle(palette.ink3)
+            .padding(.horizontal, Spacing.item)
+            .frame(minHeight: TaskMetrics.rowHeight)
+            .contentShape(.rect)
+        }
+        .buttonStyle(PressStyle(.inline))
+        .accessibilityValue(open ? "已展开" : "已折叠")
+    }
+}
+
+/// 开合其余任务的那一行：记号在任务圈那一列，字与任务标题对齐。开合的记号同会话条的项目行：朝右的箭头，开着转朝下。
 /// `open` 为 nil 是"再列几条"：不是开合，箭头一直朝下。
 private struct FoldRow: View {
     let title: String

@@ -6,11 +6,7 @@ struct ShelfScreen: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
 
     var body: some View {
-        ProjectShelf(placesAtEnd: sizeClass == .compact) {
-            if sizeClass == .compact {
-                ProjectListPlace(title: "设置", icon: .settings, route: .settings, alert: services.syncing.macAlert)
-            }
-        }
+        ProjectShelf(paired: sizeClass == .compact)
         .refreshable { await services.syncing.syncNow() }
         .floatingHeader("项目") { NewProjectButton() }
     }
