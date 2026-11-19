@@ -64,7 +64,7 @@ final class LivePreview: NSObject, WKNavigationDelegate {
     private(set) var address: URL?
     private(set) var source = Source.typed
     /// 认出的这个会话的服务（`Workspace.watchLiveServers` 每隔 `liveScan` 给）：认出来的地址在不在只看它——端口空出来后被别的进程占了，答得上话也不是这个会话的页。
-    /// 手机、iPad 上是 Mac 答来的这个会话的页面，隧道不通时为 nil（`LiveLink`）：页面在不在全看它，手机探不到 Mac 的回环。地址栏里列的其余地址也是它。
+    /// 手机、iPad 上是 Mac 答来的这个会话的页面，隧道不通时为 nil（`LiveLink` 经 `serve` 给）：页面在不在全看它，手机探不到 Mac 的回环。地址栏里列的其余地址也是它。
     @ObservationIgnored var serving: [URL]?
     private(set) var phase = Phase.blank
     private(set) var url: URL?
@@ -238,24 +238,35 @@ final class LivePreview: NSObject, WKNavigationDelegate {
         if phase == .idle { phase = .waiting }
         #endif
         while !Task.isCancelled {
-            if let address, phase != .blank {
-                let up = await isUp(address)
-                // 面板收起时取消的那一下探不到，不是服务停了：当成停了，下次打开或 Agent 再操作时页面会被重新载入
-                guard !Task.isCancelled else { return }
-                // 探的这一会儿换了地址：这一次的结果说的是旧地址
-                if address == self.address {
-                    switch phase {
-                    case .waiting where up: load(address)
-                    case .stopped where up: resume(address)
-                    case .live where !up && painted: phase = .stopped
-                    case .live: await sampleGround()
-                    default: break
-                    }
-                }
-            }
+            await check()
             try? await Task.sleep(for: .seconds(1))
         }
     }
+
+    private func check() async {
+        guard let address, phase != .blank else { return }
+        let up = await isUp(address)
+        // 面板收起时取消的那一下探不到，不是服务停了：当成停了，下次打开或 Agent 再操作时页面会被重新载入
+        guard !Task.isCancelled else { return }
+        // 探的这一会儿换了地址：这一次的结果说的是旧地址
+        guard address == self.address else { return }
+        switch phase {
+        case .waiting where up: load(address)
+        case .stopped where up: resume(address)
+        case .live where !up && painted: phase = .stopped
+        case .live: await sampleGround()
+        default: break
+        }
+    }
+
+    #if os(iOS)
+    /// Mac 答来的页面变了、隧道通了或断了（`LiveLink`）：当场照它判一次，通了的那一下不等下一秒才载。
+    func serve(_ pages: [URL]?) {
+        serving = pages
+        guard phase != .idle else { return }
+        Task { await check() }
+    }
+    #endif
 
     /// 页面跟着深浅色换了底、热更新换了样式都要跟上：载完读一次，之后随探活每秒读一次。
     private func sampleGround() async {

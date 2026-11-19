@@ -40,7 +40,7 @@ final class LiveLink {
         defer {
             connecting?.cancel()
             proxy.cancel()
-            preview.serving = nil
+            preview.serve(nil)
         }
         guard let port = try? await proxy.start() else { return state = .trouble(.isolated) }
         preview.dataStore.proxyConfigurations = [proxy.configuration(port: port)]
@@ -75,7 +75,7 @@ final class LiveLink {
             return
         }
         pages = answer.pages
-        if state == .ready { preview.serving = pages }
+        if state == .ready { preview.serve(pages) }
         guard let next = answer.door, next != door else { return }
         door = next
         connect(next, preview, key: key)
@@ -85,7 +85,7 @@ final class LiveLink {
         connecting?.cancel()
         door = nil
         proxy.use(nil)
-        preview.serving = nil
+        preview.serve(nil)
         state = .trouble(trouble)
     }
 
@@ -99,11 +99,11 @@ final class LiveLink {
                     let addresses = Set(door.addresses.map(\.host))
                     proxy.use(.init(key: key, ticket: door.ticket, mac: mac, addresses: addresses))
                     preview.tunneled = addresses
-                    preview.serving = pages
+                    preview.serve(pages)
                     state = .ready
                     return
                 case .trouble(let trouble):
-                    preview.serving = nil
+                    preview.serve(nil)
                     state = .trouble(trouble)
                 }
                 try? await Task.sleep(for: Self.retry)
