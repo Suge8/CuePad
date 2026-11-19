@@ -5844,22 +5844,6 @@
         }
       }
     },
-    "任务与灵感" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Tasks & Ideas"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "任务与灵感"
-          }
-        }
-      }
-    },
     "任务内容不能为空" : {
       "localizations" : {
         "en" : {
@@ -6060,22 +6044,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "会话"
-          }
-        }
-      }
-    },
-    "会话 %lld" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sessions %lld"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "会话 %lld"
           }
         }
       }

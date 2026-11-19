@@ -98,8 +98,7 @@ struct ProjectScreen: View {
     private var panes: some View {
         let live = (sessions?.pinned.count ?? 0) + (sessions?.now.count ?? 0)
         return PaneSegment(
-            items: [.init(value: Pane.work, title: "任务与灵感"),
-                    .init(value: .sessions, verbatim: live > 0 ? String(localized: "会话 \(live)") : String(localized: "会话"))],
+            items: [.init(value: Pane.work, title: "内容"), .init(value: .sessions, title: "会话", badge: live)],
             selection: pane) { pane = $0 }
             .frame(height: FloatingHeaderLayout.height - PaneMetrics.inset * 2)
             .padding(PaneMetrics.inset)
