@@ -198,6 +198,8 @@ struct PressFeedback: ViewModifier {
     /// 按钮按下时内容的透明度；卡片不变淡（整张变淡像停用），压暗一层，悬停时亮一半。
     private static let dimmed = 0.6
     private static let shade = 0.05
+    /// 指针停着的卡压暗（深色是提亮）多少：叠在卡上、又不在卡的按钮里的东西（灵感卡的删除）照它调自己垫的底，才和卡是一个颜色。
+    static func cardHover(_ palette: Palette) -> Double { shade / 2 * (palette.dark ? 1 : -1) }
 
     /// 原生控件的高亮没有过渡：按下、松开都在那一帧到位，外层的动画（列表挪位、开合）也不带它；悬停的进出淡一下。
     /// 每种只挂自己要的那一个效果：亮度滤镜挂在每颗按钮上，按钮里的字都要另画一遍。
@@ -206,7 +208,7 @@ struct PressFeedback: ViewModifier {
         let lit = hovering && isEnabled
         Group {
             if kind == .card {
-                content.brightness((active ? Self.shade : lit ? Self.shade / 2 : 0) * (palette.dark ? 1 : -1))
+                content.brightness(active ? Self.shade * (palette.dark ? 1 : -1) : lit ? Self.cardHover(palette) : 0)
             } else {
                 content
                     .overlay {

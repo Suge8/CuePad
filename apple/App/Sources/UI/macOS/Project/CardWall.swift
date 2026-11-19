@@ -75,7 +75,8 @@ struct CardTile: View {
         .buttonStyle(CardOpenStyle())
         .overlay(alignment: .bottomTrailing) {
             if hovering, !workspace.presses.isSelecting {
-                DeleteCardButton(card: card.id, onNote: true).padding(Spacing.glyph).transition(.opacity)
+                // 正落在日期那一行行尾置顶记号的位置上
+                DeleteCardButton(card: card.id, onNote: true).padding(Spacing.item).transition(.opacity)
             }
         }
         .cardPresence(card.id, in: workspace)
@@ -95,7 +96,7 @@ struct CardTile: View {
 
 struct DeleteCardButton: View {
     let card: UUID
-    /// 在灵感卡上：垫一块卡自己的底色，盖住行尾的置顶记号。
+    /// 在灵感卡上：垫一块与悬停着的卡同色的底，只为盖住行尾的置顶记号，自己看不出来；指针到了它上面才有悬停的底（`PressStyle`）。
     var onNote = false
     @Environment(Workspace.self) private var workspace
 
@@ -123,7 +124,7 @@ private struct DeleteGlyph: View {
             .font(Typography.meta)
             .foregroundStyle(lit ? palette.failure : palette.ink3)
             .frame(width: ControlSize.target, height: ControlSize.target)
-            .background(onNote ? palette.note : .clear, in: .circle)
+            .background { if onNote { Circle().fill(palette.note).brightness(PressFeedback.cardHover(palette)) } }
             .contentShape(.circle)
     }
 }
