@@ -12780,6 +12780,22 @@
         }
       }
     },
+    "建议" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suggested"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "建议"
+          }
+        }
+      }
+    },
     "开" : {
       "localizations" : {
         "en" : {
@@ -20692,6 +20708,22 @@
         }
       }
     },
+    "类别" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kind"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "类别"
+          }
+        }
+      }
+    },
     "粉色" : {
       "localizations" : {
         "en" : {
@@ -21696,22 +21728,6 @@
         }
       }
     },
-    "记下的灵感、建的任务都能在这里搜到" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ideas and tasks you save can be searched here."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "记下的灵感、建的任务都能在这里搜到"
-          }
-        }
-      }
-    },
     "记下（↩）" : {
       "localizations" : {
         "en" : {
@@ -22616,22 +22632,6 @@
         }
       }
     },
-    "输入关键词，或用上面的筛选" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Type to search, or use the filters above"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "输入关键词，或用上面的筛选"
-          }
-        }
-      }
-    },
     "输入地址" : {
       "localizations" : {
         "en" : {
@@ -23164,22 +23164,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "还没有归档的"
-          }
-        }
-      }
-    },
-    "还没有灵感与任务" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No Ideas or Tasks Yet"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "还没有灵感与任务"
           }
         }
       }

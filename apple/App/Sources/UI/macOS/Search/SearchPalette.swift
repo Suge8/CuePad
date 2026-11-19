@@ -19,7 +19,7 @@ nonisolated private struct PaletteData: Sendable, Equatable {
     }
 }
 
-/// 一个搜索词出一张表，同手机的搜索页（规则在 `PaletteQuery`）：会话一节在上，灵感与任务按项目在下；没打字也没设条件时只列手上的会话与最近改的几条。
+/// 一个搜索词出一张表，同手机的搜索页（规则在 `PaletteQuery`）：会话一节在上，灵感与任务按项目在下；没打字也没设条件时是空的，只给几类建议。
 struct SearchPalette: View {
     enum Hit: Hashable {
         case session(String)
@@ -101,7 +101,7 @@ struct SearchPalette: View {
     }
 
     @ViewBuilder private var content: some View {
-        FilterBar(query: $query, total: query.isIdle ? nil : data?.matches.total)
+        FilterBar(query: $query, total: query.listsCards ? data?.matches.total : nil)
              .padding(.horizontal, Spacing.inset).padding(.bottom, Spacing.item)
         Divider()
         // 放得下就列表 + 预览并排，否则只留列表（最小窗口下详情区不到 500 宽）
@@ -141,7 +141,7 @@ struct SearchPalette: View {
         guard active, query.listsSessions, let sessions else { return [] }
         let live = SessionState.inListOrder(sessions.live.map(workspace.withLiveState), state: \.self, cue: services.liveSessions.cue, at: services.speech)
         let all = live + sessions.ended
-        return query.sessionsExpanded ? all : Array(all.prefix(query.sessionPeek))
+        return query.kind == .sessions ? all : Array(all.prefix(PaletteQuery.sessionPeek))
     }
 
     private var hits: [Hit] {
@@ -152,10 +152,12 @@ struct SearchPalette: View {
         ScrollViewReader { proxy in
             ResultsScroll(query: query) {
                 LazyVStack(alignment: .leading, spacing: Spacing.hair) {
-                    if let data = data?.matches {
+                    if query.isIdle {
+                        SearchSuggestions(query: $query).padding(.top, Spacing.group)
+                    } else if let data = data?.matches {
                         let rows = sessionRows
                         if rows.isEmpty, data.groups.isEmpty {
-                            Text(query.isIdle ? "输入关键词，或用上面的筛选" : "没有找到灵感、任务或会话")
+                            Text("没有找到灵感、任务或会话")
                                 .font(Typography.secondary).foregroundStyle(palette.ink2)
                                 .padding(.vertical, Spacing.block)
                         }
@@ -163,30 +165,23 @@ struct SearchPalette: View {
                             let total = sessions.live.count + sessions.endedTotal
                             title { Text("会话"); Text("\(total)").foregroundStyle(palette.ink3) }
                             ForEach(rows, id: \.sessionID) { row($0, in: sessions).id(Hit.session($0.sessionID)) }
-                            if !query.sessionsExpanded, total > rows.count {
-                                more(Text("全部 \(total) 个会话")) { query.sessionsExpanded = true }
-                            } else if query.sessionsExpanded, sessions.endedTotal > sessions.ended.count {
+                            if query.kind != .sessions, total > rows.count {
+                                more(Text("全部 \(total) 个会话")) { query.kind = .sessions }
+                            } else if query.kind == .sessions, sessions.endedTotal > sessions.ended.count {
                                 more(Text("显示更多（还有 \(sessions.endedTotal - sessions.ended.count) 个）")) { query.sessionPages += 1 }
                             }
                         }
-                        if query.isIdle {
-                            if !data.entries.isEmpty {
-                                title { Text("最近") }
-                                ForEach(data.entries) { entry in row(entry).id(Hit.card(entry.id)) }
+                        ForEach(data.groups) { group in
+                            let project = workspace.catalog?.project(group.id)
+                            title {
+                                ProjectGlyph(project: project, size: 11)
+                                Text(project?.shownName ?? "")
+                                Text("\(group.cards.count)").foregroundStyle(palette.ink3)
                             }
-                        } else {
-                            ForEach(data.groups) { group in
-                                let project = workspace.catalog?.project(group.id)
-                                title {
-                                    ProjectGlyph(project: project, size: 11)
-                                    Text(project?.shownName ?? "")
-                                    Text("\(group.cards.count)").foregroundStyle(palette.ink3)
-                                }
-                                ForEach(group.cards) { entry in row(entry).id(Hit.card(entry.id)) }
-                            }
-                            if data.total > data.shown {
-                                more(Text(CountCopy.more(data.total - data.shown))) { query.pages += 1 }
-                            }
+                            ForEach(group.cards) { entry in row(entry).id(Hit.card(entry.id)) }
+                        }
+                        if data.total > data.shown {
+                            more(Text(CountCopy.more(data.total - data.shown))) { query.pages += 1 }
                         }
                     }
                 }

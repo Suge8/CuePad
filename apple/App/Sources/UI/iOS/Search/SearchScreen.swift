@@ -2,8 +2,8 @@
 import CueStore
 import SwiftUI
 
-/// 一个搜索词出一张表：会话一节在上（先列几个，点开才列全），灵感与任务按项目排在下面。没打字也没设条件时只列手上的会话与最近改的几条，
-/// 不把全库倒出来（规则在 `PaletteQuery`）。结果直接落在桌面上，不一条一张纸。
+/// 一个搜索词出一张表：会话一节在上（先列几个，要看全就只看会话这一类），灵感与任务按项目排在下面。没打字也没设条件时是空的，
+/// 只给几类建议（规则在 `PaletteQuery`）。结果直接落在桌面上，不一条一张纸。
 struct SearchScreen: View {
     @State private var query = PaletteQuery()
     @State private var cards: CardMatches?
@@ -21,12 +21,14 @@ struct SearchScreen: View {
     var body: some View {
         ResultsScroll(query: query) {
             LazyVStack(alignment: .leading, spacing: 0) {
-                if query.isFiltered { ActiveFilters(query: $query, total: cards?.total) }
+                if query.isFiltered { ActiveFilters(query: $query, total: query.kind == .sessions ? sessions?.count : cards?.total) }
+                if query.isIdle {
+                    SearchSuggestions(query: $query).padding(.top, Spacing.block)
                 // 两份都读到了再排：先到的那份单独排一下，另一份到时整页往下一跳
-                if let cards, !query.listsSessions || sessions != nil {
+                } else if let cards, !query.listsSessions || sessions != nil {
                     let list = query.listsSessions ? sessions : nil
                     if cards.total == 0, list?.isEmpty ?? true {
-                        vacant
+                        EmptyState.noMatch(query.text).padding(.top, Spacing.section)
                     } else {
                         if let list, !list.isEmpty { sessionSection(list) }
                         cardSections(cards)
@@ -51,7 +53,7 @@ struct SearchScreen: View {
         }) { SearchFilterMenu(query: $query) }
         .onAppear {
             if query.text.isEmpty { query.text = DebugHooks.preset.searchText }
-            if DebugHooks.preset.searchListsSessions { query.sessionsExpanded = true }
+            if DebugHooks.preset.searchListsSessions { query.kind = .sessions }
         }
     }
 
@@ -68,23 +70,13 @@ struct SearchScreen: View {
         sizeClass == .regular ? [GridItem(.adaptive(minimum: 320), spacing: Spacing.block, alignment: .top)] : [GridItem(.flexible())]
     }
 
-    @ViewBuilder private var vacant: some View {
-        // 闲着时列的是手上的与最近的：一条都没有就是库里还没有，不是没搜到
-        if query.isIdle {
-            EmptyState(mascot: .search, title: "还没有灵感与任务", message: "记下的灵感、建的任务都能在这里搜到", waitsForSync: true)
-                .padding(.top, Spacing.section)
-        } else {
-            EmptyState.noMatch(query.text).padding(.top, Spacing.section)
-        }
-    }
-
     // MARK: 会话
 
     @ViewBuilder private func sessionSection(_ list: SessionListData) -> some View {
         let active = list.pinned + list.now
         SectionHeader("会话", count: list.count).padding(.top, Spacing.block).padding(.bottom, Spacing.item)
         Group {
-            if query.sessionsExpanded {
+            if query.kind == .sessions {
                 ForEach(active) { row($0, in: list) }
                 ForEach(list.historyRuns, id: \.section) { run in
                     SectionHeader(Dotted(run.section.title), level: .group).padding(.top, Spacing.group).padding(.bottom, Spacing.tight)
@@ -96,11 +88,11 @@ struct SearchScreen: View {
                         .task(id: list.loaded) { query.sessionPages = list.loaded / SessionListData.pageSize + 1 }
                 }
             } else {
-                let shown = (active + list.ended).prefix(query.sessionPeek)
+                let shown = (active + list.ended).prefix(PaletteQuery.sessionPeek)
                 ForEach(shown) { row($0, in: list) }
                 if list.count > shown.count {
                     more(Text("全部 \(list.count) 个会话")) {
-                        withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { query.sessionsExpanded = true }
+                        withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { query.kind = .sessions }
                     }
                 }
             }
@@ -120,33 +112,19 @@ struct SearchScreen: View {
     // MARK: 灵感与任务
 
     @ViewBuilder private func cardSections(_ cards: CardMatches) -> some View {
-        if query.isIdle {
-            if !cards.entries.isEmpty {
-                SectionHeader("最近").padding(.top, Spacing.block).padding(.bottom, Spacing.tight)
-                grid(cards.entries, placed: true)
+        ForEach(cards.groups) { group in
+            let project = workspace.catalog?.project(group.id)
+            HStack(spacing: Spacing.glyph) {
+                ProjectGlyph(project: project, size: 12)
+                SectionHeader(Dotted(project?.shownName), count: group.cards.count)
             }
-        } else {
-            ForEach(cards.groups) { group in
-                let project = workspace.catalog?.project(group.id)
-                HStack(spacing: Spacing.glyph) {
-                    ProjectGlyph(project: project, size: 12)
-                    SectionHeader(Dotted(project?.shownName), count: group.cards.count)
-                }
-                .padding(.top, Spacing.block).padding(.bottom, Spacing.tight)
-                grid(group.cards, placed: false)
-            }
-            if cards.total > cards.shown {
-                more(Text(CountCopy.more(cards.total - cards.shown))) { query.pages += 1 }
+            .padding(.top, Spacing.block).padding(.bottom, Spacing.tight)
+            LazyVGrid(columns: columns, alignment: .leading, spacing: 0) {
+                ForEach(group.cards) { CardRow(entry: $0, highlight: query.text, flat: true) }
             }
         }
-    }
-
-    /// `placed`：行里标出所属项目（没按项目分组时）。
-    private func grid(_ entries: [CardEntry], placed: Bool) -> some View {
-        LazyVGrid(columns: columns, alignment: .leading, spacing: 0) {
-            ForEach(entries) { entry in
-                CardRow(entry: entry, project: placed ? .some(workspace.catalog?.project(entry.card.projectID)) : nil, highlight: query.text, flat: true)
-            }
+        if cards.total > cards.shown {
+            more(Text(CountCopy.more(cards.total - cards.shown))) { query.pages += 1 }
         }
     }
 
@@ -172,6 +150,10 @@ private struct SearchFilterMenu: View {
     var body: some View {
         Menu {
             Section("筛选") {
+                Picker(selection: $query.kind) {
+                    ForEach(PaletteQuery.Kind.allCases, id: \.self) { Text($0.label).tag($0) }
+                } label: { Text("类别") }
+                .pickerStyle(.menu)
                 Picker(selection: $query.project) {
                     Label("全部项目", icon: .all).tag(UUID?.none)
                     ForEach(workspace.catalog?.projects ?? []) { project in
@@ -201,6 +183,7 @@ private struct ActiveFilters: View {
         HStack(spacing: Spacing.item) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: Spacing.item) {
+                    if query.kind != .all { chip(query.kind.label) { query.kind = .all } }
                     if query.project != nil { chip(query.projectLabel(in: workspace.catalog?.projects ?? [])) { query.project = nil } }
                     if query.withAttachments { chip(String(localized: "含附件")) { query.withAttachments = false } }
                     if query.period != .any { chip(query.period.label) { query.period = .any } }

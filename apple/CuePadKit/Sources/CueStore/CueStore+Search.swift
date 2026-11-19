@@ -58,6 +58,7 @@ extension CueStore {
     if let hasAttachments = query.hasAttachments {
       parts.append("instr(body, '\(CueFormat.referencePrefix)') \(hasAttachments ? ">" : "=") 0")
     }
+    if let isTask = query.isTask { parts.append("todoAt IS \(isTask ? "NOT NULL" : "NULL")") }
     switch query.sent {
     case .any:
       break
