@@ -13,6 +13,12 @@ struct ProjectScreen: View {
     @State private var position = ScrollPosition()
     @State private var anchor = TaskFoldAnchor()
     @State private var board = WallBoard()
+    @State private var pane = Pane.work
+    @State private var sessions: SessionListData?
+    @State private var moreSessions = 0
+
+    /// 手机没有会话条里项目下面那几行，这个项目的会话在这一页的另一段里。只点按切换、不认左右滑：任务行左滑是它的操作，从屏边右滑是返回。
+    private enum Pane { case work, sessions }
 
     var body: some View {
         ScrollView {
@@ -34,22 +40,50 @@ struct ProjectScreen: View {
         .observing(services.store, id: projectID, into: dataBinding, onError: workspace.fail) {
             [projectID] store in try ProjectPageData.read(projectID, from: store)
         }
+        .observing(services.store, id: SessionListData.Key(filter: .init(text: "", project: projectID), limit: sessionLimit, moment: services.speech),
+                   into: $sessions, onError: workspace.fail) { [projectID, limit = sessionLimit, moment = services.speech] store in
+            try SessionListData.read(text: "", project: projectID, historyLimit: limit, at: moment, from: store)
+        }
         .onDayChange { rearrange() }
     }
+
+    private var sessionLimit: Int { ProjectSessions.cap + moreSessions }
 
     @ViewBuilder
     private func content(_ data: ProjectPageData, _ arrangement: WallArrangement) -> some View {
         let lastTarget = data.lastTarget
         // 任务区不进懒加载栈：在懒加载栈的一格里时，收起后按 id 滚回"收起"那一行会偏出一屏（`TaskFoldAnchor`）
-        ProjectSplit(project: data.project, gap: Self.sectionGap) {
-            if data.project != nil { ProjectTasks(data: data, position: $position, anchor: anchor) }
-            ProjectWallSections(data: data, arrangement: arrangement, older: board.older, metrics: metrics) { entry in
-                CardTileView(entry: entry, lastTarget: lastTarget[entry.id], floated: board.floated.contains(entry.id))
+        let paned = sizeClass == .compact && data.project != nil
+        VStack(alignment: .leading, spacing: Spacing.part) {
+            if paned, let project = data.project {
+                ProjectBanner(project: project)
+                panes
+            }
+            if paned, pane == .sessions {
+                ProjectSessions(project: projectID, list: sessions, extra: $moreSessions)
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+            } else {
+                ProjectSplit(project: paned ? nil : data.project, gap: Self.sectionGap) {
+                    if data.project != nil { ProjectTasks(data: data, position: $position, anchor: anchor) }
+                    ProjectWallSections(data: data, arrangement: arrangement, older: board.older, metrics: metrics) { entry in
+                        CardTileView(entry: entry, lastTarget: lastTarget[entry.id], floated: board.floated.contains(entry.id))
+                    }
+                }
+                .transition(.move(edge: .leading).combined(with: .opacity))
             }
         }
         .padding(.horizontal, Spacing.page)
         .padding(.bottom, Spacing.section)
         .cardDragStage()
+    }
+
+    private var panes: some View {
+        let live = (sessions?.pinned.count ?? 0) + (sessions?.now.count ?? 0)
+        return PaneSegment(
+            items: [.init(value: Pane.work, title: "任务与灵感"),
+                    .init(value: .sessions, verbatim: live > 0 ? String(localized: "会话 \(live)") : String(localized: "会话"))],
+            selection: pane) { pane = $0 }
+            .paneSlot(.regular)
     }
 
     private static let sectionGap = Spacing.section

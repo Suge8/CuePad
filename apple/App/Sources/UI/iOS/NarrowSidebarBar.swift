@@ -60,7 +60,7 @@ struct NarrowSidebarBar: View {
     }
 }
 
-/// 不常去的几处收在一颗钮里：搜索，与原先排在项目列表最底下、要滚到头才见得着的归档、回收站、设置。
+/// 不常去的几处收在一颗钮里：搜索，原先在 Cue 页会话条底下的历史会话（已结束的，跨项目；一个项目的在它的项目页里），与原先排在项目列表最底下、要滚到头才见得着的归档、回收站、设置。
 private struct PlacesMenu: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -70,6 +70,7 @@ private struct PlacesMenu: View {
         Menu {
             Button("搜索", icon: .search) { workspace.openSearch() }
             Divider()
+            Button("历史会话", icon: .history) { workspace.push(.earlier) }
             Button("归档", icon: .archive) { workspace.push(.archive) }
             Button("回收站", icon: .trash) { workspace.push(.trash) }
             Divider()

@@ -107,7 +107,7 @@ extension SessionList where Top == EmptyView {
     init(model: AgentListModel) { self.init(model: model) { EmptyView() } }
 }
 
-private struct SessionListRow: View {
+struct SessionListRow: View {
     let item: SessionListItem
     let showsPlace: Bool
     var end: Speech.Trip?
