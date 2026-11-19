@@ -56,6 +56,7 @@ struct LivePreviewPane: View {
             .animation(Motion.fade, value: preview.phase)
         }
         .background(palette.desk)
+        .modifier(LivePageAsks(preview: preview))
         .task(id: preview.address) { await preview.watch() }
         .onDisappear { if preview.picking { preview.cancelPick() } }
     }
@@ -92,6 +93,21 @@ struct LivePreviewPane: View {
     }
 
     private static let fade: CGFloat = 20
+}
+
+/// 网页弹的 alert、confirm、prompt（`LivePreview.asks`）：项目的确认卡（`dialog`），标题写哪个网站在说话。面板收着时等它开了再给你看，网页在那一句上等着。
+/// 点外面、Esc 是取消；alert 只有一颗钮。卡关上与按钮动作是先后两下，取消挪到下一拍：按了钮的那一句先答上，取消落空。
+private struct LivePageAsks: ViewModifier {
+    let preview: LivePreview
+
+    func body(content: Content) -> some View {
+        let ask = preview.asks.first
+        let shown = Binding { ask != nil } set: { if !$0, let ask { Task { preview.answer(ask.id, nil) } } }
+        let text = Binding { preview.asks.first?.text ?? "" } set: { if !preview.asks.isEmpty { preview.asks[0].text = $0 } }
+        let ok = DialogButton(title: "确定", role: ask?.kind == .alert ? .cancel : nil) { if let ask { preview.answer(ask.id, ask.kind == .prompt ? text.wrappedValue : "") } }
+        content.dialog("\(ask?.origin ?? "") 上的网页说", isPresented: shown, message: ask.map { .verbatim($0.message) },
+                       field: ask?.kind == .prompt ? DialogField(prompt: "填写回答", text: text) : nil, buttons: [ok])
+    }
 }
 
 private struct LiveWebView: NSViewRepresentable {
