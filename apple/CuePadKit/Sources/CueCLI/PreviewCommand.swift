@@ -16,7 +16,15 @@ private struct PreviewOutput {
 }
 
 extension Command {
-  private static let sessionVariables = [AgentKind.watchedSessionVariable] + AgentKind.allCases.map(\.sessionVariable)
+  static let sessionVariables = [AgentKind.watchedSessionVariable] + AgentKind.allCases.map(\.sessionVariable)
+
+  /// 执行这条命令的 Agent 会话（`show`、`live` 共用）：环境变量里第一个有值的。
+  static func agentSession(_ call: Call, _ why: String) throws -> String {
+    guard let session = sessionVariables.lazy.compactMap({ call.environment[$0] }).first(where: { !$0.isEmpty }) else {
+      throw CLIError.invalid("不在 Agent 会话里：\(sessionVariables.joined(separator: "、")) 都没有值。\(why)")
+    }
+    return session
+  }
 
   static let show = Command(
     path: ["show"], summary: "把文件发到用户的 CuePad（手机、电脑上都能看）：当前 Agent 会话的对话里出现一张卡片", arguments: "<文件…> --title <标题>…",
@@ -37,9 +45,7 @@ extension Command {
   ) { call in
     let paths = call.args.positionals
     guard !paths.isEmpty else { throw CLIError.usage("需要至少一个 <文件>") }
-    guard let session = sessionVariables.lazy.compactMap({ call.environment[$0] }).first(where: { !$0.isEmpty }) else {
-      throw CLIError.invalid("不在 Agent 会话里：\(sessionVariables.joined(separator: "、")) 都没有值。show 只能在 Agent 执行的命令里运行，卡片发到那个会话的对话里")
-    }
+    let session = try agentSession(call, "show 只能在 Agent 执行的命令里运行，卡片发到那个会话的对话里")
     let titles = call.args.all("title")
     guard titles.count == paths.count else {
       throw CLIError.usage("\(paths.count) 个文件要 \(paths.count) 个 --title（给了 \(titles.count) 个），按文件的先后每个一句，\(PreviewItem.titleRule)")

@@ -71,7 +71,7 @@ extension DebugScene {
         try lines.map { String(decoding: try JSONSerialization.data(withJSONObject: $0), as: UTF8.self) }.joined(separator: "\n")
             .write(to: file, atomically: true, encoding: .utf8)
         try await store.upsertSessions(
-            [SessionUpsert(session: IndexedSession(id: "atlas", path: file.path, cwd: "", lastActivityAt: .now), checkpoint: nil, transcript: nil)], host: host)
+            [SessionUpsert(session: IndexedSession(id: "atlas", path: file.path, cwd: args.layoutOpts.sessionDirectory ?? "", lastActivityAt: .now), checkpoint: nil, transcript: nil)], host: host)
     }
 
     static var loginPage: String { """

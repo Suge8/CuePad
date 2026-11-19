@@ -2,7 +2,7 @@
 
 nonisolated struct LayoutArgs: Decodable, DebugArgGroup {
     static let prefix = ""
-    /// `-CuePadBeside <会话>`（仅 Mac）：主区右半并排开这个演示会话（左半是 `-CuePadSession`）
+    /// `-CuePadBeside <会话>`（宽屏）：主区右半并排开这个演示会话（左半是 `-CuePadSession`）
     let beside: String?
     /// `-CuePadCompact <宽>`（iPad）：按这么宽的窄窗口画（分屏、台前调度；紧凑尺寸类）；不给时 iPad 的调试实例起来先铺满屏
     let compact: Double?
@@ -20,6 +20,18 @@ nonisolated struct LayoutArgs: Decodable, DebugArgGroup {
     let highContrast: Bool
     /// `-CuePadLargestType YES`：整个窗口按最大的辅助字号画
     let largestType: Bool
+    /// `-CuePadLivePreview <地址>|blank`（仅 Mac，配 session 画面）：左边会话的活预览开在右半、载入这个地址；blank 是刚点开、还没有地址的样子
+    let livePreview: String?
+    /// `-CuePadLiveViewport phone`（配 `-CuePadLivePreview`）：活预览起在手机宽那一档
+    let liveViewport: String?
+    /// `-CuePadLivePick <CSS 选择器>`（配 `-CuePadLivePreview <地址>`）：页面载完后开着点选、高亮停在这个元素上（后台截图里指针进不来）
+    let livePick: String?
+    /// `-CuePadLivePickCommit YES`（配 `-CuePadLivePick`）：接着点下去，元素挂进回复框
+    let livePickCommit: Bool
+    /// `-CuePadSessionDirectory <绝对路径>`（仅 Mac，演示库）：演示会话 atlas 的工作目录，在里面起的开发服务活预览认得出（`LiveServers`）
+    let sessionDirectory: String?
+    /// `-CuePadBesideShare <0–1>`（配 `-CuePadBeside` 或 `-CuePadLivePreview`）：右半占主区的这几成（`Workspace.besideShare`），超出两边最窄的照样卡住；0 是左边最宽，1 是右半最宽
+    let besideShare: Double?
     /// `-CuePadMergePreview YES`（配 instruction 画面）：已点过一下"合并进来"、标出会并进来的段
     let mergePreview: Bool
     /// `-CuePadLandscape YES`（iOS、iPad）：由 `xc.sh` 在起实例前把模拟器横过来，App 自己不读；登记在这里是为了不被当成拼错的参数

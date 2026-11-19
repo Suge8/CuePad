@@ -21,6 +21,7 @@ struct MainWindow: View {
         .overlay { Prewarm().environment(workspace) }
         .overlay { NoticeView() }
         .followsUndo(workspace)
+        .task(id: workspace.services.viewer.present) { if workspace.services.viewer.present { await workspace.watchLiveServers() } }
         .toolbar(removing: .title)
         .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
         .panelHost()
@@ -43,14 +44,10 @@ struct MainWindow: View {
                         .environment(\.underCue, under)
                 }
                 .frame(width: sizes.leading + under)
-                if sizes.split {
-                    WideColumnHost(slot: .beside, focus: focus, origin: sizes.rail + sizes.leading, width: sizes.main - sizes.leading, shape: sizes.shape) {
-                        BesideColumn().environment(\.headInset, Self.inset(trailing: trail))
-                    }
-                    .frame(width: sizes.main - sizes.leading)
-                }
                 Spacer(minLength: 0)
             }
+            .overlay(alignment: .topLeading) { beside(sizes, window: geometry.size.width, trail: trail) }
+            .overlay { if sizes.split { BesideDivider(sizes: sizes) } }
             .overlay { if !sizes.home { railChrome(sizes) } }
             .reportsWideFits(sizes, to: workspace)
             .overlay(alignment: .topTrailing) {
@@ -61,6 +58,18 @@ struct MainWindow: View {
             // Cue 铺满时它那一块伸到窗口左缘（会话条藏起）：开合钮与会话条的抽屉排在它上面，不然点不到
             .overlay { if sizes.home { railChrome(sizes) } }
         }
+    }
+
+    /// 并排的右半：不并排时也挂着、同样宽，停在窗口右缘外、滑完藏起。开合是这一块整个从右缘滑进来、滑回去（`WideColumnSlide` 的平移），
+    /// 宽不变、页不重排：收起时里面的东西原样滑走，不先被压窄。
+    private func beside(_ sizes: WideMetrics, window: CGFloat, trail: CGFloat) -> some View {
+        let origin = sizes.split ? sizes.rail + sizes.leading : window
+        return WideColumnHost(slot: .beside, focus: focus, origin: origin, width: sizes.trailing, shape: sizes.shape, hidden: !sizes.split) {
+            BesideColumn().environment(\.headInset, Self.inset(trailing: trail))
+        }
+        .frame(width: sizes.trailing)
+        .padding(.leading, origin)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     private func railChrome(_ sizes: WideMetrics) -> some View {

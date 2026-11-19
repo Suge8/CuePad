@@ -101,14 +101,15 @@ struct WideSessionTitle: View {
                     .transition(.opacity)
             }
             Spacer(minLength: Spacing.item)
-            HStack(spacing: Spacing.item) {
-                // 只开一个会话时没有 ×：会话是去处，换去处靠会话条；并排的两半才各有一颗
-                if workspace.besideSession != nil {
-                    Button("关闭", icon: .close) { workspace.closeColumn(column) }
-                        .labelStyle(.iconOnly)
-                        .buttonStyle(ControlButtonStyle(kind: .circular))
-                        .font(Typography.body)
-                }
+            // 两半的栏头末端各一颗不带框的图标钮，同一个样子：左边开合活预览（只在 Mac、会话有页面可看时；开着是强调色，收起它只有这一处），右边收起并排。
+            // 左边没有收起：它就是主区此刻的页，换去处靠会话条
+            switch column {
+            case .main:
+                #if os(macOS)
+                if let session = workspace.session(in: .main) { LivePreviewTool(session: session) }
+                #endif
+            case .beside:
+                HeadTool(label: "收起并排", icon: .rightColumn) { workspace.closeColumn(.beside) }
             }
         }
         .font(Typography.toolbarTitle)
@@ -116,6 +117,23 @@ struct WideSessionTitle: View {
         .accessibilityElement(children: .contain)
         .padding(inset).frame(height: Chrome.band)
         .windowDragArea()
+    }
+}
+
+/// 会话栏头末端的图标钮：同窗口最顶那一排别的不带框的钮（会话条开合、收起右栏），平时次要色，开着的开关是强调色。
+struct HeadTool: View {
+    let label: LocalizedStringResource
+    let icon: Icon
+    var on = false
+    let action: () -> Void
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        Button(action: action) { Image(icon).foregroundStyle(on ? palette.signature : palette.ink2) }
+            .buttonStyle(ControlButtonStyle(kind: .icon, size: .compact))
+            .help(Text(label))
+            .accessibilityLabel(Text(label))
+            .accessibilityAddTraits(on ? .isSelected : [])
     }
 }
 

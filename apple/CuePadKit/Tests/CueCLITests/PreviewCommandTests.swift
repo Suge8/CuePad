@@ -52,5 +52,19 @@ import Testing
     #expect(try await sb.store.previews(of: "s1").isEmpty)
   }
 
+  @Test func liveWithoutCuePadOpenOnThisLibraryFailsAndHandsNothingOver() async throws {
+    let sb = try Fixture()
+    let result = await sb.run("live", "5173", environment: ["PI_SESSION_ID": "s1"])
+    #expect(result.code == 1 && result.err.contains("CuePad 没开") && result.out.isEmpty)
+    #expect(try await sb.store.liveAddresses().isEmpty)
+  }
+
+  @Test(arguments: ["ftp://localhost:5173", "localhost:99999", "0"])
+  func liveRefusesAnAddressThePreviewCannotOpen(address: String) async throws {
+    let sb = try Fixture()
+    let result = await sb.run("live", address, environment: ["PI_SESSION_ID": "s1"])
+    #expect(result.code == 2 && result.err.contains("不是能打开的网页地址"))
+    #expect(try await sb.store.liveAddresses().isEmpty)
+  }
 }
 #endif

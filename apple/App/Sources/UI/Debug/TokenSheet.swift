@@ -114,7 +114,7 @@ struct TokenSheet: View {
             ("sheen", palette.sheen), ("bubble", palette.bubble), ("bubbleEdge", palette.bubbleEdge ?? .clear),
             ("glassTint", palette.glassTint), ("solidGlass", palette.solidGlass), ("inkWell", palette.inkWell),
             ("ink", palette.ink), ("ink2", palette.ink2), ("ink3", palette.ink3), ("hair", palette.hair), ("fill", palette.fill),
-            ("track", palette.track), ("backdrop", palette.backdrop), ("shadow", palette.shadow), ("panelShadow", palette.panelShadow),
+            ("track", palette.track), ("backdrop", palette.backdrop), ("stale", palette.stale), ("shadow", palette.shadow), ("panelShadow", palette.panelShadow),
             ("onMedia", palette.onMedia), ("mediaScrim", palette.mediaScrim), ("mediaGround", palette.mediaGround),
             ("mediaEdge", palette.mediaEdge), ("mediaDim", palette.mediaDim),
             ("signature", palette.signature), ("signatureSoft", palette.signatureSoft), ("signatureFill", palette.signatureFill),

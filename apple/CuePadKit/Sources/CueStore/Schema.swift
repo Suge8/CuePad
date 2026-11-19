@@ -49,7 +49,11 @@ enum Schema {
     CREATE INDEX marks_kind ON marks(kind, subject, modifiedAt);
     \(Schema.modifiedIndex(.marks))
     """,
+    // 103：会话请你看的本机网页（`LiveAddress`），本机表
+    liveAddresses,
   ]
+
+  static let liveAddresses = "CREATE TABLE liveAddresses (sessionID TEXT PRIMARY KEY NOT NULL, url TEXT NOT NULL, found INTEGER NOT NULL, sentAt INTEGER NOT NULL) STRICT;"
 
   /// 同步元数据：每条记录服务器端的系统字段（压缩存，见 `SystemFields`）与服务器收下的修改时间（从没收下过为 NULL），以及本机交出去的那一版的修改时间
   /// （sentModifiedAt，见 `CueStore.noteSent`）。服务器收下过而行已不在数据表里的，就是要向服务器删除的（不需要墓碑表）。

@@ -28,7 +28,7 @@ struct Command: Sendable {
 
   var name: String { path.joined(separator: " ") }
 
-  static let all: [Command] = project + card + task + [search, show] + conflicts
+  static let all: [Command] = project + card + task + [search, show, live] + conflicts
   static let nouns: [String] = all.map(\.path[0]).reduce(into: []) { if !$0.contains($1) { $0.append($1) } }
 }
 
