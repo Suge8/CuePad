@@ -37,8 +37,8 @@ struct WideColumnHead: View {
         switch workspace.mainRoute {
         case .project: WideProjectHeading()
         case .shelf: WideShelfHeading()
-        case .archive: WideHeading(title: String(localized: "归档"))
-        case .trash: WideHeading(title: String(localized: "回收站"))
+        case .archive: WidePlaceHeading(title: String(localized: "归档"))
+        case .trash: WidePlaceHeading(title: String(localized: "回收站"))
         case .library: LibraryPanesSlot()
         case .settings: WideHeading(title: String(localized: "设置"))
         case .conflicts: WideHeading(title: String(localized: "两个版本"))

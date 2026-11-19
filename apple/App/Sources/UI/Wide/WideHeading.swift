@@ -19,9 +19,7 @@ struct WideProjectHeading: View {
     var body: some View {
         if case .project(let id) = workspace.mainRoute, let project = workspace.catalog?.project(id) {
             HStack(spacing: 0) {
-                Button { workspace.select(.shelf) } label: { Text("项目").modifier(HeadingPiece()) }
-                    .foregroundStyle(palette.ink3)
-                Text(verbatim: "/").foregroundStyle(palette.ink3).readerHidden(true)
+                ShelfCrumb()
                 Menu { ProjectActions(project: project, folders: false).labelStyle(.titleAndIcon) } label: {
                     HStack(spacing: Spacing.tight) {
                         Text(verbatim: project.shownName).foregroundStyle(palette.ink).lineLimit(1)
@@ -50,6 +48,36 @@ struct WideProjectHeading: View {
 }
 
 /// 栏头里能点的字：悬停的底与旁边的图标钮（`ControlButtonStyle(kind: .icon)`）同高，一排里停到哪颗都是一样大的一块。
+/// 归档、回收站的栏头：同项目页一样写成"项目 / 归档"，点"项目"回列表——这两页是从项目列表进来的，栏头上看得出、也回得去。
+struct WidePlaceHeading: View {
+    let title: String
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ShelfCrumb()
+            Text(verbatim: title).foregroundStyle(palette.ink).lineLimit(1).modifier(HeadingPiece())
+                .accessibilityAddTraits(.isHeader)
+        }
+        .buttonStyle(PressStyle(.button))
+        .padding(.leading, -HeadingPiece.inset)
+        .font(Typography.toolbarTitle)
+        .accessibilityElement(children: .contain)
+    }
+}
+
+/// 栏头开头回项目列表的"项目"与它后面的斜线。
+private struct ShelfCrumb: View {
+    @Environment(Workspace.self) private var workspace
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        Button { workspace.select(.shelf) } label: { Text("项目").modifier(HeadingPiece()) }
+            .foregroundStyle(palette.ink3)
+        Text(verbatim: "/").foregroundStyle(palette.ink3).readerHidden(true)
+    }
+}
+
 private struct HeadingPiece: ViewModifier {
     static let inset = Spacing.item
 

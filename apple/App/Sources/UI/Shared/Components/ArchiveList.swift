@@ -18,10 +18,16 @@ struct ArchiveList: View {
                         #endif
                 }
             } else {
+                #if os(macOS)
+                ScrollView {
+                    LazyVStack(spacing: 0) { ForEach(cards ?? []) { card in row(card) } }.storedList()
+                }
+                #else
                 List {
                     ForEach(cards ?? []) { card in row(card) }
                 }
                 .scrollContentBackground(.hidden)
+                #endif
             }
         }
         .animation(Motion.fade, value: cards?.map(\.id))
@@ -30,18 +36,23 @@ struct ArchiveList: View {
 
     private func row(_ card: Card) -> some View {
         let project = workspace.catalog?.project(card.projectID)
+        #if os(macOS)
+        return Button { open(card) } label: {
+            StoredRow(title: card.title, detail: project?.shownName ?? "", stamp: card.archivedAt.map { Text("\(DateLabel.short($0)) 归档") }) {
+                mark(card)
+            } actions: {
+                Button("取回") { workspace.perform { try await $0.unarchive(card.id) } }
+            }
+        }
+        .buttonStyle(CardOpenStyle())
+        .contextMenu {
+            let swipes = swipes(card)
+            RowActionButtons(actions: swipes.leading + swipes.trailing).menuIcons()
+        }
+        #else
         return Button { open(card) } label: {
             HStack(alignment: .firstTextBaseline, spacing: Spacing.item) {
-                Group {
-                    if card.isTask {
-                        TaskRingView(status: card.status, done: card.status == .done, size: 17)
-                    } else {
-                        Image(.idea).foregroundStyle(palette.ink3)
-                    }
-                }
-                .frame(width: 20)
-                .accessibilityElement()
-                .accessibilityLabel(card.isTask ? "任务" : "灵感")
+                mark(card).frame(width: 20)
                 MetaLine(spacing: Spacing.item, gap: Spacing.item) {
                     VStack(alignment: .leading, spacing: Spacing.hair) {
                         Text(card.title).foregroundStyle(palette.ink).lineLimit(1)
@@ -57,12 +68,19 @@ struct ArchiveList: View {
         }
         .buttonStyle(PressStyle())
         .listRowBackground(palette.paper)
-        #if os(iOS)
         .listSwipes(swipes(card))
-        #endif
         .contextMenu {
             let swipes = swipes(card)
             RowActionButtons(actions: swipes.leading + swipes.trailing).menuIcons()
+        }
+        #endif
+    }
+
+    @ViewBuilder private func mark(_ card: Card) -> some View {
+        if card.isTask {
+            TaskRingView(status: card.status, done: card.status == .done, size: 17).accessibilityLabel("任务")
+        } else {
+            Image(.idea).foregroundStyle(palette.ink3).accessibilityLabel("灵感")
         }
     }
 

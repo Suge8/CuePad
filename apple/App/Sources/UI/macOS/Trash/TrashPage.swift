@@ -9,10 +9,10 @@ struct TrashPage: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: Spacing.page) {
+            VStack(alignment: .leading, spacing: Spacing.part) {
                 if let data { content(data) }
             }
-            .padding(.horizontal, Spacing.page).padding(.bottom, Spacing.section)
+            .storedList()
         }
         .safeAreaPadding(.top, Bars.contentGap)
         .emptyTrashConfirmation(workspace)
@@ -47,40 +47,28 @@ struct TrashPage: View {
     }
 
     private func group(_ title: LocalizedStringResource, @ViewBuilder rows: () -> some View) -> some View {
-        VStack(alignment: .leading, spacing: Spacing.item) {
+        VStack(alignment: .leading, spacing: Spacing.tight) {
             SectionHeader(title)
-            VStack(spacing: 0) { rows() }.rowPaper(cornerRadius: Radius.block)
+            VStack(spacing: 0) { rows() }
         }
     }
 }
 
-private struct TrashRow<Icon: View>: View {
+private struct TrashRow<Mark: View>: View {
     let item: TrashItem
     let restore: () -> Void
     let purge: () -> Void
-    @ViewBuilder let icon: Icon
+    @ViewBuilder let mark: Mark
     @Environment(\.palette) private var palette
     @State private var confirming = false
 
     var body: some View {
-        HStack(spacing: Spacing.item) {
-            icon.frame(width: 20)
-            Text(item.title).font(Typography.body.weight(.medium)).foregroundStyle(palette.ink).lineLimit(1).layoutPriority(1)
-            Text(item.detail).font(Typography.secondary).foregroundStyle(palette.ink3).lineLimit(1)
-            Spacer(minLength: 12)
-            if let deletedAt = item.deletedAt {
-                Text("删于 \(DateLabel.short(deletedAt))").font(Typography.meta).foregroundStyle(palette.ink3)
-            }
+        StoredRow(title: item.title, detail: item.detail, stamp: item.deletedAt.map { Text("删于 \(DateLabel.short($0))") }) {
+            mark
+        } actions: {
+            Button("恢复", action: restore)
+            Button("永久删除…") { confirming = true }.foregroundStyle(palette.failure)
         }
-        .padding(.horizontal, Spacing.inset).frame(minHeight: 40)
-        .hoverReveal {
-            HStack(spacing: Spacing.item) {
-                Button("恢复", action: restore).controlSize(.small)
-                Button("永久删除…") { confirming = true }.controlSize(.small).foregroundStyle(palette.failure)
-            }
-            .padding(.horizontal, Spacing.inset)
-        }
-        .row()
         .contextMenu {
             Button("恢复", icon: .restore, action: restore).menuIcons()
             Divider()
