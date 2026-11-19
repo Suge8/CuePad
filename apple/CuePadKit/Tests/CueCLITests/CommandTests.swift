@@ -254,7 +254,7 @@ import Testing
     let root = await sb.run("--help").out
     let commands = try #require(root.split(separator: "\n").first { $0.hasPrefix("全部命令：") })
     let names = commands.dropFirst("全部命令：".count).prefix { $0 != "；" }.split(separator: "、").map(String.init)
-    #expect(Set(names) == ["project", "card", "task", "search", "show", "conflicts"])
+    #expect(Set(names) == ["project", "card", "task", "search", "show", "live", "conflicts"])
     for command in Command.all {
       let noun = command.path[0]
       if command.path.count == 2 {

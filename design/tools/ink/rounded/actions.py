@@ -9,9 +9,9 @@ NAMES = (
     "done.pre", "reopen", "restore", "indent", "outdent", "link", "unlink", "folder.remove", "pin", "unpin",
     "conflict", "deck", "share", "save", "pencil", "write", "choose", "puzzle", "tick", "plane.done",
     "arrow.up", "arrow.down", "ring.down", "ring.stop", "ring.play", "ring.plus", "badge.down", "compact",
-    "hand", "mac", "photo", "photos", "select", "keyboard.down", "braces", "window", "doc.blank", "wrench",
+    "hand", "mac", "photo", "photos", "select", "keyboard.down", "braces", "window.play", "doc.blank", "wrench",
     "branch", "flame", "eye", "power", "mail", "tag", "keyboard", "sun", "wave", "bubble.text", "bubble.dots",
-    "mic", "mic.off", "speaker",
+    "mic", "mic.off", "speaker", "phone", "external", "pointer",
 )
 
 
@@ -138,8 +138,9 @@ def centerlines(name):
     elif name == "braces":
         for sign in (-1,1):
             opened.append(poly([(sign*8,-10),(sign*4,-10),(sign*4,-3),(sign,0),(sign*4,3),(sign*4,10),(sign*8,10)],1.6))
-    elif name == "window":
-        rectangle(-10,-9,10,9,3); line((-10,-3),(10,-3))
+    elif name == "window.play":
+        # 活预览：带标题栏的窗口，里面一个播放三角——这个会话跑起来的页面
+        rectangle(-11,-9,11,9,3); line((-11,-4.5),(11,-4.5))
     elif name == "doc.blank":
         _,closed = base.centerlines("doc")
     elif name == "wrench":
@@ -174,6 +175,17 @@ def centerlines(name):
         # 喇叭：柄与喇叭口连成一圈，右边两道由近到远的声波。
         closed.append(poly([(-11,-3),(-7,-3),(-1,-8),(-1,8),(-7,3),(-11,3)],1.6,True))
         opened.extend([arcs((0,0),5,-40,80),arcs((0,0),9.5,-40,80)])
+    elif name == "phone":
+        # 手机宽：竖着的一块屏，底下一道横条
+        rectangle(-7,-11,7,11,3.5); line((-2.5,7),(2.5,7))
+    elif name == "external":
+        # 在浏览器里打开：右上角开口的框，一支箭头从口里伸出去
+        line((-1,-9),(-9,-9),(-9,9),(9,9),(9,1),radius=2.5)
+        line((-1,1),(10,-10)); line((3,-10),(10,-10),(10,-3))
+    elif name == "pointer":
+        # 点选页面元素：指针箭头，尾巴斜伸出去
+        closed.append(poly([(-8,-10),(8,-3),(1,0),(-2,7)],[1.6,1.6,1.6,1.6],True))
+        line((1,0),(7,7))
     elif name in ("bubble.text","bubble.dots"):
         _,closed = base.centerlines("bubble")
         if name == "bubble.text": line((-4,-3),(4,-3)); line((-4,2),(2,2))
@@ -186,4 +198,5 @@ def fills(name,w):
     if name in ("photo","photos"): return [disc((4,-2),w*.6)]
     if name == "ring.stop": return [rpoly([(-3,-3),(3,-3),(3,3),(-3,3)],[1.6]*4)]
     if name == "ring.play": return [rpoly([(-3,-5),(5,0),(-3,5)],[1]*3)]
+    if name == "window.play": return [rpoly([(-3,-1.3),(5,2.75),(-3,6.8)],[1]*3)]
     return []

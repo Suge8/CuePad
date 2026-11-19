@@ -16,9 +16,8 @@ extension DebugScene {
         Task { await voiceCallIfAsked(workspace) }
         presetColumns(workspace.services.settings)
         if let prepare = entry?.prepare { await running("摆画面") { try await prepare(workspace, opened) } }
-        if let beside = args.layoutOpts.beside {
-            workspace.openSession(SessionState.recordID(sessionID: beside), sessionID: beside, in: .beside)
-        }
+        presetBeside(workspace)
+        openLivePreviewIfAsked(workspace)
         if args.demoMac { Task { await runDemoMac(workspace.services) } }
         presetDrawers(workspace)
         if let pace = args.layoutOpts.sidebarCycle { Task { await cycleColumn(fast: pace == "fast") { send(#selector(AppDelegate.toggleCueSidebar(_:))) } } }

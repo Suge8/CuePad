@@ -1,5 +1,6 @@
 #if os(macOS)
 import AppKit
+import WebKit
 
 /// 无 nib 的标准主菜单。⌘N 已是添加灵感，新会话用 ⌥⌘N（Mac 上"另一种新建"的惯例）。
 enum MainMenu {
@@ -53,6 +54,10 @@ enum MainMenu {
             .item("切换栏焦点", #selector(WideColumnView.switchWideFocus(_:)), "\t", [.control]),
             .item("会话移到左边", #selector(WideColumnView.moveWideLeft(_:)), "\u{F702}", [.command, .option]),
             .item("会话移到右边", #selector(WideColumnView.moveWideRight(_:)), "\u{F703}", [.command, .option]),
+            .separator,
+            // 活预览里的网页（同 Safari 的键）：经响应链交给有焦点的网页视图，它按能不能退、进自己停用；触控板双指左右滑也是这两下
+            .item("后退", #selector(WKWebView.goBack(_:)), "["),
+            .item("前进", #selector(WKWebView.goForward(_:)), "]"),
         ]))
         main.addItem(replyMenu())
         let window = submenu(title: "窗口", items: [

@@ -33,6 +33,7 @@ struct SplitRoot: View {
                 }
                 Spacer(minLength: 0)
             }
+            .overlay { if sizes.split { BesideDivider(sizes: sizes) } }
             .overlay { if !sizes.home { railChrome(sizes) } }
             .readerHidden(covered)
             // 排在最上：抽屉开着时它与接点按的底盖住浮着的那一排与会话条的抽屉

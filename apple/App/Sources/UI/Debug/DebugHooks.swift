@@ -115,6 +115,15 @@ enum DebugHooks {
         #endif
     }
 
+    /// 演示库里的会话记在演示的 Mac 上（`DebugScene.demoHosts`）：活预览把它们也当这台的会话认服务。Release 为空。
+    static var liveHosts: [String] {
+        #if DEBUG
+        DebugScene.args.demo ? DebugScene.demoHosts : []
+        #else
+        []
+        #endif
+    }
+
     /// 隔离库下这台 Mac 的标识换成 `-CuePadHost <名>`：同一台机器上开两个隔离实例当两台 Mac（同步测量）。nil：用硬件标识。
     static var hostID: String? {
         #if DEBUG

@@ -111,7 +111,7 @@ extension SyncIssue {
         case .agentLibraries: String(localized: "一台 Mac 上的技能与规则")
         case .agentLibraryFiles: String(localized: "一台 Mac 上一份技能或规则的正文")
         // 本机表不同步，认不出的是更新版本的表
-        case nil, .piSessions, .projectDirectories, .cueSummaries, .writeCounter, .syncRecords: String(localized: "一条记录")
+        case nil, .piSessions, .projectDirectories, .cueSummaries, .writeCounter, .syncRecords, .liveAddresses: String(localized: "一条记录")
         }
     }
 }

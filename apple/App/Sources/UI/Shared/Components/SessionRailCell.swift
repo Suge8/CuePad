@@ -60,13 +60,22 @@ struct SessionRailCell: View {
         #endif
         .relaySpot(session: item.id, row: .rail)
         .accessibilityAddTraits(selected ? .isSelected : [])
-        .accessibilityLabel(item.name)
+        .accessibilityLabel(live ? Text("\(item.name)，有活预览") : Text(verbatim: item.name))
         .accessibilityValue(Dotted(item.shown.label, project?.shownName, item.session.agentMark, item.pulse.fullContext?.help.spoken).spoken)
         .accessibilityIdentifier("session-rail-\(item.id)")
         .help(help)
     }
 
     private var running: Bool { item.waiting == nil && item.pulse.tier == .running }
+
+    /// 项目下面那一行，这个会话有活预览可看（`Workspace.hasLivePage`；开着空的地址输入不算）；等你的卡不标。只在 Mac：别处看不到这台的 localhost。
+    private var live: Bool {
+        #if os(macOS)
+        compact && workspace.hasLivePage(item.session.id)
+        #else
+        false
+        #endif
+    }
 
     private var besides: Bool {
         guard let main = workspace.session(in: .main) else { return false }
@@ -138,8 +147,11 @@ struct SessionRailCell: View {
                 } rest: {
                     name.font(Typography.body)
                     Spacer(minLength: Spacing.item)
+                    // 同栏头那颗预览钮的图形，只是个记号（点行就是开会话）：读屏在行名里说
+                    if live { Image(.livePreview).font(Glyph.small).foregroundStyle(palette.ink3).readerHidden(true).transition(.opacity) }
                     SessionRailReadout(item: item).modifier(YieldsToTool(yields: besides))
                 }
+                .animation(Motion.fade, value: live)
                 #if os(macOS)
                 // 并排的看得见的入口（另有 ⌘ 点与右键）：主区开着别的会话时，悬停的行尾露出来。
                 // 完成不放在这里：项目下面列的多半还在做，对勾摆在行尾是请人误点；它在等你回话的那张卡上（`card`）

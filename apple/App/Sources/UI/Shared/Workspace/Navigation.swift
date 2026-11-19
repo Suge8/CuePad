@@ -27,13 +27,25 @@ struct WideNavigation {
         }
     }
 
+    /// 并排时右半边放的：第二个会话，或左边那个会话的活预览（只 Mac）。预览属于左边那个会话，左边换了会话就收起；开着预览时再并排一个会话，会话替换它。
+    enum Beside: Equatable {
+        case session(SessionRoute)
+        case preview
+    }
+
     /// Cue 铺满着：主区那一页留着不拆（回去时滚动位置都在），只是让出去、订阅暂停。
     var home = true
     var main: Main = .browse {
-        didSet { if case .session = main {} else { beside = nil } }
+        didSet {
+            guard case .session(let now) = main else { return beside = nil }
+            if beside == .preview, case .session(let before) = oldValue, before.id == now.id { return }
+            if beside == .preview { beside = nil }
+        }
     }
-    /// 并排时右半边的会话；主区不是会话时没有（`main` 换走会话时一并清掉）。
-    var beside: SessionRoute?
+    /// 主区不是会话时没有（`main` 换走会话时一并清掉）。
+    var beside: Beside?
+
+    var besideSession: SessionRoute? { if case .session(let route) = beside { route } else { nil } }
 }
 
 extension Workspace {
@@ -105,7 +117,11 @@ extension Workspace {
     }
 
     var besideSession: SessionRoute? {
-        if case .wide(let state) = navigation { state.beside } else { nil }
+        if case .wide(let state) = navigation { state.besideSession } else { nil }
+    }
+
+    var beside: WideNavigation.Beside? {
+        if case .wide(let state) = navigation, !state.home { state.beside } else { nil }
     }
 
     var cueHome: Bool {
@@ -158,7 +174,7 @@ extension Workspace {
             case .project: narrow = NarrowNavigation(path: [mainRoute], sidebarOpen: true)
             default: narrow = NarrowNavigation(path: [mainRoute])
             }
-            if !state.home, let session = state.beside { narrow.path.append(.session(session)) }
+            if !state.home, let session = state.besideSession { narrow.path.append(.session(session)) }
             if let overlay { narrow.path.append(overlay.route) }
             overlay = nil
             navigation = .narrow(narrow)
@@ -181,7 +197,12 @@ extension Workspace.Navigation {
             if state.home { return "wide cue" }
             return switch state.main {
             case .browse: "wide browse"
-            case .session: state.beside == nil ? "wide session" : "wide session | session"
+            case .session:
+                switch state.beside {
+                case nil: "wide session"
+                case .session: "wide session | session"
+                case .preview: "wide session | preview"
+                }
             case .page(let route): "wide \(route.trail)"
             }
         }

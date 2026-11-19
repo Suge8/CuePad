@@ -7,6 +7,8 @@ public enum Table: String, Codable, Sendable, CaseIterable {
   case writeCounter
   /// 同步元数据（本机表，`Schema.syncRecordsTable`）：说的话读服务器收下过没有（`Speech.reachedServerSQL`）；订阅只按行依赖还没发出的那几句（`CueStore.dependOnUnsent`）。
   case syncRecords
+  /// 会话请你看的本机网页（本机表，`LiveAddress`）。
+  case liveAddresses
 }
 
 extension Table {
@@ -48,6 +50,7 @@ extension Table {
     case .projectDirectories: ["projectID", "directory"]
     case .cueSummaries: ["lo", "hi", "text", "lineIDs", "createdAt"]
     case .writeCounter: ["seq"]
+    case .liveAddresses: ["sessionID", "url", "found", "sentAt"]
     case .syncRecords: ["recordName", "recordType", "systemFields", "pushedModifiedAt", "sentModifiedAt"]
     default: syncedFields.map(\.name)
     }
@@ -94,7 +97,7 @@ extension Table {
     case .agentLibraryFiles: LibraryFileText.fields
     case .sessionViewers: Viewer.fields
     case .activityDestinations: ActivityDestination.fields
-    case .piSessions, .projectDirectories, .cueSummaries, .writeCounter, .syncRecords: []
+    case .piSessions, .projectDirectories, .cueSummaries, .writeCounter, .syncRecords, .liveAddresses: []
     }
   }
 }
