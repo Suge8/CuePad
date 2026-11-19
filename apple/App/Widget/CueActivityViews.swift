@@ -3,10 +3,11 @@ import AppIntents
 import SwiftUI
 import WidgetKit
 
-/// 常规紧凑态只留 Cue、语义图形与一个读数：等你优先，否则活跃 Agent（不是任务数）；旧快照没有读数时写破折号，不猜。
-/// 最小态与窄紧凑位用同一读数，28pt 圆内只留图形与至多 9+，不缩字号；完整数在展开态与读屏名称里。
-/// 展开与锁屏才显示完整读数、此刻那一步与必要明细。没有周期动画，内容更新时由系统做短过渡。
-/// 调试画面复用这些视图，但不能代替系统灵动岛的宽度与状态栏验收。
+/// 紧凑态左位是 Cue 与一个读数（等你优先，否则活跃 Agent，不是任务数；旧快照没有读数时写破折号，不猜），右位是一只系统自己走的钟（`CueNow.clock`）。
+/// 岛上持续在动的只有这只钟：循环动画系统不保证播，为了动而重发同一份内容会吃掉推送预算。其余的动是内容更新时系统做的短过渡。
+/// 最小态与窄紧凑位（横屏）只有 28pt 圆：图形加至多 9+ 的读数，不缩字号；完整数在展开态与读屏名称里。
+/// 展开态与锁屏整块最高 160pt：头像、读数与钟排在摄像头两侧，下面是 `Details.room` 行；全放在摄像头下面那一块时，头一排就占掉三成高。
+/// 调试画面复用这些视图，但不能代替系统灵动岛的宽度与状态栏验收（`-CuePadLiveActivity YES`）。
 struct CueActivityViews {
     private let now: CueNow
     private let stale: Bool
@@ -19,30 +20,44 @@ struct CueActivityViews {
     var lockScreen: some View { LockScreen(now: now, stale: stale).withPalette().dynamicTypeSize(...Self.maxType) }
     var compactLeading: some View { CompactLeading(now: now).island() }
     var compactTrailing: some View { CompactTrailing(now: now).island() }
-    var minimal: some View { CompactCount(now: now, narrow: true).island() }
-    var expanded: some View {
-        ActivityBody(now: now, rim: .black).padding(.horizontal, 6).padding(.bottom, 8).island()
-    }
+    var minimal: some View { NarrowCount(now: now).island() }
+    var expandedLeading: some View { Reading(now: now, rim: .black).frame(height: Self.face).padding(.leading, Self.inset).island() }
+    var expandedTrailing: some View { Clock(now: now).font(IslandType.clock).frame(height: Self.face).padding(.trailing, Self.inset).island() }
+    var expandedBottom: some View { Details(now: now).padding(.horizontal, Self.inset).padding(.bottom, 8).island() }
+    /// 调试画面里展开态的样子：三块照系统摆的位置拼在一起。
+    var expanded: some View { ActivityBody(now: now, rim: .black).island() }
     var keyline: Color { now.keyTone.color(Palette(dark: true)) }
 
     static let staleOpacity = 0.55
     static let maxType = DynamicTypeSize.xLarge
+    fileprivate static let face: CGFloat = 40
+    fileprivate static let inset: CGFloat = 6
 }
 
 private extension View {
     func island() -> some View { withPalette().environment(\.colorScheme, .dark).dynamicTypeSize(...CueActivityViews.maxType) }
 }
 
-/// 所有尺寸共用口径与读屏名称；正常紧凑位写到 99+，28pt 圆位写到 9+，完整数留在展开态。
+private extension CueNow {
+    /// 岛上那只钟从哪一刻起算：有等你的，是等得最久的那件；否则 Cue 这一轮，再否则最早在跑的那件。没有在等、在跑的（歇着、状态未确认）不画钟。
+    var clock: Date? {
+        func earliest(_ kinds: Set<Item.Kind>) -> Date? { items.filter { kinds.contains($0.kind) }.map(\.since).min() }
+        if let waiting = earliest([.asks, .reply]) { return waiting }
+        if case .working(_, _, let since) = cue { return since }
+        return earliest([.running, .delegating])
+    }
+}
+
+/// 所有尺寸共用口径与读屏名称；紧凑位写到 99+，28pt 圆位写到 9+，完整数在展开态。
 private struct ActivityCount {
     let now: CueNow
     init(_ now: CueNow) { self.now = now }
     var waiting: Bool { now.needsYou > 0 }
     var value: Int? { waiting ? now.needsYou : now.agentCount }
-    func digits(narrow: Bool) -> String {
+    func digits(upTo limit: Int? = nil) -> String {
         guard let value else { return "—" }
-        let limit = narrow ? 9 : 99
-        return value > limit ? "\(limit)+" : value.formatted(.number.grouping(.never))
+        if let limit, value > limit { return "\(limit)+" }
+        return value.formatted(.number.grouping(.never))
     }
     var line: String {
         if waiting { return String(localized: "\(now.needsYou) 等你") }
@@ -50,90 +65,123 @@ private struct ActivityCount {
         return String(localized: "活跃 Agent 数未知")
     }
     var tone: CueNow.Tone { waiting ? (now.tally.asks > 0 ? .asks : .reply) : .moving }
+    /// 同会话状态标的图形：有拍板是气泡问号，只剩新回复是信封，没有等你的是 Agent。
+    var glyph: Image { (now.tally.asks > 0 ? WidgetIcon.waiting : waiting ? .mail : .agent).image }
 }
 
-/// 系统的窄紧凑位与最小态最多容纳 28pt 圆：主读数放在左位，右位让系统收掉。
-private struct CompactLeading: View {
+private struct Digits: View {
     let now: CueNow
-    @Environment(\.isDynamicIslandLimitedInWidth) private var narrow
-
-    var body: some View {
-        if narrow { CompactCount(now: now, narrow: true) }
-        else { CueNowFace(now: now, size: 24, rim: .black) }
-    }
-}
-
-private struct CompactTrailing: View {
-    let now: CueNow
-    @Environment(\.isDynamicIslandLimitedInWidth) private var narrow
-
-    var body: some View {
-        if !narrow { CompactCount(now: now) }
-    }
-}
-
-private struct CompactCount: View {
-    let now: CueNow
-    var narrow = false
-    @Environment(\.palette) private var palette
+    var limit: Int?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.isLuminanceReduced) private var dimmed
 
     var body: some View {
         let count = ActivityCount(now)
-        Group {
-            if narrow {
-                VStack(spacing: 0) {
-                    marker(count).resizable().scaledToFit().frame(width: IslandType.narrowMarker, height: IslandType.narrowMarker)
-                    number(count).frame(height: IslandType.narrowNumberHeight)
-                }
-                .frame(width: IslandType.narrowSide, height: IslandType.narrowSide)
-            } else {
-                HStack(spacing: 4) {
-                    marker(count).font(IslandType.marker).frame(width: IslandType.markerWidth)
-                    number(count).frame(width: IslandType.countWidth)
-                }
-            }
-        }
-        .foregroundStyle(count.tone.color(palette))
-        .accessibilityElement(children: .ignore).accessibilityLabel(count.line)
-    }
-
-    /// 同会话状态标的图形：有拍板是气泡问号，只剩新回复是信封，没有等你的是 Agent。
-    private func marker(_ count: ActivityCount) -> Image {
-        (now.tally.asks > 0 ? WidgetIcon.waiting : count.waiting ? .mail : .agent).image
-    }
-
-    private func number(_ count: ActivityCount) -> some View {
-        Text(count.digits(narrow: narrow)).font(IslandType.count).monospacedDigit()
+        Text(count.digits(upTo: limit)).monospacedDigit()
             .contentTransition(dimmed ? .identity : reduceMotion ? .opacity : .numericText())
             .animation(dimmed ? nil : Motion.fading(Motion.nudge, reduceMotion: reduceMotion), value: count.value)
     }
 }
 
-private struct Headline: View {
+/// 系统的时间文字：不靠更新自己逐秒走，过一小时写成时:分:秒；常亮屏变暗时系统自己降到不带秒。
+private struct Clock: View {
+    let now: CueNow
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        if let since = now.clock {
+            // 时间文字会占满给它的宽、字靠左：钟在右端，字要贴右缘
+            Text(.currentDate, format: .timer(countingUpIn: since..<Date.distantFuture)).monospacedDigit().lineLimit(1)
+                .multilineTextAlignment(.trailing)
+                .foregroundStyle(ActivityCount(now).tone.color(palette))
+        }
+    }
+}
+
+/// 系统的窄紧凑位与最小态最多容纳 28pt 圆：主读数放在左位，右位让系统收掉。
+private struct CompactLeading: View {
+    let now: CueNow
+    @Environment(\.palette) private var palette
+    @Environment(\.isDynamicIslandLimitedInWidth) private var narrow
+
+    var body: some View {
+        if narrow {
+            NarrowCount(now: now)
+        } else {
+            let count = ActivityCount(now)
+            HStack(spacing: 5) {
+                CueNowFace(now: now, size: 24, rim: .black)
+                Digits(now: now, limit: 99).font(IslandType.count).foregroundStyle(count.tone.color(palette))
+            }
+            .accessibilityElement(children: .ignore).accessibilityLabel(count.line)
+        }
+    }
+}
+
+private struct CompactTrailing: View {
+    let now: CueNow
+    @Environment(\.palette) private var palette
+    @Environment(\.isDynamicIslandLimitedInWidth) private var narrow
+
+    var body: some View {
+        if narrow {
+            EmptyView()
+        } else if now.clock != nil {
+            Clock(now: now).font(IslandType.count).minimumScaleFactor(0.7).frame(width: IslandType.clockWidth, alignment: .trailing)
+        } else {
+            let count = ActivityCount(now)
+            count.glyph.font(IslandType.marker).foregroundStyle(count.tone.color(palette))
+        }
+    }
+}
+
+private struct NarrowCount: View {
     let now: CueNow
     @Environment(\.palette) private var palette
 
     var body: some View {
         let count = ActivityCount(now)
-        VStack(alignment: .trailing, spacing: 3) {
-            Text(count.line).font(.headline).foregroundStyle(count.tone.color(palette)).monospacedDigit()
-            if count.waiting, let agents = now.agentCount {
-                Text("\(agents) 个活跃 Agent").font(.subheadline).foregroundStyle(palette.ink2).monospacedDigit()
-            }
+        VStack(spacing: 0) {
+            count.glyph.resizable().scaledToFit().frame(width: IslandType.narrowMarker, height: IslandType.narrowMarker)
+            Digits(now: now, limit: 9).font(IslandType.count).frame(height: IslandType.narrowNumberHeight)
         }
-        .fixedSize(horizontal: false, vertical: true)
+        .frame(width: IslandType.narrowSide, height: IslandType.narrowSide)
+        .foregroundStyle(count.tone.color(palette))
+        .accessibilityElement(children: .ignore).accessibilityLabel(count.line)
     }
 }
 
-/// 最要紧的那件在前：拍板问题、Cue 此刻那一步、至多两件活。额度与逐秒时钟不属于岛的任务。
+/// 展开态与锁屏的头一排左半：紧凑态左位放大，头像还在那一端，读数前多一个说它数的是什么的图形。
+private struct Reading: View {
+    let now: CueNow
+    var rim: Color?
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        let count = ActivityCount(now)
+        HStack(spacing: 10) {
+            CueNowFace(now: now, size: CueActivityViews.face, rim: rim)
+            HStack(spacing: 5) {
+                count.glyph.font(IslandType.readingGlyph)
+                Digits(now: now).font(IslandType.reading)
+            }
+            .foregroundStyle(count.tone.color(palette))
+            .accessibilityElement(children: .ignore).accessibilityLabel(count.line)
+        }
+    }
+}
+
+/// 头一排下面按行算：一件等你占两行（问题与缘由，或问题与"允许一次"），其余一行一件。
+/// 有等你的只排等你的与在跑的，不写 Cue 此刻那一步：要你管的时候它在读哪个文件是噪音。歇着的不排。额度不属于岛的任务。
 private struct Details: View {
     let now: CueNow
     @Environment(\.palette) private var palette
 
+    static let room = 3
+
     private var step: String? {
-        switch now.cue {
+        guard now.first == nil else { return nil }
+        return switch now.cue {
         case .working(let woke, let doing, _): doing ?? woke ?? CueNow.thinking
         case .hearing: String(localized: "你的话在路上")
         case .away(let reason, _): reason
@@ -141,22 +189,28 @@ private struct Details: View {
         }
     }
 
+    private var rows: ArraySlice<CueNow.Item> {
+        var items = now.items.filter { $0.kind != .resting }
+        // 第一件等你已经写在上面（`first` 与拍板那几行同一个次序）
+        if now.first != nil, let shown = items.firstIndex(where: { $0.kind == .asks }) { items.remove(at: shown) }
+        return items.prefix(Self.room - (now.first == nil ? 0 : 2) - (step == nil ? 0 : 1))
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if let first = now.first { FirstWait(wait: first) }
+            if let first = now.first { FirstWait(wait: first).id(first).transition(.blurReplace) }
             if let step {
                 Text(step).font(.subheadline).foregroundStyle(palette.ink2).lineLimit(1)
                     .contentTransition(.opacity)
             }
-            if now.first == nil, step == nil {
-                ForEach(now.items.filter { $0.kind != .asks }.prefix(2)) { item in
-                    HStack(spacing: 12) {
-                        Text(item.name).foregroundStyle(palette.ink).lineLimit(1)
-                        Spacer(minLength: 0)
-                        Text(item.label).foregroundStyle(item.kind.tone.color(palette)).fixedSize()
-                    }
-                    .font(.subheadline)
+            ForEach(rows) { item in
+                HStack(spacing: 12) {
+                    Text(item.name).foregroundStyle(palette.ink).lineLimit(1)
+                    Spacer(minLength: 0)
+                    Text(item.label).foregroundStyle(item.kind.tone.color(palette)).fixedSize()
                 }
+                .font(.subheadline)
+                .transition(.blurReplace)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -168,11 +222,11 @@ private struct ActivityBody: View {
     var rim: Color?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 12) {
-                CueNowFace(now: now, size: 40, rim: rim)
+                Reading(now: now, rim: rim)
                 Spacer(minLength: 0)
-                Headline(now: now)
+                Clock(now: now).font(IslandType.clock)
             }
             Details(now: now)
         }

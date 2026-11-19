@@ -1,7 +1,7 @@
 #if DEBUG
 import Foundation
 
-/// `-CuePadCueNow islandLarge|islandWaiting|islandUnknown|islandZero|islandLong`：压测大数、旧快照与长内容，不改共用样例。
+/// `-CuePadCueNow islandLarge|islandWaiting|islandUnknown|islandZero|islandLong|islandHour`：压测大数、旧快照、长内容与钟过一小时变宽，不改共用样例。
 enum CueActivitySamples {
     static let tour = [CueNowSamples.four, CueNowSamples.fourWorking, CueNowSamples.delegating,
                        CueNowSamples.asks, CueNowSamples.done, CueNowSamples.hearing, CueNowSamples.awayBusy]
@@ -20,6 +20,9 @@ enum CueActivitySamples {
             let title = now.first!.title
             now.first?.detail = title
             now.first?.title = String(repeating: title, count: 3)
+        case "islandHour":
+            now = CueNowSamples.fourAsks
+            now.items[0].since = .now.addingTimeInterval(-3_590)
         case "islandUnknown": now.agentCount = nil
         case "islandZero": now.agentCount = 0
         default: return nil

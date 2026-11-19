@@ -58,8 +58,8 @@ struct DebugActivityStage: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 Text("实时活动样式预览", tableName: "Demo").font(.headline).foregroundStyle(palette.ink)
-                HStack(spacing: 120) {
-                    views.compactLeading.frame(width: IslandType.countWidth)
+                HStack(spacing: 126) {
+                    views.compactLeading
                     views.compactTrailing
                 }
                 .padding(.horizontal, 9).frame(height: 37).background(.black, in: .capsule)
