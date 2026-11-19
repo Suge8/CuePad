@@ -40,7 +40,7 @@ final class LivePreview: NSObject, WKNavigationDelegate {
     @ObservationIgnored let web: WKWebView
     private(set) var address: URL?
     private(set) var source = Source.typed
-    /// 认出的这个会话的服务（`Workspace.watchLiveServers` 每秒给）：认出来的地址在不在只看它——端口空出来后被别的进程占了，答得上话也不是这个会话的页。
+    /// 认出的这个会话的服务（`Workspace.watchLiveServers` 每隔 `liveScan` 给）：认出来的地址在不在只看它——端口空出来后被别的进程占了，答得上话也不是这个会话的页。
     @ObservationIgnored var serving: [URL]?
     private(set) var phase = Phase.blank
     private(set) var url: URL?
@@ -199,8 +199,8 @@ final class LivePreview: NSObject, WKNavigationDelegate {
 }
 
 extension Workspace {
-    /// 会话页栏头那颗钮：左边那个会话的活预览在右半开、收（开着并排的会话时换掉它）。第一次打开时给这个会话建一份；
-    /// 还没有地址时先用 Agent 发来的（`cuepad live`），再用认出的服务里最近起来的，都没有才是空的地址输入。
+    /// 会话页栏头那颗钮与菜单里的"打开活预览"：左边那个会话的活预览在右半开、收（开着并排的会话时换掉它）。第一次打开时给这个会话建一份；
+    /// 先用 Agent 发来的（`cuepad live`），再用你填过的，没有或认出的那个已不在了才换认出的服务里最近起来的，都没有是空的地址输入。
     func toggleLivePreview() {
         guard case .wide(var state) = navigation, !state.home, case .session(let session) = state.main else { return }
         if state.beside == .preview {
@@ -210,30 +210,55 @@ extension Workspace {
             livePreviews[session.id] = preview
             if let sent = liveSent.removeValue(forKey: session.id) {
                 preview.retarget(sent)
-            } else if preview.address == nil, let found = liveFound[session.id]?.first {
-                preview.retarget(.init(url: found, source: .found))
+            } else if let found = liveFound[session.id], let first = found.first, !Self.keeps(preview, found) {
+                preview.retarget(.init(url: first, source: .found))
             }
             state.beside = .preview
         }
         navigation = .wide(state)
     }
 
+    /// 有地址、而且不是认出过又不在了的（认出的地址只认 `liveFound`）。
+    private static func keeps(_ preview: LivePreview, _ found: [URL]) -> Bool {
+        guard let address = preview.address else { return false }
+        return preview.source != .found || found.contains(address)
+    }
+
+    /// 这个会话有没有页面可看（会话条那一行带不带标，栏头那颗预览钮在不在也从它起）：认出了它的服务、Agent 发来过地址（`cuepad live`）、
+    /// 你给它填过地址。按认出的地址开过、服务已不在的不算。
+    func hasLivePage(_ session: UUID) -> Bool {
+        liveFound[session]?.isEmpty == false || liveSent[session] != nil || livePreviews[session].map { Self.keeps($0, []) } ?? false
+    }
+
+    private func showsLivePreview(_ session: UUID) -> Bool { beside == .preview && self.session(in: .main)?.id == session }
+
     enum LiveButton: Equatable {
-        case none
-        /// 认出了服务或 Agent 发来了地址、预览没开：点开就是这个地址。
-        case ready(URL)
+        /// 点开就是这个地址；nil 是空的地址输入。
+        case closed(URL?)
         case open(URL?)
 
-        var isReady: Bool { if case .ready = self { true } else { false } }
         var isShowing: Bool { if case .open = self { true } else { false } }
     }
 
-    func liveButton(_ session: UUID) -> LiveButton {
-        if beside == .preview { return .open(livePreviews[session]?.address) }
-        if let sent = liveSent[session] { return .ready(sent.url) }
-        guard let found = liveFound[session]?.first else { return .none }
-        return .ready(livePreviews[session]?.address ?? found)
+    /// nil：没有页面可看、预览也没开着，栏头不放这颗钮（手动打开在会话的菜单里，`openLivePreview`）。开着空的地址输入也有它：收起只有这一处。
+    func liveButton(_ session: UUID) -> LiveButton? {
+        if showsLivePreview(session) { return .open(livePreviews[session]?.address) }
+        guard hasLivePage(session) else { return nil }
+        let found = liveFound[session] ?? []
+        let kept = livePreviews[session].flatMap { Self.keeps($0, found) ? $0.address : nil }
+        return .closed(liveSent[session]?.url ?? kept ?? found.first)
     }
+
+    /// 会话的菜单里的"打开活预览"（只在这个会话还没有页面可看、栏头没有那颗钮时有）：会话放到主区，右半滑开空的地址输入。
+    func openLivePreview(_ session: SessionState) {
+        if self.session(in: .main)?.id != session.id { openSession(session.id, sessionID: session.sessionID, in: .main) }
+        if beside != .preview { toggleLivePreview() }
+    }
+
+    /// 活预览只看这台 Mac 上的会话（本机的服务、本机的 localhost）。
+    func livesHere(_ session: SessionState) -> Bool { Self.liveHosts(services).contains(session.hostID) }
+
+    private static func liveHosts(_ services: AppServices) -> [String] { [services.hostID] + DebugHooks.liveHosts }
 
     /// Agent 发来的地址（`cuepad live`）记到会话上；会话此刻在主区、右半空着就直接滑开，否则只让栏头那颗钮亮起，不动排布。
     func followLiveAddresses() async {
@@ -256,30 +281,35 @@ extension Workspace {
         let id = SessionState.recordID(sessionID: address.sessionID)
         let target = LivePreview.Target(url: address.url, source: address.found ? .found : .sent)
         let here = session(in: .main)?.id == id
-        // 开着的预览只在显示的也是 Agent 给或认出的地址时换；你输入的不被顶掉，这一条留到下次打开
-        if here, beside == .preview, let preview = livePreviews[id], preview.source != .typed { return preview.retarget(target) }
+        // 开着的预览只在空着或显示的也是 Agent 给、认出的地址时换；你输入的不被顶掉，这一条留到下次打开
+        if here, beside == .preview, let preview = livePreviews[id], preview.address == nil || preview.source != .typed { return preview.retarget(target) }
         liveSent[id] = target
         if here, beside == nil { toggleLivePreview() }
     }
 
-    /// 栏头那颗钮挂着它（会话在主区、有人看着时才跑）：每秒认一次这个会话的服务。按认出的地址开着的预览，地址不在了、又认出了别的（5173 被占换到 5174），跟过去。
-    func watchLiveServers(_ session: SessionRoute) async {
-        guard let sessionID = session.sessionID else { return }
+    /// 窗口有人看着时（`ViewerKeeper.present`，`MainWindow` 挂着）每隔 `liveScan` 扫一遍本机进程表，把在监听、答得出网页的口归给本机没结束的各个会话：
+    /// 栏头的预览钮与会话条的标都读它。扫一遍的开销不随会话多少变（`LiveServers.find`）。
+    /// 开着的预览跟着它：按认出的地址开的，地址不在了、又认出了别的（5173 被占换到 5174）就跟过去；空着地址的，认出了就载入。
+    func watchLiveServers() async {
         var servers = LiveServers()
         while !Task.isCancelled {
-            var owner = (try? await services.store.liveOwner(sessionID)) ?? LiveServers.Owner(process: nil, directory: nil)
-            if owner.directory?.isEmpty != false { owner.directory = services.bridge.session(sessionID: sessionID)?.cwd.path }
-            let found = await servers.find(for: owner)
-            if liveFound[session.id] != found { liveFound[session.id] = found }
-            if let preview = livePreviews[session.id] {
-                preview.serving = found
-                if preview.source == .found, let address = preview.address, !found.contains(address), let first = found.first {
-                    preview.retarget(.init(url: first, source: .found))
-                }
+            var owners = (try? await services.store.liveOwners(hosts: Self.liveHosts(services))) ?? [:]
+            for (sessionID, owner) in owners where owner.directory?.isEmpty != false {
+                owners[sessionID]?.directory = services.bridge.session(sessionID: sessionID)?.cwd.path
             }
-            try? await Task.sleep(for: .seconds(1))
+            let found = await servers.find(for: owners).reduce(into: [UUID: [URL]]()) { $0[SessionState.recordID(sessionID: $1.key)] = $1.value }
+            if liveFound != found { liveFound = found }
+            for (id, preview) in livePreviews {
+                let urls = found[id] ?? []
+                preview.serving = urls
+                if let first = urls.first, !Self.keeps(preview, urls) { preview.retarget(.init(url: first, source: .found)) }
+            }
+            try? await Task.sleep(for: Self.liveScan)
         }
     }
+
+    /// 2 秒：服务起来到钮出现等得住。实测本机约 1,600 个进程时一遍 10 个会话中位 3.7 ms、50 个 4.7 ms，大头是读全部监听口，不随会话数涨。
+    static let liveScan = Duration.seconds(2)
 
     /// 预览栏上的点选钮：开着就收，没开就开；点中的元素挂进左边会话的回复框（`ReplyNote.Element`），回复框接过焦点，接着写那一句。
     func pickElement() {

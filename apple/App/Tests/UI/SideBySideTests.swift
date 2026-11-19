@@ -73,6 +73,72 @@ struct LivePreviewFlowTests {
         return url
     }
 
+    /// 本机这台上的一个会话：状态记录与带工作目录的索引（认服务按目录归属时读它）。
+    private func session(_ sessionID: String, _ state: WorkState, in directory: URL) async throws -> SessionState {
+        let recorder = try await rig.runtimeRecorder(on: services.hostID)
+        try await recorder.update(sessionID: sessionID, state: state, title: sessionID)
+        try await store.upsertSessions(
+            [SessionUpsert(session: IndexedSession(id: sessionID, path: directory.appending(path: "s.jsonl").path, cwd: directory.path, lastActivityAt: .now), checkpoint: nil, transcript: nil)],
+            host: services.hostID)
+        return try #require(try await store.sessionState(sessionID))
+    }
+
+    /// 在这个目录里起一个本机网页服务（Python 自带的目录页，回 HTML），返回它和它的地址。
+    private func serve(in directory: URL) async throws -> (Process, URL) {
+        let server = Process()
+        server.executableURL = URL(filePath: "/usr/bin/python3")
+        server.arguments = ["-u", "-m", "http.server", "0", "--bind", "127.0.0.1"]
+        server.currentDirectoryURL = directory
+        let out = Pipe()
+        server.standardOutput = out
+        try server.run()
+        // 起来时打印一行 "Serving HTTP on 127.0.0.1 port 54321 …"
+        var port: Int?
+        for try await line in out.fileHandleForReading.bytes.lines {
+            port = line.split(separator: " ").drop { $0 != "port" }.dropFirst().first.flatMap { Int($0) }
+            if port != nil { break }
+        }
+        return (server, try #require(port.flatMap { URL(string: "http://localhost:\($0)") }))
+    }
+
+    private func folder() throws -> URL {
+        let url = FileManager.default.temporaryDirectory.appending(path: "live-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }
+
+    @Test func 没有服务也没有地址的会话栏头没有预览钮_菜单里手动打开是空的地址输入_收起后钮又不在() async throws {
+        let workspace = wide()
+        let quiet = try await session("quiet", .settled, in: try folder())
+        open("quiet", workspace)
+        #expect(workspace.liveButton(quiet.id) == nil)
+
+        workspace.openLivePreview(quiet)
+        #expect(workspace.beside == .preview && workspace.liveButton(quiet.id) == .open(nil) && !workspace.hasLivePage(quiet.id))
+        workspace.toggleLivePreview()
+        #expect(workspace.beside == nil && workspace.liveButton(quiet.id) == nil)
+    }
+
+    @Test func 认出会话目录里的服务_栏头的钮与会话条的标出现_已结束的会话不认() async throws {
+        let workspace = wide()
+        let liveDir = try folder(), doneDir = try folder()
+        let live = try await session("live", .settled, in: liveDir)
+        let done = try await session("done", .ended, in: doneDir)
+        open("live", workspace)
+        let (first, url) = try await serve(in: liveDir)
+        let (second, _) = try await serve(in: doneDir)
+        defer { first.terminate(); second.terminate() }
+        let scanning = Task { await workspace.watchLiveServers() }
+        defer { await scanning.stop() }
+
+        try await eventually("栏头出现指着这个服务的钮") { workspace.liveButton(live.id) == .closed(url) }
+        #expect(workspace.hasLivePage(live.id))
+        #expect(!workspace.hasLivePage(done.id) && workspace.liveButton(done.id) == nil)
+
+        workspace.toggleLivePreview()
+        #expect(workspace.livePreviews[live.id]?.address == url)
+    }
+
     @Test func 左边换会话或离开会话页_预览收起_开着预览时并排第二个会话_会话换掉预览() {
         let workspace = wide()
         open("a", workspace)
@@ -102,12 +168,12 @@ struct LivePreviewFlowTests {
         workspace.toggleLivePreview()
         open("b", workspace)
         let second = try await live("http://localhost:3000", for: "a")
-        try await eventually("a 的钮亮起、指着新地址") { workspace.liveButton(id("a")) == .ready(second) }
+        try await eventually("a 的钮亮起、指着新地址") { workspace.liveButton(id("a")) == .closed(second) }
         #expect(workspace.session(in: .main)?.id == id("b") && workspace.beside == nil)
 
         open("c", in: .beside, workspace)
         let third = try await live("http://localhost:4000", for: "b")
-        try await eventually("b 的钮亮起") { workspace.liveButton(id("b")) == .ready(third) }
+        try await eventually("b 的钮亮起") { workspace.liveButton(id("b")) == .closed(third) }
         #expect(workspace.session(in: .beside)?.id == id("c"))
     }
 
@@ -126,7 +192,7 @@ struct LivePreviewFlowTests {
         #expect(preview.address == typed)
 
         workspace.toggleLivePreview()
-        #expect(workspace.liveButton(id("a")) == .ready(sent))
+        #expect(workspace.liveButton(id("a")) == .closed(sent))
         workspace.toggleLivePreview()
         #expect(preview.address == sent)
     }

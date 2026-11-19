@@ -2,10 +2,11 @@
 import Darwin
 import Foundation
 
-/// 本机正在监听、属于一个会话、答得出网页的开发服务（活预览自己认出的地址；`cuepad live` 不给地址时也用它）。
+/// 本机正在监听、属于会话、答得出网页的开发服务（活预览自己认出的地址、会话条上哪些会话有活预览；`cuepad live` 不给地址时也用它）。
 /// 属于会话：是会话 Agent 进程的后代，或工作目录在会话的工作目录之内——Agent 常用 nohup 把服务甩到后台，进程树断了靠目录兜住；
 /// 终端里自开、没有进程号的会话只能靠目录。会话目录是主目录、根目录这类过宽的，目录那条不算。
-/// 进程表只经 libproc（同一用户的进程都读得到，别的用户的读不到也用不着），不起 lsof；一次扫约 2–3 ms。
+/// 一个进程是某个会话 Agent 的后代就只归它；按目录归的，目录包着它的几个会话都算。
+/// 进程表只经 libproc（同一用户的进程都读得到，别的用户的读不到也用不着），不起 lsof；一次扫多少个会话都只读一遍进程表。
 public struct LiveServers: Sendable {
   public struct Owner: Equatable, Sendable {
     public var process: SessionProcess?
@@ -30,48 +31,69 @@ public struct LiveServers: Sendable {
 
   public init() {}
 
-  /// 最近起来的在前。
-  public mutating func find(for owner: Owner) async -> [URL] {
-    let listeners = await Self.listening(for: owner)
+  /// 键是会话（`Owner` 的键）；认不出服务的会话不在里面。每个会话的地址最近起来的在前。
+  public mutating func find<Key: Hashable & Sendable>(for owners: [Key: Owner]) async -> [Key: [URL]] {
+    let listeners = await Self.listening(for: owners)
     let now = ContinuousClock.now
-    for listener in listeners {
+    for (listener, _) in listeners {
       if let known = pages[listener], known.page || now - known.at < Self.retry { continue }
       pages[listener] = (await Self.answersPage(listener.url), now)
     }
-    pages = pages.filter { listeners.contains($0.key) }
-    var seen = Set<URL>()
-    return listeners.filter { pages[$0]?.page == true && seen.insert($0.url).inserted }.map(\.url)
+    let all = Set(listeners.map(\.listener))
+    pages = pages.filter { all.contains($0.key) }
+    var found: [Key: [URL]] = [:]
+    for (listener, keys) in listeners where pages[listener]?.page == true {
+      for key in keys where found[key]?.contains(listener.url) != true { found[key, default: []].append(listener.url) }
+    }
+    return found
   }
 
   public static func url(port: Int) -> URL { URL(string: "http://localhost:\(port)")! }
 
-  @concurrent static func listening(for owner: Owner) async -> [Listener] {
+  /// 最近起来的在前。
+  @concurrent static func listening<Key: Hashable & Sendable>(for owners: [Key: Owner]) async -> [(listener: Listener, owners: Set<Key>)] {
+    guard !owners.isEmpty else { return [] }
     let me = getpid()
-    let all = processes()
-    let info = Dictionary(all.compactMap { pid in bsd(pid).map { (pid, $0) } }, uniquingKeysWith: { first, _ in first })
-    var mine = Set<pid_t>()
-    if let process = owner.process, let root = info[process.pid], started(root) == process.startedAt {
-      var children: [pid_t: [pid_t]] = [:]
-      for (pid, item) in info { children[pid_t(item.pbi_ppid), default: []].append(pid) }
+    let info = Dictionary(processes().compactMap { pid in bsd(pid).map { (pid, $0) } }, uniquingKeysWith: { first, _ in first })
+    var children: [pid_t: [pid_t]] = [:]
+    for (pid, item) in info { children[pid_t(item.pbi_ppid), default: []].append(pid) }
+    var mine: [pid_t: Set<Key>] = [:]
+    for (key, owner) in owners {
+      guard let process = owner.process, let root = info[process.pid], started(root) == process.startedAt else { continue }
       var queue = children[process.pid] ?? []
       while let pid = queue.popLast() {
-        if mine.insert(pid).inserted { queue += children[pid] ?? [] }
+        guard mine[pid]?.contains(key) != true else { continue }
+        mine[pid, default: []].insert(key)
+        queue += children[pid] ?? []
       }
     }
-    if let directory = owner.directory.flatMap(realPath), !tooWide(directory) {
-      for pid in info.keys where !mine.contains(pid) {
-        if let cwd = workingDirectory(pid), cwd == directory || cwd.hasPrefix(directory + "/") { mine.insert(pid) }
+    var directories: [String: Set<Key>] = [:]
+    for (key, owner) in owners {
+      if let directory = owner.directory.flatMap(realPath), !tooWide(directory) { directories[directory, default: []].insert(key) }
+    }
+    if !directories.isEmpty {
+      // 顺着工作目录往上查表，不拿每个进程去比每个会话：一千多个进程乘几十个会话的前缀比较要好几毫秒
+      for pid in info.keys where mine[pid] == nil {
+        guard var path = workingDirectory(pid) else { continue }
+        var keys = Set<Key>()
+        while true {
+          keys.formUnion(directories[path] ?? [])
+          guard let slash = path.lastIndex(of: "/"), slash != path.startIndex else { break }
+          path = String(path[..<slash])
+        }
+        if !keys.isEmpty { mine[pid] = keys }
       }
     }
-    mine.remove(me)
+    mine[me] = nil
     guard !mine.isEmpty else { return [] }
     // 同一端口号上别人的监听口也要看：谁接哪个地址由它们一起定（`reach`）
     let listening: [Socket] = info.keys.flatMap { sockets($0) }
-    var found: [Listener] = []
-    for socket in listening where mine.contains(socket.pid) {
-      if let url = reach(socket, among: listening) { found.append(Listener(pid: socket.pid, started: started(info[socket.pid]!), url: url)) }
+    var found: [(listener: Listener, owners: Set<Key>)] = []
+    for socket in listening {
+      guard let keys = mine[socket.pid], let url = reach(socket, among: listening) else { continue }
+      found.append((Listener(pid: socket.pid, started: started(info[socket.pid]!), url: url), keys))
     }
-    return found.sorted { ($0.started, -($0.url.port ?? 0)) > ($1.started, -($1.url.port ?? 0)) }
+    return found.sorted { ($0.listener.started, -($0.listener.url.port ?? 0)) > ($1.listener.started, -($1.listener.url.port ?? 0)) }
   }
 
   /// 一个在监听的 TCP 口：绑的地址（nil 是通配）与它接哪几族（v6 的通配不设 V6ONLY 时两族都接）。
@@ -312,6 +334,23 @@ extension CueStore {
       SessionProcess(pid: Int32($0.int(0)), startedAt: $0.int(1))
     }
     return LiveServers.Owner(process: process, directory: try indexedSession(sessionID)?.cwd)
+  }
+
+  /// 这几台（本机）上没结束的会话，各自的进程与工作目录，键是会话 id：已结束的不认服务。
+  public func liveOwners(hosts: [String]) throws -> [String: LiveServers.Owner] {
+    guard !hosts.isEmpty else { return [:] }
+    let marks = Array(repeating: "?", count: hosts.count).joined(separator: ", ")
+    let rows = try db.query(
+      """
+      SELECT s.sessionID, p.pid, p.startedAt, i.cwd FROM piSessionStates s
+      LEFT JOIN piProcesses p ON p.sessionID = s.sessionID LEFT JOIN piSessions i ON i.id = s.sessionID
+      WHERE s.hostID IN (\(marks)) AND \(WorkState.outsideSQL(WorkState.closed, column: "s.state"))
+      """, hosts
+    ) { row in
+      (row.text(0), LiveServers.Owner(
+        process: row.intOrNil(1).map { SessionProcess(pid: Int32($0), startedAt: row.int(2)) }, directory: row.textOrNil(3)))
+    }
+    return Dictionary(rows, uniquingKeysWith: { first, _ in first })
   }
 }
 #endif

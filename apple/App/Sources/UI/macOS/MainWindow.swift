@@ -21,6 +21,7 @@ struct MainWindow: View {
         .overlay { Prewarm().environment(workspace) }
         .overlay { NoticeView() }
         .followsUndo(workspace)
+        .task(id: workspace.services.viewer.present) { if workspace.services.viewer.present { await workspace.watchLiveServers() } }
         .toolbar(removing: .title)
         .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
         .panelHost()

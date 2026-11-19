@@ -181,7 +181,7 @@ final class Workspace {
     var livePreviews: [UUID: LivePreview] = [:]
     /// Agent 发来、还没开过预览的地址（`cuepad live`）：开预览时用掉。
     var liveSent: [UUID: LivePreview.Target] = [:]
-    /// 认出的这个会话的服务，最近起来的在前（`watchLiveServers`，只在会话在主区、有人看着时更新）。
+    /// 认出的各个会话的服务（按会话记录 id），最近起来的在前；认不出的会话不在里面（`watchLiveServers`，窗口有人看着时更新）。
     var liveFound: [UUID: [URL]] = [:]
     #endif
     /// 并排两半的分界拖到了哪（`WideMetrics.BesideShare`）：每个窗口一份，只在内存里。

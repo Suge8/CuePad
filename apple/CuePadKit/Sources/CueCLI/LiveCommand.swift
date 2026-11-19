@@ -30,7 +30,7 @@ extension Command {
       url = parsed
     } else {
       var servers = LiveServers()
-      guard let first = await servers.find(for: try await call.store.liveOwner(session)).first else {
+      guard let first = await servers.find(for: [session: try await call.store.liveOwner(session)])[session]?.first else {
         throw CLIError.invalid(
           "没认出这个会话起的网页服务（本机在监听、回 HTML，进程是这个会话 Agent 的后代或工作目录在会话的工作目录里）。还没起来就等它起来再运行；起在别处就给端口：cuepad live 5173")
       }

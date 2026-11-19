@@ -19,6 +19,12 @@ struct SessionActions: View {
             Section {
                 OpenSessionBeside(session: session)
                 HandoffButton(session: session)
+                #if os(macOS)
+                // 有页面可看时栏头有那颗钮，这里不再给第二个入口
+                if workspace.livesHere(session), workspace.liveButton(session.id) == nil {
+                    Button("打开活预览", icon: .livePreview) { workspace.openLivePreview(session) }
+                }
+                #endif
             }
             Section {
                 if let task {

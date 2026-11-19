@@ -3,24 +3,27 @@ import CueStore
 import SwiftUI
 import WebKit
 
-/// 主区会话栏头开合活预览的那颗钮（`HeadTool`）：没有服务时同栏头别的钮；认出了服务或 Agent 发来了地址、预览没开时带一颗活点；开着是强调色。
-/// 会话在主区、有人看着时才认它的服务（`Workspace.watchLiveServers`），不在后台给所有会话扫。
+/// 主区会话栏头开合活预览的那颗钮（`HeadTool`）：这个会话有页面可看或预览开着时才在（`Workspace.liveButton`），在本身就是"有服务"；
+/// 没开同栏头别的钮，开着是强调色。来去只是它自己淡入淡出，栏头别的不挪。
 struct LivePreviewTool: View {
     let session: SessionRoute
     @Environment(Workspace.self) private var workspace
-    @Environment(AppServices.self) private var services
 
     var body: some View {
         let button = workspace.liveButton(session.id)
-        let watched = services.viewer.viewing.sessions.contains { $0.id == session.id }
-        HeadTool(label: Self.label(button), icon: .livePreview, on: button.isShowing, dot: button.isReady) { workspace.toggleLivePreview() }
-            .task(id: watched) { if watched { await workspace.watchLiveServers(session) } }
+        Group {
+            if let button {
+                HeadTool(label: Self.label(button), icon: .livePreview, on: button.isShowing) { workspace.toggleLivePreview() }
+                    .transition(.opacity)
+            }
+        }
+        .animation(Motion.fade, value: button != nil)
     }
 
     private static func label(_ button: Workspace.LiveButton) -> LocalizedStringResource {
         switch button {
-        case .none: "打开活预览"
-        case .ready(let url): "打开活预览：\(LiveAddress.shown(url))"
+        case .closed(let url?): "打开活预览：\(LiveAddress.shown(url))"
+        case .closed(nil): "打开活预览"
         case .open(let url?): "收起活预览：\(LiveAddress.shown(url))"
         case .open(nil): "收起活预览"
         }
