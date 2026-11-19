@@ -26,12 +26,15 @@ private struct LivePhoneCover: ViewModifier {
     let session: UUID
     let zoom: Namespace.ID
     @Environment(Workspace.self) private var workspace
+    @Environment(\.palette) private var palette
 
     func body(content: Content) -> some View {
         content.fullScreenCover(isPresented: Binding { workspace.showsLivePreview(session) } set: { if !$0 { workspace.liveCover = nil } }) {
             Group {
                 if let preview = workspace.livePreviews[session] {
+                    // 状态栏那一条铺页面的底：栏上下接着的是同一张页面，不是一条桌面色
                     LivePreviewPane(preview: preview).ignoresSafeArea(.container, edges: .bottom)
+                        .background((preview.ground ?? palette.desk).ignoresSafeArea())
                 }
             }
             .navigationTransition(.zoom(sourceID: session, in: zoom))

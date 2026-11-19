@@ -50,6 +50,7 @@ extension DebugScene {
         presetDrawers(workspace)
         await presetSpeech(workspace)
         await prepareNarrow(workspace)
+        await openLivePhoneIfAsked(workspace)
         if let pace = args.layoutOpts.sidebarCycle { Task { await cycleColumn(fast: pace == "fast") { workspace.railExpanded.toggle() } } }
         if let pace = args.layoutOpts.rightCycle { Task { await cycleColumn(fast: pace == "fast") { workspace.services.settings.cueOpen.toggle() } } }
     }
