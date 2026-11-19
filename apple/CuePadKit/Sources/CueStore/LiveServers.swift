@@ -20,7 +20,7 @@ public struct LiveServers: Sendable {
   struct Listener: Hashable {
     let pid: pid_t
     let started: Int64
-    /// 只绑在一个具体地址上的（局域网卡）就问那个地址：同一端口号可能另有别的进程绑在 127.0.0.1 上，问 localhost 答的是它。
+    /// 问得到这个进程的那个地址（`reach`）。
     let url: URL
   }
 
@@ -64,8 +64,74 @@ public struct LiveServers: Sendable {
       }
     }
     mine.remove(me)
-    return mine.flatMap { pid in ports(pid).map { Listener(pid: pid, started: started(info[pid]!), url: $0) } }
-      .sorted { ($0.started, -($0.url.port ?? 0)) > ($1.started, -($1.url.port ?? 0)) }
+    guard !mine.isEmpty else { return [] }
+    // 同一端口号上别人的监听口也要看：谁接哪个地址由它们一起定（`reach`）
+    let listening: [Socket] = info.keys.flatMap { sockets($0) }
+    var found: [Listener] = []
+    for socket in listening where mine.contains(socket.pid) {
+      if let url = reach(socket, among: listening) { found.append(Listener(pid: socket.pid, started: started(info[socket.pid]!), url: url)) }
+    }
+    return found.sorted { ($0.started, -($0.url.port ?? 0)) > ($1.started, -($1.url.port ?? 0)) }
+  }
+
+  /// 一个在监听的 TCP 口：绑的地址（nil 是通配）与它接哪几族（v6 的通配不设 V6ONLY 时两族都接）。
+  struct Socket {
+    let pid: pid_t
+    let port: Int
+    let v4: Bool
+    let v6: Bool
+    let address: Address?
+  }
+
+  enum Address: Hashable {
+    case v4(in_addr_t)
+    case v6([UInt8])
+
+    static let loopback4 = Address.v4(in_addr_t(0x7f00_0001).bigEndian)
+    static let loopback6 = Address.v6(Array(repeating: 0, count: 15) + [1])
+
+    var isLoopback: Bool {
+      switch self {
+      case .v4(let raw): UInt32(bigEndian: raw) >> 24 == 127
+      case .v6: self == Self.loopback6
+      }
+    }
+
+    var host: String {
+      switch self {
+      case .v4(var raw): text(AF_INET, &raw, INET_ADDRSTRLEN)
+      case .v6(var bytes): "[\(text(AF_INET6, &bytes, INET6_ADDRSTRLEN))]"
+      }
+    }
+
+    private func text(_ family: Int32, _ address: UnsafeRawPointer, _ size: Int32) -> String {
+      var buffer = [CChar](repeating: 0, count: Int(size))
+      _ = inet_ntop(family, address, &buffer, socklen_t(size))
+      return String(decoding: buffer.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self)
+    }
+  }
+
+  /// 问哪个地址到得了这个口：连一个本机地址时，绑了这个具体地址的口先接，没有才轮到通配的。
+  /// 问 localhost 时 127.0.0.1 与 ::1 都可能连上，只有两处都没有别人接时才问它；否则改问这个口自己接得到的那一个回环地址，都被别人接走就不认。
+  /// 绑在局域网地址上的照问那个地址。
+  static func reach(_ socket: Socket, among all: [Socket]) -> URL? {
+    func url(_ host: String) -> URL? { URL(string: "http://\(host):\(socket.port)") }
+    if let address = socket.address, !address.isLoopback { return url(address.host) }
+    func answering(_ address: Address) -> Set<pid_t> {
+      let here = all.filter { $0.port == socket.port }
+      let exact = here.filter { $0.address == address }
+      let wide = here.filter { $0.address == nil && (address == .loopback4 ? $0.v4 : $0.v6) }
+      return Set((exact.isEmpty ? wide : exact).map(\.pid))
+    }
+    var own: [Address] = []
+    if let address = socket.address { own = [address] } else {
+      if socket.v4 { own.append(.loopback4) }
+      if socket.v6 { own.append(.loopback6) }
+    }
+    let mine = own.filter { answering($0).contains(socket.pid) }
+    guard let first = mine.first else { return nil }
+    let shared = [Address.loopback4, .loopback6].allSatisfy { answering($0).subtracting([socket.pid]).isEmpty }
+    return url(shared ? "localhost" : first.host)
   }
 
   /// 数据库、调试端口、语言服务筛掉：只留回 HTML 的。只等到响应头。
@@ -124,20 +190,28 @@ public struct LiveServers: Sendable {
     bsd(pid).map { Date(timeIntervalSince1970: Double(started($0)) / 1_000_000) }
   }
 
-  /// 监听的口，按绑的地址给出要问的网址：通配与回环写 localhost，具体地址照写。
-  private static func ports(_ pid: pid_t) -> [URL] {
-    var ports: [URL] = []
-    for fd in fds(pid) where fd.proc_fdtype == PROX_FDTYPE_SOCKET {
-      var socket = socket_fdinfo()
+  private static func sockets(_ pid: pid_t) -> [Socket] {
+    fds(pid).compactMap { fd in
+      guard fd.proc_fdtype == PROX_FDTYPE_SOCKET else { return nil }
+      var info = socket_fdinfo()
       let size = Int32(MemoryLayout<socket_fdinfo>.size)
-      guard proc_pidfdinfo(pid, fd.proc_fd, PROC_PIDFDSOCKETINFO, &socket, size) == size, socket.psi.soi_kind == SOCKINFO_TCP else { continue }
-      let tcp = socket.psi.soi_proto.pri_tcp
-      guard tcp.tcpsi_state == TSI_S_LISTEN else { continue }
-      let port = Int(UInt16(bigEndian: UInt16(truncatingIfNeeded: tcp.tcpsi_ini.insi_lport)))
-      let url = URL(string: "http://\(host(tcp.tcpsi_ini)):\(port)")!
-      if !ports.contains(url) { ports.append(url) }
+      guard proc_pidfdinfo(pid, fd.proc_fd, PROC_PIDFDSOCKETINFO, &info, size) == size, info.psi.soi_kind == SOCKINFO_TCP else { return nil }
+      let tcp = info.psi.soi_proto.pri_tcp
+      guard tcp.tcpsi_state == TSI_S_LISTEN else { return nil }
+      let socket = tcp.tcpsi_ini
+      let port = Int(UInt16(bigEndian: UInt16(truncatingIfNeeded: socket.insi_lport)))
+      let v4 = socket.insi_vflag & UInt8(INI_IPV4) != 0, v6 = socket.insi_vflag & UInt8(INI_IPV6) != 0
+      var local = socket.insi_laddr
+      let address: Address?
+      if v6 {
+        let bytes = withUnsafeBytes(of: &local.ina_6) { Array($0) }
+        address = bytes.allSatisfy { $0 == 0 } ? nil : .v6(bytes)
+      } else {
+        let raw = local.ina_46.i46a_addr4.s_addr
+        address = raw == INADDR_ANY ? nil : .v4(raw)
+      }
+      return Socket(pid: pid, port: port, v4: v4, v6: v6, address: address)
     }
-    return ports
   }
 
   private static func fds(_ pid: pid_t) -> ArraySlice<proc_fdinfo> {
@@ -167,25 +241,6 @@ public struct LiveServers: Sendable {
     var buffer = [UInt8](repeating: 0, count: Int(MAXPATHLEN) * 4)
     let length = proc_pidpath(pid, &buffer, UInt32(buffer.count))
     return length > 0 ? String(decoding: buffer.prefix(Int(length)), as: UTF8.self) : nil
-  }
-
-  private static func host(_ socket: in_sockinfo) -> String {
-    var address = socket.insi_laddr
-    if socket.insi_vflag & UInt8(INI_IPV4) != 0 {
-      let ip = address.ina_46.i46a_addr4
-      if ip.s_addr == INADDR_ANY || UInt32(bigEndian: ip.s_addr) >> 24 == 127 { return "localhost" }
-      var raw = ip
-      return text(AF_INET, &raw, INET_ADDRSTRLEN)
-    }
-    let six = withUnsafeBytes(of: &address.ina_6) { Array($0) }
-    if six.allSatisfy({ $0 == 0 }) || six == Array(repeating: 0, count: 15) + [1] { return "localhost" }
-    return "[\(text(AF_INET6, &address.ina_6, INET6_ADDRSTRLEN))]"
-  }
-
-  private static func text(_ family: Int32, _ address: UnsafeRawPointer, _ size: Int32) -> String {
-    var buffer = [CChar](repeating: 0, count: Int(size))
-    _ = inet_ntop(family, address, &buffer, socklen_t(size))
-    return String(decoding: buffer.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self)
   }
 }
 

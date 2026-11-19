@@ -130,8 +130,8 @@ extension InteractionBench {
                 await step("宽屏展开·\(item.name)", width: threshold, rail: wide, cue: false)
             }
             await step("宽屏反向·\(item.name)", width: threshold - 1, rail: wide, cue: false, reverse: true)
-            // 并排时 Cue 一直收着（`WideMetrics.cueYields`），没有它的临界宽
-            guard !WideMetrics.cueYields(split: split) else { continue }
+            // 并排时 Cue 一直收着，没有它的临界宽
+            guard !split else { continue }
             resize(cueThreshold)
             await Task.wait(for: .seconds(1))
             for _ in 0..<2 {

@@ -75,10 +75,11 @@ enum LivePick {
             return { component: null, source: null };
         };
 
+        // 页面输入框的值只经这里读：密码框的值在页面上是圆点，不进批注
+        const shownValue = element => element.type === "password" ? "" : element.value;
+
         const describe = element => {
-            // 密码框的值在页面上是圆点，不进批注
-            const value = element.type === "password" ? "" : element.value;
-            const text = (element.innerText || value || element.placeholder || element.getAttribute("aria-label") || element.alt || element.title || "")
+            const text = (element.innerText || shownValue(element) || element.placeholder || element.getAttribute("aria-label") || element.alt || element.title || "")
                 .replace(/\\s+/g, " ").trim().slice(0, 120);
             return { page: location.href, selector: selector(element), tag: element.tagName.toLowerCase(), text, ...origin(element) };
         };

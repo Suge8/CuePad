@@ -135,8 +135,8 @@ extension Workspace {
         if mainRoute != previous { willSelect(mainRoute, from: previous) }
     }
 
-    /// 关左半时右半的会话占满主区，关右半回到只开一个。Mac 只有右半栏头的收起钮关右半（左半是主区此刻的页，换去处靠会话条，键盘的返回才关它）；
-    /// iPad 并排时两半栏头各一颗 ×。只开一个时键盘的返回回到 Cue。不另存返回来源。
+    /// 关左半时右半的会话占满主区，关右半回到只开一个。只有右半栏头的收起钮关右半（左半是主区此刻的页，换去处靠会话条，键盘的返回才关它）。
+    /// 只开一个时键盘的返回回到 Cue。不另存返回来源。
     func closeColumn(_ column: Column) {
         guard case .wide(var state) = navigation else { return }
         switch column {

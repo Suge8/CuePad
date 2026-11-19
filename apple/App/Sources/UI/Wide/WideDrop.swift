@@ -101,24 +101,16 @@ struct WideSessionTitle: View {
                     .transition(.opacity)
             }
             Spacer(minLength: Spacing.item)
-            #if os(macOS)
-            // 两半的栏头末端各一颗不带框的图标钮，同一个样子：左边开合活预览（开着是强调色，收起它只有这一处），右边收起并排。
+            // 两半的栏头末端各一颗不带框的图标钮，同一个样子：左边开合活预览（只在 Mac；开着是强调色，收起它只有这一处），右边收起并排。
             // 左边没有收起：它就是主区此刻的页，换去处靠会话条
             switch column {
             case .main:
+                #if os(macOS)
                 if let session = workspace.session(in: .main) { LivePreviewTool(session: session) }
+                #endif
             case .beside:
                 HeadTool(label: "收起并排", icon: .rightColumn) { workspace.closeColumn(.beside) }
             }
-            #else
-            // 只开一个会话时没有 ×：会话是去处，换去处靠会话条；并排的两半才各有一颗
-            if workspace.besideSession != nil {
-                Button("关闭", icon: .close) { workspace.closeColumn(column) }
-                    .labelStyle(.iconOnly)
-                    .buttonStyle(ControlButtonStyle(kind: .circular))
-                    .font(Typography.body)
-            }
-            #endif
         }
         .font(Typography.toolbarTitle)
         .animation(Motion.fade, value: ended)
@@ -128,7 +120,6 @@ struct WideSessionTitle: View {
     }
 }
 
-#if os(macOS)
 /// 会话栏头末端的图标钮：同窗口最顶那一排别的不带框的钮（会话条开合、收起右栏），平时次要色，开着的开关是强调色。
 /// `dot`：图标右上角一颗活点（同 Cue 入口上的点，`StatusDot`），说这颗钮后面有现成的东西。
 struct HeadTool: View {
@@ -157,7 +148,6 @@ struct HeadTool: View {
     /// 点的圆心落在图形的右上角外沿上（同会话条收起时 Cue 钮上的点，`railWaitingDot`）。
     private static let shift: CGFloat = 3.5
 }
-#endif
 
 extension EnvironmentValues {
     @Entry var headInset = EdgeInsets(top: 0, leading: Spacing.page, bottom: 0, trailing: Spacing.page)

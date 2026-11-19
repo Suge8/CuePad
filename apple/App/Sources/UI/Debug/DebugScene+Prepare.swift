@@ -9,6 +9,14 @@ extension DebugScene {
         settings.cueOpen = args.cue != "shut"
     }
 
+    /// 画面摆完再开并排（右半开这个会话，左半是 `-CuePadSession`）。
+    static func presetBeside(_ workspace: Workspace) {
+        if let share = args.layoutOpts.besideShare { workspace.besideShare = .init(session: share, preview: share) }
+        if let beside = args.layoutOpts.beside {
+            workspace.openSession(SessionState.recordID(sessionID: beside), sessionID: beside, in: .beside)
+        }
+    }
+
     /// 画面摆完再置：换主区会关抽屉。
     static func presetDrawers(_ workspace: Workspace) {
         if args.layoutOpts.sidebar == "drawer" { workspace.railDrawer = true }

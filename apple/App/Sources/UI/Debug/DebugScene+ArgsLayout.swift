@@ -2,7 +2,7 @@
 
 nonisolated struct LayoutArgs: Decodable, DebugArgGroup {
     static let prefix = ""
-    /// `-CuePadBeside <会话>`（仅 Mac）：主区右半并排开这个演示会话（左半是 `-CuePadSession`）
+    /// `-CuePadBeside <会话>`（宽屏）：主区右半并排开这个演示会话（左半是 `-CuePadSession`）
     let beside: String?
     /// `-CuePadCompact <宽>`（iPad）：按这么宽的窄窗口画（分屏、台前调度；紧凑尺寸类）；不给时 iPad 的调试实例起来先铺满屏
     let compact: Double?
