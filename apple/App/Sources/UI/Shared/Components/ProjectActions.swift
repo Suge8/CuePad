@@ -60,15 +60,21 @@ struct ProjectFolderItems: View {
 /// 项目页栏头里标题旁的两颗图标钮（三端同一份，长什么样由所在的那一排定）：文件夹——点开是它绑在哪、换与解除；规则——这个项目的 AGENTS.md，有才出。
 struct ProjectHeadTools: View {
     let project: Project
+    /// 手机页头：正中是两段、左边一颗返回，右边也只留一颗，规则收进文件夹的菜单（规则文件就在那个文件夹里）。
+    var merged = false
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        Menu { ProjectFolderItems(project: project).labelStyle(.titleAndIcon) } label: { Label("文件夹", icon: .folder) }
+        let rules = workspace.rules(of: project.id)
+        Menu {
+            ProjectFolderItems(project: project).labelStyle(.titleAndIcon)
+            if merged, let rules { Button("规则", icon: .instruction) { workspace.openLibrary(rules) }.labelStyle(.titleAndIcon) }
+        } label: { Label("文件夹", icon: .folder) }
             #if os(macOS)
             .menuStyle(.button).menuIndicator(.hidden).fixedSize()
             #endif
             .help(workspace.place(of: project)?.text.visible ?? String(localized: "文件夹"))
-        if let rules = workspace.rules(of: project.id) {
+        if !merged, let rules {
             Button("规则", icon: .instruction) { workspace.openLibrary(rules) }
                 .help("这个项目的 AGENTS.md")
         }

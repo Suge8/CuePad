@@ -39,7 +39,7 @@ struct ProjectScreen: View {
         }
 
         @ViewBuilder private var tools: some View {
-            if let project { ProjectHeadTools(project: project) }
+            if let project { ProjectHeadTools(project: project, merged: panes != nil) }
         }
     }
 
