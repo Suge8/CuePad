@@ -49,14 +49,19 @@ nonisolated enum ProjectCover: String, Sendable {
 struct ProjectCoverImage: View {
     let cover: ProjectCover
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.displayScale) private var scale
+    /// 图的宽（像素），十二张相差不到一成。
+    private static let pixels: CGFloat = 1360
 
     init(_ project: Project) { cover = ProjectCover(ProjectIcon(stored: project.icon)) }
 
     var body: some View {
         GeometryReader { proxy in
             let size = proxy.size, height = max(size.height, size.width / ProjectCover.aspect), width = height * ProjectCover.aspect
-            // 图存的就是画里的像素格（三四百格宽，一张十几 KB），放大时不插值：一格还是一个方块
-            Image(decorative: "cover-\(cover.rawValue)").resizable().interpolation(.none).frame(width: width, height: height)
+            // 图里一格是 8×8 的整块（格子按原画的格线取色，不是整张缩小：缩小会把相邻两格掺成灰）。
+            // 画得比图大时不插值，一格还是一个方块；画得比图小（项目卡、手机）时照常缩小，不插值的话抖色会起纹
+            Image(decorative: "cover-\(cover.rawValue)").resizable().interpolation(width * scale >= Self.pixels ? .none : .high)
+                .frame(width: width, height: height)
                 .offset(x: min(max(size.width / 2 - width * cover.focus.x, size.width - width), 0),
                         y: min(max(size.height / 2 - height * cover.focus.y, size.height - height), 0))
         }
