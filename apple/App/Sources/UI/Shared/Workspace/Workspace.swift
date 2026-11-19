@@ -194,8 +194,8 @@ final class Workspace {
     var liveFound: [UUID: [URL]] = [:]
     /// 问过答不答网页的监听口（`LiveServers` 记着，不每遍重问）。
     @ObservationIgnored var liveScanner = LiveServers()
-    /// 收过的 `cuepad live` 每个会话最后一条的时刻（`take`）。
-    @ObservationIgnored var liveTaken: [String: Date] = [:]
+    /// 收过的 `cuepad live` 每个会话最后一条（`take`）：也答给手机（`answerLivePhones`）。
+    @ObservationIgnored var liveTaken: [String: LiveAddress] = [:]
     /// 每个会话在做的那一条 Agent 请求（`answerLive`）：下一条等它做完。
     @ObservationIgnored var liveTurns: [UUID: Task<LiveChannel.Reply, Never>] = [:]
     /// 闲置被释放了的预览（`releaseLivePreviews`）：重建后第一条回执说明页面是重新载入的。

@@ -17,7 +17,7 @@ extension Workspace {
             livePreviews[session.id] = preview
             if let sent = liveSent.removeValue(forKey: session.id) {
                 preview.retarget(sent)
-            } else if let found = liveFound[session.id], let first = found.first, !Self.keeps(preview, found) {
+            } else if let found = liveFound[session.id], let first = found.first, !preview.keeps(found) {
                 preview.retarget(.init(url: first, source: .found))
             }
             state.beside = .preview
@@ -25,17 +25,11 @@ extension Workspace {
         navigation = .wide(state)
     }
 
-    /// 有地址、而且不是认出过又不在了的（认出的地址只认 `liveFound`）。
-    private static func keeps(_ preview: LivePreview, _ found: [URL]) -> Bool {
-        guard let address = preview.address else { return false }
-        return preview.source != .found || found.contains(address)
-    }
-
     /// 这个会话可看的页面，点开时开的在前：Agent 发来的（`cuepad live`）、你填过还开着的、认出的服务（最近起来的在前）。按认出的地址开过、服务已不在的不算。
     /// "有没有页面可看"只此一处：会话条的标、栏头的钮、答手机（`answerLivePhones`）都从它起。
     func livePages(_ session: UUID) -> [URL] {
         let found = liveFound[session] ?? []
-        let kept = livePreviews[session].flatMap { Self.keeps($0, found) ? $0.address : nil }
+        let kept = livePreviews[session].flatMap { $0.keeps(found) ? $0.address : nil }
         var pages: [URL] = []
         for url in [liveSent[session]?.url, kept].compactMap(\.self) + found where !pages.contains(url) { pages.append(url) }
         return pages
@@ -77,8 +71,8 @@ extension Workspace {
     /// App 起来之前发的不算（那时的服务多半已经不在了）。
     func take(_ addresses: [LiveAddress]) {
         let start = LiveServers.launched() ?? .now
-        for address in addresses where address.sentAt > liveTaken[address.sessionID] ?? start {
-            liveTaken[address.sessionID] = address.sentAt
+        for address in addresses where address.sentAt > liveTaken[address.sessionID]?.sentAt ?? start {
+            liveTaken[address.sessionID] = address
             receive(address)
         }
     }
@@ -93,8 +87,8 @@ extension Workspace {
         preview.sessionID = address.sessionID
         livePreviews[id] = preview
         liveReleased.remove(id)
-        // 你输入的、此刻正开着的地址不被顶掉：这一条留到下次打开，Agent 这期间操作的是你开着的这一页
-        if here, beside == .preview, preview.address != nil, preview.source == .typed { return liveSent[id] = target }
+        // Agent 这期间操作的是你开着的这一页
+        if !preview.yields(showing: here && beside == .preview) { return liveSent[id] = target }
         liveSent[id] = nil
         preview.retarget(target)
         preview.start()
@@ -136,7 +130,7 @@ extension Workspace {
         for (id, preview) in livePreviews where scanned?.contains(id) ?? true {
             let urls = found[id] ?? []
             preview.serving = urls
-            if let first = urls.first, !Self.keeps(preview, urls) { preview.retarget(.init(url: first, source: .found)) }
+            if let first = urls.first, !preview.keeps(urls) { preview.retarget(.init(url: first, source: .found)) }
         }
     }
 

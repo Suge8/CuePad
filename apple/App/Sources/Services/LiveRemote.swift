@@ -9,6 +9,7 @@ final class LiveRemote {
     struct Pages: Equatable, Sendable {
         var pages: [URL]
         var serving: [URL]
+        var sent: LiveAddress?
         var door: LiveSignal.Door?
     }
 
@@ -129,11 +130,11 @@ final class LiveRemote {
     func receive(_ event: VoiceRelayEvent) {
         switch event {
         case .received(let received):
-            guard case .live(.pages(_, let sessionID, let pages, let serving, let door)) = received.payload,
+            guard case .live(.pages(_, let sessionID, let pages, let serving, let sent, let door)) = received.payload,
                   let watch = watches[sessionID], received.header.sender.device == VoiceDeviceID(watch.host) else { return }
             watches[sessionID]?.answeredAt = .now
             offline.remove(sessionID)
-            let next = pages.isEmpty ? nil : Pages(pages: pages, serving: serving, door: door)
+            let next = pages.isEmpty ? nil : Pages(pages: pages, serving: serving, sent: sent, door: door)
             if answers[sessionID] != next { answers[sessionID] = next }
         case .peerClosed(let endpoint, _):
             for (sessionID, watch) in watches where VoiceDeviceID(watch.host) == endpoint.device { unreachable(sessionID) }

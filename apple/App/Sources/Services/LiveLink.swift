@@ -77,7 +77,7 @@ final class LiveLink {
             return
         }
         pages = answer.pages
-        preview.follow(pages)
+        preview.follow(answer, showing: true)
         if state == .ready { preview.serve(pages) }
         guard let next = answer.door, next != door else { return }
         door = next

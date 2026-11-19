@@ -1,7 +1,7 @@
 import Foundation
 
 /// 一个会话请用户看的本机网页（`cuepad live`）：只记在本机表 `liveAddresses`，不同步——地址是这台 Mac 上的服务。每个会话留最后一条。
-public struct LiveAddress: Equatable, Sendable {
+public struct LiveAddress: Equatable, Codable, Sendable {
   public var sessionID: String
   public var url: URL
   /// 由 `LiveServers` 认出的（Agent 没给地址）：服务换了端口跟过去；Agent 明说的不跟。

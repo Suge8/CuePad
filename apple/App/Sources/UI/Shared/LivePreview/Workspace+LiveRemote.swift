@@ -6,9 +6,11 @@ import Foundation
 /// 宽屏开在右半（同 Mac），窄屏铺满一页（`LivePhoneCover`）。隧道只在看得见时开；预览（网页与登录状态）留到离开会话页（`keepLivePreviews`）。
 extension Workspace {
     /// Mac 答来的这个会话可看的页面，点开时开的在前。只认开合预览的那一个会话（`liveRoute`）：别的会话没在问。
-    func livePages(_ session: UUID) -> [URL] {
-        guard let route = liveRoute, route.id == session else { return [] }
-        return route.sessionID.flatMap { services.liveRemote.answers[$0]?.pages } ?? []
+    func livePages(_ session: UUID) -> [URL] { liveAnswer(session)?.pages ?? [] }
+
+    private func liveAnswer(_ session: UUID) -> LiveRemote.Pages? {
+        guard let route = liveRoute, route.id == session else { return nil }
+        return route.sessionID.flatMap { services.liveRemote.answers[$0] }
     }
 
     func showsLivePreview(_ session: UUID) -> Bool {
@@ -36,11 +38,10 @@ extension Workspace {
         guard let route = liveRoute else { return }
         let opening = !showsLivePreview(route.id)
         if opening {
-            let pages = livePages(route.id)
-            guard !pages.isEmpty else { return }
+            guard let answer = liveAnswer(route.id), !answer.pages.isEmpty else { return }
             let preview = livePreviews[route.id] ?? LivePreview()
             preview.sessionID = route.sessionID
-            preview.follow(pages)
+            preview.follow(answer, showing: false)
             livePreviews[route.id] = preview
         }
         switch navigation {

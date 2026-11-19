@@ -58,6 +58,8 @@ final class LivePreview: NSObject, WKNavigationDelegate {
     @ObservationIgnored var tunneled: Set<String> = []
     /// 看得见时去 Mac 的路（`Workspace.connectLive`），收起就没有。
     var link: LiveLink?
+    /// 跟过的 Agent 发来的地址（`follow`，按发来的时刻认）。
+    @ObservationIgnored private var sentTaken: Date?
     /// 这一页的数据存储：代理设在它上面（`LiveLink`），只管这一个预览；登录状态跟着预览留到离开会话页（`Workspace.keepLivePreviews`）。
     @ObservationIgnored let dataStore = WKWebsiteDataStore.nonPersistent()
     #endif
@@ -123,6 +125,16 @@ final class LivePreview: NSObject, WKNavigationDelegate {
     #if os(macOS)
     deinit { try? FileManager.default.removeItem(at: uploadFolder) }
     #endif
+
+    /// 手里这个地址留着：有地址、而且不是按认出的开的又不在了（`found` 是此刻认出的服务）。认出的跟着服务换端口，你填的、Agent 发来的不跟。
+    /// 两端同一条：Mac 的开合与扫描（`Workspace.scanLive`）、手机跟 Mac 的答复（`follow`）。
+    func keeps(_ found: [URL]) -> Bool {
+        guard let address else { return false }
+        return source != .found || found.contains(address)
+    }
+
+    /// Agent 新发来的地址换不换过去：开着、是你自己填的那一页不被顶掉，留到下次打开。两端同一条（Mac 的 `Workspace.receive`、手机的 `follow`）。
+    func yields(showing: Bool) -> Bool { !(showing && address != nil && source == .typed) }
 
     /// 地址栏里显示的：此刻页面所在（页内跳转跟着变），还没载过就是输入的地址。
     var shownAddress: URL? { url ?? address }
@@ -267,10 +279,16 @@ final class LivePreview: NSObject, WKNavigationDelegate {
         Task { await check() }
     }
 
-    /// Mac 答来的页面里没有这一页了、有别的（服务换了端口）就跟过去，同 Mac 的 `scanLive`；留着的预览收着时也跟（`Workspace.toggleLivePreview`）。
-    func follow(_ pages: [URL]) {
-        guard let first = pages.first, address.map({ !pages.contains($0) }) ?? true else { return }
-        retarget(.init(url: first, source: .found))
+    /// 手机、iPad 跟 Mac 的答复（开着时 `LiveLink`，收着的再点开时 `Workspace.toggleLivePreview`），规则同 Mac 的开合、扫描与收 Agent 地址（`keeps`、`yields`）：
+    /// Agent 新发来的换过去；按认出的开的、服务不在了换 Mac 答的第一个；还没有地址的用第一个，当时已发来的算看过。
+    func follow(_ answer: LiveRemote.Pages, showing: Bool) {
+        if let sent = answer.sent, sent.sentAt != sentTaken, address == nil || yields(showing: showing) {
+            sentTaken = sent.sentAt
+            if address != nil { return retarget(.init(url: sent.url, source: sent.found ? .found : .sent)) }
+        }
+        guard !keeps(answer.serving), let first = answer.pages.first else { return }
+        // 不在认出的服务里的（Agent 发来的、Mac 上填的）记作发来的：记作认出的，下一次答复见它不在认出的里又要换
+        retarget(.init(url: first, source: answer.serving.contains(first) ? .found : .sent))
     }
 
     /// 隧道通了（`LiveLink`）。载出过画面的是断过再通（收起再开、回到前台、换网、Mac 醒来、换了票据）：整页重新载入一次，

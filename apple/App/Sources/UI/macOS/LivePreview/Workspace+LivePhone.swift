@@ -70,7 +70,7 @@ extension Workspace {
             var door: LiveSignal.Door?
             if let ticket = phone.ticket, let port { door = LiveSignal.Door(addresses: LiveTunnel.localAddresses(), port: port, ticket: ticket) }
             let answer = LiveSignal.pages(request: phone.request, session: key.sessionID, pages: here ? livePages(id) : [], serving: here ? liveFound[id] ?? [] : [],
-                                          door: here ? door : nil)
+                                          sent: here ? liveTaken[key.sessionID] : nil, door: here ? door : nil)
             guard answer != phone.answered, livePhones[key] != nil else { continue }
             livePhones[key]?.answered = answer
             do {

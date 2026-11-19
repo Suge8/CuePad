@@ -28,7 +28,7 @@ extension DebugScene {
 
         func sendVoice(_ payload: VoiceSignalPayload, session: VoiceSessionID, to recipient: VoiceEndpoint) async throws {
             guard case .live(.watch(let request, let sessionID, let open)) = payload else { return }
-            let reply = LiveSignal.pages(request: request, session: sessionID, pages: pages, serving: pages, door: open ? door : nil)
+            let reply = LiveSignal.pages(request: request, session: sessionID, pages: pages, serving: pages, sent: nil, door: open ? door : nil)
             let header = VoiceSignalHeader(version: VoiceSignalFormat.version, sender: endpoint, recipient: local, session: session, sequence: 1,
                                            expiresAtMilliseconds: Int64(Date.now.timeIntervalSince1970 * 1000) + 30_000, purpose: VoiceSignalPayload.live(signal: reply).purpose)
             answer(.received(.init(header: header, payload: .live(signal: reply))))
