@@ -18,7 +18,6 @@ nonisolated struct PaletteQuery: Equatable {
     var text = "" { didSet { pages = 1; sessionPages = 1 } }
     var project: UUID? { didSet { pages = 1 } }
     var withAttachments = false { didSet { pages = 1 } }
-    var sent: SendCondition = .any { didSet { pages = 1 } }
     var period: Period = .any { didSet { pages = 1 } }
     var pages = 1
     /// 会话只按搜索词搜，筛选不管它。
@@ -33,47 +32,32 @@ nonisolated struct PaletteQuery: Equatable {
 
     static let pageSize = 30
 
-    var isFiltered: Bool { project != nil || withAttachments || sent != .any || period != .any }
+    var isFiltered: Bool { project != nil || withAttachments || period != .any }
 
     func projectLabel(in projects: [Project]) -> String {
         project.flatMap { id in projects.first { $0.id == id }?.shownName } ?? String(localized: "全部")
-    }
-
-    var sentLabel: String {
-        switch sent {
-        case .any: String(localized: "任意")
-        case .never: String(localized: "没发过")
-        case .sent(_, .some(let name)): name
-        case .sent: String(localized: "发过")
-        }
     }
 
     func store(now: Date = .now) -> SearchQuery {
         var query = SearchQuery(text: text)
         if let project { query.projects = [project] }
         if withAttachments { query.hasAttachments = true }
-        query.sent = sent
         if period != .any { query.modifiedIn = now.addingTimeInterval(-Double(period.rawValue) * 86_400)...now }
         return query
     }
-}
-
-nonisolated extension SendTarget {
-    var filterID: String { "\(kind.rawValue)/\(name)" }
 }
 
 /// 摘要在 Store 执行体上算好（`CardEntry`），渲染时不解析正文；项目名与图标从 `Workspace.catalog` 读，这里不另存一份。
 nonisolated struct CardMatches: Sendable, Equatable {
     var groups: [CardGroup]
     var total: Int
-    var targets: [SendTarget]
 
     var entries: [CardEntry] { groups.flatMap(\.cards) }
     var shown: Int { groups.reduce(0) { $0 + $1.cards.count } }
 
     static func read(_ query: PaletteQuery, from store: isolated CueStore) throws -> CardMatches {
         let found = try store.search(query.store(), limit: PaletteQuery.pageSize * query.pages)
-        return CardMatches(groups: CardGroup.byProject(found.cards), total: found.totalCards, targets: try store.sendTargets())
+        return CardMatches(groups: CardGroup.byProject(found.cards), total: found.totalCards)
     }
 }
 

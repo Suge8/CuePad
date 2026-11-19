@@ -37,16 +37,6 @@ public struct SendTarget: Equatable, Sendable {
   }
 }
 
-public struct LastSend: Equatable, Sendable {
-  public var sentAt: Date
-  public var target: SendTarget
-
-  public init(sentAt: Date, target: SendTarget) {
-    self.sentAt = sentAt
-    self.target = target
-  }
-}
-
 extension SendRecord: Record, SyncedColumns {
   static let table = Table.sendRecords
   static let fields: [Field] = [

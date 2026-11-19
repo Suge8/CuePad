@@ -20,7 +20,7 @@ struct CardSearchResults<Leading: View>: View {
                 HStack(spacing: Spacing.item) {
                     ChipRow {
                         leading
-                        SearchFilters(query: $query, targets: data?.targets ?? [])
+                        SearchFilters(query: $query)
                     }
                     if let data, !query.text.isEmpty || query.isFiltered {
                         Text(CountCopy.hits(data.total)).font(Typography.meta.monospacedDigit()).foregroundStyle(palette.ink3)

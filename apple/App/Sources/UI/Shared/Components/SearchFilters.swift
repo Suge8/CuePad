@@ -4,7 +4,6 @@ import SwiftUI
 /// 菜单的样式跟外面的环境（Mac 在外面套 `.menuStyle(.button)`）。
 struct SearchFilters: View {
     @Binding var query: PaletteQuery
-    let targets: [SendTarget]
 
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
@@ -19,18 +18,6 @@ struct SearchFilters: View {
         Button { query.withAttachments.toggle() } label: { chip(String(localized: "含附件"), nil, on: query.withAttachments) }
             .buttonStyle(PressStyle())
             .accessibilityAddTraits(query.withAttachments ? .isSelected : [])
-        menu("Agent", query.sentLabel, on: query.sent != .any) {
-            Button("任意") { query.sent = .any }
-            Divider()
-            Button("没发给过 Agent") { query.sent = .never }
-            Button("发给过 Agent") { query.sent = .sent(kind: .known(.piSession)) }
-            if !targets.isEmpty {
-                Divider()
-                ForEach(targets, id: \.filterID) { target in
-                    Button(target.name) { query.sent = .sent(kind: target.kind, name: target.name) }
-                }
-            }
-        }
         menu(String(localized: "时间"), query.period.label, on: query.period != .any) {
             ForEach(PaletteQuery.Period.allCases, id: \.self) { period in Button(period.label) { query.period = period } }
         }

@@ -21,7 +21,6 @@ struct CardOpenStyle: ButtonStyle {
 /// 单独一个视图：悬停只改卡的外框，卡面不随之重算。
 private struct CardFace: View {
     let card: Card
-    let lastTarget: String?
     let floated: Bool
     @Environment(\.palette) private var palette
 
@@ -47,7 +46,7 @@ private struct CardFace: View {
             } else {
                 Spacer(minLength: 0)
             }
-            CardMeta(card: card, text: text, lastTarget: lastTarget, floated: floated, font: Typography.meta)
+            CardMeta(card: card, text: text, floated: floated, font: Typography.meta)
         }
         .padding(Spacing.block)
         }
@@ -59,14 +58,13 @@ private struct CardFace: View {
 struct CardTile: View {
 
     let card: Card
-    let lastTarget: String?
     let floated: Bool
     @Environment(Workspace.self) private var workspace
     @State private var hovering = false
 
     var body: some View {
         Button(action: open) {
-            CardFace(card: card, lastTarget: lastTarget, floated: floated)
+            CardFace(card: card, floated: floated)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .modifier(SelectedCard())
                 .note(lifted: hovering)

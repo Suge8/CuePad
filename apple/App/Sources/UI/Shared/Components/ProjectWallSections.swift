@@ -34,7 +34,7 @@ struct ProjectWallSections<Tile: View>: View {
     }
 
     var body: some View {
-        let lastTarget = data.lastTarget, shown = (arrangement.pinned + arrangement.wall).filter { data.entries[$0] != nil }
+        let shown = (arrangement.pinned + arrangement.wall).filter { data.entries[$0] != nil }
         LazyVStack(alignment: .leading, spacing: 0) {
             MasonryLayout(minColumnWidth: metrics.minColumnWidth, maxColumns: metrics.maxColumns, spacing: metrics.wallSpacing) {
                 AddIdea(data: data, action: add)
@@ -59,7 +59,7 @@ struct ProjectWallSections<Tile: View>: View {
                 SectionHeader("更早", count: arrangement.older.count).id(OlderGroup.anchor).padding(.bottom, titled ? 0 : metrics.olderGap)
                 ForEach(older, id: \.period) { group in
                     if titled { OlderGroupHeader(group: group, expanded: $expanded) }
-                    if !group.isMonth || expanded.contains(group.period) { rows(group.cards, lastTarget: lastTarget) }
+                    if !group.isMonth || expanded.contains(group.period) { rows(group.cards) }
                 }
             }
         }
@@ -83,10 +83,10 @@ struct ProjectWallSections<Tile: View>: View {
     }
 
     /// 行直接落在桌面上，不装在纸里。手机的行自己留了左右的边（按下的底、左滑的按钮按行裁），整组向两边让出这一截，字与页边对齐。
-    private func rows(_ ids: [UUID], lastTarget: [UUID: String]) -> some View {
+    private func rows(_ ids: [UUID]) -> some View {
         LazyVStack(spacing: 0) {
             ForEach(ids, id: \.self) { id in
-                if let entry = data.entries[id] { OlderRow(entry: entry, lastTarget: lastTarget[id]) }
+                if let entry = data.entries[id] { OlderRow(entry: entry) }
             }
         }
         #if os(iOS)
@@ -169,12 +169,11 @@ struct OlderGroupHeader: View {
 /// 不在墙上的旧灵感（"更早"）一行。Mac 一行字、悬停出删除、可多选；手机两行字、左滑出操作、点开放大成编辑页。
 struct OlderRow: View {
     let entry: CardEntry
-    let lastTarget: String?
 
     var body: some View {
         let card = entry.card
         let shape = RoundedRectangle(cornerRadius: Radius.row)
-        OlderRowLine(entry: entry, lastTarget: lastTarget)
+        OlderRowLine(entry: entry)
             .modifier(OlderRowOpens(card: card, shape: shape))
             .contextMenu { CardActions(card: card, selectable: Self.selectable) }
             .cardDraggable(.idea(card.id), shape: shape)
@@ -221,7 +220,6 @@ private struct OlderRowOpens: ViewModifier {
 /// 两端只差在字号、标题与预览横排还是叠成两行、类型图标在行首还是只标附件数（`Look`）与行的底（`OlderRowSurface`）。
 private struct OlderRowLine: View {
     let entry: CardEntry
-    let lastTarget: String?
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -238,7 +236,6 @@ private struct OlderRowLine: View {
             Spacer(minLength: Look.gap)
             AgentDot(card: card.id).padding(.vertical, Look.dotInset)
             Group {
-                if let lastTarget { SentMark(target: lastTarget) }
                 #if os(iOS)
                 if attached { AttachmentMark(count: text.attachments.count) }
                 #endif

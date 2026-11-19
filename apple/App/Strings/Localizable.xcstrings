@@ -8660,38 +8660,6 @@
         }
       }
     },
-    "发给过 Agent" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sent to an Agent"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "发给过 Agent"
-          }
-        }
-      }
-    },
-    "发过" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sent"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "发过"
-          }
-        }
-      }
-    },
     "发送" : {
       "localizations" : {
         "en" : {
@@ -12032,38 +12000,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已发出 %@"
-          }
-        }
-      }
-    },
-    "已发给 %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sent to %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已发给 %@"
-          }
-        }
-      }
-    },
-    "已发过" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sent"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已发过"
           }
         }
       }
@@ -17952,38 +17888,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "没发出去：%@"
-          }
-        }
-      }
-    },
-    "没发给过 Agent" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Never Sent to an Agent"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "没发给过 Agent"
-          }
-        }
-      }
-    },
-    "没发过" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Never Sent"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "没发过"
           }
         }
       }

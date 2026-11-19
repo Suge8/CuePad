@@ -5,22 +5,17 @@ import SwiftUI
 
 nonisolated private struct PaletteData: Sendable, Equatable {
     var matches: CardMatches
-    var lastSends: [UUID: LastSend]
     var parents: [UUID: String]
     var subtasks: [UUID: TaskProgress]
 
     static func read(_ query: PaletteQuery, from store: isolated CueStore) throws -> PaletteData {
         let matches = try CardMatches.read(query, from: store)
         let cards = matches.entries.map(\.card), tasks = cards.filter(\.isTask)
-        var lastSends: [UUID: LastSend] = [:]
-        for group in matches.groups {
-            lastSends.merge(try store.lastSends(in: group.id)) { current, _ in current }
-        }
         var parents: [UUID: String] = [:]
         for task in tasks {
             if let parent = task.parentID { parents[task.id] = try store.card(parent)?.title }
         }
-        return PaletteData(matches: matches, lastSends: lastSends, parents: parents, subtasks: try store.subtaskProgress(of: tasks.map(\.id)))
+        return PaletteData(matches: matches, parents: parents, subtasks: try store.subtaskProgress(of: tasks.map(\.id)))
     }
 }
 
@@ -117,7 +112,7 @@ struct SearchPalette: View {
     }
 
     @ViewBuilder private var cardsContent: some View {
-        FilterBar(query: $query, targets: data?.matches.targets ?? [], total: data?.matches.total)
+        FilterBar(query: $query, total: data?.matches.total)
              .padding(.horizontal, Spacing.inset).padding(.bottom, Spacing.item)
         Divider()
         // 放得下就列表 + 预览并排，否则只留列表（最小窗口下详情区不到 500 宽）
@@ -219,11 +214,7 @@ struct SearchPalette: View {
             let project = workspace.catalog?.project(card.projectID)
             VStack(alignment: .leading, spacing: Spacing.group) {
                 Text(text.label).font(Typography.previewTitle).foregroundStyle(palette.ink)
-                HStack(spacing: Spacing.item) {
-                    Text(Dotted(project?.shownName, DateLabel.short(card.modifiedAt)))
-                    if let name = data.lastSends[card.id]?.target.shownName { SentMark(target: name) }
-                }
-                .font(Typography.meta).foregroundStyle(palette.ink3)
+                Text(Dotted(project?.shownName, DateLabel.short(card.modifiedAt))).font(Typography.meta).foregroundStyle(palette.ink3)
                 if card.isTask, let facts = Self.taskFacts(parent: data.parents[card.id], subtasks: data.subtasks[card.id]) {
                     Text(facts).font(Typography.meta).foregroundStyle(palette.ink2)
                 }

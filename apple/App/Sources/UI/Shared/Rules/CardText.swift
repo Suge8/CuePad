@@ -50,11 +50,3 @@ nonisolated extension Card {
 nonisolated extension String {
     var nonEmpty: String? { isEmpty ? nil : self }
 }
-
-nonisolated enum SendCopy {
-    static var sameProject: String { String(localized: "已发过") }
-}
-
-nonisolated extension SendTarget {
-    var shownName: String? { kind == .known(.piSession) ? name : nil }
-}

@@ -28,9 +28,6 @@ enum DemoLibrary {
             if let intro = catalog.first(where: { $0.name == project.name })?.intro {
                 try await store.updateProject(project.id) { $0.intro = intro }
             }
-            for card in try await store.cards(in: project.id).filter({ $0.body.hasPrefix(String(localized: "评审", table: "Demo")) }).prefix(4) {
-                try await store.recordSend(card.body, to: SendTarget(kind: .piSession, name: project.name.lowercased()), card: card.id)
-            }
         }
         let retired = try await store.createProject(name: String(localized: "旧落地页", table: "Demo"), color: "#8A8A84", icon: ProjectIcon.globe.rawValue)
         _ = try await store.createCard(in: retired.id, body: String(localized: "旧落地页文案\n\n首屏标题与三段卖点。", table: "Demo"))

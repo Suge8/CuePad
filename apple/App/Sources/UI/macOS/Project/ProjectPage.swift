@@ -87,7 +87,7 @@ struct ProjectPage: View {
             ProjectWallSections(
                 data: data, arrangement: arrangement, older: board.older, metrics: Self.metrics, showsOlder: stage >= .older
             ) { entry in
-                CardTile(card: entry.card, lastTarget: data.lastTarget[entry.id], floated: board.floated.contains(entry.id))
+                CardTile(card: entry.card, floated: board.floated.contains(entry.id))
             }
         }
     }

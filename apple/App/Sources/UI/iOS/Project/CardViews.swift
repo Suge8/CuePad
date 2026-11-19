@@ -5,7 +5,6 @@ struct CardTileView: View {
     /// 会话点（看得见的那颗，不是它 44 的点按格）往卡的右内边里收一截：点离卡右边与标题离左边看着一样。
     private static let dotTuck: CGFloat = 6
     let entry: CardEntry
-    let lastTarget: String?
     let floated: Bool
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
@@ -36,7 +35,7 @@ struct CardTileView: View {
                 } else {
                     Spacer(minLength: 0)
                 }
-                CardMeta(card: card, text: text, lastTarget: lastTarget, floated: floated)
+                CardMeta(card: card, text: text, floated: floated)
             }
             .multilineTextAlignment(.leading)
             .padding(Spacing.group)

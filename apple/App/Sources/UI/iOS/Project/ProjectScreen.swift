@@ -69,7 +69,6 @@ struct ProjectScreen: View {
 
     @ViewBuilder
     private func content(_ data: ProjectPageData, _ arrangement: WallArrangement) -> some View {
-        let lastTarget = data.lastTarget
         // 任务区不进懒加载栈：在懒加载栈的一格里时，收起后按 id 滚回"收起"那一行会偏出一屏（`TaskFoldAnchor`）
         let paned = sizeClass == .compact && data.project != nil
         VStack(alignment: .leading, spacing: Spacing.part) {
@@ -84,7 +83,7 @@ struct ProjectScreen: View {
                 ProjectSplit(project: paned ? nil : data.project, gap: Self.sectionGap) {
                     if data.project != nil { ProjectTasks(data: data, position: $position, anchor: anchor) }
                     ProjectWallSections(data: data, arrangement: arrangement, older: board.older, metrics: metrics) { entry in
-                        CardTileView(entry: entry, lastTarget: lastTarget[entry.id], floated: board.floated.contains(entry.id))
+                        CardTileView(entry: entry, floated: board.floated.contains(entry.id))
                     }
                 }
                 .transition(.move(edge: .leading).combined(with: .opacity))
@@ -105,6 +104,18 @@ struct ProjectScreen: View {
             .glass(in: .capsule, interactive: true)
             .fixedSize()
             .dynamicTypeSize(...FloatingHeaderLayout.largestType)
+            .modifier(YieldsToNotice())
+    }
+
+    /// 提示盖在页头正中时这两段让开、不接点按（同项目列表页头的那两段，`NarrowSidebarBar`）。单独一个视图：提示来去只重算它，不重算整页。
+    private struct YieldsToNotice: ViewModifier {
+        @Environment(Workspace.self) private var workspace
+
+        func body(content: Content) -> some View {
+            let hidden = workspace.noticeOnHead
+            content.opacity(hidden ? 0 : 1).allowsHitTesting(!hidden).readerHidden(hidden)
+                .animation(NoticeBanner.giveWay(hidden), value: hidden)
+        }
     }
 
     /// 封面下面的项目名，同项目列表那张卡上的图标与名字；点开是这个项目自己的操作。
