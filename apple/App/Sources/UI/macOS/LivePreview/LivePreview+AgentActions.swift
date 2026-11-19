@@ -10,6 +10,8 @@ extension LivePreview {
         try await agentReady()
         try requireLocal()
         let waited = try await waitForUser()
+        // 等的这几秒里页面可能自己跳到了外网
+        try requireLocal()
         let start = record.end, from = web.url
         agent.acting = true
         defer { agent.acting = false }
@@ -120,10 +122,13 @@ extension LivePreview {
     private func keep(_ uploads: [LiveChannel.Upload]) throws -> [URL] {
         let folder = uploadFolder.appending(path: UUID().uuidString, directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        return try uploads.map { upload in
+        // 每个文件各占一层：不同目录里的同名文件不互相盖掉
+        return try uploads.enumerated().map { index, upload in
             let name = URL(filePath: upload.name).lastPathComponent
             guard !name.isEmpty, name != "..", name != "." else { throw LiveRefusal("文件名不对：\(upload.name)") }
-            let url = folder.appending(path: name)
+            let place = folder.appending(path: "\(index)", directoryHint: .isDirectory)
+            try FileManager.default.createDirectory(at: place, withIntermediateDirectories: true)
+            let url = place.appending(path: name)
             try upload.data.write(to: url)
             return url
         }
@@ -198,7 +203,7 @@ extension LivePreview {
     private func settle() async {
         try? await Task.sleep(for: .milliseconds(40))
         let deadline = ContinuousClock.now + .seconds(5)
-        while (web.isLoading || record.pending > 0) && asks.isEmpty && ContinuousClock.now < deadline {
+        while (web.isLoading || record.pending > 0) && asks.isEmpty && ContinuousClock.now < deadline && !Task.isCancelled {
             try? await Task.sleep(for: .milliseconds(20))
         }
         try? await Task.sleep(for: .milliseconds(30))

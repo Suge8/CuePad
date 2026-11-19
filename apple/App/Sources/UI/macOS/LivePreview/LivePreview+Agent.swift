@@ -135,7 +135,7 @@ extension LivePreview {
             guard parts.count == 2, let frame = Int(parts[0]) else { continue }
             let source = parts[1]
             guard let (child, childToken) = frameDocument(host: token, frame: frame, source: source, page: page) else {
-                out.append(indent + "- text: \"〔这个框读不到：还没载完，或它自己换了地址〕\"")
+                out.append(indent + "- text: \"〔这个框读不到：还没载完、它自己换了地址，或页面里有几个同地址的框分不清〕\"")
                 continue
             }
             page.hosts[childToken] = (token, frame)
@@ -157,7 +157,10 @@ extension LivePreview {
         }
         let taken = Set(page.hosts.keys)
         let free = record.documents.filter { !$0.value.main && !taken.contains($0.key) }
-        if let exact = free.first(where: { $0.value.url == source }) { return (exact.value, exact.key) }
+        // 同一地址的框有几份就分不清哪份是哪个 iframe（WKFrameInfo 不带父框）：不接，免得读到、点到别的框
+        let exact = free.filter { $0.value.url == source }
+        if exact.count > 1 { return nil }
+        if let exact = exact.first { return (exact.value, exact.key) }
         let origin = Self.origin(source)
         let same = free.filter { Self.origin($0.value.url) == origin }
         return same.count == 1 ? same.first.map { ($0.value, $0.key) } : nil
@@ -206,6 +209,7 @@ extension LivePreview {
             if let part = args.url {
                 if let url = web.url?.absoluteString, url.contains(part) { return .done("等到了\(what)（\(Self.seconds(since: start))）：\(url)") }
             } else {
+                try requireLocal()
                 let documents = args.text == nil ? record.main.flatMap { record.documents[$0] }.map { [$0] } ?? [] : Array(record.documents.values)
                 for document in documents {
                     let hit = try? await call("return { hit: cue.has(args) }", ["args": ["text": args.text as Any, "selector": args.selector as Any]], in: document, within: .seconds(2))

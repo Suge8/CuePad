@@ -67,7 +67,7 @@ struct LivePreviewFlowTests {
     func id(_ sessionID: String) -> UUID { SessionState.recordID(sessionID: sessionID) }
 
     /// 同 `cuepad live`：命令行只往资料库写这一条，App 读到了再处理。
-    private func live(_ address: String, for sessionID: String) async throws -> URL {
+    func live(_ address: String, for sessionID: String) async throws -> URL {
         let url = try #require(URL(string: address))
         try await store.sendLive(url, to: sessionID, found: false)
         return url

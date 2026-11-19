@@ -78,9 +78,9 @@ extension Workspace {
     }
 
     /// Agent 要操作的预览：有就用它（开着的、后台的都一样）；闲置被释放了的，按记下的地址重建、载入。
-    /// Agent 刚 `cuepad live`、App 还没订阅到那一条时，当场去库里读，不让紧跟着的这一条扑空。
+    /// Agent 刚 `cuepad live`（新开或换地址）、App 还没订阅到那一条时，当场去库里读，紧跟着的这一条不扑空、不落在旧页上。
     private func livePreview(forAgent sessionID: String, _ id: UUID) async throws -> (LivePreview, rebuilt: Bool) {
-        if livePreviews[id] == nil, liveSent[id] == nil { take(try await services.store.liveAddresses()) }
+        take(try await services.store.liveAddresses())
         if let preview = livePreviews[id] { return (preview, false) }
         guard let sent = liveSent.removeValue(forKey: id) else {
             throw LiveRefusal("这个会话还没有活预览：先 cuepad live（或 cuepad live <端口>）把页面开在 CuePad 里，再操作它")
