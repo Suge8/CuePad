@@ -35,7 +35,7 @@ extension DebugScene {
     /// 全部画面。加画面：在 `Scenes/` 新建文件写一个 `DebugSceneEntry`，在这里登记一行。
     static let entries: [String: DebugSceneEntry] = {
         var all: [DebugSceneEntry] = [
-            .shelf, .bins, .earlier, .project, .search, .progress, .sessions, .task, .session, .newSession,
+            .shelf, .bins, .project, .search, .progress, .sessions, .task, .session, .newSession,
             .library, .editor, .settings, .cue, .cueRows, .stateIcons, .tokens, .rail,
         ]
         #if os(macOS)

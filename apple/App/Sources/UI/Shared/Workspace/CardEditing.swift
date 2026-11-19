@@ -99,8 +99,6 @@ enum SaveState: Equatable {
         return !Task.isCancelled
     }
 
-    static var longestText: String { [saving, saved, failed].compactMap(\.text).max { $0.count < $1.count } ?? "" }
-
     var text: String? {
         switch self {
         case .idle: nil

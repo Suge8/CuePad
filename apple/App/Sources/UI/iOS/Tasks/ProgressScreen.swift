@@ -19,7 +19,7 @@ struct ProgressScreen: View {
             .observingBoard(into: $board, store: services.store, onError: workspace.fail)
     }
 
-    /// 宽屏同 Mac 的 `TaskBoardPage`：不要页头，四个列头就是最顶那一排，范围钮在它们开头（栏头的 `PageMenuSlot`）；额度在会话条最下一排（`WideRail`）。
+    /// 宽屏同 Mac 的 `TaskBoardPage`：不要页头，四个列头就是最顶那一排，范围钮在它们开头（栏头的 `ProjectScopeSlot`）；额度在会话条最下一排（`WideRail`）。
     @ViewBuilder private var page: some View {
         if workspace.layout == .wide {
             boardView

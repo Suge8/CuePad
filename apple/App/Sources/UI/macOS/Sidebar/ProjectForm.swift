@@ -31,7 +31,6 @@ struct ProjectForm: View {
         VStack(alignment: .leading, spacing: Spacing.block) {
             Text(draft.title).font(Typography.bodyStrong).foregroundStyle(palette.ink)
             field(ProjectDraft.namePrompt, text: $draft.name)
-            field(ProjectDraft.introPrompt, text: $draft.intro)
             ProjectStylePicker(icon: $draft.icon, color: $draft.color, cell: 30)
             if draft.project == nil { folderRow }
             HStack(spacing: Spacing.item) {

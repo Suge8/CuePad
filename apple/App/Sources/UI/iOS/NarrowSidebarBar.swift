@@ -4,32 +4,27 @@ import SwiftUI
 
 struct NarrowSidebarBar: View {
     @Environment(Workspace.self) private var workspace
-    @Namespace private var glass
 
     var body: some View {
         let givesWay = workspace.noticeOnHead
-        GlassEffectContainer(spacing: SidebarRow.gap) {
-            SidebarRow {
-                HStack(spacing: SidebarRow.gap) {
-                    circle("搜索", icon: .search) { workspace.openSearch() }
-                    Group {
-                        switch workspace.navigationPane {
-                        case .projects: circle("新建项目", icon: .newProject) { workspace.projectForm = .init() }
-                        case .progress: ScopeButton()
-                        }
-                    }
-                    .glassEffectID("pane-tool", in: glass)
+        // 这一排不放进 `GlassEffectContainer`：容器里的玻璃钮排在系统菜单之上接点按，"更多"与范围菜单盖在这一排上的第一项（搜索、全部项目）点不动（模拟器真实时长的点按实测）
+        SidebarRow {
+            HStack(spacing: SidebarRow.gap) {
+                PlacesMenu()
+                switch workspace.navigationPane {
+                case .projects: circle("新建项目", icon: .add) { workspace.projectForm = .init() }
+                case .progress: ScopeButton()
                 }
-                .modifier(GiveWay(hidden: givesWay))
-                ViewThatFits(in: .horizontal) {
-                    panes(titles: true)
-                    panes(titles: false)
-                }
-                .dynamicTypeSize(...FloatingHeaderLayout.largestType)
-                .modifier(GiveWay(hidden: givesWay))
-                QuotaButton().modifier(GiveWay(hidden: givesWay))
-                cue
             }
+            .modifier(GiveWay(hidden: givesWay))
+            ViewThatFits(in: .horizontal) {
+                panes(titles: true)
+                panes(titles: false)
+            }
+            .dynamicTypeSize(...FloatingHeaderLayout.largestType)
+            .modifier(GiveWay(hidden: givesWay))
+            QuotaButton().modifier(GiveWay(hidden: givesWay))
+            cue
         }
         .glassCircle()
         .dynamicTypeSize(...FloatingHeaderLayout.largestType)
@@ -57,6 +52,33 @@ struct NarrowSidebarBar: View {
             Label { Text(verbatim: workspace.cue.name) } icon: { CueAvatar(workspace.cue.beat, size: .row).relaySpot(cue: .entry) }
         }
         .accessibilityIdentifier("narrow-cue")
+    }
+}
+
+/// 不常去的几处收在一颗钮里：搜索，与原先排在项目列表最底下、要滚到头才见得着的归档、回收站、设置。
+/// 已结束的会话不另设一页：一个项目的在它的项目页里，全部的在搜索的"会话"那一段。
+private struct PlacesMenu: View {
+    @Environment(Workspace.self) private var workspace
+    @Environment(AppServices.self) private var services
+
+    var body: some View {
+        Menu {
+            Button("搜索", icon: .search) { workspace.openSearch() }
+            Divider()
+            Button("归档", icon: .archive) { workspace.push(.archive) }
+            Button("回收站", icon: .trash) { workspace.push(.trash) }
+            Divider()
+            // 设置里有要处理的事（Mac 没连上）写在这一项下面：钮上不挂点，角上一个点挤着那三个点
+            Button { workspace.push(.settings) } label: {
+                Label("设置", icon: .settings)
+                if let alert = services.syncing.macAlert { Text(alert.title) }
+            }
+        } label: {
+            Label { Text("更多") } icon: { Image(.more).imageScale(.large).frame(width: Chrome.icon, height: Chrome.icon) }
+        }
+        .menuStyle(.button)
+        .help(Text("更多"))
+        .accessibilityValue(services.syncing.macAlert?.title ?? "")
     }
 }
 

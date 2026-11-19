@@ -9,17 +9,20 @@ public struct SearchQuery: Sendable, ExpressibleByStringLiteral {
   /// 限定所属项目；nil 表示不限；空集合无结果。
   public var projects: Set<UUID>?
   public var hasAttachments: Bool?
+  /// true 只要任务，false 只要灵感；nil 不限。
+  public var isTask: Bool?
   public var sent: SendCondition
   public var modifiedIn: ClosedRange<Date>?
   public var inTrash: Bool
 
   public init(
-    text: String = "", projects: Set<UUID>? = nil, hasAttachments: Bool? = nil, sent: SendCondition = .any,
+    text: String = "", projects: Set<UUID>? = nil, hasAttachments: Bool? = nil, isTask: Bool? = nil, sent: SendCondition = .any,
     modifiedIn: ClosedRange<Date>? = nil, inTrash: Bool = false
   ) {
     self.text = text
     self.projects = projects
     self.hasAttachments = hasAttachments
+    self.isTask = isTask
     self.sent = sent
     self.modifiedIn = modifiedIn
     self.inTrash = inTrash
@@ -27,7 +30,7 @@ public struct SearchQuery: Sendable, ExpressibleByStringLiteral {
 
   public init(stringLiteral value: String) { self.init(text: value) }
 
-  var hasCardFilters: Bool { projects != nil || hasAttachments != nil || sent != .any || modifiedIn != nil }
+  var hasCardFilters: Bool { projects != nil || hasAttachments != nil || isTask != nil || sent != .any || modifiedIn != nil }
 }
 
 public enum SendCondition: Equatable, Sendable {

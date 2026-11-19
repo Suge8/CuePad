@@ -1,9 +1,10 @@
 import CueStore
 import SwiftUI
 
-/// 项目的菜单，出现的每一处（会话条的项目行、项目总览页的行与格、手机项目页的"⋯"）都是这一份。
+/// 项目自己的操作（侧栏与项目列表里的右键、长按，项目页栏头点项目名）。`folders` 为假是项目页栏头那一份：不带文件夹那一组（另有一颗钮，`ProjectHeadTools`），多一项去看板只看这个项目——在别处人还没进这个项目。
 struct ProjectActions: View {
     let project: Project
+    var folders = true
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
@@ -16,15 +17,30 @@ struct ProjectActions: View {
             workspace.perform { try await $0.updateProject(id) { $0.isPinned = pinned } }
         }
         Button("编辑名称与图标…", icon: .rename) { workspace.projectForm = .init(project: project) }
-        #if os(iOS)
-        // 手机页顶那块玻璃里放不下"规则"（Mac 与 iPad 在介绍行末，`ProjectIntroLine`）：在这里
-        if let rules = workspace.rules(of: id) {
-            Button("规则", icon: .instruction) { workspace.openLibrary(rules) }
+        if folders {
+            // 文件夹的几项收进一层子菜单：菜单至多三组，这几项不是每天用的
+            Menu("文件夹", icon: .folder) { ProjectFolderItems(project: project) }
+        } else {
+            Button("看进展", icon: .task) { workspace.showProgress(of: id) }
         }
-        #endif
-        // 文件夹的几项收进一层子菜单：菜单至多三组，这几项不是每天用的
-        Menu("文件夹", icon: .folder) {
-            if let place = workspace.place(of: project) { Section { } header: { Text(place.text) } }
+        // 默认项目不能删（`CueStore.trashProject` 也拒绝）
+        if !project.isDefault {
+            Divider()
+            Button("移到回收站", icon: .trash, role: .destructive) {
+                workspace.perform { try await $0.trashProject(id) }
+            }
+        }
+    }
+}
+
+/// 绑定的文件夹那一组：组头写它在哪。
+struct ProjectFolderItems: View {
+    let project: Project
+    @Environment(Workspace.self) private var workspace
+
+    var body: some View {
+        let id = project.id
+        Section {
             #if os(macOS)
             if let directory = workspace.catalog?.directories[id] {
                 Button("在访达中显示", icon: .folder) { NSWorkspace.shared.activateFileViewerSelecting([URL(filePath: directory, directoryHint: .isDirectory)]) }
@@ -35,13 +51,32 @@ struct ProjectActions: View {
             ForEach(folders.unbinds, id: \.binding.id) { unbind in
                 Button { workspace.unbindFolder(unbind.binding, of: project) } label: { Label { Text(unbind.title) } icon: { Image(.unbindFolder) } }
             }
+        } header: {
+            if let place = workspace.place(of: project) { Text(place.text) }
         }
-        // 默认项目不能删（`CueStore.trashProject` 也拒绝）
-        if !project.isDefault {
-            Divider()
-            Button("移到回收站", icon: .trash, role: .destructive) {
-                workspace.perform { try await $0.trashProject(id) }
-            }
+    }
+}
+
+/// 项目页栏头里标题旁的两颗图标钮（三端同一份，长什么样由所在的那一排定）：文件夹——点开是它绑在哪、换与解除；规则——这个项目的 AGENTS.md，有才出。
+struct ProjectHeadTools: View {
+    let project: Project
+    /// 手机页头：正中是两段、左边一颗返回，右边也只留一颗，规则收进文件夹的菜单（规则文件就在那个文件夹里）。
+    var merged = false
+    @Environment(Workspace.self) private var workspace
+
+    var body: some View {
+        let rules = workspace.rules(of: project.id)
+        Menu {
+            ProjectFolderItems(project: project).labelStyle(.titleAndIcon)
+            if merged, let rules { Button("规则", icon: .instruction) { workspace.openLibrary(rules) }.labelStyle(.titleAndIcon) }
+        } label: { Label("文件夹", icon: .folder) }
+            #if os(macOS)
+            .menuStyle(.button).menuIndicator(.hidden).fixedSize()
+            #endif
+            .help(workspace.place(of: project)?.text.visible ?? String(localized: "文件夹"))
+        if !merged, let rules {
+            Button("规则", icon: .instruction) { workspace.openLibrary(rules) }
+                .help("这个项目的 AGENTS.md")
         }
     }
 }

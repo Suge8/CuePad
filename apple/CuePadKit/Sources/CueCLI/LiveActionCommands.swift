@@ -1,3 +1,4 @@
+#if os(macOS)
 import CueStore
 import Foundation
 
@@ -153,3 +154,4 @@ extension Command {
     }
   }
 }
+#endif

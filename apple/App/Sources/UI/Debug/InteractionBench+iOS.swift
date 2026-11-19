@@ -100,7 +100,7 @@ enum IOSInteractionBench {
             await step("书架点项目") { workspace.push(.project(id)) }
             await step("返回书架") { workspace.path.removeAll() }
         }
-        // 项目页任务纸点"还有 N 条"展开、再收起：在没做完的任务最多的项目上（配 `-CuePadManyTasks` 量任务多时）
+        // 项目页任务区点"还有 N 条"展开、再收起：在没做完的任务最多的项目上（配 `-CuePadManyTasks` 量任务多时）
         guard let busiest = workspace.catalog?.openTasks.max(by: { $0.value < $1.value })?.key else { fail("演示库里没有带任务的项目") }
         workspace.push(.project(busiest))
         await Task.wait(for: .seconds(2))
@@ -128,11 +128,11 @@ enum IOSInteractionBench {
             await step("会话条进会话") { workspace.openSession(id) }
             await step("会话返回 Cue") { workspace.path.removeAll() }
         }
-        // "更早"那一页的列表滚动：每帧 40pt 往下再往上
+        // 搜索页会话那一节列全后的列表滚动（`perf_interact.py` 带 `-CuePadSearchScope sessions` 起）：每帧 40pt 往下再往上
         if wants("会话列表滚动") {
-            workspace.push(.earlier)
+            workspace.push(.search)
             await Task.wait(for: .seconds(1))
-            guard let scroll = Self.scrollView(in: Self.window) else { fail("\"更早\"那一页上找不到可滚的列表") }
+            guard let scroll = Self.scrollView(in: Self.window) else { fail("搜索页的会话那一段找不到可滚的列表") }
             for _ in 0..<2 { await stepScroll("会话列表滚动", scroll, step: { name, action in await step(name, action) }) }
         }
         workspace.select(.shelf)

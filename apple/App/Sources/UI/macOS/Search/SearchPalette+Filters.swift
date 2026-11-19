@@ -4,7 +4,6 @@ import SwiftUI
 
 struct FilterBar: View {
     @Binding var query: PaletteQuery
-    let targets: [SendTarget]
     let total: Int?
     @Environment(\.palette) private var palette
 
@@ -13,7 +12,7 @@ struct FilterBar: View {
         HStack(spacing: Spacing.group) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: Spacing.item) {
-                    SearchFilters(query: $query, targets: targets)
+                    SearchFilters(query: $query)
                 }
                 .menuStyle(.button).menuIndicator(.hidden).buttonStyle(PressStyle())
             }

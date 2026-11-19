@@ -44,8 +44,10 @@ extension View {
     func cardDragStage() -> some View { modifier(CardDragStage()) }
 
     /// 不给 `shape` 时预览是直角矩形，圆角的卡与行四角露出直角的底。
-    func cardDraggable(_ card: DraggedCard, session: String? = nil, shape: some Shape) -> some View {
-        modifier(CardDraggable(card: card, session: session, shape: shape))
+    /// `chip`：没有底的行（任务行、"更早"的行）给它的标题。手机拖起时系统把整行缩小、垫一块直角的白底，改拖一张写着标题的小纸（`DragChip`）；
+    /// 自己有纸的卡不给，拖的就是它自己。Mac 拖的是行原样的影子，不用。
+    func cardDraggable(_ card: DraggedCard, session: String? = nil, chip: String? = nil, shape: some Shape) -> some View {
+        modifier(CardDraggable(card: card, session: session, chip: chip, shape: shape))
     }
 
     /// `hover` 拖走与放下后报 nil；`perform` 先于放下后的那个 nil：落点的状态（拖进来时的起点）放下时还在。
@@ -97,16 +99,26 @@ private struct CardDrop: ViewModifier {
 private struct CardDraggable<S: Shape>: ViewModifier {
     let card: DraggedCard
     let session: String?
+    let chip: String?
     let shape: S
     @Environment(\.cardDrags) private var drags
     @Environment(Workspace.self) private var workspace
+    @Environment(\.palette) private var palette
 
     func body(content: Content) -> some View {
         Group {
             if let session, workspace.layout == .wide {
                 content.draggable(DraggedTaskSession(card: card, session: DraggedSession(sessionID: session)))
             } else {
+                #if os(iOS)
+                if let chip {
+                    content.draggable(card) { DragChip(title: chip, task: card.task != nil, palette: palette) }
+                } else {
+                    content.draggable(card)
+                }
+                #else
                 content.draggable(card)
+                #endif
             }
         }
             .contentShape(.dragPreview, shape)
@@ -119,3 +131,26 @@ private struct CardDraggable<S: Shape>: ViewModifier {
             }
     }
 }
+
+#if os(iOS)
+/// 拖起的那张小纸。预览画在系统的拖放层里、读不到 App 的环境，颜色由拖起的那一行带进来。
+private struct DragChip: View {
+    let title: String
+    let task: Bool
+    let palette: Palette
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: Radius.card)
+        HStack(spacing: Spacing.item) {
+            Image(task ? .task : .idea).foregroundStyle(palette.ink3)
+            Text(title).font(Typography.body.weight(.medium)).foregroundStyle(palette.ink).lineLimit(1)
+        }
+        .padding(.horizontal, Spacing.block).padding(.vertical, Spacing.item)
+        .frame(maxWidth: Self.width, alignment: .leading).fixedSize(horizontal: false, vertical: true)
+        .background(palette.paper, in: shape)
+        .contentShape(.dragPreview, shape)
+    }
+
+    private static let width: CGFloat = 260
+}
+#endif

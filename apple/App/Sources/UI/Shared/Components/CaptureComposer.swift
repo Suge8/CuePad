@@ -11,7 +11,6 @@ struct CaptureState {
 struct CaptureComposer: View {
     @Binding var state: CaptureState
     let defaultProject: UUID?
-    let pinnedOpen: Bool
     /// 草稿在这之前已清空。
     var saved: () -> Void = {}
     @Environment(Workspace.self) private var workspace
@@ -21,29 +20,27 @@ struct CaptureComposer: View {
     @Environment(\.panelCovered) private var covered
 
     private var project: UUID { state.project ?? defaultProject ?? Project.defaultID }
-    private var destination: String { workspace.catalog?.project(project)?.shownName ?? "" }
-    private var collapsed: Bool { !pinnedOpen && !focused && state.draft.isEmpty(accepting: .files) }
 
     var body: some View {
         Composer(
-            draft: $state.draft, prompt: .verbatim(collapsed ? CaptureCopy.placeholder(to: destination) : CaptureCopy.prompt), label: "随手记",
-            focus: $focused, accepts: .files, form: pinnedOpen ? .open : .line(opensOnFocus: true), shortcuts: [.send: save],
+            draft: $state.draft, prompt: .verbatim(CaptureCopy.prompt), label: "随手记",
+            focus: $focused, accepts: .files, form: .open, shortcuts: [.send: save],
             header: { header }, tools: { EmptyView() }, send: { saveButton }
         )
-        .onAppear { if pinnedOpen, !covered { focused = true } }
+        .onAppear { if !covered { focused = true } }
     }
 
     private var header: some View {
         HStack(spacing: Spacing.item) {
             DestinationMenu(project: project) { state.project = $0 }
             Spacer(minLength: 8)
-            if pinnedOpen, let notice = workspace.notice {
+            if let notice = workspace.notice {
                 Text(notice.text).font(Typography.meta)
                     .foregroundStyle(notice.isError ? palette.failure : palette.ink3)
                     .allowsHitTesting(false)
                     .transition(.opacity)
             }
-            if pinnedOpen { handOffButton }
+            handOffButton
         }
         .animation(Motion.fade, value: workspace.notice)
         .padding(.horizontal, Spacing.group).padding(.top, Spacing.item)

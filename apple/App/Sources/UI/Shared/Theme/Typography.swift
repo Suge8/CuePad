@@ -53,19 +53,17 @@ enum Typography {
     /// 下面或后面跟的那一行（项目介绍、Cue 的数字账）是 `toolbarSubtitle`；标题下面还有一行（任务 · 子任务）时标题收小，两行放进一个控件的高度。
     static let toolbarLabel = Font.system(size: 13, weight: .medium)
     static let toolbarTitle = Font.system(size: 15, weight: .semibold)
-    static let toolbarTitlePaired = Font.system(size: 13, weight: .semibold)
-    static let toolbarSubtitle = Font.system(size: 12)
+    /// 两行的那一块里标题与下面一行差三号：差一两号时下面那行的图标与字看着和标题一样重，分不出谁是标题。
+    static let toolbarTitlePaired = Font.system(size: 14, weight: .semibold)
+    static let toolbarSubtitle = Font.system(size: 11)
     /// 看板列头：四列的列名与数同一个字号（同钮上的字），轻重只靠墨色分（`BoardWeight.swift`）。
     /// 否决过：等你的列头大一号、重的两列的数大一档——一排四个列头大小不一，读成没对齐。
     static let laneTitle = Font.system(size: 13, weight: .semibold)
-    static let toolbarPath = Font.system(size: 11)
     static let cueCardName = Font.system(size: 18, weight: .semibold)
     /// 卡片摘要的额外行距；紧凑内容小于长文阅读。
     static let lineSpacing: CGFloat = 4
     static let gaugeNumber = Font.system(size: 15, weight: .semibold, design: .rounded).monospacedDigit()
     static let menuBarCount = NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .semibold)
-    /// 手机会话条格里最轻的那一行（哪家 Agent、哪个项目）：60 点宽的格放得下四五个字。Mac 上不出现，同 iOS 那一档。
-    static let railTag = Font.system(size: 9, weight: .medium)
     #else
     static let body = Font.body
     static let bodyStrong = Font.headline
@@ -84,8 +82,8 @@ enum Typography {
     static let sectionCount = Font.footnote.monospacedDigit()
     /// 宽屏栏头的标题与它后面那一行（iPad，同 Mac 那两档的角色）；页顶玻璃里两行的标题是 `toolbarTitlePaired`，下面那一行仍是 `toolbarSubtitle`。
     static let toolbarTitle = Font.headline
-    static let toolbarTitlePaired = Font.subheadline.weight(.semibold)
-    static let toolbarSubtitle = Font.caption
+    static let toolbarTitlePaired = Font.callout.weight(.semibold)
+    static let toolbarSubtitle = Font.caption2
     /// 钮上的字（分段的各段）。手机上半粗：触屏的段比 Mac 宽，中号字重在玻璃上发虚。
     static let toolbarLabel = Font.subheadline.weight(.semibold)
     /// 看板列头（横屏与 iPad 四列）：列名与数，同 Mac 那一档的角色。
@@ -95,8 +93,6 @@ enum Typography {
     static let heading = Font.title2.weight(.bold)
     static let emptyTitle = Font.title3.weight(.semibold)
     static let gaugeNumber = Font.system(.body, design: .rounded, weight: .semibold).monospacedDigit()
-    /// 手机会话条格里最轻的那一行（哪家 Agent、哪个项目）：60 点宽的格放得下四五个字；格高随字号（`SessionRail`），这一行不随。
-    static let railTag = Font.system(size: 9, weight: .medium)
     /// 预览页里整份文件的等宽字（UIKit 文本视图）。
     static let codeUIFont = UIFont.monospacedSystemFont(ofSize: UIFont.preferredFont(forTextStyle: .footnote).pointSize, weight: .regular)
     #endif

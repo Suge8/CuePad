@@ -4,8 +4,6 @@ import Foundation
 nonisolated enum CaptureCopy {
     static var prompt: String { String(localized: "记下灵感") }
 
-    static func placeholder(to destination: String) -> String { String(localized: "记下灵感 → \(destination)") }
-
     static func saved(to destination: String) -> String { String(localized: "已记到 \(destination)") }
 
     static func added(to destination: String) -> String { String(localized: "任务已加到 \(destination)") }

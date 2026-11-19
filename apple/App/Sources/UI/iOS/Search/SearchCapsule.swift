@@ -36,6 +36,10 @@ private struct BarTextField: UIViewRepresentable {
         field.font = .preferredFont(forTextStyle: .body)
         field.adjustsFontForContentSizeCategory = true
         field.returnKeyType = .search
+        // 搜的是原样的字：自动改正会把 iCloud 改成 ICloud、弹出改正气泡
+        field.autocorrectionType = .no
+        field.autocapitalizationType = .none
+        field.spellCheckingType = .no
         field.clearButtonMode = .always
         field.accessibilityLabel = String(localized: "搜索")
         field.accessibilityTraits.insert(.searchField)

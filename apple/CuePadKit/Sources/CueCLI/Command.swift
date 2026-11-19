@@ -31,7 +31,12 @@ struct Command: Sendable {
 
   var name: String { path.joined(separator: " ") }
 
+  // `live` 认的是本机在监听的开发服务（`LiveServers`，只有 Mac 有）；这个目标在 iOS 上也要编得过（`xc.sh test ios` 连它一起编）
+  #if os(macOS)
   static let all: [Command] = project + card + task + [search, show, live] + liveActions + conflicts
+  #else
+  static let all: [Command] = project + card + task + [search, show] + conflicts
+  #endif
   static let nouns: [String] = all.map(\.path[0]).reduce(into: []) { if !$0.contains($1) { $0.append($1) } }
 }
 

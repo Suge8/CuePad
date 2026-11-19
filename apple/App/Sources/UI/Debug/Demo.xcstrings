@@ -7703,22 +7703,6 @@
         }
       }
     },
-    "评审" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Review"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "评审"
-          }
-        }
-      }
-    },
     "评审结论.md" : {
       "localizations" : {
         "en" : {

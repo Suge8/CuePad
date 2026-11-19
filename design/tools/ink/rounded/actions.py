@@ -5,8 +5,8 @@ from . import base
 from .shared import box, moved, ring, smooth
 
 NAMES = (
-    "settings", "sidebar.right", "clear", "chevron.up", "chevron.right", "chevron.down", "chevron.left",
-    "done.pre", "reopen", "restore", "indent", "outdent", "link", "unlink", "folder.remove", "pin", "unpin",
+    "settings", "sidebar.right", "clear", "sweep", "chevron.up", "chevron.right", "chevron.down", "chevron.left",
+    "done.pre", "reopen", "restore", "clock", "indent", "outdent", "link", "unlink", "folder.remove", "pin", "unpin",
     "conflict", "deck", "share", "save", "pencil", "write", "choose", "puzzle", "tick", "plane.done",
     "arrow.up", "arrow.down", "ring.down", "ring.stop", "ring.play", "ring.plus", "badge.down", "compact",
     "hand", "mac", "photo", "photos", "select", "keyboard.down", "braces", "window.play", "doc.blank", "wrench",
@@ -55,12 +55,21 @@ def centerlines(name):
     elif name == "clear":
         closed.append(poly([(-11,0),(-5,-7),(10,-7),(10,7),(-5,7)],[1.8,1.8,2.5,2.5,1.8],True))
         line((-1,-3),(5,3)); line((5,-3),(-1,3))
+    elif name == "sweep":
+        # 扫帚：斜着的柄、垂直于柄的一道箍、从箍向左下张开的帚头，里面两道帚丝
+        line((10,-10),(2,-2))
+        line((-2,-6),(-11,1),(-1,11),(6,2),radius=2.5)
+        line((-2,-6),(6,2))
+        line((-2.4,-0.4),(-6.6,3.8)); line((0.4,2.4),(-3.8,6.6))
     elif name == "done.pre":
         circle(0,0,10)
     elif name in ("reopen","restore"):
         opened.append(arcs((0,1),8,-150,285))
         line((-8,-7),(-8,-2),(-3,-2))
         if name == "restore": line((0,-3),(0,1),(4,1))
+    elif name == "clock":
+        circle(0,0,10)
+        line((0,-5.5),(0,0),(4,2.5))
     elif name in ("indent","outdent"):
         for y in (-8,0,8): line((1,y),(10,y))
         direction = 1 if name == "indent" else -1

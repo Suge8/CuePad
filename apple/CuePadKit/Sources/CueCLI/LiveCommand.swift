@@ -1,3 +1,4 @@
+#if os(macOS)
 import CueStore
 import Foundation
 
@@ -65,3 +66,4 @@ extension Command {
     .invalid("这台 Mac 上的 CuePad 没开（没有 App 开着资料库 \(UserHome.shown(call.store.databasePath))）：\(then)")
   }
 }
+#endif

@@ -196,7 +196,7 @@ enum InteractionBench {
                 await step("卡回待办") { Task { await DebugScene.running("卡回待办") { try await store.setStatus(task.id, .todo) } } }
             }
         }
-        // 项目页任务纸点"还有 N 条"展开、再收起：在没做完的任务最多的项目上（配 `-CuePadManyTasks` 量任务多时）
+        // 项目页任务区点"还有 N 条"展开、再收起：在没做完的任务最多的项目上（配 `-CuePadManyTasks` 量任务多时）
         if only.map({ $0.contains("展开任务") || $0.contains("收起任务") }) ?? true,
            let busiest = workspace.catalog?.openTasks.max(by: { $0.value < $1.value })?.key {
             workspace.show(.project(busiest))

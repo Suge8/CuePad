@@ -43,6 +43,8 @@ struct IOSEditorHost: UIViewRepresentable {
 
     func makeCoordinator() -> KeyboardBar.Actions { KeyboardBar.Actions() }
 
+    private static let settle: Duration = .milliseconds(650)
+
     func makeUIView(context: Context) -> CueTextView {
         let view = CueTextView(files: services.store.files, theme: theme)
         view.storedText = initialText
@@ -54,7 +56,17 @@ struct IOSEditorHost: UIViewRepresentable {
             view.alwaysBounceVertical = false
         }
         handle.view = view
-        if initialText.isEmpty { DispatchQueue.main.async { view.becomeFirstResponder() } }
+        if initialText.isEmpty {
+            DispatchQueue.main.async {
+                // 推入的转场快停稳了再接键盘：半路接（约 0.45 秒处）转场最后一截被截断，快铺满的页一帧跳到位；等它报完成又要 1.2 秒，键盘来得太晚（都是录屏逐帧量的）
+                let controller = sequence(first: view as UIResponder, next: \.next).lazy.compactMap { $0 as? UIViewController }.first
+                guard controller?.transitionCoordinator != nil else { return _ = view.becomeFirstResponder() }
+                Task {
+                    guard (try? await Task.sleep(for: Self.settle)) != nil else { return }
+                    view.becomeFirstResponder()
+                }
+            }
+        }
         if let range = DebugHooks.preset.editorSelection {
             DebugHooks.later(.milliseconds(500)) {
                 view.becomeFirstResponder()

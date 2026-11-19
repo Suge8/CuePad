@@ -179,7 +179,7 @@ struct CuePage: View {
             #if os(macOS)
             CueVoicePanel()
             #endif
-            // 宽屏没启用时不放输入框：主区底部已有记下灵感的那一条（`CaptureSlot`），一屏只留一个；这一栏只剩启用那一张（`CueWelcome`）
+            // 宽屏没启用时不放输入框：这一栏只剩启用那一张（`CueWelcome`）
             // Mac 通话中通话条原地顶替输入框（同手机，`CueVoiceView`），挂断了输入框回来、草稿还在
             if !calling, cue.canHear || workspace.layout == .narrow {
                 CueComposer(style: .page, takesFocusRequests: true, focusing: closeStage) {

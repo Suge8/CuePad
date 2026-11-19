@@ -162,7 +162,7 @@ private struct StartBar: View {
                 Button(action: start) {
                     Label(outcome != nil ? "重试" : caption == nil ? "开始" : "开始这一步", icon: .start)
                 }
-                .buttonStyle(ControlButtonStyle(kind: .primary, size: .regular))
+                .buttonStyle(ControlButtonStyle(kind: .primary, size: .compact))
                 .accessibilityHint("把任务的正文交给 Agent，开始做")
             }
         }
@@ -177,7 +177,7 @@ private struct StartBar: View {
     }
 
     private func captioned(_ caption: String) -> some View {
-        Text(caption).font(BubbleMetrics.meta).foregroundStyle(palette.ink2).lineLimit(1)
+        Text("下一步 \(Text(verbatim: caption).foregroundStyle(palette.ink2))").font(BubbleMetrics.meta).foregroundStyle(palette.ink3).lineLimit(1)
     }
 
     private func start() {

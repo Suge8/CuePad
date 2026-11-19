@@ -27,6 +27,11 @@ struct TokenSheet: View {
                             }
                             label("projectColors")
                         }
+                        HStack(spacing: Spacing.tight) {
+                            RoundedRectangle(cornerRadius: Radius.chip).fill(palette.note).frame(width: Self.swatch, height: Self.swatch)
+                            RoundedRectangle(cornerRadius: Radius.chip).fill(palette.project(Palette.neutralProject)).frame(width: Self.swatch, height: Self.swatch)
+                            label("note · neutralProject")
+                        }
                     }
                     group("Elevation") {
                         HStack(spacing: Spacing.block) {

@@ -4,13 +4,15 @@ import SwiftUI
 /// 菜单的样式跟外面的环境（Mac 在外面套 `.menuStyle(.button)`）。
 struct SearchFilters: View {
     @Binding var query: PaletteQuery
-    let targets: [SendTarget]
 
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
     var body: some View {
         let projects = workspace.catalog?.projects ?? []
+        menu(String(localized: "类别"), query.kind.label, on: query.kind != .all) {
+            ForEach(PaletteQuery.Kind.allCases, id: \.self) { kind in Button(kind.label) { query.kind = kind } }
+        }
         menu(String(localized: "项目"), query.projectLabel(in: projects), on: query.project != nil) {
             Button("全部") { query.project = nil }
             Divider()
@@ -19,18 +21,6 @@ struct SearchFilters: View {
         Button { query.withAttachments.toggle() } label: { chip(String(localized: "含附件"), nil, on: query.withAttachments) }
             .buttonStyle(PressStyle())
             .accessibilityAddTraits(query.withAttachments ? .isSelected : [])
-        menu("Agent", query.sentLabel, on: query.sent != .any) {
-            Button("任意") { query.sent = .any }
-            Divider()
-            Button("没发给过 Agent") { query.sent = .never }
-            Button("发给过 Agent") { query.sent = .sent(kind: .known(.piSession)) }
-            if !targets.isEmpty {
-                Divider()
-                ForEach(targets, id: \.filterID) { target in
-                    Button(target.name) { query.sent = .sent(kind: target.kind, name: target.name) }
-                }
-            }
-        }
         menu(String(localized: "时间"), query.period.label, on: query.period != .any) {
             ForEach(PaletteQuery.Period.allCases, id: \.self) { period in Button(period.label) { query.period = period } }
         }
@@ -51,6 +41,38 @@ struct SearchFilters: View {
         }
         .chip(on: on, menu: value != nil)
     }
+}
+
+/// 没打字也没设条件时搜索里只有这几行（三端同一份）：点一行就是设上那个条件。
+struct SearchSuggestions: View {
+    @Binding var query: PaletteQuery
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            SectionHeader("建议").padding(.bottom, Spacing.tight)
+            row(PaletteQuery.Kind.sessions.label, .session) { query.kind = .sessions }
+            row(PaletteQuery.Kind.tasks.label, .task) { query.kind = .tasks }
+            row(PaletteQuery.Kind.ideas.label, .idea) { query.kind = .ideas }
+            row(String(localized: "含附件"), .attachment) { query.withAttachments = true }
+            row(PaletteQuery.Period.week.label, .recent) { query.period = .week }
+        }
+    }
+
+    private func row(_ title: String, _ icon: Icon, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: Spacing.item) {
+                Image(icon).foregroundStyle(palette.ink2).frame(width: Self.mark).readerHidden(true)
+                Text(title).font(Typography.body).foregroundStyle(palette.ink)
+                Spacer(minLength: 0)
+            }
+            .frame(minHeight: RowMetrics.height)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.row)
+    }
+
+    private static let mark: CGFloat = 20
 }
 
 /// 结果变短时滚动位置留在原处、落到内容外面，懒加载的列表画成空白，两端都会，所以换了条件（卡片页数回到 1）就回到顶上，"显示更多"不动。

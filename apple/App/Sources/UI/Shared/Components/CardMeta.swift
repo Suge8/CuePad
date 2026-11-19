@@ -6,7 +6,6 @@ import SwiftUI
 struct CardMeta: View {
     let card: Card
     let text: CardText
-    let lastTarget: String?
     let floated: Bool
     var font: Font = Typography.caption2
     @Environment(\.palette) private var palette
@@ -24,7 +23,6 @@ struct CardMeta: View {
                 }
                 .layoutPriority(1)
             } else { changed }
-            if let lastTarget { SentMark(target: lastTarget) }
             Spacer(minLength: 0)
             if text.files > 0 { AttachmentMark(count: text.files) }
             if card.isTask { Image(.task).help("任务").iconLabel("任务") }
@@ -50,16 +48,6 @@ struct AttachmentMark: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("带 \(count) 个附件")
-    }
-}
-
-struct SentMark: View {
-    let target: String
-
-    var body: some View {
-        Label(target, icon: .handOff).labelStyle(.titleAndIcon).lineLimit(1)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(target == SendCopy.sameProject ? Text(target) : Text("已发给 \(target)"))
     }
 }
 

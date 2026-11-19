@@ -57,7 +57,6 @@ private struct NarrowCue: View {
                 SessionRail(data: workspace.services.liveSessions.rail, form: .phone, pulse: workspace.pulse) { session, _ in
                     workspace.openSession(session.id, sessionID: session.sessionID)
                 }
-                .safeAreaInset(edge: .bottom, spacing: Spacing.item) { EarlierTile() }
                 .padding(.top, CueHeader.height + Bars.contentGap)
                 .padding(.bottom, ComposerMetrics.slot + Spacing.block)
                 .opacity(panelOpen ? 0 : 1)

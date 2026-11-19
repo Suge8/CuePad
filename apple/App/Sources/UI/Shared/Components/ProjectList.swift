@@ -1,10 +1,10 @@
 import CueStore
 import SwiftUI
 
-/// 项目列表页：项目卡，加归档、回收站两个入口；手机多的一格设置由调用方给（`extra`）。
-struct ProjectShelf<Extra: View>: View {
-    var placesAtEnd = false
-    @ViewBuilder var extra: Extra
+/// 项目列表页：项目卡。归档、回收站与设置不在这一页里：宽屏在栏头（`WideShelfHeading`），手机在页头左边那颗"更多"里（`NarrowSidebarBar`）。
+struct ProjectShelf: View {
+    /// 手机：定成两列。
+    var paired = false
     @Environment(Workspace.self) private var workspace
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -15,16 +15,12 @@ struct ProjectShelf<Extra: View>: View {
     var body: some View {
         ScrollView {
             if let projects = workspace.catalog?.projects {
-                LazyVStack(alignment: .leading, spacing: Spacing.item) {
-                    if !placesAtEnd { places }
-                    LazyVGrid(columns: columns, alignment: .leading, spacing: Spacing.group) {
-                        ForEach(projects) { project in
-                            ProjectListItem(project: project, summary: workspace.catalog?.summaries[project.id],
-                                            openTasks: workspace.catalog?.taskCounts[project.id]?.open ?? 0)
-                                .equatable()
-                        }
+                LazyVGrid(columns: columns, alignment: .leading, spacing: Spacing.group) {
+                    ForEach(projects) { project in
+                        ProjectListItem(project: project, summary: workspace.catalog?.summaries[project.id],
+                                        openTasks: workspace.catalog?.taskCounts[project.id]?.open ?? 0)
+                            .equatable()
                     }
-                    if placesAtEnd { places }
                 }
                 .frame(maxWidth: Self.maximumWidth, alignment: .leading)
                 .frame(maxWidth: .infinity)
@@ -35,24 +31,11 @@ struct ProjectShelf<Extra: View>: View {
         }
     }
 
-    private var places: some View {
-        ChipFlow(spacing: Spacing.part) {
-            ProjectListPlace(title: "归档", icon: .archive, route: .archive)
-            ProjectListPlace(title: "回收站", icon: .trash, route: .trash)
-            extra
-        }
-        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
-    }
-
     private var columns: [GridItem] {
         if typeSize >= .xxxLarge { return [GridItem(.flexible(), alignment: .topLeading)] }
-        if placesAtEnd { return Array(repeating: GridItem(.flexible(), spacing: Spacing.group, alignment: .topLeading), count: 2) }
+        if paired { return Array(repeating: GridItem(.flexible(), spacing: Spacing.group, alignment: .topLeading), count: 2) }
         return [GridItem(.adaptive(minimum: Self.columnWidth), spacing: Spacing.group, alignment: .topLeading)]
     }
-}
-
-extension ProjectShelf where Extra == EmptyView {
-    init() { self.init { EmptyView() } }
 }
 
 private struct ProjectListItem: View, Equatable {
@@ -80,37 +63,5 @@ private struct ProjectListItem: View, Equatable {
     private var label: some View {
         ProjectCard(project: project, ideaCount: summary?.cardCount ?? 0, openTasks: openTasks,
                     modifiedAt: summary?.modifiedAt ?? project.modifiedAt)
-    }
-}
-
-struct ProjectListPlace: View {
-    let title: LocalizedStringResource
-    let icon: Icon
-    let route: Route
-    var alert: SyncSummary?
-    @Environment(Workspace.self) private var workspace
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        Group {
-            #if os(macOS)
-            Button { workspace.show(route) } label: { label }
-            #else
-            NavigationLink(value: route) { label }
-            #endif
-        }
-        .buttonStyle(.row)
-        .accessibilityValue(alert?.title ?? "")
-    }
-
-    private var label: some View {
-        HStack(spacing: Spacing.glyph) {
-            Image(icon).font(Glyph.row).readerHidden(true)
-            Text(title).font(Typography.secondary)
-            if let alert { StatusDot(color: palette.color(alert.tone)) }
-        }
-        .foregroundStyle(palette.ink2)
-        .frame(minHeight: RowMetrics.height)
-        .contentShape(.rect)
     }
 }

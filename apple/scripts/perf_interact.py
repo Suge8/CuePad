@@ -89,7 +89,7 @@ def interact_ios(app, derived, runs, extra, sim):
         lines = lambda: open(out).read().splitlines() if os.path.exists(out) else []
         trace = trace_path(derived, f"interact-ios-{run}") if TRACE else None
         tracer = xctrace_device(sim.device, trace) if TRACE else None
-        pid = sim.launch(library, [*([] if SEED else ["-CuePadDemo", "YES"]), "-CuePadBench", "interact", *extra], f"{library}.ready")
+        pid = sim.launch(library, [*([] if SEED else ["-CuePadDemo", "YES"]), "-CuePadBench", "interact", "-CuePadSearchScope", "sessions", *extra], f"{library}.ready")
         if TRACE:
             print(f"trace：CuePad PID {pid}", file=sys.stderr)
         pressed, finished, asked = 0, False, 0.0

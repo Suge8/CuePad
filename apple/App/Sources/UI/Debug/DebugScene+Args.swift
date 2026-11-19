@@ -110,7 +110,7 @@ nonisolated struct DebugArgs: Decodable {
     let scene: String?
     /// `-CuePadSearch <关键词>`：search 画面与卡片选择器（`-CuePadComposer cards`）的预填关键词
     let search: String?
-    /// `-CuePadSearchScope sessions`（iOS）：搜索页打开在会话那一栏
+    /// `-CuePadSearchScope sessions`（iOS）：搜索页的会话那一节一打开就列全
     let searchScope: String?
     /// `-CuePadSeed perf`（仅 Mac）：库为空（只有默认项目）时写入性能测量用的大资料库，配合 `-CuePadBench interact`
     let seed: String?

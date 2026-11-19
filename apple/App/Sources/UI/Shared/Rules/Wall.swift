@@ -3,15 +3,13 @@ import Foundation
 nonisolated struct CardStamp: Equatable, Sendable {
     var id: UUID
     var modifiedAt: Date
-    var lastSentAt: Date?
     var isPinned: Bool
 }
 
 /// 墙只在打开另一个项目或跨天时重排；同一次打开里，墙上的卡编辑后原地不动（保住"它在左上角"的空间记忆），
 /// 排好之后新建或再次编辑的卡插到墙首，删除的卡离开；没有新编辑却新出现的卡按规则补到墙尾或进更早。
 nonisolated struct WallArrangement: Equatable, Sendable {
-    static let recentDays = 14.0
-    static let unsentDays = 30.0
+    static let recentDays = 30.0
     static let capacity = 14
 
     var project: UUID
@@ -57,7 +55,7 @@ nonisolated struct WallArrangement: Equatable, Sendable {
 
     private static func onWall(_ card: CardStamp, now: Date) -> Bool {
         let age = now.timeIntervalSince(card.modifiedAt) / 86_400
-        return age <= recentDays || (age <= unsentDays && card.lastSentAt == nil)
+        return age <= recentDays
     }
 
     private static func newestFirst(_ a: CardStamp, _ b: CardStamp) -> Bool {

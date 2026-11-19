@@ -162,37 +162,4 @@ extension CueStore {
     ) { (parent: $0.uuid(0), progress: TaskProgress(done: Int($0.int(2)), total: Int($0.int(1)), stepTime: $0.intOrNil(3).map { Double($0) / 1000 })) }
     return Dictionary(uniqueKeysWithValues: rows.map { ($0.parent, $0.progress) })
   }
-
-  public func lastSends(in project: UUID) throws -> [UUID: LastSend] {
-    Dictionary(
-      uniqueKeysWithValues: try db.query(
-        """
-        SELECT s.cardID, s.sentAt, s.targetKind, s.targetName, s.targetRef FROM sendRecords s
-        WHERE s.cardID IN (SELECT id FROM cards WHERE (\(Self.cardVisible)) AND projectID = ?)
-          AND s.id = (SELECT t.id FROM sendRecords t WHERE t.cardID = s.cardID ORDER BY t.sentAt DESC, t.id DESC LIMIT 1)
-        """, [project]
-      ) {
-        (
-          $0.uuid(0),
-          LastSend(
-            sentAt: $0.date(1),
-            target: SendTarget(kind: Open(rawValue: $0.text(2)), name: $0.text(3), ref: $0.textOrNil(4)))
-        )
-      })
-  }
-
-  /// 只含关联了卡片的发送：只有这些目标才可能筛出卡片。
-  /// `ref` 靠 SQLite 对单个 MAX 聚合的裸列语义取自最近一行。
-  public func sendTargets() throws -> [SendTarget] {
-    try db.query(
-      """
-      SELECT targetKind, targetName, targetRef, MAX(sentAt) FROM sendRecords
-      WHERE cardID IS NOT NULL
-      GROUP BY targetKind, targetName
-      ORDER BY MAX(sentAt) DESC, targetKind, targetName
-      """
-    ) {
-      SendTarget(kind: Open(rawValue: $0.text(0)), name: $0.text(1), ref: $0.textOrNil(2))
-    }
-  }
 }

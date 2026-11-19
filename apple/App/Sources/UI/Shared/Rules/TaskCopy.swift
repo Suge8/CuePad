@@ -1,25 +1,27 @@
 import CueStore
 import Foundation
 
+/// 折起时留哪几件（`folded`）：进行中的（它自己或它下面有一步在做）都留着，待办按顺序补到 `limit` 件——正在做的事不该被"还有 N 条"藏住。
 /// 只多一条时直接全列："还有 1 条"那一行与一条任务一样高，折起来不省地方。
-/// 收起其余任务一步到位，纸底那一行留在原来的屏幕位置（`TaskFoldAnchor`）。页面本地的临时状态，不持久化。
+/// 收起其余任务一步到位，"收起"那一行留在原来的屏幕位置（`TaskFoldAnchor`）。页面本地的临时状态，不持久化。
 nonisolated struct TaskFold: Equatable, Sendable {
     var showsAll = false
     var showsDone = false
 
-    static func hidden(_ count: Int, limit: Int) -> Int { count - limit > 1 ? count - limit : 0 }
-
-    func shown(_ roots: [UUID], limit: Int) -> [UUID] {
-        showsAll || Self.hidden(roots.count, limit: limit) == 0 ? roots : Array(roots.prefix(limit))
-    }
-
-    static func foldedRows(_ tree: TaskTree, limit: Int) -> Int {
-        tree.rows(of: Array(tree.roots.prefix(limit))).count
+    static func folded(_ tree: TaskTree, limit: Int) -> [UUID] {
+        let roots = tree.roots
+        let active = Set(roots.filter { root in tree.rows(of: [root]).contains { $0.task.status == .inProgress } })
+        var room = max(limit - active.count, 0)
+        let kept = roots.filter { root in
+            if active.contains(root) { return true }
+            room -= 1
+            return room >= 0
+        }
+        return roots.count - kept.count > 1 ? kept : roots
     }
 }
 
 enum TaskCopy {
-    /// 数都来自 `TaskCounts`，纸上不另摆分数。
     static func more(hidden: Int, expanded: Bool) -> String { expanded ? String(localized: "收起") : String(localized: "还有 \(hidden) 条") }
     static func done(_ count: Int) -> String { String(localized: "已完成 \(count)") }
 

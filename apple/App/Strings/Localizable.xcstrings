@@ -384,22 +384,6 @@
         }
       }
     },
-    "%@ 归档" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Archived %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ 归档"
-          }
-        }
-      }
-    },
     "%@ 必须是绝对路径，收到「%@」" : {
       "localizations" : {
         "en" : {
@@ -4616,22 +4600,6 @@
         }
       }
     },
-    "一句话介绍" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "One-line description"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "一句话介绍"
-          }
-        }
-      }
-    },
     "一台 Mac 上一份技能或规则的正文" : {
       "localizations" : {
         "en" : {
@@ -5264,6 +5232,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "下一次：%@"
+          }
+        }
+      }
+    },
+    "下一步 %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Next: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下一步 %@"
           }
         }
       }
@@ -7248,6 +7232,34 @@
         }
       }
     },
+    "全部 %lld 个会话" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld session in all"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "All %lld sessions"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "全部 %lld 个会话"
+          }
+        }
+      }
+    },
     "全部完成" : {
       "localizations" : {
         "en" : {
@@ -7816,22 +7828,6 @@
         }
       }
     },
-    "分享原图" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Share Original Images"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "分享原图"
-          }
-        }
-      }
-    },
     "分享原始文件…" : {
       "localizations" : {
         "en" : {
@@ -7844,22 +7840,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "分享原始文件…"
-          }
-        }
-      }
-    },
-    "分享文字" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Share Text"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "分享文字"
           }
         }
       }
@@ -8036,22 +8016,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "创建"
-          }
-        }
-      }
-    },
-    "删于 %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Deleted %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "删于 %@"
           }
         }
       }
@@ -8452,22 +8416,6 @@
         }
       }
     },
-    "历史" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "History"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "历史"
-          }
-        }
-      }
-    },
     "压缩上下文" : {
       "localizations" : {
         "en" : {
@@ -8512,6 +8460,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "原因：%@"
+          }
+        }
+      }
+    },
+    "原图" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Original Images"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "原图"
           }
         }
       }
@@ -8864,38 +8828,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "发给 Agent"
-          }
-        }
-      }
-    },
-    "发给过 Agent" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sent to an Agent"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "发给过 Agent"
-          }
-        }
-      }
-    },
-    "发过" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sent"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "发过"
           }
         }
       }
@@ -10936,22 +10868,6 @@
         }
       }
     },
-    "在这里开新会话；Mac 上接入的 Agent，它的会话记录也会出现在这里" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Start a new session here. Sessions from agents connected on your Mac also show up here."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在这里开新会话；Mac 上接入的 Agent，它的会话记录也会出现在这里"
-          }
-        }
-      }
-    },
     "在项目里建一个指向 AGENTS.md 的 CLAUDE.md" : {
       "localizations" : {
         "en" : {
@@ -12308,38 +12224,6 @@
         }
       }
     },
-    "已发给 %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sent to %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已发给 %@"
-          }
-        }
-      }
-    },
-    "已发过" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sent"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已发过"
-          }
-        }
-      }
-    },
     "已同步" : {
       "localizations" : {
         "en" : {
@@ -12780,6 +12664,22 @@
         }
       }
     },
+    "已设条件" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filtered"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已设条件"
+          }
+        }
+      }
+    },
     "已转为 %lld 个任务" : {
       "localizations" : {
         "en" : {
@@ -12976,6 +12876,22 @@
         }
       }
     },
+    "建议" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suggested"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "建议"
+          }
+        }
+      }
+    },
     "开" : {
       "localizations" : {
         "en" : {
@@ -13077,7 +12993,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Exited right after opening the session"
+            "value" : "Quit right after opening the session"
           }
         },
         "zh-Hans" : {
@@ -14560,18 +14476,18 @@
         }
       }
     },
-    "排成图片分享" : {
+    "排成图片" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Share as Image"
+            "value" : "As an Image"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "排成图片分享"
+            "value" : "排成图片"
           }
         }
       }
@@ -14844,22 +14760,6 @@
         }
       }
     },
-    "搜索会话" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Search sessions"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "搜索会话"
-          }
-        }
-      }
-    },
     "搜索文件夹" : {
       "localizations" : {
         "en" : {
@@ -14952,6 +14852,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "撤回"
+          }
+        }
+      }
+    },
+    "撤掉条件：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remove filter: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "撤掉条件：%@"
           }
         }
       }
@@ -15728,6 +15644,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "文件超过 %lld MB，存不进来"
+          }
+        }
+      }
+    },
+    "文字" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Text"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文字"
           }
         }
       }
@@ -18340,38 +18272,6 @@
         }
       }
     },
-    "没发给过 Agent" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Never Sent to an Agent"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "没发给过 Agent"
-          }
-        }
-      }
-    },
-    "没发过" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Never Sent"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "没发过"
-          }
-        }
-      }
-    },
     "没找到它的命令行程序" : {
       "localizations" : {
         "en" : {
@@ -18596,34 +18496,18 @@
         }
       }
     },
-    "没有找到会话" : {
+    "没有找到灵感、任务或会话" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No Sessions Found"
+            "value" : "No ideas, tasks, or sessions found"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "没有找到会话"
-          }
-        }
-      }
-    },
-    "没有找到灵感或任务" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No Ideas or Tasks Found"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "没有找到灵感或任务"
+            "value" : "没有找到灵感、任务或会话"
           }
         }
       }
@@ -19124,6 +19008,38 @@
         }
       }
     },
+    "添加灵感" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add Idea"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "添加灵感"
+          }
+        }
+      }
+    },
+    "添加灵感（⌘N）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add idea (⌘N)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "添加灵感（⌘N）"
+          }
+        }
+      }
+    },
     "清理已不存在的会话失败：%@" : {
       "localizations" : {
         "en" : {
@@ -19264,22 +19180,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "灵感"
-          }
-        }
-      }
-    },
-    "灵感与任务" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ideas & Tasks"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "灵感与任务"
           }
         }
       }
@@ -19456,22 +19356,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "状态未确认"
-          }
-        }
-      }
-    },
-    "现在" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Now"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "现在"
           }
         }
       }
@@ -20112,6 +19996,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "看近况、回复"
+          }
+        }
+      }
+    },
+    "看进展" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "View Progress"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "看进展"
           }
         }
       }
@@ -20856,6 +20756,22 @@
         }
       }
     },
+    "筛选" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filter"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "筛选"
+          }
+        }
+      }
+    },
     "管理用量" : {
       "localizations" : {
         "en" : {
@@ -20868,6 +20784,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "管理用量"
+          }
+        }
+      }
+    },
+    "类别" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kind"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "类别"
           }
         }
       }
@@ -21336,34 +21268,18 @@
         }
       }
     },
-    "置顶、移到项目、复制、归档、删除" : {
+    "置顶、编辑名称与图标" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Pin, Move to Project, Copy, Archive, Delete"
+            "value" : "Pin, edit name and icon"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "置顶、移到项目、复制、归档、删除"
-          }
-        }
-      }
-    },
-    "置顶的灵感" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Pinned idea"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "置顶的灵感"
+            "value" : "置顶、编辑名称与图标"
           }
         }
       }
@@ -21860,22 +21776,6 @@
         }
       }
     },
-    "记一条灵感" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Jot Down an Idea"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "记一条灵感"
-          }
-        }
-      }
-    },
     "记下" : {
       "localizations" : {
         "en" : {
@@ -21904,38 +21804,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "记下灵感"
-          }
-        }
-      }
-    },
-    "记下灵感 → %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Jot down an idea → %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "记下灵感 → %@"
-          }
-        }
-      }
-    },
-    "记下的灵感、建的任务都能在这里搜到" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ideas and tasks you save can be searched here."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "记下的灵感、建的任务都能在这里搜到"
           }
         }
       }
@@ -22844,22 +22712,6 @@
         }
       }
     },
-    "输入关键词，或用上面的筛选" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Type to search, or use the filters above"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "输入关键词，或用上面的筛选"
-          }
-        }
-      }
-    },
     "输入地址" : {
       "localizations" : {
         "en" : {
@@ -23268,38 +23120,6 @@
         }
       }
     },
-    "还没有 Agent 会话" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No Agent Sessions Yet"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "还没有 Agent 会话"
-          }
-        }
-      }
-    },
-    "还没有 Agent 会话。开个新会话，或在设置里接入 Agent 读进它的会话记录" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No agent sessions yet. Start a new session, or connect an agent in Settings to bring in its sessions."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "还没有 Agent 会话。开个新会话，或在设置里接入 Agent 读进它的会话记录"
-          }
-        }
-      }
-    },
     "还没有 Mac 上跑过 Agent 的文件夹。先在 Mac 上给项目绑定，或在那个文件夹里跑一次 pi。" : {
       "localizations" : {
         "en" : {
@@ -23424,22 +23244,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "还没有归档的"
-          }
-        }
-      }
-    },
-    "还没有灵感与任务" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No Ideas or Tasks Yet"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "还没有灵感与任务"
           }
         }
       }
@@ -24396,22 +24200,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "这次通话有话没交给 Cue"
-          }
-        }
-      }
-    },
-    "这里还没有灵感" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No ideas here yet"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这里还没有灵感"
           }
         }
       }
