@@ -25,9 +25,10 @@ struct TaskNextMark: View {
                 StateDot(shown: shown, size: Self.dot).relaySpot(session: session.sessionID, row: .task)
                 if shown.speaksOnTask { Text(shown.label).foregroundStyle(shown.labelTint(palette)) }
             case .start:
-                Image(.start).font(Self.glyph).foregroundStyle(lit ? palette.onFill : palette.signature)
+                // 墨色的三角落在浅底的圆上，同别的图标钮：一列任务每行一颗，着靛青就成了一列蓝点，抢过标题。行亮着时圆底深一档，不化进行的底里
+                Image(.start).font(Self.glyph).foregroundStyle(palette.ink)
                     .frame(width: Self.disc, height: Self.disc)
-                    .background(lit ? palette.signatureFill : palette.fill, in: .circle)
+                    .background(lit ? palette.track : palette.fill, in: .circle)
             }
         }
         .font(TaskMetrics.caption)

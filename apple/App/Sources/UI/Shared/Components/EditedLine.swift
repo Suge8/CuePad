@@ -13,22 +13,23 @@ struct EditedLine: View {
 
     var body: some View {
         HStack(spacing: Spacing.tight) {
-            slot { if marks.pinned { Image(.pin).iconLabel("已置顶") } }
+            slot { if marks.pinned { Image(.pin).font(Self.glyph).iconLabel("已置顶") } }
             if marks.save == .failed, let text = marks.save.text {
                 Text(text)
             } else {
-                Image(.write).iconLabel("改于")
+                Image(.write).font(Self.glyph).iconLabel("改于")
                 Text(DateLabel.short(marks.edited)).monospacedDigit()
             }
             slot {
                 switch marks.save {
                 case .saving: Spinner(.mini).accessibilityLabel(Text(marks.save.text ?? ""))
-                case .saved: Image(.checked).accessibilityLabel(Text(marks.save.text ?? ""))
+                case .saved: Image(.checked).font(Self.glyph).accessibilityLabel(Text(marks.save.text ?? ""))
                 case .idle, .failed: EmptyView()
                 }
             }
         }
         .lineLimit(1)
+        .imageScale(.small)
         .animation(Motion.fade, value: marks.save)
     }
 
@@ -37,4 +38,10 @@ struct EditedLine: View {
     }
 
     private static let slot: CGFloat = 12
+    /// 图形比旁边的时间略矮：小号（`imageScale(.small)`）在手机的小字上缩得过头，垫大一档字号补回来。
+    #if os(macOS)
+    private static let glyph: Font? = nil
+    #else
+    private static let glyph: Font? = Typography.secondary
+    #endif
 }

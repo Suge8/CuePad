@@ -70,7 +70,7 @@ struct OverlayTitle: View {
 
     private func line(_ text: Dotted) -> some View {
         HStack(spacing: Spacing.tight) {
-            Image(.write).accessibilityHidden(true)
+            Image(.write).imageScale(.small).accessibilityHidden(true)
             Text(text)
         }
     }
