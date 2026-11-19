@@ -49,7 +49,7 @@ extension TokenSheet {
     #if os(macOS)
     private static let platformFonts: [(String, Font)] = [
         ("searchField", Typography.searchField), ("previewTitle", Typography.previewTitle), ("keycap", Typography.keycap),
-        ("toolbarPath", Typography.toolbarPath), ("cueCardName", Typography.cueCardName), ("menuBarCount", Font(Typography.menuBarCount)),
+        ("cueCardName", Typography.cueCardName), ("menuBarCount", Font(Typography.menuBarCount)),
     ]
     #else
     private static let platformFonts: [(String, Font)] = [("codeUIFont", Font(Typography.codeUIFont))]

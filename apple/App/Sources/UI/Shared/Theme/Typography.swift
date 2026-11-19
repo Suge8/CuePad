@@ -59,7 +59,6 @@ enum Typography {
     /// 看板列头：四列的列名与数同一个字号（同钮上的字），轻重只靠墨色分（`BoardWeight.swift`）。
     /// 否决过：等你的列头大一号、重的两列的数大一档——一排四个列头大小不一，读成没对齐。
     static let laneTitle = Font.system(size: 13, weight: .semibold)
-    static let toolbarPath = Font.system(size: 11)
     static let cueCardName = Font.system(size: 18, weight: .semibold)
     /// 卡片摘要的额外行距；紧凑内容小于长文阅读。
     static let lineSpacing: CGFloat = 4

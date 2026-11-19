@@ -56,7 +56,7 @@ struct OverlayTitle: View {
                     line(content?.detail ?? Dotted())
                 }
             }
-            .font(Typography.toolbarPath)
+            .font(Typography.toolbarSubtitle)
             .foregroundStyle(content?.failed == true ? palette.failure : palette.ink3)
         }
         .lineLimit(1)
