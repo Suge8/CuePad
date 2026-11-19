@@ -55,7 +55,8 @@ struct ProjectCoverImage: View {
     var body: some View {
         GeometryReader { proxy in
             let size = proxy.size, height = max(size.height, size.width / ProjectCover.aspect), width = height * ProjectCover.aspect
-            Image(decorative: "cover-\(cover.rawValue)").resizable().frame(width: width, height: height)
+            // 图存的就是画里的像素格（三四百格宽，一张十几 KB），放大时不插值：一格还是一个方块
+            Image(decorative: "cover-\(cover.rawValue)").resizable().interpolation(.none).frame(width: width, height: height)
                 .offset(x: min(max(size.width / 2 - width * cover.focus.x, size.width - width), 0),
                         y: min(max(size.height / 2 - height * cover.focus.y, size.height - height), 0))
         }
