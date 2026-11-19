@@ -1,7 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// 项目页任务区下面的几段（两端同一份编排）：灵感墙——第一格永远是"添加灵感"，接着是置顶的与最近的——和"更早"按时间分组的行（月份的组可折叠，开合放在这里）。
+/// 项目页任务区下面的几段（两端同一份编排）：灵感墙——第一格永远是"添加灵感"，接着是置顶的与最近的——和"更早"按时间分组的行（整段一个开合，放在这里）。
 /// 页只管滚动、栏头与分帧建；卡片墙的格（`tile`）各端自己画。墙上不写段名：虚线那一格已经说了这是灵感。
 struct ProjectWallSections<Tile: View>: View {
     let data: ProjectPageData
@@ -11,7 +11,8 @@ struct ProjectWallSections<Tile: View>: View {
     /// Mac 首次挂上时"更早"晚一帧建（`ProjectPage.Stage`）。
     var showsOlder = true
     @ViewBuilder let tile: (CardEntry) -> Tile
-    @State private var expanded: Set<OlderGroup.Period> = []
+    /// "更早"整段一个开合，进来是开着的：旧灵感本来就在页尾，不挡前面的；按月各折各的要一个个点开才找得到东西。
+    @State private var olderOpen = true
     @State private var adding = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     #if os(iOS)
@@ -61,10 +62,21 @@ struct ProjectWallSections<Tile: View>: View {
             #endif
             if showsOlder, !older.isEmpty {
                 let titled = OlderGroup.needsTitles(in: older)
-                SectionHeader("更早", count: arrangement.older.count).id(OlderGroup.anchor).padding(.bottom, titled ? 0 : metrics.olderGap)
-                ForEach(older, id: \.period) { group in
-                    if titled { OlderGroupHeader(group: group, expanded: $expanded) }
-                    if !group.isMonth || expanded.contains(group.period) { rows(group.cards) }
+                Button { withAnimation(Motion.fade) { olderOpen.toggle() } } label: {
+                    HStack(alignment: .firstTextBaseline, spacing: Spacing.tight) {
+                        SectionHeader("更早", count: arrangement.older.count)
+                        Chevron(.forward).rotationEffect(.degrees(olderOpen ? 90 : 0))
+                    }
+                    .contentShape(.rect)
+                }
+                .buttonStyle(PressStyle(.inline))
+                .accessibilityValue(olderOpen ? "已展开" : "已折叠")
+                .id(OlderGroup.anchor).padding(.bottom, titled || !olderOpen ? 0 : metrics.olderGap)
+                if olderOpen {
+                    ForEach(older, id: \.period) { group in
+                        if titled { OlderGroupHeader(group: group) }
+                        rows(group.cards)
+                    }
                 }
             }
         }
@@ -141,43 +153,28 @@ extension WallBoard {
 
 struct OlderGroupHeader: View {
     let group: OlderGroup
-    @Binding var expanded: Set<OlderGroup.Period>
     @Environment(\.palette) private var palette
 
     var body: some View {
-        let collapsible = group.isMonth
-        let open = !collapsible || expanded.contains(group.period)
-        Button {
-            withAnimation(Motion.fade) {
-                if open { expanded.remove(group.period) } else { expanded.insert(group.period) }
-            }
-        } label: {
-            HStack {
-                if collapsible { Chevron(.forward).rotationEffect(.degrees(open ? 90 : 0)) }
-                #if os(macOS)
-                Text(group.period.title()).font(Typography.label).foregroundStyle(palette.ink2)
-                Spacer()
-                Text("\(group.cards.count) 条").font(Typography.meta).foregroundStyle(palette.ink3)
-                #else
-                SectionHeader(Dotted(group.period.title()), level: .group)
-                Spacer()
-                if collapsible && !open { Text("\(group.cards.count) 条").font(Typography.caption).foregroundStyle(palette.ink3) }
-                #endif
-            }
-            .padding(.horizontal, Spacing.tight)
+        HStack {
             #if os(macOS)
-            .padding(.top, Spacing.page).padding(.bottom, Spacing.tight)
+            Text(group.period.title()).font(Typography.label).foregroundStyle(palette.ink2)
+            Spacer()
+            Text("\(group.cards.count) 条").font(Typography.meta).foregroundStyle(palette.ink3)
             #else
-            .frame(minHeight: collapsible ? 44 : nil)
-            .padding(.top, collapsible ? Spacing.tight : Spacing.group).padding(.bottom, collapsible ? 0 : Spacing.tight)
+            SectionHeader(Dotted(group.period.title()), level: .group)
+            Spacer()
             #endif
-            .contentShape(.rect)
         }
-        .buttonStyle(PressStyle())
+        .padding(.horizontal, Spacing.tight)
+        #if os(macOS)
+        .padding(.top, Spacing.page).padding(.bottom, Spacing.tight)
+        #else
+        .padding(.top, Spacing.group).padding(.bottom, Spacing.tight)
+        #endif
         .frame(maxWidth: Spacing.reading, alignment: .leading)
-        .disabled(!collapsible)
-        .accessibilityAddTraits(collapsible ? [] : .isHeader)
-        .accessibilityValue(collapsible ? (open ? "已展开" : "已折叠") : "")
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
     }
 }
 

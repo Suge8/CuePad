@@ -15172,18 +15172,18 @@
         }
       }
     },
-    "改于" : {
+    "改于 %@" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Edited"
+            "value" : "Edited %@"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "改于"
+            "value" : "改于 %@"
           }
         }
       }

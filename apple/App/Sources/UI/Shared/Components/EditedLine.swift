@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// 灵感编辑页栏头标题下面那一行。状态只画图形：置顶是图钉、存着是转圈、存上了是勾，读屏照旧念字；没存上要人处理，写成字。
-/// 两侧各留一格见方的位置，图钉在左、存没存上在右，有没有都占着：笔与时间一直在标题正下方，状态来去时不左右挪。
+/// 灵感编辑页栏头标题下面那一行：只写改于何时，不带笔——编辑页标题下的一个时间就是改的时间，再画一支笔和图钉挤成一排图标。
+/// 状态只画图形：置顶是图钉、存着是转圈、存上了是勾，读屏照旧念字；没存上要人处理，写成字。
+/// 两侧各留一格见方的位置，图钉在左、存没存上在右，有没有都占着：时间一直在标题正下方，状态来去时不左右挪。
 struct EditedLine: View {
     struct Marks: Equatable {
         var edited: Date
@@ -17,8 +18,8 @@ struct EditedLine: View {
             if marks.save == .failed, let text = marks.save.text {
                 Text(text)
             } else {
-                Image(.write).font(Self.glyph).iconLabel("改于")
                 Text(DateLabel.short(marks.edited)).monospacedDigit()
+                    .accessibilityLabel("改于 \(DateLabel.short(marks.edited))")
             }
             slot {
                 switch marks.save {
