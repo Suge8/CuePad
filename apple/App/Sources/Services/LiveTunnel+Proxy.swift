@@ -108,7 +108,7 @@ extension LiveTunnel {
                     }
                 }
                 try await local.write(Data([5, 0, 0, 1, 0, 0, 0, 0, 0, 0]))
-                Splice.start(local, remote)
+                Splice(local, remote).start()
             } catch {
                 local.cancel()
             }

@@ -153,19 +153,16 @@ extension LiveTunnel {
         // 只在 `queue` 上碰
         private var done = false
 
-        @discardableResult
-        static func start(_ a: NWConnection, _ b: NWConnection) -> Splice {
-            let splice = Splice(a, b)
-            splice.pump(a, b)
-            splice.pump(b, a)
-            return splice
-        }
+        private let ended: @Sendable () -> Void
 
-        func close() { LiveTunnel.queue.async { self.finish() } }
-
-        private init(_ a: NWConnection, _ b: NWConnection) {
+        /// `ended` 在整条关掉时调一次（`queue` 上）。没开始对拷前关不了，所以登记到账上要在 `start` 之前。
+        init(_ a: NWConnection, _ b: NWConnection, ended: @escaping @Sendable () -> Void = {}) {
             self.a = a
             self.b = b
+            self.ended = ended
+        }
+
+        func start() {
             for connection in [a, b] {
                 connection.stateUpdateHandler = { [weak self] state in
                     switch state {
@@ -174,7 +171,11 @@ extension LiveTunnel {
                     }
                 }
             }
+            pump(a, b)
+            pump(b, a)
         }
+
+        func close() { LiveTunnel.queue.async { self.finish() } }
 
         private func pump(_ from: NWConnection, _ to: NWConnection) {
             from.receive(minimumIncompleteLength: 1, maximumLength: 256 << 10) { data, _, complete, error in
@@ -192,6 +193,7 @@ extension LiveTunnel {
             done = true
             a.cancel()
             b.cancel()
+            ended()
         }
     }
 }
@@ -211,8 +213,8 @@ extension LiveTunnel {
         }
 
         private let listener: NWListener
-        /// 放行了的连接按票据记着：票据作废时连着的也断（`keep`），网页视图的长连接不靠旧票据一直通。
-        private let open = Mutex<[Data: [Splice]]>([:])
+        /// 放行了、还连着的按票据记着：票据作废时连着的也断（`keep`），网页视图的长连接不靠旧票据一直通。关了的当场去掉：网页每个请求一条连接，一张票据活几个小时。
+        private let open = Mutex<[Data: [ObjectIdentifier: Splice]]>([:])
         private let admit: @Sendable (Request) async -> Admission
 
         init(key: SymmetricKey, admit: @escaping @Sendable (Request) async -> Admission) throws {
@@ -227,12 +229,15 @@ extension LiveTunnel {
         /// 只留这几张票据的连接，别的断掉。
         func keep(_ tickets: Set<Data>) {
             let gone = open.withLock { open in
-                let gone = open.filter { !tickets.contains($0.key) }.values.flatMap(\.self)
+                let gone = open.filter { !tickets.contains($0.key) }.values.flatMap(\.values)
                 open = open.filter { tickets.contains($0.key) }
                 return gone
             }
             for splice in gone { splice.close() }
         }
+
+        /// 还连着的条数。
+        var connections: Int { open.withLock { $0.values.reduce(0) { $0 + $1.count } } }
 
         /// 起来了就返回端口。
         func start() async throws -> UInt16 {
@@ -254,6 +259,13 @@ extension LiveTunnel {
         func cancel() {
             listener.cancel()
             keep([])
+        }
+
+        private func forget(_ ticket: Data, _ inbound: NWConnection) {
+            open.withLock { open in
+                open[ticket]?[ObjectIdentifier(inbound)] = nil
+                if open[ticket]?.isEmpty == true { open[ticket] = nil }
+            }
         }
 
         private func serve(_ inbound: NWConnection) async {
@@ -281,8 +293,10 @@ extension LiveTunnel {
                         return
                     }
                     try await inbound.write(Data([Answer.open.rawValue]))
-                    let splice = Splice.start(inbound, outbound)
-                    open.withLock { $0[request.ticket, default: []].append(splice) }
+                    let ticket = request.ticket
+                    let splice = Splice(inbound, outbound) { [weak self] in self?.forget(ticket, inbound) }
+                    open.withLock { $0[ticket, default: [:]][ObjectIdentifier(inbound)] = splice }
+                    splice.start()
                 }
             } catch {
                 inbound.cancel()

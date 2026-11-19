@@ -155,7 +155,7 @@ struct LivePhoneTests {
     }
 
     @Test func 开着预览_经隧道取到这个会话的页面与接口_别的会话的服务与不认的票据都进不来() async throws {
-        try await paired { _, remote, pair in
+        try await paired { workspace, remote, pair in
         let mine = try flow.folder(), theirs = try flow.folder()
         _ = try await flow.session("live", .settled, in: mine)
         _ = try await flow.session("theirs", .settled, in: theirs)
@@ -173,6 +173,7 @@ struct LivePhoneTests {
         route(proxy, pair.phone.key, door)
 
         #expect(try await Tab(proxy, port: port, to: url).get("index.html") == "会话里的页面")
+        try await eventually("取完的那条不再记在隧道口的账上") { workspace.liveServer?.server.connections == 0 }
         await #expect(throws: (any Error).self) { try await Tab(proxy, port: port, to: otherURL) }
 
         route(proxy, pair.phone.key, door, ticket: Data(count: 16))
@@ -196,6 +197,7 @@ struct LivePhoneTests {
         route(proxy, pair.phone.key, door)
         #expect(try await Tab(proxy, port: port, to: url).get("index.html") == "页面")
         let held = try await Tab(proxy, port: port, to: url)
+        try await eventually("取完的去掉、还连着的记着") { workspace.liveServer?.server.connections == 1 }
 
         await watching.stop()
         await workspace.receiveLive(.peerClosed(endpoint: pair.phone.local, reason: .disconnected))
