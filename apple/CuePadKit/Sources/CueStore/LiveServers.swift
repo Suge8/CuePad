@@ -35,9 +35,11 @@ public struct LiveServers: Sendable {
   public mutating func find<Key: Hashable & Sendable>(for owners: [Key: Owner]) async -> [Key: [URL]] {
     let listeners = await Self.listening(for: owners)
     let now = ContinuousClock.now
-    for (listener, _) in listeners {
-      if let known = pages[listener], known.page || now - known.at < Self.retry { continue }
-      pages[listener] = (await Self.answersPage(listener.url), now)
+    // 一起问：接了连接却迟迟不答的口要等满超时，挨个问会把别的会话这一轮都拖住
+    let asking = listeners.map(\.listener).filter { listener in pages[listener].map { !$0.page && now - $0.at >= Self.retry } ?? true }
+    await withTaskGroup(of: (Listener, Bool).self) { group in
+      for listener in asking { group.addTask { (listener, await Self.answersPage(listener.url)) } }
+      for await (listener, page) in group { pages[listener] = (page, now) }
     }
     let all = Set(listeners.map(\.listener))
     pages = pages.filter { all.contains($0.key) }
