@@ -1,4 +1,5 @@
 #if os(macOS) && DEBUG
+import CueStore
 import Foundation
 
 extension DebugScene {
@@ -9,10 +10,10 @@ extension DebugScene {
         workspace.toggleLivePreview()
         guard let session = workspace.session(in: .main), let preview = workspace.livePreviews[session.id] else { return }
         if args.layoutOpts.liveViewport == "phone" { preview.viewport = .phone }
-        guard address != "blank", let url = LivePreview.url(from: address) else { return }
-        preview.open(url)
+        guard address != "blank", let url = LiveAddress.url(from: address) else { return }
+        preview.retarget(.init(url: url, source: .typed))
         holdingReady("活预览载入") {
-            while preview.phase == .live && !preview.revealed { await Task.wait(for: .milliseconds(100)) }
+            while [.idle, .live].contains(preview.phase) && !preview.revealed { await Task.wait(for: .milliseconds(100)) }
             await Task.wait(for: .milliseconds(400))
             if let query = args.layoutOpts.livePick, preview.phase == .live { await pick(query, in: preview, workspace: workspace) }
         }

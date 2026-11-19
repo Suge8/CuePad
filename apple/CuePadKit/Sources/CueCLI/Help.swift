@@ -19,7 +19,7 @@ enum Help {
 
       全部命令：\(Command.nouns.joined(separator: "、"))；选项与输出字段看 cuepad <命令> --help（如 cuepad card add --help）。
       默认范围：在绑定了目录的项目里运行时读写限定该项目；--project 指定，--all-projects 不限；别处新建的进默认项目。
-      在沙箱里运行时资料库在沙箱外：写入的命令（show、add、done、move 等）申请在沙箱外运行。
+      在沙箱里运行时资料库在沙箱外：写入的命令（show、live、add、done、move 等）申请在沙箱外运行。
       --json 输出 JSON（失败时 stderr 为 {"error":{"code","message"}}）；退出码 0 成功、1 运行错误、2 用法错误。
       隔离库：CUEPAD_LIBRARY_DIR=<绝对路径>；默认是 CuePad.app 的库（需先打开过一次），从源码编的用 ~/Library/Application Support/CuePad Dev。
       """

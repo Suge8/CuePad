@@ -73,7 +73,7 @@ enum InkSymbols {
         "cue.select",
         "cue.keyboard.down",
         "cue.braces",
-        "cue.window",
+        "cue.window.play",
         "cue.doc.blank",
         "cue.wrench",
         "cue.branch",

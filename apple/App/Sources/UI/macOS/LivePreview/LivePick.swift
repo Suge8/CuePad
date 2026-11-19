@@ -103,31 +103,41 @@ enum LivePick {
                 box.style.opacity = label.style.opacity = 0;
                 return;
             }
-            // 框比元素大一圈、圆角随元素（圆头像就是圆框）：贴着画的话描边压在字上
-            const rect = element.getBoundingClientRect(), radius = getComputedStyle(element).borderTopLeftRadius;
-            const round = radius.endsWith("%") ? Math.min(rect.width, rect.height) * parseFloat(radius) / 100 : parseFloat(radius) || 0;
+            // 框与标签都按元素连伸出它的子元素（头像的角标）一起算：圈线不从伸出的那一块上划过，标签不压着它。只算看得见的（元素裁掉溢出的不算）、
+            // 贴着它的那一圈（滚出去的远处不算，大容器只看前几百个）。框比这一块大一圈；圆角取元素与伸出的子元素里最小的那个：
+            // 大圆角会从伸出的那一角上切过去，小的只是把角让得更开
+            const rect = element.getBoundingClientRect(), style = getComputedStyle(element);
+            const roundOf = (node, area) => {
+                const radius = getComputedStyle(node).borderTopLeftRadius;
+                return radius.endsWith("%") ? Math.min(area.width, area.height) * parseFloat(radius) / 100 : parseFloat(radius) || 0;
+            };
+            let { left, top, right, bottom } = rect, round = roundOf(element, rect), seen = 0;
+            const clips = style.overflowX !== "visible" || style.overflowY !== "visible";
+            for (const child of clips ? [] : element.querySelectorAll("*")) {
+                if (++seen > 400) break;
+                const area = child.getBoundingClientRect();
+                const inside = area.left >= rect.left && area.right <= rect.right && area.top >= rect.top && area.bottom <= rect.bottom;
+                const far = area.right < rect.left - reach || area.left > rect.right + reach || area.bottom < rect.top - reach || area.top > rect.bottom + reach;
+                if (!area.width || !area.height || inside || far || getComputedStyle(child).visibility === "hidden") continue;
+                left = Math.max(rect.left - reach, Math.min(left, area.left));
+                top = Math.max(rect.top - reach, Math.min(top, area.top));
+                right = Math.min(rect.right + reach, Math.max(right, area.right));
+                bottom = Math.min(rect.bottom + reach, Math.max(bottom, area.bottom));
+                round = Math.min(round, roundOf(child, area));
+            }
             // 悬停的反馈立刻到位，只在元素之间换的时候滑过去；也不能靠淡入：窗口被挡住时 WebKit 停掉页面动画，淡入会停在透明
             box.style.transition = box.style.opacity === "1" ? glide : "none";
             Object.assign(box.style, {
-                left: rect.left - pad + "px", top: rect.top - pad + "px", width: rect.width + 2 * pad + "px", height: rect.height + 2 * pad + "px",
+                left: left - pad + "px", top: top - pad + "px", width: right - left + 2 * pad + "px", height: bottom - top + 2 * pad + "px",
                 borderRadius: round + pad + "px", opacity: 1,
             });
             const { component } = origin(element);
             const name = element.tagName.toLowerCase() + (element.id ? "#" + element.id : element.classList[0] ? "." + element.classList[0] : "");
             label.textContent = (component ? component + " › " : "") + name;
-            // 标签在框外、不压着元素：元素占的那一截连伸出它的子元素（头像的角标）一起算，只算贴着它的那一圈（滚出去的远处不算，大容器只看前几百个）；
-            // 上方放不下就放到下方，下方也出了可视范围就贴着可视范围的下沿
-            let top = rect.top - pad, bottom = rect.bottom + pad, seen = 0;
-            for (const child of element.querySelectorAll("*")) {
-                if (++seen > 400) break;
-                const area = child.getBoundingClientRect();
-                if (!area.width || !area.height || area.bottom < rect.top - reach || area.top > rect.bottom + reach) continue;
-                top = Math.max(rect.top - reach, Math.min(top, area.top));
-                bottom = Math.min(rect.bottom + reach, Math.max(bottom, area.bottom));
-            }
-            const height = label.offsetHeight, above = top - gap - height;
-            label.style.top = (above >= gap ? above : Math.min(bottom + gap, innerHeight - height - gap)) + "px";
-            label.style.left = Math.max(gap, Math.min(rect.left - pad, innerWidth - label.offsetWidth - gap)) + "px";
+            // 标签在框外：上方放不下就放到下方，下方也出了可视范围就贴着可视范围的下沿
+            const height = label.offsetHeight, above = top - pad - gap - height;
+            label.style.top = (above >= gap ? above : Math.min(bottom + pad + gap, innerHeight - height - gap)) + "px";
+            label.style.left = Math.max(gap, Math.min(left - pad, innerWidth - label.offsetWidth - gap)) + "px";
             label.style.opacity = 1;
         };
 

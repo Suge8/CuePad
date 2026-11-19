@@ -172,7 +172,7 @@ nonisolated enum Icon: Hashable, Sendable {
         case .tool: .ink("wrench")
         case .said, .reply: .ink("bubble.text")
         case .remoteMac: .ink("mac")
-        case .livePreview: .ink("window")
+        case .livePreview: .ink("window.play")
         case .phoneWidth: .ink("phone")
         case .openInBrowser: .ink("external")
         case .pickElement: .ink("pointer")

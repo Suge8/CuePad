@@ -106,8 +106,7 @@ struct WideSessionTitle: View {
             // 左边没有收起：它就是主区此刻的页，换去处靠会话条
             switch column {
             case .main:
-                let open = workspace.livePreviewOpen
-                HeadTool(label: open ? "收起活预览" : "打开活预览", icon: .livePreview, on: open) { workspace.toggleLivePreview() }
+                if let session = workspace.session(in: .main) { LivePreviewTool(session: session) }
             case .beside:
                 HeadTool(label: "收起并排", icon: .rightColumn) { workspace.closeColumn(.beside) }
             }
@@ -131,20 +130,32 @@ struct WideSessionTitle: View {
 
 #if os(macOS)
 /// 会话栏头末端的图标钮：同窗口最顶那一排别的不带框的钮（会话条开合、收起右栏），平时次要色，开着的开关是强调色。
-private struct HeadTool: View {
+/// `dot`：图标右上角一颗活点（同 Cue 入口上的点，`StatusDot`），说这颗钮后面有现成的东西。
+struct HeadTool: View {
     let label: LocalizedStringResource
     let icon: Icon
     var on = false
+    var dot = false
     let action: () -> Void
     @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        Button(action: action) { Image(icon).foregroundStyle(on ? palette.signature : palette.ink2) }
+        Button(action: action) {
+            Image(icon).foregroundStyle(on ? palette.signature : palette.ink2)
+                .overlay(alignment: .topTrailing) {
+                    if dot { StatusDot(color: palette.replied, rim: palette.desk).offset(x: Self.shift, y: -Self.shift).transition(Motion.pop(reduceMotion: reduceMotion)) }
+                }
+                .animation(Motion.fade, value: dot)
+        }
             .buttonStyle(ControlButtonStyle(kind: .icon, size: .compact))
             .help(Text(label))
             .accessibilityLabel(Text(label))
             .accessibilityAddTraits(on ? .isSelected : [])
     }
+
+    /// 点的圆心落在图形的右上角外沿上（同会话条收起时 Cue 钮上的点，`railWaitingDot`）。
+    private static let shift: CGFloat = 3.5
 }
 #endif
 

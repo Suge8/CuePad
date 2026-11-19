@@ -13632,6 +13632,22 @@
         }
       }
     },
+    "打开活预览：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show Live Preview: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开活预览：%@"
+          }
+        }
+      }
+    },
     "打开系统设置" : {
       "localizations" : {
         "en" : {
@@ -15048,6 +15064,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "收起活预览"
+          }
+        }
+      }
+    },
+    "收起活预览：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hide Live Preview: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "收起活预览：%@"
           }
         }
       }

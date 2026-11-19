@@ -122,6 +122,8 @@ extension Schema {
 
     -- 承载会话的进程：pid 与启动时刻（微秒），只在本机（SessionProcess）。
     CREATE TABLE piProcesses (sessionID TEXT PRIMARY KEY NOT NULL, pid INTEGER NOT NULL, startedAt INTEGER NOT NULL) STRICT;
+    -- 会话请你看的本机网页（`cuepad live`，LiveAddress）：每个会话最后一条，只在本机。
+    \(Schema.liveAddresses)
 
     -- 项目绑定的代码目录：路径因设备而异，只在本机。Pi 会话按 cwd 归入项目时用它。
     CREATE TABLE projectDirectories (

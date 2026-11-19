@@ -1,4 +1,5 @@
 #if os(macOS)
+import CueStore
 import Observation
 import SwiftUI
 import WebKit
@@ -12,6 +13,8 @@ final class LivePreview: NSObject, WKNavigationDelegate {
     enum Phase: Equatable {
         /// 还没有地址。
         case blank
+        /// 有地址、面板还没开过：开了才载入（`watch`），没人看的会话不白占一份网页。
+        case idle
         /// 载入中或已载入。
         case live
         /// 连不上、还没载出过画面：在后台每秒探一次，起来了自动载入。
@@ -22,12 +25,23 @@ final class LivePreview: NSObject, WKNavigationDelegate {
 
     enum Viewport { case fill, phone }
 
+    /// 地址从哪来：你输入或挑的、Agent 用 `cuepad live` 明说的、认出来的（`LiveServers`）。只有认出来的跟着服务换端口。
+    enum Source { case typed, sent, found }
+
+    struct Target: Equatable {
+        let url: URL
+        let source: Source
+    }
+
     static let phoneWidth: CGFloat = 390
     static let phoneHeight: CGFloat = 844
 
     /// 同一时刻只挂在一处（`LiveWebView`）。
     @ObservationIgnored let web: WKWebView
     private(set) var address: URL?
+    private(set) var source = Source.typed
+    /// 认出的这个会话的服务（`Workspace.watchLiveServers` 每秒给）：认出来的地址在不在只看它——端口空出来后被别的进程占了，答得上话也不是这个会话的页。
+    @ObservationIgnored var serving: [URL]?
     private(set) var phase = Phase.blank
     private(set) var url: URL?
     private(set) var isLoading = false
@@ -59,11 +73,13 @@ final class LivePreview: NSObject, WKNavigationDelegate {
     /// 地址栏里显示的：此刻页面所在（页内跳转跟着变），还没载过就是输入的地址。
     var shownAddress: URL? { url ?? address }
 
-    func open(_ url: URL) {
-        address = url
+    /// 换一个地址：载入过的接着就载（面板收着也载，开时已是新页面），还没载入过的等面板开。
+    func retarget(_ target: Target) {
+        address = target.url
+        source = target.source
         painted = false
         revealed = false
-        load(url)
+        if phase == .blank || phase == .idle { phase = .idle } else { load(target.url) }
     }
 
     func reload() {
@@ -114,9 +130,10 @@ final class LivePreview: NSObject, WKNavigationDelegate {
 
     /// 面板开着时在后台每秒探一次（`LivePreviewPane` 的 task 里跑，收起就停）：等着的起来了就载入，载出过的停了就标出来、回来了重新载入。
     func watch() async {
+        if phase == .idle, let address { load(address) }
         while !Task.isCancelled {
             if let address, phase != .blank {
-                let up = await Self.reachable(address)
+                let up = if source == .found, let serving { serving.contains(address) } else { await Self.reachable(address) }
                 // 探的这一会儿换了地址：这一次的结果说的是旧地址
                 if address == self.address {
                     switch phase {
@@ -172,46 +189,89 @@ final class LivePreview: NSObject, WKNavigationDelegate {
     private static func unreachable(_ error: any Error) -> Bool {
         (error as NSError).domain == NSURLErrorDomain && (error as NSError).code != NSURLErrorCancelled
     }
-
-    /// 地址栏里写的：不写 http://、https://，路径只有 "/" 时也不写。
-    static func shown(_ url: URL) -> String {
-        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false), let host = components.host else { return url.absoluteString }
-        let port = components.port.map { ":\($0)" } ?? ""
-        let path = components.path == "/" ? "" : components.path
-        return host + port + path + (components.query.map { "?\($0)" } ?? "")
-    }
-
-    /// 地址栏里输入的：只写端口（5173）当作本机；不写协议时本机、局域网与不带点的主机名用 http，其余用 https。
-    static func url(from text: String) -> URL? {
-        let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let port = Int(text), (1...65_535).contains(port) { return URL(string: "http://localhost:\(port)") }
-        let full: String
-        if text.contains("://") {
-            full = text
-        } else {
-            let host = text.prefix { !":/?#".contains($0) }
-            let local = !host.contains(".") || host.hasSuffix(".local") || host.allSatisfy { $0.isNumber || $0 == "." }
-            full = (local ? "http://" : "https://") + text
-        }
-        guard let url = URL(string: full), url.host?.isEmpty == false else { return nil }
-        return url
-    }
 }
 
 extension Workspace {
-    /// 会话页栏头那颗钮与预览栏上的收起：左边那个会话的活预览在右半开、收（开着并排的会话时换掉它）。第一次打开时给这个会话建一份。
+    /// 会话页栏头那颗钮：左边那个会话的活预览在右半开、收（开着并排的会话时换掉它）。第一次打开时给这个会话建一份；
+    /// 还没有地址时先用 Agent 发来的（`cuepad live`），再用认出的服务里最近起来的，都没有才是空的地址输入。
     func toggleLivePreview() {
         guard case .wide(var state) = navigation, !state.home, case .session(let session) = state.main else { return }
         if state.beside == .preview {
             state.beside = nil
         } else {
-            if livePreviews[session.id] == nil { livePreviews[session.id] = LivePreview() }
+            let preview = livePreviews[session.id] ?? LivePreview()
+            livePreviews[session.id] = preview
+            if let sent = liveSent.removeValue(forKey: session.id) {
+                preview.retarget(sent)
+            } else if preview.address == nil, let found = liveFound[session.id]?.first {
+                preview.retarget(.init(url: found, source: .found))
+            }
             state.beside = .preview
         }
         navigation = .wide(state)
     }
 
-    var livePreviewOpen: Bool { beside == .preview }
+    enum LiveButton: Equatable {
+        case none
+        /// 认出了服务或 Agent 发来了地址、预览没开：点开就是这个地址。
+        case ready(URL)
+        case open(URL?)
+
+        var isReady: Bool { if case .ready = self { true } else { false } }
+        var isShowing: Bool { if case .open = self { true } else { false } }
+    }
+
+    func liveButton(_ session: UUID) -> LiveButton {
+        if beside == .preview { return .open(livePreviews[session]?.address) }
+        if let sent = liveSent[session] { return .ready(sent.url) }
+        guard let found = liveFound[session]?.first else { return .none }
+        return .ready(livePreviews[session]?.address ?? found)
+    }
+
+    /// Agent 发来的地址（`cuepad live`）记到会话上；会话此刻在主区、右半空着就直接滑开，否则只让栏头那颗钮亮起，不动排布。
+    func followLiveAddresses() async {
+        // 起来之前发的不算：那时的服务多半已经不在了
+        let start = Date.now
+        var seen: [String: Date]?
+        do {
+            for try await addresses in services.store.observe({ try $0.liveAddresses() }) {
+                let fresh = addresses.filter { address in seen.map { $0[address.sessionID].map { address.sentAt > $0 } ?? true } ?? (address.sentAt > start) }
+                seen = Dictionary(addresses.map { ($0.sessionID, $0.sentAt) }, uniquingKeysWith: max)
+                for address in fresh { receive(address) }
+            }
+        } catch is CancellationError {
+        } catch {
+            fail(error)
+        }
+    }
+
+    private func receive(_ address: LiveAddress) {
+        let id = SessionState.recordID(sessionID: address.sessionID)
+        let target = LivePreview.Target(url: address.url, source: address.found ? .found : .sent)
+        let here = session(in: .main)?.id == id
+        if here, beside == .preview, let preview = livePreviews[id] { return preview.retarget(target) }
+        liveSent[id] = target
+        if here, beside == nil { toggleLivePreview() }
+    }
+
+    /// 栏头那颗钮挂着它（会话在主区、有人看着时才跑）：每秒认一次这个会话的服务。按认出的地址开着的预览，地址不在了、又认出了别的（5173 被占换到 5174），跟过去。
+    func watchLiveServers(_ session: SessionRoute) async {
+        guard let sessionID = session.sessionID else { return }
+        var servers = LiveServers()
+        while !Task.isCancelled {
+            var owner = (try? await services.store.liveOwner(sessionID)) ?? LiveServers.Owner(process: nil, directory: nil)
+            if owner.directory?.isEmpty != false { owner.directory = services.bridge.session(sessionID: sessionID)?.cwd.path }
+            let found = await servers.find(for: owner)
+            if liveFound[session.id] != found { liveFound[session.id] = found }
+            if let preview = livePreviews[session.id] {
+                preview.serving = found
+                if preview.source == .found, let address = preview.address, !found.contains(address), let first = found.first {
+                    preview.retarget(.init(url: first, source: .found))
+                }
+            }
+            try? await Task.sleep(for: .seconds(1))
+        }
+    }
 
     /// 预览栏上的点选钮：开着就收，没开就开；点中的元素挂进左边会话的回复框（`ReplyNote.Element`），回复框接过焦点，接着写那一句。
     func pickElement() {

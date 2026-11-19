@@ -28,6 +28,8 @@ nonisolated struct LayoutArgs: Decodable, DebugArgGroup {
     let livePick: String?
     /// `-CuePadLivePickCommit YES`（配 `-CuePadLivePick`）：接着点下去，元素挂进回复框
     let livePickCommit: Bool
+    /// `-CuePadSessionDirectory <绝对路径>`（仅 Mac，演示库）：演示会话 atlas 的工作目录，在里面起的开发服务活预览认得出（`LiveServers`）
+    let sessionDirectory: String?
     /// `-CuePadBesideShare <0–1>`（配 `-CuePadBeside` 或 `-CuePadLivePreview`）：右半占主区的这几成（`Workspace.besideShare`），超出两边最窄的照样卡住；0 是左边最宽，1 是右半最宽
     let besideShare: Double?
     /// `-CuePadMergePreview YES`（配 instruction 画面）：已点过一下"合并进来"、标出会并进来的段

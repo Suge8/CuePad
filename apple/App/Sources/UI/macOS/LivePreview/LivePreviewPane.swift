@@ -1,6 +1,31 @@
 #if os(macOS)
+import CueStore
 import SwiftUI
 import WebKit
+
+/// 主区会话栏头开合活预览的那颗钮（`HeadTool`）：没有服务时同栏头别的钮；认出了服务或 Agent 发来了地址、预览没开时带一颗活点；开着是强调色。
+/// 会话在主区、有人看着时才认它的服务（`Workspace.watchLiveServers`），不在后台给所有会话扫。
+struct LivePreviewTool: View {
+    let session: SessionRoute
+    @Environment(Workspace.self) private var workspace
+    @Environment(AppServices.self) private var services
+
+    var body: some View {
+        let button = workspace.liveButton(session.id)
+        let watched = services.viewer.viewing.sessions.contains { $0.id == session.id }
+        HeadTool(label: Self.label(button), icon: .livePreview, on: button.isShowing, dot: button.isReady) { workspace.toggleLivePreview() }
+            .task(id: watched) { if watched { await workspace.watchLiveServers(session) } }
+    }
+
+    private static func label(_ button: Workspace.LiveButton) -> LocalizedStringResource {
+        switch button {
+        case .none: "打开活预览"
+        case .ready(let url): "打开活预览：\(LiveAddress.shown(url))"
+        case .open(let url?): "收起活预览：\(LiveAddress.shown(url))"
+        case .open(nil): "收起活预览"
+        }
+    }
+}
 
 /// 并排右半的活预览（`BesideColumn`）：网页铺满这一块，上缘滑到浮着的玻璃栏下面、下缘到窗口边；
 /// 手机宽那一档收成 390 宽居中的一块屏，落在桌面上。两档之间是同一块连续地变宽变窄，网页不重新载入。
@@ -113,7 +138,7 @@ private struct LiveAddressEntry: View {
             .foregroundStyle(palette.ink)
             .multilineTextAlignment(.center)
             .focused($focused)
-            .onSubmit { if let url = LivePreview.url(from: text) { preview.open(url) } }
+            .onSubmit { if let url = LiveAddress.url(from: text) { preview.retarget(.init(url: url, source: .typed)) } }
             .padding(.horizontal, Spacing.panel)
             .frame(height: ComposerMetrics.slot)
             .paper(cornerRadius: Radius.field)
@@ -143,7 +168,7 @@ private struct LiveBar: View {
                 }
             }
             .keyboardShortcut("r", modifiers: .command)
-            LiveAddress(preview: preview)
+            LiveAddressField(preview: preview)
             tool(preview.picking ? "退出点选" : "点选页面元素", icon: .pickElement, on: preview.picking) { workspace.pickElement() }
                 .keyboardShortcut(preview.picking ? .cancelAction : nil)
                 .disabled(preview.phase != .live)
@@ -168,22 +193,26 @@ private struct LiveBar: View {
 }
 
 /// 地址：平时居中写 `localhost:5173/路径`；点一下就地改，回车载入，Esc 或点开别处放弃。
-private struct LiveAddress: View {
+/// 改的时候认出的其余服务挨着输入框列在下面（气泡），一行一个地址，点一个就换过去。
+private struct LiveAddressField: View {
     let preview: LivePreview
     @State private var editing = false
+    @State private var dismissed = false
     @State private var text = ""
     @FocusState private var focused: Bool
+    @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
     var body: some View {
-        let shown = preview.shownAddress.map(LivePreview.shown) ?? ""
+        let shown = preview.shownAddress.map(LiveAddress.shown) ?? ""
+        let others = (workspace.session(in: .main).flatMap { workspace.liveFound[$0.id] } ?? []).filter { $0 != preview.address }
         Group {
             if editing {
                 TextField(text: $text, prompt: Text("输入地址").foregroundStyle(palette.ink3)) { Text("地址") }
                     .textFieldStyle(.plain)
                     .focused($focused)
                     .onSubmit {
-                        if let url = LivePreview.url(from: text) { preview.open(url) }
+                        if let url = LiveAddress.url(from: text) { go(url) }
                         editing = false
                     }
                     .onExitCommand { editing = false }
@@ -192,9 +221,16 @@ private struct LiveAddress: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(palette.fill, in: .capsule)
                     .onAppear { focused = true }
+                    .bubble(isPresented: Binding { !dismissed && !others.isEmpty } set: { if !$0 { dismissed = true } }) {
+                        LiveCandidates(urls: others) { url in
+                            go(url)
+                            editing = false
+                        }
+                    }
             } else {
                 Button {
                     text = shown
+                    dismissed = false
                     editing = true
                 } label: {
                     Text(verbatim: shown).lineLimit(1).truncationMode(.middle)
@@ -212,6 +248,32 @@ private struct LiveAddress: View {
         .foregroundStyle(palette.ink)
         .frame(height: ControlSize.compact.height)
         .frame(maxWidth: .infinity)
+    }
+
+    private func go(_ url: URL) { preview.retarget(.init(url: url, source: .typed)) }
+}
+
+/// 认出的其余服务：一行一个地址，不加说明。
+private struct LiveCandidates: View {
+    let urls: [URL]
+    let pick: (URL) -> Void
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(urls, id: \.self) { url in
+                Button { pick(url) } label: {
+                    Text(verbatim: LiveAddress.shown(url)).lineLimit(1)
+                        .frame(maxWidth: .infinity, minHeight: RowMetrics.height, alignment: .leading)
+                }
+                .buttonStyle(.row)
+            }
+        }
+        .fixedSize(horizontal: true, vertical: false)
+        .font(Typography.secondary.weight(.medium))
+        .foregroundStyle(palette.ink)
+        .padding(.horizontal, RowMetrics.bleed)
+        .padding(.vertical, Spacing.tight)
     }
 }
 

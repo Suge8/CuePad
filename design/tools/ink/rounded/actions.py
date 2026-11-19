@@ -9,7 +9,7 @@ NAMES = (
     "done.pre", "reopen", "restore", "indent", "outdent", "link", "unlink", "folder.remove", "pin", "unpin",
     "conflict", "deck", "share", "save", "pencil", "write", "choose", "puzzle", "tick", "plane.done",
     "arrow.up", "arrow.down", "ring.down", "ring.stop", "ring.play", "ring.plus", "badge.down", "compact",
-    "hand", "mac", "photo", "photos", "select", "keyboard.down", "braces", "window", "doc.blank", "wrench",
+    "hand", "mac", "photo", "photos", "select", "keyboard.down", "braces", "window.play", "doc.blank", "wrench",
     "branch", "flame", "eye", "power", "mail", "tag", "keyboard", "sun", "wave", "bubble.text", "bubble.dots",
     "mic", "mic.off", "speaker", "phone", "external", "pointer",
 )
@@ -132,8 +132,9 @@ def centerlines(name):
     elif name == "braces":
         for sign in (-1,1):
             opened.append(poly([(sign*8,-10),(sign*4,-10),(sign*4,-3),(sign,0),(sign*4,3),(sign*4,10),(sign*8,10)],1.6))
-    elif name == "window":
-        rectangle(-10,-9,10,9,3); line((-10,-3),(10,-3))
+    elif name == "window.play":
+        # 活预览：带标题栏的窗口，里面一个播放三角——这个会话跑起来的页面
+        rectangle(-11,-9,11,9,3); line((-11,-4.5),(11,-4.5))
     elif name == "doc.blank":
         _,closed = base.centerlines("doc")
     elif name == "wrench":
@@ -191,4 +192,5 @@ def fills(name,w):
     if name in ("photo","photos"): return [disc((4,-2),w*.6)]
     if name == "ring.stop": return [rpoly([(-3,-3),(3,-3),(3,3),(-3,3)],[1.6]*4)]
     if name == "ring.play": return [rpoly([(-3,-5),(5,0),(-3,5)],[1]*3)]
+    if name == "window.play": return [rpoly([(-3,-1.3),(5,2.75),(-3,6.8)],[1]*3)]
     return []

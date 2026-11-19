@@ -179,6 +179,10 @@ final class Workspace {
     weak var openCardEditing: CardEditing?
     /// 每个会话的活预览（按会话记录 id）：只在内存里，不进资料库、不同步。
     var livePreviews: [UUID: LivePreview] = [:]
+    /// Agent 发来、还没开过预览的地址（`cuepad live`）：开预览时用掉。
+    var liveSent: [UUID: LivePreview.Target] = [:]
+    /// 认出的这个会话的服务，最近起来的在前（`watchLiveServers`，只在会话在主区、有人看着时更新）。
+    var liveFound: [UUID: [URL]] = [:]
     /// 并排两半的分界拖到了哪（`WideMetrics.BesideShare`）：每个窗口一份，只在内存里。
     var besideShare = WideMetrics.BesideShare()
     #endif
@@ -237,8 +241,9 @@ final class Workspace {
         async let files: Void = leaveGoneFiles()
         #if os(macOS)
         async let agents: Void = followLocalAgents()
+        async let live: Void = followLiveAddresses()
         await followSessionPlacement()
-        await agents
+        _ = await (agents, live)
         #endif
         _ = await (catalog, links, launches, cue, opens, library, quota, cards, files)
     }
