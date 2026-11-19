@@ -1,3 +1,4 @@
+import CueStore
 import SwiftUI
 
 /// 读屏不念（行要读的话由行自己的标签给）。
@@ -60,5 +61,18 @@ struct SectionHeader: View {
 
     private var countFont: Font {
         level == .page ? Typography.sectionCount : Typography.label
+    }
+}
+
+/// 按项目分段的列表里一段的头（搜索结果、归档、回收站）：项目的记号、名字与这一段有几条。
+struct ProjectRunHeader: View {
+    let project: Project?
+    let count: Int
+
+    var body: some View {
+        HStack(spacing: Spacing.glyph) {
+            ProjectGlyph(project: project, size: 12)
+            SectionHeader(Dotted(project?.shownName), count: count)
+        }
     }
 }

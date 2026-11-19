@@ -46,9 +46,11 @@ struct NewTaskField: View {
                                 glyph
                                 Text(prompt).font(Typography.body).foregroundStyle(palette.ink3).frame(maxWidth: .infinity, alignment: .leading)
                             }
+                            .frame(minHeight: TaskMetrics.rowHeight)
                             .contentShape(.rect)
                         }
-                        .buttonStyle(PressStyle())
+                        // 整行是入口，底与任务行同一种（悬停、按下铺满这一行，不贴着那几个字）
+                        .buttonStyle(.row)
                         .accessibilityLabel(prompt)
                     }
                     destination

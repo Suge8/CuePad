@@ -41,12 +41,13 @@ nonisolated enum CardMenu {
         }
     }
 
-    /// 子任务跟着上级走，不单独换项目、不单独置顶。
-    /// `bindsSession`：这是叶子任务（没有子任务），没做完时多一项"绑定会话"（任务气泡的"⋯"）。
+    /// 打开的那张卡（编辑页、任务气泡）右上角只有一颗"⋯"，这张卡的操作全在里面：旁边再排几颗图标钮，一眼看过去是一排要猜的记号。
+    /// 最后一组是收走它的两项，删除在最底下。子任务跟着上级走，不单独换项目、不单独置顶。
+    /// `bindsSession`：同 `sections`（Mac 任务气泡的"⋯"）。
     static func more(for card: Card, bindsSession: Bool = false) -> [[Item]] {
-        guard card.isTask else { return [[card.isPinned ? .unpin : .pin, .move, .copy], [.archive], [.trash]] }
+        guard card.isTask else { return [[card.isPinned ? .unpin : .pin, .move, .copy], [.archive, .trash]] }
         let binds: [Item] = bindsSession && card.status != .done ? [.bindSession] : []
-        return [[card.status == .done ? .reopen : .complete] + pin(card) + (card.parentID == nil ? [.move] : []) + [.copy], binds, [.archive], [.trash]]
+        return [[card.status == .done ? .reopen : .complete], pin(card) + (card.parentID == nil ? [.move] : []) + [.copy], binds, [.archive, .trash]]
             .filter { !$0.isEmpty }
     }
 

@@ -3,8 +3,9 @@ import SwiftUI
 
 struct ArchivePage: View {
     var body: some View {
-        ArchiveList().padding(.horizontal, Spacing.page)
+        ArchiveList()
             .safeAreaPadding(.top, Bars.contentGap)
+            .fadesUnderHead()
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }

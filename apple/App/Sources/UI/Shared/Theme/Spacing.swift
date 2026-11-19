@@ -28,7 +28,7 @@ nonisolated enum Spacing {
     #if os(macOS)
     /// 纸、卡、行里的字离左右边。
     static let inset: CGFloat = 12
-    /// 浮层、面板与浮在页上的条的内边，也是页上大块纸（项目页的任务纸）的左右内边。
+    /// 浮层、面板与浮在页上的条的内边。
     static let panel: CGFloat = 20
     /// 一栏的边：页面内容的左右边距，也是这一栏栏头里第一样东西与最后一颗钮离栏边（栏头与下面的内容同一条左边、同一条右边）。
     /// 看板的卡、项目页的纸、对话的列（`SessionChat`、`CuePage` 的 inset）都从这里起。

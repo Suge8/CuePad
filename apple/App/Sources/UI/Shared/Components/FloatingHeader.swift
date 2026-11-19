@@ -23,6 +23,18 @@ extension View {
             trailing: trailing()))
     }
 
+    /// 中间那块点开是这一页那样东西自己的操作（`menu`：项目、会话），标题后跟一个展开箭头。页头右边只放直接可点的钮，不设"⋯"。
+    func floatingHeader<Items: View, Detail: View, Trailing: View>(
+        _ title: LocalizedStringResource, hidden: Bool = false, reveal: (() -> Void)? = nil,
+        @ViewBuilder menu: () -> Items, @ViewBuilder detail: () -> Detail, @ViewBuilder trailing: () -> Trailing
+    ) -> some View {
+        modifier(FloatingHeader(
+            title: title, hidden: hidden, reveal: reveal,
+            center: Menu(content: menu) { TitleStack(title: title, opens: true, detail: detail()).padding(.horizontal, Spacing.block).headerPiece() }
+                .opacity(String(localized: title).isEmpty ? 0 : 1),
+            trailing: trailing()))
+    }
+
     /// `hasPanel` 是页头的固定能力：会展开的名牌始终在页面浮层中，开合不改变安全区或实例位置。
     func floatingHeader<Center: View, Trailing: View>(
         _ title: LocalizedStringResource, height: CGFloat = FloatingHeaderLayout.height, hasPanel: Bool = false, @ViewBuilder center: () -> Center, @ViewBuilder trailing: () -> Trailing
@@ -119,7 +131,8 @@ private struct FloatingHeader<Center: View, Trailing: View>: ViewModifier {
                             // 玻璃自己画，不再套一层系统的玻璃底（玻璃不叠玻璃）
                             .sharedBackgroundVisibility(.hidden)
                         if Trailing.self != EmptyView.self {
-                            ToolbarItem(placement: .primaryAction) { trailing }
+                            // 成组：单个 ToolbarItem 里放几颗钮，系统只留第一颗
+                            ToolbarItemGroup(placement: .primaryAction) { trailing }
                         }
                     }
                     // 让开是整条导航栏一起淡（返回钮、中间、右边连同系统给的玻璃）；它淡到透明就不接点按，点让开的那一条唤出由内容顶上这一条接
@@ -255,6 +268,8 @@ private struct HeaderPiece: ViewModifier {
 /// 说明的数字过渡由 `HeaderDetail` 自己处理，不更换标题与布局容器。
 private struct TitleStack<Detail: View>: View {
     let title: LocalizedStringResource
+    /// 这一块点开是菜单：标题后跟展开的箭头。
+    var opens = false
     let detail: Detail
     @Environment(\.palette) private var palette
     @State private var widest = Widening.Widest()
@@ -262,7 +277,10 @@ private struct TitleStack<Detail: View>: View {
     var body: some View {
         Widening(widest: widest) {
             VStack(spacing: Spacing.hair) {
-                Text(title).font(Typography.toolbarTitlePaired).foregroundStyle(palette.ink).lineLimit(1)
+                HStack(spacing: Spacing.tight) {
+                    Text(title).font(Typography.toolbarTitlePaired).foregroundStyle(palette.ink).lineLimit(1)
+                    if opens { Chevron(.expand).foregroundStyle(palette.ink3) }
+                }
                 detail
             }
         }

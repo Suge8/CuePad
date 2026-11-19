@@ -104,13 +104,10 @@ struct CardEditorPage: View {
     }
 
     private var header: OverlayHeader.Content {
-        let card = data?.card
-        let edited = card.map { String(localized: "改于 \(DateLabel.short($0.modifiedAt))") }
-        let pinned = card?.isPinned == true ? String(localized: "已置顶") : nil
-        return OverlayHeader.Content(
+        OverlayHeader.Content(
             page: .card(cardID), title: data?.project?.shownName ?? "",
-            detail: Dotted(edited, pinned, editing?.saveState.text),
-            failed: editing?.saveState == .failed, widest: Dotted(edited, pinned, SaveState.longestText))
+            marks: data.map { EditedLine.Marks(edited: $0.card.modifiedAt, pinned: $0.card.isPinned, save: editing?.saveState ?? .idle) },
+            failed: editing?.saveState == .failed)
     }
 
     private func editor(_ card: Card, _ editing: CardEditing) -> some View {

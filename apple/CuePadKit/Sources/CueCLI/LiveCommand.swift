@@ -1,3 +1,4 @@
+#if os(macOS)
 import CueStore
 import Foundation
 
@@ -46,3 +47,4 @@ extension Command {
     return Reply(text: text, json: LiveOutput.fields.json(LiveOutput(session: session, url: url.absoluteString, found: found)))
   }
 }
+#endif

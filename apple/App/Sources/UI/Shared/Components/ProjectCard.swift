@@ -10,7 +10,7 @@ struct ProjectCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ProjectPixelCover(pattern: .cover(ProjectIcon(stored: project.icon)))
+            Color.clear.aspectRatio(2.2, contentMode: .fit).overlay { ProjectCoverImage(project) }.clipped()
             VStack(alignment: .leading, spacing: Spacing.tight) {
                 HStack(alignment: .firstTextBaseline, spacing: Spacing.glyph) {
                     ProjectGlyph(project: project, size: Glyph.projectIdentity)
@@ -28,10 +28,10 @@ struct ProjectCard: View {
             .padding(.horizontal, Spacing.group)
             .padding(.vertical, Spacing.item)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(palette.paper)
+            .background(palette.note)
         }
         .clipShape(.rect(cornerRadius: Radius.card))
-        .paper(wash: palette.paper)
+        .paper(wash: palette.note)
         .contentShape(.rect(cornerRadius: Radius.card))
         .accessibilityElement(children: .combine)
     }

@@ -70,8 +70,8 @@ extension DebugHooks.Preset {
         cueStage = args.cueOpts.stage.map { $0 == "open" }
         #if os(iOS)
         alertStatus = DebugScene.alertStatus
-        // sessions、cuerows 画面看会话行：手机的会话列表在搜索页的会话一栏
-        if args.searchScope == "sessions" || args.scene.map(["sessions", "cuerows"].contains) == true { searchScope = .sessions }
+        // sessions、cuerows 画面看会话行：手机的会话列表是搜索页的会话那一节
+        searchListsSessions = args.searchScope == "sessions" || args.scene.map(["sessions", "cuerows"].contains) == true
         quietAlerts = args.layoutOpts.quiet
         #endif
     }

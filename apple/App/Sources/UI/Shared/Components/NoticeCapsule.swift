@@ -41,6 +41,7 @@ struct NoticeCapsule: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hovering = false
     @State private var landed = false
+    @State private var armed = false
     @FocusState private var focus: Part?
 
     private enum Part { case link, action }
@@ -75,7 +76,13 @@ struct NoticeCapsule: View {
         .presetHover($hovering)
         #endif
         .gesture(DragGesture(minimumDistance: Self.fling).onEnded { _ in workspace.notice = nil })
-        .allowsHitTesting(notice.takesHits)
+        .allowsHitTesting(notice.takesHits && armed)
+        // 刚落下的那一下不接点按：它是自己冒出来的，手指正要点它盖住的东西时会点到它、被带去别处
+        .task(id: notice.id) {
+            armed = false
+            guard (try? await Task.sleep(for: Self.arming)) != nil else { return }
+            armed = true
+        }
         .onChange(of: held, initial: true) { was, now in if was != now || now { workspace.holdNotice(now) } }
         .onChange(of: notice.id, initial: true) {
             // 这一颗是留在原地换的字：新的一条来时表已经重开，指针还在上面就再停一次
@@ -96,6 +103,7 @@ struct NoticeCapsule: View {
 
     /// 拖出这么远才算甩走：手抖、点偏的不算。
     private static let fling: CGFloat = 16
+    private static let arming: Duration = .milliseconds(500)
 
     /// 字排出来多高就多高（不截）：`ViewThatFits` 按它判断放不放得进这一排；最后一种只排一行，放不下就截断。`inset` 只用来量放不放得下。
     private func row(font: Font, lines: Int, inset: CGFloat) -> some View {

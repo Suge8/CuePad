@@ -1,0 +1,48 @@
+import SwiftUI
+
+/// 灵感编辑页栏头标题下面那一行：只写改于何时，不带笔——编辑页标题下的一个时间就是改的时间，再画一支笔和图钉挤成一排图标。
+/// 状态只画图形：置顶是图钉、存着是转圈、存上了是勾，读屏照旧念字；没存上要人处理，写成字。
+/// 两侧各留一格见方的位置，图钉在左、存没存上在右，有没有都占着：时间一直在标题正下方，状态来去时不左右挪。
+struct EditedLine: View {
+    struct Marks: Equatable {
+        var edited: Date
+        var pinned = false
+        var save = SaveState.idle
+    }
+
+    let marks: Marks
+
+    var body: some View {
+        HStack(spacing: Spacing.tight) {
+            slot { if marks.pinned { Image(.pin).font(Self.glyph).iconLabel("已置顶") } }
+            if marks.save == .failed, let text = marks.save.text {
+                Text(text)
+            } else {
+                Text(DateLabel.short(marks.edited)).monospacedDigit()
+                    .accessibilityLabel("改于 \(DateLabel.short(marks.edited))")
+            }
+            slot {
+                switch marks.save {
+                case .saving: Spinner(.mini).accessibilityLabel(Text(marks.save.text ?? ""))
+                case .saved: Image(.checked).font(Self.glyph).accessibilityLabel(Text(marks.save.text ?? ""))
+                case .idle, .failed: EmptyView()
+                }
+            }
+        }
+        .lineLimit(1)
+        .imageScale(.small)
+        .animation(Motion.fade, value: marks.save)
+    }
+
+    private func slot(@ViewBuilder _ mark: () -> some View) -> some View {
+        Color.clear.frame(width: Self.slot, height: Self.slot).overlay { mark().transition(.opacity) }
+    }
+
+    private static let slot: CGFloat = 12
+    /// 图形比旁边的时间略矮：小号（`imageScale(.small)`）在手机的小字上缩得过头，垫大一档字号补回来。
+    #if os(macOS)
+    private static let glyph: Font? = nil
+    #else
+    private static let glyph: Font? = Typography.secondary
+    #endif
+}

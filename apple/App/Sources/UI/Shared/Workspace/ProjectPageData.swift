@@ -4,15 +4,12 @@ import Foundation
 nonisolated struct ProjectPageData: Sendable, Equatable {
     var project: Project?
     var cards: [Card]
-    var lastSends: [UUID: LastSend]
     var tasks: TaskTree
     var done: [Card]
     var taskCounts: TaskCounts
     var subtasks: [UUID: TaskProgress]
-    /// 由 `cards` 与 `lastSends` 推出，读取时算一次。
+    /// 由 `cards` 推出，读取时算一次。
     var stamps: [CardStamp]
-    /// 由 `lastSends` 推出，读取时算一次。
-    var lastTarget: [UUID: String]
     /// 每张卡的摘要，读取时在 Store 的执行体上算好，不占主线程。
     var entries: [UUID: CardEntry]
 
@@ -21,19 +18,15 @@ nonisolated struct ProjectPageData: Sendable, Equatable {
     static func read(_ project: UUID, from store: isolated CueStore) throws -> ProjectPageData {
         // 层级限制按本项目全部任务（含已完成）算
         let all = try store.tasks(in: project, .inProgress, .todo, .done)
-        let cards = try store.cards(in: project), lastSends = try store.lastSends(in: project), info = try store.project(project)
+        let cards = try store.cards(in: project)
         return ProjectPageData(
-            project: info,
+            project: try store.project(project),
             cards: cards,
-            lastSends: lastSends,
             tasks: TaskTree(all.filter { $0.status != .done }, all: all),
             done: try store.tasksDone(in: project, limit: doneLimit),
             taskCounts: try store.taskCounts(in: project),
             subtasks: try store.subtaskProgress(in: project),
-            stamps: cards.map { CardStamp(id: $0.id, modifiedAt: $0.modifiedAt, lastSentAt: lastSends[$0.id]?.sentAt, isPinned: $0.isPinned) },
-            lastTarget: lastSends.compactMapValues { send in
-                send.target.shownName.map { $0 == info?.name ? SendCopy.sameProject : $0 }
-            },
+            stamps: cards.map { CardStamp(id: $0.id, modifiedAt: $0.modifiedAt, isPinned: $0.isPinned) },
             entries: Dictionary(uniqueKeysWithValues: cards.map { ($0.id, CardEntry($0)) }))
     }
 }

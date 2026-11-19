@@ -14,7 +14,6 @@ nonisolated enum Route: Hashable {
     case progress
     case cue
     case search
-    case earlier
     case card(UUID)
     case session(SessionRoute)
 
@@ -42,7 +41,6 @@ extension Route {
         case .progress: "progress"
         case .cue: "cue"
         case .search: "search"
-        case .earlier: "earlier"
         case .card: "card"
         case .session: "session"
         }

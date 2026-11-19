@@ -5,6 +5,9 @@ extension View {
         modifier(PaperSurface(radius: cornerRadius, lifted: lifted, wash: wash))
     }
 
+    /// 项目页的灵感卡：调进项目色的淡彩纸（`Palette.note`），平放、只描一道边；`lifted` 时抬起一档（Mac 指针停着的那一张）。
+    func note(lifted: Bool = false) -> some View { modifier(NoteSurface(lifted: lifted)) }
+
     /// 不用玻璃：拍板卡后面垫着叠边，玻璃不叠玻璃；卡浮在对话上，对话从它后面滚过，半透的面透出后面的字。
     func dockedPaper() -> some View { paper(cornerRadius: Radius.field, lifted: true) }
 
@@ -96,6 +99,20 @@ private struct PaperSurface: ViewModifier {
     }
 }
 
+private struct NoteSurface: ViewModifier {
+    let lifted: Bool
+    @Environment(\.palette) private var palette
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: Radius.card), fill = palette.note
+        content
+            .environment(\.rowSurface, fill)
+            // 影子只挂在底那块形状上，且只有抬起的那一张有（同 `PaperSurface`）
+            .background { shape.fill(fill).elevation(lifted && !palette.dark ? .lifted : nil) }
+            .overlay(shape.strokeBorder(palette.hair))
+    }
+}
+
 extension Palette {
     var paperFill: LinearGradient {
         LinearGradient(colors: [paperLit, paper], startPoint: .top, endPoint: .init(x: 0.5, y: 0.35))
@@ -156,6 +173,8 @@ enum Press {
     /// 字里行间的小钮（"显示更多"、折叠开合、行内的链与清掉）：标签就是那几个字或一个图标、不另画框。
     /// Mac 的悬停底向外宽出一圈（`HoverShape.inlineOutset`），不贴着字；手机按下只变淡、不缩放不震（同系统的 plain），一行字缩一下显得软。
     case inline
+    /// 行里的记号（任务行的"开始"、会话状态）：所在的行已经有悬停的底，Mac 不再叠一块；按下照旧变淡，手机同 `control`。
+    case mark
 }
 
 struct PressStyle: ButtonStyle {
@@ -179,6 +198,8 @@ struct PressFeedback: ViewModifier {
     /// 按钮按下时内容的透明度；卡片不变淡（整张变淡像停用），压暗一层，悬停时亮一半。
     private static let dimmed = 0.6
     private static let shade = 0.05
+    /// 指针停着的卡压暗（深色是提亮）多少：叠在卡上、又不在卡的按钮里的东西（灵感卡的删除）照它调自己垫的底，才和卡是一个颜色。
+    static func cardHover(_ palette: Palette) -> Double { shade / 2 * (palette.dark ? 1 : -1) }
 
     /// 原生控件的高亮没有过渡：按下、松开都在那一帧到位，外层的动画（列表挪位、开合）也不带它；悬停的进出淡一下。
     /// 每种只挂自己要的那一个效果：亮度滤镜挂在每颗按钮上，按钮里的字都要另画一遍。
@@ -187,11 +208,11 @@ struct PressFeedback: ViewModifier {
         let lit = hovering && isEnabled
         Group {
             if kind == .card {
-                content.brightness((active ? Self.shade : lit ? Self.shade / 2 : 0) * (palette.dark ? 1 : -1))
+                content.brightness(active ? Self.shade * (palette.dark ? 1 : -1) : lit ? Self.cardHover(palette) : 0)
             } else {
                 content
                     .overlay {
-                        if lit {
+                        if lit, kind != .mark {
                             HoverShape().fill(palette.fill).padding(kind == .inline ? HoverShape.inlineOutset : EdgeInsets())
                                 .allowsHitTesting(false).transition(.opacity)
                         }
@@ -212,7 +233,7 @@ struct PressFeedback: ViewModifier {
     private var scale: CGFloat {
         switch kind {
         case .button: 0.9
-        case .control: 0.95
+        case .control, .mark: 0.95
         case .card: 0.97
         case .wide: 0.98
         case .inline: 1

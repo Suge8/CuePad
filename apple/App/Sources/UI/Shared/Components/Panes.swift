@@ -7,9 +7,12 @@ struct PaneSegment<Value: Hashable>: View {
         let value: Value
         let title: Text
         let icon: Icon?
+        /// 这一段里有几件：字右上角一个小号的数，0 不写。不写进字里——数一变段宽跟着跳，读着也像名字的一部分。
+        var badge = 0
 
-        init(value: Value, title: LocalizedStringResource, icon: Icon? = nil) {
+        init(value: Value, title: LocalizedStringResource, icon: Icon? = nil, badge: Int = 0) {
             self.init(value: value, title: Text(title), icon: icon)
+            self.badge = badge
         }
 
         init(value: Value, verbatim title: String, icon: Icon? = nil) {
@@ -41,7 +44,15 @@ struct PaneSegment<Value: Hashable>: View {
                 } label: {
                     HStack(spacing: PaneMetrics.iconGap) {
                         if let icon = item.icon { Image(icon).font(PaneMetrics.iconFont) }
-                        if titles { item.title.font(PaneMetrics.font).lineLimit(1) }
+                        if titles {
+                            HStack(alignment: .top, spacing: Spacing.hair) {
+                                item.title.font(PaneMetrics.font).lineLimit(1)
+                                if item.badge > 0 {
+                                    Text(item.badge, format: .number).font(Typography.caption2.weight(.semibold)).monospacedDigit()
+                                        .foregroundStyle(palette.ink3).fixedSize().readerHidden(true)
+                                }
+                            }
+                        }
                     }
                     .padding(.horizontal, titles ? PaneMetrics.padding : 0)
                     .frame(minWidth: titles ? PaneMetrics.minWidth : PaneMetrics.square, maxWidth: .infinity, maxHeight: .infinity)
@@ -52,6 +63,7 @@ struct PaneSegment<Value: Hashable>: View {
                 .buttonStyle(PressStyle())
                 .help(item.title)
                 .accessibilityLabel(item.title)
+                .accessibilityValue(item.badge > 0 ? Text(item.badge, format: .number) : Text(verbatim: ""))
                 .accessibilityAddTraits(on ? .isSelected : [])
             }
         }
@@ -99,35 +111,20 @@ enum PaneMetrics {
     #endif
 }
 
-/// 一个搜索词两边共用，换范围不清空。
-enum SearchScope {
-    case cards, sessions
-}
-
-struct SearchScopePanes: View {
-    @Binding var scope: SearchScope
-
-    var body: some View {
-        PaneSegment(items: [.init(value: .cards, title: "灵感与任务", icon: .idea), .init(value: .sessions, title: "会话", icon: .session)],
-                    selection: scope) { scope = $0 }
-            .paneSlot()
-    }
-}
-
 extension View {
-    /// 玻璃不叠玻璃，纸上没有玻璃托着，所以用淡底胶囊的槽。给了 `size` 就与同一排那一档控件同高（旁边是那一档的按钮时）。
-    /// 宽按各段的字定在这里：给了高时只定宽，各段与选中块撑满槽的高（连高一起定，它们只有字那么高，悬停的底贴着字）。
-    func paneSlot(_ size: ControlSize? = nil) -> some View { modifier(PaneSlot(size: size)) }
+    /// 玻璃不叠玻璃，纸上没有玻璃托着，所以用淡底胶囊的槽，与同一排 `size` 那一档控件同高。
+    /// 高一定要给：只定宽，各段与选中块撑满槽的高。不给的话它们只有字那么高，选中块是一条扁条（搜索的范围分段曾经这样）。
+    func paneSlot(_ size: ControlSize) -> some View { modifier(PaneSlot(size: size)) }
 }
 
 private struct PaneSlot: ViewModifier {
-    let size: ControlSize?
+    let size: ControlSize
     @Environment(\.palette) private var palette
 
     func body(content: Content) -> some View {
         content
-            .fixedSize(horizontal: true, vertical: size == nil)
-            .frame(height: size.map { $0.height - PaneMetrics.inset * 2 })
+            .fixedSize(horizontal: true, vertical: false)
+            .frame(height: size.height - PaneMetrics.inset * 2)
             .padding(PaneMetrics.inset)
             .background(palette.fill, in: .capsule)
     }

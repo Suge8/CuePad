@@ -88,14 +88,13 @@ struct MainWindow: View {
 /// 本窗口的浮层与确认框（都经 `panel`）。单独一个视图读它们的开合：主窗口的视图体读了，开合的那一帧就要重算整个窗口、重新提交整条工具栏。
 private struct WindowPanels: View {
     @Bindable var workspace: Workspace
-    @State private var searchScope = SearchScope.cards
     @State private var mountsPalette = false
 
     var body: some View {
         Color.clear.frame(width: 0, height: 0)
             // ⌘K 每天用很多次：直接出现、直接消失，不做动画
-            .keptPanel(isPresented: $workspace.searching, mounted: mountsPalette) { SearchPalette(scope: $searchScope) }
-            .onChange(of: workspace.searching) { if !$1 { searchScope = .cards } else { mountsPalette = true } }
+            .keptPanel(isPresented: $workspace.searching, mounted: mountsPalette) { SearchPalette() }
+            .onChange(of: workspace.searching) { if $1 { mountsPalette = true } }
             .task(id: workspace.isLibraryReady) {
                 guard workspace.isLibraryReady else { return }
                 guard (try? await Task.sleep(for: Prewarm.delay)) != nil else { return }
@@ -118,31 +117,13 @@ struct EditorLayer: View {
     }
 }
 
-/// 只在项目页与归档放：回收站、进展页与会话页不是记灵感的地方（进展页的主操作是新任务、新会话，会话页有回复框），它只会压住列表最后几行。
-struct CaptureSlot: View {
+/// 多选灵感时浮在主区底部的那一条。
+struct SelectionSlot: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        let bare = workspace.isLibraryReady && workspace.overlay == nil && workspace.presses.presented == nil
-        if bare, workspace.presses.isSelecting {
+        if workspace.isLibraryReady, workspace.overlay == nil, workspace.presses.presented == nil, workspace.presses.isSelecting {
             SelectionBar().padding(.bottom, Spacing.block).transition(.opacity)
-        } else if bare, workspace.mainRoute.takesCapture {
-            let searching = workspace.searching
-            CaptureBar(project: workspace.currentProject).padding(.bottom, Spacing.block)
-                .opacity(searching ? 0 : 1)
-                .allowsHitTesting(!searching)
-                .accessibilityHidden(searching)
-                .animation(nil, value: searching)
-                .transition(.opacity.animation(Motion.yield))
-        }
-    }
-}
-
-private extension Route {
-    var takesCapture: Bool {
-        switch self {
-        case .project, .archive: true
-        default: false
         }
     }
 }

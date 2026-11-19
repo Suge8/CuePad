@@ -9,10 +9,11 @@ struct InspirationEditorActions: View {
     let sharing: InspirationSharing
     var body: some View {
         Group {
-            Group {
-                Button("排成图片分享") { share(originals: false) }
-                Button("分享原图") { share(originals: true) }
-                Button("分享文字") {
+            // 三种分享收成一项：摊开在最上面，把置顶、移动这些更常点的挤到了菜单下半截
+            Menu("分享", icon: .share) {
+                Button("排成图片") { share(originals: false) }
+                Button("原图") { share(originals: true) }
+                Button("文字") {
                     sharing.present(InspirationPayload(files: nil, urls: [], text: CueFormat.plainText(Outgoing.text(body: latestText, values: card.variableValues))))
                 }
             }.disabled(editing.text.isEmpty || sharing.isBusy)

@@ -9,12 +9,13 @@ struct TrashPage: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: Spacing.page) {
+            VStack(alignment: .leading, spacing: Spacing.part) {
                 if let data { content(data) }
             }
-            .padding(.horizontal, Spacing.page).padding(.bottom, Spacing.section)
+            .storedList()
         }
         .safeAreaPadding(.top, Bars.contentGap)
+        .fadesUnderHead()
         .emptyTrashConfirmation(workspace)
         .observing(services.store, into: $data, onError: workspace.fail) { store in
             try TrashSummary.read(from: store)
@@ -27,7 +28,7 @@ struct TrashPage: View {
             EmptyState(mascot: .trash, title: "没有删掉的东西")
         }
         if !data.projects.isEmpty {
-            group("项目") {
+            group { SectionHeader("项目") } rows: {
                 ForEach(data.projects) { item in
                     TrashRow(item: item, restore: { workspace.restore(item) }, purge: { workspace.purge(item) }) {
                         ProjectGlyph(project: item.project)
@@ -35,52 +36,40 @@ struct TrashPage: View {
                 }
             }
         }
-        if !data.cards.isEmpty {
-            group("灵感与任务") {
-                ForEach(data.cards) { item in
+        // 单独删掉的灵感与任务按原来的项目分段，同归档（`ArchiveList`）
+        ForEach(data.runs) { run in
+            group { ProjectRunHeader(project: data.project(of: run, in: workspace.catalog), count: run.items.count) } rows: {
+                ForEach(run.items) { item in
                     TrashRow(item: item, restore: { workspace.restore(item) }, purge: { workspace.purge(item) }) {
-                        Image(.document).foregroundStyle(palette.ink3).accessibilityHidden(true)
+                        if let card = item.card { CardKindMark(card: card) }
                     }
                 }
             }
         }
     }
 
-    private func group(_ title: LocalizedStringResource, @ViewBuilder rows: () -> some View) -> some View {
-        VStack(alignment: .leading, spacing: Spacing.item) {
-            SectionHeader(title)
-            VStack(spacing: 0) { rows() }.rowPaper(cornerRadius: Radius.block)
+    private func group(@ViewBuilder header: () -> some View, @ViewBuilder rows: () -> some View) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.tight) {
+            header()
+            VStack(spacing: 0) { rows() }
         }
     }
 }
 
-private struct TrashRow<Icon: View>: View {
+private struct TrashRow<Mark: View>: View {
     let item: TrashItem
     let restore: () -> Void
     let purge: () -> Void
-    @ViewBuilder let icon: Icon
-    @Environment(\.palette) private var palette
+    @ViewBuilder let mark: Mark
     @State private var confirming = false
 
     var body: some View {
-        HStack(spacing: Spacing.item) {
-            icon.frame(width: 20)
-            Text(item.title).font(Typography.body.weight(.medium)).foregroundStyle(palette.ink).lineLimit(1).layoutPriority(1)
-            Text(item.detail).font(Typography.secondary).foregroundStyle(palette.ink3).lineLimit(1)
-            Spacer(minLength: 12)
-            if let deletedAt = item.deletedAt {
-                Text("删于 \(DateLabel.short(deletedAt))").font(Typography.meta).foregroundStyle(palette.ink3)
-            }
+        StoredRow(title: item.title, detail: item.detail, stamp: item.deletedAt) {
+            mark
+        } actions: {
+            Button("恢复", icon: .restore, action: restore).help("恢复")
+            Button("永久删除…", icon: .trash, role: .destructive) { confirming = true }.help("永久删除")
         }
-        .padding(.horizontal, Spacing.inset).frame(minHeight: 40)
-        .hoverReveal {
-            HStack(spacing: Spacing.item) {
-                Button("恢复", action: restore).controlSize(.small)
-                Button("永久删除…") { confirming = true }.controlSize(.small).foregroundStyle(palette.failure)
-            }
-            .padding(.horizontal, Spacing.inset)
-        }
-        .row()
         .contextMenu {
             Button("恢复", icon: .restore, action: restore).menuIcons()
             Divider()

@@ -19,7 +19,6 @@ struct ProjectFormSheet: View {
                 Group {
                     Section {
                         TextField(ProjectDraft.namePrompt, text: $draft.name).submitLabel(.done).onSubmit(save)
-                        TextField(ProjectDraft.introPrompt, text: $draft.intro, axis: .vertical).lineLimit(1...3)
                     }
                     Section("图标与颜色") { ProjectStylePicker(icon: $draft.icon, color: $draft.color, cell: 44) }
                     if draft.project == nil {

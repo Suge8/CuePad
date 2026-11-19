@@ -60,8 +60,6 @@ struct Palette {
     var hair: Color { ink.opacity(highContrast ? 0.3 : (dark ? 0.09 : 0.07)) }
     /// 唯一的浅底：悬停、按下、次按钮、代码与变量。
     var fill: Color { ink.opacity(fillAmount) }
-    /// `fill` 叠在 `surface` 上合成的实色：悬停的行上露出的操作垫它（`hoverReveal`），盖住压到的字、又和行的淡底接得上。
-    func hovered(_ surface: Color) -> Color { surface.mix(with: ink, by: fillAmount, in: .device) }
     private var fillAmount: Double { dark ? 0.07 : 0.05 }
     /// 没填满的轨道：用量条、档位条的空格、转圈与头像外圈的轨道。
     var track: Color { ink.opacity(highContrast ? 0.3 : (dark ? 0.16 : 0.14)) }
@@ -189,13 +187,19 @@ struct Palette {
         ProjectColor(stored: "#8A8A84", name: String(localized: "灰色"), light: 0x7D7A73, dark: 0xA39F96),
     ]
 
-    private static let fallbackProjectColor = projectColors.first { $0.stored == "#8A8A84" }!
+    /// 灰：认不出的颜色与没有项目的地方用它。
+    static let neutralProject = "#8A8A84"
+    private static let fallbackProjectColor = projectColors.first { $0.stored == neutralProject }!
 
     /// 项目的颜色：只上图形（项目图标、任务行末的项目小图标），不写成字、不做成圆点。
     func project(_ stored: String) -> Color {
         let entry = Self.projectColors.first { $0.stored.caseInsensitiveCompare(stored) == .orderedSame } ?? Self.fallbackProjectColor
         return Color(hex: dark ? entry.dark : entry.light)
     }
+
+    /// 灵感卡与项目卡的纸：纸里调进一点沙色，与桌面靠色相分开、不靠一块白。所有项目同一种——跟着项目色各调一种时，八种里总有几种发灰发脏，
+    /// 一屏的卡又和顶上的封面抢颜色；认项目靠封面与图标。
+    var note: Color { paper.mix(with: Color(hex: dark ? 0xB8A27A : 0x9A8257), by: dark ? 0.12 : 0.1, in: .device) }
 }
 
 private extension Color {
@@ -210,11 +214,6 @@ extension Color {
         let parts = css.drop { $0 != "(" }.dropFirst().prefix { $0 != ")" }.split(separator: ",").compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
         guard parts.count >= 3 else { return nil }
         return Color(red: parts[0] / 255, green: parts[1] / 255, blue: parts[2] / 255)
-    }
-
-    /// 插画色盘是主题的源数据，不是界面语义色；这里只解码，不保存或复制颜料。
-    nonisolated static func illustrationColors(_ pigments: [UInt32]) -> [Color] {
-        pigments.map { Color(hex: $0) }
     }
 }
 

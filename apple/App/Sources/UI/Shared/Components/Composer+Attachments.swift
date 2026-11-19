@@ -44,7 +44,7 @@ extension Composer {
                     }
                     Spacer(minLength: 8)
                 }
-                .padding(.leading, Spacing.group).frame(minHeight: 44)
+                .padding(.leading, removable ? Spacing.group : Spacing.tight).frame(minHeight: removable ? 44 : nil)
                 .contentShape(.rect)
             }
             if removable {
@@ -54,7 +54,8 @@ extension Composer {
                     .buttonStyle(PressStyle(.button))
             }
         }
-        .background(palette.fill, in: shape)
+        // 交出去的那件任务本身（去不掉的那条）是这块面板的标题，不铺底：面板已经是一张卡。带上的别的才是一块块能拿掉的东西
+        .background(removable ? palette.fill : .clear, in: shape)
     }
 
     var fileStrip: some View {
