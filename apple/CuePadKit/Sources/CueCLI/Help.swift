@@ -33,7 +33,7 @@ enum Help {
 
   static func command(_ command: Command) -> String {
     let options = command.options + [Opt("json", "输出 JSON")]
-    let labels = options.map { "--\($0.name)" + ($0.value.map { " <\($0)>" } ?? "") }
+    let labels = options.map { ($0.short.map { "-\($0), " } ?? "") + "--\($0.name)" + ($0.value.map { " <\($0)>" } ?? "") }
     let width = labels.map(\.displayWidth).max() ?? 0
     let rows = zip(labels, options).map { "  \($0.padded(to: width))  \($1.help)" }.joined(separator: "\n")
     let usage = ["cuepad", command.name, command.arguments, command.options.isEmpty ? "" : "[选项]"]

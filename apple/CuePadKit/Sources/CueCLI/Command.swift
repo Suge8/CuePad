@@ -5,11 +5,14 @@ struct Opt {
   let name: String
   let value: String?
   let help: String
+  /// 单字母的写法（`-i`），只给开关。
+  var short: Character?
 
-  init(_ name: String, _ help: String, value: String? = nil) {
+  init(_ name: String, _ help: String, value: String? = nil, short: Character? = nil) {
     self.name = name
     self.value = value
     self.help = help
+    self.short = short
   }
 
   static func project(_ help: String) -> Opt { Opt("project", "\(help)（名称不分大小写，或 id）", value: "项目") }
@@ -28,7 +31,7 @@ struct Command: Sendable {
 
   var name: String { path.joined(separator: " ") }
 
-  static let all: [Command] = project + card + task + [search, show, live] + conflicts
+  static let all: [Command] = project + card + task + [search, show, live] + liveActions + conflicts
   static let nouns: [String] = all.map(\.path[0]).reduce(into: []) { if !$0.contains($1) { $0.append($1) } }
 }
 

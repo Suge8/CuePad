@@ -13,15 +13,18 @@ struct Arguments {
 
   init(_ tokens: [String], options: [Opt]) throws {
     let declared = Dictionary(uniqueKeysWithValues: options.map { ($0.name, $0) })
+    let shorts = Dictionary(uniqueKeysWithValues: options.compactMap { option in option.short.map { ("-\($0)", option.name) } })
     var rest = tokens[...]
     var literal = false
     while let token = rest.popFirst() {
-      if literal || !token.hasPrefix("--") && token != "-h" {
+      if literal || !token.hasPrefix("--") && token != "-h" && shorts[token] == nil {
         positionals.append(token)
       } else if token == "--" {
         literal = true
       } else if token == "-h" {
         flags.insert("help")
+      } else if let name = shorts[token] {
+        flags.insert(name)
       } else {
         try parseOption(String(token.dropFirst(2)), declared: declared, rest: &rest)
       }

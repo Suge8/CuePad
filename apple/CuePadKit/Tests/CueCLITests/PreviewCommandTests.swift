@@ -1,6 +1,7 @@
 #if os(macOS)
 import CueStore
 import Foundation
+import Synchronization
 import Testing
 
 @testable import CueCLI
@@ -57,6 +58,83 @@ import Testing
     let result = await sb.run("live", "5173", environment: ["PI_SESSION_ID": "s1"])
     #expect(result.code == 1 && result.err.contains("CuePad 没开") && result.out.isEmpty)
     #expect(try await sb.store.liveAddresses().isEmpty)
+  }
+
+  @Test(arguments: ["https://example.com", "http://8.8.8.8:3000", "github.com/login"])
+  func liveRefusesAnAddressOffThisMac(address: String) async throws {
+    let sb = try Fixture()
+    let result = await sb.run("live", address, environment: ["PI_SESSION_ID": "s1"])
+    #expect(result.code == 2 && result.err.contains("不是本机地址"))
+    #expect(try await sb.store.liveAddresses().isEmpty)
+  }
+
+  /// 本机的几种写法过了地址这一关，停在下一关（CuePad 没开）。
+  @Test(arguments: ["localhost:3000", "192.168.1.20:5173", "myapp.local:8080", "http://[::1]:3000", "devbox:8000"])
+  func liveTakesTheLocalAddressesOfThisMac(address: String) async throws {
+    let sb = try Fixture()
+    let result = await sb.run("live", address, environment: ["PI_SESSION_ID": "s1"])
+    #expect(result.code == 1 && result.err.contains("CuePad 没开"))
+  }
+
+  @Test func liveActionsWithoutCuePadOpenFailAndAskForIt() async throws {
+    let sb = try Fixture()
+    let result = await sb.run("live", "snapshot", environment: ["PI_SESSION_ID": "s1"])
+    #expect(result.code == 1 && result.err.contains("CuePad 没开") && result.out.isEmpty)
+  }
+
+  private final class Received: Sendable {
+    private let box = Mutex<[LiveChannel.Request]>([])
+    func add(_ request: LiveChannel.Request) { box.withLock { $0.append(request) } }
+    var all: [LiveChannel.Request] { box.withLock { $0 } }
+  }
+
+  /// 替 App 听这份库：App 用的同一个服务端（会话核对在它里面），交到手上的请求记下来、答一句。
+  private func listen(_ sb: Fixture) throws -> (server: LiveChannel.Server, received: Received) {
+    let received = Received()
+    let server = try LiveChannel.Server(path: LiveChannel.socketPath(databasePath: sb.store.databasePath), store: sb.store) { request in
+      received.add(request)
+      return .done("点了 button \"登录\"")
+    }
+    return (server, received)
+  }
+
+  @Test func liveActionGoesToTheAppAsTheSessionInTheEnvironment() async throws {
+    let sb = try Fixture()
+    let (server, received) = try listen(sb)
+    defer { withExtendedLifetime(server) {} }
+
+    let result = await sb.run("live", "click", "a5", environment: ["CUEPAD_SESSION_ID": "s1"])
+    #expect(result.code == 0 && result.out == "点了 button \"登录\"\n")
+    #expect(received.all == [LiveChannel.Request(session: "s1", op: "click", args: .init(ref: "a5"))])
+
+    let nobody = await sb.run("live", "click", "a5")
+    #expect(nobody.code != 0 && nobody.err.contains("CUEPAD_SESSION_ID"))
+    #expect(received.all.count == 1)
+  }
+
+  /// 会话记着在跑的 Agent 进程时，只有它的后代能以这个会话操作预览。这里发命令的是测试进程：它是自己父进程的后代，不是一个旁的 sleep 的后代。
+  @Test func liveActionFromOutsideTheSessionsAgentIsRefused() async throws {
+    let sb = try Fixture()
+    let (server, received) = try listen(sb)
+    defer { withExtendedLifetime(server) {} }
+    let stranger = Process()
+    stranger.executableURL = URL(filePath: "/bin/sleep")
+    stranger.arguments = ["60"]
+    try stranger.run()
+    defer { stranger.terminate() }
+    let other = try #require(SessionProcess.running(pid: stranger.processIdentifier))
+    let parent = try #require(SessionProcess.running(pid: getppid()))
+    for (session, process) in [("theirs", other), ("mine", parent)] {
+      try RawDB(sb.url).exec("INSERT INTO piProcesses (sessionID, pid, startedAt) VALUES ('\(session)', \(process.pid), \(process.startedAt))")
+    }
+
+    let refused = await sb.run("live", "snapshot", environment: ["CUEPAD_SESSION_ID": "theirs"])
+    #expect(refused.code == 1 && refused.err.contains("只能操作自己会话的活预览"))
+    #expect(received.all.isEmpty)
+
+    let allowed = await sb.run("live", "snapshot", environment: ["CUEPAD_SESSION_ID": "mine"])
+    #expect(allowed.code == 0)
+    #expect(received.all.map(\.session) == ["mine"])
   }
 
   @Test(arguments: ["ftp://localhost:5173", "localhost:99999", "0"])

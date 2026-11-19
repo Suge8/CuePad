@@ -2380,6 +2380,22 @@
       },
       "shouldTranslate" : false
     },
+    "Agent 交文件" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agent attached files"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agent 交文件"
+          }
+        }
+      }
+    },
     "Agent 会话「%@」已经结束，或不在这台 Mac 上" : {
       "localizations" : {
         "en" : {
@@ -2604,6 +2620,22 @@
         }
       }
     },
+    "Agent 填" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agent typed"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agent 填"
+          }
+        }
+      }
+    },
     "Agent 拒绝了：%@" : {
       "localizations" : {
         "en" : {
@@ -2616,6 +2648,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Agent 拒绝了：%@"
+          }
+        }
+      }
+    },
+    "Agent 按 %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agent pressed %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agent 按 %@"
           }
         }
       }
@@ -2716,6 +2764,22 @@
         }
       }
     },
+    "Agent 正在操作这个页面" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agent is using this page"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agent 正在操作这个页面"
+          }
+        }
+      }
+    },
     "Agent 没有及时回应" : {
       "localizations" : {
         "en" : {
@@ -2760,6 +2824,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Agent 没有接受：%@"
+          }
+        }
+      }
+    },
+    "Agent 点" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agent clicked"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agent 点"
           }
         }
       }
@@ -2952,6 +3032,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Agent 连接目录的路径太长"
+          }
+        }
+      }
+    },
+    "Agent 选" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agent chose"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agent 选"
           }
         }
       }

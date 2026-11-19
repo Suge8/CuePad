@@ -183,6 +183,12 @@ final class Workspace {
     var liveSent: [UUID: LivePreview.Target] = [:]
     /// 认出的各个会话的服务（按会话记录 id），最近起来的在前；认不出的会话不在里面（`watchLiveServers`，窗口有人看着时更新）。
     var liveFound: [UUID: [URL]] = [:]
+    /// 收过的 `cuepad live` 每个会话最后一条的时刻（`take`）。
+    @ObservationIgnored var liveTaken: [String: Date] = [:]
+    /// 每个会话在做的那一条 Agent 请求（`answerLive`）：下一条等它做完。
+    @ObservationIgnored var liveTurns: [UUID: Task<LiveChannel.Reply, Never>] = [:]
+    /// 闲置被释放了的预览（`releaseLivePreviews`）：重建后第一条回执说明页面是重新载入的。
+    @ObservationIgnored var liveReleased: Set<UUID> = []
     #endif
     /// 并排两半的分界拖到了哪（`WideMetrics.BesideShare`）：每个窗口一份，只在内存里。
     var besideShare = WideMetrics.BesideShare()
@@ -242,8 +248,9 @@ final class Workspace {
         #if os(macOS)
         async let agents: Void = followLocalAgents()
         async let live: Void = followLiveAddresses()
+        async let liveAgent: Void = serveLiveAgent()
         await followSessionPlacement()
-        _ = await (agents, live)
+        _ = await (agents, live, liveAgent)
         #endif
         _ = await (catalog, links, launches, cue, opens, library, quota, cards, files)
     }

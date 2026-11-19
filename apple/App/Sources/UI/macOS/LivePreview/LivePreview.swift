@@ -38,6 +38,14 @@ final class LivePreview: NSObject, WKNavigationDelegate {
 
     /// 同一时刻只挂在一处（`LiveWebView`）。
     @ObservationIgnored let web: WKWebView
+    /// 页面自己报的控制台、请求与文档（`LiveAgentScript`）。
+    @ObservationIgnored let record = LivePageRecord()
+    /// Agent 操作这一页用的状态（`LivePreview+Agent`）。
+    @ObservationIgnored var agent = AgentState()
+    /// Agent 这几秒里在看、在点这一页：预览栏上亮着那个状态标。
+    var driven = false
+    /// 这个预览是哪个会话的（会话结束时释放它，`Workspace.keepLivePreviews`）。
+    @ObservationIgnored var sessionID: String?
     private(set) var address: URL?
     private(set) var source = Source.typed
     /// 认出的这个会话的服务（`Workspace.watchLiveServers` 每隔 `liveScan` 给）：认出来的地址在不在只看它——端口空出来后被别的进程占了，答得上话也不是这个会话的页。
@@ -62,7 +70,13 @@ final class LivePreview: NSObject, WKNavigationDelegate {
         configuration.websiteDataStore = .nonPersistent()
         // macOS 上默认开着：不经点击（定时器里）的 window.open 也会开，外部地址就一个个塞进默认浏览器（`LivePreview+Dialogs`）
         configuration.preferences.javaScriptCanOpenWindowsAutomatically = false
-        web = WKWebView(frame: .zero, configuration: configuration)
+        let content = configuration.userContentController
+        content.addUserScript(WKUserScript(source: LiveAgentScript.hooks, injectionTime: .atDocumentStart, forMainFrameOnly: false, in: .page))
+        content.addUserScript(WKUserScript(source: LiveAgentScript.agent, injectionTime: .atDocumentStart, forMainFrameOnly: false, in: LiveAgentScript.world))
+        content.add(record, contentWorld: .page, name: LivePageRecord.logChannel)
+        content.add(record, contentWorld: LiveAgentScript.world, name: LivePageRecord.agentChannel)
+        // 没开过面板就被 Agent 用上的（后台载入）也要有个视口：页面按它排版，取面板上次的大小
+        web = WKWebView(frame: CGRect(origin: .zero, size: Self.paneSize), configuration: configuration)
         web.isInspectable = true
         web.allowsBackForwardNavigationGestures = true
         super.init()
@@ -101,6 +115,14 @@ final class LivePreview: NSObject, WKNavigationDelegate {
 
     func stopLoading() { web.stopLoading() }
 
+    /// 有地址、还没载过的现在就载（Agent 发来地址时，面板没开也载：之后它要操作的就是这一页）。
+    func start() {
+        if phase == .idle, let address { load(address) }
+    }
+
+    /// 面板上次的大小（`LivePreviewPane` 报）：后台建的预览按它开视口，用户点开时页面不用换一套排版。
+    static var paneSize = CGSize(width: 800, height: 900)
+
     /// 在页面自己的内容世界里跑一段函数体（`callAsyncJavaScript`：可以 `await`、`return`，参数按名字成了局部变量）。
     func run(_ script: String, arguments: [String: Any] = [:]) async throws -> Any? {
         try await web.callAsyncJavaScript(script, arguments: arguments, contentWorld: .page)
@@ -135,7 +157,15 @@ final class LivePreview: NSObject, WKNavigationDelegate {
         }
     }
 
+    func webView(_ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse) async -> WKNavigationResponsePolicy {
+        if let http = navigationResponse.response as? HTTPURLResponse, http.statusCode >= 400 {
+            record.note("network", "\(navigationResponse.isForMainFrame ? "页面" : "框") \(http.url?.absoluteString ?? "") → \(http.statusCode)")
+        }
+        return .allow
+    }
+
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: any Error) {
+        if (error as NSError).code != NSURLErrorCancelled { record.note("network", "页面载不出：\(error.localizedDescription)") }
         guard Self.unreachable(error) else { return }
         phase = painted ? .stopped : .waiting
     }
@@ -212,6 +242,7 @@ extension Workspace {
             state.beside = nil
         } else {
             let preview = livePreviews[session.id] ?? LivePreview()
+            preview.sessionID = preview.sessionID ?? session.sessionID
             livePreviews[session.id] = preview
             if let sent = liveSent.removeValue(forKey: session.id) {
                 preview.retarget(sent)
@@ -235,7 +266,7 @@ extension Workspace {
         liveFound[session]?.isEmpty == false || liveSent[session] != nil || livePreviews[session].map { Self.keeps($0, []) } ?? false
     }
 
-    private func showsLivePreview(_ session: UUID) -> Bool { beside == .preview && self.session(in: .main)?.id == session }
+    func showsLivePreview(_ session: UUID) -> Bool { beside == .preview && self.session(in: .main)?.id == session }
 
     enum LiveButton: Equatable {
         /// 点开就是这个地址；nil 是空的地址输入。
@@ -263,32 +294,43 @@ extension Workspace {
     /// 活预览只看这台 Mac 上的会话（本机的服务、本机的 localhost）。
     func livesHere(_ session: SessionState) -> Bool { Self.liveHosts(services).contains(session.hostID) }
 
-    private static func liveHosts(_ services: AppServices) -> [String] { [services.hostID] + DebugHooks.liveHosts }
+    static func liveHosts(_ services: AppServices) -> [String] { [services.hostID] + DebugHooks.liveHosts }
 
-    /// Agent 发来的地址（`cuepad live`）记到会话上；会话此刻在主区、右半空着就直接滑开，否则只让栏头那颗钮亮起，不动排布。
+    /// Agent 发来的地址（`cuepad live`）。
     func followLiveAddresses() async {
-        // App 起来之前发的不算（那时的服务多半已经不在了）；起来之后、订阅开始之前发的照收
-        let start = LiveServers.launched() ?? .now
-        var seen: [String: Date]?
         do {
-            for try await addresses in services.store.observe({ try $0.liveAddresses() }) {
-                let fresh = addresses.filter { address in seen.map { $0[address.sessionID].map { address.sentAt > $0 } ?? true } ?? (address.sentAt > start) }
-                seen = Dictionary(addresses.map { ($0.sessionID, $0.sentAt) }, uniquingKeysWith: max)
-                for address in fresh { receive(address) }
-            }
+            for try await addresses in services.store.observe({ try $0.liveAddresses() }) { take(addresses) }
         } catch is CancellationError {
         } catch {
             fail(error)
         }
     }
 
+    /// 收下还没收过的那几条：订阅到的，与 Agent 的动作赶在订阅之前来时当场读的（`answerLive`）走这一处，同一条不收两遍。
+    /// App 起来之前发的不算（那时的服务多半已经不在了）。
+    func take(_ addresses: [LiveAddress]) {
+        let start = LiveServers.launched() ?? .now
+        for address in addresses where address.sentAt > liveTaken[address.sessionID] ?? start {
+            liveTaken[address.sessionID] = address.sentAt
+            receive(address)
+        }
+    }
+
+    /// 记到会话上，并在后台为它建好预览、载入这一页：之后 Agent 的 `cuepad live snapshot` 等作用在这一页上，用户点开看到的也是它。
+    /// 会话此刻在主区、右半空着就直接滑开，否则只让栏头那颗钮亮起，不动排布。
     private func receive(_ address: LiveAddress) {
         let id = SessionState.recordID(sessionID: address.sessionID)
         let target = LivePreview.Target(url: address.url, source: address.found ? .found : .sent)
         let here = session(in: .main)?.id == id
-        // 开着的预览只在空着或显示的也是 Agent 给、认出的地址时换；你输入的不被顶掉，这一条留到下次打开
-        if here, beside == .preview, let preview = livePreviews[id], preview.address == nil || preview.source != .typed { return preview.retarget(target) }
-        liveSent[id] = target
+        let preview = livePreviews[id] ?? LivePreview()
+        preview.sessionID = address.sessionID
+        livePreviews[id] = preview
+        liveReleased.remove(id)
+        // 你输入的、此刻正开着的地址不被顶掉：这一条留到下次打开，Agent 这期间操作的是你开着的这一页
+        if here, beside == .preview, preview.address != nil, preview.source == .typed { return liveSent[id] = target }
+        liveSent[id] = nil
+        preview.retarget(target)
+        preview.start()
         if here, beside == nil { toggleLivePreview() }
     }
 

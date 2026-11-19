@@ -165,6 +165,20 @@ public struct SessionProcess: Equatable, Sendable {
     self.pid = pid
     self.startedAt = startedAt
   }
+
+  #if os(macOS)
+  public static func running(pid: Int32) -> SessionProcess? {
+    var info = kinfo_proc()
+    var size = MemoryLayout<kinfo_proc>.stride
+    var name = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
+    guard sysctl(&name, 4, &info, &size, nil, 0) == 0, size > 0 else { return nil }
+    let start = info.kp_proc.p_un.__p_starttime
+    return SessionProcess(pid: pid, startedAt: Int64(start.tv_sec) * 1_000_000 + Int64(start.tv_usec))
+  }
+
+  /// 还是那一个进程在跑（pid 被复用的不算）。
+  public var isRunning: Bool { Self.running(pid: pid) == self }
+  #endif
 }
 
 extension SessionState {

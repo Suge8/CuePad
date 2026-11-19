@@ -58,7 +58,12 @@ struct LivePreviewPane: View {
         .background(palette.desk)
         .modifier(LivePageAsks(preview: preview))
         .task(id: preview.address) { await preview.watch() }
-        .onDisappear { if preview.picking { preview.cancelPick() } }
+        .onGeometryChange(for: CGSize.self) { $0.size } action: { LivePreview.paneSize = CGSize(width: $0.width, height: $0.height - Chrome.band) }
+        .onDisappear {
+            if preview.picking { preview.cancelPick() }
+            // 收起才开始算闲置（`Workspace.releaseLivePreviews`）
+            preview.agent.used = .now
+        }
     }
 
     /// 铺满时网页从玻璃栏下沿铺到窗口下缘，栏那一排铺页面的底、下沿同色渐隐：滚上去的内容淡进栏下，不在一条线上切断；
@@ -252,7 +257,8 @@ private struct LiveAddressField: View {
                     editing = true
                 } label: {
                     Text(verbatim: shown).lineLimit(1).truncationMode(.middle)
-                        .padding(.horizontal, Spacing.group)
+                        // 两边让出状态标的位置：它来去时地址不挪
+                        .padding(.horizontal, Spacing.group + LiveDriven.width)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .contentShape(.capsule)
                 }
@@ -266,9 +272,26 @@ private struct LiveAddressField: View {
         .foregroundStyle(palette.ink)
         .frame(height: ControlSize.compact.height)
         .frame(maxWidth: .infinity)
+        .overlay(alignment: .leading) {
+            if preview.driven, !editing { LiveDriven().padding(.leading, Spacing.group).transition(.opacity) }
+        }
+        .animation(Motion.fade, value: preview.driven)
     }
 
     private func go(_ url: URL) { preview.retarget(.init(url: url, source: .typed)) }
+}
+
+/// Agent 这几秒在看、在点这一页（`LivePreview.driven`）：地址前面那个会话在跑时的状态标，压在地址框的边上，不占栏里的位置。
+private struct LiveDriven: View {
+    static let size: CGFloat = 7
+    static var width: CGFloat { size * 1.8 }
+
+    var body: some View {
+        StateDot(shown: SessionShown(status: .working(.thinking)), size: Self.size)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Text("Agent 正在操作这个页面"))
+            .help(Text("Agent 正在操作这个页面"))
+    }
 }
 
 /// 认出的其余服务：一行一个地址，不加说明。
