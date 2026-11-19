@@ -86,7 +86,7 @@ struct NewProjectButton: View {
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        Button("新建项目", icon: .newProject) { workspace.projectForm = .init() }
+        Button("新建项目", icon: .add) { workspace.projectForm = .init() }
             .help("新建项目")
     }
 }

@@ -3,7 +3,7 @@ import math
 from ink.geometry import G, Arc, Line, arcs, disc, poly, rot, rpoly
 
 NAMES = (
-    "idea", "task", "session", "folder", "bookmark", "skill", "search", "filter", "plus", "close", "more", "plane", "sidebar", "copy", "trash", "archive", "clip", "alarm", "done", "dot", "stop", "play", "renew", "doc", "bubble", "folder.add",
+    "idea", "task", "session", "folder", "bookmark", "skill", "search", "filter", "plus", "close", "more", "plane", "sidebar", "copy", "trash", "archive", "clip", "alarm", "done", "dot", "stop", "play", "renew", "doc", "bubble",
 )
 
 def centerlines(kind):
@@ -21,10 +21,8 @@ def centerlines(kind):
         neck = poly([right,(3.5,neck_y),(3.5,6),(-3.5,6),(-3.5,neck_y),left],1.6)
         closed.append(head + neck)
         line((-2.1,10.4),(2.1,10.4))
-    elif kind in ("folder", "folder.add"):
+    elif kind == "folder":
         loop([(-10,-6),(-5,-6),(-2,-3),(10,-3),(10,9),(-10,9)], [2.5,1.8,1.8,2.5,3,3])
-        if kind == "folder.add":
-            line((-3,3),(3,3)); line((0,0),(0,6))
     elif kind == "bookmark":
         loop([(-7,-9),(7,-9),(7,9),(0,5.5),(-7,9)], [3,3,1.7,1.7,1.7])
     elif kind == "doc":

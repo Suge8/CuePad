@@ -14,7 +14,7 @@ struct NarrowSidebarBar: View {
                     circle("搜索", icon: .search) { workspace.openSearch() }
                     Group {
                         switch workspace.navigationPane {
-                        case .projects: circle("新建项目", icon: .newProject) { workspace.projectForm = .init() }
+                        case .projects: circle("新建项目", icon: .add) { workspace.projectForm = .init() }
                         case .progress: ScopeButton()
                         }
                     }

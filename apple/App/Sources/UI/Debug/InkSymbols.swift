@@ -30,7 +30,6 @@ enum InkSymbols {
         "cue.renew",
         "cue.doc",
         "cue.bubble",
-        "cue.folder.add",
         "cue.settings",
         "cue.sidebar.right",
         "cue.clear",
