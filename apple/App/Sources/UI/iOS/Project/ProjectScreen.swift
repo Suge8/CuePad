@@ -9,6 +9,7 @@ struct ProjectScreen: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.palette) private var palette
     @State private var data: ProjectPageData?
     @State private var position = ScrollPosition()
     @State private var anchor = TaskFoldAnchor()
@@ -19,6 +20,28 @@ struct ProjectScreen: View {
 
     /// 手机没有会话条里项目下面那几行，这个项目的会话在这一页的另一段里。只点按切换、不认左右滑：任务行左滑是它的操作，从屏边右滑是返回。
     private enum Pane { case work, sessions }
+
+    /// 手机：页头正中是那两段（同项目列表页头的"项目 / 进展"），项目名与它的菜单在封面下面（`name`）。宽屏在栏头（`WideColumnHead`），这里给的只是标题。
+    private struct Head: ViewModifier {
+        let project: Project?
+        let panes: AnyView?
+
+        func body(content: Content) -> some View {
+            let title = LocalizedStringResource.verbatim(project?.shownName ?? "")
+            if let panes {
+                content.floatingHeader(title, center: { panes }, trailing: { tools })
+            } else {
+                content.floatingHeader(title) {
+                    if let project { ProjectActions(project: project, folders: false) }
+                } detail: {
+                } trailing: { tools }
+            }
+        }
+
+        @ViewBuilder private var tools: some View {
+            if let project { ProjectHeadTools(project: project) }
+        }
+    }
 
     var body: some View {
         ScrollView {
@@ -31,12 +54,7 @@ struct ProjectScreen: View {
         }
         .scrollPosition($position)
         .taskFoldScroll(anchor)
-        .floatingHeader(.verbatim(project?.shownName ?? "")) {
-            if let project { ProjectActions(project: project, folders: false) }
-        } detail: {
-        } trailing: {
-            if let project { ProjectHeadTools(project: project) }
-        }
+        .modifier(Head(project: project, panes: sizeClass == .compact && project != nil ? AnyView(panes) : nil))
         .observing(services.store, id: projectID, into: dataBinding, onError: workspace.fail) {
             [projectID] store in try ProjectPageData.read(projectID, from: store)
         }
@@ -57,7 +75,7 @@ struct ProjectScreen: View {
         VStack(alignment: .leading, spacing: Spacing.part) {
             if paned, let project = data.project {
                 ProjectBanner(project: project)
-                panes
+                name(project)
             }
             if paned, pane == .sessions {
                 ProjectSessions(project: projectID, list: sessions, extra: $moreSessions)
@@ -83,7 +101,24 @@ struct ProjectScreen: View {
             items: [.init(value: Pane.work, title: "任务与灵感"),
                     .init(value: .sessions, verbatim: live > 0 ? String(localized: "会话 \(live)") : String(localized: "会话"))],
             selection: pane) { pane = $0 }
-            .paneSlot(.regular)
+            .frame(height: FloatingHeaderLayout.height - PaneMetrics.inset * 2)
+            .padding(PaneMetrics.inset)
+            .glass(in: .capsule, interactive: true)
+            .fixedSize()
+            .dynamicTypeSize(...FloatingHeaderLayout.largestType)
+    }
+
+    /// 封面下面的项目名，同项目列表那张卡上的图标与名字；点开是这个项目自己的操作。
+    private func name(_ project: Project) -> some View {
+        Menu { ProjectActions(project: project, folders: false) } label: {
+            HStack(spacing: Spacing.item) {
+                ProjectGlyph(project: project, size: Glyph.projectIdentity)
+                Text(verbatim: project.shownName).font(Typography.title).foregroundStyle(palette.ink).lineLimit(1)
+                Chevron(.expand).foregroundStyle(palette.ink3)
+            }
+            .contentShape(.rect)
+        }
+        .accessibilityAddTraits(.isHeader)
     }
 
     private static let sectionGap = Spacing.section
