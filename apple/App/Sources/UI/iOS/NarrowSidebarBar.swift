@@ -4,32 +4,27 @@ import SwiftUI
 
 struct NarrowSidebarBar: View {
     @Environment(Workspace.self) private var workspace
-    @Namespace private var glass
 
     var body: some View {
         let givesWay = workspace.noticeOnHead
-        GlassEffectContainer(spacing: SidebarRow.gap) {
-            SidebarRow {
-                HStack(spacing: SidebarRow.gap) {
-                    PlacesMenu()
-                    Group {
-                        switch workspace.navigationPane {
-                        case .projects: circle("新建项目", icon: .add) { workspace.projectForm = .init() }
-                        case .progress: ScopeButton()
-                        }
-                    }
-                    .glassEffectID("pane-tool", in: glass)
+        // 这一排不放进 `GlassEffectContainer`：容器里的玻璃钮排在系统菜单之上接点按，"更多"与范围菜单盖在这一排上的第一项（搜索、全部项目）点不动（模拟器真实时长的点按实测）
+        SidebarRow {
+            HStack(spacing: SidebarRow.gap) {
+                PlacesMenu()
+                switch workspace.navigationPane {
+                case .projects: circle("新建项目", icon: .add) { workspace.projectForm = .init() }
+                case .progress: ScopeButton()
                 }
-                .modifier(GiveWay(hidden: givesWay))
-                ViewThatFits(in: .horizontal) {
-                    panes(titles: true)
-                    panes(titles: false)
-                }
-                .dynamicTypeSize(...FloatingHeaderLayout.largestType)
-                .modifier(GiveWay(hidden: givesWay))
-                QuotaButton().modifier(GiveWay(hidden: givesWay))
-                cue
             }
+            .modifier(GiveWay(hidden: givesWay))
+            ViewThatFits(in: .horizontal) {
+                panes(titles: true)
+                panes(titles: false)
+            }
+            .dynamicTypeSize(...FloatingHeaderLayout.largestType)
+            .modifier(GiveWay(hidden: givesWay))
+            QuotaButton().modifier(GiveWay(hidden: givesWay))
+            cue
         }
         .glassCircle()
         .dynamicTypeSize(...FloatingHeaderLayout.largestType)
