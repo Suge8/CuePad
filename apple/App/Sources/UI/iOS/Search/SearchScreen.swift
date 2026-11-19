@@ -114,11 +114,8 @@ struct SearchScreen: View {
     @ViewBuilder private func cardSections(_ cards: CardMatches) -> some View {
         ForEach(cards.groups) { group in
             let project = workspace.catalog?.project(group.id)
-            HStack(spacing: Spacing.glyph) {
-                ProjectGlyph(project: project, size: 12)
-                SectionHeader(Dotted(project?.shownName), count: group.cards.count)
-            }
-            .padding(.top, Spacing.block).padding(.bottom, Spacing.tight)
+            ProjectRunHeader(project: project, count: group.cards.count)
+                .padding(.top, Spacing.block).padding(.bottom, Spacing.tight)
             LazyVGrid(columns: columns, alignment: .leading, spacing: 0) {
                 ForEach(group.cards) { CardRow(entry: $0, highlight: query.text, flat: true) }
             }

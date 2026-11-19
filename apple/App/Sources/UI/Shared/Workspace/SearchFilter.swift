@@ -93,16 +93,30 @@ nonisolated struct CardGroup: Identifiable, Equatable, Sendable {
     var cards: [CardEntry]
 
     static func byProject(_ cards: [Card]) -> [CardGroup] {
-        var groups: [CardGroup] = []
+        cards.runs { $0.projectID }.map { CardGroup(id: $0.id, cards: $0.items.map(CardEntry.init)) }
+    }
+}
+
+/// 同一个项目的排在一段（搜索结果、归档、回收站）。
+nonisolated struct ProjectRun<Item: Sendable & Equatable>: Identifiable, Sendable, Equatable {
+    let id: UUID
+    var items: [Item]
+}
+
+nonisolated extension Array where Element: Sendable & Equatable {
+    /// 段的次序是各项目头一条出现的次序：列表按时间倒排时，最近动过的项目在前，段里仍按时间。
+    func runs(by project: (Element) -> UUID) -> [ProjectRun<Element>] {
+        var runs: [ProjectRun<Element>] = []
         var index: [UUID: Int] = [:]
-        for card in cards {
-            if let at = index[card.projectID] {
-                groups[at].cards.append(CardEntry(card))
+        for item in self {
+            let id = project(item)
+            if let at = index[id] {
+                runs[at].items.append(item)
             } else {
-                index[card.projectID] = groups.count
-                groups.append(CardGroup(id: card.projectID, cards: [CardEntry(card)]))
+                index[id] = runs.count
+                runs.append(ProjectRun(id: id, items: [item]))
             }
         }
-        return groups
+        return runs
     }
 }

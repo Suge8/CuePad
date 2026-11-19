@@ -27,7 +27,7 @@ struct TrashPage: View {
             EmptyState(mascot: .trash, title: "没有删掉的东西")
         }
         if !data.projects.isEmpty {
-            group("项目") {
+            group { SectionHeader("项目") } rows: {
                 ForEach(data.projects) { item in
                     TrashRow(item: item, restore: { workspace.restore(item) }, purge: { workspace.purge(item) }) {
                         ProjectGlyph(project: item.project)
@@ -35,20 +35,21 @@ struct TrashPage: View {
                 }
             }
         }
-        if !data.cards.isEmpty {
-            group("灵感与任务") {
-                ForEach(data.cards) { item in
+        // 单独删掉的灵感与任务按原来的项目分段，同归档（`ArchiveList`）
+        ForEach(data.runs) { run in
+            group { ProjectRunHeader(project: data.project(of: run, in: workspace.catalog), count: run.items.count) } rows: {
+                ForEach(run.items) { item in
                     TrashRow(item: item, restore: { workspace.restore(item) }, purge: { workspace.purge(item) }) {
-                        Image(.document).foregroundStyle(palette.ink3).accessibilityHidden(true)
+                        if let card = item.card { CardKindMark(card: card) }
                     }
                 }
             }
         }
     }
 
-    private func group(_ title: LocalizedStringResource, @ViewBuilder rows: () -> some View) -> some View {
+    private func group(@ViewBuilder header: () -> some View, @ViewBuilder rows: () -> some View) -> some View {
         VStack(alignment: .leading, spacing: Spacing.tight) {
-            SectionHeader(title)
+            header()
             VStack(spacing: 0) { rows() }
         }
     }

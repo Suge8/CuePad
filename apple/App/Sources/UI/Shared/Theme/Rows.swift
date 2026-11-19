@@ -61,7 +61,7 @@ extension View {
     }
 
     /// 露出与收起时行里的字一个都不挪、不换行、不让位。挂在行的内容上（`row()` 或 `RowStyle` 之内）：读的是这一行的 `rowHovered`。
-    /// 操作垫一块与悬停的行同色的实底（行所在那层的底叠悬停的淡底，`Palette.hovered`），盖住压到的字；靠字那一侧淡入一截，不切断半个字。
+    /// 操作垫一块与悬停的行同色的实底（行所在那层的底叠悬停的淡底，`Palette.fill`），盖住压到的字；靠字那一侧淡入一截，不切断半个字。
     /// 竖直居中的（单行的行尾）实底铺满行高，像行本身；贴底的（多行的记忆）只垫操作那一条。`when` 为假时这一行没有要露的（悬停也不垫底）。
     /// 被否决的：露出时插进行里（任务行的"开始"挤窄标题、把时间挤掉，"更早"的删除挤掉摘要）；透明占位（不露时也占着行尾，窄列里标题白白少一截）。
     func hoverReveal(_ alignment: Alignment = .trailing, when shows: Bool = true, @ViewBuilder _ actions: () -> some View) -> some View {
@@ -97,13 +97,20 @@ private struct HoverReveal<Actions: View>: View {
 
     var body: some View {
         if shows, hovered {
-            let plate = palette.hovered(surface ?? palette.desk)
             actions
                 .frame(maxHeight: fills ? .infinity : nil)
-                .background(plate)
-                .background(alignment: .leading) {
-                    LinearGradient(colors: [plate.opacity(0), plate], startPoint: .leading, endPoint: .trailing)
-                        .frame(width: RowMetrics.revealFade).offset(x: -RowMetrics.revealFade)
+                .background {
+                    // 垫的底照行自己的画法叠（那层的底上盖悬停的淡底），不另算一个合成色：算出来的差一级，暗处看得出一块方的
+                    ZStack { surface ?? palette.desk; palette.fill }
+                        .compositingGroup()
+                        .padding(.leading, -RowMetrics.revealFade)
+                        .mask {
+                            HStack(spacing: 0) {
+                                LinearGradient(colors: [.clear, .black], startPoint: .leading, endPoint: .trailing)
+                                    .frame(width: RowMetrics.revealFade)
+                                Color.black
+                            }
+                        }
                 }
                 .transition(.opacity)
         }
