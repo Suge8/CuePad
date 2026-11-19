@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 /// Relay 扩展的 wire body，统一封装在 {"t":"voice","body":<本枚举的 Codable JSON>}。
@@ -107,4 +108,6 @@ nonisolated enum VoiceLink: Equatable, Sendable {
     /// 自动取本机当前租约、分配序号/期限并加密；必须检查调用时选定的目标租约仍有效。
     /// 返回只表示本机 WebSocket 提交，不能冒充远端收到或业务成功；取消/断线不重试、不排队到下一次连接。
     func sendVoice(_ payload: VoiceSignalPayload, session: VoiceSessionID, to recipient: VoiceEndpoint) async throws
+    /// 活预览隧道的密钥（`LiveTunnel.parameters`），与信令同出门铃的密钥；还没取到密钥时为 nil。
+    var liveTunnelKey: SymmetricKey? { get }
 }

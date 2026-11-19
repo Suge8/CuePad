@@ -44,6 +44,12 @@ final class AppServices {
     @ObservationIgnored let relay: Relay?
     @ObservationIgnored let sendOrder = SendOrder()
     @ObservationIgnored lazy var voice = VoiceService(services: self, signaling: relay)
+    /// 活预览的一问一答（`LiveSignal`）借通话那条信令收发：测试换替身。收到的经 `liveEvents` 交给 Mac 的工作区（答）或手机的 `liveRemote`（问）。
+    @ObservationIgnored lazy var liveSignaling: (any VoiceSignaling)? = relay
+    @ObservationIgnored let liveEvents = AsyncStream<VoiceRelayEvent>.makeStream()
+    #if os(iOS)
+    @ObservationIgnored private(set) lazy var liveRemote = LiveRemote(store: store) { [weak self] in self?.liveSignaling }
+    #endif
     /// 跟着同步、快照、收件做的跨服务的事经弱引用回到这里：服务没了就不再做（快照的发布排在任务里，可能晚于服务本身）。
     @ObservationIgnored private(set) lazy var syncing = SyncDriver(
         engine: sync, status: syncStart, store: store, timing: timing, speechClock: speechClock, localHost: speechClock.moment.localHost, tasks: tasks,

@@ -74,7 +74,7 @@ struct LivePreviewFlowTests {
     }
 
     /// 本机这台上的一个会话：状态记录与带工作目录的索引（认服务按目录归属时读它）。
-    private func session(_ sessionID: String, _ state: WorkState, in directory: URL) async throws -> SessionState {
+    func session(_ sessionID: String, _ state: WorkState, in directory: URL) async throws -> SessionState {
         let recorder = try await rig.runtimeRecorder(on: services.hostID)
         try await recorder.update(sessionID: sessionID, state: state, title: sessionID)
         try await store.upsertSessions(
@@ -84,7 +84,7 @@ struct LivePreviewFlowTests {
     }
 
     /// 在这个目录里起一个本机网页服务（Python 自带的目录页，回 HTML），返回它和它的地址。
-    private func serve(in directory: URL) async throws -> (Process, URL) {
+    func serve(in directory: URL) async throws -> (Process, URL) {
         let server = Process()
         server.executableURL = URL(filePath: "/usr/bin/python3")
         server.arguments = ["-u", "-m", "http.server", "0", "--bind", "127.0.0.1"]
@@ -101,7 +101,7 @@ struct LivePreviewFlowTests {
         return (server, try #require(port.flatMap { URL(string: "http://localhost:\($0)") }))
     }
 
-    private func folder() throws -> URL {
+    func folder() throws -> URL {
         let url = FileManager.default.temporaryDirectory.appending(path: "live-\(UUID().uuidString)", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         return url
