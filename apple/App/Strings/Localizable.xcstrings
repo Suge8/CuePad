@@ -160,6 +160,22 @@
         }
       }
     },
+    "%@ 上的网页说" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The Page at %@ Says"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 上的网页说"
+          }
+        }
+      }
+    },
     "%@ 不在 PATH 里" : {
       "localizations" : {
         "en" : {
@@ -10888,6 +10904,22 @@
         }
       }
     },
+    "填写回答" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Type an answer"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "填写回答"
+          }
+        }
+      }
+    },
     "填进来" : {
       "localizations" : {
         "en" : {
@@ -20016,6 +20048,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "知道了"
+          }
+        }
+      }
+    },
+    "确定" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OK"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "确定"
           }
         }
       }

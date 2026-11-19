@@ -51,6 +51,8 @@ final class LivePreview: NSObject, WKNavigationDelegate {
     private(set) var revealed = false
     /// 页面的底色（`<html>`，没有就 `<body>`，都透明就是浏览器默认的画布色）：玻璃栏后面让出的那一截与手机屏的底接上它。
     private(set) var ground: Color?
+    /// 网页弹的 alert、confirm、prompt，还没答的（`LivePreview+Dialogs`）。
+    var asks: [PageAsk] = []
     /// 这个地址载出过画面（提交过一次）：之后连不上是"停了"，不是"还没起来"。
     @ObservationIgnored private var painted = false
     @ObservationIgnored private var observations: [NSKeyValueObservation] = []
@@ -58,11 +60,14 @@ final class LivePreview: NSObject, WKNavigationDelegate {
     override init() {
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .nonPersistent()
+        // macOS 上默认开着：不经点击（定时器里）的 window.open 也会开，外部地址就一个个塞进默认浏览器（`LivePreview+Dialogs`）
+        configuration.preferences.javaScriptCanOpenWindowsAutomatically = false
         web = WKWebView(frame: .zero, configuration: configuration)
         web.isInspectable = true
         web.allowsBackForwardNavigationGestures = true
         super.init()
         web.navigationDelegate = self
+        web.uiDelegate = self
         observations = [
             web.observe(\.url) { [weak self] web, _ in MainActor.assumeIsolated { self?.url = web.url } },
             web.observe(\.isLoading) { [weak self] web, _ in MainActor.assumeIsolated { self?.isLoading = web.isLoading } },
