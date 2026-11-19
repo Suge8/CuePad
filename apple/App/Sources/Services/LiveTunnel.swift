@@ -153,10 +153,11 @@ extension LiveTunnel {
         // 只在 `queue` 上碰
         private var done = false
 
-        private let ended: @Sendable () -> Void
+        private let ended: @Sendable (_ bFailed: Bool) -> Void
 
-        /// `ended` 在整条关掉时调一次（`queue` 上）。没开始对拷前关不了，所以登记到账上要在 `start` 之前。
-        init(_ a: NWConnection, _ b: NWConnection, ended: @escaping @Sendable () -> Void = {}) {
+        /// `ended` 在整条关掉时调一次（`queue` 上），参数是不是 `b` 那条出错断的（不是读完、不是这头关的）。
+        /// 没开始对拷前关不了，所以登记到账上要在 `start` 之前。
+        init(_ a: NWConnection, _ b: NWConnection, ended: @escaping @Sendable (_ bFailed: Bool) -> Void = { _ in }) {
             self.a = a
             self.b = b
             self.ended = ended
@@ -166,7 +167,8 @@ extension LiveTunnel {
             for connection in [a, b] {
                 connection.stateUpdateHandler = { [weak self] state in
                     switch state {
-                    case .failed, .cancelled: self?.finish()
+                    case .failed: self?.finish(failed: connection)
+                    case .cancelled: self?.finish()
                     default: break
                     }
                 }
@@ -180,20 +182,21 @@ extension LiveTunnel {
         private func pump(_ from: NWConnection, _ to: NWConnection) {
             from.receive(minimumIncompleteLength: 1, maximumLength: 256 << 10) { data, _, complete, error in
                 guard !self.done else { return }
-                let ended = complete || error != nil
-                guard let data, !data.isEmpty else { return ended ? self.finish() : self.pump(from, to) }
+                let failed = error == nil ? nil : from
+                let ended = complete || failed != nil
+                guard let data, !data.isEmpty else { return ended ? self.finish(failed: failed) : self.pump(from, to) }
                 to.send(content: data, completion: .contentProcessed { error in
-                    if error != nil || ended { self.finish() } else { self.pump(from, to) }
+                    if error != nil || ended { self.finish(failed: error == nil ? failed : to) } else { self.pump(from, to) }
                 })
             }
         }
 
-        private func finish() {
+        private func finish(failed: NWConnection? = nil) {
             guard !done else { return }
             done = true
             a.cancel()
             b.cancel()
-            ended()
+            ended(failed === b)
         }
     }
 }
@@ -214,7 +217,13 @@ extension LiveTunnel {
 
         private let listener: NWListener
         /// 放行了、还连着的按票据记着：票据作废时连着的也断（`keep`），网页视图的长连接不靠旧票据一直通。关了的当场去掉：网页每个请求一条连接，一张票据活几个小时。
-        private let open = Mutex<[Data: [ObjectIdentifier: Splice]]>([:])
+        private let open = Mutex(Ledger())
+        private struct Ledger {
+            var splices: [Data: [ObjectIdentifier: Splice]] = [:]
+            /// 最近一次 `keep` 留下的票据（nil：还没作废过任何一张）。验票与登记之间隔着连开发服务、写放行两次等待，
+            /// 这期间作废的票据在登记这一步拦下，不让一条迟到的连接挂在作废了的票据上接着转发。
+            var tickets: Set<Data>?
+        }
         private let admit: @Sendable (Request) async -> Admission
 
         init(key: SymmetricKey, admit: @escaping @Sendable (Request) async -> Admission) throws {
@@ -229,15 +238,16 @@ extension LiveTunnel {
         /// 只留这几张票据的连接，别的断掉。
         func keep(_ tickets: Set<Data>) {
             let gone = open.withLock { open in
-                let gone = open.filter { !tickets.contains($0.key) }.values.flatMap(\.values)
-                open = open.filter { tickets.contains($0.key) }
+                let gone = open.splices.filter { !tickets.contains($0.key) }.values.flatMap(\.values)
+                open.splices = open.splices.filter { tickets.contains($0.key) }
+                open.tickets = tickets
                 return gone
             }
             for splice in gone { splice.close() }
         }
 
         /// 还连着的条数。
-        var connections: Int { open.withLock { $0.values.reduce(0) { $0 + $1.count } } }
+        var connections: Int { open.withLock { $0.splices.values.reduce(0) { $0 + $1.count } } }
 
         /// 起来了就返回端口。
         func start() async throws -> UInt16 {
@@ -263,8 +273,8 @@ extension LiveTunnel {
 
         private func forget(_ ticket: Data, _ inbound: NWConnection) {
             open.withLock { open in
-                open[ticket]?[ObjectIdentifier(inbound)] = nil
-                if open[ticket]?.isEmpty == true { open[ticket] = nil }
+                open.splices[ticket]?[ObjectIdentifier(inbound)] = nil
+                if open.splices[ticket]?.isEmpty == true { open.splices[ticket] = nil }
             }
         }
 
@@ -292,10 +302,19 @@ extension LiveTunnel {
                         inbound.cancel()
                         return
                     }
-                    try await inbound.write(Data([Answer.open.rawValue]))
                     let ticket = request.ticket
-                    let splice = Splice(inbound, outbound) { [weak self] in self?.forget(ticket, inbound) }
-                    open.withLock { $0[ticket, default: [:]][ObjectIdentifier(inbound)] = splice }
+                    let splice = Splice(inbound, outbound) { [weak self] _ in self?.forget(ticket, inbound) }
+                    let kept = open.withLock { open in
+                        guard open.tickets?.contains(ticket) ?? true else { return false }
+                        open.splices[ticket, default: [:]][ObjectIdentifier(inbound)] = splice
+                        return true
+                    }
+                    guard kept else {
+                        outbound.cancel()
+                        try? await inbound.write(Data([Answer.ticket.rawValue]))
+                        return inbound.cancel()
+                    }
+                    do { try await inbound.write(Data([Answer.open.rawValue])) } catch { return splice.close() }
                     splice.start()
                 }
             } catch {

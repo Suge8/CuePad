@@ -36,10 +36,11 @@ extension Workspace {
         guard let route = liveRoute else { return }
         let opening = !showsLivePreview(route.id)
         if opening {
-            guard let first = livePages(route.id).first else { return }
+            let pages = livePages(route.id)
+            guard !pages.isEmpty else { return }
             let preview = livePreviews[route.id] ?? LivePreview()
             preview.sessionID = route.sessionID
-            if preview.address == nil { preview.retarget(.init(url: first, source: .found)) }
+            preview.follow(pages)
             livePreviews[route.id] = preview
         }
         switch navigation {

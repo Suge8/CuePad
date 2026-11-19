@@ -35,6 +35,32 @@ import Testing
         #expect(other == .ticket)
     }
 
+    /// 验过票、还在连开发服务与写放行的这一会儿，手机走了、票据作废：这一条不放行，也不留在隧道口的账上。
+    @Test func 验票之后_登记之前票据作废_这条不放行() async throws {
+        let holder = Holder(), ticket = ticket
+        let server = try LiveTunnel.Server(key: key) { request in
+            guard request.ticket == ticket else { return .ticket }
+            holder.server?.keep([])
+            // 连回隧道口自己：只要有个在听的口
+            return .open(host: "127.0.0.1", port: holder.port)
+        }
+        holder.server = server
+        holder.port = try await server.start()
+        defer { server.cancel() }
+        let connection = NWConnection(host: "127.0.0.1", port: .init(rawValue: holder.port)!, using: LiveTunnel.parameters(key: key))
+        defer { connection.cancel() }
+        try await connection.established(within: .seconds(5))
+        try await connection.write(LiveTunnel.Request(ticket: ticket, host: "localhost", port: holder.port).encoded)
+        let answer = (try? await connection.read(1))?.first.flatMap(LiveTunnel.Answer.init)
+        #expect(answer != .open)
+        #expect(server.connections == 0)
+    }
+
+    nonisolated final class Holder: @unchecked Sendable {
+        var server: LiveTunnel.Server?
+        var port: UInt16 = 0
+    }
+
     @Test func 密钥不对握不上() async throws {
         let (server, port) = try await server(key: key)
         defer { server.cancel() }

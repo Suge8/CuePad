@@ -267,6 +267,12 @@ final class LivePreview: NSObject, WKNavigationDelegate {
         Task { await check() }
     }
 
+    /// Mac 答来的页面里没有这一页了、有别的（服务换了端口）就跟过去，同 Mac 的 `scanLive`；留着的预览收着时也跟（`Workspace.toggleLivePreview`）。
+    func follow(_ pages: [URL]) {
+        guard let first = pages.first, address.map({ !pages.contains($0) }) ?? true else { return }
+        retarget(.init(url: first, source: .found))
+    }
+
     /// 隧道通了（`LiveLink`）。载出过画面的是断过再通（收起再开、回到前台、换网、Mac 醒来、换了票据）：整页重新载入一次，
     /// 页面里的热更新连接断在旧隧道上，不指望开发服务的客户端自己重连。第一次通照 `serve`：还没载过的这就载。
     func linked(_ pages: [URL]) {

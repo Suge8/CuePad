@@ -27,6 +27,8 @@ final class LiveLink {
     @ObservationIgnored let proxy: LiveTunnel.Proxy
     @ObservationIgnored private var connecting: Task<Void, Never>?
     @ObservationIgnored private var door: LiveSignal.Door?
+    /// 代理此刻用的路（`LiveTunnel.Route.id`）：只理会这条路断了的报告。
+    @ObservationIgnored private var route: UUID?
     @ObservationIgnored private var pages: [URL] = []
 
     static let retry = Duration.seconds(3)
@@ -55,10 +57,10 @@ final class LiveLink {
     }
 
     /// 票据不认了（Mac 重开了口、手机换了租约）：再要一张；连不上了：重新找路。
-    private func mend(_ broken: AsyncStream<LiveTunnel.Answer?>, _ preview: LivePreview, sessionID: String, remote: LiveRemote,
+    private func mend(_ broken: AsyncStream<LiveTunnel.Break>, _ preview: LivePreview, sessionID: String, remote: LiveRemote,
                       key: @escaping @MainActor () -> SymmetricKey?) async {
-        for await answer in broken {
-            if answer == .ticket { remote.renew(sessionID) } else if let door { connect(door, preview, key: key) }
+        for await report in broken where report.route == route {
+            if report.answer == .ticket { remote.renew(sessionID) } else if let door { connect(door, preview, key: key) }
         }
     }
 
@@ -75,6 +77,7 @@ final class LiveLink {
             return
         }
         pages = answer.pages
+        preview.follow(pages)
         if state == .ready { preview.serve(pages) }
         guard let next = answer.door, next != door else { return }
         door = next
@@ -84,6 +87,7 @@ final class LiveLink {
     private func lose(_ trouble: LiveTrouble, _ preview: LivePreview) {
         connecting?.cancel()
         door = nil
+        route = nil
         proxy.use(nil)
         preview.serve(nil)
         state = .trouble(trouble)
@@ -94,10 +98,15 @@ final class LiveLink {
         guard let key = key() else { return state = .trouble(.offline) }
         connecting = Task {
             while !Task.isCancelled {
-                switch await Self.reach(door, key: key) {
+                let reached = await Self.reach(door, key: key)
+                // 探的这一会儿又断了一次、换了入口（新的一轮已经起了）：这一轮的结果不提交，不然切回旧入口、多载一次
+                guard !Task.isCancelled else { return }
+                switch reached {
                 case .mac(let mac):
                     let addresses = Set(door.addresses.map(\.host))
-                    proxy.use(.init(key: key, ticket: door.ticket, mac: mac, addresses: addresses))
+                    let next = LiveTunnel.Route(key: key, ticket: door.ticket, mac: mac, addresses: addresses)
+                    route = next.id
+                    proxy.use(next)
                     preview.tunneled = addresses
                     preview.linked(pages)
                     state = .ready

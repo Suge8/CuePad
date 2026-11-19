@@ -12,6 +12,14 @@ extension LiveTunnel {
         let mac: NWEndpoint
         /// Mac 在局域网上的地址：页面直接写它们的也走隧道。
         let addresses: Set<String>
+        /// 这一条路：断了的报告说的是哪一条（`Break`），换过路后到的旧报告不算。
+        let id = UUID()
+    }
+
+    /// 走某条路的连接断了：Mac 答票据不认（`answer`），或连不上、连着的出错断了（nil）。
+    nonisolated struct Break: Sendable {
+        let route: UUID
+        let answer: Answer?
     }
 
     /// 只听回环、带随机口令的 SOCKS5 代理（RFC 1928 + RFC 1929），设给预览那一份网页数据（`LivePreview`）：同机别的应用连得上回环口，没有口令进不来。
@@ -21,9 +29,9 @@ extension LiveTunnel {
         let password = UUID().uuidString
         private let listener: NWListener
         private let route = Mutex<Route?>(nil)
-        /// 隧道不通了（票据不认、Mac 的口连不上）：`LiveLink` 重新探路。
-        let broken: AsyncStream<Answer?>
-        private let report: AsyncStream<Answer?>.Continuation
+        /// 隧道不通了（票据不认、Mac 的口连不上、连着的被网络打断）：`LiveLink` 重新探路。
+        let broken: AsyncStream<Break>
+        private let report: AsyncStream<Break>.Continuation
 
         init() throws {
             let parameters = NWParameters.tcp
@@ -76,7 +84,7 @@ extension LiveTunnel {
             return inet_pton(AF_INET, host, &v4) == 1 && UInt32(bigEndian: v4.s_addr) >> 24 == 127
         }
 
-        private static func serve(_ local: NWConnection, user: String, password: String, route: Route?, report: AsyncStream<Answer?>.Continuation) async {
+        private static func serve(_ local: NWConnection, user: String, password: String, route: Route?, report: AsyncStream<Break>.Continuation) async {
             do {
                 try await local.established(within: .seconds(5))
                 let (host, port) = try await local.bounded(.seconds(5)) { try await handshake(local, user: user, password: password) }
@@ -90,12 +98,12 @@ extension LiveTunnel {
                         let answer = try await remote.bounded(.seconds(5)) { try await remote.read(1) }.first.flatMap(Answer.init) ?? .refused
                         guard answer == .open else {
                             remote.cancel()
-                            if answer == .ticket { report.yield(answer) }
+                            if answer == .ticket { report.yield(.init(route: route.id, answer: answer)) }
                             return refuse(local, answer == .refused ? 2 : 5)
                         }
                     } catch {
                         remote.cancel()
-                        report.yield(nil)
+                        report.yield(.init(route: route.id, answer: nil))
                         return refuse(local, 3)
                     }
                 } else {
@@ -108,7 +116,9 @@ extension LiveTunnel {
                     }
                 }
                 try await local.write(Data([5, 0, 0, 1, 0, 0, 0, 0, 0, 0]))
-                Splice(local, remote).start()
+                // 去 Mac 的那条出错断了（换网、Wi-Fi 断了一下、Mac 睡了）是隧道断过：页面的长连接就这样没的，等它下一个请求失败才发觉就晚了
+                let mac = isMac(host, addresses: route?.addresses ?? []) ? route?.id : nil
+                Splice(local, remote) { remoteFailed in if remoteFailed, let mac { report.yield(.init(route: mac, answer: nil)) } }.start()
             } catch {
                 local.cancel()
             }
