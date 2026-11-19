@@ -174,11 +174,15 @@ final class Workspace {
         }
     }
 
+    /// 每个会话的活预览（按会话记录 id）：只在内存里，不进资料库、不同步。手机、iPad 上只有开着的那个（`connectLive`）。
+    var livePreviews: [UUID: LivePreview] = [:]
+    #if os(iOS)
+    /// 手机上铺满屏开着活预览的会话（`LivePhoneCover`）：导航最上面换了别的页就不算开着。
+    var liveCover: UUID?
+    #endif
     #if os(macOS)
     let overlayHeader = OverlayHeader()
     weak var openCardEditing: CardEditing?
-    /// 每个会话的活预览（按会话记录 id）：只在内存里，不进资料库、不同步。
-    var livePreviews: [UUID: LivePreview] = [:]
     /// Agent 发来、还没开过预览的地址（`cuepad live`）：开预览时用掉。
     var liveSent: [UUID: LivePreview.Target] = [:]
     /// 认出的各个会话的服务（按会话记录 id），最近起来的在前；认不出的会话不在里面（`watchLiveServers`：窗口有人看着时扫全部，手机看着时扫它看的）。

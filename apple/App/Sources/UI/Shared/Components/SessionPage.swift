@@ -28,6 +28,8 @@ private struct SessionPageBody: View {
     @Environment(\.palette) private var palette
     #if os(iOS)
     @Environment(\.scenePhase) private var phase
+    /// 页头的预览钮与它长开的那一页（`LivePhoneCover`）。
+    @Namespace private var zoom
     #endif
     @State private var stored: SessionDigest?
     /// 记录读不出来的那一下（同步中途）仍照最后一次读到的样子排，不闪成"找不到"。
@@ -72,10 +74,12 @@ private struct SessionPageBody: View {
                         SessionSubtitle(session: session, delivery: digest?.delivery, undelivered: Chat.undeliveredNote(digest?.undelivered(at: services.speech) ?? 0))
                     }
                 } trailing: {
+                    LivePhoneTool(session: id, zoom: zoom)
                     if let finishing {
                         Button("完成任务", icon: .complete) { workspace.completeTask(finishing.task.id) }
                     }
                 }
+                .livePhoneCover(id, zoom: zoom)
                 #endif
             }
         }

@@ -1,5 +1,3 @@
-#if os(macOS)
-import AppKit
 import SwiftUI
 
 /// 点选页面元素的注入脚本（`LivePreview.pick`）。跑在页面自己的内容世界里：React、Vue、Svelte 开发模式挂在元素上的组件信息只有那里看得到；
@@ -9,8 +7,8 @@ enum LivePick {
     static let cancel = "window[\(key)]?.cancel()"
 
     /// 高亮框与标签的颜色（脚本里的 `tint`、`ink`）：此刻外观下实心钮的那一对（`Palette.signatureFill` 底、`onFill` 字），深浅色下标签的字都读得清。
-    static var colors: [String: String] {
-        let palette = Palette(dark: NSApp.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua)
+    static func colors(dark: Bool) -> [String: String] {
+        let palette = Palette(dark: dark)
         func css(_ color: Color) -> String {
             let rgb = color.resolve(in: EnvironmentValues())
             return "rgb(\(Int(rgb.red * 255)), \(Int(rgb.green * 255)), \(Int(rgb.blue * 255)))"
@@ -185,4 +183,3 @@ enum LivePick {
         });
         """
 }
-#endif

@@ -45,14 +45,6 @@ extension Workspace {
 
     func showsLivePreview(_ session: UUID) -> Bool { beside == .preview && self.session(in: .main)?.id == session }
 
-    enum LiveButton: Equatable {
-        /// 点开就是这个地址；nil 是空的地址输入。
-        case closed(URL?)
-        case open(URL?)
-
-        var isShowing: Bool { if case .open = self { true } else { false } }
-    }
-
     /// nil：没有页面可看、预览也没开着，栏头不放这颗钮（手动打开在会话的菜单里，`openLivePreview`）。开着空的地址输入也有它：收起只有这一处。
     func liveButton(_ session: UUID) -> LiveButton? {
         if showsLivePreview(session) { return .open(livePreviews[session]?.address) }

@@ -3706,6 +3706,22 @@
         }
       }
     },
+    "Mac 不在线" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mac is offline"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mac 不在线"
+          }
+        }
+      }
+    },
     "Mac 不在线：唤醒它、开着 UU 远程再试" : {
       "localizations" : {
         "en" : {
@@ -8688,6 +8704,22 @@
         }
       }
     },
+    "去设置" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Go to Settings"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "去设置"
+          }
+        }
+      }
+    },
     "去那里看看" : {
       "localizations" : {
         "en" : {
@@ -9792,6 +9824,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "和 Cue 通话"
+          }
+        }
+      }
+    },
+    "和 Mac 不在同一个网络" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not on the same network as your Mac"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "和 Mac 不在同一个网络"
           }
         }
       }
@@ -17920,6 +17968,22 @@
         }
       }
     },
+    "正在连 Mac" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connecting to your Mac"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在连 Mac"
+          }
+        }
+      }
+    },
     "正在连接 iCloud…" : {
       "localizations" : {
         "en" : {
@@ -18512,6 +18576,22 @@
         }
       }
     },
+    "没有本地网络权限，看不到 Mac 上的网页" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Without local network access, your Mac's pages can't come through"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没有本地网络权限，看不到 Mac 上的网页"
+          }
+        }
+      }
+    },
     "没有检测到" : {
       "localizations" : {
         "en" : {
@@ -18924,6 +19004,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "没记"
+          }
+        }
+      }
+    },
+    "没连 Wi-Fi，连上和 Mac 同一个网络就能看" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not on Wi-Fi. Join the same network as your Mac to see it"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没连 Wi-Fi，连上和 Mac 同一个网络就能看"
           }
         }
       }
@@ -24296,6 +24392,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "连不上"
+          }
+        }
+      }
+    },
+    "连不上 Mac，这个 Wi-Fi 可能不让设备互相连接" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Can't reach your Mac. This Wi-Fi may not let devices talk to each other"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "连不上 Mac，这个 Wi-Fi 可能不让设备互相连接"
           }
         }
       }

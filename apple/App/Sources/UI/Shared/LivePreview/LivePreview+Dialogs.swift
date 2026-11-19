@@ -1,9 +1,12 @@
 #if os(macOS)
 import AppKit
+#else
+import UIKit
+#endif
 import CueStore
 import WebKit
 
-/// 网页要的系统界面：选文件、alert、confirm、prompt、开新窗口。WKWebView 没有 UI 代理时这些全不做：macOS 上文件框点了没反应，
+/// 网页要的系统界面：选文件（只 Mac 要接，iOS 的网页视图自己弹）、alert、confirm、prompt、开新窗口。WKWebView 没有 UI 代理时这些全不做：macOS 上文件框点了没反应，
 /// alert 直接过去，confirm 当取消、prompt 当空，`window.open` 与 `target=_blank` 什么也不开。
 extension LivePreview: WKUIDelegate {
     /// 网页弹的一句（alert、confirm、prompt）：排着队，预览面板一次给你看一个（`LivePreviewPane`）。等着的时候网页的脚本停在那一句上。
@@ -25,6 +28,7 @@ extension LivePreview: WKUIDelegate {
         asks.remove(at: index).reply(value)
     }
 
+    #if os(macOS)
     func webView(_ webView: WKWebView, runOpenPanelWith parameters: WKOpenPanelParameters, initiatedByFrame frame: WKFrameInfo) async -> [URL]? {
         // Agent 交的文件（`cuepad live upload`）：这一下是它点的，不弹面板
         if let files = agent.upload {
@@ -33,6 +37,7 @@ extension LivePreview: WKUIDelegate {
         }
         return await FilePicker.web(multiple: parameters.allowsMultipleSelection, folders: parameters.allowsDirectories)
     }
+    #endif
 
     func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo) async {
         _ = await ask(.alert, message, from: frame)
@@ -51,7 +56,7 @@ extension LivePreview: WKUIDelegate {
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction,
                  windowFeatures: WKWindowFeatures) -> WKWebView? {
         guard let url = navigationAction.request.url else { return nil }
-        if LiveAddress.isLocal(url) { webView.load(navigationAction.request) } else { NSWorkspace.shared.open(url) }
+        if LiveAddress.isLocal(url) { webView.load(navigationAction.request) } else { Self.openOutside(url) }
         return nil
     }
 
@@ -60,15 +65,25 @@ extension LivePreview: WKUIDelegate {
     private func ask(_ kind: PageAsk.Kind, _ message: String, from frame: WKFrameInfo, text: String = "") async -> String? {
         let origin = frame.securityOrigin
         let shown = origin.host.isEmpty ? web.url.map(LiveAddress.shown) ?? "" : origin.host + (origin.port == 0 ? "" : ":\(origin.port)")
+        #if os(macOS)
         let said = "\(kind.shown)「\(message)」"
         if agent.acting, panes == 0 {
             record.note("dialog", said + (kind == .alert ? "：没人看着这一页，点了确定" : "：没人看着这一页，答了取消"))
             return nil
         }
         record.note("dialog", said + "：在等用户在预览里回答，答完之前这一页读不了也点不了")
+        #endif
         return await withCheckedContinuation { reply in
             asks.append(PageAsk(kind: kind, origin: shown, message: message, text: text) { reply.resume(returning: $0) })
         }
     }
+
+    /// 默认浏览器（Mac）、Safari（手机、iPad）。
+    static func openOutside(_ url: URL) {
+        #if os(macOS)
+        NSWorkspace.shared.open(url)
+        #else
+        UIApplication.shared.open(url)
+        #endif
+    }
 }
-#endif

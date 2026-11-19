@@ -104,13 +104,11 @@ struct WideSessionTitle: View {
                     .transition(.opacity)
             }
             Spacer(minLength: Spacing.item)
-            // 两半的栏头末端各一颗不带框的图标钮，同一个样子：左边开合活预览（只在 Mac、会话有页面可看时；开着是强调色，收起它只有这一处），右边收起并排。
+            // 两半的栏头末端各一颗不带框的图标钮，同一个样子：左边开合活预览（会话有页面可看时；开着是强调色，收起它只有这一处），右边收起并排。
             // 左边没有收起：它就是主区此刻的页，换去处靠会话条
             switch column {
             case .main:
-                #if os(macOS)
                 if let session = workspace.session(in: .main) { LivePreviewTool(session: session) }
-                #endif
             case .beside:
                 HeadTool(label: "收起并排", icon: .rightColumn) { workspace.closeColumn(.beside) }
             }

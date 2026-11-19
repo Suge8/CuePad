@@ -60,8 +60,6 @@ public struct LiveServers: Sendable {
     return ports
   }
 
-  public static func url(port: Int) -> URL { URL(string: "http://localhost:\(port)")! }
-
   /// 最近起来的在前。
   @concurrent static func listening<Key: Hashable & Sendable>(for owners: [Key: Owner]) async -> [(listener: Listener, owners: Set<Key>)] {
     guard !owners.isEmpty else { return [] }

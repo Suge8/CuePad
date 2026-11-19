@@ -6,7 +6,7 @@ import Foundation
 /// 答复只在内存里：页面地址是那台 Mac 上的服务，不进库、不同步。
 @Observable
 final class LiveRemote {
-    struct Pages: Equatable {
+    struct Pages: Equatable, Sendable {
         var pages: [URL]
         var serving: [URL]
         var door: LiveSignal.Door?
@@ -64,6 +64,9 @@ final class LiveRemote {
             if open { renew(sessionID) }
         }
     }
+
+    /// 正看着的这个会话在哪台 Mac 上。
+    func host(_ sessionID: String) -> String? { watches[sessionID]?.host }
 
     /// 马上再问一次（打开预览、票据不认了、网络回来了、回到前台）。
     func renew(_ sessionID: String) {

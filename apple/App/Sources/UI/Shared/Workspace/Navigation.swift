@@ -27,7 +27,7 @@ struct WideNavigation {
         }
     }
 
-    /// 并排时右半边放的：第二个会话，或左边那个会话的活预览（只 Mac）。预览属于左边那个会话，左边换了会话就收起；开着预览时再并排一个会话，会话替换它。
+    /// 并排时右半边放的：第二个会话，或左边那个会话的活预览。预览属于左边那个会话，左边换了会话就收起；开着预览时再并排一个会话，会话替换它。
     enum Beside: Equatable {
         case session(SessionRoute)
         case preview
