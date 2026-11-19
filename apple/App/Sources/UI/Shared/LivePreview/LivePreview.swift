@@ -56,9 +56,9 @@ final class LivePreview: NSObject, WKNavigationDelegate {
     #else
     /// 走隧道的主机（Mac 本机的名字与地址，`LiveTunnel.Proxy.isMac`）：只对它们放过 https 的证书校验，隧道两头已用 PSK 互认。
     @ObservationIgnored var tunneled: Set<String> = []
-    /// 开着时去 Mac 的路（`Workspace.connectLive`）。
+    /// 看得见时去 Mac 的路（`Workspace.connectLive`），收起就没有。
     var link: LiveLink?
-    /// 这一页的数据存储：代理设在它上面（`LiveLink`），只管这一个预览。
+    /// 这一页的数据存储：代理设在它上面（`LiveLink`），只管这一个预览；登录状态跟着预览留到离开会话页（`Workspace.keepLivePreviews`）。
     @ObservationIgnored let dataStore = WKWebsiteDataStore.nonPersistent()
     #endif
     private(set) var address: URL?
@@ -260,11 +260,19 @@ final class LivePreview: NSObject, WKNavigationDelegate {
     }
 
     #if os(iOS)
-    /// Mac 答来的页面变了、隧道通了或断了（`LiveLink`）：当场照它判一次，通了的那一下不等下一秒才载。
+    /// Mac 答来的页面变了、隧道断了（`LiveLink`）：当场照它判一次，不等下一秒的探。
     func serve(_ pages: [URL]?) {
         serving = pages
         guard phase != .idle else { return }
         Task { await check() }
+    }
+
+    /// 隧道通了（`LiveLink`）。载出过画面的是断过再通（收起再开、回到前台、换网、Mac 醒来、换了票据）：整页重新载入一次，
+    /// 页面里的热更新连接断在旧隧道上，不指望开发服务的客户端自己重连。第一次通照 `serve`：还没载过的这就载。
+    func linked(_ pages: [URL]) {
+        guard painted, let address, phase != .idle, serves(address, pages) else { return serve(pages) }
+        serving = pages
+        resume(address)
     }
     #endif
 
@@ -309,9 +317,11 @@ final class LivePreview: NSObject, WKNavigationDelegate {
         return (try? await probe.data(for: request)) != nil
     }
     #else
+    private func isUp(_ address: URL) async -> Bool { serves(address, serving ?? []) }
+
     /// 同一个服务（协议、主机、端口）在 Mac 答来的页面里。
-    private func isUp(_ address: URL) async -> Bool {
-        (serving ?? []).contains { $0.scheme == address.scheme && $0.host() == address.host() && $0.port == address.port }
+    private func serves(_ address: URL, _ pages: [URL]) -> Bool {
+        pages.contains { $0.scheme == address.scheme && $0.host() == address.host() && $0.port == address.port }
     }
     #endif
 

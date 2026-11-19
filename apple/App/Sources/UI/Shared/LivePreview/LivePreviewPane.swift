@@ -37,6 +37,9 @@ struct LivePreviewPane: View {
     @Environment(\.headInset) private var inset
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(Workspace.self) private var workspace
+    #if os(iOS)
+    @Environment(\.scenePhase) private var scenePhase
+    #endif
 
     var body: some View {
         GeometryReader { geometry in
@@ -64,7 +67,8 @@ struct LivePreviewPane: View {
         .modifier(LivePageAsks(preview: preview))
         .task(id: preview.address) { await preview.watch() }
         #if os(iOS)
-        .task { await workspace.connectLive(preview) }
+        // 进后台也断开：回来是重新连上、整页重载（`LivePreview.linked`），不靠页面里断掉的热更新连接自己回来
+        .task(id: scenePhase == .background) { if scenePhase != .background { await workspace.connectLive(preview) } }
         #endif
         .onGeometryChange(for: CGSize.self) { $0.size } action: { size in
             // 收起时滑出去的那一程按不并排的宽排着：不记它，后台预览（`LiveHost`）按开着时的大小排版

@@ -3,7 +3,7 @@ import CueStore
 import Foundation
 
 /// 手机、iPad 上的活预览：看的是会话所在那台 Mac 上的页面（`LiveRemote` 问来），经局域网隧道连过去（`LiveLink`）。
-/// 宽屏开在右半（同 Mac），窄屏铺满一页（`LivePhoneCover`）；只有开着时才有那个预览与隧道，收起就放掉。
+/// 宽屏开在右半（同 Mac），窄屏铺满一页（`LivePhoneCover`）。隧道只在看得见时开；预览（网页与登录状态）留到离开会话页（`keepLivePreviews`）。
 extension Workspace {
     /// Mac 答来的这个会话可看的页面，点开时开的在前。只认开合预览的那一个会话（`liveRoute`）：别的会话没在问。
     func livePages(_ session: UUID) -> [URL] {
@@ -51,17 +51,30 @@ extension Workspace {
         }
     }
 
-    /// 预览看得见的这段时间连着 Mac（`LivePreviewPane` 的 task）；收起了（滑完、盖着的那一页落下）就放掉这个预览。
+    /// 预览看得见的这段时间连着 Mac（`LivePreviewPane` 的 task）：收起（滑完、盖着的那一页落下）、进后台就断开，预览留着。
     func connectLive(_ preview: LivePreview) async {
         guard let sessionID = preview.sessionID, let host = services.liveRemote.host(sessionID) else { return }
         do {
-            let link = try preview.link ?? LiveLink()
+            let link = try LiveLink()
             preview.link = link
             await link.run(preview, sessionID: sessionID, host: host, remote: services.liveRemote) { [weak self] in self?.services.liveSignaling?.liveTunnelKey }
+            if preview.link === link { preview.link = nil }
         } catch {
             fail(error)
         }
-        if let (id, _) = livePreviews.first(where: { $0.value === preview }), !showsLivePreview(id) { livePreviews[id] = nil }
+    }
+
+    /// 会话页还开着（窄屏在导航栈里，宽屏在主区或并排）就留着它的预览，离开了才放掉。导航一变就调（`navigation`）。
+    func keepLivePreviews() {
+        let open: Set<UUID> = switch navigation {
+        case .wide: Set([session(in: .main), session(in: .beside)].compactMap { $0?.id })
+        case .narrow(let state): Set(state.path.compactMap { if case .session(let route) = $0 { route.id } else { nil } })
+        }
+        let gone = livePreviews.filter { !open.contains($0.key) }.values
+        guard !gone.isEmpty else { return }
+        // 弹着的对话框先答掉：WebKit 等着的回调没调就放掉网页视图会抛异常
+        for preview in gone { for ask in preview.asks { preview.answer(ask.id, nil) } }
+        livePreviews = livePreviews.filter { open.contains($0.key) }
     }
 
     /// 点一个元素挂进回复框：宽屏回复框就在左边；手机上先把预览收回，回复框接过焦点。

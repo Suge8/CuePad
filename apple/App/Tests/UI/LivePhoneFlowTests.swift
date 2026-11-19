@@ -4,6 +4,7 @@ import CueStore
 import CueTestSupport
 import Foundation
 import Network
+import os
 import Testing
 @testable import CuePad
 
@@ -19,10 +20,29 @@ struct LivePhoneFlowTests {
         let local = VoiceEndpoint(device: .init("phone-live"), lease: UUID())
         let endpoint = VoiceEndpoint(device: .init(LivePhoneFlowTests.mac), lease: UUID())
         let key = SymmetricKey(size: .bits256)
-        let ticket = Data((0..<16).map { _ in UInt8.random(in: 0...255) })
+        var ticket = Data()
         var pages: [URL] = []
         var door: (addresses: [LiveTunnel.Address], port: UInt16)?
+        /// 手机最近一问要不要隧道的入口（预览看得见才要）。
+        var opened = false
         var present = true
+        private var server: LiveTunnel.Server?
+
+        /// 开（再开就是换一个）隧道口：新票据、新端口，旧口连着的一起断（同 Mac 睡醒、换网后重开）。只放行 `shown`，接到 `port` 上。
+        func openDoor(_ shown: UInt16, to port: UInt16) async throws {
+            server?.cancel()
+            let ticket = Data((0..<16).map { _ in UInt8.random(in: 0...255) })
+            let server = try LiveTunnel.Server(key: key) { request in
+                guard request.ticket == ticket else { return .ticket }
+                if request.port == 0 { return .probe }
+                return request.port == shown ? .open(host: "127.0.0.1", port: port) : .refused
+            }
+            door = ([.init(host: "127.0.0.1", prefix: 8)], try await server.start())
+            self.ticket = ticket
+            self.server = server
+        }
+
+        func close() { server?.cancel() }
         var answer: (VoiceRelayEvent) -> Void = { _ in }
         var voiceAvailability: VoiceRelayAvailability { .ready(endpoint: local) }
         var voiceEvents: AsyncStream<VoiceRelayEvent> { AsyncStream { _ in } }
@@ -35,6 +55,7 @@ struct LivePhoneFlowTests {
 
         func sendVoice(_ payload: VoiceSignalPayload, session: VoiceSessionID, to recipient: VoiceEndpoint) async throws {
             guard case .live(.watch(let request, let sessionID, let open)) = payload else { return }
+            opened = open
             let door = open ? door.map { LiveSignal.Door(addresses: $0.addresses, port: $0.port, ticket: ticket) } : nil
             let reply = LiveSignal.pages(request: request, session: sessionID, pages: pages, serving: pages, door: door)
             let header = VoiceSignalHeader(version: VoiceSignalFormat.version, sender: endpoint, recipient: local, session: session, sequence: 1,
@@ -44,17 +65,21 @@ struct LivePhoneFlowTests {
         }
     }
 
-    /// 本进程里的网页服务：什么请求都回同一页。
+    /// 本进程里的网页服务：什么请求都回同一页，记着载了几次（取 `/` 的请求）。
     /// 模拟器与 Mac 共用回环，直连也连得上它：所以 Mac 报给手机的是另一个没人听的口，只有隧道那头把它接到这里（`phone`），页面载得出就是走了隧道。
     final class Page {
         let listener: NWListener
         let port: UInt16
+        private let loads = OSAllocatedUnfairLock(initialState: 0)
+        var loaded: Int { loads.withLock { $0 } }
 
         init(_ body: String) async throws {
             listener = try NWListener(using: .tcp)
+            let loads = loads
             listener.newConnectionHandler = { connection in
                 connection.start(queue: LiveTunnel.queue)
-                connection.receive(minimumIncompleteLength: 1, maximumLength: 1 << 16) { _, _, _, _ in
+                connection.receive(minimumIncompleteLength: 1, maximumLength: 1 << 16) { data, _, _, _ in
+                    if data.map({ String(decoding: $0, as: UTF8.self).hasPrefix("GET / ") }) == true { loads.withLock { $0 += 1 } }
                     let head = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nConnection: close\r\nContent-Length: \(body.utf8.count)\r\n\r\n"
                     connection.send(content: Data((head + body).utf8), isComplete: true, completion: .contentProcessed { _ in connection.cancel() })
                 }
@@ -81,18 +106,13 @@ struct LivePhoneFlowTests {
     }
 
     /// 手机开着这个会话页、Mac 替身接在中转上、在线；Mac 的隧道口放行这一页的端口。跑完 `body` 拆掉。
-    private func phone(_ body: (Workspace, Mac, URL, SessionRoute) async throws -> Void) async throws {
+    private func phone(_ body: (Workspace, Mac, URL, SessionRoute, Page) async throws -> Void) async throws {
         let mac = Mac()
         app.services.liveSignaling = mac
         mac.answer = { [remote = app.services.liveRemote] in remote.receive($0) }
         let page = try await Page("<html><body>手机上的页面</body></html>")
-        let ticket = mac.ticket, port = page.port, shown = try await vacant()
-        let server = try LiveTunnel.Server(key: mac.key) { request in
-            guard request.ticket == ticket else { return .ticket }
-            if request.port == 0 { return .probe }
-            return request.port == shown ? .open(host: "127.0.0.1", port: port) : .refused
-        }
-        mac.door = ([.init(host: "127.0.0.1", prefix: 8)], try await server.start())
+        let shown = try await vacant()
+        try await mac.openDoor(shown, to: page.port)
         let url = try #require(URL(string: "http://localhost:\(shown)"))
         mac.pages = [url]
 
@@ -105,14 +125,14 @@ struct LivePhoneFlowTests {
         workspace.show(.session(route))
         // 会话页看得见时问（`SessionPage` 的 task）
         let watching = Task { await app.services.liveRemote.watch("live", on: Self.mac) }
-        do { try await body(workspace, mac, url, route) } catch {
+        do { try await body(workspace, mac, url, route, page) } catch {
             await watching.stop()
-            server.cancel()
+            mac.close()
             page.listener.cancel()
             throw error
         }
         await watching.stop()
-        server.cancel()
+        mac.close()
         page.listener.cancel()
         app.services.liveSignaling = nil
     }
@@ -126,27 +146,61 @@ struct LivePhoneFlowTests {
         }
     }
 
-    @Test func Mac答有页面就出钮_点开经隧道载出Mac上的页面_收起就放掉() async throws {
-        try await phone { workspace, _, url, route in
+    @Test func Mac答有页面就出钮_点开经隧道载出Mac上的页面_收起留着_离开会话页放掉() async throws {
+        try await phone { workspace, mac, url, route, _ in
             try await eventually("页头出现预览钮，指着 Mac 上的这一页") { workspace.liveButton(route.id) == .closed(url) }
 
             workspace.toggleLivePreview()
             #expect(workspace.showsLivePreview(route.id) && workspace.liveButton(route.id) == .open(url))
             let preview = try #require(workspace.livePreviews[route.id])
-            let open = shown(preview, in: workspace)
+            var open = shown(preview, in: workspace)
             try await eventually("经隧道载出 Mac 上的页面") { preview.phase == .live && preview.revealed }
             #expect(try await preview.run("return document.body.innerText") as? String == "手机上的页面")
-            #expect(preview.link?.state == .ready)
+            #expect(preview.link?.state == .ready && mac.opened)
+            _ = try await preview.run("document.cookie = 'who=phone; max-age=3600'")
 
             workspace.toggleLivePreview()
             await open.stop()
-            #expect(!workspace.showsLivePreview(route.id) && workspace.livePreviews[route.id] == nil)
-            #expect(workspace.liveButton(route.id) == .closed(url))
+            #expect(!workspace.showsLivePreview(route.id) && workspace.liveButton(route.id) == .closed(url))
+            #expect(workspace.livePreviews[route.id] === preview, "收起留着这个预览")
+            try await eventually("收起就不再要隧道") { preview.link == nil && !mac.opened }
+
+            workspace.toggleLivePreview()
+            #expect(workspace.livePreviews[route.id] === preview)
+            open = shown(preview, in: workspace)
+            try await eventually("再点开经隧道载出") { preview.link?.state == .ready && preview.phase == .live && preview.revealed }
+            #expect(try await preview.run("return document.cookie") as? String == "who=phone", "登录状态还在")
+
+            workspace.toggleLivePreview()
+            await open.stop()
+            workspace.path = []
+            #expect(workspace.livePreviews[route.id] == nil, "离开会话页放掉")
+        }
+    }
+
+    @Test func 断过再通_整页重新载入一次() async throws {
+        try await phone { workspace, mac, url, route, page in
+            try await eventually("页头出现预览钮") { workspace.liveButton(route.id) != nil }
+            workspace.toggleLivePreview()
+            let preview = try #require(workspace.livePreviews[route.id])
+            let open = shown(preview, in: workspace)
+            try await eventually("页面载出") { preview.phase == .live && preview.revealed }
+            #expect(page.loaded == 1)
+            _ = try await preview.run("window.before = true")
+
+            // Mac 重开了隧道口（换票据、换端口，旧的连接全断）：手机续问拿到新入口、重新连上
+            try await mac.openDoor(try #require(url.port.map(UInt16.init)), to: page.port)
+            app.services.liveRemote.renew("live")
+            try await eventually("再通后整页重新载入") { page.loaded == 2 && preview.phase == .live && preview.revealed }
+            #expect(try await preview.run("return window.before ?? false") as? Bool == false)
+            await quietPeriod(.seconds(2))
+            #expect(page.loaded == 2, "只载一次")
+            await open.stop()
         }
     }
 
     @Test func 点选页面上的元素_预览收回_元素挂进回复框() async throws {
-        try await phone { workspace, _, _, route in
+        try await phone { workspace, _, _, route, _ in
             try await eventually("页头出现预览钮") { workspace.liveButton(route.id) != nil }
             workspace.toggleLivePreview()
             let preview = try #require(workspace.livePreviews[route.id])
@@ -168,7 +222,7 @@ struct LivePhoneFlowTests {
     }
 
     @Test func 连不上Mac的口说可能是Wi_Fi不让设备互连_Mac走了说不在线() async throws {
-        try await phone { workspace, mac, _, route in
+        try await phone { workspace, mac, _, route, _ in
             try await eventually("页头出现预览钮") { workspace.liveButton(route.id) != nil }
             // Mac 报的是手机自己所在网段里一个不通的口：同网段却连不上
             let mine = try #require(LiveTunnel.localAddresses().first { !$0.host.contains(":") })

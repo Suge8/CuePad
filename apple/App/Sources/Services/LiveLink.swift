@@ -4,7 +4,7 @@ import Foundation
 import Network
 import Synchronization
 
-/// 手机、iPad 开着的一个活预览去 Mac 的路：开着时（`run`，预览面板的 task）向 Mac 要隧道的入口（`LiveRemote.watch(open:)`），
+/// 手机、iPad 开着的一个活预览去 Mac 的路，看得见的这一段一份（`run`，预览面板的 task，收起、进后台就结束）：向 Mac 要隧道的入口（`LiveRemote.watch(open:)`），
 /// 拿到后同时连 Mac 报来的每个局域网地址、只验票（端口 0），最先通的交给代理（`LiveTunnel.Proxy`），网页视图这份数据存储的流量都经它。
 /// 本地网络权限的弹窗出在这里第一次连局域网地址时：只有点开预览才走到这里，会话页本身只经中转问、不碰局域网。
 /// 连不上时每 `retry` 再试一次，直到通了或预览收起：允许权限、回到 Wi-Fi、Mac 醒来都不用动手。
@@ -35,7 +35,7 @@ final class LiveLink {
 
     init() throws { proxy = try LiveTunnel.Proxy() }
 
-    /// 直到所在任务取消（预览收起、App 进后台）：走时断开隧道，Mac 那头这张票据随租约作废。
+    /// 直到所在任务取消（预览收起、App 进后台）：走时断开隧道，Mac 那头这张票据随之作废。只跑一次：代理的监听口关了不能再开。
     func run(_ preview: LivePreview, sessionID: String, host: String, remote: LiveRemote, key: @escaping @MainActor () -> SymmetricKey?) async {
         defer {
             connecting?.cancel()
@@ -99,7 +99,7 @@ final class LiveLink {
                     let addresses = Set(door.addresses.map(\.host))
                     proxy.use(.init(key: key, ticket: door.ticket, mac: mac, addresses: addresses))
                     preview.tunneled = addresses
-                    preview.serve(pages)
+                    preview.linked(pages)
                     state = .ready
                     return
                 case .trouble(let trouble):

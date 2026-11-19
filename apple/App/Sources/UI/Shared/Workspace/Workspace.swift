@@ -54,7 +54,12 @@ final class Workspace {
     let services: AppServices
     /// 只保留当前布局的导航值；尺寸切换经 `setLayout` 转换，不缓存另一套去处。
     var navigation: Navigation {
-        didSet { MainThreadWatch.shared.page(navigation.trail) }
+        didSet {
+            MainThreadWatch.shared.page(navigation.trail)
+            #if os(iOS)
+            keepLivePreviews()
+            #endif
+        }
     }
     var projectForm: ProjectFormRequest?
     /// 请求聚焦 Cue 的输入框，输入框接下后清掉。不用计数：从别的页过来时输入框是新建的，看不到数变过。
@@ -174,7 +179,7 @@ final class Workspace {
         }
     }
 
-    /// 每个会话的活预览（按会话记录 id）：只在内存里，不进资料库、不同步。手机、iPad 上只有开着的那个（`connectLive`）。
+    /// 每个会话的活预览（按会话记录 id）：只在内存里，不进资料库、不同步。手机、iPad 上只留会话页还开着的（`keepLivePreviews`）。
     var livePreviews: [UUID: LivePreview] = [:]
     #if os(iOS)
     /// 手机上铺满屏开着活预览的会话（`LivePhoneCover`）：导航最上面换了别的页就不算开着。
