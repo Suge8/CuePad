@@ -1,7 +1,6 @@
 import CueStore
 import SwiftUI
 
-/// `endedOnly`（"更早"那一页，`EarlierPage`）只读"历史"、置顶的也在里面，与会话条"更早"的个数同一个查询（`earlier`），没有置顶与"现在"两部分。
 nonisolated struct SessionListData: Sendable, Equatable {
     static let pageSize = 40
 
@@ -30,12 +29,8 @@ nonisolated struct SessionListData: Sendable, Equatable {
     var showsPlace: Bool { filter.project == nil }
 
     static func read(
-        text: String, project: UUID? = nil, endedOnly: Bool = false, historyLimit: Int, at moment: Speech.Moment, from store: isolated CueStore
+        text: String, project: UUID? = nil, historyLimit: Int, at moment: Speech.Moment, from store: isolated CueStore
     ) throws -> SessionListData {
-        if endedOnly {
-            let ended = try earlier(SessionQuery(text: text, project: project, limit: historyLimit), at: moment, from: store)
-            return SessionListData(filter: Filter(text: text, project: project), pinned: [], now: [], ended: ended.items, endedTotal: ended.total)
-        }
         let pinned = try store.sessionPage(SessionQuery(scope: .all, text: text, project: project, pinned: true, limit: .max)).items
         let live = try store.sessionPage(SessionQuery(scope: .current, text: text, project: project, pinned: false, limit: .max)).items
             .filter { $0.isCurrent(at: moment) }

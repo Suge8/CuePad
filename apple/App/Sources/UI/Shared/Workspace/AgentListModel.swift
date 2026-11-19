@@ -5,14 +5,11 @@ import SwiftUI
 
 @Observable
 final class AgentListModel {
-    let endedOnly: Bool
     var list: SessionListData?
     var query = "" { didSet { resetPaging() } }
     private(set) var limit = SessionListData.pageSize
 
     var searching: Bool { !query.trimmingCharacters(in: .whitespaces).isEmpty }
-
-    init(endedOnly: Bool = false) { self.endedOnly = endedOnly }
 
     var hasMore: Bool { list?.hasMore ?? false }
 
@@ -50,8 +47,8 @@ private struct AgentListReader: ViewModifier {
             .observing(
                 services.store, id: SessionListData.Key(filter: .init(text: model.query, project: nil), limit: model.limit, moment: services.speech),
                 into: $model.list, onError: workspace.fail
-            ) { [query = model.query, endedOnly = model.endedOnly, limit = model.limit, moment = services.speech] store in
-                try SessionListData.read(text: query, endedOnly: endedOnly, historyLimit: limit, at: moment, from: store)
+            ) { [query = model.query, limit = model.limit, moment = services.speech] store in
+                try SessionListData.read(text: query, historyLimit: limit, at: moment, from: store)
             }
     }
 }

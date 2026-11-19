@@ -8228,22 +8228,6 @@
         }
       }
     },
-    "历史会话" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Session History"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "历史会话"
-          }
-        }
-      }
-    },
     "压缩上下文" : {
       "localizations" : {
         "en" : {

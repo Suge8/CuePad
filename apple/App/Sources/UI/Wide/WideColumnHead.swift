@@ -36,7 +36,6 @@ struct WideColumnHead: View {
         case .library: LibraryPanesSlot()
         case .settings: WideHeading(title: String(localized: "设置"))
         case .conflicts: WideHeading(title: String(localized: "两个版本"))
-        case .earlier: WideHeading(title: String(localized: "历史"))
         default: EmptyView()
         }
     }

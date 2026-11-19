@@ -52,7 +52,7 @@ struct SessionList<Top: View>: View {
                 ForEach(Array(list.historyRuns.enumerated()), id: \.element.section) { index, run in
                     header {
                         VStack(alignment: .leading, spacing: Spacing.group) {
-                            if index == 0, !model.endedOnly { SectionHeader("历史") }
+                            if index == 0 { SectionHeader("历史") }
                             SectionHeader(Dotted(run.section.title), level: .group)
                         }
                         .padding(.horizontal, Spacing.tight)
@@ -131,12 +131,4 @@ private extension View {
     }
 }
 
-/// 项目页的"更早"是另一样（没在墙上的旧灵感），两处不混。
-struct EarlierPage: View {
-    @State private var model = AgentListModel(endedOnly: true)
-
-    var body: some View {
-        SessionList(model: model).floatingHeader("历史")
-    }
-}
 #endif

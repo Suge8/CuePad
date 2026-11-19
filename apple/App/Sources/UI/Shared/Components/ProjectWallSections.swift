@@ -34,13 +34,18 @@ struct ProjectWallSections<Tile: View>: View {
     }
 
     var body: some View {
-        let shown = (arrangement.pinned + arrangement.wall).filter { data.entries[$0] != nil }
+        #if os(iOS)
+        let held = born
+        #else
+        let held = UUID?.none
+        #endif
+        let shown = (arrangement.pinned + arrangement.wall).filter { data.entries[$0] != nil && $0 != held }
         LazyVStack(alignment: .leading, spacing: 0) {
             MasonryLayout(minColumnWidth: metrics.minColumnWidth, maxColumns: metrics.maxColumns, spacing: metrics.wallSpacing) {
                 AddIdea(data: data, action: add)
                     #if os(iOS)
                     // 平时登记在一个不会有卡用的 id 上：这一格的身份不随登记换
-                    .zoomSource(born.flatMap { data.entries[$0] == nil ? $0 : nil } ?? Project.defaultID, in: zoom)
+                    .zoomSource(born ?? Project.defaultID, in: zoom)
                     #endif
                 // 一张卡是一整块挪过去的（`geometryGroup`）：不然卡的底在滑，里面的字已经按新的宽排好、先到了，看着像字从卡上掉下来
                 ForEach(shown.compactMap { data.entries[$0] }) { tile($0).geometryGroup().transition(.opacity) }
@@ -65,6 +70,11 @@ struct ProjectWallSections<Tile: View>: View {
         }
     }
 
+    #if os(iOS)
+    /// 系统放大转场走完（约半秒）再留一点余量。
+    private static var zoomSettle: Duration { .milliseconds(700) }
+    #endif
+
     /// 建好就开，不等新卡落到墙上：等读库那一圈回来要停一拍。
     private func add() {
         guard !adding else { return }
@@ -79,6 +89,11 @@ struct ProjectWallSections<Tile: View>: View {
             await NextFrame.wait()
             #endif
             workspace.open(card)
+            #if os(iOS)
+            // 放大的这一段新卡先不上墙：它一落下别的卡就让位、起点跟着换到它身上，看着是抖两下。盖严了再落，返回时缩回它那一格
+            try? await Task.sleep(for: Self.zoomSettle)
+            born = nil
+            #endif
         }
     }
 

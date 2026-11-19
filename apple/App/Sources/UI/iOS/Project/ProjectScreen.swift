@@ -89,6 +89,8 @@ struct ProjectScreen: View {
                 .transition(.move(edge: .leading).combined(with: .opacity))
             }
         }
+        // 添一条、做完一条：新行淡入，下面的行与灵感墙滑着让位，不是整页往下一跳。按条数不按顺序：拖动排序自己带着动画
+        .animation(Motion.spatial(Motion.travel, reduceMotion: reduceMotion), value: data.tasks.roots.count)
         .padding(.horizontal, Spacing.page)
         .padding(.bottom, Spacing.section)
         .cardDragStage()

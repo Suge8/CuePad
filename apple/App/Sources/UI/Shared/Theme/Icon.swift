@@ -42,7 +42,7 @@ nonisolated enum Icon: Hashable, Sendable {
     case send, save, checked, stop, endSession, wakeSession, handOff, delivered, retry, toLatest, fetching, compact, renew
     /// 提示缓存冷了（回复框工具排里"重读多少"那一句的记号）
     case cold
-    case declined, mac, yourAnswer, above, floated, earlier, history
+    case declined, mac, yourAnswer, above, floated, earlier
     /// 引用一份预览回话（长按、右键与全屏页的"回复"）；用网易 UU 远程到这台 Mac 上操作
     case reply, remoteMac
     /// 和 Cue 通话（手机输入框空着时发送钮那一位、Mac 工具排末尾）；通话条上的麦克风开着、已静音
@@ -119,7 +119,7 @@ nonisolated enum Icon: Hashable, Sendable {
         case .alertsOn: .ink("bell.on")
         case .alertsOff: .ink("bell.off")
         case .reopen, .undo: .ink("reopen")
-        case .restore, .history: .ink("restore")
+        case .restore: .ink("restore")
         case .start, .play: .ink("play")
         case .indent: .ink("indent")
         case .outdent: .ink("outdent")

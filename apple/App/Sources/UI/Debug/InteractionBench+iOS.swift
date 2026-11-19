@@ -128,11 +128,11 @@ enum IOSInteractionBench {
             await step("会话条进会话") { workspace.openSession(id) }
             await step("会话返回 Cue") { workspace.path.removeAll() }
         }
-        // "更早"那一页的列表滚动：每帧 40pt 往下再往上
+        // 搜索页"会话"那一段的列表滚动（`perf_interact.py` 带 `-CuePadSearchScope sessions` 起）：每帧 40pt 往下再往上
         if wants("会话列表滚动") {
-            workspace.push(.earlier)
+            workspace.push(.search)
             await Task.wait(for: .seconds(1))
-            guard let scroll = Self.scrollView(in: Self.window) else { fail("\"更早\"那一页上找不到可滚的列表") }
+            guard let scroll = Self.scrollView(in: Self.window) else { fail("搜索页的会话那一段找不到可滚的列表") }
             for _ in 0..<2 { await stepScroll("会话列表滚动", scroll, step: { name, action in await step(name, action) }) }
         }
         workspace.select(.shelf)

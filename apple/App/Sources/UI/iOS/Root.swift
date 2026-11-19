@@ -100,7 +100,6 @@ struct RouteView: View {
         case .progress: ProgressScreen()
         case .cue: CuePage()
         case .search: SearchScreen()
-        case .earlier: EarlierPage()
         case .library: LibraryScreen()
         case .libraryFile(let file): LibraryFileScreen(file: file)
         case .session(let route): SessionPage(route, column: column)
