@@ -23,6 +23,7 @@ public actor CueStore {
   public nonisolated let files: AttachmentFiles
   /// 资料库目录（`LibraryLocation.directory`）：库旁不同步的本机文件（如 Cue 的大脑健康）放在这里。
   public nonisolated let libraryDirectory: URL
+  public nonisolated let databasePath: String
   /// 随时间变的读（`expire(at:)` 的到点重读、Mac 在不在线）用的时钟（你的话等没等过时限归 App 的 `SpeechClock`）；测试换成手动推进的。写下的时刻仍盖真实时间（`Date.stamp`）。
   public nonisolated let timing: Timing
   var readExpiry: Date?
@@ -59,6 +60,7 @@ public actor CueStore {
     self.timing = timing
     files = Self.files(of: location)
     libraryDirectory = location.directory
+    databasePath = location.databaseURL.path
     notificationNames = names
     changeListener = listener
     let dataVersion = try connection.first("PRAGMA data_version") { $0.int(0) } ?? 0
@@ -101,6 +103,7 @@ public actor CueStore {
     self.timing = timing
     files = Self.files(of: location)
     libraryDirectory = location.directory
+    databasePath = location.databaseURL.path
     notificationNames = [:]
     changeListener = nil
     seenVersions = [:]

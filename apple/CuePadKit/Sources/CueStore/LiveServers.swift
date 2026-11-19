@@ -126,12 +126,8 @@ public struct LiveServers: Sendable {
 
   /// 监听的口，按绑的地址给出要问的网址：通配与回环写 localhost，具体地址照写。
   private static func ports(_ pid: pid_t) -> [URL] {
-    let needed = proc_pidinfo(pid, PROC_PIDLISTFDS, 0, nil, 0)
-    guard needed > 0 else { return [] }
-    var fds = [proc_fdinfo](repeating: proc_fdinfo(), count: Int(needed) / MemoryLayout<proc_fdinfo>.size + 16)
-    let got = proc_pidinfo(pid, PROC_PIDLISTFDS, 0, &fds, Int32(fds.count * MemoryLayout<proc_fdinfo>.size))
     var ports: [URL] = []
-    for fd in fds.prefix(Int(max(0, got)) / MemoryLayout<proc_fdinfo>.size) where fd.proc_fdtype == PROX_FDTYPE_SOCKET {
+    for fd in fds(pid) where fd.proc_fdtype == PROX_FDTYPE_SOCKET {
       var socket = socket_fdinfo()
       let size = Int32(MemoryLayout<socket_fdinfo>.size)
       guard proc_pidfdinfo(pid, fd.proc_fd, PROC_PIDFDSOCKETINFO, &socket, size) == size, socket.psi.soi_kind == SOCKINFO_TCP else { continue }
@@ -142,6 +138,35 @@ public struct LiveServers: Sendable {
       if !ports.contains(url) { ports.append(url) }
     }
     return ports
+  }
+
+  private static func fds(_ pid: pid_t) -> ArraySlice<proc_fdinfo> {
+    let needed = proc_pidinfo(pid, PROC_PIDLISTFDS, 0, nil, 0)
+    guard needed > 0 else { return [] }
+    var fds = [proc_fdinfo](repeating: proc_fdinfo(), count: Int(needed) / MemoryLayout<proc_fdinfo>.size + 16)
+    let got = proc_pidinfo(pid, PROC_PIDLISTFDS, 0, &fds, Int32(fds.count * MemoryLayout<proc_fdinfo>.size))
+    return fds.prefix(Int(max(0, got)) / MemoryLayout<proc_fdinfo>.size)
+  }
+
+  /// 有没有 CuePad.app（可执行文件 `….app/Contents/MacOS/CuePad`；命令行在 Helpers 里、小组件在 PlugIns 里，都不算）开着这份库文件。
+  static func appHolding(_ file: String) -> Bool {
+    guard let file = realPath(file) else { return false }
+    return processes().contains { pid in
+      guard pid != getpid(), executable(pid)?.hasSuffix(".app/Contents/MacOS/CuePad") == true else { return false }
+      return fds(pid).contains { fd in
+        guard fd.proc_fdtype == PROX_FDTYPE_VNODE else { return false }
+        var info = vnode_fdinfowithpath()
+        let size = Int32(MemoryLayout<vnode_fdinfowithpath>.size)
+        guard proc_pidfdinfo(pid, fd.proc_fd, PROC_PIDFDVNODEPATHINFO, &info, size) == size else { return false }
+        return withUnsafeBytes(of: info.pvip.vip_path) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) } == file
+      }
+    }
+  }
+
+  private static func executable(_ pid: pid_t) -> String? {
+    var buffer = [UInt8](repeating: 0, count: Int(MAXPATHLEN) * 4)
+    let length = proc_pidpath(pid, &buffer, UInt32(buffer.count))
+    return length > 0 ? String(decoding: buffer.prefix(Int(length)), as: UTF8.self) : nil
   }
 
   private static func host(_ socket: in_sockinfo) -> String {
@@ -207,6 +232,10 @@ public struct LiveAddress: Equatable, Sendable {
 }
 
 extension CueStore {
+  /// 本机有没有开着这份资料库的 CuePad.app（`cuepad live` 交接前问）：看进程开着的文件，调试实例与正式版各开各的库，不会认错。
+  /// 不用在线记录（`MacPresence`）：App 崩溃后它要到期限（10 分钟）才过期，这期间会说成开着。
+  public nonisolated var appIsOpen: Bool { LiveServers.appHolding(databasePath) }
+
   /// 记下一条，顺手清掉一天前的（过了这么久的地址多半已经不在了）。
   public func sendLive(_ url: URL, to sessionID: String, found: Bool) throws {
     try write {

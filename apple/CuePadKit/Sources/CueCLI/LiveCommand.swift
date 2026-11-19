@@ -16,7 +16,8 @@ extension Command {
       不给参数：用 CuePad 认出的这个会话的服务——本机在监听、回 HTML，进程是这个会话 Agent 的后代，或工作目录在会话的工作目录里（nohup 甩到后台、进程树断了的靠这一条）；认出几个取最近起来的，之后服务换了端口预览跟过去。认不出就报错，这时给端口。
       给参数：5173 是 http://localhost:5173；也可写地址，如 localhost:3000/admin、http://127.0.0.1:8080。给了的不跟着换端口。
       开在哪：这个会话此刻开在 CuePad 主区、右半空着时，预览直接滑开；否则不动他的排布，会话栏头的预览钮亮起，他点了才开。只开在 Mac 上，手机上看不到活预览：别在回答里说发到了手机，要手机上也能看就用 show 发 HTML 文件。
-      会话同 show：取 Agent 给每条命令带的环境变量里第一个有值的（\(sessionVariables.joined(separator: "、"))），都没有就报错。CuePad.app 需要在运行。
+      会话同 show：取 Agent 给每条命令带的环境变量里第一个有值的（\(sessionVariables.joined(separator: "、"))），都没有就报错。
+      这台 Mac 上没有开着这份资料库的 CuePad.app 时报错退出（退出码 1），不交出去：请用户打开 CuePad 后再运行。
       \(Schema.output(LiveOutput.fields.description("Live"), "found：地址是认出来的（没给参数）"))
       """
   ) { call in
@@ -36,6 +37,9 @@ extension Command {
       url = first
     }
     let found = given.isEmpty
+    guard call.store.appIsOpen else {
+      throw CLIError.invalid("这台 Mac 上的 CuePad 没开（没有 App 开着资料库 \(UserHome.shown(call.store.databasePath))）：没有交出去。请用户打开 CuePad 后再运行 cuepad live")
+    }
     try await call.store.sendLive(url, to: session, found: found)
     let shown = LiveAddress.shown(url)
     let text = "已交给这台 Mac 上的 CuePad：\(shown)。会话开在主区、右半空着时预览直接滑开；否则会话栏头的预览钮亮起，等用户点开。手机上看不到活预览。\n"
