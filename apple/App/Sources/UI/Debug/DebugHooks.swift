@@ -45,7 +45,8 @@ enum DebugHooks {
         #if os(iOS)
         /// 设置页通知那一行显示的状态：演示模式没有同步，真实状态出不来。
         var alertStatus: AlertStatus?
-        var searchScope = SearchScope.cards
+        /// 搜索页的会话那一节一打开就列全。
+        var searchListsSessions = false
         var quietAlerts = false
         #endif
     }

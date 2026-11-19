@@ -54,3 +54,10 @@ nonisolated struct SessionListData: Sendable, Equatable {
         return try store.sessionPage(query)
     }
 }
+
+extension SessionListData {
+    /// 正在唤醒的读的时候就排掉了（`SessionListData.earlier`）。
+    var historyRuns: [TimeSection.Run<SessionListItem>] {
+        TimeSection.split(ended, date: \.state.stateSince, now: .now)
+    }
+}

@@ -15,24 +15,41 @@ nonisolated struct PaletteQuery: Equatable {
         }
     }
 
-    var text = "" { didSet { pages = 1; sessionPages = 1 } }
+    var text = "" { didSet { pages = 1; sessionPages = 1; sessionsExpanded = false } }
     var project: UUID? { didSet { pages = 1 } }
     var withAttachments = false { didSet { pages = 1 } }
     var period: Period = .any { didSet { pages = 1 } }
     var pages = 1
-    /// 会话只按搜索词搜，筛选不管它。
+    /// 会话那一节先列 `sessionPeek` 个，点开才列全、分页。
+    var sessionsExpanded = false
     var sessionPages = 1
 
     /// 卡片结果看的那部分：会话页数不算，会话范围点"显示更多"不重读卡片、卡片列表也不回顶。
     var cards: PaletteQuery {
         var cards = self
         cards.sessionPages = 1
+        cards.sessionsExpanded = false
         return cards
     }
 
     static let pageSize = 30
+    static let recent = 8
 
     var isFiltered: Bool { project != nil || withAttachments || period != .any }
+
+    /// 没打字也没设条件：不把全库倒出来，只列手上的会话与最近改的 `recent` 条。
+    var isIdle: Bool { text.trimmingCharacters(in: .whitespaces).isEmpty && !isFiltered }
+
+    /// 项目管得到会话；含附件、时间是灵感与任务才有的条件，设了它们会话那一节不列（列出来就是没筛过的）。
+    var listsSessions: Bool { !withAttachments && period == .any }
+
+    var sessionPeek: Int { isIdle ? 5 : 3 }
+
+    /// 已结束的会话读几条：没展开时只为凑满 `sessionPeek`，闲着时不读（只列没结束的与置顶的）。
+    var endedLimit: Int {
+        if sessionsExpanded { return SessionListData.pageSize * sessionPages }
+        return isIdle ? 0 : sessionPeek
+    }
 
     func projectLabel(in projects: [Project]) -> String {
         project.flatMap { id in projects.first { $0.id == id }?.shownName } ?? String(localized: "全部")
@@ -56,8 +73,9 @@ nonisolated struct CardMatches: Sendable, Equatable {
     var shown: Int { groups.reduce(0) { $0 + $1.cards.count } }
 
     static func read(_ query: PaletteQuery, from store: isolated CueStore) throws -> CardMatches {
-        let found = try store.search(query.store(), limit: PaletteQuery.pageSize * query.pages)
-        return CardMatches(groups: CardGroup.byProject(found.cards), total: found.totalCards)
+        let idle = query.isIdle
+        let found = try store.search(query.store(), limit: idle ? PaletteQuery.recent : PaletteQuery.pageSize * query.pages)
+        return CardMatches(groups: CardGroup.byProject(found.cards), total: idle ? found.cards.count : found.totalCards)
     }
 }
 

@@ -128,7 +128,7 @@ enum IOSInteractionBench {
             await step("会话条进会话") { workspace.openSession(id) }
             await step("会话返回 Cue") { workspace.path.removeAll() }
         }
-        // 搜索页"会话"那一段的列表滚动（`perf_interact.py` 带 `-CuePadSearchScope sessions` 起）：每帧 40pt 往下再往上
+        // 搜索页会话那一节列全后的列表滚动（`perf_interact.py` 带 `-CuePadSearchScope sessions` 起）：每帧 40pt 往下再往上
         if wants("会话列表滚动") {
             workspace.push(.search)
             await Task.wait(for: .seconds(1))

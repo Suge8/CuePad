@@ -7072,6 +7072,34 @@
         }
       }
     },
+    "全部 %lld 个会话" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld session in all"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "All %lld sessions"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "全部 %lld 个会话"
+          }
+        }
+      }
+    },
     "全部完成" : {
       "localizations" : {
         "en" : {
@@ -8208,22 +8236,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "卡死"
-          }
-        }
-      }
-    },
-    "历史" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "History"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "历史"
           }
         }
       }
@@ -10648,22 +10660,6 @@
         }
       }
     },
-    "在这里开新会话；Mac 上接入的 Agent，它的会话记录也会出现在这里" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Start a new session here. Sessions from agents connected on your Mac also show up here."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在这里开新会话；Mac 上接入的 Agent，它的会话记录也会出现在这里"
-          }
-        }
-      }
-    },
     "在项目里建一个指向 AGENTS.md 的 CLAUDE.md" : {
       "localizations" : {
         "en" : {
@@ -12424,6 +12420,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已记到 %@"
+          }
+        }
+      }
+    },
+    "已设条件" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filtered"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已设条件"
           }
         }
       }
@@ -14444,22 +14456,6 @@
         }
       }
     },
-    "搜索会话" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Search sessions"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "搜索会话"
-          }
-        }
-      }
-    },
     "搜索文件夹" : {
       "localizations" : {
         "en" : {
@@ -14552,6 +14548,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "撤回"
+          }
+        }
+      }
+    },
+    "撤掉条件：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remove filter: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "撤掉条件：%@"
           }
         }
       }
@@ -18100,34 +18112,18 @@
         }
       }
     },
-    "没有找到会话" : {
+    "没有找到灵感、任务或会话" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No Sessions Found"
+            "value" : "No ideas, tasks, or sessions found"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "没有找到会话"
-          }
-        }
-      }
-    },
-    "没有找到灵感或任务" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No Ideas or Tasks Found"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "没有找到灵感或任务"
+            "value" : "没有找到灵感、任务或会话"
           }
         }
       }
@@ -18960,22 +18956,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "状态未确认"
-          }
-        }
-      }
-    },
-    "现在" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Now"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "现在"
           }
         }
       }
@@ -20340,6 +20320,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "答案和问题对不上（选项不在列表里，或类型不对）"
+          }
+        }
+      }
+    },
+    "筛选" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filter"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "筛选"
           }
         }
       }
@@ -22688,38 +22684,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "还没有"
-          }
-        }
-      }
-    },
-    "还没有 Agent 会话" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No Agent Sessions Yet"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "还没有 Agent 会话"
-          }
-        }
-      }
-    },
-    "还没有 Agent 会话。开个新会话，或在设置里接入 Agent 读进它的会话记录" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No agent sessions yet. Start a new session, or connect an agent in Settings to bring in its sessions."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "还没有 Agent 会话。开个新会话，或在设置里接入 Agent 读进它的会话记录"
           }
         }
       }

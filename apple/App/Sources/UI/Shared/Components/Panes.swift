@@ -111,35 +111,20 @@ enum PaneMetrics {
     #endif
 }
 
-/// 一个搜索词两边共用，换范围不清空。
-enum SearchScope {
-    case cards, sessions
-}
-
-struct SearchScopePanes: View {
-    @Binding var scope: SearchScope
-
-    var body: some View {
-        PaneSegment(items: [.init(value: .cards, title: "灵感与任务", icon: .idea), .init(value: .sessions, title: "会话", icon: .session)],
-                    selection: scope) { scope = $0 }
-            .paneSlot()
-    }
-}
-
 extension View {
-    /// 玻璃不叠玻璃，纸上没有玻璃托着，所以用淡底胶囊的槽。给了 `size` 就与同一排那一档控件同高（旁边是那一档的按钮时）。
-    /// 宽按各段的字定在这里：给了高时只定宽，各段与选中块撑满槽的高（连高一起定，它们只有字那么高，悬停的底贴着字）。
-    func paneSlot(_ size: ControlSize? = nil) -> some View { modifier(PaneSlot(size: size)) }
+    /// 玻璃不叠玻璃，纸上没有玻璃托着，所以用淡底胶囊的槽，与同一排 `size` 那一档控件同高。
+    /// 高一定要给：只定宽，各段与选中块撑满槽的高。不给的话它们只有字那么高，选中块是一条扁条（搜索的范围分段曾经这样）。
+    func paneSlot(_ size: ControlSize) -> some View { modifier(PaneSlot(size: size)) }
 }
 
 private struct PaneSlot: ViewModifier {
-    let size: ControlSize?
+    let size: ControlSize
     @Environment(\.palette) private var palette
 
     func body(content: Content) -> some View {
         content
-            .fixedSize(horizontal: true, vertical: size == nil)
-            .frame(height: size.map { $0.height - PaneMetrics.inset * 2 })
+            .fixedSize(horizontal: true, vertical: false)
+            .frame(height: size.height - PaneMetrics.inset * 2)
             .padding(PaneMetrics.inset)
             .background(palette.fill, in: .capsule)
     }

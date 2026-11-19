@@ -79,14 +79,13 @@ struct MainWindow: View {
 /// 本窗口的浮层与确认框（都经 `panel`）。单独一个视图读它们的开合：主窗口的视图体读了，开合的那一帧就要重算整个窗口、重新提交整条工具栏。
 private struct WindowPanels: View {
     @Bindable var workspace: Workspace
-    @State private var searchScope = SearchScope.cards
     @State private var mountsPalette = false
 
     var body: some View {
         Color.clear.frame(width: 0, height: 0)
             // ⌘K 每天用很多次：直接出现、直接消失，不做动画
-            .keptPanel(isPresented: $workspace.searching, mounted: mountsPalette) { SearchPalette(scope: $searchScope) }
-            .onChange(of: workspace.searching) { if !$1 { searchScope = .cards } else { mountsPalette = true } }
+            .keptPanel(isPresented: $workspace.searching, mounted: mountsPalette) { SearchPalette() }
+            .onChange(of: workspace.searching) { if $1 { mountsPalette = true } }
             .task(id: workspace.isLibraryReady) {
                 guard workspace.isLibraryReady else { return }
                 guard (try? await Task.sleep(for: Prewarm.delay)) != nil else { return }

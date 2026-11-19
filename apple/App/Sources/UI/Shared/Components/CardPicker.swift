@@ -150,6 +150,8 @@ struct CardRow: View {
     var highlight = ""
     /// 点一下选中这张卡（卡片选择）；nil 时点开卡片（任务是从这一行长出的气泡），长按是卡片操作。
     var pick: ((Card) -> Void)?
+    /// 搜索结果：不垫纸，直接落在桌面上（同项目页的任务行），行首一格是任务的圈或灵感的记号，摘要缩在标题下面。
+    var flat = false
     @Environment(\.palette) private var palette
     #if os(iOS)
     @Environment(\.zoomNamespace) private var zoom
@@ -164,11 +166,11 @@ struct CardRow: View {
             #if os(iOS)
             if entry.card.isTask {
                 Button { workspace.openTask(entry.card) } label: { row }
-                    .buttonStyle(PressStyle(.card))
+                    .modifier(Press(flat: flat))
                     .contextMenu { CardActions(card: entry.card) }
             } else {
                 NavigationLink(value: Route.card(entry.card.id)) { row }
-                    .buttonStyle(PressStyle(.card))
+                    .modifier(Press(flat: flat))
                     .zoomSource(entry.card.id, in: zoom)
                     .contextMenu { CardActions(card: entry.card) }
             }
@@ -179,10 +181,17 @@ struct CardRow: View {
     private var row: some View {
         let card = entry.card, text = entry.text
         return HStack(alignment: .top, spacing: Spacing.group) {
+          HStack(alignment: .firstTextBaseline, spacing: Spacing.item) {
+            if flat {
+                Group {
+                    if card.isTask { TaskRingView(status: card.status, done: false, size: Self.ring) } else { Image(.idea).font(Glyph.small).foregroundStyle(palette.ink3) }
+                }
+                .frame(width: Self.ring).readerHidden(true)
+            }
             VStack(alignment: .leading, spacing: Spacing.tight) {
                 MetaLine(spacing: Spacing.item, gap: 0) {
                     HStack(alignment: .firstTextBaseline, spacing: Spacing.item) {
-                        if card.isTask { TaskRingView(status: card.status, done: false, size: Self.ring).frame(width: Self.ring) }
+                        if card.isTask, !flat { TaskRingView(status: card.status, done: false, size: Self.ring).frame(width: Self.ring) }
                         Text(marked(text.label)).font(Typography.bodyStrong).foregroundStyle(palette.ink).lineLimit(2)
                     }
                 } meta: {
@@ -205,15 +214,31 @@ struct CardRow: View {
                 }
             }
             .multilineTextAlignment(.leading)
+          }
             Spacer(minLength: 0)
             if let image = text.images.first {
                 Thumbnail(hash: image, height: 64, cornerRadius: Radius.chip).frame(width: 80)
             }
         }
-        .padding(Spacing.group)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .paper()
-        .contentShape(.rect(cornerRadius: Radius.card))
+        .padding(.vertical, flat ? Spacing.item : Spacing.group).padding(.horizontal, flat ? 0 : Spacing.group)
+        .frame(maxWidth: .infinity, minHeight: flat ? RowMetrics.height : nil, alignment: .leading)
+        .modifier(Surface(flat: flat))
+    }
+
+    private struct Surface: ViewModifier {
+        let flat: Bool
+
+        func body(content: Content) -> some View {
+            if flat { content.contentShape(.rect) } else { content.paper().contentShape(.rect(cornerRadius: Radius.card)) }
+        }
+    }
+
+    private struct Press: ViewModifier {
+        let flat: Bool
+
+        func body(content: Content) -> some View {
+            if flat { content.buttonStyle(.row) } else { content.buttonStyle(PressStyle(.card)) }
+        }
     }
 
     private var terms: [String] { highlight.split(whereSeparator: \.isWhitespace).map(String.init) }
