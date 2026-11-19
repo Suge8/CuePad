@@ -11,13 +11,12 @@ struct LivePreviewTool: View {
 
     var body: some View {
         let button = workspace.liveButton(session.id)
-        Group {
-            if let button {
-                HeadTool(label: Self.label(button), icon: .livePreview, on: button.isShowing) { workspace.toggleLivePreview() }
-                    .transition(.opacity)
-            }
-        }
-        .animation(Motion.fade, value: button != nil)
+        // 没有时也占着位置、只是看不见：插进去再拿出来会挤得标题忽而截断、忽而放开
+        HeadTool(label: Self.label(button ?? .closed(nil)), icon: .livePreview, on: button?.isShowing == true) { workspace.toggleLivePreview() }
+            .opacity(button == nil ? 0 : 1)
+            .allowsHitTesting(button != nil)
+            .readerHidden(button == nil)
+            .animation(Motion.fade, value: button != nil)
     }
 
     private static func label(_ button: Workspace.LiveButton) -> LocalizedStringResource {
