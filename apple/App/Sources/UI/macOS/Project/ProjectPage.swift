@@ -36,6 +36,8 @@ struct ProjectPage: View {
                     content.id("top")
                 }
                 .scrollPosition($position)
+                // 栏头那排字没有底：滚上来的卡在它下面淡出，不从字后面穿过去
+                .fadesUnderHead()
                 .taskFoldScroll(anchor)
                 .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y > Self.collapseOffset } action: { _, isCollapsed in
                     withAnimation(Motion.fade) { collapsed = isCollapsed }

@@ -5,6 +5,7 @@ struct ArchivePage: View {
     var body: some View {
         ArchiveList()
             .safeAreaPadding(.top, Bars.contentGap)
+            .fadesUnderHead()
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
