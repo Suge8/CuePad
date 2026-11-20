@@ -29,6 +29,7 @@ extension Workspace {
     func receiveLive(_ event: VoiceRelayEvent) async {
         switch event {
         case .received(let received):
+            if case .live(.show(_, let sessionID)) = received.payload { return await showLive(sessionID) }
             guard case .live(.watch(let request, let sessionID, let open)) = received.payload else { return }
             let key = LivePhone.Key(phone: received.header.sender, sessionID: sessionID)
             let fresh = livePhones[key] == nil
@@ -79,6 +80,17 @@ extension Workspace {
                 AppServices.log.notice("活预览答手机没发出去：\(String(describing: error), privacy: .public)")
             }
         }
+    }
+
+    /// 手机要用 UU 远程看这个会话（`LiveSignal.show`）：开到主区，有页面可看就同栏头的钮开活预览（地址照开合的规则，你填的不换），
+    /// 窗口提到最前。只认本机这台上没结束的会话（同 `answerLivePhones`）。
+    private func showLive(_ sessionID: String) async {
+        let hosted = ((try? await services.store.liveOwners(hosts: Self.liveHosts(services))) ?? [:]).keys
+        guard hosted.contains(sessionID), let state = try? await services.store.sessionState(sessionID) else { return }
+        // 手机看着时只扫它看的会话：此刻认出的才准
+        await scanLive(only: [sessionID])
+        if hasLivePage(state.id) { openLivePreview(state) } else { openSession(state.id, sessionID: sessionID) }
+        services.windowShell?.show()
     }
 
     /// 隧道口：开着就用它，没开就开（端口随机）；没取到门铃的密钥（中转还没连上过）开不了。
