@@ -12,8 +12,7 @@ struct BoardWaitCard: View {
     var body: some View {
         link {
             VStack(alignment: .leading, spacing: BoardCardMetrics.footGap) {
-                BoardWaitFace(held: held, ask: ask)
-                if row { Spacer(minLength: 0) }
+                BoardWaitFace(held: held, ask: ask).frame(maxHeight: row ? .infinity : nil, alignment: .top)
                 BoardWaitFoot(held: held, project: project)
             }
             .padding(.vertical, BoardCardMetrics.pad).boardCard(.waiting)

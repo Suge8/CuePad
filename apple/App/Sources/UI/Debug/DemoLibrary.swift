@@ -98,7 +98,7 @@ enum DemoLibrary {
             group.cards.map {
                 SeedCard(project: index(of: group.name), body: $0.text, pinned: $0.favorite, modifiedAt: now - $0.days * 86_400)
             }
-        } + tasks.map { SeedCard(project: index(of: $0.project), body: $0.text, modifiedAt: now, kind: $0.done ? .doneTask : .task) }
+        } + tasks.map { SeedCard(project: index(of: $0.project), body: $0.text, modifiedAt: now - ($0.done ?? 0) * 86_400, kind: $0.done == nil ? .task : .doneTask) }
         try await store.seed(
             projects: named.map { SeedProject(name: $0.name, icon: $0.icon.rawValue, color: $0.color, pinned: $0.pinned) }, cards: cards)
     }
