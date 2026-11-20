@@ -141,6 +141,7 @@
 				Symbols.xcassets,
 			);
 			platformFiltersByRelativePath = {
+				CuePoses.xcassets = (ios, );
 				WidgetViews.swift = (ios, );
 			};
 			target = A10000000000000000000030 /* CuePad */;

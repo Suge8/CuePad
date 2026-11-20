@@ -49,6 +49,19 @@ nonisolated enum CueBeat: String, Codable, Sendable, CaseIterable {
         }
     }
 
+    /// 全身的那张叫什么：Cue 页舞台画 "cue-stage-" 接它（200pt），锁屏的实时活动画 "cue-pose-" 接它（`CuePoses`，同一张缩到 140pt：
+    /// 实时活动里比那一块还大的图系统可能不画）。
+    var pose: String {
+        switch self {
+        case .resting, .hearing: "idle"
+        case .thinking, .failed: "think"
+        case .delegating: "wave"
+        case .waiting: "offer"
+        case .done: "jump"
+        case .away: "sleep"
+        }
+    }
+
     /// 你正在写时：刚做完的让给"在听"（歇着那张），别的照旧。
     func composing(_ drafting: Bool) -> CueBeat { drafting && self == .done ? .resting : self }
 }
