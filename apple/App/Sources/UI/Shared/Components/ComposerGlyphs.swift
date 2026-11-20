@@ -14,7 +14,8 @@ struct CircleGlyph<Content: View>: View {
     }
 }
 
-/// 输入框右下角的主按钮，全 App 的输入框只此一颗。发送是纸飞机（与"交给"同一架，`Icon.send`），记下是勾，停止是圆角方墨，通话是声纹，挂断是叉：
+/// 输入框右下角的主按钮，全 App 的输入框只此一颗，任务气泡底下那颗"开始"也是它。发送是纸飞机（与"交给"同一架，`Icon.send`），记下是勾，
+/// 开始是三角（同看板卡上那颗，`TaskNextMark`），停止是圆角方墨，通话是声纹，挂断是叉：
 /// 同一个字形换符号，几样之间来回都原地换，中途反向从此刻的样子接着走。
 /// 发送中（话在路上，与会话状态标同一个）：发出那一刻钮底当帧换掉、飞机往右上飞走淡出，同一刻机头处起飞一点光（`RelayLaunch`，"对 Cue 说"才有）——
 /// 钮底不渐变，靛青的光才不会压在靛青的钮上看不见。
@@ -22,8 +23,10 @@ struct CircleGlyph<Content: View>: View {
 struct SendGlyph: View {
     enum Phase: Equatable {
         case idle, ready, sending, stop, stopping
-        /// 记下（随手记、Cue 没启用时）：勾，能按时靛青。
+        /// 记下（随手记、记任务、Cue 没启用时）：勾，能按时靛青。
         case save(enabled: Bool)
+        /// 把任务交给 Agent 开始做（任务气泡）；上一次没开成时是重试。
+        case start, retry
         case call(enabled: Bool)
         /// 挂断（手机通话中，代替发送那一位）：墨色实心，同停止。
         case hangUp
@@ -60,7 +63,7 @@ struct SendGlyph: View {
     private var disc: Color {
         switch phase {
         case .idle, .sending, .stopping, .save(enabled: false), .call: palette.fill
-        case .ready, .save(enabled: true): palette.signatureFill
+        case .ready, .save(enabled: true), .start, .retry: palette.signatureFill
         case .stop, .hangUp: palette.ink
         }
     }
@@ -70,6 +73,8 @@ struct SendGlyph: View {
         let (icon, ink, size): (Icon, Color, CGFloat) = switch phase {
         case .stop: (.stop, palette.paper, 14)
         case .save(let enabled): (.save, enabled ? palette.onFill : palette.ink3, 17)
+        case .start: (.start, palette.onFill, 15)
+        case .retry: (.retry, palette.onFill, 17)
         case .call(let enabled): (.call, enabled ? palette.ink : palette.ink3, 18)
         case .hangUp: (.close, palette.paper, 14)
         case .ready: (.send, palette.onFill, Self.sendSide)

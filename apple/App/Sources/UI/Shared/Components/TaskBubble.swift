@@ -41,11 +41,11 @@ struct TaskBubble: View {
                         }
                         .padding(.top, Spacing.item).padding(.leading, BubbleMetrics.leading)
                     } footer: {
-                        // 同输入框底下那一排（`Composer.pill`）：胶囊从左边排起，主钮离右边与离下边一样远
+                        // 同输入框底下那一排：胶囊从左边排起，圆钮在右下同一个位置
                         BubbleFooter(data: data, focus: focus, editing: editing)
-                            .padding(.leading, Spacing.group).padding(.trailing, ComposerMetrics.pillInset)
+                            .padding(.leading, Spacing.group).padding(.trailing, ComposerMetrics.glyphInset)
                             .padding(.top, BubbleMetrics.footerGap)
-                            .padding(.bottom, ComposerMetrics.pillInset + (sheet ? BubbleMetrics.sheetBottom : 0))
+                            .padding(.bottom, ComposerMetrics.glyphInset + (sheet ? BubbleMetrics.sheetBottom : 0))
                             .background(palette.paper)
                     }
                 }

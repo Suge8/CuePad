@@ -2,7 +2,7 @@ import CueStore
 import SwiftUI
 
 /// 看板上记任务只有这一个输入框（待办的"＋"），同新会话的输入框一张卡、一种呈现（`NewSessionInput`）：去处胶囊在上，
-/// 字在中间（第一行是标题，其余是正文，同任务正文），"添加"在右下。记下一条就清空、留着接着记；收起只有 Esc 与点外面。
+/// 字在中间（第一行是标题，其余是正文，同任务正文），右下是记下的那颗勾。记下一条就清空、留着接着记；收起只有 Esc 与点外面。
 struct NewTaskInput: View {
     let start: TaskStart
     @Environment(Workspace.self) private var workspace
@@ -15,7 +15,7 @@ struct NewTaskInput: View {
 
     var body: some View {
         Composer(
-            draft: $draft, prompt: "写下任务", label: "添加任务", focus: $focused, accepts: [], tooled: true, pill: true,
+            draft: $draft, prompt: "写下任务", label: "添加任务", focus: $focused, accepts: [],
             shortcuts: [.send: add],
             header: {
                 HStack(spacing: Spacing.item) {
@@ -26,8 +26,8 @@ struct NewTaskInput: View {
             },
             tools: { EmptyView() },
             send: {
-                Button("添加", action: add)
-                    .buttonStyle(ControlButtonStyle(kind: .primary, size: .compact)).disabled(empty)
+                Button(action: add) { SendGlyph(.save(enabled: !empty)) }
+                    .buttonStyle(PressStyle(.button)).disabled(empty).accessibilityLabel("添加")
             })
         #if os(macOS)
         .frame(width: BubbleMetrics.width)

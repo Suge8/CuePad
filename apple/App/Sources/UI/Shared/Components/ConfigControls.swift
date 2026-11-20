@@ -87,7 +87,7 @@ struct ConfigControls<Trailing: View>: View {
     /// 工具排的字号上限（同 Cue 面板的做法）：按最坏的一排定——最窄的 iPhone（375 宽）、英文，模型、"管理用量"、思考强度、加速、上下文全在，
     /// 收完六步（`ConfigRow`）仍一颗不少、不压发送钮的那一档，实测 xxLarge；再大一档 xxxLarge 时英文的上下文压到发送钮下面。
     /// 泛型类型里放不了静态存储属性。
-    static var largestType: DynamicTypeSize { ComposerMetrics.largestType }
+    static var largestType: DynamicTypeSize { .xxLarge }
 
     func aligned(_ alignment: Alignment) -> Self {
         var aligned = self

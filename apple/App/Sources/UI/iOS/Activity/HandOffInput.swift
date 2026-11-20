@@ -76,7 +76,7 @@ struct HandOffInput: View {
     var body: some View {
         Composer(
             draft: box, prompt: "补一句", label: "发给 Agent", focus: $focused,
-            accepts: chosen == nil ? [.files, .cards] : .reply, cardsFrom: outbox.project, keeps: outbox.card, tooled: true, pill: true,
+            accepts: chosen == nil ? [.files, .cards] : .reply, cardsFrom: outbox.project, keeps: outbox.card, tooled: tools != nil || launchTools != nil,
             commands: commands,
             header: { header.padding(.horizontal, Spacing.group).padding(.top, Spacing.item) },
             tools: {
@@ -87,8 +87,8 @@ struct HandOffInput: View {
                 }
             },
             send: {
-                Button("交给", action: send)
-                    .buttonStyle(ControlButtonStyle(kind: .primary, size: .compact)).disabled(!canSend)
+                Button(action: send) { SendGlyph(canSend ? .ready : .idle) }
+                    .buttonStyle(PressStyle(.button)).disabled(!canSend)
                     .accessibilityLabel(chosen.map { String(localized: "交给 \($0.state.title)") } ?? String(localized: "开新会话交给它"))
             })
         .composerNotice(launchStatus != nil || config?.failure != nil) {

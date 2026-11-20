@@ -119,7 +119,8 @@ private struct BubbleStrip<Content: View, Trailing: View>: View {
                 .accessibilityLabel(markLabel ?? "")
             content
             Spacer(minLength: 4)
-            trailing
+            // 带字的钮比圆钮往里让一格
+            trailing.padding(.trailing, Spacing.item)
         }
         .contentShape(.rect)
     }
@@ -163,8 +164,9 @@ private struct StartBar: View {
                     captioned(caption)
                 }
                 Spacer(minLength: 0)
-                Button(startTitle(retry: outcome != nil), action: start)
-                    .buttonStyle(ControlButtonStyle(kind: .primary, size: .compact))
+                Button(action: start) { SendGlyph(outcome != nil ? .retry : .start) }
+                    .buttonStyle(PressStyle(.button))
+                    .accessibilityLabel(startTitle(retry: outcome != nil)).help(Text(startTitle(retry: outcome != nil)))
                     .accessibilityHint("把任务的正文交给 Agent，开始做")
             }
         }
