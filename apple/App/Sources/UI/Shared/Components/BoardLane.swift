@@ -132,6 +132,10 @@ struct BoardColumnHeader: View {
         .overlay(alignment: .trailing) {
             if let add { LaneAddButton(add, cell: CGSize(width: disc, height: height)).font(font) }
         }
+        #if os(iOS)
+        // 定高的一排，字号放大到页顶那一排的上限为止：再大字比这一排高，下半截被卡盖住
+        .dynamicTypeSize(...FloatingHeaderLayout.largestType)
+        #endif
         .frame(height: height)
         // 又做完一件（正好多一件：读到一批、同步来一串不算）：对勾擦掉，等卡飞到时重写一遍
         .onChange(of: count) { old, new in if column == .done, new == old + 1, !reduceMotion { wins += 1 } }

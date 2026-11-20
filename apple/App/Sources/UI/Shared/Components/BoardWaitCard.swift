@@ -103,6 +103,6 @@ private struct BoardWaitFoot: View {
             HStack { Spacer(minLength: 0); TimeSpent(clock: .waiting(since: held.session.stateSince)).lineLimit(1).fixedSize() }
         }
         .font(TaskMetrics.caption)
-        .frame(height: BoardCardMetrics.vitals)
+        .boardFootHeight(BoardCardMetrics.vitals)
     }
 }

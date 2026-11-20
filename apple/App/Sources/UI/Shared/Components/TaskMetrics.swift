@@ -63,6 +63,8 @@ enum BoardCardMetrics {
     static let compactPad: CGFloat = 10
     /// 标题至多几行（列里的卡上层就这么高）。
     nonisolated static func lines(_ typeSize: DynamicTypeSize) -> Int { typeSize.isAccessibilitySize ? 3 : 2 }
+    /// 手机的行里标题几行：辅助字号下一行只放得下四五个字，排两行。
+    nonisolated static func rowLines(_ typeSize: DynamicTypeSize) -> Int { typeSize.isAccessibilitySize ? 2 : 1 }
     /// 卡脚里项目名最宽：约七个汉字，再长就截，给线与读数留地方。
     static let tagMax: CGFloat = 104
 }
