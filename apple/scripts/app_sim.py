@@ -3,6 +3,7 @@ import os
 import re
 import shlex
 import signal
+import struct
 import subprocess
 import sys
 import time
@@ -17,6 +18,9 @@ SIMCTL_TIMEOUT = 180
 BOOT_TIMEOUT = 180
 # 一张的看守上限要装得下一次 simctl 自愈（超时 + shutdown + boot + 重做），不然第二次尝试被闹钟截断
 SHOT_HOLD = HOLD + 2 * SIMCTL_TIMEOUT + 2 * BOOT_TIMEOUT
+SETTINGS = "com.apple.Preferences"
+# 岛收起来、展开的转场是系统的，没有可等的信号
+ISLAND_SETTLE = 3
 
 
 class Sim:
@@ -72,6 +76,30 @@ class Sim:
         self.orient(args)
         env = dict(os.environ, SIMCTL_CHILD_CUEPAD_LIBRARY_DIR=os.path.abspath(library), SIMCTL_CHILD_CUEPAD_SHOT_READY=ready)
         return int(self.run("launch", "--terminate-running-process", f"--stderr={self.log}", self.device, BUNDLE_ID, *args, env=env).rsplit(":", 1)[1])
+
+    def island(self, out):
+        """拍系统的灵动岛：把设置切到前台，App 退到后台岛才出来；先拍收起的（<图>-compact.png），在岛上长按，再拍展开的（<图>）。
+        调试预览（`-CuePadScene activity`）不受系统的约束——展开态封顶 160pt、内容裁在离岛边十几点以内——超出的在这里才看得到被截断。
+        用 axe 截：simctl io screenshot 拍不到岛那一层。"""
+        compact = re.sub(r"(\.png)?$", "-compact.png", out, count=1)
+
+        def axe(*args):
+            try:
+                subprocess.run(["axe", *args, "--udid", self.device], check=True, capture_output=True, text=True, timeout=SIMCTL_TIMEOUT)
+            except subprocess.CalledProcessError as e:
+                die(f"axe {args[0]} 失败：{(e.stderr or e.stdout).strip()}")
+
+        self.run("launch", self.device, SETTINGS)
+        time.sleep(ISLAND_SETTLE)
+        axe("screenshot", "--output", compact)
+        with open(compact, "rb") as f:
+            width = struct.unpack(">I", f.read(20)[16:])[0]
+        # 岛在屏幕顶上正中（手机都是 3 倍屏）
+        axe("touch", "-x", str(width // 6), "-y", "28", "--down", "--up", "--delay", "1.2")
+        time.sleep(1)
+        axe("screenshot", "--output", out)
+        subprocess.run(["xcrun", "simctl", "terminate", self.device, SETTINGS], capture_output=True, timeout=SIMCTL_TIMEOUT)
+        print(compact, flush=True)
 
     def terminate(self):
         """收尾，尽力而为：没在跑会报错，卡住了下一次 launch 也带 --terminate-running-process；横着的转回竖屏（下一次 launch 照样会摆）。"""
@@ -140,6 +168,8 @@ def sim(cmd, device, app, library, shots):
                 if cmd == "rec":
                     rec = recorder(device, shot.out)
                     stop_recording(rec)
+                elif flag(shot.args, "-CuePadLiveActivity") == "YES":
+                    s.island(shot.out)
                 else:
                     s.run("io", device, "screenshot", shot.out)
         finally:
