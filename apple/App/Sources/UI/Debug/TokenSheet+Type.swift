@@ -38,7 +38,7 @@ extension TokenSheet {
         ("reading", Typography.reading), ("readingHeading", Typography.readingHeading),
         ("code", Typography.code), ("codeNote", Typography.codeNote), ("inlineCode", Typography.inlineCode),
         ("title", Typography.title), ("sectionTitle", Typography.sectionTitle), ("sectionCount", Typography.sectionCount),
-        ("heading", Typography.heading), ("emptyTitle", Typography.emptyTitle), ("gaugeNumber", Typography.gaugeNumber),
+        ("heading", Typography.heading), ("emptyTitle", Typography.emptyTitle), ("cueCardName", Typography.cueCardName), ("gaugeNumber", Typography.gaugeNumber),
         ("toolbarLabel", Typography.toolbarLabel), ("toolbarTitle", Typography.toolbarTitle),
         ("toolbarTitlePaired", Typography.toolbarTitlePaired), ("toolbarSubtitle", Typography.toolbarSubtitle),
         ("laneTitle", Typography.laneTitle),
@@ -49,10 +49,10 @@ extension TokenSheet {
     #if os(macOS)
     private static let platformFonts: [(String, Font)] = [
         ("searchField", Typography.searchField), ("previewTitle", Typography.previewTitle), ("keycap", Typography.keycap),
-        ("cueCardName", Typography.cueCardName), ("menuBarCount", Font(Typography.menuBarCount)),
+        ("menuBarCount", Font(Typography.menuBarCount)),
     ]
     #else
-    private static let platformFonts: [(String, Font)] = [("codeUIFont", Font(Typography.codeUIFont))]
+    private static let platformFonts: [(String, Font)] = [("codeUIFont", Font(Typography.codeUIFont)), ("cueCardNameCompact", Typography.cueCardNameCompact)]
     #endif
 }
 #endif

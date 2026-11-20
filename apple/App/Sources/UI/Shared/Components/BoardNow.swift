@@ -49,7 +49,7 @@ struct BoardWord: View {
     }
 }
 
-/// 卡脚右端：上下文用了多少（状态词已经写了百分比时不再画）、此刻这个状态多久了。
+/// 卡脚右端：此刻这个状态多久了；上下文只在吃紧时画（宽裕的每张卡都画一圈，一列全是圈；状态词已经写了百分比时也不再画）。
 struct BoardVitals: View {
     let pulse: BoardPulse
     @Environment(\.palette) private var palette
@@ -59,7 +59,7 @@ struct BoardVitals: View {
 
     private var meter: ContextMeter? {
         if case .context = pulse.word { return nil }
-        return pulse.session?.context.flatMap(ContextMeter.init)
+        return pulse.session?.context.flatMap(ContextMeter.init).flatMap { $0.level == .roomy ? nil : $0 }
     }
 
     var body: some View {
@@ -70,7 +70,7 @@ struct BoardVitals: View {
                     Circle().stroke(palette.track, lineWidth: Self.stroke)
                         .overlay { Circle().trim(from: 0, to: meter.fraction).stroke(tint, style: StrokeStyle(lineWidth: Self.stroke, lineCap: .round)).rotationEffect(.degrees(-90)) }
                         .frame(width: Self.ring, height: Self.ring)
-                    Text(meter.percent).monospacedDigit().foregroundStyle(meter.level == .roomy ? palette.ink3 : tint)
+                    Text(meter.percent).monospacedDigit().foregroundStyle(tint)
                 }
                 .help(meter.help.visible)
             }
@@ -80,22 +80,12 @@ struct BoardVitals: View {
     }
 }
 
+/// 同卡脚别的字一个轻重：数字加粗、单位小一号时，一列卡的右下角各有一个抢眼的数。
 struct TimeSpent: View {
     let clock: SessionClock
     @Environment(\.palette) private var palette
 
     var body: some View {
-        LiveText(style: clock.live(.span)) { text in Self.styled(text, palette) }
-    }
-
-    private static func styled(_ text: String, _ palette: Palette) -> Text {
-        let count = text.prefix { $0.isNumber }.count
-        var digits = AttributedString(text.prefix(count))
-        digits.font = Typography.meta.weight(.semibold).monospacedDigit()
-        digits.foregroundColor = palette.ink2
-        var unit = AttributedString(text.dropFirst(count))
-        unit.font = Typography.caption2
-        unit.foregroundColor = palette.ink3
-        return Text(digits + unit)
+        LiveText(style: clock.live(.span)) { [ink = palette.ink3] text in Text(text).monospacedDigit().foregroundStyle(ink) }
     }
 }

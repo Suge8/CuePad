@@ -28,10 +28,12 @@ struct PhoneBoard: View {
         }
     }
 
+    /// 行头离上一行远、离自己的卡近。
     static let gap = Spacing.group
 }
 
 /// 一次排版里算完，不经几何读数写回状态：写回影响自身排版的状态会形成布局反馈环。
+/// 各行按自己的高排，一屏放不下就上下滚；有余高时整排整排地给推进中（`BoardRowFlex`），卡不拉高，剩的零头留在页尾。
 private struct BoardRows: Layout {
     let gap: CGFloat
 
@@ -53,19 +55,13 @@ private struct BoardRows: Layout {
 
     private func heights(width: CGFloat, subviews: Subviews) -> [CGFloat] {
         guard let ruler = subviews.first else { return [] }
-        let room = ruler.sizeThatFits(.unspecified).height - gaps(subviews)
-        let rows = subviews.dropFirst()
-        let ideal = rows.map { $0.sizeThatFits(ProposedViewSize(width: width, height: nil)).height }
-        let least = rows.map { $0.sizeThatFits(ProposedViewSize(width: width, height: 0)).height }
-        let wanted = ideal.reduce(0, +), tightest = least.reduce(0, +)
-        let heights: [CGFloat] = if room >= wanted {
-            ideal.map { $0 * room / wanted }
-        } else if room > tightest {
-            zip(ideal, least).map { $1 + ($0 - $1) * (room - tightest) / (wanted - tightest) }
-        } else {
-            least
+        let rows = Array(subviews.dropFirst())
+        var heights = rows.map { $0.sizeThatFits(ProposedViewSize(width: width, height: nil)).height }
+        let spare = ruler.sizeThatFits(.unspecified).height - heights.reduce(0, +) - gaps(subviews)
+        if let index = rows.firstIndex(where: { $0[BoardRowFlex.self] != nil }), let flex = rows[index][BoardRowFlex.self] {
+            heights[index] += CGFloat(min(flex.most - 1, max(0, Int(spare / flex.step)))) * flex.step
         }
-        return heights.map { $0.rounded(.down) }
+        return heights
     }
 }
 #endif
