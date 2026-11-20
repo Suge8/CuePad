@@ -12,36 +12,34 @@ struct BubbleFooter: View {
     private enum Stage {
         case agent(Card)
         case launching(AgentKind)
-        case start(Card, caption: String?, editing: CardEditing?)
+        case start(Card, editing: CardEditing?)
     }
 
+    /// 总览要开的那一步，"开始"长在那一步的行尾（`TaskBubblePage`），这里只在下一步是 Agent 时放它在做什么。
     private var stage: Stage? {
         if focus.id == data.goal.id, !data.steps.isEmpty {
-            switch workspace.lead(of: data.steps, in: agents) {
-            case .agent(_, let session)?: return data.steps.first { $0.piSessionID == session.sessionID }.map(Stage.agent)
-            case .start(let leaf)?: return .start(leaf, caption: leaf.title, editing: nil)
-            case nil: return nil
-            }
+            guard case .agent(_, let session)? = workspace.lead(of: data.steps, in: agents) else { return nil }
+            return data.steps.first { $0.piSessionID == session.sessionID }.map(Stage.agent)
         }
         if agents.items[focus.id] != nil { return .agent(focus) }
         if let kind = agents.launching[focus.id], !workspace.launchUnsettled(focus.id) { return .launching(kind) }
-        return focus.status != .done ? .start(focus, caption: nil, editing: editing) : nil
+        return focus.status != .done ? .start(focus, editing: editing) : nil
     }
 
     /// 开始 → 正在开 → Agent 在做是同一条的三个样子，里面的旧的先淡完、新的再淡入（`handOff`），不叠着换。
     /// 同新会话输入框的工具排：不垫底、不画线，Mac 上铺满气泡的宽（那一排的字才写得全），靠上面留的空隔开。
+    /// 没有这一排时留一个零高的框：气泡底下照样留出外面给它的那圈白，最后一行不贴着气泡底。
     var body: some View {
-        if let stage {
-            ZStack(alignment: .leading) {
-                switch stage {
-                case .agent(let leaf): AgentStrip(leaf: leaf).transition(.handOff)
-                case .launching(let kind): LaunchStrip(kind: kind).transition(.handOff)
-                case .start(let leaf, let caption, let editing): StartBar(leaf: leaf, caption: caption, editing: editing).transition(.handOff)
-                }
+        ZStack(alignment: .leading) {
+            switch stage {
+            case .agent(let leaf)?: AgentStrip(leaf: leaf).transition(.handOff)
+            case .launching(let kind)?: LaunchStrip(kind: kind).transition(.handOff)
+            case .start(let leaf, let editing)?: StartBar(leaf: leaf, editing: editing).transition(.handOff)
+            case nil: EmptyView()
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.top, Spacing.tight)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.top, stage == nil ? 0 : Spacing.tight)
     }
 }
 
@@ -131,7 +129,6 @@ private struct BubbleStrip<Content: View, Trailing: View>: View {
 /// 这台 Mac 上上一次没开成或说不出结果（`SessionLaunching.outcome`）时左边换成原因、按钮写"重试"，可能已开过时先确认。
 private struct StartBar: View {
     let leaf: Card
-    let caption: String?
     let editing: CardEditing?
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
@@ -149,26 +146,22 @@ private struct StartBar: View {
         let outcome: (text: String, failed: Bool)? = nil
         let controls: MacAgents? = nil
         #endif
-        VStack(alignment: .leading, spacing: Spacing.item) {
-            if let caption, outcome != nil || controls != nil { captioned(caption) }
-            HStack(spacing: BubbleMetrics.gap) {
-                if let outcome {
-                    Text(verbatim: outcome.text).font(BubbleMetrics.meta).foregroundStyle(outcome.failed ? palette.failure : palette.ink2).lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                } else if let controls {
-                    #if os(macOS)
-                    HandOffChoice(leaf: leaf)
-                    #endif
-                    LaunchControls(mac: controls, project: leaf.projectID)
-                } else if let caption {
-                    captioned(caption)
-                }
-                Spacer(minLength: 0)
-                Button(action: start) { SendGlyph(outcome != nil ? .retry : .start) }
-                    .buttonStyle(PressStyle(.button))
-                    .accessibilityLabel(startTitle(retry: outcome != nil)).help(Text(startTitle(retry: outcome != nil)))
-                    .accessibilityHint("把任务的正文交给 Agent，开始做")
+        HStack(spacing: BubbleMetrics.gap) {
+            if let outcome {
+                Text(verbatim: outcome.text).font(BubbleMetrics.meta).foregroundStyle(outcome.failed ? palette.failure : palette.ink2).lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else if let controls {
+                #if os(macOS)
+                HandOffChoice(leaf: leaf)
+                #endif
+                LaunchControls(mac: controls, project: leaf.projectID)
             }
+            Spacer(minLength: 0)
+            let title: LocalizedStringResource = outcome != nil ? "重试" : "开始"
+            Button(action: start) { SendGlyph(outcome != nil ? .retry : .start) }
+                .buttonStyle(PressStyle(.button))
+                .accessibilityLabel(title).help(Text(title))
+                .accessibilityHint("把任务的正文交给 Agent，开始做")
         }
         #if os(macOS)
         .confirmsLaunchAgain(launching)
@@ -178,14 +171,6 @@ private struct StartBar: View {
             return host
         }
         #endif
-    }
-
-    private func startTitle(retry: Bool) -> LocalizedStringResource {
-        retry ? "重试" : caption == nil ? "开始" : "开始这一步"
-    }
-
-    private func captioned(_ caption: String) -> some View {
-        Text("下一步 \(Text(verbatim: caption).foregroundStyle(palette.ink2))").font(BubbleMetrics.meta).foregroundStyle(palette.ink3).lineLimit(1)
     }
 
     private func start() {

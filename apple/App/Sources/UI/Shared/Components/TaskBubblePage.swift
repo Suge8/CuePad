@@ -4,6 +4,7 @@ import SwiftUI
 
 /// 标题是正文的首段，同一个编辑器（`CardEditing` 的 `titled`），从第一帧就在、就可编辑：点下去字不挪、行高不变、纸不变高（没有"先显示字、点了换输入框"的那一下）。
 /// 同新会话、记任务的输入框一种排法：顶上一颗胶囊（总览是挂在哪个项目、点开换；子任务是回上级），中间是字，底下一排、主钮在右下（`BubbleFooter`）。
+/// 总览没有那一排的"开始"：要开的那一步（`Workspace.lead`）行尾一颗实心的"开始"，开的就是那一步，不用在底下再写一遍"下一步 某某"。
 /// 没有"⋯"：完成是标题旁的圈，其余操作在卡的右键菜单里（`CardMenu.sections`）。
 /// 气泡里不建子任务：拆子任务是 Agent 与 Cue 的事，手动的在任务大纲里把任务拖到它下面（`TaskTree`）。
 struct TaskBubblePage: View {
@@ -11,6 +12,7 @@ struct TaskBubblePage: View {
     let focus: Card
     let editing: CardEditing
     @Environment(Workspace.self) private var workspace
+    @Environment(\.cardAgents) private var agents
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -27,12 +29,16 @@ struct TaskBubblePage: View {
             }
             .padding(.top, Spacing.item)
             if overview, !data.steps.isEmpty {
+                let lead: Card? = if case .start(let leaf)? = workspace.lead(of: data.steps, in: agents) { leaf } else { nil }
                 VStack(alignment: .leading, spacing: 0) {
-                    ForEach(data.steps) { TaskLine(task: $0, step: true) }
+                    ForEach(data.steps) { TaskLine(task: $0, step: true, inBubble: true, leads: $0.id == lead?.id) }
                 }
                 .padding(.leading, BubbleMetrics.stepLead).padding(.trailing, BubbleMetrics.textTrailing)
                 .padding(.top, Spacing.tight)
                 .animation(Motion.fade, value: data.steps.map(\.id))
+                #if os(macOS)
+                .modifier(LaunchAgain(leaf: lead))
+                #endif
             }
         }
     }
@@ -63,6 +69,19 @@ struct TaskBubblePage: View {
         .accessibilityLabel("返回 \(data.goal.title)")
     }
 }
+
+#if os(macOS)
+/// 那一步上一次可能已经开过（说不出结果）时再点"开始"先问一句（`Workspace.launch`）；手机的"开始"打开交给 Agent 的输入框，问在那里。
+private struct LaunchAgain: ViewModifier {
+    let leaf: Card?
+    @Environment(Workspace.self) private var workspace
+
+    // 挂在底上：要开的那一步换成没有时，上面的行不因为外面少了一层而整列重建
+    func body(content: Content) -> some View {
+        content.background { if let leaf { Color.clear.confirmsLaunchAgain(workspace.sessionLaunching(.card(leaf.id))) } }
+    }
+}
+#endif
 
 private struct TaskEditor: View {
     let card: Card

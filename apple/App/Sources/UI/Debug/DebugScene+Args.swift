@@ -22,7 +22,7 @@ nonisolated struct DebugArgs: Decodable {
     let awayAfter: Double
     /// `-CuePadBusyBoard YES`（配 tasks 画面与 `-CuePadDemo YES`）：推进中里再放几件 Agent 正在多步推进的任务
     let busyBoard: Bool
-    /// `-CuePadCanvasSteps YES`（配 tasks 画面）：待办里一件写了正文、有三个子任务的任务，看任务气泡的正文与子任务
+    /// `-CuePadCanvasSteps YES`（配 progress、task 画面）：待办里一件写了正文、有三个子任务的任务，看任务气泡的正文与子任务
     let canvasSteps: Bool
     /// `-CuePadCard <正文开头>`：editor 画面打开哪张卡
     let card: String?
@@ -131,6 +131,8 @@ nonisolated struct DebugArgs: Decodable {
     let task: String?
     /// `-CuePadLongTask YES`（配 task 画面）：打开的那条任务写一段长正文、挂上十二个子任务，气泡停在滚到一半处，看钉在底下那一排盖住滚过的字
     let longTask: Bool
+    /// `-CuePadLaunchFailed YES`（配 task 画面，仅 Mac）：打开的那条任务要开的那一步上一次没开成，看原因写在哪、"开始"换成"重试"
+    let launchFailed: Bool
     /// `-CuePadTaskLines written|changed`：对话末尾 Cue 再说一句关于"导入旧数据"的话（气泡下一行这件活），都看过、页停在最新处
     let taskLines: String?
     /// `-CuePadTidy YES`（配 library 画面，仅 Mac）：画面出来后点一下一键整理，拍整理后的样子

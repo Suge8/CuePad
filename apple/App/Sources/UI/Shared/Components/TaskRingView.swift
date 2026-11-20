@@ -27,14 +27,21 @@ struct TaskRingView: View {
         .alignmentGuide(.firstTextBaseline) { $0.height * 0.82 }
     }
 
+    /// 推进中有两种样子：有 Agent 正在这一步上跑（`running`）是整圈淡靛青、靛青的扫光走一圈又一圈，同分段圈里正在跑的那一段（减弱动态效果时是静止的靛青）；
+    /// 标了推进中、此刻没人在跑是外圈加右半边实心的半满圆，静止。
     private var open: some View {
-        let tint = status == .inProgress ? palette.ink : palette.ink3, line = max(1.4, size * 0.095)
+        let line = max(1.4, size * 0.095)
         return ZStack {
-            if status == .inProgress {
-                Circle().trim(from: 0.08, to: 0.86)
-                    .stroke(tint, style: StrokeStyle(lineWidth: line, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-            } else { Circle().stroke(tint, lineWidth: line) }
+            if status == .inProgress, running {
+                let ring = Circle().stroke(lineWidth: line)
+                ring.foregroundStyle(sweeps ? palette.selection : palette.signature)
+                    .overlay { if sweeps { LoopLayer(kind: .sheen, color: palette.signature).mask { ring } } }
+            } else if status == .inProgress {
+                Circle().stroke(palette.ink, lineWidth: line)
+                HalfDisc().fill(palette.ink).padding(line * 1.6)
+            } else {
+                Circle().stroke(palette.ink3, lineWidth: line)
+            }
         }
         .animation(Motion.fade, value: status)
         .frame(width: size * 0.88, height: size * 0.88)
@@ -62,5 +69,16 @@ struct TaskRingView: View {
         .animation(Motion.fade, value: steps.done)
         .frame(width: size * 0.88, height: size * 0.88)
         .frame(width: size * 1.02, height: size * 1.02)
+    }
+}
+
+nonisolated private struct HalfDisc: Shape {
+    func path(in rect: CGRect) -> Path {
+        Path { path in
+            path.move(to: CGPoint(x: rect.midX, y: rect.minY))
+            path.addArc(center: CGPoint(x: rect.midX, y: rect.midY), radius: min(rect.width, rect.height) / 2,
+                        startAngle: .degrees(-90), endAngle: .degrees(90), clockwise: false)
+            path.closeSubpath()
+        }
     }
 }

@@ -471,6 +471,22 @@
         }
       }
     },
+    "Pi 没装在这台 Mac 上" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pi isn’t installed on this Mac"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pi 没装在这台 Mac 上"
+          }
+        }
+      }
+    },
     "README 截图换完了吗？" : {
       "localizations" : {
         "en" : {
