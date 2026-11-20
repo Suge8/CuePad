@@ -351,12 +351,10 @@ private struct PanelLayer: View {
                     BareStage(from: from) { shown.content.background { area(shown.id) } }
                 } else {
                     shown.content
-                        .background(palette.desk)
                         .background { area(shown.id) }
-                        .clipShape(.rect(cornerRadius: Radius.card))
-                        .rowContainer(.rect(cornerRadius: Radius.card))
-                        .overlay { RoundedRectangle(cornerRadius: Radius.card).strokeBorder(palette.hair) }
-                        .elevation(.panel)
+                        .clipShape(.rect(cornerRadius: Radius.field))
+                        .rowContainer(.rect(cornerRadius: Radius.field))
+                        .glass(in: .rect(cornerRadius: Radius.field))
                 }
             }
                 .accessibilityAddTraits(.isModal)
