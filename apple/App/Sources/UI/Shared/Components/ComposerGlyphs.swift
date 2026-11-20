@@ -18,17 +18,17 @@ struct CircleGlyph<Content: View>: View {
 /// 开始是三角（同看板卡上那颗，`TaskNextMark`），停止是圆角方墨，通话是声纹，挂断是叉：
 /// 同一个字形换符号，几样之间来回都原地换，中途反向从此刻的样子接着走。
 /// 发送中（话在路上，与会话状态标同一个）：发出那一刻钮底当帧换掉、飞机往右上飞走淡出，同一刻机头处起飞一点光（`RelayLaunch`，"对 Cue 说"才有）——
-/// 钮底不渐变，靛青的光才不会压在靛青的钮上看不见。
+/// 钮底不渐变，靛青的光才不会压在还没淡完的墨底上看不清。
 /// 按下照 `PressFeedback`（由外面的按钮给）。减弱动态效果：换状态只淡入淡出，不跳、不走，发送中是静止的"话在路上"。
 struct SendGlyph: View {
     enum Phase: Equatable {
         case idle, ready, sending, stop, stopping
-        /// 记下（随手记、记任务、Cue 没启用时）：勾，能按时靛青。
+        /// 记下（随手记、记任务、Cue 没启用时）：勾，能按时是实心的。
         case save(enabled: Bool)
         /// 把任务交给 Agent 开始做（任务气泡）；上一次没开成时是重试。
         case start, retry
         case call(enabled: Bool)
-        /// 挂断（手机通话中，代替发送那一位）：墨色实心，同停止。
+        /// 挂断（手机通话中，代替发送那一位）：实心，同停止。
         case hangUp
     }
 
@@ -63,21 +63,20 @@ struct SendGlyph: View {
     private var disc: Color {
         switch phase {
         case .idle, .sending, .stopping, .save(enabled: false), .call: palette.fill
-        case .ready, .save(enabled: true), .start, .retry: palette.signatureFill
-        case .stop, .hangUp: palette.ink
+        case .ready, .save(enabled: true), .start, .retry, .stop, .hangUp: palette.action
         }
     }
 
     /// 发送、记下、停止的字形：颜色跟着钮插值；飞机与勾、方块之间整个淡换（飞机自己一个身份，发出时才飞得走）。
     private var glyph: some View {
         let (icon, ink, size): (Icon, Color, CGFloat) = switch phase {
-        case .stop: (.stop, palette.paper, 14)
-        case .save(let enabled): (.save, enabled ? palette.onFill : palette.ink3, 17)
-        case .start: (.start, palette.onFill, 15)
-        case .retry: (.retry, palette.onFill, 17)
+        case .stop: (.stop, palette.onAction, 14)
+        case .save(let enabled): (.save, enabled ? palette.onAction : palette.ink3, 17)
+        case .start: (.start, palette.onAction, 15)
+        case .retry: (.retry, palette.onAction, 17)
         case .call(let enabled): (.call, enabled ? palette.ink : palette.ink3, 18)
-        case .hangUp: (.close, palette.paper, 14)
-        case .ready: (.send, palette.onFill, Self.sendSide)
+        case .hangUp: (.close, palette.onAction, 14)
+        case .ready: (.send, palette.onAction, Self.sendSide)
         default: (.send, palette.ink3, Self.sendSide)
         }
         return Image(icon)

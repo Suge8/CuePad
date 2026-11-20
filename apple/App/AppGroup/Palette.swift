@@ -92,7 +92,7 @@ struct Palette {
     var mediaDim: Color { dark ? Color.black.opacity(0.14) : .clear }
 
 
-    /// 靛青：焦点与正在发生（主按钮、焦点环、Agent 在跑、拖放的落点、图标点睛点亮）。对比度 6.3，深色 5.1，增强对比度 ≥ 8。
+    /// 靛青：焦点与正在发生（焦点环、Agent 在跑、拖放的落点、图标点睛点亮）。主按钮不用它（`action`）。对比度 6.3，深色 5.1，增强对比度 ≥ 8。
     var signature: Color {
         switch (dark, highContrast) {
         case (false, false): Color(hex: 0x2F4A9E)
@@ -103,8 +103,8 @@ struct Palette {
     }
     /// 靛青的次一档：拖放落点还没停上去时的虚线框。
     var signatureSoft: Color { signature.opacity(0.7) }
-    /// 主按钮、发送钮的靛青底：浅色就是签名色；深色压到中等明度——深色的签名色是给字与焦点用的浅靛青，铺成实心钮是一块亮斑。
-    /// 钮上的字（`onFill`）8.0，深色 5.4，深色增强对比度 6.0。
+    /// 铺成一块的靛青（滑动动作"取回"、活预览点选的高亮框、选中的那张图的边、输入光标）：浅色就是签名色；深色压到中等明度——深色的签名色是给字与焦点用的浅靛青，铺成实心是一块亮斑。
+    /// 上面的字（`onFill`）8.0，深色 5.4，深色增强对比度 6.0。
     var signatureFill: Color {
         switch (dark, highContrast) {
         case (false, _): signature
@@ -121,6 +121,10 @@ struct Palette {
 
     /// 靛青、胭脂、赭黄实底上的字与图标：暖白。
     var onFill: Color { Color(hex: 0xFFFDF8) }
+    /// 主按钮与输入框右下那颗圆钮的底：墨（深色下是米白），上面的字与图标是纸（`onAction`）。不用靛青：靛青说的是"这里有动静"，
+    /// "这里可以点"再用它，暖色的纸上就多出一块与动静无关的冷色。
+    var action: Color { ink }
+    var onAction: Color { paper }
 
     /// 锁屏那张实时活动整块按状态上色（`CueActivityViews` 的 `LockScreen`），一臂之外先认出颜色：赭黄等你拍板、石绿有新回复或刚做完、
     /// 靛青在推进，都没有时是纸。三块实底两种外观同一份：衬着它的是壁纸，不是纸与桌面。
