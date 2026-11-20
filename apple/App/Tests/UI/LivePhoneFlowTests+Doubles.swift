@@ -25,6 +25,17 @@ extension LivePhoneFlowTests {
         /// 手机最近一问要不要隧道的入口（预览看得见才要）。
         var opened = false
         var present = true
+        /// 收到的"亮出这个会话"（`LiveSignal.show`）；`showing` 是这一帧发不出去还是挂住不回。
+        var revealed: [String] = []
+        var showing = Showing.sends
+        enum Showing { case sends, fails, hangs }
+        private var held: [CheckedContinuation<Void, Never>] = []
+
+        /// 挂住的那几帧放开（用例结束前：挂着的发送攥着替身、替身攥着资料库）。
+        func letGo() {
+            held.forEach { $0.resume() }
+            held = []
+        }
         private var server: LiveTunnel.Server?
         /// 这个会话名下的端口（报给手机的页面地址里的）：隧道只放它们。
         private let shown = OSAllocatedUnfairLock<Set<UInt16>>(initialState: [])
@@ -58,6 +69,14 @@ extension LivePhoneFlowTests {
         }
 
         func sendVoice(_ payload: VoiceSignalPayload, session: VoiceSessionID, to recipient: VoiceEndpoint) async throws {
+            if case .live(.show(_, let sessionID)) = payload {
+                switch showing {
+                case .sends: revealed.append(sessionID)
+                case .fails: throw VoiceSignalError.peerUnavailable
+                case .hangs: await withCheckedContinuation { held.append($0) }
+                }
+                return
+            }
             guard case .live(.watch(let request, let sessionID, let open)) = payload else { return }
             opened = open
             let door = open ? door.map { LiveSignal.Door(addresses: $0.addresses, port: $0.port, ticket: ticket) } : nil

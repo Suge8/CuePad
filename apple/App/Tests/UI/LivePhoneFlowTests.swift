@@ -233,6 +233,41 @@ struct LivePhoneFlowTests {
         }
     }
 
+    @Test func 和Mac不在同一个网络_点在Mac上操作_先请Mac亮出这个会话再拉起UU远程_发不出也照样拉起() async throws {
+        try await phone { workspace, mac, _, route, _ in
+            // 拉起 UU 的链接与拉起那一刻 Mac 收到过几次"亮出"
+            var opened: [(url: URL, revealed: Int)] = []
+            workspace.apps = ExternalApps { url in
+                opened.append((url, mac.revealed.count))
+                return true
+            }
+            try await eventually("页头出现预览钮") { workspace.liveButton(route.id) != nil }
+            // Mac 报的地址不在手机的任何网段里（127.0.0.2 本机没有，连上去立刻失败）
+            mac.door = ([.init(host: "127.0.0.2", prefix: 32)], 9)
+            workspace.toggleLivePreview()
+            let preview = try #require(workspace.livePreviews[route.id])
+            let open = shown(preview, in: workspace)
+            try await eventually("说和 Mac 不在同一个网络") { preview.link?.trouble == .apart }
+            #expect(preview.link?.trouble?.reachesByRemote == true)
+
+            await workspace.viewOnMac(preview)
+            #expect(mac.revealed == ["live"])
+            #expect(opened.last?.url.path() == "/device/authorize" && opened.last?.revealed == 1, "没绑过先在 UU 里选这台 Mac，拉起前请求已发出")
+
+            app.services.settings.remoteDevices[Self.mac] = "enc-x"
+            mac.showing = .fails
+            await workspace.viewOnMac(preview)
+            #expect(opened.count == 2 && opened.last?.url.query()?.contains("anonymous_device_id=enc-x") == true, "发不出也照样远控这台")
+
+            mac.showing = .hangs
+            let started = ContinuousClock.now
+            await workspace.viewOnMac(preview)
+            #expect(opened.count == 3 && .now - started < .seconds(2), "挂住不回的不久等")
+            mac.letGo()
+            await open.stop()
+        }
+    }
+
     @Test func 连不上Mac的口说可能是Wi_Fi不让设备互连_Mac走了说不在线() async throws {
         try await phone { workspace, mac, _, route, _ in
             try await eventually("页头出现预览钮") { workspace.liveButton(route.id) != nil }

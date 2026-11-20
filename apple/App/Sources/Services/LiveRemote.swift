@@ -121,6 +121,28 @@ final class LiveRemote {
         }
     }
 
+    /// 请 Mac 把这个会话亮在最前（`LiveSignal.show`），接着要拉起 UU 远程：最多等 `showWait`，发不出、中转没连上都不拦。
+    /// 等的是发出去，不等 Mac 做完：App 一被 UU 顶到后台，中转连接就可能停下。
+    func show(_ sessionID: String) async {
+        guard let host = watches[sessionID]?.host, let signaling = signaling(), case .ready = signaling.voiceAvailability else { return }
+        let (sent, done) = AsyncStream<Never>.makeStream()
+        Task {
+            if let peer = try? await signaling.resolveVoicePeer(VoiceDeviceID(host)) {
+                try? await signaling.sendVoice(.live(signal: .show(request: UUID(), session: sessionID)), session: VoiceSessionID(UUID()), to: peer)
+            }
+            done.finish()
+        }
+        let timer = Task {
+            try? await Task.sleep(for: Self.showWait)
+            done.finish()
+        }
+        for await _ in sent {}
+        timer.cancel()
+    }
+
+    /// 平常一问一发约两个中转往返；再长就不等了，钮点下去不能没反应。
+    static let showWait = Duration.seconds(1)
+
     private func unreachable(_ sessionID: String) {
         answers[sessionID] = nil
         offline.insert(sessionID)

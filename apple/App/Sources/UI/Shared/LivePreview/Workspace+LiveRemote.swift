@@ -79,6 +79,13 @@ extension Workspace {
         livePreviews = livePreviews.filter { open.contains($0.key) }
     }
 
+    /// 连不上 Mac 时的退路（预览里那颗"在 Mac 上操作"）：先请 Mac 把这个会话的活预览亮在最前，再用 UU 远程连过去看那一页。
+    func viewOnMac(_ preview: LivePreview) async {
+        guard let sessionID = preview.sessionID, let host = services.liveRemote.host(sessionID) else { return }
+        await services.liveRemote.show(sessionID)
+        await operate(on: host)
+    }
+
     /// 点一个元素挂进回复框：宽屏回复框就在左边；手机上先把预览收回，回复框接过焦点。
     func pickElement() {
         guard let route = liveRoute, let preview = livePreviews[route.id] else { return }
