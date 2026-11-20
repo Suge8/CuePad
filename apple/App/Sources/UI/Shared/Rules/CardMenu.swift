@@ -9,7 +9,6 @@ nonisolated enum CardMenu {
         case more
         case open
         case select
-        case bindSession
         case indent, outdent
     }
 
@@ -28,27 +27,23 @@ nonisolated enum CardMenu {
         (opens ? [.open] : []) + [card.status == .done ? .reopen : .complete] + pin(card) + [.copy, .archive]
     }
 
-    /// 右键菜单至多三组（去哪看、整理、删除），项少：系统的指引是右键只放这个对象常用的，约三组以内。
-    /// 没做完的任务不给归档（做完的提示上有，气泡的"⋯"里也有），绑定会话在任务气泡的"⋯"里（`more`），会话的休眠在会话自己的菜单里。
+    /// 右键菜单至多三组（去哪看、整理、收走），项少：系统的指引是右键只放这个对象常用的，约三组以内。最后一组是收走它的两项，删除在最底下。
+    /// 任务的操作只在这里与气泡上：气泡里没有"⋯"，完成是标题旁的圈，换项目是气泡顶上的项目胶囊，Mac 上绑定会话在"开始"那一排的"交给"里；
+    /// 会话的休眠在会话自己的菜单里。子任务跟着上级走，不单独置顶。
     /// `selectable`：这张卡在能批量选择的地方（Mac 项目页的墙与列表），删除前多一项"选择"。
     /// `opens`：点它进的是会话（`Workspace.enter`），最前面单独一组"打开任务"；点一下就是打开任务的不重复这一项。
     static func sections(for card: Card, selectable: Bool = false, opens: Bool = false) -> [[Item]] {
         let head: [[Item]] = opens ? [[.open]] : []
         return switch card.status {
         case nil: [[.move, .archive], (selectable ? [.select] : []) + [.trash]]
-        case .done: head + [pin(card) + [.reopen, .archive], [.trash]]
-        case .todo, .inProgress: head + [pin(card) + [.complete], [.trash]]
+        case .done: head + [pin(card) + [.reopen, .copy], [.archive, .trash]]
+        case .todo, .inProgress: head + [pin(card) + [.complete, .copy], [.archive, .trash]]
         }
     }
 
-    /// 打开的那张卡（编辑页、任务气泡）右上角只有一颗"⋯"，这张卡的操作全在里面：旁边再排几颗图标钮，一眼看过去是一排要猜的记号。
-    /// 最后一组是收走它的两项，删除在最底下。子任务跟着上级走，不单独换项目、不单独置顶。
-    /// `bindsSession`：同 `sections`（Mac 任务气泡的"⋯"）。
-    static func more(for card: Card, bindsSession: Bool = false) -> [[Item]] {
-        guard card.isTask else { return [[card.isPinned ? .unpin : .pin, .move, .copy], [.archive, .trash]] }
-        let binds: [Item] = bindsSession && card.status != .done ? [.bindSession] : []
-        return [[card.status == .done ? .reopen : .complete], pin(card) + (card.parentID == nil ? [.move] : []) + [.copy], binds, [.archive, .trash]]
-            .filter { !$0.isEmpty }
+    /// 灵感编辑页右上角只有一颗"⋯"，这张卡的操作全在里面：旁边再排几颗图标钮，一眼看过去是一排要猜的记号。
+    static func more(for idea: Card) -> [[Item]] {
+        [[idea.isPinned ? .unpin : .pin, .move, .copy], [.archive, .trash]]
     }
 
     private static func pin(_ task: Card) -> [Item] { task.parentID == nil ? [task.isPinned ? .unpin : .pin] : [] }

@@ -4,14 +4,11 @@ import SwiftUI
 /// 按偏移量留着的话原来看着的那张卡滑出视野。这里记下可视区正中的那张卡（`scrollTargetLayout` 的直接子视图，即各列 `ForEach` 的身份），
 /// 内容一变由滚动视图自己把它留在正中（系统的 `scrollPosition`，不读几何回写）。身份的类型随列：待办、已完成是任务（`TaskBoard.Item.id`），
 /// 推进中、等你是会话与任务混排的那一份（`AdvancingSlot.id`、`TaskBoard.Held.id`）。
-/// 给了 `rewind`（打开添加任务）就滚回顶边：添加那一行插在列顶，留在原来那张卡上它就落在视野上方；回顶边不回首卡，它在首卡之上。
 struct LaneAnchor: ViewModifier {
     let column: TaskBoard.Column
-    let rewind: UUID?
     @State private var position: ScrollPosition
     @State private var span = Span()
     @Environment(\.boardMoves) private var moves
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// 滚到哪了、能滚到哪：滚动时每帧记，不触发重绘。
     private final class Span {
@@ -22,9 +19,8 @@ struct LaneAnchor: ViewModifier {
     /// 拖着卡停在列的上下边时每帧滚这么多（一秒六百来点：看得清滚过了什么）。
     private static let step: CGFloat = 10
 
-    init(_ column: TaskBoard.Column, rewind: UUID?) {
+    init(_ column: TaskBoard.Column) {
         self.column = column
-        self.rewind = rewind
         _position = State(initialValue: column.light ? ScrollPosition(idType: UUID.self) : ScrollPosition(idType: String.self))
     }
 
@@ -39,9 +35,6 @@ struct LaneAnchor: ViewModifier {
             } action: { _, now in
                 span.at = CGPoint(x: now[0], y: now[1])
                 span.end = now[2]
-            }
-            .onChange(of: rewind) {
-                if rewind != nil { withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { position.scrollTo(edge: .top) } }
             }
             .task(id: pull) {
                 guard pull == .top || pull == .bottom else { return }

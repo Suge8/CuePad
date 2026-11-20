@@ -1,8 +1,8 @@
 import CueStore
 import SwiftUI
 
-/// 开新会话只有这一个输入框（两端同一份）：看板的"＋"、会话列表空着时那一颗、Mac 菜单，以及手机把任务交给新会话时。
-/// 手机浮在键盘上（`FloatingInput`），Mac 浮在窗口中间的遮罩上（`NewSessionPanel`，不套浮层的纸）。
+/// 开新会话只有这一个输入框（两端同一份，入口都经 `Workspace.openNewSession`）。同记任务的输入框（`NewTaskInput`）一张卡：
+/// 去处胶囊在上、字在中间、圆钮在右下；手机与 iPad 浮在键盘上（`FloatingInput`），Mac 浮在窗口中间的遮罩上（`NewInputPanel`，不套浮层的纸）。
 struct NewSessionInput: View {
     let start: SessionStart
     @Environment(Workspace.self) private var workspace
@@ -27,7 +27,7 @@ struct NewSessionInput: View {
     var body: some View {
         composer.composerNotice(status != nil) { if let status { LaunchStatusLine(status: status) } }
             #if os(macOS)
-            .frame(width: 480)
+            .frame(width: BubbleMetrics.width)
             #endif
     }
 

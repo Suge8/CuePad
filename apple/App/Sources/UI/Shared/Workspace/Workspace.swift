@@ -112,6 +112,8 @@ final class Workspace {
         didSet { if openTask == nil, let oldValue { closedTask = (oldValue.task, .now) } }
     }
     var sessionAsk: SessionAsk?
+    /// 看板上放下的卡在等的、还没办完的事（`answer`）。
+    var answering = 0
     /// 正显示某张卡完成圈（或看板卡）的视图，后出现的在后（`completionAsks(claiming:)`）。
     @ObservationIgnored var completionClaims: [UUID: [UUID]] = [:]
     @ObservationIgnored var closedTask: (task: UUID, at: ContinuousClock.Instant)?
@@ -121,8 +123,9 @@ final class Workspace {
     var moreCard: CardMoreRequest?
     #endif
     var voiceDetails: BubbleSource?
-    var addsTask = false
     var confirmsEmptyTrash = false
+    /// 开着的记任务输入框（`NewTaskInput`）。
+    var newTask: TaskStart?
     /// 开着的新会话输入框（`NewSessionInput`）。
     var newSession: SessionStart? {
         didSet { if let oldValue, oldValue.id != newSession?.id { settleLaunch(.form) } }

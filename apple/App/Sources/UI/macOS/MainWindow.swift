@@ -102,7 +102,7 @@ private struct WindowPanels: View {
                 mountsPalette = true
             }
             .panel(item: $workspace.projectForm) { ProjectForm($0) }
-            .modifier(NewSessionPanel())
+            .modifier(NewInputPanel())
             .panel(isPresented: $workspace.showsSetup) { SetupPanel() }
             .sessionAsks(workspace)
     }

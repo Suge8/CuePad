@@ -1,7 +1,8 @@
 #if DEBUG
 extension DebugSceneEntry {
     /// progress：进展页的看板。配 `-CuePadDemo YES` 写入演示会话与 Cue 的等你，推进中的带会话状态；`-CuePadProject` 先把范围设成它（iOS）。
-    static let progress = DebugSceneEntry("progress") { workspace, project in
+    /// newtask：同 progress，再点开待办的"＋"（记任务的输入框）。
+    static let progress = DebugSceneEntry("progress", "newtask") { workspace, project in
         let services = workspace.services
         #if os(macOS)
         await DebugScene.seedDemo(services)
@@ -15,6 +16,7 @@ extension DebugSceneEntry {
         #endif
         await DebugScene.seedCanvasSteps(services.store)
         workspace.show(.progress)
+        if DebugScene.scene == "newtask" { workspace.openNewTask() }
     }
 
     /// sessions：会话在会话条上的进展（Mac，给了 `-CuePadProject` 先把项目范围设成它）；iOS 是搜索页的会话一栏（在线的与历史的会话行）。

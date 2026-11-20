@@ -28,7 +28,7 @@ extension Workspace {
             switch plan.destination {
             case .session(let session, _, let host):
                 #if os(macOS)
-                workspace.send(try await store.opening(of: plan.leaf, false), to: AgentTarget(session: session, host: host), card: task)
+                await workspace.send(try await store.opening(of: plan.leaf, false), to: AgentTarget(session: session, host: host), card: task).value
                 #endif
                 return nil
             case .launch(let project, let host):

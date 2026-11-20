@@ -7,16 +7,12 @@ struct ProgressScreen: View {
     @Environment(AppServices.self) private var services
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.underCue) private var under
     @Environment(\.headInset) private var inset
     @State private var board: TaskBoard?
 
     var body: some View {
-        page
-            .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: workspace.addsTask)
-            .onChange(of: workspace.scopedProject) { workspace.addsTask = false }
-            .observingBoard(into: $board, store: services.store, onError: workspace.fail)
+        page.observingBoard(into: $board, store: services.store, onError: workspace.fail)
     }
 
     /// 宽屏同 Mac 的 `TaskBoardPage`：不要页头，四个列头就是最顶那一排，范围钮在它们开头（栏头的 `ProjectScopeSlot`）；额度在会话条最下一排（`WideRail`）。
@@ -40,18 +36,15 @@ struct ProgressScreen: View {
     private var boardView: some View {
         let scope = workspace.scopedProject
         let shown = (board ?? .empty).only(scope)
-        let adding = Bindable(workspace).addsTask
         return Group {
             if verticalSizeClass == .compact || sizeClass == .regular {
-                BoardColumns(board: shown, adding: adding, newTaskProject: newTaskProject, margin: workspace.layout == .wide ? 0 : 12, tail: under)
+                BoardColumns(board: shown, margin: workspace.layout == .wide ? 0 : 12, tail: under)
             } else {
-                PhoneBoard(board: shown, adding: adding, newTaskProject: newTaskProject)
+                PhoneBoard(board: shown)
             }
         }
         // 换范围不带里层的挪位与数字动画，理由同 Mac 的 `TaskBoardPage`
         .transaction(value: scope) { $0.disablesAnimations = true }
     }
-
-    private var newTaskProject: UUID? { workspace.scopedProject ?? workspace.currentProject }
 }
 #endif

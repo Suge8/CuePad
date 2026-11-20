@@ -196,8 +196,6 @@ struct ScheduleStrip: View {
                 .buttonStyle(PressStyle())
                 .accessibilityLabel("改定时")
             }
-            .padding(BubbleMetrics.stripPadding)
-            .background(palette.fill, in: Radius.nested)
             .accessibilityElement(children: .combine)
         }
     }

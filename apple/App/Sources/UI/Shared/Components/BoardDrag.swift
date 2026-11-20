@@ -5,16 +5,23 @@ import SwiftUI
 /// - 系统拖放（Mac 的鼠标；触屏上按住半秒、菜单出来之后再挪）：卡由系统画着跟手，能拖出看板（并排的会话格、别的窗口）。
 /// - 触屏按住即拖（`BoardLift`）：按住 0.2 秒卡就浮在手里（`BoardFloat`），不等菜单；只在看板里放。
 /// 拖着时原处留一个空位；在待办上空位跟着指针走、别的卡当场让开，松手就落在空位里，写库在后面跟。
-/// 放到别的列上的卡先停在松手的地方，等看板读到它换了列，从那里飞进去（`BoardMoves.read`）；等不到（不接、要先问一句）就回原处。
+/// 放到别的列上的卡先停在松手的地方，等看板读到它换了列，从那里飞进去（`BoardMoves.read`）；要先问一句的（`asking`）问着时一直停在那儿；
+/// 飞的那一路手里这张陪着、裁成那边的大小、一路淡掉：两列里卡的样子不一样（手机的已完成是一行高的薄条），看起来是一张卡边走边变样，不是这张没了、那张冒出来。
+/// 等不到（不接、问了没答应）就滑回原处。系统拖放松手时系统画的那张就没了，换一张自己画的停着（`drop`）：不然卡先闪回原处、答应了再从原处飞。
 /// 否决过：一条插入线——线只说"这里"，卡落下前后别的卡各跳一次。
 extension BoardMoves {
     struct Held: Equatable {
-        enum Phase { case dragging, settling, pending }
+        /// `landing`：换了列，手里这张陪着新排出来的那张滑到落点（`takeoff`）。
+        enum Phase { case dragging, settling, pending, landing }
 
         let card: DraggedCard
-        let id: String
+        /// 飞行身份；悬着时卡换了身份就跟着换（`BoardMoves.read`）。
+        var id: String
         let size: CGSize
         var phase = Phase.dragging
+        /// 落进哪一列，落点（那边那张的框）排出来没有（`land`）。
+        var lane: TaskBoard.Column?
+        var home: CGRect?
     }
 
     /// 浮在手里的那张：`grab` 是按下的那一点离卡心多远，拖着时卡不往指尖下面跳。
@@ -45,13 +52,22 @@ extension BoardMoves {
 
     private static let grace = Duration.milliseconds(600)
     private static let relayout = Duration.milliseconds(50)
+    /// 等新看板排出来最多等几帧（`takeoff`）。
+    private static let patience = 6
     /// 指针离待办的边这么近就算到了边上（`pull`）。
     private static let reach: CGFloat = 36
     /// 从推进中拖回待办的卡在待办里垫的那一格空位，记它的框用的身份。
     static let well = "well"
 
-    /// 卡在它那一列滚动区里的框；没排出来的没有（`shown`）。
-    private func laid(of id: String) -> (lane: TaskBoard.Column, frame: CGRect)? { shown[id] == nil ? nil : frames[id] }
+    /// 卡在它那一列滚动区里的框；没排出来的没有（`shown`，手机的行里是 `stacks`）。
+    private func laid(of id: String) -> (lane: TaskBoard.Column, frame: CGRect)? {
+        if shown[id] != nil { return frames[id] }
+        for stack in stacks.values where !stack.frame.isNull {
+            guard let cell = stack.ids.firstIndex(of: id) else { continue }
+            return (stack.lane, CGRect(x: stack.frame.minX, y: stack.frame.minY + CGFloat(cell) * stack.pitch, width: stack.frame.width, height: stack.height))
+        }
+        return nil
+    }
 
     func frame(of id: String) -> CGRect? {
         guard let card = laid(of: id), let lane = lanes[card.lane] else { return nil }
@@ -95,11 +111,19 @@ extension BoardMoves {
         aimed = nil
     }
 
-    func drop(_ card: DraggedCard, at local: CGPoint, in column: TaskBoard.Column, on board: TaskBoard, row: Bool) -> TaskBoard.Drop? {
+    /// `face`：那张卡的面（按飞行身份取）。
+    func drop(
+        _ card: DraggedCard, at local: CGPoint, in column: TaskBoard.Column, on board: TaskBoard, row: Bool, face: (String) -> AnyView?
+    ) -> TaskBoard.Drop? {
         hover(card, at: local, in: column, on: board, row: row)
         guard let held, held.card == card, held.phase == .dragging, let area = areas[column] else { return nil }
         let drop = board.drop(card, into: column, at: slot)
-        hand = CGRect(x: area.minX + local.x - held.size.width / 2, y: area.minY + local.y - held.size.height / 2, width: held.size.width, height: held.size.height)
+        let spot = CGPoint(x: area.minX + local.x, y: area.minY + local.y)
+        hand = CGRect(x: spot.x - held.size.width / 2, y: spot.y - held.size.height / 2, width: held.size.width, height: held.size.height)
+        if Self.waits(drop), let face = face(held.id) {
+            point = spot
+            float = Float(face: face, row: row, grab: .zero)
+        }
         land(drop)
         return drop
     }
@@ -223,9 +247,14 @@ extension BoardMoves {
         self.slot = nil
         pull = nil
         aimed = nil
+        if Self.waits(drop) { pend() } else { settle() }
+    }
+
+    /// 放下后要等库才知道卡去哪：待办里排序的落在空位里，不等。
+    private static func waits(_ drop: TaskBoard.Drop?) -> Bool {
         switch drop {
-        case nil, .place: settle()
-        default: pend()
+        case nil, .place: false
+        default: true
         }
     }
 
@@ -249,26 +278,56 @@ extension BoardMoves {
         }
     }
 
-    private func pend() {
-        guard let held else { return }
-        self.held?.phase = .pending
-        Task {
+    func pend() {
+        guard held != nil else { return }
+        held?.phase = .pending
+        // 上一次的等待作废：同一张卡紧接着又放下一次（或问完重新等）时，不被上一次的到点收走
+        waiting?.cancel()
+        waiting = Task {
             try? await Task.sleep(for: Self.grace)
-            guard self.held?.id == held.id, self.held?.phase == .pending else { return }
+            guard !Task.isCancelled, !asking else { return }
             if placed != nil { withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { placed = nil } }
             settle()
         }
     }
 
-    /// 放下后悬着的那张换了列：它从手里（松手的地方）起飞，不从原处。
-    func takeoff(_ moved: [String: TaskBoard.Column]) -> (id: String, frame: CGRect)? {
+    /// 放下后悬着的那张换了列：它从手里（松手的地方）起飞，不从原处。`lands`：它落进了哪一列。
+    func takeoff(_ moved: [String: TaskBoard.Column], lands: (String) -> TaskBoard.Column?) -> (id: String, frame: CGRect)? {
         guard let held, held.phase == .pending, moved[held.id] != nil else { return nil }
-        let frame = float == nil ? hand : CGRect(x: point.x - held.size.width / 2, y: point.y - held.size.height / 2, width: held.size.width, height: held.size.height)
-        clear()
-        return frame.map { (held.id, $0) }
+        guard float != nil, !reduceMotion, let column = lands(held.id) else {
+            let frame = hand
+            clear()
+            return frame.map { (held.id, $0) }
+        }
+        waiting?.cancel()
+        self.held?.phase = .landing
+        self.held?.lane = column
+        waiting = Task {
+            for _ in 0..<Self.patience where self.held?.home == nil {
+                await NextFrame.wait()
+                if Task.isCancelled { return }
+                land()
+            }
+            // 落点没排出来（懒加载、滚出去了）：新的那张在那边淡入，手里这张就地收
+            if self.held?.home == nil { clear() }
+        }
+        return (held.id, CGRect(x: point.x - held.size.width / 2, y: point.y - held.size.height / 2, width: held.size.width, height: held.size.height))
+    }
+
+    /// 落点排出来了就往那儿滑。每次记框都来问一声（`frames`、`stacks`），与新排出来的那张同一帧起步，晚一帧两张就错开一截；落点又挪了就改道。
+    /// 新看板排出来之前取到的还是原处那张的框（同一个身份），所以认列。
+    func land() {
+        guard let held, held.phase == .landing, laid(of: held.id)?.lane == held.lane, let home = frame(of: held.id), home != held.home else { return }
+        withAnimation(Motion.travel) {
+            self.held?.home = home
+            point = CGPoint(x: home.midX, y: home.midY)
+        } completion: {
+            if self.held?.id == held.id, self.held?.phase == .landing, self.held?.home == home { self.clear() }
+        }
     }
 
     private func clear() {
+        waiting?.cancel()
         held = nil
         float = nil
         hand = nil

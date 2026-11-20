@@ -161,8 +161,8 @@ private struct CompletionAsks: ViewModifier {
     func body(content: Content) -> some View {
         content
             .agentBusyDialog(busy?.session, sleeps: busy?.sleeps ?? true, isPresented: asking { if case .agent = $0 { true } else { false } }, confirm: confirm)
-            .dialog(.verbatim(TaskCopy.openSubtasks(steps)), isPresented: asking { if case .steps = $0 { true } else { false } },
-                    buttons: [DialogButton(title: "全部完成", action: confirm)])
+            .ask(.verbatim(TaskCopy.openSubtasks(steps)), isPresented: asking { if case .steps = $0 { true } else { false } },
+                 button: DialogButton(title: "全部完成", action: confirm))
             .onAppear {
                 guard case .claim(let task) = spot else { return }
                 workspace.completionClaims[task, default: []].append(token)
@@ -192,6 +192,6 @@ private struct CompletionAsks: ViewModifier {
     /// 取的是呈现时那一问的：按下时框可能已先收起、`sessionAsk` 已清。
     private var confirm: @MainActor () -> Void {
         guard mine != nil, case .complete(_, _, let proceed) = workspace.sessionAsk else { return {} }
-        return { [workspace] in workspace.attempt { try await proceed(workspace) } }
+        return { [workspace] in workspace.answer(proceed) }
     }
 }

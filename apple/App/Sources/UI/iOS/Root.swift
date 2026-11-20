@@ -34,6 +34,11 @@ struct IOSRoot: View {
                 }
             }
             .overlay {
+                FloatingInput(isPresented: workspace.newTask != nil, close: { workspace.newTask = nil }) {
+                    if let start = workspace.newTask { NewTaskInput(start: start).id(start.id) }
+                }
+            }
+            .overlay {
                 FloatingInput(isPresented: workspace.outbox != nil, close: { workspace.outbox = nil }) {
                     if let outbox = workspace.outbox { HandOffInput(outbox: outbox).id(outbox.id) }
                 }

@@ -92,8 +92,10 @@ struct CaptureComposer: View {
 
 #endif
 
+/// 去处胶囊连着选项目的菜单：随手记（"→ 项目"）、记任务（"记到 项目"）。
 struct DestinationMenu: View {
     let project: UUID
+    var lead = Text(verbatim: "→")
     let choose: (UUID) -> Void
     @Environment(Workspace.self) private var workspace
 
@@ -104,20 +106,20 @@ struct DestinationMenu: View {
                 ChoiceMenu.Choice(title: .verbatim(item.shownName), checked: item.id == project) { choose(item.id) }
             }),
         ], accessibilityLabel: "记到 \(current?.shownName ?? "")") {
-            DestinationChip(project: current)
+            DestinationChip(project: current, lead: lead)
         }
     }
 }
 
 struct DestinationChip<Icon: View>: View {
-    var lead: String?
+    var lead: Text?
     let title: Text
     @ViewBuilder let icon: Icon
     @Environment(\.palette) private var palette
 
     var body: some View {
         HStack(spacing: Spacing.tight) {
-            if let lead { Text(lead).foregroundStyle(palette.ink3) }
+            if let lead { lead.foregroundStyle(palette.ink3) }
             icon
             title
         }
@@ -126,8 +128,8 @@ struct DestinationChip<Icon: View>: View {
 }
 
 extension DestinationChip where Icon == ProjectGlyph {
-    init(project: Project?) {
-        self.init(lead: "→", title: Text(project?.shownName ?? "")) { ProjectGlyph(project: project, size: Self.glyph) }
+    init(project: Project?, lead: Text? = nil) {
+        self.init(lead: lead, title: Text(project?.shownName ?? "")) { ProjectGlyph(project: project, size: Self.glyph) }
     }
 
     private static var glyph: CGFloat {

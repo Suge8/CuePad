@@ -4,21 +4,17 @@ import SwiftUI
 /// 手机竖屏看板的一行：行头同列头是一个组件（`BoardColumnHeader`），靠左排、不垫玻璃；下面一条横滑的卡，和列里是同一张卡。
 /// 行头的字与卡里的字同一条左缘。一行里的卡一样高（`BoardCardLayout` 在行里固定三行）：卡高各异时横着排成锯齿。
 /// 滚动区不裁内容：卡换行时飞过行的上下沿，横向超出的在屏幕外。
-/// 添加任务那一行（`above`）横贯这一行、在卡的上面，不挤进格子里（格子窄，选项目的胶囊会被截）。
 ///
 /// 一屏宽是一小列，从上往下排满再排下一小列：露全的那一小列就是这一行最前的几张。小列里的卡上下让位；
 /// 排到另一小列去的卡是这一列撤一张、那一列添一张，淡出淡入、不飞——斜着横穿一屏的那一下不说明任何事，
 /// 排数一变（页面的余高换了分法）或前面插进一张，每个小列的尾巴都要这样挪。
 /// 否决过 `LazyHGrid`：它把换格当成同一张卡挪位置，一次重排满屏斜着飞；挪到没排出来的格子去的那张还会在别的行上停半秒（实测）。
-struct BoardRowLane<Above: View, Content: View>: View {
+struct BoardRowLane<Content: View>: View {
     let column: TaskBoard.Column
     /// 这一行有几张卡：页面有余高时至多排这么多排，一屏露全（`BoardRows` 按 `BoardRowFlex` 分）。
     let count: Int
     let archives: Bool
     let targeted: Bool
-    /// 换了就回到行首（打开添加任务）。
-    let rewind: UUID?
-    @ViewBuilder let above: Above
     @ViewBuilder let content: Content
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -36,7 +32,6 @@ struct BoardRowLane<Above: View, Content: View>: View {
         VStack(alignment: .leading, spacing: 0) {
             BoardColumnHeader(column: column, count: count, archives: archives, shelf: true)
                 .padding(.leading, BoardRowMetrics.margin + TaskMetrics.cardPadding).padding(.trailing, BoardRowMetrics.margin)
-            above.padding(.horizontal, BoardRowMetrics.margin).padding(.bottom, BoardRowMetrics.gap)
             if cell > 0 { strip }
         }
         .padding(.bottom, BoardRowMetrics.inset)
@@ -74,6 +69,9 @@ struct BoardRowLane<Above: View, Content: View>: View {
                                     // 卡、空格与"更早做完的"铺满格
                                     ForEach(cards[stack * tiers..<min((stack + 1) * tiers, cards.count)]) { $0.frame(maxWidth: .infinity).frame(height: cell, alignment: .top) }
                                 }
+                                .boardStack(
+                                    cards[stack * tiers..<min((stack + 1) * tiers, cards.count)].map(\.containerValues.boardFlight), in: column,
+                                    height: cell, pitch: cell + BoardRowMetrics.gap)
                                 .containerRelativeFrame(.horizontal) { [share = cardShare] width, _ in (width * share).rounded() }
                                 // 没露全的那一小列退后半步：右缘的半张卡不同整张的抢
                                 .scrollTransition(.interactive, axis: .horizontal) { [peek = BoardRowMetrics.peek] stack, phase in stack.opacity(phase.isIdentity ? 1 : peek) }
@@ -90,9 +88,6 @@ struct BoardRowLane<Above: View, Content: View>: View {
                 .scrollDismissesKeyboard(.immediately)
                 .frame(height: geometry.size.height, alignment: .top)
                 .environment(\.boardRow, true)
-                .onChange(of: rewind, initial: true) {
-                    if rewind != nil { withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { proxy.scrollTo(0, anchor: .leading) } }
-                }
                 .onScrollTargetVisibilityChange(idType: Int.self) { lead = $0.first ?? lead }
                 .task(id: moves?.pull.flatMap { $0.column == column ? $0.edge : nil }) {
                     guard let edge = moves?.pull.flatMap({ $0.column == column ? $0.edge : nil }), edge == .trailing || edge == .leading else { return }

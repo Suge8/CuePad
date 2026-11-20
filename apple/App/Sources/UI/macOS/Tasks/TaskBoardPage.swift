@@ -19,7 +19,7 @@ struct TaskBoardPage: View {
 
     var body: some View {
         let scope = workspace.scopedProject
-        BoardColumns(board: (board ?? .empty).only(scope), adding: Bindable(workspace).addsTask, newTaskProject: scope ?? workspace.currentProject, margin: 0, tail: under > 0 ? under + trailing : 0)
+        BoardColumns(board: (board ?? .empty).only(scope), margin: 0, tail: under > 0 ? under + trailing : 0)
             .padding(.trailing, under > 0 ? 0 : trailing)
             .padding(.leading, WideMetrics.boardLead(inset))
             .environment(\.boardBand, Chrome.band)
@@ -28,8 +28,6 @@ struct TaskBoardPage: View {
             .transaction(value: scope) { $0.disablesAnimations = true }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .background(palette.desk)
-            .animation(Motion.fade, value: workspace.addsTask)
-            .onChange(of: workspace.scopedProject) { workspace.addsTask = false }
             .observingBoard(into: $board, store: services.store, onError: workspace.fail)
     }
 }

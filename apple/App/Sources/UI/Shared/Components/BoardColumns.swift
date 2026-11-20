@@ -3,8 +3,6 @@ import SwiftUI
 
 struct BoardColumns: View {
     let board: TaskBoard
-    @Binding var adding: Bool
-    let newTaskProject: UUID?
     let margin: CGFloat
     /// 滚动区右端压在别的东西下面的那一截（宽屏的 Cue 浮板）：列按让出它之后的宽分，放不下横滑时滑进它下面。
     var tail: CGFloat = 0
@@ -30,7 +28,7 @@ struct BoardColumns: View {
     private func columns(_ room: CGFloat) -> some View {
         HStack(alignment: .top, spacing: BoardWidths.gap) {
             ForEach(TaskBoard.Column.allCases, id: \.self) { item in
-                BoardColumn(column: item, board: board, adding: $adding, newTaskProject: newTaskProject, earlier: $showsEarlier)
+                BoardColumn(column: item, board: board, earlier: $showsEarlier)
                     .frame(width: BoardWidths.column(item, room: room))
             }
         }

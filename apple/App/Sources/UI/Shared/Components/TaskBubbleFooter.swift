@@ -119,13 +119,15 @@ private struct BubbleStrip<Content: View, Trailing: View>: View {
                 .accessibilityLabel(markLabel ?? "")
             content
             Spacer(minLength: 4)
-            trailing
+            // 带字的钮比圆钮往里让一格
+            trailing.padding(.trailing, Spacing.item)
         }
         .contentShape(.rect)
     }
 }
 
-/// Mac 上这一下要开新会话时，左边是用哪家、哪个模型的那一排（同新会话的输入框，改了就记住）；接着用已有会话的不放。
+/// Mac 上这一下要开新会话时，左边是交给谁（新会话，或绑定本项目开着的会话，`HandOffChoice`）与用哪家、哪个模型的那一排（同新会话的输入框，改了就记住）；
+/// 接着用已有会话的都不放（写"交给 新会话"就说错了）。
 /// 这台 Mac 上上一次没开成或说不出结果（`SessionLaunching.outcome`）时左边换成原因、按钮写"重试"，可能已开过时先确认。
 private struct StartBar: View {
     let leaf: Card
@@ -154,16 +156,18 @@ private struct StartBar: View {
                     Text(verbatim: outcome.text).font(BubbleMetrics.meta).foregroundStyle(outcome.failed ? palette.failure : palette.ink2).lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
                 } else if let controls {
+                    #if os(macOS)
+                    HandOffChoice(leaf: leaf)
+                    #endif
                     LaunchControls(mac: controls, project: leaf.projectID)
                 } else if let caption {
                     captioned(caption)
                 }
                 Spacer(minLength: 0)
-                Button(action: start) {
-                    Label(outcome != nil ? "重试" : caption == nil ? "开始" : "开始这一步", icon: .start)
-                }
-                .buttonStyle(ControlButtonStyle(kind: .primary, size: .compact))
-                .accessibilityHint("把任务的正文交给 Agent，开始做")
+                Button(action: start) { SendGlyph(outcome != nil ? .retry : .start) }
+                    .buttonStyle(PressStyle(.button))
+                    .accessibilityLabel(startTitle(retry: outcome != nil)).help(Text(startTitle(retry: outcome != nil)))
+                    .accessibilityHint("把任务的正文交给 Agent，开始做")
             }
         }
         #if os(macOS)
@@ -174,6 +178,10 @@ private struct StartBar: View {
             return host
         }
         #endif
+    }
+
+    private func startTitle(retry: Bool) -> LocalizedStringResource {
+        retry ? "重试" : caption == nil ? "开始" : "开始这一步"
     }
 
     private func captioned(_ caption: String) -> some View {
@@ -191,3 +199,39 @@ private struct StartBar: View {
         }
     }
 }
+
+#if os(macOS)
+/// 交给谁：默认开新会话；选本项目开着的会话是把这一步绑给它（只关联，不发正文、不开不停会话），绑上后底下这一排换成那个会话。
+private struct HandOffChoice: View {
+    let leaf: Card
+    @Environment(Workspace.self) private var workspace
+    @Environment(AppServices.self) private var services
+
+    var body: some View {
+        let sessions = services.liveSessions.live.filter { ($0.state.projectID ?? Project.defaultID) == leaf.projectID }
+        let bound = sessions.first { $0.state.sessionID == leaf.piSessionID }
+        MenuButton(sections: [
+            ChoiceMenu.Section(choices: [ChoiceMenu.Choice(title: "新会话", image: .icon(.add), checked: leaf.piSessionID == nil) { unbind() }]),
+            ChoiceMenu.Section(title: "本项目开着的会话", choices: sessions.isEmpty
+                ? [ChoiceMenu.Choice(title: "本项目没有开着的会话", disabled: true) {}]
+                : sessions.map { item in
+                    ChoiceMenu.Choice(title: .verbatim(item.state.title), checked: item.state.sessionID == leaf.piSessionID) { bind(item.state.sessionID) }
+                }),
+        ], accessibilityLabel: "交给谁", value: bound?.state.title ?? String(localized: "新会话")) {
+            DestinationChip(title: Text(bound.map { "交给 \($0.state.title)" } ?? "交给 新会话")) { EmptyView() }
+        }
+        .layoutPriority(1)
+    }
+
+    private func bind(_ sessionID: String) {
+        let id = leaf.id
+        workspace.perform { try await $0.bindSession(sessionID, to: id) }
+    }
+
+    private func unbind() {
+        guard leaf.piSessionID != nil else { return }
+        let id = leaf.id
+        workspace.perform { try await $0.unbindSession(from: id) }
+    }
+}
+#endif

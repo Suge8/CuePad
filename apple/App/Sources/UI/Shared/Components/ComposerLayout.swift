@@ -7,6 +7,8 @@ enum ComposerMetrics {
     static let textBottomOpen: CGFloat = 4
     static let glyph: CGFloat = 40
     static let glyphTarget: CGFloat = 44
+    /// 右下角那颗圆钮（点得到的那一圈）离右边与离下边一样远；任务气泡底下那颗"开始"排在同一个位置。
+    static let glyphInset = (slot - glyphTarget) / 2
     static let noticeSpacing = Spacing.tight
     static let noticePadding = Spacing.item
     /// 会话页对话末尾按动态字号缩放它（`Conversation`），外边距不缩放。

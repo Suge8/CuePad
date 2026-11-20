@@ -34,16 +34,15 @@ struct ModelCapsule: View {
         let badged = mark != nil || binding != nil
         let name = (current.map { Text(Dotted(ModelName.short($0), $0.account?.label(provider: $0.key.provider)).visible) } ?? Text(unnamed))
             .contentTransition(.opacity)
-        return HStack(spacing: 0) {
-            // 装饰：Mac 上菜单的标签与值会落到标签里的图标上，不藏起来读屏多出一个同名的"模型"
+        // 装饰：Mac 上菜单的标签与值会落到标签里的图标上，不藏起来读屏多出一个同名的"模型"
+        let badge = ModelBadge(mark: mark, binding: binding).modifier(Breathing(active: pending)).readerHidden(true)
+        return Group {
             if badged {
-                ModelBadge(mark: mark, binding: binding)
-                    .modifier(Breathing(active: pending))
-                    .readerHidden(true)
-                // 工具排给的宽放不下全名（`ConfigRow` 的 `model`）就只留标志，不截成"G…"；完整模型名可悬停、读屏或在菜单里看
+                // 工具排给的宽放不下全名（`ConfigRow` 的 `model`）就只留标志，不截成"G…"；完整模型名可悬停、读屏或在菜单里看。
+                // 两个候选都是整颗（同 `AgentCapsule`）：只把名字放进 `ViewThatFits` 时，给足它量出的宽它也退成只剩标志（实测 iPhone）
                 ViewThatFits(in: .horizontal) {
-                    name.padding(.leading, Self.gap)
-                    Color.clear.frame(width: 0, height: 0)
+                    HStack(spacing: Self.gap) { badge; name }.fixedSize()
+                    badge
                 }
             } else {
                 name.truncationMode(.tail)

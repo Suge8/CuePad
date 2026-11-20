@@ -8,6 +8,10 @@ extension View {
         panel(isPresented: isPresented) { DialogCard(title: title, message: message, field: field, buttons: buttons) }
     }
 
+    func ask(_ title: LocalizedStringResource, isPresented: Binding<Bool>, message: LocalizedStringResource? = nil, button: DialogButton) -> some View {
+        dialog(title, isPresented: isPresented, message: message, buttons: [button])
+    }
+
     func dialog<Item: Identifiable>(
         _ title: LocalizedStringResource, item: Binding<Item?>, message: LocalizedStringResource? = nil, buttons: @escaping (Item) -> [DialogButton]
     ) -> some View {
