@@ -27,6 +27,9 @@ extension LivePhoneFlowTests {
         var present = true
         /// 收到的"亮出这个会话"（`LiveSignal.show`）；`showing` 是这一帧发不出去还是挂住不回。
         var revealed: [String] = []
+        /// 收到的"我回来了"（`LiveSignal.back`）；`bounces` 是接下来几句中转转不过去、退回给手机（Mac 刚断、换了租约）。
+        var returned: [String] = []
+        var bounces = 0
         var showing = Showing.sends
         enum Showing { case sends, fails, hangs }
         private var held: [CheckedContinuation<Void, Never>] = []
@@ -77,14 +80,24 @@ extension LivePhoneFlowTests {
                 }
                 return
             }
+            let answer = answer
+            func header(_ payload: VoiceSignalPayload, from sender: VoiceEndpoint, to recipient: VoiceEndpoint) -> VoiceSignalHeader {
+                VoiceSignalHeader(version: VoiceSignalFormat.version, sender: sender, recipient: recipient, session: session, sequence: 1,
+                                  expiresAtMilliseconds: Int64(Date.now.timeIntervalSince1970 * 1000) + 30_000, purpose: payload.purpose)
+            }
+            if case .live(.back(_, let sessionID)) = payload {
+                guard bounces > 0 else { return returned.append(sessionID) }
+                bounces -= 1
+                let bounced = header(payload, from: local, to: endpoint)
+                Task { answer(.rejected(header: bounced, reason: .unavailable)) }
+                return
+            }
             guard case .live(.watch(let request, let sessionID, let open)) = payload else { return }
             opened = open
             let door = open ? door.map { LiveSignal.Door(addresses: $0.addresses, port: $0.port, ticket: ticket) } : nil
-            let reply = LiveSignal.pages(request: request, session: sessionID, pages: pages, serving: found ?? pages, sent: sent, door: door, ports: nil)
-            let header = VoiceSignalHeader(version: VoiceSignalFormat.version, sender: endpoint, recipient: local, session: session, sequence: 1,
-                                           expiresAtMilliseconds: Int64(Date.now.timeIntervalSince1970 * 1000) + 30_000, purpose: VoiceSignalPayload.live(signal: reply).purpose)
-            let answer = answer
-            Task { answer(.received(.init(header: header, payload: .live(signal: reply)))) }
+            let reply = VoiceSignalPayload.live(signal: .pages(request: request, session: sessionID, pages: pages, serving: found ?? pages, sent: sent, door: door, ports: nil))
+            let replied = header(reply, from: endpoint, to: local)
+            Task { answer(.received(.init(header: replied, payload: reply))) }
         }
     }
 

@@ -26,6 +26,7 @@ final class WindowFrameKeeper {
     }
 
     private func save() {
+        guard (window as? MainShellWindow)?.unfilled == nil else { return }
         settings.setWindowFrame(window.frameDescriptor, for: name)
     }
 }

@@ -10,6 +10,7 @@ extension DebugScene {
         workspace.toggleLivePreview()
         guard let session = workspace.session(in: .main), let preview = workspace.livePreviews[session.id] else { return }
         if args.layoutOpts.liveViewport == "phone" { preview.viewport = .phone }
+        if args.layoutOpts.liveViewport == "window" { workspace.liveFill = session.id }
         guard address != "blank", let url = LiveAddress.url(from: address) else { return }
         preview.retarget(.init(url: url, source: .typed))
         holdingReady("活预览载入") {

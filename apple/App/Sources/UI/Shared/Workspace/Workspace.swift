@@ -58,6 +58,8 @@ final class Workspace {
             MainThreadWatch.shared.page(navigation.trail)
             #if os(iOS)
             keepLivePreviews()
+            #else
+            if let liveFill, !showsLivePreview(liveFill) { endLiveFill() }
             #endif
         }
     }
@@ -194,12 +196,17 @@ final class Workspace {
     var liveFound: [UUID: [URL]] = [:]
     /// 问过答不答网页的监听口（`LiveServers` 记着，不每遍重问）。
     @ObservationIgnored var liveScanner = LiveServers()
+    /// 排在最后的那一遍扫描（`scanLive`）。
+    @ObservationIgnored var liveScanning: Task<Void, Never>?
     /// 收过的 `cuepad live` 每个会话最后一条（`take`）：也答给手机（`answerLivePhones`）。
     @ObservationIgnored var liveTaken: [String: LiveAddress] = [:]
     /// 每个会话在做的那一条 Agent 请求（`answerLive`）：下一条等它做完。
     @ObservationIgnored var liveTurns: [UUID: Task<LiveChannel.Reply, Never>] = [:]
     /// 闲置被释放了的预览（`releaseLivePreviews`）：重建后第一条回执说明页面是重新载入的。
     @ObservationIgnored var liveReleased: Set<UUID> = []
+    /// 手机请 Mac 亮出来、正用 UU 远程看着活预览的会话（`showLive`）：预览铺满窗口（`WideMetrics.fill`）、窗口铺满屏幕，`endLiveFill` 放回。
+    /// 远程画面是整块屏幕缩到手机上，预览只占一角时找不到、看不清。
+    var liveFill: UUID?
     /// 手机、iPad 开着的本机会话页（`receiveLive`）：它们看着的会话也要扫（`watchLiveServers`）。
     var livePhones: [LivePhone.Key: LivePhone] = [:]
     /// 给手机的隧道口（`openLiveDoor`）：有手机开着预览时才开。
@@ -263,6 +270,9 @@ final class Workspace {
         async let quota: Void = followFilesQuota()
         async let cards: Void = followShownCards()
         async let files: Void = leaveGoneFiles()
+        #if os(iOS)
+        async let returns: Void = followReturns()
+        #endif
         #if os(macOS)
         async let agents: Void = followLocalAgents()
         async let live: Void = followLiveAddresses()
@@ -271,6 +281,9 @@ final class Workspace {
         async let livePhones: Void = followLivePhones()
         await followSessionPlacement()
         _ = await (agents, live, liveAgent, liveScan, livePhones)
+        #endif
+        #if os(iOS)
+        await returns
         #endif
         _ = await (catalog, links, launches, cue, opens, library, quota, cards, files)
     }

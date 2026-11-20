@@ -30,6 +30,10 @@ extension Workspace {
         switch event {
         case .received(let received):
             if case .live(.show(_, let sessionID)) = received.payload { return await showLive(sessionID) }
+            if case .live(.back(_, let sessionID)) = received.payload {
+                if liveFill == SessionState.recordID(sessionID: sessionID) { endLiveFill() }
+                return
+            }
             guard case .live(.watch(let request, let sessionID, let open)) = received.payload else { return }
             let key = LivePhone.Key(phone: received.header.sender, sessionID: sessionID)
             let fresh = livePhones[key] == nil
@@ -89,18 +93,31 @@ extension Workspace {
         }
     }
 
-    /// 手机要用 UU 远程看这个会话（`LiveSignal.show`）：开到主区，有页面可看就同栏头的钮开活预览（地址照开合的规则，你填的不换），
-    /// 窗口提到最前。只认本机这台上没结束的会话（同 `answerLivePhones`）。
+    /// 手机要用 UU 远程看这个会话（`LiveSignal.show`）：开到主区，有页面可看就同栏头的钮开活预览（地址照开合的规则，你填的不换）、
+    /// 铺满窗口（`liveFill`），窗口铺满屏幕排到最前。只认本机这台上没结束的会话（同 `answerLivePhones`）。
     private func showLive(_ sessionID: String) async {
         let hosted = ((try? await services.store.liveOwners(hosts: Self.liveHosts(services))) ?? [:]).keys
         guard hosted.contains(sessionID), let state = try? await services.store.sessionState(sessionID) else { return }
         // 手机看着时只扫它看的会话：此刻认出的才准
         await scanLive(only: [sessionID])
+        // 上一次铺满的先放下、窗口的位置留着：下面重开时（`navigation`）不把窗口缩回去再铺一次
+        liveFill = nil
         // 已在主区也重开一次：Cue 铺满着、上面盖着编辑页时，主区还是它，只是看不见
         overlay = nil
         openSession(state.id, sessionID: sessionID)
         if hasLivePage(state.id) { openLivePreview(state) }
         services.windowShell?.show(overOthers: true)
+        guard showsLivePreview(state.id) else { return services.windowShell?.restoreFrame() ?? () }
+        liveFill = state.id
+        services.windowShell?.fillScreen()
+    }
+
+    /// 铺满的预览放回右半、窗口回到原来的位置：手机从 UU 远程回到 CuePad 了（`LiveSignal.back`）、点了预览栏上那颗"放回右半"、
+    /// 预览不在主区旁了（换了会话、收起了，`navigation`）。
+    func endLiveFill() {
+        guard liveFill != nil else { return }
+        liveFill = nil
+        services.windowShell?.restoreFrame()
     }
 
     /// 隧道口：开着就用它，没开就开（端口随机）；没取到门铃的密钥（中转还没连上过）开不了。
@@ -136,7 +153,7 @@ extension Workspace {
     }
 
     /// 隧道的一条连接放不放（`LiveTunnel.Server`）：票据要是这台 Mac 发给开着预览的手机、还没过期的；端口 0 只验票。
-    /// 目标要是本机（回环、本机的局域网地址），端口要属于这个会话：它名下在监听的（答不答网页都算），或它的页面地址里的（Agent 发来、你填的）。
+    /// 目标要是本机（回环、本机的局域网地址），端口要属于这个会话：它名下在监听、答 HTTP 的（页面与它调的接口），或它的页面地址里的（Agent 发来、你填的）。
     /// 连哪个地址由这头定（`livePorts`），不照手机写的：手机回环上照搬来的连接只说得出端口，而同一个端口号上 127.0.0.1 与 ::1 可以各是一个会话的服务。
     func admitLive(_ request: LiveTunnel.Request) async -> LiveTunnel.Server.Admission {
         guard let (key, _) = livePhones.first(where: { $0.value.ticket == request.ticket && $0.value.until > .now }) else { return .ticket }
@@ -153,7 +170,8 @@ extension Workspace {
     /// 这个会话放行的本机端口，各自连哪个地址：它名下在监听的连那个服务所在的地址（`LiveServers.ports`），只在页面地址里的照地址写的连。
     private func livePorts(_ sessionID: String) async -> [Int: String] {
         if let kept = livePorts[sessionID], ContinuousClock.now - kept.at < .seconds(1) { return kept.ports }
-        var ports = await LiveServers.ports(for: liveOwners(), only: [sessionID])[sessionID] ?? [:]
+        // 答不答 HTTP 是按节奏扫的那一遍问出来的（`scanLive`）：这里只读它记下的，不为放行一条连接现去问
+        var ports = await liveScanner.ports(for: liveOwners(), only: [sessionID])[sessionID] ?? [:]
         let local = Set(LiveTunnel.localAddresses().map(\.host))
         for url in livePages(SessionState.recordID(sessionID: sessionID)) {
             guard let port = url.port, ports[port] == nil, let host = url.host(percentEncoded: false)?.lowercased(), LiveTunnel.Proxy.isMac(host, addresses: local) else { continue }

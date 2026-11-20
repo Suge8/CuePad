@@ -1,6 +1,7 @@
 #if os(macOS)
 import Darwin
 import Foundation
+import Synchronization
 
 /// 本机正在监听、属于会话、答得出网页的开发服务（活预览自己认出的地址、会话条上哪些会话有活预览；`cuepad live` 不给地址时也用它）。
 /// 属于哪个会话按这个顺序认，前两条认到就只归它：
@@ -27,38 +28,55 @@ public struct LiveServers: Sendable {
     let started: Int64
     /// 问得到这个进程的那个地址（`reach`）。
     let url: URL
+    var asked: Asked { Asked(pid: pid, started: started, port: url.port ?? 0) }
+  }
+
+  /// 一个进程的一个口。问到的记在它上，不记在地址上：地址会变（别的进程在另一族回环上占了同号的口，localhost 就换成 127.0.0.1），
+  /// 跟着地址记的话这个口会掉出放行的名单，等下一遍问过才回来，它上面连着的先被断掉（`ports`）。
+  struct Asked: Hashable {
+    let pid: pid_t
+    let started: Int64
+    let port: Int
   }
 
   /// 问过的监听口答不答网页：答了的同一个进程的同一个口不再问；没答的过一会儿再问（服务先开口、页面后就绪）。
-  private var pages: [Listener: (page: Bool, at: ContinuousClock.Instant)] = [:]
+  /// `web`：答过 HTTP（不论答的是什么）。答过一次就一直算：后来哪一次没在时限里答上不改它，不然隧道会把这个口上连着的断掉（`ports`）。
+  private var pages: [Asked: (page: Bool, web: Bool, at: ContinuousClock.Instant)] = [:]
   private static let retry = Duration.seconds(5)
 
   public init() {}
 
   /// 键是会话 id；认不出服务的会话不在里面。每个会话的地址最近起来的在前。
   public mutating func find(for owners: [String: Owner], only: Set<String>? = nil) async -> [String: [URL]] {
-    let listeners = await Self.listening(for: owners, only: only)
+    // 还在不在对着全部会话的口看，问只问要的这几个：只留这一遍要的，别的会话问过的就忘了，它们的口不再算答过 HTTP（`ports`）
+    let everyone = await Self.listening(for: owners)
+    let listeners = only.map { only in everyone.filter { !$0.owners.isDisjoint(with: only) }.map { (listener: $0.listener, owners: $0.owners.intersection(only)) } } ?? everyone
     let now = ContinuousClock.now
     // 一起问：接了连接却迟迟不答的口要等满超时，挨个问会把别的会话这一轮都拖住
-    let asking = listeners.map(\.listener).filter { listener in pages[listener].map { !$0.page && now - $0.at >= Self.retry } ?? true }
-    await withTaskGroup(of: (Listener, Bool).self) { group in
-      for listener in asking { group.addTask { (listener, await Self.answersPage(listener.url)) } }
-      for await (listener, page) in group { pages[listener] = (page, now) }
+    var once = Set<Asked>()
+    let asking = listeners.map(\.listener).filter { listener in
+      (pages[listener.asked].map { !$0.page && now - $0.at >= Self.retry } ?? true) && once.insert(listener.asked).inserted
     }
-    let all = Set(listeners.map(\.listener))
+    await withTaskGroup(of: (Asked, Bool?).self) { group in
+      for listener in asking { group.addTask { (listener.asked, await Self.answersPage(listener.url)) } }
+      for await (asked, page) in group { pages[asked] = (page == true, page != nil || pages[asked]?.web == true, now) }
+    }
+    let all = Set(everyone.map(\.listener.asked))
     pages = pages.filter { all.contains($0.key) }
     var found: [String: [URL]] = [:]
-    for (listener, keys) in listeners where pages[listener]?.page == true {
+    for (listener, keys) in listeners where pages[listener.asked]?.page == true {
       for key in keys where found[key]?.contains(listener.url) != true { found[key, default: []].append(listener.url) }
     }
     return found
   }
 
-  /// 这几个会话名下在监听的端口，答不答网页都算（活预览的隧道放行它们：页面要调的只回 JSON 的接口也在里面）。
+  /// 这几个会话名下、网页用得上的端口：`find` 问到过 HTTP 回应的（页面要调的只回 JSON 的接口也在里面），活预览的隧道只放行它们。
+  /// 不说 HTTP 的（数据库、缓存）不在里面：网页本来也连不了它们，而手机那头把放行的口照搬到回环上，别的应用连得到（`LiveTunnel.Proxy.mirror`）。
+  /// 只按 http 问：只开 https 的口不在里面，要靠页面地址放行（`Workspace.livePorts`）。刚起来的口等下一遍 `find` 问过才有。
   /// 值是连得到会话那个服务的本机地址（`reach`）：同一个端口号上 127.0.0.1 与 ::1 可以各是一个进程，只凭端口号连 localhost 会连到别人那里。
-  public static func ports(for owners: [String: Owner], only: Set<String>? = nil) async -> [String: [Int: String]] {
+  public func ports(for owners: [String: Owner], only: Set<String>? = nil) async -> [String: [Int: String]] {
     var ports: [String: [Int: String]] = [:]
-    for (listener, keys) in await listening(for: owners, only: only) {
+    for (listener, keys) in await Self.listening(for: owners, only: only) where pages[listener.asked]?.web == true {
       guard let port = listener.url.port, let host = listener.url.host(percentEncoded: false) else { continue }
       for key in keys where ports[key]?[port] == nil { ports[key, default: [:]][port] = host }
     }
@@ -147,73 +165,26 @@ public struct LiveServers: Sendable {
     return sessions
   }
 
-  /// 一个在监听的 TCP 口：绑的地址（nil 是通配）与它接哪几族（v6 的通配不设 V6ONLY 时两族都接）。
-  struct Socket {
-    let pid: pid_t
-    let port: Int
-    let v4: Bool
-    let v6: Bool
-    let address: Address?
-  }
-
-  enum Address: Hashable {
-    case v4(in_addr_t)
-    case v6([UInt8])
-
-    static let loopback4 = Address.v4(in_addr_t(0x7f00_0001).bigEndian)
-    static let loopback6 = Address.v6(Array(repeating: 0, count: 15) + [1])
-
-    var isLoopback: Bool {
-      switch self {
-      case .v4(let raw): UInt32(bigEndian: raw) >> 24 == 127
-      case .v6: self == Self.loopback6
-      }
-    }
-
-    var host: String {
-      switch self {
-      case .v4(var raw): text(AF_INET, &raw, INET_ADDRSTRLEN)
-      case .v6(var bytes): "[\(text(AF_INET6, &bytes, INET6_ADDRSTRLEN))]"
-      }
-    }
-
-    private func text(_ family: Int32, _ address: UnsafeRawPointer, _ size: Int32) -> String {
-      var buffer = [CChar](repeating: 0, count: Int(size))
-      _ = inet_ntop(family, address, &buffer, socklen_t(size))
-      return String(decoding: buffer.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self)
-    }
-  }
-
-  /// 问哪个地址到得了这个口：连一个本机地址时，绑了这个具体地址的口先接，没有才轮到通配的。
-  /// 问 localhost 时 127.0.0.1 与 ::1 都可能连上，只有两处都没有别人接时才问它；否则改问这个口自己接得到的那一个回环地址，都被别人接走就不认。
-  /// 绑在局域网地址上的照问那个地址。
-  static func reach(_ socket: Socket, among all: [Socket]) -> URL? {
-    func url(_ host: String) -> URL? { URL(string: "http://\(host):\(socket.port)") }
-    if let address = socket.address, !address.isLoopback { return url(address.host) }
-    func answering(_ address: Address) -> Set<pid_t> {
-      let here = all.filter { $0.port == socket.port }
-      let exact = here.filter { $0.address == address }
-      let wide = here.filter { $0.address == nil && (address == .loopback4 ? $0.v4 : $0.v6) }
-      return Set((exact.isEmpty ? wide : exact).map(\.pid))
-    }
-    var own: [Address] = []
-    if let address = socket.address { own = [address] } else {
-      if socket.v4 { own.append(.loopback4) }
-      if socket.v6 { own.append(.loopback6) }
-    }
-    let mine = own.filter { answering($0).contains(socket.pid) }
-    guard let first = mine.first else { return nil }
-    let shared = [Address.loopback4, .loopback6].allSatisfy { answering($0).subtracting([socket.pid]).isEmpty }
-    return url(shared ? "localhost" : first.host)
-  }
-
-  /// 数据库、调试端口、语言服务筛掉：只留回 HTML 的。只等到响应头。
-  @concurrent static func answersPage(_ url: URL) async -> Bool {
+  /// 数据库、调试端口、语言服务筛掉：只留回 HTML 的（true）。只等到响应头。答了 HTTP、不是 HTML 的是 false，没有 HTTP 回应是 nil。
+  /// 把人转去别处、那一处又连不上的（http 转 https、转去登录的域名）也是答了 HTTP：false。
+  @concurrent static func answersPage(_ url: URL) async -> Bool? {
     var request = URLRequest(url: url)
     request.setValue("text/html", forHTTPHeaderField: "Accept")
-    guard let (bytes, response) = try? await probe.bytes(for: request) else { return false }
+    let redirects = Redirects()
+    guard let (bytes, response) = try? await probe.bytes(for: request, delegate: redirects) else { return redirects.seen.withLock { $0 } ? false : nil }
     bytes.task.cancel()
     return response.mimeType == "text/html"
+  }
+
+  private final class Redirects: NSObject, URLSessionTaskDelegate, Sendable {
+    let seen = Mutex(false)
+
+    // 不写成 async 的那一版：Swift 6.4 给它生成 ObjC 入口时编译器崩
+    func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest,
+                    completionHandler: @escaping @Sendable (URLRequest?) -> Void) {
+      seen.withLock { $0 = true }
+      completionHandler(request)
+    }
   }
 
   private static let probe: URLSession = {

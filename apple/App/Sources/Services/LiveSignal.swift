@@ -10,9 +10,12 @@ nonisolated enum LiveSignal: Equatable, Codable, Sendable {
     /// Mac 这次启动以来）；开着预览时的入口，与隧道放行的本机端口（`ports`，`Workspace.livePorts`；2611201440 及更早的 Mac 不带，
     /// 手机用页面地址里的端口）。有变化 Mac 主动再答一次。手机按它们跟 Mac 同一条规则换地址（`LivePreview.follow`）。
     case pages(request: UUID, session: String, pages: [URL], serving: [URL], sent: LiveAddress?, door: Door?, ports: [Int]?)
-    /// 手机：连不上 Mac 的隧道、要用 UU 远程看（`Workspace.viewOnMac`），请 Mac 把这个会话开到主区、活预览开在右半、窗口提到最前。不答。
-    /// 2611201115 那一版的 Mac 不认：正文解不开，只记一条日志（`VoiceRelayEvent.unreadable`），中转连接照旧。
+    /// 手机：连不上 Mac 的隧道、要用 UU 远程看（`Workspace.operate(on:viewing:)`），请 Mac 把这个会话开到主区、活预览铺满窗口、窗口铺满屏幕排到最前
+    /// （`Workspace.showLive`）。不答。2611201115 那一版的 Mac 不认：正文解不开，只记一条日志（`VoiceRelayEvent.unreadable`），中转连接照旧。
     case show(request: UUID, session: String)
+    /// 手机：从 UU 远程回到 CuePad 了（`Workspace.returnFromMac`），请 Mac 把铺满的预览与窗口放回原样。不答。
+    /// 2611202102 及更早的 Mac 不认（同上，只记日志）：它们亮出来时也不铺满。
+    case back(request: UUID, session: String)
 
     /// 去 Mac 的隧道（`LiveTunnel`）：Mac 在局域网上的地址、此刻的端口，与一张只给这台手机、这个会话的票据。
     struct Door: Equatable, Codable, Sendable {
@@ -26,7 +29,7 @@ nonisolated enum LiveSignal: Equatable, Codable, Sendable {
 
     var request: UUID {
         switch self {
-        case .watch(let request, _, _), .pages(let request, _, _, _, _, _, _), .show(let request, _): request
+        case .watch(let request, _, _), .pages(let request, _, _, _, _, _, _), .show(let request, _), .back(let request, _): request
         }
     }
 
