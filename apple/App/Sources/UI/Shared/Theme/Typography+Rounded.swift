@@ -38,12 +38,20 @@ enum RoundedFace {
             CTFontManagerRegisterFontsForURL(URL(fileURLWithPath: path) as CFURL, .process, nil)
             if installed { return true }
         }
-        fetch()
+        // 要字体可能堵住调用的线程（见 `installed`），不在主线程上要
+        DispatchQueue.global(qos: .utility).async { fetch() }
         return false
     }()
 
+    /// Mac 上只查系统已有的字体名单，不按名字建一个来试：机器上没有这款时系统当场去取，取不到就一直堵着调用的线程，而头一次问是在主线程画界面时——
+    /// GitHub 的 runner 没有圆体-简，挂真窗口的测试堵满 120 秒的时限（运行 44678051442 的日志停在这一步）。iOS 上按名字试没卡过，照旧。
     private nonisolated static var installed: Bool {
-        [name, bold].allSatisfy { CTFontCopyPostScriptName(CTFontCreateWithName($0 as CFString, 0, nil)) as String == $0 }
+        #if os(macOS)
+        let available = Set(CTFontManagerCopyAvailablePostScriptNames() as? [String] ?? [])
+        return [name, bold].allSatisfy(available.contains)
+        #else
+        return [name, bold].allSatisfy { CTFontCopyPostScriptName(CTFontCreateWithName($0 as CFString, 0, nil)) as String == $0 }
+        #endif
     }
 
     private nonisolated static func fetch() {
