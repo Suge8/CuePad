@@ -19,6 +19,7 @@ extension View {
 }
 
 extension EnvironmentValues {
+    /// 卡在手机竖屏横滑的一行里（`BoardRowLane`）：同一张卡，固定三行、铺满格高，一行里的卡一样高。
     @Entry var boardRow = false
 }
 
@@ -31,7 +32,7 @@ private struct BoardCardFrame: ViewModifier {
     @Environment(\.palette) private var palette
 
     func body(content: Content) -> some View {
-        content.padding(.horizontal, row ? BoardCardMetrics.rowPadding : TaskMetrics.cardPadding)
+        content.padding(.horizontal, TaskMetrics.cardPadding)
             .frame(maxWidth: .infinity, maxHeight: row ? .infinity : nil, alignment: .leading)
             .background {
                 if let arrival {
@@ -40,7 +41,7 @@ private struct BoardCardFrame: ViewModifier {
                 }
             }
             .paper(cornerRadius: TaskMetrics.cardRadius, wash: column.paper(palette))
-            .overlay { if running, plays, !row { LoopLayer(kind: .aura(radius: TaskMetrics.cardRadius), color: palette.signature).allowsHitTesting(false) } }
+            .overlay { if running, plays { LoopLayer(kind: .aura(radius: TaskMetrics.cardRadius), color: palette.signature).allowsHitTesting(false) } }
             .contentShape(.rect(cornerRadius: TaskMetrics.cardRadius))
     }
 }
@@ -70,22 +71,20 @@ struct BoardPin: View {
 }
 
 /// 项目只在看全部项目时画（调用方给 nil）：选了项目范围时范围已经说了。指针停在上面时别的项目的卡淡下去（`boardDim`）。
-/// 手机的行里格子窄，只画小图形；列里的卡在卡脚左端连名字一起写。
 struct BoardProjectTag: View {
     let project: Project
     #if os(macOS)
     @Environment(Workspace.self) private var workspace
     #endif
-    @Environment(\.boardRow) private var row
     @Environment(\.palette) private var palette
 
     var body: some View {
         HStack(spacing: Spacing.hair) {
             ProjectGlyph(project: project, size: TaskMetrics.cardGlyph)
             // 卡脚只给得出图形那么宽时名字排成 0 宽裁掉（`BoardFoot`），不剩一个"…"
-            if !row { Text(project.shownName).font(TaskMetrics.caption).foregroundStyle(palette.ink3).lineLimit(1).fact() }
+            Text(project.shownName).font(TaskMetrics.caption).foregroundStyle(palette.ink3).lineLimit(1).fact()
         }
-        .frame(maxWidth: row ? nil : BoardCardMetrics.tagMax, alignment: .leading)
+        .frame(maxWidth: BoardCardMetrics.tagMax, alignment: .leading)
         .help(project.shownName)
         #if os(macOS)
         .onHover { workspace.hoverProject(project.id, $0) }
@@ -104,13 +103,14 @@ extension Workspace {
 #endif
 
 /// 拉丁词按词断——词里的连字符换成不断行的（U+2011），"notes-edit"不拆成"notes- / edit"；
-/// 整个标题只是一个拉丁词（没有空格、没有汉字）时只排一行，放不下先收字距、再截断，不按字母折行。中文照常按字折，至多两行（辅助字号三行）。
+/// 整个标题只是一个拉丁词（没有空格、没有汉字）时只排一行，放不下先收字距、再截断，不按字母折行。中文照常按字折，至多两行（辅助字号三行）；手机的行里一行。
 /// 几个拉丁词里有一个比一行还长时系统仍会在词中间折：标题里少见，不为它另排。
 /// `lines` 给 1 是这张卡第二行非写旁注不可（等你的那句提问）。
 struct BoardCardTitle: View {
     let text: String
     var lines: Int?
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.boardRow) private var row
 
     init(_ text: String, lines: Int? = nil) {
         self.text = text
@@ -118,7 +118,7 @@ struct BoardCardTitle: View {
     }
 
     var body: some View {
-        Text(Self.joined(text)).lineLimit(Self.oneWord(text) ? 1 : lines ?? BoardCardMetrics.lines(typeSize)).allowsTightening(true)
+        Text(Self.joined(text)).lineLimit(row || Self.oneWord(text) ? 1 : lines ?? BoardCardMetrics.lines(typeSize)).allowsTightening(true)
     }
 
     private static func joined(_ text: String) -> String {
@@ -154,12 +154,6 @@ struct BoardSessionCard: View {
         let name = agent.name(at: workspace.services.speech)
         BoardLink(to: session) {
             BoardCardLayout(advancing: true, pulse: pulse, moves: moves, project: project, note: SessionProgress.said(of: session), session: session) {
-                Group {
-                    if let kind = session.agent.known { kind.mark.image } else { Image(.terminal) }
-                }
-                .font(.system(size: TaskMetrics.cardLead * 0.85)).foregroundStyle(resting ? palette.ink3 : palette.ink2)
-                .frame(width: TaskMetrics.cardLead, height: TaskMetrics.cardLead)
-            } title: {
                 BoardCardTitle(name).foregroundStyle(resting ? palette.ink2 : palette.ink)
             }
             .boardCard(.advancing, running: moves && pulse.tier == .running)
@@ -172,11 +166,11 @@ struct BoardSessionCard: View {
     }
 }
 
-/// 列里的卡：标题（至多两行，右上角是哪家 Agent 的标志）、推进中多一行此刻在干什么（`BoardNow`）、卡脚。
+/// 卡：标题（至多两行，右上角是哪家 Agent 的标志）、推进中多一行此刻在干什么（`BoardNow`）、卡脚。
 /// 卡脚左端项目，右端这一列要说的那一样——推进中是上下文与时长（`BoardVitals`），别的列是 `facts`。
 /// 状态词不放在标题右端：窄列里标题会只剩四五个字。
-/// 手机的行里格子窄而矮，还是一排：图标、项目小图形、标题，推进中的下沿写要你管的状态词与时长。
-struct BoardCardLayout<Icon: View, Title: View, Facts: View, Trailing: View>: View {
+/// 手机的行里（`boardRow`）是同一张：标题一行，卡脚沉到格底；待办、已完成只有标题与卡脚，不写旁注。
+struct BoardCardLayout<Title: View, Facts: View, Trailing: View>: View {
     let advancing: Bool
     var pulse = BoardPulse()
     var moves = true
@@ -185,16 +179,14 @@ struct BoardCardLayout<Icon: View, Title: View, Facts: View, Trailing: View>: Vi
     var session: SessionState?
     /// 待办、已完成的卡：标题写几行占几行，有旁注才多一行，上下的边也收紧。
     var compact = false
-    let icon: Icon
     let title: Title
     let facts: Facts
     let trailing: Trailing
     @Environment(\.boardRow) private var row
-    @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.palette) private var palette
 
     init(advancing: Bool, pulse: BoardPulse = BoardPulse(), moves: Bool = true, project: Project?, note: String? = nil, session: SessionState? = nil, compact: Bool = false,
-         @ViewBuilder icon: () -> Icon, @ViewBuilder title: () -> Title,
+         @ViewBuilder title: () -> Title,
          @ViewBuilder facts: () -> Facts = { EmptyView() }, @ViewBuilder trailing: () -> Trailing = { EmptyView() }) {
         self.advancing = advancing
         self.pulse = pulse
@@ -203,51 +195,37 @@ struct BoardCardLayout<Icon: View, Title: View, Facts: View, Trailing: View>: Vi
         self.note = note
         self.session = session
         self.compact = compact
-        self.icon = icon()
         self.title = title()
         self.facts = facts()
         self.trailing = trailing()
     }
 
     var body: some View {
-        if !row {
-            VStack(alignment: .leading, spacing: BoardCardMetrics.footGap) {
-                HStack(alignment: compact ? .top : .firstTextBaseline, spacing: Spacing.item) {
-                    VStack(alignment: .leading, spacing: Spacing.hair) {
-                        HStack(alignment: .firstTextBaseline, spacing: Spacing.tight) { title }.font(compact ? TaskMetrics.lineFont : Typography.bodyStrong)
-                        if compact, let note { noteLine(note) }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    // 有就地处理的钮时它占右上角（真的那颗浮在卡上，`boardRescue`；这里只留出它的宽）
-                    if let session, SessionRescue.of(session) != nil, !compact {
-                        BoardRescue(session: session).hidden()
-                    } else if let session {
-                        AgentMark(session: session, font: TaskMetrics.caption, named: false)
-                    }
-                    trailing
+        VStack(alignment: .leading, spacing: BoardCardMetrics.footGap) {
+            HStack(alignment: compact ? .top : .firstTextBaseline, spacing: Spacing.item) {
+                VStack(alignment: .leading, spacing: Spacing.hair) {
+                    HStack(alignment: .firstTextBaseline, spacing: Spacing.tight) { title }.font(compact ? TaskMetrics.lineFont : Typography.bodyStrong)
+                    if compact, !row, let note { noteLine(note) }
                 }
-                if advancing, pulse.shown != nil || note != nil { BoardNow(pulse: pulse, said: note, moves: moves) }
-                BoardFoot(glyph: BoardCardMetrics.footGlyph) {
-                    if let project { BoardProjectTag(project: project) } else { Color.clear.frame(width: 0) }
-                    foot
+                .frame(maxWidth: .infinity, alignment: .leading)
+                // 有就地处理的钮时它占右上角（真的那颗浮在卡上，`boardRescue`；这里只留出它的宽）
+                if let session, SessionRescue.of(session) != nil, !compact {
+                    // 行里的卡一样高：只留宽，钮比标题那一行高出的不撑高卡
+                    BoardRescue(session: session).hidden().frame(height: row ? 0 : nil)
+                } else if let session {
+                    AgentMark(session: session, font: TaskMetrics.caption, named: false)
                 }
-                .frame(height: advancing ? BoardCardMetrics.vitals : BoardCardMetrics.foot)
+                trailing
             }
-            .padding(.vertical, compact ? BoardCardMetrics.compactPad : BoardCardMetrics.pad)
-        } else if advancing {
-            // 读数在标题下面另起一行：并排的话窄格里标题被挤没
-            line.frame(maxHeight: .infinity).padding(.bottom, BoardCardMetrics.rowFact)
-                .overlay(alignment: .bottomLeading) {
-                    HStack(spacing: Spacing.tight) {
-                        if pulse.speaks { BoardWord(pulse: pulse) }
-                        if let clock = pulse.shown?.clock { TimeSpent(clock: clock) }
-                    }
-                    .font(TaskMetrics.caption).lineLimit(1)
-                    .padding(.leading, TaskMetrics.cardLead + BoardCardMetrics.rowGap).padding(.bottom, Spacing.glyph)
-                }
-        } else {
-            line.frame(maxHeight: .infinity)
+            if advancing, pulse.shown != nil || note != nil { BoardNow(pulse: pulse, said: note, moves: moves) }
+            if row { Spacer(minLength: 0) }
+            BoardFoot(glyph: BoardCardMetrics.footGlyph) {
+                if let project { BoardProjectTag(project: project) } else { Color.clear.frame(width: 0) }
+                foot
+            }
+            .frame(height: advancing ? BoardCardMetrics.vitals : BoardCardMetrics.foot)
         }
+        .padding(.vertical, compact ? BoardCardMetrics.compactPad : BoardCardMetrics.pad)
     }
 
     private var foot: some View {
@@ -260,20 +238,6 @@ struct BoardCardLayout<Icon: View, Title: View, Facts: View, Trailing: View>: Vi
 
     private func noteLine(_ note: String) -> some View {
         Text(verbatim: note).font(TaskMetrics.caption).foregroundStyle(palette.ink3).lineLimit(1).readerHidden(true)
-    }
-
-    private var line: some View {
-        HStack(spacing: BoardCardMetrics.rowGap) {
-            Group {
-                icon
-                if let project { BoardProjectTag(project: project) }
-                title
-            }
-            .font(BoardCardMetrics.rowTitle).lineLimit(BoardCardMetrics.lines(typeSize))
-            Spacer(minLength: 0)
-            trailing
-        }
-        .frame(minHeight: BoardCardMetrics.titleRow)
     }
 }
 

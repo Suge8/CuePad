@@ -30,10 +30,20 @@ struct BoardRescue: View {
 
 extension View {
     /// 浮在卡的右上角、不放进卡里：会话卡整张是一颗按钮（`BoardLink`），钮里不套钮。
-    func boardRescue(_ session: SessionState?) -> some View {
-        overlay(alignment: .topTrailing) {
+    func boardRescue(_ session: SessionState?) -> some View { modifier(BoardRescueSpot(session: session)) }
+}
+
+private struct BoardRescueSpot: ViewModifier {
+    let session: SessionState?
+    @Environment(\.boardRow) private var row
+    @ScaledMetric(relativeTo: .body) private var titleLine: CGFloat = 22
+
+    func body(content: Content) -> some View {
+        content.overlay(alignment: .topTrailing) {
             if let session, SessionRescue.of(session) != nil {
-                BoardRescue(session: session).padding(.trailing, TaskMetrics.cardPadding).padding(.top, BoardCardMetrics.pad)
+                // 行里卡不为它撑高（`BoardCardLayout`）：钮对着标题那一行居中
+                BoardRescue(session: session).padding(.trailing, TaskMetrics.cardPadding)
+                    .padding(.top, BoardCardMetrics.pad + (row ? (titleLine - ControlSize.inline.height) / 2 : 0))
             }
         }
     }

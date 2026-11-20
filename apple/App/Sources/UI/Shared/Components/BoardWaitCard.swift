@@ -8,19 +8,15 @@ struct BoardWaitCard: View {
     let project: Project?
     @Environment(Workspace.self) private var workspace
     @Environment(\.boardRow) private var row
-    @Environment(\.palette) private var palette
 
     var body: some View {
         link {
-            if row {
-                rowFace.boardCard(.waiting)
-            } else {
-                VStack(alignment: .leading, spacing: BoardCardMetrics.footGap) {
-                    BoardWaitFace(held: held, ask: ask)
-                    BoardWaitFoot(held: held, project: project)
-                }
-                .padding(.vertical, BoardCardMetrics.pad).boardCard(.waiting)
+            VStack(alignment: .leading, spacing: BoardCardMetrics.footGap) {
+                BoardWaitFace(held: held, ask: ask)
+                if row { Spacer(minLength: 0) }
+                BoardWaitFoot(held: held, project: project)
             }
+            .padding(.vertical, BoardCardMetrics.pad).boardCard(.waiting)
         }
         .contextMenu { menu }
         .boardDim(project: held.project)
@@ -41,16 +37,6 @@ struct BoardWaitCard: View {
         .accessibilityLabel(spoken)
         .accessibilityActions { menu }
         .completionAsks(claiming: held.item?.task.id)
-    }
-
-    private var rowFace: some View {
-        BoardCardLayout(advancing: false, project: project) {
-            StateGlyph(status: held.deciding ? .asking : .awaitsReply).font(.system(size: TaskMetrics.ring))
-                .frame(width: TaskMetrics.cardLead, height: TaskMetrics.cardLead)
-        } title: {
-            if held.item?.task.isPinned == true { BoardPin() }
-            BoardCardTitle(held.title).foregroundStyle(palette.ink)
-        }
     }
 
     /// 等你的是哪一句：拍板是它问的那句，待回复是它最后说的那句的头一句。

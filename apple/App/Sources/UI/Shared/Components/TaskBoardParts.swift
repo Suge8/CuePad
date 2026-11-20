@@ -51,7 +51,7 @@ struct BoardColumn: View {
     @ViewBuilder private var lane: some View {
         #if os(iOS)
         if row {
-            BoardRowLane(column: column, count: board.count(column), targeted: lit, rewind: rewind) {
+            BoardRowLane(column: column, count: board.count(column), archives: archives, targeted: lit, rewind: rewind, tiers: rowTiers) {
                 if adding && column == .todo { newTask.transition(.opacity) }
             } content: {
                 content
@@ -89,6 +89,11 @@ struct BoardColumn: View {
             .background { BoardLane(targeted: lit) }
         #endif
     }
+
+    #if os(iOS)
+    /// 手机的行里推进中有余高时多排几排，卡少时不空着排。
+    private var rowTiers: Int { column == .advancing ? min(3, max(board.advancing.count, 1)) : 1 }
+    #endif
 
     private var archives: Bool { column == .done && !(board.done.isEmpty && board.earlier.isEmpty) }
 
@@ -214,7 +219,7 @@ struct BoardColumn: View {
             .paper(cornerRadius: TaskMetrics.cardRadius, lifted: !isRow)
     }
 
-    /// 能添东西的列空着时，这一格就是添加的入口（列头那颗"+"的同一个动作）；手机的行里添加在行脊上，这一格只是说明。
+    /// 能添东西的列空着时，这一格就是添加的入口（列头那颗"+"的同一个动作）；手机的行里添加在行头上，这一格只是说明。
     @ViewBuilder private func empty(_ text: LocalizedStringResource) -> some View {
         if !isRow, let add = LaneAdd.of(column, in: workspace) {
             Button(action: add.action) {
@@ -264,14 +269,8 @@ struct BoardColumn: View {
     private var earlierList: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: BoardCardMetrics.gap) {
-                HStack {
-                    Text("更早做完的 \(board.earlier.count)").font(Typography.bodyStrong).monospacedDigit()
-                    Spacer(minLength: Spacing.item)
-                    let archive = LaneAdd.archive(in: workspace)
-                    Button(archive.title) { listsEarlier = false; archive.action() }
-                    .font(Typography.secondary)
-                }
-                .padding(.vertical, Spacing.item)
+                Text("更早做完的 \(board.earlier.count)").font(Typography.bodyStrong).monospacedDigit()
+                    .padding(.vertical, Spacing.item)
                 ForEach(board.earlier) { card($0) }
             }
             .padding(Spacing.inset)

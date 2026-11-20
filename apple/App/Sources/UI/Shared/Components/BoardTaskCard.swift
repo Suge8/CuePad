@@ -26,8 +26,6 @@ struct BoardTaskCard: View {
             VStack(alignment: .leading, spacing: 0) {
             if let hero { BoardShot(shot: hero, group: task.id.uuidString, hero: true, open: openShot).padding(.top, TaskMetrics.cardPadding) }
             BoardCardLayout(advancing: advancing, pulse: pulse, moves: moves, project: project, note: note, session: item.agent?.state, compact: column.light) {
-                ring(next: next).opacity(column.leadOpacity)
-            } title: {
                 if task.isPinned { BoardPin() }
                 title(resting: pulse.tier == .resting && advancing)
             } facts: {
@@ -43,25 +41,16 @@ struct BoardTaskCard: View {
         }
         .help(tip)
         .taskSpoken(task, title: title, subtasks: item.steps, next: next, aside: aside(pulse), check: $check, open: open, follow: { follow(next) }) { menu }
-        // 行里的卡由圈认领（`TaskCheckButton`），列里的卡不画圈、由整张卡认领
-        .completionAsks(claiming: row ? nil : task.id)
+        // 卡不画圈，完成前那一问由整张卡认领
+        .completionAsks(claiming: task.id)
     }
 
-    private func ring(next: TaskNext?) -> some View {
-        let target = CGSize(width: TaskMetrics.cardLead, height: TaskMetrics.cardLead)
-        #if os(macOS)
-        return TaskCheckButton(task: task, subtasks: item.steps, next: next, size: Self.ring, target: target, check: $check) { tap() }
-        #else
-        return TaskCheckButton(task: task, subtasks: item.steps, next: next, size: Self.ring, target: target, check: $check)
-        #endif
-    }
-
-    /// 列里的卡没有圈，Cue 交过来的那道光落在标题上；行里的落在圈上（`TaskCheckButton`）。
-    @ViewBuilder private func title(resting: Bool) -> some View {
+    /// 卡没有圈，Cue 交过来的那道光落在标题上。
+    private func title(resting: Bool) -> some View {
         let ink = check.phase != .idle ? palette.ink3 : resting ? palette.ink2 : column.titleInk(palette)
-        let title = BoardCardTitle(title.textGlyphs).fontWeight(column.titleWeight)
+        return BoardCardTitle(title.textGlyphs).fontWeight(column.titleWeight)
             .strikethrough(check.phase != .idle, color: palette.ink3).foregroundStyle(ink)
-        if row { title } else { title.relaySpot(task: task.id) }
+            .relaySpot(task: task.id)
     }
 
     /// 第二行那一句：会话此刻在做什么（做完的是它最后说的头一句），没有会话的是任务正文的头一行。
@@ -116,8 +105,6 @@ struct BoardTaskCard: View {
     }
 
     #if os(macOS)
-    private static let ring: CGFloat = 15
-
     private func framed(@ViewBuilder _ card: () -> some View) -> some View {
         card()
             .modifier(PressFeedback(pressed: false, kind: .card))
@@ -125,8 +112,6 @@ struct BoardTaskCard: View {
             .contextMenu { menu }
     }
     #else
-    private static let ring: CGFloat = 22
-
     /// 按住不动出长按菜单；菜单出来后往菜单外一挪就是拖（`BoardColumn` 挂的 `draggable`，系统把两者放在同一次长按里），往菜单里挪是在菜单里选。
     private func framed(@ViewBuilder _ card: () -> some View) -> some View {
         Group {

@@ -96,8 +96,12 @@ extension Workspace {
 struct BoardColumnHeader: View {
     let column: TaskBoard.Column
     let count: Int
-    /// 已完成那一列有做完的任务：列尾那一格（别的列放加号的地方）是全部归档，不随"更早做完的"展没展开。手机按行排时列头没有这一格，入口在"更早做完的"那一页。
+    /// 已完成那一列有做完的任务：列尾那一格（别的列放加号的地方）是全部归档，不随"更早做完的"展没展开。
     var archives = false
+    #if os(iOS)
+    /// 手机竖屏的行头（`BoardRowLane`）：靠左排，字小一档，不垫玻璃。
+    var shelf = false
+    #endif
     @State private var wins = 0
     @State private var drawn: CGFloat = 1
     @Environment(\.palette) private var palette
@@ -109,20 +113,26 @@ struct BoardColumnHeader: View {
         let button = add == nil ? 0 : Self.add
         // 列名在列的正中，两边各让出钮那么宽；窄到放不下时只让右边，列名靠左挪半个钮、不截字。
         // 两个候选都是整个列名，不会像按宽挑"有名没名"那样先把列名挑没（见上）
-        return ViewThatFits(in: .horizontal) {
-            row.padding(.horizontal, button)
-            row.padding(.trailing, button)
+        return Group {
+            if isShelf {
+                row.padding(.trailing, button).frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                ViewThatFits(in: .horizontal) {
+                    row.padding(.horizontal, button)
+                    row.padding(.trailing, button)
+                }
+                .frame(maxWidth: .infinity)
+            }
         }
         .lineLimit(1)
-        .frame(maxWidth: .infinity)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(column.title)
         .accessibilityValue("\(count)")
         .accessibilityAddTraits(.isHeader)
         .overlay(alignment: .trailing) {
-            if let add { LaneAddButton(add, cell: CGSize(width: Self.add, height: Self.height)).font(Self.font) }
+            if let add { LaneAddButton(add, cell: CGSize(width: Self.add, height: height)).font(font) }
         }
-        .frame(height: Self.height)
+        .frame(height: height)
         // 又做完一件（正好多一件：读到一批、同步来一串不算）：对勾擦掉，等卡飞到时重写一遍
         .onChange(of: count) { old, new in if column == .done, new == old + 1, !reduceMotion { wins += 1 } }
         .task(id: wins) {
@@ -136,17 +146,34 @@ struct BoardColumnHeader: View {
 
     private var row: some View {
         HStack(spacing: 0) {
-            BoardLaneMark(column: column, size: Self.mark, drawn: drawn)
+            BoardLaneMark(column: column, size: isShelf ? 16 : Self.mark, drawn: drawn)
             Text(column.title).foregroundStyle(column.light ? palette.ink3 : palette.ink2).truncationMode(.tail)
                 .padding(.leading, Spacing.glyph)
             // 数紧跟列名：四列同一种排法
             Text("\(count)").monospacedDigit().foregroundStyle(column.countInk(palette)).counting(count).fixedSize()
                 .padding(.leading, Spacing.glyph)
         }
-        .font(Self.font)
+        .font(font)
     }
 
-    private static let font = Typography.laneTitle
+    private var isShelf: Bool {
+        #if os(iOS)
+        shelf
+        #else
+        false
+        #endif
+    }
+
+    private var font: Font { isShelf ? Typography.secondary.weight(.semibold) : Typography.laneTitle }
+
+    private var height: CGFloat {
+        #if os(iOS)
+        shelf ? BoardRowMetrics.header : Self.height
+        #else
+        Self.height
+        #endif
+    }
+
     static var height: CGFloat { ControlSize.regular.height }
     #if os(macOS)
     private static let mark: CGFloat = 16

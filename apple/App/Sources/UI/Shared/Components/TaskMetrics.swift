@@ -16,7 +16,6 @@ enum TaskMetrics {
     static let ringColumn: CGFloat = 44
     static let columnGap = Spacing.hair
     static let cardPadding = Spacing.group
-    static let cardLead: CGFloat = 24
     static let cardGlyph: CGFloat = 13
     static let rowGap: CGFloat = 0
     /// 圈在它那一列里居中，圈的左缘离列边这么远：行直接落在页上时（项目页）整列向左让出这一截，圈与页边对齐。
@@ -34,7 +33,6 @@ enum TaskMetrics {
     static let ringColumn: CGFloat = 18
     static let columnGap = Spacing.item
     static let cardPadding = Spacing.group
-    static let cardLead: CGFloat = 16
     static let cardGlyph: CGFloat = 12
     /// 行与行之间那道缝：行高 `rowHeight` 加上下这一截，一行正好占一行的高（`RowMetrics.height`），悬停的底相邻两行不粘在一起。
     static let rowGap = (RowMetrics.height - rowHeight) / 2
@@ -47,9 +45,6 @@ enum BoardCardMetrics {
     static let gap = Spacing.item
     /// 列与列之间不另留缝（`BoardWidths`）。否决过：列间再留 20——四列三道缝连同卡离列边共白占约 100，1280 宽时待办一行只剩三四个字。
     static var columnGap: CGFloat { 2 * inset }
-    static let rowPadding = Spacing.group
-    static let rowGap = Spacing.glyph
-    static let rowTitle = Typography.secondary.weight(.medium)
     /// 列里的卡：字离上下边、标题与卡脚之间、卡脚的高（放得下线，也放得下"开始"的点按区）。
     #if os(macOS)
     static let pad = Spacing.group
@@ -60,7 +55,7 @@ enum BoardCardMetrics {
     static let pad = Spacing.group
     static let footGap = Spacing.glyph
     static let foot: CGFloat = 24
-    static let vitals = foot
+    static let vitals: CGFloat = 18
     #endif
     /// 卡脚里项目图形占的宽（名字放不下时只留它，`BoardFoot`）。
     static var footGlyph: CGFloat { TaskMetrics.cardGlyph + ProjectGlyph.margin }
@@ -70,8 +65,4 @@ enum BoardCardMetrics {
     nonisolated static func lines(_ typeSize: DynamicTypeSize) -> Int { typeSize.isAccessibilitySize ? 3 : 2 }
     /// 卡脚里项目名最宽：约七个汉字，再长就截，给线与读数留地方。
     static let tagMax: CGFloat = 104
-    /// 手机的行里的卡。
-    static let titleRow: CGFloat = 24
-    /// 推进中的行下沿给读数留的高。
-    static let rowFact: CGFloat = 18
 }
