@@ -11,6 +11,8 @@ final class LiveRemote {
         var serving: [URL]
         var sent: LiveAddress?
         var door: LiveSignal.Door?
+        /// 隧道放行的 Mac 本机端口：手机照搬到自己的回环上（`LiveTunnel.Proxy.mirror`）。
+        var ports: [Int]
     }
 
     /// Mac 答的，按 Pi 的会话 id。没答、答了没有页面、过了 `LiveSignal.lease` 没再答都不在里面。
@@ -152,11 +154,11 @@ final class LiveRemote {
     func receive(_ event: VoiceRelayEvent) {
         switch event {
         case .received(let received):
-            guard case .live(.pages(_, let sessionID, let pages, let serving, let sent, let door)) = received.payload,
+            guard case .live(.pages(_, let sessionID, let pages, let serving, let sent, let door, let ports)) = received.payload,
                   let watch = watches[sessionID], received.header.sender.device == VoiceDeviceID(watch.host) else { return }
             watches[sessionID]?.answeredAt = .now
             offline.remove(sessionID)
-            let next = pages.isEmpty ? nil : Pages(pages: pages, serving: serving, sent: sent, door: door)
+            let next = pages.isEmpty ? nil : Pages(pages: pages, serving: serving, sent: sent, door: door, ports: ports ?? pages.compactMap(\.port))
             if answers[sessionID] != next { answers[sessionID] = next }
         case .peerClosed(let endpoint, _):
             for (sessionID, watch) in watches where VoiceDeviceID(watch.host) == endpoint.device { unreachable(sessionID) }

@@ -87,7 +87,7 @@ struct LivePreviewPane: View {
     /// 页面出不来的原因：服务还没起来；手机、iPad 上还有连不上 Mac 的那几种（`LiveLink.State`）。
     private var trouble: LiveTrouble? {
         #if os(iOS)
-        if let trouble = preview.link?.trouble { return trouble }
+        if let link = preview.link, let trouble = link.trouble ?? link.taken(preview.address) { return trouble }
         #endif
         return preview.phase == .waiting ? .starting : nil
     }
@@ -191,7 +191,7 @@ extension Workspace {
 
 /// 页面出不来的原因，盖在预览上的那一句。
 nonisolated enum LiveTrouble: Equatable, Sendable {
-    case starting, asking, offline, noWiFi, apart, isolated, denied, gone
+    case starting, asking, offline, noWiFi, apart, isolated, denied, gone, taken
 
     var title: LocalizedStringResource {
         switch self {
@@ -203,6 +203,7 @@ nonisolated enum LiveTrouble: Equatable, Sendable {
         case .isolated: "连不上 Mac，这个 Wi-Fi 可能不让设备互相连接"
         case .denied: "没有本地网络权限，看不到 Mac 上的网页"
         case .gone: "服务停了，等它回来"
+        case .taken: "这个端口在这台设备上被占着"
         }
     }
 

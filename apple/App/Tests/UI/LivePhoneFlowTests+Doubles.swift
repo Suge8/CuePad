@@ -80,7 +80,7 @@ extension LivePhoneFlowTests {
             guard case .live(.watch(let request, let sessionID, let open)) = payload else { return }
             opened = open
             let door = open ? door.map { LiveSignal.Door(addresses: $0.addresses, port: $0.port, ticket: ticket) } : nil
-            let reply = LiveSignal.pages(request: request, session: sessionID, pages: pages, serving: found ?? pages, sent: sent, door: door)
+            let reply = LiveSignal.pages(request: request, session: sessionID, pages: pages, serving: found ?? pages, sent: sent, door: door, ports: nil)
             let header = VoiceSignalHeader(version: VoiceSignalFormat.version, sender: endpoint, recipient: local, session: session, sequence: 1,
                                            expiresAtMilliseconds: Int64(Date.now.timeIntervalSince1970 * 1000) + 30_000, purpose: VoiceSignalPayload.live(signal: reply).purpose)
             let answer = answer

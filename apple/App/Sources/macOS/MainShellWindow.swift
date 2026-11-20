@@ -12,10 +12,12 @@ import AppKit
 class MainShellWindow: NSWindow, NSWindowDelegate {
     private var parked: NSViewController?
 
-    func show() {
+    /// `overOthers`：不是这台 Mac 上的操作要它出来的（手机请它亮出来，`Workspace.showLive`）。系统不让应用这时把自己换到前台
+    /// （实测 macOS 27.2：`NSApp.activate()` 之后前台还是原来那个应用），窗口自己排到所有窗口最前不用换前台：远程画面里一眼看得到，点它一下前台就过来。
+    func show(overOthers: Bool = false) {
         unpark()
         if isMiniaturized { deminiaturize(nil) }
-        present(activating: true)
+        present(activating: true, overOthers: overOthers)
     }
 
     /// 连应用一起隐藏，焦点才会回到此前的前台应用。
@@ -65,10 +67,11 @@ class MainShellWindow: NSWindow, NSWindowDelegate {
 }
 extension NSWindow {
     /// 显示窗口：到最前并接过键盘（`activating` 时连 App 一起到前台）；本机构建排在后面（`DebugHooks.keepsBehind`）。
-    func present(activating: Bool = false) {
+    func present(activating: Bool = false, overOthers: Bool = false) {
         guard !DebugHooks.keepsBehind(self) else { return }
         if activating { NSApp.activate() }
         makeKeyAndOrderFront(nil)
+        if overOthers { orderFrontRegardless() }
     }
 }
 #endif

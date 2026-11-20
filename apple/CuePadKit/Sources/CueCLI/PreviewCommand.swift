@@ -16,12 +16,11 @@ private struct PreviewOutput {
 }
 
 extension Command {
-  static let sessionVariables = [AgentKind.watchedSessionVariable] + AgentKind.allCases.map(\.sessionVariable)
 
   /// 执行这条命令的 Agent 会话（`show`、`live` 共用）：环境变量里第一个有值的。
   static func agentSession(_ call: Call, _ why: String) throws -> String {
-    guard let session = sessionVariables.lazy.compactMap({ call.environment[$0] }).first(where: { !$0.isEmpty }) else {
-      throw CLIError.invalid("不在 Agent 会话里：\(sessionVariables.joined(separator: "、")) 都没有值。\(why)")
+    guard let session = AgentKind.sessionVariables.lazy.compactMap({ call.environment[$0] }).first(where: { !$0.isEmpty }) else {
+      throw CLIError.invalid("不在 Agent 会话里：\(AgentKind.sessionVariables.joined(separator: "、")) 都没有值。\(why)")
     }
     return session
   }
@@ -36,7 +35,7 @@ extension Command {
       他回复里的 `预览「标题」：……` 说的就是你发的那一份。
       做 HTML 页时按手机上看来做：手机顶栏已显示标题，页面里不写标题、页眉、导语和说明页脚，内容直接开始；按手机宽度排版，跟随深浅色（prefers-color-scheme）；能用原生控件（button、input、select、details）就不自绘；单个文件、不联网，样式与脚本写进同一个 HTML，图片用 data: 地址内联。
       其余命令（灵感、任务、搜索）与在沙箱里怎么运行：cuepad --help。
-      会话取 Agent 给每条命令带的环境变量里第一个有值的：\(sessionVariables.joined(separator: "、"))。\(AgentKind.watchedSessionVariable) 是 CuePad 的 Pi 扩展给的、用户在看的会话，子代理发的也落在它的对话里。都没有就报错，不猜。
+      会话取 Agent 给每条命令带的环境变量里第一个有值的：\(AgentKind.sessionVariables.joined(separator: "、"))。\(AgentKind.watchedSessionVariable) 是 CuePad 的 Pi 扩展给的、用户在看的会话，子代理发的也落在它的对话里。都没有就报错，不猜。
       一次给几个文件是同一张卡，点开后左右切换；用户看到的是标题，不是文件名。
       可发：\(PreviewKind.supportedList)；单个不超过 \(PreviewItem.maxBytes / 1_000_000) MB。Markdown 排成文稿，diff、patch 是增删对照。
       网页只读、不联网、读不到别的文件；outsideReferences 是页面引用了、预览里因此缺失的地址。经 iCloud 同步，CuePad.app 需要在运行。

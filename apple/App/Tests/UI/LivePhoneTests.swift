@@ -219,6 +219,56 @@ struct LivePhoneTests {
         }
     }
 
+    @Test func 同号端口上另一个会话的服务在另一族回环上_手机只说得出端口_连到的还是这个会话的() async throws {
+        try await paired { _, remote, pair in
+        let mine = try flow.folder(), theirs = try flow.folder()
+        _ = try await flow.session("live", .settled, in: mine)
+        _ = try await flow.session("theirs", .settled, in: theirs)
+        let (page, url) = try await flow.serve(in: mine)
+        let (other, _) = try await flow.serve(in: theirs, bind: "::1", port: try #require(url.port))
+        defer { page.terminate(); other.terminate() }
+        try "会话里的页面".write(to: mine.appending(path: "index.html"), atomically: true, encoding: .utf8)
+        try "别的会话".write(to: theirs.appending(path: "index.html"), atomically: true, encoding: .utf8)
+
+        let watching = Task { await remote.watch("live", on: flow.services.hostID, open: true) }
+        let door = try await awaited("Mac 给了隧道的入口") { remote.answers["live"]?.door }
+        let proxy = try LiveTunnel.Proxy()
+        defer { proxy.cancel() }
+        let port = try await proxy.start()
+        route(proxy, pair.phone.key, door)
+        for _ in 0..<3 { #expect(try await Tab(proxy, port: port, to: url).get("index.html") == "会话里的页面") }
+        await watching.stop()
+        }
+    }
+
+    @Test func 放行的口撤掉了_那个口上还连着的也断() async throws {
+        try await paired { workspace, remote, pair in
+        let directory = try flow.folder(), elsewhere = try flow.folder()
+        _ = try await flow.session("live", .settled, in: directory)
+        // 不在会话名下的服务：只因 Agent 发来这个地址才放行
+        let (server, url) = try await flow.serve(in: elsewhere)
+        defer { server.terminate() }
+        try "页面".write(to: elsewhere.appending(path: "index.html"), atomically: true, encoding: .utf8)
+        let following = Task { await workspace.followLiveAddresses() }
+        _ = try await flow.live(url.absoluteString, for: "live")
+
+        let watching = Task { await remote.watch("live", on: flow.services.hostID, open: true) }
+        let door = try await awaited("Mac 给了隧道的入口") { remote.answers["live"]?.door }
+        let proxy = try LiveTunnel.Proxy()
+        defer { proxy.cancel() }
+        let port = try await proxy.start()
+        route(proxy, pair.phone.key, door)
+        let held = try await Tab(proxy, port: port, to: url)
+        #expect(workspace.liveServer?.server.connections == 1)
+
+        _ = try await flow.live("http://localhost:9", for: "live")
+        try await eventually("Agent 换了地址，原来那个口上连着的断了") { workspace.liveServer?.server.connections == 0 }
+        await #expect(throws: (any Error).self) { try await held.get("index.html") }
+        await watching.stop()
+        await following.stop()
+        }
+    }
+
     @Test func 手机走了_票据作废_连着的也断_没人开着预览时隧道口关上() async throws {
         try await paired { workspace, remote, pair in
         let directory = try flow.folder()

@@ -40,6 +40,9 @@ public enum AgentKind: String, CaseIterable, Sendable, Identifiable, Codable {
     }
   }
 
+  /// 一个进程属于哪个会话，取它环境里这几个中第一个有值的：`cuepad show`、`cuepad live` 认自己在哪个会话，活预览认服务是谁起的（`LiveServers`）。
+  public static let sessionVariables = [watchedSessionVariable] + allCases.map(\.sessionVariable)
+
   /// Claude Code、Codex、Grok Build 的模型名在它们自己的命名空间里（`opus`、`gpt-5.1`、`grok-4.6`），提供方就写成这家；Pi、OpenCode、dsh 的模型本身带提供方，为 nil。
   public var modelProvider: String? {
     switch self {

@@ -98,6 +98,13 @@ extension CueStore {
     return LiveServers.Owner(process: process, directory: try indexedSession(sessionID)?.cwd)
   }
 
+  /// 本机记着进程的会话（`piProcesses` 是本机表），只带进程，键是会话 id。命令行只认一个会话的服务时连它们一起给（`LiveServers.find(for:only:)`）。
+  public func liveAgents() throws -> [String: LiveServers.Owner] {
+    Dictionary(try db.query("SELECT sessionID, pid, startedAt FROM piProcesses") { row in
+      (row.text(0), LiveServers.Owner(process: SessionProcess(pid: Int32(row.int(1)), startedAt: row.int(2)), directory: nil))
+    }, uniquingKeysWith: { first, _ in first })
+  }
+
   /// 这几台（本机）上没结束的会话，各自的进程与工作目录，键是会话 id：已结束的不认服务。
   public func liveOwners(hosts: [String]) throws -> [String: LiveServers.Owner] {
     guard !hosts.isEmpty else { return [:] }

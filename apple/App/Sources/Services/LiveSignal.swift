@@ -7,8 +7,9 @@ nonisolated enum LiveSignal: Equatable, Codable, Sendable {
     /// 手机：这个会话页我正开着；`open` 是它的活预览也开着，要隧道的入口。每 `renewal` 重发一次，Mac 过了 `lease` 没再收到就当他走了。
     case watch(request: UUID, session: String, open: Bool)
     /// Mac：这个会话此刻可看的页面，点开时开的在前，没有是空的；其中认出在服务的（`serving`）；Agent 最近一次发来的（`cuepad live`，
-    /// Mac 这次启动以来）；开着预览时的入口。有变化 Mac 主动再答一次。手机按它们跟 Mac 同一条规则换地址（`LivePreview.follow`）。
-    case pages(request: UUID, session: String, pages: [URL], serving: [URL], sent: LiveAddress?, door: Door?)
+    /// Mac 这次启动以来）；开着预览时的入口，与隧道放行的本机端口（`ports`，`Workspace.livePorts`；2611201440 及更早的 Mac 不带，
+    /// 手机用页面地址里的端口）。有变化 Mac 主动再答一次。手机按它们跟 Mac 同一条规则换地址（`LivePreview.follow`）。
+    case pages(request: UUID, session: String, pages: [URL], serving: [URL], sent: LiveAddress?, door: Door?, ports: [Int]?)
     /// 手机：连不上 Mac 的隧道、要用 UU 远程看（`Workspace.viewOnMac`），请 Mac 把这个会话开到主区、活预览开在右半、窗口提到最前。不答。
     /// 2611201115 那一版的 Mac 不认：正文解不开，只记一条日志（`VoiceRelayEvent.unreadable`），中转连接照旧。
     case show(request: UUID, session: String)
@@ -25,7 +26,7 @@ nonisolated enum LiveSignal: Equatable, Codable, Sendable {
 
     var request: UUID {
         switch self {
-        case .watch(let request, _, _), .pages(let request, _, _, _, _, _), .show(let request, _): request
+        case .watch(let request, _, _), .pages(let request, _, _, _, _, _, _), .show(let request, _): request
         }
     }
 
