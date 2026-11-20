@@ -11,6 +11,32 @@ import AppKit
 /// 主线程就为看板的卡片查约 700 次字体显示名（`AccessibilityViewGraph` → `NSFont.displayName`），与按节奏的拉取抢主线程。
 class MainShellWindow: NSWindow, NSWindowDelegate {
     private var parked: NSViewController?
+    /// 铺满屏幕之前的位置（`fillScreen`）；铺满着时窗口的位置不记进偏好（`WindowFrameKeeper`）。
+    private(set) var unfilled: NSRect?
+    /// 铺满之后人又进了系统全屏，这时要放回：等出了全屏再放（`windowDidExitFullScreen`）。
+    private var restoresAfterFullScreen = false
+
+    /// 铺满所在的屏幕（菜单栏与程序坞之外），`restoreFrame` 放回原来的位置。不用系统的全屏：它另开一个桌面，
+    /// 应用换不到前台时（`show(overOthers:)`）系统不一定切过去，远程画面里就还是原来的桌面。系统全屏着的不动。
+    func fillScreen() {
+        restoresAfterFullScreen = false
+        guard !styleMask.contains(.fullScreen), let screen else { return }
+        if unfilled == nil { unfilled = frame }
+        setFrame(screen.visibleFrame, display: true, animate: true)
+    }
+
+    /// 系统全屏着时先记着：这时改不了位置，出全屏时系统又会把窗口摆回进全屏前（铺满）的样子，原来的位置就丢了。
+    func restoreFrame() {
+        guard let frame = unfilled else { return }
+        restoresAfterFullScreen = styleMask.contains(.fullScreen)
+        guard !restoresAfterFullScreen else { return }
+        unfilled = nil
+        setFrame(frame, display: true, animate: true)
+    }
+
+    func windowDidExitFullScreen(_ notification: Notification) {
+        if restoresAfterFullScreen { restoreFrame() }
+    }
 
     /// `overOthers`：不是这台 Mac 上的操作要它出来的（手机请它亮出来，`Workspace.showLive`）。系统不让应用这时把自己换到前台
     /// （实测 macOS 27.2：`NSApp.activate()` 之后前台还是原来那个应用），窗口自己排到所有窗口最前不用换前台：远程画面里一眼看得到，点它一下前台就过来。

@@ -126,7 +126,7 @@ public enum ClaudeCodeError: Error, Equatable, ShownError {
     public var shown: String.LocalizationValue {
         switch self {
         case .exited(let reason): reason.map { "在后台启动的 Claude Code 退出了：\($0.embedded)" } ?? "在后台启动的 Claude Code 没连上就退出了"
-        case .listingFailed: "没能问到 Claude Code 此刻在跑哪些会话"
+        case .listingFailed: "没能问到 Claude Code 此刻开着哪些会话"
         }
     }
 }

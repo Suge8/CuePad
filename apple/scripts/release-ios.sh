@@ -49,7 +49,7 @@ case "$mode" in
     # 上传走 altool（xcodebuild 的 destination=upload 用 API 密钥时会报"账号凭据过期"）
     xcrun altool --upload-app -f "$OUT/export/CuePad.ipa" -t ios --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID"
     release_tag ios "$build_version" "$source_commit"
-    echo "已上传 ${build_version}，App Store Connect 处理完成后出现在 TestFlight"
+    echo "已上传 ${build_version}，App Store Connect 处理完成后出现在 TestFlight（处理到哪了：python3 apple/scripts/testflight.py builds）"
     python3 "$APPLE_DIR/scripts/testflight.py" group || {
       echo "IPA 已上传并标记来源；仅重试 python3 apple/scripts/testflight.py group，不要为分组重新上传 IPA" >&2
       exit 1

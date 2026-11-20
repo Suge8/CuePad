@@ -16,6 +16,8 @@ CATALOGS = {"Localizable": f"{APPLE}/App/Strings/Localizable.xcstrings", "Demo":
 BUILD = f"{APPLE}/.derived/Build/Intermediates.noindex"
 TODO = f"{APPLE}/.derived/strings-todo.json"
 APP_TARGETS = ("CuePad", "CuePadWidget", "CuePadShare", "CuePadNotify")  # 测试目标与命令行工具的字不上界面
+# 界面上不用的词 → 改成什么。口味的出处：占位字在根目录 AGENTS.md 的界面一节，叫法在 WORDS.md
+BANNED = {"可不填": "占位字不写这三个字，能不能空着由提交钮亮不亮说", "在跑": "正在干活写“工作中”，没休眠的会话写“开着”"}
 HAN = re.compile(r"[\u3000-\u303f\u4e00-\u9fff\uff00-\uffef]")
 SPEC = re.compile(r"%(?:\d+\$)?[-+ 0#]*\d*(?:\.\d+)?(?:hh|h|ll|l|q|z|t|j|L)?([@dDiuUxXoOfeEgGcCsSpaA%])")
 def stringsdata(configs):
@@ -153,11 +155,10 @@ def check():
            for _, d in stringsdata(["Debug-iphonesimulator"]) for t, strings in d["tables"].items() for s in strings
            if s["key"] not in catalogs.get(t, {})]
     bad += [f"「{k}」{why}" for c in catalogs.values() for k, e in c.items() if (why := problems(k, e))]
-    # 能不能空着由提交钮亮不亮说（根目录 AGENTS.md 的界面口味）
-    bad += [f"「{k}」写了可不填：占位字不写这三个字" for k in catalogs["Localizable"] if "可不填" in k]
+    bad += [f"「{k}」写了{word}：{fix}" for k in catalogs["Localizable"] for word, fix in BANNED.items() if word in k]
     if bad:
         sys.exit("\n".join(sorted(set(bad))) + "\n界面文字没对齐：xc.sh strings 收进目录，strings.py set 补英文（见头注释）")
 
 
 if __name__ == "__main__":
-    {"sync": sync, "set": put, "find": find, "check": check}[sys.argv[1] if len(sys.argv) > 1 else ""]()
+    {"sync": sync, "set": put, "find": find, "check": check}.get(sys.argv[1] if len(sys.argv) > 1 else "", lambda: sys.exit(__doc__))()

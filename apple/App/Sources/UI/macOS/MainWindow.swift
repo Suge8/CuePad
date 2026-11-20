@@ -37,17 +37,18 @@ struct MainWindow: View {
                 // 放不下时也挂着（宽 0、不放循环动效、订阅暂停）：窗口拖窄跨过临界宽的那一下主区从它上面滑过去，露出的是它本身
                 WideRail(width: sizes.rail)
                 // Cue 铺满时主区让出去（宽 0）、页留着不拆，订阅暂停
-                WideColumnHost(slot: .main, focus: focus, origin: sizes.rail, width: sizes.leading + under, shape: sizes.shape, hidden: sizes.home) {
+                // 预览铺满时主区被右半盖住：宽不变（不重排），滑完藏起
+                WideColumnHost(slot: .main, focus: focus, origin: sizes.rail, width: sizes.leading + under, shape: sizes.shape, hidden: sizes.home || sizes.fill) {
                     MainColumn().environment(\.headInset, Self.inset(leading: Chrome.headLead(rail: sizes.rail), trailing: sizes.split ? Spacing.page : trail))
-                        .environment(\.pageActive, !sizes.home)
+                        .environment(\.pageActive, !sizes.home && !sizes.fill)
                         .environment(\.underCue, under)
                 }
                 .frame(width: sizes.leading + under)
                 Spacer(minLength: 0)
             }
             .overlay(alignment: .topLeading) { beside(sizes, window: geometry.size.width, trail: trail) }
-            .overlay { if sizes.split { BesideDivider(sizes: sizes) } }
-            .overlay { if !sizes.home { railChrome(sizes) } }
+            .overlay { if sizes.split, !sizes.fill { BesideDivider(sizes: sizes) } }
+            .overlay { if !sizes.home, !sizes.fill { railChrome(sizes) } }
             .reportsWideFits(sizes, to: workspace)
             .overlay(alignment: .topTrailing) {
                 if !workspace.cueShown(sizes) { CueButton(fits: sizes.cueFits).padding(.trailing, Spacing.page).frame(height: Chrome.band) }
@@ -60,11 +61,12 @@ struct MainWindow: View {
     }
 
     /// 并排的右半：不并排时也挂着、同样宽，停在窗口右缘外、滑完藏起。开合是这一块整个从右缘滑进来、滑回去（`WideColumnSlide` 的平移），
-    /// 宽不变、页不重排：收起时里面的东西原样滑走，不先被压窄。
+    /// 宽不变、页不重排：收起时里面的东西原样滑走，不先被压窄。活预览铺满时（`WideMetrics.fill`）它从右半长到窗口左缘，栏让出红绿灯。
     private func beside(_ sizes: WideMetrics, window: CGFloat, trail: CGFloat) -> some View {
-        let origin = sizes.split ? sizes.rail + sizes.leading : window
+        let origin = !sizes.split ? window : sizes.fill ? 0 : sizes.rail + sizes.leading
         return WideColumnHost(slot: .beside, focus: focus, origin: origin, width: sizes.trailing, shape: sizes.shape, hidden: !sizes.split) {
-            BesideColumn { SessionPage($0, column: .beside) }.environment(\.headInset, Self.inset(trailing: trail))
+            BesideColumn { SessionPage($0, column: .beside) }
+                .environment(\.headInset, Self.inset(leading: sizes.fill ? Chrome.toggle : Spacing.page, trailing: trail))
         }
         .frame(width: sizes.trailing)
         .padding(.leading, origin)

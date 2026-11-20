@@ -10,8 +10,9 @@
 Mac 上的 CuePad 落成 <目录>/<设备>/<文件>（DiagnosticInbox.swift）。目录缺省是正式版的 ~/Library/Logs/CuePad；读隔离实例（xc.sh fleet）的给
 CUEPAD_DIAG_DIR=<库目录>/Logs。<设备> 是目录名（Mac 是电脑名，iPhone、iPad 是型号代号如 iPhone18,1：iOS 不给 App 用户起的设备名），写开头几个字也行。
 系统的崩溃报告走 devicectl（Xcode 自带；无线连接也行，不要 root）：systemCrashLogs 域的列出与拷出，拷出不删手机上的；手机选 CUEPAD_DIAG_DEVICE
-（名字或 UDID），没给时取唯一一台配对过的真机。直连取手机的系统日志不做：devicectl 没有日志流，sysdiagnose 要管理员密码，log collect --device 要 root，
-idevicesyslog 要用户在 Finder 里另开无线显示。要点的格式与 App 里"导出诊断"同一套（DiagnosticSummary.swift）。"""
+（名字或 UDID），没给时取唯一一台配对过的真机。直连取手机的系统日志不做：devicectl 没有日志流，sysdiagnose 要管理员密码，log collect --device 要 root。
+连着线时 idevicesyslog 取得到（`idevicesyslog -u <UDID> archive <包.tar> --start-time <起点的 epoch 秒>`，解进一个 .logarchive 目录再 `log show --archive`）：一包几百 MB，
+带着别的 App 的内容，按需手取、读完就删，不做成命令。要点的格式与 App 里"导出诊断"同一套（DiagnosticSummary.swift）。"""
 import json
 import os
 import re

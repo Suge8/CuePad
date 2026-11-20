@@ -1,6 +1,7 @@
 // CuePad 的编译、测试、截图、测量与模拟器开关只经 apple/scripts/xc.sh，调试实例只经它起停。
 // 绕开它：多一份冷编译、多一台反复冷启动的模拟器；自己起的 CuePad 不隔离、不受"每个检出一份"管；
 // 按名字或 bundle id 起停会碰到用户正在用的正式版（它与调试构建同一个 bundle id）；osascript 激活应用、点按会抢用户的前台。这里拦下 Agent 直接这样做的命令。
+// 合并也只经它（xc.sh land）：直接 gh pr merge 不看主干是不是红着，红上叠合并之后分不清是谁弄坏的。
 // 判断程序只看每段命令的第一个词，grep、日志里出现这些词不算；只读的查询（pgrep、xcodebuild -version、读窗口信息的 osascript）放行。
 import { existsSync, readFileSync, statSync } from "node:fs";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
@@ -115,6 +116,8 @@ function blocked(command: string): string | undefined {
 		const args = words.slice(i + 1);
 		if (program === "xcodebuild" && args.some((a) => XCODEBUILD_READONLY.has(a))) continue;
 		if (program === "xcodebuild" || program === "swift-build" || program === "swift-test") return `不直接调 ${program}。${BUILD}`;
+		if (program === "gh" && sub === "pr" && args[1] === "merge")
+			return "合并只经 apple/scripts/xc.sh land [PR] [--red]：主干最近一遍云端检查红着它就停下、列出红的用例，合完快进主检出（land.sh 头注释）。";
 		if (program === "swift" && SWIFT_BLOCKED.has(sub)) return `不直接调 swift ${sub}。${BUILD}`;
 		if (program === "simctl" && SIMCTL_BLOCKED.has(sub)) return `不直接调 simctl ${sub}。${BUILD}`;
 		if (program === "CuePad" || (program === "open" && args.some((a) => CUEPAD.test(a)))) return `不直接起 CuePad。${INSTANCE}`;

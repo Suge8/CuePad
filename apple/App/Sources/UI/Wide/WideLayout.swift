@@ -25,6 +25,8 @@ struct WideMetrics {
     let cue: CGFloat
     let split: Bool
     let preview: Bool
+    /// Mac 的活预览铺满整个窗口（`Workspace.liveFill`）：会话条收起，右半盖过主区。
+    let fill: Bool
     let cueFits: Bool
     private let share: CGFloat
 
@@ -48,7 +50,7 @@ struct WideMetrics {
     }
 
     /// 并排时右半的宽；不并排时是此刻开出右半会有的宽（右半一直挂着，`MainWindow.beside`、`SplitRoot.beside`）。
-    var trailing: CGFloat { main - (split ? leading : (main / 2).rounded()) }
+    var trailing: CGFloat { fill ? main : main - (split ? leading : (main / 2).rounded()) }
 
     static func trailingMin(preview: Bool) -> CGFloat { preview ? previewWidth : session }
 
@@ -64,11 +66,12 @@ struct WideMetrics {
         let rail: CGFloat
         let cue: CGFloat
         var split = false
+        var fill = false
     }
 
     /// 铺满的 Cue 随窗口变宽，不算换了形：拖窗口时不起滑动。
     /// 并排开合也算换形：右半那一块从主区右缘长出来、收回去（`MainWindow`、`SplitRoot` 一直挂着它）。
-    var shape: Shape { Shape(rail: rail, cue: home ? -1 : cue, split: split) }
+    var shape: Shape { Shape(rail: rail, cue: home ? -1 : cue, split: split, fill: fill) }
 
     struct Fits: Equatable {
         let rail: Bool
@@ -81,9 +84,14 @@ struct WideMetrics {
         home = workspace.cueHome
         split = workspace.beside != nil
         preview = workspace.beside == .preview
+        #if os(macOS)
+        fill = preview && workspace.liveFill != nil
+        #else
+        fill = false
+        #endif
         let narrowest = split ? Self.session + Self.trailingMin(preview: preview) : Self.session
         railFits = width >= Chrome.rail + narrowest
-        rail = workspace.sidebarOpen && railFits ? Chrome.rail : 0
+        rail = workspace.sidebarOpen && railFits && !fill ? Chrome.rail : 0
         cueFits = home || !split && width >= rail + narrowest + Self.cue
         cue = home ? width - rail : workspace.services.settings.cueOpen && cueFits ? Self.cue : 0
         main = max(0, width - rail - cue)
