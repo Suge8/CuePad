@@ -17,6 +17,7 @@ nonisolated struct CueReading: Sendable {
     }
 
     struct ActivityRead: Equatable, Sendable {
+        /// 各台手机的地址，活动的与开岛的都在（`ActivityDestination.isStarter`）。
         let destinations: [ActivityDestination]
         let publisher: String?
     }

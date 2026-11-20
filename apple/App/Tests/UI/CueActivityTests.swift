@@ -51,8 +51,12 @@ struct CueActivityTests {
         try await recorder.update(sessionID: "zoom", state: .ended)
         try await recorder.update(sessionID: "testflight", state: .ended)
         cue = try await now()
-        #expect(kinds(cue) == [.done, .done, .done] && !cue.isLive && cue.first == nil)
+        // 刚做完的让已有的岛再留一会儿（不够新开一只），过了那一段才结束
+        #expect(kinds(cue) == [.done, .done, .done] && cue.isLive && !cue.hasConfirmedActivity && cue.first == nil)
         #expect(cue.aged(to: cue.at.addingTimeInterval(CueNow.doneWindow + 1)).items.isEmpty)
+        let later = CueNow(
+            try await CueDigest.read(from: store), at: .always(at: .now.addingTimeInterval(CueNow.doneWindow + 1)), local: CueNow.Local(waiting: nil, here: nil))
+        #expect(later.items.isEmpty && !later.isLive)
 
         _ = try await store.updateCueProfile { profile in
             profile.hostID = "mac-cue"

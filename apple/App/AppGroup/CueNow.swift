@@ -138,11 +138,24 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
     /// 随快照写进 App Group 的是两种各几件，小组件与实时活动只读不另算。
     var needsYou: Int { tally.needsYou }
 
-    /// 当前有确认的活动才可新建；未确认只能保留已有活动。
-    var hasConfirmedActivity: Bool { isBusy || needsYou > 0 || tally.moving > 0 || agentCount.map { $0 > 0 } == true }
+    /// 实时活动跟着还没完的事：在想、在跑、等你拍板。有它才可新建；未确认与刚完的只能保留已有活动。
+    /// 新回复不算：那一轮已经完了，一直没读就一直挂着的岛写的是旧事，它留在角标与通知里。
+    var hasConfirmedActivity: Bool { isBusy || tally.asks > 0 || tally.moving > 0 || agentCount.map { $0 > 0 } == true }
 
-    /// 未确认不等于全部完成；只有明确没有活（歇着与刚做完）时才允许现有生命周期收尾。
-    var isLive: Bool { hasConfirmedActivity || unconfirmed }
+    /// 刚完的（做完、新回复）让已有活动再留到的时刻：两轮之间不收了又开，远程开一只要亮屏提醒、还占系统的额度。
+    var lingersUntil: Date? {
+        items.filter { $0.kind == .done || $0.kind == .reply }.map { $0.since.addingTimeInterval(Self.doneWindow) }.max()
+    }
+
+    /// 未确认不等于全部完成；只有明确没有活、刚完的也过了 `lingersUntil` 才允许现有生命周期收尾。
+    var isLive: Bool { hasConfirmedActivity || unconfirmed || lingersUntil.map { $0 > at } == true }
+
+    /// 最近开工或开始等你拍板的那一件：手机上的活动没了之后，比它没的那一刻更晚开始的才值得远程再开一只。
+    /// Cue 自己的轮不算（多是几秒的收尾）；等子代理的起点随交回变，也不算。
+    var newest: Item? { items.filter { $0.kind == .running || $0.kind == .asks }.max { $0.since < $1.since } }
+
+    /// 一眼看得出的变化：哪几件、各是等你、在动、做完还是歇着。它变了的那一份值得立刻送到；在跑与等子代理之间来回、读到哪一步不算。
+    var glance: Set<String> { Set(items.map { "\($0.id)/\($0.kind.tone)" }) }
 
     var staleAfter: TimeInterval { isBusy ? Self.fastStale : Self.slowStale }
     var staleAt: Date { min(at.addingTimeInterval(staleAfter), cueUntil ?? .distantFuture) }
@@ -177,10 +190,11 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
         [nextChange(after: date), staleAt > date && self != settled ? staleAt : nil, decay.first { $0.at > date }?.at].compactMap { $0 }.min()
     }
 
-    /// 内容一样（不看推出的时刻）：一样的不重画、不重发。
+    /// 内容一样（不看推出的时刻）：一样的不重画、不重发。刚完的那件留到点了，字没变也不一样：该结束了。
     func same(as other: CueNow) -> Bool {
         var other = other
         if isBusy || other.isBusy, staleAt != other.staleAt { return false }
+        guard isLive == other.isLive else { return false }
         other.at = at
         return self == other
     }

@@ -4,6 +4,7 @@ export const MAX_REQUEST_BYTES = 16 * 1024;
 const MAX_PAYLOAD_BYTES = 4096;
 const MAX_TOKEN_HEX_LENGTH = 1024;
 const MAX_ACTIVITY_LIFETIME_S = 8 * 60 * 60;
+const START_KEYS = ["attributes-type", "attributes", "alert", "input-push-token"];
 
 const object = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 const only = (value: Record<string, unknown>, keys: string[]) => Object.keys(value).every(key => keys.includes(key));
@@ -16,11 +17,15 @@ function parse(value: unknown, environment: string): Push | Result {
     || (value.priority !== 5 && value.priority !== 10) || !seconds(value.expiration)
     || !object(value.payload) || !only(value.payload, ["aps"]) || !object(value.payload.aps)) return { status: 400, reason: "InvalidActivity" };
   const aps = value.payload.aps;
-  if (!only(aps, ["timestamp", "event", "content-state", "stale-date", "dismissal-date"])
+  // start 发给开岛令牌（push-to-start）：Apple 要求带活动类型、属性与提醒；其余两种发给某只活动自己的令牌，不许带这些。
+  const starting = aps.event === "start";
+  if (!only(aps, ["timestamp", "event", "content-state", "stale-date", "dismissal-date", ...(starting ? START_KEYS : [])])
     || !seconds(aps.timestamp) || value.expiration < aps.timestamp || value.expiration - aps.timestamp > MAX_ACTIVITY_LIFETIME_S
-    || (aps.event !== "update" && aps.event !== "end") || !object(aps["content-state"])
+    || (aps.event !== "update" && aps.event !== "end" && !starting) || !object(aps["content-state"])
     || ("stale-date" in aps && !seconds(aps["stale-date"]))
-    || ("dismissal-date" in aps && !seconds(aps["dismissal-date"]))) return { status: 400, reason: "InvalidActivity" };
+    || ("dismissal-date" in aps && !seconds(aps["dismissal-date"]))
+    || (starting && (typeof aps["attributes-type"] !== "string" || !/^[A-Za-z_][A-Za-z0-9_]{0,63}$/.test(aps["attributes-type"])
+      || !object(aps.attributes) || !object(aps.alert) || ("input-push-token" in aps && aps["input-push-token"] !== 1)))) return { status: 400, reason: "InvalidActivity" };
   if (value.environment !== environment) return { status: 400, reason: "EnvironmentMismatch" };
   const body = JSON.stringify(value.payload);
   if (Buffer.byteLength(body) > MAX_PAYLOAD_BYTES) return { status: 413, reason: "PayloadTooLarge" };
