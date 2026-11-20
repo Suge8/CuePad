@@ -205,15 +205,31 @@ private struct Details: View {
             }
             ForEach(rows) { item in
                 HStack(spacing: 12) {
-                    Text(item.name).foregroundStyle(palette.ink).lineLimit(1)
+                    Text(item.name).font(.subheadline).foregroundStyle(palette.ink).lineLimit(1)
                     Spacer(minLength: 0)
-                    Text(item.label).foregroundStyle(item.kind.tone.color(palette)).fixedSize()
+                    HStack(spacing: 4) {
+                        item.kind.glyph?.image
+                        Text(item.label)
+                    }
+                    .font(.footnote.weight(.medium)).foregroundStyle(item.kind.tone.color(palette)).fixedSize()
                 }
-                .font(.subheadline)
                 .transition(.blurReplace)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private extension CueNow.Item.Kind {
+    /// 行尾状态词前的图形，同读数前那一个（`ActivityCount.glyph`）；歇着、状态未确认只写字。
+    var glyph: WidgetIcon? {
+        switch self {
+        case .asks: .waiting
+        case .reply: .mail
+        case .running, .delegating: .agent
+        case .done: .done
+        case .resting, .unconfirmed: nil
+        }
     }
 }
 
@@ -260,16 +276,22 @@ private struct FirstWait: View {
         HStack(spacing: 12) {
             Link(destination: wait.open) {
                 VStack(alignment: .leading, spacing: 3) {
+                    // 系统的岛按一行的高来量这一块：不钉住竖向的高，两行的问题被截成一行
                     Text(wait.title).font(.subheadline.weight(.semibold)).foregroundStyle(palette.ink).lineLimit(wait.detail == nil ? 2 : 1)
+                        .fixedSize(horizontal: false, vertical: true).multilineTextAlignment(.leading)
                     if let detail = wait.detail { Text(detail).font(.caption).foregroundStyle(palette.ink2).lineLimit(1) }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             if let allow = wait.allow {
+                // 同 App 里拍板卡答"可以"的那颗钮：只有对勾。带上"允许一次"四个字，iPhone 17 的岛上问题只剩十个字就被截断。
+                // 赭黄实底、纸色的勾：这一态岛上只有等你这一种颜色，能点的是其中唯一铺了底的一块；靛青的钮在黑底上发闷，和赭黄的读数抢一眼。
                 Button(intent: AllowOnceIntent(allow)) {
-                    Text("允许一次").font(.footnote.weight(.semibold)).foregroundStyle(palette.onFill)
-                        .padding(.horizontal, 12).frame(minHeight: 44).background(palette.signatureFill, in: .capsule)
+                    WidgetIcon.tick.image.font(.title3.weight(.bold)).foregroundStyle(palette.paper)
+                        .frame(width: 60, height: 40).background(palette.waiting, in: .capsule)
+                        .frame(minHeight: 44).contentShape(.rect)
                 }
+                .accessibilityLabel("允许一次")
                 .buttonStyle(.plain).fixedSize()
             }
         }
