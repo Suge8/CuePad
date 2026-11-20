@@ -14,7 +14,7 @@ struct BoardLane: View {
     }
 }
 
-/// 三端的新会话都只在这里，另外只有会话列表空着时那一颗（`SessionList`）。动作直接调工作区，不经环境交下来：环境里的闭包没法比较，页每更新一次就让读它的列头全部重算。
+/// 三端看板上的记任务与新会话都只在这里（新会话另外还有会话列表空着时那一颗，`SessionList`）。动作直接调工作区，不经环境交下来：环境里的闭包没法比较，页每更新一次就让读它的列头全部重算。
 struct LaneAdd {
     let title: LocalizedStringResource
     var icon = Icon.add
@@ -22,7 +22,7 @@ struct LaneAdd {
 
     static func of(_ column: TaskBoard.Column, in workspace: Workspace) -> LaneAdd? {
         switch column {
-        case .todo: LaneAdd(title: "添加任务") { workspace.addsTask = true }
+        case .todo: LaneAdd(title: "添加任务") { workspace.openNewTask() }
         case .advancing: LaneAdd(title: "新会话") { workspace.openNewSession(in: workspace.scopedProject) }
         case .waiting, .done: nil
         }

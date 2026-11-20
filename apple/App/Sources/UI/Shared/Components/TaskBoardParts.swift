@@ -5,8 +5,6 @@ import SwiftUI
 struct BoardColumn: View {
     let column: TaskBoard.Column
     let board: TaskBoard
-    @Binding var adding: Bool
-    let newTaskProject: UUID?
     /// 已完成列末尾"更早做完的"原地展开着：由 `BoardColumns` 持有（它展开了已完成就不是空列，列宽跟着变）；手机的行不原地展开（`listsEarlier`）。
     var earlier: Binding<Bool> = .constant(false)
     #if os(iOS)
@@ -64,11 +62,7 @@ struct BoardColumn: View {
     @ViewBuilder private var lane: some View {
         #if os(iOS)
         if row {
-            BoardRowLane(column: column, count: board.count(column), archives: archives, targeted: lit, rewind: rewind) {
-                if adding && column == .todo { newTask.transition(.opacity) }
-            } content: {
-                content
-            }
+            BoardRowLane(column: column, count: board.count(column), archives: archives, targeted: lit) { content }
         } else {
             columnLane
         }
@@ -83,14 +77,14 @@ struct BoardColumn: View {
         ScrollView { cards }
             .scrollBounceBehavior(.basedOnSize)
             .scrollClipDisabled()
-            .modifier(LaneAnchor(column, rewind: rewind))
+            .modifier(LaneAnchor(column))
             .boardLane(column)
             .boardTopRow(column: column, count: board.count(column), archives: archives, targeted: lit)
         #else
         ScrollView { cards }
             .scrollBounceBehavior(.basedOnSize)
             .scrollClipDisabled()
-            .modifier(LaneAnchor(column, rewind: rewind))
+            .modifier(LaneAnchor(column))
             .boardLane(column)
             .safeAreaPadding(.top, BoardColumnHeader.height + BoardCardMetrics.inset)
             .overlay(alignment: .top) {
@@ -104,9 +98,6 @@ struct BoardColumn: View {
     }
 
     private var archives: Bool { column == .done && !(board.done.isEmpty && board.earlier.isEmpty) }
-
-    /// 打开添加任务时待办回到开头（行滑到首格，列滚回顶）：添加那一行在待办最前，滚过的列要把它带进视野。
-    private var rewind: UUID? { adding && column == .todo ? board.todo.first?.id : nil }
 
     /// 接得住的卡拖到这一列上就亮。
     private var lit: Bool { moves?.over == column }
@@ -155,16 +146,13 @@ struct BoardColumn: View {
     @ViewBuilder private var content: some View {
         switch column {
         case .todo:
-            if adding, !isRow {
-                newTask.transition(.opacity)
-            }
             ForEach(todoCells) { cell in
                 switch cell {
                 case .card(let item): card(item).boardDraggable(item.id, session: item.agent?.state.sessionID)
                 case .well(let height): BoardWell().frame(height: isRow ? nil : height).boardFlight(BoardMoves.well)
                 }
             }
-            if board.todo.isEmpty && !adding { empty("没有待办") }
+            if board.todo.isEmpty { empty("没有待办") }
         case .advancing:
             // 一个 ForEach 排完各档：卡换档是同一串里换位（让位），不是这一档删一张、那一档添一张（同一个飞行身份一删一添会从栈顶飞过来）
             ForEach(AdvancingSlot.slots(workspace.byAttention(board.advancing), gaps: !isRow)) { slot in
@@ -224,12 +212,6 @@ struct BoardColumn: View {
     }
 
     private func glyph(_ project: Project?) -> Project? { workspace.scopedProject == nil ? project : nil }
-
-    private var newTask: some View {
-        NewTaskField(project: newTaskProject, choosesProject: true, stacked: !isRow, autofocus: true) { adding = false }
-            .padding(.horizontal, isRow ? Spacing.tight : TaskMetrics.cardPadding)
-            .paper(cornerRadius: TaskMetrics.cardRadius, lifted: !isRow)
-    }
 
     /// 能添东西的列空着时，这一格就是添加的入口（列头那颗"+"的同一个动作）；手机的行里添加在行头上，这一格只是说明。
     @ViewBuilder private func empty(_ text: LocalizedStringResource) -> some View {

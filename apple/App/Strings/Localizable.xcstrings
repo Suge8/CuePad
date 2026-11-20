@@ -5821,6 +5821,22 @@
         }
       }
     },
+    "交给谁" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hand Off To"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "交给谁"
+          }
+        }
+      }
+    },
     "什么时候用它" : {
       "localizations" : {
         "en" : {
@@ -7689,6 +7705,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "再说一遍"
+          }
+        }
+      }
+    },
+    "写下任务" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Write a task"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "写下任务"
           }
         }
       }
@@ -14309,22 +14341,6 @@
         }
       }
     },
-    "挂到 %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Add to %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "挂到 %@"
-          }
-        }
-      }
-    },
     "挂断" : {
       "localizations" : {
         "en" : {
@@ -17029,6 +17045,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "本项目"
+          }
+        }
+      }
+    },
+    "本项目在跑的会话" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Running in This Project"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "本项目在跑的会话"
           }
         }
       }
@@ -20989,22 +21021,6 @@
         }
       }
     },
-    "绑定会话" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Link Session"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "绑定会话"
-          }
-        }
-      }
-    },
     "绑定到任务" : {
       "localizations" : {
         "en" : {
@@ -21925,6 +21941,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "记住"
+          }
+        }
+      }
+    },
+    "记到" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save to"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "记到"
           }
         }
       }

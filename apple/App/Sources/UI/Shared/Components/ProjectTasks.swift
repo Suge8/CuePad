@@ -75,7 +75,7 @@ struct ProjectTasks: View {
             .onGeometryChange(for: ClosedRange<CGFloat>.self) {
                 let frame = $0.frame(in: .global)
                 return frame.minX...frame.maxX
-            } action: { lane = $0.lowerBound - BubbleMetrics.padding.leading - BubbleMetrics.stepLead...$0.upperBound }
+            } action: { lane = $0.lowerBound - BubbleMetrics.leading - BubbleMetrics.stepLead...$0.upperBound }
         }
         .onChange(of: active ? lane : nil, initial: true) { workspace.press.lane = $1 }
         .onDisappear { workspace.press.lane = nil }

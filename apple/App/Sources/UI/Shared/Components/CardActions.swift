@@ -6,14 +6,13 @@ struct CardActions: View {
     let card: Card
     var more = false
     var selectable = false
-    var leaf = false
     var opens = false
     /// 点它进的那个会话：打开任务旁边多一项并排打开。
     var session: SessionState?
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        let sections = more ? CardMenu.more(for: card, bindsSession: leaf) : CardMenu.sections(for: card, selectable: selectable, opens: opens)
+        let sections = more ? CardMenu.more(for: card) : CardMenu.sections(for: card, selectable: selectable, opens: opens)
         ForEach(sections.indices, id: \.self) { index in
             if index > 0 { Divider() }
             ForEach(sections[index], id: \.self, content: item)
@@ -24,8 +23,6 @@ struct CardActions: View {
     @ViewBuilder private func item(_ item: CardMenu.Item) -> some View {
         switch item {
         case .move: moveMenu
-        case .bindSession:
-            Menu(item.title, icon: item.icon) { SessionBindItems(leaf: card) }
         case .open:
             Button(item.title, icon: item.icon) { workspace.openTask(card) }
             if let session { OpenSessionBeside(session: session); HandoffButton(session: session) }
@@ -59,7 +56,6 @@ extension CardMenu.Item {
         case .copy: "复制"
         case .trash: "删除"
         case .select: "选择"
-        case .bindSession: "绑定会话"
         case .indent: "缩进"
         case .outdent: "反缩进"
         case .more: "更多"
@@ -78,7 +74,6 @@ extension CardMenu.Item {
         case .copy: .copy
         case .trash: .trash
         case .select: .complete
-        case .bindSession: .link
         case .indent: .indent
         case .outdent: .outdent
         case .more: .more
@@ -96,7 +91,7 @@ extension CardMenu.Item {
 }
 
 extension CardMenu.Item {
-    /// 子菜单（移到项目、绑定会话）与此处做不了的（手机上的选择、Mac 上的"更多"、不在大纲里的缩进）为 nil。
+    /// 子菜单（移到项目）与此处做不了的（手机上的选择、Mac 上的"更多"、不在大纲里的缩进）为 nil。
     func run(on card: Card, in workspace: Workspace, structure: TaskStructure? = nil) -> (() -> Void)? {
         let id = card.id
         switch self {
@@ -126,7 +121,7 @@ extension CardMenu.Item {
             #else
             return nil
             #endif
-        case .move, .bindSession: return nil
+        case .move: return nil
         }
     }
 

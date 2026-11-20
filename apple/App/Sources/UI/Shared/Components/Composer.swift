@@ -33,6 +33,9 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     /// 有工具排（`tools`：会话的模型与思考强度）。一直展开的有工具时才分两层（文字在上、＋工具提交钮一排在下），没有工具的照旧一排；
     /// 会收起的在聚焦时文字下面多一排。
     var tooled = false
+    /// 提交钮是带字的主钮（新会话的"开始"、记任务的"添加"）：排在工具排右端、一直在（不能提交时置灰），不占右下角的圆钮位。
+    /// 只配一直展开、有工具排的形态（`layered`）：同任务气泡底下那一排，主钮在右下。
+    var pill = false
     /// 这个会话此刻能用的斜杠命令：输入 "/" 时弹出面板（`SlashPalette`）；空表示不弹。
     var commands: [SlashCommand] = []
     var shortcuts: [ReplyShortcut: () -> Void] = [:]
@@ -156,7 +159,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
             .layoutPriority(1)
         }
         // 提交钮只有一颗，浮在右下角留出的位置上：有没有内容都不改它的位置与输入框的宽
-        .overlay(alignment: .bottomTrailing) { if !shrunk { sendSlot } }
+        .overlay(alignment: .bottomTrailing) { if !shrunk, !pill { sendSlot } }
         // 整块玻璃都是输入框：点在文字区以外（边距、两个圆钮之间的空处）也聚焦，不落空（文字区只占中间一条，
         // 外面原本什么都接不住，点下去玻璃动了一下却没聚焦，得再点一次）。文字区、＋ 与提交钮在它上面，照旧自己接
         .background {
@@ -185,7 +188,11 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
                 if !accepts.isEmpty { plus }
                 tools().environment(\.singleLineConfig, workspace.layout == .wide)
                 Spacer(minLength: 0)
-                slotSpace
+                if pill {
+                    send().padding(.leading, Spacing.item).padding(.trailing, ComposerMetrics.pillInset).frame(minHeight: ComposerMetrics.slot)
+                } else {
+                    slotSpace
+                }
             }
         }
     }

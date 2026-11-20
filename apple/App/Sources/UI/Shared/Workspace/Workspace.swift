@@ -122,8 +122,9 @@ final class Workspace {
     var moreCard: CardMoreRequest?
     #endif
     var voiceDetails: BubbleSource?
-    var addsTask = false
     var confirmsEmptyTrash = false
+    /// 开着的记任务输入框（`NewTaskInput`）。
+    var newTask: TaskStart?
     /// 开着的新会话输入框（`NewSessionInput`）。
     var newSession: SessionStart? {
         didSet { if let oldValue, oldValue.id != newSession?.id { settleLaunch(.form) } }

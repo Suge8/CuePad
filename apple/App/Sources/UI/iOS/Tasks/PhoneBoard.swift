@@ -4,28 +4,19 @@ import SwiftUI
 
 struct PhoneBoard: View {
     let board: TaskBoard
-    @Binding var adding: Bool
-    let newTaskProject: UUID?
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                BoardRows(gap: Self.gap) {
-                    Color.clear.containerRelativeFrame(.vertical)
-                    ForEach(TaskBoard.Column.allCases) { column in
-                        BoardColumn(column: column, board: board, adding: $adding, newTaskProject: newTaskProject, row: true)
-                            .id(column)
-                    }
+        ScrollView {
+            BoardRows(gap: Self.gap) {
+                Color.clear.containerRelativeFrame(.vertical)
+                ForEach(TaskBoard.Column.allCases) { column in
+                    BoardColumn(column: column, board: board, row: true)
                 }
             }
-            .scrollBounceBehavior(.basedOnSize)
-            .scrollIndicators(.never)
-            .boardStage()
-            .onChange(of: adding) {
-                if adding { withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { proxy.scrollTo(TaskBoard.Column.todo, anchor: .top) } }
-            }
         }
+        .scrollBounceBehavior(.basedOnSize)
+        .scrollIndicators(.never)
+        .boardStage()
     }
 
     /// 行头离上一行远、离自己的卡近。

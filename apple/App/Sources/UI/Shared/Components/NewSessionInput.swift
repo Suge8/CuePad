@@ -1,8 +1,8 @@
 import CueStore
 import SwiftUI
 
-/// 开新会话只有这一个输入框（两端同一份）：看板的"＋"、会话列表空着时那一颗、Mac 菜单，以及手机把任务交给新会话时。
-/// 手机浮在键盘上（`FloatingInput`），Mac 浮在窗口中间的遮罩上（`NewSessionPanel`，不套浮层的纸）。
+/// 开新会话只有这一个输入框（两端同一份，入口都经 `Workspace.openNewSession`）。同记任务的输入框（`NewTaskInput`）一张卡：
+/// 去处胶囊在上、字在中间、主钮在右下；手机与 iPad 浮在键盘上（`FloatingInput`），Mac 浮在窗口中间的遮罩上（`NewInputPanel`，不套浮层的纸）。
 struct NewSessionInput: View {
     let start: SessionStart
     @Environment(Workspace.self) private var workspace
@@ -21,13 +21,13 @@ struct NewSessionInput: View {
     private var phase: LaunchProgress.Phase { launching.phase(at: services.speech) }
     private var brain: AgentModelChoice? { agents.flatMap { services.settings.launchChoice(on: $0, in: chosen?.project.id) } }
     private var canStart: Bool {
-        chosen?.host != nil && brain != nil && launching.canSubmit(at: services.speech) && !launching.inFlight(at: services.speech)
+        !draft.isEmpty(accepting: [.files, .cards]) && chosen?.host != nil && brain != nil && launching.canSubmit(at: services.speech) && !launching.inFlight(at: services.speech)
     }
 
     var body: some View {
         composer.composerNotice(status != nil) { if let status { LaunchStatusLine(status: status) } }
             #if os(macOS)
-            .frame(width: 480)
+            .frame(width: BubbleMetrics.width)
             #endif
     }
 
@@ -35,12 +35,12 @@ struct NewSessionInput: View {
         Composer(
             draft: $draft, prompt: nil, label: "新会话的第一句话", focus: $focused,
             cardsFrom: chosen?.project.id,
-            tooled: brain != nil, shortcuts: [.send: launch],
+            tooled: true, pill: true, shortcuts: [.send: launch],
             header: { header.padding(.horizontal, Spacing.group).padding(.top, Spacing.item) },
             tools: { if let agents { LaunchControls(mac: agents, project: chosen?.project.id) } },
             send: {
-                Button(action: launch) { SendGlyph(canStart ? .ready : .idle) }
-                    .buttonStyle(PressStyle(.button)).disabled(!canStart).accessibilityLabel("开始")
+                Button("开始", action: launch)
+                    .buttonStyle(ControlButtonStyle(kind: .primary, size: .compact)).disabled(!canStart)
             })
         // 请求在路上时整个停用：这时改的字、换的去处都进不了已发出的那一次，认领到了输入框一收就丢了
         .disabled(launching.inFlight(at: services.speech))

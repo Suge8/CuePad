@@ -39,16 +39,13 @@ struct TaskBubble: View {
                             ForEach(data.schedules.filter { $0.line.task == focus.id }) { ScheduleStrip(scheduled: $0) }
                                 .padding(.leading, BubbleMetrics.textLeading).padding(.trailing, BubbleMetrics.textTrailing)
                         }
-                        .padding(.top, BubbleMetrics.padding.top).padding(.leading, BubbleMetrics.padding.leading).padding(.trailing, BubbleMetrics.padding.trailing)
+                        .padding(.top, Spacing.item).padding(.leading, BubbleMetrics.leading)
                     } footer: {
+                        // 同输入框底下那一排（`Composer.pill`）：胶囊从左边排起，主钮离右边与离下边一样远
                         BubbleFooter(data: data, focus: focus, editing: editing)
-                            #if os(iOS)
-                            .padding(.leading, BubbleMetrics.textLeading).padding(.trailing, BubbleMetrics.textTrailing)
-                            #else
-                            .padding(.trailing, Spacing.hair)
-                            #endif
-                            .padding(.top, BubbleMetrics.footerGap).padding(.leading, BubbleMetrics.padding.leading).padding(.trailing, BubbleMetrics.padding.trailing)
-                            .padding(.bottom, BubbleMetrics.padding.bottom + (sheet ? BubbleMetrics.sheetBottom : 0))
+                            .padding(.leading, Spacing.group).padding(.trailing, ComposerMetrics.pillInset)
+                            .padding(.top, BubbleMetrics.footerGap)
+                            .padding(.bottom, ComposerMetrics.pillInset + (sheet ? BubbleMetrics.sheetBottom : 0))
                             .background(palette.paper)
                     }
                 }
@@ -127,34 +124,34 @@ nonisolated struct BubbleData: Sendable, Equatable {
 
 enum BubbleMetrics {
     static let stepLead: CGFloat = (TaskMetrics.chipTarget - TaskMetrics.ringColumn) / 2
+    /// 完成圈在它那一格里离格边多远：顶上那颗胶囊让进这么多，同圈一条左缘。
+    static let ringInset: CGFloat = (TaskMetrics.chipTarget - TaskMetrics.titleRing) / 2
+    /// 胶囊与完成圈离左边 `Spacing.group`、胶囊离上边 `Spacing.item`，同输入框的去处胶囊。
+    static let leading = Spacing.group - ringInset
     static let textLeading: CGFloat = stepLead + TaskMetrics.ringColumn + TaskMetrics.columnGap
     static let titleGap: CGFloat = textLeading - TaskMetrics.chipTarget
+    /// 字离右边，同输入框里的字（`Composer` 的 `layered`）。
+    static let textTrailing = Spacing.block
     static let sheetBottom = Spacing.group
     #if os(macOS)
     static let strong = Typography.secondary.weight(.semibold)
     static let meta = Typography.meta
-    static let padding = EdgeInsets(top: Spacing.glyph, leading: Spacing.item, bottom: Spacing.group, trailing: Spacing.glyph)
-    static let laneFont = Typography.secondary.weight(.semibold)
     static let editorInset = Spacing.glyph
     static let ringTop: CGFloat = 2
-    static let textTrailing = Spacing.group
     static let footerGap = Spacing.item
     static let gap = Spacing.item
     static let brand: CGFloat = 20
     static let markSlot: CGFloat = 26
     static let dot: CGFloat = 8
     static let capsule: CGFloat = 28
-    /// 同新会话的输入框一样宽（`NewSessionInput`）：底下那一排（哪家、模型、思考强度、"开始"）的字都写得全。
+    /// 新会话、记任务的输入框在 Mac 上也是这么宽（`NewSessionInput`、`NewTaskInput`）：底下那一排（交给谁、哪家、模型、思考强度、"开始"）的字都写得全。
     static let width: CGFloat = 480
     static let stripPadding = EdgeInsets(top: Spacing.item, leading: Spacing.item, bottom: Spacing.item, trailing: Spacing.item)
     #else
     static let strong = Typography.secondary.weight(.semibold)
     static let meta = Typography.meta
-    static let padding = EdgeInsets(top: Spacing.glyph, leading: Spacing.item, bottom: Spacing.group, trailing: Spacing.item)
-    static let laneFont = Typography.secondary.weight(.semibold)
     static let editorInset = Spacing.item
     static let ringTop: CGFloat = 3
-    static let textTrailing = Spacing.group
     static let footerGap = Spacing.group
     static let gap = Spacing.item
     static let brand: CGFloat = 24
