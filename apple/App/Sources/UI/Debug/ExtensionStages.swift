@@ -46,7 +46,7 @@ struct DebugWidgetStage: View {
 }
 
 /// `-CuePadScene activity`：同一份视图的样式预览，不模拟状态栏与系统分区尺寸。
-/// 真正宽度、长按与横屏必须用 `-CuePadLiveActivity YES` 在系统岛上验收。
+/// 真正的宽度、长按展开有没有被截断在系统的岛上验收（`xc.sh shot ios` 带 `-CuePadLiveActivity YES`）。
 struct DebugActivityStage: View {
     let workspace: Workspace
     @Environment(\.palette) private var palette

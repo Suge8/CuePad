@@ -24,6 +24,17 @@ extension DebugScene {
         }
     }
 
+    /// `-CuePadLiveActivity YES`：系统那份活动换成这次运行的内容才报就绪。活动只有 App 在前台开得出，`xc.sh shot` 一就绪就把 App 切到后台去拍岛；
+    /// 同一台模拟器上一张留下的活动还在，所以比的是内容的时刻，不是有没有。钉的样例本就开不出活动的（都歇着）不等。
+    private static func holdForLiveActivity() {
+        guard args.liveActivity, pinned.cueNow?.hasConfirmedActivity != false else { return }
+        holdingReady("实时活动换成这次的（-CuePadLiveActivity）") {
+            while CueLiveActivity.running.first.map({ $0.content.state.now.at < PerfProbe.processStart }) ?? true {
+                guard await Task.wait(for: .milliseconds(100)) else { return }
+            }
+        }
+    }
+
     static func prepare(_ workspace: Workspace) async {
         if args.driveOpts.bench == "interact" { IOSInteractionBench.beginCold() }
         dumpAccessibilityIfAsked()
@@ -40,6 +51,7 @@ extension DebugScene {
         Task { await phoneVoiceCallIfAsked(workspace) }
         if args.noAsks { await settleAsks(workspace.services.store) }
         await IslandBench.run(workspace.services)  // 跑完才报就绪：xc.sh run 一直持有这台模拟器，别的任务换不掉它
+        holdForLiveActivity()
         if args.driveOpts.bench == "interact" {
             Task { await IOSInteractionBench.run(workspace) }
             return
