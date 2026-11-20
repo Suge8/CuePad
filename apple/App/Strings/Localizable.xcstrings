@@ -15469,6 +15469,22 @@
         }
       }
     },
+    "放大" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enlarge"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "放大"
+          }
+        }
+      }
+    },
     "放得太深（超过 6 层），Codex 读不到" : {
       "localizations" : {
         "en" : {

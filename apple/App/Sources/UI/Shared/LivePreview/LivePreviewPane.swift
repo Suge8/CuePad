@@ -28,8 +28,8 @@ struct LivePreviewTool: View {
     }
 }
 
-/// 并排右半的活预览（`BesideColumn`）：网页铺满这一块，上缘滑到浮着的玻璃栏下面、下缘到窗口边；
-/// 手机宽那一档收成 390 宽居中的一块屏，落在桌面上。两档之间是同一块连续地变宽变窄，网页不重新载入。
+/// 并排右半的活预览（`BesideColumn`）：网页是浮在桌面上的一块屏（圆角、留边同 Cue 的浮板，`CuePanel`），玻璃栏在它上面的桌面上、同左边的栏头一排；
+/// 手机宽那一档收成 390 宽居中的一块。两档之间是同一块屏连续地变宽变窄，网页不重新载入。贴到窗口边的一整面白页撞在深色界面上，栏还压着页面的头。
 /// 手机上是铺满屏的一页（`LivePhoneCover`），栏换成手机那一排（`LiveBar`）。手机、iPad 上开着时连着 Mac（`LiveLink`），连不上的原因盖在页上。
 struct LivePreviewPane: View {
     let preview: LivePreview
@@ -62,6 +62,9 @@ struct LivePreviewPane: View {
             }
             .animation(Motion.fade, value: preview.phase)
             .animation(Motion.fade, value: trouble)
+            #if os(macOS)
+            .onChange(of: Self.remoteZoom(width: geometry.size.width, remote: workspace.liveFill?.remote == true && preview.viewport != .phone), initial: true) { preview.web.pageZoom = $1 }
+            #endif
         }
         .background(palette.desk)
         .modifier(LivePageAsks(preview: preview))
@@ -92,26 +95,27 @@ struct LivePreviewPane: View {
         return preview.phase == .waiting ? .starting : nil
     }
 
-    /// 铺满时网页从玻璃栏下沿铺到窗口下缘，栏那一排铺页面的底、下沿同色渐隐：滚上去的内容淡进栏下，不在一条线上切断；
-    /// 手机宽时是栏下面居中的一块屏。两档之间网页只换位置与宽，不换内边距：内容不跳。
+    /// 宽屏上网页是栏下面的一块屏：铺满那一档四周留一圈，手机宽那一档居中。两档之间只换位置、大小与圆角：内容不跳。
+    /// 手机上没有屏的边：网页从玻璃栏下沿铺到屏幕下缘，栏那一排铺页面的底、下沿同色渐隐，滚上去的内容淡进栏下。
     private func screen(in size: CGSize) -> some View {
         let phone = preview.viewport == .phone
-        let page = Self.page(in: size, phone: phone)
+        let framed = workspace.layout == .wide
+        let page = Self.page(in: size, phone: phone, framed: framed)
         let room = Self.room(in: size)
-        let height = phone ? page.height : size.height
+        let height = framed ? page.height : size.height
         let width = page.width
-        let top = phone ? Chrome.band + Spacing.item + max(0, room - height) / 2 : 0
-        let shape = RoundedRectangle(cornerRadius: phone ? Radius.screen : 0, style: .continuous)
+        let top = phone ? Chrome.band + Spacing.item + max(0, room - height) / 2 : framed ? Self.screenTop : 0
+        let shape = RoundedRectangle(cornerRadius: phone ? Radius.screen : framed ? CuePanel.radius : 0, style: .continuous)
         let ground = preview.ground ?? palette.paper
         let shown = preview.phase == .live && preview.revealed || preview.phase == .stopped
         return LiveWebView(preview: preview)
             .overlay(alignment: .top) {
                 LinearGradient(colors: [ground, ground.opacity(0)], startPoint: .top, endPoint: .bottom)
                     .frame(height: Self.fade)
-                    .opacity(phone ? 0 : 1)
+                    .opacity(framed ? 0 : 1)
                     .allowsHitTesting(false)
             }
-            .padding(.top, phone ? 0 : Chrome.band)
+            .padding(.top, framed ? 0 : Chrome.band)
             .overlay {
                 if preview.phase == .stopped {
                     LiveStopped(text: trouble?.title ?? "服务停了，等它回来", message: trouble?.message) { LiveTroubleAction(trouble: trouble, preview: preview) }
@@ -120,8 +124,8 @@ struct LivePreviewPane: View {
             .frame(width: width, height: height)
             .background(ground)
             .clipShape(shape)
-            .overlay { shape.strokeBorder(palette.hair).opacity(phone ? 1 : 0) }
-            .background { shape.fill(ground).elevation(phone ? .lifted : nil) }
+            .overlay { shape.strokeBorder(palette.hair).opacity(framed ? 1 : 0) }
+            .background { shape.fill(ground).elevation(framed ? .lifted : nil) }
             .opacity(shown ? 1 : 0)
             .position(x: size.width / 2, y: top + height / 2)
             .animation(Motion.spatial(Motion.travel, reduceMotion: reduceMotion), value: phone)
@@ -129,11 +133,24 @@ struct LivePreviewPane: View {
 
     private static let fade: CGFloat = 20
 
-    /// 网页视图在这么大的面板里的大小：后台预览（`LiveHost`）也照它排版，用户点开时页面不换一套排版。
-    static func page(in size: CGSize, phone: Bool) -> CGSize {
-        guard phone else { return CGSize(width: size.width, height: size.height - Chrome.band) }
-        return CGSize(width: min(LivePreview.phoneWidth, size.width - 2 * Spacing.page), height: min(room(in: size), LivePreview.phoneHeight))
+    /// 网页视图在这么大的面板里的大小：后台预览（`LiveHost`）也照它排版，用户点开时页面不换一套排版。`framed` 是宽屏上那块留边的屏。
+    static func page(in size: CGSize, phone: Bool, framed: Bool = true) -> CGSize {
+        if phone { return CGSize(width: min(LivePreview.phoneWidth, size.width - 2 * Spacing.page), height: min(room(in: size), LivePreview.phoneHeight)) }
+        guard framed else { return CGSize(width: size.width, height: size.height - Chrome.band) }
+        return CGSize(width: size.width - 2 * CuePanel.float, height: size.height - screenTop - CuePanel.float)
     }
+
+    /// 那块屏的上沿：离玻璃栏的下沿一小圈（iPad 的栏占满那一排，从这一排的下沿起就贴上了）。
+    private static var screenTop: CGFloat { (Chrome.band + Chrome.control) / 2 + Spacing.item }
+
+    /// 手机用 UU 远程看着时页面放大几倍：远程画面是整块屏幕缩到手机上，3008 宽的屏上照原样排的字在手机上只有两三个点高。
+    /// 放大到页面按 `remoteWidth` 宽排版（仍是桌面那一套排法）：手机横过来看，正文约 11 点。屏本来就不比它宽的不放大；
+    /// 手机宽那一档也不放大（那块屏还是 390 宽，放大了页面就按一百多宽排）。
+    static func remoteZoom(width: CGFloat, remote: Bool) -> CGFloat {
+        remote ? max(1, (width - 2 * CuePanel.float) / remoteWidth) : 1
+    }
+
+    private static let remoteWidth: CGFloat = 1024
 
     /// 手机屏离玻璃栏下沿与离窗口下缘一样远
     private static func room(in size: CGSize) -> CGFloat { size.height - Chrome.band - Spacing.item - Spacing.block }
@@ -180,6 +197,34 @@ private struct LiveWebView: UIViewRepresentable {
 #endif
 
 extension Workspace {
+    /// 活预览放大到整个窗口的会话（`WideMetrics.fill`：右半盖过主区，会话条收起）。`remote` 是手机请 Mac 亮出来、正用 UU 远程看着
+    /// （Mac 的 `showLive`）：窗口也铺满屏幕，页面放大到手机上读得清（`LivePreviewPane.remoteZoom`）。
+    /// `own` 是你自己点的放大：手机来看又回去了，它还留着。
+    struct LiveFill: Equatable {
+        let session: UUID
+        var own = true
+        var remote = false
+    }
+
+    /// 预览栏开头那颗：放大到盖过左边的会话，再点放回右半。
+    func toggleLiveFill() {
+        guard liveFill == nil else { return endLiveFill() }
+        guard let session = session(in: .main), showsLivePreview(session.id) else { return }
+        liveFill = LiveFill(session: session.id)
+    }
+
+    /// 放回右半，手机看着时铺满屏幕的窗口也回到原来的位置。除了那颗钮：手机从 UU 远程回到 CuePad 了（`LiveSignal.back`）、
+    /// 预览不在主区旁了（换了会话、收起了，`navigation`）、点选了元素要去回复框写那一句（`pickElement`）。
+    func endLiveFill() {
+        guard let fill = liveFill else { return }
+        liveFill = nil
+        #if os(macOS)
+        // 预览不在主区旁时那一栏不在了，没人替它把放大的页面改回来；Agent 接着在后台用的还是这一页
+        livePreviews[fill.session]?.web.pageZoom = 1
+        services.windowShell?.restoreFrame()
+        #endif
+    }
+
     enum LiveButton: Equatable {
         /// 点开就是这个地址；nil 是空的地址输入。
         case closed(URL?)

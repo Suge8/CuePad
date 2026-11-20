@@ -285,3 +285,18 @@ nonisolated private struct HoverShape: Shape {
     }
 }
 #endif
+
+extension View {
+    /// 开着的开关钮（栏头、玻璃栏里只画图标的那种）：垫一块选中的底，同悬停那一块的形状；图标的强调色由调用处给。
+    /// 只换图标颜色的话，一排图标里看不出哪颗开着。
+    func toggledOn(_ on: Bool) -> some View { modifier(ToggledOn(on: on)) }
+}
+
+private struct ToggledOn: ViewModifier {
+    let on: Bool
+    @Environment(\.palette) private var palette
+
+    func body(content: Content) -> some View {
+        content.background(on ? palette.selection : .clear, in: .capsule).animation(Motion.fade, value: on)
+    }
+}

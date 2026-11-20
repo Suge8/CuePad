@@ -25,7 +25,7 @@ struct WideMetrics {
     let cue: CGFloat
     let split: Bool
     let preview: Bool
-    /// Mac 的活预览铺满整个窗口（`Workspace.liveFill`）：会话条收起，右半盖过主区。
+    /// 活预览放大到整个窗口（`Workspace.liveFill`）：会话条收起，右半盖过主区。
     let fill: Bool
     let cueFits: Bool
     private let share: CGFloat
@@ -84,11 +84,7 @@ struct WideMetrics {
         home = workspace.cueHome
         split = workspace.beside != nil
         preview = workspace.beside == .preview
-        #if os(macOS)
         fill = preview && workspace.liveFill != nil
-        #else
-        fill = false
-        #endif
         let narrowest = split ? Self.session + Self.trailingMin(preview: preview) : Self.session
         railFits = width >= Chrome.rail + narrowest
         rail = workspace.sidebarOpen && railFits && !fill ? Chrome.rail : 0

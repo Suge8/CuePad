@@ -31,8 +31,7 @@ extension Workspace {
         case .received(let received):
             if case .live(.show(_, let sessionID)) = received.payload { return await showLive(sessionID) }
             if case .live(.back(_, let sessionID)) = received.payload {
-                if liveFill == SessionState.recordID(sessionID: sessionID) { endLiveFill() }
-                return
+                return endRemoteFill(SessionState.recordID(sessionID: sessionID))
             }
             guard case .live(.watch(let request, let sessionID, let open)) = received.payload else { return }
             let key = LivePhone.Key(phone: received.header.sender, sessionID: sessionID)
@@ -94,13 +93,15 @@ extension Workspace {
     }
 
     /// 手机要用 UU 远程看这个会话（`LiveSignal.show`）：开到主区，有页面可看就同栏头的钮开活预览（地址照开合的规则，你填的不换）、
-    /// 铺满窗口（`liveFill`），窗口铺满屏幕排到最前。只认本机这台上没结束的会话（同 `answerLivePhones`）。
+    /// 放大到整个窗口（`liveFill` 的 `remote`），窗口铺满屏幕排到最前：远程画面是整块屏幕缩到手机上，预览只占一角时找不到、看不清。
+    /// 只认本机这台上没结束的会话（同 `answerLivePhones`）。
     private func showLive(_ sessionID: String) async {
         let hosted = ((try? await services.store.liveOwners(hosts: Self.liveHosts(services))) ?? [:]).keys
         guard hosted.contains(sessionID), let state = try? await services.store.sessionState(sessionID) else { return }
         // 手机看着时只扫它看的会话：此刻认出的才准
         await scanLive(only: [sessionID])
         // 上一次铺满的先放下、窗口的位置留着：下面重开时（`navigation`）不把窗口缩回去再铺一次
+        let own = liveFill?.session == state.id && liveFill?.own == true
         liveFill = nil
         // 已在主区也重开一次：Cue 铺满着、上面盖着编辑页时，主区还是它，只是看不见
         overlay = nil
@@ -108,15 +109,15 @@ extension Workspace {
         if hasLivePage(state.id) { openLivePreview(state) }
         services.windowShell?.show(overOthers: true)
         guard showsLivePreview(state.id) else { return services.windowShell?.restoreFrame() ?? () }
-        liveFill = state.id
+        liveFill = LiveFill(session: state.id, own: own, remote: true)
         services.windowShell?.fillScreen()
     }
 
-    /// 铺满的预览放回右半、窗口回到原来的位置：手机从 UU 远程回到 CuePad 了（`LiveSignal.back`）、点了预览栏上那颗"放回右半"、
-    /// 预览不在主区旁了（换了会话、收起了，`navigation`）。
-    func endLiveFill() {
-        guard liveFill != nil else { return }
-        liveFill = nil
+    /// 手机从 UU 远程回到 CuePad 了（`LiveSignal.back`）：窗口放回原位；它来看之前你自己放大着的留着放大，只是不再算它在看。
+    private func endRemoteFill(_ session: UUID) {
+        guard let fill = liveFill, fill.remote, fill.session == session else { return }
+        guard fill.own else { return endLiveFill() }
+        liveFill?.remote = false
         services.windowShell?.restoreFrame()
     }
 

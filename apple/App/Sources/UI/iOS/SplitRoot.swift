@@ -17,7 +17,7 @@ struct SplitRoot: View {
             let under = sizes.split || sizes.home ? 0 : sizes.cue
             HStack(spacing: 0) {
                 if sizes.railFits { WideRail(width: sizes.rail, sizes: sizes) }
-                WideColumnHost(slot: .main, focus: focus, origin: sizes.rail, width: sizes.leading + under, shape: sizes.shape, hidden: sizes.home) {
+                WideColumnHost(slot: .main, focus: focus, origin: sizes.rail, width: sizes.leading + under, shape: sizes.shape, hidden: sizes.home || sizes.fill) {
                     destination(workspace.mainRoute, column: .main)
                         .environment(\.headInset, EdgeInsets(top: 0, leading: Chrome.headLead(rail: sizes.rail), bottom: 0, trailing: Spacing.page))
                         .environment(\.underCue, under)
@@ -27,8 +27,8 @@ struct SplitRoot: View {
                 Spacer(minLength: 0)
             }
             .overlay(alignment: .topLeading) { beside(sizes, window: geometry.size.width) }
-            .overlay { if sizes.split { BesideDivider(sizes: sizes) } }
-            .overlay { if !sizes.home { railChrome(sizes) } }
+            .overlay { if sizes.split, !sizes.fill { BesideDivider(sizes: sizes) } }
+            .overlay { if !sizes.home, !sizes.fill { railChrome(sizes) } }
             .readerHidden(covered)
             // 排在最上：抽屉开着时它与接点按的底盖住浮着的那一排与会话条的抽屉
             .overlay {
@@ -45,9 +45,9 @@ struct SplitRoot: View {
         .onChange(of: covered) { DebugHooks.readerLayers(outsideCue: covered, drawer: workspace.cueDrawer) }
     }
 
-    /// 并排的右半（第二个会话、活预览）：不并排时也挂着、同样宽，停在窗口右缘外、滑完藏起（同 Mac 的 `MainWindow.beside`）。
+    /// 并排的右半（第二个会话、活预览）：不并排时也挂着、同样宽，停在窗口右缘外、滑完藏起；活预览放大时长到窗口左缘（同 Mac 的 `MainWindow.beside`）。
     private func beside(_ sizes: WideMetrics, window: CGFloat) -> some View {
-        let origin = sizes.split ? sizes.rail + sizes.leading : window
+        let origin = !sizes.split ? window : sizes.fill ? 0 : sizes.rail + sizes.leading
         return WideColumnHost(slot: .beside, focus: focus, origin: origin, width: sizes.trailing, shape: sizes.shape, hidden: !sizes.split) {
             BesideColumn { destination(.session($0), column: .beside) }
         }

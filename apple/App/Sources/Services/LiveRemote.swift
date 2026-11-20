@@ -20,7 +20,7 @@ final class LiveRemote {
 
     /// Mac 答的，按 Pi 的会话 id。没答、答了没有页面、过了 `LiveSignal.lease` 没再答都不在里面。
     private(set) var answers: [String: Pages] = [:]
-    /// 问不到那台 Mac 的会话（它不在线、中转说它走了）。
+    /// 问不到那台 Mac 的会话（它不在线、中转说它走了）；手机自己没连上中转的不算。
     private(set) var offline: Set<String> = []
 
     private struct Watch {
@@ -117,9 +117,8 @@ final class LiveRemote {
 
     private func send(_ sessionID: String, channel: VoiceSessionID) async {
         guard let watch = watches[sessionID] else { return }
-        guard let signaling = signaling(), case .ready = signaling.voiceAvailability, (try? await store.macOnline(watch.host)) == true else {
-            return unreachable(sessionID)
-        }
+        guard let signaling = signaling(), case .ready = signaling.voiceAvailability else { return held(sessionID) }
+        guard (try? await store.macOnline(watch.host)) == true else { return unreachable(sessionID) }
         let request = UUID()
         watches[sessionID]?.requests.insert(request)
         do {
@@ -127,8 +126,16 @@ final class LiveRemote {
             let open = (watches[sessionID]?.opens ?? 0) > 0
             try await signaling.sendVoice(.live(signal: .watch(request: request, session: sessionID, open: open)), session: channel, to: peer)
         } catch {
+            // 问到一半自己这头断了，同没连上
+            guard case .ready = signaling.voiceAvailability else { return held(sessionID) }
             unreachable(sessionID)
         }
+    }
+
+    /// 自己这头的中转没连上（刚回到前台、断网），问不出去：不算那台 Mac 不在。答过的留着、租约从这时重新算
+    /// （它只该数问得出去的时间），连上了马上再问（`receive` 的 availability）。
+    private func held(_ sessionID: String) {
+        if watches[sessionID]?.answeredAt != nil { watches[sessionID]?.answeredAt = .now }
     }
 
     /// 请 Mac 把这个会话亮在最前（`LiveSignal.show`），接着要拉起 UU 远程：最多等 `showWait`，发不出、中转没连上都不拦。
