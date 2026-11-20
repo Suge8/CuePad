@@ -20,6 +20,8 @@ final class CueLiveActivity {
     private var remoteStarts: [Task<Void, Never>] = []
     /// 已写进库的开岛令牌：回前台每次都读，没换就不再排一次写入。
     var starterToken: String?
+    /// 令牌流给过的最新一份开岛令牌（`registerStarter`）。
+    var starterArrived: Data?
     private(set) var revision = UUID()
     var observers: [String: [Task<Void, Never>]] = [:]
     var destinationWork: Task<Void, Never>?

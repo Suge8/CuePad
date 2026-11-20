@@ -37,9 +37,9 @@ extension CueLiveActivity {
         [
             Task { [weak self] in
                 await self?.registerStarter()
-                for await _ in Activity<CueActivityAttributes>.pushToStartTokenUpdates {
+                for await token in Activity<CueActivityAttributes>.pushToStartTokenUpdates {
                     guard !Task.isCancelled else { return }
-                    await self?.registerStarter()
+                    await self?.registerStarter(arrived: token)
                 }
             },
             Task { [weak self] in
@@ -58,10 +58,17 @@ extension CueLiveActivity {
     }
 
     /// 和登记活动地址同一个前提：资料所属确认过（`remoteState`）才把这台手机的地址写进它的 iCloud。
-    func registerStarter() async {
-        guard sync != nil, let device, let environment = pushEnvironment, let token = Activity<CueActivityAttributes>.pushToStartToken,
+    /// `arrived` 是令牌流刚给的那份，直接用并留着：到的那一刻资料所属可能还没确认，而 `pushToStartToken` 之后不保证读得出
+    /// （真机 iOS 27.3 上从启动到回前台一直是 nil，开岛地址整段运行都没登记上）。没带的读系统当前的，读不出用留着的。
+    func registerStarter(arrived: Data? = nil) async {
+        if let arrived {
+            starterArrived = arrived
+            trace(.destinationWrite, reason: "starter/stream", tokenTag: Self.tag(Self.hex(arrived)))
+        }
+        guard sync != nil, let device, let environment = pushEnvironment,
+              let token = arrived ?? Activity<CueActivityAttributes>.pushToStartToken ?? starterArrived,
               (try? remoteState()) != nil else { return }
-        let hex = token.map { String(format: "%02x", $0) }.joined()
+        let hex = Self.hex(token)
         guard hex != starterToken else { return }
         starterToken = hex
         await changeDestination(activityID: nil, reason: "starter") {
@@ -101,9 +108,8 @@ extension CueLiveActivity {
             trace(.destinationResult, activityID: activity.id, reason: "register/ineligible")
             return
         }
-        let hex = token.map { String(format: "%02x", $0) }.joined()
-        let tag = SHA256.hash(data: Data(hex.utf8)).map { String(format: "%02x", $0) }.joined()
-        trace(.destinationWrite, activityID: activity.id, tokenTag: tag)
+        let hex = Self.hex(token)
+        trace(.destinationWrite, activityID: activity.id, tokenTag: Self.tag(hex))
         await changeDestination(activityID: activity.id, reason: "register") {
             guard !Task.isCancelled, revision == self.revision, Self.running.first?.id == activity.id else {
                 self.trace(.blocked, activityID: activity.id, reason: "register/ineligibleAfterQueue")
@@ -115,6 +121,9 @@ extension CueLiveActivity {
             return id.map { (record: $0, activity: activity.id) }
         }
     }
+
+    private static func hex(_ token: Data) -> String { token.map { String(format: "%02x", $0) }.joined() }
+    private static func tag(_ hex: String) -> String { SHA256.hash(data: Data(hex.utf8)).map { String(format: "%02x", $0) }.joined() }
 
     func removeDestination(activityID: String?, reason: String) async {
         guard sync != nil, let device else {
