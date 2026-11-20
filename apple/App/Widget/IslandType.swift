@@ -13,5 +13,18 @@ nonisolated enum IslandType {
     static let narrowNumberHeight: CGFloat = 17
     static let reading = Font.system(.title2, design: .rounded, weight: .semibold)
     static let readingGlyph = Font.system(.headline, weight: .semibold)
-    static let clock = Font.system(.title3, design: .rounded, weight: .semibold)
+    static let clock = Font.system(size: 26, weight: .bold, design: .rounded)
+
+    // 锁屏那张卡：系统封顶 160pt 高，字号钉死，不随动态字体放大（放大了排不下，被裁掉的是最后几行）。
+    static let posterTitle = Font.system(size: 20, weight: .bold)
+    static let posterQuestion = Font.system(size: 17, weight: .bold)
+    static let posterBig = Font.system(size: 44, weight: .bold, design: .rounded)
+    static let posterWord = Font.system(size: 14, weight: .bold)
+    static let posterHeadWord = Font.system(size: 17, weight: .bold)
+    static let posterRow = Font.system(size: 14.5, weight: .semibold)
+    static let posterTime = Font.system(size: 14.5, weight: .semibold, design: .rounded)
+    static let posterGlyph = Font.system(size: 13, weight: .semibold)
+    static let posterTick = Font.system(size: 20, weight: .bold)
+    /// 行尾那只钟的宽（放得下 "59:59"），过一小时收字号。
+    static let posterTimeWidth: CGFloat = 42
 }

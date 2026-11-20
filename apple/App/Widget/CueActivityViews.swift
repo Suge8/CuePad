@@ -6,7 +6,8 @@ import WidgetKit
 /// 紧凑态左位是 Cue 与一个读数（等你优先，否则活跃 Agent，不是任务数；旧快照没有读数时写破折号，不猜），右位是一只系统自己走的钟（`CueNow.clock`）。
 /// 岛上持续在动的只有这只钟：循环动画系统不保证播，为了动而重发同一份内容会吃掉推送预算。其余的动是内容更新时系统做的短过渡。
 /// 最小态与窄紧凑位（横屏）只有 28pt 圆：图形加至多 9+ 的读数，不缩字号；完整数在展开态与读屏名称里。
-/// 展开态与锁屏整块最高 160pt：头像、读数与钟排在摄像头两侧，下面是 `Details.room` 行；全放在摄像头下面那一块时，头一排就占掉三成高。
+/// 展开态最高 160pt：头像、读数与钟排在摄像头两侧，下面是 `Details.room` 行；全放在摄像头下面那一块时，头一排就占掉三成高。
+/// 锁屏是另一张（`CueLockScreen`）：岛的底系统钉死是黑的，颜色只能上在字上；锁屏那块的底归我们，整块按状态上色、一个主角（`Poster`）。
 /// 调试画面复用这些视图，但不能代替系统灵动岛的宽度与状态栏验收（`-CuePadLiveActivity YES`）。
 struct CueActivityViews {
     private let now: CueNow
@@ -17,7 +18,9 @@ struct CueActivityViews {
         stale = date >= state.now.staleAt
     }
 
-    var lockScreen: some View { LockScreen(now: now, stale: stale).withPalette().dynamicTypeSize(...Self.maxType) }
+    var lockScreen: some View { CueLockScreen(now: now, stale: stale).withPalette() }
+    /// 锁屏那张卡的底色：系统里由 `activityBackgroundTint` 铺，调试画面自己铺。
+    func lockFill(_ palette: Palette) -> Color { CueLockScreen(now: now, stale: stale).fill(palette) }
     var compactLeading: some View { CompactLeading(now: now).island() }
     var compactTrailing: some View { CompactTrailing(now: now).island() }
     var minimal: some View { NarrowCount(now: now).island() }
@@ -38,7 +41,7 @@ private extension View {
     func island() -> some View { withPalette().environment(\.colorScheme, .dark).dynamicTypeSize(...CueActivityViews.maxType) }
 }
 
-private extension CueNow {
+extension CueNow {
     /// 岛上那只钟从哪一刻起算：有等你的，是等得最久的那件；否则 Cue 这一轮，再否则最早在跑的那件。没有在等、在跑的（歇着、状态未确认）不画钟。
     var clock: Date? {
         func earliest(_ kinds: Set<Item.Kind>) -> Date? { items.filter { kinds.contains($0.kind) }.map(\.since).min() }
@@ -85,13 +88,14 @@ private struct Digits: View {
 
 /// 系统的时间文字：不靠更新自己逐秒走，过一小时写成时:分:秒；常亮屏变暗时系统自己降到不带秒。
 /// 岛上能一直动的只有它：给图形加循环动画（`symbolEffect` 的 pulse、无限重复）在 iOS 27 模拟器的系统岛上录过，收起与展开都不播。
-private struct Elapsed: View {
+struct ActivityElapsed: View {
     let since: Date
+    /// 时间文字会占满给它的宽、字靠左：排在右端的（默认）字要贴右缘。
+    var alignment = TextAlignment.trailing
 
     var body: some View {
-        // 时间文字会占满给它的宽、字靠左：它都排在右端，字要贴右缘
         Text(.currentDate, format: .timer(countingUpIn: since..<Date.distantFuture)).monospacedDigit().lineLimit(1)
-            .multilineTextAlignment(.trailing)
+            .multilineTextAlignment(alignment)
     }
 }
 
@@ -100,7 +104,7 @@ private struct Clock: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        if let since = now.clock { Elapsed(since: since).foregroundStyle(ActivityCount(now).tone.color(palette)) }
+        if let since = now.clock { ActivityElapsed(since: since).foregroundStyle(ActivityCount(now).tone.color(palette)) }
     }
 }
 
@@ -217,7 +221,7 @@ private struct Details: View {
                         item.kind.glyph?.image
                         // 还在动的写做了多久（自己走），停下的写状态词
                         if item.kind.tone == .moving {
-                            Elapsed(since: item.since).minimumScaleFactor(0.8).frame(width: IslandType.rowClockWidth, alignment: .trailing)
+                            ActivityElapsed(since: item.since).minimumScaleFactor(0.8).frame(width: IslandType.rowClockWidth, alignment: .trailing)
                         } else {
                             Text(item.label)
                         }
@@ -232,7 +236,7 @@ private struct Details: View {
     }
 }
 
-private extension CueNow.Item.Kind {
+extension CueNow.Item.Kind {
     /// 行尾状态词前的图形，同 App 里会话状态标的那几个；歇着、状态未确认只写字。
     var glyph: WidgetIcon? {
         switch self {
@@ -259,25 +263,6 @@ private struct ActivityBody: View {
             }
             Details(now: now)
         }
-    }
-}
-
-private struct LockScreen: View {
-    let now: CueNow
-    let stale: Bool
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            ActivityBody(now: now)
-            if stale {
-                Text(now.at, style: .relative).font(.caption).foregroundStyle(palette.ink3)
-            }
-        }
-        .padding(16)
-        .opacity(stale ? CueActivityViews.staleOpacity : 1)
-        .activityBackgroundTint(palette.paper)
-        .activitySystemActionForegroundColor(palette.ink)
     }
 }
 
