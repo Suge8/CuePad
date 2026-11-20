@@ -9,6 +9,9 @@ nonisolated enum LiveSignal: Equatable, Codable, Sendable {
     /// Mac：这个会话此刻可看的页面，点开时开的在前，没有是空的；其中认出在服务的（`serving`）；Agent 最近一次发来的（`cuepad live`，
     /// Mac 这次启动以来）；开着预览时的入口。有变化 Mac 主动再答一次。手机按它们跟 Mac 同一条规则换地址（`LivePreview.follow`）。
     case pages(request: UUID, session: String, pages: [URL], serving: [URL], sent: LiveAddress?, door: Door?)
+    /// 手机：连不上 Mac 的隧道、要用 UU 远程看（`Workspace.viewOnMac`），请 Mac 把这个会话开到主区、活预览开在右半、窗口提到最前。不答。
+    /// 2611201115 那一版的 Mac 不认：正文解不开，只记一条日志（`VoiceRelayEvent.unreadable`），中转连接照旧。
+    case show(request: UUID, session: String)
 
     /// 去 Mac 的隧道（`LiveTunnel`）：Mac 在局域网上的地址、此刻的端口，与一张只给这台手机、这个会话的票据。
     struct Door: Equatable, Codable, Sendable {
@@ -22,7 +25,7 @@ nonisolated enum LiveSignal: Equatable, Codable, Sendable {
 
     var request: UUID {
         switch self {
-        case .watch(let request, _, _), .pages(let request, _, _, _, _, _): request
+        case .watch(let request, _, _), .pages(let request, _, _, _, _, _), .show(let request, _): request
         }
     }
 

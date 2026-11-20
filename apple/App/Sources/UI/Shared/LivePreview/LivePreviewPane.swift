@@ -52,7 +52,7 @@ struct LivePreviewPane: View {
                 } else {
                     screen(in: geometry.size)
                     if let trouble, preview.phase != .stopped {
-                        EmptyState(mascot: .search, title: trouble.title, bare: true) { LiveTroubleAction(trouble: trouble) }
+                        EmptyState(mascot: .search, title: trouble.title, message: trouble.message, bare: true) { LiveTroubleAction(trouble: trouble, preview: preview) }
                             .padding(.horizontal, Spacing.page)
                             .frame(maxHeight: .infinity)
                             .transition(.opacity)
@@ -112,7 +112,11 @@ struct LivePreviewPane: View {
                     .allowsHitTesting(false)
             }
             .padding(.top, phone ? 0 : Chrome.band)
-            .overlay { if preview.phase == .stopped { LiveStopped(text: trouble?.title ?? "服务停了，等它回来") } }
+            .overlay {
+                if preview.phase == .stopped {
+                    LiveStopped(text: trouble?.title ?? "服务停了，等它回来", message: trouble?.message) { LiveTroubleAction(trouble: trouble, preview: preview) }
+                }
+            }
             .frame(width: width, height: height)
             .background(ground)
             .clipShape(shape)
@@ -194,48 +198,104 @@ nonisolated enum LiveTrouble: Equatable, Sendable {
         case .starting: "等开发服务起来"
         case .asking: "正在连 Mac"
         case .offline: "Mac 不在线"
-        case .noWiFi: "没连 Wi-Fi，连上和 Mac 同一个网络就能看"
+        case .noWiFi: "没连 Wi-Fi"
         case .apart: "和 Mac 不在同一个网络"
         case .isolated: "连不上 Mac，这个 Wi-Fi 可能不让设备互相连接"
         case .denied: "没有本地网络权限，看不到 Mac 上的网页"
         case .gone: "服务停了，等它回来"
         }
     }
+
+    /// 连不上的是手机到 Mac 的这段路、Mac 本身在线：可以用 UU 远程到 Mac 上看（`Workspace.viewOnMac`）。
+    var reachesByRemote: Bool { [.noWiFi, .apart, .isolated, .denied].contains(self) }
+
+    /// 只有 UU 远程是主要出路的才说；没给权限的主要出路是去设置。
+    var message: LocalizedStringResource? { reachesByRemote && self != .denied ? "用 UU 远程看 Mac 上的这一页" : nil }
 }
 
-/// 缺本地网络权限时去设置打开；别的没有可做的，等它自己回来。
+/// 缺本地网络权限时去设置打开；手机到 Mac 的路不通时用 UU 远程到 Mac 上看（没给权限时排在去设置后面）；别的没有可做的，等它自己回来。
 private struct LiveTroubleAction: View {
-    let trouble: LiveTrouble
+    let trouble: LiveTrouble?
+    let preview: LivePreview
+    #if os(iOS)
+    @Environment(Workspace.self) private var workspace
+    @State private var opening = false
+    #endif
 
     var body: some View {
         #if os(iOS)
-        if trouble == .denied, let settings = URL(string: UIApplication.openSettingsURLString) {
-            Button("去设置") { UIApplication.shared.open(settings) }.buttonStyle(ControlButtonStyle(kind: .primary))
+        // 没有钮时什么都不出：一排空的也会让所在的 VStack 多留一段间距，那一句跟着上移
+        if trouble?.reachesByRemote == true {
+            // 并排放不下（大字号）就上下排，不在钮里折行
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: Spacing.item) { buttons }
+                VStack(spacing: Spacing.item) { buttons }
+            }
         }
         #endif
     }
+
+    #if os(iOS)
+    @ViewBuilder private var buttons: some View {
+        if trouble == .denied, let settings = URL(string: UIApplication.openSettingsURLString) {
+            Button("去设置") { UIApplication.shared.open(settings) }.buttonStyle(ControlButtonStyle(kind: .primary))
+        }
+        Button("在 Mac 上操作", icon: .remoteMac) {
+            guard !opening else { return }
+            opening = true
+            Task {
+                await workspace.viewOnMac(preview)
+                opening = false
+            }
+        }
+        .buttonStyle(ControlButtonStyle(kind: trouble == .denied ? .secondary : .primary))
+        .accessibilityHint("用网易 UU 远程控制 Mac")
+    }
+    #endif
 }
 
 /// 服务停了、连不上 Mac 了：最后的画面压暗一层留着，上面浮一句；回来时自动重新载入（`LivePreview.watch`），这一层随之撤掉。
-private struct LiveStopped: View {
+/// 有可做的（`LiveTroubleAction`）排在那一句下面，点了会怎样（`message`）写在那一句里第二行，同空态。
+private struct LiveStopped<Action: View>: View {
     let text: LocalizedStringResource
+    var message: LocalizedStringResource?
+    @ViewBuilder var action: Action
     @Environment(\.palette) private var palette
 
     var body: some View {
         ZStack {
             palette.stale
-            HStack(spacing: Spacing.glyph) {
-                Spinner(.small)
-                Text(text)
+            VStack(spacing: Spacing.block) {
+                if let message {
+                    VStack(spacing: Spacing.tight) {
+                        status
+                        Text(message).font(Typography.caption).foregroundStyle(palette.ink2)
+                    }
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, Spacing.block)
+                    .padding(.vertical, Spacing.item)
+                    .glass(in: .rect(cornerRadius: Radius.sheet))
+                } else {
+                    status
+                        .padding(.horizontal, Spacing.block)
+                        .frame(height: Chrome.control)
+                        .glass(in: .capsule)
+                }
+                action
             }
-            .font(Typography.secondary.weight(.medium))
-            .foregroundStyle(palette.ink)
-            .padding(.horizontal, Spacing.block)
-            .frame(height: Chrome.control)
-            .glass(in: .capsule)
+            .padding(.horizontal, Spacing.page)
         }
         .allowsHitTesting(true)
         .transition(.opacity)
+    }
+
+    private var status: some View {
+        HStack(spacing: Spacing.glyph) {
+            Spinner(.small)
+            Text(text)
+        }
+        .font(Typography.secondary.weight(.medium))
+        .foregroundStyle(palette.ink)
     }
 }
 

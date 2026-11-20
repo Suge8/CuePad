@@ -19044,18 +19044,18 @@
         }
       }
     },
-    "没连 Wi-Fi，连上和 Mac 同一个网络就能看" : {
+    "没连 Wi-Fi" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Not on Wi-Fi. Join the same network as your Mac to see it"
+            "value" : "Not on Wi-Fi"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "没连 Wi-Fi，连上和 Mac 同一个网络就能看"
+            "value" : "没连 Wi-Fi"
           }
         }
       }
@@ -19584,6 +19584,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "用 %@ 做一个番茄钟网页，做好截图给我看"
+          }
+        }
+      }
+    },
+    "用 UU 远程看 Mac 上的这一页" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "See this page on your Mac with UU Remote"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "用 UU 远程看 Mac 上的这一页"
           }
         }
       }

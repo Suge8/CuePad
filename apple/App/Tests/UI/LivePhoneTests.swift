@@ -154,6 +154,43 @@ struct LivePhoneTests {
         }
     }
 
+    @Test func 手机要用UU远程看_Mac把会话开到主区_有页面开活预览_别处的与结束的不动() async throws {
+        try await paired { workspace, _, pair in
+        let directory = try flow.folder()
+        _ = try await flow.session("live", .settled, in: directory)
+        _ = try await flow.session("plain", .settled, in: try flow.folder())
+        _ = try await flow.session("done", .ended, in: try flow.folder())
+        try await (flow.rig.runtimeRecorder(on: "other-mac")).update(sessionID: "elsewhere", state: .settled, title: "elsewhere")
+        let (server, url) = try await flow.serve(in: directory)
+        defer { server.terminate() }
+        func show(_ sessionID: String) async throws {
+            try await pair.phone.sendVoice(.live(signal: .show(request: UUID(), session: sessionID)), session: VoiceSessionID(UUID()), to: pair.mac.local)
+        }
+
+        try await show("plain")
+        try await eventually("没有页面的会话只开到主区") { workspace.session(in: .main)?.sessionID == "plain" }
+        #expect(workspace.beside == nil)
+
+        try await show("live")
+        try await eventually("开到主区、右半开着它的活预览") {
+            workspace.session(in: .main)?.sessionID == "live" && workspace.beside == .preview && workspace.livePreviews[flow.id("live")]?.address == url
+        }
+
+        workspace.goHome()
+        try await show("live")
+        try await eventually("Cue 铺满着时也让出来") { if case .wide(let state) = workspace.navigation { !state.home } else { false } }
+        workspace.showEditor(UUID())
+        try await show("live")
+        try await eventually("盖着编辑页时揭开") { workspace.overlay == nil }
+        #expect(workspace.beside == .preview)
+
+        try await show("done")
+        try await show("elsewhere")
+        await quietPeriod(.milliseconds(500))
+        #expect(workspace.session(in: .main)?.sessionID == "live" && workspace.beside == .preview, "别处的、结束了的会话不动")
+        }
+    }
+
     @Test func 开着预览_经隧道取到这个会话的页面与接口_别的会话的服务与不认的票据都进不来() async throws {
         try await paired { workspace, remote, pair in
         let mine = try flow.folder(), theirs = try flow.folder()

@@ -47,6 +47,7 @@ extension Workspace {
     }
 
     /// 会话的菜单里的"打开活预览"（只在这个会话还没有页面可看、栏头没有那颗钮时有）：会话放到主区，右半滑开空的地址输入。
+    /// 手机要用 UU 远程看时（`showLive`）也走这里，那时有页面可看，开的是它。
     func openLivePreview(_ session: SessionState) {
         if self.session(in: .main)?.id != session.id { openSession(session.id, sessionID: session.sessionID, in: .main) }
         if beside != .preview { toggleLivePreview() }

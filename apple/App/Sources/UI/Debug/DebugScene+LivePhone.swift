@@ -52,7 +52,8 @@ extension DebugScene {
                 return request.port == 0 ? .probe : .open(host: "127.0.0.1", port: request.port)
             }
             let port = try await server.start()
-            let addresses = LiveTunnel.localAddresses().filter { !$0.host.contains(":") }
+            // 127.0.0.2 本机没有、不在手机的任何网段里：连上去立刻失败，说不在同一个网络（`LiveLink.reach`）
+            let addresses = args.layoutOpts.liveApart ? [.init(host: "127.0.0.2", prefix: 32)] : LiveTunnel.localAddresses().filter { !$0.host.contains(":") }
             mac.door = LiveSignal.Door(addresses: addresses.isEmpty ? [.init(host: "127.0.0.1", prefix: 8)] : addresses, port: port, ticket: ticket)
             liveMac = (mac, server)
             services.liveSignaling = mac
@@ -61,7 +62,9 @@ extension DebugScene {
         holdingReady("活预览载入") {
             while workspace.liveButton(page.id) == nil { await Task.wait(for: .milliseconds(50)) }
             workspace.toggleLivePreview()
-            while workspace.livePreviews[page.id].map({ !($0.phase == .live && $0.revealed) }) ?? true { await Task.wait(for: .milliseconds(100)) }
+            while workspace.livePreviews[page.id].map({ args.layoutOpts.liveApart ? $0.link?.trouble != .apart : !($0.phase == .live && $0.revealed) }) ?? true {
+                await Task.wait(for: .milliseconds(100))
+            }
             await Task.wait(for: .milliseconds(600))
         }
     }
