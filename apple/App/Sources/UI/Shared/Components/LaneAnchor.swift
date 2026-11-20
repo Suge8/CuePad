@@ -16,7 +16,7 @@ struct LaneAnchor: ViewModifier {
     /// 滚到哪了、能滚到哪：滚动时每帧记，不触发重绘。
     private final class Span {
         var at = CGPoint.zero
-        var range: ClosedRange<CGFloat> = 0...0
+        var end: CGFloat = 0
     }
 
     /// 拖着卡停在列的上下边时每帧滚这么多（一秒六百来点：看得清滚过了什么）。
@@ -33,10 +33,12 @@ struct LaneAnchor: ViewModifier {
         content
             .scrollPosition($position, anchor: .center)
             .onScrollGeometryChange(for: [CGFloat].self) {
-                [$0.contentOffset.x, $0.contentOffset.y, -$0.contentInsets.top, max($0.contentSize.height + $0.contentInsets.bottom - $0.containerSize.height, -$0.contentInsets.top)]
+                // 从内容的起点算，不是滚动视图的偏移量：`scrollTo(point:)` 认的是前者，列头占的那段顶边距不算在内。照偏移量给的话一步都滚不动（实测）
+                [$0.contentOffset.x + $0.contentInsets.leading, $0.contentOffset.y + $0.contentInsets.top,
+                 max($0.contentSize.height + $0.contentInsets.top + $0.contentInsets.bottom - $0.containerSize.height, 0)]
             } action: { _, now in
                 span.at = CGPoint(x: now[0], y: now[1])
-                span.range = now[2]...now[3]
+                span.end = now[2]
             }
             .onChange(of: rewind) {
                 if rewind != nil { withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { position.scrollTo(edge: .top) } }
@@ -44,9 +46,8 @@ struct LaneAnchor: ViewModifier {
             .task(id: pull) {
                 guard pull == .top || pull == .bottom else { return }
                 while (try? await Task.sleep(for: .milliseconds(16))) != nil {
-                    let next = min(max(span.at.y + (pull == .bottom ? Self.step : -Self.step), span.range.lowerBound), span.range.upperBound)
+                    let next = min(max(span.at.y + (pull == .bottom ? Self.step : -Self.step), 0), span.end)
                     guard next != span.at.y else { continue }
-                    // 横向照原样给：只给 y 的话横向归零，列两侧留的边（内容边距）被吃掉，整列往左跳一下（实测）
                     position.scrollTo(point: CGPoint(x: span.at.x, y: next))
                     moves?.reaim()
                 }

@@ -37,6 +37,9 @@ nonisolated struct BoardArrival: Equatable {
     /// 飞进去的那一列排在上面（`BoardColumn`），飞到一半又来一份没人换列的看板时不落到别的列下面。
     @ObservationIgnored private var landing: Set<String> = []
     @ObservationIgnored var frames: [String: (lane: TaskBoard.Column, frame: CGRect)] = [:]
+    /// 此刻排出来的卡（值是那一份视图自己的记号）。懒加载撤掉的卡留着撤掉前的框：一下跳过几屏（拖滚动条）时那个框还在可视区里，
+    /// 按住会拎起早已不在那儿的卡、排序会把它算进去，所以取框只认排出来的（`laid`）。
+    @ObservationIgnored var shown: [String: UUID] = [:]
     @ObservationIgnored var lanes: [TaskBoard.Column: CGRect] = [:]
 
     // 拖动（`BoardDrag.swift`）。几何不触发重绘；读得到的只有下面几样，手指每挪一下只写 `point`。
@@ -66,8 +69,17 @@ nonisolated struct BoardArrival: Equatable {
             departures[move.key] = Departure(column: move.value, frame: frame, at: now)
         }
         if let hand = takeoff(moved), let column = moved[hand.id] { from[hand.id] = Departure(column: column, frame: hand.frame, at: now) }
-        // 放下的那一处库里排好了（或别处改了待办）：空位交还给库里的顺序
-        if placed != nil, board.todo.map(\.id) != before.todo.map(\.id) { placed = nil }
+        if board.todo.map(\.id) != before.todo.map(\.id) {
+            // 放下的那一处库里排好了（或别处改了待办）：空位交还给库里的顺序
+            if placed != nil { placed = nil }
+            // 拖着时待办变了（同步插进来一张）：空位跟着它后面那张卡走，不留在原来的下标上——留着的话空位当场跳到别处，松手落的也是那一处
+            if let slot, let id = held?.card.task, held?.phase == .dragging {
+                let next = before.todo.indices.contains(slot) ? before.todo[slot].id : nil
+                let wanted = next.flatMap { next in board.todo.firstIndex { $0.id == next } } ?? board.todo.count
+                self.slot = board.slots(for: id).min { abs($0 - wanted) < abs($1 - wanted) }
+            }
+        }
+        if aimed != nil { aimed?.board = board }
         departures.add(from, dropping: board.entered(from: before), at: now)
         if !moved.isEmpty { landing = Set(moved.keys) }
     }
@@ -118,6 +130,7 @@ private struct BoardFlight: ViewModifier {
     let id: String
     @Environment(\.boardMoves) private var moves
     @Environment(\.boardLane) private var lane
+    @State private var token = UUID()
 
     func body(content: Content) -> some View {
         if let moves, let lane {
@@ -127,6 +140,9 @@ private struct BoardFlight: ViewModifier {
                 .opacity(held ? 0 : 1)
                 .background { if held { BoardWell() } }
                 .onGeometryChange(for: CGRect.self) { $0.frame(in: .scrollView) } action: { moves.frames[id] = (lane, $0) }
+                // 按记号认：卡换小列、换列时新的那份先出现、旧的那份后撤，旧的撤掉时不把新的也摘了
+                .onAppear { moves.shown[id] = token }
+                .onDisappear { if moves.shown[id] == token { moves.shown[id] = nil } }
                 .transition(.board(id, moves.departures))
         } else {
             content

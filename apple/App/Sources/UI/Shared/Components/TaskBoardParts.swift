@@ -37,7 +37,8 @@ struct BoardColumn: View {
             .cardDrop(isEnabled: drags?.current.map(accepts) == true, hover: { point in
                 if let point, let card = drags?.current { moves?.hover(card, at: point, in: column, on: board, row: isRow) } else { moves?.leave(column) }
             }) { card, point in
-                if let drop = moves?.drop(card, at: point, in: column, on: board, row: isRow) { workspace.drop(drop) }
+                // 另一根手指正拎着一张时这一下不进拖动的状态，照样办：系统已经当它接下了，不能放下了没动静
+                if let drop = moves?.drop(card, at: point, in: column, on: board, row: isRow) ?? board.drop(card, into: column, at: nil) { workspace.drop(drop) }
             }
             #if os(iOS)
             .background { lift }
@@ -52,8 +53,8 @@ struct BoardColumn: View {
         let cards = board.draggables(column)
         func stage(_ point: CGPoint) -> CGPoint { moves.map { CGPoint(x: point.x - $0.origin.x, y: point.y - $0.origin.y) } ?? point }
         return BoardLift(enabled: active, hits: { moves?.card(at: stage($0), among: cards) != nil }, began: { point in
-            guard let moves, let hit = moves.card(at: stage(point), among: cards), let face = face(hit.flight) else { return }
-            moves.lift(hit.card, id: hit.flight, at: stage(point), face: face, row: row)
+            guard let moves, let hit = moves.card(at: stage(point), among: cards), let face = face(hit.flight) else { return false }
+            return moves.lift(hit.card, id: hit.flight, at: stage(point), face: face, row: row)
         }, moved: { moves?.drag(to: stage($0), on: board, row: row) }, ended: { released in
             if !released { moves?.cancel() } else if let drop = moves?.release(on: board) { workspace.drop(drop) }
         })

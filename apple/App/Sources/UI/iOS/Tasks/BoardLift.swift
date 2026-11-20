@@ -11,7 +11,8 @@ struct BoardLift: UIViewRepresentable {
     let enabled: Bool
     /// 这一点上有没有拖得动的卡：没有就不认，空白处按住再滑照样是滚动。点都在窗口坐标里。
     let hits: (CGPoint) -> Bool
-    let began: (CGPoint) -> Void
+    /// 拎起来了为真。
+    let began: (CGPoint) -> Bool
     let moved: (CGPoint) -> Void
     /// 松手为真；被系统收走（菜单出来、来电）为假。
     let ended: (Bool) -> Void
@@ -77,8 +78,9 @@ struct BoardLift: UIViewRepresentable {
 
         @objc private func raise() {
             guard state == .possible, finger != nil else { return }
+            // 各列各有一个，拖动的状态只有一份：没拎起来（另一根手指正拖着一张）就不跟，不然这根手指挪的、放下的是那一张
+            guard anchor?.lift?.began(start) == true else { return state = .failed }
             lifted = true
-            anchor?.lift?.began(start)
         }
 
         override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent) {
@@ -88,7 +90,9 @@ struct BoardLift: UIViewRepresentable {
                 if far > Self.still { state = .failed }
                 return
             }
-            if !claimed, far > Self.slop {
+            if !claimed {
+                // 没挪开之前不报位置：松手还算点按，报了的话挨着邻卡按一下、手一抖就排了序
+                guard far > Self.slop else { return }
                 claimed = true
                 // 按名字认：这几个没有公开的类型。改了名认不出来时，拖得慢的那几次菜单照旧弹出来（它的容许位移比看上去大，实测每秒 27 点仍弹）。
                 // 不看它们认到哪一步了：管长按菜单的那个按下不到 0.2 秒就已经开始，只取消还没开始的话菜单照弹、这一下被它收走（实测）
@@ -137,4 +141,3 @@ struct BoardLift: UIViewRepresentable {
     }
 }
 #endif
-

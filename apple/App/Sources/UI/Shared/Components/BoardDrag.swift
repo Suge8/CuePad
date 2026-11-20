@@ -50,9 +50,17 @@ extension BoardMoves {
     /// 从推进中拖回待办的卡在待办里垫的那一格空位，记它的框用的身份。
     static let well = "well"
 
+    /// 卡在它那一列滚动区里的框；没排出来的没有（`shown`）。
+    private func laid(of id: String) -> (lane: TaskBoard.Column, frame: CGRect)? { shown[id] == nil ? nil : frames[id] }
+
     func frame(of id: String) -> CGRect? {
-        guard let card = frames[id], let lane = lanes[card.lane] else { return nil }
+        guard let card = laid(of: id), let lane = lanes[card.lane] else { return nil }
         return card.frame.offsetBy(dx: lane.minX, dy: lane.minY)
+    }
+
+    /// 上一张放下后还悬着（等库、正落回去）就拖下一张：上一张当场收掉，不挡这一张。
+    private func retire() {
+        if let held, held.phase != .dragging { clear() }
     }
 
     func card(at point: CGPoint, among cards: [(flight: String, card: DraggedCard)]) -> (flight: String, card: DraggedCard)? {
@@ -63,10 +71,11 @@ extension BoardMoves {
 
     /// `local` 在那一列自己的坐标里（`DropInfo.location`）。
     func hover(_ card: DraggedCard, at local: CGPoint, in column: TaskBoard.Column, on board: TaskBoard, row: Bool) {
+        retire()
         guard float == nil, let area = areas[column] else { return }
         if held == nil {
             let id = board.flight(of: card) ?? ""
-            held = Held(card: card, id: id, size: frames[id]?.frame.size ?? .zero)
+            held = Held(card: card, id: id, size: laid(of: id)?.frame.size ?? .zero)
         }
         guard held?.card == card, held?.phase == .dragging else { return }
         let point = CGPoint(x: area.minX + local.x, y: area.minY + local.y)
@@ -102,11 +111,14 @@ extension BoardMoves {
 
     // MARK: 按住即拖
 
-    func lift(_ card: DraggedCard, id: String, at finger: CGPoint, face: AnyView, row: Bool) {
-        guard held == nil, let frame = frame(of: id) else { return }
+    /// 拎不起来为假：别的手指（或系统拖放）正拖着一张。
+    func lift(_ card: DraggedCard, id: String, at finger: CGPoint, face: AnyView, row: Bool) -> Bool {
+        retire()
+        guard held == nil, let frame = frame(of: id) else { return false }
         point = CGPoint(x: frame.midX, y: frame.midY)
         float = Float(face: face, row: row, grab: CGSize(width: finger.x - frame.midX, height: finger.y - frame.midY))
         held = Held(card: card, id: id, size: frame.size)
+        return true
     }
 
     func drag(to finger: CGPoint, on board: TaskBoard, row: Bool) {
@@ -140,6 +152,8 @@ extension BoardMoves {
         guard let held, held.phase == .dragging, let aimed else { return }
         shifted = nil
         aim(held.card, at: aimed.finger, in: areas.first { $0.value.contains(aimed.finger) }?.key, on: aimed.board, row: aimed.row)
+        // 空位滚到了能去的最后一处就停：不重算的话指针不动它一直滚到头
+        pull(held.card, at: aimed.finger, on: aimed.board, row: aimed.row)
     }
 
     func release(on board: TaskBoard) -> TaskBoard.Drop? {
@@ -175,7 +189,7 @@ extension BoardMoves {
         if let slot, let shifted, ContinuousClock.now - shifted < Self.relayout { return slot }
         let pointer = CGPoint(x: point.x - lane.minX, y: point.y - lane.minY)
         let home = board.todo.firstIndex { $0.id == id }
-        let others = board.todo.enumerated().compactMap { index, item in item.id == id ? nil : frames[item.flight].map { (index: index, frame: $0.frame) } }
+        let others = board.todo.enumerated().compactMap { index, item in item.id == id ? nil : laid(of: item.flight).map { (index: index, frame: $0.frame) } }
         func far(_ frame: CGRect) -> CGFloat {
             hypot(max(frame.minX - pointer.x, 0, pointer.x - frame.maxX), max(frame.minY - pointer.y, 0, pointer.y - frame.maxY))
         }
@@ -183,7 +197,7 @@ extension BoardMoves {
         if !row {
             wanted = others.last { $0.frame.midY < pointer.y }.map { $0.index + 1 } ?? others.first?.index ?? 0
         } else if let near = others.min(by: { far($0.frame) < far($1.frame) }) {
-            let well = frames[home == nil ? Self.well : "task/\(id)"]?.frame
+            let well = laid(of: home == nil ? Self.well : "task/\(id)")?.frame
             // 空位在它前面就换到它后面，在它后面就换到它前面；指针还在空位里不动。从推进中刚拖进待办时还没有空位，看指针在它的前半还是后半
             if let current = slot ?? home {
                 if let well, far(well) <= far(near.frame) { return current }
