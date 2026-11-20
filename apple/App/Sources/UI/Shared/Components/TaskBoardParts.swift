@@ -364,11 +364,13 @@ private struct BoardPile: View {
             .boardCard(.done)
             .background {
                 ForEach([2, 1], id: \.self) { depth in
-                    RoundedRectangle(cornerRadius: TaskMetrics.cardRadius).fill(palette.paperFill).opacity(depth == 1 ? 0.7 : 0.4)
-                        .padding(.horizontal, CGFloat(depth) * Self.inset).offset(y: CGFloat(depth) * Self.step)
+                    let layer = RoundedRectangle(cornerRadius: TaskMetrics.cardRadius).fill(palette.paperFill).opacity(depth == 1 ? 0.7 : 0.4)
+                    // 横着排的一行里往右露边（格子只有一行高，往下露不出）
+                    if row { layer.padding(.vertical, CGFloat(depth) * Spacing.tight).offset(x: CGFloat(depth) * Self.step) }
+                    else { layer.padding(.horizontal, CGFloat(depth) * Self.inset).offset(y: CGFloat(depth) * Self.step) }
                 }
             }
-            .padding(.bottom, 2 * Self.step)
+            .padding(row ? .trailing : .bottom, 2 * Self.step)
         }
         .buttonStyle(PressStyle(.card))
         .accessibilityValue("已折叠")

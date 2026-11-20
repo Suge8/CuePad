@@ -73,6 +73,8 @@ struct BoardPin: View {
 /// 项目只在看全部项目时画（调用方给 nil）：选了项目范围时范围已经说了。指针停在上面时别的项目的卡淡下去（`boardDim`）。
 struct BoardProjectTag: View {
     let project: Project
+    /// 手机行里待办、已完成的薄条只画图形：一行里地方给标题。
+    var named = true
     #if os(macOS)
     @Environment(Workspace.self) private var workspace
     #endif
@@ -82,9 +84,9 @@ struct BoardProjectTag: View {
         HStack(spacing: Spacing.hair) {
             ProjectGlyph(project: project, size: TaskMetrics.cardGlyph)
             // 卡脚只给得出图形那么宽时名字排成 0 宽裁掉（`BoardFoot`），不剩一个"…"
-            Text(project.shownName).font(TaskMetrics.caption).foregroundStyle(palette.ink3).lineLimit(1).fact()
+            if named { Text(project.shownName).font(TaskMetrics.caption).foregroundStyle(palette.ink3).lineLimit(1).fact() }
         }
-        .frame(maxWidth: BoardCardMetrics.tagMax, alignment: .leading)
+        .frame(maxWidth: named ? BoardCardMetrics.tagMax : nil, alignment: .leading)
         .help(project.shownName)
         #if os(macOS)
         .onHover { workspace.hoverProject(project.id, $0) }
@@ -170,7 +172,8 @@ struct BoardSessionCard: View {
 /// 三层三种轻重：标题最重，第二行带状态的颜色，卡脚整行淡。
 /// 卡脚左端项目，右端这一列要说的那一样——推进中是时长（`BoardVitals`），别的列是 `facts`；这张卡自己的那一颗钮（开始、就地处理）在最右。
 /// 状态词不放在标题右端：窄列里标题会只剩四五个字。
-/// 手机的行里（`boardRow`）是同一张：标题一行，卡脚沉到格底；待办、已完成只有标题与卡脚，不写旁注。
+/// 手机的行里（`boardRow`）是同一张：标题一行，卡脚沉到格底；待办、已完成收成一行高的薄条（项目的图形、标题、卡脚右端那一样），
+/// 地方让给正在发生的两行。
 struct BoardCardLayout<Title: View, Facts: View, Trailing: View>: View {
     let advancing: Bool
     var pulse = BoardPulse()
@@ -202,13 +205,26 @@ struct BoardCardLayout<Title: View, Facts: View, Trailing: View>: View {
     }
 
     var body: some View {
+        if row, compact { strip } else { stacked }
+    }
+
+    private var strip: some View {
+        HStack(spacing: Spacing.item) {
+            if let project { BoardProjectTag(project: project, named: false) }
+            HStack(alignment: .firstTextBaseline, spacing: Spacing.tight) { title }.font(TaskMetrics.lineFont).frame(maxWidth: .infinity, alignment: .leading)
+            HStack(spacing: Spacing.glyph) { facts }.fixedSize().font(TaskMetrics.caption).lineLimit(1)
+            trailing
+        }
+    }
+
+    private var stacked: some View {
         VStack(alignment: .leading, spacing: BoardCardMetrics.footGap) {
             // 行里卡脚沉到格底：上半截占满余高（中间垫 Spacer 的话它前后各多一个行距，卡比格高）
             VStack(alignment: .leading, spacing: BoardCardMetrics.footGap) {
                 HStack(alignment: compact ? .top : .firstTextBaseline, spacing: Spacing.item) {
                     VStack(alignment: .leading, spacing: Spacing.hair) {
                         HStack(alignment: .firstTextBaseline, spacing: Spacing.tight) { title }.font(compact ? TaskMetrics.lineFont : Typography.bodyStrong)
-                        if compact, !row, let note { noteLine(note) }
+                        if compact, let note { noteLine(note) }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     if let session { AgentMark(session: session, font: TaskMetrics.caption, named: false) }
