@@ -6,7 +6,7 @@ enum LivePick {
     private static let key = "Symbol.for('cuepad.pick')"
     static let cancel = "window[\(key)]?.cancel()"
 
-    /// 高亮框与标签的颜色（脚本里的 `tint`、`ink`）：此刻外观下实心钮的那一对（`Palette.signatureFill` 底、`onFill` 字），深浅色下标签的字都读得清。
+    /// 高亮框与标签的颜色（脚本里的 `tint`、`ink`）：此刻外观下铺成一块的靛青那一对（`Palette.signatureFill` 底、`onFill` 字），深浅色下标签的字都读得清。
     static func colors(dark: Bool) -> [String: String] {
         let palette = Palette(dark: dark)
         func css(_ color: Color) -> String {

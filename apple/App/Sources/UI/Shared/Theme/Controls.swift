@@ -171,7 +171,7 @@ struct ControlSurface: ViewModifier {
         default:
             content
                 .font(size.font.weight(selected ? .semibold : .medium))
-                .foregroundStyle(kind == .primary ? palette.onFill : ink)
+                .foregroundStyle(kind == .primary ? palette.onAction : ink)
                 .padding(.horizontal, size.padding)
                 .padding(.vertical, size.verticalPadding)
                 .frame(minHeight: size.height)
@@ -197,7 +197,7 @@ struct ControlSurface: ViewModifier {
     private var background: Color {
         if selected { return palette.selection }
         return switch kind {
-        case .primary: palette.signatureFill
+        case .primary: palette.action
         case .quiet, .glass, .icon: .clear
         case .secondary, .circular, .round: palette.fill
         }

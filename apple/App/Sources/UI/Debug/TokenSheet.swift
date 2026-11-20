@@ -123,7 +123,7 @@ struct TokenSheet: View {
             ("onMedia", palette.onMedia), ("mediaScrim", palette.mediaScrim), ("mediaGround", palette.mediaGround),
             ("mediaEdge", palette.mediaEdge), ("mediaDim", palette.mediaDim),
             ("signature", palette.signature), ("signatureSoft", palette.signatureSoft), ("signatureFill", palette.signatureFill),
-            ("selection", palette.selection), ("searchMatch", Palette.searchMatch), ("onFill", palette.onFill),
+            ("selection", palette.selection), ("searchMatch", Palette.searchMatch), ("onFill", palette.onFill), ("action", palette.action), ("onAction", palette.onAction),
             ("waiting", palette.waiting), ("waitingFill", palette.waitingFill), ("failure", palette.failure),
             ("failureFill", palette.failureFill), ("failureTrack", palette.failureTrack), ("replied", palette.replied),
             ("failureWash", palette.failureWash), ("repliedWash", palette.repliedWash),
