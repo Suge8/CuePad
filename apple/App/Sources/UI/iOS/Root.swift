@@ -39,7 +39,8 @@ struct IOSRoot: View {
                 }
             }
             .overlay {
-                FloatingInput(isPresented: workspace.outbox != nil, close: { workspace.outbox = nil }) {
+                // 没发就关了：同取消，看板上放下的那张卡不用等，当场回原处
+                FloatingInput(isPresented: workspace.outbox != nil, close: { workspace.outbox = nil; workspace.declineDrop() }) {
                     if let outbox = workspace.outbox { HandOffInput(outbox: outbox).id(outbox.id) }
                 }
             }
