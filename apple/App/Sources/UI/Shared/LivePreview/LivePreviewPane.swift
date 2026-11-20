@@ -220,25 +220,34 @@ private struct LiveTroubleAction: View {
 
     var body: some View {
         #if os(iOS)
-        HStack(spacing: Spacing.item) {
-            if trouble == .denied, let settings = URL(string: UIApplication.openSettingsURLString) {
-                Button("去设置") { UIApplication.shared.open(settings) }.buttonStyle(ControlButtonStyle(kind: .primary))
-            }
-            if trouble?.reachesByRemote == true {
-                Button("在 Mac 上操作", icon: .remoteMac) {
-                    guard !opening else { return }
-                    opening = true
-                    Task {
-                        await workspace.viewOnMac(preview)
-                        opening = false
-                    }
-                }
-                .buttonStyle(ControlButtonStyle(kind: trouble == .denied ? .secondary : .primary))
-                .accessibilityHint("用网易 UU 远程控制 Mac")
+        // 没有钮时什么都不出：一排空的也会让所在的 VStack 多留一段间距，那一句跟着上移
+        if trouble?.reachesByRemote == true {
+            // 并排放不下（大字号）就上下排，不在钮里折行
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: Spacing.item) { buttons }
+                VStack(spacing: Spacing.item) { buttons }
             }
         }
         #endif
     }
+
+    #if os(iOS)
+    @ViewBuilder private var buttons: some View {
+        if trouble == .denied, let settings = URL(string: UIApplication.openSettingsURLString) {
+            Button("去设置") { UIApplication.shared.open(settings) }.buttonStyle(ControlButtonStyle(kind: .primary))
+        }
+        Button("在 Mac 上操作", icon: .remoteMac) {
+            guard !opening else { return }
+            opening = true
+            Task {
+                await workspace.viewOnMac(preview)
+                opening = false
+            }
+        }
+        .buttonStyle(ControlButtonStyle(kind: trouble == .denied ? .secondary : .primary))
+        .accessibilityHint("用网易 UU 远程控制 Mac")
+    }
+    #endif
 }
 
 /// 服务停了、连不上 Mac 了：最后的画面压暗一层留着，上面浮一句；回来时自动重新载入（`LivePreview.watch`），这一层随之撤掉。
