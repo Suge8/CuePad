@@ -92,7 +92,7 @@ struct BoardColumn: View {
 
     #if os(iOS)
     /// 手机的行里推进中有余高时多排几排，卡少时不空着排。
-    private var rowTiers: Int { column == .advancing ? min(3, max(board.advancing.count, 1)) : 1 }
+    private var rowTiers: Int { column == .advancing ? max(board.advancing.count, 1) : 1 }
     #endif
 
     private var archives: Bool { column == .done && !(board.done.isEmpty && board.earlier.isEmpty) }
@@ -364,13 +364,12 @@ private struct BoardPile: View {
             .boardCard(.done)
             .background {
                 ForEach([2, 1], id: \.self) { depth in
-                    let layer = RoundedRectangle(cornerRadius: TaskMetrics.cardRadius).fill(palette.paperFill).opacity(depth == 1 ? 0.7 : 0.4)
-                    // 横着排的一行里往右露边（格子只有一行高，往下露不出）
-                    if row { layer.padding(.vertical, CGFloat(depth) * Spacing.tight).offset(x: CGFloat(depth) * Self.step) }
-                    else { layer.padding(.horizontal, CGFloat(depth) * Self.inset).offset(y: CGFloat(depth) * Self.step) }
+                    RoundedRectangle(cornerRadius: TaskMetrics.cardRadius).fill(palette.paperFill).opacity(depth == 1 ? 0.7 : 0.4)
+                        .padding(.horizontal, CGFloat(depth) * Self.inset).offset(y: CGFloat(depth) * Self.step)
                 }
             }
-            .padding(row ? .trailing : .bottom, 2 * Self.step)
+            // 手机的行里面上那张占满一格，两层边露到格子下面（横滑区不裁内容）：格子只有一行高
+            .padding(.bottom, row ? 0 : 2 * Self.step)
         }
         .buttonStyle(PressStyle(.card))
         .accessibilityValue("已折叠")

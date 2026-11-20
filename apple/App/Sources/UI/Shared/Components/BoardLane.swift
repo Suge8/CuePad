@@ -41,7 +41,7 @@ struct LaneAdd {
 /// Mac 上钮就是这颗圆，悬停的底也只是它——钮比圆宽时悬停的底盖到旁边的数上、高出列头。
 /// 手机上命中与排版分开：圆照样只占 `cell` 那么宽的排版，钮本身至少 `ControlSize.target` 宽，居中浮在格上、不占排版——
 /// 按命中宽排会把列名挤短（手机横屏四列的待办列头里，英文"To Do"就截成"To…"）。
-/// 列头高本来就不低于 target，只横着扩。钮点得到的就是它自己的框：标签上外扩的 contentShape 出了按钮的框不认（实测），所以扩的是钮、不是形状。
+/// 手机竖屏的行头比 target 矮，竖着也扩。钮点得到的就是它自己的框：标签上外扩的 contentShape 出了按钮的框不认（实测），所以扩的是钮、不是形状。
 struct LaneAddButton: View {
     let add: LaneAdd
     var cell: CGSize?
@@ -58,7 +58,7 @@ struct LaneAddButton: View {
             button(disc: cell.width).frame(height: cell.height)
             #else
             Color.clear.frame(width: cell.width, height: cell.height)
-                .overlay { button(disc: cell.width).frame(width: max(cell.width, ControlSize.target), height: cell.height) }
+                .overlay { button(disc: cell.width).frame(width: max(cell.width, ControlSize.target), height: max(cell.height, ControlSize.target)) }
             #endif
         } else {
             button(disc: nil)
