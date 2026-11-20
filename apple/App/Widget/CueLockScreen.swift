@@ -153,14 +153,7 @@ struct CueLockScreen: View {
         case .wait(let wait):
             if let allow = wait.allow {
                 HStack(spacing: 12) {
-                    // 同 App 里拍板卡答"可以"的那颗钮：只有对勾。卡是赭黄的，钮反过来用墨底、赭黄的勾
-                    Button(intent: AllowOnceIntent(allow)) {
-                        WidgetIcon.tick.image.font(IslandType.posterTick).foregroundStyle(signal.fill)
-                            .frame(width: 72, height: 42).background(signal.ink, in: .capsule)
-                            .frame(minHeight: 44).contentShape(.rect)
-                    }
-                    .accessibilityLabel("允许一次")
-                    .buttonStyle(.plain).fixedSize()
+                    AllowTick(allow: allow, signal: signal, width: 72)
                     if let since = now.clock {
                         Text("已等 \(ActivityElapsed.text(since: since))").font(IslandType.posterTime).foregroundStyle(signal.soft).lineLimit(1)
                     }
@@ -185,7 +178,7 @@ struct CueLockScreen: View {
 }
 
 /// 其余几行：名字、行尾还在动的写做了多久（自己走），停下的写状态词。整块上了色，行里不再分颜色，靠行首的图形分。
-private struct PosterRow: View {
+struct PosterRow: View {
     let item: CueNow.Item
     let signal: Palette.Signal
 

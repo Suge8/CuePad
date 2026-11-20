@@ -64,6 +64,7 @@ struct DebugActivityStage: View {
                 }
                 .padding(.horizontal, 9).frame(height: 37).background(.black, in: .capsule)
                 views.expanded.padding(18).background(.black, in: .rect(cornerRadius: Radius.screen))
+                    .containerShape(.rect(cornerRadius: Radius.screen))
                 views.lockScreen.background(views.lockFill(palette)).clipShape(.rect(cornerRadius: Radius.sheet))
                 views.minimal.frame(width: 37, height: 37).background(.black, in: .circle)
             }
