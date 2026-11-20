@@ -111,6 +111,8 @@ final class Workspace {
         didSet { if openTask == nil, let oldValue { closedTask = (oldValue.task, .now) } }
     }
     var sessionAsk: SessionAsk?
+    /// 答应了、还没办完的那几问（`answer`）。
+    var answering = 0
     /// 正显示某张卡完成圈（或看板卡）的视图，后出现的在后（`completionAsks(claiming:)`）。
     @ObservationIgnored var completionClaims: [UUID: [UUID]] = [:]
     @ObservationIgnored var closedTask: (task: UUID, at: ContinuousClock.Instant)?

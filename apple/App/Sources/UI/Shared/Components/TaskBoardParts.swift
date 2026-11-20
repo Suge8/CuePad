@@ -38,7 +38,7 @@ struct BoardColumn: View {
                 if let point, let card = drags?.current { moves?.hover(card, at: point, in: column, on: board, row: isRow) } else { moves?.leave(column) }
             }) { card, point in
                 // 另一根手指正拎着一张时这一下不进拖动的状态，照样办：系统已经当它接下了，不能放下了没动静
-                if let drop = moves?.drop(card, at: point, in: column, on: board, row: isRow) ?? board.drop(card, into: column, at: nil) { workspace.drop(drop) }
+                if let drop = moves?.drop(card, at: point, in: column, on: board, row: isRow, face: face) ?? board.drop(card, into: column, at: nil) { workspace.drop(drop) }
             }
             #if os(iOS)
             .background { lift }
@@ -199,10 +199,10 @@ struct BoardColumn: View {
     }
 
     private func card(_ item: TaskBoard.Item, moves: Bool = false) -> some View {
-        taskFace(item, moves: moves).boardFlight(item.flight).benchSpot(item.id)
+        taskFace(item, in: column, moves: moves).boardFlight(item.flight).benchSpot(item.id)
     }
 
-    private func taskFace(_ item: TaskBoard.Item, moves: Bool) -> some View {
+    private func taskFace(_ item: TaskBoard.Item, in column: TaskBoard.Column, moves: Bool) -> some View {
         BoardTaskCard(item: item, column: column, project: glyph(item.project), moves: moves) { opened = $0 }.boardDim(project: item.task.projectID)
     }
 
@@ -214,20 +214,14 @@ struct BoardColumn: View {
         BoardWaitCard(held: held, project: glyph(workspace.catalog?.project(held.project)))
     }
 
-    #if os(iOS)
-    /// 这一列里那张卡的面：按住拎起来时浮在手里的就是它，不带原处那张的飞行身份。
+    /// 那张卡在它原来那一列里的面：浮在手里、放下后停在松手处的就是它，不带原处那张的飞行身份。
     private func face(_ flight: String) -> AnyView? {
-        switch column {
-        case .todo: board.todo.first { $0.flight == flight }.map { AnyView(taskFace($0, moves: false)) }
-        case .advancing:
-            board.advancing.first { $0.id == flight }.flatMap { work in
-                work.item.map { AnyView(taskFace($0, moves: false)) } ?? work.loose.map { AnyView(sessionFace($0, of: work, moves: false)) }
-            }
-        case .waiting: board.held.first { $0.id == flight }.map { AnyView(waitFace($0)) }
-        case .done: nil
+        if let item = board.todo.first(where: { $0.flight == flight }) { return AnyView(taskFace(item, in: .todo, moves: false)) }
+        if let work = board.advancing.first(where: { $0.id == flight }) {
+            return work.item.map { AnyView(taskFace($0, in: .advancing, moves: false)) } ?? work.loose.map { AnyView(sessionFace($0, of: work, moves: false)) }
         }
+        return board.held.first { $0.id == flight }.map { AnyView(waitFace($0)) }
     }
-    #endif
 
     private func glyph(_ project: Project?) -> Project? { workspace.scopedProject == nil ? project : nil }
 

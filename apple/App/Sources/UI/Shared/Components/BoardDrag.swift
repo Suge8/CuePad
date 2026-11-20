@@ -5,7 +5,8 @@ import SwiftUI
 /// - 系统拖放（Mac 的鼠标；触屏上按住半秒、菜单出来之后再挪）：卡由系统画着跟手，能拖出看板（并排的会话格、别的窗口）。
 /// - 触屏按住即拖（`BoardLift`）：按住 0.2 秒卡就浮在手里（`BoardFloat`），不等菜单；只在看板里放。
 /// 拖着时原处留一个空位；在待办上空位跟着指针走、别的卡当场让开，松手就落在空位里，写库在后面跟。
-/// 放到别的列上的卡先停在松手的地方，等看板读到它换了列，从那里飞进去（`BoardMoves.read`）；等不到（不接、要先问一句）就回原处。
+/// 放到别的列上的卡先停在松手的地方，等看板读到它换了列，从那里飞进去（`BoardMoves.read`）；要先问一句的（`asking`）问着时一直停在那儿；
+/// 等不到（不接、问了没答应）就滑回原处。系统拖放松手时系统画的那张就没了，换一张自己画的停着（`drop`）：不然卡先闪回原处、答应了再从原处飞。
 /// 否决过：一条插入线——线只说"这里"，卡落下前后别的卡各跳一次。
 extension BoardMoves {
     struct Held: Equatable {
@@ -51,7 +52,7 @@ extension BoardMoves {
     static let well = "well"
 
     /// 卡在它那一列滚动区里的框；没排出来的没有（`shown`）。
-    private func laid(of id: String) -> (lane: TaskBoard.Column, frame: CGRect)? { shown[id] == nil ? nil : frames[id] }
+    private func laid(of id: String) -> (lane: TaskBoard.Column, frame: CGRect)? { shown[id].flatMap { frames[$0] } }
 
     func frame(of id: String) -> CGRect? {
         guard let card = laid(of: id), let lane = lanes[card.lane] else { return nil }
@@ -95,11 +96,19 @@ extension BoardMoves {
         aimed = nil
     }
 
-    func drop(_ card: DraggedCard, at local: CGPoint, in column: TaskBoard.Column, on board: TaskBoard, row: Bool) -> TaskBoard.Drop? {
+    /// `face`：那张卡的面（按飞行身份取）。
+    func drop(
+        _ card: DraggedCard, at local: CGPoint, in column: TaskBoard.Column, on board: TaskBoard, row: Bool, face: (String) -> AnyView?
+    ) -> TaskBoard.Drop? {
         hover(card, at: local, in: column, on: board, row: row)
         guard let held, held.card == card, held.phase == .dragging, let area = areas[column] else { return nil }
         let drop = board.drop(card, into: column, at: slot)
-        hand = CGRect(x: area.minX + local.x - held.size.width / 2, y: area.minY + local.y - held.size.height / 2, width: held.size.width, height: held.size.height)
+        let spot = CGPoint(x: area.minX + local.x, y: area.minY + local.y)
+        hand = CGRect(x: spot.x - held.size.width / 2, y: spot.y - held.size.height / 2, width: held.size.width, height: held.size.height)
+        if Self.waits(drop), let face = face(held.id) {
+            point = spot
+            float = Float(face: face, row: row, grab: .zero)
+        }
         land(drop)
         return drop
     }
@@ -223,9 +232,14 @@ extension BoardMoves {
         self.slot = nil
         pull = nil
         aimed = nil
+        if Self.waits(drop) { pend() } else { settle() }
+    }
+
+    /// 放下后要等库才知道卡去哪：待办里排序的落在空位里，不等。
+    private static func waits(_ drop: TaskBoard.Drop?) -> Bool {
         switch drop {
-        case nil, .place: settle()
-        default: pend()
+        case nil, .place: false
+        default: true
         }
     }
 
@@ -249,12 +263,12 @@ extension BoardMoves {
         }
     }
 
-    private func pend() {
+    func pend() {
         guard let held else { return }
         self.held?.phase = .pending
         Task {
             try? await Task.sleep(for: Self.grace)
-            guard self.held?.id == held.id, self.held?.phase == .pending else { return }
+            guard !asking, self.held?.id == held.id, self.held?.phase == .pending else { return }
             if placed != nil { withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { placed = nil } }
             settle()
         }

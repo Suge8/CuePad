@@ -192,6 +192,6 @@ private struct CompletionAsks: ViewModifier {
     /// 取的是呈现时那一问的：按下时框可能已先收起、`sessionAsk` 已清。
     private var confirm: @MainActor () -> Void {
         guard mine != nil, case .complete(_, _, let proceed) = workspace.sessionAsk else { return {} }
-        return { [workspace] in workspace.attempt { try await proceed(workspace) } }
+        return { [workspace] in workspace.answer(proceed) }
     }
 }

@@ -11501,38 +11501,6 @@
         }
       }
     },
-    "完成后它的会话会休眠，再对它说话就醒。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Its session goes to sleep when you complete this. Message it to wake it."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "完成后它的会话会休眠，再对它说话就醒。"
-          }
-        }
-      }
-    },
-    "完成并休眠" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Complete and Sleep"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "完成并休眠"
-          }
-        }
-      }
-    },
     "定时" : {
       "localizations" : {
         "en" : {
@@ -21653,6 +21621,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "装好了，但找不到 %@"
+          }
+        }
+      }
+    },
+    "要休眠会话吗？" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Put its session to sleep?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "要休眠会话吗？"
           }
         }
       }

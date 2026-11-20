@@ -13,6 +13,7 @@ struct BoardWell: View {
 struct BoardFloat: View {
     @Environment(\.boardMoves) private var moves
     @Environment(\.cardDrags) private var drags
+    @Environment(Workspace.self) private var workspace
 
     var body: some View {
         ZStack {
@@ -25,11 +26,13 @@ struct BoardFloat: View {
             }
         }
         .allowsHitTesting(false)
-        .sensoryFeedback(.impact(weight: .medium), trigger: moves?.float != nil) { _, lifted in lifted }
+        // 系统拖放放下后换上的那一张不算拎起来
+        .sensoryFeedback(.impact(weight: .medium), trigger: moves?.float != nil && moves?.held?.phase == .dragging) { _, lifted in lifted }
         .sensoryFeedback(.selection, trigger: moves?.making)
         .sensoryFeedback(.selection, trigger: moves?.over) { _, over in over != nil }
         .sensoryFeedback(.impact(weight: .light), trigger: moves?.held?.phase) { $0 == .dragging && $1 != .dragging }
         .onChange(of: drags?.current) { if drags?.current == nil { moves?.systemEnded() } }
+        .onChange(of: workspace.asksAboutDrop, initial: true) { moves?.asking = workspace.asksAboutDrop }
     }
 
     /// 只这一层读手指的位置：每挪一下重算的是位移，不是卡。
