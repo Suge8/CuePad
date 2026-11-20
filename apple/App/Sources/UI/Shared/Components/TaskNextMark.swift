@@ -28,9 +28,9 @@ struct TaskNextMark: View {
                 StateDot(shown: shown, size: Self.dot).relaySpot(session: session.sessionID, row: .task)
                 if shown.speaksOnTask { Text(shown.label).foregroundStyle(shown.labelTint(palette)) }
             case .start where primary:
-                Image(retry ? .retry : .start).font(Self.glyph).foregroundStyle(palette.paper)
+                Image(retry ? .retry : .start).font(Self.glyph).foregroundStyle(palette.onAction)
                     .frame(width: Self.disc, height: Self.disc)
-                    .background(palette.ink, in: .circle)
+                    .background(palette.action, in: .circle)
             case .start:
                 // 墨色的三角落在浅底的圆上，同别的图标钮：一列任务每行一颗，着靛青就成了一列蓝点，抢过标题。行亮着时圆底深一档，不化进行的底里
                 Image(.start).font(Self.glyph).foregroundStyle(palette.ink)

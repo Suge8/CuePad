@@ -27,15 +27,14 @@ struct TaskRingView: View {
         .alignmentGuide(.firstTextBaseline) { $0.height * 0.82 }
     }
 
-    /// 推进中有两种样子：有 Agent 正在这一步上跑（`running`）是整圈淡靛青、靛青的扫光走一圈又一圈，同分段圈里正在跑的那一段（减弱动态效果时是静止的靛青）；
+    /// 推进中有两种样子：有 Agent 正在这一步上跑（`running`）是一段靛青的弧绕着圈转（同 `Spinner` 的那一种，不放循环动效时是静止的靛青整圈）；
+    /// 试过同分段圈的扫光：单独一圈没有墨色的段衬着，扫光的间隙里比没开工的圈还淡。
     /// 标了推进中、此刻没人在跑是外圈加右半边实心的半满圆，静止。
     private var open: some View {
         let line = max(1.4, size * 0.095)
         return ZStack {
             if status == .inProgress, running {
-                let ring = Circle().stroke(lineWidth: line)
-                ring.foregroundStyle(sweeps ? palette.selection : palette.signature)
-                    .overlay { if sweeps { LoopLayer(kind: .sheen, color: palette.signature).mask { ring } } }
+                if sweeps { LoopLayer(kind: .orbit, color: palette.signature) } else { Circle().stroke(palette.signature, lineWidth: line) }
             } else if status == .inProgress {
                 Circle().stroke(palette.ink, lineWidth: line)
                 HalfDisc().fill(palette.ink).padding(line * 1.6)
