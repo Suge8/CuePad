@@ -16,9 +16,10 @@ struct SessionAlert: Equatable, Identifiable {
         session = state.id
         self.kind = kind
         title = state.title
-        question = state.question?.text
-        reply = state.lastReply
-        failure = state.state == .known(.error) ? state.detail : nil
+        // 提示与系统通知不排版：去掉标记，回复只取头一句（同看板等你卡上那一句）
+        question = SessionProgress.firstLine(state.question?.text)
+        reply = SessionProgress.firstSentence(state.lastReply)
+        failure = state.state == .known(.error) ? SessionProgress.firstLine(state.detail) : nil
     }
 
     var content: (title: String, body: String) {

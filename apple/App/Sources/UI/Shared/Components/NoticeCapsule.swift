@@ -65,7 +65,9 @@ struct NoticeCapsule: View {
                 .frame(maxWidth: fills ? .infinity : nil)
                 .frame(height: height)
             case .rail:
+                // 宿主按零高摆它（`floatingAbove`）：不自己撑开的话底只有一行高，折了行的字露在底外面
                 row(font: Typography.secondary, lines: 4, inset: ControlSize.regular.verticalPadding).frame(minHeight: height)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         // 一行时就是胶囊；折了行的四角还是那个弯

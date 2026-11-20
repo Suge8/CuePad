@@ -31,7 +31,10 @@ struct BoardTaskCard: View {
             } facts: {
                 if let steps = item.steps { Text(verbatim: "\(steps.done)/\(steps.total)").monospacedDigit().foregroundStyle(palette.ink3) }
                 if let finished { Text(verbatim: finished).monospacedDigit().foregroundStyle(palette.ink3) }
-                if column == .todo { BoardStart(next: next, since: task.todoAt ?? task.createdAt) }
+                #if os(iOS)
+                // Mac 上不放"开始"：把卡拖到推进中就是开始（用上次选的那家与模型），要换的点开任务。触屏拖起来没那么顺手，写着
+                if column == .todo, let start = next.flatMap({ $0.starts ? $0 : nil }) { TaskNextMark(next: start) }
+                #endif
             } trailing: {
                 if hero == nil, let shot = item.shot { BoardShot(shot: shot, group: task.id.uuidString, open: openShot) }
             }
@@ -70,7 +73,9 @@ struct BoardTaskCard: View {
             case nil: nil
             }
         case .done: task.completedAt?.formatted(date: .omitted, time: .shortened)
-        case .todo, .waiting: nil
+        // 记下多久了只在这里说：写在卡脚上把项目名挤成一个图标，它又不是据以行动的事
+        case .todo: DateLabel.short(task.todoAt ?? task.createdAt)
+        case .waiting: nil
         }
         return Dotted(item.project?.shownName, time, agent).visible
     }
@@ -122,21 +127,4 @@ struct BoardTaskCard: View {
             .contextMenu { menu }
     }
     #endif
-}
-
-/// 待办的卡脚右端：记下多久了。Mac 上不放"开始"：把卡拖到推进中就是开始（用上次选的那家与模型），要换的点开任务；
-/// 悬停才出的"开始"挤在卡脚里，和项目名、时间抢位置。触屏拖起来没那么顺手，照旧写着。
-private struct BoardStart: View {
-    let next: TaskNext?
-    let since: Date
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        age
-        #if os(iOS)
-        if let start = next.flatMap({ $0.starts ? $0 : nil }) { TaskNextMark(next: start) }
-        #endif
-    }
-
-    private var age: some View { Text(verbatim: DateLabel.short(since)).foregroundStyle(palette.ink3) }
 }
