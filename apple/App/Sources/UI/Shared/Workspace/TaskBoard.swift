@@ -113,6 +113,8 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         return new.count == 1 ? new.first.map { ($0.key, old, $0.value) } : nil
     }
 
+    func column(of flight: String) -> Column? { columns[flight] }
+
     /// 比 `before` 多出来或少了的卡（新来、离开看板）：它们不是在飞的那张，进出照常淡（`boardFlight`）。
     func entered(from before: TaskBoard) -> Set<String> {
         Set(columns.keys).symmetricDifference(before.columns.keys)

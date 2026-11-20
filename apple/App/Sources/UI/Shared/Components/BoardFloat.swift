@@ -22,7 +22,7 @@ struct BoardFloat: View {
                 float.face
                     .environment(\.boardRow, float.row)
                     .frame(width: held.size.width, height: held.size.height)
-                    .modifier(Floating(moves: moves, settling: held.phase == .settling))
+                    .modifier(Floating(moves: moves, settling: held.phase == .settling, landing: held.phase == .landing))
             }
         }
         .allowsHitTesting(false)
@@ -39,18 +39,22 @@ struct BoardFloat: View {
     private struct Floating: ViewModifier {
         let moves: BoardMoves
         let settling: Bool
+        let landing: Bool
         @State private var raised = false
         @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
         private static let scale = 1.04
 
         func body(content: Content) -> some View {
-            let up = raised && !settling
+            let up = raised && !settling && !landing
             content
                 .elevation(up ? .lifted : nil)
                 .scaleEffect(up && !reduceMotion ? Self.scale : 1)
+                // 落下那一路淡掉，露出底下已经排成新样子的那张
+                .opacity(landing ? 0 : 1)
                 .position(moves.point)
                 .animation(Motion.release, value: settling)
+                .animation(Motion.travel, value: landing)
                 .onAppear { withAnimation(Motion.press) { raised = true } }
         }
     }

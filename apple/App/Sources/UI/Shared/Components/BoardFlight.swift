@@ -74,7 +74,9 @@ nonisolated struct BoardArrival: Equatable {
         var moved = board.moved(from: before)
         let now = ContinuousClock.now
         // 放下后悬着的那张换了身份（`TaskBoard.renamed`）：手里这张跟着认新的，不然新的那张在原处露出来、手里这张还悬着；连列也换了的算换列
+        var shed: (id: String, from: TaskBoard.Column, frame: CGRect)?
         if let held, held.phase == .pending, let new = board.renamed(held.id, from: before) {
+            shed = frame(of: held.id).map { (held.id, new.from, $0) }
             self.held?.id = new.id
             if new.to != new.from { moved[new.id] = new.from }
         }
@@ -82,7 +84,9 @@ nonisolated struct BoardArrival: Equatable {
             guard let frame = frame(of: move.key) else { return }
             departures[move.key] = Departure(column: move.value, frame: frame, at: now)
         }
-        if let hand = takeoff(moved), let column = moved[hand.id] { from[hand.id] = Departure(column: column, frame: hand.frame, at: now) }
+        if let hand = takeoff(moved, lands: { board.column(of: $0) }), let column = moved[hand.id] { from[hand.id] = Departure(column: column, frame: hand.frame, at: now) }
+        // 旧身份的那张当场藏掉（有飞行记录的撤掉时不淡，`BoardDrop`）：不然它在原处淡着露一下
+        if let shed { from[shed.id] = Departure(column: shed.from, frame: shed.frame, at: now) }
         if board.todo.map(\.id) != before.todo.map(\.id) {
             // 放下的那一处库里排好了（或别处改了待办）：空位交还给库里的顺序
             if placed != nil { placed = nil }
@@ -150,7 +154,7 @@ private struct BoardFlight: ViewModifier {
     func body(content: Content) -> some View {
         if let moves, let lane {
             // 拖着的那张原处只留空位（`BoardDrag`）
-            let held = moves.held?.id == id
+            let held = moves.held.map { $0.id == id && $0.phase != .landing } ?? false
             content
                 .opacity(held ? 0 : 1)
                 .background { if held { BoardWell() } }

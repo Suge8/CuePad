@@ -6,11 +6,13 @@ import SwiftUI
 /// - 触屏按住即拖（`BoardLift`）：按住 0.2 秒卡就浮在手里（`BoardFloat`），不等菜单；只在看板里放。
 /// 拖着时原处留一个空位；在待办上空位跟着指针走、别的卡当场让开，松手就落在空位里，写库在后面跟。
 /// 放到别的列上的卡先停在松手的地方，等看板读到它换了列，从那里飞进去（`BoardMoves.read`）；要先问一句的（`asking`）问着时一直停在那儿；
+/// 飞的那一路手里这张陪着、一路淡掉：两列里卡的样子不一样（手机的已完成是一行高的薄条），看起来是一张卡边走边变样，不是这张没了、那张冒出来。
 /// 等不到（不接、问了没答应）就滑回原处。系统拖放松手时系统画的那张就没了，换一张自己画的停着（`drop`）：不然卡先闪回原处、答应了再从原处飞。
 /// 否决过：一条插入线——线只说"这里"，卡落下前后别的卡各跳一次。
 extension BoardMoves {
     struct Held: Equatable {
-        enum Phase { case dragging, settling, pending }
+        /// `landing`：换了列，手里这张陪着新排出来的那张滑到落点、一路淡掉（`takeoff`）。
+        enum Phase { case dragging, settling, pending, landing }
 
         let card: DraggedCard
         /// 飞行身份；悬着时卡换了身份就跟着换（`BoardMoves.read`）。
@@ -47,6 +49,8 @@ extension BoardMoves {
 
     private static let grace = Duration.milliseconds(600)
     private static let relayout = Duration.milliseconds(50)
+    /// 等新看板排出来最多等几帧（`takeoff`）。
+    private static let patience = 6
     /// 指针离待办的边这么近就算到了边上（`pull`）。
     private static let reach: CGFloat = 36
     /// 从推进中拖回待办的卡在待办里垫的那一格空位，记它的框用的身份。
@@ -284,12 +288,31 @@ extension BoardMoves {
         }
     }
 
-    /// 放下后悬着的那张换了列：它从手里（松手的地方）起飞，不从原处。
-    func takeoff(_ moved: [String: TaskBoard.Column]) -> (id: String, frame: CGRect)? {
+    /// 放下后悬着的那张换了列：它从手里（松手的地方）起飞，不从原处。`lands`：它落进了哪一列。
+    func takeoff(_ moved: [String: TaskBoard.Column], lands: (String) -> TaskBoard.Column?) -> (id: String, frame: CGRect)? {
         guard let held, held.phase == .pending, moved[held.id] != nil else { return nil }
-        let frame = float == nil ? hand : CGRect(x: point.x - held.size.width / 2, y: point.y - held.size.height / 2, width: held.size.width, height: held.size.height)
-        clear()
-        return frame.map { (held.id, $0) }
+        guard float != nil, !reduceMotion, let column = lands(held.id) else {
+            let frame = hand
+            clear()
+            return frame.map { (held.id, $0) }
+        }
+        waiting?.cancel()
+        self.held?.phase = .landing
+        Task {
+            // 落点要等新看板排出来才有；排出来之前取到的还是原处那张的框（同一个身份），所以认列
+            var home: CGRect?
+            for _ in 0..<Self.patience where home == nil {
+                await NextFrame.wait()
+                guard self.held?.id == held.id, self.held?.phase == .landing else { return }
+                if laid(of: held.id)?.lane == column { home = frame(of: held.id) }
+            }
+            // 落点没排出来（懒加载、滚出去了）：新的那张在那边淡入，手里这张就地收
+            guard let home else { return clear() }
+            withAnimation(Motion.travel) { point = CGPoint(x: home.midX, y: home.midY) } completion: {
+                if self.held?.id == held.id, self.held?.phase == .landing { self.clear() }
+            }
+        }
+        return (held.id, CGRect(x: point.x - held.size.width / 2, y: point.y - held.size.height / 2, width: held.size.width, height: held.size.height))
     }
 
     private func clear() {
