@@ -334,6 +334,12 @@ struct LivePhoneFlowTests {
             await quietPeriod(.milliseconds(500))
             #expect(preview.link?.trouble == .isolated)
             mac.connected = true
+            mac.drops = true
+            app.services.liveRemote.renew("live")
+            try await eventually("问到一半断的") { !mac.connected }
+            await quietPeriod(.milliseconds(300))
+            #expect(preview.link?.trouble == .isolated, "也不算")
+            mac.connected = true
 
             mac.present = false
             let left = ContinuousClock.now

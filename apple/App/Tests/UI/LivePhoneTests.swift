@@ -154,6 +154,11 @@ struct LivePhoneTests {
         try await back("live")
         await quietPeriod(.milliseconds(300))
         #expect(previewWidth() == 1600, "你自己放大的，手机回来不收")
+        try await show("live")
+        try await eventually("这时手机来看") { workspace.liveFill?.remote == true }
+        try await back("live")
+        try await eventually("它回去了") { workspace.liveFill?.remote == false }
+        #expect(previewWidth() == 1600, "它来看之前你就放大着的，也留着")
         workspace.toggleLiveFill()
         #expect(previewWidth() < 1600)
 

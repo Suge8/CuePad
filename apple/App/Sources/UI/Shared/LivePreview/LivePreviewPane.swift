@@ -63,7 +63,7 @@ struct LivePreviewPane: View {
             .animation(Motion.fade, value: preview.phase)
             .animation(Motion.fade, value: trouble)
             #if os(macOS)
-            .onChange(of: Self.remoteZoom(width: geometry.size.width, remote: workspace.liveFill?.remote == true), initial: true) { preview.web.pageZoom = $1 }
+            .onChange(of: Self.remoteZoom(width: geometry.size.width, remote: workspace.liveFill?.remote == true && preview.viewport != .phone), initial: true) { preview.web.pageZoom = $1 }
             #endif
         }
         .background(palette.desk)
@@ -144,7 +144,8 @@ struct LivePreviewPane: View {
     private static var screenTop: CGFloat { (Chrome.band + Chrome.control) / 2 + Spacing.item }
 
     /// 手机用 UU 远程看着时页面放大几倍：远程画面是整块屏幕缩到手机上，3008 宽的屏上照原样排的字在手机上只有两三个点高。
-    /// 放大到页面按 `remoteWidth` 宽排版（仍是桌面那一套排法）：手机横过来看，正文约 11 点。屏本来就不比它宽的不放大。
+    /// 放大到页面按 `remoteWidth` 宽排版（仍是桌面那一套排法）：手机横过来看，正文约 11 点。屏本来就不比它宽的不放大；
+    /// 手机宽那一档也不放大（那块屏还是 390 宽，放大了页面就按一百多宽排）。
     static func remoteZoom(width: CGFloat, remote: Bool) -> CGFloat {
         remote ? max(1, (width - 2 * CuePanel.float) / remoteWidth) : 1
     }
@@ -198,8 +199,10 @@ private struct LiveWebView: UIViewRepresentable {
 extension Workspace {
     /// 活预览放大到整个窗口的会话（`WideMetrics.fill`：右半盖过主区，会话条收起）。`remote` 是手机请 Mac 亮出来、正用 UU 远程看着
     /// （Mac 的 `showLive`）：窗口也铺满屏幕，页面放大到手机上读得清（`LivePreviewPane.remoteZoom`）。
+    /// `own` 是你自己点的放大：手机来看又回去了，它还留着。
     struct LiveFill: Equatable {
         let session: UUID
+        var own = true
         var remote = false
     }
 
@@ -211,11 +214,13 @@ extension Workspace {
     }
 
     /// 放回右半，手机看着时铺满屏幕的窗口也回到原来的位置。除了那颗钮：手机从 UU 远程回到 CuePad 了（`LiveSignal.back`）、
-    /// 预览不在主区旁了（换了会话、收起了，`navigation`）。
+    /// 预览不在主区旁了（换了会话、收起了，`navigation`）、点选了元素要去回复框写那一句（`pickElement`）。
     func endLiveFill() {
-        guard liveFill != nil else { return }
+        guard let fill = liveFill else { return }
         liveFill = nil
         #if os(macOS)
+        // 预览不在主区旁时那一栏不在了，没人替它把放大的页面改回来；Agent 接着在后台用的还是这一页
+        livePreviews[fill.session]?.web.pageZoom = 1
         services.windowShell?.restoreFrame()
         #endif
     }

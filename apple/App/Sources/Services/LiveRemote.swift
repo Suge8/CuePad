@@ -117,8 +117,7 @@ final class LiveRemote {
 
     private func send(_ sessionID: String, channel: VoiceSessionID) async {
         guard let watch = watches[sessionID] else { return }
-        // 自己这头的中转还没连上（刚回到前台、断网）不算那台 Mac 不在：答过的留着，连上了马上再问（`receive` 的 availability）
-        guard let signaling = signaling(), case .ready = signaling.voiceAvailability else { return }
+        guard let signaling = signaling(), case .ready = signaling.voiceAvailability else { return held(sessionID) }
         guard (try? await store.macOnline(watch.host)) == true else { return unreachable(sessionID) }
         let request = UUID()
         watches[sessionID]?.requests.insert(request)
@@ -127,8 +126,16 @@ final class LiveRemote {
             let open = (watches[sessionID]?.opens ?? 0) > 0
             try await signaling.sendVoice(.live(signal: .watch(request: request, session: sessionID, open: open)), session: channel, to: peer)
         } catch {
+            // 问到一半自己这头断了，同没连上
+            guard case .ready = signaling.voiceAvailability else { return held(sessionID) }
             unreachable(sessionID)
         }
+    }
+
+    /// 自己这头的中转没连上（刚回到前台、断网），问不出去：不算那台 Mac 不在。答过的留着、租约从这时重新算
+    /// （它只该数问得出去的时间），连上了马上再问（`receive` 的 availability）。
+    private func held(_ sessionID: String) {
+        if watches[sessionID]?.answeredAt != nil { watches[sessionID]?.answeredAt = .now }
     }
 
     /// 请 Mac 把这个会话亮在最前（`LiveSignal.show`），接着要拉起 UU 远程：最多等 `showWait`，发不出、中转没连上都不拦。

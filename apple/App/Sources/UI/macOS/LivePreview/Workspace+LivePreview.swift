@@ -155,12 +155,14 @@ extension Workspace {
     static let liveScan = Duration.seconds(2)
 
     /// 预览栏上的点选钮：开着就收，没开就开；点中的元素挂进左边会话的回复框（`ReplyNote.Element`），回复框接过焦点，接着写那一句。
+    /// 放大着的先放回右半：回复框被盖在下面。
     func pickElement() {
         guard let session = session(in: .main), let preview = livePreviews[session.id] else { return }
         if preview.picking { return preview.cancelPick() }
         Task {
             guard let element = await preview.pick() else { return }
             services.settings.quote(element, for: session.id)
+            endLiveFill()
             replyFocus = session.id
         }
     }

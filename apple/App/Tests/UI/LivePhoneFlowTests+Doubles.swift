@@ -27,6 +27,8 @@ extension LivePhoneFlowTests {
         var present = true
         /// 手机自己这头连没连着中转。
         var connected = true
+        /// 接下来那一问问到一半，手机这头的中转断了。
+        var drops = false
         /// 收到的"亮出这个会话"（`LiveSignal.show`）；`showing` 是这一帧发不出去还是挂住不回。
         var revealed: [String] = []
         /// 收到的"我回来了"（`LiveSignal.back`）；`bounces` 是接下来几句中转转不过去、退回给手机（Mac 刚断、换了租约）。
@@ -95,6 +97,10 @@ extension LivePhoneFlowTests {
                 return
             }
             guard case .live(.watch(let request, let sessionID, let open)) = payload else { return }
+            if drops {
+                (drops, connected) = (false, false)
+                throw VoiceSignalError.peerUnavailable
+            }
             opened = open
             let door = open ? door.map { LiveSignal.Door(addresses: $0.addresses, port: $0.port, ticket: ticket) } : nil
             let reply = VoiceSignalPayload.live(signal: .pages(request: request, session: sessionID, pages: pages, serving: found ?? pages, sent: sent, door: door, ports: nil))

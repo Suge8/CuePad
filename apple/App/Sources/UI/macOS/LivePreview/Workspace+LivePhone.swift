@@ -31,9 +31,7 @@ extension Workspace {
         case .received(let received):
             if case .live(.show(_, let sessionID)) = received.payload { return await showLive(sessionID) }
             if case .live(.back(_, let sessionID)) = received.payload {
-                // 你自己在 Mac 上放大的不算手机在看：它回来不收
-                if liveFill == LiveFill(session: SessionState.recordID(sessionID: sessionID), remote: true) { endLiveFill() }
-                return
+                return endRemoteFill(SessionState.recordID(sessionID: sessionID))
             }
             guard case .live(.watch(let request, let sessionID, let open)) = received.payload else { return }
             let key = LivePhone.Key(phone: received.header.sender, sessionID: sessionID)
@@ -103,6 +101,7 @@ extension Workspace {
         // 手机看着时只扫它看的会话：此刻认出的才准
         await scanLive(only: [sessionID])
         // 上一次铺满的先放下、窗口的位置留着：下面重开时（`navigation`）不把窗口缩回去再铺一次
+        let own = liveFill?.session == state.id && liveFill?.own == true
         liveFill = nil
         // 已在主区也重开一次：Cue 铺满着、上面盖着编辑页时，主区还是它，只是看不见
         overlay = nil
@@ -110,8 +109,16 @@ extension Workspace {
         if hasLivePage(state.id) { openLivePreview(state) }
         services.windowShell?.show(overOthers: true)
         guard showsLivePreview(state.id) else { return services.windowShell?.restoreFrame() ?? () }
-        liveFill = LiveFill(session: state.id, remote: true)
+        liveFill = LiveFill(session: state.id, own: own, remote: true)
         services.windowShell?.fillScreen()
+    }
+
+    /// 手机从 UU 远程回到 CuePad 了（`LiveSignal.back`）：窗口放回原位；它来看之前你自己放大着的留着放大，只是不再算它在看。
+    private func endRemoteFill(_ session: UUID) {
+        guard let fill = liveFill, fill.remote, fill.session == session else { return }
+        guard fill.own else { return endLiveFill() }
+        liveFill?.remote = false
+        services.windowShell?.restoreFrame()
     }
 
     /// 隧道口：开着就用它，没开就开（端口随机）；没取到门铃的密钥（中转还没连上过）开不了。
