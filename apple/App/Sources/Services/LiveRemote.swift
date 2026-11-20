@@ -125,8 +125,8 @@ final class LiveRemote {
 
     /// 请 Mac 把这个会话亮在最前（`LiveSignal.show`），接着要拉起 UU 远程：最多等 `showWait`，发不出、中转没连上都不拦。
     /// 等的是发出去，不等 Mac 做完：App 一被 UU 顶到后台，中转连接就可能停下。
-    func show(_ sessionID: String) async {
-        guard let host = watches[sessionID]?.host, let signaling = signaling(), case .ready = signaling.voiceAvailability else { return }
+    func show(_ sessionID: String, on host: String) async {
+        guard let signaling = signaling(), case .ready = signaling.voiceAvailability else { return }
         let (sent, done) = AsyncStream<Never>.makeStream()
         Task {
             if let peer = try? await signaling.resolveVoicePeer(VoiceDeviceID(host)) {
@@ -140,6 +140,18 @@ final class LiveRemote {
         }
         for await _ in sent {}
         timer.cancel()
+    }
+
+    /// 请 Mac 把亮出来时铺满的预览放回去（`LiveSignal.back`）。发出去了返回 true；中转没连上、那台 Mac 不在返回 false。
+    func back(_ sessionID: String, on host: String) async -> Bool {
+        guard let signaling = signaling(), case .ready = signaling.voiceAvailability else { return false }
+        do {
+            let peer = try await signaling.resolveVoicePeer(VoiceDeviceID(host))
+            try await signaling.sendVoice(.live(signal: .back(request: UUID(), session: sessionID)), session: VoiceSessionID(UUID()), to: peer)
+            return true
+        } catch {
+            return false
+        }
     }
 
     /// 平常一问一发约两个中转往返；再长就不等了，钮点下去不能没反应。

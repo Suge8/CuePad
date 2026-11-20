@@ -2,9 +2,10 @@ import CueStore
 import Foundation
 
 extension Workspace {
-    func operate(on host: String) async {
+    /// `sessionID` 给了是要到那台 Mac 上看这个会话的活预览（预览里连不上 Mac 时那颗"在 Mac 上操作"，`viewOnMac`）。
+    func operate(on host: String, viewing sessionID: String? = nil) async {
         services.settings.remoteLastHost = host
-        if let device = services.settings.remoteDevices[host] { await launch(MacRemote.control(device, host: host)) } else { await bind(host) }
+        if let device = services.settings.remoteDevices[host] { await control(device, host: host, viewing: sessionID) } else { await bind(host, viewing: sessionID) }
     }
 
     /// 还没连过时返回这几台，由界面先选一台。
@@ -28,26 +29,46 @@ extension Workspace {
         await bind(host)
     }
 
-    private func bind(_ host: String) async {
+    private func bind(_ host: String, viewing sessionID: String? = nil) async {
         let nonce = UUID().uuidString
         services.settings.remotePending = [nonce: host]
+        remoteBinding = sessionID.map { (nonce, $0) }
         await launch(MacRemote.authorize(nonce: nonce))
     }
 
+    /// 远控这台 Mac。要看的是某个会话的活预览时：拉起前先请 Mac 把它铺满亮出来（`LiveRemote.show`，最多等 `showWait`，发不出不拦），
+    /// 并记下来（`AppSettings.remoteViewing`），回到 CuePad 时请它放回去（`returnFromMac`）。
+    private func control(_ device: String, host: String, viewing sessionID: String? = nil) async {
+        #if os(iOS)
+        if let sessionID {
+            await services.liveRemote.show(sessionID, on: host)
+            services.settings.remoteViewing[sessionID] = host
+        }
+        let launched = await launch(MacRemote.control(device, host: host))
+        // 没拉起来（UU 卸了）人还在这里：这就请它放回去
+        if !launched, sessionID != nil { await returnFromMac() }
+        #else
+        await launch(MacRemote.control(device, host: host))
+        #endif
+    }
+
     /// 拉起 UU 远程；打不开就是没装，提示去 App Store。
-    private func launch(_ url: URL) async {
-        guard await !apps.open(url) else { return }
+    @discardableResult private func launch(_ url: URL) async -> Bool {
+        guard await !apps.open(url) else { return true }
         say("先装网易 UU 远程，并在 Mac 上也装好、登录同一个账号", tone: .gone, action: NoticeAction(title: String(localized: "去 App Store")) {
             _ = await $0.apps.open(MacRemote.appStore)
         })
+        return false
     }
 
     func remoteBound(device: String?, error: String?, nonce: String?) async {
         guard let nonce, let host = services.settings.remotePending[nonce] else { return }
         services.settings.remotePending = [:]
+        let viewing = remoteBinding?.nonce == nonce ? remoteBinding?.viewing : nil
+        remoteBinding = nil
         if let device {
             services.settings.remoteDevices[host] = device
-            await launch(MacRemote.control(device, host: host))
+            await control(device, host: host, viewing: viewing)
         } else if let message = error.flatMap(MacRemote.failure) {
             say(Dotted(message), tone: .failure)
         }

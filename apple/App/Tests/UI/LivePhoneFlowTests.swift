@@ -255,7 +255,7 @@ struct LivePhoneFlowTests {
         }
     }
 
-    @Test func 和Mac不在同一个网络_点在Mac上操作_先请Mac亮出这个会话再拉起UU远程_发不出也照样拉起() async throws {
+    @Test func 和Mac不在同一个网络_点在Mac上操作_先请Mac亮出这个会话再拉起UU远程_回来了请它放回去_发不出也照样拉起() async throws {
         try await phone { workspace, mac, _, route, _ in
             // 拉起 UU 的链接与拉起那一刻 Mac 收到过几次"亮出"
             var opened: [(url: URL, revealed: Int)] = []
@@ -273,18 +273,28 @@ struct LivePhoneFlowTests {
             #expect(preview.link?.trouble?.reachesByRemote == true)
 
             await workspace.viewOnMac(preview)
+            #expect(opened.last?.url.path() == "/device/authorize" && mac.revealed.isEmpty, "没绑过先在 UU 里选这台 Mac，这时还不请 Mac 亮出来")
+            await workspace.returnFromMac()
+            #expect(mac.returned.isEmpty, "选完电脑回来不算看完回来")
+            let nonce = try #require(app.services.settings.remotePending.keys.first)
+            await workspace.remoteBound(device: "enc-x", error: nil, nonce: nonce)
             #expect(mac.revealed == ["live"])
-            #expect(opened.last?.url.path() == "/device/authorize" && opened.last?.revealed == 1, "没绑过先在 UU 里选这台 Mac，拉起前请求已发出")
+            #expect(opened.count == 2 && opened.last?.revealed == 1 && opened.last?.url.query()?.contains("anonymous_device_id=enc-x") == true, "选完接着远控，拉起前请求已发出")
 
-            app.services.settings.remoteDevices[Self.mac] = "enc-x"
+            await workspace.returnFromMac()
+            #expect(mac.returned == ["live"], "回到 CuePad：请 Mac 把铺满的预览放回去")
+            await workspace.returnFromMac()
+            #expect(mac.returned == ["live"], "只请一次")
+
             mac.showing = .fails
             await workspace.viewOnMac(preview)
-            #expect(opened.count == 2 && opened.last?.url.query()?.contains("anonymous_device_id=enc-x") == true, "发不出也照样远控这台")
+            #expect(opened.count == 3 && opened.last?.url.query()?.contains("anonymous_device_id=enc-x") == true, "发不出也照样远控这台")
 
             mac.showing = .hangs
             let started = ContinuousClock.now
             await workspace.viewOnMac(preview)
-            #expect(opened.count == 3 && .now - started < .seconds(2), "挂住不回的不久等")
+            #expect(opened.count == 4 && .now - started < .seconds(2), "挂住不回的不久等")
+            app.services.settings.remoteViewing = [:]
             mac.letGo()
             await open.stop()
         }

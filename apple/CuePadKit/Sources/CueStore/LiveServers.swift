@@ -30,22 +30,25 @@ public struct LiveServers: Sendable {
   }
 
   /// 问过的监听口答不答网页：答了的同一个进程的同一个口不再问；没答的过一会儿再问（服务先开口、页面后就绪）。
-  private var pages: [Listener: (page: Bool, at: ContinuousClock.Instant)] = [:]
+  /// `web`：答过 HTTP（不论答的是什么）。答过一次就一直算：后来哪一次没在时限里答上不改它，不然隧道会把这个口上连着的断掉（`ports`）。
+  private var pages: [Listener: (page: Bool, web: Bool, at: ContinuousClock.Instant)] = [:]
   private static let retry = Duration.seconds(5)
 
   public init() {}
 
   /// 键是会话 id；认不出服务的会话不在里面。每个会话的地址最近起来的在前。
   public mutating func find(for owners: [String: Owner], only: Set<String>? = nil) async -> [String: [URL]] {
-    let listeners = await Self.listening(for: owners, only: only)
+    // 还在不在对着全部会话的口看，问只问要的这几个：只留这一遍要的，别的会话问过的就忘了，它们的口不再算答过 HTTP（`ports`）
+    let everyone = await Self.listening(for: owners)
+    let listeners = only.map { only in everyone.filter { !$0.owners.isDisjoint(with: only) }.map { (listener: $0.listener, owners: $0.owners.intersection(only)) } } ?? everyone
     let now = ContinuousClock.now
     // 一起问：接了连接却迟迟不答的口要等满超时，挨个问会把别的会话这一轮都拖住
     let asking = listeners.map(\.listener).filter { listener in pages[listener].map { !$0.page && now - $0.at >= Self.retry } ?? true }
-    await withTaskGroup(of: (Listener, Bool).self) { group in
+    await withTaskGroup(of: (Listener, Bool?).self) { group in
       for listener in asking { group.addTask { (listener, await Self.answersPage(listener.url)) } }
-      for await (listener, page) in group { pages[listener] = (page, now) }
+      for await (listener, page) in group { pages[listener] = (page == true, page != nil || pages[listener]?.web == true, now) }
     }
-    let all = Set(listeners.map(\.listener))
+    let all = Set(everyone.map(\.listener))
     pages = pages.filter { all.contains($0.key) }
     var found: [String: [URL]] = [:]
     for (listener, keys) in listeners where pages[listener]?.page == true {
@@ -54,11 +57,13 @@ public struct LiveServers: Sendable {
     return found
   }
 
-  /// 这几个会话名下在监听的端口，答不答网页都算（活预览的隧道放行它们：页面要调的只回 JSON 的接口也在里面）。
+  /// 这几个会话名下、网页用得上的端口：`find` 问到过 HTTP 回应的（页面要调的只回 JSON 的接口也在里面），活预览的隧道只放行它们。
+  /// 不说 HTTP 的（数据库、缓存）不在里面：网页本来也连不了它们，而手机那头把放行的口照搬到回环上，别的应用连得到（`LiveTunnel.Proxy.mirror`）。
+  /// 只按 http 问：只开 https 的口不在里面，要靠页面地址放行（`Workspace.livePorts`）。刚起来的口等下一遍 `find` 问过才有。
   /// 值是连得到会话那个服务的本机地址（`reach`）：同一个端口号上 127.0.0.1 与 ::1 可以各是一个进程，只凭端口号连 localhost 会连到别人那里。
-  public static func ports(for owners: [String: Owner], only: Set<String>? = nil) async -> [String: [Int: String]] {
+  public func ports(for owners: [String: Owner], only: Set<String>? = nil) async -> [String: [Int: String]] {
     var ports: [String: [Int: String]] = [:]
-    for (listener, keys) in await listening(for: owners, only: only) {
+    for (listener, keys) in await Self.listening(for: owners, only: only) where pages[listener]?.web == true {
       guard let port = listener.url.port, let host = listener.url.host(percentEncoded: false) else { continue }
       for key in keys where ports[key]?[port] == nil { ports[key, default: [:]][port] = host }
     }
@@ -207,11 +212,11 @@ public struct LiveServers: Sendable {
     return url(shared ? "localhost" : first.host)
   }
 
-  /// 数据库、调试端口、语言服务筛掉：只留回 HTML 的。只等到响应头。
-  @concurrent static func answersPage(_ url: URL) async -> Bool {
+  /// 数据库、调试端口、语言服务筛掉：只留回 HTML 的（true）。只等到响应头。答了 HTTP、不是 HTML 的是 false，没有 HTTP 回应是 nil。
+  @concurrent static func answersPage(_ url: URL) async -> Bool? {
     var request = URLRequest(url: url)
     request.setValue("text/html", forHTTPHeaderField: "Accept")
-    guard let (bytes, response) = try? await probe.bytes(for: request) else { return false }
+    guard let (bytes, response) = try? await probe.bytes(for: request) else { return nil }
     bytes.task.cancel()
     return response.mimeType == "text/html"
   }

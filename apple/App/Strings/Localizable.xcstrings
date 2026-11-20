@@ -15453,6 +15453,22 @@
         }
       }
     },
+    "放回右半" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Move Back to the Side"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "放回右半"
+          }
+        }
+      }
+    },
     "放在这里" : {
       "localizations" : {
         "en" : {

@@ -3,6 +3,7 @@ import SwiftUI
 
 /// 浮在网页上的玻璃栏：重新载入（载入中是停止）、地址、点选、手机宽、在浏览器里打开；载入进度是贴着下沿的一条细线。
 /// 没有收起：收起只经左边会话栏头上打开它的那颗钮（`WideSessionTitle`），一件事一个入口。
+/// Mac 上铺满窗口时（手机用 UU 远程看着，`Workspace.liveFill`）开头多一颗"放回右半"：那时左边的会话被盖住，栏头那颗钮点不到。
 /// iPad 同 Mac，只是没有手机宽与在浏览器里打开（Safari 连不到 Mac 的 localhost）；手机上是收起、后退、前进、地址、重新载入、点选（收起只在这里：页头那颗钮被这一页盖住了）。
 struct LiveBar: View {
     let preview: LivePreview
@@ -14,6 +15,9 @@ struct LiveBar: View {
         let loading = preview.isLoading && preview.phase == .live
         let narrow = workspace.layout == .narrow
         HStack(spacing: Spacing.hair) {
+            #if os(macOS)
+            if workspace.liveFill != nil { tool("放回右半", icon: .rightColumn) { workspace.endLiveFill() } }
+            #endif
             if narrow {
                 tool("收起活预览", icon: .close) { workspace.toggleLivePreview() }
                 tool("后退", icon: .back) { preview.web.goBack() }

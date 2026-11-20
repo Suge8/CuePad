@@ -27,7 +27,7 @@ nonisolated struct LayoutArgs: Decodable, DebugArgGroup {
     let liveCycle: Bool
     /// `-CuePadLiveApart YES`（手机、iPad，配 `-CuePadLivePreview`）：替身 Mac 报一个手机不在的网段，预览停在"和 Mac 不在同一个网络"
     let liveApart: Bool
-    /// `-CuePadLiveViewport phone`（配 `-CuePadLivePreview`）：活预览起在手机宽那一档
+    /// `-CuePadLiveViewport phone`（配 `-CuePadLivePreview`）：活预览起在手机宽那一档；`window`（只 Mac）：铺满整个窗口，手机用 UU 远程看着时的样子（`Workspace.liveFill`）
     let liveViewport: String?
     /// `-CuePadLivePick <CSS 选择器>`（配 `-CuePadLivePreview <地址>`）：页面载完后开着点选、高亮停在这个元素上（后台截图里指针进不来）
     let livePick: String?

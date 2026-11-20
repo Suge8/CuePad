@@ -27,6 +27,8 @@ extension LivePhoneFlowTests {
         var present = true
         /// 收到的"亮出这个会话"（`LiveSignal.show`）；`showing` 是这一帧发不出去还是挂住不回。
         var revealed: [String] = []
+        /// 收到的"我回来了"（`LiveSignal.back`）。
+        var returned: [String] = []
         var showing = Showing.sends
         enum Showing { case sends, fails, hangs }
         private var held: [CheckedContinuation<Void, Never>] = []
@@ -77,6 +79,7 @@ extension LivePhoneFlowTests {
                 }
                 return
             }
+            if case .live(.back(_, let sessionID)) = payload { return returned.append(sessionID) }
             guard case .live(.watch(let request, let sessionID, let open)) = payload else { return }
             opened = open
             let door = open ? door.map { LiveSignal.Door(addresses: $0.addresses, port: $0.port, ticket: ticket) } : nil

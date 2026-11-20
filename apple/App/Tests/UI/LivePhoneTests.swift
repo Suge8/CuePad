@@ -154,7 +154,7 @@ struct LivePhoneTests {
         }
     }
 
-    @Test func 手机要用UU远程看_Mac把会话开到主区_有页面开活预览_别处的与结束的不动() async throws {
+    @Test func 手机要用UU远程看_Mac把会话开到主区_有页面开活预览铺满窗口_回来了放回右半_别处的与结束的不动() async throws {
         try await paired { workspace, _, pair in
         let directory = try flow.folder()
         _ = try await flow.session("live", .settled, in: directory)
@@ -166,15 +166,37 @@ struct LivePhoneTests {
         func show(_ sessionID: String) async throws {
             try await pair.phone.sendVoice(.live(signal: .show(request: UUID(), session: sessionID)), session: VoiceSessionID(UUID()), to: pair.mac.local)
         }
+        func back(_ sessionID: String) async throws {
+            try await pair.phone.sendVoice(.live(signal: .back(request: UUID(), session: sessionID)), session: VoiceSessionID(UUID()), to: pair.mac.local)
+        }
+        // 预览占窗口多宽：铺满是整个窗口
+        @MainActor func previewWidth() -> CGFloat { WideMetrics(width: 1600, workspace: workspace).trailing }
 
         try await show("plain")
         try await eventually("没有页面的会话只开到主区") { workspace.session(in: .main)?.sessionID == "plain" }
         #expect(workspace.beside == nil)
 
         try await show("live")
-        try await eventually("开到主区、右半开着它的活预览") {
-            workspace.session(in: .main)?.sessionID == "live" && workspace.beside == .preview && workspace.livePreviews[flow.id("live")]?.address == url
+        try await eventually("开到主区、它的活预览铺满窗口") {
+            workspace.session(in: .main)?.sessionID == "live" && workspace.beside == .preview && workspace.livePreviews[flow.id("live")]?.address == url && previewWidth() == 1600
         }
+        try await back("plain")
+        await quietPeriod(.milliseconds(300))
+        #expect(previewWidth() == 1600, "别的会话回来不算")
+        try await back("live")
+        try await eventually("手机回到 CuePad：预览放回右半") { previewWidth() < 1600 }
+        #expect(workspace.beside == .preview && workspace.session(in: .main)?.sessionID == "live")
+
+        try await show("live")
+        try await eventually("再看一次又铺满") { previewWidth() == 1600 }
+        workspace.endLiveFill()
+        #expect(previewWidth() < 1600 && workspace.beside == .preview, "预览栏上那颗钮放回右半")
+
+        try await show("live")
+        try await eventually("铺满") { previewWidth() == 1600 }
+        workspace.toggleLivePreview()
+        workspace.toggleLivePreview()
+        #expect(previewWidth() < 1600, "收起过就不再铺满")
 
         workspace.goHome()
         try await show("live")
@@ -237,6 +259,40 @@ struct LivePhoneTests {
         let port = try await proxy.start()
         route(proxy, pair.phone.key, door)
         for _ in 0..<3 { #expect(try await Tab(proxy, port: port, to: url).get("index.html") == "会话里的页面") }
+        await watching.stop()
+        }
+    }
+
+    @Test func 会话名下不答HTTP的口_数据库那样的_隧道不放行() async throws {
+        try await paired { _, remote, pair in
+        let directory = try flow.folder()
+        _ = try await flow.session("live", .settled, in: directory)
+        let (page, url) = try await flow.serve(in: directory)
+        // 接了连接就关、一个字不答的服务，同一个会话起的
+        let silent = Process(), out = Pipe()
+        silent.executableURL = URL(filePath: "/usr/bin/python3")
+        silent.arguments = ["-u", "-c", "import socket\ns = socket.socket()\ns.bind(('127.0.0.1', 0))\ns.listen()\nprint(s.getsockname()[1])\nwhile True: s.accept()[0].close()"]
+        silent.currentDirectoryURL = directory
+        silent.standardOutput = out
+        try silent.run()
+        defer { page.terminate(); silent.terminate() }
+        var port: Int?
+        for try await line in out.fileHandleForReading.bytes.lines {
+            port = Int(line)
+            break
+        }
+        let other = try #require(port.flatMap { URL(string: "http://localhost:\($0)") })
+        try "页面".write(to: directory.appending(path: "index.html"), atomically: true, encoding: .utf8)
+
+        let watching = Task { await remote.watch("live", on: flow.services.hostID, open: true) }
+        let door = try await awaited("Mac 给了隧道的入口") { remote.answers["live"]?.door }
+        let proxy = try LiveTunnel.Proxy()
+        defer { proxy.cancel() }
+        let entry = try await proxy.start()
+        route(proxy, pair.phone.key, door)
+        #expect(try await Tab(proxy, port: entry, to: url).get("index.html") == "页面")
+        await #expect(throws: (any Error).self) { try await Tab(proxy, port: entry, to: other) }
+        #expect(remote.answers["live"]?.ports == [try #require(url.port)], "报给手机照搬的也只有网页的口")
         await watching.stop()
         }
     }
