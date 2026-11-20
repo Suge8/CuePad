@@ -84,17 +84,23 @@ private struct Digits: View {
 }
 
 /// 系统的时间文字：不靠更新自己逐秒走，过一小时写成时:分:秒；常亮屏变暗时系统自己降到不带秒。
+/// 岛上能一直动的只有它：给图形加循环动画（`symbolEffect` 的 pulse、无限重复）在 iOS 27 模拟器的系统岛上录过，收起与展开都不播。
+private struct Elapsed: View {
+    let since: Date
+
+    var body: some View {
+        // 时间文字会占满给它的宽、字靠左：它都排在右端，字要贴右缘
+        Text(.currentDate, format: .timer(countingUpIn: since..<Date.distantFuture)).monospacedDigit().lineLimit(1)
+            .multilineTextAlignment(.trailing)
+    }
+}
+
 private struct Clock: View {
     let now: CueNow
     @Environment(\.palette) private var palette
 
     var body: some View {
-        if let since = now.clock {
-            // 时间文字会占满给它的宽、字靠左：钟在右端，字要贴右缘
-            Text(.currentDate, format: .timer(countingUpIn: since..<Date.distantFuture)).monospacedDigit().lineLimit(1)
-                .multilineTextAlignment(.trailing)
-                .foregroundStyle(ActivityCount(now).tone.color(palette))
-        }
+        if let since = now.clock { Elapsed(since: since).foregroundStyle(ActivityCount(now).tone.color(palette)) }
     }
 }
 
@@ -171,7 +177,7 @@ private struct Reading: View {
     }
 }
 
-/// 头一排下面按行算：一件等你占两行（问题与缘由，或问题与"允许一次"），其余一行一件。
+/// 头一排下面按行算：一件等你占两行（问题与缘由，或问题与对勾钮），其余一行一件。
 /// 有等你的只排等你的与在跑的，不写 Cue 此刻那一步：要你管的时候它在读哪个文件是噪音。歇着的不排。额度不属于岛的任务。
 private struct Details: View {
     let now: CueNow
@@ -209,10 +215,16 @@ private struct Details: View {
                     Spacer(minLength: 0)
                     HStack(spacing: 4) {
                         item.kind.glyph?.image
-                        Text(item.label)
+                        // 还在动的写做了多久（自己走），停下的写状态词
+                        if item.kind.tone == .moving {
+                            Elapsed(since: item.since).minimumScaleFactor(0.8).frame(width: IslandType.rowClockWidth, alignment: .trailing)
+                        } else {
+                            Text(item.label)
+                        }
                     }
                     .font(.footnote.weight(.medium)).foregroundStyle(item.kind.tone.color(palette)).fixedSize()
                 }
+                .accessibilityElement(children: .ignore).accessibilityLabel(Dotted(item.name, item.label).spoken)
                 .transition(.blurReplace)
             }
         }
@@ -221,12 +233,13 @@ private struct Details: View {
 }
 
 private extension CueNow.Item.Kind {
-    /// 行尾状态词前的图形，同读数前那一个（`ActivityCount.glyph`）；歇着、状态未确认只写字。
+    /// 行尾状态词前的图形，同 App 里会话状态标的那几个；歇着、状态未确认只写字。
     var glyph: WidgetIcon? {
         switch self {
         case .asks: .waiting
         case .reply: .mail
-        case .running, .delegating: .agent
+        case .running: .session
+        case .delegating: .relay
         case .done: .done
         case .resting, .unconfirmed: nil
         }

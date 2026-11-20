@@ -5,6 +5,8 @@ nonisolated enum IslandType {
     static let count = Font.system(size: 15, weight: .semibold, design: .rounded)
     /// 紧凑态右位的钟定宽（放得下 "59:59"）：岛的右缘不随秒数伸缩，过一小时收字号。系统给一侧 52pt 上下，再宽就挤掉状态栏的图标。
     static let clockWidth: CGFloat = 44
+    /// 展开态行尾那只钟的宽（放得下 "59:59"）：各行的图形对成一列，过一小时收字号。
+    static let rowClockWidth: CGFloat = 36
     static let marker = Font.system(size: 12, weight: .semibold)
     static let narrowSide: CGFloat = 28
     static let narrowMarker: CGFloat = 9

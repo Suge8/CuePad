@@ -295,7 +295,7 @@ nonisolated extension CueNow.Item.Kind {
         switch self {
         case .asks: String(localized: "等你拍板")
         case .reply: String(localized: "新回复")
-        case .running: String(localized: "在跑")
+        case .running: String(localized: "工作中")
         case .delegating: String(localized: "等子代理")
         case .resting: String(localized: "歇着")
         case .unconfirmed: String(localized: "状态未确认")
