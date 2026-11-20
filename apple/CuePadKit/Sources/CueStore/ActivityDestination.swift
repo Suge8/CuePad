@@ -1,6 +1,8 @@
 import Foundation
 
-/// 一台手机开着的实时活动推送地址：只由这台手机写，Mac 读后经中转发 ActivityKit 推送。
+/// 一台手机的实时活动推送地址：只由这台手机写，Mac 读后经中转发 ActivityKit 推送。
+/// 一台手机至多两行：开着的那只活动的（内容与结束推给它，活动没了就删），和远程开一只新活动用的（`isStarter`，一直留着）。
+/// 后者放同一张表、activityID 为空、startedAt 写 0：还没更新的 Mac 把它当过期地址略过，不用另加同步表。
 /// 令牌只放在用户自己的 iCloud 加密字段里；没有业务内容、不是第二份 Cue 状态。
 /// 未能报结束的最迟按系统的八小时上限失效。
 public struct ActivityDestination: Equatable, Sendable {
@@ -12,8 +14,13 @@ public struct ActivityDestination: Equatable, Sendable {
   public var modifiedAt: Date
 
   public static let lifetime: TimeInterval = 8 * 60 * 60
+  /// 系统到上限自己结束的活动还在锁屏留四小时旧内容，那时已推不动它：提前这么久由 Mac 结束并清掉。
+  public static let retireLead: TimeInterval = 15 * 60
   public var expiresAt: Date { startedAt.addingTimeInterval(Self.lifetime) }
+  public var retireAt: Date { expiresAt.addingTimeInterval(-Self.retireLead) }
+  public var isStarter: Bool { activityID.isEmpty }
   public static func recordID(device: String) -> UUID { DeterministicID.uuid("activity-destination/\(device)") }
+  public static func starterID(device: String) -> UUID { DeterministicID.uuid("activity-starter/\(device)") }
 }
 
 extension ActivityDestination: Record, SyncedColumns {
@@ -22,7 +29,9 @@ extension ActivityDestination: Record, SyncedColumns {
     .plain("id"), .plain("device"), .plain("activityID"), .encrypted("token"), .plain("environment"), .plain("startedAt"),
     .plain("modifiedAt"),
   ]
-  var bindings: [any SQLBindable] { [Self.recordID(device: device), device, activityID, token, environment, startedAt, modifiedAt] }
+  var bindings: [any SQLBindable] {
+    [isStarter ? Self.starterID(device: device) : Self.recordID(device: device), device, activityID, token, environment, startedAt, modifiedAt]
+  }
   init(row: Row) {
     self.init(device: row.text(1), activityID: row.text(2), token: row.text(3), environment: row.text(4), startedAt: row.date(5), modifiedAt: row.date(6))
   }
@@ -39,13 +48,30 @@ extension CueStore {
     return online.first?.hostID
   }
 
-  /// 仍在系统最长活动期内的推送地址；到期重读观察，不发过期活动、不需要续期心跳。
-  public func activityDestinations() throws -> [ActivityDestination] {
-    let now = timing.now()
-    return try select(ActivityDestination.self, orderBy: "device").filter {
-      guard $0.expiresAt > now else { return false }
-      expire(at: $0.expiresAt)
-      return true
+  /// 各台手机的推送地址（活动的与开岛的）；过期的照样读出，由发布方据此知道那只岛没了。到该收、到过期的时刻由发布方自己醒：
+  /// 到点重读读到的还是这几行，订阅不会为它再叫一次。
+  public func activityDestinations() throws -> [ActivityDestination] { try select(ActivityDestination.self, orderBy: "device") }
+
+  /// 开岛的令牌系统会换：只留最新一份。
+  @discardableResult
+  public func recordActivityStarter(device: String, token: String, environment: String) throws -> UUID? {
+    try write {
+      let id = ActivityDestination.starterID(device: device)
+      if let old = try find(ActivityDestination.self, id), old.token == token, old.environment == environment { return nil }
+      try upsert(
+        ActivityDestination(device: device, activityID: "", token: token, environment: environment, startedAt: Date(timeIntervalSince1970: 0), modifiedAt: Date.stamp),
+        updating: ["token", "environment", "modifiedAt"])
+      return id
+    }
+  }
+
+  @discardableResult
+  public func removeActivityStarter(device: String) throws -> UUID? {
+    try write {
+      let id = ActivityDestination.starterID(device: device)
+      guard try find(ActivityDestination.self, id) != nil else { return nil }
+      try db.run("DELETE FROM activityDestinations WHERE id = ?", [id])
+      return id
     }
   }
 

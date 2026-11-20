@@ -7,6 +7,12 @@ nonisolated enum WidgetIcon: String, Sendable {
     case mail
     case agent
     case done
+    /// 确认的对勾，同 App 里答"可以"的那颗钮（`Icon.checked`）。
+    case tick
+    /// 正在工作的心电线，同会话状态标（`Icon.session`）。
+    case session
+    /// 等子代理交回（`Icon.relay`）。
+    case relay
 
     /// 装饰图：读屏念的是所在元素的标签，不念资源名（同 `Icon`）。
     var image: Image { Image(decorative: "cue.\(rawValue)") }

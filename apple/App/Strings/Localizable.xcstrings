@@ -4252,6 +4252,42 @@
         }
       }
     },
+    "island_start_asks" : {
+      "comment" : "远程开实时活动时的提醒正文：ActivityKit 推送按 key 在设备上取文案（`ActivityPush.Payload.starting`），标题是那一件的名字。",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Needs your call"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "等你拍板"
+          }
+        }
+      }
+    },
+    "island_start_working" : {
+      "comment" : "远程开实时活动时的提醒正文：ActivityKit 推送按 key 在设备上取文案（`ActivityPush.Payload.starting`），标题是那一件的名字。",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Started working"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "开工了"
+          }
+        }
+      }
+    },
     "me@example.com" : {
       "localizations" : {
 
@@ -4297,13 +4333,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "A session is awaiting your reply"
+            "value" : "A session has a new reply"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "有会话待回复"
+            "value" : "有会话新回复"
           }
         }
       }
@@ -4315,13 +4351,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "An agent finished"
+            "value" : "A session has a new reply"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Agent 完成了"
+            "value" : "有会话新回复"
           }
         }
       }
@@ -4333,13 +4369,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "An agent needs you"
+            "value" : "A session needs your call"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Agent 在等你确认"
+            "value" : "有会话等你拍板"
           }
         }
       }

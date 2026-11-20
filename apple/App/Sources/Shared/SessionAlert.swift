@@ -18,7 +18,7 @@ struct SessionAlert: Equatable, Identifiable {
         title = state.title
         // 提示与系统通知不排版：去掉标记，回复只取头一句（同看板等你卡上那一句）
         question = SessionProgress.firstLine(state.question?.text)
-        reply = SessionProgress.firstSentence(state.lastReply)
+        reply = state.answered ? SessionProgress.firstSentence(state.lastReply) : nil
         failure = state.state == .known(.error) ? SessionProgress.firstLine(state.detail) : nil
     }
 
@@ -45,9 +45,12 @@ struct SessionAlert: Equatable, Identifiable {
 /// 第一次读到某个会话只记下它（规则里没有上一版本就不提示）：App 刚打开时已有的状态不提示。同一个版本读两遍不重复。
 /// `since`（iOS）是这次回到前台的时刻：在那之前就发生的转换（冷启动、从后台回来后才同步到的）不补报——那一下系统推送已经提示过，
 /// 再在前台弹一遍只会盖在刚点开的页面上。Mac 没有锁屏推送，不给。
+/// 做完了等这一轮的回答读进来再报（`SessionState.answered`：状态与问答两路先后不定，同 Cue 的变化那条规则），提示里才是这一轮说的话，
+/// 不是上一轮的；没等到就又动起来的不报。
 struct SessionAlertTracker {
     private var seen: [UUID: SessionState] = [:]
     private var left: Set<UUID> = []
+    private var unanswered: Set<UUID> = []
 
     mutating func alerts(for live: [SessionListItem], cue: CueDuty?, since active: Date = .distantPast) -> [SessionAlert] {
         let nowLeft = Set(live.filter { cue?.leftToYou($0.state) == true }.map(\.id))
@@ -60,8 +63,16 @@ struct SessionAlertTracker {
             if nowLeft.contains(item.id), !left.contains(item.id) {
                 return SessionAlert(item.state, item.state.leftAlert)
             }
-            guard item.state.stateSince >= active, let kind = item.state.alert(since: previous) else { return nil }
-            return SessionAlert(item.state, kind)
+            var kind = item.state.stateSince >= active ? item.state.alert(since: previous) : nil
+            let settled = item.state.state == .known(.settled)
+            if kind == .settled, !item.state.answered {
+                unanswered.insert(item.id)
+                kind = nil
+            } else if kind == nil, settled, item.state.answered, unanswered.contains(item.id) {
+                kind = .settled
+            }
+            if kind != nil || !settled { unanswered.remove(item.id) }
+            return kind.map { SessionAlert(item.state, $0) }
         }
     }
 }

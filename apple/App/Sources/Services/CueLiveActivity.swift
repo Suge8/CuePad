@@ -6,16 +6,20 @@ import OSLog
 
 /// iPhone 上只开一个实时活动。有真实同步时请求推送令牌，内容与结束由 Mac 经 APNs 独占写入；
 /// 本地库可能落后于系统刚收到的推送，不能在回前台、后台拉取或回答后拿本地快照覆盖它。
-/// 隔离演示没有远程发布者，才由本地更新与结束。系统只允许前台开启，八小时结束后也要回到前台再开。
+/// 隔离演示没有远程发布者，才由本地更新与结束。App 自己只在前台开得了。
 /// 退出账号、换号或清除所属资料时手机仍负责撤销活动；暂时离线不撤销。重开前必须按已对账的当前库取内容。
 /// 令牌的初值、轮换与结束在同一服务维护（`CueLiveActivity+Destination`），不等待窗口或下一次前台激活。
+/// App 不在前台时由 Mac 远程开（`ActivityPublisher`）：这里登记开岛令牌、接住系统开出来的那只（`adopt`），仍只留一只。
 final class CueLiveActivity {
     static let log = Logger(subsystem: AppIdentity.id, category: "live-activity")
     let store: CueStore
     let sync: (any SyncControlling)?
     let device: String?
-    private let remoteState: () throws -> CueActivityState?
-    private var restoration: Task<Void, Never>?
+    let remoteState: () throws -> CueActivityState?
+    var restoration: Task<Void, Never>?
+    private var remoteStarts: [Task<Void, Never>] = []
+    /// 已写进库的开岛令牌：回前台每次都读，没换就不再排一次写入。
+    var starterToken: String?
     private(set) var revision = UUID()
     var observers: [String: [Task<Void, Never>]] = [:]
     var destinationWork: Task<Void, Never>?
@@ -33,10 +37,12 @@ final class CueLiveActivity {
         trace(.processStarted)
         watchDiagnosticPhases()
         restoration = Task { [revision] in await restore(revision) }
+        if sync != nil { remoteStarts = watchRemoteStarts() }
     }
 
     isolated deinit {
         restoration?.cancel()
+        for task in remoteStarts { task.cancel() }
         for task in phaseTasks + diagnosticTasks.values { task.cancel() }
         for tasks in observers.values { for task in tasks { task.cancel() } }
     }
@@ -75,6 +81,7 @@ final class CueLiveActivity {
             }
             await previous?.value
             await removeDestination(activityID: nil, reason: reason)
+            await removeStarter(reason: reason)
         }
         restoration = ending
         return ending
@@ -94,6 +101,8 @@ final class CueLiveActivity {
             trace(.blocked, reason: "presentError", error: error)
             Self.log.error("实时活动没能开启：\((error as NSError).domain, privacy: .public) \((error as NSError).code)")
         }
+        // 开岛令牌在 App 没运行时被系统换掉的，令牌流不补发：回前台时读一遍当前的。排在开启之后：上面的失效检查与开启之间不能隔着等待
+        if foreground { await registerStarter() }
     }
 
     private func present(_ local: CueActivityState, resend: Bool, foreground: Bool, revision: UUID) async throws {
