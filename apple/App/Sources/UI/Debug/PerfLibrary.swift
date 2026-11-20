@@ -46,7 +46,7 @@ enum PerfLibrary {
         groups[0] = big
 
         let tasks: [DemoLibrary.DemoTask] = (0..<200).map { index in
-            (groups[index % projectCount].name, sentence(&random, chinese: index % 3 != 0, words: 4...10), index % 5 == 0)
+            (groups[index % projectCount].name, sentence(&random, chinese: index % 3 != 0, words: 4...10), index % 5 == 0 ? 0 : nil)
         }
         try await DemoLibrary.seed(store, groups: groups, tasks: tasks)
 
