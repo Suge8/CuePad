@@ -36,12 +36,12 @@ nonisolated struct BoardArrival: Equatable {
     let departures = BoardDepartures()
     /// 飞进去的那一列排在上面（`BoardColumn`），飞到一半又来一份没人换列的看板时不落到别的列下面。
     @ObservationIgnored private var landing: Set<String> = []
-    @ObservationIgnored var frames: [String: (lane: TaskBoard.Column, frame: CGRect)] = [:]
+    @ObservationIgnored var frames: [String: (lane: TaskBoard.Column, frame: CGRect)] = [:] { didSet { land() } }
     /// 此刻排出来的卡（值是那一份视图自己的记号）。懒加载撤掉的卡留着撤掉前的框：一下跳过几屏（拖滚动条）时那个框还在可视区里，
     /// 按住会拎起早已不在那儿的卡、排序会把它算进去，所以取框只认排出来的（`laid`）。
     @ObservationIgnored var shown: [String: UUID] = [:]
     /// 手机的行里各小列排在哪、从上到下是哪几张（`boardStack`）：行里卡的框由它算，不挂在卡上记。
-    @ObservationIgnored var stacks: [UUID: Stack] = [:]
+    @ObservationIgnored var stacks: [UUID: Stack] = [:] { didSet { land() } }
     @ObservationIgnored var lanes: [TaskBoard.Column: CGRect] = [:]
 
     // 拖动（`BoardDrag.swift`）。几何不触发重绘；读得到的只有下面几样，手指每挪一下只写 `point`。
@@ -209,9 +209,9 @@ private struct BoardStackSpot: ViewModifier {
         content
             .onGeometryChange(for: CGRect.self) { $0.frame(in: .scrollView) } action: { moves?.stacks[token, default: BoardMoves.Stack(lane: lane)].frame = $0 }
             .onChange(of: [AnyHashable(ids), AnyHashable(height), AnyHashable(pitch)], initial: true) {
-                moves?.stacks[token, default: BoardMoves.Stack(lane: lane)].ids = ids
-                moves?.stacks[token]?.height = height
-                moves?.stacks[token]?.pitch = pitch
+                var stack = moves?.stacks[token] ?? BoardMoves.Stack(lane: lane)
+                (stack.ids, stack.height, stack.pitch) = (ids, height, pitch)
+                moves?.stacks[token] = stack
             }
             .onDisappear { moves?.stacks[token] = nil }
     }
