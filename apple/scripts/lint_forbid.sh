@@ -14,8 +14,10 @@ forbid "动画曲线只用 Motion 的几种（AppGroup/Motion.swift；UIKit 视�
   'App/AppGroup/Motion.swift' '**/Theme/Jelly.swift'
 forbid "自定义转场的 body 写成 nonisolated func：协议标的是主线程，iOS 上 SwiftUI 却在渲染线程求值，body 继承来的主线程隔离让里面的闭包一调就崩；只在类型上写 nonisolated 不够（理由在 BoardFlight.swift 的 board）" \
   '(?<!nonisolated )func body\(content: Content, phase: TransitionPhase\)'
+# 例外：实时活动的视图画完就被系统存档，LiveText 的定时重画不会跑，只有系统时间文本自己走
 forbid "按时刻换字的文字用 LiveText（Moments.swift，不用系统时间文本的原因在它的注释里）" \
-  '\.currentDate\b'
+  '\.currentDate\b' \
+  'App/Widget/CueActivityViews.swift'
 forbid "不用 DispatchQueue.main.asyncAfter：它取消不了。等事件用通知序列或 NextFrame，真要定时用可取消的 Task.sleep" \
   'DispatchQueue\.main\.asyncAfter'
 forbid "不访问 NSTextView/UITextView 的 layoutManager：访问一次就把视图永久降级到 TextKit 1，用 textLayoutManager" \

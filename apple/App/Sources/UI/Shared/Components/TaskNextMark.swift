@@ -43,17 +43,17 @@ struct TaskNextMark: View {
     #if os(macOS)
     private var edge: Alignment { .leading }
     private static let dot: CGFloat = 6
-    private static let glyph = Glyph.mark
-    private static let target: CGFloat = 20
-    private static let disc: CGFloat = 20
+    static let glyph = Glyph.mark
+    static let target: CGFloat = 20
+    static let disc: CGFloat = 20
     #else
     @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.dynamicTypeSize) private var typeSize
     private var edge: Alignment { sizeClass == .regular || typeSize.isAccessibilitySize ? .leading : .trailing }
     private static let dot: CGFloat = 7
-    private static let glyph = Typography.caption2.weight(.bold)
-    private static let target: CGFloat = TaskMetrics.chipTarget
-    private static let disc: CGFloat = 28
+    static let glyph = Typography.caption2.weight(.bold)
+    static let target: CGFloat = TaskMetrics.chipTarget
+    static let disc: CGFloat = 28
     #endif
 
     private var help: String {

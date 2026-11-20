@@ -8,7 +8,7 @@ NAMES = (
     "settings", "sidebar.right", "clear", "sweep", "chevron.up", "chevron.right", "chevron.down", "chevron.left",
     "done.pre", "reopen", "restore", "clock", "indent", "outdent", "link", "unlink", "folder.remove", "pin", "unpin",
     "conflict", "deck", "share", "save", "pencil", "write", "choose", "puzzle", "tick", "plane.done",
-    "arrow.up", "arrow.down", "ring.down", "ring.stop", "ring.play", "ring.plus", "badge.down", "compact",
+    "arrow.up", "arrow.down", "ring.down", "ring.stop", "ring.play", "ring.plus", "badge.down",
     "hand", "mac", "photo", "photos", "select", "keyboard.down", "braces", "window.play", "doc.blank", "wrench",
     "branch", "flame", "eye", "power", "mail", "tag", "keyboard", "sun", "wave", "bubble.text", "bubble.dots",
     "mic", "mic.off", "speaker", "phone", "external", "pointer",
@@ -115,9 +115,6 @@ def centerlines(name):
         mark = name.split(".")[-1]
         if mark == "down": arrow(True,size=5)
         elif mark == "plus": line((-4,0),(4,0)); line((0,-4),(0,4))
-    elif name == "compact":
-        line((-9,-9),(-2,-2)); line((-7,-2),(-2,-2),(-2,-7))
-        line((9,9),(2,2)); line((7,2),(2,2),(2,7))
     elif name == "hand":
         # 指尖合成圆润上缘，以两条指缝分组；拇指与掌底保留可辨的外轮廓。
         closed.append(poly([(-4,10),(-10,3),(-10,0),(-8,-3),(-4,4),(-4,-7),(-1,-10),(3,-10),(7,-7),(7,4),(3,10)],

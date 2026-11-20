@@ -12,18 +12,18 @@ enum Typography {
     #if os(macOS)
     /// 正文：卡片摘要、列表的主文字（输入框与气泡同一号，是阅读的 `readingSize`）。
     nonisolated static let bodySize: CGFloat = 14
-    static let body = Font.system(size: bodySize)
+    static let body = ui(bodySize)
     /// 强调的正文：卡片标题、列表行的名字。
-    static let bodyStrong = Font.system(size: 15, weight: .semibold)
+    static let bodyStrong = ui(15, .semibold)
     /// 次要：说明、一行里跟在标题后的摘要、空态的说明。
-    static let secondary = Font.system(size: 13)
+    static let secondary = ui(13)
     /// 元信息：时间、计数、路径、标记。
-    static let meta = Font.system(size: 12)
+    static let meta = ui(12)
     /// 小节标签（任务与 Agent 栏的"任务""Agent"、子任务）：小号加粗、次要墨色。
-    static let label = Font.system(size: 12, weight: .semibold)
+    static let label = ui(12, .semibold)
     /// 最小的字：折起的计数、对话里的旁注（`NoteLine`）这类附注（iOS 比元信息小一档，Mac 不再往下小）；caption2 是展开箭头这类更小的符号。
-    static let caption = Font.system(size: 12)
-    static let caption2 = Font.system(size: 11)
+    static let caption = ui(12)
+    static let caption2 = ui(11)
     /// 阅读：会话里的回答与你的话（Markdown 正文、列表、引用、气泡），比界面正文大两号：对话是 Cue 页与会话页的主角；标题与代码同属这一列。
     nonisolated static let readingSize: CGFloat = 16
     static let reading = Font.system(size: readingSize)
@@ -38,60 +38,63 @@ enum Typography {
     static let readingLineSpacing: CGFloat = 7
     /// 醒目的一句（等你确认的问题）。
     static let titleSize: CGFloat = 18
-    static let title = Font.system(size: titleSize, weight: .semibold)
+    static let title = ui(titleSize, .semibold)
     /// 页内分组标题（最近、更早、现在、历史）与它旁边的计数。
-    static let sectionTitle = Font.system(size: 15, weight: .semibold)
-    static let sectionCount = Font.system(size: 13).monospacedDigit()
+    static let sectionTitle = ui(15, .semibold)
+    static let sectionCount = ui(13)
     /// 面板与文件页顶上的大标题（接入 Agent、技能的名字）。
-    static let heading = Font.system(size: 22, weight: .semibold)
+    static let heading = ui(22, .semibold)
     /// ⌘K 搜索框的输入与右侧预览的标题：浮层里最大的两行字。
     static let searchField = Font.system(size: 18)
-    static let previewTitle = Font.system(size: 17, weight: .bold)
+    static let previewTitle = ui(17, .bold)
     static let keycap = Font.system(size: 11, weight: .medium, design: .rounded)
-    static let emptyTitle = Font.system(size: 17, weight: .semibold)
+    static let emptyTitle = ui(17, .semibold)
     /// 栏头（窗口最顶那一排）：钮上的字（收起、项目范围）；三栏栏头的标题只有一种（项目名、会话名与它前面的项目、Cue 的名字、页名），
     /// 下面或后面跟的那一行（项目介绍、Cue 的数字账）是 `toolbarSubtitle`；标题下面还有一行（任务 · 子任务）时标题收小，两行放进一个控件的高度。
-    static let toolbarLabel = Font.system(size: 13, weight: .medium)
-    static let toolbarTitle = Font.system(size: 15, weight: .semibold)
+    static let toolbarLabel = ui(13, .medium)
+    static let toolbarTitle = ui(15, .semibold)
     /// 两行的那一块里标题与下面一行差三号：差一两号时下面那行的图标与字看着和标题一样重，分不出谁是标题。
-    static let toolbarTitlePaired = Font.system(size: 14, weight: .semibold)
-    static let toolbarSubtitle = Font.system(size: 11)
+    static let toolbarTitlePaired = ui(14, .semibold)
+    static let toolbarSubtitle = ui(11)
     /// 看板列头：四列的列名与数同一个字号（同钮上的字），轻重只靠墨色分（`BoardWeight.swift`）。
     /// 否决过：等你的列头大一号、重的两列的数大一档——一排四个列头大小不一，读成没对齐。
-    static let laneTitle = Font.system(size: 13, weight: .semibold)
-    static let cueCardName = Font.system(size: 18, weight: .semibold)
+    static let laneTitle = ui(13, .semibold)
+    static let cueCardName = ui(18, .semibold)
     /// 卡片摘要的额外行距；紧凑内容小于长文阅读。
     static let lineSpacing: CGFloat = 4
     static let gaugeNumber = Font.system(size: 15, weight: .semibold, design: .rounded).monospacedDigit()
     static let menuBarCount = NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .semibold)
     #else
-    static let body = Font.body
-    static let bodyStrong = Font.headline
-    static let secondary = Font.subheadline
-    static let meta = Font.footnote
-    static let label = Font.caption.weight(.semibold)
-    static let sectionTitle = Font.headline
-    static let caption = Font.caption
-    static let caption2 = Font.caption2
+    static let body = ui(.body)
+    static let bodyStrong = ui(.headline, .semibold)
+    static let secondary = ui(.subheadline)
+    static let meta = ui(.footnote)
+    static let label = ui(.caption, .semibold)
+    static let sectionTitle = ui(.headline, .semibold)
+    static let caption = ui(.caption)
+    static let caption2 = ui(.caption2)
     static let reading = Font.body
     static let readingHeading = Font.title3.weight(.semibold)
     static let code = Font.footnote.monospaced()
     static let codeNote = Font.caption.monospaced()
     static let inlineCode = Font.callout.monospaced()
     static let readingLineSpacing: CGFloat = 4
-    static let sectionCount = Font.footnote.monospacedDigit()
+    static let sectionCount = ui(.footnote)
     /// 宽屏栏头的标题与它后面那一行（iPad，同 Mac 那两档的角色）；页顶玻璃里两行的标题是 `toolbarTitlePaired`，下面那一行仍是 `toolbarSubtitle`。
-    static let toolbarTitle = Font.headline
-    static let toolbarTitlePaired = Font.callout.weight(.semibold)
-    static let toolbarSubtitle = Font.caption2
+    static let toolbarTitle = ui(.headline, .semibold)
+    static let toolbarTitlePaired = ui(.callout, .semibold)
+    static let toolbarSubtitle = ui(.caption2)
     /// 钮上的字（分段的各段）。手机上半粗：触屏的段比 Mac 宽，中号字重在玻璃上发虚。
-    static let toolbarLabel = Font.subheadline.weight(.semibold)
+    static let toolbarLabel = ui(.subheadline, .semibold)
     /// 看板列头（横屏与 iPad 四列）：列名与数，同 Mac 那一档的角色。
-    static let laneTitle = Font.headline
-    static let title = Font.title3.weight(.semibold)
+    static let laneTitle = ui(.headline, .semibold)
+    static let title = ui(.title3, .semibold)
     /// 文件页顶上的大标题（技能的名字），同 Mac 那一档的角色。
-    static let heading = Font.title2.weight(.bold)
-    static let emptyTitle = Font.title3.weight(.semibold)
+    static let heading = ui(.title2, .bold)
+    static let emptyTitle = ui(.title3, .semibold)
+    /// 名牌上 Cue 的名字：铺满页顶时一档，收在页头里时小一档。
+    static let cueCardName = ui(.title3, .bold)
+    static let cueCardNameCompact = ui(.subheadline, .semibold)
     static let gaugeNumber = Font.system(.body, design: .rounded, weight: .semibold).monospacedDigit()
     /// 预览页里整份文件的等宽字（UIKit 文本视图）。
     static let codeUIFont = UIFont.monospacedSystemFont(ofSize: UIFont.preferredFont(forTextStyle: .footnote).pointSize, weight: .regular)

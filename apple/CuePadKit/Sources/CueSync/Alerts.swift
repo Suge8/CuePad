@@ -44,27 +44,46 @@ public enum CloudAlert: Equatable, Sendable {
 }
 
 /// 锁屏通知的具体文案：服务端只能发通用句（会话名、问题是加密字段），手机上的通知服务扩展收到后
-/// 取回触发它的记录，在设备上解密，改写成"会话名 + 问题首句（或状态）"。取不到就保持通用句。
+/// 取回触发它的记录，在设备上解密，改写成"会话名 + 问题（或这一轮说的话）"。取不到就保持通用句。
 public enum AlertText {
+  /// 正文至多这么多字：锁屏通知收起时四行上下，再长系统自己截。
+  static let bodyLimit = 160
+
   /// 读不出会话名时为 nil（保持通用句）。
   public static func content(for record: CKRecord, kind: AlertKind) -> (title: String, body: String)? {
     let fields = record.encryptedValues
     guard let title = (fields["title"] as? String).flatMap({ $0.isEmpty ? nil : $0 }) else { return nil }
     let question = (fields["question"] as? String).flatMap(Question.init(stored:))?.text
     let failure = record["state"] as? String == WorkState.error.rawValue ? fields["detail"] as? String : nil
-    return content(title: title, question: question, reply: fields["lastReply"] as? String, failure: failure, kind: kind)
+    // 同 `SessionState.answered`：这一轮的回答还没读进这条记录时，`lastReply` 是上一轮的
+    let answered = (record["turnStartedAt"] as? Int64).flatMap { started in (record["answeredAt"] as? Int64).map { $0 >= started } } ?? false
+    return content(title: title, question: question, reply: answered ? fields["lastReply"] as? String : nil, failure: failure, kind: kind)
   }
 
+  /// `reply` 只给这一轮的回答（`SessionState.answered`）。做完了与待回复对你是同一件事（那个会话停了、有新回复），同一句；
+  /// 在等你拍板的那一轮还没做完，没有它的回答可写。
   public static func content(title: String, question: String?, reply: String?, failure: String?, kind: AlertKind) -> (title: String, body: String) {
     switch kind {
     case .waitingForUser:
-      let first = [question, reply].lazy.compactMap { $0.flatMap(\.firstLine) }.first
-      return (String(localized: "\(title) 等你拍板"), first ?? String(localized: "去看看它在问什么"))
-    case .awaitsReply:
-      return (String(localized: "\(title) 新回复"), (failure ?? reply).flatMap(\.firstLine) ?? String(localized: "去看看它说了什么"))
-    case .settled:
-      return (title, String(localized: "完成了"))
+      (String(localized: "\(title) 等你拍板"), gist(question) ?? String(localized: "去看看它在问什么"))
+    case .awaitsReply, .settled:
+      (String(localized: "\(title) 新回复"), gist(failure) ?? gist(reply) ?? String(localized: "去看看它说了什么"))
     }
+  }
+
+  /// 通知正文：前几行去掉 Markdown 记号连成一段，代码块、表格与分隔线跳过。只取首行不行：真实库 3291 条回复里，首行带 ** 或反引号的三成、
+  /// 不足 12 字的（"好的。""## 结论"）三成。
+  static func gist(_ text: String?) -> String? {
+    var fenced = false, gist = ""
+    for raw in (text ?? "").split(whereSeparator: \.isNewline) where gist.count < bodyLimit {
+      let line = raw.trimmingCharacters(in: .whitespaces)
+      if line.hasPrefix("```") { fenced.toggle() }
+      guard !fenced, !line.hasPrefix("```"), !line.hasPrefix("|"), !line.allSatisfy({ "-*_=".contains($0) }) else { continue }
+      let marked = line.replacing(/^(#{1,6}\s+|>\s*|[-*+]\s+|\d+[.)]\s+)+/, with: "")
+      let plain = String(AttributedString(inlineMarkdown: marked).characters).trimmingCharacters(in: .whitespaces)
+      if !plain.isEmpty { gist += gist.isEmpty ? plain : " " + plain }
+    }
+    return gist.isEmpty ? nil : gist.clipped(bodyLimit)
   }
 }
 

@@ -20,12 +20,26 @@ nonisolated extension CueNow {
         }
         let host = digest.hostName ?? MacAgents.unnamed
         let agentCount = runtime.agentCount
+        let finished = digest.tally.replies.map(\.session.stateSince) + digest.done.compactMap(\.completedAt)
         self.init(
             name: digest.name, cue: Self.brain(presence, digest: digest, local: local, at: moment.now),
             tally: runtime.tally, advancing: runtime.advancing, subagents: runtime.subagents, items: items,
             first: digest.tally.waiting.first.map { Self.wait($0, name: digest.name) }, at: moment.now,
             elsewhere: digest.enabled && local.here != nil && digest.hostID != local.here ? String(localized: "在「\(host)」上运行") : nil,
-            decay: runtime.decay(visible: items), unconfirmed: runtime.unconfirmed || presence.isUnconfirmed || unconfirmed || (!digest.hostOnline && digest.state?.state.isWorking == true), cueUntil: digest.hostUntil, agentCount: agentCount)
+            decay: runtime.decay(visible: items), unconfirmed: runtime.unconfirmed || presence.isUnconfirmed || unconfirmed || (!digest.hostOnline && digest.state?.state.isWorking == true), cueUntil: digest.hostUntil, agentCount: agentCount,
+            lingersUntil: finished.max().map { $0.addingTimeInterval(Self.doneWindow) })
+    }
+
+    /// 最近开工或开始等你拍板的那一件：手机上的实时活动没了之后，比它没的那一刻更晚开始的才值得远程再开一只（`ActivityPublisher`）。
+    /// 从全量里取、按每个会话这一轮的起点算（`RuntimeTimeline.Work.began`），不读 `items`：那里只列得下几行，一件任务的行又只写最早那个会话的起点。
+    /// Cue 自己的轮不算（多是几秒的收尾）；等子代理的起点随交回变，也不算。
+    static func newest(_ digest: CueDigest, at moment: Speech.Moment) -> Item? {
+        let started = RuntimeTimeline(digest, at: moment).works.filter { $0.held == 0 && $0.kind == .running }.map { work in
+            var item = work.item
+            item.since = work.began ?? item.since
+            return item
+        }
+        return (items(digest, works: started, at: moment.now).filter { $0.kind == .asks || $0.kind == .running }).max { $0.since < $1.since }
     }
 
     private static func brain(_ presence: CuePresence, digest: CueDigest, local: Local, at now: Date) -> Brain {

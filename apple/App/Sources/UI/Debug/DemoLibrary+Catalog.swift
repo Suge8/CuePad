@@ -66,28 +66,29 @@ extension DemoLibrary {
     }
 
     static let tasks: [DemoTask] = [
-        ("CuePad", String(localized: "投送队列超时报错不发键", table: "Demo"), false),
-        ("CuePad", String(localized: "导入旧数据时保留回收站", table: "Demo"), false),
-        ("CuePad", String(localized: "菜单栏面板 ↩ 直接发出", table: "Demo"), false),
-        ("CuePad", String(localized: "小组件显示进行中的任务", table: "Demo"), false),
-        ("CuePad", String(localized: "分享扩展支持多张图片", table: "Demo"), false),
-        ("CuePad", String(localized: "设置页加快捷键冲突提示", table: "Demo"), false),
-        ("CuePad", String(localized: "首次启动引导绑定文件夹", table: "Demo"), true),
-        ("CuePad", String(localized: "深色模式下纸色偏灰", table: "Demo"), true),
-        (String(localized: "圆桌", table: "Demo"), String(localized: "发言轮次乱序", table: "Demo"), false),
-        (String(localized: "圆桌", table: "Demo"), String(localized: "登录回调改走统一网关", table: "Demo"), false),
-        (String(localized: "圆桌", table: "Demo"), String(localized: "房间链接过期后给出提示", table: "Demo"), false),
-        (String(localized: "圆桌", table: "Demo"), String(localized: "主持人可以静音全部", table: "Demo"), false),
-        (String(localized: "圆桌", table: "Demo"), String(localized: "清理旧的计费脚本", table: "Demo"), true),
-        ("Flow", String(localized: "画布缩放锚点跟随指针", table: "Demo"), false),
-        ("Flow", String(localized: "撤销栈合并连续拖拽", table: "Demo"), false),
-        ("Flow", String(localized: "导出 PNG 时保留透明背景", table: "Demo"), false),
-        ("Flow", String(localized: "节点吸附到网格", table: "Demo"), false),
-        ("Flow", String(localized: "多选后统一改颜色", table: "Demo"), false),
-        (nil, String(localized: "README 截图换成 Swift 版", table: "Demo"), false),
-        (nil, String(localized: "续费域名", table: "Demo"), false),
+        ("CuePad", String(localized: "投送队列超时报错不发键", table: "Demo"), nil),
+        ("CuePad", String(localized: "导入旧数据时保留回收站", table: "Demo"), nil),
+        ("CuePad", String(localized: "菜单栏面板 ↩ 直接发出", table: "Demo"), nil),
+        ("CuePad", String(localized: "小组件显示进行中的任务", table: "Demo"), nil),
+        ("CuePad", String(localized: "分享扩展支持多张图片", table: "Demo"), nil),
+        ("CuePad", String(localized: "设置页加快捷键冲突提示", table: "Demo"), nil),
+        ("CuePad", String(localized: "首次启动引导绑定文件夹", table: "Demo"), 1),
+        ("CuePad", String(localized: "深色模式下纸色偏灰", table: "Demo"), 3),
+        (String(localized: "圆桌", table: "Demo"), String(localized: "发言轮次乱序", table: "Demo"), nil),
+        (String(localized: "圆桌", table: "Demo"), String(localized: "登录回调改走统一网关", table: "Demo"), nil),
+        (String(localized: "圆桌", table: "Demo"), String(localized: "房间链接过期后给出提示", table: "Demo"), nil),
+        (String(localized: "圆桌", table: "Demo"), String(localized: "主持人可以静音全部", table: "Demo"), nil),
+        (String(localized: "圆桌", table: "Demo"), String(localized: "清理旧的计费脚本", table: "Demo"), 8),
+        ("Flow", String(localized: "画布缩放锚点跟随指针", table: "Demo"), nil),
+        ("Flow", String(localized: "撤销栈合并连续拖拽", table: "Demo"), nil),
+        ("Flow", String(localized: "导出 PNG 时保留透明背景", table: "Demo"), nil),
+        ("Flow", String(localized: "节点吸附到网格", table: "Demo"), nil),
+        ("Flow", String(localized: "多选后统一改颜色", table: "Demo"), nil),
+        (nil, String(localized: "README 截图换成 Swift 版", table: "Demo"), nil),
+        (nil, String(localized: "续费域名", table: "Demo"), nil),
     ]
 
-    typealias DemoTask = (project: String?, text: String, done: Bool)
+    /// `done`：几天前做完的（没做完为 nil）。散在前几天：看板的已完成有"更早做完的"那一叠。
+    typealias DemoTask = (project: String?, text: String, done: Double?)
 }
 #endif

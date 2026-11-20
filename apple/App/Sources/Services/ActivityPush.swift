@@ -19,6 +19,44 @@ nonisolated struct ActivityPush: Encodable, Sendable {
                 staleDate: now.isLive ? Int((now.nextShownChange(after: now.at) ?? now.staleAt).timeIntervalSince1970) : nil,
                 dismissalDate: now.isLive ? nil : Int((now.nextChange(after: now.at) ?? now.at).timeIntervalSince1970))
         }
+
+        /// 结束并立刻从锁屏清掉（快到系统上限的那只）：内容没完，留着就是旧的。
+        static func clearing(_ state: CueActivityState) -> Payload {
+            var payload = Payload(state)
+            payload.aps.event = "end"
+            payload.aps.staleDate = nil
+            payload.aps.dismissalDate = payload.aps.timestamp
+            return payload
+        }
+
+        /// 远程开一只：系统要求带提醒（不带的苹果照收、岛不出现），不带声音——该响的那一下归通知。
+        /// `startedAt` 进活动的属性，手机接住时按它认最新的一只。
+        static func starting(_ state: CueActivityState, startedAt: Date, title: String, body: String) -> Payload {
+            var payload = Payload(state)
+            payload.aps.event = "start"
+            payload.aps.attributesType = "CueActivityAttributes"
+            payload.aps.attributes = Attributes(startedAt: startedAt)
+            payload.aps.alert = Alert(title: clipped(title, bytes: 120), body: Alert.Key(key: body))
+            payload.aps.inputPushToken = 1
+            return payload
+        }
+    }
+
+    /// 同手机上的 `CueActivityAttributes`（系统按默认 Codable 策略解，日期是 2001 年起的秒）。
+    struct Attributes: Encodable, Sendable {
+        var startedAt: Date
+        var remoteUpdates = true
+    }
+
+    /// 正文按键在手机上取文案（`Localizable.xcstrings` 的 `island_start_*`）；标题是那一件的名字。
+    struct Alert: Encodable, Sendable {
+        var title: String
+        var body: Key
+
+        struct Key: Encodable, Sendable {
+            var key: String
+            enum CodingKeys: String, CodingKey { case key = "loc-key" }
+        }
     }
 
     struct APS: Encodable, Sendable {
@@ -27,22 +65,30 @@ nonisolated struct ActivityPush: Encodable, Sendable {
         var state: CueActivityState
         var staleDate: Int?
         var dismissalDate: Int?
+        var attributesType: String?
+        var attributes: Attributes?
+        var alert: Alert?
+        var inputPushToken: Int?
 
         enum CodingKeys: String, CodingKey {
-            case timestamp, event
+            case timestamp, event, attributes, alert
             case state = "content-state"
             case staleDate = "stale-date"
             case dismissalDate = "dismissal-date"
+            case attributesType = "attributes-type"
+            case inputPushToken = "input-push-token"
         }
     }
 
+    /// 开岛那一份比更新多出属性与提醒：内容按留出这些的预算裁，两种都放得下。
     static let byteLimit = 4_096
+    static let startOverhead = 384
 
     struct Oversized: Error {}
 
     /// 数字账完整保留；先缩短显示文字，再省掉放不下的行，第一件等你仍可打开。
     static func fitted(_ original: CueActivityState) throws -> CueActivityState {
-        func fits(_ value: CueActivityState) throws -> Bool { try JSONEncoder().encode(Payload(value)).count <= byteLimit }
+        func fits(_ value: CueActivityState) throws -> Bool { try JSONEncoder().encode(Payload(value)).count <= byteLimit - startOverhead }
         if try fits(original) { return original }
         var state = original
         state.now.name = clipped(state.now.name, bytes: 80)
