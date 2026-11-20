@@ -3,10 +3,14 @@ import Darwin
 import Foundation
 
 /// 本机正在监听、属于会话、答得出网页的开发服务（活预览自己认出的地址、会话条上哪些会话有活预览；`cuepad live` 不给地址时也用它）。
-/// 属于会话：是会话 Agent 进程的后代，或工作目录在会话的工作目录之内——Agent 常用 nohup 把服务甩到后台，进程树断了靠目录兜住；
-/// 终端里自开、没有进程号的会话只能靠目录。会话目录是主目录、根目录这类过宽的，目录那条不算。
-/// 一个进程是某个会话 Agent 的后代就只归它；按目录归的，目录包着它的几个会话都算。
-/// 进程表只经 libproc（同一用户的进程都读得到，别的用户的读不到也用不着），不起 lsof；一次扫多少个会话都只读一遍进程表。
+/// 属于哪个会话按这个顺序认，前两条认到就只归它：
+/// 1. 进程的环境里带着会话 id（`AgentKind.sessionVariables`，Agent 给每条命令带的那个，`cuepad show` 认会话也是它）：谁起的就是谁的。
+///    Agent 常用 nohup 把服务甩到后台，进程树断了、工作目录在别处都还认得；带着的是别的会话的 id（这一轮没问到的、已结束的）就谁也不归。
+/// 2. 是会话 Agent 进程的后代：系统自带的可执行文件（/usr/bin/ruby）内核不给读环境，靠这条。
+/// 3. 都没有的（你自己在终端里起的）看工作目录：在会话的工作目录之内，目录包着它的几个会话都算；会话目录是主目录、根目录这类过宽的不算。
+///    只按目录认时，同一个项目里开着的几个会话会一起认领 Agent 甩到后台的服务（实测：三个会话都亮了预览、点进去是同一页）。
+/// 归属对着本机知道的全部会话认，只要其中几个的结果用 `only` 说：只拿一个会话去认，别的会话 Agent 的后代（读不到环境的）会被它按目录认走。
+/// 进程表只经 libproc 与 sysctl（同一用户的进程都读得到，别的用户的读不到也用不着），不起 lsof；一次扫多少个会话都只读一遍进程表。
 public struct LiveServers: Sendable {
   public struct Owner: Equatable, Sendable {
     public var process: SessionProcess?
@@ -31,9 +35,9 @@ public struct LiveServers: Sendable {
 
   public init() {}
 
-  /// 键是会话（`Owner` 的键）；认不出服务的会话不在里面。每个会话的地址最近起来的在前。
-  public mutating func find<Key: Hashable & Sendable>(for owners: [Key: Owner]) async -> [Key: [URL]] {
-    let listeners = await Self.listening(for: owners)
+  /// 键是会话 id；认不出服务的会话不在里面。每个会话的地址最近起来的在前。
+  public mutating func find(for owners: [String: Owner], only: Set<String>? = nil) async -> [String: [URL]] {
+    let listeners = await Self.listening(for: owners, only: only)
     let now = ContinuousClock.now
     // 一起问：接了连接却迟迟不答的口要等满超时，挨个问会把别的会话这一轮都拖住
     let asking = listeners.map(\.listener).filter { listener in pages[listener].map { !$0.page && now - $0.at >= Self.retry } ?? true }
@@ -43,7 +47,7 @@ public struct LiveServers: Sendable {
     }
     let all = Set(listeners.map(\.listener))
     pages = pages.filter { all.contains($0.key) }
-    var found: [Key: [URL]] = [:]
+    var found: [String: [URL]] = [:]
     for (listener, keys) in listeners where pages[listener]?.page == true {
       for key in keys where found[key]?.contains(listener.url) != true { found[key, default: []].append(listener.url) }
     }
@@ -51,59 +55,96 @@ public struct LiveServers: Sendable {
   }
 
   /// 这几个会话名下在监听的端口，答不答网页都算（活预览的隧道放行它们：页面要调的只回 JSON 的接口也在里面）。
-  public static func ports<Key: Hashable & Sendable>(for owners: [Key: Owner]) async -> [Key: Set<Int>] {
-    var ports: [Key: Set<Int>] = [:]
-    for (listener, keys) in await listening(for: owners) {
-      guard let port = listener.url.port else { continue }
-      for key in keys { ports[key, default: []].insert(port) }
+  /// 值是连得到会话那个服务的本机地址（`reach`）：同一个端口号上 127.0.0.1 与 ::1 可以各是一个进程，只凭端口号连 localhost 会连到别人那里。
+  public static func ports(for owners: [String: Owner], only: Set<String>? = nil) async -> [String: [Int: String]] {
+    var ports: [String: [Int: String]] = [:]
+    for (listener, keys) in await listening(for: owners, only: only) {
+      guard let port = listener.url.port, let host = listener.url.host(percentEncoded: false) else { continue }
+      for key in keys where ports[key]?[port] == nil { ports[key, default: [:]][port] = host }
     }
     return ports
   }
 
   /// 最近起来的在前。
-  @concurrent static func listening<Key: Hashable & Sendable>(for owners: [Key: Owner]) async -> [(listener: Listener, owners: Set<Key>)] {
-    guard !owners.isEmpty else { return [] }
+  @concurrent static func listening(for owners: [String: Owner], only: Set<String>? = nil) async -> [(listener: Listener, owners: Set<String>)] {
+    guard !owners.isEmpty, only?.isEmpty != true else { return [] }
     let me = getpid()
     let info = Dictionary(processes().compactMap { pid in bsd(pid).map { (pid, $0) } }, uniquingKeysWith: { first, _ in first })
+    // 同一端口号上别人的监听口也要看：谁接哪个地址由它们一起定（`reach`）
+    let listening: [Socket] = info.keys.flatMap { sockets($0) }
+    let candidates = Set(listening.map(\.pid)).subtracting([me])
+    // 空的是带着别的会话的 id：后两条不再认它
+    var mine: [pid_t: Set<String>] = [:]
+    for (pid, session) in sessions(of: candidates) { mine[pid] = owners[session] == nil ? [] : [session] }
     var children: [pid_t: [pid_t]] = [:]
     for (pid, item) in info { children[pid_t(item.pbi_ppid), default: []].append(pid) }
-    var mine: [pid_t: Set<Key>] = [:]
+    var descended: [pid_t: Set<String>] = [:]
     for (key, owner) in owners {
       guard let process = owner.process, let root = info[process.pid], started(root) == process.startedAt else { continue }
       var queue = children[process.pid] ?? []
       while let pid = queue.popLast() {
-        guard mine[pid]?.contains(key) != true else { continue }
-        mine[pid, default: []].insert(key)
+        guard descended[pid]?.contains(key) != true else { continue }
+        descended[pid, default: []].insert(key)
         queue += children[pid] ?? []
       }
     }
-    var directories: [String: Set<Key>] = [:]
+    var directories: [String: Set<String>] = [:]
     for (key, owner) in owners {
       if let directory = owner.directory.flatMap(realPath), !tooWide(directory) { directories[directory, default: []].insert(key) }
     }
-    if !directories.isEmpty {
-      // 顺着工作目录往上查表，不拿每个进程去比每个会话：一千多个进程乘几十个会话的前缀比较要好几毫秒
-      for pid in info.keys where mine[pid] == nil {
-        guard var path = workingDirectory(pid) else { continue }
-        var keys = Set<Key>()
-        while true {
-          keys.formUnion(directories[path] ?? [])
-          guard let slash = path.lastIndex(of: "/"), slash != path.startIndex else { break }
-          path = String(path[..<slash])
-        }
-        if !keys.isEmpty { mine[pid] = keys }
+    for pid in candidates where mine[pid] == nil {
+      if let keys = descended[pid] {
+        mine[pid] = keys
+        continue
       }
+      // 顺着工作目录往上查表，不拿每个进程去比每个会话
+      guard !directories.isEmpty, var path = workingDirectory(pid) else { continue }
+      var keys = Set<String>()
+      while true {
+        keys.formUnion(directories[path] ?? [])
+        guard let slash = path.lastIndex(of: "/"), slash != path.startIndex else { break }
+        path = String(path[..<slash])
+      }
+      mine[pid] = keys
     }
-    mine[me] = nil
-    guard !mine.isEmpty else { return [] }
-    // 同一端口号上别人的监听口也要看：谁接哪个地址由它们一起定（`reach`）
-    let listening: [Socket] = info.keys.flatMap { sockets($0) }
-    var found: [(listener: Listener, owners: Set<Key>)] = []
+    var found: [(listener: Listener, owners: Set<String>)] = []
     for socket in listening {
-      guard let keys = mine[socket.pid], let url = reach(socket, among: listening) else { continue }
+      guard let keys = mine[socket.pid].map({ only?.intersection($0) ?? $0 }), !keys.isEmpty, let url = reach(socket, among: listening) else { continue }
       found.append((Listener(pid: socket.pid, started: started(info[socket.pid]!), url: url), keys))
     }
     return found.sorted { ($0.listener.started, -($0.listener.url.port ?? 0)) > ($1.listener.started, -($1.listener.url.port ?? 0)) }
+  }
+
+  /// 这几个进程起来时的环境里带着的会话 id（`AgentKind.sessionVariables` 里第一个有值的，同 `cuepad show`）；没带、读不到的不在里面。
+  /// 内核只给读同一用户、不是系统自带可执行文件的进程（实测 node、bun、python 读得到，/usr/bin/ruby、/bin/sleep 读不到）。
+  static func sessions(of pids: Set<pid_t>) -> [pid_t: String] {
+    var limit = 0, limitSize = MemoryLayout<Int>.size
+    guard sysctlbyname("kern.argmax", &limit, &limitSize, nil, 0) == 0, limit > 0 else { return [:] }
+    var buffer = [UInt8](repeating: 0, count: limit)
+    let wanted = AgentKind.sessionVariables.map { Array("\($0)=".utf8) }
+    var sessions: [pid_t: String] = [:]
+    for pid in pids {
+      var mib = [CTL_KERN, KERN_PROCARGS2, pid]
+      var size = limit
+      guard sysctl(&mib, 3, &buffer, &size, nil, 0) == 0, size > MemoryLayout<Int32>.size else { continue }
+      // 排法：参数个数，可执行文件路径，补的零，那几个参数，然后是环境；每段以零结尾
+      var skip = Int(buffer.withUnsafeBytes { $0.load(as: Int32.self) })
+      var at = MemoryLayout<Int32>.size
+      while at < size, buffer[at] != 0 { at += 1 }
+      while at < size, buffer[at] == 0 { at += 1 }
+      var values = [String?](repeating: nil, count: wanted.count)
+      while at < size {
+        let end = buffer[at..<size].firstIndex(of: 0) ?? size
+        if skip > 0 { skip -= 1 } else if end == at { break } else {
+          for (index, name) in wanted.enumerated() where end - at > name.count && buffer[at..<at + name.count].elementsEqual(name) {
+            values[index] = String(decoding: buffer[(at + name.count)..<end], as: UTF8.self)
+          }
+        }
+        at = end + 1
+      }
+      if let session = values.lazy.compactMap(\.self).first { sessions[pid] = session }
+    }
+    return sessions
   }
 
   /// 一个在监听的 TCP 口：绑的地址（nil 是通配）与它接哪几族（v6 的通配不设 V6ONLY 时两族都接）。

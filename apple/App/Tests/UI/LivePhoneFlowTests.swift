@@ -11,6 +11,12 @@ import Testing
 struct LivePhoneFlowTests {
     let app = TestApp()
     static let mac = "mac-live"
+    /// 会话页看得见时的那一问（`SessionPage` 的 task）：`phone` 里起，进后台的用例自己停它。
+    private let page = Asking()
+
+    private final class Asking {
+        var task: Task<Void, Never>?
+    }
 
     /// 手机开着这个会话页、Mac 替身接在中转上、在线；Mac 的隧道口放行这一页的端口。跑完 `body` 拆掉。
     private func phone(page html: String = "<html><body>手机上的页面</body></html>",
@@ -31,15 +37,14 @@ struct LivePhoneFlowTests {
         let workspace = Workspace(services: app.services)
         let route = SessionRoute(id: state.id, sessionID: "live")
         workspace.show(.session(route))
-        // 会话页看得见时问（`SessionPage` 的 task）
-        let watching = Task { await app.services.liveRemote.watch("live", on: Self.mac) }
+        self.page.task = Task { await app.services.liveRemote.watch("live", on: Self.mac) }
         do { try await body(workspace, mac, url, route, page) } catch {
-            await watching.stop()
+            await self.page.task?.stop()
             mac.close()
             page.stop()
             throw error
         }
-        await watching.stop()
+        await self.page.task?.stop()
         mac.close()
         page.stop()
         app.services.liveSignaling = nil
@@ -83,6 +88,23 @@ struct LivePhoneFlowTests {
             await open.stop()
             workspace.path = []
             #expect(workspace.livePreviews[route.id] == nil, "离开会话页放掉")
+        }
+    }
+
+    @Test func 切到别的应用再回来_会话页还没再问_预览自己连回Mac() async throws {
+        try await phone { workspace, _, _, route, _ in
+            try await eventually("页头出现预览钮") { workspace.liveButton(route.id) != nil }
+            workspace.toggleLivePreview()
+            let preview = try #require(workspace.livePreviews[route.id])
+            var open = shown(preview, in: workspace)
+            try await eventually("页面载出") { preview.phase == .live && preview.revealed }
+
+            // 进后台：预览断开、会话页不问了；回来时场景先是不活动，预览这就连，会话页要等活动了才问
+            await open.stop()
+            await page.task?.stop()
+            open = shown(preview, in: workspace)
+            try await eventually("预览连回 Mac，页面还在") { preview.link?.state == .ready && preview.phase == .live && preview.revealed }
+            await open.stop()
         }
     }
 

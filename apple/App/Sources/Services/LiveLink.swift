@@ -3,9 +3,10 @@ import CryptoKit
 import Foundation
 import Network
 import Synchronization
+import UIKit
 
 /// 手机、iPad 开着的一个活预览去 Mac 的路，看得见的这一段一份（`run`，预览面板的 task，收起、进后台就结束）：向 Mac 要隧道的入口（`LiveRemote.watch(open:)`），
-/// 拿到后同时连 Mac 报来的每个局域网地址、只验票（端口 0），最先通的交给代理（`LiveTunnel.Proxy`），网页视图这份数据存储的流量都经它。
+/// 拿到后同时连 Mac 报来的每个局域网地址、只验票（端口 0），最先通的交给代理（`LiveTunnel.Proxy`）：局域网地址的页面经它的 SOCKS 口，localhost 的经它照搬到手机回环上的同号口（`mirror`）。
 /// 本地网络权限的弹窗出在这里第一次连局域网地址时：只有点开预览才走到这里，会话页本身只经中转问、不碰局域网。
 /// 连不上时每 `retry` 再试一次，直到通了或预览收起：允许权限、回到 Wi-Fi、Mac 醒来都不用动手。
 @Observable
@@ -30,6 +31,28 @@ final class LiveLink {
     /// 代理此刻用的路（`LiveTunnel.Route.id`）：只理会这条路断了的报告。
     @ObservationIgnored private var route: UUID?
     @ObservationIgnored private var pages: [URL] = []
+    /// 手机回环上照搬的口（`LiveTunnel.Proxy.mirror`）开好了哪些、哪些被占着。
+    private var mirrored = LiveTunnel.Proxy.Mirrored()
+
+    /// 这一页在这台设备的回环上要照搬的口；不是回环地址的（Mac 的局域网地址，走代理）是 nil。
+    private static func mirror(_ url: URL) -> UInt16? {
+        guard let host = url.host(percentEncoded: false), LiveTunnel.Proxy.isMac(host, addresses: []) else { return nil }
+        return UInt16(exactly: url.port ?? (url.scheme == "https" ? 443 : 80))
+    }
+
+    /// 可以载的页面：回环地址的要它的口照搬好了才算。没开好就载，连到的是这台设备上占着那个口的别人（另一个窗口的预览、别的应用）。
+    private var served: [URL] {
+        #if targetEnvironment(simulator)
+        pages  // 模拟器不照搬：它和 Mac 共用回环
+        #else
+        pages.filter { Self.mirror($0).map(mirrored.open.contains) ?? true }
+        #endif
+    }
+
+    /// 连上了 Mac，这一页的口却在这台设备上被占着。
+    func taken(_ address: URL?) -> LiveTrouble? {
+        state == .ready && address.flatMap(Self.mirror).map(mirrored.taken.contains) == true ? .taken : nil
+    }
 
     static let retry = Duration.seconds(3)
     /// 连一个地址最多等多久：同一网段里连不上多半是路由器不让设备互连（访客网络），不再等下去。
@@ -50,6 +73,7 @@ final class LiveLink {
         await withDiscardingTaskGroup { group in
             group.addTask { await remote.watch(sessionID, on: host, open: true) }
             group.addTask { await self.mend(broken, preview, sessionID: sessionID, remote: remote, key: key) }
+            group.addTask { await self.remirror(preview) }
             for await seen in Observations({ Seen(answer: remote.answers[sessionID], offline: remote.offline.contains(sessionID)) }) {
                 follow(seen, preview, key: key)
             }
@@ -61,6 +85,14 @@ final class LiveLink {
                       key: @escaping @MainActor () -> SymmetricKey?) async {
         for await report in broken where report.route == route {
             if report.answer == .ticket { remote.renew(sessionID) } else if let door { connect(door, preview, key: key) }
+        }
+    }
+
+    /// 照搬的口开好了、被占着有变化：能载的页面跟着变。
+    private func remirror(_ preview: LivePreview) async {
+        for await next in proxy.mirrored where next != mirrored {
+            mirrored = next
+            if state == .ready { preview.serve(served) }
         }
     }
 
@@ -77,8 +109,9 @@ final class LiveLink {
             return
         }
         pages = answer.pages
+        proxy.mirror(Set(answer.ports.compactMap { UInt16(exactly: $0) }.filter { $0 != 0 }))
         preview.follow(answer, showing: true)
-        if state == .ready { preview.serve(pages) }
+        if state == .ready { preview.serve(served) }
         guard let next = answer.door, next != door else { return }
         door = next
         connect(next, preview, key: key)
@@ -108,9 +141,14 @@ final class LiveLink {
                     route = next.id
                     proxy.use(next)
                     preview.tunneled = addresses
-                    preview.linked(pages)
+                    preview.linked(served)
                     state = .ready
                     return
+                case .trouble(.denied) where UIApplication.shared.applicationState != .active:
+                    // 权限框挂着（应用这时不在活动状态）系统就把连接报成没给权限：他还没答，不亮"没有本地网络权限"；答完回来马上再探。
+                    // 实测等着重试的那一下，点了允许还要看十来秒"没有本地网络权限"
+                    for await _ in NotificationCenter.default.notifications(named: UIApplication.didBecomeActiveNotification) { break }  // 晚订：上一行刚看过还没回到活动状态，中间没让出主线程
+                    continue
                 case .trouble(let trouble):
                     preview.serve(nil)
                     state = .trouble(trouble)

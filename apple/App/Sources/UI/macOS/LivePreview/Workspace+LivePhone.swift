@@ -70,8 +70,15 @@ extension Workspace {
             let here = hosted.contains(key.sessionID)
             var door: LiveSignal.Door?
             if let ticket = phone.ticket, let port { door = LiveSignal.Door(addresses: LiveTunnel.localAddresses(), port: port, ticket: ticket) }
+            var ports: [Int]?
+            if let ticket = phone.ticket {
+                let allowed = here ? await livePorts(key.sessionID) : [:]
+                // 不再放行的口上还连着的断掉（你改填了别的地址、会话结束了）：放不放只在连接进来时问一次，长连接不靠那一次一直通
+                liveServer?.server.limit(ticket, to: Set(allowed.keys.compactMap { UInt16(exactly: $0) }))
+                if here, door != nil { ports = allowed.keys.sorted() }
+            }
             let answer = LiveSignal.pages(request: phone.request, session: key.sessionID, pages: here ? livePages(id) : [], serving: here ? liveFound[id] ?? [] : [],
-                                          sent: here ? liveTaken[key.sessionID] : nil, door: here ? door : nil)
+                                          sent: here ? liveTaken[key.sessionID] : nil, door: here ? door : nil, ports: ports)
             guard answer != phone.answered, livePhones[key] != nil else { continue }
             livePhones[key]?.answered = answer
             do {
@@ -93,7 +100,7 @@ extension Workspace {
         overlay = nil
         openSession(state.id, sessionID: sessionID)
         if hasLivePage(state.id) { openLivePreview(state) }
-        services.windowShell?.show()
+        services.windowShell?.show(overOthers: true)
     }
 
     /// 隧道口：开着就用它，没开就开（端口随机）；没取到门铃的密钥（中转还没连上过）开不了。
@@ -130,26 +137,28 @@ extension Workspace {
 
     /// 隧道的一条连接放不放（`LiveTunnel.Server`）：票据要是这台 Mac 发给开着预览的手机、还没过期的；端口 0 只验票。
     /// 目标要是本机（回环、本机的局域网地址），端口要属于这个会话：它名下在监听的（答不答网页都算），或它的页面地址里的（Agent 发来、你填的）。
+    /// 连哪个地址由这头定（`livePorts`），不照手机写的：手机回环上照搬来的连接只说得出端口，而同一个端口号上 127.0.0.1 与 ::1 可以各是一个会话的服务。
     func admitLive(_ request: LiveTunnel.Request) async -> LiveTunnel.Server.Admission {
         guard let (key, _) = livePhones.first(where: { $0.value.ticket == request.ticket && $0.value.until > .now }) else { return .ticket }
         guard request.port != 0 else { return .probe }
         var host = request.host.lowercased()
         if host.hasPrefix("[") { host = String(host.dropFirst().dropLast()) }
-        guard LiveTunnel.Proxy.isMac(host, addresses: Set(LiveTunnel.localAddresses().map(\.host))) else { return .refused }
-        guard await livePorts(key.sessionID).contains(Int(request.port)) else { return .refused }
-        // *.localhost 系统的解析器不一定认（浏览器认），一律连回环；Host 头随字节原样到服务
-        return .open(host: host.hasSuffix(".localhost") ? "localhost" : host, port: request.port)
+        guard LiveTunnel.Proxy.isMac(host, addresses: Set(LiveTunnel.localAddresses().map(\.host))), let target = await livePorts(key.sessionID)[Int(request.port)] else {
+            AppServices.log.notice("活预览的隧道没放行 \(host, privacy: .public):\(request.port)：不是这个会话的口")
+            return .refused
+        }
+        return .open(host: target, port: request.port)
     }
 
-    private func livePorts(_ sessionID: String) async -> Set<Int> {
+    /// 这个会话放行的本机端口，各自连哪个地址：它名下在监听的连那个服务所在的地址（`LiveServers.ports`），只在页面地址里的照地址写的连。
+    private func livePorts(_ sessionID: String) async -> [Int: String] {
         if let kept = livePorts[sessionID], ContinuousClock.now - kept.at < .seconds(1) { return kept.ports }
-        var owner = (try? await services.store.liveOwner(sessionID)) ?? LiveServers.Owner(process: nil, directory: nil)
-        if owner.directory?.isEmpty != false { owner.directory = services.bridge.session(sessionID: sessionID)?.cwd.path }
-        var ports = await LiveServers.ports(for: [sessionID: owner])[sessionID] ?? []
+        var ports = await LiveServers.ports(for: liveOwners(), only: [sessionID])[sessionID] ?? [:]
         let local = Set(LiveTunnel.localAddresses().map(\.host))
         for url in livePages(SessionState.recordID(sessionID: sessionID)) {
-            guard let port = url.port, let host = url.host(percentEncoded: false), LiveTunnel.Proxy.isMac(host, addresses: local) else { continue }
-            ports.insert(port)
+            guard let port = url.port, ports[port] == nil, let host = url.host(percentEncoded: false)?.lowercased(), LiveTunnel.Proxy.isMac(host, addresses: local) else { continue }
+            // *.localhost 系统的解析器不一定认（浏览器认），一律连回环；Host 头随字节原样到服务
+            ports[port] = host.hasSuffix(".localhost") ? "localhost" : host
         }
         livePorts[sessionID] = (ports, .now)
         return ports

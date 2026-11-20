@@ -206,7 +206,7 @@ final class Workspace {
     @ObservationIgnored var liveServer: (server: LiveTunnel.Server, port: UInt16)?
     @ObservationIgnored var liveServerStarting: Task<UInt16?, Never>?
     /// 隧道放行的端口（`admitLive`），按会话记一秒：网页一次开几条连接，不各扫一遍进程表。
-    @ObservationIgnored var livePorts: [String: (ports: Set<Int>, at: ContinuousClock.Instant)] = [:]
+    @ObservationIgnored var livePorts: [String: (ports: [Int: String], at: ContinuousClock.Instant)] = [:]
     #endif
     /// 并排两半的分界拖到了哪（`WideMetrics.BesideShare`）：每个窗口一份，只在内存里。
     var besideShare = WideMetrics.BesideShare()
