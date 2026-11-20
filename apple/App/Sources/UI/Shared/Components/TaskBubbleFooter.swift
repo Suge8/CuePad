@@ -124,7 +124,7 @@ private struct BubbleStrip<Content: View, Trailing: View>: View {
     }
 }
 
-/// Mac 上这一下要开新会话时，左边是交给谁（新会话，或绑定本项目在跑的会话，`HandOffChoice`）与用哪家、哪个模型的那一排（同新会话的输入框，改了就记住）；
+/// Mac 上这一下要开新会话时，左边是交给谁（新会话，或绑定本项目开着的会话，`HandOffChoice`）与用哪家、哪个模型的那一排（同新会话的输入框，改了就记住）；
 /// 接着用已有会话的都不放（写"交给 新会话"就说错了）。
 /// 这台 Mac 上上一次没开成或说不出结果（`SessionLaunching.outcome`）时左边换成原因、按钮写"重试"，可能已开过时先确认。
 private struct StartBar: View {
@@ -186,7 +186,7 @@ private struct StartBar: View {
 }
 
 #if os(macOS)
-/// 交给谁：默认开新会话；选本项目在跑的会话是把这一步绑给它（只关联，不发正文、不开不停会话），绑上后底下这一排换成那个会话。
+/// 交给谁：默认开新会话；选本项目开着的会话是把这一步绑给它（只关联，不发正文、不开不停会话），绑上后底下这一排换成那个会话。
 private struct HandOffChoice: View {
     let leaf: Card
     @Environment(Workspace.self) private var workspace
@@ -197,8 +197,8 @@ private struct HandOffChoice: View {
         let bound = sessions.first { $0.state.sessionID == leaf.piSessionID }
         MenuButton(sections: [
             ChoiceMenu.Section(choices: [ChoiceMenu.Choice(title: "新会话", image: .icon(.add), checked: leaf.piSessionID == nil) { unbind() }]),
-            ChoiceMenu.Section(title: "本项目在跑的会话", choices: sessions.isEmpty
-                ? [ChoiceMenu.Choice(title: "本项目没有在跑的会话", disabled: true) {}]
+            ChoiceMenu.Section(title: "本项目开着的会话", choices: sessions.isEmpty
+                ? [ChoiceMenu.Choice(title: "本项目没有开着的会话", disabled: true) {}]
                 : sessions.map { item in
                     ChoiceMenu.Choice(title: .verbatim(item.state.title), checked: item.state.sessionID == leaf.piSessionID) { bind(item.state.sessionID) }
                 }),

@@ -122,10 +122,21 @@ extension Workspace {
         return owners
     }
 
-    /// 扫一遍（`only` 给了只要这几个会话的）。开着的预览跟着它：按认出的地址开的，地址不在了、又认出了别的（5173 被占换到 5174）就跟过去；空着地址的，认出了就载入。
+    /// 扫一遍（`only` 给了只要这几个会话的），一遍一遍排着来：收到手机一问时的那一遍与按节奏的这一遍交叠的话，后写回的会盖掉先写回的那一遍问到的，
+    /// 隧道放行哪些口读的就是它（`livePorts`）。
     func scanLive(only sessionIDs: Set<String>? = nil) async {
+        let before = liveScanning
+        let scan = Task {
+            await before?.value
+            await self.scanLiveNow(only: sessionIDs)
+        }
+        liveScanning = scan
+        await scan.value
+    }
+
+    /// 开着的预览跟着它：按认出的地址开的，地址不在了、又认出了别的（5173 被占换到 5174）就跟过去；空着地址的，认出了就载入。
+    private func scanLiveNow(only sessionIDs: Set<String>?) async {
         let owners = await liveOwners()
-        // 拷出来扫、扫完写回：收到手机一问时的那一遍可能与按节奏的这一遍交叠
         var scanner = liveScanner
         let found = await scanner.find(for: owners, only: sessionIDs).reduce(into: [UUID: [URL]]()) { $0[SessionState.recordID(sessionID: $1.key)] = $1.value }
         liveScanner = scanner
@@ -144,12 +155,14 @@ extension Workspace {
     static let liveScan = Duration.seconds(2)
 
     /// 预览栏上的点选钮：开着就收，没开就开；点中的元素挂进左边会话的回复框（`ReplyNote.Element`），回复框接过焦点，接着写那一句。
+    /// 放大着的先放回右半：回复框被盖在下面。
     func pickElement() {
         guard let session = session(in: .main), let preview = livePreviews[session.id] else { return }
         if preview.picking { return preview.cancelPick() }
         Task {
             guard let element = await preview.pick() else { return }
             services.settings.quote(element, for: session.id)
+            endLiveFill()
             replyFocus = session.id
         }
     }

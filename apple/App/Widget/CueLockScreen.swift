@@ -153,7 +153,7 @@ struct CueLockScreen: View {
         case .wait(let wait):
             if let allow = wait.allow {
                 HStack(spacing: 12) {
-                    AllowTick(allow: allow, signal: signal, width: 72)
+                    AllowTick(allow: allow, fill: signal.ink, tick: signal.fill, size: CGSize(width: 72, height: 44))
                     if let since = now.clock {
                         Text("已等 \(ActivityElapsed.text(since: since))").font(IslandType.posterTime).foregroundStyle(signal.soft).lineLimit(1)
                     }
@@ -178,7 +178,7 @@ struct CueLockScreen: View {
 }
 
 /// 其余几行：名字、行尾还在动的写做了多久（自己走），停下的写状态词。整块上了色，行里不再分颜色，靠行首的图形分。
-struct PosterRow: View {
+private struct PosterRow: View {
     let item: CueNow.Item
     let signal: Palette.Signal
 

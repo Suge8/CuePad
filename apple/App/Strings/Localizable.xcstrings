@@ -1220,34 +1220,6 @@
         }
       }
     },
-    "%lld 个在跑" : {
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld running"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld running"
-                }
-              }
-            }
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld 个在跑"
-          }
-        }
-      }
-    },
     "%lld 个子代理" : {
       "localizations" : {
         "en" : {
@@ -1276,7 +1248,7 @@
         }
       }
     },
-    "%lld 个子代理在跑" : {
+    "%lld 个子代理工作中" : {
       "localizations" : {
         "en" : {
           "variations" : {
@@ -1284,13 +1256,13 @@
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%lld subagent running"
+                  "value" : "%lld subagent working"
                 }
               },
               "other" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%lld subagents running"
+                  "value" : "%lld subagents working"
                 }
               }
             }
@@ -1299,7 +1271,35 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%lld 个子代理在跑"
+            "value" : "%lld 个子代理工作中"
+          }
+        }
+      }
+    },
+    "%lld 个工作中" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld working"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld working"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 个工作中"
           }
         }
       }
@@ -10893,22 +10893,6 @@
         }
       }
     },
-    "在跑的那一轮没能停下，这句没有发出" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The running turn couldn’t be stopped, so this wasn’t sent."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在跑的那一轮没能停下，这句没有发出"
-          }
-        }
-      }
-    },
     "在这台 Mac 上启用" : {
       "localizations" : {
         "en" : {
@@ -15405,6 +15389,22 @@
         }
       }
     },
+    "放回右半" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Move Back to the Side"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "放回右半"
+          }
+        }
+      }
+    },
     "放在这里" : {
       "localizations" : {
         "en" : {
@@ -15417,6 +15417,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "放在这里"
+          }
+        }
+      }
+    },
+    "放大" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enlarge"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "放大"
           }
         }
       }
@@ -17017,18 +17033,18 @@
         }
       }
     },
-    "本项目在跑的会话" : {
+    "本项目开着的会话" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Running in This Project"
+            "value" : "Open Sessions in This Project"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "本项目在跑的会话"
+            "value" : "本项目开着的会话"
           }
         }
       }
@@ -17049,18 +17065,18 @@
         }
       }
     },
-    "本项目没有在跑的会话" : {
+    "本项目没有开着的会话" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No Running Sessions in This Project"
+            "value" : "No Open Sessions in This Project"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "本项目没有在跑的会话"
+            "value" : "本项目没有开着的会话"
           }
         }
       }
@@ -17573,6 +17589,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在休眠…"
+          }
+        }
+      }
+    },
+    "正在做的那一轮没能停下，这句没有发出" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The running turn couldn’t be stopped, so this wasn’t sent."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在做的那一轮没能停下，这句没有发出"
           }
         }
       }
@@ -18905,18 +18937,18 @@
         }
       }
     },
-    "没能问到 Claude Code 此刻在跑哪些会话" : {
+    "没能问到 Claude Code 此刻开着哪些会话" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Couldn't ask Claude Code which sessions are running"
+            "value" : "Couldn't ask Claude Code which sessions are open"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "没能问到 Claude Code 此刻在跑哪些会话"
+            "value" : "没能问到 Claude Code 此刻开着哪些会话"
           }
         }
       }
@@ -23573,18 +23605,18 @@
         }
       }
     },
-    "这个会话现在没有出错的一轮可重跑（它在跑，或最后一轮不是出错结束的）" : {
+    "这个会话现在没有出错的一轮可重跑（它正在工作，或最后一轮不是出错结束的）" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This session has no failed turn to retry (it is running, or its last turn did not fail)."
+            "value" : "This session has no failed turn to retry (it is working, or its last turn did not fail)."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "这个会话现在没有出错的一轮可重跑（它在跑，或最后一轮不是出错结束的）"
+            "value" : "这个会话现在没有出错的一轮可重跑（它正在工作，或最后一轮不是出错结束的）"
           }
         }
       }

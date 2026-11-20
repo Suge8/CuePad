@@ -4,6 +4,7 @@
 #   xc.sh check                                     提交前的门：lint.sh、运行时编的着色器（shaders.swift）、CuePadKit 的 swift build、iOS 编译（连测试目标）、Mac App 连测试目标的整模块编译（只在 Mac 编的测试，如 #if os(macOS) 的，警告也在这里拦）；
 #                                                   自己的 Swift 源文件（App、CuePadKit）有一条编译警告就失败，第三方与生成的代码不算（_build.sh 的 own_warnings）
 #   xc.sh signoff                                   合并前的门：本机跑 check、test kit、test mac，全过才给 HEAD 这个提交记 GitHub 状态，主干规则认它（signoff.sh 头注释）
+#   xc.sh land [PR 号或分支] [--red]                  合并：主干最近一遍云端检查红着就停下、列出红的用例，合完把主检出快进（land.sh 头注释）
 #   xc.sh build <mac|ios|ipad>
 #   xc.sh strings                                   编 mac 与 ios，把界面文字收进 String Catalog，列出缺英文的（strings.py 头注释）
 #   xc.sh test <mac|ios|ipad> [xcodebuild 参数…]     如 -only-testing:CuePadTests/SuiteName；ios、ipad 不带参数时连 CuePadKit 也在模拟器上跑
@@ -20,6 +21,11 @@
 #                                                   xc.sh shot ios -- -CuePadScene shelf , dark-cue.png -- -CuePadScene cue -theme dark
 #   xc.sh rec  <mac|ios|ipad> [片.mov] [-- 启动参数…] [, …]  同上，每张录 CUEPAD_REC_SECONDS 秒（默认 12）；CUEPAD_REC_LAUNCH=1 从启动前开录（Mac 等窗口出现就录）
 #     Mac 首帧入片后写 <片.mov>.ready；交互先清旧回执、等新回执再操作，应用就绪不等于已开录。
+#     ios 的 shot 带 -CuePadLiveActivity YES 时拍的是系统的灵动岛：收起的（<图>-compact.png）与长按展开的（<图>），如
+#       xc.sh shot ios -- -CuePadDemo YES -CuePadLiveActivity YES -CuePadCueNow asks（app_sim.py 的 island）。改了岛的界面在这里验：调试预览看不出被系统截断。
+#       锁屏那张卡在模拟器上拍不到（按锁屏键不进锁屏），看调试预览与真机
+#   xc.sh sheet <出.png> [-cols 列数] [-crop 宽x高[+左+上]] <图…>
+#                                                   把几张图拼成一张对照图，一次读完：每张先裁（像素，从左上角算）、按列数排开、下面写文件名（sheet.swift）
 #     ios、ipad 的 shot、rec、run 认 -CuePadLandscape YES：起实例前把模拟器横过来（设备的物理朝向，devicectl），这一张拍完转回竖屏（app_sim.py 的 orient）
 #   xc.sh run  <mac|ios|ipad> [-- 启动参数…]          起着给 bcu、axe 操作，打印 PID（模拟器另带 UDID）；实例 5 分钟后自己退出（CUEPAD_RUN_SECONDS 改）。
 #                                                   iOS 的模拟器由后台看守租着，别的检出领不到，直到实例退出、到时或 stop
@@ -68,7 +74,7 @@ export TEST_RUNNER_PI_OFFLINE=1
 # 同时跑的测试最多这么多个（Swift Testing 的并行宽度；不限时它把用例全数同时起）：测试起的是真 Agent 进程，3 核的 CI 机器上同时起几十个，
 # 不少用例等到超时（实测 76 条）。按核数给，CUEPAD_TEST_WIDTH 覆盖
 export TEST_RUNNER_SWT_EXPERIMENTAL_MAXIMUM_PARALLELIZATION_WIDTH="${CUEPAD_TEST_WIDTH:-$(sysctl -n hw.ncpu)}"
-USAGE="用法：$0 <check|signoff|build|strings|test|agents|shot|rec|run|stop|real|fleet|explore|perf|release|device|provision|diag> [mac|ios|ipad|kit] …（xc.sh help 看全部）"
+USAGE="用法：$0 <check|signoff|land|build|strings|test|agents|shot|rec|sheet|run|stop|real|fleet|explore|perf|release|device|provision|diag> [mac|ios|ipad|kit] …（xc.sh help 看全部）"
 
 cmd="${1:-}"; platform="${2:-}"
 case "$cmd" in
@@ -76,7 +82,13 @@ case "$cmd" in
   strings) "$0" build mac; "$0" build ios; exec python3 "$APPLE_DIR/scripts/strings.py" sync ;;
   provision) signing_begin; exec python3 "$APPLE_DIR/scripts/provision.py" "${2:-all}" "${@:3}" ;;  # 签名锁见 _lock.sh 规则 3
   stop) exec python3 "$APPLE_DIR/scripts/app.py" stop ;;
-  signoff) exec "$APPLE_DIR/scripts/signoff.sh" "$0" ;;
+  # signoff.sh 先换到仓库根再调 xc.sh：给绝对路径，$0 是相对的（cd apple && scripts/xc.sh）就找不到
+  signoff) exec "$APPLE_DIR/scripts/signoff.sh" "$APPLE_DIR/scripts/xc.sh" ;;
+  land) exec "$APPLE_DIR/scripts/land.sh" "${@:2}" ;;
+  sheet)
+    sheet="$APPLE_DIR/.derived/sheet"
+    if [ ! -x "$sheet" ] || [ "$APPLE_DIR/scripts/sheet.swift" -nt "$sheet" ]; then mkdir -p "$APPLE_DIR/.derived"; xcrun swiftc -O "$APPLE_DIR/scripts/sheet.swift" -o "$sheet"; fi
+    exec "$sheet" "${@:2}" ;;
   agents) exec python3 "$APPLE_DIR/scripts/agents.py" "${@:2}" ;;
   diag) exec python3 "$APPLE_DIR/scripts/device_diag.py" "${@:2}" ;;
   explore) exec python3 "$APPLE_DIR/scripts/explore.py" "$0" "${@:2}" ;;

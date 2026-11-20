@@ -18,6 +18,8 @@ nonisolated enum IslandType {
     static let chipClock = Font.system(size: 14, weight: .bold, design: .rounded)
     static let chipClockWidth: CGFloat = 38
     static let question = Font.system(size: 16, weight: .bold)
+    static let row = Font.system(size: 15, weight: .medium)
+    static let rowTail = Font.system(size: 14, weight: .semibold, design: .rounded)
 
     // 锁屏那张卡：系统封顶 160pt 高，字号钉死，不随动态字体放大（放大了排不下，被裁掉的是最后几行）。
     static let posterTitle = Font.system(size: 20, weight: .bold)

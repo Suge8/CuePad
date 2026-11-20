@@ -7,10 +7,10 @@ import WidgetKit
 /// 岛上持续在动的只有这只钟：循环动画系统不保证播，为了动而重发同一份内容会吃掉推送预算。其余的动是内容更新时系统做的短过渡。
 /// 最小态与窄紧凑位（横屏）只有 28pt 圆：图形加至多 9+ 的读数，不缩字号；完整数在展开态与读屏名称里。
 /// 展开态最高 160pt：头像、读数与钟排在摄像头两侧，下面是 `Details.room` 行；全放在摄像头下面那一块时，头一排就占掉三成高。
-/// 岛的底系统钉死是黑的，状态的实色（`Palette.signal`，同锁屏那张卡）铺在岛里面的一块上：展开态头一排下面整块，
-/// 紧凑态与最小态只在等你时铺（右位的钟、最小态那颗圆）——常驻在状态栏里的平时只上字色，轮到你了才亮成一块。
+/// 岛的底系统钉死是黑的，状态的实色（`Palette.signal`，同锁屏那张卡）只铺在小块上：紧凑态与最小态等你时
+/// 右位的钟、最小态那颗圆，展开态那颗对勾钮——常驻在状态栏里的平时只上字色，轮到你了才亮成一块。
 /// 锁屏是另一张（`CueLockScreen`）：那块的底归我们，整块按状态上色、一个主角。
-/// 调试画面复用这些视图，但不能代替系统灵动岛的宽度与状态栏验收（`-CuePadLiveActivity YES`）。
+/// 调试画面复用这些视图，但不能代替系统的岛：宽度、状态栏、展开态 160pt 的上限只有系统的岛上看得出，改了在那里拍（`xc.sh shot ios` 带 `-CuePadLiveActivity YES`）。
 struct CueActivityViews {
     private let now: CueNow
     private let stale: Bool
@@ -26,16 +26,17 @@ struct CueActivityViews {
     var compactLeading: some View { CompactLeading(now: now).island() }
     var compactTrailing: some View { CompactTrailing(now: now).island() }
     var minimal: some View { NarrowCount(now: now).island() }
-    var expandedLeading: some View { Reading(now: now, rim: .black).frame(height: Self.face).padding(.leading, Self.inset).island() }
-    var expandedTrailing: some View { Clock(now: now).font(IslandType.clock).frame(height: Self.face).padding(.trailing, Self.inset).island() }
-    var expandedBottom: some View { Details(now: now).padding(.horizontal, Self.inset).padding(.bottom, 8).island() }
+    var expandedLeading: some View { Reading(now: now).frame(height: Self.head).padding(.leading, Self.inset).island() }
+    var expandedTrailing: some View { Clock(now: now).font(IslandType.clock).frame(height: Self.head).padding(.trailing, Self.inset).island() }
+    var expandedBottom: some View { Details(now: now).island() }
     /// 调试画面里展开态的样子：三块照系统摆的位置拼在一起。
-    var expanded: some View { ActivityBody(now: now, rim: .black).island() }
+    var expanded: some View { ActivityBody(now: now).island() }
     var keyline: Color { now.keyTone.color(Palette(dark: true)) }
 
     static let staleOpacity = 0.55
     static let maxType = DynamicTypeSize.xLarge
-    fileprivate static let face: CGFloat = 44
+    /// 头一排的高：同摄像头那一条，读数与钟排在它两侧。
+    fileprivate static let head: CGFloat = 36
     fileprivate static let inset: CGFloat = 6
 }
 
@@ -177,33 +178,36 @@ private struct NarrowCount: View {
     }
 }
 
-/// 展开态与锁屏的头一排左半：紧凑态左位放大，头像还在那一端，读数前多一个说它数的是什么的图形。
+/// 展开态头一排左半：紧凑态左位的读数放大，前面是说它数的是什么的图形。Cue 不在这一排：它全身站在右下角（`Details`）。
 private struct Reading: View {
     let now: CueNow
-    var rim: Color?
     @Environment(\.palette) private var palette
 
     var body: some View {
         let count = ActivityCount(now)
-        HStack(spacing: 10) {
-            CueNowFace(now: now, size: CueActivityViews.face, rim: rim, disc: false)
-            HStack(spacing: 6) {
-                count.glyph.font(IslandType.readingGlyph)
-                Digits(now: now).font(IslandType.reading)
-            }
-            .foregroundStyle(count.tone.color(palette))
-            .accessibilityElement(children: .ignore).accessibilityLabel(count.line)
+        HStack(spacing: 6) {
+            count.glyph.font(IslandType.readingGlyph)
+            Digits(now: now).font(IslandType.reading)
         }
+        .foregroundStyle(count.tone.color(palette))
+        .accessibilityElement(children: .ignore).accessibilityLabel(count.line)
     }
 }
 
-/// 头一排下面那一块整块按状态上色，里面按行算：一件等你占两行（问题与缘由，或问题与对勾钮），其余一行一件（同锁屏那张卡的 `PosterRow`）。
+/// 头一排下面：左边按行算，一件等你占两行（问题与缘由）或占满（问题与对勾钮），其余一行一件；右边站着全身的 Cue。
+/// 它整只站在里面，不像锁屏那张卡探出边去：系统把内容裁在离岛边十几点以内（`contentMargins` 设 0 也一样），探出去是齐刷刷一刀。
+/// 岛的底是黑的，状态只上在字、图形与那颗钮上。
 /// 有等你的只排等你的与在跑的，不写 Cue 此刻那一步：要你管的时候它在读哪个文件是噪音。歇着的不排。额度不属于岛的任务。
+/// 否决过：下面整块铺状态的实色——黑岛里再套一块圆角色块，像盒子装盒子，真机上三行就被岛的下缘截断。
 private struct Details: View {
     let now: CueNow
     @Environment(\.palette) private var palette
 
     static let room = 3
+    /// 这一块的高，也是 Cue 的身高：头一排与系统上下的留白之外，160pt 里只剩这么多，再高下缘被系统裁掉。
+    private static let height: CGFloat = 84
+    /// 右边让给 Cue 的宽：行尾的字不排到它身上。
+    private static let beside: CGFloat = 104
 
     private var step: String? {
         guard now.first == nil else { return nil }
@@ -219,23 +223,42 @@ private struct Details: View {
         var items = now.items.filter { $0.kind != .resting }
         // 第一件等你已经写在上面（`first` 与拍板那几行同一个次序）
         if now.first != nil, let shown = items.firstIndex(where: { $0.kind == .asks }) { items.remove(at: shown) }
-        return items.prefix(Self.room - (now.first == nil ? 0 : 2) - (step == nil ? 0 : 1))
+        return items.prefix(Self.room - (now.first.map { $0.allow == nil ? 2 : 3 } ?? 0) - (step == nil ? 0 : 1))
     }
 
     var body: some View {
-        let signal = palette.signal(ActivityCount(now).tone)
-        VStack(alignment: .leading, spacing: 2) {
-            if let first = now.first { FirstWait(wait: first, signal: signal).id(first).transition(.blurReplace) }
+        VStack(alignment: .leading, spacing: 5) {
+            if let first = now.first { FirstWait(wait: first).id(first).transition(.blurReplace) }
             if let step {
-                Text(step).font(IslandType.posterWord).foregroundStyle(signal.soft).lineLimit(1).frame(height: 21)
+                Text(step).font(IslandType.row).foregroundStyle(palette.ink2).lineLimit(1)
                     .contentTransition(.opacity)
             }
-            ForEach(rows) { PosterRow(item: $0, signal: signal).transition(.blurReplace) }
+            ForEach(rows) { item in
+                HStack(spacing: 8) {
+                    Text(item.name).font(IslandType.row).foregroundStyle(palette.ink).lineLimit(1)
+                    Spacer(minLength: 0)
+                    HStack(spacing: 4) {
+                        item.kind.glyph?.image
+                        // 还在动的写做了多久（自己走），停下的写状态词
+                        if item.kind.tone == .moving {
+                            ActivityElapsed(since: item.since).minimumScaleFactor(0.8).frame(width: IslandType.rowClockWidth, alignment: .trailing)
+                        } else {
+                            Text(item.label)
+                        }
+                    }
+                    .font(IslandType.rowTail).foregroundStyle(item.kind.tone.color(palette)).fixedSize()
+                }
+                .accessibilityElement(children: .ignore).accessibilityLabel(Dotted(item.name, item.label).spoken)
+                .transition(.blurReplace)
+            }
         }
-        .padding(.horizontal, 14).padding(.vertical, 9)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        // 四角与岛同心；拿不到岛的形状时不小于大块面那一档（扩展里没有 `Radius`）
-        .background(signal.fill, in: ConcentricRectangle(corners: .concentric(minimum: .fixed(22)), isUniform: true))
+        .padding(.leading, CueActivityViews.inset).padding(.trailing, Self.beside)
+        .frame(maxWidth: .infinity, minHeight: Self.height, alignment: .topLeading)
+        .overlay(alignment: .bottomTrailing) {
+            Image(decorative: "cue-pose-\(now.beat.pose)").resizable().scaledToFit().frame(height: Self.height)
+                .padding(.trailing, CueActivityViews.inset)
+                .opacity(now.beat.faded ? CueFaceMarks.awayOpacity : 1)
+        }
     }
 }
 
@@ -255,12 +278,11 @@ extension CueNow.Item.Kind {
 
 private struct ActivityBody: View {
     let now: CueNow
-    var rim: Color?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 12) {
-                Reading(now: now, rim: rim)
+                Reading(now: now)
                 Spacer(minLength: 0)
                 Clock(now: now).font(IslandType.clock)
             }
@@ -271,36 +293,38 @@ private struct ActivityBody: View {
 
 private struct FirstWait: View {
     let wait: CueNow.Wait
-    let signal: Palette.Signal
+    @Environment(\.palette) private var palette
 
     var body: some View {
-        HStack(spacing: 12) {
+        VStack(alignment: .leading, spacing: 6) {
             Link(destination: wait.open) {
                 VStack(alignment: .leading, spacing: 2) {
                     // 系统的岛按一行的高来量这一块：不钉住竖向的高，两行的问题被截成一行
-                    Text(wait.title).font(IslandType.question).foregroundStyle(signal.ink).lineLimit(wait.detail == nil ? 2 : 1)
+                    Text(wait.title).font(IslandType.question).foregroundStyle(palette.ink).lineLimit(wait.detail == nil ? 2 : 1)
                         .fixedSize(horizontal: false, vertical: true).multilineTextAlignment(.leading)
-                    if let detail = wait.detail { Text(detail).font(IslandType.posterWord).foregroundStyle(signal.soft).lineLimit(1) }
+                    if let detail = wait.detail { Text(detail).font(IslandType.row).foregroundStyle(palette.ink2).lineLimit(1) }
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            if let allow = wait.allow { AllowTick(allow: allow, signal: signal, width: 60) }
+            // 岛上铺了实色的只有这颗钮：等你那块赭黄，墨色的勾
+            if let allow = wait.allow {
+                let signal = palette.signal(.asks)
+                AllowTick(allow: allow, fill: signal.fill, tick: signal.ink, size: CGSize(width: 72, height: 36))
+            }
         }
     }
 }
 
 /// 同 App 里拍板卡答"可以"的那颗钮：只有对勾。带上"允许一次"四个字，iPhone 17 的岛上问题只剩十个字就被截断。
-/// 底是等你那块赭黄，钮反过来用墨底、赭黄的勾：这一块里能点的只有它。
 struct AllowTick: View {
     let allow: CueNow.Allow
-    let signal: Palette.Signal
-    let width: CGFloat
+    let fill: Color
+    let tick: Color
+    let size: CGSize
 
     var body: some View {
         Button(intent: AllowOnceIntent(allow)) {
-            WidgetIcon.tick.image.font(IslandType.posterTick).foregroundStyle(signal.fill)
-                .frame(width: width, height: 40).background(signal.ink, in: .capsule)
-                .frame(minHeight: 44).contentShape(.rect)
+            WidgetIcon.tick.image.font(IslandType.posterTick).foregroundStyle(tick)
+                .frame(width: size.width, height: size.height).background(fill, in: .capsule)
         }
         .accessibilityLabel("允许一次")
         .buttonStyle(.plain).fixedSize()

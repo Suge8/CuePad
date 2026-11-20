@@ -62,7 +62,7 @@ nonisolated struct DebugArgs: Decodable {
     let launch: Bool
     /// `-CuePadLibraryTab skills`：技能与规则页一打开在技能那一段
     let libraryTab: String?
-    /// `-CuePadLiveActivity YES`：隔离库下也开真的实时活动（配 `-CuePadDemo YES`，演示库里有推进中与等你），验收锁屏与灵动岛
+    /// `-CuePadLiveActivity YES`：隔离库下也开真的实时活动（配 `-CuePadDemo YES`，演示库里有推进中与等你），验收灵动岛；`xc.sh shot ios` 带它时拍系统的岛（收起与长按展开）
     let liveActivity: Bool
     /// `-CuePadLongChat YES`：演示对话前面多 110 轮更早的来回（比 Cue 页读得到的 `CueThread.limit` 条多：来一句新的，最早那条就掉出去，同真实库）（看 Cue 页往上翻与刻度滑条）
     let longChat: Bool

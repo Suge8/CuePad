@@ -48,7 +48,7 @@ final class AppServices {
     @ObservationIgnored lazy var liveSignaling: (any VoiceSignaling)? = relay
     @ObservationIgnored let liveEvents = AsyncStream<VoiceRelayEvent>.makeStream()
     #if os(iOS)
-    @ObservationIgnored private(set) lazy var liveRemote = LiveRemote(store: store) { [weak self] in self?.liveSignaling }
+    @ObservationIgnored private(set) lazy var liveRemote = LiveRemote(store: store, settings: settings) { [weak self] in self?.liveSignaling }
     #endif
     /// 跟着同步、快照、收件做的跨服务的事经弱引用回到这里：服务没了就不再做（快照的发布排在任务里，可能晚于服务本身）。
     @ObservationIgnored private(set) lazy var syncing = SyncDriver(

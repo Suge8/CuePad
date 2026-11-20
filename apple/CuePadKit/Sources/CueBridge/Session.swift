@@ -228,13 +228,13 @@ enum RejectReason: String {
         case .empty: nil
         case .userTurn: "会话已进入另一轮，Cue 没有打断"
         case .unconfirmedTurn: "当前轮次的来源尚未确认，Cue 没有打断"
-        case .previousTurnRunning: "在跑的那一轮没能停下，这句没有发出"
+        case .previousTurnRunning: "正在做的那一轮没能停下，这句没有发出"
         case .noPrompt, .stalePrompt: "这个问题已经答过了，或 Agent 已经不在等这个问题"
         case .badAnswer: "答案和问题对不上（选项不在列表里，或类型不对）"
         case .noAuth: "这个模型的提供方在这台 Mac 上还没有登录或配置密钥"
         case .unknownCommand: "这个 Agent 会话里没有这个命令（可能已经被移除，或是只能在终端里用）"
         case .missingArgument: "这个命令需要带上参数"
-        case .nothingToRetry: "这个会话现在没有出错的一轮可重跑（它在跑，或最后一轮不是出错结束的）"
+        case .nothingToRetry: "这个会话现在没有出错的一轮可重跑（它正在工作，或最后一轮不是出错结束的）"
         }
     }
 }

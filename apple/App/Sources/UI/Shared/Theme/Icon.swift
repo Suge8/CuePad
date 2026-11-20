@@ -46,7 +46,7 @@ nonisolated enum Icon: Hashable, Sendable {
     /// 引用一份预览回话（长按、右键与全屏页的"回复"）；用网易 UU 远程到这台 Mac 上操作
     case reply, remoteMac
     /// 会话旁边的活预览（一扇浏览器窗）；它那条栏上的手机宽、在浏览器里打开、点选页面元素
-    case livePreview, phoneWidth, openInBrowser, pickElement
+    case livePreview, phoneWidth, openInBrowser, pickElement, enlarge, shrink
     /// 和 Cue 通话（手机输入框空着时发送钮那一位、Mac 工具排末尾）；通话条上的麦克风开着、已静音
     case call, microphone, muted
     /// 带着附件（回形针）：只带文件的灵感在列表、卡片与搜索里的标记
@@ -176,6 +176,8 @@ nonisolated enum Icon: Hashable, Sendable {
         case .phoneWidth: .ink("phone")
         case .openInBrowser: .ink("external")
         case .pickElement: .ink("pointer")
+        case .enlarge: .ink("enlarge")
+        case .shrink: .ink("shrink")
         case .started: .ink("ring.play")
         case .added: .ink("ring.plus")
         case .branch: .ink("branch")

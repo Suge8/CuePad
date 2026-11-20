@@ -59,6 +59,7 @@ final class Workspace {
             #if os(iOS)
             keepLivePreviews()
             #endif
+            if let liveFill, !showsLivePreview(liveFill.session) { endLiveFill() }
         }
     }
     var projectForm: ProjectFormRequest?
@@ -184,6 +185,8 @@ final class Workspace {
 
     /// 每个会话的活预览（按会话记录 id）：只在内存里，不进资料库、不同步。手机、iPad 上只留会话页还开着的（`keepLivePreviews`）。
     var livePreviews: [UUID: LivePreview] = [:]
+    /// 活预览放大到盖过主区的会话（`toggleLiveFill`、Mac 的 `showLive`）。
+    var liveFill: LiveFill?
     #if os(iOS)
     /// 手机上铺满屏开着活预览的会话（`LivePhoneCover`）：导航最上面换了别的页就不算开着。
     var liveCover: UUID?
@@ -197,6 +200,8 @@ final class Workspace {
     var liveFound: [UUID: [URL]] = [:]
     /// 问过答不答网页的监听口（`LiveServers` 记着，不每遍重问）。
     @ObservationIgnored var liveScanner = LiveServers()
+    /// 排在最后的那一遍扫描（`scanLive`）。
+    @ObservationIgnored var liveScanning: Task<Void, Never>?
     /// 收过的 `cuepad live` 每个会话最后一条（`take`）：也答给手机（`answerLivePhones`）。
     @ObservationIgnored var liveTaken: [String: LiveAddress] = [:]
     /// 每个会话在做的那一条 Agent 请求（`answerLive`）：下一条等它做完。
@@ -266,6 +271,9 @@ final class Workspace {
         async let quota: Void = followFilesQuota()
         async let cards: Void = followShownCards()
         async let files: Void = leaveGoneFiles()
+        #if os(iOS)
+        async let returns: Void = followReturns()
+        #endif
         #if os(macOS)
         async let agents: Void = followLocalAgents()
         async let live: Void = followLiveAddresses()
@@ -274,6 +282,9 @@ final class Workspace {
         async let livePhones: Void = followLivePhones()
         await followSessionPlacement()
         _ = await (agents, live, liveAgent, liveScan, livePhones)
+        #endif
+        #if os(iOS)
+        await returns
         #endif
         _ = await (catalog, links, launches, cue, opens, library, quota, cards, files)
     }
