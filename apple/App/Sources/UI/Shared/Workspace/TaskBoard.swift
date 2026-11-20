@@ -104,6 +104,15 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         }
     }
 
+    /// `id` 那张换了身份落进来：它没了、同时只多出一张——没绑任务的会话拖到已完成是先建任务再完成，`session/…` 少一张、`task/…` 多一张。
+    /// 返回它现在的身份，原来、现在各在哪一列。
+    func renamed(_ id: String, from before: TaskBoard) -> (id: String, from: Column, to: Column)? {
+        let now = columns, was = before.columns
+        guard now[id] == nil, let old = was[id] else { return nil }
+        let new = now.filter { was[$0.key] == nil }
+        return new.count == 1 ? new.first.map { ($0.key, old, $0.value) } : nil
+    }
+
     /// 比 `before` 多出来或少了的卡（新来、离开看板）：它们不是在飞的那张，进出照常淡（`boardFlight`）。
     func entered(from before: TaskBoard) -> Set<String> {
         Set(columns.keys).symmetricDifference(before.columns.keys)

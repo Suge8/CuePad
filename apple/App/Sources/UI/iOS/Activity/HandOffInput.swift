@@ -141,8 +141,10 @@ struct HandOffInput: View {
             workspace.launchHandOff(outbox, opening: planned?.opening)
             return
         }
-        workspace.reply(
+        let sent = workspace.reply(
             to: session, commands: commands, from: box, accepting: .reply, card: outbox.card, saying: Dotted(String(localized: "已交给 \(session.title)")))
+        // 面板这就收起，那一条还在排队写：看板上放下的卡等它写完再定去哪
+        workspace.answer { _ in await sent.value }
         focused = false
         workspace.outbox = nil
     }

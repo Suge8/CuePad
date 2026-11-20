@@ -72,10 +72,11 @@ struct BoardRowLane<Above: View, Content: View>: View {
                             ForEach(0..<(cards.count + tiers - 1) / tiers, id: \.self) { stack in
                                 VStack(spacing: BoardRowMetrics.gap) {
                                     // 卡、空格与"更早做完的"铺满格
-                                    ForEach(cards[stack * tiers..<min((stack + 1) * tiers, cards.count)]) { card in
-                                        card.frame(maxWidth: .infinity).frame(height: cell, alignment: .top).boardSpot(card.containerValues.boardFlight)
-                                    }
+                                    ForEach(cards[stack * tiers..<min((stack + 1) * tiers, cards.count)]) { $0.frame(maxWidth: .infinity).frame(height: cell, alignment: .top) }
                                 }
+                                .boardStack(
+                                    cards[stack * tiers..<min((stack + 1) * tiers, cards.count)].map(\.containerValues.boardFlight), in: column,
+                                    height: cell, pitch: cell + BoardRowMetrics.gap)
                                 .containerRelativeFrame(.horizontal) { [share = cardShare] width, _ in (width * share).rounded() }
                                 // 没露全的那一小列退后半步：右缘的半张卡不同整张的抢
                                 .scrollTransition(.interactive, axis: .horizontal) { [peek = BoardRowMetrics.peek] stack, phase in stack.opacity(phase.isIdentity ? 1 : peek) }

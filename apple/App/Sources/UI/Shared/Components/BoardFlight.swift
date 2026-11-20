@@ -36,10 +36,12 @@ nonisolated struct BoardArrival: Equatable {
     let departures = BoardDepartures()
     /// 飞进去的那一列排在上面（`BoardColumn`），飞到一半又来一份没人换列的看板时不落到别的列下面。
     @ObservationIgnored private var landing: Set<String> = []
-    /// 卡的框各份视图各记各的（键是那一份自己的记号），一张卡认最后出现、还没撤的那一份（`shown`、`laid`）。按卡记一份的话旧框会留下：
-    /// 懒加载撤掉的卡留着撤掉前的框，一下跳过几屏（拖滚动条）时那个框还在可视区里；卡换格时旧的那份后撤，撤之前再报一次就盖掉新的。
-    @ObservationIgnored var frames: [UUID: (lane: TaskBoard.Column, frame: CGRect)] = [:]
+    @ObservationIgnored var frames: [String: (lane: TaskBoard.Column, frame: CGRect)] = [:]
+    /// 此刻排出来的卡（值是那一份视图自己的记号）。懒加载撤掉的卡留着撤掉前的框：一下跳过几屏（拖滚动条）时那个框还在可视区里，
+    /// 按住会拎起早已不在那儿的卡、排序会把它算进去，所以取框只认排出来的（`laid`）。
     @ObservationIgnored var shown: [String: UUID] = [:]
+    /// 手机的行里各小列排在哪、从上到下是哪几张（`boardStack`）：行里卡的框由它算，不挂在卡上记。
+    @ObservationIgnored var stacks: [UUID: Stack] = [:]
     @ObservationIgnored var lanes: [TaskBoard.Column: CGRect] = [:]
 
     // 拖动（`BoardDrag.swift`）。几何不触发重绘；读得到的只有下面几样，手指每挪一下只写 `point`。
@@ -56,6 +58,8 @@ nonisolated struct BoardArrival: Equatable {
     @ObservationIgnored var asking = false {
         didSet { if oldValue, !asking, held?.phase == .pending { pend() } }
     }
+    /// 放下后等库的那一段（`pend`）。
+    @ObservationIgnored var waiting: Task<Void, Never>?
     var held: Held?
     var float: Float?
     /// 浮着的那张的卡心。
@@ -67,7 +71,13 @@ nonisolated struct BoardArrival: Equatable {
 
     /// 新来或离开看板的卡这一趟不是飞，还没飞完的记录也撤掉，进出照常淡。
     fileprivate func read(_ board: TaskBoard, from before: TaskBoard) {
-        let moved = board.moved(from: before), now = ContinuousClock.now
+        var moved = board.moved(from: before)
+        let now = ContinuousClock.now
+        // 放下后悬着的那张换了身份（`TaskBoard.renamed`）：手里这张跟着认新的，不然新的那张在原处露出来、手里这张还悬着；连列也换了的算换列
+        if let held, held.phase == .pending, let new = board.renamed(held.id, from: before) {
+            self.held?.id = new.id
+            if new.to != new.from { moved[new.id] = new.from }
+        }
         var from: [String: Departure] = moved.reduce(into: [:]) { departures, move in
             guard let frame = frame(of: move.key) else { return }
             departures[move.key] = Departure(column: move.value, frame: frame, at: now)
@@ -135,16 +145,21 @@ private struct BoardFlight: ViewModifier {
     @Environment(\.boardMoves) private var moves
     @Environment(\.boardLane) private var lane
     @Environment(\.boardRow) private var row
+    @State private var token = UUID()
 
     func body(content: Content) -> some View {
-        if let moves, lane != nil {
+        if let moves, let lane {
             // 拖着的那张原处只留空位（`BoardDrag`）
             let held = moves.held?.id == id
             content
                 .opacity(held ? 0 : 1)
                 .background { if held { BoardWell() } }
+                // 手机的行里不在卡上记，由小列算（`boardStack`）
+                .onGeometryChange(for: CGRect.self) { $0.frame(in: .scrollView) } action: { if !row { moves.frames[id] = (lane, $0) } }
+                // 按记号认：卡换列时新的那份先出现、旧的那份后撤，旧的撤掉时不把新的也摘了
+                .onAppear { if !row { moves.shown[id] = token } }
+                .onDisappear { if moves.shown[id] == token { moves.shown[id] = nil } }
                 .containerValue(\.boardFlight, id)
-                .boardSpot(row ? nil : id)
                 .transition(.board(id, moves.departures))
         } else {
             content
@@ -153,35 +168,48 @@ private struct BoardFlight: ViewModifier {
 }
 
 extension ContainerValues {
-    /// 手机的行按它认格里排的是哪张卡（`BoardRowLane`）。
+    /// 手机的行按它认格里排的是哪张卡（`boardStack`）。
     @Entry var boardFlight: String?
 }
 
-extension View {
-    /// 记这张卡此刻排在哪（`BoardMoves.frames`）。列里挂在卡上（`boardFlight`）；手机的行挂在格上：行把卡一格一格重新摆（`Group(subviews:)`），
-    /// 卡换小列时挂在卡上的那一份不报新位置（实测：卡的状态跟着卡走、不重建，位置却是另一格的），留着的旧框正好是挪进它原处那张卡的位置，
-    /// 按住那张卡拎起来的是它。
-    func boardSpot(_ id: String?) -> some View { modifier(BoardSpot(id: id)) }
+extension BoardMoves {
+    struct Stack {
+        let lane: TaskBoard.Column
+        var frame = CGRect.null
+        /// 从上到下各格是哪张卡（飞行身份）；不是卡的格（"更早做完的"那一叠、空着的说明）为 nil。
+        var ids: [String?] = []
+        /// 一格的高，与格到格的间距。
+        var height: CGFloat = 0
+        var pitch: CGFloat = 0
+    }
 }
 
-private struct BoardSpot: ViewModifier {
-    let id: String?
+extension View {
+    /// 手机的行里一小列（`BoardRowLane`）记它排在哪、里面是哪几张：行里各格一样高，卡的框按第几格算（`BoardMoves.laid`）。
+    /// 不挂在卡上记：行把卡一格一格重新摆（`Group(subviews:)`），卡换小列时它身上那一份不报新位置（实测：卡的状态跟着卡走、位置却是另一格的），
+    /// 留着的旧框正好盖在挪进它原处的那张卡上，按住那张拎起来的是它。也不挂在格上记：格上多套一层，卡换行时的飞行就丢了，旧的那张在原处露两帧（实测）。
+    func boardStack(_ ids: [String?], in lane: TaskBoard.Column, height: CGFloat, pitch: CGFloat) -> some View {
+        modifier(BoardStackSpot(ids: ids, lane: lane, height: height, pitch: pitch))
+    }
+}
+
+private struct BoardStackSpot: ViewModifier {
+    let ids: [String?]
+    let lane: TaskBoard.Column
+    let height: CGFloat
+    let pitch: CGFloat
     @Environment(\.boardMoves) private var moves
-    @Environment(\.boardLane) private var lane
     @State private var token = UUID()
 
     func body(content: Content) -> some View {
-        if let id, let moves, let lane {
-            content
-                .onGeometryChange(for: CGRect.self) { $0.frame(in: .scrollView) } action: { moves.frames[token] = (lane, $0) }
-                .onAppear { moves.shown[id] = token }
-                .onDisappear {
-                    moves.frames[token] = nil
-                    if moves.shown[id] == token { moves.shown[id] = nil }
-                }
-        } else {
-            content
-        }
+        content
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .scrollView) } action: { moves?.stacks[token, default: BoardMoves.Stack(lane: lane)].frame = $0 }
+            .onChange(of: [AnyHashable(ids), AnyHashable(height), AnyHashable(pitch)], initial: true) {
+                moves?.stacks[token, default: BoardMoves.Stack(lane: lane)].ids = ids
+                moves?.stacks[token]?.height = height
+                moves?.stacks[token]?.pitch = pitch
+            }
+            .onDisappear { moves?.stacks[token] = nil }
     }
 }
 

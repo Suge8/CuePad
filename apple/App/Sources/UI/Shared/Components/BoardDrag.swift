@@ -13,7 +13,8 @@ extension BoardMoves {
         enum Phase { case dragging, settling, pending }
 
         let card: DraggedCard
-        let id: String
+        /// 飞行身份；悬着时卡换了身份就跟着换（`BoardMoves.read`）。
+        var id: String
         let size: CGSize
         var phase = Phase.dragging
     }
@@ -51,8 +52,15 @@ extension BoardMoves {
     /// 从推进中拖回待办的卡在待办里垫的那一格空位，记它的框用的身份。
     static let well = "well"
 
-    /// 卡在它那一列滚动区里的框；没排出来的没有（`shown`）。
-    private func laid(of id: String) -> (lane: TaskBoard.Column, frame: CGRect)? { shown[id].flatMap { frames[$0] } }
+    /// 卡在它那一列滚动区里的框；没排出来的没有（`shown`，手机的行里是 `stacks`）。
+    private func laid(of id: String) -> (lane: TaskBoard.Column, frame: CGRect)? {
+        if shown[id] != nil { return frames[id] }
+        for stack in stacks.values where !stack.frame.isNull {
+            guard let cell = stack.ids.firstIndex(of: id) else { continue }
+            return (stack.lane, CGRect(x: stack.frame.minX, y: stack.frame.minY + CGFloat(cell) * stack.pitch, width: stack.frame.width, height: stack.height))
+        }
+        return nil
+    }
 
     func frame(of id: String) -> CGRect? {
         guard let card = laid(of: id), let lane = lanes[card.lane] else { return nil }
@@ -264,11 +272,13 @@ extension BoardMoves {
     }
 
     func pend() {
-        guard let held else { return }
-        self.held?.phase = .pending
-        Task {
+        guard held != nil else { return }
+        held?.phase = .pending
+        // 上一次的等待作废：同一张卡紧接着又放下一次（或问完重新等）时，不被上一次的到点收走
+        waiting?.cancel()
+        waiting = Task {
             try? await Task.sleep(for: Self.grace)
-            guard !asking, self.held?.id == held.id, self.held?.phase == .pending else { return }
+            guard !Task.isCancelled, !asking else { return }
             if placed != nil { withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { placed = nil } }
             settle()
         }
@@ -283,6 +293,7 @@ extension BoardMoves {
     }
 
     private func clear() {
+        waiting?.cancel()
         held = nil
         float = nil
         hand = nil
