@@ -114,6 +114,8 @@ final class Workspace {
     var sessionAsk: SessionAsk?
     /// 看板上放下的卡在等的、还没办完的事（`answer`）。
     var answering = 0
+    /// 放下的卡问的那一句被取消了几回（`declineDrop`）。
+    var dropDeclines = 0
     /// 正显示某张卡完成圈（或看板卡）的视图，后出现的在后（`completionAsks(claiming:)`）。
     @ObservationIgnored var completionClaims: [UUID: [UUID]] = [:]
     @ObservationIgnored var closedTask: (task: UUID, at: ContinuousClock.Instant)?

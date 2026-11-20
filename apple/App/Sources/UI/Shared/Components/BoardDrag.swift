@@ -286,9 +286,20 @@ extension BoardMoves {
         waiting = Task {
             try? await Task.sleep(for: Self.grace)
             guard !Task.isCancelled, !asking else { return }
-            if placed != nil { withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { placed = nil } }
-            settle()
+            giveUp()
         }
+    }
+
+    /// 问的那一句被取消了（`Workspace.declineDrop`）：不会有写入，悬着的卡不等 `grace`，这就回去。
+    func decline() {
+        guard held?.phase == .pending else { return }
+        waiting?.cancel()
+        giveUp()
+    }
+
+    private func giveUp() {
+        if placed != nil { withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { placed = nil } }
+        settle()
     }
 
     /// 放下后悬着的那张换了列：它从手里（松手的地方）起飞，不从原处。`lands`：它落进了哪一列。

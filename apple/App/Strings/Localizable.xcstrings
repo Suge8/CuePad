@@ -5277,22 +5277,6 @@
         }
       }
     },
-    "下一步 %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Next: %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "下一步 %@"
-          }
-        }
-      }
-    },
     "下载中 %@" : {
       "localizations" : {
         "en" : {
@@ -13041,22 +13025,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "开始"
-          }
-        }
-      }
-    },
-    "开始这一步" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Start This Step"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "开始这一步"
           }
         }
       }

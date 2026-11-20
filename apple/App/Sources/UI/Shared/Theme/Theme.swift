@@ -28,8 +28,9 @@ extension Palette {
 struct PaletteProvider: ViewModifier {
     func body(content: Content) -> some View {
         content.withPalette()
-            // 验收时整个窗口按"减弱动态效果"画（`-CuePadReduceMotion`）：不碰系统设置，Mac 上那是用户这台机器的全局设置
+            // 验收时整个窗口按"减弱动态效果"、"降低透明度"画（`-CuePadReduceMotion`、`-CuePadReduceTransparency`）：不碰系统设置，Mac 上那是用户这台机器的全局设置
             .transformEnvironment(\._accessibilityReduceMotion) { if DebugHooks.preset.reducesMotion { $0 = true } }
+            .transformEnvironment(\._accessibilityReduceTransparency) { if DebugHooks.preset.reducesTransparency { $0 = true } }
             .transformEnvironment(\.dynamicTypeSize) { if DebugHooks.preset.largestType { $0 = .accessibility5 } }
             .transformEnvironment(\._colorSchemeContrast) { if DebugHooks.preset.highContrast { $0 = .increased } }
     }

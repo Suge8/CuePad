@@ -38,6 +38,7 @@ struct BoardFloat: View {
         .sensoryFeedback(.impact(weight: .light), trigger: moves?.held?.phase) { $0 == .dragging && $1 != .dragging }
         .onChange(of: drags?.current) { if drags?.current == nil { moves?.systemEnded() } }
         .onChange(of: workspace.asksAboutDrop, initial: true) { moves?.asking = workspace.asksAboutDrop }
+        .onChange(of: workspace.dropDeclines) { moves?.decline() }
     }
 
     /// 只这一层读手指的位置：每挪一下重算的是位移，不是卡。

@@ -177,7 +177,6 @@ private struct BubbleLayer: View {
                     .transition(placement.transition(reduceMotion: reduceMotion))
                 }
             }
-            .coordinateSpace(.named(BubbleStage.space))
         }
         // 贴在底部的纸伸进 Home 指示条那一截：与屏幕圆角同心
         .ignoresSafeArea(source == .bottom ? .all : .keyboard, edges: source == .bottom ? .bottom : .all)

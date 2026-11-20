@@ -54,6 +54,7 @@ extension DebugHooks.Preset {
         modelMenu = args.layoutOpts.modelMenu
         cueFocus = args.cueOpts.focus
         reducesMotion = args.layoutOpts.reduceMotion
+        reducesTransparency = args.layoutOpts.reduceTransparency
         largestType = args.layoutOpts.largestType
         highContrast = args.layoutOpts.highContrast
         readerOn = args.layoutOpts.reader

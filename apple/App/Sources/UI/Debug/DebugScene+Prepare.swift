@@ -211,12 +211,41 @@ extension DebugScene {
         later(.milliseconds(300)) { proxy.scrollTo(OlderGroup.anchor, anchor: UnitPoint(x: 0.5, y: 0.35)) }
     }
 
+    private static func lengthen(_ task: Card, in store: CueStore) async throws {
+        guard try await store.children(of: task.id).filter(\.isTask).count < 12 else { return }
+        let line = String(localized: "跑一下 scheduler 的测试，找出 5 人以上时谁被排到了最前\n先别改代码，告诉我原因和改法", table: "Demo")
+        try await store.updateCard(task.id) { $0.rest = Array(repeating: line, count: 8).joined(separator: "\n") }
+        for index in 1...12 { _ = try await store.createTask(String(localized: "检查发布事项 \(index)", table: "Demo"), under: task.id) }
+    }
+
     static func openTask(_ workspace: Workspace, preferred: (Card) -> Bool) async {
         await running("打开任务气泡") {
             let tasks = try await workspace.services.store.tasks(.inProgress, .todo).flatMap(\.tasks)
             let named = args.task.flatMap { prefix in tasks.first { $0.title.hasPrefix(prefix) } }
-            if let task = named ?? tasks.first(where: preferred) ?? tasks.first { workspace.openTask(task) }
+            if let task = named ?? tasks.first(where: preferred) ?? tasks.first {
+                if args.longTask {
+                    try await lengthen(task, in: workspace.services.store)
+                    later(.seconds(2)) {}  // 等气泡滚到一半（`MiddleScroll`）再就绪
+                }
+                workspace.openTask(task)
+            }
         }
+    }
+}
+
+/// 内容读到之后滚到一半（`-CuePadLongTask`）：内容每长高一次，停一下再滚。
+struct MiddleScroll: ViewModifier {
+    @State private var position = ScrollPosition()
+    @State private var overflow: CGFloat = 0
+
+    func body(content: Content) -> some View {
+        content
+            .scrollPosition($position)
+            .onScrollGeometryChange(for: CGFloat.self) { $0.contentSize.height - $0.containerSize.height } action: { overflow = $1 }
+            .task(id: overflow) {
+                guard DebugScene.args.longTask, overflow > 0, await Task.wait(for: .seconds(0.3)) else { return }
+                position.scrollTo(y: overflow / 2)
+            }
     }
 }
 #endif

@@ -160,9 +160,11 @@ private struct CompletionAsks: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .agentBusyDialog(busy?.session, sleeps: busy?.sleeps ?? true, isPresented: asking { if case .agent = $0 { true } else { false } }, confirm: confirm)
+            .agentBusyDialog(
+                busy?.session, sleeps: busy?.sleeps ?? true, isPresented: asking { if case .agent = $0 { true } else { false } },
+                confirm: confirm, cancel: workspace.declineDrop)
             .ask(.verbatim(TaskCopy.openSubtasks(steps)), isPresented: asking { if case .steps = $0 { true } else { false } },
-                 button: DialogButton(title: "全部完成", action: confirm))
+                 button: DialogButton(title: "全部完成", action: confirm), cancel: workspace.declineDrop)
             .onAppear {
                 guard case .claim(let task) = spot else { return }
                 workspace.completionClaims[task, default: []].append(token)
