@@ -228,7 +228,7 @@ struct BoardCardLayout<Title: View, Facts: View, Trailing: View>: View {
             Spacer(minLength: 0)
             if advancing { BoardVitals(pulse: pulse) } else { HStack(spacing: Spacing.glyph) { facts }.fixedSize() }
             // 就地处理的那颗浮在卡上（`boardRescue`），这里只留出它的宽
-            if advancing, let session, SessionRescue.of(session) != nil { BoardRescue(session: session).hidden().frame(height: 0) }
+            if advancing, let session, SessionRescue.of(session) != nil { BoardRescue(session: session, reserves: true).hidden().frame(height: 0) }
         }
         .font(TaskMetrics.caption).lineLimit(1)
     }

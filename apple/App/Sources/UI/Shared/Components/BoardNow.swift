@@ -49,8 +49,7 @@ struct BoardWord: View {
     }
 }
 
-/// 卡脚右端：此刻这个状态多久了；上下文只在吃紧时画（宽裕的每张卡都画一圈，一列全是圈）。
-/// 状态词已经写了百分比、或卡脚上已经是"现在压缩"时不再画：同一件事不说两遍。
+/// 卡脚右端：此刻这个状态多久了；上下文只在吃紧时画（宽裕的每张卡都画一圈，一列全是圈；状态词已经写了百分比时也不再画）。
 struct BoardVitals: View {
     let pulse: BoardPulse
     @Environment(\.palette) private var palette
@@ -60,8 +59,7 @@ struct BoardVitals: View {
 
     private var meter: ContextMeter? {
         if case .context = pulse.word { return nil }
-        guard let session = pulse.session, SessionRescue.of(session) != .compact else { return nil }
-        return session.context.flatMap(ContextMeter.init).flatMap { $0.level == .roomy ? nil : $0 }
+        return pulse.session?.context.flatMap(ContextMeter.init).flatMap { $0.level == .roomy ? nil : $0 }
     }
 
     var body: some View {
