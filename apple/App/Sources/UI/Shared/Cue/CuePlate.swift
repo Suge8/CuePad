@@ -17,10 +17,10 @@ struct PlateStyle {
     #if os(iOS)
     static let fill = PlateStyle(
         width: nil, height: CueHeader.height, face: 48, inset: (CueHeader.height - 48) / 2, nameGap: 12, lineGap: 1,
-        name: .title3.weight(.bold), line: .subheadline, largestType: .xLarge)
+        name: Typography.cueCardName, line: Typography.secondary, largestType: .xLarge)
     static let compact = PlateStyle(
         width: 244, height: CueHeader.height, face: 40, inset: 8, nameGap: 10, lineGap: 2,
-        name: .subheadline.weight(.semibold), line: .caption, largestType: FloatingHeaderLayout.largestType)
+        name: Typography.cueCardNameCompact, line: Typography.caption, largestType: FloatingHeaderLayout.largestType)
     #else
     static let column = PlateStyle(
         width: nil, height: 52, face: 44, inset: 4, nameGap: 10, lineGap: 1,
