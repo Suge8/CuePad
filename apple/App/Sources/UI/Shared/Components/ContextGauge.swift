@@ -65,7 +65,7 @@ struct ContextGauge: View {
                 Text("快满了。Agent 会在到顶前自动压缩，也可以现在压缩。")
                     .font(Typography.meta).foregroundStyle(palette.ink2)
                     .fixedSize(horizontal: false, vertical: true)
-                Button("现在压缩", icon: .compact, action: compact)
+                Button("现在压缩", icon: .compacting, action: compact)
                     .buttonStyle(ControlButtonStyle(size: .compact))
             }
         }
