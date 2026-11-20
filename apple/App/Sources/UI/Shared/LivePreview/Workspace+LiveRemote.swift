@@ -94,21 +94,8 @@ extension Workspace {
         for await _ in activations { await returnFromMac() }
     }
 
-    /// 人回到 CuePad 了：用 UU 远程看过的会话（`AppSettings.remoteViewing`），请那台 Mac 把铺满的预览放回去（`LiveSignal.back`）。
-    /// 刚回来时中转多半还在重连，没发出去的每秒再试；试 `returnTries` 次还发不出就不再管（Mac 的预览栏上有"放回右半"）。
-    /// 不在活动状态（被推送在后台叫醒、又切走了）不发：他可能还在 UU 里看着。
-    func returnFromMac() async {
-        for _ in 0..<Self.returnTries {
-            guard UIApplication.shared.applicationState == .active else { return }
-            for (sessionID, host) in services.settings.remoteViewing {
-                if await services.liveRemote.back(sessionID, on: host) { services.settings.remoteViewing[sessionID] = nil }
-            }
-            guard !services.settings.remoteViewing.isEmpty, (try? await Task.sleep(for: .seconds(1))) != nil else { return }
-        }
-        services.settings.remoteViewing = [:]
-    }
-
-    static let returnTries = 30
+    /// 人回到 CuePad 了：用 UU 远程看过的会话，请那台 Mac 把铺满的预览放回去。
+    func returnFromMac() async { await services.liveRemote.comeBack() }
 
     /// 点一个元素挂进回复框：宽屏回复框就在左边；手机上先把预览收回，回复框接过焦点。
     func pickElement() {

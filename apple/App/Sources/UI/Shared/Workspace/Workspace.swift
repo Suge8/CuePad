@@ -118,8 +118,6 @@ final class Workspace {
     @ObservationIgnored var closedTask: (task: UUID, at: ContinuousClock.Instant)?
     @ObservationIgnored var press = PressPoint()
     @ObservationIgnored var apps = ExternalApps.system
-    /// 在 UU 里选电脑的这一次（`bind`）是为了看哪个会话的活预览：选完回来远控时接着请 Mac 亮出它。只在内存里：选的时候被系统收掉，回来只远控。
-    @ObservationIgnored var remoteBinding: (nonce: String, viewing: String)?
     #if os(iOS)
     var moreCard: CardMoreRequest?
     #endif

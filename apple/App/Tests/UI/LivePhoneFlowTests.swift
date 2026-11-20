@@ -278,12 +278,16 @@ struct LivePhoneFlowTests {
             await workspace.returnFromMac()
             #expect(mac.returned.isEmpty, "选完电脑回来不算看完回来")
             let nonce = try #require(app.services.settings.remotePending.keys.first)
-            await workspace.remoteBound(device: "enc-x", error: nil, nonce: nonce)
+            // 回跳由 iPad 的另一个窗口接到也一样
+            let other = Workspace(services: app.services)
+            other.apps = workspace.apps
+            await other.remoteBound(device: "enc-x", error: nil, nonce: nonce)
             #expect(mac.revealed == ["live"])
             #expect(opened.count == 2 && opened.last?.revealed == 1 && opened.last?.url.query()?.contains("anonymous_device_id=enc-x") == true, "选完接着远控，拉起前请求已发出")
 
+            mac.bounces = 1
             await workspace.returnFromMac()
-            #expect(mac.returned == ["live"], "回到 CuePad：请 Mac 把铺满的预览放回去")
+            #expect(mac.returned == ["live"] && mac.bounces == 0, "回到 CuePad：请 Mac 把铺满的预览放回去；中转退回来的那一句不算，再请一次")
             await workspace.returnFromMac()
             #expect(mac.returned == ["live"], "只请一次")
 

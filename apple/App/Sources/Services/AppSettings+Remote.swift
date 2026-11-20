@@ -5,6 +5,7 @@ extension AppSettings {
         static let devices = "remoteDevices"
         static let lastHost = "remoteLastHost"
         static let pending = "remotePending"
+        static let pendingViewing = "remotePendingViewing"
         static let viewing = "remoteViewing"
     }
 
@@ -26,7 +27,14 @@ extension AppSettings {
         set { defaults.set(newValue, forKey: RemoteKey.pending) }
     }
 
-    /// 用 UU 远程到 Mac 上看着活预览的会话 → 那台 Mac：回到 CuePad 时请它把铺满的预览放回去（`Workspace.returnFromMac`）。
+    /// 那一次绑定是为了看哪个会话的活预览（`Workspace.operate(on:viewing:)`），与 `remotePending` 同写同清。
+    /// 也记在偏好里：回跳可能由 iPad 的另一个窗口、冷启动后的这一个接到。
+    var remotePendingViewing: String? {
+        get { defaults.string(forKey: RemoteKey.pendingViewing) }
+        set { defaults.set(newValue, forKey: RemoteKey.pendingViewing) }
+    }
+
+    /// 用 UU 远程到 Mac 上看着活预览的会话 → 那台 Mac：回到 CuePad 时请它把铺满的预览放回去（`LiveRemote.comeBack`）。
     /// 记在偏好里：看的那段时间系统可能把 CuePad 收掉。
     var remoteViewing: [String: String] {
         get { defaults.dictionary(forKey: RemoteKey.viewing) as? [String: String] ?? [:] }

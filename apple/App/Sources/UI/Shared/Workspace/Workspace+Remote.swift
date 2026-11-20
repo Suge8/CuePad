@@ -32,21 +32,18 @@ extension Workspace {
     private func bind(_ host: String, viewing sessionID: String? = nil) async {
         let nonce = UUID().uuidString
         services.settings.remotePending = [nonce: host]
-        remoteBinding = sessionID.map { (nonce, $0) }
+        services.settings.remotePendingViewing = sessionID
         await launch(MacRemote.authorize(nonce: nonce))
     }
 
     /// 远控这台 Mac。要看的是某个会话的活预览时：拉起前先请 Mac 把它铺满亮出来（`LiveRemote.show`，最多等 `showWait`，发不出不拦），
-    /// 并记下来（`AppSettings.remoteViewing`），回到 CuePad 时请它放回去（`returnFromMac`）。
+    /// 回到 CuePad 时请它放回去（`LiveRemote.comeBack`）。
     private func control(_ device: String, host: String, viewing sessionID: String? = nil) async {
         #if os(iOS)
-        if let sessionID {
-            await services.liveRemote.show(sessionID, on: host)
-            services.settings.remoteViewing[sessionID] = host
-        }
+        if let sessionID { await services.liveRemote.show(sessionID, on: host) }
         let launched = await launch(MacRemote.control(device, host: host))
         // 没拉起来（UU 卸了）人还在这里：这就请它放回去
-        if !launched, sessionID != nil { await returnFromMac() }
+        if !launched, sessionID != nil { await services.liveRemote.comeBack() }
         #else
         await launch(MacRemote.control(device, host: host))
         #endif
@@ -63,9 +60,9 @@ extension Workspace {
 
     func remoteBound(device: String?, error: String?, nonce: String?) async {
         guard let nonce, let host = services.settings.remotePending[nonce] else { return }
+        let viewing = services.settings.remotePendingViewing
         services.settings.remotePending = [:]
-        let viewing = remoteBinding?.nonce == nonce ? remoteBinding?.viewing : nil
-        remoteBinding = nil
+        services.settings.remotePendingViewing = nil
         if let device {
             services.settings.remoteDevices[host] = device
             await control(device, host: host, viewing: viewing)
