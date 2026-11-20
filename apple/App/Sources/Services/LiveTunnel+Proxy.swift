@@ -57,7 +57,26 @@ extension LiveTunnel {
         private let listener: NWListener
         private let route = Mutex<Route?>(nil)
         /// 手机自己回环上照搬的口（`mirror`），按端口记着。
-        private let mirrors = Mutex<[UInt16: [NWListener]]>([:])
+        private let mirrors = Mutex<[UInt16: Mirror]>([:])
+        /// 照搬的口开好了、开不了有变化：回环地址的页面要它的口开好了才载（`LiveLink`）。
+        let mirrored: AsyncStream<Mirrored>
+        private let mirroring: AsyncStream<Mirrored>.Continuation
+
+        /// `open`：两族的监听口都起来了。`taken`：开不了，这台设备上有别人占着（另一个窗口的预览、别的应用），每 `remirror` 再试。
+        struct Mirrored: Equatable, Sendable {
+            var open: Set<UInt16> = []
+            var taken: Set<UInt16> = []
+        }
+
+        private struct Mirror {
+            /// 这一次开的：重开过、不要了之后到的旧回调不算。
+            let id = UUID()
+            var listeners: [NWListener] = []
+            var ready = 0
+            var failed = false
+        }
+
+        private static let remirror = Duration.seconds(3)
         /// 隧道不通了（票据不认、Mac 的口连不上、连着的被网络打断）：`LiveLink` 重新探路。
         let broken: AsyncStream<Break>
         private let report: AsyncStream<Break>.Continuation
@@ -67,6 +86,7 @@ extension LiveTunnel {
             parameters.requiredLocalEndpoint = .hostPort(host: .ipv4(.loopback), port: .any)
             listener = try NWListener(using: parameters)
             (broken, report) = AsyncStream.makeStream(bufferingPolicy: .bufferingNewest(1))
+            (mirrored, mirroring) = AsyncStream.makeStream(bufferingPolicy: .bufferingNewest(1))
         }
 
         func start() async throws -> UInt16 {
@@ -96,6 +116,7 @@ extension LiveTunnel {
             listener.cancel()
             mirror([])
             report.finish()
+            mirroring.finish()
         }
 
         /// 把 Mac 放行的这几个口照搬到手机自己的回环上（同一个端口号），接进来的原样送进隧道，到 Mac 的 localhost 同号口。
@@ -104,21 +125,29 @@ extension LiveTunnel {
         /// 同源、安全上下文、页面里写死的 localhost:端口（另一个口上的接口、热更新的连接）都照旧。同 SSH 与编辑器远程开发的端口转发。
         /// 回环口带不了口令：预览开着的这段时间，手机上别的应用连得上这几个口，同 Mac 上本机进程连得上开发服务一样。
         /// 模拟器不开：它和 Mac 共用回环，那个口就是开发服务自己（开了 Mac 连回 localhost 会连到这里，绕成圈）。
-        /// 口被手机上别的应用占着的开不了，记一条日志，那个口上的页面出不来。
+        /// 回环口是整台设备共用的：被占着的（iPad 另一个窗口的预览开着同号口、别的应用）开不了，那个口上的页面不载（载了连到的是占着它的别人），
+        /// 报在 `mirrored` 里，占着的走了自己接上。
         func mirror(_ ports: Set<UInt16>) {
             #if !targetEnvironment(simulator)
             let gone = mirrors.withLock { mirrors in
                 let gone = mirrors.filter { !ports.contains($0.key) }
                 for port in gone.keys { mirrors[port] = nil }
                 for port in ports where mirrors[port] == nil { mirrors[port] = listen(port) }
-                return gone.values.flatMap(\.self)
+                mirroring.yield(Self.mirrored(mirrors))
+                return gone.values.flatMap(\.listeners)
             }
             for listener in gone { listener.cancel() }
             #endif
         }
 
-        private func listen(_ port: UInt16) -> [NWListener] {
-            [NWEndpoint.Host.ipv4(.loopback), .ipv6(.loopback)].compactMap { host -> NWListener? in
+        private static func mirrored(_ mirrors: [UInt16: Mirror]) -> Mirrored {
+            Mirrored(open: Set(mirrors.filter { !$0.value.failed && $0.value.ready == 2 }.keys), taken: Set(mirrors.filter(\.value.failed).keys))
+        }
+
+        private func listen(_ port: UInt16, again: Bool = false) -> Mirror {
+            var mirror = Mirror()
+            let id = mirror.id
+            mirror.listeners = [NWEndpoint.Host.ipv4(.loopback), .ipv6(.loopback)].compactMap { host -> NWListener? in
                 let parameters = NWParameters.tcp
                 parameters.requiredLocalEndpoint = .hostPort(host: host, port: .init(rawValue: port)!)
                 parameters.allowLocalEndpointReuse = true
@@ -128,13 +157,38 @@ extension LiveTunnel {
                     let route = route.withLock { $0 }
                     Task { await Self.forward(connection, port: port, route: route, report: self.report) }
                 }
-                listener.stateUpdateHandler = { [weak listener] state in
-                    guard case .failed(let error) = state else { return }
-                    log.notice("活预览在手机回环上开不了 \(port) 口：\(String(describing: error), privacy: .public)")
-                    listener?.cancel()
+                listener.stateUpdateHandler = { [weak self] state in
+                    switch state {
+                    case .ready: self?.settle(port, id, failed: false)
+                    case .failed(let error):
+                        if !again { log.notice("活预览在手机回环上开不了 \(port) 口：\(String(describing: error), privacy: .public)") }
+                        self?.settle(port, id, failed: true)
+                    default: break
+                    }
                 }
                 listener.start(queue: LiveTunnel.queue)
                 return listener
+            }
+            return mirror
+        }
+
+        /// 一个监听口起来了或开不了。开不了的整口关掉，过 `remirror` 还要它就重开。
+        private func settle(_ port: UInt16, _ id: UUID, failed: Bool) {
+            let closing = mirrors.withLock { mirrors -> [NWListener]? in
+                guard var mirror = mirrors[port], mirror.id == id, !mirror.failed else { return nil }
+                if failed { mirror.failed = true } else { mirror.ready += 1 }
+                mirrors[port] = mirror
+                mirroring.yield(Self.mirrored(mirrors))
+                return failed ? mirror.listeners : nil
+            }
+            guard let closing else { return }
+            for listener in closing { listener.cancel() }
+            LiveTunnel.queue.asyncAfter(deadline: .now() + Self.remirror.seconds) { [weak self] in
+                guard let self else { return }
+                mirrors.withLock { mirrors in
+                    guard mirrors[port]?.id == id else { return }
+                    mirrors[port] = listen(port, again: true)
+                }
             }
         }
 
@@ -143,6 +197,7 @@ extension LiveTunnel {
                 try await local.established(within: .seconds(5))
                 // 还没有去 Mac 的路：关掉，网页视图当连不上，`LivePreview.watch` 下一秒再试
                 guard let route else { return local.cancel() }
+                // 连 Mac 上哪个地址由 Mac 按会话定（`Workspace.admitLive`），这里只说得出端口
                 let remote = try await route.dial(host: "localhost", port: port, report: report)
                 Splice(local, remote) { remoteFailed in if remoteFailed { report.yield(.init(route: route.id, answer: nil)) } }.start()
             } catch {

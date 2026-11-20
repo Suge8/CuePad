@@ -31,6 +31,28 @@ final class LiveLink {
     /// 代理此刻用的路（`LiveTunnel.Route.id`）：只理会这条路断了的报告。
     @ObservationIgnored private var route: UUID?
     @ObservationIgnored private var pages: [URL] = []
+    /// 手机回环上照搬的口（`LiveTunnel.Proxy.mirror`）开好了哪些、哪些被占着。
+    private var mirrored = LiveTunnel.Proxy.Mirrored()
+
+    /// 这一页在这台设备的回环上要照搬的口；不是回环地址的（Mac 的局域网地址，走代理）是 nil。
+    private static func mirror(_ url: URL) -> UInt16? {
+        guard let host = url.host(percentEncoded: false), LiveTunnel.Proxy.isMac(host, addresses: []) else { return nil }
+        return UInt16(exactly: url.port ?? (url.scheme == "https" ? 443 : 80))
+    }
+
+    /// 可以载的页面：回环地址的要它的口照搬好了才算。没开好就载，连到的是这台设备上占着那个口的别人（另一个窗口的预览、别的应用）。
+    private var served: [URL] {
+        #if targetEnvironment(simulator)
+        pages  // 模拟器不照搬：它和 Mac 共用回环
+        #else
+        pages.filter { Self.mirror($0).map(mirrored.open.contains) ?? true }
+        #endif
+    }
+
+    /// 连上了 Mac，这一页的口却在这台设备上被占着。
+    func taken(_ address: URL?) -> LiveTrouble? {
+        state == .ready && address.flatMap(Self.mirror).map(mirrored.taken.contains) == true ? .taken : nil
+    }
 
     static let retry = Duration.seconds(3)
     /// 连一个地址最多等多久：同一网段里连不上多半是路由器不让设备互连（访客网络），不再等下去。
@@ -51,6 +73,7 @@ final class LiveLink {
         await withDiscardingTaskGroup { group in
             group.addTask { await remote.watch(sessionID, on: host, open: true) }
             group.addTask { await self.mend(broken, preview, sessionID: sessionID, remote: remote, key: key) }
+            group.addTask { await self.remirror(preview) }
             for await seen in Observations({ Seen(answer: remote.answers[sessionID], offline: remote.offline.contains(sessionID)) }) {
                 follow(seen, preview, key: key)
             }
@@ -62,6 +85,14 @@ final class LiveLink {
                       key: @escaping @MainActor () -> SymmetricKey?) async {
         for await report in broken where report.route == route {
             if report.answer == .ticket { remote.renew(sessionID) } else if let door { connect(door, preview, key: key) }
+        }
+    }
+
+    /// 照搬的口开好了、被占着有变化：能载的页面跟着变。
+    private func remirror(_ preview: LivePreview) async {
+        for await next in proxy.mirrored where next != mirrored {
+            mirrored = next
+            if state == .ready { preview.serve(served) }
         }
     }
 
@@ -80,7 +111,7 @@ final class LiveLink {
         pages = answer.pages
         proxy.mirror(Set(answer.ports.compactMap { UInt16(exactly: $0) }.filter { $0 != 0 }))
         preview.follow(answer, showing: true)
-        if state == .ready { preview.serve(pages) }
+        if state == .ready { preview.serve(served) }
         guard let next = answer.door, next != door else { return }
         door = next
         connect(next, preview, key: key)
@@ -110,7 +141,7 @@ final class LiveLink {
                     route = next.id
                     proxy.use(next)
                     preview.tunneled = addresses
-                    preview.linked(pages)
+                    preview.linked(served)
                     state = .ready
                     return
                 case .trouble(.denied) where UIApplication.shared.applicationState != .active:
