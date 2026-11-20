@@ -18,8 +18,8 @@ struct BoardColumn: View {
     @Environment(\.boardMoves) private var moves
     @Environment(\.cardDrags) private var drags
     @State private var targeted = false
-    /// 待办里拖着的卡会落在第几张之前（`TaskBoard.slots` 里离指针最近的一处）；各卡的位置只在拖着时有。
-    @State private var slot: Int?
+    /// 待办里拖着的卡会落在哪道缝（`TaskBoard.slots` 里离指针最近的一处）；各卡的位置只在拖着时有。
+    @State private var seam: Seam?
     @State private var frames: [UUID: CGRect] = [:]
     @State private var opened: PreviewOpening?
     #if os(iOS)
@@ -32,15 +32,15 @@ struct BoardColumn: View {
             #if os(iOS)
             .sheet(isPresented: $listsEarlier) { earlierList }
             #endif
-            .overlay(alignment: .topLeading) { if lit, let slot, let at = position(of: slot) { mark(at: at).transition(.opacity) } }
-            .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: slot)
+            .overlay(alignment: .topLeading) { if lit, let seam { mark(seam.line).transition(.opacity) } }
+            .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: seam)
             .coordinateSpace(.named(space))
             // 一列只这一个落点：卡上不另挂（里外两层互相抢，线与底时有时无）。不接的卡（`accepts`）拖过来不亮、不画线，放下也不动
             .cardDrop(isEnabled: drags?.current.map(accepts) == true, hover: { point in
                 targeted = point != nil
-                slot = point.flatMap(slot)
+                seam = point.flatMap(seam)
             }) { card, point in
-                if let drop = board.drop(card, into: column, at: slot(at: point)) { workspace.drop(drop) }
+                if let drop = board.drop(card, into: column, at: seam(at: point)?.slot) { workspace.drop(drop) }
             }
             .modifier(ShotPresenter(column: column, opened: $opened))
             // 有卡飞进来的那一列（行）排在别的列上面：往左、往上飞的卡不从别的列的卡下面钻过去（`boardFlight`）
@@ -51,7 +51,7 @@ struct BoardColumn: View {
     @ViewBuilder private var lane: some View {
         #if os(iOS)
         if row {
-            BoardRowLane(column: column, count: board.count(column), archives: archives, targeted: lit, rewind: rewind, tiers: rowTiers) {
+            BoardRowLane(column: column, count: board.count(column), archives: archives, targeted: lit, rewind: rewind) {
                 if adding && column == .todo { newTask.transition(.opacity) }
             } content: {
                 content
@@ -90,41 +90,51 @@ struct BoardColumn: View {
         #endif
     }
 
-    #if os(iOS)
-    /// 手机的行里推进中有余高时多排几排，卡少时不空着排。
-    private var rowTiers: Int { column == .advancing ? max(board.advancing.count, 1) : 1 }
-    #endif
-
     private var archives: Bool { column == .done && !(board.done.isEmpty && board.earlier.isEmpty) }
 
     /// 打开添加任务时待办回到开头（行滑到首格，列滚回顶）：添加那一行在待办最前，滚过的列要把它带进视野。
     private var rewind: UUID? { adding && column == .todo ? board.todo.first?.id : nil }
 
-    /// 接得住的卡拖到这一列上就亮；待办另画一条线说落在哪（`slot`）。
+    /// 接得住的卡拖到这一列上就亮；待办另画一条线说落在哪（`seam`）。
     private var lit: Bool { targeted && drags?.current.map(accepts) == true }
 
     private var space: String { "board-lane-\(column)" }
 
     private func accepts(_ card: DraggedCard) -> Bool { board.drop(card, into: column, at: nil) != nil }
 
-    /// 手机的行是横着排的一条，按横向算。
-    private func along(_ point: CGPoint) -> CGFloat { isRow ? point.x : point.y }
+    /// 第 `slot` 张之前的那道缝，线画在 `line`（一条线的框：横线零高、竖线零宽）。
+    private struct Seam: Equatable {
+        let slot: Int
+        let line: CGRect
+    }
 
-    private func slot(at point: CGPoint) -> Int? {
+    private func seam(at point: CGPoint) -> Seam? {
         guard column == .todo, let id = drags?.current?.task else { return nil }
-        let at = along(point)
-        return board.slots(for: id).compactMap { slot in position(of: slot).map { (slot, abs($0 - at)) } }.min { $0.1 < $1.1 }?.0
+        func distance(_ line: CGRect) -> CGFloat {
+            hypot(max(line.minX - point.x, 0, point.x - line.maxX), max(line.minY - point.y, 0, point.y - line.maxY))
+        }
+        return board.slots(for: id).flatMap { slot in lines(of: slot).map { Seam(slot: slot, line: $0) } }.min { distance($0.line) < distance($1.line) }
     }
 
     /// 两张卡之间那道缝的正中；没排出来的卡（滚出去很远的）没有位置。
-    private func position(of slot: Int) -> CGFloat? {
+    /// 上下挨着的两张之间是横线，手机的行只排一排时是左右两张之间的竖线。行里排了几排时，一小列的底与下一小列的顶是同一道缝，两处都算：
+    /// 指针挨着哪处线就画在哪处。
+    private func lines(of slot: Int) -> [CGRect] {
         func frame(_ index: Int) -> CGRect? { board.todo.indices.contains(index) ? frames[board.todo[index].id] : nil }
         let half = gap / 2
+        // 排出来的卡都在一条横线上：行里只排了一排
+        let flat = isRow && Set(frames.values.map { $0.minY.rounded() }).count == 1
+        func below(_ card: CGRect) -> CGRect { CGRect(x: card.minX, y: card.maxY + half, width: card.width, height: 0) }
+        func above(_ card: CGRect) -> CGRect { CGRect(x: card.minX, y: card.minY - half, width: card.width, height: 0) }
+        func after(_ card: CGRect) -> CGRect { CGRect(x: card.maxX + half, y: card.minY, width: 0, height: card.height) }
+        func before(_ card: CGRect) -> CGRect { CGRect(x: card.minX - half, y: card.minY, width: 0, height: card.height) }
         switch (frame(slot - 1), frame(slot)) {
-        case let (before?, after?): return isRow ? (before.maxX + after.minX) / 2 : (before.maxY + after.minY) / 2
-        case let (before?, nil): return (isRow ? before.maxX : before.maxY) + half
-        case let (nil, after?): return (isRow ? after.minX : after.minY) - half
-        case (nil, nil): return nil
+        case let (last?, next?) where flat: return [CGRect(x: (last.maxX + next.minX) / 2, y: last.minY, width: 0, height: last.height)]
+        case let (last?, next?) where abs(last.minX - next.minX) < 1: return [CGRect(x: last.minX, y: (last.maxY + next.minY) / 2, width: last.width, height: 0)]
+        case let (last?, next?): return [below(last), above(next)]
+        case let (last?, nil): return [flat ? after(last) : below(last)]
+        case let (nil, next?): return [flat ? before(next) : above(next)]
+        case (nil, nil): return []
         }
     }
 
@@ -136,13 +146,20 @@ struct BoardColumn: View {
         #endif
     }
 
-    @ViewBuilder private func mark(at position: CGFloat) -> some View {
+    @ViewBuilder private func mark(_ line: CGRect) -> some View {
         if isRow {
-            Capsule().fill(palette.signature).frame(width: 3).padding(.vertical, Spacing.item).offset(x: position - 1.5).allowsHitTesting(false)
+            // 线比卡的那一边短一截：两头不顶到圆角外
+            let inset = Spacing.item
+            Capsule().fill(palette.signature)
+                .frame(width: max(line.width - 2 * inset, Self.stroke), height: max(line.height - 2 * inset, Self.stroke))
+                .offset(x: line.width > 0 ? line.minX + inset : line.minX - Self.stroke / 2, y: line.height > 0 ? line.minY + inset : line.minY - Self.stroke / 2)
+                .allowsHitTesting(false)
         } else {
-            InsertionMark().padding(.horizontal, BoardCardMetrics.inset).offset(y: position - InsertionMark.ring / 2).allowsHitTesting(false)
+            InsertionMark().padding(.horizontal, BoardCardMetrics.inset).offset(y: line.minY - InsertionMark.ring / 2).allowsHitTesting(false)
         }
     }
+
+    private static var stroke: CGFloat { 3 }
 
     private var isRow: Bool {
         #if os(iOS)
@@ -170,7 +187,7 @@ struct BoardColumn: View {
             if board.todo.isEmpty && !adding { empty("没有待办") }
         case .advancing:
             // 一个 ForEach 排完各档：卡换档是同一串里换位（让位），不是这一档删一张、那一档添一张（同一个飞行身份一删一添会从栈顶飞过来）
-            ForEach(AdvancingSlot.slots(workspace.byAttention(board.advancing), gaps: !isRow)) { slot in
+            ForEach(AdvancingSlot.slots(workspace.byAttention(board.advancing, steady: isRow), gaps: !isRow)) { slot in
                 switch slot {
                 case .gap:
                     // 档与档之间多空一截：栈里一格零高的空，前后各一个行距（横着的一行里一格就是一张卡宽，不空）
@@ -331,10 +348,10 @@ private enum AdvancingSlot: Identifiable {
         }
     }
 
-    static func slots(_ groups: [(pinned: Bool, tier: BoardPulse.Tier, work: [TaskBoard.Work])], gaps: Bool) -> [AdvancingSlot] {
+    static func slots(_ groups: [Workspace.Attention], gaps: Bool) -> [AdvancingSlot] {
         groups.enumerated().flatMap { offset, group -> [AdvancingSlot] in
             let gap = gaps && offset > 0 && !(group.pinned && groups[offset - 1].pinned)
-            let cards = group.work.enumerated().map { AdvancingSlot.work($1, moves: group.tier == .running && $0 < BoardNow.maxMoving) }
+            let cards = group.work.enumerated().map { AdvancingSlot.work($1.work, moves: $1.running && $0 < BoardNow.maxMoving) }
             return (gap ? [.gap(pinned: group.pinned, group.tier)] : []) + cards
         }
     }
