@@ -14,10 +14,10 @@ extension Command {
     path: ["live"], summary: "在用户 Mac 上的 CuePad 里打开活预览：你在本机起的网页服务，开在这个会话旁边；之后你也能自己看、点这个页面", arguments: "[地址或端口]",
     notes: """
       什么时候用：你在本机起了网页的开发服务（vite、next dev 之类）、要用户看这个页面，或要自己在页面上验证时。预览是活的，热更新照常，改完不用再发；要他看的是一份文件就用 show。
-      不给参数：用 CuePad 认出的这个会话的服务——本机在监听、回 HTML，进程是这个会话 Agent 的后代，或工作目录在会话的工作目录里（nohup 甩到后台、进程树断了的靠这一条）；认出几个取最近起来的，之后服务换了端口预览跟过去。认不出就报错，这时给端口。
+      不给参数：用 CuePad 认出的这个会话的服务——本机在监听、回 HTML，是你在这个会话里起的（甩到后台、换了目录也认得）；你没起、用户自己在会话的工作目录里起的也算；认出几个取最近起来的，之后服务换了端口预览跟过去。认不出就报错，这时给端口。
       给参数：5173 是 http://localhost:5173；也可写地址，如 localhost:3000/admin、http://127.0.0.1:8080。给了的不跟着换端口。只开本机地址：localhost、127.0.0.1、局域网 IP、.local。
       开在哪：这个会话此刻开在 CuePad 主区、右半空着时，预览直接滑开；否则不动他的排布，会话栏头的预览钮亮起，他点了才看到。不论开没开，CuePad 都在后台载入这一页、照开着的跑（动画、懒加载照常，视口是预览上次开着时的大小），下面的动词随时能用。他的手机、iPad 与这台 Mac 在同一个网络时，打开这个会话也看得到这一页；不在同一个网络就看不到，所以别在回答里说发到了手机，要他在哪都能看就用 show 发 HTML 文件。
-      会话同 show：取 Agent 给每条命令带的环境变量里第一个有值的（\(sessionVariables.joined(separator: "、"))），都没有就报错。
+      会话同 show：取 Agent 给每条命令带的环境变量里第一个有值的（\(AgentKind.sessionVariables.joined(separator: "、"))），都没有就报错。
       这台 Mac 上没有开着这份资料库的 CuePad.app 时报错退出（退出码 1），不交出去：请用户打开 CuePad 后再运行。
       \(Schema.output(LiveOutput.fields.description("Live"), "found：地址是认出来的（没给参数）"))
 
@@ -41,7 +41,7 @@ extension Command {
       var servers = LiveServers()
       guard let first = await servers.find(for: [session: try await call.store.liveOwner(session)])[session]?.first else {
         throw CLIError.invalid(
-          "没认出这个会话起的网页服务（本机在监听、回 HTML，进程是这个会话 Agent 的后代或工作目录在会话的工作目录里）。还没起来就等它起来再运行；起在别处就给端口：cuepad live 5173")
+          "没认出这个会话起的网页服务（本机在监听、回 HTML，是这个会话里起的，或起在会话的工作目录里）。还没起来就等它起来再运行；别的会话、别处起的就给端口：cuepad live 5173")
       }
       url = first
     }

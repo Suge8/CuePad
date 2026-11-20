@@ -83,12 +83,16 @@ struct LivePreviewFlowTests {
         return try #require(try await store.sessionState(sessionID))
     }
 
-    /// 在这个目录里起一个本机网页服务（Python 自带的目录页，回 HTML），返回它和它的地址。
-    func serve(in directory: URL) async throws -> (Process, URL) {
+    /// 在这个目录里起一个本机网页服务（Python 自带的目录页，回 HTML），返回它和它的地址。`session` 是起它的那个会话（Agent 给命令带的环境变量），
+    /// 不给就是你自己在终端里起的：跑测试的这个进程自己可能就在某个 Agent 会话里，它带着的会话 id 不传下去。
+    func serve(in directory: URL, session: String? = nil) async throws -> (Process, URL) {
         let server = Process()
         server.executableURL = URL(filePath: "/usr/bin/python3")
         server.arguments = ["-u", "-m", "http.server", "0", "--bind", "127.0.0.1"]
         server.currentDirectoryURL = directory
+        var environment = ProcessInfo.processInfo.environment.filter { !AgentKind.sessionVariables.contains($0.key) }
+        environment[AgentKind.watchedSessionVariable] = session
+        server.environment = environment
         let out = Pipe()
         server.standardOutput = out
         try server.run()
@@ -137,6 +141,21 @@ struct LivePreviewFlowTests {
 
         workspace.toggleLivePreview()
         #expect(workspace.livePreviews[live.id]?.address == url)
+    }
+
+    @Test func Agent起的服务只归起它的那个会话_甩到别的目录也认得_同目录的另一个会话不认领() async throws {
+        let workspace = wide()
+        let project = try folder(), elsewhere = try folder()
+        let mine = try await session("mine", .settled, in: project)
+        let other = try await session("other", .settled, in: project)
+        open("mine", workspace)
+        let (first, url) = try await serve(in: elsewhere, session: "mine")
+        let (second, theirs) = try await serve(in: project, session: "other")
+        defer { first.terminate(); second.terminate() }
+        let scanning = Task { await workspace.watchLiveServers() }
+        defer { await scanning.stop() }
+
+        try await eventually("两个会话各认出自己 Agent 起的那一个") { workspace.livePages(mine.id) == [url] && workspace.livePages(other.id) == [theirs] }
     }
 
     @Test func 左边换会话或离开会话页_预览收起_开着预览时并排第二个会话_会话换掉预览() {
