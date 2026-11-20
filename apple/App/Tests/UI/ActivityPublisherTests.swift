@@ -8,6 +8,8 @@ import Testing
 /// 中转的替身：收下每份实时活动推送，按主机名分开记（用例并行）。
 private nonisolated final class RelayStub: URLProtocol, @unchecked Sendable {
     static let received = Mutex<[String: [Data]]>([:])
+    /// APNs 说已失效的令牌（各用例的令牌不重名）。
+    static let dead = Mutex<Set<String>>([])
 
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
@@ -22,7 +24,9 @@ private nonisolated final class RelayStub: URLProtocol, @unchecked Sendable {
             stream.close()
         }
         Self.received.withLock { $0[request.url!.host()!, default: []].append(body) }
-        client?.urlProtocol(self, didReceive: HTTPURLResponse(url: request.url!, statusCode: 204, httpVersion: nil, headerFields: nil)!, cacheStoragePolicy: .notAllowed)
+        let token = (try? JSONSerialization.jsonObject(with: body) as? [String: Any])?["token"] as? String ?? ""
+        let status = Self.dead.withLock { $0.contains(token) } ? 410 : 204
+        client?.urlProtocol(self, didReceive: HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil, headerFields: nil)!, cacheStoragePolicy: .notAllowed)
         client?.urlProtocolDidFinishLoading(self)
     }
 }
@@ -117,6 +121,35 @@ struct ActivityPublisherTests {
         #expect(end.event == "end" && end.token == "bb22" && end.aps["dismissal-date"] as? Int == end.aps["timestamp"] as? Int)
         await quietPeriod(.milliseconds(1500))
         #expect(pushes.count == 1)
+    }
+
+    @Test func 到点那一刻库里没有变化_也自己醒来收掉() async throws {
+        let project = try await store.createProject(name: "圆桌", color: "#000000")
+        let recorder = try await recording(), task = publish()
+        defer { task.cancel() }
+        try await recorder.update(sessionID: "zoom", state: .thinking, title: "canvas-zoom", projectID: project.id)
+        // 再过两秒才到该收的时刻：先照常推内容
+        try await store.recordActivityDestination(
+            device: "phone", activityID: "A", token: "cc33", environment: "production",
+            startedAt: .now.addingTimeInterval(ActivityDestination.retireLead + 2 - ActivityDestination.lifetime))
+        try await eventually("先推内容") { pushes.count == 1 }
+        #expect(pushes[0].event == "update")
+        try await eventually("到点收掉") { pushes.count == 2 }
+        #expect(pushes[1].event == "end" && pushes[1].aps["dismissal-date"] as? Int == pushes[1].aps["timestamp"] as? Int)
+    }
+
+    @Test func 令牌失效后同一只活动换了令牌_接着推() async throws {
+        let project = try await store.createProject(name: "圆桌", color: "#000000")
+        let recorder = try await recording(), task = publish()
+        defer { task.cancel() }
+        let old = "dd\(UUID().uuidString.prefix(6).lowercased())"
+        RelayStub.dead.withLock { _ = $0.insert(old) }
+        try await recorder.update(sessionID: "zoom", state: .thinking, title: "canvas-zoom", projectID: project.id)
+        try await store.recordActivityDestination(device: "phone", activityID: "A", token: old, environment: "production", startedAt: .now)
+        try await eventually("旧令牌被拒") { pushes.count == 1 }
+        try await store.recordActivityDestination(device: "phone", activityID: "A", token: "ee55", environment: "production", startedAt: .now)
+        try await eventually("新令牌接着推") { pushes.count == 2 }
+        #expect(pushes[1].event == "update" && pushes[1].token == "ee55")
     }
 }
 #endif

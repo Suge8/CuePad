@@ -16,7 +16,7 @@ final class CueLiveActivity {
     let sync: (any SyncControlling)?
     let device: String?
     let remoteState: () throws -> CueActivityState?
-    private var restoration: Task<Void, Never>?
+    var restoration: Task<Void, Never>?
     private var remoteStarts: [Task<Void, Never>] = []
     /// 已写进库的开岛令牌：回前台每次都读，没换就不再排一次写入。
     var starterToken: String?
@@ -95,14 +95,14 @@ final class CueLiveActivity {
             trace(.blocked, reason: "supersededOrCancelled")
             return
         }
-        // 开岛令牌在 App 没运行时被系统换掉的，令牌流不补发：回前台时读一遍当前的
-        if foreground { await registerStarter() }
         do {
             try await present(state, resend: resend, foreground: foreground, revision: revision)
         } catch {
             trace(.blocked, reason: "presentError", error: error)
             Self.log.error("实时活动没能开启：\((error as NSError).domain, privacy: .public) \((error as NSError).code)")
         }
+        // 开岛令牌在 App 没运行时被系统换掉的，令牌流不补发：回前台时读一遍当前的。排在开启之后：上面的失效检查与开启之间不能隔着等待
+        if foreground { await registerStarter() }
     }
 
     private func present(_ local: CueActivityState, resend: Bool, foreground: Bool, revision: UUID) async throws {

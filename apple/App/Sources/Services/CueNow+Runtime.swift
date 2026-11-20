@@ -10,6 +10,8 @@ nonisolated struct RuntimeTimeline {
         var since: Date
         var runningSince: Date?
         var delegatingSince: Date?
+        /// 在跑的会话里最晚开工的那个的起点（`runningSince` 是最早的，行上写做了多久用它）。
+        var began: Date?
         var running = 0
         var delegating = 0
         var unknown = 0
@@ -141,6 +143,7 @@ nonisolated struct RuntimeTimeline {
                 entry.running += running
                 entry.delegating += delegating
                 entry.agents += agents
+                if running > 0 { entry.began = max(entry.began ?? .distantPast, session.busySince ?? session.stateSince) }
                 if state.known == nil {
                     entry.unknown += 1
                     if let mac = session.macOff(at: moment) {

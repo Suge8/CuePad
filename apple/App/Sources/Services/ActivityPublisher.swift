@@ -16,13 +16,16 @@ import OSLog
 /// - 手机上没有岛、又有比它没的那一刻更晚开工或开始等你的事（`CueNow.newest`），远程开一只（push-to-start）。
 ///   所以你划掉的、到上限收掉的，同一件事不再开；这台刚启动时还在跑的也不开。两次之间至少隔 `startSpacing`：系统对远程开岛另有额度，用完就静默不开。
 /// - 远程开的那只要等手机被唤醒、登记了地址才推得动；没等到（App 被强杀、额度用完）就留给手机下次到前台自己开。
+/// - 岛几时没的只有手机知道，它在后台时要等被唤醒才删地址：这里从读到删除的那一刻算，其间开工的事也当旧事不开（宁可少开一只，不把划掉的开回来）。
+/// 到点才要做的（刚完的留到点、快到上限、间隔满了）库里没有变化，由 `wakeAt` 自己醒。
 final class ActivityPublisher {
     private let endpoint: URL
     private let session: URLSession
     private var sent: [String: Sent] = [:]
     private var islands: [String: Island] = [:]
     private var lastAttempt = Date.distantPast
-    private var lingersUntil: Date?
+    private var seen: Set<String> = []
+    private var wakeAt: Date?
     private let launched = Date.now
     private nonisolated static let log = Logger(subsystem: AppIdentity.id, category: "live-activity")
     private static let requestLimit: TimeInterval = 15
@@ -35,10 +38,11 @@ final class ActivityPublisher {
         var state: CueActivityState
     }
 
-    /// 这台对一台手机上的岛所知道的：没了的时刻（没见过就从这台启动算）、由这台结束的那只（手机还没来得及删地址）、上次远程开的时刻。
+    /// 这台对一台手机上的岛所知道的：没了的时刻（没见过就从这台启动算）、推不动了的那个令牌（这台结束了那只、或 APNs 说它失效；
+    /// 手机还没来得及删地址。按令牌记不按活动记：同一只活动换了令牌还推得动）、上次远程开的时刻。
     private struct Island {
         var gone: Date
-        var ended: String?
+        var dead: String?
         var started: Date?
     }
 
@@ -98,10 +102,9 @@ final class ActivityPublisher {
                 if failed { Self.log.notice("实时活动推送恢复") }
                 failed = false
                 retry.reset()
-                // 刚完的留到点那一刻库里没有变化：自己醒一次去结束
                 lingering?.cancel()
-                lingering = lingersUntil.map { until in
-                    Task { if (try? await services.timing.sleepUntil(until)) != nil { changed.yield() } }
+                lingering = wakeAt.map { date in
+                    Task { if (try? await services.timing.sleepUntil(date)) != nil { changed.yield() } }
                 }
             } catch where !Task.isCancelled {
                 if !failed { Self.log.error("实时活动推送未送达，保留最新一份重试：\(String(describing: error), privacy: .public)") }
@@ -115,6 +118,7 @@ final class ActivityPublisher {
     private struct Publication {
         var destinations: [ActivityDestination]
         var state: CueActivityState
+        var newest: CueNow.Item?
 
         func same(as other: Self) -> Bool { destinations == other.destinations && state.same(as: other.state) }
     }
@@ -123,40 +127,47 @@ final class ActivityPublisher {
     private func current(_ services: AppServices) throws -> Publication? {
         let read = try services.store.snapshot { try CueReading.Read.read(from: $0, widget: false) }.value
         guard let activity = read.activity, activity.publisher == services.hostID, let state = try services.activityState(read.digest) else { return nil }
-        return Publication(destinations: activity.destinations, state: state)
+        return Publication(destinations: activity.destinations, state: state, newest: services.activityNewest(read.digest))
     }
 
     /// 内容在等待期间前进了就交回合并流（返回 true），只追最新一份，不在这里循环追赶。
     private func publishLatest(_ services: AppServices) async throws -> Bool {
+        wakeAt = nil
         guard let publication = try current(services) else {
-            for device in sent.keys { leave(device) }
-            lingersUntil = nil
+            for device in seen { leave(device) }
             return false
         }
         let now = publication.state.now
-        lingersUntil = now.isLive && !now.hasConfirmedActivity && !now.unconfirmed ? now.lingersUntil : nil
+        if now.isLive, !now.hasConfirmedActivity, !now.unconfirmed { wake(now.lingersUntil) }
         let devices = Dictionary(grouping: publication.destinations, by: \.device)
         // 手机删了地址：那只岛结束了或被划掉了
-        for device in sent.keys where devices[device]?.contains(where: { !$0.isStarter }) != true { leave(device) }
+        for device in seen where devices[device]?.contains(where: { !$0.isStarter }) != true { leave(device) }
         for device in devices.keys.sorted() {
             try Task.checkCancellation()
             let destination = devices[device]?.first { !$0.isStarter }
-            if let destination, destination.expiresAt > .now, islands[device]?.ended != destination.activityID {
+            if let destination, destination.expiresAt > .now, islands[device]?.dead != destination.token {
+                seen.insert(device)
                 if try await update(destination, publication, services) { return true }
             } else if let starter = devices[device]?.first(where: \.isStarter) {
                 // 没等这台来收就过了系统上限的那只：从上限那一刻算没了
-                if let destination, islands[device]?.ended != destination.activityID { leave(device, ending: destination.activityID, at: destination.expiresAt) }
+                if let destination, islands[device]?.dead != destination.token { leave(device, dead: destination.token, at: destination.expiresAt) }
                 if try await start(starter, publication, services) { return true }
             }
         }
         return false
     }
 
-    private func leave(_ device: String, ending activity: String? = nil, at date: Date = .now) {
+    private func wake(_ date: Date?) {
+        guard let date, date > .now else { return }
+        wakeAt = min(wakeAt ?? date, date)
+    }
+
+    private func leave(_ device: String, dead token: String? = nil, at date: Date = .now) {
         sent[device] = nil
+        seen.remove(device)
         var island = islands[device] ?? Island(gone: launched)
         island.gone = max(island.gone, date)
-        if let activity { island.ended = activity }
+        if let token { island.dead = token }
         islands[device] = island
     }
 
@@ -178,11 +189,12 @@ final class ActivityPublisher {
                 expiration: Int(destination.expiresAt.timeIntervalSince1970), payload: payload))
         }
         if destination.retireAt <= .now {
-            _ = try await push(.clearing(publication.state), priority: 10)
-            Self.log.notice("实时活动快到系统上限，已结束并清掉")
-            leave(device, ending: destination.activityID)
+            let accepted = try await push(.clearing(publication.state), priority: 10)
+            Self.log.notice("实时活动快到系统上限：\(accepted ? "已结束并清掉" : "令牌已失效，没清成", privacy: .public)")
+            leave(device, dead: destination.token)
             return false
         }
+        wake(destination.retireAt)
         let old = sent[device]
         if let old, old.destination == destination, old.state.same(as: publication.state) { return false }
         guard let publication = try await confirmed(publication, services) else { return true }
@@ -192,7 +204,7 @@ final class ActivityPublisher {
         if try await push(.init(publication.state), priority: urgent ? 10 : 5), now.isLive {
             sent[device] = Sent(destination: destination, state: publication.state)
         } else {
-            leave(device, ending: destination.activityID)
+            leave(device, dead: destination.token)
         }
         try Task.checkCancellation()
         guard let fresh = try current(services), fresh.same(as: publication) else { return true }
@@ -201,11 +213,15 @@ final class ActivityPublisher {
 
     private func start(_ starter: ActivityDestination, _ publication: Publication, _ services: AppServices) async throws -> Bool {
         let device = starter.device, island = islands[device] ?? Island(gone: launched)
-        guard publication.state.now.hasConfirmedActivity, let newest = publication.state.now.newest, newest.since > island.gone,
-              island.started.map({ Date.now.timeIntervalSince($0) >= Self.startSpacing }) ?? true else { return false }
-        guard let publication = try await confirmed(publication, services) else { return true }
+        guard publication.state.now.hasConfirmedActivity, let newest = publication.newest, newest.since > island.gone else { return false }
+        // 间隔没满：满的那一刻再看，那件事还在就开，不靠别的变化碰巧叫醒
+        if let ready = island.started?.addingTimeInterval(Self.startSpacing), ready > .now {
+            wake(ready)
+            return false
+        }
+        guard let publication = try await confirmed(publication, services), let newest = publication.newest else { return true }
         lastAttempt = .now
-        islands[device] = Island(gone: .now, ended: island.ended, started: .now)
+        islands[device] = Island(gone: .now, dead: island.dead, started: .now)
         // 开没开出来这里不重试：同一件事再推一次只是再亮一次屏、再占一次额度，没开出来的留给手机到前台自己开
         do {
             let accepted = try await send(ActivityPush(

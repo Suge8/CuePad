@@ -29,6 +29,13 @@ extension AppServices {
         return try ActivityPush.fitted(CueActivityState(now: Self.cueNow(try digest(), at: speech, local: CueNow.Local(waiting: nil, here: nil))))
     }
 
+    /// 远程开实时活动看的那一件，同 `cueNow` 按这一刻算。
+    func activityNewest(_ digest: CueDigest) -> CueNow.Item? {
+        var moment = speech
+        moment.now = .now
+        return CueNow.newest(digest, at: moment)
+    }
+
     /// 小组件、实时活动与 Cue 那一行（`CueWatch`）都经这里推。
     /// 按推出的这一刻推：说的话的此刻（`SpeechClock`）只在时限到点、同步通断时走，库变了时它可能停在很久以前，
     /// 拿它算会把早过了 `doneWindow` 的"刚做完"当成新的、过时时刻也从那时算。

@@ -8,6 +8,8 @@ const START_KEYS = ["attributes-type", "attributes", "alert", "input-push-token"
 
 const object = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 const only = (value: Record<string, unknown>, keys: string[]) => Object.keys(value).every(key => keys.includes(key));
+// 提醒的标题与正文：一句话，或按键在设备上取文案的 { "loc-key": … }
+const shown = (value: unknown) => (typeof value === "string" && value.length > 0) || (object(value) && typeof value["loc-key"] === "string" && value["loc-key"].length > 0);
 const seconds = (value: unknown): value is number => typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 
 function parse(value: unknown, environment: string): Push | Result {
@@ -25,7 +27,8 @@ function parse(value: unknown, environment: string): Push | Result {
     || ("stale-date" in aps && !seconds(aps["stale-date"]))
     || ("dismissal-date" in aps && !seconds(aps["dismissal-date"]))
     || (starting && (typeof aps["attributes-type"] !== "string" || !/^[A-Za-z_][A-Za-z0-9_]{0,63}$/.test(aps["attributes-type"])
-      || !object(aps.attributes) || !object(aps.alert) || ("input-push-token" in aps && aps["input-push-token"] !== 1)))) return { status: 400, reason: "InvalidActivity" };
+      || !object(aps.attributes) || !object(aps.alert) || !shown(aps.alert.title) || !shown(aps.alert.body)
+      || ("input-push-token" in aps && aps["input-push-token"] !== 1)))) return { status: 400, reason: "InvalidActivity" };
   if (value.environment !== environment) return { status: 400, reason: "EnvironmentMismatch" };
   const body = JSON.stringify(value.payload);
   if (Buffer.byteLength(body) > MAX_PAYLOAD_BYTES) return { status: 413, reason: "PayloadTooLarge" };

@@ -48,15 +48,9 @@ extension CueStore {
     return online.first?.hostID
   }
 
-  /// 各台手机的推送地址（活动的与开岛的）。活动的那行到该收、到过期的时刻重读观察，不需要续期心跳；过期的照样读出，由发布方据此知道那只岛没了。
-  public func activityDestinations() throws -> [ActivityDestination] {
-    let now = timing.now()
-    let rows = try select(ActivityDestination.self, orderBy: "device")
-    for row in rows where !row.isStarter {
-      for date in [row.retireAt, row.expiresAt] where date > now { expire(at: date) }
-    }
-    return rows
-  }
+  /// 各台手机的推送地址（活动的与开岛的）；过期的照样读出，由发布方据此知道那只岛没了。到该收、到过期的时刻由发布方自己醒：
+  /// 到点重读读到的还是这几行，订阅不会为它再叫一次。
+  public func activityDestinations() throws -> [ActivityDestination] { try select(ActivityDestination.self, orderBy: "device") }
 
   /// 开岛的令牌系统会换：只留最新一份。
   @discardableResult

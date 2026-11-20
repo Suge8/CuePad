@@ -30,10 +30,13 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
     var cueUntil: Date? = nil
     /// 参与工作的 Agent 总数；还没从库推出过（`empty`）时未知。
     var agentCount: Int? = nil
+    /// 刚完的（做完、新回复）让已有的实时活动再留到的时刻：两轮之间不收了又开，远程开一只要亮屏提醒、还占系统的额度。
+    /// 从没截过的全量里取（`items` 只列得下几行，旧的未读回复会把刚到的挤出去）。
+    var lingersUntil: Date? = nil
 
     enum CodingKeys: String, CodingKey {
         case name, cue, tally, advancing, subagents, items, first, at, elsewhere, agentCount
-        case decay = "x", unconfirmed = "u", cueUntil = "v"
+        case decay = "x", unconfirmed = "u", cueUntil = "v", lingersUntil = "l"
     }
 
     enum Brain: Codable, Hashable, Sendable {
@@ -142,17 +145,8 @@ nonisolated struct CueNow: Codable, Hashable, Sendable {
     /// 新回复不算：那一轮已经完了，一直没读就一直挂着的岛写的是旧事，它留在角标与通知里。
     var hasConfirmedActivity: Bool { isBusy || tally.asks > 0 || tally.moving > 0 || agentCount.map { $0 > 0 } == true }
 
-    /// 刚完的（做完、新回复）让已有活动再留到的时刻：两轮之间不收了又开，远程开一只要亮屏提醒、还占系统的额度。
-    var lingersUntil: Date? {
-        items.filter { $0.kind == .done || $0.kind == .reply }.map { $0.since.addingTimeInterval(Self.doneWindow) }.max()
-    }
-
     /// 未确认不等于全部完成；只有明确没有活、刚完的也过了 `lingersUntil` 才允许现有生命周期收尾。
     var isLive: Bool { hasConfirmedActivity || unconfirmed || lingersUntil.map { $0 > at } == true }
-
-    /// 最近开工或开始等你拍板的那一件：手机上的活动没了之后，比它没的那一刻更晚开始的才值得远程再开一只。
-    /// Cue 自己的轮不算（多是几秒的收尾）；等子代理的起点随交回变，也不算。
-    var newest: Item? { items.filter { $0.kind == .running || $0.kind == .asks }.max { $0.since < $1.since } }
 
     /// 一眼看得出的变化：哪几件、各是等你、在动、做完还是歇着。它变了的那一份值得立刻送到；在跑与等子代理之间来回、读到哪一步不算。
     var glance: Set<String> { Set(items.map { "\($0.id)/\($0.kind.tone)" }) }
