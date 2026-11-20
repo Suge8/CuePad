@@ -203,17 +203,20 @@ struct BoardCardLayout<Title: View, Facts: View, Trailing: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: BoardCardMetrics.footGap) {
-            HStack(alignment: compact ? .top : .firstTextBaseline, spacing: Spacing.item) {
-                VStack(alignment: .leading, spacing: Spacing.hair) {
-                    HStack(alignment: .firstTextBaseline, spacing: Spacing.tight) { title }.font(compact ? TaskMetrics.lineFont : Typography.bodyStrong)
-                    if compact, !row, let note { noteLine(note) }
+            // 行里卡脚沉到格底：上半截占满余高（中间垫 Spacer 的话它前后各多一个行距，卡比格高）
+            VStack(alignment: .leading, spacing: BoardCardMetrics.footGap) {
+                HStack(alignment: compact ? .top : .firstTextBaseline, spacing: Spacing.item) {
+                    VStack(alignment: .leading, spacing: Spacing.hair) {
+                        HStack(alignment: .firstTextBaseline, spacing: Spacing.tight) { title }.font(compact ? TaskMetrics.lineFont : Typography.bodyStrong)
+                        if compact, !row, let note { noteLine(note) }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    if let session { AgentMark(session: session, font: TaskMetrics.caption, named: false) }
+                    trailing
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                if let session { AgentMark(session: session, font: TaskMetrics.caption, named: false) }
-                trailing
+                if advancing, pulse.shown != nil || note != nil { BoardNow(pulse: pulse, said: note, moves: moves) }
             }
-            if advancing, pulse.shown != nil || note != nil { BoardNow(pulse: pulse, said: note, moves: moves) }
-            if row { Spacer(minLength: 0) }
+            .frame(maxHeight: row ? .infinity : nil, alignment: .top)
             BoardFoot(glyph: BoardCardMetrics.footGlyph) {
                 if let project { BoardProjectTag(project: project) } else { Color.clear.frame(width: 0) }
                 foot
