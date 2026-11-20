@@ -3,9 +3,10 @@ import CryptoKit
 import Foundation
 import Network
 import Synchronization
+import UIKit
 
 /// 手机、iPad 开着的一个活预览去 Mac 的路，看得见的这一段一份（`run`，预览面板的 task，收起、进后台就结束）：向 Mac 要隧道的入口（`LiveRemote.watch(open:)`），
-/// 拿到后同时连 Mac 报来的每个局域网地址、只验票（端口 0），最先通的交给代理（`LiveTunnel.Proxy`），网页视图这份数据存储的流量都经它。
+/// 拿到后同时连 Mac 报来的每个局域网地址、只验票（端口 0），最先通的交给代理（`LiveTunnel.Proxy`）：局域网地址的页面经它的 SOCKS 口，localhost 的经它照搬到手机回环上的同号口（`mirror`）。
 /// 本地网络权限的弹窗出在这里第一次连局域网地址时：只有点开预览才走到这里，会话页本身只经中转问、不碰局域网。
 /// 连不上时每 `retry` 再试一次，直到通了或预览收起：允许权限、回到 Wi-Fi、Mac 醒来都不用动手。
 @Observable
@@ -77,6 +78,7 @@ final class LiveLink {
             return
         }
         pages = answer.pages
+        proxy.mirror(Set(answer.ports.compactMap { UInt16(exactly: $0) }.filter { $0 != 0 }))
         preview.follow(answer, showing: true)
         if state == .ready { preview.serve(pages) }
         guard let next = answer.door, next != door else { return }
@@ -111,6 +113,11 @@ final class LiveLink {
                     preview.linked(pages)
                     state = .ready
                     return
+                case .trouble(.denied) where UIApplication.shared.applicationState != .active:
+                    // 权限框挂着（应用这时不在活动状态）系统就把连接报成没给权限：他还没答，不亮"没有本地网络权限"；答完回来马上再探。
+                    // 实测等着重试的那一下，点了允许还要看十来秒"没有本地网络权限"
+                    for await _ in NotificationCenter.default.notifications(named: UIApplication.didBecomeActiveNotification) { break }  // 晚订：上一行刚看过还没回到活动状态，中间没让出主线程
+                    continue
                 case .trouble(let trouble):
                     preview.serve(nil)
                     state = .trouble(trouble)

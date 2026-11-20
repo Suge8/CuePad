@@ -5,7 +5,7 @@ import WebKit
 
 /// 一个会话的活预览：这个会话正在开发的网页本身（`Workspace.livePreviews`，只在内存里）。
 /// 每个会话一个 `WKWebView`、各用一份非持久的数据存储：两个会话开着同一个地址，登录状态也不串。
-/// Mac 上网页直连本机的服务、自己探服务在不在；手机、iPad 上这份数据存储的流量全经隧道的代理（`LiveLink`），服务在不在、有哪些地址看 Mac 的答复（`serving`）。
+/// Mac 上网页直连本机的服务、自己探服务在不在；手机、iPad 上去 Mac 的流量都经隧道（`LiveLink`），服务在不在、有哪些地址看 Mac 的答复（`serving`）。
 /// 网页不伸到玻璃栏后面（`LivePreviewPane.screen`）：SwiftUI 的 `WebView` 公开接口里没有遮挡区（macOS 26 SDK 的 `_WebKit_SwiftUI`），
 /// `WKWebView` 的 `obscuredContentInsets` 让出的那一截 WebKit 自己画一道硬边的带（浅色白、深色灰，公开接口改不了），两档视口切换时内边距还要跳。
 @Observable

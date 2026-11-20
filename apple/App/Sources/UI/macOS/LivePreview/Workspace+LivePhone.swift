@@ -70,8 +70,9 @@ extension Workspace {
             let here = hosted.contains(key.sessionID)
             var door: LiveSignal.Door?
             if let ticket = phone.ticket, let port { door = LiveSignal.Door(addresses: LiveTunnel.localAddresses(), port: port, ticket: ticket) }
+            let ports = here && door != nil ? await livePorts(key.sessionID).sorted() : nil
             let answer = LiveSignal.pages(request: phone.request, session: key.sessionID, pages: here ? livePages(id) : [], serving: here ? liveFound[id] ?? [] : [],
-                                          sent: here ? liveTaken[key.sessionID] : nil, door: here ? door : nil)
+                                          sent: here ? liveTaken[key.sessionID] : nil, door: here ? door : nil, ports: ports)
             guard answer != phone.answered, livePhones[key] != nil else { continue }
             livePhones[key]?.answered = answer
             do {
@@ -135,8 +136,10 @@ extension Workspace {
         guard request.port != 0 else { return .probe }
         var host = request.host.lowercased()
         if host.hasPrefix("[") { host = String(host.dropFirst().dropLast()) }
-        guard LiveTunnel.Proxy.isMac(host, addresses: Set(LiveTunnel.localAddresses().map(\.host))) else { return .refused }
-        guard await livePorts(key.sessionID).contains(Int(request.port)) else { return .refused }
+        guard LiveTunnel.Proxy.isMac(host, addresses: Set(LiveTunnel.localAddresses().map(\.host))), await livePorts(key.sessionID).contains(Int(request.port)) else {
+            AppServices.log.notice("活预览的隧道没放行 \(host, privacy: .public):\(request.port)：不是这个会话的口")
+            return .refused
+        }
         // *.localhost 系统的解析器不一定认（浏览器认），一律连回环；Host 头随字节原样到服务
         return .open(host: host.hasSuffix(".localhost") ? "localhost" : host, port: request.port)
     }
