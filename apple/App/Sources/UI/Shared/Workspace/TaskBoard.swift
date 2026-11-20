@@ -122,6 +122,20 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         }
     }
 
+    /// 这一列里拖得动的卡：它的飞行身份，与拖的是什么。已完成的不拖。
+    func draggables(_ column: Column) -> [(flight: String, card: DraggedCard)] {
+        switch column {
+        case .todo: todo.map { ($0.flight, .task($0.id)) }
+        case .advancing: advancing.map { ($0.id, $0.item.map { .task($0.id) } ?? .session($0.loose?.state.sessionID ?? "")) }
+        case .waiting: held.map { ($0.id, $0.item.map { .task($0.id) } ?? .session($0.session.sessionID)) }
+        case .done: []
+        }
+    }
+
+    func flight(of card: DraggedCard) -> String? {
+        Column.allCases.lazy.flatMap(draggables).first { $0.card == card }?.flight
+    }
+
     func count(_ column: Column) -> Int {
         switch column {
         case .todo: todo.count
@@ -150,8 +164,8 @@ nonisolated struct TaskBoard: Sendable, Equatable {
     }
 
     /// 这张卡在待办里能落的各处（第几张之前，`todo.count` 是末尾）。待办按项目分段排，卡不悄悄换项目：
-    /// 能落的只有它那个项目那一段的里面与两头，落在别处的话放下后卡会跳回自己那一段。插入线只画在这些位置上（看板取离指针最近的一处）。
-    /// 它原来的位置也在内（放下不动）；它那个项目在待办里一张都没有时为空（拖回待办落在项目排到的地方，没有线可画）。
+    /// 能落的只有它那个项目那一段的里面与两头，落在别处的话放下后卡会跳回自己那一段。拖着时的空位只挪到这些位置上（看板取离指针最近的一处）。
+    /// 它原来的位置也在内（放下不动）；它那个项目在待办里一张都没有时为空（拖回待办落在项目排到的地方，不垫空位）。
     func slots(for id: UUID) -> [Int] {
         guard let project = placeable(id)?.projectID else { return [] }
         func own(_ index: Int) -> Bool { todo.indices.contains(index) && todo[index].task.projectID == project }

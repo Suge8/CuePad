@@ -118,7 +118,8 @@ struct BoardTaskCard: View {
             .contextMenu { menu }
     }
     #else
-    /// 按住不动出长按菜单；菜单出来后往菜单外一挪就是拖（`BoardColumn` 挂的 `draggable`，系统把两者放在同一次长按里），往菜单里挪是在菜单里选。
+    /// 按住 0.2 秒卡就拎起来、能拖（`BoardLift`）；接着按住不动到半秒出长按菜单，菜单出来后往菜单外一挪是系统的拖放（`BoardColumn` 挂的 `draggable`，
+    /// 系统把两者放在同一次长按里），往菜单里挪是在菜单里选。
     private func framed(@ViewBuilder _ card: () -> some View) -> some View {
         Group {
             if workspace.layout == .wide { card().gesture(SessionTap(action: enter)) }

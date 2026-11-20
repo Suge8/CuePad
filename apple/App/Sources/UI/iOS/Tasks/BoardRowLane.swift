@@ -22,6 +22,9 @@ struct BoardRowLane<Above: View, Content: View>: View {
     @ViewBuilder let content: Content
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.boardMoves) private var moves
+    /// 露全的那一小列是第几列：拖到屏幕边上时往旁边翻一列（`BoardMoves.Pull`）。
+    @State private var lead = 0
     /// 一格的高，量出来的（`BoardRowRuler`）：写死的数只对一种字——界面字取到圆体时行高一档，卡比格高，上下两排贴在一起（实测）。
     /// 量的那把尺不随这个数变，不成环；量到之前不排卡。
     @State private var full: CGFloat = 0
@@ -90,10 +93,22 @@ struct BoardRowLane<Above: View, Content: View>: View {
                 .onChange(of: rewind, initial: true) {
                     if rewind != nil { withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { proxy.scrollTo(0, anchor: .leading) } }
                 }
+                .onScrollTargetVisibilityChange(idType: Int.self) { lead = $0.first ?? lead }
+                .task(id: moves?.pull.flatMap { $0.column == column ? $0.edge : nil }) {
+                    guard let edge = moves?.pull.flatMap({ $0.column == column ? $0.edge : nil }), edge == .trailing || edge == .leading else { return }
+                    // 停在边上一会儿才翻，之后一下一下地翻：路过边上不翻，翻了有工夫看清到了哪
+                    while (try? await Task.sleep(for: Self.dwell)) != nil {
+                        let next = lead + (edge == .trailing ? 1 : -1)
+                        guard next >= 0 else { return }
+                        withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { proxy.scrollTo(next, anchor: .leading) } completion: { moves?.reaim() }
+                    }
+                }
             }
         }
         .frame(minHeight: cell, idealHeight: cell, maxHeight: .infinity)
     }
+
+    private static var dwell: Duration { .milliseconds(450) }
 
     /// 辅助字号下一张卡几乎占满可见宽：窄卡里大字一行只放得下几个字。
     private var cardShare: CGFloat { typeSize.isAccessibilitySize ? BoardRowMetrics.wideCardWidth : BoardRowMetrics.cardWidth }
