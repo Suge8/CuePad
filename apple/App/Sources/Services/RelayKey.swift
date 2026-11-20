@@ -7,6 +7,8 @@ struct RelayCredentials: Sendable {
     let room: String
     private let key: Curve25519.Signing.PrivateKey
     let voiceKey: SymmetricKey
+    /// 活预览隧道的 TLS-PSK（`LiveTunnel.parameters`）。
+    let tunnelKey: SymmetricKey
 
     init(secret: Data) throws {
         let seed = HKDF<SHA256>.deriveKey(
@@ -15,6 +17,7 @@ struct RelayCredentials: Sendable {
         room = key.publicKey.rawRepresentation.base64URL
         voiceKey = HKDF<SHA256>.deriveKey(inputKeyMaterial: SymmetricKey(data: secret),
                                         info: Data(VoiceSignalFormat.keyContext.utf8), outputByteCount: 32)
+        tunnelKey = HKDF<SHA256>.deriveKey(inputKeyMaterial: SymmetricKey(data: secret), info: Data(LiveTunnel.keyContext.utf8), outputByteCount: 32)
     }
 
     func signVoice(_ claim: VoiceRegistrationClaim) throws -> Data {

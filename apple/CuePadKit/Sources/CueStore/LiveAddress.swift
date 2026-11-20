@@ -1,8 +1,7 @@
-#if os(macOS)
 import Foundation
 
 /// 一个会话请用户看的本机网页（`cuepad live`）：只记在本机表 `liveAddresses`，不同步——地址是这台 Mac 上的服务。每个会话留最后一条。
-public struct LiveAddress: Equatable, Sendable {
+public struct LiveAddress: Equatable, Codable, Sendable {
   public var sessionID: String
   public var url: URL
   /// 由 `LiveServers` 认出的（Agent 没给地址）：服务换了端口跟过去；Agent 明说的不跟。
@@ -19,7 +18,7 @@ public struct LiveAddress: Equatable, Sendable {
   /// 输入的地址：只写端口（5173）当作本机；不写协议时本机、局域网与不带点的主机名用 http，其余用 https。
   public static func url(from text: String) -> URL? {
     let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
-    if let port = Int(text) { return (1...65_535).contains(port) ? LiveServers.url(port: port) : nil }
+    if let port = Int(text) { return (1...65_535).contains(port) ? URL(string: "http://localhost:\(port)") : nil }
     let full: String
     if text.contains("://") {
       full = text
@@ -70,6 +69,7 @@ public struct LiveAddress: Equatable, Sendable {
   }
 }
 
+#if os(macOS)
 extension CueStore {
   /// 本机有没有开着这份资料库的 CuePad.app（`cuepad live` 交接前问）：看进程开着的文件，调试实例与正式版各开各的库，不会认错。
   /// 不用在线记录（`MacPresence`）：App 崩溃后它要到期限（10 分钟）才过期，这期间会说成开着。

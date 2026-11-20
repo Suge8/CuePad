@@ -1,10 +1,9 @@
-#if os(macOS)
 import CueStore
 import SwiftUI
 import WebKit
 
 /// 主区会话栏头开合活预览的那颗钮（`HeadTool`）：这个会话有页面可看或预览开着时才在（`Workspace.liveButton`），在本身就是"有服务"；
-/// 没开同栏头别的钮，开着是强调色。来去只是它自己淡入淡出，栏头别的不挪。
+/// 没开同栏头别的钮，开着是强调色。来去只是它自己淡入淡出，栏头别的不挪。Mac 与 iPad 宽屏同一颗（手机的在页头，`LivePhoneTool`）。
 struct LivePreviewTool: View {
     let session: SessionRoute
     @Environment(Workspace.self) private var workspace
@@ -19,7 +18,7 @@ struct LivePreviewTool: View {
             .animation(Motion.fade, value: button != nil)
     }
 
-    private static func label(_ button: Workspace.LiveButton) -> LocalizedStringResource {
+    static func label(_ button: Workspace.LiveButton) -> LocalizedStringResource {
         switch button {
         case .closed(let url?): "打开活预览：\(LiveAddress.shown(url))"
         case .closed(nil): "打开活预览"
@@ -31,22 +30,29 @@ struct LivePreviewTool: View {
 
 /// 并排右半的活预览（`BesideColumn`）：网页铺满这一块，上缘滑到浮着的玻璃栏下面、下缘到窗口边；
 /// 手机宽那一档收成 390 宽居中的一块屏，落在桌面上。两档之间是同一块连续地变宽变窄，网页不重新载入。
+/// 手机上是铺满屏的一页（`LivePhoneCover`），栏换成手机那一排（`LiveBar`）。手机、iPad 上开着时连着 Mac（`LiveLink`），连不上的原因盖在页上。
 struct LivePreviewPane: View {
     let preview: LivePreview
     @Environment(\.palette) private var palette
     @Environment(\.headInset) private var inset
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(Workspace.self) private var workspace
+    #if os(iOS)
+    @Environment(\.scenePhase) private var scenePhase
+    #endif
 
     var body: some View {
         GeometryReader { geometry in
             ZStack(alignment: .top) {
                 if preview.address == nil {
+                    // 只 Mac 有空着的地址（会话的菜单里手动打开）：手机、iPad 开时就有 Mac 答来的地址
+                    #if os(macOS)
                     LiveAddressEntry(preview: preview).frame(maxWidth: .infinity, maxHeight: .infinity)
+                    #endif
                 } else {
                     screen(in: geometry.size)
-                    if preview.phase == .waiting {
-                        EmptyState(mascot: .search, title: "等开发服务起来", bare: true) { EmptyView() }
+                    if let trouble, preview.phase != .stopped {
+                        EmptyState(mascot: .search, title: trouble.title, bare: true) { LiveTroubleAction(trouble: trouble) }
                             .padding(.horizontal, Spacing.page)
                             .frame(maxHeight: .infinity)
                             .transition(.opacity)
@@ -55,10 +61,15 @@ struct LivePreviewPane: View {
                 }
             }
             .animation(Motion.fade, value: preview.phase)
+            .animation(Motion.fade, value: trouble)
         }
         .background(palette.desk)
         .modifier(LivePageAsks(preview: preview))
         .task(id: preview.address) { await preview.watch() }
+        #if os(iOS)
+        // 进后台也断开：回来是重新连上、整页重载（`LivePreview.linked`），不靠页面里断掉的热更新连接自己回来
+        .task(id: scenePhase == .background) { if scenePhase != .background { await workspace.connectLive(preview) } }
+        #endif
         .onGeometryChange(for: CGSize.self) { $0.size } action: { size in
             // 收起时滑出去的那一程按不并排的宽排着：不记它，后台预览（`LiveHost`）按开着时的大小排版
             guard case .preview = workspace.beside else { return }
@@ -66,9 +77,19 @@ struct LivePreviewPane: View {
         }
         .onDisappear {
             if preview.picking { preview.cancelPick() }
+            #if os(macOS)
             // 收起才开始算闲置（`Workspace.releaseLivePreviews`）
             preview.agent.used = .now
+            #endif
         }
+    }
+
+    /// 页面出不来的原因：服务还没起来；手机、iPad 上还有连不上 Mac 的那几种（`LiveLink.State`）。
+    private var trouble: LiveTrouble? {
+        #if os(iOS)
+        if let trouble = preview.link?.trouble { return trouble }
+        #endif
+        return preview.phase == .waiting ? .starting : nil
     }
 
     /// 铺满时网页从玻璃栏下沿铺到窗口下缘，栏那一排铺页面的底、下沿同色渐隐：滚上去的内容淡进栏下，不在一条线上切断；
@@ -91,7 +112,7 @@ struct LivePreviewPane: View {
                     .allowsHitTesting(false)
             }
             .padding(.top, phone ? 0 : Chrome.band)
-            .overlay { if preview.phase == .stopped { LiveStopped() } }
+            .overlay { if preview.phase == .stopped { LiveStopped(text: trouble?.title ?? "服务停了，等它回来") } }
             .frame(width: width, height: height)
             .background(ground)
             .clipShape(shape)
@@ -129,6 +150,7 @@ private struct LivePageAsks: ViewModifier {
     }
 }
 
+#if os(macOS)
 private struct LiveWebView: NSViewRepresentable {
     let preview: LivePreview
 
@@ -143,9 +165,60 @@ private struct LiveWebView: NSViewRepresentable {
 
     static func dismantleNSView(_ web: WKWebView, coordinator: LivePreview) { coordinator.leftPane() }
 }
+#else
+private struct LiveWebView: UIViewRepresentable {
+    let preview: LivePreview
 
-/// 服务停了：最后的画面压暗一层留着，上面浮一句；服务回来时自动重新载入（`LivePreview.watch`），这一层随之撤掉。
+    func makeUIView(context: Context) -> WKWebView { preview.web }
+
+    func updateUIView(_ web: WKWebView, context: Context) {}
+}
+#endif
+
+extension Workspace {
+    enum LiveButton: Equatable {
+        /// 点开就是这个地址；nil 是空的地址输入。
+        case closed(URL?)
+        case open(URL?)
+
+        var isShowing: Bool { if case .open = self { true } else { false } }
+    }
+}
+
+/// 页面出不来的原因，盖在预览上的那一句。
+nonisolated enum LiveTrouble: Equatable, Sendable {
+    case starting, asking, offline, noWiFi, apart, isolated, denied, gone
+
+    var title: LocalizedStringResource {
+        switch self {
+        case .starting: "等开发服务起来"
+        case .asking: "正在连 Mac"
+        case .offline: "Mac 不在线"
+        case .noWiFi: "没连 Wi-Fi，连上和 Mac 同一个网络就能看"
+        case .apart: "和 Mac 不在同一个网络"
+        case .isolated: "连不上 Mac，这个 Wi-Fi 可能不让设备互相连接"
+        case .denied: "没有本地网络权限，看不到 Mac 上的网页"
+        case .gone: "服务停了，等它回来"
+        }
+    }
+}
+
+/// 缺本地网络权限时去设置打开；别的没有可做的，等它自己回来。
+private struct LiveTroubleAction: View {
+    let trouble: LiveTrouble
+
+    var body: some View {
+        #if os(iOS)
+        if trouble == .denied, let settings = URL(string: UIApplication.openSettingsURLString) {
+            Button("去设置") { UIApplication.shared.open(settings) }.buttonStyle(ControlButtonStyle(kind: .primary))
+        }
+        #endif
+    }
+}
+
+/// 服务停了、连不上 Mac 了：最后的画面压暗一层留着，上面浮一句；回来时自动重新载入（`LivePreview.watch`），这一层随之撤掉。
 private struct LiveStopped: View {
+    let text: LocalizedStringResource
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -153,7 +226,7 @@ private struct LiveStopped: View {
             palette.stale
             HStack(spacing: Spacing.glyph) {
                 Spinner(.small)
-                Text("服务停了，等它回来")
+                Text(text)
             }
             .font(Typography.secondary.weight(.medium))
             .foregroundStyle(palette.ink)
@@ -166,6 +239,7 @@ private struct LiveStopped: View {
     }
 }
 
+#if os(macOS)
 /// 还没有地址：面板中间只有一个地址输入，焦点已在里面。
 private struct LiveAddressEntry: View {
     let preview: LivePreview
@@ -190,176 +264,6 @@ private struct LiveAddressEntry: View {
             .padding(.horizontal, Spacing.page)
             .defaultFocus($focused, true)
             .onAppear { focused = true }
-    }
-}
-
-/// 浮在网页上的玻璃栏：重新载入（载入中是停止）、地址、点选、手机宽、在浏览器里打开；载入进度是贴着下沿的一条细线。
-/// 没有收起：收起只经左边会话栏头上打开它的那颗钮（`WideSessionTitle`），一件事一个入口。
-private struct LiveBar: View {
-    let preview: LivePreview
-    @Environment(Workspace.self) private var workspace
-    @Environment(\.palette) private var palette
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    var body: some View {
-        let loading = preview.isLoading && preview.phase == .live
-        HStack(spacing: Spacing.hair) {
-            Group {
-                if loading {
-                    tool("停止载入", icon: .stop) { preview.stopLoading() }
-                } else {
-                    tool("重新载入", icon: .retry) { preview.reload() }
-                }
-            }
-            .keyboardShortcut("r", modifiers: .command)
-            LiveAddressField(preview: preview)
-            tool(preview.picking ? "退出点选" : "点选页面元素", icon: .pickElement, on: preview.picking) { workspace.pickElement() }
-                .keyboardShortcut(preview.picking ? .cancelAction : nil)
-                .disabled(preview.phase != .live)
-            tool(preview.viewport == .phone ? "铺满" : "手机宽度", icon: .phoneWidth, on: preview.viewport == .phone) {
-                withAnimation(Motion.spatial(Motion.travel, reduceMotion: reduceMotion)) { preview.viewport = preview.viewport == .phone ? .fill : .phone }
-            }
-            tool("在浏览器里打开", icon: .openInBrowser) { if let url = preview.shownAddress { NSWorkspace.shared.open(url) } }
-                .disabled(preview.shownAddress == nil)
-        }
-        .padding(.horizontal, Spacing.tight)
-        .frame(height: Chrome.control)
-        .overlay { LiveProgress(value: preview.progress, shown: loading) }
-        .glass(in: .capsule)
-    }
-
-    private func tool(_ label: LocalizedStringResource, icon: Icon, on: Bool = false, action: @escaping () -> Void) -> some View {
-        Button(action: action) { Image(icon).foregroundStyle(on ? palette.signature : palette.ink) }
-            .buttonStyle(ControlButtonStyle(kind: .icon, size: .compact))
-            .help(Text(label))
-            .accessibilityLabel(Text(label))
-    }
-}
-
-/// 地址：平时居中写 `localhost:5173/路径`；点一下就地改，回车载入，Esc 或点开别处放弃。
-/// 改的时候认出的其余服务挨着输入框列在下面（气泡），一行一个地址，点一个就换过去。
-private struct LiveAddressField: View {
-    let preview: LivePreview
-    @State private var editing = false
-    @State private var dismissed = false
-    @State private var text = ""
-    @FocusState private var focused: Bool
-    @Environment(Workspace.self) private var workspace
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        let shown = preview.shownAddress.map(LiveAddress.shown) ?? ""
-        let others = (workspace.session(in: .main).flatMap { workspace.liveFound[$0.id] } ?? []).filter { $0 != preview.address }
-        Group {
-            if editing {
-                TextField(text: $text, prompt: Text("输入地址").foregroundStyle(palette.ink3)) { Text("地址") }
-                    .textFieldStyle(.plain)
-                    .focused($focused)
-                    .onSubmit {
-                        if let url = LiveAddress.url(from: text) { go(url) }
-                        editing = false
-                    }
-                    .onExitCommand { editing = false }
-                    .onChange(of: focused) { if !$1 { editing = false } }
-                    .padding(.horizontal, Spacing.group)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(palette.fill, in: .capsule)
-                    .onAppear { focused = true }
-                    .bubble(isPresented: Binding { !dismissed && !others.isEmpty } set: { if !$0 { dismissed = true } }) {
-                        LiveCandidates(urls: others) { url in
-                            go(url)
-                            editing = false
-                        }
-                    }
-            } else {
-                Button {
-                    text = shown
-                    dismissed = false
-                    editing = true
-                } label: {
-                    Text(verbatim: shown).lineLimit(1).truncationMode(.middle)
-                        // 两边让出状态标的位置：它来去时地址不挪
-                        .padding(.horizontal, Spacing.group + LiveDriven.width)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .contentShape(.capsule)
-                }
-                .buttonStyle(PressStyle(.control))
-                .help("改地址")
-                .accessibilityLabel(Text("地址"))
-                .accessibilityValue(Text(verbatim: shown))
-            }
-        }
-        .font(Typography.secondary.weight(.medium))
-        .foregroundStyle(palette.ink)
-        .frame(height: ControlSize.compact.height)
-        .frame(maxWidth: .infinity)
-        .overlay(alignment: .leading) {
-            if preview.driven, !editing { LiveDriven().padding(.leading, Spacing.group).transition(.opacity) }
-        }
-        .animation(Motion.fade, value: preview.driven)
-    }
-
-    private func go(_ url: URL) { preview.retarget(.init(url: url, source: .typed)) }
-}
-
-/// Agent 这几秒在看、在点这一页（`LivePreview.driven`）：地址前面那个会话在跑时的状态标，压在地址框的边上，不占栏里的位置。
-private struct LiveDriven: View {
-    static let size: CGFloat = 7
-    static var width: CGFloat { size * 1.8 }
-
-    var body: some View {
-        StateDot(shown: SessionShown(status: .working(.thinking)), size: Self.size)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(Text("Agent 正在操作这个页面"))
-            .help(Text("Agent 正在操作这个页面"))
-    }
-}
-
-/// 认出的其余服务：一行一个地址，不加说明。
-private struct LiveCandidates: View {
-    let urls: [URL]
-    let pick: (URL) -> Void
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ForEach(urls, id: \.self) { url in
-                Button { pick(url) } label: {
-                    Text(verbatim: LiveAddress.shown(url)).lineLimit(1)
-                        .frame(maxWidth: .infinity, minHeight: RowMetrics.height, alignment: .leading)
-                }
-                .buttonStyle(.row)
-            }
-        }
-        .fixedSize(horizontal: true, vertical: false)
-        .font(Typography.secondary.weight(.medium))
-        .foregroundStyle(palette.ink)
-        .padding(.horizontal, RowMetrics.bleed)
-        .padding(.vertical, Spacing.tight)
-    }
-}
-
-/// 载入进度：贴着玻璃栏下沿的一条细线（按栏的胶囊裁，两头随圆角收），载完淡出。
-private struct LiveProgress: View {
-    let value: Double
-    let shown: Bool
-    @Environment(\.palette) private var palette
-
-    private static let thickness: CGFloat = 2
-    /// 刚开始载、还没有进度时先露出的一截：一按下去就看得到在载。
-    private static let start = 0.08
-
-    var body: some View {
-        GeometryReader { geometry in
-            palette.signature
-                .frame(width: geometry.size.width * max(Self.start, value), height: Self.thickness)
-                .frame(maxHeight: .infinity, alignment: .bottom)
-                .animation(Motion.glide, value: value)
-        }
-        .clipShape(.capsule)
-        .opacity(shown ? 1 : 0)
-        .animation(Motion.fade, value: shown)
-        .allowsHitTesting(false)
     }
 }
 #endif

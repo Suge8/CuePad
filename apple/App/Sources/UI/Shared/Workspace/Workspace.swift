@@ -54,7 +54,12 @@ final class Workspace {
     let services: AppServices
     /// 只保留当前布局的导航值；尺寸切换经 `setLayout` 转换，不缓存另一套去处。
     var navigation: Navigation {
-        didSet { MainThreadWatch.shared.page(navigation.trail) }
+        didSet {
+            MainThreadWatch.shared.page(navigation.trail)
+            #if os(iOS)
+            keepLivePreviews()
+            #endif
+        }
     }
     var projectForm: ProjectFormRequest?
     /// 请求聚焦 Cue 的输入框，输入框接下后清掉。不用计数：从别的页过来时输入框是新建的，看不到数变过。
@@ -174,21 +179,34 @@ final class Workspace {
         }
     }
 
+    /// 每个会话的活预览（按会话记录 id）：只在内存里，不进资料库、不同步。手机、iPad 上只留会话页还开着的（`keepLivePreviews`）。
+    var livePreviews: [UUID: LivePreview] = [:]
+    #if os(iOS)
+    /// 手机上铺满屏开着活预览的会话（`LivePhoneCover`）：导航最上面换了别的页就不算开着。
+    var liveCover: UUID?
+    #endif
     #if os(macOS)
     let overlayHeader = OverlayHeader()
     weak var openCardEditing: CardEditing?
-    /// 每个会话的活预览（按会话记录 id）：只在内存里，不进资料库、不同步。
-    var livePreviews: [UUID: LivePreview] = [:]
     /// Agent 发来、还没开过预览的地址（`cuepad live`）：开预览时用掉。
     var liveSent: [UUID: LivePreview.Target] = [:]
-    /// 认出的各个会话的服务（按会话记录 id），最近起来的在前；认不出的会话不在里面（`watchLiveServers`，窗口有人看着时更新）。
+    /// 认出的各个会话的服务（按会话记录 id），最近起来的在前；认不出的会话不在里面（`watchLiveServers`：窗口有人看着时扫全部，手机看着时扫它看的）。
     var liveFound: [UUID: [URL]] = [:]
-    /// 收过的 `cuepad live` 每个会话最后一条的时刻（`take`）。
-    @ObservationIgnored var liveTaken: [String: Date] = [:]
+    /// 问过答不答网页的监听口（`LiveServers` 记着，不每遍重问）。
+    @ObservationIgnored var liveScanner = LiveServers()
+    /// 收过的 `cuepad live` 每个会话最后一条（`take`）：也答给手机（`answerLivePhones`）。
+    @ObservationIgnored var liveTaken: [String: LiveAddress] = [:]
     /// 每个会话在做的那一条 Agent 请求（`answerLive`）：下一条等它做完。
     @ObservationIgnored var liveTurns: [UUID: Task<LiveChannel.Reply, Never>] = [:]
     /// 闲置被释放了的预览（`releaseLivePreviews`）：重建后第一条回执说明页面是重新载入的。
     @ObservationIgnored var liveReleased: Set<UUID> = []
+    /// 手机、iPad 开着的本机会话页（`receiveLive`）：它们看着的会话也要扫（`watchLiveServers`）。
+    var livePhones: [LivePhone.Key: LivePhone] = [:]
+    /// 给手机的隧道口（`openLiveDoor`）：有手机开着预览时才开。
+    @ObservationIgnored var liveServer: (server: LiveTunnel.Server, port: UInt16)?
+    @ObservationIgnored var liveServerStarting: Task<UInt16?, Never>?
+    /// 隧道放行的端口（`admitLive`），按会话记一秒：网页一次开几条连接，不各扫一遍进程表。
+    @ObservationIgnored var livePorts: [String: (ports: Set<Int>, at: ContinuousClock.Instant)] = [:]
     #endif
     /// 并排两半的分界拖到了哪（`WideMetrics.BesideShare`）：每个窗口一份，只在内存里。
     var besideShare = WideMetrics.BesideShare()
@@ -249,8 +267,10 @@ final class Workspace {
         async let agents: Void = followLocalAgents()
         async let live: Void = followLiveAddresses()
         async let liveAgent: Void = serveLiveAgent()
+        async let liveScan: Void = watchLiveServers()
+        async let livePhones: Void = followLivePhones()
         await followSessionPlacement()
-        _ = await (agents, live, liveAgent)
+        _ = await (agents, live, liveAgent, liveScan, livePhones)
         #endif
         _ = await (catalog, links, launches, cue, opens, library, quota, cards, files)
     }

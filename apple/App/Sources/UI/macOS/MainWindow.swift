@@ -21,7 +21,6 @@ struct MainWindow: View {
         .overlay { Prewarm().environment(workspace) }
         .overlay { NoticeView() }
         .followsUndo(workspace)
-        .task(id: workspace.services.viewer.present) { if workspace.services.viewer.present { await workspace.watchLiveServers() } }
         .toolbar(removing: .title)
         .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
         .panelHost()
@@ -65,7 +64,7 @@ struct MainWindow: View {
     private func beside(_ sizes: WideMetrics, window: CGFloat, trail: CGFloat) -> some View {
         let origin = sizes.split ? sizes.rail + sizes.leading : window
         return WideColumnHost(slot: .beside, focus: focus, origin: origin, width: sizes.trailing, shape: sizes.shape, hidden: !sizes.split) {
-            BesideColumn().environment(\.headInset, Self.inset(trailing: trail))
+            BesideColumn { SessionPage($0, column: .beside) }.environment(\.headInset, Self.inset(trailing: trail))
         }
         .frame(width: sizes.trailing)
         .padding(.leading, origin)

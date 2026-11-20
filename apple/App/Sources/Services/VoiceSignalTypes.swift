@@ -6,6 +6,8 @@ nonisolated enum VoiceSignalPayload: Equatable, Codable, Sendable {
     case command(command: VoiceCommand)
     case commandResult(result: VoiceCommandResult)
     case projection(value: VoiceCallProjection)
+    /// 手机、iPad 看 Mac 会话的活预览（`LiveSignal`），与通话无关，借这条端到端加密的信令。
+    case live(signal: LiveSignal)
 }
 
 /// 拒绝只能结算原发送的归属；结果帧与请求帧分开，回执发送失败不能误伤同 UUID 的本地请求。
@@ -21,6 +23,9 @@ extension VoiceSignalPayload {
         case .media, .projection: .media
         case .command(let command): .command(id: command.id)
         case .commandResult(let result): .commandResult(id: result.command)
+        // 不另加 purpose：路由头在中转连接上整帧解码（`Relay.frame(from:)`），旧版遇到不认识的 purpose 整条中转连接断开重连、门铃一起断；
+        // 认识的 purpose 配上解不开的正文，旧版只当一帧解不开（`VoiceRelayEvent.unreadable`）。问记作命令、答记作结果，拒收照旧按 id 归属。
+        case .live(let signal): signal.answers ? .commandResult(id: .init(signal.request)) : .command(id: .init(signal.request))
         }
     }
 }

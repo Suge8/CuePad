@@ -48,6 +48,7 @@ extension DebugScene {
         #else
         let from = (workspace.mainRoute, workspace.path)
         drivers += [
+            { await cycleLivePhoneIfAsked(workspace) },
             {
                 await saysIfAsked(services, visit: { workspace.select(.cue) }, back: {
                     workspace.select(from.0)

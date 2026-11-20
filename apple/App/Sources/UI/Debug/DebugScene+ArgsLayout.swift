@@ -20,8 +20,11 @@ nonisolated struct LayoutArgs: Decodable, DebugArgGroup {
     let highContrast: Bool
     /// `-CuePadLargestType YES`：整个窗口按最大的辅助字号画
     let largestType: Bool
-    /// `-CuePadLivePreview <地址>|blank`（仅 Mac，配 session 画面）：左边会话的活预览开在右半、载入这个地址；blank 是刚点开、还没有地址的样子
+    /// `-CuePadLivePreview <地址>|blank`（配 session 画面）：左边会话的活预览开在右半、载入这个地址；blank 是刚点开、还没有地址的样子（只 Mac）。
+    /// 手机、iPad 上会话所在的 Mac 由本进程里的替身扮（`DebugScene+LivePhone`），地址是这台 Mac 回环上的服务，经真的隧道载入；手机铺满一页
     let livePreview: String?
+    /// `-CuePadLiveCycle YES`（手机、iPad，配 `-CuePadLivePreview` 录屏）：就绪后每 2.5 秒开合一次活预览
+    let liveCycle: Bool
     /// `-CuePadLiveViewport phone`（配 `-CuePadLivePreview`）：活预览起在手机宽那一档
     let liveViewport: String?
     /// `-CuePadLivePick <CSS 选择器>`（配 `-CuePadLivePreview <地址>`）：页面载完后开着点选、高亮停在这个元素上（后台截图里指针进不来）

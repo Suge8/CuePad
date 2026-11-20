@@ -1,3 +1,4 @@
+import CryptoKit
 import CueStore
 import CueSync
 import Foundation
@@ -46,6 +47,8 @@ final class Relay {
     @ObservationIgnored private var rang: (@MainActor () async -> Void)?
     /// 这个账号的房间与签名（密钥派生的）：取到一次就记着，换账号（`reconnect`）时清掉。
     @ObservationIgnored private var known: RelayCredentials?
+    /// 活预览隧道的密钥（`VoiceSignaling.liveTunnelKey`），与入房同出这个账号的密钥。
+    var liveTunnelKey: SymmetricKey? { known?.tunnelKey }
     /// 最后一个按出去的门铃（之前的都已发完或失败）：`settle` 与短连等它。
     @ObservationIgnored private var sending: Task<Void, Never>?
     /// 有改动被收下时门铃没通（或没按出去），入房后先补按一次。

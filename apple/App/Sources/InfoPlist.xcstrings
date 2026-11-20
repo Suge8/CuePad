@@ -19,6 +19,24 @@
         }
       }
     },
+    "NSLocalNetworkUsageDescription" : {
+      "comment" : "iOS：本地网络授权说明（同一网络里看 Mac 上的活预览，点开预览时才问）",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lets you see your Mac's web preview when you're both on the same network."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在同一个网络里看你 Mac 上的网页预览。"
+          }
+        }
+      }
+    },
     "NSMicrophoneUsageDescription" : {
       "comment" : "和 Cue 通话时的麦克风授权说明",
       "extractionState" : "manual",
