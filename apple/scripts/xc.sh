@@ -20,6 +20,8 @@
 #                                                   xc.sh shot ios -- -CuePadScene shelf , dark-cue.png -- -CuePadScene cue -theme dark
 #   xc.sh rec  <mac|ios|ipad> [片.mov] [-- 启动参数…] [, …]  同上，每张录 CUEPAD_REC_SECONDS 秒（默认 12）；CUEPAD_REC_LAUNCH=1 从启动前开录（Mac 等窗口出现就录）
 #     Mac 首帧入片后写 <片.mov>.ready；交互先清旧回执、等新回执再操作，应用就绪不等于已开录。
+#     ios 的 shot 带 -CuePadLiveActivity YES 时拍的是系统的灵动岛：收起的（<图>-compact.png）与长按展开的（<图>），如
+#       xc.sh shot ios -- -CuePadDemo YES -CuePadLiveActivity YES -CuePadCueNow asks（app_sim.py 的 island）。改了岛的界面在这里验：调试预览看不出被系统截断
 #     ios、ipad 的 shot、rec、run 认 -CuePadLandscape YES：起实例前把模拟器横过来（设备的物理朝向，devicectl），这一张拍完转回竖屏（app_sim.py 的 orient）
 #   xc.sh run  <mac|ios|ipad> [-- 启动参数…]          起着给 bcu、axe 操作，打印 PID（模拟器另带 UDID）；实例 5 分钟后自己退出（CUEPAD_RUN_SECONDS 改）。
 #                                                   iOS 的模拟器由后台看守租着，别的检出领不到，直到实例退出、到时或 stop

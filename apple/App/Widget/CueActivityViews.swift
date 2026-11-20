@@ -10,7 +10,7 @@ import WidgetKit
 /// 岛的底系统钉死是黑的，状态的实色（`Palette.signal`，同锁屏那张卡）只铺在小块上：紧凑态与最小态等你时
 /// 右位的钟、最小态那颗圆，展开态那颗对勾钮——常驻在状态栏里的平时只上字色，轮到你了才亮成一块。
 /// 锁屏是另一张（`CueLockScreen`）：那块的底归我们，整块按状态上色、一个主角。
-/// 调试画面复用这些视图，但不能代替系统灵动岛的宽度与状态栏验收（`-CuePadLiveActivity YES`）。
+/// 调试画面复用这些视图，但不能代替系统的岛：宽度、状态栏、展开态 160pt 的上限只有系统的岛上看得出，改了在那里拍（`xc.sh shot ios` 带 `-CuePadLiveActivity YES`）。
 struct CueActivityViews {
     private let now: CueNow
     private let stale: Bool
