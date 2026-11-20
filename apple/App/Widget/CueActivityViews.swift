@@ -93,9 +93,11 @@ struct ActivityElapsed: View {
     /// 时间文字会占满给它的宽、字靠左：排在右端的（默认）字要贴右缘。
     var alignment = TextAlignment.trailing
 
-    var body: some View {
-        Text(.currentDate, format: .timer(countingUpIn: since..<Date.distantFuture)).monospacedDigit().lineLimit(1)
-            .multilineTextAlignment(alignment)
+    var body: some View { Self.text(since: since).lineLimit(1).multilineTextAlignment(alignment) }
+
+    /// 能嵌进一句里的那只钟（"已等 3:02"）。
+    static func text(since: Date) -> Text {
+        Text(.currentDate, format: .timer(countingUpIn: since..<Date.distantFuture)).monospacedDigit()
     }
 }
 
