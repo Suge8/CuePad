@@ -103,16 +103,18 @@ struct BoardRowLane<Above: View, Content: View>: View {
 /// 推进中、等你三行（标题、近况或问句那一句、卡脚）；待办与已完成是一行高的薄条（`light`），不低于一颗钮的点按高。
 private struct BoardRowRuler: View {
     let light: Bool
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
+        let title = Text(verbatim: "国").lineLimit(BoardCardMetrics.rowLines(typeSize), reservesSpace: true)
         Group {
             if light {
-                Text(verbatim: "国").font(TaskMetrics.lineFont).padding(.vertical, BoardCardMetrics.compactPad).frame(minHeight: ControlSize.regular.height)
+                title.font(TaskMetrics.lineFont).padding(.vertical, BoardCardMetrics.compactPad).frame(minHeight: ControlSize.regular.height)
             } else {
                 VStack(alignment: .leading, spacing: BoardCardMetrics.footGap) {
-                    Text(verbatim: "国").font(Typography.bodyStrong)
+                    title.font(Typography.bodyStrong)
                     Text(verbatim: "国").font(TaskMetrics.caption)
-                    Color.clear.frame(width: 0, height: BoardCardMetrics.vitals)
+                    Color.clear.frame(width: 0).boardFootHeight(BoardCardMetrics.vitals)
                 }
                 .padding(.vertical, BoardCardMetrics.pad)
             }

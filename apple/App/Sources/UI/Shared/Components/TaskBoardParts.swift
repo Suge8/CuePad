@@ -187,7 +187,7 @@ struct BoardColumn: View {
             if board.todo.isEmpty && !adding { empty("没有待办") }
         case .advancing:
             // 一个 ForEach 排完各档：卡换档是同一串里换位（让位），不是这一档删一张、那一档添一张（同一个飞行身份一删一添会从栈顶飞过来）
-            ForEach(AdvancingSlot.slots(workspace.byAttention(board.advancing, steady: isRow), gaps: !isRow)) { slot in
+            ForEach(AdvancingSlot.slots(workspace.byAttention(board.advancing), gaps: !isRow)) { slot in
                 switch slot {
                 case .gap:
                     // 档与档之间多空一截：栈里一格零高的空，前后各一个行距（横着的一行里一格就是一张卡宽，不空）

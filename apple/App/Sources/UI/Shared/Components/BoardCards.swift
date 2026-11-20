@@ -105,7 +105,7 @@ extension Workspace {
 #endif
 
 /// 拉丁词按词断——词里的连字符换成不断行的（U+2011），"notes-edit"不拆成"notes- / edit"；
-/// 整个标题只是一个拉丁词（没有空格、没有汉字）时只排一行，放不下先收字距、再截断，不按字母折行。中文照常按字折，至多两行（辅助字号三行）；手机的行里一行。
+/// 整个标题只是一个拉丁词（没有空格、没有汉字）时只排一行，放不下先收字距、再截断，不按字母折行。中文照常按字折，至多两行（辅助字号三行）；手机的行里一行（辅助字号两行）。
 /// 几个拉丁词里有一个比一行还长时系统仍会在词中间折：标题里少见，不为它另排。
 /// `lines` 给 1 是这张卡第二行非写旁注不可（等你的那句提问）。
 struct BoardCardTitle: View {
@@ -120,7 +120,7 @@ struct BoardCardTitle: View {
     }
 
     var body: some View {
-        Text(Self.joined(text)).lineLimit(row || Self.oneWord(text) ? 1 : lines ?? BoardCardMetrics.lines(typeSize)).allowsTightening(true)
+        Text(Self.joined(text)).lineLimit(Self.oneWord(text) ? 1 : row ? BoardCardMetrics.rowLines(typeSize) : lines ?? BoardCardMetrics.lines(typeSize)).allowsTightening(true)
     }
 
     private static func joined(_ text: String) -> String {
@@ -237,7 +237,7 @@ struct BoardCardLayout<Title: View, Facts: View, Trailing: View>: View {
                 if let project { BoardProjectTag(project: project) } else { Color.clear.frame(width: 0) }
                 foot
             }
-            .frame(height: advancing ? BoardCardMetrics.vitals : BoardCardMetrics.foot)
+            .boardFootHeight(advancing ? BoardCardMetrics.vitals : BoardCardMetrics.foot)
         }
         .padding(.vertical, compact ? BoardCardMetrics.compactPad : BoardCardMetrics.pad)
     }
@@ -255,6 +255,18 @@ struct BoardCardLayout<Title: View, Facts: View, Trailing: View>: View {
     private func noteLine(_ note: String) -> some View {
         Text(verbatim: note).font(TaskMetrics.caption).foregroundStyle(palette.ink3).lineLimit(1).readerHidden(true)
     }
+}
+
+extension View {
+    /// 卡脚定高，随字号放大：定死的话大字号下卡脚的字比卡脚高，压到卡边上。
+    func boardFootHeight(_ height: CGFloat) -> some View { modifier(BoardFootHeight(height: height)) }
+}
+
+private struct BoardFootHeight: ViewModifier {
+    let height: CGFloat
+    @ScaledMetric(relativeTo: .footnote) private var scale = 1.0
+
+    func body(content: Content) -> some View { content.frame(height: height * scale) }
 }
 
 /// 卡脚两样：左端项目、右端这一列的事实。事实先占它非要不可的宽，项目名用剩下的、放不下就截；

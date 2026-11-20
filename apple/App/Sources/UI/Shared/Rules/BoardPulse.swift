@@ -41,7 +41,8 @@ struct BoardPulse: Equatable {
         return shown.isRunning ? .running : .resting
     }
 
-    /// 手机的行按它排：要你管的在前，睡了的（没有会话、已休眠）在后，其余同一档——在跑与歇着每一轮都来回换，休眠与唤醒才是难得的一次。
+    /// 推进中的先后按它，不按 `tier`：要你管的在前，睡了的（没有会话、已休眠）在后，其余同一档——在跑与歇着每一轮都来回换，
+    /// 按它们排卡就跟着来回换位置；休眠与唤醒才是难得的一次。
     var steadyTier: Tier {
         if speaks { return .needsYou }
         guard let shown else { return .resting }
@@ -75,15 +76,14 @@ extension Workspace {
     typealias Attention = (pinned: Bool, tier: BoardPulse.Tier, work: [(work: TaskBoard.Work, running: Bool)])
 
     /// 置顶的任务在最前：置顶是你亲手定的先后，排在档之前。
-    /// `steady`（手机的行）：卡只在换列时动，同一行里的位置不跟着会话每一轮的状态变（`BoardPulse.steadyTier`）——行里是几排的格子，
-    /// 又没有档与档的间隔，按在跑、歇着排只剩下卡来回换位置。没绑任务的会话在行里按开的先后排，不按最近一次换状态的时刻
-    /// （读库的那一份是后者，同样一换状态就换位置）。
-    func byAttention(_ work: [TaskBoard.Work], steady: Bool = false) -> [Attention] {
-        let listed = steady ? work.filter { $0.loose == nil } + work.compactMap { work in work.loose.map { (work, $0.state) } }
-            .sorted { ($1.1.createdAt, $0.1.sessionID) < ($0.1.createdAt, $1.1.sessionID) }.map(\.0) : work
-        let tiered = listed.map { work in
+    /// 卡只在换列时动，同一列里的位置不跟着会话每一轮的状态变（`BoardPulse.steadyTier`）。没绑任务的会话按开的先后排，
+    /// 不按最近一次换状态的时刻（读库的那一份是后者，同样一换状态就换位置）。
+    func byAttention(_ work: [TaskBoard.Work]) -> [Attention] {
+        let loose = work.compactMap { work in work.loose.map { (work, $0.state) } }
+            .sorted { ($1.1.createdAt, $0.1.sessionID) < ($0.1.createdAt, $1.1.sessionID) }.map(\.0)
+        let tiered = (work.filter { $0.loose == nil } + loose).map { work in
             let pulse = pulse(of: work.agent)
-            return (work: work, tier: steady ? pulse.steadyTier : pulse.tier, running: pulse.tier == .running)
+            return (work: work, tier: pulse.steadyTier, running: pulse.tier == .running)
         }
         return [true, false].flatMap { pinned -> [Attention] in
             let tiers = Dictionary(grouping: tiered.filter { ($0.work.item?.task.isPinned == true) == pinned }, by: \.tier)
