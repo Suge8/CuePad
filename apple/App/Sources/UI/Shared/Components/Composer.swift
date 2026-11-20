@@ -189,7 +189,9 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
                 tools().environment(\.singleLineConfig, workspace.layout == .wide)
                 Spacer(minLength: 0)
                 if pill {
-                    send().padding(.leading, Spacing.item).padding(.trailing, ComposerMetrics.pillInset).frame(minHeight: ComposerMetrics.slot)
+                    // 字号封顶同工具排（`ConfigControls.largestType`）：再大这颗钮把模型名挤没
+                    send().dynamicTypeSize(...ComposerMetrics.largestType)
+                        .padding(.leading, Spacing.item).padding(.trailing, ComposerMetrics.pillInset).frame(minHeight: ComposerMetrics.slot)
                 } else {
                     slotSpace
                 }

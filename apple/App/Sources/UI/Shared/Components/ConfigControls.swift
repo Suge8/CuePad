@@ -87,7 +87,7 @@ struct ConfigControls<Trailing: View>: View {
     /// 工具排的字号上限（同 Cue 面板的做法）：按最坏的一排定——最窄的 iPhone（375 宽）、英文，模型、"管理用量"、思考强度、加速、上下文全在，
     /// 收完六步（`ConfigRow`）仍一颗不少、不压发送钮的那一档，实测 xxLarge；再大一档 xxxLarge 时英文的上下文压到发送钮下面。
     /// 泛型类型里放不了静态存储属性。
-    static var largestType: DynamicTypeSize { .xxLarge }
+    static var largestType: DynamicTypeSize { ComposerMetrics.largestType }
 
     func aligned(_ alignment: Alignment) -> Self {
         var aligned = self
@@ -115,7 +115,7 @@ struct ConfigControls<Trailing: View>: View {
                     #if os(macOS)
                     .popUpAnchor(anchors[.thinking])
                     #endif
-                    .layoutValue(key: ConfigGive.self, value: [.wording, .secondary])
+                    .layoutValue(key: ConfigGive.self, value: [.wording, .level])
             }
             if shown.model?.supportsFast == true {
                 FastCapsule(fast: shown.fast, choose: chooseFast).layoutValue(key: ConfigGive.self, value: [.secondary])
@@ -154,7 +154,8 @@ struct ConfigControls<Trailing: View>: View {
 /// 先收字、留标志与操作；不把胶囊收进"⋯"：排版定不了菜单里该有哪几项（`Layout` 不能藏起子视图，藏不掉的照样被读屏读到、点到），一律收短、留在原地。
 /// 所有压缩档用尽仍放不下时才折行；新增的尾部动作不能伸到发送钮下面，也不裁掉操作。
 private struct ConfigRow: Layout {
-    enum Give: CaseIterable { case wording, spacing, context, agent, secondary, model }
+    /// 名字比读数要紧：思考强度先收成只剩竖格（`level`），再收 Agent 名，模型名最后收——看不出选的是哪个模型就没法确认这一次用的是谁。
+    enum Give: CaseIterable { case wording, spacing, context, level, agent, secondary, model }
 
     private static let spacing = Spacing.glyph
     private static let tightSpacing = Spacing.hair
@@ -210,7 +211,7 @@ private struct ConfigRow: Layout {
                 for index in subviews.indices where subviews[index][ConfigGive.self].contains(give) {
                     row.widths[index] = width(of: subviews[index], in: max(0, available - row.width + row.widths[index]))
                 }
-            case .wording, .context, .agent, .secondary:
+            case .wording, .context, .level, .agent, .secondary:
                 for index in subviews.indices where subviews[index][ConfigGive.self].contains(give) {
                     row.widths[index] = width(of: subviews[index], in: max(0, row.widths[index] - 1))
                 }

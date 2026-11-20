@@ -9,6 +9,8 @@ enum ComposerMetrics {
     static let glyphTarget: CGFloat = 44
     /// 带字主钮（`Composer.pill`、任务气泡的"开始"）离右边与离下边一样远：钮的圆角与输入框的圆角同心。
     static let pillInset = (slot - ControlSize.compact.height) / 2
+    /// 底下那一排（工具排与带字主钮）的字号上限。
+    static let largestType = DynamicTypeSize.xxLarge
     static let noticeSpacing = Spacing.tight
     static let noticePadding = Spacing.item
     /// 会话页对话末尾按动态字号缩放它（`Conversation`），外边距不缩放。

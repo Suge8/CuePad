@@ -5741,6 +5741,22 @@
         }
       }
     },
+    "交给" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hand Off"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "交给"
+          }
+        }
+      }
+    },
     "交给 %@" : {
       "localizations" : {
         "en" : {
