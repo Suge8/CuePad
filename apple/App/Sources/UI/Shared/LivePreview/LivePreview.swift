@@ -58,6 +58,8 @@ final class LivePreview: NSObject, WKNavigationDelegate {
     @ObservationIgnored var tunneled: Set<String> = []
     /// 看得见时去 Mac 的路（`Workspace.connectLive`），收起就没有。
     var link: LiveLink?
+    /// 会话所在的那台 Mac，打开时记下：回到前台时预览先连（场景一不在后台就连）、会话页后问（场景活动了才问），那一刻 `LiveRemote.host` 还是空的。
+    @ObservationIgnored var host: String?
     /// 跟过的 Agent 发来的地址（`follow`，按发来的时刻认）。
     @ObservationIgnored private var sentTaken: Date?
     /// 这一页的数据存储：代理设在它上面（`LiveLink`），只管这一个预览；登录状态跟着预览留到离开会话页（`Workspace.keepLivePreviews`）。

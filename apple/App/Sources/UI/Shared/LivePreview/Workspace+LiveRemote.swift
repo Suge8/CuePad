@@ -41,6 +41,7 @@ extension Workspace {
             guard let answer = liveAnswer(route.id), !answer.pages.isEmpty else { return }
             let preview = livePreviews[route.id] ?? LivePreview()
             preview.sessionID = route.sessionID
+            preview.host = route.sessionID.flatMap(services.liveRemote.host)
             preview.follow(answer, showing: false)
             livePreviews[route.id] = preview
         }
@@ -55,7 +56,7 @@ extension Workspace {
 
     /// 预览看得见的这段时间连着 Mac（`LivePreviewPane` 的 task）：收起（滑完、盖着的那一页落下）、进后台就断开，预览留着。
     func connectLive(_ preview: LivePreview) async {
-        guard let sessionID = preview.sessionID, let host = services.liveRemote.host(sessionID) else { return }
+        guard let sessionID = preview.sessionID, let host = preview.host else { return }
         do {
             let link = try LiveLink()
             preview.link = link
@@ -81,7 +82,7 @@ extension Workspace {
 
     /// 连不上 Mac 时的退路（预览里那颗"在 Mac 上操作"）：先请 Mac 把这个会话的活预览亮在最前，再用 UU 远程连过去看那一页。
     func viewOnMac(_ preview: LivePreview) async {
-        guard let sessionID = preview.sessionID, let host = services.liveRemote.host(sessionID) else { return }
+        guard let sessionID = preview.sessionID, let host = preview.host else { return }
         await services.liveRemote.show(sessionID)
         await operate(on: host)
     }
