@@ -65,6 +65,8 @@ nonisolated struct LayoutArgs: Decodable, DebugArgGroup {
     let reader: Bool
     /// `-CuePadReduceMotion YES`：整个窗口按"减弱动态效果"画
     let reduceMotion: Bool
+    /// `-CuePadReduceTransparency YES`：整个窗口按"降低透明度"画（玻璃退回实底）
+    let reduceTransparency: Bool
     /// `-CuePadRightCycle YES|fast`：同样开合右栏（Cue）
     let rightCycle: String?
     /// `-CuePadScheduleOpen YES`：新定时的几点展开（配 cueschedules、task 画面）

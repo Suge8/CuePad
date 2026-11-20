@@ -104,14 +104,20 @@ nonisolated struct BubblePlacement: Equatable {
         case .fixed(let fixed): fixed
         }
         let width = min(wanted, room)
-        guard let anchor else { return ((minX + maxX - width) / 2, width) }
-        let left = left ?? (leads ? anchor - Self.lead : anchor - width / 2)
-        return (min(max(left, minX), maxX - width), width)
+        return (x(width: width), width)
     }
 
-    func tail(x: CGFloat, width: CGFloat) -> BubbleTail? {
+    /// 左沿只由宽定：气泡的形状（`BubbleShape`）拿到自己的宽就画得出尾巴，不读回摆的位置。
+    private func x(width: CGFloat) -> CGFloat {
+        if sheet { return minX }
+        guard let anchor else { return (minX + maxX - width) / 2 }
+        let left = left ?? (leads ? anchor - Self.lead : anchor - width / 2)
+        return min(max(left, minX), maxX - width)
+    }
+
+    func tail(width: CGFloat) -> BubbleTail? {
         guard let tailEdge, let anchor else { return nil }
-        return BubbleTail(edge: tailEdge, offset: min(max(anchor - x, Self.tailInset), width - Self.tailInset))
+        return BubbleTail(edge: tailEdge, offset: min(max(anchor - x(width: width), Self.tailInset), width - Self.tailInset))
     }
 
     func lifted(_ lifted: Bool) -> BubblePlacement {
@@ -128,11 +134,8 @@ nonisolated struct BubblePlacement: Equatable {
     }
 
     static let rise: CGFloat = 8
-    #if os(macOS)
-    static let radius = Radius.card
-    #else
+    /// 同新会话、记任务的输入卡。
     static let radius = Radius.field
-    #endif
     static let reach: CGFloat = RowMetrics.height / 2
     // 尾巴根离圆角起弧处再让一点，尾巴不骑在弧上
     static let tailInset: CGFloat = radius + BubbleTail.base / 2 + 4
@@ -151,11 +154,11 @@ nonisolated struct BubbleTail: Equatable {
 }
 
 nonisolated struct BubbleShape: Shape {
-    var tail: BubbleTail?
-    var radius: CGFloat
+    var placement: BubblePlacement
 
     func path(in rect: CGRect) -> Path {
-        let r = min(radius, rect.width / 2, rect.height / 2)
+        let tail = placement.tail(width: rect.width)
+        let r = min(placement.radius, rect.width / 2, rect.height / 2)
         let (minX, minY, maxX, maxY) = (rect.minX, rect.minY, rect.maxX, rect.maxY)
         var path = Path()
         path.move(to: CGPoint(x: minX + r, y: minY))
@@ -193,37 +196,23 @@ struct BubbleFrame<Content: View, Area: View>: View {
     let placement: BubblePlacement
     @ViewBuilder let content: Content
     @ViewBuilder var area: Area
-    @Environment(\.palette) private var palette
 
     var body: some View {
         let card = RoundedRectangle(cornerRadius: placement.radius)
         ScrollView { content }
             .scrollBounceBehavior(.basedOnSize)
+            .debugScrollsToMiddle()
             .frame(minWidth: placement.narrowest, alignment: .topLeading)
             .clipShape(card)
             .rowContainer(card)
+            .glass(in: BubbleShape(placement: placement))
             .background { area }
-            .background {
-                GeometryReader { proxy in
-                    let frame = proxy.frame(in: .named(BubbleStage.space))
-                    let shape = BubbleShape(tail: placement.tail(x: frame.minX, width: frame.width), radius: placement.radius)
-                    // 一根发丝粗的实线勾出轮廓与尾巴：气泡常落在同色的纸上，只靠投影时尾巴看不出（贴边再叠一层细影也行，但开合每帧多画一层影，掉帧）
-                    shape.fill(palette.paper)
-                        .elevation(.panel)
-                        .overlay { shape.stroke(palette.track, lineWidth: Self.edge) }
-                }
-            }
             .layoutValue(key: BubbleSpot.self, value: placement)
     }
-
-    private static var edge: CGFloat { 0.5 }
 }
 
 /// 只排一次，不读回排版结果。
 struct BubbleStage: Layout {
-    /// 挂 `BubbleStage` 的地方给 `coordinateSpace`，气泡按它画尾巴。
-    nonisolated static let space = "bubble-stage"
-
     var floor: CGFloat?
     var ceiling: CGFloat = 0
 

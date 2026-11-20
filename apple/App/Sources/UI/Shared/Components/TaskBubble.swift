@@ -18,7 +18,7 @@ struct TaskBubble: View {
     @Environment(AppServices.self) private var services
     @Environment(\.closePanel) private var close
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.palette) private var palette
+    @State private var footerHeight: CGFloat = 0
     @State private var data: BubbleData?
     /// 这一页的编辑：页一出现就开着（编辑器从第一帧就在，点哪写哪），翻页、关气泡先写下没保存的字再换。"开始"先等它落盘再交出去。
     @State private var editing: CardEditing?
@@ -40,13 +40,14 @@ struct TaskBubble: View {
                                 .padding(.leading, BubbleMetrics.textLeading).padding(.trailing, BubbleMetrics.textTrailing)
                         }
                         .padding(.top, Spacing.item).padding(.leading, BubbleMetrics.leading)
+                        .mask(alignment: .top) { UnderFooterFade(footer: footerHeight) }
                     } footer: {
                         // 同输入框底下那一排：胶囊从左边排起，圆钮在右下同一个位置
                         BubbleFooter(data: data, focus: focus, editing: editing)
                             .padding(.leading, Spacing.group).padding(.trailing, ComposerMetrics.glyphInset)
                             .padding(.top, BubbleMetrics.footerGap)
                             .padding(.bottom, ComposerMetrics.glyphInset + (sheet ? BubbleMetrics.sheetBottom : 0))
-                            .background(palette.paper)
+                            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { footerHeight = $0 }
                     }
                 }
                 .id(focus.id)
@@ -79,6 +80,27 @@ struct TaskBubble: View {
         editing?.leave()
         editing = card.map { CardEditing($0, titled: true, workspace: workspace) }
     }
+}
+
+/// 正文滚到钉在底下那一排后面时，在那一排的上沿渐隐、排后面不留字：气泡底是玻璃，那一排铺实色是一条带子、再套玻璃是玻璃叠玻璃。
+/// 渐隐随藏到排后面的长短长出来：没滚、正文刚好放下时最后一行不淡。只挪遮罩（`visualEffect`），滚动时不重算视图。
+private struct UnderFooterFade: View {
+    let footer: CGFloat
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Color.black
+            LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom).frame(height: Self.fade)
+        }
+        .padding(.bottom, -Self.fade)
+        .visualEffect { [footer, fade = Self.fade, gap = BubbleMetrics.footerGap] content, proxy in
+            let top = (proxy.bounds(of: .scrollView)?.maxY ?? .infinity) - footer
+            let hidden = max(0, proxy.size.height - top)
+            return content.offset(y: -min(hidden * 3, hidden + fade - gap))
+        }
+    }
+
+    private static let fade: CGFloat = 24
 }
 
 /// 只有它读 `Workspace.openTask`，开合、翻页时只重算它，不连带根视图。

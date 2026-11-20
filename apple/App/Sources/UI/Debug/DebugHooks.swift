@@ -22,6 +22,7 @@ enum DebugHooks {
         var taskFold = TaskFold()
         /// 整个窗口按"减弱动态效果"画（`PaletteProvider`）：验收时不碰系统设置。
         var reducesMotion = false
+        var reducesTransparency = false
         /// 整个窗口按最大的辅助字号画，同上不碰系统设置。
         var largestType = false
         /// 整个窗口按"增强对比度"画，同上不碰系统设置。

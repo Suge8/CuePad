@@ -383,7 +383,6 @@ private struct PanelLayer: View {
                     }
                 }
             }
-            .coordinateSpace(.named(BubbleStage.space))
         }
         .ignoresSafeArea()
     }

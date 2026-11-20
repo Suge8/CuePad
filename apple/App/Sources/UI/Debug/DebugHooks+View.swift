@@ -80,6 +80,15 @@ extension View {
         #endif
     }
 
+    /// `-CuePadLongTask YES`：挂在滚动区上，内容读到之后滚到一半。
+    func debugScrollsToMiddle() -> some View {
+        #if DEBUG
+        modifier(MiddleScroll())
+        #else
+        self
+        #endif
+    }
+
     /// `-CuePadHelpOpen YES`：问号的说明一出现就点开，同点一下问号（推入转场里栏在动，等它停下再量钮的框）。
     func debugOpensHelp(_ open: @escaping @MainActor () -> Void) -> some View {
         #if DEBUG

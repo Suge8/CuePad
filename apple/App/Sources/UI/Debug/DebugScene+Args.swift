@@ -129,6 +129,8 @@ nonisolated struct DebugArgs: Decodable {
     let syncBench: String?
     /// `-CuePadTask <标题开头>`：task 画面打开那一条任务的气泡，没给是第一条
     let task: String?
+    /// `-CuePadLongTask YES`（配 task 画面）：打开的那条任务写一段长正文、挂上十二个子任务，气泡停在滚到一半处，看钉在底下那一排盖住滚过的字
+    let longTask: Bool
     /// `-CuePadTaskLines written|changed`：对话末尾 Cue 再说一句关于"导入旧数据"的话（气泡下一行这件活），都看过、页停在最新处
     let taskLines: String?
     /// `-CuePadTidy YES`（配 library 画面，仅 Mac）：画面出来后点一下一键整理，拍整理后的样子
