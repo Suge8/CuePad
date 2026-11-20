@@ -219,7 +219,7 @@ extension LiveTunnel {
         /// 放行了、还连着的按票据记着：票据作废时连着的也断（`keep`），网页视图的长连接不靠旧票据一直通。关了的当场去掉：网页每个请求一条连接，一张票据活几个小时。
         private let open = Mutex(Ledger())
         private struct Ledger {
-            var splices: [Data: [ObjectIdentifier: Splice]] = [:]
+            var splices: [Data: [ObjectIdentifier: (splice: Splice, port: UInt16)]] = [:]
             /// 最近一次 `keep` 留下的票据（nil：还没作废过任何一张）。验票与登记之间隔着连开发服务、写放行两次等待，
             /// 这期间作废的票据在登记这一步拦下，不让一条迟到的连接挂在作废了的票据上接着转发。
             var tickets: Set<Data>?
@@ -238,10 +238,20 @@ extension LiveTunnel {
         /// 只留这几张票据的连接，别的断掉。
         func keep(_ tickets: Set<Data>) {
             let gone = open.withLock { open in
-                let gone = open.splices.filter { !tickets.contains($0.key) }.values.flatMap(\.values)
+                let gone = open.splices.filter { !tickets.contains($0.key) }.values.flatMap(\.values).map(\.splice)
                 open.splices = open.splices.filter { tickets.contains($0.key) }
                 open.tickets = tickets
                 return gone
+            }
+            for splice in gone { splice.close() }
+        }
+
+        /// 这张票据只留这几个口上的连接，别的口上还连着的断掉。
+        func limit(_ ticket: Data, to ports: Set<UInt16>) {
+            let gone = open.withLock { open in
+                let gone = open.splices[ticket]?.filter { !ports.contains($0.value.port) } ?? [:]
+                for inbound in gone.keys { open.splices[ticket]?[inbound] = nil }
+                return gone.values.map(\.splice)
             }
             for splice in gone { splice.close() }
         }
@@ -306,7 +316,7 @@ extension LiveTunnel {
                     let splice = Splice(inbound, outbound) { [weak self] _ in self?.forget(ticket, inbound) }
                     let kept = open.withLock { open in
                         guard open.tickets?.contains(ticket) ?? true else { return false }
-                        open.splices[ticket, default: [:]][ObjectIdentifier(inbound)] = splice
+                        open.splices[ticket, default: [:]][ObjectIdentifier(inbound)] = (splice, request.port)
                         return true
                     }
                     guard kept else {

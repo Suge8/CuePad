@@ -9,6 +9,7 @@ import Foundation
 /// 2. 是会话 Agent 进程的后代：系统自带的可执行文件（/usr/bin/ruby）内核不给读环境，靠这条。
 /// 3. 都没有的（你自己在终端里起的）看工作目录：在会话的工作目录之内，目录包着它的几个会话都算；会话目录是主目录、根目录这类过宽的不算。
 ///    只按目录认时，同一个项目里开着的几个会话会一起认领 Agent 甩到后台的服务（实测：三个会话都亮了预览、点进去是同一页）。
+/// 归属对着本机知道的全部会话认，只要其中几个的结果用 `only` 说：只拿一个会话去认，别的会话 Agent 的后代（读不到环境的）会被它按目录认走。
 /// 进程表只经 libproc 与 sysctl（同一用户的进程都读得到，别的用户的读不到也用不着），不起 lsof；一次扫多少个会话都只读一遍进程表。
 public struct LiveServers: Sendable {
   public struct Owner: Equatable, Sendable {
@@ -35,8 +36,8 @@ public struct LiveServers: Sendable {
   public init() {}
 
   /// 键是会话 id；认不出服务的会话不在里面。每个会话的地址最近起来的在前。
-  public mutating func find(for owners: [String: Owner]) async -> [String: [URL]] {
-    let listeners = await Self.listening(for: owners)
+  public mutating func find(for owners: [String: Owner], only: Set<String>? = nil) async -> [String: [URL]] {
+    let listeners = await Self.listening(for: owners, only: only)
     let now = ContinuousClock.now
     // 一起问：接了连接却迟迟不答的口要等满超时，挨个问会把别的会话这一轮都拖住
     let asking = listeners.map(\.listener).filter { listener in pages[listener].map { !$0.page && now - $0.at >= Self.retry } ?? true }
@@ -54,18 +55,19 @@ public struct LiveServers: Sendable {
   }
 
   /// 这几个会话名下在监听的端口，答不答网页都算（活预览的隧道放行它们：页面要调的只回 JSON 的接口也在里面）。
-  public static func ports(for owners: [String: Owner]) async -> [String: Set<Int>] {
-    var ports: [String: Set<Int>] = [:]
-    for (listener, keys) in await listening(for: owners) {
-      guard let port = listener.url.port else { continue }
-      for key in keys { ports[key, default: []].insert(port) }
+  /// 值是连得到会话那个服务的本机地址（`reach`）：同一个端口号上 127.0.0.1 与 ::1 可以各是一个进程，只凭端口号连 localhost 会连到别人那里。
+  public static func ports(for owners: [String: Owner], only: Set<String>? = nil) async -> [String: [Int: String]] {
+    var ports: [String: [Int: String]] = [:]
+    for (listener, keys) in await listening(for: owners, only: only) {
+      guard let port = listener.url.port, let host = listener.url.host(percentEncoded: false) else { continue }
+      for key in keys where ports[key]?[port] == nil { ports[key, default: [:]][port] = host }
     }
     return ports
   }
 
   /// 最近起来的在前。
-  @concurrent static func listening(for owners: [String: Owner]) async -> [(listener: Listener, owners: Set<String>)] {
-    guard !owners.isEmpty else { return [] }
+  @concurrent static func listening(for owners: [String: Owner], only: Set<String>? = nil) async -> [(listener: Listener, owners: Set<String>)] {
+    guard !owners.isEmpty, only?.isEmpty != true else { return [] }
     let me = getpid()
     let info = Dictionary(processes().compactMap { pid in bsd(pid).map { (pid, $0) } }, uniquingKeysWith: { first, _ in first })
     // 同一端口号上别人的监听口也要看：谁接哪个地址由它们一起定（`reach`）
@@ -107,7 +109,7 @@ public struct LiveServers: Sendable {
     }
     var found: [(listener: Listener, owners: Set<String>)] = []
     for socket in listening {
-      guard let keys = mine[socket.pid], !keys.isEmpty, let url = reach(socket, among: listening) else { continue }
+      guard let keys = mine[socket.pid].map({ only?.intersection($0) ?? $0 }), !keys.isEmpty, let url = reach(socket, among: listening) else { continue }
       found.append((Listener(pid: socket.pid, started: started(info[socket.pid]!), url: url), keys))
     }
     return found.sorted { ($0.listener.started, -($0.listener.url.port ?? 0)) > ($1.listener.started, -($1.listener.url.port ?? 0)) }

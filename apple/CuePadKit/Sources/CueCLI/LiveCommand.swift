@@ -38,8 +38,9 @@ extension Command {
       guard LiveAddress.isLocal(parsed) else { throw CLIError.usage("「\(text)」不是本机地址：活预览只开本机的开发服务（localhost、127.0.0.1、局域网 IP、.local）") }
       url = parsed
     } else {
-      var servers = LiveServers()
-      guard let first = await servers.find(for: [session: try await call.store.liveOwner(session)])[session]?.first else {
+      var servers = LiveServers(), owners = try await call.store.liveAgents()
+      owners[session] = try await call.store.liveOwner(session)
+      guard let first = await servers.find(for: owners, only: [session])[session]?.first else {
         throw CLIError.invalid(
           "没认出这个会话起的网页服务（本机在监听、回 HTML，是这个会话里起的，或起在会话的工作目录里）。还没起来就等它起来再运行；别的会话、别处起的就给端口：cuepad live 5173")
       }

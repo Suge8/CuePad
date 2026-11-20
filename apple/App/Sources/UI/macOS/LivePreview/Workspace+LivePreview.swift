@@ -113,16 +113,21 @@ extension Workspace {
         }
     }
 
-    /// 扫一遍（`only` 给了只扫这几个会话）。开着的预览跟着它：按认出的地址开的，地址不在了、又认出了别的（5173 被占换到 5174）就跟过去；空着地址的，认出了就载入。
-    func scanLive(only sessionIDs: Set<String>? = nil) async {
+    /// 本机没结束的会话各自的进程与工作目录（`LiveServers` 认服务归属用）；库里还没有工作目录的用桥报的。
+    func liveOwners() async -> [String: LiveServers.Owner] {
         var owners = (try? await services.store.liveOwners(hosts: Self.liveHosts(services))) ?? [:]
-        if let sessionIDs { owners = owners.filter { sessionIDs.contains($0.key) } }
         for (sessionID, owner) in owners where owner.directory?.isEmpty != false {
             owners[sessionID]?.directory = services.bridge.session(sessionID: sessionID)?.cwd.path
         }
+        return owners
+    }
+
+    /// 扫一遍（`only` 给了只要这几个会话的）。开着的预览跟着它：按认出的地址开的，地址不在了、又认出了别的（5173 被占换到 5174）就跟过去；空着地址的，认出了就载入。
+    func scanLive(only sessionIDs: Set<String>? = nil) async {
+        let owners = await liveOwners()
         // 拷出来扫、扫完写回：收到手机一问时的那一遍可能与按节奏的这一遍交叠
         var scanner = liveScanner
-        let found = await scanner.find(for: owners).reduce(into: [UUID: [URL]]()) { $0[SessionState.recordID(sessionID: $1.key)] = $1.value }
+        let found = await scanner.find(for: owners, only: sessionIDs).reduce(into: [UUID: [URL]]()) { $0[SessionState.recordID(sessionID: $1.key)] = $1.value }
         liveScanner = scanner
         let scanned = sessionIDs.map { Set($0.map(SessionState.recordID(sessionID:))) }
         var next = liveFound
