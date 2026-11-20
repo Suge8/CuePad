@@ -61,7 +61,8 @@ struct BoardTaskCard: View {
         item.agent.flatMap { SessionProgress.said(of: $0.state) } ?? SessionProgress.firstLine(task.rest)
     }
 
-    private var finished: String? { column == .done ? task.completedAt.map { DateLabel.short($0) } : nil }
+    /// 手机行里的薄条不写：一行里地方给标题，这一行又都是今天做完的。
+    private var finished: String? { column == .done && !row ? task.completedAt.map { DateLabel.short($0) } : nil }
 
     private var tip: String {
         let agent = item.agent?.state.agentMark

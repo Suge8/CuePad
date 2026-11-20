@@ -29,7 +29,7 @@ struct PhoneBoard: View {
     }
 
     /// 行头离上一行远、离自己的卡近。
-    static let gap = Spacing.group
+    static let gap = Spacing.item
 }
 
 /// 一次排版里算完，不经几何读数写回状态：写回影响自身排版的状态会形成布局反馈环。

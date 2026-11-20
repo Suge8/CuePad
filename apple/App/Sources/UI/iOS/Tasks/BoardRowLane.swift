@@ -68,21 +68,23 @@ struct BoardRowLane<Above: View, Content: View>: View {
 }
 
 /// 这一行的卡有多高：照行里那张卡的骨架（`BoardCardLayout`、`BoardWaitCard`）用同样的字与间距排一张空的，行按它的高分格。
-/// 推进中三行（标题、近况那一句、卡脚），等你的问句两行，待办与已完成只有标题与卡脚。
+/// 推进中、等你三行（标题、近况或问句那一句、卡脚）；待办与已完成是一行高的薄条，不低于一颗钮的点按高。
 private struct BoardRowRuler: View {
     let column: TaskBoard.Column
 
     var body: some View {
-        VStack(alignment: .leading, spacing: BoardCardMetrics.footGap) {
-            Text(verbatim: "国").font(column.light ? TaskMetrics.lineFont : Typography.bodyStrong)
-            switch column {
-            case .advancing: Text(verbatim: "国").font(TaskMetrics.caption)
-            case .waiting: Text(verbatim: "国\n国").font(TaskMetrics.caption)
-            case .todo, .done: EmptyView()
+        Group {
+            if column.light {
+                Text(verbatim: "国").font(TaskMetrics.lineFont).padding(.vertical, BoardCardMetrics.compactPad).frame(minHeight: ControlSize.regular.height)
+            } else {
+                VStack(alignment: .leading, spacing: BoardCardMetrics.footGap) {
+                    Text(verbatim: "国").font(Typography.bodyStrong)
+                    Text(verbatim: "国").font(TaskMetrics.caption)
+                    Color.clear.frame(width: 0, height: BoardCardMetrics.vitals)
+                }
+                .padding(.vertical, BoardCardMetrics.pad)
             }
-            Color.clear.frame(width: 0, height: column.light ? BoardCardMetrics.foot : BoardCardMetrics.vitals)
         }
-        .padding(.vertical, column.light ? BoardCardMetrics.compactPad : BoardCardMetrics.pad)
         .fixedSize()
     }
 }
@@ -99,9 +101,10 @@ enum BoardRowMetrics {
     /// 露出下一张的开头：看得出能横滑。
     static let cardWidth: CGFloat = 0.72
     static let wideCardWidth: CGFloat = 0.9
-    static let header: CGFloat = 44
+    /// 比一颗钮的点按高矮：行头的钮上下浮出去补足（`LaneAddButton`），省下的高凑给推进中多一排。
+    static let header = ControlSize.compact.height
     static let margin = Spacing.block
-    static let gap = Spacing.item
+    static let gap = Spacing.group
     static let inset = Spacing.tight
 }
 #endif

@@ -65,6 +65,7 @@ struct BoardWaitCard: View {
 private struct BoardWaitFace: View {
     let held: TaskBoard.Held
     let ask: String?
+    @Environment(\.boardRow) private var row
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -81,13 +82,14 @@ private struct BoardWaitFace: View {
             }
             if let ask {
                 Text(verbatim: ask).font(TaskMetrics.caption).foregroundStyle(palette.ink2)
-                    .lineLimit(Self.lines).multilineTextAlignment(.leading)
+                    .lineLimit(row ? 1 : Self.lines).multilineTextAlignment(.leading)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(.rect)
     }
 
+    /// 手机的行里一行：同推进中的卡一样高，问句短时不空着一行。
     private static let lines = 2
 }
 
