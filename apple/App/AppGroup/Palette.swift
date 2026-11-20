@@ -122,6 +122,30 @@ struct Palette {
     /// 靛青、胭脂、赭黄实底上的字与图标：暖白。
     var onFill: Color { Color(hex: 0xFFFDF8) }
 
+    /// 锁屏那张实时活动整块按状态上色（`CueActivityViews` 的 `LockScreen`），一臂之外先认出颜色：赭黄等你拍板、石绿有新回复或刚做完、
+    /// 靛青在推进，都没有时是纸。三块实底两种外观同一份：衬着它的是壁纸，不是纸与桌面。
+    /// `soft` 给状态词与行首图形。底上的字：赭黄 9.3（soft 6.1）、石绿 6.6（soft 4.8）、靛青 7.0（soft 5.3）。
+    struct Signal {
+        let fill: Color
+        let ink: Color
+        let soft: Color
+
+        fileprivate init(fill: Color, ink: Color) {
+            self.fill = fill
+            self.ink = ink
+            soft = ink.opacity(0.82)
+        }
+    }
+
+    func signal(_ tone: CueNow.Tone) -> Signal {
+        switch tone {
+        case .asks: Signal(fill: Color(hex: 0xEDBD57), ink: Color(hex: 0x2A1F06))
+        case .reply, .done: Signal(fill: Color(hex: 0x55B988), ink: Color(hex: 0x0C2619))
+        case .moving: Signal(fill: Color(hex: 0x3852A8), ink: onFill)
+        case .quiet: Signal(fill: paper, ink: ink)
+        }
+    }
+
 
     /// 等你确认：赭黄，全 App 只有等你、拍板与会话里缓存失效那一行的感叹号（多花了钱，字照旧是墨色）用它。对比度 4.7，深色 6.9。别的"要你处理"（同步、连接）按 `StatusTone.notice` 用墨色，出错是 `FailureMark`。
     var waiting: Color { dark ? Color(hex: 0xEDBD57) : Color(hex: 0x845A06) }

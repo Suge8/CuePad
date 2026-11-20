@@ -142,8 +142,8 @@ struct CueFaceMarks: ViewModifier {
 }
 
 extension View {
-    func cueDisc(size: CGFloat) -> some View {
-        modifier(CueDisc(size: size))
+    func cueDisc(size: CGFloat, filled: Bool = true) -> some View {
+        modifier(CueDisc(size: size, filled: filled))
     }
 
     func cueMarks(size: CGFloat, beat: CueBeat, badge: Int? = nil, rim: Color? = nil) -> some View {
@@ -153,26 +153,29 @@ extension View {
 
 private struct CueDisc: ViewModifier {
     let size: CGFloat
+    let filled: Bool
     @Environment(\.palette) private var palette
 
     func body(content: Content) -> some View {
-        content.frame(width: size, height: size).background(palette.hair, in: .circle)
+        content.frame(width: size, height: size).background(filled ? palette.hair : .clear, in: .circle)
     }
 }
 
 /// 扩展里的头像：这一拍的静止图（`CueBeat.still`）；`badge` 时右上角写要你管的几件（灵动岛最小态）。
+/// 灵动岛自己就是一块黑底，不再垫圆底（`disc`）。
 struct CueNowFace: View {
     let now: CueNow
     let size: CGFloat
     var badge = false
     var rim: Color?
+    var disc = true
     @Environment(\.isLuminanceReduced) private var dimmed
 
     var body: some View {
-        Image(decorative: now.beat.still).resizable().scaledToFit().padding(size * 0.06)
+        Image(decorative: now.beat.still).resizable().scaledToFit().padding(disc ? size * 0.06 : 0)
             .contentTransition(dimmed ? .identity : .opacity)
             .animation(dimmed ? nil : Motion.fade, value: now.beat)
-            .cueDisc(size: size)
+            .cueDisc(size: size, filled: disc)
             .cueMarks(size: size, beat: now.beat, badge: badge ? now.needsYou : nil, rim: rim)
             .readerHidden(true)
     }
