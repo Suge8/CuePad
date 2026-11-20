@@ -122,7 +122,8 @@ struct LivePhoneFlowTests {
             try await mac.openDoor(to: page.port)
             app.services.liveRemote.renew("live")
             try await eventually("再通后整页重新载入") { page.loaded == 2 && preview.phase == .live && preview.revealed }
-            #expect(try await preview.run("return window.before ?? false") as? Bool == false)
+            // 服务记下第二次载入时网页视图可能还没换到新的一页（整套一起跑时碰到过）：等到换过去
+            try await eventually("是新的一页") { (try? await preview.run("return window.before ?? false")) as? Bool == false }
             await quietPeriod(.seconds(2))
             #expect(page.loaded == 2, "只载一次")
             await open.stop()
