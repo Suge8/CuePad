@@ -31,6 +31,9 @@ extension Workspace {
         #endif
     }
 
+    /// 那一问答的是取消：没有要等的写入，放下的卡当场回原处（`BoardMoves.decline`），不像答应了那样等库。
+    func declineDrop() { dropDeclines += 1 }
+
     /// 办一件放下的卡在等的事：完成（连同问之前的查）、答应之后的写、交给会话的那一条（Mac 放下就发，手机在交给的输入框上发）。
     func answer(_ work: @escaping @MainActor (Workspace) async throws -> Void) {
         answering += 1

@@ -8,8 +8,12 @@ extension View {
         panel(isPresented: isPresented) { DialogCard(title: title, message: message, field: field, buttons: buttons) }
     }
 
-    func ask(_ title: LocalizedStringResource, isPresented: Binding<Bool>, message: LocalizedStringResource? = nil, button: DialogButton) -> some View {
-        dialog(title, isPresented: isPresented, message: message, buttons: [button])
+    /// `cancel`：没答应就关了（取消、Esc、点外面）。
+    func ask(
+        _ title: LocalizedStringResource, isPresented: Binding<Bool>, message: LocalizedStringResource? = nil, button: DialogButton,
+        cancel: @escaping @MainActor () -> Void
+    ) -> some View {
+        modifier(Ask(title: title, isPresented: isPresented, message: message, button: button, cancel: cancel))
     }
 
     func dialog<Item: Identifiable>(
@@ -17,6 +21,33 @@ extension View {
     ) -> some View {
         panel(item: item) { DialogCard(title: title, message: message, field: nil, buttons: buttons($0)) }
     }
+}
+
+private struct Ask: ViewModifier {
+    let title: LocalizedStringResource
+    @Binding var isPresented: Bool
+    let message: LocalizedStringResource?
+    let button: DialogButton
+    let cancel: @MainActor () -> Void
+    @State private var answered = Answered()
+
+    func body(content: Content) -> some View {
+        let answered = answered, shown = $isPresented, cancel = cancel
+        content.dialog(title, isPresented: Binding { shown.wrappedValue } set: { open in
+            shown.wrappedValue = open
+            guard !open else { return }
+            // 关与办在同一个调用里（`DialogCard.run` 先关后办）：等这个调用走完，再看这一回是不是答应了
+            Task { @MainActor in
+                if !answered.yes { cancel() }
+                answered.yes = false
+            }
+        }, message: message, buttons: [DialogButton(title: button.title, role: button.role, disabled: button.disabled) {
+            answered.yes = true
+            button.action()
+        }])
+    }
+
+    @MainActor private final class Answered { var yes = false }
 }
 
 /// 破坏性的不当默认、要点按，免得顺手一回车删掉东西。

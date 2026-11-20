@@ -24,10 +24,14 @@ extension View {
     }
 
     /// 答了才往下走的一问：居中的提示框，带"取消"。系统的动作表在手机上不画"取消"，只能点框外。
-    func ask(_ title: LocalizedStringResource, isPresented: Binding<Bool>, message: LocalizedStringResource? = nil, button: DialogButton) -> some View {
+    /// `cancel`：没答应就关了。
+    func ask(
+        _ title: LocalizedStringResource, isPresented: Binding<Bool>, message: LocalizedStringResource? = nil, button: DialogButton,
+        cancel: @escaping @MainActor () -> Void
+    ) -> some View {
         alert(Text(title), isPresented: isPresented) {
             Button(role: button.role, action: button.action) { Text(button.title) }
-            Button("取消", role: .cancel) {}
+            Button("取消", role: .cancel, action: cancel)
         } message: {
             if let message { Text(message) }
         }
