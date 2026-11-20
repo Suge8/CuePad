@@ -197,9 +197,11 @@ struct BoardColumn: View {
             if board.count(.waiting) == 0 { empty("没有等你的事") }
         case .done:
             ForEach(board.done) { card($0) }
-            // 列头的数只数今天的：今天没有时先说没有，再接更早的，数与字对得上
-            if board.done.isEmpty { empty("今天还没做完的") }
-            if !board.earlier.isEmpty { earlierToggle }
+            // 列头的数只数今天的。今天没有、更早的有时只摆那一叠：再垫一个"今天还没做完的"空框，一列里两样都是空的
+            if board.done.isEmpty && board.earlier.isEmpty { empty("今天还没做完的") }
+            if !board.earlier.isEmpty {
+                if earlier.wrappedValue { earlierToggle } else { BoardPile(count: board.earlier.count, action: toggleEarlier) }
+            }
             if earlier.wrappedValue { ForEach(board.earlier) { card($0) } }
         }
     }
@@ -242,14 +244,18 @@ struct BoardColumn: View {
             .background(RoundedRectangle(cornerRadius: TaskMetrics.cardRadius).strokeBorder(palette.hair, style: StrokeStyle(lineWidth: 1, dash: [4, 4])))
     }
 
+    /// 列里原地摊开、收回；手机的行另出一页（`listsEarlier`）。
+    private func toggleEarlier() {
+        #if os(iOS)
+        if row { listsEarlier = true; return }
+        #endif
+        withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { earlier.wrappedValue.toggle() }
+    }
+
+    /// 摊开后留在那一叠原来的位置：点它收回去。
     private var earlierToggle: some View {
         HStack(spacing: Spacing.group) {
-            Button {
-                #if os(iOS)
-                if row { listsEarlier = true; return }
-                #endif
-                withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { earlier.wrappedValue.toggle() }
-            } label: {
+            Button(action: toggleEarlier) {
                 HStack(spacing: Spacing.tight) {
                     Text("更早做完的 \(board.earlier.count)").monospacedDigit()
                     Chevron(.forward).rotationEffect(.degrees(earlier.wrappedValue ? 90 : 0))
@@ -262,7 +268,6 @@ struct BoardColumn: View {
         }
         .font(Typography.meta).foregroundStyle(palette.ink3)
         .padding(.horizontal, Spacing.tight)
-        .frame(maxHeight: isRow ? .infinity : nil)
     }
 
     #if os(iOS)
@@ -332,5 +337,40 @@ private enum AdvancingSlot: Identifiable {
             let cards = group.work.enumerated().map { AdvancingSlot.work($1, moves: group.tier == .running && $0 < BoardNow.maxMoving) }
             return (gap ? [.gap(pinned: group.pinned, group.tier)] : []) + cards
         }
+    }
+}
+
+/// 收着的"更早做完的"：一叠卡，面上写着有几件，下面露出两层边；点一下摊开。
+/// 否决过：一行小灰字——今天没做完时这一列只剩一个虚线空框加这行字，读成这一列是空的。
+private struct BoardPile: View {
+    let count: Int
+    let action: () -> Void
+    @Environment(\.boardRow) private var row
+    @Environment(\.palette) private var palette
+
+    /// 下面每一层比上一层矮下去、窄进去多少。
+    private static let step = Spacing.glyph
+    private static let inset = Spacing.group
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: Spacing.item) {
+                Text("更早做完的 \(count)").monospacedDigit().lineLimit(1)
+                Spacer(minLength: 0)
+                Chevron(.forward)
+            }
+            .font(TaskMetrics.lineFont).fontWeight(TaskBoard.Column.done.titleWeight).foregroundStyle(TaskBoard.Column.done.titleInk(palette))
+            .padding(.vertical, BoardCardMetrics.compactPad)
+            .boardCard(.done)
+            .background {
+                ForEach([2, 1], id: \.self) { depth in
+                    RoundedRectangle(cornerRadius: TaskMetrics.cardRadius).fill(palette.paperFill).opacity(depth == 1 ? 0.7 : 0.4)
+                        .padding(.horizontal, CGFloat(depth) * Self.inset).offset(y: CGFloat(depth) * Self.step)
+                }
+            }
+            .padding(.bottom, 2 * Self.step)
+        }
+        .buttonStyle(PressStyle(.card))
+        .accessibilityValue("已折叠")
     }
 }
