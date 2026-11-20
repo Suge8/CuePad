@@ -36,6 +36,7 @@ nonisolated enum DateLabel {
         formatter.unitsStyle = style
         formatter.dateTimeStyle = .named
         formatter.formattingContext = .beginningOfSentence
-        return formatter.localizedString(from: offset)
+        // 系统的中文写法数字贴着单位（"33分钟前"），全 App 的时长都隔一格（"33 分钟"，`SessionClock.duration`）：这里补上那一格
+        return formatter.localizedString(from: offset).replacing(/(\d)(\p{Han})/) { "\($0.1) \($0.2)" }
     }
 }

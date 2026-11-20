@@ -26,7 +26,7 @@ nonisolated enum Icon: Hashable, Sendable {
     case skill, instruction
     // 状态
     case waiting, failure, undelivered, onTheWay, replied, fresh, ended, interrupted, unknown, gone
-    /// 在压缩上下文（会话状态）：两块板夹着弹簧；"现在压缩"那颗钮是往里收的箭头（`compact`）
+    /// 压缩上下文：两块板夹着弹簧。正在压缩的状态与"现在压缩"那颗钮同一个图形（往里收的箭头单看认不出是压缩，删了）
     case compacting
     case done, donePending, picked
     case syncStarting, synced, syncing, syncOff, syncRestricted, syncTrouble, syncPaused, uploadLocal, replaceWithCloud, syncNow
@@ -39,7 +39,7 @@ nonisolated enum Icon: Hashable, Sendable {
     /// 这一页的说明（问号圆钮，点开是气泡）；同名的技能（几份，去重）
     case help, duplicate
     // 输入、发送与会话
-    case send, save, checked, stop, endSession, wakeSession, handOff, delivered, retry, toLatest, fetching, compact, renew
+    case send, save, checked, stop, endSession, wakeSession, handOff, delivered, retry, toLatest, fetching, renew
     /// 提示缓存冷了（回复框工具排里"重读多少"那一句的记号）
     case cold
     case declined, mac, yourAnswer, above, floated, earlier, recent
@@ -153,7 +153,6 @@ nonisolated enum Icon: Hashable, Sendable {
         case .retry: .ink("reload")
         case .toLatest: .ink("arrow.down")
         case .fetching: .ink("ring.down")
-        case .compact: .ink("compact")
         case .cold: .ink("cold")
         case .declined: .ink("hand")
         case .mac: .ink("mac")
