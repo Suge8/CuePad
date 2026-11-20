@@ -33,7 +33,8 @@ struct PhoneBoard: View {
 }
 
 /// 一次排版里算完，不经几何读数写回状态：写回影响自身排版的状态会形成布局反馈环。
-/// 各行按自己的高排，一屏放不下就上下滚；有余高时整排整排地给推进中（`BoardRowFlex`），卡不拉高，剩的零头留在页尾。
+/// 各行按自己的高排，一屏放不下就上下滚；有余高时整排整排地分给还有卡没露出来的行（`BoardRowFlex`，先后见 `BoardRowLane`），
+/// 卡不拉高，剩的零头留在页尾。
 private struct BoardRows: Layout {
     let gap: CGFloat
 
@@ -57,9 +58,12 @@ private struct BoardRows: Layout {
         guard let ruler = subviews.first else { return [] }
         let rows = Array(subviews.dropFirst())
         var heights = rows.map { $0.sizeThatFits(ProposedViewSize(width: width, height: nil)).height }
-        let spare = ruler.sizeThatFits(.unspecified).height - heights.reduce(0, +) - gaps(subviews)
-        if let index = rows.firstIndex(where: { $0[BoardRowFlex.self] != nil }), let flex = rows[index][BoardRowFlex.self] {
-            heights[index] += CGFloat(min(flex.most - 1, max(0, Int(spare / flex.step)))) * flex.step
+        var spare = ruler.sizeThatFits(.unspecified).height - heights.reduce(0, +) - gaps(subviews)
+        let flexible = rows.indices.compactMap { index in rows[index][BoardRowFlex.self].map { (index, $0) } }.sorted { $0.1.rank < $1.1.rank }
+        for (index, flex) in flexible {
+            let more = CGFloat(min(flex.most - 1, max(0, Int(spare / flex.step)))) * flex.step
+            heights[index] += more
+            spare -= more
         }
         return heights
     }
