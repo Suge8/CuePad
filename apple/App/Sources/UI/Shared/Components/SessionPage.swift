@@ -26,6 +26,11 @@ private struct SessionPageBody: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette
+    #if os(iOS)
+    @Environment(\.scenePhase) private var phase
+    /// 页头的预览钮与它长开的那一页（`LivePhoneCover`）。
+    @Namespace private var zoom
+    #endif
     @State private var stored: SessionDigest?
     /// 记录读不出来的那一下（同步中途）仍照最后一次读到的样子排，不闪成"找不到"。
     @State private var lastSeen: SessionState?
@@ -69,10 +74,12 @@ private struct SessionPageBody: View {
                         SessionSubtitle(session: session, delivery: digest?.delivery, undelivered: Chat.undeliveredNote(digest?.undelivered(at: services.speech) ?? 0))
                     }
                 } trailing: {
+                    LivePhoneTool(session: id, zoom: zoom)
                     if let finishing {
                         Button("完成任务", icon: .complete) { workspace.completeTask(finishing.task.id) }
                     }
                 }
+                .livePhoneCover(id, zoom: zoom)
                 #endif
             }
         }
@@ -97,12 +104,26 @@ private struct SessionPageBody: View {
         .requestsTranscript(stored)
         #if os(iOS)
         .debugDrivesHeader($follow)
+        // 看得见（这一页在导航最上面、场景在前台）才问 Mac 有没有页面可看
+        .task(id: liveWatch(session)) { if let watch = liveWatch(session) { await services.liveRemote.watch(watch.sessionID, on: watch.host) } }
         #endif
         // 打开就记一下（通知随即收掉，`AlertCenter.dismissSeen`）；之后干着活时不记：每换一步都记一下就是每步一次同步，停下、离开时记的那一下已盖住干活的那段
         .task(id: session?.sessionID) { if let session { markSeen(session) } }
         .task(id: session?.stateSince) { if let session, !session.runtimeState.isWorking { markSeen(session) } }
         .onDisappear { if let session { markSeen(session) } }
     }
+
+    #if os(iOS)
+    private struct LiveWatch: Equatable {
+        let sessionID: String
+        let host: String
+    }
+
+    private func liveWatch(_ session: SessionState?) -> LiveWatch? {
+        guard let session, phase == .active, workspace.shownSessions.contains(where: { $0.id == id }) else { return nil }
+        return LiveWatch(sessionID: session.sessionID, host: session.hostID)
+    }
+    #endif
 
     private func markSeen(_ session: SessionState) {
         let store = services.store, id = session.sessionID

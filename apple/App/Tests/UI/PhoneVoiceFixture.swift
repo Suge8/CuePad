@@ -1,3 +1,4 @@
+import CryptoKit
 import CueStore
 import Foundation
 import Testing
@@ -28,6 +29,7 @@ import Testing
     var peer = VoiceEndpoint(device: .init("mac-audit"), lease: UUID())
     var voiceAvailability: VoiceRelayAvailability { .ready(endpoint: local) }
     var voiceEvents: AsyncStream<VoiceRelayEvent> { AsyncStream { _ in } }
+    var liveTunnelKey: SymmetricKey? { nil }
     var sent: [VoiceSignalPayload] = []
     var recipients: [VoiceEndpoint] = []
     var failConnected = false

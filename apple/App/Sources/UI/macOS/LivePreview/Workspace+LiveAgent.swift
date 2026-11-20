@@ -44,7 +44,7 @@ extension Workspace {
             await preview.touchedByAgent()
             defer { preview.agent.used = .now }
             let args = request.args
-            let colors = LivePick.colors
+            let colors = preview.pickColors
             let mark = (tint: colors["tint"] ?? "", ink: colors["ink"] ?? "")
             var reply: LiveChannel.Reply
             switch request.op {

@@ -50,7 +50,15 @@ public struct LiveServers: Sendable {
     return found
   }
 
-  public static func url(port: Int) -> URL { URL(string: "http://localhost:\(port)")! }
+  /// 这几个会话名下在监听的端口，答不答网页都算（活预览的隧道放行它们：页面要调的只回 JSON 的接口也在里面）。
+  public static func ports<Key: Hashable & Sendable>(for owners: [Key: Owner]) async -> [Key: Set<Int>] {
+    var ports: [Key: Set<Int>] = [:]
+    for (listener, keys) in await listening(for: owners) {
+      guard let port = listener.url.port else { continue }
+      for key in keys { ports[key, default: []].insert(port) }
+    }
+    return ports
+  }
 
   /// 最近起来的在前。
   @concurrent static func listening<Key: Hashable & Sendable>(for owners: [Key: Owner]) async -> [(listener: Listener, owners: Set<Key>)] {

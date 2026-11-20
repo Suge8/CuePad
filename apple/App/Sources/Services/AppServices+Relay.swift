@@ -25,7 +25,17 @@ extension AppServices {
     func startRelay() {
         guard let relay, let sync = sync as? CloudSync else { return }
         let voiceEvents = relay.voiceEvents
-        follow { for await event in voiceEvents { await self.voice.receive(event) } }
+        follow {
+            for await event in voiceEvents {
+                // 活预览的帧只给它；连接与对端的去留两边都要
+                if case .received(let signal) = event, case .live = signal.payload {
+                    self.liveEvents.continuation.yield(event)
+                    continue
+                }
+                if case .received = event {} else { self.liveEvents.continuation.yield(event) }
+                await self.voice.receive(event)
+            }
+        }
         // 当场订阅：同步一启动就可能有一批被收下、账号就可能变，那时跟随者还没跑起来
         let accepted = sync.acceptedUpdates, accountChanged = NotificationCenter.default.notifications(named: .CKAccountChanged)
         follow {
@@ -34,6 +44,10 @@ extension AppServices {
         follow {
             for await _ in accountChanged { await relay.reconnect() }
         }
+        #if os(iOS)
+        let liveEvents = liveEvents.stream
+        follow { for await event in liveEvents { self.liveRemote.receive(event) } }
+        #endif
         #if os(macOS)
         follow { await relay.run(connected: true) { await self.syncing.pull() } }
         #else

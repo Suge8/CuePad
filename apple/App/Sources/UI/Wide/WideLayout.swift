@@ -28,12 +28,8 @@ struct WideMetrics {
     let cueFits: Bool
     private let share: CGFloat
 
-    #if os(macOS)
     /// 活预览最窄：手机宽那一档连两侧留白放得下。
     static let previewWidth = LivePreview.phoneWidth + 2 * Spacing.page
-    #else
-    static let previewWidth: CGFloat = 0
-    #endif
 
     /// 右半占主区的几成（每个窗口一份，`Workspace.besideShare`）：两个会话各半；看网页要比看对话宽，预览默认约六成。
     struct BesideShare: Equatable {
@@ -51,7 +47,7 @@ struct WideMetrics {
         return Self.leading(main: main, share: share, preview: preview)
     }
 
-    /// 并排时右半的宽；不并排时是此刻开出右半会有的宽（Mac 的右半一直挂着，`MainWindow.beside`）。
+    /// 并排时右半的宽；不并排时是此刻开出右半会有的宽（右半一直挂着，`MainWindow.beside`、`SplitRoot.beside`）。
     var trailing: CGFloat { main - (split ? leading : (main / 2).rounded()) }
 
     static func trailingMin(preview: Bool) -> CGFloat { preview ? previewWidth : session }
@@ -71,12 +67,8 @@ struct WideMetrics {
     }
 
     /// 铺满的 Cue 随窗口变宽，不算换了形：拖窗口时不起滑动。
-    /// Mac 上并排开合也算换形：右半那一块从主区右缘长出来、收回去（`MainWindow` 一直挂着它）；iPad 的右半只在并排时挂，开合照旧直接到位。
-    #if os(macOS)
+    /// 并排开合也算换形：右半那一块从主区右缘长出来、收回去（`MainWindow`、`SplitRoot` 一直挂着它）。
     var shape: Shape { Shape(rail: rail, cue: home ? -1 : cue, split: split) }
-    #else
-    var shape: Shape { Shape(rail: rail, cue: home ? -1 : cue) }
-    #endif
 
     struct Fits: Equatable {
         let rail: Bool

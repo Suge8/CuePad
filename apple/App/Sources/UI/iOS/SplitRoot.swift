@@ -24,15 +24,9 @@ struct SplitRoot: View {
                 }
                 .frame(width: sizes.leading + under)
                 .reachesWindowBottom()
-                if sizes.split, let beside = workspace.besideSession {
-                    WideColumnHost(slot: .beside, focus: focus, origin: sizes.rail + sizes.leading, width: sizes.main - sizes.leading, shape: sizes.shape) {
-                        destination(.session(beside), column: .beside)
-                    }
-                    .frame(width: sizes.main - sizes.leading)
-                    .reachesWindowBottom()
-                }
                 Spacer(minLength: 0)
             }
+            .overlay(alignment: .topLeading) { beside(sizes, window: geometry.size.width) }
             .overlay { if sizes.split { BesideDivider(sizes: sizes) } }
             .overlay { if !sizes.home { railChrome(sizes) } }
             .readerHidden(covered)
@@ -49,6 +43,18 @@ struct SplitRoot: View {
         .overlay(alignment: .top) { NoticeBanner().readerHidden(covered) }
         .environment(\.wideWindowID, focus.windowID)
         .onChange(of: covered) { DebugHooks.readerLayers(outsideCue: covered, drawer: workspace.cueDrawer) }
+    }
+
+    /// 并排的右半（第二个会话、活预览）：不并排时也挂着、同样宽，停在窗口右缘外、滑完藏起（同 Mac 的 `MainWindow.beside`）。
+    private func beside(_ sizes: WideMetrics, window: CGFloat) -> some View {
+        let origin = sizes.split ? sizes.rail + sizes.leading : window
+        return WideColumnHost(slot: .beside, focus: focus, origin: origin, width: sizes.trailing, shape: sizes.shape, hidden: !sizes.split) {
+            BesideColumn { destination(.session($0), column: .beside) }
+        }
+        .frame(width: sizes.trailing)
+        .padding(.leading, origin)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .reachesWindowBottom()
     }
 
     /// 藏起时顶上那一排原地浮着；放不下时拉出的抽屉里有同一排（同一个位置），抽屉开着就不再浮一份。

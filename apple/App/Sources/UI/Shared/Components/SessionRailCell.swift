@@ -68,7 +68,7 @@ struct SessionRailCell: View {
 
     private var running: Bool { item.waiting == nil && item.pulse.tier == .running }
 
-    /// 项目下面那一行，这个会话有活预览可看（`Workspace.hasLivePage`；开着空的地址输入不算）；等你的卡不标。只在 Mac：别处看不到这台的 localhost。
+    /// 项目下面那一行，这个会话有活预览可看（`Workspace.hasLivePage`；开着空的地址输入不算）；等你的卡不标。只在 Mac：手机、iPad 只问开着的那个会话有没有页面（`LiveRemote`）。
     private var live: Bool {
         #if os(macOS)
         compact && workspace.hasLivePage(item.session.id)
