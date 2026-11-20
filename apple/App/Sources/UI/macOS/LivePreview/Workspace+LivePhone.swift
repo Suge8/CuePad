@@ -94,7 +94,7 @@ extension Workspace {
         overlay = nil
         openSession(state.id, sessionID: sessionID)
         if hasLivePage(state.id) { openLivePreview(state) }
-        services.windowShell?.show()
+        services.windowShell?.show(overOthers: true)
     }
 
     /// 隧道口：开着就用它，没开就开（端口随机）；没取到门铃的密钥（中转还没连上过）开不了。
