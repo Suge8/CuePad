@@ -215,7 +215,7 @@ nonisolated extension CueNow {
             case .asks: String(localized: "\(count) 件拍板")
             case .reply: String(localized: "\(count) 件新回复")
             case .advancing: String(localized: "\(count) 件推进中")
-            case .subagents: String(localized: "\(count) 个子代理在跑")
+            case .subagents: String(localized: "\(count) 个子代理工作中")
             }
         }
 

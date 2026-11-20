@@ -13,7 +13,7 @@ struct SessionBindItems: View {
             let sessionID = item.state.sessionID
             Toggle(item.state.title, isOn: Binding(get: { leaf.piSessionID == sessionID }, set: { if $0 { bind(sessionID) } }))
         }
-        if sessions.isEmpty { Button("本项目没有在跑的会话") {}.disabled(true) }
+        if sessions.isEmpty { Button("本项目没有开着的会话") {}.disabled(true) }
         if leaf.piSessionID != nil {
             Divider()
             Button("解除绑定", icon: .unlink) {

@@ -46,7 +46,7 @@ nonisolated struct SubagentSummary: Equatable {
     let rejected: Int
     let lineup: [SubagentState]
 
-    var lead: String { running > 0 ? String(localized: "\(running) 个在跑") : String(localized: "\(total) 个子代理") }
+    var lead: String { running > 0 ? String(localized: "\(running) 个工作中") : String(localized: "\(total) 个子代理") }
 
     var tail: String? { running > 0 && total > running ? String(localized: "共 \(total) 个") : nil }
 
@@ -96,7 +96,7 @@ nonisolated enum SubagentLine {
         switch running.count {
         case 0: return String(localized: "子代理已交回，等 Agent 接着做")
         case 1: return Dotted(running[0].name, running[0].action).visible
-        default: return String(localized: "\(running.count) 个在跑")
+        default: return String(localized: "\(running.count) 个工作中")
         }
     }
 }
