@@ -160,4 +160,4 @@ def check():
 
 
 if __name__ == "__main__":
-    {"sync": sync, "set": put, "find": find, "check": check}[sys.argv[1] if len(sys.argv) > 1 else ""]()
+    {"sync": sync, "set": put, "find": find, "check": check}.get(sys.argv[1] if len(sys.argv) > 1 else "", lambda: sys.exit(__doc__))()
