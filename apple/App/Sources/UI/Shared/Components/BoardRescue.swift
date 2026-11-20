@@ -1,9 +1,10 @@
 import CueStore
 import SwiftUI
 
-/// 卡住的会话就地处理的那一颗（`SessionRescue`），在卡脚右端，同待办卡的"开始"一个位置、一样大（`TaskNextMark`）。
-/// 原因卡上一直写着（第二行的状态词），这颗只画图标；墨底反白，一列卡里一眼找得到，不用红（红留给原因那几个字）。
-/// 否决过：标题右端写着字的胶囊——整张卡上它最重，把标题挤短，还顶掉了哪家 Agent 的标志。
+/// 卡住的会话就地处理的那一颗（`SessionRescue`），在卡脚右端，同待办卡的"开始"一个位置、一样高（`TaskNextMark`）。
+/// 写着字、垫淡底：原因卡上一直写着（第二行的状态词），这颗说的是能做什么。
+/// 否决过：标题右端墨底反白的胶囊——整张卡上它最重，把标题挤短，还顶掉了哪家 Agent 的标志；
+/// 只画图标的圆钮——压缩没有一看就懂的图形；反白的实心底是一页一颗的主操作，一列卡里每张卡住的都有一颗就不是了。
 struct BoardRescue: View {
     let session: SessionState
     @Environment(Workspace.self) private var workspace
@@ -12,9 +13,9 @@ struct BoardRescue: View {
     var body: some View {
         Group {
             switch SessionRescue.of(session) {
-            case .usage(let url): Link(destination: url) { face(.openInBrowser, "管理用量") }
-            case .retry: Button { workspace.retry(session) } label: { face(.retry, "重试") }
-            case .compact: Button { workspace.compact(session) } label: { face(.compact, "现在压缩") }
+            case .usage(let url): Link(destination: url) { face("管理用量") }
+            case .retry: Button { workspace.retry(session) } label: { face("重试") }
+            case .compact: Button { workspace.compact(session) } label: { face("现在压缩") }
             case nil: EmptyView()
             }
         }
@@ -22,13 +23,12 @@ struct BoardRescue: View {
         .fixedSize()
     }
 
-    private func face(_ icon: Icon, _ title: LocalizedStringResource) -> some View {
-        Label(title, icon: icon).labelStyle(.iconOnly).font(TaskNextMark.glyph).foregroundStyle(palette.desk)
-            .frame(width: TaskNextMark.disc, height: TaskNextMark.disc)
-            .background(palette.ink, in: .circle)
-            .frame(minWidth: TaskNextMark.target, minHeight: TaskNextMark.target, alignment: .trailing)
+    private func face(_ title: LocalizedStringKey) -> some View {
+        Text(title).font(Typography.label).foregroundStyle(palette.ink)
+            .padding(.horizontal, Spacing.group).frame(height: TaskNextMark.disc)
+            .background(palette.fill, in: .capsule)
+            .frame(minHeight: TaskNextMark.target)
             .contentShape(.rect)
-            .help(Text(title))
     }
 }
 

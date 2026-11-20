@@ -224,11 +224,11 @@ struct BoardCardLayout<Title: View, Facts: View, Trailing: View>: View {
     }
 
     private var foot: some View {
-        HStack(spacing: Spacing.glyph) {
+        HStack(spacing: Spacing.item) {
             Spacer(minLength: 0)
             if advancing { BoardVitals(pulse: pulse) } else { HStack(spacing: Spacing.glyph) { facts }.fixedSize() }
-            // 就地处理的那颗浮在卡上（`boardRescue`），这里只留出圆的宽：点按区比圆宽出的那截盖在时长上，不占排版（窄列里卡脚放不下）
-            if advancing, let session, SessionRescue.of(session) != nil { Color.clear.frame(width: TaskNextMark.disc, height: 0) }
+            // 就地处理的那颗浮在卡上（`boardRescue`），这里只留出它的宽
+            if advancing, let session, SessionRescue.of(session) != nil { BoardRescue(session: session).hidden().frame(height: 0) }
         }
         .font(TaskMetrics.caption).lineLimit(1)
     }
