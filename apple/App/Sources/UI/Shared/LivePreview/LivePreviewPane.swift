@@ -112,7 +112,11 @@ struct LivePreviewPane: View {
                     .allowsHitTesting(false)
             }
             .padding(.top, phone ? 0 : Chrome.band)
-            .overlay { if preview.phase == .stopped { LiveStopped(text: trouble?.title ?? "服务停了，等它回来") { LiveTroubleAction(trouble: trouble, preview: preview) } } }
+            .overlay {
+                if preview.phase == .stopped {
+                    LiveStopped(text: trouble?.title ?? "服务停了，等它回来", message: trouble?.message) { LiveTroubleAction(trouble: trouble, preview: preview) }
+                }
+            }
             .frame(width: width, height: height)
             .background(ground)
             .clipShape(shape)
@@ -251,9 +255,10 @@ private struct LiveTroubleAction: View {
 }
 
 /// 服务停了、连不上 Mac 了：最后的画面压暗一层留着，上面浮一句；回来时自动重新载入（`LivePreview.watch`），这一层随之撤掉。
-/// 有可做的（`LiveTroubleAction`）排在那一句下面。
+/// 有可做的（`LiveTroubleAction`）排在那一句下面，点了会怎样（`message`）写在那一句里第二行，同空态。
 private struct LiveStopped<Action: View>: View {
     let text: LocalizedStringResource
+    var message: LocalizedStringResource?
     @ViewBuilder var action: Action
     @Environment(\.palette) private var palette
 
@@ -261,20 +266,36 @@ private struct LiveStopped<Action: View>: View {
         ZStack {
             palette.stale
             VStack(spacing: Spacing.block) {
-                HStack(spacing: Spacing.glyph) {
-                    Spinner(.small)
-                    Text(text)
+                if let message {
+                    VStack(spacing: Spacing.tight) {
+                        status
+                        Text(message).font(Typography.caption).foregroundStyle(palette.ink2)
+                    }
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, Spacing.block)
+                    .padding(.vertical, Spacing.item)
+                    .glass(in: .rect(cornerRadius: Radius.sheet))
+                } else {
+                    status
+                        .padding(.horizontal, Spacing.block)
+                        .frame(height: Chrome.control)
+                        .glass(in: .capsule)
                 }
-                .font(Typography.secondary.weight(.medium))
-                .foregroundStyle(palette.ink)
-                .padding(.horizontal, Spacing.block)
-                .frame(height: Chrome.control)
-                .glass(in: .capsule)
                 action
             }
+            .padding(.horizontal, Spacing.page)
         }
         .allowsHitTesting(true)
         .transition(.opacity)
+    }
+
+    private var status: some View {
+        HStack(spacing: Spacing.glyph) {
+            Spinner(.small)
+            Text(text)
+        }
+        .font(Typography.secondary.weight(.medium))
+        .foregroundStyle(palette.ink)
     }
 }
 

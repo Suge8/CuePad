@@ -176,6 +176,14 @@ struct LivePhoneTests {
             workspace.session(in: .main)?.sessionID == "live" && workspace.beside == .preview && workspace.livePreviews[flow.id("live")]?.address == url
         }
 
+        workspace.goHome()
+        try await show("live")
+        try await eventually("Cue 铺满着时也让出来") { if case .wide(let state) = workspace.navigation { !state.home } else { false } }
+        workspace.showEditor(UUID())
+        try await show("live")
+        try await eventually("盖着编辑页时揭开") { workspace.overlay == nil }
+        #expect(workspace.beside == .preview)
+
         try await show("done")
         try await show("elsewhere")
         await quietPeriod(.milliseconds(500))

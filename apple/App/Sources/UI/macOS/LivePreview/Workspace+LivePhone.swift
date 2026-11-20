@@ -89,7 +89,10 @@ extension Workspace {
         guard hosted.contains(sessionID), let state = try? await services.store.sessionState(sessionID) else { return }
         // 手机看着时只扫它看的会话：此刻认出的才准
         await scanLive(only: [sessionID])
-        if hasLivePage(state.id) { openLivePreview(state) } else { openSession(state.id, sessionID: sessionID) }
+        // 已在主区也重开一次：Cue 铺满着、上面盖着编辑页时，主区还是它，只是看不见
+        overlay = nil
+        openSession(state.id, sessionID: sessionID)
+        if hasLivePage(state.id) { openLivePreview(state) }
         services.windowShell?.show()
     }
 
