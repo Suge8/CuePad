@@ -91,7 +91,7 @@ enum BoardRowMetrics {
     /// 露出下一张的开头：看得出能横滑。
     static let cardWidth: CGFloat = 0.72
     static let wideCardWidth: CGFloat = 0.9
-    static let header: CGFloat = 36
+    static let header: CGFloat = 44
     static let margin = Spacing.block
     static let gap = Spacing.item
     static let inset = Spacing.tight

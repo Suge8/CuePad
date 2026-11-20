@@ -110,7 +110,7 @@ struct BoardColumnHeader: View {
 
     var body: some View {
         let add = archives ? .archive(in: workspace) : LaneAdd.of(column, in: workspace)
-        let button = add == nil ? 0 : Self.add
+        let button = add == nil ? 0 : disc
         // 列名在列的正中，两边各让出钮那么宽；窄到放不下时只让右边，列名靠左挪半个钮、不截字。
         // 两个候选都是整个列名，不会像按宽挑"有名没名"那样先把列名挑没（见上）
         return Group {
@@ -130,7 +130,7 @@ struct BoardColumnHeader: View {
         .accessibilityValue("\(count)")
         .accessibilityAddTraits(.isHeader)
         .overlay(alignment: .trailing) {
-            if let add { LaneAddButton(add, cell: CGSize(width: Self.add, height: height)).font(font) }
+            if let add { LaneAddButton(add, cell: CGSize(width: disc, height: height)).font(font) }
         }
         .frame(height: height)
         // 又做完一件（正好多一件：读到一批、同步来一串不算）：对勾擦掉，等卡飞到时重写一遍
@@ -165,6 +165,9 @@ struct BoardColumnHeader: View {
     }
 
     private var font: Font { isShelf ? Typography.secondary.weight(.semibold) : Typography.laneTitle }
+
+    /// 行头的圆钮同卡脚那颗一样大（`TaskNextMark`），上下离卡各留一截；列头的垫满玻璃条的高。
+    private var disc: CGFloat { isShelf ? TaskNextMark.disc : Self.add }
 
     private var height: CGFloat {
         #if os(iOS)

@@ -167,7 +167,8 @@ struct BoardSessionCard: View {
 }
 
 /// 卡：标题（至多两行，右上角是哪家 Agent 的标志）、推进中多一行此刻在干什么（`BoardNow`）、卡脚。
-/// 卡脚左端项目，右端这一列要说的那一样——推进中是上下文与时长（`BoardVitals`），别的列是 `facts`。
+/// 三层三种轻重：标题最重，第二行带状态的颜色，卡脚整行淡。
+/// 卡脚左端项目，右端这一列要说的那一样——推进中是时长（`BoardVitals`），别的列是 `facts`；这张卡自己的那一颗钮（开始、就地处理）在最右。
 /// 状态词不放在标题右端：窄列里标题会只剩四五个字。
 /// 手机的行里（`boardRow`）是同一张：标题一行，卡脚沉到格底；待办、已完成只有标题与卡脚，不写旁注。
 struct BoardCardLayout<Title: View, Facts: View, Trailing: View>: View {
@@ -208,13 +209,7 @@ struct BoardCardLayout<Title: View, Facts: View, Trailing: View>: View {
                     if compact, !row, let note { noteLine(note) }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                // 有就地处理的钮时它占右上角（真的那颗浮在卡上，`boardRescue`；这里只留出它的宽）
-                if let session, SessionRescue.of(session) != nil, !compact {
-                    // 行里的卡一样高：只留宽，钮比标题那一行高出的不撑高卡
-                    BoardRescue(session: session).hidden().frame(height: row ? 0 : nil)
-                } else if let session {
-                    AgentMark(session: session, font: TaskMetrics.caption, named: false)
-                }
+                if let session { AgentMark(session: session, font: TaskMetrics.caption, named: false) }
                 trailing
             }
             if advancing, pulse.shown != nil || note != nil { BoardNow(pulse: pulse, said: note, moves: moves) }
@@ -232,6 +227,8 @@ struct BoardCardLayout<Title: View, Facts: View, Trailing: View>: View {
         HStack(spacing: Spacing.glyph) {
             Spacer(minLength: 0)
             if advancing { BoardVitals(pulse: pulse) } else { HStack(spacing: Spacing.glyph) { facts }.fixedSize() }
+            // 就地处理的那颗浮在卡上（`boardRescue`），这里只留出圆的宽：点按区比圆宽出的那截盖在时长上，不占排版（窄列里卡脚放不下）
+            if advancing, let session, SessionRescue.of(session) != nil { Color.clear.frame(width: TaskNextMark.disc, height: 0) }
         }
         .font(TaskMetrics.caption).lineLimit(1)
     }
@@ -242,7 +239,7 @@ struct BoardCardLayout<Title: View, Facts: View, Trailing: View>: View {
 }
 
 /// 卡脚两样：左端项目、右端这一列的事实。事实先占它非要不可的宽，项目名用剩下的、放不下就截；
-/// 名字连两三个字都写不下时只留图形。再剩的都归右端。
+/// 名字连两三个字都写不下时只留图形，图形也放不下就不画（画半个像画坏了）。再剩的都归右端。
 struct BoardFoot: Layout {
     let glyph: CGFloat
     private static let nameMin: CGFloat = 36
@@ -256,7 +253,7 @@ struct BoardFoot: Layout {
         let wanted = tag.sizeThatFits(.unspecified).width
         let gap = wanted > 0 ? Spacing.item : 0
         let room = min(wanted, max(0, bounds.width - gap - facts.sizeThatFits(.unspecified).width))
-        let width = room < wanted && room < glyph + Self.nameMin ? min(room, glyph) : room
+        let width = room < glyph ? 0 : room < wanted && room < glyph + Self.nameMin ? glyph : room
         tag.place(at: CGPoint(x: bounds.minX, y: bounds.midY), anchor: .leading, proposal: ProposedViewSize(width: width, height: bounds.height))
         let used = width > 0 ? width + gap : 0
         facts.place(at: CGPoint(x: bounds.minX + used, y: bounds.midY), anchor: .leading, proposal: ProposedViewSize(width: bounds.width - used, height: bounds.height))
