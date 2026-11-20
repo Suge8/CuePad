@@ -58,9 +58,8 @@ final class Workspace {
             MainThreadWatch.shared.page(navigation.trail)
             #if os(iOS)
             keepLivePreviews()
-            #else
-            if let liveFill, !showsLivePreview(liveFill) { endLiveFill() }
             #endif
+            if let liveFill, !showsLivePreview(liveFill.session) { endLiveFill() }
         }
     }
     var projectForm: ProjectFormRequest?
@@ -186,6 +185,8 @@ final class Workspace {
 
     /// 每个会话的活预览（按会话记录 id）：只在内存里，不进资料库、不同步。手机、iPad 上只留会话页还开着的（`keepLivePreviews`）。
     var livePreviews: [UUID: LivePreview] = [:]
+    /// 活预览放大到盖过主区的会话（`toggleLiveFill`、Mac 的 `showLive`）。
+    var liveFill: LiveFill?
     #if os(iOS)
     /// 手机上铺满屏开着活预览的会话（`LivePhoneCover`）：导航最上面换了别的页就不算开着。
     var liveCover: UUID?
@@ -207,9 +208,6 @@ final class Workspace {
     @ObservationIgnored var liveTurns: [UUID: Task<LiveChannel.Reply, Never>] = [:]
     /// 闲置被释放了的预览（`releaseLivePreviews`）：重建后第一条回执说明页面是重新载入的。
     @ObservationIgnored var liveReleased: Set<UUID> = []
-    /// 手机请 Mac 亮出来、正用 UU 远程看着活预览的会话（`showLive`）：预览铺满窗口（`WideMetrics.fill`）、窗口铺满屏幕，`endLiveFill` 放回。
-    /// 远程画面是整块屏幕缩到手机上，预览只占一角时找不到、看不清。
-    var liveFill: UUID?
     /// 手机、iPad 开着的本机会话页（`receiveLive`）：它们看着的会话也要扫（`watchLiveServers`）。
     var livePhones: [LivePhone.Key: LivePhone] = [:]
     /// 给手机的隧道口（`openLiveDoor`）：有手机开着预览时才开。

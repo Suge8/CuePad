@@ -97,14 +97,14 @@ extension Workspace {
     /// 人回到 CuePad 了：用 UU 远程看过的会话，请那台 Mac 把铺满的预览放回去。
     func returnFromMac() async { await services.liveRemote.comeBack() }
 
-    /// 点一个元素挂进回复框：宽屏回复框就在左边；手机上先把预览收回，回复框接过焦点。
+    /// 点一个元素挂进回复框：宽屏回复框就在左边（放大着的先放回右半）；手机上先把预览收回，回复框接过焦点。
     func pickElement() {
         guard let route = liveRoute, let preview = livePreviews[route.id] else { return }
         if preview.picking { return preview.cancelPick() }
         Task {
             guard let element = await preview.pick() else { return }
             services.settings.quote(element, for: route.id)
-            if layout == .narrow { liveCover = nil }
+            if layout == .narrow { liveCover = nil } else { endLiveFill() }
             replyFocus = route.id
         }
     }

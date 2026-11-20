@@ -132,6 +132,7 @@ struct HeadTool: View {
     var body: some View {
         Button(action: action) { Image(icon).foregroundStyle(on ? palette.signature : palette.ink2) }
             .buttonStyle(ControlButtonStyle(kind: .icon, size: .compact))
+            .toggledOn(on)
             .help(Text(label))
             .accessibilityLabel(Text(label))
             .accessibilityAddTraits(on ? .isSelected : [])

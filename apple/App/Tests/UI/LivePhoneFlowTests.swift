@@ -277,7 +277,7 @@ struct LivePhoneFlowTests {
             #expect(opened.last?.url.path() == "/device/authorize" && mac.revealed.isEmpty, "没绑过先在 UU 里选这台 Mac，这时还不请 Mac 亮出来")
             await workspace.returnFromMac()
             #expect(mac.returned.isEmpty, "选完电脑回来不算看完回来")
-            let nonce = try #require(app.services.settings.remotePending.keys.first)
+            let nonce = try #require(app.services.settings.remoteBinding?.nonce)
             // 回跳由 iPad 的另一个窗口接到也一样
             let other = Workspace(services: app.services)
             other.apps = workspace.apps
@@ -291,21 +291,32 @@ struct LivePhoneFlowTests {
             await workspace.returnFromMac()
             #expect(mac.returned == ["live"], "只请一次")
 
+            // 放回还在重试（Mac 一时找不到）时又去看：旧的那一遍停下，不排到新的"亮出"后面把刚铺满的放回去
+            await workspace.viewOnMac(preview)
+            mac.present = false
+            let returning = Task { await workspace.returnFromMac() }
+            await quietPeriod(.milliseconds(300))
+            mac.present = true
+            await workspace.viewOnMac(preview)
+            await returning.value
+            await quietPeriod(.milliseconds(1500))
+            #expect(mac.revealed.count == 3 && mac.returned == ["live"] && app.services.settings.remoteViewing["live"] != nil, "这一次的放回留给下一次回来")
+
             mac.showing = .fails
             await workspace.viewOnMac(preview)
-            #expect(opened.count == 3 && opened.last?.url.query()?.contains("anonymous_device_id=enc-x") == true, "发不出也照样远控这台")
+            #expect(opened.count == 5 && opened.last?.url.query()?.contains("anonymous_device_id=enc-x") == true, "发不出也照样远控这台")
 
             mac.showing = .hangs
             let started = ContinuousClock.now
             await workspace.viewOnMac(preview)
-            #expect(opened.count == 4 && .now - started < .seconds(2), "挂住不回的不久等")
+            #expect(opened.count == 6 && .now - started < .seconds(2), "挂住不回的不久等")
             app.services.settings.remoteViewing = [:]
             mac.letGo()
             await open.stop()
         }
     }
 
-    @Test func 连不上Mac的口说可能是Wi_Fi不让设备互连_Mac走了说不在线() async throws {
+    @Test func 连不上Mac的口说可能是Wi_Fi不让设备互连_手机自己没连上中转不改口_Mac走了说不在线() async throws {
         try await phone { workspace, mac, _, route, _ in
             try await eventually("页头出现预览钮") { workspace.liveButton(route.id) != nil }
             // Mac 报的是手机自己所在网段里一个不通的口：同网段却连不上
@@ -316,6 +327,19 @@ struct LivePhoneFlowTests {
             let open = shown(preview, in: workspace)
             try await eventually("说这个 Wi-Fi 可能不让设备互相连接") { preview.link?.trouble == .isolated }
             #expect(preview.phase != .live)
+
+            // 刚回到前台时手机自己的中转还在重连：续问发不出去，不算那台 Mac 不在线
+            mac.connected = false
+            app.services.liveRemote.renew("live")
+            await quietPeriod(.milliseconds(500))
+            #expect(preview.link?.trouble == .isolated)
+            mac.connected = true
+            mac.drops = true
+            app.services.liveRemote.renew("live")
+            try await eventually("问到一半断的") { !mac.connected }
+            await quietPeriod(.milliseconds(300))
+            #expect(preview.link?.trouble == .isolated, "也不算")
+            mac.connected = true
 
             mac.present = false
             let left = ContinuousClock.now
