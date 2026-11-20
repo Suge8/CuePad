@@ -25,6 +25,8 @@ extension LivePhoneFlowTests {
         /// 手机最近一问要不要隧道的入口（预览看得见才要）。
         var opened = false
         var present = true
+        /// 手机自己这头连没连着中转。
+        var connected = true
         /// 收到的"亮出这个会话"（`LiveSignal.show`）；`showing` 是这一帧发不出去还是挂住不回。
         var revealed: [String] = []
         /// 收到的"我回来了"（`LiveSignal.back`）；`bounces` 是接下来几句中转转不过去、退回给手机（Mac 刚断、换了租约）。
@@ -62,7 +64,7 @@ extension LivePhoneFlowTests {
 
         func close() { server?.cancel() }
         var answer: (VoiceRelayEvent) -> Void = { _ in }
-        var voiceAvailability: VoiceRelayAvailability { .ready(endpoint: local) }
+        var voiceAvailability: VoiceRelayAvailability { connected ? .ready(endpoint: local) : .unavailable }
         var voiceEvents: AsyncStream<VoiceRelayEvent> { AsyncStream { _ in } }
         var liveTunnelKey: SymmetricKey? { key }
 

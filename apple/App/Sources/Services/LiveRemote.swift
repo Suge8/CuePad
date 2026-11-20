@@ -20,7 +20,7 @@ final class LiveRemote {
 
     /// Mac 答的，按 Pi 的会话 id。没答、答了没有页面、过了 `LiveSignal.lease` 没再答都不在里面。
     private(set) var answers: [String: Pages] = [:]
-    /// 问不到那台 Mac 的会话（它不在线、中转说它走了）。
+    /// 问不到那台 Mac 的会话（它不在线、中转说它走了）；手机自己没连上中转的不算。
     private(set) var offline: Set<String> = []
 
     private struct Watch {
@@ -117,9 +117,9 @@ final class LiveRemote {
 
     private func send(_ sessionID: String, channel: VoiceSessionID) async {
         guard let watch = watches[sessionID] else { return }
-        guard let signaling = signaling(), case .ready = signaling.voiceAvailability, (try? await store.macOnline(watch.host)) == true else {
-            return unreachable(sessionID)
-        }
+        // 自己这头的中转还没连上（刚回到前台、断网）不算那台 Mac 不在：答过的留着，连上了马上再问（`receive` 的 availability）
+        guard let signaling = signaling(), case .ready = signaling.voiceAvailability else { return }
+        guard (try? await store.macOnline(watch.host)) == true else { return unreachable(sessionID) }
         let request = UUID()
         watches[sessionID]?.requests.insert(request)
         do {

@@ -146,8 +146,16 @@ struct LivePhoneTests {
 
         try await show("live")
         try await eventually("再看一次又铺满") { previewWidth() == 1600 }
-        workspace.endLiveFill()
-        #expect(previewWidth() < 1600 && workspace.beside == .preview, "预览栏上那颗钮放回右半")
+        workspace.toggleLiveFill()
+        #expect(previewWidth() < 1600 && workspace.beside == .preview, "预览栏开头那颗钮放回右半")
+
+        workspace.toggleLiveFill()
+        #expect(previewWidth() == 1600, "没人远程看着时那颗钮是放大：盖过左边的会话")
+        try await back("live")
+        await quietPeriod(.milliseconds(300))
+        #expect(previewWidth() == 1600, "你自己放大的，手机回来不收")
+        workspace.toggleLiveFill()
+        #expect(previewWidth() < 1600)
 
         try await show("live")
         try await eventually("铺满") { previewWidth() == 1600 }
@@ -218,6 +226,20 @@ struct LivePhoneTests {
         for _ in 0..<3 { #expect(try await Tab(proxy, port: port, to: url).get("index.html") == "会话里的页面") }
         await watching.stop()
         }
+    }
+
+    @Test func 别的会话在另一族回环上占了同号的口_这个会话答过HTTP的口不掉出放行() async throws {
+        let mine = try flow.folder(), theirs = try flow.folder()
+        let owners = ["live": LiveServers.Owner(process: nil, directory: mine.path), "theirs": LiveServers.Owner(process: nil, directory: theirs.path)]
+        let (page, url) = try await flow.serve(in: mine)
+        defer { page.terminate() }
+        let port = try #require(url.port)
+        var scanner = LiveServers()
+        #expect(await scanner.find(for: owners)["live"]?.compactMap(\.port) == [port])
+        // 问得到它的地址从 localhost 换成了 127.0.0.1，还没再问过：答没答过 HTTP 是记在这个进程的这个口上的
+        let (other, _) = try await flow.serve(in: theirs, bind: "::1", port: port)
+        defer { other.terminate() }
+        #expect(await scanner.ports(for: owners, only: ["live"])["live"] == [port: "127.0.0.1"])
     }
 
     @Test func 会话名下不答HTTP的口_数据库那样的_隧道不放行_答了HTTP的不是网页也放行() async throws {

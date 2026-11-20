@@ -31,8 +31,7 @@ extension Workspace {
 
     private func bind(_ host: String, viewing sessionID: String? = nil) async {
         let nonce = UUID().uuidString
-        services.settings.remotePending = [nonce: host]
-        services.settings.remotePendingViewing = sessionID
+        services.settings.remoteBinding = .init(nonce: nonce, host: host, viewing: sessionID)
         await launch(MacRemote.authorize(nonce: nonce))
     }
 
@@ -59,13 +58,11 @@ extension Workspace {
     }
 
     func remoteBound(device: String?, error: String?, nonce: String?) async {
-        guard let nonce, let host = services.settings.remotePending[nonce] else { return }
-        let viewing = services.settings.remotePendingViewing
-        services.settings.remotePending = [:]
-        services.settings.remotePendingViewing = nil
+        guard let binding = services.settings.remoteBinding, binding.nonce == nonce else { return }
+        services.settings.remoteBinding = nil
         if let device {
-            services.settings.remoteDevices[host] = device
-            await control(device, host: host, viewing: viewing)
+            services.settings.remoteDevices[binding.host] = device
+            await control(device, host: binding.host, viewing: binding.viewing)
         } else if let message = error.flatMap(MacRemote.failure) {
             say(Dotted(message), tone: .failure)
         }

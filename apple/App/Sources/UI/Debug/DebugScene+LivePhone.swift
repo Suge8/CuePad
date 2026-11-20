@@ -62,6 +62,7 @@ extension DebugScene {
         holdingReady("活预览载入") {
             while workspace.liveButton(page.id) == nil { await Task.wait(for: .milliseconds(50)) }
             workspace.toggleLivePreview()
+            if args.layoutOpts.liveViewport == "window" { workspace.toggleLiveFill() }
             while workspace.livePreviews[page.id].map({ args.layoutOpts.liveApart ? $0.link?.trouble != .apart : !($0.phase == .live && $0.revealed) }) ?? true {
                 await Task.wait(for: .milliseconds(100))
             }

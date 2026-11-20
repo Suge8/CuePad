@@ -11,7 +11,7 @@ NAMES = (
     "arrow.up", "arrow.down", "ring.down", "ring.stop", "ring.play", "ring.plus", "badge.down",
     "hand", "mac", "photo", "photos", "select", "keyboard.down", "braces", "window.play", "doc.blank", "wrench",
     "branch", "flame", "eye", "power", "mail", "tag", "keyboard", "sun", "wave", "bubble.text", "bubble.dots",
-    "mic", "mic.off", "speaker", "phone", "external", "pointer",
+    "mic", "mic.off", "speaker", "phone", "external", "pointer", "enlarge", "shrink",
 )
 
 
@@ -186,6 +186,14 @@ def centerlines(name):
         # 点选页面元素：指针箭头，尾巴斜伸出去
         closed.append(poly([(-8,-10),(8,-3),(1,0),(-2,7)],[1.6,1.6,1.6,1.6],True))
         line((1,0),(7,7))
+    elif name == "enlarge":
+        # 放大：两支箭头沿对角线朝外
+        line((2,-2),(9,-9)); line((3,-9),(9,-9),(9,-3))
+        line((-2,2),(-9,9)); line((-9,3),(-9,9),(-3,9))
+    elif name == "shrink":
+        # 放回：两支箭头沿对角线朝里
+        line((10,-10),(3,-3)); line((3,-9),(3,-3),(9,-3))
+        line((-10,10),(-3,3)); line((-9,3),(-3,3),(-3,9))
     elif name in ("bubble.text","bubble.dots"):
         _,closed = base.centerlines("bubble")
         if name == "bubble.text": line((-4,-3),(4,-3)); line((-4,2),(2,2))
