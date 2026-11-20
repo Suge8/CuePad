@@ -22,7 +22,12 @@ struct BoardFloat: View {
                 float.face
                     .environment(\.boardRow, float.row)
                     .frame(width: held.size.width, height: held.size.height)
-                    .modifier(Floating(moves: moves, settling: held.phase == .settling, landing: held.phase == .landing))
+                    // 落下的一路裁成落点那张的大小。只裁、不按插值的宽高重排：重排的话字逐帧挪（`boardFlight`）
+                    .mask {
+                        RoundedRectangle(cornerRadius: TaskMetrics.cardRadius)
+                            .frame(width: (held.home?.size ?? held.size).width, height: (held.home?.size ?? held.size).height)
+                    }
+                    .modifier(Floating(moves: moves, settling: held.phase == .settling, landing: held.phase == .landing, fading: held.home != nil))
             }
         }
         .allowsHitTesting(false)
@@ -40,6 +45,7 @@ struct BoardFloat: View {
         let moves: BoardMoves
         let settling: Bool
         let landing: Bool
+        let fading: Bool
         @State private var raised = false
         @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -50,8 +56,8 @@ struct BoardFloat: View {
             content
                 .elevation(up ? .lifted : nil)
                 .scaleEffect(up && !reduceMotion ? Self.scale : 1)
-                // 落下那一路淡掉，露出底下已经排成新样子的那张
-                .opacity(landing ? 0 : 1)
+                // 与滑过去同一个事务（`BoardMoves.land`）：一路淡掉，露出底下已经排成新样子的那张
+                .opacity(fading ? 0 : 1)
                 .position(moves.point)
                 .animation(Motion.release, value: settling)
                 .animation(Motion.travel, value: landing)

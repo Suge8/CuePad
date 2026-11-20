@@ -154,16 +154,7 @@ extension CueStage {
 
         let asset: String
 
-        init(_ beat: CueBeat) {
-            asset = switch beat {
-            case .resting, .hearing: "cue-stage-idle"
-            case .thinking, .failed: "cue-stage-think"
-            case .delegating: "cue-stage-wave"
-            case .waiting: "cue-stage-offer"
-            case .done: "cue-stage-jump"
-            case .away: "cue-stage-sleep"
-            }
-        }
+        init(_ beat: CueBeat) { asset = "cue-stage-\(beat.pose)" }
     }
 
     /// 舞台上那一件，按先后只挑一件（规则只在这里）：不在、出错最先（别的动作这时都做不成），然后要你动手的（拍板、新回复），

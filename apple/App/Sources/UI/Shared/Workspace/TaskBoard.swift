@@ -92,7 +92,7 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         var flown: Set<UUID> = []
         return try waiting.map { session, task, deciding in
             let item = try task.flatMap { try store.card($0) }.map(item)
-            let id = item.flatMap { flown.insert($0.id).inserted ? $0.flight : nil } ?? "session/\(session.sessionID)"
+            let id = item.flatMap { flown.insert($0.id).inserted ? $0.flight : nil } ?? loose + session.sessionID
             return Held(id: id, session: session, item: item, deciding: deciding)
         }
     }
@@ -104,14 +104,20 @@ nonisolated struct TaskBoard: Sendable, Equatable {
         }
     }
 
-    /// `id` 那张换了身份落进来：它没了、同时只多出一张——没绑任务的会话拖到已完成是先建任务再完成，`session/…` 少一张、`task/…` 多一张。
-    /// 返回它现在的身份，原来、现在各在哪一列。
+    /// `id` 那张换了身份落进来：没绑任务的会话拖到已完成是先建任务再完成，`session/…` 没了、多出一张带着这个会话的 `task/…`
+    /// （完成时会话可能已从任务上卸下，记在 `formerSessionIDs`）。返回它现在的身份，原来、现在各在哪一列。
     func renamed(_ id: String, from before: TaskBoard) -> (id: String, from: Column, to: Column)? {
         let now = columns, was = before.columns
-        guard now[id] == nil, let old = was[id] else { return nil }
-        let new = now.filter { was[$0.key] == nil }
-        return new.count == 1 ? new.first.map { ($0.key, old, $0.value) } : nil
+        guard now[id] == nil, let old = was[id], id.hasPrefix(Self.loose) else { return nil }
+        let session = String(id.dropFirst(Self.loose.count))
+        let new = (todo + advancing.compactMap(\.item) + held.compactMap(\.item) + done + earlier).first {
+            was[$0.flight] == nil && ($0.task.piSessionID == session || $0.task.formerSessionIDs.contains(session))
+        }
+        return new.flatMap { new in now[new.flight].map { (new.flight, old, $0) } }
     }
+
+    /// 没绑任务的会话那张卡的身份的开头（`CueWork.id`、`heldCards`）。
+    private static let loose = "session/"
 
     func column(of flight: String) -> Column? { columns[flight] }
 

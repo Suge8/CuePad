@@ -8,7 +8,13 @@ extension Workspace {
         case .place(let id, let move?): self.move(id, to: move.slot, after: move.after)
         case .place(_, nil): break
         case .backToTodo(let id, let move): perform { try await $0.returnToTodo(id, to: move?.slot, after: move?.after) }
-        case .start(let task): handOff(task)
+        case .start(let task):
+            #if os(macOS)
+            let sent = handOff(task)
+            answer { _ in await sent?.value }
+            #else
+            handOff(task)
+            #endif
         case .finish(let item): answer { try await $0.finish(item) }
         case .finishSession(let agent): answer { try await $0.finish(agent) }
         case .endSession(let session): sleep(session)
@@ -25,7 +31,7 @@ extension Workspace {
         #endif
     }
 
-    /// 办一件放下的卡在等的事：完成（连同问之前的查）、答应之后的写、交给已有会话的那一条。
+    /// 办一件放下的卡在等的事：完成（连同问之前的查）、答应之后的写、交给会话的那一条（Mac 放下就发，手机在交给的输入框上发）。
     func answer(_ work: @escaping @MainActor (Workspace) async throws -> Void) {
         answering += 1
         attempt {
