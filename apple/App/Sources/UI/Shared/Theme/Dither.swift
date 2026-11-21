@@ -3,7 +3,8 @@ import SwiftUI
 
 /// 一张照片按屏幕上的格子抖出网点（有序抖动，8×8 Bayer）：每个颜色通道各自抖到几级，照片的颜色与层次都留着，凑近才看到格子。
 /// 否决过：整张映到三四种墨上抖（像套色海报，照片的层次没了，蓝天成了色块）。
-/// 格子对齐设备像素才清楚：按要画出来的那块的像素尺寸当场算一张静止的图，不预先烤好再缩放（缩放过的网点糊、起摩尔纹），也不逐帧算。
+/// 格子对齐设备像素才清楚：按要画出来的那块当场算一张一格一像素的静止小图，整倍放大、不插值贴上（一格 `cell` 点），
+/// 不预先烤好再缩放（缩放过的网点糊、起摩尔纹），也不逐帧算；小图是整块按设备像素算的几十分之一。
 /// 尺寸变了（Mac 拖窗口、底下的卡长高）先把上一张拉伸着顶着，停下来再算。上沿 `fade` 那一截按同一张阈值表散成透明：融进后面的底，不画一条边。
 struct DitherImage: View {
     let asset: String
@@ -17,12 +18,14 @@ struct DitherImage: View {
     @State private var drawn: DitherGPU.Job?
 
     var body: some View {
-        ZStack {
+        ZStack(alignment: .topLeading) {
             if let image {
-                Image(decorative: image, scale: scale).resizable().interpolation(.none).transition(.opacity)
+                Image(decorative: image, scale: 1).resizable().interpolation(.none)
+                    .frame(width: CGFloat(job.width) * cellPx / scale, height: CGFloat(job.height) * cellPx / scale)
+                    .transition(.opacity)
             }
         }
-        .frame(width: size.width, height: size.height)
+        .frame(width: size.width, height: size.height, alignment: .topLeading)
         .debugSettling(drawn != job)
         // 换一份就换一个视图起任务，不用 task(id:)：它靠 onChange，同一帧里变两次（气泡量出高、云跟着挪）第二次被丢掉，停在旧的一份上
         .background {
@@ -37,17 +40,20 @@ struct DitherImage: View {
         }
     }
 
+    /// 一格多少设备像素：取整，格子才对得齐像素。
+    private var cellPx: CGFloat { DitherGPU.cell * max(1, scale.rounded()) }
+
     private var job: DitherGPU.Job {
         let px = { (v: CGFloat) in Float(v * scale) }
+        let cells = { (v: CGFloat) in UInt32(max(1, (v * scale / cellPx).rounded(.up))) }
         return DitherGPU.Job(
-            asset: asset,
-            width: UInt32(max(1, (size.width * scale).rounded())), height: UInt32(max(1, (size.height * scale).rounded())),
+            asset: asset, width: cells(size.width), height: cells(size.height),
             origin: SIMD2(px(placement.minX), px(placement.minY)), extent: SIMD2(px(placement.width), px(placement.height)),
-            cell: Float(DitherGPU.cell * max(1, scale.rounded())), fade: px(fade))
+            cell: Float(cellPx), fade: px(fade))
     }
 }
 
-/// 显卡那一份，全 App 共用：着色器第一次用时在运行时编（同 `FigureGPU`，项目不装 Metal 编译工具链），原图各载一次。
+/// 显卡那一份，全 App 共用：着色器第一次用时在运行时编（同 `FigureGPU`，项目不装 Metal 编译工具链），只留最近用的那张原图（带 mip 约 8 MB）：一天里会换着用八张，全留着就是几十 MB。
 final class DitherGPU {
     static let shared = DitherGPU()
     /// 一格多少点：一点一格在 Retina 上细得看不出是网点，三点一格就成了马赛克。
@@ -73,7 +79,7 @@ final class DitherGPU {
     private let device = MTLCreateSystemDefaultDevice()!
     private lazy var queue = device.makeCommandQueue()!
     private var pipeline: MTLComputePipelineState?
-    private var sources: [String: MTLTexture] = [:]
+    private var loaded: (asset: String, texture: MTLTexture)?
 
     func render(_ job: Job) async -> CGImage {
         let pipeline = await pipeline()
@@ -110,11 +116,11 @@ final class DitherGPU {
     }
 
     private func source(_ asset: String) async -> MTLTexture {
-        if let texture = sources[asset] { return texture }
+        if let loaded, loaded.asset == asset { return loaded.texture }
         let renderer = ImageRenderer(content: Image(decorative: asset))
         renderer.scale = 1
         let texture = try! await MTKTextureLoader(device: device).newTexture(cgImage: renderer.cgImage!, options: [.SRGB: false, .generateMipmaps: true])
-        sources[asset] = texture
+        loaded = (asset, texture)
         return texture
     }
 
@@ -126,8 +132,8 @@ struct Job {
     float2 origin;   // 图左上角（像素）
     float2 extent;   // 图的宽高（像素）
     float2 texel;    // 原图一个像素在 uv 里的大小
-    uint width, height;
-    float cell, fade;
+    uint width, height;  // 出图多少格（一格一像素）
+    float cell, fade;    // 一格、上沿散开那一截（设备像素）
 };
 
 constant float bayer[64] = {
@@ -140,11 +146,11 @@ kernel void dither(texture2d<float> src [[texture(0)]], constant Job &j [[buffer
                    uint2 gid [[thread_position_in_grid]]) {
     if (gid.x >= j.width || gid.y >= j.height) return;
     constexpr sampler s(filter::linear, mip_filter::linear, address::clamp_to_edge);
-    uint2 cell = uint2(float2(gid) / j.cell);
-    float t = (bayer[(cell.y % 8) * 8 + cell.x % 8] + 0.5) / 64.0;
+    float t = (bayer[(gid.y % 8) * 8 + gid.x % 8] + 0.5) / 64.0;
     uint index = gid.y * j.width + gid.x;
-    if (float(gid.y) < j.fade && float(gid.y) / j.fade <= t) { out[index] = uchar4(0); return; }
-    float2 uv = ((float2(cell) + 0.5) * j.cell - j.origin) / j.extent;
+    float2 at = (float2(gid) + 0.5) * j.cell;
+    if (at.y < j.fade && at.y / j.fade <= t) { out[index] = uchar4(0); return; }
+    float2 uv = (at - j.origin) / j.extent;
     // 九点取平均压掉原图的压缩块；临近下沿起改取越来越粗的一级 mip，出了下沿一小截就只剩一片匀的颜色：边上那一行的起伏不往下拉成竖纹
     float lod = clamp((uv.y - 0.98) * 150.0, 0.0, 7.0);
     float3 c = 0;

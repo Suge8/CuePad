@@ -93,6 +93,8 @@ struct CuePage: View {
                 .frame(maxWidth: Self.readingWidth)
         }
         .scrollDismissesKeyboard(.interactively)
+        // 同会话页：对话滑到页头的玻璃下面，只有状态栏那一条由窗口的模糊盖着（`StatusBarBlur`），不再垫系统的淡出
+        .scrollEdgeEffectHidden(true, for: .top)
         // iPad 右边那一栏：名牌比栏窄，对话到名牌下沿淡出，不从名牌两侧露出来（`Bars`）；手机的名牌铺满整行，照沉浸式
         .fadesUnderHead(headerHost == .panel && !(staged && stageInView))
         .floatingHeader(.verbatim(cue.name), height: CueHeader.height, hasPanel: true, center: { CueHeader(staged: staged && stageInView) }) { EmptyView() }

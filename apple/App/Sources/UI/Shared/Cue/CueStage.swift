@@ -5,6 +5,7 @@ import SwiftUI
 /// 云下一个气泡说它此刻的样子，下面是你不在时攒下的几件（`CueBrief`），一行一件、点了就到。打开时停在最新处就是它；往上滑是历史，滑回来它还在（"回到最新"同会话页）。
 /// 你开口（输入框聚焦、发出）它才收成那一行（`CuePage`）。它是对话里的最后一格：在屏上时最后几条话在它上面、不在可见区，不算读过（`CueEndProbe`）。
 /// 天空是一张照片抖成网点（`DitherImage`），按打开那一刻的时段换一张（`Period`），横着铺满整栏（伸出读宽，`chatMargin`），往下伸到回复框底下；上沿那一截散成透明，融进对话的底，不画一条边。
+/// 散开的那一截在这一格的可见区上面：停在舞台上时满屏是天、页头底下不见一层渐变，往上滑才看到它散进上一条话。
 /// Cue 是软的立体、天是平的网点，一前一后分得开。进场只放一次（Cue 与字浮上来），之后整幕静止：Cue 页在静置测量的范围里，不放常驻动效。换拍子是 Cue 跳一下换姿势（`Jelly`，同头像）。
 /// 否决过：舞台盖在对话上、往下拉收起（拉一下就看历史去了，这一趟回不来）；气泡里只挑一件说（常与拍板卡重复）；没事时列几件灵感请你点头（App 按规则挑的，不是 Cue 想做的，没人点）。
 struct CueStage: View {
@@ -36,7 +37,7 @@ struct CueStage: View {
 
     var body: some View {
         Color.clear
-            .frame(height: max(visible - below, 0))
+            .frame(height: max(visible - below, 0) + Sky.fade)
             .overlay {
                 GeometryReader { room in
                     let side = margin
@@ -50,8 +51,9 @@ struct CueStage: View {
                     }
                     .frame(width: sky.size.width, height: room.size.height, alignment: .top)
                     .offset(x: -side)
-                    .background(alignment: .top) { backdrop(sky).offset(x: -side) }
+                    .background(alignment: .top) { backdrop(sky).offset(x: -side, y: -Sky.fade) }
                 }
+                .padding(.top, Sky.fade)
             }
             .debugSettling(!settled)
             .task {
@@ -63,7 +65,7 @@ struct CueStage: View {
 
     private func backdrop(_ sky: Sky) -> some View {
         DitherImage(
-            asset: sky.asset, placement: sky.placement, size: CGSize(width: sky.size.width, height: sky.depth),
+            asset: sky.asset, placement: sky.placement.offsetBy(dx: 0, dy: Sky.fade), size: CGSize(width: sky.size.width, height: Sky.fade + sky.depth),
             fade: Sky.fade)
             .overlay { if beat == .away { palette.backdrop } }
             .readerHidden(true)
