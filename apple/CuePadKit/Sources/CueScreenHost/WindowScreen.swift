@@ -39,8 +39,8 @@ final class WindowScreen: NSObject, ScreenSource, SCStreamOutput, SCStreamDelega
   @MainActor private(set) weak var shown: NSWindow?
   /// 上一次量到开着的那些窗。
   @MainActor private var seen: Set<Int> = []
-  /// 上一次看到开着的那些窗（`tuck`）；清空它就是要再排一次。
-  @MainActor var tucked: Set<Int> = []
+  /// 压到壁纸底下的窗各自原来在哪一层（`tuck`）。
+  @MainActor private let levels = NSMapTable<NSWindow, NSNumber>.weakToStrongObjects()
   @MainActor var input = Input()
   @MainActor var outlined = Outlined()
 
@@ -66,21 +66,35 @@ final class WindowScreen: NSObject, ScreenSource, SCStreamOutput, SCStreamDelega
         self?.measure()
       }
     }
-  }
-
-  /// 应用在后台时，它的窗留在所有应用的窗口最底下，看它在预览里看：后台的应用一开窗（刚起时的主窗 `open -g` 也是，之后的设置窗、表单、右键菜单）
-  /// 系统就把那扇窗提到所有应用的窗口上面（实测 macOS 27.2），盖住正看着预览的 CuePad。开着的窗有变化就排回去；菜单在它自己那一层，不动。
-  /// 用户自己把应用切到前台后不管。
-  @MainActor private func tuck() {
-    let open = Set(NSApp.windows.filter(\.isVisible).map(\.windowNumber))
-    guard open != tucked else { return }
-    tucked = open
-    guard !NSApp.isActive else { return }
-    // 从前往后一扇扇排到最底下：它们之间的先后不变
-    for window in NSApp.orderedWindows where window.isVisible && window.level == .normal && window.parent == nil && window.sheetParent == nil {
-      window.order(.below, relativeTo: 0)
+    // 菜单开着时应用不走上面那一轮：它的窗（子菜单也是）一露面就压下去
+    NotificationCenter.default.addObserver(forName: NSWindow.didChangeOcclusionStateNotification, object: nil, queue: .main) { [weak self] _ in
+      MainActor.assumeIsolated { self?.tuck() }
     }
   }
+
+  /// 应用在后台时，它的窗都压在桌面壁纸底下，看它、点它都在预览里：画面照取，这里造的事件不经屏幕、照收，屏上不见它。
+  /// 不压的话，后台的应用一开窗、挨一下点、出一个菜单，系统就把窗提到所有应用的窗口上面（实测 macOS 27.2），盖住正看着预览的 CuePad。
+  /// 别的藏法都不行（实测）：最小化、隐藏、全透明就没有画面，挪到屏外被系统拉回来露一条边，排到所有窗口最底下还露在桌面上。
+  /// 状态栏图标那一层不动。应用到前台（用户点它的程序坞图标）各回各层，退回后台再压下去。
+  @MainActor private func tuck() {
+    for window in NSApp.windows where window.parent == nil && window.sheetParent == nil && level(window) != .statusBar {
+      if NSApp.isActive {
+        guard let own = levels.object(forKey: window) else { continue }
+        window.level = NSWindow.Level(own.intValue)
+        levels.removeObject(forKey: window)
+      } else if window.level != Self.under {
+        levels.setObject(window.level.rawValue as NSNumber, forKey: window)
+        window.level = Self.under
+      }
+    }
+  }
+
+  /// 这扇窗自己的那一层（压下去之前的）。
+  @MainActor func level(_ window: NSWindow) -> NSWindow.Level {
+    levels.object(forKey: window).map { NSWindow.Level($0.intValue) } ?? window.level
+  }
+
+  private static let under = NSWindow.Level(Int(CGWindowLevelForKey(.minimumWindow)))
 
   // MARK: ScreenSource
 
