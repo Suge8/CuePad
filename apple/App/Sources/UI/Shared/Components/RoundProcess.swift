@@ -88,12 +88,14 @@ struct RoundProcess: View {
                 ForEach(process.counts, id: \.kind) { count in
                     HStack(alignment: .firstTextBaseline, spacing: Spacing.hair) {
                         Image(Self.icon(count.kind)).font(Typography.caption2)
-                        Text(verbatim: "\(count.count)")
+                        Text(verbatim: "\(count.count)").contentTransition(.numericText(value: Double(count.count)))
                     }
-                    .fixedSize().foregroundStyle(palette.ink3)
+                    .fixedSize().foregroundStyle(palette.ink3).transition(.opacity)
                 }
-                if let steps = process.steps { Text(steps).fixedSize().foregroundStyle(palette.ink3) }
+                if let steps = process.steps { Text(steps).fixedSize().foregroundStyle(palette.ink3).contentTransition(.numericText()) }
             }
+            .animation(Motion.nudge, value: process.counts.map(\.count))
+            .animation(Motion.nudge, value: process.steps)
         }
     }
 

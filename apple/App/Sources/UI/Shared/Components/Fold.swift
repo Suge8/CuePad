@@ -46,6 +46,20 @@ struct Fold<Label: View, Content: View>: View {
     private static var hoverRoom: CGFloat { Spacing.item }
 }
 
+extension View {
+    /// 收着的那一头由实到虚：字是被截在这里的，不是到这里就完了。
+    func fadesEdge(_ edge: VerticalEdge, when folded: Bool) -> some View {
+        mask {
+            ZStack(alignment: edge == .top ? .top : .bottom) {
+                Rectangle()
+                LinearGradient(colors: [.clear, .black], startPoint: edge == .top ? .bottom : .top, endPoint: edge == .top ? .top : .bottom)
+                    .frame(height: Note.lineHeight).blendMode(.destinationOut).opacity(folded ? 1 : 0)
+            }
+            .compositingGroup()
+        }
+    }
+}
+
 struct DisclosureChevron: View {
     let open: Bool
     @Environment(\.palette) private var palette

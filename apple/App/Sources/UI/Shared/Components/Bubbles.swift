@@ -149,17 +149,9 @@ struct BubbleText: View {
         Paragraphs(verbatim: text, lineSpacing: Typography.readingLineSpacing, lineLimit: open ? nil : foldedLines)
             .font(Typography.reading).foregroundStyle(palette.ink)
             .background(alignment: .topLeading) { if let foldedLines, !open { truncationProbe(lineLimit: foldedLines) } }
-            .mask {
-                ZStack(alignment: .bottom) {
-                    Rectangle()
-                    LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom)
-                        .frame(height: Self.fade).blendMode(.destinationOut).opacity(truncated && !open ? 1 : 0)
-                }
-                .compositingGroup()
-            }
+            .fadesEdge(.bottom, when: truncated && !open)
     }
 
-    private static let fade: CGFloat = 28
     private static let toggle: CGFloat = 20
 
     /// 同一宽度和样式多排一行就能判定截断；短气泡只多量自身，长气泡不必排完整篇。
