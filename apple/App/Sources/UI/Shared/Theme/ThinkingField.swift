@@ -2,7 +2,7 @@ import MetalKit
 import SwiftUI
 
 /// 思考强度轨道里填满的那一段（模型气泡，`ThinkingTrack`）：一块铺满轨道的 Metal 画布，调用方按钮的位置遮出左边一截。
-/// 画法同 Cue 页的天：一格 2 点、对齐设备像素，按同一张 8×8 阈值抖成网点（只抖明暗、不抖色相），整个 App 一种质感。
+/// 画法同 Cue 页的天：格子一样大（`DitherGPU.cell`）、对齐设备像素，按同一张 8×8 阈值抖成网点（只抖明暗、不抖色相），整个 App 一种质感。
 /// 色带从左端的钴蓝长到填满处（`fill`）正好是这一档的颜色；档越高（`energy` 0→1，`ThinkingMeter.energy`）多一样东西，前面的都留着：
 /// 最低档星点明灭 → 低档往右漂 → 中档拉成流光 → 高档一阵阵脉冲冲到钮、钮外亮一圈 → 很高档多一层更快的流、脉冲加密 → 最高档整段翻涌、钮边冒金色火花。
 /// 每样东西按能量淡入，换档时在画布里连续地过去（`ThinkingRenderer`）；换档那一下从钮荡开一圈。
@@ -60,6 +60,7 @@ final class ThinkingGPU {
 private struct ThinkingUniforms {
     var a: SIMD4<Float>  // 宽, 高（像素）, 时间, 能量
     var b: SIMD4<Float>  // 每点几像素, 关（1 是关）, 填满处（占宽几成）, 换档后过了几秒
+    var c: SIMD4<Float>  // 网点一格几像素
     var low, mid, high, spark: SIMD4<Float>
 }
 
@@ -99,7 +100,8 @@ final class ThinkingRenderer: NSObject, MTKViewDelegate {
         let size = view.drawableSize, scale = Float(size.width / max(view.bounds.width, 1))
         var uniforms = ThinkingUniforms(
             a: SIMD4(Float(size.width), Float(size.height), time, Float(shown ?? target)),
-            b: SIMD4(scale, off ? 1 : 0, Float(shownFill ?? fill), Float(min(now - changedAt, 10))), low: ramp[0], mid: ramp[1], high: ramp[2], spark: ramp[3])
+            b: SIMD4(scale, off ? 1 : 0, Float(shownFill ?? fill), Float(min(now - changedAt, 10))),
+            c: SIMD4(Float(DitherGPU.cell) * max(1, scale.rounded()), 0, 0, 0), low: ramp[0], mid: ramp[1], high: ramp[2], spark: ramp[3])
         pass.colorAttachments[0].loadAction = .clear
         pass.colorAttachments[0].clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 0)
         let render = commands.makeRenderCommandEncoder(descriptor: pass)!
@@ -188,6 +190,7 @@ using namespace metal;
 struct Uniforms {
     float4 a;   // 宽, 高（像素）, 时间, 能量
     float4 b;   // 每点几像素, 关, 填满处（占宽几成）, 换档后过了几秒
+    float4 c;   // 网点一格几像素
     float4 low, mid, high, spark;
 };
 
@@ -249,8 +252,8 @@ static float motes(float2 p, float cell, float speed, float stretch, float densi
 fragment float4 thinkingFragment(Out in [[stage_in]], constant Uniforms &u [[buffer(0)]]) {
     float scale = u.b.x, time = u.a.z, e = u.a.w, fill = max(u.b.z, 0.05);
     if (u.b.y > 0.5 && e < 0.002) return float4(0);
-    // 网点一格 2 点、整倍设备像素；格里每个像素取格心的值
-    float cellPx = 2.0 * max(1.0, round(scale));
+    // 格里每个像素取格心的值
+    float cellPx = u.c.x;
     uint2 cell = uint2(in.position.xy / cellPx);
     float2 size = u.a.xy / scale;
     float2 p = (float2(cell) + 0.5) * cellPx / scale;
