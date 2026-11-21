@@ -22,7 +22,7 @@ extension Workspace {
     }
 
     /// 放下的卡要先答一句才办（完成、休眠前的确认，触屏上交给谁）：问着时卡停在松手的地方（`BoardMoves.asking`）。
-    /// 问之前的查、答应之后的写也算（`answer`）：查得慢时框还没出，框先收起、库后写完，这两截卡都不往回走。休眠不换列，答完就回原处，不用等。
+    /// 问之前的查、答应之后的写也算（`answer`）：查得慢时框还没出，框先收起、库后写完，这两截卡都不往回走。休眠的那张答应了就离开看板（`BoardMoves.leave`），不用等。
     var asksAboutDrop: Bool {
         #if os(iOS)
         sessionAsk != nil || answering > 0 || outbox != nil

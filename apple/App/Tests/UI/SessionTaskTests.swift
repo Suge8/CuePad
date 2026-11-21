@@ -105,7 +105,8 @@ struct SessionTaskTests {
         try await recorder.update(sessionID: "s1", state: .thinking, turnStartedAt: .now)
         try await store.writeTranscript(SessionTranscript(sessionID: "s1", messages: [], recap: Recap(lastPrompt: "修登录", lastReply: "修好了", answeredAt: .now)))
         try await recorder.update(sessionID: "s1", state: .settled)
-        try await workspace.complete(old.id)
+        // 不是你点的完成（你点的会叫它休眠，在路上的不上看板）：不是为这件事开的会话留着
+        try await store.completeTask(old.id)
         #expect(try await store.cueChanges(after: CueMarks(mark)).filter { $0.kind == .settled }.map(\.task?.id) == [old.id])
 
         #expect(try await store.cueBoard().sessions.isEmpty, "随完成的事收起")

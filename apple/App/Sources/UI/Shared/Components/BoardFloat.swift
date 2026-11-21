@@ -27,7 +27,7 @@ struct BoardFloat: View {
                         RoundedRectangle(cornerRadius: TaskMetrics.cardRadius)
                             .frame(width: (held.home?.size ?? held.size).width, height: (held.home?.size ?? held.size).height)
                     }
-                    .modifier(Floating(moves: moves, settling: held.phase == .settling, landing: held.phase == .landing, fading: held.home != nil))
+                    .modifier(Floating(moves: moves, settling: held.phase == .settling, landing: held.phase == .landing, fading: held.home != nil || held.phase == .leaving))
             }
         }
         .allowsHitTesting(false)
@@ -57,7 +57,7 @@ struct BoardFloat: View {
             content
                 .elevation(up ? .lifted : nil)
                 .scaleEffect(up && !reduceMotion ? Self.scale : 1)
-                // 与滑过去同一个事务（`BoardMoves.land`）：一路淡掉，露出底下已经排成新样子的那张
+                // 与滑过去同一个事务（`BoardMoves.land`）：一路淡掉，露出底下已经排成新样子的那张；离开看板的就地淡掉（`leave`）
                 .opacity(fading ? 0 : 1)
                 .position(moves.point)
                 .animation(Motion.release, value: settling)

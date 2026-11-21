@@ -80,6 +80,7 @@ nonisolated struct BoardArrival: Equatable {
             self.held?.id = new.id
             if new.to != new.from { moved[new.id] = new.from }
         }
+        if let hung = self.held, before.column(of: hung.id) != nil, board.column(of: hung.id) == nil { leave() }
         var from: [String: Departure] = moved.reduce(into: [:]) { departures, move in
             guard let frame = frame(of: move.key) else { return }
             departures[move.key] = Departure(column: move.value, frame: frame, at: now)
