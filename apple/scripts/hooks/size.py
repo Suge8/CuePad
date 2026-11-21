@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """单个文件不超过 LIMIT 个令牌（字节数 ÷ 4，约 20KB）：Agent 一次读得完、改得准。
 用法：size.py           查暂存区（提交钩子）：新文件超标、已超标的文件变大就拦下，给出拆法，退出 1
+      size.py --worktree 同一道判断查工作区相对 HEAD 的改动（xc.sh check 经 lint.sh 跑，提交前就拦）
       size.py --report  列出此刻超标的文件
 已超标的文件改小或不变照常放行：存量随手拆，不卡并行改它们的会话；拆完后就是全拦。不是手写的文件列在同目录的 size-ignore，二进制不看。
 """
@@ -121,15 +122,31 @@ def report(skip):
     print(f"共 {len(rows)} 个文件超过 {LIMIT} 令牌")
 
 
-def staged(skip):
-    fields = iter(git("diff", "--cached", "--name-status", "-z", "-M", "--diff-filter=AMR").split("\0"))
-    failures = []
+def read(path):
+    if not os.path.isfile(path):
+        return None
+    with open(path, "rb") as f:
+        return f.read()
+
+
+def changes(worktree):
+    """[(HEAD 里的原路径, 现路径)]：暂存区或工作区相对 HEAD 新增、改动、改名的文件。"""
+    fields = iter(git("diff", "HEAD" if worktree else "--cached", "--name-status", "-z", "-M", "--diff-filter=AMR").split("\0"))
+    result = []
     for status in fields:
         if not status:
             continue
         source = next(fields)
-        path = next(fields) if status[0] == "R" else source  # 改名按原文件比：搬家不算新增
-        data = blob(f":{path}")
+        result.append((source, next(fields) if status[0] == "R" else source))  # 改名按原文件比：搬家不算新增
+    if worktree:
+        result += [(path, path) for path in filter(None, git("ls-files", "--others", "--exclude-standard", "-z").split("\0"))]
+    return result
+
+
+def check(skip, worktree):
+    failures = []
+    for source, path in changes(worktree):
+        data = read(path) if worktree else blob(f":{path}")
         if skip(path) or data is None or not oversized(data):
             continue
         before = blob(f"HEAD:{source}")
@@ -146,4 +163,7 @@ def staged(skip):
 
 if __name__ == "__main__":
     os.chdir(git("rev-parse", "--show-toplevel").strip())
-    (report if sys.argv[1:] == ["--report"] else staged)(ignored())
+    if sys.argv[1:] == ["--report"]:
+        report(ignored())
+    else:
+        check(ignored(), sys.argv[1:] == ["--worktree"])

@@ -79,4 +79,7 @@ python3 "$scripts/lint_expiry.py" || status=1
 # 文档指向的名字还在（lint_docs.py 头注释）；要 git
 [ "${1:-}" = --staged ] || python3 "$scripts/lint_docs.py" || status=1
 
+# 单个文件的大小上限，同提交钩子那一道（hooks/size.py 头注释）；钩子自己查暂存区，这里只查工作区
+[ "${1:-}" = --staged ] || python3 "$scripts/hooks/size.py" --worktree || status=1
+
 exit $status
