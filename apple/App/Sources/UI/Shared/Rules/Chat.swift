@@ -163,7 +163,7 @@ nonisolated enum Chat {
             rows.append(.step(index))
         }
         close(at: items.count)
-        return rows
+        return rows == [.looks(items.indices)] ? items.indices.map(ProcessRow.step) : rows
     }
 
     static func diffLabel(added: Int?, removed: Int?) -> String {
