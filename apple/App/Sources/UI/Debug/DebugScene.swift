@@ -71,6 +71,7 @@ extension DebugHooks.Preset {
         cueStage = args.cueOpts.stage.map { $0 == "open" }
         cueSky = args.cueOpts.sky
         railOpen = args.railOpen
+        indexOpen = args.indexOpen
         #if os(iOS)
         alertStatus = DebugScene.alertStatus
         // sessions、cuerows 画面看会话行：手机的会话列表是搜索页的会话那一节

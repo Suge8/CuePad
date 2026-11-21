@@ -47,6 +47,8 @@ enum DebugHooks {
         var cueSky: String?
         /// 手机的会话条一出现就展开成面板（`-CuePadRailOpen`）。
         var railOpen = false
+        /// 对话目录一出现就展开成面板（`-CuePadIndexOpen`）。
+        var indexOpen = false
         #if os(iOS)
         /// 设置页通知那一行显示的状态：演示模式没有同步，真实状态出不来。
         var alertStatus: AlertStatus?

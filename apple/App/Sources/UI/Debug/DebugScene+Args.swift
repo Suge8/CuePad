@@ -64,7 +64,7 @@ nonisolated struct DebugArgs: Decodable {
     let libraryTab: String?
     /// `-CuePadLiveActivity YES`：隔离库下也开真的实时活动（配 `-CuePadDemo YES`，演示库里有推进中与等你），验收灵动岛；`xc.sh shot ios` 带它时拍系统的岛（收起与长按展开）
     let liveActivity: Bool
-    /// `-CuePadLongChat YES`：演示对话前面多 110 轮更早的来回（比 Cue 页读得到的 `CueThread.limit` 条多：来一句新的，最早那条就掉出去，同真实库）（看 Cue 页往上翻与刻度滑条）
+    /// `-CuePadLongChat YES`：演示对话前面多 110 轮更早的来回（比 Cue 页读得到的 `CueThread.limit` 条多：来一句新的，最早那条就掉出去，同真实库）（看 Cue 页往上翻与对话目录）
     let longChat: Bool
     /// `-CuePadMac agents|bare`：库里写下一台 Mac「MacBook Pro」，接了 Claude Code 与 Codex，或一家都没接（bare）
     let mac: String?
@@ -100,6 +100,8 @@ nonisolated struct DebugArgs: Decodable {
     let railForm: String?
     /// `-CuePadRailOpen YES`：手机的会话条一出现就展开成面板（轻点胶囊后的样子）
     let railOpen: Bool
+    /// `-CuePadIndexOpen YES`：对话目录一出现就展开成面板（轻点记号后的样子）
+    let indexOpen: Bool
     /// `-CuePadReconcileSeconds <秒>`（默认 8，配 `-CuePadSync newmac`）：这么久后带回 Cue 在「Mac Studio」上运行
     let reconcileSeconds: Double?
     /// `-CuePadReplies <N>`：Cue 把歇着的会话留给你回（待回复：会话条与看板的等你组，`seedReplies`）

@@ -13,7 +13,7 @@ import SwiftUI
 /// 行若离内容原点有一段边距，整段对话就被横着推出那一段。
 /// 不用 `contentMargins(…, for: .scrollContent)`：同一棵树里几块滚动区在同一次更新里定内容边距时，SwiftUI 会把一块的边距写到另一块上、之后不改回（这里犯过：Cue 页拍板卡那一排件的边被写到对话上，整段左移、上移 16）。
 /// `.scrollView` 坐标空间两种边一样不含，对话里按它量的（`CueEndProbe`）不变。
-/// Mac 上不画系统滚动条，定位靠右缘的刻度滑条与"回到最新"（`ChatColumn`）：按"显示滚动条"的系统设置，它要么是常驻的一根粗灰条，
+/// Mac 上不画系统滚动条，定位靠右缘的对话目录与"回到最新"（`ChatColumn`）：按"显示滚动条"的系统设置，它要么是常驻的一根粗灰条，
 /// 要么是悬浮的、栏露出时亮一下再在主线程逐帧淡掉（约 250ms、千万条指令，每露出一次一回）。手机上的滚动指示条细、只在滚时出现，照系统。
 struct ChatScroll<Content: View, Key: Equatable>: View {
     let followKey: Key
@@ -25,6 +25,7 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
     private let content: Content
     @Environment(\.accessibilityReduceMotion) var reduceMotion
     @Environment(\.chatBottomInset) var bottomInset
+    @Environment(\.chatReading) var chatReading
     @State var anchor = ChatAnchor()
     @State var onScreen: Set<UUID> = []
     @State var offset = ScrollOffset()
@@ -101,6 +102,7 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                         let grown = reading.height - last.height
                         let rising = offset.arrived(arrival) && grown > 0
                         if reading.anchor.onScreen != onScreen { onScreen = reading.anchor.onScreen }
+                        if let chatReading, chatReading.id != reading.anchor.reading { chatReading.id = reading.anchor.reading }
                         let shift = anchor.take()
                         if shift != 0 { lift.scroll(by: shift) }
                         if follow.wrappedValue.prepending, grown > 0 {
@@ -168,7 +170,7 @@ struct ChatScroll<Content: View, Key: Equatable>: View {
                         guard let target else { return }
                         Task {
                             await NextFrame.wait()
-                            withAnimation(reduceMotion || target.landing == .read ? nil : Motion.fade) { reader.scrollTo(target.id, anchor: target.anchor) }
+                            reader.scrollTo(target.id, anchor: target.anchor)
                         }
                     }
             }

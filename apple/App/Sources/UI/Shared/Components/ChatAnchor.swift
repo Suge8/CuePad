@@ -20,6 +20,7 @@ nonisolated final class ChatAnchor: Sendable {
         /// 挪动来自第几次排版（连着两次挪同样多也各报一次）；没挪为 0。
         var layout = 0
         var onScreen: Set<UUID> = []
+        var reading: UUID?
     }
 
     private struct Mark {
@@ -101,7 +102,8 @@ nonisolated final class ChatAnchor: Sendable {
             let top = read + state.inFlight + state.pending
             state.seen = state.layout
             state.mark = Self.mark(at: top, height: height, in: state)
-            var tracked = Tracked(shift: (state.inFlight + state.pending).rounded(), onScreen: Self.onScreen(top, height, state))
+            var tracked = Tracked(
+                shift: (state.inFlight + state.pending).rounded(), onScreen: Self.onScreen(top, height, state), reading: Self.row(at: top + height / 3, in: state))
             if tracked.shift != 0 { tracked.layout = state.layout }
             return tracked
         }
@@ -109,6 +111,12 @@ nonisolated final class ChatAnchor: Sendable {
 
     private static func onScreen(_ top: CGFloat, _ height: CGFloat, _ state: State) -> Set<UUID> {
         Set(state.runs.lazy.filter { $0.top < top + height && $0.top + $0.height > top }.map(\.id))
+    }
+
+    private static func row(at y: CGFloat, in state: State) -> UUID? {
+        guard let run = state.runs.last(where: { $0.top <= y }) ?? state.runs.first else { return nil }
+        guard state.real.contains(run.id), let rows = state.segments[run.id]?.rows else { return run.id }
+        return (rows.last { run.top + $0.top <= y } ?? rows.first)?.id ?? run.id
     }
 
     /// 那一段还是空白（刚滚进来，下一次更新才排成真的）时改认可见区里它下面第一段真的：空白换成真的之后段里各条怎么分布不知道，按空白对会差出它估高的那点出入。
