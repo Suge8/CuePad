@@ -202,7 +202,7 @@ enum LiveAgentScript {
       // 输入框此刻的值（原生在 `fill` 之后、页面安定了再核对一遍）；下拉框与别的不算
       const value = ({ n }) => {
         const el = resolve(n);
-        return el.isContentEditable || el.localName === "input" || el.localName === "textarea" ? held(el) : {};
+        return el.isContentEditable || el.localName === "input" || el.localName === "textarea" ? { ...held(el), what: describe(el) } : {};
       };
 
       const focusable = () => [...document.querySelectorAll("a[href], button, input, select, textarea, [tabindex], [contenteditable]")]
