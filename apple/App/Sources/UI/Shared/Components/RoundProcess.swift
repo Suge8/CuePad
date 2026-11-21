@@ -4,24 +4,14 @@ import SwiftUI
 /// 做完的几步与说过的话来自会话文件（`Recap.pendingTools`）；此刻在做的那一步来自会话状态（`detail`），由对话末尾的角色说（`LiveFigure`），这里不列。
 /// Mac 上正在说的话出字时（`SessionShown.speaking`）这一块是草稿的标题，说的话就是下面的草稿，不再列一遍。
 /// 工具结果里有图时，标题行下面挂着这一轮的图（`ChatImages`），点开全屏看：用户看得到 Agent 看到的，Agent 不必为了给人看再发一遍。
-/// 清单收着时图只留一排（余下几张写在最后一格上），展开时全摆出来：收着的一轮是回答上面的一句交代，不压过回答。
-/// 在跑的清单开着，做完的收着。刚落下的那一轮先照在跑时的样子开着、同样高，随即收起：Mac 上正在说的话落库时原位换下（`SessionDraft`），
-/// 是这一块连续收回，不在换下的那一帧跳一下。
-/// 清单里的一步点开看里面（`StepRow`）；标题行是用时（在跑的只有图标）接每类一个图标配个数，图标与清单那一类的同一个；缓存没接上的一轮在末尾另起一行写重读了多少（`Chat.process`）。
 struct RoundProcess: View {
     let tools: ChatMessage.Tools?
     let ending: Ending
     let session: SessionState
     /// 做完的一轮是哪条回答（别的设备点开一步时请 Mac 写在它上面，`StepRow`）；在跑的一轮为 nil。
     var message: UUID?
-    /// 最新做完的那一轮何时落下的（`ChatEntry.landed`）；你点开、收起的照你的。
-    var landed: Date?
     @Environment(\.palette) private var palette
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.chatStay) private var stay
-    @State private var toggled: Bool?
-    @State private var key = UUID()
-    @State private var settled = false
+    @State private var open = DebugHooks.preset.toolsOpen
 
     nonisolated enum Ending: Equatable {
         case took(String)
@@ -36,43 +26,28 @@ struct RoundProcess: View {
     var body: some View {
         let process = Chat.process(tools)
         if let process, let tools, tools.steps > 0 {
-            let fresh = !settled && landed.map { $0.timeIntervalSinceNow > -Self.landing } ?? false
-            let expanded = !tools.items.isEmpty && (toggled ?? (message == nil || fresh || DebugHooks.preset.toolsOpen))
             VStack(alignment: .leading, spacing: 0) {
-                Button {
-                    stay?(key, !expanded)
-                    withAnimation(motion) { toggled = !expanded }
-                } label: { header(process, open: tools.items.isEmpty ? nil : expanded) }
-                    .buttonStyle(PressStyle(.inline))
-                    .allowsHitTesting(!tools.items.isEmpty)
-                    .accessibilityLabel(spoken(process))
-                    .accessibilityExpanded(tools.items.isEmpty ? nil : expanded)
-                    #if os(macOS)
-                    .help(process.spoken.visible)
-                    #endif
-                // 收起时淡出的几行跟着这一块的下沿收回，不叠在下面的回答上
-                VStack(alignment: .leading, spacing: 0) {
+                Fold(open: $open, toggles: !tools.items.isEmpty) {
+                    header(process, open: tools.items.isEmpty ? nil : open)
+                        .accessibilityLabel(spoken(process))
+                        #if os(macOS)
+                        .help(process.spoken.visible)
+                        #endif
+                } content: {
                     if !tools.images.isEmpty {
                         NoteThread {
-                            ChatImages(hashes: tools.images, alignment: .leading, side: Self.imageSide, perRow: Self.imageRow, rows: expanded ? nil : 1)
+                            ChatImages(hashes: tools.images, alignment: .leading, side: Self.imageSide, perRow: Self.imageRow, rows: open ? nil : 1)
                                 .padding(.vertical, Spacing.hair)
                         }
                     }
-                    if expanded {
+                    if open {
                         NoteThread { list(tools) }
                     } else if ending == .running, let said = tools.items.last(where: { $0.kind == .said }) {
                         NoteThread { SaidRow(text: said.target, lines: 3) }
                     }
                 }
-                // 只裁上下：行的悬停底比行左右各宽出一圈（`Press.inline`），贴着框裁的话右端被切成直边
-                .padding(.horizontal, Self.hoverRoom).clipped().padding(.horizontal, -Self.hoverRoom)
                 recached(process)
             }
-            .task {
-                guard fresh, (try? await Task.sleep(for: Self.beat)) != nil else { return }
-                withAnimation(motion) { settled = true }
-            }
-            .onDisappear { if toggled == true { stay?(key, false) } }
         } else {
             recached(process)
         }
@@ -84,17 +59,9 @@ struct RoundProcess: View {
         }
     }
 
-    /// 开合带着下面的回答一起挪：只给这一块挂动画的话回答当帧跳到位，收走的几行还在原地淡出，叠在回答的字上。
-    private var motion: Animation? { Motion.spatial(Motion.nudge, reduceMotion: reduceMotion) }
-
-    private static let hoverRoom = Spacing.item
     private static let imageSide: CGFloat = 64
     /// 手机最窄的对话列放得下的一排，三端同一个数。
     private static let imageRow = 4
-    /// 落下多久之内算刚落下：本机会话文件落库到这里画出来不到一秒；别的设备上随同步晚到的直接收着。
-    private static let landing: TimeInterval = 5
-    /// 回答落定后停这一下再收：换下的那一帧不动，收起看得出是接着发生的。
-    private static let beat: Duration = .milliseconds(400)
 
     private func spoken(_ process: Chat.Process) -> String {
         let end: String? = switch ending {
@@ -131,14 +98,19 @@ struct RoundProcess: View {
     }
 
     @ViewBuilder private func list(_ tools: ChatMessage.Tools) -> some View {
-        ForEach(Array(tools.items.enumerated()), id: \.offset) { index, item in row(item, at: index) }
+        ForEach(Chat.rows(tools.items), id: \.self) { row in
+            switch row {
+            case .step(let index): step(tools.items[index], at: index)
+            case .looks(let range): LooksRow(range: range, items: tools.items, session: session, message: message)
+            }
+        }
         let listed = tools.items.count { $0.kind != .said }
         if tools.steps > listed {
             Text("另有 \(tools.steps - listed) 步未列出").font(Typography.caption).foregroundStyle(palette.ink3).noteGlyph(.indent)
         }
     }
 
-    @ViewBuilder private func row(_ item: ChatMessage.Tools.Item, at index: Int) -> some View {
+    @ViewBuilder private func step(_ item: ChatMessage.Tools.Item, at index: Int) -> some View {
         if item.kind == .said {
             SaidRow(text: item.target, lines: 3)
         } else {
@@ -159,20 +131,40 @@ struct RoundProcess: View {
     }
 }
 
-extension View {
-    func accessibilityExpanded(_ open: Bool?) -> some View {
-        accessibilityValue(open.map { $0 ? Text("已展开") : Text("已收起") } ?? Text(verbatim: ""))
+private struct LooksRow: View {
+    let range: Range<Int>
+    let items: [ChatMessage.Tools.Item]
+    let session: SessionState
+    let message: UUID?
+    @Environment(\.palette) private var palette
+    @State private var open = false
+
+    var body: some View {
+        let looks = items[range], counts = Chat.looks(looks), failed = looks.count(where: \.failed)
+        Fold(open: $open) {
+            HStack(alignment: .firstTextBaseline, spacing: Note.spacing) {
+                Image(RoundProcess.icon(counts.max { $0.count < $1.count }?.kind ?? .other))
+                    .font(Typography.caption2).foregroundStyle(palette.ink3).readerHidden(true).noteGlyph()
+                Text(Dotted(counts.map(\.spoken)).visible).font(Typography.caption).foregroundStyle(palette.ink3).lineLimit(1)
+                if failed > 0 { Text("\(failed) 失败").font(Typography.caption).foregroundStyle(palette.failure).fixedSize() }
+                DisclosureChevron(open: open)
+                Spacer(minLength: 0)
+            }
+            .contentShape(.rect)
+            .accessibilityElement(children: .combine)
+        } content: {
+            if open {
+                NoteThread {
+                    ForEach(Array(range), id: \.self) { index in StepRow(item: items[index], session: session, message: message, index: index) }
+                }
+            }
+        }
     }
 }
 
-struct DisclosureChevron: View {
-    let open: Bool
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        Image(.expand).font(Typography.caption2.weight(.semibold)).foregroundStyle(palette.ink3)
-            .rotationEffect(.degrees(open ? 180 : 0))
-            .readerHidden(true)
+extension View {
+    func accessibilityExpanded(_ open: Bool?) -> some View {
+        accessibilityValue(open.map { $0 ? Text("已展开") : Text("已收起") } ?? Text(verbatim: ""))
     }
 }
 

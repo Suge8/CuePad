@@ -18,8 +18,6 @@ nonisolated struct ChatEntry: Identifiable, Equatable, Sendable {
     var previews: [PreviewItem] = []
     var question: String?
     var fromCue = false
-    /// 最新做完的那一轮何时落下的：它之后你还没说下一句（发出、还在路上的也算说了）。刚落下时经过先开着再收起（`RoundProcess`）。
-    var landed: Date?
 }
 
 private nonisolated extension ChatEntry {
@@ -97,8 +95,6 @@ nonisolated enum Chat {
         }
         place(before: nil)
         entries += outgoing[tail...].map(ChatEntry.outgoing)
-        let yours = entries.lastIndex { [.user, .answer].contains($0.role) || $0.role.isOutgoing } ?? -1
-        if let last = entries.lastIndex(where: { $0.role == .pi }), last > yours { entries[last].landed = messages.last { $0.id == entries[last].id }?.at }
         return entries
     }
 
@@ -130,21 +126,44 @@ nonisolated enum Chat {
         guard let tools else { return nil }
         let recached = tools.cache?.recached.map { String(localized: "缓存失效，重读 \(CueContext.tokens($0))") }
         guard tools.steps > 0 else { return recached.map { Process(recached: $0) } }
-        func count(_ kind: ChatMessage.Tools.Kind) -> Int { tools.items.count { $0.kind == kind } }
         let edits = tools.items.count { $0.kind == .edit && !$0.failed }
         var counts = [Process.Count(kind: .edit, count: edits, spoken: String(localized: "改了 \(edits) 个文件"))]
         let complete = tools.steps == tools.items.count { $0.kind != .said }
-        if complete {
-            let commands = count(.command), reads = count(.read), searches = count(.search), others = count(.other)
-            counts += [
-                .init(kind: .command, count: commands, spoken: String(localized: "跑了 \(commands) 条命令")),
-                .init(kind: .read, count: reads, spoken: String(localized: "读了 \(reads) 个文件")),
-                .init(kind: .search, count: searches, spoken: String(localized: "搜了 \(searches) 次")),
-                .init(kind: .other, count: others, spoken: String(localized: "\(others) 次工具")),
-            ]
-        }
+        if complete { counts += looks(tools.items) }
         counts.removeAll { $0.count == 0 }
         return Process(counts: counts, steps: complete && !counts.isEmpty ? nil : String(localized: "共 \(tools.steps) 步"), recached: recached)
+    }
+
+    static func looks(_ items: some Collection<ChatMessage.Tools.Item>) -> [Process.Count] {
+        func count(_ kind: ChatMessage.Tools.Kind) -> Int { items.count { $0.kind == kind } }
+        let commands = count(.command), reads = count(.read), searches = count(.search), others = count(.other)
+        return [
+            Process.Count(kind: .command, count: commands, spoken: String(localized: "跑了 \(commands) 条命令")),
+            .init(kind: .read, count: reads, spoken: String(localized: "读了 \(reads) 个文件")),
+            .init(kind: .search, count: searches, spoken: String(localized: "搜了 \(searches) 次")),
+            .init(kind: .other, count: others, spoken: String(localized: "\(others) 次工具")),
+        ].filter { $0.count > 0 }
+    }
+
+    enum ProcessRow: Hashable {
+        case step(Int)
+        case looks(Range<Int>)
+    }
+
+    static let foldedLooks = 3
+
+    static func rows(_ items: [ChatMessage.Tools.Item]) -> [ProcessRow] {
+        var rows: [ProcessRow] = [], start = 0
+        func close(at end: Int) {
+            rows += end - start >= foldedLooks ? [.looks(start..<end)] : (start..<end).map(ProcessRow.step)
+            start = end + 1
+        }
+        for (index, item) in items.enumerated() where item.kind.acts || item.kind == .said {
+            close(at: index)
+            rows.append(.step(index))
+        }
+        close(at: items.count)
+        return rows
     }
 
     static func diffLabel(added: Int?, removed: Int?) -> String {
