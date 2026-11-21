@@ -29,7 +29,7 @@ struct RoundProcess: View {
             VStack(alignment: .leading, spacing: 0) {
                 Fold(open: $open, toggles: !tools.items.isEmpty) {
                     header(process, open: tools.items.isEmpty ? nil : open)
-                        .accessibilityLabel(spoken(process))
+                        .accessibilityElement(children: .ignore).accessibilityLabel(spoken(process))
                         #if os(macOS)
                         .help(process.spoken.visible)
                         #endif
