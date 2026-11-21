@@ -1,7 +1,10 @@
-// 用法：sheet <出.png> [-cols 列数] [-crop 宽x高[+左+上]] <图…>
+// 用法：sheet <出.png> [-cols 列数] [-crop 宽x高[+左+上]] [-fit 长边] [-from 秒] [-to 秒] [-fps 帧率] <图或片…>
 // 把几张图拼成一张对照图，一次读完：每张先按 -crop 裁（像素，从左上角算），按列数排开（缺省排成一行），各自下面写所在目录与文件名。
+// 片子（.mov、.mp4）逐帧排开看动效：取 -from（缺省 0）到 -to（缺省 from 后 1 秒）之间每秒 -fps（缺省 15）帧，一帧一格，下面写它在片里的秒数。
+// -fit 把每格缩到长边不超过这么多像素（裁完再缩）；片子的帧缺省缩到 640，图不带 -fit 不缩。
 // xc.sh sheet 编译并调用它。
 import AppKit
+import AVFoundation
 
 var args = Array(CommandLine.arguments.dropFirst())
 func fail(_ message: String) -> Never {
@@ -23,16 +26,57 @@ let asked = option("-cols").map { text -> Int in
     guard let n = Int(text), n > 0 else { fail("-cols 后面是列数") }
     return n
 }
-guard args.count >= 2 else { fail("用法：sheet <出.png> [-cols 列数] [-crop 宽x高[+左+上]] <图…>") }
+func seconds(_ name: String) -> Double? {
+    option(name).map { text in
+        guard let n = Double(text), n >= 0 else { fail("\(name) 后面是秒数") }
+        return n
+    }
+}
+let fit = option("-fit").map { text -> Int in
+    guard let n = Int(text), n > 0 else { fail("-fit 后面是像素数") }
+    return n
+}
+let from = seconds("-from") ?? 0, to = seconds("-to") ?? from + 1, fps = seconds("-fps") ?? 15
+guard args.count >= 2 else { fail("用法：sheet <出.png> [-cols 列数] [-crop 宽x高[+左+上]] [-fit 长边] [-from 秒] [-to 秒] [-fps 帧率] <图或片…>") }
 let out = args.removeFirst()
-let tiles = args.map { path -> (name: String, image: CGImage) in
-    let url = URL(fileURLWithPath: path)
-    guard let source = CGImageSourceCreateWithURL(url as CFURL, nil), var image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { fail("读不了 \(path)") }
+
+typealias Tile = (name: String, image: CGImage)
+func tile(_ name: String, _ whole: CGImage, from path: String, fit: Int?) -> Tile {
+    var image = whole
     if let crop {
         guard let cut = image.cropping(to: crop) else { fail("\(path)（\(image.width)x\(image.height)）裁不出 \(crop)") }
         image = cut
     }
-    return (url.deletingPathExtension().pathComponents.suffix(2).joined(separator: "/"), image)
+    let long = max(image.width, image.height)
+    guard let fit, long > fit else { return (name, image) }
+    let size = (width: image.width * fit / long, height: image.height * fit / long)
+    guard let context = CGContext(data: nil, width: size.width, height: size.height, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { fail("缩不了 \(path)") }
+    context.interpolationQuality = .high
+    context.draw(image, in: CGRect(x: 0, y: 0, width: size.width, height: size.height))
+    return (name, context.makeImage()!)
+}
+
+var tiles: [Tile] = []
+for path in args {
+    let url = URL(fileURLWithPath: path)
+    if ["mov", "mp4"].contains(url.pathExtension.lowercased()) {
+        let generator = AVAssetImageGenerator(asset: AVURLAsset(url: url))
+        generator.appliesPreferredTrackTransform = true
+        generator.requestedTimeToleranceBefore = .zero
+        generator.requestedTimeToleranceAfter = .zero
+        let before = tiles.count
+        for i in 0...Int(((to - from) * fps).rounded()) {
+            let at = from + Double(i) / fps
+            // 过了片尾就取不到了：有几帧排几帧
+            guard let frame = try? await generator.image(at: CMTime(seconds: at, preferredTimescale: 600)).image else { break }
+            tiles.append(tile(String(format: "%.2f 秒", at), frame, from: path, fit: fit ?? 640))
+        }
+        guard tiles.count > before else { fail("\(path) 在第 \(from) 秒取不到帧") }
+    } else {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil), let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { fail("读不了 \(path)") }
+        tiles.append(tile(url.deletingPathExtension().pathComponents.suffix(2).joined(separator: "/"), image, from: path, fit: fit))
+    }
 }
 
 let cols = min(asked ?? tiles.count, tiles.count), rows = (tiles.count + cols - 1) / cols
