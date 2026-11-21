@@ -35,7 +35,7 @@ struct ChatIndex: View {
     var body: some View {
         EdgeIndex(
             groups: [marks], edge: .trailing, metrics: .init(width: Self.width, pitch: Self.pitch, tall: row, short: row, panel: 320),
-            shut: .sample(Self.visibleMarks), glassShut: false, current: current, opens: DebugHooks.preset.indexOpen,
+            shut: .marks(Self.visibleMarks), current: current,
             label: "对话目录", spoken: { ($0.preview, "") }, choose: { jump($0.id) }, expandedChanged: { open = $0 },
             mark: mark, words: words, overflow: { _ in EmptyView() })
             .padding(.top, JumpToNewest.clearance)
