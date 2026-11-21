@@ -52,12 +52,6 @@ nonisolated struct ThinkingMeter: Equatable {
     var label: String { current?.label ?? String(localized: "默认") }
     var isMax: Bool { current != .off && current == ThinkingLevel.allCases.last(where: levels.contains) }
 
-    func level(at fraction: Double) -> ThinkingLevel {
-        let stops = (levels.contains(.off) ? [.off] : []) + Self.scale
-        let index = Int((min(max(fraction, 0), 0.999) * Double(stops.count)).rounded(.down))
-        return stops[min(index, stops.count - 1)].clamped(to: levels)
-    }
-
     func step(_ delta: Int) -> ThinkingLevel? {
         guard let current, let index = levels.firstIndex(of: current) else { return levels.first }
         let next = index + delta

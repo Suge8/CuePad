@@ -183,7 +183,8 @@ private struct ModelPickBubble: View {
 }
 
 /// 思考强度的能量轨道：这个模型支持的档从左到右排开，填满到钮的那一段是这一档的思考场（`ThinkingField`），
-/// 档越高越长、越暖、星越密越快。按下或点在轨道上就跳到最近的档；拖着走时钮跟手，档位带回差地吸（过了两档正中再多走一成才换，
+/// 档越高越长、越暖、星越密越快。最左端总是"关"：模型没有关这一档时那里空着、钮停不过去，最低档也就离开左端亮出一截，不像关着。
+/// 按下或点在轨道上就跳到最近的档；拖着走时钮跟手，档位带回差地吸（过了两档正中再多走一成才换，
 /// 停在边界上不来回跳），每换一档轻震一下；松手才提交、钮弹到档位上。小标题那一行的右端写着此刻（拖着时是要去）的档。
 /// 否决过：一排分段——五六段挤在一行只剩字，看不出"越往右越用力"，选中的那块也只是换个颜色。
 private struct ThinkingTrack: View {
@@ -198,6 +199,7 @@ private struct ThinkingTrack: View {
     @State private var heading: Int?
 
     private var levels: [ThinkingLevel] { meter.levels }
+    private var lead: Int { levels.contains(.off) ? 0 : 1 }
     private var index: Int? { heading ?? meter.current.flatMap { levels.firstIndex(of: $0) } }
     private var level: ThinkingLevel? { index.map { levels[$0] } }
 
@@ -231,8 +233,8 @@ private struct ThinkingTrack: View {
     }
 
     private func track(width: CGFloat) -> some View {
-        let radius = Self.height / 2, span = max(width - Self.height, 1), last = max(levels.count - 1, 1)
-        let spot = { (i: Int) in radius + span * CGFloat(i) / CGFloat(last) }
+        let radius = Self.height / 2, span = max(width - Self.height, 1), slots = max(levels.count - 1 + lead, 1)
+        let spot = { (i: Int) in radius + span * CGFloat(i + lead) / CGFloat(slots) }
         let knob = dragging ?? index.map(spot) ?? radius
         let fill = (index.map(spot) ?? radius) + radius
         return ZStack(alignment: .leading) {
@@ -255,11 +257,11 @@ private struct ThinkingTrack: View {
         .gesture(
             DragGesture(minimumDistance: 0)
                 .onChanged { drag in
-                    let x = min(max(drag.location.x, radius), radius + span)
-                    let raw = Double((x - radius) / span) * Double(last)
+                    let x = min(max(drag.location.x, spot(0)), spot(levels.count - 1))
+                    let raw = Double((x - radius) / span) * Double(slots) - Double(lead)
                     // 刚按下时直接取最近的档；拖着时离开当前档过了 0.6 格才换（回差）
                     if dragging == nil || index.map({ abs(raw - Double($0)) > 0.6 }) ?? true {
-                        heading = Int(raw.rounded())
+                        heading = min(max(Int(raw.rounded()), 0), levels.count - 1)
                     }
                     dragging = x
                 }

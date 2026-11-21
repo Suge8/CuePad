@@ -15,11 +15,10 @@ struct ThinkingField: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        let ramp = [palette.thinkingLow, palette.thinkingMid, palette.thinkingHigh]
         LinearGradient(colors: [palette.thinkingLow, palette.thinking(energy ?? 0)], startPoint: .leading, endPoint: .trailing)
             .opacity(energy == nil ? 0 : 1)
             .overlay {
-                ThinkingSurface(energy: energy, fill: fill, running: running, ramp: ramp.map { $0.resolve(in: EnvironmentValues()) })
+                ThinkingSurface(energy: energy, fill: fill, running: running, ramp: [palette.thinkingLow, palette.thinkingMid, palette.thinkingHigh])
             }
             .allowsHitTesting(false)
             .readerHidden(true)
@@ -115,7 +114,7 @@ private struct ThinkingSurface {
     let energy: Double?
     let fill: Double
     let running: Bool
-    let ramp: [Color.Resolved]
+    let ramp: [Color]
 
     func makeCoordinator() -> ThinkingRenderer { ThinkingRenderer() }
 
@@ -133,15 +132,17 @@ private struct ThinkingSurface {
         view.layer?.isOpaque = false
         view.colorspace = CGColorSpace(name: CGColorSpace.sRGB)
         #endif
-        update(view, renderer)
         return view
     }
 
-    func update(_ view: MTKView, _ renderer: ThinkingRenderer) {
+    func update(_ view: MTKView, _ renderer: ThinkingRenderer, in environment: EnvironmentValues) {
         renderer.target = energy ?? 0
         renderer.fill = fill
         renderer.off = energy == nil
-        renderer.ramp = ramp.map { SIMD4(Float($0.red), Float($0.green), Float($0.blue), 1) }
+        renderer.ramp = ramp.map {
+            let c = $0.resolve(in: environment)
+            return SIMD4(c.red, c.green, c.blue, 1)
+        }
         renderer.running = running
         view.enableSetNeedsDisplay = !running
         view.isPaused = !running
@@ -162,12 +163,12 @@ private struct ThinkingSurface {
 #if os(iOS)
 extension ThinkingSurface: UIViewRepresentable {
     func makeUIView(context: Context) -> MTKView { make(context.coordinator) }
-    func updateUIView(_ view: MTKView, context: Context) { update(view, context.coordinator) }
+    func updateUIView(_ view: MTKView, context: Context) { update(view, context.coordinator, in: context.environment) }
 }
 #else
 extension ThinkingSurface: NSViewRepresentable {
     func makeNSView(context: Context) -> MTKView { make(context.coordinator) }
-    func updateNSView(_ view: MTKView, context: Context) { update(view, context.coordinator) }
+    func updateNSView(_ view: MTKView, context: Context) { update(view, context.coordinator, in: context.environment) }
 }
 #endif
 
