@@ -3,7 +3,7 @@ import CryptoKit
 import Foundation
 import Network
 
-/// 把一块屏变成本机网页：`GET /` 是那张页（`ScreenPage`），页面连 `/screen` 这条 WebSocket，画面往下发、手指往上送。
+/// 把一块屏变成本机网页：`GET /` 是那张页（`ScreenPage`），页面连 `/screen` 这条 WebSocket，画面往下发、手指往上送；`GET /outline` 是画面里有什么（`ScreenSource.outline`）。
 /// 只听本机回环：活预览（`cuepad live`）照普通的开发服务打开它，手机经隧道看到的也是这一页。
 /// 有人连着才让来源取画面（`ScreenSource.watch`、`rest`）。画面只在有改动时编，停下来后补几帧（`settle`）。
 public final class ScreenServer: @unchecked Sendable {
@@ -163,6 +163,11 @@ public final class ScreenServer: @unchecked Sendable {
     switch (request[0], request[1]) {
     case ("GET", "/"): reply(connection, "200 OK", page)
     case ("HEAD", "/"): reply(connection, "200 OK")
+    case ("GET", "/outline"):
+      source.outline { [weak self] outline in
+        guard let self else { return }
+        queue.async { self.reply(connection, outline == nil ? "404 Not Found" : "200 OK", outline ?? Data(), type: "application/json") }
+      }
     case ("GET", "/screen"):
       guard headers["upgrade"]?.lowercased() == "websocket", let key = headers["sec-websocket-key"] else { return reply(connection, "400 Bad Request") }
       let accept = Data(Insecure.SHA1.hash(data: Data((key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").utf8))).base64EncodedString()
@@ -182,8 +187,8 @@ public final class ScreenServer: @unchecked Sendable {
     }
   }
 
-  private func reply(_ connection: NWConnection, _ status: String, _ body: Data = Data()) {
-    let lines = ["HTTP/1.1 \(status)", "Content-Type: text/html; charset=utf-8", "Content-Length: \(body.count)", "Cache-Control: no-store", "X-Frame-Options: DENY", "\(Self.header): \(identity)", "Connection: close", "", ""]
+  private func reply(_ connection: NWConnection, _ status: String, _ body: Data = Data(), type: String = "text/html; charset=utf-8") {
+    let lines = ["HTTP/1.1 \(status)", "Content-Type: \(type)", "Content-Length: \(body.count)", "Cache-Control: no-store", "X-Frame-Options: DENY", "\(Self.header): \(identity)", "Connection: close", "", ""]
     connection.send(content: Data(lines.joined(separator: "\r\n").utf8) + body, isComplete: true, completion: .contentProcessed { _ in connection.cancel() })
   }
 
@@ -229,7 +234,7 @@ public final class ScreenServer: @unchecked Sendable {
     switch input {
     case .touch(let phase, let x, let y): viewer.finger = phase == .up ? nil : (x, y)
     case .key(let usage, let down): if down { viewer.keys.insert(usage) } else { viewer.keys.remove(usage) }
-    case .secondary, .wheel, .text: break
+    case .secondary, .wheel, .text, .focus, .fill: break
     }
     source.send(input)
   }
@@ -268,6 +273,8 @@ public final class ScreenServer: @unchecked Sendable {
   private static func input(_ payload: Data) -> ScreenInput? {
     guard let message = try? JSONSerialization.jsonObject(with: payload) as? [String: Any], let kind = message["t"] as? String else { return nil }
     if kind == "text", let text = message["s"] as? String { return .text(text) }
+    if kind == "focus", let id = message["i"] as? Int { return .focus(id) }
+    if kind == "fill", let id = message["i"] as? Int, let text = message["s"] as? String { return .fill(id, text) }
     if kind == "key", let usage = message["u"] as? Int, (4...231).contains(usage), let down = message["d"] as? Bool { return .key(usage: UInt32(usage), down: down) }
     // 来源照这些数造事件、算整数：出了界的不往下送
     guard let x = message["x"] as? Double, let y = message["y"] as? Double, (0...1).contains(x), (0...1).contains(y) else { return nil }
