@@ -43,6 +43,8 @@ enum DebugHooks {
         var cuePanelOpen = false
         /// Cue 页打开时舞台开着（true）或收着（false），nil 照上次离开的时刻定（`-CuePadCueStage`）。
         var cueStage: Bool?
+        /// 手机的会话条一出现就展开成面板（`-CuePadRailOpen`）。
+        var railOpen = false
         #if os(iOS)
         /// 设置页通知那一行显示的状态：演示模式没有同步，真实状态出不来。
         var alertStatus: AlertStatus?

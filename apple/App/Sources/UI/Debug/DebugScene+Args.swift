@@ -98,6 +98,8 @@ nonisolated struct DebugArgs: Decodable {
     let railEmpty: Bool
     /// `-CuePadRailForm <形态>`：rail 画面的形态
     let railForm: String?
+    /// `-CuePadRailOpen YES`：手机的会话条一出现就展开成面板（轻点胶囊后的样子）
+    let railOpen: Bool
     /// `-CuePadReconcileSeconds <秒>`（默认 8，配 `-CuePadSync newmac`）：这么久后带回 Cue 在「Mac Studio」上运行
     let reconcileSeconds: Double?
     /// `-CuePadReplies <N>`：Cue 把歇着的会话留给你回（待回复：会话条与看板的等你组，`seedReplies`）

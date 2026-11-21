@@ -11,8 +11,8 @@ import SwiftUI
 struct CueStage: View {
     let beat: CueBeat
     let focus: Focus
-    /// 左边让给常驻会话条的宽（手机）：天空照样铺满整页，Cue 与字在让出之后的那块里居中。
-    var leading: CGFloat = 0
+    /// 字两侧在 `CuePage.inset` 之外再让的宽（手机让给常驻会话条，同对话）：天空照样铺满整页，Cue 与字按整屏居中。
+    var sides: CGFloat = 0
     let close: () -> Void
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -35,7 +35,7 @@ struct CueStage: View {
 
     var body: some View {
         GeometryReader { room in
-            let sky = Sky(room.size, leading: leading, top: room.safeAreaInsets.top)
+            let sky = Sky(room.size, top: room.safeAreaInsets.top)
             ZStack(alignment: .top) {
                 palette.sky
                 DitherImage(
@@ -46,7 +46,7 @@ struct CueStage: View {
                 glow(sky)
                 figure(sky)
                 words(sky)
-                    .padding(.leading, leading)
+                    .padding(.horizontal, sides)
                     .frame(width: room.size.width, height: room.size.height, alignment: .top)
             }
             .offset(y: pull * Self.pullFollow)
@@ -127,10 +127,10 @@ extension CueStage {
         let perch: CGFloat
         let figureScale: CGFloat
 
-        init(_ size: CGSize, leading: CGFloat, top inset: CGFloat) {
-            mid = leading + (size.width - leading) / 2
+        init(_ size: CGSize, top inset: CGFloat) {
+            mid = size.width / 2
             let span = 2 * max(mid, size.width - mid)
-            figureScale = size.width - leading > 700 ? 1.15 : 1
+            figureScale = size.width > 700 ? 1.15 : 1
             let lowest = inset + Pose.size.height * figureScale * 0.6
             if size.width > size.height {
                 asset = "cue-stage-sky-wide"
