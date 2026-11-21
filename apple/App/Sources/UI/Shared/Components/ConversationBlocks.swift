@@ -101,7 +101,7 @@ private struct MachineCard: View {
                 Text(note.line).foregroundStyle(note.failed ? palette.failure : palette.ink2)
                     .lineLimit(open ? nil : 2).frame(maxWidth: .infinity, alignment: .leading)
             }
-            .accessibilityLabel("\(note.who)：\(note.line)")
+            .accessibilityElement(children: .ignore).accessibilityLabel("\(note.who)：\(note.line)")
         } content: {
             if open { NoteThread { MarkdownText(source: note.detail).equatable() } }
         }
