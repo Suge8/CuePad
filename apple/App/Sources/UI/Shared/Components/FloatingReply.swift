@@ -8,6 +8,7 @@ import SwiftUI
 /// 对话只从这一叠上沿的圆角两侧露出来；手机上回复框是玻璃、卡是纸，对话在它们周围清楚可见。
 /// 键盘只经系统的安全区让，两页同一套：对话与这一块的底边是安全区底边，键盘弹出时就是键盘顶（第三方键盘长高、换键盘、下拖收起都由系统跟着键盘的动画走），
 /// 这一块离键盘或安全区底边（Mac 是栏底）`Spacing.replyBottom`，各页不另加。键盘高在排版里量，不经焦点状态：外接键盘有焦点也没有软键盘。
+/// 对话顶上同一套：滑到页头的玻璃下面，只有状态栏那一条由窗口的模糊盖着（`StatusBarBlur`），不垫系统的顶部淡出（别的页由导航栏垫，`RouteView`）。
 struct FloatingReply<Chat: View, Reply: View>: View {
     @ViewBuilder let chat: Chat
     @ViewBuilder let reply: Reply
@@ -19,7 +20,12 @@ struct FloatingReply<Chat: View, Reply: View>: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            if let height { chat.environment(\.chatBottomInset, height).environment(\.chatHeight, visible) }
+            if let height {
+                chat.environment(\.chatBottomInset, height).environment(\.chatHeight, visible)
+                    #if os(iOS)
+                    .scrollEdgeEffectHidden(true, for: .top)
+                    #endif
+            }
             GeometryReader { room in
                 let page = room.bounds(of: .named(floatingReplyPage))?.maxY ?? room.size.height
                 let keyboard = room.size.height - page, visible = page + room.safeAreaInsets.top
