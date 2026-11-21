@@ -208,7 +208,7 @@ extension ChatSegment {
     }
 }
 
-/// 不是分隔（上下文没换），刻度滑条上也没有它。
+/// 不是分隔（上下文没换），对话目录里也没有它。
 private struct RoundEndNote: View {
     let notice: ChatNotice
 
