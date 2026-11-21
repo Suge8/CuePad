@@ -60,9 +60,10 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     /// 收成短胶囊：一行的形态再变窄、居中，点它照常聚焦展开。有草稿也收（胶囊里写"草稿：第一行"）：翻历史时整宽的两层太占地方。
     private var shrunk: Bool { form.isCapsule && !focused }
     private var showsTools: Bool { form == .open || focused }
+    private var toolsShown: Bool { tooled && expanded && showsTools }
     /// 圆钮那一格的高：露出工具排时与工具排同一条中线（`slot`），否则与最后一行字同一条中线（字号大了跟着高）。
     var buttonHeight: CGFloat {
-        tooled && expanded && showsTools ? ComposerMetrics.slot : ComposerMetrics.lineSlot(line: ComposerField.lineHeight(typeSize))
+        toolsShown ? ComposerMetrics.slot : ComposerMetrics.lineSlot(line: ComposerField.lineHeight(typeSize))
     }
     /// 收着的草稿：文字区藏起（还是同一个，焦点与输入法不断），换成一行预览。
     private var shrunkDraft: String? { shrunk ? draft.preview : nil }
@@ -183,7 +184,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
                 .modifier(Yield(yielded: yielded))
             HStack(spacing: 0) {
                 if !accepts.isEmpty { plus }
-                tools().environment(\.singleLineConfig, workspace.layout == .wide)
+                tools().environment(\.singleLineConfig, workspace.layout == .wide).environment(\.chipHeight, ComposerMetrics.glyph)
                 Spacer(minLength: 0)
                 slotSpace
             }
@@ -195,15 +196,16 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
         HStack(alignment: .bottom, spacing: 0) {
             if !accepts.isEmpty { plus }
             VStack(alignment: .leading, spacing: 0) {
+                // 露出工具排时字下面只留一线（同 `layered`），字与工具排之间不空出一截
                 text
                     .padding(.leading, accepts.isEmpty ? Spacing.block : Spacing.hair).padding(.trailing, shrunk ? Spacing.block : Spacing.hair)
-                    .padding(.vertical, ComposerMetrics.textTop)
-                    .frame(minHeight: buttonHeight)
-                // 工具排与两颗圆钮同一条中线；没有工具时这里是空的，不占位
-                if tooled, expanded, showsTools {
-                    tools().environment(\.singleLineConfig, workspace.layout == .wide)
-                        .frame(minHeight: ComposerMetrics.slot - 2 * ComposerMetrics.inset)
-                        .padding(.bottom, ComposerMetrics.inset)
+                    .padding(.top, ComposerMetrics.textTop)
+                    .padding(.bottom, toolsShown ? ComposerMetrics.textBottomOpen : ComposerMetrics.textTop)
+                    .frame(minHeight: toolsShown ? nil : buttonHeight)
+                // 工具排与两颗圆钮同一格高、同一条中线；没有工具时这里是空的，不占位
+                if toolsShown {
+                    tools().environment(\.singleLineConfig, workspace.layout == .wide).environment(\.chipHeight, ComposerMetrics.glyph)
+                        .frame(minHeight: ComposerMetrics.slot)
                         .transition(Motion.pop(reduceMotion: reduceMotion))
                 }
             }

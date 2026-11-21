@@ -8,12 +8,18 @@ extension View {
     }
 }
 
+extension EnvironmentValues {
+    /// 胶囊定高（输入框的工具排给 `ComposerMetrics.glyph`）：只有图标的胶囊成圆，与＋、主钮一个样子。
+    @Entry var chipHeight: CGFloat?
+}
+
 private struct Chip: ViewModifier {
     let on: Bool
     let menu: Bool
     let size: ControlSize
     let level: ControlSurface.Level?
     @Environment(\.palette) private var palette
+    @Environment(\.chipHeight) private var height
 
     private static let gap = Spacing.tight
 
@@ -23,6 +29,6 @@ private struct Chip: ViewModifier {
             if menu { Chevron(.expand).foregroundStyle(on ? palette.ink2 : palette.ink3) }
         }
         .lineLimit(1)
-        .modifier(ControlSurface(kind: .secondary, size: size, selected: on, level: level))
+        .modifier(ControlSurface(kind: .secondary, size: size, selected: on, level: level, height: height))
     }
 }

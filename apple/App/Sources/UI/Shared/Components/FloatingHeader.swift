@@ -30,7 +30,10 @@ extension View {
     ) -> some View {
         modifier(FloatingHeader(
             title: title, hidden: hidden, reveal: reveal,
-            center: Menu(content: menu) { TitleStack(title: title, opens: true, detail: detail()).padding(.horizontal, Spacing.block).headerPiece() }
+            // 玻璃挂在菜单外面，标签只是两行字：系统给这颗菜单钮的框只有 36 高，44 高的玻璃若在标签里，
+            // 菜单收起的那段动画按钮框裁掉玻璃上下各一截、再整块淡回来；挂在外面时玻璃不动，收起只动字
+            center: Menu(content: menu) { TitleStack(title: title, opens: true, detail: detail()).padding(.horizontal, Spacing.block) }
+                .headerPiece()
                 .opacity(String(localized: title).isEmpty ? 0 : 1),
             trailing: trailing()))
     }

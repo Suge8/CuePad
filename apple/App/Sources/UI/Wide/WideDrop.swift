@@ -76,6 +76,25 @@ struct WideSessionTitle: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
+        HStack(spacing: Spacing.item) {
+            name
+            Spacer(minLength: Spacing.item)
+            // 两半的栏头末端各一颗玻璃圆钮，同一个样子：左边开合活预览（会话有页面可看时；开着是强调色，收起它只有这一处），右边收起并排。
+            // 左边没有收起：它就是主区此刻的页，换去处靠会话条
+            switch column {
+            case .main:
+                if let session = workspace.session(in: .main) { LivePreviewTool(session: session) }
+            case .beside:
+                HeadTool(label: "收起并排", icon: .rightColumn) { workspace.closeColumn(.beside) }
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .padding(inset).frame(height: Chrome.band)
+        .windowDragArea()
+    }
+
+    /// 名字那一块是浮在对话上的玻璃胶囊（同手机页头中间那块），对话从它下面滑过去。
+    private var name: some View {
         HStack(spacing: Spacing.glyph) {
             if let project {
                 Button { workspace.select(.project(project.id)) } label: { Text(verbatim: project.shownName).lineLimit(1) }
@@ -103,25 +122,16 @@ struct WideSessionTitle: View {
                     .padding(.leading, Spacing.tight)
                     .transition(.opacity)
             }
-            Spacer(minLength: Spacing.item)
-            // 两半的栏头末端各一颗不带框的图标钮，同一个样子：左边开合活预览（会话有页面可看时；开着是强调色，收起它只有这一处），右边收起并排。
-            // 左边没有收起：它就是主区此刻的页，换去处靠会话条
-            switch column {
-            case .main:
-                if let session = workspace.session(in: .main) { LivePreviewTool(session: session) }
-            case .beside:
-                HeadTool(label: "收起并排", icon: .rightColumn) { workspace.closeColumn(.beside) }
-            }
         }
         .font(Typography.toolbarTitle)
         .animation(Motion.fade, value: ended)
-        .accessibilityElement(children: .contain)
-        .padding(inset).frame(height: Chrome.band)
-        .windowDragArea()
+        .padding(.horizontal, Spacing.block)
+        .frame(height: Chrome.control)
+        .glass(in: .capsule)
     }
 }
 
-/// 会话栏头末端的图标钮：同窗口最顶那一排别的不带框的钮（会话条开合、收起右栏），平时次要色，开着的开关是强调色。
+/// 会话栏头末端的玻璃圆钮（对话从下面滑过，不带框的钮压在字上看不清）：平时次要色，开着的开关是强调色。
 struct HeadTool: View {
     let label: LocalizedStringResource
     let icon: Icon
@@ -131,7 +141,7 @@ struct HeadTool: View {
 
     var body: some View {
         Button(action: action) { Image(icon).foregroundStyle(on ? palette.signature : palette.ink2) }
-            .buttonStyle(ControlButtonStyle(kind: .icon, size: .compact))
+            .buttonStyle(ControlButtonStyle(kind: .circular))
             .toggledOn(on)
             .help(Text(label))
             .accessibilityLabel(Text(label))

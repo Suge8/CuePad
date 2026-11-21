@@ -1,7 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// 会话的菜单，出现的每一处（会话条、看板、会话列表、会话页栏头）都是这一份，有哪几项、什么顺序只在这里。三组：去哪看（并排打开、它在等的那件）、
+/// 会话的菜单，列表里出现的每一处（会话条、看板、会话列表、搜索）都是这一份，有哪几项、什么顺序只在这里；会话页栏头只放会话自己的事（`SessionMenuItems`）。三组：去哪看（并排打开、它在等的那件）、
 /// 整理（置顶、重命名、标为未读，Mac 上没有页面可看的会话另有打开活预览）、收尾。收尾只有一个词：完成——这件事用完了，会话跟着休眠（`Workspace.complete`）。
 /// 休眠只在它归着没做完的任务时另给一项：事还没完，先让 Agent 歇着。没归着任务的不给，完成就是它。
 /// 置顶、重命名、完成与任务是同一组操作：归着任务的落在那件任务上，没归着的活会话当场给它建一件（`Workspace+Adopt`）；
@@ -10,8 +10,6 @@ struct SessionActions: View {
     let session: SessionState
     var task: SessionTask?
     var ending = false
-    /// 会话页栏头：有没做完的任务时，完成按任务列在它自己那一组（`SessionMenuItems`），这里不再给。
-    var completes = true
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
@@ -38,7 +36,7 @@ struct SessionActions: View {
                 #endif
             }
             Section {
-                if completes, let complete = Self.complete(session, task: task, in: workspace) { RowActionButtons(actions: [complete]) }
+                if let complete = Self.complete(session, task: task, in: workspace) { RowActionButtons(actions: [complete]) }
                 if let sleep = Self.sleep(session, task: task, ending: ending, in: workspace) { RowActionButtons(actions: [sleep]) }
             }
             #if os(iOS)

@@ -130,6 +130,8 @@ struct ControlSurface: ViewModifier {
     var selected = false
     var destructive = false
     var level: Level?
+    /// 定高（字号大了照样随字长高），不比高窄：只有图标的是一颗圆。
+    var height: CGFloat?
     @Environment(\.palette) private var palette
     @Environment(\.isEnabled) private var isEnabled
 
@@ -174,7 +176,7 @@ struct ControlSurface: ViewModifier {
                 .foregroundStyle(kind == .primary ? palette.onAction : ink)
                 .padding(.horizontal, size.padding)
                 .padding(.vertical, size.verticalPadding)
-                .frame(minHeight: size.height)
+                .frame(minWidth: height, minHeight: height ?? size.height)
                 .background(background, in: .capsule)
                 .background {
                     if let level {
