@@ -25,6 +25,12 @@ extension LivePreview {
         }
         if waited > .milliseconds(100) { text += "（先等用户停手 \(Self.seconds(waited))）" }
         await settle()
+        // 页面安定后那个框里不是填的这段：它没收下，或改写了（格式化、截断）
+        if case .fill = act { await untilCurrent() }
+        if case .fill(let ref, let value) = act, let target = try? target(ref), let kept = try? await call("return cue.value({ n })", ["n": target.n], in: target.document, within: .seconds(1)),
+           let now = kept["value"] as? String, now != value {
+            text += "\n页面没照这段字收下：安定后它的值是 \(kept["shown"] as? String ?? "")"
+        }
         if let url = web.url, url != from {
             text += "\n页面到了 \(url.absoluteString)"
             if !LiveAddress.isLocal(url) { text += "\n这是外网地址：之后不替你操作，snapshot、screenshot、console 还能用" }

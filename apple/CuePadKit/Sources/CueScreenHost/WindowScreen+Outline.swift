@@ -13,11 +13,14 @@ extension WindowScreen {
     var elements: [Int: (element: NSObject, spot: CGPoint)] = [:]
     var ids: [AnyHashable: Int] = [:]
     var next = 0
+    /// 开始有人看的那一刻：SwiftUI 的无障碍树、头一帧画面都要过一会儿才有，`answer` 等它们。
+    var woke = 0.0
   }
 
   /// SwiftUI 没有辅助技术在场时不建无障碍树（实测：宿主视图底下是空的）；这是旁白这类客户端打开的那个开关，打开后下一轮它就建。
   /// 走老式的接口：新式的协议里没有这一项。
   @MainActor func outlines() {
+    outlined.woke = CACurrentMediaTime()
     NSApp.perform(NSSelectorFromString("accessibilitySetValue:forAttribute:"), with: true, with: "AXEnhancedUserInterface")
   }
 
@@ -40,7 +43,7 @@ extension WindowScreen {
   }
 
   @MainActor private func answer() {
-    let now = CACurrentMediaTime(), still = now - max(changed, input.time) >= Self.quiet
+    let now = CACurrentMediaTime(), still = now - max(changed, input.time, outlined.woke) >= Self.quiet
     let due = outlined.asking.filter { still || now - $0.since >= Self.patience }
     guard !due.isEmpty else { return }
     outlined.asking.removeAll { still || now - $0.since >= Self.patience }
@@ -48,9 +51,10 @@ extension WindowScreen {
       outlined.timer?.invalidate()
       outlined.timer = nil
     }
-    // `points`：画面横着是应用里的多少点。`app`：哪一份应用说的（编号只在一份里作数）
+    // `points`：画面横着是应用里的多少点。`ms`：走这一遍占了主线程多久，页面照它定画面隔一会儿小动一下时多久再问
+    let nodes = nodes()
     let data = try? JSONSerialization.data(withJSONObject: [
-      "nodes": nodes(), "points": picture.map { $0.window.width / $0.scale } ?? 0, "app": ProcessInfo.processInfo.processIdentifier,
+      "nodes": nodes, "points": picture.map { $0.window.width / $0.scale } ?? 0, "ms": (CACurrentMediaTime() - now) * 1000,
     ])
     due.forEach { $0.reply(data) }
   }
@@ -138,24 +142,31 @@ extension WindowScreen {
       guard !WindowScreen.dropped.contains(subrole) else { return [] }
       let kids = WindowScreen.leaves.contains(role) ? [] : children(of: element, clip: role == "AXScrollArea" ? seen : clip, depth: depth)
       let name = WindowScreen.text(WindowScreen.read(element, "accessibilityLabel")) ?? WindowScreen.text(WindowScreen.read(element, "accessibilityTitle")) ?? ""
-      let value = WindowScreen.text(WindowScreen.read(element, "accessibilityValue"))
+      // 值只在用得上的那几种上问：SwiftUI 的元素答一次要几百微秒（把字连同字体属性算一遍，实测），是这一遍里最贵的
+      let raw = { WindowScreen.read(element, "accessibilityValue") }, value = { WindowScreen.text(raw()) }
       var node: [String: Any] = ["b": box(seen)]
       switch role {
       case "AXStaticText":
-        guard let said = value ?? (name.isEmpty ? nil : name) else { return kids }
+        guard let said = value() ?? (name.isEmpty ? nil : name) else { return kids }
         node["r"] = "text"
         node["n"] = said
       case "AXTextField", "AXTextArea", "AXComboBox":
         node["r"] = subrole == "AXSearchField" ? "searchbox" : "textbox"
         if role == "AXTextArea" { node["lines"] = true }
-        if subrole == "AXSecureTextField" { node["secret"] = true } else { node["v"] = value ?? "" }
+        if subrole != "AXSecureTextField" {
+          let whole = raw()
+          node["v"] = WindowScreen.text(whole) ?? ""
+          if let whole = whole as? String, whole.count > WindowScreen.clip { node["cut"] = true }
+        } else {
+          node["secret"] = true
+        }
         if let hint = WindowScreen.text(WindowScreen.read(element, "accessibilityPlaceholderValue")) { node["hint"] = hint }
       case "AXCheckBox", "AXRadioButton":
         node["r"] = role == "AXRadioButton" ? "radio" : subrole == "AXSwitch" || subrole == "AXToggle" ? "switch" : "checkbox"
-        node["on"] = value == "1"
+        node["on"] = value() == "1"
       case "AXDisclosureTriangle":
         node["r"] = "button"
-        node["open"] = value == "1"
+        node["open"] = value() == "1"
       default:
         guard let known = WindowScreen.roles[role] else {
           // 没有名字的分组、不认识的：不单列，里面的照样列；有名字的分组留着（Agent 靠它分得清两处同名的钮）
@@ -164,7 +175,7 @@ extension WindowScreen {
           break
         }
         node["r"] = menu && role == "AXRow" ? "menuitem" : known
-        if ["combobox", "slider", "spinbutton"].contains(known) { node["v"] = value ?? "" }
+        if ["combobox", "slider", "spinbutton"].contains(known) { node["v"] = value() ?? "" }
         // 说不出是什么的图、菜单里的分隔线：不列
         if known == "img" || known == "menuitem", name.isEmpty { return kids }
       }
@@ -217,8 +228,11 @@ extension WindowScreen {
     case let number as NSNumber: number.stringValue
     default: nil
     }
-    return text.flatMap { $0.isEmpty ? nil : String($0.prefix(400)) }
+    return text.flatMap { $0.isEmpty ? nil : String($0.prefix(clip)) }
   }
+
+  /// 一段字最多说这么长。
+  fileprivate static let clip = 400
 
   /// 元素在屏上的位置（AppKit 的坐标）。老式的那一种在进程里问到的也是左下原点的（翻成左上原点是给进程外的客户端做的，实测）。
   fileprivate static func frame(_ element: NSObject) -> CGRect? {

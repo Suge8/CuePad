@@ -13,7 +13,7 @@ extension Command {
       画面是这个应用最前面的那扇主窗口，连同它的表单、弹层、菜单；新开一扇窗（设置）画面换过去，关了换回来。窗口被挡着、在别的桌面都照常出画面；最小化、隐藏时没有。
       用户能做的：点、拖、滚、右键，键盘打字（用他那一头的输入法）与快捷键；手机上轻点是点、拖是滚、按住再拖是拖，双指放大、挪画面，点输入框键盘跟着出来。拖标题栏挪窗口、拖边缘改大小、指针悬停的效果做不到。
       你自己验它，同 cuepad live 的那几条：snapshot 照应用的无障碍树列出窗口里的按钮、输入框、文字（表单、弹层、开着的菜单各列一块），click、fill、press、wait --text、screenshot 照常用。
-      click 是在那个元素的正中真点一下；fill 换掉输入框里的字（它回报的是页面那一层的值，应用没接住时下一次 snapshot 里还是原来的）；press 不带 ref 按在拿着键盘的那一处，press PageDown|PageUp <ref> 滚那个元素所在的那一块。
+      click 是在那个元素的正中真点一下；fill 换掉输入框里的字，应用没收下时回执里会说；press 不带 ref 按在拿着键盘的那一处，press PageDown|PageUp <ref> 滚那个元素所在的那一块。
       快照里没有的：没有无障碍标签的自绘控件（给它加上标签，用户的旁白也用得上）、滚出去的行（先滚到）、被表单压着的窗口点不到（报被挡住）。eval、upload、console 说的是那张页，不是应用。
       起不进去的：开了 Hardened Runtime 的构建（Xcode 的 Debug 构建默认不开，发布构建、装好的成品都开着）。网页壳的应用（Electron、Tauri）不用这一条，对它的开发服务用 cuepad live。
       应用得由你自己的脚本起时（调试器、带环境的启动脚本）：起它的环境里加上 DYLD_INSERT_LIBRARIES=\(AppServe.library) 与 CUEPAD_SCREEN_PORT=<端口>，起来后 cuepad live <端口>。

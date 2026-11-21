@@ -35,6 +35,20 @@ extension LivePreview {
         case .idle, .live: break
         }
         guard record.main != nil else { throw LiveRefusal("页面 10 秒还没载出来：过一会儿再试，或 cuepad live screenshot 看一眼") }
+        await untilCurrent()
+    }
+
+    /// 页面的内容要现问的（Mac 应用的那张页：画面里有什么得问应用）：告诉它有人要读了（`cuepad-read`），等它问回来。
+    /// 它问着的时候根元素标着 aria-busy；别的页面自己标了的也等，最多 3 秒。弹着对话框时脚本停着，问不了。
+    func untilCurrent() async {
+        var probe = "dispatchEvent(new Event('cuepad-read')); document.documentElement.getAttribute('aria-busy')"
+        let patience = ContinuousClock.now + .seconds(3)
+        while asks.isEmpty, ContinuousClock.now < patience {
+            let script = probe
+            guard (try? await bounded(.milliseconds(500)) { try await self.web.evaluateJavaScript(script, contentWorld: .defaultClient) }) as? String == "true" else { return }
+            probe = "document.documentElement.getAttribute('aria-busy')"
+            try? await Task.sleep(for: .milliseconds(30))
+        }
     }
 
     var local: Bool { web.url.map(LiveAddress.isLocal) ?? true }

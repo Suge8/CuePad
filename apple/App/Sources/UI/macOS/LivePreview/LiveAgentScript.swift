@@ -162,6 +162,11 @@ enum LiveAgentScript {
         return { did: describe(el) };
       };
 
+      const held = el => {
+        const value = el.isContentEditable ? el.innerText.replace(/\n$/, "") : el.value;
+        return { value, shown: el.type === "password" ? `${value.length} 个字符` : quote(clip(value, 80)) };
+      };
+
       const fill = ({ n, text }) => {
         const el = resolve(n);
         el.scrollIntoView({ block: "center", inline: "center", behavior: "instant" });
@@ -185,16 +190,19 @@ enum LiveAgentScript {
         else el.select?.();
         // execCommand 走浏览器自己的编辑：beforeinput、input 的 isTrusted 为真，React 的受控输入跟着更新；有的输入类型（email、number）不让选中，退回直接改值
         const edited = text ? document.execCommand("insertText", false, text) : document.execCommand("delete");
-        const now = () => el.isContentEditable ? el.innerText.replace(/\n$/, "") : el.value;
-        if (!edited || now() !== text) {
+        if (!edited || held(el).value !== text) {
           const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), "value")?.set;
           if (el.isContentEditable) el.textContent = text; else if (setter) setter.call(el, text); else el.value = text;
           el.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: text }));
         }
         el.dispatchEvent(new Event("change", { bubbles: true }));
-        const value = now();
-        const shown = el.type === "password" ? `${value.length} 个字符` : quote(clip(value, 80));
-        return { did: `${describe(el)} 填成了 ${shown}` };
+        return { did: `${describe(el)} 填成了 ${held(el).shown}` };
+      };
+
+      // 输入框此刻的值（原生在 `fill` 之后、页面安定了再核对一遍）；下拉框与别的不算
+      const value = ({ n }) => {
+        const el = resolve(n);
+        return el.isContentEditable || el.localName === "input" || el.localName === "textarea" ? held(el) : {};
       };
 
       const focusable = () => [...document.querySelectorAll("a[href], button, input, select, textarea, [tabindex], [contenteditable]")]
@@ -227,6 +235,8 @@ enum LiveAgentScript {
       };
 
       const has = ({ text, selector }) => {
+        // 内容要现问的页面（Mac 应用的那张页）：告诉它有人在等，下一轮就读到新的
+        dispatchEvent(new Event("cuepad-read"));
         if (selector) return [...document.querySelectorAll(selector)].some(el => el.checkVisibility());
         if ((document.body?.innerText ?? "").includes(text)) return true;
         const walker = document.createTreeWalker(document.documentElement, NodeFilter.SHOW_ELEMENT);
@@ -262,7 +272,7 @@ enum LiveAgentScript {
 
       const markRef = ({ n, word, tint, ink }) => { mark(resolve(n), word, tint, ink); return true; };
 
-      globalThis.cue = { token, snapshot, click, arm, disarm, fill, press, has, rect, frameBox, hitsFrame, chooseFile, files, markRef, clearMarks };
+      globalThis.cue = { token, snapshot, click, arm, disarm, fill, value, press, has, rect, frameBox, hitsFrame, chooseFile, files, markRef, clearMarks };
       try { webkit.messageHandlers.cuepadAgent.postMessage({ hello: token, url: location.href, main: window === top }); } catch {}
     """#
 }
