@@ -20,6 +20,8 @@ nonisolated struct FigureSprite {
 /// `size` 是角色本身那一方块（排版只占这么大），画布四周多出来的给波纹、火星和碎开时飞走的格子。
 nonisolated enum FigureLayout {
     static let size: CGFloat = 144
+    /// 角色在那一方块里偏下站，头顶空着的这一截不占排版：占着的话它离上面的字比离回复框远一截。
+    static let headroom: CGFloat = 16
     static let tiles = 36
     /// 世界坐标里画布那一方块有多宽：角色连环、迷你方块都在里面。
     static let span: Float = 2.7
