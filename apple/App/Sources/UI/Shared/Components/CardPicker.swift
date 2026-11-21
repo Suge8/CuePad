@@ -44,9 +44,9 @@ struct CardPicker: View {
     }
     #else
     private var content: some View {
-        VStack(spacing: Spacing.block) {
+        VStack(spacing: 0) {
             PanelHeader(Self.title)
-            PanelSearchField(prompt: Self.prompt, text: $text)
+            PanelSearchField(prompt: Self.prompt, text: $text).padding(.top, Spacing.block)
             list
         }
         .padding(.top, Spacing.block)
@@ -54,12 +54,12 @@ struct CardPicker: View {
     }
     #endif
 
-    private static let title = String(localized: "选一条灵感或任务")
+    private static let title = String(localized: "灵感或任务")
     private static let prompt = String(localized: "搜索灵感与任务")
 
     private var list: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: Spacing.group) {
+            LazyVStack(alignment: .leading, spacing: 0) {
                 if let data {
                     if data.shown == 0, !settled.isEmpty { EmptyState.noMatch(settled) }
                     if !data.pins.isEmpty {
@@ -70,7 +70,7 @@ struct CardPicker: View {
                         let own = project.flatMap { workspace.catalog?.project($0) }
                         header(own.map { .verbatim($0.shownName) } ?? "本项目", project: own)
                         rows(data.own)
-                        if !data.rest.isEmpty { header("其他", project: nil).padding(.top, Spacing.item) }
+                        if !data.rest.isEmpty { header("其他", project: nil) }
                     }
                     rows(data.rest, showsProject: true)
                     if data.total > data.shown {
@@ -89,11 +89,10 @@ struct CardPicker: View {
         ForEach(entries) { entry in
             CardRow(
                 entry: entry, project: showsProject && project == nil ? .some(workspace.catalog?.project(entry.card.projectID)) : nil,
-                highlight: settled
-            ) { card in
-                pick(card)
-                close()
-            }
+                highlight: settled, pick: { card in
+                    pick(card)
+                    close()
+                })
         }
     }
 
@@ -102,6 +101,7 @@ struct CardPicker: View {
             if let project { ProjectGlyph(project: project, size: 12) }
             SectionHeader(title)
         }
+        .padding(.top, Spacing.block).padding(.bottom, Spacing.tight)
     }
 
     private struct Key: Equatable {
@@ -143,6 +143,7 @@ nonisolated struct CardEntry: Identifiable, Sendable, Equatable {
     }
 }
 
+/// 搜索结果与卡片选择里的一行：不垫纸，直接落在所在那一层上（同项目页的任务行），行首一格是任务的圈或灵感的记号，摘要缩在标题下面。
 struct CardRow: View {
     let entry: CardEntry
     /// 标出所属项目（卡片选择里不属于本项目的那组）；nil 不标（搜索已按项目分组）。
@@ -150,8 +151,6 @@ struct CardRow: View {
     var highlight = ""
     /// 点一下选中这张卡（卡片选择）；nil 时点开卡片（任务是从这一行长出的气泡），长按是卡片操作。
     var pick: ((Card) -> Void)?
-    /// 搜索结果：不垫纸，直接落在桌面上（同项目页的任务行），行首一格是任务的圈或灵感的记号，摘要缩在标题下面。
-    var flat = false
     @Environment(\.palette) private var palette
     #if os(iOS)
     @Environment(\.zoomNamespace) private var zoom
@@ -161,16 +160,16 @@ struct CardRow: View {
 
     var body: some View {
         if let pick {
-            Button { pick(entry.card) } label: { row }.buttonStyle(PressStyle(.card))
+            Button { pick(entry.card) } label: { row }.buttonStyle(.row)
         } else {
             #if os(iOS)
             if entry.card.isTask {
                 Button { workspace.openTask(entry.card) } label: { row }
-                    .modifier(Press(flat: flat))
+                    .buttonStyle(.row)
                     .contextMenu { CardActions(card: entry.card) }
             } else {
                 NavigationLink(value: Route.card(entry.card.id)) { row }
-                    .modifier(Press(flat: flat))
+                    .buttonStyle(.row)
                     .zoomSource(entry.card.id, in: zoom)
                     .contextMenu { CardActions(card: entry.card) }
             }
@@ -182,18 +181,13 @@ struct CardRow: View {
         let card = entry.card, text = entry.text
         return HStack(alignment: .top, spacing: Spacing.group) {
           HStack(alignment: .firstTextBaseline, spacing: Spacing.item) {
-            if flat {
-                Group {
-                    if card.isTask { TaskRingView(status: card.status, done: false, size: Self.ring) } else { Image(.idea).font(Glyph.small).foregroundStyle(palette.ink3) }
-                }
-                .frame(width: Self.ring).readerHidden(true)
+            Group {
+                if card.isTask { TaskRingView(status: card.status, done: false, size: Self.ring) } else { Image(.idea).font(Glyph.small).foregroundStyle(palette.ink3) }
             }
+            .frame(width: Self.ring).readerHidden(true)
             VStack(alignment: .leading, spacing: Spacing.tight) {
                 MetaLine(spacing: Spacing.item, gap: 0) {
-                    HStack(alignment: .firstTextBaseline, spacing: Spacing.item) {
-                        if card.isTask, !flat { TaskRingView(status: card.status, done: false, size: Self.ring).frame(width: Self.ring) }
-                        Text(marked(text.label)).font(Typography.bodyStrong).foregroundStyle(palette.ink).lineLimit(2)
-                    }
+                    Text(marked(text.label)).font(Typography.bodyStrong).foregroundStyle(palette.ink).lineLimit(2)
                 } meta: {
                     HStack(spacing: Spacing.item) {
                         if text.files > 0 { AttachmentMark(count: text.files) }
@@ -220,25 +214,9 @@ struct CardRow: View {
                 Thumbnail(hash: image, height: 64, cornerRadius: Radius.chip).frame(width: 80)
             }
         }
-        .padding(.vertical, flat ? Spacing.item : Spacing.group).padding(.horizontal, flat ? 0 : Spacing.group)
-        .frame(maxWidth: .infinity, minHeight: flat ? RowMetrics.height : nil, alignment: .leading)
-        .modifier(Surface(flat: flat))
-    }
-
-    private struct Surface: ViewModifier {
-        let flat: Bool
-
-        func body(content: Content) -> some View {
-            if flat { content.contentShape(.rect) } else { content.paper().contentShape(.rect(cornerRadius: Radius.card)) }
-        }
-    }
-
-    private struct Press: ViewModifier {
-        let flat: Bool
-
-        func body(content: Content) -> some View {
-            if flat { content.buttonStyle(.row) } else { content.buttonStyle(PressStyle(.card)) }
-        }
+        .padding(.vertical, Spacing.item)
+        .frame(maxWidth: .infinity, minHeight: RowMetrics.height, alignment: .leading)
+        .contentShape(.rect)
     }
 
     private var terms: [String] { highlight.split(whereSeparator: \.isWhitespace).map(String.init) }
