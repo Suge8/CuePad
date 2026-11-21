@@ -17,27 +17,40 @@ struct DebugSessionRail: View {
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 16) {
-            SessionRail(data: workspace.services.liveSessions.rail, form: form, pulse: workspace.pulse) { session, opening in
-                event = "\(opening == .beside ? "beside" : "primary"): \(session.sessionID)"
+        Group {
+            if form == .phone {
+                // 手机的会话条要整屏那么宽：展开的面板从左缘的胶囊长出来，铺到屏幕右边；说明叠在右上
+                rail.frame(height: 650).overlay(alignment: .topTrailing) { notes.fixedSize().padding(.trailing, 16) }
+            } else {
+                HStack(alignment: .top, spacing: 16) {
+                    rail.frame(width: Chrome.rail, height: 650)
+                    notes.frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
             }
-            .frame(width: form.width ?? Chrome.rail, height: 650)
-            VStack(alignment: .leading, spacing: 16) {
-                Text(verbatim: "SessionRail · \(Int(form.width ?? Chrome.rail)) pt").font(Typography.bodyStrong)
-                Text(verbatim: event).font(Typography.body).accessibilityIdentifier("rail-event")
-                Color.clear.contentShape(.rect)
-                    .dropDestination(for: DraggedSession.self) { items, _ in
-                        guard let item = items.first else { return false }
-                        event = "drop: \(item.sessionID)"
-                        return true
-                    }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .padding(.top, 40)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(palette.desk)
         .environment(workspace)
+    }
+
+    private var rail: some View {
+        SessionRail(data: workspace.services.liveSessions.rail, form: form, pulse: workspace.pulse) { session, opening in
+            event = "\(opening == .beside ? "beside" : "primary"): \(session.sessionID)"
+        }
+    }
+
+    private var notes: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(verbatim: "SessionRail · \(Int(form.width ?? Chrome.rail)) pt").font(Typography.bodyStrong)
+            Text(verbatim: event).font(Typography.body).accessibilityIdentifier("rail-event")
+            Color.clear.contentShape(.rect)
+                .dropDestination(for: DraggedSession.self) { items, _ in
+                    guard let item = items.first else { return false }
+                    event = "drop: \(item.sessionID)"
+                    return true
+                }
+        }
     }
 }
 

@@ -80,7 +80,7 @@ struct CuePage: View {
         .background { if grounded { palette.desk } }
     }
     #else
-    /// 名牌保留整页坐标；对话与拍板卡给常驻会话条让位，舞台的天空铺到会话条底下（伸出读宽，`CueStage`）。
+    /// 名牌保留整页坐标；对话与拍板卡两侧都给常驻会话条让位、按整屏居中，舞台的天空铺到会话条底下（伸出读宽，`CueStage.outset`）。
     private var page: some View {
         FloatingReply {
             chat
@@ -96,7 +96,7 @@ struct CuePage: View {
     }
     #endif
 
-    /// 对话自己离左边 `inset`：让到字离竖条一个 `item`。
+    /// 对话自己离两边 `inset`：两边都让到字离会话条一个 `item`，左右对称，对话与页头、输入框同一条中线。
     private var railInset: CGFloat { workspace.layout == .narrow ? SessionRail.phoneWidth + Spacing.item - Self.inset : 0 }
 
     private var staged: Bool { stage == true && cue.canHear && thread?.rows.isEmpty == false }
@@ -107,12 +107,12 @@ struct CuePage: View {
             if let thread, !thread.rows.isEmpty {
                 if stage != nil {
                     conversation(thread)
-                        .padding(.leading, railInset)
+                        .padding(.horizontal, railInset)
                 } else {
                     Color.clear
                 }
             } else if thread != nil {
-                CueWelcomeChat().padding(.leading, railInset)
+                CueWelcomeChat().padding(.horizontal, railInset)
             } else {
                 Color.clear
             }
@@ -192,7 +192,7 @@ struct CuePage: View {
         VStack(spacing: 0) {
             if let thread {
                 CueWaitDock(waiting: thread.waiting, asking: workspace.cueAsking, shots: thread.shots, open: { opened = $0 }, moving: $docking)
-                    .padding(.leading, railInset)
+                    .padding(.horizontal, railInset)
                 if !thread.rows.isEmpty, !cue.canHear { CueWelcome(intro: false).fixedSize(horizontal: false, vertical: true).padding(.bottom, Spacing.item).transition(.opacity) }
             }
             #if os(macOS)
