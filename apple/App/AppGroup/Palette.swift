@@ -161,19 +161,13 @@ struct Palette {
     var thinkingMid: Color { dark ? Color(hex: 0x8550CC) : Color(hex: 0x7643C4) }
     var thinkingHigh: Color { dark ? Color(hex: 0xB23A6E) : Color(hex: 0xC03A70) }
 
-    /// 色带铺成一块时（`ThinkingField`）上沿的受光、下沿的沉、上半圈的边光：两种外观同一份，衬着它的是色带本身。
-    /// 受光封顶在这里：再亮压在上面的白字就不到 4.5:1。
-    var thinkingSheen: Color { Color.white.opacity(0.14) }
-    var thinkingShade: Color { Color.black.opacity(0.1) }
-    var thinkingRim: Color { Color.white.opacity(0.35) }
+    /// 压在色带上的档位点（`ThinkingTrack`）：两种外观同一份，衬着它的是色带本身。
+    var thinkingRim: Color { Color.white.opacity(0.45) }
 
     /// 色带上的一点：0 最低档、1 最高档（`ThinkingMeter.energy`）。
     func thinking(_ energy: Double) -> Color {
         energy < 0.5 ? thinkingLow.mix(with: thinkingMid, by: energy * 2) : thinkingMid.mix(with: thinkingHigh, by: energy * 2 - 1)
     }
-
-    /// 色带铺成的那一块底下透出的光：档越高越浓。
-    func thinkingGlow(_ energy: Double) -> Color { thinking(energy).opacity(0.25 + 0.2 * energy) }
     /// 出错与没能送达：胭脂（`Failure`）。对比度 5.0，深色 4.6。
     var failure: Color { dark ? Color(hex: 0xF0789E) : Color(hex: 0xAD2B5C) }
     /// 删除钮、轻扫删除的胭脂底。字 6.3，深色 5.6。

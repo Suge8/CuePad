@@ -130,10 +130,7 @@ private struct ModelPickBubble: View {
                 }
             }
             if let meter, !meter.levels.isEmpty {
-                VStack(alignment: .leading, spacing: Spacing.tight) {
-                    caption("思考强度") { EmptyView() }
-                    ThinkingSegments(meter: meter, choose: chooseThinking)
-                }
+                ThinkingTrack(meter: meter, choose: chooseThinking)
             }
         }
         .padding(Spacing.item)
@@ -185,48 +182,94 @@ private struct ModelPickBubble: View {
     #endif
 }
 
-/// 思考强度的分段：这个模型支持的档一格一段。选中的那段浮起一块这一档的"场"（`ThinkingField`），换档时它滑过去、颜色与翻动跟着变；
-/// 选"关"时浮起的是一块纸。
-private struct ThinkingSegments: View {
+/// 思考强度的能量轨道：这个模型支持的档从左到右排开，填满到钮的那一段是这一档的思考场（`ThinkingField`），
+/// 档越高越长、越暖、星越密越快。按下或点在轨道上就跳到最近的档；拖着走时钮跟手，档位带回差地吸（过了两档正中再多走一成才换，
+/// 停在边界上不来回跳），每换一档轻震一下；松手才提交、钮弹到档位上。小标题那一行的右端写着此刻（拖着时是要去）的档。
+/// 否决过：一排分段——五六段挤在一行只剩字，看不出"越往右越用力"，选中的那块也只是换个颜色。
+private struct ThinkingTrack: View {
     let meter: ThinkingMeter
     let choose: (ThinkingLevel) -> Void
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Namespace private var thumb
+    @LoopsPlay private var loops
+    /// 拖着时钮的中心；松手后归 nil，钮回到档位上
+    @State private var dragging: CGFloat?
+    /// 拖着时、与松手后 Agent 报回新档之前要去的那一档；报不回（没换成）一秒后放下，回到当前档
+    @State private var heading: Int?
+
+    private var levels: [ThinkingLevel] { meter.levels }
+    private var index: Int? { heading ?? meter.current.flatMap { levels.firstIndex(of: $0) } }
+    private var level: ThinkingLevel? { index.map { levels[$0] } }
 
     var body: some View {
-        HStack(spacing: 0) {
-            ForEach(meter.levels, id: \.self) { level in
-                let on = level == meter.current
-                Button { if !on { choose(level) } } label: {
-                    Text(verbatim: level.label)
-                        .font(Typography.meta.weight(on ? .semibold : .medium))
-                        .foregroundStyle(on ? (level == .off ? palette.ink : palette.onFill) : palette.ink2)
-                        .lineLimit(1).minimumScaleFactor(0.7)
-                        .frame(maxWidth: .infinity, minHeight: Self.height)
-                        .background {
-                            if on {
-                                Group {
-                                    if let energy = ThinkingMeter.energy(level) {
-                                        ThinkingField(energy: energy)
-                                    } else {
-                                        Capsule().fill(palette.paperLit).overlay { Capsule().strokeBorder(palette.hair, lineWidth: ControlMetrics.stroke) }
-                                    }
-                                }
-                                .padding(Self.inset)
-                                .matchedGeometryEffect(id: 0, in: thumb)
-                            }
-                        }
-                        .contentShape(.capsule)
-                }
-                .buttonStyle(PressStyle(.mark))
-                .accessibilityAddTraits(on ? .isSelected : [])
+        VStack(alignment: .leading, spacing: Spacing.tight) {
+            HStack(spacing: Spacing.tight) {
+                Text("思考强度").foregroundStyle(palette.ink3)
+                Spacer(minLength: Spacing.item)
+                Text(verbatim: level?.label ?? meter.label).fontWeight(.semibold).foregroundStyle(palette.ink)
+                    .contentTransition(.interpolate)
             }
+            .font(Typography.caption)
+            .padding(.horizontal, Spacing.item)
+            .readerHidden(true)
+            GeometryReader { proxy in track(width: proxy.size.width) }
+                .frame(height: Self.height)
         }
-        .background(palette.fill, in: .capsule)
-        .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: meter.current)
-        .accessibilityElement(children: .contain)
+        .accessibilityElement(children: .ignore)
         .accessibilityLabel("思考强度")
+        .accessibilityValue(meter.label)
+        .accessibilityAdjustableAction { direction in
+            guard let next = meter.step(direction == .increment ? 1 : -1), next != meter.current else { return }
+            choose(next)
+        }
+        .sensoryFeedback(.selection, trigger: index)
+        .task(id: heading) {
+            guard heading != nil, dragging == nil, (try? await Task.sleep(for: .seconds(1))) != nil else { return }
+            heading = nil
+        }
+        .onChange(of: meter.current) { if dragging == nil { heading = nil } }
+    }
+
+    private func track(width: CGFloat) -> some View {
+        let radius = Self.height / 2, span = max(width - Self.height, 1), last = max(levels.count - 1, 1)
+        let spot = { (i: Int) in radius + span * CGFloat(i) / CGFloat(last) }
+        let knob = dragging ?? index.map(spot) ?? radius
+        let fill = (index.map(spot) ?? radius) + radius
+        return ZStack(alignment: .leading) {
+            Capsule().fill(palette.fill)
+            ThinkingField(energy: level.flatMap(ThinkingMeter.energy), fill: Double(fill / width), running: loops)
+                .mask(alignment: .leading) { Capsule().frame(width: knob + radius) }
+            ForEach(levels.indices, id: \.self) { i in
+                Circle().fill(spot(i) < knob ? palette.thinkingRim : palette.track)
+                    .frame(width: Self.dot, height: Self.dot)
+                    .position(x: spot(i), y: radius)
+            }
+            // 钮两种外观都是暖白：深色下用纸色，压在亮的色带上是一块发沉的洞
+            Circle().fill(palette.onFill)
+                .frame(width: Self.height - Self.inset * 2, height: Self.height - Self.inset * 2)
+                .elevation(.hover)
+                .scaleEffect(dragging == nil ? 1 : Self.lift)
+                .position(x: knob, y: radius)
+        }
+        .contentShape(.capsule)
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { drag in
+                    let x = min(max(drag.location.x, radius), radius + span)
+                    let raw = Double((x - radius) / span) * Double(last)
+                    // 刚按下时直接取最近的档；拖着时离开当前档过了 0.6 格才换（回差）
+                    if dragging == nil || index.map({ abs(raw - Double($0)) > 0.6 }) ?? true {
+                        heading = Int(raw.rounded())
+                    }
+                    dragging = x
+                }
+                .onEnded { _ in
+                    dragging = nil
+                    if let heading, levels[heading] != meter.current { choose(levels[heading]) }
+                }
+        )
+        .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: dragging == nil)
+        .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: index)
     }
 
     #if os(iOS)
@@ -234,8 +277,11 @@ private struct ThinkingSegments: View {
     #else
     private static let height: CGFloat = 28
     #endif
-    /// 选中那段浮起的纸与分段外沿留的一线：贴边时像把分段的底换了色，不像浮起一块
+    /// 钮与轨道外沿留的一线：贴边时钮像嵌进轨道里，不像压在上面
     private static let inset: CGFloat = 3
+    private static let dot: CGFloat = 4
+    /// 捏住时钮略微鼓起，松手回原大
+    private static let lift: CGFloat = 1.12
 }
 
 /// 思考强度的竖格：除"关"以外的六档各一格（`ThinkingMeter.scale`），当前档以下填满，每格是它那一档在色带上的颜色（`Palette.thinking`），
