@@ -101,6 +101,7 @@ private struct StepDetail: View {
     let detail: ToolCallDetail
     let shown: String
     @Environment(\.palette) private var palette
+    @State private var earlierOpen = false
 
     var body: some View {
         let command = detail.command.flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines) == shown ? nil : $0 }
@@ -118,10 +119,7 @@ private struct StepDetail: View {
                     }
                     .clipShape(.rect(cornerRadius: Radius.chip))
                 }
-                if !detail.output.isEmpty {
-                    if detail.clipped { Text("更早的输出未显示").font(Typography.caption).foregroundStyle(palette.ink3) }
-                    Text(detail.output).foregroundStyle(palette.ink2).selectable()
-                }
+                if !detail.output.isEmpty { output }
             }
             .font(Typography.codeNote)
             .fixedSize(horizontal: false, vertical: true)
@@ -129,6 +127,39 @@ private struct StepDetail: View {
             .padding(.vertical, Spacing.tight)
         }
     }
+
+    /// 命令的结论在最后：先露末尾几行，更早的点开才往上长。
+    @ViewBuilder private var output: some View {
+        let rows = detail.output.split(separator: "\n", omittingEmptySubsequences: false)
+        let earlier = rows.dropLast(Self.tail)
+        let dropped = Text("更早的输出未显示").font(Typography.caption).foregroundStyle(palette.ink3)
+        if earlier.isEmpty {
+            if detail.clipped { dropped }
+            Text(detail.output).foregroundStyle(palette.ink2).selectable()
+        } else {
+            VStack(alignment: .leading, spacing: 0) {
+                Fold(open: $earlierOpen) {
+                    HStack(alignment: .firstTextBaseline, spacing: Spacing.tight) {
+                        Text("更早的输出").font(Typography.caption).foregroundStyle(palette.ink3)
+                        DisclosureChevron(open: earlierOpen)
+                    }
+                    .frame(minHeight: Note.lineHeight).contentShape(.rect)
+                } content: {
+                    if earlierOpen {
+                        VStack(alignment: .leading, spacing: Spacing.item) {
+                            if detail.clipped { dropped }
+                            Text(earlier.joined(separator: "\n")).foregroundStyle(palette.ink2).selectable()
+                        }
+                        .transition(.opacity)
+                    }
+                }
+                Text(rows.suffix(Self.tail).joined(separator: "\n")).foregroundStyle(palette.ink2).selectable()
+                    .fadesEdge(.top, when: !earlierOpen)
+            }
+        }
+    }
+
+    private static let tail = 12
 
     /// 连着的同一种行并成一块，一块一个底色；段与段之间（`@@`）空一行。Mac 只交来一串 `+`/`-` 行、几段用 `@@` 隔开（没有文件抬头），按一段来读。
     private static func runs(_ diff: String) -> [(kind: UnifiedDiff.Line.Kind, text: String)] {

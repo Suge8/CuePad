@@ -19,14 +19,14 @@ nonisolated struct FigureSprite {
 
 /// `size` 是角色本身那一方块（排版只占这么大），画布四周多出来的给波纹、火星和碎开时飞走的格子。
 nonisolated enum FigureLayout {
-    static let size: CGFloat = 120
+    static let size: CGFloat = 144
     static let tiles = 36
     /// 世界坐标里画布那一方块有多宽：角色连环、迷你方块都在里面。
     static let span: Float = 2.7
     static let tile = size / CGFloat(tiles)
     /// 碎开时格子往右上飞出一个多身位，画布往右、往上留出这一截。
-    static let origin = CGPoint(x: 16, y: 26)
-    static let canvas = CGSize(width: size + 150, height: size + 44)
+    static let origin = CGPoint(x: 20, y: 32)
+    static let canvas = CGSize(width: size + 180, height: size + 52)
 }
 
 /// 深色下格子是暗底上的光点（带底光）；浅色下光衬不出来，按像素画在浅底上的做法：

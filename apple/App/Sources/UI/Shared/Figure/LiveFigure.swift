@@ -138,7 +138,7 @@ struct LiveFigure: View {
 
     private func row(_ shown: FigureLive, fading: Bool) -> some View {
         let pose: FigurePose = if case .lingering = stage { .done } else { shown.pose }
-        return HStack(alignment: .center, spacing: Spacing.item) {
+        return HStack(alignment: .center, spacing: Spacing.group) {
             Color.clear.frame(width: FigureLayout.size, height: FigureLayout.size)
                 .overlay(alignment: .topLeading) {
                     FigureCanvas(pose: pose, arrives: arrives, leaving: fading, running: plays && visible)
@@ -208,9 +208,9 @@ private struct FigureStatus: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.hair) {
             HStack(alignment: .firstTextBaseline, spacing: Spacing.item) {
-                DoingLine(text: live.verb).font(Typography.secondary.weight(.semibold)).lineLimit(1)
+                DoingLine(text: live.verb).font(Typography.bodyStrong).lineLimit(1)
                 Text(timerInterval: since...Date.distantFuture, countsDown: false)
-                    .font(Typography.caption.monospacedDigit()).foregroundStyle(palette.ink3).fixedSize()
+                    .font(Typography.secondary.monospacedDigit()).foregroundStyle(palette.ink3).fixedSize()
             }
             // 对象那一行没有时也占着：整块跟角色竖着居中，行数一变动作那行就上下跳半行（在想与用工具交替时一步一跳）
             ZStack(alignment: .leading) {

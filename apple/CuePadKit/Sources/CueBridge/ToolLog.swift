@@ -154,7 +154,7 @@ private extension ToolLog.Call {
 
     private static func told(_ command: String) -> String? {
         guard let line = command.split(whereSeparator: \.isNewline).lazy.map({ $0.trimmingCharacters(in: .whitespaces) }).first(where: { !$0.isEmpty }) else { return nil }
-        let run = line.replacing(/^(?:(?:cd\s+(?:"[^"]*"|'[^']*'|\S+)|[A-Za-z_]\w*=(?:"[^"]*"|'[^']*'|\S*))\s*(?:&&|;)\s*)+/, with: "")
+        let run = line.replacing(/^(?:(?:cd\s+(?:"[^"]*"|'[^']*'|\S+)\s*(?:&&|;)|[A-Za-z_]\w*=(?:"[^"]*"|'[^']*'|[^\s;&]*)(?:\s*(?:&&|;)|\s))\s*)+/, with: "")
         return run.isEmpty ? line : run
     }
 
