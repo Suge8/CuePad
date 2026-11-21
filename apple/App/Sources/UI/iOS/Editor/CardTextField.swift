@@ -11,6 +11,7 @@ struct CardTextField: View {
     let editing: CardEditing
     let theme: CueEditorTheme
     var fits = false
+    var editable = true
     @Environment(Workspace.self) private var workspace
     @State private var pickingImage = false
     @State private var pickedImage: PhotosPickerItem?
@@ -28,7 +29,7 @@ struct CardTextField: View {
             onVariables: { editingVariables = true },
             selectionActions: [.convertToTasks(from: card, workspace: workspace)],
             onError: workspace.fail,
-            fits: fits, bottomInset: fits ? 0 : theme.verticalInset)
+            fits: fits, bottomInset: fits ? 0 : theme.verticalInset, editable: editable)
         .overlay { AttachmentSpotLayer(spot: editing.handle.spot) }
         .photosPicker(isPresented: $pickingImage, selection: $pickedImage, matching: .images)
         .onChange(of: pickedImage) { insertPicked() }

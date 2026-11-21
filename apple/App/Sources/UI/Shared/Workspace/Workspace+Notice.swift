@@ -37,7 +37,7 @@ extension Workspace {
 
     func holdNotice(_ held: Bool) {
         noticeTask?.cancel()
-        guard !held, let notice else { return }
+        guard !held, let notice, notice.tone != .pick else { return }
         let due = max(noticeDue, .now + Self.graceNotice)
         // 只记身份：提示的动作可能攥着库（撤销），计时期间不跟着攥
         noticeTask = Task { [weak self, id = notice.id] in

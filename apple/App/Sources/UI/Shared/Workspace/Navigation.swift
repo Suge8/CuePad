@@ -5,9 +5,27 @@ enum NavigationPane: String, CaseIterable {
 }
 
 /// 窄屏只有以 Cue 为根的一个栈；Cue 不写进 path。侧栏盖在根 Cue 上，推入页盖住二者，不是另一个栈。
+/// 边聊边看（`dock`）只活在这个值里：不持久化，换布局、去别处（`selectNarrow`）都建新值，停靠随之解除。
 struct NarrowNavigation {
-    var path: [Route] = []
-    var sidebarOpen = false
+    var path: [Route] = [] { didSet { dock = dock?.following(path) } }
+    var sidebarOpen = false { didSet { if sidebarOpen, dock?.session == nil { dock = nil } } }
+    var dock: IdeaDock?
+}
+
+/// 边聊边看：一条灵感停靠在会话页的回复框上方。`session` 为 nil 时正在 Cue 页的会话条上挑：推入的下一页是会话就停进它，是别的页、打开侧栏即取消。
+/// 停进去之后只在那个会话页在最上面时有，返回或再推入别的页即解除：编辑页这时已不在栈里，同一张卡只有停靠里这一个编辑器。
+struct IdeaDock: Equatable {
+    let card: UUID
+    var session: UUID?
+    var open = false
+
+    fileprivate func following(_ path: [Route]) -> IdeaDock? {
+        guard let top = path.last else { return session == nil ? self : nil }
+        guard case .session(let route) = top, session == nil || session == route.id else { return nil }
+        var next = self
+        next.session = route.id
+        return next
+    }
 }
 
 /// Cue 是落点（`home`，同手机以 Cue 为根）：没去别处时它铺满会话条之外；去了项目、进展或会话，它让到右边——那时它收没收起是用户的选择
