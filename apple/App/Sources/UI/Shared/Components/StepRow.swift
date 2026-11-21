@@ -25,7 +25,7 @@ struct StepRow: View {
             } content: {
                 switch opened {
                 // 取到了却是空的：这一步没有命令、改动与文字输出（看了一张图、搜了一下网）
-                case .ready(let detail): if detail.isEmpty { note(Text("这一步没有更多内容")) } else { StepDetail(detail: detail, shown: item.target) }
+                case .ready(let detail): if beyondTitle(detail).isEmpty { note(Text("这一步没有更多内容")) } else { StepDetail(detail: beyondTitle(detail)) }
                 case .missing(let why): note(Text(why))
                 // 本机读是毫秒级的，读的那一下不另画；向 Mac 取要几秒
                 case .loading: if !services.holdsSteps(of: session) { note(Text("正在从 Mac 取").shimmering()) }
@@ -37,7 +37,7 @@ struct StepRow: View {
                 guard message != nil, DebugHooks.preset.stepOpen == index, (try? await Task.sleep(for: .seconds(2))) != nil else { return }
                 open()
             }
-            .onChange(of: item.detail) { if let detail = item.detail { land(.ready(detail)) } }
+            .onChange(of: item.detail) { if let detail = item.detail { land(.ready(detail), over: .missing(Self.late)) } }
             .task(id: fetching) { if fetching != nil { await fetch() } }
         } else {
             row(open: nil)
@@ -49,7 +49,7 @@ struct StepRow: View {
     }
 
     private func row(open: Bool?) -> some View {
-        ToolRow(icon: RoundProcess.icon(item.kind), target: Text(item.target), truncation: item.kind == .command ? .tail : .middle) {
+        ToolRow(icon: RoundProcess.icon(item.kind), target: Text(item.target), truncation: item.kind == .command ? .tail : .middle, wraps: titleIsCommand) {
             if item.failed {
                 Text("失败").font(Typography.caption).foregroundStyle(palette.failure)
             } else if item.added != nil || item.removed != nil {
@@ -71,8 +71,22 @@ struct StepRow: View {
         opened = nil
     }
 
-    private func land(_ fetched: Opened) {
-        guard opened == .loading else { return }
+    /// 命令与标题那一行一样时不再写一遍，开着时标题放开写全。
+    private var titleIsCommand: Bool {
+        if case .ready(let detail) = opened { detail.command?.trimmingCharacters(in: .whitespacesAndNewlines) == item.target } else { false }
+    }
+
+    private func beyondTitle(_ detail: ToolCallDetail) -> ToolCallDetail {
+        var rest = detail
+        if titleIsCommand { rest.command = nil }
+        return rest
+    }
+
+    private static var late: String { String(localized: "详情没同步过来，再点一次") }
+
+    /// `over`：等过了头才同步到的详情照样换上，不要你再点一次。
+    private func land(_ fetched: Opened, over waited: Opened = .loading) {
+        guard opened == .loading || opened == waited else { return }
         withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { opened = fetched }
     }
 
@@ -81,6 +95,7 @@ struct StepRow: View {
             #if os(macOS)
             if services.holdsSteps(of: session) {
                 let detail = try await AppServices.stepDetail(item.calls ?? [], of: session.sessionID, in: services.store, runtimes: services.runtimes)
+                try Task.checkCancellation()
                 land(.ready(detail))
                 return
             }
@@ -89,7 +104,7 @@ struct StepRow: View {
             try await services.fetchStep(index, of: message, in: session)
             // Mac 办完了，写上的详情随同步稍后到（`onChange`）；这之间那条回答被重读改写的话它就没了，不一直等
             try await Task.sleep(for: .seconds(10))
-            land(.missing(String(localized: "详情没同步过来，再点一次")))
+            land(.missing(Self.late))
         } catch is CancellationError {
         } catch {
             land(.missing(ShownText(error).text))
@@ -99,15 +114,15 @@ struct StepRow: View {
 
 private struct StepDetail: View {
     let detail: ToolCallDetail
-    let shown: String
     @Environment(\.palette) private var palette
     @State private var earlierOpen = false
+    @State private var long = false
+    @ScaledMetric(relativeTo: .caption) private var tail: CGFloat = 192
 
     var body: some View {
-        let command = detail.command.flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines) == shown ? nil : $0 }
         NoteThread {
             VStack(alignment: .leading, spacing: Spacing.item) {
-                if let command { Text(command).foregroundStyle(palette.ink).selectable() }
+                if let command = detail.command { Text(command).foregroundStyle(palette.ink).selectable() }
                 if let diff = detail.diff {
                     VStack(alignment: .leading, spacing: 0) {
                         ForEach(Array(Self.runs(diff).enumerated()), id: \.offset) { _, run in
@@ -128,38 +143,27 @@ private struct StepDetail: View {
         }
     }
 
-    /// 命令的结论在最后：先露末尾几行，更早的点开才往上长。
+    /// 命令的结论在最后：先露末尾十二行那么高（按排出来的高算，窄栏里折了行的长行也算进去），更早的点开才往上长。
     @ViewBuilder private var output: some View {
-        let rows = detail.output.split(separator: "\n", omittingEmptySubsequences: false)
-        let earlier = rows.dropLast(Self.tail)
         let dropped = Text("更早的输出未显示").font(Typography.caption).foregroundStyle(palette.ink3)
-        if earlier.isEmpty {
-            if detail.clipped { dropped }
-            Text(detail.output).foregroundStyle(palette.ink2).selectable()
-        } else {
-            VStack(alignment: .leading, spacing: 0) {
-                Fold(open: $earlierOpen) {
-                    HStack(alignment: .firstTextBaseline, spacing: Spacing.tight) {
-                        Text("更早的输出").font(Typography.caption).foregroundStyle(palette.ink3)
-                        DisclosureChevron(open: earlierOpen)
-                    }
-                    .frame(minHeight: Note.lineHeight).contentShape(.rect)
-                } content: {
-                    if earlierOpen {
-                        VStack(alignment: .leading, spacing: Spacing.item) {
-                            if detail.clipped { dropped }
-                            Text(earlier.joined(separator: "\n")).foregroundStyle(palette.ink2).selectable()
-                        }
-                        .transition(.opacity)
-                    }
+        let text = Text(detail.output).foregroundStyle(palette.ink2).selectable().fixedSize(horizontal: false, vertical: true)
+            .onGeometryChange(for: Bool.self) { [tail] in $0.size.height > tail } action: { long = $0 }
+        if long {
+            Fold(open: $earlierOpen) {
+                HStack(alignment: .firstTextBaseline, spacing: Spacing.tight) {
+                    Text("更早的输出").font(Typography.caption).foregroundStyle(palette.ink3)
+                    DisclosureChevron(open: earlierOpen)
                 }
-                Text(rows.suffix(Self.tail).joined(separator: "\n")).foregroundStyle(palette.ink2).selectable()
-                    .fadesEdge(.top, when: !earlierOpen)
+                .frame(minHeight: Note.lineHeight).contentShape(.rect)
+            } content: {
+                if earlierOpen, detail.clipped { dropped.padding(.bottom, Spacing.item).transition(.opacity) }
+                text.frame(maxHeight: earlierOpen ? nil : tail, alignment: .bottom).clipped().fadesEdge(.top, when: !earlierOpen)
             }
+        } else {
+            if detail.clipped { dropped }
+            text
         }
     }
-
-    private static let tail = 12
 
     /// 连着的同一种行并成一块，一块一个底色；段与段之间（`@@`）空一行。Mac 只交来一串 `+`/`-` 行、几段用 `@@` 隔开（没有文件抬头），按一段来读。
     private static func runs(_ diff: String) -> [(kind: UnifiedDiff.Line.Kind, text: String)] {

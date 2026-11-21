@@ -100,7 +100,7 @@ struct RoundProcess: View {
     }
 
     @ViewBuilder private func list(_ tools: ChatMessage.Tools) -> some View {
-        ForEach(Chat.rows(tools.items), id: \.self) { row in
+        ForEach(Chat.rows(tools.items, settled: message != nil), id: \.self) { row in
             switch row {
             case .step(let index): step(tools.items[index], at: index)
             case .looks(let range): LooksRow(range: range, items: tools.items, session: session, message: message)
@@ -174,6 +174,7 @@ struct ToolRow<Status: View>: View {
     let icon: Icon
     let target: Text
     let truncation: Text.TruncationMode
+    var wraps = false
     @ViewBuilder let status: Status
     @Environment(\.palette) private var palette
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -191,7 +192,7 @@ struct ToolRow<Status: View>: View {
                 }
             } else {
                 target.font(Typography.codeNote).foregroundStyle(palette.ink3)
-                    .lineLimit(1).truncationMode(truncation)
+                    .lineLimit(wraps ? nil : 1).truncationMode(truncation)
                 Spacer(minLength: Spacing.tight)
                 status
             }
