@@ -2,7 +2,7 @@ import CueEditor
 import CueStore
 import SwiftUI
 
-/// 并排里的一条灵感（`WideNavigation.Beside.card`）：栏头写它所在的项目与第一行，拖名牌挪到别处，末端的钮收起；下面直接可改。
+/// 并排里的一条灵感（`WideNavigation.Beside.card`）：栏头写它所在的项目与第一行，拖名牌挪到别处，名牌末端的 × 收起；下面直接可改。
 /// 同一条灵感只在一处可改（`CardEditing` 是唯一写者）：放进并排时盖着它的编辑页先收起（`Workspace.drop`），并排着时再打开它不另开一份（`showEditor`）。
 struct IdeaPane: View {
     let cardID: UUID
@@ -56,7 +56,6 @@ struct IdeaPane: View {
         HStack(spacing: Spacing.item) {
             name
             Spacer(minLength: Spacing.item)
-            HeadTool(label: "收起并排", icon: .rightColumn) { workspace.closeColumn(column) }
         }
         .accessibilityElement(children: .contain)
         .windowDragArea()
@@ -80,9 +79,11 @@ struct IdeaPane: View {
                 .draggable(DraggedCard.idea(cardID))
                 .layoutPriority(1)
             #endif
+            PaneClose { workspace.closeColumn(column) }
         }
         .font(Typography.toolbarTitle)
-        .padding(.horizontal, Spacing.block)
+        .padding(.leading, Spacing.block)
+        .padding(.trailing, PaneClose.inset)
         .frame(height: Chrome.control)
         .glass(in: .capsule)
     }

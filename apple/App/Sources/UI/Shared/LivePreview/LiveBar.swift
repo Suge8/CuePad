@@ -2,7 +2,7 @@ import CueStore
 import SwiftUI
 
 /// 浮在网页上的玻璃栏：重新载入（载入中是停止）、地址、点选、手机宽、在浏览器里打开；载入进度是贴着下沿的一条细线。
-/// 没有收起：收起只经左边会话栏头上打开它的那颗钮（`WideSessionTitle`），一件事一个入口。
+/// 宽屏上末端是并排里每一块都有的 ×（`PaneClose`），与左边会话栏头上打开它的那颗钮（`WideSessionTitle`）是同一个开合。
 /// 宽屏上开头是"放大"（`Workspace.toggleLiveFill`）：这块屏长到盖过左边的会话，那时这颗换成"放回右半"（左边栏头那颗钮被盖住，点不到）。
 /// iPad 同 Mac，只是没有手机宽与在浏览器里打开（Safari 连不到 Mac 的 localhost）；手机上是收起、后退、前进、地址、重新载入、点选（收起只在这里：页头那颗钮被这一页盖住了）。
 struct LiveBar: View {
@@ -45,8 +45,9 @@ struct LiveBar: View {
             tool("在浏览器里打开", icon: .openInBrowser) { if let url = preview.shownAddress { LivePreview.openOutside(url) } }
                 .disabled(preview.shownAddress == nil)
             #endif
+            if !narrow { PaneClose { workspace.toggleLivePreview() } }
         }
-        .padding(.horizontal, Spacing.tight)
+        .padding(.horizontal, PaneClose.inset)
         .frame(height: Chrome.control)
         .overlay { LiveProgress(value: preview.progress, shown: loading) }
         .glass(in: .capsule)

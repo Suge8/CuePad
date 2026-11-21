@@ -188,6 +188,7 @@ extension WideColumnController: UIDropInteractionDelegate {
 #endif
 
 /// 排在窗口最顶那一排（`Chrome.band`），左右让出多少由主区给（`headInset`：收起的 Cue 钮压在最右那一块的栏头上）。
+/// 名牌后面紧跟着最左那块的活预览钮（会话有页面可看时；开着是强调色），同项目页栏头名字后面跟着它的钮（`WideProjectHeading`）。
 struct WideSessionTitle: View {
     let title: String
     /// 会话所在的项目，写在名字前面，点它去那个项目的页（同项目页栏头里的"项目"回列表）。
@@ -203,19 +204,16 @@ struct WideSessionTitle: View {
     var body: some View {
         HStack(spacing: Spacing.item) {
             name
+            if column == .main, let session = workspace.session(in: .main) { LivePreviewTool(session: session) }
             Spacer(minLength: Spacing.item)
-            // 每块的栏头末端各一颗玻璃圆钮，同一个样子：最左那块开合活预览（会话有页面可看时；开着是强调色，收起它只有这一处），右边的收起这一块。
-            // 最左那块没有收起：它就是主区此刻的页，换去处靠会话条
-            if column == .main {
-                if let session = workspace.session(in: .main) { LivePreviewTool(session: session) }
-            } else {
-                HeadTool(label: "收起并排", icon: .rightColumn) { workspace.closeColumn(column) }
-            }
         }
         .accessibilityElement(children: .contain)
         .padding(inset).frame(height: Chrome.band)
         .windowDragArea()
     }
+
+    /// 最左那块收起时右边第一个会话顶上来（`WideNavigation.close`）：右边没有会话时它就是主区此刻的页，不给收起，换去处靠会话条。
+    private var closes: Bool { column != .main || !workspace.besideSessions.isEmpty }
 
     /// 名字那一块是浮在对话上的玻璃胶囊（同手机页头中间那块），对话从它下面滑过去。
     private var name: some View {
@@ -246,16 +244,43 @@ struct WideSessionTitle: View {
                     .padding(.leading, Spacing.tight)
                     .transition(.opacity)
             }
+            if closes { PaneClose { workspace.closeColumn(column) } }
         }
         .font(Typography.toolbarTitle)
         .animation(Motion.fade, value: ended)
-        .padding(.horizontal, Spacing.block)
+        .padding(.leading, Spacing.block)
+        .padding(.trailing, closes ? PaneClose.inset : Spacing.block)
         .frame(height: Chrome.control)
         .glass(in: .capsule)
     }
 }
 
-/// 会话栏头末端的玻璃圆钮（对话从下面滑过，不带框的钮压在字上看不清）：平时次要色，开着的开关是强调色。
+/// 并排里一块的收起（会话、灵感、活预览三种块同一个）：一颗 ×，排在这一块名牌那个玻璃胶囊的末端。
+/// 悬停的底是一个圆，离胶囊上下沿与末端同样 `inset`：与胶囊的圆头同心，宽出图标一圈又不伸出圆角。
+struct PaneClose: View {
+    let action: () -> Void
+    @Environment(\.palette) private var palette
+
+    static let inset = Spacing.tight
+    private static var side: CGFloat { Chrome.control - 2 * inset }
+
+    var body: some View {
+        Button(action: action) {
+            Image(.close).font(Glyph.small).foregroundStyle(palette.ink3)
+                .frame(width: Self.side, height: Self.side)
+                .contentShape(.circle)
+        }
+        .buttonStyle(PressStyle(.control))
+        #if os(iOS)
+        .contentShape(.hoverEffect, .circle)
+        .hoverEffect(.highlight)
+        #endif
+        .help(Text("收起并排"))
+        .accessibilityLabel(Text("收起并排"))
+    }
+}
+
+/// 栏头里浮在内容上的玻璃圆钮（对话从下面滑过，不带框的钮压在字上看不清）：平时次要色，开着的开关是强调色。
 struct HeadTool: View {
     let label: LocalizedStringResource
     let icon: Icon
