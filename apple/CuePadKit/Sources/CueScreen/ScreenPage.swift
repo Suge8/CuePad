@@ -59,6 +59,9 @@ public enum ScreenPage {
       };
       mine.onclose = () => {
         if (socket === mine) socket = null;
+        // 按着的手指与键服务那头替这条连接抬起了：这头也忘掉，重连后不接着发半截的拖动
+        finger = null;
+        held.clear();
         setTimeout(connect, 1000);
       };
     };

@@ -76,7 +76,9 @@ final class LivePreview: NSObject, WKNavigationDelegate {
     private(set) var progress = 0.0
     private(set) var canGoBack = false
     private(set) var canGoForward = false
-    var viewport = Viewport.fill
+    var viewport = Viewport.fill { didSet { adopted = false } }
+    /// 手机宽那一档是页面要的（`adoptViewport`），不是你点的：换到没这样要的页面时放回铺满。你点过栏上那颗钮就算你的，不再动。
+    @ObservationIgnored private var adopted = false
     /// 这个地址第一次载完：之前网页还是 WebKit 的默认底（深色下也是一块白），先不露出来。
     private(set) var revealed = false
     /// 页面的底色（`<html>`，没有就 `<body>`，都透明就是浏览器默认的画布色）：玻璃栏后面让出的那一截与手机屏的底接上它。
@@ -221,7 +223,12 @@ final class LivePreview: NSObject, WKNavigationDelegate {
     /// 页面自己说要摆成手机宽那一档（`<meta name="cuepad-viewport" content="phone">`，模拟器的屏：`ScreenPage`）：每次载完照它摆一次，
     /// 之后栏上那颗钮照旧换。只在宽屏上有这一档（`LivePreviewPane.screen`）。
     private func adoptViewport() async {
-        if (try? await run(#"return document.querySelector('meta[name="cuepad-viewport"]')?.content"#) as? String) == "phone" { viewport = .phone }
+        if (try? await run(Self.viewportScript) as? String) == "phone" {
+            viewport = .phone
+            adopted = true
+        } else if adopted {
+            viewport = .fill
+        }
     }
 
     func webView(_ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse) async -> WKNavigationResponsePolicy {
@@ -314,22 +321,6 @@ final class LivePreview: NSObject, WKNavigationDelegate {
         guard let css = try? await run(Self.groundScript) as? String, let color = Color.webPage(css), color != ground else { return }
         ground = color
     }
-
-    private static let groundScript = """
-        const solid = element => {
-            const color = element && getComputedStyle(element).backgroundColor;
-            return color && !/^(transparent|rgba\\(.*,\\s*0\\))$/.test(color) ? color : null;
-        };
-        const canvas = () => {
-            const probe = document.createElement("div");
-            probe.style.background = "Canvas";
-            document.documentElement.append(probe);
-            const color = getComputedStyle(probe).backgroundColor;
-            probe.remove();
-            return color;
-        };
-        return solid(document.documentElement) ?? solid(document.body) ?? canvas();
-        """
 
     #if os(macOS)
     private static let probe: URLSession = {

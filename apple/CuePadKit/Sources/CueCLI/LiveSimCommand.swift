@@ -46,17 +46,24 @@ enum SimServe {
   /// 口按 UDID 定：模拟器重开、服务重起后还是同一个地址，用户那头的预览自己接回来。被别的东西占着就顺次往后挪。
   static func ensure(_ device: SimScreen.Device) async throws -> UInt16 {
     let first = UInt16(47_600 + device.udid.utf8.reduce(0) { ($0 &* 31 &+ Int($1)) % 300 })
+    // 每次起各写各的日志：两条命令同时起同一台时不互相清掉
+    let log = FileManager.default.temporaryDirectory.appending(path: "cuepad-screen-\(UUID().uuidString).log")
+    defer { try? FileManager.default.removeItem(at: log) }
     for port in first..<first + 8 {
       if await ScreenServer.serves(device.udid, port: port) { return port }
-      let log = FileManager.default.temporaryDirectory.appending(path: "cuepad-screen-\(device.udid).log")
-      try launch([entry, device.udid, String(port)], log: log)
+      let pid = try launch([entry, device.udid, String(port)], log: log)
       for _ in 0..<50 {
         try await Task.sleep(for: .milliseconds(100))
         if await ScreenServer.serves(device.udid, port: port) { return port }
-        // 口被别的占着：它退出时在日志里写了这个词（`run`）
+        // 没起来只按它退出了算：系统框架往 stderr 写的诊断不算
+        var status: Int32 = 0
+        guard waitpid(pid, &status, WNOHANG) == pid else { continue }
         let said = (try? String(contentsOf: log, encoding: .utf8)) ?? ""
-        if said.contains(taken) { break }
-        if !said.isEmpty { throw CLIError.invalid("接不上模拟器「\(device.name)」的屏：\(said.trimmingCharacters(in: .whitespacesAndNewlines))") }
+        // 口被占着（`run` 退出时写的这个词）：占着它的可能正是同时起的另一条命令的这台的服务，再认一次，不是才往后挪
+        guard said.contains(taken) else { throw CLIError.invalid("接不上模拟器「\(device.name)」的屏：\(said.trimmingCharacters(in: .whitespacesAndNewlines))") }
+        try await Task.sleep(for: .milliseconds(300))
+        if await ScreenServer.serves(device.udid, port: port) { return port }
+        break
       }
     }
     throw CLIError.invalid("接不上模拟器「\(device.name)」的屏：服务没起来（\(first)–\(first + 7) 这几个口都没听上）")
@@ -64,8 +71,8 @@ enum SimServe {
 
   private static let taken = "port taken"
 
-  /// 自成一个会话组、不接终端：起它的命令结束、Agent 收掉那条命令的进程组，它都留着。出错写进 `log`（先清空），`ensure` 读了报给 Agent。
-  private static func launch(_ arguments: [String], log: URL) throws {
+  /// 自成一个会话组、不接终端：起它的命令结束、Agent 收掉那条命令的进程组，它都留着。出错写进 `log`，它退出后 `ensure` 读了报给 Agent。
+  private static func launch(_ arguments: [String], log: URL) throws -> pid_t {
     guard let executable = Bundle.main.executablePath else { throw CLIError.invalid("找不到 cuepad 自己的路径") }
     FileManager.default.createFile(atPath: log.path, contents: nil)
     var actions: posix_spawn_file_actions_t?
@@ -85,6 +92,7 @@ enum SimServe {
     var pid: pid_t = 0
     let status = posix_spawn(&pid, executable, &actions, &attributes, &argv, environ)
     guard status == 0 else { throw CLIError.invalid("起不了模拟器屏的服务：\(String(cString: strerror(status)))") }
+    return pid
   }
 
   /// 后台进程的全部：听上、守着，模拟器关了或 cuepad 自己被换掉（App 更新）就退。不返回。

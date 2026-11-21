@@ -27,6 +27,9 @@ public final class ScreenServer: @unchecked Sendable {
     /// 收到过关键帧、之后的帧都接得上；跟丢了（`backlog`）就停发，等写空了从新的关键帧接。
     var synced = false
     var input = Data()
+    /// 这条连接按着没抬起的手指与键：它断了替它抬起（`drop`），不然模拟器里一直按着。
+    var finger: (x: Double, y: Double)?
+    var keys: Set<UInt32> = []
     init(_ connection: NWConnection) { self.connection = connection }
   }
 
@@ -203,9 +206,9 @@ public final class ScreenServer: @unchecked Sendable {
       viewer.input.append(data)
       while let (opcode, payload) = Self.frame(&viewer.input) {
         switch opcode {
-        case .text: if let input = Self.input(payload) { self.source.send(input) }
+        case .text: if let input = Self.input(payload) { self.forward(input, from: viewer) }
         case .ping: self.write(.pong, payload, to: viewer)
-        case .close: return self.drop(viewer)
+        case .close: return self.drop(viewer, answering: payload)
         default: break
         }
       }
@@ -214,9 +217,24 @@ public final class ScreenServer: @unchecked Sendable {
     }
   }
 
-  private func drop(_ viewer: Viewer) {
-    viewers[ObjectIdentifier(viewer)] = nil
-    viewer.connection.cancel()
+  private func forward(_ input: ScreenInput, from viewer: Viewer) {
+    switch input {
+    case .touch(let phase, let x, let y): viewer.finger = phase == .up ? nil : (x, y)
+    case .key(let usage, let down): if down { viewer.keys.insert(usage) } else { viewer.keys.remove(usage) }
+    case .wheel: break
+    }
+    source.send(input)
+  }
+
+  /// `answering`：那头先发了 Close，把它的那一帧（带着关闭码）回过去再断，不回的话它记成异常断开。
+  private func drop(_ viewer: Viewer, answering: Data? = nil) {
+    guard viewers.removeValue(forKey: ObjectIdentifier(viewer)) != nil else { return }
+    if let finger = viewer.finger { source.send(.touch(.up, x: finger.x, y: finger.y)) }
+    viewer.keys.forEach { source.send(.key(usage: $0, down: false)) }
+    let connection = viewer.connection
+    // 控制帧的内容不过 125 字节
+    guard let answer = answering?.prefix(125) else { return connection.cancel() }
+    connection.send(content: Data([0x80 | Opcode.close.rawValue, UInt8(answer.count)]) + answer, completion: .contentProcessed { _ in connection.cancel() })
   }
 
   /// 从头上取下一整帧；不够一帧是 nil。客户端的帧都带掩码、不超过 125 字节加两字节长度那一档。
