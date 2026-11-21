@@ -193,10 +193,12 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
             if toolsShown {
                 HStack(spacing: 0) {
                     if !accepts.isEmpty { plus.matchedGeometryEffect(id: 0, in: plusSlot) }
+                    // 工具拿下剩下的整宽，不与弹簧对半分（只拿一半时模型胶囊提早收掉名字）；没有＋时胶囊站到＋那颗圆的位置，不贴输入框的边
                     tools().environment(\.chipHeight, ComposerMetrics.glyph)
+                        .padding(.leading, accepts.isEmpty ? (ComposerMetrics.slot - ComposerMetrics.glyph) / 2 : 0)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .modifier(Yield(yielded: yielded))
                         .transition(Motion.pop(reduceMotion: reduceMotion))
-                    Spacer(minLength: 0)
                     slotSpace
                 }
             }
