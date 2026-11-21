@@ -16341,6 +16341,22 @@
         }
       }
     },
+    "更早的输出" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Earlier output"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "更早的输出"
+          }
+        }
+      }
+    },
     "更早的输出未显示" : {
       "localizations" : {
         "en" : {

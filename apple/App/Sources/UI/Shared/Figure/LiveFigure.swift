@@ -90,6 +90,7 @@ struct LiveFigure: View {
     }
 
     static let dwell: TimeInterval = 0.6
+    private static let height = FigureLayout.size - FigureLayout.headroom
     static let lingerLimit: Duration = .seconds(1)
     static let restLimit: Duration = .milliseconds(800)
 
@@ -100,9 +101,9 @@ struct LiveFigure: View {
         case .absent, .leaving, .resting: false
         }
         ZStack(alignment: .topLeading) {
-            if let shown = stage.shown { row(shown, fading: handed || stage == .leaving(shown)) }
+            if let shown = stage.shown { row(shown, fading: handed || stage == .leaving(shown)).offset(y: holds ? -FigureLayout.headroom : 0) }
         }
-        .frame(maxWidth: .infinity, minHeight: holds ? FigureLayout.size : 0, maxHeight: holds ? FigureLayout.size : 0, alignment: handed ? .bottomLeading : .topLeading)
+        .frame(maxWidth: .infinity, minHeight: holds ? Self.height : 0, maxHeight: holds ? Self.height : 0, alignment: handed ? .bottomLeading : .topLeading)
         .onAppear {
             FigureGPU.warm()
             if stage == .absent, let live { show(live, arriving: false) }
