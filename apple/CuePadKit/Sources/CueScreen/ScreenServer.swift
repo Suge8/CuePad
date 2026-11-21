@@ -225,7 +225,7 @@ public final class ScreenServer: @unchecked Sendable {
         default: break
         }
       }
-      // 网页只发几十字节的帧：攒到这么多还凑不成一帧的不是它
+      // 网页的帧最多几 KB（一段字，`ScreenPage` 的 `type` 切过）：攒到这么多还凑不成一帧的不是它
       viewer.input.count < 4096 ? self.listen(viewer) : self.drop(viewer)
     }
   }
@@ -251,7 +251,7 @@ public final class ScreenServer: @unchecked Sendable {
     connection.send(content: Data([0x80 | Opcode.close.rawValue, UInt8(answer.count)]) + answer, completion: .contentProcessed { _ in connection.cancel() })
   }
 
-  /// 从头上取下一整帧；不够一帧是 nil。客户端的帧都带掩码、不超过 125 字节加两字节长度那一档。
+  /// 从头上取下一整帧；不够一帧是 nil。客户端的帧都带掩码；长度写到两字节那一档，八字节那一档的永远凑不成，`listen` 攒满了断开它。
   private static func frame(_ input: inout Data) -> (Opcode, Data)? {
     let bytes = [UInt8](input.prefix(8))
     guard bytes.count >= 2, bytes[1] & 0x80 != 0 else { return nil }
@@ -260,7 +260,7 @@ public final class ScreenServer: @unchecked Sendable {
       guard bytes.count >= 4 else { return nil }
       (length, start) = (Int(bytes[2]) << 8 | Int(bytes[3]), 4)
     }
-    guard length < 127, input.count >= start + 4 + length else { return nil }
+    guard length != 127, input.count >= start + 4 + length else { return nil }
     let all = [UInt8](input.prefix(start + 4 + length)), mask = all[start..<start + 4]
     let payload = Data(all[(start + 4)...].enumerated().map { $1 ^ mask[mask.startIndex + $0 % 4] })
     input.removeFirst(start + 4 + length)

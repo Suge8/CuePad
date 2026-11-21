@@ -5,8 +5,8 @@ extension ScreenPage {
   /// 它们点的是这一层的元素，落点正是画面里那个控件，按下去照常经 `hands` 送进应用。
   static let mirror = #"""
     const layer = stage.querySelector("section"), made = new Map();
-    // 画面横着是应用里的多少点（`attend` 照它算放多大）
-    let points = 0;
+    // 画面横着是应用里的多少点（`attend` 照它算放多大）。`app`：这一层照的是哪一份应用，换了一份（重新构建后再起的）整层重摆，旧的引用不落到新的元素上
+    let points = 0, app = 0;
     // 自己接点击的（落点认它）；别的只供读，不挡着底下的
     const live = new Set(["window", "dialog", "menu", "button", "link", "textbox", "searchbox", "checkbox", "radio", "switch", "combobox", "slider", "spinbutton", "option", "tab", "menuitem"]);
     // 名字写成内容的：读页面的从内容取这几种的名字，等文字出现（wait --text）也找得到
@@ -35,8 +35,8 @@ extension ScreenPage {
         set(element, "aria-disabled", node.off);
         set(element, "aria-selected", node.sel);
         set(element, "aria-expanded", node.open);
-        // 给了它才能照引用聚焦（press <键> <ref>）；-1：Tab 不经过
-        set(element, "tabindex", live.has(node.r) && !typed && !["window", "dialog", "menu"].includes(node.r) ? -1 : undefined);
+        // 给了它才能照引用聚焦（press <键> <ref>）；-1：Tab 不经过（输入框也是，不然真键盘的 Tab 会停进这一层看不见的框里）
+        set(element, "tabindex", live.has(node.r) && !["window", "dialog", "menu"].includes(node.r) ? -1 : undefined);
         if (typed) {
           set(element, "type", node.secret ? "password" : node.r === "searchbox" ? "search" : undefined);
           set(element, "placeholder", node.hint);
@@ -60,6 +60,11 @@ extension ScreenPage {
         if (response.ok) {
           const seen = new Set(), outline = await response.json();
           points = outline.points;
+          if (app !== outline.app) {
+            layer.replaceChildren();
+            made.clear();
+            app = outline.app;
+          }
           arrange(outline.nodes, layer, [0, 0, 1, 1], seen);
           for (const id of [...made.keys()]) if (!seen.has(id)) made.delete(id);
         }
@@ -86,6 +91,7 @@ extension ScreenPage {
     for (const phase of ["keydown", "keyup"]) {
       document.addEventListener(phase, event => {
         if (event.isTrusted) return;
+        scripted = phase === "keydown";
         const pages = { PageDown: 0.4, PageUp: -0.4 }[event.key];
         if (pages && layer.contains(event.target)) {
           const box = event.target.getBoundingClientRect();

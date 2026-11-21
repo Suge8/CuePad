@@ -4,7 +4,8 @@ extension ScreenPage {
   static let hands = #"""
     // 按着的那根指头（或鼠标左键）。`gesture`：桌面窗口上的手指先不算按下，看它接下来是点、是滚、还是按住。
     // `pinch`：桌面窗口上落了第二根手指，这两根是在摆画面（`view`），不送进去
-    let finger = null, gesture = null, pinch = null, zoomedFor = null;
+    // `spot`：直接按下去的那一下（鼠标、触摸屏上的手指）此刻在哪，半路作废时照它补抬起
+    let finger = null, gesture = null, pinch = null, zoomedFor = null, spot = null;
     const held = new Set(), touches = new Map(), deepest = 6;
     const release = () => {
       clearTimeout(gesture?.hold);
@@ -21,8 +22,8 @@ extension ScreenPage {
     addEventListener("pointerdown", event => {
       if (event.pointerType === "touch") touches.set(event.pointerId, event);
       if (desktop && touches.size === 2) {
-        // 第一根开的头作废：按住拖已经按下去的补一个抬起
-        if (gesture?.mode === "drag") say({ t: "up", ...point(gesture.at) });
+        // 先前开的头作废：已经按下去的（按住拖、还按着的鼠标）补一个抬起
+        if (finger !== null && (!gesture || gesture.mode === "drag")) say({ t: "up", ...point(gesture?.at ?? spot) });
         clearTimeout(gesture?.hold);
         finger = gesture = null;
         return pinch = { ...span(), view: { ...view } };
@@ -36,7 +37,7 @@ extension ScreenPage {
         return;
       }
       board.focus({ preventScroll: true });
-      say({ t: "down", ...point(at) });
+      say({ t: "down", ...point(spot = at) });
     });
     // 拖出画面、拖到页面外也跟着：听在窗口上，不用指针捕获（捕获了，点击就不落在按下的那个元素上，Agent 那一下点没点中认不出来）
     addEventListener("pointermove", event => {
@@ -52,7 +53,7 @@ extension ScreenPage {
         return settle();
       }
       if (event.pointerId !== finger) return;
-      const at = place(event);
+      const at = spot = place(event);
       if (!gesture || gesture.mode === "drag") return say({ t: "move", ...point(at) });
       const dx = event.clientX - gesture.x, dy = event.clientY - gesture.y;
       if (!gesture.mode && Math.hypot(dx, dy) < 8) return;
@@ -77,8 +78,8 @@ extension ScreenPage {
       finger = gesture = null;
       if (!was || was.mode === "drag") return say({ t: "up", ...point(place(event)) });
       clearTimeout(was.hold);
-      if (was.mode === "scroll") return glide(was);
       if (event.type === "pointercancel") return;
+      if (was.mode === "scroll") return glide(was);
       say({ t: "down", ...point(was.at) });
       say({ t: "up", ...point(was.at) });
       tapped = was.target;
@@ -86,7 +87,7 @@ extension ScreenPage {
     // 手指点在输入框上：键盘跟着出来，画面凑到那个框上。键盘只在系统认的那一下点击里叫得出来（手指抬起那一下里叫，iOS 的网页视图不给），所以等它补发的 click
     let tapped = null;
     stage.onclick = event => {
-      if (event.isTrusted && tapped?.matches?.("section input:not([readonly]), section textarea")) attend(tapped);
+      if (event.isTrusted && tapped?.matches?.('section :is(input:not([readonly]), textarea):not([aria-disabled="true"])')) attend(tapped);
       tapped = null;
     };
     addEventListener("pointerup", lift);
@@ -121,6 +122,8 @@ extension ScreenPage {
     // 桌面窗口：打得出字的键不照键位送，字由输入法组好后整段送（`flush`）；⌘V 贴进来的也是字
     const typed = event => desktop && usages[event.code] < 224 && event.key.length === 1 && !event.ctrlKey && (!event.metaKey || event.code === "KeyV");
     const key = (event, down) => {
+      // 桌面窗口：脚本合成的键（Agent 的 press）归 mirror 送，这里再送就是两下
+      if (desktop && !event.isTrusted) return;
       const usage = usages[event.code];
       // 触摸屏按着不放由它自己连发；桌面窗口照这头的连发送
       if (!usage || event.isComposing || event.keyCode === 229 || typed(event) || (event.repeat && !desktop)) return;
@@ -142,13 +145,14 @@ extension ScreenPage {
       const points = Array.from(text.replace(/\r\n?/g, "\n"));
       for (let index = 0; index < points.length || index === 0 && first.t !== "text"; index += 400) say({ ...(index ? { t: "text" } : first), s: points.slice(index, index + 400).join("") });
     };
-    let attend = () => {};
+    // `scripted`：Agent 的 press 正按在收字的框上。那颗键 mirror 送过了，脚本接着往框里插的字（execCommand）不再送一遍
+    let attend = () => {}, scripted = false;
     if (desktop) {
       let composing = false;
       const flush = () => {
         const text = field.value;
         field.value = "";
-        type(text);
+        if (!scripted) type(text);
       };
       field.oninput = () => composing || flush();
       field.addEventListener("compositionstart", () => { composing = true; field.classList.add("composing"); });

@@ -9,7 +9,8 @@ extension WindowScreen {
     var asking: [(since: Double, reply: @Sendable (Data?) -> Void)] = []
     var timer: Timer?
     /// 最近那一份里编号 → 元素。编号跟着元素走：元素还在，下一份里还是这个号，页面那头的元素（连同 Agent 手里的引用）就不换。
-    var elements: [Int: NSObject] = [:]
+    /// `spot`：它看得见的那一块的正中（屏上），页面那头点它也落在这里。
+    var elements: [Int: (element: NSObject, spot: CGPoint)] = [:]
     var ids: [AnyHashable: Int] = [:]
     var next = 0
   }
@@ -47,8 +48,10 @@ extension WindowScreen {
       outlined.timer?.invalidate()
       outlined.timer = nil
     }
-    // `points`：画面横着是应用里的多少点
-    let data = try? JSONSerialization.data(withJSONObject: ["nodes": nodes(), "points": picture.map { $0.window.width / $0.scale } ?? 0])
+    // `points`：画面横着是应用里的多少点。`app`：哪一份应用说的（编号只在一份里作数）
+    let data = try? JSONSerialization.data(withJSONObject: [
+      "nodes": nodes(), "points": picture.map { $0.window.width / $0.scale } ?? 0, "app": ProcessInfo.processInfo.processIdentifier,
+    ])
     due.forEach { $0.reply(data) }
   }
 
@@ -65,7 +68,7 @@ extension WindowScreen {
       let inner = walk.children(of: window, clip: window.frame, depth: 0)
       // 里面什么都没有的窗不列（系统盖在窗口那三颗钮上的"共享中"标记就是这样一扇）
       guard window === shown || !inner.isEmpty else { return nil }
-      var node: [String: Any] = ["i": walk.id(window), "r": window === shown ? "window" : walk.menu ? "menu" : "dialog", "b": walk.box(window.frame)]
+      var node: [String: Any] = ["i": walk.id(window, seen: window.frame), "r": window === shown ? "window" : walk.menu ? "menu" : "dialog", "b": walk.box(window.frame)]
       if !window.title.isEmpty { node["n"] = window.title }
       // 表单开着时底下那扇窗点不动
       if window.sheetParent != nil || window === NSApp.modalWindow { node["modal"] = true }
@@ -82,18 +85,31 @@ extension WindowScreen {
     let picture: (all: CGRect, window: CGRect, scale: Double)
     let known: [AnyHashable: Int]
     var next: Int
-    var elements: [Int: NSObject] = [:]
+    var elements: [Int: (element: NSObject, spot: CGPoint)] = [:]
     var ids: [AnyHashable: Int] = [:]
+    /// 同一张表里说着同样内容的行见过几条。
+    var rows: [AnyHashable: Int] = [:]
     /// 正走在一扇菜单的窗里：它的每一项是表格的一行（实测 macOS 27），列成菜单项。
     var menu = false
 
-    /// `key`：元素每问一次都是新造的那一种（表格的行）凭它认，不给就认对象本身。
-    mutating func id(_ element: NSObject, key: AnyHashable? = nil) -> Int {
+    /// `key`：元素每问一次都是新造的那一种（表格的行）凭它认，不给就认对象本身。`seen`：它看得见的那一块。
+    mutating func id(_ element: NSObject, key: AnyHashable? = nil, seen: CGRect) -> Int {
       let key = key ?? AnyHashable(ObjectIdentifier(element))
       let id = ids[key] ?? known[key] ?? { next += 1; return next }()
       ids[key] = id
-      elements[id] = element
+      elements[id] = (element, CGPoint(x: seen.midX, y: seen.midY))
       return id
+    }
+
+    /// 表格的行凭它说的内容认，不凭第几行：插了、删了、重排之后同一个位置上是另一条记录，旧编号（Agent 手里的引用）不能落到它头上。
+    /// 说着同样内容的几行照先后分。
+    private mutating func row(_ name: String, _ kids: [[String: Any]], in parent: NSObject) -> AnyHashable {
+      func said(_ nodes: [[String: Any]]) -> String {
+        nodes.map { ($0["n"] as? String ?? "") + "\u{1F}" + ($0["v"] as? String ?? "") + said($0["k"] as? [[String: Any]] ?? []) }.joined(separator: "\u{1E}")
+      }
+      let content = [AnyHashable(ObjectIdentifier(parent)), AnyHashable(name.isEmpty ? said(kids) : name)]
+      rows[content, default: 0] += 1
+      return AnyHashable(content + [AnyHashable(rows[content] ?? 0)])
     }
 
     /// 屏上的一块 → 画面里的位置（0…1：左、上、宽、高）。
@@ -158,8 +174,7 @@ extension WindowScreen {
       if WindowScreen.read(element, "accessibilityFocused", "isAccessibilityFocused") as? Bool == true { node["focus"] = true }
       if WindowScreen.read(element, "accessibilitySelected", "isAccessibilitySelected") as? Bool == true { node["sel"] = true }
       if !kids.isEmpty { node["k"] = kids }
-      let row = role == "AXRow" ? (WindowScreen.read(element, "accessibilityIndex") as? Int).map { [AnyHashable(ObjectIdentifier(parent)), AnyHashable($0)] } : nil
-      node["i"] = id(element, key: row)
+      node["i"] = id(element, key: role == "AXRow" ? row(name, kids, in: parent) : nil, seen: seen)
       return [node]
     }
   }
@@ -184,7 +199,7 @@ extension WindowScreen {
   private static let legacy = [
     "accessibilityRole": "AXRole", "accessibilitySubrole": "AXSubrole", "accessibilityChildren": "AXChildren", "accessibilityTitle": "AXTitle",
     "accessibilityLabel": "AXDescription", "accessibilityValue": "AXValue", "accessibilityEnabled": "AXEnabled", "accessibilitySelected": "AXSelected",
-    "accessibilityFocused": "AXFocused", "accessibilityIndex": "AXIndex",
+    "accessibilityFocused": "AXFocused",
   ]
   private static let legacyRead = NSSelectorFromString("accessibilityAttributeValue:")
 
@@ -217,9 +232,7 @@ extension WindowScreen {
 
   /// 照点它一下会带来的做，不点下去：这一点下的视图拿第一响应者。无障碍那条给焦点的路不用：SwiftUI 的输入框从 AppKit 的框那边接不住（实测，问它还说没聚焦）。
   @MainActor func focus(_ id: Int) {
-    guard let frame = outlined.elements[id].flatMap(Self.frame) else { return }
-    let spot = CGPoint(x: frame.midX, y: frame.midY)
-    guard let window = window(at: spot) else { return }
+    guard let spot = outlined.elements[id]?.spot, let window = window(at: spot) else { return }
     let before = window.firstResponder
     if let view = window.contentView?.superview?.hitTest(window.convertPoint(fromScreen: spot)), view.acceptsFirstResponder { window.makeFirstResponder(view) }
     // 输入框刚拿到焦点时是全选的，接着按的字会把原来的换掉：光标放到末尾，同网页里聚焦一个框
@@ -232,7 +245,7 @@ extension WindowScreen {
   @MainActor func fill(_ id: Int, _ text: String) {
     focus(id)
     // 它没接住焦点（停用的框）就不填：不然字落进原先拿着键盘的另一个框里
-    guard let element = outlined.elements[id], Self.read(element, "accessibilityFocused", "isAccessibilityFocused") as? Bool == true,
+    guard let element = outlined.elements[id]?.element, Self.read(element, "accessibilityFocused", "isAccessibilityFocused") as? Bool == true,
           let field = typing?.firstResponder as? NSText else { return }
     field.selectAll(nil)
     text.isEmpty ? field.delete(nil) : insert(text)

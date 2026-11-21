@@ -68,8 +68,8 @@ extension WindowScreen {
     picture.map { (CGPoint(x: $0.all.minX + x * $0.window.width / $0.scale, y: $0.all.maxY - y * $0.window.height / $0.scale), $0.scale) }
   }
 
-  /// 这一点上最上面的那扇窗。
-  @MainActor func window(at point: CGPoint) -> NSWindow? { stack.last { !$0.ignoresMouseEvents && $0.frame.contains(point) } }
+  /// 这一点上最上面的那扇窗。挂着表单的那扇不算：同真鼠标一样点不动它，键盘也留在表单那里。
+  @MainActor func window(at point: CGPoint) -> NSWindow? { stack.last { !$0.ignoresMouseEvents && $0.attachedSheet == nil && $0.frame.contains(point) } }
 
   // MARK: 鼠标
 
