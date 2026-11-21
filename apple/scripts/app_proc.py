@@ -79,7 +79,9 @@ def wait_ready(path, pid, log="", timeout=READY_TIMEOUT):
         deadline = time.monotonic() + timeout
         while not os.path.exists(path):
             if exited:
-                die(f"App 在画面就绪前退出了：{log and '原因看输出 ' + log + ' 的末尾，'}崩了的话崩溃报告在 ~/Library/Logs/DiagnosticReports/CuePad-*.ips")
+                # 原因当场印出来，不只给路径：一次拍几张时下一张起实例就把这份输出重写了
+                said = log and "".join(open(log, errors="replace").readlines()[-8:]).strip()
+                die(f"App 在画面就绪前退出了，它最后的输出：\n{said or '（没有输出）'}\n崩了的话崩溃报告在 ~/Library/Logs/DiagnosticReports/CuePad-*.ips")
             left = deadline - time.monotonic()
             if left <= 0:
                 die(f"{timeout:g} 秒内画面没有就绪（没有写下 {path}）{log and '，输出在 ' + log}")

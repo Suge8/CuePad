@@ -7,12 +7,13 @@ extension DebugScene {
     private static var holds: [String: Int] = [:]
     /// 正在跑的 `running`，按名字计数：摆画面卡住时报出来的是这些名字（摆画面时另起的常驻任务也在里面，它们不拖就绪）。
     private static var steps: [String: Int] = [:]
-    private static var unsettled: Set<UUID> = []
+    /// 报着正在过渡的视图，记着是哪一处报的（`debugSettling` 的调用处）。
+    private static var unsettled: [UUID: String] = [:]
     /// 从摆画面起这么久还没就绪就报出名字退出：要早于脚本从起实例算的 60 秒（`app_proc.READY_TIMEOUT`），晚于最长的正当拖延（`-CuePadQuotaResetIn`，会话里用过最大 30 秒，再加 5 秒）。
     private static let readyLimit: Duration = .seconds(45)
 
-    static func settling(_ id: UUID, _ busy: Bool) {
-        if busy { unsettled.insert(id) } else { unsettled.remove(id) }
+    static func settling(_ id: UUID, _ place: String?) {
+        unsettled[id] = place
     }
 
     static func later(_ delay: Duration, fileID: String = #fileID, line: Int = #line, _ work: @escaping @MainActor () -> Void) {
@@ -81,7 +82,7 @@ extension DebugScene {
             guard await Task.wait(for: readyLimit) else { return }
             func named(_ names: [String: Int]) -> [String] { names.sorted { $0.key < $1.key }.map { $1 > 1 ? "\($0) ×\($1)" : $0 } }
             let waiting = named(steps) + named(holds)
-                + (unsettled.isEmpty ? [] : ["\(unsettled.count) 处视图报着正在过渡"]) + (animating ? ["屏上有一次性动画"] : [])
+                + named(Dictionary(unsettled.values.map { ("\($0) 的视图报着正在过渡", 1) }, uniquingKeysWith: +)) + (animating ? ["屏上有一次性动画"] : [])
             abandon("画面 \(readyLimit.components.seconds) 秒内没有就绪", Unmet("还拖着：\(waiting.isEmpty ? "（没有登记名字的等待）" : waiting.joined(separator: "、"))"))
         }
         defer { watch.cancel() }
