@@ -1,7 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// 模型与思考强度合成一颗：胶囊写这一次用谁（标志、名字）和思考几格，点开是挨着它长出的气泡——上面按提供方分组列模型，下面一排思考强度。
+/// 模型与思考强度合成一颗：胶囊写这一次用谁（标志、名字）和思考的档名，点开是挨着它长出的气泡——上面按提供方分组列模型，下面一排思考强度。
 /// 选了模型气泡不收，接着就能选强度（换了模型强度的档跟着换）；点外面或 Esc 收起。Mac 的 ⌘⇧M 与思考强度的快捷键都打开它。
 /// 否决过：两颗胶囊各开一个系统菜单——模型菜单里只有一列名字，强度要回到工具排再点另一颗，换一次模型要开两个菜单。
 struct ModelPick: View {
@@ -37,7 +37,7 @@ struct ModelPick: View {
             .contentTransition(.opacity)
         // 装饰：意思由按钮的标签与值说
         let badge = ModelBadge(mark: mark, binding: binding).modifier(Breathing(active: pending)).readerHidden(true)
-        // 工具排给的宽放不下就先收名字、留标志与强度格，再只留标志（`ConfigRow` 的 `model`）；整颗是候选，只把名字放进去会量错（同 `AgentCapsule`）
+        // 工具排给的宽放不下就先收名字、留标志与档名，再只留标志（`ConfigRow` 的 `model`）；整颗是候选，只把名字放进去会量错（同 `AgentCapsule`）
         return ViewThatFits(in: .horizontal) {
             HStack(spacing: Self.gap) { badge; name; ticks }.fixedSize()
             HStack(spacing: Self.gap) { badge; ticks }.fixedSize()
@@ -49,7 +49,7 @@ struct ModelPick: View {
     }
 
     @ViewBuilder private var ticks: some View {
-        if let meter { ThinkingBar(meter: meter).padding(.leading, Spacing.hair).readerHidden(true) }
+        if let meter { ThinkingWord(meter: meter).padding(.leading, Spacing.hair).readerHidden(true) }
     }
 
     static let gap = Spacing.tight
@@ -289,40 +289,23 @@ private struct ThinkingTrack: View {
     private static let lift: CGFloat = 1.12
 }
 
-/// 胶囊上的思考强度：气泡里那条轨道（`ThinkingTrack`）的缩小版——同样最左端是"关"，从左填到这一档、末端一颗白点，
-/// 填的那段从钴蓝长到这一档的颜色（`Palette.thinking`），一眼看出用了几成力；最高档时有一道光扫过。
-/// 常驻在工具排上，只用静止的颜色，不放每帧重算的东西。否决过：六根高低竖格——一排细线数不清是第几格，也不像气泡里那条。
-struct ThinkingBar: View {
+/// 胶囊上的思考强度：写 Agent 自己的档名（high、xhigh…），字从钴蓝描到这一档在色带上的颜色（`Palette.thinking`），档越高越暖；
+/// 最高档有一道光扫过，关着是灰字。Agent 没报此刻的档时不写。常驻在工具排上，只用静止的颜色，不放每帧重算的东西。
+/// 否决过：六根高低竖格（数不清第几格）、气泡里那条的缩小版（8 点高看不出档，像个开关）。
+struct ThinkingWord: View {
     let meter: ThinkingMeter
     @Environment(\.palette) private var palette
     @LoopsPlay private var loops
 
     var body: some View {
-        let lead = meter.levels.contains(.off) ? 0 : 1
-        let slots = max(meter.levels.count - 1 + lead, 1)
-        let at = meter.current.flatMap { meter.levels.firstIndex(of: $0) }.map { CGFloat($0 + lead) / CGFloat(slots) } ?? 0
-        let energy = meter.current.flatMap(ThinkingMeter.energy)
-        let fill = Self.height + (Self.width - Self.height) * at
-        ZStack(alignment: .leading) {
-            Capsule().fill(palette.track)
-            if let energy {
-                Capsule().fill(LinearGradient(colors: [palette.thinkingLow, palette.thinking(energy)], startPoint: .leading, endPoint: .trailing))
-                    .frame(width: fill)
-                    .overlay {
-                        if meter.isMax, loops { LoopLayer(kind: .sheen, color: palette.onFill).clipShape(.capsule).allowsHitTesting(false) }
-                    }
-            }
-            Circle().fill(energy == nil ? palette.ink3 : palette.onFill)
-                .frame(width: Self.height - Self.inset * 2, height: Self.height - Self.inset * 2)
-                .offset(x: fill - Self.height + Self.inset)
+        if let level = meter.current {
+            let word = Text(verbatim: level.rawValue).font(Typography.meta.weight(.semibold)).fontDesign(.rounded)
+            let energy = ThinkingMeter.energy(level)
+            word
+                .foregroundStyle(energy.map { AnyShapeStyle(LinearGradient(colors: [palette.thinkingInk(0), palette.thinkingInk($0)], startPoint: .leading, endPoint: .trailing)) } ?? AnyShapeStyle(palette.ink3))
+                .overlay { if meter.isMax, loops { LoopLayer(kind: .sheen, color: palette.onFill).mask { word }.allowsHitTesting(false) } }
+                .contentTransition(.opacity)
+                .animation(Motion.fade, value: level)
         }
-        .frame(width: Self.width, height: Self.height)
-        .animation(Motion.fade, value: meter)
     }
-
-    /// 高与胶囊里字的 x 高相当，不撑高胶囊；长宽比照气泡里那条缩下来
-    private static let width: CGFloat = 24
-    private static let height: CGFloat = 8
-    /// 白点与条沿留的一线，同气泡里那条的钮
-    private static let inset: CGFloat = 1.5
 }

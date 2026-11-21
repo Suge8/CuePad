@@ -170,6 +170,8 @@ struct Palette {
     func thinking(_ energy: Double) -> Color {
         energy < 0.5 ? thinkingLow.mix(with: thinkingMid, by: energy * 2) : thinkingMid.mix(with: thinkingHigh, by: energy * 2 - 1)
     }
+    /// 写成字的档名（`ThinkingWord`）：深色下色带本身到不了 4.5:1，往白里提四成。
+    func thinkingInk(_ energy: Double) -> Color { dark ? thinking(energy).mix(with: .white, by: 0.4) : thinking(energy) }
     /// 出错与没能送达：胭脂（`Failure`）。对比度 5.0，深色 4.6。
     var failure: Color { dark ? Color(hex: 0xF0789E) : Color(hex: 0xAD2B5C) }
     /// 删除钮、轻扫删除的胭脂底。字 6.3，深色 5.6。
