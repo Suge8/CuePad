@@ -20,8 +20,7 @@ struct SessionSpine: View {
     var body: some View {
         EdgeIndex(
             groups: [rows.waiting, rows.advancing], edge: .leading,
-            metrics: .init(width: Self.width, pitch: pitch, tall: tall, short: short, panel: 300), shut: .prefix, glassShut: true,
-            opens: DebugHooks.preset.railOpen, label: "会话",
+            metrics: .init(width: Self.width, pitch: pitch, tall: tall, short: short, panel: 300), shut: .capsule, label: "会话",
             spoken: { ($0.name, Dotted($0.shown.label, line($0)).spoken) }, choose: { open($0.session) },
             mark: { item, _ in mark(item) }, words: { item, cell in words(item, twoLines: cell.twoLines) },
             // 收在 +N 里的会话，Cue 交给它时光落在这里：它们就在这一格里

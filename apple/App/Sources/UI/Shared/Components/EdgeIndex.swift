@@ -1,8 +1,13 @@
 import SwiftUI
 
-/// 边缘索引：贴屏幕一边的一列记号，一项一颗。按住上下滑（同通讯录右侧的 A–Z 索引）：这一列长成一块面板列出全部，手指经过的那行高亮、给一下选择触感，
-/// 松在哪行选哪行，松在行外不选、收起。轻点：面板留着，点行选，放不下的滚着看；点外面、Esc 收起，面板里的空白不收。
-/// 指针（Mac、iPad 的触控板）移到记号上就展开，移出面板收起，点行选。
+/// 边缘索引：贴屏幕一边的一列记号，一项一颗，展开成一块面板列出全部。四个阶段（`Phase`）与它们之间的每一条路：
+/// - 收着 → 按住滑（触屏按住记号那一列，同通讯录右侧的 A–Z 索引）：手指经过的那行高亮、给一下选择触感。松在哪行选哪行、收起；松在行外不选、收起；
+///   按下到松开又短又没挪（轻点）→ 钉住。
+/// - 收着 → 钉住：读屏激活收着时的那一颗钮（调试参数 `-CuePadIndexOpen` 一出现就是这样）。钉住时点行选、放不下的滚着看；点外面、Esc 收起，面板里的空白不收，
+///   指针进出不管它。
+/// - 收着 → 悬停（指针，Mac 与 iPad 的触控板）：指针移到记号上就展开，移出面板收起，点行选、收起。
+///   Mac 上没有按住滑：指针总是先到记号上、先展开成悬停，按下落在行上（窗口刚到前台时指针已经停在那里也一样先报悬停，实测）。
+/// - 任何时候页面不在前台、选了一行、Esc → 收着。
 /// 收起与展开是同一块玻璃、同一列记号：记号从收着的位置滑到它那一行，字在玻璃长宽时露出来，不先消失再淡入。
 /// 面板放不下全部时，滑的时候列表跟着手指等比滚：手指在面板上沿是第一行、下沿是最后一行，手指下面一直是它指着的那一行；放得下时不滚，只认摆出来的那几行。
 /// 会话条（`SessionSpine`）与对话目录（`ChatIndex`）只给各项、此刻在哪一项与每行怎么画。
@@ -11,7 +16,6 @@ struct EdgeIndex<Item: Identifiable, Mark: View, Words: View, Overflow: View>: V
     private let edge: HorizontalEdge
     private let metrics: EdgeIndexMetrics
     private let shut: EdgeIndexShut
-    private let glassShut: Bool
     private let current: Item.ID?
     private let label: LocalizedStringResource
     private let spoken: (Item) -> (name: String, value: String)
@@ -24,7 +28,7 @@ struct EdgeIndex<Item: Identifiable, Mark: View, Words: View, Overflow: View>: V
     @Environment(\.pageActive) private var active
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var phase: Phase
-    @State private var hovered: Item.ID?
+    @State private var under: Item.ID?
     @State private var pressed: Date?
     @State private var position = ScrollPosition()
     @State private var scrubbed: CGFloat = 0
@@ -37,7 +41,7 @@ struct EdgeIndex<Item: Identifiable, Mark: View, Words: View, Overflow: View>: V
     private static var tapSlop: CGFloat { 10 }
 
     init(
-        groups: [[Item]], edge: HorizontalEdge, metrics: EdgeIndexMetrics, shut: EdgeIndexShut, glassShut: Bool, current: Item.ID? = nil, opens: Bool = false,
+        groups: [[Item]], edge: HorizontalEdge, metrics: EdgeIndexMetrics, shut: EdgeIndexShut, current: Item.ID? = nil,
         label: LocalizedStringResource, spoken: @escaping (Item) -> (name: String, value: String), choose: @escaping (Item) -> Void,
         expandedChanged: @escaping (Bool) -> Void = { _ in },
         @ViewBuilder mark: @escaping (Item, EdgeIndexCell) -> Mark, @ViewBuilder words: @escaping (Item, EdgeIndexCell) -> Words,
@@ -47,7 +51,6 @@ struct EdgeIndex<Item: Identifiable, Mark: View, Words: View, Overflow: View>: V
         self.edge = edge
         self.metrics = metrics
         self.shut = shut
-        self.glassShut = glassShut
         self.current = current
         self.label = label
         self.spoken = spoken
@@ -56,7 +59,7 @@ struct EdgeIndex<Item: Identifiable, Mark: View, Words: View, Overflow: View>: V
         self.mark = mark
         self.words = words
         self.overflow = overflow
-        _phase = State(initialValue: opens ? .pinned : .shut)
+        _phase = State(initialValue: DebugHooks.preset.indexOpen == edge ? .pinned : .shut)
     }
 
     private var expanded: Bool { phase != .shut }
@@ -80,7 +83,7 @@ struct EdgeIndex<Item: Identifiable, Mark: View, Words: View, Overflow: View>: V
             .onChange(of: current == nil) { if browsing { position.scrollTo(y: full.offset(anchor: full.anchor(current))) } }
         }
         .animation(Motion.spatial(Motion.travel, reduceMotion: reduceMotion) ?? Motion.fade, value: expanded)
-        .sensoryFeedback(.selection, trigger: hovered) { _, new in new != nil }
+        .sensoryFeedback(.selection, trigger: under) { _, new in new != nil }
         .onChange(of: active) { _, active in if !active { collapse() } }
         .onChange(of: expanded, initial: true) { _, expanded in expandedChanged(expanded) }
     }
@@ -120,11 +123,12 @@ struct EdgeIndex<Item: Identifiable, Mark: View, Words: View, Overflow: View>: V
         .background { if browsing { Color.clear.contentShape(.rect).onTapGesture {}.readerHidden(true) } }
         .clipShape(shape)
         .rowContainer(shape)
-        .glass(in: shape, shown: glassShut || expanded)
+        .glass(in: shape, ink: .veil, shown: shut == .capsule || expanded)
         .contentShape(shape)
-        .gesture(scrub(full, from: plan), isEnabled: !browsing)
         .onHover(perform: hover)
-        #if os(macOS)
+        #if os(iOS)
+        .gesture(scrub(full, from: plan), isEnabled: !browsing)
+        #else
         .presetHover(Binding { phase == .hovering } set: { hover($0) })
         #endif
         .overlay {
@@ -160,7 +164,7 @@ struct EdgeIndex<Item: Identifiable, Mark: View, Words: View, Overflow: View>: V
             }
             .frame(height: plan.rowHeight, alignment: edge == .leading ? .leading : .trailing)
         }
-        .buttonStyle(RowStyle(selected: hovered.map { $0 == item.id } ?? (expanded && cell.current)))
+        .buttonStyle(RowStyle(selected: under.map { $0 == item.id } ?? (expanded && cell.current), cell: true))
         .allowsHitTesting(browsing)
         // 收着时这一行不进读屏，换成什么都没有：藏起（readerHidden）的话，记号在动的那几行照样被列出来（模拟器无障碍树实测）
         .accessibilityRepresentation {
@@ -174,6 +178,7 @@ struct EdgeIndex<Item: Identifiable, Mark: View, Words: View, Overflow: View>: V
         .transition(.opacity)
     }
 
+    #if os(iOS)
     private func scrub(_ plan: Plan, from shut: Plan) -> some Gesture {
         DragGesture(minimumDistance: 0)
             .onChanged { drag in
@@ -186,13 +191,13 @@ struct EdgeIndex<Item: Identifiable, Mark: View, Words: View, Overflow: View>: V
                 }
                 let offset = plan.offset(anchor: plan.fraction(finger: drag.location.y))
                 position.scrollTo(y: offset)
-                hovered = plan.item(at: drag.location, offset: offset, edge: edge)?.id
+                under = plan.item(at: drag.location, offset: offset, edge: edge)?.id
             }
             .onEnded { drag in
                 let tap = Date.now.timeIntervalSince(pressed ?? .now) < Self.tapTime
                     && hypot(drag.translation.width, drag.translation.height) < Self.tapSlop
                 if tap {
-                    hovered = nil
+                    under = nil
                     phase = .pinned
                 } else if let item = plan.item(at: drag.location, offset: plan.offset(anchor: plan.fraction(finger: drag.location.y)), edge: edge) {
                     pick(item)
@@ -201,6 +206,7 @@ struct EdgeIndex<Item: Identifiable, Mark: View, Words: View, Overflow: View>: V
                 }
             }
     }
+    #endif
 
     private func hover(_ inside: Bool) {
         if inside, phase == .shut {
@@ -216,7 +222,7 @@ struct EdgeIndex<Item: Identifiable, Mark: View, Words: View, Overflow: View>: V
     }
 
     private func collapse() {
-        hovered = nil
+        under = nil
         phase = .shut
     }
 
@@ -247,12 +253,12 @@ struct EdgeIndex<Item: Identifiable, Mark: View, Words: View, Overflow: View>: V
             let at = current.flatMap { id in items.firstIndex { $0.id == id } }
             var kept = Set(items.indices)
             switch shut {
-            case .prefix where !expanded && total > fits:
+            case .capsule where !expanded && total > fits:
                 kept = Set(0..<max(0, fits - 1))
-            case .sample(let limit) where !expanded && total > min(fits, limit):
+            case .marks(let limit) where !expanded && total > min(fits, limit):
                 let shown = min(fits, limit)
                 kept = shown > 1 ? Set((0..<shown).map { (total - 1) * $0 / (shown - 1) }) : shown == 1 ? [total - 1] : []
-            case .prefix, .sample:
+            case .capsule, .marks:
                 break
             }
             var start = 0
@@ -261,7 +267,7 @@ struct EdgeIndex<Item: Identifiable, Mark: View, Words: View, Overflow: View>: V
                 return group.indices.compactMap { kept.contains(start + $0) ? group[$0] : nil }
             }
             self.groups = groups
-            if case .prefix = shut {
+            if shut == .capsule {
                 hidden = items.indices.filter { !kept.contains($0) }.map { items[$0].id }
                 marked = at.flatMap { kept.contains($0) ? items[$0].id : nil }
             } else {
@@ -327,9 +333,12 @@ struct EdgeIndexMetrics {
     var column: CGFloat { width - 2 * Chrome.pad }
 }
 
-enum EdgeIndexShut {
-    case prefix
-    case sample(Int)
+/// 收着时长什么样。
+enum EdgeIndexShut: Equatable {
+    /// 一条玻璃胶囊（会话条）：从头排放得下的几项，其余收进末尾的 +N。
+    case capsule
+    /// 不垫玻璃的一列淡记号（对话目录）：最多这么多颗，从头到尾等距抽；此刻那一项落在抽到的、它往前最近的那一颗上。
+    case marks(Int)
 }
 
 struct EdgeIndexCell {

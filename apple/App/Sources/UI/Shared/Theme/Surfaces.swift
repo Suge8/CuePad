@@ -73,6 +73,11 @@ enum GlassInk: Equatable {
     /// 一整块面板（Mac 右边那一栏的 Cue 浮板）：玻璃里铺实的桌面色，只留玻璃的边光与影子。面板里的页照旧用桌面色盖住滚过栏头、回复框的内容
     /// （`fadesUnderHead`），垫九成实的话那几条盖层与面板差一档、看得出一条带子。
     case ground
+    /// 浮在正文上、指针移开就收的面板（边缘索引展开的那一块）：要读得出是一块浮着的玻璃，背后的字隐约透出一点影子。iOS 同 `.solid`（`inkWell` 本来就通透）。
+    /// Mac 与 `.solid` 的差别：`.solid` 里外各垫九成实的底，压在正文上读作一块平的深色板；这里只在玻璃下面垫一层七成上下的页面底色（`Palette.veilGlass`），
+    /// 背后的字先被压淡、再被玻璃糊开，只剩字影，面板里的字仍远过 4.5:1；再加一层 `Elevation.panel` 的投影，浅色桌面上也看得出它浮着。
+    /// 试过不要的：只在玻璃里垫 `inkWell`、里外各垫五成：Mac 的玻璃把里面那层再压暗一档，深色下两种都还是一块偏平的深板，边光淡得看不出。
+    case veil
 }
 
 private struct PaperSurface: ViewModifier {
@@ -136,6 +141,7 @@ private struct GlassSurface<S: Shape>: ViewModifier {
             switch ink {
             case .clear: content.glassEffect(glass, in: shape)
             case .solid: solid(content)
+            case .veil: veil(content)
             case .ground: content.background(fill(palette.desk), in: shape).glassEffect(glass, in: shape)
             }
         }
@@ -150,6 +156,14 @@ private struct GlassSurface<S: Shape>: ViewModifier {
         content.background(fill(palette.inkWell), in: shape).glassEffect(glass, in: shape)
         #else
         content.background(fill(palette.solidGlass), in: shape).glassEffect(glass, in: shape).background(fill(palette.solidGlass), in: shape)
+        #endif
+    }
+
+    @ViewBuilder private func veil(_ content: Content) -> some View {
+        #if os(iOS)
+        solid(content)
+        #else
+        content.glassEffect(glass, in: shape).background { shape.fill(fill(palette.veilGlass)).elevation(shown ? .panel : nil) }
         #endif
     }
 

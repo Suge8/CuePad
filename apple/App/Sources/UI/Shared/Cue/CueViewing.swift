@@ -49,6 +49,7 @@ struct CueViewing: ViewModifier {
                 if !was, CueStage.opens(left: services.settings.cueLeft, at: .now) { revisit() } else { land() }
             }
             .onChange(of: reading && thread != nil) { _, start in if start { land() } }
+            .onChange(of: thread?.unread) { land() }
             .task(id: Reading(seen: Set(seen.keys), counts: reading)) { await mark() }
     }
 
@@ -57,9 +58,16 @@ struct CueViewing: ViewModifier {
         let counts: Bool
     }
 
+    /// 不在前台的页不订阅（`pageActive`）：回到这页的那一刻手里的对话还是离开时的。先问库第一条新消息是哪条，对话里还没有它就等重新订阅送来再落。
     private func land() {
-        guard reading, !staged, let thread else { return }
-        follow.land(on: thread.rows.first { thread.unread.contains($0.id) }?.id)
+        guard follow.owesLanding, reading, !staged, let thread else { return }
+        let first: UUID?
+        do { first = try services.store.snapshot { try $0.cueUnread().first }.value } catch {
+            workspace.fail(error)
+            return
+        }
+        if let first, !thread.unread.contains(first) { return }
+        follow.land(on: first)
     }
 
     private func mark() async {
