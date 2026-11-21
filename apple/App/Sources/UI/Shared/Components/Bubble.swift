@@ -1,7 +1,14 @@
 import SwiftUI
 
+extension EnvironmentValues {
+    /// 这一块里的钮长出的气泡，两侧比平常多让这么多。回复框设成它那排圆钮离框边的距离：手机上框贴着页边，气泡盖着框的上沿，
+    /// 边再同框的边重合，两个圆角就叠成一道缺口；让进去，落在圆钮的外沿上。
+    @Entry var bubbleInset: CGFloat = 0
+}
+
 nonisolated enum BubbleSource: Equatable {
-    case control(CGRect)
+    /// `inset`：所在那一块要气泡两侧多让的（`bubbleInset`）。
+    case control(CGRect, inset: CGFloat = 0)
     /// 从一行里点的那一下（任务行这类）：行成百上千，不给每行挂几何读数，只知道点不知道行，按半个列表行高（`BubblePlacement.reach`）让开整行；
     /// 尾巴靠左角对着那一下，气泡往右铺（顺着读的方向，不往回盖住侧栏）。
     /// `left`：按在一栏清单里时气泡的左沿（`PressPoint.lane`）——同一栏里点哪一条、点在标题的哪个字上，气泡都落在同一条竖线上。
@@ -57,8 +64,10 @@ nonisolated struct BubblePlacement: Equatable {
             side = 1
             sheet = true
             return
-        case .control(let frame):
+        case .control(let frame, let inset):
             target = frame.offsetBy(dx: -container.minX, dy: -container.minY)
+            minX += inset
+            maxX -= inset
         case .press(let point, let lane):
             target = CGRect(x: point.x - container.minX, y: point.y - container.minY - Self.reach, width: 0, height: Self.reach * 2)
             leads = true

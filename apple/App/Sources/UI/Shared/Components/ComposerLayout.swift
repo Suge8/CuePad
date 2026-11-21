@@ -17,6 +17,8 @@ enum ComposerMetrics {
     #else
     static let glyphTarget = glyph
     #endif
+    /// ＋ 与主钮那两颗圆（看得见的）离框的左右边；没有 ＋ 时胶囊从这里起，框里长出的气泡两侧也让到这里（`bubbleInset`）。
+    static let glyphEdge = (slot - glyph) / 2
     /// 右下角那颗圆钮（点得到的那一圈）离右边与离下边一样远；任务气泡底下那颗"开始"排在同一个位置。
     static let glyphInset = (slot - glyphTarget) / 2
     static let noticeSpacing = Spacing.tight

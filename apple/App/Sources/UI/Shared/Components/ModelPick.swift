@@ -289,7 +289,7 @@ private struct ThinkingTrack: View {
     private static let lift: CGFloat = 1.12
 }
 
-/// 胶囊上的思考强度：写 Agent 自己的档名（high、xhigh…），字从钴蓝描到这一档在色带上的颜色（`Palette.thinking`），档越高越暖；
+/// 胶囊上的思考强度：写这一档的名字（同气泡里那条右端写的，`ThinkingLevel.label`），字从钴蓝描到这一档在色带上的颜色（`Palette.thinking`），档越高越暖；
 /// 最高档有一道光扫过，关着是灰字。Agent 没报此刻的档时不写。常驻在工具排上，只用静止的颜色，不放每帧重算的东西。
 /// 否决过：六根高低竖格（数不清第几格）、气泡里那条的缩小版（8 点高看不出档，像个开关）。
 struct ThinkingWord: View {
@@ -299,7 +299,7 @@ struct ThinkingWord: View {
 
     var body: some View {
         if let level = meter.current {
-            let word = Text(verbatim: level.rawValue).font(Typography.meta.weight(.semibold)).fontDesign(.rounded)
+            let word = Text(level.label).font(Typography.meta.weight(.semibold)).fontDesign(.rounded)
             let energy = ThinkingMeter.energy(level)
             word
                 .foregroundStyle(energy.map { AnyShapeStyle(LinearGradient(colors: [palette.thinkingInk(0), palette.thinkingInk($0)], startPoint: .leading, endPoint: .trailing)) } ?? AnyShapeStyle(palette.ink3))

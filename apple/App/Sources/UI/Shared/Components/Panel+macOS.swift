@@ -247,11 +247,12 @@ private struct ControlBubble<Panel: View>: ViewModifier {
     let width: BubblePlacement.Width
     @ViewBuilder let panel: () -> Panel
     @State private var frame: CGRect?
+    @Environment(\.bubbleInset) private var inset
 
     func body(content: Content) -> some View {
         content
             .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame = $0 }
-            .panel(isPresented: $isPresented, style: .bubble(frame.map(BubbleSource.control) ?? .unanchored, width: width), content: panel)
+            .panel(isPresented: $isPresented, style: .bubble(frame.map { .control($0, inset: inset) } ?? .unanchored, width: width), content: panel)
     }
 }
 
