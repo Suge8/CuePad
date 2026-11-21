@@ -40,7 +40,8 @@ struct CueStage: View {
             .frame(height: max(visible - below, 0) + Sky.fade)
             .overlay {
                 GeometryReader { room in
-                    let side = margin
+                    // 横着的手机，滚动区让开了刘海那一侧的安全区：天照样铺到屏幕边，不在两侧露出两条底
+                    let side = max(margin, room.safeAreaInsets.leading, room.safeAreaInsets.trailing)
                     let lines = Array(brief.prefix(Sky.rows(in: room.size.height, base: base, row: row)))
                     let sky = Sky(
                         CGSize(width: room.size.width + 2 * side, height: room.size.height), chat: room.size.height + below, period: period,

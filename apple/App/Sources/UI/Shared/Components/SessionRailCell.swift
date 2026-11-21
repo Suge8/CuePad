@@ -20,7 +20,6 @@ extension UTType {
 /// 等你的行首放项目的图形（只看图形认不出是哪个项目，写名字才认得）。
 struct SessionRailCell: View {
     let item: SessionRailRows.Item
-    let form: SessionRail.Form
     let selected: Bool
     var compact = false
     let open: (SessionState, SessionRail.Opening) -> Void
@@ -147,7 +146,7 @@ struct SessionRailCell: View {
     /// 拍板的不给：它问的那句还没答。触屏没有悬停，完成在长按菜单里。
     private var finishing: RowAction? {
         #if os(macOS)
-        guard hovering, !compact, form == .wide, item.waiting == .awaitsReply else { return nil }
+        guard hovering, !compact, item.waiting == .awaitsReply else { return nil }
         return SessionActions.complete(item.session, task: item.task, in: workspace)
         #else
         return nil

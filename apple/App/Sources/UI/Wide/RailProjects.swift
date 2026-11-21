@@ -140,7 +140,7 @@ struct RailProjectSessions: View {
             // 不让下面往下让的行从还没淡完的字上压过去。只裁上下，左右留给行的悬停底
             VStack(spacing: Spacing.hair) {
                 ForEach(items) { item in
-                    SessionRailCell(item: item, form: .wide, selected: marked.contains(item.id), compact: true, open: open)
+                    SessionRailCell(item: item, selected: marked.contains(item.id), compact: true, open: open)
                         .transition(.opacity)
                 }
             }

@@ -99,7 +99,7 @@ private struct SessionRailContent: View {
                 ScrollView {
                     LazyVStack(spacing: cellGap) {
                         ForEach(items) { item in
-                            SessionRailCell(item: item, form: .wide, selected: marked.contains(item.id), open: open)
+                            SessionRailCell(item: item, selected: marked.contains(item.id), open: open)
                                 .frame(height: rowHeight(item))
                                 .matchedGeometryEffect(id: item.id, in: moves)
                                 .id(item.id)
