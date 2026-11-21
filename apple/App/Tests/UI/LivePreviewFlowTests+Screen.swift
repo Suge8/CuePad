@@ -59,7 +59,7 @@ extension LivePreviewFlowTests {
             let candidate = try ScreenServer(source: desk, port: port, identity: "test", page: ScreenPage.html(title: "替身", kind: .desktop))
             if (try? await candidate.start()) != nil { server = candidate }
         }
-        try #require(server != nil, "连着 8 个口都被占着")
+        try #require(server != nil, "试了 8 个口，服务都没起来")
         workspace.openSession(id("b"), sessionID: "b", in: .main)
         _ = try await live("http://127.0.0.1:\(port)/", for: "a")
         try await eventually("后台建好了 a 的预览") { workspace.livePreviews[id("a")]?.web.title == "替身" }
@@ -79,7 +79,9 @@ extension LivePreviewFlowTests {
         #expect(spat.text.contains("不是填的这段"), "\(spat.text)")
 
         _ = await agent(workspace, "press", .init(ref: try ref("textbox \"收下\"", in: page.text), key: "Backspace"))
-        try await eventually("退格到了应用") { !desk.state.withLock { $0.keys }.isEmpty }
+        // 输入照先后到：后面这一下点到了，退格的那几下就都到过了
+        _ = await agent(workspace, "click", .init(ref: try ref("button \"点我\"", in: page.text)))
+        try await eventually("后面的那一下点到了应用") { desk.state.withLock { $0.taps } == 2 }
         #expect(desk.state.withLock { $0.keys } == [42])
         _ = server
     }

@@ -25,7 +25,7 @@ import Testing
       let candidate = try ScreenServer(source: source, port: port, identity: "test", page: "")
       if (try? await candidate.start()) != nil { server = candidate }
     }
-    try #require(server != nil, "连着 8 个口都被占着")
+    try #require(server != nil, "试了 8 个口，服务都没起来")
     let configuration = URLSessionConfiguration.ephemeral
     configuration.connectionProxyDictionary = [:]
     let socket = URLSession(configuration: configuration).webSocketTask(with: try #require(URL(string: "ws://127.0.0.1:\(port)/screen")))
