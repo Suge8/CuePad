@@ -118,7 +118,9 @@ struct EdgeIndex<Item: Identifiable, Mark: View, Words: View, Overflow: View>: V
         .scrollDisabled(!browsing)
         .scrollIndicators(.hidden)
         .scrollBounceBehavior(.basedOnSize)
-        .frame(width: plan.width, height: plan.height, alignment: edge == .leading ? .topLeading : .topTrailing)
+        // 放不下、要滚着看的列表当场排成另一种摆法，只有玻璃在长、在收：跟着一起动的话，滚动位置从头滑到此刻那一行，几百行在零点几秒里飞过去
+        .transaction { if full.content > full.height { $0.animation = nil } }
+        .frame(width: plan.width, height: plan.height, alignment: edge == .leading ? .leading : .trailing)
         // 面板里的空白接住轻点、什么也不做：只有形状没有手势的地方，轻点会穿过去落到下面的内容上（实测）
         .background { if browsing { Color.clear.contentShape(.rect).onTapGesture {}.readerHidden(true) } }
         .clipShape(shape)
