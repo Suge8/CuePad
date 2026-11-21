@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
-"""模拟器里按元素操作界面：读、点、输入、等文字、截图（AXe 的薄封装）。
+"""模拟器里按元素操作界面：读、点、拖、输入、等文字、截图（AXe 的薄封装）。
 用法：ui.py <UDID|iphone|ipad|mac> <命令> …，iphone、ipad、mac 是 `xc.sh fleet up` 起的那一台（fleet.json）。
   read [--all]               屏上的元素，每行 类型⇥标签⇥值⇥x,y,宽,高（点）；--all 连屏外的与没标签的一起列
   tap <标签|#id|x,y> [--type T] [--nth N] [--physical]   按元素点它的中心：标签先全等后包含，只数屏上的；有几个就报错列出，--nth 从 0 起挑一个
+  drag <x1,y1> <x2,y2> [中间点数=6] [--rec 片.mp4]
+                             按住再拖：按下、逐点挪过去、抬手。axe drag 按下就走（带 --pre-delay 也是），按住才浮起来的东西（看板的卡）它拎不动。
+                             每个点约 1.5 秒（axe 1.8.0 实测），整趟是慢动作：验的是放下的结果与抬手之后的动效，不是拖着时的手感。
+                             --rec 把这一趟录下来（抬手后再录 2 秒），打印抬手在片里的秒数；逐帧看用 xc.sh sheet -from
   paste <文字>                把文字放进模拟器剪贴板再 ⌘V：中文、表情都行（axe type 只认美式键盘）
   key <cmd+n|esc|…>           组合键：修饰键 cmd ctrl alt shift，键 a–z 0–9 return esc tab space delete
   wait <文字> [秒=20]          读到标签或值包含它为止，打印用时；超时以 1 退出
@@ -12,6 +16,7 @@ mac 只有 read（bcu observe-ui，折叠）与 wait（bcu search-ui），都按
 import json
 import os
 import re
+import signal
 import subprocess
 import sys
 import time
@@ -93,6 +98,26 @@ def tap(udid, key, kind=None, nth=None, physical=False):
     axe("tap", "-x", str(x), "-y", str(y), "--udid", udid, *(["--tap-style", "physical"] if physical else []))
 
 
+def drag(udid, start, end, points=6, rec=None):
+    """返回抬手在片里的秒数（没录是 None）。"""
+    (x0, y0), (x1, y1) = start, end
+    steps = [f"touch -x {x0 + (x1 - x0) * i / points:.0f} -y {y0 + (y1 - y0) * i / points:.0f} --down" for i in range(points + 1)]
+    steps.append(f"touch -x {x1:.0f} -y {y1:.0f} --up")
+    recorder = began = None
+    if rec:
+        recorder = subprocess.Popen(["axe", "record-video", "--udid", udid, "--fps", "30", "--output", rec], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+        if "Recording" not in recorder.stderr.readline():  # 开录时它先说这一句：片里的时间从这里起算
+            fail(f"axe record-video 没开录（退出码 {recorder.wait()}）")
+        began = time.time()
+    axe("batch", "--udid", udid, *(a for s in steps for a in ("--step", s)))
+    lifted = time.time()
+    if recorder:
+        time.sleep(2)
+        recorder.send_signal(signal.SIGINT)
+        recorder.communicate()
+        return lifted - began
+
+
 def key(udid, combo):
     parts = combo.lower().split("+")
     mods, code = [MODS[m] for m in parts[:-1]], KEYS[parts[-1]]
@@ -136,9 +161,10 @@ def main(argv):
     ident, is_mac = resolve(target)
     if is_mac and cmd not in ("read", "wait"):
         fail("mac 只有 read 与 wait")
-    flags = {a for a in rest if a.startswith("--") and a not in ("--type", "--nth")}
-    opts = {rest[i][2:]: rest[i + 1] for i in range(len(rest) - 1) if rest[i] in ("--type", "--nth")}
-    args = [a for i, a in enumerate(rest) if not a.startswith("--") and not (i and rest[i - 1] in ("--type", "--nth"))]
+    valued = ("--type", "--nth", "--rec")
+    flags = {a for a in rest if a.startswith("--") and a not in valued}
+    opts = {rest[i][2:]: rest[i + 1] for i in range(len(rest) - 1) if rest[i] in valued}
+    args = [a for i, a in enumerate(rest) if not a.startswith("--") and not (i and rest[i - 1] in valued)]
     if cmd == "read" and is_mac:
         sys.stdout.write(subprocess.run(["bcu", "observe-ui", "--pid", str(ident)], capture_output=True, text=True).stdout)
     elif cmd == "read":
@@ -146,6 +172,11 @@ def main(argv):
             print("\t".join([e["type"], e["label"] or "", "" if e["value"] is None else str(e["value"]), ",".join(str(round(e["f"][k])) for k in ("x", "y", "width", "height"))]))
     elif cmd == "tap":
         tap(ident, args[0], opts.get("type"), int(opts["nth"]) if "nth" in opts else None, "--physical" in flags)
+    elif cmd == "drag":
+        start, end = (tuple(map(float, a.split(","))) for a in args[:2])
+        at = drag(ident, start, end, *map(int, args[2:3]), rec=opts.get("rec"))
+        if at is not None:
+            print(f"{opts['rec']}：抬手在第 {at:.2f} 秒")
     elif cmd == "paste":
         paste(ident, args[0])
     elif cmd == "key":
