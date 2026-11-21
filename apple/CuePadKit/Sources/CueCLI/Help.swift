@@ -50,7 +50,7 @@ enum Help {
 
 enum Schema {
   static let project = ProjectView.fields.description("Project") + "（cardCount 是顶层灵感数）"
-  static let card = CardView.fields.description("Card") + "（kind：idea 灵感、task 任务；status 只有任务有：todo 待办、inProgress 进行中（startedAt 有值；子任务推进时上级也开始，回到待办后，已完成的子任务不会让上级重新变为进行中）、done 完成；parentId 是上级任务，顶层为 null，挂在任务下的任务是子任务；pinned 为 true 是项目里置顶的灵感）"
+  static let card = CardView.fields.description("Card") + "（kind：idea 灵感、task 任务；status 只有任务有：todo 待办、inProgress 进行中（startedAt 有值；子任务推进时上级也开始，回到待办后，已完成的子任务不会让上级重新变为进行中）、done 完成；parentId 是上级任务，顶层为 null，挂在任务下的任务是子任务；pinned 为 true 是项目里置顶的灵感；sessionId 是任务绑着的会话，session 是进行中的任务正在哪个会话里做（会话标题））"
   static let search = SearchOutput.fields.description("Search")
   static let conflict = ConflictOutput.fields.description("Conflict")
 

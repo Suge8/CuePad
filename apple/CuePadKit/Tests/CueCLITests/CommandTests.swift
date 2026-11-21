@@ -274,7 +274,7 @@ import Testing
     try sb.markConflict(copy: copy.id, of: card.id)
 
     let projectFields: Set<String> = ["id", "name", "intro", "icon", "color", "pinned", "directory", "cardCount", "createdAt", "modifiedAt"]
-    let cardFields: Set<String> = ["id", "kind", "status", "projectId", "project", "parentId", "body", "pinned", "conflictOf", "startedAt", "completedAt", "archivedAt", "deletedAt", "createdAt", "modifiedAt"]
+    let cardFields: Set<String> = ["id", "kind", "status", "projectId", "project", "parentId", "body", "pinned", "conflictOf", "startedAt", "completedAt", "archivedAt", "deletedAt", "createdAt", "modifiedAt", "sessionId", "session"]
     let searchFields: Set<String> = ["total", "projects", "cards"]
     let conflictFields: Set<String> = ["original", "copy"]
     func documentedFields(_ command: [String], type: String) async throws -> Set<String> {
