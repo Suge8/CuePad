@@ -17,6 +17,7 @@ struct LivePhoneTool: View {
 
 extension View {
     /// 手机上铺满屏的活预览：从页头那颗钮长开、收回（系统的缩放转场），栏在顶上，网页伸到屏幕下缘。
+    /// 系统转场自带的下拉、捏合、左缘右滑收起，落在网页里的不算（`PreviewDismissGuard`）。
     func livePhoneCover(_ session: UUID, zoom: Namespace.ID) -> some View {
         modifier(LivePhoneCover(session: session, zoom: zoom))
     }
@@ -35,6 +36,7 @@ private struct LivePhoneCover: ViewModifier {
                     // 状态栏那一条铺页面的底：栏上下接着的是同一张页面，不是一条桌面色
                     LivePreviewPane(preview: preview).ignoresSafeArea(.container, edges: .bottom)
                         .background((preview.ground ?? palette.desk).ignoresSafeArea())
+                        .background { PreviewDismissGuard(web: true) }
                 }
             }
             .navigationTransition(.zoom(sourceID: session, in: zoom))

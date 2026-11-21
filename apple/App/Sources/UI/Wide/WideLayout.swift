@@ -76,8 +76,9 @@ struct WideMetrics {
     /// 第 `index` 块（0 是最左）的左缘离窗口左缘多远；没画出来的停在窗口右缘外（`width` 是窗口宽）。
     func origin(_ index: Int, window: CGFloat) -> CGFloat {
         guard index < widths.count else { return window }
-        if fill, index > 0 { return beside[index - 1] == .preview ? 0 : window }
-        return index == 0 ? rail : edge(after: index - 1)
+        guard index > 0 else { return rail }
+        if fill { return beside[index - 1] == .preview ? 0 : window }
+        return edge(after: index - 1)
     }
 
     /// 第 `index` 块与右边那块的分界离窗口左缘多远。

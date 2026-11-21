@@ -39,6 +39,8 @@ final class WindowScreen: NSObject, ScreenSource, SCStreamOutput, SCStreamDelega
   @MainActor private(set) weak var shown: NSWindow?
   /// 上一次量到开着的那些窗。
   @MainActor private var seen: Set<Int> = []
+  /// 上一次看到开着的那些窗（`tuck`）；清空它就是要再排一次。
+  @MainActor var tucked: Set<Int> = []
   @MainActor var input = Input()
   @MainActor var outlined = Outlined()
 
@@ -59,7 +61,24 @@ final class WindowScreen: NSObject, ScreenSource, SCStreamOutput, SCStreamDelega
     }
     // 窗口开、关、变大小都在应用处理完一轮事件之后：这时重新量一遍
     NotificationCenter.default.addObserver(forName: NSApplication.didUpdateNotification, object: nil, queue: .main) { [weak self] _ in
-      MainActor.assumeIsolated { self?.measure() }
+      MainActor.assumeIsolated {
+        self?.tuck()
+        self?.measure()
+      }
+    }
+  }
+
+  /// 应用在后台时，它的窗留在所有应用的窗口最底下，看它在预览里看：后台的应用一开窗（刚起时的主窗 `open -g` 也是，之后的设置窗、表单、右键菜单）
+  /// 系统就把那扇窗提到所有应用的窗口上面（实测 macOS 27.2），盖住正看着预览的 CuePad。开着的窗有变化就排回去；菜单在它自己那一层，不动。
+  /// 用户自己把应用切到前台后不管。
+  @MainActor private func tuck() {
+    let open = Set(NSApp.windows.filter(\.isVisible).map(\.windowNumber))
+    guard open != tucked else { return }
+    tucked = open
+    guard !NSApp.isActive else { return }
+    // 从前往后一扇扇排到最底下：它们之间的先后不变
+    for window in NSApp.orderedWindows where window.isVisible && window.level == .normal && window.parent == nil && window.sheetParent == nil {
+      window.order(.below, relativeTo: 0)
     }
   }
 
