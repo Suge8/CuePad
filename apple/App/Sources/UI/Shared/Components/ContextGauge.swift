@@ -98,17 +98,18 @@ private struct ContextDetail: View {
                 }
                 if let meter = facts.meter {
                     MarkedBar(fill: meter.fraction, mark: meter.mark, level: meter.level)
-                    // 几成已在右上角；这一行说离压缩线多远，没有线的才说还剩多少
-                    Text(meter.compactLine ?? meter.summary.visible).font(Typography.meta.monospacedDigit()).foregroundStyle(palette.ink2)
+                    // 几成已在右上角；这一行说离压缩线多远，没有线的才说还剩多少。现在就压缩的那颗跟在这句的行尾：它是这句话的另一个选择，
+                    // 右沿同上面的百分数、条的尽头一条线。否决过：另起一行一颗带字的胶囊——悬在左下角，同上面三行哪个都不对齐。
+                    HStack(spacing: Spacing.group) {
+                        Text(meter.compactLine ?? meter.summary.visible).font(Typography.meta.monospacedDigit()).foregroundStyle(palette.ink2)
+                        Spacer(minLength: 0)
+                        if meter.suggestsCompact { RescueDisc(icon: .compacting, title: "现在压缩", action: compact) }
+                    }
                 }
                 if let note {
                     Label { Text(note.line) } icon: { Image(note.icon) }
                         .font(Typography.meta.monospacedDigit()).foregroundStyle(palette.ink2)
                         .fixedSize(horizontal: false, vertical: true)
-                }
-                if facts.meter?.suggestsCompact == true {
-                    Button("现在压缩", icon: .compacting, action: compact)
-                        .buttonStyle(ControlButtonStyle(size: .compact))
                 }
             }
             .frame(width: Self.width, alignment: .leading)
