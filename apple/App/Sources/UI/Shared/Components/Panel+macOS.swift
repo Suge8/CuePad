@@ -209,9 +209,6 @@ private struct AreaMark: NSViewRepresentable {
 
     private final class Inert: NSView {
         override func hitTest(_ point: NSPoint) -> NSView? { nil }
-
-        /// 浮层画在 SwiftUI 里、不是 AppKit 的视图：盖着输入框时，系统照底下文字区的那块矩形仍给工字指针。这一层在它上面，把箭头要回来。
-        override func resetCursorRects() { addCursorRect(bounds, cursor: .arrow) }
     }
 }
 
