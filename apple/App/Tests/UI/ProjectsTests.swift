@@ -56,7 +56,7 @@ struct ProjectsTests {
     @Test func 并排着回到Cue再变窄_只剩Cue_没回Cue时两个会话都在栈里() {
         let workspace = Workspace(services: services)
         workspace.openSession(UUID(), sessionID: "a")
-        workspace.openSession(UUID(), sessionID: "b", in: .beside)
+        workspace.openSession(UUID(), sessionID: "b", in: .aside)
         #expect(workspace.navigation.trail == "wide session | session")
 
         workspace.setLayout(.narrow)
@@ -64,7 +64,7 @@ struct ProjectsTests {
 
         workspace.setLayout(.wide)
         workspace.openSession(UUID(), sessionID: "a")
-        workspace.openSession(UUID(), sessionID: "b", in: .beside)
+        workspace.openSession(UUID(), sessionID: "b", in: .aside)
         workspace.goHome()
         workspace.setLayout(.narrow)
         #expect(workspace.navigation.trail == "cue")

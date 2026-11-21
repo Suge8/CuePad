@@ -167,7 +167,10 @@ private struct SessionPageBody: View {
                         Color.clear.frame(height: ComposerMetrics.openOneLine)
                     }
                     #else
-                    dock(session, digest)
+                    VStack(spacing: 0) {
+                        DockedCard(workspace.ideaDock.flatMap { $0.session == id ? $0 : nil }) { IdeaDockCard(dock: $0) }
+                        dock(session, digest)
+                    }
                     #endif
                 }
                 #if os(macOS)

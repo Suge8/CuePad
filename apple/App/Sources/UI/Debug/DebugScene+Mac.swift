@@ -16,7 +16,7 @@ extension DebugScene {
         Task { await voiceCallIfAsked(workspace) }
         presetColumns(workspace.services.settings)
         if let prepare = entry?.prepare { await running("摆画面") { try await prepare(workspace, opened) } }
-        presetBeside(workspace)
+        await presetBeside(workspace)
         openLivePreviewIfAsked(workspace)
         if args.demoMac { Task { await runDemoMac(workspace.services) } }
         presetDrawers(workspace)

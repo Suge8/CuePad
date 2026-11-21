@@ -38,7 +38,7 @@ struct MainWindow: View {
                 WideRail(width: sizes.rail)
                 // Cue 铺满时主区让出去（宽 0）、页留着不拆，订阅暂停
                 // 预览铺满时主区被右半盖住：宽不变（不重排），滑完藏起
-                WideColumnHost(slot: .main, focus: focus, origin: sizes.rail, width: sizes.leading + under, shape: sizes.shape, hidden: sizes.home || sizes.fill) {
+                WideColumnHost(slot: .main, focus: focus, origin: sizes.rail, width: sizes.leading + under, shape: sizes.shape, hidden: sizes.home || sizes.fill, under: under, spans: sizes.spans) {
                     MainColumn().environment(\.headInset, Self.inset(leading: Chrome.headLead(rail: sizes.rail), trailing: sizes.split ? Spacing.page : trail))
                         .environment(\.pageActive, !sizes.home && !sizes.fill)
                         .environment(\.underCue, under)
@@ -46,8 +46,13 @@ struct MainWindow: View {
                 .frame(width: sizes.leading + under)
                 Spacer(minLength: 0)
             }
-            .overlay(alignment: .topLeading) { beside(sizes, window: geometry.size.width, trail: trail) }
-            .overlay { if sizes.split, !sizes.fill { BesideDivider(sizes: sizes) } }
+            .overlay(alignment: .topLeading) {
+                ZStack(alignment: .topLeading) {
+                    ForEach(0..<WideNavigation.maxPanes - 1, id: \.self) { beside($0, sizes, window: geometry.size.width, trail: trail) }
+                }
+            }
+            .overlay { if !sizes.fill { ForEach(0..<sizes.widths.count - 1, id: \.self) { BesideDivider(sizes: sizes, index: $0) } } }
+            .overlay { WideDropFeedback(window: geometry.size.width) }
             .overlay { if !sizes.home, !sizes.fill { railChrome(sizes) } }
             .reportsWideFits(sizes, to: workspace)
             .overlay(alignment: .topTrailing) {
@@ -60,15 +65,16 @@ struct MainWindow: View {
         }
     }
 
-    /// 并排的右半：不并排时也挂着、同样宽，停在窗口右缘外、滑完藏起。开合是这一块整个从右缘滑进来、滑回去（`WideColumnSlide` 的平移），
-    /// 宽不变、页不重排：收起时里面的东西原样滑走，不先被压窄。活预览铺满时（`WideMetrics.fill`）它从右半长到窗口左缘，栏让出红绿灯。
-    private func beside(_ sizes: WideMetrics, window: CGFloat, trail: CGFloat) -> some View {
-        let origin = !sizes.split ? window : sizes.fill ? 0 : sizes.rail + sizes.leading
-        return WideColumnHost(slot: .beside, focus: focus, origin: origin, width: sizes.trailing, shape: sizes.shape, hidden: !sizes.split) {
-            BesideColumn { SessionPage($0, column: .beside) }
-                .environment(\.headInset, Self.inset(leading: sizes.fill ? Chrome.toggle : Spacing.page, trailing: trail))
+    /// 并排时最左那块右边的第 `index` 块：没开着时也挂着、同样宽，停在窗口右缘外、滑完藏起。开合是这一块整个从右缘滑进来、滑回去（`WideColumnSlide` 的平移），
+    /// 宽不变、页不重排：收起时里面的东西原样滑走，不先被压窄。活预览铺满时（`WideMetrics.fill`）它长到窗口左缘，栏让出红绿灯，别的几块滑走。
+    private func beside(_ index: Int, _ sizes: WideMetrics, window: CGFloat, trail: CGFloat) -> some View {
+        let origin = sizes.origin(index + 1, window: window), width = sizes.width(index + 1)
+        let last = index + 2 == sizes.widths.count
+        return WideColumnHost(slot: .beside(index), focus: focus, origin: origin, width: width, shape: sizes.shape, hidden: origin >= window, spans: sizes.spans) {
+            BesideColumn(index: index) { SessionPage($0, column: .beside(index)) } card: { IdeaPane(cardID: $0, column: .beside(index)) }
+                .environment(\.headInset, Self.inset(leading: sizes.fill ? Chrome.toggle : Spacing.page, trailing: last || sizes.fill ? trail : Spacing.page))
         }
-        .frame(width: sizes.trailing)
+        .frame(width: width)
         .padding(.leading, origin)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
