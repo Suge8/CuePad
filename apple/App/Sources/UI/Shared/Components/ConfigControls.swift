@@ -63,9 +63,7 @@ struct ConfigControls<Trailing: View>: View {
     let trailing: Trailing
     var alignment = Alignment.leading
     @Environment(AppServices.self) var services
-    #if os(macOS)
-    @State var anchors = [ConfigPick.model: PopUpAnchor(), .thinking: PopUpAnchor()]
-    #endif
+    @State private var picking = false
 
     init(
         agent: AgentPick? = nil, models: ModelMenu, shown: ConfigShown, unnamed: LocalizedStringResource = "模型", levels: [ThinkingLevel],
@@ -84,8 +82,8 @@ struct ConfigControls<Trailing: View>: View {
         self.trailing = trailing()
     }
 
-    /// 工具排的字号上限（同 Cue 面板的做法）：按最坏的一排定——最窄的 iPhone（375 宽）、英文，模型、"管理用量"、思考强度、加速、上下文全在，
-    /// 收完六步（`ConfigRow`）仍一颗不少、不压发送钮的那一档，实测 xxLarge；再大一档 xxxLarge 时英文的上下文压到发送钮下面。
+    /// 工具排的字号上限（同 Cue 面板的做法）：按最坏的一排定——最窄的 iPhone（375 宽）、英文，模型与思考、加速、上下文全在，
+    /// 收完各步（`ConfigRow`）仍一颗不少、不压发送钮的那一档，实测 xxLarge（模型与思考分两颗时量的）；再大一档 xxxLarge 时英文的上下文压到发送钮下面。
     /// 泛型类型里放不了静态存储属性。
     static var largestType: DynamicTypeSize { .xxLarge }
 
@@ -98,55 +96,24 @@ struct ConfigControls<Trailing: View>: View {
     var body: some View {
         ConfigRow {
             if let agent { AgentCapsule(pick: agent).layoutValue(key: ConfigGive.self, value: [.agent]) }
-            modelCapsule.layoutValue(key: ConfigGive.self, value: [.model])
-            if let model = shown.model, let url = model.account?.usageURL(provider: model.key.provider) {
-                Link(destination: url) {
-                    ViewThatFits(in: .horizontal) {
-                        Text("管理用量")
-                        Text("用量")
-                    }
-                }
-                .font(Typography.meta).buttonStyle(PressStyle())
-                .accessibilityLabel("管理用量")
-                .layoutValue(key: ConfigGive.self, value: [.secondary])
-            }
-            if let meter = ThinkingMeter(levels: levels, current: shown.thinking) {
-                ThinkingDial(meter: meter, pending: shown.pending, choose: chooseThinking)
-                    #if os(macOS)
-                    .popUpAnchor(anchors[.thinking])
-                    #endif
-                    .layoutValue(key: ConfigGive.self, value: [.wording, .level])
-            }
+            ModelPick(models: models, current: shown.model, unnamed: unnamed, pending: shown.pending, quotas: services.accountQuotas.items,
+                      meter: ThinkingMeter(levels: levels, current: shown.thinking), chooseThinking: chooseThinking, picking: $picking)
+                .layoutValue(key: ConfigGive.self, value: [.model])
             if shown.model?.supportsFast == true {
-                FastCapsule(fast: shown.fast, choose: chooseFast).layoutValue(key: ConfigGive.self, value: [.secondary])
+                FastCapsule(fast: shown.fast, choose: chooseFast)
             }
             trailing
         }
         // 字号到这一档为止（输入的正文与上下文气泡照常放大，气泡按窗口的字号画，`PanelHost.typeSize`）：再大最窄的手机上收完六步也放不下
         .dynamicTypeSize(...Self.largestType)
         .frame(maxWidth: .infinity, alignment: alignment)
-        #if os(macOS)
+        // 模型与思考强度的快捷键都打开同一个气泡
         .onChange(of: opening.wrappedValue) { _, pick in
-            guard let pick else { return }
+            guard pick != nil else { return }
             opening.wrappedValue = nil
-            open(pick)
+            picking = true
         }
-        .task {
-            guard DebugHooks.preset.modelMenu, (try? await Task.sleep(for: .seconds(1.5))) != nil else { return }
-            open(.model)
-        }
-        #endif
-    }
-
-    private var modelCapsule: some View {
-        #if os(macOS)
-        ModelCapsule(models: models, current: shown.model, unnamed: unnamed, pending: shown.pending,
-                       quotas: services.accountQuotas.items) { open(.model) }
-            .popUpAnchor(anchors[.model])
-        #else
-        ModelCapsule(models: models, current: shown.model, unnamed: unnamed, pending: shown.pending,
-                       quotas: services.accountQuotas.items)
-        #endif
+        .onAppear { if DebugHooks.preset.modelMenu { picking = true } }
     }
 }
 
@@ -154,8 +121,8 @@ struct ConfigControls<Trailing: View>: View {
 /// 先收字、留标志与操作；不把胶囊收进"⋯"：排版定不了菜单里该有哪几项（`Layout` 不能藏起子视图，藏不掉的照样被读屏读到、点到），一律收短、留在原地。
 /// 所有压缩档用尽仍放不下时才折行；新增的尾部动作不能伸到发送钮下面，也不裁掉操作。
 private struct ConfigRow: Layout {
-    /// 名字比读数要紧：思考强度先收成只剩竖格（`level`），再收 Agent 名，模型名最后收——看不出选的是哪个模型就没法确认这一次用的是谁。
-    enum Give: CaseIterable { case wording, spacing, context, level, agent, secondary, model }
+    /// 名字比读数要紧：先收字与间距，再收 Agent 名，模型名最后收——看不出选的是哪个模型就没法确认这一次用的是谁。
+    enum Give: CaseIterable { case wording, spacing, agent, model }
 
     private static let spacing = Spacing.glyph
     private static let tightSpacing = Spacing.hair
@@ -211,7 +178,7 @@ private struct ConfigRow: Layout {
                 for index in subviews.indices where subviews[index][ConfigGive.self].contains(give) {
                     row.widths[index] = width(of: subviews[index], in: max(0, available - row.width + row.widths[index]))
                 }
-            case .wording, .context, .level, .agent, .secondary:
+            case .wording, .agent:
                 for index in subviews.indices where subviews[index][ConfigGive.self].contains(give) {
                     row.widths[index] = width(of: subviews[index], in: max(0, row.widths[index] - 1))
                 }
@@ -247,7 +214,7 @@ struct SessionConfigControls: View {
             configure(SessionConfig(fast: $0))
         }) {
             if let meter = shown.context.flatMap(ContextMeter.init) {
-                ContextGauge(session: session, meter: meter).layoutValue(key: ConfigGive.self, value: [.context, .secondary])
+                ContextGauge(session: session, meter: meter)
             }
             if let cold { ColdNote(cold: cold).layoutValue(key: ConfigGive.self, value: [.wording]).transition(.opacity) }
         }
@@ -287,8 +254,4 @@ private struct ColdNote: View {
         .help(said)
         .accessibilityElement(children: .ignore).accessibilityLabel(said)
     }
-}
-
-extension EnvironmentValues {
-    @Entry var singleLineConfig = false
 }

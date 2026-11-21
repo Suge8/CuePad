@@ -38,9 +38,11 @@ nonisolated struct SessionDigest: Sendable, Equatable {
               let wanted = request.config else { return current }
         switch Speech.trip(request, at: moment) {
         case .preparing, .sending, .sent:
-            let model = wanted.model.flatMap { key in catalog?.models.first { $0.key == key } } ?? current.model
-            let thinking = (wanted.thinking ?? current.thinking).map { $0.clamped(to: model?.thinkingLevels ?? []) }
-            return ConfigShown(model: model, thinking: thinking, fast: wanted.fast ?? current.fast, context: current.context, pending: true, failure: nil)
+            // 连着换（模型气泡里先换模型、紧接着换强度）时前一条也可能还在路上：每样取在路上的最近一条，后一条不把前一条要换的盖回会话现在的值
+            let flying = deliveries.filter { Speech.trip($0, at: moment).awaitingResult }.compactMap(\.config)
+            let model = flying.last(where: { $0.model != nil })?.model.flatMap { key in catalog?.models.first { $0.key == key } } ?? current.model
+            let thinking = (flying.last(where: { $0.thinking != nil })?.thinking ?? current.thinking).map { $0.clamped(to: model?.thinkingLevels ?? []) }
+            return ConfigShown(model: model, thinking: thinking, fast: flying.last(where: { $0.fast != nil })?.fast ?? current.fast, context: current.context, pending: true, failure: nil)
         case .delivered: return current
         case .unconfirmed: return current
         case .failed(let failure):

@@ -86,7 +86,7 @@ nonisolated struct ContextMeter: Equatable {
 
     var suggestsCompact: Bool { fraction >= Self.compactFraction }
 
-    private var used: Int { Int((fraction * 100).rounded()) }
+    var used: Int { Int((fraction * 100).rounded()) }
 
     var percent: String { "\(used)%" }
 

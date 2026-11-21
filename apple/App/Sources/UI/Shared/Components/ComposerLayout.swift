@@ -11,7 +11,12 @@ enum ComposerMetrics {
     #else
     static let glyph: CGFloat = 32
     #endif
+    /// Mac 上点得到的就是那颗圆：悬停的底按点按区画，比圆大一圈时是圆外一块方圆底。
+    #if os(iOS)
     static let glyphTarget: CGFloat = 44
+    #else
+    static let glyphTarget = glyph
+    #endif
     /// 右下角那颗圆钮（点得到的那一圈）离右边与离下边一样远；任务气泡底下那颗"开始"排在同一个位置。
     static let glyphInset = (slot - glyphTarget) / 2
     static let noticeSpacing = Spacing.tight

@@ -159,7 +159,6 @@ struct Palette {
     var failure: Color { dark ? Color(hex: 0xF0789E) : Color(hex: 0xAD2B5C) }
     /// 删除钮、轻扫删除的胭脂底。字 6.3，深色 5.6。
     var failureFill: Color { dark ? Color(hex: 0xB8325F) : Color(hex: 0xAD2B5C) }
-    var failureTrack: Color { failure.opacity(0.2) }
     /// 有新回复（这轮答完了、你还没看）与任务做完：石绿（两种用途见头注释）。对比度 4.7，深色 5.0，增强对比度 ≥ 7。
     var replied: Color {
         switch (dark, highContrast) {
