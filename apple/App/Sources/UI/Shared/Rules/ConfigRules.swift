@@ -29,6 +29,11 @@ nonisolated struct ThinkingMeter: Equatable {
 
     static let scale = ThinkingLevel.allCases.filter { $0 != .off }
 
+    /// 这一档在尺上的高低：0 最低档、1 最高档，同一档在哪个模型上都一样热（颜色、流动都按它）；关是 nil。
+    static func energy(_ level: ThinkingLevel) -> Double? {
+        scale.firstIndex(of: level).map { Double($0) / Double(scale.count - 1) }
+    }
+
     init?(levels: [ThinkingLevel], current: ThinkingLevel?) {
         guard !levels.isEmpty else { return nil }
         self.levels = levels

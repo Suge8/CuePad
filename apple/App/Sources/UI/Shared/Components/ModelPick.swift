@@ -13,14 +13,15 @@ struct ModelPick: View {
     let meter: ThinkingMeter?
     let chooseThinking: (ThinkingLevel) -> Void
     @Binding var picking: Bool
+    @State private var live = Live()
 
     var body: some View {
         Moments(next: quotas.nextReset(after:)) { now in
             Button { picking.toggle() } label: { label(at: now) }
                 .buttonStyle(PressStyle())
-                .bubble(isPresented: $picking, width: .fixed(Self.width)) {
-                    ModelPickBubble(models: models, current: current, quotas: quotas, meter: meter, chooseThinking: chooseThinking)
-                }
+                .bubble(isPresented: $picking, width: .fixed(Self.width)) { ModelPickBubble(live: live) }
+                .onChange(of: picking, initial: true) { if picking { live.take(self) } }
+                .onChange(of: Seen(self)) { live.take(self) }
                 .accessibilityLabel("模型")
                 .accessibilityValue(Dotted(spoken(at: now), meter.map { String(localized: "思考 \($0.label)") }).spoken)
                 .accessibilityAdjustableAction { direction in
@@ -64,15 +65,51 @@ struct ModelPick: View {
     }
 }
 
+/// 气泡的内容在打开那一刻交给浮层宿主，之后不随胶囊重算（`presentPanel`）：要跟着变的（选中哪个模型、哪一档、额度）放进这只盒子，气泡读它。
+/// 打开时整份重放一遍：输入框换会话时可能留着同一个视图，盒子里的两个选择动作不能还是上一个会话的。
+@Observable private final class Live {
+    var models = ModelMenu(models: [], current: nil) { _ in }
+    var current: ModelOption?
+    var quotas: [AccountQuota] = []
+    var meter: ThinkingMeter?
+    var chooseThinking: (ThinkingLevel) -> Void = { _ in }
+
+    func take(_ pick: ModelPick) {
+        models = pick.models
+        current = pick.current
+        quotas = pick.quotas
+        meter = pick.meter
+        chooseThinking = pick.chooseThinking
+    }
+}
+
+/// 开着时要重放进盒子的那些值；动作是闭包、比不了，跟着这些一起换。
+private struct Seen: Equatable {
+    let models: [ModelOption]
+    let defaultModel: ModelKey?
+    let current: ModelOption?
+    let quotas: [AccountQuota]
+    let meter: ThinkingMeter?
+
+    init(_ pick: ModelPick) {
+        models = pick.models.models
+        defaultModel = pick.models.defaultModel
+        current = pick.current
+        quotas = pick.quotas
+        meter = pick.meter
+    }
+}
+
 /// 气泡本身已是一张卡，里面不铺底、不分组头：两段（模型、思考强度）各一行小标题，模型按提供方排、组与组之间只隔一段留白，
 /// 标志就说了是哪家；额度、默认、认不出标志时的提供方名写在那一行的第二行。选中的那行垫选中底、行尾一个勾。
 /// 否决过：每家一行组头（照搬系统菜单的分组）——多数家只有一个模型，组头比模型还多，整块又长又碎。
 private struct ModelPickBubble: View {
-    let models: ModelMenu
-    let current: ModelOption?
-    let quotas: [AccountQuota]
-    let meter: ThinkingMeter?
-    let chooseThinking: (ThinkingLevel) -> Void
+    let live: Live
+    private var models: ModelMenu { live.models }
+    private var current: ModelOption? { live.current }
+    private var quotas: [AccountQuota] { live.quotas }
+    private var meter: ThinkingMeter? { live.meter }
+    private var chooseThinking: (ThinkingLevel) -> Void { live.chooseThinking }
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -148,7 +185,8 @@ private struct ModelPickBubble: View {
     #endif
 }
 
-/// 思考强度的分段：这个模型支持的档一格一段，选中的那段浮起一块纸，换档时它滑过去。
+/// 思考强度的分段：这个模型支持的档一格一段。选中的那段浮起一块这一档的"场"（`ThinkingField`），换档时它滑过去、颜色与翻动跟着变；
+/// 选"关"时浮起的是一块纸。
 private struct ThinkingSegments: View {
     let meter: ThinkingMeter
     let choose: (ThinkingLevel) -> Void
@@ -163,14 +201,20 @@ private struct ThinkingSegments: View {
                 Button { if !on { choose(level) } } label: {
                     Text(verbatim: level.label)
                         .font(Typography.meta.weight(on ? .semibold : .medium))
-                        .foregroundStyle(on ? palette.ink : palette.ink2)
+                        .foregroundStyle(on ? (level == .off ? palette.ink : palette.onFill) : palette.ink2)
                         .lineLimit(1).minimumScaleFactor(0.7)
                         .frame(maxWidth: .infinity, minHeight: Self.height)
                         .background {
                             if on {
-                                Capsule().fill(palette.paperLit).overlay { Capsule().strokeBorder(palette.hair, lineWidth: ControlMetrics.stroke) }
-                                    .padding(Self.inset)
-                                    .matchedGeometryEffect(id: 0, in: thumb)
+                                Group {
+                                    if let energy = ThinkingMeter.energy(level) {
+                                        ThinkingField(energy: energy)
+                                    } else {
+                                        Capsule().fill(palette.paperLit).overlay { Capsule().strokeBorder(palette.hair, lineWidth: ControlMetrics.stroke) }
+                                    }
+                                }
+                                .padding(Self.inset)
+                                .matchedGeometryEffect(id: 0, in: thumb)
                             }
                         }
                         .contentShape(.capsule)
@@ -194,7 +238,8 @@ private struct ThinkingSegments: View {
     private static let inset: CGFloat = 3
 }
 
-/// 思考强度的竖格：除"关"以外的六档各一格（`ThinkingMeter.scale`），当前档以下填满；关着时格全空、斜划一道，最高档时有一道光扫过。
+/// 思考强度的竖格：除"关"以外的六档各一格（`ThinkingMeter.scale`），当前档以下填满，每格是它那一档在色带上的颜色（`Palette.thinking`），
+/// 越往上越暖；关着时格全空、斜划一道，最高档时有一道光扫过。常驻在工具排上，只用静止的颜色，不放每帧重算的东西。
 struct ThinkingTicks: View {
     enum Size { case small, regular }
 
@@ -211,7 +256,7 @@ struct ThinkingTicks: View {
 
     var body: some View {
         bars { index in
-            index < meter.filled ? palette.ink : meter.current == nil ? palette.ink3 : palette.track
+            index < meter.filled ? palette.thinking(Double(index) / Double(ThinkingMeter.scale.count - 1)) : meter.current == nil ? palette.ink3 : palette.track
         }
         .overlay {
             if meter.isMax, loops {

@@ -14,6 +14,8 @@ struct LoopLayer {
         case pulse
         case aura(radius: CGFloat)
         case sprite(CueSprite, CueAtlas.Sheet)
+        /// 思考强度那一档的一片色（`ThinkingField`）：`stops` 是打底的左、中、右与两团光的颜色，`energy` 定光走得多快多远。
+        case field(energy: Double, stops: [CGColor])
     }
 
     let kind: Kind
@@ -114,6 +116,8 @@ struct LoopLayer {
                 Self.layoutAura(loop, in: bounds, radius: radius, color: color)
             case .sprite:
                 Self.layoutSprite(loop, in: bounds)
+            case .field(let energy, let stops):
+                Self.layoutField(loop, in: bounds, energy: energy, stops: stops)
             case .sheen:
                 let band = bounds.width * 0.5
                 loop.bounds = CGRect(x: 0, y: 0, width: band, height: bounds.height)
@@ -166,6 +170,8 @@ struct LoopLayer {
                 return makeSprite(sprite, on: sheet, intro: intro)
             case .aura:
                 return makeAura()
+            case .field:
+                return makeField()
             case .sheen:
                 let layer = CAGradientLayer()
                 layer.startPoint = CGPoint(x: 0, y: 0.5)

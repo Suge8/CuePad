@@ -130,6 +130,8 @@ struct TokenSheet: View {
             ("diffAdded", palette.diffAdded), ("diffRemoved", palette.diffRemoved),
             ("waitingPaper", palette.waitingPaper), ("neutralFill", palette.neutralFill),
             ("quietFill", palette.quietFill),
+            ("thinkingLow", palette.thinkingLow), ("thinkingMid", palette.thinkingMid), ("thinkingHigh", palette.thinkingHigh),
+            ("thinkingSheen", palette.thinkingSheen), ("thinkingShade", palette.thinkingShade), ("thinkingRim", palette.thinkingRim),
         ]
     }
 

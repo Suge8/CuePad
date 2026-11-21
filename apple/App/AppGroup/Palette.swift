@@ -155,6 +155,25 @@ struct Palette {
     var waiting: Color { dark ? Color(hex: 0xEDBD57) : Color(hex: 0x845A06) }
     /// 等你的实底胶囊（实时活动里等你的数）。字 6.0，深色 4.6。
     var waitingFill: Color { dark ? Color(hex: 0x9C6A08) : Color(hex: 0x845A06) }
+    /// 思考强度的色带：靛（最低档）经紫到玫红（最高档），越往上越暖，与 Cue 页的晚霞同一族；中间的档按位置混（`thinking(_:)`）。
+    /// 不借靛青（`signature` 说的是"正在发生"）与赭黄（等你）。三段上的字（`onFill`）6.5、6.1、5.1，深色 5.7、5.1、5.6：选中的档是一块铺满的色、字压在上面。
+    var thinkingLow: Color { dark ? Color(hex: 0x5458C8) : Color(hex: 0x4A4FC2) }
+    var thinkingMid: Color { dark ? Color(hex: 0x8550CC) : Color(hex: 0x7643C4) }
+    var thinkingHigh: Color { dark ? Color(hex: 0xB23A6E) : Color(hex: 0xC03A70) }
+
+    /// 色带铺成一块时（`ThinkingField`）上沿的受光、下沿的沉、上半圈的边光：两种外观同一份，衬着它的是色带本身。
+    /// 受光封顶在这里：再亮压在上面的白字就不到 4.5:1。
+    var thinkingSheen: Color { Color.white.opacity(0.14) }
+    var thinkingShade: Color { Color.black.opacity(0.1) }
+    var thinkingRim: Color { Color.white.opacity(0.35) }
+
+    /// 色带上的一点：0 最低档、1 最高档（`ThinkingMeter.energy`）。
+    func thinking(_ energy: Double) -> Color {
+        energy < 0.5 ? thinkingLow.mix(with: thinkingMid, by: energy * 2) : thinkingMid.mix(with: thinkingHigh, by: energy * 2 - 1)
+    }
+
+    /// 色带铺成的那一块底下透出的光：档越高越浓。
+    func thinkingGlow(_ energy: Double) -> Color { thinking(energy).opacity(0.25 + 0.2 * energy) }
     /// 出错与没能送达：胭脂（`Failure`）。对比度 5.0，深色 4.6。
     var failure: Color { dark ? Color(hex: 0xF0789E) : Color(hex: 0xAD2B5C) }
     /// 删除钮、轻扫删除的胭脂底。字 6.3，深色 5.6。
