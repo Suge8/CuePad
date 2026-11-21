@@ -1,24 +1,32 @@
 import CueStore
 import SwiftUI
 
-/// Cue 页的舞台：新来访时（`CueStage.opens`）对话先让给这一幕：云上的 Cue 摆着此刻那一拍的姿势（`Pose`），云下一句它此刻最该让你知道的那一件（`Focus`）。
-/// 那一件是 Cue 说出来的一个气泡（`CueBalloon`），尾巴指着云上的它：来由、那一句、正文与去处在同一块玻璃里，整块点得动。不另起卡：拍板时底下已有拍板卡，一屏只一张卡。
-/// 天空是一张图，浅色画白天、深色画夜里（按外观，不按钟点）；窄的用竖图、宽的用横图。Cue 站的那朵云在图里的高度是图高的一个比例（`Sky.perch`），
-/// 图只等比铺开，人与字都从那一线往下排；图下沿以下铺图底的颜色（`palette.sky`），输入框与拍板卡浮在上面。
-/// 进场只放一次（天空从近处拉远落定，Cue 与字随后浮上来），之后整幕静止：Cue 页在静置测量的范围里，不放常驻动效。换拍子是 Cue 跳一下换姿势（`Jelly`，同头像）。
-/// 自己收起（回到对话）在往下拉过头、点气泡时；输入框聚焦与发出由页收（`CuePage`）。
+/// Cue 页对话的尽头。新来访时（`CueStage.opens`）对话末尾不是那一行小 Cue（`CueEnding`），而是铺满一屏的这一幕：网点的天上，云上的 Cue 摆着此刻那一拍的姿势（`Pose`），
+/// 云下一个气泡说它此刻的样子，下面是你不在时攒下的几件（`CueBrief`），一行一件、点了就到。打开时停在最新处就是它；往上滑是历史，滑回来它还在（"回到最新"同会话页）。
+/// 你开口（输入框聚焦、发出）它才收成那一行（`CuePage`）。它是对话里的最后一格：在屏上时最后几条话在它上面、不在可见区，不算读过（`CueEndProbe`）。
+/// 天空是一张照片抖成网点（`DitherImage`），按打开那一刻的时段换一张（`Period`），横着铺满整栏（伸出读宽，`chatMargin`），往下伸到回复框底下；上沿那一截散成透明，融进对话的底，不画一条边。
+/// 散开的那一截在这一格的可见区上面：停在舞台上时满屏是天、页头底下不见一层渐变，往上滑才看到它散进上一条话。
+/// Cue 是软的立体、天是平的网点，一前一后分得开。进场只放一次（Cue 与字浮上来），之后整幕静止：Cue 页在静置测量的范围里，不放常驻动效。换拍子是 Cue 跳一下换姿势（`Jelly`，同头像）。
+/// 否决过：舞台盖在对话上、往下拉收起（拉一下就看历史去了，这一趟回不来）；气泡里只挑一件说（常与拍板卡重复）；没事时列几件灵感请你点头（App 按规则挑的，不是 Cue 想做的，没人点）。
 struct CueStage: View {
     let beat: CueBeat
-    let focus: Focus
-    /// 左边让给常驻会话条的宽（手机）：天空照样铺满整页，Cue 与字在让出之后的那块里居中。
-    var leading: CGFloat = 0
-    let close: () -> Void
+    let status: String
+    let brief: [CueBrief.Line]
+    let period: Period
+    let open: (CueBrief.Line) -> Void
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.chatMargin) private var margin
+    @Environment(\.chatBottomInset) private var below
+    @Environment(\.chatHeight) private var visible
     @State private var shown = false
-    /// 进场放完：截图的就绪等它（`debugSettling`），进场里的字与 Cue 还没到位。
+    /// 气泡里除去各行的高（那一句与边距），列着行时量出来的。只剩那一句时它换大字、边距也不同，那时量的不算：
+    /// 算进来的话，放不放得下第一行要看上一轮是列着还是没列，同一个高从两头调过来结果不一样。
+    @State private var base: CGFloat = 0
+    /// 各行一样高：放得下几行按它算，不等排出来再删。
+    @ScaledMetric(relativeTo: .body) private var row: CGFloat = 56
+    /// 进场放完：截图的就绪等它（`debugSettling`）。
     @State private var settled = false
-    @GestureState private var pull: CGFloat = 0
 
     /// 离开 Cue 页超过这么久再回来算一次新来访，舞台重开；短暂离开回来原样。30 分钟是网站统计切分来访的常见默认。
     static let revisit: TimeInterval = 30 * 60
@@ -28,54 +36,40 @@ struct CueStage: View {
         left.map { moment.timeIntervalSince($0) > revisit } ?? true
     }
 
-    /// 往下拉过这么多就收起；拉的时候整幕只跟手走三成，读作有阻力的一拉，不是拖走一张纸。
-    private static let pullToClose: CGFloat = 72
-    private static let pullFollow: CGFloat = 0.3
-
     var body: some View {
-        GeometryReader { room in
-            let sky = Sky(room.size, leading: leading, top: room.safeAreaInsets.top)
-            ZStack(alignment: .top) {
-                palette.sky
-                Image(decorative: sky.asset)
-                    .resizable()
-                    .frame(width: sky.width, height: sky.height)
-                    .scaleEffect(shown || reduceMotion ? 1 : Sky.approach, anchor: UnitPoint(x: 0.5, y: sky.perchUnit))
-                    .position(x: sky.mid, y: sky.top + sky.height / 2)
-                if beat == .away { palette.backdrop.transition(.opacity) }
-                glow(sky)
-                figure(sky)
-                words(sky)
-                    .padding(.leading, leading)
-                    .frame(width: room.size.width, height: room.size.height, alignment: .top)
+        Color.clear
+            .frame(height: max(visible - below, 0) + Sky.fade)
+            .overlay {
+                GeometryReader { room in
+                    // 横着的手机，滚动区让开了刘海那一侧的安全区：天照样铺到屏幕边，不在两侧露出两条底
+                    let side = max(margin, room.safeAreaInsets.leading, room.safeAreaInsets.trailing)
+                    let lines = Array(brief.prefix(Sky.rows(in: room.size.height, base: base, row: row)))
+                    let sky = Sky(
+                        CGSize(width: room.size.width + 2 * side, height: room.size.height), chat: room.size.height + below, period: period,
+                        bubble: base + CGFloat(lines.count) * row)
+                    ZStack(alignment: .top) {
+                        if sky.showsFigure { figure(sky) }
+                        words(sky, lines: lines)
+                    }
+                    .frame(width: sky.size.width, height: room.size.height, alignment: .top)
+                    .offset(x: -side)
+                    .background(alignment: .top) { backdrop(sky).offset(x: -side, y: -Sky.fade) }
+                }
+                .padding(.top, Sky.fade)
             }
-            .offset(y: pull * Self.pullFollow)
-            .opacity(shown ? 1 : 0)
-            // 在铺开安全区之后的框里裁：裁在外面就裁回安全区里，页头底下空一截；不裁的话宽的天空画进旁边的栏
-            .frame(width: room.size.width, height: room.size.height)
-            .clipped()
-        }
-        .ignoresSafeArea()
-        .contentShape(.rect)
-        .gesture(DragGesture(minimumDistance: Spacing.group).updating($pull) { drag, pull, _ in pull = max(0, drag.translation.height) }
-            .onEnded { if $0.translation.height > Self.pullToClose { close() } })
-        .animation(Motion.spatial(Motion.release, reduceMotion: reduceMotion), value: pull == 0)
-        .animation(Motion.fade, value: beat)
-        .debugSettling(!settled)
-        .onAppear {
-            withAnimation(Motion.fading(Motion.Stage.unveil, reduceMotion: reduceMotion)) { shown = true } completion: { settled = true }
-        }
+            .debugSettling(!settled)
+            .task {
+                shown = true
+                try? await Task.sleep(for: .seconds(Motion.Stage.wordsDelay + Motion.Stage.riseDuration))
+                settled = true
+            }
     }
 
-    /// 脚下那团光随拍子换色（等你是赭黄、做完是绿、在动是靛蓝），不在的时候灭了。叠加着画：天亮的地方亮一点，天暗的地方像云被照着。
-    private func glow(_ sky: Sky) -> some View {
-        let color = beat == .failed ? palette.failure : beat.tone.color(palette)
-        return Ellipse()
-            .fill(EllipticalGradient(colors: [color, color.opacity(0)], center: .center, startRadiusFraction: 0, endRadiusFraction: 0.5))
-            .frame(width: Sky.glow.width, height: Sky.glow.height)
-            .blendMode(.plusLighter)
-            .opacity(beat == .away ? 0 : Sky.glowStrength)
-            .position(x: sky.mid, y: sky.perch - Sky.glow.height / 4)
+    private func backdrop(_ sky: Sky) -> some View {
+        DitherImage(
+            asset: sky.asset, placement: sky.placement.offsetBy(dx: 0, dy: Sky.fade), size: CGSize(width: sky.size.width, height: Sky.fade + sky.depth),
+            fade: Sky.fade)
+            .overlay { if beat == .away { palette.backdrop } }
             .readerHidden(true)
     }
 
@@ -84,64 +78,96 @@ struct CueStage: View {
             Image(decorative: Pose(beat).asset).resizable().frame(width: Pose.size.width * sky.figureScale, height: Pose.size.height * sky.figureScale)
         }
         .opacity(shown ? 1 : 0)
-        .scaleEffect(shown || reduceMotion ? 1 : Sky.approach, anchor: .bottom)
+        .offset(y: shown || reduceMotion ? 0 : Sky.rise)
         .animation(Motion.fading(Motion.Stage.rise, reduceMotion: reduceMotion).delay(Motion.Stage.figureDelay), value: shown)
-        .position(x: sky.mid, y: sky.perch + Pose.footing - Pose.size.height * sky.figureScale / 2)
+        .position(x: sky.size.width / 2, y: sky.perch + Pose.footing - Pose.size.height * sky.figureScale / 2)
         .readerHidden(true)
     }
 
-    private func words(_ sky: Sky) -> some View {
-        CueBalloon(focus: focus, close: close)
-            .frame(maxWidth: CueBalloon.width)
-            .padding(.horizontal, CuePage.inset)
-            .padding(.top, sky.perch + Sky.wordsGap - CueBalloon.tail)
-            .offset(y: shown || reduceMotion ? 0 : Sky.wordsRise)
+    private func words(_ sky: Sky, lines: [CueBrief.Line]) -> some View {
+        CueBriefBubble(beat: beat, status: status, lines: lines, row: row, open: open)
+            .frame(maxWidth: CueBriefBubble.width)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { if !lines.isEmpty { base = $0 - CGFloat(lines.count) * row } }
+            .padding(.horizontal, margin)
+            .padding(.top, sky.perch + Sky.wordsGap - SpeechShape.tail)
+            .offset(y: shown || reduceMotion ? 0 : Sky.rise)
             .opacity(shown ? 1 : 0)
             .animation(Motion.fading(Motion.Stage.rise, reduceMotion: reduceMotion).delay(Motion.Stage.wordsDelay), value: shown)
-            .animation(Motion.fade, value: focus)
+            .animation(Motion.fade, value: lines)
     }
 }
 
 extension CueStage {
-    /// 天空图怎么铺：图是生成的，云的高度量自图本身（竖图 30%、横图 35.5%，白天与夜里两张对齐过）。
-    /// 竖图的高在可见高的八成与宽的 1.62～1.75 倍之间：手机上云落在三成高处，高瘦的屏不把云推到太下面；
-    /// 横图铺满宽与高、再上移到云落在可见高的 30%（至少 230 点：Mac 栏头浮在内容上、不进安全区，Cue 的头要低过它）；矮的栏里图本身的云低不到那里，就放大到够。两种都以 Cue 所在那块的中线为中线，宽要盖住离中线远的那一边。
-    /// 云不高过安全区（状态栏、页头）往下 Cue 身高的六成：Cue 的头低于状态栏，页头两侧的圆钮在它左右（名牌这时让开，`CueHeader`）。
+    /// 这一格就是可见区里回复框以上那一截。Cue 站的那朵云（`perch`）先照图排：竖图铺满对话区、云在图高的 `line`；
+    /// 横图铺满宽、云落在格高的 30%（至少 230 点：Mac 栏头浮在内容上，Cue 的头要低过它）。云下放不下气泡时（手机上拍板卡升着）云往上提到放得下；
+    /// 提到云上只放得下八成五的 Cue 时，气泡少列几行（排在后面的先不列，至少留那一句），Cue 再缩也不小过六成，再放不下就不画 Cue。图跟着云走。
     struct Sky {
-        static let approach: CGFloat = 1.12
-        static let glow = CGSize(width: 360, height: 170)
-        static let glowStrength = 0.55
-        /// 云下沿到第一行字：云本身的厚度。
-        static let wordsGap: CGFloat = 40
-        static let wordsRise: CGFloat = 14
+        /// 上沿散成透明的那一截。
+        static let fade: CGFloat = 96
+        static let overscroll: CGFloat = 160
+        static let step: CGFloat = 120
+        /// 云上留给状态栏与页头圆钮的那一截：Cue 的头低过它。
+        static let headroom: CGFloat = 56
+        /// 气泡离这一格下沿（回复框上沿）。
+        static let floor: CGFloat = Spacing.block
+        /// 云下沿到气泡：云本身的厚度。
+        static let wordsGap: CGFloat = 36
+        static let rise: CGFloat = 14
 
         let asset: String
-        let width: CGFloat
-        let height: CGFloat
-        let top: CGFloat
-        let mid: CGFloat
+        let size: CGSize
+        let depth: CGFloat
+        let placement: CGRect
         let perch: CGFloat
         let figureScale: CGFloat
-        var perchUnit: CGFloat { (perch - top) / height }
+        let showsFigure: Bool
+        private static let leastScale: CGFloat = 0.6
 
-        init(_ size: CGSize, leading: CGFloat, top inset: CGFloat) {
-            mid = leading + (size.width - leading) / 2
-            let span = 2 * max(mid, size.width - mid)
-            figureScale = size.width - leading > 700 ? 1.15 : 1
-            let lowest = inset + Pose.size.height * figureScale * 0.6
-            if size.width > size.height {
-                asset = "cue-stage-sky-wide"
-                let line: CGFloat = 0.355
-                perch = max(size.height * 0.3, 230, lowest)
-                let scale = max(span / 1672, size.height / 941, perch / (941 * line))
-                (width, height) = (1672 * scale, 941 * scale)
-                top = perch - height * line
-            } else {
-                asset = "cue-stage-sky-tall"
-                height = max(min(max(size.height * 0.8, size.width * 1.62), size.width * 1.75), span * 1.5, lowest / 0.3)
-                width = height / 1.5
-                top = 0
-                perch = height * 0.3
+        /// 这一格里气泡能列几行：云上至少留八成五的 Cue。
+        static func rows(in height: CGFloat, base: CGFloat, row: CGFloat) -> Int {
+            let perch = headroom - Pose.footing + Pose.size.height * 0.85
+            return max(0, Int(((height - floor - wordsGap + SpeechShape.tail - perch - base) / row).rounded(.down)))
+        }
+
+        /// Cue 站的那朵云的顶在图里的高度，八张图量过都在这一线（生成时按它摆）。
+        static let line: CGFloat = 0.35
+
+        /// `chat`：整个对话区的高（连回复框底下），图的下沿至少到它（照片拉不出下沿，拉出去的只是糊开的竖纹）；天再往下多伸一截（`depth`），贴底回弹时不露出对话的底。
+        /// 都按一段一段取整：卡升起时回复框每帧长高，跟着重算网点就每帧一张。
+        init(_ size: CGSize, chat: CGFloat, period: Period, bubble: CGFloat) {
+            self.size = size
+            let cover = (chat / Self.step).rounded(.up) * Self.step
+            depth = cover + Self.overscroll
+            // 横竖按整个对话区定，不按这一格：拍板卡升降时这一格变矮变高，按它定的话近方形的栏里天会换成另一张图
+            let wide = size.width > chat
+            asset = "cue-stage-sky-\(period.rawValue)-\(wide ? "wide" : "tall")"
+            let line = Self.line
+            let aspect: CGFloat = wide ? 941 / 1672 : 1.5
+            let goal = wide ? max(size.height * 0.3, 230) : max(cover, size.width * aspect) * line
+            let room = size.height - Self.floor - bubble - Self.wordsGap + SpeechShape.tail
+            let lowest = Self.headroom - Pose.footing + Pose.size.height * Self.leastScale
+            // 连那一句都放不下六成的 Cue 时（横着的手机、拍板卡升着）不画 Cue，气泡顶到页头下面：画了头就出屏
+            showsFigure = room >= lowest
+            perch = showsFigure ? min(goal, room) : Self.headroom - Self.wordsGap + SpeechShape.tail
+            figureScale = min(size.width > 700 ? 1.15 : 1, max(Self.leastScale, (perch + Pose.footing - Self.headroom) / Pose.size.height))
+            let height = max(size.width * aspect, perch / line, (cover - perch) / (1 - line))
+            let width = height / aspect
+            placement = CGRect(x: (size.width - width) / 2, y: perch - height * line, width: width, height: height)
+        }
+    }
+
+    /// 一天里的四个时段，各一张天（竖横各一）。打开舞台那一刻取一次，看着不变。深色外观一律是夜里：白天的亮天垫在深色的玻璃后面刺眼。
+    enum Period: String {
+        case dawn, day, dusk, night
+
+        init(at moment: Date, dark: Bool, calendar: Calendar = .current) {
+            if let pinned = DebugHooks.preset.cueSky.flatMap(Period.init(rawValue:)) { self = pinned; return }
+            guard !dark else { self = .night; return }
+            self = switch calendar.component(.hour, from: moment) {
+            case 5..<9: .dawn
+            case 9..<17: .day
+            case 17..<20: .dusk
+            default: .night
             }
         }
     }
@@ -155,79 +181,5 @@ extension CueStage {
         let asset: String
 
         init(_ beat: CueBeat) { asset = "cue-stage-\(beat.pose)" }
-    }
-
-    /// 舞台上那一件，按先后只挑一件（规则只在这里）：不在、出错最先（别的动作这时都做不成），然后要你动手的（拍板、新回复），
-    /// 再是给你看一眼的（新消息、做完没看的），都没有时是不用你管的（等子代理、在想、歇着）。姿势照旧跟拍子（`Pose`），这里只定说哪件、点什么。
-    enum Focus: Hashable, Sendable {
-        case away(String, failed: Bool)
-        case asks(Int)
-        case reply(CueNow.Item)
-        case said(Said)
-        case done(Done)
-        case invite([CueInvite])
-        case delegating(CueNow.Item)
-        case quiet(String)
-
-        init(now: CueNow, said: Said?, read: CueStageRead) {
-            let item = { (kind: CueNow.Item.Kind) in now.items.first { $0.kind == kind } }
-            if case .away(let reason, let failed) = now.cue {
-                self = .away(reason, failed: failed)
-            } else if now.tally.asks > 0 {
-                self = .asks(now.tally.asks)
-            } else if let reply = item(.reply) {
-                self = .reply(reply)
-            } else if let said {
-                self = .said(said)
-            } else if let done = read.done {
-                self = .done(done)
-            } else if !read.invites.isEmpty, !now.isBusy {
-                self = .invite(read.invites)
-            } else if now.beat == .delegating, let waiting = item(.delegating) {
-                self = .delegating(waiting)
-            } else {
-                self = .quiet(now.quietLine)
-            }
-        }
-
-    }
-
-    /// 做完了、结果你还没看的那件（`CueStore.unseenDone`）：看结果就是看交给的那个会话，在那里看过它就下台。
-    nonisolated struct Done: Hashable, Sendable {
-        let task: UUID
-        let title: String
-        let session: String
-    }
-
-    /// 还没读的头一条 Cue 的话（`CueThread.unread`）：第一句是气泡的大字，其余是正文；它回的是你哪一句（它之前你说的最后一句）写在来由那一行。
-    struct Said: Hashable, Sendable {
-        let asked: String?
-        let head: String
-        let rest: String
-
-        init?(_ thread: CueThread) {
-            guard let index = thread.messages.firstIndex(where: { thread.unread.contains($0.id) }) else { return nil }
-            asked = thread.messages[..<index].last { $0.author == .known(.you) }.flatMap { SessionProgress.firstLine($0.text) }
-            (head, rest) = Self.split(thread.messages[index].text)
-        }
-
-        /// 第一句与其余：气泡里第一句是大字，其余是正文（新消息、新回复同一个截法）。
-        static func split(_ text: String) -> (String, String) {
-            let plain = MarkdownBlock.plainText(text).trimmingCharacters(in: .whitespacesAndNewlines)
-            guard let end = plain.firstIndex(where: { "。！？!?\n".contains($0) }) else { return (plain, "") }
-            return (String(plain[...end]).trimmingCharacters(in: .whitespacesAndNewlines),
-                    plain[plain.index(after: end)...].trimmingCharacters(in: .whitespacesAndNewlines))
-        }
-    }
-}
-
-private extension CueBeat {
-    var tone: CueNow.Tone {
-        switch self {
-        case .waiting: .asks
-        case .done: .done
-        case .thinking, .hearing, .delegating: .moving
-        case .resting, .away, .failed: .quiet
-        }
     }
 }

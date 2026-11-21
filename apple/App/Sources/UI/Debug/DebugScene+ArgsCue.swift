@@ -20,6 +20,8 @@ nonisolated struct CueArgs: Decodable, DebugArgGroup {
     let presence: String?
     /// `-CuePadCueStage open|closed`（配 cue 画面）：Cue 页打开时舞台开着或收着，不按上次离开的时刻定
     let stage: String?
+    /// `-CuePadCueSky dawn|day|dusk|night`（配 cue 画面）：舞台的天空钉成这个时段，不按钟点与外观换
+    let sky: String?
     /// `-CuePadCueStale YES`：Cue 页摆成对话停滞的样子
     let stale: Bool
 }

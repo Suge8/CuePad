@@ -53,12 +53,13 @@ private struct NarrowCue: View {
         RouteView(route: .cue)
             .environment(\.headerHost, .page)
             .background(palette.desk.ignoresSafeArea())
-            .overlay(alignment: .leading) {
+            .overlay {
                 SessionRail(data: workspace.services.liveSessions.rail, form: .phone, pulse: workspace.pulse) { session, _ in
                     workspace.openSession(session.id, sessionID: session.sessionID)
                 }
-                .padding(.top, CueHeader.height + Bars.contentGap)
-                .padding(.bottom, ComposerMetrics.slot + Spacing.block)
+                // 安全区让出页头与输入框，胶囊在中间那段居中；展开时点外面收起的那一层铺过安全区、盖满整屏
+                .safeAreaPadding(.top, CueHeader.height + Bars.contentGap)
+                .safeAreaPadding(.bottom, ComposerMetrics.slot + Spacing.block)
                 .opacity(panelOpen ? 0 : 1)
                 .allowsHitTesting(!panelOpen)
                 .readerHidden(panelOpen)
