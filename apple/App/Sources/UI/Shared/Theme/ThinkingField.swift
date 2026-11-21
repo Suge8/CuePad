@@ -1,13 +1,15 @@
 import MetalKit
 import SwiftUI
 
-/// 思考强度轨道里填满的那一段（模型气泡，`ThinkingTrack`）：一块铺满轨道的 Metal 画布，调用方按钮的位置遮出左边一截；色带从左端的靛长到
-/// 填满处（`fill`，占轨道宽的几成）正好是这一档的颜色，
-/// 里面两层星点往右流（近的大而快、远的小而慢），档越高（`energy` 0→1，`ThinkingMeter.energy`）星越密、流得越快、越亮；
-/// 中档起有一道扫光，最高档整段的能量翻涌、右端一团光在呼吸。换档时颜色与星的密度在画布里平滑地过去（`ThinkingRenderer`），不跳。
+/// 思考强度轨道里填满的那一段（模型气泡，`ThinkingTrack`）：一块铺满轨道的 Metal 画布，调用方按钮的位置遮出左边一截。
+/// 画法同 Cue 页的天：一格 2 点、对齐设备像素，按 8×8 阈值逐通道抖成网点，整个 App 一种质感。
+/// 色带从左端的钴蓝长到填满处（`fill`）正好是这一档的颜色；档越高（`energy` 0→1，`ThinkingMeter.energy`）多一样东西，前面的都留着：
+/// 最低档星点明灭 → 低档往右漂 → 中档拉成流光 → 高档一阵阵脉冲冲到钮、钮外亮一圈 → 很高档多一层更快的流、脉冲加密 → 最高档整段翻涌、钮边冒金色火花。
+/// 每样东西按能量淡入，换档时在画布里连续地过去（`ThinkingRenderer`）；换档那一下从钮荡开一圈。
 /// `running` 为假（减弱动态效果、省电、页不在前台，`LoopsPlay`）时停在一帧；关（`energy` 为 nil）、过渡走完也停，不空转。
 /// 着色器在运行时编（`ThinkingShaders`），不进构建：项目不另装 Metal 编译工具链（同 `FigureGPU`）；编好之前垫着同一套色的静止渐变。
-/// 否决过：Core Animation 的渐变层叠两团光——只能翻色，做不出星点、扫光这一档一个样子的差别；SwiftUI 的网格渐变按帧走——气泡开着时 App 进程一直占约 5% CPU。
+/// 否决过：Core Animation 的渐变层叠两团光——只能翻色，做不出一档一个样子的差别；SwiftUI 的网格渐变按帧走——气泡开着时 App 进程一直占约 5% CPU；
+/// 平滑的光带不抖网点——和 Cue 页的天、像素的小 Cue 是两种质感。
 struct ThinkingField: View {
     let energy: Double?
     let fill: Double
@@ -18,7 +20,7 @@ struct ThinkingField: View {
         LinearGradient(colors: [palette.thinkingLow, palette.thinking(energy ?? 0)], startPoint: .leading, endPoint: .trailing)
             .opacity(energy == nil ? 0 : 1)
             .overlay {
-                ThinkingSurface(energy: energy, fill: fill, running: running, ramp: [palette.thinkingLow, palette.thinkingMid, palette.thinkingHigh])
+                ThinkingSurface(energy: energy, fill: fill, running: running, ramp: [palette.thinkingLow, palette.thinkingMid, palette.thinkingHigh, palette.thinkingSpark])
             }
             .allowsHitTesting(false)
             .readerHidden(true)
@@ -57,13 +59,17 @@ final class ThinkingGPU {
 /// 与着色器里的 `Uniforms` 逐字段对齐：全是 float4。
 private struct ThinkingUniforms {
     var a: SIMD4<Float>  // 宽, 高（像素）, 时间, 能量
-    var b: SIMD4<Float>  // 每点几像素, 关（1 是关）, 填满处（占宽几成）, 0
-    var low, mid, high: SIMD4<Float>
+    var b: SIMD4<Float>  // 每点几像素, 关（1 是关）, 填满处（占宽几成）, 换档后过了几秒
+    var low, mid, high, spark: SIMD4<Float>
 }
 
 final class ThinkingRenderer: NSObject, MTKViewDelegate {
     /// 要去的档与填满处；画出来的每帧往它们靠（时间常数 `settle` 秒），颜色与星的密度一起过去。
-    var target: Double = 0
+    var target: Double = 0 {
+        didSet { if target != oldValue, shown != nil { changedAt = CACurrentMediaTime() } }
+    }
+    /// 上一次换档的时刻：从钮荡开的那一圈按它走；打开气泡那一下不算换档
+    private var changedAt = -Double.infinity
     var fill: Double = 1
     private var shownFill: Double?
     var off = false
@@ -79,7 +85,7 @@ final class ThinkingRenderer: NSObject, MTKViewDelegate {
     var settled: Bool { shown.map { abs($0 - target) < 0.002 } ?? false }
 
     func draw(in view: MTKView) {
-        guard let gpu = ThinkingGPU.ready, ramp.count == 3,
+        guard let gpu = ThinkingGPU.ready, ramp.count == 4,
               let pass = view.currentRenderPassDescriptor, let drawable = view.currentDrawable, let commands = gpu.queue.makeCommandBuffer() else { return }
         let now = CACurrentMediaTime()
         let step = last.map { min(now - $0, 0.1) } ?? 0
@@ -93,7 +99,7 @@ final class ThinkingRenderer: NSObject, MTKViewDelegate {
         let size = view.drawableSize, scale = Float(size.width / max(view.bounds.width, 1))
         var uniforms = ThinkingUniforms(
             a: SIMD4(Float(size.width), Float(size.height), time, Float(shown ?? target)),
-            b: SIMD4(scale, off ? 1 : 0, Float(shownFill ?? fill), 0), low: ramp[0], mid: ramp[1], high: ramp[2])
+            b: SIMD4(scale, off ? 1 : 0, Float(shownFill ?? fill), Float(min(now - changedAt, 10))), low: ramp[0], mid: ramp[1], high: ramp[2], spark: ramp[3])
         pass.colorAttachments[0].loadAction = .clear
         pass.colorAttachments[0].clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 0)
         let render = commands.makeRenderCommandEncoder(descriptor: pass)!
@@ -103,7 +109,7 @@ final class ThinkingRenderer: NSObject, MTKViewDelegate {
         render.endEncoding()
         commands.present(drawable)
         commands.commit()
-        if !running || (off && settled) {
+        if !running || (off && settled && now - changedAt > 1) {
             view.isPaused = true
             last = nil
         }
@@ -181,20 +187,18 @@ using namespace metal;
 
 struct Uniforms {
     float4 a;   // 宽, 高（像素）, 时间, 能量
-    float4 b;   // 每点几像素, 关, 填满处（占宽几成）
-    float4 low, mid, high;
+    float4 b;   // 每点几像素, 关, 填满处（占宽几成）, 换档后过了几秒
+    float4 low, mid, high, spark;
 };
 
 struct Out {
     float4 position [[position]];
-    float2 uv;
 };
 
 vertex Out thinkingVertex(uint id [[vertex_id]]) {
     float2 p = float2(id & 1, id >> 1);
     Out o;
     o.position = float4(p.x * 2 - 1, 1 - p.y * 2, 0, 1);
-    o.uv = p;
     return o;
 }
 
@@ -210,63 +214,85 @@ static float noise(float2 p) {
     return mix(mix(hash(i), hash(i + float2(1, 0)), u.x), mix(hash(i + float2(0, 1)), hash(i + float2(1, 1)), u.x), u.y);
 }
 
+// 8×8 有序抖动的阈值，与 Cue 页的天同一张表：按位交错算出来，不另抄一份。
+static float bayer(uint2 c) {
+    uint x = c.x ^ c.y, y = c.y, v = 0;
+    for (uint b = 0; b < 3; b++) v |= ((x >> b) & 1) << (5 - 2 * b) | ((y >> b) & 1) << (4 - 2 * b);
+    return (float(v) + 0.5) / 64.0;
+}
+
 static float3 ramp(float x, constant Uniforms &u) {
     x = clamp(x, 0.0, 1.0);
     return x < 0.5 ? mix(u.low.rgb, u.mid.rgb, x * 2) : mix(u.mid.rgb, u.high.rgb, x * 2 - 1);
 }
 
-// 一层星：按格子撒，每格至多一颗、按能量决定有没有；整层往右流，近的层格大、流得快。
-// 每个像素看周围九格：光晕比格子边近时也画完整，不被格子切成方块。
-static float stars(float2 p, float cell, float speed, float time, float density, float seed) {
+// 一层星：按格子撒，每格至多一颗；整层往右流。stretch 把星沿流向拉长成流光。看周围九格：拉长的光不被格子切断。
+static float motes(float2 p, float cell, float speed, float stretch, float density, float seed, float time, float grain) {
     p.x -= time * speed;
-    float2 home = floor(p / cell);
+    float2 q = float2(p.x / stretch, p.y);
+    float2 home = floor(q / cell);
     float sum = 0;
     for (int dy = -1; dy <= 1; dy++) {
         for (int dx = -1; dx <= 1; dx++) {
             float2 id = home + float2(dx, dy);
             float h = hash(id + seed);
             if (h > density) continue;
-            float2 at = (id + float2(hash(id + seed + 3.1), hash(id + seed + 7.7))) * cell;
-            float d = length(p - at);
-            float twinkle = 0.55 + 0.45 * sin(time * (2.0 + 3.0 * h) + h * 40.0);
-            float size = cell * (0.06 + 0.05 * hash(id + seed + 11.0));
-            sum += twinkle * (smoothstep(size, 0.0, d) + 0.35 * exp(-d * d / (size * size * 9.0)));
+            float2 d = q - (id + float2(hash(id + seed + 3.1), hash(id + seed + 7.7))) * cell;
+            float size = cell * grain;
+            float twinkle = 0.45 + 0.55 * sin(time * (1.5 + 3.0 * h) + h * 40.0);
+            sum += twinkle * exp(-dot(d, d) / (size * size));
         }
     }
     return sum;
 }
 
 fragment float4 thinkingFragment(Out in [[stage_in]], constant Uniforms &u [[buffer(0)]]) {
-    float2 size = u.a.xy / u.b.x;          // 按点算：星的大小、流速在各种屏上一样
-    float2 p = in.uv * size;
-    float time = u.a.z, e = u.a.w, h = size.y;
+    float scale = u.b.x, time = u.a.z, e = u.a.w, fill = max(u.b.z, 0.05);
     if (u.b.y > 0.5 && e < 0.002) return float4(0);
-    // 底：左端靛，往右长到填满处正好是这一档的颜色；上沿受光、下沿沉
-    float along = clamp(in.uv.x / max(u.b.z, 0.05), 0.0, 1.0);
-    float3 c = ramp(along * e, u);
-    c *= 1.1 - 0.25 * in.uv.y;
-    // 能量翻涌：一层慢慢漂的噪声，档越高越明显
-    float flow = noise(float2(p.x / h * 1.3 - time * (0.3 + 1.2 * e), p.y / h * 1.6 + time * 0.2));
-    c += (flow - 0.5) * 0.22 * e * c;
-    // 星：越往右越密越亮（能量从左边流进来）
-    float lean = smoothstep(0.0, 0.9, along);
-    float density = mix(0.0, 0.55, e) * lean;
-    float glow = stars(p, h * 0.5, h * (0.4 + 2.6 * e), time, density, 0.0)
-               + 0.6 * stars(p + 13.0, h * 0.32, h * (0.2 + 1.3 * e), time, density * 0.8, 5.0);
-    c += glow * (0.35 + 0.65 * e) * float3(1.0, 0.97, 1.0);
-    // 扫光：中档起一道斜光从左扫到右
-    float sweepOn = smoothstep(0.35, 0.6, e);
-    float phase = fract(time / 2.4) * 1.6 - 0.3;
-    float band = exp(-pow((along - phase - (in.uv.y - 0.5) * 0.25) / 0.07, 2.0));
-    c += band * 0.28 * sweepOn;
-    // 最高档：右端一团光在呼吸
-    float peak = smoothstep(0.85, 1.0, e);
-    float breathe = 0.75 + 0.25 * sin(time * 3.2);
-    float right = exp(-pow((u.b.z - in.uv.x) * size.x / (h * 1.4), 2.0));
-    c += right * peak * breathe * 0.35 * float3(1.0, 0.85, 0.95);
-    // 颗粒：免得渐变起色阶
-    c += (hash(floor(p * u.b.x)) - 0.5) * 0.02;
-    return float4(clamp(c, 0.0, 1.0), 1);
+    // 网点一格 2 点、整倍设备像素；格里每个像素取格心的值
+    float cellPx = 2.0 * max(1.0, round(scale));
+    uint2 cell = uint2(in.position.xy / cellPx);
+    float2 size = u.a.xy / scale;
+    float2 p = (float2(cell) + 0.5) * cellPx / scale;
+    float h = size.y;
+    float along = clamp(p.x / (size.x * fill), 0.0, 1.0);
+    float knob = size.x * fill - h * 0.5;
+    // 每跨一档多一样东西，到它那一档正好全亮：0 最低 … 5 最高
+    float stage = e * 5.0;
+    float drift = smoothstep(0.2, 1.0, stage), streak = smoothstep(1.2, 2.0, stage), pulse = smoothstep(2.2, 3.0, stage);
+    float layer = smoothstep(3.2, 4.0, stage), blaze = smoothstep(4.2, 5.0, stage);
+
+    // 明暗：0 是这一档的颜色压暗，1 是它本身，往上是光（白，最高档偏金）。底子左暗右亮、上沿受光，最高档翻涌
+    float churn = noise(float2(p.x / h * 1.1 - time * 1.4, p.y / h * 2.2 + time * 0.6));
+    float tone = 0.45 + 0.4 * along + 0.1 * (0.5 - p.y / h) + blaze * (churn - 0.5) * 0.6;
+
+    float light = 0;
+    float speed = h * (0.12 + 1.0 * drift + 1.4 * streak + 1.4 * layer + 1.0 * blaze);
+    light += 1.4 * motes(p, h * 0.5, speed, 1.0 + 3.5 * streak, 0.22 + 0.13 * e, 0.0, time, 0.26);
+    light += layer * 1.2 * motes(p + 17.0, h * 0.34, speed * 1.7, 1.0 + 5.0 * streak, 0.22, 5.0, time, 0.18);
+    float period = mix(2.2, 1.2, layer);
+    // 脉冲：一阵柔和的提亮从左扫到钮、略斜，网点在它经过时由暗转亮（不是一道实心光条）；很高档起再跟一阵
+    float slant = (p.y / h - 0.5) * 0.04;
+    float wave = pulse * exp(-pow((along - slant - fract(time / period)) / 0.09, 2.0));
+    wave += layer * 0.8 * exp(-pow((along - slant - fract(time / period + 0.5)) / 0.07, 2.0));
+    light += wave * 0.55 * smoothstep(0.0, 0.2, along);
+    float2 toKnob = float2(p.x - knob, p.y - h * 0.5);
+    float dk = length(toKnob);
+    light += exp(-pow(dk / (h * 0.85), 2.0)) * (0.3 * pulse + 0.4 * blaze * (0.75 + 0.25 * sin(time * 3.2)));
+    // 换档那一下：从钮荡开一圈，半秒散尽
+    float since = u.b.w;
+    light += exp(-pow((dk - since * h * 5.0) / (h * 0.3), 2.0)) * exp(-since * 5.0) * 0.9;
+    tone += light * (0.6 + 0.4 * along);
+
+    // 只抖明暗、不抖色相（同一种墨深浅两级相间，不冒杂色），四级一档，阈值同 Cue 页的天
+    float q = floor(max(tone, 0.0) * 4.0 + bayer(cell)) / 4.0;
+    float3 hue = ramp(along * e, u);
+    float3 glow = mix(float3(1.0), u.spark.rgb, blaze * 0.6);
+    float3 c = q <= 1.0 ? mix(hue * 0.55, hue, q) : mix(hue, glow, min((q - 1.0) * 1.6, 1.0));
+    // 最高档的火花：钮边的格子一闪一闪地变金
+    float near = exp(-pow((p.x - knob) / (h * 1.6), 2.0));
+    c = mix(c, u.spark.rgb, step(1.0 - 0.025 * blaze * near, hash(float2(cell) + floor(time * 8.0))));
+    return float4(c, 1);
 }
 """#
 }

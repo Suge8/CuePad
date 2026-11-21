@@ -183,9 +183,9 @@ private struct ModelPickBubble: View {
 }
 
 /// 思考强度的能量轨道：这个模型支持的档从左到右排开，填满到钮的那一段是这一档的思考场（`ThinkingField`），
-/// 档越高越长、越暖、星越密越快。最左端总是"关"：模型没有关这一档时那里空着、钮停不过去，最低档也就离开左端亮出一截，不像关着。
+/// 档越高越长、越暖、多一样动的东西。最左端总是"关"：模型没有关这一档时那里空着、钮停不过去，最低档也就离开左端亮出一截，不像关着。
 /// 按下或点在轨道上就跳到最近的档；拖着走时钮跟手，档位带回差地吸（过了两档正中再多走一成才换，
-/// 停在边界上不来回跳），每换一档轻震一下；松手才提交、钮弹到档位上。小标题那一行的右端写着此刻（拖着时是要去）的档。
+/// 停在边界上不来回跳），每换一档轻震一下（越高越重）；松手才提交、钮弹到档位上。小标题那一行的右端写着此刻（拖着时是要去）的档。
 /// 否决过：一排分段——五六段挤在一行只剩字，看不出"越往右越用力"，选中的那块也只是换个颜色。
 private struct ThinkingTrack: View {
     let meter: ThinkingMeter
@@ -224,7 +224,10 @@ private struct ThinkingTrack: View {
             guard let next = meter.step(direction == .increment ? 1 : -1), next != meter.current else { return }
             choose(next)
         }
-        .sensoryFeedback(.selection, trigger: index)
+        // 每换一档轻震一下，档越高震得越重
+        .sensoryFeedback(trigger: level) { _, level in
+            .impact(flexibility: .soft, intensity: 0.35 + 0.65 * (level.flatMap(ThinkingMeter.energy) ?? 0))
+        }
         .task(id: heading) {
             guard heading != nil, dragging == nil, (try? await Task.sleep(for: .seconds(1))) != nil else { return }
             heading = nil

@@ -131,7 +131,7 @@ struct TokenSheet: View {
             ("waitingPaper", palette.waitingPaper), ("neutralFill", palette.neutralFill),
             ("quietFill", palette.quietFill),
             ("thinkingLow", palette.thinkingLow), ("thinkingMid", palette.thinkingMid), ("thinkingHigh", palette.thinkingHigh),
-            ("thinkingRim", palette.thinkingRim),
+            ("thinkingRim", palette.thinkingRim), ("thinkingSpark", palette.thinkingSpark),
         ]
     }
 
