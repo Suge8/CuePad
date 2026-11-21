@@ -3,7 +3,7 @@ import SwiftUI
 
 /// 手机的会话条：贴屏幕左缘一条玻璃胶囊（边缘索引），每个会话一颗状态标，等你在上、推进中在下，两组之间一道缝；放不下时排前几个，末尾写 +N。
 /// 按住上下滑（同通讯录右侧的 A–Z 索引）：胶囊长成一块面板列出全部会话，手指经过的那行高亮、给一下选择触感，松在哪行开哪行，松在行外不开、收起。
-/// 轻点：面板留着，点行打开；点外面收起，面板里的空白不收。
+/// 轻点：面板留着，点行打开，放不下的滚着看；点外面、Esc 收起，面板里的空白不收。滑的时候不滚：只认摆出来的那几行。
 /// 收起与展开是同一块玻璃、同一列状态标：标从胶囊里的位置滑到它那一行，名字在玻璃长宽时露出来，不先消失再淡入。
 /// 被否决的：60 点宽的格子竖条（每格状态标加名字）——对话、舞台、拍板卡只能在剩下那块里居中，页头与输入框按整屏居中，整页偏右。
 struct SessionSpine: View {
@@ -56,20 +56,25 @@ struct SessionSpine: View {
 
     private func spine(_ plan: Plan, hits: Plan) -> some View {
         let shape = RoundedRectangle(cornerRadius: expanded ? Radius.sheet : Self.width / 2, style: .continuous)
-        return VStack(alignment: .leading, spacing: 0) {
-            ForEach(plan.waiting) { row($0, plan) }
-            if plan.splits { Color.clear.frame(height: Self.split) }
-            ForEach(plan.advancing) { row($0, plan) }
-            if plan.extra > 0 {
-                Text(verbatim: "+\(plan.extra)")
-                    .font(Typography.caption2.weight(.semibold)).monospacedDigit()
-                    .foregroundStyle(palette.ink2)
-                    .frame(width: Self.column, height: plan.rowHeight)
+        return ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(plan.waiting) { row($0, plan) }
+                if plan.splits { Color.clear.frame(height: Self.split) }
+                ForEach(plan.advancing) { row($0, plan) }
+                if plan.extra > 0 {
+                    Text(verbatim: "+\(plan.extra)")
+                        .font(Typography.caption2.weight(.semibold)).monospacedDigit()
+                        .foregroundStyle(palette.ink2)
+                        .frame(width: Self.column, height: plan.rowHeight)
+                        .readerHidden(true)
+                }
             }
+            .padding(Chrome.pad)
+            .padding(.vertical, Spacing.tight)
         }
-        .readerHidden(!expanded)
-        .padding(Chrome.pad)
-        .padding(.vertical, Spacing.tight)
+        .scrollDisabled(phase != .pinned)
+        .scrollIndicators(.hidden)
+        .scrollBounceBehavior(.basedOnSize)
         .frame(width: plan.width, height: plan.height, alignment: .topLeading)
         // 面板里的空白接住轻点、什么也不做：只有形状没有手势的地方，轻点会穿过去落到下面的对话上（实测）
         .background { if phase == .pinned { Color.clear.contentShape(.rect).onTapGesture {}.readerHidden(true) } }
@@ -89,6 +94,11 @@ struct SessionSpine: View {
                     .accessibilityAction { phase = .pinned }
             }
         }
+        .background {
+            // 外接键盘的 Esc；读屏的退出手势在下面
+            if expanded { Button("收起", action: collapse).keyboardShortcut(.cancelAction).hidden() }
+        }
+        .accessibilityAction(.escape) { collapse() }
     }
 
     private func row(_ item: SessionRailRows.Item, _ plan: Plan) -> some View {
@@ -106,8 +116,12 @@ struct SessionSpine: View {
         }
         .buttonStyle(RowStyle(selected: hovered == item.id))
         .allowsHitTesting(phase == .pinned)
-        .accessibilityLabel(Text(verbatim: item.name))
-        .accessibilityValue(Dotted(item.shown.label, line(item)).spoken)
+        // 收着时这一行不进读屏，换成什么都没有：藏起（readerHidden）的话，标在动的那几行照样被列出来（模拟器无障碍树实测）
+        .accessibilityRepresentation {
+            if expanded {
+                Button(item.name) { choose(item) }.accessibilityValue(Dotted(item.shown.label, line(item)).spoken)
+            }
+        }
         .transition(.opacity)
     }
 
@@ -195,7 +209,8 @@ struct SessionSpine: View {
             let room = band.height - 2 * Self.edge - (expanded ? 2 * Spacing.item : 0) - (rows.waiting.isEmpty || rows.advancing.isEmpty ? 0 : SessionSpine.split)
             let row = expanded ? min(tall, max(short, room / CGFloat(max(total, 1)))) : pitch
             let fits = Int(room / row)
-            let shown = total <= fits ? total : max(0, fits - 1)
+            // 展开的全列出来，放不下的滚着看
+            let shown = expanded || total <= fits ? total : max(0, fits - 1)
             waiting = Array(rows.waiting.prefix(shown))
             advancing = Array(rows.advancing.prefix(shown - waiting.count))
             extra = total - shown
@@ -203,12 +218,13 @@ struct SessionSpine: View {
             twoLines = row >= tall - Spacing.tight
             width = expanded ? min(SessionSpine.panelWidth, band.width - Spacing.tight - Spacing.page) : SessionSpine.width
             let lines = CGFloat(shown + (extra > 0 ? 1 : 0))
-            height = 2 * Self.edge + lines * row + (!waiting.isEmpty && !advancing.isEmpty ? SessionSpine.split : 0)
+            let content = 2 * Self.edge + lines * row + (!waiting.isEmpty && !advancing.isEmpty ? SessionSpine.split : 0)
+            height = expanded ? min(content, band.height - 2 * Spacing.item) : content
         }
 
         /// 玻璃自己坐标里的一点落在哪一行；行外（上下两头的边、两组之间的缝、玻璃右边之外）为 nil。左边不限：手指压着屏幕边。
         func item(at point: CGPoint) -> SessionRailRows.Item? {
-            guard point.x <= width else { return nil }
+            guard point.x <= width, point.y < height else { return nil }
             var y = point.y - Self.edge
             for (index, group) in [waiting, advancing].enumerated() {
                 if index == 1, splits { y -= SessionSpine.split }

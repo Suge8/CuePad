@@ -170,7 +170,7 @@ struct CuePage: View {
     private func openBrief(_ line: CueBrief.Line) {
         switch line.go {
         case .session(let session): workspace.openSession(SessionState.recordID(sessionID: session), sessionID: session)
-        case .message(let id): follow.land(on: id)
+        case .message(let id): follow.seek(id)
         }
     }
 

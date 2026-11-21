@@ -42,7 +42,7 @@ struct CueStage: View {
                     let lines = Array(brief.prefix(Sky.rows(in: room.size.height, base: base, row: row)))
                     let sky = Sky(CGSize(width: room.size.width + 2 * side, height: room.size.height), bubble: base + CGFloat(lines.count) * row)
                     ZStack(alignment: .top) {
-                        figure(sky)
+                        if sky.showsFigure { figure(sky) }
                         words(sky, lines: lines)
                     }
                     .frame(width: sky.size.width, height: room.size.height, alignment: .top)
@@ -95,7 +95,7 @@ struct CueStage: View {
 extension CueStage {
     /// 这一格就是可见区里回复框以上那一截。Cue 站的那朵云（`perch`）先照图排：竖图的高在格高的八成与宽的 1.62～1.75 倍之间、云在图高的 37%；
     /// 横图铺满宽与高、云落在格高的 30%（至少 230 点：Mac 栏头浮在内容上，Cue 的头要低过它）。云下放不下气泡时（手机上拍板卡升着）云往上提到放得下；
-    /// 提到云上只放得下八成五的 Cue 时，气泡少列几行（排在后面的先不列，至少留那一句），Cue 再缩也不小过六成。图跟着云走：Cue 站的那朵云在图里的高度量自图本身（`line`：竖图 37%、横图 38%）。
+    /// 提到云上只放得下八成五的 Cue 时，气泡少列几行（排在后面的先不列，至少留那一句），Cue 再缩也不小过六成，再放不下就不画 Cue。图跟着云走：Cue 站的那朵云在图里的高度量自图本身（`line`：竖图 37%、横图 38%）。
     struct Sky {
         static let tone = 0.1...0.96
         /// 上沿散成透明的那一截。
@@ -115,6 +115,8 @@ extension CueStage {
         let placement: CGRect
         let perch: CGFloat
         let figureScale: CGFloat
+        let showsFigure: Bool
+        private static let leastScale: CGFloat = 0.6
 
         /// 这一格里气泡能列几行：云上至少留八成五的 Cue。
         static func rows(in height: CGFloat, base: CGFloat, row: CGFloat) -> Int {
@@ -136,8 +138,11 @@ extension CueStage {
                 width = height / 1.5
             }
             let room = size.height - Self.floor - bubble - Self.wordsGap + SpeechShape.tail
-            perch = min(wide ? max(size.height * 0.3, 230) : height * line, room)
-            figureScale = min(size.width > 700 ? 1.15 : 1, max(0.6, (perch + Pose.footing - Self.headroom) / Pose.size.height))
+            let lowest = Self.headroom - Pose.footing + Pose.size.height * Self.leastScale
+            // 连那一句都放不下六成的 Cue 时（横着的手机、拍板卡升着）不画 Cue，气泡顶到页头下面：画了头就出屏
+            showsFigure = room >= lowest
+            perch = showsFigure ? min(wide ? max(size.height * 0.3, 230) : height * line, room) : Self.headroom - Self.wordsGap + SpeechShape.tail
+            figureScale = min(size.width > 700 ? 1.15 : 1, max(Self.leastScale, (perch + Pose.footing - Self.headroom) / Pose.size.height))
             placement = CGRect(x: (size.width - width) / 2, y: perch - height * line, width: width, height: height)
         }
     }
