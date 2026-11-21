@@ -1,7 +1,6 @@
 {
   "images" : [
-    { "filename" : "tall-day.jpg", "idiom" : "universal" },
-    { "appearances" : [ { "appearance" : "luminosity", "value" : "dark" } ], "filename" : "tall-night.jpg", "idiom" : "universal" }
+    { "filename" : "sky-tall.jpg", "idiom" : "universal" }
   ],
   "info" : { "author" : "xcode", "version" : 1 }
 }

@@ -14,20 +14,23 @@ struct FloatingReply<Chat: View, Reply: View>: View {
     /// 这一块的高。量到之前不排对话（同一次更新里的下一遍排版就量到了，第一帧照样有对话）：对话第一次排就按它让出底边，
     /// 不先按 0 排一遍再挪——那样滚动区的读数在打开的那一帧里多变一次，赶上推入页面时导航栏那一遍，系统丢掉第三次（`ChatScroll`）。
     @State private var height: CGFloat?
+    /// 对话区可见的高（`chatHeight`）：对话里铺满一屏的那一格要它（Cue 的舞台）。
+    @State private var visible: CGFloat = .infinity
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            if let height { chat.environment(\.chatBottomInset, height) }
+            if let height { chat.environment(\.chatBottomInset, height).environment(\.chatHeight, visible) }
             GeometryReader { room in
                 let page = room.bounds(of: .named(floatingReplyPage))?.maxY ?? room.size.height
-                let keyboard = room.size.height - page
+                let keyboard = room.size.height - page, visible = page + room.safeAreaInsets.top
                 reply
                     .padding(.bottom, Spacing.replyBottom)
                     // 对话区可见的高：透到上安全区里（页头、状态栏底下也是对话）的那段连同算；下边不算，键盘弹出时那是键盘，盖住的不可见。
                     // 与键盘高同在这一遍排版里定，不写回状态
-                    .environment(\.chatHeight, page + room.safeAreaInsets.top)
+                    .environment(\.chatHeight, visible)
                     .frame(maxWidth: .infinity)
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height = $0 }
+                    .onChange(of: visible, initial: true) { self.visible = visible }
                     .padding(.bottom, keyboard)
                     // 框就是给的高，放不下的从顶上伸出去，不伸到键盘底下
                     .frame(width: room.size.width, height: room.size.height, alignment: .bottom)

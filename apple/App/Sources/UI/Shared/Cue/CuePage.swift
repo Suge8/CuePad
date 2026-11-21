@@ -7,7 +7,7 @@ import SwiftUI
 /// Cue 自己醒来的几轮每轮一行旁注（`CueNoteLog`），末尾是它此刻在做什么（`CueEnding`：此刻在做的只写这里）。
 /// 拍板卡（`CueWaitDock`）里是 Cue 的提问与会话在问的，对话里不另挂；通话在输入框里（`CueComposer`），Mac 通话中通话条顶替输入框（`CueVoicePanel`）。
 /// 首次见面与启用只有一处（`CueWelcome`）：还没说过话时在正中，说过话后停用了在输入框正上方。
-/// 说过话、启用着时，新来访先是舞台（`CueStage`）占着对话区，收起才排对话：舞台开着时对话不排，新消息就不会被当成读过（`CueEndProbe`）。
+/// 说过话、启用着时，新来访时对话的尽头是舞台（`CueStage`）：打开停在它上面，往上滑是历史；你开口才收成末尾那一行。
 /// 对话第一帧就排好（`observing` 当场读），停在最新处；有新消息时从第一条读起，还没读的气泡旁一颗小点（`CueViewing`）。
 /// Cue 运行在别的设备上、本机正在和 iCloud 对时（`AppServices.isCatchingUp(on:)`）页头写"正在同步"，这期间到的话先不滑上来，
 /// 对完一次滑上来（`ChatColumn` 的 `holding`）：对完才算开始看，有新消息就到第一条新消息、从它读起，没有才到最新处（`CueViewing`）。
@@ -32,11 +32,13 @@ struct CuePage: View {
     @State private var dockedCard: String?
     /// 末尾在屏上的新消息（`CueViewing`）。
     @State private var seen: [UUID: Date] = [:]
-    /// 舞台开着（`CueStage`）：页出现时与新来访时（`CueViewing`）按上次离开的时刻定，输入框聚焦、发出、往下拉、点"看对话"收。
+    /// 舞台开着（`CueStage`）：页出现时与新来访时（`CueViewing`）按上次离开的时刻定，输入框聚焦、发出时收。
     /// 还没定（nil）时对话区空这一帧：先排一帧对话再换成舞台是一闪。
     @State private var stage: Bool?
-    /// 舞台自己读的（`CueStageRead`），舞台开着时才读。
-    @State private var stageRead: CueStageRead?
+    /// 舞台上云下那几件（`CueBrief`），舞台开着时才读。
+    @State private var brief: CueBrief?
+    /// 舞台此刻在可见区里：名牌让开、Mac 不垫托底（后面是天空）。往上看历史时它不在。
+    @State private var stageInView = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     static let readingWidth = Spacing.reading
@@ -52,7 +54,11 @@ struct CuePage: View {
             .previewPresenter($opened, reply: .cue)
             .panel(isPresented: Bindable(cue).showsMemory) { CueMemoryPage() }
             .panel(isPresented: Bindable(cue).showsSchedules) { CueSchedulePage() }
-            .modifier(CueViewing(thread: thread, catchingUp: catchingUp, seen: $seen, follow: $follow, staged: staged) { if DebugHooks.preset.cueStage == nil { stage = true } })
+            .modifier(CueViewing(thread: thread, catchingUp: catchingUp, seen: $seen, follow: $follow, staged: staged) {
+                guard DebugHooks.preset.cueStage == nil else { return }
+                stage = true
+                follow.jumpToNewest()
+            })
             .onAppear { if stage == nil { stage = DebugHooks.preset.cueStage ?? CueStage.opens(left: services.settings.cueLeft, at: .now) } }
             .onChange(of: thread.flatMap(card), initial: true) { dockedCard = $1 }
             .onChange(of: thread != nil, initial: true) { _, loaded in
@@ -67,14 +73,14 @@ struct CuePage: View {
             chat.frame(maxWidth: .infinity, maxHeight: .infinity)
         } reply: {
             bottom()
-                .replyTray(!staged)
+                .replyTray(!(staged && stageInView))
                 .padding(.horizontal, Self.inset)
                 .frame(maxWidth: Self.readingWidth)
         }
         .background { if grounded { palette.desk } }
     }
     #else
-    /// 名牌保留整页坐标；仅对话与拍板卡给常驻会话条让位，舞台的天空铺到会话条底下（`CueStage.leading`）。
+    /// 名牌保留整页坐标；对话与拍板卡给常驻会话条让位，舞台的天空铺到会话条底下（伸出读宽，`CueStage`）。
     private var page: some View {
         FloatingReply {
             chat
@@ -85,8 +91,8 @@ struct CuePage: View {
         }
         .scrollDismissesKeyboard(.interactively)
         // iPad 右边那一栏：名牌比栏窄，对话到名牌下沿淡出，不从名牌两侧露出来（`Bars`）；手机的名牌铺满整行，照沉浸式
-        .fadesUnderHead(headerHost == .panel && !staged)
-        .floatingHeader(.verbatim(cue.name), height: CueHeader.height, hasPanel: true, center: { CueHeader(staged: staged) }) { EmptyView() }
+        .fadesUnderHead(headerHost == .panel && !(staged && stageInView))
+        .floatingHeader(.verbatim(cue.name), height: CueHeader.height, hasPanel: true, center: { CueHeader(staged: staged && stageInView) }) { EmptyView() }
     }
     #endif
 
@@ -98,18 +104,10 @@ struct CuePage: View {
     /// 读不出来时也排一个真的视图：读库的订阅挂在页上，等视图出现才启动。
     @ViewBuilder private var chat: some View {
         Group {
-            if staged {
-                CueStage(
-                    beat: cue.beat, focus: CueStage.Focus(now: cue.now, said: thread.flatMap { CueStage.Said($0) }, read: stageRead ?? CueStageRead()),
-                    leading: railInset > 0 ? railInset + Self.inset : 0, close: closeStage)
-                    // 只在舞台开着时读：做完没看的与建议只上舞台
-                    .observing(services.store, into: $stageRead, onError: workspace.fail) { try CueStageRead.read(from: $0) }
-                    .transition(.asymmetric(insertion: .opacity, removal: .opacity.combined(with: .offset(y: -Spacing.vacant))))
-            } else if let thread, !thread.rows.isEmpty {
+            if let thread, !thread.rows.isEmpty {
                 if stage != nil {
                     conversation(thread)
                         .padding(.leading, railInset)
-                        .transition(.opacity.combined(with: .offset(y: Motion.Turn.distance)))
                 } else {
                     Color.clear
                 }
@@ -145,13 +143,34 @@ struct CuePage: View {
                     })
                     .equatable()
                 }
-                CueEnding(
-                    newestSaid: thread.messages.last { $0.author == .known(.cue) }?.createdAt, joined: rows.last?.speaker == .leading)
+                if staged {
+                    stageView(thread)
+                } else {
+                    CueEnding(
+                        newestSaid: thread.messages.last { $0.author == .known(.cue) }?.createdAt, joined: rows.last?.speaker == .leading)
+                }
             }
             #if os(iOS)
             // 手机上对话里的字不开行内选择：长按出的是消息菜单，挑字走菜单里的"选择文本"（同会话页）
             .environment(\.inlineTextSelection, false)
             #endif
+        }
+    }
+
+    private func stageView(_ thread: CueThread) -> some View {
+        let replies = cue.now.items.filter { $0.kind == .reply }, said = CueBrief.said(thread)
+        return CueStage(beat: cue.beat, status: cue.now.quietLine, brief: brief?.lines ?? [], outset: railInset, open: openBrief)
+            .onScrollVisibilityChange(threshold: 0.4) { stageInView = $0 }
+            .observing(services.store, id: [said?.detail, said?.title] + replies.map(\.id), into: $brief, onError: workspace.fail) { [replies, said] in
+                try CueBrief.read(replies: replies, said: said, from: $0)
+            }
+            .transition(.opacity)
+    }
+
+    private func openBrief(_ line: CueBrief.Line) {
+        switch line.go {
+        case .session(let session): workspace.openSession(SessionState.recordID(sessionID: session), sessionID: session)
+        case .message(let id): follow.land(on: id)
         }
     }
 
@@ -195,6 +214,7 @@ struct CuePage: View {
 
     private func closeStage() {
         guard stage == true else { return }
+        stageInView = false
         withAnimation(Motion.fading(Motion.travel, reduceMotion: reduceMotion)) { stage = false }
     }
 

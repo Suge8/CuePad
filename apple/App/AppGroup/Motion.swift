@@ -95,12 +95,11 @@ extension Motion {
         static let stroke = Animation.easeOut(duration: 0.45)
     }
 
-    /// Cue 页舞台的一幕（`CueStage`）是编排，不是控件的反馈：新来访时天空从近处拉远、慢慢落定（`unveil`，大块画面比面板开合慢一档，缓出到停），
-    /// Cue 与字随后浮上来（`rise`，无回弹）；收起回对话走 `travel`。减弱动态效果时只淡（`fading`）。
+    /// Cue 页舞台的一幕（`CueStage`）是编排，不是控件的反馈：天空淡进来，Cue 与字随后浮上来（`rise`，无回弹）；收起回对话走 `travel`。减弱动态效果时只淡（`fading`）。
     nonisolated enum Stage {
-        static let unveil = Animation.timingCurve(0.22, 1, 0.36, 1, duration: 1.6)
-        static let rise = Animation.spring(duration: 0.6)
-        /// 天空落定到一半时 Cue 出来，再过一拍字出来：先看到地方，再看到它，再看到它说什么。
+        static let riseDuration: TimeInterval = 0.6
+        static let rise = Animation.spring(duration: riseDuration)
+        /// 天空淡进来时 Cue 出来，再过一拍字出来：先看到地方，再看到它，再看到它说什么。
         static let figureDelay: TimeInterval = 0.3
         static let wordsDelay: TimeInterval = 0.6
     }

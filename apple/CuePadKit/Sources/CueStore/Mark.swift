@@ -1,6 +1,7 @@
 import Foundation
 
-/// 你对一样东西的注意（同步，各端都写）：Cue 页读到哪、会话看到哪、标为未读、灵感今天先不做。
+/// 你对一样东西的注意（同步，各端都写）：Cue 页读到哪、会话看到哪、标为未读。
+/// 库里还可能有已不用的种类（`ideaSkipped`，舞台的灵感建议删掉了）：没人读，照常同步，不清。
 /// 一条只记一个时刻，就记成这一行的修改时间，没有别的值：同步时两版按修改时间取晚的（`CueStore.applyVersion`），本机也只往后挪（`CueStore.mark`），
 /// 两台各记各的，谁也冲不掉另一台更晚的那一下。不记在它说的那样东西身上：那条记录的真改动与"看了一眼"并发时，整条取胜会带走另一边的。
 public enum Mark: Hashable, Sendable {
@@ -10,24 +11,19 @@ public enum Mark: Hashable, Sendable {
   case sessionSeen(String)
   /// 标为未读
   case sessionUnread(String)
-  /// 灵感划掉：当天不再提（`CueStore.pendingIdeas`）
-  case ideaSkipped(UUID)
 
   var kind: String {
     switch self {
     case .cueRead: "cueRead"
     case .sessionSeen: "sessionSeen"
     case .sessionUnread: "sessionUnread"
-    case .ideaSkipped: "ideaSkipped"
     }
   }
 
-  /// 卡片按库里的写法（小写），查询直接与 `cards.id` 比。
   var subject: String {
     switch self {
     case .cueRead: ""
     case .sessionSeen(let session), .sessionUnread(let session): session
-    case .ideaSkipped(let card): card.uuidString.lowercased()
     }
   }
 

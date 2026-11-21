@@ -5885,22 +5885,6 @@
         }
       }
     },
-    "今天先不做" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Not Today"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "今天先不做"
-          }
-        }
-      }
-    },
     "今天还没做完的" : {
       "localizations" : {
         "en" : {
@@ -8677,22 +8661,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "去会话"
-          }
-        }
-      }
-    },
-    "去会话里看" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Open Session"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "去会话里看"
           }
         }
       }
@@ -14181,22 +14149,6 @@
         }
       }
     },
-    "拆成任务" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Make Tasks"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "拆成任务"
-          }
-        }
-      }
-    },
     "拍板" : {
       "localizations" : {
         "en" : {
@@ -16541,34 +16493,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "最高"
-          }
-        }
-      }
-    },
-    "有 %lld 件等你拍板" : {
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld thing needs your call"
-                }
-              },
-              "other" : {
-                "stringUnit" : {
-                  "state" : "translated",
-                  "value" : "%lld things need your call"
-                }
-              }
-            }
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "有 %lld 件等你拍板"
           }
         }
       }
@@ -19945,22 +19869,6 @@
         }
       }
     },
-    "看对话" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Show Chat"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "看对话"
-          }
-        }
-      }
-    },
     "看怎么才会有额度" : {
       "localizations" : {
         "en" : {
@@ -20037,38 +19945,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "看每个窗口还剩多少、多久后重置"
-          }
-        }
-      }
-    },
-    "看看" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Look"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "看看"
-          }
-        }
-      }
-    },
-    "看结果" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "See Result"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "看结果"
           }
         }
       }
@@ -23921,22 +23797,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "这份资料库是更早版本的 CuePad 建的，这个版本不再升级它。你的内容没有被改动，请导出诊断，发给开发者。"
-          }
-        }
-      }
-    },
-    "这几件，要不要顺手做了？" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Want to knock these out?"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这几件，要不要顺手做了？"
           }
         }
       }
