@@ -152,10 +152,11 @@ private extension ToolLog.Call {
         self.init(kind: kind, target: target.clipped(Tools.targetLimit), added: change?.added ?? written, removed: change?.removed)
     }
 
+    /// 开头的 `cd … &&` 与环境变量赋值不算命令。值里有转义、引号套引号、命令替换这类按字面分不清到哪为止的，以及去掉后只剩注释的，整行照原样留着。
     private static func told(_ command: String) -> String? {
         guard let line = command.split(whereSeparator: \.isNewline).lazy.map({ $0.trimmingCharacters(in: .whitespaces) }).first(where: { !$0.isEmpty }) else { return nil }
-        let run = line.replacing(/^(?:(?:cd\s+(?:"[^"]*"|'[^']*'|\S+)\s*(?:&&|;)|[A-Za-z_]\w*=(?:"[^"]*"|'[^']*'|[^\s;&]*)(?:\s*(?:&&|;)|\s))\s*)+/, with: "")
-        return run.isEmpty ? line : run
+        let run = line.replacing(/^(?:(?:cd\s+(?:"[^"]*"|'[^']*'|[^\s;&\\"'`()]+)\s*(?:&&|;)|[A-Za-z_]\w*=(?:"[^"]*"|'[^']*'|[^\s;&\\"'`()]*)(?:\s*(?:&&|;)|\s))\s*)+/, with: "")
+        return run.isEmpty || run.hasPrefix("#") ? line : run
     }
 
     /// 相对工作目录；工作目录之外的家目录路径写成 ~/…（完整路径不同步）。

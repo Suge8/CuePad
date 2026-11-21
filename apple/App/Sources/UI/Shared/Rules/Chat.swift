@@ -152,7 +152,9 @@ nonisolated enum Chat {
 
     static let foldedLooks = 3
 
-    static func rows(_ items: [ChatMessage.Tools.Item]) -> [ProcessRow] {
+    /// 在跑的一轮逐条列：清单还在往后加，并起来的那一行会跟着换范围，开着的一行与它里面正在看的一步就被换掉了。
+    static func rows(_ items: [ChatMessage.Tools.Item], settled: Bool) -> [ProcessRow] {
+        guard settled else { return items.indices.map(ProcessRow.step) }
         var rows: [ProcessRow] = [], start = 0
         func close(at end: Int) {
             rows += end - start >= foldedLooks ? [.looks(start..<end)] : (start..<end).map(ProcessRow.step)
