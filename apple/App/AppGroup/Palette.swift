@@ -28,8 +28,12 @@ struct Palette {
     var sidebar: Color { dark ? Color(hex: 0x141210) : Color(hex: 0xE6E2DB) }
     /// 页面底，也是小组件与分享扩展的底。iOS 启动屏的底色（资源目录的 LaunchBackground）与它同值：启动屏只认资源目录里的颜色，不同的话冷启动先白后米一闪。
     var desk: Color { dark ? Color(hex: 0x1B1916) : Color(hex: 0xEFEDE8) }
-    /// Cue 页舞台那张天空图下沿的颜色（`CueStage`）：图下面接着铺它，接缝看不出。跟着图走，不跟桌面。
-    var sky: Color { dark ? Color(hex: 0x1B1132) : Color(hex: 0xF7DBD2) }
+    /// Cue 页舞台的天空抖成的三种墨（`CueStage`、`DitherImage`），由暗到亮：白天钴蓝的天、粉的霞、奶白的云，夜里墨蓝的天、靛的云影、月白的云。
+    var skyInks: [Color] {
+        dark ? [Color(hex: 0x0B0A1F), Color(hex: 0x3B3A9E), Color(hex: 0xD9D2FF)] : [Color(hex: 0x3A4FD8), Color(hex: 0xE6A4C4), Color(hex: 0xFFF4EC)]
+    }
+    /// 天空抖出来之前那一下的底（`CueStage`）：接近天空下半截点子混出来的颜色，抖好的图淡进来时不闪。
+    var sky: Color { dark ? Color(hex: 0x0E0C26) : Color(hex: 0xF6D9DC) }
     var paper: Color { dark ? Color(hex: 0x282420) : Color(hex: 0xFCFBF8) }
     var paperLit: Color { dark ? Color(hex: 0x2E2A25) : Color(hex: 0xFFFFFD) }
     var sheen: Color { Color.white.opacity(dark ? 0.07 : 0.9) }

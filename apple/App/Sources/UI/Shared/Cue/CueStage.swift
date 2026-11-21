@@ -4,7 +4,8 @@ import SwiftUI
 /// Cue 页的舞台：新来访时（`CueStage.opens`）对话先让给这一幕：云上的 Cue 摆着此刻那一拍的姿势（`Pose`），云下一句它此刻最该让你知道的那一件（`Focus`）。
 /// 那一件是 Cue 说出来的一个气泡（`CueBalloon`），尾巴指着云上的它：来由、那一句、正文与去处在同一块玻璃里，整块点得动。不另起卡：拍板时底下已有拍板卡，一屏只一张卡。
 /// 天空是一张图，浅色画白天、深色画夜里（按外观，不按钟点）；窄的用竖图、宽的用横图。Cue 站的那朵云在图里的高度是图高的一个比例（`Sky.perch`），
-/// 图只等比铺开，人与字都从那一线往下排；图下沿以下铺图底的颜色（`palette.sky`），输入框与拍板卡浮在上面。
+/// 图只等比铺开，人与字都从那一线往下排。图抖成三种墨的网点（`DitherImage`、`palette.skyInks`）再铺满整块，图下沿以下接着抖图边上的颜色：
+/// Cue 是软的立体，天是平的网点，一前一后分得开。输入框与拍板卡浮在上面。
 /// 进场只放一次（天空从近处拉远落定，Cue 与字随后浮上来），之后整幕静止：Cue 页在静置测量的范围里，不放常驻动效。换拍子是 Cue 跳一下换姿势（`Jelly`，同头像）。
 /// 自己收起（回到对话）在往下拉过头、点气泡时；输入框聚焦与发出由页收（`CuePage`）。
 struct CueStage: View {
@@ -37,11 +38,10 @@ struct CueStage: View {
             let sky = Sky(room.size, leading: leading, top: room.safeAreaInsets.top)
             ZStack(alignment: .top) {
                 palette.sky
-                Image(decorative: sky.asset)
-                    .resizable()
-                    .frame(width: sky.width, height: sky.height)
-                    .scaleEffect(shown || reduceMotion ? 1 : Sky.approach, anchor: UnitPoint(x: 0.5, y: sky.perchUnit))
-                    .position(x: sky.mid, y: sky.top + sky.height / 2)
+                DitherImage(
+                    asset: sky.asset, placement: CGRect(x: sky.mid - sky.width / 2, y: sky.top, width: sky.width, height: sky.height),
+                    size: room.size, inks: palette.skyInks, tone: palette.dark ? Sky.nightTone : Sky.dayTone)
+                    .scaleEffect(shown || reduceMotion ? 1 : Sky.approach, anchor: UnitPoint(x: sky.mid / room.size.width, y: sky.perch / room.size.height))
                 if beat == .away { palette.backdrop.transition(.opacity) }
                 glow(sky)
                 figure(sky)
@@ -118,11 +118,14 @@ extension CueStage {
         let asset: String
         let width: CGFloat
         let height: CGFloat
+        /// 图的明暗落在哪一段（量自图本身，竖图横图一样）：白天整张在亮的那半、夜里在暗的那半，拉开再抖。
+        static let dayTone = 0.6...0.96
+        static let nightTone = 0.06...0.62
+
         let top: CGFloat
         let mid: CGFloat
         let perch: CGFloat
         let figureScale: CGFloat
-        var perchUnit: CGFloat { (perch - top) / height }
 
         init(_ size: CGSize, leading: CGFloat, top inset: CGFloat) {
             mid = leading + (size.width - leading) / 2
