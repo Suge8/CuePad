@@ -147,15 +147,16 @@ extension DebugScene {
     }
 
     private static func playRound(for request: UUID, store: CueStore, host: String) async throws {
-        // 歇下的不再演一轮：一写状态它又醒了
-        guard let asked = try await store.deliveryRequest(request), asked.mode != .known(.end), let ref = asked.target.ref,
-              let session = try await store.sessionPage(SessionQuery(id: SessionState.recordID(sessionID: ref))).items.first?.state
-        else { return }
+        // 歇下的不演：一写状态它又醒了。每一下都重读，等的这几秒里被叫去歇下的也不再写
+        guard let asked = try await store.deliveryRequest(request), asked.mode != .known(.end), let ref = asked.target.ref else { return }
         let recorder = demoRecorder(store, host: host)
-        await Task.wait(for: .seconds(0.8))
-        try await replay(session, as: .thinking, recorder: recorder)
-        await Task.wait(for: .seconds(2.5))
-        try await replay(session, as: .settled, recorder: recorder)
+        for (wait, state) in [(0.8, WorkState.thinking), (2.5, .settled)] {
+            await Task.wait(for: .seconds(wait))
+            guard let session = try await store.sessionPage(SessionQuery(id: SessionState.recordID(sessionID: ref))).items.first?.state,
+                  session.state != .known(.ended)
+            else { return }
+            try await replay(session, as: state, recorder: recorder)
+        }
     }
 
     /// 演示会话换一个状态：名字、所在、模型、命令与上下文照旧（记录器每次整份写入，不带上就被清掉）。

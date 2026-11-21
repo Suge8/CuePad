@@ -68,12 +68,16 @@ public struct CueTally: Equatable, Sendable {
 }
 
 extension CueStore {
+  /// 你已经叫它歇了（结束在路上）的无主会话不在你看的推进中，不等那台 Mac 做完（同等你，`notEnding`）：不然完成后把卡归档、删掉，
+  /// 它在歇下之前又冒回推进中，像没歇成；没结束成（失败）的照常回来。只在这里筛，不进 `isLoose`：Cue 那边照旧管着它，
+  /// 不然歇着这一段里它的变化先被筛掉、Cue 的基线又走过去了，没歇成之后再也报不出来。
   public func cueTally() throws -> CueTally {
     let waiting = try cueWaiting()
     let replying = try sessionsAwaitingReply()
     let owners = try sessionOwners(replying.map(\.sessionID))
+    let board = try cueBoard()
     return CueTally(
-      works: try cueBoard().inProgress, waiting: waiting, replies: replying.map { CueTally.Reply(session: $0, task: owners[$0.sessionID]?.task.id) })
+      works: CueBoard(tasks: board.tasks, sessions: try notEnding(board.sessions)).inProgress, waiting: waiting, replies: replying.map { CueTally.Reply(session: $0, task: owners[$0.sessionID]?.task.id) })
   }
 
   public func cueWaiting() throws -> [CueTally.Wait] {
