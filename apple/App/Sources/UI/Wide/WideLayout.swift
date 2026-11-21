@@ -63,8 +63,11 @@ struct WideMetrics {
     /// 活预览放大到整个窗口（`Workspace.liveFill`）：会话条收起，预览那一块盖过主区。
     let fill: Bool
     let cueFits: Bool
-    /// 这个窗口放得下几块（不论此刻开了几块，最窄的会话按 `session` 算）：开在旁边、拖进来插一块时多出的挤掉最右那块（`Workspace.wideRoom`）。
+    /// 这个窗口放得下几块：画出来的几块，加上余下的宽还放得下几个最窄的会话（`session`）。同画不画按同一条宽算（会话条放不下就藏），
+    /// 开在旁边、拖进来插一块时多出的挤掉最右那块（`Workspace.wideRoom`）。
     let room: Int
+    /// 主区从左到右放着的几块里画出来的那些（最左不是会话时为空）：块按它认，挪了位置的从旧处滑到新处（`WideColumnSlide`）。
+    let order: [WideNavigation.Beside]
 
     var split: Bool { !beside.isEmpty }
     func narrowest(_ index: Int) -> CGFloat { index == 0 ? Self.session : beside[index - 1].narrowest }
@@ -91,26 +94,43 @@ struct WideMetrics {
         let cue: CGFloat
         var panes = 1
         var fill = false
+        var order: [WideNavigation.Beside] = []
     }
 
     /// 铺满的 Cue 随窗口变宽，不算换了形：拖窗口时不起滑动。
-    /// 并排添一块、收一块也算换形：那一块从主区右缘长出来、收回去（`MainWindow`、`SplitRoot` 一直挂着它）。
-    var shape: Shape { Shape(rail: rail, cue: home ? -1 : cue, panes: widths.count, fill: fill) }
+    /// 并排添一块、收一块、几块换了位置也算换形：添的那一块从主区右缘长出来、收回去（`MainWindow`、`SplitRoot` 一直挂着它），挪了的从旧处滑过去。
+    var shape: Shape { Shape(rail: rail, cue: home ? -1 : cue, panes: widths.count, fill: fill, order: order) }
 
+    /// 主区里画出来的每一块在窗口里的左缘与宽。
+    var spans: [WideNavigation.Beside: Span] {
+        Dictionary(order.indices.map { (order[$0], Span(origin: origin($0, window: .infinity), width: width($0))) }) { first, _ in first }
+    }
+
+    struct Span: Equatable {
+        let origin: CGFloat
+        let width: CGFloat
+    }
+
+    /// `width` 是窗口宽：放得下几块、画出来几块随导航变，由工作区按它当场算（`Workspace.wideSizes`），不存上一次排版的结果。
     struct Fits: Equatable {
         let rail: Bool
         let cue: Bool
-        let room: Int
+        let width: CGFloat
     }
 
-    var fits: Fits { Fits(rail: railFits, cue: cueFits, room: room) }
+    let window: CGFloat
+    var fits: Fits { Fits(rail: railFits, cue: cueFits, width: window) }
 
-    init(width: CGFloat, workspace: Workspace) {
-        home = workspace.cueHome
-        let wanted = workspace.beside.map(Kind.init)
+    /// `navigation` 给了就按它排（拖着时预演放下后的样子，`WideDropFeedback`），否则按工作区此刻的。
+    init(width: CGFloat, workspace: Workspace, navigation: WideNavigation? = nil) {
+        window = width
+        home = navigation?.home ?? workspace.cueHome
+        let panes = home ? [] : navigation?.panes ?? workspace.session(in: .main).map { [.session($0)] + workspace.beside } ?? []
+        let wanted = panes.dropFirst().map(Kind.init)
         var shown = wanted.count
         while shown > 0, Self.session + wanted.prefix(shown).map(\.narrowest).reduce(0, +) > width { shown -= 1 }
         beside = Array(wanted.prefix(shown))
+        order = Array(panes.prefix(1 + shown))
         fill = beside.contains(.preview) && workspace.liveFill != nil
         let narrowest = Self.session + beside.map(\.narrowest).reduce(0, +)
         railFits = width >= Chrome.rail + narrowest
@@ -119,8 +139,8 @@ struct WideMetrics {
         cue = home ? width - rail : workspace.services.settings.cueOpen && cueFits ? Self.cue : 0
         main = max(0, width - rail - cue)
         widths = Self.widths(main: main, beside: beside, fractions: workspace.paneShares.fractions(beside))
-        let open = width - (workspace.sidebarOpen ? Chrome.rail : 0)
-        room = max(1, min(WideNavigation.maxPanes, Int(open / Self.session)))
+        let spare = max(0, width - narrowest)
+        room = min(WideNavigation.maxPanes, 1 + shown + Int(spare / Self.session))
     }
 
     /// 按几成分主区，再让每块不窄于自己的最窄：超出的从最右那块往左收回（先保左边）；主区连最窄之和都放不下时左边那块仍保 `session`，右边的挤。

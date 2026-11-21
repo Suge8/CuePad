@@ -163,8 +163,15 @@ final class Workspace {
     var railDrawer = false
     @ObservationIgnored var wideFits: WideMetrics.Fits?
     var cueAsking: String?
-    var notice: Notice?
+    /// 挑会话的那条提示（`Notice.Tone.pick`）怎么没的都算不挑了（甩走、读屏关掉、被下一条顶掉）：挑着的状态只跟着它看得见的那段。
+    var notice: Notice? {
+        didSet { if oldValue?.tone == .pick, notice?.tone != .pick, pickingDock { setDock(nil) } }
+    }
     var preview: PreviewOpening?
+    /// 拖着经过宽屏主区时放下会怎样（`WideDrop`），占位按它画；不拖时为 nil。
+    var dropTarget: WideDropTarget?
+    /// 这个窗口里此刻拖起的是哪一块（`reportsWideDrag`，iPad 的落点读）；没在拖或拖的不是这个窗口报的为 nil。
+    @ObservationIgnored var dragging: WideNavigation.Beside??
     /// 一次性：该会话的回复框聚焦后清掉。
     var replyFocus: UUID?
     var folderPicker: Project?

@@ -38,7 +38,7 @@ struct MainWindow: View {
                 WideRail(width: sizes.rail)
                 // Cue 铺满时主区让出去（宽 0）、页留着不拆，订阅暂停
                 // 预览铺满时主区被右半盖住：宽不变（不重排），滑完藏起
-                WideColumnHost(slot: .main, focus: focus, origin: sizes.rail, width: sizes.leading + under, shape: sizes.shape, hidden: sizes.home || sizes.fill, under: under) {
+                WideColumnHost(slot: .main, focus: focus, origin: sizes.rail, width: sizes.leading + under, shape: sizes.shape, hidden: sizes.home || sizes.fill, under: under, spans: sizes.spans) {
                     MainColumn().environment(\.headInset, Self.inset(leading: Chrome.headLead(rail: sizes.rail), trailing: sizes.split ? Spacing.page : trail))
                         .environment(\.pageActive, !sizes.home && !sizes.fill)
                         .environment(\.underCue, under)
@@ -52,6 +52,7 @@ struct MainWindow: View {
                 }
             }
             .overlay { if !sizes.fill { ForEach(0..<sizes.widths.count - 1, id: \.self) { BesideDivider(sizes: sizes, index: $0) } } }
+            .overlay { WideDropFeedback(window: geometry.size.width) }
             .overlay { if !sizes.home, !sizes.fill { railChrome(sizes) } }
             .reportsWideFits(sizes, to: workspace)
             .overlay(alignment: .topTrailing) {
@@ -69,7 +70,7 @@ struct MainWindow: View {
     private func beside(_ index: Int, _ sizes: WideMetrics, window: CGFloat, trail: CGFloat) -> some View {
         let origin = sizes.origin(index + 1, window: window), width = sizes.width(index + 1)
         let last = index + 2 == sizes.widths.count
-        return WideColumnHost(slot: .beside(index), focus: focus, origin: origin, width: width, shape: sizes.shape, hidden: origin >= window) {
+        return WideColumnHost(slot: .beside(index), focus: focus, origin: origin, width: width, shape: sizes.shape, hidden: origin >= window, spans: sizes.spans) {
             BesideColumn(index: index) { SessionPage($0, column: .beside(index)) } card: { IdeaPane(cardID: $0, column: .beside(index)) }
                 .environment(\.headInset, Self.inset(leading: sizes.fill ? Chrome.toggle : Spacing.page, trailing: last || sizes.fill ? trail : Spacing.page))
         }

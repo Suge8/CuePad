@@ -15453,22 +15453,6 @@
         }
       }
     },
-    "放在这里" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Drop Here"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "放在这里"
-          }
-        }
-      }
-    },
     "放大" : {
       "localizations" : {
         "en" : {
@@ -20453,6 +20437,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "窗口"
+          }
+        }
+      }
+    },
+    "窗口太窄，放不下并排" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Window too narrow to show side by side"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "窗口太窄，放不下并排"
           }
         }
       }

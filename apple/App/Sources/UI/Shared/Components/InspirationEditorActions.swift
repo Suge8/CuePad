@@ -7,7 +7,6 @@ struct InspirationEditorActions: View {
     let card: Card
     let editing: CardEditing
     let sharing: InspirationSharing
-    @Environment(Workspace.self) private var workspace
 
     var body: some View {
         Group {
@@ -19,15 +18,6 @@ struct InspirationEditorActions: View {
                     sharing.present(InspirationPayload(files: nil, urls: [], text: CueFormat.plainText(Outgoing.text(body: latestText, values: card.variableValues))))
                 }
             }.disabled(editing.text.isEmpty || sharing.isBusy)
-            if workspace.layout == .narrow {
-                // 先落盘再走：编辑页离开时才存，停靠里的编辑器按库里的正文载入
-                Button("边聊边看", icon: .session) {
-                    workspace.attempt { [workspace, editing, id = card.id] in
-                        _ = try await editing.flushed()
-                        workspace.pickDock(id)
-                    }
-                }.disabled(editing.text.isEmpty)
-            }
             Divider()
             CardActions(card: card, more: true).labelStyle(.titleAndIcon)
         }

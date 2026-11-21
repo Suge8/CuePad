@@ -105,6 +105,12 @@ private struct CardDraggable<S: Shape>: ViewModifier {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
 
+    /// 拖进宽屏主区算哪一块（同 `WideDrop.pane`）：带会话的是会话，灵感是灵感，任务不接。
+    private var wide: WideNavigation.Beside?? {
+        if let session = session ?? card.session { return .session(SessionRoute(id: SessionState.recordID(sessionID: session), sessionID: session)) }
+        return .some(card.idea.map { .card($0) })
+    }
+
     func body(content: Content) -> some View {
         Group {
             if let session, workspace.layout == .wide {
@@ -122,6 +128,7 @@ private struct CardDraggable<S: Shape>: ViewModifier {
             }
         }
             .contentShape(.dragPreview, shape)
+            .reportsWideDrag(wide)
             .onDragSessionUpdated { session in
                 guard let drags else { return }
                 switch session.phase {

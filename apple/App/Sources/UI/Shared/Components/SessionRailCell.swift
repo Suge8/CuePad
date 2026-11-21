@@ -41,6 +41,7 @@ struct SessionRailCell: View {
                     .accessibilityActions { menu }
                     .contentShape(.dragPreview, .rect(cornerRadius: Radius.row))
                     .draggable(DraggedSession(sessionID: item.id))
+                    .reportsWideDrag(.session(SessionRoute(id: SessionState.recordID(sessionID: item.id), sessionID: item.id)))
             }
         }
         .padding(.leading, compact ? Self.indent : 0)

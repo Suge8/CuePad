@@ -17,7 +17,7 @@ struct SplitRoot: View {
             let under = sizes.split || sizes.home ? 0 : sizes.cue
             HStack(spacing: 0) {
                 if sizes.railFits { WideRail(width: sizes.rail, sizes: sizes) }
-                WideColumnHost(slot: .main, focus: focus, origin: sizes.rail, width: sizes.leading + under, shape: sizes.shape, hidden: sizes.home || sizes.fill, under: under) {
+                WideColumnHost(slot: .main, focus: focus, origin: sizes.rail, width: sizes.leading + under, shape: sizes.shape, hidden: sizes.home || sizes.fill, under: under, spans: sizes.spans) {
                     destination(workspace.mainRoute, column: .main)
                         .environment(\.headInset, EdgeInsets(top: 0, leading: Chrome.headLead(rail: sizes.rail), bottom: 0, trailing: Spacing.page))
                         .environment(\.underCue, under)
@@ -32,6 +32,7 @@ struct SplitRoot: View {
                 }
             }
             .overlay { if !sizes.fill { ForEach(0..<sizes.widths.count - 1, id: \.self) { BesideDivider(sizes: sizes, index: $0) } } }
+            .overlay { WideDropFeedback(window: geometry.size.width) }
             .overlay { if !sizes.home, !sizes.fill { railChrome(sizes) } }
             .readerHidden(covered)
             // 排在最上：抽屉开着时它与接点按的底盖住浮着的那一排与会话条的抽屉
@@ -52,7 +53,7 @@ struct SplitRoot: View {
     /// 并排时最左那块右边的第 `index` 块（会话、活预览、灵感）：没开着时也挂着、同样宽，停在窗口右缘外、滑完藏起；活预览放大时长到窗口左缘（同 Mac 的 `MainWindow.beside`）。
     private func beside(_ index: Int, _ sizes: WideMetrics, window: CGFloat) -> some View {
         let origin = sizes.origin(index + 1, window: window), width = sizes.width(index + 1)
-        return WideColumnHost(slot: .beside(index), focus: focus, origin: origin, width: width, shape: sizes.shape, hidden: origin >= window) {
+        return WideColumnHost(slot: .beside(index), focus: focus, origin: origin, width: width, shape: sizes.shape, hidden: origin >= window, spans: sizes.spans) {
             BesideColumn(index: index) { destination(.session($0), column: .beside(index)) } card: { IdeaPane(cardID: $0, column: .beside(index)) }
         }
         .frame(width: width)

@@ -7,16 +7,19 @@ struct WideTitleDrag: UIViewRepresentable {
     let title: String
     let type: UTType
     let item: any Encodable & Sendable
+    /// 拖起时报给宽屏主区的落点（`Workspace.dragging`）。
+    let pane: WideNavigation.Beside
     @Environment(Workspace.self) private var workspace
 
     func makeUIView(context: Context) -> WideTitleLabel {
-        WideTitleLabel(type: type, item: item, workspace: workspace)
+        WideTitleLabel(type: type, item: item, pane: pane, workspace: workspace)
     }
 
     func updateUIView(_ view: WideTitleLabel, context: Context) {
         view.text = title
         view.type = type
         view.item = item
+        view.pane = pane
     }
 
     /// 只占名字那么宽（放不下时截断）：名字后面紧跟的「已结束」挨着它，同 Mac。
@@ -29,11 +32,13 @@ struct WideTitleDrag: UIViewRepresentable {
 final class WideTitleLabel: UILabel, UIDragInteractionDelegate {
     var type: UTType
     var item: any Encodable & Sendable
+    var pane: WideNavigation.Beside
     private let workspace: Workspace
 
-    init(type: UTType, item: any Encodable & Sendable, workspace: Workspace) {
+    init(type: UTType, item: any Encodable & Sendable, pane: WideNavigation.Beside, workspace: Workspace) {
         self.type = type
         self.item = item
+        self.pane = pane
         self.workspace = workspace
         super.init(frame: .zero)
         font = .preferredFont(forTextStyle: .headline)
@@ -61,5 +66,8 @@ final class WideTitleLabel: UILabel, UIDragInteractionDelegate {
             return []
         }
     }
+
+    func dragInteraction(_ interaction: UIDragInteraction, sessionWillBegin session: any UIDragSession) { workspace.dragging = .some(pane) }
+    func dragInteraction(_ interaction: UIDragInteraction, session: any UIDragSession, didEndWith operation: UIDropOperation) { workspace.dragging = nil }
 }
 #endif

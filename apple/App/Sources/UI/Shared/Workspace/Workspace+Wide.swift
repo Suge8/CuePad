@@ -65,8 +65,9 @@ extension Workspace {
     func fit(_ fits: WideMetrics.Fits) {
         let previous = wideFits
         wideFits = fits
-        if fits.rail || previous.map({ $0.rail != fits.rail }) == true { railDrawer = false }
-        if fits.cue || previous.map({ $0.cue != fits.cue }) == true { cueDrawer = false }
+        // 窗口宽每次拖窗口都报（`Fits.width`）：只在真要改时写，不然每一帧都惊动读它的视图
+        if railDrawer, fits.rail || previous.map({ $0.rail != fits.rail }) == true { railDrawer = false }
+        if cueDrawer, fits.cue || previous.map({ $0.cue != fits.cue }) == true { cueDrawer = false }
     }
 
     var railExpanded: Bool {
@@ -96,12 +97,12 @@ extension Workspace {
             overlay = nil
             state.main = .session(session)
             state.beside = [.card(card)]
-        } else if case .beside(let index) = column, let main = state.mainSession {
-            let count = state.beside.count, full = 1 + count >= wideRoom
+        } else if case .beside(let index) = column, let main = state.mainSession, wideRoom > 1 {
+            let shown = wideShown, full = 1 + shown >= wideRoom
             if main.id != session.id, !state.beside.contains(.session(session)) {
-                // 放满了的开在旁边换掉最右那块（`wideRoom` 至少两块，放满时右边总有一块）
-                let at = index < count ? index + 1 : full ? count : count + 1
-                state.place(.session(session), at: at, replacing: index < count || full, room: wideRoom)
+                // 放满了的开在旁边换掉看得见的最右那块（`wideShown`：窗口变窄后藏起的几块还在导航里，不换看不见的）
+                let at = index < shown ? index + 1 : full ? shown : shown + 1
+                state.place(.session(session), at: at, replacing: index < shown || full, room: wideRoom)
             }
         } else {
             state.beside.removeAll { $0 == .session(session) }
@@ -111,33 +112,25 @@ extension Workspace {
         presentWide(state)
     }
 
-    /// 拖进主区放下（`WideDrop`）：`index` 是放下后它在几块里的序号，`replacing` 换掉那一块。同窗口里拖来的已在主区，挪过去；
-    /// 跨窗口只在这个窗口打开，不改源窗口。主区不是会话时会话开到主区、灵感照常盖在主区上打开。
-    func drop(_ pane: WideNavigation.Beside, at index: Int, replacing: Bool) {
-        guard case .wide(var state) = navigation else { return }
+    /// 拖进主区放下（`WideDrop`）、灵感页头的并排钮：`index` 是放下后它在几块里的序号，`replacing` 换掉那一块；规则在 `WideNavigation.dropping`。
+    /// 同窗口里拖来的已在主区，挪过去；跨窗口只在这个窗口打开，不改源窗口。放不了的不动、返回假。
+    @discardableResult func drop(_ pane: WideNavigation.Beside, at index: Int, replacing: Bool) -> Bool {
+        guard case .wide(let state) = navigation,
+              let next = state.dropping(pane, at: index, replacing: replacing, room: wideRoom, covering: openCard) else { return false }
         openTask = nil
-        guard state.mainSession != nil else {
-            switch pane {
-            case .session(let session): openWideSession(session, in: openCard != nil ? .aside : .main)
-            case .card(let id): showEditor(id)
-            case .preview: break
-            }
-            return
-        }
-        if case .card(let id) = pane { close(.card(id)) }
-        state.place(pane, at: index, replacing: replacing, room: wideRoom)
-        state.home = false
-        presentWide(state)
+        if let card = openCard, next.beside.contains(.card(card)) { overlay = nil }
+        presentWide(next)
+        return true
     }
 
-    /// 栏头的键盘挪（⌘⌥← →）：这一块与左边或右边那块对调；最左只能是会话，挪不过去的不动。
+    /// 栏头的键盘挪（⌘⌥← →）：这一块与左边或右边看得见的那块对调；最左只能是会话，挪不过去的不动、返回假（焦点不跟过去）。
     /// focus 不存到导航；调用方把实际有键盘焦点的那一块传进来。
-    func moveColumn(_ column: Column, by step: Int) {
-        guard case .wide(var state) = navigation, state.mainSession != nil, let pane = pane(in: column) else { return }
+    func moveColumn(_ column: Column, by step: Int) -> Bool {
+        guard case .wide(var state) = navigation, state.mainSession != nil, let pane = pane(in: column) else { return false }
         let target = column.index + step
-        guard target >= 0, target <= state.beside.count else { return }
-        state.place(pane, at: target, replacing: true, room: wideRoom)
+        guard target >= 0, target <= wideShown, state.place(pane, at: target, replacing: true, room: wideRoom) else { return false }
         presentWide(state)
+        return true
     }
 
     /// 主区第几块放的是什么（最左那块不是会话时为 nil）。
@@ -153,8 +146,14 @@ extension Workspace {
         if case .session(let route)? = pane(in: column) { route } else { nil }
     }
 
-    /// 窗口此刻放得下几块（宽屏的根报来，`WideMetrics.room`）：开在旁边、插进来时多出的挤掉最右那块。至少两块：窄到放不下两块时并排照开、挤着（先保最左）。
-    var wideRoom: Int { max(2, wideFits?.room ?? 2) }
+    /// 按宽屏的根报来的窗口宽、此刻的导航排一遍（还没排过版时为 nil）。
+    private var wideSizes: WideMetrics? { wideFits.map { WideMetrics(width: $0.width, workspace: self) } }
+
+    /// 窗口此刻放得下几块（`WideMetrics.room`）：开在旁边、插进来时多出的挤掉最右那块；只放得下一块时开在旁边就是开在主区。
+    var wideRoom: Int { wideSizes?.room ?? 2 }
+
+    /// 右边此刻画出来几块（`WideMetrics.beside`）：窗口变窄后右端藏起的还在 `beside` 里，开在旁边、拖放、键盘挪只认看得见的。
+    var wideShown: Int { wideSizes?.beside.count ?? beside.count }
 
     private func presentWide(_ state: WideNavigation) {
         let previous = mainRoute

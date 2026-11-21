@@ -133,7 +133,7 @@ enum WideSlide {
 final class WideColumnSlide {
     private let slot: WideSlot
     private let apply: (_ hidden: Bool) -> Void
-    private var previous: (origin: CGFloat, width: CGFloat, shape: WideMetrics.Shape)?
+    private var previous: (origin: CGFloat, width: CGFloat, shape: WideMetrics.Shape, pane: WideNavigation.Beside?, spans: [WideNavigation.Beside: WideMetrics.Span])?
     private var sequence = 0
     private var sliding: Int?
     private var hidden = false
@@ -153,8 +153,11 @@ final class WideColumnSlide {
         self.apply = apply
     }
 
-    func move(_ layer: CALayer, page: CALayer, origin: CGFloat, width: CGFloat, shape: WideMetrics.Shape) {
-        defer { previous = (origin, width, shape) }
+    /// `spans` 是主区此刻画出来的每一块在哪（`WideMetrics.spans`）：这一块换了放的东西时，挪来的（插进一块、两块对调）从它原来那一块的位置与宽滑过来，
+    /// 新放进来的在原地淡入——不在原处先淡出旧的、再淡入新的。
+    func move(_ layer: CALayer, page: CALayer, origin: CGFloat, width: CGFloat, shape: WideMetrics.Shape, spans: [WideNavigation.Beside: WideMetrics.Span] = [:]) {
+        let pane = slot.column.flatMap { shape.order.indices.contains($0.index) ? shape.order[$0.index] : nil }
+        defer { previous = (origin, width, shape, pane, spans) }
         guard let previous, previous.shape != shape else { return }
         sequence += 1
         let turn = sequence
@@ -162,9 +165,14 @@ final class WideColumnSlide {
         CATransaction.begin()
         CATransaction.setCompletionBlock { [weak self] in self?.landed(turn) }
         defer { CATransaction.commit() }
-        let distance = previous.origin - origin
+        let swapped = pane != nil && pane != previous.pane
+        let from = swapped ? pane.flatMap { previous.spans[$0] }.flatMap { $0.origin.isFinite ? $0 : nil } : nil
+        let distance = (from?.origin ?? previous.origin) - origin
         let edge: CGFloat
-        if slot == .main, shape.rail < previous.shape.rail {
+        if let from {
+            WideSlide.translate(layer, by: distance, key: "wide.\(turn)")
+            edge = from.width - width
+        } else if slot == .main, shape.rail < previous.shape.rail {
             WideSlide.slide(layer, "bounds.origin.x", by: -distance, key: "wide.\(turn)")
             edge = previous.width + distance - width
         } else {
@@ -175,8 +183,13 @@ final class WideColumnSlide {
         WideSlide.slide(layer, "position.x", by: layer.anchorPoint.x * edge, key: "wide.edge.anchor.\(turn)")
         // 并排的右半从窗口外滑进来时页是这一下才挂上的（`BesideColumn`），层全是新的：随块一起平移进来，不当作新露出的层等落定再淡入
         let entering = hidden && slot.column.map { $0 != .main } == true
+        if swapped {
+            // 换了放的东西，页的层全是新的，没有旧位置可补
+            if from == nil, !entering { WideSlide.appear(layer, key: "wide.appear.\(turn)") }
         // 主区压在 Cue 浮板下面时块的宽不随 Cue 开合变，页照样按让出后的宽重排（`underCue`）
-        if !entering, previous.width != width || slot == .main { pending = (WideSlide.Positions(page), "wide.page.\(turn)", Self.layoutPasses) }
+        } else if !entering, previous.width != width || slot == .main {
+            pending = (WideSlide.Positions(page), "wide.page.\(turn)", Self.layoutPasses)
+        }
     }
 
     /// 页按新宽排完（托管视图排版之后调）：各层从记下的旧处滑到此刻的新处，同一次提交里起步；第二遍只补新挪的（`Positions`）。没排齐就滑完了的作废（`landed`）。

@@ -73,7 +73,7 @@ struct IdeaPane: View {
             }
             let title = data?.card.heading ?? ""
             #if os(iOS)
-            WideTitleDrag(title: title, type: .cuepadCard, item: DraggedCard.idea(cardID)).layoutPriority(1)
+            WideTitleDrag(title: title, type: .cuepadCard, item: DraggedCard.idea(cardID), pane: .card(cardID)).layoutPriority(1)
             #else
             Text(verbatim: title).foregroundStyle(palette.ink).lineLimit(1)
                 .contentShape(.rect)
@@ -88,27 +88,45 @@ struct IdeaPane: View {
     }
 }
 
-/// 盖在会话上打开的灵感（编辑页）栏头那颗：把它挪到会话旁边并排，边聊边看。只在主区最左是会话时有。
 extension View {
+    /// 灵感的名牌拖到主区右边，它就并排到会话旁边（`WideDrop`）。
     @ViewBuilder func draggable(idea: UUID?) -> some View {
-        if let idea { draggable(DraggedCard.idea(idea)) } else { self }
+        if let idea { draggable(DraggedCard.idea(idea)).reportsWideDrag(.card(idea)) } else { self }
     }
 }
 
+/// 灵感编辑页栏头那颗，三端同一处：宽屏盖在会话上打开时，把它挪到会话旁边并排（只在主区最左是会话时有）；
+/// 手机回到 Cue 页挑一个会话、停在它的回复框上方（`Workspace.pickDock`）。都是边聊边看。
 struct BesideIdeaButton: View {
     let cardID: UUID
+    /// 手机上先把编辑页的字落盘：停靠里的编辑器按库里的正文载入。
+    var editing: CardEditing?
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
-        if workspace.layout == .wide, workspace.session(in: .main) != nil, workspace.openCard == cardID {
-            #if os(macOS)
-            HeadTool(label: "并排打开", icon: .rightColumn, action: besides)
-            #else
-            // 页头右边那一排自己是一块玻璃（`FloatingHeader`）：钮不再带玻璃
-            Button("并排打开", icon: .rightColumn, action: besides)
-            #endif
+        switch workspace.layout {
+        case .wide:
+            if workspace.session(in: .main) != nil, workspace.openCard == cardID {
+                #if os(macOS)
+                HeadTool(label: "并排打开", icon: .rightColumn, action: besides)
+                #else
+                // 页头右边那一排自己是一块玻璃（`FloatingHeader`）：钮不再带玻璃
+                Button("并排打开", icon: .rightColumn, action: besides)
+                #endif
+            }
+        case .narrow:
+            Button("边聊边看", icon: .rightColumn) {
+                workspace.attempt { [workspace, editing, cardID] in
+                    _ = try await editing?.flushed()
+                    workspace.pickDock(cardID)
+                }
+            }
+            .disabled(editing?.text.isEmpty ?? true)
         }
     }
 
-    private func besides() { workspace.drop(.card(cardID), at: WideNavigation.maxPanes, replacing: false) }
+    /// 窗口只放得下一块时放不了（`Workspace.wideRoom`）：说一声，不当作点了没反应。
+    private func besides() {
+        if !workspace.drop(.card(cardID), at: WideNavigation.maxPanes, replacing: false) { workspace.say("窗口太窄，放不下并排", tone: .failure) }
+    }
 }

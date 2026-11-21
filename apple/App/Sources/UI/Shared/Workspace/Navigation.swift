@@ -31,8 +31,8 @@ struct IdeaDock: Equatable {
 /// Cue 是落点（`home`，同手机以 Cue 为根）：没去别处时它铺满会话条之外；去了项目、进展或会话，它让到右边——那时它收没收起是用户的选择
 /// （`AppSettings.cueOpen`），放不下时住进右缘抽屉、开没开是这一刻的呈现（`Workspace.cueDrawer`）。
 /// 同一个会话最多占一块，回复草稿仍按会话 id 由 AppSettings 持有。
-struct WideNavigation {
-    enum Main {
+struct WideNavigation: Equatable {
+    enum Main: Equatable {
         /// 浏览落点直接引用持久选择（`browseRoute`），不复制分段。
         case browse
         case session(SessionRoute)
@@ -74,9 +74,9 @@ struct WideNavigation {
     var besideSessions: [SessionRoute] { beside.compactMap { if case .session(let route) = $0 { route } else { nil } } }
 
     /// 把一块放到主区第 `index` 块（0 是最左）：`replacing` 换掉那一块，否则插在那里、后面的往右挪，多出 `room` 的挤掉最右那块（不挤刚放的）。
-    /// 已在主区的挪过去：换掉时两块对调，插入时从原处拿走。放完最左不是会话的不放（灵感、预览不能在最左）；最左换了会话时它的预览收起。
-    mutating func place(_ pane: Beside, at index: Int, replacing: Bool, room: Int) {
-        guard let first = mainSession else { return }
+    /// 已在主区的挪过去：换掉时两块对调，插入时从原处拿走。放完最左不是会话的不放、返回假（灵感、预览不能在最左）；最左换了会话时它的预览收起。
+    @discardableResult mutating func place(_ pane: Beside, at index: Int, replacing: Bool, room: Int) -> Bool {
+        guard let first = mainSession else { return false }
         var panes: [Beside] = [.session(first)] + beside
         var index = min(max(0, index), panes.count - (replacing ? 1 : 0))
         if let old = panes.firstIndex(of: pane) {
@@ -93,18 +93,37 @@ struct WideNavigation {
             panes.insert(pane, at: index)
             if panes.count > max(1, room) { panes.remove(at: index == panes.count - 1 ? panes.count - 2 : panes.count - 1) }
         }
-        guard case .session(let lead) = panes[0] else { return }
+        guard case .session(let lead) = panes[0] else { return false }
         if lead.id != first.id { panes.removeAll { $0 == .preview } }
         main = .session(lead)
         beside = Array(panes.dropFirst())
+        return true
     }
 
-    /// 开合最左那个会话的活预览：开在它紧右边，放满了挤掉最右那块。
+    /// 拖进主区的一块放下后的样子（拖着时的占位按它画，`WideDrop`）；nil 是放不了或放了不变。最左不是会话时只接会话，开到最左。
+    /// `covering` 是盖在主区上的那条灵感（`Workspace.openCard`）：会话放在被它盖着的最左那块上，会话占最左、灵感挪到它右边，接着边聊边看。
+    func dropping(_ pane: Beside, at index: Int, replacing: Bool, room: Int, covering: UUID?) -> WideNavigation? {
+        var next = self
+        next.home = false
+        if case .session(let session) = pane, mainSession == nil || covering != nil && index == 0 {
+            next.beside.removeAll { $0 == pane }
+            next.main = .session(session)
+            if let covering, !next.place(.card(covering), at: 1, replacing: false, room: room) { return nil }
+        } else if !next.place(pane, at: index, replacing: replacing, room: room) {
+            return nil
+        }
+        return next == self ? nil : next
+    }
+
+    /// 主区从左到右放着的几块（最左不是会话时为空）。
+    var panes: [Beside] { mainSession.map { [.session($0)] + beside } ?? [] }
+
+    /// 开合最左那个会话的活预览：开在它紧右边，放满了挤掉最右那块。只放得下一块时也开（至少按两块算）：预览能放大到整个窗口（`Workspace.liveFill`）。
     mutating func togglePreview(room: Int) {
         if beside.contains(.preview) {
             beside.removeAll { $0 == .preview }
         } else {
-            place(.preview, at: 1, replacing: false, room: room)
+            place(.preview, at: 1, replacing: false, room: max(2, room))
         }
     }
 
@@ -252,9 +271,9 @@ extension Workspace {
         }
     }
 
-    /// 宽→窄：浏览入口在侧栏，主区详情先入栈，并排的几块（会话、灵感；预览不留）、盖在主区上的页依次在上面。
-    /// 窄→宽：栈顶的编辑页、文件页盖到主区上（`overlay`），其下的栈顶或浏览落点进主区（会话独占主区，其下的页回到浏览落点）。
-    /// 只转换此刻的导航，不缓存旧布局。
+    /// 宽→窄：浏览入口在侧栏，主区详情先入栈，并排的会话依次在上面（预览不留），并排的灵感停在栈顶那个会话上（`IdeaDock`），盖在主区上的页再在最上。
+    /// 窄→宽：栈顶的编辑页、文件页盖到主区上（`overlay`），栈顶连着的几个会话（至多 `maxPanes`）原样并排、停着的灵感并排在最右，
+    /// 否则栈顶或浏览落点进主区（会话独占主区，其下的页回到浏览落点）。只转换此刻的导航，不缓存旧布局。
     func setLayout(_ next: Layout) {
         guard next != layout else { return }
         switch navigation {
@@ -267,13 +286,9 @@ extension Workspace {
             default: narrow = NarrowNavigation(path: [mainRoute])
             }
             if !state.home {
-                for pane in state.beside {
-                    switch pane {
-                    case .session(let session): narrow.path.append(.session(session))
-                    case .card(let id): narrow.path.append(.card(id))
-                    case .preview: break
-                    }
-                }
+                for session in state.besideSessions { narrow.path.append(.session(session)) }
+                let card = state.beside.lazy.compactMap { if case .card(let id) = $0 { id } else { nil } }.first
+                if let card, case .session(let top)? = narrow.path.last { narrow.dock = IdeaDock(card: card, session: top.id) }
             }
             if let overlay { narrow.path.append(overlay.route) }
             overlay = nil
@@ -282,7 +297,15 @@ extension Workspace {
             let covering = state.path.last.flatMap(Overlay.init)
             if covering != nil { state.path.removeLast() }
             var wide = WideNavigation(home: state.path.isEmpty && !state.sidebarOpen && covering == nil)
-            if let page = state.path.last { wide.main = WideNavigation.Main(page) }
+            let dock = state.dock.flatMap { $0.session == nil ? nil : $0.card }
+            let sessions = state.path.reversed().prefix { if case .session = $0 { true } else { false } }.prefix(WideNavigation.maxPanes - (dock == nil ? 0 : 1)).reversed()
+            if case .session(let first)? = sessions.first {
+                wide.main = .session(first)
+                wide.beside = sessions.dropFirst().compactMap { if case .session(let route) = $0 { .session(route) } else { nil } }
+                if let dock { wide.beside.append(.card(dock)) }
+            } else if let page = state.path.last {
+                wide.main = WideNavigation.Main(page)
+            }
             navigation = .wide(wide)
             overlay = covering
         }
