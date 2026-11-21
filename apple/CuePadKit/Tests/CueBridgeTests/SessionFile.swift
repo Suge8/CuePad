@@ -4,7 +4,6 @@ import CueTestSupport
 import Foundation
 @testable import CueBridge
 
-/// 造 Pi 会话 JSONL（v3 树结构）的最小写手。字段名来自 Pi 的 session-format 文档。
 struct SessionFile {
     let url: URL
     private var lines: [String] = []

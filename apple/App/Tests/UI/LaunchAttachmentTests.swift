@@ -9,7 +9,6 @@ import Synchronization
 import Testing
 @testable import CuePad
 
-/// "手机"是第二个 Mac 进程（同 `AgentLibraryTests` 的经云同步），成功路径走新会话输入框的 `Workspace.submitSession`，附件失败与重试走它写请求的 `AppServices.launchSession`。
 @MainActor
 @Suite(.releasesLibraries)
 struct LaunchAttachmentTests {
@@ -70,7 +69,7 @@ struct LaunchAttachmentTests {
         mac.sync.fetching.withLock {
             $0 = { _ in
                 fetches.withLock { $0 += 1 }
-                try await Task.sleep(for: .seconds(3600))  // 附件记录一直没同步过来
+                try await Task.sleep(for: .seconds(3600))
                 throw FileFetchFailure.notSyncing
             }
         }
@@ -93,7 +92,6 @@ struct LaunchAttachmentTests {
             try await awaitNext("会话启动进度", from: phone.services.store.observe({ try launch.progress(from: $0) }))
         }
         func phase(_ launch: SessionLaunch) async throws -> LaunchProgress.Phase { try await progress(launch).phase(at: phone.services.speech) }
-        // 经服务器转一手：此刻服务器收下（拉到它的那台记下收下的时刻）
         func relay(_ id: UUID, from: TestApp, to: TestApp) async throws {
             let row = try #require(try await from.services.store.syncRow(recordName: id.uuidString.lowercased()))
             #expect(try await to.services.store.applyRemote([.save(row, systemFields: Data(), serverAt: clock.now)]).isEmpty)

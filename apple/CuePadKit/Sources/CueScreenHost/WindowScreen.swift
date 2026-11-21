@@ -8,38 +8,29 @@ import os
 /// 被别的窗口挡着、应用在后台、窗口在别的桌面照样出帧（实测；按显示器取的那一种窗口不在当前桌面时一帧都没有）。最小化、隐藏时没有画面。
 /// 点与键见 `WindowScreen+Input`，画面里有什么见 `WindowScreen+Outline`。
 final class WindowScreen: NSObject, ScreenSource, SCStreamOutput, SCStreamDelegate, @unchecked Sendable {
-  /// 取哪扇窗，画面多大（像素）。
   struct Stage: Equatable, Sendable {
     let window: CGWindowID
     let width: Int
     let height: Int
-    /// 第几次起流：流自己停了、没起成，加一再量，同一扇窗也重起（`again`）。
     let turn: Int
   }
 
   private struct Shared {
     var changed: (@Sendable () -> Void)?
     var frame: CVPixelBuffer?
-    /// `frame` 是哪一刻的。
     var time = 0.0
-    /// 正起着的那条流：停下的通知是不是它的，凭这个认。
     var stream: SCStream?
-    /// 最近一帧里有窗伸出了窗口（`place`）。
     var overflowing = false
   }
 
   private let shared = OSAllocatedUnfairLock(uncheckedState: Shared())
   private let frames = DispatchQueue(label: "cuepad.screen.capture", qos: .userInteractive)
-  /// 要取的那一块（没人看、没有窗口是 nil）：只留最新的，`capture` 一个个照着改流。
   private let wanted: AsyncStream<Stage?>.Continuation
   @MainActor private var asked: Stage?
   @MainActor private var turn = 0
   @MainActor private var watching = false
-  /// 画面里的那扇窗。
   @MainActor private(set) weak var shown: NSWindow?
-  /// 上一次量到开着的那些窗。
   @MainActor private var seen: Set<Int> = []
-  /// 压到壁纸底下的窗各自原来在哪一层（`tuck`）。
   @MainActor private let levels = NSMapTable<NSWindow, NSNumber>.weakToStrongObjects()
   @MainActor var input = Input()
   @MainActor var outlined = Outlined()
@@ -59,7 +50,6 @@ final class WindowScreen: NSObject, ScreenSource, SCStreamOutput, SCStreamDelega
       guard let self else { return event }
       return dispatch(event)
     }
-    // 窗口开、关、变大小都在应用处理完一轮事件之后：这时重新量一遍
     NotificationCenter.default.addObserver(forName: NSApplication.didUpdateNotification, object: nil, queue: .main) { [weak self] _ in
       MainActor.assumeIsolated {
         self?.tuck()
@@ -89,7 +79,6 @@ final class WindowScreen: NSObject, ScreenSource, SCStreamOutput, SCStreamDelega
     }
   }
 
-  /// 这扇窗自己的那一层（压下去之前的）。
   @MainActor func level(_ window: NSWindow) -> NSWindow.Level {
     levels.object(forKey: window).map { NSWindow.Level($0.intValue) } ?? window.level
   }
@@ -121,9 +110,7 @@ final class WindowScreen: NSObject, ScreenSource, SCStreamOutput, SCStreamDelega
 
   func frame() -> CVPixelBuffer? { shared.withLockUnchecked { $0.frame } }
 
-  /// 最近一帧里有窗伸出了窗口。
   var overflowing: Bool { shared.withLockUnchecked { $0.overflowing } }
-  /// 最近一帧是哪一刻。
   var changed: Double { shared.withLockUnchecked { $0.time } }
 
   func send(_ input: ScreenInput) { onMain { $0.deliver(input) } }
@@ -143,7 +130,6 @@ final class WindowScreen: NSObject, ScreenSource, SCStreamOutput, SCStreamDelega
   @MainActor private func measure() {
     var stage: Stage?
     if watching {
-      // 能当主窗口的那些，从前往后；只有面板的应用（菜单栏小工具）取能拿键盘的
       let all = NSApp.orderedWindows.filter { $0.isVisible && $0.parent == nil && $0.sheetParent == nil }
       let open = all.contains(where: \.canBecomeMain) ? all.filter(\.canBecomeMain) : all.filter(\.canBecomeKey)
       // 新开的那扇（设置、新文档）换过去看，看着的那扇关了回到最前面的。不只看谁在最前面：后台的应用新开的窗排在自己别的窗后面（实测）
@@ -165,7 +151,6 @@ final class WindowScreen: NSObject, ScreenSource, SCStreamOutput, SCStreamDelega
 
   // MARK: 取画面
 
-  /// 把流改成取 `stage`：没有流就起，换了窗口、换了一次（`Stage.turn`）重起，同一扇窗只改大小；nil 是停。回来的是改完后的流。
   private func capture(_ stage: Stage?, from running: (stream: SCStream, stage: Stage)?) async -> (SCStream, Stage)? {
     do {
       if let running {
@@ -197,7 +182,6 @@ final class WindowScreen: NSObject, ScreenSource, SCStreamOutput, SCStreamDelega
     }
   }
 
-  /// 没取成、流自己停了：过一秒当成新的一次再量，还有人看、窗口还在就重起。
   private func again() {
     Task { @MainActor [self] in
       try? await Task.sleep(for: .seconds(1))
@@ -214,7 +198,6 @@ final class WindowScreen: NSObject, ScreenSource, SCStreamOutput, SCStreamDelega
     configuration.minimumFrameInterval = CMTime(value: 1, timescale: 60)
     configuration.pixelFormat = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
     configuration.showsCursor = false
-    // 手上留着上一帧（`same`），编码那头还可能拿着一帧
     configuration.queueDepth = 4
     return configuration
   }
@@ -256,7 +239,6 @@ final class WindowScreen: NSObject, ScreenSource, SCStreamOutput, SCStreamDelega
     }
   }
 
-  /// 流自己停了（系统收回）：重起。这里自己停掉的流（换窗、没人看）不算。
   func stream(_ stream: SCStream, didStopWithError error: any Error) {
     guard shared.withLockUnchecked({ $0.stream === stream }) else { return }
     Host.say("画面停了：\(error)")

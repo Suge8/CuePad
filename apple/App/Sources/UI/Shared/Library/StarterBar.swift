@@ -1,9 +1,5 @@
 import SwiftUI
 
-/// 起步规则：全局规则还一个字都没有时文件页顶上那一条（`LibraryFileTop`）。点了把底稿填进编辑器，之后同你自己写的一样存
-/// （Mac 自动存、手机发往 Mac，`FileDraft.fill`）。填进去就是你的文件：CuePad 不再碰它，以后改了底稿也不回写。
-/// 只给全局规则：项目规则写的是那个项目自己的命令与约束，没有通用的底稿。
-/// 底稿是给各家 Agent 读的做事的标准，跟界面语言走（它是你要读、要改的文件）；每条写要的做法，不写笼统的禁令。
 struct StarterBar: View {
     let draft: FileDraft
     @Environment(\.palette) private var palette

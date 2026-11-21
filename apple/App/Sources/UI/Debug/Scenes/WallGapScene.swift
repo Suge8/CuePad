@@ -7,7 +7,6 @@ extension DebugSceneEntry {
         await DebugScene.running("卡片墙删卡") { try await DebugScene.wallGap(workspace) }
     }
 
-    /// select：批量选择本页前三条灵感。
     static let select = DebugSceneEntry("select") { workspace, _ in
         await Task.wait(for: .seconds(1))
         for id in workspace.presses.selectable.prefix(3) { workspace.presses.toggle(id) }

@@ -1,7 +1,5 @@
 import SwiftUI
 
-/// 提示出现的那一处：摆在哪由 `Workspace.noticeInRail` 定，宿主（会话条 `WideRail`、Mac 页头 `NoticeView`、手机与 iPad 页头 `NoticeBanner`）各放一个，
-/// 轮到自己才显示。从贴着的那条边浮出来；换下一条时这一颗留在原地，字与宽跟着变，不整颗换。
 struct NoticeSlot: View {
     let place: NoticeCapsule.Place
     @Environment(Workspace.self) private var workspace
@@ -15,18 +13,11 @@ struct NoticeSlot: View {
                     .transition(Motion.surface(from: place == .rail ? .bottom : .top, reduceMotion: reduceMotion))
             }
         }
-        // 走得比来得快：收走的东西不该再占着眼睛
         .animation(notice == nil ? Motion.fade : Motion.fading(Motion.nudge, reduceMotion: reduceMotion), value: notice)
-        // 停着表时换了地方（会话条收起）：原来那颗撤了、新出的一颗没人停着，接着数
         .onChange(of: workspace.noticeInRail) { workspace.holdNotice(false) }
     }
 }
 
-/// 页头那一排的（`head`）高同那一排：放不下一行时小一号折两行（"这是灵感，没有状态：要做的事另建任务…"截在一行里正好截掉要你做的那一步）；
-/// 两行也放不下（辅助字号）就一行截断——读屏照样读全文，点它照样去那里。字号上限同页顶那一排（`FloatingHeaderLayout.largestType`），再大一行也高过这一排。
-/// 会话条里的（`rail`）宽只有会话条那么宽：字照原字号折行，高随字长。
-/// 只是报个结果的（没有钮、没有去处、不是出错）不接点按，点穿到下面；其余的点字就收（有去处的是去那里），也能拖一下甩走。
-/// 停多久在 `Workspace+Notice`：这里只报指针、键盘焦点在不在它上面、读屏开没开（`holdNotice`）。
 struct NoticeCapsule: View {
     enum Place: Equatable {
         case head(fills: Bool)
@@ -65,12 +56,10 @@ struct NoticeCapsule: View {
                 .frame(maxWidth: fills ? .infinity : nil)
                 .frame(height: height)
             case .rail:
-                // 宿主按零高摆它（`floatingAbove`）：不自己撑开的话底只有一行高，折了行的字露在底外面
                 row(font: Typography.secondary, lines: 4, inset: ControlSize.regular.verticalPadding).frame(minHeight: height)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        // 一行时就是胶囊；折了行的四角还是那个弯
         .glass(in: .rect(cornerRadius: height / 2), interactive: acts)
         .elevation(.panel)
         .onHover { hovering = $0 }
@@ -79,7 +68,6 @@ struct NoticeCapsule: View {
         #endif
         .gesture(DragGesture(minimumDistance: Self.fling).onEnded { _ in workspace.notice = nil })
         .allowsHitTesting(notice.takesHits && armed)
-        // 刚落下的那一下不接点按：它是自己冒出来的，手指正要点它盖住的东西时会点到它、被带去别处
         .task(id: notice.id) {
             armed = false
             guard (try? await Task.sleep(for: Self.arming)) != nil else { return }
@@ -87,7 +75,6 @@ struct NoticeCapsule: View {
         }
         .onChange(of: held, initial: true) { was, now in if was != now || now { workspace.holdNotice(now) } }
         .onChange(of: notice.id, initial: true) {
-            // 这一颗是留在原地换的字：新的一条来时表已经重开，指针还在上面就再停一次
             if held { workspace.holdNotice(true) }
             AccessibilityNotification.Announcement(notice.text.spoken).post()
             if workspace.soundedNotice != notice.id {
@@ -99,21 +86,17 @@ struct NoticeCapsule: View {
         }
         .accessibilityHint(notice.link == nil ? "" : "去那里看看")
         .accessibilityAddTraits(.updatesFrequently)
-        // 读屏开着时不自动收：读屏的"关闭"手势收掉
         .accessibilityAction(.escape) { workspace.notice = nil }
     }
 
-    /// 拖出这么远才算甩走：手抖、点偏的不算。
     private static let fling: CGFloat = 16
     private static let arming: Duration = .milliseconds(500)
 
-    /// 字排出来多高就多高（不截）：`ViewThatFits` 按它判断放不放得进这一排；最后一种只排一行，放不下就截断。`inset` 只用来量放不放得下。
     private func row(font: Font, lines: Int, inset: CGFloat) -> some View {
         HStack(spacing: 0) {
             message(inset: inset)
             if let action = notice.action {
                 Group {
-                    // 撤销每条都一样、认图就够：只画图标，折了行的字也多出一截地方。别的动作（归档、查看）各不相同，写字
                     if action.undoes != nil {
                         Button(action.title, icon: .undo) { workspace.run(action) }
                             .labelStyle(.iconOnly)
@@ -137,7 +120,6 @@ struct NoticeCapsule: View {
     @ViewBuilder private func message(inset: CGFloat) -> some View {
         let label = HStack(spacing: Spacing.glyph) {
             Label { Text(notice.text).contentTransition(.opacity) } icon: {
-                // 胶囊落定后图标才冒出来：这一下是"成了"的那个点
                 Group {
                     if let status = notice.status { StateGlyph(status: status) } else { Image(notice.tone.icon) }
                 }

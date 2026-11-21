@@ -4,7 +4,6 @@ import Foundation
 import NaturalLanguage
 
 extension CueInterface {
-    /// 界面词的叫法只在目录里，经 `String(localized:)` 取，和界面上的字是同一份。
     static var current: CueInterface {
         let code = Bundle.main.preferredLocalizations.first ?? "zh-Hans"
         guard !code.hasPrefix("zh") else { return .chinese }
@@ -18,7 +17,6 @@ extension CueInterface {
         ])
     }
 
-    /// 中文为 nil；他没开口或认不出时用界面语言。
     func writing(after said: String?) -> String? {
         let code = said.flatMap(Self.language(of:)) ?? (terms.isEmpty ? "zh" : nil)
         guard let code else { return language }

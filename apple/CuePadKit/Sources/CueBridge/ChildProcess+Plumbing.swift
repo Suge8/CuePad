@@ -12,7 +12,6 @@ extension ChildProcess {
         _ executable: URL, _ arguments: [String], environment: [String: String], actions: inout posix_spawn_file_actions_t?,
         newSession: Bool, drainsErrors: Bool, registered: (pid_t) -> Void
     ) async throws -> (pid: pid_t, hold: Int32?) {
-        // 起不来的（不存在、不可执行）当场抛错，不等中转里的 exec 失败
         guard access(executable.path, X_OK) == 0 else { throw POSIXError(.init(rawValue: errno) ?? .ENOENT) }
         let reported = try pipe(), go = try pipe()
         posix_spawn_file_actions_adddup2(&actions, reported.write, reportFD)
@@ -38,7 +37,7 @@ extension ChildProcess {
         close(reported.write)
         close(go.read)
         if let hold { close(hold.read) }
-        defer { close(go.write) }  // 放它 exec
+        defer { close(go.write) }
         guard code == 0 else {
             close(reported.read)
             if let hold { close(hold.write) }
@@ -86,7 +85,6 @@ extension ChildProcess {
         return (try lifted(fds[0]), try lifted(fds[1]))
     }
 
-    /// 还没退出（整组都走之前，组号不会被别的进程拿去）才发；SIGTERM 只发一次。
     static func deliver(_ pid: pid_t, _ signal: Int32, group: Bool, shared: Shared) {
         let send = shared.state.withLock { s in
             guard s.status == nil, signal != SIGTERM || !s.terminated else { return false }
@@ -97,11 +95,9 @@ extension ChildProcess {
         if group { killpg(pid, signal) } else { Darwin.kill(pid, signal) }
     }
 
-    /// 事件源在进程退出前一直握着自己，与这个对象的生死无关（脱离 App 的 Pi 也由它记下退出）。
-    /// `group` 时组长退出后接着等组里剩下的（`Placement.group`）：每走一个重新列一遍组员，没人了才算退出。
     static func watchExit(_ pid: pid_t, group: Bool, timing: Timing, shared: Shared, errors: ErrorTail?) {
         let finish: @Sendable (Int32) -> Void = { status in
-            errors?.flush()  // 等退出的取得到它退出前写的全部标准错误
+            errors?.flush()
             let (waiters, deadline) = shared.state.withLock { s in
                 s.status = status
                 defer { s.waiters = [:] }
@@ -113,14 +109,13 @@ extension ChildProcess {
         let queue = kqueue()
         guard watch(pid, on: queue) else {
             close(queue)
-            return finish(SIGKILL)  // 还没放它 exec 就没了：只能是被外面结束的
+            return finish(SIGKILL)
         }
         let events = DispatchQueue(label: "cuepad.child.exit")
         let source = DispatchSource.makeReadSource(fileDescriptor: queue, queue: events)
         final class Leader: Sendable { let status = Mutex<Int32?>(nil) }
         let leader = Leader()
         let settle: @Sendable () -> Bool = {
-            // 到点强杀与最后一个组员退出可能同时到：已经算退出了的不再碰关掉的 kqueue
             guard let status = leader.status.withLock({ $0 }), shared.state.withLock({ $0.status == nil }) else { return false }
             if group, watchMembers(of: pid, on: queue) { return true }
             source.cancel()
@@ -140,7 +135,7 @@ extension ChildProcess {
                 guard (try? await timing.sleep(AgentTimeouts.endGrace)) != nil else { return }
                 events.async {
                     deliver(pid, SIGKILL, group: true, shared: shared)
-                    _ = settle()  // 离开了这个组的不再等
+                    _ = settle()
                 }
             }
             shared.state.withLock { $0.deadline = deadline }

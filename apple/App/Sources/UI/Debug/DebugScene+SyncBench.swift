@@ -52,7 +52,6 @@ enum SyncBench {
         }
     }
 
-    /// 一行打点，脚本按行读（标准输出是管道，每行当场冲出去）。
     static func mark(_ event: String, _ fields: [String: any Sendable] = [:], at time: Date = .now) {
         var row = fields
         row["e"] = event

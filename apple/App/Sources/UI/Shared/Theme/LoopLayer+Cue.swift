@@ -1,13 +1,11 @@
 import QuartzCore
 import SwiftUI
 
-/// 宿主层的坐标两端都是 y 朝下（Mac 的宿主翻过来，`LoopLayer.Host.isFlipped`），这里不分平台。
 extension LoopLayer {
     init(sprite: CueSprite, sheet: CueAtlas.Sheet, intro: Bool) { self.init(kind: .sprite(sprite, sheet), color: .clear, intro: intro) }
 }
 
 extension LoopLayer.Host {
-    /// 小人：一层，`contents` 是整张拼图（`CueAtlas`），帧序列只按 `contentsRect` 离散地换（`discrete`）：两下之间值不变。
     static func makeSprite(_ sprite: CueSprite, on sheet: CueAtlas.Sheet, intro: Bool) -> CALayer {
         let layer = CALayer()
         layer.contentsGravity = .resizeAspect
@@ -30,7 +28,6 @@ extension LoopLayer.Host {
             _ = Self.loop(frames, on: layer)
         }
         if intro, let intro = flip(sprite.intro, in: sheet) {
-            // 进来这一下从此刻起放，不对齐全局的节拍
             intro.beginTime = layer.convertTime(CACurrentMediaTime(), from: nil)
             intro.isRemovedOnCompletion = true
             layer.add(intro, forKey: "intro")

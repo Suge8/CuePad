@@ -134,7 +134,6 @@ struct ConflictBar: View {
     #endif
 }
 
-/// 文件页顶上的一条（同名的几份、另写了一份、改冲突了、起步规则）：一句话与行尾的小钮，直接排在页上，不垫底、不套卡（同列表页的分组标题行）。
 struct LibraryFileBar<Content: View, Below: View>: View {
     @ViewBuilder var content: Content
     @ViewBuilder var below: Below
@@ -153,7 +152,6 @@ extension LibraryFileBar where Below == EmptyView {
     }
 }
 
-/// 字、标题（前面淡墨的 #）与这一列的宽同编辑器（`theme`）：从编辑器换过来字不跳大小、不挪位置。
 struct MergePreview: View {
     let blocks: [(text: String, incoming: Bool)]
     let theme: CueEditorTheme
@@ -179,7 +177,6 @@ struct MergePreview: View {
                     }
                     .padding(.vertical, Spacing.tight).padding(.trailing, Spacing.tight).padding(.leading, Self.mark)
                     .background(block.incoming ? palette.bubble : .clear, in: .rect(cornerRadius: Radius.chip))
-                    // 记号与底挂在字的左边：字与编辑器里的对齐
                     .padding(.leading, -(Self.mark + Self.bar + Self.gap))
                     .accessibilityElement(children: .combine)
                     .accessibilityHint(block.incoming ? String(localized: "会并进来") : "")

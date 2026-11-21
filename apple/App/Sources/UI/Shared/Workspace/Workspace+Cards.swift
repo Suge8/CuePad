@@ -4,7 +4,6 @@ import Observation
 import SwiftUI
 
 extension Workspace {
-    /// 项目失效时由写事务选择默认项目；界面按实际落点纠正导航并提示。
     func createCard(body: String = "", in project: UUID) async throws -> Card {
         let card = try await services.store.createCard(in: project, body: body, ifProjectMissing: .useDefault)
         return await created(card, requested: project)
@@ -23,20 +22,15 @@ extension Workspace {
         return card
     }
 
-    /// 已经完成的不动：界面手里的副本可能已过时（别的设备刚做完），再来一次不能把它翻回去（`CueStore.completeTask`）。
-    /// 你点的完成就是这件事用完了：它的会话跟着休眠，哪些只由 Store 定（`CueStore.sessionsFreed`：这件事还有没做完的步骤、别的事还在用的留着）。
-    /// 留着时提示照实说，不让人猜这次关没关。完成与休眠一次写下（`CueStore.completeTask(_:sleepingAt:)`）；休眠没发出去（那台 Mac 够不着）照常报错，完成不撤。
     func complete(_ id: UUID) async throws {
         let store = services.store
         let (status, undo, unreached) = try await store.completing(id, at: services.speech)
-        // 做完了就给一个归档（不自动归档）
         guard status == .done else { return }
         if let undo { undoable("完成", undo) }
         let archiving = NoticeAction(title: String(localized: "归档")) { try await $0.archive(id) }
         let away = Set(unreached.map(\.sessionID))
         let stays = try await store.sessionsKept(afterCompleting: id).contains { !away.contains($0.sessionID) }
         say(stays ? "已完成，会话还在用，没有休眠" : "已完成", action: archiving, sound: .check)
-        // 手里那条"离开"可能已经过时：这几个照点名结束的路再试（先拉一次同步）。一个没发出去不耽误后面的，都试过再报头一个错
         var failure: (any Error)?
         for session in unreached {
             do { _ = try await services.end(session) } catch { failure = failure ?? error }
@@ -44,13 +38,10 @@ extension Workspace {
         if let failure { throw failure }
     }
 
-    /// 完成一件事的入口都先过这里（完成圈、拖到已完成、卡片菜单、看板上完成没绑任务的会话）：要问就交给确认框（`sessionAsk`），答应了才 `proceed`；不用问当场 `proceed`。`proceed` 收到 Workspace 而不自己攥着：问着的时候它挂在 Workspace 上，攥着就是一个环。
-    /// 问句挨着正显示这张卡的那个视图弹出（`completionClaims`）；`anchored` 为 false（拖放：卡已离开原位）或没有视图认领时窗口居中出。
     func confirmComplete(
         _ task: UUID?, subtasks: TaskProgress?, busy: SessionState?, anchored: Bool = true,
         then proceed: @escaping @MainActor (Workspace) async throws -> Void
     ) async throws {
-        // 没有任务的（完成的是会话本身，`finish`）一定休眠它
         var sleeps = true
         if let task, let busy { sleeps = try await services.store.sessionsEnding(byCompleting: task, at: services.speech).contains(busy.sessionID) }
         if let ask = CompletionAsk(subtasks: subtasks, busy: busy, sleeps: sleeps) {
@@ -60,7 +51,6 @@ extension Workspace {
         try await proceed(self)
     }
 
-    /// 卡片菜单的"完成"：菜单手里没有子任务进度与会话状态，现读。
     func confirmComplete(_ task: Card) async throws {
         let id = task.id
         let subtasks = try await services.store.subtaskProgress(of: [id])[id]
@@ -71,7 +61,6 @@ extension Workspace {
         try await services.store.reopenTask(id)
     }
 
-    /// 灵感变成要做的事只有这一步与 `newTask(fromIdea:)`。
     func mergeIdea(_ idea: UUID, into task: UUID) async throws {
         let store = services.store
         let undo = try await store.merging(idea, into: task)
@@ -86,14 +75,12 @@ extension Workspace {
         say("已新建任务「\(task.title.textGlyphs)」", action: .undo("新建任务", undo))
     }
 
-    /// 还是空白（`Card.isBlank`）的灵感就不留下：记一条是先建一条空的再编辑。
     func leaveEditing(_ id: UUID, flush: Autosave?, heading: String) {
         let store = services.store
         attempt {
             do {
                 try await flush?.flush()
             } catch {
-                // 页面已经走了，待写的字交给 Workspace 带着：再打开这条时接回来、再试着写
                 if let text = flush?.unsaved {
                     self.unsavedBodies[id] = UnsavedBody(text: text, base: try? await store.card(id)?.body)
                 }
@@ -104,7 +91,6 @@ extension Workspace {
         }
     }
 
-    /// 删掉、归档了的不开，说一句它去哪了。
     func openTask(id: UUID) {
         let store = services.store
         attempt {
@@ -116,16 +102,12 @@ extension Workspace {
 
     func pressed(at point: CGPoint) { press.record(point) }
 
-    /// 项目页的任务行、看板的卡同一条规则：看板的卡是此刻干活那一步的（`TaskBoard.Item.agent`，有子任务的也是），任务行是这条自己交给的（做完了也算）。
     func enter(_ task: Card, session: SessionState?, in column: Column = .main) {
         guard let session else { return openTask(task) }
         openTask = nil
         openSession(session.id, sessionID: session.sessionID, in: column)
     }
 
-    /// 打开一条任务的气泡（没开工的任务行、Cue 对话里的任务、⌘K、归档、小组件链接都经这里）：从刚按下的那一下长出来；
-    /// 不是刚点的（键盘、⌘K 里按 ↩、链接）就没有落点，气泡在窗口上方居中。子任务是它上级的气泡、翻到这一项；
-    /// 这件事的气泡已经开着时（气泡里点子任务、返回）原地翻页，不重新长一次。
     func openTask(_ card: Card) {
         let task = card.parentID ?? card.id, step = card.parentID == nil ? nil : card.id
         if openTask?.task == task {
@@ -141,7 +123,6 @@ extension Workspace {
         attempt { self.undoable(pinned ? "置顶" : "取消置顶", try await store.pinning(card, pinned)) }
     }
 
-    /// 排序、换项目、缩进、挂成子任务（`CueStore.moveCard`）。
     func move(_ id: UUID, to slot: CardSlot, after previous: UUID?) {
         let store = services.store
         attempt { self.undoable("移动", try await store.moving(id, to: slot, after: previous)) }
@@ -166,13 +147,11 @@ extension Workspace {
         say(ids.count > 1 ? "已删除 \(ids.count) 条" : "已删除", action: .undo("删除", undo))
     }
 
-    /// 归档的就是看板上此刻看得到的那些已完成：选了项目范围只归档那个项目的。入口都在看板的已完成那一列，范围只在这里读。
     func archiveCompletedTasks() async throws {
         let count = try await services.store.archiveCompletedTasks(in: scopedProject)
         if count > 0 { say("已归档 \(count) 项任务") }
     }
 
-    /// 普通的复制，不是发送，不记发送记录。
     func copy(_ stored: String) {
         do {
             try services.copy(stored)
@@ -183,12 +162,10 @@ extension Workspace {
     }
 }
 
-/// 完成前先问什么：还有没做完的子任务问一起完成；它的 Agent 在做或在等你问一句（`agentBusyDialog`），`sleeps` 是完成会不会让这个会话休眠（`CueStore.sessionsFreed`）。
 enum CompletionAsk: Equatable {
     case steps(TaskProgress)
     case agent(SessionState, sleeps: Bool)
 
-    /// `busy`：在做或在等你的会话（`TaskNext.busySession`）。
     init?(subtasks: TaskProgress?, busy: SessionState?, sleeps: Bool) {
         if let subtasks, TaskCopy.hasOpen(subtasks) {
             self = .steps(subtasks)

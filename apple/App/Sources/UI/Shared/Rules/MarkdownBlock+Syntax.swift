@@ -8,7 +8,6 @@ nonisolated extension MarkdownBlock {
         return (mark, count)
     }
 
-    /// 只移除列表容器的缩进，代码自身的空白与制表符保留；跨过容器边界的制表符剩余部分还原为空格。
     static func removingIndent(_ count: Int, from line: String) -> String {
         var column = 0
         var rest = line[...]

@@ -12,7 +12,6 @@ public struct AgentLibrary: Equatable, Sendable {
   public var instructions: [LibraryInstruction]
   public var tidies: [LibraryTidy]
   public var selfManaged: [SelfManagedSkills]
-  /// 这台装着的几家（配置目录在的）：与登没登录、能不能开会话（`MacAgents`）无关。
   public var agents: [AgentKind]
   public var modifiedAt: Date
 
@@ -116,7 +115,6 @@ public struct LibraryInstruction: Codable, Equatable, Sendable, Identifiable {
     case global
     case piSystem
     case project(UUID)
-    /// 一家原生读、还没换成共享那份的全局规则（`file` 是在它配置目录里的相对路径）：有就列，整理后没了。
     case agent(AgentKind, file: String)
   }
 
@@ -150,7 +148,6 @@ public struct SelfManagedSkills: Codable, Equatable, Sendable {
   }
 }
 
-/// Mac 上的文件已不是 `base` 就不写，退回“Mac 上刚改过”（`AgentLibraryError.changedOnMac`）。
 public struct LibraryEdit: Codable, Equatable, Sendable, StoredJSON {
   public var file: LibraryFile
   public var base: String
@@ -162,16 +159,12 @@ public struct LibraryEdit: Codable, Equatable, Sendable, StoredJSON {
     self.text = text
   }
 
-  /// 没有文件与空文件都是空串：文件页把“还没有”当空文本，哈希要与 Mac 上的对得上。
   public static func base(of text: String?) -> String {
     guard let text, !text.isEmpty else { return "" }
     return SHA256.hash(data: Data(text.utf8)).prefix(16).map { String(format: "%02x", $0) }.joined()
   }
 }
 
-/// 整理里的一件（一键整理是不用你选的那几件）：`keep` 只给同名的那件（去重），是留下的那份技能目录；
-/// `retire` 只给全局规则的合并，是一并撤掉的替换基础提示的几份（Pi 的进废纸篓、Codex 的撤掉配置键，撤销时都放回）；
-/// `base` 只给合并，是你看过的合并稿出自的那一版（`LibraryTidy.base`），Mac 上的文件已不是它就不合并、退回"Mac 上刚改过"。
 public struct TidyOrder: Codable, Hashable, Sendable {
   public var tidy: String
   public var keep: String?
@@ -191,7 +184,6 @@ public enum AgentLibraryError: Error, Equatable, ShownError {
   case gone
   case tidyGone
   case noFolder
-  /// 撤销整理时，整理过的文件之后又改过：整个不撤，不盖掉后来的改动
   case changedSinceTidy
 
   public var shown: String.LocalizationValue {

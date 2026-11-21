@@ -12,8 +12,6 @@ enum DebugForeground {
     private static var holding = false
     private static let request = ProcessInfo.processInfo.environment["CUEPAD_FRONT_REQUEST"]
 
-    /// 键鼠静止多久才算用户不在。前台测量独占全机、会移指针与抢键盘，几十秒的"借一下"在用户眼前就是打断；
-    /// 60 秒：坐在 Mac 前打字、看屏幕、点鼠标的间隙很少超过它；用户多半在手机上指挥，人走开后不必再白等几分钟。
     private static let awayAfter: TimeInterval = 60
 
     /// 启动时：给了 `-CuePadForeground YES` 而用户不够空闲，就报读数、以 2 退出（起实例的 xc.sh 命令随之失败，原因在实例日志末尾）。
@@ -26,7 +24,6 @@ enum DebugForeground {
         exit(2)
     }
 
-    /// 本 App 到前台、`window` 到最前并接过键盘；没给 `-CuePadForeground YES` 时什么都不做，返回 false。可重复调（把窗口再拉到最前）。
     static func borrow(_ window: NSWindow) -> Bool {
         guard DebugScene.args.driveOpts.foreground else { return false }
         if lender == nil, let front = NSWorkspace.shared.frontmostApplication, front != .current { lender = front }
@@ -38,20 +35,17 @@ enum DebugForeground {
         return true
     }
 
-    /// 非占前台不可的（`what` 说是谁）：借不到就报错退出。
     static func require(_ window: NSWindow, for what: String) {
         guard !borrow(window) else { return }
         FileHandle.standardError.write(Data("\(what) 要占前台：加 -CuePadForeground YES（apple/scripts/AGENTS.md「占前台」）\n".utf8))
         exit(2)
     }
 
-    /// 把真实指针移到 `point`（全局坐标，主屏左上为原点）；第一次移时记下原位，`giveBack` 时放回。只在借到前台后调。
     static func movePointer(to point: CGPoint) {
         if pointer == nil { pointer = CGEvent(source: nil)?.location }
         CGWarpMouseCursorPosition(point)
     }
 
-    /// 还前台与指针：窗口排回最后，借前的前台应用回到前台，动过的指针回原位。没借过时什么都不做。
     static func giveBack() {
         holding = false
         askFront(false)
@@ -82,7 +76,6 @@ enum DebugForeground {
             do {
                 try FileManager.default.removeItem(atPath: request)
             } catch let error as CocoaError where error.code == .fileNoSuchFile {
-                // 脚本已经收走
             } catch {
                 DebugScene.abandon("要前台的请求文件删不掉", error)
             }

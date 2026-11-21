@@ -1,12 +1,9 @@
 import CueStore
 import SwiftUI
 
-/// 全 App 只此一个，状态只从记录推出（`Speech`）。等待到点只显示静态未确认；再说一次须确认重复风险，保留原记录。晚到回执照常收敛。
 struct SpeechBubble<Menu: View>: View {
     let said: Said
-    /// 重发时撤回了旧的却写不进新的：原文放回这个去处的输入框。
     let box: Binding<ComposerDraft>
-    /// 会话页还没进对话的都标（连着几句只标最后一句，`marksTransit`），Cue 页只标你最后一句（旧的不标，免得满屏）。
     var showsDelivered = true
     var session: SessionState?
     var fromCue = false
@@ -38,7 +35,6 @@ struct SpeechBubble<Menu: View>: View {
             } else if case .failed(let undelivered) = shown { failedLine(undelivered).padding(.trailing, look.statusInset) }
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
-        // 会话页新到的淡入（Cue 页这一句挂在格子里面，过渡不播，由回复框那头的发出动画接上）
         .transition(.entry)
         .dialog("再说一次？", isPresented: $confirmingAgain, message: "上一句可能已经执行，再说一次可能让 Agent 重复操作。原请求会保留。", buttons: [
             DialogButton(title: "再说一次") { workspace.sayAgain(said, restoringInto: box) },

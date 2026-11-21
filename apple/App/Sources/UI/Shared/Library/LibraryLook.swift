@@ -1,7 +1,6 @@
 import CueStore
 import SwiftUI
 
-/// 规则（哪些该整理、谁读得到）在 `AgentLibrary`、`LibraryTidy` 与 Mac 端的扫描里，这里只把快照写成字。
 extension Workspace {
     func fact(of tidy: LibraryTidy, in library: AgentLibrary) -> TidyFact {
         switch tidy.kind {
@@ -39,7 +38,6 @@ extension Workspace {
         }
     }
 
-    /// 前三个写出来，其余只写个数。
     private static func listed(_ names: [String]) -> String {
         let shown = names.prefix(3).joined(separator: String(localized: "、"))
         return names.count > 3 ? String(localized: "\(shown) 等 \(names.count) 个") : shown
@@ -74,7 +72,6 @@ extension Workspace {
     }
 }
 
-/// 该整理的一件写成两句：哪里不对、一键整理会对它做什么。
 struct TidyFact: Equatable {
     let problem: String
     let plan: String
@@ -92,7 +89,6 @@ extension LibraryTidy {
 }
 
 extension AgentLibrary {
-    /// 各家自己管的技能（列不出、整理也不碰）合成一句；没有为 nil。
     var selfManagedNote: String? {
         selfManaged.isEmpty ? nil : String(localized: "另有 \(selfManaged.map(\.title).formatted(.list(type: .and)))，由它们自己管")
     }
@@ -131,7 +127,6 @@ nonisolated struct SkillGroups {
     }
 }
 
-/// Mac 悬停一个写"<那家> 读不到"，读屏整组念同一句。槽位定宽（这台装着几家就几格，`AgentLibrary.agents`），标志靠右排，各行的名字与说明不随它挪。
 struct UnseenMarks: View {
     let agents: [AgentKind]
     let unseen: [AgentKind]

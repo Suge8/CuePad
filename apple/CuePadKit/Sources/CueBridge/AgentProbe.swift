@@ -3,7 +3,6 @@ import CueStore
 import CueText
 import Foundation
 
-/// 只读，不改任何一家的配置：每家起一个不落会话、不跑钩子、不连 CuePad 的进程，问完让它退出。接没接入不影响能不能用：后台开的会话都由 CuePad 直接托管。
 struct AgentProbe {
     let paths: AgentPaths
     let locator: ExecutableLocator
@@ -46,7 +45,6 @@ struct AgentProbe {
         }
     }
 
-    /// 原因里错误原话的字符数上限（含省略号）：原因跟着同步记录走，界面只显示一行。
     private static let messageLimit = 60
 
     private static func absent(_ kind: AgentKind, _ status: AgentStatus) -> MacAgentProblem.Reason? {
@@ -58,8 +56,6 @@ struct AgentProbe {
         }
     }
 
-    /// 随包插件（Pi 的桥扩展、dsh 的 cuepad 插件）在探测模式（`CUEPAD_PROBE`）写的一行 `{"cuepadProbe": {model, models}}`：
-    /// 缺省模型与会话里的模型菜单同一份；一个模型都没有是没登录。
     struct PluginReply: Decodable {
         let cuepadProbe: Models
         struct Models: Decodable {

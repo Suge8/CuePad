@@ -5,14 +5,12 @@ import SwiftUI
 extension Workspace {
     func willSelect(_ route: Route, from previous: Route) { overlay = nil }
 
-    /// 宽屏盖在主区上（`selectWide`）。
     func showEditor(_ card: UUID) { push(.card(card)) }
 
     func openLibrary(_ file: LibraryFile) {
         if layout == .narrow, case .libraryFile? = path.last { path[path.count - 1] = .libraryFile(file) } else { push(.libraryFile(file)) }
     }
 
-    /// 读不出来时照常推入，由页面报错。
     func sessionRoute(_ id: UUID, sessionID: String?) -> Route? {
         let seed = try? services.store.snapshot { try SessionDigest.read(id, sessionID: sessionID, from: $0) }.value
         return .session(id, sessionID: sessionID ?? seed?.session?.sessionID, seed: seed)
@@ -23,7 +21,6 @@ extension Workspace {
         outbox = Outbox(content: Outgoing.text(of: leaf), card: leaf.id, project: leaf.projectID)
     }
 
-    /// 交给新会话：就在交给 Agent 的输入框上发出（用哪家、哪个模型在那里已经选好），进度、没开成的原因与再开确认都在它上面；认领到了收起它、进那个会话。
     @discardableResult
     func launchHandOff(_ outbox: Outbox, opening: String?) -> Task<Void, Never>? {
         guard let card = outbox.card else { return nil }
@@ -39,10 +36,8 @@ extension Workspace {
         if top == .search { back() }
     }
 
-    /// 与系统通知同一条规则（`AlertCenter`）。
     func showsAlert(about session: UUID) -> Bool { !shownSessions.contains { $0.id == session } }
 
-    /// 说的是某个会话的提示时，你进了那个会话就当场撤下，不在正看着的页面上停满 5 秒。挑会话的提示挑完、取消就撤。
     func keeps(_ notice: Notice) -> Bool {
         if notice.tone == .pick { return pickingDock }
         guard case .session(let route)? = notice.link else { return true }

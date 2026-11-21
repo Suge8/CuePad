@@ -1,13 +1,10 @@
 import SwiftUI
 
-/// 各段可以不带图标（只写字），整组照样要么全带字、要么全只画图标（`titles: false`，字给悬停与读屏），不在一排里一扁一圆。放不下带字的时，调用处退成全只画图标（`ViewThatFits`），不截半个词。
-/// 字一律半粗：选中不换字重，段宽不跟着跳。底由调用处给：栏头、页顶的玻璃，纸与面板上是淡底的槽（`paneSlot`）。
 struct PaneSegment<Value: Hashable>: View {
     struct Item {
         let value: Value
         let title: Text
         let icon: Icon?
-        /// 这一段里有几件：字右上角一个小号的数，0 不写。不写进字里——数一变段宽跟着跳，读着也像名字的一部分。
         var badge = 0
 
         init(value: Value, title: LocalizedStringResource, icon: Icon? = nil, badge: Int = 0) {
@@ -70,7 +67,6 @@ struct PaneSegment<Value: Hashable>: View {
     }
 }
 
-/// 第一个子视图是选中块，排在第 `selected` 段的位置；其余是各段。选中块是同一个视图换位置，换段的动画里它从上一段滑过去。
 private struct EqualSegments: Layout {
     let selected: Int
 
@@ -112,8 +108,6 @@ enum PaneMetrics {
 }
 
 extension View {
-    /// 玻璃不叠玻璃，纸上没有玻璃托着，所以用淡底胶囊的槽，与同一排 `size` 那一档控件同高。
-    /// 高一定要给：只定宽，各段与选中块撑满槽的高。不给的话它们只有字那么高，选中块是一条扁条（搜索的范围分段曾经这样）。
     func paneSlot(_ size: ControlSize) -> some View { modifier(PaneSlot(size: size)) }
 }
 

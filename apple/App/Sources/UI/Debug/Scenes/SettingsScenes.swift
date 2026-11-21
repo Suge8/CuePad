@@ -39,7 +39,6 @@ extension DebugSceneEntry {
         workspace.show(.progress)
     }
 
-    /// updatewait：托管的 Pi 在干活时检查更新——它撑得过重启，更新不等它、直接装（演示更新器打一个点）。托管的会话由 socket 目录里的假扩展连上来，连上后检查一次。
     static let updateWait = DebugSceneEntry("updatewait") { workspace, _ in
         await DebugScene.connectAgents(workspace.services)
         let bridge = workspace.services.bridge

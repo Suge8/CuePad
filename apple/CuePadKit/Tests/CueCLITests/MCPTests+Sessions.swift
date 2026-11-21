@@ -53,7 +53,7 @@ extension MCPTests {
       $0.hostID = "mac-a"
       $0.enabledAt = .now
     }
-    try await store.recordMacPresence(host: "mac-a") { true }  // 会话所在的 Mac 醒着：它上面的会话才算在跑，Cue 才能对它说话
+    try await store.recordMacPresence(host: "mac-a") { true }
     let recorder = StateRecorder(store: store, hostID: "mac-a")
     let project = try await sandbox.project("演示")
     try await store.setDirectory("/tmp/demo", for: project.id)
@@ -63,14 +63,13 @@ extension MCPTests {
     try await recorder.update(sessionID: "s1", state: .error, title: "修好登录页")
     try await recorder.update(sessionID: "c1", state: .error, title: "改文案", agent: .claudeCode)
     try await Server.run(library: sandbox.directory) { server in
-      // 这台 Mac 一收到就办成：说话、作答的工具等得到结果，马上返回
       let executor = DeliveryExecutor(store: store, hostID: "mac-a", onIssue: { Issue.record("\($0)") }) { _, _ in .succeeded }
       try await executor.start()
       defer { Task { await executor.stop() } }
 
       _ = try await server.call(
         "task", ["action": "say", "task": pi.id.uuidString, "text": "用 luna 重试", "model": "openai/gpt-6-luna", "effort": "high"])
-      let requests = try await store.deliveryRequests(toSession: "s1")  // 执行器按这个先后执行
+      let requests = try await store.deliveryRequests(toSession: "s1")
       #expect(requests.map(\.mode) == [.known(.config), .known(.send)] && requests.allSatisfy(\.isFromCue))
       #expect(requests.first?.config == SessionConfig(model: ModelKey(provider: "openai", id: "gpt-6-luna"), thinking: .high))
       #expect(requests.last?.content == "用 luna 重试")
@@ -89,7 +88,6 @@ extension MCPTests {
       _ = try await server.call("task", ["action": "start", "task": claude.id.uuidString, "agent": "claude", "model": "opus", "fresh": true])
       let launch = try #require(try await store.deliveryRequests().first { $0.mode == .known(.start) })
       #expect(launch.launch?.agent == .claudeCode && launch.launch?.model == ModelKey(provider: "claude", id: "opus"))
-      // 换下来的会话只是关联过、不是为这件事开的：不结束
       #expect(try await store.deliveryRequests(toSession: "c1").allSatisfy { $0.mode != .known(.end) })
     }
   }

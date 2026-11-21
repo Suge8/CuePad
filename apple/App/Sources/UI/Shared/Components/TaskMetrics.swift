@@ -1,7 +1,6 @@
 import SwiftUI
 
 enum TaskMetrics {
-    /// 看板上的卡一律这个圆角（四列、摊开的那张、拖动时的轮廓）。
     static let cardRadius = Radius.sheet
     #if os(iOS)
     nonisolated static let rowHeight: CGFloat = 44
@@ -12,13 +11,11 @@ enum TaskMetrics {
     static let stepFont = Typography.secondary
     static let ring: CGFloat = 24
     static let stepRing: CGFloat = 16
-    /// 行没有左右内边距（纸自己留了）。
     static let ringColumn: CGFloat = 44
     static let columnGap = Spacing.hair
     static let cardPadding = Spacing.group
     static let cardGlyph: CGFloat = 13
     static let rowGap: CGFloat = 0
-    /// 圈在它那一列里居中，圈的左缘离列边这么远：行直接落在页上时（项目页）整列向左让出这一截，圈与页边对齐。
     static let ringInset = (ringColumn - ring) / 2
     #else
     nonisolated static let rowHeight: CGFloat = 30
@@ -29,12 +26,10 @@ enum TaskMetrics {
     static let stepFont = Typography.secondary
     static let ring: CGFloat = 17
     static let stepRing: CGFloat = 13
-    /// 新建行按它缩进，字与任务标题对齐；悬停的淡底是行的底（`RowStyle`），向两边让出去。
     static let ringColumn: CGFloat = 18
     static let columnGap = Spacing.item
     static let cardPadding = Spacing.group
     static let cardGlyph: CGFloat = 12
-    /// 行与行之间那道缝：行高 `rowHeight` 加上下这一截，一行正好占一行的高（`RowMetrics.height`），悬停的底相邻两行不粘在一起。
     static let rowGap = (RowMetrics.height - rowHeight) / 2
     static let ringInset: CGFloat = 0
     #endif
@@ -43,9 +38,7 @@ enum TaskMetrics {
 enum BoardCardMetrics {
     static let inset = Spacing.item
     static let gap = Spacing.item
-    /// 列与列之间不另留缝（`BoardWidths`）。否决过：列间再留 20——四列三道缝连同卡离列边共白占约 100，1280 宽时待办一行只剩三四个字。
     static var columnGap: CGFloat { 2 * inset }
-    /// 列里的卡：字离上下边、标题与卡脚之间、卡脚的高（放得下线，也放得下"开始"的点按区）。
     #if os(macOS)
     static let pad = Spacing.group
     static let footGap = Spacing.glyph
@@ -57,14 +50,9 @@ enum BoardCardMetrics {
     static let foot: CGFloat = 24
     static let vitals: CGFloat = 18
     #endif
-    /// 卡脚里项目图形占的宽（名字放不下时只留它，`BoardFoot`）。
     static var footGlyph: CGFloat { TaskMetrics.cardGlyph + ProjectGlyph.margin }
-    /// 待办、已完成的卡上下的边：比推进中的卡紧一档，一屏多放几条。
     static let compactPad: CGFloat = 10
-    /// 标题至多几行（列里的卡上层就这么高）。
     nonisolated static func lines(_ typeSize: DynamicTypeSize) -> Int { typeSize.isAccessibilitySize ? 3 : 2 }
-    /// 手机的行里标题几行：辅助字号下一行只放得下四五个字，排两行。
     nonisolated static func rowLines(_ typeSize: DynamicTypeSize) -> Int { typeSize.isAccessibilitySize ? 2 : 1 }
-    /// 卡脚里项目名最宽：约七个汉字，再长就截，给线与读数留地方。
     static let tagMax: CGFloat = 104
 }

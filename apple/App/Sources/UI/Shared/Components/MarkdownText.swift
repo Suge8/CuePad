@@ -22,7 +22,6 @@ struct MarkdownText: View, Equatable {
 
     nonisolated static func == (lhs: Self, rhs: Self) -> Bool { lhs.source == rhs.source && lhs.notes == rhs.notes && lhs.style == rhs.style }
 
-    /// 批注按它认出选区在哪条回答的第几段（`ReplyNote.run`）。
     static func proseTexts(_ source: String) -> [String] {
         Run.of(source, Palette(dark: false), notes: [], style: .reply).compactMap { run in
             if case .prose(let text) = run { String(text.characters) } else { nil }
@@ -193,7 +192,6 @@ struct MarkdownText: View, Equatable {
             if run.link != nil { string[run.range].underlineStyle = .single }
             if run.inlinePresentationIntent?.contains(.code) == true {
                 string[run.range].backgroundColor = palette.fill
-                // 等宽字在同字号下比中文显得大：小一档，句子中间不鼓出一块
                 string[run.range].font = Typography.inlineCode
             }
         }
@@ -322,7 +320,6 @@ private struct MoreToTheRight: ViewModifier {
     private static let width: CGFloat = 24
 
     func body(content: Content) -> some View {
-        // 不淡时连遮罩也不挂：遮罩会切掉越过栏边的内容
         if enabled { faded(content) } else { content }
     }
 

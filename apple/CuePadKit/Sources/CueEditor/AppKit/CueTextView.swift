@@ -9,16 +9,11 @@ import CueText
 public final class CueTextView: NSTextView, CueEditorHost {
     public let files: any CueFileStore
     public var theme: CueEditorTheme { didSet { applyTheme() } }
-    /// 用户编辑后的新正文；程序设置 `storedText` 不触发。
     public var onChange: ((String) -> Void)?
-    /// 有没有选中文字变了。
     public var onSelectionChange: ((Bool) -> Void)?
     public var selectedStoredText: String? { core.stored(in: selectedRange()) }
     public var selectionActions: [CueSelectionAction] = []
-    /// 附件入库失败（磁盘满、文件不可读、太大）。失败的附件不会插入。
     public var onError: ((any Error) -> Void)?
-    /// 点了文件牌或还没到这台的图片（键、文件名；图片没有名字）：宿主在本机就打开看，还没到就去 iCloud 取，到了调 `refreshAttachments`。
-    /// `picture` 是它的画面在文本视图坐标里的框（文件牌是左边那块缩略图，图片是整张）：全屏页从这里放大出来、缩回这里。
     public var onOpenAttachment: ((_ key: String, _ name: String, _ picture: CGRect) -> Void)?
     public var fileStatus: (_ key: String, _ name: String, _ file: URL?) -> CueFileStatus {
         get { core.fileStatus }
@@ -34,7 +29,6 @@ public final class CueTextView: NSTextView, CueEditorHost {
 
     private(set) var core: EditorCore!
     private var isLoading = false
-    /// 上次报告的"有没有选区"，只在变化时再报。
     var reportedSelection = false
     private var editObserver: (any NSObjectProtocol)?
 
@@ -59,13 +53,13 @@ public final class CueTextView: NSTextView, CueEditorHost {
     }
 
     private func configure() {
-        isRichText = true  // 附件需要富文本；格式一律由主题决定，序列化时忽略
-        importsGraphics = true  // 让拖入的文件被接受
+        isRichText = true
+        importsGraphics = true
         allowsUndo = true
         usesFontPanel = false
         usesRuler = false
         isAutomaticQuoteSubstitutionEnabled = false
-        isAutomaticDashSubstitutionEnabled = false  // 分割线 `---`、`--flag` 不能被替换成破折号
+        isAutomaticDashSubstitutionEnabled = false
         isAutomaticTextReplacementEnabled = false
         isAutomaticSpellingCorrectionEnabled = false
         isAutomaticLinkDetectionEnabled = false
@@ -75,7 +69,6 @@ public final class CueTextView: NSTextView, CueEditorHost {
         maxSize = NSSize(width: 10_000_000, height: 10_000_000)
     }
 
-    /// 存储格式正文。读取时序列化当前内容；设置时整体替换、清空撤销栈，不触发 `onChange`。
     public var storedText: String {
         get { core.stored() }
         set {
@@ -101,9 +94,7 @@ public final class CueTextView: NSTextView, CueEditorHost {
     public override func didChangeText() {
         super.didChangeText()
         core.flushHighlight()
-        // 高贴着字摆的宿主（任务气泡）按它重量高
         invalidateIntrinsicContentSize()
-        // 组合中的拼音只是标记文本，提交后才是内容，不上报
         if !isLoading, !hasMarkedText() { onChange?(storedText) }
     }
 
@@ -121,20 +112,18 @@ public final class CueTextView: NSTextView, CueEditorHost {
         core.settler.restart()
     }
 
-    /// 左右留白：至少 `horizontalInset`；有最大行宽时宽出来的部分平分到两边，字居中成一列。
     private func horizontalInset(forWidth width: CGFloat) -> CGFloat {
         guard let maxTextWidth = theme.maxTextWidth else { return theme.horizontalInset }
         return max(theme.horizontalInset, ((width - maxTextWidth) / 2).rounded(.down))
     }
 
-    /// 排完全文、贴着字的高（含上下留白）：不放进滚动视图、高随字长的宿主（任务气泡）按它摆。
     public var fittingHeight: CGFloat {
         let layout = core.layout
         layout.ensureLayout(for: layout.documentRange)
         return ceil(layout.usageBoundsForTextContainer.height + textContainerInset.height * 2)
     }
 
-    func resolvedColor(_ color: CueColor) -> CueColor { color }  // 底色在绘制时按当时的外观解析
+    func resolvedColor(_ color: CueColor) -> CueColor { color }
     func layoutDidAdvance() { needsLayout = true }
     /// 重排之外还要把画字的子视图标脏：TextKit 2 的 NSTextView 重排后不重画布局片段，附件的新样子要等别的事（打字、滚动）触发才出来。
     func needsRelayout() {

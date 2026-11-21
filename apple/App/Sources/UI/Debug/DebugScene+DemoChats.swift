@@ -37,7 +37,6 @@ extension DebugScene {
             .init(kind: .command, target: "git status --short"), .init(kind: .command, target: "make lint-notes", failed: true),
         ])
 
-    /// 每一步带着调用 id，对得上 `seedStepFile` 写的那份会话文件：点开一步走的是真的那条路（`ToolCallDetail`）。隔了一夜才问的，缓存没接上。
     private static let testRun: ChatMessage.Tools = {
         var tools = ChatMessage.Tools(
             steps: 4,
@@ -264,6 +263,5 @@ extension DebugScene {
         \(String(localized: "为什么在等锁", table: "Demo"))
         """ }
 
-    /// 发给它的会话的话，像真的经同步那样慢慢走完，录"发出 → 返回列表 → 状态流转"用。Cue 运行在它上面时，你对 Cue 说的话一会儿后交给 Cue（已送达），它想一会儿回一句（`demoCueAnswers`）。同步替身报连不上 iCloud 时（`-CuePadSync offline`）它收不到，恢复后再接手。
 }
 #endif

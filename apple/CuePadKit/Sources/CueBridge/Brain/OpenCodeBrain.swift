@@ -97,7 +97,6 @@ final class OpenCodeBrain: HostedSession {
         ]
     }
 
-    /// 流断了而服务还在（不是 `stop()` 停的）就结束服务。
     private func follow(_ client: OpenCodeClient) async throws {
         let stream = client.events()
         // 用流而不是 continuation 等第一声连上：调用方被取消时 `next()` 当场返回 nil
@@ -123,7 +122,6 @@ final class OpenCodeBrain: HostedSession {
         guard try await first.next() != nil else { throw CancellationError() }
     }
 
-    /// 删掉这个工作目录里崩溃留下的大脑会话：带标记、起它的服务已不在；同时在跑的另一个大脑的不动。
     private func sweep(_ client: OpenCodeClient) async throws {
         for info in try await client.sessions("&directory=" + OpenCodeClient.escaped(directory)) {
             guard let pid = info.metadata?.cuepadBrain, SessionProcess.running(pid: pid) == nil else { continue }
@@ -187,7 +185,6 @@ final class OpenCodeBrain: HostedSession {
         try await client.call("POST", "/api/session/\(sessionID)/prompt", directory: directory, body: prompt)
     }
 
-    /// 先删会话再关输入；删不掉的（服务已卡住或退出）留给下次起大脑时清。
     func stop() -> @concurrent @Sendable () async -> Void {
         let process = process, client = client, sessionID = sessionID
         self.client = nil

@@ -5,7 +5,6 @@ import CueText
 import PhotosUI
 import SwiftUI
 
-/// 正文的读写都经 `CardEditing`（编辑器是唯一写者）。
 struct CardTextField: View {
     let card: Card
     let editing: CardEditing

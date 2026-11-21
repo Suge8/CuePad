@@ -42,7 +42,6 @@ class EvalScript {
         return step
     }
 
-    /// Cue 这一步没开工（先对齐、没建）就由评测替它开，记一笔：后面的剧本要有这个会话。
     func adopt(_ topic: Regex<Substring>, after step: Step, title: String, in projectName: String) async throws -> ScriptedSession {
         let started = calls(step, "task", ["start"]).contains { !$0.call.failed }
         var found: ScriptedSession?
@@ -95,10 +94,9 @@ class EvalScript {
         for (id, fake) in extensions where id.hasPrefix("new-") && !sessions.contains(where: { $0.id == id }) {
             guard let leaf = try await rig.store.tasks(boundTo: id).first else { continue }
             let top = leaf.parent ?? leaf.task
-            // 新开在原来那件上的（那件已结束、照原任务另开新会话）新交代不在正文里，在 Cue 随后送进来的话里
             let said = fake.commands.compactMap { $0.json["text"] as? String }
             guard ([top.body, leaf.task.body] + said).joined(separator: "\n").contains(topic) else { continue }
-            fake.setState(["kind": "thinking"])  // 开场白在接手前就到了：像真会话那样在干活
+            fake.setState(["kind": "thinking"])
             return ScriptedSession(id, on: rig.app.host, task: top)
         }
         return nil
@@ -126,12 +124,9 @@ class EvalScript {
 
     func answers(_ steps: [Step], to session: ScriptedSession) -> [String] { steps.compactMap(\.window).flatMap(session.answers(in:)) }
 
-    /// 他问起早先的事：答对才过；没答对时标出是说不知道还是答错（乱编）
-    /// `fabricated`：没答对、也没说不知道时，这句是不是给了一个具体的错答案（编造）。
     func recalled(
         _ label: String, _ step: Step, kind: CheckKind = .memory, fabricated: ((String) -> Bool)? = nil, _ correct: (String) -> Bool
     ) async throws -> Check {
-        // 这一步里回他的每一句都算：碰上换新时，答他的那句之后新班次还会再回一句
         let answers = try await replies(step)
         if answers.contains(where: correct) { return Check(kind, label, true) }
         if answers.contains(where: EvalReading.admitsUnknown) {

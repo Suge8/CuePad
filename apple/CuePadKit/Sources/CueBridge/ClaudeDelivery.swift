@@ -11,7 +11,6 @@ import Foundation
 @MainActor
 final class ClaudeDelivery {
     private let verdicts = PendingReplies<String, Void>(timeout: AgentTimeouts.reply, timeoutError: BridgeError.ackTimeout)
-    /// 已 started、还没定下的那一条（小写的 uuid），与这一轮出错收尾的原话
     private var running: String?
     private var failure: String?
 
@@ -45,8 +44,6 @@ final class ClaudeDelivery {
         if let running { settle(running, .success(())) }
     }
 
-    /// 这一轮出错收尾（被停下的不算）：记到 started 了还没定下的那一条上。原因取给人看的那句（"Not logged in · Please run /login"）：
-    /// `result` 的原话，没有时是出错回答的正文，都没有才是这一轮出错的原文 `failure`。
     func failed(_ failure: String, in result: JSONValue) {
         guard running != nil else { return }
         let said = result["result"]?.string?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""

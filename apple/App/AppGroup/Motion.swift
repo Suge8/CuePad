@@ -9,35 +9,22 @@ import SwiftUI
 /// 常驻的循环（`LoopLayer`、头像帧序列的 `Motion.Beat`）与 Cue 和会话之间的接力（`CueRelayStage`）是编排，节奏与曲线在它们自己那里，不在这套里。
 /// 减弱动态效果的规矩只在 `spatial` 与 `fading`。不隔离：iOS 上转场的效果在渲染线程上求值（`boardFlight`）。
 nonisolated enum Motion {
-    /// 小位移：列表里让位、面板与浮层开合、展开收起、切换、计数滚动。0.25 秒，一屏里挪几十上百点时跟手。
-    /// 窄屏侧栏开合（横过整屏）也是它：虽横过整屏，是点了就要到的控件，用户定的不比列表里慢。
     static let nudge = Animation.spring(Spring.nudge)
-    /// 接着手指速度的 `nudge`（横滑开合窄屏侧栏松手：初速度按剩下的距离归一，同 Core Animation 那一份 `UIView.animate(springDuration:)`）。
     static func nudge(velocity: Double) -> Animation { .interpolatingSpring(Spring.nudge, initialVelocity: velocity) }
-    /// 远距离的空间移动：卡在看板上换列、在墙上换位。0.4 秒：时长随距离长（Material「距离越远时长越长」，大的转场 375～400ms；
-    /// Apple 默认的弹簧 0.5 秒），0.25 秒的弹簧前 50ms 就走掉三成多，飞过两三列（上千点）看着是一跳。
     static let travel = Animation.spring(Spring.travel)
     /// 定长的挪动：滚到某处、渲染端的平移与缩放（`ContentLift`、Mac 预览的飞出飞回与缩放）。弹簧最后一两像素的尾巴要再画两百多毫秒，
     /// 正压在接着来的那几次更新上；预览飞完要接着落内容、新说的一句要等对话让开再淡入，都按它的终点排。曲线是标准的缓入缓出（Material 2 standard）：
     /// 起步不急（旧的 (0.2, 0, 0, 1) 前 50ms 走掉一半，远一点就是一跳），收尾柔。
     static let glide = Animation.timingCurve(Glide.curve.0, Glide.curve.1, Glide.curve.2, Glide.curve.3, duration: Glide.duration)
-    /// 不挪位置的变化：出现消失、换色、透明度、悬停、换了身份的整块交叉淡（`crossfade` 不另设：两块各自淡入淡出用的就是它）。缓出，一落下就有回应。
     static let fade = Animation.easeOut(duration: Fade.duration)
-    /// 让位的淡出：同一处先后换两样东西时旧的先淡完（`HandOff`），离开时不压住正滑向终位的内容。
     static let yield = Animation.easeOut(duration: Fade.yield)
-    /// 手机按下：快、不回弹，手指一落就到位。
     static let press = Animation.spring(duration: 0.12)
-    /// 手机松开：一点回弹（15% 还不觉得弹，只让尾巴利落些，WWDC23）。
     static let release = Animation.spring(duration: 0.3, bounce: 0.15)
 
-    /// 冒出来：小东西（角上的点、输入框里的钮与附件、状态标换样子）出现消失时从九成大长到原大并淡入，减弱动态效果时只淡。
-    /// 不从零长：一个点从无到有像是跳出来的，起点 0.9～0.97 才读作"浮现"（ui-craft）。用的动画照旧是外面给的（多是 `fade`、`nudge`）。
     static func pop(reduceMotion: Bool) -> AnyTransition {
         reduceMotion ? .opacity : .scale(scale: 0.9).combined(with: .opacity)
     }
 
-    /// 浮出来：浮在内容上的小块（提示）从它贴着的那条边出现，短短挪一截、从九七成大长到原大并淡入；减弱动态效果时只淡。
-    /// 不从边外整块滑进来：它不是从屏幕外来的东西，挪一个身位就够说明从哪边来。
     static func surface(from edge: VerticalEdge, reduceMotion: Bool) -> AnyTransition {
         reduceMotion ? .opacity : .offset(y: edge == .top ? -Surface.shift : Surface.shift).combined(with: .scale(scale: 0.97)).combined(with: .opacity)
     }
@@ -46,7 +33,6 @@ nonisolated enum Motion {
         static let shift: CGFloat = 10
     }
 
-    /// 滑多远、往哪边：够看出从哪边来，不至于像翻过一整页。
     nonisolated enum Turn {
         static let distance: CGFloat = 28
         static func offset(_ edge: HorizontalEdge) -> CGFloat { edge == .leading ? -distance : distance }
@@ -57,20 +43,17 @@ nonisolated enum Motion {
         reduceMotion ? nil : animation
     }
 
-    /// 减弱动态效果时视图自己不挪、只按同一个状态淡（出现时不缩放、不位移，只剩透明度）的变化：那时照样淡（`fade`），否则走 `animation`。
     static func fading(_ animation: Animation, reduceMotion: Bool) -> Animation {
         reduceMotion ? fade : animation
     }
 }
 
 extension Motion {
-    /// 弹簧 token 的参数：渲染端照同一条走（`WideSlide` 按它取样）。
     nonisolated enum Spring {
         static let nudge = SwiftUI.Spring(duration: 0.25)
         static let travel = SwiftUI.Spring(duration: 0.4)
     }
 
-    /// `glide` 的时长与曲线，渲染端的同一段（`CABasicAnimation`、`NSAnimationContext`）用 `timing`。
     nonisolated enum Glide {
         static let duration: TimeInterval = 0.28
         fileprivate static let curve: (Double, Double, Double, Double) = (0.4, 0, 0.2, 1)
@@ -79,36 +62,27 @@ extension Motion {
         }
     }
 
-    /// 会话状态标那根线换形（`StateInk`）：比 `nudge` 慢一截、带一点回弹——线被拉过去再落定，读作活的东西在变，不是图标在切换。
-    /// 这里的回弹不是松手：线是会话本身，换状态是它自己在动；收成一点时线宽不弹（弹过零会翻出来），只有形状弹。
     nonisolated enum Ink {
         static let morph: CGFloat = 0.5
         static let bounce: CGFloat = 0.22
-        /// 不是线的标（铃铛、徽）从中心冒出来的那一下，与线收进去同一拍。
         static let pop = Animation.spring(duration: 0.42, bounce: 0.3)
     }
 
-    /// 一笔写出来：又做完一件时看板已完成列头的对勾重写一遍（`BoardColumnHeader`）。低频、是那一下的落款，比控件的反馈慢；
-    /// 等卡飞到（`travel` 的大半程）才起笔，卡落下时正写完。
     nonisolated enum Write {
         static let delay: Duration = .milliseconds(300)
         static let stroke = Animation.easeOut(duration: 0.45)
     }
 
-    /// Cue 页舞台的一幕（`CueStage`）是编排，不是控件的反馈：天空淡进来，Cue 与字随后浮上来（`rise`，无回弹）；收起回对话走 `travel`。减弱动态效果时只淡（`fading`）。
     nonisolated enum Stage {
         static let riseDuration: TimeInterval = 0.6
         static let rise = Animation.spring(duration: riseDuration)
-        /// 天空淡进来时 Cue 出来，再过一拍字出来：先看到地方，再看到它，再看到它说什么。
         static let figureDelay: TimeInterval = 0.3
         static let wordsDelay: TimeInterval = 0.6
     }
 
-    /// `fade`、`yield` 的时长，渲染端的淡出（Mac 预览落地时飞的那张淡掉）与编排里的等候（等旧的淡完再来新的）用它。
     nonisolated enum Fade {
         static let duration: TimeInterval = 0.16
         static let yield: TimeInterval = 0.08
-        /// 等容器先落定再淡入的那一拍（输入框展开后的头部、提示横幅换下一条）：淡入压在还在动的框上会糊成一团。
         static let settle: TimeInterval = 0.12
         static var timing: CAMediaTimingFunction { CAMediaTimingFunction(name: .easeOut) }
     }
@@ -116,7 +90,6 @@ extension Motion {
 
 #if os(iOS)
 extension Motion.Fade {
-    /// `fade` 的 UIKit 那一份（同一段时长与缓出），给改在 UIKit 视图上、不经 SwiftUI 事务的变化。从当前呈现值接着走，动画里照样接点按。
     @MainActor static func animate(_ changes: @escaping () -> Void) {
         UIView.animate(withDuration: duration, delay: 0, options: [.curveEaseOut, .beginFromCurrentState, .allowUserInteraction], animations: changes)
     }

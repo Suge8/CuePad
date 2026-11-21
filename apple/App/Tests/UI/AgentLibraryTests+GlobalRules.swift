@@ -7,8 +7,6 @@ import Testing
 @testable import CueBridge
 
 extension AgentLibraryTests {
-    /// ~/.agents 常是一个仓库，它的 AGENTS.md 只给在那里干活的 Agent 看：不当全局规则，不并进去，也不让别家链过去。
-    /// 共享那份还没有时，全局规则列的是各家真读的那份。
     @Test func 共读目录里的AGENTS不算全局规则_一键整理让各家读同一份() async throws {
         let opencode = home("opencode")
         for directory in [claude, codex, opencode] { try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true) }

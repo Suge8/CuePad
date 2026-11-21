@@ -1,8 +1,6 @@
 import CueStore
 import Foundation
 
-/// Cue 的大脑此刻好不好（本机文件 `<资料库>/Cue/health.json`，不同步）：值班的管理器（`CueKeeper`）每次对完账写，
-/// Cue 的工具服务（另一个进程）读给 Cue 看（`setup look`），只有它读。唯一的写者是管理器，事实源是它的内存状态，这里只是投影。
 public struct CueHealth: Codable, Equatable, Sendable {
   public enum Phase: String, Codable, Sendable {
     case starting
@@ -11,12 +9,9 @@ public struct CueHealth: Codable, Equatable, Sendable {
   }
 
   public var phase: Phase
-  /// 这个班次起来的时刻；没在跑为 nil
   public var shiftStartedAt: Date?
-  /// 大脑此刻用的 Agent 与模型（nil 是这家的默认）
   public var runtime: AgentKind?
   public var model: String?
-  /// 连续失败了几次（一轮做完清零）
   public var failures: Int
   public var nextRetry: Date?
   public var lastFailure: Failure?
@@ -62,7 +57,6 @@ public struct CueHealth: Codable, Equatable, Sendable {
     library.appending(path: "Cue", directoryHint: .isDirectory).appending(path: "health.json")
   }
 
-  /// 读不到（还没值过班、不在这台值班）为 nil。
   public static func read(library: URL) -> CueHealth? {
     guard let data = try? Data(contentsOf: file(in: library)) else { return nil }
     let decoder = JSONDecoder()

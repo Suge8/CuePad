@@ -1,12 +1,7 @@
 import CueStore
 import Foundation
 
-/// 只在回复框的草稿里（本机偏好，`AppSettings`），随下一句发出，不入库。
-/// 位置记在渲染后的文字里：回答写完后文字不再变，偏移是确切的，同一句话出现两次也不会挂错；那一处已不是 `quote` 时（渲染规则改了）只是不画高亮，发出时照样带摘录。
-/// 引用一份预览时不碰文件，网页地址那类预览也一样引用；话就是回复框里你写的那句，自己没有字（`note` 空）。
-/// 活预览里点选的页面元素（`element`）同样只引用、不带截图：发出时写成 Agent 认得出的文字（地址、选择器、标签与字、组件与源码位置）。
 nonisolated struct ReplyNote: Identifiable, Equatable, Codable, Sendable {
-    /// 活预览里点选的一个页面元素：能拿到时带组件名与源码位置（框架开发模式留在元素上的标记）。
     struct Element: Equatable, Codable, Sendable {
         let page: String
         let selector: String
@@ -15,7 +10,6 @@ nonisolated struct ReplyNote: Identifiable, Equatable, Codable, Sendable {
         var component: String?
         var source: String?
 
-        /// 回复框里那一行写的：元素上的字，没有字时是标签。
         var title: String { text.isEmpty ? "<\(tag)>" : text }
     }
 
@@ -26,7 +20,6 @@ nonisolated struct ReplyNote: Identifiable, Equatable, Codable, Sendable {
     let quote: String
     var note = ""
     var preview: UUID?
-    /// 没有它的旧草稿照常解出来（只是过期后是一张纸）。
     var kind: PreviewKind?
     var element: Element?
 
@@ -49,11 +42,8 @@ nonisolated struct ReplyNote: Identifiable, Equatable, Codable, Sendable {
         self.element = element
     }
 
-    /// 对回答里一段的批注（不是引用的预览、点选的元素）。
     var marksPassage: Bool { preview == nil && element == nil }
 
-    /// 引用的那份预览，按编号从这个会话此刻的预览里取（`SessionDigest.previews`）：引用只记编号，画面显示时再取，
-    /// 预览随对话过期删掉后取不到（nil），这一行仍照标题发出。
     func quoted(in previews: [PreviewItem]) -> PreviewItem? {
         preview.flatMap { id in previews.first { $0.id == id } }
     }
@@ -78,7 +68,6 @@ nonisolated struct ReplyNote: Identifiable, Equatable, Codable, Sendable {
 
     private static let scheme = "cuepad-note"
 
-    /// 按在对话里的先后排（`order` 是对话里回答的 id 顺序）：Agent 读到的顺序就是原文的顺序，不是批注的先后。点选的元素与引用的预览不在里面，排在后面、按挂上的先后。
     static func sorted(_ notes: [ReplyNote], by order: [UUID]) -> [ReplyNote] {
         let index = Dictionary(order.enumerated().map { ($1, $0) }, uniquingKeysWith: { first, _ in first })
         let passages = notes.filter(\.marksPassage)
@@ -86,11 +75,6 @@ nonisolated struct ReplyNote: Identifiable, Equatable, Codable, Sendable {
         return passages + notes.filter { $0.element != nil } + notes.filter { $0.preview != nil }
     }
 
-    /// 发给 Agent 的话：对回答的批注一段排在最前；原文已经在 Agent 自己的上下文里，所以不重发原文，只给能认出位置的摘录（`excerpt`）：
-    /// 一条批注的定位只占二十来个 token，选得再长也一样。不用 Markdown 引用块（每行一个前缀）、不给行号（Agent 看不到行号）。
-    /// 引用的预览写在你那句话前头：`预览「标题」：话`——标题是 Agent 发它时自己写的（`cuepad show --title`），它认得出是哪份。
-    /// 写给某一份的话（`AppSettings.annotate`）各占一行、同一个写法，排在你那句话之前。
-    /// 点选的元素各占一行，排在批注之后、你那句话之前。
     static func message(_ notes: [ReplyNote], said text: String) -> String {
         let passages = notes.filter(\.marksPassage), previews = notes.filter { $0.preview != nil }
         let noted = previews.filter { !$0.note.isEmpty }.map { String(localized: "\(String(localized: "预览「\($0.quote)」"))：\($0.note)") }.joined(separator: "\n")
@@ -99,7 +83,6 @@ nonisolated struct ReplyNote: Identifiable, Equatable, Codable, Sendable {
         return [comments(passages), picked(notes.compactMap(\.element)), noted, said].filter { !$0.isEmpty }.joined(separator: "\n\n")
     }
 
-    /// 给 Agent 读的，不进目录：选择器与源码位置原样给，它拿去在代码里找；字截到 `excerptLimit`。
     private static func picked(_ elements: [Element]) -> String {
         guard !elements.isEmpty else { return "" }
         let lines = elements.map { element in
@@ -127,6 +110,5 @@ nonisolated struct ReplyNote: Identifiable, Equatable, Codable, Sendable {
     }
 
     static let excerptLimit = 30, excerptEnd = 12
-    /// `MarkdownText` 排版时自己加的字符（列表符、次级列表符、引用竖条），不是 Agent 写的。
     private static let renderedMarks: Set<Character> = ["•", "◦", "▎"]
 }

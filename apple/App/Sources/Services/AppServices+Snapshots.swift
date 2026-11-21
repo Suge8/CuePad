@@ -4,13 +4,12 @@ import Foundation
 import UIKit
 #endif
 
-/// 本地实时活动与小组件读同一份 Cue 此刻；远程活动只用它开启，已有内容由 Mac 经 APNs 更新（`CueLiveActivity`）。
 extension AppServices {
     func startSnapshots() {
         follow(reporting: { .widgetDataUnavailable("\($0)") }) {
             for try await seen in self.cueUpdates() {
                 guard seen.read.widget != nil else { continue }
-                try await self.snapshots.writeSnapshots()  // 观察只当通知：读在发布的串行段里重做，见 writeSnapshots
+                try await self.snapshots.writeSnapshots()
             }
         }
     }
@@ -22,23 +21,17 @@ extension AppServices {
 
     var knowsActivityState: Bool { syncing.state.reconciled && syncing.state.status.reachesMac }
 
-    /// 远程实时活动的内容（手机开活动时的首份、Mac 经 APNs 推的每一份）只按这里算。账号认好、对完账、同步通着才算得出，否则 nil：
-    /// 本地库可能落后于别处，不拿它写，也不用 CueFeed 在换号、清库前排队的旧快照。不带本机的等待原因与"这台"：锁屏上是同一份。
     func activityState(_ digest: @autoclosure () throws -> CueDigest) throws -> CueActivityState? {
         guard knowsActivityState else { return nil }
         return try ActivityPush.fitted(CueActivityState(now: Self.cueNow(try digest(), at: speech, local: CueNow.Local(waiting: nil, here: nil))))
     }
 
-    /// 远程开实时活动看的那一件，同 `cueNow` 按这一刻算。
     func activityNewest(_ digest: CueDigest) -> CueNow.Item? {
         var moment = speech
         moment.now = .now
         return CueNow.newest(digest, at: moment)
     }
 
-    /// 小组件、实时活动与 Cue 那一行（`CueWatch`）都经这里推。
-    /// 按推出的这一刻推：说的话的此刻（`SpeechClock`）只在时限到点、同步通断时走，库变了时它可能停在很久以前，
-    /// 拿它算会把早过了 `doneWindow` 的"刚做完"当成新的、过时时刻也从那时算。
     static func cueNow(_ digest: CueDigest, at moment: Speech.Moment, local: CueNow.Local) -> CueNow {
         var moment = moment
         moment.now = .now
@@ -54,7 +47,6 @@ extension AppServices {
         return CueNow.Local(waiting: CueGate.of(self, running: nil, name: nil).waitingReason, here: here)
     }
 
-    /// 不依赖观察任务赶在挂起前执行；前台重开、后台收尾都显式等这一份完成。
     func resendSnapshots() async {
         do {
             try await snapshots.writeSnapshots(resend: true)
@@ -63,7 +55,6 @@ extension AppServices {
         }
     }
 
-    /// 按读到的摘要推出此刻，发布小组件之外跟着它的（手机的实时活动与角标），返回给小组件的那份；`first` 是这次运行的第一份。
     func present(_ digest: CueDigest, first: Bool, resend: Bool) async throws -> CueNow {
         let now = Self.cueNow(digest, at: speech, local: cueLocal)
         #if os(iOS)
@@ -79,18 +70,15 @@ nonisolated struct WidgetSnapshots: Equatable, Sendable {
     var home: DefaultProjectSnapshot
     var cue: CueNow
 
-    /// Cue 此刻随此刻推（在不在、话在不在路上、表情，`AppServices.cueNow`），读库的那份不随。
     init(_ content: WidgetContent, now: CueNow) {
         projects = content.projects
         home = content.home
         cue = now
     }
 
-    /// 只比内容（Cue 此刻推出的时刻不算）：内容一样就不重写、不刷新小组件。
     static func == (a: Self, b: Self) -> Bool { a.projects == b.projects && a.home == b.home && a.cue.same(as: b.cue) }
 }
 
-/// 小组件除 Cue 之外从库里读的那份（与 Cue 的摘要同一次读，`CueFeed.Read`）。
 nonisolated struct WidgetContent: Equatable, Sendable {
     var projects: ProjectsSnapshot
     var home: DefaultProjectSnapshot

@@ -1,7 +1,6 @@
 import CueStore
 import SwiftUI
 
-/// 只存列表的引用、到画的地方才取出这一件：一件按值约 1.4KB，放进视图值会随外面每一层修饰一起复制、比较。
 struct CueWaitPick: Equatable {
     let waits: [CueWait]
     let index: Int
@@ -33,7 +32,6 @@ struct CueWaitCard: View {
     nonisolated static let lead: CGFloat = 6
 
     #if os(macOS)
-    /// Cue 页打开时数要排几格用（`CuePage.covered`）：只能数少。
     static func floor(_ wait: CueWait, shots: [UUID: [CueShown]], width: CGFloat) -> CGFloat {
         let pictures = wait.message.flatMap { shots[$0.id] }.map { gap + CueShots.floor(count: $0.count, width: width - 2 * side) } ?? 0
         return edge + CueWaitEyebrow.height + lead + Typography.titleSize + pictures + gap + ControlSize.compact.height + edge + CueWaitDock.below
@@ -64,13 +62,11 @@ struct CueWaitCard: View {
             pictures.fitPart(.pictures, hidden: folded)
             WaitAnswer(wait: pick.wait.wait).fitPart(.sheet, hidden: folded)
             line.fitFrame()
-                // 量裁的框（不是里面的内容）：收成一行的那条排出来了就是收起了
                 .onGeometryChange(for: Bool.self) { $0.size.height > 0 } action: { folded = $0 }
                 .fitRole(.folded, hidden: !folded)
         }
     }
 
-    /// 连紧凑的样子都放不下（横屏弹着键盘）：整张卡收成问句一行。
     private var line: some View {
         Button {
             UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)

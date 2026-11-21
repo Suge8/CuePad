@@ -13,7 +13,6 @@ struct MacSyncTests {
     let rig = TestApp()
     var services: AppServices { rig.services }
 
-    /// `spoke`：留下了会话文件（说过话）；没有文件的会话结束时不进历史。
     func session(
         _ sessionID: String, cwd: String = "/work/app", state: WorkState = .thinking, pid: Int32 = 100, spoke: Bool = false
     ) -> CueBridge.Session {
@@ -60,7 +59,6 @@ struct MacSyncTests {
 
     @Test
     func 退出时这台Mac离线_前面的组件卡住也不漏() async throws {
-        // Cue 的大脑起不来、也取消不了，直到断言后放行：停 Cue 这一步卡住（等的是不随取消结束的任务）
         let (gate, release) = AsyncStream<Void>.makeStream()
         defer { release.finish() }
         let rig = TestApp(cue: CueDependencies(
@@ -132,7 +130,7 @@ struct MacSyncTests {
     @Test func 会话显示名写进同步记录_改名后跟上() async throws {
         var named = session("s1", cwd: "/work/app")
         try await services.consumeSessionChanges(changes([.appeared(named)]))
-        #expect(try await services.store.allSessionStates().first?.title == "app")  // 没有名字和消息时是文件夹名
+        #expect(try await services.store.allSessionStates().first?.title == "app")
 
         named.name = "登录修复"
         try await services.consumeSessionChanges(changes([.infoChanged(named)]))
@@ -142,7 +140,7 @@ struct MacSyncTests {
     @Test func 启动时把这台Mac遗留的记录标为已结束_不动别的Mac() async throws {
         let mine = StateRecorder(store: services.store, hostID: TestApp.hostID)
         let other = StateRecorder(store: services.store, hostID: "mac-other")
-        try await mine.update(sessionID: "old", state: .settled, process: SessionProcess(pid: 1, startedAt: 1))  // 记下的进程已不在
+        try await mine.update(sessionID: "old", state: .settled, process: SessionProcess(pid: 1, startedAt: 1))
         try await other.update(sessionID: "theirs", state: .thinking)
 
         try services.reconcileLaunch()
@@ -151,7 +149,6 @@ struct MacSyncTests {
         #expect(states == ["old": .known(.ended), "theirs": .known(.thinking)])
     }
 
-    /// 各家接入上桥时都报"现在"（这里的假扩展也是），起点只在桥上定一次，界面与同步记录读的是同一个。
     @Test func 重开后接回的会话沿用原来的起点_看过的不又成有新回复() async throws {
         let past = Date.now.addingTimeInterval(-3600)
         let before = StateRecorder(store: services.store, hostID: TestApp.hostID)

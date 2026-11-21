@@ -23,7 +23,6 @@ public struct LibraryLocation: Equatable, Sendable {
 
   public enum Base: Sendable {
     case applicationSupport(URL)
-    /// iOS：App Group 共享容器；没有权限时为 nil。
     case appGroup(container: URL?)
 
     public static var platform: Base {
@@ -36,11 +35,8 @@ public struct LibraryLocation: Equatable, Sendable {
   }
 
   public enum Origin: Sendable {
-    /// 正式版的真实库（Mac 上正式版的进程，iOS 上 App Group 里的）
     case release
-    /// Mac 本机构建的开发库（`CuePad Dev`）
     case development
-    /// 环境变量或调用方指定的隔离目录（xc.sh、测试、临时库）
     case override
   }
 
@@ -50,7 +46,6 @@ public struct LibraryLocation: Equatable, Sendable {
 
   public var databaseURL: URL { directory.appending(path: "cuepad.db") }
 
-  /// 可随时重建的缓存（附件文件，可从 iCloud 再取；缩略图与网页快照），系统可清、不进备份。iOS 真实库放在 App Group 容器里（分享扩展、小组件与主 App 读写同一份附件，不用跨容器链接）；隔离库在隔离目录的 `Caches/` 里——本机构建、测量与测试不往正式版的缓存里写。
   public var caches: URL {
     #if os(macOS)
     if !isIsolated { return URL.cachesDirectory }
@@ -69,7 +64,6 @@ public struct LibraryLocation: Equatable, Sendable {
       ? directory.appending(path: "Logs", directoryHint: .isDirectory) : UserHome.directory.appending(path: "Library/Logs/CuePad", directoryHint: .isDirectory)
   }
 
-  /// 换位置的环境变量（库、工作区、设备日志）的唯一读法：没给为 nil；给了相对路径就报错、打不开，不悄悄回到默认位置（那可能是真实的家目录）。
   public static func overrideDirectory(_ key: String, in environment: [String: String]) throws -> URL? {
     guard let value = environment[key], !value.isEmpty else { return nil }
     guard value.hasPrefix("/") else { throw LibraryLocationError.relativePath(key: key, value: value) }
@@ -80,7 +74,6 @@ public struct LibraryLocation: Equatable, Sendable {
     LibraryLocation(directory: directory, origin: .override)
   }
 
-  /// `isRelease`：这个进程是不是正式版（nil 取 `AppIdentity.isRelease`）；Mac 上不是的打开开发库。
   public static func resolve(
     environment: [String: String] = ProcessInfo.processInfo.environment, base: Base = .platform, isRelease: Bool? = nil
   ) throws -> LibraryLocation {

@@ -5,10 +5,8 @@ import CueStore
 import Foundation
 
 extension AppServices {
-    /// 这台就是会话所在的 Mac：点开一步当场回会话文件取，在跑的一轮也取得到。
     func holdsSteps(of session: SessionState) -> Bool {
         #if os(macOS)
-        // 演示的会话挂在 demo-mac 下、不挂本机：挂本机会被本机真的执行器接手，发送失败；所以演示 Mac 在这里另认
         session.hostID == speech.localHost || DebugHooks.preset.demoMac
         #else
         false
@@ -16,13 +14,11 @@ extension AppServices {
     }
 
     #if os(macOS)
-    /// 会话所在的 Mac 办别的设备的请求（`DeliveryMode.step`）：取了写在那一步上。会话没了、读不了按失败写回原因，不写一份空的。
     static func fillStep(_ content: String, in store: CueStore, runtimes: [AgentKind: any AgentRuntime]) async throws {
         guard let step = try await store.stepCalls(content) else { throw SendError.sessionFileMissing }
         try await store.fillStep(content, calls: step.calls, with: try await stepDetail(step.calls, of: step.session, in: store, runtimes: runtimes))
     }
 
-    /// 那家没接着（演示库）时照会话文件读。
     static func stepDetail(
         _ calls: [String], of sessionID: String, in store: CueStore, runtimes: [AgentKind: any AgentRuntime]
     ) async throws -> ToolCallDetail {
@@ -36,7 +32,6 @@ extension AppServices {
     }
     #endif
 
-    /// 别的设备上：请会话所在的 Mac 取了写在那一步上（`ChatMessage.Tools.Item.detail`），等它办完；那台没开、没取到、一分钟没回音都抛出原因。
     func fetchStep(_ item: Int, of message: UUID, in session: SessionState) async throws {
         let result = try await awaitOutcome(onTimeout: SendError.noReply) {
             try await request(on: session.hostID) { try await store.requestStep(item, of: message, in: session) }

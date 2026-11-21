@@ -3,50 +3,33 @@ import AppKit
 import CueStore
 import WebKit
 
-/// 动作让页面弹了对话框、正等用户回答：动作本身做了，回执照常写（对话框那一行在控制台记录里）。
 struct AskPending: Error {}
 
-/// 等页面答话时它换了文档（点了链接、提交了表单）：旧文档里那一句不会再回来，动作本身做了。
 struct PageLeft: Error {}
 
-/// Agent 这一下做不了：`text` 原样回给它（`cuepad live` 的动词把它当报错打出来）。
 struct LiveRefusal: Error {
     let text: String
     init(_ text: String) { self.text = text }
 }
 
-/// Agent 怎么看、点这一页（`cuepad live snapshot|click|…`，由 `Workspace.answerLive` 调）。调用方保证同一个预览一次只做一件。
-/// 引用是"页面代号 + 编号"（`a5`）：代号随主框换文档（跳转、重载）而换，旧代号的引用一律报错，绝不落到新页面的别的元素上；
-/// 编号由各份文档里的脚本按原生给的起点发（`LiveAgentScript.agent`），一页里主框与各个框共用一串。
 extension LivePreview {
     struct AgentState {
-        /// 此刻这一页：读过一次快照才有。
         var page: AgentPage?
-        /// 这个预览发过的页面代号：认得出是"之前那一页的"还是"别处来的"。
         var codes: Set<String> = []
-        /// `upload` 交下的文件：页面这回要选文件时给它（`runOpenPanel`）。
         var upload: [URL]?
-        /// 用户最近一次在这个页面上按键、点、滚（`Workspace.watchUserInput`）。
         var userInput: ContinuousClock.Instant?
-        /// Agent 最近一次操作，或面板最近一次收起（闲置释放从它算起，`Workspace.keepLivePreviews`）。
         var used = ContinuousClock.now
-        /// Agent 最近一次发来地址或操作（`engage`）。
         var acted = ContinuousClock.now
-        /// 正在做 Agent 的动作：这时网页弹的对话框没人看着就当场答掉（`LivePreview+Dialogs`）。
         var acting = false
         var drivenUntil = ContinuousClock.now
-        /// 这一页（主框的那份文档）一直标着 aria-busy、等到头过（`untilCurrent`）。
         var stuckBusy: String?
     }
 
     struct AgentPage {
         let code: String
-        /// 主框那份文档（`LivePageRecord.main`）。
         let main: String
         var next = 0
-        /// 编号 → 它所在的文档。
         var owners: [Int: String] = [:]
-        /// 框里的文档 → 外面那一层的文档与 iframe 元素的编号：算框里元素在网页视图上的位置用。
         var hosts: [String: (parent: String, frame: Int)] = [:]
     }
 
@@ -57,7 +40,6 @@ extension LivePreview {
         let token: String
     }
 
-    /// 动作的回执里对话框、新报错之外的那一行做了什么。
     enum Act {
         case click(String), fill(String, String), press(String, String?), upload(String, [LiveChannel.Upload]), eval(String)
     }
@@ -95,7 +77,6 @@ extension LivePreview {
         return .done(text, LiveChannel.Info(url: url, title: title))
     }
 
-    /// 只留含这段字的行与它们的上级（按缩进认上级），不分大小写。
     private static func matching(_ lines: [String], _ query: String) -> [String] {
         var kept = Array(repeating: false, count: lines.count)
         var chain: [(depth: Int, index: Int)] = []
@@ -152,7 +133,6 @@ extension LivePreview {
         return out
     }
 
-    /// iframe 元素对应哪一份文档：上次接上的那份还在就是它；否则按地址找一份还没接上的。
     private func frameDocument(host: String, frame: Int, source: String, page: AgentPage) -> (LivePageRecord.Document, String)? {
         if let token = page.hosts.first(where: { $0.value.parent == host && $0.value.frame == frame })?.key, let document = record.documents[token] {
             return (document, token)
@@ -212,7 +192,6 @@ extension LivePreview {
                 if let url = web.url?.absoluteString, url.contains(part) { return .done("等到了\(what)（\(Self.seconds(since: start))）：\(url)") }
             } else {
                 try requireLocal()
-                // 内容要现问的页面：每一轮都等它问回来再看，不拿上一轮的旧内容当等到了
                 await untilCurrent()
                 let documents = args.text == nil ? record.main.flatMap { record.documents[$0] }.map { [$0] } ?? [] : Array(record.documents.values)
                 for document in documents {

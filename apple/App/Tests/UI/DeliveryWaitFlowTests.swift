@@ -20,7 +20,7 @@ struct DeliveryWaitFlowTests {
         app.sync.fetching.withLock {
             $0 = { _ in
                 fetches.withLock { $0 += 1 }
-                return URL(filePath: "/nonexistent/\(key)")  // 说取到了，库里却没有
+                return URL(filePath: "/nonexistent/\(key)")
             }
         }
         try await services.executor.start()

@@ -1,4 +1,3 @@
-/// 帮助是命令行的唯一文档：根帮助只教常用任务；选项与 JSON 字段在各命令的 --help 里。
 enum Help {
   static let root: String = {
     let examples = [
@@ -38,7 +37,6 @@ enum Help {
     let rows = zip(labels, options).map { "  \($0.padded(to: width))  \($1.help)" }.joined(separator: "\n")
     let usage = ["cuepad", command.name, command.arguments, command.options.isEmpty ? "" : "[选项]"]
       .filter { !$0.isEmpty }.joined(separator: " ")
-    // 参数和带值的选项（--parent <任务>、--after <灵感或任务>）都是对象引用
     let kinds = ["<灵感或任务>", "<任务>", "<副本>"]
     let takesReference = ([command.arguments] + options.compactMap { $0.value.map { "<\($0)>" } })
       .contains { text in kinds.contains { text.contains($0) } }
@@ -67,7 +65,6 @@ enum Schema {
 }
 
 extension String {
-  /// 按显示宽度补空格（中日韩字符占两格），终端里两栏才对齐。
   var displayWidth: Int { unicodeScalars.reduce(0) { $0 + ($1.value >= 0x2E80 ? 2 : 1) } }
   func padded(to width: Int) -> String { self + String(repeating: " ", count: max(0, width - displayWidth)) }
 }

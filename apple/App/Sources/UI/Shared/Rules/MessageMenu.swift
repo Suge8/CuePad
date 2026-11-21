@@ -1,4 +1,3 @@
-/// 长按的预览就是消息本身（系统截图），不另画一份。
 nonisolated enum MessageMenu {
     enum Kind: Equatable, Sendable {
         case reply, mine

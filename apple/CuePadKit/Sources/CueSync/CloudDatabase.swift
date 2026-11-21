@@ -1,7 +1,6 @@
 import CloudKit
 import Foundation
 
-/// 令牌是 `CKServerChangeToken` 的归档，测试可换成任意字节。
 struct ZoneChangeBatch: Sendable {
   var modifications: [CKRecord]
   var deletions: [(id: CKRecord.ID, recordType: String)]
@@ -9,10 +8,8 @@ struct ZoneChangeBatch: Sendable {
   var moreComing: Bool
 }
 
-/// 都不带附件的文件：文件另走一路（`FileCloud`）。
 protocol ZoneChangeSource: Sendable {
   func changes(since token: Data?, keys: [String]) async throws -> ZoneChangeBatch
-  /// 按 ID 取整条记录、不带文件（取不到的略过）。一次不超过 `CloudKitLimits.recordsPerRequest` 条，由调用方分批。
   func records(_ ids: [CKRecord.ID]) async throws -> [CKRecord]
 }
 
@@ -38,7 +35,6 @@ protocol FileCloud: Sendable {
   func uploadFile(_ record: CKRecord, progress: @escaping @Sendable (Double) -> Void) async throws -> SentRecords
   /// 上个进程交给系统、还没交回结果的文件上传（传完了的结果也在这里交回）。
   func resumedFileUploads() async throws -> [ResumedUpload]
-  /// 只取这条记录的文件（`fileKey`）；记录已不在为 nil。
   func downloadFile(_ id: CKRecord.ID, progress: @escaping @Sendable (Double) -> Void) async throws -> CKRecord?
 }
 
@@ -50,9 +46,7 @@ struct ResumedUpload: Sendable {
 protocol SyncCloud: ZoneChangeSource, RecordUploader, SubscriptionStore, FileCloud {
   func accountStatus() async throws -> CKAccountStatus
   func accountName() async throws -> String
-  /// 门铃的密钥（`RelaySecret`），没有就生成一把存进去。
   func relaySecret() async throws -> Data
-  /// 诊断区（`DiagnosticZone`）：拉与传同业务区，区不在时拉取抛 zoneNotFound，上传自己建区。
   func diagnosticChanges(since token: Data?) async throws -> ZoneChangeBatch
   func uploadDiagnostics(saving: [CKRecord], deleting: [CKRecord.ID]) async throws -> SentRecords
 }
@@ -84,7 +78,6 @@ struct CloudDatabase: SyncCloud {
     let result = try await database { try await $0.recordZoneChanges(inZoneWith: zoneID, since: since, desiredKeys: keys) }
     var modifications: [CKRecord] = []
     for (_, outcome) in result.modificationResultsByID {
-      // 单条取不出来的整批重来：跳过它，令牌就跨过了这条记录
       modifications.append(try outcome.get().record)
     }
     return ZoneChangeBatch(
@@ -98,14 +91,13 @@ struct CloudDatabase: SyncCloud {
     for (_, outcome) in try await database({ try await $0.records(for: ids, desiredKeys: ZonePuller.fieldsWithoutFiles) }) {
       switch outcome {
       case .success(let record): found.append(record)
-      case .failure(let error as CKError) where error.code == .unknownItem: continue  // 这期间被删了
+      case .failure(let error as CKError) where error.code == .unknownItem: continue
       case .failure(let error): throw error
       }
     }
     return found
   }
 
-  /// 按服务器版本比对：同步区的记录带着拉到的版本，冲突交给对账。
   func upload(saving records: [CKRecord], deleting ids: [CKRecord.ID]) async throws -> SentRecords {
     try await upload(saving: records, deleting: ids, policy: .ifServerRecordUnchanged)
   }

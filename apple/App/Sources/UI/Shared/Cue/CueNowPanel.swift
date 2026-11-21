@@ -14,7 +14,6 @@ struct CueNowPanel: View {
     @Environment(Workspace.self) private var workspace
     @State private var settings = CueSettingsModel()
 
-    /// 面板的字号上限：再大胶囊那一排连模型名都要截掉（iPhone 17 上辅助字号第二档就成了"Opus…"）。
     private static let largestType = DynamicTypeSize.accessibility1
 
     var body: some View {
@@ -27,9 +26,7 @@ struct CueNowPanel: View {
             }
             .padding(.horizontal, Spacing.panel)
             CueHostLine(model: settings) { go(openSettings) }
-                // 悬停的底就是这一行自己的圆角块（同上面几组）：默认的行底向两边出血，在这里会顶到面板的边、被圆角裁掉
                 .rowContainer(RoundedRectangle(cornerRadius: Radius.row), flush: true)
-                // 行首图标在它那一列里居中，往左收两点，图标的左沿才对上面几组的字
                 .padding(.horizontal, Spacing.panel - Spacing.inset - Spacing.hair)
                 .padding(.top, -Spacing.item)
         }
@@ -60,7 +57,6 @@ struct CueNowPanel: View {
     }
 }
 
-/// 高度总由启用了的那一排定（看不见时也排着），换态时面板不变高。
 private struct BrainBlock: View {
     let brain: AgentModelChoice?
     let settings: CueSettingsModel
@@ -82,7 +78,6 @@ private struct BrainBlock: View {
     private static let dimmed = 0.4
 }
 
-/// 三个大数一排，每个是去那一页的入口：数是主角，底下一行小字说它是什么。排法见 `Spread`。没启用时只剩技能那一个（记忆与定时要 Cue 在）。
 private struct CueFigures: View {
     let enabled: Bool
     let memory: () -> Void
@@ -114,12 +109,10 @@ private struct CueFigures: View {
         .observing(services.store, into: $next, onError: workspace.fail) { try $0.cueScheduleLines() }
     }
 
-    /// 只写几点几分、不带上午下午：三个数差不多宽才排得齐，"上午 8:00"比旁边两个数宽出一倍。12 小时制还是 24 小时制跟系统的设置。
     private static func clock(_ date: Date) -> String {
         date.formatted(.dateTime.hour(.defaultDigits(amPM: .omitted)).minute())
     }
 
-    /// 哪一天；12 小时制时上午下午接在它后面（大数里省掉的那半句）。
     private static func day(_ date: Date) -> String {
         let calendar = Calendar.current, shown = date.formatted(date: .omitted, time: .shortened)
         let period = [calendar.amSymbol, calendar.pmSymbol].first(where: shown.contains)
@@ -127,8 +120,6 @@ private struct CueFigures: View {
     }
 }
 
-/// 头一个贴左边、末一个贴右边、中间那个压在正中；正中放不下时让开宽的那一头，还放不下就只给它两头剩下的宽（它的小字自己缩）。
-/// 不分三等份：小字长短差得多（英文的"Schedule · Tomorrow AM"），等分时中间那格先被截。只有一个时贴左边。
 private struct Spread: Layout {
     let gap: CGFloat
 
@@ -183,12 +174,10 @@ private struct Figure: View {
 }
 
 private extension View {
-    /// 面板里不带框的按钮：悬停的淡底比字宽出一圈，不贴着字的边画；`hoverRoomTaken` 在按钮外把这一圈收回，字仍对着面板的边线。
     func hoverRoom(_ side: CGFloat = Spacing.item) -> some View { padding(.horizontal, side).padding(.vertical, Spacing.glyph).contentShape(.rect) }
     func hoverRoomTaken(_ side: CGFloat = Spacing.item) -> some View { padding(.horizontal, -side).padding(.vertical, -Spacing.glyph) }
 }
 
-/// 最近记下的两条各一行（字在左、几时记的在右），点哪里都去记忆页。
 private struct CueRecall: View {
     let open: () -> Void
     @Environment(Workspace.self) private var workspace
@@ -197,7 +186,6 @@ private struct CueRecall: View {
     @State private var recent: CueMemoryRecent?
 
     nonisolated private static let shown = 2
-    /// 悬停底的两边与底下运行那一行的对齐（那一行离面板边 `panel - inset - hair`）。
     private static let room = Spacing.inset + Spacing.hair
 
     var body: some View {
@@ -245,8 +233,6 @@ private struct RecallLine: View {
     }
 }
 
-/// 名片上没有可数的时它不在的那一句已写在名字下面（`CueNow.quietLine`），同一屏不写两遍，这一句回到"Cue 的设置"。
-/// 还没选过在哪台运行时开关占着位置、看不见：那时的下一步是上面的选 Mac（`CueHostPick`）；还没和 iCloud 对过、手机上还没有哪台 Mac 时开关停用。
 private struct CueHostLine: View {
     let model: CueSettingsModel
     let open: () -> Void
@@ -324,7 +310,6 @@ private struct CueHostPick: View {
                 }
                 .font(Typography.secondary).foregroundStyle(palette.ink3)
             } else if hosts.isEmpty {
-                // 只在手机上：Mac 上这台总在列表里
                 #if os(iOS)
                 Text(CueSettings.noHost(services)).font(Typography.secondary).foregroundStyle(palette.ink3)
                 #endif

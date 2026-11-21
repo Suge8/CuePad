@@ -14,7 +14,6 @@ extension DebugScene {
         return try await relayRequests(store, tokens: tokens)
     }
 
-    // 同一段 actor 隔离中写完两条请求，订阅者下一次读取必须同时看见两个认领结果。
     private static func relayRequests(_ store: isolated CueStore, tokens: [String]) throws -> [DeliveryRequest] {
         try tokens.enumerated().map { index, token in
             try store.requestLaunch(

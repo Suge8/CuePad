@@ -12,7 +12,6 @@ import Testing
       ([:], .appGroup(container: URL(filePath: "/group")), false, "/group/Library", false),
     ]
     #if os(macOS)
-    // 本机构建（不是正式版）不碰真实资料库，打开开发库
     cases.append(([:], .applicationSupport(URL(filePath: "/support")), false, "/support/CuePad Dev/Library", true))
     #endif
     return cases

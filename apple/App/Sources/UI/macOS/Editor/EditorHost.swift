@@ -13,7 +13,6 @@ final class EditorHandle {
     func focus() {
         if let textView { textView.window?.makeFirstResponder(textView) }
     }
-    /// 光标留在原来的位置附近，撤销栈清空：之前的撤销对不上新正文。
     func replace(_ text: String) {
         guard let textView else { return }
         let location = textView.selectedRange().location
@@ -22,7 +21,6 @@ final class EditorHandle {
     }
 }
 
-/// 正文只在创建时载入一次：之后编辑器是这张卡正文的唯一写者，Store 回传的自身保存不再灌回编辑器（会打断光标与撤销栈）。
 struct EditorHost: NSViewRepresentable {
     let initialText: String
     let theme: CueEditorTheme
@@ -32,7 +30,6 @@ struct EditorHost: NSViewRepresentable {
     var selectionActions: [CueSelectionAction] = []
     var onSubmit: (() -> Void)?
     var onError: (any Error) -> Void = { _ in }
-    /// false：盖着别的东西、看不见时（技能与规则文件页标出合并时）交出键盘、不接输入、读屏跳过；回到 true 时之前拿着键盘的再拿回来。
     var editable = true
     var bottomInset: CGFloat = 0
     @Environment(AppServices.self) private var services

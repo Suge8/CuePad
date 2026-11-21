@@ -21,14 +21,12 @@ nonisolated enum ModelLabel {
     }
 }
 
-/// 思考强度：这个模型有的档（`levels`）与此刻的档。颜色与动的多少按固定的一把尺（`scale`、`energy`），同一档在哪个模型上都一样热。
 nonisolated struct ThinkingMeter: Equatable {
     let levels: [ThinkingLevel]
     private(set) var current: ThinkingLevel?
 
     static let scale = ThinkingLevel.allCases.filter { $0 != .off }
 
-    /// 这一档在尺上的高低：0 最低档、1 最高档，同一档在哪个模型上都一样热（颜色、流动都按它）；关是 nil。
     static func energy(_ level: ThinkingLevel) -> Double? {
         scale.firstIndex(of: level).map { Double($0) / Double(scale.count - 1) }
     }
@@ -45,7 +43,6 @@ nonisolated struct ThinkingMeter: Equatable {
         return meter
     }
 
-    /// 档名；Agent 没报此刻的强度时（用模型的缺省）是"默认"，照样能点能换。
     var label: String { current?.label ?? String(localized: "默认") }
     var isMax: Bool { current != .off && current == ThinkingLevel.allCases.last(where: levels.contains) }
 

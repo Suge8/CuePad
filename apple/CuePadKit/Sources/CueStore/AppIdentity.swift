@@ -35,7 +35,5 @@ public enum AppIdentity {
 }
 
 extension Logger {
-  /// 停摆的现场（notice 级别落盘）：Mac 等着拉时的晚醒与排队（`AppServices.holdActivityWhilePolling`）、
-  /// 一拉太久与拉取节奏迟醒（`SyncPoller`）都记在这一类里。
   public static let stall = Logger(subsystem: AppIdentity.id, category: "stall")
 }

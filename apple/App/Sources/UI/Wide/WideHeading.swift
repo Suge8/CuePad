@@ -10,8 +10,6 @@ struct WideHeading: View {
     }
 }
 
-/// 项目页的栏头：回项目列表的"项目"、项目名（点开是项目自己的操作，`ProjectActions`），紧跟着文件夹与规则两颗图标钮（`ProjectHeadTools`）。
-/// 读内存里的项目目录（`Workspace.catalog`），不另订阅。
 struct WideProjectHeading: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
@@ -39,7 +37,6 @@ struct WideProjectHeading: View {
                     .buttonStyle(ControlButtonStyle(kind: .icon))
             }
             .buttonStyle(PressStyle(.button))
-            // 第一块的字仍与下面的内容左对齐：悬停的底向左宽出去
             .padding(.leading, -HeadingPiece.inset)
             .font(Typography.toolbarTitle)
             .accessibilityElement(children: .contain)
@@ -47,9 +44,6 @@ struct WideProjectHeading: View {
     }
 }
 
-/// 栏头里能点的字：悬停的底与旁边的图标钮（`ControlButtonStyle(kind: .icon)`）同高，一排里停到哪颗都是一样大的一块。
-/// 归档、回收站的栏头：同项目页一样写成"项目 / 归档"，点"项目"回列表——这两页是从项目列表进来的，栏头上看得出、也回得去。
-/// 这一页自己的钮（回收站的清空）紧跟在标题后面，同项目页栏头里项目名后面那两颗。
 struct WidePlaceHeading<Tools: View>: View {
     let title: String
     @ViewBuilder var tools: Tools
@@ -72,7 +66,6 @@ struct WidePlaceHeading<Tools: View>: View {
     }
 }
 
-/// 栏头开头回项目列表的"项目"与它后面的斜线。
 private struct ShelfCrumb: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette

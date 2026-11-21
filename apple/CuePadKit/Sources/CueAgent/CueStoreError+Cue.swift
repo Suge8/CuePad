@@ -1,10 +1,8 @@
 import CueStore
 
 extension CueStoreError {
-  /// 模型写错 model 时直接列出能选的，至多这么多个；多了指去 setup look。
   static let choicesListed = 20
 
-  /// 给 Cue 的下一步：Store 的报错只说事实，该用哪个工具、哪个动作在这里按工具与动作名（`TaskAction`）写。
   var cueAdvice: String? {
     switch self {
     case .noSession: "先 \(TaskAction.start.rawValue) 开工，它的正文会作为第一句"

@@ -18,14 +18,12 @@ enum LiveHost {
         fit(window)
     }
 
-    /// 挂在这里的拿下来（Agent 不用了、预览释放）；挂在面板里的不动。
     static func unpark(_ web: WKWebView) {
         guard let window, web.window === window else { return }
         web.removeFromSuperview()
         tidy()
     }
 
-    /// 网页视图被面板接走后调：空了就收掉窗口。
     static func tidy() {
         guard let window, window.contentView?.subviews.isEmpty != false else { return }
         window.orderOut(nil)
@@ -66,7 +64,6 @@ enum LiveHost {
     }
 }
 
-/// 活预览的网页视图：离开窗口时报一声（`LivePreview.parkIfLeft`）。
 final class PageView: WKWebView {
     var leftWindow: (() -> Void)?
 

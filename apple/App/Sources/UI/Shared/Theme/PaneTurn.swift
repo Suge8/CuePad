@@ -1,9 +1,6 @@
 import SwiftUI
 
 extension Motion {
-    /// 换页只这一种，各处的切页都经它。
-    /// 两页的占高也随进度换（出去的收、进来的长，`TurnHeight`），装两页的是 `TurnStack`：贴底的任务气泡、"更多"的高连续地变，不在转场开头或结尾一下跳到终点的高。页里不随页滑的一块（两个范围共用的分段）挂 `turnSteady`，原地淡换。
-    /// 动画是触发它的那一下给的 `nudge`。两段都一直挂着、只换看得见的那一段的用 `paneTurn`（同一段距离与方向）。
     static func turn(from edge: HorizontalEdge, reduceMotion: Bool) -> AnyTransition {
         reduceMotion ? .opacity : .modifier(active: TurnPage(progress: 0, shift: Turn.offset(edge)), identity: TurnPage(progress: 1, shift: Turn.offset(edge)))
     }
@@ -14,7 +11,6 @@ extension EnvironmentValues {
 }
 
 extension View {
-    /// 这一块不随换页滑（`Motion.turn`）：两页上同一处同一样东西（搜索两个范围顶上的分段），原地淡换，看着就是没动。
     func turnSteady() -> some View { modifier(TurnSteady()) }
 }
 
@@ -67,7 +63,6 @@ private struct TurnHeight: Layout {
 }
 
 extension View {
-    /// 平移在渲染端（`visualEffect`，页不每帧重排）；出去的那一段淡得比进来的快（`Motion.fade`），两段叠着半透明的那几帧短、字不糊在一起。
     func paneTurn(_ index: Int, of selected: Int) -> some View { modifier(PaneTurn(index: index, selected: selected)) }
 }
 

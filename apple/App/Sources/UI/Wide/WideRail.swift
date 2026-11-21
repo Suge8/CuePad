@@ -1,14 +1,6 @@
 import CueStore
 import SwiftUI
 
-/// 贴着窗口的边：底色从窗口顶一直铺到底（Mac 的红绿灯与开合钮坐在它上面），与主区只靠底色分开、不画分割线——
-/// 同 macOS 27 的侧栏（WWDC26 主题演讲："Sidebars now expand to the very edges of the window. This helps reduce distractions along the left edge."）。
-/// 只有开着、藏起两态（`Chrome` 头注释）：藏起时排版上宽 0；视图树一直挂着（滚动位置、读到的数都在），不放循环动效、点不到、读屏跳过，放回来不重建。
-/// 藏起时它照原宽画在主区下面（主区铺满桌面色、盖住它）：开合时看得见的只有主区从它上面滑过（`WideColumnSlide`），它自己不动、不换样子。
-/// 宽 `Chrome.rail`，不能拖：它是每个自动藏起临界宽的一项（`WideMetrics`），拖宽要么逐帧挪三栏（违背 Mac 开合不逐帧挪位置），要么只拖一条线、松手才变，换来的只是二十来点。
-/// 被否决的：收起成一列图标条（`Chrome` 头注释）；浮起的一块（macOS 26 那样离窗边一档、圆角，红绿灯坐在里面）——四周一圈桌面色的缝分散左边的注意力，macOS 27 也改回贴边；
-/// 开合钮与搜索放在会话条顶上一行（占一整行，搜索与会话条无关；搜索在最下一排的小钮里，主要靠 ⌘K）；开合钮做成玻璃圆钮（圆底压在会话条与主区的分界上）。
-/// 最上面是两格去处（`RailHome`）：Cue 与进展，各带一个数。进展的图标是强调色（签名色靛青，HIG「Sidebars」："By default, sidebar icons use your app's accent color."）。
 struct WideRail: View {
     let width: CGFloat
     #if os(iOS)
@@ -30,7 +22,6 @@ struct WideRail: View {
             .padding(.horizontal, Chrome.gutter)
             .frame(width: Chrome.rail)
             .frame(maxHeight: .infinity, alignment: .top)
-            // 直角：贴着窗口的边，四角由窗口自己的圆角裁
             .rowContainer(.rect)
             .environment(\.rowSurface, palette.sidebar)
             .background { palette.sidebar.ignoresSafeArea() }
@@ -53,7 +44,6 @@ struct WideRail: View {
         }
     }
 
-    /// 两端同一排、同一个位置：搜索、技能与规则、设置，右端是额度。
     private var tools: some View {
         HStack(spacing: Spacing.tight) {
             #if os(macOS)
@@ -68,7 +58,6 @@ struct WideRail: View {
             Spacer(minLength: 0)
             RailQuota()
         }
-        // 额度的右沿落在行尾读数那条线（行底让出的那一截）
         .padding(.leading, RailTool.lead)
         .padding(.trailing, RowMetrics.bleed)
         .frame(height: Chrome.control)
@@ -86,7 +75,6 @@ struct RailTopTools: View {
         HStack(spacing: Spacing.item) {
             tool(.sidebar, "显示或隐藏侧栏（⌃⌘S）") { workspace.toggleRail(sizes) }
                 .railWaitingDot(hidden: !workspace.railShown(sizes))
-            // Cue 铺满时它没有可收可放的（去 Cue 是下面那一格）
             if !sizes.home { CueButton(fits: sizes.cueFits, shown: workspace.cueShown(sizes)).frame(width: Chrome.control, height: Chrome.control) }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -106,11 +94,6 @@ struct RailTopTools: View {
 
 #endif
 
-/// 宽屏窗口里额度只在这一处：额度是整个 App 的（`AppServices.accountQuotas`），不属于哪一页；会话条藏起时窗口里没有额度
-/// （Mac 看菜单栏面板里那一份 `MenuBarPad`，栏头不另留一份；手机没有会话条，在侧页顶上那一排 `NarrowSidebarBar`）。
-/// 高同那一行的钮（`Chrome.control`），环最多三颗、往右长：有没有额度、几家都不挪别的钮，256 宽的会话条里连同两颗钮也放得下。
-/// 不定时查询：环出现、可问的来源变了与明细打开时才读取账号清单（`refreshesQuota`）。
-/// 否决过：放进底栏设置钮左边（四颗圆钮加两三颗环超出侧栏最小宽）、放进 Cue 名片（名片说的是 Cue，环比名字那一行高，名片跟着变高）。
 private struct RailQuota: View {
     @Environment(AppServices.self) private var services
     @State private var detail = BubbleSwitch(open: DebugHooks.preset.quotaOpen)

@@ -1,7 +1,6 @@
 #if os(macOS)
 import SwiftUI
 
-/// 立即检查在菜单"CuePad › 检查更新…"，不在这一行。
 struct UpdateRow: View {
     @Environment(AppServices.self) private var services
 

@@ -5,7 +5,6 @@ import Foundation
 import Testing
 
 extension MCPTests {
-  /// Cue 在 mac-a 上用 Pi 当大脑：Pi 的 Opus 花 Max 账号的额度（本周用了 86%，卡着），Claude Code 也能用，Codex 没登录。
   private static let opus = ModelOption(
     key: ModelKey(provider: "anthropic", id: "claude-opus-5-5"), name: "Claude Opus 5.5", thinkingLevels: [.low, .medium, .high],
     account: PiAccount(kind: .oauth, scope: "max-1"), supportsFast: true)

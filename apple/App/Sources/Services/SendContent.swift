@@ -2,7 +2,6 @@ import CueEditor
 import CueText
 import Foundation
 
-/// 调用方传入的是已经填好变量的正文。
 nonisolated struct SendContent: Sendable {
     private let tokens: [CueToken]
 
@@ -14,7 +13,6 @@ import CueBridge
 import CueStore
 
 extension SendContent {
-    /// 原图与类型交给 Agent、由它自行缩放；图不在本机或认不出格式抛 `SendError.attachmentUnavailable`。
     func messageImages(from files: AttachmentFiles) throws -> [MessageImage] {
         try tokens.compactMap { token -> MessageImage? in
             guard case .image(let key) = token else { return nil }
@@ -25,7 +23,6 @@ extension SendContent {
         }
     }
 
-    /// `imagesAsFiles`（收不了图片的会话）时图片也按文件写。文件要已在本机（投送执行器取齐了才执行），不在抛 `SendError.attachmentUnavailable`。
     func agentText(from files: AttachmentFiles, imagesAsFiles: Bool = false) throws -> String {
         var text = ""
         for (index, token) in tokens.enumerated() {

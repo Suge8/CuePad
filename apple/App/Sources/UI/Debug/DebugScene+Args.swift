@@ -144,7 +144,6 @@ nonisolated struct DebugArgs: Decodable {
     /// `-CuePadWebSnapshot <PNG 路径>`：预览网页打开时，用同一套拦截规则另载入一份、把快照存成 PNG
     let webSnapshot: String?
 
-    /// 分组：各自在 `DebugScene+Args<名>.swift`，字段注释即那一组的登记表。
     let phoneVoiceOpts: PhoneVoiceArgs
     let voiceOpts: VoiceArgs
     let syncBenchOpts: SyncBenchArgs

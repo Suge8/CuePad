@@ -1,10 +1,8 @@
 import CueStore
 import Foundation
 
-/// 交给界面的失败结果，进程不终止。`summary` 是给人看的说明；原文（`reason`）只放在折叠的详情与导出的诊断里。
 struct LibraryFailure: Equatable, Sendable {
     let reason: String
-    /// 库文件；位置本身解析不出来（如没有 App Group 权限）时为 nil。
     let path: String?
     let version: Int?
 
@@ -20,7 +18,6 @@ struct LibraryFailure: Equatable, Sendable {
 
     var newerLibrary: Bool { version.map { $0 > CueStore.supportedSchemaVersions.upperBound } ?? false }
 
-    /// 版本 0 是空库，照常新建。
     var olderLibrary: Bool { version.map { $0 > 0 && $0 < CueStore.supportedSchemaVersions.lowerBound } ?? false }
 
     var summary: String {

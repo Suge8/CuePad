@@ -39,7 +39,6 @@ struct BarHelpButton<Content: View>: View {
     }
 }
 
-/// 往上找到系统给钮的那块玻璃，找不到就是自己；不读几何、不回写排版。
 private struct Spot: UIViewRepresentable {
     let box: Box
 

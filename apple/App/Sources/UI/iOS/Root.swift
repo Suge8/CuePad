@@ -25,7 +25,6 @@ struct IOSRoot: View {
             Group {
                 if sizeClass == .regular { SplitRoot() } else { NarrowRoot() }
             }
-            // 正文、输入框里的附件在这里看（页里另挂了全屏页的用页里那个，带底栏）
             .previewPresenter($workspace.preview, reply: nil)
             .background { RootShortcuts() }
             .overlay {
@@ -39,7 +38,6 @@ struct IOSRoot: View {
                 }
             }
             .overlay {
-                // 没发就关了：同取消，看板上放下的那张卡不用等，当场回原处
                 FloatingInput(isPresented: workspace.outbox != nil, close: { workspace.outbox = nil; workspace.declineDrop() }) {
                     if let outbox = workspace.outbox { HandOffInput(outbox: outbox).id(outbox.id) }
                 }
@@ -56,7 +54,6 @@ struct IOSRoot: View {
         .overlay(alignment: .top) { if sizeClass != .regular { NoticeBanner() } }
         .modifier(WindowCardAgents(workspace: workspace))
         .modifier(CueRelayStage(workspace: workspace))
-        // 环境放在最外层：浮层与弹出面板是这些修饰符内容的兄弟，放在里面它们拿不到
         .environment(\.zoomNamespace, zoom)
         .followsUndo(workspace)
         .environment(workspace)
@@ -68,8 +65,6 @@ struct IOSRoot: View {
     }
 }
 
-/// 右边那一栏的页（侧栏选中的根页与其上推入的页都经这里）。页底色在这里一处铺在导航容器上：
-/// 各页的内容要等读库（异步）才有，铺在滚动区上时数据没到的几帧整页透明、露出系统的黑。
 struct RouteView: View {
     let route: Route
     var column = Workspace.Column.main

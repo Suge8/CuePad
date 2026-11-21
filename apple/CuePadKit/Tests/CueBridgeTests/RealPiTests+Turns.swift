@@ -22,7 +22,7 @@ extension RealPiTests {
 
     @Test func abortStopsTheRunningTurnAndTheSessionTakesTheNextMessage() async throws {
         try await withRig { pi, bridge, s in
-            try await bridge.abort(s.id)  // 空闲：成功，不改状态
+            try await bridge.abort(s.id)
             #expect(bridge.sessions.first?.state == .settled)
 
             let gate = pi.hold("很长的一轮")
@@ -37,7 +37,6 @@ extension RealPiTests {
         }
     }
 
-    /// 说到一半停住的回答（假模型的 `stream(_:until:)`）：说出的半句先作为草稿上报、这一轮还在跑，放行后同一条回答说完、这一轮做完
     @Test func aReplyHeldMidStreamShowsItsDraftAndFinishesOnceReleased() async throws {
         try await withRig { pi, bridge, s in
             let gate = pi.model.gate()
@@ -80,7 +79,6 @@ extension RealPiTests {
         }
     }
 
-    /// 前一句的那一轮停在假模型里：第二句到达时它不论已经开始还是还在等着，结果都一样。
     @Test func aMessageSentWhileBusyStopsTheRunningTurnAndStartsANewOneWithIt() async throws {
         try await withRig { pi, bridge, s in
             pi.model.on("跑个慢命令", .call("bash", ["command": "sleep 30"]), .say("TOOL_DONE"))
@@ -111,7 +109,6 @@ extension RealPiTests {
             try await eventually("回答到了") { recap(of: s)?.lastReply == "ECHO 第一行\n第二行" }
             #expect(recap(of: s)?.lastPrompt == "第一行 第二行")
 
-            // 块与块之间夹着真人文字不是机器消息（整条都是块的见 `RealTranscriptTests`）
             let mixed = "<some_event>\n机器一\n</some_event>\n请解释这个结果\n<some_event>\n机器二\n</some_event>"
             try pi.prompt(mixed)
             try await eventually("夹着真人文字的那轮回答") { recap(of: s)?.lastReply?.contains("请解释这个结果") == true }

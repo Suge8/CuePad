@@ -1,8 +1,6 @@
 import CueStore
 import SwiftUI
 
-/// 两段一开页就都挂着，换段只换哪一段看得见：不重建，各自的滚动位置留着。第一次换过去也不现建——两段加起来几十行，
-/// 开页时一起建，比按段现建（同进展页的 `mounted`）在第一次换段时卡一下、也滑不起来（还没有层可挪）划算。
 struct LibraryDeck: View {
     let library: AgentLibrary
     @Environment(Workspace.self) private var workspace
@@ -44,8 +42,6 @@ private struct LibraryPaneScroll<Content: View>: View {
     private static func index(_ pane: LibraryPane) -> Int { LibraryPane.allCases.firstIndex(of: pane) ?? 0 }
 }
 
-/// 规则｜技能两段，看哪一段只有 `Workspace.libraryPane` 一份（`PaneSegment`）：Mac 在主栏栏头（`LibraryPanesSlot`），
-/// 手机与 iPad 在页顶中间那块玻璃里（`LibraryScreen`）；它也是页名，页里不另写。
 struct LibraryPanes: View {
     @Environment(Workspace.self) private var workspace
 

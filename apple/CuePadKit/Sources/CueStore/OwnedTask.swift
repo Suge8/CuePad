@@ -1,9 +1,6 @@
 import Foundation
 import Synchronization
 
-/// 带身份的后台任务：actor 里登记任务的位置，只认身份，不认"位置上有没有东西"。
-/// 任务晚到的收尾（sleep 已返回才发现被取消、停止后才跑完）只能清走自己占的位置（`Slots.release`、`Pace.due`：身份相同才算），
-/// 碰不到后来登记在同一位置的新任务。本模块所有"任务晚于登记它的状态才收尾"的地方都走这一种写法，不另写代次计数。
 struct Owned: Sendable {
   let id: UUID
   let task: Task<Void, Never>
@@ -21,7 +18,6 @@ struct Slots<Key: Hashable> {
 
   mutating func put(_ key: Key, _ task: Owned) { owned[key] = task }
 
-  /// 任务收尾：位置上还是自己才清，返回是否清了；已被停止清空或换成别的任务就什么都不动。
   @discardableResult
   mutating func release(_ key: Key, _ id: UUID) -> Bool {
     guard owned[key]?.id == id else { return false }
@@ -31,7 +27,6 @@ struct Slots<Key: Hashable> {
 
   mutating func cancel(_ key: Key) { owned.removeValue(forKey: key)?.task.cancel() }
 
-  /// 取消全部并清空，返回它们的任务让调用方等收尾。
   mutating func cancelAll() -> [Task<Void, Never>] {
     let tasks = owned.values.map(\.task)
     tasks.forEach { $0.cancel() }
@@ -62,7 +57,7 @@ private final class Handoff<T: Sendable>: Sendable {
   func run(_ operation: @escaping @Sendable () async throws -> T) async throws -> T {
     try await withCheckedThrowingContinuation { continuation in
       let cancelled = state.withLock { state -> Bool in
-        if state.finished { return true }  // 还没开始就被取消了
+        if state.finished { return true }
         state.continuation = continuation
         return false
       }

@@ -1,8 +1,6 @@
 import CueStore
 import SwiftUI
 
-/// 设置里 Cue 那一组的音色：选了就写进 `CueProfile.voice`（经 iCloud 到值班的 Mac，下一通起用它），并放一遍它的样本；左边那颗试听、再点停。
-/// 通话占着声音时两样都不放（`VoiceService.canPreview`）。
 struct CueVoiceSetting: View {
     let model: CueSettingsModel
     @Environment(AppServices.self) private var services

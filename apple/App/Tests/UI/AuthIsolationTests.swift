@@ -4,7 +4,6 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 只替换两个外部服务，Pi、桥、投送与存储照常运行。
 @Suite(.releasesLibraries)
 struct AuthIsolationTests {
     @Test func Claude授权未返回或已失效_GPT仍能发话换模型_主动查额度明确失败() async throws {
@@ -23,7 +22,6 @@ struct AuthIsolationTests {
         let endpoint = try #require(URL(string: String(contentsOf: endpointFile, encoding: .utf8)))
         try await Self.control("expire", at: endpoint)
 
-        // 发话前的命令刷新不能顺带刷新 Claude。若它进入 Claude 门，立即失败并放行清理，不拿墙钟竞速。
         workspace.send("normal", to: AgentTarget(session: sessionID))
         let replied = try await Self.withoutClaude(at: endpoint) {
             _ = try await eventually(store, { try $0.chatMessages(of: sessionID) }) { $0.filter { $0.role.known == .pi }.count == 1 }

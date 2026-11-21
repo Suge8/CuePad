@@ -2,7 +2,6 @@
 import CueStore
 import Foundation
 
-/// 隔离运行不能碰仍指向真实位置的配置与共享目录。
 public struct AgentFileAccess: Sendable {
     public let paths: AgentPaths
     private let isolated: Bool

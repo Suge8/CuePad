@@ -10,7 +10,6 @@ import Testing
 @Suite(.releasesLibraries, .pinnedPi, .serialized)
 @MainActor
 struct SubagentWakeTests {
-    /// 会话文件由 Mac 照常读（不经测试代写摘要）：会话是 FireCode 的指挥官，交回结果是一条机器消息开的轮。
     @Test func 等子代理不叫醒_结果交回那一轮回答晚到也只叫醒一次() async throws {
         let rig = try await CueHostTests.Rig()
         let store = rig.store
@@ -20,7 +19,7 @@ struct SubagentWakeTests {
         try await eventually("执行器开出会话") { !rig.app.host.extensions.isEmpty }
         let session = try #require(rig.app.host.extensions.values.first)
         let task = try #require(try await store.cueBoard().tasks.first?.task)
-        try await store.linkCard(task.id, toSession: session.sessionID)  // 认领（假扩展不带开会话的标识）
+        try await store.linkCard(task.id, toSession: session.sessionID)
         try await store.updateCard(task.id) { $0.body = "修好登录页 派子代理" }
         try await eventually("开工的第一句发进会话") { !session.messages.isEmpty }
         let file = try #require(rig.app.host.sessionFiles[session.sessionID])
@@ -29,7 +28,6 @@ struct SubagentWakeTests {
         session.sendInfo(["subagents": [Self.ui("running", action: "Run $ swift test")]])
         try await eventually("名册写进库") { try await store.sessions(matching: session.sessionID).first?.subagents.isEmpty == false }
         session.setState(["kind": "delegating"])
-        // 名册先到（立即写），随后的等子代理只是工作中细节的变化，按写入节流晚到：节流的间隔不真等
         rig.jump(by: StateRecorder.detailInterval)
         try await eventually("等子代理写进库、派活那一轮的回答读到") {
             let record = try await store.sessions(matching: session.sessionID).first
@@ -71,17 +69,16 @@ struct SubagentWakeTests {
             name: "ui", role: "工程师", phase: .known(.running), action: "bash · swift test", startedAt: due - 3600,
             progressAt: due - SessionState.stallAfter)
         let reviewer = SubagentState(name: "reviewer", role: "哨兵", phase: .known(.done), startedAt: due - 3600, settledAt: due - 3000, progressAt: due - 3000)
-        // 会话在跑只认宿主在线时报的（`runtimeUntil`）：mac-b 像醒着的 Mac 那样先报在线
         try await store.recordMacPresence(host: "mac-b") { true }
         let remote = StateRecorder(store: store, hostID: "mac-b")
-        let byHim = TurnOpener(delivery: UUID(), cue: false)  // 他从回复框说的"做到底"开的这一轮
+        let byHim = TurnOpener(delivery: UUID(), cue: false)
         try await store.writeTranscript(SessionTranscript(
             sessionID: "remote-his",
             messages: [ChatMessage(sessionID: "remote-his", entryID: "u1", seq: 1, role: .user, text: "做到底", at: due - 3600, deliveryID: byHim.delivery)],
             recap: Recap(lastPrompt: "做到底")))
         try await remote.update(sessionID: "remote-his", state: .delegating, title: "修好注册页", turnOpener: byHim, subagents: [ui])
         try await remote.update(sessionID: "remote-1", state: .delegating, title: "修好登录页", subagents: [ui, reviewer])
-        try await rig.reconciled()  // 还没停住：排好到点的那一下
+        try await rig.reconciled()
         rig.jump(to: due)
 
         try await rig.message(.cue, containing: "子代理那边停住了")
@@ -121,7 +118,7 @@ struct SubagentWakeTests {
         try await remote.update(sessionID: "remote-2", state: .thinking, title: "修好登录页", subagents: [ui])
         try await remote.update(sessionID: "remote-2", state: .delegating, title: "修好登录页", subagents: [ui])
         let line = try await store.noteCueLine("核对发布结果", source: .you, remindAt: rig.clock.now.addingTimeInterval(60))
-        try await rig.reconciled()  // 会话来回写过都对过账，定时才到点
+        try await rig.reconciled()
         rig.jump(to: try #require(line.remindAt))
         try await rig.message(.cue, containing: "定时到点：\(line.id.uuidString.lowercased()) 核对发布结果")
         let keeper = try #require(rig.services.cue.keeper)

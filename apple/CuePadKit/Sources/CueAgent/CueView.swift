@@ -2,21 +2,13 @@ import CueStore
 import CueText
 import Foundation
 
-/// 新会话第一条输入里的对话视图（`CueKeeper`），在记忆视图之后、信封之前，接上此前的经过。从库里的对话现拼，一条一行，带序号与绝对时刻，从早到晚；从最新的往前取到 `budget` 字。
-/// 提问的回答另起一行，排在回答的时刻。换新之后的各轮照常留在会话里，下一次换新时再并进视图。
 public enum CueView {
-  /// 5000 字：换新那一刻实测 5000 字与 1.2 万字接得一样好，按真实时间线算每天便宜约 20%（冷了换新要整段重写起点，起点越小越省）。
-  /// 换新后的起点约为固定前缀（系统提示与工具说明，约 1.1 万 token）加记忆视图（至多约 8k）与这份视图，约 2 万。最近十几轮来回与各轮的经过
-  /// （一轮的经过一行至多 `roundLimit` 字）在这里，更早的靠记忆与 memory recall。
   public static let budget = 5000
-  /// 从库里读最近这么多条对话来拼（一行至少十来个字，读这么多够填满预算）
   public static let fetched = 1000
   static let hisLimit = 600
   static let yourLimit = 300
   static let roundLimit = 300
 
-  /// `messages` 是最近的对话（`CueStore.cueMessages`，从早到晚）；一行都没有为 nil。
-  /// 先只按时刻排好每条可能的一行，再从最新的往前现拼正文、拼满预算就停：读进来的上千条里只有留下的那几十条去整理正文。
   public static func render(_ messages: [CueMessage]) -> String? {
     var plain: [Int: String] = [:]
     var kept: [Entry] = [], total = 0
@@ -49,14 +41,12 @@ public enum CueView {
     var text: String
   }
 
-  /// 一条对话可能占的一行（`answer`：提问的回答另起的那一行，排在回答的时刻），从早到晚；正文要不要、写成什么由 `line` 现定。
   private struct Slot {
     var at: Date
     var order: Int
     var answer = false
   }
 
-  /// 他还没交给你的话不列（它们这次随信封交给你）；提问的回答交过了才列。
   private static func slots(_ messages: [CueMessage]) -> [Slot] {
     var slots: [Slot] = []
     for (order, message) in messages.enumerated() {
@@ -77,7 +67,6 @@ public enum CueView {
     return slots.sorted { ($0.at, $0.order, $0.answer ? 1 : 0) < ($1.at, $1.order, $1.answer ? 1 : 0) }
   }
 
-  /// 这一行的正文（`text` 是这条对话去掉图片、拍成一行的正文）；空的 Cue 消息与没做事的一轮没有这一行。
   private static func line(_ slot: Slot, _ message: CueMessage, _ text: String) -> String? {
     switch message.author.known {
     case .you:
@@ -93,7 +82,6 @@ public enum CueView {
     }
   }
 
-  /// 一轮的经过：清单里的每一步（对他说的话与提问已是自己的一行，不重复：Cue 的一轮里这两类只来自 tell），没成的标出。
   private static func round(_ tools: ChatMessage.Tools?) -> String? {
     let steps = (tools?.items ?? []).filter { $0.kind != .said && $0.kind != .ask }.map { $0.target + ($0.failed ? "（没成）" : "") }
     guard !steps.isEmpty else { return nil }

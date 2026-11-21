@@ -3,11 +3,9 @@ import Foundation
 
 extension CueStore {
   static let lineOrder = "createdAt, id"
-  /// 定时与记忆同表，只分这一处：有下一次、没忘掉的是定时（`CueMemoryLine`），其余没忘掉的是记忆
   private static let scheduled = "remindAt IS NOT NULL AND deletedAt IS NULL"
   private static let kept = "remindAt IS NULL AND deletedAt IS NULL"
 
-  /// 记不成一条的（`CueMemoryLine.fits`）拒绝。`replacing` 是这一条取代的几条（改了说法、几条并成一条）：同一次写入里忘掉它们，要都还在、都不是定时，否则整件不写（`notFound`）。
   @discardableResult
   public func noteCueLine(
     _ text: String, source: CueLineSource, pinned: Bool = false, remindAt: Date? = nil, repeats: CueRepeat? = nil, task: UUID? = nil,
@@ -27,7 +25,6 @@ extension CueStore {
     }
   }
 
-  /// 在写事务内调用，调用方先查过记得成。
   func insertLine(
     _ text: String, source: CueLineSource, pinned: Bool, remindAt: Date? = nil, repeats: CueRepeat? = nil, task: UUID? = nil
   ) throws -> CueMemoryLine {
@@ -46,7 +43,6 @@ extension CueStore {
     return ids.compactMap { id in found.first { $0.id == id } }
   }
 
-  /// 覆盖它的摘要随之作废（摘要的指纹含各行忘没忘，见 `cueMemory`）。已忘掉的不变。
   public func forgetCueLine(_ id: UUID) throws {
     try write {
       guard let line = try find(CueMemoryLine.self, id) else { throw CueStoreError.notFound }
@@ -70,8 +66,6 @@ extension CueStore {
     }
   }
 
-  /// 承接到点的那一轮好好做完才调（`fires` 是它醒来时的那几次）：这一行此刻还欠着那一次（没忘掉、下一次不晚于它）才往下走——
-  /// 重复的按库里此刻的规则推到 `now` 之后的下一次，一次性的忘掉（不留成普通记忆）；这期间别处改到以后、忘掉的照改过的留着。
   public func fireCueSchedules(_ fires: [CueFire], at now: Date = .now) throws {
     try write {
       for fire in fires {
@@ -119,8 +113,6 @@ extension CueStore {
 
   private static let scheduleWake = #"{"schedule":%"#
 
-  /// 挂在 `tasks`（选出任务 id 的 SQL，参数是 ?2）上的定时不再定时（在写事务内调用）：任务完成、进回收站、归档就是这件事不用再定时做了；
-  /// 不再定时是忘掉那一条；只有撤销删除、撤销归档凭回执里的这些 id 放回来（`restoreCueSchedules`），恢复项目、从归档列表取回、重新打开不复活。
   @discardableResult
   func endCueSchedules(onTasksIn tasks: String, _ argument: any SQLBindable, at now: Date) throws -> [UUID] {
     let condition = "\(Self.scheduled) AND taskID IN (\(tasks))"
@@ -134,15 +126,12 @@ extension CueStore {
     try db.run("UPDATE cueLines SET deletedAt = NULL, modifiedAt = ? WHERE id IN (SELECT value FROM json_each(?))", [Date.stamp, Self.idList(lines)])
   }
 
-  /// 全部记忆与有效的摘要，一次读出。摘要生成时区间里各行的身份与内容记成指纹，现在对不上（别处同步来更早的行、
-  /// 本机或别的设备忘掉、钉上或取消了其中一行，哪怕同步晚到），或实际读取的子摘要变了就作废。摘要不含重点，钉上后旧摘要不能再带着它。
   public func cueMemory() throws -> CueMemory {
     let lines = try select(CueMemoryLine.self, orderBy: Self.lineOrder)
     let summaries = try db.query("SELECT lo, hi, text, lineIDs, createdAt FROM cueSummaries ORDER BY lo, hi") { row in
       (summary: CueMemorySummary(lo: Int(row.int(0)), hi: Int(row.int(1)), text: row.text(2), createdAt: row.date(4)), ids: row.text(3))
     }
     var memory = CueMemory(lines: lines, summaries: [])
-    // 子块先验证；父块只能引用已经验证的子摘要，失效沿实际输入依赖向上传播。
     for entry in summaries.sorted(by: { $0.summary.hi - $0.summary.lo < $1.summary.hi - $1.summary.lo }) {
       if memory.range(lo: entry.summary.lo, hi: entry.summary.hi)?.fingerprint == entry.ids {
         memory.summaries.append(entry.summary)
@@ -151,7 +140,6 @@ extension CueStore {
     return memory
   }
 
-  /// 手机面板读两条，记忆页读全部。
   public func recentCueMemory(limit: Int = -1) throws -> CueMemoryRecent {
     let lines = try select(CueMemoryLine.self, where: Self.kept, orderBy: "createdAt DESC, id DESC", limit: limit)
     let count = try db.first("SELECT count(*) FROM cueLines WHERE \(Self.kept)") { Int($0.int(0)) } ?? 0

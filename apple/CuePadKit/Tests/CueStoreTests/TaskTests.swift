@@ -63,7 +63,7 @@ import Testing
     try await store.setStatus(done.id, .done)
     let open = try await store.createTask("还在做")
     let doneStep = try await store.createTask("已复现", under: open.id)
-    try await store.setStatus(doneStep.id, .done)  // 没做完的任务下已完成的子任务算在上级的进度里，不单独归档
+    try await store.setStatus(doneStep.id, .done)
 
     #expect(try await store.archiveCompletedTasks() == 1)
     for id in [done.id, sub.id, prompt.id] { #expect(try await card(id).archivedAt != nil) }

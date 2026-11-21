@@ -79,7 +79,6 @@ struct AgentLibraryPlaces: Sendable {
         paths.home(of: kind).appending(path: kind.facts.instructionsFile)
     }
 
-    /// 这一家此刻原生读的全局规则（在的，含链接）。
     func globalReads(_ kind: AgentKind) -> [URL] {
         let present = kind.facts.globalReads.map { paths.home(of: kind).appending(path: $0) }.filter(LibraryFileReading.exists)
         return kind.facts.readsFirstOnly ? Array(present.prefix(1)) : present
@@ -90,14 +89,12 @@ struct AgentLibraryPlaces: Sendable {
     /// 不 `retires` 的是另加的、不挡也不重复的（Claude Code `rules/` 下自己写的那几份）：照列，整理不碰。
     struct GlobalFile {
         let owner: AgentKind
-        /// 页面上的名字、文件页认它的键（`LibraryInstruction.Kind.agent`）：配置目录里的相对路径，Grok 读的 ~/.claude 那几份写成 `~/.claude/…`
         let name: String
         let url: URL
         let readers: [AgentKind]
         let retires: Bool
     }
 
-    /// 页面、比对、整理、文件页只认这一份清单。
     var globalFiles: [GlobalFile] {
         let shared = globalInstructions
         var found: [GlobalFile] = []
@@ -134,7 +131,6 @@ struct AgentLibraryPlaces: Sendable {
         return found
     }
 
-    /// `rules/` 下（含子目录）每一份 .md，按路径排。
     private static func markdown(in directory: URL) -> [URL] {
         guard let walk = FileManager.default.enumerator(at: directory, includingPropertiesForKeys: nil) else { return [] }
         return walk.compactMap { $0 as? URL }.filter { $0.pathExtension.lowercased() == "md" && LibraryFileReading.exists($0) }
@@ -157,7 +153,6 @@ struct AgentLibraryPlaces: Sendable {
     var codexConfig: URL { paths.home(of: .codex).appending(path: "config.toml") }
 
     func projectInstructions(_ id: UUID) -> URL? { projects[id]?.appending(path: "AGENTS.md") }
-    /// `local` 是个人的、不入库的那份，整理不碰。
     func projectClaude(_ id: UUID) -> (main: URL, nested: URL, local: URL)? {
         projects[id].map { ($0.appending(path: "CLAUDE.md"), $0.appending(path: ".claude/CLAUDE.md"), $0.appending(path: "CLAUDE.local.md")) }
     }

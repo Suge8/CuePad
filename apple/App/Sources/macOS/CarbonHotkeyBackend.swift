@@ -2,7 +2,7 @@
 import Carbon.HIToolbox
 
 final class CarbonHotkeyBackend: HotkeyBackend {
-    private static let signature: OSType = 0x4355_4550 // 'CUEP'
+    private static let signature: OSType = 0x4355_4550
 
     private struct Entry {
         let ref: EventHotKeyRef
@@ -13,7 +13,6 @@ final class CarbonHotkeyBackend: HotkeyBackend {
     private var nextHandle: HotkeyHandle = 1
     private var eventHandler: EventHandlerRef?
 
-    /// 事件处理器拿的是未持有的 self 指针：释放前必须先摘掉，系统不会再回调到已释放的对象。
     isolated deinit {
         for entry in entries.values { UnregisterEventHotKey(entry.ref) }
         if let eventHandler { RemoveEventHandler(eventHandler) }

@@ -17,13 +17,13 @@ struct TaskCountTests {
         try await store.setStatus(publish.id, .done)
         let fix = try await store.createTask("修重连", in: project)
         try await store.setStatus(fix.id, .done)
-        await nextMillisecond()  // 完成时间存到毫秒：同一毫秒里做完的两件分不出先后
+        await nextMillisecond()
         let shipped = try await store.createTask("发版", in: project)
         try await store.setStatus(shipped.id, .done)
         let closed = try await store.createTask("收尾", in: project)
         let reopened = try await store.createTask("补文档", under: closed.id)
         try await store.setStatus(closed.id, .done)
-        try await store.setStatus(reopened.id, .todo)  // 上级跟着不再算做完
+        try await store.setStatus(reopened.id, .todo)
         let archived = try await store.createTask("旧的", in: project)
         _ = try await store.createTask("旧的子任务", under: archived.id)
         try await store.archive(archived.id)
@@ -44,7 +44,7 @@ struct TaskCountTests {
         #expect(Set(board.todo.map(\.id)) == [closed.id, orphan.id])
         #expect(board.advancing.compactMap(\.item?.id) == [release.id])
         let done = [fix.id, shipped.id]
-        #expect(board.done.map(\.id) == [shipped.id, fix.id] && page.taskCounts.done == done.count)  // 做完按完成时间排，最近的在前
+        #expect(board.done.map(\.id) == [shipped.id, fix.id] && page.taskCounts.done == done.count)
     }
 
     #if os(macOS)
@@ -103,7 +103,7 @@ struct TaskCountTests {
         try await recorder.update(sessionID: "login", state: .thinking, title: "修登录")
         try await store.bindSession("login", to: live.id)
         try await recorder.update(sessionID: "term", state: .settled, title: "无主的")
-        func inEnvelope() async throws -> Int { try await store.cueBoard().active.count }  // 信封的"在做 N 件"数的就是它
+        func inEnvelope() async throws -> Int { try await store.cueBoard().active.count }
 
         var board = try await TaskBoard.read(from: store)
         #expect(Set(board.advancing.map(\.id)) == ["task/\(card.id.uuidString)", "task/\(live.id.uuidString)", "session/term"])

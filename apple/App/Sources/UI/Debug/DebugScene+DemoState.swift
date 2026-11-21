@@ -30,7 +30,6 @@ extension DebugScene {
             times: SessionTimes(stateSince: .now.addingTimeInterval(-6 * 60), busySince: nil), modelState: demoModels, commands: demoCommands)
         let cuepad = tasks.filter { $0.projectID == projects.first { $0.name == "CuePad" }?.id && !$0.body.hasPrefix(String(localized: "投送队列超时报错不发键", table: "Demo")) }
         if let started = cuepad.first { try await store.setStatus(started.id, .inProgress) }
-        // Flow 只有一条在推进的任务、没有 Agent：项目的"此刻"是这条任务
         if let canvas = tasks.first(where: { $0.body.hasPrefix(String(localized: "画布缩放锚点跟随指针", table: "Demo")) }) { try await store.setStatus(canvas.id, .inProgress) }
         if cuepad.count > 1 { try await store.setStatus(cuepad[1].id, .done) }
         for name in ["Flow", String(localized: "圆桌", table: "Demo")] {
@@ -58,7 +57,6 @@ extension DebugScene {
         }
         guard let first = created.first, let last = created.last else { return }
         let screenshot = try screenshotMarkup(store), pdf = try demoPDF(store)
-        // 宽高悬殊的几张：铺满裁切的方格里，裁掉的那截不该接邻格的指针
         let looked = try [Self.screenshotPNG()].compactMap { $0 }.map { try store.files.store($0) }
             + [(1600, 240, 0.08), (300, 1400, 0.5), (1800, 200, 0.75), (900, 700, 0.35)].compactMap { try Self.swatchPNG(width: $0.0, height: $0.1, hue: $0.2).map { try store.files.store($0) } }
         let messages = [
@@ -71,13 +69,11 @@ extension DebugScene {
                 at: last.addingTimeInterval(2), tools: .init(steps: 2, items: [
                     .init(kind: .command, target: "npx playwright screenshot --device 'iPhone 15' login-v2.html login-mobile.png"),
                     .init(kind: .read, target: "login-mobile.png", images: looked),
-                // 缓存一小时前就冷了：回复框上方提醒这一句要重读多少
                 ], cache: .init(context: 164_000, warmUntil: .now.addingTimeInterval(-3_600))), roundStartedAt: first.addingTimeInterval(-50)),
         ]
         try await store.writeTranscript(SessionTranscript(
             sessionID: "notes", messages: messages,
             recap: Recap(lastPrompt: messages[0].text, lastReply: messages.last?.text)))
-        // 缓存还热着的两个（上面 notes 的已冷）：notes-edit 在等你，卡上写还热多久；docs 歇着，回复框里上下文旁写还剩几分钟
         for (id, minutes) in [("notes-edit", 9.0), ("docs", 42)] {
             guard let state = try await store.sessionItems(sessionIDs: [id])[id]?.state else { continue }
             try await store.writeTranscript(SessionTranscript(

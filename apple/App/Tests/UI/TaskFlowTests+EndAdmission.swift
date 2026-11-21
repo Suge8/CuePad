@@ -6,7 +6,6 @@ import Testing
 @testable import CuePad
 @testable import CueStore
 
-/// 插入点在真实桥的 SessionLink.end 内、向 Agent 交出关闭之前；已经过执行器资格判断及桥的 TaskGroup 调度。
 private final class InterleavingEndLink: SessionLink {
     let bridge: Bridge
     let beforeEnd: () async throws -> Void

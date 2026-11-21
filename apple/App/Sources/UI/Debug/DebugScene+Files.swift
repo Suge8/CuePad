@@ -6,7 +6,6 @@ import CueText
 import Foundation
 
 extension DebugScene {
-    /// 没有同步，下载进度是这里写给界面的。
     static func seedFiles(_ services: AppServices) async {
         await seedInspiration(services)
         guard args.files else { return }

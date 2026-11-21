@@ -3,12 +3,9 @@ import SwiftUI
 
 struct DebugSceneEntry {
     let names: [String]
-    /// 数据就绪、主窗口出来之后摆画面；第二个参数是 `-CuePadProject` 打开的项目。
     var prepare: (@MainActor (Workspace, UUID?) async throws -> Void)?
-    /// 盖在窗口根上的整页样板（总览、样张）。iOS 之后统一套 `withPalette()`，Mac 自己套。
     var overlay: (@MainActor (Workspace) -> AnyView)?
     #if os(macOS)
-    /// 取代主窗口内容：另一扇窗（菜单栏面板）放进主窗口里拍。
     var stage: (@MainActor (Workspace) -> AnyView)?
     #endif
 
@@ -32,7 +29,6 @@ struct DebugSceneEntry {
 }
 
 extension DebugScene {
-    /// 全部画面。加画面：在 `Scenes/` 新建文件写一个 `DebugSceneEntry`，在这里登记一行。
     static let entries: [String: DebugSceneEntry] = {
         var all: [DebugSceneEntry] = [
             .shelf, .bins, .project, .search, .progress, .sessions, .task, .session, .newSession,

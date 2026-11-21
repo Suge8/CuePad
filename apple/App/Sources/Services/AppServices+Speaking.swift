@@ -1,7 +1,6 @@
 import CueStore
 import Foundation
 
-/// 同一个去处按用户发起顺序落库，附件等待也占顺序；失败不阻塞后一句，上传不占队列。
 final class SendOrder {
     private var tails: [SendingTarget: Task<Void, Never>] = [:]
 

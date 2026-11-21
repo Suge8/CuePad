@@ -151,7 +151,6 @@ extension DebugScene {
         if !args.voiceOpts.keepOpen { Task { NSApp.terminate(nil) } }
     }
 
-    /// 手机发起的通话由这台的 VoiceCall 持有（媒体在手机）：照样记节点与阶段，直到实例退出。
     private static func logPhoneCalls(_ services: AppServices, note: @escaping (String) -> Void) async {
         for await call in Observations({ services.voice.call }) {
             guard let call else { continue }

@@ -16,7 +16,7 @@ extension MCPTests {
     let task = try await store.createTask("重写发布脚本", in: project.id)
     let first = try await store.createTask("调研", under: task.id), second = try await store.createTask("改脚本", under: task.id)
     let opening = try await store.requestLaunch(LaunchRequest(project: project.id, prompt: first.body, token: "first-step"), title: first.heading, on: "mac-a", card: first.id)
-    try await store.recordMacPresence(host: "mac-a") { true }  // 会话所在的 Mac 醒着：下一步才能接着用它的会话
+    try await store.recordMacPresence(host: "mac-a") { true }
     try await StateRecorder(store: store, hostID: "mac-a").update(
       sessionID: "s1", state: .settled, title: "调研", projectID: project.id, launchToken: opening.launch?.token, hosted: true)
     try await store.deleteDelivery(opening.id)
@@ -37,7 +37,6 @@ extension MCPTests {
         let start = try await cue.refused("task", ["action": "start", "task": second.id.uuidString])
         let say = try await cue.refused("task", ["action": "say", "task": second.id.uuidString, "text": "还有"])
         #expect(board.contains("改脚本 › 发送中"), "\(board)")
-        // 上一句可能已经执行：开工、说话都拒绝，免得同一句说两遍
         #expect(peek.contains("尚未确认") && start.contains("尚未确认") && say.contains("尚未确认"), "\(peek)\n\(start)\n\(say)")
       }
 
@@ -83,7 +82,7 @@ extension MCPTests {
       let ends = { try await store.deliveryRequests().filter { $0.mode == .known(.end) }.compactMap(\.target.ref).sorted() }
 
       _ = try await server.call("task", ["action": "done", "task": sound.id.uuidString, "evidence": ["提示音与提示窗都出来了"]])
-      #expect(try await ends().isEmpty)  // 下一步还没开工，默认接着用它
+      #expect(try await ends().isEmpty)
 
       _ = try await server.call("task", ["action": "start", "task": settings.id.uuidString, "fresh": true])
       let launch = try #require(try await store.deliveryRequests().first { $0.mode == .known(.start) })
@@ -92,12 +91,12 @@ extension MCPTests {
       try await executor.start()
       _ = try await eventually(store, { try $0.deliveryRequest(launch.id)?.status }) { $0 == .known(.succeeded) }
       await executor.stop()
-      _ = try await recorder.update(sessionID: "s1", state: .ended)  // 结束请求也执行了
+      _ = try await recorder.update(sessionID: "s1", state: .ended)
       _ = try await recorder.update(sessionID: "s2", state: .settled, title: "设置里加开关", launchToken: launch.launch?.token, hosted: true)
       #expect(try await store.card(settings.id)?.piSessionID == "s2")
 
       _ = try await server.call("task", ["action": "done", "task": settings.id.uuidString, "evidence": ["开关能用"]])
-      #expect(try await ends() == ["s1"])  // 写说明还没开工，默认接着用 s2
+      #expect(try await ends() == ["s1"])
       try await store.bindSession("s3", to: docs.id)
       #expect(try await ends() == ["s1"])
 

@@ -20,7 +20,6 @@ extension CueEvalTests {
         做完的标准：跑过项目已有的测试与 lint 并贴出输出；改前改后的登录页截图发到手机。推送前先停下来问。
         """
 
-    /// 卡上已经问着（同 Cue 把三个方案作为审美取舍交上来的那张：推荐 1，点名每个方案一张图）；会话还在、等他定。
     static func proposalsAsked(_ eval: CueEval) async throws -> (Working, CueMessage) {
         let rig = eval.rig
         let work = try await rig.working("重做提问卡", "提问卡出三个视觉方案：决定单、对话里问、郑重放行。做完的标准：每个方案的效果图发到手机，他选定后再实现。")
@@ -35,7 +34,6 @@ extension CueEvalTests {
         return (work, question)
     }
 
-    /// 会话交回三个提问卡方案与效果图（还夹着先前别的改动的截图），Cue 被会话歇下叫醒的那一轮跑完。
     static func proposalsDelivered(_ eval: CueEval) async throws -> Working {
         let rig = eval.rig
         let work = try await rig.working("重做提问卡", "提问卡出三个视觉方案：决定单、对话里问、郑重放行。做完的标准：每个方案的效果图（手机浅色、深色、原样与 Mac）发到手机。")
@@ -75,7 +73,6 @@ extension CueEvalTests {
         截图都发到手机了：一路的方案稿 A/B、中途两版，和最终版。
         """
 
-    /// add 写的正文（第一次建成的那条）
     static func body(_ added: [(call: CueToolCall, args: [String: Any])]) -> String? { added.first { !$0.call.failed }?.args["body"] as? String }
 
     static let doneReply = """

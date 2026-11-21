@@ -19,7 +19,6 @@ struct RealHostTests {
         return (try #require(session.sessionFile), session.sessionID)
     }
 
-    /// 空闲时限给得短：测试进程意外退出时，留下的托管进程不久也会自己退。
     private func host(_ pi: PiProcess, _ bridge: Bridge, idleLimit: Duration = .seconds(120)) -> PiRuntime {
         PiRuntime(bridge: bridge, paths: pi.paths, brief: SessionBrief.text(cuepad: PiProcess.cuepad), pi: { pinnedPi.executable }, idleLimit: idleLimit, timing: noDeadline)
     }
@@ -46,7 +45,6 @@ struct RealHostTests {
         try await eventually("后台进程回答了") { fileTexts("assistant", in: file).last == "ECHO 后台接着说" }
     }
 
-    /// 同 `RealHostedResumeTests` 的并发恢复：同一会话同时来两次恢复，只起一个 Pi，两边拿到同一个 id。
     @Test func twoResumesOfTheSameSessionAtOnceStartOneProcess() async throws {
         let pi = try await PiProcess()
         let bridge = Bridge(socketDirectory: pi.paths.socketDirectory)
@@ -106,7 +104,6 @@ struct RealHostTests {
         }
     }
 
-    /// 忙时点结束（同 `RealHostedEndTests` 的第一例）：扩展先中止这一轮、Pi 自己把它写成被停下的一轮，再退出，结束报成功。
     @Test func endingABusyHostedSessionStopsTheTurnBeforeItQuits() async throws {
         let pi = try await PiProcess()
         let bridge = Bridge(socketDirectory: pi.paths.socketDirectory)
@@ -128,7 +125,6 @@ struct RealHostTests {
         #expect(record.messages.contains { $0.text == ChatNotice.stopped.rawValue }, "会话记录里没有被停下的这一轮：\(record.messages.map(\.text))")
     }
 
-    /// 起来马上点结束、说出第一句马上点停止或结束（同 `RealHostedEndTests` 的那一例，#81）：都不等满 `AgentTimeouts.stop`。
     @Test(arguments: ["end on open", "stop on first message", "end on first message"])
     func stoppingOrEndingRightAwayDoesNotWaitOutTheStopLimit(_ moment: String) async throws {
         let pi = try await PiProcess()
@@ -153,8 +149,6 @@ struct RealHostTests {
         #expect(took < .seconds(10), "用了 \(took)")
     }
 
-    /// 托管的 Pi 一起来就开始算闲置（扩展里，不等 CuePad 认出它）：时限 1 秒短过忙时这个测试进程认出它的用时（#166），
-    /// 所以第一句经它自己的标准输入马上交出、停在假模型里，桥认出它之后才放行，闲置从这一轮歇下算起。
     @Test func anIdleHostedSessionExitsAfterTheIdleLimit() async throws {
         let pi = try await PiProcess(env: [PiRuntime.hostedVariable: "1"])
         let bridge = Bridge(socketDirectory: pi.paths.socketDirectory)
@@ -203,7 +197,6 @@ struct RealHostTests {
         try await eventually("认回的进程接着收话、有回答") { fileTexts("assistant", in: file).last == "ECHO 新的 CuePad 认回之后" }
     }
 
-    /// App 更新：随包的扩展目录原地换成新版（路径不变），新起的 CuePad 握手时请读不懂的旧扩展核对，它从同一路径换上新扩展、重新连回。
     @Test func anOldHostedProcessComesBackOnTheNewExtension() async throws {
         let pi = try await PiProcess()
         let old = Bridge(socketDirectory: pi.paths.socketDirectory)

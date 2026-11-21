@@ -25,7 +25,6 @@ extension View {
             trailing: trailing()))
     }
 
-    /// 中间那块点开是这一页那样东西自己的操作（`menu`：项目、会话），标题后跟一个展开箭头。页头右边只放直接可点的钮，不设"⋯"。
     func floatingHeader<Items: View, Detail: View, Trailing: View>(
         _ title: LocalizedStringResource, hidden: Bool = false, reveal: (() -> Void)? = nil,
         @ViewBuilder menu: () -> Items, @ViewBuilder detail: () -> Detail, @ViewBuilder trailing: () -> Trailing
@@ -40,14 +39,12 @@ extension View {
             trailing: trailing()))
     }
 
-    /// `hasPanel` 是页头的固定能力：会展开的名牌始终在页面浮层中，开合不改变安全区或实例位置。
     func floatingHeader<Center: View, Trailing: View>(
         _ title: LocalizedStringResource, height: CGFloat = FloatingHeaderLayout.height, hasPanel: Bool = false, @ViewBuilder center: () -> Center, @ViewBuilder trailing: () -> Trailing
     ) -> some View {
         modifier(FloatingHeader(title: title, hidden: false, reveal: nil, height: height, hasPanel: hasPanel, center: center(), trailing: trailing()))
     }
 
-    /// `detail` 为 nil 时只写标题；要等读库才有的信息先给空串，那一行先留着位置，读到后标题不再上移。
     func floatingHeader<Trailing: View>(_ title: LocalizedStringResource, detail: Dotted? = nil, @ViewBuilder trailing: () -> Trailing) -> some View {
         floatingHeader(title, detail: { HeaderDetail(text: detail) }, trailing: trailing)
     }
@@ -64,7 +61,6 @@ enum HeaderHost: Equatable {
     case page
     case sidebar
     case panel
-    /// 宽屏主区栏里的页：标题与操作在栏头（`WideColumnHead`）。
     case column
 }
 
@@ -75,12 +71,9 @@ extension EnvironmentValues {
 }
 
 nonisolated enum FloatingHeaderLayout {
-    /// 顶部的提示横幅与它同高、盖在中间那块的位置（`NoticeBanner`）。
     static let height: CGFloat = 44
     static let margin = Spacing.page
     static let slot = height + 8
-    /// 这一排定高，字号跟着动态字体放大到这一档为止（同系统的导航栏与标签栏）：再大圆钮里的图标与中间那块的字就撑出这一排、把两颗圆钮挤出屏幕。
-    /// 管这一排上收着的东西（圆钮、`headerPiece`、`GrowPanel` 的 `head`、提示横幅），长出来的面板不归它管。
     static let largestType = DynamicTypeSize.xxLarge
 }
 
@@ -104,7 +97,6 @@ private struct FloatingHeader<Center: View, Trailing: View>: ViewModifier {
             case .sidebar:
                 content.safeAreaPadding(.top, height + Bars.contentGap)
             case .column:
-                // 这一页是什么、有什么操作都在栏头（`WideColumnHead`，同 Mac）：这里只让出栏头的高、内容在它下沿淡出（同会话页），`trailing` 只给窄屏
                 content
                     .fadesUnderHead()
                     .safeAreaPadding(.top, height + Bars.contentGap)
@@ -128,12 +120,10 @@ private struct FloatingHeader<Center: View, Trailing: View>: ViewModifier {
                 }
             case .navigationBar:
                 content
-                    // 标题只在中间那块玻璃里：不在 `RouteView` 里的页（任务正文的编辑 sheet）也不能让系统在下面再排一个大标题
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
                         // 中间这一项一直在：不在时系统会把标题当普通文字摆回中间
                         ToolbarItem(placement: .principal) { middle }
-                            // 玻璃自己画，不再套一层系统的玻璃底（玻璃不叠玻璃）
                             .sharedBackgroundVisibility(.hidden)
                         if Trailing.self != EmptyView.self {
                             // 成组：单个 ToolbarItem 里放几颗钮，系统只留第一颗
@@ -259,7 +249,6 @@ private struct HeaderPiece: ViewModifier {
     @Environment(\.headerGrown) private var grown
 
     func body(content: Content) -> some View {
-        // 先定高再上玻璃：玻璃随内容高时，没有第二行的标题（项目没写介绍）只剩一条细缝
         let piece = content.dynamicTypeSize(...FloatingHeaderLayout.largestType).frame(height: FloatingHeaderLayout.height)
         Group {
             if grown { piece } else { piece.glass(in: .capsule) }
@@ -273,7 +262,6 @@ private struct HeaderPiece: ViewModifier {
 /// 说明的数字过渡由 `HeaderDetail` 自己处理，不更换标题与布局容器。
 private struct TitleStack<Detail: View>: View {
     let title: LocalizedStringResource
-    /// 这一块点开是菜单：标题后跟展开的箭头。
     var opens = false
     let detail: Detail
     @Environment(\.palette) private var palette

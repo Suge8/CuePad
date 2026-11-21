@@ -3,7 +3,6 @@ import CueEditor
 import Foundation
 import Synchronization
 
-/// CueEditor 只经 `CueFileStore` 协议读写附件。
 final class DirectoryFileStore: CueFileStore, Sendable {
     private struct Stored {
         var files: [String: URL] = [:]

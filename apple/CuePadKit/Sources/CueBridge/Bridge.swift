@@ -3,20 +3,15 @@ import CueStore
 import Foundation
 import Observation
 
-/// 各家经 attach/update/detach 发布，会话命令交给 `SessionLink`；Pi 的 socket 生命周期由 `PiConnections` 持有。
 @MainActor @Observable
 public final class Bridge {
-    /// 一个在线会话一格。状态变化只改这一格，只有读这一格的视图重算；读 `slots` 的只在会话出现、消失时重算。
     @MainActor @Observable
     public final class Slot: Identifiable {
-        /// 会话的身份与工作目录一经连上就不变：只读它们的视图（会话集合、归属项目）不随状态变化重算。
         public nonisolated let id: Session.ID
         public nonisolated let sessionID: String
         public nonisolated let cwd: URL
         public internal(set) var session: Session
-        /// 出字时只有读它的视图重算
         public var draft: LiveDraft? { feed.draft }
-        /// 只在有无变化时通知：会话行读它不随每个增量重算
         public var speaking: Bool { feed.speaking }
         private let feed = LiveDraftFeed()
 
@@ -30,31 +25,23 @@ public final class Bridge {
         func offer(_ next: LiveDraft?) { feed.offer(next) }
     }
 
-    /// 界面读会话用这个（列表读 `slots`，每一行读自己那格的 `session`）或 `session(sessionID:)`。
     public internal(set) var slots: [Slot] = []
 
-    /// 在线会话的快照（读了每一格，任何一格变化都会通知读它的视图）：非界面代码与测试用，视图别读。
     public var sessions: [Session] { slots.map(\.session) }
 
     public var sessionFiles: Observations<Set<URL>, Never> { Observations { Set(self.slots.compactMap(\.session.sessionFile)) } }
 
-    /// 同一会话开在两个进程里时取先出现的。只随这一个会话的变化通知。
     public func session(sessionID: String) -> Session? { slot(sessionID: sessionID)?.session }
 
-    /// 规则同 `session(sessionID:)`；只随会话出现、消失通知。
     public func slot(sessionID: String) -> Slot? { slots.first { $0.sessionID == sessionID } }
 
     public func session(id: Session.ID) -> Session? { slots.first { $0.id == id }?.session }
 
     @ObservationIgnored private let connections: PiConnections
     @ObservationIgnored let hostedIdle: Duration
-    /// App 给的是它自己的那一个（`MacDependencies.timing`）。
     @ObservationIgnored let timing: Timing
-    /// 读各家配置里自动压缩的阈值（`compacting`）；没给（测试）不报阈值。
     @ObservationIgnored let paths: AgentPaths?
     @ObservationIgnored var controls: [Session.ID: any SessionLink] = [:]
-    /// 重开前（`carryOver`）各会话的状态与计时：重新上桥时用一次。重新载入的 Pi 扩展自己带着起点（扩展的 `Carried`），不经这里。
-    /// 读不懂的扩展读不到状态，不留也不用：接回时沿用的是它之前读到的
     @ObservationIgnored var carried: [String: (state: WorkState, times: SessionTimes)] = [:]
     @ObservationIgnored var idleTimers: [Session.ID: Task<Void, Never>] = [:]
     /// 已经请它退出的托管会话：同一个只请一次（Pi 收尾中再收到一次 SIGTERM 会跳过收尾直接退出）
@@ -62,7 +49,6 @@ public final class Bridge {
     @ObservationIgnored let turns = SessionGate()
     @ObservationIgnored private var subscribers: [UUID: AsyncStream<SessionChange>.Continuation] = [:]
 
-    /// - Parameter hostedIdle: 托管的 Claude Code、Codex 会话歇着满这么久就请它退出（不算结束，发话时再接着）。
     public init(
         socketDirectory: URL = PiPaths().socketDirectory, paths: AgentPaths? = nil, hostedIdle: Duration = AgentTimeouts.hostedIdle, timing: Timing = .system
     ) {
@@ -135,7 +121,6 @@ extension Bridge {
         try await link.command(line, opener: opener, in: id)
     }
 
-    /// `AgentTimeouts.end` 内没下线抛 `notEnded`。
     public func end(_ id: Session.ID) async throws {
         guard let target = session(id: id) else { throw BridgeError.sessionEnded }
         let ids = target.agent == .pi
@@ -148,7 +133,7 @@ extension Bridge {
 
     private func endInstance(_ id: Session.ID) async throws {
         let link = try control(id)
-        let changes = changes()  // 先订阅再动手：下线的那一刻不会漏
+        let changes = changes()
         try await link.end(id)
         try await withDeadline(AgentTimeouts.end, timing: timing, orThrow: BridgeError.notEnded) {
             for await change in changes {
@@ -161,28 +146,20 @@ extension Bridge {
         }
     }
 
-    /// 停止该会话正在跑的这一轮（相当于在 Agent 里按 Esc）：受理即返回，会话随后歇下（`.settled`），能接着说。
-    /// 已经空闲时什么也不发生（也成功）；只停它自己这一轮，它派出的子代理照常跑。
     public func abort(_ id: Session.ID) async throws {
         let link = try control(id)
         turns.abort(id)
         try await link.abort(id)
     }
 
-    /// 把该会话出错的那一轮原样重跑一遍（`SessionState.canRetry`）：对话里不多一句话、也不发"继续"，只多出新的回答。受理即返回，会话随即回到在跑；
-    /// 会话在跑、或最后一轮不是出错结束的，抛 `rejected("nothing_to_retry")`。只有 Pi 有。
     public func retry(_ id: Session.ID) async throws {
         try await control(id, needs: .retry).retry(id)
     }
 
-    /// 回答该会话正在等的弹窗；`promptID` 不是正在等的那个、或答案对不上时抛 `BridgeError.rejected`。
     public func answer(_ answer: AnswerValue, to promptID: String, in id: Session.ID) async throws {
         try await control(id).answer(answer, to: promptID, in: id)
     }
 
-    /// 换该会话的模型、思考强度、加速或会话名（至少给一项，会话名不能是空白）：先换模型再设强度，强度按新模型支持的范围夹取；
-    /// 要加速而换完之后的模型不支持（`ModelOption.supportsFast`）抛 `unsupported`。
-    /// 模型不在 Agent 的模型表里抛 `unknownModel`，提供方没配好密钥抛 `rejected("no_auth")`；成功后会话的上报（`model`、`thinking`）随 `infoChanged` 更新。
     public func configure(_ config: SessionConfig, in id: Session.ID) async throws {
         var config = config
         config.name = config.name?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -195,16 +172,12 @@ extension Bridge {
         try await link.configure(config, in: id)
     }
 
-    /// 请该会话查一次所有 OAuth 订阅的额度：查到的随 `changes()` 的 `.quota` 报出（与回复里带回的同一条路），
-    /// 再返回；有一家没查到抛 `rejected("failed: …")`（查到的那几家照常报出）。只有 Pi 有。
     public func refreshQuota(in id: Session.ID) async throws {
         try await control(id, needs: .quota).refreshQuota(in: id)
     }
 
-    /// 不在桥上的为 false。
     public func isTurnRunning(_ id: Session.ID) -> Bool { session(id: id)?.state.isTurnRunning ?? false }
 
-    /// 会话的控制通道；这家或这个模型做不到（`AgentCapabilities`）就抛 `unsupported`：能做什么只看能力表，通道不判断。
     private func control(_ id: Session.ID, needs: AgentCapabilities = []) throws -> any SessionLink {
         guard let link = controls[id], let session = session(id: id) else { throw BridgeError.unknownSession(id) }
         guard session.capabilities.isSuperset(of: needs) else { throw BridgeError.unsupported }

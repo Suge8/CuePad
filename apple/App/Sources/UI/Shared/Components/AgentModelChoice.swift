@@ -2,7 +2,6 @@ import CueStore
 import SwiftUI
 
 extension ConfigControls {
-    /// 选了做什么由调用方给；换了家时模型换成哪个也由调用方写（开新会话按家记在本机，`LaunchControls`；Cue 记在设置里）。
     init(
         choice: AgentModelChoice, opening: Binding<ConfigPick?> = .constant(nil), chooseAgent: @escaping (AgentKind) -> Void,
         chooseModel: @escaping (ModelKey?) -> Void, chooseThinking: @escaping (ThinkingLevel) -> Void, chooseFast: @escaping (Bool) -> Void = { _ in },
@@ -18,7 +17,6 @@ extension ConfigControls {
 nonisolated struct AgentModelChoice: Equatable, Sendable {
     let agents: [MacAgent]
     let agent: AgentKind?
-    /// 指定的模型；nil 是这家的默认。
     let model: ModelKey?
     let thinking: ThinkingLevel?
     var fast: Bool = false
@@ -44,7 +42,6 @@ nonisolated struct AgentModelChoice: Equatable, Sendable {
     }
 }
 
-/// 开新会话的那一排（新会话的输入框、手机交给 Agent 的输入框、Mac 任务气泡的"开始"）：选了就记在本机，下次默认是它。
 struct LaunchControls: View {
     let mac: MacAgents
     let project: UUID?
@@ -67,8 +64,6 @@ struct LaunchControls: View {
 }
 
 extension View {
-    /// 开新会话那一排要的那台 Mac 的 Agent 清单（新会话的输入框、手机交给新会话、Mac 任务气泡的"开始"同一份读法）。
-    /// `host` 读出 nil（没选 Mac、去向不是开新会话）时清单是 nil：不拿一份没有名字的空清单冒充某台 Mac。
     func observingLaunchAgents(
         id: some Equatable, into agents: Binding<MacAgents?>, onError: @escaping (any Error) -> Void,
         host: @escaping @Sendable (isolated CueStore) throws -> String?

@@ -6,7 +6,6 @@ nonisolated protocol DebugArgGroup: Decodable {
 }
 
 extension DebugArgs {
-    /// 本次启动的参数。只认参数域，不读已存的偏好（`UserDefaults.standard` 是真实的偏好域）。
     nonisolated static let launch: DebugArgs = {
         let domain = UserDefaults.standard.volatileDomain(forName: UserDefaults.argumentDomain)
         var values: [String: String] = [:]
@@ -19,7 +18,6 @@ extension DebugArgs {
         let asked = Asked()
         let args: DebugArgs
         do { args = try DebugArgs(from: ArgDecoder(values: values, prefix: "", asked: asked)) } catch { fatalError("启动参数解不出来：\(error)") }
-        // 拼错的参数不能被静默忽略：拍出来是错画面却没人发现
         let unknown = spelled.filter { !asked.names.contains($0.key) }.map { "-" + $0.value }.sorted()
         if !unknown.isEmpty { fatalError("不认识的启动参数：\(unknown.joined(separator: "、"))（拼错了，或只在另一端认；登记表在 DebugScene+Args*.swift）") }
         return args

@@ -8,7 +8,6 @@ import Testing
 @Suite(.releasesLibraries)
 struct SyncAccountTests {
     let cloud = SimulatedCloud([CKRecord.peerFloor(CueStore.peerFloor)])
-    /// 账号变化只发给这里起的同步：全进程的通知会叫醒并行的别的测试。
     let accountChanges = NotificationCenter()
 
     @Test
@@ -67,7 +66,7 @@ struct SyncAccountTests {
             await services.syncing.syncNow()
             return await cloud.saved.contains(name(waiting))
         }
-        try await eventually("回到已同步") { services.syncing.state.status == .idle }  // 界面的状态由跟随者异步抄过来
+        try await eventually("回到已同步") { services.syncing.state.status == .idle }
     }
 
     @Test
@@ -129,7 +128,7 @@ struct SyncAccountTests {
 
         let began = ContinuousClock.now
         await services.handleActivation()
-        #expect(ContinuousClock.now - began < .seconds(5))  // 沿用挂起前那次的，要等它到请求时限（15 秒）
+        #expect(ContinuousClock.now - began < .seconds(5))
         try await eventually("要你决定") { services.syncing.state.status == .needsDecision(.accountSwitched) }
         await services.upload(pending.id)
         #expect(await !cloud.saved.contains(name(pending)))

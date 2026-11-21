@@ -38,16 +38,11 @@ extension Command {
   }
 }
 
-/// 一台模拟器一个后台进程（`cuepad __screen <UDID> <端口>`）：把它的屏变成本机网页（`ScreenServer`），一直到模拟器关掉。
-/// 另起进程、不放在 App 里：读屏与送手指用的是没公开的接口（`SimScreen`），它出事不带倒 App；也不跟着起它的那条命令退。
 enum SimServe {
   static let entry = "__screen"
 
-  /// 这台的服务在哪个口上：已经起着就用它，没有就起一个、等它听上。
-  /// 口按 UDID 定：模拟器重开、服务重起后还是同一个地址，用户那头的预览自己接回来。被别的东西占着就顺次往后挪。
   static func ensure(_ device: SimScreen.Device) async throws -> UInt16 {
     let first = UInt16(47_600 + device.udid.utf8.reduce(0) { ($0 &* 31 &+ Int($1)) % 300 })
-    // 每次起各写各的日志：两条命令同时起同一台时不互相清掉
     let log = FileManager.default.temporaryDirectory.appending(path: "cuepad-screen-\(UUID().uuidString).log")
     defer { try? FileManager.default.removeItem(at: log) }
     for port in first..<first + 8 {
@@ -60,7 +55,6 @@ enum SimServe {
         var status: Int32 = 0
         guard waitpid(pid, &status, WNOHANG) == pid else { continue }
         let said = (try? String(contentsOf: log, encoding: .utf8)) ?? ""
-        // 口被占着（`run` 退出时写的这个词）：占着它的可能正是同时起的另一条命令的这台的服务，再认一次，不是才往后挪
         guard said.contains(taken) else { throw CLIError.invalid("接不上模拟器「\(device.name)」的屏：\(said.trimmingCharacters(in: .whitespacesAndNewlines))") }
         try await Task.sleep(for: .milliseconds(300))
         if await ScreenServer.identity(port: port) == device.udid { return port }
@@ -96,7 +90,6 @@ enum SimServe {
     return pid
   }
 
-  /// 后台进程的全部：听上、守着，模拟器关了或 cuepad 自己被换掉（App 更新）就退。不返回。
   static func run(_ arguments: [String]) async -> Never {
     func fail(_ message: String) -> Never {
       FileHandle.standardError.write(Data((message + "\n").utf8))

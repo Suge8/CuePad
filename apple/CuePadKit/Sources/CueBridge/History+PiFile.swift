@@ -104,7 +104,7 @@ extension History {
             cp.toolFinished(id: result.id, failed: result.failed)
             return
         }
-        guard let line = decode(raw) else { return } // 损坏行跳过
+        guard let line = decode(raw) else { return }
         let time = line.time
         if let time { cp.lastActivity = time }
         let entry = Entry(id: line.id ?? "\(cp.seq)", seq: cp.seq, at: time ?? cp.lastActivity ?? .distantPast)
@@ -139,7 +139,6 @@ extension History {
                 for call in message.content?.toolCalls ?? [] {
                     cp.toolStarted(id: call.id ?? "", name: call.name ?? "", arguments: call.arguments ?? ToolArguments())
                 }
-                // 中途调工具前说的一段也是说的话（这一句的回答是最后一段）；被停下（Esc）时说了一半的也是
                 switch message.stopReason {
                 case "toolUse": cp.spoke(message.content?.reply ?? "", entry)
                 case "length":
@@ -190,7 +189,6 @@ extension History {
         contains(head(raw), toolResultMarker)
     }
 
-    /// 快速路径：工具结果行里的调用 id 与成败；不是工具结果行、或两头没有预期的键为 nil。
     private static func toolResult(_ raw: UnsafeRawBufferPointer) -> (id: String, failed: Bool)? {
         let head = head(raw)
         let tail = UnsafeRawBufferPointer(rebasing: raw.suffix(tailLength))

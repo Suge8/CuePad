@@ -3,13 +3,11 @@ import CueStore
 import SwiftUI
 
 extension DebugScene {
-    /// 宽屏两栏的开合偏好每次按参数摆：隔离实例的偏好域在几次截图之间留着。
     static func presetColumns(_ settings: AppSettings) {
         settings.railExpanded = args.layoutOpts.sidebar != "hidden"
         settings.cueOpen = args.cue != "shut"
     }
 
-    /// 画面摆完再开并排（右半开这个会话，左半是 `-CuePadSession`）。
     static func presetBeside(_ workspace: Workspace) async {
         if let share = args.layoutOpts.besideShare {
             for kind in [WideMetrics.Kind.session, .preview] { workspace.paneShares.set([1 - share, share], for: [kind]) }
@@ -24,13 +22,11 @@ extension DebugScene {
         }
     }
 
-    /// 画面摆完再置：换主区会关抽屉。
     static func presetDrawers(_ workspace: Workspace) {
         if args.layoutOpts.sidebar == "drawer" { workspace.railDrawer = true }
         if args.cue == "drawer" { workspace.showCue() }
     }
 
-    /// 就绪后跑的驱动（多配录屏）：各自看自己的启动参数，没给的立刻返回。两端的 `debugScene` 修饰符只决定怎么跑。
     static func drivers(_ workspace: Workspace) -> [@MainActor () async -> Void] {
         let services = workspace.services
         var drivers: [@MainActor () async -> Void] = [
@@ -70,7 +66,6 @@ extension DebugScene {
 
     /// `-CuePadSidebarCycle`、`-CuePadRightCycle`：反复开合那一栏，`fast` 在动画中途反向。
     static func cycleColumn(fast: Bool, _ toggle: @MainActor () -> Void) async {
-        // 两次之间停多久是录屏的节奏，不是在等别的事
         let gaps: [Double] = fast ? [0.1, 1.5, 0.06, 0.06, 1.5] : [1.5]
         await Task.wait(for: .seconds(3))
         for step in 0... {
@@ -131,12 +126,7 @@ extension DebugScene {
     }
 
     #if os(macOS)
-    /// 每次启动、只要是隔离库（演示库、性能库，也包括真实数据复现的只读副本），这台 Mac 上绑在真实主目录下的文件夹都改绑到演示主目录
-    /// （`DemoLibrary.demoHome`，在隔离库里），保留主目录下的相对路径：实例会真去读写绑定的文件夹（技能与规则的扫描、整理与改规则），
-    /// 绑在真实主目录下就会改到真的仓库；旧版本的演示种子绑的就是真实主目录（`~/Project/cuepad`），库在了不重写。
-    /// 所以副本里项目绑的文件夹也不是原来那些。`-CuePadFolder` 明说要绑的那个照旧（隔离实例里真跑 Cue 派活要它）。
     private static func isolateBoundFolders(_ store: CueStore) async throws {
-        // 只在隔离库里搬：用真实库的 Debug 实例绑的就是用户自己的文件夹
         guard let library = ProcessInfo.processInfo.environment[LibraryLocation.environmentKey] else { return }
         let directories = try await store.projectDirectories()
         let real = UserHome.directory.path(percentEncoded: false)
@@ -147,7 +137,6 @@ extension DebugScene {
     }
     #endif
 
-    /// 库里只有默认项目（新的隔离库）时写入：库一旦有了数据就不再写，所以只在新库里起效的数据都不挂在这里（`seedScratchFiles` 每次启动都写）。
     private static func seedIfFresh(_ store: CueStore, _ seed: (CueStore) async throws -> Void) async throws {
         if try await store.projects().allSatisfy(\.isDefault) { try await seed(store) }
     }
@@ -232,7 +221,7 @@ extension DebugScene {
             if let task = named ?? tasks.first(where: preferred) ?? tasks.first {
                 if args.longTask {
                     try await lengthen(task, in: workspace.services.store)
-                    later(.seconds(2)) {}  // 等气泡滚到一半（`MiddleScroll`）再就绪
+                    later(.seconds(2)) {}
                 }
                 workspace.openTask(task)
             }
@@ -240,7 +229,6 @@ extension DebugScene {
     }
 }
 
-/// 内容读到之后滚到一半（`-CuePadLongTask`）：内容每长高一次，停一下再滚。
 struct MiddleScroll: ViewModifier {
     @State private var position = ScrollPosition()
     @State private var overflow: CGFloat = 0

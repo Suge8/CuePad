@@ -48,7 +48,6 @@ final class DaysHistory {
         logged = log.count
 
         let pins = ["改数据库结构前先问我", "推送到远端前先问我", "提交信息用英文写", "界面方案先给几个让我在卡上选", "回复用中文、一两句", "官网的改动不要碰 blog 子目录"]
-        // 序号按写下的先后：同一毫秒写下的按 id 排，所以一条一条隔开写
         let lines = pins.map { ($0, true) } + (0..<87).map { (DaysScript.learned[$0 % DaysScript.learned.count] + "（\($0 + 1)）", false) }
             + [("他 10/20 说：提交信息以后改用中文写", false)]
         for (line, pin) in lines {
@@ -93,8 +92,6 @@ final class DaysHistory {
         fake.sendInfo(["name": title])
         let file = try #require(rig.app.host.sessionFiles[id])
         try file.user(first, delivery: delivery.uuidString, at: started)
-        // 会话每次交回后让它继续的也是 Cue（带发送记录）：没有记录就算他在会话里说的，之后那一停当场留给他回、不叫醒 Cue，
-        // 剧本要考的作答（S3）与兑现（访问量）就考不到
         for (text, at) in replies {
             let resumed = UUID()
             try await rig.store.recordSend("继续", to: SendTarget(kind: .piSession, name: title, ref: id), card: task.id, delivery: resumed, origin: .known(.cue))
@@ -119,7 +116,6 @@ nonisolated struct Seeded: Sendable {
 }
 
 extension CueStore {
-    /// 预置历史：按给的时刻写对话（一轮的经过带清单），他的话标成当时已交给 Cue。只给评测用：正式路径只写此刻。
     func seed(_ log: [Seeded]) throws {
         try write {
             for entry in log {
@@ -132,7 +128,6 @@ extension CueStore {
 }
 
 enum DaysScript {
-    /// 多日后段补记的记忆（Cue 记下的），让视图超出预算、有块待合并；第一条是后面要问的车位
     static let notedLater = [
         "他的车停在公司地库 B2 层 117 号车位", "官网的 CDN 是 Cloudflare，缓存规则在 Page Rules 里", "演示项目的预发环境每晚 2 点自动重置数据",
         "他周五下午一般不开会", "看板的拖拽在 Safari 15 上有已知闪烁", "设计组的图标库 v2 月底出", "演示项目的数据库每周日凌晨全量备份",

@@ -33,7 +33,6 @@ extension CueHostTests {
             let step = try await store.createTask(title, under: task.id)
             let file = rig.folder.appending(path: "s\(index).jsonl")
             try Data("{}\n".utf8).write(to: file)
-            // 先绑上再连上（同从任务开会话）：会话一出现就在这一步下
             try await store.linkCard(step.id, toSession: "s\(index)")
             sessions.append(try await rig.app.host.connect("s\(index)", cwd: rig.folder.path, busy: true, sessionFile: file.path))
         }
@@ -52,7 +51,6 @@ extension CueHostTests {
         await rig.stop()
     }
 
-    /// 刚升级、还没记下进程的会话（升级前写的记录）不知道还在不在，原样不动：仍是工作中，说明与子代理都在，不写成歇着或被打断。
     @Test func 重启时还活着的托管会话不算被打断() async throws {
         let rig = try await Rig()
         let store = rig.store
@@ -69,7 +67,7 @@ extension CueHostTests {
         try await store.linkCard(upgraded.id, toSession: "h1")
         try await eventually("记下在干活") { try await store.allSessionStates().filter { $0.state.isWorking }.count == 2 }
 
-        try rig.services.reconcileLaunch()  // 启动对账：桥上的托管会话还连着，它的进程还在
+        try rig.services.reconcileLaunch()
         let states = Dictionary(uniqueKeysWithValues: try await store.allSessionStates().map { ($0.sessionID, $0) })
         #expect(states["h0"]?.state == .known(.thinking))
         #expect(states["h1"]?.state == .known(.tool) && states["h1"]?.detail == "bash · swift test" && states["h1"]?.subagents == [helper])

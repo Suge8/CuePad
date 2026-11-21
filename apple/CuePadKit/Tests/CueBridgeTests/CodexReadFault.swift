@@ -37,14 +37,12 @@ final class CodexReadFault {
         }
     }
 
-    /// `lateStart` 时回了 -32600 的停止有几次
     var refusedStops: Int {
         ((try? String(contentsOf: control.appending(path: "refused.log"), encoding: .utf8)) ?? "").count { $0 == "\n" }
     }
 
     private func write(_ mode: Mode) { try! Data(mode.rawValue.utf8).write(to: control.appending(path: "mode"), options: .atomic) }
 
-    /// 回过的子线程的读：`fail`、`hold`（挂住）、`pass`，按先后；挂住的放行时再记一笔它怎么回的
     var reads: [(thread: String, outcome: String)] {
         ((try? String(contentsOf: control.appending(path: "reads.log"), encoding: .utf8)) ?? "").split(separator: "\n").map {
             let parts = $0.split(separator: " ")
@@ -52,7 +50,6 @@ final class CodexReadFault {
         }
     }
 
-    /// 回成 `outcome` 的子线程有几个
     func threads(_ outcome: String) -> Set<String> { Set(reads.filter { $0.outcome == outcome }.map(\.thread)) }
 
     private static func source(codex: URL, control: URL) -> String {

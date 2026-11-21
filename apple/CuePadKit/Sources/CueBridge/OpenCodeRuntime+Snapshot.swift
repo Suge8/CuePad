@@ -7,7 +7,7 @@ extension OpenCodeRuntime {
         let client = connection.client
         let hosted = try await store.hostedSessionIDs(of: .opencode, host: hostID).union(sessions.keys)
         let all = try await client.sessions().filter { hosted.contains($0.parentID ?? $0.id) }
-        let asked = Date.now  // 对话里读不到一轮时的开始：快照里在跑的那一轮此刻之后才收尾
+        let asked = Date.now
         let active = Set(try await client.get(OpenCodeData<[String: JSONValue]>.self, "/api/session/active").data.keys)
         var started: [String: Date] = [:], failures: [String: String] = [:]
         for info in all where info.parentID == nil {
@@ -25,8 +25,6 @@ extension OpenCodeRuntime {
         for info in topLevel {
             var tracked = track(info)
             tracked.info = info
-            // 断线期间错过的事件不补：执行与压缩的进展只认此刻的快照（在线会话的压缩中由 refreshLive 补上）
-            // 快照里在跑的一轮：开始取快照之后读到的对话里的（可能是断线期间开始的另一轮，`SessionFacts.startTurn(at:)`）
             tracked.turns.reconcile(runningSince: started[info.id], failure: failures[info.id])
             if tracked.parser.speaking { bridge.setDraft(bridgeID(info.id, connection), nil) }
             tracked.parser = OpenCodeTurn()
@@ -149,7 +147,6 @@ extension OpenCodeRuntime {
         }
     }
 
-    /// 强度是模型的 `variant`；没设（`default`）时，没有强度可选的模型是 `off`，有的不知道是哪一档。
     static func thinking(_ variant: String?, of model: ModelOption) -> Open<ThinkingLevel>? {
         guard let variant, variant != "default" else { return model.thinkingLevels == [.off] ? .known(.off) : nil }
         return Open(rawValue: variant)

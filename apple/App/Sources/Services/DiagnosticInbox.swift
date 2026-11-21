@@ -3,11 +3,6 @@ import CueSync
 import Foundation
 import os
 
-/// Mac 上把各台设备经 iCloud 送来的诊断（`DeviceDiagnostic`）落成文件：`<directory>/<设备名>/<文件名>`，解析得出的旁边另落一份要点
-/// （`<文件名>.summary.json`，`CrashReport.Summary`），云上删了的这里也删，
-/// 与各台的存档一样只留最近几份。`directory` 是 `LibraryLocation.deviceLogs()`（正式版在 ~/Library/Logs/CuePad，不在资料库里：
-/// agent 读它不碰真实资料库；隔离库在自己目录里），`xc.sh diag` 读它、符号化。
-/// 进度（拉到哪的令牌、设备 ID 对应哪个目录）记在 `directory/.inbox.json`；令牌失效或文件丢了就从头读一遍、照云上的全部重写。
 actor DiagnosticInbox {
     /// Mac 不收推送、诊断区也没有门铃：隔这么久看一次（另在同步认好账号后先看一次）。一次一个请求，比在等时的同步拉取（2 秒一次）少两个数量级；
     /// 代价是手机上点了"把最近日志发到 Mac"，最多这么久才落到 Mac 上。
@@ -29,7 +24,6 @@ actor DiagnosticInbox {
 
     private var stateFile: URL { directory.appending(path: ".inbox.json") }
 
-    /// 拉一遍、写下：返回写了几份、删了几份。没拉成的抛出（等账号、被限流时同 `CloudSync.diagnosticChanges`）。
     @discardableResult
     func check() async throws -> (written: Int, removed: Int) {
         var state = (try? JSONDecoder().decode(State.self, from: Data(contentsOf: stateFile))) ?? State()
@@ -38,7 +32,6 @@ actor DiagnosticInbox {
         try files.createDirectory(at: directory, withIntermediateDirectories: true)
         var removed = 0
         if changes.complete {
-            // 从头读的：本地有、云上没有的都删
             let keep = Set(changes.saved.flatMap { saved in
                 let file = folder(for: saved, in: &state).appending(path: saved.file)
                 return [file.path, Self.summary(of: file).path]
@@ -57,7 +50,7 @@ actor DiagnosticInbox {
             let file = directory.appending(path: name).appending(path: gone.file)
             guard files.fileExists(atPath: file.path) else { continue }
             try files.removeItem(at: file)
-            try? files.removeItem(at: Self.summary(of: file))  // 日志与取证没有要点
+            try? files.removeItem(at: Self.summary(of: file))
             removed += 1
         }
         for diagnostic in changes.saved {
@@ -78,7 +71,6 @@ actor DiagnosticInbox {
 
     private static func summary(of file: URL) -> URL { file.appendingPathExtension("summary.json") }
 
-    /// 按设备名分目录；两台同名的，后来的加上设备 ID 的头几位。
     private func folder(for diagnostic: DeviceDiagnostic, in state: inout State) -> URL {
         if let name = state.folders[diagnostic.device] { return directory.appending(path: name, directoryHint: .isDirectory) }
         let base = diagnostic.deviceName.replacing("/", with: "-").replacing(":", with: "-")
@@ -88,7 +80,6 @@ actor DiagnosticInbox {
         return directory.appending(path: name, directoryHint: .isDirectory)
     }
 
-    /// 跟着 App 一直跑：先看一次，之后每 `every` 看一次。看不成的（没登录、被限流、断网）记一条，到点再看。
     func watch(every: Duration) async {
         while !Task.isCancelled {
             do { try await check() } catch is CancellationError { return } catch {

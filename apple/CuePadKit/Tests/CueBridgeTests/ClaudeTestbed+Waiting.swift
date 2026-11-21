@@ -7,7 +7,6 @@ import Testing
 @testable import CueBridge
 
 extension ClaudeTestbed {
-    /// 看变化记录，不看此刻的状态：一轮可能在开始等之前就做完了；按歇下的时刻认，之前停下的那一轮不算。发话之前取 `start`。
     func waitForTurn(_ id: Session.ID, since start: Date) async throws {
         func done() -> Bool {
             var worked = false
@@ -38,7 +37,6 @@ extension ClaudeTestbed {
 
     func expectSettledOnce(_ id: Session.ID, since start: Date, reply: String, roster: SubagentPhase, waits: Int = 1) async throws {
         let session = { [bridge] in bridge.session(id: id) }
-        // 变化日志经异步流收下，比桥上的会话晚一拍：等它也收到这次歇下
         try await eventually("交回结果的那一轮做完") {
             session()?.state == .settled && (try? transcript(session()?.sessionFile))?.recap.lastReply?.contains(reply) == true
                 && log.states.last == .settled
@@ -52,7 +50,6 @@ extension ClaudeTestbed {
         #expect(states.filter { $0 == .settled } == [.settled] && states.last == .settled, "\(states)")
         #expect(states.dropLast().last?.isWorking == true && states.dropLast().last != .delegating, "歇下前是交回结果的那一轮：\(states)")
         #expect(session()?.subagents.map(\.phase) == [.known(roster)], "\(String(describing: session()?.subagents))")
-        // 歇下就绪（`SessionState.answered`）：交回结果那一轮的收尾不早于它的开始（收到开它的 `task_notification` 的时刻）。
         let turn = try #require(session()?.turnStartedAt), answered = try #require(try transcript(session()?.sessionFile).recap.answeredAt)
         #expect(turn <= answered, "\(turn) \(answered)")
     }
@@ -68,7 +65,6 @@ extension ClaudeTestbed {
         try await store.upsertSessions([SessionUpsert(session: session, checkpoint: try JSONEncoder().encode(update.checkpoint), transcript: nil)], host: "mac")
     }
 
-    /// 回答写进会话文件可能晚于这一轮歇下，等它落盘。
     func waitForDraftLanded(_ id: Session.ID) async throws {
         let file = bridge.session(id: id)?.sessionFile
         var newest: ChatMessage?

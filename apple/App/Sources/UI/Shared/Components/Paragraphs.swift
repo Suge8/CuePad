@@ -21,7 +21,6 @@ struct Paragraphs: View {
 
     var body: some View {
         if let lineLimit {
-            // 前几行一定在前几段里：只排前这么多段，看不到的字不进排版
             Text(Self.prefix(text, paragraphs: lineLimit)).lineSpacing(lineSpacing).lineLimit(lineLimit).selectable()
         } else {
             #if os(macOS)

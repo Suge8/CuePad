@@ -1,7 +1,5 @@
 import Foundation
 
-/// 对话是记录：Cue 页按它画气泡下的任务行、结果卡与醒来那几行，不读那几处此刻的样子，之后改名、改状态、删掉都不变。写下时在同一个事务里取（`capture`）。名字是用户内容，加密同步。
-/// 其他版本写来的没有这一份：界面只说是哪一类（“一个会话”、“一件任务”），不另查。
 public struct CuePlace: Codable, Equatable, Sendable {
   public var name: String?
   public var status: Open<TaskStatus>?
@@ -46,7 +44,6 @@ extension CueMessage {
   public func place(session: String) -> CuePlace? { places[CuePlace.key(session: session)] }
   public func place(task: UUID) -> CuePlace? { places[CuePlace.key(task: task)] }
 
-  /// `choices` 是写下时的字，作答与记下的回答都按它。
   public var shownChoices: [String]? { choices.map { $0.map(shownChoice) } }
 
   public func shownChoice(_ choice: String) -> String {

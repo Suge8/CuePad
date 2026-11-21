@@ -5,14 +5,9 @@ import Foundation
 import Network
 import Synchronization
 
-/// 手机、iPad 看 Mac 会话活预览的数据面：同一局域网里直连 Mac，网页的每条 TCP 一条 TLS 连接（`parameters`）。
-/// 连上后手机先写一个头（`Request`：票据、要连的主机与端口），Mac 答一个字节（`Answer`），之后两边原样对拷（`Splice`）。
-/// 票据只经加密信令（`LiveSignal`）发给开着这个会话预览的那台手机；Mac 凭它认出是哪个会话、放行哪些端口（`Workspace.admitLive`）。
-/// 两头：Mac 的 `Server`，手机的 `Proxy`（给网页视图的 SOCKS5 代理）。I/O 都在 `queue` 上。
 nonisolated enum LiveTunnel {
     static let queue = DispatchQueue(label: "cuepad.live-tunnel")
 
-    /// 从门铃的密钥派生（`RelayCredentials.tunnelKey`）：HKDF-SHA256、空 salt、此 info、32 字节。
     static let keyContext = "cuepad-live-tunnel-v1"
     private static let identity = Data("cuepad-live-v1".utf8)
 
@@ -32,7 +27,6 @@ nonisolated enum LiveTunnel {
         return NWParameters(tls: tls, tcp: tcp)
     }
 
-    /// 手机连上后写的头：版本、16 字节票据、端口（大端）、主机名长度与主机名。端口 0 只验票（`LiveLink` 探通路用），不连任何服务。
     struct Request: Equatable, Sendable {
         static let version: UInt8 = 1
         let ticket: Data
@@ -55,11 +49,8 @@ nonisolated enum LiveTunnel {
 
     enum Answer: UInt8, Sendable {
         case open = 0
-        /// 票据不认（过期、换了一张、不是这台 Mac 发的）：手机重新要一张。
         case ticket = 1
-        /// 不是这个会话的服务。
         case refused = 2
-        /// 是这个会话的，但连不上（服务停了）。
         case unreachable = 3
     }
 
@@ -80,7 +71,6 @@ nonisolated enum LiveTunnel {
         return found
     }
 
-    /// 局域网上的一个地址与它的网段长度。
     struct Address: Codable, Equatable, Sendable {
         let host: String
         let prefix: Int
@@ -115,7 +105,6 @@ nonisolated enum LiveTunnel {
             return String(decoding: buffer.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self)
         }
 
-        /// 两个地址在不在同一网段（按各自的网段长度取短的那个比）。
         func shares(_ other: Address) -> Bool {
             guard let mine = Self.bytes(host), let theirs = Self.bytes(other.host), mine.count == theirs.count else { return false }
             var left = min(prefix, other.prefix)
@@ -150,13 +139,10 @@ extension LiveTunnel {
     nonisolated final class Splice: @unchecked Sendable {
         private let a: NWConnection
         private let b: NWConnection
-        // 只在 `queue` 上碰
         private var done = false
 
         private let ended: @Sendable (_ bFailed: Bool) -> Void
 
-        /// `ended` 在整条关掉时调一次（`queue` 上），参数是不是 `b` 那条出错断的（不是读完、不是这头关的）。
-        /// 没开始对拷前关不了，所以登记到账上要在 `start` 之前。
         init(_ a: NWConnection, _ b: NWConnection, ended: @escaping @Sendable (_ bFailed: Bool) -> Void = { _ in }) {
             self.a = a
             self.b = b
@@ -204,24 +190,18 @@ extension LiveTunnel {
 // MARK: Mac：接手机的连接
 
 extension LiveTunnel {
-    /// Mac 这头：随开随关（`Workspace.openLiveDoor`），端口随机，放不放行每条连接问 `admit`。
     nonisolated final class Server: Sendable {
         enum Admission: Sendable {
-            /// 连这个本机地址。
             case open(host: String, port: UInt16)
-            /// 只验票：票据认得。
             case probe
             case ticket
             case refused
         }
 
         private let listener: NWListener
-        /// 放行了、还连着的按票据记着：票据作废时连着的也断（`keep`），网页视图的长连接不靠旧票据一直通。关了的当场去掉：网页每个请求一条连接，一张票据活几个小时。
         private let open = Mutex(Ledger())
         private struct Ledger {
             var splices: [Data: [ObjectIdentifier: (splice: Splice, port: UInt16)]] = [:]
-            /// 最近一次 `keep` 留下的票据（nil：还没作废过任何一张）。验票与登记之间隔着连开发服务、写放行两次等待，
-            /// 这期间作废的票据在登记这一步拦下，不让一条迟到的连接挂在作废了的票据上接着转发。
             var tickets: Set<Data>?
         }
         private let admit: @Sendable (Request) async -> Admission
@@ -235,7 +215,6 @@ extension LiveTunnel {
             }
         }
 
-        /// 只留这几张票据的连接，别的断掉。
         func keep(_ tickets: Set<Data>) {
             let gone = open.withLock { open in
                 let gone = open.splices.filter { !tickets.contains($0.key) }.values.flatMap(\.values).map(\.splice)
@@ -246,7 +225,6 @@ extension LiveTunnel {
             for splice in gone { splice.close() }
         }
 
-        /// 这张票据只留这几个口上的连接，别的口上还连着的断掉。
         func limit(_ ticket: Data, to ports: Set<UInt16>) {
             let gone = open.withLock { open in
                 let gone = open.splices[ticket]?.filter { !ports.contains($0.value.port) } ?? [:]
@@ -256,10 +234,8 @@ extension LiveTunnel {
             for splice in gone { splice.close() }
         }
 
-        /// 还连着的条数。
         var connections: Int { open.withLock { $0.splices.values.reduce(0) { $0 + $1.count } } }
 
-        /// 起来了就返回端口。
         func start() async throws -> UInt16 {
             let listener = listener
             return try await withCheckedThrowingContinuation { ready in

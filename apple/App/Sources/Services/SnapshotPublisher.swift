@@ -32,7 +32,7 @@ final class SnapshotPublisher {
         let ticket = ticket
         let previous = turn
         let turn = Task {
-            _ = await previous?.result  // 前一份的失败由它的调用方报告
+            _ = await previous?.result
             guard resend || ticket == self.ticket else { return false }
             let read = try await CueReading.Read.read(from: store, widget: true)
             try await render(read.widget!, read.digest, resend: resend)
@@ -42,7 +42,6 @@ final class SnapshotPublisher {
         guard try await turn.value else { return await latestSnapshot(after: turn) }
     }
 
-    /// 被顶掉的请求等队尾：等的时候又来了新的就接着等新的队尾。队尾的失败由它自己的调用方报告。
     private func latestSnapshot(after skipped: Task<Bool, any Error>) async {
         var awaited = skipped
         while let latest = turn, latest != awaited {

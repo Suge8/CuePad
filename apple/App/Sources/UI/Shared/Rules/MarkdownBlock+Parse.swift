@@ -2,7 +2,6 @@ import CueText
 import Foundation
 
 nonisolated extension MarkdownBlock {
-    /// 列表只在遇到非空行时按缩进收栈；任何块都从这一份栈取路径，不在块分支里清空或另建归属。
     static func parse(_ source: String, more: (MarkdownBlock) -> Bool = { _ in true }) -> [MarkdownBlock] {
         let lines = source.components(separatedBy: "\n")
         var blocks: [MarkdownBlock] = []
@@ -102,7 +101,6 @@ nonisolated extension MarkdownBlock {
             }
         }
         if !done { flush() }
-        // 围栏正文以换行累积，去掉最后一个行分隔，保留原文真正的空行。
         return blocks.map { block in
             guard case .code(let text) = block.content, text.hasSuffix("\n") else { return block }
             return MarkdownBlock(content: .code(String(text.dropLast())), list: block.list, startsItem: block.startsItem)

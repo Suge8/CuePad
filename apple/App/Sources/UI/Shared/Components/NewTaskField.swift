@@ -1,7 +1,6 @@
 import CueStore
 import SwiftUI
 
-/// 项目页任务清单末尾那一行；看板上记任务是另一个输入框（`NewTaskInput`）。
 struct NewTaskField: View {
     let project: UUID?
     @Environment(Workspace.self) private var workspace
@@ -30,7 +29,6 @@ struct NewTaskField: View {
                     .frame(minHeight: TaskMetrics.rowHeight)
                     .contentShape(.rect)
                 }
-                // 整行是入口，底与任务行同一种（悬停、按下铺满这一行，不贴着那几个字）
                 .buttonStyle(.row)
                 .accessibilityLabel(prompt)
             }
@@ -56,7 +54,6 @@ struct NewTaskField: View {
             }
     }
 
-    // 入口不用系统占位灰：那样看起来像不能点
     private var glyph: some View {
         Image(.add).font(Glyph.small).foregroundStyle(palette.ink2).readerHidden(true)
             .frame(width: TaskMetrics.ringColumn)

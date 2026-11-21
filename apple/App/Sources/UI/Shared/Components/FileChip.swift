@@ -6,7 +6,6 @@ struct FileChip: View {
     let key: String
     let name: String
     var height: CGFloat = 56
-    /// 空的是只有它自己。
     var among: [DraftFile] = []
     var group = "file"
     @Environment(AppServices.self) private var services

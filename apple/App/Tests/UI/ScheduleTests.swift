@@ -45,13 +45,13 @@ struct ScheduleTests {
             switch title {
             case "清理过期分支":
                 try await workspace.complete(task.id)
-                try await workspace.reopen(task.id)  // 再点一下：重新打开
+                try await workspace.reopen(task.id)
             case "续费域名":
                 try await workspace.archive(task.id)
-                try await #require(workspace.notice?.action).run(workspace)  // 撤销：取回
+                try await #require(workspace.notice?.action).run(workspace)
             default:
                 try await workspace.trash(task.id)
-                try await #require(workspace.notice?.action).run(workspace)  // 撤销：恢复
+                try await #require(workspace.notice?.action).run(workspace)
             }
         }
         #expect(Set(try await store.cueSchedules().map(\.line.id)) == Set(lines.dropFirst()))

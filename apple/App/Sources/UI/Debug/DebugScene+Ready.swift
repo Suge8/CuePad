@@ -3,13 +3,9 @@ import CueStore
 import SwiftUI
 
 extension DebugScene {
-    /// 还拖着就绪的事，按名字计数：等过了 `readyLimit` 报出来的就是这些名字。
     private static var holds: [String: Int] = [:]
-    /// 正在跑的 `running`，按名字计数：摆画面卡住时报出来的是这些名字（摆画面时另起的常驻任务也在里面，它们不拖就绪）。
     private static var steps: [String: Int] = [:]
-    /// 报着正在过渡的视图，记着是哪一处报的（`debugSettling` 的调用处）。
     private static var unsettled: [UUID: String] = [:]
-    /// 从摆画面起这么久还没就绪就报出名字退出：要早于脚本从起实例算的 60 秒（`app_proc.READY_TIMEOUT`），晚于最长的正当拖延（`-CuePadQuotaResetIn`，会话里用过最大 30 秒，再加 5 秒）。
     private static let readyLimit: Duration = .seconds(45)
 
     static func settling(_ id: UUID, _ place: String?) {
@@ -46,13 +42,11 @@ extension DebugScene {
     /// 就绪文件：脚本起的实例都带（`CUEPAD_SHOT_READY`，见 app.py），App 也据此认出是脚本起的（`DebugHooks.scripted`）。
     static let readyFile = ProcessInfo.processInfo.environment["CUEPAD_SHOT_READY"]
 
-    /// 摆画面要的数据没写成：报出原因、以 1 退出，不写就绪文件。等它的脚本（`xc.sh shot`、`perf.py`）照失败处理，不拿半截的库或画面当成果。
     nonisolated static func abandon(_ what: String, _ error: any Error) -> Never {
         FileHandle.standardError.write(Data("\(what)：\(error)\n".utf8))
         exit(1)
     }
 
-    /// 跑一段调试代码（演示数据、驱动）：任何一步抛错都以失败退出（`abandon`），不吞错；被取消（视图走了、任务收场）是正常结束。
     static func running(_ what: String, _ body: () async throws -> Void) async {
         count(what, in: &steps, 1)
         defer { count(what, in: &steps, -1) }
@@ -70,9 +64,6 @@ extension DebugScene {
         init(_ description: String) { self.description = description }
     }
 
-    /// 摆画面（`prepare`），给了就绪文件时再等到：读库的结果都回来了、摆画面的事都做完了、
-    /// 没有视图报着正在过渡、屏上没有进行中的一次性动画（转圈这类一直循环的不算），连着三帧都这样，再写下这个文件。`xc.sh shot` 等它出现才截图，不靠固定的等待。
-    /// 从摆画面起过了 `readyLimit` 还没写下就报出还在跑、还拖着的名字，以 1 退出。返回 false：任务被取消了（Mac 窗口内容在就绪前被摘下），没写文件，驱动不该再起。
     static func signalReady(_ services: AppServices, _ prepare: () async -> Void) async -> Bool {
         guard let path = readyFile else {
             await prepare()
@@ -90,7 +81,6 @@ extension DebugScene {
         var still = 0
         while still < 3 {
             guard !Task.isCancelled else { return false }
-            // 排在页面已经发出的读库之后：它回来时，那些读取也都回来了
             do {
                 _ = try await services.store.projects()
             } catch is CancellationError {

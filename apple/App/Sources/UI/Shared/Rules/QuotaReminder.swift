@@ -7,7 +7,6 @@ import Foundation
 /// 5 小时这类短窗口不提醒：几小时就转一圈，提醒只是噪音；按模型的周额度不提醒：与整个账号的本周一起重置、先卡住的是整个账号的。
 nonisolated struct QuotaReminder {
     static let lead: TimeInterval = 12 * 3_600
-    /// 本地通知标识的前缀：重排时认出哪些待发通知是这里排的
     static let prefix = "cuepad.quota/"
 
     /// 提供方与重置时刻（按分钟取整：同一窗口里提供方报的重置时刻会差几百毫秒）：换了一次重置就是新的一条

@@ -31,7 +31,6 @@ enum MacRemote {
 
     private static let unreserved = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
 
-    /// 用户自己取消、被后一次绑定顶掉的不说（文档 2.5 的错误码）。
     static func failure(_ code: String) -> String? {
         switch code {
         case "user_cancel", "superseded": nil
@@ -58,7 +57,6 @@ enum MacRemote {
     }
 }
 
-/// 打开别的 App 的链接，返回打开了没有（没装那个 App 时打不开）：测试换成记下来的替身（只用替身，不真去拉起别的 App）。
 struct ExternalApps {
     let open: @MainActor (URL) async -> Bool
 

@@ -1,6 +1,5 @@
 #if os(macOS)
 extension LiveAgentScript {
-    /// 认角色与名称、出快照、按编号找回元素。
     static let reading = #"""
       const token = crypto.randomUUID();
       const numOf = new WeakMap(), byNum = new Map();

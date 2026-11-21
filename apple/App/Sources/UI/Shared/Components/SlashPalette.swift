@@ -1,7 +1,6 @@
 import CueStore
 import SwiftUI
 
-/// `next`、`previous` 是 Tab 与 ⇧Tab。
 enum ComposerKey { case up, down, accept, dismiss, next, previous }
 
 struct SlashPalette: View {
@@ -65,7 +64,6 @@ nonisolated extension Open<CommandSource> {
         case .known(.builtin): String(localized: "内置")
         case .known(.extension): String(localized: "扩展")
         case .known(.prompt): String(localized: "模板")
-        // 不用"技能"那个键：它是技能与规则页顶的那一段，英文是复数 Skills；这里是一条命令的来源，英文同 Extension、Template 用单数
         case .known(.skill): String(localized: "技能命令")
         case .unknown: String(localized: "其他")
         }

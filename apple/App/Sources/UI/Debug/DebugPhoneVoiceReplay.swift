@@ -7,7 +7,6 @@ import Foundation
 /// reverse（配 -CuePadPhoneVoice idle）：快速反向——接通动画走到一半就挂断、挂断动画走到一半又接通、打一个字马上删掉，看过渡从当前样子接着走、不闪。
 /// 接通走正式的 `VoiceService.adopt` 换上回放媒体（没有信令），接上由回放媒体报"已连上"；挂断与中断走正式的 `end`。
 enum DebugPhoneVoiceReplay {
-    /// 在写投影之前换上媒体所有者（同正式的 start）：所有者不在观察里，先写投影的话读能否静音的视图不会按它重算。
     static func attach(_ voice: VoiceService, workspace: Workspace, session: VoiceSessionID) {
         guard let mode = DebugScene.args.phoneVoiceOpts.replay else { return }
         if mode == "cycle" || mode == "reverse" {
@@ -60,7 +59,6 @@ enum DebugPhoneVoiceReplay {
         FileHandle.standardError.write(Data("phone-voice-replay ready-for-interaction\n".utf8))
     }
 
-    /// 拨出：同 `start` 摆出的"正在连接"。
     @discardableResult
     static func dial(_ voice: VoiceService, session: VoiceSessionID = VoiceSessionID(UUID())) -> VoicePhoneSession {
         let owner = VoicePhoneSession(id: session, local: VoiceEndpoint(device: VoiceDeviceID("voice-ui-replay"), lease: UUID()), media: Media())
@@ -68,7 +66,6 @@ enum DebugPhoneVoiceReplay {
         return owner
     }
 
-    /// 接通：回放媒体报"已连上"（同真的媒体），投影到"在听"。
     static func answer(_ voice: VoiceService) {
         voice.phone?.media.onEvent(.connected)
         show(voice, .listening)
@@ -113,7 +110,6 @@ enum DebugPhoneVoiceReplay {
         FileHandle.standardError.write(Data("phone-voice-replay cycle-done\n".utf8))
     }
 
-    /// 每一步都落在上一段过渡（0.16～0.25 秒）的半途。挂断要等媒体关完（替身 0.5 秒）才回到空着，这一段里再拨不了，同真的。
     private static func reverse(_ voice: VoiceService, workspace: Workspace) async throws {
         func mark(_ step: String) { FileHandle.standardError.write(Data("phone-voice-replay \(step)\n".utf8)) }
         try await Task.sleep(for: .seconds(2))
@@ -127,7 +123,6 @@ enum DebugPhoneVoiceReplay {
             }
             mark("hang-\(round)")
             await voice.end()
-            // 回到空着后 80ms 又拨：输入框正从通话条变回来
             try await Task.sleep(for: .milliseconds(80))
         }
         try await Task.sleep(for: .milliseconds(900))

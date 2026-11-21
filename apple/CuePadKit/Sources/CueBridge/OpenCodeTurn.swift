@@ -87,7 +87,6 @@ struct OpenCodeTurn {
     static let unknownFailure = String(localized: "出错了，原因不明")
 }
 extension TurnEvent {
-    /// 改的不只是正在说的话（正在说的话直接交给桥，不用重新发布整个会话）
     var changesFacts: Bool { if case .speaking = self { false } else { true } }
 }
 #endif

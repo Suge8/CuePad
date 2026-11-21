@@ -1,7 +1,6 @@
 import CueStore
 import SwiftUI
 
-/// 问句只这一套画法：拍板卡、全屏预览的底栏与对话里答完的问句共用。
 struct CueQuestionLine<Below: View>: View {
     enum Tone { case card, ended }
 
@@ -76,9 +75,6 @@ extension CueQuestionLine where Below == EmptyView {
     private static let tailLength = 4
 }
 
-/// 一问的主动作只有"可以"（一颗对勾，读屏念"可以"），放宽规矩是顺手的事，不和它抢。
-/// 能点掉的那一类（`CueAsk.declinable`）对勾旁多一颗叉：单独一颗对勾，人会找叉。
-/// Cue 停用着答不了时（`CueWatch.canHear`）只留"可以"、降成次级并停用，不和启用那颗主按钮抢（同屏只一个主动作），启用后恢复。
 struct CueChoices: View {
     let message: CueMessage
     var disabled = false
@@ -93,11 +89,9 @@ struct CueChoices: View {
     #else
     static let onceWidth: CGFloat = 88
     #endif
-    /// 按钮左右内边距之和：最小宽要扣掉它才是里面那颗对勾占的宽。
     private static let inset = 2 * ControlSize.regular.padding
 
     var body: some View {
-        // 停用着只留停用的"可以"：别的选项此刻同样选不了
         let cue = workspace.cue, paused = !cue.canHear, accessible = typeSize.isAccessibilitySize, options = message.choices ?? []
         let side = VStack(alignment: accessible ? .trailing : .leading, spacing: 0) {
             if paused { note(String(localized: "启用 \(cue.name) 后再答")) }
@@ -126,7 +120,6 @@ struct CueChoices: View {
         }
     }
 
-    /// 次要的选项：一行小字，点了照样答这一项（存下的原文；写的是这台设备语言的那句，`CueMessage.shownChoice`）。
     private func link(_ option: String) -> some View {
         Button { pick(option) } label: {
             Text(message.shownChoice(option)).font(Typography.meta.weight(.medium)).foregroundStyle(palette.ink2)
@@ -152,8 +145,6 @@ struct CueChoices: View {
     }
 }
 
-/// 缩略图本来看不全、都要点开，它只管认出是哪张、邀请点开；要看什么由每张正下方那一句说。
-/// `chosen`："可以"选的就是其中这一张（`chosen(for:in:)`），它描一圈主按钮的靛青。
 struct CueShots: View {
     let shots: [CueShown]
     let group: String
@@ -175,11 +166,8 @@ struct CueShots: View {
         return max(0, min(side, ((width - gaps) / CGFloat(count)).rounded(.down)))
     }
 
-    /// 这一块至少多高（Cue 页数格子，`CuePage.floor`）：图的边长，不算下面那句说明，只能数少。
     static func floor(count: Int, width: CGFloat) -> CGFloat { count == 0 ? 0 : cell(count: count, width: width) }
 
-    /// 几张里"可以"选的是哪张：Cue 写的动作（"按方案 1 决定单改提问卡"）里提到的那张图的名字（看什么"："前那半），恰好一张时才算；
-    /// 一张都没提到（证据图）或提到不止一张时不标，问句本身说了做什么。
     static func chosen(for asking: CueAsking?, in shots: [CueShown]) -> UUID? {
         guard let action = asking?.action, shots.count > 1 else { return nil }
         let named = shots.filter { action.contains($0.look.split(separator: "：", maxSplits: 1).first ?? "") }

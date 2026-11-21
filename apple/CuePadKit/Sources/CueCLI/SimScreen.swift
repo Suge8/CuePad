@@ -25,7 +25,6 @@ final class SimScreen: ScreenSource, @unchecked Sendable {
   }
 
   let device: Device
-  /// 屏是竖长的（手机）。
   let tall: Bool
   private let simulator: NSObject
   private let display: NSObject
@@ -64,7 +63,6 @@ final class SimScreen: ScreenSource, @unchecked Sendable {
     return devices
   }
 
-  /// `xcode-select` 选中的那份 Xcode。
   private static var developerDirectory: String {
     ProcessInfo.processInfo.environment["DEVELOPER_DIR"] ?? (try? FileManager.default.destinationOfSymbolicLink(atPath: "/var/db/xcode_select_link")) ?? "/Applications/Xcode.app/Contents/Developer"
   }
@@ -161,7 +159,6 @@ final class SimScreen: ScreenSource, @unchecked Sendable {
         finger(phase, x, y)
       case .wheel(let x, let y, let dx, let dy): wheel(x, y, dx, dy)
       case .key(let usage, let down): post("IndigoKeyboardButtonEvent", ["usageCode": UInt64(usage), "state": UInt64(down ? 1 : 2)])
-      // 触摸屏那张页不发这几种：没有右键，字在模拟器自己的键盘上打，画面里有什么它说不出来（`outline`）
       case .secondary, .text, .focus, .fill: break
       }
     }
@@ -182,7 +179,6 @@ final class SimScreen: ScreenSource, @unchecked Sendable {
 
   private static let hubService = "com.apple.coredevice.feature.remote.hid.digitizer"
 
-  /// 模拟器里这项服务的口；没有（老系统）是 0。
   private static func hubPort(_ simulator: NSObject) -> mach_port_t {
     let lookup = NSSelectorFromString("lookup:error:")
     typealias Lookup = @convention(c) (AnyObject, Selector, NSString, AutoreleasingUnsafeMutablePointer<NSError?>?) -> mach_port_t
@@ -190,7 +186,6 @@ final class SimScreen: ScreenSource, @unchecked Sendable {
     return unsafeBitCast(simulator.method(for: lookup), to: Lookup.self)(simulator, lookup, hubService as NSString, nil)
   }
 
-  /// 一条消息：种类、来自哪项服务、内容（手指、按键都经触摸屏这项服务的连接走）。连接断了（模拟器里的服务重启）下一条重连。
   private func post(_ kind: String, _ payload: [String: Any]) {
     guard let hub = hub ?? connect() else { return }
     xpc_connection_send_message(hub, Self.xpc(["messageType": kind, "isBarrier": false, "featureIdentifier": Self.hubService, "payload": payload]))
@@ -207,7 +202,6 @@ final class SimScreen: ScreenSource, @unchecked Sendable {
           let made = unsafeBitCast(endpoint, to: Endpoint.self)(port, 0, 0).flatMap(unsafeBitCast(create, to: Connection.self)) else { return nil }
     // 不标成"模拟器到宿主"的连接，那头看得到有人连上、收不到内容
     unsafeBitCast(enable, to: Enable.self)(made)
-    // 事件回在 `input` 上（下一行）：断了就放掉，下一条消息重连
     xpc_connection_set_event_handler(made) { [weak self] event in
       if xpc_get_type(event) == XPC_TYPE_ERROR { self?.hub = nil }
     }

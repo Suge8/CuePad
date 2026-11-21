@@ -3,8 +3,6 @@ import CueStore
 import Foundation
 import os
 
-/// 不碰网络：服务器给的由拉取器（`ZonePuller.pulled`）、发送者（`sent`、`nextBatch`）与账号检查（`CloudSync`）直接交进来。
-/// 失败只经 `failed` 改状态、记问题，下次什么时候再发只经 `hold`（`SyncCoordinator+Hold`）；请求成功只经 `succeeded`。
 actor SyncCoordinator {
   static let issueLimit = 50
   static let log = Logger(subsystem: AppIdentity.id, category: "delivery")
@@ -15,36 +13,26 @@ actor SyncCoordinator {
   nonisolated let zoneID: CKRecordZone.ID
   private let states = Broadcast(latest: Facts().state(accountUnconfirmed: false))
   private var published = Facts().state(accountUnconfirmed: false)
-  /// 认清了没有不是这里的事实，这里只读（`CloudSync.start` 交进来）。
   private var gate = AccountGate()
   nonisolated let acceptances = Broadcast<Void>()
-  /// 重试的等待结束了（到点、连通了、收下了一批）：发送者接着发，拉取器补上被挡下的那一拉（`SyncCoordinator+Hold`）。
   nonisolated let retryDue = Broadcast<Void>(bufferingPolicy: .bufferingNewest(1))
   var backoff = Backoff()
   var retryTimer: Task<Void, Never>?
   var outage: (fault: SyncFault, began: ContinuousClock.Instant)?
-  /// 这一版传不上去的记录与它的修改时间（删除记 `.min`）：附件文件不在本机、服务器拒收（`SyncFault.rejected`）。
-  /// 同一版不再每批重试、重复报告，也不挡别的记录；改过再试，重启 App 也再试一次。
   var unsendable: [String: Int64] = [:]
-  /// 每条通道（`Lane`）库里没有可传的待推送，截至推导时的同步变更代数（`CueStore.pendingSync(since:in:newestFirst:)`）：之后只复查其后的提交碰过的记录，
-  /// 不再全量推导；代数没变（按节奏的拉取每次顺带的那一轮）就什么都不查。挑批时清掉，交出带走了全部的一批时记在批上
-  /// （`OutgoingBatch.drains`），整批收下才记回这里（`processSent`）。
   var drained: [Lane: Int] = [:]
   /// 文件那一路在传的附件记录（`takeFile`）：后台通道不删它们，文件那一路不再交出（停下又开始同步时，上一轮的还在系统里传）。
   var fileUploads: Set<String> = []
   var quotaTimer: Task<Void, Never>?
 
-  /// `status` 不含 `.syncing`；对外的快照只在发布处推出（`state`）。
   struct Facts {
     var status = SyncStatus.starting
     var sending = false
     var catchingUp = false
-    /// 服务器要求的等待（`Hold.server`）在界面上算同步中，只从这里读。
     var holding: Hold?
     var reconciled = false
     var issues: [SyncIssue] = []
     var alerts = AlertSubscriptionStatus.off
-    /// 之后传上去一个才清掉；别的记录照常同步，所以不进 `status`。
     var filesHeldUntil: ContinuousClock.Instant?
 
     func shown(accountUnconfirmed: Bool) -> SyncStatus {
@@ -90,7 +78,6 @@ actor SyncCoordinator {
     self.zoneID = zoneID
   }
 
-  /// 退避与空间不足的计时只弱持这里：同步整个没了（退出登录、换库、关掉 App 的服务）时，在等的计时不再攥着它与资料库直到到点。
   deinit {
     retryTimer?.cancel()
     quotaTimer?.cancel()
@@ -102,13 +89,11 @@ actor SyncCoordinator {
     !stopped && gate.current == .open && ![.noAccount, .accountRestricted].contains(status)
   }
 
-  /// 停下时不拉、不传，账号、同步区与上传失败都不改状态。
   var stopped: Bool { needsDecision != nil || status == .outdated }
 
   var alertSubscription: AlertSubscriptionStatus { facts.alerts }
   func setAlerts(_ alerts: AlertSubscriptionStatus) { facts.alerts = alerts }
 
-  /// 之后重新开始同步（元数据、令牌与账号这里已清掉）。没有等你决定的事什么都不做：免得误擦数据。
   func resolve(_ resolution: SyncResolution) async throws {
     guard needsDecision != nil else { return }
     switch resolution {
@@ -117,8 +102,8 @@ actor SyncCoordinator {
     }
     unsendable = [:]
     drained = [:]
-    clearHolds()  // 上一个账号（或处理前）的退避、等待与空间不足不带进新的开始
-    facts.reconciled = false  // 两种处理都清掉了令牌
+    clearHolds()
+    facts.reconciled = false
     facts.status = .starting
   }
 
@@ -126,7 +111,6 @@ actor SyncCoordinator {
 
   func setCatchingUp(_ busy: Bool) { facts.catchingUp = busy }
 
-  /// 令牌读写只经 `token()`、`setToken`，顺带记下有没有（`SyncState.reconciled` 的唯一来源）。
   func token() async throws -> Data? {
     let token = try await store.syncState(ZonePuller.tokenKey)
     facts.reconciled = token != nil
@@ -138,17 +122,15 @@ actor SyncCoordinator {
     facts.reconciled = token != nil
   }
 
-  /// 同步开始时读一次令牌：还没拉过（离线、没登录）也说得出这台对没对过。
   func loadToken() async {
     do { _ = try await token() } catch { failed(error) }
   }
 
-  /// 应用完才返回；整页没能应用（库写不进去、停下了）时抛出，拉取器不前移令牌。单条记录不合法只报告。
   func pulled(_ modifications: [CKRecord], _ deletions: [(id: CKRecord.ID, recordType: String)]) async throws {
     guard canSync else { throw SyncPaused() }
     try meet(modifications)
     guard !modifications.isEmpty || !deletions.isEmpty else { return }
-    try await applyFetched(modifications, deletions)  // 没应用成的由拉取器报（`failed`）
+    try await applyFetched(modifications, deletions)
   }
 
   func meet(_ records: [CKRecord]) throws {
@@ -161,8 +143,6 @@ actor SyncCoordinator {
     if case .needsDecision(let decision) = status { decision } else { nil }
   }
 
-  /// 认到的账号状态。可用时仍是正在连接，第一次请求成功（`succeeded`）才算已同步：认了账号不等于连得上、对过门槛。
-  /// 认账号的结论（这个、`account`、`accountFailed`）都要带那一次的凭据：不是最新在认的那次就不写（`AccountGate.Check`）。
   func accountStatus(_ account: CKAccountStatus, from check: AccountGate.Check) {
     guard !stopped, gate.admits(check) else { return }
     switch account {
@@ -180,7 +160,6 @@ actor SyncCoordinator {
     let gate = gate
     do {
       let match = try await store.matchAccount(Data(name.utf8), key: Self.accountKey) { gate.admits(check) }
-      // 回到这里的途中又起了一次认：这次的结论已经过时（之后同步地写，新一次的写排在后面）
       guard match == .switched, !stopped, gate.admits(check) else { return }
       facts.status = .needsDecision(.accountSwitched)
     } catch {
@@ -221,7 +200,6 @@ actor SyncCoordinator {
     facts = next
   }
 
-  /// 只在正常状态之间切换：要你决定、这台要更新这些更要紧的状态不被盖过。
   @discardableResult
   func failed(_ error: any Error, kind: SyncIssue.Kind = .request, recordType: String? = nil, recordName: String? = nil) -> SyncFault {
     let fault = SyncFault(error)
@@ -237,7 +215,6 @@ actor SyncCoordinator {
     return fault
   }
 
-  /// 错误不直接报，经 `failed` 归类：连不上、要等、账号的不是问题。日志只写 `reason`（见 `Error.brief`），没给时只记哪类问题、哪条记录：`detail` 可能带记录内容。
   func report(
     _ problem: SyncIssue.Problem, detail: String? = nil, kind: SyncIssue.Kind, recordType: String?, recordName: String?, reason: String? = nil
   ) {
@@ -251,7 +228,7 @@ actor SyncCoordinator {
     next.issues.append(issue)
     if next.issues.count > Self.issueLimit { next.issues.removeFirst(next.issues.count - Self.issueLimit) }
     if issue.isFailure, !stopped { next.status = .failed }
-    facts = next  // 问题与状态一次送达
+    facts = next
   }
 
   func recordID(_ name: String) -> CKRecord.ID { CKRecord.ID(recordName: name, zoneID: zoneID) }
@@ -262,9 +239,6 @@ struct SyncPaused: Error {}
 enum AccountMatch { case recorded, same, switched }
 
 extension CueStore {
-  /// 比对并记下同步的账号，在资料库自己的队列上一步做完：读、比、写之间插不进别的读写（另一次认的比对排在前或后，不交错）。
-  /// `latest` 不是 true（这一次已被更新的一次取代）就什么都不写，返回 nil。查过之后、写下之前另起的那次排在这次之后读，等同于这次更早写完；
-  /// 不把判定和写入挪进闸门的锁里：那样起新的一次认要在锁里等资料库写入。
   fileprivate func matchAccount(_ current: Data, key: String, latest: @Sendable () -> Bool) throws -> AccountMatch? {
     guard latest() else { return nil }
     guard let last = try syncState(key) else {

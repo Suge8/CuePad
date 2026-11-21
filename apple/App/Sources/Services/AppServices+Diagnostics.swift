@@ -5,8 +5,6 @@ import Foundation
 import SystemConfiguration
 #endif
 
-/// 诊断怎么从各台设备到 Mac：存档一变就经 iCloud 送出（`DiagnosticOutbox`），Mac 隔一阵收一次、落成文件（`DiagnosticInbox`）。
-/// 只在真同步（`CloudSync`，含同步测量与测试的替身云）时送；没同步的隔离实例只存本机。
 extension AppServices {
     func startDiagnostics() {
         let cloud = sync as? CloudSync

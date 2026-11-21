@@ -1,12 +1,10 @@
 import CueEditor
 import SwiftUI
 
-/// 草稿里只记在途的编号（`ComposerDraft.importing`）。存好前这份草稿已经发出（或被取走）的，发的人按编号等它存好、连同附件一起发出（`claimImports`）：附件不落进下一条草稿，也不丢。发送钮不因导入而停用。
 final class Imports {
     fileprivate var running: [UUID: Task<[DraftFile], Never>] = [:]
 }
 
-/// 任务当场取下：导入一完成就会撤掉自己。
 struct ImportClaim {
     fileprivate let draft: ComposerDraft
     fileprivate let tasks: [Task<[DraftFile], Never>]
@@ -22,7 +20,6 @@ struct ImportClaim {
 }
 
 extension Workspace {
-    /// 存不了的提示，其余照常接上。
     func importFiles(_ incoming: [IncomingFile], into box: Binding<ComposerDraft>) {
         let id = UUID(), files = services.store.files
         let task = Task {
@@ -46,7 +43,6 @@ extension Workspace {
         }
     }
 
-    /// 取走 `draft` 时调（和取走在同一个同步步骤里）。
     func claimImports(_ draft: ComposerDraft) -> ImportClaim {
         ImportClaim(draft: draft, tasks: draft.importing.compactMap { imports.running[$0] })
     }

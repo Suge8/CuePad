@@ -15,7 +15,6 @@ extension CueStore {
     }
   }
 
-  /// 删除状态对调用方只读，有专门的方法（编译期保证）。改了名的不能改成空名（别处留下的空名不改名照样能改别的）。
   public func updateProject(_ id: UUID, _ edit: @Sendable (inout Project) -> Void) throws {
     try write {
       guard var project = try find(Project.self, id) else { throw CueStoreError.notFound }
@@ -31,7 +30,6 @@ extension CueStore {
     guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw CueStoreError.blankProjectName }
   }
 
-  /// 卡片随之隐藏（由项目推导），卡片行不动，它的任务上的定时不再定时，没做完的任务离开看板、没人再用的会话随之结束。默认项目不能删（`defaultProjectUndeletable`）。
   public func trashProject(_ id: UUID) throws {
     guard id != Project.defaultID else { throw CueStoreError.defaultProjectUndeletable }
     try write {
@@ -47,7 +45,6 @@ extension CueStore {
     }
   }
 
-  /// 永久删除：连同随项目进回收站的卡片；更早单独进回收站的卡片留在回收站（归入默认项目）。
   public func purgeProject(_ id: UUID) throws {
     try removingFiles { try write {
       let orphaned = try purgeCards(where: "projectID = ? AND deletedAt IS NULL", [id])
@@ -56,8 +53,6 @@ extension CueStore {
     } }
   }
 
-  /// 项目行从库里删掉（本机永久删除、清空回收站，或别处删了传来）：还留在它名下的卡片归默认项目（内容保留，不悬空隐藏），
-  /// 本机的目录绑定一并删。按 id 做、不查项目表：别处删掉的项目本机可能从没收到过，名下先到的卡照样归过来。必须在写事务内调用。
   func dropProjects(_ ids: [UUID]) throws {
     let list = Self.idList(ids)
     try db.run("UPDATE cards SET projectID = ?, modifiedAt = ? WHERE projectID IN (SELECT value FROM json_each(?))", [Project.defaultID, Date.stamp, list])
@@ -65,7 +60,6 @@ extension CueStore {
     try db.run("DELETE FROM projects WHERE id IN (SELECT value FROM json_each(?))", [list])
   }
 
-  /// 目录因设备而异，不同步。会话归哪个项目写在会话记录上，所以绑定变了、同一个事务里把本机已有的会话（含历史）按新的绑定重新归：只改归属变了的，没变的不重写。
   public func setDirectory(_ directory: String?, for project: UUID) throws {
     try write {
       if let directory {
@@ -132,8 +126,6 @@ extension CueStore {
     }
   }
 
-  /// 卡片只能归属存在且未在回收站的项目。必须在写事务内调用，
-  /// 与随后的写入之间没有别的写入可以插进来。仅显式允许时回落，返回实际归属。
   @discardableResult
   func requireLiveProject(_ project: UUID, ifMissing: MissingProject = .reject) throws -> UUID {
     let live = try db.first("SELECT 1 FROM projects WHERE id = ? AND deletedAt IS NULL", [project]) { _ in true }

@@ -17,11 +17,9 @@ struct ComposerDraft {
     var files: [DraftFile] = []
     var attachments: [Outbox] = []
     var notes: [ReplyNote] = []
-    /// 存好前就发出的话，发的人按它们等附件（`Workspace.claimImports`）。
     var importing: [UUID] = []
 
     var preview: String? {
-        // 逐行往下找到第一行有字的就停：草稿几百行时不把整串切成行（会话行与回复框每次重算都要问）
         var rest = text[...]
         while !rest.isEmpty {
             let end = rest.firstIndex(where: \.isNewline) ?? rest.endIndex
@@ -63,7 +61,6 @@ struct ComposerDraft {
             && (!kinds.contains(.notes) || notes.isEmpty)
     }
 
-    /// 草稿里可能有看不见的附件（调回的上一句、展开编辑的卡片、编辑后重发的话），发出前都经这里，界面上没露出的不会跟着发出去。
     func accepting(_ kinds: ComposerKinds) -> ComposerDraft {
         guard !kinds.contains(.files) else { return self }
         var draft = self
@@ -77,7 +74,6 @@ struct ComposerDraft {
         return draft
     }
 
-    /// 批注与引用的预览按 `ReplyNote.message` 接上你写的话。
     var stored: String {
         StoredBody.make(attachments: attachments.map(\.content), text: ReplyNote.message(notes, said: text), files: files)
     }
@@ -91,7 +87,6 @@ struct ComposerKinds: OptionSet {
     static let reply: ComposerKinds = [.files, .cards, .notes]
 }
 
-/// 粘贴、拖进来的附件不经这里，由文字区直接交进附件条。
 enum ComposerSource { case cards, photos, camera, files }
 
 extension Binding where Value == ComposerSource? {
@@ -100,7 +95,6 @@ extension Binding where Value == ComposerSource? {
     }
 }
 
-/// 选好就存进附件目录（`store`，在后台：大文件要读一遍算哈希），草稿里只记键与文件名。同一份内容就是同一个附件（身份与相等都只看键）：改了名再选一次不多一个，附件条与对话里的文件牌身份不重。
 nonisolated struct DraftFile: Identifiable, Hashable, Sendable {
     let key: String
     let name: String

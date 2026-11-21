@@ -5,30 +5,22 @@ extension View {
         modifier(PaperSurface(radius: cornerRadius, lifted: lifted, wash: wash))
     }
 
-    /// 项目页的灵感卡：调进项目色的淡彩纸（`Palette.note`），平放、只描一道边；`lifted` 时抬起一档（Mac 指针停着的那一张）。
     func note(lifted: Bool = false) -> some View { modifier(NoteSurface(lifted: lifted)) }
 
-    /// 不用玻璃：拍板卡后面垫着叠边，玻璃不叠玻璃；卡浮在对话上，对话从它后面滚过，半透的面透出后面的字。
     func dockedPaper() -> some View { paper(cornerRadius: Radius.field, lifted: true) }
 
     func counting(_ value: Int) -> some View {
         contentTransition(.numericText(value: Double(value))).animation(Motion.nudge, value: value)
     }
 
-    /// 控件层玻璃；"降低透明度"开启时退回实底。玻璃不叠玻璃：调用方不在玻璃里再套玻璃。
     func glass<S: Shape>(in shape: S, interactive: Bool = false, ink: GlassInk = .solid) -> some View {
         modifier(GlassSurface(shape: shape, interactive: interactive, ink: ink))
     }
 }
 
-/// 浮起的高度：投影只有这几档，Theme 以外不写 `.shadow(`（`lint.sh` 查）。新东西先问它浮得多高，不另配一组数。
-/// 深色下平放的东西靠描边分层，抬起的纸不投影（`paper`）。
 enum Elevation: CaseIterable {
-    /// 卡片角上的小圆钮。
     case hover
-    /// 抬起的纸。
     case lifted
-    /// 窗口内浮层、气泡与提示条：要从整窗里浮出来，比 `lifted` 重。
     case panel
 
     fileprivate var radius: CGFloat {
@@ -65,13 +57,7 @@ extension View {
 
 enum GlassInk: Equatable {
     case clear
-    /// 写着字的（默认；顶栏标题、输入框、搜索框、提示横幅、状态行）：玻璃里垫一层页面底色（`Palette.inkWell`），边缘仍是玻璃的光。内容一直滚到这些玻璃后面，
-    /// 背后什么都有可能（亮的截图、深的代码块）：只着色不垫底的话，深色下一张亮图就把玻璃衬成浅灰、米白的字只剩 1.7:1，
-    /// 垫了底才在任何背景上都够 4.5:1。
     case solid
-    /// 一整块面板（Mac 右边那一栏的 Cue 浮板）：玻璃里铺实的桌面色，只留玻璃的边光与影子。面板里的页照旧用桌面色盖住滚过栏头、回复框的内容
-    /// （`fadesUnderHead`），垫九成实的话那几条盖层与面板差一档、看得出一条带子。
-    /// `shown` 为假时什么都不画，视图的身份不变：同一块内容时而是浮板时而不是（窗口拖过临界宽），不能为此重建、丢了滚动位置。
     case ground(shown: Bool)
 }
 
@@ -107,7 +93,6 @@ private struct NoteSurface: ViewModifier {
         let shape = RoundedRectangle(cornerRadius: Radius.card), fill = palette.note
         content
             .environment(\.rowSurface, fill)
-            // 影子只挂在底那块形状上，且只有抬起的那一张有（同 `PaperSurface`）
             .background { shape.fill(fill).elevation(lifted && !palette.dark ? .lifted : nil) }
             .overlay(shape.strokeBorder(palette.hair))
     }
@@ -170,10 +155,7 @@ enum Press {
     case control
     case card
     case wide
-    /// 字里行间的小钮（"显示更多"、折叠开合、行内的链与清掉）：标签就是那几个字或一个图标、不另画框。
-    /// Mac 的悬停底向外宽出一圈（`HoverShape.inlineOutset`），不贴着字；手机按下只变淡、不缩放不震（同系统的 plain），一行字缩一下显得软。
     case inline
-    /// 行里的记号（任务行的"开始"、会话状态）：所在的行已经有悬停的底，Mac 不再叠一块；按下照旧变淡，手机同 `control`。
     case mark
 }
 
@@ -195,10 +177,8 @@ struct PressFeedback: ViewModifier {
     #if os(macOS)
     @Environment(\.palette) private var palette
     @State private var hovering = false
-    /// 按钮按下时内容的透明度；卡片不变淡（整张变淡像停用），压暗一层，悬停时亮一半。
     private static let dimmed = 0.6
     private static let shade = 0.05
-    /// 指针停着的卡压暗（深色是提亮）多少：叠在卡上、又不在卡的按钮里的东西（灵感卡的删除）照它调自己垫的底，才和卡是一个颜色。
     static func cardHover(_ palette: Palette) -> Double { shade / 2 * (palette.dark ? 1 : -1) }
 
     /// 原生控件的高亮没有过渡：按下、松开都在那一帧到位，外层的动画（列表挪位、开合）也不带它；悬停的进出淡一下。
@@ -229,7 +209,6 @@ struct PressFeedback: ViewModifier {
     #else
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// 大面积只缩一点，不然文字发虚。
     private var scale: CGFloat {
         switch kind {
         case .button: 0.9
@@ -287,8 +266,6 @@ nonisolated private struct HoverShape: Shape {
 #endif
 
 extension View {
-    /// 开着的开关钮（栏头、玻璃栏里只画图标的那种）：垫一块选中的底，同悬停那一块的形状；图标的强调色由调用处给。
-    /// 只换图标颜色的话，一排图标里看不出哪颗开着。
     func toggledOn(_ on: Bool) -> some View { modifier(ToggledOn(on: on)) }
 }
 

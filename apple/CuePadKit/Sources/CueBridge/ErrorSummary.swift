@@ -7,12 +7,10 @@ import Foundation
 /// "状态码 + 提供方的 JSON 错误体"，也可能是网络库的报错——这里提取状态码与提供方的错误类型、消息并归类。
 public struct ErrorSummary: Sendable, Equatable {
     public enum Kind: Sendable, Equatable {
-        /// 401 或明确的认证错误：密钥无效、登录过期；权限与策略拒绝不据此要求重登
         case authentication
         /// 额度、余额、订阅用量用完（按消息内容识别，不论状态码：Anthropic 的用量上限与余额不足都是 400）
         case quota
         case rateLimited
-        /// 400 等：请求被模型拒绝（内容太大、参数不合法……）
         case rejected
         case server
         case network
@@ -53,7 +51,6 @@ public struct ErrorSummary: Sendable, Equatable {
         }
     }
 
-    /// 限流、服务出错与连不上一样是 Agent 重试用尽的暂时性错；回答超长归未完成。
     public var failure: FailureKind {
         switch kind {
         case .authentication: .login
@@ -64,7 +61,6 @@ public struct ErrorSummary: Sendable, Equatable {
         }
     }
 
-    /// 不能悬停看原文的地方（手机、菜单栏）用：摘要，加上提供方的原句（有的话）。用量限制的摘要就是状态词（`FailureKind.quota`），有原句时只写原句，不念两遍。
     public var line: String {
         if kind == .quota, let providerMessage { return providerMessage }
         return [title, providerMessage].compactMap { $0 }.joined(separator: "：")
@@ -85,7 +81,6 @@ public struct ErrorSummary: Sendable, Equatable {
         return (type, error["message"] as? String)
     }
 
-    /// Claude Code 报的错误类型（StopFailure 钩子的 `error`、流里出错的那条回答的 `error`，见官方 hooks 文档）。
     private static let claudeCodes: [String: Kind] = [
         "rate_limit": .rateLimited, "overloaded": .server, "server_error": .server,
         "authentication_failed": .authentication, "oauth_org_not_allowed": .authentication, "account_on_hold": .authentication,

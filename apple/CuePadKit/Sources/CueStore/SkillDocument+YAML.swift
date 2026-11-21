@@ -1,10 +1,6 @@
 import Foundation
 
-/// frontmatter 里一个顶层键的值怎么读、怎么写：YAML 标量的子集，够读各家真实技能里出现的写法（普通、单双引号、块、跨行折叠），
-/// 写出的值换成任何一家的 YAML 解析器都读回同一段字。
 extension SkillDocument {
-  /// `first` 是值的第一行（冒号之后那段，或值从下一行起时的那一行），`rest` 是值接着的几行（缩进的与中间的空行）。
-  /// `quote` 是原来带的引号，没带为 nil。
   static func scalar(_ first: Substring, rest: [Substring]) -> (value: String, quote: Character?) {
     let head = first.trimmingCharacters(in: .whitespaces)
     switch head.first {
@@ -21,7 +17,6 @@ extension SkillDocument {
       let raw = ([head] + rest.map(String.init)).joined(separator: "\n").dropFirst()
       return (quoted(raw, quote: quote), quote)
     default:
-      // 普通写法：` #` 起是注释，跨行的每行去掉首尾空白再折叠
       let lines = ([first] + rest).map { line in
         let content = line.range(of: " #").map { line[..<$0.lowerBound] } ?? line
         return content.trimmingCharacters(in: .whitespaces)
@@ -30,7 +25,6 @@ extension SkillDocument {
     }
   }
 
-  /// 冒号后那段接着的 `rest` 里有几行属于值：引号的到收尾引号那行；块的到缩进不够的那行；普通的到值之后的注释（` #` 或单独一行的 `#`）。
   static func valueLines(_ first: Substring, rest: ArraySlice<Substring>) -> Int {
     let head = first.trimmingCharacters(in: .whitespaces)
     let blank = { (line: Substring) in line.allSatisfy { $0 == " " || $0 == "\t" } }
@@ -92,8 +86,6 @@ extension SkillDocument {
     return nil
   }
 
-  /// `key: 值` 的几行（用文件的换行符连起来，末尾不带换行）。多行的写成 `|-` 块（`block` 为假时不用块）；单行的能不加引号就不加，原来带引号的保留那种引号；
-  /// 双引号能写下一切，是最后的写法。
   static func yaml(_ key: Key, _ value: String, quote: Character?, block: Bool, newline: String) -> String {
     let prefix = key.rawValue + ":"
     let printable = !value.unicodeScalars.contains(where: needsEscape)
@@ -110,7 +102,6 @@ extension SkillDocument {
     return prefix + " \"" + value.unicodeScalars.map(escaped).joined() + "\""
   }
 
-  /// 块与普通写法的折叠：相邻两行连成一个空格，n 个空行是 n 个换行；`>` 里多缩进的行保留换行。
   private static func folded(_ lines: [String]) -> String {
     var result = "", breaks = 0, previousIndented = false, started = false
     for line in lines {
@@ -128,7 +119,6 @@ extension SkillDocument {
     return result
   }
 
-  /// 引号里的字（开头的引号已去掉，读到收尾的引号为止）：换行折叠同上；单引号里 `''` 是一个 `'`，双引号里认反斜杠转义。
   private static func quoted(_ raw: Substring, quote: Character) -> String {
     var result = ""
     var rest = raw[...]
@@ -187,7 +177,6 @@ extension SkillDocument {
     }
   }
 
-  /// 不加引号也读回同一段字：不以 YAML 的标记字符开头，不含 `: ` 与 ` #`，不会被读成布尔、空值、数字或日期
   private static func isPlain(_ value: String) -> Bool {
     guard let first = value.first, let last = value.last, !first.isWhitespace, !last.isWhitespace, last != ":",
           !value.contains("\t"), !"-?:,[]{}#&*!|>'\"%@`".contains(first) else { return false }

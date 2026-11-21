@@ -115,13 +115,13 @@ import Testing
     let handler = Handler()
     let made = try await store.requestDelivery("x", to: pi, on: "mac-a")
     try RawDB(fixture.url).exec("UPDATE deliveryRequests SET mode = 'quantumSend'")
-    #expect(try await request(made.id)?.mode == .unknown("quantumSend"))  // 原样保留
+    #expect(try await request(made.id)?.mode == .unknown("quantumSend"))
 
     let executor = executor(handler)
     try await executor.start()
     let done = try await eventually(store, { try $0.deliveryRequests() }) { $0.first?.status == .known(.failed) }
 
-    #expect(await handler.seen.isEmpty)  // 不认识的发送方式不执行，也不猜成 send
+    #expect(await handler.seen.isEmpty)
     #expect(done[0].reason?.text.contains("quantumSend") == true)
     #expect(done[0].mode == .unknown("quantumSend") && done[0].completedAt != nil)
     await executor.stop()

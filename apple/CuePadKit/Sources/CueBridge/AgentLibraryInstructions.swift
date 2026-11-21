@@ -7,7 +7,6 @@ struct LibraryInstructionScan {
     var texts: [String: String] = [:]
     var tidies: [LibraryTidy] = []
     var watched: Set<String> = []
-    /// 全局规则那件整理在：它会把 Claude Code 自己的全局 CLAUDE.md 并掉、移走（项目那边据此不另建链接）
     private var globalTidy = false
 
     init(_ places: AgentLibraryPlaces) {
@@ -18,7 +17,6 @@ struct LibraryInstructionScan {
         }
     }
 
-    /// 列出各家此刻真读的：链到共享那份的算它的读者，别的各列一行（`.agent`）；会被整理并掉的那几份也是合并的来源。
     private mutating func scanGlobal(_ places: AgentLibraryPlaces) {
         let shared = places.globalInstructions
         let sharedText = LibraryFileReading.content(shared)
@@ -53,7 +51,6 @@ struct LibraryInstructionScan {
         if places.uses(.pi), let text = LibraryFileReading.content(places.piSystem) { add(.piSystem, places.piSystem, text, readers: [.pi]) }
     }
 
-    /// 替换基础提示的两份（有才列）；不论要不要比都盯着：SYSTEM.md 留着时是单独一份规则，Codex 的配置里加上这个键就有一份要比。
     private mutating func replacements(_ places: AgentLibraryPlaces) -> [InstructionSource] {
         var found: [InstructionSource] = []
         if places.uses(.pi) {

@@ -1,8 +1,6 @@
 import MetalKit
 import SwiftUI
 
-/// 显卡那一份，全 App 共用、只建一次：算格子的计算管线，格子与点各两种混合（深色底光叠加、其余预乘混合）。
-/// 着色器在运行时编（`FigureShaders`）：对话页一出现就开编（`warm`），编译与建管线都走异步接口、不占主线程，编好之前角色不画。
 final class FigureGPU {
     private(set) static var ready: FigureGPU?
     private static var warming: Task<Void, Never>?
@@ -54,8 +52,6 @@ final class FigureGPU {
     }
 }
 
-/// 一块画布：每帧先在显卡上算格子（`figureTiles`），再画两遍——底光或投影、格子——点缀（脚下的光在格子下，波纹与火星在上）跟着画。
-/// 点缀的存储三份轮着用、最多三帧在显卡上：写这一帧的点时不碰显卡还在读的那份，也不每帧新建。
 final class FigureRenderer: NSObject, MTKViewDelegate {
     let motion: FigureMotion
     var dark = true
@@ -65,7 +61,6 @@ final class FigureRenderer: NSObject, MTKViewDelegate {
 
     private struct Store {
         static let depth = 3
-        /// 一帧的点数：脚下的光约一百五、波纹约一百一、火星与念头二三十，留出一倍。
         static let sprites = 512
         let tiles: MTLBuffer
         let sprites: [MTLBuffer]
@@ -130,9 +125,6 @@ final class FigureRenderer: NSObject, MTKViewDelegate {
     }
 }
 
-/// Cue 角色画在一块透明的 Metal 画布上，排版只占角色本身那一方块（`FigureLayout.size`），画布四周伸出去给点缀，不接点击。
-/// 一块画布只陪角色出场一次：`arrives` 为真就从格子拼起来（否则本来就在），`leaving` 一变真就碎开。
-/// `running` 为假（减弱动态效果、省电、页不在前台、滚出屏幕）时停在一帧：各项到位、不再每帧画。
 struct FigureCanvas: View {
     let pose: FigurePose
     let arrives: Bool
@@ -187,7 +179,6 @@ private struct FigureSurface {
         guard !running else { return }
         renderer.motion.settle()
         redraw(view)
-        // 停着的画布只在要它画时画一次：着色器还没编好的话等编好再补这一帧
         if FigureGPU.ready == nil { Task { await FigureGPU.whenReady(); redraw(view) } }
     }
 

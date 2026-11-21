@@ -1,37 +1,26 @@
 import CueText
 import Foundation
 
-/// 灵感与任务是同一种记录，差别只是 `todoAt`（建成任务时写上，之后不变：不互转，灵感要做就接进一条任务或照它新建一条，灵感进回收站）。
-/// 任务的正文第一行是标题，其余是要交代给 Agent 的话：开工时整段作为第一句发出，发出后留在任务上。
 public struct Card: Identifiable, Equatable, Sendable {
   public let id: UUID
   public internal(set) var projectID: UUID
   public var body: String
-  /// 字段名沿用同步记录里的 isPinned。
   public var isPinned: Bool
   public var variableValues: [String: String]
-  /// 同一张卡在两台设备上离线并发改了正文时，较旧的版本存成一张新卡，指回原卡。
   public internal(set) var conflictOf: UUID?
   public internal(set) var sortKey: String
-  /// 随项目删除的卡为 nil。
   public internal(set) var deletedAt: Date?
   public var createdAt: Date
   public var modifiedAt: Date
-  /// 上级不在库里或不可见时按顶层看待。
   public internal(set) var parentID: UUID?
   public internal(set) var todoAt: Date?
-  /// 本任务自己的开始事实；明确开工或投送时记下（投送失败不撤回），子任务推进时同事务推进祖先，明确退回待办清空，旧子任务不会在读取时重新启动它。
   public internal(set) var startedAt: Date?
   public internal(set) var completedAt: Date?
   public internal(set) var piSessionID: String?
   public internal(set) var sessionBindingRevision: SessionBindingRevision?
-  /// 连同下级一起归档、一起取回；归档的照样搜得到（`cardVisible` 只挡回收站）。
   public internal(set) var archivedAt: Date?
-  /// 叶子以前用过的会话（Pi 自己的会话 id，先换下的在前）：开新会话、改绑、Cue 换新会话时换下来的那个记在这里，
-  /// 它仍属于这个叶子（`CueStore.isLoose`）。正在用的只在 `piSessionID`，不在这里。
   public internal(set) var formerSessionIDs: [String] = []
 
-  /// 任务下的灵感不算一级。
   public static let maxTaskDepth = 2
 
   public var isTask: Bool { todoAt != nil }
@@ -77,7 +66,6 @@ public struct TaskCounts: Equatable, Sendable {
 public struct TaskProgress: Equatable, Sendable {
   public let done: Int
   public let total: Int
-  /// 一步都没有时为 nil（直接勾掉、没开过工的子任务量不出用时）。
   public let stepTime: TimeInterval?
 
   public init(done: Int, total: Int, stepTime: TimeInterval? = nil) {
@@ -97,24 +85,17 @@ public enum CardSlot: Hashable, Sendable {
   case under(UUID)
 }
 
-/// 一次卡片改动的回执：足够原样拨回去的快照，在改动的同一个事务里读到，所以不会和库里的实际写入对不上（`CueStore.undo`）。
 public enum CardChange: Sendable, Equatable {
-  /// 进回收站的那条、提到它位置的下级，与随之不再定时的那些定时（撤销时放回来）。
   case trash(id: UUID, lifted: [UUID], schedules: [UUID])
-  /// 归档的那条、这次归档记下的时刻（撤销只取回它和下级里归档时刻是这一刻的），与随之不再定时的那些定时（撤销时放回来）。
   case archive(id: UUID, at: Date, schedules: [UUID])
   case move(id: UUID, from: CardSlot, after: UUID?)
-  /// 灵感接进任务：任务原来的正文，与接完那一刻任务的修改时刻（撤销时核对，变了就是之后又改过，不撤）。
   case merge(idea: UUID, task: UUID, body: String, modifiedAt: Date)
-  /// 新建的那条任务与它此刻的修改时刻（撤销时核对）。
   case spawn(idea: UUID, task: UUID, modifiedAt: Date)
 }
 
 extension Card {
-  /// Cue 的工具、信封与界面都用这一个标题规则。空白的卡是空串（App 的 `title` 另给占位说法）。
   public var heading: String { CueSummary.title(of: body) }
 
-  /// 写它只换这部分，标题那一行不动。
   public var rest: String? {
     get { CueLines.split(body).rest }
     set { body = CueLines.joined(title: CueLines.split(body).title, rest: newValue) }
@@ -122,7 +103,6 @@ extension Card {
 }
 
 extension UUID {
-  /// Cue 的工具接受至少 4 位的前缀。
   public var shortID: String { String(uuidString.lowercased().prefix(8)) }
 }
 
@@ -156,7 +136,6 @@ extension Card: Record, SyncedColumns {
       formerSessionIDs: JSONColumn.decodeList(String.self, from: row.textOrNil(16)))
   }
 
-  /// 几乎所有卡片没有变量取值（存成 "{}"），不为它们创建解码器。
   private static func variables(_ stored: String) -> [String: String] {
     stored == "{}" ? [:] : (try? JSONDecoder().decode([String: String].self, from: Data(stored.utf8))) ?? [:]
   }

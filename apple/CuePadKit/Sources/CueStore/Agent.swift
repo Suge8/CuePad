@@ -1,6 +1,5 @@
 import Foundation
 
-/// 同步字段：其他版本写的不认识的值读作 `Open.unknown`。
 public enum AgentKind: String, CaseIterable, Sendable, Identifiable, Codable {
   case pi
   case claudeCode = "claude"
@@ -40,7 +39,6 @@ public enum AgentKind: String, CaseIterable, Sendable, Identifiable, Codable {
     }
   }
 
-  /// 一个进程属于哪个会话，取它环境里这几个中第一个有值的：`cuepad show`、`cuepad live` 认自己在哪个会话，活预览认服务是谁起的（`LiveServers`）。
   public static let sessionVariables = [watchedSessionVariable] + allCases.map(\.sessionVariable)
 
   /// Claude Code、Codex、Grok Build 的模型名在它们自己的命名空间里（`opus`、`gpt-5.1`、`grok-4.6`），提供方就写成这家；Pi、OpenCode、dsh 的模型本身带提供方，为 nil。
@@ -60,22 +58,18 @@ public enum AgentKind: String, CaseIterable, Sendable, Identifiable, Codable {
     return ModelKey(provider: modelProvider, id: parts[0])
   }
 
-  /// 读不出抛 `invalidModel`（Cue 写的 model）。
   public func requiredModelKey(_ ref: String) throws -> ModelKey {
     guard let key = modelKey(ref) else { throw CueStoreError.invalidModel(name) }
     return key
   }
 }
 
-/// 因家或因模型而异的几样：Mac 与手机按同一条规则从会话记录推出（不同步、不落库），执行端不另做判断。
-/// 说话、停下、换模型、改名、斜杠命令、作答、结束每家都有：会话都是 CuePad 在后台托管的。
 public struct AgentCapabilities: OptionSet, Sendable, Hashable {
   public let rawValue: Int
   public init(rawValue: Int) { self.rawValue = rawValue }
 
   public static let images = AgentCapabilities(rawValue: 1 << 0)
   public static let retry = AgentCapabilities(rawValue: 1 << 1)
-  /// 查订阅额度：只有 CuePad 的 Pi 扩展会查。一台 Mac 能不能答额度只看它上面有没有在线、带这一项的会话。
   public static let quota = AgentCapabilities(rawValue: 1 << 2)
 
   public static func of(_ agent: AgentKind, model: ModelOption?) -> AgentCapabilities {

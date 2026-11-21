@@ -2,7 +2,6 @@ import CueStore
 import Foundation
 
 extension CueTools {
-  /// 灵感属于项目里的卡片；Cue 的长期记忆由 memory 管理。保存成功才回执，失败沿工具的错误通道返回。
   static var ideaDefinition: [String: Any] {
     [
       "description": """

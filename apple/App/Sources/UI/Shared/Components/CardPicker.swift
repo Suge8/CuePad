@@ -2,7 +2,6 @@ import CueStore
 import CueText
 import SwiftUI
 
-/// 所属项目置顶的灵感排在最前：长期参考，发给 Agent 时常要带上。
 struct CardPicker: View {
     let project: UUID?
     let pick: (Card) -> Void
@@ -128,7 +127,6 @@ struct CardPicker: View {
     }
 }
 
-/// 摘要在读数据时算好（Store 的执行体上），渲染与滚动时不在主线程解析正文。
 nonisolated struct CardEntry: Identifiable, Sendable, Equatable {
     let card: Card
     let text: CardText
@@ -143,13 +141,10 @@ nonisolated struct CardEntry: Identifiable, Sendable, Equatable {
     }
 }
 
-/// 搜索结果与卡片选择里的一行：不垫纸，直接落在所在那一层上（同项目页的任务行），行首一格是任务的圈或灵感的记号，摘要缩在标题下面。
 struct CardRow: View {
     let entry: CardEntry
-    /// 标出所属项目（卡片选择里不属于本项目的那组）；nil 不标（搜索已按项目分组）。
     var project: Project??
     var highlight = ""
-    /// 点一下选中这张卡（卡片选择）；nil 时点开卡片（任务是从这一行长出的气泡），长按是卡片操作。
     var pick: ((Card) -> Void)?
     @Environment(\.palette) private var palette
     #if os(iOS)
@@ -251,7 +246,6 @@ private final class FirstResponderProbe: NSObject {
 }
 
 extension UIResponder {
-    /// 发给 nil 目标的动作落在第一响应者上：借此拿到它。
     @objc fileprivate func cuepadReportFirstResponder(_ sender: Any) {
         (sender as? FirstResponderProbe)?.responder = self
     }

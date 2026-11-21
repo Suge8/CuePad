@@ -1,6 +1,5 @@
 import SwiftUI
 
-/// 会话条放不下时从窗口左缘拉出的抽屉：再窄的窗口（竖着的 iPad、拖小的 Mac 窗口）也够得着导航。
 struct RailDrawer<Rail: View>: View {
     let open: Bool
     let close: () -> Void

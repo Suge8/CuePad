@@ -100,7 +100,6 @@ enum SystemFields {
     return starts
   }()
 
-  /// 一条会话消息记录的系统字段归档（记录名换成全 0）。
   private static let dictionary = [UInt8](
     Data(
       base64Encoded: """

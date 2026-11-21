@@ -3,7 +3,6 @@ import Foundation
 /// 一个 MetricKit 包里每种诊断都是数组，同一个包可以带好几次（崩溃加卡死、两次卡死）：每一次各是一份（`reports(file:json:)`）。
 /// MetricKit 的 JSON 里时间是交来时这台设备本地时区的 "yyyy-MM-dd HH:mm:ss"、不带时区（实测，文档没写）：按本地时区读。
 nonisolated struct CrashReport: Identifiable, Equatable, Sendable {
-    /// 一个包里的几份按声明的顺序（崩溃、卡死、CPU、磁盘）排，存档文件名按排第一的那份；`freeze` 是本机记下的主线程卡住。
     enum Kind: String, CaseIterable, Sendable {
         case crash, hang, cpu, disk, freeze
 
@@ -42,9 +41,7 @@ nonisolated struct CrashReport: Identifiable, Equatable, Sendable {
     struct Frame: Equatable, Sendable, Encodable {
         let binary: String
         let offset: Int?
-        /// CuePad 自己的代码（不是系统库）：符号化要找的就是这些。
         let own: Bool
-        /// 符号化用（`xc.sh diag` 按它找 dSYM、算载入地址）。
         let uuid: String?
         let address: Int?
 
@@ -58,19 +55,14 @@ nonisolated struct CrashReport: Identifiable, Equatable, Sendable {
     let file: String
     let kind: Kind
     let date: Date
-    /// 异常类型（如 EXC_BAD_ACCESS）、信号（如 SIGSEGV）、原文的终止原因；包里没有的为 nil。
     let exception: String?
     let signal: String?
     let reason: String?
-    /// 并成同一种时比的原因：异常与终止码（有终止码时只认码与看门狗事件；没有时是原文，数字抹掉：CPU 用时、地址每次都不同）。
     let cause: String
     let explanation: String?
-    /// "版本（构建）· 设备 · 系统"。
     let app: Dotted?
-    /// 符号化要的构建号与系统（`xc.sh diag` 按它挑发布归档）。
     let build: String?
     let os: String?
-    /// 崩溃线程（没有标记就取第一条）自顶向下的前 `topFrames` 帧；更深处 CuePad 自己的帧再补至多 `ownFrames` 个（顶上常全是系统库）。
     let frames: [Frame]
     let trail: [String]
 
@@ -134,12 +126,10 @@ nonisolated struct CrashReport: Identifiable, Equatable, Sendable {
 
     var shownDate: String { date.formatted(Self.metricKitTime.timeZone(separator: .colon)) }
 
-    /// "崩溃 · EXC_BAD_ACCESS（SIGSEGV）"。
     var title: String { Dotted(kind.name, exception.map { $0 + (signal.map { "（\($0)）" } ?? "") }).visible }
 
     var framesTitle: String { kind == .crash ? String(localized: "崩溃线程：") : String(localized: "主线程：") }
 
-    /// Mac 收下各台的诊断时落在原文旁边的要点（`DiagnosticInbox`），`xc.sh diag` 只读它、再符号化，不另写一份 MetricKit 的解析。
     struct Summary: Encodable {
         var date: String
         var title: String
@@ -199,8 +189,6 @@ nonisolated struct CrashReport: Identifiable, Equatable, Sendable {
     }
 }
 
-/// 系统结束进程时终止原因里的终止码与看门狗事件（"code:0x8BADF00D … WatchdogEvent: process-exit"）的人话。
-/// 码见 Apple 的 "Understanding the exception types in a crash report"。xc.sh diag 解析系统的崩溃报告（.ips，App 不解析）时照抄这几句人话（diag_report.py 的 EXPLAIN）：改这里就改那里。
 nonisolated enum Termination {
     static func key(_ reason: String) -> String {
         guard let code = code(reason) else { return reason.replacing(/\d+/, with: "#") }

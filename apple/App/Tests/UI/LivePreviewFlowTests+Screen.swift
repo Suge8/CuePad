@@ -9,8 +9,6 @@ import Testing
 @testable import CuePad
 
 extension LivePreviewFlowTests {
-    /// 一个 Mac 应用的替身：一颗钮、点了几下的字、一个收字的框、一个不收的框。真应用那头是注入库走无障碍树、造鼠标键盘事件（`WindowScreen`），
-    /// 这里只替掉它；那张页（`ScreenPage`）、服务（`ScreenServer`）与 App 替 Agent 做的那几样都是真的。
     private final class Desk: ScreenSource {
         struct State {
             var taps = 0
@@ -45,14 +43,11 @@ extension LivePreviewFlowTests {
         }
     }
 
-    /// `cuepad live app` 开进预览的 Mac 应用：Agent 一开进来就读得到它的元素，点下去落在应用里的那个控件上、等得到它变了的字，
-    /// 填的字应用收下了才报填成了、没收下的回执里说，按一个键应用只收到一下。
     @Test func Agent操作_Mac应用的那张页_读得到_点和填都到应用_没收下的字回执里说_按键只到一下() async throws {
         let workspace = wide()
         let following = Task { await workspace.follow() }
         defer { await following.stop() }
         let desk = Desk()
-        // 口被占着就换下一个，试几个为止
         var port = UInt16.random(in: 49152...65000), server: ScreenServer?
         for _ in 0..<8 where server == nil {
             port += 1
@@ -79,7 +74,6 @@ extension LivePreviewFlowTests {
         #expect(spat.text.contains("不是填的这段"), "\(spat.text)")
 
         _ = await agent(workspace, "press", .init(ref: try ref("textbox \"收下\"", in: page.text), key: "Backspace"))
-        // 输入照先后到：后面这一下点到了，退格的那几下就都到过了
         _ = await agent(workspace, "click", .init(ref: try ref("button \"点我\"", in: page.text)))
         try await eventually("后面的那一下点到了应用") { desk.state.withLock { $0.taps } == 2 }
         #expect(desk.state.withLock { $0.keys } == [42])

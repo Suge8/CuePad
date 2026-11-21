@@ -213,7 +213,6 @@ struct VoiceFlowTests {
         try await fixture.hangUp()
     }
 
-    /// 同一命令身份的重发在媒体关闭中照回原结果、不再写一条；关闭中不接再说；原请求被接走后恢复被拒。
     @Test func 同一命令重发回原结果_关闭中不接再说_接走后不能恢复() async throws {
         let app = TestApp(), store = app.services.store, host = TestApp.hostID
         defer { app.services.cancelBackgroundWork() }

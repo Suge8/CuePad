@@ -3,11 +3,8 @@ public enum Table: String, Codable, Sendable, CaseIterable {
   case piSessionStates, agentCatalogs, deliveryRequests, directoryBindings, piMessages, previews, accountQuotas
   case cueMessages, cueLines, cueProfile, cueState, marks, cueSummaries, macPresence, macAgents, sessionViewers, agentLibraries, agentLibraryFiles
   case activityDestinations
-  /// 本机写入序号（`CueStore.lastWrite`，由触发器随 Cue 关心的那几列变化而加）：订阅读它，就只在这些变化时被叫醒。
   case writeCounter
-  /// 同步元数据（本机表，`Schema.syncRecordsTable`）：说的话读服务器收下过没有（`Speech.reachedServerSQL`）；订阅只按行依赖还没发出的那几句（`CueStore.dependOnUnsent`）。
   case syncRecords
-  /// 会话请你看的本机网页（本机表，`LiveAddress`）。
   case liveAddresses
 }
 
@@ -19,11 +16,6 @@ extension Table {
     .agentLibraryFiles, .activityDestinations,
   ]
 
-  /// 走实时通道的表（CueSync 的 `RecordSender`）：别的设备在等着办、等着看、等着据此让位或推送的；其余同步表走后台通道。通道只按这里分。
-  /// 值是这张表里哪些版本一写下就叫实时通道开传（`Urgency`），其余版本等攒批窗口；这些表里的删除都一写下就传。
-  /// 投送请求被 Mac 领下、正在办的那一版（执行）等窗口：多数几十毫秒就有结果，窗口里写下了结果就只传结果；领取那一版在路上，结果要等它回来。
-  /// 会话状态只有带手机通知标志的那一版：排在其余待推送后面，等的时候状态前进会把它作废（`StateRecorder`）。
-  /// Cue 的状态一轮里一步步地变，自己不叫开传，跟着要马上传的那批走：Cue 的话连同它此刻的状态一起到。
   package static let live: [Table: Urgency] = [
     .deliveryRequests: .when("t.status != 'executing'"),
     .piSessionStates: .when("t.notify IS NOT NULL"),
@@ -34,16 +26,12 @@ extension Table {
 
   package enum Urgency: Sendable {
     case always
-    /// 待推送的这一版满足这个 SQL 条件（表别名 `t`）
     case when(String)
-    /// 自己不叫开传，跟着同一通道里要马上传的那批走
     case gathered
   }
 
-  /// 带手机通知标志（明文列 `notify`）的表：标志上传即清、远端带回来的不留（`CueStore.markPushed`、`applyVersion`）。
   package static let notifyFlagged: Set<Table> = [.piSessionStates, .cueMessages]
 
-  /// 每张表的列：同步表（`synced`）是同步的那些（CKRecord 的字段，`syncedFields`）；本机表是它自己的列。
   package var columns: [String] {
     switch self {
     case .piSessions: IndexedSession.columns
@@ -58,21 +46,19 @@ extension Table {
 
   package var syncedFields: [Field] { fields.filter { $0.storage != .local } }
 
-  /// 同步表里只留本机的列：记录类型读写的标 `.local`，其余（触发器、单独的 SQL 维护的）列在这里。
   package var localColumns: [String] {
     let maintained: [String] =
       switch self {
-      case .cards, .piSessionStates, .cueMessages: ["writeSeq"]  // 本机写入序号，见 `writeSeq`
-      case .deliveryRequests: ["writeSeq", "cueToldAt"]  // cueToldAt：Cue 已知道没送到
-      case .attachments: ["registeredHere"]  // 这台设备登记的，见 `registerAttachment`
-      case .piMessages: ["arrival"]  // 读进这台的次序，这张表的主键让给了它、id 改由 UNIQUE 守，见 `Schema.create`
+      case .cards, .piSessionStates, .cueMessages: ["writeSeq"]
+      case .deliveryRequests: ["writeSeq", "cueToldAt"]
+      case .attachments: ["registeredHere"]
+      case .piMessages: ["arrival"]
       case .accountQuotas: ["owners"]
       default: []
       }
     return fields.filter { $0.storage == .local }.map(\.name) + maintained
   }
 
-  /// 同步表的每一列与它的去向；本机表没有。
   private var fields: [Field] {
     switch self {
     case .projects: Project.fields
@@ -114,7 +100,6 @@ package struct Field: Sendable {
   static func local(_ name: String) -> Field { Field(name: name, storage: .local) }
 }
 
-/// 同步表的记录类型：列连同去向只在 `fields` 声明一次，SQL 读写的 `columns` 由它推出（顺序即 `bindings`、`init(row:)` 的序号）。
 protocol SyncedColumns {
   static var fields: [Field] { get }
 }
@@ -123,7 +108,6 @@ extension SyncedColumns {
   static var columns: [String] { fields.map(\.name) }
 }
 
-/// 表行与列的对应。`bindings[0]` 是主键；`columns` 与 `bindings`、`init(row:)` 的读取序号一致。
 protocol Record: Sendable {
   static var table: Table { get }
   static var columns: [String] { get }

@@ -76,7 +76,6 @@ extension DebugScene {
         try FileManager.default.createDirectory(at: codex.appending(path: "skills/codex-primary-runtime"), withIntermediateDirectories: true)
     }
 
-    /// 从 `directory` 到 `target` 的相对路径（两者都是绝对路径）：链接跟着整个隔离库搬也不断。
     private static func relative(_ target: URL, from directory: URL) -> String {
         let from = directory.standardizedFileURL.pathComponents, to = target.standardizedFileURL.pathComponents
         let common = zip(from, to).prefix { $0 == $1 }.count

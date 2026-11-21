@@ -14,19 +14,15 @@ import Foundation
 final class CodexDriver {
     private(set) var rpc: CodexRPC?
     private(set) var thread: String?
-    /// 在跑的这一轮与最近结束的一轮（挡住晚到的回应）
     private(set) var turn: String?
     private var finishedTurn: String?
-    /// 正在停的那一轮与它的停下，见 `interrupt`
     private var stopping: (turn: String, stop: Stop)?
     private let stopsDone = Occurrences(timeout: nil, timeoutError: CancellationError())
     private var lastError: String?
-    /// 一轮开跑（`turn/started`）或结束，见 `interrupt`
     private let activations = Occurrences(timeout: AgentTimeouts.stop, timeoutError: BridgeError.ackTimeout)
     var onEvent: (TurnEvent) -> Void = { _ in }
     var onNotification: (String, JSONValue) -> Void = { _, _ in }
 
-    /// 进程退出报 `exited`（`stop` 让它退的为 nil）。
     @discardableResult
     func launch(
         _ executable: URL, arguments: [String] = [], environment: [String: String], directory: URL? = nil, timing: Timing = .system,
@@ -113,7 +109,6 @@ final class CodexDriver {
             do {
                 try await rpc.call("turn/interrupt", params)
             } catch CodexRPCError.server(-32600, _) {
-                // 这一轮在问与停之间自己结束了
             }
         } catch CodexRPCError.server(-32600, _) {
             // 这一轮在问与停之间自己结束了（"no active turn to interrupt"）
@@ -182,14 +177,11 @@ final class CodexDriver {
         }
     }
 
-    /// 线程里不是工具的项：别的一律当工具（以后的新工具如实显示在跑，不退回思考中）。`functionCallOutput` 是工具的结果，不是又一次调用。
     private static let notTools: Set = [
         "userMessage", "agentMessage", "reasoning", "plan", "contextCompaction", "hookPrompt", "enteredReviewMode", "exitedReviewMode",
         "subAgentActivity", "functionCallOutput",
     ]
 
-    /// 工具一项的名字与参数（参数只取界面那一行要的，见 `ToolDetail.target`）；不是工具的为 nil。命令记作 `bash`、改文件记作 `edit`（参数是第一个文件），
-    /// 内置的带命名空间的工具照 Codex 自己的写法（`clock.sleep`），认不得的用项的类型名。
     static func tool(_ item: JSONValue) -> (name: String, arguments: JSONValue)? {
         guard let type = item["type"]?.string, !notTools.contains(type) else { return nil }
         return switch type {

@@ -189,7 +189,6 @@ struct DeliveryRecoveryTests {
         #expect(!queued.isError)
         let second = try #require(try await store.deliveryRequests().first { $0.id != first.id })
 
-        // 库还是 Cue 的旧报告，宿主已进入他开的另一轮：不能拿旧报告授权打断。
         let newTurn = Int64(began.addingTimeInterval(1).timeIntervalSince1970 * 1000)
         ext.sendRaw(#"{"t":"state","state":{"kind":"thinking","since":\#(newTurn),"turnSince":\#(newTurn),"opener":{"delivery":"\#(UUID().uuidString)","cue":false}}}"#)
         try await eventually("桥看到后来的一轮") { app.bridge.session(id: ext.id)?.turnStartedAt != began }

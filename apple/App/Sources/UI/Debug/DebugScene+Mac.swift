@@ -43,7 +43,6 @@ extension DebugScene {
         NSApp.sendAction(action, to: nil, from: nil)
     }
 
-    /// 隔离库里 Cue 不值班，替 `CueService.followNotifications` 交给同一个出口。
     private static func askSample(after delay: Duration, services: AppServices) async {
         await Task.wait(for: delay)
         await running("Cue 请你允许一件事") {
@@ -78,10 +77,8 @@ extension DebugScene {
         }
     }
 
-    /// 把几家 Agent 接进截图用的隔离目录（`xc.sh shot` 把各家的配置目录指到产物目录下）。配置目录建出来就算装着（没有命令时按目录认）。
     static func connectAgents(_ services: AppServices) async {
         await running("接入各家 Agent") {
-            // 隔离环境没给指配置目录的那几家不接入：本机构建不读真实配置
             for kind in AgentKind.allCases where services.agents.integration.touches(kind) {
                 try FileManager.default.createDirectory(at: services.agents.integration.home(of: kind), withIntermediateDirectories: true)
                 await services.agents.detect(kind)
@@ -112,7 +109,6 @@ extension DebugScene {
 
     static var mainWindow: NSWindow? { NSApp.windows.first { $0 is DebugWindow } }
 
-    /// 只调整主窗口尺寸，外框样式由壳层创建窗口时决定，这里不碰。
     private static func resizeWindow() {
         guard let size = windowSize, let window = mainWindow else { return }
         window.setContentSize(size)

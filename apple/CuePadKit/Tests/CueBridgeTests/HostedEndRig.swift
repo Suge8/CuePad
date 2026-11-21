@@ -6,7 +6,6 @@ import Foundation
 import Testing
 @testable import CueBridge
 
-/// 托管会话是 CuePad 起的、一个会话一个进程的几家（`HostedProcesses`）：同一组收尾用例在各家上跑（`RealHostedEndTests`）。
 enum Hosting: String, CaseIterable, Sendable, CustomTestStringConvertible {
     case claude, codex, grok, dsh
 
@@ -21,7 +20,6 @@ enum Hosting: String, CaseIterable, Sendable, CustomTestStringConvertible {
         }
     }
 
-    /// 外壳只把起托管会话的那几次算进来；问在跑哪些会话（Claude Code）的照原样跑
     fileprivate var hostedLaunch: String {
         switch self {
         case .claude: #"[ "$1" != agents ]"#
@@ -32,21 +30,14 @@ enum Hosting: String, CaseIterable, Sendable, CustomTestStringConvertible {
     static var uncovered: String? { allCases.lazy.compactMap(\.pinned.uncovered).first }
 }
 
-/// 钉住的真 Agent（`PinnedAgent`）连本用例的假模型，起它的是外壳（`wrapper/<命令>`，真的在 `$REAL`）：
-/// 记下每次起的进程号（`launched`），起的时候前面起的还活着就记进 `overlap`（同一会话同时两个进程）；
-/// 起的那一刻有 `slow` 标记的，真 Agent 退出后（写 `eof.<进程号>`）还握着输出 3 秒；有 `stubborn` 标记的不理 SIGTERM、退出后一直握着输出；
-/// 有 `late-refusal` 标记的（Codex）把"no active turn"的回应压到下一条 `turn/started` 之后才交出。
-/// 配置目录、家目录、连接目录全在临时目录里，不碰真实的配置与资料库。
 @MainActor
 final class EndRig {
     let hosting: Hosting
-    /// 桥的钟：闲置到点只在 `idleOut` 拨它时（真钟上的短时限会在发话之后、Agent 报忙之前到点，负载高时就碰上）
     private let idle: ManualTiming
     private static let idleLimit: Duration = .seconds(60)
     let model: FakeModel
     let bridge: Bridge
     private(set) var runtime: any AgentRuntime
-    /// 另起一个接入（同 App 重开），Claude Code 没有（它的接入在 `ClaudeTestbed` 里）
     private var makeRuntime: (() throws -> any AgentRuntime)?
     let work: URL
     let wrapper: URL
@@ -54,7 +45,6 @@ final class EndRig {
     private let modelKey: ModelKey?
     private let claude: ClaudeTestbed?
 
-    /// `settings` 是 Claude Code 用户自己的 settings.json，别家不用。
     static func run(
         _ hosting: Hosting, timing: Timing, settings: String? = nil, _ body: (EndRig) async throws -> Void
     ) async throws {
@@ -151,7 +141,6 @@ final class EndRig {
         runtime = try makeRuntime!()
     }
 
-    /// 停掉这个接入、另起一个（同 App 重开）；返回 false 是这家不支持（Claude Code）。
     func restartRuntime() async throws -> Bool {
         guard let makeRuntime else { return false }
         await runtime.stop()()
@@ -159,7 +148,6 @@ final class EndRig {
         return true
     }
 
-    /// 会话的进程就是钉住的那份可执行文件（Grok 是原生程序，别家起的可能是解释器）
     func runsPinned(_ pid: Int32) -> Bool {
         var path = [CChar](repeating: 0, count: 4096)
         guard proc_pidpath(pid, &path, UInt32(path.count)) > 0 else { return false }
@@ -203,8 +191,6 @@ final class EndRig {
         try #"{"autoUpdateEnabled":false}"#.write(to: daemon.appending(path: "settings.json"), atomically: true, encoding: .utf8)
     }
 
-    /// 真 Agent 已退、外壳还握着的（`eof.<进程号>`，收尾没走到 SIGKILL 的红跑里留下）按确切进程号整组结束：`runtime.stop()` 的宽限
-    /// 量在用例的钟上，不前进就一直等。
     func stop() async {
         for pid in launched where has("eof.\(pid)") && kill(pid, 0) == 0 { killpg(pid, SIGKILL) }
         if let claude { return await claude.stop() }
@@ -215,7 +201,6 @@ final class EndRig {
         try? FileManager.default.removeItem(at: root)
     }
 
-    /// 这个会话歇下、闲置计时起了，拨到点：桥请它退出（`idleOut` 之后外壳写下 `eof.<进程号>`）。
     func idleOut(_ id: Session.ID) async throws {
         let due = idle.now.addingTimeInterval(Self.idleLimit.seconds)
         try await eventually("歇下、闲置计时起了") { bridge.session(id: id)?.state == .settled && idle.hasSleeper(until: due) }
@@ -226,14 +211,12 @@ final class EndRig {
         try await runtime.open(in: work, launchToken: "t-\(UUID().uuidString)", name: nil, model: modelKey, thinking: nil)
     }
 
-    /// 这句话的那一轮停在假模型里：先说半句，再不说完，直到 Agent 断开（停下这一轮）
     func hang(_ token: String) {
         model.on({ !$0.tools.isEmpty && $0.prompt.contains(token) }) { _ in .stream(["Working on it"]) }
     }
 
     func asked(_ token: String) -> Bool { model.requests.contains { !$0.tools.isEmpty && $0.prompt.contains(token) } }
 
-    /// 发一句话、等它的回答落进会话记录（假模型的回答是 `ECHO <你的话>`），返回那时的会话。
     func converse(_ token: String, in id: Session.ID) async throws -> Session {
         try await bridge.send(SessionMessage(text: token), to: id)
         let session = try #require(bridge.session(id: id))
@@ -247,7 +230,6 @@ final class EndRig {
         }
     }
 
-    /// 会话记录里最后一条回答（去掉首尾空白）
     func lastReply(_ session: Session) -> String? {
         (try? record(session))?.messages.last { $0.role == .known(.pi) }?.text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
@@ -260,7 +242,6 @@ final class EndRig {
         IndexedSession(id: session.sessionID, path: session.sessionFile?.path ?? "", cwd: work.path, lastActivityAt: .now, agent: session.agent)
     }
 
-    /// 同 `MacExecutor.connect`：桥上有这个会话就用它，没有就接着它。
     func connect(_ indexed: IndexedSession) async throws -> Session.ID {
         if let live = bridge.session(sessionID: indexed.id) { return live.id }
         return try await runtime.resume(indexed)

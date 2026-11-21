@@ -3,7 +3,6 @@ import CueStore
 import SwiftUI
 
 extension DebugScene {
-    /// 走的是侧栏那一排与侧栏钮调的同一些 Workspace 方法（不是手势）。
     static func prepareNarrow(_ workspace: Workspace) async {
         await running("窄屏验收") {
             let store = workspace.services.store
@@ -32,7 +31,6 @@ extension DebugScene {
         workspace.setDock(IdeaDock(card: card, session: session.id, open: dock == "open"))
     }
 
-    /// 走点浮窗外面那条路关（`ModalScrim` 调的同一个 `close`），第三遍在长出的半途就关，看中途反向。
     private static func cycleQuota() async {
         let stays: [Double] = [1.5, 1.5, 0.12, 1.5]
         await Task.wait(for: .seconds(3))
@@ -45,7 +43,6 @@ extension DebugScene {
     }
 
     private static func cycleNarrow(_ workspace: Workspace) async {
-        // 每步之前停多久是录屏的节奏，不是在等别的事；0.1 秒那一步落在上一下换段的弹簧中途（`Motion.nudge` 0.25 秒）
         let steps: [(pause: Double, step: () -> Void)] = [
             (1.5, { workspace.selectPane(.progress) }),
             (1.5, { workspace.selectPane(.projects) }),
@@ -55,7 +52,7 @@ extension DebugScene {
         ]
         for (pause, step) in steps {
             await Task.wait(for: .seconds(pause))
-            withAnimation(Motion.spatial(Motion.nudge, reduceMotion: DebugHooks.preset.reducesMotion)) { step() }  // 同分段里点一下
+            withAnimation(Motion.spatial(Motion.nudge, reduceMotion: DebugHooks.preset.reducesMotion)) { step() }
         }
     }
 }

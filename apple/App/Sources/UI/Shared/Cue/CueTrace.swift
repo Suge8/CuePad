@@ -1,8 +1,6 @@
 import CueStore
 import SwiftUI
 
-/// 这是记录，只读同步来的那一行清单（`CueMessage.tools`）：一步做完才落进清单，同一处只把动作原位换成更要紧的，出现了就一直在、顺序不变，各台设备、重开前后一样。
-/// 此刻在做的那一步不进这里，只写在对话末尾常驻的那一行（`CueEnding`）：它一出一收、换字都不改这一块的高，对话不跳。
 struct CueTrace: View {
     let touches: [CueActivity.Touch]
     @State private var unfolded = DebugHooks.preset.toolsOpen
@@ -15,7 +13,6 @@ struct CueTrace: View {
         let folded = !unfolded && touches.count > Self.rows
         let shown = folded ? Array(touches.prefix(Self.rows - 1)) : touches
         VStack(alignment: .leading, spacing: 0) {
-            // 一处只会往后加、动作原位换成更要紧的，下标就是它的身份
             ForEach(shown.indices, id: \.self) { index in line(shown[index]) }
             if folded {
                 Button { unfolded = true } label: {
@@ -39,7 +36,6 @@ struct CueTrace: View {
         }
     }
 
-    /// 查看是眼睛：Cue 看的是会话与任务，不是文件；留给你画待回复的图形，只取状态那一处（`SessionShown.icon`），不读会话此刻的状态。
     static func icon(_ kind: ChatMessage.Tools.Kind) -> Icon {
         switch kind {
         case .read: .looked

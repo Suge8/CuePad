@@ -9,7 +9,6 @@ import os
 final class Diagnostics {
     private(set) var reports: [CrashReport]
     #if os(iOS)
-    /// 连着 iCloud（或测试、验收的替身云）时手机、iPad 才能把最近日志发到 Mac。
     private(set) var canSend = false
     #endif
     @ObservationIgnored let archive: DiagnosticArchive
@@ -52,7 +51,6 @@ final class Diagnostics {
         reload()
     }
 
-    /// 记一条实时活动取证（`CueLiveActivity.trace`）：在活动之外异步写，写完照常送去 iCloud。先后由事件里的序号定，不靠到达顺序。
     func record(activity event: ActivityDiagnosticReport.Event) {
         Task {
             do { try await activity.record(event) } catch {
@@ -62,8 +60,6 @@ final class Diagnostics {
         }
     }
 
-    /// 手机、iPad 设置里"把最近日志发到 Mac"（Mac 上的测试拿它演手机）：存一份最近 `RecentLogs.window` 的日志，送进 iCloud。返回时已被 iCloud 收下；
-    /// 没送成（没登录、断网、被限流）或等了 `sendLimit` 还没收下，抛 `Queued`：日志已存下，送件那边自己接着送（`DiagnosticOutbox`）。
     func sendRecentLogs() async throws {
         guard let outbox else { throw CancellationError() }
         let end = Date.now

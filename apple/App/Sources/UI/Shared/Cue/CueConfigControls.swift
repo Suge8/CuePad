@@ -1,8 +1,6 @@
 import CueStore
 import SwiftUI
 
-/// 值只在同步的 `CueProfile`（`runtime`、`model`、`effort`），选了经 `AppServices.updateCue` 写入并上传；Cue 运行的那台 Mac 读到就按它值班。
-/// 可选什么、当前是什么由放它的那一处订阅好交进来（`observingCueBrain`）：手机的面板开时才建这一排，名牌一直订阅着，长出的第一帧就是真的。
 struct CueConfigControls<Trailing: View>: View {
     let choice: AgentModelChoice?
     var opening: Binding<ConfigPick?> = .constant(nil)
@@ -50,7 +48,6 @@ struct CueConfigControls<Trailing: View>: View {
         }
     }
 
-    /// 设置里的模型按这家的写法（`AgentKind.modelRef`）读回；读不出提供方时只留 id。
     static func read(from store: isolated CueStore) throws -> AgentModelChoice {
         let profile = try store.cueProfile() ?? CueProfile()
         let agents = try store.macAgents(on: profile.hostID ?? "")

@@ -12,7 +12,6 @@ import CueStore
 ///   漏采的那几帧里有没有跳，这里证明不了：逐帧看屏上的样子录 `-CuePadWideReverse`（`DebugScene+Wide.swift`）。
 /// 没被 `-CuePadInteractOnly` 选中的步骤照样改窗口宽、只是不量，选中的那一步总是从阈值另一侧跨过来。
 extension InteractionBench {
-    /// 跨阈值与侧栏开合是同一种变化（会话条或 Cue 换宽、主区按新宽排一次、叠一段滑动），用同一份预算。
     private static var wideBudget: (clickMs: Double, hitches: Int) { budgets["侧栏收起"]! }
 
     struct WideCase {
@@ -45,7 +44,6 @@ extension InteractionBench {
         for (index, id) in ids.enumerated() { settings.setReplyDraft(ComposerDraft(text: "宽屏草稿 \(index)"), for: id) }
         workspace.cue.draft = ComposerDraft(text: "宽屏 Cue 草稿")
         let height = window.contentLayoutRect.height
-        // 不是这里要的改宽、主区去处与临界宽的变化都记下（连同改宽时的调用栈），附在下一行上：判不对时看是谁动了窗口或状态
         let watch = WideWatch(window: window, workspace: workspace)
         func resize(_ width: CGFloat) {
             watch.expected = width
@@ -56,8 +54,6 @@ extension InteractionBench {
             arrange(item, in: workspace, sessions: sessions)
             let split = item.sessions > 1
             let threshold = WideMetrics.railThreshold(split: split), cueThreshold = WideMetrics.cueThreshold(split: split)
-            // 基线在会话条与 Cue 都露着的最窄宽上读（Cue 的临界宽）：会话条的临界宽上 Cue 已经收成钮，它那一栏没有能滚的、读不到阅读位置。
-            // 两个宽上主区一样宽（都是最窄），主区的那一条不因此挪。
             resize(cueThreshold)
             await Task.wait(for: .seconds(1))
             await WidePage.scrollToMiddle(wideColumns(in: view))
@@ -67,7 +63,6 @@ extension InteractionBench {
             await Task.wait(for: .seconds(1))
             func step(_ name: String, width: CGFloat, rail: CGFloat, cue: Bool, reverse: Bool = false) async {
                 guard only?.contains(name) ?? true else {
-                    // 不量也照样改宽：下一步才是从阈值另一侧跨过来（反向那一下停回原宽，不必做）
                     if !reverse { resize(width) }
                     return
                 }
@@ -88,7 +83,6 @@ extension InteractionBench {
                     slide?.start(in: view)
                     if reverse { pullBack = Task { await Task.wait(for: .milliseconds(50)); resize(threshold) } }
                 }
-                // 拉回那一下落地了才往下读、往下走：没等它的话它在负载高时晚到，会把后面某一步改过的窗口宽又改回临界宽（会话条变宽、Cue 露出），判那一步不对
                 await pullBack?.value
                 var moved = false
                 if let slide {
@@ -101,7 +95,6 @@ extension InteractionBench {
                 row["idleMainM"] = ((threadInstructionsMillions() - idle.main) * 10).rounded() / 10
                 row["idleProcessM"] = ((instructionsMillions() - idle.process) * 10).rounded() / 10
                 mark("静置后")
-                // 读的那一刻的时间线（离动作发出的毫秒、窗口宽、主区左缘、Cue 露没露）：判不对时看是窗口被改回去了还是排版没跟上
                 row["timeline"] = timeline
                 row["widthAsked"] = Double(width)
                 let shown = columns(in: view)
@@ -130,7 +123,6 @@ extension InteractionBench {
                 await step("宽屏展开·\(item.name)", width: threshold, rail: wide, cue: false)
             }
             await step("宽屏反向·\(item.name)", width: threshold - 1, rail: wide, cue: false, reverse: true)
-            // 并排时 Cue 一直收着，没有它的临界宽
             guard !split else { continue }
             resize(cueThreshold)
             await Task.wait(for: .seconds(1))
@@ -215,8 +207,6 @@ private extension NSView {
     var windowFrame: CGRect { convert(bounds, to: nil) }
 }
 
-/// 宽屏阈值测量期间盯着两样（`measureWide`）：窗口被改成不是测量要的宽（记下当时的调用栈），主区去处、两个开合偏好与抽屉的每一次变化（开盯时的那一份不算变化，不记）。
-/// 各带离开始多少毫秒，攒到下一行测量里（`drain`）。
 @MainActor final class WideWatch {
     var expected: CGFloat
     private var events: [String] = []

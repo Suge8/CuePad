@@ -1,8 +1,6 @@
 import Foundation
 
 nonisolated extension CueNow {
-    /// 按各 host 的实际期限预计算的差量；归属在计算时按整件去重，不把一台的到期误套给别台。
-    /// 只存有变化的可见行，未列出的工作也已经计入完整数字账。
     struct Decay: Codable, Hashable, Sendable {
         var at: Date
         var tally: Tally

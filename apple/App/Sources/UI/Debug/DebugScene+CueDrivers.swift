@@ -54,7 +54,6 @@ extension DebugScene {
         }
     }
 
-    /// "等你"为 0：看只有新消息时 Cue 入口上的样子（石绿点）。
     static func settleAsks(_ store: CueStore) async {
         await running("撤回等你的提问") {
             for asked in try await store.cueMessagesWaitingForYou() { _ = try await store.endCueQuestion(asked.id, .withdrawn) }
@@ -83,7 +82,6 @@ extension DebugScene {
         }
     }
 
-    /// `aged` 为 false 时不挪，都是此刻说的：连着 iCloud 的实例里挪早会挪进别的设备写过的对话中间。
     static func seedAway(_ store: CueStore, aged: Bool = true) async throws {
         let hour: TimeInterval = 3600
         for (hours, author, text) in [
@@ -109,8 +107,6 @@ extension DebugScene {
 
     static let goingAway = String(localized: "推吧。我去睡了，后面的你盯着，明早看", table: "Demo")
 
-    /// 手机录"离开很久后回来"的定位；Mac 在两台设备同步读到哪时当写下新消息的那台（停在设置画面，不回来）。
-    /// 不挪早：连着 iCloud 时挪早会挪进别的设备写过的对话中间；等这么久是先把 iCloud 里已有的拉完，之前的都在你这一句之前，不算新的。
     static func awayIfAsked(_ store: CueStore, leave: @MainActor () -> Void = {}, back: @MainActor () -> Void = {}) async {
         let delay = args.awayAfter
         guard delay > 0 else { return }
@@ -181,7 +177,6 @@ extension DebugScene {
         let probe = log == nil ? 0 : flightProbe
         await running(key) {
             while !Task.isCancelled {
-                // 间隔是演示节奏，不是在等别的事
                 await Task.wait(for: .seconds(max(every - probe, 0)))
                 if let log { try await measureFlight("idle", seconds: probe, into: log) }
                 guard let done = try await act() else { continue }

@@ -11,10 +11,8 @@ import os
 /// `syncInstructionsM` 是同步那一段的中位数，`instructionsM` 是整段走下来的合计。机器忙时 CPU 毫秒被拉长，和目标比用周期按性能核的频率折算（M4 Pro 4.5GHz：45M 周期约 10ms）。
 extension InteractionBench {
     private static let relayoutPages = ["换宽·会话页", "换宽·看板", "换宽·项目页"]
-    /// 一步挪多少：会话条开合在约 30 帧里挪 256 点。
     private static let relayoutStep: CGFloat = 8
     private static let relayoutWindow: CGFloat = 1440
-    /// 一次换宽的目标（#74）：大库三页中位 8ms 以内，逐帧排版才在一帧里放得下。
     private static let relayoutBudget: Double = 8
 
     static func measureRelayout(_ workspace: Workspace, in window: NSWindow, sessions: [String], only: Set<String>?) async throws {

@@ -12,7 +12,6 @@ nonisolated final class VoiceAudioDevice: NSObject, RTCAudioDevice, Sendable {
     /// 下行固定这个格式；上行跟麦克风的硬件采样率（声源是文件时也用这个）。WebRTC 内部再重采样。
     static let rate = 48_000.0
 
-    /// 实时线程拿着用，不进锁。
     struct Link: @unchecked Sendable {
         let playout: RTCAudioDeviceGetPlayoutDataBlock
         let deliver: RTCAudioDeviceDeliverRecordedDataBlock

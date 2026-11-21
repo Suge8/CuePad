@@ -157,7 +157,6 @@ extension View {
     }
 
     #if os(macOS)
-    /// 主窗口根上：按启动参数摆好调试画面（状态图形总览盖在最上层）、挂上自检用的布局环，摆好后报"首帧就绪"（`xc.sh shot` 等它再截图）。
     func debugScene(_ workspace: Workspace) -> some View {
         #if DEBUG
         overlay { DebugScene.entry?.overlay?(workspace) }
@@ -167,7 +166,6 @@ extension View {
                 await DebugScene.seedRailIfAsked(workspace.services)
                 await DebugScene.projectFormIfAsked(workspace)
             }) else { return }
-            // 驱动不挂在窗口内容上：接力、关窗要跨过关窗，关窗时内容摘下（`MainShellWindow`），内容上的任务跟着停
             for drive in DebugScene.drivers(workspace) { Task { await drive() } }
         }
         .background { if DebugScene.injectsGeometryLoop { GeometryLoopProbe() } }
@@ -181,7 +179,6 @@ extension View {
     func debugScene(_ workspace: Workspace) -> some View {
         #if DEBUG
         overlay {
-            // 盖在根上（在着色的那层外面），自己给系统控件着色
             if let sheet = DebugScene.entry?.overlay?(workspace) { sheet.withPalette() }
         }
             .task {
@@ -235,7 +232,6 @@ private extension DebugScene {
     static func projectFormIfAsked(_ workspace: Workspace) async {
         guard scene == "projectform" else { return }
         await running("项目表单") {
-            // 主区开着哪个项目不算（启动就停在上次的项目页），只认参数打开的（`prepareLibrary` 已打开它）
             let asked = args.project == nil ? nil : workspace.currentProject
             let existing = if let asked { try await workspace.services.store.project(asked) } else { Project?.none }
             workspace.projectForm = .init(project: existing)
@@ -246,7 +242,6 @@ private extension DebugScene {
 private struct BenchSpot<ID: Hashable>: ViewModifier {
     let id: ID
     @Environment(\.pageActive) private var active
-    /// 最近一次的位置：页重新露出来时位置可能没变、不再报，从这里补登记。是引用，写它不触发更新。
     @State private var last = Last()
 
     final class Last { var frame: CGRect? }

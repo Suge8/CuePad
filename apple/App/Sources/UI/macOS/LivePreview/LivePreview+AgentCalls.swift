@@ -5,7 +5,6 @@ import WebKit
 
 extension LivePreview {
 
-    /// 用户最近 1.5 秒在这个页面上有真实的键鼠输入、或点选开着：等他停手，最多 5 秒。返回等了多久。
     func waitForUser() async throws -> Duration {
         let start = ContinuousClock.now
         while picking || agent.userInput.map({ ContinuousClock.now - $0 < Self.userPause }) == true {
@@ -38,9 +37,6 @@ extension LivePreview {
         await untilCurrent()
     }
 
-    /// 页面的内容要现问的（Mac 应用的那张页：画面里有什么得问应用）：告诉它有人要读了（`cuepad-read`），等它问回来。
-    /// 它问着的时候根元素标着 aria-busy；别的页面自己标了的也等，框里的文档一样，最多 3 秒。等到头还标着的回 false，
-    /// 这一页之后不再陪它等（一直标着的页面不拖慢每一步），看到它去掉过才重新等。弹着对话框时脚本停着，问不了，也回 false。
     @discardableResult
     func untilCurrent() async -> Bool {
         let patience = ContinuousClock.now + (agent.stuckBusy == record.main ? .zero : .seconds(3))
@@ -71,12 +67,10 @@ extension LivePreview {
         throw LiveRefusal("页面到了外网地址 \(url.absoluteString)，不替你操作（snapshot、screenshot、console 还能用；回本机页面用 cuepad live <端口或地址>）")
     }
 
-    /// 此刻这一页读过快照才有；主框换了文档（跳转、重载）就没了。
     func currentPage() -> AgentPage? {
         agent.page.flatMap { $0.main == record.main ? $0 : nil }
     }
 
-    /// 新的一页：换个新代号、从 1 编起。
     func freshPage() -> AgentPage {
         let code = Self.nextCode()
         agent.codes.insert(code)
@@ -103,7 +97,6 @@ extension LivePreview {
         return Aim(ref: ref, n: n, document: document, token: token)
     }
 
-    /// 页面代号 a、b … z、aa、ab …：全 App 一串，从随机一处起，App 重开后旧引用撞上新代号的机会也小（撞上了还得这个预览发过它，`target`）。
     private static func nextCode() -> String {
         codeCounter += 1
         var n = codeCounter, code = ""
@@ -252,7 +245,6 @@ extension LivePreview {
         }
     }
 
-    /// Agent 刚做了一件：预览栏上的状态标亮着，3 秒没有下一件就灭。
     func touchedByAgent() async {
         if engage() { await untilVisible() }
         agent.used = .now
@@ -269,7 +261,6 @@ extension LivePreview {
 }
 
 extension LivePreview.PageAsk.Kind {
-    /// 给 Agent 的说法（`LiveRefusal` 与控制台的对话框一行）。
     var shown: String {
         switch self {
         case .alert: "alert"

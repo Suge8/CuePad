@@ -27,7 +27,6 @@ struct ThinkingField: View {
     }
 }
 
-/// 显卡那一份，全 App 共用、只建一次；编译与建管线走异步接口，不占主线程。
 final class ThinkingGPU {
     private(set) static var ready: ThinkingGPU?
     private static var warming: Task<Void, Never>?
@@ -56,21 +55,18 @@ final class ThinkingGPU {
     }
 }
 
-/// 与着色器里的 `Uniforms` 逐字段对齐：全是 float4。
 private struct ThinkingUniforms {
-    var a: SIMD4<Float>  // 宽, 高（像素）, 时间, 能量
-    var b: SIMD4<Float>  // 每点几像素, 关（1 是关）, 填满处（占宽几成）, 换档后过了几秒
-    var c: SIMD4<Float>  // 网点一格几像素, 风吹过了几趟, 拉成流光几成
-    var d: SIMD4<Float>  // 两层星各流过了多远（几个轨道高）、各拉长几倍
+    var a: SIMD4<Float>
+    var b: SIMD4<Float>
+    var c: SIMD4<Float>
+    var d: SIMD4<Float>
     var low, mid, high, spark: SIMD4<Float>
 }
 
 final class ThinkingRenderer: NSObject, MTKViewDelegate {
-    /// 要去的档与填满处；画出来的每帧往它们靠（时间常数 `settle` 秒），颜色与星的密度一起过去。
     var target: Double = 0 {
         didSet { if target != oldValue, shown != nil { changedAt = CACurrentMediaTime() } }
     }
-    /// 上一次换档的时刻：从钮荡开的那一圈按它走；打开气泡那一下不算换档
     private var changedAt = -Double.infinity
     var fill: Double = 1
     private var shownFill: Double?
@@ -80,25 +76,18 @@ final class ThinkingRenderer: NSObject, MTKViewDelegate {
     private var shown: Double?
     private var last: CFTimeInterval?
     private static let settle = 0.22
-    /// 流过的路程、风吹过的趟数按帧累加（`draw`）。否决过：着色器里拿时钟乘流速——换档时流速一变，乘着一大段时间的那个位置
-    /// 一下跳出去老远，看着是猛冲一阵又停住，冲多远还随气泡开了多久变。每次打开从时钟上取个起点，不都是同一片星。
     private var flow = SIMD2(repeating: CACurrentMediaTime().truncatingRemainder(dividingBy: 97))
     private var sweeps = 0.0
 
-    /// 一样东西按档淡入，到第 `stage` 档正好全有（0 最低 … 5 最高；同着色器里的 `smoothstep(stage - 0.8, stage, e * 5)`）
     private static func fade(_ energy: Double, by stage: Double) -> Double {
         let t = min(max((energy * 5 - stage) / 0.8 + 1, 0), 1)
         return t * t * (3 - 2 * t)
     }
-    /// 每秒流过几个轨道高：最低档几乎不动，低档起漂，往上每高一档快六成多。等比地快上去才档档看得出——
-    /// 原先按档各加一截（中档到高档那一截还是零），高档那头看着一样快。
     private static func speed(_ energy: Double) -> Double { 0.05 + fade(energy, by: 1) * 0.8 * pow(12, energy) }
-    /// 一阵风每秒吹过几趟：高档才有，再往上越吹越密
     private static func sweep(_ energy: Double) -> Double { 0.45 + 0.4 * min(max((energy - 0.6) / 0.4, 0), 1) }
 
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
 
-    /// 动画放着时一直画；不放、关着、或过渡走完了停下（要画时 `update` 再点一下）。
     var settled: Bool { shown.map { abs($0 - target) < 0.002 } ?? false }
 
     func draw(in view: MTKView) {
@@ -111,16 +100,13 @@ final class ThinkingRenderer: NSObject, MTKViewDelegate {
         let keep = running ? exp(-step / Self.settle) : 0
         shown = target + (from - target) * keep
         shownFill = fill + ((shownFill ?? fill) - fill) * keep
-        // 星拉成流光几成：低档还是点，到中档拉满
         let energy = shown ?? target, streak = Self.fade(energy, by: 2)
-        // 第二层细一些、快一些、拉得更长；最高档两层都再拉长一截
         let blaze = Self.fade(energy, by: 5)
         let stretch = SIMD2(1 + 3.5 * streak + 2 * blaze, 1 + 5 * streak + 3 * blaze)
         if running {
             flow += step * Self.speed(energy) * SIMD2(1, 1.7)
             sweeps += step * Self.sweep(energy)
         }
-        // 明灭、翻涌、火花不随档变快慢，照时钟走
         let time = running ? Float(now.truncatingRemainder(dividingBy: 3600)) : 0
         let size = view.drawableSize, scale = Float(size.width / max(view.bounds.width, 1))
         var uniforms = ThinkingUniforms(
@@ -181,7 +167,6 @@ private struct ThinkingSurface {
         view.enableSetNeedsDisplay = !running
         view.isPaused = !running
         if !running { redraw(view) }
-        // 着色器还没编好时这一帧画不出：编好再补一帧（动着的下一帧自己会画）
         if ThinkingGPU.ready == nil { Task { await ThinkingGPU.whenReady(); redraw(view) } }
     }
 
@@ -206,8 +191,6 @@ extension ThinkingSurface: NSViewRepresentable {
 }
 #endif
 
-/// 思考场的着色器源码：App 运行时交给系统编（`ThinkingGPU.warm`），不进构建。写错由 `xc.sh check` 拦（scripts/shaders.swift 用本机的 Metal 编这一段），
-/// 收尾的 `"""#` 顶格写：那个脚本按它切。与 `ThinkingUniforms` 逐字段对齐。
 nonisolated enum ThinkingShaders {
     static let source = #"""
 #include <metal_stdlib>

@@ -8,7 +8,6 @@ struct LoopLayer {
     enum Kind: Equatable {
         case orbit
         case voice(VoiceRibbon)
-        /// "发出"一族只有纸飞机（与发送钮、"已送达"同一架，`Icon.send`）：发送中、已送达都是它，胖箭头只表示方向。不播时（截图、Mac 不在前台时只画的那一帧）停在正中。
         case flight
         case sheen
         case pulse
@@ -18,7 +17,6 @@ struct LoopLayer {
 
     let kind: Kind
     let color: Color
-    /// 帧序列的 `intro` 放不放：只在换成这一拍的那一下（`JellyPhase.entering`）放，层重建（切页回来、省电关了又开）不放。
     var intro = false
 
     final class Host: LoopHostBase {
@@ -61,7 +59,6 @@ struct LoopLayer {
         required init?(coder: NSCoder) { fatalError() }
 
         func show(_ kind: Kind, color: CGColor?, intro: Bool) {
-            // 调用方每帧重算时（软糖放着，`JellyFrame`）值没变不碰图层
             guard kind != self.kind || color != self.color else { return }
             if case .voice = kind, case .voice = self.kind {
                 self.kind = kind
@@ -98,7 +95,6 @@ struct LoopLayer {
                 let side = min(bounds.width, bounds.height)
                 plane.frame = CGRect(x: (bounds.width - side) / 2, y: (bounds.height - side) / 2, width: side, height: side)
                 plane.backgroundColor = color
-                // 剪影与飞的距离只随边长（剪影还随屏幕倍数）变：每次更新都重挂的话飞到一半的那一趟从头再飞
                 guard mask.frame.size != plane.bounds.size || mask.contentsScale != displayScale else { break }
                 mask.frame = plane.bounds
                 mask.contentsScale = displayScale
@@ -225,7 +221,7 @@ extension LoopLayer: NSViewRepresentable {
 
     private init() {
         let changes = NotificationCenter.default.notifications(named: .NSProcessInfoPowerStateDidChange)
-        isOn = ProcessInfo.processInfo.isLowPowerModeEnabled  // 订上之后再读：其间的切换不漏
+        isOn = ProcessInfo.processInfo.isLowPowerModeEnabled
         Task {
             for await _ in changes {
                 isOn = ProcessInfo.processInfo.isLowPowerModeEnabled

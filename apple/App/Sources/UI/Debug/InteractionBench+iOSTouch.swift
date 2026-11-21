@@ -9,13 +9,11 @@ extension IOSInteractionBench {
     enum Finger {
         case press(CGPoint)
         case swipe(from: CGPoint, to: CGPoint, seconds: Double = 0.25)
-        /// 慢拖（axe drag，逐点移动）：行的轻扫只认开始那一刻横向慢于 600pt/s 的拖。
         case drag(from: CGPoint, to: CGPoint, seconds: Double)
     }
 
     typealias Step = (_ name: String, _ window: Duration, _ finger: Finger?, _ action: () -> Void) async -> Void
 
-    /// 滑动的几项量 1 秒：滑 0.25 秒、松手后转场还要走半秒，800ms 时常停在半路上。
     static let swipeWindow = Duration.milliseconds(1000)
 
     static func gestures(
@@ -28,17 +26,14 @@ extension IOSInteractionBench {
             await Task.wait(for: .seconds(1))
         }
         for _ in 0..<2 {
-            // Cue 页右滑开侧栏（起手让开左边的会话条，x 在屏宽四分之一）
             if wants("滑动开侧栏") {
                 await land(.cue)
                 await step("滑动开侧栏", swipeWindow, .swipe(from: CGPoint(x: left, y: mid), to: CGPoint(x: right, y: mid))) {}
             }
-            // 侧栏进展段满是横着滚的看板行（手指下能滚的先滚），收侧栏从右屏边起手（`NarrowPan` 认屏边起手）
             if wants("滑动收侧栏") {
                 await land(.progress)
                 await step("滑动收侧栏", swipeWindow, .swipe(from: CGPoint(x: bounds.width - 8, y: mid), to: CGPoint(x: left, y: mid))) {}
             }
-            // 右滑返回从内容区起（x=60），不贴边：推入页的返回是系统的
             guard wants("右滑返回") else { continue }
             await land(.cue)
             workspace.openSession(session)
@@ -53,7 +48,6 @@ extension IOSInteractionBench {
         }
     }
 
-    /// 量完时停在哪：根上那一层（`cue`，侧栏开着是侧栏那一段）与推入的页（`cue>session`），进展页的看板记第一行横着滚到了哪。
     static func landed(_ workspace: Workspace) -> String {
         func brief(_ route: Route) -> String {
             switch route {
@@ -138,7 +132,6 @@ extension IOSInteractionBench {
     }
 }
 
-/// 窗口里手指按下的那一刻（测量脚本在模拟器上真按、真滑）：每个窗口挂一个（长按菜单弹在自己的窗口里），只看不拦，按下就报给等着的一方。
 private final class TouchProbe: UIGestureRecognizer {
     private static var waiting: (() -> Void)?
 

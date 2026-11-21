@@ -18,10 +18,8 @@ struct ProjectScreen: View {
     @State private var sessions: SessionListData?
     @State private var moreSessions = 0
 
-    /// 手机没有会话条里项目下面那几行，这个项目的会话在这一页的另一段里。只点按切换、不认左右滑：任务行左滑是它的操作，从屏边右滑是返回。
     private enum Pane { case work, sessions }
 
-    /// 手机：页头正中是那两段（同项目列表页头的"项目 / 进展"），项目名与它的菜单在封面下面（`name`）。宽屏在栏头（`WideColumnHead`），这里给的只是标题。
     private struct Head: ViewModifier {
         let project: Project?
         let panes: AnyView?
@@ -89,7 +87,6 @@ struct ProjectScreen: View {
                 .transition(.move(edge: .leading).combined(with: .opacity))
             }
         }
-        // 添一条、做完一条：新行淡入，下面的行与灵感墙滑着让位，不是整页往下一跳。按条数不按顺序：拖动排序自己带着动画
         .animation(Motion.spatial(Motion.travel, reduceMotion: reduceMotion), value: data.tasks.roots.count)
         .padding(.horizontal, Spacing.page)
         .padding(.bottom, Spacing.section)
@@ -109,7 +106,6 @@ struct ProjectScreen: View {
             .modifier(YieldsToNotice())
     }
 
-    /// 提示盖在页头正中时这两段让开、不接点按（同项目列表页头的那两段，`NarrowSidebarBar`）。单独一个视图：提示来去只重算它，不重算整页。
     private struct YieldsToNotice: ViewModifier {
         @Environment(Workspace.self) private var workspace
 
@@ -120,7 +116,6 @@ struct ProjectScreen: View {
         }
     }
 
-    /// 封面下面的项目名，同项目列表那张卡上的图标与名字；点开是这个项目自己的操作。
     private func name(_ project: Project) -> some View {
         Menu { ProjectActions(project: project, folders: false) } label: {
             HStack(spacing: Spacing.item) {
@@ -135,7 +130,6 @@ struct ProjectScreen: View {
 
     private static let sectionGap = Spacing.section
 
-    /// 卡片墙：辅助字号下只排一列，卡上的字与"添加灵感"才不被窄列挤成一字一行。
     private var metrics: ProjectWallSections<CardTileView>.Metrics {
         .init(minColumnWidth: sizeClass == .regular ? 220 : 150, maxColumns: typeSize.isAccessibilitySize ? 1 : 4, wallSpacing: 12,
               sectionGap: Self.sectionGap, olderGap: 8)
@@ -144,7 +138,6 @@ struct ProjectScreen: View {
     /// 名称、目录与计数取自项目目录，推入的第一帧就是最终值：导航栏标题在推入时定下，之后再换会让整页跳一下。
     private var project: Project? { workspace.catalog?.project(projectID) }
 
-    /// 读到的数据与由它推出的分区在同一次写入里落下（同 Mac 的 `ProjectPage`）。
     private var dataBinding: Binding<ProjectPageData?> {
         Binding(get: { data }, set: { data = $0; rearrange() })
     }

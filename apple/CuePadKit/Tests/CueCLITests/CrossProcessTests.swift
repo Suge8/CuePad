@@ -23,7 +23,7 @@ import Testing
         for try await bodies in stream {
           if bodies.contains("来自 CLI 进程") { return bodies }
           guard !launched else { continue }
-          launched = true  // 收到订阅后的初始值，观察者已就位，再让子进程写
+          launched = true
           let status = try await Self.run(binary, ["card", "add", "--body", "来自 CLI 进程"], library: sandbox.directory)
           #expect(status == 0)
         }

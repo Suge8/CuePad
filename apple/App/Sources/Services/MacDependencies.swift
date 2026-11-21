@@ -12,17 +12,13 @@ struct MacDependencies {
     var hostID: String
     var workspaces: Workspaces
     var wakeNotifications: NotificationCenter
-    /// `bridge` 必须用同一个钟建（`Bridge.timing`）；测试换成手动推进的。
     var timing: Timing = .system
-    /// 托管会话的指引写的是 App 里那份的绝对路径（`SessionBrief`），不依赖这个链接。
     var commandLineTool: CommandLineToolInstaller
     var updater: (any AppUpdater)?
-    /// OpenCode 的会话索引由它的接入直接写进资料库，所以等资料库打开后再建（参数就是它）。
     var runtimes: @MainActor (CueStore) -> [AgentKind: any AgentRuntime]
     var pasteboard: NSPasteboard
     var cue: CueDependencies
 
-    /// 隔离实例这台 Mac 的标识（没给 `-CuePadHost` 时）：不是任何真实的 Mac，库里记给真实 Mac 的东西在它看来都是别台的。
     static let isolatedHostID = "mac-isolated"
 
     /// 碰不碰真实世界只看 `LibraryLocation.touchesRealWorld`；
@@ -32,7 +28,6 @@ struct MacDependencies {
         let isolated = !location.touchesRealWorld
         AppServices.log.notice("库：\(String(describing: location.origin), privacy: .public)，碰真实世界：\(!isolated, privacy: .public)")
         let sockets = PiPaths.socketDirectory(environment: environment, isolatedLibrary: isolated ? location.directory : nil)
-        // 另起的连接目录也交给 CuePad 起的每个子进程（托管的 Pi、Cue 的大脑），它们才连回这个 App 而不是正式版
         if isolated { setenv("CUEPAD_PI_SOCKET_DIR", sockets.path, 1) }
         let agentHome = isolated ? DebugHooks.agentHome : nil
         let paths = AgentPaths(pi: PiPaths(socketDirectory: sockets), environment: agentHome.map { home in
@@ -40,7 +35,6 @@ struct MacDependencies {
         } ?? environment)
         let timing = Timing.system
         let bridge = Bridge(socketDirectory: paths.pi.socketDirectory, paths: paths, timing: timing)
-        // 不碰真实世界时不碰真实的 `~/.local/bin`：链接放进资料库目录，除非指定了 Pi 目录与链接目录（`PiPaths.isExplicit`）
         let commandLineTool = isolated && !paths.pi.isExplicit
             ? CommandLineToolInstaller(linkDirectory: location.directory.appending(path: "bin", directoryHint: .isDirectory))
             : CommandLineToolInstaller(linkDirectory: paths.pi.binDirectory)
@@ -53,8 +47,6 @@ struct MacDependencies {
             isolated: isolated))
         let brief = SessionBrief.text(cuepad: commandLineTool.helper)
         let hostID = isolated ? DebugHooks.hostID ?? Self.isolatedHostID : HostIdentity.current()
-        // 隔离实例用真实库的副本时，副本里记给这台的请求、会话索引（真实 ~/.pi 下的会话文件）、项目文件夹与 Cue 值班都按本机 id 认，
-        // 冒充了这台就会在真实目录里恢复、开会话（#34）
         if isolated { precondition(hostID != HostIdentity.current(), "隔离实例不能用这台 Mac 的标识（-CuePadHost 换个名字）") }
         return MacDependencies(
             bridge: bridge,

@@ -19,13 +19,9 @@ struct PhoneBoard: View {
         .boardStage()
     }
 
-    /// 行头离上一行远、离自己的卡近。
     static let gap = Spacing.item
 }
 
-/// 一次排版里算完，不经几何读数写回状态：写回影响自身排版的状态会形成布局反馈环。
-/// 各行按自己的高排，一屏放不下就上下滚；有余高时整排整排地分给还有卡没露出来的行（`BoardRowFlex`，先后见 `BoardRowLane`），
-/// 卡不拉高，剩的零头留在页尾。
 private struct BoardRows: Layout {
     let gap: CGFloat
 

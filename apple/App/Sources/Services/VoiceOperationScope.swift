@@ -1,6 +1,5 @@
 import Foundation
 
-/// 一次会话的异步操作归它自己所有。取消立即恢复本地 continuation；迟到的系统回调只访问已结束的旧作用域。
 final class VoiceOperationScope {
     private(set) var ended = false
     private var pending: [UUID: () -> Void] = [:]

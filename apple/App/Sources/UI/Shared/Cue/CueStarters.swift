@@ -1,7 +1,6 @@
 import CueStore
 import SwiftUI
 
-/// 点名的 Agent 是 Cue 运行的那台 Mac 上能用的（`MacAgents`，第一家就是 Cue 开工时的缺省）。
 struct CueStarters: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services

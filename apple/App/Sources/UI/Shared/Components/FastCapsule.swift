@@ -20,7 +20,6 @@ struct FastCapsule: View {
         }
     }
 
-    /// 只画闪电：开着是选中底（同别的开关胶囊），开没开、未知在悬停与读屏里。
     private var label: some View {
         Image(.fast)
             .chip(on: fast == true, menu: fast == nil)

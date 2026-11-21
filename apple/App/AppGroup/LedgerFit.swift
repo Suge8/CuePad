@@ -1,6 +1,5 @@
 import SwiftUI
 
-/// 当帧按理想宽度选排并放置，不依赖布局后的回调或视图状态。
 struct LedgerFit: Layout {
     struct Line {
         let items: [Int]
@@ -9,7 +8,6 @@ struct LedgerFit: Layout {
 
     let items: [CueNow.Entry]
     let lines: [Line]
-    /// 序号小于它的是要你管的那组。
     let yours: Int
 
     init(_ now: CueNow, gap: CGFloat) {

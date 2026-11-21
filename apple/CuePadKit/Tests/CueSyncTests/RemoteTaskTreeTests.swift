@@ -5,7 +5,6 @@ import Testing
 
 @testable import CueSync
 
-/// 远端变更下的任务层级不变量：两台设备离线并发地挪任务，合并后可能出现环、任务超过两级、子任务与父任务不在同一项目。
 @Suite struct RemoteTaskTreeTests {
   let rig = try! Rig()
   var store: CueStore { rig.store }

@@ -3,7 +3,6 @@ import CueStore
 import Foundation
 import Testing
 
-/// `cuepad mcp` 走 stdio，一行一个 JSON-RPC；真实子进程，结果落在库里。
 @Suite struct MCPTests {
   /// 一个 `cuepad mcp` 子进程：写一行请求，读一行回应。回应由它自己的线程读：两个子进程同时有调用在等（一个工具在等送达结果时
   /// 另一个照常回应）也互不挡着，`FileHandle.bytes` 的读取会把它们排成一队。
@@ -42,7 +41,7 @@ import Testing
       let outcome: Result<Void, any Error>
       do { outcome = .success(try await body(server)) } catch { outcome = .failure(error) }
       try? server.input.fileHandleForWriting.close()
-      _ = await server.exit.value  // 关了输入就该自己退出；不退出由测试时限报
+      _ = await server.exit.value
       try outcome.get()
     }
 
@@ -105,7 +104,7 @@ import Testing
       let launch = try #require(try await store.deliveryRequests().first)
       let step = try #require(try await store.children(of: task).first)
       #expect(launch.hostID == "mac-a" && launch.isFromCue && launch.target.name == "调研")
-      #expect(launch.launch?.project == project.id && launch.launch?.prompt == "重写发布脚本\n\n调研\n先读 release.sh")  // 开新会话：顶层任务作背景在前
+      #expect(launch.launch?.project == project.id && launch.launch?.prompt == "重写发布脚本\n\n调研\n先读 release.sh")
       #expect(launch.launch?.model == ModelKey(provider: "anthropic", id: "claude-x") && launch.launch?.thinking == .high)
       #expect(try await store.workingLeaf(of: task).id == step.id)
       #expect(try await server.call("task", ["action": "peek"]).contains("调研 › 正在开会话"))

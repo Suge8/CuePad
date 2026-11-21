@@ -45,7 +45,6 @@ nonisolated struct SessionListData: Sendable, Equatable {
             })
     }
 
-    /// 正在唤醒的已在"现在"与会话条上（`SessionListItem.isCurrent`），唤醒按此刻算、库里认不出，读出来按会话 id 排掉，个数与分页才对得上。
     static func earlier(_ query: SessionQuery, at moment: Speech.Moment, from store: isolated CueStore) throws -> SessionListPage {
         var query = query
         query.scope = .ended
@@ -56,7 +55,6 @@ nonisolated struct SessionListData: Sendable, Equatable {
 }
 
 extension SessionListData {
-    /// 正在唤醒的读的时候就排掉了（`SessionListData.earlier`）。
     var historyRuns: [TimeSection.Run<SessionListItem>] {
         TimeSection.split(ended, date: \.state.stateSince, now: .now)
     }

@@ -8,7 +8,6 @@ import Testing
 @testable import CuePad
 
 extension AgentLibraryTests {
-    /// "手机"是连同一个云替身的第二个进程。
     @Test func 改一个技能只传它那一条正文_删掉的技能手机上也没了() async throws {
         let cloud = SimulatedCloud([CKRecord.peerFloor(CueStore.peerFloor)])
         let macApp = TestApp(sync: .built { CloudSync(store: $0) { cloud } })

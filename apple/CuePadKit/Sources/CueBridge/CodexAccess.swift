@@ -5,7 +5,6 @@ import Foundation
 /// refreshToken=false 不强制续期，但令牌临近过期时 Codex 自身仍可能续期并写回凭证；不是整个调用链只读、不续期的保证。
 public struct CodexAccess: Sendable {
     public let token: String
-    /// 令牌里的 ChatGPT 账号（请求头 `ChatGPT-Account-ID`）
     public let accountID: String
     public let expiresAt: Date
 }
@@ -19,7 +18,6 @@ public enum CodexAccessError: Error, Equatable {
 }
 
 extension AgentIntegration {
-    /// 至多 `AgentTimeouts.probe`（比通话的接通期限短，失败原因才轮得到它说）。开始、拿到、失败各记一行：只记阶段、用时与错误种类，不记令牌。
     @MainActor public func codexAccess(executable: URL?) async throws -> CodexAccess {
         let started = ContinuousClock.now
         CodexRuntime.log.notice("Codex credentials: start")
@@ -47,7 +45,6 @@ extension AgentIntegration {
         return String(format: "%.1f", Double(elapsed.seconds) + Double(elapsed.attoseconds) / 1e18)
     }
 
-    /// 错误种类：Codex 回的错误正文不进日志。
     private static func kind(_ error: any Error) -> String {
         switch error {
         case let error as CodexAccessError: "\(error)"

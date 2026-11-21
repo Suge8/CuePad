@@ -3,7 +3,6 @@ import CueEditor
 import UIKit
 import UniformTypeIdentifiers
 
-/// 系统剪贴板（复制不是发送，不写发送记录）。
 enum Clipboard {
     static func copy(_ text: String) {
         UIPasteboard.general.string = text

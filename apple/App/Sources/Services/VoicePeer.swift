@@ -150,5 +150,4 @@ private extension RTCIceConnectionState {
     }
 }
 
-/// `unavailable`：WebRTC 没给出连接，或它的音频设备还没接上（`VoiceAudioDevice.link`）。
 enum VoicePeerError: Error { case microphoneDenied, unavailable }

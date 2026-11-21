@@ -1,7 +1,6 @@
 import CueStore
 import SwiftUI
 
-/// 归档的灵感与任务按项目分段（最近归档过的项目在前，段里按归档时间）：找一条归档的东西，记得的是它是哪个项目的。
 struct ArchiveList: View {
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -98,7 +97,6 @@ struct ArchiveList: View {
     private func open(_ card: Card) { workspace.open(card) }
 }
 
-/// 归档与回收站行首那一格：任务是它的圈，灵感是灯泡。
 struct CardKindMark: View {
     let card: Card
     @Environment(\.palette) private var palette

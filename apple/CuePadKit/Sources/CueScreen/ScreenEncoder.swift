@@ -7,7 +7,6 @@ import VideoToolbox
 /// 出的是 AVCC（每个 NAL 前 4 字节长度），网页的 `VideoDecoder` 直接吃。只在 `ScreenServer` 的队列上用。
 final class ScreenEncoder {
   struct Frame: Sendable {
-    /// 关键帧带着 avcC（SPS、PPS）：解码器照它配置。
     let description: Data?
     let data: Data
   }
@@ -51,7 +50,6 @@ final class ScreenEncoder {
       kVTCompressionPropertyKey_AllowFrameReordering: false,
       kVTCompressionPropertyKey_ExpectedFrameRate: rate,
       kVTCompressionPropertyKey_MaxKeyFrameInterval: Int32.max,
-      // 界面是大片不动加小块在动：平均码率只在整屏滚动时用满，停下来的那几帧（`ScreenServer.settle`）把字补清楚
       kVTCompressionPropertyKey_AverageBitRate: min(16_000_000, max(4_000_000, width * height * 3)),
     ]
     VTSessionSetProperties(made, propertyDictionary: settings as CFDictionary)
@@ -66,7 +64,6 @@ final class ScreenEncoder {
     return Frame(description: key ? sample.formatDescription.flatMap(description) : nil, data: data)
   }
 
-  /// avcC（ISO/IEC 14496-15 5.2.4.1）：一组 SPS、一组 PPS，NAL 长度占 4 字节。
   private static func description(_ format: CMFormatDescription) -> Data? {
     let sets = format.parameterSets
     guard sets.count >= 2, sets[0].count >= 4 else { return nil }

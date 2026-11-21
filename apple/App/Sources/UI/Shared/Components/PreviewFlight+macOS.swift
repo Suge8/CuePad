@@ -24,7 +24,6 @@ import WebKit
     private var sources: [PreviewZoomKey: Source] = [:]
     private var painted = false
     private var paintWaiter: CheckedContinuation<Void, Never>?
-    /// 第几趟开合：开、关各进一趟。飞到一半被关掉、又开了下一份时，上一趟醒来看见不是自己那一趟就撤走，不落内容、不等别人的那一帧。
     private var trip = 0
     private var shows: [UUID: WeakShowing] = [:]
     private let pageShots = PreviewPageShots()
@@ -58,12 +57,10 @@ import WebKit
             guard let flight = await Flight(image, from: source.frame(from, showing: image), to: to, in: window)
             else { return stage.landed(true) }
             let kind = stage.kind.thumbnail
-            // 那一小页的排法与内容不同：停下来再换，错开的字看得见。飞过半程（纸已长到大半个页）就边飞边淡成内容，两种排法只在动着的那一小段里叠着
             try? await Task.sleep(for: .seconds(kind == .page ? Motion.Glide.duration / 2 : Motion.Glide.duration))
             guard trip == self.trip else { return flight.remove() }
             switch kind {
             case .picture:
-                // 内容在飞的那张下面露出来，那张再淡掉：两层同时一淡一显，中间会透出底色
                 stage.landed(true)
                 flight.dissolve()
             case .page:
@@ -72,7 +69,6 @@ import WebKit
             case .screen:
                 if stage.page != nil { await painted(within: Self.paintLimit) }
                 guard trip == self.trip else { return flight.remove() }
-                // 快照在最上面：网页露出来的这一帧它还盖着，画上屏之后再淡掉
                 stage.landed(true)
                 await NextFrame.drawn()
                 flight.dissolve()
@@ -89,7 +85,6 @@ import WebKit
         Task { await pageShots.keep(view, area: area, as: key) }
     }
 
-    /// 等不到就不等了：网页一直不画（载入卡住、翻页翻走了它的视图）时快照照样淡掉，全屏页不一直透明着。
     private func painted(within limit: Duration) async {
         guard !painted else { return }
         let giveUp = Task {
@@ -117,7 +112,6 @@ import WebKit
                 guard let image = await source.image() else { return }
                 start = (image, place.frame(of: image, aspect: source.aspect, crop: source.alignment))
             }
-            // 另排的那几种飞回去的是缩略图（落到缩略图上是同一张，不跳）：它与页上的内容不是同一张，淡着出来，内容留着随浮层淡出
             let reflows = stage.kind.thumbnail != .picture
             guard let flight = await Flight(
                 start.0, from: place.cornered(start.1), to: source.frame(to, showing: start.0), in: window, appearing: reflows ? Motion.Fade.duration : nil)
@@ -128,7 +122,6 @@ import WebKit
         }
     }
 
-    /// 页里能说清自己样子的视图（图片、PDF）按是哪一份登记；翻页时旧页还在淡出，按份认，不认最后登记的那个。
     func showing(_ preview: UUID, _ view: some PreviewShowing) { shows[preview] = WeakShowing(value: view) }
 }
 
@@ -148,10 +141,8 @@ extension EnvironmentValues {
 /// 加的是图层不是视图，AppKit 不为它重排窗口、重算指针区域，打开那一帧少十几毫秒，实测），画面从 `from` 飞到 `to`（框与圆角），停在那里，`dissolve` 时淡掉、撤走。
 @MainActor private final class Flight {
     private let layer = CALayer()
-    /// 画面在框里的一层：多数时候铺满框；纸比画面大时（`PreviewFrame.page`）框是纸、它是纸上的那一块。
     private let picture = CALayer()
 
-    /// `contents` 是 CGImage 或 IOSurface；两端各带着那里画面露出的那一截（`contentsRect`），飞着从一截换成另一截。
     init?(_ contents: Any, from: Frame, to: Frame, in window: NSWindow, appearing: TimeInterval? = nil) {
         guard let root = window.contentView?.superview, let host = root.layer else { return nil }
         picture.contents = contents
@@ -163,7 +154,6 @@ extension EnvironmentValues {
         layer.zPosition = 1000
         layer.addSublayer(picture)
         let start = root.convert(from.rect, from: nil), end = root.convert(to.rect, from: nil)
-        // 画面在框里的位置按同一个视图的坐标算差：框的图层没翻，随上面翻不翻一起，差值两种情形都对
         let inner = { (frame: Frame, box: CGRect) -> CGRect in
             root.convert(frame.page ?? frame.rect, from: nil).offsetBy(dx: -box.minX, dy: -box.minY)
         }
@@ -217,7 +207,6 @@ extension PreviewFlight.Source {
         if case .aligned(let alignment) = crop { alignment } else { .center }
     }
 
-    /// 点名图露的是细节最多的那块，按缩略图同一个算法在整张上算；`contents` 是全屏页的大图（IOSurface）时到缩略图交的整张上算，单位坐标一样。
     func frame(_ rect: CGRect, showing contents: Any) async -> PreviewFrame {
         guard case .detail = crop else { return PreviewFrame(filling: rect, radius: radius, with: contents, crop: alignment) }
         let whole: CGImage? = if contents is IOSurface { await image() } else { (contents as! CGImage) }
@@ -231,7 +220,6 @@ extension PreviewFlight.Source {
 
 struct PreviewFrame {
     var rect: CGRect
-    /// 画面只占框里的这一块（窗口坐标），框的其余铺 `paper`；nil 是铺满框。
     var page: CGRect?
     var paper: CGColor?
     var radius: CGFloat = 0

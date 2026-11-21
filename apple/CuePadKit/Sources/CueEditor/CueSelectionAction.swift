@@ -1,4 +1,3 @@
-/// 图由 App 给（App 的图标只在它自己那里定），`perform` 拿到选中部分的存储格式。
 public struct CueSelectionAction {
     public var title: String
     public var image: CueImage?

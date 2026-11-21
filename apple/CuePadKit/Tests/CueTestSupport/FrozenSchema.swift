@@ -1,6 +1,4 @@
-/// 已发布构建建出、新版要能升级的库结构。
 public enum FrozenSchema {
-  /// 结构 98（mac/2611132301、ios/2611132255）的库：作者那台 Mac 上一路升到 98 的资料库，只导出结构（`sqlite_schema`，不含 FTS 影子表）。
   public static let v98 = #"""
 CREATE TABLE projects (
   id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, icon TEXT, color TEXT NOT NULL,

@@ -7,7 +7,6 @@ import Synchronization
 import Testing
 @testable import CuePad
 
-/// 会话被结束后又被话唤醒时 Mac 照会话文件重开一个进程（`RecordingHost.resume`）：剧本跟着此刻连着桥的那一个演。
 @MainActor
 final class ScriptedSession {
     let id: String

@@ -3,29 +3,21 @@ import CueAgent
 import CueStore
 import Foundation
 
-/// 只来自大脑的事件，只在值班这台 Mac 的内存里（`CueKeeper.Snapshot.rounds`）：大脑不落会话，这是唯一的事实源。
-/// 给人看的那一份由它推出（`process`），写在对话里这一轮开始的位置那一行上（`row`），随库同步到各端。
 struct CueRound: Identifiable {
     let id: Int
-    /// 为什么醒；没有醒来就开始的一轮（插进来的话恰好赶上这一轮结束）记作你发来消息
     let wake: CueWake
     let startedAt: Date
-    /// 交给大脑的话：第一段是醒来时的信封连同你的话，之后每段是这一轮里插进来的
     var sent: [String]
     var calls: [CueToolCall] = []
     var finishedAt: Date?
-    /// 这一轮报的错（原文）；大脑中途退出也记在这里
     var failure: String?
     var context: Int?
-    /// 这一轮的经过在对话里的那一行（`CueStore.recordCueRound`）：Cue 自己醒来的一轮醒来就有，你发起的还没调过工具时没有
     var row: UUID?
 
-    /// 记下的结果至多这么多字符：记忆、看板的结果可能很长，留住开头够排查
     static let resultLimit = 20_000
 
     var running: CueToolCall? { calls.last { $0.finishedAt == nil } }
 
-    /// 给人看的经过：做完的调用按先后（还在跑的不算，它是此刻在做的）；一个都没做完为 nil。
     var process: ChatMessage.Tools? {
         let items = calls.compactMap(\.item)
         guard !items.isEmpty else { return nil }
@@ -47,9 +39,7 @@ struct CueToolCall: Identifiable {
     let id: String
     let name: String
     let arguments: String
-    /// 动到的任务或会话，开始时就认好（`CueActivity.named`）：正在用时碰到的那一处（`step`）同步读它、不等库，做完后那一条也用它。
     let named: CueActivity.Named
-    /// 正在用时碰到的那一处（`CueActivity.step`）；没碰哪一处时是那一句（`detail`）
     let step: CueActivity.Touch?
     let detail: String?
     let startedAt: Date

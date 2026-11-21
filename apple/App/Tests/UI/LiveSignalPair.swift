@@ -3,7 +3,6 @@ import CryptoKit
 import Foundation
 @testable import CuePad
 
-/// 一对信令替身：一头发出的一帧就是另一头收到的一帧（中转只转不看，这里也一样），密钥两头同一把。
 @MainActor final class LiveSignalPair {
     final class End: VoiceSignaling {
         let local: VoiceEndpoint

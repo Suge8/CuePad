@@ -90,7 +90,6 @@ extension TaskFlowTests {
         #expect(try await peer.services.store.deliveryRequests().filter { $0.mode == .known(.end) }.isEmpty)
         var closed = try #require(try await store.syncRow(recordName: task.id.uuidString.lowercased()))
         let acknowledged = try #require(try await peer.services.store.syncRow(recordName: task.id.uuidString.lowercased()))
-        // 手机的较新任务状态获胜；这里独立于测试运行时的两次时钟采样。
         closed.fields["modifiedAt"] = .int(acknowledged.modifiedAt + 1_000)
         for _ in 0..<2 {
             #expect(try await peer.services.store.applyRemote([.save(closed, systemFields: Data())]).isEmpty)

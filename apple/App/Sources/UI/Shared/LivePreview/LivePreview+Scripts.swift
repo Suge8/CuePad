@@ -1,6 +1,5 @@
 import Foundation
 
-/// 载完后在页面里读的两样（`LivePreview.sampleGround`、`adoptViewport`）。
 extension LivePreview {
     static let groundScript = """
         const solid = element => {

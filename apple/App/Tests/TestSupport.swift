@@ -1,7 +1,6 @@
 import CloudKit
 import CueStore
 @testable import CueSync
-// 测试共用的支撑（临时库目录、测试图片、条件等待）与 Kit 的测试同一份；整个测试目标都能用
 @_exported import CueTestSupport
 import Foundation
 import Synchronization
@@ -62,7 +61,6 @@ nonisolated final class FakeSync: SyncControlling, Sendable {
         state.withLock { $0.stopped += 1 }
         for hung in hanging.withLock({ $0.stop() }) { hung.resume() }
     }
-    /// 立即同步一直不返回，直到同步停下（同真的引擎：停了在途的才收尾）。
     let syncNowHangs = Mutex(false)
     private let hanging = Mutex(Hanging())
 
@@ -139,7 +137,6 @@ final class TestApp {
     #if os(macOS)
     private let cue: CueDependencies?
     private let updater: (any AppUpdater)?
-    /// 这台的标识：两台设备连同一个云替身时，另一台给别的（演手机：它看的是那台 Mac 写下的，经投送请求让那台做）。
     let hostID: String
     init(
         sync source: AppServices.SyncSource? = nil, cue: CueDependencies? = nil, updater: (any AppUpdater)? = nil, timing: Timing = .system,
@@ -164,11 +161,8 @@ final class TestApp {
     }
     #endif
 
-    /// 同真的 App 退出：Mac 走退出的收尾（后台工作、执行器、Cue、桥、同步都停）。不停的话后台任务一直攥着整套服务和资料库，
-    /// 换账号的通知又是全进程的，测试结束后它还会跟着并行的测试去认账号、拉取。deinit 里等不了：收尾交给 `.releasesLibraries`，用例结束时等它做完再查释放。
     isolated deinit {
         #if os(macOS)
-        // 退出流程只取消跟随者、不等它们退场；它们退场前攥着服务与资料库，CI 慢时超过检查的宽限
         let followers = services.cancelBackgroundWork(), finish = services.beginShutdown()
         LibraryLedger.close(ledger, app: createdAt) {
             _ = await finish()
@@ -182,7 +176,6 @@ final class TestApp {
         #endif
     }
 
-    /// 看过这个会话（会话页记的那一下），会话行随即读到。
     func see(_ session: SessionState, at moment: Date = .now.addingTimeInterval(1)) async throws {
         try await services.store.mark(.sessionSeen(session.sessionID), at: moment)
         services.liveSessions.apply(try await LiveSessions.Page.read(from: services.store), at: .always())
@@ -195,11 +188,9 @@ final class TestApp {
         return services
     }
 
-    /// 旧实例自己的工作都停下（同进程被杀）：桥、托管的会话和热键是 `TestApp` 的，留给新实例。不写离线之类的收尾记录，免得晚到的写入盖过新实例的。
     private func retire(_ services: AppServices, app: SourceLocation? = nil) {
         let halted = services.halt()
         LibraryLedger.close(ledger, app: app) {
-            // 一步出错也接着停后面的：同步与后台任务留着会连累别的用例；错在全部停完后报
             var failure: (any Error)?
             for step in halted.steps {
                 do { try await step.run() } catch { failure = failure ?? error }
@@ -214,7 +205,6 @@ final class TestApp {
         try await services.store.runtimeRecorder(on: host, boot: boot, minInterval: .zero, timing: timing)
     }
 
-    /// （`services.start()` 或 `startSync()`）：替身只有一条状态流，起两遍就是两处在读。
     func syncs(reconciled: Bool = true) async throws {
         sync.emit(SyncState(status: .idle, issues: [], reconciled: reconciled))
         try await eventually("对过一遍：\(reconciled)") { services.syncing.knowsSyncedFacts == reconciled }
@@ -230,17 +220,13 @@ final class TestApp {
     var piPaths: PiPaths {
         PiPaths(agentDirectory: directory.appending(path: "pi-agent"), socketDirectory: socketDirectory, binDirectory: directory.appending(path: "home/.local/bin"))
     }
-    /// App 里的命令行工具在哪（托管会话的指引与命令行链接指向它）；改了之后 `relaunch()` 就是"App 移动到这里再启动"。
     lazy var helper = directory.appending(path: "CuePad.app/Contents/Helpers/cuepad")
     var workspaces: Workspaces { Workspaces(root: directory.appending(path: "CuePad", directoryHint: .isDirectory)) }
 
-    /// 这台 Mac 写下自己能用 Pi（开新会话只从 macAgents 选 Agent）：探测本身起真 Agent，只在 Kit 的 Real* 测试里验，这里直接写下它的结果。
     func offersPi() async throws {
         try await services.store.recordMacAgents(host: Self.hostID, name: "测试 Mac", [MacAgent(kind: .pi, model: nil, models: [])])
     }
 
-    /// 接入一家 Agent（会话索引只为接入了的建）：放一个只报版本的假可执行文件，检测到它再打开接入。
-    /// 假的 Pi 还像桥扩展的探测模式那样报出模型（登录了），所以这台 Mac 上能用它（同步表 macAgents）；其余几家问不出模型。
     func connect(_ kind: AgentKind, version: String = "2.1.299") async throws {
         try install(kind, version: version)
         await services.agents.detect(kind)
@@ -279,7 +265,6 @@ final class TestApp {
 
     private var installers: URL { directory.appending(path: "installers") }
 
-    /// 探测时（stream-json 的 initialize）按登录了没有回答账号，同真的 Claude Code。
     func offersClaudeInstaller(loginFails: Bool = false) throws {
         try executable(AgentKind.claudeCode.facts.command, Self.fakeClaude(loginFails: loginFails), in: installers)
     }
@@ -350,7 +335,6 @@ final class TestApp {
 }
 
 extension Task {
-    /// 取消并等它收尾：用例自己起的任务结束前还攥着它捕获的服务与资料库，`.releasesLibraries` 紧接着就查。
     func stop() async {
         cancel()
         _ = await result
@@ -381,7 +365,6 @@ extension CKRecord {
 }
 
 extension AppServices {
-    /// 测试里把这几条马上传出去（非马上传的表等不到下一轮推送）。
     func upload(_ records: UUID...) async {
         _ = await sync?.send(recordNames: Set(records.map { $0.uuidString.lowercased() }))
     }

@@ -9,7 +9,6 @@ extension CodexRuntime {
         try await deliver(Self.input(message.text, images: message.images, skills: session.skills), clientID: CodexHistory.clientID(for: message.deliveryID), opener: message.opener, to: session)
     }
 
-    /// 以这个会话的 `/skill:名字` 开头的是用这个技能说的——技能条目在前、其余的话在后（同在 Codex 里选了技能再打字），投送请求 id 照样随这条消息进会话文件；名字不是它的技能的照原文。
     static func input(_ text: String, images: [MessageImage], skills: [(name: String, path: String)]) -> [JSONValue] {
         let head = text.prefix { !$0.isWhitespace }
         guard head.hasPrefix("/skill:"), let skill = skills.first(where: { "/skill:\($0.name)" == head }) else {
@@ -68,7 +67,6 @@ extension CodexRuntime {
         try await session.turns.abort { [self] in try await interrupt(session) }
     }
 
-    /// 这一轮已结束、还在等认出子代理（`ending`）的不再等，就此收尾。
     private func interrupt(_ session: Tracked) async throws {
         if let ending = session.ending {
             ending.cancel()
@@ -110,7 +108,6 @@ extension CodexRuntime {
         }
     }
 
-    /// 这一刻下桥，`tracked` 留到进程退出：停下这一轮还要用它。
     public func end(_ id: Session.ID) throws {
         guard tracked[id] != nil else { throw BridgeError.unknownSession(id) }
         processes.retire(id, link: self)

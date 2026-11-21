@@ -1,11 +1,6 @@
 #if os(iOS)
 import SwiftUI
 
-/// 不随字长短变宽：数字账随时在变，跟着变宽整颗名牌就一直在动。
-/// 头像只有一个、跟着长大（`PlateLayout`），接力的落点挂在它上面。名牌本身（`CuePlate`）与 Mac 右栏的栏头（`CueTitle`）是同一个。
-/// 舞台开着时（`staged`，`CueStage`）名牌让开（撤掉，同长开时撤圆钮的理由）：大的 Cue 就站在它的位置下面，两侧的圆钮照留；收起时淡回来，只淡一次。
-/// 开面板先收起键盘：面板盖住对话的上半截，键盘弹着时放不下；打开它就是从打字转去看 Cue，草稿留在输入框里，收起面板不再弹回（同推入别的页时交出焦点）。
-/// 名牌浮在对话上，展开不改对话的布局，长大的只有这一块；展开与否只在这里（不进 `CueWatch`：别处也读它）。
 struct CueHeader: View {
     var staged = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion

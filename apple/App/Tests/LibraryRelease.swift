@@ -51,7 +51,6 @@ nonisolated final class LibraryLedger: Sendable {
 
     private let state = Mutex(State())
 
-    /// 建 `TestApp` 时调：在 `.releasesLibraries` 的作用域外建的当场报错。
     static func opening(createdAt location: SourceLocation) -> LibraryLedger? {
         guard let ledger = current else {
             Issue.record("TestApp 要在挂了 .releasesLibraries 的套件里建：不然它的资料库有没有释放没人查", sourceLocation: location)
@@ -61,7 +60,6 @@ nonisolated final class LibraryLedger: Sendable {
         return ledger
     }
 
-    /// 不经 `TestApp`、自己搭服务的测试台（`ClaudeRig`、`HistoryRulesTests.Rig`）建好服务时调：同样只能在作用域里建，库同样查释放。
     static func tracking(_ store: CueStore, createdAt location: SourceLocation) {
         guard let ledger = current else {
             Issue.record("建服务要在挂了 .releasesLibraries 的套件里：不然它的资料库有没有释放没人查", sourceLocation: location)
@@ -88,7 +86,6 @@ nonisolated final class LibraryLedger: Sendable {
         state.withLock { $0.stores.append(Entry(store: store, createdAt: location)) }
     }
 
-    /// `TestApp` 的收尾（deinit、relaunch 换下的旧实例）：当场开始，用例结束时等它做完。`app` 是 deinit 时给的，记下这个实例收尾了。
     static func close(_ ledger: LibraryLedger?, app: SourceLocation? = nil, _ work: @escaping @Sendable () async throws -> Void) {
         let closing = Task.detached { try await work() }
         ledger?.state.withLock { state in
@@ -100,7 +97,6 @@ nonisolated final class LibraryLedger: Sendable {
     private var held: [SourceLocation] { state.withLock { $0.stores.filter { $0.store != nil }.map(\.createdAt) } }
 
     func expectReleased() async {
-        // 用例在别的线程上放掉的 TestApp，deinit 排在主线程上（isolated deinit）：先让它们跑完
         await MainActor.run {}
         let (apps, closings) = state.withLock { ($0.apps, $0.closings) }
         for location in apps {
@@ -122,7 +118,6 @@ nonisolated final class LibraryLedger: Sendable {
         for (store, location) in live where store !== excused?.store { record(location) }
     }
 
-    /// 库释放没有可等的事件，每 10 毫秒看一次。
     private func graceForOneShots() async {
         let clock = ContinuousClock(), deadline = clock.now + .seconds(1)
         while !held.isEmpty, clock.now < deadline {

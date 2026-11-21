@@ -1,9 +1,5 @@
 import SwiftUI
 
-/// 底栏、对话让出的地方（手机是安全区，Mac 是浮着的回复框）与卡每一帧都是同一个高，贴着最新的对话跟着每帧让位、再跟着落回（`ChatScroll`），不当帧跳。
-/// 只动卡（淡入淡出、平移）的话占的高当帧就到终点：对话先一下被顶开或掉下去，再空着等卡补上或淡完。代价是动的这零点几秒里底栏与对话每帧排一次
-/// （会话页状态轮播、卡几秒进出一次，与改前交替 3 轮：唤醒与渲染服务持平，App 指令每次进出约多 3.5 亿条）。
-/// 否决过：卡叠在对话上、对话底下常留一张卡的位置——卡高随问题与选项变，平时空着一大截；不留又盖住最新那几行（问的来龙去脉）。
 struct RiseBehind: ViewModifier, Animatable {
     var shown: CGFloat
     let floats: Bool
@@ -14,9 +10,6 @@ struct RiseBehind: ViewModifier, Animatable {
         set { shown = newValue }
     }
 
-    /// 一条路径排两种样子（换分支的话卡在离开那一下换了身份、重建一遍）：浮着时卡底对齐、往上浮出去，不裁；
-    /// 不浮时两边与上面让出卡的影子（随露出的比例收，藏到底时一点不留），下沿齐输入框那一排的上沿裁——往下伸的话，
-    /// 卡藏在下面的上沿与问号从输入框圆角外、"⋯"与输入框之间的缝里露出来，画在玻璃控件上面。
     func body(content: Content) -> some View {
         let limit = chatHeight / 2
         RiseLayout(shown: shown, floats: floats, limit: limit) { content }
@@ -55,7 +48,6 @@ struct DockedCard<Item: Equatable, Card: View>: View {
     }
 
     var body: some View {
-        // 外面这一层一直在（空着时不占地方）：`onChange` 挂在它上面，卡出现的那一次也接得到
         ZStack {
             if let shown = item ?? last {
                 card(shown).padding(.bottom, Spacing.item)
@@ -68,8 +60,6 @@ struct DockedCard<Item: Equatable, Card: View>: View {
         }
     }
 
-    /// 与沉回同一帧起播（不像 `CueWaitDock` 等卡排进去的下一帧）：一张走、一张来（问题答完转出错）时两段同起同落，占的高一路单调地变，
-    /// 晚一帧的话对话先多掉一截再往回爬。沉到一半又来了就从那儿升回去。
     private func arrive() {
         last = nil
         withAnimation(Motion.fading(Motion.glide, reduceMotion: reduceMotion)) { level = 1 }
@@ -91,7 +81,6 @@ struct RiseLayout: Layout {
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         guard let child = subviews.first else { return .zero }
         let size = child.sizeThatFits(ProposedViewSize(width: proposal.width, height: room(proposal.height)))
-        // 宽照给的：卡拿掉的那一刻孩子没了，宽跟着塌成 0 的话，裁的窗口两边让出的影子位就成了一小块露在输入框上
         return CGSize(width: proposal.width ?? size.width, height: size.height * shown)
     }
 
@@ -103,9 +92,6 @@ struct RiseLayout: Layout {
         child.place(at: origin, anchor: .topLeading, proposal: fit)
     }
 
-    /// 孩子按整高排：至多 `limit`，外面给的不够时（输入框先拿走它的高，剩下的不到 `limit`）只到给的。给的是露出的那截，
-    /// 除以露出的比例换回整高：升起时外面按缩了的高回头再排一次，照给的高直接排的话卡里那段就当成放不下、换成紧凑的。
-    /// 向上取整：除回来的小数比整高少一点点也会被当成放不下。
     private func room(_ offered: CGFloat?) -> CGFloat {
         guard let offered, shown > 0 else { return limit }
         return min(limit, (offered / shown).rounded(.up))

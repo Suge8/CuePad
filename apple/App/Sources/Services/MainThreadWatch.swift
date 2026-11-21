@@ -13,15 +13,12 @@ nonisolated struct FreezeNote: Codable, Equatable, Sendable {
     var device: String
     var os: String
 
-    /// 与 MetricKit 的包区分（`CrashReport.Kind`）。
     struct File: Codable {
         static let key = "cuepadFreeze"
         let cuepadFreeze: FreezeNote
     }
 }
 
-/// 同一轮忙过 `threshold`（1 秒）才记。主线程闲着时看守停着（不为它唤醒）；所在页与最近的动作由界面在变时报来，卡住时看守直接读，不经主线程。
-/// 处处都开（调试实例也记：`xc.sh explore` 靠它发现卡住后取样）；只有 MetricKit 订阅限在用户的设备上（`Diagnostics.start`）。
 nonisolated final class MainThreadWatch: Sendable {
     static let shared = MainThreadWatch()
     static let threshold: UInt64 = 1_000_000_000
@@ -29,10 +26,8 @@ nonisolated final class MainThreadWatch: Sendable {
     static let recent = 8
 
     private struct State {
-        /// 这一轮醒来的时刻（`DispatchTime` 的纳秒）；0 是在等事件。
         var entered: UInt64 = 0
         var watching = false
-        /// 看守上一次醒来的时刻（同一个钟）。
         var checked: UInt64 = 0
         var page = "?"
         var actions: [String] = []
@@ -52,7 +47,6 @@ nonisolated final class MainThreadWatch: Sendable {
         timer.setEventHandler { [unowned self] in check() }
     }
 
-    /// 幂等。记下的条目存进 `archive`，存下后在主线程调 `recorded`（卡住时一次，恢复了带上时长再一次）。
     @MainActor
     func start(archive: DiagnosticArchive, version: String, recorded: @escaping @MainActor @Sendable (FreezeNote) -> Void) {
         let started = state.withLock { state in
@@ -79,7 +73,6 @@ nonisolated final class MainThreadWatch: Sendable {
         }
     }
 
-    /// 看守的开停都在锁里：开、停各只在 `watching` 翻转的那一下做一次，挂起与恢复的次数才配得上。
     private func turn(awake: Bool) {
         state.withLock { state in
             state.entered = awake ? DispatchTime.now().uptimeNanoseconds : 0
@@ -92,7 +85,6 @@ nonisolated final class MainThreadWatch: Sendable {
 
     private func check() {
         let (write, archive, recorded) = state.withLock { state -> (FreezeNote?, DiagnosticArchive?, (@Sendable (FreezeNote) -> Void)?) in
-            // 在锁里取时刻：锁外取的话主线程可能在取完之后才记下这一轮的醒来，醒来比"此刻"还晚
             let now = DispatchTime.now().uptimeNanoseconds
             var write: FreezeNote?
             // 看守隔了这么久才醒：这段时间进程没在跑（iOS 挂起了它），不算主线程忙。主线程常在结束后台任务的那一轮里就被挂起，

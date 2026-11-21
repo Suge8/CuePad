@@ -20,11 +20,8 @@ struct ClaudeHostedTasks {
     private var listed: Set<String> = []
     private var topLevel: Set<String> = []
     private var owner: [String: String] = [:]
-    /// 交回过中途结果、名下任务做完时会再跑的子代理
     private var paused: Set<String> = []
-    /// 名下任务刚做完、还没重新出现在清单里的子代理
     private var resuming: Set<String> = []
-    /// 顶层任务落定后、主会话为它跑的那一轮还没收尾的通知（`run_id`）与任务的结束时刻
     private var owed: [String: Date] = [:]
     private var ended: [String: Date] = [:]
 
@@ -41,10 +38,8 @@ struct ClaudeHostedTasks {
         paused.subtract(listed)
     }
 
-    /// `task_updated` 带来的结束时刻（毫秒）
     mutating func ended(_ id: String, at milliseconds: Double) { ended[id] = Date(timeIntervalSince1970: milliseconds / 1000) }
 
-    /// 一个任务落定（`completed`：做完或交回了中途结果；否则被停下或失败）；主会话要为它跑一轮时返回那一轮的开始。
     mutating func settled(_ id: String, run: String?, completed: Bool, at now: Date) -> Date? {
         if completed { paused.insert(id) } else { paused.remove(id) }
         if let parent = owner[id], paused.remove(parent) != nil { resuming.insert(parent) }
@@ -54,7 +49,6 @@ struct ClaudeHostedTasks {
         return end
     }
 
-    /// 一条 `result`：为某个通知跑的那一轮收尾了；返回它是不是。
     mutating func answered(_ result: JSONValue) -> Bool {
         guard result["origin"]?["kind"]?.string == "task-notification" else { return false }
         if let run = result["origin"]?["runId"]?.string { owed[run] = nil }

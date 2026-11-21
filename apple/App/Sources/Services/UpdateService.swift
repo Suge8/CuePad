@@ -8,9 +8,7 @@ protocol AppUpdater: AnyObject {
     var automaticallyChecksForUpdates: Bool { get set }
     var canCheckForUpdates: Bool { get }
     func checkForUpdates()
-    /// 后台查一次：有更新照常提示，没有不出声。
     func checkForUpdatesInBackground()
-    /// 更新装好前、App 要退出重启时问一次：返回 true 就先不重启，之后调用交来的 `install` 接着装。
     var postponeRelaunch: ((_ install: @escaping () -> Void) -> Bool)? { get set }
 }
 
@@ -26,7 +24,6 @@ final class UpdateService {
     @ObservationIgnored private var install: (() -> Void)?
     @ObservationIgnored private var watcher: Task<Void, Never>?
     @ObservationIgnored private var nudges: Task<Void, Never>?
-    /// 发版脚本发完时发的进程间通知（`release-mac.sh`）：这台装着的正式版当场查一次，不等定期检查。装与重启照常走更新窗与 `postpone`。
     static let checkNow = "\(AppIdentity.id).check-update"
     private(set) var waitingFor: Int?
 
@@ -65,7 +62,6 @@ final class UpdateService {
         updater?.checkForUpdates()
     }
 
-    /// 别的设备已用新版、这台停下同步时（`SyncStatus.outdated`）当场查一次，不等定期检查（默认一天一次）。
     func checkInBackground() {
         updater?.checkForUpdatesInBackground()
     }

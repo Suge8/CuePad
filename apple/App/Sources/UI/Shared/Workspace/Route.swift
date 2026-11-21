@@ -7,7 +7,6 @@ nonisolated enum Route: Hashable {
     case archive
     case trash
     case library
-    /// iOS 推入；Mac 盖在当前页上。
     case libraryFile(LibraryFile)
     case settings
     case conflicts
@@ -27,7 +26,6 @@ nonisolated enum Route: Hashable {
 }
 
 extension Route {
-    /// 只有哪种页，不带内容：会话页的 `seed` 是整页的对话。
     var trail: String {
         switch self {
         case .shelf: "shelf"
@@ -47,8 +45,6 @@ extension Route {
     }
 }
 
-/// `sessionID` 是 Pi 的会话 id（Mac 的桥按它认在线的会话），只有记录 id 的入口不带。`seed` 是推入前读好的这一页，只作首帧，
-/// 之后一律以 Store 的观察流为准；两者都不参与相等。
 nonisolated struct SessionRoute: Hashable {
     let id: UUID
     var sessionID: String?

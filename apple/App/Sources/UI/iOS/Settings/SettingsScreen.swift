@@ -49,7 +49,6 @@ struct SettingsScreen: View {
         .floatingHeader("设置")
     }
 
-    /// 演示模式没有同步：调试参数要看通知各状态时照样显示这一节。
     private static var previewsAlerts: Bool { DebugHooks.preset.alertStatus != nil }
 }
 
@@ -70,8 +69,6 @@ struct SettingsForm<Content: View>: View {
     }
 }
 
-/// 设置里一行状态的标题与下面的说明。说明按 `reserve`（会自己来去的那一句：连不上 iCloud）留出高度，此刻没说明或说明更短时留白：
-/// 断开、连上不是用户做的，说明一出一收整页的行就跟着跳。比它长的（要你处理的几种，不会自己来去）照常撑高。
 private struct StatusText: View {
     let title: String
     let detail: String?

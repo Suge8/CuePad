@@ -3,17 +3,14 @@ import CueBridge
 import CueStore
 
 extension Workspace {
-    /// Cue 从没在哪台 Mac 上设过（`CueProfile.hostID`，停用后仍留着）就弹，只这一次，不等检测与同步。已接入 Agent、只差 Cue 的老用户也弹这一次，停用过 Cue 的不再打扰。"出现过"记在 `AppSettings.setupOffered`：看过不接的人身上没有别的事实留下来。
     func offerSetup() {
         guard !services.settings.setupOffered, cue.hostID == nil else { return }
         services.settings.setupOffered = true
         showsSetup = true
     }
 
-    /// 什么时候有、能不能勾只在这里定。检测完、问过这台的 Agent 之后读，之前面板只写检测中。
     enum SetupCue: Equatable {
         case none
-        /// Cue 也许已在别的 Mac 上设过（换新 Mac 时库还没和 iCloud 对过一遍），先不提议在这台启用，免得把它从那台抢过来。
         case waiting(String)
         case needsAgent
         case enable
@@ -61,7 +58,6 @@ extension Workspace {
         do { try await services.installAgent(kind) } catch { fail(error) }
     }
 
-    /// Pi 开终端，你回到 CuePad 时再问（`recheckAgents`）。
     func logIn(_ kind: AgentKind) async {
         guard kind.facts.loginArguments != nil else {
             do { try await services.agents.openPiLogin() } catch { fail(error) }

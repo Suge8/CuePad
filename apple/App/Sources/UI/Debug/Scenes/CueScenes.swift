@@ -10,7 +10,6 @@ extension DebugSceneEntry {
         if scene == "cuememory" { workspace.cue.showsMemory = true }
         if scene == "cueschedules" { workspace.cue.showsSchedules = true }
         #else
-        // 一夜里来的话要在不看 Cue 页时写（看着时写当场就读掉了）：先离开、写完再回来，才是"回来时有新消息"的样子
         if DebugScene.args.cueOpts.presence == "away" {
             workspace.show(.progress)
             await NextFrame.wait()

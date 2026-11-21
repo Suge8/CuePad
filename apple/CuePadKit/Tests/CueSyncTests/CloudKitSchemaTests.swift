@@ -21,7 +21,6 @@ import Testing
     #expect(generated == committed, "记录映射变了：运行 TEST_RUNNER_CUEPAD_REGENERATE_SCHEMA=1 apple/scripts/xc.sh test kit -only-testing:CueSyncTests/CloudKitSchemaTests 重新生成，再导入开发环境（apple/CloudKit/AGENTS.md）")
   }
 
-  /// 新加的列不在 `fields` 里选去向（明文、加密、本机）就在这里失败，不会默认以明文进 iCloud。
   @Test func everyColumnOfASyncedTableIsDeclaredExactlyOnce() async throws {
     let store = try Fixture().store
     for table in Table.synced {

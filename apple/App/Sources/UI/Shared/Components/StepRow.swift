@@ -1,12 +1,9 @@
 import CueStore
 import SwiftUI
 
-/// 清单里的一步，点开在原位看里面：命令全文或改动，下面是输出的末尾（`ToolCallDetail`）。
-/// 会话所在的 Mac 上当场回会话文件取；别的设备上请那台 Mac 取了写在这一步上、随同步回来（做完的一轮才行，`CueStore.requestStep`）。
 struct StepRow: View {
     let item: ChatMessage.Tools.Item
     let session: SessionState
-    /// 做完的一轮是哪条回答；在跑的一轮为 nil。
     let message: UUID?
     let index: Int
     @Environment(\.palette) private var palette
@@ -15,7 +12,6 @@ struct StepRow: View {
     @Environment(\.chatStay) private var stay
     @State private var opened: Opened?
     @State private var key = UUID()
-    /// 这一次点开要去取（每点开一次换一个）：取的任务随这一行走，行没了、收起了就不再等。
     @State private var fetching: UUID?
 
     enum Opened: Equatable { case loading, ready(ToolCallDetail), missing(String) }
@@ -27,17 +23,14 @@ struct StepRow: View {
                     .buttonStyle(PressStyle(.inline))
                     .accessibilityExpanded(opened != nil)
                 switch opened {
-                // 取到了却是空的：这一步没有命令、改动与文字输出（看了一张图、搜了一下网）
                 case .ready(let detail): if detail.isEmpty { note(Text("这一步没有更多内容")) } else { StepWell(detail: detail) }
                 case .missing(let why): note(Text(why))
-                // 本机读是毫秒级的，读的那一下不另画；向 Mac 取要几秒
                 case .loading: if !services.holdsSteps(of: session) { note(Text("正在从 Mac 取").shimmering()) }
                 case nil: EmptyView()
                 }
             }
             .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: opened)
             .task {
-                // 等画面就绪、对话贴到最新处之后再点：和人点的时机一样
                 guard message != nil, DebugHooks.preset.stepOpen == index, (try? await Task.sleep(for: .seconds(2))) != nil else { return }
                 toggle()
             }
@@ -88,7 +81,6 @@ struct StepRow: View {
             #endif
             guard let message else { return }
             try await services.fetchStep(index, of: message, in: session)
-            // Mac 办完了，写上的详情随同步稍后到（`onChange`）；这之间那条回答被重读改写的话它就没了，不一直等
             try await Task.sleep(for: .seconds(10))
             if opened == .loading { opened = .missing(String(localized: "详情没同步过来，再点一次")) }
         } catch is CancellationError {
@@ -136,7 +128,6 @@ private struct StepWell: View {
         .transition(.opacity)
     }
 
-    /// 连着的同一种行并成一块，一块一个底色；段与段之间（`@@`）空一行。Mac 只交来一串 `+`/`-` 行、几段用 `@@` 隔开（没有文件抬头），按一段来读。
     private static func runs(_ diff: String) -> [(kind: UnifiedDiff.Line.Kind, text: String)] {
         let source = diff.hasPrefix("@@") || diff.hasPrefix("diff ") || diff.hasPrefix("--- ") ? diff : "@@\n" + diff
         var runs: [(kind: UnifiedDiff.Line.Kind, rows: [String])] = []

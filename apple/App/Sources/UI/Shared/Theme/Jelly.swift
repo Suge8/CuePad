@@ -37,10 +37,8 @@ struct Jelly<Value: Equatable, Content: View>: View {
 
     private func start(_ new: Value) {
         if reduceMotion {
-            // 样子没变时里面的点、变淡跟着这一下淡入淡出；样子变了的由 `handOff` 自带的节奏淡
             return withAnimation(Motion.fade) { run = JellyRun(from: new, to: new) }
         }
-        // 上一下画到了哪：画的值与形变都从最后求值的那一帧接着（按墙钟估会比动画实际走到的早一两帧，接上时跳一下）
         let time = run.drawn.time
         let shown = run.shown(at: time)
         let next = JellyRun(from: shown, to: new, move: move(shown, new), carry: run.pose(at: time), origin: run.drawn.progress)
@@ -146,7 +144,6 @@ nonisolated struct JellyPose: Equatable, Sendable {
     }
 }
 
-/// 几种一次性形变（借 lab 的软糖关键帧）。Cue 头像的几种拉长不超过 6%、上跳不超过身高的 5%：再多脑袋就顶出头像那块圆，40pt 的名牌里贴着玻璃上沿。
 enum JellyMove {
     case wake
     case happy
@@ -192,7 +189,6 @@ enum JellyMove {
         }
     }
 
-    /// 其余只要样子变了（换了静止图，或从在听的倾里出来）就轻压回弹：姿势一变必有一个动作，不硬切。
     static func cue(_ old: CueBeat, _ new: CueBeat) -> JellyMove? {
         guard old != new else { return nil }
         let asleep: Set<CueBeat> = [.away, .failed]

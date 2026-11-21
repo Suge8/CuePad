@@ -9,7 +9,6 @@ struct HandOffInput: View {
     @Environment(\.palette) private var palette
     @State private var digest: SessionDigest?
     @State private var choice: UUID?
-    /// 点了"新会话"：任务绑着会话也另开一个。
     @State private var fresh = false
     @State private var planned: HandOffTargets.Options?
     @State private var launchAgents: MacAgents?
@@ -25,8 +24,6 @@ struct HandOffInput: View {
         return planned?.bound.flatMap { bound in all.first { $0.state.sessionID == bound.state.sessionID } }
     }
     private var launching: SessionLaunching { workspace.sessionLaunching(outbox.launchKey) }
-    /// 交给新会话时输入框上方那一行：开不了的原因，或发出后的进度与结果。
-    /// 开新会话的请求在路上：整个输入框停用——这时改的字进不了已发出的那一次，换去处再发会把同一件任务交给两个 Agent。
     private var waiting: Bool { launching.inFlight(at: services.speech) }
     private var launchStatus: LaunchStatus? {
         let noMac = planned?.noMac == true
@@ -38,7 +35,6 @@ struct HandOffInput: View {
         return chosen != nil || launchTools != nil && launching.canSubmit(at: services.speech)
     }
 
-    /// 草稿在 `Workspace.handOffDraft`：交给已有会话的发出即收起，写库失败时放回草稿、重新浮起这个输入框；交给新会话的留着看进度（`launchHandOff`）。
     private var box: Binding<ComposerDraft> {
         let workspace = workspace, outbox = outbox
         return Binding(get: { workspace.handOffDraft }) { draft in
@@ -68,7 +64,6 @@ struct HandOffInput: View {
         return (project, host)
     }
     private var launchHost: String? { launchSpot?.host }
-    /// 交给新会话时的那一排：用哪家、哪个模型在这里就选，发出即开。
     private var launchTools: MacAgents? {
         launchAgents.flatMap { services.settings.launchChoice(on: $0, in: launchSpot?.project) == nil ? nil : $0 }
     }
@@ -101,7 +96,6 @@ struct HandOffInput: View {
             try HandOffTargets.Options(card, in: store)
         }
         .observingLaunchAgents(id: launchHost, into: $launchAgents, onError: workspace.fail) { [host = launchHost] _ in host }
-        // 改模型、思考强度的请求与目录记录不在会话列表那一页里：只读选中的那个（会话变了就带着新的会话状态重读）
         .observing(services.store, id: chosenLive, into: $digest, onError: workspace.fail) { [session = chosenLive] store in
             guard let session else { return SessionDigest(session: nil, project: nil, deliveries: []) }
             return SessionDigest(
@@ -112,7 +106,6 @@ struct HandOffInput: View {
 
     private var header: some View {
         HStack(spacing: Spacing.item) {
-            // 新会话放最上面：会话多了也不用往下翻
             MenuButton(sections: [
                 ChoiceMenu.Section(choices: [ChoiceMenu.Choice(title: "新会话", image: .icon(.add), checked: chosen == nil) { fresh = true }]),
                 ChoiceMenu.Section(choices: sessions.map { item in
@@ -137,13 +130,11 @@ struct HandOffInput: View {
     private func send() {
         guard canSend else { return }
         guard let session = chosen?.state else {
-            // 选过的那个会话已经不在了：同点了"新会话"，另开一个
             workspace.launchHandOff(outbox, opening: planned?.opening)
             return
         }
         let sent = workspace.reply(
             to: session, commands: commands, from: box, accepting: .reply, card: outbox.card, saying: Dotted(String(localized: "已交给 \(session.title)")))
-        // 面板这就收起，那一条还在排队写：看板上放下的卡等它写完再定去哪
         workspace.answer { _ in await sent.value }
         focused = false
         workspace.outbox = nil

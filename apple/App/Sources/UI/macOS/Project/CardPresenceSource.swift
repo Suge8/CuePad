@@ -12,7 +12,6 @@ extension EnvironmentValues {
     @Entry var cardSelected = false
 }
 
-/// 单独的修饰器：只有它读这张卡的按下与选中状态，卡片本身的内容不随之重算。
 private struct CardPresenceSource: ViewModifier {
     let card: UUID
     let presence: CardPresence

@@ -2,9 +2,7 @@ import CueStore
 import CueSync
 import Foundation
 
-/// 同步测量（`SyncBench`）伸进产品代码的钩子；Release 里什么都不做。
 extension DebugHooks {
-    /// 页面的订阅拿到新值（`Observing`）：测量据此记一句话第一次画进页面的时刻。
     static func observed(_ value: some Sendable) {
         #if DEBUG && os(macOS)
         if SyncBench.role != nil { SyncBench.Watch.observed(value) }

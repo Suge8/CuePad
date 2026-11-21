@@ -3,8 +3,6 @@ import Foundation
 import Network
 import Synchronization
 
-/// 门铃中转的替身：照 relay/server.ts 的门铃部分走（challenge → auth → ready，ring 转给别的已入房连接），不验签名、不转通话。
-/// 入房的连接按先后编号（`drop` 用）；`holding` 时新来的连接一到就断，像中转连不上。
 nonisolated final class FakeRelay: Sendable {
     private struct State {
         var live: [(id: Int, connection: NWConnection)] = []
@@ -44,11 +42,9 @@ nonisolated final class FakeRelay: Sendable {
 
     deinit { listener.cancel() }
 
-    /// 入过房的连接数（重连的另算一次）。
     var joined: Int { state.withLock { $0.joined } }
     var rings: Int { state.withLock { $0.rings } }
 
-    /// 断掉第 `index` 个入房的连接（从 0 数），`holding` 为真时之后来的都不让进，直到 `release`。
     func drop(_ index: Int, holding: Bool) {
         let dropped = state.withLock { state in
             state.holding = holding

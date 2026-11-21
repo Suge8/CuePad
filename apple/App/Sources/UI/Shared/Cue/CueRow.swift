@@ -18,19 +18,13 @@ struct CueSegment: View, Equatable {
     }
 }
 
-/// 对话里的一格，连同上面的时间与间距。只按自己的输入比较（`equatable()`）：对话里来了一句、Cue 的状态变了，别的格子不重算——
-/// 发出一句的那一刻对话要重排，每格都重算的话那一帧就掉了。"已送达"只交给用得着的那一格。
 struct CueRow: View, Equatable {
     let row: CueThread.Row
     let shots: [CueShown]
     let joined: Bool
     let stamp: Date?
     let delivered: Bool
-    /// 这一格是新消息：左边一颗小点（`CueUnreadDot`），末尾进出滚动区时报给页面（`CueViewing`）。
-    /// 页边距（`chatMargin`）放得下时在气泡外隔一条缝；放不下（iPhone、窄窗口的 iPad）点骑在气泡左缘上（`straddlesDot`），离屏缘约 12 点：
-    /// 挤在屏边与气泡之间时离屏缘只剩 3 点，像被切掉一半。
     let unread: Bool
-    /// 后面又有了话：醒来那几行收成一行（`CueNoteLog`）。
     let settled: Bool
     @Binding var opened: PreviewOpening?
     @Binding var seen: [UUID: Date]
@@ -70,7 +64,6 @@ struct CueRow: View, Equatable {
             }
     }
 
-    /// `swapsInPlace`：Cue 在这台 Mac 值班，它的话原位换下正在说的那句（`CueEnding`），直接出现。你的话由回复框那头的发出动画接上，其余各格直接出现。
     static func arrives(_ row: CueThread.Row, swapsInPlace: Bool) -> Bool {
         switch row {
         case .cue: !swapsInPlace
@@ -104,9 +97,6 @@ struct CueRow: View, Equatable {
     private var straddlesDot: Bool { margin < CueUnreadDot.room }
 }
 
-/// Cue 此刻在做什么只写在这里，不进对话里的哪一格（经过、醒来那一行都是记录，`CueTrace`）：一轮在跑时是 Cue 本人（`LiveFigure`），
-/// 回复到了它碎开让位、回复从它的位置接上。
-/// 正在说的话（`CueKeeper.speech`）只有这个视图读它，出字时对话列表不重算；它与对话在同一次更新里拿到同一份对话，落库了（`LiveDraft.landed`）就不再显示，换下是同一帧里的一减一加。
 struct CueEnding: View {
     let newestSaid: Date?
     let joined: Bool
@@ -118,7 +108,6 @@ struct CueEnding: View {
             #if os(macOS)
             let draft = services.cue.keeper?.speech.draft
             if let draft, !draft.landed(newestReply: newestSaid, record: nil) {
-                // 与落库后的那句（`CueSays`）同一颗气泡、同一个位置，换下时正文不动
                 BubbleWidth(fraction: CueBubble.cueWidth, edge: .leading) {
                     MarkdownText(source: draft.text).equatable().cueBubble(joined: joined)
                 }
@@ -132,7 +121,6 @@ struct CueEnding: View {
         }
     }
 
-    /// Mac 上开始出字就是回复到了：角色当场让位给草稿。
     private func figure(speaking: Bool) -> some View {
         LiveFigure(live: speaking ? nil : FigureLive(cue: workspace.cue.presence, now: workspace.cue.now), handoff: FigureHandoff(reply: newestSaid, speaking: speaking))
     }

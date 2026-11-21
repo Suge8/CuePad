@@ -3,7 +3,6 @@ import CueStore
 import CueText
 import Foundation
 
-/// 上传记录的通道（`RecordSender`）：实时通道是 `Table.live` 的表，其余同步表走后台通道（附件的文件另走 `FileSender`）。
 enum Lane: CaseIterable, Sendable {
   case live, bulk
 
@@ -11,28 +10,19 @@ enum Lane: CaseIterable, Sendable {
 
   var tables: [Table] { Table.synced.filter { Lane($0) == self } }
 
-  /// 一批至多几条：实时通道的一批小，积压再多，新写的也在下一批里。
   var limit: Int { self == .live ? 50 : CloudKitLimits.recordsPerRequest }
 }
 
 struct OutgoingBatch: Sendable {
   var saves: [CKRecord]
   var deletes: [CKRecord.ID]
-  /// 交出时这条通道里可传的全在这批里，截至这个同步变更代数：整批收下就记作没有了（`SyncCoordinator.drained`）。
   var drains: (lane: Lane, generation: Int)?
-  /// 挑到了、但这一版传不上去的（`SyncCoordinator.unsendable`）：不在批里，在等的据此答没传成。
   var stuck: Set<String> = []
-  /// 挑到了、仍待推送但这批装不下（超过 `limit`）或在路上的：在等的接着等下一批。
   var left: Set<String> = []
   var names: Set<String> { Set(saves.map(\.recordID.recordName) + deletes.map(\.recordName)) }
 }
 
 extension SyncCoordinator {
-  /// 这条通道的下一批：至多 `limit` 条，没有可传的是空批。此刻不能同步（停下了、没有账号）或读库出错时抛出：
-  /// 调用方分得清"没有可传的"与"这次准备不了"。上次确定这条通道没有可传的之后，只看其后的提交碰过的记录（`drained`）；
-  /// `wanted`（有人在等的）另按主键查、排在最前：这一版传不上去的不算剩下，`drained` 之后不再出现在增量里。
-  /// `excluding`（这条通道在路上的）不挑，算作装不下的（`left`）。`urgentOnly`：只挑一写下就该传的版本（`CueStore.pendingSync`），
-  /// 不算这条通道挑完了，不动 `drained`。
   func nextBatch(
     _ lane: Lane, limit: Int, urgentOnly: Bool = false, wanted: Set<String> = [], excluding inFlight: Set<String> = []
   ) async throws -> OutgoingBatch {
@@ -52,7 +42,6 @@ extension SyncCoordinator {
       failed(error)
       throw error
     }
-    // 附件记录带着文件，走文件那一路（`FileSender`）；那一路在传的，删除也等它传完
     let names = pending.saves.filter { $0.table != .attachments }.map(\.id)
     var deletes = pending.deletes.filter { !fileUploads.contains($0) && !inFlight.contains($0) }
     var batch = OutgoingBatch(saves: [], deletes: [])
@@ -69,7 +58,6 @@ extension SyncCoordinator {
       }
       if let record { batch.saves.append(record) } else if unsendable[name] != nil { batch.stuck.insert(name) }
     }
-    // 删除只认删除被拒记下的 `.min`：先前哪一版保存被拒，不挡之后删掉它
     batch.stuck.formUnion(deletes.filter { unsendable[$0] == .min })
     deletes.removeAll { unsendable[$0] == .min }
     let fits = max(limit - batch.saves.count, 0)
@@ -79,7 +67,6 @@ extension SyncCoordinator {
       if !urgentOnly, inFlight.union(fileUploads).isDisjoint(with: pending.saves.map(\.id) + pending.deletes) { drained[lane] = generation }
       return batch
     }
-    // 这一版传不上去的同不可传的一样不算剩下：改过才再出现在提交的增量里
     if !urgentOnly, batch.saves.count + batch.deletes.count + batch.stuck.count == names.count + pending.deletes.count {
       batch.drains = (lane, generation)
     }
@@ -92,13 +79,10 @@ extension SyncCoordinator {
       failed(error)
       throw error
     }
-    // 构造这批时可能停下了（拉到过高的门槛、要你决定）：停下后不再交出新的一批
     guard canSync else { throw SyncPaused() }
     return batch
   }
 
-  /// 上传问题只挂在仍待推送的记录上：从没收下过的记录被拒后本机删掉了，就没有要再传的，问题随之收起
-  /// （删除同步表的行会叫醒发送者，见 `CueStore.write`）。
   private func dropSettledIssues() async throws {
     let names = Set(facts.issues.compactMap { $0.kind == .upload ? $0.recordName : nil })
     guard !names.isEmpty else { return }
@@ -111,7 +95,6 @@ extension SyncCoordinator {
     facts = next
   }
 
-  /// 临交出前核对需要保留发送权的记录，过时版本仍由发送者沿原调度重读，不视为服务器收下。
   func reserveForUpload(_ prepared: OutgoingBatch) async throws -> (batch: OutgoingBatch, obsolete: Set<String>) {
     let obsolete = try await store.reserveForUpload(prepared.saves.compactMap { record in
       guard let table = RecordMapper.table(named: record.recordType), let stamp = record.modifiedAt else { return nil }
@@ -122,7 +105,6 @@ extension SyncCoordinator {
     return (batch, obsolete)
   }
 
-  /// nil：行已不在，或这一版传不上去（`unsendable`）。附件的文件不在本机的这一版记进 `unsendable` 并报告。读库出错抛出。
   func record(for id: CKRecord.ID) async throws -> CKRecord? {
     guard let row = try await store.syncRow(recordName: id.recordName), unsendable[id.recordName] != row.modifiedAt else { return nil }
     let base = try await store.systemFields(of: id.recordName).flatMap(RecordMapper.decodeSystemFields)
@@ -138,11 +120,9 @@ extension SyncCoordinator {
     return record
   }
 
-  /// 文件那一路要传这条附件记录：带上文件、记下交出的版本，在传完（`fileDone`）之前后台通道不删它、这一路不再交出。
-  /// 已在传、传不上去（文件不在本机、这一版被拒过）为 nil。读库出错抛出。
   func takeFile(_ name: String) async throws -> CKRecord? {
     guard canSync else { throw SyncPaused() }
-    guard fileUploads.insert(name).inserted else { return nil }  // 先占下再读：两趟同时来也只有一趟拿到
+    guard fileUploads.insert(name).inserted else { return nil }
     do {
       guard let record = try await record(for: recordID(name)), let stamp = record.modifiedAt else {
         fileUploads.remove(name)
@@ -156,15 +136,12 @@ extension SyncCoordinator {
     }
   }
 
-  /// 接上的上一个进程交给系统的上传（`FileSender.resume`）：同 `takeFile` 交出的，传完之前不删、不另传。
   func filesResumed(_ names: [String]) { fileUploads.formUnion(names) }
 
   func fileDone(_ name: String) { fileUploads.remove(name) }
 
-  /// 有记录收下就是一次成功（`succeeded`），并告诉实时层（`acceptances`）。
   func sent(_ sent: SentRecords, for batch: OutgoingBatch) async -> SendOutcome {
     guard !stopped else { return SendOutcome(progressed: false, paused: true) }
-    // 服务器答了才是连上了：有记录收下，或逐条的拒绝里有不是连不上的（版本冲突、限流）；全是连不上的不算
     let failures = sent.failedSaves.map(\.error) + sent.failedDeletes.map(\.error)
     if !sent.saved.isEmpty || !sent.deleted.isEmpty || failures.contains(where: { !SyncFault($0).isOffline }) { succeeded() }
     do {
@@ -187,19 +164,18 @@ extension SyncCoordinator {
       acceptances.yield(())
     }
 
-    // 没收下的仍是待推送（库里推导），下一批自然带上；这里只处理要先改本机状态才能成功的
     for (record, error) in sent.failedSaves {
       let name = record.recordID.recordName
       switch error.code {
       case .serverRecordChanged:
         if let server = error.serverRecord {
-          try await applyFetched([server], [])  // 带上服务器的版本标签；本机版本胜出的话下一批重传
+          try await applyFetched([server], [])
           outcome.progressed = true
         } else {
           report(.refused, detail: String(localized: "保存冲突但没有服务器版本：\(error.diagnosis)"), kind: .upload, recordType: record.recordType, recordName: name)
         }
       case .batchRequestFailed:
-        outcome.progressed = true  // 同批里别的记录被拒，这条自己没问题
+        outcome.progressed = true
       case .unknownItem, .zoneNotFound:
         if error.code == .zoneNotFound { outcome.zoneMissing = true }
         try await store.dropSyncMetadata([name])
@@ -223,7 +199,6 @@ extension SyncCoordinator {
     return outcome
   }
 
-  /// 其余（连不上、要等、账号）是整个发送者的事，合进这批的结局。删除没有版本，记 `.min`。
   private func refused(_ fault: SyncFault, _ name: String, version: Int64, _ outcome: inout SendOutcome) {
     guard fault == .rejected else { return outcome.fault = SyncFault.merge(outcome.fault, fault) }
     unsendable[name] = version

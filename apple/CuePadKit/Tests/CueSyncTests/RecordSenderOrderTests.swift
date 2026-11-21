@@ -5,9 +5,6 @@ import Testing
 
 @testable import CueSync
 
-/// 马上传的答复：先后由替身控制（上传挂着等放行），不靠负载。
-/// 每条都核对同一件事：答收下时，服务器上已有要的那一刻库里的那一版。
-/// 先后由替身控制，等的是替身记下的进展；等不到就记一条说出在等什么的问题，不挂住也不假通过。
 private func until(_ what: String, _ condition: () async -> Bool) async {
   do { try await eventually(what, condition) } catch { Issue.record(error) }
 }
@@ -15,7 +12,6 @@ private func until(_ what: String, _ condition: () async -> Bool) async {
 @Suite struct RecordSenderOrderTests {
   let rig = try! Rig()
 
-  /// 上传挂着等放行。
   actor Gated: RecordUploader {
     private(set) var calls = 0
     private(set) var bodies: [String: String] = [:]
@@ -44,7 +40,6 @@ private func until(_ what: String, _ condition: () async -> Bool) async {
 
     func saveZone() async throws {}
 
-    /// 之后的上传从 0 数起、挂着等放行。
     func hold() {
       (calls, released, gating) = (0, [], true)
     }
@@ -54,7 +49,6 @@ private func until(_ what: String, _ condition: () async -> Bool) async {
       holds.removeValue(forKey: index)?.resume()
     }
 
-    /// 放行所有挂着的与之后的上传。
     func open() {
       gating = false
       holds.values.forEach { $0.resume() }
@@ -64,7 +58,6 @@ private func until(_ what: String, _ condition: () async -> Bool) async {
     func untilCalls(_ count: Int) async { await until("第 \(count) 次上传发出") { calls >= count } }
   }
 
-  /// 起好发送者，把库里已有的待推送发完；之后的上传挂着等放行。
   func started(_ server: Gated) async -> RecordSender {
     let sender = RecordSender(uploader: server, coordinator: rig.coordinator)
     await server.set(gating: false)
@@ -84,21 +77,20 @@ private func until(_ what: String, _ condition: () async -> Bool) async {
     try await rig.store.updateCard(id) { $0.body = body }
   }
 
-  /// 同一条连要两次、中间改过：第二次只在新版收下后答，答的那一刻服务器上已是新版。
   @Test func askedTwiceWithAnEditBetweenIsAnsweredWithTheNewVersion() async throws {
     let server = Gated()
     let (r, R) = try await card("r1")
     let sender = await started(server)
     try await edit(r, "r2")
     let first = Task { await sender.send([R]) }
-    await server.untilCalls(1)  // r2 那一批在路上、挂着
+    await server.untilCalls(1)
     try await edit(r, "r3")
     let second = Task { () -> (Bool, String?) in
       let sent = await sender.send([R])
       return (sent, await server.bodies[R])
     }
-    await server.release(0)  // r2 收下：答不了第二次
-    await server.untilCalls(2)  // r3 那一批已在路上、挂着：此刻答了就是拿 r2 答的
+    await server.release(0)
+    await server.untilCalls(2)
     await server.open()
     #expect(await first.value)
     let (sent, body) = await second.value
@@ -107,7 +99,6 @@ private func until(_ what: String, _ condition: () async -> Bool) async {
     await sender.stop()
   }
 
-  /// 断网时答没传上，网络回来再要就传上。
   @Test func offlineIsAnsweredAsNotSentAndTheNextAskAfterReconnectingSends() async throws {
     let server = Gated()
     let (r, R) = try await card("r1")
@@ -121,7 +112,6 @@ private func until(_ what: String, _ condition: () async -> Bool) async {
     await sender.stop()
   }
 
-  /// 一批里服务器拒了一条：这次答没传上，同批收下的单独要答收下，再要被拒的那条当场答没传上。
   @Test func aPartlyRefusedBatchAnswersEachRecordOnItsOwn() async throws {
     let server = Gated()
     let (a, A) = try await card("a1"), (b, B) = try await card("b1")

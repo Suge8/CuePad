@@ -5,8 +5,6 @@ import Synchronization
 import Testing
 @testable import CueBridge
 
-/// 真 Pi（钉住的版本，`PinnedAgent.pi`）的测试驱动，RPC 模式。所有状态落在临时目录：agent 目录（`PI_CODING_AGENT_DIR`）与家目录，
-/// 绝不碰真实 ~/.pi；模型是本用例的假模型（`FakeModel`，经 agent 目录的 `models.json` 指过去，Chat Completions），零网络。
 let pinnedPi = PinnedAgent.pi
 
 /// FireCode（Pi 扩展，npm 的 `pi-firecode`）随 Pi 一起钉住装进缓存（`Tests/agents.json` 的 `with`）；
@@ -101,7 +99,6 @@ final class PiProcess: @unchecked Sendable {
     private final class Anchor {}
     static var cuepad: URL { Bundle(for: Anchor.self).bundleURL.deletingLastPathComponent().appending(path: "cuepad") }
 
-    /// 假模型的三个模型：标价 echo-b 最低、echo（缺省的当前模型）其次（起名挑同一 provider 里最便宜的）；echo-think 能思考，echo-b 不能看图。
     static func writeModels(_ model: FakeModel, into agent: URL) throws {
         func entry(_ id: String, reasoning: Bool = false, images: Bool = true, cost: (Double, Double)) -> [String: Any] {
             ["id": id, "name": id, "reasoning": reasoning, "input": images ? ["text", "image"] : ["text"], "contextWindow": 100_000, "maxTokens": 4096,
@@ -138,12 +135,10 @@ final class PiProcess: @unchecked Sendable {
         let description: String
     }
 
-    /// 只看 Pi 事件的结构化字段，与 FireCode 的文案和语言无关。
     var subagentsToolFailed: Bool {
         events.contains { $0["type"] as? String == "tool_execution_end" && $0["toolName"] as? String == "subagents" && $0["isError"] as? Bool == true }
     }
 
-    /// 工具报错时带着 FireCode 启动时发的全部提示原文失败（拒绝原因就在其中），不让测试只说"子代理没出现"。
     func requireSubagentsTool() throws {
         guard subagentsToolFailed else { return }
         let notices = events.filter { $0["type"] as? String == "extension_ui_request" && $0["method"] as? String == "notify" }
@@ -166,7 +161,7 @@ final class PiProcess: @unchecked Sendable {
                 if n <= 0 { break }
                 consume(Data(buffer[0..<n]))
             }
-            _ = handle // 读线程存活期间持有句柄，fd 不会被提前关闭
+            _ = handle
         }
     }
 
@@ -193,7 +188,6 @@ final class PiProcess: @unchecked Sendable {
 
     func kill(_ signal: Int32) { Darwin.kill(process.processIdentifier, signal) }
 
-    /// 这句话的那一轮停在假模型里，直到测试放行（`FakeGate.open`）或 Pi 停下这一轮；放行后照 `then` 答。
     func hold(_ prompt: String, then reply: FakeReply? = nil) -> FakeGate {
         let gate = model.gate()
         model.on({ $0.prompt.contains(prompt) }) { .held(gate, then: reply ?? .say("ECHO \($0.prompt)")) }

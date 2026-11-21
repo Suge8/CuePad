@@ -1,9 +1,6 @@
 import QuartzCore
 import SwiftUI
 
-/// 声纹的绘制参数，不持有通话生命周期。十三根墨线始终是同一批图层：连接时围拢，听说时展开，静音和结束时收束；
-/// 收成种子（`seed`）时停在原样不动（那时整条正淡走，再收一遍看不见、只多一次提交），下一次离开种子时从正中一点长开成此刻的样子（手机通话接通时，`PhoneCall`）。
-/// 待连接与处理的光沿环行走只是等待信号；听说的起伏只来自音轨，静置没有假音量循环。
 struct VoiceRibbon: Equatable {
     let activity: CueVoiceActivity?
     let muted: Bool
@@ -26,7 +23,6 @@ struct VoiceRibbon: Equatable {
         case .failed: return 0.12 + shoulder * 0.22
         case .connecting, .processing: return 0.16
         case .listening, .speaking:
-            // 一根对应最近一个采样；尚未填满的左侧为空，不把起步的几帧拉伸到整条宽度。
             let slot = samples.count - VoiceRibbonLayer.count + index
             let sample = slot >= 0 && slot < samples.count ? samples[slot] : 0
             return 0.10 + shoulder * (0.20 + min(1, max(0, sample)) * 0.68)
@@ -34,7 +30,6 @@ struct VoiceRibbon: Equatable {
     }
 }
 
-/// 只在状态或采样到达时提交目标，逐帧插值交给渲染服务。每条被打断的过渡从 presentation layer 接续，不延后业务状态。
 final class VoiceRibbonLayer: CALayer {
     nonisolated static let count = 13
     private static let stroke: CGFloat = 2.4
@@ -43,7 +38,6 @@ final class VoiceRibbonLayer: CALayer {
     private static let lightSteps = 24
     private var waiting = false
     private var installed = false
-    /// 停在种子上：下一次展示从正中一点长开。
     private var seeded = false
 
     nonisolated override init() {
@@ -96,7 +90,6 @@ final class VoiceRibbonLayer: CALayer {
         DebugHooks.voiceRibbon(ribbon, on: self)
     }
 
-    /// `from`：从这个值起（长开时的种子），不从此刻画着的样子起。
     private func redirect(_ layer: CALayer, key: String, to value: Any?, from: Any? = nil, animate: Bool) {
         let old = layer.value(forKeyPath: key) as? NSObject
         let next = value as? NSObject
@@ -108,7 +101,6 @@ final class VoiceRibbonLayer: CALayer {
             let move = CABasicAnimation(keyPath: key)
             move.fromValue = shown
             move.toValue = value
-            // 电平每 50ms 到来，缓出让第一帧就跟随；空间展开仍用同一条 glide，不让采样重启位移动画。
             let followsSample = key == "path" || key == "fillColor"
             move.duration = followsSample ? Motion.Fade.duration : Motion.Glide.duration
             move.timingFunction = followsSample ? Motion.Fade.timing : Motion.Glide.timing
@@ -141,7 +133,6 @@ final class VoiceRibbonLayer: CALayer {
         }
         if animate {
             let settle = CABasicAnimation(keyPath: "opacity")
-            // 循环保持全局相位；把当前亮度与该相位的差淡去，避免重入时旧 settle 结束后突然闪亮。
             settle.isAdditive = playing
             settle.fromValue = playing ? shown - current : shown
             settle.toValue = playing ? 0 : 1

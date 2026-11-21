@@ -18,11 +18,9 @@ struct CueListPanel<Rows: View, Field: View, Empty: View>: View {
         }
         .scrollEdgeEffectHidden()
         .overlay { if isEmpty { empty.padding(Spacing.panel) } }
-        // 滚动区止于胶囊半高处，胶囊下半截伸出滚动区：内容只从胶囊背后滚过，不在它下面与圆角外露出被面板下沿切掉的半行
         .safeAreaInset(edge: .bottom, spacing: 0) {
             field
                 .padding(.horizontal, Spacing.block)
-                // 单行时两头正好是半圆（胶囊）；新定时在上面展开几点时是圆角的块，里面那块随它同心（`Radius.nested`）
                 .containerShape(.rect(cornerRadius: Radius.field))
                 .glass(in: .rect(cornerRadius: Radius.field))
                 .padding(.horizontal, Spacing.block)
@@ -34,7 +32,6 @@ struct CueListPanel<Rows: View, Field: View, Empty: View>: View {
     #if os(macOS)
     var body: some View {
         list
-            // 右上的问号与关闭占着一排：第一行从它们下面起，滚动条照旧到顶
             .safeAreaPadding(.top, CueListMetrics.top)
             .contentMargins(.top, -CueListMetrics.top, for: .scrollIndicators)
             .overlay(alignment: .topTrailing) {

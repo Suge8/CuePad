@@ -16,7 +16,6 @@ extension Typography {
         return paragraph
     }()
     #else
-    /// Kit 接收默认档位的设计值，由当前视图的 trait 缩放一次；不能把已缩放的 preferredFont 再缩一遍。
     static var readingFont: UIFont { baseFont(.body) }
     static var editorHeadingFont: UIFont { baseFont(.title3, weight: .semibold) }
     static var editorCodeFont: UIFont { baseFont(.footnote, monospaced: true) }

@@ -21,22 +21,18 @@ final class IOSEditorHandle {
     }
 }
 
-/// 正文只在创建时载入一次，之后编辑器是这张卡正文的唯一写者。
 struct IOSEditorHost: UIViewRepresentable {
     let initialText: String
     let theme: CueEditorTheme
     let handle: IOSEditorHandle
     let onChange: (String) -> Void
-    /// 都为 nil 时键盘上方只有"收起键盘"。
     var onInsertImage: (() -> Void)?
     var onInsertFile: (() -> Void)?
     var onVariables: (() -> Void)?
     var selectionActions: [CueSelectionAction] = []
     var onError: (any Error) -> Void = { _ in }
-    /// 高贴着字、自己不滚（任务气泡：整张纸一起滚）；否则铺满给的地方、在里面滚（纸页）。
     var fits = false
     var bottomInset: CGFloat = 0
-    /// false：盖着别的东西、看不见时（技能与规则文件页标出合并时）收起键盘、不接输入、读屏跳过；回到 true 时之前拿着键盘的再拿回来。
     var editable = true
     @Environment(AppServices.self) private var services
     @Environment(Workspace.self) private var workspace
@@ -121,7 +117,6 @@ struct IOSEditorHost: UIViewRepresentable {
 
 final class KeyboardBar: UIToolbar {
     private static let itemSize: CGFloat = 44
-    /// 随 SwiftUI 更新而替换的动作（工具栏本身只建一次）。也是宿主的协调者：跟着附件传输重画文件牌的任务挂在这里，编辑器拆掉时取消。
     final class Actions {
         var insertImage: () -> Void = {}
         var insertFile: () -> Void = {}

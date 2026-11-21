@@ -15,7 +15,6 @@ extension DebugScene {
             version: "2026.11.6（2611060241）", device: "iPhone18,1", os: "Version 27.2 (Build 24B5089g)")
     }
 
-    /// `cpu`：App 在那 5 秒里的 CPU 用时，每次都不同（同一种并成一条时原因原文各列一行）。
     private static func watchdogCrash(end: String, cpu: String, hang: Bool) -> Data {
         let reason = "RBSTerminateContext domain:10 code:0x8BADF00D explanation:[app<com.sugeh.cuepad>] Failed to terminate gracefully after 5.0s "
             + "ProcessVisibility: Foreground ProcessState: Running WatchdogEvent: process-exit WatchdogVisibility: Foreground "
@@ -53,7 +52,6 @@ extension DebugScene {
         """
     }
 
-    /// 自顶向下：前 13 帧照那份真机诊断（UUID 与偏移），之后是常见的主线程底部；CuePad 那一帧的 UUID 是 2611060241 的主程序。
     private static let sampleFrames: [(String, String, Int)] = [
         ("libsystem_malloc.dylib", "23C72FA4-C616-3B28-B7AC-1285D74905B1", 239_736),
         ("libswiftCore.dylib", "1626B042-8BEF-3CD5-B323-614D439C4279", 35_888),

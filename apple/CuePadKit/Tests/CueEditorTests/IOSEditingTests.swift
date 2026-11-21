@@ -55,7 +55,7 @@ struct IOSEditingTests {
             let found = attachments(in: item.result)
             let attachment = try #require(found.first as? CueImageAttachment)
             #expect(found.count == 1 && h.store.storedData.count == 1 && h.store.fileURL(for: attachment.key) != nil)
-            if fromFile { #expect(h.store.storedData == [png]) }  // 文件原样入库，不重新编码
+            if fromFile { #expect(h.store.storedData == [png]) }
         }
     }
 

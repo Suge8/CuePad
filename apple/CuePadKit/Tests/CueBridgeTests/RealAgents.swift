@@ -51,14 +51,12 @@ enum RealAgents {
 
     static let tiered = Tiered()
 
-    /// 按家参数化的用例第一句调
     static func require(_ agent: AgentKind) throws {
         if let reason = pinned(agent).uncovered { try Test.cancel(Comment(rawValue: reason)) }
     }
 }
 
 extension Tag {
-    /// 真 Agent 的冒烟（`RealAgents.Tiered`）
     @Tag static var smoke: Self
 }
 

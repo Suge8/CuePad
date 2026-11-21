@@ -3,7 +3,6 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 宽屏主区并排（最左的会话旁边再开别的会话、灵感；Mac 上还有活预览）时的排布。
 @Suite(.releasesLibraries)
 struct SideBySideTests {
     let rig = TestApp()
@@ -19,7 +18,6 @@ struct SideBySideTests {
         workspace.openSession(SessionState.recordID(sessionID: sessionID), sessionID: sessionID, in: column)
     }
 
-    /// 放得下会话条、一个会话与 Cue 的窗口。
     private func cueShown(_ workspace: Workspace) -> Bool { workspace.cueShown(WideMetrics(width: 1600, workspace: workspace)) }
 
     @Test func 右半开着时Cue收成钮_收起右半回到原来的选择_选择本身没被改() {

@@ -26,7 +26,6 @@ extension DebugScene {
     }
 
     #if os(macOS)
-    /// 走真的失败那一路（`Workspace.launch` 记下原因）：原因怎么写、写在哪与真的没开成一样。
     private static func failLead(_ workspace: Workspace) async throws {
         guard let task = workspace.openTask?.task,
               let leaf = try await workspace.services.store.children(of: task).first(where: { $0.isTask && $0.status != .done })

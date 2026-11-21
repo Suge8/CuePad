@@ -18,12 +18,12 @@ struct ThrottleTests {
     for sync in [macSync, phoneSync] {
       await sync.start()
       try await sync.syncNow()
-      await sync.push()  // 对过最低对端版本：之后没有这台自己发起的请求
+      await sync.push()
     }
 
     try JSONEncoder().encode(["until": Date.now.timeIntervalSince1970 + 60, "retryAfter": 1]).write(to: directory.appending(path: "throttle.json"))
     await #expect(throws: CKError.self) { try await macSync.syncNow() }
-    try FileManager.default.removeItem(at: directory.appending(path: "throttle.json"))  // 只限这一次：之后被拒只因没守 Retry-After
+    try FileManager.default.removeItem(at: directory.appending(path: "throttle.json"))
 
     let card = try await mac.store.createCard(body: "限流时记的")
     let name = card.id.uuidString.lowercased()
@@ -36,7 +36,6 @@ struct ThrottleTests {
     try await phoneSync.syncNow()
     #expect(try await phone.store.card(card.id)?.body == "限流时记的")
 
-    // 服务器记下的请求：回了 429 的那一次之后、它给的 Retry-After 到点之前到的
     let early = try RawDB(directory.appending(path: "cloud.sqlite")).rows("""
       SELECT r.kind FROM requests r JOIN requests refused ON refused.result = '429'
       WHERE r.rowid > refused.rowid AND r.t < refused.t + refused.wait

@@ -5,7 +5,6 @@ import Testing
 @testable import CuePad
 
 extension CueEvalTests {
-    /// 测"不该问却问"：他亲口说过推送不用问，会话做完问推不推，Cue 直接答（靠当时照原话 note 并 pin 记下）。
     @Test func w放行过的不再问() async throws {
         try await CueEval.run(
             "w-放行过的不再问",
@@ -28,7 +27,6 @@ extension CueEvalTests {
         }
     }
 
-    /// 测必要的打扰：约好的时间点到了（一次性、没挂任务的定时），tell 带 urgent，只说这一件事。
     @Test func x到点提醒() async throws {
         try await CueEval.run(
             "x-到点提醒",
@@ -48,7 +46,6 @@ extension CueEvalTests {
         }
     }
 
-    /// 他一句话要定期做一件事：定成每周一 9:00 的定时、挂在一件任务上（任务先建好、不开工）。
     @Test func x2说一句建定时() async throws {
         try await CueEval.run(
             "x2-说一句建定时",
@@ -67,7 +64,6 @@ extension CueEvalTests {
         }
     }
 
-    /// 挂在任务上的每周定时到点：开工那件任务，这一次的结果是一条会话；任务不 done（done 了就不再定时），不打扰他。
     @Test func x3定时到点开工() async throws {
         try await CueEval.run(
             "x3-定时到点开工",

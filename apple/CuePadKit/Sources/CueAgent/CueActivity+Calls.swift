@@ -2,10 +2,7 @@ import CueStore
 import CueText
 import Foundation
 
-/// 认 Cue 的一次工具调用（两种说法给谁看见 `CueActivity` 头注释）：正在用时碰到的那一处（`step`，界面按按钮动词表写）或没碰哪一处时那一句（`detail`），
-/// 与做完后经过清单里那一条（`item`：给 Cue 自己看的说法写在 `target`，碰到的那一处另记在 `name`、`task`、`session`，与 `step` 同一对）。
 extension CueActivity {
-  /// 这次调用给了会话一个去处：对它说话、留给他回、收回、做完（含收掉会话）或就它问他。`CueKeeper.leaveUnattended` 据此认一轮里谁已经有去处。
   public static func settlesStop(tool: String, arguments: String) -> Bool {
     let args = Parsed(arguments)
     switch tool {
@@ -15,20 +12,16 @@ extension CueActivity {
     }
   }
 
-  /// 调用开始时认一次对象（`Named`），存在这次调用上，正在用时那一句与做完后那一条都用它，不再查第二次库。
   public static func named(tool: String, arguments: String, store: CueStore) async -> Named {
     await Named(Parsed(arguments), tool: tool, store: store)
   }
 
-  /// 任务那个工具指了哪一处时有；看板（没指哪一处）、认不出的动作为 nil。
   public static func step(tool: String, arguments: String, named: Named) -> Touch? {
     let args = Parsed(arguments)
     guard tool == "task", let kind = args.action?.kind, let name = named.name else { return nil }
     return Touch(kind: kind, name: name, task: named.task, session: named.session)
   }
 
-  /// 正在用时没碰哪一处（`step` 为 nil）的那一句。
-  /// `tool`、`arguments` 是大脑报的（`TurnEvent.tool`：去掉前缀的小写名字与 JSON 原文）。
   public static func detail(tool: String, arguments: String) -> String {
     let args = Parsed(arguments)
     func line(_ action: String, _ target: String? = nil) -> String {
@@ -54,9 +47,6 @@ extension CueActivity {
     }
   }
 
-  /// 做完的一次调用在经过清单里的一条：动到的任务与会话是开始时认出的（`named`，新建的那件开始时还没有，做成了再认，`Named.added`），记在这一条上；
-  /// 认不出（写错了、调用失败）就照它写的引用，不带任务与会话。
-  /// 对你说的话（tell）已在对话里：清单里只留首行。记忆的 UUID 是 Cue 内部的身份，不写给人看。
   public static func item(tool: String, arguments: String, named: Named, failed: Bool, store: CueStore) async -> ChatMessage.Tools.Item {
     let args = Parsed(arguments)
     func item(_ kind: ChatMessage.Tools.Kind, _ target: String, at place: Named? = nil) -> ChatMessage.Tools.Item {
@@ -67,7 +57,6 @@ extension CueActivity {
     switch tool {
     case "task":
       let action = args.action
-      // 收回不上经过：没有与之同名的按钮（`CueActivity.verb`），只进 Cue 自己的上下文
       guard let words = action?.words(named.quoted, board: args.board, starts: args.raw["start"] as? Bool == true) else { return item(.other, "task") }
       guard let kind = action?.kind else { return item(.other, words) }
       let place = action == .add && !failed ? await named.added(args, store: store) : named
@@ -79,12 +68,10 @@ extension CueActivity {
       switch args.line("action") {
       case "recall": return item(.search, args.line("query") ?? "记忆")
       case "note":
-        // 换掉了几条要写出来：下一个会话只从经过知道上一轮并过，看不到就会以为没并、否认自己说过的
         let replaced = (args.raw["replaces"] as? [Any])?.count ?? 0
         return item(.other, (replaced > 0 ? "记下（换掉 \(replaced) 条）：" : "记下：") + (args.line("text") ?? ""))
       case "remind":
         let text = args.line("text") ?? ""
-        // 挂在任务上的点了开那件任务（气泡里就是这条定时）；没挂的不能点
         var task: UUID?
         if !failed, let ref = args.line("task") { task = try? await CueReferences(store: store).task(ref).id }
         return .init(kind: .schedule, target: "定时：\(text)".clipped(ChatMessage.Tools.targetLimit), failed: failed, task: task, name: text)
@@ -101,7 +88,6 @@ extension CueActivity {
     }
   }
 
-  /// setup 的一次调用（正在用时那一句与经过里那一条同一句）："看设置 · quota""改大脑：agent=codex""建项目「官网」"。
   static func setupWords(_ args: Parsed) -> String {
     switch args.line("action") {
     case "look": return "看设置" + (args.line("part").map { SessionState.detailSeparator + $0 } ?? "")
@@ -115,13 +101,10 @@ extension CueActivity {
     }
   }
 
-  /// Cue 写的那件活或那个会话，与工具同一个认法（session 写成任务的编号也认作那件任务）：`name` 是它叫什么，认不出照它写的；没指哪一处为 nil。
   public struct Named: Sendable {
     public let task: UUID?
-    /// 是会话时（`SessionState.id`）
     public let session: UUID?
     public let name: String?
-    /// "「名字」"
     var quoted: String { "「\(name ?? "")」" }
 
     private init(task: UUID?, session: UUID?, name: String?) {
@@ -130,7 +113,6 @@ extension CueActivity {
       self.name = name
     }
 
-    /// 开始时认，与工具同一个认法（`CueTools.place`）：add 要建的那件还没有，只照标题叫它（按标题去找会认成同名的旧任务，比如早做完的那件）。
     init(_ args: Parsed, tool: String, store: CueStore) async {
       var task: Card?, found: SessionState?
       switch try? await CueReferences(store: store).place(Args(args.raw)) {
@@ -144,7 +126,6 @@ extension CueActivity {
       name = task?.heading ?? (found == nil ? args.line("task") : nil) ?? args.line("title") ?? found?.title ?? written
     }
 
-    /// add 做成后它建的那件，或认作同一件、没再建的那件：同项目里没做完的同名顶层任务里后建的；会话照开始时认的。
     func added(_ args: Parsed, store: CueStore) async -> Named {
       let refs = CueReferences(store: store)
       guard let title = Args(args.raw).string("title")?.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -157,7 +138,6 @@ extension CueActivity {
 
   static let targetLimit = 80
 
-  /// 大脑报的参数：JSON 对象，取各项的第一个非空行。
   struct Parsed {
     let raw: [String: Any]
 
@@ -170,7 +150,6 @@ extension CueActivity {
     var action: TaskAction? { line("action").flatMap(TaskAction.init(rawValue:)) }
 
     var path: String? { line("path") ?? line("file_path") }
-    /// 看的是看板：没指哪件活、哪个会话。
     var board: Bool { line("task") == nil && line("session") == nil }
   }
 }

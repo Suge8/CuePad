@@ -55,14 +55,14 @@ struct AgentDayTests {
     @Test func 一个会话一天里_新会话_有新回复_看过_草稿_发话() async throws {
         let recorder = try await app.runtimeRecorder(on: "mac-a")
         try await recorder.update(sessionID: "atlas", state: .settled, title: "atlas")
-        #expect(try await label("atlas") == "新开的会话")  // 刚开、还没有任何一轮：不是"空闲"
+        #expect(try await label("atlas") == "新开的会话")
 
         try await store.writeTranscript(SessionTranscript(sessionID: "atlas", messages: [], recap: Recap(lastPrompt: "跑一下测试", lastReply: "全部通过。共 214 个。")))
         let done = try await item("atlas")
         #expect(workspace.shown(done).label == "新回复")
         try await app.see(done.state)
         #expect(try await label("atlas") == "空闲")
-        #expect(!done.state.isUnread(try await app.relaunch().store.sessionMarks()["atlas"], at: .now))  // 看过记在库里（同步到各台），退出再回来还算看过
+        #expect(!done.state.isUnread(try await app.relaunch().store.sessionMarks()["atlas"], at: .now))
 
         settings.setReplyDraft(ComposerDraft(text: "改完再跑一遍\n顺便看看覆盖率"), for: done.state.id)
         #expect(note(done) == .draft)
@@ -103,7 +103,7 @@ struct AgentDayTests {
         await nextMillisecond()
         try await beta.update(sessionID: "beta", state: .thinking, title: "beta")
         try await beta.update(sessionID: "beta", state: .settled, title: "beta")
-        #expect(try await label("beta") == "没能送达")  // 会话之后动过也不消失
+        #expect(try await label("beta") == "没能送达")
         try await app.see(try await item("beta").state)
         #expect(try await label("beta") != "没能送达")
 
@@ -125,7 +125,7 @@ struct AgentDayTests {
         }
 
         let request = try await app.services.rename(try await item("delta").state, to: "  排队调度\n")
-        #expect(request.config == SessionConfig(name: "排队调度") && Chat.outgoing([request], messages: []).isEmpty)  // 不算发给会话的话
+        #expect(request.config == SessionConfig(name: "排队调度") && Chat.outgoing([request], messages: []).isEmpty)
         #expect(try await title() == "排队调度")
         #expect(try await item("delta").delivery == nil)
 
@@ -134,14 +134,14 @@ struct AgentDayTests {
         #expect(SessionRename.title(of: failed.state, request: failed.rename, at: .always()) == "delta")
         #expect(note(failed) == .renameFailed)
         try await app.see(failed.state)
-        #expect(note(failed) == nil)  // 看过就不再写
+        #expect(note(failed) == nil)
 
         let again = try await app.services.rename(failed.state, to: "排队调度")
         try await macAnswers(again, host: "mac-d", .succeeded)
         await nextMillisecond()
         try await recorder.update(sessionID: "delta", state: .settled, title: "排队调度")
         #expect(try await title() == "排队调度")
-        try await recorder.update(sessionID: "delta", state: .settled, title: "调度")  // 之后又改了名：以 Pi 报的为准
+        try await recorder.update(sessionID: "delta", state: .settled, title: "调度")
         #expect(try await title() == "调度")
     }
 

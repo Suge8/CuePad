@@ -32,7 +32,7 @@ import Testing
 
     let end = try await store.cards(in: p.id)
     #expect(end.map(\.id) == [start[1].id, start[0].id, start[2].id])
-    #expect(Set(end.map(\.sortKey)).count == 3)  // 键已重新分配，之后的移动不再依赖 id 打平
+    #expect(Set(end.map(\.sortKey)).count == 3)
   }
 
   // MARK: 回收站

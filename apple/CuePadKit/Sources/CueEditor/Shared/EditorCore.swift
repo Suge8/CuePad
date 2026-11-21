@@ -9,13 +9,9 @@ import UIKit
 
 @MainActor
 protocol CueEditorHost: AnyObject {
-    /// 动态色按当前外观解析成固定色（绘制到 CGContext 的底色用）。
     func resolvedColor(_ color: CueColor) -> CueColor
-    /// 分片预布局每推进一片：让宿主按最新用量重算内容尺寸。
     func layoutDidAdvance()
-    /// 附件的绘制内容变了（缩略图解码完成）：让宿主重排刷新。
     func needsRelayout()
-    /// 屏幕像素与点的比例：附件图按像素尺寸预先画好。
     var displayScale: CGFloat { get }
 }
 
@@ -35,7 +31,6 @@ enum CueTextStack {
     }
 }
 
-/// 编辑器的平台无关核心：存储格式（Markdown 原文）与运行时富文本的互转（只有附件换成 U+FFFC）。平台宿主只负责视图、输入与系统交互。
 @MainActor
 final class EditorCore {
     private weak var host: (any CueEditorHost)?
@@ -43,14 +38,10 @@ final class EditorCore {
     let storage: NSTextStorage
     let content: NSTextContentStorage
     let layout: NSTextLayoutManager
-    /// 宿主缩放后的实际样式，所有排版都读它。
     var style: CueEditorTheme
 
-    /// 整体替换过正文几次（`load`）：途中的异步结果核对它，正文已换就不再插。
     private var loads = 0
-    /// 正文被编辑过几次（`storageDidProcessEditing`）：异步结果据此判断发起时记下的位置还准不准。
     private var edits = 0
-    /// 自上次刷新以来的编辑：新坐标下的范围与长度变化。
     private var pendingEdits: [NSRange] = []
     var flushedDecorations = CueDecorations("")
     var decorations = CueDecorations("")
@@ -58,11 +49,9 @@ final class EditorCore {
     private(set) lazy var settler = LayoutSettler(core: self)
     private(set) lazy var thumbnails = ThumbnailLoader(core: self)
     var displayScale: CGFloat { host?.displayScale ?? 2 }
-    /// 附件此刻的样子（宿主给：类型与大小、还没到时怎么取、传了几成）；参数是键、文件名与本机那份（不在本机为 nil）。
     var fileStatus: (_ key: String, _ name: String, _ file: URL?) -> CueFileStatus = { _, name, _ in
         CueFileStatus(detail: AttachmentKey.format(ofName: name).uppercased())
     }
-    /// 文件牌上没有缩略图时的记号，按文件名的类型（宿主给：图标只在 App 的图标表里）。
     var fileIcon: (String) -> CueImage? = { _ in nil }
 
     init(host: any CueEditorHost, files: any CueFileStore, style: CueEditorTheme, storage: NSTextStorage, content: NSTextContentStorage, layout: NSTextLayoutManager) {
@@ -134,10 +123,6 @@ final class EditorCore {
         return string
     }
 
-    /// 存入几个文件（拖入、粘贴、选的；任意类型，调用方持有访问权直到回调），在后台算哈希、拷贝，回调在主线程：
-    /// 每个附件自成一行（文件牌、图片之间与前后的字各隔一个换行）。有一个存不进就整批不插，报那个错。
-    /// 附件属于发起时的那份正文与那个位置：存的途中正文被整体换掉了（`load`：换了一条、同步来了新版本）就不再插，成功时给 nil（回调仍到，粘贴的条目要交还）；
-    /// 插在发起时的选区（`start`）；途中又改了字（位置已不可信）就插在此刻选区的后面，不替换后来选中的字。
     func importFiles(
         _ sources: [IncomingFile], at start: NSRange, selection current: @escaping @MainActor () -> NSRange,
         completion: @escaping @MainActor (Result<(NSAttributedString, NSRange)?, any Error>) -> Void
@@ -196,7 +181,6 @@ final class EditorCore {
 
     func missingImageLabel(_ key: String) -> String { fileStatus(key, "", nil).detail }
 
-    /// 这个字符位置上点了要交给宿主（`onOpenAttachment`）的附件：文件牌，或还没到这台的图片；本机的图片与别处为 nil，照常定光标。
     func openableAttachment(at index: Int) -> (key: String, name: String)? {
         guard index >= 0, index < storage.length else { return nil }
         let hit: (key: String, name: String, file: URL?)
@@ -208,7 +192,6 @@ final class EditorCore {
         return hit.file == nil || !hit.name.isEmpty ? (hit.key, hit.name) : nil
     }
 
-    /// 整体替换正文；撤销栈、选区、`onChange` 由宿主处理。
     func load(_ stored: String) {
         loads += 1
         storage.setAttributedString(attributed(CueFormat.parse(stored)))
@@ -236,12 +219,10 @@ final class EditorCore {
         DispatchQueue.main.async { [weak self] in self?.flushHighlight() }
     }
 
-    /// 同步点（一次编辑结束、组合输入的每一步）之后刷新高亮与装饰；兜底的主队列回调覆盖撤销等其它路径。
     func flushHighlight() {
         guard !pendingEdits.isEmpty else { return }
         let edits = pendingEdits
         pendingEdits = []
-        // 多次编辑累积时新旧坐标混杂，直接全文重扫
         refreshVariableHighlight(around: edits.count == 1 ? edits[0] : nil)
         restyleAfter(edits)
     }

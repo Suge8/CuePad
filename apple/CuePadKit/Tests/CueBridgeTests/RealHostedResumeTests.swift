@@ -6,15 +6,9 @@ import Foundation
 import Testing
 @testable import CueBridge
 
-/// 接着同一托管会话（`HostedProcesses.resume`）不论几个调用方、怎么交错，这个会话同一时刻至多一个进程，不留没人收的进程：
-/// 同时来的恢复合成一次、拿到同一个 id；放弃的调用方各走各的；App 退出（`runtime.stop()`）之后不再起进程。
-/// 合成、放弃与退出的判断都在共用层（`Resumptions`、`HostedProcesses`），一家（Codex）作代表；各家各走一遍的只有
-/// 自己的恢复经不经共用层（第一例）与起进程时登记（App 退出在起进程时，Grok 与 dsh 同一套 `ACPHost.launch`，Grok 作代表）。
 @MainActor
 @Suite(RealAgents.tiered, .enabled(if: Hosting.uncovered == nil || PinnedAgent.fullMatrix, Comment(rawValue: Hosting.uncovered ?? "")))
 struct RealHostedResumeTests {
-    /// 闲置到点被请退出、外壳在真 Agent 退出后还握着输出 3 秒（旧进程还没走）。请退出的那一刻就不在桥上；
-    /// 紧接着同时来两条投送（`MacExecutor` 的接法）：接着同一会话、合成一次，等旧进程走了才起一个新的，话送到。
     @Test(arguments: Hosting.allCases)
     func twoResumesOfTheSameSessionAtOnceStartOneProcess(_ hosting: Hosting) async throws {
         try await EndRig.run(hosting, timing: noDeadline) { rig in
@@ -31,8 +25,6 @@ struct RealHostedResumeTests {
         }
     }
 
-    /// 结束后另起一个进程接着这个会话（能另起接入的几家连接入一起重开，同 App 重开）：会话还是它、进程是新的钉住的那份，
-    /// 模型收到的对话里紧接着先前那句的是这句，答得出只在先前那句里的词。
     @Test(.tags(.smoke), arguments: Hosting.allCases)
     func anEndedSessionIsResumedByANewProcessWithItsConversation(_ hosting: Hosting) async throws {
         try await EndRig.run(hosting, timing: noDeadline) { rig in
@@ -68,7 +60,6 @@ struct RealHostedResumeTests {
         }
     }
 
-    /// 第一个恢复已经起了进程、还没连上，第二个到了：等它，不收它的进程。
     @Test func aResumeArrivingWhileAnotherIsLaunchingJoinsIt() async throws {
         try await EndRig.run(.codex, timing: noDeadline) { rig in
             let id = try await rig.open()
@@ -85,7 +76,6 @@ struct RealHostedResumeTests {
         }
     }
 
-    /// 两个恢复在等旧进程，其中一个放弃（投送到了截止时刻）：它走它的，另一个照样接上，留下的进程就是桥上的那个。
     @Test func cancellingOneOfTwoResumesLeavesTheOtherConnected() async throws {
         try await EndRig.run(.codex, timing: noDeadline) { rig in
             let first = try await quitWhileSlow(rig)
@@ -102,7 +92,6 @@ struct RealHostedResumeTests {
         }
     }
 
-    /// App 退出时恢复正在等旧进程收完（`waiting`），或已经起了新进程还没连上（`launching`）：退出之后一个进程都不剩。
     @Test(arguments: [(Hosting.codex, "waiting"), (.claude, "launching"), (.codex, "launching"), (.grok, "launching")])
     func quittingTheAppDuringAResumeLeavesNoProcess(_ hosting: Hosting, _ phase: String) async throws {
         try await EndRig.run(hosting, timing: noDeadline) { rig in
@@ -116,7 +105,6 @@ struct RealHostedResumeTests {
                 try await eventually("闲置到点、旧进程走了") { rig.bridge.session(id: id) == nil && kill(first.pid, 0) != 0 }
             }
             let resuming = Task { try await rig.connect(rig.indexed(first)) }
-            // 等旧进程的那段有外壳多握的 3 秒，这里只是让恢复走进去
             if phase == "waiting" { try await Task.sleep(for: .milliseconds(200)) } else { try await eventually("起了新进程") { rig.launched.count == 2 } }
             await rig.runtime.stop()()
             _ = await resuming.result
@@ -124,7 +112,6 @@ struct RealHostedResumeTests {
         }
     }
 
-    /// 开一个会话说一句，闲置到点被请退出；外壳在真 Agent 退出后还握着 3 秒（旧进程还在），返回那时的会话。
     private func quitWhileSlow(_ rig: EndRig) async throws -> Session {
         try rig.mark("slow", true)
         let id = try await rig.open()

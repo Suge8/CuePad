@@ -7,18 +7,13 @@ import AppKit
 /// 收不到的是窗口服务器自己管的那几样：拖标题栏挪窗口、拖边缘改大小、指针悬停的效果。
 extension WindowScreen {
   struct Input {
-    /// 按下那一下落在哪扇窗：拖动与抬起都算它的，指针出了窗口也是。
     var pressed: NSWindow?
-    /// 最近点过的那扇窗：键与字交给它（`typing`）。应用在后台时没有"当前窗口"可问。
     weak var focus: NSWindow?
-    /// 点那一下时画面里有哪些窗。
     var around: Set<Int> = []
     var modifiers: NSEvent.ModifierFlags = []
     var clicks = (at: CGPoint.zero, time: 0.0, count: 0)
     var number = 0
-    /// 滚轮攒着的不足一个像素的零头。
     var scroll = CGSize.zero
-    /// 最近一下输入是哪一刻：`outline` 等它过去一会儿再答。
     var time = 0.0
   }
 
@@ -63,7 +58,6 @@ extension WindowScreen {
     return (all, frame, min(frame.width / all.width, frame.height / all.height))
   }
 
-  /// 画面里的一点 → 屏上的一点，与画面缩了多少。
   @MainActor private func place(_ x: Double, _ y: Double) -> (point: CGPoint, scale: Double)? {
     picture.map { (CGPoint(x: $0.all.minX + x * $0.window.width / $0.scale, y: $0.all.maxY - y * $0.window.height / $0.scale), $0.scale) }
   }
@@ -84,7 +78,6 @@ extension WindowScreen {
     NSApp.postEvent(event, atStart: false)
   }
 
-  /// 没落在哪扇窗上的点（窗口外的空处）算给最近点过的那扇：开着的菜单照常收起。
   @MainActor private func press(_ x: Double, _ y: Double) {
     guard let point = place(x, y)?.point, let window = window(at: point) ?? typing else { return }
     let now = ProcessInfo.processInfo.systemUptime
@@ -116,8 +109,6 @@ extension WindowScreen {
 
   // MARK: 键与字
 
-  /// 键与字给哪扇窗，照真的当前窗口那样：点过之后才开出来的（表单、弹层）拿走键盘；没有这样的，最近点过的那扇还在画面里就是它；
-  /// 都不是就给画面里最上面能拿键盘的（换过去的设置窗、表单关了之后底下那扇）。
   @MainActor var typing: NSWindow? {
     let keyable = stack.filter(\.canBecomeKey)
     return keyable.last { !input.around.contains($0.windowNumber) } ?? keyable.last { $0 === input.focus } ?? keyable.last
@@ -141,7 +132,6 @@ extension WindowScreen {
   @MainActor func insert(_ text: String) {
     guard let window = typing else { return }
     if let client = window.firstResponder as? any NSTextInputClient { return client.insertText(text, replacementRange: NSRange(location: NSNotFound, length: 0)) }
-    // 拿着键盘的不是输入框（按字母键当快捷键的界面）：一个字一下按键
     for character in text {
       for phase in [NSEvent.EventType.keyDown, .keyUp] {
         guard let event = NSEvent.keyEvent(
@@ -154,7 +144,6 @@ extension WindowScreen {
 
   // MARK: 派发
 
-  /// 这里造的事件带这个记号（`CGEvent` 的 `eventSourceUserData`）：`dispatch` 凭它认，真鼠标真键盘的不碰。
   private static let mark: Int64 = 0x43_7565
 
   /// 应用平常派发按下与键之前先过这里（`NSEvent.addLocalMonitorForEvents`，`WindowScreen.init` 装的）。应用在后台时哪扇窗都不是当前窗口：
@@ -206,7 +195,6 @@ extension WindowScreen {
 
   private static let modifiers: [UInt32: NSEvent.ModifierFlags] = [224: .control, 225: .shift, 226: .option, 227: .command, 228: .control, 229: .shift, 230: .option, 231: .command]
 
-  /// USB HID 键盘页的用法码 → Mac 的虚拟键码（Carbon 的 kVK_*）。
   private static let keyCodes: [UInt32: CGKeyCode] = {
     let letters: [CGKeyCode] = [0, 11, 8, 2, 14, 3, 5, 4, 34, 38, 40, 37, 46, 45, 31, 35, 12, 15, 1, 17, 32, 9, 13, 7, 16, 6]
     let digits: [CGKeyCode] = [18, 19, 20, 21, 23, 22, 26, 28, 25, 29]

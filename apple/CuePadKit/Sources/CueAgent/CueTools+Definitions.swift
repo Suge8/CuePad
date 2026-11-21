@@ -80,7 +80,6 @@ extension CueTools {
   }
 
   static var string: [String: Any] { ["type": "string"] }
-  /// 点名要他看的图（tell 的提问与 done 的结果共用）：发到手机的那一份的 id 与看什么。
   static var show: [String: Any] {
     ["type": "array", "maxItems": CueShot.limit, "items": ["type": "object", "properties": ["file": string, "look": string], "required": ["file", "look"]]]
   }
@@ -88,7 +87,6 @@ extension CueTools {
 
   static let evidenceCount = 3
   static let evidenceLimit = 40
-  /// 证据的示例（工具说明与证据超长的报错共用）：一句行为上的结论。
   static let evidenceExample = "登录后进到首页"
 
 

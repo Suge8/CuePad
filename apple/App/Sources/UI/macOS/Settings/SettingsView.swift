@@ -69,14 +69,12 @@ private struct WholePointHeight: Layout {
 
 private struct GeneralSections: View {
     @Environment(AppServices.self) private var services
-    /// "对 Cue 说"的快捷键（调试画面里没有）。
     @Environment(CueBar.self) private var cueBar: CueBar?
 
     var body: some View {
         CueSettingsSection()
         Section {
             SyncRow()
-            // 空间满只停附件，不进同步那一行的状态
             if services.syncing.state.filesOverQuota {
                 SettingRow(title: "附件", icon: Image(.syncPaused), tone: .notice, status: Dotted(FileStatus.overQuota)) { EmptyView() } fix: { EmptyView() }
             }
@@ -98,7 +96,6 @@ private struct GeneralSections: View {
     }
 }
 
-/// 指针停在上面（`buttonHovered`）时左边露出"更改"：占着位置、只是透明，露出时键帽不挪。
 private struct ShortcutKey: View {
     let text: String
     let recording: Bool
@@ -132,7 +129,6 @@ private struct ShortcutRow: View {
             .help("点一下，按下新的组合键（Esc 取消）")
         }
         .onDisappear(perform: stop)
-        // 切走了就不录了：录着的时候全局快捷键都让出去了
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) { _ in stop() }
     }
 
@@ -181,7 +177,6 @@ private struct ShortcutRow: View {
     }
 }
 
-/// 系统权限开着就不占一行：横幅样式本来就在系统设置里。
 private struct NotificationSection: View {
     let alerts: AlertCenter
     @Environment(AppServices.self) private var services
@@ -212,7 +207,6 @@ private struct NotificationSection: View {
 
     private func row(_ title: LocalizedStringResource, kind: AlertKind, help: LocalizedStringResource) -> some View {
         @Bindable var settings = services.settings
-        // 设置行的图标是墨色线条：形状与提示带的状态图形同一个
         return SettingRow(title: title, icon: Image(SessionShown(status: SessionAlert.status(kind)).icon), help: help) {
             Toggle(String(localized: title), isOn: $settings.alerts[kind]).labelsHidden().toggleStyle(.switch)
         }
@@ -253,7 +247,6 @@ private struct CrashRow: View {
     }
 }
 
-/// 不叫"处理…"：同步要你决定时 iCloud 那一行也有"处理…"，同一屏两个同名链接分不清。
 private struct ConflictsRow: View {
     @Environment(AppServices.self) private var services
     @Environment(\.palette) private var palette

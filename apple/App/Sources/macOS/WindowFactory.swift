@@ -2,8 +2,6 @@
 import AppKit
 import SwiftUI
 
-/// CuePad 的窗口外框都在这里创建时定好，界面不再在运行时改窗口样式：内容铺到透明标题栏下，
-/// 页面的底色一直连到窗口上沿（侧栏通顶；设置等窗口不留一条系统色的标题栏和分隔线）。
 enum WindowFactory {
     /// 窗口工具栏是一条空的（`toolbarStyle` 统一），只为给最顶那一排定高（`Chrome.band`）、把红绿灯放在它中线上。`place` 在挂上内容之前摆好位置与大小（记下的、居中或屏幕外）：
     /// 整窗的 SwiftUI 布局是冷启动的大头，挂上内容后再改大小就按新大小从头再排一遍。
@@ -26,7 +24,6 @@ enum WindowFactory {
         return dress(window, controller: controller)
     }
 
-    /// 内容自己让开标题栏（安全区）。
     static func utility(title: String, content: some View) -> NSWindow {
         let window = dress(NSWindow(
             contentRect: .zero, styleMask: [.titled, .closable, .fullSizeContentView], backing: .buffered, defer: false),
@@ -35,7 +32,6 @@ enum WindowFactory {
         return window
     }
 
-    /// 标题"设置"只给读屏与"窗口"菜单、不显示（选中的标签就是这一页的名字）。
     static func settings(_ tabs: NSTabViewController) -> NSWindow {
         tabs.canPropagateSelectedChildViewControllerTitle = false
         let window = dress(NSWindow(

@@ -16,7 +16,7 @@ import Testing
   @Test func cardsArrivingBeforeTheirProjectAreKeptAndAppearOnceTheProjectArrives() async throws {
     let projectID = UUID()
     try await rig.coordinator.pulled([remoteRecord(.cards, cardFields(project: projectID, body: "early", modifiedAt: 5_000))], [])
-    #expect(try RawDB(rig.fixture.url).rows("SELECT projectID FROM cards") == [[rig.id(projectID)]])  // 原样保存，没有被挪进默认项目
+    #expect(try RawDB(rig.fixture.url).rows("SELECT projectID FROM cards") == [[rig.id(projectID)]])
     #expect(try await store.cards(in: Project.defaultID).isEmpty)
 
     try await rig.coordinator.pulled([remoteRecord(.projects, id: projectID, projectFields(name: "late", modifiedAt: 5_000))], [])
@@ -32,7 +32,7 @@ import Testing
       remoteRecord(.cards, cardFields(project: projectID, body: "inside", modifiedAt: 5_000)),
     ], [])
 
-    #expect(try await store.cards(in: projectID).isEmpty)  // 随项目隐藏，由项目推导
+    #expect(try await store.cards(in: projectID).isEmpty)
     #expect(try await store.cards(in: Project.defaultID).isEmpty)
     #expect(try RawDB(rig.fixture.url).rows("SELECT projectID FROM cards") == [[rig.id(projectID)]])
   }
@@ -43,17 +43,16 @@ import Testing
     let project = try await store.createProject(name: "P", color: "#111")
     try await store.setDirectory("/work/p", for: project.id)
     try await rig.simulatePush()
-    // 本机离线期间在该项目下新增的内容（另一台设备的 purge 不知道它们）
     let card = try await store.createCard(in: project.id, body: "written offline")
     let task = try await store.createTask("offline task", in: project.id)
 
     try await rig.coordinator.pulled([], [(rig.recordID(project.id), "projects")])
 
     #expect(try await store.project(project.id) == nil)
-    #expect(try await store.cards(in: Project.defaultID).map(\.id) == [card.id])  // 内容保留，归入默认项目，而不是悬空隐藏
+    #expect(try await store.cards(in: Project.defaultID).map(\.id) == [card.id])
     #expect(try await store.card(task.id)?.projectID == Project.defaultID)
     #expect(try await store.directory(of: project.id) == nil)
-    #expect(try await rig.reconcileDelta().saves == [rig.id(card.id), rig.id(task.id)])  // 归属变更推回去
+    #expect(try await rig.reconcileDelta().saves == [rig.id(card.id), rig.id(task.id)])
   }
 
   @Test func remotelyPurgedProjectDoesNotResurrectCardsTheOtherDeviceAlsoDeleted() async throws {

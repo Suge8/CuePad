@@ -10,9 +10,6 @@ public actor StateRecorder {
     var catalog: AgentCatalog?
   }
 
-  /// 工作中细节的最短写入间隔（会话与 Cue 同一个）：每次写入都是一次整条记录的上传与各端的下载。放宽到 15 秒不拖慢该快的：
-  /// 状态转换（开始工作、等你、做完、出错）不受它管；回答（对话与近况）不经这里写，提交后随即上传（`RecordSender`）；
-  /// 正在说的话只在 Mac 的内存里逐字显示（`LiveDraft`），不靠同步。
   public static let detailInterval: Duration = .seconds(15)
 
   public nonisolated let store: CueStore
@@ -32,9 +29,6 @@ public actor StateRecorder {
     self.timing = timing
   }
 
-  /// 写一个会话此刻的样子（桥上的会话产出的 `SessionSnapshot`，`SessionMirror` 交来）：会话记录只经这里写。
-  /// 快照上说不上来的几项沿用上一次写下的（`SessionSnapshot.keepingUnknown`）。
-  /// 返回这次写入置位的通知标志（没有置位为 nil）；置位的那一版由同步层马上传（`Table.live`）。
   @discardableResult
   public func update(_ snapshot: SessionSnapshot) async throws -> AlertKind? {
     let sessionID = snapshot.sessionID
@@ -43,8 +37,6 @@ public actor StateRecorder {
     let previous = session.pace.content
     var content = snapshot
     if let previous { content.keepingUnknown(from: previous) }
-    // 工作中总有这段连续处理的起点（界面的"已运行"、停止的进度都从它算）：桥上的会话由扩展给，
-    // 不带时间的调用方（演示、测试）从进入工作算
     if content.state.isWorking, content.times.busySince == nil { content.times.busySince = content.times.stateSince }
     switch session.pace.offer(content, at: now, interval: minInterval) {
     case .skip:
@@ -66,16 +58,12 @@ public actor StateRecorder {
     }
   }
 
-  /// 源端确认实际结束：状态与领取时固定的请求集合一并落盘；没有请求身份的状态更新不确认投送。
   public func end(sessionID: String, confirming requests: Set<UUID> = []) async throws {
     sessions.removeValue(forKey: sessionID)?.pace.timer?.task.cancel()
     let now = timing.now()
     try await persist { [store, hostID, bootID] in try await store.endSessionState(host: hostID, sessionID: sessionID, bootID: bootID, at: now, confirming: requests) }
   }
 
-  /// 启动对账（历史回填完成后）：歇着的托管会话没有会话文件索引的（文件被删的、从没落盘的）删掉记录；此刻在线的（本记录器正在跟的）不动——
-  /// 它们的记录由状态变化自己写，对账与写入在这里排在同一条任务链上，不会删掉刚建立的会话。
-  /// 只对账这一家（它的索引刚回填完）：别家的索引此刻可能不全（没接入的不回填），它们的记录不动。
   public func dropUnindexedHosted(of agent: AgentKind) async throws {
     let live = Set(sessions.keys)
     try await persist { [store, hostID] in try await store.deleteUnindexedHostedStates(host: hostID, agent: agent, except: live) }
@@ -98,18 +86,15 @@ public actor StateRecorder {
     }
   }
 
-  /// 这个会话最近一次交来的样子（演示与测试的便捷写法在它上面改，`Seed.swift`）。
   func latest(_ sessionID: String) -> SessionSnapshot? { sessions[sessionID]?.pace.content }
 
   private func flush(_ sessionID: String, timer: UUID) async {
     guard var session = sessions[sessionID], let content = session.pace.due(timer) else { return }
     let write = commit(sessionID, &session, content, at: timing.now())
     sessions[sessionID] = session
-    // 定时写入没有调用方可报告；记为未写入，下一次更新会重写
     do { try await persist(write) } catch { sessions[sessionID]?.pace.forget(content) }
   }
 
-  /// 挂起的写入等 `wait` 秒再交给 `fire`（带这个计时任务的身份，`Pace.due` 据此核对）；被取消（取代、丢弃）就不写。
   func after(_ wait: TimeInterval, _ fire: @escaping @Sendable (StateRecorder, UUID) async -> Void) -> Owned {
     Owned.spawn { [timing] id in
       guard (try? await timing.sleep(.seconds(wait))) != nil else { return }
@@ -117,11 +102,6 @@ public actor StateRecorder {
     }
   }
 
-  /// 把 `content` 记为已写入，返回对应的落盘操作。`notify` 是手机通知标志（只发 `AlertKind.entering` 定义的两种转换）：
-  /// 一次性事件，只存在于未上传的版本上——置位后，同一状态下的后续写入（如仍在等、只换了问题文本）在上传之前沿用它
-  /// （见 `writeSessionState`）；服务端接受上传即清掉（`CueStore.markPushed`），此后本机的任何改动都不会再带上，订阅不会为同一次
-  /// 等待重复通知。状态一旦前进（如用户答完回到思考中），未上传的标志随之作废——已恢复工作的会话不该再提示"等你确认"。
-  /// 会话结束（`end`）清掉标志，未上传的也不再通知。
   private func commit(
     _ sessionID: String, _ session: inout Session, _ content: SessionSnapshot, notify: AlertKind? = nil, at now: Date
   ) -> @Sendable () async throws -> Void {

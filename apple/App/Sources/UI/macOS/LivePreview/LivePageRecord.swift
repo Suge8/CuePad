@@ -8,10 +8,8 @@ final class LivePageRecord: NSObject, WKScriptMessageHandler {
         let level: String
         let text: String
         let source: String?
-        /// 动作回执或 `console` 给 Agent 看过了。
         var seen = false
 
-        /// 出处跟在第一行后面，调用栈缩进接在下面。
         var line: String {
             let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
             return "[\(level)] \(lines[0])" + (source.map { "（\($0)）" } ?? "") + lines.dropFirst().map { "\n    " + $0 }.joined()
@@ -19,7 +17,6 @@ final class LivePageRecord: NSObject, WKScriptMessageHandler {
         var isProblem: Bool { ["error", "warn", "network", "dialog"].contains(level) }
     }
 
-    /// 一份文档（主框或框）里的 Agent 脚本：`token` 是那份文档的，文档换了（跳转、重载）就是新的。
     struct Document {
         let info: WKFrameInfo
         let url: String
@@ -27,13 +24,10 @@ final class LivePageRecord: NSObject, WKScriptMessageHandler {
     }
 
     private(set) var log: [Entry] = []
-    /// 主框此刻那份文档；换了就是页面换了。
     private(set) var main: String?
     private(set) var documents: [String: Document] = [:]
-    /// 页面里还没回来的 fetch、XHR（页面世界送来，页面自己也能乱报：只拿来等页面安定，等也有上限）。
     private(set) var pending = 0
 
-    /// 记过的条数（含已经挤掉的）：位置用它算，挤掉旧的不挪后来的位置。
     var end: Int { dropped + log.count }
     private var dropped = 0
 
@@ -47,14 +41,12 @@ final class LivePageRecord: NSObject, WKScriptMessageHandler {
         }
     }
 
-    /// 还没给 Agent 看过的问题（报错、警告、失败的请求、对话框），从位置 `start` 起。
     func unseen(from start: Int = 0) -> [Int] {
         (max(start, dropped)..<end).filter { !log[$0 - dropped].seen && log[$0 - dropped].isProblem }
     }
 
     func entry(_ position: Int) -> Entry { log[position - dropped] }
 
-    /// 最近 `count` 条的位置。
     func recent(_ count: Int) -> Range<Int> { max(dropped, end - count)..<end }
 
     func markSeen(_ positions: some Sequence<Int>) {
@@ -66,7 +58,6 @@ final class LivePageRecord: NSObject, WKScriptMessageHandler {
         if message.name == Self.agentChannel, let token = body["hello"] as? String {
             let main = body["main"] as? Bool ?? false
             if main {
-                // 新文档：上一页的框都跟着没了
                 documents = [:]
                 self.main = token
                 pending = 0

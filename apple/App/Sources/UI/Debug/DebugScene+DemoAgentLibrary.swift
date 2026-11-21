@@ -3,7 +3,6 @@ import CueStore
 import Foundation
 
 extension DebugScene {
-    /// 手机上看的是演示的 Mac Studio 报来的快照，这里替它写一份；Mac 上看的是本机照文件扫出的，这里把同一套内容写成隔离目录里的文件（`seedAgentFiles`）。
     static func seedAgentLibrary(_ services: AppServices) async throws {
         #if os(macOS)
         try seedAgentFiles()
@@ -22,7 +21,6 @@ extension DebugScene {
     }
 
     #if os(macOS)
-    /// 本机扫出该一键整理的就点一下，直到 3 秒里不再冒出新的（隔离实例起来后各家的目录陆续建出来，又有一家要链），最多 20 秒。
     static func tidyLibrary(_ workspace: Workspace) async {
         var quiet = 0
         for _ in 0..<200 where quiet < 30 {
@@ -84,8 +82,6 @@ struct DemoAgentLibrary {
         InstructionSource(origin: origin, path: path, hash: LibraryEdit.base(of: text), modifiedAt: ago(hours))
     }
 
-    /// 演示的 Mac Studio 照手机发来的整理与改文件改它的快照（`-CuePadDemoMac YES`，`runDemoMac`）：整理了的那几件不在了（补上链接的各家都读得到，
-    /// 去重留下的那份之外的不在了），文件照基准写（快照里已不是手机看到的那一版就退回"Mac 上刚改过"，同真的 Mac）。不是这两种请求为 nil。
     static func apply(_ request: DeliveryRequest, store: CueStore) async -> DeliveryOutcome? {
         do {
             return try await applying(request, store: store)

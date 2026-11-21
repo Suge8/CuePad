@@ -1,7 +1,6 @@
 import Foundation
 
 extension CueStore {
-  /// 只重新唤醒尚未交给 Cue 的原记录；不删除、不复制正文、不换 UUID。
   public func recoverCueMessage(_ original: UUID, host: String) throws -> CueMessage {
     try write {
       guard try cueProfile()?.activeHost == host else { throw CueStoreError.deliveryAlreadyHanded }
@@ -13,7 +12,6 @@ extension CueStore {
     }
   }
 
-  /// 尚未落库的原语音请求只保存在 Mac 通话 owner；客户端不能提供正文，只能再次指名原对象。
   public func recordVoiceRequest(_ text: String, command: UUID, host: String?) throws -> CueMessage {
     try write {
       guard let activeHost = try cueProfile()?.activeHost, host == nil || activeHost == host else { throw CueStoreError.deliveryAlreadyHanded }

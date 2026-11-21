@@ -68,7 +68,6 @@ enum VoiceWire {
         case started
         case turn(id: String, assistant: Bool, done: Bool, text: String)
         case delegation(Delegation)
-        /// 服务器把上下文放入时间线；这个回执不表示生成了语音或播放完成。
         case context(delegation: String?, endMs: Int)
         case usage(audioMs: Int)
         case error(String)
@@ -120,7 +119,6 @@ enum VoiceWire {
         return current.isEmpty ? out : out + [current]
     }
 
-    /// 每个 call 只有一个控制连接，reader 与发送都由通话拥有；关闭会取消在等的收发。
     final class Channel: VoiceControl {
         private let socket: URLSessionWebSocketTask
         private var reader: Task<Void, Never>?

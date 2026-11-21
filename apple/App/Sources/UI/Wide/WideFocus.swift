@@ -23,7 +23,6 @@ enum WideSlot: Hashable, CaseIterable {
     }
 }
 
-/// 只保留控件引用，当前栏从系统第一响应者读取，不复制输入焦点状态。⌃Tab 在看得见的几块之间轮换（主区并排的几块、Cue）。
 final class WideFocus {
     let windowID = UUID()
     #if os(macOS)
@@ -101,7 +100,6 @@ final class WideFocus {
         focus(shown[next])
     }
 
-    /// ⌘⌥← →：有焦点的那一块与左边或右边那块对调，焦点跟着它走；挪不过去的焦点也不动。
     func move(by step: Int, in workspace: Workspace) {
         guard let source = current?.column, source.index + step >= 0, workspace.moveColumn(source, by: step) else { return }
         Task {
@@ -118,11 +116,8 @@ struct WideColumnHost<Content: View>: NSViewRepresentable {
     let origin: CGFloat
     let width: CGFloat
     let shape: WideMetrics.Shape
-    /// 收起的 Cue 仍挂着（回来时对话、滚动位置都在），只是藏起：看不见、点不到、⌃Tab 跳过。
     var hidden = false
-    /// 右端压在 Cue 浮板下面多宽（主区不并排时，`underCue`）：拖放按露出来的那截算落在哪。
     var under: CGFloat = 0
-    /// 主区各块此刻在哪（`WideMetrics.spans`）：这一块换了放的东西时从它原来的位置滑过来（`WideColumnSlide.move`）。
     var spans: [WideNavigation.Beside: WideMetrics.Span] = [:]
     @ViewBuilder let content: Content
     @Environment(\.self) private var environment
@@ -145,7 +140,6 @@ struct WideColumnHost<Content: View>: NSViewRepresentable {
         view.drop.under = under
         view.host.rootView = AnyView(content.modifier(WideEnvironment(workspace: workspace, values: environment)).environment(panels).environment(\.wideWindowID, focus.windowID))
         view.slide.park(hidden)
-        // 主区的页铺满桌面色：会话条藏起、放回时它从会话条上滑过，盖住它或露出它（`WideColumnSlide`），页里透明的地方不能透出下面的会话条
         if slot == .main { view.host.layer?.backgroundColor = environment.palette.desk.resolve(in: environment).cgColor }
     }
 }
@@ -182,7 +176,6 @@ final class WideColumnView: NSView {
         self.workspace = workspace
         super.init(frame: .zero)
         wantsLayer = true
-        // 按栏的框裁（矩形裁剪，不离屏）：滑动时右缘随图层的宽走（`WideColumnSlide`）。Cue 那一块宽一直不变、不裁：它是抽屉时面板阴影落在块外（`CueDock`）
         clipsToBounds = slot != .cue
         host.sizingOptions = []
         host.laidOut = { [unowned self] in if let page = host.layer { slide.laidOut(page) } }
@@ -279,9 +272,7 @@ struct WideColumnHost<Content: View>: UIViewControllerRepresentable {
     let width: CGFloat
     let shape: WideMetrics.Shape
     var hidden = false
-    /// 右端压在 Cue 浮板下面多宽（主区不并排时，`underCue`）：拖放按露出来的那截算落在哪。
     var under: CGFloat = 0
-    /// 同 Mac 的 `WideColumnHost.spans`。
     var spans: [WideNavigation.Beside: WideMetrics.Span] = [:]
     @ViewBuilder let content: Content
     @Environment(\.self) private var environment
@@ -299,7 +290,6 @@ struct WideColumnHost<Content: View>: UIViewControllerRepresentable {
         controller.drop.under = under
         controller.rootView = AnyView(content.modifier(WideEnvironment(workspace: workspace, values: environment)).environment(alerts).environment(\.wideWindowID, focus.windowID))
         controller.slide.park(hidden)
-        // 主区的页铺满桌面色：会话条藏起、放回时它从会话条上滑过、盖住它或露出它（`WideColumnSlide`），页里透明的地方不能透出下面的会话条
         if slot == .main { controller.view.backgroundColor = UIColor(cgColor: environment.palette.desk.resolve(in: environment).cgColor) }
     }
 }

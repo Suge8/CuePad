@@ -1,11 +1,9 @@
 import CueStore
 import SwiftUI
 
-/// 已完成列末尾的"更早做完的 N"：它们没进归档，跳去归档页看到的是别的，所以就在看板上看——四列并排时原地展开，手机的行里另出一页竖着列。
 struct BoardColumn: View {
     let column: TaskBoard.Column
     let board: TaskBoard
-    /// 已完成列末尾"更早做完的"原地展开着：由 `BoardColumns` 持有（它展开了已完成就不是空列，列宽跟着变）；手机的行不原地展开（`listsEarlier`）。
     var earlier: Binding<Bool> = .constant(false)
     #if os(iOS)
     var row = false
@@ -18,7 +16,6 @@ struct BoardColumn: View {
     @Environment(\.pageActive) private var active
     @State private var opened: PreviewOpening?
     #if os(iOS)
-    /// 手机那一行是横着滑的，更早做完的几百条排不进去：点了另出一页竖着列。
     @State private var listsEarlier = false
     #endif
 
@@ -27,7 +24,6 @@ struct BoardColumn: View {
             #if os(iOS)
             .sheet(isPresented: $listsEarlier) { earlierList }
             #endif
-            // 待办里拖着的卡指到哪，空位挪到哪、别的卡让开（`BoardDrag`）
             .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: column == .todo ? moves?.making : nil)
             // 量在垫底的一层上：直接挂在这一列上，手机的行交给 `BoardRows` 的排版值（`BoardRowFlex`）就传不出去（实测）
             .background { Color.clear.onGeometryChange(for: CGRect.self) { $0.frame(in: .named(BoardMoves.space)) } action: { moves?.areas[column] = $0 } }
@@ -42,7 +38,6 @@ struct BoardColumn: View {
             .background { lift }
             #endif
             .modifier(ShotPresenter(column: column, opened: $opened))
-            // 有卡飞进来的那一列（行）排在别的列上面：往左、往上飞的卡不从别的列的卡下面钻过去（`boardFlight`）
             .zIndex(moves?.lands(in: board.flights(column)) == true ? 1 : 0)
     }
 
@@ -71,7 +66,6 @@ struct BoardColumn: View {
         #endif
     }
 
-    /// 列头浮在卡上，卡从它后面滚过，不在它下沿裁掉。
     private var columnLane: some View {
         #if os(macOS)
         ScrollView { cards }
@@ -99,13 +93,10 @@ struct BoardColumn: View {
 
     private var archives: Bool { column == .done && !(board.done.isEmpty && board.earlier.isEmpty) }
 
-    /// 接得住的卡拖到这一列上就亮。
     private var lit: Bool { moves?.over == column }
 
     private func accepts(_ card: DraggedCard) -> Bool { board.drop(card, into: column, at: nil) != nil }
 
-    /// 待办排出来的各格：拖着的卡的空位在它指着的那一处（`BoardMoves.making`），不在它库里的位置。
-    /// 从推进中拖回来的卡在待办里没有格，另垫一格空位。
     private enum TodoCell: Identifiable {
         case card(TaskBoard.Item)
         case well(CGFloat)
@@ -158,7 +149,6 @@ struct BoardColumn: View {
             ForEach(AdvancingSlot.slots(workspace.byAttention(board.advancing), gaps: !isRow)) { slot in
                 switch slot {
                 case .gap:
-                    // 档与档之间多空一截：栈里一格零高的空，前后各一个行距（横着的一行里一格就是一张卡宽，不空）
                     Color.clear.frame(height: 0)
                 case .work(let work, let moves):
                     if let item = work.item {
@@ -177,7 +167,6 @@ struct BoardColumn: View {
             if board.count(.waiting) == 0 { empty("没有等你的事") }
         case .done:
             ForEach(board.done) { card($0) }
-            // 列头的数只数今天的。今天没有、更早的有时只摆那一叠：再垫一个"今天还没做完的"空框，一列里两样都是空的
             if board.done.isEmpty && board.earlier.isEmpty { empty("今天还没做完的") }
             if !board.earlier.isEmpty {
                 if earlier.wrappedValue { earlierToggle } else { BoardPile(count: board.earlier.count, action: toggleEarlier) }
@@ -202,7 +191,6 @@ struct BoardColumn: View {
         BoardWaitCard(held: held, project: glyph(workspace.catalog?.project(held.project)))
     }
 
-    /// 那张卡在它原来那一列里的面：浮在手里、放下后停在松手处的就是它，不带原处那张的飞行身份。
     private func face(_ flight: String) -> AnyView? {
         if let item = board.todo.first(where: { $0.flight == flight }) { return AnyView(taskFace(item, in: .todo, moves: false)) }
         if let work = board.advancing.first(where: { $0.id == flight }) {
@@ -213,7 +201,6 @@ struct BoardColumn: View {
 
     private func glyph(_ project: Project?) -> Project? { workspace.scopedProject == nil ? project : nil }
 
-    /// 能添东西的列空着时，这一格就是添加的入口（列头那颗"+"的同一个动作）；手机的行里添加在行头上，这一格只是说明。
     @ViewBuilder private func empty(_ text: LocalizedStringResource) -> some View {
         if !isRow, let add = LaneAdd.of(column, in: workspace) {
             Button(action: add.action) {
@@ -236,7 +223,6 @@ struct BoardColumn: View {
             .background(RoundedRectangle(cornerRadius: TaskMetrics.cardRadius).strokeBorder(palette.hair, style: StrokeStyle(lineWidth: 1, dash: [4, 4])))
     }
 
-    /// 列里原地摊开、收回；手机的行另出一页（`listsEarlier`）。
     private func toggleEarlier() {
         #if os(iOS)
         if row { listsEarlier = true; return }
@@ -244,7 +230,6 @@ struct BoardColumn: View {
         withAnimation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion)) { earlier.wrappedValue.toggle() }
     }
 
-    /// 摊开后留在那一叠原来的位置：点它收回去。
     private var earlierToggle: some View {
         HStack(spacing: Spacing.group) {
             Button(action: toggleEarlier) {
@@ -308,15 +293,12 @@ private enum AdvancingSlot: Identifiable {
     }
 }
 
-/// 收着的"更早做完的"：一叠卡，面上写着有几件，下面露出两层边；点一下摊开。
-/// 否决过：一行小灰字——今天没做完时这一列只剩一个虚线空框加这行字，读成这一列是空的。
 private struct BoardPile: View {
     let count: Int
     let action: () -> Void
     @Environment(\.boardRow) private var row
     @Environment(\.palette) private var palette
 
-    /// 下面每一层比上一层矮下去、窄进去多少。
     private static let step = Spacing.glyph
     private static let inset = Spacing.group
 
@@ -336,7 +318,6 @@ private struct BoardPile: View {
                         .padding(.horizontal, CGFloat(depth) * Self.inset).offset(y: CGFloat(depth) * Self.step)
                 }
             }
-            // 手机的行里面上那张占满一格，两层边露到格子下面（横滑区不裁内容）：格子只有一行高
             .padding(.bottom, row ? 0 : 2 * Self.step)
         }
         .buttonStyle(PressStyle(.card))

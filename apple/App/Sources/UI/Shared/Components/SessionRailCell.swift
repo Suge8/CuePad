@@ -12,12 +12,6 @@ extension UTType {
     nonisolated static let cuepadSession = UTType(exportedAs: "\(AppIdentity.id).session", conformingTo: .data)
 }
 
-/// 宽屏有两种样子。等你的是一张卡（`card`）：会话条上唯一要你动手的，长得不同于下面的行。排在项目下面的一行（`compact`）：缩进一格，
-/// 项目已经由上一行说了，只有名字与读数。
-/// 行首不放状态点：只有两头画记号——在推进的画看板推进中那个（同项目行尾数的那个），已结束的画斜线圈、名字淡到底；歇着的不画、名字淡一档。
-/// 已结束的原先同歇着的一样不画，在侧栏分不出哪些已经关了（说一句要先唤醒）。
-/// 否决过：每种状态一个图形（七八种，认不过来）；实心、空心的点分在跑与歇着（两种点摆在一起读不出哪个是哪个）；
-/// 等你的行首放项目的图形（只看图形认不出是哪个项目，写名字才认得）。
 struct SessionRailCell: View {
     let item: SessionRailRows.Item
     let selected: Bool
@@ -39,9 +33,7 @@ struct SessionRailCell: View {
             .reportsWideDrag(.session(SessionRoute(id: SessionState.recordID(sessionID: item.id), sessionID: item.id)))
             .padding(.leading, compact ? Self.indent : 0)
             #if os(macOS)
-            // 叠在卡上、不放进卡里：卡整张是一颗钮，钮里不套钮
             .overlay(alignment: .topTrailing) {
-                // 对勾的右沿、中线都对着它换下的那一格（等了多久）
                 if let finishing {
                     RailHoverTool(finishing.title, finishing.icon, action: finishing.run)
                         .padding(.trailing, Spacing.group - RailHoverTool.overhang).padding(.top, Spacing.item - RailHoverTool.overhang / 2)
@@ -62,7 +54,6 @@ struct SessionRailCell: View {
 
     private var running: Bool { item.waiting == nil && item.pulse.tier == .running }
 
-    /// 项目下面那一行，这个会话有活预览可看（`Workspace.hasLivePage`；开着空的地址输入不算）；等你的卡不标。只在 Mac：手机、iPad 只问开着的那个会话有没有页面（`LiveRemote`）。
     private var live: Bool {
         #if os(macOS)
         compact && workspace.hasLivePage(item.session.id)
@@ -71,20 +62,16 @@ struct SessionRailCell: View {
         #endif
     }
 
-    /// 项目下面的会话缩进这么多：项目图形那一列的中线上画一道引线（`RailProjectSessions`），行的悬停底从引线右边一档起，不盖住它。
     static let indent: CGFloat = Chrome.icon / 2 + Spacing.tight + RowMetrics.bleed
-    /// 缩进后行首那一列只放得下记号这么宽，名字不再往右让。
     static let mark: CGFloat = 12
 
     private var help: String { Dotted(item.name, project?.shownName, item.shown.label, item.ask ?? item.doing, item.session.agentMark).visible }
 
-    /// 没归项目的会话算在默认项目下（同会话条的分组与历史的查询）。
     private var project: Project? { workspace.catalog?.project(item.session.projectID ?? Project.defaultID) }
 
     @ViewBuilder private var control: some View {
         #if os(macOS)
         let button = Button { open(item.session, (NSApp.currentEvent?.modifierFlags.contains(.command) == true) ? .beside : .primary) } label: { label }
-        // 卡自己有面，不要行的悬停底（它比卡宽出一圈）
         if compact { button.buttonStyle(RowStyle(selected: selected)) } else { button.buttonStyle(PressStyle(.button)) }
         #else
         label
@@ -106,7 +93,6 @@ struct SessionRailCell: View {
         Group {
             if compact {
                 RailLine(leadWidth: Self.mark) {
-                    // 开始跑、歇下、休眠：记号冒出来、淡掉，不是当场换一个图
                     ZStack {
                         if running {
                             BoardLaneMark(column: .advancing, size: Self.mark).transition(Motion.pop(reduceMotion: reduceMotion))
@@ -119,7 +105,6 @@ struct SessionRailCell: View {
                 } rest: {
                     name.font(Typography.body)
                     Spacer(minLength: Spacing.item)
-                    // 同栏头那颗预览钮的图形，只是个记号（点行就是开会话）：读屏在行名里说
                     if live { Image(.livePreview).font(Glyph.small).foregroundStyle(palette.ink3).readerHidden(true).transition(.opacity) }
                     SessionRailReadout(item: item)
                 }
@@ -131,8 +116,6 @@ struct SessionRailCell: View {
         .contentShape(.rect)
     }
 
-    /// 新回复的卡上指针停着时，右上角等了多久那一格换成对勾：它说完了、在等你，这时才是定"用完了"的时候（同看板那张卡回复框旁的完成，`WaitAnswer`）。
-    /// 拍板的不给：它问的那句还没答。触屏没有悬停，完成在长按菜单里。
     private var finishing: RowAction? {
         #if os(macOS)
         guard hovering, !compact, item.waiting == .awaitsReply else { return nil }
@@ -149,11 +132,8 @@ struct SessionRailCell: View {
             .lineLimit(1)
     }
 
-    /// 等你的一张卡：纸色同看板等你那一列的卡，浮起一档。两行：名字与等了多久，左边哪个项目（图形带名字）、右边用的模型与哪家 Agent 的标志；它要你做什么在悬停提示里、点开就是。
-    /// 开着的那张描一圈墨边。
     private var card: some View {
         VStack(alignment: .leading, spacing: Spacing.tight) {
-            // 等你确认还是待回复只画行首那个图形（同看板等你那一列的卡），字在悬停提示与读屏里：两张卡各多一行状态字，这一组读着像表单
             HStack(alignment: .firstTextBaseline, spacing: Spacing.item) {
                 if let waiting = item.waiting { StateGlyph(status: waiting).font(Glyph.small).frame(width: 11) }
                 name.font(Typography.body)
@@ -202,7 +182,6 @@ private struct SessionRailTime: View {
     let item: SessionRailRows.Item
     @Environment(\.palette) private var palette
 
-    /// 等你的卡：提示缓存还热着就写它还有几分钟过期（这之前回不用原价重读整段上下文，是现在回的理由），过期了才写等了多久。
     var body: some View {
         if let cache = item.cache, cache.warmUntil != nil {
             Moments(next: cache.nextTick(after:)) { now in
@@ -236,7 +215,6 @@ extension SessionRailRows.Item {
 
     var ask: String? { Self.firstLine(waiting == .asking ? session.question?.displayText ?? session.detail : session.lastReply) }
 
-    /// 没在等你的会话第二行写的：此刻在做的那一步，没有就是它上一句回答的头一行。
     var doing: String? { Self.firstLine(session.detail) ?? Self.firstLine(session.lastReply) }
 
     private static func firstLine(_ text: String?) -> String? {

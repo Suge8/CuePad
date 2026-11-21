@@ -13,17 +13,13 @@ struct ComposerField: UIViewRepresentable {
     let maxLines: Int
     let ink: Color
     let focus: FocusState<Bool>.Binding
-    /// 外接键盘的方向键、↩/Tab、Esc 先交给调用方；返回 true 表示已处理。
     var keys: (ComposerKey) -> Bool = { _ in false }
-    /// nil 是此刻用不了。
     var shortcut: (ReplyShortcut) -> (() -> Void)? = { _ in nil }
-    /// nil 是不收附件，剪贴板里的照常当文字粘。
     var files: (([IncomingFile]) -> Void)?
     @Environment(Workspace.self) private var workspace
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.palette) private var palette
     @Environment(\.dynamicTypeSize) private var typeSize
-    /// 整个输入框被停用时（开会话的请求在路上）字也不能改：那时改的进不了已发出的请求。
     @Environment(\.isEnabled) private var enabled
 
     static func lineHeight(_ size: DynamicTypeSize) -> CGFloat {
@@ -91,10 +87,8 @@ struct ComposerField: UIViewRepresentable {
 
     final class Coordinator: NSObject, UITextViewDelegate {
         var parent: ComposerField
-        /// 上次交给 `text` 的那一串：绑定原样传回时是同一块存储，比较不用逐字（更新时拿它判断是不是外部改写，不拿文字区的字比）。
         var sent = ""
         var ink: Color?
-        /// 正在写外部改写的文字：这期间文字区报的变化不是你打的。
         var writing = false
         init(_ parent: ComposerField) { self.parent = parent }
 
@@ -104,7 +98,6 @@ struct ComposerField: UIViewRepresentable {
             view.textChanged()
             let text = String(native: view.textStorage.string as NSString)
             sent = text
-            // 高度跟着文字一起走动画：拼音换行、定字收回每次都差一整行
             withAnimation(Motion.spatial(Motion.nudge, reduceMotion: parent.reduceMotion)) { parent.text = text }
         }
     }
@@ -117,7 +110,6 @@ final class GrowingTextView: UITextView {
     var keys: (ComposerKey) -> Bool = { _ in false }
     var shortcut: (ReplyShortcut) -> (() -> Void)? = { _ in nil }
     var files: (([IncomingFile]) -> Void)?
-    /// 与复制写进的是同一个剪贴板（`AppServices.pasteboard`）。
     let pasteboard: UIPasteboard
     var revealsEnd = false { didSet { revealedHeight = nil } }
     private var revealedHeight: CGFloat?
@@ -154,10 +146,8 @@ final class GrowingTextView: UITextView {
         placeholder.sizeThatFits(CGSize(width: max(0, width - placeholderInset), height: .greatestFiniteMagnitude))
     }
 
-    /// 排满 `maxLines` 行中文量出来的高度（中文行比西文行高，首行与后续行也不一样），撑满时最后一行不被切一半；字号大到放不下时少排几行。
     var maxHeight: CGFloat {
         let rulerHeight = Self.rulerHeight(font: font!, paragraph: paragraph, lines: maxLines)
-        // 大字号档位下 6 行会高过键盘上方放得下的空间（头部叠到文字上、最后一行被玻璃边切掉）：按整行数收到窗口高度的 3 成以内
         let pitch = rulerHeight / CGFloat(maxLines)
         let limit = (window?.bounds.height ?? .greatestFiniteMagnitude) * 0.3
         let lines = max(1, min(maxLines, Int(min(limit / pitch, CGFloat(maxLines)))))
@@ -246,7 +236,6 @@ final class GrowingTextView: UITextView {
             manager.ensureLayout(for: manager.documentRange)
         }
         super.layoutSubviews()
-        // 占位从光标右边起：光标画在第一个字上会压住它（系统输入框同样留出光标的宽度）
         let size = promptSize(width: bounds.width)
         placeholder.frame = CGRect(x: placeholderInset, y: 0, width: max(0, bounds.width - placeholderInset), height: size.height)
         // 没撑满行数时没有可滚的：滚动条只在内容比框高出半行以上时开（尺寸为 0 的滚动条会作为"0页"滑块进读屏树）
@@ -280,7 +269,6 @@ final class GrowingTextView: UITextView {
     }
 
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
-        // 输入法组合期间的按键属于输入法
         let handled = markedTextRange == nil && presses.allSatisfy { press in
             guard let key = press.key, !key.modifierFlags.contains(.command) else { return false }
             return switch key.keyCode {
@@ -302,7 +290,6 @@ final class GrowingTextView: UITextView {
         return true
     }
 
-    /// 光标跟随造成的滚动（不是用户在拖）走短动画，不再瞬间跳一行。
     override var contentOffset: CGPoint {
         get { super.contentOffset }
         set {

@@ -42,7 +42,6 @@ struct CommandLineToolRow: View {
         }
     }
 
-    /// 读不出 PATH 也要明说，不静默。
     private var describe: (StatusTone, Dotted?) {
         if let error { return (.failure, Dotted(error)) }
         switch tool.state {

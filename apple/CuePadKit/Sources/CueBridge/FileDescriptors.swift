@@ -2,7 +2,6 @@
 import Darwin
 import Foundation
 
-/// 对端已关或出错返回 false。
 @discardableResult
 func writeAll(_ fd: Int32, _ data: Data) -> Bool {
     data.withUnsafeBytes { bytes in
@@ -17,7 +16,6 @@ func writeAll(_ fd: Int32, _ data: Data) -> Bool {
     }
 }
 
-/// 只在一条串行队列上用（读缓冲复用，不是每次读都分配 256 KB）。EOF 或读失败返回 nil。
 final class ReadBuffer: @unchecked Sendable {
     private var scratch = [UInt8](repeating: 0, count: 256 * 1024)
 
@@ -30,7 +28,6 @@ final class ReadBuffer: @unchecked Sendable {
     }
 }
 
-/// 不含换行与行尾的 `\r`、不含空行；每块只丢弃一次已切出的部分。只在一条串行队列上用。
 final class LineReader: @unchecked Sendable {
     private var pending = Data()
 
@@ -64,7 +61,6 @@ enum UnixSocket {
         return fd
     }
 
-    /// 在 `path` 上监听（上次没删掉的 socket 文件先删），只有属主能连（0600）；非阻塞，配合读事件 accept。
     static func listen(_ path: String) throws(Failure) -> Int32 {
         let fd = try open()
         unlink(path)

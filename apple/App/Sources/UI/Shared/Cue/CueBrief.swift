@@ -1,13 +1,10 @@
 import CueStore
 import SwiftUI
 
-/// 舞台上云下那几件：你不在时攒下的、点一下就到的，至多三行，按先后：Cue 没读的话（它自己醒来做的事落在这里）、做完了结果你还没看的、Cue 留给你回的会话。
-/// 拍板不在这里：拍板卡就在下面，一件事一处。都没有时只剩气泡里那一句（Cue 此刻的样子）。
 nonisolated struct CueBrief: Equatable, Sendable {
     struct Line: Equatable, Identifiable, Sendable {
         enum Go: Equatable, Sendable {
             case session(String)
-            /// 对话里的这一条：滚过去从它读起，舞台留在尽头。
             case message(UUID)
         }
 
@@ -23,7 +20,6 @@ nonisolated struct CueBrief: Equatable, Sendable {
     static let limit = 3
     var lines: [Line] = []
 
-    /// 要另查库的两种，至多 `room` 行；新消息那一行页按对话当场排在最前（`said`），不经这里：它跟着对话变，不等重读。
     static func read(replies: [CueNow.Item], room: Int, from store: isolated CueStore) throws -> CueBrief {
         var lines: [Line] = []
         if room > 0, let task = try store.unseenDone(), let session = task.piSessionID {
@@ -41,7 +37,6 @@ nonisolated struct CueBrief: Equatable, Sendable {
         return CueBrief(lines: lines)
     }
 
-    /// 新消息：几条、头一条的第一句，点了滚过去从它读起。
     static func said(_ thread: CueThread) -> Line? {
         let unread = thread.messages.filter { $0.author == .known(.cue) && thread.unread.contains($0.id) }
         guard let first = unread.first else { return nil }
@@ -60,8 +55,6 @@ nonisolated struct CueBrief: Equatable, Sendable {
     }
 }
 
-/// 气泡：一块玻璃，尾巴朝上指着云上的 Cue（浮在网点天空上的表面用系统玻璃，字压在花的云上时玻璃垫着底才读得清）。
-/// 上面一句是 Cue 此刻的样子（`CueNow.quietLine`，出错着胭脂），下面各行是一颗钮。没有可列的时只剩那一句，气泡自己缩小。
 struct CueBriefBubble: View {
     let beat: CueBeat
     let status: String
@@ -70,7 +63,6 @@ struct CueBriefBubble: View {
     let open: (CueBrief.Line) -> Void
     @Environment(\.palette) private var palette
 
-    /// 比对话的读宽窄：宽屏上铺满读宽就成了一条横幅，不像谁说出来的。
     static let width: CGFloat = 440
     private static let shot: CGFloat = 40
 
@@ -105,7 +97,6 @@ struct CueBriefBubble: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 if let shot = line.shot {
-                    // 只给人认出是哪一张：点它与点这一行一样，成果在会话里看全
                     DeliverableTile(preview: shot.preview, label: shot.look, shape: .shot(side: Self.shot, chosen: false), captioned: false,
                                     zoom: PreviewZoomKey(group: "stage", preview: shot.id)) { _ in }
                         .allowsHitTesting(false)
@@ -121,8 +112,6 @@ struct CueBriefBubble: View {
     }
 }
 
-/// 气泡的形：圆角的身子，上沿正中一个小尖朝上。尖的两肩与顶都是圆的，同系统气泡的尾巴：直角的三角像贴上去的。
-/// 尾巴的高算在框里（`tail`），尖顶在框的上沿。
 nonisolated struct SpeechShape: Shape {
     static let tail: CGFloat = 14
 

@@ -3,12 +3,9 @@ import CueText
 import SwiftUI
 
 extension AnyTransition {
-    /// 对话里一条出现或消失：只淡入淡出，动画随过渡自带。不给整段对话挂动画：其余各行的位移若也跟着动画，
-    /// 底部锚定下正在读的那段会先被推走再滑回来
     static let entry = AnyTransition.opacity.animation(Motion.fade)
 }
 
-/// 会话页是 Agent 干活的记录，回答全宽、不成泡，你的话只标出哪句是你说的，不画两边对说的样子（`session`）；Cue 页（`cue`）才是两边对说的对话气泡。
 enum BubbleLook: Equatable {
     case session
     case cue(joined: Bool)
@@ -31,9 +28,7 @@ enum BubbleLook: Equatable {
     var statusInset: CGFloat { self == .session ? 0 : CueBubble.padding.trailing }
 }
 
-/// `stored` 是存储格式正文（`CueFormat`）：文字在气泡里，带的图片是气泡下面的缩略图（`ChatImages`），文件是再下面的文件牌（`ChatFiles`）；送达前后同一个样子。
 struct UserBubble<Menu: View>: View {
-    /// 长的话折到这么多行，点"展开"看全：会话页的重点是回答，你自己写的长提示词不该是整屏最重的一块。
     static var foldedLines: Int { 6 }
     static var widthFraction: CGFloat { 0.78 }
 
@@ -42,7 +37,6 @@ struct UserBubble<Menu: View>: View {
     var trip = BubbleTrip.arrived
     var highlighted = false
     var fromCue = false
-    /// 在路上、已送达的记号画不画：连着几句还没进对话时只最后一句画（在路上的照旧淡着），没送到的总画。
     var marksTransit = true
     var quote: BubbleQuote?
     @ViewBuilder var menu: Menu
@@ -119,7 +113,6 @@ struct BubbleText: View {
     let look: BubbleLook
     var highlighted = false
     var trip = BubbleTrip.arrived
-    /// Cue 替你说的：不垫底、描一圈边，字前面是它的头像（`CueMark`）。与你说的同样高、同样的间距。
     var fromCue = false
     var lineLimit: Int?
     var truncated: Binding<Bool>?
@@ -153,7 +146,6 @@ struct BubbleText: View {
             .buttonStyle(PressStyle(.inline))
     }
 
-    /// 同一宽度和样式多排一行就能判定截断；短气泡只多量自身，长气泡不必排完整篇。
     private func truncationProbe(_ truncated: Binding<Bool>, lineLimit: Int) -> some View {
         GeometryReader { shown in
             let folded = shown.size.height
@@ -179,7 +171,6 @@ struct BubbleText: View {
     }
 }
 
-/// Cue 的提问与会话里的提问同一个组件，各自只从自己的事实推出：Cue 的是那条提问（`CueThread.Row.answer`），会话的是对话里的作答（`ChatRole.answer`）。
 struct AnswerBubble<Menu: View>: View {
     let answer: String
     let quote: BubbleQuote?
@@ -192,7 +183,6 @@ struct AnswerBubble<Menu: View>: View {
     }
 }
 
-/// `target` 是对话里那个问题所在的一格，点引用跳回去（`chatJump`）；问题已不在对话里（会话的问题答完就没了）为 nil，不能点。
 nonisolated struct BubbleQuote: Equatable, Sendable {
     let text: String
     var target: UUID?

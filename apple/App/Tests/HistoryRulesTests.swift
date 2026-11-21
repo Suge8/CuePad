@@ -7,8 +7,6 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 真实 Pi 与真实后台托管（测闲置退出的用例闲置 2 秒就退），全部状态落在临时目录，假模型（`model`，回 `ECHO <你的话>`）零网络；不碰真实资料库与 ~/.pi。
-
 @Suite(.releasesLibraries, .pinnedPi, .timeLimit(.minutes(4)))
 struct HistoryRulesTests {
     final class Rig {
@@ -27,7 +25,6 @@ struct HistoryRulesTests {
                 agentDirectory: directory.appending(path: "agent"),
                 socketDirectory: URL(filePath: "/tmp/hr-\(UUID().uuidString.prefix(8))", directoryHint: .isDirectory),
                 binDirectory: directory.appending(path: "home/.local/bin"))
-            // 其余 Agent 的目录也指到临时目录：不读这台 Mac 上真实的会话
             let agentPaths = AgentPaths(pi: paths, environment: [
                 "CLAUDE_CONFIG_DIR": directory.appending(path: "claude").path, "CODEX_HOME": directory.appending(path: "codex").path,
                 "OPENCODE_CONFIG_DIR": directory.appending(path: "opencode").path, "GROK_HOME": directory.appending(path: "grok").path,
@@ -83,7 +80,6 @@ struct HistoryRulesTests {
         }
 
         func shutdown() {
-            // 托管的 Pi 不随 CuePad 结束：桥上还在的（本用例临时 socket 目录里的，是本用例启动的）逐个让它退出
             for session in bridge.sessions { kill(session.pid, SIGTERM) }
             let followers = services.cancelBackgroundWork(), finish = services.beginShutdown()
             LibraryLedger.close(LibraryLedger.current) {
@@ -143,7 +139,6 @@ struct HistoryRulesTests {
         try await idleExit(rig, sessionID)
         try await expectResting(rig, sessionID)
 
-        // Mac 本机发话（"已结束"那条路：执行器用会话索引在后台唤醒）
         Workspace(services: rig.services).send("本机来的话", to: AgentTarget(session: sessionID))
         try await eventually("本机发话得到回复") { try await rig.replies(of: sessionID).last == "ECHO 本机来的话" }
         try await idleExit(rig, sessionID)
@@ -162,8 +157,6 @@ struct HistoryRulesTests {
         #expect(try await rig.records(.live).isEmpty)
     }
 
-    /// 闲置到点时扩展做的事就是给自己发 SIGTERM（lifecycle.ts 的 IdleExit）；到点本身由 CueBridgeTests 的 anIdleHostedSessionExitsAfterTheIdleLimit 守，
-    /// 这里歇下就直接发，不等墙钟（托管的闲置时限最小一秒，四次就是好几秒）。
     private func idleExit(_ rig: Rig, _ sessionID: String) async throws {
         try await eventually("这一轮歇下") { rig.bridge.session(sessionID: sessionID)?.state == .settled }
         kill(try #require(rig.bridge.session(sessionID: sessionID)).pid, SIGTERM)

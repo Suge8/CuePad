@@ -2,7 +2,6 @@
 import CueBridge
 import Testing
 
-/// 样本取自各提供方 SDK 经 Pi 格式化后的真实报错。
 struct ErrorSummaryTests {
     @Test(arguments: [
         (#"400 {"type":"error","error":{"type":"invalid_request_error","message":"messages.1.content.0.image.source.base64: image exceeds 5 MB maximum"},"request_id":"req_011CXyz"}"#,
@@ -18,7 +17,6 @@ struct ErrorSummaryTests {
          .quota, 400, "达到用量限制", "You have reached your specified API usage limits. You will regain access on 2026-11-01 at 00:00 UTC."),
         (#"400 {"type":"error","error":{"type":"invalid_request_error","message":"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits."}}"#,
          .quota, 400, "达到用量限制", "Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits."),
-        // 挑刺官第 5 轮实际遇到的 Anthropic 订阅额度报错（原文开头与结尾取自记录，中间按 Anthropic 的措辞补全）
         (#"400 {"type":"error","error":{"type":"invalid_request_error","message":"Third-party apps now draw from your extra usage, not your plan limits. Add more at claude.ai/settings/usage and keep going."},"request_id":"req_5"}"#,
          .quota, 400, "达到用量限制", "Third-party apps now draw from your extra usage, not your plan limits. Add more at claude.ai/settings/usage and keep going."),
         // Pi 自己判为"不可重试的额度上限"的说法（packages/ai/src/utils/retry.ts）
@@ -37,7 +35,6 @@ struct ErrorSummaryTests {
          .server, 529, "模型服务繁忙或出错，稍后再试（529）", "Overloaded"),
         (#"500: {"error":{"message":"Internal Server Error","code":500}}"#,
          .server, 500, "模型服务繁忙或出错，稍后再试（500）", "Internal Server Error"),
-        // Claude Code 的格式（经小米网关）
         ("API Error: 402 Insufficient account balance", .quota, 402, "达到用量限制", nil),
         ("API Error: 400 Unsupported model claude-sonnet-5-5", .rejected, 400, "模型拒绝了请求（400）", nil),
         ("Connection error.", .network, nil, "网络连接中断", nil),
@@ -49,7 +46,6 @@ struct ErrorSummaryTests {
     func summarizesRealProviderErrors(raw: String, kind: ErrorSummary.Kind, status: Int?, title: String, message: String?) {
         let summary = ErrorSummary(raw)
         #expect(summary.kind == kind)
-        // 手机与菜单栏上看到的那一行：摘要（带状态码）加提供方的原句；用量限制有原句时只写原句
         #expect(summary.line == (kind == .quota ? message ?? title : [title, message].compactMap { $0 }.joined(separator: "：")))
     }
 }

@@ -10,9 +10,7 @@ final class ACPConnection {
     let process: ChildProcess
     private(set) var agent: JSONValue = [:]
     var onNotification: ((String, JSONValue) -> Void)?
-    /// Agent 发来的请求（方法、参数、请求 id）：接了返回 true，之后用 `respond` 回它
     var onRequest: ((String, JSONValue, JSONValue) -> Bool)?
-    /// 连接断了（进程退出）；只调一次
     var onClose: (() -> Void)?
     private var nextID = 0
     private let replies = PendingReplies<Int, JSONValue>(timeout: AgentTimeouts.reply, timeoutError: ACPError.timedOut)
@@ -27,7 +25,6 @@ final class ACPConnection {
         }
     }
 
-    /// 起不来、握手失败或超时时停掉进程再抛错。`spawned` 在进程起来、握手之前调（托管的在这里登记，`HostedProcesses.admit`）。
     static func launch(
         _ executable: URL, _ arguments: [String], environment: [String: String], directory: URL? = nil, timing: Timing = .system,
         spawned: (ChildProcess) async throws -> Void = { _ in }
@@ -50,7 +47,6 @@ final class ACPConnection {
 
     var isClosed: Bool { replies.isClosed }
 
-    /// Agent 回错误抛 `server`，连接先断了抛 `closed`，没有及时回应抛 `timedOut`。
     @discardableResult
     func call(_ method: String, _ params: JSONValue) async throws -> JSONValue {
         nextID += 1
@@ -62,8 +58,6 @@ final class ACPConnection {
         return message["result"] ?? [:]
     }
 
-    /// 发一个不限时的请求，回应在读到它的那一行当场交给 `reply`：排在之前读到的通知之后、之后的之前（`call` 要等调用方被叫醒，
-    /// 那之前同一批读到的通知已先处理了）。Agent 回错误交 `server`，连接先断了交 `closed`。
     func request(_ method: String, _ params: JSONValue, reply: @escaping (Result<JSONValue, ACPError>) -> Void) {
         guard !isClosed else { return reply(.failure(.closed)) }
         nextID += 1

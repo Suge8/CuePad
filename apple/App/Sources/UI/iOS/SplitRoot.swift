@@ -2,7 +2,6 @@
 import CueStore
 import SwiftUI
 
-/// Cue 的名牌长开着时读屏只读 Cue 那一块：宽屏的名牌只长在 Cue 里，所以其余整块藏起；Cue 那一块里由名牌所在的页藏起旁边的（`FloatingHeader`）。
 struct SplitRoot: View {
     @Environment(Workspace.self) private var workspace
     @Environment(ModalHost.self) private var modals: ModalHost?
@@ -13,7 +12,6 @@ struct SplitRoot: View {
         let covered = modals?.modal?.inPage == true
         GeometryReader { geometry in
             let sizes = WideMetrics(width: geometry.size.width, workspace: workspace)
-            // 右边那一栏的 Cue 是浮在主区上的一块玻璃（`CuePanel`，同 Mac 的 `MainWindow`）：主区铺到窗口右缘，压在它下面的那一截交给页自己让
             let under = sizes.split || sizes.home ? 0 : sizes.cue
             HStack(spacing: 0) {
                 if sizes.railFits { WideRail(width: sizes.rail, sizes: sizes) }
@@ -35,14 +33,11 @@ struct SplitRoot: View {
             .overlay { WideDropFeedback(window: geometry.size.width) }
             .overlay { if !sizes.home, !sizes.fill { railChrome(sizes) } }
             .readerHidden(covered)
-            // 排在最上：抽屉开着时它与接点按的底盖住浮着的那一排与会话条的抽屉
             .overlay {
                 CueDock(sizes: sizes, width: geometry.size.width, focus: focus, bleed: EdgeInsets(top: geometry.safeAreaInsets.top, leading: 0, bottom: 0, trailing: 0)) { cue(fits: $0, home: sizes.home, bottom: geometry.safeAreaInsets.bottom) }
             }
-            // Cue 铺满时它那一块伸到窗口左缘（会话条藏起）：浮着的那一排与会话条的抽屉排在它上面，不然点不到（同 Mac 的 `MainWindow`）
             .overlay { if sizes.home { railChrome(sizes).readerHidden(covered) } }
             .reportsWideFits(sizes, to: workspace)
-            // 桌面色一处铺满窗口（托管的几块是透明的，`WideColumnController`）：几块的上沿排在状态栏底下，状态栏那一条也要是桌面色
             .background(palette.desk)
         }
         .overlay(alignment: .top) { NoticeBanner().readerHidden(covered) }
@@ -50,7 +45,6 @@ struct SplitRoot: View {
         .onChange(of: covered) { DebugHooks.readerLayers(outsideCue: covered, drawer: workspace.cueDrawer) }
     }
 
-    /// 并排时最左那块右边的第 `index` 块（会话、活预览、灵感）：没开着时也挂着、同样宽，停在窗口右缘外、滑完藏起；活预览放大时长到窗口左缘（同 Mac 的 `MainWindow.beside`）。
     private func beside(_ index: Int, _ sizes: WideMetrics, window: CGFloat) -> some View {
         let origin = sizes.origin(index + 1, window: window), width = sizes.width(index + 1)
         return WideColumnHost(slot: .beside(index), focus: focus, origin: origin, width: width, shape: sizes.shape, hidden: origin >= window, spans: sizes.spans) {
@@ -62,7 +56,6 @@ struct SplitRoot: View {
         .reachesWindowBottom()
     }
 
-    /// 藏起时顶上那一排原地浮着；放不下时拉出的抽屉里有同一排（同一个位置），抽屉开着就不再浮一份。
     private func railChrome(_ sizes: WideMetrics) -> some View {
         ZStack(alignment: .topLeading) {
             if !workspace.railShown(sizes) { RailTopTools(sizes: sizes, floating: true) }
@@ -71,8 +64,6 @@ struct SplitRoot: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
-    /// 浮板伸到横条那一截里、离窗口下缘同样一小圈（`bottom` 是横条让出的高）：停在横条上沿的话，板底下露出一条看板。
-    /// 板里的页照样让出横条（少掉板自己那一圈），名牌离板的上沿也留一圈。
     private func cue(fits: Bool, home: Bool, bottom: CGFloat) -> some View {
         let inset = fits && !home ? CuePanel.float : 0
         return CuePage()
@@ -100,7 +91,6 @@ private struct DestinationColumn: View {
 
     var body: some View {
         let overlay = column == .main ? workspace.overlay : nil
-        // 看板自己让（列滑到浮板下面，`ProgressScreen`），列头就是最顶那一排、栏头只占它开头的范围钮；会话页的栏头在页里（同 Mac）；搜索框占着那一排的中间
         let board = route == .progress && overlay == nil
         let headed = overlay != nil || !route.isSession && route != .search
         ZStack(alignment: .top) {
@@ -110,7 +100,6 @@ private struct DestinationColumn: View {
                     .toolbarVisibility(.hidden, for: .navigationBar)
                     .navigationDestination(for: Route.self) { RouteView(route: $0) }
             }
-            // 盖在主区上（同 Mac 的 `EditorLayer`）：下面那一页留着，收起回到它
             if let overlay {
                 RouteView(route: overlay.route)
                     .environment(\.headerHost, .panel)

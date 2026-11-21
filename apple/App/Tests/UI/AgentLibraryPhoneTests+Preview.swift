@@ -35,7 +35,6 @@ extension AgentLibraryPhoneTests {
         let draft = try #require(workspace.fileDrafts[FileDraftKey(host: "mac-a", file: .instruction(.global))])
         let editor = try #require(window.subviews(of: CueTextView.self).first)
         #expect(editor.becomeFirstResponder())
-        // 照键盘那样打字：送给窗口里拿着键盘的那一个，没有就无处可去
         func type(_ text: String) { (window.subviews(of: UIView.self, where: \.isFirstResponder).first as? UIKeyInput)?.insertText(text) }
 
         draft.previewing = true

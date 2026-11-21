@@ -10,7 +10,6 @@ import Testing
 @MainActor
 @Suite(RealAgents.needs(.dsh), RealAgents.tiered, .timeLimit(.minutes(3)))
 struct RealDshTests {
-    /// 发送：起的是钉住版本的真 dsh，话到了模型（Messages，带着工具清单），回答回到对话里。
     @Test func aMessageReachesTheModelAndItsAnswerComesBack() async throws {
         try await withDshRig { rig in
             let id = try await rig.runtime.open(in: rig.work, launchToken: "token-send", name: nil, model: rig.model, thinking: nil)
@@ -23,7 +22,6 @@ struct RealDshTests {
         }
     }
 
-    /// 停止：模型的回答停着时点停止，到模型的连接随之断开、会话歇下，再说一句照常回答。
     @Test func stoppingAHeldRoundDisconnectsTheModelAndTheNextMessageIsAnswered() async throws {
         try await withDshRig { rig in
             let gate = rig.fake.gate()
@@ -58,8 +56,6 @@ func commandLine(of pid: Int32) -> String {
     return text
 }
 
-/// 一个临时的 dsh 家目录与工作目录，不读写真实的 ~/.dsh 与资料库；会话存进它下面 CuePad 的明文根。真 dsh 是钉住的版本，
-/// 模型地址 `DEEPSEEK_BASE_URL` 与搜索地址 `DEEPSEEK_SEARCH_BASE_URL` 都指到本用例的假模型，key 是假的。
 @MainActor
 final class DshRig {
     let root: URL
@@ -70,7 +66,6 @@ final class DshRig {
     let model = ModelKey(provider: "deepseek-official", id: "deepseek-flash")
     var work: URL { root.appending(path: "work", directoryHint: .isDirectory) }
 
-    /// dsh 的完整环境（也是大脑用的）：HOME 与 DSH_HOME 在 `root` 里，没有任何真实的密钥或登录。
     static func environment(_ fake: FakeModel, in root: URL) throws -> [String: String] {
         try FileManager.default.createDirectory(at: root.appending(path: "home"), withIntermediateDirectories: true)
         return PinnedAgent.dsh.environment(home: root.appending(path: "home"), [

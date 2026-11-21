@@ -1,7 +1,6 @@
 import CueStore
 import SwiftUI
 
-/// 读到会话记录、确认它不在了（Mac 上的会话文件被删）时，回复框换成一句说明。
 struct SessionDock: View {
     let session: SessionState
     let digest: SessionDigest?
@@ -15,7 +14,6 @@ struct SessionDock: View {
     var body: some View {
         let deliveries = digest?.deliveries ?? [], messages = digest?.messages ?? [], speech = services.speech
         let endIssue = MacDelivery.endProgress(deliveries, at: speech)
-        // 卡与回复框之间的缝在卡里（`DockedCard`）：卡升起、沉回时缝跟着长、跟着收
         VStack(spacing: 0) {
             QuestionDock(session: session)
             FailureDock(session: session, delivery: digest?.delivery, catalog: digest?.catalog, config: digest?.config(at: speech))
@@ -52,7 +50,6 @@ struct SessionDock: View {
 }
 
 extension View {
-    /// 本机的也走同一条路；同步不通时不请；已有没被领取的补写请求时不写第二条（`CueStore.requestTranscript`）。
     func requestsTranscript(_ digest: SessionDigest?) -> some View { modifier(TranscriptRequest(digest: digest)) }
 }
 

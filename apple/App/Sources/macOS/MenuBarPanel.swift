@@ -55,7 +55,6 @@ final class MenuBarPanel: NSObject, NSWindowDelegate {
         panel.makeKeyAndOrderFront(nil)
     }
 
-    /// 最高到图标下方到屏幕可见区域底边（留边）那么高，再高的部分由内容自己滚（菜单栏面板里是"在做"那一块，`MenuBarPad`）。
     private func fitToContent() {
         guard let placement else { return }
         var size = host.fittingSize

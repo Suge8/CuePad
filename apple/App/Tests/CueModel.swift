@@ -9,8 +9,6 @@ import Synchronization
 import Testing
 @testable import CuePad
 
-/// Cue 大脑的剧本，演在共用的假模型上（`server`，CueTestSupport 的 `FakeModel`：Pi 经 Chat Completions 连它）。
-/// 有的只演第一次（`once`）：第一次出错、第一次不回（连接挂着，等大脑被杀）。用量固定为 `usage` 个输入 token。
 nonisolated final class CueModel: Sendable {
     let server: FakeModel
     private let played = Mutex<[String: Int]>([:])
@@ -21,10 +19,8 @@ nonisolated final class CueModel: Sendable {
     private let finishedAfter = Mutex<[String]>([])
     private let quotaBlocked = Mutex((left: 0, containing: String?.none))
     func blockQuota(times: Int, containing: String? = nil) { quotaBlocked.withLock { $0 = (times, containing) } }
-    /// 不回的请求停在这里，直到大脑断开
     private let hang = FakeGate()
     var hanging: Bool { hang.held > 0 }
-    /// 先不回、等 `release()` 再回一句话的请求（这一轮停在模型那里，测试趁这时改库）
     private let held = FakeGate()
     var holding: Bool { held.waiting > 0 }
     func release() { for _ in 0..<held.waiting { held.open() } }
@@ -43,7 +39,6 @@ nonisolated final class CueModel: Sendable {
 
     var requests: [(model: String, effort: String?)] { server.requests.filter { $0.api == .chat }.map { ($0.model, $0.effort) } }
 
-    /// 已就结果含 `fragment` 的工具调用回了这一轮最后一句。
     func answered(_ fragment: String) -> Bool { answers(fragment) > 0 }
     func answers(_ fragment: String) -> Int { finishedAfter.withLock { $0.count { $0.contains(fragment) } } }
 
@@ -64,7 +59,6 @@ nonisolated final class CueModel: Sendable {
         let request = fake.json
         func call(_ name: String, _ arguments: [String: any Sendable]) -> Reply { .call(name, arguments) }
         func say(_ text: String) -> Reply { .say(text) }
-        // Cue 自己醒来的一轮（刚启用除外）最后的话不写（`CueKeeper.Turn.writesReply`）：要让你看到它醒来看到了什么，就用 tell 对你说
         func tell(_ text: String) -> Reply { call("tell", ["text": text]) }
 
         let last = (request["messages"] as? [[String: Any]])?.last ?? [:]
@@ -83,7 +77,6 @@ nonisolated final class CueModel: Sendable {
                 }
             }
             if let code = earlier.lazy.compactMap({ $0.firstMatch(of: /暗号是 (\S+)/)?.1 }).last { return say("记得，暗号是 \(code)") }
-            // 开了新会话：前面的话不在上下文里，只在这一条输入开头的对话视图里
             if let view = text.firstMatch(of: /<view>[\s\S]*<\/view>/)?.0, let code = view.firstMatch(of: /暗号是 (\S+)/)?.1 { return say("从视图接上：暗号是 \(code)") }
             return say("不记得暗号")
         }
@@ -96,7 +89,7 @@ nonisolated final class CueModel: Sendable {
         if text.contains("额度吃紧吗") { return say(text.firstMatch(of: /额度吃紧：\n(- [^\n]*\n)+/).map { String($0.0) } ?? "额度不吃紧") }
         if last["role"] as? String == "tool" {
             if text.contains("建好了"), let id = text.firstMatch(of: /（([0-9a-f]{8})）/)?.1 {
-                return call("task", ["action": "start", "task": String(id), "model": "fake/m", "effort": "high"])  // 测试 Mac 上 Pi 报的模型（TestSupport 的 piProbeLine）
+                return call("task", ["action": "start", "task": String(id), "model": "fake/m", "effort": "high"])
             }
             finishedAfter.withLock { $0.append(text) }
             return say("办好了")
@@ -115,7 +108,6 @@ nonisolated final class CueModel: Sendable {
         if text.contains("请建个任务并开工") { return call("task", ["action": "add", "title": "修好登录页", "project": "演示", "body": "把登录页修好"]) }
         if text.contains("请问我一个问题") { return call("tell", ["text": "要推送吗？", "ask": "push", "doing": "推送登录页的修复"]) }
         if last["role"] as? String == "user", let key = failingOnce.first(where: text.contains), once("fail:" + key) { return fail() }
-        // 额度用完（各家额度类的说法之一，`ErrorSummary` 认作额度）：说了这句的每次都是，`blockQuota` 之后的那几次也是
         let blocked = quotaBlocked.withLock { rule in
             guard rule.left > 0, last["role"] as? String == "user",
                   rule.containing.map(text.contains) ?? true else { return false }

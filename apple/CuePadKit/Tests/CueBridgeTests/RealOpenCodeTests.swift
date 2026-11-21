@@ -33,7 +33,6 @@ struct RealOpenCodeTests {
         try await store.chatMessages(of: sessionID).filter { $0.role == .known(.pi) }.map(\.text)
     }
 
-    /// 发送：CuePad 开的会话答完歇下，再发一句、改名、就地换模型与强度、压缩上下文。
     @Test(.tags(.smoke)) func aHostedSessionTakesMessagesAnswersAndSettings() async throws {
         try await withOpenCode { sandbox, store, bridge, runtime in
             let id = try await runtime.open(in: sandbox.work, launchToken: "token-m", name: nil, model: nil, thinking: nil)
@@ -80,7 +79,6 @@ struct RealOpenCodeTests {
         }
     }
 
-    /// 权限：要确认的命令，允许了就跑、拒绝了不跑，各留下该留的一行。
     @Test(arguments: [true, false]) func aCommandThatNeedsPermissionRunsWhenAllowedAndNotWhenDeclined(allow: Bool) async throws {
         try await withOpenCode { sandbox, store, bridge, runtime in
             let file = allow ? "approved.txt" : "declined.txt"
@@ -101,12 +99,10 @@ struct RealOpenCodeTests {
                 return session(bridge)?.state == .settled && messages.last.map { allow ? $0.role == .known(.pi) && $0.text.contains("DONE") : $0.text == "已拒绝" } == true
             }
             #expect(FileManager.default.fileExists(atPath: sandbox.work.appending(path: file).path) == allow)
-            // 允许了模型拿到命令的结果接着说；拒绝了这一轮到此为止，不再问模型
             #expect(allow ? sandbox.model.requests.count > asked : sandbox.model.requests.count == asked)
         }
     }
 
-    /// 停止：跑着命令时停下，对话里留下“已停止”，再说一句照常回答。
     @Test func aStoppedRoundLeavesAStoppedLineAndTheNextMessageIsAnswered() async throws {
         try await withOpenCode { sandbox, store, bridge, runtime in
             sandbox.model.on("Run the slow command", .call("shell", ["command": "sleep 30", "description": "Run the requested command"]), .say("SLEPT"))
@@ -126,7 +122,6 @@ struct RealOpenCodeTests {
         }
     }
 
-    /// 停止的另一条路：这一轮还在跑时又说一句，停下在跑的、开新的一轮回答新的这句，两轮之间不报歇下（同 `RealHostedTurnTests`）。
     @Test func aMessageWhileBusyStopsTheRoundAndStartsANewOne() async throws {
         try await withOpenCode { sandbox, store, bridge, runtime in
             sandbox.model.on("Run the slow command", .call("shell", ["command": "sleep 60", "description": "Run the requested command"]), .say("SLEPT"))
@@ -153,8 +148,6 @@ struct RealOpenCodeTests {
         }
     }
 
-    /// 起来马上点结束、说出第一句马上点停止或结束（同 `RealHostedEndTests` 的那一例，#81）：都不等满 `AgentTimeouts.stop`；
-    /// 结束的会话还在服务里（进程是服务的），只看它下桥。
     @Test(arguments: ["end on open", "stop on first message", "end on first message"])
     func stoppingOrEndingRightAwayDoesNotWaitOutTheStopLimit(_ moment: String) async throws {
         try await withOpenCode { sandbox, store, bridge, runtime in
@@ -174,7 +167,6 @@ struct RealOpenCodeTests {
         }
     }
 
-    /// 忙时点结束（同 `RealHostedEndTests` 的第一例）：先停下这一轮（服务把它写成被停下的一轮）再下桥，结束报成功。
     @Test func endingABusySessionStopsTheRoundFirst() async throws {
         try await withOpenCode { sandbox, store, bridge, runtime in
             sandbox.model.on("Run the slow command", .call("shell", ["command": "sleep 30", "description": "Run the requested command"]), .say("SLEPT"))

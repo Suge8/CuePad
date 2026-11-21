@@ -1,9 +1,6 @@
 import Foundation
 
 extension CueStore {
-  /// 只收集本事务里改变收尾资格的事实，不保存生命周期状态：本地操作、同步、层级修复共用入口。
-  /// 正文与计时刷新不触发收尾；纯关联不产生结束；你恢复使用的会话（`SessionState.restoredAt`）不再结束。
-  /// 临时表随事务回滚，提交前消费；结束资格仍只由 taskSessionCanEnd 决定。
   static let taskSessionEvents = """
     CREATE TEMP TABLE taskSessionEvents (id TEXT PRIMARY KEY NOT NULL);
     CREATE TEMP TRIGGER taskSessionCardInserted AFTER INSERT ON main.cards
@@ -52,8 +49,6 @@ extension CueStore {
     END;
     """
 
-  /// 投送释放占用时（`OLD` 是那条投送）补上被它挡下的收尾。只认任务还在看板上时写下的话：用这个会话的任务里有一件还在，或在它写下之后才离开。
-  /// 都离开之后才写的，送完不结束它：Cue 问一句已做完的事，问完他自己收（你说的那时已记下 `restoredAt`）。
   private static let releasedHold = """
     INSERT OR IGNORE INTO taskSessionEvents SELECT s.createdForTaskID FROM piSessionStates s
       WHERE s.sessionID = OLD.targetRef AND s.createdForTaskID IS NOT NULL AND EXISTS (

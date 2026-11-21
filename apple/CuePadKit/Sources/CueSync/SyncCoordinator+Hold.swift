@@ -8,9 +8,7 @@ extension SyncCoordinator {
   struct Hold {
     var until: ContinuousClock.Instant
     var fault: SyncFault
-    /// 服务器给的最早时刻：连通的证据与收下一批都不提前它。
     var notBefore: ContinuousClock.Instant
-    /// 在等服务器要求的时刻（限流、区忙，或后来的失败盖过了它、它还没到）：界面显示同步中（`Facts.state`）。
     let server: Bool
 
     init(until: ContinuousClock.Instant, fault: SyncFault, notBefore: ContinuousClock.Instant) {
@@ -49,8 +47,6 @@ extension SyncCoordinator {
     }
   }
 
-  /// 一次失败定下次最早什么时候发。`waiting`：有人在等结果（马上传了还没收下），没给时刻的等待也压到 `Backoff.waitingCap`。
-  /// 两路的结果先后回来，后到的不缩短先前服务器给的时刻。
   func hold(_ fault: SyncFault, waiting: Bool) {
     let now = ContinuousClock.now
     let cap = waiting ? Backoff.waitingCap : nil
@@ -84,7 +80,6 @@ extension SyncCoordinator {
     quotaTimer = nil
   }
 
-  /// 服务器给的最早时刻照守：另一路被限流时它还在。
   func progressed() {
     backoff.reset()
     guard let hold = facts.holding, ContinuousClock.now < hold.notBefore else { return release() }
@@ -131,7 +126,6 @@ extension SyncCoordinator {
     retryDue.yield(())
   }
 
-  /// 在等的照样给一次 `retryDue`，新一代当场发。
   func clearHolds() {
     backoff.reset()
     outage = nil
@@ -142,7 +136,6 @@ extension SyncCoordinator {
   }
 }
 
-/// 重试调度要求等着，不算失败。
 struct RetryHeld: LocalizedError {
   var errorDescription: String? { "同步在等重试的时刻" }
 }

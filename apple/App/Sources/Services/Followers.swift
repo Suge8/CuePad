@@ -1,7 +1,5 @@
 import Foundation
 
-/// 常驻的跟随者（跟着流或通知直到被取消）的生命期：全部是同一个任务组里的子任务，取消一次就全部停。
-/// 起跟随者用 `AppServices.follow`；一个跟随者出错只报告，不拖垮别的。
 final class Followers {
     typealias Body = @MainActor () async -> Void
 
@@ -27,8 +25,6 @@ final class Followers {
         }
     }
 
-    /// 返回的任务在全部跟随者退场后结束：被取消的跟随者还要把手上那一步走完才放掉服务（测试收尾等它；退出不等）。
-    /// 再取消一次返回的还是它。
     @discardableResult
     func cancelAll() -> Task<Void, Never>? {
         sink?.finish()

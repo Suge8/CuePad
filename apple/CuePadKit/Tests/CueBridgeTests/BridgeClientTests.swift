@@ -46,7 +46,6 @@ struct BridgeClientTests {
 
     // MARK: 结束与残留清理
 
-    /// 新 socket 的目录事件可能先于旧连接断开被处理（负载高时常见），那次扫描看到的是还挂着的旧连接；旧连接断开后不会再有目录事件，会话也得重新连上。
     @Test func reloadWhoseNewSocketIsSeenBeforeTheOldConnectionDropsStillReconnects() async throws {
         let old = FakeExtension(directory: dir)
         try old.start()
@@ -56,7 +55,6 @@ struct BridgeClientTests {
 
         let reloaded = FakeExtension(directory: dir, sessionID: old.sessionID)
         try reloaded.start()
-        // 再起一个会话当标记：它出现时，桥已在新 socket 存在、旧连接还在时扫描过一次
         let marker = FakeExtension(directory: dir)
         try marker.start()
         try await eventually("标记会话出现") { session(marker.id) != nil }
@@ -67,7 +65,6 @@ struct BridgeClientTests {
         try await eventually("同一会话重新连上") { session(old.id) != nil && reloaded.connectionCount == 1 }
     }
 
-    /// 属主活着但还没 listen（刚 bind）的不能删，否则会破坏正在启动的会话。
     @Test func staleSocketsOfDeadProcessesAreRemovedWhileUnlistenedOnesOfLiveProcessesAreKept() async throws {
         let pending = dir.appending(path: "\(UUID().uuidString.lowercased()).\(getpid()).sock")
         let stale = dir.appending(path: "\(UUID().uuidString.lowercased()).\(try await deadPid()).sock")
@@ -91,7 +88,6 @@ struct BridgeClientTests {
         #expect(throws: BridgeError.self) { try bridge.start() }
     }
 
-    /// 启动时同步扫一遍目录，要连的话 `start()` 返回时连接已排进对端的 backlog：此刻监听端不可读就是没连。
     @Test func doesNotConnectToASocketOthersCouldWriteTo() throws {
         let path = dir.appending(path: "\(UUID().uuidString.lowercased()).\(getpid()).sock").path
         let listener = try UnixSocket.listen(path)
@@ -122,7 +118,7 @@ struct BridgeClientTests {
 
     @Test func pendingSendFailsWhenSessionEndsBeforeAck() async throws {
         let ext = FakeExtension(directory: dir)
-        ext.onCommand = { _, _ in nil } // 收到不回
+        ext.onCommand = { _, _ in nil }
         try ext.start()
         try bridge.start()
         try await eventually("appeared") { session(ext.id) != nil }
@@ -134,7 +130,6 @@ struct BridgeClientTests {
 
     // MARK: 分格观察
 
-    /// 别的会话状态一变，读它的视图就要重算的话，Agent 多起来时每秒几十次整页重算。
     @Test func lookingUpOneSessionIsNotNotifiedByAnotherSessionsChanges() async throws {
         let first = FakeExtension(directory: dir)
         try first.start()

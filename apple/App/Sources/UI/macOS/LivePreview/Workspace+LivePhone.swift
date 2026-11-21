@@ -2,8 +2,6 @@
 import CueStore
 import Foundation
 
-/// Mac 这头答手机、iPad（`LiveSignal`）：它们开着本机哪个会话的页，就答这个会话有哪些页面可看（规则与栏头的钮同一处，`livePages`），
-/// 变了主动再答；它们开着那个会话的活预览时，另给一张票据与隧道口（`LiveTunnel.Server`），隧道只放这个会话名下的服务（`admitLive`）。
 extension Workspace {
     struct LivePhone {
         struct Key: Hashable {
@@ -11,17 +9,13 @@ extension Workspace {
             let sessionID: String
         }
 
-        /// 回信用手机发来时的那一路（信令头里的 session）与它最近一问的 id。
         var channel: VoiceSessionID
         var request: UUID
         var until: ContinuousClock.Instant
-        /// 开着预览时才有：只给这台手机、这个会话，手机走了、关了预览、过期就作废。
         var ticket: Data?
-        /// 上一次答它的（变了才再答）。
         var answered: LiveSignal?
     }
 
-    /// 直到所在任务取消（`follow`）。
     func followLivePhones() async {
         for await event in services.liveEvents.stream { await receiveLive(event) }
     }
@@ -42,23 +36,20 @@ extension Workspace {
             phone.until = .now + LiveSignal.lease
             if open, phone.ticket == nil { phone.ticket = Data((0..<16).map { _ in UInt8.random(in: .min ... .max) }) }
             if !open { phone.ticket = nil }
-            phone.answered = nil  // 每一问都答：手机靠答复续着钮
+            phone.answered = nil
             livePhones[key] = phone
-            // 刚开始看的会话先扫一遍再答：第一句就是准的，不等下一轮
             if fresh { await scanLive(only: [sessionID]) }
             await answerLivePhones()
         case .peerClosed(let endpoint, _):
             livePhones = livePhones.filter { $0.key.phone != endpoint }
             syncLiveDoor()
         case .localClosed:
-            // 本机这条中转连接换了：手机们会按新的租约再问
             livePhones = [:]
             syncLiveDoor()
         default: break
         }
     }
 
-    /// 答过期的去掉，变了的（或还没答过的）答一次。扫完一轮（`watchLiveServers`）与收到一问时调。
     func answerLivePhones() async {
         let now = ContinuousClock.now
         livePhones = livePhones.filter { $0.value.until > now }
@@ -66,7 +57,6 @@ extension Workspace {
         guard !livePhones.isEmpty else { return }
         let needsDoor = livePhones.values.contains { $0.ticket != nil }
         let port = needsDoor ? await openLiveDoor() : nil
-        // 只答本机这几台上没结束的会话；别处的、结束了的答没有页面
         let hosted = Set(((try? await services.store.liveOwners(hosts: Self.liveHosts(services))) ?? [:]).keys)
         for (key, phone) in livePhones {
             let id = SessionState.recordID(sessionID: key.sessionID)
@@ -76,7 +66,6 @@ extension Workspace {
             var ports: [Int]?
             if let ticket = phone.ticket {
                 let allowed = here ? await livePorts(key.sessionID) : [:]
-                // 不再放行的口上还连着的断掉（你改填了别的地址、会话结束了）：放不放只在连接进来时问一次，长连接不靠那一次一直通
                 liveServer?.server.limit(ticket, to: Set(allowed.keys.compactMap { UInt16(exactly: $0) }))
                 if here, door != nil { ports = allowed.keys.sorted() }
             }
@@ -92,18 +81,12 @@ extension Workspace {
         }
     }
 
-    /// 手机要用 UU 远程看这个会话（`LiveSignal.show`）：开到主区，有页面可看就同栏头的钮开活预览（地址照开合的规则，你填的不换）、
-    /// 放大到整个窗口（`liveFill` 的 `remote`），窗口铺满屏幕排到最前：远程画面是整块屏幕缩到手机上，预览只占一角时找不到、看不清。
-    /// 只认本机这台上没结束的会话（同 `answerLivePhones`）。
     private func showLive(_ sessionID: String) async {
         let hosted = ((try? await services.store.liveOwners(hosts: Self.liveHosts(services))) ?? [:]).keys
         guard hosted.contains(sessionID), let state = try? await services.store.sessionState(sessionID) else { return }
-        // 手机看着时只扫它看的会话：此刻认出的才准
         await scanLive(only: [sessionID])
-        // 上一次铺满的先放下、窗口的位置留着：下面重开时（`navigation`）不把窗口缩回去再铺一次
         let own = liveFill?.session == state.id && liveFill?.own == true
         liveFill = nil
-        // 已在主区也重开一次：Cue 铺满着、上面盖着编辑页时，主区还是它，只是看不见
         overlay = nil
         openSession(state.id, sessionID: sessionID)
         if hasLivePage(state.id) { openLivePreview(state) }
@@ -113,7 +96,6 @@ extension Workspace {
         services.windowShell?.fillScreen()
     }
 
-    /// 手机从 UU 远程回到 CuePad 了（`LiveSignal.back`）：窗口放回原位；它来看之前你自己放大着的留着放大，只是不再算它在看。
     private func endRemoteFill(_ session: UUID) {
         guard let fill = liveFill, fill.remote, fill.session == session else { return }
         guard fill.own else { return endLiveFill() }
@@ -121,7 +103,6 @@ extension Workspace {
         services.windowShell?.restoreFrame()
     }
 
-    /// 隧道口：开着就用它，没开就开（端口随机）；没取到门铃的密钥（中转还没连上过）开不了。
     private func openLiveDoor() async -> UInt16? {
         if let liveServer { return liveServer.port }
         if let starting = liveServerStarting { return await starting.value }
@@ -143,7 +124,6 @@ extension Workspace {
         return port
     }
 
-    /// 作废了的票据连着的断掉；没有手机开着预览了就关隧道口：它只在有人要看时听。
     private func syncLiveDoor() {
         guard let liveServer else { return }
         let tickets = Set(livePhones.values.compactMap(\.ticket))
@@ -168,10 +148,8 @@ extension Workspace {
         return .open(host: target, port: request.port)
     }
 
-    /// 这个会话放行的本机端口，各自连哪个地址：它名下在监听的连那个服务所在的地址（`LiveServers.ports`），只在页面地址里的照地址写的连。
     private func livePorts(_ sessionID: String) async -> [Int: String] {
         if let kept = livePorts[sessionID], ContinuousClock.now - kept.at < .seconds(1) { return kept.ports }
-        // 答不答 HTTP 是按节奏扫的那一遍问出来的（`scanLive`）：这里只读它记下的，不为放行一条连接现去问
         var ports = await liveScanner.ports(for: liveOwners(), only: [sessionID])[sessionID] ?? [:]
         let local = Set(LiveTunnel.localAddresses().map(\.host))
         for url in livePages(SessionState.recordID(sessionID: sessionID)) {

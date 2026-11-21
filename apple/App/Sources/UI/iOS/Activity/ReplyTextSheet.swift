@@ -12,7 +12,6 @@ extension EnvironmentValues {
     @Entry var replyText: ReplyTextOpener?
 }
 
-/// 每次更新换出的闭包做的是同一件事，读它的回答不因此重算，所以按会话比较。
 struct ReplyTextOpener: Equatable {
     let session: UUID
     let open: (UUID, ReplyTextSheet.Purpose) -> Void
@@ -102,7 +101,6 @@ private struct NoteDialog: ViewModifier {
 
     private var written: String { text.trimmingCharacters(in: .whitespacesAndNewlines) }
 
-    /// 记下时读此刻的字（按钮建好之后还在打字）。
     private func buttons(_ edit: ReplyNote.Edit) -> [DialogButton] {
         let settings = services.settings, session = session, order = order
         let save = DialogButton(title: edit.fresh ? "添加" : "完成", disabled: written.isEmpty) {

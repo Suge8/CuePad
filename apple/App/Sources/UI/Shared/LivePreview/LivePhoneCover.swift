@@ -1,7 +1,6 @@
 #if os(iOS)
 import SwiftUI
 
-/// 手机页头的活预览钮：会话有页面可看时才在（`Workspace.liveButton`，Mac 答来的）。点了这一页从它长开铺满屏（`livePhoneCover`）。
 struct LivePhoneTool: View {
     let session: UUID
     let zoom: Namespace.ID
@@ -33,7 +32,6 @@ private struct LivePhoneCover: ViewModifier {
         content.fullScreenCover(isPresented: Binding { workspace.showsLivePreview(session) } set: { if !$0 { workspace.liveCover = nil } }) {
             Group {
                 if let preview = workspace.livePreviews[session] {
-                    // 状态栏那一条铺页面的底：栏上下接着的是同一张页面，不是一条桌面色
                     LivePreviewPane(preview: preview).ignoresSafeArea(.container, edges: .bottom)
                         .background((preview.ground ?? palette.desk).ignoresSafeArea())
                         .background { PreviewDismissGuard(web: true) }

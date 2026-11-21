@@ -2,11 +2,6 @@ import CueEditor
 import CueStore
 import SwiftUI
 
-/// 标题是正文的首段，同一个编辑器（`CardEditing` 的 `titled`），从第一帧就在、就可编辑：点下去字不挪、行高不变、纸不变高（没有"先显示字、点了换输入框"的那一下）。
-/// 同新会话、记任务的输入框一种排法：顶上一颗胶囊（总览是挂在哪个项目、点开换；子任务是回上级），中间是字，底下一排、主钮在右下（`BubbleFooter`）。
-/// 总览没有那一排的"开始"：要开的那一步（`Workspace.lead`）行尾一颗实心的"开始"，开的就是那一步，不用在底下再写一遍"下一步 某某"。
-/// 没有"⋯"：完成是标题旁的圈，其余操作在卡的右键菜单里（`CardMenu.sections`）。
-/// 气泡里不建子任务：拆子任务是 Agent 与 Cue 的事，手动的在任务大纲里把任务拖到它下面（`TaskTree`）。
 struct TaskBubblePage: View {
     let data: BubbleData
     let focus: Card
@@ -43,7 +38,6 @@ struct TaskBubblePage: View {
         }
     }
 
-    /// 同输入框的去处胶囊（`DestinationChip`）：子任务跟着上级走，不单独换。
     private var project: some View {
         let goal = data.goal, current = workspace.catalog?.project(goal.projectID)
         return MenuButton(sections: [
@@ -71,12 +65,10 @@ struct TaskBubblePage: View {
 }
 
 #if os(macOS)
-/// 那一步上一次可能已经开过（说不出结果）时再点"开始"先问一句（`Workspace.launch`）；手机的"开始"打开交给 Agent 的输入框，问在那里。
 private struct LaunchAgain: ViewModifier {
     let leaf: Card?
     @Environment(Workspace.self) private var workspace
 
-    // 挂在底上：要开的那一步换成没有时，上面的行不因为外面少了一层而整列重建
     func body(content: Content) -> some View {
         content.background { if let leaf { Color.clear.confirmsLaunchAgain(workspace.sessionLaunching(.card(leaf.id))) } }
     }
@@ -102,7 +94,6 @@ private struct TaskEditor: View {
     }
 }
 
-/// 正文还没写时第二段（空段）上的提示。点它就是点进那一段：不拦点按。只占那空段的一行，大字号下截断：折成两行就往上叠到标题上。只看标题那一行之后有没有字，每敲一个字的开销不随正文变长。
 private struct BodyHint: View {
     let editing: CardEditing
     let inset: CGFloat

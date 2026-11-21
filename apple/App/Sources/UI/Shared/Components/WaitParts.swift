@@ -2,7 +2,6 @@ import CueStore
 import SwiftUI
 
 nonisolated extension CueWait {
-    /// Cue 的是代码写的问句（`CueMessage.headline`）与 `CueAsking.why`（只有规矩那一类有）；会话的见 `SessionState.asked`。
     var asked: (line: String, detail: String?) {
         switch wait {
         case .message(let message, _): (message.headline ?? "", message.asking?.why)
@@ -12,7 +11,6 @@ nonisolated extension CueWait {
 }
 
 nonisolated extension SessionState {
-    /// 选项不写进来（它们是胶囊）。在等却没报出问题时是它此刻那一句（`SessionProgress.line`）。
     var asked: (line: String, detail: String?) {
         let lines = (question?.text ?? SessionProgress.line(of: self) ?? "").split(separator: "\n", maxSplits: 1).map(String.init)
         return (lines.first ?? "", lines.count > 1 ? lines[1] : nil)
@@ -54,7 +52,6 @@ struct ChipFlow: Layout {
         var rows: [Row] = [Row()]
         for (index, subview) in subviews.enumerated() {
             var size = subview.sizeThatFits(.unspecified)
-            // 一行放不下的长选项按整行宽折行显示全文，不截断：选项的区别常在末尾
             if size.width > width { size = subview.sizeThatFits(ProposedViewSize(width: width, height: nil)) }
             if !rows[rows.count - 1].items.isEmpty, rows[rows.count - 1].width + spacing + size.width > width { rows.append(Row()) }
             var row = rows[rows.count - 1]

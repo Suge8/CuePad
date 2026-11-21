@@ -2,19 +2,14 @@ import CueStore
 import Foundation
 import Observation
 
-/// 说的话到哪了（`Speech`）的外部输入，全 App 一份：此刻与本机同步从什么时候起通着（`moment`）。
-/// 到点翻状态只靠这里：资料库里还在等的话（`track`，`AppServices.startSpeechClock` 跟着库给，服务器收下时也重给）最早到时限的那一刻把"此刻"刷一次
-/// （一个可取消的睡眠，不轮询），同步断开、恢复时也刷。气泡、会话行、提示词、Cue 在不在与值班都读 `moment`，不各自计时。
 @Observable
 final class SpeechClock {
     private(set) var moment: Speech.Moment
     @ObservationIgnored private var waiting: [Awaiting] = []
     @ObservationIgnored private var alarm: Task<Void, Never>?
-    /// 同步一直算通（演示 Mac 在本机库里接手，`DebugHooks.Preset.alwaysReachable`）。
     @ObservationIgnored private let alwaysReachable: Bool
     @ObservationIgnored private let timing: Timing
 
-    /// 仍在等进度的一句：投送请求按它自己的期限（`Speech.deadline`，与同步通不通无关；没有期限就不定闹钟）；对 Cue 说的话按通信窗口。
     nonisolated enum Awaiting: Equatable, Sendable {
         case request(deadline: Date?)
         case cue(said: Date, reachedServer: Bool, host: String?)
@@ -27,7 +22,6 @@ final class SpeechClock {
         moment = Speech.Moment(now: now, reachableSince: reachable || alwaysReachable ? now : nil, localHost: localHost)
     }
 
-    /// 本机同步此刻通不通（`SyncStatus.reachesMac`）：恢复的那一刻起重新算时限；断开时已发出的话不计时，没发出的从写下算。
     func setReachable(_ reachable: Bool) {
         guard !alwaysReachable, reachable != (moment.reachableSince != nil) else { return }
         let now = timing.now()

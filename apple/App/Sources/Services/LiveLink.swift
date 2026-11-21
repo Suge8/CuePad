@@ -28,19 +28,15 @@ final class LiveLink {
     @ObservationIgnored let proxy: LiveTunnel.Proxy
     @ObservationIgnored private var connecting: Task<Void, Never>?
     @ObservationIgnored private var door: LiveSignal.Door?
-    /// 代理此刻用的路（`LiveTunnel.Route.id`）：只理会这条路断了的报告。
     @ObservationIgnored private var route: UUID?
     @ObservationIgnored private var pages: [URL] = []
-    /// 手机回环上照搬的口（`LiveTunnel.Proxy.mirror`）开好了哪些、哪些被占着。
     private var mirrored = LiveTunnel.Proxy.Mirrored()
 
-    /// 这一页在这台设备的回环上要照搬的口；不是回环地址的（Mac 的局域网地址，走代理）是 nil。
     private static func mirror(_ url: URL) -> UInt16? {
         guard let host = url.host(percentEncoded: false), LiveTunnel.Proxy.isMac(host, addresses: []) else { return nil }
         return UInt16(exactly: url.port ?? (url.scheme == "https" ? 443 : 80))
     }
 
-    /// 可以载的页面：回环地址的要它的口照搬好了才算。没开好就载，连到的是这台设备上占着那个口的别人（另一个窗口的预览、别的应用）。
     private var served: [URL] {
         #if targetEnvironment(simulator)
         pages  // 模拟器不照搬：它和 Mac 共用回环
@@ -49,7 +45,6 @@ final class LiveLink {
         #endif
     }
 
-    /// 连上了 Mac，这一页的口却在这台设备上被占着。
     func taken(_ address: URL?) -> LiveTrouble? {
         state == .ready && address.flatMap(Self.mirror).map(mirrored.taken.contains) == true ? .taken : nil
     }
@@ -60,7 +55,6 @@ final class LiveLink {
 
     init() throws { proxy = try LiveTunnel.Proxy() }
 
-    /// 直到所在任务取消（预览收起、App 进后台）：走时断开隧道，Mac 那头这张票据随之作废。只跑一次：代理的监听口关了不能再开。
     func run(_ preview: LivePreview, sessionID: String, host: String, remote: LiveRemote, key: @escaping @MainActor () -> SymmetricKey?) async {
         defer {
             connecting?.cancel()
@@ -80,7 +74,6 @@ final class LiveLink {
         }
     }
 
-    /// 票据不认了（Mac 重开了口、手机换了租约）：再要一张；连不上了：重新找路。
     private func mend(_ broken: AsyncStream<LiveTunnel.Break>, _ preview: LivePreview, sessionID: String, remote: LiveRemote,
                       key: @escaping @MainActor () -> SymmetricKey?) async {
         for await report in broken where report.route == route {
@@ -88,7 +81,6 @@ final class LiveLink {
         }
     }
 
-    /// 照搬的口开好了、被占着有变化：能载的页面跟着变。
     private func remirror(_ preview: LivePreview) async {
         for await next in proxy.mirrored where next != mirrored {
             mirrored = next
@@ -104,7 +96,6 @@ final class LiveLink {
     private func follow(_ seen: Seen, _ preview: LivePreview, key: () -> SymmetricKey?) {
         if seen.offline { return lose(.offline, preview) }
         guard let answer = seen.answer else {
-            // 还没答过是在问；答过、现在没有页面了是服务停了
             if door != nil { lose(.gone, preview) }
             return
         }
@@ -132,7 +123,6 @@ final class LiveLink {
         connecting = Task {
             while !Task.isCancelled {
                 let reached = await Self.reach(door, key: key)
-                // 探的这一会儿又断了一次、换了入口（新的一轮已经起了）：这一轮的结果不提交，不然切回旧入口、多载一次
                 guard !Task.isCancelled else { return }
                 switch reached {
                 case .mac(let mac):
@@ -168,7 +158,6 @@ final class LiveLink {
         case denied, failed
     }
 
-    /// 同时连 Mac 的每个地址，用最先验过票的那个。都不通时按手机自己的网络说原因：没有 Wi-Fi、不在一个网段、同网段却连不上（多半是访客网络的隔离）、没给本地网络权限。
     private nonisolated static func reach(_ door: LiveSignal.Door, key: SymmetricKey) async -> Reached {
         let mine = LiveTunnel.localAddresses()
         guard !mine.isEmpty else { return .trouble(.noWiFi) }

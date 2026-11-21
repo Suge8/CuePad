@@ -1,7 +1,6 @@
 import SwiftUI
 
 struct InspirationPaper: View {
-    /// 编辑与长图沿用同一列。
     static let textWidth: CGFloat = 680
     let source: String
     var images: [String: CGImage] = [:]

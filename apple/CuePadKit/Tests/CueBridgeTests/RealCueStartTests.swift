@@ -5,16 +5,12 @@ import Foundation
 import Testing
 @testable import CueBridge
 
-/// 再说一句又做完歇下。各家用自己的隔离测试台：Pi、Codex、Claude Code 与 Grok Build 是假模型，OpenCode 见 `OpenCodeSandbox`，
-/// dsh 的家目录在临时目录里、登录只经环境里的 DeepSeek key。
-
 @MainActor
 @Suite(RealAgents.tiered)
 struct RealCueStartTests {
     @Test(.tags(.smoke), arguments: AgentKind.allCases) func cueStartsASessionTalksAndItSettles(_ agent: AgentKind) async throws {
         try RealAgents.require(agent)
         try await withAgent(agent) { runtime, bridge, work, model in
-            // 强度给的不是测试台配置里的 low：生效了才看得出来
             let id = try await runtime.open(in: work, launchToken: "cue-1", name: "Cue 开的", model: model, thinking: .medium)
             let opened = try #require(bridge.session(id: id))
             #expect(opened.agent == agent && opened.launchToken == "cue-1")

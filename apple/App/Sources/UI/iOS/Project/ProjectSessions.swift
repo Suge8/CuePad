@@ -2,9 +2,6 @@
 import CueStore
 import SwiftUI
 
-/// 手机项目页的"会话"那一段，同宽屏会话条里项目下面那几行读的一份（`SessionListData.read` 按项目筛，`RailProjectSessions`）：
-/// 没结束的与置顶的全在，已结束的先列 `cap` 条，多的收在"更早的会话"一行里、点一下多列 `step` 条。
-/// 手机的会话条只放等你与推进中，项目页不列的话，一个结束了的会话只剩搜索找得到。
 struct ProjectSessions: View {
     let project: UUID
     let list: SessionListData?

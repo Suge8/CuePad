@@ -17,10 +17,7 @@ nonisolated enum ReplyButton: Equatable {
     case send(DeliveryMode)
 }
 
-/// 能否停止、结束与作答都经 `SessionState` 上同一组规则（Cue 也经它们）。
 nonisolated enum MacDelivery {
-    /// 结束会话进行得怎样，列表行、会话页与回复框上方都只读这里：在途的先显示；没有在途的，结果未确认的逐条保留、不被别的结束成功掩盖（记录 ended 不确认投送）；
-    /// 再不然最后一次结束失败了显示失败。成功了、没请求过是 nil。`requests` 按发出先后。
     static func endProgress(_ requests: [DeliveryRequest], at moment: Speech.Moment) -> Speech.Trip? {
         let ends = requests.filter { $0.mode == .known(.end) }.map { Speech.trip($0, at: moment) }
         if let going = ends.last(where: \.awaitingResult) { return going }
@@ -28,7 +25,6 @@ nonisolated enum MacDelivery {
         return ends.last.flatMap { $0.failure != nil ? $0 : nil }
     }
 
-    /// 受理只表示收到，歇下看状态。进度只读投送请求，界面不另存。
     static func stopping(_ session: SessionState, deliveries: [DeliveryRequest], at moment: Speech.Moment) -> Bool {
         guard session.canStop, let turnStart = session.busySince else { return false }
         return deliveries.contains { request in
@@ -38,7 +34,6 @@ nonisolated enum MacDelivery {
         }
     }
 
-    /// 读投送请求与对话，不另存。
     enum CommandProgress: Equatable {
         case preparing(String)
         case running(String)
@@ -58,7 +53,6 @@ nonisolated enum MacDelivery {
     }
 
     static func commandProgress(_ deliveries: [DeliveryRequest], messages: [ChatMessage], at moment: Speech.Moment) -> CommandProgress? {
-        // 最新的一条是按写下的先后排的最后一条（`deliveryRequests(toSession:)`）：时间只到毫秒，同一毫秒的两条按时间比不出先后
         guard let latest = deliveries.last, latest.mode == .known(.command) else { return nil }
         let command = String(latest.content.prefix { !$0.isWhitespace })
         let trip = Speech.trip(latest, at: moment)
@@ -75,7 +69,6 @@ nonisolated enum MacDelivery {
         }
     }
 
-    /// 空着而 Agent 自己在跑一轮是停止：这时最可能想做的就是叫停（同 ChatGPT、Claude）。
     static func button(for session: SessionState, hasDraft: Bool, command: Bool = false) -> ReplyButton? {
         switch reply(to: session) {
         case .answer: return .answer

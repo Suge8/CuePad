@@ -1,22 +1,12 @@
 import CueStore
 import SwiftUI
 
-/// 会话条：等你在上面、推进中在下面，三端共用数据、注意顺序。手机（`phone`）是贴左缘的边缘索引（`SessionSpine`）。
-/// 宽屏（`wide`）：组就是会话条那一块上的一段行，各自独立滚，靠组头与间距分开；每个会话一行（`RailLine`），行首那一列是会话的状态标（`StateDot`），名字在它右边。
-/// 组头是小号淡字组名加着色计数，左沿同行首那一列、字贴着下沿，离它那一组近、离上一组远。
-/// 等你组每行两行高（`Chrome.tallRow`），推进中一行一种高（`Chrome.row`），长相在 `SessionRailCell`。
-/// 等你过多时自身也能滚、最多占一半可用高度，不能把推进中或待回复挤到再也点不到。一组多到要滚时下沿淡出一截（`Chrome.scrollFade`），看得出下面还有；
-/// 放得下时不淡。两组为空时写一行"没有在推进的会话"（`SessionRailEmpty`），不留一大块不知道是不是没读到的空白。
-/// 点按只回报会话与意图（`Opening`：默认，或 ⌘ 点的并排）；右键是会话的菜单（`SessionActions`，同会话出现的每一处）。`marked` 是调用方主区开着的会话投影，不在组件内记选中。
-/// 被否决的：宽屏每组一张纸（等你赭黄、推进中白纸）——三种材质叠在侧栏底上像一摞卡片，不像一条栏；行首放 Agent 标志——同一家的都一样，零信息，状态挤成标志底下一截细线读不出。
 struct SessionRail: View {
     enum Form {
         case phone, wide
-        /// 手机的边缘索引定宽；宽屏跟着会话条那一块的宽。
         var width: CGFloat? { self == .phone ? SessionRail.phoneWidth : nil }
     }
 
-    /// 手机的胶囊连它离左缘的空隙：浮在 Cue 页上，对话、舞台与拍板卡两侧各让这么多、按整屏居中（`CuePage`）。
     static let phoneWidth = Spacing.tight + SessionSpine.width
 
     enum Opening { case primary, beside }
@@ -28,7 +18,6 @@ struct SessionRail: View {
     let open: (SessionState, Opening) -> Void
 
     var body: some View {
-        // 常驻的栏同页头限制可见字号；全文留在读屏标签，不能让大字把组头计数挤成省略号。
         Group {
             if form == .phone {
                 SessionSpine(rows: SessionRailRows(data, pulse: pulse)) { open($0, .primary) }
@@ -53,7 +42,6 @@ private struct SessionRailContent: View {
 
     var body: some View {
         GeometryReader { geometry in
-            // 两组各要多高、放不放得下只由这里的可用高度与行数推出（不读滚动区的几何）：等你最多一半，推进中拿剩下的
             let waitingIdeal = idealHeight(rows.waiting), waitingCap = geometry.size.height * (rows.advancing.isEmpty ? 1 : 0.5)
             let waitingHeight = min(waitingIdeal, waitingCap)
             let advancingRoom = geometry.size.height - (rows.waiting.isEmpty ? 0 : waitingHeight + Chrome.groupGap)
@@ -70,7 +58,6 @@ private struct SessionRailContent: View {
                 Spacer(minLength: 0)
             }
             .frame(maxWidth: .infinity)
-            // 一个会话换组（推进中的停下来等你、等你的被你答了）：那一格从原处滑到另一组里它的位置（`matchedGeometryEffect`），不在这边消失、那边冒出来
             .animation(Motion.spatial(Motion.travel, reduceMotion: reduceMotion) ?? Motion.fade, value: [rows.waiting.map(\.id), rows.advancing.map(\.id)])
         }
         .onChange(of: [rows.waiting.map(\.id), rows.advancing.map(\.id)], initial: true) { _, groups in reveal.update(groups) }
@@ -79,7 +66,6 @@ private struct SessionRailContent: View {
         .onDisappear { reveal.active = false }
     }
 
-    /// 相邻两个会话之间同会话条上别的行一道缝。
     private var cellGap: CGFloat { Spacing.hair }
 
     private func rowHeight(_ item: SessionRailRows.Item) -> CGFloat {
@@ -90,7 +76,6 @@ private struct SessionRailContent: View {
         Chrome.groupHeader + items.map(rowHeight).reduce(0, +) + CGFloat(max(0, items.count - 1)) * cellGap + Chrome.pad
     }
 
-    /// `overflows`：这一组放不下、要滚（下沿淡出一截，滚到底时最后一行在淡出的上面）。
     private func group(_ items: [SessionRailRows.Item], column: TaskBoard.Column, overflows: Bool) -> some View {
         VStack(spacing: 0) {
             SessionRailHeader(column: column, count: items.count)
@@ -106,7 +91,6 @@ private struct SessionRailContent: View {
                                 .transition(.opacity)
                         }
                     }
-                    // 行底伸出行框：滚动内容自己留出伸出的那一截（滚动区按自己的边裁）
                     .padding(.horizontal, RowMetrics.bleed)
                     .scrollTargetLayout()
                     .safeAreaPadding(.bottom, overflows ? Chrome.scrollFade : Chrome.pad)
@@ -131,7 +115,6 @@ private struct SessionRailContent: View {
     }
 }
 
-/// 宽屏的组头：淡字组名加着色计数，左沿同行首那一列，字贴着下沿。
 private struct SessionRailHeader: View {
     let column: TaskBoard.Column
     let count: Int
@@ -175,7 +158,6 @@ private struct BottomFade: ViewModifier {
     }
 }
 
-/// 宽屏两组都空（没有等你、没有在推进的会话）：在两组的位置写一行淡字，左沿同名字那一列，不画图标、不加按钮（新会话只在看板推进中列头的 ＋）。
 private struct SessionRailEmpty: View {
     @Environment(\.palette) private var palette
 

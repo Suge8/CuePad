@@ -1,17 +1,12 @@
 import CueStore
 import Foundation
 
-/// 口径是还剩多少（剩余，不是已用）：用户要回答的是"还够不够用"，满格是满额、往下掉是在用，同电量一样不用换算。
-/// 读数（含读屏的说法与"照这速度多久用完"）全在 `now` 那一刻算定：过了重置时间的窗口显示等待更新，不画数值，不请求、也不跑定时器——界面只在新观测到达或重画时换读数，
-/// 倒计时是自己走字的计时文字（`Countdown`，与"x 分钟前"的 `SessionClock.Live` 同一种做法）。档位按已用算，与上下文用量同一个口径（`UsageLevel`）。
 nonisolated struct QuotaMeter: Equatable {
     struct Window: Equatable, Identifiable {
         let name: String
         let left: Double
-        /// 匀速线：按窗口已过的时间，匀速用的话此刻该还剩多少（0 到 1）；已重置为 nil
         let even: Double?
         let resetsAt: Date
-        /// 照这速度还能用多久的短语："约 2 小时"（时长写法同 `SessionClock.duration`）；剩的不比匀速线少（重置前用不完）为 nil
         let runway: String?
         let level: UsageLevel
         let id: QuotaWindow.ID
@@ -42,7 +37,6 @@ nonisolated struct QuotaMeter: Equatable {
     let message: String?
     let usageURL: URL?
     let account: String
-    /// 网关的全名是扩展拼的"Magpie / 产品 / 账号 / 上游"，打头的"Magpie"在每张卡上都一样，不再写。
     let product: String
     let identity: String?
     let source: String?
@@ -53,7 +47,6 @@ nonisolated struct QuotaMeter: Equatable {
     enum Status: Equatable {
         case stale(Date), failed, expired, unobserved, unsupported
     }
-    /// 按模型的周额度只在用过七成时列在后面——平时它比整个账号的本周宽松，列出来只是多读一行，快用完时才卡人
     let windows: [Window]
     let balance: String?
     let plan: String?
@@ -98,7 +91,6 @@ nonisolated struct QuotaMeter: Equatable {
         return (parts.first ?? name, parts.count > 1 ? parts.dropFirst().joined(separator: " / ") : nil)
     }
 
-    /// 账号在明细、额度环与菜单栏面板里的先后：按产品名，同一产品按账号名，再按所属 Mac 与记录定死。不看写入时间，刷新不挪位置。
     static func ordered(_ quotas: [AccountQuota]) -> [AccountQuota] {
         quotas.map { (names($0), $0) }.sorted { a, b in
             for (x, y) in [(a.0.product, b.0.product), (a.0.identity ?? "", b.0.identity ?? ""), (a.1.hostID, b.1.hostID)] where x != y {
@@ -108,12 +100,10 @@ nonisolated struct QuotaMeter: Equatable {
         }.map(\.1)
     }
 
-    /// 只认减号紧跟数字（"¥-0.06"），不解析金额。
     private static func negative(_ text: String) -> Bool {
         zip(text, text.dropFirst()).contains { ($0 == "-" || $0 == "\u{2212}") && $1.isNumber }
     }
 
-    /// 地址与授权分区只用于认身份，不显示。
     static func all(_ quotas: [AccountQuota], at now: Date) -> [Self] {
         var meters = labeled(quotas, at: now)
         for (_, indices) in Dictionary(grouping: meters.indices, by: { meters[$0].product }) where indices.count > 1 {
@@ -147,7 +137,6 @@ nonisolated struct QuotaMeter: Equatable {
 
     var spoken: String { Dotted([account] + [balance].compactMap { $0 } + (message.map { [$0] } ?? windows.map(\.spoken))).spoken }
 
-    /// 过了 `end` 不再走（那一刻由 `Moments` 睡到 `nextReset(after:)` 按过期重画）。
     struct Countdown: DiscreteFormatStyle {
         let end: Date
 
@@ -177,7 +166,6 @@ nonisolated struct QuotaMeter: Equatable {
 }
 
 extension [AccountQuota] {
-    /// 只重画读数，不发网络请求。
     nonisolated func nextReset(after now: Date) -> Date? {
         let resets = flatMap(\.windows).map(\.resetsAt) + flatMap { $0.details?.values.compactMap(\.resetsAt) ?? [] }
         let stale = compactMap { $0.observedAt?.addingTimeInterval(AccountQuota.staleAfter) }

@@ -9,7 +9,6 @@ struct AgentRows: View {
     }
 }
 
-/// 出现时重新检测它：用户可能刚在终端里装好。
 struct AgentRow: View {
     let kind: AgentKind
     @Environment(AppServices.self) private var services
@@ -24,7 +23,6 @@ struct AgentRow: View {
         let (tone, line) = describe(status)
 
         SettingRow(title: .verbatim(kind.name), icon: kind.mark.image, tone: tone, busy: installing, status: line, help: help) {
-            // 开关常驻，检测完只换状态那一行字。
             Toggle(kind.name, isOn: Binding(get: { services.isConnected(kind) }, set: apply))
                 .labelsHidden()
                 .toggleStyle(.switch)
@@ -41,7 +39,6 @@ struct AgentRow: View {
         .task { await services.agents.detect(kind) }
     }
 
-    /// 开发构建不读真实配置目录里的会话；没装的 Agent 不接，接过的卸掉后还能关掉。
     private func canToggle(_ status: AgentStatus) -> Bool {
         services.agents.integration.touches(kind) && (status.isAvailable || services.isConnected(kind))
     }
@@ -65,7 +62,6 @@ struct AgentRow: View {
         return AgentLine.of(kind, status, connected: services.isConnected(kind), touches: services.agents.integration.touches(kind))
     }
 
-    /// 一句一行：中文句间不留空格、英文要，换行两边都对
     private var help: LocalizedStringResource {
         let name = kind.name
         let lines = [
@@ -87,7 +83,6 @@ struct AgentRow: View {
         if on { services.connectAgents([kind]) } else { services.disconnectAgent(kind) }
     }
 
-    /// 没装上的原因在 `jobs` 里；这里接住的是装完重新检测、写进库时抛的错。
     private func install() {
         outcome = nil
         let services = services, kind = kind
@@ -99,7 +94,6 @@ struct AgentRow: View {
 
 enum AgentLine {
     static var installing: String { String(localized: "安装中，可能要几分钟") }
-    /// 原因是安装脚本的最后一句原话
     static func notInstalled(_ why: String) -> String { String(localized: "没装上：\(why)") }
 
     static func needs(_ prerequisite: InstallPrerequisite) -> String {
@@ -107,7 +101,6 @@ enum AgentLine {
         return String(localized: "需要 \(prerequisite.name) \(version) 以上")
     }
 
-    /// `touches`：这家的配置目录碰得到（`AgentIntegration.touches`）。
     static func of(_ kind: AgentKind, _ status: AgentStatus?, connected: Bool, touches: Bool) -> (StatusTone, Dotted?) {
         guard let status else { return (.calm, Dotted(String(localized: "检测中…"))) }
         guard touches else { return (.calm, Dotted(String(localized: "正式版在用，先用 \(kind.facts.homeVariable) 指定目录"))) }
@@ -123,8 +116,6 @@ enum AgentLine {
 }
 
 extension AgentKind {
-    /// 接入后读进它磁盘上的全部会话记录（`HistoryScope.all`）。OpenCode 只认 CuePad 托管过的（`OpenCodeRuntime`），
-    /// dsh 的会话记录只落在 CuePad 给托管会话的存储根里（`DshRuntime.sessions`）。
     var readsAllSessions: Bool { self != .opencode && self != .dsh }
 }
 

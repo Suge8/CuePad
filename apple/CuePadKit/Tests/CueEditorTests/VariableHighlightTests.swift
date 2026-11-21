@@ -25,7 +25,7 @@ struct VariableHighlightTests {
         h.textView.insertText("名字", replacementRange: nowhere)
         #expect(!h.textView.hasMarkedText())
         #expect(h.stored == "前 {{名字}} 后")
-        #expect(notified == ["前 {{名字}} 后"])  // 组合中不上报，提交后上报一次
+        #expect(notified == ["前 {{名字}} 后"])
     }
 
 }

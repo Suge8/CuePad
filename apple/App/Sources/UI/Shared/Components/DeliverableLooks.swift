@@ -12,17 +12,13 @@ nonisolated struct DeliverableLook: Sendable {
     var detail: String?
 }
 
-/// 解码与生成按框定尺寸，不按猜的最长边：同高 150 点的一排里一张 16:9 截图只要 800×450 像素，按"最长边是高的 4 倍"解成 1800 像素宽是它的五倍多。
 nonisolated struct LookBox: Hashable, Sendable {
     var width: Int
     var height: Int
     var fills: Bool
-    /// 提问的方形缩略图只为认出是哪张，截图的中间常是空白，居中裁认不出；裁好的随缩略图存，画的时候居中铺满即可。
     var framed = false
-    /// 截图与网页是别人的画面，只能压暗；自己排的页按此刻的外观画，Mac 全屏页落地时换成的正文同色，不在深色里亮出一张白纸。
     var dark = false
 
-    /// 限宽的框里，横图、全景图最多按框的 4 倍解：再宽的那一截反正被裁掉或缩得看不清。不限宽的一排里格子按真实比例给宽，不封顶，否则全景图会被放大。
     private static let longestFactor = 4
 
     func longestSide(of size: CGSize) -> Int {
@@ -97,7 +93,6 @@ enum DeliverableLooks {
         }
     }
 
-    /// 自己排出来的那几类（`rendered`）的画法变过就换一个 `pageLook`，磁盘上旧画法的那张不再认。
     private static func key(_ preview: PreviewItem, _ box: LookBox) -> String {
         let page = drawn(preview.kind) ? "-\(pageLook)\(box.dark ? "-dark" : "")" : ""
         return "\(preview.hash)@\(box.width)x\(box.height)\(box.fills ? "fill" : "fit")\(box.framed ? "-framed" : "")\(page)"
@@ -105,7 +100,6 @@ enum DeliverableLooks {
 
     private static let pageLook = "faded"
 
-    /// 按外观画（`LookBox.dark`），深色下不再压暗。
     static func drawn(_ kind: PreviewKind?) -> Bool { [.markdown, .diff, .text].contains(kind) }
 
     /// 沿长的那一边挪到细节最多的地方：截图与页面上有字、有控件的地方细节多，空白的底没有，页面的标题与表单、几张方案图各自不同的那一块都落在框里。
@@ -134,7 +128,6 @@ enum DeliverableLooks {
     }
 
     nonisolated private static let detailSlack = 0.02
-    /// 够分出一行字，量一次不到一毫秒。
     nonisolated private static let detailSide = 64
 
     nonisolated private static func detail(_ image: CGImage, rows: Bool) -> [Double]? {
@@ -190,7 +183,6 @@ enum DeliverableLooks {
 
     @concurrent private static func parse(_ source: String) async -> UnifiedDiff { UnifiedDiff(source) }
 
-    /// 字号随平台不同，页底常正好切在一行字中间，横切半行读作排坏了；淡出说的是"下面还有"（同会话条多到要滚时的下沿）。
     private static func rendered(_ content: some View, palette: Palette, box: LookBox) -> CGImage? {
         let page = content
             .frame(width: markdownPage.width, height: markdownPage.height, alignment: .topLeading)
@@ -207,9 +199,7 @@ enum DeliverableLooks {
         return renderer.cgImage
     }
 
-    /// 页底淡出的那一截：约一行半字高，切在哪一行，被切的那行都已淡到看不出
     private static let pageFade: CGFloat = 36
-    /// 画成多大的一页再缩进卡片：比阅读栏窄，缩进主图、横排时字仍认得出（480 宽时列表只剩七八磅）
     static let markdownPage = CGSize(width: 360, height: 270)
 
     @concurrent private static func head(of file: URL) async -> String? {

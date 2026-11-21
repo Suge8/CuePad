@@ -1,8 +1,5 @@
 import Foundation
 
-/// 只推事实；什么时候显示（Cue 值班时歇着，不是待回复、有新回复）只看会话显示的状态（App 的 `SessionProgress.handoff`），不在这里再判一遍。
-/// 只从 Cue 每一轮的经过推（`cueMessages`）、读的时候对上那一处此刻的样子，不另存，也不截 Cue 的原话。
-/// 交给的任务做完了就不再写，等 Cue 醒来再处理（不然“等它做完”挂在一件已经做完的事上）。Cue 只看了看、没交出去的不算，近况照旧是会话自己最后那句回答。
 public struct CueHandoff: Equatable, Sendable {
   public let kind: ChatMessage.Tools.Kind
   public let place: UUID
@@ -11,8 +8,6 @@ public struct CueHandoff: Equatable, Sendable {
 }
 
 extension CueStore {
-  /// 往回只看 Cue 最近这么多轮：列表每读一次都要推一遍，歇了好几天的会话不该让它把几天的经过全解一遍；交出去总在停下后不久，
-  /// 之后又有这么多轮没再碰它，那件事也早不是近况了。
   static let handoffWindow = 60
 
   private static let handing: Set<ChatMessage.Tools.Kind> = [.talk, .start, .add]

@@ -7,7 +7,6 @@ import ImageIO
 import Testing
 @testable import CuePad
 
-/// 各家同一条路（`History.Transcript.toolImages`）：会话文件的形状照各家真机读图时写下的（Codex 0.166 的 view_image、Grok 1.0.70 的 read_file）。
 @MainActor
 @Suite(.releasesLibraries)
 struct ToolImageTests {
@@ -19,7 +18,6 @@ struct ToolImageTests {
         try log.reset()
         let shot = pngData(width: 3200, height: 2000, shade: 0.3), icon = pngData(width: 40, height: 40, shade: 0.6)
         try log.user("截个图看看")
-        // 清单只列 30 条不落结果的调用：先跑满，带图的那几步照样列上
         for step in 0..<31 { try log.tool("bash", id: "b\(step)", arguments: ["command": "ls \(step)"]) }
         try log.tool("read", id: "c1", arguments: ["path": "shot.png"], images: [shot])
         try log.tool("read", id: "c2", arguments: ["path": "icon.png"], images: [icon])
@@ -31,7 +29,7 @@ struct ToolImageTests {
         let round = try #require(try await store.chatMessages(of: "s").last { $0.role == .known(.pi) })
         let images = try #require(round.tools?.images)
         #expect(images.count == 2)
-        #expect(round.tools?.steps == 33)  // 31 条命令 + 读两个文件（同一个文件读两次只算一次）
+        #expect(round.tools?.steps == 33)
 
         let stored = try JSONEncoder().encode(update.checkpoint)
         var old = try #require(try JSONSerialization.jsonObject(with: stored) as? [String: Any])

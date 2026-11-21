@@ -6,8 +6,6 @@ import Synchronization
 import Testing
 @testable import CueBridge
 
-/// CuePad 托管的会话里，Agent 用自己的工具跑 `cuepad live snapshot`：会话记着承载它的进程（`piProcesses`），
-/// 只有那个进程的后代能以这个会话操作活预览（`LiveChannel.Server.admit`）。各家的工具命令得真是它的后代，否则这一家的动词全被拒。
 @MainActor
 @Suite(RealAgents.tiered)
 struct RealLiveAgentTests {
@@ -17,7 +15,6 @@ struct RealLiveAgentTests {
         var sessions: [String] { box.withLock { $0 } }
     }
 
-    /// 各家跑命令的工具与参数（假模型照这个调）。Codex 申请在沙箱外跑（`codexEscalated`），由 CuePad 问用户。
     private nonisolated static func shell(_ agent: AgentKind, _ command: String) -> FakeReply {
         switch agent {
         case .pi: .call("bash", ["command": command])
@@ -59,7 +56,6 @@ struct RealLiveAgentTests {
             // 只答带工具的那一路：Claude Code 另有不带工具的辅助请求（起标题之类）也带着这句
             model.on({ !$0.tools.isEmpty && $0.prompt.contains("LIVE-CHECK") }) { $0.step < steps.count ? steps[$0.step] : .say("DONE") }
             try await bridge.send(SessionMessage(text: "LIVE-CHECK run it"), to: session.id)
-            // 问要不要跑这条命令的（各家自己的权限规则、Codex 的沙箱外），照用户点允许
             try await eventually("工具命令跑完") {
                 if let ask = bridge.session(id: session.id)?.question, let prompt = ask.promptID {
                     try await bridge.answer(.confirmed(true), to: prompt, in: session.id)
@@ -74,7 +70,6 @@ struct RealLiveAgentTests {
             #expect(printed == "PAGE-OK\nexit=0\n", "\(printed)\n\((try? String(contentsOf: err, encoding: .utf8)) ?? "")")
             #expect(received.sessions == [session.sessionID])
 
-            // 同一个会话号、不是它后代的进程（测试自己）：拒
             let stranger = Process()
             stranger.executableURL = PiProcess.cuepad
             stranger.arguments = ["live", "snapshot"]
@@ -88,7 +83,6 @@ struct RealLiveAgentTests {
         }
     }
 
-    /// 在这一家起好托管的接入，交出桥、假模型、工作目录与开一个托管会话的办法。
     private func hosted(
         _ agent: AgentKind, _ store: CueStore,
         _ body: (Bridge, FakeModel, URL, () async throws -> Session.ID) async throws -> Void

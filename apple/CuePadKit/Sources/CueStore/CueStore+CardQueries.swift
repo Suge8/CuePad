@@ -6,14 +6,12 @@ extension CueStore {
     try select(Card.self, where: "(\(Self.cardActive)) AND (\(Self.looseIdea)) AND projectID = ?", [project], orderBy: "sortKey, id")
   }
 
-  /// 随项目删除的卡归在该项目名下，不在这里。
   public func trashedCards() throws -> [Card] {
     try select(Card.self, where: "deletedAt IS NOT NULL", orderBy: "deletedAt DESC, id")
   }
 
   public func card(_ id: UUID) throws -> Card? { try find(Card.self, id) }
 
-  /// 只列归档时的那一条，不列随它一起归档的下级。
   public func archived() throws -> [Card] {
     try select(
       Card.self,
@@ -24,8 +22,6 @@ extension CueStore {
       orderBy: "archivedAt DESC, id")
   }
 
-  /// 执行过或认领过的读灵感与任务上记的会话；还没执行的读最近一条投送请求。开新会话的是“正在开”（开好后由 `claimLaunchedCards` 记到卡上；没开成的不算交给过，任务行重新给“开始”）。
-  /// 在路上的最近一条发给已有会话的请求优先于卡上记的会话：手机重发后状态点跟着那个会话（发送中），不停在旧的回复上。开新会话的请求不抢：开好时由认领记到卡上。
   public func handedSessions() throws -> [UUID: AgentHandoff] {
     let handOff = "r.cardID IS NOT NULL AND (r.mode = 'start' OR (r.targetRef IS NOT NULL AND r.mode IN (\(sqlList(DeliveryMode.toSession)))))"
       + " AND \(Self.latestHandoff("r"))"
@@ -99,7 +95,6 @@ extension CueStore {
     "FROM cards t LEFT JOIN cards u ON u.id = t.parentID AND \(taskOnBoard("u"))"
   private static let topLevel = "(u.id IS NULL OR (t.completedAt IS NULL AND u.completedAt IS NOT NULL))"
 
-  /// 给用户看的任务数与完成数只有这一处定义。顶层是显示在顶层的任务：没有上级、上级不在（没到、在回收站、归档了），或自己没完成而上级已完成（看板上它在顶层）。
   public func taskCounts() throws -> [UUID: TaskCounts] { try taskCounts(scope: "", []) }
 
   public func taskCounts(in project: UUID) throws -> TaskCounts {
@@ -119,7 +114,6 @@ extension CueStore {
     return Dictionary(uniqueKeysWithValues: rows.map { ($0.project, $0.counts) })
   }
 
-  /// 给用户看的“做完了哪些”只有这一处：任务看板的做完列、实时活动的“今天做完”、项目页的“已完成”。顶层与可见的口径同 `taskCounts`。
   public func tasksDone(since: Date? = nil, in project: UUID? = nil, limit: Int? = nil) throws -> [Card] {
     var scope = "", arguments: [any SQLBindable] = []
     if let since {

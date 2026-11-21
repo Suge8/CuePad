@@ -2,18 +2,14 @@ import CueText
 import Foundation
 
 extension CueStore {
-  /// 插入或更新会话索引（本机，不同步）；`checkpoint` 为 nil 时保留已存的检查点，非 nil 时在同一事务里替换。
   public func upsertSession(_ session: IndexedSession, checkpoint: Data? = nil, host: String, transcript: SessionTranscript? = nil) throws {
     try upsertSessions([SessionUpsert(session: session, checkpoint: checkpoint, transcript: transcript)], host: host)
   }
 
-  /// 一批会话索引在同一个事务里写（首次回填几千个文件时：一次提交、一次变更通知，界面不为每个文件重读重画）。
   public func upsertSessions(_ batch: [SessionUpsert], host: String) throws {
     try write { try upsertSessionRows(batch, host: host) }
   }
 
-  /// 读会话文件之前先记下桥给出的会话文件（投送确认要跟着它）：索引里还没有这个会话才插一行，已有的不动。
-  /// 查有没有与插入在同一个事务里：分两步时，中间读会话文件的那一路可能已写下标题与检查点，再插就拿桥上的名字（没报名字时是文件夹名）盖掉标题。
   public func seedSession(_ session: IndexedSession, host: String) throws {
     try write {
       guard try find(IndexedSession.self, session.id) == nil else { return }
@@ -37,7 +33,6 @@ extension CueStore {
     }
   }
 
-  /// 未收尾投送对应的真实文件位置；确认到期也继续由正常历史订阅跟随，直到正证据或请求被清理。
   public func deliveryHistoryFiles(on host: String) throws -> Set<URL> {
     let unsettled = "r.hostID = ?1 AND r.status NOT IN ('\(DeliveryStatus.succeeded.rawValue)', '\(DeliveryStatus.failed.rawValue)')"
     return Set(try db.query(
@@ -50,7 +45,6 @@ extension CueStore {
       """, [host]) { URL(filePath: $0.text(0)) })
   }
 
-  /// 同时让已结束（与没托管过、被打断）的记录与会话文件一一对应：删掉这台 Mac 上没有会话文件的这类记录（文件被删的；从没落盘的，如 `--no-session` 或没发过消息的），补写有会话文件却没有记录的。在线的不动；歇着的托管会话同样要有会话文件，由 `StateRecorder.dropUnindexedHosted` 对账（它知道哪些是此刻在线的）。每个 Agent 的索引各自对账自己的会话。
   @discardableResult
   public func retainSessions(paths: Set<String>, agent: AgentKind, host: String) throws -> Int {
     try write {
@@ -63,7 +57,6 @@ extension CueStore {
           DELETE FROM piSessionStates WHERE hostID = ? AND (state = ? OR state = ? AND hosted IS NULL) AND agent = ? AND sessionID NOT IN (SELECT id FROM piSessions)
           """,
         [host, WorkState.ended.rawValue, WorkState.interrupted.rawValue, agent.rawValue])
-      // 反过来，有会话文件却没有记录的补写：换 iCloud 账号丢掉同步数据（`eraseSyncedData`，本机索引留着）、记录在别处被删之后
       let unrecorded = try select(
         IndexedSession.self, where: "NOT EXISTS (SELECT 1 FROM piSessionStates s WHERE s.sessionID = piSessions.id)")
       let bound = try boundDirectories()
@@ -72,8 +65,6 @@ extension CueStore {
     }
   }
 
-  /// 删掉一家 Agent 的本机会话索引（断开接入时）：会话同步记录与对话不动。`host` 这台 Mac 托管过的会话（`hostedSessionIDs`）留着：
-  /// 没接入也照样开、照样读对话，闲置退出或结束后再发话要靠索引接着它（`MacExecutor`）。
   public func deleteSessions(of agent: AgentKind, keepingHostedOn host: String) throws {
     try write {
       try db.run(
@@ -81,7 +72,6 @@ extension CueStore {
     }
   }
 
-  /// `host` 这台 Mac 托管过的这家的会话：CuePad 开的（带认领标识）与接着的（不带标识），结束了也算。
   public func hostedSessionIDs(of agent: AgentKind, host: String) throws -> Set<String> {
     Set(try db.query(Self.hostedSessionsSQL, [host, agent.rawValue]) { $0.text(0) })
   }
@@ -92,10 +82,6 @@ extension CueStore {
 
   public func indexedSession(_ id: String) throws -> IndexedSession? { try find(IndexedSession.self, id) }
 
-  /// 已结束的记录更新名字、所在、最后活动时间与会话文件里最后用的模型、思考强度（没变不写，免得检查点作废、从头重读时把几千条历史重新上传）；
-  /// 在线的不动（由状态写入方负责）。必须在写事务内调用。
-  /// 变没变在 SQL 里按库里存的精度比：读会话文件得到的时间带亚毫秒，库里是毫秒，在 Swift 里比几乎总是“变了”。
-  /// 模型只比是不是同一个（提供方与 id）：在线时桥报的那份带名字、档位与账号，文件里只有键，同一个就留着桥报的；文件没记的不清掉已有的。
   private func writeSessionHistory(_ session: IndexedSession, host: String, bound: [BoundDirectory]) throws {
     let id = SessionState.recordID(sessionID: session.id)
     let cwd = URL(filePath: session.cwd, directoryHint: .isDirectory)

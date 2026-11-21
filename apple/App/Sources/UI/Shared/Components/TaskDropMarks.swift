@@ -42,7 +42,6 @@ struct OutlineTargets: View {
         .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: target)
     }
 
-    // 实底的小签盖在行尾的旁注（时间、"开始"）上，字不叠字；底色同亮起的行
     private var badge: some View {
         Label("接到正文后面", icon: .add).labelStyle(.titleAndIcon)
             .font(TaskMetrics.caption.weight(.semibold)).foregroundStyle(palette.signature)
@@ -85,7 +84,6 @@ struct InsertionLine: View {
     }
 }
 
-/// 落点的线：强调色（墨色的线在深色里是一条白杠，与卡上的字一个颜色、分不出是标记），头上一颗空心圈标出从哪一级起。
 struct InsertionMark: View {
     static let ring: CGFloat = 9
     private static let line: CGFloat = 2.5
@@ -100,7 +98,6 @@ struct InsertionMark: View {
 }
 
 extension View {
-    /// 挂在整行上（连同右边的开合）：落点大，拖着时开合也用不上。
     func newTaskDrop() -> some View { modifier(NewTaskDrop()) }
 }
 

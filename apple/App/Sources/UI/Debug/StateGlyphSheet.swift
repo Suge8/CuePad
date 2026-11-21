@@ -2,7 +2,6 @@
 import CueStore
 import SwiftUI
 
-/// 每行画的就是 App 里的那个视图（`StateDot`、`CueAvatar`），不另画一份；放不放循环随 `LoopsPlay`。
 struct StateGlyphSheet: View {
     @Environment(\.palette) private var palette
 
@@ -101,7 +100,6 @@ struct StateGlyphSheet: View {
     }
 }
 
-/// 按一次会话常见的先后把状态挨个换一遍，看换形连不连贯（录屏用）。
 private struct StateTour: View {
     @State private var step = 0
 

@@ -10,8 +10,6 @@ import CueBridge
 import UIKit
 #endif
 
-/// 组合根：开库、装配依赖；持有跨窗口的服务（同步、快照、提示、热键、Mac 的执行器）与投送请求的入口（`request(on:)`）。
-/// 每个窗口自己的用例（建卡、完成、交给 Agent）在 `Workspace`，直接写 store；界面读数据直接 `store.observe(...)`。
 @Observable
 final class AppServices {
     static let version: String = {
@@ -32,11 +30,9 @@ final class AppServices {
     @ObservationIgnored let location: LibraryLocation
     let diagnostics: Diagnostics
 
-    /// 没有默认值：入口必须写明，不能悄悄没有同步。
     enum SyncSource {
         case iCloud
         case custom(any SyncControlling)
-        /// 用本机的库建同步：真实的同步代码连替身 iCloud，给测试与调试画面。给了 `relay`（测试的中转替身）才连门铃。
         case built((CueStore) -> any SyncControlling, relay: URL? = nil)
     }
 
@@ -44,13 +40,11 @@ final class AppServices {
     @ObservationIgnored let relay: Relay?
     @ObservationIgnored let sendOrder = SendOrder()
     @ObservationIgnored lazy var voice = VoiceService(services: self, signaling: relay)
-    /// 活预览的一问一答（`LiveSignal`）借通话那条信令收发：测试换替身。收到的经 `liveEvents` 交给 Mac 的工作区（答）或手机的 `liveRemote`（问）。
     @ObservationIgnored lazy var liveSignaling: (any VoiceSignaling)? = relay
     @ObservationIgnored let liveEvents = AsyncStream<VoiceRelayEvent>.makeStream()
     #if os(iOS)
     @ObservationIgnored private(set) lazy var liveRemote = LiveRemote(store: store, settings: settings) { [weak self] in self?.liveSignaling }
     #endif
-    /// 跟着同步、快照、收件做的跨服务的事经弱引用回到这里：服务没了就不再做（快照的发布排在任务里，可能晚于服务本身）。
     @ObservationIgnored private(set) lazy var syncing = SyncDriver(
         engine: sync, status: syncStart, store: store, timing: timing, speechClock: speechClock, localHost: speechClock.moment.localHost, tasks: tasks,
         cadence: { [weak self] in self?.pollingCadence },
@@ -63,32 +57,25 @@ final class AppServices {
     }
     @ObservationIgnored private(set) lazy var captures = CaptureIngest(store: store, directory: location.captureDirectory) { [weak self] in self?.reportIssue($0) }
     #if os(iOS)
-    /// 每个窗口自己决定弹不弹。
     private(set) var sessionAlert: SessionAlert?
     #endif
     let speechClock: SpeechClock
-    /// 资料库里随时间变的读、说的话到点翻状态、主动拉取的节奏共用这一个钟。
     @ObservationIgnored let timing: Timing
-    /// 界面与服务都从这里取，不各自订阅。
     let liveSessions: LiveSessions
     let cueFeed: CueFeed
     let accountQuotas = AccountQuotas()
 
-    /// 待打开的页：写入后由工作区取走（`Workspace.openLinks`）。
     var pendingDeepLink: DeepLink?
 
     @ObservationIgnored let tasks: Followers
     var hasOpenDeliveries = false
-    /// 这台设备有人在看哪些页，读写都只经它。
     @ObservationIgnored let viewer: ViewerKeeper
     @ObservationIgnored var backgroundFlushes: [UUID: @MainActor () async -> Void] = [:]
 
-    /// App 代理持有的那一个，`start()` 前接上；测试没有，不发真实通知。
     @ObservationIgnored weak var alerts: AlertCenter?
 
     #if os(iOS)
     @ObservationIgnored let pasteboard: UIPasteboard
-    /// 这台手机在同步表与中转里认自己的 ID（同 Mac 的 `hostID`）：viewer、中转、实时活动的地址记录、诊断都用它，读不到时为 nil。
     @ObservationIgnored let device: String?
     /// 隔离实例默认不开，避免遗留活动唤醒测试宿主；验收用 `-CuePadLiveActivity YES`。
     @ObservationIgnored private(set) var cueActivity: CueLiveActivity?
@@ -108,14 +95,11 @@ final class AppServices {
     @ObservationIgnored var hotkeys: [GlobalHotkey] = []
     @ObservationIgnored let hostID: String
     @ObservationIgnored let workspaces: Workspaces
-    /// 各台设备的诊断落在哪（`LibraryLocation.deviceLogs`）：打开时就解析，环境变量给错了进失败页。
     @ObservationIgnored let deviceLogs: URL
     @ObservationIgnored let wakeNotifications: NotificationCenter
     @ObservationIgnored let stateRecorder: StateRecorder
     @ObservationIgnored let presence: MacPresenceKeeper
-    /// 同步表 `macAgents` 的唯一写入口；Cue 启用前也经它问。
     @ObservationIgnored let macAgents: MacAgentsRecorder
-    /// 同步表 `agentLibraries` 的唯一写入口，整理与改规则也经它。
     @ObservationIgnored let library: AgentLibraryFiles
     @ObservationIgnored lazy var executor = MacExecutor(
         store: store, bridge: bridge, runtimes: runtimes, hostID: hostID, workspaces: workspaces, recorder: stateRecorder, library: library,
@@ -130,21 +114,16 @@ final class AppServices {
 
     nonisolated enum StartupIssue: Equatable {
         case globalShortcutUnavailable(String)
-        /// 分享扩展留下的内容没能入库（保留在共享容器里，下次再试）。
         case captureImportFailed(String)
-        /// 分享扩展留下的一条读不出来（挪到资料库旁的 `CaptureQueue.unreadableName`，不再重试）。
         case captureUnreadable(String)
-        /// 跟着库常驻的本机功能没能启动或停了：是哪一项写在原因里。
         case syncUnavailable(String)
         case widgetDataUnavailable(String)
         #if os(macOS)
         case bridgeUnavailable(String)
-        /// Pi 历史索引读写 Store 失败；该会话文件不再写回。
         case historyUnavailable(String)
         #endif
     }
 
-    // 打不开资料库时不能悄悄换一个空库，也不能带着它往下走：错误交给调用方，启动入口显示失败页（`UnreadableLibraryView`），不终止进程。
     #if os(macOS)
     init(location: LibraryLocation, defaults: UserDefaults, sync: SyncSource, mac: MacDependencies) throws {
         let store = try CueStore(location: location, timing: mac.timing)
@@ -177,7 +156,6 @@ final class AppServices {
         runtimes = mac.runtimes(store)
         agents = mac.agents
         macAgents = MacAgentsRecorder(store: store, host: mac.hostID, agents: agents)
-        // 隔离运行时移走的不进系统废纸篓，放在库里
         let trash = location.touchesRealWorld ? nil : AgentLibraryFiles.trash(into: location.directory.appending(path: "Trash", directoryHint: .isDirectory))
         library = AgentLibraryFiles(store: store, host: mac.hostID, access: agents.integration.fileAccess, trash: trash)
         commandLineTool = mac.commandLineTool
@@ -224,7 +202,6 @@ final class AppServices {
     func post(_ alert: SessionAlert) { sessionAlert = alert }
     #endif
 
-    /// 读不出就照常提示，宁可多响一次也不悄悄吞掉。
     func reaches(_ subject: AlertSubject) async -> Bool {
         do {
             return try await store.reaches(subject)
@@ -234,7 +211,6 @@ final class AppServices {
         }
     }
 
-    /// 换账号或清除资料前先撤销活动；重置同步令牌的决定已做出，不等异步状态流才阻止旧库重开活动。
     func resolveSync(_ resolution: SyncResolution) async throws {
         #if os(iOS)
         await cueActivity?.invalidate(reason: "resolveSync").value

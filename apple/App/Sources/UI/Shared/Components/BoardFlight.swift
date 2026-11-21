@@ -12,7 +12,6 @@ nonisolated extension EnvironmentValues {
     @Entry var boardArrival: BoardArrival?
 }
 
-/// `landed` 从 false 变到 true 是在看板那一份的事务里，跟着它变的透明度随飞行插值。
 nonisolated struct BoardArrival: Equatable {
     let from: TaskBoard.Column
     let landed: Bool
@@ -32,48 +31,36 @@ nonisolated struct BoardArrival: Equatable {
         let at: ContinuousClock.Instant
     }
 
-    /// 原处没排出来的（懒加载还没建、滚出去了）不飞，在新处淡入。
     let departures = BoardDepartures()
-    /// 飞进去的那一列排在上面（`BoardColumn`），飞到一半又来一份没人换列的看板时不落到别的列下面。
     @ObservationIgnored private var landing: Set<String> = []
     @ObservationIgnored var frames: [String: (lane: TaskBoard.Column, frame: CGRect)] = [:] { didSet { land() } }
     /// 此刻排出来的卡（值是那一份视图自己的记号）。懒加载撤掉的卡留着撤掉前的框：一下跳过几屏（拖滚动条）时那个框还在可视区里，
     /// 按住会拎起早已不在那儿的卡、排序会把它算进去，所以取框只认排出来的（`laid`）。
     @ObservationIgnored var shown: [String: UUID] = [:]
-    /// 手机的行里各小列排在哪、从上到下是哪几张（`boardStack`）：行里卡的框由它算，不挂在卡上记。
     @ObservationIgnored var stacks: [UUID: Stack] = [:] { didSet { land() } }
     @ObservationIgnored var lanes: [TaskBoard.Column: CGRect] = [:]
 
-    // 拖动（`BoardDrag.swift`）。几何不触发重绘；读得到的只有下面几样，手指每挪一下只写 `point`。
-    /// 各列（行）连列头的框，看板坐标系；`origin` 是看板坐标系在窗口里的原点。
     @ObservationIgnored var areas: [TaskBoard.Column: CGRect] = [:]
     @ObservationIgnored var origin = CGPoint.zero
     @ObservationIgnored var reduceMotion = false
-    /// 系统拖放放下的那一处（卡那么大的框）。
     @ObservationIgnored var hand: CGRect?
-    /// 空位上一次挪开的时刻。
     @ObservationIgnored var shifted: ContinuousClock.Instant?
     @ObservationIgnored var aimed: (finger: CGPoint, board: TaskBoard, row: Bool)?
-    /// 放下的卡要先答一句才办（`Workspace.asksAboutDrop`）：问着时它停在松手的地方，问完再等库（`pend`）。
     @ObservationIgnored var asking = false {
         didSet { if oldValue, !asking, held?.phase == .pending { pend() } }
     }
-    /// 放下后等库的那一段（`pend`）。
     @ObservationIgnored var waiting: Task<Void, Never>?
     var held: Held?
     var float: Float?
-    /// 浮着的那张的卡心。
     var point = CGPoint.zero
     var over: TaskBoard.Column?
     var slot: Int?
     var placed: Placed?
     var pull: Pull?
 
-    /// 新来或离开看板的卡这一趟不是飞，还没飞完的记录也撤掉，进出照常淡。
     fileprivate func read(_ board: TaskBoard, from before: TaskBoard) {
         var moved = board.moved(from: before)
         let now = ContinuousClock.now
-        // 放下后悬着的那张换了身份（`TaskBoard.renamed`）：手里这张跟着认新的，不然新的那张在原处露出来、手里这张还悬着；连列也换了的算换列
         var shed: (id: String, from: TaskBoard.Column, frame: CGRect)?
         if let held, held.phase == .pending, let new = board.renamed(held.id, from: before) {
             shed = frame(of: held.id).map { (held.id, new.from, $0) }
@@ -86,12 +73,9 @@ nonisolated struct BoardArrival: Equatable {
             departures[move.key] = Departure(column: move.value, frame: frame, at: now)
         }
         if let hand = takeoff(moved, lands: { board.column(of: $0) }), let column = moved[hand.id] { from[hand.id] = Departure(column: column, frame: hand.frame, at: now) }
-        // 旧身份的那张当场藏掉（有飞行记录的撤掉时不淡，`BoardDrop`）：不然它在原处淡着露一下
         if let shed { from[shed.id] = Departure(column: shed.from, frame: shed.frame, at: now) }
         if board.todo.map(\.id) != before.todo.map(\.id) {
-            // 放下的那一处库里排好了（或别处改了待办）：空位交还给库里的顺序
             if placed != nil { placed = nil }
-            // 拖着时待办变了（同步插进来一张）：空位跟着它后面那张卡走，不留在原来的下标上——留着的话空位当场跳到别处，松手落的也是那一处
             if let slot, let id = held?.card.task, held?.phase == .dragging {
                 let next = before.todo.indices.contains(slot) ? before.todo[slot].id : nil
                 let wanted = next.flatMap { next in board.todo.firstIndex { $0.id == next } } ?? board.todo.count
@@ -154,12 +138,10 @@ private struct BoardFlight: ViewModifier {
 
     func body(content: Content) -> some View {
         if let moves, let lane {
-            // 拖着的那张原处只留空位（`BoardDrag`）
             let held = moves.held.map { $0.id == id && $0.phase != .landing } ?? false
             content
                 .opacity(held ? 0 : 1)
                 .background { if held { BoardWell() } }
-                // 手机的行里不在卡上记，由小列算（`boardStack`）
                 .onGeometryChange(for: CGRect.self) { $0.frame(in: .scrollView) } action: { if !row { moves.frames[id] = (lane, $0) } }
                 // 按记号认：卡换列时新的那份先出现、旧的那份后撤，旧的撤掉时不把新的也摘了
                 .onAppear { if !row { moves.shown[id] = token } }
@@ -173,7 +155,6 @@ private struct BoardFlight: ViewModifier {
 }
 
 extension ContainerValues {
-    /// 手机的行按它认格里排的是哪张卡（`boardStack`）。
     @Entry var boardFlight: String?
 }
 
@@ -181,9 +162,7 @@ extension BoardMoves {
     struct Stack {
         let lane: TaskBoard.Column
         var frame = CGRect.null
-        /// 从上到下各格是哪张卡（飞行身份）；不是卡的格（"更早做完的"那一叠、空着的说明）为 nil。
         var ids: [String?] = []
-        /// 一格的高，与格到格的间距。
         var height: CGFloat = 0
         var pitch: CGFloat = 0
     }
@@ -266,8 +245,6 @@ nonisolated private struct BoardDrop: Transition {
 }
 
 extension View {
-    /// 过了零点也重读一次："今天做完"按读的那一刻分，库没变时日子换了也要换。
-    /// 看板怎么动只在这里定，各列各行不另挂动画：第一份是页面打开的样子、不动；之后每一份都在一个动画事务里换上（`Motion.travel`：换列是看板上最远的挪动，列里让位跟着同一条走、与飞的那张同起同落）。
     func observingBoard(into board: Binding<TaskBoard?>, store: CueStore, onError: @escaping (any Error) -> Void) -> some View {
         modifier(BoardReading(board: board, store: store, onError: onError))
     }

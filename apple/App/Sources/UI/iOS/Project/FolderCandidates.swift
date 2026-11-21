@@ -2,7 +2,6 @@
 import CueStore
 import SwiftUI
 
-/// 手机看不到 Mac 的完整路径，所以只有名字；选中后请那台 Mac 解析成完整路径再绑。`project` 在新建项目时还没有，为 nil。
 struct FolderCandidateList: View {
     let project: UUID?
     var closesOnChoose = false
@@ -64,7 +63,6 @@ struct FolderCandidateList: View {
     }
 }
 
-/// Mac 绑好（结果写回）才收起；没成功就在下面写原因、可以再选。
 struct FolderPickerSheet: View {
     let project: Project
     @Environment(Workspace.self) private var workspace

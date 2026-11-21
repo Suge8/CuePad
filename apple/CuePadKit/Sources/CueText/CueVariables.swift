@@ -1,8 +1,6 @@
 import Foundation
 
-/// `{{变量}}`：名称为非空且不含 `{` `}` 换行的文本。
 public enum CueVariables {
-    /// 提取变量名，重复变量只保留第一次出现的位置。
     public static func names(in text: String) -> [String] {
         var seen = Set<String>()
         return matches(in: text, within: nil).compactMap { match in
@@ -11,7 +9,6 @@ public enum CueVariables {
         }
     }
 
-    /// 替换已填写的变量值；未提供或留空的变量保留原始占位符（空串不是有效填充）。
     public static func fill(_ text: String, values: [String: String]) -> String {
         let units = Array(text.utf16)
         var result = ""
@@ -25,7 +22,6 @@ public enum CueVariables {
         return result + String(decoding: units[cursor...], as: UTF16.self)
     }
 
-    /// `range`（UTF-16，通常是被编辑的段落）内所有变量的范围，含花括号；高亮用。
     public static func ranges(in text: String, within range: NSRange) -> [NSRange] {
         matches(in: text, within: range).map(\.range)
     }

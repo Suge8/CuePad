@@ -4,9 +4,6 @@ import CoreVideo
 import CueEditor
 import IOSurface
 
-/// 放大多少只有滚动视图自己的 `magnification` 一份，翻页、顶栏都不另记。
-/// 横扫翻不翻页由全屏页按这张往那边还滑不滑得动定（`PageInput`）：没放大、或放大了已滑到那一边才翻。
-/// 解码都在后台，与手机同一套：打开时只按全屏页的大小解一份（进缩略图缓存，再打开不再解）；第一次放大停下来才解清楚的那张（`PreviewScale.detailPixels`，不进缓存），停稳了才换上（捏着、滑着、动画途中到了先留着）。只看不放大的图不解原图。
 final class PreviewZoom: NSScrollView, PreviewShowing {
     var chrome = NSEdgeInsetsZero {
         didSet {
@@ -125,8 +122,6 @@ final class PreviewZoom: NSScrollView, PreviewShowing {
         }
     }
 
-    /// 鼠标滚轮（一格一格的，没有触控板那种连续位移）在指针那一点放大、缩小：鼠标没有捏合，滚轮只滚动的话放大只剩双击那一档。
-    /// 触控板双指照旧是滚动看图，捏合放大。
     override func scrollWheel(with event: NSEvent) {
         guard !event.hasPreciseScrollingDeltas, event.scrollingDeltaY != 0 else { return super.scrollWheel(with: event) }
         let target = min(max(magnification * exp(event.scrollingDeltaY * Self.wheel), minMagnification), maxMagnification)
@@ -196,7 +191,6 @@ final class PreviewZoom: NSScrollView, PreviewShowing {
     }
 
     private static let snap: CGFloat = 0.1
-    /// 滚轮一格（位移约 1～3）放大约一成。
     private static let wheel: CGFloat = 0.05
 }
 
@@ -216,7 +210,6 @@ private final class Canvas: NSView {
 
     override var isFlipped: Bool { true }
     override var wantsUpdateLayer: Bool { true }
-    // 窗口不在前台时第一下也算：双击放大不用先点一下激活
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
     override func mouseDown(with event: NSEvent) {

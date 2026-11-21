@@ -19,7 +19,6 @@ struct CardMoreSlot: View {
     }
 }
 
-/// 气泡里两页，原地翻而不叠两层：叠两层读不出哪个是当前的，点外面也不知道关哪层。
 private struct CardMorePanel: View {
     let card: Card
     let opens: Bool

@@ -10,13 +10,11 @@ func jsonLine(_ tag: String, _ row: [String: Any]) -> String {
     tag + " " + String(decoding: try! JSONSerialization.data(withJSONObject: row, options: [.sortedKeys]), as: UTF8.self)
 }
 
-/// 进程已执行的指令数（百万）。别的进程抢 CPU 时 CPU 时间会被拉长，指令数几乎不受影响，前后对比以它为准。
 func instructionsMillions() -> Double { Double(processCounters().instructions) / 1_000_000 }
 
 /// 调用它的线程累计执行的指令（百万）：内核的每线程计数器（`thread_selfcounts`，取指令与周期两项）。线程的计数跨 exec 不清零。
 func threadInstructionsMillions() -> Double { threadCountersMillions().instructions }
 
-/// 调用它的线程累计的指令与 CPU 周期（百万）。周期除以核的频率就是这段活在不忙的机器上要多久：机器忙时 CPU 时间被拉长，周期几乎不变。
 func threadCountersMillions() -> (instructions: Double, cycles: Double) {
     var counts: (instructions: UInt64, cycles: UInt64) = (0, 0)
     _ = withUnsafeMutablePointer(to: &counts) { threadSelfCounts(1, $0, MemoryLayout<(UInt64, UInt64)>.size) }
@@ -117,7 +115,6 @@ final class FrameRecorder: NSObject {
     }
 }
 
-/// 每圈主线程 run loop（醒来 → 回去睡）的墙钟与 CPU 时间；提交发生在这一圈的 BeforeWaiting，所以一圈包含一帧的更新、布局与提交。
 final class TurnLog {
     struct Turn {
         var dur: CFTimeInterval
@@ -178,8 +175,6 @@ final class TurnLog {
         return (log, changedAt, since)
     }
 
-    /// 画面的指纹：窗口图层树里看得见的层（不隐藏、不透明）的位置、大小、滚动偏移（bounds 原点：滚动只改它）、变换、透明度、底色、边框、圆角、阴影与内容。
-    /// 不含图层对象本身：换了个什么都不画的层不算变。动画只改显示层、不改模型层，所以不会因为转着的图标而变。
     private static func fingerprint(_ layer: CALayer) -> Int {
         var hasher = Hasher()
         func visit(_ layer: CALayer) {
@@ -234,7 +229,6 @@ final class TurnLog {
             "seen": turns.changedAt != nil,
             "totalMs": ms(log.reduce(0) { $0 + min($1.cpu, $1.dur) }),
             "maxTurnMs": ms(log.map { min($0.cpu, $0.dur) }.max() ?? 0),
-            // ≥3ms 的各圈：[动作发出后第几毫秒醒来, 这一圈的 CPU 毫秒]
             "heavy": log.filter { min($0.cpu, $0.dur) >= 0.003 }.map { [((($0.at - turns.start) * 1000).rounded()), ms(min($0.cpu, $0.dur))] },
             "instructionsM": ((instructionsMillions() - instructions) * 10).rounded() / 10,
             "hitches": frames.count,
@@ -244,8 +238,6 @@ final class TurnLog {
     }
 }
 
-/// 界面里的测量点：项目页内容排完（`content`，`ProjectPage` 分帧出完最后一段，Mac）、Cue 页的对话出现（`cue`）。只在 Debug 构建里由视图调用，
-/// `interact` 等它出现再开始量，或拿它的时刻算到内容出现用了多久。
 enum PerfProbe {
     private static var waiting: [String: [CheckedContinuation<Void, Never>]] = [:]
     private(set) static var firstSeen: [String: Date] = [:]
@@ -261,8 +253,6 @@ enum PerfProbe {
         await withCheckedContinuation { waiting[event, default: []].append($0) }
     }
 
-    /// 这个进程里主线程看守记下的卡住条数（`MainThreadWatch`）：克隆来的库里带着写种子那次记的，不算。
-    /// 记录的时刻只到整秒，起点往前让一秒，启动那一圈就卡住的也算上。
     static func freezes(_ diagnostics: Diagnostics) -> Int {
         let start = processStart.addingTimeInterval(-1)
         return diagnostics.reports.count { $0.kind == .freeze && $0.date >= start }

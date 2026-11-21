@@ -20,11 +20,9 @@ nonisolated struct LaunchProgress: Sendable, Equatable {
         case opening
         case unconfirmed(String)
         case failed(Speech.Failure)
-        /// 这一次的请求库里已经没有了（清理掉了），说不出结果。
         case missing
         case claimed
 
-        /// 编辑和关闭不等投送；再次提交是否需要确认只由进度推出。
         var submission: Submission {
             switch self {
             case .idle, .failed: .safe
@@ -35,7 +33,6 @@ nonisolated struct LaunchProgress: Sendable, Equatable {
         }
     }
 
-    /// 当前一次失败也不能授权重做旧的未知请求；仍在等待当前回执时继续等。
     func submission(at moment: Speech.Moment) -> Submission {
         let current = phase(at: moment).submission
         return current == .waiting || otherRequests.isEmpty ? current : .confirm
@@ -55,7 +52,6 @@ nonisolated struct LaunchProgress: Sendable, Equatable {
     }
 }
 
-/// 认领标识：会话连上时带着它，进度按它读。
 nonisolated struct SessionLaunch: Equatable, Sendable {
     let request: UUID
     let token: String

@@ -1,6 +1,5 @@
 import SwiftUI
 
-/// 打开时响一声，听得出开的是什么。
 struct SoundToggle: View {
     @Environment(AppServices.self) private var services
 

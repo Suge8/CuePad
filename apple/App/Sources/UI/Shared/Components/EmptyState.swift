@@ -1,13 +1,10 @@
 import SwiftUI
 
-/// 那句下一步按全角标点断成几截排（`PhraseLines`，标点黏在前一截末尾）：居中的中文按字折行，行尾常剩一两个孤字。
-/// "这里还没有"类的空态（`waitsForSync`）在本机正在和 iCloud 对时（`SyncDriver.isCatchingUp`）不先说空：对得快就等对完再出，这一轮已久（`SyncDriver.showsCatchingUp`）换成"正在从 iCloud 同步"——新装的设备上东西一页页地到，说"还没有"是错的。
 struct EmptyState<Action: View>: View {
     let mascot: Mascot
     let title: LocalizedStringResource
     var message: LocalizedStringResource?
     var waitsForSync = false
-    /// 不垫纸，直接排在所在那一面上（Cue 那一栏：整栏只有它，再套一张纸是卡里套卡）。
     var bare = false
     @ViewBuilder var action: Action
     @Environment(AppServices.self) private var services: AppServices?
@@ -19,7 +16,6 @@ struct EmptyState<Action: View>: View {
     private var syncing: Bool { waitsForSync && services?.syncing.showsCatchingUp == true }
 
     var body: some View {
-        // 等同步那一句换成这里的空态：整块换身份，先淡掉再淡入（`handOff`），两块叠在同一张纸上、不同时交叉淡
         ZStack {
             VStack(spacing: Spacing.block) {
                 illustration
@@ -79,7 +75,6 @@ private struct Sheet: ViewModifier {
     }
 }
 
-/// 用 `Layout` 一次排，不量了再写回状态。读屏读整句。
 private struct PhraseLines: View {
     let text: String
 

@@ -8,7 +8,6 @@ import Foundation
 /// `-CuePadCueFlowLog <路径>`：量"发送"（send：从按下起）与"静止"（idle：走完之后 Cue 歇着、页面不动）各一段，一段一行 JSON 追加进这个文件。
 /// 静止放在最后量：刚就绪的几秒里进程还在后台忙（iOS 模拟器上 4 秒能有上百亿条指令，主线程却几乎不动），量不出页面歇着的样子。
 extension DebugScene {
-    /// 演示节奏（秒）：节奏本身就是要录的内容，不是在等别的事。
     private enum FlowBeat {
         static let lead = 2.0
         static let probe = 4.0
@@ -49,7 +48,6 @@ extension DebugScene {
         guard let press = flowPress else { throw Unmet("Cue 页的输入框不在") }
         flowPress = nil
         flowPressed = true
-        // 量在这里而不在输入框的任务里：手机上发出后输入框的任务会被取消，量到一半就断了
         let sending = Task {
             guard let log = cueFlowLog else { return press.resume() }
             try await measureFlight("send", seconds: FlowBeat.probe, into: log) { press.resume() }
@@ -109,7 +107,6 @@ extension DebugScene {
     private static func beat(_ seconds: Double) async throws { try await Task.sleep(for: .seconds(seconds)) }
 
     private static var flowPress: CheckedContinuation<Void, Never>?
-    /// 已经按过：之后又出现的输入框（iPhone 切回来）不再等。
     private static var flowPressed = false
 
     static func pressForCueFlow(_ press: () -> Void) async {

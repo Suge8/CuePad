@@ -5,7 +5,6 @@ import Testing
 
 @testable import CueSync
 
-/// 通知里不能出现加密字段（标题、详情）：文案是本地化 key 的通用句。
 @Suite struct AlertTests {
   let zone = testZone
 
@@ -22,17 +21,16 @@ import Testing
 
     #expect(record["notify"] as? String == "waitingForUser" && record.encryptedValues["notify"] == nil)
     #expect(record["sessionID"] as? String == "s1")
-    #expect(record["title"] == nil && record["detail"] == nil)  // 标题与详情只在加密字段里
+    #expect(record["title"] == nil && record["detail"] == nil)
     #expect(record.encryptedValues["title"] as? String == "secret title")
   }
 
-  /// 这一种取代是有意的：已恢复工作的会话不该再提示"等你确认"。
   @Test func anAlertForAStateThatHasSinceMovedOnIsNotDelivered() async throws {
     let rig = try Rig()
     let recorder = StateRecorder(store: rig.store, hostID: "mac", timing: ManualTiming().timing)
     try await recorder.update(sessionID: "s1", state: .thinking)
-    try await recorder.update(sessionID: "s1", state: .waitingForUser)  // 置位，还没上传
-    try await recorder.update(sessionID: "s1", state: .thinking)  // 继续工作
+    try await recorder.update(sessionID: "s1", state: .waitingForUser)
+    try await recorder.update(sessionID: "s1", state: .thinking)
 
     let id = try #require(try await rig.store.allSessionStates().first).id
     let record = try #require(try await rig.coordinator.record(for: rig.recordID(id)))
@@ -45,7 +43,7 @@ import Testing
     let recorder = StateRecorder(store: rig.store, hostID: "mac", timing: ManualTiming().timing)
     try await recorder.update(sessionID: "s1", state: .thinking)
     try await recorder.update(sessionID: "s1", state: .waitingForUser, detail: "q1")
-    try await rig.simulatePush()  // 带标志的记录已被服务端接受
+    try await rig.simulatePush()
 
     try await recorder.update(sessionID: "s1", state: .waitingForUser, detail: "q2")
 
@@ -66,7 +64,6 @@ import Testing
     let waiting = try #require(AlertText.content(for: try await record(), kind: .waitingForUser))
     #expect(waiting.title == "homepage 等你拍板" && waiting.body == "要覆盖 public/feed.xml 吗？ 会丢掉手写的条目")
 
-    // 这一轮的回答还没读进记录：不拿上一轮的充数
     let earlier = Recap(lastPrompt: "看看首页", lastReply: "上一轮说的话", answeredAt: .now.addingTimeInterval(-600))
     try await rig.store.writeTranscript(SessionTranscript(sessionID: "s1", messages: [], recap: earlier))
     let unread = try #require(AlertText.content(for: try await record(), kind: .settled))
@@ -106,7 +103,6 @@ import Testing
     try #require(try await rig.coordinator.record(for: rig.recordID(id)))["notify"] as? String
   }
 
-  /// 手机上开着的不挡：那条可能停在"开着"，手机前台自己不弹。
   @Test func cueRepliesToHisRoundReachThePhoneOncePerRoundUnlessHeHasTheCuePageOpenOnAMac() async throws {
     let rig = try Rig()
     func reply(_ text: String, startedAt: Date = .now) async throws -> UUID {
@@ -123,7 +119,7 @@ import Testing
     let round = Date.now
     let card = try await rig.store.addCueMessage(.cue, text: "要推送吗？", ask: try CueAsking(.push, action: "推送登录页的修复"))
     #expect(try await flag(rig, card.id) == "cue")
-    #expect(try await flag(rig, reply("问你了", startedAt: round)) == "said")  // 只静默叫醒
+    #expect(try await flag(rig, reply("问你了", startedAt: round)) == "said")
 
     try await rig.store.recordMacPresence(host: "mac") { true }
     try await rig.store.recordViewing(device: "mac", sessionIDs: [], cue: true)
@@ -134,7 +130,6 @@ import Testing
     let rig = try Rig()
     let recorder = StateRecorder(store: rig.store, hostID: "mac", timing: ManualTiming().timing, bootID: TestBoot.id)
     let session = SessionState.recordID(sessionID: "s1")
-    /// `his` 是他从回复框说的那句：开轮的是他
     func round(his said: String? = nil) async throws {
       let opener = said.map { _ in TurnOpener(delivery: UUID(), cue: false) }
       try await recorder.update(sessionID: "s1", state: .thinking, title: "登录页", turnStartedAt: .now, turnOpener: opener)
@@ -161,10 +156,10 @@ import Testing
       $0.enabledAt = .now
     }
     try await round()
-    #expect(try await flag(rig, session) == nil)  // 归 Cue 接手
+    #expect(try await flag(rig, session) == nil)
     try await round(his: "顺便把限流加上")
-    #expect(try await flag(rig, session) == nil)  // 做完这一下不推：他发起的这一轮按待回复推
-    _ = try await rig.store.leaveHisStops(after: 0)  // 值班的管理器对账时当场留给他回
+    #expect(try await flag(rig, session) == nil)
+    _ = try await rig.store.leaveHisStops(after: 0)
     let left = try #require(try await rig.store.cueDuty()?.left.first)
     #expect(try await rig.store.flagLeftToYou(left, host: "mac") == session)
     let record = try #require(try await rig.coordinator.record(for: rig.recordID(session)))

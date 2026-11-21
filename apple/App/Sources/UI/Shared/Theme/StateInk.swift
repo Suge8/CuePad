@@ -1,17 +1,10 @@
 import QuartzCore
 import SwiftUI
 
-/// 会话状态标里的那几根线：在想时是走着心跳的线，用工具时拧成扳手，压缩时是两块板夹着的弹簧，等子代理时是飘着的小机器人，
-/// 在问时是气泡里一个问号，新回复是一封信，被打断时是拔开的插头，已结束时是月牙；空闲时收进中心、什么都不画。
-/// 换状态是同一组线逐点变形过去（几何由 design/tools/ink/state_geometry.py 从符号的中线导出，每根同样点数），不换掉重画；
-/// 不是线的状态（铃铛、出错的徽、纸飞机，`StateDot` 叠在上面）这组线收进中心。
-/// 变形与常驻的动作都是 Core Animation、交给渲染服务（理由同 `LoopLayer`）；常驻动作只在 `loops` 时放，长时间挂着的几种隔几秒到十几秒才动一下（`InkBeat`）。
 struct StateInk {
     let pose: InkPose
     let color: Color
-    /// `LoopsPlay`：不放时停在静止的样子。
     let loops: Bool
-    /// 减弱动态效果时为 false：换状态只交叉淡。
     let morphs: Bool
 
     final class Host: LoopHostBase {
@@ -72,14 +65,11 @@ struct StateInk {
                     shape.lineWidth = 0
                     strand.box.addSublayer(shape)
                 }
-                // 走的那一截只有主线有：叠在别的线上，半透明的颜色会把那根描深一层
                 strand.runner.isHidden = true
                 ink.addSublayer(strand.box)
             }
         }
 
-        /// 线在 24 格的坐标里画（原点在中心），整组按边长缩放：线宽、位移都按格写，尺寸变了不用重挂动画。
-        /// 栅格化按缩放后的大小（`contentsScale`），放大了也不糊。
         private func place() {
             CATransaction.begin()
             CATransaction.setDisableActions(true)
@@ -106,14 +96,12 @@ struct StateInk {
             }
             if old?.life != pose.life || looped != loops {
                 live(pose.life)
-                // 换进一个不一直动的状态：变形落定时先动一下，不等下一次敲
                 if old != nil, loops { beat(pose.life, delay: Motion.Ink.morph * 0.6) }
             }
             paint(animated: old != nil)
             CATransaction.commit()
         }
 
-        /// 每根线换到新形状上：新形状里没有的那根收成一点、落在新主线上离它最近的地方；新冒出来的一根从旧主线上离它最近的一点长出来。
         private func reshape(_ shape: InkPose.Shape, animated: Bool) {
             let target = shape.strands
             let oldSpine = strands[0].points
@@ -133,7 +121,6 @@ struct StateInk {
             }
         }
 
-        /// 常驻的动作与各层的静止值（亮度、跑的那一截）。在干活的几种一直动（`LoopLayer.Host.loop`）；其余由 `InkBeat` 隔几秒敲一下。
         private func live(_ life: InkPose.Life) {
             for layer in [ink] + strands.flatMap({ [$0.box, $0.runner] }) {
                 for key in layer.animationKeys() ?? [] where ["life", "blink", "beat"].contains(key) { layer.removeAnimation(forKey: key) }
@@ -159,17 +146,14 @@ struct StateInk {
                 walk.timingFunction = CAMediaTimingFunction(controlPoints: 0.45, 0.05, 0.55, 0.95)
                 _ = LoopLayer.Host.loop(walk, on: main.runner, key: "life")
             case .twist:
-                // 绕扳手头拧过去、带一点回弹，停一拍再拧
                 main.pivot(at: CGPoint(x: 4, y: -4))
                 _ = LoopLayer.Host.loop(Self.frames("transform.rotation.z", Self.degrees([(0, 0), (0.45, -24), (0.75, 5), (1, 0), (1.5, 0)])), on: main.box, key: "life")
             case .press:
-                // 两块板往里一压、弹簧挤紧，松开时弹过一点再落定
                 let push: [(Double, CGFloat)] = [(0, 0), (0.45, 2.6), (0.65, 2.6), (0.95, -0.5), (1.15, 0), (1.4, 0)]
                 _ = LoopLayer.Host.loop(Self.frames("transform.scale.x", push.map { ($0.0, 1 - $0.1 * 0.145) }), on: main.box, key: "life")
                 _ = LoopLayer.Host.loop(Self.frames("transform.translation.x", push.map { ($0.0, $0.1) }), on: strands[1].box, key: "life")
                 _ = LoopLayer.Host.loop(Self.frames("transform.translation.x", push.map { ($0.0, -$0.1) }), on: strands[2].box, key: "life")
             case .bot:
-                // 浮着上下飘，飘两下眨一次眼、天线跟着一抖
                 for strand in strands {
                     _ = LoopLayer.Host.loop(Self.frames("transform.translation.y", [(0, 0), (0.9, -0.9), (1.8, 0), (2.7, -0.9), (3.6, 0)]), on: strand.box, key: "life")
                 }
@@ -189,7 +173,6 @@ struct StateInk {
             }
         }
 
-        /// 不一直动的几种动的那一下（`InkBeat` 隔几秒敲一次，换进来时 `delay` 后也放一次）：只放动的这一秒，放完就摘，其余时间渲染服务不画。
         func beat(_ life: InkPose.Life, delay: Double = 0) {
             guard pose?.life == life else { return }
             let start = CACurrentMediaTime() + delay
@@ -200,13 +183,10 @@ struct StateInk {
             }
             switch life {
             case .nod:
-                // 歪一下头再回正，像在问
                 play(Self.frames("transform.rotation.z", [(0, 0), (0.16, -0.2), (0.3, 0.12), (0.42, -0.04), (0.52, 0)]), on: ink)
             case .flap:
-                // 信封盖往上掀开一下再合上：有一封给你的
                 play(Self.frames("transform.scale.y", [(0, 1), (0.25, -0.55), (0.5, -0.55), (0.72, 1.08), (0.86, 1)]), on: strands[1].box)
             case .jitter:
-                // 拔开的两半各往外一弹，像刚断开时那一下
                 for (index, strand) in strands.enumerated() {
                     let away: CGFloat = [0, 2, 3, 4].contains(index) ? -1 : 1
                     play(Self.frames("transform.translation", [0, 1, -0.3, 0].enumerated().map { step, push in
@@ -214,14 +194,12 @@ struct StateInk {
                     }), on: strand.box)
                 }
             case .rock:
-                // 月牙轻轻晃一下
                 play(Self.frames("transform.rotation.z", [(0, 0), (0.35, -0.21), (0.7, 0.08), (1, 0)]), on: ink)
             default:
                 break
             }
         }
 
-        /// 颜色与亮度：在想的心跳底下那条轨是淡的，其余整根是实的。
         private func paint(animated: Bool) {
             guard let pose else { return }
             let alpha = color?.alpha ?? 1
@@ -231,7 +209,6 @@ struct StateInk {
             }
         }
 
-        /// 收起来的一根：一点，落在主线上离 `point` 最近的地方。
         private static func parked(near point: CGPoint, on spine: [CGPoint]) -> [CGPoint] {
             let spot = spine.min { hypot($0.x - point.x, $0.y - point.y) < hypot($1.x - point.x, $1.y - point.y) } ?? .zero
             return Array(repeating: spot, count: InkStateGeometry.strandPoints)
@@ -241,7 +218,6 @@ struct StateInk {
             CGPoint(x: points.map(\.x).reduce(0, +) / CGFloat(points.count), y: points.map(\.y).reduce(0, +) / CGFloat(points.count))
         }
 
-        /// 一段关键帧（时刻按秒、最后一个时刻就是时长），段与段缓入缓出；常驻的交给 `LoopLayer.Host.loop` 循环，敲一下的放完就摘。
         private static func frames(_ keyPath: String, _ keys: [(time: Double, value: Any)]) -> CAKeyframeAnimation {
             let move = CAKeyframeAnimation(keyPath: keyPath)
             let duration = keys.last!.time
@@ -267,7 +243,6 @@ struct StateInk {
         private static let grid = CGRect(x: -12, y: -12, width: 24, height: 24)
     }
 
-    /// 一根线：`box` 管这根整体的动作（挤、跳、眨），`base` 是线本身，`runner` 是它上面走的那一截（只有主线用）。
     private final class Strand {
         let box = CALayer()
         let base = CAShapeLayer()
@@ -291,7 +266,6 @@ struct StateInk {
             runner.lineWidth = width
         }
 
-        /// 从此刻画着的样子弹过去（换到一半又换，接着此刻的样子走）。路径带一点回弹，线宽不弹：收成一点时宽度弹过零会翻出来。
         func morph(to points: [CGPoint], width: CGFloat, animated: Bool) {
             let shownPath = base.presentation()?.path ?? base.path
             let shownWidth = base.presentation()?.lineWidth ?? base.lineWidth

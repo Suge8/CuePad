@@ -50,7 +50,6 @@ extension MCPTests {
     }
   }
 
-  /// 明天这个钟点（本机时区），照 remind 认的 yyyy-MM-dd HH:mm 写。
   static func tomorrow(hour: Int) -> String {
     let day = Calendar.current.date(byAdding: .day, value: 1, to: .now)!
     let date = Calendar.current.date(bySettingHour: hour, minute: 0, second: 0, of: day)!

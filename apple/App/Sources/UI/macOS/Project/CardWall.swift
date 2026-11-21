@@ -35,7 +35,6 @@ struct RowOpenStyle: ButtonStyle {
     }
 }
 
-/// 单独一个视图：悬停只改卡的外框，卡面不随之重算。
 private struct CardFace: View {
     let card: Card
     let floated: Bool
@@ -54,7 +53,6 @@ private struct CardFace: View {
                 Spacer(minLength: 0)
                 AgentDot(card: card.id)
             }
-            // 摘要拿剩下的高，放不下的行截掉；日期那一行贴底
             if image == nil, !text.preview.isEmpty {
                 Text(VariableText.styled(text.preview, palette))
                     .font(Typography.body).lineSpacing(Typography.lineSpacing).foregroundStyle(palette.ink2)
@@ -90,7 +88,6 @@ struct CardTile: View {
         .buttonStyle(CardOpenStyle())
         .overlay(alignment: .bottomTrailing) {
             if hovering, !workspace.presses.isSelecting {
-                // 正落在日期那一行行尾置顶记号的位置上
                 DeleteCardButton(card: card.id, onNote: true).padding(Spacing.item).transition(.opacity)
             }
         }
@@ -111,7 +108,6 @@ struct CardTile: View {
 
 struct DeleteCardButton: View {
     let card: UUID
-    /// 在灵感卡上：垫一块与悬停着的卡同色的底，只为盖住行尾的置顶记号，自己看不出来；指针到了它上面才有悬停的底（`PressStyle`）。
     var onNote = false
     @Environment(Workspace.self) private var workspace
 
@@ -133,7 +129,6 @@ private struct DeleteGlyph: View {
     @Environment(\.palette) private var palette
     let onNote: Bool
 
-    /// 与那一行的日期同一种字、坐在行尾：不是浮在上面的一颗白钮。
     var body: some View {
         Image(.trash)
             .font(Typography.meta)
@@ -144,8 +139,6 @@ private struct DeleteGlyph: View {
     }
 }
 
-/// 全 App 一套选中，不着靛青。
-/// 挂在卡面外、纸里面：底垫在字下，卡面不随选中重算。
 private struct SelectedCard: ViewModifier {
     @Environment(\.cardSelected) private var selected
     @Environment(\.palette) private var palette
@@ -163,7 +156,6 @@ private struct SelectedCard: ViewModifier {
     }
 }
 
-/// 墨色圆里一个纸色对勾：深色下墨是浅的，勾跟着取纸色才看得见。
 struct PickedMark: View {
     @Environment(\.palette) private var palette
 

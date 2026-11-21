@@ -8,7 +8,6 @@ import Testing
 extension RealCodexHostedTests {
     enum Restart: String, CaseIterable, Sendable { case speakWhileBusy, stopThenSpeak }
 
-    /// 停下这一轮紧接着发话（发话自己停、先停再发）：新一轮从停下之后算起，开轮的换成这句——Cue 开的那一轮被他的话接过去，Cue 就插不进了。
     @Test(arguments: Restart.allCases) func aMessageRightAfterStoppingStartsANewTurn(_ restart: Restart) async throws {
         try await withCodexRig { rig in
             let first = rig.model.gate(), second = rig.model.gate()

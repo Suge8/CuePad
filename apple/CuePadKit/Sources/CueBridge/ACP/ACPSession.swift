@@ -22,22 +22,15 @@ final class ACPSession {
     private(set) var opened: JSONValue = [:]
     var options: [JSONValue] = []
     var pending: (request: JSONValue, ask: ACPAsk)?
-    /// 一轮一个编号：`session/prompt` 的回应只结束它自己开的那一轮
     private var turn = 0
-    /// 在跑的是 CuePad 的 `session/prompt` 开的那一轮（它的编号）；Agent 自己开的为 nil
     private var prompted: Int?
-    /// 先排进队列的家（`ACPDialect.queuesPrompts`）已报它跑起来了
     private var promptRunning = false
-    /// 各家报的这一轮出错的原文，等回应结束这一轮时用
     private var reported: String?
-    /// 回应之前各家已报它自己接着开了一轮（`ACPSignal.stranded`）：这一轮结束后接着开
     private var agentTurnNext = false
     var steers = ACPSteers()
     private var draft: DraftParts?
-    /// 等这一轮变化的（排着的那一句跑起来、这一轮结束）；进程退出时也放行。大脑等一轮自然做完，不限时
     private let changes = Occurrences(timeout: nil, timeoutError: BridgeError.ackTimeout)
     private var loading = false
-    /// CuePad 的 MCP 服务连上没有（`ACPDialect.connectsMCPLater`）：nil 是这个会话还没报
     private var mcp: Result<Void, HostedSessionError>?
     private var mcpWaiters: [UUID: CheckedContinuation<Void, Never>] = [:]
     private var contextUsed: Int?
@@ -60,7 +53,6 @@ final class ACPSession {
         turns = HostedTurns()
     }
 
-    /// 起好的连接；没起或进程已退出时抛错（托管会话 `sessionEnded`，大脑 `notRunning`）
     var live: ACPConnection {
         get throws {
             guard let connection, !connection.isClosed else { throw brain == nil ? BridgeError.sessionEnded : HostedSessionError.notRunning }
@@ -84,7 +76,6 @@ final class ACPSession {
         return connection
     }
 
-    /// 返回 Agent 给的会话 id
     @discardableResult
     func open(in directory: URL, mcpServers: [JSONValue] = [], meta: JSONValue? = nil) async throws -> String {
         var params: [String: JSONValue] = ["cwd": .string(directory.path), "mcpServers": .array(mcpServers)]
@@ -144,7 +135,6 @@ final class ACPSession {
         mcpWaiters = [:]
     }
 
-    /// 读到回应的那一刻这一轮结束，之后读到的通知归下一轮。
     func prompt(_ blocks: [JSONValue], deliveryID: String? = nil) throws {
         let connection = try live
         guard let sessionID else { throw HostedSessionError.notRunning }
@@ -157,7 +147,7 @@ final class ACPSession {
             switch reply {
             case .success: self?.finish(mine, failure: nil)
             case .failure(.server(_, let message)): self?.finish(mine, failure: message)
-            case .failure: break  // 进程退出：由 `ended` 收尾
+            case .failure: break
             }
         }
     }
@@ -173,7 +163,6 @@ final class ACPSession {
     /// 在跑的是 CuePad 开的那一轮：插话只并进它（Agent 自己开的一轮各家不保证收下，等它做完再开）
     var steerable: Bool { turns.running && prompted == turn && promptRunning }
 
-    /// 等这一轮变一次：排着的那一句跑起来、这一轮结束，或进程退出；没在跑或进程已退出时立即返回。不限时（大脑等一轮自然做完）。
     func nextChange() async throws {
         guard turns.running, connection?.isClosed == false else { return }
         try await changes.next()
@@ -187,8 +176,6 @@ final class ACPSession {
         return turn
     }
 
-    /// 这一轮结束；`which` 是 `session/prompt` 开的那一轮的编号（别的轮的回应不算），nil 是各家报的结束（Agent 自己开的那一轮）。
-    /// 插进来、还没认出被收下的话是这一轮收下的（`ACPSteers`）；回应之前各家报了它接着开的一轮，这就开。
     private func finish(_ which: Int?, failure: String?) {
         guard turns.running, which.map({ $0 == turn }) ?? true else { return }
         let failure = turns.stopping ? nil : reported ?? failure
@@ -227,7 +214,6 @@ final class ACPSession {
         publish()
     }
 
-    /// `HostedTurns` 不认的（已在跑时的开始、没在跑时的工具与收尾）不往外报。
     func emit(_ event: TurnEvent) {
         guard turns.apply(event) else { return }
         brain?.emit(event)
@@ -278,7 +264,6 @@ final class ACPSession {
             }
         case .turnFinished(let failure):
             guard turns.running, prompted == turn else { return finish(nil, failure: failure) }
-            // 它已不再收插话：之后的话等回应结束这一轮再开新的一轮
             reported = failure
             promptRunning = false
         case .context(let used): noteContext(used: used, window: contextWindow)

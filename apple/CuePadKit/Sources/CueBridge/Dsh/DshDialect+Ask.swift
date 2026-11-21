@@ -2,10 +2,6 @@
 import CueStore
 import Foundation
 
-/// dsh 的提问（`ask_user_question` 工具，插件转成请求 `_cuepad/ask_user_question` {sessionId, questions[{id, question, header?, detail?,
-/// options?[{label, description?}], multiSelect?}]}）。几问逐问来（`ACPReply.next`），都答完回 `{answers[{id, selected[], custom?}]}`
-/// （dsh 的 `AskUserQuestionAnswer`）；作废回 `{cancelled: true}`，插件让这次提问失败。
-/// dsh 的会话只有 CuePad 托管的，没有别处能答：没有选项的是文字题，有选项的每问都能自己填（`custom`），多选的也只选一项。
 extension DshDialect {
     func ask(_ method: String, _ params: JSONValue) -> ACPAsk? {
         guard method == "_cuepad/ask_user_question" else { return nil }

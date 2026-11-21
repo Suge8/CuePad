@@ -68,7 +68,6 @@ import Testing
     #expect(try await sb.store.liveAddresses().isEmpty)
   }
 
-  /// 本机的几种写法过了地址这一关，停在下一关（CuePad 没开）。
   @Test(arguments: ["localhost:3000", "192.168.1.20:5173", "myapp.local:8080", "http://[::1]:3000", "devbox:8000"])
   func liveTakesTheLocalAddressesOfThisMac(address: String) async throws {
     let sb = try Fixture()
@@ -88,7 +87,6 @@ import Testing
     var all: [LiveChannel.Request] { box.withLock { $0 } }
   }
 
-  /// 替 App 听这份库：App 用的同一个服务端（会话核对在它里面），交到手上的请求记下来、答一句。
   private func listen(_ sb: Fixture, answer: LiveChannel.Reply = .done("点了 button \"登录\"")) throws -> (server: LiveChannel.Server, received: Received) {
     let received = Received()
     let server = try LiveChannel.Server(path: LiveChannel.socketPath(databasePath: sb.store.databasePath), store: sb.store) { request in
@@ -137,7 +135,6 @@ import Testing
     ])
   }
 
-  /// 会话记着在跑的 Agent 进程时，只有它的后代能以这个会话操作预览。这里发命令的是测试进程：它是自己父进程的后代，不是一个旁的 sleep 的后代。
   @Test func liveActionFromOutsideTheSessionsAgentIsRefused() async throws {
     let sb = try Fixture()
     let (server, received) = try listen(sb)

@@ -1,9 +1,6 @@
 import CueText
 import SwiftUI
 
-/// 阅读栏贴着边、右边距放不下刻度再隔一条缝（`crowded`，iPhone 与窄窗口）时平时不露也不接手指，滚动、指着时出来：常驻的话像一把尺子贴在气泡边上。
-/// 键盘弹着时淡出让开（手机、iPad）：这时在写字，可见区只剩键盘上面一截，刻度挤在输入框旁边只是碍眼。
-/// 手势只在这一段窄条里，不碰代码块、表格的横向滚动、顶栏与返回手势。
 struct ChatScrubber: View {
     let marks: [ChatMark]
     let scrolling: Bool
@@ -11,12 +8,9 @@ struct ChatScrubber: View {
     let jump: (UUID) -> Void
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// 刻度区的下沿还要让开浮在对话底上的回复框（Mac）。在这里读而不在 `ChatColumn` 读：它一读，回复框一变高矮整段对话都要重排。
     @Environment(\.chatBottomInset) private var bottomInset
     @State private var finger: CGFloat?
     @State private var lingering = false
-    /// 上一次跳到的那一处（读屏的上一处、下一处从它算）。记 id 不记序号：刻度随对话换（Cue 页只读最近 200 条，新消息进来最早的那处就掉出去），
-    /// 记着的序号会指到别处或越界；那一处掉出去了就当没跳过。
     @State private var current: UUID?
     @State private var hovering = false
     @State private var keyboard = false
@@ -38,9 +32,7 @@ struct ChatScrubber: View {
     private static let minGap: CGFloat = 3
     private static let reach: CGFloat = 44
     static let width: CGFloat = 28
-    /// 手机上让开系统的滚动指示条，Mac 上不贴着栏边（Mac 的对话不画系统滚动条，`ChatScroll`）。
     private static let edge: CGFloat = 8
-    /// 上沿在三成高处：避开顶栏，进拇指够得着的区。
     private static let bandTop: CGFloat = 0.3
     private static let restOpacity = 0.35
     static let room: CGFloat = edge + restLength + 8
@@ -81,7 +73,6 @@ struct ChatScrubber: View {
                         go(to: band.index(at: value.location.y))
                     })
             .sensoryFeedback(.selection, trigger: pointed) { _, new in new != nil }
-            // 平时不露时也不接手指：贴右缘滚对话的拇指不会抓到看不见的刻度；滚起来它露出来，停手后还留一会儿可以抓
             .allowsHitTesting(active || !crowded)
         }
         .frame(width: Self.width)
@@ -133,7 +124,6 @@ struct ChatScrubber: View {
         jump(marks[index].id)
     }
 
-    /// 拖动时按手指为中心做鱼眼变换（Sarkar–Brown：离手指越远越压紧，手指下的间距放大到 `focusPitch`）。
     private func ticks(_ band: Band) -> [(Int, CGFloat)] {
         guard let finger else {
             let shown = min(marks.count, Self.visibleTicks)

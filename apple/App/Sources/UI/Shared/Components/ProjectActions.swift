@@ -1,7 +1,6 @@
 import CueStore
 import SwiftUI
 
-/// 项目自己的操作（侧栏与项目列表里的右键、长按，项目页栏头点项目名）。`folders` 为假是项目页栏头那一份：不带文件夹那一组（另有一颗钮，`ProjectHeadTools`），多一项去看板只看这个项目——在别处人还没进这个项目。
 struct ProjectActions: View {
     let project: Project
     var folders = true
@@ -18,12 +17,10 @@ struct ProjectActions: View {
         }
         Button("编辑名称与图标…", icon: .rename) { workspace.projectForm = .init(project: project) }
         if folders {
-            // 文件夹的几项收进一层子菜单：菜单至多三组，这几项不是每天用的
             Menu("文件夹", icon: .folder) { ProjectFolderItems(project: project) }
         } else {
             Button("看进展", icon: .task) { workspace.showProgress(of: id) }
         }
-        // 默认项目不能删（`CueStore.trashProject` 也拒绝）
         if !project.isDefault {
             Divider()
             Button("移到回收站", icon: .trash, role: .destructive) {
@@ -33,7 +30,6 @@ struct ProjectActions: View {
     }
 }
 
-/// 绑定的文件夹那一组：组头写它在哪。
 struct ProjectFolderItems: View {
     let project: Project
     @Environment(Workspace.self) private var workspace
@@ -57,10 +53,8 @@ struct ProjectFolderItems: View {
     }
 }
 
-/// 项目页栏头里标题旁的两颗图标钮（三端同一份，长什么样由所在的那一排定）：文件夹——点开是它绑在哪、换与解除；规则——这个项目的 AGENTS.md，有才出。
 struct ProjectHeadTools: View {
     let project: Project
-    /// 手机页头：正中是两段、左边一颗返回，右边也只留一颗，规则收进文件夹的菜单（规则文件就在那个文件夹里）。
     var merged = false
     @Environment(Workspace.self) private var workspace
 

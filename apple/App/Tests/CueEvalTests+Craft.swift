@@ -5,7 +5,6 @@ import SwiftUI
 import Testing
 @testable import CuePad
 
-/// 只有 Cue 在场的几个时机：追问两次就留给他、要的就是长相的成果只凭图挑刺；与后台整理记忆时把他反复交代的做法提议记成规矩。
 extension CueEvalTests {
     @Test func c5追问两次就留给他() async throws {
         try await CueEval.run("c5-追问两次就留给他", expect: "改前改后的截图 Cue 追问过两次，会话这次还是没发：不问第三次，tell 一句缺什么，留给他回；不 done") { eval in
@@ -42,7 +41,6 @@ extension CueEvalTests {
             for (title, days) in [("修好注册页白屏", 6.0), ("导出报表加筛选", 2.0), (Self.title, 0.5)] {
                 works.append((try await rig.working(title, "照现状修，做完贴出验证。"), days))
             }
-            // 那条做法先各说一遍，再夹进只管手头那件事的话：攒够一批（`CueKeeper.heardBatch`）时三个会话里的都已在库里
             for (index, item) in works.enumerated() {
                 try item.work.file.user(habit[index], at: .now - item.days * 86400)
                 try await rig.read(habit[index], in: item.work.id)
@@ -75,7 +73,6 @@ extension CueEvalTests {
         }
     }
 
-    /// 只管手头那件事的话（各会话里轮着说）
     static let oneOffs = [
         "限流改成 30 秒", "这个按钮往右挪 8 像素", "报错文案改成「请稍后再试」", "把日志级别调到 debug 再跑一遍", "先看看是不是缓存的问题",
         "截图发我看看", "这一步跑完了吗", "列表默认按时间倒序", "超时先放到 10 秒", "把这个接口的返回贴出来", "继续", "标题字号小一号",
@@ -114,8 +111,6 @@ extension CueEvalTests {
     }
 }
 
-/// 一张做得很模板的设置页成品图：标题上方的小号大写眉标、彩虹渐变标题、标题下的说明句、带编号标签的卡片、卡片套卡片、每行一句不带信息的说明、
-/// 左缘不齐、一行字被截断。挑刺的 Cue 该从图上看出这些。
 @MainActor
 func sloppySettingsShot() throws -> Data {
     func row(_ title: String, _ note: String, inset: CGFloat) -> some View {

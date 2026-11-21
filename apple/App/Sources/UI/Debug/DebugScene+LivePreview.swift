@@ -20,7 +20,6 @@ extension DebugScene {
         }
     }
 
-    /// 后台截图里指针进不来：开点选，经点选脚本留在页面上的句柄把高亮停在那个元素上（要的话接着点下去，等它挂进回复框）。
     private static func pick(_ query: String, in preview: LivePreview, workspace: Workspace) async {
         workspace.pickElement()
         let commit = args.layoutOpts.livePickCommit

@@ -3,7 +3,6 @@ import CueStore
 import Foundation
 
 extension ToolCallDetail {
-    /// 会话文件读不了抛出。
     @concurrent public static func read(file: URL, calls: [String]) async throws -> ToolCallDetail {
         read(try Data(contentsOf: file, options: .mappedIfSafe), calls: calls)
     }
@@ -15,7 +14,6 @@ extension ToolCallDetail {
     /// 读到了却没有这次调用的命令、改动与文字输出（看了一张图、搜了一下网）是一份空的。
     static func read(_ data: Data, calls: [String]) -> ToolCallDetail {
         var commands: [String] = [], diffs: [String] = [], outputs: [String] = []
-        // 一步里的几次调用在文件里挨着：从第一次找到的地方往后找，不为每个 id 从头扫一遍（会话文件可以有几百 MB）
         var from = data.startIndex
         for call in calls {
             let (id, path) = CodexHistory.changeCall(call)
@@ -54,7 +52,6 @@ extension ToolCallDetail {
                 return hits.first?.startIndex
             }
             let first = scan(from: from)
-            // 先发起、后做完的调用排在前一个之前：这里没找全就从头找
             if !called || output == nil, from > data.startIndex { _ = scan(from: data.startIndex) } else if let first { from = first }
             if let output, !output.isEmpty { outputs.append(output) }
         }

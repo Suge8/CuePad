@@ -45,7 +45,7 @@ struct OwnEchoTests {
 
     #expect(try await store.conflicts().isEmpty)
     #expect(try await store.card(card.id)?.body == "第二版")
-    #expect(try await store.pendingSync().saves.map(\.id).contains(name(card)))  // 更新的版本仍待推送
+    #expect(try await store.pendingSync().saves.map(\.id).contains(name(card)))
     await cloud.release()
     await restarted.stop()
   }
@@ -78,8 +78,6 @@ actor EchoCloud: SyncCloud {
     held = []
   }
 
-  /// 之后的上传都到了服务器、结果都回不来。不是只丢下一次：编辑后过了攒批窗口也会发这一版，丢的若是它的，
-  /// `send` 再发时服务器已有这一版、答收下了。
   func loseResults() { losesResults = true }
 
   func upload(saving: [CKRecord], deleting: [CKRecord.ID]) async throws -> SentRecords {

@@ -3,9 +3,6 @@ import Foundation
 import Synchronization
 @testable import CueBridge
 
-/// 字节协议见 CueBridge 的 README 与 `PiWire`。
-/// 连接与收到的命令在 socket 队列上写、测试里读，放在锁里；`onCommand` 这类配置由测试在启动前设好。
-/// CuePadKit 的桥测试与 App 测试共用这一份：App 工程不同步这个目录，是直接引用这个文件，改名或挪位置要同时改工程文件。
 nonisolated final class FakeExtension: @unchecked Sendable {
     struct WireModel: Sendable {
         var provider = "test"
@@ -37,7 +34,6 @@ nonisolated final class FakeExtension: @unchecked Sendable {
         var model: WireModel? = WireModel(id: "test-model")
         var thinking: String? = "off"
         var models: [WireModel] = []
-        /// 上下文：已用 token（nil 为未知）与窗口；nil 表示没有模型
         var context: (tokens: Int?, window: Int)?
         var commands: [WireCommand] = []
         var sessionFile: String? = "/work/session.jsonl"
@@ -51,11 +47,9 @@ nonisolated final class FakeExtension: @unchecked Sendable {
     private struct Shared {
         var listenFD: Int32 = -1
         var connections: [Connection] = []
-        /// 收到的命令与此刻的状态存原样的 JSON 字节：字典里是 Any，不能交给锁，读的时候再解。
         var commands: [(connection: Int, line: Data)] = []
         var state = Data(#"{"kind":"idle"}"#.utf8)
         var turnSince: Int?
-        /// 同真扩展：交来的话（带投送 id 的 send）一收下就当落成了消息，它成了开轮的那句
         var opener: [String: Any]? { openerData.map(FakeExtension.object) }
         var openerData: Data?
     }
@@ -63,7 +57,6 @@ nonisolated final class FakeExtension: @unchecked Sendable {
     private var source: DispatchSourceRead?
     private var socketFile: SocketDirectory.FileIdentity?
     private let queue = DispatchQueue(label: "fake-extension")
-    /// 对每条命令回一个 ack 体（不含 t/id）；nil 表示不回。
     var onCommand: @Sendable (_ connection: Int, _ command: [String: Any]) -> [String: Any]? = { _, _ in ["ok": true] }
 
     /// 与真扩展（Node：写已断开的连接只得到 EPIPE）一样，写不会让进程收到 SIGPIPE；写与关闭互斥、关闭后的写丢掉：
@@ -130,7 +123,6 @@ nonisolated final class FakeExtension: @unchecked Sendable {
 
     func start() throws {
         try? FileManager.default.removeItem(at: socketURL)
-        // 与真实扩展一致：在临时名上 listen、定好权限，再改名进来
         let pending = socketURL.deletingPathExtension().appendingPathExtension("tmp")
         let fd = try Self.boundSocket(at: pending)
         guard listen(fd, 8) == 0, chmod(pending.path, 0o600) == 0, rename(pending.path, socketURL.path) == 0 else {
@@ -140,14 +132,14 @@ nonisolated final class FakeExtension: @unchecked Sendable {
         socketFile = SocketDirectory.identity(of: socketURL.path)
         let src = DispatchSource.makeReadSource(fileDescriptor: fd, queue: queue)
         src.setEventHandler { [weak self] in self?.accept() }
-        src.setCancelHandler { Darwin.close(fd) }  // 同 Connection.close：事件源注销后才关
+        src.setCancelHandler { Darwin.close(fd) }
         src.resume()
         source = src
     }
 
     static func makeStaleSocket(at url: URL) throws {
         let fd = try boundSocket(at: url)
-        chmod(url.path, 0o600) // 真实扩展总会 chmod，残留的也是 0600
+        chmod(url.path, 0o600)
         Darwin.close(fd)
     }
 
@@ -243,7 +235,6 @@ nonisolated final class FakeExtension: @unchecked Sendable {
         for conn in shared.withLock({ $0.connections }) { write(object, to: conn) }
     }
 
-    /// 只带变了的几项，没带的不变；hello 才带全部。
     func sendInfo(_ fields: [String: Any]) {
         broadcast(["t": "info"].merging(fields) { $1 })
     }
@@ -253,7 +244,6 @@ nonisolated final class FakeExtension: @unchecked Sendable {
                    "status": status, "windows": windows, "complete": complete])
     }
 
-    /// 发状态切换（`kind` 等字段按协议；没给 `since` 补此刻）。从不在跑进入思考或调工具是开始新的一轮：`turnSince` 记成此刻（同扩展在回合开始时记）。
     func setState(_ state: [String: Any]) {
         var s = state
         if s["since"] == nil { s["since"] = Self.nowMillis }
@@ -273,22 +263,19 @@ nonisolated final class FakeExtension: @unchecked Sendable {
     func close(bye reason: String) {
         broadcast(["t": "bye", "reason": reason])
         crash()
-        // 只删自己那个文件：closeAfterReply 排在队列上晚到时，同一会话（同名同 pid）的下一个假扩展可能已在这个路径上 listen 了
         if let socketFile, SocketDirectory.identity(of: socketURL.path) == socketFile { unlink(socketURL.path) }
     }
 
-    /// 回完手上这条命令再告别退出（Pi 收到 end 也是先回 ack 再走）：排在处理命令的同一条队列上，ack 一定先于 bye 写出。
     func closeAfterReply(bye reason: String) {
         queue.async { [weak self] in self?.close(bye: reason) }
     }
 
-    /// 不告别直接断开并留下 socket 文件（等同 kill -9）。幂等：fd 是进程全局的，重复 close 会误关别的测试刚复用的描述符。
     func crash() {
         let open = shared.withLock {
             defer { $0.listenFD = -1; $0.connections = [] }
             return $0.connections
         }
-        source?.cancel()  // 取消回调里关监听的描述符
+        source?.cancel()
         source = nil
         for conn in open { conn.close() }
     }

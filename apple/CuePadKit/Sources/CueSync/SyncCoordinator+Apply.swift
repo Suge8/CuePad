@@ -5,7 +5,7 @@ import os
 extension SyncCoordinator {
   func applyFetched(_ modifications: [CKRecord], _ deletions: [(id: CKRecord.ID, recordType: String)]) async throws {
     var changes: [RemoteChange] = []
-    for record in modifications where record.recordType != PeerFloor.recordType {  // 门槛不进库，`meet` 看过了
+    for record in modifications where record.recordType != PeerFloor.recordType {
       guard let row = RecordMapper.row(from: record) else {
         report(.unknownType, kind: .incoming, recordType: record.recordType, recordName: record.recordID.recordName)
         continue

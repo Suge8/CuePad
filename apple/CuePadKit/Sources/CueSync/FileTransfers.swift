@@ -12,10 +12,8 @@ public struct FileTransfer: Equatable, Sendable {
   }
 }
 
-/// 没能把文件取到本机。网络与 iCloud 的失败原样抛出（CKError），这里是同步层自己的结论。
 public enum FileFetchFailure: Error, Equatable, Sendable {
   case notSyncing
-  /// 已进问题列表；再取也一样。
   case damaged
 }
 
@@ -38,7 +36,6 @@ final class TransferBoard: Sendable {
 
   func set(_ key: String, _ direction: FileTransfer.Direction, _ fraction: Double) {
     let next = FileTransfer(direction: direction, fraction: min(max(fraction, 0), 1))
-    // 在锁里给出：两路的回调同时来，快照不会先后颠倒
     board.withLock { board in
       if let last = board[key], last.direction == direction, abs(last.fraction - next.fraction) < Self.step, next.fraction < 1 { return }
       board[key] = next

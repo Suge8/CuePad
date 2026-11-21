@@ -14,7 +14,6 @@ extension RealBrainTests {
         let bench = try makeTempDirectory()
         let reached = bench.appending(path: "stop-reached"), open = bench.appending(path: "stop-open")
         let hold = bench.appending(path: "hold.sh"), grok = bench.appending(path: "grok")
-        // 起它的 Grok 退了就不再等：用例没走到放行就失败时不留进程
         try TestScript.install("""
             #!/bin/sh
             . "$0.env"

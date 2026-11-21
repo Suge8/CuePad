@@ -31,7 +31,6 @@ extension CueEvalTests {
         }
     }
 
-    /// issue #26 里派出的第一件事：他说的工作区是项目的文件夹，不是大脑自己的工作目录（Cue 的 work，空的、不归他）。
     @Test func v在工作区建文件() async throws {
         try await CueEval.run("v-在工作区建文件", expect: "他要在工作区里建 hello.txt：建任务开工，正文不把文件指到 Cue 自己的工作目录") { eval in
             let rig = eval.rig

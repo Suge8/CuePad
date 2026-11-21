@@ -5,7 +5,6 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// "手机"开新会话走新会话输入框调的同一条 `AppServices.launchSession`；那台 Mac 写回什么由服务器的回声给。
 @MainActor
 @Suite(.releasesLibraries)
 struct LaunchLockTests {

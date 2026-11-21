@@ -28,7 +28,6 @@ struct CodexModel {
         return message.isEmpty ? String(localized: "Codex 这一轮失败了") : message.joined(separator: "\n")
     }
 
-    /// `hidden`：连隐藏的模型也要（大脑可能配的就是它）。
     @MainActor static func list(_ rpc: CodexRPC, hidden: Bool = false) async throws -> [CodexModel] {
         let listed = try await rpc.call("model/list", hidden ? ["includeHidden": true, "limit": 500] : [:])
         return (listed["data"]?.array ?? []).compactMap { entry in

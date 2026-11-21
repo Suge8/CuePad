@@ -5,11 +5,6 @@ import CueStore
 import Foundation
 import SystemConfiguration
 
-/// 这台 Mac 上的 Agent 能不能用、各家的模型（同步表 macAgents）只经这里写，内容变了才写（同步层马上传）；各处读库，这里不留结果。
-/// 一次问完再问下一次，后问的不会被先问的覆盖。不合并请求：触发很少，问一次最慢约 2 秒。
-/// 系统唤醒时先重新检测各家：睡着时可能装、换、卸了 Agent，登录或换了模型配置。Cue 启用前经 `record` 等这一次写完再按库里的判断，刚启动还没问完时启用也不会读到旧的或空的。
-/// 接入面板打开、回到 App、装完或登录完一家时由 `Workspace.recheckAgents` 触发：登录不改检测出的状态，不重问就看不到。
-/// 一次问用的状态记着（`probed`）：这次自己重新检测引起的状态变化不再触发一次。
 @MainActor
 final class MacAgentsRecorder {
     private let store: CueStore
@@ -24,7 +19,6 @@ final class MacAgentsRecorder {
         self.agents = agents
     }
 
-    /// `redetecting`：问之前先重新检测各家（只检测，不升级、不写文件）；还没检测全的也先检测。
     @discardableResult
     func record(redetecting: Bool = false) async throws -> MacAgents {
         let before = latest
@@ -32,7 +26,6 @@ final class MacAgentsRecorder {
             _ = await before?.result
             if redetecting || !agents.detected { await agents.redetect() }
             probed = agents.statuses
-            // 能开新会话的几家各起一个进程问，慢；只在这里问，界面读库
             let found = await agents.integration.probe(agents.statuses)
             let name = SCDynamicStoreCopyComputerName(nil, nil) as String?
             try await store.recordMacAgents(host: host, name: name, found.agents, problems: found.problems)

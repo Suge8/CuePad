@@ -2,16 +2,13 @@
 import Synchronization
 import SwiftUI
 
-/// 这里的 body 不随什么重算（前后台在 `ScenePhaseWork` 里看）：窗口的根视图只建一次，建工作区时当场读库（`Workspace.init`）不白读。
 struct SceneRoot: View {
     let services: AppServices
     let alerts: AlertCenter
 
     var body: some View {
         IOSRoot(services: services)
-            // 窗口里的气泡（窄屏与宽屏、任务气泡、控件上的说明）都画在这一层
             .panelHost()
-            // 系统控件的 tint 与验收时改的外观环境（`PaletteProvider`）连同上面那一层一起管：那一层也在窗口里
             .modifier(PaletteProvider())
             .debugCompact()
             .environment(alerts)
@@ -22,8 +19,6 @@ struct SceneRoot: View {
     }
 }
 
-/// 最后一个窗口退到后台：落盘、传完、断开（`prepareForBackground`）。回到前台整个 App 只做一次，不在这里（`AppServices.startForeground`）。
-/// iPad 多窗口时只退下一个、别的还在前台，App 照常拉取、连着门铃。
 private struct ScenePhaseWork: ViewModifier {
     let services: AppServices
     @Environment(\.scenePhase) private var phase
@@ -38,7 +33,6 @@ private struct ScenePhaseWork: ViewModifier {
     }
 }
 
-/// 让后台里的工作有时间跑完（系统随后才挂起进程）。
 enum BackgroundWork {
     static func run(_ work: @MainActor () async -> Void) async {
         let end = begin()
@@ -46,7 +40,6 @@ enum BackgroundWork {
         end()
     }
 
-    /// 当场开始，返回结束它的那一下（只认第一次）。
     static func begin() -> @MainActor @Sendable () -> Void {
         // 到期回调与做完的收尾谁先到谁结束、只结束一次（到期后再结束同一个标识系统会报错）；回调先于赋值的窗口只有一瞬，用锁盒子传
         let task = Mutex(UIBackgroundTaskIdentifier.invalid)

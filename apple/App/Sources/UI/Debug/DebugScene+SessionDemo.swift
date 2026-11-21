@@ -11,7 +11,6 @@ extension DebugScene {
         var question: Question?
     }
 
-    /// 演示对话的另一台 Mac 的执行器（留住它，结果写回后照常显示）。
     private static var relayExecutor: DeliveryExecutor?
 
     static func seedRemote(_ services: AppServices) async {
@@ -23,8 +22,6 @@ extension DebugScene {
 
     private static func seedSessions(_ services: AppServices) async throws {
         let store = services.store
-        // 演示库的会话索引已写成历史；这里补的是演示 Mac 的在线会话，它有在线的就是写过了。只看演示 Mac：
-        // 截图实例的连接目录是各检出共用的，别处起的 Pi 会话会先连上来，算上它就一个演示会话都不补
         let live = try await store.sessionPage(.live).items
         guard !live.contains(where: { $0.state.hostID == "demo-mac" }) else { return }
         let projects = try await store.projects()
@@ -68,7 +65,6 @@ extension DebugScene {
             ("weekly", nil, Recap(lastPrompt: String(localized: "汇总这周的提交", table: "Demo"), lastReply: String(localized: "这周 23 个提交，主要是同步和 Agent 页。", table: "Demo"))),
             ("pricing", String(localized: "个人网站", table: "Demo"), Recap(lastPrompt: String(localized: "重做定价区，三档在窄屏别挤成两行", table: "Demo"), lastReply: String(localized: "改好了，网页、对比表、宽屏截图和改动说明都发给你了。", table: "Demo"))),
         ]
-        // 文件夹名与还没绑文件夹的项目同名（Flow）：手机给项目换文件夹时的候选里有它
         for index in 1...3 {
             let id = "flow-\(index)"
             _ = try await recorder.update(sessionID: id, state: .settled, detail: nil, title: "flow \(index)", directory: "flow", projectID: nil)
@@ -90,7 +86,6 @@ extension DebugScene {
             let messages = (said[id] ?? []).enumerated().map { index, minutes in
                 ChatMessage(sessionID: id, entryID: "said-\(index)", seq: Int64(index), role: .user, text: recap.pendingPrompt ?? recap.lastPrompt ?? "", at: .now.addingTimeInterval(-minutes * 60))
             }
-            // 出错的那条是 Mac 的桥归好类的样子（`ErrorSummary` 在 CueBridge，手机的演示编不了它）：用量限制只写提供方的原句
             _ = try await recorder.update(
                 sessionID: id, state: state, detail: detail, failure: state == .error ? .quota : nil, title: id, directory: id,
                 projectID: name.flatMap(project), question: recap.question,

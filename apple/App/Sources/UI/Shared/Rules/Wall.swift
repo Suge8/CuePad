@@ -6,8 +6,6 @@ nonisolated struct CardStamp: Equatable, Sendable {
     var isPinned: Bool
 }
 
-/// 墙只在打开另一个项目或跨天时重排；同一次打开里，墙上的卡编辑后原地不动（保住"它在左上角"的空间记忆），
-/// 排好之后新建或再次编辑的卡插到墙首，删除的卡离开；没有新编辑却新出现的卡按规则补到墙尾或进更早。
 nonisolated struct WallArrangement: Equatable, Sendable {
     static let recentDays = 30.0
     static let capacity = 14
@@ -37,10 +35,8 @@ nonisolated struct WallArrangement: Equatable, Sendable {
         let placed = Set(pinned + wall)
         let known = placed.union(older)
         let touched = cards.filter { $0.modifiedAt > arrangedAt && !placed.contains($0.id) }.sorted(by: Self.newestFirst)
-        // 排墙之后才出现、却没有新编辑的卡（同步下来、别处移入）按上墙规则补到墙尾，不打乱已有位置
         let arrived = cards.filter { $0.modifiedAt <= arrangedAt && !known.contains($0.id) }.sorted(by: Self.newestFirst)
 
-        // 置顶不靠修改时间：置顶或取消都不改正文，当场进出这一组（新设的在前，取消的回到墙首）
         let wasPinned = Set(pinned)
         let pinnedNow = cards.filter { $0.isPinned && !wasPinned.contains($0.id) }.sorted(by: Self.newestFirst).map(\.id)
             + pinned.filter { byID[$0]?.isPinned == true }
@@ -65,10 +61,8 @@ nonisolated struct WallArrangement: Equatable, Sendable {
 
 nonisolated struct OlderGroup: Equatable, Sendable {
     enum Period: Hashable, Sendable {
-        /// 只有几条时的唯一一组：分组的标题会比内容还多。
         case all
         case week(start: Date)
-        /// 三个月内、每周都只有一条的月份并成的一组：一周一个标题时标题比内容还多。常开，不折叠。
         case sparseMonth(start: Date)
         case month(start: Date)
     }
@@ -76,12 +70,10 @@ nonisolated struct OlderGroup: Equatable, Sendable {
     var period: Period
     var cards: [UUID]
 
-    /// 两端项目页"更早"那一段标题的滚动 id：调试的 older 画面滚到这里（`DebugScene.scrollIfNeeded`）。
     static let anchor = "older"
     static let weeklyMonths = 3
     static let fewLimit = 4
 
-    /// 要不要给各组加日期标题：只有一组按周的卡时不要（每行自带日期）；按月的组要标题来折叠，多组时要标题来分隔。
     static func needsTitles(in groups: [OlderGroup]) -> Bool {
         guard groups.count == 1, let only = groups.first else { return !groups.isEmpty }
         return only.isMonth
@@ -106,7 +98,6 @@ nonisolated struct OlderGroup: Equatable, Sendable {
         return mergingSparseMonths(groups, dates: Dictionary(uniqueKeysWithValues: sorted.map { ($0.id, $0.modifiedAt) }), calendar: calendar)
     }
 
-    /// 月份取这一周里最新那张卡自己的日期（不取周一所在的月：周一落在上个月的那一周里，9/2 的卡属于九月）。
     private static func mergingSparseMonths(_ groups: [OlderGroup], dates: [UUID: Date], calendar: Calendar) -> [OlderGroup] {
         var result: [OlderGroup] = []
         var run: [OlderGroup] = []
@@ -146,7 +137,6 @@ nonisolated struct OlderGroup: Equatable, Sendable {
 }
 
 extension OlderGroup.Period {
-    /// "更早"那一段每组的标题。
     func title(now: Date = .now, calendar: Calendar = .current) -> String {
         switch self {
         case .all:

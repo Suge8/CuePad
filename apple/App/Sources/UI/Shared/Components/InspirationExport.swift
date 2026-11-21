@@ -1,7 +1,5 @@
 import SwiftUI
 
-/// 每次打开分享都从当前草稿取值。准备结果只属于这一份快照；关掉即取消，重开重新准备。
-/// 文件未到本机立即失败，用户在编辑器中点按附件取回后可重试；不把同步等待藏在分享流程里。
 struct InspirationExport: View {
     let source: String
     let originals: Bool

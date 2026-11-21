@@ -60,7 +60,7 @@ import Testing
   @Test func everySyncedTableRoundTripsThroughCKRecord() async throws {
     _ = try await populate()
     let keys = try await store.pendingSync().saves
-    #expect(Set(keys.map(\.table)) == Set(Table.synced))  // 每张同步表都有记录
+    #expect(Set(keys.map(\.table)) == Set(Table.synced))
 
     for key in keys {
       let row = try #require(try await store.syncRow(recordName: key.id))
@@ -104,7 +104,7 @@ import Testing
     try await rig.coordinator.pulled([send], [])
 
     #expect(try RawDB(rig.fixture.url).rows("SELECT targetKind FROM sendRecords") == [["carrierPigeon"]])
-    let pushedSend = try #require(try await rig.coordinator.record(for: send.recordID))  // 原样推回
+    let pushedSend = try #require(try await rig.coordinator.record(for: send.recordID))
     #expect(pushedSend["targetKind"] as? String == "carrierPigeon")
   }
 

@@ -21,7 +21,6 @@ enum CueImageRendering {
         }
     }
 
-    /// 左上为原点的画布（文件牌）。画在绘制的那一刻现跑，颜色按当时的外观解析。
     static func canvas(size: CGSize, draw: @escaping @MainActor (CGContext) -> Void) -> NSImage {
         NSImage(size: size, flipped: true) { _ in
             guard let context = NSGraphicsContext.current?.cgContext else { return false }

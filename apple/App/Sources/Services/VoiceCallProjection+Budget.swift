@@ -16,10 +16,8 @@ extension VoiceCallProjection.RequestPreview {
 }
 
 extension VoiceCallProjection {
-    /// 发给手机的每类最多这么多条（最近的）；再超出信令帧的明文上限时，从条目最多的那类再去掉最旧的。
     static let shownLimit = 30
 
-    /// 发给手机的这一份：只带最近的条目，其余记进 omitted。
     func bounded() throws -> Self {
         var requests = Array(self.requests.suffix(Self.shownLimit))
         var replies = Array(self.replies.suffix(Self.shownLimit))

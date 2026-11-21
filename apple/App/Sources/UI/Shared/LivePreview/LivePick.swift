@@ -6,7 +6,6 @@ enum LivePick {
     private static let key = "Symbol.for('cuepad.pick')"
     static let cancel = "window[\(key)]?.cancel()"
 
-    /// 高亮框与标签的颜色（脚本里的 `tint`、`ink`）：此刻外观下铺成一块的靛青那一对（`Palette.signatureFill` 底、`onFill` 字），深浅色下标签的字都读得清。
     static func colors(dark: Bool) -> [String: String] {
         let palette = Palette(dark: dark)
         func css(_ color: Color) -> String {
@@ -16,8 +15,6 @@ enum LivePick {
         return ["tint": css(palette.signatureFill), "ink": css(palette.onFill)]
     }
 
-    /// 高亮的画法，点选与 Agent 的动作（`LiveAgentScript` 的 `mark`）共用：一圈比元素大 `pad` 的框，框外 `gap` 处一个标签。
-    /// 是脚本里的 cssText，`tint`、`ink` 是脚本里的变量。
     static let pad = 3, gap = 4
     static let ring = "position:fixed;box-sizing:border-box;border:2px solid ${tint};border-radius:6px;background:color-mix(in srgb, ${tint} 14%, transparent)"
     static let tag = "position:fixed;padding:2px 8px;border-radius:6px;background:${tint};color:${ink};font:600 12px/18px -apple-system,system-ui,sans-serif;white-space:nowrap"

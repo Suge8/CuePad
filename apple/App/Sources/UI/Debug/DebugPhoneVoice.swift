@@ -34,7 +34,6 @@ enum DebugPhoneVoice {
         ] : []
         voice.availability = .ready(endpoint: VoiceEndpoint(device: VoiceDeviceID("voice-layout-phone"), lease: UUID()))
         DebugPhoneVoiceReplay.attach(voice, workspace: workspace, session: session)
-        // 回放换上通话时会清掉静音
         voice.muted = name == "muted"
         if let phase {
             voice.setProjection(.init(session: session, phase: phase, requests: requests, replies: [], response: response))

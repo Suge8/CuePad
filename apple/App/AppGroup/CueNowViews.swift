@@ -1,9 +1,6 @@
 import SwiftUI
 
-/// 同一处先后换两样东西（状态的一句、你的话到哪了的记号、横幅让回页头）：旧的先让位淡完（`Motion.yield`）、新的晚这么久再淡入（`Motion.fade`）——
-/// 长短不同的两句同时交叉淡，中间几帧叠成读不出的一团。App 与扩展同一份。
 enum HandOff {
-    /// 现成短句没有数值字段（例如顶栏的 Dotted）：数字只影响滚动，不改变句式身份。
     static func wording(_ text: String) -> String {
         text.replacingOccurrences(of: "\\p{Nd}+(?:[.,]\\p{Nd}+)*", with: "#", options: .regularExpression)
     }
@@ -15,7 +12,6 @@ extension AnyTransition {
 }
 
 extension View {
-    /// id 只传数据结构的种类序列；空序列在父布局中不占一项。叶子上的 numericText 动画独立于换项动画。
     @ViewBuilder func handOff<Kind: Hashable>(id: [Kind]) -> some View {
         Group {
             if !id.isEmpty {
@@ -93,12 +89,6 @@ extension CueNow.Entry {
     }
 }
 
-/// 头像那一层（App 的 `CueAvatar` 与扩展的 `CueNowFace` 同一个样子），点与变淡只读这一拍（`CueBeat.dot`、`faded`）：
-/// 淡底的圆（`cueDisc`）托着吉祥物，没有环；右下一颗点——在动靛青、起不来胭脂——圆心正落在头像那块圆的边上（右下 45° 处），
-/// 不越出头像的框；不在时整只变淡；给了 `badge` 时右上角是要你管的几件（拍板加新回复，赭黄，同 App 图标的角标）。
-/// `rim` 是点与角标外那一圈的颜色，与头像后面的底同色，把它们从脸上剪开（灵动岛里是黑）。
-/// App 里点与变淡挂在会形变的脸上（`cueMarks`，在软糖压得最扁时与姿势同一刻换），淡底的圆不跟着形变。
-/// 否决过：头像外一圈状态环、在想时一颗彗星绕着转——看着就是一条加载进度，平时那圈淡墨也把脸压小了一圈。
 struct CueFaceMarks: ViewModifier {
     let size: CGFloat
     let beat: CueBeat
@@ -110,8 +100,6 @@ struct CueFaceMarks: ViewModifier {
     static let awayOpacity = 0.5
     static func dotSide(_ size: CGFloat) -> CGFloat { max(size * 0.26, 6) }
 
-    /// 点的圆心往右、往下各离头像圆心多远：落在圆边的右下 45° 处；小到点会越出头像的框时（16pt，点有 6pt 下限）往里收到贴着框。
-    /// 接力的光落在这里、从这里发出（`RelayFlight.Scene.dot`）。
     static func dotReach(_ size: CGFloat) -> CGFloat { min(size * 0.5 / 2.squareRoot(), (size - dotSide(size)) / 2) }
 
     func body(content: Content) -> some View {
@@ -161,8 +149,6 @@ private struct CueDisc: ViewModifier {
     }
 }
 
-/// 扩展里的头像：这一拍的静止图（`CueBeat.still`）；`badge` 时右上角写要你管的几件（灵动岛最小态）。
-/// 灵动岛自己就是一块黑底，不再垫圆底（`disc`）。
 struct CueNowFace: View {
     let now: CueNow
     let size: CGFloat

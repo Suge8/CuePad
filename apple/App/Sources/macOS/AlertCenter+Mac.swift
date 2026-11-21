@@ -4,14 +4,11 @@ import CueSync
 import UserNotifications
 import os
 
-/// Mac 的通知都是本机发的：Mac 不注册远程通知、不收 CloudKit 推送（签名里没有推送权限 aps-environment；同步到达本来也不靠推送），
-/// 所以设置里的开关与音效管得到每一条，免打扰只认系统的专注模式。
 extension AlertCenter: CueNotifying {
     func post(title: String, body: String) async {
         await post(AlertMessage(title: title, body: body))
     }
 
-    /// 音效关着为 nil；周额度提醒不属于哪一种提示，用系统默认音。
     func sound(for route: AlertRoute) async -> UNNotificationSound? {
         guard services?.settings.sounds == true else { return nil }
         guard let kind = route.kind else { return .default }
