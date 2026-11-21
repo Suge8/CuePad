@@ -21,15 +21,7 @@ struct CardEditorScreen: View {
     private static let pageWidth: CGFloat = 760
 
     var body: some View {
-        editor
-            .frame(maxWidth: wide ? Self.pageWidth : .infinity, maxHeight: .infinity, alignment: .top)
-            .background(palette.paper, in: .rect(cornerRadius: wide ? Radius.sheet : 0))
-            .overlay {
-                if wide { RoundedRectangle(cornerRadius: Radius.sheet).strokeBorder(palette.hair).allowsHitTesting(false) }
-            }
-            .clipShape(.rect(cornerRadius: wide ? Radius.sheet : 0))
-            .padding(wide ? EdgeInsets(top: Spacing.item, leading: Spacing.sheet, bottom: 0, trailing: Spacing.sheet) : EdgeInsets())
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        page
             .modifier(InspirationSharePresentation(sharing: inspirationSharing, editing: editing))
             .floatingHeader(.verbatim(data?.project?.shownName ?? ""), detail: { detail }, trailing: { actions })
             // 卡没了（并进了草稿、接进了会话的回复框）由工作区收起，不当成出错
@@ -48,6 +40,23 @@ struct CardEditorScreen: View {
     }
 
     private var wide: Bool { sizeClass == .regular }
+
+    /// 手机上正文铺到屏幕上下边，滚动时从页头的玻璃与横条底下穿过；静止时首行的位置由文字视图把安全区算进滚动边距（`contentInsetAdjustmentBehavior`）给出，同没铺开时一样。
+    @ViewBuilder private var page: some View {
+        if wide {
+            editor
+                .frame(maxWidth: Self.pageWidth, maxHeight: .infinity, alignment: .top)
+                .background(palette.paper, in: .rect(cornerRadius: Radius.sheet))
+                .overlay { RoundedRectangle(cornerRadius: Radius.sheet).strokeBorder(palette.hair).allowsHitTesting(false) }
+                .clipShape(.rect(cornerRadius: Radius.sheet))
+                .padding(EdgeInsets(top: Spacing.item, leading: Spacing.sheet, bottom: 0, trailing: Spacing.sheet))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            editor
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .ignoresSafeArea(.container, edges: .vertical)
+        }
+    }
 
     @ViewBuilder private var editor: some View {
         VStack(alignment: .leading, spacing: 0) {
