@@ -27,6 +27,20 @@ struct SessionBoardTests {
         try await rig.runtimeRecorder(on: Self.mac).update(sessionID: sessionID, state: .thinking, times: SessionTimes(stateSince: at, busySince: at))
     }
 
+    /// 那台 Mac 办完在路上的休眠（同 `MacExecutor.end`：记为已结束、确认请求）；`slept` 为 false 时按没歇成写回。别的请求不碰会话。
+    private func macAnswersEnds(slept: Bool = true) async throws {
+        let recorder = try await rig.runtimeRecorder(on: Self.mac)
+        let executor = DeliveryExecutor(store: store, hostID: Self.mac, onIssue: { Issue.record("执行器意外上报：\($0)") }) { request, _ in
+            guard request.mode == .known(.end), let ref = request.target.ref else { return .succeeded }
+            guard slept else { return .failed(.verbatim("会话没有按时结束")) }
+            do { try await recorder.end(sessionID: ref, confirming: request.coveredEndRequests) } catch { return .failed(ShownText(error)) }
+            return .succeeded
+        }
+        try await executor.start()
+        _ = try await eventually(store, { try $0.deliveryRequests().contains(where: \.isEnding) }) { !$0 }
+        await executor.stop()
+    }
+
     private func tasks() async throws -> [Card] { try await store.tasks(.todo, .inProgress, .done).flatMap(\.tasks) }
 
     private func names(_ task: UUID, _ sessionID: String) async throws -> [String] {
@@ -62,13 +76,16 @@ struct SessionBoardTests {
         #expect(Set(ends.compactMap(\.target.ref)) == ["s1", "s2"] && ends.allSatisfy { $0.end == .explicit }, "完成就是用完了：点名让它休眠，不靠任务的结束权限")
 
         let s1 = try #require(made.first { $0.piSessionID == "s1" }).id
+        try await moves("s1", after: s1)
+        #expect(try await TaskBoard.read(from: store).advancing.isEmpty, "休眠还在路上时它又动了一下（叫它歇时正做着）：不回推进中")
+        try await macAnswersEnds()
         try await moves("s1", after: s1, by: 0)
         #expect(try await TaskBoard.read(from: store).advancing.isEmpty, "同一毫秒分不出先后，按没动过算")
         try await moves("s1", after: s1)
-        #expect(try await TaskBoard.read(from: store).advancing.map(\.id) == ["session/s1"])
+        #expect(try await TaskBoard.read(from: store).advancing.map(\.id) == ["session/s1"], "歇下之后又醒来")
     }
 
-    @Test func 完成后归档或项目进回收站_活会话没卡代表_照常回推进中() async throws {
+    @Test func 完成后归档或项目进回收站_休眠在路上的不回推进中_没歇成才回来() async throws {
         let workspace = Workspace(services: services)
         let project = try await store.createProject(name: "回收", color: "#000000")
         let archived = try await session("s1", title: "修登录")
@@ -81,11 +98,12 @@ struct SessionBoardTests {
         let made = try await tasks()
         let first = try #require(made.first { $0.piSessionID == "s1" })
         try await workspace.archive(first.id)
-        #expect(try await TaskBoard.read(from: store).advancing.map(\.id) == ["session/s1"], "卡归档了，会话没有东西代表，回推进中")
-
         #expect(made.first { $0.piSessionID == "s2" }?.projectID == project.id, "建在会话所在的项目里")
         try await store.trashProject(project.id)
-        #expect(Set(try await TaskBoard.read(from: store).advancing.map(\.id)) == ["session/s1", "session/s2"])
+        #expect(try await TaskBoard.read(from: store).advancing.isEmpty, "已经叫它歇了：卡离开看板也不回推进中，不等那台 Mac 做完")
+
+        try await macAnswersEnds(slept: false)
+        #expect(Set(try await TaskBoard.read(from: store).advancing.map(\.id)) == ["session/s1", "session/s2"], "没歇成：活着又没有卡代表，回推进中")
     }
 
     @Test func 等你里的无主会话点完成_先问一句_答应了才建卡完成() async throws {
@@ -148,6 +166,7 @@ struct SessionBoardTests {
         try await workspace.rename(live, to: "登录页白屏", adopts: true)
         let old = try #require(try await tasks().first)
         try await workspace.complete(old.id)
+        try await macAnswersEnds()
         try await moves("s1", after: old.id)
         let back = try #require(try await TaskBoard.read(from: store).advancing.first { $0.loose?.state.sessionID == "s1" }?.loose?.state)
 

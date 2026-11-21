@@ -86,7 +86,10 @@ extension DebugScene {
                 if quotaFails { return .failed(ShownText("这台 Mac 上没有在线的 Pi 会话")) }
             case .tidy, .libraryEdit:
                 return await DemoAgentLibrary.apply(request, store: store) ?? .failed(ShownText(SendError.unsupportedMode(request.mode.rawValue)))
-            case .withdraw, .start, .transcript, .bind, .end, .stop, .retry, .answer, .config, .command:
+            case .end:
+                guard let ref = request.target.ref else { break }
+                try await demoRecorder(store, host: host).end(sessionID: ref, confirming: request.coveredEndRequests)
+            case .withdraw, .start, .transcript, .bind, .stop, .retry, .answer, .config, .command:
                 break
             }
             return .succeeded
@@ -144,7 +147,8 @@ extension DebugScene {
     }
 
     private static func playRound(for request: UUID, store: CueStore, host: String) async throws {
-        guard let ref = try await store.deliveryRequest(request)?.target.ref,
+        // 歇下的不再演一轮：一写状态它又醒了
+        guard let asked = try await store.deliveryRequest(request), asked.mode != .known(.end), let ref = asked.target.ref,
               let session = try await store.sessionPage(SessionQuery(id: SessionState.recordID(sessionID: ref))).items.first?.state
         else { return }
         let recorder = demoRecorder(store, host: host)

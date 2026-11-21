@@ -11,8 +11,8 @@ import SwiftUI
 /// 否决过：一条插入线——线只说"这里"，卡落下前后别的卡各跳一次。
 extension BoardMoves {
     struct Held: Equatable {
-        /// `landing`：换了列，手里这张陪着新排出来的那张滑到落点（`takeoff`）。
-        enum Phase { case dragging, settling, pending, landing }
+        /// `landing`：换了列，手里这张陪着新排出来的那张滑到落点（`takeoff`）。`leaving`：它离开了看板，手里这张就地淡掉（`leave`）。
+        enum Phase { case dragging, settling, pending, landing, leaving }
 
         let card: DraggedCard
         /// 飞行身份；悬着时卡换了身份就跟着换（`BoardMoves.read`）。
@@ -295,6 +295,16 @@ extension BoardMoves {
         guard held?.phase == .pending else { return }
         waiting?.cancel()
         giveUp()
+    }
+
+    /// 放下后悬着的那张离开了看板（没绑任务的会话拖到待办叫它休眠：叫它歇了的不上看板）：就地淡掉，不滑回一个已经没有的原处、到了再凭空没掉。
+    func leave() {
+        guard let id = held?.id, held?.phase == .pending else { return }
+        waiting?.cancel()
+        guard float != nil else { return clear() }
+        withAnimation(Motion.fade) { held?.phase = .leaving } completion: {
+            if self.held?.id == id, self.held?.phase == .leaving { self.clear() }
+        }
     }
 
     private func giveUp() {

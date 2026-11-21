@@ -27,9 +27,12 @@ extension CueStore {
   /// 先后比记录自带的时刻（会话的 `stateSince` 与任务的 `completedAt`），不比本机写入的先后：同步乱序到达时，收到的先后与发生的先后相反，
   /// 时刻在各设备上读到的都一样。只有会话的时刻严格晚于完成才算完成之后的新动静；时刻只记到毫秒，同一毫秒分不出先后，按没动过算——
   /// 完成那一下与会话的这次变化同一毫秒，多半就是同一件事。
+  /// 你已经叫它歇了（结束在路上）的不算，不等那台 Mac 做完（同等你，`notEnding`）：不然完成后把卡归档、删掉，它在歇下之前又冒回推进中，
+  /// 像没歇成。没结束成（失败）的照常回来。
   static func isLoose(_ alias: String) -> String {
     """
     \(WorkState.outsideSQL([.ended], column: "\(alias).state"))
+      AND NOT EXISTS (SELECT 1 FROM deliveryRequests r WHERE r.targetRef = \(alias).sessionID AND \(DeliveryRequest.endingSQL("r")))
       AND NOT EXISTS (SELECT 1 FROM cards c WHERE \(usedSession("c", "\(alias).sessionID")) AND \(taskOpen))
       AND NOT EXISTS (
         SELECT 1 FROM cards c WHERE c.piSessionID = \(alias).sessionID AND \(taskDoneOnBoard) AND c.completedAt >= \(alias).stateSince)
