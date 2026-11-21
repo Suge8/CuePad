@@ -7,9 +7,9 @@ struct CueViewing: ViewModifier {
     let catchingUp: Bool
     @Binding var seen: [UUID: Date]
     @Binding var follow: ChatFollow
-    /// 舞台开着（`CueStage`）：对话没排，不算在读——落点（第一条新消息）留到收起、对话排出来那一刻按那时的新消息定。
+    /// 舞台开着（`CueStage`）：打开停在对话尽头的它上面，不落到第一条新消息；读到哪照样按末尾在不在屏上算（舞台在屏上时它们在上面）。
     let staged: Bool
-    /// 离开够久（`CueStage.opens`）又回来看：页把舞台重开。离开的时刻记在本机（`AppSettings.cueLeft`），各台设备各算各的来访。
+    /// 离开够久（`CueStage.opens`）又回来看：页把舞台重开、回到最新处。离开的时刻记在本机（`AppSettings.cueLeft`），各台设备各算各的来访。
     let revisit: () -> Void
     @Environment(AppServices.self) private var services
     @Environment(Workspace.self) private var workspace
@@ -27,7 +27,7 @@ struct CueViewing: ViewModifier {
     static let dwell: Duration = .seconds(1)
 
     private var watching: Bool { active && onScreen && appeared }
-    private var reading: Bool { watching && !catchingUp && !staged }
+    private var reading: Bool { watching && !catchingUp }
 
     func body(content: Content) -> some View {
         content
@@ -46,7 +46,6 @@ struct CueViewing: ViewModifier {
                     return
                 }
                 follow.oweLanding()
-                // 重开舞台的这一下 `staged` 还是旧值：不当场落，留到收起
                 if !was, CueStage.opens(left: services.settings.cueLeft, at: .now) { revisit() } else { land() }
             }
             .onChange(of: reading && thread != nil) { _, start in if start { land() } }
@@ -59,7 +58,7 @@ struct CueViewing: ViewModifier {
     }
 
     private func land() {
-        guard reading, let thread else { return }
+        guard reading, !staged, let thread else { return }
         follow.land(on: thread.rows.first { thread.unread.contains($0.id) }?.id)
     }
 

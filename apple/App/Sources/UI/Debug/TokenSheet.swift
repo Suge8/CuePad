@@ -115,7 +115,7 @@ struct TokenSheet: View {
 
     private static func colors(_ palette: Palette) -> [(String, Color)] {
         [
-            ("sidebar", palette.sidebar), ("desk", palette.desk), ("sky", palette.sky), ("paper", palette.paper), ("paperLit", palette.paperLit),
+            ("sidebar", palette.sidebar), ("desk", palette.desk), ("paper", palette.paper), ("paperLit", palette.paperLit),
             ("sheen", palette.sheen), ("bubble", palette.bubble), ("bubbleEdge", palette.bubbleEdge ?? .clear),
             ("glassTint", palette.glassTint), ("solidGlass", palette.solidGlass), ("inkWell", palette.inkWell),
             ("ink", palette.ink), ("ink2", palette.ink2), ("ink3", palette.ink3), ("hair", palette.hair), ("fill", palette.fill),

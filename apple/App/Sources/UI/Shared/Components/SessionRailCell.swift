@@ -20,7 +20,6 @@ extension UTType {
 /// 等你的行首放项目的图形（只看图形认不出是哪个项目，写名字才认得）。
 struct SessionRailCell: View {
     let item: SessionRailRows.Item
-    let form: SessionRail.Form
     let selected: Bool
     var compact = false
     let open: (SessionState, SessionRail.Opening) -> Void
@@ -32,39 +31,33 @@ struct SessionRailCell: View {
     #endif
 
     var body: some View {
-        Group {
-            if form == .phone {
-                control
-            } else {
-                control
-                    .contextMenu { menu }
-                    .accessibilityActions { menu }
-                    .contentShape(.dragPreview, .rect(cornerRadius: Radius.row))
-                    .draggable(DraggedSession(sessionID: item.id))
-                    .reportsWideDrag(.session(SessionRoute(id: SessionState.recordID(sessionID: item.id), sessionID: item.id)))
+        control
+            .contextMenu { menu }
+            .accessibilityActions { menu }
+            .contentShape(.dragPreview, .rect(cornerRadius: Radius.row))
+            .draggable(DraggedSession(sessionID: item.id))
+            .reportsWideDrag(.session(SessionRoute(id: SessionState.recordID(sessionID: item.id), sessionID: item.id)))
+            .padding(.leading, compact ? Self.indent : 0)
+            #if os(macOS)
+            // 叠在卡上、不放进卡里：卡整张是一颗钮，钮里不套钮
+            .overlay(alignment: .topTrailing) {
+                // 对勾的右沿、中线都对着它换下的那一格（等了多久）
+                if let finishing {
+                    RailHoverTool(finishing.title, finishing.icon, action: finishing.run)
+                        .padding(.trailing, Spacing.group - RailHoverTool.overhang).padding(.top, Spacing.item - RailHoverTool.overhang / 2)
+                        .transition(.opacity)
+                }
             }
-        }
-        .padding(.leading, compact ? Self.indent : 0)
-        #if os(macOS)
-        // 叠在卡上、不放进卡里：卡整张是一颗钮，钮里不套钮
-        .overlay(alignment: .topTrailing) {
-            // 对勾的右沿、中线都对着它换下的那一格（等了多久）
-            if let finishing {
-                RailHoverTool(finishing.title, finishing.icon, action: finishing.run)
-                    .padding(.trailing, Spacing.group - RailHoverTool.overhang).padding(.top, Spacing.item - RailHoverTool.overhang / 2)
-                    .transition(.opacity)
-            }
-        }
-        .onHover { hovering = $0 }
-        .presetHover($hovering)
-        .animation(Motion.fade, value: hovering)
-        #endif
-        .relaySpot(session: item.id, row: .rail)
-        .accessibilityAddTraits(selected ? .isSelected : [])
-        .accessibilityLabel(live ? Text("\(item.name)，有活预览") : Text(verbatim: item.name))
-        .accessibilityValue(Dotted(item.shown.label, project?.shownName, item.session.agentMark, item.pulse.fullContext?.help.spoken).spoken)
-        .accessibilityIdentifier("session-rail-\(item.id)")
-        .help(help)
+            .onHover { hovering = $0 }
+            .presetHover($hovering)
+            .animation(Motion.fade, value: hovering)
+            #endif
+            .relaySpot(session: item.id, row: .rail)
+            .accessibilityAddTraits(selected ? .isSelected : [])
+            .accessibilityLabel(live ? Text("\(item.name)，有活预览") : Text(verbatim: item.name))
+            .accessibilityValue(Dotted(item.shown.label, project?.shownName, item.session.agentMark, item.pulse.fullContext?.help.spoken).spoken)
+            .accessibilityIdentifier("session-rail-\(item.id)")
+            .help(help)
     }
 
     private var running: Bool { item.waiting == nil && item.pulse.tier == .running }
@@ -94,19 +87,14 @@ struct SessionRailCell: View {
         // 卡自己有面，不要行的悬停底（它比卡宽出一圈）
         if compact { button.buttonStyle(RowStyle(selected: selected)) } else { button.buttonStyle(PressStyle(.button)) }
         #else
-        if form == .phone {
-            Button { open(item.session, .primary) } label: { label }
-                .buttonStyle(RowStyle(selected: selected))
-        } else {
-            label
-                .row(selected: selected && compact)
-                .gesture(SessionTap { open(item.session, $0 ? .beside : .primary) })
-                .focusable(interactions: .activate)
-                .onKeyPress(.space) { open(item.session, .primary); return .handled }
-                .accessibilityElement(children: .ignore)
-                .accessibilityAddTraits(.isButton)
-                .accessibilityAction { open(item.session, .primary) }
-        }
+        label
+            .row(selected: selected && compact)
+            .gesture(SessionTap { open(item.session, $0 ? .beside : .primary) })
+            .focusable(interactions: .activate)
+            .onKeyPress(.space) { open(item.session, .primary); return .handled }
+            .accessibilityElement(children: .ignore)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction { open(item.session, .primary) }
         #endif
     }
 
@@ -116,19 +104,7 @@ struct SessionRailCell: View {
 
     private var label: some View {
         Group {
-            if form == .phone {
-                // 两层：会动的状态标（唯一着色的）与会话名。哪家 Agent、哪个项目不写：60 点宽里第三行只放得下四五个 9 号字，一列看下来是乱的，点进会话就有。
-                // 空闲的不画标：那一层收起来，名字居中
-                VStack(spacing: Spacing.hair) {
-                    StateDot(shown: item.shown, size: Chrome.railMark)
-                        .frame(height: item.shown.isQuiet ? 0 : nil)
-                    name.font(Typography.caption2.weight(.semibold))
-                }
-                .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion) ?? Motion.fade, value: item.shown.isQuiet)
-                .padding(.horizontal, Spacing.hair)
-                .padding(.vertical, Spacing.tight)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if compact {
+            if compact {
                 RailLine(leadWidth: Self.mark) {
                     // 开始跑、歇下、休眠：记号冒出来、淡掉，不是当场换一个图
                     ZStack {
@@ -159,7 +135,7 @@ struct SessionRailCell: View {
     /// 拍板的不给：它问的那句还没答。触屏没有悬停，完成在长按菜单里。
     private var finishing: RowAction? {
         #if os(macOS)
-        guard hovering, !compact, form == .wide, item.waiting == .awaitsReply else { return nil }
+        guard hovering, !compact, item.waiting == .awaitsReply else { return nil }
         return SessionActions.complete(item.session, task: item.task, in: workspace)
         #else
         return nil

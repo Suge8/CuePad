@@ -1,27 +1,23 @@
 import CueStore
 import SwiftUI
 
-/// 分组格会话条：等你在上面、推进中在下面独立滚。尺寸只影响排版，三端共用数据、注意顺序与动画预算。
-/// 手机（`phone`，60 点竖条）：每组一张纸（列的纸色），格铺满纸，在默认字号、650 点高内完整放下十个会话。手机不放组头：组靠纸色分，
-/// 两组的数名牌上有；组头的记号（问号、心电线）同格里的状态标一个样子，一组只剩一格时读成那一格上下各一个状态。
-/// 宽屏（`wide`）：不铺纸，组就是会话条那一块上的一段行，靠组头与间距分开；每个会话一行（`RailLine`），行首那一列是会话的状态标（`StateDot`），名字在它右边。
+/// 会话条：等你在上面、推进中在下面，三端共用数据、注意顺序。手机（`phone`）是贴左缘的边缘索引（`SessionSpine`）。
+/// 宽屏（`wide`）：组就是会话条那一块上的一段行，各自独立滚，靠组头与间距分开；每个会话一行（`RailLine`），行首那一列是会话的状态标（`StateDot`），名字在它右边。
 /// 组头是小号淡字组名加着色计数，左沿同行首那一列、字贴着下沿，离它那一组近、离上一组远。
 /// 等你组每行两行高（`Chrome.tallRow`），推进中一行一种高（`Chrome.row`），长相在 `SessionRailCell`。
 /// 等你过多时自身也能滚、最多占一半可用高度，不能把推进中或待回复挤到再也点不到。一组多到要滚时下沿淡出一截（`Chrome.scrollFade`），看得出下面还有；
-/// 放得下时不淡。两组为空时手机保留列宽、不重排对话；宽屏在那儿写一行"没有在推进的会话"（`SessionRailEmpty`），不留一大块不知道是不是没读到的空白。
+/// 放得下时不淡。两组为空时写一行"没有在推进的会话"（`SessionRailEmpty`），不留一大块不知道是不是没读到的空白。
 /// 点按只回报会话与意图（`Opening`：默认，或 ⌘ 点的并排）；右键是会话的菜单（`SessionActions`，同会话出现的每一处）。`marked` 是调用方主区开着的会话投影，不在组件内记选中。
 /// 被否决的：宽屏每组一张纸（等你赭黄、推进中白纸）——三种材质叠在侧栏底上像一摞卡片，不像一条栏；行首放 Agent 标志——同一家的都一样，零信息，状态挤成标志底下一截细线读不出。
 struct SessionRail: View {
     enum Form {
         case phone, wide
-        /// 手机竖条定宽；宽屏跟着会话条那一块的宽。
+        /// 手机的边缘索引定宽；宽屏跟着会话条那一块的宽。
         var width: CGFloat? { self == .phone ? SessionRail.phoneWidth : nil }
     }
 
-    /// 窄屏的竖条也浮在 Cue 页的对话左边，对话照它让开（`CuePage`）。
-    static let phoneWidth: CGFloat = 60
-    /// 手机竖条的纸离屏边（格铺满纸）。
-    static let phoneInset = Spacing.hair
+    /// 手机的胶囊连它离左缘的空隙：浮在 Cue 页上，对话、舞台与拍板卡两侧各让这么多、按整屏居中（`CuePage`）。
+    static let phoneWidth = Spacing.tight + SessionSpine.width
 
     enum Opening { case primary, beside }
 
@@ -33,26 +29,27 @@ struct SessionRail: View {
 
     var body: some View {
         // 常驻的栏同页头限制可见字号；全文留在读屏标签，不能让大字把组头计数挤成省略号。
-        SessionRailContent(rows: SessionRailRows(data, pulse: pulse), form: form, marked: marked, open: open)
-            .dynamicTypeSize(...DynamicTypeSize.xxLarge)
+        Group {
+            if form == .phone {
+                SessionSpine(rows: SessionRailRows(data, pulse: pulse)) { open($0, .primary) }
+            } else {
+                SessionRailContent(rows: SessionRailRows(data, pulse: pulse), marked: marked, open: open)
+            }
+        }
+        .dynamicTypeSize(...DynamicTypeSize.xxLarge)
     }
 }
 
 private struct SessionRailContent: View {
     let rows: SessionRailRows
-    let form: SessionRail.Form
     let marked: Set<String>
     let open: (SessionState, SessionRail.Opening) -> Void
-    @Environment(\.palette) private var palette
-    @ScaledMetric(relativeTo: .caption2) private var tileHeight: CGFloat = 46
 
     @Environment(\.relayStage) private var stage
     @Environment(\.pageActive) private var active
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var reveal = SessionRailReveal()
     @Namespace private var moves
-
-    private var phone: Bool { form == .phone }
 
     var body: some View {
         GeometryReader { geometry in
@@ -69,7 +66,7 @@ private struct SessionRailContent: View {
                     group(rows.advancing, column: .advancing, overflows: idealHeight(rows.advancing) > advancingRoom)
                         .frame(maxHeight: idealHeight(rows.advancing))
                 }
-                if rows.waiting.isEmpty, rows.advancing.isEmpty, !phone { SessionRailEmpty() }
+                if rows.waiting.isEmpty, rows.advancing.isEmpty { SessionRailEmpty() }
                 Spacer(minLength: 0)
             }
             .frame(maxWidth: .infinity)
@@ -80,49 +77,43 @@ private struct SessionRailContent: View {
         .onChange(of: active, initial: true) { _, active in reveal.active = active }
         .onAppear { stage?.register(reveal); reveal.active = active }
         .onDisappear { reveal.active = false }
-        .frame(width: form.width)
     }
 
-    /// 相邻两个会话之间：手机的格隔一道纸缝，宽屏的行同会话条上别的行一道缝。
-    private var cellGap: CGFloat { phone ? Chrome.cellGap : Spacing.hair }
+    /// 相邻两个会话之间同会话条上别的行一道缝。
+    private var cellGap: CGFloat { Spacing.hair }
 
     private func rowHeight(_ item: SessionRailRows.Item) -> CGFloat {
-        if phone { return tileHeight }
-        return item.waiting == nil ? Chrome.row : Chrome.tallRow
+        item.waiting == nil ? Chrome.row : Chrome.tallRow
     }
 
     private func idealHeight(_ items: [SessionRailRows.Item]) -> CGFloat {
-        (phone ? Chrome.pad : Chrome.groupHeader) + items.map(rowHeight).reduce(0, +) + CGFloat(max(0, items.count - 1)) * cellGap + Chrome.pad
+        Chrome.groupHeader + items.map(rowHeight).reduce(0, +) + CGFloat(max(0, items.count - 1)) * cellGap + Chrome.pad
     }
 
-    /// `overflows`：这一组放不下、要滚（宽屏下沿淡出一截，滚到底时最后一行在淡出的上面）。
+    /// `overflows`：这一组放不下、要滚（下沿淡出一截，滚到底时最后一行在淡出的上面）。
     private func group(_ items: [SessionRailRows.Item], column: TaskBoard.Column, overflows: Bool) -> some View {
-        let fades = overflows && !phone
-        return VStack(spacing: 0) {
-            if !phone {
-                SessionRailHeader(column: column, count: items.count)
-                    .frame(height: Chrome.groupHeader)
-            }
+        VStack(spacing: 0) {
+            SessionRailHeader(column: column, count: items.count)
+                .frame(height: Chrome.groupHeader)
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: cellGap) {
                         ForEach(items) { item in
-                            SessionRailCell(item: item, form: form, selected: marked.contains(item.id), open: open)
+                            SessionRailCell(item: item, selected: marked.contains(item.id), open: open)
                                 .frame(height: rowHeight(item))
                                 .matchedGeometryEffect(id: item.id, in: moves)
                                 .id(item.id)
                                 .transition(.opacity)
                         }
                     }
-                    // 行底伸出行框：滚动内容自己留出伸出的那一截（滚动区按自己的边裁）；手机的格铺满纸
-                    .padding(.horizontal, phone ? 0 : RowMetrics.bleed)
+                    // 行底伸出行框：滚动内容自己留出伸出的那一截（滚动区按自己的边裁）
+                    .padding(.horizontal, RowMetrics.bleed)
                     .scrollTargetLayout()
-                    .safeAreaPadding(.top, phone ? Chrome.pad : 0)
-                    .safeAreaPadding(.bottom, fades ? Chrome.scrollFade : Chrome.pad)
+                    .safeAreaPadding(.bottom, overflows ? Chrome.scrollFade : Chrome.pad)
                 }
                 .scrollIndicators(.hidden)
-                .modifier(BottomFade(on: fades))
-                .animation(phone ? nil : Motion.spatial(Motion.nudge, reduceMotion: reduceMotion) ?? Motion.fade, value: items.map(\.id))
+                .modifier(BottomFade(on: overflows))
+                .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion) ?? Motion.fade, value: items.map(\.id))
                 .onScrollPhaseChange { _, phase in
                     if phase == .idle { reveal.busy.remove(column) } else { reveal.busy.insert(column) }
                 }
@@ -136,25 +127,6 @@ private struct SessionRailContent: View {
                 }
                 .onDisappear { reveal.remove(column) }
             }
-        }
-        .modifier(GroupSurface(phone: phone, wash: column.paper(palette)))
-    }
-}
-
-/// 一组的底：手机是一张纸（列的纸色、格铺满纸），宽屏不铺、组就是会话条那一块上的一段行（行容器是那一块，`WideRail`）。
-private struct GroupSurface: ViewModifier {
-    let phone: Bool
-    let wash: Color?
-
-    func body(content: Content) -> some View {
-        if phone {
-            content
-                .rowContainer(.rect(cornerRadius: Radius.block), flush: true)
-                .clipShape(.rect(cornerRadius: Radius.block))
-                .paper(cornerRadius: Radius.block, wash: wash)
-                .padding(.horizontal, SessionRail.phoneInset)
-        } else {
-            content
         }
     }
 }
