@@ -127,27 +127,27 @@ struct LivePhoneTests {
             try await pair.phone.sendVoice(.live(signal: .back(request: UUID(), session: sessionID)), session: VoiceSessionID(UUID()), to: pair.mac.local)
         }
         // 预览占窗口多宽：铺满是整个窗口
-        @MainActor func previewWidth() -> CGFloat { WideMetrics(width: 1600, workspace: workspace).trailing }
+        @MainActor func previewWidth() -> CGFloat { let s = WideMetrics(width: 1600, workspace: workspace); return s.width(s.widths.count - 1) }
 
         try await show("plain")
         try await eventually("没有页面的会话只开到主区") { workspace.session(in: .main)?.sessionID == "plain" }
-        #expect(workspace.beside == nil)
+        #expect(workspace.beside.isEmpty)
 
         try await show("live")
         try await eventually("开到主区、它的活预览铺满窗口") {
-            workspace.session(in: .main)?.sessionID == "live" && workspace.beside == .preview && workspace.livePreviews[flow.id("live")]?.address == url && previewWidth() == 1600
+            workspace.session(in: .main)?.sessionID == "live" && workspace.beside == [.preview] && workspace.livePreviews[flow.id("live")]?.address == url && previewWidth() == 1600
         }
         try await back("plain")
         await quietPeriod(.milliseconds(300))
         #expect(previewWidth() == 1600, "别的会话回来不算")
         try await back("live")
         try await eventually("手机回到 CuePad：预览放回右半") { previewWidth() < 1600 }
-        #expect(workspace.beside == .preview && workspace.session(in: .main)?.sessionID == "live")
+        #expect(workspace.beside == [.preview] && workspace.session(in: .main)?.sessionID == "live")
 
         try await show("live")
         try await eventually("再看一次又铺满") { previewWidth() == 1600 }
         workspace.toggleLiveFill()
-        #expect(previewWidth() < 1600 && workspace.beside == .preview, "预览栏开头那颗钮放回右半")
+        #expect(previewWidth() < 1600 && workspace.beside == [.preview], "预览栏开头那颗钮放回右半")
 
         workspace.toggleLiveFill()
         #expect(previewWidth() == 1600, "没人远程看着时那颗钮是放大：盖过左边的会话")
@@ -174,12 +174,12 @@ struct LivePhoneTests {
         workspace.showEditor(UUID())
         try await show("live")
         try await eventually("盖着编辑页时揭开") { workspace.overlay == nil }
-        #expect(workspace.beside == .preview)
+        #expect(workspace.beside == [.preview])
 
         try await show("done")
         try await show("elsewhere")
         await quietPeriod(.milliseconds(500))
-        #expect(workspace.session(in: .main)?.sessionID == "live" && workspace.beside == .preview, "别处的、结束了的会话不动")
+        #expect(workspace.session(in: .main)?.sessionID == "live" && workspace.beside == [.preview], "别处的、结束了的会话不动")
         }
     }
 

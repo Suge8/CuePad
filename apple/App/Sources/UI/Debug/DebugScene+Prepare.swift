@@ -10,10 +10,17 @@ extension DebugScene {
     }
 
     /// 画面摆完再开并排（右半开这个会话，左半是 `-CuePadSession`）。
-    static func presetBeside(_ workspace: Workspace) {
-        if let share = args.layoutOpts.besideShare { workspace.besideShare = .init(session: share, preview: share) }
+    static func presetBeside(_ workspace: Workspace) async {
+        if let share = args.layoutOpts.besideShare {
+            for kind in [WideMetrics.Kind.session, .preview] { workspace.paneShares.set([1 - share, share], for: [kind]) }
+        }
         if let beside = args.layoutOpts.beside {
-            workspace.openSession(SessionState.recordID(sessionID: beside), sessionID: beside, in: .beside)
+            workspace.openSession(SessionState.recordID(sessionID: beside), sessionID: beside, in: .aside)
+        }
+        if args.layoutOpts.besideCard {
+            await running("并排一条灵感") {
+                if let card = try await card(in: Project.defaultID, store: workspace.services.store) { workspace.drop(.card(card), at: WideNavigation.maxPanes, replacing: false) }
+            }
         }
     }
 

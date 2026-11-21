@@ -3,7 +3,7 @@ import Foundation
 import Testing
 @testable import CuePad
 
-/// 宽屏主区右半（第二个会话；Mac 上还有活预览）开着时的排布，与 Agent 用 `cuepad live` 交来的地址落在哪。
+/// 宽屏主区并排（最左的会话旁边再开别的会话、灵感；Mac 上还有活预览）时的排布。
 @Suite(.releasesLibraries)
 struct SideBySideTests {
     let rig = TestApp()
@@ -28,21 +28,50 @@ struct SideBySideTests {
         open("a", workspace)
         #expect(cueShown(workspace))
 
-        open("b", in: .beside, workspace)
+        open("b", in: .aside, workspace)
         #expect(!cueShown(workspace) && services.settings.cueOpen)
-        workspace.closeColumn(.beside)
+        workspace.closeColumn(.beside(0))
         #expect(cueShown(workspace))
 
         #if os(macOS)
         workspace.toggleLivePreview()
-        #expect(workspace.beside == .preview && !cueShown(workspace) && services.settings.cueOpen)
+        #expect(workspace.beside.contains(.preview) && !cueShown(workspace) && services.settings.cueOpen)
         workspace.toggleLivePreview()
         #expect(cueShown(workspace))
         #endif
 
         services.settings.cueOpen = false
-        open("b", in: .beside, workspace)
-        workspace.closeColumn(.beside)
+        open("b", in: .aside, workspace)
+        workspace.closeColumn(.beside(0))
         #expect(!cueShown(workspace) && !services.settings.cueOpen)
+    }
+
+    @Test func 灵感并排在会话旁边_放得下三块_灵感不占最左_删了那一块自己收起() async throws {
+        let workspace = wide()
+        workspace.fit(WideMetrics(width: 1600, workspace: workspace).fits)
+        let idea = try await services.store.createCard(body: "边聊边看的那条")
+        open("a", workspace)
+
+        workspace.drop(.card(idea.id), at: 1, replacing: false)
+        open("b", in: .aside, workspace)
+        #expect(workspace.navigation.trail == "wide session | card | session")
+        workspace.drop(.card(idea.id), at: 0, replacing: true)
+        #expect(workspace.navigation.trail == "wide session | card | session", "灵感换不到最左")
+
+        open("c", in: .aside, workspace)
+        #expect(workspace.navigation.trail == "wide session | card | session" && workspace.session(in: .beside(1))?.sessionID == "c", "放满了，开在旁边换掉最右那块")
+
+        try await workspace.trash(idea.id)
+        #expect(workspace.navigation.trail == "wide session | session")
+    }
+
+    @Test func 看着一条灵感时拖来会话_会话占左边_灵感挪到右边() async throws {
+        let workspace = wide()
+        let idea = try await services.store.createCard(body: "边聊边看的那条")
+        workspace.select(.shelf)
+        workspace.showEditor(idea.id)
+
+        workspace.drop(.session(SessionRoute(id: SessionState.recordID(sessionID: "a"), sessionID: "a")), at: 0, replacing: false)
+        #expect(workspace.navigation.trail == "wide session | card" && workspace.overlay == nil)
     }
 }

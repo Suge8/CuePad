@@ -14,52 +14,92 @@ extension EnvironmentValues {
     @Entry var wideWindowID: UUID?
 }
 
-#if os(iOS)
-extension WideColumnController: UIDropInteractionDelegate {
-    func dropInteraction(_ interaction: UIDropInteraction, canHandle session: any UIDropSession) -> Bool {
-        // 看板、项目页的卡片落点在主区浏览页里，与这个接收器挂在同一个托管视图上：带卡片的拖放（有会话的任务卡也带会话）归它们，不在这里打开会话
-        if slot == .main, workspace.session(in: .main) == nil, session.hasItemsConforming(toTypeIdentifiers: [UTType.cuepadCard.identifier]) { return false }
-        return session.hasItemsConforming(toTypeIdentifiers: [DraggedColumn.type.identifier, UTType.cuepadSession.identifier])
+/// 拖进主区的一块上放下会怎样：插在这一块左边、右边，或换掉它。
+enum WideDropZone: Equatable {
+    case before, replace, after
+}
+
+/// 宽屏主区接的拖放（Mac 的 `WideColumnView`、iPad 的 `WideColumnController`）：会话（栏头的名字、会话条的行、带会话的看板卡）与灵感（卡、灵感那一块的栏头）。
+/// 拖着时只看得到类型、读不到内容，落点只按类型定：带会话的就当会话，只带卡的当灵感（不带会话的任务卡放下时不接）。
+enum WideDrop {
+    static let types: [UTType] = [DraggedColumn.type, .cuepadSession, .cuepadCard]
+
+    /// 拖到第 `column` 块、横向在它宽的 `fraction` 处：两侧各四分之一是插在旁边，中间是换掉它；nil 不接。
+    /// 主区不是会话时只有主区那一块接会话（开到主区；盖着一条灵感时会话开在左边、灵感挪到它右边），灵感卡的落点归页里（项目页、看板）。
+    /// 最左只能是会话：灵感拖到最左那块上只插在它右边。窗口放满了（`wideRoom`）只能换：插进来会挤掉最右那块，占位却在别处，看不出谁会没了。
+    static func zone(_ types: Set<UTType>, at fraction: CGFloat, in column: Workspace.Column, workspace: Workspace) -> WideDropZone? {
+        let session = types.contains(DraggedColumn.type) || types.contains(.cuepadSession)
+        guard session || types.contains(.cuepadCard) else { return nil }
+        guard workspace.session(in: .main) != nil else {
+            guard session, column == .main else { return nil }
+            return workspace.openCard != nil ? .before : .replace
+        }
+        let full = 1 + workspace.beside.count >= workspace.wideRoom
+        if !session, column == .main { return full ? nil : .after }
+        if full { return .replace }
+        return fraction < 0.25 ? .before : fraction > 0.75 ? .after : .replace
     }
 
-    func dropInteraction(_ interaction: UIDropInteraction, sessionDidUpdate session: any UIDropSession) -> UIDropProposal {
-        drop.targeted = true
-        return UIDropProposal(operation: .copy)
-    }
-
-    func dropInteraction(_ interaction: UIDropInteraction, sessionDidExit session: any UIDropSession) { drop.targeted = false }
-    func dropInteraction(_ interaction: UIDropInteraction, sessionDidEnd session: any UIDropSession) { drop.targeted = false }
-
-    func dropInteraction(_ interaction: UIDropInteraction, performDrop session: any UIDropSession) {
-        drop.targeted = false
-        guard let column = slot.column, let provider = session.items.first?.itemProvider else { return }
-        if provider.hasItemConformingToTypeIdentifier(DraggedColumn.type.identifier) {
-            load(DraggedColumn.self, type: DraggedColumn.type, from: provider) {
-                self.workspace.dropSession(SessionRoute(id: $0.recordID, sessionID: $0.sessionID), in: column, movingWithinWindow: $0.windowID == self.focus.windowID)
-            }
-        } else {
-            load(DraggedSession.self, type: .cuepadSession, from: provider) {
-                self.workspace.openSession(SessionState.recordID(sessionID: $0.sessionID), sessionID: $0.sessionID, in: column)
+    static func pane(_ type: UTType, _ data: Data) throws -> WideNavigation.Beside? {
+        let decoder = JSONDecoder()
+        switch type {
+        case DraggedColumn.type:
+            let value = try decoder.decode(DraggedColumn.self, from: data)
+            return .session(SessionRoute(id: value.recordID, sessionID: value.sessionID))
+        case .cuepadSession:
+            let value = try decoder.decode(DraggedSession.self, from: data)
+            return .session(SessionRoute(id: SessionState.recordID(sessionID: value.sessionID), sessionID: value.sessionID))
+        default:
+            switch try decoder.decode(DraggedCard.self, from: data) {
+            case .idea(let id): return .card(id)
+            case .session(let sessionID): return .session(SessionRoute(id: SessionState.recordID(sessionID: sessionID), sessionID: sessionID))
+            case .task: return nil
             }
         }
     }
 
-    private func load<Value: Decodable & Sendable>(_ value: Value.Type, type: UTType, from provider: NSItemProvider, apply: @escaping @MainActor (Value) -> Void) {
+    static func apply(_ pane: WideNavigation.Beside, _ zone: WideDropZone, in column: Workspace.Column, workspace: Workspace) {
+        workspace.drop(pane, at: column.index + (zone == .after ? 1 : 0), replacing: zone == .replace)
+    }
+}
+
+#if os(iOS)
+extension WideColumnController: UIDropInteractionDelegate {
+    func dropInteraction(_ interaction: UIDropInteraction, canHandle session: any UIDropSession) -> Bool {
+        // 看板、项目页的卡片落点在主区浏览页里，与这个接收器挂在同一个托管视图上：主区不是会话时带卡片的拖放（有会话的任务卡也带会话）归它们
+        guard slot.column != nil, workspace.session(in: .main) != nil || !session.hasItemsConforming(toTypeIdentifiers: [UTType.cuepadCard.identifier]) else { return false }
+        return session.hasItemsConforming(toTypeIdentifiers: WideDrop.types.map(\.identifier))
+    }
+
+    func dropInteraction(_ interaction: UIDropInteraction, sessionDidUpdate session: any UIDropSession) -> UIDropProposal {
+        drop.zone = slot.column.flatMap { zone(session, in: $0) }
+        return UIDropProposal(operation: drop.zone == nil ? .cancel : .copy)
+    }
+
+    func dropInteraction(_ interaction: UIDropInteraction, sessionDidExit session: any UIDropSession) { drop.zone = nil }
+    func dropInteraction(_ interaction: UIDropInteraction, sessionDidEnd session: any UIDropSession) { drop.zone = nil }
+
+    func dropInteraction(_ interaction: UIDropInteraction, performDrop session: any UIDropSession) {
+        defer { drop.zone = nil }
+        guard let column = slot.column, let zone = drop.zone, let provider = session.items.first?.itemProvider,
+              let type = WideDrop.types.first(where: { provider.hasItemConformingToTypeIdentifier($0.identifier) }) else { return }
         provider.loadDataRepresentation(forTypeIdentifier: type.identifier) { data, error in
-            let result = Result { () throws -> Value in
-                if let error { throw error }
-                return try JSONDecoder().decode(value, from: data ?? Data())
-            }
             Task { @MainActor in
-                switch result {
-                case .success(let value): apply(value)
-                case .failure(let error): self.workspace.fail(error)
+                do {
+                    if let error { throw error }
+                    if let pane = try WideDrop.pane(type, data ?? Data()) { WideDrop.apply(pane, zone, in: column, workspace: self.workspace) }
+                } catch {
+                    self.workspace.fail(error)
                 }
             }
         }
     }
-}
 
+    private func zone(_ session: any UIDropSession, in column: Workspace.Column) -> WideDropZone? {
+        let types = Set(WideDrop.types.filter { session.hasItemsConforming(toTypeIdentifiers: [$0.identifier]) })
+        return WideDrop.zone(types, at: session.location(in: view).x / max(1, view.bounds.width - drop.under), in: column, workspace: workspace)
+    }
+}
 #endif
 
 /// 排在窗口最顶那一排（`Chrome.band`），左右让出多少由主区给（`headInset`：收起的 Cue 钮压在最右那一块的栏头上）。
@@ -79,13 +119,12 @@ struct WideSessionTitle: View {
         HStack(spacing: Spacing.item) {
             name
             Spacer(minLength: Spacing.item)
-            // 两半的栏头末端各一颗玻璃圆钮，同一个样子：左边开合活预览（会话有页面可看时；开着是强调色，收起它只有这一处），右边收起并排。
-            // 左边没有收起：它就是主区此刻的页，换去处靠会话条
-            switch column {
-            case .main:
+            // 每块的栏头末端各一颗玻璃圆钮，同一个样子：最左那块开合活预览（会话有页面可看时；开着是强调色，收起它只有这一处），右边的收起这一块。
+            // 最左那块没有收起：它就是主区此刻的页，换去处靠会话条
+            if column == .main {
                 if let session = workspace.session(in: .main) { LivePreviewTool(session: session) }
-            case .beside:
-                HeadTool(label: "收起并排", icon: .rightColumn) { workspace.closeColumn(.beside) }
+            } else {
+                HeadTool(label: "收起并排", icon: .rightColumn) { workspace.closeColumn(column) }
             }
         }
         .accessibilityElement(children: .contain)
@@ -104,7 +143,7 @@ struct WideSessionTitle: View {
             }
             if let windowID, let session = workspace.session(in: column) {
                 #if os(iOS)
-                WideTitleDrag(title: title, item: DraggedColumn(windowID: windowID, recordID: session.id, sessionID: session.sessionID))
+                WideTitleDrag(title: title, type: DraggedColumn.type, item: DraggedColumn(windowID: windowID, recordID: session.id, sessionID: session.sessionID))
                     .layoutPriority(1)
                 #else
                 Text(verbatim: title).foregroundStyle(palette.ink).lineLimit(1)
@@ -157,16 +196,33 @@ extension EnvironmentValues {
 
 @Observable
 final class WideDropState {
-    var targeted = false
+    var zone: WideDropZone?
+    @ObservationIgnored var under: CGFloat = 0
 }
 
+/// 拖着经过一块时，放下后新的一块会在哪：一块透明的玻璃占位浮在那里，底下的页透出来（插在旁边占这一块靠那边的一半，换掉它占整块），
+/// 指针在两侧与中间之间挪时占位连续地伸缩滑过去，不跳。
 struct WideDropFeedback: View {
     let state: WideDropState
     @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        if state.targeted {
-            palette.selection.overlay { Text("放在这里").font(Typography.title) }.allowsHitTesting(false)
+        GeometryReader { proxy in
+            let width = proxy.size.width - state.under, half = (width / 2).rounded()
+            let zone = state.zone
+            RoundedRectangle(cornerRadius: Radius.sheet)
+                .fill(palette.selection)
+                .glass(in: RoundedRectangle(cornerRadius: Radius.sheet), ink: .clear)
+                .padding(Spacing.item)
+                .frame(width: zone == .replace ? width : half)
+                .offset(x: zone == .after ? width - half : 0)
+                .opacity(zone == nil ? 0 : 1)
+                .scaleEffect(zone == nil ? 0.97 : 1)
+                .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: zone)
         }
+        .padding(.top, Chrome.band)
+        .allowsHitTesting(false)
+        .readerHidden(true)
     }
 }

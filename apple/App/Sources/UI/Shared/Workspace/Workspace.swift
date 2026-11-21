@@ -218,8 +218,8 @@ final class Workspace {
     /// 隧道放行的端口（`admitLive`），按会话记一秒：网页一次开几条连接，不各扫一遍进程表。
     @ObservationIgnored var livePorts: [String: (ports: [Int: String], at: ContinuousClock.Instant)] = [:]
     #endif
-    /// 并排两半的分界拖到了哪（`WideMetrics.BesideShare`）：每个窗口一份，只在内存里。
-    var besideShare = WideMetrics.BesideShare()
+    /// 并排几块之间的分界拖到了哪（`WideMetrics.Shares`）：每个窗口一份，只在内存里。
+    var paneShares = WideMetrics.Shares()
 
     let launching = Launching()
     @ObservationIgnored var launches: [SessionLaunching.Key: SessionLaunching] = [:]
@@ -385,7 +385,7 @@ final class Workspace {
     private var shownRoutes: [Route] {
         let routes: [Route] = switch navigation {
         case .narrow(let state): state.path
-        case .wide: [mainRoute]
+        case .wide: [mainRoute] + beside.compactMap { if case .card(let id) = $0 { .card(id) } else { nil } }
         }
         return routes + [overlay?.route].compactMap(\.self)
     }

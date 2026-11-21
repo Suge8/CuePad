@@ -47,7 +47,7 @@ struct WideRail: View {
             #endif
             RailHome()
             RailSessions(data: services.liveSessions.rail, marked: Set(workspace.shownSessions.compactMap(\.sessionID))) { session, opening in
-                workspace.openSession(session.id, sessionID: session.sessionID, in: opening == .beside ? .beside : .main)
+                workspace.openSession(session.id, sessionID: session.sessionID, in: opening == .beside ? .aside : .main)
             }
             tools
         }

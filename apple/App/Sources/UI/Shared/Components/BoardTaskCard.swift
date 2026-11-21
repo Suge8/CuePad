@@ -95,7 +95,7 @@ struct BoardTaskCard: View {
         #endif
     }
 
-    private func enter(_ beside: Bool) { workspace.enter(task, session: item.agent?.state, in: beside ? .beside : .main) }
+    private func enter(_ beside: Bool) { workspace.enter(task, session: item.agent?.state, in: beside ? .aside : .main) }
 
     private func follow(_ next: TaskNext?) {
         if let next { workspace.follow(next) }

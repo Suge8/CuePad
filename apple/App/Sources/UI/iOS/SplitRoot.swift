@@ -17,7 +17,7 @@ struct SplitRoot: View {
             let under = sizes.split || sizes.home ? 0 : sizes.cue
             HStack(spacing: 0) {
                 if sizes.railFits { WideRail(width: sizes.rail, sizes: sizes) }
-                WideColumnHost(slot: .main, focus: focus, origin: sizes.rail, width: sizes.leading + under, shape: sizes.shape, hidden: sizes.home || sizes.fill) {
+                WideColumnHost(slot: .main, focus: focus, origin: sizes.rail, width: sizes.leading + under, shape: sizes.shape, hidden: sizes.home || sizes.fill, under: under) {
                     destination(workspace.mainRoute, column: .main)
                         .environment(\.headInset, EdgeInsets(top: 0, leading: Chrome.headLead(rail: sizes.rail), bottom: 0, trailing: Spacing.page))
                         .environment(\.underCue, under)
@@ -26,8 +26,12 @@ struct SplitRoot: View {
                 .reachesWindowBottom()
                 Spacer(minLength: 0)
             }
-            .overlay(alignment: .topLeading) { beside(sizes, window: geometry.size.width) }
-            .overlay { if sizes.split, !sizes.fill { BesideDivider(sizes: sizes) } }
+            .overlay(alignment: .topLeading) {
+                ZStack(alignment: .topLeading) {
+                    ForEach(0..<WideNavigation.maxPanes - 1, id: \.self) { beside($0, sizes, window: geometry.size.width) }
+                }
+            }
+            .overlay { if !sizes.fill { ForEach(0..<sizes.widths.count - 1, id: \.self) { BesideDivider(sizes: sizes, index: $0) } } }
             .overlay { if !sizes.home, !sizes.fill { railChrome(sizes) } }
             .readerHidden(covered)
             // 排在最上：抽屉开着时它与接点按的底盖住浮着的那一排与会话条的抽屉
@@ -45,13 +49,13 @@ struct SplitRoot: View {
         .onChange(of: covered) { DebugHooks.readerLayers(outsideCue: covered, drawer: workspace.cueDrawer) }
     }
 
-    /// 并排的右半（第二个会话、活预览）：不并排时也挂着、同样宽，停在窗口右缘外、滑完藏起；活预览放大时长到窗口左缘（同 Mac 的 `MainWindow.beside`）。
-    private func beside(_ sizes: WideMetrics, window: CGFloat) -> some View {
-        let origin = !sizes.split ? window : sizes.fill ? 0 : sizes.rail + sizes.leading
-        return WideColumnHost(slot: .beside, focus: focus, origin: origin, width: sizes.trailing, shape: sizes.shape, hidden: !sizes.split) {
-            BesideColumn { destination(.session($0), column: .beside) }
+    /// 并排时最左那块右边的第 `index` 块（会话、活预览、灵感）：没开着时也挂着、同样宽，停在窗口右缘外、滑完藏起；活预览放大时长到窗口左缘（同 Mac 的 `MainWindow.beside`）。
+    private func beside(_ index: Int, _ sizes: WideMetrics, window: CGFloat) -> some View {
+        let origin = sizes.origin(index + 1, window: window), width = sizes.width(index + 1)
+        return WideColumnHost(slot: .beside(index), focus: focus, origin: origin, width: width, shape: sizes.shape, hidden: origin >= window) {
+            BesideColumn(index: index) { destination(.session($0), column: .beside(index)) } card: { IdeaPane(cardID: $0, column: .beside(index)) }
         }
-        .frame(width: sizes.trailing)
+        .frame(width: width)
         .padding(.leading, origin)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .reachesWindowBottom()
