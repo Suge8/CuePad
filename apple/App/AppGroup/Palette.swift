@@ -28,11 +28,6 @@ struct Palette {
     var sidebar: Color { dark ? Color(hex: 0x141210) : Color(hex: 0xE6E2DB) }
     /// 页面底，也是小组件与分享扩展的底。iOS 启动屏的底色（资源目录的 LaunchBackground）与它同值：启动屏只认资源目录里的颜色，不同的话冷启动先白后米一闪。
     var desk: Color { dark ? Color(hex: 0x1B1916) : Color(hex: 0xEFEDE8) }
-    /// Cue 页舞台的天空抖成的四种墨（`CueStage`、`DitherImage`），由暗到亮：白天钴蓝的天到奶白的云，夜里墨蓝的天到月白的云。原图只有一张，日夜只换墨。
-    var skyInks: [Color] {
-        dark ? [Color(hex: 0x070A1E), Color(hex: 0x1C2A6E), Color(hex: 0x5B6FD0), Color(hex: 0xE6EBFF)]
-            : [Color(hex: 0x2F5BDB), Color(hex: 0x6E8FE6), Color(hex: 0xB4C7F5), Color(hex: 0xFFFDF8)]
-    }
     var paper: Color { dark ? Color(hex: 0x282420) : Color(hex: 0xFCFBF8) }
     var paperLit: Color { dark ? Color(hex: 0x2E2A25) : Color(hex: 0xFFFFFD) }
     var sheen: Color { Color.white.opacity(dark ? 0.07 : 0.9) }

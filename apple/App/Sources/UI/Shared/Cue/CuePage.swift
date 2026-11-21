@@ -37,6 +37,8 @@ struct CuePage: View {
     @State private var stage: Bool?
     /// 舞台上云下那几件（`CueBrief`），舞台开着时才读。
     @State private var brief: CueBrief?
+    /// 舞台开起来的那一刻：天空按它取时段（`CueStage.Period`），开着的期间不换。
+    @State private var stagedAt = Date.now
     /// 舞台此刻在可见区里：名牌让开、Mac 不垫托底（后面是天空）。往上看历史时它不在。
     @State private var stageInView = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -57,6 +59,7 @@ struct CuePage: View {
             .modifier(CueViewing(thread: thread, catchingUp: catchingUp, seen: $seen, follow: $follow, staged: staged) {
                 guard DebugHooks.preset.cueStage == nil else { return }
                 stage = true
+                stagedAt = .now
                 follow.jumpToNewest()
             })
             .onAppear { if stage == nil { stage = DebugHooks.preset.cueStage ?? CueStage.opens(left: services.settings.cueLeft, at: .now) } }
@@ -159,7 +162,8 @@ struct CuePage: View {
 
     private func stageView(_ thread: CueThread) -> some View {
         let replies = cue.now.items.filter { $0.kind == .reply }, said = CueBrief.said(thread)
-        return CueStage(beat: cue.beat, status: cue.now.quietLine, brief: brief?.lines ?? [], open: openBrief)
+        return CueStage(
+            beat: cue.beat, status: cue.now.quietLine, brief: brief?.lines ?? [], period: CueStage.Period(at: stagedAt, dark: palette.dark), open: openBrief)
             .onScrollVisibilityChange(threshold: 0.4) { stageInView = $0 }
             .observing(services.store, id: [said?.detail, said?.title] + replies.map(\.id), into: $brief, onError: workspace.fail) { [replies, said] in
                 try CueBrief.read(replies: replies, said: said, from: $0)

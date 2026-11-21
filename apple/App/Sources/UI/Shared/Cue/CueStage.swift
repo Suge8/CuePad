@@ -4,13 +4,14 @@ import SwiftUI
 /// Cue 页对话的尽头。新来访时（`CueStage.opens`）对话末尾不是那一行小 Cue（`CueEnding`），而是铺满一屏的这一幕：网点的天上，云上的 Cue 摆着此刻那一拍的姿势（`Pose`），
 /// 云下一个气泡说它此刻的样子，下面是你不在时攒下的几件（`CueBrief`），一行一件、点了就到。打开时停在最新处就是它；往上滑是历史，滑回来它还在（"回到最新"同会话页）。
 /// 你开口（输入框聚焦、发出）它才收成那一行（`CuePage`）。它是对话里的最后一格：在屏上时最后几条话在它上面、不在可见区，不算读过（`CueEndProbe`）。
-/// 天空是一张照片抖成网点（`DitherImage`、`palette.skyInks`），横着铺满整栏（伸出读宽，`chatMargin`），往下伸到回复框底下；上沿那一截散成透明，融进对话的底，不画一条边。
+/// 天空是一张照片抖成网点（`DitherImage`），按打开那一刻的时段换一张（`Period`），横着铺满整栏（伸出读宽，`chatMargin`），往下伸到回复框底下；上沿那一截散成透明，融进对话的底，不画一条边。
 /// Cue 是软的立体、天是平的网点，一前一后分得开。进场只放一次（Cue 与字浮上来），之后整幕静止：Cue 页在静置测量的范围里，不放常驻动效。换拍子是 Cue 跳一下换姿势（`Jelly`，同头像）。
 /// 否决过：舞台盖在对话上、往下拉收起（拉一下就看历史去了，这一趟回不来）；气泡里只挑一件说（常与拍板卡重复）；没事时列几件灵感请你点头（App 按规则挑的，不是 Cue 想做的，没人点）。
 struct CueStage: View {
     let beat: CueBeat
     let status: String
     let brief: [CueBrief.Line]
+    let period: Period
     let open: (CueBrief.Line) -> Void
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -40,7 +41,9 @@ struct CueStage: View {
                 GeometryReader { room in
                     let side = margin
                     let lines = Array(brief.prefix(Sky.rows(in: room.size.height, base: base, row: row)))
-                    let sky = Sky(CGSize(width: room.size.width + 2 * side, height: room.size.height), bubble: base + CGFloat(lines.count) * row)
+                    let sky = Sky(
+                        CGSize(width: room.size.width + 2 * side, height: room.size.height), chat: room.size.height + below, period: period,
+                        bubble: base + CGFloat(lines.count) * row)
                     ZStack(alignment: .top) {
                         if sky.showsFigure { figure(sky) }
                         words(sky, lines: lines)
@@ -58,12 +61,10 @@ struct CueStage: View {
             }
     }
 
-    /// 往下伸过回复框、再多一截：贴底回弹时底下不露出对话的底。高按一段一段取整，回复框长高一点不重算。
     private func backdrop(_ sky: Sky) -> some View {
-        let height = ((sky.size.height + below + Sky.overscroll) / Sky.step).rounded(.up) * Sky.step
-        return DitherImage(
-            asset: sky.asset, placement: sky.placement, size: CGSize(width: sky.size.width, height: height),
-            inks: palette.skyInks, tone: Sky.tone, fade: Sky.fade)
+        DitherImage(
+            asset: sky.asset, placement: sky.placement, size: CGSize(width: sky.size.width, height: sky.depth),
+            fade: Sky.fade)
             .overlay { if beat == .away { palette.backdrop } }
             .readerHidden(true)
     }
@@ -93,11 +94,10 @@ struct CueStage: View {
 }
 
 extension CueStage {
-    /// 这一格就是可见区里回复框以上那一截。Cue 站的那朵云（`perch`）先照图排：竖图的高在格高的八成与宽的 1.62～1.75 倍之间、云在图高的 37%；
-    /// 横图铺满宽与高、云落在格高的 30%（至少 230 点：Mac 栏头浮在内容上，Cue 的头要低过它）。云下放不下气泡时（手机上拍板卡升着）云往上提到放得下；
-    /// 提到云上只放得下八成五的 Cue 时，气泡少列几行（排在后面的先不列，至少留那一句），Cue 再缩也不小过六成，再放不下就不画 Cue。图跟着云走：Cue 站的那朵云在图里的高度量自图本身（`line`：竖图 37%、横图 38%）。
+    /// 这一格就是可见区里回复框以上那一截。Cue 站的那朵云（`perch`）先照图排：竖图铺满对话区、云在图高的 `line`；
+    /// 横图铺满宽、云落在格高的 30%（至少 230 点：Mac 栏头浮在内容上，Cue 的头要低过它）。云下放不下气泡时（手机上拍板卡升着）云往上提到放得下；
+    /// 提到云上只放得下八成五的 Cue 时，气泡少列几行（排在后面的先不列，至少留那一句），Cue 再缩也不小过六成，再放不下就不画 Cue。图跟着云走。
     struct Sky {
-        static let tone = 0.1...0.96
         /// 上沿散成透明的那一截。
         static let fade: CGFloat = 96
         static let overscroll: CGFloat = 160
@@ -112,6 +112,7 @@ extension CueStage {
 
         let asset: String
         let size: CGSize
+        let depth: CGFloat
         let placement: CGRect
         let perch: CGFloat
         let figureScale: CGFloat
@@ -124,26 +125,45 @@ extension CueStage {
             return max(0, Int(((height - floor - wordsGap + SpeechShape.tail - perch - base) / row).rounded(.down)))
         }
 
-        init(_ size: CGSize, bubble: CGFloat) {
+        /// Cue 站的那朵云的顶在图里的高度，八张图量过都在这一线（生成时按它摆）。
+        static let line: CGFloat = 0.35
+
+        /// `chat`：整个对话区的高（连回复框底下），图的下沿至少到它（照片拉不出下沿，拉出去的只是糊开的竖纹）；天再往下多伸一截（`depth`），贴底回弹时不露出对话的底。
+        /// 都按一段一段取整：卡升起时回复框每帧长高，跟着重算网点就每帧一张。
+        init(_ size: CGSize, chat: CGFloat, period: Period, bubble: CGFloat) {
             self.size = size
+            let cover = (chat / Self.step).rounded(.up) * Self.step
+            depth = cover + Self.overscroll
             let wide = size.width > size.height
-            let line: CGFloat = wide ? 0.38 : 0.37
-            asset = wide ? "cue-stage-sky-wide" : "cue-stage-sky-tall"
-            let width: CGFloat, height: CGFloat
-            if wide {
-                let scale = max(size.width / 1672, size.height / 941, max(size.height * 0.3, 230) / (941 * line))
-                (width, height) = (1672 * scale, 941 * scale)
-            } else {
-                height = max(min(max(size.height * 0.8, size.width * 1.62), size.width * 1.75), size.width * 1.5)
-                width = height / 1.5
-            }
+            asset = "cue-stage-sky-\(period.rawValue)-\(wide ? "wide" : "tall")"
+            let line = Self.line
+            let aspect: CGFloat = wide ? 941 / 1672 : 1.5
+            let goal = wide ? max(size.height * 0.3, 230) : max(cover, size.width * aspect) * line
             let room = size.height - Self.floor - bubble - Self.wordsGap + SpeechShape.tail
             let lowest = Self.headroom - Pose.footing + Pose.size.height * Self.leastScale
             // 连那一句都放不下六成的 Cue 时（横着的手机、拍板卡升着）不画 Cue，气泡顶到页头下面：画了头就出屏
             showsFigure = room >= lowest
-            perch = showsFigure ? min(wide ? max(size.height * 0.3, 230) : height * line, room) : Self.headroom - Self.wordsGap + SpeechShape.tail
+            perch = showsFigure ? min(goal, room) : Self.headroom - Self.wordsGap + SpeechShape.tail
             figureScale = min(size.width > 700 ? 1.15 : 1, max(Self.leastScale, (perch + Pose.footing - Self.headroom) / Pose.size.height))
+            let height = max(size.width * aspect, perch / line, (cover - perch) / (1 - line))
+            let width = height / aspect
             placement = CGRect(x: (size.width - width) / 2, y: perch - height * line, width: width, height: height)
+        }
+    }
+
+    /// 一天里的四个时段，各一张天（竖横各一）。打开舞台那一刻取一次，看着不变。深色外观一律是夜里：白天的亮天垫在深色的玻璃后面刺眼。
+    enum Period: String {
+        case dawn, day, dusk, night
+
+        init(at moment: Date, dark: Bool, calendar: Calendar = .current) {
+            if let pinned = DebugHooks.preset.cueSky.flatMap(Period.init(rawValue:)) { self = pinned; return }
+            guard !dark else { self = .night; return }
+            self = switch calendar.component(.hour, from: moment) {
+            case 5..<9: .dawn
+            case 9..<17: .day
+            case 17..<20: .dusk
+            default: .night
+            }
         }
     }
 

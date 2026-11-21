@@ -69,6 +69,7 @@ extension DebugHooks.Preset {
         mergePreview = args.layoutOpts.mergePreview
         cuePanelOpen = args.layoutOpts.cuePanel
         cueStage = args.cueOpts.stage.map { $0 == "open" }
+        cueSky = args.cueOpts.sky
         railOpen = args.railOpen
         #if os(iOS)
         alertStatus = DebugScene.alertStatus

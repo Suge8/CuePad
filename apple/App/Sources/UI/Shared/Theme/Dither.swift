@@ -1,8 +1,8 @@
 import MetalKit
 import SwiftUI
 
-/// 一张照片按屏幕上的格子抖成四种墨的点（有序抖动，8×8 Bayer），同印刷的网点。墨按"多白"分：天越蓝越暗、云越白越亮，云的阴影仍算云——
-/// 只按明暗分的话，云底的阴影比天还暗，抖出来同天一个色，云像被挖了洞。
+/// 一张照片按屏幕上的格子抖出网点（有序抖动，8×8 Bayer）：每个颜色通道各自抖到几级，照片的颜色与层次都留着，凑近才看到格子。
+/// 否决过：整张映到三四种墨上抖（像套色海报，照片的层次没了，蓝天成了色块）。
 /// 格子对齐设备像素才清楚：按要画出来的那块的像素尺寸当场算一张静止的图，不预先烤好再缩放（缩放过的网点糊、起摩尔纹），也不逐帧算。
 /// 尺寸变了（Mac 拖窗口、底下的卡长高）先把上一张拉伸着顶着，停下来再算。上沿 `fade` 那一截按同一张阈值表散成透明：融进后面的底，不画一条边。
 struct DitherImage: View {
@@ -10,13 +10,8 @@ struct DitherImage: View {
     /// 图在这块里的位置与大小（点）；图外的格子取图边上的颜色（下沿以下越远越糊，不把边上那一行拉成竖纹）。
     let placement: CGRect
     let size: CGSize
-    /// 由暗到亮的四种墨。
-    let inks: [Color]
-    /// "多白"落在这一段里，拉开成整段再抖。
-    let tone: ClosedRange<Double>
     var fade: CGFloat = 0
     @Environment(\.displayScale) private var scale
-    @Environment(\.self) private var environment
     @State private var image: CGImage?
     /// 画着的是哪一份：截图的就绪等新的一份画上（`debugSettling`）。
     @State private var drawn: DitherGPU.Job?
@@ -29,29 +24,34 @@ struct DitherImage: View {
         }
         .frame(width: size.width, height: size.height)
         .debugSettling(drawn != job)
-        .task(id: job) { [job] in
-            if image != nil { do { try await Task.sleep(for: .milliseconds(120)) } catch { return } }
-            let rendered = await DitherGPU.shared.render(job)
-            guard !Task.isCancelled else { return }
-            withAnimation(Motion.fade) { image = rendered }
-            drawn = job
+        // 换一份就换一个视图起任务，不用 task(id:)：它靠 onChange，同一帧里变两次（气泡量出高、云跟着挪）第二次被丢掉，停在旧的一份上
+        .background {
+            Color.clear.task { [job] in
+                if image != nil { do { try await Task.sleep(for: .milliseconds(120)) } catch { return } }
+                let rendered = await DitherGPU.shared.render(job)
+                guard !Task.isCancelled else { return }
+                withAnimation(Motion.fade) { image = rendered }
+                drawn = job
+            }
+            .id(job)
         }
     }
 
     private var job: DitherGPU.Job {
         let px = { (v: CGFloat) in Float(v * scale) }
-        let resolved = inks.map { $0.resolve(in: environment) }.map { SIMD4<Float>($0.red, $0.green, $0.blue, 1) }
         return DitherGPU.Job(
             asset: asset,
             width: UInt32(max(1, (size.width * scale).rounded())), height: UInt32(max(1, (size.height * scale).rounded())),
             origin: SIMD2(px(placement.minX), px(placement.minY)), extent: SIMD2(px(placement.width), px(placement.height)),
-            cell: Float(max(1, scale.rounded())), tone: SIMD2(Float(tone.lowerBound), Float(tone.upperBound)), fade: px(fade), inks: resolved)
+            cell: Float(DitherGPU.cell * max(1, scale.rounded())), fade: px(fade))
     }
 }
 
 /// 显卡那一份，全 App 共用：着色器第一次用时在运行时编（同 `FigureGPU`，项目不装 Metal 编译工具链），原图各载一次。
 final class DitherGPU {
     static let shared = DitherGPU()
+    /// 一格多少点：一点一格在 Retina 上细得看不出是网点，三点一格就成了马赛克。
+    static let cell: CGFloat = 2
 
     struct Job: Hashable {
         let asset: String
@@ -60,17 +60,14 @@ final class DitherGPU {
         let origin: SIMD2<Float>
         let extent: SIMD2<Float>
         let cell: Float
-        let tone: SIMD2<Float>
         let fade: Float
-        let inks: [SIMD4<Float>]
     }
 
     /// 与着色器里的 `Job` 逐字段对齐。
     private struct Uniforms {
         var origin, extent, texel: SIMD2<Float>
         var width, height: UInt32
-        var cell, lo, hi, fade: Float
-        var inks: (SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>)
+        var cell, fade: Float
     }
 
     private let device = MTLCreateSystemDefaultDevice()!
@@ -85,8 +82,7 @@ final class DitherGPU {
         let out = device.makeBuffer(length: width * height * 4, options: .storageModeShared)!
         var uniforms = Uniforms(
             origin: job.origin, extent: job.extent, texel: SIMD2(1 / Float(source.width), 1 / Float(source.height)),
-            width: job.width, height: job.height, cell: job.cell, lo: job.tone.x, hi: job.tone.y, fade: job.fade,
-            inks: (job.inks[0], job.inks[1], job.inks[2], job.inks[3]))
+            width: job.width, height: job.height, cell: job.cell, fade: job.fade)
         let commands = queue.makeCommandBuffer()!, encoder = commands.makeComputeCommandEncoder()!
         encoder.setComputePipelineState(pipeline)
         encoder.setTexture(source, index: 0)
@@ -131,8 +127,7 @@ struct Job {
     float2 extent;   // 图的宽高（像素）
     float2 texel;    // 原图一个像素在 uv 里的大小
     uint width, height;
-    float cell, lo, hi, fade;
-    float4 inks[4];
+    float cell, fade;
 };
 
 constant float bayer[64] = {
@@ -150,19 +145,16 @@ kernel void dither(texture2d<float> src [[texture(0)]], constant Job &j [[buffer
     uint index = gid.y * j.width + gid.x;
     if (float(gid.y) < j.fade && float(gid.y) / j.fade <= t) { out[index] = uchar4(0); return; }
     float2 uv = ((float2(cell) + 0.5) * j.cell - j.origin) / j.extent;
-    // 九点取平均压掉原图的压缩块；下沿以下改取越来越粗的一级 mip：边上那一行的起伏不往下拉成竖纹
-    float lod = clamp((uv.y - 0.97) * 40.0, 0.0, 7.0);
+    // 九点取平均压掉原图的压缩块；临近下沿起改取越来越粗的一级 mip，出了下沿一小截就只剩一片匀的颜色：边上那一行的起伏不往下拉成竖纹
+    float lod = clamp((uv.y - 0.98) * 150.0, 0.0, 7.0);
     float3 c = 0;
     for (int y = -1; y <= 1; y++)
         for (int x = -1; x <= 1; x++)
             c += src.sample(s, uv + float2(x, y) * j.texel * 1.5, level(lod)).rgb;
     c /= 9.0;
-    float top = max(c.r, max(c.g, c.b));
-    float white = 1.0 - (top - min(c.r, min(c.g, c.b))) / max(top, 1e-3);
-    float f = mix(dot(c, float3(0.2126, 0.7152, 0.0722)), white, 0.7);
-    float l = smoothstep(j.lo, j.hi, f) * 3.0;
-    int i = min(int(l), 2);
-    float3 o = (l - float(i) > t ? j.inks[i + 1] : j.inks[i]).rgb;
+    // 先略提饱和与对比：每通道只剩四级，抖完的颜色比原图灰一点
+    c = saturate((mix(float3(dot(c, float3(0.2126, 0.7152, 0.0722))), c, 1.1) - 0.5) * 1.05 + 0.5);
+    float3 o = floor(c * 3.0 + t) / 3.0;
     out[index] = uchar4(uchar3(round(saturate(o) * 255.0)), 255);
 }
 """#
