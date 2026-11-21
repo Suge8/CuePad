@@ -6,6 +6,9 @@ import Foundation
 func emit(_ data: Data, to handle: FileHandle) { try? handle.write(contentsOf: data) }
 
 let arguments = Array(CommandLine.arguments.dropFirst())
+#if os(macOS)
+if arguments.first == SimServe.entry { await SimServe.run(Array(arguments.dropFirst())) }
+#endif
 let result = await CLI.run(
   arguments,
   environment: ProcessInfo.processInfo.environment,
