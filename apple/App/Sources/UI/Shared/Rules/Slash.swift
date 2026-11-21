@@ -76,6 +76,9 @@ nonisolated enum Slash {
 nonisolated struct ContextMeter: Equatable {
     /// 走到压缩线的这几成起建议现在就压缩
     static let compactFraction = 0.8
+    /// 用量越过线这么多（占窗口几成）Agent 还没压缩，算出的线就是错的——各家的缺省照它们的源码与文档写（`AgentFacts.compactsAt`），
+    /// 它们升级后可能变。那时当没有线：不画、不说要压缩，紧不紧按窗口的边算。
+    static let overshoot = 0.05
 
     let fraction: Double
     /// 自动压缩线占窗口几成（`ContextUsage.compactAt`）；Agent 关了自动压缩或说不准时为 nil
@@ -85,6 +88,7 @@ nonisolated struct ContextMeter: Equatable {
         guard let fraction = usage.fraction else { return nil }
         self.fraction = fraction
         compactsAt = usage.compactAt.flatMap { $0 > 0 ? min(1, Double($0) / Double(usage.window)) : nil }
+            .flatMap { fraction <= $0 + Self.overshoot ? $0 : nil }
     }
 
     /// 线落在窗口边上（用满才压）的不另画：环上的缺口与条上的刻度都只标在边以内

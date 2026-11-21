@@ -161,8 +161,8 @@ private struct BubbleLayer: View {
         let source = shown?.source ?? .unanchored
         GeometryReader { proxy in
             let frame = proxy.frame(in: .global)
-            let placement = BubblePlacement(source: source, container: frame, insets: Self.insets, width: shown?.width ?? .fitting).lifted(keyboardTop != nil)
-            BubbleStage(floor: keyboardTop.map { $0 - frame.minY - Self.insets.bottom }, ceiling: Self.insets.top) {
+            let placement = BubblePlacement(source: source, container: frame, insets: Self.insets(source), width: shown?.width ?? .fitting).lifted(keyboardTop != nil)
+            BubbleStage(floor: keyboardTop.map { $0 - frame.minY - Self.edge }, ceiling: Self.edge) {
                 if let shown {
                     BubbleFrame(placement: placement) {
                         shown.content
@@ -204,7 +204,15 @@ private struct BubbleLayer: View {
 
     private static var dismissDrag: CGFloat { 140 }
 
-    private static var insets: EdgeInsets { EdgeInsets(top: Spacing.item, leading: BubblePlacement.margin, bottom: Spacing.item, trailing: BubblePlacement.margin) }
+    private static let edge = Spacing.item
+
+    /// 从钮长出的气泡两侧再让进一截，落在回复框里 ＋ 与主钮那两颗圆的外沿上：回复框贴着页边，气泡盖着它的上沿，
+    /// 两边再同它对齐，两个圆角就叠成一道缺口。
+    private static func insets(_ source: BubbleSource) -> EdgeInsets {
+        var side = BubblePlacement.margin
+        if case .control = source { side += (ComposerMetrics.slot - ComposerMetrics.glyph) / 2 }
+        return EdgeInsets(top: edge, leading: side, bottom: edge, trailing: side)
+    }
 }
 
 struct SheetGrabber: View {
