@@ -25,6 +25,7 @@ extension LivePreview {
         }
         if waited > .milliseconds(100) { text += "（先等用户停手 \(Self.seconds(waited))）" }
         await settle()
+        if case .fill(let ref, let value) = act { text += await verified(ref, value) }
         if let url = web.url, url != from {
             text += "\n页面到了 \(url.absoluteString)"
             if !LiveAddress.isLocal(url) { text += "\n这是外网地址：之后不替你操作，snapshot、screenshot、console 还能用" }
@@ -83,6 +84,20 @@ extension LivePreview {
         let done = try await call("return cue.fill({ n, text })", ["n": target.n, "text": value], in: target.document)
         await flash(target, done["chose"] as? Bool == true ? String(localized: "Agent 选") : String(localized: "Agent 填"), mark)
         return done["did"] as? String ?? ""
+    }
+
+    /// `fill` 之后页面安定了再看一眼那个框：值不是填的这段、核对不了的，回执里都说。
+    private func verified(_ ref: String, _ value: String) async -> String {
+        let current = await untilCurrent()
+        // 弹着对话框时脚本停着，读不了
+        guard asks.isEmpty else { return "" }
+        guard let target = try? target(ref), let kept = try? await call("return cue.value({ n })", ["n": target.n], in: target.document, within: .seconds(1)) else {
+            return "\n填完之后这个框不在了，没核对上它收没收下：cuepad live snapshot 看一眼"
+        }
+        // 下拉框不核对
+        guard let now = kept["value"] as? String else { return "" }
+        if now != value.replacingOccurrences(of: "\r\n", with: "\n") { return "\n页面安定后它的值是 \(kept["shown"] as? String ?? "")，不是填的这段" }
+        return current ? "" : "\n页面还在换内容，没核对上它收没收下"
     }
 
     func press(_ key: String, _ ref: String?, mark: (tint: String, ink: String)) async throws -> String {

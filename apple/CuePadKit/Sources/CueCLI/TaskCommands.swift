@@ -43,7 +43,34 @@ extension Command {
       }
       return reply(try await call.cardViews([task])[0])
     },
-    setStatus("start", "标记进行中（不启动会话、不发送正文）", .inProgress),
+    Command(path: ["task", "start"], summary: "开工：标记进行中；在 Agent 会话里运行时记下是这个会话在做（task list 里看得到，别的会话就不会重复做）", arguments: "<任务>",
+      notes: "已在别的会话里进行中的任务不能再认领：要接手先和用户确认，再用 task bind 改绑。有子任务的只标进行中，认领落在子任务上。\n"
+        + Schema.output("更新后的 Card", Schema.card)) { call in
+      try call.args.expect("任务")
+      let task = try await call.task(call.args.positionals[0])
+      guard let session = callingSession(call) else {
+        try await call.store.setStatus(task.id, .inProgress)
+        return reply(try await call.freshView(task.id))
+      }
+      if task.status == .inProgress, let other = task.piSessionID, other != session {
+        let title = try await call.store.sessionState(other)?.title ?? other
+        throw CLIError.invalid("这件任务已在会话「\(title)」里进行中，没有认领。要接手先和用户确认，再用 cuepad task bind 改绑")
+      }
+      var note = ""
+      do {
+        try await call.store.bindSession(session, to: task.id)
+      } catch CueStoreError.notALeaf {
+        try await call.store.setStatus(task.id, .inProgress)
+        note = "有子任务：只标了进行中，认领要落在某个子任务上\n"
+      } catch CueStoreError.notFound {
+        try await call.store.setStatus(task.id, .inProgress)
+        note = "CuePad 里没有这个会话：只标了进行中，没记下是谁在做\n"
+      } catch CueStoreError.invalidProject {
+        throw CLIError.invalid("这件任务和这个会话不在同一个项目里，没有认领")
+      }
+      let view = try await call.freshView(task.id)
+      return Reply(text: view.line + "\n" + note, json: view.json)
+    },
     Command(path: ["task", "done"], summary: "完成任务（没完成的子任务一起完成）", arguments: "<任务>",
       notes: Schema.output("更新后的 Card", Schema.card)) { call in
       try call.args.expect("任务")

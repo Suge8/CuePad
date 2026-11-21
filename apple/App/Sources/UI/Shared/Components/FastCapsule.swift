@@ -20,14 +20,10 @@ struct FastCapsule: View {
         }
     }
 
+    /// 只画闪电：开着是选中底（同别的开关胶囊），开没开、未知在悬停与读屏里。
     private var label: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: Spacing.tight) {
-                Text("加速")
-                if fast == true { Text("开") } else if fast == false { Text("关") } else { Text("未知") }
-            }
-            Text("加速")
-        }
-        .chip(on: fast == true, menu: fast == nil)
+        Image(.fast)
+            .chip(on: fast == true, menu: fast == nil)
+            .help(fast == true ? Text("加速：开") : fast == false ? Text("加速：关") : Text("加速：未知"))
     }
 }

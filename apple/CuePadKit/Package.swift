@@ -32,7 +32,7 @@ let package = Package(
         // Sources/CueScreenHost 不是包的目标：工程的 CuePadScreenHost 目标把它与 CueScreen 的源码编成一个库，载进别的应用里取它的窗口。
         .target(name: "CueScreen"),
         .executableTarget(name: "CueCLI", dependencies: ["CueStore", "CueText", "CueAgent", "CueScreen"]),
-        .testTarget(name: "CueCLITests", dependencies: ["CueCLI", "CueTestSupport"]),
+        .testTarget(name: "CueCLITests", dependencies: ["CueCLI", "CueScreen", "CueTestSupport"]),
         .testTarget(name: "CueTextTests", dependencies: ["CueText"]),
         .testTarget(name: "CueStoreTests", dependencies: ["CueStore", "CueText", "CueTestSupport"]),
         .testTarget(name: "CueEditorTests", dependencies: ["CueEditor", "CueTestSupport"]),

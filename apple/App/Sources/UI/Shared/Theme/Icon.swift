@@ -49,6 +49,8 @@ nonisolated enum Icon: Hashable, Sendable {
     case livePreview, phoneWidth, openInBrowser, pickElement, enlarge, shrink
     /// 和 Cue 通话（手机输入框空着时发送钮那一位、Mac 工具排末尾）；通话条上的麦克风开着、已静音
     case call, microphone, muted
+    /// 加速（模型的快速档，工具排里那颗开关）
+    case fast
     /// 带着附件（回形针）：只带文件的灵感在列表、卡片与搜索里的标记
     case attachment
     case photo, photoLibrary, camera, pickCards, expandEdit, selectText, dismissKeyboard, variables
@@ -188,7 +190,7 @@ nonisolated enum Icon: Hashable, Sendable {
         case .relayStalled: .ink("relay.stalled")
         case .memory: .ink("bookmark")
         case .wakeEnabled, .launchAtLogin, .wakeSession: .ink("power")
-        case .wakeActivity: .ink("bolt")
+        case .wakeActivity, .fast: .ink("bolt")
         case .wakeMessage, .talkToCue: .ink("bubble")
         case .wakeIdle, .looked: .ink("eye")
         case .schedule: .ink("alarm")
