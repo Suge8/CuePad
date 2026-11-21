@@ -95,38 +95,44 @@ extension View {
     }
 }
 
-/// 灵感编辑页栏头那颗，三端同一处：宽屏盖在会话上打开时，把它挪到会话旁边并排（只在主区最左是会话时有）；
-/// 手机回到 Cue 页挑一个会话、停在它的回复框上方（`Workspace.pickDock`）。都是边聊边看。
-struct BesideIdeaButton: View {
+/// 边聊边看：灵感编辑页栏头那颗，三端同一处、同一个名字。宽屏把这条灵感挪到最左那个会话旁边并排（盖在会话上打开时才有）；
+/// 手机回到 Cue 页挑一个会话、停在它的回复框上方（`Workspace.pickDock`）。
+struct ChatAlongsideButton: View {
     let cardID: UUID
     /// 手机上先把编辑页的字落盘：停靠里的编辑器按库里的正文载入。
     var editing: CardEditing?
     @Environment(Workspace.self) private var workspace
 
     var body: some View {
+        if let action {
+            #if os(macOS)
+            HeadTool(label: "边聊边看", icon: .rightColumn, action: action)
+            #else
+            // 页头右边那一排自己是一块玻璃（`FloatingHeader`）：钮不再带玻璃
+            Button("边聊边看", icon: .rightColumn, action: action)
+                .disabled(workspace.layout == .narrow && editing?.text.isEmpty != false)
+            #endif
+        }
+    }
+
+    private var action: (() -> Void)? {
         switch workspace.layout {
         case .wide:
-            if workspace.session(in: .main) != nil, workspace.openCard == cardID {
-                #if os(macOS)
-                HeadTool(label: "并排打开", icon: .rightColumn, action: besides)
-                #else
-                // 页头右边那一排自己是一块玻璃（`FloatingHeader`）：钮不再带玻璃
-                Button("并排打开", icon: .rightColumn, action: besides)
-                #endif
-            }
-        case .narrow:
-            Button("边聊边看", icon: .rightColumn) {
-                workspace.attempt { [workspace, editing, cardID] in
-                    _ = try await editing?.flushed()
-                    workspace.pickDock(cardID)
-                }
-            }
-            .disabled(editing?.text.isEmpty ?? true)
+            guard workspace.session(in: .main) != nil, workspace.openCard == cardID else { return nil }
+            return beside
+        case .narrow: return pick
         }
     }
 
     /// 窗口只放得下一块时放不了（`Workspace.wideRoom`）：说一声，不当作点了没反应。
-    private func besides() {
+    private func beside() {
         if !workspace.drop(.card(cardID), at: WideNavigation.maxPanes, replacing: false) { workspace.say("窗口太窄，放不下并排", tone: .failure) }
+    }
+
+    private func pick() {
+        workspace.attempt { [workspace, editing, cardID] in
+            _ = try await editing?.flushed()
+            workspace.pickDock(cardID)
+        }
     }
 }

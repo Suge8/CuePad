@@ -23,7 +23,7 @@ struct WideColumnHead: View {
             #if os(macOS)
             // iPad 上盖着的页（编辑、文件）的标题与操作在它自己那一排（`HeaderHost.panel`）
             if let card = workspace.openCard {
-                BesideIdeaButton(cardID: card)
+                ChatAlongsideButton(cardID: card)
                 CardMenuSlot()
             }
             #endif
