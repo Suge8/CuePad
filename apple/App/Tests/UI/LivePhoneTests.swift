@@ -126,8 +126,8 @@ struct LivePhoneTests {
         func back(_ sessionID: String) async throws {
             try await pair.phone.sendVoice(.live(signal: .back(request: UUID(), session: sessionID)), session: VoiceSessionID(UUID()), to: pair.mac.local)
         }
-        // 预览占窗口多宽：铺满是整个窗口
-        @MainActor func previewWidth() -> CGFloat { let s = WideMetrics(width: 1600, workspace: workspace); return s.width(s.widths.count - 1) }
+        // 预览占窗口多宽（窗口画它时问的 `spans`）：铺满是整个窗口
+        @MainActor func previewWidth() -> CGFloat { WideMetrics(width: 1600, workspace: workspace).spans[.preview]?.width ?? 0 }
 
         try await show("plain")
         try await eventually("没有页面的会话只开到主区") { workspace.session(in: .main)?.sessionID == "plain" }
