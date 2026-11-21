@@ -66,16 +66,16 @@ extension Bridge {
         }
     }
 
-    /// 各家报的用量不带阈值，在这一处补上：模型与窗口没变就沿用上一次读的，变了才再读一遍配置。
-    /// 预留比窗口还大的（线不在窗口里）当说不准。
+    /// 各家报的用量不带阈值，只在这一处补上：模型、窗口、已用有一样变了就照这家此刻的配置再算一遍（换了模型、会话里改了压缩设置，
+    /// 下一次报用量就跟上），都没变沿用上一次的——会话别的字段变得勤，不为它们读配置。预留比窗口还大的（线不在窗口里）当说不准。
     private func compacting(_ session: Session, after previous: Session?) -> Session {
-        guard let paths, let window = session.context?.window, session.context?.compactAt == nil else { return session }
+        guard let paths, let compactsAt = session.agent.facts.compactsAt, var context = session.context else { return session }
         var session = session
         let key = session.model?.key
-        let at = previous?.context?.window == window && previous?.model?.key == key
-            ? previous?.context?.compactAt
-            : session.agent.facts.compactsAt?(window, key, paths).flatMap { $0 > 0 ? $0 : nil }
-        session.context?.compactAt = at
+        let before = previous?.context
+        let same = before?.window == context.window && before?.tokens == context.tokens && previous?.model?.key == key
+        context.compactAt = same ? before?.compactAt : compactsAt(context.window, key, paths).flatMap { $0 > 0 ? $0 : nil }
+        session.context = context
         return session
     }
 

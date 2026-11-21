@@ -78,9 +78,10 @@ struct OpenCodeTurn {
         return [.speaking(nil)]
     }
 
+    /// 一次请求放得下多少：输入上限与上下文窗口里小的那个（OpenCode 自己按它算用了几成、何时压缩，compaction.ts 的 inputWindow）。
     static func window(of model: OpenCodeModelRef?, in models: [OpenCodeModel]) -> Int? {
-        guard let model else { return nil }
-        return models.first { $0.id == model.id && $0.providerID == model.providerID }?.limit?.context
+        guard let model, let limit = models.first(where: { $0.id == model.id && $0.providerID == model.providerID })?.limit else { return nil }
+        return [limit.input, limit.context].compactMap { $0 }.filter { $0 > 0 }.min()
     }
 
     static let unknownFailure = String(localized: "出错了，原因不明")

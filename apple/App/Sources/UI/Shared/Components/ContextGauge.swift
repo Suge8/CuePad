@@ -14,21 +14,25 @@ struct ContextGauge: View {
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
     @State private var showsDetail = BubbleSwitch()
+    @State private var shown = ContextShown()
+
+    private var facts: ContextShown.Facts { .init(meter: meter, cache: cache, working: session.runtimeState.isWorking) }
 
     var body: some View {
         Moments(next: { cache?.nextTick(after: $0) }) { now in
-            let note = CacheNote(cache, working: session.runtimeState.isWorking, at: now)
+            let note = CacheNote(cache, working: facts.working, at: now)
             if meter != nil || note != nil {
                 let help = (meter?.help ?? Dotted([])) + Dotted(note?.line)
                 Button { showsDetail.toggle() } label: { label(note) }
                     .buttonStyle(PressStyle())
                     .help(help.visible)
-                    .bubble(isPresented: $showsDetail.open) { detail(note) }
+                    .bubble(isPresented: $showsDetail.open) { ContextDetail(shown: shown, compact: compact) }
                     .accessibilityLabel("上下文")
                     .accessibilityValue(help.spoken)
             }
         }
         .animation(Motion.fade, value: meter)
+        .onChange(of: facts, initial: true) { shown.facts = facts }
     }
 
     /// 工具排给的宽放不下就先收缓存的字、留它的记号（`ConfigRow` 的 `wording`）；整颗是候选，同 `ModelPick`
@@ -57,37 +61,59 @@ struct ContextGauge: View {
         .readerHidden(true)
     }
 
-    private func detail(_ note: CacheNote?) -> some View {
-        VStack(alignment: .leading, spacing: Spacing.item) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("上下文").font(Typography.secondary.weight(.semibold)).foregroundStyle(palette.ink)
-                Spacer(minLength: Spacing.block)
-                if let meter { Text(meter.percent).font(Typography.secondary.weight(.semibold).monospacedDigit()).foregroundStyle(palette.ink) }
-            }
-            if let meter {
-                MarkedBar(fill: meter.fraction, mark: meter.mark, level: meter.level)
-                // 几成已在右上角；这一行说离压缩线多远，没有线的才说还剩多少
-                Text(meter.compactLine ?? meter.summary.visible).font(Typography.meta.monospacedDigit()).foregroundStyle(palette.ink2)
-            }
-            if let note {
-                Label { Text(note.line) } icon: { Image(note.icon) }
-                    .font(Typography.meta.monospacedDigit()).foregroundStyle(palette.ink2)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            if meter?.suggestsCompact == true {
-                Button("现在压缩", icon: .compacting, action: compact)
-                    .buttonStyle(ControlButtonStyle(size: .compact))
-            }
-        }
-        .frame(width: Self.detailWidth, alignment: .leading)
-        .padding(Spacing.block)
-    }
-
-    private static let detailWidth: CGFloat = 240
-
     private func compact() {
         showsDetail.open = false
         workspace.compact(session)
+    }
+}
+
+/// 气泡的内容在打开那一刻交给浮层宿主，之后不随胶囊重算（同 `ModelPick` 的 `Live`）：用量、缓存、在不在跑放进这只盒子，气泡读它，
+/// 剩的分钟由气泡自己到点重画——开着气泡跨过一分钟、跨过缓存冷掉的那一刻，里面写的跟胶囊上的一致。
+@Observable private final class ContextShown {
+    struct Facts: Equatable {
+        var meter: ContextMeter?
+        var cache: ChatMessage.Tools.Cache?
+        var working = false
+    }
+
+    var facts = Facts()
+}
+
+private struct ContextDetail: View {
+    let shown: ContextShown
+    let compact: () -> Void
+    @Environment(\.palette) private var palette
+
+    private static let width: CGFloat = 240
+
+    var body: some View {
+        let facts = shown.facts
+        Moments(next: { facts.cache?.nextTick(after: $0) }) { now in
+            let note = CacheNote(facts.cache, working: facts.working, at: now)
+            VStack(alignment: .leading, spacing: Spacing.item) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("上下文").font(Typography.secondary.weight(.semibold)).foregroundStyle(palette.ink)
+                    Spacer(minLength: Spacing.block)
+                    if let meter = facts.meter { Text(meter.percent).font(Typography.secondary.weight(.semibold).monospacedDigit()).foregroundStyle(palette.ink) }
+                }
+                if let meter = facts.meter {
+                    MarkedBar(fill: meter.fraction, mark: meter.mark, level: meter.level)
+                    // 几成已在右上角；这一行说离压缩线多远，没有线的才说还剩多少
+                    Text(meter.compactLine ?? meter.summary.visible).font(Typography.meta.monospacedDigit()).foregroundStyle(palette.ink2)
+                }
+                if let note {
+                    Label { Text(note.line) } icon: { Image(note.icon) }
+                        .font(Typography.meta.monospacedDigit()).foregroundStyle(palette.ink2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if facts.meter?.suggestsCompact == true {
+                    Button("现在压缩", icon: .compacting, action: compact)
+                        .buttonStyle(ControlButtonStyle(size: .compact))
+                }
+            }
+            .frame(width: Self.width, alignment: .leading)
+            .padding(Spacing.block)
+        }
     }
 }
 

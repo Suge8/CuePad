@@ -84,7 +84,7 @@ nonisolated struct ContextMeter: Equatable {
     init?(_ usage: ContextUsage) {
         guard let fraction = usage.fraction else { return nil }
         self.fraction = fraction
-        compactsAt = usage.compactAt.map { min(1, max(0, Double($0) / Double(usage.window))) }
+        compactsAt = usage.compactAt.flatMap { $0 > 0 ? min(1, Double($0) / Double(usage.window)) : nil }
     }
 
     /// 线落在窗口边上（用满才压）的不另画：环上的缺口与条上的刻度都只标在边以内
@@ -97,8 +97,9 @@ nonisolated struct ContextMeter: Equatable {
     var compactLine: String? {
         guard let compactsAt else { return nil }
         guard mark != nil else { return String(localized: "用满时自动压缩") }
-        let left = Int(((compactsAt - fraction) * 100).rounded())
-        return left > 0 ? String(localized: "再用约 \(left)% 自动压缩") : String(localized: "到了压缩线，接着会自动压缩")
+        // 还没到线就不说到了：差不到一个百分点写 1
+        let left = max(1, Int(((compactsAt - fraction) * 100).rounded()))
+        return fraction < compactsAt ? String(localized: "再用约 \(left)% 自动压缩") : String(localized: "到了压缩线，接着会自动压缩")
     }
 
     var used: Int { Int((fraction * 100).rounded()) }

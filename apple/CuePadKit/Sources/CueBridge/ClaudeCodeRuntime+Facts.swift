@@ -18,17 +18,37 @@ extension ClaudeCodeRuntime {
         releasesIdleHosted: true, probe: askClaude, brain: { ClaudeHostedSession(timing: .system) }, sharedSkills: .none, projectFolder: ".claude", selfManagedSkills: "synced",
         instructionsFile: "rules/AGENTS.md", globalReads: ["CLAUDE.md", "rules/AGENTS.md"], readsFirstOnly: false, compactsAt: compactsAt)
 
-    /// 官方文档 model-config 的 auto-compact：设了窗口就到它压缩——环境变量先于 `/autocompact` 按模型存的（`modelSettings`），再是设置里的
-    /// `autoCompactWindow`；没设时到窗口的边，原生 1M 窗口的约在 967K；百分比的覆盖只往低里调。按模型存的那份记在模型的正式名下，
-    /// 这里的 id 是别名（`opus`）时对不上，照没存算。
+    /// 官方文档 model-config 与 settings-reference 的 auto-compact：关了（`autoCompactEnabled`、`DISABLE_AUTO_COMPACT`）不压缩；设了窗口就到它压缩——
+    /// 环境变量（不到 100K 当 100K、超过 1M 当 1M、读不懂的不算）先于 `/autocompact` 按模型存的（`modelSettings`，`"auto"` 是不设），
+    /// 再是 `autoCompactWindow`；没设时到窗口的边，原生 1M 窗口的约在 967K；百分比的覆盖只往低里调。环境变量也认设置里 `env` 写的。
     nonisolated private static func compactsAt(_ window: Int, _ model: ModelKey?, _ paths: AgentPaths) -> Int? {
         let settings = paths.home(of: .claudeCode).appending(path: "settings.json")
-        let set = paths.environment["CLAUDE_CODE_AUTO_COMPACT_WINDOW"].flatMap { Int($0) }
-            ?? model.flatMap { AgentSettings.json(settings, "modelSettings", $0.id, "autoCompactWindow") as? Int }
-            ?? AgentSettings.json(settings, "autoCompactWindow") as? Int
-        let at = min(set ?? (window >= 1_000_000 ? window - 33_000 : window), window)
-        guard let percent = paths.environment["CLAUDE_AUTOCOMPACT_PCT_OVERRIDE"].flatMap({ Int($0) }), (1...100).contains(percent) else { return at }
+        func env(_ name: String) -> String? { paths.environment[name] ?? AgentSettings.json(settings, "env", name) as? String }
+        let disabled = env("DISABLE_AUTO_COMPACT").map { !["", "0", "false"].contains($0.lowercased()) } ?? false
+        guard !disabled, AgentSettings.json(settings, "autoCompactEnabled") as? Bool != false else { return nil }
+        let tuned = window >= 1_000_000 ? window - 33_000 : window
+        let forced = env("CLAUDE_CODE_AUTO_COMPACT_WINDOW").flatMap(tokens).map { min(max($0, 100_000), 1_000_000) }
+        let saved = model.flatMap { saved(for: $0.id, in: AgentSettings.json(settings, "modelSettings") as? [String: Any] ?? [:]) }
+        let set = forced ?? (saved is String ? nil : saved as? Int ?? AgentSettings.json(settings, "autoCompactWindow") as? Int)
+        let at = min(set ?? tuned, window)
+        guard let percent = env("CLAUDE_AUTOCOMPACT_PCT_OVERRIDE").flatMap({ Int($0) }), (1...100).contains(percent) else { return at }
         return min(at, window * percent / 100)
+    }
+
+    /// `200000`、`200k`、`1M`；别的写法读不懂。
+    nonisolated private static func tokens(_ text: String) -> Int? {
+        let text = text.trimmingCharacters(in: .whitespaces).lowercased()
+        let scale = text.hasSuffix("k") ? 1_000.0 : text.hasSuffix("m") ? 1_000_000.0 : 1
+        return Double(scale == 1 ? text : String(text.dropLast())).flatMap { $0 > 0 ? Int($0 * scale) : nil }
+    }
+
+    /// 按模型存的窗口记在模型的正式名下（`claude-opus-5-5`），会话里的 id 可能带日期、带 `[1m]`，也可能是别名（`opus`）：
+    /// 先找同名的，再找是这个 id 开头一段的，别名只在恰好一条的名字里有它时才认（两代 Opus 都存过就分不出是哪条，照没存算）。
+    nonisolated private static func saved(for id: String, in models: [String: Any]) -> Any? {
+        let id = id.split(separator: "[")[0].lowercased()
+        let named = models.keys.filter { id == $0.lowercased() || id.hasPrefix($0.lowercased()) }.max { $0.count < $1.count }
+        let aliased = models.keys.filter { $0.lowercased().split(separator: "-").contains(Substring(id)) }
+        return (named ?? (aliased.count == 1 ? aliased[0] : nil)).flatMap { (models[$0] as? [String: Any])?["autoCompactWindow"] }
     }
 
     /// stream-json 不存会话、关掉钩子、不起 MCP 服务，控制请求 `initialize` 给模型清单，
