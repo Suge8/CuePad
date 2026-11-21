@@ -18,12 +18,14 @@ import Testing
   /// 页面把一长段字（填充、粘贴）切成最多 400 个字一条送来，一条有一千多字节：整段到来源，它后面的输入照常到。
   @Test func 页面送来的一长段字整段到来源_后面的输入照常到() async throws {
     let source = Source()
-    var port = UInt16.random(in: 49152...65000)
-    var server = try ScreenServer(source: source, port: port, identity: "test", page: "")
-    while (try? await server.start()) == nil {
+    // 口被占着就换下一个，试几个为止
+    var port = UInt16.random(in: 49152...65000), server: ScreenServer?
+    for _ in 0..<8 where server == nil {
       port += 1
-      server = try ScreenServer(source: source, port: port, identity: "test", page: "")
+      let candidate = try ScreenServer(source: source, port: port, identity: "test", page: "")
+      if (try? await candidate.start()) != nil { server = candidate }
     }
+    try #require(server != nil, "连着 8 个口都被占着")
     let configuration = URLSessionConfiguration.ephemeral
     configuration.connectionProxyDictionary = [:]
     let socket = URLSession(configuration: configuration).webSocketTask(with: try #require(URL(string: "ws://127.0.0.1:\(port)/screen")))

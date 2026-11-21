@@ -39,7 +39,7 @@ extension LivePreviewFlowTests {
         let kept = await agent(workspace, "fill", .init(ref: try ref("textbox \"收下\"", in: page.text), text: "abc"))
         #expect(kept.text == "textbox \"收下\" 填成了 \"abc\"")
         let spat = await agent(workspace, "fill", .init(ref: try ref("textbox \"不收\"", in: page.text), text: "abc"))
-        #expect(spat.text.contains("页面没照这段字收下：安定后它的值是 \"原样\""), "\(spat.text)")
+        #expect(spat.text.contains("页面安定后它的值是 \"原样\"，不是填的这段"), "\(spat.text)")
     }
 }
 #endif

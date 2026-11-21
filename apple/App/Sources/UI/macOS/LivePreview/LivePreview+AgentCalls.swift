@@ -39,16 +39,29 @@ extension LivePreview {
     }
 
     /// 页面的内容要现问的（Mac 应用的那张页：画面里有什么得问应用）：告诉它有人要读了（`cuepad-read`），等它问回来。
-    /// 它问着的时候根元素标着 aria-busy；别的页面自己标了的也等，最多 3 秒。弹着对话框时脚本停着，问不了。
-    func untilCurrent() async {
-        var probe = "dispatchEvent(new Event('cuepad-read')); document.documentElement.getAttribute('aria-busy')"
-        let patience = ContinuousClock.now + .seconds(3)
-        while asks.isEmpty, ContinuousClock.now < patience {
-            let script = probe
-            guard (try? await bounded(.milliseconds(500)) { try await self.web.evaluateJavaScript(script, contentWorld: .defaultClient) }) as? String == "true" else { return }
-            probe = "document.documentElement.getAttribute('aria-busy')"
+    /// 它问着的时候根元素标着 aria-busy；别的页面自己标了的也等，框里的文档一样，最多 3 秒。等到头还标着的回 false，
+    /// 这一页之后不再陪它等（一直标着的页面不拖慢每一步），看到它去掉过才重新等。弹着对话框时脚本停着，问不了，也回 false。
+    @discardableResult
+    func untilCurrent() async -> Bool {
+        let patience = ContinuousClock.now + (agent.stuckBusy == record.main ? .zero : .seconds(3))
+        var body = "dispatchEvent(new Event('cuepad-read')); return { busy: document.documentElement.getAttribute('aria-busy') === 'true' }"
+        while asks.isEmpty {
+            var busy = false
+            for document in Array(record.documents.values) {
+                if (try? await call(body, in: document, within: .milliseconds(500)))?["busy"] as? Bool == true { busy = true }
+            }
+            guard busy else {
+                agent.stuckBusy = nil
+                return true
+            }
+            guard ContinuousClock.now < patience else {
+                agent.stuckBusy = record.main
+                return false
+            }
+            body = "return { busy: document.documentElement.getAttribute('aria-busy') === 'true' }"
             try? await Task.sleep(for: .milliseconds(30))
         }
+        return false
     }
 
     var local: Bool { web.url.map(LiveAddress.isLocal) ?? true }

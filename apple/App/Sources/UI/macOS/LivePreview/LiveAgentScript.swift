@@ -235,8 +235,6 @@ enum LiveAgentScript {
       };
 
       const has = ({ text, selector }) => {
-        // 内容要现问的页面（Mac 应用的那张页）：告诉它有人在等，下一轮就读到新的
-        dispatchEvent(new Event("cuepad-read"));
         if (selector) return [...document.querySelectorAll(selector)].some(el => el.checkVisibility());
         if ((document.body?.innerText ?? "").includes(text)) return true;
         const walker = document.createTreeWalker(document.documentElement, NodeFilter.SHOW_ELEMENT);

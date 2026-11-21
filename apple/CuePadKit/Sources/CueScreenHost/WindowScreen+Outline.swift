@@ -43,7 +43,8 @@ extension WindowScreen {
   }
 
   @MainActor private func answer() {
-    let now = CACurrentMediaTime(), still = now - max(changed, input.time, outlined.woke) >= Self.quiet
+    // 窗口还没开出来（应用刚起）也算没停：答出去的是一张空的
+    let now = CACurrentMediaTime(), still = picture != nil && now - max(changed, input.time, outlined.woke) >= Self.quiet
     let due = outlined.asking.filter { still || now - $0.since >= Self.patience }
     guard !due.isEmpty else { return }
     outlined.asking.removeAll { still || now - $0.since >= Self.patience }
@@ -153,12 +154,12 @@ extension WindowScreen {
       case "AXTextField", "AXTextArea", "AXComboBox":
         node["r"] = subrole == "AXSearchField" ? "searchbox" : "textbox"
         if role == "AXTextArea" { node["lines"] = true }
-        if subrole != "AXSecureTextField" {
-          let whole = raw()
-          node["v"] = WindowScreen.text(whole) ?? ""
-          if let whole = whole as? String, whole.count > WindowScreen.clip { node["cut"] = true }
-        } else {
+        // 密码框不说里面的字，只说多长（无障碍给的是等长的圆点）：页面那头凭它知道刚填的那段进没进去
+        if subrole == "AXSecureTextField" {
           node["secret"] = true
+          node["len"] = value()?.utf16.count ?? 0
+        } else {
+          node["v"] = WindowScreen.text(raw(), limit: WindowScreen.longest) ?? ""
         }
         if let hint = WindowScreen.text(WindowScreen.read(element, "accessibilityPlaceholderValue")) { node["hint"] = hint }
       case "AXCheckBox", "AXRadioButton":
@@ -221,18 +222,18 @@ extension WindowScreen {
     return element.perform(legacyRead, with: name)?.takeUnretainedValue()
   }
 
-  fileprivate static func text(_ value: Any?) -> String? {
+  fileprivate static func text(_ value: Any?, limit: Int = 400) -> String? {
     let text: String? = switch value {
     case let text as String: text
     case let text as NSAttributedString: text.string
     case let number as NSNumber: number.stringValue
     default: nil
     }
-    return text.flatMap { $0.isEmpty ? nil : String($0.prefix(clip)) }
+    return text.flatMap { $0.isEmpty ? nil : String($0.prefix(limit)) }
   }
 
-  /// 一段字最多说这么长。
-  fileprivate static let clip = 400
+  /// 输入框里的字最多说这么长（名字、文字是 400）：`fill` 之后页面那头凭它核对填没填进去，再长的核对不了。
+  fileprivate static let longest = 10000
 
   /// 元素在屏上的位置（AppKit 的坐标）。老式的那一种在进程里问到的也是左下原点的（翻成左上原点是给进程外的客户端做的，实测）。
   fileprivate static func frame(_ element: NSObject) -> CGRect? {
