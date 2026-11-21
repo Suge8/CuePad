@@ -63,6 +63,8 @@ struct ProjectView {
 struct CardView {
   let card: Card
   let project: String
+  /// 进行中的任务绑着的会话的标题（`task start` 认领的）。
+  var session: String?
 
   private static let mark: [TaskStatus: String] = [.todo: "[ ] ", .inProgress: "[~] ", .done: "[x] "]
 
@@ -73,13 +75,14 @@ struct CardView {
     ("startedAt", { iso($0.card.startedAt) }), ("completedAt", { iso($0.card.completedAt) }),
     ("archivedAt", { iso($0.card.archivedAt) }), ("deletedAt", { iso($0.card.deletedAt) }),
     ("createdAt", { iso($0.card.createdAt) }), ("modifiedAt", { iso($0.card.modifiedAt) }),
+    ("sessionId", { nullable($0.card.piSessionID) }), ("session", { nullable($0.session) }),
   ])
 
   var json: JSONObject { Self.fields.json(self) }
 
   var line: String {
     "\(card.status.flatMap { Self.mark[$0] } ?? "")\(card.id.shortID)  \(project)  \(card.isPinned ? "★ " : "")\(title(card.body))"
-      + (card.parentID.map { "  ↳ \($0.shortID)" } ?? "")
+      + (card.parentID.map { "  ↳ \($0.shortID)" } ?? "") + (session.map { "  ← 会话「\($0)」在做" } ?? "")
   }
 
   var detail: String {
@@ -110,7 +113,11 @@ extension Call {
 
   func cardViews(_ cards: [Card]) async throws -> [CardView] {
     let names = try await projectNames()
-    return cards.map { CardView(card: $0, project: names[$0.projectID] ?? "") }
+    var sessions: [String: String] = [:]
+    for id in Set(cards.filter { $0.status == .inProgress }.compactMap(\.piSessionID)) {
+      sessions[id] = try await store.sessionState(id)?.title ?? id
+    }
+    return cards.map { CardView(card: $0, project: names[$0.projectID] ?? "", session: $0.status == .inProgress ? $0.piSessionID.flatMap { sessions[$0] } : nil) }
   }
 
   func freshView(_ id: UUID) async throws -> CardView {

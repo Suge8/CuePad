@@ -19,10 +19,14 @@ extension Command {
 
   /// 执行这条命令的 Agent 会话（`show`、`live` 共用）：环境变量里第一个有值的。
   static func agentSession(_ call: Call, _ why: String) throws -> String {
-    guard let session = AgentKind.sessionVariables.lazy.compactMap({ call.environment[$0] }).first(where: { !$0.isEmpty }) else {
+    guard let session = callingSession(call) else {
       throw CLIError.invalid("不在 Agent 会话里：\(AgentKind.sessionVariables.joined(separator: "、")) 都没有值。\(why)")
     }
     return session
+  }
+
+  static func callingSession(_ call: Call) -> String? {
+    AgentKind.sessionVariables.lazy.compactMap { call.environment[$0] }.first { !$0.isEmpty }
   }
 
   static let show = Command(
