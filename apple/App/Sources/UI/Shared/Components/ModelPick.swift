@@ -195,13 +195,14 @@ private struct ThinkingTrack: View {
     @LoopsPlay private var loops
     /// 拖着时钮的中心；松手后归 nil，钮回到档位上
     @State private var dragging: CGFloat?
-    /// 拖着时、与松手后 Agent 报回新档之前要去的那一档；报不回（没换成）一秒后放下，回到当前档
-    @State private var heading: Int?
+    /// 拖着时、与松手后 Agent 报回新档之前要去的那一档；报不回（没换成）一秒后放下，回到当前档。
+    /// 记的是档、不是第几格：这一秒里换了模型，档位表就是另一张，新模型没有这一档时照它此刻的档画。
+    @State private var heading: ThinkingLevel?
 
     private var levels: [ThinkingLevel] { meter.levels }
     private var lead: Int { levels.contains(.off) ? 0 : 1 }
-    private var index: Int? { heading ?? meter.current.flatMap { levels.firstIndex(of: $0) } }
-    private var level: ThinkingLevel? { index.map { levels[$0] } }
+    private var level: ThinkingLevel? { heading.flatMap { levels.contains($0) ? $0 : nil } ?? meter.current }
+    private var index: Int? { level.flatMap { levels.firstIndex(of: $0) } }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.tight) {
@@ -264,13 +265,13 @@ private struct ThinkingTrack: View {
                     let raw = Double((x - radius) / span) * Double(slots) - Double(lead)
                     // 刚按下时直接取最近的档；拖着时离开当前档过了 0.6 格才换（回差）
                     if dragging == nil || index.map({ abs(raw - Double($0)) > 0.6 }) ?? true {
-                        heading = min(max(Int(raw.rounded()), 0), levels.count - 1)
+                        heading = levels[min(max(Int(raw.rounded()), 0), levels.count - 1)]
                     }
                     dragging = x
                 }
                 .onEnded { _ in
                     dragging = nil
-                    if let heading, levels[heading] != meter.current { choose(levels[heading]) }
+                    if let heading, heading != meter.current { choose(heading) }
                 }
         )
         .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: dragging == nil)

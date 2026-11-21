@@ -3,7 +3,7 @@ import SwiftUI
 
 /// 思考强度轨道里填满的那一段（模型气泡，`ThinkingTrack`）：一块铺满轨道的 Metal 画布，调用方按钮的位置遮出左边一截。
 /// 画法同 Cue 页的天：格子一样大（`DitherGPU.cell`）、对齐设备像素，按同一张 8×8 阈值抖成网点（只抖明暗、不抖色相），整个 App 一种质感。
-/// 色带从左端的钴蓝长到填满处（`fill`）正好是这一档的颜色；档越高（`energy` 0→1，`ThinkingMeter.energy`）多一样东西，前面的都留着：
+/// 色带从左端的钴蓝长到填满处（`fill`）正好是这一档的颜色；档越高（`energy` 0→1，`ThinkingMeter.energy`）流得越快、多一样东西，前面的都留着：
 /// 最低档星点明灭 → 低档往右漂 → 中档拉成流光 → 高档一阵阵脉冲冲到钮、钮外亮一圈 → 很高档多一层更快的流、脉冲加密 → 最高档整段翻涌、钮边冒金色火花。
 /// 每样东西按能量淡入，换档时在画布里连续地过去（`ThinkingRenderer`）；换档那一下从钮荡开一圈。
 /// `running` 为假（减弱动态效果、省电、页不在前台，`LoopsPlay`）时停在一帧；关（`energy` 为 nil）、过渡走完也停，不空转。
@@ -60,7 +60,8 @@ final class ThinkingGPU {
 private struct ThinkingUniforms {
     var a: SIMD4<Float>  // 宽, 高（像素）, 时间, 能量
     var b: SIMD4<Float>  // 每点几像素, 关（1 是关）, 填满处（占宽几成）, 换档后过了几秒
-    var c: SIMD4<Float>  // 网点一格几像素
+    var c: SIMD4<Float>  // 网点一格几像素, 扫光扫过了几趟, 拉成流光几成
+    var d: SIMD4<Float>  // 两层星各流过了多远（拉长前，几个轨道高）、各拉长几倍
     var low, mid, high, spark: SIMD4<Float>
 }
 
@@ -79,6 +80,21 @@ final class ThinkingRenderer: NSObject, MTKViewDelegate {
     private var shown: Double?
     private var last: CFTimeInterval?
     private static let settle = 0.22
+    /// 流过的路程、扫过的趟数按帧累加（`advance`）。否决过：着色器里拿时钟乘流速——换档时流速、拉长的倍数一变，乘着一大段时间的那个位置
+    /// 一下跳出去老远，看着是猛冲一阵又停住，冲多远还随气泡开了多久变。每次打开从时钟上取个起点，不都是同一片星。
+    private var flow = SIMD2(repeating: CACurrentMediaTime().truncatingRemainder(dividingBy: 97))
+    private var sweeps = 0.0
+
+    /// 一样东西按档淡入，到第 `stage` 档正好全有（0 最低 … 5 最高；同着色器里的 `smoothstep(stage - 0.8, stage, e * 5)`）
+    private static func fade(_ energy: Double, by stage: Double) -> Double {
+        let t = min(max((energy * 5 - stage) / 0.8 + 1, 0), 1)
+        return t * t * (3 - 2 * t)
+    }
+    /// 每秒流过几个轨道高：最低档几乎不动，低档起漂，往上每高一档快六成多。等比地快上去才档档看得出——
+    /// 原先按档各加一截（中档到高档那一截还是零），高档那头看着一样快。
+    private static func speed(_ energy: Double) -> Double { 0.05 + fade(energy, by: 1) * 0.5 * pow(12, energy) }
+    /// 扫光每秒扫几趟：高档才有，再往上越扫越密
+    private static func sweep(_ energy: Double) -> Double { 0.4 + 0.35 * min(max((energy - 0.6) / 0.4, 0), 1) }
 
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
 
@@ -95,13 +111,22 @@ final class ThinkingRenderer: NSObject, MTKViewDelegate {
         let keep = running ? exp(-step / Self.settle) : 0
         shown = target + (from - target) * keep
         shownFill = fill + ((shownFill ?? fill) - fill) * keep
-        // 星与扫光按全局时钟走：两次打开同一档，接着上次的样子流，不从头起
+        // 星拉成流光几成：低档还是点，到中档拉满
+        let energy = shown ?? target, streak = Self.fade(energy, by: 2)
+        // 第二层细一些、快一些、拉得更长
+        let stretch = SIMD2(1 + 3.5 * streak, 1 + 5 * streak)
+        if running {
+            flow += step * Self.speed(energy) * SIMD2(1, 1.7) / stretch
+            sweeps += step * Self.sweep(energy)
+        }
+        // 明灭、翻涌、火花不随档变快慢，照时钟走
         let time = running ? Float(now.truncatingRemainder(dividingBy: 3600)) : 0
         let size = view.drawableSize, scale = Float(size.width / max(view.bounds.width, 1))
         var uniforms = ThinkingUniforms(
-            a: SIMD4(Float(size.width), Float(size.height), time, Float(shown ?? target)),
+            a: SIMD4(Float(size.width), Float(size.height), time, Float(energy)),
             b: SIMD4(scale, off ? 1 : 0, Float(shownFill ?? fill), Float(min(now - changedAt, 10))),
-            c: SIMD4(Float(DitherGPU.cell) * max(1, scale.rounded()), 0, 0, 0), low: ramp[0], mid: ramp[1], high: ramp[2], spark: ramp[3])
+            c: SIMD4(Float(DitherGPU.cell) * max(1, scale.rounded()), Float(sweeps.truncatingRemainder(dividingBy: 1)), Float(streak), 0),
+            d: SIMD4(Float(flow.x), Float(flow.y), Float(stretch.x), Float(stretch.y)), low: ramp[0], mid: ramp[1], high: ramp[2], spark: ramp[3])
         pass.colorAttachments[0].loadAction = .clear
         pass.colorAttachments[0].clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 0)
         let render = commands.makeRenderCommandEncoder(descriptor: pass)!
@@ -190,7 +215,8 @@ using namespace metal;
 struct Uniforms {
     float4 a;   // 宽, 高（像素）, 时间, 能量
     float4 b;   // 每点几像素, 关, 填满处（占宽几成）, 换档后过了几秒
-    float4 c;   // 网点一格几像素
+    float4 c;   // 网点一格几像素, 扫光扫过了几趟, 拉成流光几成
+    float4 d;   // 两层星各流过了多远（拉长前，几个轨道高）、各拉长几倍
     float4 low, mid, high, spark;
 };
 
@@ -229,10 +255,9 @@ static float3 ramp(float x, constant Uniforms &u) {
     return x < 0.5 ? mix(u.low.rgb, u.mid.rgb, x * 2) : mix(u.mid.rgb, u.high.rgb, x * 2 - 1);
 }
 
-// 一层星：按格子撒，每格至多一颗；整层往右流。stretch 把星沿流向拉长成流光。看周围九格：拉长的光不被格子切断。
-static float motes(float2 p, float cell, float speed, float stretch, float density, float seed, float time, float grain) {
-    p.x -= time * speed;
-    float2 q = float2(p.x / stretch, p.y);
+// 一层星：按格子撒，每格至多一颗；整层往右流（shift 是流过的路程，画布外按帧累加）。stretch 把星沿流向拉长成流光。看周围九格：拉长的光不被格子切断。
+static float motes(float2 p, float cell, float shift, float stretch, float density, float seed, float time, float grain) {
+    float2 q = float2(p.x / stretch - shift, p.y);
     float2 home = floor(q / cell);
     float sum = 0;
     for (int dy = -1; dy <= 1; dy++) {
@@ -262,7 +287,7 @@ fragment float4 thinkingFragment(Out in [[stage_in]], constant Uniforms &u [[buf
     float knob = size.x * fill - h * 0.5;
     // 每跨一档多一样东西，到它那一档正好全亮：0 最低 … 5 最高
     float stage = e * 5.0;
-    float drift = smoothstep(0.2, 1.0, stage), streak = smoothstep(1.2, 2.0, stage), pulse = smoothstep(2.2, 3.0, stage);
+    float streak = u.c.z, pulse = smoothstep(2.2, 3.0, stage);
     float layer = smoothstep(3.2, 4.0, stage), blaze = smoothstep(4.2, 5.0, stage);
 
     // 明暗：0 是这一档的颜色压暗，1 是它本身，往上是光（白，最高档偏金）。低档整段暗而静，档越高底子越亮；左暗右亮、上沿受光，最高档翻涌
@@ -270,14 +295,12 @@ fragment float4 thinkingFragment(Out in [[stage_in]], constant Uniforms &u [[buf
     float tone = 0.2 + 0.4 * e + 0.4 * along + 0.1 * (0.5 - p.y / h) + blaze * (churn - 0.5) * 0.6;
 
     float light = 0;
-    float speed = h * (0.05 + 0.8 * drift + 1.6 * streak + 1.6 * layer + 1.6 * blaze);
-    light += (1.8 + 0.6 * streak) * motes(p, h * 0.5, speed, 1.0 + 3.5 * streak, 0.25 + 0.2 * e, 0.0, time, 0.26);
-    light += layer * 1.2 * motes(p + 17.0, h * 0.34, speed * 1.7, 1.0 + 5.0 * streak, 0.25, 5.0, time, 0.18);
+    light += (1.8 + 0.6 * streak) * motes(p, h * 0.5, u.d.x * h, u.d.z, 0.25 + 0.2 * e, 0.0, time, 0.26);
+    light += layer * 1.2 * motes(p + 17.0, h * 0.34, u.d.y * h, u.d.w, 0.25, 5.0, time, 0.18);
     // 扫描光：一道竖的亮线从左扫到钮，后面拖一截渐暗的余辉；高档一道，很高两道，最高三道
-    float period = mix(2.4, 1.5, blaze);
     for (int k = 0; k < 3; k++) {
         float weight = k == 0 ? pulse : k == 1 ? layer : blaze;
-        float x = along - fract(time / period + float(k) / 3.0);
+        float x = along - fract(u.c.y + float(k) / 3.0);
         light += weight * (exp(-pow(x / 0.012, 2.0)) * 1.4 + step(x, 0.0) * exp(x / 0.07) * 0.35) * smoothstep(0.0, 0.15, along);
     }
     float2 toKnob = float2(p.x - knob, p.y - h * 0.5);
