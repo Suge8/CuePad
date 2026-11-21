@@ -98,8 +98,8 @@ struct LivePreviewPane: View {
     /// 宽屏上网页是栏下面的一块屏：铺满那一档四周留一圈，手机宽那一档居中。两档之间只换位置、大小与圆角：内容不跳。
     /// 手机上没有屏的边：网页从玻璃栏下沿铺到屏幕下缘，栏那一排铺页面的底、下沿同色渐隐，滚上去的内容淡进栏下。
     private func screen(in size: CGSize) -> some View {
-        let phone = preview.viewport == .phone
         let framed = workspace.layout == .wide
+        let phone = framed && preview.viewport == .phone
         let page = Self.page(in: size, phone: phone, framed: framed)
         let room = Self.room(in: size)
         let height = framed ? page.height : size.height

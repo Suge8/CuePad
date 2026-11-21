@@ -213,8 +213,15 @@ final class LivePreview: NSObject, WKNavigationDelegate {
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         Task {
             await sampleGround()
+            await adoptViewport()
             revealed = true
         }
+    }
+
+    /// 页面自己说要摆成手机宽那一档（`<meta name="cuepad-viewport" content="phone">`，模拟器的屏：`ScreenPage`）：每次载完照它摆一次，
+    /// 之后栏上那颗钮照旧换。只在宽屏上有这一档（`LivePreviewPane.screen`）。
+    private func adoptViewport() async {
+        if (try? await run(#"return document.querySelector('meta[name="cuepad-viewport"]')?.content"#) as? String) == "phone" { viewport = .phone }
     }
 
     func webView(_ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse) async -> WKNavigationResponsePolicy {

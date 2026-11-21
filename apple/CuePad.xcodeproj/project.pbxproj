@@ -30,6 +30,7 @@
 		E1000000000000000000000F /* CueStore in Frameworks */ = {isa = PBXBuildFile; productRef = E1000000000000000000000D /* CueStore */; };
 		E10000000000000000000010 /* CueText in Frameworks */ = {isa = PBXBuildFile; productRef = E1000000000000000000000E /* CueText */; };
 		E10000000000000000000012 /* CueAgent in Frameworks */ = {isa = PBXBuildFile; productRef = E10000000000000000000011 /* CueAgent */; };
+		E10000000000000000000015 /* CueScreen in Frameworks */ = {isa = PBXBuildFile; productRef = E10000000000000000000016 /* CueScreen */; };
 		E10000000000000000000014 /* CueAgent in Frameworks */ = {isa = PBXBuildFile; platformFilters = (macos, ); productRef = E10000000000000000000013 /* CueAgent */; };
 		F1000000000000000000A003 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; platformFilters = (macos, ); productRef = F1000000000000000000A002 /* Sparkle */; };
 		F2000000000000000000A003 /* WebRTC in Frameworks */ = {isa = PBXBuildFile; productRef = F2000000000000000000A002 /* WebRTC */; };
@@ -231,6 +232,7 @@
 				E1000000000000000000000F /* CueStore in Frameworks */,
 				E10000000000000000000010 /* CueText in Frameworks */,
 				E10000000000000000000012 /* CueAgent in Frameworks */,
+				E10000000000000000000015 /* CueScreen in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -452,6 +454,7 @@
 				E1000000000000000000000D /* CueStore */,
 				E1000000000000000000000E /* CueText */,
 				E10000000000000000000011 /* CueAgent */,
+				E10000000000000000000016 /* CueScreen */,
 			);
 			productName = CuePadCLI;
 			productReference = E10000000000000000000001 /* cuepad */;
@@ -1085,6 +1088,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = B10000000000000000000001 /* XCLocalSwiftPackageReference "CuePadKit" */;
 			productName = CueAgent;
+		};
+		E10000000000000000000016 /* CueScreen */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B10000000000000000000001 /* XCLocalSwiftPackageReference "CuePadKit" */;
+			productName = CueScreen;
 		};
 		E10000000000000000000013 /* CueAgent */ = {
 			isa = XCSwiftPackageProductDependency;
