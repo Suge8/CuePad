@@ -40,7 +40,6 @@ extension CueEditorTheme {
     static func inspiration(_ palette: Palette, horizontalInset: CGFloat, maxTextWidth: CGFloat? = nil) -> CueEditorTheme {
         var theme = editor(palette, horizontalInset: horizontalInset, verticalInset: Spacing.group, maxTextWidth: maxTextWidth)
         theme.headingSpacing = 0
-        theme.blankLineHeight = Spacing.tight
         return theme
     }
 

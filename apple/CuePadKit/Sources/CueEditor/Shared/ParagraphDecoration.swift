@@ -75,8 +75,7 @@ extension EditorCore {
         let lineRange = NSRange(location: range.location, length: range.length - (hasNewline ? 1 : 0))
         let line = decorations.style(ofLine: text.substring(with: lineRange), at: range.location)
         let title = range.location == 0 ? style.title : nil
-        let blank = lineRange.length == 0 && line.kind == .body ? style.blankLineHeight : nil
-        guard title != nil || blank != nil || line.kind != .body || line.markerLength > 0 || !line.inlineCode.isEmpty || !line.links.isEmpty || !line.emphasis.isEmpty else { return nil }
+        guard title != nil || line.kind != .body || line.markerLength > 0 || !line.inlineCode.isEmpty || !line.links.isEmpty || !line.emphasis.isEmpty else { return nil }
         let paragraph = NSMutableAttributedString(attributedString: storage.attributedSubstring(from: range))
         if let title {
             // 标题行不认 Markdown 记号：它就是一件事的名字
@@ -87,11 +86,6 @@ extension EditorCore {
             // 字体不盖到段尾的换行上：标题后面还空着时，末尾那一行空行的高跟着换行符的字体走，盖上标题的大字它就比正文的一行高，
             // 一写进正文又矮回去，贴着字摆高的宿主（任务气泡）跟着跳
             paragraph.addAttributes([.font: title.font, .foregroundColor: title.color], range: NSRange(location: 0, length: lineRange.length))
-        } else if let blank {
-            let spacing = NSMutableParagraphStyle()
-            spacing.minimumLineHeight = blank
-            spacing.maximumLineHeight = blank
-            paragraph.addAttributes([.font: CueFont.systemFont(ofSize: blank), .paragraphStyle: spacing], range: NSRange(location: 0, length: paragraph.length))
         } else {
             decorate(paragraph, line: line)
         }
