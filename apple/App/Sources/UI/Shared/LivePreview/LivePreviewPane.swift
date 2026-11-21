@@ -66,7 +66,8 @@ struct LivePreviewPane: View {
             .onChange(of: Self.remoteZoom(width: geometry.size.width, remote: workspace.liveFill?.remote == true && preview.viewport != .phone), initial: true) { preview.web.pageZoom = $1 }
             #endif
         }
-        .background(palette.desk)
+        // 手机上不伸进状态栏那一条：那一条铺的是页面的底（`LivePhoneCover`），被这层桌面色盖住，页面就像在栏上沿被一刀切断
+        .background(palette.desk, ignoresSafeAreaEdges: workspace.layout == .wide ? .all : [])
         .modifier(LivePageAsks(preview: preview))
         .task(id: preview.address) { await preview.watch() }
         #if os(iOS)
