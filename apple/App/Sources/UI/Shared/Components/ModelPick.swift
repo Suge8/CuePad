@@ -49,7 +49,7 @@ struct ModelPick: View {
     }
 
     @ViewBuilder private var ticks: some View {
-        if let meter { ThinkingTicks(meter: meter, size: .small).padding(.leading, Spacing.hair).readerHidden(true) }
+        if let meter { ThinkingBar(meter: meter).padding(.leading, Spacing.hair).readerHidden(true) }
     }
 
     static let gap = Spacing.tight
@@ -289,49 +289,40 @@ private struct ThinkingTrack: View {
     private static let lift: CGFloat = 1.12
 }
 
-/// 思考强度的竖格：除"关"以外的六档各一格（`ThinkingMeter.scale`），当前档以下填满，每格是它那一档在色带上的颜色（`Palette.thinking`），
-/// 越往上越暖；关着时格全空、斜划一道，最高档时有一道光扫过。常驻在工具排上，只用静止的颜色，不放每帧重算的东西。
-struct ThinkingTicks: View {
-    enum Size { case small, regular }
-
+/// 胶囊上的思考强度：气泡里那条轨道（`ThinkingTrack`）的缩小版——同样最左端是"关"，从左填到这一档、末端一颗白点，
+/// 填的那段从钴蓝长到这一档的颜色（`Palette.thinking`），一眼看出用了几成力；最高档时有一道光扫过。
+/// 常驻在工具排上，只用静止的颜色，不放每帧重算的东西。否决过：六根高低竖格——一排细线数不清是第几格，也不像气泡里那条。
+struct ThinkingBar: View {
     let meter: ThinkingMeter
-    var size = Size.regular
-    var pending = false
     @Environment(\.palette) private var palette
     @LoopsPlay private var loops
 
-    private var barWidth: CGFloat { size == .small ? 2.5 : 4 }
-    private var gap: CGFloat { size == .small ? 1.5 : 3 }
-    private var lowest: CGFloat { size == .small ? 4 : 6 }
-    private var tallest: CGFloat { size == .small ? 12 : 16 }
-
     var body: some View {
-        bars { index in
-            index < meter.filled ? palette.thinking(Double(index) / Double(ThinkingMeter.scale.count - 1)) : meter.current == nil ? palette.ink3 : palette.track
-        }
-        .overlay {
-            if meter.isMax, loops {
-                LoopLayer(kind: .sheen, color: palette.onFill).mask { bars { _ in .black } }.allowsHitTesting(false)
+        let lead = meter.levels.contains(.off) ? 0 : 1
+        let slots = max(meter.levels.count - 1 + lead, 1)
+        let at = meter.current.flatMap { meter.levels.firstIndex(of: $0) }.map { CGFloat($0 + lead) / CGFloat(slots) } ?? 0
+        let energy = meter.current.flatMap(ThinkingMeter.energy)
+        let fill = Self.height + (Self.width - Self.height) * at
+        ZStack(alignment: .leading) {
+            Capsule().fill(palette.track)
+            if let energy {
+                Capsule().fill(LinearGradient(colors: [palette.thinkingLow, palette.thinking(energy)], startPoint: .leading, endPoint: .trailing))
+                    .frame(width: fill)
+                    .overlay {
+                        if meter.isMax, loops { LoopLayer(kind: .sheen, color: palette.onFill).clipShape(.capsule).allowsHitTesting(false) }
+                    }
             }
+            Circle().fill(energy == nil ? palette.ink3 : palette.onFill)
+                .frame(width: Self.height - Self.inset * 2, height: Self.height - Self.inset * 2)
+                .offset(x: fill - Self.height + Self.inset)
         }
-        .overlay {
-            if meter.isOff {
-                Capsule().fill(palette.ink3).frame(width: 1.5)
-                    .frame(height: tallest + 4).rotationEffect(.degrees(42))
-                    .transition(.opacity)
-            }
-        }
-        .modifier(Breathing(active: pending))
+        .frame(width: Self.width, height: Self.height)
+        .animation(Motion.fade, value: meter)
     }
 
-    private func bars(color: @escaping (Int) -> Color) -> some View {
-        HStack(alignment: .bottom, spacing: gap) {
-            let count = ThinkingMeter.scale.count
-            ForEach(0..<count, id: \.self) { index in
-                Capsule().fill(color(index))
-                    .frame(width: barWidth, height: count > 1 ? lowest + (tallest - lowest) * CGFloat(index) / CGFloat(count - 1) : tallest)
-            }
-        }
-        .frame(height: tallest, alignment: .bottom)
-    }
+    /// 高与胶囊里字的 x 高相当，不撑高胶囊；长宽比照气泡里那条缩下来
+    private static let width: CGFloat = 24
+    private static let height: CGFloat = 8
+    /// 白点与条沿留的一线，同气泡里那条的钮
+    private static let inset: CGFloat = 1.5
 }

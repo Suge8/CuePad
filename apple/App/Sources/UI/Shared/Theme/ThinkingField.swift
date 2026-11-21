@@ -262,20 +262,21 @@ fragment float4 thinkingFragment(Out in [[stage_in]], constant Uniforms &u [[buf
     float drift = smoothstep(0.2, 1.0, stage), streak = smoothstep(1.2, 2.0, stage), pulse = smoothstep(2.2, 3.0, stage);
     float layer = smoothstep(3.2, 4.0, stage), blaze = smoothstep(4.2, 5.0, stage);
 
-    // 明暗：0 是这一档的颜色压暗，1 是它本身，往上是光（白，最高档偏金）。底子左暗右亮、上沿受光，最高档翻涌
+    // 明暗：0 是这一档的颜色压暗，1 是它本身，往上是光（白，最高档偏金）。低档整段暗而静，档越高底子越亮；左暗右亮、上沿受光，最高档翻涌
     float churn = noise(float2(p.x / h * 1.1 - time * 1.4, p.y / h * 2.2 + time * 0.6));
-    float tone = 0.45 + 0.4 * along + 0.1 * (0.5 - p.y / h) + blaze * (churn - 0.5) * 0.6;
+    float tone = 0.2 + 0.4 * e + 0.4 * along + 0.1 * (0.5 - p.y / h) + blaze * (churn - 0.5) * 0.6;
 
     float light = 0;
-    float speed = h * (0.12 + 1.0 * drift + 1.4 * streak + 1.4 * layer + 1.0 * blaze);
-    light += 1.4 * motes(p, h * 0.5, speed, 1.0 + 3.5 * streak, 0.22 + 0.13 * e, 0.0, time, 0.26);
-    light += layer * 1.2 * motes(p + 17.0, h * 0.34, speed * 1.7, 1.0 + 5.0 * streak, 0.22, 5.0, time, 0.18);
-    float period = mix(2.2, 1.2, layer);
-    // 脉冲：一阵柔和的提亮从左扫到钮、略斜，网点在它经过时由暗转亮（不是一道实心光条）；很高档起再跟一阵
-    float slant = (p.y / h - 0.5) * 0.04;
-    float wave = pulse * exp(-pow((along - slant - fract(time / period)) / 0.09, 2.0));
-    wave += layer * 0.8 * exp(-pow((along - slant - fract(time / period + 0.5)) / 0.07, 2.0));
-    light += wave * 0.55 * smoothstep(0.0, 0.2, along);
+    float speed = h * (0.05 + 0.8 * drift + 1.6 * streak + 1.6 * layer + 1.6 * blaze);
+    light += (1.8 + 0.6 * streak) * motes(p, h * 0.5, speed, 1.0 + 3.5 * streak, 0.25 + 0.2 * e, 0.0, time, 0.26);
+    light += layer * 1.2 * motes(p + 17.0, h * 0.34, speed * 1.7, 1.0 + 5.0 * streak, 0.25, 5.0, time, 0.18);
+    // 扫描光：一道竖的亮线从左扫到钮，后面拖一截渐暗的余辉；高档一道，很高两道，最高三道
+    float period = mix(2.4, 1.5, blaze);
+    for (int k = 0; k < 3; k++) {
+        float weight = k == 0 ? pulse : k == 1 ? layer : blaze;
+        float x = along - fract(time / period + float(k) / 3.0);
+        light += weight * (exp(-pow(x / 0.012, 2.0)) * 1.4 + step(x, 0.0) * exp(x / 0.07) * 0.35) * smoothstep(0.0, 0.15, along);
+    }
     float2 toKnob = float2(p.x - knob, p.y - h * 0.5);
     float dk = length(toKnob);
     light += exp(-pow(dk / (h * 0.85), 2.0)) * (0.3 * pulse + 0.4 * blaze * (0.75 + 0.25 * sin(time * 3.2)));
