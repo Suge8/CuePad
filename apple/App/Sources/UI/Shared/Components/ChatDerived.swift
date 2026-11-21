@@ -21,6 +21,6 @@ final class ChatDerived {
         guard key != self.key else { return }
         self.key = key
         items = Chat.entries(digest.messages, previews: digest.previews, deliveries: digest.deliveries, cueSent: key.cueSent, at: moment)
-        marks = ChatScrubber.marks(items)
+        marks = ChatMark.of(items)
     }
 }

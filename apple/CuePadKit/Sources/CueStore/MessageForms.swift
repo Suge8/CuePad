@@ -63,7 +63,7 @@ public struct SkillCall: Equatable, Sendable {
 }
 
 /// 对话里的系统行有哪几种，唯一的一处：同步记录里只有说话人与正文，种类由正文认出（正文是中文原文，各端照当前语言显示 `label`）。
-/// 只有压缩换了上下文（对话里画分隔、刻度滑条上一个点）；停下与拒绝只是这一轮怎么结束的（行内一句）。
+/// 只有压缩换了上下文（对话里画分隔、对话目录里一颗点）；停下与拒绝只是这一轮怎么结束的（行内一句）。
 public enum ChatNotice: String, Sendable, CaseIterable {
   case compacted = "已压缩上下文"
   case stopped = "已停止"

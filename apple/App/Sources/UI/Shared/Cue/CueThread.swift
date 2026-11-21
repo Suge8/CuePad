@@ -1,7 +1,7 @@
 import CueStore
 import SwiftUI
 
-/// 对话排成的格子与刻度滑条的刻度在读的时候一起推好（不在主线程，滚动时页面重算也不再推一遍）。
+/// 对话排成的格子与对话目录的各行在读的时候一起推好（不在主线程，滚动时页面重算也不再推一遍）。
 nonisolated struct CueThread: Equatable, Sendable {
     /// 最近的对话，从早到晚；前面另带上早于它问、在它这段时间里答了的提问（`CueStore.cueQuestionsAnswered`）：
     /// 你的回答在读到的范围里，它引用的那条提问也要在，点引用才回得去。

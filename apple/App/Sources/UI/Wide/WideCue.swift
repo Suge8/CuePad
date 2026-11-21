@@ -57,7 +57,7 @@ struct CuePanel: ViewModifier {
         let floats = fits && !home, bleeds = fits && home
         content
             .padding(bleeds ? Self.bleed : 0)
-            .glass(in: .rect(cornerRadius: Self.radius), ink: .ground(shown: fits))
+            .glass(in: .rect(cornerRadius: Self.radius), ink: .ground, shown: fits)
             .padding(bleeds ? -Self.bleed : floats ? Self.float : 0)
             // 铺满时按块的左右裁（左边是会话条），上下放开：对话照样滚到状态栏与横条后面。浮着时左右也放开：板的影子落在块外。
             // 同一个修饰符只换形状，图层不重建
