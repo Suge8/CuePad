@@ -7613,6 +7613,22 @@
         }
       }
     },
+    "再用约 %lld%% 自动压缩" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auto-compacts in about %lld%%"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "再用约 %lld%% 自动压缩"
+          }
+        }
+      }
+    },
     "再说一次" : {
       "localizations" : {
         "en" : {
@@ -8197,6 +8213,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "别的设备已用新版，这台更新后接着同步；这期间写下的都在，更新后自动发出"
+          }
+        }
+      }
+    },
+    "到了压缩线，接着会自动压缩" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "At the compact line. Auto-compact comes next"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "到了压缩线，接着会自动压缩"
           }
         }
       }
@@ -9401,22 +9433,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "可在设置里改"
-          }
-        }
-      }
-    },
-    "可能重读 %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "may reread %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "可能重读 %@"
           }
         }
       }
@@ -13313,38 +13329,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "忘掉这一条？"
-          }
-        }
-      }
-    },
-    "快满了。Agent 会在到顶前自动压缩，也可以现在压缩。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Almost full. The agent compacts automatically before it runs out, or you can compact now."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "快满了。Agent 会在到顶前自动压缩，也可以现在压缩。"
-          }
-        }
-      }
-    },
-    "快满了，可以压缩" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Almost full, consider compacting"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "快满了，可以压缩"
           }
         }
       }
@@ -19581,6 +19565,22 @@
         }
       }
     },
+    "用满时自动压缩" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auto-compacts when full"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "用满时自动压缩"
+          }
+        }
+      }
+    },
     "用网易 UU 远程控制 Mac" : {
       "localizations" : {
         "en" : {
@@ -19593,22 +19593,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "用网易 UU 远程控制 Mac"
-          }
-        }
-      }
-    },
-    "用量" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Usage"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "用量"
           }
         }
       }
@@ -21041,6 +21025,34 @@
         }
       }
     },
+    "缓存 %lld 分钟后过期" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Cache expires in %lld minute"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Cache expires in %lld minutes"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "缓存 %lld 分钟后过期"
+          }
+        }
+      }
+    },
     "缓存 %lldm 过期" : {
       "localizations" : {
         "en" : {
@@ -21101,6 +21113,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "缓存已冷，这一句会重读约 %@"
+          }
+        }
+      }
+    },
+    "缓存约 %lld 分钟后过期" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Cache expires in about %lld minute"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Cache expires in about %lld minutes"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "缓存约 %lld 分钟后过期"
           }
         }
       }
@@ -25525,22 +25565,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "重试这一轮"
-          }
-        }
-      }
-    },
-    "重读 %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "rereads %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "重读 %@"
           }
         }
       }

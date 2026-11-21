@@ -125,11 +125,13 @@ struct TokenSheet: View {
             ("signature", palette.signature), ("signatureSoft", palette.signatureSoft), ("signatureFill", palette.signatureFill),
             ("selection", palette.selection), ("searchMatch", Palette.searchMatch), ("onFill", palette.onFill), ("action", palette.action), ("onAction", palette.onAction),
             ("waiting", palette.waiting), ("waitingFill", palette.waitingFill), ("failure", palette.failure),
-            ("failureFill", palette.failureFill), ("failureTrack", palette.failureTrack), ("replied", palette.replied),
+            ("failureFill", palette.failureFill), ("replied", palette.replied),
             ("failureWash", palette.failureWash), ("repliedWash", palette.repliedWash),
             ("diffAdded", palette.diffAdded), ("diffRemoved", palette.diffRemoved),
             ("waitingPaper", palette.waitingPaper), ("neutralFill", palette.neutralFill),
             ("quietFill", palette.quietFill),
+            ("thinkingLow", palette.thinkingLow), ("thinkingMid", palette.thinkingMid), ("thinkingHigh", palette.thinkingHigh),
+            ("thinkingRim", palette.thinkingRim), ("thinkingSpark", palette.thinkingSpark),
         ]
     }
 

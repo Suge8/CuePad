@@ -152,7 +152,7 @@ enum BubbleMetrics {
     static let leading = Spacing.group - ringInset
     static let textLeading: CGFloat = stepLead + TaskMetrics.ringColumn + TaskMetrics.columnGap
     static let titleGap: CGFloat = textLeading - TaskMetrics.chipTarget
-    /// 字离右边，同输入框里的字（`Composer` 的 `layered`）。
+    /// 字离右边，同输入框里的字（`Composer` 的 `rows`）。
     static let textTrailing = Spacing.block
     static let sheetBottom = Spacing.group
     #if os(macOS)

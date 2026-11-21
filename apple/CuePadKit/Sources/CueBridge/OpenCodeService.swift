@@ -291,7 +291,10 @@ struct OpenCodeModel: Decodable, Sendable {
     var capabilities: Capabilities?
 
     struct Variant: Decodable, Sendable { var id: String }
-    struct Limit: Decodable, Sendable { var context: Int? }
+    struct Limit: Decodable, Sendable {
+        var context: Int?
+        var input: Int?
+    }
     struct Capabilities: Decodable, Sendable { var input: [String]? }
 
     var key: ModelKey { ModelKey(provider: providerID, id: id) }

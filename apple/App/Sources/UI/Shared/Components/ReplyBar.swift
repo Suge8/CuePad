@@ -14,7 +14,7 @@ struct ReplyBar: View {
     var sending = false
     var recall: String?
     var previews: [PreviewItem] = []
-    /// 最新那条回答带的提示缓存（`ChatMessage.Tools.Cache`）：过了 `warmUntil` 还没说下一句，写字时提醒这一句要重读多少。
+    /// 最新那条回答带的提示缓存：上下文那颗旁边写它还热几分钟、冷了这一句要重读多少（`CacheNote`）。
     var cache: ChatMessage.Tools.Cache?
     var revealNote: (ReplyNote) -> Void = { _ in }
     let sent: () -> Void
@@ -26,7 +26,6 @@ struct ReplyBar: View {
     @FocusState private var focused: Bool
     @Environment(\.panelCovered) private var covered
     @State private var opening: ConfigPick?
-    @State private var cold = false
 
     /// 回复框的草稿（每个会话一份，`AppSettings.replyDraft`）只在回复框里读写：会话页不经手它，
     /// 打字时只有回复框（与列表里那一行）重算，会话页、对话都不动。
@@ -75,24 +74,8 @@ struct ReplyBar: View {
                 if let commandProgress { progressLine(commandProgress) }
                 if expanded { MacInputNotice(failure: config?.failure) }
             }
-            .task(id: cache?.warmUntil) {
-                cold = false
-                guard let until = cache?.warmUntil else { return }
-                try? await Task.sleep(for: .seconds(max(0, until.timeIntervalSinceNow)))
-                cold = !Task.isCancelled
-            }
         }
     }
-
-    /// 小上下文重读不值一提；这一轮还在跑时缓存正被用着。
-    private var recache: Int? {
-        guard cold, !session.runtimeState.isWorking, let context = cache?.context, context >= Self.recacheWorthSaying else { return nil }
-        return context
-    }
-
-    private static let recacheWorthSaying = 20_000
-
-    private var coldCache: ColdCache? { recache.map { ColdCache(context: $0, estimated: cache?.estimated == true) } }
 
     private var expanded: Bool { form.expanded(focused: focused, draft: draft, accepts: accepts) }
 
@@ -105,7 +88,7 @@ struct ReplyBar: View {
                     if !draft.notes.isEmpty { ReplyNoteStack(notes: draft.notes, previews: previews, reveal: revealNote, remove: removeNote) }
                 },
                 tools: {
-                    if hasTools, let config { SessionConfigControls(session: session, models: models, shown: config, cold: coldCache, opening: $opening) }
+                    if hasTools, let config { SessionConfigControls(session: session, models: models, shown: config, cache: cache, opening: $opening) }
                 },
                 send: { sendControl }
             )

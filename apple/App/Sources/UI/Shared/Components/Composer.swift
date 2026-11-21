@@ -2,8 +2,8 @@ import CueStore
 import SwiftUI
 
 /// 随手记、新会话与 Pi 会话回复框共用的输入框（iOS 与 Mac 同一份；文字区各用平台的文本视图，见 `ComposerField`；附件来源与带上的卡片的菜单、面板
-/// 在 `Composer+iOS`、`Composer+macOS`）。变形时只有玻璃上沿与文字往上下挪，没有横着挪的东西：文字区是平台的文本视图，
-/// 变形时它一下换到新位置，横着挪的"＋"会从字上滑过、挪着的提交钮被玻璃下沿裁掉。
+/// 在 `Composer+iOS`、`Composer+macOS`）。收成一行时＋在字左边；露出工具排时字铺满整宽顶在左上（三端一样），＋留在原地成了下面那排的头一颗：
+/// 玻璃往上长，字往左上挪开，＋与提交钮不动，不从字上滑过、不被玻璃下沿裁掉。
 /// 调用方给草稿、占位、接受的种类和提交钮，草稿怎么处理由它们决定；回复框另给键盘快捷键（`ReplyShortcut`）与空着时按 ↑ 调回的那一句（`recall`）。
 struct Composer<Header: View, Tools: View, Send: View>: View {
     @Binding var draft: ComposerDraft
@@ -30,8 +30,8 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     var lead: ComposerLead?
     /// 收成一行时头部也留着（会话回复框：批注在这块玻璃的上部）；平时头部只在展开时出现。
     var keepsHeader = false
-    /// 有工具排（`tools`：会话的模型与思考强度）。一直展开的有工具时才分两层（文字在上、＋工具提交钮一排在下），没有工具的照旧一排；
-    /// 会收起的在聚焦时文字下面多一排。
+    /// 有工具排（`tools`：会话的模型与思考强度）。工具排露出时分两层（文字在上、＋工具提交钮一排在下），没有工具的照旧一排；
+    /// 一直展开的一直露出，会收起的聚焦时露出。
     var tooled = false
     /// 这个会话此刻能用的斜杠命令：输入 "/" 时弹出面板（`SlashPalette`）；空表示不弹。
     var commands: [SlashCommand] = []
@@ -55,6 +55,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
     /// 斜杠命令面板里高亮的那一行，与按过 Esc 收起面板时的那段文字（文字再变就又弹出）。
     @State private var highlighted = 0
     @State private var dismissedPalette: String?
+    @Namespace private var plusSlot
 
     private var expanded: Bool { form.expanded(focused: focused, draft: draft, accepts: accepts) }
     /// 收成短胶囊：一行的形态再变窄、居中，点它照常聚焦展开。有草稿也收（胶囊里写"草稿：第一行"）：翻历史时整宽的两层太占地方。
@@ -151,10 +152,7 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
                 fileStrip.padding([.horizontal, .top], ComposerMetrics.inset).transition(.opacity)
             }
             // 空间不足时先压缩可滚动的头部，保留编辑区与工具排。
-            Group {
-                if form == .open, tooled { layered } else { row }
-            }
-            .layoutPriority(1)
+            rows.layoutPriority(1)
         }
         // 提交钮只有一颗，浮在右下角留出的位置上：有没有内容都不改它的位置与输入框的宽
         .overlay(alignment: .bottomTrailing) { if !shrunk { sendSlot } }
@@ -177,40 +175,33 @@ struct Composer<Header: View, Tools: View, Send: View>: View {
         .frame(maxWidth: .infinity)
     }
 
-    /// 一直展开、有工具：文字铺满整宽在上，底下一排＋、工具与提交钮的位置。
-    private var layered: some View {
+    /// 文字区一直是同一个视图（换形态时不重建，焦点与输入法组合都不断）。收成一行：＋、字、提交钮的位置一排，两颗圆钮底对齐、钉在角上；
+    /// 露出工具排：字铺满整宽在上、下面只留一线，＋（同一颗，`matchedGeometryEffect`）、工具与提交钮的位置一排在下。
+    private var rows: some View {
         VStack(alignment: .leading, spacing: 0) {
-            text.padding(.horizontal, Spacing.block).padding(.top, ComposerMetrics.textTop).padding(.bottom, ComposerMetrics.textBottomOpen)
-                .modifier(Yield(yielded: yielded))
-            HStack(spacing: 0) {
-                if !accepts.isEmpty { plus }
-                tools().environment(\.singleLineConfig, workspace.layout == .wide).environment(\.chipHeight, ComposerMetrics.glyph)
-                Spacer(minLength: 0)
-                slotSpace
-            }
-        }
-    }
-
-    /// 其余：文字区（换形态时不重建，焦点与输入法组合都不断）一直在＋与提交钮之间，两颗圆钮底对齐、钉在角上。
-    private var row: some View {
-        HStack(alignment: .bottom, spacing: 0) {
-            if !accepts.isEmpty { plus }
-            VStack(alignment: .leading, spacing: 0) {
-                // 露出工具排时字下面只留一线（同 `layered`），字与工具排之间不空出一截
+            HStack(alignment: .bottom, spacing: 0) {
+                if !accepts.isEmpty, !toolsShown { plus.matchedGeometryEffect(id: 0, in: plusSlot) }
                 text
-                    .padding(.leading, accepts.isEmpty ? Spacing.block : Spacing.hair).padding(.trailing, shrunk ? Spacing.block : Spacing.hair)
+                    .padding(.leading, toolsShown || accepts.isEmpty ? Spacing.block : Spacing.hair)
+                    .padding(.trailing, toolsShown || shrunk ? Spacing.block : Spacing.hair)
                     .padding(.top, ComposerMetrics.textTop)
                     .padding(.bottom, toolsShown ? ComposerMetrics.textBottomOpen : ComposerMetrics.textTop)
                     .frame(minHeight: toolsShown ? nil : buttonHeight)
-                // 工具排与两颗圆钮同一格高、同一条中线；没有工具时这里是空的，不占位
-                if toolsShown {
-                    tools().environment(\.singleLineConfig, workspace.layout == .wide).environment(\.chipHeight, ComposerMetrics.glyph)
-                        .frame(minHeight: ComposerMetrics.slot)
+                    .modifier(Yield(yielded: yielded))
+                if !toolsShown, !shrunk { slotSpace }
+            }
+            if toolsShown {
+                HStack(spacing: 0) {
+                    if !accepts.isEmpty { plus.matchedGeometryEffect(id: 0, in: plusSlot) }
+                    // 工具拿下剩下的整宽，不与弹簧对半分（只拿一半时模型胶囊提早收掉名字）；没有＋时胶囊站到＋那颗圆的位置，不贴输入框的边
+                    tools().environment(\.chipHeight, ComposerMetrics.glyph)
+                        .padding(.leading, accepts.isEmpty ? (ComposerMetrics.slot - ComposerMetrics.glyph) / 2 : 0)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .modifier(Yield(yielded: yielded))
                         .transition(Motion.pop(reduceMotion: reduceMotion))
+                    slotSpace
                 }
             }
-            .modifier(Yield(yielded: yielded))
-            if !shrunk { slotSpace }
         }
     }
 

@@ -2,20 +2,7 @@
 import AppKit
 import SwiftUI
 
-extension ConfigControls {
-    func open(_ pick: ConfigPick) {
-        guard let anchor = anchors[pick]?.view else { return }
-        switch pick {
-        case .model:
-            ChoiceMenu.popUp(models.sections(quotas: services.accountQuotas.items, at: .now), below: anchor)
-        case .thinking:
-            ChoiceMenu.popUp([ChoiceMenu.Section(title: "思考强度", choices: levels.map { level in
-                ChoiceMenu.Choice(title: .verbatim(level.label), checked: shown.thinking == level) { chooseThinking(level) }
-            })], below: anchor)
-        }
-    }
-}
-
+/// 点开 AppKit 菜单的钮（`AgentCapsule`）记下自己的视图，菜单从它下面弹出。
 final class PopUpAnchor {
     weak var view: NSView?
 }

@@ -20,6 +20,7 @@ extension Bridge {
             session.busySince = before.times.busySince ?? session.busySince
         }
         guard let slot = slots.first(where: { $0.id == session.id }) else {
+            session = compacting(session, after: nil)
             slots.append(Slot(session))
             return emit(.appeared(session))
         }
@@ -44,6 +45,7 @@ extension Bridge {
 
     private func replace(_ slot: Slot, with session: Session) {
         let previous = slot.session
+        let session = compacting(session, after: previous)
         guard session != previous else { return }
         slot.session = session
         emit(session.state != previous.state || session.detail != previous.detail ? .stateChanged(session, from: previous.state) : .infoChanged(session))
@@ -62,6 +64,19 @@ extension Bridge {
         case .context(let used, let window?): update(id) { $0.context = ContextUsage(tokens: used, window: window) }
         default: break
         }
+    }
+
+    /// 各家报的用量不带阈值，只在这一处补上：模型、窗口、已用有一样变了就照这家此刻的配置再算一遍（换了模型、会话里改了压缩设置，
+    /// 下一次报用量就跟上），都没变沿用上一次的——会话别的字段变得勤，不为它们读配置。预留比窗口还大的（线不在窗口里）当说不准。
+    private func compacting(_ session: Session, after previous: Session?) -> Session {
+        guard let paths, let compactsAt = session.agent.facts.compactsAt, var context = session.context else { return session }
+        var session = session
+        let key = session.model?.key
+        let before = previous?.context
+        let same = before?.window == context.window && before?.tokens == context.tokens && previous?.model?.key == key
+        context.compactAt = same ? before?.compactAt : compactsAt(context.window, key, paths).flatMap { $0 > 0 ? $0 : nil }
+        session.context = context
+        return session
     }
 
     public func detach(_ id: Session.ID, reason: SessionEndReason) {

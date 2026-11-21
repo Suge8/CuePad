@@ -89,10 +89,10 @@ extension DebugScene {
     }
 
     static let demoContexts: [String: ContextUsage] = [
-        "atlas": ContextUsage(tokens: 172_000, window: 200_000),
-        "homepage": ContextUsage(tokens: 31_000, window: 200_000),
-        "cuepad": ContextUsage(tokens: 96_000, window: 200_000),
-        "rename": ContextUsage(tokens: 188_000, window: 200_000),
+        "atlas": ContextUsage(tokens: 172_000, window: 200_000, compactAt: 180_000),
+        "homepage": ContextUsage(tokens: 31_000, window: 200_000, compactAt: 180_000),
+        "cuepad": ContextUsage(tokens: 96_000, window: 200_000, compactAt: 180_000),
+        "rename": ContextUsage(tokens: 188_000, window: 200_000, compactAt: 200_000),
         "billing": ContextUsage(tokens: nil, window: 200_000),
     ]
 

@@ -56,4 +56,30 @@ struct SessionControlsTests {
         _ = try await app.services.configure(SessionConfig(model: luna.key), for: ended)
         #expect(try await shown(ended).model == luna)
     }
+
+    @Test func 换模型还在路上_后发的改强度没换成_仍显示要换的模型_送达后强度收进新模型有的档() async throws {
+        let atlas = try await session()
+        let switching = try await app.services.configure(SessionConfig(model: luna.key), for: atlas)
+        let thinking = try await app.services.configure(SessionConfig(thinking: .high), for: atlas)
+        let confirm = AsyncStream<Void>.makeStream()
+        let executor = DeliveryExecutor(store: store, hostID: "mac-a", onIssue: { _ in }) { [stream = confirm.stream] request, _ in
+            guard request.id == switching.id else { return .failed(.verbatim("Pi 没在运行")) }
+            return .confirming { _ in
+                for await _ in stream { break }
+                return .succeeded
+            }
+        }
+        try await executor.start()
+        defer { Task { await executor.stop() } }
+        _ = try await eventually(store, { try $0.deliveryRequest(thinking.id) }) { $0.map { !$0.isOpen } ?? false }
+        #expect(try await shown(atlas) == ConfigShown(model: luna, thinking: .off, pending: true, failure: "没换成 思考 高：Pi 没在运行"))
+
+        confirm.continuation.yield()
+        _ = try await eventually(store, { try $0.deliveryRequest(switching.id) }) { $0?.status == .known(.succeeded) }
+        try await app.runtimeRecorder(on: "mac-a").update(
+            sessionID: "atlas", state: .settled, title: "atlas", directory: "/w/atlas",
+            modelState: ModelState(model: luna, thinking: .known(.low), models: [opus, luna]))
+        let delivered = try await shown(atlas)
+        #expect(delivered.model == luna && delivered.thinking == .off && !delivered.pending)
+    }
 }

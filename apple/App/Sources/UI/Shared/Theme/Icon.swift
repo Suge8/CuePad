@@ -40,8 +40,8 @@ nonisolated enum Icon: Hashable, Sendable {
     case help, duplicate
     // 输入、发送与会话
     case send, save, checked, stop, endSession, wakeSession, handOff, delivered, retry, toLatest, fetching, renew
-    /// 提示缓存冷了（回复框工具排里"重读多少"那一句的记号）
-    case cold
+    /// 提示缓存冷了、还热着（回复框里上下文旁那一句的记号，`CacheNote`）
+    case cold, warm
     case declined, mac, yourAnswer, above, floated, earlier, recent
     /// 引用一份预览回话（长按、右键与全屏页的"回复"）；用网易 UU 远程到这台 Mac 上操作
     case reply, remoteMac
@@ -156,6 +156,7 @@ nonisolated enum Icon: Hashable, Sendable {
         case .toLatest: .ink("arrow.down")
         case .fetching: .ink("ring.down")
         case .cold: .ink("cold")
+        case .warm: .ink("clock")
         case .declined: .ink("hand")
         case .mac: .ink("mac")
         case .yourAnswer: .ink("restore")

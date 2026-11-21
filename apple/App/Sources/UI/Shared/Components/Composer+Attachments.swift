@@ -16,11 +16,12 @@ extension Composer {
                     .foregroundStyle(lead?.enabled == false ? palette.ink3 : palette.ink)
                     .contentTransition(.symbolEffect(.replace))
             }
-            .frame(width: ComposerMetrics.slot, height: buttonHeight)
             .animation(Motion.fade, value: lead)
         }
         .disabled(lead?.enabled == false)
         .fixedSize()
+        // 格子撑在钮外面：撑在标签里时悬停的底是整格那么大
+        .frame(width: ComposerMetrics.slot, height: buttonHeight)
     }
 
     func chip(_ outbox: Outbox) -> some View {

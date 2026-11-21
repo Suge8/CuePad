@@ -77,12 +77,13 @@ extension DebugScene {
         try await store.writeTranscript(SessionTranscript(
             sessionID: "notes", messages: messages,
             recap: Recap(lastPrompt: messages[0].text, lastReply: messages.last?.text)))
-        // 等你的卡写缓存还热多久：notes-edit 的还热着（上面 notes 的已冷，那张卡写等了多久）
-        if let asking = try await store.sessionItems(sessionIDs: ["notes-edit"])["notes-edit"]?.state {
+        // 缓存还热着的两个（上面 notes 的已冷）：notes-edit 在等你，卡上写还热多久；docs 歇着，回复框里上下文旁写还剩几分钟
+        for (id, minutes) in [("notes-edit", 9.0), ("docs", 42)] {
+            guard let state = try await store.sessionItems(sessionIDs: [id])[id]?.state else { continue }
             try await store.writeTranscript(SessionTranscript(
-                sessionID: "notes-edit",
-                messages: [ChatMessage(sessionID: "notes-edit", entryID: "p1", seq: 1, role: .pi, text: asking.lastReply ?? "", at: now, tools: .init(steps: 0, items: [], cache: .init(context: 48_000, warmUntil: now.addingTimeInterval(9 * 60))))],
-                recap: Recap(lastPrompt: asking.lastPrompt, lastReply: asking.lastReply, pendingPrompt: asking.pendingPrompt, pendingTools: asking.pendingTools, answeredAt: asking.answeredAt)))
+                sessionID: id,
+                messages: [ChatMessage(sessionID: id, entryID: "p1", seq: 1, role: .pi, text: state.lastReply ?? "", at: now, tools: .init(steps: 0, items: [], cache: .init(context: 48_000, warmUntil: now.addingTimeInterval(minutes * 60))))],
+                recap: Recap(lastPrompt: state.lastPrompt, lastReply: state.lastReply, pendingPrompt: state.pendingPrompt, pendingTools: state.pendingTools, answeredAt: state.answeredAt)))
         }
     }
 

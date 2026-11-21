@@ -50,6 +50,8 @@ public final class Bridge {
     @ObservationIgnored let hostedIdle: Duration
     /// App 给的是它自己的那一个（`MacDependencies.timing`）。
     @ObservationIgnored let timing: Timing
+    /// 读各家配置里自动压缩的阈值（`compacting`）；没给（测试）不报阈值。
+    @ObservationIgnored let paths: AgentPaths?
     @ObservationIgnored var controls: [Session.ID: any SessionLink] = [:]
     /// 重开前（`carryOver`）各会话的状态与计时：重新上桥时用一次。重新载入的 Pi 扩展自己带着起点（扩展的 `Carried`），不经这里。
     /// 读不懂的扩展读不到状态，不留也不用：接回时沿用的是它之前读到的
@@ -61,9 +63,12 @@ public final class Bridge {
     @ObservationIgnored private var subscribers: [UUID: AsyncStream<SessionChange>.Continuation] = [:]
 
     /// - Parameter hostedIdle: 托管的 Claude Code、Codex 会话歇着满这么久就请它退出（不算结束，发话时再接着）。
-    public init(socketDirectory: URL = PiPaths().socketDirectory, hostedIdle: Duration = AgentTimeouts.hostedIdle, timing: Timing = .system) {
+    public init(
+        socketDirectory: URL = PiPaths().socketDirectory, paths: AgentPaths? = nil, hostedIdle: Duration = AgentTimeouts.hostedIdle, timing: Timing = .system
+    ) {
         self.hostedIdle = hostedIdle
         self.timing = timing
+        self.paths = paths
         connections = PiConnections(directory: socketDirectory, timing: timing)
         connections.bridge = self
     }

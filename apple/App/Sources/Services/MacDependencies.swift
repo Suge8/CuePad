@@ -39,7 +39,7 @@ struct MacDependencies {
             environment.merging(["HOME": home.path, "PATH": "/usr/bin:/bin:/usr/sbin:/sbin"]) { $1 }
         } ?? environment)
         let timing = Timing.system
-        let bridge = Bridge(socketDirectory: paths.pi.socketDirectory, timing: timing)
+        let bridge = Bridge(socketDirectory: paths.pi.socketDirectory, paths: paths, timing: timing)
         // 不碰真实世界时不碰真实的 `~/.local/bin`：链接放进资料库目录，除非指定了 Pi 目录与链接目录（`PiPaths.isExplicit`）
         let commandLineTool = isolated && !paths.pi.isExplicit
             ? CommandLineToolInstaller(linkDirectory: location.directory.appending(path: "bin", directoryHint: .isDirectory))

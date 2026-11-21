@@ -153,11 +153,27 @@ struct Palette {
     var waiting: Color { dark ? Color(hex: 0xEDBD57) : Color(hex: 0x845A06) }
     /// 等你的实底胶囊（实时活动里等你的数）。字 6.0，深色 4.6。
     var waitingFill: Color { dark ? Color(hex: 0x9C6A08) : Color(hex: 0x845A06) }
+    /// 思考强度的色带，取自 Cue 页的天：夜里的钴蓝（最低档）经清晨的紫到黄昏的玫红（最高档），越往上越暖；中间的档按位置混（`thinking(_:)`）。
+    /// 不借靛青（`signature` 说的是"正在发生"）与赭黄（等你）。
+    var thinkingLow: Color { dark ? Color(hex: 0x4566D6) : Color(hex: 0x2F4FB8) }
+    var thinkingMid: Color { dark ? Color(hex: 0x8A55D2) : Color(hex: 0x7A45C6) }
+    var thinkingHigh: Color { dark ? Color(hex: 0xC8457C) : Color(hex: 0xC8396F) }
+    /// 最高档的火花与光的金边（`ThinkingField`）：只在钮边几格一闪，不铺成块，不与赭黄（等你）混淆。
+    var thinkingSpark: Color { Color(hex: 0xFFD08A) }
+
+    /// 压在色带上的档位点（`ThinkingTrack`）：两种外观同一份，衬着它的是色带本身。
+    var thinkingRim: Color { Color.white.opacity(0.45) }
+
+    /// 色带上的一点：0 最低档、1 最高档（`ThinkingMeter.energy`）。
+    func thinking(_ energy: Double) -> Color {
+        energy < 0.5 ? thinkingLow.mix(with: thinkingMid, by: energy * 2) : thinkingMid.mix(with: thinkingHigh, by: energy * 2 - 1)
+    }
+    /// 写成字的档名（`ThinkingWord`）：深色下色带本身到不了 4.5:1，往白里提四成。
+    func thinkingInk(_ energy: Double) -> Color { dark ? thinking(energy).mix(with: .white, by: 0.4) : thinking(energy) }
     /// 出错与没能送达：胭脂（`Failure`）。对比度 5.0，深色 4.6。
     var failure: Color { dark ? Color(hex: 0xF0789E) : Color(hex: 0xAD2B5C) }
     /// 删除钮、轻扫删除的胭脂底。字 6.3，深色 5.6。
     var failureFill: Color { dark ? Color(hex: 0xB8325F) : Color(hex: 0xAD2B5C) }
-    var failureTrack: Color { failure.opacity(0.2) }
     /// 有新回复（这轮答完了、你还没看）与任务做完：石绿（两种用途见头注释）。对比度 4.7，深色 5.0，增强对比度 ≥ 7。
     var replied: Color {
         switch (dark, highContrast) {

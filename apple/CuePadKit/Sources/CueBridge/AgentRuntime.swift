@@ -93,6 +93,8 @@ public struct AgentFacts: Sendable {
     var instructionsFile = "AGENTS.md"
     var globalReads = ["AGENTS.md"]
     var readsFirstOnly = true
+    /// 这个模型、窗口这么大时用到多少它自己压缩（按这家的配置与缺省，`AgentSettings`）；nil 是关了自动压缩或说不准。
+    var compactsAt: (@Sendable (_ window: Int, ModelKey?, AgentPaths) -> Int?)?
 }
 
 /// 读不到的技能 CuePad 逐个链到它自己的技能目录（`<配置目录>/skills/<名>`、项目里的 `<projectFolder>/skills/<名>`），整个目录链不行：

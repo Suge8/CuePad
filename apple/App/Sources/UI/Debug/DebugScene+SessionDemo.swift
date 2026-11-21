@@ -99,7 +99,7 @@ extension DebugScene {
                     return SessionTimes(stateSince: start, busySince: state.isWorking ? start : nil)
                 },
                 hosted: id == "scratch", modelState: demoModels(for: demoAgents[id], fast: id == "scratch" ? false : nil),
-                context: demoContexts[id] ?? ContextUsage(tokens: 12_000, window: 200_000), commands: demoCommands(for: demoAgents[id]),
+                context: demoContexts[id] ?? ContextUsage(tokens: 12_000, window: 200_000, compactAt: 180_000), commands: demoCommands(for: demoAgents[id]),
                 agent: demoAgents[id])
             try await store.writeTranscript(SessionTranscript(
                 sessionID: id, messages: messages,

@@ -21,13 +21,17 @@ nonisolated enum ModelLabel {
     }
 }
 
-/// 思考强度条：格是一把固定的尺，除"关"以外的六档（最低到最高）各一格，当前档以下填满——同一档在哪个模型上都是同样几格（"低"总是两格），
-/// 换了模型不换样子；模型不支持的档照样有格，指到那里取最近的支持档（`ThinkingLevel.clamped(to:)`）。关着时格全空。
+/// 思考强度：这个模型有的档（`levels`）与此刻的档。颜色与动的多少按固定的一把尺（`scale`、`energy`），同一档在哪个模型上都一样热。
 nonisolated struct ThinkingMeter: Equatable {
     let levels: [ThinkingLevel]
     private(set) var current: ThinkingLevel?
 
     static let scale = ThinkingLevel.allCases.filter { $0 != .off }
+
+    /// 这一档在尺上的高低：0 最低档、1 最高档，同一档在哪个模型上都一样热（颜色、流动都按它）；关是 nil。
+    static func energy(_ level: ThinkingLevel) -> Double? {
+        scale.firstIndex(of: level).map { Double($0) / Double(scale.count - 1) }
+    }
 
     init?(levels: [ThinkingLevel], current: ThinkingLevel?) {
         guard !levels.isEmpty else { return nil }
@@ -41,17 +45,9 @@ nonisolated struct ThinkingMeter: Equatable {
         return meter
     }
 
-    var filled: Int { current.flatMap { Self.scale.firstIndex(of: $0) }.map { $0 + 1 } ?? 0 }
-    var isOff: Bool { current == .off }
     /// 档名；Agent 没报此刻的强度时（用模型的缺省）是"默认"，照样能点能换。
     var label: String { current?.label ?? String(localized: "默认") }
     var isMax: Bool { current != .off && current == ThinkingLevel.allCases.last(where: levels.contains) }
-
-    func level(at fraction: Double) -> ThinkingLevel {
-        let stops = (levels.contains(.off) ? [.off] : []) + Self.scale
-        let index = Int((min(max(fraction, 0), 0.999) * Double(stops.count)).rounded(.down))
-        return stops[min(index, stops.count - 1)].clamped(to: levels)
-    }
 
     func step(_ delta: Int) -> ThinkingLevel? {
         guard let current, let index = levels.firstIndex(of: current) else { return levels.first }
