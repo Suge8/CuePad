@@ -117,7 +117,7 @@ struct SearchScreen: View {
             ProjectRunHeader(project: project, count: group.cards.count)
                 .padding(.top, Spacing.block).padding(.bottom, Spacing.tight)
             LazyVGrid(columns: columns, alignment: .leading, spacing: 0) {
-                ForEach(group.cards) { CardRow(entry: $0, highlight: query.text, flat: true) }
+                ForEach(group.cards) { CardRow(entry: $0, highlight: query.text) }
             }
         }
         if cards.total > cards.shown {

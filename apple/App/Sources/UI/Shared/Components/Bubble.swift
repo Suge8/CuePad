@@ -1,7 +1,14 @@
 import SwiftUI
 
+extension EnvironmentValues {
+    /// 这一块里的钮长出的气泡，两侧比平常多让这么多。回复框设成它那排圆钮离框边的距离：手机上框贴着页边，气泡盖着框的上沿，
+    /// 边再同框的边重合，两个圆角就叠成一道缺口；让进去，落在圆钮的外沿上。
+    @Entry var bubbleInset: CGFloat = 0
+}
+
 nonisolated enum BubbleSource: Equatable {
-    case control(CGRect)
+    /// `inset`：所在那一块要气泡两侧多让的（`bubbleInset`）。
+    case control(CGRect, inset: CGFloat = 0)
     /// 从一行里点的那一下（任务行这类）：行成百上千，不给每行挂几何读数，只知道点不知道行，按半个列表行高（`BubblePlacement.reach`）让开整行；
     /// 尾巴靠左角对着那一下，气泡往右铺（顺着读的方向，不往回盖住侧栏）。
     /// `left`：按在一栏清单里时气泡的左沿（`PressPoint.lane`）——同一栏里点哪一条、点在标题的哪个字上，气泡都落在同一条竖线上。
@@ -57,8 +64,10 @@ nonisolated struct BubblePlacement: Equatable {
             side = 1
             sheet = true
             return
-        case .control(let frame):
+        case .control(let frame, let inset):
             target = frame.offsetBy(dx: -container.minX, dy: -container.minY)
+            minX += inset
+            maxX -= inset
         case .press(let point, let lane):
             target = CGRect(x: point.x - container.minX, y: point.y - container.minY - Self.reach, width: 0, height: Self.reach * 2)
             leads = true
@@ -192,6 +201,15 @@ nonisolated struct BubbleShape: Shape {
     }
 }
 
+extension View {
+    /// 气泡内容最外层的一块标成钉在底下的：内容放不下、在气泡里滚时它不跟着滚走，别的在它上面滚。
+    func bubbleFoot() -> some View { containerValue(\.bubbleFoot, true) }
+}
+
+extension ContainerValues {
+    @Entry fileprivate var bubbleFoot = false
+}
+
 struct BubbleFrame<Content: View, Area: View>: View {
     let placement: BubblePlacement
     @ViewBuilder let content: Content
@@ -199,9 +217,27 @@ struct BubbleFrame<Content: View, Area: View>: View {
 
     var body: some View {
         let card = RoundedRectangle(cornerRadius: placement.radius)
-        ScrollView { content }
-            .scrollBounceBehavior(.basedOnSize)
-            .debugScrollsToMiddle()
+        Group(subviews: content) { parts in
+            let feet = parts.filter(\.containerValues.bubbleFoot)
+            let scroll = ScrollView { ForEach(parts.filter { !$0.containerValues.bubbleFoot }) { $0 } }
+                .scrollBounceBehavior(.basedOnSize)
+                .debugScrollsToMiddle()
+            if feet.isEmpty {
+                scroll
+            } else {
+                // 钉着的那块排在滚动区下面、不压在它上面；滚着的内容到它跟前那一小截淡出，不被一条直线切断（不滚时这一截是内容自己的下边距）。
+                // 否决过：系统的栏（`safeAreaBar`）——滚着的字从钉着的那块后面透出来，叠在它的字上。
+                VStack(spacing: 0) {
+                    scroll.mask {
+                        VStack(spacing: 0) {
+                            Rectangle()
+                            LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom).frame(height: Spacing.item)
+                        }
+                    }
+                    ForEach(feet) { $0 }
+                }
+            }
+        }
             .frame(minWidth: placement.narrowest, alignment: .topLeading)
             .clipShape(card)
             .rowContainer(card)

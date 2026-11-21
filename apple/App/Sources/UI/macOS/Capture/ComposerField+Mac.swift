@@ -240,6 +240,21 @@ final class GrowingTextView: NSTextView {
         return true
     }
 
+    /// 指针在文字区的范围里、底下却不是它：浮层（气泡）是 SwiftUI 画的、不是盖在上面的 AppKit 视图，系统照文字区的范围仍把指针事件送来，
+    /// 文字区照常把指针设成工字（实测：气泡盖着时窗口的 hitTest 给的不是文字区，`cursorUpdate` 照样设工字），指针在气泡上就成了工字。
+    private func covered(_ event: NSEvent) -> Bool {
+        guard bounds.contains(convert(event.locationInWindow, from: nil)), let content = window?.contentView else { return false }
+        return content.hitTest(content.superview?.convert(event.locationInWindow, from: nil) ?? event.locationInWindow)?.isDescendant(of: self) != true
+    }
+
+    override func cursorUpdate(with event: NSEvent) {
+        if covered(event) { NSCursor.arrow.set() } else { super.cursorUpdate(with: event) }
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        if covered(event) { NSCursor.arrow.set() } else { super.mouseMoved(with: event) }
+    }
+
     override func becomeFirstResponder() -> Bool {
         let became = super.becomeFirstResponder()
         if became { focusChanged?(true) }

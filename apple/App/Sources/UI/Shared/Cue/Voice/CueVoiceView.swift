@@ -10,7 +10,7 @@ struct CueVoiceDetailButton<Label: View>: View {
     var body: some View {
         Button {
             if let activate { activate() }
-            else { source = frame.map(BubbleSource.control) ?? .unanchored }
+            else { source = frame.map { .control($0) } ?? .unanchored }
         } label: { label() }
             .buttonStyle(PressStyle())
             .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { next in

@@ -29,7 +29,7 @@ struct BarHelpButton<Content: View>: View {
 
     private func show() {
         host.present(
-            token: token, key: token, source: spot.frame.map(BubbleSource.control) ?? .unanchored, width: .fitting,
+            token: token, key: token, source: spot.frame.map { .control($0) } ?? .unanchored, width: .fitting,
             close: ClosePanel { [host, token] in host.hide(token) }, environment: environment, content: Live(content: content))
     }
 

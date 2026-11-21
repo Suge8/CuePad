@@ -114,26 +114,27 @@ private struct ModelPickBubble: View {
 
     var body: some View {
         let now = Date.now
-        VStack(alignment: .leading, spacing: Spacing.block) {
-            VStack(alignment: .leading, spacing: Spacing.tight) {
-                caption("模型") {
-                    if let current, let url = current.account?.usageURL(provider: current.key.provider) {
-                        Link("管理用量", destination: url).buttonStyle(PressStyle(.inline))
-                    }
-                }
-                VStack(alignment: .leading, spacing: Spacing.item) {
-                    ForEach(ModelLabel.groups(models.models), id: \.provider.id) { group in
-                        VStack(alignment: .leading, spacing: Spacing.hair) {
-                            ForEach(group.models) { row($0, at: now) }
-                        }
-                    }
+        VStack(alignment: .leading, spacing: Spacing.tight) {
+            caption("模型") {
+                if let current, let url = current.account?.usageURL(provider: current.key.provider) {
+                    Link("管理用量", destination: url).buttonStyle(PressStyle(.inline))
                 }
             }
-            if let meter, !meter.levels.isEmpty {
-                ThinkingTrack(meter: meter, choose: chooseThinking)
+            VStack(alignment: .leading, spacing: Spacing.item) {
+                ForEach(ModelLabel.groups(models.models), id: \.provider.id) { group in
+                    VStack(alignment: .leading, spacing: Spacing.hair) {
+                        ForEach(group.models) { row($0, at: now) }
+                    }
+                }
             }
         }
         .padding(Spacing.item)
+        if let meter, !meter.levels.isEmpty {
+            // 钉在气泡底下：手机上工具排只在打字时露出，键盘升着气泡总是矮的，模型一多这一条就滚到了看不见的地方
+            ThinkingTrack(meter: meter, choose: chooseThinking)
+                .padding(Spacing.item)
+                .bubbleFoot()
+        }
     }
 
     private func caption(_ title: LocalizedStringResource, @ViewBuilder trailing: () -> some View) -> some View {
@@ -195,13 +196,14 @@ private struct ThinkingTrack: View {
     @LoopsPlay private var loops
     /// 拖着时钮的中心；松手后归 nil，钮回到档位上
     @State private var dragging: CGFloat?
-    /// 拖着时、与松手后 Agent 报回新档之前要去的那一档；报不回（没换成）一秒后放下，回到当前档
-    @State private var heading: Int?
+    /// 拖着时、与松手后 Agent 报回新档之前要去的那一档；报不回（没换成）一秒后放下，回到当前档。
+    /// 记的是档、不是第几格：这一秒里换了模型，档位表就是另一张，新模型没有这一档时照它此刻的档画。
+    @State private var heading: ThinkingLevel?
 
     private var levels: [ThinkingLevel] { meter.levels }
     private var lead: Int { levels.contains(.off) ? 0 : 1 }
-    private var index: Int? { heading ?? meter.current.flatMap { levels.firstIndex(of: $0) } }
-    private var level: ThinkingLevel? { index.map { levels[$0] } }
+    private var level: ThinkingLevel? { heading.flatMap { levels.contains($0) ? $0 : nil } ?? meter.current }
+    private var index: Int? { level.flatMap { levels.firstIndex(of: $0) } }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.tight) {
@@ -264,13 +266,13 @@ private struct ThinkingTrack: View {
                     let raw = Double((x - radius) / span) * Double(slots) - Double(lead)
                     // 刚按下时直接取最近的档；拖着时离开当前档过了 0.6 格才换（回差）
                     if dragging == nil || index.map({ abs(raw - Double($0)) > 0.6 }) ?? true {
-                        heading = min(max(Int(raw.rounded()), 0), levels.count - 1)
+                        heading = levels[min(max(Int(raw.rounded()), 0), levels.count - 1)]
                     }
                     dragging = x
                 }
                 .onEnded { _ in
                     dragging = nil
-                    if let heading, levels[heading] != meter.current { choose(levels[heading]) }
+                    if let heading, heading != meter.current { choose(heading) }
                 }
         )
         .animation(Motion.spatial(Motion.nudge, reduceMotion: reduceMotion), value: dragging == nil)
@@ -289,7 +291,7 @@ private struct ThinkingTrack: View {
     private static let lift: CGFloat = 1.12
 }
 
-/// 胶囊上的思考强度：写 Agent 自己的档名（high、xhigh…），字从钴蓝描到这一档在色带上的颜色（`Palette.thinking`），档越高越暖；
+/// 胶囊上的思考强度：写这一档的名字（同气泡里那条右端写的，`ThinkingLevel.label`），字从钴蓝描到这一档在色带上的颜色（`Palette.thinking`），档越高越暖；
 /// 最高档有一道光扫过，关着是灰字。Agent 没报此刻的档时不写。常驻在工具排上，只用静止的颜色，不放每帧重算的东西。
 /// 否决过：六根高低竖格（数不清第几格）、气泡里那条的缩小版（8 点高看不出档，像个开关）。
 struct ThinkingWord: View {
@@ -299,7 +301,7 @@ struct ThinkingWord: View {
 
     var body: some View {
         if let level = meter.current {
-            let word = Text(verbatim: level.rawValue).font(Typography.meta.weight(.semibold)).fontDesign(.rounded)
+            let word = Text(level.label).font(Typography.meta.weight(.semibold)).fontDesign(.rounded)
             let energy = ThinkingMeter.energy(level)
             word
                 .foregroundStyle(energy.map { AnyShapeStyle(LinearGradient(colors: [palette.thinkingInk(0), palette.thinkingInk($0)], startPoint: .leading, endPoint: .trailing)) } ?? AnyShapeStyle(palette.ink3))

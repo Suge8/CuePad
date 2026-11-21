@@ -209,6 +209,9 @@ private struct AreaMark: NSViewRepresentable {
 
     private final class Inert: NSView {
         override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+        /// 浮层画在 SwiftUI 里、不是 AppKit 的视图：盖着输入框时，系统照底下文字区的那块矩形仍给工字指针。这一层在它上面，把箭头要回来。
+        override func resetCursorRects() { addCursorRect(bounds, cursor: .arrow) }
     }
 }
 
@@ -247,11 +250,12 @@ private struct ControlBubble<Panel: View>: ViewModifier {
     let width: BubblePlacement.Width
     @ViewBuilder let panel: () -> Panel
     @State private var frame: CGRect?
+    @Environment(\.bubbleInset) private var inset
 
     func body(content: Content) -> some View {
         content
             .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame = $0 }
-            .panel(isPresented: $isPresented, style: .bubble(frame.map(BubbleSource.control) ?? .unanchored, width: width), content: panel)
+            .panel(isPresented: $isPresented, style: .bubble(frame.map { .control($0, inset: inset) } ?? .unanchored, width: width), content: panel)
     }
 }
 
