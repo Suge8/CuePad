@@ -61,11 +61,13 @@ struct SessionSpine: View {
                 ForEach(plan.waiting) { row($0, plan) }
                 if plan.splits { Color.clear.frame(height: Self.split) }
                 ForEach(plan.advancing) { row($0, plan) }
-                if plan.extra > 0 {
-                    Text(verbatim: "+\(plan.extra)")
+                if !plan.hidden.isEmpty {
+                    Text(verbatim: "+\(plan.hidden.count)")
                         .font(Typography.caption2.weight(.semibold)).monospacedDigit()
                         .foregroundStyle(palette.ink2)
                         .frame(width: Self.column, height: plan.rowHeight)
+                        // 收在 +N 里的会话，Cue 交给它时光落在这里：它们就在这一格里
+                        .background { ForEach(plan.hidden, id: \.self) { Color.clear.relaySpot(session: $0, row: .rail) } }
                         .readerHidden(true)
                 }
             }
@@ -192,7 +194,8 @@ struct SessionSpine: View {
     private struct Plan {
         let waiting: [SessionRailRows.Item]
         let advancing: [SessionRailRows.Item]
-        let extra: Int
+        /// 收着放不下、收进 +N 的会话。
+        let hidden: [String]
         let rowHeight: CGFloat
         let twoLines: Bool
         let width: CGFloat
@@ -213,11 +216,11 @@ struct SessionSpine: View {
             let shown = expanded || total <= fits ? total : max(0, fits - 1)
             waiting = Array(rows.waiting.prefix(shown))
             advancing = Array(rows.advancing.prefix(shown - waiting.count))
-            extra = total - shown
+            hidden = (rows.waiting + rows.advancing).dropFirst(shown).map(\.id)
             rowHeight = row
             twoLines = row >= tall - Spacing.tight
             width = expanded ? min(SessionSpine.panelWidth, band.width - Spacing.tight - Spacing.page) : SessionSpine.width
-            let lines = CGFloat(shown + (extra > 0 ? 1 : 0))
+            let lines = CGFloat(shown + (hidden.isEmpty ? 0 : 1))
             let content = 2 * Self.edge + lines * row + (!waiting.isEmpty && !advancing.isEmpty ? SessionSpine.split : 0)
             height = expanded ? min(content, band.height - 2 * Spacing.item) : content
         }
