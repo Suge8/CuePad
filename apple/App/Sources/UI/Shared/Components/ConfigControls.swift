@@ -201,7 +201,7 @@ struct SessionConfigControls: View {
     let session: SessionState
     let models: [ModelOption]
     let shown: ConfigShown
-    var cold: ColdCache?
+    var cache: ChatMessage.Tools.Cache?
     var opening: Binding<ConfigPick?> = .constant(nil)
     @Environment(Workspace.self) private var workspace
     @Environment(AppServices.self) private var services
@@ -212,10 +212,8 @@ struct SessionConfigControls: View {
         }, chooseFast: {
             configure(SessionConfig(fast: $0))
         }) {
-            if let meter = shown.context.flatMap(ContextMeter.init) {
-                ContextGauge(session: session, meter: meter)
-            }
-            if let cold { ColdNote(cold: cold).layoutValue(key: ConfigGive.self, value: [.wording]).transition(.opacity) }
+            ContextGauge(session: session, meter: shown.context.flatMap(ContextMeter.init), cache: cache)
+                .layoutValue(key: ConfigGive.self, value: [.wording])
         }
     }
 
@@ -223,34 +221,5 @@ struct SessionConfigControls: View {
 
     private func configure(_ config: SessionConfig) {
         workspace.attempt { _ = try await services.configure(config, for: session) }
-    }
-}
-
-/// 缓存冷了、这一句要重读多少上下文：排在回复框的工具那一排里、挨着上下文的用量，雪花说"冷了"、字只说重读多少，放不下只剩雪花，整句在悬停里。
-/// 不另浮一张条在对话上：那是这一句的代价，属于要发出它的回复框。
-struct ColdCache: Equatable {
-    let context: Int
-    let estimated: Bool
-}
-
-private struct ColdNote: View {
-    let cold: ColdCache
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        let tokens = CueContext.tokens(cold.context)
-        let said = cold.estimated ? Text("缓存可能已冷，这一句可能重读约 \(tokens)") : Text("缓存已冷，这一句会重读约 \(tokens)")
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: Spacing.tight) {
-                Image(.cold)
-                cold.estimated ? Text("可能重读 \(tokens)") : Text("重读 \(tokens)")
-            }
-            .fixedSize()
-            Image(.cold)
-        }
-        .font(Typography.caption).monospacedDigit().foregroundStyle(palette.ink3)
-        .padding(.leading, Spacing.tight)
-        .help(said)
-        .accessibilityElement(children: .ignore).accessibilityLabel(said)
     }
 }

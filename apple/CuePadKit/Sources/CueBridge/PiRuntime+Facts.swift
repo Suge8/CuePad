@@ -12,7 +12,16 @@ extension PiRuntime {
         homeMeansInstalled: false,
         sessionFiles: SessionFileFormat(ingest: History.ingest, depth: 2, naming: .idSuffix) { $0.pi.sessionsDirectory },
         probe: askPi, brain: { PiBrain() }, projectFolder: ".pi",
-        globalReads: ["AGENTS.override.md", "AGENTS.md", "CLAUDE.md"])
+        globalReads: ["AGENTS.override.md", "AGENTS.md", "CLAUDE.md"], compactsAt: compactsAt)
+
+    /// 用到窗口减预留就压缩（compaction.ts 的 shouldCompact）：预留先取这个模型的覆盖（`compaction.modelOverrides["提供方/模型"]`），
+    /// 再取 `compaction.reserveTokens`，缺省 16384（settings-manager.ts）。不认项目里的设置。
+    nonisolated private static func compactsAt(_ window: Int, _ model: ModelKey?, _ paths: AgentPaths) -> Int? {
+        let settings = paths.home(of: .pi).appending(path: "settings.json")
+        guard AgentSettings.json(settings, "compaction", "enabled") as? Bool != false else { return nil }
+        let override = model.flatMap { AgentSettings.json(settings, "compaction", "modelOverrides", AgentKind.pi.modelRef($0), "reserveTokens") as? Int }
+        return window - (override ?? AgentSettings.json(settings, "compaction", "reserveTokens") as? Int ?? 16_384)
+    }
 
     /// RPC 模式、不存会话，只加载随包的桥扩展（不加载其他扩展；探测模式下它不连 CuePad）并开探测模式（扩展的 `CUEPAD_PROBE`）：
     /// 扩展把会话里上报的同一份模型配置写成一行就收尾。可选的与 Pi 的 /model 同一规则，配了范围（`enabledModels`）就是范围内的。

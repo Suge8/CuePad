@@ -249,10 +249,10 @@ private struct SessionRailTime: View {
 
     /// 等你的卡：提示缓存还热着就写它还有几分钟过期（这之前回不用原价重读整段上下文，是现在回的理由），过期了才写等了多久。
     var body: some View {
-        if let until = item.cache?.warmUntil {
-            Moments(next: { Self.left(until, at: $0).map { until.addingTimeInterval(-Double($0 - 1) * 60) } }) { now in
-                if let left = Self.left(until, at: now) {
-                    (item.cache?.estimated == true ? Text("缓存约 \(left)m 过期") : Text("缓存 \(left)m 过期")).foregroundStyle(palette.ink3).monospacedDigit()
+        if let cache = item.cache, cache.warmUntil != nil {
+            Moments(next: cache.nextTick(after:)) { now in
+                if let left = cache.minutesLeft(at: now) {
+                    (cache.estimated == true ? Text("缓存约 \(left)m 过期") : Text("缓存 \(left)m 过期")).foregroundStyle(palette.ink3).monospacedDigit()
                 } else {
                     waited
                 }
@@ -266,12 +266,6 @@ private struct SessionRailTime: View {
         if let clock = item.shown.clock {
             LiveText(style: clock.live(.span)) { Text($0).foregroundStyle(palette.ink3).monospacedDigit() }
         }
-    }
-
-    /// 还剩几分钟（往上取整，至少 1）；过期了为 nil。
-    private static func left(_ until: Date, at now: Date) -> Int? {
-        let seconds = until.timeIntervalSince(now)
-        return seconds > 0 ? Int((seconds / 60).rounded(.up)) : nil
     }
 }
 

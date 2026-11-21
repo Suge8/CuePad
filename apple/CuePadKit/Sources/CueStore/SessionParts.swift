@@ -162,10 +162,13 @@ public struct ModelState: Sendable, Equatable {
 public struct ContextUsage: Sendable, Equatable, Codable {
   public var tokens: Int?
   public var window: Int
+  /// 用到这么多时 Agent 自己压缩：Mac 的桥按这家的配置与缺省算（`AgentFacts.compactsAt`）；算不出、或关了自动压缩为 nil
+  public var compactAt: Int?
 
-  public init(tokens: Int?, window: Int) {
+  public init(tokens: Int?, window: Int, compactAt: Int? = nil) {
     self.tokens = tokens
     self.window = window
+    self.compactAt = compactAt
   }
 
   public var fraction: Double? {

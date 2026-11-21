@@ -14,7 +14,13 @@ extension GrokRuntime {
             sidecar: GrokHistory.sidecar) {
             $0.home(of: .grok).appending(path: "sessions", directoryHint: .isDirectory)
         },
-        releasesIdleHosted: true, probe: ask, brain: { ACPSession(dialect: GrokDialect()) }, projectFolder: ".grok")
+        releasesIdleHosted: true, probe: ask, brain: { ACPSession(dialect: GrokDialect()) }, projectFolder: ".grok", compactsAt: compactsAt)
+
+    /// 用到窗口的 `[session] auto_compact_threshold_percent`（缺省 85）就压缩（官方文档 settings reference）。
+    nonisolated private static func compactsAt(_ window: Int, _ model: ModelKey?, _ paths: AgentPaths) -> Int? {
+        let percent = AgentSettings.tomlInt(paths.home(of: .grok).appending(path: "config.toml"), table: "session", key: "auto_compact_threshold_percent")
+        return window * (percent.flatMap { (1...100).contains($0) ? $0 : nil } ?? 85) / 100
+    }
 
     /// 起 ACP 服务、只握手（不开会话、不落记录）：握手的 `_meta` 里有默认的登录方式（没有就是没登录：没有登录过的凭据、也没有 API 密钥）
     /// 与模型清单（`modelState`：默认模型、每个模型能用的思考强度）。

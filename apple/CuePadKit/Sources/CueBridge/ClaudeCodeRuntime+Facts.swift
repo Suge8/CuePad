@@ -16,7 +16,20 @@ extension ClaudeCodeRuntime {
             $0.home(of: .claudeCode).appending(path: "projects", directoryHint: .isDirectory)
         },
         releasesIdleHosted: true, probe: askClaude, brain: { ClaudeHostedSession(timing: .system) }, sharedSkills: .none, projectFolder: ".claude", selfManagedSkills: "synced",
-        instructionsFile: "rules/AGENTS.md", globalReads: ["CLAUDE.md", "rules/AGENTS.md"], readsFirstOnly: false)
+        instructionsFile: "rules/AGENTS.md", globalReads: ["CLAUDE.md", "rules/AGENTS.md"], readsFirstOnly: false, compactsAt: compactsAt)
+
+    /// 官方文档 model-config 的 auto-compact：设了窗口就到它压缩——环境变量先于 `/autocompact` 按模型存的（`modelSettings`），再是设置里的
+    /// `autoCompactWindow`；没设时到窗口的边，原生 1M 窗口的约在 967K；百分比的覆盖只往低里调。按模型存的那份记在模型的正式名下，
+    /// 这里的 id 是别名（`opus`）时对不上，照没存算。
+    nonisolated private static func compactsAt(_ window: Int, _ model: ModelKey?, _ paths: AgentPaths) -> Int? {
+        let settings = paths.home(of: .claudeCode).appending(path: "settings.json")
+        let set = paths.environment["CLAUDE_CODE_AUTO_COMPACT_WINDOW"].flatMap { Int($0) }
+            ?? model.flatMap { AgentSettings.json(settings, "modelSettings", $0.id, "autoCompactWindow") as? Int }
+            ?? AgentSettings.json(settings, "autoCompactWindow") as? Int
+        let at = min(set ?? (window >= 1_000_000 ? window - 33_000 : window), window)
+        guard let percent = paths.environment["CLAUDE_AUTOCOMPACT_PCT_OVERRIDE"].flatMap({ Int($0) }), (1...100).contains(percent) else { return at }
+        return min(at, window * percent / 100)
+    }
 
     /// stream-json 不存会话、关掉钩子、不起 MCP 服务，控制请求 `initialize` 给模型清单，
     /// 其中的 `account` 没有令牌也没有 API 密钥是没登录；`get_settings` 的 `applied.model` 是按用户配置解析出的实际模型。默认落到清单

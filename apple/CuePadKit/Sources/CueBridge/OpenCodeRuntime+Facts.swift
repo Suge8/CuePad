@@ -10,7 +10,15 @@ extension OpenCodeRuntime {
         home: home, minimumVersion: AgentVersion(2, 0, 0), installScript: "curl -fsSL https://opencode.ai/v2/install | bash",
         installDirectory: ".opencode/bin", probe: ask,
         brain: { OpenCodeBrain() },
-        skillFolders: ["skills", "skill"], projectFolder: ".opencode")
+        skillFolders: ["skills", "skill"], projectFolder: ".opencode", compactsAt: compactsAt)
+
+    /// 窗口减预留：缺省一成五，窗口不小于 32K 时至少 16K（compaction.ts）；`compaction.auto` 关了不压缩。自定的预留不认，照缺省。
+    nonisolated private static func compactsAt(_ window: Int, _ model: ModelKey?, _ paths: AgentPaths) -> Int? {
+        let home = home(paths)
+        guard !["opencode.json", "opencode.jsonc"].contains(where: { AgentSettings.json(home.appending(path: $0), "compaction", "auto") as? Bool == false }) else { return nil }
+        let reserve = window * 15 / 100
+        return window - (window >= 32_000 ? max(reserve, 16_000) : reserve)
+    }
 
     nonisolated private static func home(_ paths: AgentPaths) -> URL {
         paths.directory(facts.homeVariable) ?? paths.xdg("XDG_CONFIG_HOME", ".config").appending(path: "opencode", directoryHint: .isDirectory)

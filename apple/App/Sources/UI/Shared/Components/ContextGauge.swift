@@ -1,27 +1,114 @@
 import CueStore
 import SwiftUI
 
-/// 一圈表盘：圈本身就是工具排里的一颗圆钮，用了几成沿着它的边描出来，圈里写百分数。不用一条短横（挨着数字读成减号"−86%"），
-/// 也不用圈里一块扇形（像录制钮或表盘）。描的那一段像一道彗星：起点淡、头上实、顶着一颗亮珠，一眼看出往哪走、走到了哪；轨道上 80% 处一个小点，
-/// 是开始建议压缩的地方（`ContextMeter.compactFraction`），走过去就被盖住。颜色只描在边上，数字留给墨色（胭脂字在深色下到不了 4.5:1）。
-/// 都是静止的图形，只在用量变了时补一段过渡。接近上限时点开的气泡里多一个"压缩"，等于发出 /compact。
+/// 上下文与提示缓存合成一颗胶囊（同模型那颗的 `chip`）：一道仪表弧、用了几成，后面跟着缓存还热几分钟（冷了换成雪花与这一句要重读多少），
+/// 点开是挨着它长出的气泡。弧靠近尽头的那道缝是 Agent 自动压缩的线（`ContextMeter.mark`），接近它时弧加深、到线变胭脂；
+/// 气泡里那条（`MarkedBar`）在同一处有一道刻度。
+/// 否决过：百分数写在圈里——圈只有工具排那么高，字挤到 8 点；圈上一个小点标建议压缩的地方、弧头一颗亮珠——没人认得出点是什么；
+/// 缓存另起一颗——同一件事（这段对话还记得多少、接着说贵不贵）分在两处。颜色只描在弧上，数字留给墨色（胭脂字在深色下到不了 4.5:1）。
+/// 都是静止的图形，只在用量、剩的分钟变了时补一段过渡。
 struct ContextGauge: View {
     let session: SessionState
-    let meter: ContextMeter
+    let meter: ContextMeter?
+    var cache: ChatMessage.Tools.Cache?
     @Environment(Workspace.self) private var workspace
     @Environment(\.palette) private var palette
-    @Environment(\.chipHeight) private var chipHeight
     @State private var showsDetail = BubbleSwitch()
+
+    var body: some View {
+        Moments(next: { cache?.nextTick(after: $0) }) { now in
+            let note = CacheNote(cache, working: session.runtimeState.isWorking, at: now)
+            if meter != nil || note != nil {
+                let help = (meter?.help ?? Dotted([])) + Dotted(note?.line)
+                Button { showsDetail.toggle() } label: { label(note) }
+                    .buttonStyle(PressStyle())
+                    .help(help.visible)
+                    .bubble(isPresented: $showsDetail.open) { detail(note) }
+                    .accessibilityLabel("上下文")
+                    .accessibilityValue(help.spoken)
+            }
+        }
+        .animation(Motion.fade, value: meter)
+    }
+
+    /// 工具排给的宽放不下就先收缓存的字、留它的记号（`ConfigRow` 的 `wording`）；整颗是候选，同 `ModelPick`
+    private func label(_ note: CacheNote?) -> some View {
+        ViewThatFits(in: .horizontal) {
+            row(note, words: true)
+            row(note, words: false)
+        }
+        .chip()
+        .animation(Motion.fade, value: note)
+    }
+
+    private func row(_ note: CacheNote?, words: Bool) -> some View {
+        HStack(spacing: Spacing.item) {
+            if let meter {
+                HStack(spacing: Spacing.tight) {
+                    ContextArc(meter: meter)
+                    Text(verbatim: meter.percent).monospacedDigit()
+                        .foregroundStyle(meter.level == .roomy ? palette.ink2 : palette.ink)
+                        .contentTransition(.numericText(value: meter.fraction))
+                }
+            }
+            if let note { CacheMark(note: note, words: words).transition(.opacity) }
+        }
+        .fixedSize()
+        .readerHidden(true)
+    }
+
+    private func detail(_ note: CacheNote?) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.item) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("上下文").font(Typography.secondary.weight(.semibold)).foregroundStyle(palette.ink)
+                Spacer(minLength: Spacing.block)
+                if let meter { Text(meter.percent).font(Typography.secondary.weight(.semibold).monospacedDigit()).foregroundStyle(palette.ink) }
+            }
+            if let meter {
+                MarkedBar(fill: meter.fraction, mark: meter.mark, level: meter.level)
+                // 几成已在右上角；这一行说离压缩线多远，没有线的才说还剩多少
+                Text(meter.compactLine ?? meter.summary.visible).font(Typography.meta.monospacedDigit()).foregroundStyle(palette.ink2)
+            }
+            if let note {
+                Label { Text(note.line) } icon: { Image(note.icon) }
+                    .font(Typography.meta.monospacedDigit()).foregroundStyle(palette.ink2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if meter?.suggestsCompact == true {
+                Button("现在压缩", icon: .compacting, action: compact)
+                    .buttonStyle(ControlButtonStyle(size: .compact))
+            }
+        }
+        .frame(width: Self.detailWidth, alignment: .leading)
+        .padding(Spacing.block)
+    }
+
+    private static let detailWidth: CGFloat = 240
+
+    private func compact() {
+        showsDetail.open = false
+        workspace.compact(session)
+    }
+}
+
+/// 仪表弧：开口朝下的四分之三圈（同手表上的圆形仪表），用掉的那段从左下顺时针描过去；轨道在压缩线处切一道缝，缝后是过了线才会走到的那一截。
+/// 否决过：闭合的圆环——起点与尽头在 12 点碰在一起，用得少时那一小段像加载的转圈；缝后那一截染深——用得少时与起点那一小段一左一右，像一副耳机。
+private struct ContextArc: View {
+    let meter: ContextMeter
+    @Environment(\.palette) private var palette
+    /// 与模型胶囊里的标志（`ModelBadge`）差不多大，随字号放大
+    @ScaledMetric(relativeTo: .footnote) private var side: CGFloat = 17
+
+    private static let sweep = 0.75
     /// 用得再少也露出一小截弧：只剩圆头的一个点读不出是"用了一点"
-    private static let least = 0.03
+    private static let least = 0.05
+    /// 压缩线那道缝的宽（点）：同额度条上刻度两侧的缝
+    private static let notch: CGFloat = 2
 
-    private var tight: Bool { meter.level == .tight || meter.level == .critical }
-    private var side: CGFloat { chipHeight ?? ControlSize.inline.height }
-    /// 线宽随圈定：细到 2.5 点时弧在玻璃上发虚，读不出用了几成；再粗字就挤不进圈
-    private var line: CGFloat { side * 0.16 }
-    private var shown: Double { max(meter.fraction, Self.least) }
+    /// 线宽随圈定，粗到五分之一：再细在胶囊的底上发虚，读不出用了几成
+    private var line: CGFloat { side * 0.2 }
 
-    private var arc: Color {
+    private var ink: Color {
         switch meter.level {
         case .critical: palette.failure
         case .tight: palette.ink
@@ -30,66 +117,52 @@ struct ContextGauge: View {
     }
 
     var body: some View {
-        Button { showsDetail.toggle() } label: { dial }
-            .buttonStyle(PressStyle())
-            .help(meter.help.visible)
-            .bubble(isPresented: $showsDetail.open) { detail }
-            .accessibilityLabel("上下文")
-            .accessibilityValue(meter.help.spoken)
-            .animation(Motion.fade, value: meter)
-    }
-
-    private var dial: some View {
+        let round = StrokeStyle(lineWidth: line, lineCap: .round)
         ZStack {
-            Circle().fill(palette.fill)
-            Circle().strokeBorder(palette.track, lineWidth: line)
-            if !meter.suggestsCompact {
-                Circle().fill(palette.ink3).frame(width: line * 0.45, height: line * 0.45)
-                    .offset(y: -(side - line) / 2)
-                    .rotationEffect(.degrees(360 * ContextMeter.compactFraction))
-                    .transition(.opacity)
+            arc(0, 1).stroke(palette.track, style: round)
+            if let mark = meter.mark {
+                let half = Double(Self.notch / 2 / (.pi * (side - line) * Self.sweep))
+                arc(mark - half, mark + half).stroke(.black, lineWidth: line + 1).blendMode(.destinationOut)
             }
-            Circle().inset(by: line / 2).trim(from: 0, to: shown)
-                .stroke(
-                    AngularGradient(colors: [arc.opacity(0.12), arc], center: .center, startAngle: .zero, endAngle: .degrees(360 * shown)),
-                    style: StrokeStyle(lineWidth: line, lineCap: .round))
-                .rotationEffect(.degrees(-90))
-            // 弧头一颗亮珠，同思考强度那条的钮：走到哪一眼找得到
-            Circle().fill(palette.onFill).frame(width: line * 0.5, height: line * 0.5)
-                .offset(y: -(side - line) / 2)
-                .rotationEffect(.degrees(360 * shown))
-            // 圈里的字随圈定大，不随动态字体：放大了就撑出圈
-            HStack(alignment: .firstTextBaseline, spacing: 0) {
-                Text(verbatim: "\(meter.used)").font(.system(size: side * 0.3, weight: tight ? .bold : .semibold, design: .rounded))
-                Text(verbatim: "%").font(.system(size: side * 0.2, weight: .semibold, design: .rounded)).foregroundStyle(palette.ink3)
-            }
-            .monospacedDigit()
-            .foregroundStyle(tight ? palette.ink : palette.ink2)
-            .contentTransition(.numericText(value: meter.fraction))
-            .readerHidden(true)
+            arc(0, max(meter.fraction, Self.least)).stroke(ink, style: round)
         }
+        .compositingGroup()
+        // 开口在下，弧看着偏上：往下挪一点与旁边的字对齐
+        .offset(y: side * 0.06)
         .frame(width: side, height: side)
-        .contentShape(.circle)
     }
 
-    private var detail: some View {
-        VStack(alignment: .leading, spacing: Spacing.item) {
-            Text("上下文").font(Typography.secondary.weight(.semibold)).foregroundStyle(palette.ink)
-            Text(meter.summary).font(Typography.meta.monospacedDigit()).foregroundStyle(palette.ink2)
-                .fixedSize(horizontal: false, vertical: true)
-            if meter.suggestsCompact {
-                Text("快满了。Agent 会在到顶前自动压缩，也可以现在压缩。")
-                    .font(Typography.meta).foregroundStyle(palette.ink2)
-                    .fixedSize(horizontal: false, vertical: true)
-                Button("现在压缩", icon: .compacting, action: compact)
-                    .buttonStyle(ControlButtonStyle(size: .compact))
+    private func arc(_ from: Double, _ to: Double) -> some Shape {
+        Circle().inset(by: line / 2).trim(from: from * Self.sweep, to: to * Self.sweep).rotation(.degrees(135))
+    }
+}
+
+/// 缓存那一句在胶囊里的样子：记号（钟、雪花）加几个字，放不下只留记号；整句在悬停与气泡里。
+private struct CacheMark: View {
+    let note: CacheNote
+    let words: Bool
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        HStack(spacing: Spacing.hair) {
+            Image(note.icon)
+            if words {
+                switch note {
+                case .warm(let minutes, _): Text(verbatim: "\(minutes)m").contentTransition(.numericText(countsDown: true))
+                case .cold(let tokens, _): Text(verbatim: CueContext.tokens(tokens))
+                }
             }
         }
-        .padding(Spacing.block)
+        .monospacedDigit()
+        .foregroundStyle(palette.ink3)
     }
+}
 
-    private func compact() {
-        showsDetail.open = false
-        workspace.compact(session)
+extension CacheNote {
+    var icon: Icon {
+        switch self {
+        case .warm: .warm
+        case .cold: .cold
+        }
     }
 }

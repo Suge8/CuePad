@@ -11,7 +11,13 @@ extension CodexRuntime {
             $0.home(of: .codex).appending(path: "sessions", directoryHint: .isDirectory)
         },
         releasesIdleHosted: true, probe: askCodex, brain: { CodexBrain() }, projectFolder: ".codex", selfManagedSkills: ".system",
-        globalReads: ["AGENTS.override.md", "AGENTS.md"])
+        globalReads: ["AGENTS.override.md", "AGENTS.md"], compactsAt: compactsAt)
+
+    /// 配置里的 `model_auto_compact_token_limit` 与窗口的九成取小（openai_models.rs）。模型自带的上限 app-server 不报，没配时按九成。
+    nonisolated private static func compactsAt(_ window: Int, _ model: ModelKey?, _ paths: AgentPaths) -> Int? {
+        let configured = AgentSettings.tomlInt(paths.home(of: .codex).appending(path: "config.toml"), table: nil, key: "model_auto_compact_token_limit")
+        return min(configured ?? .max, window * 9 / 10)
+    }
 
     /// `codex app-server` 不开线程（不落会话、不跑钩子）：`getAuthStatus` 没有登录方式且要 OpenAI 登录是没登录（只读本机的登录；
     /// 否决 `account/read`：它要联网查工作区，断网或刚醒时超时就成了没登录）；默认是用户配置的模型（`config/read` 的 `model`），
