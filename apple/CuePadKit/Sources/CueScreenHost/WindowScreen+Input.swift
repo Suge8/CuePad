@@ -34,8 +34,6 @@ extension WindowScreen {
       guard let point = place(x, y)?.point, let window = window(at: point) else { return }
       post(.rightMouseDown, in: window, at: point)
       post(.rightMouseUp, in: window, at: point)
-      // 菜单一出来，系统把这扇窗提到最前，拦不住（它不问视图，实测）：菜单收起后排回去
-      tucked = []
     case .wheel(let x, let y, let dx, let dy): scroll(x, y, dx, dy)
     case .key(let usage, let down): key(usage, down)
     case .text(let text): insert(text)
@@ -51,8 +49,8 @@ extension WindowScreen {
   @MainActor var stack: [NSWindow] {
     func chain(_ window: NSWindow) -> [NSWindow] { [window] + ((window.parent ?? window.sheetParent).map(chain) ?? []) }
     return NSApp.windows.compactMap { window -> (NSWindow, Int, Int)? in
-      guard window.isVisible, let root = chain(window).last, root === shown || root.level == .popUpMenu else { return nil }
-      return (window, root.level.rawValue, chain(window).count)
+      guard window.isVisible, let root = chain(window).last, root === shown || level(root) == .popUpMenu else { return nil }
+      return (window, level(root).rawValue, chain(window).count)
     }.sorted { ($0.1, $0.2) < ($1.1, $1.2) }.map(\.0)
   }
 
@@ -162,13 +160,10 @@ extension WindowScreen {
   /// 应用平常派发按下与键之前先过这里（`NSEvent.addLocalMonitorForEvents`，`WindowScreen.init` 装的）。应用在后台时哪扇窗都不是当前窗口：
   /// 按下，AppKit 先问落点的视图接不接第一下（`acceptsFirstMouse`），不接的（文本框、带手势的 SwiftUI 视图）就只当成"点到这扇窗"；
   /// 键，没有当前窗口可给，直接丢掉。按下：让那个视图对这里造的事件答"接"，之后照常派发；键：给拿键盘的那扇窗，原来那一下吞掉。
-  /// 没落在视图上的按下（表单开着时点它底下的窗，`press` 算给了表单）也吞掉：照常派发的话 AppKit 当成"点到这扇窗"，把它提到所有应用的窗口上面。
   @MainActor func dispatch(_ event: NSEvent) -> NSEvent? {
     guard event.cgEvent?.getIntegerValueField(.eventSourceUserData) == Self.mark else { return event }
     if event.type == .leftMouseDown {
-      guard let window = event.window, !window.isKeyWindow else { return event }
-      guard let view = window.contentView?.superview?.hitTest(event.locationInWindow) else { return nil }
-      Self.welcome(type(of: view))
+      if let window = event.window, !window.isKeyWindow, let view = window.contentView?.superview?.hitTest(event.locationInWindow) { Self.welcome(type(of: view)) }
       return event
     }
     if !event.modifierFlags.isDisjoint(with: [.command, .control]), event.type == .keyDown { shortcut(event) } else { typing?.sendEvent(event) }
@@ -178,24 +173,15 @@ extension WindowScreen {
   /// 这个类的视图对这里造的事件一律答"接第一下"，别的事件照它原来的答。
   /// 改的是这一个类的方法：没有公开的口子让后台应用的窗口当上当前窗口（`makeKey` 不作数，实测 macOS 27.2），
   /// 而自己替 AppKit 调 `mouseDown` 的话手势认不到（它们是 AppKit 派发时喂的，SwiftUI 的点按、拖、双击都是手势）。
-  /// 同一下里也不让这扇窗排到最前：后台窗口挨了按下，AppKit 会把它提到所有应用的窗口上面（盖住正看着预览的 CuePad）。
-  /// 让视图答"排序等抬起再说"（`shouldDelayWindowOrdering`），再撤掉那一次（`preventWindowOrdering`）。
-  /// 撤要在 AppKit 记下"等抬起"之后：它先问等不等、再问接不接，所以放在答"接"的那一下里（放在答"等"里不作数，实测）。
   @MainActor private static func welcome(_ type: AnyClass) {
-    guard welcomed.insert(ObjectIdentifier(type)).inserted else { return }
+    let selector = #selector(NSView.acceptsFirstMouse(for:))
+    guard welcomed.insert(ObjectIdentifier(type)).inserted, let method = class_getInstanceMethod(type, selector) else { return }
     typealias Original = @convention(c) (NSView, Selector, NSEvent?) -> Bool
-    func answer(_ selector: Selector, then: @escaping @Sendable () -> Void = {}) {
-      guard let method = class_getInstanceMethod(type, selector) else { return }
-      let original = unsafeBitCast(method_getImplementation(method), to: Original.self)
-      let ours: @convention(block) (NSView, NSEvent?) -> Bool = { view, event in
-        guard event?.cgEvent?.getIntegerValueField(.eventSourceUserData) == mark else { return original(view, selector, event) }
-        then()
-        return true
-      }
-      class_replaceMethod(type, selector, imp_implementationWithBlock(ours), method_getTypeEncoding(method))
+    let original = unsafeBitCast(method_getImplementation(method), to: Original.self)
+    let ours: @convention(block) (NSView, NSEvent?) -> Bool = { view, event in
+      event?.cgEvent?.getIntegerValueField(.eventSourceUserData) == mark || original(view, selector, event)
     }
-    answer(#selector(NSView.shouldDelayWindowOrdering(for:)))
-    answer(#selector(NSView.acceptsFirstMouse(for:))) { MainActor.assumeIsolated { NSApp.preventWindowOrdering() } }
+    class_replaceMethod(type, selector, imp_implementationWithBlock(ours), method_getTypeEncoding(method))
   }
 
   @MainActor private static var welcomed: Set<ObjectIdentifier> = []

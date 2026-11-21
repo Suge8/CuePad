@@ -69,7 +69,7 @@ extension WindowScreen {
     guard let picture else { return [] }
     var walk = Walk(picture: picture, known: outlined.ids, next: outlined.next)
     let nodes = stack.compactMap { window -> [String: Any]? in
-      walk.menu = window.level == .popUpMenu
+      walk.menu = level(window) == .popUpMenu
       let inner = walk.children(of: window, clip: window.frame, depth: 0)
       // 里面什么都没有的窗不列（系统盖在窗口那三颗钮上的"共享中"标记就是这样一扇）
       guard window === shown || !inner.isEmpty else { return nil }
