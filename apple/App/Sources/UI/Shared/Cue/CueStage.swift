@@ -11,8 +11,6 @@ struct CueStage: View {
     let beat: CueBeat
     let status: String
     let brief: [CueBrief.Line]
-    /// 对话外面再让出的宽（手机两侧给会话条让的，`CuePage.railInset`）：天空连它一起铺满。
-    var outset: CGFloat = 0
     let open: (CueBrief.Line) -> Void
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -40,7 +38,7 @@ struct CueStage: View {
             .frame(height: max(visible - below, 0))
             .overlay {
                 GeometryReader { room in
-                    let side = margin + outset
+                    let side = margin
                     let lines = Array(brief.prefix(Sky.rows(in: room.size.height, base: base, row: row)))
                     let sky = Sky(CGSize(width: room.size.width + 2 * side, height: room.size.height), bubble: base + CGFloat(lines.count) * row)
                     ZStack(alignment: .top) {
@@ -85,7 +83,7 @@ struct CueStage: View {
         CueBriefBubble(beat: beat, status: status, lines: lines, row: row, open: open)
             .frame(maxWidth: CueBriefBubble.width)
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { base = $0 - CGFloat(lines.count) * row }
-            .padding(.horizontal, margin + outset)
+            .padding(.horizontal, margin)
             .padding(.top, sky.perch + Sky.wordsGap - SpeechShape.tail)
             .offset(y: shown || reduceMotion ? 0 : Sky.rise)
             .opacity(shown ? 1 : 0)

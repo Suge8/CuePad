@@ -18,6 +18,8 @@ struct DitherImage: View {
     @Environment(\.displayScale) private var scale
     @Environment(\.self) private var environment
     @State private var image: CGImage?
+    /// 画着的是哪一份：截图的就绪等新的一份画上（`debugSettling`）。
+    @State private var drawn: DitherGPU.Job?
 
     var body: some View {
         ZStack {
@@ -26,11 +28,13 @@ struct DitherImage: View {
             }
         }
         .frame(width: size.width, height: size.height)
+        .debugSettling(drawn != job)
         .task(id: job) { [job] in
             if image != nil { do { try await Task.sleep(for: .milliseconds(120)) } catch { return } }
             let rendered = await DitherGPU.shared.render(job)
             guard !Task.isCancelled else { return }
             withAnimation(Motion.fade) { image = rendered }
+            drawn = job
         }
     }
 

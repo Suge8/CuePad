@@ -80,7 +80,7 @@ struct CuePage: View {
         .background { if grounded { palette.desk } }
     }
     #else
-    /// 名牌保留整页坐标；对话与拍板卡两侧都给常驻会话条让位、按整屏居中，舞台的天空铺到会话条底下（伸出读宽，`CueStage.outset`）。
+    /// 名牌保留整页坐标；对话与拍板卡两侧都给常驻会话条让位、按整屏居中，舞台的天空铺到会话条底下（伸出读宽，`CueStage`）。
     private var page: some View {
         FloatingReply {
             chat
@@ -97,6 +97,7 @@ struct CuePage: View {
     #endif
 
     /// 对话自己离两边 `inset`：两边都让到字离会话条一个 `item`，左右对称，对话与页头、输入框同一条中线。
+    /// 对话里让在滚动区自己的边距里（`ChatColumn` 的 `inset`），不在外面缩滚动区：缩了的话舞台的天空画不出滚动区，两边露出两条底。
     private var railInset: CGFloat { workspace.layout == .narrow ? SessionRail.phoneWidth + Spacing.item - Self.inset : 0 }
 
     private var staged: Bool { stage == true && cue.canHear && thread?.rows.isEmpty == false }
@@ -107,7 +108,6 @@ struct CuePage: View {
             if let thread, !thread.rows.isEmpty {
                 if stage != nil {
                     conversation(thread)
-                        .padding(.horizontal, railInset)
                 } else {
                     Color.clear
                 }
@@ -126,7 +126,7 @@ struct CuePage: View {
     private func conversation(_ thread: CueThread) -> some View {
         let rows = thread.rows
         return ChatColumn(
-            followKey: FollowKey(thread, live: cue.presence.shown != nil), readingWidth: Self.readingWidth, inset: Self.inset, follow: $follow,
+            followKey: FollowKey(thread, live: cue.presence.shown != nil), readingWidth: Self.readingWidth, inset: Self.inset + railInset, follow: $follow,
             marks: thread.marks, ids: rows.map(\.id), paging: Self.paging(thread),
             holding: catchingUp || docking || sinking(thread),
             arrival: rows.last.flatMap { CueRow.arrives($0, swapsInPlace: services.cueOnDutyHere) ? $0.id : nil }
@@ -159,7 +159,7 @@ struct CuePage: View {
 
     private func stageView(_ thread: CueThread) -> some View {
         let replies = cue.now.items.filter { $0.kind == .reply }, said = CueBrief.said(thread)
-        return CueStage(beat: cue.beat, status: cue.now.quietLine, brief: brief?.lines ?? [], outset: railInset, open: openBrief)
+        return CueStage(beat: cue.beat, status: cue.now.quietLine, brief: brief?.lines ?? [], open: openBrief)
             .onScrollVisibilityChange(threshold: 0.4) { stageInView = $0 }
             .observing(services.store, id: [said?.detail, said?.title] + replies.map(\.id), into: $brief, onError: workspace.fail) { [replies, said] in
                 try CueBrief.read(replies: replies, said: said, from: $0)
