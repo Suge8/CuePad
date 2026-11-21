@@ -51,6 +51,8 @@ struct IOSEditorHost: UIViewRepresentable {
         context.coordinator.watching = AttachmentLooks.follow(services, in: view)
         view.inputAccessoryView = KeyboardBar(textView: view, actions: context.coordinator, plain: onInsertImage == nil)
         view.accessibilityLabel = String(localized: "正文")
+        // 同 `RouteView` 的柔边：那里的 `scrollEdgeEffectStyle` 传不进 UIKit 的滚动视图，默认是带分隔线的实底，滚进页头时一刀切开
+        view.topEdgeEffect.style = .soft
         if fits {
             view.isScrollEnabled = false
             view.alwaysBounceVertical = false
