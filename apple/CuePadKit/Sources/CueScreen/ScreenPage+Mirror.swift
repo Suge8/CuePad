@@ -54,9 +54,10 @@ extension ScreenPage {
       while (parent.children.length > nodes.length) parent.lastElementChild.remove();
     };
     // 什么时候问应用（走一遍无障碍树占它的主线程，几十个元素十几毫秒）：
-    // 画面或输入动过了（`dirty`）不马上问，等它停下 200 毫秒；一直在动的（动画、拖着滚）就一直不问，隔一会儿小动一下的两次之间至少隔开 `gap`。
-    // 读页面的来了（CuePad 替 Agent 读、点之前发 `cuepad-read`）当场问，问到之前根元素标着 aria-busy，它等这个标去掉
-    let asking = false, again = false, dirty = false, wanted = false, asked = 0, gap = 1000, timer = null;
+    // 画面或输入动过了（`dirty`）不马上问，等它停下 200 毫秒；一直在动的（动画、拖着滚）就一直不问，隔一会儿小动一下的两次之间至少隔开 1 秒。
+    // 读页面的来了（CuePad 替 Agent 读、点之前发 `cuepad-read`）当场问，问到之前根元素标着 aria-busy，它等这个标去掉。
+    // 两问之间照上一遍的花销（`cost`，毫秒）隔开：没人读时不过应用主线程的 2%；有人等着读时不过一成，最多隔 1 秒（读的人只等 3 秒）
+    let asking = false, again = false, dirty = false, wanted = false, asked = 0, cost = 0, timer = null;
     const ask = async () => {
       clearTimeout(timer);
       const from = socket;
@@ -68,8 +69,7 @@ extension ScreenPage {
         if (outline && from === socket) {
           const seen = new Set();
           points = outline.points;
-          // 问一遍的花销不过应用主线程的 2%
-          gap = Math.max(1000, outline.ms * 50);
+          cost = outline.ms;
           arrange(outline.nodes, layer, [0, 0, 1, 1], seen);
           for (const id of [...made.keys()]) if (!seen.has(id)) made.delete(id);
           answered = true;
@@ -88,16 +88,16 @@ extension ScreenPage {
       dirty = true;
       if (asking || wanted) return;
       clearTimeout(timer);
-      timer = setTimeout(ask, Math.max(200, asked + gap - performance.now()));
+      timer = setTimeout(ask, Math.max(200, asked + Math.max(1000, cost * 50) - performance.now()));
     };
     addEventListener("cuepad-read", () => {
       if (!dirty && !asking) return;
       document.documentElement.setAttribute("aria-busy", "true");
-      // 在途的那一问答回来时说的就是此刻；读的人连着来的（wait 一轮轮地读），两问之间隔开 1 秒
+      // 在途的那一问答回来时说的就是此刻
       if (asking || wanted) return;
       wanted = true;
       clearTimeout(timer);
-      timer = setTimeout(ask, Math.max(0, asked + 1000 - performance.now()));
+      timer = setTimeout(ask, Math.max(0, asked + Math.min(1000, cost * 10) - performance.now()));
     });
     // 这一层作不作数：没连上、刚连上还没问到时不作数，整层清空（再连上的可能是重新构建后起的另一份应用，旧的引用不落到新的元素上），
     // 根元素标着 aria-busy；CuePad 替 Agent 读、点之前等它去掉（`LivePreview.untilCurrent`），不然刚开进预览就读到一张空页
